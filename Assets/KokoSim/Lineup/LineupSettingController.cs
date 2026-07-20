@@ -62,6 +62,15 @@ namespace KokoSim.Unity.Lineup
             }
             SetText("lu-match", match);
 
+            // 編成不備（ベンチ入り9人未満）は警告を出して確定を塞ぐ。正常時は警告行そのものを消す。
+            var warn = _root.Q<Label>("lu-warn");
+            if (warn != null)
+            {
+                warn.text = v.WarnText;
+                warn.style.display = string.IsNullOrEmpty(v.WarnText) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+            _root.Q<Button>("lu-ok")?.SetEnabled(v.CanConfirm);
+
             var rank = _root.Q<VisualElement>("lu-team-rank");
             if (rank != null) { rank.Clear(); rank.Add(RankChip(v.TeamRankGrade)); }
 
@@ -409,6 +418,7 @@ namespace KokoSim.Unity.Lineup
         // ── 確定操作 ──
         private void OnOk()
         {
+            if (!_state.CanConfirm) return;   // 編成不備（ベンチ入り9人未満）では確定させない
             KokoSim.Unity.Shell.GameSession.Current.Lineup = _state.ToLineupSpec();
             // AwaitingMatchStart は立てたまま → ホーム復帰で自校戦を消化する。
             KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("HomeDashboard");
