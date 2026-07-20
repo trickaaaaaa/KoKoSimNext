@@ -20,6 +20,12 @@ namespace KokoSim.Unity.Home
         private VisualElement _root;
         private VisualElement _banner, _dialog, _result;
 
+        // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
+        // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
+        private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk;
+        private VisualElement _tsRow;
+        private EventCallback<ClickEvent> _tsRowClick;
+
         private void OnEnable()
         {
             _state = new HomeState();
@@ -29,18 +35,20 @@ namespace KokoSim.Unity.Home
             _dialog = _root.Q<VisualElement>("tm-dialog");
             _result = _root.Q<VisualElement>("tm-result");
 
-            var advance = _root.Q<Button>("advance");
-            if (advance != null) advance.clicked += OnAdvance;
+            _advanceBtn = _root.Q<Button>("advance");
+            if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
 
-            Wire("tm-dialog-yes", OnMatchYes);
-            Wire("tm-dialog-no", OnMatchNo);
-            Wire("tm-result-ok", OnResultOk);
+            _dialogYes = Wire("tm-dialog-yes", OnMatchYes);
+            _dialogNo = Wire("tm-dialog-no", OnMatchNo);
+            _resultOk = Wire("tm-result-ok", OnResultOk);
 
             // 部の状態「チーム総合力」行 → 6角形の専用パネルへ（行クリックで詳細）。
-            var tsRow = _root.Q<VisualElement>("team-strength-row");
-            if (tsRow != null)
-                tsRow.RegisterCallback<ClickEvent>(_ =>
-                    KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("TeamStrength"));
+            _tsRow = _root.Q<VisualElement>("team-strength-row");
+            if (_tsRow != null)
+            {
+                _tsRowClick = _ => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TeamStrength");
+                _tsRow.RegisterCallback(_tsRowClick);
+            }
 
             Render();
 
@@ -83,7 +91,8 @@ namespace KokoSim.Unity.Home
                 OnComplete = result =>
                 {
                     homeState.CompleteMatch(result);                 // 大会へ結果反映＋成績畳み込み＋ResultPending
-                    KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("HomeDashboard");   // 戻ると OnEnable が結果表示
+                    // 「戻る」のクリック配信中なので同期 Show は不可（イベント木が壊れて全画面が落ちる）。
+                    KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");   // 戻ると OnEnable が結果表示
                 },
             };
             // この StartLiveMatch は HomeDashboard.OnEnable（＝スタメンOKの Show("HomeDashboard") の内側）から
@@ -92,10 +101,22 @@ namespace KokoSim.Unity.Home
             router.ShowDeferred("MatchLive");
         }
 
-        private void Wire(string name, System.Action handler)
+        private Button Wire(string name, System.Action handler)
         {
             var btn = _root.Q<Button>(name);
             if (btn != null) btn.clicked += handler;
+            return btn;
+        }
+
+        // 画面を離れるときに登録を解除する（OnEnable が毎回登録するため、外さないと往復のたび多重登録になる）。
+        private void OnDisable()
+        {
+            if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
+            if (_dialogYes != null) _dialogYes.clicked -= OnMatchYes;
+            if (_dialogNo != null) _dialogNo.clicked -= OnMatchNo;
+            if (_resultOk != null) _resultOk.clicked -= OnResultOk;
+            if (_tsRow != null && _tsRowClick != null) _tsRow.UnregisterCallback(_tsRowClick);
+            _tsRowClick = null;
         }
 
         // ===== 大会モード進行（要件1〜7） =====
@@ -157,7 +178,7 @@ namespace KokoSim.Unity.Home
             if (router != null)
             {
                 KokoSim.Unity.Shell.GameSession.Current.AwaitingMatchStart = true;
-                router.Show("LineupSetting");
+                router.ShowDeferred("LineupSetting");   // 「はい」のクリック配信中なので遅延切替
                 return;
             }
             // フォールバック（ルータ不在）：従来どおり即消化。
