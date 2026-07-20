@@ -87,6 +87,8 @@ namespace KokoSim.Unity.Match
         private Color _lamp = Hex(0xF5C64A);        // 走者塗り・移動中野手の縁（--color-lamp）
         private Color _trailColor = Hex(0xE68A2E);  // 軌跡（明芝で視認できる濃いめアンバー）
         private Color _ball = Hex(0xFFFFFF);        // ボール本体（純白＝--ball-white）
+        private Color _grassStripe = Hex(0x578646); // 外野芝の刈り込みストライプ（明側・ベース芝と交互）
+        private Color _warning = Hex(0xA26E44);     // ウォーニングトラック（フェンス手前の土帯）
 
         private static readonly CustomStyleProperty<Color> GrassProp = new("--field-grass-day");
         private static readonly CustomStyleProperty<Color> FoulProp = new("--field-foul-day");
@@ -104,6 +106,8 @@ namespace KokoSim.Unity.Match
         private static readonly CustomStyleProperty<Color> TrailProp = new("--field-trail-day");
         private static readonly CustomStyleProperty<Color> LampProp = new("--color-lamp");
         private static readonly CustomStyleProperty<Color> BallProp = new("--ball-white");
+        private static readonly CustomStyleProperty<Color> GrassStripeProp = new("--field-grass-stripe-day");
+        private static readonly CustomStyleProperty<Color> WarningProp = new("--field-warning-day");
 
         // ── 再生状態（SetTime でメートル空間に確定） ──
         private PlaybackPlay _play;
@@ -167,6 +171,8 @@ namespace KokoSim.Unity.Match
             if (cs.TryGetValue(TrailProp, out var tr)) _trailColor = tr;
             if (cs.TryGetValue(LampProp, out var la)) _lamp = la;
             if (cs.TryGetValue(BallProp, out var bw)) _ball = bw;
+            if (cs.TryGetValue(GrassStripeProp, out var gs)) _grassStripe = gs;
+            if (cs.TryGetValue(WarningProp, out var wa)) _warning = wa;
             foreach (var l in _fielderLabels) l.style.color = _chalk;
             MarkDirtyRepaint();
         }
@@ -298,9 +304,12 @@ namespace KokoSim.Unity.Match
         }
 
         // drawField（昼光版）。「暗い額縁の中の明るい昼の球場」を作るため層を分けて塗る：
-        //   ①全面を暗いUI背景（額縁）→②ファウルゾーン芝→③フェア芝（フェンス弧で閉じる）→
-        //   ④ダート扇→⑤内野芝ダイヤ→⑥フェンス弧線→⑦ファウルライン（100%白）→⑧マウンド→⑨ベース。
-        // メンバー画面 BaseballFieldElement と同じ層構成。座標変換 Project は共通（fillColumn 対応）。
+        //   ①額縁→②ファウルゾーン芝→③フェア芝→④放射ストライプ→⑤本塁土円＋ダート扇→
+        //   ⑥ウォーニングトラック→⑦観客席帯→⑧フェンス弧線→⑨ファウルライン→
+        //   ⑩本塁周りチョーク→⑪マウンド→⑫ベース。
+        // ストライプは本塁→フェンスの全扇で塗り、後段のダート扇・トラックが内外を上塗りする
+        // ＝柄は自然に「外野芝のみ」に残る（ClaudeDesign 見本 2026-07-20 の視覚言語）。
+        // 座標変換 Project は共通（fillColumn 対応）。
         private void DrawField(Painter2D p, Rect r, float k)
         {
             const float q = Mathf.PI / 4f; // 45°（両翼＝ファウル線の角度）
@@ -339,24 +348,66 @@ namespace KokoSim.Unity.Match
             p.ClosePath();
             p.Fill();
 
-            // ④ 内野ダート（本塁から半径30mの扇・±45°＝甲子園様式で全面ダート。内野芝ダイヤは廃止）。mock: 30。
+            // ④ 放射ストライプ（外野芝の刈り込み）：±45°を11.25°×8ウェッジに割り、奇数番だけ明側色を
+            //    本塁→フェンス弧の扇で重ね塗り（偶数番はベース芝が透ける＝2色交互）。
+            p.fillColor = _grassStripe;
+            for (var w = 1; w < 8; w += 2)
+            {
+                var th0 = -q + q * 2f * w / 8f;
+                var th1 = -q + q * 2f * (w + 1) / 8f;
+                p.BeginPath();
+                p.MoveTo(Project(Home));
+                for (var i = 0; i <= 8; i++)
+                {
+                    var th = th0 + (th1 - th0) * i / 8f;
+                    p.LineTo(Project(FencePoint(th)));
+                }
+                p.ClosePath();
+                p.Fill();
+            }
+
+            // ⑤ 本塁土円＋内野ダート扇（甲子園様式で全面ダート。内野芝ダイヤは廃止）。
+            //    境界弧は本塁中心の固定半径ではなく共通ソース InfieldDirtRadius（マウンド中心・
+            //    半径29m＝実球場のグラスライン準拠）。中堅方向47.4m＝二塁が必ず土の内側に載る。
             p.fillColor = _clay;
+            p.BeginPath();
+            p.Arc(Project(Home), 4.3f * S * k, new Angle(0, AngleUnit.Degree), new Angle(360, AngleUnit.Degree));
+            p.Fill();
             p.BeginPath();
             p.MoveTo(Project(Home));
             for (var i = 0; i <= 40; i++)
             {
                 var th = (-45f + 90f * i / 40f) * Mathf.Deg2Rad;
-                p.LineTo(Project(new Vector2(30f * Mathf.Sin(th), 30f * Mathf.Cos(th))));
+                var dirtR = (float)FieldDiagramGeometry.InfieldDirtRadius(th);
+                p.LineTo(Project(new Vector2(dirtR * Mathf.Sin(th), dirtR * Mathf.Cos(th))));
             }
             p.ClosePath();
             p.Fill();
 
-            // ⑤ 観客席帯（外殻）：フェンス弧の外側に沿った暗い帯（約11px・2段で濃色グラデ）。
+            // ⑥ ウォーニングトラック：フェンス弧の内側に沿う幅3.5mの土帯（打球のフェンス際が一目で分かる）。
+            p.fillColor = _warning;
+            p.BeginPath();
+            for (var i = 0; i <= 60; i++) // 外側の弧：+45°→-45°（フェンス上）
+            {
+                var th = (45f - 90f * i / 60f) * Mathf.Deg2Rad;
+                var pt = Project(FencePoint(th));
+                if (i == 0) p.MoveTo(pt); else p.LineTo(pt);
+            }
+            for (var i = 0; i <= 60; i++) // 内側の弧：-45°→+45°（フェンス−3.5m）
+            {
+                var th = (-45f + 90f * i / 60f) * Mathf.Deg2Rad;
+                var wr = FenceRadius(th) - 3.5f;
+                p.LineTo(Project(new Vector2(wr * Mathf.Sin(th), wr * Mathf.Cos(th))));
+            }
+            p.ClosePath();
+            p.Fill();
+
+            // ⑦ 観客席帯（外殻）：フェンス弧の外側に沿った暗い帯（約11px・2段で濃色グラデ）。
             //    球場輪郭を場外の暗背景から切り離して閉じる。フェンス線の直前に敷き、線が壁上端になる。
             DrawStandBand(p, k, 5.5f, 11f, _standLo); // 外側（暗）
             DrawStandBand(p, k, 0f, 5.5f, _standHi);  // 内側（壁前列・明るめ）
 
-            // ⑥ フェンス弧（θ=-45°..45°・r=両翼+(中堅-両翼)cos2θ・明芝に映える濃緑）。将来 stadiums.yaml 駆動へ。
+            // ⑧ フェンス弧（θ=-45°..45°・r=両翼+(中堅-両翼)cos2θ・明芝に映える濃緑）。将来 stadiums.yaml 駆動へ。
             p.strokeColor = _fence;
             p.lineWidth = 4f * k;
             p.BeginPath();
@@ -368,19 +419,28 @@ namespace KokoSim.Unity.Match
             }
             p.Stroke();
 
-            // ⑦ ファウルライン（本塁→[±67.2,67.2]）。昼の石灰ライン＝不透明度100%でくっきり。
+            // ⑨ ファウルライン（本塁→[±67.2,67.2]）。昼の石灰ライン＝不透明度100%でくっきり。
             p.strokeColor = _chalk;
             p.lineWidth = 2f * k;
             StrokeLine(p, Project(Home), Project(new Vector2(67.2f, 67.2f)));
             StrokeLine(p, Project(Home), Project(new Vector2(-67.2f, 67.2f)));
 
-            // マウンド（土円 r8・ダートより一段濃い土色）。
+            // ⑩ 本塁周りチョーク（バッターボックス左右・キャッチャーボックス）。
+            //    実寸[m]で引く（ボックス1.22×1.83等）。線は細め＝ファウルラインより従の階層。
+            //    ネクストバッターズサークルは不採用（2026-07-20 ユーザー判断）。
+            p.strokeColor = _chalk;
+            p.lineWidth = 1.2f * k;
+            StrokeRectM(p, 0.37f, -0.91f, 1.59f, 0.92f);    // 右打席
+            StrokeRectM(p, -1.59f, -0.91f, -0.37f, 0.92f);  // 左打席
+            StrokeRectM(p, -1.2f, -3.1f, 1.2f, -0.7f);      // キャッチャーボックス（簡略形）
+
+            // ⑪ マウンド（土円 r8・ダートより一段濃い土色）。
             p.fillColor = _mound;
             p.BeginPath();
             p.Arc(Project(Mound), 8f * k, new Angle(0, AngleUnit.Degree), new Angle(360, AngleUnit.Degree));
             p.Fill();
 
-            // ベース（チョーク小四角 8×8）。
+            // ⑫ ベース（チョーク小四角 8×8）。
             DrawBase(p, Project(Home), k);
             DrawBase(p, Project(First), k);
             DrawBase(p, Project(Second), k);
@@ -548,6 +608,18 @@ namespace KokoSim.Unity.Match
         private static void StrokeLine(Painter2D p, Vector2 a, Vector2 b)
         {
             p.BeginPath(); p.MoveTo(a); p.LineTo(b); p.Stroke();
+        }
+
+        // 球場座標[m]の軸平行矩形をチョーク線で描く（本塁周りのボックス用。Project は等方なので形は保たれる）。
+        private void StrokeRectM(Painter2D p, float x0, float y0, float x1, float y1)
+        {
+            p.BeginPath();
+            p.MoveTo(Project(new Vector2(x0, y0)));
+            p.LineTo(Project(new Vector2(x1, y0)));
+            p.LineTo(Project(new Vector2(x1, y1)));
+            p.LineTo(Project(new Vector2(x0, y1)));
+            p.ClosePath();
+            p.Stroke();
         }
 
         private void DrawBase(Painter2D p, Vector2 c, float k)

@@ -130,14 +130,15 @@ namespace KokoSim.Unity.Member
             p.ClosePath();
             p.Fill();
 
-            // 4. 内野ダート（本塁から半径29mの扇・±45°）
+            // 4. 内野ダート（±45°の扇）。境界弧は共通ソース InfieldDirtRadius（マウンド中心・半径29m＝
+            //    実球場のグラスライン準拠）。旧・本塁中心29m固定は二塁(38.8m)が土の外に浮く誤りだった。
             p.fillColor = _clay;
             p.BeginPath();
             p.MoveTo(FieldToLocal(Home));
-            var dirt = (float)MemberFieldLayout.InfieldDirtRadiusM;
             for (var i = 0; i <= 40; i++)
             {
                 var th = -q + 2f * q * i / 40f;
+                var dirt = (float)FieldDiagramGeometry.InfieldDirtRadius(th);
                 p.LineTo(FieldToLocal(new Vector2(dirt * Mathf.Sin(th), dirt * Mathf.Cos(th))));
             }
             p.ClosePath();
