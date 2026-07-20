@@ -8,7 +8,8 @@ namespace KokoSim.Engine.Match.Field;
 public static class MemberFieldLayout
 {
     public const double BaseDistanceM = FieldDiagramGeometry.BaseDistanceM; // 塁間（共通ジオメトリ）
-    public const double InfieldDirtRadiusM = 29.0; // 本塁基準の内野ダート扇の半径（メンバー画面 framing）
+    // 内野ダート境界は共通ソース FieldDiagramGeometry.InfieldDirtRadius（マウンド中心弧）を使うこと。
+    // 旧 InfieldDirtRadiusM（本塁基準29m固定）は二塁が土の外に浮く誤りだったため廃止（2026-07-20）。
     public const double WingFenceM = 98.0;         // 両翼フェンス（メンバー画面＝端見切れ回避で詰めた framing）
     public const double CenterFenceM = 122.0;      // 中堅フェンス
 

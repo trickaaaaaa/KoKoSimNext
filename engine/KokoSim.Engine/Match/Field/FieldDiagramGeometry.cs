@@ -23,8 +23,26 @@ public static class FieldDiagramGeometry
     public static readonly (double X, double Y) Third = (-19.4, 19.4);
     public static readonly (double X, double Y) Mound = (0.0, 18.4);
 
+    /// <summary>芝土境界弧（グラスライン）の半径[m]。実球場準拠のマウンド中心・約95ft。</summary>
+    public const double InfieldGrassArcRadiusM = 29.0;
+
     /// <summary>球場座標の方位角[rad]（+Y=中堅を0、+X側を正）。</summary>
     public static double BearingRad((double X, double Y) p) => System.Math.Atan2(p.X, p.Y);
+
+    /// <summary>
+    /// 方位角[rad]の内野ダート境界（芝土境界弧）までの本塁からの距離[m]。
+    /// 弧は本塁中心ではなく**マウンド中心・半径 <see cref="InfieldGrassArcRadiusM"/>**（実球場の
+    /// グラスライン準拠）。本塁中心の固定半径だと二塁（38.8m）が土の外に浮くための修正式。
+    /// 導出: 点 r·(sinθ, cosθ) とマウンド (0, My) の距離 = R を r について解いた正根
+    /// r(θ) = My·cosθ + √(R² − (My·sinθ)²)。中堅方向47.4m・±45°で約38.9m。
+    /// </summary>
+    public static double InfieldDirtRadius(double bearingRad)
+    {
+        var my = Mound.Y;
+        const double r = InfieldGrassArcRadiusM;
+        var s = my * System.Math.Sin(bearingRad);
+        return my * System.Math.Cos(bearingRad) + System.Math.Sqrt(r * r - s * s);
+    }
 
     /// <summary>
     /// 方位角[rad]の外野フェンスまでの距離[m]。中堅=0で中堅距離、±45°で両翼距離を cos(2θ) 補間。
