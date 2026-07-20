@@ -23,6 +23,12 @@ public sealed record Player
     /// </summary>
     public int UniformNumber { get; init; }
 
+    /// <summary>
+    /// 学年（1〜3）。表示用（大会展望の登録メンバー・試合盤面のプロフィール）。0=未設定。
+    /// 自校は DevelopingPlayer.Grade を焼き込み、相手校は生成時に採番する。乱数を含まない純データ。
+    /// </summary>
+    public int Grade { get; init; }
+
     /// <summary>投げ手・打ち手の利き（設計書01 §1.1c）。</summary>
     public Handedness Throws { get; init; } = Handedness.Right;
     public Handedness Bats { get; init; } = Handedness.Right;

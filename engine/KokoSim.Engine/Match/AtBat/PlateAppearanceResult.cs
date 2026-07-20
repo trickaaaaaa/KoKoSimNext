@@ -11,6 +11,7 @@ public enum PlateAppearanceResult
     HomeRun,
     InPlayOut,
     ReachedOnError,
+    HitByPitch,
 }
 
 public static class PlateAppearanceResultExtensions
@@ -20,9 +21,9 @@ public static class PlateAppearanceResultExtensions
         => r is PlateAppearanceResult.Single or PlateAppearanceResult.Double
             or PlateAppearanceResult.Triple or PlateAppearanceResult.HomeRun;
 
-    /// <summary>公式打数に数えるか（四球は打数に含めない）。</summary>
+    /// <summary>公式打数に数えるか（四球・死球は打数に含めない）。</summary>
     public static bool IsAtBat(this PlateAppearanceResult r)
-        => r is not PlateAppearanceResult.Walk;
+        => r is not (PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch);
 
     /// <summary>塁打数（長打率用）。</summary>
     public static int TotalBases(this PlateAppearanceResult r) => r switch

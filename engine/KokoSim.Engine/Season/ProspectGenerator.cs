@@ -35,19 +35,25 @@ public sealed record RosterCoefficients
     public double PhysicalMean { get; init; } = 45.0;
     public double PhysicalSd { get; init; } = 12.0;
 
-    /// <summary>精神力・統率傾向の分布（設計書02 §3 / 09 §8。才能・身体と独立に振る）。</summary>
-    public double MentalMean { get; init; } = 50.0;
+    /// <summary>
+    /// 精神力・統率傾向の分布（設計書02 §3 / 09 §8。才能・身体と独立に振る）。
+    /// 実戦成長ループ接続（Q8・2026-07-20）に伴い、精神力は「新入生は未熟（中心46）→3年間の実戦で開花」へ
+    /// 初期分布を低めに振り直した（設計書02 §5.3a の時間アーク）。
+    /// </summary>
+    public double MentalMean { get; init; } = 46.0;
     public double MentalSd { get; init; } = 12.0;
     public double LeadershipMean { get; init; } = 50.0;
     public double LeadershipSd { get; init; } = 15.0;
 
     /// <summary>
-    /// 捕手リード（設計書01 §2①）。天性＝野球脳(Mental)相関で素地が決まる。中心50＝リーグ平均で帯不変（不変条件#5）。
-    /// 「未熟→実戦で伸びる」時間アークは将来の実戦成長ループに委ね、初期分布は中心不変に保つ。
+    /// 捕手リード（設計書01 §2①）。天性＝野球脳(Mental)相関で素地が決まる。
+    /// 実戦成長ループ接続（Q8・2026-07-20）に伴い中心を46へ引き下げ（「未熟→捕手出場で伸びる」の時間アーク）。
     /// </summary>
-    public double LeadMean { get; init; } = 50.0;
+    public double LeadMean { get; init; } = 46.0;
     public double LeadSd { get; init; } = 8.0;
     public double LeadMentalCorr { get; init; } = 0.30;   // 野球脳との相関（天性の効き）
+    /// <summary>リードcapの野球脳相関（Q8(c): 名捕手の天井は野球脳で決まる）。(Mental−50)×これ を cap に加算。</summary>
+    public double LeadCapMentalCorr { get; init; } = 0.15;
 
     // --- 投打の利き（設計書01 §1.1c） ---
     public double ThrowLeftProb { get; init; } = 0.12;
@@ -98,6 +104,9 @@ public sealed record RosterCoefficients
     // 旧フィールド（後方互換・他コードから参照）。生成は上記モデルに移行。
     public double InitLevelMean { get; init; } = 32.0;
     public double InitLevelSd { get; init; } = 8.0;
+
+    /// <summary>球質タイプ（本格派/技巧派/軟投派）の出現割合と配分オフセット。自校・AI校で共有する。</summary>
+    public PitcherArchetypeCoefficients Archetypes { get; init; } = new();
 }
 
 /// <summary>
@@ -167,10 +176,21 @@ public static class ProspectGenerator
         var mentalRng = rng.Fork(MentalStreamId(year, index));
         var mental = (int)MathUtil.Clamp(Math.Round(mentalRng.NextGaussian(c.MentalMean, c.MentalSd)), 1, 99);
         var leadership = (int)MathUtil.Clamp(Math.Round(mentalRng.NextGaussian(c.LeadershipMean, c.LeadershipSd)), 1, 99);
-        // 捕手リード（設計書01 §2①）: 野球脳(Mental)相関＋個体差。中心50不変で帯を保つ（不変条件#5）。
+        // 捕手リード（設計書01 §2①）: 野球脳(Mental)相関＋個体差。
         // mentalRng の末尾で引くことで既存の mental/leadership 値と主ロール列を1ビットも変えない。
         var lead = (int)MathUtil.Clamp(
             Math.Round(c.LeadMean + (mental - 50) * c.LeadMentalCorr + mentalRng.NextGaussian(0, c.LeadSd)), 1, 99);
+
+        // 実戦成長の隠し上限（Q8・2026-07-20）: 能力capと同じ「現在値＋gap＋Late上振れ」の流儀。
+        // リードcapはさらに野球脳と相関（Q8(c)）＝「名捕手の天井」を個体で表現。mentalRng 末尾追加のため
+        // 既存の mental/leadership/lead 値は不変（決定論の増分互換）。
+        var mentalCap = (int)MathUtil.Clamp(
+            Math.Round(mental + mentalRng.NextGaussian(c.CapGapMean, c.CapGapSd)
+                + (growth == GrowthType.Late ? c.LateCapBonus : 0)), mental + 2, 99);
+        var leadCap = (int)MathUtil.Clamp(
+            Math.Round(lead + mentalRng.NextGaussian(c.CapGapMean, c.CapGapSd)
+                + (growth == GrowthType.Late ? c.LateCapBonus : 0)
+                + (mental - 50) * c.LeadCapMentalCorr), lead + 2, 99);
 
         // 性格タイプ（設計書01 §1.1, CHANGELOG 22b）: 専用フォークストリームで抽選（能力・精神ロール列を1ビットも乱さない）。
         // タイプ先決め: 抽選したタイプが①統率傾向の生成平均偏りと③自主成長(PersonalityFactor)の中心を与える。
@@ -197,8 +217,10 @@ public static class ProspectGenerator
                 personalityCoeff.FactorMin, personalityCoeff.FactorMax),
             Personality = personality,
             Mental = mental,
+            MentalCap = mentalCap,
             Leadership = leadership,
             Lead = lead,
+            LeadCap = leadCap,
             // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。
             Skills = SkillGenerator.Generate(isPitcher, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff),
             // 怪我耐性（隠し, 設計書01 §1.1）。身体系と同様に才能と独立。
@@ -247,6 +269,19 @@ public static class ProspectGenerator
         var arm = p.Level(AbilityKind.ArmStrength);
         var veloLevel = (int)MathUtil.Clamp(
             Math.Round(arm * c.VelocityArmWeight + pitcherSense * c.VelocitySenseWeight), 1, 100);
+
+        // 球質タイプ（設計書01 §1.1b「技巧派投手」）: 投手総合はほぼ変えず、球速・制球・スタミナ・キレの
+        // 配分だけを振り替える。専用Forkストリームで抽選＝既存の能力ロール列を1ビットも乱さない（不変条件#2）。
+        if (isPitcher)
+        {
+            var archetype = PitcherArchetypes.Sample(
+                rng.Fork(ArchetypeStreamId(year, index)), c.Archetypes);
+            var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(archetype, c.Archetypes);
+            veloLevel = Lv(veloLevel + dv);
+            SetWithCap(p, AbilityKind.Control, Lv(p.Level(AbilityKind.Control) + dc), c, growth, rng);
+            SetWithCap(p, AbilityKind.Stamina, Lv(p.Level(AbilityKind.Stamina) + ds), c, growth, rng);
+            SetWithCap(p, AbilityKind.PitchRank, Lv(p.Level(AbilityKind.PitchRank) + dr), c, growth, rng);
+        }
         SetWithCap(p, AbilityKind.Velocity, veloLevel, c, growth, rng);
 
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
@@ -378,6 +413,12 @@ public static class ProspectGenerator
 
     /// <summary>性格抽選の独立ストリームID（他ストリームと別の上位ビット）。</summary>
     private static ulong PersonalityStreamId(int year, int index) => 0x9D2B_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>球質タイプ抽選の独立ストリーム（能力ロール列を乱さない）。</summary>
+    private static ulong ArchetypeStreamId(int year, int index) => 0x7B15_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
+    private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
 
     private static GrowthType SampleGrowthType(IRandomSource rng)
     {

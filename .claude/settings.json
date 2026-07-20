@@ -197,7 +197,10 @@
       "Bash(cp /tmp/new-baseline-raw.txt /Users/seiya.oda/Unity/KoKoSimNext/engine/KokoSim.Engine.Tests/Match/Game/determinism-baseline.txt *)",
       "Bash(cp /tmp/new-baseline-d2e.txt /Users/seiya.oda/Unity/KoKoSimNext/engine/KokoSim.Engine.Tests/Match/Game/determinism-baseline.txt && wc -l /Users/seiya.oda/Unity/KoKoSimNext/engine/KokoSim.Engine.Tests/Match/Game/determinism-baseline.txt)",
       "Bash(bash /Users/seiya.oda/Unity/KoKoSimNext/tools/sync-engine-dll.sh)",
-      "Bash(ls -la /Users/seiya.oda/Unity/KoKoSimNext/.claude/ 2>/dev/null; echo \"---\"; cat /Users/seiya.oda/Unity/KoKoSimNext/.claude/settings.json 2>/dev/null; echo \"---local---\"; cat /Users/seiya.oda/Unity/KoKoSimNext/.claude/settings.local.json 2>/dev/null; echo \"---user---\"; cat /Users/seiya.oda/.claude/settings.json 2>/dev/null)"
+      "Bash(ls -la /Users/seiya.oda/Unity/KoKoSimNext/.claude/ 2>/dev/null; echo \"---\"; cat /Users/seiya.oda/Unity/KoKoSimNext/.claude/settings.json 2>/dev/null; echo \"---local---\"; cat /Users/seiya.oda/Unity/KoKoSimNext/.claude/settings.local.json 2>/dev/null; echo \"---user---\"; cat /Users/seiya.oda/.claude/settings.json 2>/dev/null)",
+      "Bash(git commit -m ' *)",
+      "Edit(/.claude/skills/issue/**)",
+      "Bash(gh run *)"
     ],
     "additionalDirectories": [
       "/private/tmp/kprobe",

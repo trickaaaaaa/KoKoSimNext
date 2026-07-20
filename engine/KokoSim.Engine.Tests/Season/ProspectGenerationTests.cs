@@ -223,17 +223,17 @@ public sealed class ProspectGenerationTests
         Assert.True(varied > pop.Count / 2, "伸びしろが分野一律になっている");
     }
 
-    // --- 捕手リード（設計書01 §2①: 天性＝野球脳相関、中心50不変で帯を保つ） ---
+    // --- 捕手リード（設計書01 §2①: 天性＝野球脳相関。Q8で「未熟(中心46)→実戦で開花」へ引き下げ） ---
 
     [Fact]
-    public void Lead_IsCenteredAtFifty_AndCorrelatesWithMental()
+    public void Lead_IsCenteredLow_AndCorrelatesWithMental()
     {
         var pop = Cohort(C.TalentCenterDefault);
         var leads = pop.Select(p => (double)p.Lead).ToList();
         var mentals = pop.Select(p => (double)p.Mental).ToList();
 
-        // 中心50不変（統計帯を動かさない, 不変条件#5）。個体差はあるが平均は50近傍。
-        Assert.InRange(leads.Average(), 47.5, 52.5);
+        // Q8（実戦成長ループ）: 新入生は未熟＝中心46−(50−MentalMean)×corr ≈ 44.8 近傍。実戦出場で開花する。
+        Assert.InRange(leads.Average(), 43.0, 46.5);
         // 個体差が潰れていない（横並びの中にも良し悪しがある）。
         var sd = System.Math.Sqrt(leads.Select(v => (v - leads.Average()) * (v - leads.Average())).Average());
         Assert.InRange(sd, 5.0, 13.0);
@@ -254,5 +254,23 @@ public sealed class ProspectGenerationTests
         var a = ProspectGenerator.Intake(1, C, new Xoshiro256Random(21));
         var b = ProspectGenerator.Intake(1, C, new Xoshiro256Random(21));
         for (var i = 0; i < a.Count; i++) Assert.Equal(a[i].Lead, b[i].Lead);
+    }
+
+    // --- 実戦成長の隠しcap（Q8・2026-07-20: 現在値＋gap＋Late上振れ、リードは野球脳相関） ---
+
+    [Fact]
+    public void MatchGrowthCaps_AreAboveCurrentValue_AndLateGetsHigherCeiling()
+    {
+        var pop = Cohort(C.TalentCenterDefault);
+        foreach (var p in pop)
+        {
+            Assert.InRange(p.MentalCap, p.Mental + 2, 99);
+            Assert.InRange(p.LeadCap, p.Lead + 2, 99);
+        }
+
+        // Late は cap 上振れ（LateCapBonus）: 現在値との平均ギャップが Standard/Early より大きい。
+        double Gap(GrowthType g) => pop.Where(p => p.GrowthType == g).Average(p => (double)(p.LeadCap - p.Lead));
+        Assert.True(Gap(GrowthType.Late) > Gap(GrowthType.Standard),
+            $"Lateのリードcap上振れが無い (Late={Gap(GrowthType.Late):F1} Std={Gap(GrowthType.Standard):F1})");
     }
 }

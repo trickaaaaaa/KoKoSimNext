@@ -41,5 +41,13 @@ public sealed record TrainingCoefficients
     /// </summary>
     public int DefaultBudgetMinutes { get; init; } = 300;
 
+    // === 実戦成長（設計書02 §5.3a, Q8・2026-07-20）: 精神力・走塁判断・捕手リードは試合出場でのみ伸びる ===
+    /// <summary>1試合出場あたりの精神力exp（成長段階係数を乗算）。</summary>
+    public double MatchMentalExp { get; init; } = 260.0;
+    /// <summary>1試合の捕手出場あたりのリードexp（成長段階係数を乗算）。</summary>
+    public double MatchLeadExp { get; init; } = 400.0;
+    /// <summary>1試合出場あたりの走塁判断exp（成長段階係数を乗算, AbilityKind.Baserunning へ）。</summary>
+    public double MatchBaserunningExp { get; init; } = 300.0;
+
     public double RequiredExp(int level) => LevelUpBase * Math.Pow(LevelUpGrowth, level);
 }

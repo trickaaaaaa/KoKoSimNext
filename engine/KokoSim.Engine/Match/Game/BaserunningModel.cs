@@ -63,6 +63,7 @@ public static class BaserunningModel
                 return (0, 0, 0, false, false, Moves(mv));
 
             case PlateAppearanceResult.Walk:
+            case PlateAppearanceResult.HitByPitch: // 死球はボールデッド＝四球と同じフォース進塁のみ
             {
                 var (runs, outs) = ApplyWalk(bases, batter, r1, r2, r3, mv);
                 return (runs, outs, 0, false, false, Moves(mv));
@@ -301,6 +302,17 @@ public static class BaserunningModel
     {
         if (currentOuts >= 2) return (0, 0, 0, false); // この凡打が3アウト目。進塁なし。
 
+        // フォース進塁（2026-07-20, OPEN-QUESTIONS 2026-07-19項）: ゴロ凡打では打者走者が一塁へ向かうため、
+        // 後方の占有で押し出される走者（一塁走者=常時 / 二塁走者=一塁走者あり / 三塁走者=満塁）は塁を
+        // 明け渡さざるを得ない。守備が確実なアウト（一塁 or 併殺）を選んだ時点で押し出された走者の次塁は
+        // 空く＝確定進塁。ProductiveOutAdvanceProb は非フォースの進塁打（二塁→三塁の右方向ゴロ等）専用。
+        // フライ（タッグアップ＝時計が別物）と home 無し（従来互換・単体テスト経路）はフォース対象外。
+        // フォース判定は打席開始時の占有で確定させる（併殺/野選で r1 が消えても後続の押し出しは起きていた）。
+        var isGrounder = home is { IsFly: false };
+        var r1Forced = isGrounder && r1 is not null;
+        var r2Forced = isGrounder && r1 is not null && r2 is not null;
+        var r3Forced = isGrounder && r1 is not null && r2 is not null && r3 is not null;
+
         var extraOuts = 0;
         var homeOuts = 0;
         var batterSafeOnFc = false;
@@ -353,8 +365,35 @@ public static class BaserunningModel
         // それ以外（犠飛=フライ・home無し）は従来の SacFlyScoreProb テーブル。
         if (r3 is not null)
         {
+            // フォースの三塁走者（満塁ゴロ）: 自重できない（後続に押し出される）。
+            // 内野前進×併殺なしは本塁封殺の勝負（送り判定なしで必ず走る）、それ以外は守備が
+            // 一塁/併殺を選んだ＝本塁は空く＝確定生還。
+            if (r3Forced && home is { IsFly: false } hforce && extraOuts == 0
+                && hforce.InfieldDepth == Tactics.DefenseDepth.In)
+            {
+                var delay = coeff.HomeGrounderStartDelaySeconds;
+                if (HomePlayResolver.Resolve(r3, 3, hforce.Situation, hforce.Field, coeff, rng, delay) == HomePlayResult.Safe)
+                {
+                    runs++;
+                    mv?.Add(new RunnerMove(r3, 3, 4, false));
+                }
+                else
+                {
+                    extraOuts++; homeOuts++; // 本塁封殺（フォースアウト）
+                    mv?.Add(new RunnerMove(r3, 3, 4, Out: true));
+                }
+                bases.Third = null;
+                r3 = null;
+            }
+            else if (r3Forced)
+            {
+                runs++; // 守備は一塁/併殺を選択＝フォースの三塁走者は悠々生還。
+                mv?.Add(new RunnerMove(r3, 3, 4, false));
+                bases.Third = null;
+                r3 = null;
+            }
             // 深さが本塁プレーの有無を決める（G1）: 後退=献上して還す／前進=本塁で勝負／通常=従来テーブル。
-            if (home is { IsFly: false } h && extraOuts == 0 && h.InfieldDepth == Tactics.DefenseDepth.Deep)
+            else if (home is { IsFly: false } h && extraOuts == 0 && h.InfieldDepth == Tactics.DefenseDepth.Deep)
             {
                 runs++; // 内野後退＝献上。三塁走者は悠々生還。
                 mv?.Add(new RunnerMove(r3, 3, 4, false));
@@ -395,15 +434,15 @@ public static class BaserunningModel
 
         if (currentOuts + battersOwnOut + extraOuts >= 3) return (runs, extraOuts, homeOuts, batterSafeOnFc); // 本塁憤死で3アウト＝以降の進塁なし。
 
-        // 進塁打で走者が1つ進む。
-        if (r2 is not null && bases.Third is null && MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
+        // 進塁打で走者が1つ進む（フォースは確定進塁・rng非消費。非フォースのみ従来の確率判定）。
+        if (r2 is not null && bases.Third is null && (r2Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
         {
             mv?.Add(new RunnerMove(r2, 2, 3, false));
             bases.Third = r2;
             bases.Second = null;
             r2 = null;
         }
-        if (r1 is not null && bases.Second is null && MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
+        if (r1 is not null && bases.Second is null && (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
         {
             mv?.Add(new RunnerMove(r1, 1, 2, false));
             bases.Second = r1;

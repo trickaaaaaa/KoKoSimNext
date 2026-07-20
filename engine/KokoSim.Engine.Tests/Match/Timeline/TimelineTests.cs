@@ -77,11 +77,13 @@ public sealed class TimelineTests
     public void CaptureOn_InPlayEntriesHaveTimelines()
     {
         var r = CapturedGame(7);
-        var inPlay = r.Log.Where(e => e.Result is not (PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk)).ToList();
+        var inPlay = r.Log.Where(e => e.Result is not (PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk
+            or PlateAppearanceResult.HitByPitch)).ToList();
         Assert.NotEmpty(inPlay);
         Assert.All(inPlay, e => Assert.NotNull(e.Timeline));
-        // 三振・四球は打球プレーが無いのでタイムラインなし。
-        Assert.All(r.Log.Where(e => e.Result is PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk),
+        // 三振・四球・死球は打球プレーが無いのでタイムラインなし。
+        Assert.All(r.Log.Where(e => e.Result is PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk
+                or PlateAppearanceResult.HitByPitch),
             e => Assert.Null(e.Timeline));
     }
 
