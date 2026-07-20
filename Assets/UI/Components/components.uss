@@ -422,7 +422,7 @@
 .lineup-row__pos { width: 40px; margin-left: var(--sp-2); flex-direction: row; align-items: center; }
 .lineup-row__info { width: 96px; font-size: var(--fs-cap); color: var(--color-muted); }
 
-/* ── PosChip：守備位置チップ（クリックで守備位置変更）。投＝固定・指＝DH（非活性見た目） ── */
+/* ── PosChip：守備位置チップ（クリックで選択→別チップのクリックで守備位置を入替）。投＝固定・指＝DH（非活性見た目） ── */
 .pos-chip {
     min-width: 26px;
     height: 24px;
@@ -440,26 +440,8 @@
 .pos-chip:hover { border-color: var(--color-lamp); }
 .pos-chip--fixed { color: var(--color-muted); background-color: var(--color-line-soft); }
 .pos-chip--dh { color: var(--color-lamp); background-color: var(--color-line-soft); }
-
-/* ── PosMenu：守備位置ドロップダウン（PosChip クリックで浮遊表示） ── */
-.pos-menu {
-    position: absolute;
-    background-color: var(--color-panel-deep);
-    border-width: var(--border-w);
-    border-color: var(--color-line-focus);
-    border-radius: var(--radius-chip);
-    padding-top: 3px;
-    padding-bottom: 3px;
-}
-.pos-menu__item {
-    -unity-text-align: middle-center;
-    font-size: var(--fs-label);
-    color: var(--color-chalk);
-    padding-left: 12px;
-    padding-right: 12px;
-    height: 26px;
-}
-.pos-menu__item:hover { background-color: var(--color-panel-hover); color: var(--color-lamp); }
+/* 選択中（1つ目のチップをクリック済み）。bench-row--picked / sp-pill--picked と同じ表現。 */
+.pos-chip--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
 
 /* ── BenchRow：控え（打順外）の1行（名前＋投/野タグ＋総合ランク） ── */
 .bench-row {

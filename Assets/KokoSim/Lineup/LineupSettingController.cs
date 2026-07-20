@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using KokoSim.Engine.Match.Field;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -22,20 +21,11 @@ namespace KokoSim.Unity.Lineup
 
         private LineupSettingState _state;
         private VisualElement _root;
-        private VisualElement _posMenu;   // 守備位置ドロップダウン（浮遊）
-        private int _posMenuSlot = -1;
 
         private void OnEnable()
         {
             _state = new LineupSettingState();
             _root = GetComponent<UIDocument>().rootVisualElement;
-
-            _posMenu = new VisualElement();
-            _posMenu.AddToClassList("pos-menu");
-            _posMenu.style.display = DisplayStyle.None;
-            _root.Add(_posMenu);
-            // 盤面クリックでメニューを閉じる（メニュー自身のクリックは伝播停止で除外）。
-            _root.RegisterCallback<ClickEvent>(_ => HidePosMenu());
 
             Click("lu-ok", OnOk);
             Click("lu-cancel", OnCancel);
@@ -47,7 +37,6 @@ namespace KokoSim.Unity.Lineup
 
         private void Render()
         {
-            HidePosMenu();
             var v = _state.BuildView();
 
             // 画面専用ヘッダーに「この試合」の文脈を出す（共通ナビは非表示）。大会外表示（テスト等）は空。
@@ -133,42 +122,13 @@ namespace KokoSim.Unity.Lineup
             else if (r.IsPitcherSlot) chip.AddToClassList("pos-chip--fixed");
             if (r.PosEditable)
             {
+                if (r.IsPosPicked) chip.AddToClassList("pos-chip--picked");
+                // 打順行と同じ操作モデル：1回目のクリックで選択、2回目に別スロットのチップで守備位置を入替。
+                // 行クリック（打順入替）へ伝播させないよう停止する。
                 var slot = r.Order - 1;
-                chip.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); TogglePosMenu(slot, chip); });
+                chip.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); _state.ClickPosition(slot); Render(); });
             }
             return chip;
-        }
-
-        // ── 守備位置ドロップダウン ──
-        private void TogglePosMenu(int slot, VisualElement anchor)
-        {
-            if (_posMenuSlot == slot && _posMenu.style.display == DisplayStyle.Flex) { HidePosMenu(); return; }
-            _posMenu.Clear();
-            _posMenuSlot = slot;
-            foreach (var pos in LineupSettingState.FielderPositions)
-            {
-                var item = new Label(LineupSettingState.PosLabel(pos));
-                item.AddToClassList("pos-menu__item");
-                var p = pos;
-                item.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); _state.SetSlotPosition(slot, p); Render(); });
-                _posMenu.Add(item);
-            }
-            _posMenu.style.display = DisplayStyle.Flex;
-            _posMenu.BringToFront();
-            _posMenu.schedule.Execute(() =>
-            {
-                var wb = anchor.worldBound;
-                var local = _root.WorldToLocal(new Vector2(wb.xMin, wb.yMax + 2f));
-                _posMenu.style.left = local.x;
-                _posMenu.style.top = local.y;
-            });
-        }
-
-        private void HidePosMenu()
-        {
-            if (_posMenu == null) return;
-            _posMenu.style.display = DisplayStyle.None;
-            _posMenuSlot = -1;
         }
 
         // ── DH制トグル＋先発投手 ──
