@@ -14,8 +14,13 @@ namespace KokoSim.Engine.Tests.Season;
 /// </summary>
 public sealed class LineupSpecTests
 {
-    private static DevelopingPlayer Dp(int id, string name, bool pitcher = false, bool captain = false)
-        => new() { Id = id, Name = name, IsPitcher = pitcher, IsCaptain = captain };
+    // 既定でベンチ入り（背番号あり）。ベンチ外を作るときだけ number: 0 を渡す。
+    private static DevelopingPlayer Dp(int id, string name, bool pitcher = false, bool captain = false, int number = -1)
+        => new()
+        {
+            Id = id, Name = name, IsPitcher = pitcher, IsCaptain = captain,
+            UniformNumber = number >= 0 ? number : Math.Clamp(id, 1, UniformNumberAssigner.BenchSize),
+        };
 
     // 非DH: 8守備＋投手9番。守備位置を一意網羅。
     private static readonly FieldPosition[] EightFieldPos =
@@ -97,6 +102,54 @@ public sealed class LineupSpecTests
     {
         var slots = new List<LineupSlot> { new(Dp(1, "A"), FieldPosition.Catcher) };
         Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(new LineupSpec(slots)));
+    }
+
+    [Fact]
+    public void BuildFromLineup_BenchOutInBattingOrder_Throws()
+    {
+        var order = StandardOrder(out _);
+        // 3番をベンチ外（背番号0）の選手に差し替える。
+        order[2] = order[2] with { Player = Dp(30, "ベンチ外", number: 0) };
+        var ex = Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(new LineupSpec(order)));
+        Assert.Contains("ベンチ外", ex.Message);
+    }
+
+    [Fact]
+    public void BuildFromLineup_BenchOutOnBenchOrBullpen_Throws()
+    {
+        var order = StandardOrder(out _);
+        Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(
+            new LineupSpec(order, Bench: new List<DevelopingPlayer> { Dp(31, "控え外", number: 0) })));
+        Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(
+            new LineupSpec(order, Bullpen: new List<DevelopingPlayer> { Dp(32, "投手外", pitcher: true, number: 0) })));
+    }
+
+    [Fact]
+    public void BuildFromLineup_BenchOutStartingPitcher_Throws()
+    {
+        // DH制：先発投手だけベンチ外。
+        var slots = new List<LineupSlot>(9);
+        var posCursor = 0;
+        for (var i = 0; i < 9; i++)
+        {
+            if (i == 3) { slots.Add(new LineupSlot(Dp(10, "DH打者"), FieldPosition.FirstBase)); continue; }
+            slots.Add(new LineupSlot(Dp(i + 1, $"野手{i + 1}"), EightFieldPos[posCursor++]));
+        }
+        var sp = Dp(33, "先発", pitcher: true, number: 0);
+        Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(
+            new LineupSpec(slots, DhSlot: 3, StartingPitcher: sp)));
+    }
+
+    [Fact]
+    public void BuildFromLineup_AllBenchEntered_Succeeds()
+    {
+        var order = StandardOrder(out _);
+        var team = RosterTeamBuilder.BuildFromLineup(new LineupSpec(
+            order,
+            Bullpen: new List<DevelopingPlayer> { Dp(11, "控え投手", pitcher: true) },
+            Bench: new List<DevelopingPlayer> { Dp(12, "控え野手") }));
+        Assert.Single(team.Bullpen);
+        Assert.Single(team.Bench);
     }
 
     [Fact]

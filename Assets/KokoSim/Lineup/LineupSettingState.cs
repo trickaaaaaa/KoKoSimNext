@@ -90,6 +90,8 @@ namespace KokoSim.Unity.Lineup
         public CompareCardView CardB = new CompareCardView();
         public int Tab;
         public string[] TabLabels = { "打撃・走塁", "守備・投手" };
+        public bool CanConfirm = true;      // ベンチ入りが9人未満なら false（確定ボタンを塞ぐ）
+        public string WarnText = "";        // 上の理由（空＝警告なし）
         public List<CompareRowView> Rows2 = new List<CompareRowView>();  // 比較能力行
         public bool ShowApt;
         public bool HasAptA;
@@ -160,6 +162,11 @@ namespace KokoSim.Unity.Lineup
 
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
 
+        // 出場登録できる選手＝ベンチ入り（背番号1〜20。設計書06 §3.3b）のロスターindex。
+        // スタメン・控え・ブルペンはすべてこの集合からしか選べない（ベンチ外は候補に出さない）。
+        private readonly List<int> _eligible;
+        private readonly bool _shortage;   // ベンチ入りが9人未満＝打順を組めない（確定を塞ぐ）
+
         // 打順（9スロット）：各スロットのロスターindexと守備位置。
         private readonly int[] _idx = new int[9];
         private readonly FieldPosition[] _pos = new FieldPosition[9];
@@ -177,6 +184,11 @@ namespace KokoSim.Unity.Lineup
         public LineupSettingState()
         {
             _roster = RosterService.Roster;
+            var benchIn = Enumerable.Range(0, _roster.Count).Where(i => _roster[i].UniformNumber >= 1).ToList();
+            // ベンチ入りが9人に満たない編成では打順を組めない。画面は従来通り全部員で描いたうえで確定を塞ぎ、
+            // メンバー設定でベンチ入りを増やしてもらう（不正な LineupSpec はエンジンが弾く）。
+            _shortage = benchIn.Count < 9;
+            _eligible = _shortage ? Enumerable.Range(0, _roster.Count).ToList() : benchIn;
             SeedFromUniformNumbers();
         }
 
@@ -234,8 +246,9 @@ namespace KokoSim.Unity.Lineup
             return ByAbility().First(i => !InOrder(i));
         }
 
+        // 候補列挙は常にベンチ入りのみ（自動シード・控え一覧・ToLineupSpec のベンチ/ブルペンが全部これを通る）。
         private IEnumerable<int> ByAbility() =>
-            Enumerable.Range(0, _roster.Count).OrderByDescending(i => _roster[i].AverageLevel());
+            _eligible.OrderByDescending(i => _roster[i].AverageLevel());
 
         private bool InOrder(int idx)
         {
@@ -277,6 +290,7 @@ namespace KokoSim.Unity.Lineup
         public void ClickBench(int idx)
         {
             if (idx < 0 || idx >= _roster.Count) return;
+            if (!_eligible.Contains(idx)) return;   // ベンチ外は出場登録できない（安全網。候補にも出していない）
             if (_picked < 0) { _picked = idx; _pickKind = PickKind.OrderPlayer; return; }
             if (_picked == idx) { ClearPick(); return; }
 
@@ -350,6 +364,9 @@ namespace KokoSim.Unity.Lineup
             return -1;
         }
 
+        /// <summary>スタメンを確定できるか（ベンチ入り9人未満なら不可）。</summary>
+        public bool CanConfirm => !_shortage;
+
         public void SetHovered(int index) => _hovered = index;
         public void SetTab(int tab) => _tab = Math.Clamp(tab, 0, 1);
         private void ClearPick() { _picked = -1; _pickKind = PickKind.None; }
@@ -389,7 +406,9 @@ namespace KokoSim.Unity.Lineup
 
         public LineupSettingView BuildView()
         {
-            var v = new LineupSettingView { Tab = _tab, UsesDh = _usesDh };
+            var v = new LineupSettingView { Tab = _tab, UsesDh = _usesDh, CanConfirm = !_shortage };
+            if (_shortage)
+                v.WarnText = "ベンチ入りが9人未満です。メンバー設定で背番号を割り当ててください。";
 
             for (var i = 0; i < 9; i++)
             {
@@ -426,7 +445,7 @@ namespace KokoSim.Unity.Lineup
             var used = new HashSet<int>();
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
             if (_usesDh && _spIdx >= 0) used.Add(_spIdx);
-            foreach (var i in Enumerable.Range(0, _roster.Count)
+            foreach (var i in _eligible
                          .Where(i => !used.Contains(i))
                          .OrderByDescending(i => _roster[i].IsPitcher ? 1 : 0)
                          .ThenByDescending(i => _roster[i].AverageLevel()))

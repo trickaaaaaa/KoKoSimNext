@@ -112,11 +112,21 @@ public static class RosterTeamBuilder
         if (!spec.UsesDh && (spec.PitcherSlot < 0 || spec.PitcherSlot > 8))
             throw new ArgumentException("PitcherSlot は 0〜8 の範囲です。", nameof(spec));
 
-        // 主将（設計書09 §8）: spec が参照する全 DevelopingPlayer から1名を探し、同一 Player 参照を Team.Captain へ差す。
+        // spec が参照する全 DevelopingPlayer（打順＋先発＋ブルペン＋ベンチ）。
         var referenced = spec.BattingOrder.Select(s => s.Player)
             .Concat(spec.StartingPitcher != null ? new[] { spec.StartingPitcher } : Array.Empty<DevelopingPlayer>())
             .Concat(spec.Bullpen ?? Array.Empty<DevelopingPlayer>())
-            .Concat(spec.Bench ?? Array.Empty<DevelopingPlayer>());
+            .Concat(spec.Bench ?? Array.Empty<DevelopingPlayer>())
+            .ToList();
+
+        // ベンチ入り検証（設計書06 §3.3b: 背番号1〜20＝ベンチ入り・0＝ベンチ外）。
+        // 出場登録（スタメン／先発／ブルペン／ベンチ）はベンチ入り選手のみ。UIが防ぐが安全網としてここで弾く。
+        var benchOut = referenced.Where(p => p.UniformNumber < 1).Select(p => p.Name).Distinct().ToList();
+        if (benchOut.Count > 0)
+            throw new ArgumentException(
+                "ベンチ外（背番号なし）の選手は出場登録できません: " + string.Join("、", benchOut), nameof(spec));
+
+        // 主将（設計書09 §8）: 参照選手から1名を探し、同一 Player 参照を Team.Captain へ差す。
         var captainDp = referenced.FirstOrDefault(p => p.IsCaptain);
         Player? captainPlayer = null;
         void TrackCaptain(DevelopingPlayer? dp, Player pl)
