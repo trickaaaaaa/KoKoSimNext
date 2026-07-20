@@ -368,7 +368,6 @@ namespace KokoSim.Unity.Member
             {
                 var chip = new VisualElement();
                 chip.AddToClassList("pool-chip");
-                if (p.Assigned) chip.AddToClassList("pool-chip--assigned");
                 if (p.IsPicked) chip.AddToClassList("pool-chip--picked");
 
                 var body = new VisualElement();

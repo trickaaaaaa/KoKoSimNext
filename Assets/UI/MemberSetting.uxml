@@ -38,8 +38,8 @@
                         <ui:Label text="控え　背番号 10–20" class="ms-section" />
                         <ui:VisualElement name="ms-bench" class="ms-bench" />
 
-                        <!-- 割当元プール -->
-                        <ui:Label name="ms-pool-title" text="部員（ベンチ外・未割当を先頭）" class="ms-section" />
+                        <!-- 割当元プール（ベンチ外のみ） -->
+                        <ui:Label name="ms-pool-title" text="部員（ベンチ外）" class="ms-section" />
                         <ui:ScrollView mode="Vertical" class="ms-pool-scroll">
                             <ui:VisualElement name="ms-pool" class="ms-pool" />
                         </ui:ScrollView>
