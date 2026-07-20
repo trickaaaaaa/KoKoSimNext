@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ヘッドレス一括シミュレーションCLI。net10.0 で単体実行する。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>KokoSim.Balance</RootNamespace>
+    <AssemblyName>KokoSim.Balance</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KokoSim.Engine\KokoSim.Engine.csproj" />
+    <ProjectReference Include="..\KokoSim.Config\KokoSim.Config.csproj" />
+  </ItemGroup>
+
+</Project>

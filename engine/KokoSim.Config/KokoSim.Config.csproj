@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- data/ の YAML を読み、純エンジンの設定オブジェクトへ変換する層。
+       IO と YamlDotNet 依存はここに隔離し、KokoSim.Engine を純粋に保つ（不変条件#3）。 -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>KokoSim.Config</RootNamespace>
+    <AssemblyName>KokoSim.Config</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="16.2.1" />
+  </ItemGroup>
+
+  <!-- netstandard2.1 の init/required ポリフィルをエンジンと共有（各アセンブリに内部型として複製） -->
+  <ItemGroup>
+    <Compile Include="..\KokoSim.Engine\Core\Polyfills.cs" Link="Polyfills.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KokoSim.Engine\KokoSim.Engine.csproj" />
+  </ItemGroup>
+
+</Project>

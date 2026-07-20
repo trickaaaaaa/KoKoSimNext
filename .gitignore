@@ -18,6 +18,7 @@ out/
 *.csproj
 *.sln
 !engine/KokoSim.sln
+!engine/**/*.csproj
 
 # --- OS / IDE ---
 .DS_Store
