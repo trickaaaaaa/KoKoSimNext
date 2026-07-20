@@ -60,6 +60,10 @@ public class PitchSequenceSynthesizerTests
                     Assert.Equal(4, last.BallsAfter);
                     Assert.Equal(PitchKind.Ball, last.Kind);
                     break;
+                case PlateAppearanceResult.HitByPitch:
+                    Assert.Equal(PitchKind.HitByPitch, last.Kind); // 死球はカウント不変で終了
+                    Assert.True(last.BallsAfter < 4 && last.StrikesAfter < 3);
+                    break;
                 default:
                     Assert.Equal(PitchKind.InPlay, last.Kind);
                     Assert.True(last.BallsAfter < 4 && last.StrikesAfter < 3);

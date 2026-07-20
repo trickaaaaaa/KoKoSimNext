@@ -174,6 +174,18 @@ public sealed class AtBatSession
         // 判定用弾道特徴量（設計書15 Phase E-1）: テーブル補間・RNG非消費。Phase E-2 から④の空振り判定へ接続。
         _lastPitchFeatures = ComputeFeatures(plan);
 
+        // 死球（HBP, design-14 未決F・2026-07-20）: 散布結果が打者の体側ウィンドウ（X負側・高さ帯）へ入り、
+        // 回避に失敗した球。ボールデッド＝打席即終了（進塁はフォースのみ＝BaserunningModel が Walk 同様に解く）。
+        // バント/スクイズ構え中でも体に当たれば死球（各Resolverより先に判定）。回避ロールはウィンドウ内のみ
+        // rng を消費する（FieldersChoiceProb ガードと同じ流儀）。
+        if (loc.X <= -ctx.Pitching.HbpBodyEdgeM
+            && loc.Y >= ctx.Pitching.HbpBodyBottomM && loc.Y <= ctx.Pitching.HbpBodyTopM
+            && !MathUtil.Chance(ctx.Pitching.HbpDodgeProb, rng))
+        {
+            RecordPitch(PitchKind.HitByPitch, plan, loc);
+            return Finish(PlateAppearanceResult.HitByPitch);
+        }
+
         // バント/セーフティバント（design-14・設計書02 §4.3・設計書15 Phase D-2b）: 通常の打者判断/コンタクト
         // パイプラインとは別の専用解決（BuntResolver）へ分岐する。球種/コースは実データとして記録するが
         // （PitchSelection/ControlScatterは通常どおり消費済み）、結果自体は BuntResolver が決める。

@@ -544,6 +544,7 @@ namespace KokoSim.Unity.Match
             {
                 case KokoSim.Engine.Match.AtBat.PlateAppearanceResult.Strikeout: return "三振";
                 case KokoSim.Engine.Match.AtBat.PlateAppearanceResult.Walk: return "四球";
+                case KokoSim.Engine.Match.AtBat.PlateAppearanceResult.HitByPitch: return "死球";
                 default: return "凡退";
             }
         }

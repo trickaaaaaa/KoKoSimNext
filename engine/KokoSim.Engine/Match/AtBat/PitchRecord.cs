@@ -8,6 +8,7 @@ public enum PitchKind
     SwingingStrike,
     Foul,
     InPlay,
+    HitByPitch,
 }
 
 /// <summary>

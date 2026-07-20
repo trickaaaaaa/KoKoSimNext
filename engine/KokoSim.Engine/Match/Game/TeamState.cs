@@ -85,8 +85,8 @@ public sealed class TeamState
     public void RecordSqueeze() => Squeezes++;
 
     // ===== 個人成績（ボックススコア） =====
-    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO; }
-    private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches; }
+    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP; }
+    private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches, HB; }
     private readonly Dictionary<Player, BatAccum> _bat = new();
     private readonly Dictionary<Player, PitAccum> _pit = new();
 
@@ -101,6 +101,7 @@ public sealed class TeamState
         if (r == PlateAppearanceResult.Triple) a.Triples++;
         if (r == PlateAppearanceResult.HomeRun) a.HR++;
         if (r == PlateAppearanceResult.Walk) a.BB++;
+        if (r == PlateAppearanceResult.HitByPitch) a.HBP++;
         if (r == PlateAppearanceResult.Strikeout) a.SO++;
         a.RBI += rbi;
     }
@@ -114,6 +115,7 @@ public sealed class TeamState
         a.Runs += runs;
         if (r == PlateAppearanceResult.Strikeout) a.SO++;
         if (r == PlateAppearanceResult.Walk) a.BB++;
+        if (r == PlateAppearanceResult.HitByPitch) a.HB++;
         a.Outs += outs;
         a.Pitches += pitches;
     }
@@ -145,7 +147,8 @@ public sealed class TeamState
         return lines;
 
         static BattingLine Line(int order, Player p, BatAccum a)
-            => new(order, p.Position, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId);
+            => new(order, p.Position, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
+                a.HBP);
     }
 
     /// <summary>登板順の投手成績（先発→登板したブルペン）。</summary>
@@ -157,7 +160,7 @@ public sealed class TeamState
         {
             if (p == null || seen.Contains(p) || !_pit.TryGetValue(p, out var a)) return;
             seen.Add(p);
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId));
+            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB));
         }
         Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
         foreach (var p in _team.Bullpen) Add(p);
@@ -321,7 +324,8 @@ public sealed class TeamState
 
     public void NotePitchingResult(PlateAppearanceResult r, int rattledThreshold)
     {
-        if (r.IsHit() || r is PlateAppearanceResult.Walk or PlateAppearanceResult.ReachedOnError)
+        if (r.IsHit() || r is PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch
+            or PlateAppearanceResult.ReachedOnError)
         {
             _consecutiveBaserunners++;
             if (_consecutiveBaserunners >= rattledThreshold) PitcherRattled = true;

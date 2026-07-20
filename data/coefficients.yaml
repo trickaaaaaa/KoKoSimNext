@@ -27,6 +27,12 @@ pitching:
     intercept_cm: 30.0
     slope_cm_per_point: 0.22
     min_sigma_cm: 2.0
+  # 死球（HBP, design-14 未決F・2026-07-20）: 散布結果が体側ウィンドウ（X負側・高さ帯）へ入り
+  # 回避に失敗した球。打者の立ち位置はX負側固定（左右打者の区別は現モデルに無い）🟡
+  hbp_body_edge_m: 0.45          # 体側ウィンドウの内縁|X|[m]（ゾーン半幅0.216+ボックス余白）
+  hbp_body_bottom_m: 0.20        # 下端[m]（これ未満はワンバウンド＝ボール）
+  hbp_body_top_m: 1.60           # 上端[m]（これ超は頭上抜け＝ボール）
+  hbp_dodge_prob: 0.85           # ウィンドウ内の球を打者が避けられる確率
   # 毎球の球速ばらつき（設計書02 §1.1d）: 最速=天井、常時は−3〜5km/h、たまに最速付近 🟡
   velocity_drop_mean_kmh: 4.0
   velocity_drop_sigma_kmh: 1.8
@@ -506,6 +512,11 @@ training:
   # 練習時間配分（設計書03 §3.1）: 基準週=1メニュー満額の基準、default_budget=施設0の週練習時間
   reference_week_minutes: 300
   default_budget_minutes: 300  # 照明/寮などの施設導入で増やす（設計書03 §4, 今回は口だけ）
+  # 実戦成長（設計書02 §5.3a, Q8・2026-07-20）: 精神力/走塁判断/捕手リードは試合出場でのみ伸びる。
+  # 1試合出場あたりのexp（成長段階係数を乗算）。必要expは能力値と同じ曲線（100×1.05^v）🟡
+  match_mental_exp: 260.0
+  match_lead_exp: 400.0        # 捕手として出場した試合のみ
+  match_baserunning_exp: 300.0
 
 # --- 全国（架空校生成・AI校進化, 設計書05） ---
 # --- チーム総合力6指標（設計決定 2026-07-18）: 打撃/投手/守備/機動/選手層/精神の加重平均 ---
@@ -524,9 +535,9 @@ team_strength:
   launch_weight: 0.15
   discipline_weight: 0.15
   # 投手合成（1投手, 合計1.0）
-  velocity_weight: 0.30
-  control_weight: 0.30
-  stamina_weight: 0.20
+  velocity_weight: 0.40
+  control_weight: 0.25
+  stamina_weight: 0.15
   pitch_rank_weight: 0.20
   # 守備合成（1野手, 合計1.0）
   fielding_weight: 0.40
@@ -618,14 +629,16 @@ roster:
   physical_mean: 45.0
   physical_sd: 12.0
   # 精神力・統率傾向（設計書02 §3 / 09 §8。才能・身体と独立）
-  mental_mean: 50.0
+  # 実戦成長ループ接続（Q8・2026-07-20）: 「新入生は未熟（中心46）→3年間の実戦で開花」へ初期分布を引き下げ
+  mental_mean: 46.0
   mental_sd: 12.0
   leadership_mean: 50.0
   leadership_sd: 15.0
   # 捕手リード（設計書01 §2①）: 野球脳(Mental)相関＋個体差。中心50不変で統計帯を保つ（不変条件#5）
-  lead_mean: 50.0
+  lead_mean: 46.0                # Q8: 未熟→捕手出場で伸びる時間アークへ引き下げ（旧50）
   lead_sd: 8.0
   lead_mental_corr: 0.30
+  lead_cap_mental_corr: 0.15     # Q8(c): リードcapの野球脳相関（名捕手の天井）
   # 投打の利き（§1.1c）
   throw_left_prob: 0.12
   switch_prob: 0.03
@@ -659,6 +672,25 @@ roster:
   aptitude_base_sd: 14.0
   aptitude_group_affinity_sd: 12.0 # 系統(投/捕/内/外)ごとの向き不向き（独立に振る）
   aptitude_position_noise_sd: 6.0  # 各ポジ個別の個体差
+  # 球質タイプ（設計書01 §1.1b / 02 §2）: 投手総合は変えず、球速・制球・スタミナ・キレの配分だけ振り替える。
+  # これにより「球速＝投手の良さ」ではなくなり、同じ総合ランクに本格派と技巧派が併存する。
+  # オフセットは「実際の試合の失点が型によらず揃う」よう実測で校正（式の加重和ではない）。
+  # 現行シムは制球(与四球)の価値が球速(奪三振)より大きいため、制球の振れ幅は小さく取る。
+  archetype_power_share: 0.25        # 本格派
+  archetype_finesse_share: 0.22      # 技巧派
+  archetype_soft_toss_share: 0.08    # 軟投派（残りはバランス型）
+  archetype_power_velocity: 14
+  archetype_power_control: -2
+  archetype_power_stamina: -2
+  archetype_power_pitch_rank: -1
+  archetype_finesse_velocity: -10
+  archetype_finesse_control: 3
+  archetype_finesse_stamina: 1
+  archetype_finesse_pitch_rank: 2
+  archetype_soft_toss_velocity: -14
+  archetype_soft_toss_control: 4
+  archetype_soft_toss_stamina: 2
+  archetype_soft_toss_pitch_rank: 3
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0

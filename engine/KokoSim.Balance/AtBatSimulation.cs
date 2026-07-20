@@ -21,6 +21,7 @@ public static class AtBatSimulation
         public int Triples { get; init; }
         public int HomeRuns { get; init; }
         public int Walks { get; init; }
+        public int HitByPitches { get; init; }
         public int Strikeouts { get; init; }
         public int ReachedOnError { get; init; }
         public int InPlayOuts { get; init; }
@@ -37,7 +38,8 @@ public static class AtBatSimulation
                 return denom > 0 ? (double)(Hits - HomeRuns) / denom : 0;
             }
         }
-        public double OnBase => PlateAppearances > 0 ? (double)(Hits + Walks) / PlateAppearances : 0;
+        public double HitByPitchRate => PlateAppearances > 0 ? (double)HitByPitches / PlateAppearances : 0;
+        public double OnBase => PlateAppearances > 0 ? (double)(Hits + Walks + HitByPitches) / PlateAppearances : 0;
         public double Slugging => AtBats > 0
             ? (double)(Singles + 2 * Doubles + 3 * Triples + 4 * HomeRuns) / AtBats : 0;
     }
@@ -59,9 +61,9 @@ public static class AtBatSimulation
             forks[i] = root.Fork((ulong)i);
         }
 
-        var total = new int[11]; // pa, ab, h, s1, s2, s3, hr, bb, so, roe, outs
+        var total = new int[12]; // pa, ab, h, s1, s2, s3, hr, bb, so, roe, outs, hbp
         Parallel.For(0, atBats,
-            () => new int[11],
+            () => new int[12],
             (i, _, local) =>
             {
                 var rng = forks[i];
@@ -82,6 +84,7 @@ public static class AtBatSimulation
                     case PlateAppearanceResult.Strikeout: local[8]++; break;
                     case PlateAppearanceResult.ReachedOnError: local[9]++; break;
                     case PlateAppearanceResult.InPlayOut: local[10]++; break;
+                    case PlateAppearanceResult.HitByPitch: local[11]++; break;
                 }
                 return local;
             },
@@ -106,6 +109,7 @@ public static class AtBatSimulation
             Strikeouts = total[8],
             ReachedOnError = total[9],
             InPlayOuts = total[10],
+            HitByPitches = total[11],
         };
     }
 
@@ -172,6 +176,7 @@ public static class AtBatSimulation
         sb.AppendLine(c, $"| 打率 AVG | {s.Average:F3} | .240–.290 |");
         sb.AppendLine(c, $"| 三振率 K% | {s.StrikeoutRate:P1} | 15.0–22.0% |");
         sb.AppendLine(c, $"| 四球率 BB% | {s.WalkRate:P1} | 6.0–10.0% |");
+        sb.AppendLine(c, $"| 死球率 HBP% | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率 HR% | {s.HomeRunRate:P2} | 2.0–4.0% |");
         sb.AppendLine(c, $"| BABIP | {s.Babip:F3} | 参考 .290–.320 |");
         sb.AppendLine(c, $"| 出塁率 OBP | {s.OnBase:F3} | 参考 |");

@@ -18,6 +18,7 @@ public sealed class PitchingStatLine
     public int Runs { get; private set; }
     public int StrikeOuts { get; private set; }
     public int Walks { get; private set; }
+    public int HitBatters { get; private set; }
     public int Pitches { get; private set; }
 
     /// <summary>投球回テキスト（例: 7回1/3 → "7 1/3"）。</summary>
@@ -45,6 +46,7 @@ public sealed class PitchingStatLine
         Runs += l.Runs;
         StrikeOuts += l.StrikeOuts;
         Walks += l.Walks;
+        HitBatters += l.HitBatters;
         Pitches += l.Pitches;
     }
 }

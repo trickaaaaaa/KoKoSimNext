@@ -96,7 +96,8 @@ public static class DevelopmentModel
         foreach (var (pos, weight) in eff.Aptitudes) ApplyAptitudeExp(p, pos, common * weight, c);
     }
 
-    private static void ApplyExp(DevelopingPlayer p, AbilityKind ability, double delta, TrainingCoefficients c)
+    // internal: 実戦成長（MatchGrowthModel, Q8）が走塁判断へ同じ式でexpを注ぐため。
+    internal static void ApplyExp(DevelopingPlayer p, AbilityKind ability, double delta, TrainingCoefficients c)
     {
         if (p.Level(ability) >= p.Cap(ability)) return;
 
