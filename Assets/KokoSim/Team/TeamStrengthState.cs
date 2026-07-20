@@ -61,7 +61,6 @@ namespace KokoSim.Unity.Squad
                 Value = iv,
                 Grade = grade,
                 Pct = pct,
-                BarColorHex = RankPalette.Hex(grade), // バー色＝ランク連動（単一ソース）
             });
             v.Radar.Add(new RadarAxis { Label = label, Value01 = pct });
         }

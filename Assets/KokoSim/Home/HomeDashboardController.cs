@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Home
 {
@@ -233,7 +234,7 @@ namespace KokoSim.Unity.Home
 
             // チーム総合力ランクチップ。
             var rank = _root.Q<VisualElement>("team-rank");
-            if (rank != null) { rank.Clear(); rank.Add(GradeChip(v.TeamRankGrade)); }
+            if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChipLegacy(v.TeamRankGrade)); }
 
             // チーム総合力（6指標の総合ランク）を部の状態に表示（クリックで専用パネル）。
             var tsChip = _root.Q<VisualElement>("team-strength-chip");
@@ -241,7 +242,7 @@ namespace KokoSim.Unity.Home
             {
                 var ts = new KokoSim.Unity.Squad.TeamStrengthState().BuildView();
                 tsChip.Clear();
-                tsChip.Add(GradeChip(ts.OverallGrade));
+                tsChip.Add(UiComponents.RankChipLegacy(ts.OverallGrade));
             }
 
             // 次の試合。
@@ -292,7 +293,7 @@ namespace KokoSim.Unity.Home
             cond.AddToClassList(CondClass(r.Condition));
             row.Add(cond);
 
-            row.Add(GradeChip(r.OverallGrade));
+            row.Add(UiComponents.RankChipLegacy(r.OverallGrade));
             return row;
         }
 
@@ -379,14 +380,6 @@ namespace KokoSim.Unity.Home
         }
 
         // ===== 補助 =====
-
-        private static Label GradeChip(string grade)
-        {
-            var chip = new Label(grade);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + grade);
-            return chip;
-        }
 
         private static string CondArrow(string c)
         {

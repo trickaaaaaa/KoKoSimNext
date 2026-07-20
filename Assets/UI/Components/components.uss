@@ -27,6 +27,76 @@
 .rank-chip--E { background-color: var(--rank-e); }
 .rank-chip--F { background-color: var(--rank-f); color: var(--color-chalk); }
 .rank-chip--G { background-color: var(--rank-g); color: var(--color-chalk); }
+/* サイズ違い：総合ランクなど「1画面で1つだけ大きく出す」用途に限る（強調は希少資源＝UI原則②）。 */
+.rank-chip--lg { min-width: 46px; height: 44px; font-size: 28px; border-radius: 6px; padding-left: 12px; padding-right: 12px; }
+.rank-chip--xl { min-width: 64px; height: 60px; font-size: 40px; border-radius: 8px; padding-left: 18px; padding-right: 18px; }
+
+/* ── AbilityRow：能力バー行（アイコン／能力名＋副題／数値／バー／ランクチップ／補足） ─
+   能力バーを出す画面はこの部品だけを使う（UI原則③ランク併記・⑤部品辞書の外に出ない）。
+   バー色はランク連動色を C# 側（RankPalette＝--rank-*）から与えるためここでは指定しない。
+   固定幅の列には flex-shrink: 0 を必ず付ける（可変列に幅を奪われて列がずれるため）。 */
+.abil-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: var(--sp-2);
+}
+.abil-row--dim { opacity: 0.45; }              /* 伸びない能力など（一覧からは消さない） */
+.abil-row--divided {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    margin-bottom: 0;
+    border-bottom-width: var(--border-w);
+    border-bottom-color: var(--color-line);
+}
+.abil-row__icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    background-color: var(--color-panel);
+    color: var(--color-lamp);
+    border-radius: 5px;
+    font-size: var(--fs-label);
+    margin-right: var(--sp-2);
+}
+.abil-row__name { width: 78px; flex-shrink: 0; }
+.abil-row__label { font-size: var(--fs-label); color: var(--color-chalk); }
+.abil-row__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
+.abil-row__value {
+    width: 34px;
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    color: var(--color-chalk);
+    margin-right: var(--sp-3);
+}
+.abil-row__bar {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    height: 8px;
+    background-color: var(--color-panel-deep);
+    border-radius: 3px;
+    margin-right: var(--sp-3);
+}
+.abil-row__fill { height: 100%; border-radius: 3px; }
+.abil-row__note {
+    width: 40px;
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    color: var(--color-lamp);
+    margin-left: var(--sp-2);
+}
+.abil-row__note--muted { color: var(--color-muted); -unity-font-style: normal; }
+
+/* 大（チーム総合力パネル）：指標名を太く、数値を大きく、バーを太くする */
+.abil-row--lg .abil-row__name { width: 182px; }
+.abil-row--lg .abil-row__label { font-size: var(--fs-body); -unity-font-style: bold; }
+.abil-row--lg .abil-row__value { width: 58px; font-size: 34px; margin-right: var(--sp-4); }
+.abil-row--lg .abil-row__bar { height: 12px; margin-right: var(--sp-4); }
 
 /* ── NumberBadge：背番号バッジ ─────────────────────────────────────── */
 .num-badge {

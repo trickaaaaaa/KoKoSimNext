@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Players
 {
@@ -46,10 +47,7 @@ namespace KokoSim.Unity.Players
             if (rank != null)
             {
                 rank.Clear();
-                var g = new Label(v.TeamRankGrade);
-                g.AddToClassList("grade");
-                g.AddToClassList("grade--" + v.TeamRankGrade);
-                rank.Add(g);
+                rank.Add(UiComponents.RankChipLegacy(v.TeamRankGrade));
             }
 
             var rows = _root.Q<VisualElement>("player-rows");
@@ -82,7 +80,7 @@ namespace KokoSim.Unity.Players
             overall.AddToClassList("cell--narrow");
             overall.style.flexDirection = FlexDirection.Row;
             overall.style.alignItems = Align.Center;
-            overall.Add(MakeGradeChip(r.OverallGrade));
+            overall.Add(UiComponents.RankChipLegacy(r.OverallGrade));
             overall.Add(new Label(r.OverallValue.ToString()));
             row.Add(overall);
 
@@ -93,7 +91,7 @@ namespace KokoSim.Unity.Players
             ability.AddToClassList("ability-cell");
             foreach (var chip in r.Abilities)
             {
-                ability.Add(MakeGradeChip(chip.Grade));
+                ability.Add(UiComponents.RankChipLegacy(chip.Grade));
                 var lbl = new Label(chip.Label);
                 lbl.style.marginRight = 10;
                 lbl.style.fontSize = 11;
@@ -125,14 +123,6 @@ namespace KokoSim.Unity.Players
             l.AddToClassList("cell");
             if (!string.IsNullOrEmpty(modifier)) l.AddToClassList(modifier);
             return l;
-        }
-
-        private static Label MakeGradeChip(string grade)
-        {
-            var chip = new Label(grade);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + grade);
-            return chip;
         }
     }
 }

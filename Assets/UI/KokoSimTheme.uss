@@ -761,24 +761,14 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 
 /* --- 能力バー --- */
 .pd2-abils { padding: 6px 14px 12px 14px; }
-.pd2-abil { flex-direction: row; align-items: center; padding: 5px 0; border-bottom-width: 1px; border-bottom-color: #232E28; }
-.pd2-abil__l { width: 78px; font-size: 13px; color: #E8ECEA; }
-.pd2-abil__v { width: 34px; font-size: 15px; -unity-font-style: bold; -unity-text-align: middle-right; color: #E8ECEA; margin-right: 10px; }
-.pd2-abil__bar { flex-grow: 1; height: 8px; background-color: #202A24; margin-right: 10px; }
-.pd2-abil__fill { height: 100%; }
+/* 能力バー行そのものは部品辞書 components.uss の .abil-row に一本化（issue #3）。ここは器の余白のみ。 */
 
 /* --- レーダー / 成長 --- */
 .pd2-radar { flex-grow: 1; min-height: 224px; align-items: center; justify-content: center; padding: 8px; }
 .ts-radar { min-height: 500px; }
 /* 右パネル: 6行をパネル高さ全体へ均等分散。数値を指標名より大きく（ダッシュボード視認性） */
 .ts-factors { flex-grow: 1; justify-content: space-between; padding: 20px 20px; }
-.ts-frow { flex-direction: row; align-items: center; }
-.ts-frow__name { width: 182px; }
-.ts-frow__l { font-size: 16px; -unity-font-style: bold; color: #E8ECEA; }
-.ts-frow__sub { font-size: 10px; color: #7E8C82; margin-top: 2px; }
-.ts-frow__v { width: 58px; font-size: 34px; -unity-font-style: bold; -unity-text-align: middle-right; color: #EFF4EA; margin-right: 14px; }
-.ts-frow__bar { flex-grow: 1; height: 12px; background-color: #121814; border-radius: 3px; margin-right: 14px; }
-.ts-frow__fill { height: 100%; border-radius: 3px; }
+/* 指標行は部品辞書 components.uss の .abil-row（--lg 修飾子）に一本化（issue #3）。 */
 /* 分析コメント（弱点）: パネル最下部 */
 .ts-analysis { border-top-width: 1px; border-top-color: #232E28; padding: 16px 20px 6px 20px; }
 .ts-analysis__k { font-size: 11px; color: #9DB3A0; letter-spacing: 2px; margin-bottom: 4px; }

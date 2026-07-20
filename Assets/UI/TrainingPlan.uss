@@ -137,17 +137,7 @@
 .copy-btn--disabled { color: var(--color-line); }
 
 /* ═══ ability bar 行（伸びバー・プリセット強調で共用） ═══ */
-.gainbar-row { flex-direction: row; align-items: center; margin-bottom: 6px; }
-.gainbar-row--none { opacity: 0.45; }   /* 伸びない能力は淡色（一覧には常に出す） */
-.gainbar__icon {
-    width: 24px; height: 24px; -unity-text-align: middle-center;
-    background-color: var(--color-panel); color: var(--color-lamp);
-    border-radius: 5px; font-size: var(--fs-label); margin-right: var(--sp-2);
-}
-.gainbar__name { width: 68px; font-size: var(--fs-label); color: var(--color-muted); }
-.gainbar__track { flex-grow: 1; margin-right: var(--sp-2); }   /* .stat-bar を継承 */
-.gainbar__lv { font-size: var(--fs-label); color: var(--color-lamp); -unity-font-style: bold; width: 40px; -unity-text-align: middle-right; }
-.gainbar__lv--none { color: var(--color-muted); -unity-font-style: normal; }
+/* 伸びバーは部品辞書 components.uss の .abil-row に一本化（issue #3）。ここは空状態の文言だけ残す。 */
 .gain-none { font-size: 13px; color: var(--color-faint); margin-top: var(--sp-1); }
 
 /* ═══ 統合モーダル（tp-modal = modal-scrim, card = modal-card） ═══ */
