@@ -260,6 +260,10 @@ public static class TimelineBuilder
     /// <summary>
     /// 走塁結果（BaserunningModel.ApplyDetailed）をタイムラインの走者レッグへ変換して合成する。
     /// 打者走者は既定レッグ（本塁→一塁）があるため、二塁打以降の続きのレッグだけ追加する。乱数不使用。
+    /// 塁上から動く走者には、移動開始までその塁に立たせる待機レッグ（T0=0→移動開始, From=To=元の塁）を
+    /// 先頭に足す（#25）。これが無いと再生層 <c>PlaybackEvaluator.RunnerAt</c> は最初のレッグ開始前に
+    /// null を返し、かつ <see cref="AppendHeldRunners"/> も「動いた塁」を除外するため、フォース進塁する
+    /// 走者が接触時刻まで盤面から消える（＝塁上に居ないように見える）。表示専用・結果不変。
     /// </summary>
     public static PlayTimeline AppendRunnerLegs(
         PlayTimeline timeline, IReadOnlyList<RunnerMove> moves, FieldGeometry field)
@@ -280,6 +284,13 @@ public static class TimelineBuilder
                 : ContactAt + 0.10;
 
             if (m.FromBase == 0 && m.ToBase <= 1) continue;    // 打者の一塁までは既定レッグ
+
+            // 塁上の走者は移動開始まで元の塁に立たせる（待機レッグ）。打者走者は本塁の既定レッグがあるため対象外。
+            if (m.FromBase >= 1 && m.ToBase > m.FromBase && t > 0)
+            {
+                var stand = BasePoint(field, BaseName(m.FromBase));
+                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t, From = stand, To = stand, OutAtEnd = false });
+            }
 
             for (var b = startBase; b < m.ToBase; b++)
             {
