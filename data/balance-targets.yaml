@@ -1,0 +1,47 @@
+# 統計回帰テストの許容帯（不変条件#5: 変更後は必ずこの帯を満たすこと）。
+# Phase 1 DoD: 1万打席の各指標が下記レンジに収まること。数値は設計確定時に調整する。
+
+version: 0
+
+# --- Phase 1: 打席解決（プレースホルダの目標帯） ---
+atbat_10k:
+  batting_average: { min: 0.240, max: 0.290 }   # 打率
+  strikeout_rate:  { min: 0.150, max: 0.220 }   # 三振率
+  walk_rate:       { min: 0.060, max: 0.100 }   # 四球率
+  home_run_rate:   { min: 0.020, max: 0.040 }   # 本塁打率
+
+# --- Phase 2: 試合エンジン（得点分布・試合時間） ---
+games_10k:
+  runs_per_team:   { min: 3.5, max: 6.0 }       # 平均得点/チーム
+  pitches_per_game: { min: 210, max: 330 }      # 平均球数/試合（両軍）
+  minutes_per_game: { min: 90, max: 160 }       # 推定試合時間[分]
+  innings_per_game: { min: 9.0, max: 9.8 }      # 平均イニング
+  # 本塁クロスプレー憤死/試合（設計書12 §3 F2, Q9）。実測≈0.26。広め＝得点帯と競合させない warn 相当。
+  home_play_outs_per_game: { min: 0.12, max: 0.42 }
+  # --- design-14 第1段（P1）: 采配Brain不要＝無指示でも発生する常時系（2026-07-17校正, 🟡広め帯） ---
+  # 野選（FC）: 実測≈0.46-0.48/試合（両軍計）。
+  fielders_choice_per_game: { min: 0.10, max: 1.20 }
+  # 振り逃げ: 実測≈0.12-0.15/試合（両軍計）。捕手Catchingの個体差で母平均が押し上がる非対称クランプの影響あり
+  # （悪い捕手ほど落球しやすい効果が下限クランプで非対称に効く。design-14 P1-2の意図通り＝仕様として許容）。
+  dropped_third_strike_per_game: { min: 0.02, max: 0.40 }
+  # 失策連鎖: 実測≈0.14/試合（両軍計）。
+  error_extra_advance_per_game: { min: 0.02, max: 0.40 }
+  # 暴投・パスボール（design-14 P2-8, 設計書15 Phase D-3）: 実測≈0.56-0.59/試合（両軍計, seed42/2024）。
+  wild_pitch_per_game: { min: 0.15, max: 1.00 }
+
+# --- design-14 第1段（P1）: 采配Brain（StandardTacticsBrain, GameSimulation --tactics）ありでのみ発生する系 ---
+# 敬遠・重盗・牽制は守備側/攻撃側の采配判断が引き金のため、Brain付きシミュレーションでのみ検証する
+# （GameRegressionTests は無指示＝Brainなしのため、これらは通常の games_10k では常に0）。
+games_10k_tactics:
+  runs_per_team: { min: 3.3, max: 6.2 }   # Brainつきでも得点環境は大きく変わらない想定（実測≈3.9-4.0）
+  # 牽制アウト: 実測≈0.001/試合（両軍計）。盗塁企図自体が稀（Brainの盗塁閾値依存）なため参考帯として広め。
+  pickoff_per_game: { min: 0.0, max: 0.05 }
+  # 敬遠: 実測≈0.06/試合（両軍計）。
+  intentional_walk_per_game: { min: 0.01, max: 0.30 }
+  # 一・三塁重盗: 実測≈0.002-0.003/試合（両軍計）。一・三塁で盗塁企図という稀な塁状況依存のため広め。
+  double_steal_third_break_per_game: { min: 0.0, max: 0.05 }
+  # --- 1球采配（design-15 Phase C-2, 2026-07-19校正）: 追い込まれ矯正/3-0待て/決め球切替の影響を最も受ける ---
+  # 実測（StandardTacticsBrain, 10000試合×seed42/2024）: 三振≈19.1%, 四球≈8.2%, 本塁打≈2.85%（打席あたり）。
+  strikeout_rate: { min: 0.16, max: 0.22 }
+  walk_rate: { min: 0.06, max: 0.10 }
+  home_run_rate: { min: 0.020, max: 0.036 }

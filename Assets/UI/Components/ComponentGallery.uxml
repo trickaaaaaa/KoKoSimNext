@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 部品辞書プレビュー（UI-BUILD-METHOD Step 2/3）。各アトムをサンプルデータで並べ、
+     ScreenshotCapture で決定論PNG化して自己検証する。値は tokens/components のみ。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="../tokens.uss" />
+    <Style src="components.uss" />
+    <ui:VisualElement class="ui-root" style="flex-grow: 1; background-color: rgb(20, 35, 27); padding-left: 24px; padding-right: 24px; padding-top: 20px; padding-bottom: 20px;">
+        <ui:Label text="部品辞書 プレビュー" style="font-size: 18px; color: rgb(245, 198, 74); -unity-font-style: bold; margin-bottom: 16px;" />
+
+        <ui:Label text="RankChip（S〜G）" class="panel__title" style="margin-top: 8px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:Label text="S" class="rank-chip rank-chip--S" style="margin-right: 6px;" />
+            <ui:Label text="A" class="rank-chip rank-chip--A" style="margin-right: 6px;" />
+            <ui:Label text="B" class="rank-chip rank-chip--B" style="margin-right: 6px;" />
+            <ui:Label text="C" class="rank-chip rank-chip--C" style="margin-right: 6px;" />
+            <ui:Label text="D" class="rank-chip rank-chip--D" style="margin-right: 6px;" />
+            <ui:Label text="E" class="rank-chip rank-chip--E" style="margin-right: 6px;" />
+            <ui:Label text="F" class="rank-chip rank-chip--F" style="margin-right: 6px;" />
+            <ui:Label text="G" class="rank-chip rank-chip--G" style="margin-right: 6px;" />
+        </ui:VisualElement>
+
+        <ui:Label text="NumberBadge" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:Label text="1" class="num-badge" style="margin-right: 8px;" />
+            <ui:Label text="18" class="num-badge" style="margin-right: 8px;" />
+            <ui:Label text="—" class="num-badge num-badge--out" />
+        </ui:VisualElement>
+
+        <ui:Label text="StatBar（amber / good / warn）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="width: 220px;">
+            <ui:VisualElement class="stat-bar" style="margin-bottom: 6px;"><ui:VisualElement class="stat-bar__fill" style="width: 72%;" /></ui:VisualElement>
+            <ui:VisualElement class="stat-bar stat-bar--good" style="margin-bottom: 6px;"><ui:VisualElement class="stat-bar__fill" style="width: 40%;" /></ui:VisualElement>
+            <ui:VisualElement class="stat-bar stat-bar--warn stat-bar--tall"><ui:VisualElement class="stat-bar__fill" style="width: 88%;" /></ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label text="SegmentedControl（軽/普/猛）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:VisualElement class="seg seg--lg" style="margin-right: 16px;">
+                <ui:Label text="軽" class="seg__cell" />
+                <ui:Label text="普" class="seg__cell seg__cell--on" />
+                <ui:Label text="猛" class="seg__cell" />
+            </ui:VisualElement>
+            <ui:VisualElement class="seg seg--sm">
+                <ui:Label text="軽" class="seg__cell" />
+                <ui:Label text="普" class="seg__cell" />
+                <ui:Label text="猛" class="seg__cell seg__cell--on seg__cell--hard" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label text="Chip / Switch / StepButton" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row; align-items: center;">
+            <ui:Label text="打撃60" class="chip" />
+            <ui:Label text="3年" class="chip chip--tag" />
+            <ui:Label text="ベンチ外" class="chip chip--tag chip--out" style="margin-right: 16px;" />
+            <ui:VisualElement class="switch" style="margin-right: 8px;"><ui:VisualElement class="switch__knob" /></ui:VisualElement>
+            <ui:VisualElement class="switch switch--on" style="margin-right: 16px;"><ui:VisualElement class="switch__knob" /></ui:VisualElement>
+            <ui:Label text="−" class="step-btn" />
+            <ui:Label text="＋" class="step-btn" />
+        </ui:VisualElement>
+
+        <ui:Label text="Banner" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement class="banner" style="width: 480px;">
+            <ui:Label text="CAMP" class="banner__badge" />
+            <ui:VisualElement style="flex-grow: 1;">
+                <ui:Label text="冬合宿・鍛錬期  ×2.5 経験値" style="font-size: 15px; color: rgb(239, 244, 234); -unity-font-style: bold;" />
+                <ui:Label text="対外試合禁止期間（12〜3月）— 育成の山場です。" style="font-size: 12px; color: rgb(157, 179, 160); margin-top: 2px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:Label text="MLineupRow / MLineupPitcher（ライブ観戦のスタメン列）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="width: 320px;">
+            <ui:VisualElement class="mlineup-row">
+                <ui:Label text="1" class="mlineup-row__ord" />
+                <ui:Label text="2" class="num-badge num-badge--sm" />
+                <ui:Label text="増田" class="mlineup-row__name" />
+                <ui:Label text="捕" class="mlineup-row__pos" />
+                <ui:VisualElement class="cond-face" />
+                <ui:Label text="2-1 ①" class="mlineup-row__today" />
+            </ui:VisualElement>
+            <ui:VisualElement class="mlineup-row mlineup-row--at-bat">
+                <ui:Label text="2" class="mlineup-row__ord" />
+                <ui:Label text="6" class="num-badge num-badge--sm" />
+                <ui:Label text="林" class="mlineup-row__name" />
+                <ui:Label text="一" class="mlineup-row__pos" />
+                <ui:VisualElement class="cond-face" />
+                <ui:Label text="3-2" class="mlineup-row__today" />
+            </ui:VisualElement>
+            <ui:VisualElement class="mlineup-row">
+                <ui:Label text="8" class="mlineup-row__ord" />
+                <ui:Label text="代打" class="mlineup-row__name" />
+                <ui:Label text="←丸山" class="mlineup-row__replaced" />
+                <ui:Label text="右" class="mlineup-row__pos" />
+                <ui:VisualElement class="cond-face" />
+                <ui:Label text="0-0" class="mlineup-row__today" />
+            </ui:VisualElement>
+            <ui:VisualElement class="mlineup-pitcher">
+                <ui:Label text="投" class="mlineup-pitcher__tag" />
+                <ui:Label text="福田" class="mlineup-pitcher__name" />
+                <ui:Label text="54球" class="mlineup-pitcher__stat" />
+                <ui:Label text="3 1/3回" class="mlineup-pitcher__stat" />
+                <ui:Label text="失0" class="mlineup-pitcher__stat" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label text="MatchupBar（投手ブロック | 打者ブロック・将来のリザルト/選手詳細で流用）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement class="matchup-bar" style="width: 560px;">
+            <ui:VisualElement class="mup-block mup-block--pitcher">
+                <ui:VisualElement class="mup-line">
+                    <ui:Label text="1" class="num-badge num-badge--sm" />
+                    <ui:Label text="福田" class="mup-name" />
+                    <ui:Label text="右投" class="mup-hand" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mup-line">
+                    <ui:Label text="防 2.14　奪三振 7" class="mup-career" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mup-line">
+                    <ui:Label text="球数" class="mup-pitches__lab" />
+                    <ui:Label text="84" class="mup-pitches mup-pitches--warn" />
+                    <ui:Label text="球" class="mup-pitches__lab" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label text="VS" class="matchup-bar__vs" />
+            <ui:VisualElement class="mup-block mup-block--batter">
+                <ui:VisualElement class="mup-line">
+                    <ui:Label text="5" class="num-badge num-badge--sm" />
+                    <ui:Label text="清水" class="mup-name" />
+                    <ui:Label text="右打" class="mup-hand" />
+                    <ui:VisualElement class="cond-face" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mup-line">
+                    <ui:Label text=".342 / 7本 / 21点 / —盗" class="mup-career" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mup-line">
+                    <ui:Label text="今日" class="mup-today__lab" />
+                    <ui:Label text="2-1" class="mup-today" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

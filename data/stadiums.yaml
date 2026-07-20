@@ -1,0 +1,303 @@
+# 球場カタログ（設計書13-stadiums ①物理層）
+# 寸法: left/right=両翼[m], center=中堅[m], fence_height=フェンス高[m]
+#   right 省略時は left にフォールバック（左右対称）。fence_height 省略時は 2.5m。
+# tier: municipal（市営級・序盤）/ prefectural（県営級・準決勝決勝）/ national（聖地）
+# wind: ②環境用の箱。今回未使用（設計書13-stadiums §5）。将来の風雨システムで有効化。
+# 表示名は命名権（企業名）除去済みの施設名（stadiums-research.md）。甲子園は商標配慮で「甲子園」表記。
+
+# ── 架空基礎タイプ（序盤ラウンド）＋聖地 ─────────────────────────
+stadiums:
+  # 架空タイプ: 統計検証（狭>標準>広の順序）と序盤ラウンドに使用
+  - id: municipal_small_01
+    name: 市営球場（狭い）
+    left: 91
+    center: 115
+    fence_height: 2.0
+    tier: municipal
+  - id: municipal_small_02
+    name: 市営球場（やや狭い）
+    left: 93
+    center: 116
+    fence_height: 2.0
+    tier: municipal
+  - id: standard_01
+    name: 標準球場
+    left: 95
+    center: 118
+    fence_height: 2.6
+    tier: prefectural
+  - id: pref_large_01
+    name: 県営球場（広い）
+    left: 100
+    center: 122
+    fence_height: 3.0
+    tier: prefectural
+
+  # 聖地（national）
+  - id: koshien
+    name: 甲子園
+    left: 95
+    center: 118
+    fence_height: 2.6
+    tier: national
+    # wind: 浜風  # ②用の箱。今回未使用
+  - id: jingu
+    name: 明治神宮野球場
+    left: 97.5
+    center: 120
+    fence_height: 3.3
+    tier: national
+
+# ── 47県 夏の決勝クラス主会場（実測ベース・命名権除去済み）─────────
+# 確度⚠の寸法は現代標準122m帯でほぼ外れない（stadiums-research.md §傾向）。
+prefecture_finals:
+  - id: kita_hokkaido_final
+    name: 旭川スタルヒン球場
+    left: 99.5
+    center: 122
+    tier: prefectural
+  - id: minami_hokkaido_final
+    name: 円山球場
+    left: 99
+    center: 122
+    tier: prefectural
+  - id: aomori_final
+    name: はるか夢球場
+    left: 99.5
+    center: 122
+    tier: prefectural
+  - id: iwate_final
+    name: 盛岡南公園野球場
+    left: 99.5
+    center: 122
+    tier: prefectural
+  - id: miyagi_final
+    name: 宮城球場
+    left: 100.1
+    center: 122
+    tier: prefectural
+  - id: akita_final
+    name: 秋田県立野球場（こまち）
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: yamagata_final
+    name: 山形県野球場
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: fukushima_final
+    name: 開成山野球場
+    left: 99.1
+    center: 120
+    tier: prefectural
+  - id: ibaraki_final
+    name: 水戸市民球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: tochigi_final
+    name: 宇都宮清原球場
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: gunma_final
+    name: 敷島公園野球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: saitama_final
+    name: 県営大宮公園野球場
+    left: 99
+    center: 122
+    tier: prefectural
+  - id: chiba_final
+    name: 千葉県総合スポーツセンター野球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: higashi_tokyo_final
+    name: 明治神宮野球場
+    left: 97.5
+    center: 120
+    fence_height: 3.3
+    tier: prefectural
+  - id: nishi_tokyo_final
+    name: 明治神宮野球場
+    left: 97.5
+    center: 120
+    fence_height: 3.3
+    tier: prefectural
+  - id: kanagawa_final
+    name: 横浜スタジアム
+    left: 94.2
+    center: 117.7
+    fence_height: 5.0
+    tier: prefectural
+  - id: yamanashi_final
+    name: 小瀬スポーツ公園野球場
+    left: 99
+    center: 122
+    tier: prefectural
+  - id: niigata_final
+    name: 鳥屋野潟公園野球場
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: toyama_final
+    name: 富山市民球場
+    left: 99.1
+    center: 122
+    tier: prefectural
+  - id: ishikawa_final
+    name: 石川県立野球場
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: fukui_final
+    name: 福井県営球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: nagano_final
+    name: 長野オリンピックスタジアム
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: gifu_final
+    name: 長良川球場
+    left: 101
+    center: 122
+    tier: prefectural
+  - id: shizuoka_final
+    name: 草薙球場
+    left: 97
+    center: 120
+    tier: prefectural
+  - id: aichi_final
+    name: 岡崎市民球場
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: mie_final
+    name: 倉田山公園野球場
+    left: 99
+    center: 122
+    tier: prefectural
+  - id: shiga_final
+    name: 皇子山総合運動公園野球場
+    left: 98
+    center: 120
+    tier: prefectural
+  - id: kyoto_final
+    name: 西京極野球場
+    left: 92
+    center: 119
+    tier: prefectural
+  - id: osaka_final
+    name: 南港中央野球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: hyogo_final
+    name: 神戸総合運動公園野球場
+    left: 99.1
+    center: 122
+    tier: prefectural
+  - id: nara_final
+    name: 橿原公苑野球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: wakayama_final
+    name: 紀三井寺公園野球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: tottori_final
+    name: 米子市民球場
+    left: 99.1
+    center: 122
+    tier: prefectural
+  - id: shimane_final
+    name: 松江市営野球場
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: okayama_final
+    name: 倉敷マスカットスタジアム
+    left: 99.5
+    center: 122
+    tier: prefectural
+  - id: hiroshima_final
+    name: 広島市民球場
+    left: 101
+    right: 100
+    center: 122
+    fence_height: 3.0
+    tier: prefectural
+  - id: yamaguchi_final
+    name: 西京スタジアム
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: tokushima_final
+    name: 蔵本球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: kagawa_final
+    name: 香川県営野球場
+    left: 99
+    center: 122
+    tier: prefectural
+  - id: ehime_final
+    name: 松山中央公園野球場（坊っちゃん）
+    left: 99.1
+    center: 122
+    tier: prefectural
+  - id: kochi_final
+    name: 高知市営球場
+    left: 98
+    center: 120
+    tier: prefectural
+  - id: fukuoka_final
+    name: 北九州市民球場
+    left: 98
+    center: 122
+    tier: prefectural
+  - id: saga_final
+    name: みどりの森県営球場
+    left: 99.1
+    center: 122
+    tier: prefectural
+  - id: nagasaki_final
+    name: 長崎県営野球場
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: kumamoto_final
+    name: 藤崎台県営野球場
+    left: 99
+    center: 122
+    tier: prefectural
+  - id: oita_final
+    name: 新大分球場
+    left: 99.1
+    center: 122
+    tier: prefectural
+  - id: miyazaki_final
+    name: 宮崎県総合運動公園野球場（サンマリン）
+    left: 100
+    center: 122
+    tier: prefectural
+  - id: kagoshima_final
+    name: 鴨池公園野球場
+    left: 98
+    center: 121
+    tier: prefectural
+  - id: okinawa_final
+    name: 奥武山野球場
+    left: 100
+    center: 122
+    tier: prefectural

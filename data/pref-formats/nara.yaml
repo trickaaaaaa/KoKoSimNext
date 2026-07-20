@@ -1,0 +1,21 @@
+# confidence: verified
+# 出典: 奈良新聞 2025/10/5, 高校野球ドットコム tournaments/834
+# 型見本: 予選なし・県一発トーナメント（近畿の3位決定戦つき）
+pref: nara
+snapshot_year: 2025
+region: kinki
+district_assignment: none
+regional_berths: 3          # 2025は奇数年のため3（隔年制はregional側で管理）
+seed_exemption: false
+stages:
+  - name: 県大会
+    type: knockout
+    third_place_match: true   # 準決勝敗退2校＋3位決定戦勝者の計3校が近畿大会へ
+# 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=橿原公苑、序盤=市営級プールから抽選
+stadiums:
+  final: nara_final
+  early: [municipal_small_01, municipal_small_02]
+notes:
+  - 2025近畿大会開催県
+  - 連合チームあり
+  - 近畿の枠は隔年制。regional-tournaments.yaml の kinki を参照

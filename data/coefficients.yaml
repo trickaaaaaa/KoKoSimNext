@@ -1,0 +1,664 @@
+# 表示層→物理層の変換係数（不変条件#1: 変換式はここに集約）。
+# バランス調整はこのファイルの編集で行い、C# は書き換えない（不変条件#4）。
+# 読込は KokoSim.Config が担い、純エンジンへ型付きオブジェクトとして注入する（不変条件#3: エンジンはIOを持たない）。
+
+version: 1
+
+# --- 空力・物理定数（弾道積分の係数, 設計書01 §2⑥） ---
+aerodynamics:
+  ball_mass_kg: 0.145
+  ball_radius_m: 0.0365
+  air_density: 1.225
+  gravity: 9.81
+  drag_coefficient: 0.35
+  # 揚力係数 Cl = min(lift_coefficient_per_spin_factor × S, max_lift_coefficient), S = r|ω|/|v|
+  lift_coefficient_per_spin_factor: 0.80
+  max_lift_coefficient: 0.35
+
+# --- マウンド幾何 ---
+mound:
+  # リリース〜本塁の実効距離[m]（18.44m − エクステンション約1.7m）
+  release_to_plate_distance_m: 16.74
+
+# --- 投球（表示層→物理層, 設計書02 §1.2） ---
+pitching:
+  # コントロール → 投球散布σ[cm]: σ = intercept − C×slope（例: C50→19cm, C100→8cm）
+  control_to_sigma:
+    intercept_cm: 30.0
+    slope_cm_per_point: 0.22
+    min_sigma_cm: 2.0
+  # 毎球の球速ばらつき（設計書02 §1.1d）: 最速=天井、常時は−3〜5km/h、たまに最速付近 🟡
+  velocity_drop_mean_kmh: 4.0
+  velocity_drop_sigma_kmh: 1.8
+  velocity_drop_max_kmh: 10.0
+  # 配球（Phase 簡略。設計書09で采配・慣れ §2.3b に接続）
+  straight_share: 0.55
+  catcher_lead_stuff_per_point: 0.004   # 捕手リード→球威（設計書01 §2①）。(Lead−50)×これ。50=恒等
+  # 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式。判定には未接続＝帯に無関係）
+  spin_rpm_base: 2200.0            # キレ(Sharpness=50)基準の回転数[rpm]（145km/h・2200rpmはCLAUDE.md検証値）
+  spin_rpm_per_sharpness: 6.0       # キレ(Sharpness−50)あたりの傾き[rpm/能力1]
+  # 投手ギア「飛ばす/流す」（設計書02 §1.1f）🟡
+  gear_push_velocity_bonus_kmh: 2.0
+  gear_push_stamina_factor: 1.6
+  gear_coast_velocity_penalty_kmh: 2.5
+  gear_coast_stamina_factor: 0.7
+
+# --- 打撃（打席解決の確率・物理変換, Phase 1 統計回帰で調整済み） ---
+# league-average 母集団で AVG≈.265 / K%≈19.6 / BB%≈8.6 / HR%≈3.1 に収まる初期値。
+batting:
+  aim_sigma_x_m: 0.10            # 投手の狙い散布σ（横）
+  aim_sigma_y_m: 0.155           # 投手の狙い散布σ（縦）
+  zone_swing_base: 0.68          # ゾーン内スイング率
+  chase_base: 0.28               # ゾーン外追いかけ率
+  chase_discipline_slope: 0.0045 # 選球眼→追いかけ抑制
+  zone_swing_discipline_slope: 0.0015
+  # 誘発変化合成量[m]（設計書15 Phase E-3）: ゾーン外+/ゾーン内−の対称係数（見え方と実軌道のズレの代理指標）
+  chase_break_slope: 0.02
+  chase_distance_slope: 0.15    # ゾーン外距離あたりのチェイス減衰（大外れが変化量だけで釣れる不自然を防ぐガード）
+  whiff_intercept: -2.40         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正）
+  whiff_contact_slope: 0.030     # ミート→空振り減
+  whiff_out_of_zone_penalty: 0.85
+  # 誘発変化合成量[m]（設計書15 Phase E-2）あたりの空振り加算。旧stuff_per_pitch_rank（球種ランク直参照）は
+  # Sharpness→rpm→変化量の経路で弾道へ織り込み済みのため完全置換（二重計上回避）。校正ノブ。
+  whiff_break_slope: 1.5
+  foul_share: 0.40               # コンタクト中のファウル割合
+  stuff_base_velocity_kmh: 130.0
+  stuff_per_kmh: 0.020
+  exit_velo_intercept_kmh: 125.0 # 打球初速上限の切片
+  exit_velo_per_power: 0.82      # パワー1あたり初速上限
+  quality_mean: 0.62
+  quality_contact_slope: 0.0020
+  quality_sigma: 0.17
+  launch_angle_at_lt1: -5.0      # 弾道1の平均打球角
+  launch_angle_at_lt100: 26.0    # 弾道100の平均打球角
+  launch_angle_sigma: 12.0
+  bearing_sigma: 20.0
+  min_quality_velo_factor: 0.55
+
+# --- 守備（弾道→捕球/送球判定） ---
+fielding:
+  fly_apex_threshold_m: 2.5
+  catch_reach_factor: 1.00
+  throw_transfer_seconds: 0.70
+  infield_play_overhead_seconds: 0.30  # 内野ゴロ処理の実戦オーバーヘッド（時間軸校正, §4.1b）
+  runner_reaction_seconds: 0.45        # 実戦オフセット（設計書02 §4.1b: 走力50右で本塁→一塁≈4.2s）
+  left_batter_first_step_bonus_seconds: 0.13  # 左打者は一塁が近く速い（§4.1b）
+  infield_depth_m: 46.0
+  force_out_margin_seconds: 0.0
+  error_base_prob: 0.018
+  error_catching_slope: 0.0003
+  double_distance_m: 80.0
+  triple_distance_m: 113.0
+  # 守備位置適性→実効守備力の補正（設計書01 §1.1）。基準50で×1.0、本職＝高適性でボーナス、慣れないポジでペナルティ。
+  aptitude_neutral: 50.0
+  aptitude_slope_per_point: 0.006
+  aptitude_factor_min: 0.60
+  aptitude_factor_max: 1.30
+
+# --- 走塁（進塁確率, Phase 2。平均得点≈4.3/チームに収まる初期値） ---
+# 進塁判断は走塁判断(Baserunning)を参照（速度は走力, 判断は走塁判断。設計書02 §4.1）
+baserunning:
+  first_to_third_on_single: 0.28
+  second_to_home_on_single: 0.62
+  first_to_home_on_double: 0.48
+  speed_slope: 0.006
+  sac_fly_score_prob: 0.30
+  productive_out_advance_prob: 0.18
+  double_play_prob: 0.13
+  fielders_choice_prob: 0.06       # 野選（FC, design-14 P1-1）: DP不成立時に先行走者アウト＋打者一塁生存（2026-07-17校正）
+  error_extra_advance_prob: 0.20   # 失策連鎖（design-14 P1-6）: ReachedOnError時に全走者+打者へ追加1進塁（2026-07-17校正）
+  drop_third_strike_reach_prob: 0.001      # 振り逃げ（design-14 P1-2）: 一塁空き or 2アウトの三振で成立（2026-07-17校正）
+  drop_third_strike_catching_slope: 0.002  # 捕手Catching(-50)あたりの成立確率減少幅
+  wild_pitch_prob: 0.0012          # 暴投（design-14 P2-8）: 走者あり・実球（Ball/CalledStrike/SwingingStrike）ごとの基準確率（2026-07-20校正）
+  wild_pitch_control_slope: 0.0006 # 投手Control(-50)あたりの暴投確率の減少幅
+  passed_ball_prob: 0.0008         # パスボール（design-14 P2-8）: 同上・捕手責
+  passed_ball_catching_slope: 0.0006 # 捕手Catching(-50)あたりのパスボール確率の減少幅
+  # 盗塁（設計書02 §4.2）: すべて秒の時間軸で校正（🟡 設計書07で実タイムに合わせ込む）
+  steal_lead_distance_m: 23.5
+  catch_throw_distance_m: 38.8
+  steal_reaction_intercept: 0.90   # スタート遅延[s] = intercept − steal×slope（Step4再校正: 快足を3.4秒台へ）
+  steal_reaction_slope: 0.004
+  pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
+  pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋送球時間）
+  tag_seconds: 0.10
+  steal_margin_scale: 0.22         # margin→成功確率のlogistic幅（Step4再校正: 肩差が効く幅に拡張）
+  steal_success_bias: 0.38         # リーグ平均成功率の校正項（🟡, Step4再校正）
+  catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
+  steal_third_success_bias: -0.35  # 三盗の成功率バイアス（design-14「三盗は成功率下方」）
+  steal_home_success_bias: -0.7    # 本盗の成功率バイアス（design-14「本盗はさらに下方」）
+  double_steal_third_break_prob: 0.4  # 一・三塁重盗（design-14 P1-4）: 三塁走者も同時スタート（2026-07-17校正）
+  pickoff_base_prob: 0.05          # 牽制アウト（design-14 P1-5）の基準確率（2026-07-17校正）
+  pickoff_runner_lead_slope: 0.0015
+  pickoff_pitcher_sense_slope: 0.001
+  pickoff_max_prob: 0.08
+  # バント（設計書02 §4.3）
+  bunt_base: 0.60
+  bunt_skill_slope: 0.005          # バント×0.5%
+  bunt_velocity_ref_kmh: 130.0
+  bunt_velocity_penalty_per_kmh: 0.004
+  bunt_miss_share: 0.07
+  bunt_foul_share: 0.18            # Bunt50時。上手いほど減る（Step4-③）
+  bunt_foul_skill_slope: 0.0012   # (Bunt−50)あたりファウル減
+  bunt_foul_floor: 0.06
+  bunt_pop_share: 0.05
+  # バント内野安打の時間軸判定（設計書02 §4.1b, Step4-②）: 打者走者→一塁 対 バント処理→送球
+  bunt_base_distance_m: 27.4
+  bunt_runner_reaction_seconds: 0.45   # 守備側 runner_reaction_seconds と同軸
+  bunt_left_first_step_bonus_seconds: 0.13
+  sacrifice_bunt_square_delay_seconds: 0.35  # 犠打は早く構えて走り出しが遅い
+  safety_bunt_square_delay_seconds: 0.12     # セーフティは走りながら転がす
+  bunt_field_throw_base_seconds: 3.70        # コーナー突進＋素手＋短距離送球
+  bunt_placement_slope: 0.006                # 好バントほど処理が遅れる
+  bunt_infield_hit_time_scale: 0.14          # margin→確率のlogistic幅
+  # 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）: 走塁 §4.1 と同じ秒の時間勝負
+  home_runner_reaction_intercept: 0.55       # 本塁を狙う走者の判断遅延[s] = intercept − 走塁判断×slope
+  home_runner_reaction_slope: 0.004
+  home_lead_distance_m: 3.5                   # 二次リード分の距離短縮[m]
+  outfield_transfer_seconds: 0.60            # 外野の捕球→送球（グラブ離し）
+  relay_transfer_seconds: 0.55               # 中継の握り替え
+  relay_throw_speed_mps: 32.0                # 中継野手の送球速度（リーグ平均内野肩）
+  cutoff_fraction_from_home: 0.5             # カットマン位置（本塁からの距離割合）
+  cutoff_distance_threshold_m: 60.0          # これ超で中継、以下は本塁へ直接返球
+  home_tag_seconds: 0.12
+  home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
+  home_margin_scale: 0.25                    # margin→生還確率のlogistic幅
+  home_success_bias: 2.00                    # 憤死≈0.26/試合・得点≈4.08/チームへ校正（Slice C, Heavy実測）
+  # ライナー併殺（コンタクト始動の一塁走者が捕られ戻れず, 設計書12 §4, G2）
+  liner_break_reaction_seconds: 0.05         # 接触と同時に飛び出す＝ほぼ即時
+  liner_commit_cap_seconds: 1.00             # 「盲目的に走る」時間の上限（長い滞空でもリードが伸び続けない）
+  liner_reference_sprint_speed_mps: 7.25     # リード算出の基準走力（個人差は戻りの走力にだけ効く）
+  doubled_off_reverse_seconds: 0.35          # 捕球を見て反転するまでの判断遅延
+  doubled_off_transfer_seconds: 0.30         # 捕球野手の捕球→送球（内野寄りなので外野より短い）
+  doubled_off_tag_seconds: 0.10
+  doubled_off_margin_scale: 0.20             # margin→塁へ戻れる確率のlogistic幅
+  doubled_off_success_bias: 0.0              # 校正前の暫定値（Heavy実測で調整）
+  # 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）: 捕手リード＋投手センス vs 状況の意外性
+  steal_expectedness_intercept: 0.42         # 盗塁企図の基準「予想されやすさ」E
+  steal_expectedness_steal_slope: 0.006      # Steal能力→予想度（快足盗塁屋は読まれやすい）
+  gamble_unexpectedness_reduction: 0.28      # ギャンブル始動は意表＝予想度を下げる（G3b配線）
+  steal_read_intercept: 0.50                 # 読み力の基準（捕手リード＋投手センス）
+  steal_read_catcher_lead_slope: 0.006       # 捕手リード(Lead−50)あたり読み力加算
+  steal_read_pitcher_sense_slope: 0.003      # 投手センス(Mental−50)あたり読み力加算
+  max_pitchout_prob: 0.55                    # 読み切っても上限
+  pitchout_defense_bonus_seconds: 0.35       # ピッチアウト成功で守備時間短縮（捕手優位）
+  gamble_pitchout_extra_bonus_seconds: 0.20  # ギャンブル走者は無防備でさらに刺されやすい（G3b配線）
+  gamble_jump_bonus_seconds: 0.15            # ギャンブルの好スタート（走者時間短縮, G3b配線）
+
+# --- 投手疲労（設計書02 §1.1e: スタミナ＝目安投球数を超えた球数で減衰・継投） ---
+# 目安投球数そのものは選手側（StaminaPitches）。Level→球数の変換は 45 + level×0.9（PitcherAttributes に集約）
+fatigue:
+  velocity_drop_per_over_pitch: 0.05
+  control_drop_per_over_pitch: 0.12
+  relieve_pitch_margin: 25.0
+  hard_cap_pitches: 130.0
+
+# --- 調子・試合限りの好不調（設計書02 §3.3/§3.3b）🟡「調子が支配的にならない」よう控えめ ---
+form:
+  # 調子（5段階, 1段階あたりの効果）
+  contact_per_step: 2.5
+  power_per_step: 2.0
+  control_per_step: 2.5
+  velocity_per_step_kmh: 0.6
+  # 試合限りの好不調（当日の出来。大半は微小・スパイクは十数試合に一度）
+  day_form_base_sigma: 0.15
+  day_form_clamp: 0.45
+  day_form_spike_prob: 0.07
+  day_form_spike_min: 0.6
+  day_form_spike_max: 1.0
+  contact_per_day_form: 3.0
+  power_per_day_form: 2.0
+  control_per_day_form: 5.0
+  velocity_per_day_form_kmh: 1.5
+  # 週次の波（数日〜数週間続く。毎試合振り直さない）
+  weekly_persistence: 0.75
+  weekly_sigma: 0.28
+
+# --- 特殊能力の効果量・出現率（設計書10）🟡 スキルなしの選手には作用しない（帯不変） ---
+# スキルの定義（id・カテゴリ・説明）は data/skills.yaml。ここは効果の強さと生成率だけ。
+skills:
+  # 打撃系（試合内・行動特性）
+  slow_starter_bat_contact_per_pa: 1.6   # 尻上がり: 打席数あたりのミート増
+  slow_starter_bat_max_bonus: 6.0
+  spray_bearing_factor: 1.35             # 広角打法: 打球方向σ拡大（シフト無効化）
+  first_pitch_swing_prob: 0.62           # 初球から振る
+  grinder_foul_factor: 1.30              # 粘り打ち: ファウル率拡大（球数を吐かせる）
+  streaky_variance_factor: 1.7           # ムラっけ: 当日の出来の振れ幅拡大
+  # 投手系（試合内・非線形）
+  slow_starter_pitch_control_per_bf: 0.45
+  slow_starter_pitch_max_bonus: 8.0
+  second_time_through_batters_faced: 18  # 打者一巡: 3巡目〜崩れる
+  second_time_through_control_penalty: 6.0
+  second_time_through_stuff_penalty: 0.10
+  effectively_wild_control_penalty: 7.0  # 荒れ球: 制球↓（四球増）だが…
+  effectively_wild_stuff_bonus: 0.13     # …打ちにくい
+  deceptive_ball_stuff_bonus: 0.18       # クセ球: 球速に依らない空振り誘発
+  # 守備系
+  double_play_artist_bonus: 0.06
+  master_catcher_lead_bonus: 10          # 名捕手: 実効リード+10（設計書10, 01 §2①）
+  # チーム系
+  spiritual_pillar_captain_factor: 1.4   # 精神的支柱: 主将の緩和量拡大（設計書09 §8）
+  # 体質・成長系
+  diligent_exp_factor: 1.15
+  lazy_exp_factor: 0.85
+  durable_injury_factor: 0.55
+  injury_prone_injury_factor: 1.8
+  # 目玉（怪物: 複数分野に確かな上乗せ）
+  monster_contact_bonus: 4.0
+  monster_power_bonus: 4.0
+  monster_control_bonus: 4.0
+  monster_stuff_bonus: 0.10
+  # 生成（0〜数個、目玉は極稀、一部は隠し）
+  max_skills_per_player: 3
+  common_skill_prob: 0.16
+  hidden_share: 0.22
+  marquee_skill_prob: 0.008
+  pillar_leadership_threshold: 68
+  pillar_bonus_prob: 0.35
+
+# --- 性格（設計書01 §1.1, CHANGELOG 22b）🟡 母集団平均が中立になるよう重みと係数を対称化（帯ドリフト最小化） ---
+# 内部4傾向値: ①統率(leadership_mean_offset) ②素直さ(coaching_receptivity) ③勤勉さ(self_growth_factor)
+# ④自己犠牲⇔目立ちたがり(bunt_success_bonus 加算 / chance_hit_factor 得点圏強攻の長打質倍率)。各軸の効き先は1つ。
+personalities:
+  factor_jitter_sd: 0.06     # PersonalityFactor のタイプ内個体差σ（タイプが中心）
+  factor_min: 0.75
+  factor_max: 1.25
+  profiles:
+    #                  weight  coaching  growth  bunt    chance  lead
+    - { type: HotBlood,     spawn_weight: 1.0, coaching_receptivity: 1.00, self_growth_factor: 1.08, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:  14 }
+    - { type: Hardworker,   spawn_weight: 1.4, coaching_receptivity: 1.06, self_growth_factor: 1.10, bunt_success_bonus:  0.05, chance_hit_factor: 0.99, leadership_mean_offset:   4 }
+    - { type: Genius,       spawn_weight: 0.5, coaching_receptivity: 0.88, self_growth_factor: 1.10, bunt_success_bonus: -0.06, chance_hit_factor: 1.10, leadership_mean_offset:   0 }
+    - { type: HonorStudent, spawn_weight: 1.0, coaching_receptivity: 1.10, self_growth_factor: 1.00, bunt_success_bonus:  0.05, chance_hit_factor: 0.98, leadership_mean_offset:  12 }
+    - { type: MyPace,       spawn_weight: 1.4, coaching_receptivity: 0.94, self_growth_factor: 0.95, bunt_success_bonus:  0.00, chance_hit_factor: 1.00, leadership_mean_offset:   0 }
+    - { type: MoodMaker,    spawn_weight: 1.2, coaching_receptivity: 1.00, self_growth_factor: 0.92, bunt_success_bonus: -0.06, chance_hit_factor: 1.08, leadership_mean_offset:   4 }
+    - { type: LoneWolf,     spawn_weight: 0.8, coaching_receptivity: 0.92, self_growth_factor: 1.00, bunt_success_bonus: -0.05, chance_hit_factor: 1.06, leadership_mean_offset: -16 }
+    - { type: Introvert,    spawn_weight: 1.2, coaching_receptivity: 1.08, self_growth_factor: 0.95, bunt_success_bonus:  0.04, chance_hit_factor: 0.97, leadership_mean_offset: -14 }
+
+# --- プレッシャー指数×精神力（設計書02 §3.1-3.2）🟡 精神力50は常に恒等（帯不変） ---
+pressure:
+  late_inning_from: 8        # 8回以降 +1
+  close_score_diff: 2        # 2点差以内 +1
+  risp_point: 1              # 得点圏 +1
+  bases_loaded_point: 2      # 満塁 +2
+  retirement_point: 1        # 負けたら引退（3年夏）+1
+  max_index: 8
+  multiplier_slope: 0.02     # 倍率 = 1 + (精神力−50)/50 × slope × P（精神力100・P8で+16%）
+  fatigue_negative_amplify: 1.5   # 疲労閾値超過時は負側のみ増幅（終盤の失点劇）
+
+# --- 采配（設計書09: サイン/守備指示/伝令/主将）🟡 判断閾値と効果量 ---
+tactics:
+  # 攻撃サイン判断（StandardTacticsBrain＝委任・敵AIの土台）
+  sac_bunt_from_inning: 7
+  sac_bunt_prob: 0.55
+  sac_bunt_tie_break_prob: 0.90    # タイブレークでは犠打価値が跳ね上がる（§7）
+  sac_bunt_max_power: 58
+  sac_bunt_min_skill: 40
+  sac_bunt_max_behind: 2
+  sac_bunt_max_ahead: 1
+  squeeze_from_inning: 8
+  squeeze_prob: 0.28
+  squeeze_max_diff_abs: 1
+  squeeze_min_bunt: 55
+  steal_min_success: 0.72          # 解決式の成功見込みがこの値以上で仕掛ける
+  steal_prob: 0.45
+  hit_and_run_prob: 0.07
+  hit_and_run_min_contact: 55
+  hit_and_run_max_power: 65
+  # ギャンブル始動（設計書12 §5, G3b）: 際どい盗塁ほど好ジャンプ・意表に賭ける
+  gamble_start_max_success: 0.82   # 見込みがこの値未満の盗塁でギャンブルを検討
+  gamble_start_prob: 0.40          # 際どい盗塁でギャンブル始動に賭ける確率
+  take_max_control: 40
+  take_prob: 0.30
+  # 本塁への送り判定（設計書12 §3/§4, F2）: 生還推定確率がこの閾値以上なら還す
+  send_home_min_success: 0.50        # 中立采配の送り閾値（Slice C校正: 憤死を目標帯へ）
+  send_home_two_out_relax: 0.30      # 2アウトは緩和（積極的に還す）
+  send_home_aggression_span: 0.50    # aggression(0..1)で閾値を±動かす幅
+  # 内野深さ×ゴロ×本塁（G1, 設計書12 §4/§5）は深さで本塁プレーの有無を分岐（前進=勝負/後退=献上/通常=テーブル）。
+  # 送りバイアスは baserunning.home_grounder_start_delay_seconds で調整。
+  # 守備指示判断
+  bunt_shift_prob: 0.50
+  infield_in_from_inning: 8
+  infield_in_max_lead: 1
+  outfield_deep_min_power: 72
+  control_first_max_control: 38
+  keep_low_min_power: 75
+  gear_push_innings_left: 1
+  gear_push_max_diff_abs: 1
+  gear_coast_min_lead: 5
+  # 敬遠（design-14 P1-3）: 一塁空き・得点圏・強打者・僅差終盤で次打者と勝負。既定オフ
+  intentional_walk_min_power: 70
+  intentional_walk_from_inning: 6
+  intentional_walk_max_diff_abs: 3
+  intentional_walk_prob: 0.6
+  # 伝令判断（攻守各3回, §3）
+  defense_timeout_min_pressure: 3
+  offense_timeout_min_pressure: 5
+  offense_timeout_max_mental: 42
+  # 選手交代判断（設計書09 §6, C-2。決定論=能力の極値を選ぶ）
+  pinch_hit_from_inning: 7
+  pinch_hit_contact_ceiling: 46      # この打者ミート以下を代打候補に
+  pinch_hit_improvement: 12          # 控えがこれだけミート上なら送る
+  pinch_hit_min_diff: -3             # 代打を出す得失点差レンジ（僅差〜小ビハインド）
+  pinch_hit_max_diff: 2
+  pinch_run_from_inning: 8
+  pinch_run_speed_ceiling: 44        # この走力以下の走者を代走候補に
+  pinch_run_improvement: 22          # 控えがこれだけ走力上なら送る
+  pinch_run_min_diff: -2             # 1点を取りにいく場面（ビハインドこの点以内〜+1）
+  defensive_sub_from_inning: 8
+  defensive_sub_min_lead: 1          # このリード以上で守備固め
+  defensive_sub_fielding_ceiling: 44 # この守備以下を交代候補に
+  defensive_sub_improvement: 12      # 控えがこれだけ守備上なら固める
+  # サイン効果（補正係数。パイプライン不変）
+  hit_and_run_contact_boost: 0.10
+  hit_and_run_power_penalty: 0.15
+  hit_and_run_launch_penalty: 0.20
+  hit_and_run_caught_penalty: 0.15
+  buster_vs_shift_bonus: 0.08
+  buster_penalty: 0.05
+  squeeze_read_base: 0.08          # ウエスト（バッテリー察知）
+  squeeze_read_per_lead: 0.002
+  squeeze_read_obvious_bonus: 0.05
+  # 陣形→初期守備位置（効果は幾何＝物理から出る, §2.1）
+  infield_in_factor: 0.82
+  infield_deep_factor: 1.12
+  outfield_in_factor: 0.88
+  outfield_deep_factor: 1.10
+  bunt_shift_corner_charge_factor: 0.60
+  # 配球方針の重み（§2.2）
+  fastball_heavy_share_delta: 0.25
+  breaking_heavy_share_delta: -0.25
+  control_first_aim_sigma_factor: 0.72
+  keep_low_aim_y_offset_m: -0.18
+  inside_aim_x_offset_m: 0.15
+  # 伝令効果・動揺・主将（§3/§8）
+  timeout_mitigation: 0.60
+  timeout_duration_pa: 3
+  rattled_consecutive_baserunners: 3
+  rattled_negative_amplify: 1.4
+  captain_mitigation_per_power: 0.004   # 統率力（統率傾向×精神力/100）1あたりの負補正緩和
+  captain_bench_factor: 0.30
+  # 1球采配（設計書15 §2.3, Phase C）
+  pitch_tactics_two_strike_force_swing_prob: 0.35  # 追い込まれ矯正（見逃し三振回避）
+  pitch_tactics_two_strike_min_contact: 50
+  pitch_tactics_three_zero_take_prob: 0.85         # 3-0待て
+  pitch_tactics_three_zero_swing_away_min_power: 80
+  pitch_tactics_three_zero_swing_away_from_inning: 7
+  pitch_tactics_three_zero_swing_away_max_diff_abs: 1
+  pitch_tactics_put_away_prob: 0.50                # 守備: 2ストライク後の決め球切替
+  pitch_tactics_control_first_min_balls: 3         # 守備: 不利カウントでゾーンに集める
+
+# --- 敵AI（設計書11: 三層＝能力値ミス率×ティア引き出し×校風）🟡 別途の難易度補正は持たない ---
+# プレイヤーとAIは同じ采配システム（tactics:）を使い、選び方だけがこの三層で変わる。
+enemy_ai:
+  # ① 能力値層: 最適解選択率 = base + 采配能力 × per_sense
+  optimal_base: 0.55
+  optimal_per_sense: 0.004
+  optimal_floor: 0.50
+  optimal_cap: 0.98
+  reckless_on_miss_prob: 0.18       # 正着を外したとき無謀な盗塁に走る確率
+  # ② ティア層: 各戦術の最低ティア（0=G 〜 7=S）
+  safety_bunt_min_tier: 2           # E: 状況セーフティ
+  steal_min_tier: 2                 # E: 状況盗塁
+  gamble_start_min_tier: 4          # C: ギャンブル始動（好ジャンプ・意表, G3b）
+  squeeze_min_tier: 5               # B: 上級
+  hit_and_run_min_tier: 5           # B: 上級
+  buster_min_tier: 5                # B: 上級
+  depth_min_tier: 2                 # E: 守備位置調整
+  bunt_shift_min_tier: 5            # B: 守備シフト
+  advanced_policy_min_tier: 2       # E: カウント別配球
+  inside_policy_min_tier: 5         # B: 内角・釣り球
+  gear_min_tier: 4                  # C: ギア先読み
+  timeout_min_tier: 2              # E: 伝令運用
+  pinch_hit_min_tier: 2             # E: 代打の基本運用
+  pinch_run_min_tier: 4             # C: 代走の使いどころ
+  defensive_sub_min_tier: 3         # D: 守備固め
+  pitch_tactics_min_tier: 2        # E: 1球采配（カウント別の基本判断, 設計書15 §2.3）
+  # ③ 校風層: 采配傾向の重み
+  small_ball_steal_factor: 1.7
+  small_ball_bunt_factor: 1.4
+  small_ball_bunt_inning_earlier: 2
+  small_ball_hit_and_run_factor: 1.8
+  small_ball_steal_min_success_relax: 0.08
+  small_ball_gamble_start_factor: 1.8   # 機動力校はギャンブル始動を多用（G3b）
+  power_bunt_factor: 0.30
+  power_take_factor: 1.5
+  power_squeeze_factor: 0.40
+  defensive_bunt_factor: 1.4
+  defensive_shift_factor: 1.4
+  defensive_coast_lead_earlier: 1
+  defensive_sub_inning_earlier: 1        # 守り勝つ: 守備固めを早める
+  small_ball_pinch_run_inning_earlier: 1 # 機動力: 代走を早める
+  ace_dependent_defense_timeout_keep_prob: 0.45
+
+# --- 怪我（設計書03 §3.5: 段階制・常に可視・押して出場は悪化リスク）🟡 ---
+injury:
+  weekly_base_prob: 0.004
+  resistance_slope: 0.010
+  minor_share: 0.70
+  moderate_share: 0.25
+  minor_recovery_weeks: 2
+  moderate_recovery_weeks: 4
+  severe_recovery_weeks: 8
+  minor_performance_factor: 0.95
+  moderate_performance_factor: 0.85
+  severe_performance_factor: 0.70
+  play_through_worsen_prob: 0.30
+  worsen_extra_weeks: 3
+  medical_recovery_factor: 1.0   # 医療施設で短縮（設計書04の備品, 未接続時1.0）
+
+# --- 選手成長イベント（設計書03 §5.5: 覚醒/開眼/スランプ/伸び悩み/イップス）🟡 ---
+# 原則: 上昇はレアな福音、下降は文脈必須（理不尽回避）。覚醒率・恒久ダウン率は設計書07で検証
+growth:
+  awakening_weekly_prob: 0.0015
+  awakening_growth_threshold: 1.15
+  awakening_condition_min: 0.2
+  awakening_gain: 4
+  breakthrough_weekly_prob: 0.003
+  breakthrough_gain: 3
+  slump_weekly_prob: 0.0025
+  slump_condition_max: -0.2
+  slump_weeks_min: 3
+  slump_weeks_max: 6
+  slump_performance_factor: 0.93
+  plateau_cap_proximity: 3.0
+  plateau_weekly_prob: 0.004
+  plateau_growth_factor: 0.6
+  yips_weekly_prob: 0.0008
+  yips_ability_drop: 5
+  yips_overcome_weekly_prob: 0.03
+
+# --- 気づきイベント（設計書03 §5.6: 育成眼→頻度/精度）🟡 ---
+insight:
+  base_weekly_prob: 0.006
+  prob_per_talent_eye: 0.00008
+  accuracy_base: 0.55
+  accuracy_per_talent_eye: 0.004
+  accuracy_max: 0.97
+
+# --- 監督成長イベント（設計書04 §1.1b: 節目の跳ね）🟡 ---
+manager_growth:
+  koshien_tactical_boost: 5.0
+  famous_rival_prob: 0.15
+  famous_rival_boost: 3.0
+  big_loss_prob: 0.35
+  big_loss_boost: 3.0
+  seminar_prob: 0.25
+  seminar_boost: 2.0
+  seminar_cost: 20.0
+  pro_ob_visit_base_prob: 0.08
+  pro_ob_visit_fame_slope: 0.001
+  pro_ob_visit_boost: 2.0
+  mentor_prob: 0.02
+  mentor_boost: 2.0
+  cap: 99.0
+
+# --- 育成（練習→能力, 設計書02 §5.1） ---
+training:
+  base_main_exp: 85.0
+  sub_factor: 0.4
+  facility_coef: 1.0
+  coaching_level: 20.0        # Phase 5で監督メタ（分野別指導力）に置換
+  coaching_slope: 0.005
+  level_up_base: 100.0        # 必要exp = base × growth^level
+  level_up_growth: 1.05
+  summer_camp_mult: 2.0       # 設計書04 §4
+  winter_camp_mult: 2.5
+  tournament_practice_mult: 0.5   # 大会モード中は練習効果が落ちる（設計書03/05）。<1.0で低下
+  # 練習時間配分（設計書03 §3.1）: 基準週=1メニュー満額の基準、default_budget=施設0の週練習時間
+  reference_week_minutes: 300
+  default_budget_minutes: 300  # 照明/寮などの施設導入で増やす（設計書03 §4, 今回は口だけ）
+
+# --- 全国（架空校生成・AI校進化, 設計書05） ---
+# --- チーム総合力6指標（設計決定 2026-07-18）: 打撃/投手/守備/機動/選手層/精神の加重平均 ---
+# たたき台の重み。総合を加重平均へ切替（実装③）時に統計回帰で再校正する。
+team_strength:
+  # 6指標→総合（投手力が王様）。総和は Compute 側で正規化する。
+  pitching_weight: 0.28
+  batting_weight: 0.24
+  defense_weight: 0.18
+  depth_weight: 0.12
+  mobility_weight: 0.10
+  mental_weight: 0.08
+  # 打撃合成（1野手, 合計1.0）
+  contact_weight: 0.35
+  power_weight: 0.35
+  launch_weight: 0.15
+  discipline_weight: 0.15
+  # 投手合成（1投手, 合計1.0）
+  velocity_weight: 0.30
+  control_weight: 0.30
+  stamina_weight: 0.20
+  pitch_rank_weight: 0.20
+  # 守備合成（1野手, 合計1.0）
+  fielding_weight: 0.40
+  catching_weight: 0.30
+  arm_weight: 0.30
+  # 機動力合成（1野手, 合計1.0）
+  speed_weight: 0.70
+  steal_weight: 0.30
+  # 投手力: エース偏重（ace/2番手/3番手以降平均, 合計1.0）
+  ace_weight: 0.50
+  second_pitcher_weight: 0.30
+  rest_pitcher_weight: 0.20
+  # 選手層: 控え野手平均＋2枚目以降投手（合計1.0）
+  bench_batter_weight: 0.60
+  backup_pitcher_weight: 0.40
+  lineup_size: 9
+  bench_sample_size: 6
+  # 総合のリーグ標準化（③）: 6指標加重平均(raw)を旧AverageLevel/AI校Strength尺度へ写す線形較正。
+  # 実測フィット（TeamOverallCalibrationTests, 残差<0.6）。表示・シードとも同一値になる。
+  overall_scale: 1.037
+  overall_offset: -6.6
+
+nation:
+  strength_mean: 44.0
+  strength_sd: 13.0
+  strength_min: 8.0
+  strength_max: 99.0
+  storied_fame_bonus: 20.0
+  storied_strength_bonus: 8.0
+  emerging_fame_penalty: -5.0
+  aggregate_scale: 4.0        # 強さ差→勝率。GameEngineにキャリブレーション（差10→≈0.92）
+  mean_reversion: 0.10        # 平均回帰（全国統計の安定化）
+  churn_sd: 5.5               # 世代交代の揺らぎ（勢力変動）。定常sd≈初期sdを保つ
+  strength_per_win: 0.12
+  fame_to_strength: 0.015
+  fame_decay: 0.90
+  fame_champion: 40.0
+  fame_per_win: 2.5
+
+# --- 大会モード日程（設計書03/05, 抽象日カウント） ---
+tournament:
+  first_round_day: 1      # 開幕(0日目)から初戦までの日数
+  round_gap_days: 3       # ラウンド間の中○日（「試合までXX日」の刻み）
+
+# --- 監督キャリア（設計書04 §1） ---
+career:
+  coaching_growth_per_year: 3.0     # 采配経験による指導力上昇
+  coaching_growth_per_win: 0.8
+  coaching_cap: 99.0
+  coaching_to_strength: 0.78        # 指導力→チーム力の押し上げ
+  free_koshien_threshold: 1         # 甲子園1回でフリー資格
+  free_fame_threshold: 52.0         # または名声60
+  retain_trust_threshold: 60.0      # 残留確率ロジスティックの中点（この信頼度で残留確率＝上限の半分）
+  retain_trust_spread: 10.0         # ロジスティックの傾き（信頼度の効き幅）
+  retain_probability: 0.8           # 高信頼時の残留確率の上限
+  fame_koshien_appearance: 22.0
+  fame_national_champion: 45.0
+  fame_per_win: 1.5
+  fame_decay: 0.92
+  trust_reset: 50.0                 # 転任で信頼度リセット
+  trust_per_win: 4.0
+  trust_koshien: 20.0
+  trust_poor_season_penalty: 12.0
+  annual_budget_base: 80.0
+  budget_per_trust: 0.8
+  new_school_strength_mean: 34.0    # 教員監督の赴任先は弱小
+  new_school_strength_sd: 6.0
+  free_choice_school_strength: 48.0 # フリー化後の本拠地
+
+# --- 新入生生成（設計書04 §2.1・設計書01 §1.1b-c）: 名声→総合力→凸凹配分 ---
+roster:
+  intake_mean: 10.0
+  intake_sd: 1.5
+  intake_min: 8
+  intake_max: 13
+  pitcher_share: 0.30
+  # 総合力（名声由来。既定は一般校相当。名声接続後は talentCenter を上書き）
+  talent_center_default: 32.0
+  talent_sd: 8.0
+  talent_min: 10.0
+  talent_max: 90.0
+  # 凸凹配分（総ポイントをランダム重みで配分・偏り自体もばらつく＝金太郎飴回避）
+  concentration_mean: 0.35    # 偏り強度σ。大きいほど内訳が凸凹
+  concentration_sd: 0.15
+  specialty_floor: 14         # 専門能力の下限（「できない」を作らない）
+  off_specialty_factor: 0.55  # 専門外能力の中心係数（総合力×これ）。パワプロ型特化を禁止
+  off_specialty_floor: 8
+  # 運動能力ベースライン（走力・地肩・スタミナ, 名声独立, §1.1b-2）
+  physical_mean: 45.0
+  physical_sd: 12.0
+  # 精神力・統率傾向（設計書02 §3 / 09 §8。才能・身体と独立）
+  mental_mean: 50.0
+  mental_sd: 12.0
+  leadership_mean: 50.0
+  leadership_sd: 15.0
+  # 捕手リード（設計書01 §2①）: 野球脳(Mental)相関＋個体差。中心50不変で統計帯を保つ（不変条件#5）
+  lead_mean: 50.0
+  lead_sd: 8.0
+  lead_mental_corr: 0.30
+  # 投打の利き（§1.1c）
+  throw_left_prob: 0.12
+  switch_prob: 0.03
+  bat_left_given_right_throw: 0.40   # 右投→左打（右投左打を意図的に量産）
+  bat_left_given_left_throw: 0.98    # 左投→ほぼ左打（左投右打は絶滅危惧種）
+  # 投手球速 = 地肩 ＋ 投手センス（§1.1b-3。km/h校正は Slice 2D）
+  pitcher_sense_bonus: 10.0
+  non_pitcher_sense_factor: 0.45
+  velocity_arm_weight: 0.5
+  velocity_sense_weight: 0.5
+  # 伸びしろ（分野別・凸凹, 現在値と独立, §5.1）
+  growth_mean: 1.0
+  growth_sd: 0.22
+  growth_min: 0.5
+  growth_max: 1.6
+  late_growth_bonus: 0.15
+  # 才能上限（凸凹）
+  cap_gap_mean: 26.0
+  cap_gap_sd: 10.0
+  late_cap_bonus: 6.0         # 晩成の才能上限上方補正（設計書02 §5.2）
+  # 隠し属性「投手経歴」（野手の変化球上振れの素, §1.1b）
+  pitcher_background_prob: 0.06
+  # 変化球レパートリー（設計書02 §2.2）: 投手1〜3球種／野手0〜1（経歴持ちは上振れ）🟡
+  pitcher_second_pitch_prob: 0.75
+  pitcher_third_pitch_prob: 0.30
+  fielder_breaking_prob: 0.35
+  background_fielder_extra_prob: 0.60
+  pitch_offset_sd: 8.0
+  # 守備位置適性の初期分布（設計書01 §1.1, 創発モデル）: 本職は事前に決めず結果として定まる
+  aptitude_base_mean: 50.0         # 守備地力の全体水準（高い個体は全ポジ器用になりうる）
+  aptitude_base_sd: 14.0
+  aptitude_group_affinity_sd: 12.0 # 系統(投/捕/内/外)ごとの向き不向き（独立に振る）
+  aptitude_position_noise_sd: 6.0  # 各ポジ個別の個体差
+  # 旧フィールド（後方互換）
+  init_level_mean: 32.0
+  init_level_sd: 8.0

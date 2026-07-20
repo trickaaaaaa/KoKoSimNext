@@ -1,0 +1,51 @@
+# 47都道府県（JIS順）→ 実名・所属地区（設計書05 §1.5 / CHANGELOG 26-28）。
+# Prefecture.Id (0..46) = JIS順の添字。秋季→地区大会の集約と regional-tournaments.yaml の枠キーに使う。
+# region の値は data/pref-formats/regional-tournaments.yaml の region キーと一致させること。
+prefectures:
+  - { id: 0,  name: hokkaido,  region: hokkaido }
+  - { id: 1,  name: aomori,    region: tohoku }
+  - { id: 2,  name: iwate,     region: tohoku }
+  - { id: 3,  name: miyagi,    region: tohoku }
+  - { id: 4,  name: akita,     region: tohoku }
+  - { id: 5,  name: yamagata,  region: tohoku }
+  - { id: 6,  name: fukushima, region: tohoku }
+  - { id: 7,  name: ibaraki,   region: kanto }
+  - { id: 8,  name: tochigi,   region: kanto }
+  - { id: 9,  name: gunma,     region: kanto }
+  - { id: 10, name: saitama,   region: kanto }
+  - { id: 11, name: chiba,     region: kanto }
+  - { id: 12, name: tokyo,     region: tokyo }
+  - { id: 13, name: kanagawa,  region: kanto }
+  - { id: 14, name: niigata,   region: hokushinetsu }
+  - { id: 15, name: toyama,    region: hokushinetsu }
+  - { id: 16, name: ishikawa,  region: hokushinetsu }
+  - { id: 17, name: fukui,     region: hokushinetsu }
+  - { id: 18, name: yamanashi, region: kanto }
+  - { id: 19, name: nagano,    region: hokushinetsu }
+  - { id: 20, name: gifu,      region: tokai }
+  - { id: 21, name: shizuoka,  region: tokai }
+  - { id: 22, name: aichi,     region: tokai }
+  - { id: 23, name: mie,       region: tokai }
+  - { id: 24, name: shiga,     region: kinki }
+  - { id: 25, name: kyoto,     region: kinki }
+  - { id: 26, name: osaka,     region: kinki }
+  - { id: 27, name: hyogo,     region: kinki }
+  - { id: 28, name: nara,      region: kinki }
+  - { id: 29, name: wakayama,  region: kinki }
+  - { id: 30, name: tottori,   region: chugoku }
+  - { id: 31, name: shimane,   region: chugoku }
+  - { id: 32, name: okayama,   region: chugoku }
+  - { id: 33, name: hiroshima, region: chugoku }
+  - { id: 34, name: yamaguchi, region: chugoku }
+  - { id: 35, name: tokushima, region: shikoku }
+  - { id: 36, name: kagawa,    region: shikoku }
+  - { id: 37, name: ehime,     region: shikoku }
+  - { id: 38, name: kochi,     region: shikoku }
+  - { id: 39, name: fukuoka,   region: kyushu }
+  - { id: 40, name: saga,      region: kyushu }
+  - { id: 41, name: nagasaki,  region: kyushu }
+  - { id: 42, name: kumamoto,  region: kyushu }
+  - { id: 43, name: oita,      region: kyushu }
+  - { id: 44, name: miyazaki,  region: kyushu }
+  - { id: 45, name: kagoshima, region: kyushu }
+  - { id: 46, name: okinawa,   region: kyushu }

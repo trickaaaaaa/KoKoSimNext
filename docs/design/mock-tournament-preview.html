@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大会プレビュー サンプル</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@500&family=Shippori+Mincho:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --field:#14231B; --panel:#1D3227; --panel2:#24402F; --line:#38543F;
+    --chalk:#EFF4EA; --chalk-dim:#9DB3A0; --lamp:#F5C64A; --alert:#E86A4A;
+    --num:'Oswald','Arial Narrow',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --mincho:'Shippori Mincho',serif;
+    --jp:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--field);color:var(--chalk);font-family:var(--jp);font-size:14px;line-height:1.7;padding:18px 14px 50px}
+  .wrap{max-width:760px;margin:0 auto}
+
+  .masthead{border-bottom:3px double var(--line);padding-bottom:12px;margin-bottom:18px}
+  .masthead .kicker{font-family:var(--num);letter-spacing:.3em;color:var(--lamp);font-size:12px}
+  .masthead h1{font-family:var(--mincho);font-size:27px;font-weight:700;letter-spacing:.04em;margin:4px 0 6px}
+  .masthead .meta{font-family:var(--mono);font-size:11.5px;color:var(--chalk-dim)}
+
+  h2{font-family:var(--mincho);font-size:17px;font-weight:700;letter-spacing:.05em;
+     margin:22px 0 12px;padding-left:11px;border-left:4px solid var(--lamp)}
+
+  .lead{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+        font-family:var(--mincho);font-size:14.5px;line-height:1.95}
+  .lead .drop{float:left;font-family:var(--mincho);font-size:44px;line-height:.8;color:var(--lamp);
+              padding:4px 10px 2px 0;font-weight:700}
+
+  .rank{display:flex;flex-direction:column;gap:9px}
+  .team{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;
+        display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:start}
+  .team.fav{border-color:var(--lamp);box-shadow:0 0 16px #f5c64a1f}
+  .mark{font-family:var(--num);font-size:30px;font-weight:700;line-height:1;text-align:center;min-width:44px}
+  .mark.dfav{color:var(--lamp)} .mark.dtaiko{color:var(--chalk)} .mark.ddark{color:var(--alert)}
+  .mark small{display:block;font-family:var(--jp);font-size:9.5px;letter-spacing:.15em;color:var(--chalk-dim);margin-top:3px}
+  .team .body h3{font-size:15.5px;font-weight:700;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .team .body h3 .seed{font-family:var(--mono);font-size:10.5px;color:var(--chalk-dim);font-weight:400}
+  .team .body .grade{font-family:var(--num);font-size:12px;color:var(--field);background:var(--chalk-dim);
+       border-radius:3px;padding:0 6px;letter-spacing:.05em}
+  .team .body p{font-family:var(--mincho);font-size:13px;margin-top:5px;color:#E4EBDF}
+  .bars{display:flex;gap:12px;margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--chalk-dim)}
+  .bar{flex:1}
+  .bar .t{display:flex;justify-content:space-between;margin-bottom:2px}
+  .bar .track{height:5px;background:#0E1A13;border-radius:3px;overflow:hidden;border:1px solid var(--line)}
+  .bar .fill{height:100%;background:var(--lamp)}
+  .bar .fill.def{background:#69B98B}
+
+  .players{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.players{grid-template-columns:1fr}}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 13px}
+  .pcard .top{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .pcard .no{font-family:var(--num);font-size:20px;font-weight:700;color:var(--field);background:var(--lamp);
+       width:30px;height:30px;border-radius:50%;display:grid;place-items:center}
+  .pcard .no.field{background:#69B98B}
+  .pcard .nm{font-size:14.5px;font-weight:700}
+  .pcard .nm span{font-size:11px;color:var(--chalk-dim);font-weight:400;margin-left:4px}
+  .pcard .stat{font-family:var(--mono);font-size:11.5px;color:var(--lamp);margin-bottom:5px}
+  .pcard p{font-family:var(--mincho);font-size:12.5px;color:#E4EBDF}
+
+  .roster{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .roster .rhead{background:var(--panel2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
+  .roster .rhead h3{font-size:14.5px;font-weight:700}
+  .roster .rhead .tag{font-family:var(--num);font-size:11px;letter-spacing:.1em;color:var(--field);
+       background:var(--lamp);border-radius:3px;padding:1px 7px}
+  .roster .sub{font-family:var(--mincho);font-size:12.5px;color:#E4EBDF;padding:10px 14px 0}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  th{font-size:10px;color:var(--chalk-dim);letter-spacing:.1em;text-align:left;padding:5px 14px;border-bottom:1px solid var(--line)}
+  td{padding:5px 14px;border-bottom:1px solid #24402F}
+  td.n{font-family:var(--num);color:var(--lamp);width:34px}
+  td.g{font-family:var(--mono);color:var(--chalk-dim);text-align:right}
+  .foot{margin-top:20px;font-size:11px;color:var(--chalk-dim);text-align:center;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="kicker">TOURNAMENT PREVIEW ── 大会展望</div>
+    <h1>2027年度 秋季神奈川県大会</h1>
+    <div class="meta">出場 64校 ／ 開幕 9月13日 ／ 上位2校が関東大会へ ─ 自動生成プレビュー</div>
+  </div>
+
+  <div class="lead">
+    <span class="drop">混</span>戦、と呼ぶほかない秋である。夏の主力が抜けた新チーム同士、まだ誰も完成していない。そんな中で頭ひとつ抜けるのは、投打に穴のない<b>横浜緑ヶ丘学院</b>。対するは春の雪辱に燃える<b>湘南工科大付</b>と、大型右腕を擁する<b>相模原中央</b>。公立勢では<b>県立厚木東</b>が伏兵として不気味だ。上位2校のみに与えられる関東への切符を巡り、64校が火花を散らす。
+  </div>
+
+  <h2>優勝争いの構図</h2>
+  <div class="rank">
+    <div class="team fav">
+      <div class="mark dfav">◎<small>優勝候補</small></div>
+      <div class="body">
+        <h3>横浜緑ヶ丘学院 <span class="grade">総合 A</span><span class="seed">第1シード</span></h3>
+        <p>死角が見当たらない。打線は中軸の破壊力に加え、1番から繋がる。エース塙の制球力を軸に、守り勝つ試合も撃ち勝つ試合もできる。優勝候補の筆頭に置くのが自然だろう。</p>
+        <div class="bars">
+          <div class="bar"><div class="t"><span>打力</span><span>88</span></div><div class="track"><div class="fill" style="width:88%"></div></div></div>
+          <div class="bar"><div class="t"><span>投手</span><span>84</span></div><div class="track"><div class="fill" style="width:84%"></div></div></div>
+          <div class="bar"><div class="t"><span>守備</span><span>82</span></div><div class="track"><div class="fill def" style="width:82%"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="team">
+      <div class="mark dtaiko">○<small>対抗</small></div>
+      <div class="body">
+        <h3>湘南工科大付 <span class="grade">総合 A</span><span class="seed">第2シード</span></h3>
+        <p>春の準決勝で緑ヶ丘に苦杯をなめた実力校。強力打線は健在で、一発のある打者が並ぶ。課題は投手陣の頭数。エースの出来次第では頂点も十分に見えるが、連戦になると計算が立ちにくい。</p>
+        <div class="bars">
+          <div class="bar"><div class="t"><span>打力</span><span>90</span></div><div class="track"><div class="fill" style="width:90%"></div></div></div>
+          <div class="bar"><div class="t"><span>投手</span><span>71</span></div><div class="track"><div class="fill" style="width:71%"></div></div></div>
+          <div class="bar"><div class="t"><span>守備</span><span>78</span></div><div class="track"><div class="fill def" style="width:78%"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="team">
+      <div class="mark dtaiko">○<small>対抗</small></div>
+      <div class="body">
+        <h3>相模原中央 <span class="grade">総合 B</span><span class="seed">第3シード</span></h3>
+        <p>すべては大型右腕・仁科の右腕にかかる。最速148キロの直球は県内屈指で、彼が投げる試合は圧倒的な安定感を誇る。打線は水物だが、「投手を中心に守り抜く」という明確な色があるチームは強い。</p>
+        <div class="bars">
+          <div class="bar"><div class="t"><span>打力</span><span>72</span></div><div class="track"><div class="fill" style="width:72%"></div></div></div>
+          <div class="bar"><div class="t"><span>投手</span><span>86</span></div><div class="track"><div class="fill" style="width:86%"></div></div></div>
+          <div class="bar"><div class="t"><span>守備</span><span>77</span></div><div class="track"><div class="fill def" style="width:77%"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="team">
+      <div class="mark ddark">▲<small>ダークホース</small></div>
+      <div class="body">
+        <h3>県立厚木東 <span class="grade">総合 C</span><span class="seed">ノーシード</span></h3>
+        <p>戦力値だけを見れば上位には一歩譲る。しかし夏を経験した二遊間が堅く、走塁でかき回す野球は、短期決戦のトーナメントで侮れない。強豪が足をすくわれるなら、この手のチーム相手だ。公立の意地を見せられるか。</p>
+        <div class="bars">
+          <div class="bar"><div class="t"><span>打力</span><span>63</span></div><div class="track"><div class="fill" style="width:63%"></div></div></div>
+          <div class="bar"><div class="t"><span>投手</span><span>66</span></div><div class="track"><div class="fill" style="width:66%"></div></div></div>
+          <div class="bar"><div class="t"><span>守備</span><span>79</span></div><div class="track"><div class="fill def" style="width:79%"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>注目選手</h2>
+  <div class="players">
+    <div class="pcard">
+      <div class="top"><div class="no">1</div><div class="nm">仁科 大和 <span>相模原中央・2年・右投右打・投</span></div></div>
+      <div class="stat">最速148km/h ／ 今秋 防御率0.90・32奪三振</div>
+      <p>県内No.1右腕。角度のある直球と鋭いスライダーで空振りを量産する。まだ2年、伸びしろも十分。スカウトの視線が早くも集まる。</p>
+    </div>
+    <div class="pcard">
+      <div class="top"><div class="no field">3</div><div class="nm">大河内 蓮 <span>湘南工科大付・2年・右投左打・一</span></div></div>
+      <div class="stat">今秋 打率.480・4本（1年時から主軸）</div>
+      <p>県屈指のスラッガー。打球初速は野手最速クラスで、一発は文句なしの飛距離。彼を歩かせるか勝負するかが、対戦相手の毎打席の悩みになる。</p>
+    </div>
+    <div class="pcard">
+      <div class="top"><div class="no">1</div><div class="nm">塙 洋佑 <span>横浜緑ヶ丘学院・2年・左投左打・投</span></div></div>
+      <div class="stat">最速141km/h ／ 今秋 防御率1.12・WHIP0.94</div>
+      <p>球速こそ派手ではないが、制球は県内随一。四球で崩れない安定感が、優勝候補の屋台骨を支える。技巧派エースの完成形。</p>
+    </div>
+    <div class="pcard">
+      <div class="top"><div class="no field">6</div><div class="nm">早瀬 悠人 <span>県立厚木東・2年・右投左打・遊</span></div></div>
+      <div class="stat">今秋 打率.421・7盗塁 ／ 走塁判断◎</div>
+      <p>公立の快足遊撃手。出塁すれば必ず次の塁を狙う積極走塁で、相手バッテリーに重圧をかける。守っては広い守備範囲でチームを救う。</p>
+    </div>
+  </div>
+
+  <h2>出場校メンバー（抜粋）</h2>
+  <div class="roster">
+    <div class="rhead"><h3>横浜緑ヶ丘学院</h3><span class="tag">総合 A ／ 第1シード</span></div>
+    <div class="sub">投打に隙のない優勝候補。守備の破綻が少なく、接戦をものにする力がある。</div>
+    <table>
+      <tr><th>背番号</th><th>選手</th><th>学年</th><th>投打</th></tr>
+      <tr><td class="n">1</td><td>塙 洋佑（投）</td><td>2年</td><td class="g">左投左打</td></tr>
+      <tr><td class="n">2</td><td>栗原 樹（捕）</td><td>2年</td><td class="g">右投右打</td></tr>
+      <tr><td class="n">4</td><td>三宅 遼（二）</td><td>1年</td><td class="g">右投左打</td></tr>
+      <tr><td class="n">5</td><td>高梨 蒼（三）</td><td>2年</td><td class="g">右投右打</td></tr>
+    </table>
+    <div style="height:12px"></div>
+  </div>
+
+  <div class="foot">※ 本プレビューは登録データ・能力・成績から自動生成された読み物です。数値・校名・人名はすべて架空。</div>
+
+</div>
+</body>
+</html>

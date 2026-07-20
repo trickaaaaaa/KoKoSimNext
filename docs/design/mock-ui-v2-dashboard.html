@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<template id="__bundler_thumbnail" data-bg-color="#14231B">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#14231B"/>
+    <rect x="360" y="150" width="480" height="500" fill="none" stroke="#38543F" stroke-width="8"/>
+    <rect x="360" y="150" width="480" height="90" fill="#1D3227"/>
+    <text x="600" y="215" font-family="Oswald, sans-serif" font-weight="700" font-size="56" fill="#F5C64A" text-anchor="middle">GM</text>
+    <text x="600" y="470" font-family="Oswald, sans-serif" font-weight="700" font-size="180" fill="#EFF4EA" text-anchor="middle">1</text>
+    <text x="600" y="580" font-family="sans-serif" font-size="40" fill="#9DB3A0" text-anchor="middle">監督シミュレーション</text>
+  </svg>
+</template>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Shippori+Mincho:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:#0d1712; }
+  a { color:#F5C64A; text-decoration:none; }
+  a:hover { color:#ffdd7a; }
+  .scr::-webkit-scrollbar { width:8px; height:8px; }
+  .scr::-webkit-scrollbar-track { background:#12211a; }
+  .scr::-webkit-scrollbar-thumb { background:#38543F; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+</style>
+</helmet>
+
+<div style="width:1600px; height:900px; background:#14231B; color:#EFF4EA; font-family:'Noto Sans JP',sans-serif; display:flex; flex-direction:column; overflow:hidden; position:relative;">
+
+  <!-- ===== SCOREBOARD HEADER ===== -->
+  <div style="display:flex; align-items:stretch; background:#182a20; border-bottom:1px solid #38543F;">
+    <div style="display:flex; align-items:center; gap:16px; padding:12px 22px; border-right:1px solid #38543F; min-width:344px;">
+      <div style="width:44px; height:44px; border:2px solid #F5C64A; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:700; font-size:22px; color:#F5C64A;">青</div>
+      <div>
+        <div style="font-family:'Shippori Mincho',serif; font-weight:700; font-size:21px; letter-spacing:1px;">{{ teamName }}</div>
+        <div style="font-size:11px; color:#9DB3A0; letter-spacing:2px; margin-top:3px;">{{ prefName }}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:5px; padding-left:16px; border-left:1px solid #38543F;">
+        <span style="font-size:9px; color:#9DB3A0; letter-spacing:2px;">チーム総合力</span>
+        <span style="display:flex; align-items:center; gap:5px;">{{ teamRankEl }}<span style="font-size:12px; color:#EFF4EA; font-weight:500;">ランク</span></span>
+      </div>
+    </div>
+
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; gap:40px;">
+      <div style="text-align:center;">
+        <div style="font-size:10px; color:#9DB3A0; letter-spacing:2px;">現在</div>
+        <div style="font-family:'Oswald',sans-serif; font-weight:600; font-size:24px; color:#EFF4EA; letter-spacing:1px;">2026 <span style="color:#9DB3A0; font-size:16px;">/</span> 7月 第2週</div>
+      </div>
+      <div style="width:1px; height:38px; background:#38543F;"></div>
+      <div style="text-align:center;">
+        <div style="font-size:10px; color:#9DB3A0; letter-spacing:2px;">夏予選まで</div>
+        <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:24px; color:#F5C64A;">残り 3 週</div>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:22px; padding:0 22px; border-left:1px solid #38543F;">
+      <div style="text-align:right;">
+        <div style="font-size:10px; color:#9DB3A0; letter-spacing:1px;">部費残高</div>
+        <div style="font-family:'Oswald',sans-serif; font-weight:600; font-size:19px;">¥1,240,000</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:10px; color:#9DB3A0; letter-spacing:1px;">名声</div>
+        <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:19px; color:#EE8A3C;">B</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:10px; color:#9DB3A0; letter-spacing:1px;">信頼度</div>
+        <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:19px; color:#E8503A;">A</div>
+      </div>
+      <button onClick="{{ goDash }}" style="display:flex; align-items:center; gap:8px; background:{{ accent }}; color:#14231B; border:none; padding:12px 20px; font-family:'Noto Sans JP',sans-serif; font-weight:700; font-size:14px; cursor:pointer; letter-spacing:1px;">今週を進める <span style="font-family:'Oswald',sans-serif; font-size:15px;">&#9654;</span></button>
+    </div>
+  </div>
+
+  <!-- ===== NAV ===== -->
+  <div style="display:flex; align-items:stretch; background:#14231B; border-bottom:1px solid #38543F;">
+    <sc-for list="{{ nav }}" as="item" hint-placeholder-count="9">
+      <button onClick="{{ item.onClick }}" style="position:relative; background:transparent; border:none; border-right:1px solid #22382b; padding:11px 22px; font-family:'Noto Sans JP',sans-serif; font-size:13px; font-weight:500; color:#9DB3A0; cursor:pointer; letter-spacing:1px;">
+        {{ item.label }}
+        <sc-if value="{{ item.active }}" hint-placeholder-val="{{ false }}">
+          <span style="position:absolute; left:0; right:0; bottom:-1px; height:3px; background:#F5C64A;"></span>
+        </sc-if>
+      </button>
+    </sc-for>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN 1 : DASHBOARD -->
+  <!-- ============================================================ -->
+  <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+  <div class="scr" data-screen-label="ダッシュボード" style="flex:1; overflow:hidden; display:grid; grid-template-columns:372px 1fr 400px; gap:14px; padding:16px;">
+
+    <!-- COL 1 -->
+    <div style="display:flex; flex-direction:column; gap:14px; overflow:hidden;">
+      <!-- next match -->
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+          <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px; letter-spacing:1px;">次の試合</span>
+          <span style="font-size:10px; color:#9DB3A0; letter-spacing:1px;">練習試合</span>
+        </div>
+        <div style="padding:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="text-align:center; flex:1;">
+              <div style="font-family:'Shippori Mincho',serif; font-size:17px; font-weight:600;">青嵐</div>
+              <div style="font-size:10px; color:#9DB3A0;">自校</div>
+            </div>
+            <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:20px; color:#9DB3A0;">VS</div>
+            <div style="text-align:center; flex:1;">
+              <div style="font-family:'Shippori Mincho',serif; font-size:17px; font-weight:600;">海鳴工業</div>
+              <div style="font-size:10px; color:#9DB3A0;">県立・強豪</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:16px; margin-top:12px; padding-top:12px; border-top:1px solid #2c4535; font-size:11px; color:#9DB3A0;">
+            <span>7/12（土） 14:00</span><span>県営あおぞら球場</span><span>天気 曇</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- team status -->
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px; letter-spacing:1px;">部の状態</div>
+        <div style="padding:14px; display:flex; flex-direction:column; gap:13px;">
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;"><span style="color:#9DB3A0;">チーム士気</span><span style="font-family:'Oswald',sans-serif; font-weight:700; color:#9FCB3B; font-size:14px;">82</span></div>
+            {{ moraleGauge }}
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;"><span style="color:#9DB3A0;">平均疲労</span><span style="font-family:'Oswald',sans-serif; font-weight:700; color:#F5C64A; font-size:14px;">44</span></div>
+            {{ fatigueGauge }}
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; padding-top:11px; border-top:1px solid #2c4535;">
+            <span style="font-size:11px; color:#9DB3A0;">怪我人</span>
+            <span style="display:flex; align-items:center; gap:7px;"><span style="width:9px; height:9px; border-radius:50%; background:#E86A4A; animation:blink 1.3s infinite;"></span><span style="font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; color:#E86A4A;">2</span><span style="font-size:11px; color:#9DB3A0;">名（桐生・立花）</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- notable players -->
+      <div style="background:#1D3227; border:1px solid #38543F; flex:1; overflow:hidden; display:flex; flex-direction:column;">
+        <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px; letter-spacing:1px;">注目選手</div>
+        <div class="scr" style="overflow-y:auto;">
+          <sc-for list="{{ notable }}" as="p" hint-placeholder-count="4">
+            <div onClick="{{ goPlayer }}" style="display:flex; align-items:center; gap:11px; padding:10px 14px; border-bottom:1px solid #22382b; cursor:pointer;">
+              <span style="width:30px; height:30px; border:1px solid #38543F; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:700; font-size:14px;">{{ p.no }}</span>
+              <div style="flex:1;">
+                <div style="font-size:13px; font-weight:500;">{{ p.name }}</div>
+                <div style="font-size:10px; color:#9DB3A0;">{{ p.pos }}</div>
+              </div>
+              {{ p.condEl }}
+              {{ p.chipEl }}
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- COL 2 : feed -->
+    <div style="background:#1D3227; border:1px solid #38543F; display:flex; flex-direction:column; overflow:hidden;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+        <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px; letter-spacing:1px;">通知フィード</span>
+        <span style="font-size:10px; color:#9DB3A0;">今週の出来事</span>
+      </div>
+      <div class="scr" style="flex:1; overflow-y:auto;">
+        <sc-for list="{{ notes }}" as="n" hint-placeholder-count="8">
+          <div style="display:flex; align-items:stretch; border-bottom:1px solid #22382b;">
+            <span style="width:4px; background:{{ n.bar }}; flex-shrink:0;"></span>
+            <div style="padding:12px 14px; flex:1;">
+              <div style="display:flex; align-items:center; gap:9px; margin-bottom:4px;">
+                <span style="font-size:9px; letter-spacing:1px; color:{{ n.bar }}; border:1px solid {{ n.bar }}; padding:1px 6px; font-weight:700;">{{ n.tag }}</span>
+                <span style="font-family:'Oswald',sans-serif; font-size:11px; color:#6b8577;">{{ n.time }}</span>
+              </div>
+              <div style="font-size:13px; line-height:1.5; text-wrap:pretty;">{{ n.text }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- COL 3 : practice + guidance -->
+    <div style="display:flex; flex-direction:column; gap:14px; overflow:hidden;">
+      <div style="background:#1D3227; border:1px solid #38543F; flex:1; overflow:hidden; display:flex; flex-direction:column;">
+        <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px; letter-spacing:1px;">今週の練習計画</div>
+        <div style="flex:1; overflow:hidden;">
+          <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+            <div style="display:flex; align-items:center; gap:12px; padding:9px 14px; border-bottom:1px solid #22382b; background:{{ d.rowBg }};">
+              <span style="width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-family:'Shippori Mincho',serif; font-weight:600; font-size:13px; color:{{ d.dayColor }}; flex-shrink:0;">{{ d.d }}</span>
+              <span style="flex:1; display:flex; align-items:center; gap:8px; border-left:3px solid {{ d.accentBar }}; padding:5px 10px;">
+                <span style="font-size:12px; font-weight:{{ d.weight }}; color:{{ d.menuColor }};">{{ d.menu }}</span>
+              </span>
+              <sc-if value="{{ d.game }}" hint-placeholder-val="{{ false }}">
+                <span style="font-size:9px; letter-spacing:1px; color:#14231B; background:#F5C64A; padding:2px 7px; font-weight:700;">試合日</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+          <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px; letter-spacing:1px;">個別指導</span>
+          <span style="font-size:10px; color:#9DB3A0;">残り枠 1 / 3</span>
+        </div>
+        <div style="padding:12px 14px; display:flex; flex-direction:column; gap:9px;">
+          <sc-for list="{{ guidance }}" as="g" hint-placeholder-count="3">
+            <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px dashed #38543F; padding:11px 12px; font-size:12px; color:#6b8577; text-align:center;">＋ 空き枠（選手を指名）</div>
+            </sc-if>
+            <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; justify-content:space-between; background:#182a20; border:1px solid #38543F; padding:10px 12px;">
+                <span style="font-size:13px; font-weight:500;">{{ g.name }}</span>
+                <span style="font-size:11px; color:#F5C64A;">{{ g.focus }}</span>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN 2 : PLAYER DETAIL -->
+  <!-- ============================================================ -->
+  <sc-if value="{{ isPlayer }}" hint-placeholder-val="{{ false }}">
+  <div class="scr" data-screen-label="選手詳細" style="flex:1; overflow-y:auto; padding:16px;">
+
+    <!-- player header -->
+    <div style="display:flex; align-items:stretch; background:#1D3227; border:1px solid #38543F; margin-bottom:14px;">
+      <div style="width:120px; background:#182a20; border-right:1px solid #38543F; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; position:relative;">
+        <span style="position:absolute; top:8px; left:10px; font-size:10px; color:#F5C64A; letter-spacing:2px; font-weight:700;">P</span>
+        <span style="font-family:'Oswald',sans-serif; font-weight:700; font-size:64px; line-height:0.9; color:#EFF4EA;">1</span>
+        <span style="font-size:11px; color:#9DB3A0;">投手 / エース</span>
+      </div>
+      <div style="flex:1; padding:16px 22px; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <span style="font-family:'Shippori Mincho',serif; font-weight:700; font-size:32px; letter-spacing:2px;">三宅 航平</span>
+            {{ pcond }}
+            <span style="font-size:12px; color:#F5C64A;">絶好調</span>
+          </div>
+          <div style="display:flex; gap:20px; margin-top:10px; font-size:13px; color:#9DB3A0;">
+            <span>3年</span><span>投手（P）</span><span>右投右打</span><span>投法：オーバースロー</span><span>最速 <span style="font-family:'Oswald',sans-serif; font-weight:700; color:#EFF4EA; font-size:16px;">141</span> km/h</span>
+          </div>
+        </div>
+        <div style="text-align:center; padding-left:22px; border-left:1px solid #38543F;">
+          <div style="font-size:10px; color:#9DB3A0; letter-spacing:2px; margin-bottom:6px;">総合ランク</div>
+          {{ pOverall }}
+        </div>
+      </div>
+    </div>
+
+    <!-- abilities : pitcher + fielder, both on one screen -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+          <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">投手能力</span>
+          <span style="font-size:10px; color:#9DB3A0;">数値は内部値（1〜100）</span>
+        </div>
+        <div style="padding:6px 14px 12px;">
+          <div style="display:grid; grid-template-columns:96px 34px 1fr 24px; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #38543F;">
+            <span style="font-size:12.5px;">球速</span>
+            <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:700; font-size:16px; color:#F5C64A;">141</span>
+            <div style="height:7px; background:#12211a;"><div style="height:100%; width:58%; background:{{ accent }};"></div></div>
+            <span style="font-size:9px; color:#9DB3A0; text-align:right;">km/h</span>
+          </div>
+          <sc-for list="{{ pAbilities }}" as="a" hint-placeholder-count="10">
+            <div style="display:grid; grid-template-columns:96px 34px 1fr 24px; gap:10px; align-items:center; padding:6px 0; border-bottom:1px solid #22382b;">
+              <span style="font-size:12.5px;">{{ a.label }}</span>
+              <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:600; font-size:15px;">{{ a.val }}</span>
+              <div style="height:7px; background:#12211a;"><div style="height:100%; width:{{ a.pct }}; background:{{ a.barColor }};"></div></div>
+              <span style="display:flex; justify-content:flex-end;">{{ a.chipEl }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+          <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">野手能力</span>
+          <span style="font-size:10px; color:#9DB3A0;">数値は内部値（1〜100）</span>
+        </div>
+        <div style="padding:6px 14px 12px;">
+          <sc-for list="{{ fAbilities }}" as="a" hint-placeholder-count="12">
+            <div style="display:grid; grid-template-columns:96px 34px 1fr 24px; gap:10px; align-items:center; padding:5px 0; border-bottom:1px solid #22382b;">
+              <span style="font-size:12.5px;">{{ a.label }}</span>
+              <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:600; font-size:15px;">{{ a.val }}</span>
+              <div style="height:7px; background:#12211a;"><div style="height:100%; width:{{ a.pct }}; background:{{ a.barColor }};"></div></div>
+              <span style="display:flex; justify-content:flex-end;">{{ a.chipEl }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- radar + growth + hidden -->
+    <div style="display:grid; grid-template-columns:320px 1fr 340px; gap:14px; margin-bottom:14px;">
+      <div style="background:#1D3227; border:1px solid #38543F; display:flex; flex-direction:column;">
+        <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">能力バランス</div>
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:8px;">{{ radarEl }}</div>
+      </div>
+      <div style="background:#1D3227; border:1px solid #38543F; display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+          <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">成長推移</span>
+          <span style="display:flex; gap:12px; font-size:10px;"><span style="color:#F5C64A;">━ 球速</span><span style="color:#6B8CA8;">┅ 制球</span></span>
+        </div>
+        <div style="flex:1; display:flex; align-items:center; padding:12px 8px;">{{ growthEl }}</div>
+      </div>
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">隠しパラメータ（推定）</div>
+        <div style="padding:12px 14px; display:flex; flex-direction:column; gap:10px;">
+          <sc-for list="{{ hidden }}" as="hp" hint-placeholder-count="4">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <span style="font-size:12px; color:#9DB3A0;">{{ hp.k }}</span>
+              <sc-if value="{{ hp.known }}" hint-placeholder-val="{{ true }}">
+                <span style="font-size:13px; font-weight:700; color:#EFF4EA; border-bottom:1px solid #F5C64A; padding-bottom:1px;">{{ hp.v }}</span>
+              </sc-if>
+              <sc-if value="{{ hp.known }}" hint-placeholder-val="{{ false }}">
+                <span style="font-family:'Oswald',sans-serif; font-size:15px; font-weight:700; color:#6b8577;">？</span>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="font-size:10px; color:#6b8577; margin-top:2px; line-height:1.5;">試合起用・面談・スカウトで段階的に判明します。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- statcast + skills/stats -->
+    <div style="display:grid; grid-template-columns:1fr 360px; gap:14px;">
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+          <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">球種データ（Statcast風）</span>
+          <span style="font-size:10px; color:#9DB3A0;">計測平均値</span>
+        </div>
+        <div style="padding:4px 14px 12px;">
+          <div style="display:grid; grid-template-columns:1.4fr 44px 1fr 1.2fr 1fr; gap:8px; padding:9px 0; border-bottom:1px solid #38543F; font-size:10px; color:#9DB3A0; letter-spacing:1px;">
+            <span>球種</span><span style="text-align:center;">ランク</span><span style="text-align:right;">球速</span><span style="text-align:right;">変化量</span><span style="text-align:right;">回転数</span>
+          </div>
+          <sc-for list="{{ pitches }}" as="pt" hint-placeholder-count="4">
+            <div style="display:grid; grid-template-columns:1.4fr 44px 1fr 1.2fr 1fr; gap:8px; align-items:center; padding:9px 0; border-bottom:1px solid #22382b;">
+              <span style="font-size:13px;">{{ pt.name }}</span>
+              <span style="display:flex; justify-content:center;">{{ pt.rankEl }}</span>
+              <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:600; font-size:15px;">{{ pt.velo }}<span style="font-size:9px; color:#9DB3A0;"> km/h</span></span>
+              <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:13px; color:#EFF4EA;">{{ pt.move }}</span>
+              <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:13px; color:#9DB3A0;">{{ pt.rpm }}<span style="font-size:9px;"> rpm</span></span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div style="background:#1D3227; border:1px solid #38543F;">
+          <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">特殊能力</div>
+          <div style="padding:12px 14px; display:flex; flex-direction:column; gap:11px;">
+            <sc-for list="{{ skills }}" as="sk" hint-placeholder-count="4">
+              <div>
+                <span style="display:inline-block; font-size:12px; font-weight:700; color:#F5C64A; background:rgba(245,198,74,0.12); border:1px solid #F5C64A; padding:3px 10px; margin-bottom:5px;">{{ sk.name }}</span>
+                <div style="font-size:11px; color:#9DB3A0; line-height:1.5;">{{ sk.desc }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background:#1D3227; border:1px solid #38543F;">
+          <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:14px;">簡易成績</div>
+          <div style="padding:8px 14px 14px;">
+            <div style="font-size:10px; color:#F5C64A; letter-spacing:1px; margin:8px 0 6px;">今大会（春季県大会）</div>
+            <div style="display:flex; gap:6px;">
+              <div style="flex:1; background:#182a20; border:1px solid #2c4535; padding:8px; text-align:center;"><div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:20px; color:#F5C64A;">0.90</div><div style="font-size:9px; color:#9DB3A0;">防御率</div></div>
+              <div style="flex:1; background:#182a20; border:1px solid #2c4535; padding:8px; text-align:center;"><div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:20px;">2-0</div><div style="font-size:9px; color:#9DB3A0;">勝敗</div></div>
+              <div style="flex:1; background:#182a20; border:1px solid #2c4535; padding:8px; text-align:center;"><div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:20px;">24</div><div style="font-size:9px; color:#9DB3A0;">奪三振</div></div>
+            </div>
+            <div style="font-size:10px; color:#9DB3A0; letter-spacing:1px; margin:14px 0 6px;">公式戦通算（高校3年間）</div>
+            <div style="display:flex; gap:6px;">
+              <div style="flex:1; background:#182a20; border:1px solid #2c4535; padding:8px; text-align:center;"><div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:20px;">1.42</div><div style="font-size:9px; color:#9DB3A0;">防御率</div></div>
+              <div style="flex:1; background:#182a20; border:1px solid #2c4535; padding:8px; text-align:center;"><div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:20px;">9-1</div><div style="font-size:9px; color:#9DB3A0;">勝敗</div></div>
+              <div style="flex:1; background:#182a20; border:1px solid #2c4535; padding:8px; text-align:center;"><div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:20px;">118</div><div style="font-size:9px; color:#9DB3A0;">奪三振</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============================================================ -->
+  <!-- SCREEN 3 : DATA / RANKINGS -->
+  <!-- ============================================================ -->
+  <sc-if value="{{ isData }}" hint-placeholder-val="{{ false }}">
+  <div class="scr" data-screen-label="データ閲覧" style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px;">
+
+    <!-- tabs -->
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <div style="display:flex; gap:0; border:1px solid #38543F;">
+        <span style="padding:9px 18px; font-size:12px; background:#F5C64A; color:#14231B; font-weight:700; letter-spacing:1px;">公式戦通算</span>
+        <span style="padding:9px 18px; font-size:12px; color:#9DB3A0; border-left:1px solid #38543F; cursor:pointer;">今大会</span>
+        <span style="padding:9px 18px; font-size:12px; color:#9DB3A0; border-left:1px solid #38543F; cursor:pointer;">キャリア通算</span>
+      </div>
+      <div style="display:flex; gap:0; border:1px solid #38543F;">
+        <button onClick="{{ setBat }}" style="padding:9px 20px; font-size:12px; font-family:'Noto Sans JP',sans-serif; border:none; cursor:pointer; letter-spacing:1px; font-weight:700; background:{{ accent }}; color:#14231B;">打者</button>
+        <button onClick="{{ setPit }}" style="padding:9px 20px; font-size:12px; font-family:'Noto Sans JP',sans-serif; border:none; border-left:1px solid #38543F; cursor:pointer; letter-spacing:1px; font-weight:500; background:transparent; color:#9DB3A0;">投手</button>
+      </div>
+    </div>
+
+    <!-- batter table -->
+    <sc-if value="{{ isBat }}" hint-placeholder-val="{{ true }}">
+    <div style="background:#1D3227; border:1px solid #38543F;">
+      <div style="display:grid; grid-template-columns:38px 1fr 42px 52px 44px 40px 60px 46px 46px 66px 44px 56px 56px; gap:6px; padding:10px 14px; border-bottom:1px solid #38543F; font-size:10px; color:#9DB3A0; letter-spacing:1px;">
+        <span>背番</span><span>選手</span><span style="text-align:center;">総合</span><span style="text-align:center;">調子</span><span>学年</span><span>守備</span><span>投打</span><span style="text-align:right;">打率</span><span style="text-align:right;">本</span><span style="text-align:right;">打点</span><span style="text-align:right;">盗</span><span style="text-align:right;">出塁</span><span style="text-align:right;">OPS</span>
+      </div>
+      <sc-for list="{{ batters }}" as="b" hint-placeholder-count="10">
+        <div onClick="{{ goPlayer }}" style="display:grid; grid-template-columns:38px 1fr 42px 52px 44px 40px 60px 46px 46px 66px 44px 56px 56px; gap:6px; align-items:center; padding:9px 14px; border-bottom:1px solid #22382b; cursor:pointer;">
+          <span style="font-family:'Oswald',sans-serif; font-weight:600; font-size:15px;">{{ b.no }}</span>
+          <span style="font-size:13px; font-weight:500;">{{ b.name }}</span>
+          <span style="display:flex; justify-content:center;">{{ b.chipEl }}</span>
+          <span style="display:flex; justify-content:center;">{{ b.condEl }}</span>
+          <span style="font-size:12px; color:#9DB3A0;">{{ b.yr }}年</span>
+          <span style="font-size:12px; color:#9DB3A0;">{{ b.pos }}</span>
+          <span style="font-size:11px; color:#9DB3A0;">{{ b.bt }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:600; font-size:14px;">{{ b.avg }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:600; font-size:14px;">{{ b.hr }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:14px;">{{ b.rbi }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:14px;">{{ b.sb }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:13px; color:#9DB3A0;">{{ b.obp }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; color:#F5C64A;">{{ b.ops }}</span>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <!-- pitcher table -->
+    <sc-if value="{{ isPit }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#1D3227; border:1px solid #38543F;">
+      <div style="display:grid; grid-template-columns:38px 1fr 42px 52px 44px 56px 90px 56px 56px 52px 52px 58px 58px; gap:6px; padding:10px 14px; border-bottom:1px solid #38543F; font-size:10px; color:#9DB3A0; letter-spacing:1px;">
+        <span>背番</span><span>選手</span><span style="text-align:center;">総合</span><span style="text-align:center;">調子</span><span>学年</span><span>投</span><span>投法</span><span style="text-align:right;">防御率</span><span style="text-align:right;">勝敗</span><span style="text-align:right;">奪三</span><span style="text-align:right;">K/9</span><span style="text-align:right;">WHIP</span><span style="text-align:right;">最速</span>
+      </div>
+      <sc-for list="{{ pitchers }}" as="pp" hint-placeholder-count="5">
+        <div onClick="{{ goPlayer }}" style="display:grid; grid-template-columns:38px 1fr 42px 52px 44px 56px 90px 56px 56px 52px 52px 58px 58px; gap:6px; align-items:center; padding:9px 14px; border-bottom:1px solid #22382b; cursor:pointer;">
+          <span style="font-family:'Oswald',sans-serif; font-weight:600; font-size:15px;">{{ pp.no }}</span>
+          <span style="font-size:13px; font-weight:500;">{{ pp.name }}</span>
+          <span style="display:flex; justify-content:center;">{{ pp.chipEl }}</span>
+          <span style="display:flex; justify-content:center;">{{ pp.condEl }}</span>
+          <span style="font-size:12px; color:#9DB3A0;">{{ pp.yr }}年</span>
+          <span style="font-size:11px; color:#9DB3A0;">{{ pp.th }}</span>
+          <span style="font-size:11px; color:#9DB3A0;">{{ pp.arm }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; color:#F5C64A;">{{ pp.era }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:600; font-size:14px;">{{ pp.wl }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:14px;">{{ pp.k }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:13px; color:#9DB3A0;">{{ pp.k9 }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-size:13px; color:#9DB3A0;">{{ pp.whip }}</span>
+          <span style="text-align:right; font-family:'Oswald',sans-serif; font-weight:600; font-size:14px;">{{ pp.velo }}</span>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <!-- bottom analytics row -->
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;">
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:13px;">本塁打 チーム内ランキング</div>
+        <div style="padding:14px;">{{ hrRankEl }}</div>
+      </div>
+      <div style="background:#1D3227; border:1px solid #38543F;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid #38543F;">
+          <span style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:13px;">打球初速の分布</span>
+          <span style="font-size:10px; color:#9DB3A0;">km/h ・ 全打席</span>
+        </div>
+        <div style="padding:14px 10px;">{{ histEl }}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div style="background:#1D3227; border:1px solid #F5C64A;">
+          <div style="padding:9px 14px; border-bottom:1px solid #2c4535; font-family:'Shippori Mincho',serif; font-weight:600; font-size:13px; color:#F5C64A;">記録に迫る</div>
+          <div style="padding:12px 14px; font-size:12px; line-height:1.6;">
+            <span style="font-weight:700;">早瀬 大和</span> が校史通算本塁打記録（<span style="font-family:'Oswald',sans-serif; font-weight:700; color:#F5C64A;">23</span>本）に迫る。現在 <span style="font-family:'Oswald',sans-serif; font-weight:700; color:#F5C64A;">21</span>本、更新まであと<span style="font-family:'Oswald',sans-serif; font-weight:700; color:#F5C64A;"> 2 </span>本。
+          </div>
+        </div>
+        <div style="background:#1D3227; border:1px solid #38543F; flex:1;">
+          <div style="padding:9px 14px; border-bottom:1px solid #38543F; font-family:'Shippori Mincho',serif; font-weight:600; font-size:13px;">教え子の現在地（プロ）</div>
+          <div style="padding:6px 14px 12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #22382b;">
+              <span style="font-size:12px;">'24卒 黒瀬 匠 <span style="color:#9DB3A0;">/ 内野手</span></span>
+              <span style="font-size:11px; color:#9DB3A0;">二軍 打率 .284</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0;">
+              <span style="font-size:12px;">'23卒 白瀬 蓮 <span style="color:#9DB3A0;">/ 投手</span></span>
+              <span style="font-size:11px; color:#9DB3A0;">一軍 防御率 3.10</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:900},&quot;teamName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;青嵐高校&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;prefName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;神奈川県&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#F5C64A&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#F5C64A&quot;,&quot;#E8503A&quot;,&quot;#9FCB3B&quot;,&quot;#6B8CA8&quot;]}}">
+const h = React.createElement;
+const C = { bg:'#14231B', panel:'#1D3227', panel2:'#182a20', text:'#EFF4EA', sub:'#9DB3A0', line:'#38543F', amber:'#F5C64A', warn:'#E86A4A', good:'#9FCB3B' };
+const RANK = { S:'#D6409F', A:'#E8503A', B:'#EE8A3C', C:'#F5C64A', D:'#9FCB3B', E:'#3FA96A', F:'#6B8CA8', G:'#8A968E' };
+const RTEXT = { S:'#fff', A:'#fff', B:'#1a120a', C:'#14231B', D:'#14231B', E:'#04140b', F:'#fff', G:'#14231B' };
+
+const COND = {
+  '絶好調':{t:'\u2191\u2191', c:'#F5C64A'},
+  '好調':  {t:'\u2191',       c:'#9FCB3B'},
+  '普通':  {t:'\u2192',       c:'#9DB3A0'},
+  '不調':  {t:'\u2193',       c:'#EE8A3C'},
+  '絶不調':{t:'\u2193\u2193', c:'#E86A4A'}
+};
+
+function chip(rank, sz) {
+  sz = sz || 22;
+  return h('span', { style:{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:sz, height:sz, background:RANK[rank], color:RTEXT[rank], fontFamily:"'Oswald',sans-serif", fontWeight:700, fontSize:sz*0.58, lineHeight:1 } }, rank);
+}
+function faceEl(name, size) {
+  size = size || 22;
+  const map = {
+    '絶好調':{ c:'#F5C64A', mouth:'M6.5,14 Q12,20.5 17.5,14', eye:'happy' },
+    '好調':  { c:'#9FCB3B', mouth:'M7.5,14.5 Q12,18.5 16.5,14.5', eye:'dot' },
+    '普通':  { c:'#9DB3A0', mouth:'M8,15.5 L16,15.5', eye:'dot' },
+    '不調':  { c:'#EE8A3C', mouth:'M8,17.5 Q12,14.5 16,17.5', eye:'dot' },
+    '絶不調':{ c:'#E86A4A', mouth:'M7,18.5 Q12,13.5 17,18.5', eye:'sad' }
+  };
+  const f = map[name] || map['普通'];
+  let eyes;
+  if (f.eye === 'happy') {
+    eyes = [ h('path',{key:'e1',d:'M6.4,10.6 Q8,9 9.6,10.6',fill:'none',stroke:f.c,strokeWidth:1.4,strokeLinecap:'round'}),
+             h('path',{key:'e2',d:'M14.4,10.6 Q16,9 17.6,10.6',fill:'none',stroke:f.c,strokeWidth:1.4,strokeLinecap:'round'}) ];
+  } else if (f.eye === 'sad') {
+    eyes = [ h('circle',{key:'e1',cx:8,cy:10.8,r:1.15,fill:f.c}), h('circle',{key:'e2',cx:16,cy:10.8,r:1.15,fill:f.c}),
+             h('path',{key:'b1',d:'M6.3,8.6 L9.6,9.9',stroke:f.c,strokeWidth:1.1,strokeLinecap:'round'}),
+             h('path',{key:'b2',d:'M17.7,8.6 L14.4,9.9',stroke:f.c,strokeWidth:1.1,strokeLinecap:'round'}) ];
+  } else {
+    eyes = [ h('circle',{key:'e1',cx:8,cy:10.6,r:1.2,fill:f.c}), h('circle',{key:'e2',cx:16,cy:10.6,r:1.2,fill:f.c}) ];
+  }
+  return h('svg',{width:size,height:size,viewBox:'0 0 24 24',title:name,style:{display:'block',flexShrink:0}},
+    h('circle',{cx:12,cy:12,r:10.2,fill:'none',stroke:f.c,strokeWidth:1.6}),
+    ...eyes,
+    h('path',{d:f.mouth,fill:'none',stroke:f.c,strokeWidth:1.7,strokeLinecap:'round'}));
+}
+function condEl(name){ return faceEl(name, 22); }
+
+class Component extends DCLogic {
+  state = { screen:'dash', dataTab:'bat' };
+
+  A() { return this.props.accentColor || C.amber; }
+  setScreen = (s) => this.setState({ screen:s });
+  setDataTab = (t) => this.setState({ dataTab:t });
+
+  radar() {
+    const A = this.A();
+    const axes = [['球速',92],['制球',72],['スタミナ',88],['変化球',75],['メンタル',80],['守備',60]];
+    const S=250, cx=S/2, cy=S/2, r=82, n=axes.length;
+    const ang=i=>-Math.PI/2 + i*2*Math.PI/n;
+    const P=(i,v)=>[cx+Math.cos(ang(i))*r*v/100, cy+Math.sin(ang(i))*r*v/100];
+    const rings=[25,50,75,100].map((rr,k)=>h('polygon',{key:'r'+k, points:axes.map((_,i)=>P(i,rr).join(',')).join(' '), fill:'none', stroke:'#2c4535', strokeWidth:1}));
+    const spokes=axes.map((_,i)=>{const[x,y]=P(i,100);return h('line',{key:'s'+i,x1:cx,y1:cy,x2:x,y2:y,stroke:'#2c4535',strokeWidth:1});});
+    const poly=h('polygon',{points:axes.map((a,i)=>P(i,a[1]).join(',')).join(' '), fill:'rgba(245,198,74,0.20)', stroke:A, strokeWidth:2});
+    const dots=axes.map((a,i)=>{const[x,y]=P(i,a[1]);return h('circle',{key:'d'+i,cx:x,cy:y,r:3.2,fill:A});});
+    const labels=axes.map((a,i)=>{const[x,y]=P(i,118);return h('text',{key:'l'+i,x,y,fill:C.sub,fontSize:11,textAnchor:'middle',dominantBaseline:'middle',fontFamily:"'Noto Sans JP',sans-serif"},a[0]);});
+    return h('svg',{width:S,height:S,viewBox:'0 0 '+S+' '+S},...rings,...spokes,poly,...dots,...labels);
+  }
+
+  growth() {
+    const A = this.A();
+    const W=470,H=196,pl=38,pr=44,pt=14,pb=30;
+    const xs=['入学','1年夏','2年春','2年夏','3年春','現在'];
+    const velo=[128,132,135,137,140,141];
+    const ctrl=[42,50,56,60,66,72];
+    const vmin=120,vmax=145;
+    const X=i=>pl+i*(W-pl-pr)/(xs.length-1);
+    const Yv=v=>H-pb-(v-vmin)/(vmax-vmin)*(H-pb-pt);
+    const Yc=v=>H-pb-(v/100)*(H-pb-pt);
+    const grid=[120,130,140].map((g,k)=>h('g',{key:'g'+k},
+      h('line',{x1:pl,y1:Yv(g),x2:W-pr,y2:Yv(g),stroke:'#243a2c',strokeWidth:1}),
+      h('text',{x:pl-6,y:Yv(g),fill:'#6b8577',fontSize:10,textAnchor:'end',dominantBaseline:'middle',fontFamily:"'Oswald',sans-serif"},g)));
+    const lineV=h('polyline',{fill:'none',stroke:A,strokeWidth:2.4,points:velo.map((v,i)=>X(i)+','+Yv(v)).join(' ')});
+    const lineC=h('polyline',{fill:'none',stroke:'#6B8CA8',strokeWidth:2,strokeDasharray:'4 3',points:ctrl.map((v,i)=>X(i)+','+Yc(v)).join(' ')});
+    const dv=velo.map((v,i)=>h('circle',{key:'v'+i,cx:X(i),cy:Yv(v),r:3,fill:A}));
+    const xl=xs.map((s,i)=>h('text',{key:'x'+i,x:X(i),y:H-8,fill:'#6b8577',fontSize:9.5,textAnchor:'middle',fontFamily:"'Noto Sans JP',sans-serif"},s));
+    const last=h('text',{x:X(5)+6,y:Yv(141),fill:A,fontSize:13,dominantBaseline:'middle',fontFamily:"'Oswald',sans-serif",fontWeight:700},'141');
+    return h('svg',{width:'100%',viewBox:'0 0 '+W+' '+H,style:{display:'block'}},...grid,lineC,lineV,...dv,...xl,last);
+  }
+
+  hist() {
+    const A=this.A();
+    const bins=[['120-130',2],['130-140',5],['140-150',7],['150-160',4],['160+',1]];
+    const W=300,H=150,pb=26,pt=8,pl=8,pr=8,max=8;
+    const bw=(W-pl-pr)/bins.length;
+    const bars=bins.map((b,i)=>{const bh=(b[1]/max)*(H-pb-pt);const x=pl+i*bw+6;const y=H-pb-bh;return h('g',{key:i},
+      h('rect',{x,y,width:bw-12,height:bh,fill:A,opacity:0.85}),
+      h('text',{x:x+(bw-12)/2,y:y-4,fill:C.text,fontSize:11,textAnchor:'middle',fontFamily:"'Oswald',sans-serif",fontWeight:600},b[1]),
+      h('text',{x:x+(bw-12)/2,y:H-9,fill:'#6b8577',fontSize:9,textAnchor:'middle',fontFamily:"'Oswald',sans-serif"},b[0]));});
+    return h('svg',{width:'100%',viewBox:'0 0 '+W+' '+H,style:{display:'block'}},...bars);
+  }
+
+  hrRank() {
+    const A=this.A();
+    const rows=[['国分 悠真',9],['大山 蒼空',8],['早瀬 大和',6],['桐生 颯',5],['三宅 航平',4]];
+    const max=10;
+    return h('div',{style:{display:'flex',flexDirection:'column',gap:9}},
+      rows.map((r,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',gap:8}},
+        h('span',{style:{width:78,fontSize:11,color:C.sub,fontFamily:"'Noto Sans JP',sans-serif",whiteSpace:'nowrap'}},r[0]),
+        h('div',{style:{flex:1,height:14,background:'#12211a',position:'relative'}},
+          h('div',{style:{position:'absolute',left:0,top:0,bottom:0,width:(r[1]/max*100)+'%',background:i===0?A:'rgba(245,198,74,0.45)'}})),
+        h('span',{style:{width:20,textAlign:'right',fontFamily:"'Oswald',sans-serif",fontWeight:700,fontSize:14,color:C.text}},r[1]))));
+  }
+
+  gauge(pct, color) {
+    return h('div',{style:{height:10,background:'#12211a',position:'relative'}},
+      h('div',{style:{position:'absolute',left:0,top:0,bottom:0,width:pct+'%',background:color}}));
+  }
+  winBar() {
+    const A=this.A();
+    return h('div',{style:{display:'flex',height:22,fontFamily:"'Oswald',sans-serif",fontWeight:700,fontSize:13}},
+      h('div',{style:{width:'58%',background:A,color:'#14231B',display:'flex',alignItems:'center',paddingLeft:8}},'58%'),
+      h('div',{style:{width:'42%',background:'#2c4535',color:C.sub,display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:8}},'42%'));
+  }
+
+  renderVals() {
+    const A = this.A();
+    const teamName = this.props.teamName || '青嵐高校';
+    const prefName = this.props.prefName || '神奈川県';
+    const S = this.state.screen;
+
+    const navDefs=[['ホーム','dash'],['選手','player'],['練習',null],['試合',null],['大会・全国',null],['スカウト',null],['経営',null],['キャリア',null],['記録','data']];
+    const nav = navDefs.map(([label,scr])=>({ label, active: scr && scr===S ? true : (scr==='data' && S==='data') || (scr===S), onClick: scr ? ()=>this.setScreen(scr) : ()=>{} }));
+
+    // dashboard data
+    const notes = [
+      {bar:C.good, tag:'成長', text:'三宅 航平 の球速が 141km/h に上昇（自己最速更新）', time:'7/09'},
+      {bar:C.warn, tag:'警告', text:'小野寺 巧 の疲労が 72。要休養（次回登板は回避推奨）', time:'7/09'},
+      {bar:A,      tag:'発見', text:'早瀬 大和 の性格が判明：「負けず嫌い」', time:'7/08'},
+      {bar:C.good, tag:'成長', text:'国分 悠真 のパワーが B → A に成長', time:'7/07'},
+      {bar:C.sub,  tag:'新聞', text:'地方大会新聞：海鳴工業のエース 芦田が7回無失点の好投', time:'7/07'},
+      {bar:C.sub,  tag:'情報', text:'練習試合の相手校が確定：海鳴工業（7/12・県営あおぞら球場）', time:'7/06'},
+      {bar:C.warn, tag:'警告', text:'桐生 颯 が右足に違和感を訴え、別メニューに変更', time:'7/05'},
+      {bar:C.good, tag:'成長', text:'相田 蓮 の走塁判断が C → B に成長', time:'7/04'},
+      {bar:C.sub,  tag:'情報', text:'部費より用具費 ¥80,000 を支出（バット・ボール補充）', time:'7/03'},
+      {bar:A,      tag:'発見', text:'二宮 慧 の成長タイプが判明：「早熟」', time:'7/02'}
+    ];
+    const notable = [
+      {no:'8', name:'早瀬 大和', pos:'中堅', rank:'A', cond:'絶好調'},
+      {no:'1', name:'三宅 航平', pos:'投手', rank:'A', cond:'絶好調'},
+      {no:'3', name:'国分 悠真', pos:'一塁', rank:'A', cond:'普通'},
+      {no:'11',name:'小野寺 巧', pos:'投手', rank:'B', cond:'不調'}
+    ].map(p=>({...p, chipEl:chip(p.rank), condEl:condEl(p.cond)}));
+    const days = [
+      {d:'月', menu:'走塁・基礎守備', game:false},
+      {d:'火', menu:'打撃強化（マシン）', game:false},
+      {d:'水', menu:'投手フォーム・投球', game:false},
+      {d:'木', menu:'紅白戦（実戦形式）', game:false},
+      {d:'金', menu:'調整・軽め', game:false},
+      {d:'土', menu:'練習試合 vs 海鳴工業', game:true},
+      {d:'日', menu:'休養', game:false}
+    ].map(d=>({...d,
+      rowBg: d.game ? 'rgba(245,198,74,0.10)' : 'transparent',
+      accentBar: d.game ? A : 'transparent',
+      dayColor: d.game ? A : C.sub,
+      menuColor: d.game ? A : C.text,
+      weight: d.game ? 700 : 500
+    }));
+    const guidance = [
+      {name:'三宅 航平', focus:'変化球（フォーク）', empty:false},
+      {name:'早瀬 大和', focus:'走塁判断', empty:false},
+      {name:'', focus:'', empty:true}
+    ];
+
+    // player detail (三宅 航平)
+    const abil = (arr)=>arr.map(a=>({...a, val:a.v, pct:a.v+'%', barColor:RANK[a.rank], chipEl:chip(a.rank,22)}));
+    const pAbilities = abil([
+      {label:'コントロール', rank:'B', v:70}, {label:'スタミナ', rank:'A', v:84}, {label:'投手センス', rank:'A', v:86},
+      {label:'クイック', rank:'C', v:55}, {label:'フィールディング', rank:'D', v:44}, {label:'対左打者', rank:'B', v:72},
+      {label:'対ピンチ', rank:'A', v:88}, {label:'牽制', rank:'C', v:52}, {label:'回復力', rank:'C', v:58}, {label:'ケガ耐性', rank:'B', v:74}
+    ]);
+    const fAbilities = abil([
+      {label:'ミート', rank:'D', v:46}, {label:'パワー', rank:'E', v:34}, {label:'弾道', rank:'F', v:22}, {label:'選球眼', rank:'E', v:33},
+      {label:'走力', rank:'C', v:56}, {label:'バント', rank:'C', v:54}, {label:'盗塁', rank:'D', v:42}, {label:'走塁判断', rank:'D', v:40},
+      {label:'肩', rank:'B', v:75}, {label:'送球精度', rank:'B', v:70}, {label:'守備', rank:'D', v:44}, {label:'捕球', rank:'C', v:52}
+    ]);
+    const pitches = [
+      {name:'ストレート', rank:'A', velo:'141', move:'—', rpm:'2380'},
+      {name:'スライダー', rank:'B', velo:'128', move:'横 32cm', rpm:'2450'},
+      {name:'フォーク',   rank:'C', velo:'129', move:'縦 38cm', rpm:'1350'},
+      {name:'カーブ',     rank:'D', velo:'108', move:'縦 28cm', rpm:'1980'}
+    ].map(p=>({...p, rankEl:chip(p.rank)}));
+    const skills = [
+      {name:'尻上がり', desc:'登板の終盤ほど失点しにくくなる'},
+      {name:'精神的支柱', desc:'チーム全体の士気低下を防ぐ'},
+      {name:'打たれ強い', desc:'走者を背負っても崩れにくい'},
+      {name:'完投能力', desc:'イニングあたりのスタミナ消費が緩やか'}
+    ];
+    const hidden = [
+      {k:'性格', v:'負けず嫌い', known:true},
+      {k:'伸びしろ', v:'中', known:true},
+      {k:'成長タイプ', v:'？', known:false},
+      {k:'フォーム相性', v:'？', known:false}
+    ];
+
+    // data tables
+    const batters = [
+      {no:'8', name:'早瀬 大和', yr:'3', pos:'中堅', bt:'右右', rank:'A', cond:'絶好調', avg:'.389', hr:'6', rbi:'31', ops:'1.121', sb:'18', obp:'.470', slg:'.651'},
+      {no:'6', name:'相田 蓮',   yr:'3', pos:'遊撃', bt:'右左', rank:'A', cond:'好調',   avg:'.356', hr:'4', rbi:'28', ops:'.980', sb:'22', obp:'.441', slg:'.539'},
+      {no:'3', name:'国分 悠真', yr:'2', pos:'一塁', bt:'右左', rank:'A', cond:'普通',   avg:'.333', hr:'9', rbi:'35', ops:'1.045', sb:'3', obp:'.420', slg:'.625'},
+      {no:'2', name:'藤堂 樹',   yr:'3', pos:'捕手', bt:'右右', rank:'B', cond:'好調',   avg:'.312', hr:'7', rbi:'40', ops:'.949', sb:'1', obp:'.389', slg:'.560'},
+      {no:'5', name:'大山 蒼空', yr:'3', pos:'三塁', bt:'右右', rank:'B', cond:'普通',   avg:'.301', hr:'8', rbi:'33', ops:'.920', sb:'5', obp:'.372', slg:'.548'},
+      {no:'4', name:'宮園 陽',   yr:'2', pos:'二塁', bt:'右左', rank:'C', cond:'好調',   avg:'.298', hr:'2', rbi:'19', ops:'.770', sb:'14', obp:'.360', slg:'.410'},
+      {no:'7', name:'早乙女 遼', yr:'1', pos:'左翼', bt:'左左', rank:'C', cond:'普通',   avg:'.289', hr:'3', rbi:'15', ops:'.805', sb:'7', obp:'.350', slg:'.455'},
+      {no:'9', name:'桐生 颯',   yr:'3', pos:'右翼', bt:'右右', rank:'C', cond:'不調',   avg:'.276', hr:'5', rbi:'22', ops:'.810', sb:'6', obp:'.340', slg:'.470'},
+      {no:'10',name:'立花 湊',   yr:'2', pos:'遊撃', bt:'右両', rank:'D', cond:'普通',   avg:'.254', hr:'1', rbi:'11', ops:'.678', sb:'9', obp:'.318', slg:'.360'},
+      {no:'12',name:'羽鳥 開',   yr:'1', pos:'捕手', bt:'右右', rank:'D', cond:'好調',   avg:'.241', hr:'0', rbi:'8', ops:'.612', sb:'2', obp:'.300', slg:'.312'}
+    ].map(p=>({...p, chipEl:chip(p.rank), condEl:condEl(p.cond)}));
+    const pitchers = [
+      {no:'1', name:'三宅 航平', yr:'3', th:'右投', arm:'オーバー', rank:'A', cond:'絶好調', era:'1.42', wl:'9-1', k:'118', k9:'11.2', whip:'0.92', velo:'141'},
+      {no:'11',name:'小野寺 巧', yr:'2', th:'左投', arm:'オーバー', rank:'B', cond:'不調',   era:'2.31', wl:'6-3', k:'88',  k9:'9.1', whip:'1.10', velo:'134'},
+      {no:'18',name:'海老原 陸', yr:'3', th:'右投', arm:'オーバー', rank:'B', cond:'普通',   era:'2.88', wl:'5-2', k:'71',  k9:'8.0', whip:'1.24', velo:'138'},
+      {no:'17',name:'二宮 慧',   yr:'1', th:'右投', arm:'スリークォーター', rank:'C', cond:'好調', era:'3.55', wl:'2-1', k:'40', k9:'7.2', whip:'1.35', velo:'129'},
+      {no:'19',name:'神保 大地', yr:'2', th:'右投', arm:'サイド', rank:'D', cond:'普通',   era:'4.10', wl:'3-2', k:'33',  k9:'6.1', whip:'1.48', velo:'127'}
+    ].map(p=>({...p, chipEl:chip(p.rank), condEl:condEl(p.cond)}));
+
+    return {
+      accent:A, teamName, prefName,
+      isDash:S==='dash', isPlayer:S==='player', isData:S==='data',
+      nav, notes, notable, days, guidance,
+      radarEl:this.radar(), growthEl:this.growth(), histEl:this.hist(), hrRankEl:this.hrRank(),
+      winBarEl:this.winBar(), moraleGauge:this.gauge(82,C.good), fatigueGauge:this.gauge(44,A), injGauge:this.gauge(20,C.warn),
+      pAbilities, fAbilities, pitches, skills, hidden, teamRankEl:chip('B',24),
+      isBat:this.state.dataTab==='bat', isPit:this.state.dataTab==='pit',
+      batters, pitchers,
+      goDash:()=>this.setScreen('dash'), goPlayer:()=>this.setScreen('player'), goData:()=>this.setScreen('data'),
+      setBat:()=>this.setDataTab('bat'), setPit:()=>this.setDataTab('pit'),
+      pcond:condEl('絶好調'), pOverall:chip('A',34)
+    };
+  }
+}
+</script>
+</body>
+</html>

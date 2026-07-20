@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="KokoSimTheme.uss" />
+    <ui:VisualElement class="root">
+      <ui:ScrollView mode="Vertical" class="scroll">
+
+        <!-- ===== ヘッダー ===== -->
+        <ui:VisualElement class="header">
+            <ui:VisualElement class="board">
+                <ui:VisualElement class="school">
+                    <ui:Label class="school__pref" text="神奈川" />
+                    <ui:Label class="school__name" text="県立桜丘高校" />
+                    <ui:Label class="school__week" text="試合（高速）" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="nav">
+                <ui:Label name="nav-home" class="nav__item" text="ホーム" />
+                <ui:Label name="nav-players" class="nav__item" text="選手" />
+                <ui:Label name="nav-training" class="nav__item" text="練習" />
+                <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
+                <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
+                <ui:Label name="nav-management" class="nav__item" text="経営" />
+                <ui:Label name="nav-career" class="nav__item" text="キャリア" />
+                <ui:Label name="nav-records" class="nav__item" text="記録" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ===== メイン ===== -->
+        <ui:VisualElement class="main">
+            <ui:VisualElement class="col-full">
+
+                <!-- スコアボード（上部中央） -->
+                <ui:VisualElement class="panel">
+                    <ui:VisualElement class="match-top">
+                        <ui:Label name="result-banner" class="result-banner" text="" />
+                        <ui:VisualElement class="vs__teams">
+                            <ui:Label name="away-team" class="vs__team" text="北都大付属" />
+                            <ui:Label class="vs__x" text="VS" />
+                            <ui:Label name="home-team" class="vs__team" text="桜丘" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="scoreboard" class="scoreboard" />
+                        <ui:Label name="board-empty" class="note" text="「試合開始」で試合を消化します。" />
+                        <ui:Button name="play-btn" class="advance play-btn" text="試合開始 ▶" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 打撃成績（自校） -->
+                <ui:VisualElement name="home-bat-panel" class="panel">
+                    <ui:Label class="panel__title" text="打撃成績 ─ 自校（桜丘）" />
+                    <ui:VisualElement name="home-bat" />
+                </ui:VisualElement>
+
+                <!-- 打撃成績（相手） -->
+                <ui:VisualElement name="away-bat-panel" class="panel">
+                    <ui:Label class="panel__title" text="打撃成績 ─ 相手（北都大付属）" />
+                    <ui:VisualElement name="away-bat" />
+                </ui:VisualElement>
+
+                <!-- 投手成績 -->
+                <ui:VisualElement name="pit-panel" class="panel">
+                    <ui:Label class="panel__title" text="投手成績" />
+                    <ui:Label class="stat-sub" text="自校（桜丘）" />
+                    <ui:VisualElement name="home-pit" />
+                    <ui:Label class="stat-sub" text="相手（北都大付属）" />
+                    <ui:VisualElement name="away-pit" />
+                </ui:VisualElement>
+
+                <!-- テキスト速報 -->
+                <ui:VisualElement class="panel">
+                    <ui:Label class="panel__title" text="テキスト速報" />
+                    <ui:VisualElement name="feed-list" />
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label class="footer" text="※ プレイアブルα 試合(高速)。校名・選手名はすべて架空。盗塁・犠打等は今後実装。" />
+      </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

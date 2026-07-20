@@ -1,0 +1,79 @@
+# 守備陣形ルール表（CHANGELOG 33 / 設計書01 §2⑥）。
+# 状況（打球ゾーン×走者有無）→ 9人全員の担当動作。タイムラインへ自動付与される。
+# task: field_ball / cover_base / cutoff / backup / hold
+# target: ball / first / second / third / home / none
+# runners: any / none / on_base（省略=any）
+# ※このファイルは FormationTable.Default（エンジン内蔵の既定表）のミラー。調整はここを編集する。
+
+formations:
+  - zone: bunt
+    assignments:
+      pitcher:      { task: field_ball, target: ball }
+      catcher:      { task: cover_base, target: home }
+      first_base:   { task: field_ball, target: ball }
+      second_base:  { task: cover_base, target: first }
+      third_base:   { task: cover_base, target: third }
+      shortstop:    { task: cover_base, target: second }
+      left_field:   { task: backup, target: third }
+      center_field: { task: backup, target: second }
+      right_field:  { task: backup, target: first }
+
+  - zone: infield_left
+    assignments:
+      shortstop:    { task: field_ball, target: ball }
+      third_base:   { task: field_ball, target: ball }
+      second_base:  { task: cover_base, target: second }
+      first_base:   { task: cover_base, target: first }
+      pitcher:      { task: backup, target: home }
+      catcher:      { task: cover_base, target: home }
+      left_field:   { task: backup, target: ball }
+      center_field: { task: backup, target: second }
+      right_field:  { task: backup, target: first }
+
+  - zone: infield_right
+    assignments:
+      second_base:  { task: field_ball, target: ball }
+      first_base:   { task: field_ball, target: ball }
+      shortstop:    { task: cover_base, target: second }
+      pitcher:      { task: cover_base, target: first }
+      catcher:      { task: cover_base, target: home }
+      third_base:   { task: cover_base, target: third }
+      right_field:  { task: backup, target: ball }
+      center_field: { task: backup, target: second }
+      left_field:   { task: hold, target: none }
+
+  - zone: outfield_left
+    assignments:
+      left_field:   { task: field_ball, target: ball }
+      center_field: { task: backup, target: ball }
+      shortstop:    { task: cutoff, target: second }
+      second_base:  { task: cover_base, target: second }
+      third_base:   { task: cover_base, target: third }
+      first_base:   { task: cover_base, target: first }
+      pitcher:      { task: backup, target: home }
+      catcher:      { task: cover_base, target: home }
+      right_field:  { task: hold, target: none }
+
+  - zone: outfield_center
+    assignments:
+      center_field: { task: field_ball, target: ball }
+      left_field:   { task: backup, target: ball }
+      right_field:  { task: backup, target: ball }
+      second_base:  { task: cutoff, target: second }
+      shortstop:    { task: cover_base, target: second }
+      first_base:   { task: cover_base, target: first }
+      third_base:   { task: cover_base, target: third }
+      pitcher:      { task: backup, target: home }
+      catcher:      { task: cover_base, target: home }
+
+  - zone: outfield_right
+    assignments:
+      right_field:  { task: field_ball, target: ball }
+      center_field: { task: backup, target: ball }
+      second_base:  { task: cutoff, target: second }
+      shortstop:    { task: cover_base, target: second }
+      first_base:   { task: cover_base, target: first }
+      third_base:   { task: cover_base, target: third }
+      pitcher:      { task: backup, target: home }
+      catcher:      { task: cover_base, target: home }
+      left_field:   { task: hold, target: none }

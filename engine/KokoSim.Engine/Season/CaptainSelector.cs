@@ -1,0 +1,63 @@
+using System.Collections.Generic;
+using System.Linq;
+
+namespace KokoSim.Engine.Season;
+
+/// <summary>
+/// 主将の選定と年度更新（設計書09 §8）。統率力 = 統率傾向(Leadership) × 精神力(Mental) / 100 で選ぶ。
+/// 主将は基本「最上級生」から選ぶ（現実の高校野球）。3年生引退で主将が抜けたら自動で選び直す。
+/// プレイヤーの手動指名（<see cref="Designate"/>）は在籍する限り尊重し、<see cref="EnsureCaptain"/> は上書きしない。
+/// 純ロジック（乱数不要・決定論）。
+/// </summary>
+public static class CaptainSelector
+{
+    /// <summary>統率力（0〜約99）。主将適性の指標。</summary>
+    public static double LeadershipPower(DevelopingPlayer p) => p.Leadership * p.Mental / 100.0;
+
+    /// <summary>現在の主将（不在なら null）。</summary>
+    public static DevelopingPlayer? Current(IReadOnlyList<DevelopingPlayer> roster)
+        => roster.FirstOrDefault(p => p.IsCaptain);
+
+    /// <summary>
+    /// 主将を自動選定する（最上級生の中で統率力最大）。既存の IsCaptain は一旦すべて外して付け替える。
+    /// タイブレークは統率力→統率傾向→名前で決定論。空ロスターは null。
+    /// </summary>
+    public static DevelopingPlayer? SelectAuto(IReadOnlyList<DevelopingPlayer> roster)
+    {
+        foreach (var p in roster) p.IsCaptain = false;
+        if (roster.Count == 0) return null;
+
+        var topGrade = roster.Max(p => p.Grade);
+        var chosen = roster
+            .Where(p => p.Grade == topGrade)
+            .OrderByDescending(LeadershipPower)
+            .ThenByDescending(p => p.Leadership)
+            .ThenBy(p => p.Name, System.StringComparer.Ordinal)
+            .First();
+        chosen.IsCaptain = true;
+        return chosen;
+    }
+
+    /// <summary>
+    /// ロスターに有効な主将が居ることを保証する。現主将が在籍していればそのまま（手動指名も尊重）、
+    /// 居なければ自動選定する（3年生引退→選び直しの入口）。年度更新後に呼ぶ。
+    /// </summary>
+    public static DevelopingPlayer? EnsureCaptain(IReadOnlyList<DevelopingPlayer> roster)
+    {
+        // IsCaptain が複数付いていたら不整合。1名以下に正規化してから判定。
+        var flagged = roster.Where(p => p.IsCaptain).ToList();
+        if (flagged.Count == 1) return flagged[0];
+        if (flagged.Count > 1)
+        {
+            foreach (var p in roster) p.IsCaptain = false;
+        }
+        return SelectAuto(roster);
+    }
+
+    /// <summary>プレイヤーによる手動指名（設計書09 §8）。他の主将フラグを外して指定選手に付ける。</summary>
+    public static void Designate(IReadOnlyList<DevelopingPlayer> roster, DevelopingPlayer captain)
+    {
+        foreach (var p in roster) p.IsCaptain = false;
+        captain.IsCaptain = true;
+    }
+}

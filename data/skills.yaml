@@ -1,0 +1,126 @@
+# 特殊能力カタログ（設計書10）。純化後: パラメータ・精神力で出せるものは含めない（二重計上禁止）。
+# 走塁の巧拙/肩・送球精度/左右相性/チャンス・逆境・大舞台 は能力値と PressureModel が担当しスキル化しない。
+# 残すのは 非線形挙動・質的スタイル・チーム波及・体質 だけ。効果量は data/coefficients.yaml の skills: で調整する。
+#
+# id            : エンジンの Skill enum と一致（必須）
+# category      : batting / pitching / fielding / team / constitution / special
+# hidden_eligible: 隠しスキルになり得るか（気づきイベントで開示・育成眼で察知, §6）
+# name/description: UI 表示（選手詳細のスキル欄）
+
+skills:
+  # --- 打撃系（挙動の癖・スタイル） ---
+  - id: SlowStarterBat
+    category: batting
+    hidden_eligible: true
+    name: 尻上がり
+    description: 打席を重ねるほど当たりが出る（試合内で調子が上がる）
+  - id: Streaky
+    category: batting
+    hidden_eligible: true
+    name: ムラっけ
+    description: 好不調の振れ幅が大きい（当たれば大きいが崩れやすい）
+  - id: SprayHitter
+    category: batting
+    hidden_eligible: false
+    name: 広角打法
+    description: 打球方向が広くシフトを無効化しやすい（方向の質・打力ではない）
+  - id: FirstPitchSwinger
+    category: batting
+    hidden_eligible: false
+    name: 初球から振る
+    description: 初球からスイングを仕掛ける積極性
+  - id: Grinder
+    category: batting
+    hidden_eligible: false
+    name: 粘り打ち
+    description: ファウルで粘り相手投手の球数を吐かせる
+
+  # --- 投手系（挙動の癖） ---
+  - id: SlowStarterPitch
+    category: pitching
+    hidden_eligible: true
+    name: 尻上がり
+    description: イニングを追うごとに安定する
+  - id: SecondTimeThrough
+    category: pitching
+    hidden_eligible: true
+    name: 打者一巡
+    description: 2巡目以降に崩れやすい（対戦回数依存の癖）
+  - id: EffectivelyWild
+    category: pitching
+    hidden_eligible: false
+    name: 荒れ球
+    description: 軌道が不安定で打ちにくいが四球も増える（両刃）
+  - id: DeceptiveBall
+    category: pitching
+    hidden_eligible: true
+    name: クセ球
+    description: 見た目より打ちにくい球質（球速に表れない空振り誘発）
+
+  # --- 守備系（質的な癖） ---
+  - id: DoublePlayArtist
+    category: fielding
+    hidden_eligible: false
+    name: 併殺の名手
+    description: 二塁経由の送球が速く併殺を取りやすい
+  - id: MasterCatcher
+    category: fielding
+    hidden_eligible: true
+    name: 名捕手
+    description: リードで配球の質を上げる（非数値の技）
+
+  # --- チーム系（本人以外へ波及） ---
+  - id: Moodmaker
+    category: team
+    hidden_eligible: false
+    name: ムードメーカー
+    description: チームの士気を底上げする
+  - id: SpiritualPillar
+    category: team
+    hidden_eligible: true
+    name: 精神的支柱
+    description: 主将適性。在場時チームのプレッシャー負補正を和らげる
+  - id: PracticeLeader
+    category: team
+    hidden_eligible: false
+    name: 練習リーダー
+    description: 周囲の練習効率を少し高める
+  - id: RoleModel
+    category: team
+    hidden_eligible: true
+    name: お手本
+    description: 同ポジションの後輩の成長を促す
+
+  # --- 体質・成長系（能力値でない体の性質） ---
+  - id: Diligent
+    category: constitution
+    hidden_eligible: false
+    name: 練習熱心
+    description: 経験値効率が上がる
+  - id: Lazy
+    category: constitution
+    hidden_eligible: true
+    name: サボり癖
+    description: 経験値効率が下がる（負・克服の余地あり）
+  - id: Durable
+    category: constitution
+    hidden_eligible: true
+    name: 故障しにくい
+    description: 怪我をしにくい体質
+  - id: InjuryProne
+    category: constitution
+    hidden_eligible: true
+    name: ケガしやすい
+    description: 怪我をしやすい体質（負・克服の余地あり）
+
+  # --- 目玉（少数の華・極稀） ---
+  - id: Monster
+    category: special
+    hidden_eligible: false
+    name: 怪物
+    description: 複数分野に強力な補正を持つ超レア素質
+  - id: SubmarineMastery
+    category: special
+    hidden_eligible: true
+    name: アンダースローの妙
+    description: 特定投法×球質の職人技

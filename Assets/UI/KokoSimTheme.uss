@@ -1,0 +1,824 @@
+/* KokoSim スコアボードテーマ（設計書06）。モック mock-home-dashboard.html を UI Toolkit(Flexbox) へ移植。
+   UI Toolkit は CSS grid 非対応のため grid は flex で表現。色覚対応の等級カラーを共通言語とする。
+   フォントは丸ゴシック（KokoSimFont, PanelSettings既定）。字間は詰めすぎず親しみやすいポップ調。 */
+
+.root {
+    flex-grow: 1;
+    background-color: #0E1512;   /* --field 深緑 */
+    color: #E8ECEA;              /* --chalk */
+    font-size: 18px;
+    /* SDF丸ゴ(KokoSimFont)を明示指定。既定テーマの legacy ビットマップフォント(NotInter)を上書きし、
+       全子孫へ継承させる。これが無いとテキストが legacy フォントで拡大描画されて滲む（設計書06）。 */
+    -unity-font-definition: url("project://database/Assets/UI/KokoSimFont.asset?fileID=11400000&guid=aa1b28686c2d84c489628717f9662630&type=2#KokoSimFont");
+}
+
+/* UI Toolkit は Web と違いパネルが固定高。コンテナが flex-shrink で潰れて
+   重ならないよう、主要ブロックは縮小を禁止して自然な内容高を保つ。 */
+.header, .nav, .board, .school, .meters, .meter,
+.main, .top-row, .panel, .stats, .stat, .days, .day,
+.row, .vs, .vs__teams, .winbar, .feed__item {
+    flex-shrink: 0;
+}
+
+/* 全体を縦スクロール（UI Toolkitはパネル固定高のため）。背景は root に任せ透過。 */
+.scroll { flex-grow: 1; }
+.scroll > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container {
+    flex-grow: 1;
+}
+
+/* ===== ヘッダー（スコアボード） ===== */
+.header {
+    background-color: #202A24;
+    border-bottom-width: 2px;
+    border-bottom-color: #232E28;
+    padding: 10px 22px 0 22px;
+}
+.board {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+}
+.school {
+    flex-direction: row;
+    align-items: baseline;
+}
+.school__pref {
+    font-size: 15px;
+    color: #9AA5A0;
+    letter-spacing: 2px;
+    margin-right: 12px;
+}
+.school__name {
+    font-size: 28px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    margin-right: 12px;
+}
+.school__week {
+    font-size: 21px;
+    letter-spacing: 1px;
+    color: #F5C64A;             /* --lamp 電光ランプ */
+}
+.meters { flex-direction: row; }
+.meter {
+    align-items: flex-end;
+    margin-left: 22px;
+}
+.meter__k {
+    font-size: 14px;
+    letter-spacing: 2px;
+    color: #9AA5A0;
+}
+.meter__v {
+    font-size: 25px;
+    -unity-font-style: bold;
+    flex-direction: row;
+    align-items: center;
+}
+.advance {
+    background-color: #F5C64A;
+    color: #1A1608;
+    border-width: 0;
+    border-radius: 6px;
+    -unity-font-style: bold;
+    font-size: 18px;
+    letter-spacing: 1px;
+    padding: 9px 22px;
+    margin-left: 22px;
+}
+.advance:hover { background-color: #F8D368; }
+
+/* ===== ナビ ===== */
+.nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+.nav__item {
+    color: #9AA5A0;
+    font-size: 17px;
+    letter-spacing: 1px;
+    padding: 10px 16px;
+    border-radius: 8px 8px 0 0;
+}
+.nav__item:hover { color: #E8ECEA; }
+.nav__item--on {
+    color: #E8ECEA;
+    background-color: #18211C;
+    border-width: 0;
+}
+
+/* ===== レイアウト ===== */
+.main {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 10px 22px 0 22px;
+}
+.col-left {
+    flex-grow: 1;
+    flex-basis: 56%;
+    min-width: 420px;
+    padding-right: 14px;
+}
+.col-right {
+    flex-grow: 1;
+    flex-basis: 40%;
+    min-width: 320px;
+}
+.top-row { flex-direction: row; flex-wrap: wrap; }
+
+.panel {
+    background-color: #18211C;   /* --panel（枠線廃止・角丸12・面色で区切る） */
+    border-width: 0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+.panel--half { flex-grow: 1; flex-basis: 45%; min-width: 200px; margin-right: 14px; }
+.panel__title {
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: #9AA5A0;
+    -unity-font-style: bold;
+    margin-bottom: 7px;
+}
+
+/* ===== 次の試合 ===== */
+.vs {
+    background-color: #202A24;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 8px;
+    padding: 16px;
+    align-items: center;
+}
+.vs__tag { font-size: 15px; color: #F5C64A; letter-spacing: 2px; }
+.vs__teams { flex-direction: row; align-items: center; margin: 10px 0 6px 0; }
+.vs__team { font-size: 22px; -unity-font-style: bold; margin: 0 10px; }
+.vs__x { color: #9AA5A0; margin: 0 6px; }
+.vs__info { font-size: 16px; color: #9AA5A0; }
+.winbar { width: 100%; margin-top: 12px; }
+.winbar__lbl { flex-direction: row; justify-content: space-between; font-size: 15px; color: #9AA5A0; margin-bottom: 4px; }
+.bar {
+    height: 10px;
+    background-color: #202A24;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: #232E28;
+    overflow: hidden;
+}
+.bar__fill { height: 100%; background-color: #F5C64A; }
+.note { font-size: 16px; color: #9AA5A0; margin-top: 10px; white-space: normal; }
+
+/* ===== 部の状態 ===== */
+.stats { flex-direction: row; }
+.stat {
+    flex-grow: 1;
+    background-color: #202A24;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 8px;
+    padding: 9px 6px;
+    margin: 0 3px;
+    align-items: center;
+}
+.stat__k { font-size: 14px; color: #9AA5A0; letter-spacing: 1px; }
+.stat__v { font-size: 30px; -unity-font-style: bold; margin-top: 2px; }
+.stat__v--warn { color: #E86A4A; }
+
+/* ===== 通知フィード ===== */
+.feed__item {
+    background-color: #202A24;
+    border-width: 1px;
+    border-color: #232E28;
+    border-left-width: 3px;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+}
+.feed__item--up { border-left-color: #F5C64A; }
+.feed__item--warn { border-left-color: #E86A4A; }
+.feed__when { font-size: 14px; color: #9AA5A0; margin-bottom: 2px; }
+.feed__text { font-size: 17px; }
+
+/* ===== 練習計画 ===== */
+.days { flex-direction: row; flex-wrap: wrap; }
+.day {
+    flex-grow: 1;
+    background-color: #202A24;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 8px;
+    padding: 8px 6px;
+    margin: 0 3px 6px 3px;
+    align-items: center;
+    min-width: 56px;
+}
+.day__d { font-size: 15px; color: #9AA5A0; letter-spacing: 1px; }
+.day__m { font-size: 17px; -unity-font-style: bold; margin-top: 3px; }
+.day--rest .day__m { color: #9AA5A0; }
+.day--match { border-color: #F5C64A; }
+.day--match .day__m { color: #F5C64A; }
+
+/* ===== 注目選手テーブル ===== */
+.row {
+    flex-direction: row;
+    align-items: center;
+    padding: 9px 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: #1C2620;
+}
+.row--head { border-bottom-color: #232E28; }
+.cell { flex-grow: 1; flex-basis: 0; font-size: 17px; }
+.cell--head { font-size: 14px; color: #9AA5A0; letter-spacing: 1px; -unity-font-style: bold; }
+
+/* ===== 等級チップ（S〜G 共通カラー, 色覚対応で文字併記） ===== */
+.grade {
+    min-width: 23px;
+    -unity-text-align: middle-center;
+    border-radius: 5px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    padding: 2px 5px;
+    margin-right: 5px;
+    color: #101408;
+}
+/* ランク色は tokens.uss --rank-* が正。ここはトークン非読込の画面向けミラー（値を必ず一致させる）。 */
+.grade--S { background-color: #F4CE5B; }
+.grade--A { background-color: #E4553B; color: #E8ECEA; }
+.grade--B { background-color: #EC8B3C; }
+.grade--C { background-color: #E6C245; }
+.grade--D { background-color: #A8C64E; }
+.grade--E { background-color: #56A96E; color: #0B1A10; }
+.grade--F { background-color: #7E8C93; color: #E8ECEA; }
+.grade--G { background-color: #566257; color: #E8ECEA; }
+
+/* ===== 選手一覧（単一カラム／ツールバー／列幅） ===== */
+.col-full { flex-grow: 1; flex-basis: 100%; }
+.toolbar {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.toolbar .panel__title { margin-bottom: 0; }
+.toolbar__ctrls { flex-direction: row; align-items: center; }
+.toolbar__counts { color: #9AA5A0; font-size: 16px; margin-right: 14px; letter-spacing: 1px; }
+.chip-btn {
+    background-color: #202A24;
+    color: #E8ECEA;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 8px;
+    font-size: 16px;
+    letter-spacing: 1px;
+    padding: 7px 14px;
+    margin-left: 8px;
+}
+.chip-btn:hover { border-color: #F5C64A; color: #F5C64A; }
+
+/* 列幅（.cell の等幅を上書き。基底の後に置き同特異度で勝つ） */
+.cell--name { flex-grow: 2.2; -unity-font-style: bold; }
+.cell--wide { flex-grow: 3.2; }
+.cell--narrow { flex-grow: 0.8; }
+.ability-cell { flex-direction: row; flex-wrap: wrap; align-items: center; }
+
+/* ===== 練習計画 ===== */
+.day__e { font-size: 14px; color: #9AA5A0; margin-top: 3px; -unity-text-align: middle-center; white-space: normal; }
+.day--edit { }
+.day--edit:hover { border-color: #F5C64A; }
+.chip-btn--hard { border-color: #E86A4A; color: #E86A4A; }
+.chip-btn--light { border-color: #69B98B; color: #69B98B; }
+.chip-btn--on { background-color: #F5C64A; color: #1A1608; border-color: #F5C64A; }
+
+.eff-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 4px;
+    border-bottom-width: 1px;
+    border-bottom-color: #1C2620;
+}
+.eff-row__k { font-size: 17px; }
+.eff-row__v { font-size: 18px; -unity-font-style: bold; color: #B9D45A; }
+.eff-foot {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px 4px 0 4px;
+}
+.eff-foot__k { font-size: 14px; color: #9AA5A0; letter-spacing: 1px; }
+.eff-foot__v { font-size: 24px; -unity-font-style: bold; color: #F5C64A; }
+
+.coach-row { flex-direction: row; }
+.coach-slot {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    background-color: #202A24;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 8px;
+    padding: 14px;
+    margin: 0 4px;
+}
+.coach-slot__t { font-size: 16px; color: #5C6660; letter-spacing: 1px; }
+
+/* 部員別 練習割当テーブル */
+.cell--menu { flex-grow: 1.3; }
+.cell--mid { flex-grow: 1.6; font-size: 16px; color: #9AA5A0; }
+.menu-chip {
+    background-color: #202A24;
+    color: #E8ECEA;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 6px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding: 6px 12px;
+}
+.menu-chip:hover { border-color: #F5C64A; color: #F5C64A; }
+.menu-chip--rest { background-color: #202A24; color: #9AA5A0; border-color: #232E28; }
+.menu-chip--locked { background-color: #0E1512; color: #5C6660; border-color: #232E28; }
+.menu-chip--locked:hover { border-color: #232E28; color: #5C6660; }
+
+/* 選択行のハイライト */
+.row--selected { background-color: #1F2A24; border-left-width: 3px; border-left-color: #F5C64A; }
+
+/* 分配分エディタ（選択選手のメニュー別 分） */
+.edit-slot {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #202A24;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 4px;
+    min-width: 150px;
+}
+.edit-slot__name { font-size: 16px; color: #E8ECEA; -unity-font-style: bold; flex-grow: 1; }
+.edit-slot__min { font-size: 16px; color: #9AA5A0; -unity-text-align: middle-center; min-width: 48px; }
+.edit-slot__btn {
+    background-color: #202A24;
+    color: #E8ECEA;
+    border-width: 1px;
+    border-color: #232E28;
+    border-radius: 6px;
+    font-size: 18px;
+    -unity-font-style: bold;
+    width: 32px;
+    padding: 2px;
+}
+.edit-slot__btn:hover { border-color: #F5C64A; color: #F5C64A; }
+.coach-row { flex-direction: row; flex-wrap: wrap; }
+.proj--up { color: #B9D45A; -unity-font-style: bold; }
+.proj--none { color: #5C6660; }
+.fat--warn { color: #E86A4A; -unity-font-style: bold; }
+
+/* ===== 試合（高速モード） ===== */
+.play-btn { margin-left: 0; margin-top: 14px; }
+.result-banner { font-size: 25px; -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 6px; }
+.result-banner--win { color: #F5C64A; }
+.result-banner--lose { color: #E86A4A; }
+.result-banner--draw { color: #9AA5A0; }
+
+.match-top { align-items: center; }
+.match-winbar { max-width: 460px; margin-top: 14px; }
+
+.scoreboard { flex-direction: column; align-items: center; margin-top: 6px; }
+.sb-row { flex-direction: row; align-items: center; }
+.sb-cell {
+    width: 34px;
+    height: 34px;
+    -unity-text-align: middle-center;
+    font-size: 17px;
+    border-width: 1px;
+    border-color: #1C2620;
+    background-color: #202A24;
+}
+.sb-cell--team {
+    width: 120px;
+    -unity-text-align: middle-left;
+    padding-left: 10px;
+    -unity-font-style: bold;
+    background-color: #18211C;
+}
+.sb-cell--rhe { -unity-font-style: bold; background-color: #0E1512; }
+.sb-head { color: #9AA5A0; font-size: 15px; background-color: #18211C; }
+.sb-cell--lead { color: #F5C64A; }
+
+/* ===== 出場成績テーブル（打撃・投手） ===== */
+.stat-sub { font-size: 15px; color: #F5C64A; -unity-font-style: bold; margin: 8px 0 4px 2px; letter-spacing: 1px; }
+.st-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 5px 4px;
+    border-bottom-width: 1px;
+    border-bottom-color: #1C2620;
+}
+.st-row--head { border-bottom-color: #232E28; }
+.st-cell { -unity-text-align: middle-center; font-size: 16px; }
+.st-cell--head { font-size: 14px; color: #9AA5A0; -unity-font-style: bold; }
+.st-ord { width: 34px; color: #9AA5A0; }
+.st-pos { width: 34px; }
+.st-name { flex-grow: 1; flex-basis: 0; -unity-text-align: middle-left; padding-left: 6px; -unity-font-style: bold; min-width: 90px; }
+.st-num { width: 44px; }
+.st-ip { width: 60px; -unity-font-style: bold; }
+.st-num--hi { color: #B9D45A; -unity-font-style: bold; }
+
+.mfeed { padding: 5px 4px; border-bottom-width: 1px; border-bottom-color: #1C2620; }
+.mfeed--header { color: #F5C64A; -unity-font-style: bold; font-size: 15px; margin-top: 8px; letter-spacing: 1px; }
+.mfeed--hit { color: #E8ECEA; font-size: 16px; }
+.mfeed--run { color: #B9D45A; -unity-font-style: bold; font-size: 17px; }
+
+.footer { padding: 10px 22px 16px 22px; font-size: 15px; color: #9AA5A0; }
+
+/* ===== 大会プレビュー（設計書06 §3.5b, mock-tournament-preview.html） ===== */
+.tp-masthead {
+    border-bottom-width: 3px; border-bottom-color: #232E28;
+    padding-bottom: 12px; margin-bottom: 16px;
+}
+.tp-kicker { font-size: 14px; letter-spacing: 3px; color: #F5C64A; -unity-font-style: bold; }
+.tp-title { font-size: 30px; -unity-font-style: bold; letter-spacing: 1px; color: #E8ECEA; margin-top: 4px; margin-bottom: 6px; white-space: normal; }
+.tp-meta { font-size: 14px; color: #9AA5A0; white-space: normal; }
+
+.tp-lead {
+    background-color: #18211C; border-width: 1px; border-color: #232E28; border-radius: 8px;
+    padding: 14px 16px; font-size: 16px; -unity-font-style: italic; color: #E8ECEA;
+    white-space: normal; margin-bottom: 4px;
+}
+.tp-h2 {
+    font-size: 20px; -unity-font-style: bold; letter-spacing: 1px; color: #E8ECEA;
+    border-left-width: 4px; border-left-color: #F5C64A; padding-left: 11px;
+    margin-top: 22px; margin-bottom: 12px;
+}
+
+.tp-team {
+    flex-direction: row; background-color: #18211C; border-width: 1px; border-color: #232E28;
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 9px;
+}
+.tp-team--fav { border-color: #F5C64A; }
+
+.tp-mark { width: 64px; align-items: center; justify-content: flex-start; }
+.tp-mark__sym { font-size: 34px; -unity-font-style: bold; }
+.tp-mark__sym--fav { color: #F5C64A; }
+.tp-mark__sym--cont { color: #E8ECEA; }
+.tp-mark__sym--dark { color: #E86A4A; }
+.tp-mark__label { font-size: 12px; letter-spacing: 1px; color: #9AA5A0; margin-top: 2px; }
+
+.tp-body { flex-grow: 1; }
+.tp-team-sub { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.tp-team-name { font-size: 18px; -unity-font-style: bold; color: #E8ECEA; }
+.tp-seed { font-size: 13px; color: #9AA5A0; margin-left: 8px; }
+.tp-blurb { font-size: 15px; color: #E8ECEA; white-space: normal; margin-top: 5px; margin-bottom: 9px; }
+
+.tp-bars { flex-direction: row; }
+.tp-bar { flex-grow: 1; margin-right: 14px; }
+.tp-bar__top { flex-direction: row; justify-content: space-between; margin-bottom: 3px; }
+.tp-bar__label { font-size: 13px; color: #9AA5A0; }
+.tp-bar__val { font-size: 13px; color: #E8ECEA; }
+.tp-track { height: 6px; background-color: #202A24; border-radius: 3px; border-width: 1px; border-color: #232E28; }
+.tp-fill { height: 100%; background-color: #F5C64A; border-radius: 2px; }
+.tp-fill--def { background-color: #69B98B; }
+
+/* ================================================================ */
+/* ホーム ダッシュボード v2（mock-ui-v2-dashboard.html） */
+/* ================================================================ */
+
+/* --- スコアボードヘッダー --- */
+.sb2 { flex-direction: row; align-items: stretch; background-color: #141C17; border-bottom-width: 1px; border-bottom-color: #232E28; flex-shrink: 0; }
+.sb2-left { flex-direction: row; align-items: center; padding: 10px 20px; border-right-width: 1px; border-right-color: #232E28; }
+.sb2-badge { width: 46px; height: 46px; border-width: 0; border-radius: 8px; background-color: #202A24; color: #E8ECEA; font-size: 24px; -unity-font-style: bold; -unity-text-align: middle-center; margin-right: 14px; }
+.sb2-id { margin-right: 18px; }
+.sb2-name { font-size: 22px; -unity-font-style: bold; letter-spacing: 1px; color: #E8ECEA; }
+.sb2-pref { font-size: 12px; color: #9AA5A0; letter-spacing: 2px; margin-top: 2px; }
+.sb2-rank { align-items: center; padding-left: 16px; border-left-width: 1px; border-left-color: #232E28; }
+.sb2-rank__k { font-size: 11px; color: #9AA5A0; letter-spacing: 2px; }
+.sb2-rank__row { flex-direction: row; align-items: center; margin-top: 5px; }
+.sb2-rank__t { font-size: 13px; color: #E8ECEA; margin-left: 6px; }
+
+.sb2-center { flex-grow: 1; flex-direction: row; align-items: center; justify-content: center; }
+.sb2-cell { align-items: center; }
+.sb2-cell__k { font-size: 11px; color: #9AA5A0; letter-spacing: 2px; }
+.sb2-cell__v { font-size: 24px; -unity-font-style: bold; color: #E8ECEA; letter-spacing: 1px; margin-top: 2px; }
+.sb2-cell__v--amber { color: #F5C64A; }
+.sb2-div { width: 1px; height: 38px; background-color: #232E28; margin: 0 34px; }
+
+.sb2-right { flex-direction: row; align-items: center; padding: 0 18px; border-left-width: 1px; border-left-color: #232E28; }
+.sb2-meter { align-items: center; margin-right: 22px; }
+.sb2-meter__k { font-size: 11px; color: #9AA5A0; letter-spacing: 1px; }
+.sb2-meter__v { font-size: 20px; -unity-font-style: bold; color: #E8ECEA; margin-top: 2px; }
+.sb2-meter__v--fame { color: #EE8A3C; }
+.sb2-meter__v--trust { color: #E8503A; }
+
+/* --- 3カラム本体（外側スクロールなし・内部スクロール） --- */
+.dash { flex-grow: 1; flex-direction: row; padding: 14px; overflow: hidden; }
+.dash-col { flex-direction: column; overflow: hidden; }
+.dash-col--a { width: 350px; flex-shrink: 0; margin-right: 14px; }
+.dash-col--b { flex-grow: 1; margin-right: 14px; }
+.dash-col--c { width: 372px; flex-shrink: 0; }
+
+/* --- カード（ヘッダーバー付きパネル） --- */
+/* カード：枠線を廃し明度(面色)で区切る・角丸12・余白拡大（リファイン） */
+.card { background-color: #18211C; border-width: 0; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+.card--grow { flex-grow: 1; }
+.card__hd { flex-direction: row; align-items: center; justify-content: space-between; padding: 14px 16px 10px 16px; flex-shrink: 0; }
+.card__hd-title { font-size: 16px; -unity-font-style: bold; letter-spacing: 1px; color: #E8ECEA; }
+.card__hd-sub { font-size: 12px; color: #9AA5A0; letter-spacing: 1px; }
+.card__body { padding: 6px 16px 16px 16px; }
+.card__scroll { flex-grow: 1; }
+
+/* --- 次の試合 --- */
+.nm-teams { flex-direction: row; align-items: center; }
+.nm-team { flex-grow: 1; align-items: center; }
+.nm-team__n { font-size: 19px; -unity-font-style: bold; color: #E8ECEA; }
+.nm-team__s { font-size: 11px; color: #9AA5A0; margin-top: 2px; }
+.nm-vs { font-size: 20px; -unity-font-style: bold; color: #9AA5A0; margin: 0 8px; }
+.nm-meta { flex-direction: row; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top-width: 1px; border-top-color: #232E28; }
+.nm-meta__i { font-size: 12px; color: #9AA5A0; margin-right: 16px; }
+
+/* --- 部の状態（ゲージ） --- */
+.g-row { margin-bottom: 13px; }
+.g-row__top { flex-direction: row; justify-content: space-between; margin-bottom: 5px; }
+.g-row__k { font-size: 13px; color: #9AA5A0; }
+.g-row__v { font-size: 16px; -unity-font-style: bold; }
+.g-row__v--good { color: #9FCB3B; }
+.g-row__v--amber { color: #F5C64A; }
+.gauge { height: 9px; background-color: #202A24; border-radius: 4px; overflow: hidden; }
+.gauge__fill { height: 100%; }
+.gauge__fill--good { background-color: #9FCB3B; }
+.gauge__fill--amber { background-color: #F5C64A; }
+.inj-row { flex-direction: row; align-items: center; justify-content: space-between; padding-top: 11px; border-top-width: 1px; border-top-color: #232E28; }
+.inj-row__v { font-size: 15px; -unity-font-style: bold; color: #9AA5A0; }
+.inj-row__v--warn { color: #E86A4A; }
+
+/* --- 注目選手 --- */
+.np-row { flex-direction: row; align-items: center; padding: 10px 14px; border-bottom-width: 1px; border-bottom-color: #232E28; }
+.np-no { width: 30px; height: 30px; border-width: 0; background-color: #202A24; border-radius: 6px; -unity-text-align: middle-center; font-size: 15px; -unity-font-style: bold; color: #E8ECEA; margin-right: 11px; flex-shrink: 0; }
+.np-body { flex-grow: 1; }
+.np-name { font-size: 15px; color: #E8ECEA; }
+.np-pos { font-size: 11px; color: #9AA5A0; margin-top: 1px; }
+.np-cond { font-size: 17px; -unity-font-style: bold; margin-right: 10px; }
+.cond--best { color: #F5C64A; }
+.cond--good { color: #9FCB3B; }
+.cond--normal { color: #9AA5A0; }
+.cond--bad { color: #EE8A3C; }
+.cond--worst { color: #E86A4A; }
+
+/* --- 通知フィード --- */
+.fd-item { flex-direction: row; align-items: stretch; border-bottom-width: 1px; border-bottom-color: #232E28; }
+.fd-bar { width: 4px; flex-shrink: 0; }
+.fd-body { flex-grow: 1; padding: 11px 14px; }
+.fd-meta { flex-direction: row; align-items: center; margin-bottom: 4px; }
+.fd-tag { font-size: 11px; letter-spacing: 1px; -unity-font-style: bold; padding: 1px 7px; margin-right: 9px; }
+.fd-time { font-size: 12px; color: #5C6660; }
+.fd-text { font-size: 15px; color: #E8ECEA; white-space: normal; }
+
+/* --- 練習計画（曜日リスト） --- */
+.pd-row { flex-direction: row; align-items: center; padding: 9px 14px; border-bottom-width: 1px; border-bottom-color: #232E28; }
+.pd-row--match { background-color: rgba(245, 198, 74, 0.10); }
+.pd-day { width: 26px; -unity-text-align: middle-center; font-size: 15px; -unity-font-style: bold; color: #9AA5A0; flex-shrink: 0; }
+.pd-day--match { color: #F5C64A; }
+.pd-menu-wrap { flex-grow: 1; border-left-width: 3px; border-left-color: #232E28; padding: 4px 10px; margin-left: 4px; }
+.pd-menu-wrap--match { border-left-color: #F5C64A; }
+.pd-menu { font-size: 14px; color: #E8ECEA; white-space: normal; }
+.pd-menu--match { color: #F5C64A; -unity-font-style: bold; }
+.pd-badge { font-size: 11px; letter-spacing: 1px; color: #0E1512; background-color: #F5C64A; padding: 2px 7px; -unity-font-style: bold; flex-shrink: 0; }
+
+/* --- 個別指導 --- */
+.gd-slot { flex-direction: row; align-items: center; justify-content: space-between; background-color: #202A24; border-width: 0; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+.gd-slot--empty { background-color: transparent; border-width: 1px; border-color: #232E28; -unity-text-align: middle-center; }
+.gd-name { font-size: 14px; color: #E8ECEA; }
+.gd-focus { font-size: 12px; color: #F5C64A; }
+.gd-empty-t { font-size: 13px; color: #5C6660; -unity-text-align: middle-center; flex-grow: 1; }
+
+/* ============================================================ */
+/* 選手詳細（mock: 野球部監督GM「選手詳細」）              pd2-* */
+/* ============================================================ */
+.pd2-scroll { flex-grow: 1; }
+
+/* --- プレイヤーヘッダー --- */
+.pd2-head { flex-direction: row; align-items: stretch; background-color: #18211C; border-width: 1px; border-color: #232E28; margin: 14px; }
+.pd2-numbox { width: 122px; background-color: #141C17; border-right-width: 1px; border-right-color: #232E28; align-items: center; justify-content: center; padding: 14px 0; }
+.pd2-numbox__role { color: #F5C64A; font-size: 12px; letter-spacing: 3px; -unity-font-style: bold; }
+.pd2-numbox__no { font-size: 62px; -unity-font-style: bold; color: #E8ECEA; }
+.pd2-numbox__sub { font-size: 12px; color: #9AA5A0; }
+.pd2-headmain { flex-grow: 1; flex-direction: row; align-items: center; justify-content: space-between; padding: 16px 24px; }
+.pd2-nameline { flex-direction: row; align-items: center; }
+.pd2-name { font-size: 32px; -unity-font-style: bold; letter-spacing: 2px; color: #E8ECEA; margin-right: 14px; }
+.pd2-cond { font-size: 15px; color: #F5C64A; }
+
+/* 主将バッジ（設計書09 §8）: 名前脇の金地ピル。 */
+.pd2-captain {
+    background-color: #F5C64A;
+    color: #1A1608;
+    -unity-font-style: bold;
+    font-size: 13px;
+    letter-spacing: 1px;
+    border-radius: 4px;
+    padding: 2px 9px;
+    margin-right: 14px;
+}
+/* 主将に指名ボタン: 控えめなアウトライン調。 */
+.pd2-capbtn {
+    background-color: rgba(245, 198, 74, 0.12);
+    color: #F5C64A;
+    border-width: 1px;
+    border-color: #F5C64A;
+    border-radius: 5px;
+    font-size: 13px;
+    padding: 4px 12px;
+    margin-left: 16px;
+}
+.pd2-capbtn:hover { background-color: rgba(245, 198, 74, 0.24); }
+.pd2-meta { flex-direction: row; flex-wrap: wrap; margin-top: 10px; }
+.pd2-meta__i { font-size: 14px; color: #9AA5A0; margin-right: 20px; }
+.pd2-overall { align-items: center; padding-left: 24px; border-left-width: 1px; border-left-color: #232E28; }
+.pd2-overall__k { font-size: 11px; color: #9AA5A0; letter-spacing: 2px; margin-bottom: 8px; }
+.pd2-overall__chip { flex-direction: row; }
+.grade--lg { font-size: 28px; min-width: 46px; padding: 6px 12px; border-radius: 6px; margin-right: 0; }
+
+/* --- 行レイアウト（カード） --- */
+.pd2-row { flex-direction: row; margin-left: 14px; margin-right: 0; margin-bottom: 14px; }
+.pd2-card { background-color: #18211C; border-width: 1px; border-color: #232E28; margin-right: 14px; }
+.pd2-card--half { flex-grow: 1; flex-basis: 0; }
+.pd2-card--radar { width: 318px; }
+.pd2-card--grow { flex-grow: 1; flex-basis: 0; }
+.pd2-card--hidden { width: 338px; }
+.pd2-card--pitch { flex-grow: 1; flex-basis: 0; }
+.pd2-col-right { width: 360px; margin-right: 14px; }
+.pd2-col-right .pd2-card { margin-right: 0; margin-bottom: 14px; }
+.pd2-card__hd { flex-direction: row; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom-width: 1px; border-bottom-color: #232E28; }
+.pd2-card__t { font-size: 15px; -unity-font-style: bold; color: #E8ECEA; letter-spacing: 1px; }
+.pd2-card__note { font-size: 11px; color: #9AA5A0; }
+.pd2-card__body { padding: 12px 14px; }
+
+/* --- 能力バー --- */
+.pd2-abils { padding: 6px 14px 12px 14px; }
+.pd2-abil { flex-direction: row; align-items: center; padding: 5px 0; border-bottom-width: 1px; border-bottom-color: #232E28; }
+.pd2-abil__l { width: 78px; font-size: 13px; color: #E8ECEA; }
+.pd2-abil__v { width: 34px; font-size: 15px; -unity-font-style: bold; -unity-text-align: middle-right; color: #E8ECEA; margin-right: 10px; }
+.pd2-abil__bar { flex-grow: 1; height: 8px; background-color: #202A24; margin-right: 10px; }
+.pd2-abil__fill { height: 100%; }
+
+/* --- レーダー / 成長 --- */
+.pd2-radar { flex-grow: 1; min-height: 224px; align-items: center; justify-content: center; padding: 8px; }
+.ts-radar { min-height: 500px; }
+/* 右パネル: 6行をパネル高さ全体へ均等分散。数値を指標名より大きく（ダッシュボード視認性） */
+.ts-factors { flex-grow: 1; justify-content: space-between; padding: 20px 20px; }
+.ts-frow { flex-direction: row; align-items: center; }
+.ts-frow__name { width: 182px; }
+.ts-frow__l { font-size: 16px; -unity-font-style: bold; color: #E8ECEA; }
+.ts-frow__sub { font-size: 10px; color: #7E8C82; margin-top: 2px; }
+.ts-frow__v { width: 58px; font-size: 34px; -unity-font-style: bold; -unity-text-align: middle-right; color: #EFF4EA; margin-right: 14px; }
+.ts-frow__bar { flex-grow: 1; height: 12px; background-color: #121814; border-radius: 3px; margin-right: 14px; }
+.ts-frow__fill { height: 100%; border-radius: 3px; }
+/* 分析コメント（弱点）: パネル最下部 */
+.ts-analysis { border-top-width: 1px; border-top-color: #232E28; padding: 16px 20px 6px 20px; }
+.ts-analysis__k { font-size: 11px; color: #9DB3A0; letter-spacing: 2px; margin-bottom: 4px; }
+.ts-analysis__t { font-size: 15px; color: #C7D2CB; white-space: normal; }
+/* レーダー軸ラベル（ラベル1.5倍・数値2倍・数値は1色統一で強調はサイズ/太さ） */
+.ts-axis { position: absolute; align-items: center; }
+.ts-axis__l { font-size: 18px; color: #9DB3A0; -unity-font-style: bold; margin-bottom: 1px; }
+.ts-axis__v { font-size: 40px; -unity-font-style: bold; color: #EFF4EA; }
+/* 総合ランク: チップ＋(値) を1行に（1.5倍拡大） */
+.ts-overall-line { flex-direction: row; align-items: center; }
+.ts-overall-value { font-size: 34px; -unity-font-style: bold; color: #E8ECEA; margin-left: 8px; }
+.grade--xl { font-size: 40px; min-width: 64px; padding: 8px 18px; border-radius: 8px; margin-right: 0; }
+.pd2-growth { flex-grow: 1; min-height: 180px; align-items: center; justify-content: center; }
+.pd2-empty { font-size: 12px; color: #5C6660; -unity-text-align: middle-center; white-space: normal; padding: 20px; }
+
+/* --- 隠しパラメータ --- */
+.pd2-hidden-row { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.pd2-hidden-k { font-size: 13px; color: #9AA5A0; }
+.pd2-hidden-v { font-size: 14px; -unity-font-style: bold; color: #E8ECEA; }
+.pd2-hidden-v--unknown { font-size: 15px; -unity-font-style: bold; color: #5C6660; }
+.pd2-hidden-note { font-size: 11px; color: #5C6660; margin-top: 4px; white-space: normal; }
+
+/* --- 球種テーブル --- */
+.pd2-pitch-head { flex-direction: row; padding: 9px 0; border-bottom-width: 1px; border-bottom-color: #232E28; }
+.pd2-pc { font-size: 11px; color: #9AA5A0; letter-spacing: 1px; }
+.pd2-pc--name { flex-grow: 2; flex-basis: 0; }
+.pd2-pc--rank { width: 56px; -unity-text-align: middle-center; }
+.pd2-pc--num { flex-grow: 1; flex-basis: 0; -unity-text-align: middle-right; }
+.pd2-pitch-row { flex-direction: row; align-items: center; padding: 9px 0; border-bottom-width: 1px; border-bottom-color: #232E28; }
+.pd2-pv--name { flex-grow: 2; flex-basis: 0; font-size: 13px; color: #E8ECEA; }
+.pd2-pv--rank { width: 56px; flex-direction: row; justify-content: center; }
+.pd2-pv--num { flex-grow: 1; flex-basis: 0; -unity-text-align: middle-right; font-size: 14px; -unity-font-style: bold; color: #E8ECEA; }
+
+/* --- 特殊能力 --- */
+.pd2-skill { margin-bottom: 11px; }
+.pd2-skill__name { font-size: 12px; -unity-font-style: bold; color: #F5C64A; background-color: rgba(245,198,74,0.12); border-width: 1px; border-color: #F5C64A; padding: 3px 10px; align-self: flex-start; }
+.pd2-skill__desc { font-size: 11px; color: #9AA5A0; margin-top: 5px; white-space: normal; }
+
+/* --- 簡易成績 --- */
+.pd2-stat-label { font-size: 11px; color: #F5C64A; letter-spacing: 1px; margin-top: 8px; margin-bottom: 6px; }
+.pd2-stat-row { flex-direction: row; margin-bottom: 6px; }
+.pd2-stat { flex-grow: 1; flex-basis: 0; background-color: #141C17; border-width: 1px; border-color: #232E28; padding: 8px 4px; align-items: center; margin-right: 6px; }
+.pd2-stat__v { font-size: 20px; -unity-font-style: bold; color: #F5C64A; }
+.pd2-stat__k { font-size: 9px; color: #9AA5A0; margin-top: 2px; }
+
+/* 行クリック可能な一覧行 */
+.row--click:hover { background-color: #232E28; }
+
+/* --- 球種変化チャート（プロスピ風） --- */
+.pd2-pitchchart { min-height: 300px; flex-grow: 1; }
+.pd2-pchip { position: absolute; flex-direction: row; align-items: center; background-color: #0E1512; border-width: 1px; border-color: #232E28; padding: 4px 9px; }
+.pd2-pchip__name { font-size: 13px; color: #E8ECEA; margin-right: 8px; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ミニマルスクロールバー（全画面共通・リファイン）
+   OS標準の矢印付き太バーを廃止し、幅6px・角丸・つまみのみへ置換する。
+   KokoSimTheme は全画面が読み込むためここに置けば全 ScrollView に効く。
+   ═══════════════════════════════════════════════════════════════════════ */
+.unity-scroller--vertical { width: 6px; background-color: transparent; }
+.unity-scroller--horizontal { height: 6px; background-color: transparent; }
+/* 矢印ボタン（トラック上下端）を消す */
+.unity-scroller__low-button, .unity-scroller__high-button { display: none; width: 0; height: 0; }
+/* トラック（溝）を透明に */
+.unity-scroller .unity-base-slider { width: 6px; margin: 0; background-color: transparent; }
+.unity-scroller--horizontal .unity-base-slider { height: 6px; width: auto; }
+#unity-tracker { background-color: transparent; border-width: 0; }
+/* つまみのみ表示（半透明の明色・角丸） */
+#unity-dragger {
+    background-color: rgba(232, 236, 234, 0.16);
+    border-width: 0; border-radius: 3px;
+    width: 6px; min-height: 40px; margin: 0;
+}
+#unity-dragger:hover { background-color: rgba(232, 236, 234, 0.30); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   リファイン追補：カード類の枠線を廃し「面の明度」で区切る（全画面共通・後勝ち）
+   PlayerDetail / Tournament / Match 等の残存枠線をまとめて無効化し、角丸12へ統一する。
+   枠線を残すのは focus/入力/スコアボード格子（sb-cell）と、意味を持つ左アクセントのみ。
+   ═══════════════════════════════════════════════════════════════════════ */
+.tp-team, .tp-lead, .pd2-head, .pd2-card, .pd2-stat,
+.vs, .stat, .day, .coach-slot, .edit-slot {
+    border-width: 0;
+}
+.tp-team, .tp-lead, .pd2-head, .pd2-card, .vs, .coach-slot, .edit-slot, .stat, .day { border-radius: 12px; }
+/* 優勝候補だけは意味のある左アクセント（黄）を細く残す（全周枠は廃止） */
+.tp-team--fav { border-left-width: 3px; border-left-color: #F5C64A; }
+/* 通知フィード（旧レイアウト）：全周枠は廃止し左アクセントのみ残す */
+.feed__item { border-width: 0; border-left-width: 3px; border-left-color: #232E28; }
+
+/* ===== 大会モード オーバーレイ（開幕バナー・試合開始ダイアログ・結果） ===== */
+/* 同一document内オーバーレイ。別UIDocument/PanelSettingsはScreenRouter競合になるため使わない。
+   ルート要素なので class="ui-root" を必ず付ける。既定は display:none でコントローラが出す。 */
+.tm-scrim {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgba(6, 12, 8, 0.72);
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+.tm-card {
+    background-color: #18211C;   /* --sf-card */
+    border-width: 1px;
+    border-color: #232E28;       /* --color-line */
+    border-radius: 16px;         /* --radius-modal */
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 40px;
+    min-width: 360px;
+}
+
+/* 開幕バナー（全画面センター・フェード。opacity はコントローラが制御） */
+.tm-banner {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgba(6, 12, 8, 0.88);
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+.tm-banner__inner { flex-direction: column; align-items: center; }
+.tm-banner__top { font-size: 40px; -unity-font-style: bold; color: #F5C64A; letter-spacing: 3px; }
+.tm-banner__rule { height: 2px; width: 220px; background-color: #F5C64A; margin: 14px 0; }
+.tm-banner__name { font-size: 26px; color: #E8ECEA; letter-spacing: 2px; }
+.tm-banner__open { font-size: 34px; -unity-font-style: bold; color: #E8ECEA; letter-spacing: 8px; margin-top: 18px; }
+
+/* 試合開始ダイアログ */
+.tm-dialog__round { font-size: 15px; color: #9AA5A0; letter-spacing: 2px; }
+.tm-dialog__vs { font-size: 24px; -unity-font-style: bold; color: #E8ECEA; margin-top: 6px; }
+.tm-dialog__q { font-size: 17px; color: #E8ECEA; margin-top: 18px; margin-bottom: 20px; }
+.tm-dialog__btns { flex-direction: row; }
+
+/* 試合結果（自動消化） */
+.tm-result__round { font-size: 15px; color: #9AA5A0; letter-spacing: 2px; }
+.tm-result__headline { font-size: 30px; -unity-font-style: bold; -unity-text-align: middle-center; margin-top: 8px; }
+.tm-result__headline--win { color: #F5C64A; }
+.tm-result__headline--lose { color: #E86A4A; }
+.tm-result__score { font-size: 20px; color: #E8ECEA; margin-top: 10px; margin-bottom: 20px; }
+
+/* 大会モードのボタン（主要=黄CTA・副次=ゴースト） */
+.tm-btn { min-width: 120px; height: 40px; -unity-text-align: middle-center; font-size: 16px; border-radius: 10px; margin: 0 8px; }
+.tm-btn--primary { background-color: #F5C64A; color: #12160F; -unity-font-style: bold; border-width: 0; }
+.tm-btn--ghost { background-color: #202A24; color: #E8ECEA; border-width: 1px; border-color: #232E28; }

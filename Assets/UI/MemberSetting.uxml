@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- メンバー設定 画面（UI-BUILD-METHOD Step 4）。背番号1〜20の固定枠に選手を割り当て、
+     選んだ2選手の全能力を比較する。骨組みだけ置き、枠・プール・比較は MemberSettingController が
+     部品（components.uss）で動的生成する。スタイルは tokens → KokoSimTheme → components → 画面USS の順。
+     背番号1〜9はダイヤモンド配置（守備位置の慣例）、10〜20は控えとして横並び。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="MemberSetting.uss" />
+
+    <ui:VisualElement class="ui-root ms-root">
+
+        <!-- 共通トップバー（スコアボード＋ナビ・単一ソース） -->
+        <ui:Instance template="TopBar" />
+
+        <ui:VisualElement class="ms-body">
+
+            <!-- 左：背番号割当（ダイヤ＋控え＋プール） -->
+            <ui:VisualElement class="ms-left">
+                <ui:VisualElement class="ms-head">
+                    <ui:Label name="ms-hint" text="選手をクリックで選択（比較の左）→ 相手にカーソルを合わせて比較 → クリックで背番号を交換" class="ms-head__hint" />
+                    <ui:VisualElement class="ms-head__spacer" />
+                    <ui:Button name="ms-auto" text="能力順で自動割当" class="ms-auto-btn" />
+                </ui:VisualElement>
+
+                <!-- 左＝縦長の球場図、右＝控え＋プール。球場図は縦長でないと内野ダイヤを大きく取れない。 -->
+                <ui:VisualElement class="ms-left-body">
+                    <!-- 球場図（背番号1〜9を守備位置＝球場座標へ配置）。芝/ファウル/ダート/ライン/フェンスは
+                         BaseballFieldElement が座標系から描く。Controller がスロット等を挿入する。 -->
+                    <ui:VisualElement name="ms-field" class="field-diamond ms-field">
+                        <ui:VisualElement name="ms-field-slots" class="ms-field__slots" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="ms-roster">
+                        <!-- 控え（背番号10〜20・横並び） -->
+                        <ui:Label text="控え　背番号 10–20" class="ms-section" />
+                        <ui:VisualElement name="ms-bench" class="ms-bench" />
+
+                        <!-- 割当元プール -->
+                        <ui:Label name="ms-pool-title" text="部員（ベンチ外・未割当を先頭）" class="ms-section" />
+                        <ui:ScrollView mode="Vertical" class="ms-pool-scroll">
+                            <ui:VisualElement name="ms-pool" class="ms-pool" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 右：2選手比較 -->
+            <ui:VisualElement class="ms-compare panel">
+                <ui:VisualElement class="ms-cmp-cards">
+                    <ui:VisualElement name="ms-cmp-a" class="cmp-card ms-cmp-card--a" />
+                    <ui:VisualElement name="ms-cmp-b" class="cmp-card" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="ms-cmp-tabs" class="ms-cmp-tabs" />
+
+                <ui:ScrollView mode="Vertical" class="ms-cmp-scroll">
+                    <ui:VisualElement name="ms-cmp-rows" />
+                    <ui:VisualElement name="ms-cmp-apt" class="ms-cmp-apt" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

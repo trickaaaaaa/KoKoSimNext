@@ -1,0 +1,186 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   LineupSetting.uss — 試合前スタメン設定 画面の配置のみ（UI-BUILD-METHOD Step 4）
+   ───────────────────────────────────────────────────────────────────────
+   見た目の最小単位は components.uss（部品辞書）。ここは2カラム分割や列幅など
+   「この画面固有の並べ方」だけを持ち、色・余白・角丸は tokens を参照する。
+   gap/grid/擬似要素は使わない（USS非対応）。固定寸法セクションは flex-shrink:0。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.lu-root {
+    flex-grow: 1;
+    background-color: var(--color-field);
+}
+
+.lu-body {
+    flex-direction: row;
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-4);
+}
+
+/* ── 左：打順表＋DH/先発＋控え＋確定 ── */
+.lu-left {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-right: var(--sp-4);
+}
+/* 画面専用ヘッダー（共通TopBarの代替・全幅ストリップ）。ナビタブや「今週を進める」は出さない。 */
+.lu-topbar {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-header);
+    background-color: var(--color-strip);
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+}
+.lu-topbar__spacer { flex-grow: 1; }
+.lu-title { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; }
+.lu-match { font-size: var(--fs-label); color: var(--color-muted); margin-left: var(--sp-4); }
+.lu-head__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+.lu-head__rank { flex-direction: row; }
+
+/* 左＋中の2カラム（[スタメン＋DH] ｜ [控え]）。ヘッダー下から確定ボタン上までを縦に使い切る（flex-grow）。
+   align-items:stretch で上端を揃えつつ控えの高さを左カラムに合わせ、あふれは控え内でスクロールさせる。 */
+.lu-cols { flex-direction: row; align-items: stretch; flex-grow: 1; }
+/* 左カラム：スタメン＋DH。選手名の右余白が空きすぎないよう約68%幅に据える。 */
+.lu-orders { width: 68%; flex-shrink: 0; }
+
+/* 打順テーブル：ヘッダ列幅は行（.lineup-row__*）と揃える（横ずれ対策）。
+   縦は使い切る＝テーブルと行ホストを flex-grow し、9行を等分配で拡大（固定pxにしない）。 */
+.lu-table { flex-grow: 1; }
+.lu-rows { flex-grow: 1; }
+
+/* 行拡大に合わせて文字を1.3〜1.5倍（選手名を最大に）。ランク/守備チップはこの画面のみ拡大（共有部品を汚さない）。 */
+.lu-root .lineup-row__ord { font-size: 21px; }
+.lu-root .lineup-row__name { font-size: 24px; }
+.lu-root .lineup-row__info { font-size: 15px; }
+.lineup-row .pos-chip { min-width: 36px; height: 34px; font-size: 19px; }
+.lineup-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
+/* 選手名と「学年・投打」の間の通算成績。学年・投打と同じ控えめグレー・名前より目立たせない。 */
+.lu-root .lineup-row__stat { font-size: 15px; color: var(--color-muted); margin-right: var(--sp-3); }
+
+/* 控えも行高・文字をスタメンと揃える（成績は付けない＝幅節約）。ランクチップも同スケール。 */
+.lu-root .bench-row__name { font-size: 24px; }
+.lu-root .bench-row__tag { font-size: 14px; }
+.bench-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
+.lu-thead {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-thead);
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    border-bottom-width: var(--border-w);
+    border-bottom-color: var(--color-line);
+    margin-bottom: var(--sp-1);
+}
+.lu-th { font-size: var(--fs-th); color: var(--color-muted); }
+.lu-th--ord { width: 22px; -unity-text-align: middle-center; }
+.lu-th--pos { width: 40px; -unity-text-align: middle-center; margin-left: var(--sp-2); }
+.lu-th--name { flex-grow: 1; flex-basis: 0; margin-left: var(--sp-2); }
+.lu-th--info { width: 96px; }
+.lu-th--rank { width: 40px; -unity-text-align: middle-right; }
+
+/* DH制トグル＋先発 */
+.lu-dhbar {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--sp-3);
+    margin-bottom: var(--sp-2);
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-2);
+    padding-bottom: var(--sp-2);
+}
+.lu-dhbar__label { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-3); }
+.lu-dhbar__spacer { flex-grow: 1; }
+.lu-sp { flex-direction: row; }
+
+.lu-section {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    -unity-font-style: bold;
+    margin-top: var(--sp-2);
+    margin-bottom: var(--sp-2);
+}
+/* 中カラム：控え。左カラムの右隣に置き、残り幅を占める。高さは左カラム（スタメン＋DH）に追従（stretch）。 */
+.lu-bench-wrap { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-4); }
+/* height:0＋flex-grow で「スクロール中身が行高を決めない」ようにする＝行高はスタメン側で決まり、
+   控えはその高さいっぱいに広がって収まらない分を内部スクロール（左カラム高＝控え高に揃う）。 */
+.lu-bench-scroll { flex-grow: 1; min-height: 0; height: 0; }
+.lu-bench { }
+
+/* スタメン＋控えの下と確定ボタンの間を詰めるスペーサ（CTAを最下部へ）。 */
+.lu-spacer { flex-grow: 1; }
+
+.lu-actions { flex-direction: row; margin-top: var(--sp-3); }
+.lu-btn {
+    height: 44px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-body);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+}
+.lu-btn--ghost {
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    margin-right: var(--sp-2);
+}
+.lu-btn--ghost:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
+.lu-btn--go {
+    flex-grow: 1;
+    background-color: var(--color-lamp);
+    color: var(--color-ink);
+    -unity-font-style: bold;
+}
+.lu-btn--go:hover { background-color: var(--color-lamp-hi); }
+
+/* ── 右：2選手比較＋成績 ── */
+.lu-compare {
+    width: 384px;
+    flex-shrink: 0;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+.lu-cmp-cards {
+    flex-direction: row;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-chip);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+}
+.lu-cmp-card--a { border-right-width: var(--border-w); border-right-color: var(--color-line); }
+
+.lu-cmp-tabs { flex-direction: row; margin-top: var(--sp-2); margin-bottom: var(--sp-1); }
+.lu-tab {
+    flex-grow: 1;
+    flex-basis: 0;
+    -unity-text-align: middle-center;
+    height: 30px;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    margin-left: 2px;
+    margin-right: 2px;
+}
+.lu-tab:hover { color: var(--color-chalk); }
+.lu-tab--on { background-color: var(--color-panel-hover); color: var(--color-chalk); border-color: var(--color-line-focus); -unity-font-style: bold; }
+
+.lu-cmp-scroll { flex-grow: 1; }
+.lu-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }
+.lu-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); -unity-font-style: bold; letter-spacing: 1px; margin-top: var(--sp-2); margin-bottom: var(--sp-1); }
+.lu-cmp-apt { margin-top: var(--sp-1); }
+.lu-cmp-stats { margin-top: var(--sp-2); }
+.lu-stat-name { font-size: var(--fs-label); color: var(--color-chalk); -unity-font-style: bold; margin-top: var(--sp-2); margin-bottom: 2px; }

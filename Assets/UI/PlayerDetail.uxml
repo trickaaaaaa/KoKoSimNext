@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="KokoSimTheme.uss" />
+    <ui:VisualElement class="root">
+
+      <!-- ===== スコアボードヘッダー（home と共通の sb2） ===== -->
+      <ui:VisualElement class="sb2">
+        <ui:VisualElement class="sb2-left">
+          <ui:Label class="sb2-badge" text="桜" />
+          <ui:VisualElement class="sb2-id">
+            <ui:Label class="sb2-name" text="県立桜丘高校" />
+            <ui:Label class="sb2-pref" text="神奈川県" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="sb2-center">
+          <ui:VisualElement class="sb2-cell">
+            <ui:Label class="sb2-cell__k" text="画面" />
+            <ui:Label class="sb2-cell__v" text="選手詳細" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="sb2-right">
+          <ui:Button name="back-list" class="advance" text="◀ 一覧へ戻る" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- ===== ナビ ===== -->
+      <ui:VisualElement class="nav">
+        <ui:Label name="nav-home" class="nav__item" text="ホーム" />
+        <ui:Label name="nav-players" class="nav__item nav__item--on" text="選手" />
+        <ui:Label name="nav-training" class="nav__item" text="練習" />
+        <ui:Label name="nav-match" class="nav__item" text="試合" />
+        <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
+        <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
+        <ui:Label name="nav-management" class="nav__item" text="経営" />
+        <ui:Label name="nav-career" class="nav__item" text="キャリア" />
+        <ui:Label name="nav-records" class="nav__item" text="記録" />
+      </ui:VisualElement>
+
+      <ui:ScrollView mode="Vertical" class="pd2-scroll">
+
+        <!-- ===== プレイヤーヘッダー ===== -->
+        <ui:VisualElement class="pd2-head">
+          <ui:VisualElement class="pd2-numbox">
+            <ui:Label name="role" class="pd2-numbox__role" text="P" />
+            <ui:Label name="number" class="pd2-numbox__no" text="1" />
+            <ui:Label name="role-sub" class="pd2-numbox__sub" text="投手" />
+          </ui:VisualElement>
+          <ui:VisualElement class="pd2-headmain">
+            <ui:VisualElement class="pd2-headmain__top">
+              <ui:VisualElement class="pd2-nameline">
+                <ui:Label name="name" class="pd2-name" text="三宅 航平" />
+                <ui:Label name="captain-badge" class="pd2-captain" text="主将" />
+                <ui:Label name="cond" class="pd2-cond" text="絶好調" />
+                <ui:Button name="designate-captain" class="pd2-capbtn" text="主将に指名" />
+              </ui:VisualElement>
+              <ui:VisualElement class="pd2-meta">
+                <ui:Label name="meta-grade" class="pd2-meta__i" text="3年" />
+                <ui:Label name="meta-pos" class="pd2-meta__i" text="投手（P）" />
+                <ui:Label name="meta-tb" class="pd2-meta__i" text="右投右打" />
+                <ui:Label name="meta-style" class="pd2-meta__i" text="投法：オーバースロー" />
+                <ui:Label name="meta-velo" class="pd2-meta__i" text="最速 141 km/h" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="pd2-overall">
+              <ui:Label class="pd2-overall__k" text="総合ランク" />
+              <ui:VisualElement name="overall-chip" class="pd2-overall__chip" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ===== 能力（投手・野手 2カラム） ===== -->
+        <ui:VisualElement class="pd2-row">
+          <ui:VisualElement class="pd2-card pd2-card--half">
+            <ui:VisualElement class="pd2-card__hd">
+              <ui:Label class="pd2-card__t" text="投手能力" />
+              <ui:Label class="pd2-card__note" text="数値は内部値（1〜100）" />
+            </ui:VisualElement>
+            <ui:VisualElement name="pitcher-abils" class="pd2-abils" />
+          </ui:VisualElement>
+          <ui:VisualElement class="pd2-card pd2-card--half">
+            <ui:VisualElement class="pd2-card__hd">
+              <ui:Label class="pd2-card__t" text="野手能力" />
+              <ui:Label class="pd2-card__note" text="数値は内部値（1〜100）" />
+            </ui:VisualElement>
+            <ui:VisualElement name="fielder-abils" class="pd2-abils" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ===== レーダー / 成長推移 / 隠しパラメータ ===== -->
+        <ui:VisualElement class="pd2-row">
+          <ui:VisualElement class="pd2-card pd2-card--radar">
+            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="能力バランス" /></ui:VisualElement>
+            <ui:VisualElement name="radar" class="pd2-radar" />
+          </ui:VisualElement>
+          <ui:VisualElement class="pd2-card pd2-card--grow">
+            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="成長推移" /></ui:VisualElement>
+            <ui:VisualElement name="growth" class="pd2-growth">
+              <ui:Label class="pd2-empty" text="成長履歴は次シーズンから記録されます" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+          <ui:VisualElement class="pd2-card pd2-card--hidden">
+            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="隠しパラメータ（推定）" /></ui:VisualElement>
+            <ui:VisualElement class="pd2-card__body">
+              <ui:VisualElement name="hidden-list" />
+              <ui:Label class="pd2-hidden-note" text="試合起用・面談・スカウトで段階的に判明します。" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ===== 球種データ / 特殊能力・成績 ===== -->
+        <ui:VisualElement class="pd2-row pd2-row--last">
+          <ui:VisualElement class="pd2-card pd2-card--pitch">
+            <ui:VisualElement class="pd2-card__hd">
+              <ui:Label class="pd2-card__t" text="球種変化チャート" />
+              <ui:Label class="pd2-card__note" text="中心＝ボール / チップ＝キレ S〜G" />
+            </ui:VisualElement>
+            <ui:VisualElement class="pd2-card__body">
+              <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />
+              <ui:Label name="pitch-empty" class="pd2-empty" text="投手ではありません" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="pd2-col-right">
+            <ui:VisualElement class="pd2-card">
+              <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="特殊能力" /></ui:VisualElement>
+              <ui:VisualElement class="pd2-card__body">
+                <ui:VisualElement name="skills-list" />
+                <ui:Label name="skills-empty" class="pd2-empty" text="特殊能力はまだ発見されていません" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="pd2-card">
+              <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="簡易成績" /></ui:VisualElement>
+              <ui:VisualElement class="pd2-card__body">
+                <ui:Label name="tourn-label" class="pd2-stat-label" text="今大会（未接続）" />
+                <ui:VisualElement name="tourn-stats" class="pd2-stat-row" />
+                <ui:Label class="pd2-stat-label" text="公式戦通算（高校3年間）" />
+                <ui:VisualElement name="career-stats" class="pd2-stat-row" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+      </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>
