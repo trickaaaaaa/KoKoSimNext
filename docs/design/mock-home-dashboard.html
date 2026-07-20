@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>甲子園への道（仮）— ホームダッシュボード モック</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --field:#14231B;        /* スコアボードの深緑（背景） */
+    --panel:#1D3227;        /* パネル面 */
+    --panel-2:#24402F;      /* パネル強調面 */
+    --line:#38543F;         /* 白線ならぬ枠線 */
+    --chalk:#EFF4EA;        /* チョーク白（本文） */
+    --chalk-dim:#9DB3A0;    /* 補助テキスト */
+    --lamp:#F5C64A;         /* 電光ランプ（アクセント・主操作） */
+    --lamp-dim:#8A7431;
+    --alert:#E86A4A;        /* 警告 */
+    --num:'Oswald','Arial Narrow',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --jp:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--field);color:var(--chalk);font-family:var(--jp);font-size:14px;line-height:1.55;padding-bottom:40px}
+  a,button{font-family:inherit}
+
+  /* ===== スコアボードヘッダー（シグネチャ） ===== */
+  header{
+    background:linear-gradient(180deg,#0E1A13,#14231B);
+    border-bottom:2px solid var(--line);
+    padding:14px 20px 0;
+  }
+  .board{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;max-width:1240px;margin:0 auto}
+  .school{display:flex;align-items:baseline;gap:12px}
+  .school h1{font-size:20px;font-weight:700;letter-spacing:.06em}
+  .school .pref{font-size:11px;color:var(--chalk-dim);letter-spacing:.2em}
+  .week{font-family:var(--num);font-size:15px;letter-spacing:.12em;color:var(--lamp);text-transform:uppercase}
+  .meters{display:flex;gap:20px;font-family:var(--num)}
+  .meter{text-align:right}
+  .meter .k{font-size:10px;letter-spacing:.25em;color:var(--chalk-dim);font-family:var(--jp)}
+  .meter .v{font-size:19px;letter-spacing:.05em}
+  .advance{
+    background:var(--lamp);color:#1A1608;border:none;border-radius:4px;
+    font-weight:700;font-size:14px;letter-spacing:.15em;padding:10px 22px;cursor:pointer;
+    box-shadow:0 0 0 1px #00000055, 0 0 18px #f5c64a33;
+  }
+  .advance:hover{filter:brightness(1.08)}
+  .advance:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
+
+  nav{max-width:1240px;margin:10px auto 0;display:flex;gap:2px;overflow-x:auto}
+  nav a{
+    color:var(--chalk-dim);text-decoration:none;font-size:12.5px;letter-spacing:.1em;
+    padding:9px 14px;border-radius:6px 6px 0 0;white-space:nowrap;
+  }
+  nav a.on{color:var(--lamp);background:var(--panel);border:1px solid var(--line);border-bottom:none}
+  nav a:hover{color:var(--chalk)}
+
+  /* ===== レイアウト ===== */
+  main{max-width:1240px;margin:18px auto 0;padding:0 20px;display:grid;gap:14px;
+       grid-template-columns:1.05fr 0.95fr 1fr;
+       grid-template-areas:"game team feed" "plan plan feed" "roster roster feed";}
+  @media (max-width:960px){
+    main{grid-template-columns:1fr;grid-template-areas:"game" "team" "feed" "plan" "roster"}
+  }
+  section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  h2{font-size:11px;letter-spacing:.3em;color:var(--chalk-dim);font-weight:600;margin-bottom:12px}
+
+  /* ===== 次の試合（ミニスコアボード） ===== */
+  .game{grid-area:game}
+  .vs{background:#0E1A13;border:1px solid var(--line);border-radius:6px;padding:14px;text-align:center}
+  .vs .tag{font-size:11px;color:var(--lamp);letter-spacing:.25em}
+  .vs .teams{display:flex;align-items:center;justify-content:center;gap:14px;margin:10px 0 6px}
+  .vs .t{font-size:16px;font-weight:700}
+  .vs .x{font-family:var(--num);color:var(--chalk-dim)}
+  .vs .info{font-family:var(--mono);font-size:12px;color:var(--chalk-dim)}
+  .winbar{margin-top:12px}
+  .winbar .lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--chalk-dim);margin-bottom:4px}
+  .bar{height:8px;background:#0E1A13;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+  .bar i{display:block;height:100%;width:42%;background:var(--lamp)}
+
+  /* ===== 部の状態 ===== */
+  .team{grid-area:team}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center}
+  .stat{background:#0E1A13;border:1px solid var(--line);border-radius:6px;padding:10px 6px}
+  .stat .k{font-size:10.5px;color:var(--chalk-dim);letter-spacing:.15em}
+  .stat .v{font-family:var(--num);font-size:22px;margin-top:2px}
+  .stat .v.warn{color:var(--alert)}
+  .lampdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--alert);margin-left:6px;animation:blink 1.6s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  @media (prefers-reduced-motion: reduce){.lampdot{animation:none}}
+  .note{font-size:12px;color:var(--chalk-dim);margin-top:10px}
+  .note b{color:var(--chalk)}
+
+  /* ===== 通知フィード ===== */
+  .feed{grid-area:feed}
+  .feed ul{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .feed li{background:#0E1A13;border:1px solid var(--line);border-left:3px solid var(--line);
+           border-radius:5px;padding:9px 11px;font-size:12.5px}
+  .feed li .when{font-family:var(--mono);font-size:10.5px;color:var(--chalk-dim);display:block;margin-bottom:2px}
+  .feed li.up{border-left-color:var(--lamp)}
+  .feed li.warn{border-left-color:var(--alert)}
+  .feed li a{color:var(--lamp);text-decoration:none}
+  .feed li a:hover{text-decoration:underline}
+
+  /* ===== 練習計画 ===== */
+  .plan{grid-area:plan}
+  .days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  @media (max-width:600px){.days{grid-template-columns:repeat(4,1fr)}}
+  .day{background:#0E1A13;border:1px solid var(--line);border-radius:6px;padding:8px 6px;text-align:center}
+  .day .d{font-family:var(--num);font-size:11px;color:var(--chalk-dim);letter-spacing:.2em}
+  .day .m{font-size:12.5px;font-weight:700;margin-top:3px}
+  .day.rest .m{color:var(--chalk-dim)}
+  .day.match{border-color:var(--lamp)}
+  .day.match .m{color:var(--lamp)}
+  .coach{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .slot{background:var(--panel-2);border:1px dashed var(--line);border-radius:6px;
+        padding:7px 12px;font-size:12.5px}
+  .slot b{color:var(--lamp);font-weight:700}
+  .slot span{color:var(--chalk-dim)}
+
+  /* ===== 注目選手 ===== */
+  .roster{grid-area:roster}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:10.5px;color:var(--chalk-dim);letter-spacing:.15em;text-align:left;
+     padding:4px 8px;border-bottom:1px solid var(--line);font-weight:600}
+  td{padding:7px 8px;border-bottom:1px solid #24402F}
+  td.num{font-family:var(--mono)}
+  .g{display:inline-block;min-width:20px;text-align:center;border-radius:4px;
+     font-family:var(--num);font-size:12px;padding:1px 4px;color:#101408;margin-right:2px}
+  .gS{background:#FF5D8F}.gA{background:#FF6B4A}.gB{background:#FFA03C}
+  .gC{background:#F5C64A}.gD{background:#B9D45A}.gE{background:#69B98B;color:#0B1A10}
+  .gF{background:#5E7F8F;color:#EFF4EA}.gG{background:#5A6A5E;color:#EFF4EA}
+  .cond{font-family:var(--num)}
+  .cond.up{color:#B9D45A}.cond.dn{color:var(--alert)}
+
+  footer{max-width:1240px;margin:22px auto 0;padding:0 20px;font-size:11px;color:var(--chalk-dim)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="board">
+    <div class="school">
+      <span class="pref">神奈川</span>
+      <h1>県立桜丘高校</h1>
+      <span class="week">2027 JUN — 第3週 ｜ 夏予選まで4週</span>
+    </div>
+    <div class="meters">
+      <div class="meter"><div class="k">資金</div><div class="v">¥142万</div></div>
+      <div class="meter"><div class="k">名声</div><div class="v"><span class="g gD">D</span>34</div></div>
+      <div class="meter"><div class="k">信頼</div><div class="v"><span class="g gC">C</span>61</div></div>
+    </div>
+    <button class="advance">今週を進める ▶</button>
+  </div>
+  <nav>
+    <a class="on" href="#">ホーム</a><a href="#">選手</a><a href="#">練習</a><a href="#">試合</a>
+    <a href="#">大会・全国</a><a href="#">スカウト</a><a href="#">経営</a><a href="#">キャリア</a><a href="#">記録</a>
+  </nav>
+</header>
+
+<main>
+  <section class="game">
+    <h2>次の試合</h2>
+    <div class="vs">
+      <div class="tag">練習試合</div>
+      <div class="teams">
+        <span class="t">桜丘</span><span class="x">VS</span><span class="t">北都大付属</span>
+      </div>
+      <div class="info">6/20 SAT 10:00 ／ 桜丘G ／ 晴れ予報</div>
+      <div class="winbar">
+        <div class="lbl"><span>勝率予想</span><span>42%</span></div>
+        <div class="bar"><i></i></div>
+      </div>
+    </div>
+    <p class="note">相手は秋季県ベスト8の私立。<b>格上との実戦データ採り</b>に最適。</p>
+  </section>
+
+  <section class="team">
+    <h2>部の状態</h2>
+    <div class="stats">
+      <div class="stat"><div class="k">士気</div><div class="v">高</div></div>
+      <div class="stat"><div class="k">平均疲労</div><div class="v warn">58<span class="lampdot"></span></div></div>
+      <div class="stat"><div class="k">怪我人</div><div class="v">1</div></div>
+    </div>
+    <p class="note">捕手 <b>小野寺</b> の疲労が72。今週の強度は<b>「普通」以下</b>を推奨。</p>
+  </section>
+
+  <section class="feed">
+    <h2>通知フィード</h2>
+    <ul>
+      <li class="up"><span class="when">今週</span><a href="#">三宅 遼（2年・投）</a> 球速 139 → <b>141 km/h</b></li>
+      <li class="warn"><span class="when">今週</span>疲労警告: <a href="#">小野寺 樹（3年・捕）</a> 疲労 72</li>
+      <li><span class="when">今週</span>見極め: <a href="#">早瀬 悠人（1年・遊）</a> の性格が判明 —「練習の虫」</li>
+      <li class="up"><span class="when">先週</span>OB会から寄付 <b>¥30万</b> を受領</li>
+      <li><span class="when">先週</span>地方大会新聞: 海鳴工業のエース仁科、練習試合で15奪三振。「今年の神奈川は激戦」</li>
+      <li><span class="when">先週</span>スカウト報告: 入部予定者リストに投手適性「？」の大型1年生</li>
+    </ul>
+  </section>
+
+  <section class="plan">
+    <h2>今週の練習計画 — 強度: 普通</h2>
+    <div class="days">
+      <div class="day"><div class="d">MON</div><div class="m">打撃</div></div>
+      <div class="day"><div class="d">TUE</div><div class="m">守備</div></div>
+      <div class="day"><div class="d">WED</div><div class="m">投げ込み</div></div>
+      <div class="day"><div class="d">THU</div><div class="m">筋力</div></div>
+      <div class="day"><div class="d">FRI</div><div class="m">走塁</div></div>
+      <div class="day match"><div class="d">SAT</div><div class="m">練習試合</div></div>
+      <div class="day rest"><div class="d">SUN</div><div class="m">休養</div></div>
+    </div>
+    <div class="coach">
+      <div class="slot">個別指導 ① <b>三宅（投）</b><span> — 球速</span></div>
+      <div class="slot">個別指導 ② <b>小野寺（捕）</b><span> — リード</span></div>
+      <div class="slot">個別指導 ③ <b>早瀬（遊）</b><span> — ミート</span></div>
+    </div>
+  </section>
+
+  <section class="roster">
+    <h2>注目選手</h2>
+    <table>
+      <tr><th>選手</th><th>守備</th><th>主要能力</th><th>球速/ミート</th><th>調子</th></tr>
+      <tr><td>三宅 遼（2年）</td><td>投</td><td><span class="g gC">C</span>制球 <span class="g gB">B</span>スライダー</td><td class="num">141 km/h</td><td class="cond up">▲</td></tr>
+      <tr><td>小野寺 樹（3年）</td><td>捕</td><td><span class="g gB">B</span>リード <span class="g gC">C</span>肩</td><td class="num">ミート 55</td><td class="cond dn">▼</td></tr>
+      <tr><td>早瀬 悠人（1年）</td><td>遊</td><td><span class="g gD">D</span>ミート <span class="g gC">C</span>走力</td><td class="num">ミート 48</td><td class="cond up">▲</td></tr>
+    </table>
+  </section>
+</main>
+
+<footer>※ ビジュアル方向性確認用モック。データ・校名・選手名はすべて架空。</footer>
+
+</body>
+</html>

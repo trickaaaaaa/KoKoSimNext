@@ -1,0 +1,60 @@
+# confidence: verified (枠数・慣行) / snapshot 2025
+# 秋季地区大会 → 明治神宮大会 の動線と出場枠
+# 出典: 各地区大会のWikipedia・高校野球ドットコム大会データ（2025年秋）
+
+regions:
+  - region: tohoku
+    berths_per_pref: { aomori: 3, iwate: 3, miyagi: 3, akita: 3, yamagata: 3, fukushima: 3 }
+    host_prefecture_bonus: false
+    host_by_year: { 2025: iwate }
+    champion_to_jingu: true
+  - region: kanto
+    berths_per_pref: { ibaraki: 2, tochigi: 2, gunma: 2, saitama: 2, chiba: 2, kanagawa: 2, yamanashi: 2 }
+    host_prefecture_bonus: true      # 開催県は3位校を追加（実質3）
+    host_by_year: { 2025: yamanashi, 2026: gunma }
+    champion_to_jingu: true
+  - region: tokyo                     # 都大会が地区大会を兼任
+    single_prefecture: true
+    champion_to_jingu: true
+    host_by_year: { 2025: tokyo }
+  - region: hokushinetsu
+    berths_per_pref: { niigata: 3, nagano: 3, toyama: 3, ishikawa: 3, fukui: 3 }
+    host_prefecture_bonus: true       # 開催県+1
+    host_by_year: { 2025: toyama }
+    champion_to_jingu: true
+  - region: tokai
+    berths_per_pref: { shizuoka: 3, aichi: 3, gifu: 3, mie: 3 }
+    host_prefecture_bonus: false
+    host_by_year: { 2025: aichi }
+    champion_to_jingu: true
+  - region: kinki
+    fixed: { osaka: 3, hyogo: 3 }
+    biennial_rotation:
+      odd_year:  { shiga: 3, nara: 3, kyoto: 2, wakayama: 2 }   # 2025
+      even_year: { shiga: 2, nara: 2, kyoto: 3, wakayama: 3 }
+    host_prefecture_bonus: false
+    host_by_year: { 2025: nara }
+    champion_to_jingu: true
+    notes:
+      - 2026年秋から滋賀・京都・奈良・和歌山の「3位校決定戦」が新設予定。別年度スナップショットで管理
+  - region: chugoku
+    berths_per_pref: { tottori: 3, shimane: 3, okayama: 3, hiroshima: 3, yamaguchi: 3 }
+    host_prefecture_bonus: true       # 開催県+1
+    host_by_year: { 2025: yamaguchi }
+    champion_to_jingu: true
+  - region: shikoku
+    berths_per_pref: { kagawa: 3, tokushima: 3, ehime: 3, kochi: 3 }
+    host_prefecture_bonus: false
+    host_by_year: { 2025: kagawa }
+    champion_to_jingu: true
+  - region: kyushu
+    berths_per_pref: { fukuoka: 2, saga: 2, nagasaki: 2, kumamoto: 2, oita: 2, miyazaki: 2, kagoshima: 2, okinawa: 2 }
+    host_prefecture_bonus: false      # 2018年以降は開催県・福岡も2で固定
+    host_by_year: { 2025: miyazaki, 2026: kumamoto }
+    champion_to_jingu: true
+  - region: hokkaido                  # 全道大会が地区大会を兼任
+    single_prefecture: true
+    champion_to_jingu: true
+    host_by_year: { 2025: hokkaido }
+
+# 明治神宮大会（高校の部）: 上記10地区の champion 各1 = 10校のトーナメント

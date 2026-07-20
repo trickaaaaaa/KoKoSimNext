@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="MatchDetail.uss" />
+    <ui:VisualElement class="ui-root md-root">
+
+        <ui:Label class="md-title" text="試合ビュー — 2D俯瞰 再生" />
+        <ui:Label class="md-sub" text="エンジンが出力するタイムラインをUIが再生するだけ（物理はすべて事前計算済み）。" />
+
+        <ui:VisualElement class="md-stage">
+
+            <ui:VisualElement name="field-host" class="md-field" />
+
+            <ui:VisualElement class="md-caption">
+                <ui:Label name="result-chip" class="md-result" text="" />
+                <ui:Label name="caption" class="md-caption-text" text="プレーを選択してください" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="md-controls">
+                <ui:VisualElement name="play-list" class="md-group" />
+                <ui:VisualElement class="md-group">
+                    <ui:Button name="replay" class="chip-btn md-replay" text="▶ もう一度" />
+                    <ui:Button name="spd-05" class="chip-btn" text="×0.5" />
+                    <ui:Button name="spd-1" class="chip-btn chip-btn--on" text="×1" />
+                    <ui:Button name="spd-2" class="chip-btn" text="×2" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

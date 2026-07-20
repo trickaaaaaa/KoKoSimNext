@@ -1,0 +1,28 @@
+# --- .NET エンジン ---
+engine/**/bin/
+engine/**/obj/
+[Oo]ut/
+*.user
+
+# --- バランスレポート出力（成果物は都度貼るため追跡しない） ---
+out/
+
+# --- Unity（既存プロジェクト） ---
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Ll]ogs/
+[Uu]serSettings/
+[Bb]uild/
+[Bb]uilds/
+*.csproj
+*.sln
+!engine/KokoSim.sln
+
+# --- OS / IDE ---
+.DS_Store
+.vs/
+
+# --- Claude Code ローカル状態（settings.json と hooks は共有・これらは端末ローカル） ---
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

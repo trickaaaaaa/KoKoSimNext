@@ -1,0 +1,122 @@
+using System;
+using KokoSim.Engine.Core;
+
+namespace KokoSim.Engine.Players;
+
+/// <summary>調子（設計書02 §3.3）。パワプロ式5段階。内部は連続値（DevelopingPlayer.ConditionValue）。</summary>
+public enum Condition
+{
+    Terrible,   // 絶不調
+    Poor,       // 不調
+    Normal,     // 普通
+    Good,       // 好調
+    Excellent,  // 絶好調
+}
+
+/// <summary>
+/// 調子・試合限りの好不調の係数（設計書02 §3.3 / §3.3b）。🟡効果量は設計書07の検証で調整。
+/// 「調子が支配的にならない」よう控えめが原則（能力の積み上げ > 運）。
+/// </summary>
+public sealed record FormCoefficients
+{
+    // --- 調子の効果量（1段階あたり。step = -2〜+2） ---
+    public double ContactPerStep { get; init; } = 2.5;
+    public double PowerPerStep { get; init; } = 2.0;
+    public double ControlPerStep { get; init; } = 2.5;
+    public double VelocityPerStepKmh { get; init; } = 0.6;
+
+    // --- 試合限りの好不調（§3.3b, dayForm ∈ [-1, +1]。調子より効果小さめ） ---
+    /// <summary>通常日の揺らぎσ（大半は体感できないレベル）。</summary>
+    public double DayFormBaseSigma { get; init; } = 0.15;
+    /// <summary>通常日のクランプ（これを超えるのはスパイクのみ）。</summary>
+    public double DayFormClamp { get; init; } = 0.45;
+    /// <summary>「明確におかしい/走ってる日」の確率（十数試合に一度 ≒ 0.07）。</summary>
+    public double DayFormSpikeProb { get; init; } = 0.07;
+    public double DayFormSpikeMin { get; init; } = 0.6;
+    public double DayFormSpikeMax { get; init; } = 1.0;
+    public double ContactPerDayForm { get; init; } = 3.0;
+    public double PowerPerDayForm { get; init; } = 2.0;
+    public double ControlPerDayForm { get; init; } = 5.0;
+    public double VelocityPerDayFormKmh { get; init; } = 1.5;
+
+    // --- 週次の波（§3.3: 数日〜数週間続く。毎試合振り直さない） ---
+    /// <summary>前週の持ち越し（1に近いほど波が長い）。</summary>
+    public double WeeklyPersistence { get; init; } = 0.75;
+    public double WeeklySigma { get; init; } = 0.28;
+}
+
+/// <summary>
+/// 調子・当日の出来を実効能力へ変換する（設計書02 §3.3 / §3.3b）。
+/// 打席解決パイプラインの構造は変えず、能力補正として差し込む（PitchingFatigue.Effective と同型）。
+/// 補正後も物理層変換（不変条件#1）を通るので、確率を直接いじらない。
+/// </summary>
+public static class FormModel
+{
+    /// <summary>調子5段階 → 補正ステップ（-2〜+2）。</summary>
+    public static int Step(Condition c) => (int)c - (int)Condition.Normal;
+
+    /// <summary>連続値（-1〜+1）→ 5段階（表示・投影用）。閾値は±0.55/±0.20。</summary>
+    public static Condition Quantize(double v)
+    {
+        if (v >= 0.55) return Condition.Excellent;
+        if (v >= 0.20) return Condition.Good;
+        if (v > -0.20) return Condition.Normal;
+        if (v > -0.55) return Condition.Poor;
+        return Condition.Terrible;
+    }
+
+    /// <summary>打者へ適用（コンタクト・打球初速に補正, §3.3）。Normal＋dayForm=0 なら恒等。</summary>
+    public static BatterAttributes ApplyBatter(BatterAttributes b, Condition c, double dayForm, FormCoefficients f)
+    {
+        var step = Step(c);
+        if (step == 0 && dayForm == 0.0) return b;
+        return b with
+        {
+            Contact = ClampAbility(b.Contact + step * f.ContactPerStep + dayForm * f.ContactPerDayForm),
+            Power = ClampAbility(b.Power + step * f.PowerPerStep + dayForm * f.PowerPerDayForm),
+        };
+    }
+
+    /// <summary>投手へ適用（コントロールσ・球威=球速天井に補正, §3.3）。キレ（球種2軸）への補正は🟡後続。</summary>
+    public static PitcherAttributes ApplyPitcher(PitcherAttributes p, Condition c, double dayForm, FormCoefficients f)
+    {
+        var step = Step(c);
+        if (step == 0 && dayForm == 0.0) return p;
+        return p with
+        {
+            Control = ClampAbility(p.Control + step * f.ControlPerStep + dayForm * f.ControlPerDayForm),
+            MaxVelocityKmh = Math.Max(105.0,
+                p.MaxVelocityKmh + step * f.VelocityPerStepKmh + dayForm * f.VelocityPerDayFormKmh),
+        };
+    }
+
+    /// <summary>
+    /// 試合限りの好不調をサンプリング（§3.3b）。大半は微小（N(0,σ)を±clampに制限）、
+    /// まれにスパイク（十数試合に一度、±0.6〜1.0）→「今日はどうもおかしい/やけに走っている」。
+    /// 事前に見えない（UIには出さない）。
+    /// </summary>
+    public static double SampleDayForm(IRandomSource rng, FormCoefficients f, double varianceFactor = 1.0)
+    {
+        if (rng.NextDouble() < f.DayFormSpikeProb)
+        {
+            var sign = rng.NextDouble() < 0.5 ? -1.0 : 1.0;
+            var spike = sign * (f.DayFormSpikeMin + rng.NextDouble() * (f.DayFormSpikeMax - f.DayFormSpikeMin));
+            // ムラっけ（設計書10）: 振れ幅を拡大。上限は±1.5に抑える（大崩れ/大当たりが極端になりすぎない）。
+            return MathUtil.Clamp(spike * varianceFactor, -1.5, 1.5);
+        }
+        return MathUtil.Clamp(rng.NextGaussian(0, f.DayFormBaseSigma * varianceFactor),
+            -f.DayFormClamp * varianceFactor, f.DayFormClamp * varianceFactor);
+    }
+
+    /// <summary>
+    /// 週次の調子更新（§3.3: 平均回帰つきランダムウォーク。数週間続く波を作る）。
+    /// イベント・試合結果による上下は設計書03のイベント側から加算する。
+    /// </summary>
+    public static double NextWeeklyCondition(double current, IRandomSource rng, FormCoefficients f)
+    {
+        var v = current * f.WeeklyPersistence + rng.NextGaussian(0, f.WeeklySigma);
+        return MathUtil.Clamp(v, -1.0, 1.0);
+    }
+
+    private static int ClampAbility(double v) => (int)MathUtil.Clamp(Math.Round(v), 1, 100);
+}

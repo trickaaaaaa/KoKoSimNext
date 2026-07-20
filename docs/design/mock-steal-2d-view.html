@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>盗塁ビュー（2D俯瞰）再生モック</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --field:#14231B; --panel:#1D3227; --line:#38543F;
+    --chalk:#EFF4EA; --chalk-dim:#9DB3A0; --lamp:#F5C64A; --alert:#E86A4A;
+    --grass:#1C3126; --grass2:#22392B; --dirt:#57452F;
+    --num:'Oswald','Arial Narrow',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --jp:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--field);color:var(--chalk);font-family:var(--jp);font-size:14px;padding:16px 14px 40px}
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-size:15px;letter-spacing:.18em;font-weight:700}
+  .sub{font-size:11.5px;color:var(--chalk-dim);margin:4px 0 12px}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px}
+  canvas{display:block;width:100%;height:auto;border-radius:6px;background:var(--grass)}
+
+  .timers{display:flex;gap:8px;margin-top:10px}
+  .tm{flex:1;background:#0E1A13;border:1px solid var(--line);border-radius:6px;padding:8px 10px;text-align:center}
+  .tm .k{font-size:10px;color:var(--chalk-dim);letter-spacing:.12em}
+  .tm .v{font-family:var(--num);font-size:20px;margin-top:2px}
+  .tm .v small{font-size:11px;color:var(--chalk-dim)}
+  .tm.run .v{color:var(--lamp)} .tm.def .v{color:#69B98B}
+
+  .caption{margin-top:10px;background:#0E1A13;border:1px solid var(--line);border-radius:6px;
+    padding:9px 12px;font-size:13.5px;min-height:40px;display:flex;align-items:center;gap:10px}
+  .caption .res{font-family:var(--num);font-size:12px;letter-spacing:.1em;color:#101408;background:var(--lamp);
+    border-radius:4px;padding:1px 8px;white-space:nowrap;visibility:hidden}
+  .caption .res.show{visibility:visible}
+  .caption .res.out{background:var(--alert)}
+
+  .ctrl{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+  .grp{display:flex;gap:6px;flex-wrap:wrap}
+  button{background:#0E1A13;color:var(--chalk);border:1px solid var(--line);border-radius:5px;
+    padding:8px 12px;font-size:12.5px;cursor:pointer;font-family:var(--jp)}
+  button:hover{border-color:var(--chalk-dim)}
+  button.on{background:var(--lamp);color:#1A1608;border-color:var(--lamp);font-weight:700}
+  button.replay{color:var(--lamp);letter-spacing:.1em}
+  .spd{font-family:var(--mono)}
+  .legend{margin-top:12px;font-size:11.5px;color:var(--chalk-dim);line-height:1.8}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:-1px;margin-right:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>盗塁ビュー — 2D俯瞰 再生モック</h1>
+  <div class="sub">「投手クイック＋捕手ポップタイム vs 走者の到達時間」の勝負を可視化。数値はエンジンが事前計算した想定値の再生です。</div>
+
+  <div class="stage">
+    <canvas id="cv" width="760" height="520" aria-label="盗塁の俯瞰図"></canvas>
+    <div class="timers">
+      <div class="tm run"><div class="k">走者 到達</div><div class="v" id="tRun">–<small>s</small></div></div>
+      <div class="tm def"><div class="k">クイック</div><div class="v" id="tQk">–<small>s</small></div></div>
+      <div class="tm def"><div class="k">ポップタイム</div><div class="v" id="tPop">–<small>s</small></div></div>
+      <div class="tm def"><div class="k">送球到達</div><div class="v" id="tThrow">–<small>s</small></div></div>
+    </div>
+    <div class="caption"><span class="res" id="res"></span><span id="cap">プレーを選択してください</span></div>
+    <div class="ctrl">
+      <div class="grp" id="plays"></div>
+      <div class="grp">
+        <button class="replay" id="replay">▶ もう一度</button>
+        <button class="spd" data-s="0.5">×0.5</button>
+        <button class="spd on" data-s="1">×1</button>
+        <button class="spd" data-s="2">×2</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>見方:</b>
+    <span class="dot" style="background:var(--lamp)"></span>走者（二塁へ） ／
+    <span class="dot" style="background:#fff"></span>ボール ／
+    白枠＝投手・捕手・二塁手。
+    上のタイマーが「走者の到達」と「守備側の合計時間」の競争。※データ・演出は架空。
+  </div>
+</div>
+
+<script>
+"use strict";
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const capEl=document.getElementById('cap'), resEl=document.getElementById('res');
+const tRun=document.getElementById('tRun'), tQk=document.getElementById('tQk'),
+      tPop=document.getElementById('tPop'), tThrow=document.getElementById('tThrow');
+
+const S=3.35, CX=380, OY=492;
+const px=p=>[CX+p[0]*S, OY-p[1]*S];
+const HOME=[0,0], FIRST=[19.4,0.0], SECOND=[0,38.8], THIRD=[-19.4,19.4], MOUND=[0,18.4];
+// 一塁は本塁から見て右斜め。座標系上は (13.7,13.7) が実際の塁位置
+const B1=[13.7,13.7], B2=[0,27.4], B3=[-13.7,13.7];
+const DEF={
+  投:[0,17.4], 捕:[0,-2.2],
+  一:[16,15], 二:[9.5,22], 三:[-16,15], 遊:[-9,26],
+  左:[-30,64], 中:[0,78], 右:[30,64]
+};
+// 盗塁時のベースカバー等の動き。プレー名 → {ポジション:到達点}
+const DEF_MOVES={
+  "① 盗塁成功":{ 遊:[0.6,27.4], 中:[3,52] },   // 遊撃が二塁ベースカバー、中堅がバックアップへ前進
+  "② 盗塁死（好返球）":{ 遊:[0.6,27.4], 中:[3,52] },
+  "③ けん制アウト":{}                            // けん制は一塁手が定位置で受ける
+};
+
+const easeIO=u=>u<0?0:u>1?1:u*u*(3-2*u);
+function lead(){ // 一塁走者のリード位置（B1から二塁側へ約3.5m）
+  const dx=B2[0]-B1[0], dy=B2[1]-B1[1], d=Math.hypot(dx,dy);
+  return [B1[0]+dx/d*3.5, B1[1]+dy/d*3.5];
+}
+
+/* プレーデータ = エンジンの想定出力 */
+const PLAYS=[
+{ name:"① 盗塁成功", dur:4.4, result:"SB 盗塁成功", out:false,
+  quick:1.25, pop:2.05, throwArrive:3.55, runArrive:3.42,
+  ball:[ {t0:0.35,t1:1.60,from:MOUND,to:HOME,type:'pitch'},   // 投球
+         {t0:1.60,t1:3.55,from:[0,-2.2],to:B2,type:'throw'} ],// 捕手→二塁送球（遅れて到達）
+  runner:{t0:0.55,t1:3.42,from:lead(),to:B2},                 // 走者は先にベースへ
+  caps:[[0.05,"一塁走者、大きなリード"],[0.40,"投手モーション、走った！"],
+        [1.62,"捕手が二塁へ送球！"],[3.44,"セーフ！ 盗塁成功"]],
+  resAt:3.44 },
+
+{ name:"② 盗塁死（好返球）", dur:4.2, result:"CS 盗塁死", out:true,
+  quick:1.12, pop:1.88, throwArrive:3.10, runArrive:3.30,
+  ball:[ {t0:0.30,t1:1.42,from:MOUND,to:HOME,type:'pitch'},
+         {t0:1.42,t1:3.10,from:[0,-2.2],to:B2,type:'throw'} ],// 速い送球が先に到達
+  runner:{t0:0.52,t1:3.30,from:lead(),to:B2},                 // 走者は一歩及ばず
+  caps:[[0.05,"俊足の走者、隙をうかがう"],[0.35,"スタート！ 好スタートだ"],
+        [1.44,"捕手、矢のような送球！"],[3.12,"タッチ！ アウト——盗塁死！"]],
+  resAt:3.12 },
+
+{ name:"③ けん制アウト", dur:3.0, result:"けん制死", out:true,
+  quick:null, pop:null, throwArrive:null, runArrive:null,
+  ball:[ {t0:0.45,t1:1.00,from:MOUND,to:B1,type:'pickoff'} ], // 投手→一塁けん制
+  runner:{t0:0.0,t1:0.45,from:lead(),to:lead(),
+          back:{t0:0.55,t1:1.35,to:B1}},                     // 飛び出し→戻り切れず
+  caps:[[0.05,"走者、リードを大きく取る"],[0.46,"投手、鋭くけん制！"],
+        [1.05,"走者、戻れるか——"],[1.40,"アウト！ 飛び出したところを刺された"]],
+  resAt:1.40 },
+];
+
+let play=PLAYS[0], t=0, speed=1, last=null, trail=[];
+
+function ballAt(tt){
+  let held=null;
+  for(const s of play.ball){
+    if(tt<s.t0) return held;
+    if(tt<=s.t1){ const u=easeIO((tt-s.t0)/(s.t1-s.t0));
+      let h=1.6; if(s.type==='throw') h=1.7+2.0*Math.sin(Math.PI*u);
+      if(s.type==='pitch') h=1.6-0.5*u; if(s.type==='pickoff') h=1.4;
+      return {x:s.from[0]+(s.to[0]-s.from[0])*u, y:s.from[1]+(s.to[1]-s.from[1])*u, h};
+    }
+    held={x:s.to[0],y:s.to[1],h:1.6};
+  }
+  return held;
+}
+function runnerAt(tt){
+  const r=play.runner;
+  if(r.back){ // けん制: 進んで戻る
+    if(tt<r.back.t0){ const u=Math.min(1,(tt-r.t0)/(r.t1-r.t0)); return [r.from[0],r.from[1]]; }
+    const u=Math.min(1,(tt-r.back.t0)/(r.back.t1-r.back.t0));
+    return [r.from[0]+(r.back.to[0]-r.from[0])*u, r.from[1]+(r.back.to[1]-r.from[1])*u];
+  }
+  if(tt<r.t0) return r.from;
+  const u=Math.min(1,(tt-r.t0)/(r.t1-r.t0));
+  return [r.from[0]+(r.to[0]-r.from[0])*u, r.from[1]+(r.to[1]-r.from[1])*u];
+}
+
+// 球場データ（設計書13-stadiums; 本番は data/stadiums.yaml から供給）
+const STADIUM = { left:95, right:95, center:118 };
+
+function drawField(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--grass');
+  ctx.fillRect(0,0,cv.width,cv.height);
+  // フェンス弧: エンジン FieldGeometry.FenceDistance と同式（左右非対称対応）
+  ctx.beginPath();
+  for(let i=0;i<=60;i++){const th=(-45+90*i/60)*Math.PI/180, line=th>=0?STADIUM.right:STADIUM.left, r=line+(STADIUM.center-line)*Math.cos(2*th);
+    const p=px([r*Math.sin(th),r*Math.cos(th)]); i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}
+  ctx.strokeStyle="#4A6A52"; ctx.lineWidth=4; ctx.stroke();
+  // 内野ダート扇形
+  ctx.beginPath(); const h0=px(HOME); ctx.moveTo(h0[0],h0[1]);
+  for(let i=0;i<=40;i++){const th=(-45+90*i/40)*Math.PI/180; const p=px([30*Math.sin(th),30*Math.cos(th)]); ctx.lineTo(p[0],p[1]);}
+  ctx.closePath(); ctx.fillStyle="#57452F"; ctx.fill();
+  // 内野芝ダイヤ
+  ctx.beginPath();
+  [[0,4.5],B1,B2,B3].forEach((q,i)=>{const p=px(q); i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);});
+  ctx.closePath(); ctx.fillStyle="#22392B"; ctx.fill();
+  // ファウルライン
+  ctx.strokeStyle="rgba(239,244,234,.8)"; ctx.lineWidth=2;
+  [[67.2,67.2],[-67.2,67.2]].forEach(q=>{ctx.beginPath(); const a=px(HOME),b=px(q); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();});
+  // 塁
+  [HOME,B1,B2,B3].forEach(b=>{const p=px(b); ctx.fillStyle="#EFF4EA"; ctx.fillRect(p[0]-4,p[1]-4,8,8);});
+  const m=px(MOUND); ctx.beginPath(); ctx.arc(m[0],m[1],8,0,7); ctx.fillStyle="#57452F"; ctx.fill();
+  // 盗塁先の塁を強調
+  const tgt=px(B2); ctx.beginPath(); ctx.arc(tgt[0],tgt[1],13,0,7);
+  ctx.strokeStyle="rgba(245,198,74,.5)"; ctx.lineWidth=2; ctx.stroke();
+}
+function token(p,label,hot){
+  const q=px(p); ctx.beginPath(); ctx.arc(q[0],q[1],10,0,7);
+  ctx.fillStyle="#1D3227"; ctx.fill(); ctx.lineWidth=2;
+  ctx.strokeStyle=hot?"#F5C64A":"rgba(239,244,234,.85)"; ctx.stroke();
+  ctx.fillStyle="#EFF4EA"; ctx.font="10px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText(label,q[0],q[1]+.5);
+}
+function fielderAt(k,tt){
+  const base=DEF[k];
+  const mv=(DEF_MOVES[play.name]||{})[k];
+  if(!mv) return {pos:base,moving:false};
+  const t0=0.55,t1=3.0;
+  if(tt<=t0) return {pos:base,moving:false};
+  const u=easeIO((tt-t0)/(t1-t0));
+  return {pos:[base[0]+(mv[0]-base[0])*u, base[1]+(mv[1]-base[1])*u], moving:tt<t1};
+}
+function draw(){
+  drawField();
+  ctx.lineWidth=2;
+  for(let i=1;i<trail.length;i++){ctx.strokeStyle=`rgba(245,198,74,${0.3*i/trail.length})`;
+    ctx.beginPath(); ctx.moveTo(trail[i-1][0],trail[i-1][1]); ctx.lineTo(trail[i][0],trail[i][1]); ctx.stroke();}
+  for(const k of Object.keys(DEF)){ const f=fielderAt(k,t); token(f.pos,k,f.moving); }
+  // 走者
+  const rp=runnerAt(t); const q=px(rp);
+  ctx.beginPath(); ctx.arc(q[0],q[1],9,0,7); ctx.fillStyle="#F5C64A"; ctx.fill();
+  ctx.fillStyle="#1A1608"; ctx.font="bold 10px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("走",q[0],q[1]+.5);
+  // ボール
+  const b=ballAt(t);
+  if(b){const g=px([b.x,b.y]);
+    ctx.beginPath(); ctx.ellipse(g[0],g[1],4,2.4,0,0,7); ctx.fillStyle="rgba(0,0,0,.5)"; ctx.fill();
+    const by=g[1]-b.h*2.6; ctx.beginPath(); ctx.arc(g[0],by,4.2,0,7); ctx.fillStyle="#fff"; ctx.fill();
+    trail.push([g[0],by]); if(trail.length>22) trail.shift();}
+  // 実況・結果
+  let text=""; for(const c of play.caps) if(t>=c[0]) text=c[1];
+  capEl.textContent=text;
+  resEl.textContent=play.result; resEl.classList.toggle('show',t>=play.resAt);
+  resEl.classList.toggle('out', !!play.out);
+  // タイマー
+  tRun.innerHTML = play.runArrive?`${play.runArrive.toFixed(2)}<small>s</small>`:'–';
+  tQk.innerHTML = play.quick?`${play.quick.toFixed(2)}<small>s</small>`:'–';
+  tPop.innerHTML = play.pop?`${play.pop.toFixed(2)}<small>s</small>`:'–';
+  tThrow.innerHTML = play.throwArrive?`${play.throwArrive.toFixed(2)}<small>s</small>`:'–';
+}
+function frame(ts){ if(last!=null&&t<=play.dur+0.6){t+=(ts-last)/1000*speed; draw();} last=ts; requestAnimationFrame(frame);}
+function start(p){play=p; t=0; trail=[]; draw();}
+const playsEl=document.getElementById('plays');
+PLAYS.forEach((p,i)=>{const b=document.createElement('button'); b.textContent=p.name; if(i===0)b.classList.add('on');
+  b.onclick=()=>{playsEl.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); start(p);};
+  playsEl.appendChild(b);});
+document.getElementById('replay').onclick=()=>start(play);
+document.querySelectorAll('.spd').forEach(b=>b.onclick=()=>{document.querySelectorAll('.spd').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); speed=parseFloat(b.dataset.s);});
+start(PLAYS[0]); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

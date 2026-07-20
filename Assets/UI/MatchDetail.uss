@@ -1,0 +1,90 @@
+/* 試合詳細（2D俯瞰再生）画面。mock-match-2d-view.html のステージ＋実況＋操作を忠実移植。
+   色・角丸・余白は tokens.uss の変数のみ。ボタンは部品 chip-btn / chip-btn--on を使用。 */
+
+.md-root {
+    flex-grow: 1;
+    background-color: var(--color-field);
+    padding: 16px 18px 24px 18px;
+}
+
+.md-title {
+    font-size: 18px;
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+}
+
+.md-sub {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin-top: 4px;
+    margin-bottom: 12px;
+    white-space: normal;
+}
+
+/* ステージ（球場＋実況＋操作をまとめるパネル） */
+.md-stage {
+    background-color: var(--color-panel);
+    border-radius: 10px;
+    padding: 10px;
+    align-items: flex-start;
+}
+
+/* 球場キャンバス領域。再生要素（Match2DPlaybackElement）が絶対配置で内側を満たす。
+   モックの 760×520 比率（=1.462）に合わせた固定寸法。要素側で uniform 拡縮レターボックス。 */
+.md-field {
+    width: 820px;
+    height: 561px;
+    background-color: var(--field-grass);
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+/* 実況バー（結果チップ＋実況テキスト） */
+.md-caption {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 10px;
+    background-color: var(--color-panel-deep);
+    border-radius: 6px;
+    padding: 9px 12px;
+    min-height: 40px;
+    width: 820px;
+    flex-shrink: 0;
+}
+
+/* 結果バッジ（resAt 到達で表示。既定は非表示） */
+.md-result {
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--color-ink);
+    background-color: var(--color-lamp);
+    border-radius: 4px;
+    padding: 1px 8px;
+    margin-right: 10px;
+    display: none;
+}
+
+.md-caption-text {
+    font-size: 14px;
+    color: var(--color-chalk);
+    white-space: normal;
+    flex-grow: 1;
+}
+
+/* 操作列（プレー選択・もう一度・倍速） */
+.md-controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    align-items: center;
+}
+
+.md-group {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-right: 14px;
+}
+
+.md-replay { color: var(--color-lamp); }

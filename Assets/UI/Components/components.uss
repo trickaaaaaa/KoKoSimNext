@@ -1,0 +1,779 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   components.uss — 部品辞書（UI-BUILD-METHOD Step 2）
+   ───────────────────────────────────────────────────────────────────────
+   再利用される見た目の最小単位（アトム）を名前付きUSSクラスとして定義する。
+   値はすべて tokens.uss の var(--...) を参照し、色・サイズ・余白を直書きしない。
+   各アトムは Components/<Name>.uxml に同名のプレビュー（サンプルデータ）を持つ。
+   画面側USS（TrainingPlan.uss）はここに無い見た目を自作せず、必要なら辞書へ追加する。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── RankChip：総合/能力ランク S〜G（色覚対応・文字併記前提） ───────── */
+.rank-chip {
+    min-width: 23px;
+    height: 26px;
+    -unity-text-align: middle-center;
+    border-radius: 5px;
+    font-size: var(--fs-body);
+    -unity-font-style: bold;
+    padding-left: 5px;
+    padding-right: 5px;
+    color: var(--color-ink);
+}
+.rank-chip--S { background-color: var(--rank-s); }
+.rank-chip--A { background-color: var(--rank-a); color: var(--color-chalk); }
+.rank-chip--B { background-color: var(--rank-b); }
+.rank-chip--C { background-color: var(--rank-c); }
+.rank-chip--D { background-color: var(--rank-d); }
+.rank-chip--E { background-color: var(--rank-e); }
+.rank-chip--F { background-color: var(--rank-f); color: var(--color-chalk); }
+.rank-chip--G { background-color: var(--rank-g); color: var(--color-chalk); }
+
+/* ── NumberBadge：背番号バッジ ─────────────────────────────────────── */
+.num-badge {
+    width: 30px;
+    height: 30px;
+    -unity-text-align: middle-center;
+    background-color: var(--color-panel-deep);
+    color: var(--color-lamp);
+    -unity-font-style: bold;
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    font-size: var(--fs-num);
+}
+.num-badge--out { color: var(--color-faint); border-color: var(--color-line-soft); }
+
+/* ── StatBar：横バー（使用率・疲労・バジェット等） ───────────────────── */
+.stat-bar {
+    height: 5px;
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: 3px;
+}
+.stat-bar__fill {
+    height: 100%;
+    border-radius: 3px;
+    background-color: var(--color-lamp);
+}
+.stat-bar--good .stat-bar__fill { background-color: var(--color-good); }
+.stat-bar--warn .stat-bar__fill { background-color: var(--color-warn); }
+.stat-bar--tall { height: 8px; border-radius: 4px; }
+.stat-bar--tall .stat-bar__fill { border-radius: 4px; }
+
+/* ── SegmentedControl：N段トグル（強度 軽/普/猛 など） ───────────────── */
+.seg {
+    flex-direction: row;
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    overflow: hidden;
+}
+.seg__cell {
+    -unity-text-align: middle-center;
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    font-size: var(--fs-label);
+}
+.seg__cell:hover { color: var(--color-chalk); }
+.seg--sm .seg__cell { width: 26px; height: 26px; }
+.seg--lg .seg__cell { width: 40px; height: 32px; font-size: 14px; }
+/* 文字数が可変なラベル向け（強攻/待て等）。幅固定セルではなくパディングで揃える。 */
+.seg--auto .seg__cell { width: auto; height: 24px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
+.seg__cell--on { background-color: var(--color-lamp); color: var(--color-ink); -unity-font-style: bold; }
+.seg__cell--hard { background-color: var(--color-warn); color: var(--color-chalk); }
+
+/* ── Chip：小ラベル（配分チップ・タグ） ─────────────────────────────── */
+.chip {
+    font-size: var(--fs-cap);
+    color: var(--color-chalk);
+    background-color: var(--color-line-soft);
+    border-radius: 4px;
+    padding-left: 7px;
+    padding-right: 7px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-right: var(--sp-1);
+    margin-bottom: var(--sp-1);
+}
+.chip--tag {
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    padding-top: 1px;
+    padding-bottom: 1px;
+    margin-bottom: 0;
+}
+.chip--out { color: var(--color-warn); border-color: var(--color-warn); }
+
+/* ── FilterChip：トグル可能なフィルタ／ソートチップ ─────────────────── */
+.filter-chip {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    height: 28px;
+    -unity-text-align: middle-center;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    background-color: var(--color-panel-deep);
+    margin-left: var(--sp-1);
+}
+.filter-chip:hover { border-color: var(--color-lamp); color: var(--color-chalk); }
+.filter-chip--on { background-color: var(--color-lamp); color: var(--color-ink); border-color: var(--color-lamp); -unity-font-style: bold; }
+
+/* ── Switch：オン/オフトグル（委任など） ────────────────────────────── */
+.switch {
+    width: 44px;
+    height: 24px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    justify-content: center;
+}
+.switch__knob {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background-color: var(--color-muted);
+    margin-left: 3px;
+}
+.switch--on { background-color: var(--color-lamp); border-color: var(--color-lamp); }
+.switch--on .switch__knob { background-color: var(--color-ink); margin-left: 22px; }
+
+/* ── StepButton：（− 値 +）の増減ボタン ─────────────────────────────── */
+.step-btn {
+    width: 28px;
+    height: 28px;
+    -unity-text-align: middle-center;
+    background-color: var(--color-panel);
+    color: var(--color-chalk);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    font-size: var(--fs-num);
+    margin-left: 2px;
+    margin-right: 2px;
+}
+.step-btn:hover { border-color: var(--color-lamp); }
+.step-btn--locked { color: var(--color-line); }
+
+/* ── Panel：見出し付きの区切り枠（画面の基本容器） ───────────────────── */
+.panel {
+    background-color: var(--color-strip);
+    border-radius: var(--radius-panel);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+}
+.panel__title {
+    font-size: var(--fs-label);
+    color: var(--color-lamp);
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+/* ── Modal：同一ドキュメント内オーバーレイ（暗幕＋中央カード） ─────────
+   別UIDocument/別PanelSettingsはScreenRouterのレンダリング競合になるため使わない。
+   スクリムは tp-root 末尾に置き display で開閉、ルート要素なので class="ui-root" を必ず付ける。 */
+.modal-scrim {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgba(6, 12, 8, 0.72);
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+.modal-card {
+    background-color: var(--color-field);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-panel);
+    flex-direction: column;
+}
+
+/* ── Banner：強調告知バー（合宿など） ───────────────────────────────── */
+.banner {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--color-panel);
+    border-width: var(--border-w);
+    border-color: var(--color-lamp);
+    border-radius: var(--radius-panel);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-2);
+    padding-bottom: var(--sp-2);
+}
+.banner__badge {
+    background-color: var(--color-lamp);
+    color: var(--color-ink);
+    font-size: 12px;
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-1);
+    border-radius: 5px;
+    margin-right: var(--sp-3);
+}
+
+/* ── FieldDiamond：ダイヤモンド配置の背番号枠（メンバー設定 1〜9） ───────
+   USSにSVGが無いため、内野は rotate:45deg の矩形で近似。スロットは position:absolute で
+   コントローラが top/left を inline 指定して配置する（守備位置の慣例座標）。 */
+.field-diamond {
+    position: relative;
+    background-color: var(--field-grass);
+    border-radius: var(--radius-panel);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    overflow: hidden;
+}
+/* 球場図の小型チップ（常設ラベル・高さ24px以下）。背番号＋姓＋ランクのみ。
+   アンカーはチップ下端中央＝立ち位置点で、left/top は Controller が球場座標[m]から与える。
+   フルカード（学年/投打/×）はホバー時に field-pop で出す。 */
+.field-chip {
+    position: absolute;
+    height: 22px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(10, 18, 14, 0.92);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: 5px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+.field-chip:hover { border-color: var(--color-line-focus); }
+.field-chip--picked { border-color: var(--color-lamp); background-color: rgba(40, 58, 44, 0.95); }
+.field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-lamp); -unity-font-style: bold; }
+.field-chip__name { font-size: var(--fs-cap); color: var(--color-chalk); -unity-font-style: bold; margin-left: 4px; margin-right: 3px; white-space: nowrap; }
+.field-chip__empty { font-size: var(--fs-cap); color: var(--color-faint); margin-left: 4px; }
+.field-chip .rank-chip { min-width: 17px; height: 17px; font-size: 10px; }
+
+/* フルカードのポップオーバー（ホバー/選択時のみ・チップの真上）。 */
+.field-pop {
+    position: absolute;
+    width: 190px;
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line-focus);
+    border-radius: 8px;
+    padding-left: 7px;
+    padding-right: 7px;
+    padding-top: 5px;
+    padding-bottom: 6px;
+}
+
+/* ── SlotCard：背番号枠の中身（2行：①背番号＋名前＋位置ランク ②学年・投打・解除） ── */
+.slot-card__top { flex-direction: row; align-items: center; }
+.slot-card__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 6px;
+    margin-right: 4px;
+}
+.slot-card__empty {
+    flex-grow: 1;
+    flex-basis: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    -unity-text-align: middle-center;
+    margin-left: 6px;
+}
+.slot-card__sub { flex-direction: row; align-items: center; margin-top: 3px; }
+.slot-card__sub-txt { font-size: var(--fs-cap); color: var(--color-muted); margin-left: 2px; }
+.slot-card__spacer { flex-grow: 1; }
+.slot-card__clear {
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    margin-left: 4px;
+}
+.slot-card__clear:hover { color: var(--color-warn); }
+
+/* ── BenchSlot：控え（背番号10〜20）の2行カード ───────────────────────── */
+.bench-slot {
+    width: 190px;
+    background-color: var(--color-panel);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 5px;
+    padding-bottom: 6px;
+    margin-right: var(--sp-2);
+    margin-bottom: var(--sp-2);
+}
+.bench-slot:hover { border-color: var(--color-line-focus); }
+.bench-slot--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+
+/* ── PoolChip：割当元プール（部員一覧の小片） ──────────────────────── */
+.pool-chip {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--color-panel);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: 8px;
+    padding-left: var(--sp-1);
+    padding-right: var(--sp-2);
+    padding-top: 5px;
+    padding-bottom: 5px;
+    margin-right: var(--sp-2);
+    margin-bottom: var(--sp-2);
+}
+.pool-chip:hover { border-color: var(--color-line-focus); }
+.pool-chip--assigned { opacity: 0.45; }
+.pool-chip--picked { border-color: var(--color-lamp); opacity: 1; }
+.pool-chip__body { margin-left: var(--sp-2); margin-right: var(--sp-2); }
+.pool-chip__name { font-size: var(--fs-label); color: var(--color-chalk); }
+.pool-chip__meta { flex-direction: row; align-items: center; margin-top: 1px; }
+.cmp-btn {
+    width: 22px; height: 22px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-cap);
+    -unity-font-style: bold;
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: 4px;
+    margin-left: 2px;
+}
+.cmp-btn:hover { border-color: var(--color-lamp); color: var(--color-lamp); }
+.cmp-btn--a-on { background-color: var(--cmp-a); color: var(--color-ink); border-color: var(--cmp-a); }
+.cmp-btn--b-on { background-color: var(--cmp-b); color: var(--color-ink); border-color: var(--cmp-b); }
+
+/* ── CompareBar：2選手の能力対比（左右対向バー＋差分） ─────────────── */
+.cmp-row { flex-direction: row; align-items: center; margin-top: 2px; margin-bottom: 2px; }
+.cmp-row__side { flex-grow: 1; flex-basis: 0; flex-direction: row; align-items: center; height: 14px; }
+.cmp-row__side--l { justify-content: flex-end; }
+.cmp-row__side--r { justify-content: flex-start; }
+.cmp-row__bar { height: 8px; border-radius: 4px; }
+.cmp-row__bar--a { background-color: var(--cmp-a); }
+.cmp-row__bar--b { background-color: var(--cmp-b); }
+.cmp-row__val { font-size: var(--fs-cap); color: var(--color-muted); width: 22px; }
+.cmp-row__val--l { -unity-text-align: middle-right; margin-right: var(--sp-1); }
+.cmp-row__val--r { -unity-text-align: middle-left; margin-left: var(--sp-1); }
+.cmp-row__val--win { color: var(--color-chalk); -unity-font-style: bold; }
+.cmp-row__lab { width: 64px; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-muted); }
+.cmp-card {
+    flex-grow: 1;
+    flex-basis: 0;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+.cmp-card__lab { font-size: 10px; -unity-font-style: bold; color: var(--color-ink); border-radius: 3px; padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
+.cmp-card__lab--a { background-color: var(--cmp-a); }
+.cmp-card__lab--b { background-color: var(--cmp-b); }
+.cmp-card__name { font-size: var(--fs-body); -unity-font-style: bold; color: var(--color-chalk); margin-top: var(--sp-2); }
+.cmp-card__meta { flex-direction: row; align-items: center; margin-top: 2px; }
+.cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }
+
+/* ── LineupRow：打順1枠の行（順・守・選手・学年投打・総合ランク）。行高32px基準（UI原則①） ──
+   スタメン設定の打順表で使う。列幅は画面USS（LineupSetting.uss）側の .lu-row__* 幅と揃える。 */
+.lineup-row {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-basis: 0;
+    min-height: 40px;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-chip);
+    margin-bottom: 3px;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+}
+.lineup-row:hover { background-color: var(--color-row-hover); }
+.lineup-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
+.lineup-row__ord {
+    width: 22px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+}
+.lineup-row__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: var(--sp-2);
+    margin-right: var(--sp-2);
+}
+.lineup-row__pos { width: 40px; margin-left: var(--sp-2); flex-direction: row; align-items: center; }
+.lineup-row__info { width: 96px; font-size: var(--fs-cap); color: var(--color-muted); }
+
+/* ── PosChip：守備位置チップ（クリックで守備位置変更）。投＝固定・指＝DH（非活性見た目） ── */
+.pos-chip {
+    min-width: 26px;
+    height: 24px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    padding-left: 4px;
+    padding-right: 4px;
+}
+.pos-chip:hover { border-color: var(--color-lamp); }
+.pos-chip--fixed { color: var(--color-muted); background-color: var(--color-line-soft); }
+.pos-chip--dh { color: var(--color-lamp); background-color: var(--color-line-soft); }
+
+/* ── PosMenu：守備位置ドロップダウン（PosChip クリックで浮遊表示） ── */
+.pos-menu {
+    position: absolute;
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line-focus);
+    border-radius: var(--radius-chip);
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+.pos-menu__item {
+    -unity-text-align: middle-center;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    padding-left: 12px;
+    padding-right: 12px;
+    height: 26px;
+}
+.pos-menu__item:hover { background-color: var(--color-panel-hover); color: var(--color-lamp); }
+
+/* ── BenchRow：控え（打順外）の1行（名前＋投/野タグ＋総合ランク） ── */
+.bench-row {
+    flex-direction: row;
+    align-items: center;
+    height: 64px;
+    flex-shrink: 0;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-chip);
+    margin-bottom: 3px;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+}
+.bench-row:hover { background-color: var(--color-row-hover); }
+.bench-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
+.bench-row__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--color-chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: var(--sp-2); }
+.bench-row__tag { font-size: 10px; color: var(--color-muted); background-color: var(--color-panel-deep); border-radius: 3px; padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
+
+/* ── SpPill：先発投手ピル（DH制時のみ・クリックで選択→控え投手クリックで差替） ── */
+.sp-pill {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+}
+.sp-pill:hover { border-color: var(--color-lamp); }
+.sp-pill--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+.sp-pill__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+.sp-pill__name { font-size: var(--fs-label); color: var(--color-chalk); -unity-font-style: bold; margin-right: var(--sp-2); }
+
+/* ── StatBlock：成績2列（通算/今大会）。数値は右揃え・桁揃え（UI原則③） ── */
+.stat-cols { flex-direction: row; }
+.stat-col {
+    flex-grow: 1;
+    flex-basis: 0;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-2);
+}
+.stat-col--a { margin-right: 4px; }
+.stat-col--b { margin-left: 4px; }
+.stat-col__title { font-size: var(--fs-cap); color: var(--color-muted); -unity-font-style: bold; letter-spacing: 1px; margin-bottom: 2px; }
+.stat-row { flex-direction: row; align-items: center; height: 22px; }
+.stat-row__lab { flex-grow: 1; flex-basis: 0; font-size: var(--fs-cap); color: var(--color-muted); }
+.stat-row__val { width: 64px; -unity-text-align: middle-right; font-size: var(--fs-label); color: var(--color-chalk); }
+
+/* ── AptField：守備適性ダイヤ（比較パネル内・2選手の位置別適性を盤面表示） ── */
+.apt-pair { flex-direction: row; }
+.apt-field {
+    position: relative;
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 210px;
+    background-color: var(--field-grass);
+    border-radius: var(--radius-panel);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    overflow: hidden;
+}
+.apt-field--a { margin-right: 4px; border-top-width: 2px; border-top-color: var(--cmp-a); }
+.apt-field--b { margin-left: 4px; border-top-width: 2px; border-top-color: var(--cmp-b); }
+.apt-field__infield {
+    position: absolute;
+    width: 118px;
+    height: 118px;
+    left: 50%;
+    top: 53%;
+    translate: -50% -50%;
+    rotate: 45deg;
+    background-color: var(--field-clay);
+    border-width: 2px;
+    border-color: var(--field-line);
+    border-radius: 5px;
+}
+.apt-field__home {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    left: 50%;
+    top: 82%;
+    translate: -50% -50%;
+    background-color: var(--field-line);
+}
+.apt-field__slots { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.apt-node {
+    position: absolute;
+    translate: -50% -50%;
+    align-items: center;
+}
+.apt-node .rank-chip { min-width: 20px; height: 22px; font-size: var(--fs-cap); }
+.apt-node__dash { font-size: var(--fs-label); color: var(--color-faint); -unity-text-align: middle-center; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ライブ観戦（MatchLive）3カラム部品 ─ スタメン列 / 投手行 / マッチアップHUD。
+   盤面ビュー例外: HUD・調子色は状態コード（アクセント本数制限の対象外）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── NumberBadge --sm：スタメン列/HUD用の小型背番号。
+   背番号は識別情報でありアクセントではない（UI原則②・黄はデータに使わない）＝文字は白、面は小片色。 ── */
+.num-badge--sm {
+    width: 22px; height: 22px;
+    font-size: var(--fs-label);
+    border-radius: 4px;
+    color: var(--color-chalk);
+}
+
+/* ── ConditionFace：調子の表情顔（Painter2D・C# ConditionFace が描画）。5段階（0=絶好調〜4=絶不調）。 ── */
+.cond-face { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* ── MLineupRow：ライブ観戦のスタメン1行（行高32px基準・左右ミラー可）。
+   順序: 打順・背番号・姓・守備位置・調子・今日の成績。右列は row-reverse でミラー。 ── */
+.mlineup-row {
+    flex-direction: row;
+    align-items: center;
+    height: 32px;
+    flex-shrink: 0;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-chip);
+    margin-bottom: 2px;
+    padding-left: var(--sp-1);
+    padding-right: var(--sp-1);
+}
+.mlineup-row--mirror { flex-direction: row-reverse; }
+/* 現打者ハイライト（状態コード＝アンバー淡色。攻守交代で左右の列を移る） */
+.mlineup-row--at-bat { background-color: rgba(245, 198, 74, 0.16); }
+.mlineup-row--at-bat .mlineup-row__name { color: var(--color-lamp); }
+/* 交代済みスロット（新選手は通常表示・退いた選手名を薄く併記） */
+.mlineup-row__ord {
+    width: 16px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    flex-shrink: 0;
+}
+.mlineup-row__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: var(--sp-1);
+    margin-right: var(--sp-1);
+}
+.mlineup-row__replaced {
+    font-size: 9px;
+    color: var(--color-faint);
+    margin-right: var(--sp-1);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.mlineup-row__pos {
+    width: 24px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    -unity-font-style: bold;
+    flex-shrink: 0;
+}
+/* 今日の成績（打数-安打・打点マル数字）。右揃え・桁揃え。 */
+.mlineup-row__today {
+    width: 46px;
+    -unity-text-align: middle-right;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    flex-shrink: 0;
+}
+.mlineup-row__cond { margin-left: var(--sp-1); margin-right: var(--sp-1); }
+
+/* ── 控えセクション見出し（「控え」） ── */
+.mlineup-subhead {
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    height: 20px;
+    margin-top: var(--sp-2);
+    -unity-text-align: middle-left;
+    flex-shrink: 0;
+}
+.mlineup-subhead--right { -unity-text-align: middle-right; }
+
+/* ── MLineupBenchRow：控え1行（打順・今日成績なし＝スタメンより淡く従属表示）。守備位置/名前/背番号/調子。 ── */
+.mlineup-benchrow {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    flex-shrink: 0;
+    padding-left: var(--sp-1);
+    padding-right: var(--sp-1);
+}
+.mlineup-benchrow .mlineup-row__name {
+    -unity-font-style: normal;
+    color: var(--color-muted);
+    font-size: var(--fs-cap);
+}
+
+/* ── MLineupPitcher：各列下の固定1行（投手＝打順外・名前/球数/投球回/失点） ── */
+.mlineup-pitcher {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    flex-shrink: 0;
+    margin-top: var(--sp-1);
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip);
+}
+.mlineup-pitcher--mirror { flex-direction: row-reverse; }
+.mlineup-pitcher__tag {
+    font-size: 9px;
+    color: var(--color-muted);
+    -unity-font-style: bold;
+    width: 20px;
+    flex-shrink: 0;
+}
+.mlineup-pitcher__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: var(--sp-1);
+    margin-right: var(--sp-1);
+}
+.mlineup-pitcher__stat {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-left: var(--sp-1);
+    margin-right: var(--sp-1);
+    flex-shrink: 0;
+}
+
+/* ═══ MatchupHud / MatchupBar ─ 投手ブロック / 打者ブロックは単体でも使える分離部品 ═══ */
+
+/* 投手/打者ブロック共通（1段目=氏名行・2段目=通算・3段目=今日/球数） */
+.mup-block { flex-direction: column; }
+.mup-line {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 2px;
+}
+.mup-name {
+    font-size: var(--fs-body);
+    -unity-font-style: bold;
+    color: var(--color-chalk);
+    margin-left: var(--sp-2);
+    margin-right: var(--sp-2);
+    white-space: nowrap;
+}
+.mup-hand { font-size: var(--fs-cap); color: var(--color-muted); flex-shrink: 0; }
+.mup-career { font-size: var(--fs-label); color: var(--color-muted); white-space: nowrap; }
+.mup-today {
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+    white-space: nowrap;
+}
+.mup-today__lab { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+/* 球数＝采配判断の主指標。大きめ。閾値超で警告色（状態コード）。 */
+.mup-pitches {
+    font-size: var(--fs-num-lg);
+    -unity-font-style: bold;
+    color: var(--color-chalk);
+}
+.mup-pitches__lab { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+.mup-pitches--warn { color: var(--color-lamp); }        /* 80球超 */
+.mup-pitches--alert { color: var(--color-warn); }       /* 100球超 */
+.mup-cond { margin-left: var(--sp-2); }
+
+/* MatchupHud：盤面ホスト上の画面座標固定オーバーレイ。下端アンカー・左下=投手/右下=打者（左右固定）。 */
+.matchup-hud {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+}
+.mhud-corner {
+    position: absolute;
+    bottom: 10px;
+    max-width: 42%;
+}
+.mhud-corner--left { left: 10px; }
+.mhud-corner--right { right: 10px; }
+/* 半透明パネルで盤面から浮かせる（フェンス/ライン視認を妨げない）。盤面overlay＝inline rgba idiom（field-chip 同様）。 */
+.mhud-panel {
+    background-color: rgba(24, 33, 28, 0.85);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-2);
+}
+
+/* MatchupBar：同ブロックを横帯に並べた版（ComponentGallery 登録のみ・将来のリザルト/選手詳細で流用）。 */
+.matchup-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip);
+    padding: var(--sp-2) var(--sp-3);
+}
+.matchup-bar__half { flex-direction: column; }
+.matchup-bar__vs { font-size: var(--fs-label); color: var(--color-faint); -unity-font-style: bold; margin-left: var(--sp-3); margin-right: var(--sp-3); }

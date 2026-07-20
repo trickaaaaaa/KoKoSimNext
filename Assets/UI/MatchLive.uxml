@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="MatchDetail.uss" />
+    <Style src="MatchLive.uss" />
+    <ui:VisualElement class="ui-root mlive-root">
+        <ui:VisualElement class="mlive-3col">
+
+            <!-- 左列: 自校スタメン -->
+            <ui:VisualElement class="mlive-col mlive-col--side">
+                <ui:Label name="left-team" class="mlive-col-title" text="自校" />
+                <ui:VisualElement name="left-lineup" class="mlive-lineup" />
+                <ui:VisualElement name="left-pitcher" class="mlive-pitcher-host" />
+            </ui:VisualElement>
+
+            <!-- 中央列: スコアボード＋盤面＋実況 -->
+            <ui:VisualElement class="mlive-col mlive-col--center">
+
+                <ui:VisualElement class="mlive-sb">
+                    <ui:VisualElement class="mlive-side">
+                        <ui:Label name="away-name" class="mlive-team" text="先攻" />
+                        <ui:Label name="away-score" class="mlive-score" text="0" />
+                    </ui:VisualElement>
+                    <ui:Label name="inning" class="mlive-inning" text="—" />
+                    <ui:VisualElement class="mlive-side mlive-side--home">
+                        <ui:Label name="home-score" class="mlive-score" text="0" />
+                        <ui:Label name="home-name" class="mlive-team" text="後攻" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="mlive-bso">
+                    <ui:VisualElement class="mlive-count">
+                        <ui:VisualElement class="mlive-count-row">
+                            <ui:Label class="mlive-count-key" text="B" />
+                            <ui:VisualElement name="b1" class="mlive-dot mlive-dot--ball" />
+                            <ui:VisualElement name="b2" class="mlive-dot mlive-dot--ball" />
+                            <ui:VisualElement name="b3" class="mlive-dot mlive-dot--ball" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="mlive-count-row">
+                            <ui:Label class="mlive-count-key" text="S" />
+                            <ui:VisualElement name="s1" class="mlive-dot mlive-dot--strike" />
+                            <ui:VisualElement name="s2" class="mlive-dot mlive-dot--strike" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="mlive-count-row">
+                            <ui:Label class="mlive-count-key" text="O" />
+                            <ui:VisualElement name="o1" class="mlive-dot mlive-dot--out" />
+                            <ui:VisualElement name="o2" class="mlive-dot mlive-dot--out" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="mlive-diamond">
+                        <ui:VisualElement name="base-2" class="mlive-base mlive-base--second" />
+                        <ui:VisualElement name="base-3" class="mlive-base mlive-base--third" />
+                        <ui:VisualElement name="base-1" class="mlive-base mlive-base--first" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="mlive-field-wrap">
+                    <ui:VisualElement name="field-host" class="mlive-field" />
+                    <ui:VisualElement name="hud-host" class="matchup-hud" />
+                </ui:VisualElement>
+
+                <!-- 1球采配ショートカット（設計書15 Phase C-3, Q12-2: 全球で常駐）。低彩度の常時1行帯。
+                     既定(任せ/通常)は無点灯＝目立たせない。プレイヤーが上書きを選んだ時だけ1球だけ点灯する。 -->
+                <ui:VisualElement class="mlive-pitchtactics">
+                    <ui:Label class="mlive-pitchtactics-label" text="打撃" />
+                    <ui:VisualElement name="pt-batting" class="seg seg--auto">
+                        <ui:Label name="pt-batting-swing" class="seg__cell" text="強攻" />
+                        <ui:Label name="pt-batting-take" class="seg__cell" text="待て" />
+                        <ui:Label name="pt-batting-auto" class="seg__cell" text="任せ" />
+                    </ui:VisualElement>
+                    <ui:Label class="mlive-pitchtactics-label" text="配球" />
+                    <ui:VisualElement name="pt-defense" class="seg seg--auto">
+                        <ui:Label name="pt-defense-break" class="seg__cell" text="変化球" />
+                        <ui:Label name="pt-defense-zone" class="seg__cell" text="ゾーン" />
+                        <ui:Label name="pt-defense-auto" class="seg__cell" text="通常" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="caption-history" class="mlive-caphist" />
+
+                <ui:VisualElement class="md-caption">
+                    <ui:Label name="batter" class="mlive-batter" text="" />
+                    <ui:Label name="result-chip" class="md-result" text="" />
+                    <ui:Label name="caption" class="md-caption-text" text="試合開始を待っています" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="md-controls">
+                    <ui:VisualElement class="md-group">
+                        <ui:Button name="next-pa" class="chip-btn md-replay" text="▶ 次の打席へ" />
+                        <ui:Button name="pinch-hit" class="chip-btn" text="代打を送る" />
+                        <ui:Button name="skip" class="chip-btn" text="⏭ スキップ（委任）" />
+                        <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="md-group">
+                        <ui:Button name="spd-1" class="chip-btn chip-btn--on" text="×1" />
+                        <ui:Button name="spd-2" class="chip-btn" text="×2" />
+                        <ui:Button name="spd-4" class="chip-btn" text="×4" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+
+            <!-- 右列: 相手校スタメン（ミラー配置） -->
+            <ui:VisualElement class="mlive-col mlive-col--side">
+                <ui:Label name="right-team" class="mlive-col-title mlive-col-title--right" text="相手校" />
+                <ui:VisualElement name="right-lineup" class="mlive-lineup" />
+                <ui:VisualElement name="right-pitcher" class="mlive-pitcher-host" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

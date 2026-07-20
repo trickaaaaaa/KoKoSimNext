@@ -1,0 +1,229 @@
+using System.Collections.Generic;
+using System.Linq;
+using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Timeline.Playback;
+using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Players;
+using Xunit;
+
+namespace KokoSim.Engine.Tests.Nation;
+
+/// <summary>
+/// 大会モードの進行体（設計書05 §1.2/§1.4）。自校の一戦停止・裏試合の自動消化・次戦相手/次戦日・
+/// 優勝/敗退経路・不戦勝・決定論を検証する。
+/// </summary>
+public sealed class TournamentRunnerTests
+{
+    private static readonly NationCoefficients Coeff = new();
+    private static readonly TournamentSchedule Schedule = new() { FirstRoundDay = 1, RoundGapDays = 3 };
+
+    private static School Sch(int id, double strength) => new()
+    {
+        Id = id, Name = $"校{id}", PrefectureId = 0, Strength = strength,
+    };
+
+    /// <summary>自校(id=1)＋others 校の参加校リスト。</summary>
+    private static List<School> Field(double managerStrength, int others, double othersStrength)
+    {
+        var list = new List<School> { Sch(1, managerStrength) };
+        for (var i = 0; i < others; i++) list.Add(Sch(100 + i, othersStrength));
+        return list;
+    }
+
+    private static TournamentRunner NewRunner(List<School> field, ulong seed = 42)
+        => new(field, field[0], Coeff, new Xoshiro256Random(seed), Schedule, "テスト大会");
+
+    private static void PlayToEnd(TournamentRunner r)
+    {
+        while (!r.Finished) r.PlayNextPlayerMatch();
+    }
+
+    [Fact]
+    public void StrongManager_WinsChampionship()
+    {
+        var r = NewRunner(Field(99, 7, 30));
+        PlayToEnd(r);
+
+        Assert.True(r.IsChampion);
+        Assert.True(r.PlayerActive);
+        var view = r.BuildBracketView();
+        Assert.Equal("校1", view.ChampionName);
+        Assert.True(view.ManagerIsChampion);
+        Assert.False(view.ManagerEliminated);
+    }
+
+    [Fact]
+    public void WeakManager_EliminatedEarly_BracketStillCompletes()
+    {
+        var r = NewRunner(Field(8, 7, 95));
+        PlayToEnd(r);
+
+        Assert.False(r.IsChampion);
+        Assert.False(r.PlayerActive);
+        var view = r.BuildBracketView();
+        Assert.True(view.ManagerEliminated);
+        Assert.NotNull(view.ChampionName);            // 背景消化で優勝校まで確定する。
+        Assert.NotEqual("校1", view.ChampionName);
+    }
+
+    [Fact]
+    public void Determinism_SameSeedSameResult()
+    {
+        var a = NewRunner(Field(60, 15, 55), seed: 7);
+        var b = NewRunner(Field(60, 15, 55), seed: 7);
+        PlayToEnd(a);
+        PlayToEnd(b);
+
+        var va = a.BuildBracketView();
+        var vb = b.BuildBracketView();
+        Assert.Equal(va.ChampionName, vb.ChampionName);
+        Assert.Equal(va.Matches.Count, vb.Matches.Count);
+        Assert.Equal(a.IsChampion, b.IsChampion);
+        for (var i = 0; i < va.Matches.Count; i++)
+        {
+            Assert.Equal(va.Matches[i].WinnerName, vb.Matches[i].WinnerName);
+            Assert.Equal(va.Matches[i].WinnerScore, vb.Matches[i].WinnerScore);
+            Assert.Equal(va.Matches[i].LoserScore, vb.Matches[i].LoserScore);
+        }
+    }
+
+    [Fact]
+    public void NextMatchDay_AdvancesByGap_WhenNoByes()
+    {
+        // 8校（2の冪, 不戦勝なし）。強い自校が確実に勝ち上がる。
+        var r = NewRunner(Field(99, 7, 30));
+        Assert.Equal(Schedule.MatchDay(0), r.NextMatchDay);      // 初戦。
+        Assert.NotNull(r.NextOpponent);
+
+        r.PlayNextPlayerMatch();                                // 1勝→2回戦へ。
+        Assert.False(r.Finished);
+        Assert.Equal(Schedule.MatchDay(1), r.NextMatchDay);     // 中3日ぶん進む。
+    }
+
+    [Fact]
+    public void Bye_AdvancesManagerToNextRound()
+    {
+        // 3校＝ブラケットサイズ4。最強シードの自校は初戦不戦勝になる。
+        var r = NewRunner(Field(99, 2, 40));
+
+        Assert.True(r.PlayerActive);
+        Assert.False(r.Finished);
+        Assert.NotNull(r.NextOpponent);                         // 不戦勝を消化し実対戦相手が確定。
+        Assert.Equal(Schedule.MatchDay(1), r.NextMatchDay);     // 初戦不戦勝で1ラウンド進んでいる。
+    }
+
+    [Fact]
+    public void SoleEntrant_IsImmediateChampion()
+    {
+        var r = NewRunner(Field(50, 0, 0));
+        Assert.True(r.IsChampion);
+        Assert.True(r.Finished);
+        Assert.Null(r.NextOpponent);
+    }
+
+    [Fact]
+    public void Outcome_ReportsOpponentAndScore()
+    {
+        var r = NewRunner(Field(99, 7, 30));
+        var opponent = r.NextOpponent!;
+        var outcome = r.PlayNextPlayerMatch();
+
+        Assert.True(outcome.ManagerWon);
+        Assert.Equal(opponent.Name, outcome.OpponentName);
+        Assert.Equal(opponent.Tier, outcome.OpponentTier);
+        Assert.True(outcome.ManagerScore > outcome.OpponentScore);   // 勝者スコアが上。
+    }
+
+    // ライブ観戦（Begin/Complete 制御反転）が自動消化（PlayNextPlayerMatch）と同じ大会展開になる＝
+    // 「観戦してもしなくても結果は同じ」＋「本流RNGの消費順は不変」の核心保証（設計書の決定論ゲート相当）。
+    [Theory]
+    [InlineData(9UL)]
+    [InlineData(21UL)]
+    [InlineData(2026UL)]
+    public void LiveBeginComplete_EqualsAutoPlayNextMatch(ulong seed)
+    {
+        var resolver = new LiveConsistentResolver();
+        var auto = new TournamentRunner(Field(70, 15, 55), Sch(1, 70), Coeff,
+            new Xoshiro256Random(seed), Schedule, "t", resolver);
+        var live = new TournamentRunner(Field(70, 15, 55), Sch(1, 70), Coeff,
+            new Xoshiro256Random(seed), Schedule, "t", resolver);
+
+        while (!auto.Finished)
+        {
+            var oAuto = auto.PlayNextPlayerMatch();
+
+            var lm = live.BeginNextPlayerMatch();
+            Assert.Equal(oAuto.OpponentName, lm.OpponentName);   // 同じ相手を観戦している。
+            while (lm.Progression.Advance()) { /* 采配なしで全打席 */ }
+            var oLive = live.CompleteNextPlayerMatch(lm.Progression.BuildResult());
+
+            Assert.Equal(oAuto.ManagerWon, oLive.ManagerWon);
+            Assert.Equal(oAuto.ManagerScore, oLive.ManagerScore);
+            Assert.Equal(oAuto.OpponentScore, oLive.OpponentScore);
+            Assert.Equal(oAuto.OpponentName, oLive.OpponentName);
+            Assert.Equal(oAuto.IsChampion, oLive.IsChampion);
+        }
+
+        Assert.Equal(auto.IsChampion, live.IsChampion);
+        Assert.Equal(auto.PlayerActive, live.PlayerActive);
+
+        // 裏試合も含め大会概要（ブラケット全行）がバイト一致＝本流RNG消費順が完全に保たれている。
+        var va = auto.BuildBracketView();
+        var vb = live.BuildBracketView();
+        Assert.Equal(va.ChampionName, vb.ChampionName);
+        Assert.Equal(va.Matches.Count, vb.Matches.Count);
+        for (var i = 0; i < va.Matches.Count; i++)
+        {
+            Assert.Equal(va.Matches[i].WinnerName, vb.Matches[i].WinnerName);
+            Assert.Equal(va.Matches[i].LoserName, vb.Matches[i].LoserName);
+            Assert.Equal(va.Matches[i].WinnerScore, vb.Matches[i].WinnerScore);
+            Assert.Equal(va.Matches[i].LoserScore, vb.Matches[i].LoserScore);
+        }
+    }
+
+    /// <summary>
+    /// Resolve と BeginLive を同一 teams＋同一Fork で作る整合リゾルバ（実 PlayerMatchResolver の契約と同形）。
+    /// 自校＝後攻(home)。全打席を進めた BeginLive の結果は Resolve のボックススコアに一致する。
+    /// </summary>
+    private sealed class LiveConsistentResolver : IPlayerMatchResolver
+    {
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng)
+            => new(GameEngine.Play(MakeTeam(opponent.Name, opponent.Strength),
+                MakeTeam(manager.Name, manager.Strength), new GameContext(), rng.Fork(2)), ManagerIsAway: false);
+
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng)
+            => new(new MatchProgression(MakeTeam(opponent.Name, opponent.Strength),
+                MakeTeam(manager.Name, manager.Strength),
+                new GameContext { CaptureTimelines = true }, rng.Fork(2)), ManagerIsAway: false);
+
+        private static Team MakeTeam(string name, double strength)
+        {
+            var ab = (int)System.Math.Clamp(strength, 20, 90);
+            Player Pos(FieldPosition p) => new()
+            {
+                Position = p, Contact = ab, Power = ab, LaunchTendency = 50, Discipline = ab,
+                Speed = ab, ArmStrength = ab, Fielding = ab, Catching = ab,
+            };
+            var order = new List<Player>
+            {
+                Pos(FieldPosition.Catcher), Pos(FieldPosition.FirstBase), Pos(FieldPosition.SecondBase),
+                Pos(FieldPosition.ThirdBase), Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField),
+                Pos(FieldPosition.CenterField), Pos(FieldPosition.RightField),
+                Pos(FieldPosition.Pitcher) with { Name = name + "P", Pitching = PitcherAttributes.LeagueAverage },
+            };
+            return new Team { Name = name, BattingOrder = order, PitcherSlot = 8 };
+        }
+    }
+
+    [Fact]
+    public void ThrowsWhenManagerNotInField()
+    {
+        var field = Field(50, 7, 50);
+        var outsider = Sch(999, 50);
+        Assert.Throws<System.ArgumentException>(
+            () => new TournamentRunner(field, outsider, Coeff, new Xoshiro256Random(1), Schedule, "x"));
+    }
+}

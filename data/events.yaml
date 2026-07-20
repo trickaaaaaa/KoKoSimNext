@@ -1,0 +1,65 @@
+# イベントテーブル（設計書04 §3）。Phase 3 は発火の基盤のみ（効果適用は Phase 5 で接続）。
+# 追加・調整はこのファイル編集だけで完結させる（データ駆動）。
+
+events:
+  # --- 固定イベント（カレンダー連動, calendar_week: 0〜49） ---
+  - id: entrance_ceremony
+    kind: Fixed
+    calendar_week: 0
+    text: "入学式。新入部員が加わった。"
+  - id: summer_camp
+    kind: Fixed
+    calendar_week: 18
+    text: "夏合宿。全体の経験値が跳ね上がる。"
+  - id: culture_festival
+    kind: Fixed
+    calendar_week: 28
+    text: "文化祭。束の間の休息。"
+  - id: winter_camp
+    kind: Fixed
+    calendar_week: 38
+    text: "冬合宿。鍛錬期の山場。"
+  - id: draft_meeting
+    kind: Fixed
+    calendar_week: 30
+    text: "ドラフト会議。教え子に指名がかかるか。"
+  - id: graduation
+    kind: Fixed
+    calendar_week: 49
+    text: "卒業式。3年生を送り出す。"
+
+  # --- ランダムイベント（重み付き抽選） ---
+  - id: injury
+    kind: Random
+    weight: 2.0
+    cooldown_weeks: 6
+    text: "選手が練習中に故障した。"
+  - id: rain_week
+    kind: Random
+    weight: 3.0
+    cooldown_weeks: 2
+    text: "雨天でグラウンドが使えない。"
+  - id: media_coverage
+    kind: Random
+    weight: 1.5
+    cooldown_weeks: 8
+    text: "マスコミの取材が入った。名声が上がる。"
+  - id: ob_donation
+    kind: Random
+    weight: 1.0
+    cooldown_weeks: 10
+    text: "OB会から寄付があった。"
+
+  # --- 選択肢イベント（Phase 5で効果接続） ---
+  - id: ace_hidden_injury
+    kind: Choice
+    weight: 1.0
+    cooldown_weeks: 12
+    sets_annual_flag: ace_injured_this_year
+    requires_not_annual_flag: ace_injured_this_year
+    text: "エースが肘の違和感を隠しているようだ…"
+  - id: skipping_practice
+    kind: Choice
+    weight: 1.0
+    cooldown_weeks: 12
+    text: "主力が練習をサボっているらしい。"

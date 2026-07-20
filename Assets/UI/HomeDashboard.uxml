@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="KokoSimTheme.uss" />
+    <ui:VisualElement class="root">
+
+      <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
+      <ui:Instance template="TopBar" />
+
+      <!-- ===== ダッシュボード本体（3カラム・外側スクロールなし） ===== -->
+      <ui:VisualElement class="dash">
+
+        <!-- COL1: 次の試合 / 部の状態 / 注目選手 -->
+        <ui:VisualElement class="dash-col dash-col--a">
+          <!-- 次の試合 -->
+          <ui:VisualElement class="card">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="次の試合" />
+              <ui:Label name="game-tag" class="card__hd-sub" text="練習試合" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body">
+              <ui:VisualElement class="nm-teams">
+                <ui:VisualElement class="nm-team">
+                  <ui:Label name="home-team" class="nm-team__n" text="桜丘" />
+                  <ui:Label name="home-sub" class="nm-team__s" text="自校" />
+                </ui:VisualElement>
+                <ui:Label class="nm-vs" text="VS" />
+                <ui:VisualElement class="nm-team">
+                  <ui:Label name="away-team" class="nm-team__n" text="北都大付属" />
+                  <ui:Label name="away-sub" class="nm-team__s" text="県立・強豪" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+              <ui:VisualElement class="nm-meta">
+                <ui:Label name="game-date" class="nm-meta__i" text="第2週（土）" />
+                <ui:Label name="venue" class="nm-meta__i" text="自校グラウンド" />
+                <ui:Label name="weather" class="nm-meta__i" text="天気 曇" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <!-- 部の状態 -->
+          <ui:VisualElement class="card">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="部の状態" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body">
+              <ui:VisualElement name="team-strength-row" class="inj-row">
+                <ui:Label class="g-row__k" text="チーム総合力" />
+                <ui:VisualElement name="team-strength-chip" class="pd2-overall__chip" />
+              </ui:VisualElement>
+              <ui:VisualElement class="inj-row">
+                <ui:Label class="g-row__k" text="怪我人" />
+                <ui:Label name="injuries" class="inj-row__v" text="0 名" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <!-- 注目選手（内部スクロール） -->
+          <ui:VisualElement class="card card--grow">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="注目選手" />
+            </ui:VisualElement>
+            <ui:ScrollView mode="Vertical" class="card__scroll">
+              <ui:VisualElement name="roster-rows" />
+            </ui:ScrollView>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- COL2: 通知フィード（内部スクロール） -->
+        <ui:VisualElement class="dash-col dash-col--b">
+          <ui:VisualElement class="card card--grow">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="通知フィード" />
+              <ui:Label class="card__hd-sub" text="今週の出来事" />
+            </ui:VisualElement>
+            <ui:ScrollView mode="Vertical" class="card__scroll">
+              <ui:VisualElement name="feed-list" />
+            </ui:ScrollView>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- COL3: 練習計画 / 個別指導 -->
+        <ui:VisualElement class="dash-col dash-col--c">
+          <ui:VisualElement class="card card--grow">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="今週の練習計画" />
+              <ui:Label class="card__hd-sub" text="週間メニュー" />
+            </ui:VisualElement>
+            <ui:ScrollView mode="Vertical" class="card__scroll">
+              <ui:VisualElement name="plan-days" />
+            </ui:ScrollView>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="card">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="個別指導" />
+              <ui:Label name="guidance-count" class="card__hd-sub" text="残り枠 1 / 3" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body">
+              <ui:VisualElement name="guidance-list" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+      </ui:VisualElement>
+
+      <!-- 大会モード: 開幕バナー（全画面センター・フェード）。既定は非表示、コントローラが出す。 -->
+      <ui:VisualElement name="tm-banner" class="ui-root tm-banner">
+        <ui:VisualElement class="tm-banner__inner">
+          <ui:Label name="tm-banner-top" class="tm-banner__top" text="2028年　夏" />
+          <ui:VisualElement class="tm-banner__rule" />
+          <ui:Label name="tm-banner-name" class="tm-banner__name" text="選手権神奈川大会" />
+          <ui:Label class="tm-banner__open" text="開　幕" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- 大会モード: 試合開始ダイアログ（はい／いいえ）。 -->
+      <ui:VisualElement name="tm-dialog" class="ui-root tm-scrim">
+        <ui:VisualElement class="tm-card tm-dialog__card">
+          <ui:Label name="tm-dialog-round" class="tm-dialog__round" text="２回戦" />
+          <ui:Label name="tm-dialog-vs" class="tm-dialog__vs" text="vs 享栄 [B]" />
+          <ui:Label class="tm-dialog__q" text="試合を始めますか？" />
+          <ui:VisualElement class="tm-dialog__btns">
+            <ui:Button name="tm-dialog-no" class="tm-btn tm-btn--ghost" text="いいえ" />
+            <ui:Button name="tm-dialog-yes" class="tm-btn tm-btn--primary" text="はい" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- 大会モード: 試合結果（自動消化）。 -->
+      <ui:VisualElement name="tm-result" class="ui-root tm-scrim">
+        <ui:VisualElement class="tm-card tm-result__card">
+          <ui:Label name="tm-result-round" class="tm-result__round" text="２回戦" />
+          <ui:Label name="tm-result-headline" class="tm-result__headline" text="勝利！" />
+          <ui:Label name="tm-result-score" class="tm-result__score" text="桜丘 5 - 2 享栄" />
+          <ui:Button name="tm-result-ok" class="tm-btn tm-btn--primary" text="次へ" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

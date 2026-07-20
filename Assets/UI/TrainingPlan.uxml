@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 練習計画 画面（UI-BUILD-METHOD Step 4）。静的な骨組みだけを置き、行・プリセット一覧・
+     カスタム編集・伸びバーは TrainingPlanController が部品ファクトリで動的生成する。スタイルは
+     tokens（値）→ KokoSimTheme（既存）→ components（部品辞書）→ TrainingPlan（画面配置）の順。
+     設定編集は右枠ではなく統合モーダル（tp-modal）で行う（プリセット選択＋カスタム＋伸びバー）。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="TrainingPlan.uss" />
+
+    <ui:VisualElement class="ui-root tp-root">
+
+        <!-- ═══ 共通トップバー（スコアボード＋ナビ・単一ソース） ═══ -->
+        <ui:Instance template="TopBar" />
+
+        <!-- ═══ SUB STRIP: 合宿バナー + 個別指導3枠 ═══ -->
+        <ui:VisualElement class="tp-strip">
+            <ui:VisualElement name="camp-banner" class="banner tp-camp">
+                <ui:Label text="CAMP" class="banner__badge" />
+                <ui:VisualElement class="tp-camp__body">
+                    <ui:VisualElement class="tp-camp__head">
+                        <ui:Label name="camp-title" text="冬合宿・鍛錬期" class="tp-camp__title" />
+                        <ui:Label name="camp-mult" text="×2.5 経験値" class="tp-camp__mult" />
+                    </ui:VisualElement>
+                    <ui:Label name="camp-note" text="対外試合禁止期間（12〜3月）— 育成の山場です。" class="tp-camp__note" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="tp-coach">
+                <ui:Label text="個別指導 3枠" class="tp-coach__title" />
+                <ui:VisualElement name="nom-slots" class="tp-coach__slots" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ═══ ROSTER TABLE（全幅） ═══ -->
+        <ui:VisualElement class="tp-table">
+            <ui:VisualElement class="tp-toolbar">
+                <ui:Label name="roster-title" text="部員別 練習割当" class="tp-toolbar__title" />
+                <ui:Label name="roster-count" text="/ 45名" class="tp-toolbar__count" />
+                <ui:VisualElement class="tp-toolbar__spacer" />
+                <ui:Label text="学年" class="tp-toolbar__cap" />
+                <ui:VisualElement name="year-filters" class="tp-toolbar__group" />
+                <ui:Label text="並び" class="tp-toolbar__cap" />
+                <ui:VisualElement name="sort-modes" class="tp-toolbar__group" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="tp-thead">
+                <ui:Label text="背番号 ／ 選手 ／ 学年" class="tp-th tp-th--id" />
+                <ui:Label text="総合" class="tp-th tp-th--grade" />
+                <ui:Label text="練習設定" class="tp-th tp-th--preset" />
+                <ui:Label text="複製" class="tp-th tp-th--copy" />
+                <ui:VisualElement class="tp-thead__gutter" />
+            </ui:VisualElement>
+
+            <ui:ScrollView mode="Vertical" class="tp-scroll">
+                <ui:VisualElement name="train-rows" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <ui:Label name="toast" text="" class="tp-toast" />
+
+        <!-- ═══ 統合モーダル（プリセット選択＋カスタム編集＋伸びバー・単一ドキュメント内オーバーレイ） ═══ -->
+        <ui:VisualElement name="tp-modal" class="ui-root modal-scrim">
+            <ui:VisualElement class="modal-card tpm-card">
+
+                <!-- ヘッダー：選手・委任・個別指導・閉じる -->
+                <ui:VisualElement class="tpm-head">
+                    <ui:VisualElement class="tp-ed-id">
+                        <ui:Label text="背番号" class="tp-ed-id__cap" />
+                        <ui:Label name="sel-num" text="18" class="tp-ed-id__num" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="tpm-head__id">
+                        <ui:VisualElement class="tpm-head__namerow">
+                            <ui:Label name="sel-name" text="選手名" class="tp-ed-who__name" />
+                            <ui:Label name="sel-benchout" text="ベンチ外" class="chip chip--tag chip--out" />
+                        </ui:VisualElement>
+                        <ui:Label name="sel-meta" text="2年・右投左打・総合 B" class="tp-ed-head__meta tpm-head__meta" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="tp-ed-head__spacer" />
+                    <ui:Button name="sel-nom" text="★ 個別指導に指名" class="nom-btn" />
+                    <ui:VisualElement class="tpm-delegate">
+                        <ui:VisualElement name="delegate-toggle" class="switch">
+                            <ui:VisualElement class="switch__knob" />
+                        </ui:VisualElement>
+                        <ui:Label name="delegate-state" text="手動" class="tpm-delegate__state" />
+                    </ui:VisualElement>
+                    <ui:Button name="modal-close" text="✕" class="tpm-close" />
+                </ui:VisualElement>
+
+                <!-- 本体：左＝自分で配分（主）＋お任せ（任意） / 右＝伸びバー＋バジェット -->
+                <ui:VisualElement class="tpm-body">
+                    <ui:ScrollView mode="Vertical" class="tpm-main">
+                        <!-- ① 自分で配分（基本・10分単位） -->
+                        <ui:VisualElement class="tp-ed-section">
+                            <ui:Label text="練習メニューを配分（10分単位）" class="tp-ed-section__title" />
+                            <ui:Label name="menu-lock-hint" text="委任中ロック" class="tp-ed-section__lock" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="tpm-menus" />
+
+                        <ui:Label text="守備（ポジション別）" class="tp-ed-section__title tp-ed-section__title--mt" />
+                        <ui:VisualElement name="tpm-defense" />
+
+                        <!-- ② お任せプリセット（任意・後から選ぶ） -->
+                        <ui:Label text="お任せプリセットから選ぶ（任意）" class="tp-ed-section__title tp-ed-section__title--mt" />
+                        <ui:VisualElement name="tpm-presets" class="tpm-presets" />
+                    </ui:ScrollView>
+
+                    <ui:VisualElement class="tpm-side">
+                        <ui:Label text="この設定で伸びる能力" class="tp-ed-section__title" />
+                        <ui:ScrollView mode="Vertical" class="tpm-growth-scroll">
+                            <ui:VisualElement name="tpm-growth" class="tpm-growth" />
+                        </ui:ScrollView>
+
+                        <ui:VisualElement class="tpm-budget">
+                            <ui:Label name="sel-remain" text="残り 30 / 300分" class="tp-ed-bar__remain" />
+                            <ui:VisualElement class="stat-bar stat-bar--tall">
+                                <ui:VisualElement name="sel-budget-fill" class="stat-bar__fill" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- フッター：週テンプレ＋決定 -->
+                <ui:VisualElement class="tpm-foot">
+                    <ui:Label text="週テンプレ" class="tp-tpl__title" />
+                    <ui:VisualElement name="template-list" class="tp-tpl__list" />
+                    <ui:Button name="template-save" text="＋ 保存" class="tp-tpl__save" />
+                    <ui:VisualElement class="tp-ed-head__spacer" />
+                    <ui:Button name="modal-done" text="決定" class="tpm-done" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

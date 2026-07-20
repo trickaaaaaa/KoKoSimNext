@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="KokoSimTheme.uss" />
+    <ui:VisualElement class="root">
+
+      <!-- ===== スコアボードヘッダー（選手詳細と共通の sb2） ===== -->
+      <ui:VisualElement class="sb2">
+        <ui:VisualElement class="sb2-left">
+          <ui:Label class="sb2-badge" text="桜" />
+          <ui:VisualElement class="sb2-id">
+            <ui:Label class="sb2-name" text="県立桜丘高校" />
+            <ui:Label class="sb2-pref" text="神奈川県" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="sb2-center">
+          <ui:VisualElement class="sb2-cell">
+            <ui:Label class="sb2-cell__k" text="画面" />
+            <ui:Label class="sb2-cell__v" text="チーム総合力" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="sb2-right">
+          <ui:Button name="back-home" class="advance" text="◀ ホームへ戻る" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- ===== ナビ ===== -->
+      <ui:VisualElement class="nav">
+        <ui:Label name="nav-home" class="nav__item nav__item--on" text="ホーム" />
+        <ui:Label name="nav-players" class="nav__item" text="選手" />
+        <ui:Label name="nav-training" class="nav__item" text="練習" />
+        <ui:Label name="nav-match" class="nav__item" text="試合" />
+        <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
+        <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
+        <ui:Label name="nav-management" class="nav__item" text="経営" />
+        <ui:Label name="nav-career" class="nav__item" text="キャリア" />
+        <ui:Label name="nav-records" class="nav__item" text="記録" />
+      </ui:VisualElement>
+
+      <ui:ScrollView mode="Vertical" class="pd2-scroll">
+
+        <!-- ===== ヘッダー（総合ランクチップ） ===== -->
+        <ui:VisualElement class="pd2-head">
+          <ui:VisualElement class="pd2-headmain">
+            <ui:VisualElement class="pd2-headmain__top">
+              <ui:VisualElement class="pd2-nameline">
+                <ui:Label name="team-name" class="pd2-name" text="チーム総合力" />
+              </ui:VisualElement>
+              <ui:VisualElement class="pd2-meta">
+                <ui:Label class="pd2-meta__i" text="レギュラー＋控えから算出" />
+                <ui:Label class="pd2-meta__i" text="6指標の加重平均をリーグ尺度に標準化（投手力を重く）" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="pd2-overall">
+              <ui:Label class="pd2-overall__k" text="総合ランク" />
+              <ui:VisualElement class="ts-overall-line">
+                <ui:VisualElement name="overall-chip" class="pd2-overall__chip" />
+                <ui:Label name="overall-value" class="ts-overall-value" text="" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ===== 6角形 / 指標バー ===== -->
+        <ui:VisualElement class="pd2-row pd2-row--last ts-row">
+          <ui:VisualElement class="pd2-card pd2-card--grow">
+            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="チーム戦力バランス" /></ui:VisualElement>
+            <ui:VisualElement name="radar" class="pd2-radar ts-radar" />
+          </ui:VisualElement>
+          <ui:VisualElement class="pd2-card pd2-card--grow">
+            <ui:VisualElement class="pd2-card__hd">
+              <ui:Label class="pd2-card__t" text="指標" />
+              <ui:Label class="pd2-card__note" text="数値は 0〜100（各指標の集計値）" />
+            </ui:VisualElement>
+            <ui:VisualElement name="factors" class="ts-factors" />
+            <ui:VisualElement class="ts-analysis">
+              <ui:Label class="ts-analysis__k" text="分析" />
+              <ui:Label name="analysis" class="ts-analysis__t" text="" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+      </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

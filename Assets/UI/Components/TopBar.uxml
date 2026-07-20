@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 共通トップバー（UI-BUILD-METHOD Step 2/4）。スコアボードヘッダー(sb2)＋ナビタブ(nav)。
+     全画面がこの単一ソースを ui:Instance で読み込み、画面ごとに上部/タブを作り直さない。
+     アクティブタブの強調は ScreenRouter が付ける（ここでは付けない）。
+     動的値（週・部費・名声・信頼度・総合ランク）は各画面のコントローラが name で埋める。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="sb2">
+        <ui:VisualElement class="sb2-left">
+            <ui:Label name="badge" class="sb2-badge" text="桜" />
+            <ui:VisualElement class="sb2-id">
+                <ui:Label name="school-name" class="sb2-name" text="県立桜丘高校" />
+                <ui:Label name="pref" class="sb2-pref" text="神奈川県" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sb2-rank">
+                <ui:Label class="sb2-rank__k" text="チーム総合力" />
+                <ui:VisualElement class="sb2-rank__row">
+                    <ui:VisualElement name="team-rank" class="sb2-rank__chip" />
+                    <ui:Label class="sb2-rank__t" text="ランク" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="sb2-center">
+            <ui:VisualElement class="sb2-cell">
+                <ui:Label class="sb2-cell__k" text="現在" />
+                <ui:Label name="week" class="sb2-cell__v" text="2026年4月1週目" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sb2-div" />
+            <ui:VisualElement class="sb2-cell">
+                <ui:Label name="countdown-k" class="sb2-cell__k" text="夏予選まで" />
+                <ui:Label name="countdown" class="sb2-cell__v sb2-cell__v--amber" text="残り 15 週" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="sb2-right">
+            <ui:VisualElement class="sb2-meter">
+                <ui:Label class="sb2-meter__k" text="部費残高" />
+                <ui:Label name="funds" class="sb2-meter__v" text="¥120万" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sb2-meter">
+                <ui:Label class="sb2-meter__k" text="名声" />
+                <ui:Label name="fame" class="sb2-meter__v sb2-meter__v--fame" text="D" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sb2-meter">
+                <ui:Label class="sb2-meter__k" text="信頼度" />
+                <ui:Label name="trust" class="sb2-meter__v sb2-meter__v--trust" text="C" />
+            </ui:VisualElement>
+            <ui:Button name="advance" class="advance" text="今週を進める ▶" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+
+    <ui:VisualElement class="nav">
+        <ui:Label name="nav-home" class="nav__item" text="ホーム" />
+        <ui:Label name="nav-players" class="nav__item" text="選手" />
+        <ui:Label name="nav-member" class="nav__item" text="メンバー" />
+        <ui:Label name="nav-training" class="nav__item" text="練習" />
+        <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
+        <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
+        <ui:Label name="nav-management" class="nav__item" text="経営" />
+        <ui:Label name="nav-career" class="nav__item" text="キャリア" />
+        <ui:Label name="nav-records" class="nav__item" text="記録" />
+    </ui:VisualElement>
+</ui:UXML>

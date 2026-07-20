@@ -1,0 +1,27 @@
+# confidence: verified
+# 出典: hyogo-koyaren.or.jp, 高校野球ドットコム articles/7938, note「しんのG」
+# 型見本: 地区予選＋敗者復活代表決定戦 + 夏甲子園校の予選免除
+pref: hyogo
+snapshot_year: 2025
+region: kinki
+districts: [神戸, 阪神, 播淡, 但丹, 東西播]   # 5地区（各地区内にA〜Fブロック）
+district_assignment: geographic
+regional_berths: 3            # 大阪・兵庫は毎年固定3
+seed_exemption: true          # 夏甲子園出場の東洋大姫路を県大会推薦校に追加
+stages:
+  - name: 地区予選
+    type: group_split
+    groups: 5                 # 5地区
+    grouping: geographic
+    child:
+      type: knockout          # 各地区内はブロックトーナメント
+    advance_per_group: null    # 地区ごとに県大会枠（合計55、要項PDFで内訳確定）
+    loser_bracket:
+      enabled: true           # 各地区で敗者復活の代表決定戦
+      advance: null
+  - name: 県大会
+    type: knockout
+    entries: 56               # 地区予選55 ＋ 推薦1（東洋大姫路）
+notes:
+  - 県大会56チーム＝地区予選勝ち上がり55＋夏甲子園校の推薦1
+  - 各地区の県大会枠内訳と敗者復活の救い上げ数は要項PDFで確定
