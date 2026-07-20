@@ -335,7 +335,6 @@
     margin-bottom: var(--sp-2);
 }
 .pool-chip:hover { border-color: var(--color-line-focus); }
-.pool-chip--assigned { opacity: 0.45; }
 .pool-chip--picked { border-color: var(--color-lamp); opacity: 1; }
 .pool-chip__body { margin-left: var(--sp-2); margin-right: var(--sp-2); }
 .pool-chip__name { font-size: var(--fs-label); color: var(--color-chalk); }

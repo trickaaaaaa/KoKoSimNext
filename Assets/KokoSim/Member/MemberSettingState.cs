@@ -33,7 +33,6 @@ namespace KokoSim.Unity.Member
         public string Name = "";
         public string GradeLabel = "";
         public string OverallGrade = "";
-        public bool Assigned;            // 背番号1〜20を持つ（プールでは淡色）
         public bool IsPicked;            // 選択中の選手
     }
 
@@ -155,8 +154,8 @@ namespace KokoSim.Unity.Member
         }
 
         /// <summary>
-        /// プール選手クリック。未選択なら選択。選択中に別の選手をクリックしたら両者の背番号を交換
-        /// （ベンチ外選手を選べば控え落ち＝入替）。同じ選手を再クリックで選択解除。
+        /// プール（ベンチ外）選手クリック。未選択なら選択。枠から選択中の選手がいれば背番号を交換
+        /// （＝そのベンチ入り選手は控え落ち）。同じ選手を再クリックで選択解除。
         /// </summary>
         public void ClickPool(int index)
         {
@@ -213,10 +212,10 @@ namespace KokoSim.Unity.Member
             }
             v.BenchOutCount = _roster.Count - v.AssignedCount;
 
-            // プール：未割当（ベンチ外）を先頭に、各群を総合力降順で。
+            // プール：ベンチ外（背番号未割当）だけを総合力降順で並べる。
             var ordered = Enumerable.Range(0, _roster.Count)
-                .OrderBy(i => _roster[i].UniformNumber == 0 ? 0 : 1)
-                .ThenByDescending(i => _roster[i].AverageLevel());
+                .Where(i => _roster[i].UniformNumber == 0)
+                .OrderByDescending(i => _roster[i].AverageLevel());
             foreach (var i in ordered)
             {
                 var p = _roster[i];
@@ -226,7 +225,6 @@ namespace KokoSim.Unity.Member
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
                     OverallGrade = OverallGrade(p),
-                    Assigned = p.UniformNumber != 0,
                     IsPicked = _picked == i,
                 });
             }
