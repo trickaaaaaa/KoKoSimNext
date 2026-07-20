@@ -34,6 +34,10 @@ namespace KokoSim.Unity.Tournament
             var back = _root.Q<Button>("tp-back");
             if (back != null) back.clicked += () => { _showPreview = false; Render(); };
 
+            // 共通トップバーの「今週を進める」で共有週を進める（選手/練習画面と同じ扱い＝GameClock 単一ソース）。
+            var advance = _root.Q<Button>("advance");
+            if (advance != null) advance.clicked += () => { GameClock.Advance(+1); Render(); };
+
             Render();
         }
 
@@ -49,6 +53,8 @@ namespace KokoSim.Unity.Tournament
             var session = GameSession.Current;
             var inTournament = session.InTournament;
 
+            RenderTopBar();
+
             Show(_empty, !inTournament);
             Show(_bracketView, inTournament && !_showPreview);
             Show(_previewView, inTournament && _showPreview);
@@ -62,6 +68,25 @@ namespace KokoSim.Unity.Tournament
         private static void Show(VisualElement e, bool visible)
         {
             if (e != null) e.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        /// <summary>
+        /// 共通トップバー（Components/TopBar.uxml）の動的値を埋める。週は全画面共有の GameClock、
+        /// 総合ランクは共有ロスター由来の TeamOverall を単一ソースとして引く（選手/メンバー/練習画面と同じ）。
+        /// 部費・名声・信頼度は現状どの画面も固定表示のため TopBar の既定値をそのまま使う。
+        /// </summary>
+        private void RenderTopBar()
+        {
+            SetText("week", GameClock.CurrentLabel());
+
+            var rank = _root.Q<VisualElement>("team-rank");
+            if (rank == null) return;
+            rank.Clear();
+            var grade = TeamOverall.GradeOf(RosterService.Roster);
+            var chip = new Label(grade);
+            chip.AddToClassList("grade");
+            chip.AddToClassList("grade--" + grade);
+            rank.Add(chip);
         }
 
         // ===== ビュー1: トーナメント（今大会の経過） =====
