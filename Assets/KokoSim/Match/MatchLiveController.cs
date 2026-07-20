@@ -63,6 +63,8 @@ namespace KokoSim.Unity.Match
         private Label _caption, _result, _batter, _awayScore, _homeScore, _inning;
         private Button _nextPa, _pinchHit, _skip;
         private readonly List<Button> _speedButtons = new();
+        // 速度ボタンのハンドラ（ラムダのため OnDisable で外せるよう保持する）。
+        private readonly List<(Button Button, System.Action Handler)> _speedHandlers = new();
 
         // 3カラム（左=自校 / 右=相手）＋マッチアップHUD＋実況履歴。表示専用（数値はエンジン集計 Snapshot から引く）。
         private VisualElement _leftLineup, _rightLineup, _leftPitcher, _rightPitcher, _hudHost, _capHistHost;
@@ -96,7 +98,13 @@ namespace KokoSim.Unity.Match
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
 
+            // ScreenRouter は同じ GameObject を SetActive で付け外しするだけなので、このコンポーネントは
+            // 試合をまたいで生存する。試合ごとの状態は必ずここで初期化する（前試合の _gameOver 等の持ち越しで
+            // 2試合目の操作ボタンが全無効になる不具合を防ぐ）。
+            ResetPerMatchState();
+
             var host = _root.Q<VisualElement>("field-host");
+            host?.Clear();   // 前回の盤面要素を残さない（OnEnable ごとに積み上がるのを防ぐ）
             _view = new Match2DPlaybackElement();
             _view.SetColumnFraming(true);   // 全景の3カラム中央＝列内を使い切る既定ビューポート
             host?.Add(_view);
@@ -136,11 +144,60 @@ namespace KokoSim.Unity.Match
             _outDots = new[] { _root.Q<VisualElement>("o1"), _root.Q<VisualElement>("o2") };
             _bases = new[] { _root.Q<VisualElement>("base-1"), _root.Q<VisualElement>("base-2"), _root.Q<VisualElement>("base-3") };
 
+            ResetPerMatchVisuals();
             BuildGame();
             SetBackHomeVisible(false);
             EnterTacticsWindow("試合開始。采配を選んで打席へ。");
             RefreshPanel();   // 初期スタメン列（今日の成績は0・現打者/HUDは打席開始で点灯）
             _view.SetResting(false, false, false);   // 打席開始前も守備陣を定位置に表示（盤面を空にしない）
+        }
+
+        // 画面を離れるときにハンドラを外す（OnEnable が毎回登録するため、外さないと往復のたび多重登録になり
+        // 1クリックで複数打席進んでしまう）。
+        private void OnDisable()
+        {
+            if (_nextPa != null) _nextPa.clicked -= OnNextPa;
+            if (_pinchHit != null) _pinchHit.clicked -= OnPinchHit;
+            if (_skip != null) _skip.clicked -= OnSkip;
+            if (_backHome != null) _backHome.clicked -= OnBackHome;
+            foreach (var (b, h) in _speedHandlers) b.clicked -= h;
+            _speedHandlers.Clear();
+            _speedButtons.Clear();
+        }
+
+        // 試合ごとに初期化する進行状態（試合をまたいだ持ち越し禁止）。要素クエリ前に呼べるフィールドだけを扱う。
+        private void ResetPerMatchState()
+        {
+            _gameOver = false;
+            _replaying = false;
+            _finalResult = null;
+            _onComplete = null;
+            _current = null;
+            _prog = null;
+            _homeTeam = null;
+            _t = 0;
+            _speed = 1f;
+            _pitchIdx = 0;
+            _pitchClock = 0f;
+            _inPitchPhase = false;
+            _pitchBattingChoice = null;
+            _pitchPolicyChoice = null;
+            _capHist.Clear();
+            _speedButtons.Clear();
+            _speedHandlers.Clear();
+        }
+
+        // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
+        private void ResetPerMatchVisuals()
+        {
+            _capHistHost?.Clear();
+            ClearSegHighlight(_ptBattingSeg);
+            ClearSegHighlight(_ptDefenseSeg);
+            SetCount(0, 0);
+            SetOuts(0);
+            SetBases(false, false, false);
+            foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb.name == "spd-1");
+            if (_result != null) _result.style.display = DisplayStyle.None;
         }
 
         private void BuildGame()
@@ -511,11 +568,13 @@ namespace KokoSim.Unity.Match
             var b = _root.Q<Button>(name);
             if (b == null) return;
             _speedButtons.Add(b);
-            b.clicked += () =>
+            System.Action handler = () =>
             {
                 _speed = speed;
                 foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
             };
+            b.clicked += handler;
+            _speedHandlers.Add((b, handler));
         }
 
         private static void SetEnabled(Button b, bool on) { if (b != null) b.SetEnabled(on); }

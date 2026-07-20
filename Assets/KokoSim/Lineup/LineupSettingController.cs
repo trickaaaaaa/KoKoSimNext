@@ -421,13 +421,15 @@ namespace KokoSim.Unity.Lineup
             if (!_state.CanConfirm) return;   // 編成不備（ベンチ入り9人未満）では確定させない
             KokoSim.Unity.Shell.GameSession.Current.Lineup = _state.ToLineupSpec();
             // AwaitingMatchStart は立てたまま → ホーム復帰で自校戦を消化する。
-            KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("HomeDashboard");
+            // クリック配信中に同期 Show すると UITK のイベント木が壊れて全画面が非アクティブに落ちるため、
+            // ScreenRouter 自身が用意する遅延切替（次フレーム）を使う（ScreenRouter の _pending 参照）。
+            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
         }
 
         private void OnCancel()
         {
             KokoSim.Unity.Shell.GameSession.Current.AwaitingMatchStart = false;   // 試合は消化しない
-            KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("HomeDashboard");
+            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
         }
 
         private void RenderCompareOnly() => BuildCompare(_state.BuildView());
