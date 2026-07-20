@@ -184,6 +184,40 @@ public sealed class TournamentRunnerTests
         }
     }
 
+    // Complete し損ねたライブ自校戦（観戦画面を離脱した等）から復帰できること。Begin を再度呼んでも例外で
+    // 詰まず、同一の進行体が返り、そのまま Complete して大会が進む＝取り残しが行き止まりにならない保証。
+    [Fact]
+    public void PendingLiveMatch_IsResumable_AndDoesNotBlockTournament()
+    {
+        var resolver = new LiveConsistentResolver();
+        var r = new TournamentRunner(Field(70, 15, 55), Sch(1, 70), Coeff,
+            new Xoshiro256Random(2026), Schedule, "t", resolver);
+
+        var first = r.BeginNextPlayerMatch();
+        Assert.True(r.HasPendingLiveMatch);
+
+        // 観戦画面を離脱した想定＝Complete せずに再度 Begin / Resume する。
+        var again = r.BeginNextPlayerMatch();
+        Assert.Same(first.Progression, again.Progression);
+        Assert.Equal(first.OpponentName, again.OpponentName);
+        Assert.Same(first.Progression, r.ResumePendingLiveMatch().Progression);
+
+        while (again.Progression.Advance()) { /* 采配なしで全打席 */ }
+        r.CompleteNextPlayerMatch(again.Progression.BuildResult());
+
+        Assert.False(r.HasPendingLiveMatch);
+        Assert.Equal(Schedule.MatchDay(1), r.NextMatchDay);   // ラウンドが進んだ（日程が据え置かれない）。
+    }
+
+    [Fact]
+    public void ResumePendingLiveMatch_ThrowsWhenNothingPending()
+    {
+        var r = new TournamentRunner(Field(70, 15, 55), Sch(1, 70), Coeff,
+            new Xoshiro256Random(3), Schedule, "t", new LiveConsistentResolver());
+        Assert.False(r.HasPendingLiveMatch);
+        Assert.Throws<System.InvalidOperationException>(() => r.ResumePendingLiveMatch());
+    }
+
     /// <summary>
     /// Resolve と BeginLive を同一 teams＋同一Fork で作る整合リゾルバ（実 PlayerMatchResolver の契約と同形）。
     /// 自校＝後攻(home)。全打席を進めた BeginLive の結果は Resolve のボックススコアに一致する。

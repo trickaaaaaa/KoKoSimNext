@@ -84,9 +84,13 @@ public sealed class TournamentRunner
     /// Complete で終局結果を受けて自校カードと以降のカードを確定する。Next は自校スロット(Slot)と
     /// それ以降が未充填の途中状態（Complete で埋める）。本流RNGの消費順は自動 ResolveRound と同一。
     /// </summary>
+    /// <remarks>
+    /// Live は Begin が返したのと同一のライブ観戦ハンドル。UI が Complete し損ねた（観戦画面を離脱した等）
+    /// ときに <see cref="ResumePendingLiveMatch"/> で同じ進行体へ復帰できるよう保持する。
+    /// </remarks>
     private sealed record PendingLiveMatch(
         School?[] Cur, School?[] Next, int Slot, School Mgr, School Opp,
-        string RoundName, int RoundsRemaining, bool ManagerIsAway);
+        string RoundName, int RoundsRemaining, bool ManagerIsAway, LivePlayerMatch Live);
 
     public string Title { get; }
     public bool PlayerActive { get; private set; } = true;
@@ -177,12 +181,15 @@ public sealed class TournamentRunner
     /// 自校カードは詳細を隔離Fork のライブ進行体に委ねて一時停止する（この時点では勝敗未確定）。
     /// UI が進行体を進めて終局したら <see cref="CompleteNextPlayerMatch"/> に結果を戻すこと。
     /// 本流RNGの消費は <see cref="PlayNextPlayerMatch"/> とバイト一致（＝観戦してもしなくても同じ大会展開）。
+    ///
+    /// 未完了のライブ自校戦が残っている（前回 Complete まで到達せず画面を離れた）ときは、新たに Begin せず
+    /// その進行体をそのまま返す＝再開する。Begin だけが積み上がって大会が進めなくなる状態を作らないため。
     /// </summary>
     public LivePlayerMatch BeginNextPlayerMatch()
     {
+        if (_pending is not null) return _pending.Live;   // 取り残されたライブ戦へ復帰（例外で詰ませない）。
         if (Finished) throw new InvalidOperationException("大会は自校にとって終了しています。");
         if (_nextOpponent is null) throw new InvalidOperationException("次戦相手が未確定です。");
-        if (_pending is not null) throw new InvalidOperationException("進行中のライブ自校戦があります（先に Complete してください）。");
         if (_playerResolver is null) throw new InvalidOperationException("ライブ観戦には IPlayerMatchResolver が必要です。");
 
         var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
@@ -220,6 +227,18 @@ public sealed class TournamentRunner
         AdvanceUntilPlayerMatch();
         return outcome;
     }
+
+    /// <summary>
+    /// ライブ観戦中の自校戦が Complete されないまま残っているか。UI が観戦画面から離脱した場合の検知に使う。
+    /// </summary>
+    public bool HasPendingLiveMatch => _pending is not null;
+
+    /// <summary>
+    /// 取り残されたライブ自校戦へ復帰する（<see cref="BeginNextPlayerMatch"/> が返したのと同一の進行体）。
+    /// 本流RNGは一切消費しない＝復帰しても大会展開は変わらない。
+    /// </summary>
+    public LivePlayerMatch ResumePendingLiveMatch()
+        => _pending?.Live ?? throw new InvalidOperationException("進行中のライブ自校戦がありません。");
 
     public TournamentBracketView BuildBracketView()
         => new(Title, _matches.ToList(), ChampionName, IsChampion, !PlayerActive);
@@ -360,8 +379,10 @@ public sealed class TournamentRunner
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)));
-                _pending = new PendingLiveMatch(cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway);
-                return new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName);
+                var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName);
+                _pending = new PendingLiveMatch(
+                    cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway, handle);
+                return handle;
             }
 
             _matches.Add(new BracketMatch(roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, false));
