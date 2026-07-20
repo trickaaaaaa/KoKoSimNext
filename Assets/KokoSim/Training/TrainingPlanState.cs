@@ -34,6 +34,8 @@ namespace KokoSim.Unity.Training
         public string Icon = "";
         public double Progress;    // 0..1（次レベルまでの割合）
         public int LevelsGained;   // この週で上がったレベル数（0=進捗のみ）
+        public int Value;          // 現在の能力値（0=未設定＝相対強調バー）
+        public string Grade = "";  // 現在値のランク S〜G（空＝ランクを持たない相対バー）
     }
 
     /// <summary>プリセット選択肢（統合モーダルの一覧）。説明文と「伸びる能力」の相対バーを持つ。</summary>
@@ -452,6 +454,9 @@ namespace KokoSim.Unity.Training
                     AbilityJp = AbilityJp(k), Icon = AbilityIcon(k),
                     Progress = System.Math.Clamp(gain, 0.0, 1.0),   // 1レベル=満タン、複数レベルはLevelsGainedで表示
                     LevelsGained = p.Level(k) - beforeLv[k],
+                    // ランク併記は「今週の伸び」ではなく**現在の能力値**を表す（UI原則③）。
+                    Value = p.Level(k),
+                    Grade = Tiers.FromStrength(p.Level(k)).ToString(),
                 });
             }
             return bars;

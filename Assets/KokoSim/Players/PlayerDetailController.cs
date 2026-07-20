@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Shell;
+using KokoSim.Unity.Components;
 
 namespace KokoSim.Unity.Players
 {
@@ -78,7 +79,7 @@ namespace KokoSim.Unity.Players
             SetText("meta-velo", "最速 " + v.TopVelocityKmh + " km/h");
 
             var chip = _root.Q<VisualElement>("overall-chip");
-            if (chip != null) { chip.Clear(); chip.Add(BigGradeChip(v.OverallGrade)); }
+            if (chip != null) { chip.Clear(); chip.Add(UiComponents.RankChip(v.OverallGrade, RankChipSize.Large)); }
 
             BuildList("pitcher-abils", v.PitcherAbilities, BuildAbil);
             BuildList("fielder-abils", v.FielderAbilities, BuildAbil);
@@ -108,22 +109,14 @@ namespace KokoSim.Unity.Players
         // ===== 行ビルダー =====
 
         private static VisualElement BuildAbil(AbilityBar a)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("pd2-abil");
-
-            var l = new Label(a.Label); l.AddToClassList("pd2-abil__l"); row.Add(l);
-            var val = new Label(a.Value.ToString()); val.AddToClassList("pd2-abil__v"); row.Add(val);
-
-            var bar = new VisualElement(); bar.AddToClassList("pd2-abil__bar");
-            var fill = new VisualElement(); fill.AddToClassList("pd2-abil__fill");
-            fill.style.width = Length.Percent(Mathf.Clamp01(a.Pct) * 100f);
-            fill.style.backgroundColor = Hex(a.BarColorHex);
-            bar.Add(fill); row.Add(bar);
-
-            row.Add(GradeChip(a.Grade));
-            return row;
-        }
+            => UiComponents.AbilityRow(new AbilityRowData
+            {
+                Label = a.Label,
+                Value = a.Value.ToString(),
+                Pct = a.Pct,
+                Grade = a.Grade,
+                Divided = true,
+            });
 
         private static VisualElement BuildHidden(HiddenParam h)
         {
@@ -153,7 +146,7 @@ namespace KokoSim.Unity.Players
                 chip.AddToClassList("pd2-pchip");
                 chip.userData = pt;
                 var name = new Label(pt.Name); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
-                chip.Add(GradeChip(pt.Kire));
+                chip.Add(UiComponents.RankChip(pt.Kire));
                 _chart.Add(chip);
             }
             LayoutChart();
@@ -191,7 +184,7 @@ namespace KokoSim.Unity.Players
                 child.style.left = end.x - lw * 0.5f;
                 child.style.top = end.y - lh * 0.5f;
 
-                _chartLines.Add((end, GradeColor(pt.Kire)));
+                _chartLines.Add((end, RankPalette.Of(pt.Kire)));
             }
             _chart.MarkDirtyRepaint();
         }
@@ -236,22 +229,6 @@ namespace KokoSim.Unity.Players
             p.Arc(c + new Vector2(BallR * 1.35f, 0f), BallR * 1.55f,
                 new Angle(148f, AngleUnit.Degree), new Angle(212f, AngleUnit.Degree));
             p.Stroke();
-        }
-
-        // 等級（S〜G）→色。USS の .grade--X 背景色に一致。
-        private static Color GradeColor(string grade)
-        {
-            switch (grade)
-            {
-                case "S": return new Color(1.000f, 0.365f, 0.561f);
-                case "A": return new Color(1.000f, 0.420f, 0.290f);
-                case "B": return new Color(1.000f, 0.627f, 0.235f);
-                case "C": return new Color(0.961f, 0.776f, 0.290f);
-                case "D": return new Color(0.725f, 0.831f, 0.353f);
-                case "E": return new Color(0.412f, 0.725f, 0.545f);
-                case "F": return new Color(0.369f, 0.498f, 0.561f);
-                default:  return new Color(0.353f, 0.416f, 0.369f);
-            }
         }
 
         private static VisualElement BuildSkill(SkillInfo s)
@@ -335,21 +312,6 @@ namespace KokoSim.Unity.Players
         }
 
         // ===== 補助 =====
-
-        private static Label GradeChip(string grade)
-        {
-            var chip = new Label(grade);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + grade);
-            return chip;
-        }
-
-        private static Label BigGradeChip(string grade)
-        {
-            var chip = GradeChip(grade);
-            chip.AddToClassList("grade--lg");
-            return chip;
-        }
 
         private static Color Hex(string hex)
         {

@@ -10,14 +10,13 @@ using KokoSim.Engine.Season;
 
 namespace KokoSim.Unity.Players
 {
-    /// <summary>能力1行（ラベル・内部値・等級・バー割合0〜1・バー色hex）。</summary>
+    /// <summary>能力1行（ラベル・内部値・等級・バー割合0〜1）。バー色は等級から部品側で決まる（RankPalette）。</summary>
     public sealed class AbilityBar
     {
         public string Label = "";
         public int Value;
         public string Grade = "D";
         public float Pct;
-        public string BarColorHex = "#9FCB3B";
     }
 
     /// <summary>隠しパラメータ1項（未判明なら Known=false で「？」）。</summary>
@@ -291,16 +290,11 @@ namespace KokoSim.Unity.Players
                 Value = v,
                 Grade = Tiers.FromStrength(v).ToString(),
                 Pct = System.Math.Max(0f, System.Math.Min(1f, v / 100f)),
-                BarColorHex = BarColor(v),
             };
         }
 
         private static RadarAxis Axis(DevelopingPlayer p, AbilityKind k, string label)
             => new RadarAxis { Label = label, Value01 = System.Math.Max(0f, System.Math.Min(1f, p.Level(k) / 100f)) };
-
-        // 内部値→バー色（帯で色分け）。
-        private static string BarColor(int v)
-            => v >= 80 ? "#F5C64A" : v >= 65 ? "#9FCB3B" : v >= 50 ? "#6B8CA8" : "#5C7466";
 
         // 球速内部値(1〜100)→km/h（表示近似。実シムの物理変換はエンジン係数側）。
         private static int Kmh(int velLevel)
