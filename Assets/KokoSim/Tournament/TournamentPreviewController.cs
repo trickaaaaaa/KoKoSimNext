@@ -2,6 +2,7 @@ using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Unity.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Tournament
 {
@@ -83,10 +84,7 @@ namespace KokoSim.Unity.Tournament
             if (rank == null) return;
             rank.Clear();
             var grade = TeamOverall.GradeOf(RosterService.Roster);
-            var chip = new Label(grade);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + grade);
-            rank.Add(chip);
+            rank.Add(UiComponents.RankChipLegacy(grade));
         }
 
         // ===== ビュー1: トーナメント（今大会の経過） =====
@@ -227,9 +225,8 @@ namespace KokoSim.Unity.Tournament
             var name = new Label(c.Name);
             name.AddToClassList("tp-team-name");
             sub.Add(name);
-            var chip = new Label("総合 " + c.TierLetter);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + c.TierLetter);
+            var chip = UiComponents.RankChipLegacy(c.TierLetter);
+            chip.text = "総合 " + c.TierLetter;
             chip.style.marginLeft = 8;
             sub.Add(chip);
             var seed = new Label(c.SeedLabel);

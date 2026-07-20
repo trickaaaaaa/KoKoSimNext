@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Players; // AbilityBar / RadarAxis を共用
 using KokoSim.Unity.Shell;   // ScreenRouter / RankPalette（ランク色の単一ソース）
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Squad
 {
@@ -68,7 +69,7 @@ namespace KokoSim.Unity.Squad
 
             // ヘッダー: 総合ランク チップ ＋ (値) 形式「E (41)」（1.5倍拡大）。
             var chip = _root.Q<VisualElement>("overall-chip");
-            if (chip != null) { chip.Clear(); chip.Add(XlGradeChip(v.OverallGrade)); }
+            if (chip != null) { chip.Clear(); chip.Add(UiComponents.RankChip(v.OverallGrade, RankChipSize.XLarge)); }
             var ov = _root.Q<Label>("overall-value");
             if (ov != null) ov.text = "(" + v.OverallValue + ")";
 
@@ -146,28 +147,15 @@ namespace KokoSim.Unity.Squad
         // ===== 右カラムの指標バー（内訳＋ランク連動色） =====
 
         private static VisualElement BuildFactor(AbilityBar a)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("ts-frow");
-
-            var nameCol = new VisualElement();
-            nameCol.AddToClassList("ts-frow__name");
-            var l = new Label(a.Label); l.AddToClassList("ts-frow__l"); nameCol.Add(l);
-            var sub = new Label(Composition.TryGetValue(a.Label, out var c) ? c : "");
-            sub.AddToClassList("ts-frow__sub"); nameCol.Add(sub);
-            row.Add(nameCol);
-
-            var val = new Label(a.Value.ToString()); val.AddToClassList("ts-frow__v"); row.Add(val);
-
-            var bar = new VisualElement(); bar.AddToClassList("ts-frow__bar");
-            var fill = new VisualElement(); fill.AddToClassList("ts-frow__fill");
-            fill.style.width = Length.Percent(Mathf.Clamp01(a.Pct) * 100f);
-            fill.style.backgroundColor = Hex(a.BarColorHex); // ＝RankPalette.Hex(grade)
-            bar.Add(fill); row.Add(bar);
-
-            row.Add(GradeChip(a.Grade));
-            return row;
-        }
+            => UiComponents.AbilityRow(new AbilityRowData
+            {
+                Label = a.Label,
+                Sub = Composition.TryGetValue(a.Label, out var c) ? c : "",
+                Value = a.Value.ToString(),
+                Pct = a.Pct,
+                Grade = a.Grade,
+                Size = AbilityRowSize.Large,
+            });
 
         // ===== レーダー描画（Painter2D＋頂点カラーメッシュ・総合ランク連動色） =====
 
@@ -256,24 +244,5 @@ namespace KokoSim.Unity.Squad
             return new Vector2(cx + Mathf.Cos(ang) * r, cy + Mathf.Sin(ang) * r);
         }
 
-        // ===== 補助 =====
-
-        private static Label GradeChip(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("grade");
-            c.AddToClassList("grade--" + grade);
-            return c;
-        }
-
-        private static Label XlGradeChip(string grade)
-        {
-            var c = GradeChip(grade);
-            c.AddToClassList("grade--xl");
-            return c;
-        }
-
-        private static Color Hex(string hex)
-            => ColorUtility.TryParseHtmlString(hex, out var c) ? c : Color.white;
     }
 }

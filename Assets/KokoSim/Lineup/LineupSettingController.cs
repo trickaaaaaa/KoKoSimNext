@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Lineup
 {
@@ -61,7 +62,7 @@ namespace KokoSim.Unity.Lineup
             _root.Q<Button>("lu-ok")?.SetEnabled(v.CanConfirm);
 
             var rank = _root.Q<VisualElement>("lu-team-rank");
-            if (rank != null) { rank.Clear(); rank.Add(RankChip(v.TeamRankGrade)); }
+            if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChip(v.TeamRankGrade)); }
 
             BuildRows(v);
             BuildDhBar(v);
@@ -104,7 +105,7 @@ namespace KokoSim.Unity.Lineup
                 info.AddToClassList("lineup-row__info");
                 row.Add(info);
 
-                row.Add(RankChip(r.OverallGrade));
+                row.Add(UiComponents.RankChip(r.OverallGrade));
 
                 var slot = r.Order - 1;
                 var pidx = r.PlayerIndex;
@@ -151,7 +152,7 @@ namespace KokoSim.Unity.Lineup
             var name = new Label(v.StartingPitcherName);
             name.AddToClassList("sp-pill__name");
             pill.Add(name);
-            pill.Add(RankChip(v.StartingPitcherGrade));
+            pill.Add(UiComponents.RankChip(v.StartingPitcherGrade));
             pill.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _state.ClickStartingPitcher(); Render(); });
             sp.Add(pill);
         }
@@ -174,7 +175,7 @@ namespace KokoSim.Unity.Lineup
                 var tag = new Label(b.IsPitcher ? "投" : "野");
                 tag.AddToClassList("bench-row__tag");
                 row.Add(tag);
-                row.Add(RankChip(b.OverallGrade));
+                row.Add(UiComponents.RankChip(b.OverallGrade));
 
                 var idx = b.Index;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickBench(idx); Render(); });
@@ -311,7 +312,7 @@ namespace KokoSim.Unity.Lineup
                 var pos = AptPos[i + 1];
                 el.style.top = Length.Percent(pos.Top);
                 el.style.left = Length.Percent(pos.Left);
-                el.Add(has ? AptRank(grades[i]) : AptDash());
+                el.Add(has ? UiComponents.RankChip(grades[i]) : AptDash());
                 slots.Add(el);
             }
             field.Add(slots);
@@ -337,7 +338,7 @@ namespace KokoSim.Unity.Lineup
             var meta = new VisualElement();
             meta.AddToClassList("cmp-card__meta");
             meta.Add(GradeLabel(card.GradeLabel));
-            meta.Add(RankChip(card.OverallGrade));
+            meta.Add(UiComponents.RankChip(card.OverallGrade));
             if (card.IsCaptain)
             {
                 var cap = new Label("主将");
@@ -414,21 +415,7 @@ namespace KokoSim.Unity.Lineup
             return l;
         }
 
-        private static Label RankChip(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
-        private static Label AptRank(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
         private static Label AptDash()
         {

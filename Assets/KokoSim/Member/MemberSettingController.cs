@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Member
 {
@@ -73,10 +74,7 @@ namespace KokoSim.Unity.Member
             if (rank != null)
             {
                 rank.Clear();
-                var g = new Label(v.TeamRankGrade);
-                g.AddToClassList("grade");
-                g.AddToClassList("grade--" + v.TeamRankGrade);
-                rank.Add(g);
+                rank.Add(UiComponents.RankChip(v.TeamRankGrade));
             }
 
             SetText("ms-pool-title",
@@ -229,7 +227,7 @@ namespace KokoSim.Unity.Member
                 var name = new Label(slot.Name);
                 name.AddToClassList("slot-card__name");
                 top.Add(name);
-                top.Add(RankChip(slot.RankGrade));
+                top.Add(UiComponents.RankChip(slot.RankGrade));
                 el.Add(top);
 
                 var sub = new VisualElement();
@@ -264,7 +262,7 @@ namespace KokoSim.Unity.Member
                 var name = new Label(Surname(slot.Name));
                 name.AddToClassList("field-chip__name");
                 el.Add(name);
-                el.Add(RankChip(slot.RankGrade));
+                el.Add(UiComponents.RankChip(slot.RankGrade));
             }
             else
             {
@@ -315,7 +313,7 @@ namespace KokoSim.Unity.Member
             var name = new Label(slot.Name);
             name.AddToClassList("slot-card__name");
             top.Add(name);
-            top.Add(RankChip(slot.RankGrade));
+            top.Add(UiComponents.RankChip(slot.RankGrade));
             _popover.Add(top);
 
             var sub = new VisualElement();
@@ -378,7 +376,7 @@ namespace KokoSim.Unity.Member
                 var meta = new VisualElement();
                 meta.AddToClassList("pool-chip__meta");
                 meta.Add(GradeLabel(p.GradeLabel));
-                meta.Add(RankChip(p.OverallGrade));
+                meta.Add(UiComponents.RankChip(p.OverallGrade));
                 body.Add(meta);
                 chip.Add(body);
 
@@ -466,20 +464,13 @@ namespace KokoSim.Unity.Member
                 var pos = AptPos[i + 1];
                 el.style.top = Length.Percent(pos.Top);
                 el.style.left = Length.Percent(pos.Left);
-                el.Add(has ? AptRank(grades[i]) : AptDash());
+                el.Add(has ? UiComponents.RankChip(grades[i]) : AptDash());
                 slots.Add(el);
             }
             field.Add(slots);
             return field;
         }
 
-        private static Label AptRank(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
         private static Label AptDash()
         {
@@ -514,7 +505,7 @@ namespace KokoSim.Unity.Member
             var meta = new VisualElement();
             meta.AddToClassList("cmp-card__meta");
             meta.Add(GradeLabel(card.GradeLabel));
-            meta.Add(RankChip(card.OverallGrade));
+            meta.Add(UiComponents.RankChip(card.OverallGrade));
             if (card.IsCaptain)
             {
                 var cap = new Label("主将");
@@ -581,13 +572,6 @@ namespace KokoSim.Unity.Member
             return l;
         }
 
-        private static Label RankChip(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
         private Label ClearButton(int number)
         {
