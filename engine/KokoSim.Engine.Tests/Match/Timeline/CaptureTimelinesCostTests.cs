@@ -64,9 +64,11 @@ public sealed class CaptureTimelinesCostTests
 
     [Fact]
     [Trait("Category", "Heavy")]
-    public void Cost_OnVsOff_1000Games()
+    public void Cost_OnVsOff_250Games()
     {
-        const int games = 1000;
+        // 250 試合。コスト「比」を見るのが目的なので試合数は必要最小限にする
+        // （1000 試合だと CI で単体6分かかり、PRのCI時間を独占していた。issue #17）。
+        const int games = 250;
 
         var (offMs, offBytes, offTimelines) = Measure(games, capture: false);
         var (onMs, onBytes, onTimelines) = Measure(games, capture: true);
@@ -80,8 +82,14 @@ public sealed class CaptureTimelinesCostTests
         Assert.Equal(0, offTimelines);
         Assert.True(onTimelines > games, "ON では試合数を超えるタイムラインが生成される");
 
-        // ガードレール: ON は OFF に対して極端に遅くない（回帰検知・環境差を吸収する緩い上限）。
-        Assert.True(onMs < offMs * 8 + 2000, $"ON が想定外に遅い（on={onMs}ms off={offMs}ms）");
+        // ガードレール（回帰検知）は**アロケーション**で見る。
+        // 経過時間の比は実行環境に強く依存し（ローカル ×4.9 に対し GitHub の共有ランナーでは ×9.4）、
+        // 他テストとの CPU 競合でも動くため、閾値付きの合否判定には使えない。
+        // 一方アロケーション量は環境に依らずほぼ一定で、記録処理が太った回帰を素直に捉える。
+        Assert.True(onBytes < offBytes * 2, $"ON の割り当てが想定外に多い（on={onBytes}B off={offBytes}B）");
+
+        // 時間は「桁が変わっていないか」だけを見る極めて緩い上限（測定値自体は上のログで確認する）。
+        Assert.True(onMs < offMs * 25 + 2000, $"ON が想定外に遅い（on={onMs}ms off={offMs}ms）");
     }
 
     private static (long Ms, long Bytes, long Timelines) Measure(int games, bool capture)
@@ -94,7 +102,10 @@ public sealed class CaptureTimelinesCostTests
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
-        var bytes0 = GC.GetTotalAllocatedBytes(precise: true);
+        // プロセス全体ではなく**現在のスレッド**の割り当てを見る。
+        // GetTotalAllocatedBytes はプロセス全体の値なので、xUnit が他テストを並列実行していると
+        // そちらの割り当てまで混入し、計測が数倍にぶれる（単独 119MB → 並列 742MB を実測）。
+        var bytes0 = GC.GetAllocatedBytesForCurrentThread();
         var sw = Stopwatch.StartNew();
         long timelines = 0;
         for (var s = 1; s <= games; s++)
@@ -105,7 +116,7 @@ public sealed class CaptureTimelinesCostTests
                 if (e.Timeline is not null) timelines++;
         }
         sw.Stop();
-        var bytes1 = GC.GetTotalAllocatedBytes(precise: true);
+        var bytes1 = GC.GetAllocatedBytesForCurrentThread();
         return (sw.ElapsedMilliseconds, bytes1 - bytes0, timelines);
     }
 }

@@ -1,6 +1,12 @@
 name: engine-ci
 
 # エンジンの CI: dotnet test が回ることが Phase 0 の完了条件（design-07 §3）。
+#
+# ジョブ構成（PRのCIが12分かかっていた問題への対応 / issue #17）:
+#   fast  … Category!=Heavy。日常ループ相当。数分で返るPRの主フィードバック
+#   heavy … Category=Heavy の統計回帰。fast と**並列**に走らせ、さらに3シャードに分割する
+#           （不変条件#5「バランス影響のある変更後は統計回帰を必ず実行」を毎PRで満たすため、
+#             Heavy を条件付き実行にはしない。短くするのは分割と並列化で行う）
 on:
   push:
     paths:
@@ -16,8 +22,14 @@ on:
       - ".github/workflows/ci.yml"
   workflow_dispatch:
 
+# 同一ブランチで新しい push があれば古い実行を打ち切る（無駄なランナー占有をなくす）。
+concurrency:
+  group: engine-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  fast:
+    name: fast (Category!=Heavy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,4 +46,41 @@ jobs:
         run: dotnet build engine/KokoSim.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test engine/KokoSim.sln --configuration Release --no-build --verbosity normal
+        run: >
+          dotnet test engine/KokoSim.sln --configuration Release --no-build
+          --filter "Category!=Heavy"
+
+  heavy:
+    name: heavy (${{ matrix.shard.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          # 実測（run 29747743052）で最も重いのがタイムライン記録のコスト計測。
+          # これは経過時間の比を見る性能テストなので、他テストと同居させると
+          # ランナーの CPU 競合で比がぶれる。専用シャードで単独実行する。
+          - name: timeline-cost
+            filter: "Category=Heavy&FullyQualifiedName~CaptureTimelinesCost"
+          - name: balance
+            filter: "Category=Heavy&FullyQualifiedName~Tests.Balance."
+          - name: rest
+            filter: "Category=Heavy&FullyQualifiedName!~CaptureTimelinesCost&FullyQualifiedName!~Tests.Balance."
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore engine/KokoSim.sln
+
+      - name: Build
+        run: dotnet build engine/KokoSim.sln --configuration Release --no-restore
+
+      - name: Test
+        run: >
+          dotnet test engine/KokoSim.sln --configuration Release --no-build
+          --filter "${{ matrix.shard.filter }}"
