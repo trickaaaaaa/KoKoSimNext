@@ -55,14 +55,22 @@ public sealed class DevelopingPlayer
     public GrowthType GrowthType { get; init; } = GrowthType.Standard;
     public double PersonalityFactor { get; init; } = 1.0; // 練習効率 0.8〜1.2
 
-    /// <summary>精神力（設計書02 §3）。実戦出場でのみ成長する系（練習では伸びない）。</summary>
+    /// <summary>精神力（設計書02 §3）。実戦出場でのみ成長する系（練習では伸びない, MatchGrowthModel）。</summary>
     public int Mental { get; set; } = 50;
+    /// <summary>精神力の実戦経験値（設計書02 §5.3a, Q8）。必要expは能力値と同じ曲線。</summary>
+    public double MentalExp { get; set; }
+    /// <summary>精神力の隠し上限（Q8。生成時に才能ギャップ＋Late上振れで決まる）。</summary>
+    public int MentalCap { get; set; } = 99;
 
     /// <summary>
     /// 捕手リード（配球の質, 設計書01 §2①）。天性（野球脳＝Mental相関）で素地が決まり、
-    /// 実戦出場で伸ばす系（練習では伸びない, Mentalと同格）。捕手のみ意味を持つ。set は将来の実戦成長フック。
+    /// 捕手として実戦出場すると伸びる系（練習では伸びない, MatchGrowthModel）。捕手のみ意味を持つ。
     /// </summary>
     public int Lead { get; set; } = 50;
+    /// <summary>捕手リードの実戦経験値（設計書02 §5.3a, Q8）。</summary>
+    public double LeadExp { get; set; }
+    /// <summary>捕手リードの隠し上限（Q8。野球脳と相関＋Late上振れ＝「名捕手の天井」）。</summary>
+    public int LeadCap { get; set; } = 99;
 
     /// <summary>統率傾向（性格の一部, CHANGELOG 22b）。主将選定の軸（設計書09 §8）。</summary>
     public int Leadership { get; init; } = 50;

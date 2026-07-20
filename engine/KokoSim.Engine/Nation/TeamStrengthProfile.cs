@@ -43,9 +43,11 @@ public sealed record TeamStrengthCoefficients
     public double DisciplineWeight { get; init; } = 0.15;
 
     // --- 投手合成（1投手, 合計1.0） ---
-    public double VelocityWeight { get; init; } = 0.30;
-    public double ControlWeight { get; init; } = 0.30;
-    public double StaminaWeight { get; init; } = 0.20;
+    // 球速は投手の格を決める最大要素として重めに置く（速球は打者への物理的な脅威そのもの）。
+    // ただし単独では決めない＝制球・キレ・スタミナの合計(0.60)が球速(0.40)を上回る配分にする。
+    public double VelocityWeight { get; init; } = 0.40;
+    public double ControlWeight { get; init; } = 0.25;
+    public double StaminaWeight { get; init; } = 0.15;
     public double PitchRankWeight { get; init; } = 0.20;
 
     // --- 守備合成（1野手, 合計1.0） ---

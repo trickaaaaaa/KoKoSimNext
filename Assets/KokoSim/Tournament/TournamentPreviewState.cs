@@ -1,15 +1,13 @@
-using System;
 using System.Collections.Generic;
-using KokoSim.Engine.Core;
-using KokoSim.Engine.Match.Tactics;
-using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 
 namespace KokoSim.Unity.Tournament
 {
     /// <summary>
     /// 大会プレビュー画面の ViewModel（設計書06 §3.5b, mock-tournament-preview.html）。UnityEngine 非依存。
-    /// 出場校（実名・強さ・校風）を決定論生成し、エンジンの TournamentPreviewBuilder でプレビューを組む。
+    /// 出場校は「今まさに開催中の大会」（GameSession.Field＝自校＋県内校）を使う。
+    /// 注目選手・登録メンバーは実際の対戦相手ラインナップと同一ソース（StrengthTeamFactory.ForSchool）から
+    /// 組まれるため、展望で見た選手が実戦でそのまま出てくる。
     /// UI（Controller）はこの View を描画するだけ。
     /// </summary>
     public sealed class TournamentPreviewState
@@ -27,23 +25,62 @@ namespace KokoSim.Unity.Tournament
             public int Batting, Pitching, Defense;
         }
 
+        public sealed class NotableRow
+        {
+            public string Number;       // 背番号（丸バッジ）
+            public bool IsPitcher;      // バッジ色分け（投手=アンバー / 野手=グリーン）
+            public string Name;
+            public string Sub;          // 校名・学年・投打・守備位置
+            public string StatLine;     // 最速/防御率 or 打率/本塁打（合成の見込み値）
+            public string Blurb;
+        }
+
+        public sealed class MemberRow
+        {
+            public string Number;
+            public string Name;         // 氏名（守備位置つき）
+            public string Grade;        // 「2年」
+            public string Hand;         // 「右投左打」
+        }
+
+        public sealed class RosterBlock
+        {
+            public string SchoolName;
+            public string Tag;          // 「総合 A ／ 第1シード」
+            public string TierLetter;
+            public string Sub;          // チーム寸評
+            public List<MemberRow> Members;
+        }
+
         public sealed class View
         {
             public string Title;
             public string Meta;
             public string Lead;
-            public List<ContenderRow> Contenders;
+            public List<ContenderRow> Contenders = new List<ContenderRow>();
+            public List<NotableRow> Notables = new List<NotableRow>();
+            public List<RosterBlock> Rosters = new List<RosterBlock>();
         }
 
+        /// <summary>大会が開催中でなければ null（呼び出し側は空状態を出す）。</summary>
         public View Build()
         {
-            var preview = TournamentPreviewBuilder.Build(
-                "2027年度 秋季神奈川県大会", GenerateField(), berths: 2, nextStageName: "関東大会");
+            var session = KokoSim.Unity.Shell.GameSession.Current;
+            if (!session.InTournament || session.Field == null || session.Field.Count == 0) return null;
 
-            var rows = new List<ContenderRow>(preview.Contenders.Count);
+            // 上位2校が次のステージへ（秋＝地区/関東、夏＝甲子園）。現状の大会構造に合わせた表示上の既定。
+            var summer = session.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
+            var preview = TournamentPreviewBuilder.Build(
+                session.Title, session.Field,
+                berths: summer ? 1 : 2,
+                nextStageName: summer ? "甲子園" : "地区大会",
+                yearIndex: session.Year);
+
+            var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
+
             foreach (var c in preview.Contenders)
             {
-                rows.Add(new ContenderRow
+                v.Contenders.Add(new ContenderRow
                 {
                     MarkSym = Sym(c.Mark),
                     MarkClass = MarkClass(c.Mark),
@@ -58,24 +95,44 @@ namespace KokoSim.Unity.Tournament
                     Defense = c.Rating.Defense,
                 });
             }
-            return new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead, Contenders = rows };
-        }
 
-        // 出場校は生成済み全国から1県ぶんを引く（校名は NationGenerator が県内ユニーク化済み）。
-        // 決定論生成なので静的キャッシュで初回のみ生成（画面再表示のたびの再生成を避ける）。
-        private const int PreviewPrefectureId = 32; // 校数 ≈ 64（mock「出場64校」相当）
-        private static KokoSim.Engine.Nation.Nation _nation;
-
-        private static List<School> GenerateField()
-        {
-            if (_nation == null)
+            foreach (var n in preview.NotablePlayers)
             {
-                _nation = NationGenerator.Generate(
-                    KokoSim.Unity.Shell.SchoolNameVocabProvider.Default, new NationCoefficients(), new Xoshiro256Random(2027));
+                v.Notables.Add(new NotableRow
+                {
+                    Number = n.UniformNumber.ToString(),
+                    IsPitcher = n.IsPitcher,
+                    Name = n.Name,
+                    Sub = n.SchoolName + "・" + n.Grade + "年・" + n.HandednessLabel + "・" + n.PositionLabel,
+                    StatLine = n.StatLine,
+                    Blurb = n.Blurb,
+                });
             }
-            var field = new List<School>();
-            foreach (var s in _nation.InPrefecture(PreviewPrefectureId)) field.Add(s);
-            return field;
+
+            foreach (var r in preview.Rosters)
+            {
+                var block = new RosterBlock
+                {
+                    SchoolName = r.SchoolName,
+                    TierLetter = r.Tier.ToString(),
+                    Tag = "総合 " + r.Tier + " ／ " + r.SeedLabel,
+                    Sub = r.TeamBlurb,
+                    Members = new List<MemberRow>(r.Members.Count),
+                };
+                foreach (var m in r.Members)
+                {
+                    block.Members.Add(new MemberRow
+                    {
+                        Number = m.UniformNumber.ToString(),
+                        Name = m.Name + "（" + m.PositionLabel + "）",
+                        Grade = m.Grade + "年",
+                        Hand = m.HandednessLabel,
+                    });
+                }
+                v.Rosters.Add(block);
+            }
+
+            return v;
         }
 
         private static string Sym(ContenderMark m) => m switch

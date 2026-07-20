@@ -102,6 +102,9 @@ public static class PitchSequenceSynthesizer
                 b = 4;
                 tokens.Add(new PitchToken(PitchKind.Ball, b, s));
                 break;
+            case PlateAppearanceResult.HitByPitch:
+                tokens.Add(new PitchToken(PitchKind.HitByPitch, b, s)); // 死球はカウント不変で打席終了
+                break;
             default:
                 tokens.Add(new PitchToken(PitchKind.InPlay, b, s));
                 break;

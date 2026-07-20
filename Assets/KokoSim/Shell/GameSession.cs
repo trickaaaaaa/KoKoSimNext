@@ -3,7 +3,9 @@
 // HomeState は画面遷移のたびに作り直されるため、大会の進行（日・進行体・演出フラグ）は
 // 静的なこのホルダーに置き、どの画面へ移動しても大会状態が失われないようにする。
 using System;
+using System.Collections.Generic;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
@@ -22,6 +24,12 @@ namespace KokoSim.Unity.Shell
         public string Title { get; private set; } = "";
         public TournamentRunner Runner { get; private set; }
         public int Year { get; set; } = 1;
+
+        /// <summary>
+        /// 今大会の出場校（自校を含む）。TournamentRunner は entrants を外部公開しないため、
+        /// 大会展望（優勝候補・注目選手・登録メンバー）が実際の出場校を引けるようここで保持する。
+        /// </summary>
+        public IReadOnlyList<School> Field { get; private set; } = Array.Empty<School>();
 
         /// <summary>大会内経過日（開幕=0日目）。日送りで +1。</summary>
         public int TournamentDay { get; private set; }
@@ -60,12 +68,15 @@ namespace KokoSim.Unity.Shell
             InTournament && !Runner.Finished && TournamentDay >= Runner.NextMatchDay;
 
         /// <summary>大会モードに入る（HomeState が構築した進行体を公開し、開幕演出を要求する）。</summary>
-        public void EnterTournament(TournamentKind kind, string title, TournamentRunner runner)
+        /// <param name="field">出場校（自校を含む）。大会展望が実際の出場校を引くために保持する。</param>
+        public void EnterTournament(TournamentKind kind, string title, TournamentRunner runner,
+            IReadOnlyList<School> field = null)
         {
             Mode = GameMode.Tournament;
             Kind = kind;
             Title = title;
             Runner = runner;
+            Field = field ?? Array.Empty<School>();
             TournamentDay = 0;
             BannerPending = true;
             ResultPending = false;
@@ -83,13 +94,29 @@ namespace KokoSim.Unity.Shell
             return TournamentDay % 7 == 0;
         }
 
+        // 実戦成長（設計書02 §5.3a, Q8）用の暦・係数。HomeState の練習適用と同じ既定値運用。
+        private static readonly SeasonCalendar GrowthCalendar = new SeasonCalendar();
+        private static readonly GrowthStageTable GrowthStages = new GrowthStageTable();
+        private static readonly TrainingCoefficients GrowthTraining = new TrainingCoefficients();
+
+        /// <summary>
+        /// 実戦成長ループ（Q8）: 詳細シムの自校戦1試合ぶん、出場者の精神力/走塁判断/捕手リードを伸ばす。
+        /// 成績畳み込み（FoldGame）と同じ合流点で適用（PlayMatch/CompleteMatch の双方から1回ずつ）。
+        /// </summary>
+        private void ApplyMatchGrowth(GameResult detail, bool managerWasAway)
+            => MatchGrowthModel.Apply(detail, managerWasAway, RosterService.Roster,
+                GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
+
         /// <summary>自校の次戦を自動消化する。結果を UI 表示待ちにする。</summary>
         public PlayerMatchOutcome PlayMatch()
         {
             LastOutcome = Runner.PlayNextPlayerMatch();
             // 詳細シムで回った自校戦なら、ボックススコアを通算/今大会成績へ畳み込む。
             if (LastOutcome.Detail is { } detail)
+            {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+            }
             ResultPending = true;
             return LastOutcome;
         }
@@ -107,7 +134,10 @@ namespace KokoSim.Unity.Shell
         {
             LastOutcome = Runner.CompleteNextPlayerMatch(result);
             if (LastOutcome.Detail is { } detail)
+            {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+            }
             ResultPending = true;
             return LastOutcome;
         }

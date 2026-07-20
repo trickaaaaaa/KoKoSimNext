@@ -55,6 +55,7 @@ public static class GameSimulation
         /// <summary>1球采配（設計書15 Phase C）の帯校正用: 三振/四球/本塁打は1球判断の影響を最も受ける。</summary>
         public long TotalStrikeOuts { get; init; }
         public long TotalWalks { get; init; }
+        public long TotalHitBatters { get; init; }
         public long TotalHomeRuns { get; init; }
         public long TotalPlateAppearances { get; init; }
 
@@ -96,6 +97,7 @@ public static class GameSimulation
             TotalSacrificeBunts > 0 ? (double)TotalSacrificeBuntSuccesses / TotalSacrificeBunts : 0;
         public double StrikeoutRate => TotalPlateAppearances > 0 ? (double)TotalStrikeOuts / TotalPlateAppearances : 0;
         public double WalkRate => TotalPlateAppearances > 0 ? (double)TotalWalks / TotalPlateAppearances : 0;
+        public double HitByPitchRate => TotalPlateAppearances > 0 ? (double)TotalHitBatters / TotalPlateAppearances : 0;
         public double HomeRunRate => TotalPlateAppearances > 0 ? (double)TotalHomeRuns / TotalPlateAppearances : 0;
     }
 
@@ -147,7 +149,7 @@ public static class GameSimulation
         public long TotalWildPitches;
         public long TotalStealAttempts, TotalStealSuccesses;
         public long TotalSacrificeBunts, TotalSacrificeBuntSuccesses;
-        public long TotalStrikeOuts, TotalWalks, TotalHomeRuns, TotalPlateAppearances;
+        public long TotalStrikeOuts, TotalWalks, TotalHitBatters, TotalHomeRuns, TotalPlateAppearances;
         public int HomeWins, Ties, Extra, Shutouts;
         // 球種別（設計書15 Phase E-4）: enum 添字。
         public readonly long[] Swings = new long[PitchTypeCount];
@@ -173,8 +175,8 @@ public static class GameSimulation
             TotalStealSuccesses += r.AwayTactics.StealSuccesses + r.HomeTactics.StealSuccesses;
             TotalSacrificeBunts += r.AwayTactics.SacrificeBunts + r.HomeTactics.SacrificeBunts;
             TotalSacrificeBuntSuccesses += r.AwayTactics.SacrificeBuntSuccesses + r.HomeTactics.SacrificeBuntSuccesses;
-            foreach (var p in r.AwayPitching) { TotalStrikeOuts += p.StrikeOuts; TotalWalks += p.Walks; }
-            foreach (var p in r.HomePitching) { TotalStrikeOuts += p.StrikeOuts; TotalWalks += p.Walks; }
+            foreach (var p in r.AwayPitching) { TotalStrikeOuts += p.StrikeOuts; TotalWalks += p.Walks; TotalHitBatters += p.HitBatters; }
+            foreach (var p in r.HomePitching) { TotalStrikeOuts += p.StrikeOuts; TotalWalks += p.Walks; TotalHitBatters += p.HitBatters; }
             TotalPlateAppearances += r.Log.Count;
             foreach (var e in r.Log)
             {
@@ -227,6 +229,7 @@ public static class GameSimulation
             TotalSacrificeBuntSuccesses += o.TotalSacrificeBuntSuccesses;
             TotalStrikeOuts += o.TotalStrikeOuts;
             TotalWalks += o.TotalWalks;
+            TotalHitBatters += o.TotalHitBatters;
             TotalHomeRuns += o.TotalHomeRuns;
             TotalPlateAppearances += o.TotalPlateAppearances;
             for (var i = 0; i < PitchTypeCount; i++)
@@ -268,6 +271,7 @@ public static class GameSimulation
             TotalSacrificeBuntSuccesses = TotalSacrificeBuntSuccesses,
             TotalStrikeOuts = TotalStrikeOuts,
             TotalWalks = TotalWalks,
+            TotalHitBatters = TotalHitBatters,
             TotalHomeRuns = TotalHomeRuns,
             TotalPlateAppearances = TotalPlateAppearances,
             SwingsByPitchType = Swings,
@@ -388,6 +392,7 @@ public static class GameSimulation
         sb.AppendLine(c, $"| 本塁憤死/試合 | {s.AverageHomePlayOutsPerGame:F3} | 0.12–0.42 |");
         sb.AppendLine(c, $"| 三振率（打席あたり） | {s.StrikeoutRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 四球率（打席あたり） | {s.WalkRate:P2} | 参考 |");
+        sb.AppendLine(c, $"| 死球率（打席あたり） | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率（打席あたり） | {s.HomeRunRate:P2} | 参考 |");
         sb.AppendLine();
         sb.AppendLine("## design-14 第1段（P1）新プレー発生率（両軍計/試合）");

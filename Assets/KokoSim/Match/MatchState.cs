@@ -198,6 +198,7 @@ namespace KokoSim.Unity.Match
                 // 注目プレー（安打・四球・失策出塁・得点）のみ速報化。凡退・三振は間引く。
                 var notable = e.Result.IsHit()
                     || e.Result == PlateAppearanceResult.Walk
+                    || e.Result == PlateAppearanceResult.HitByPitch
                     || e.Result == PlateAppearanceResult.ReachedOnError
                     || e.RunsScored > 0;
                 if (!notable) continue;
@@ -243,6 +244,7 @@ namespace KokoSim.Unity.Match
                 case PlateAppearanceResult.Triple: return "三塁打";
                 case PlateAppearanceResult.HomeRun: return "ホームラン";
                 case PlateAppearanceResult.Walk: return "四球";
+                case PlateAppearanceResult.HitByPitch: return "死球";
                 case PlateAppearanceResult.ReachedOnError: return "出塁（失策）";
                 case PlateAppearanceResult.Strikeout: return "三振";
                 default: return "凡退";

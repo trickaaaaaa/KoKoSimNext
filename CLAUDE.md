@@ -113,6 +113,8 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 守備 / 捕球 | Fielding / Catching | Fieldingは反応・判断 |
 | 球速 / コントロール / スタミナ | Velocity / Control / Stamina | |
 | キレ（球種ランク） | PitchRank | 内部は SpinRate＋SpinEfficiency の2軸 |
+| 球質タイプ | PitcherArchetype(Power/Finesse/SoftToss/Balanced) | 本格派/技巧派/軟投派/バランス型。投手総合を変えず球速・制球・キレの配分だけ振り替える（`data/coefficients.yaml` の `roster: archetype_*`） |
+| 投手総合 | PitcherComposite | 球速.40/制球.25/スタミナ.15/キレ.20（TeamStrengthCoefficients）。球速を最大要素にしつつ、他3つの合計(0.60)が球速(0.40)を上回る＝**球速単独では決まらない** |
 | 精神力 | Mental | 選手の疲労概念・練習強度は廃止（2026-07-17）。投手スタミナ（試合内球数消耗＝PitchingFatigue）は別概念で存続 |
 | 才能上限 / 成長タイプ | PotentialCap / GrowthType(Early/Standard/Late) | 隠しパラメータ |
 | 見極め | Insight | 隠しパラメータの推定精度 |
