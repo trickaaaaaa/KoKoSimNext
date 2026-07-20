@@ -5,7 +5,7 @@ namespace KokoSim.Engine.Stats;
 /// <summary>
 /// 個人打撃の累積成績（複数試合の集計）。1試合ぶんの <see cref="BattingLine"/> を <see cref="Add"/> で畳み込む。
 /// 生カウンタのみ保持し、打率・出塁率・長打率は派生プロパティで算出（純データ・決定論）。
-/// 死球/犠飛は現エンジン未対応のため出塁率は (安打+四球)/(打数+四球) の近似（OPEN-QUESTIONS）。
+/// 犠飛は現エンジン未対応のため出塁率は (安打+四球+死球)/(打数+四球+死球) の近似（犠飛のみ分母から欠落）。
 /// </summary>
 public sealed class BattingStatLine
 {
@@ -18,6 +18,7 @@ public sealed class BattingStatLine
     public int HomeRuns { get; private set; }
     public int Rbi { get; private set; }
     public int Walks { get; private set; }
+    public int HitByPitches { get; private set; }
     public int StrikeOuts { get; private set; }
 
     /// <summary>単打＝安打−（二塁打＋三塁打＋本塁打）。</summary>
@@ -29,8 +30,9 @@ public sealed class BattingStatLine
     /// <summary>打率（打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;
 
-    /// <summary>出塁率＝(安打+四球)/(打数+四球)（死球/犠飛は未対応の近似, 分母0なら0）。</summary>
-    public double Obp => (AtBats + Walks) > 0 ? (double)(Hits + Walks) / (AtBats + Walks) : 0.0;
+    /// <summary>出塁率＝(安打+四球+死球)/(打数+四球+死球)（犠飛のみ未対応の近似, 分母0なら0）。</summary>
+    public double Obp => (AtBats + Walks + HitByPitches) > 0
+        ? (double)(Hits + Walks + HitByPitches) / (AtBats + Walks + HitByPitches) : 0.0;
 
     /// <summary>長打率＝塁打/打数（打数0なら0）。</summary>
     public double Slg => AtBats > 0 ? (double)TotalBases / AtBats : 0.0;
@@ -50,6 +52,7 @@ public sealed class BattingStatLine
         HomeRuns += l.HomeRuns;
         Rbi += l.Rbi;
         Walks += l.Walks;
+        HitByPitches += l.HitByPitches;
         StrikeOuts += l.StrikeOuts;
     }
 }

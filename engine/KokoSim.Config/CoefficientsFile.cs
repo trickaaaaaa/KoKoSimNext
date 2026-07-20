@@ -6,6 +6,7 @@ using KokoSim.Engine.Match.Pitching;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -171,6 +172,11 @@ public static class CoefficientsLoader
     {
         private static readonly PitchingCoefficients D = new();
         public ControlToSigmaDto? ControlToSigma { get; set; }
+        // 死球（HBP, design-14 未決F・2026-07-20）
+        public double HbpBodyEdgeM { get; set; } = D.HbpBodyEdgeM;
+        public double HbpBodyBottomM { get; set; } = D.HbpBodyBottomM;
+        public double HbpBodyTopM { get; set; } = D.HbpBodyTopM;
+        public double HbpDodgeProb { get; set; } = D.HbpDodgeProb;
         // 毎球の球速ばらつき（設計書02 §1.1d）
         public double VelocityDropMeanKmh { get; set; } = D.VelocityDropMeanKmh;
         public double VelocityDropSigmaKmh { get; set; } = D.VelocityDropSigmaKmh;
@@ -195,6 +201,10 @@ public static class CoefficientsLoader
                 ControlSigmaInterceptCm = s.InterceptCm,
                 ControlSigmaSlopeCmPerPoint = s.SlopeCmPerPoint,
                 ControlSigmaMinCm = s.MinSigmaCm,
+                HbpBodyEdgeM = HbpBodyEdgeM,
+                HbpBodyBottomM = HbpBodyBottomM,
+                HbpBodyTopM = HbpBodyTopM,
+                HbpDodgeProb = HbpDodgeProb,
                 VelocityDropMeanKmh = VelocityDropMeanKmh,
                 VelocityDropSigmaKmh = VelocityDropSigmaKmh,
                 VelocityDropMaxKmh = VelocityDropMaxKmh,
@@ -695,6 +705,9 @@ public static class CoefficientsLoader
         public double TournamentPracticeMult { get; set; } = D.TournamentPracticeMult;
         public int ReferenceWeekMinutes { get; set; } = D.ReferenceWeekMinutes;
         public int DefaultBudgetMinutes { get; set; } = D.DefaultBudgetMinutes;
+        public double MatchMentalExp { get; set; } = D.MatchMentalExp;
+        public double MatchLeadExp { get; set; } = D.MatchLeadExp;
+        public double MatchBaserunningExp { get; set; } = D.MatchBaserunningExp;
 
         public TrainingCoefficients ToModel() => new()
         {
@@ -710,6 +723,9 @@ public static class CoefficientsLoader
             TournamentPracticeMult = TournamentPracticeMult,
             ReferenceWeekMinutes = ReferenceWeekMinutes,
             DefaultBudgetMinutes = DefaultBudgetMinutes,
+            MatchMentalExp = MatchMentalExp,
+            MatchLeadExp = MatchLeadExp,
+            MatchBaserunningExp = MatchBaserunningExp,
         };
     }
 
@@ -1156,6 +1172,7 @@ public static class CoefficientsLoader
         public double LeadMean { get; set; } = D.LeadMean;
         public double LeadSd { get; set; } = D.LeadSd;
         public double LeadMentalCorr { get; set; } = D.LeadMentalCorr;
+        public double LeadCapMentalCorr { get; set; } = D.LeadCapMentalCorr;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
         public double SwitchProb { get; set; } = D.SwitchProb;
@@ -1192,9 +1209,45 @@ public static class CoefficientsLoader
         // 旧フィールド（後方互換）
         public double InitLevelMean { get; set; } = D.InitLevelMean;
         public double InitLevelSd { get; set; } = D.InitLevelSd;
+        // 球質タイプ（本格派/技巧派/軟投派）: 出現割合と配分オフセット。自校・AI校で共有する。
+        public double ArchetypePowerShare { get; set; } = AD.PowerShare;
+        public double ArchetypeFinesseShare { get; set; } = AD.FinesseShare;
+        public double ArchetypeSoftTossShare { get; set; } = AD.SoftTossShare;
+        public double ArchetypePowerVelocity { get; set; } = AD.PowerVelocity;
+        public double ArchetypePowerControl { get; set; } = AD.PowerControl;
+        public double ArchetypePowerStamina { get; set; } = AD.PowerStamina;
+        public double ArchetypePowerPitchRank { get; set; } = AD.PowerPitchRank;
+        public double ArchetypeFinesseVelocity { get; set; } = AD.FinesseVelocity;
+        public double ArchetypeFinesseControl { get; set; } = AD.FinesseControl;
+        public double ArchetypeFinesseStamina { get; set; } = AD.FinesseStamina;
+        public double ArchetypeFinessePitchRank { get; set; } = AD.FinessePitchRank;
+        public double ArchetypeSoftTossVelocity { get; set; } = AD.SoftTossVelocity;
+        public double ArchetypeSoftTossControl { get; set; } = AD.SoftTossControl;
+        public double ArchetypeSoftTossStamina { get; set; } = AD.SoftTossStamina;
+        public double ArchetypeSoftTossPitchRank { get; set; } = AD.SoftTossPitchRank;
+
+        private static readonly PitcherArchetypeCoefficients AD = new();
 
         public RosterCoefficients ToModel() => new()
         {
+            Archetypes = new PitcherArchetypeCoefficients
+            {
+                PowerShare = ArchetypePowerShare,
+                FinesseShare = ArchetypeFinesseShare,
+                SoftTossShare = ArchetypeSoftTossShare,
+                PowerVelocity = ArchetypePowerVelocity,
+                PowerControl = ArchetypePowerControl,
+                PowerStamina = ArchetypePowerStamina,
+                PowerPitchRank = ArchetypePowerPitchRank,
+                FinesseVelocity = ArchetypeFinesseVelocity,
+                FinesseControl = ArchetypeFinesseControl,
+                FinesseStamina = ArchetypeFinesseStamina,
+                FinessePitchRank = ArchetypeFinessePitchRank,
+                SoftTossVelocity = ArchetypeSoftTossVelocity,
+                SoftTossControl = ArchetypeSoftTossControl,
+                SoftTossStamina = ArchetypeSoftTossStamina,
+                SoftTossPitchRank = ArchetypeSoftTossPitchRank,
+            },
             IntakeMean = IntakeMean,
             IntakeSd = IntakeSd,
             IntakeMin = IntakeMin,
@@ -1218,6 +1271,7 @@ public static class CoefficientsLoader
             LeadMean = LeadMean,
             LeadSd = LeadSd,
             LeadMentalCorr = LeadMentalCorr,
+            LeadCapMentalCorr = LeadCapMentalCorr,
             ThrowLeftProb = ThrowLeftProb,
             SwitchProb = SwitchProb,
             BatLeftGivenRightThrow = BatLeftGivenRightThrow,

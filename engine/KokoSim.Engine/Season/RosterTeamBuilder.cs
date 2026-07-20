@@ -223,8 +223,8 @@ public static class RosterTeamBuilder
             var pitchRank = L(AbilityKind.PitchRank);
             pitching = new PitcherAttributes
             {
-                // StrengthTeamFactory と同式（Velocity Level を強さとみなす）。
-                MaxVelocityKmh = MathUtil.Clamp(120 + L(AbilityKind.Velocity) * 0.45, 118, 155),
+                // 球速Level→km/h は PitcherAttributes に一箇所集約（不変条件#1）。相手校生成と同一の式。
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(L(AbilityKind.Velocity)),
                 Control = L(AbilityKind.Control),
                 // スタミナ＝目安投球数（設計書02 §1.1e）。Level→球数の変換は一箇所に集約。
                 StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(L(AbilityKind.Stamina)),
@@ -238,6 +238,7 @@ public static class RosterTeamBuilder
             Name = dp.Name,
             SourceId = dp.Id,             // 成績集計の帰属キー（相手校の生成選手投影は Id 無し＝null のまま）
             UniformNumber = dp.UniformNumber,   // 背番号（0=ベンチ外/未割当・1〜=ベンチ入り）
+            Grade = dp.Grade,                   // 学年（表示用・純データ）
             Position = pos,
             Throws = dp.Throws,
             Bats = dp.Bats,

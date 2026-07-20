@@ -95,6 +95,10 @@ public sealed class PitchRecordTests
                         if (last.Kind != PitchKind.Ball || last.BallsAfter != 4)
                             mismatches.Add($"{name}#{seed}: 四球の最終球が不整合 {last.Kind} {last.BallsAfter}");
                         break;
+                    case PlateAppearanceResult.HitByPitch:
+                        if (last.Kind != PitchKind.HitByPitch || last.BallsAfter >= 4 || last.StrikesAfter >= 3)
+                            mismatches.Add($"{name}#{seed}: 死球の最終球が不整合 {last.Kind} {last.BallsAfter}-{last.StrikesAfter}");
+                        break;
                     default:
                         if (last.Kind != PitchKind.InPlay)
                             mismatches.Add($"{name}#{seed}: インプレー結果の最終球が不整合 {last.Kind}");

@@ -288,7 +288,8 @@ namespace KokoSim.Unity.Home
             // 自校の一戦だけ詳細試合エンジンで解決（成績が実データで積まれる）。裏試合は従来の抽象シムのまま。
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
                 TournamentTitle(kind), new PlayerMatchResolver());
-            GameSession.Current.EnterTournament(kind, TournamentTitle(kind), runner);
+            // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
+            GameSession.Current.EnterTournament(kind, TournamentTitle(kind), runner, field);
             GameSession.Current.Year = KokoSim.Unity.Shell.GameClock.YearIndex;
 
             PushFeed(new List<FeedItem>
