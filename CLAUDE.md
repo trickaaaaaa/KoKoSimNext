@@ -14,7 +14,7 @@
 | docs/design/design-02 | 能力スケールと物理層変換式、球種、精神力、走塁系解決式、育成式 |
 | docs/design/design-03 | 週ターン制、年間カレンダー、練習、イベント3分類 |
 | docs/design/design-04 | 監督メタ（分野別指導・転任・信頼/名声・資金）、スカウト/新入生、イベントYAML、合宿 |
-| docs/design/design-05 | 大会構造、裏試合3層処理、架空4000校生成、球場 |
+| docs/design/design-05 | 大会構造、裏試合2層処理（全試合フルシム・記録解像度2層）、架空4000校生成、球場 |
 | docs/design/design-06 | UI設計（UI Toolkit、スコアボードテーマ、画面一覧） |
 | docs/design/design-07 | フェーズ計画とDoD（統計テスト） |
 | docs/design/design-08 | 3Dアートディレクション（のっぺらぼう抽象方針） |
@@ -25,6 +25,8 @@
 | docs/design/design-13 | 球場システム（フェンス距離/高さの物理層パラメータ化、data/stadiums.yaml） |
 | docs/design/design-14 | ルール網羅・未実装プレー（野選/振り逃げ/敬遠/重盗/牽制/失策連鎖/死球/暴投等の実装計画と帯再校正） |
 | docs/design/design-15 | 1球単位の試合進行と打席内采配（AtBatSessionステッパ化＋GameStep.Pitch＋IPitchTacticsBrain、4フェーズ移行、決定論/帯の担保） |
+| docs/design/design-16 | UIリスタイル「テロップと電光掲示板」（書体3役＝太明朝/サンセリフ/コンデンス数字＋掲示板部品、ヒラギノ置換F0〜F4、フェーズゲート制） |
+| docs/design/design-17 | デバッグモード（観測=PitchTrace/JSONL・再現=RNG状態＋再現トークン・注入=シナリオ/強制発動、MCP用DebugBridge、F0〜F4） |
 
 ## 不変条件（違反するコードを書かない）
 
@@ -140,6 +142,7 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 県内地区 | School.DistrictId | 地理固定割の添字（設計書05 §2.2） |
 | 球場 / 球場格 | Stadium / StadiumTier(Municipal/Prefectural/National) | data/stadiums.yaml。寸法→FieldGeometry（設計書13） |
 | 両翼 / 中堅 / フェンス高 | LeftFenceM＋RightFenceM / CenterFenceM / FenceHeightM | 左右非対称対応。本塁打判定に直結（設計書13 §2） |
+| 怪物 | Phenom | 才能外れ値の隠しフラグ。一芸特化型/総合型（OPEN-QUESTIONS Q20, design-04 §2） |
 
 ## 進め方
 
