@@ -173,8 +173,11 @@ namespace KokoSim.Unity.Member
             if (holder >= 0) UniformNumberAssigner.Clear(_roster[holder]);
         }
 
-        /// <summary>カーソルを合わせた選手（比較の右）。選択中(_picked)がある時だけ右に反映される。</summary>
+        /// <summary>カーソルを合わせた選手。未選択なら比較の左、選択中(_picked)があれば右に出る。-1＝ホバーなし。</summary>
         public void SetHovered(int index) => _hovered = index;
+
+        /// <summary>カーソルが外れた（枠/チップの PointerLeave）。表示が残らないようホバーを解除する。</summary>
+        public void ClearHovered(int index) { if (_hovered == index) _hovered = -1; }
 
         public void SetTab(int tab) => _tab = Math.Clamp(tab, 0, 1);
 
@@ -233,7 +236,8 @@ namespace KokoSim.Unity.Member
                 v.TeamRankGrade = Tiers.FromStrength(_roster.Average(p => p.AverageLevel())).ToString();
 
             // 左＝選択中(_picked)、右＝ホバー中(_hovered)。右は選択中があるときだけ／別人のときだけ。
-            var leftIdx = _picked;
+            // 未選択のときはホバーだけで能力値を見せる（左＝ホバー選手）。クリック不要で一覧を舐められる。
+            var leftIdx = _picked >= 0 ? _picked : _hovered;
             var rightIdx = (_picked >= 0 && _hovered != _picked) ? _hovered : -1;
             v.CardA = MakeCard(leftIdx);
             v.CardB = MakeCard(rightIdx);
