@@ -1047,6 +1047,14 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
         public void OpenSubstitutionForCapture() => _subPanel?.Open();
 
+        /// <summary>スクショ用: 自校が今「攻撃側」か（交代モーダルの出し分け確認用）。</summary>
+        public bool ManagerOnOffenseForCapture
+            => _prog != null && _prog.SubstitutionOptions(_managerIsAway).IsOffense;
+
+        /// <summary>スクショ用: 今このタイミングで代走を出せるか（塁上に走者がいる攻撃中）。</summary>
+        public bool ManagerCanPinchRunForCapture
+            => _prog != null && _prog.SubstitutionOptions(_managerIsAway).CanPinchRun;
+
         /// <summary>スクショ用: 選手交代モーダルを閉じる。</summary>
         public void CloseSubstitutionForCapture() => _subPanel?.Close();
 
