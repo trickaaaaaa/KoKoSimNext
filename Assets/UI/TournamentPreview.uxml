@@ -37,6 +37,14 @@
                     <ui:Button name="tp-go-preview" class="tp-cta" text="大会展望を見る　▶" />
                 </ui:VisualElement>
 
+                <ui:Label name="tb-h-tree" class="tp-h2" text="トーナメント表" />
+                <ui:ScrollView name="tp-bracket-scroll" mode="VerticalAndHorizontal" class="brk-scroll">
+                    <ui:VisualElement name="tp-bracket" class="brk-tree" />
+                    <!-- ラウンド名の帯。樹形図の上に浮かせ、縦スクロール量ぶん下げて上端に貼り付ける
+                         （横スクロールには列と一緒に追従する）。列と同じ寸法トークンで組んで幅を揃える。 -->
+                    <ui:VisualElement name="tp-bracket-head" class="brk-head" />
+                </ui:ScrollView>
+
                 <ui:Label name="tb-h-mine" class="tp-h2" text="自校の戦績" />
                 <ui:VisualElement name="tp-my-matches" />
 

@@ -587,6 +587,83 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-mrow .tp-mc--no { color: var(--color-lamp); }
 .tp-mrow .tp-mc--hand { color: var(--tx-2); }
 
+/* ===== トーナメント表（樹形図・列＝ラウンドの横スクロール） =====
+   列の高さは初戦列（カード数が最大）が決め、他の列は flex の cross-axis stretch で同じ高さになる。
+   各カードは flex-grow:1 の枠の中央に置くので、次段のカードは前段2枚の中点へ自動的に並ぶ
+   （縦位置の計算をコード側に持たない）。接続線は「枠の境界＝ちょうど中点」を利用して
+   ボーダー1本ずつで描く（USSに線描画は無いため）。 */
+.brk-scroll {
+    height: var(--brk-view-h); flex-shrink: 0;
+    background-color: var(--sf-base); border-radius: var(--radius-card);
+    padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2);
+}
+.brk-tree { flex-direction: row; align-items: stretch; padding-top: var(--h-thead); }
+.brk-col { flex-shrink: 0; }
+.brk-col__body { flex-grow: 1; }
+
+/* ラウンド名の帯（樹形図の上に浮かせて縦スクロールに追従＝列名を常に見せる）。 */
+.brk-head {
+    position: absolute; left: 0; top: 0; flex-direction: row;
+    height: var(--h-thead); background-color: var(--sf-base);
+}
+.brk-hcell { flex-direction: row; flex-shrink: 0; }
+.brk-col__name {
+    height: var(--h-thead); width: var(--brk-card-w); flex-shrink: 0; margin: 0;
+    font-size: var(--fs-th); color: var(--tx-2); -unity-text-align: middle-center;
+}
+
+/* カード枠：等分してカードを中央寄せ＝樹形図の縦位置そのもの。 */
+.brk-slot { flex-direction: row; align-items: center; flex-grow: 1; min-height: var(--brk-pitch); }
+
+.brk-card {
+    width: var(--brk-card-w); flex-shrink: 0;
+    background-color: var(--sf-card); border-radius: var(--radius-chip); overflow: hidden;
+}
+/* 自校ラインだけ左端にアンバーの縁（データ画面のアクセントは自校ラインに絞る＝UI原則2）。 */
+.brk-card--fav { border-left-width: 2px; border-left-color: var(--color-lamp); }
+
+.brk-line {
+    flex-direction: row; align-items: center; height: var(--brk-slot-h);
+    padding-left: var(--sp-2); padding-right: var(--sp-2);
+}
+/* 上下スロットの区切りだけ引く（対戦の組を示す機能がある線）。 */
+.brk-line--top { border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
+.brk-name {
+    flex-grow: 1; flex-basis: 0; min-width: 0; margin: 0;
+    font-size: var(--fs-label); color: var(--tx-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.brk-name--win { -unity-font-style: bold; }
+.brk-name--out { color: var(--tx-3); }
+.brk-name--tbd { color: var(--tx-3); }
+.brk-name--fav { color: var(--color-lamp); }
+/* 数値は右揃え・全カード同一幅（UI原則3）。 */
+.brk-score {
+    width: var(--brk-score-w); flex-shrink: 0; margin: 0;
+    font-size: var(--fs-label); color: var(--tx-1); -unity-text-align: middle-right;
+}
+.brk-score--out { color: var(--tx-3); }
+
+/* 接続線：lead＝前段から入る横線／elbow＝左半分が横線・右半分の左端が縦線。 */
+.brk-lead { width: var(--brk-lead-w); flex-shrink: 0; align-self: stretch; }
+.brk-elbow { width: var(--brk-elbow-w); flex-shrink: 0; align-self: stretch; flex-direction: row; }
+.brk-elbow--flat { flex-direction: column; }
+.brk-elbow__part { flex-grow: 1; flex-basis: 0; }
+.brk-half { flex-grow: 1; flex-basis: 0; }
+.brk-half--h { border-bottom-width: 1px; border-bottom-color: var(--line-focus); }
+.brk-half--v { border-left-width: 1px; border-left-color: var(--line-focus); }
+.brk-half--fav { border-bottom-color: var(--color-lamp); border-left-color: var(--color-lamp); }
+
+/* 優勝欄（決勝の右）。 */
+.brk-champ {
+    width: var(--brk-card-w); flex-shrink: 0; background-color: var(--sf-inset);
+    border-radius: var(--radius-chip); padding: var(--sp-1) var(--sp-2);
+}
+.brk-champ__cap { font-size: var(--fs-cap); color: var(--tx-2); margin: 0; letter-spacing: 1px; }
+.brk-champ__name { font-size: var(--fs-label); color: var(--tx-1); margin: 0; -unity-font-style: bold; }
+.brk-champ__name--fav { color: var(--color-lamp); }
+.brk-champ__name--tbd { color: var(--tx-3); -unity-font-style: normal; }
+
 /* ================================================================ */
 /* ホーム ダッシュボード v2（mock-ui-v2-dashboard.html） */
 /* ================================================================ */
@@ -845,6 +922,8 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     width: 6px; min-height: 40px; margin: 0;
 }
 #unity-dragger:hover { background-color: rgba(232, 236, 234, 0.30); }
+/* 横スクロールのつまみは縦横が入れ替わる（高さ6px・最小長40px）。 */
+.unity-scroller--horizontal #unity-dragger { width: auto; height: 6px; min-height: 0; min-width: 40px; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    リファイン追補：カード類の枠線を廃し「面の明度」で区切る（全画面共通・後勝ち）
