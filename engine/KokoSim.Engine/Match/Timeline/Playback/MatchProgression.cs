@@ -89,19 +89,25 @@ public sealed class MatchProgression
     private readonly Team _awayTeam;
     private readonly Team _homeTeam;
     private readonly GameContext _ctx;
+    private readonly Debugging.ScenarioStart? _scenarioStart; // 注入で始めた試合は再生時も同じ局面から起こす
 
     private int _confirmed;   // 確定した打席数
-    private int _away, _home; // 進行中スコア
     private int _pitchIndexInCurrentPa; // AdvancePitch() で現在の打席内に何回Pitch窓が来たか（0始まり）
 
-    public MatchProgression(Team away, Team home, GameContext ctx, ulong seed)
+    /// <param name="scenarioStart">
+    /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
+    /// 注入した試合は <see cref="GameResult.ScenarioId"/> が立ち、digest・統計集計から外れる。
+    /// </param>
+    public MatchProgression(Team away, Team home, GameContext ctx, ulong seed,
+        Debugging.ScenarioStart? scenarioStart = null)
     {
         _seed = seed;
         _seedable = true;
         _awayTeam = away;
         _homeTeam = home;
         _ctx = ctx;
-        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed));
+        _scenarioStart = scenarioStart;
+        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed), null, scenarioStart);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
 
@@ -130,8 +136,11 @@ public sealed class MatchProgression
     public LivePlateAppearance? Current { get; private set; }
     public bool IsFinished { get; private set; }
     public int ConfirmedPlateAppearances => _confirmed;
-    public int AwayScore => _away;
-    public int HomeScore => _home;
+    // 進行中スコアは engine の実値をそのまま映す（自前で足し込まない）。設計書17 F2/F4 で
+    // 「打席に紐づかない得点」（場面ジャンプの注入・暴投での生還・重盗の生還）が入ったため、
+    // PlayLogEntry.RunsScored の合計では実スコアとズレる。
+    public int AwayScore => _p.Away.Runs;
+    public int HomeScore => _p.Home.Runs;
 
     /// <summary>
     /// 設計書15 Phase D-1: 今ここで <see cref="SetPitchBattingOverride"/>/<see cref="SetPitchDefenseOverride"/>
@@ -350,7 +359,6 @@ public sealed class MatchProgression
     private void ConfirmPlateAppearance(GameStep step)
     {
         var e = _p.Log[step.LogIndex];
-        if (e.IsTop) _away += e.RunsScored; else _home += e.RunsScored;
 
         // 投球列（設計書15 §4）: AtBatSession が解いた実データを最優先。バント/スクイズ等 PitchLog が無い
         // 経路（統一はPhase D）だけ、結果と整合する合成列にフォールバックする（打席固有シード＝メインRNG非依存）。
@@ -370,8 +378,8 @@ public sealed class MatchProgression
         {
             Inning = step.Inning,
             IsTop = step.IsTop,
-            AwayScore = _away,
-            HomeScore = _home,
+            AwayScore = AwayScore,
+            HomeScore = HomeScore,
             BatterName = e.BatterName,
             RunsScored = e.RunsScored,
             Result = e.Result,
@@ -474,19 +482,12 @@ public sealed class MatchProgression
             ConfirmedPlateAppearances = plateAppearances,
             ConfirmedPitchesInCurrentPa = pitchesInCurrentPa,
         };
-        var resumed = GameReplay.Restore(_awayTeam, _homeTeam, _ctx, save);
+        var resumed = GameReplay.Restore(_awayTeam, _homeTeam, _ctx, save, _scenarioStart);
         _p = resumed.Progress;
         _steps = resumed.Steps;
 
-        // 再生後の見かけの状態を組み直す（スコア・確定打席数は再生済みの Log から数え直す）。
-        _confirmed = 0;
-        _away = 0;
-        _home = 0;
-        foreach (var e in _p.Log)
-        {
-            if (e.IsTop) _away += e.RunsScored; else _home += e.RunsScored;
-            _confirmed++;
-        }
+        // 再生後の見かけの状態を組み直す（スコアは _p 直読みなので同期不要）。
+        _confirmed = _p.Log.Count;
         _pitchIndexInCurrentPa = pitchesInCurrentPa;
         PendingPitchIndex = pitchesInCurrentPa > 0 ? pitchesInCurrentPa - 1 : 0;
         IsFinished = false;
@@ -514,8 +515,6 @@ public sealed class MatchProgression
         {
             // Pitch 窓（設計書15）は打席確定ではないのでスコア加算・確定カウントの対象外。
             if (_steps.Current.Kind != GameStepKind.PlateAppearance) continue;
-            var e = _p.Log[_steps.Current.LogIndex];
-            if (e.IsTop) _away += e.RunsScored; else _home += e.RunsScored;
             _confirmed++;
         }
         IsFinished = true;

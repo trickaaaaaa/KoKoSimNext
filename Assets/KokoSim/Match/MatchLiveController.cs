@@ -263,7 +263,12 @@ namespace KokoSim.Unity.Match
             _homeDisp = homeName;
             SetColumnTitles();
             // 観戦する試合だけ CaptureTimelines=true（裏試合は GameEngine を通らずコストゼロ）。
-            _prog = new MatchProgression(away, home, new GameContext { CaptureTimelines = true }, gameSeed);
+            var ctx = new GameContext { CaptureTimelines = true };
+#if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+            // デバッグHUD（設計書17 §5, F3）が開いているときだけ観測を差し込む。閉じていれば恒等＝従来と完全一致。
+            ctx = Unity.Debugging.DebugTraceHub.AttachTo(ctx);
+#endif
+            _prog = new MatchProgression(away, home, ctx, gameSeed);
         }
 
         // 列見出し（左=自校 / 右=相手校）。監督が先攻(away)か後攻(home)かで名前を割り当てる。

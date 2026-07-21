@@ -57,6 +57,9 @@ namespace KokoSim.Unity.Shell
         // 現在アクティブな画面 GameObject 名（回送の判定に使う）。
         private string _current;
 
+        /// <summary>現在アクティブな画面 GameObject 名（デバッグのスクショ・状態ダンプ用。読み取り専用）。</summary>
+        public string CurrentScreen => _current;
+
         private void Awake() => Instance = this;
 
         // 遅延した画面切替をイベント配信外（次フレーム）で処理する。

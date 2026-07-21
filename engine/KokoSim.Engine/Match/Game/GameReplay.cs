@@ -98,14 +98,19 @@ public static class GameReplay
     /// 再生し（enumerator を進め）、その位置から続行できる <see cref="ResumedGame"/> を返す。
     /// awayTeam/homeTeam/ctx は試合設定（保存ファイル側で別途シリアライズする前提）。
     /// </summary>
-    public static ResumedGame Restore(Team awayTeam, Team homeTeam, GameContext ctx, GameSaveState save)
+    /// <param name="scenarioStart">
+    /// 場面ジャンプで始めた試合を復元するときの開始局面（設計書17 §3.4）。
+    /// null=通常の試合（1回表の頭から再生）。注入で始めた試合をこれ無しで復元すると別の試合になる。
+    /// </param>
+    public static ResumedGame Restore(Team awayTeam, Team homeTeam, GameContext ctx, GameSaveState save,
+        Debugging.ScenarioStart? scenarioStart = null)
     {
         // 開始乱数源: RngState があればそこから（大会Fork経路の中断保存, 設計書17 §3.2）、
         // 無ければ従来どおりシードから。既存セーブは RngState=null なので挙動不変。
         var rng = save.RngState is { } st
             ? Xoshiro256Random.FromState(st)
             : new Xoshiro256Random(save.Seed);
-        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, rng);
+        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, rng, null, scenarioStart);
         var e = GameEngine.Steps(p).GetEnumerator();
 
         // 采配決定を「その球の直前」に適用しながら、確定打席数ぶん再生する（設計書15 Phase D-1）。

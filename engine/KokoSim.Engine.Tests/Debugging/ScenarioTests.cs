@@ -44,6 +44,65 @@ public sealed class ScenarioTests
             DebugScenarioLoader.Parse("scenarios:\n  - name: id無し\n    inning: 3\n"));
     }
 
+    /// <summary>
+    /// 純パーサ（engine 側・Unity と共有）が全フィールドを正しく読むこと。
+    /// ここがズレると CLI と Unity で同じ id が別の場面になる。
+    /// </summary>
+    [Fact]
+    public void Parser_ReadsEveryField()
+    {
+        var catalog = ScenarioYamlParser.Parse(@"
+# 先頭コメント
+scenarios:
+  - id: sample
+    name: 見本の場面          # 行末コメント
+    away: { school: ""AI:tier=A"", score: 4 }
+    home: { school: ""player"", score: 3 }
+    inning: 9
+    top: false
+    outs: 2
+    bases: [1, 2, 3]
+    count: { balls: 3, strikes: 2 }
+    batter: 4
+    pitcher_fatigue: 120
+    modern_rules: { dh: false, tiebreak: true }
+    seed: 20260721
+    force: WildPitch
+
+  - id: minimal
+");
+        Assert.Equal(2, catalog.Count);
+
+        Assert.True(catalog.TryGet("sample", out var s));
+        Assert.Equal("見本の場面", s.Name);
+        Assert.Equal("AI:tier=A", s.Away);
+        Assert.Equal("player", s.Home);
+        Assert.Equal(4, s.AwayScore);
+        Assert.Equal(3, s.HomeScore);
+        Assert.Equal(9, s.Inning);
+        Assert.False(s.Top);
+        Assert.Equal(2, s.Outs);
+        Assert.Equal(new[] { 1, 2, 3 }, s.Bases);
+        Assert.Equal(3, s.Balls);
+        Assert.Equal(2, s.Strikes);
+        Assert.Equal(4, s.Batter);
+        Assert.Equal(120, s.PitcherFatigue);
+        Assert.False(s.Dh);
+        Assert.True(s.TieBreak);
+        Assert.Equal(20260721UL, s.Seed);
+        Assert.Equal("WildPitch", s.Force);
+
+        // 省略時は既定（1回表・無死・走者なし・0-0・1番・player vs AI）。
+        Assert.True(catalog.TryGet("minimal", out var m));
+        Assert.Equal("minimal", m.Name);
+        Assert.Equal(1, m.Inning);
+        Assert.True(m.Top);
+        Assert.Empty(m.Bases);
+        Assert.Null(m.Seed);
+        Assert.Null(m.Force);
+        Assert.Null(m.TieBreak);
+    }
+
     /// <summary>全シナリオが宣言どおりの局面で起動する（設計書17 §9 F2 DoD）。</summary>
     [Fact]
     public void EveryScenario_StartsInTheDeclaredSituation()
@@ -148,6 +207,27 @@ public sealed class ScenarioTests
         Assert.Equal(0, sink.Pitches[pitchesInFirstPa].BallsBefore);
         Assert.Equal(0, sink.Pitches[pitchesInFirstPa].StrikesBefore);
         Assert.True(secondPa.Pitches > 0);
+    }
+
+    /// <summary>
+    /// 注入した開始得点が <see cref="MatchProgression"/> の表示スコアにも載ること。
+    /// 表示側が0から数え直す実装だと掲示板・ラインスコアが engine の実スコアとズレる（実際に踏んだ）。
+    /// </summary>
+    [Fact]
+    public void ScenarioScores_AreVisibleThroughMatchProgression()
+    {
+        Assert.True(Catalog().TryGet("bases-loaded-9th", out var def));
+        var built = ScenarioBuilder.Build(def, new GameContext(), 42UL);
+        var prog = new KokoSim.Engine.Match.Timeline.Playback.MatchProgression(
+            built.Away, built.Home, built.Ctx, built.Seed, built.Start);
+
+        Assert.Equal(def.AwayScore, prog.AwayScore);
+        Assert.Equal(def.HomeScore, prog.HomeScore);
+
+        // 進めても「注入ぶん＋その後の得点」であり続ける（0から数え直さない）。
+        prog.Advance();
+        Assert.True(prog.AwayScore >= def.AwayScore);
+        Assert.True(prog.HomeScore >= def.HomeScore);
     }
 
     [Fact]
