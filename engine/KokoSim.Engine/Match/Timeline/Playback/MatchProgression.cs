@@ -227,7 +227,8 @@ public sealed class MatchProgression
         if (e.PitchLog is { Count: > 0 } pitchLog)
         {
             pitchSeq = new PitchSequence(
-                pitchLog.Select(p => new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter)).ToList());
+                pitchLog.Select(p => new PitchToken(
+                    p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh)).ToList());
         }
         else
         {

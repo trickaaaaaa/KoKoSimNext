@@ -828,3 +828,37 @@
 }
 .matchup-bar__half { flex-direction: column; }
 .matchup-bar__vs { font-size: var(--fs-label); color: var(--color-faint); -unity-font-style: bold; margin-left: var(--sp-3); margin-right: var(--sp-3); }
+
+/* PitchCall：投球判定の大型オーバーレイ（試合盤面・1球ごとに短時間だけ出す）。
+   盤面ビューなので色は状態コード（ストライク＝アンバー／ボール＝良好色／それ以外＝チョーク）で、
+   データ画面のアクセント本数制限の対象外（CLAUDE.md「適用範囲の例外（試合盤面）」）。
+   既存UIと重なってよい短命表示のため、盤面ホスト上に絶対配置し既定は非表示。 */
+.pitch-call {
+    position: absolute;
+    left: 0; right: 0; top: 20%;
+    align-items: center;
+    display: none;
+}
+/* 判定テキスト。緑の盤面上でも読めるよう半透明パネルで浮かせる（mhud-panel と同じ idiom）。 */
+.pitch-call__judge {
+    font-size: var(--fs-callout);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    letter-spacing: 2px;
+    color: var(--color-chalk);
+    background-color: rgba(14, 26, 19, 0.82);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-1) var(--sp-4);
+}
+.pitch-call__judge--strike { color: var(--color-lamp); }
+.pitch-call__judge--ball { color: var(--color-good); }
+/* 球種・球速（実1球記録がある打席のみ。合成投球列では出さない）。 */
+.pitch-call__detail {
+    font-size: var(--fs-body);
+    -unity-text-align: middle-center;
+    color: var(--color-chalk);
+    background-color: rgba(14, 26, 19, 0.82);
+    border-radius: var(--radius-chip);
+    padding: var(--sp-1) var(--sp-2);
+    margin-top: var(--sp-1);
+}

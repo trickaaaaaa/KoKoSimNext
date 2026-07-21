@@ -84,6 +84,25 @@ public class PitchSequenceSynthesizerTests
         }
     }
 
+    /// <summary>
+    /// 合成列は実際に投げられた球ではないため、球種・球速を持たない（null）。表示側はこれを
+    /// 「球種・球速は出さない」として扱う＝架空の球速をでっち上げない契約。
+    /// </summary>
+    [Fact]
+    public void Synthesize_HasNoPitchTypeOrVelocity()
+    {
+        foreach (var result in Enum.GetValues<PlateAppearanceResult>())
+        {
+            var seed = PitchSequenceSynthesizer.SeedFrom(3, 2, true, 5, result);
+            var seq = PitchSequenceSynthesizer.Synthesize(result, 5, seed);
+            Assert.All(seq.Pitches, t =>
+            {
+                Assert.Null(t.PitchType);
+                Assert.Null(t.VelocityKmh);
+            });
+        }
+    }
+
     [Fact]
     public void Synthesize_IntentionalWalk_ZeroPitches_ShowsFourBalls()
     {
