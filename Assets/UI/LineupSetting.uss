@@ -37,7 +37,7 @@
     padding-right: var(--sp-4);
 }
 .lu-topbar__spacer { flex-grow: 1; }
-.lu-title { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; }
+.lu-title { font-size: var(--fs-page); color: var(--color-chalk); }
 .lu-match { font-size: var(--fs-label); color: var(--color-muted); margin-left: var(--sp-4); }
 .lu-head__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
 .lu-head__rank { flex-direction: row; }
@@ -103,7 +103,6 @@
 .lu-section {
     font-size: var(--fs-label);
     color: var(--color-muted);
-    -unity-font-style: bold;
     margin-top: var(--sp-2);
     margin-bottom: var(--sp-2);
 }
@@ -146,7 +145,6 @@
     flex-grow: 1;
     background-color: var(--color-lamp);
     color: var(--color-ink);
-    -unity-font-style: bold;
 }
 .lu-btn--go:hover { background-color: var(--color-lamp-hi); }
 
@@ -184,11 +182,11 @@
     margin-right: 2px;
 }
 .lu-tab:hover { color: var(--color-chalk); }
-.lu-tab--on { background-color: var(--color-panel-hover); color: var(--color-chalk); border-color: var(--color-line-focus); -unity-font-style: bold; }
+.lu-tab--on { background-color: var(--color-panel-hover); color: var(--color-chalk); border-color: var(--color-line-focus); }
 
 .lu-cmp-scroll { flex-grow: 1; }
 .lu-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }
-.lu-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); -unity-font-style: bold; letter-spacing: 1px; margin-top: var(--sp-2); margin-bottom: var(--sp-1); }
+.lu-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-2); margin-bottom: var(--sp-1); }
 .lu-cmp-apt { margin-top: var(--sp-1); }
 .lu-cmp-stats { margin-top: var(--sp-2); }
-.lu-stat-name { font-size: var(--fs-label); color: var(--color-chalk); -unity-font-style: bold; margin-top: var(--sp-2); margin-bottom: 2px; }
+.lu-stat-name { font-size: var(--fs-label); color: var(--color-chalk); margin-top: var(--sp-2); margin-bottom: 2px; }

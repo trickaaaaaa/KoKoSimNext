@@ -31,7 +31,6 @@
     height: 32px;
     font-size: var(--fs-page);
     color: var(--color-chalk);
-    -unity-font-style: bold;
     -unity-text-align: middle-center;
     letter-spacing: 1px;
     margin-bottom: var(--sp-1);
@@ -48,7 +47,7 @@
     flex-grow: 1;
     min-height: 0;
     overflow: hidden;
-    border-radius: 6px;
+    border-radius: var(--radius-chip);
     margin-top: 8px;
     margin-bottom: 8px;
 }
@@ -66,7 +65,7 @@
     flex-shrink: 0;
     padding: 4px 12px;
     background-color: var(--color-panel-deep);
-    border-radius: 6px;
+    border-radius: var(--radius-chip);
     margin-bottom: 6px;
 }
 .mlive-pitchtactics-label {
@@ -92,118 +91,14 @@
     height: 15px;
 }
 
-/* ── スコアボード帯（中央カラム上・先攻｜イニング｜後攻）。列幅に合わせて伸縮。 ── */
-.mlive-sb {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    margin-bottom: 6px;
-    padding: 6px 12px;
-    background-color: var(--color-panel-deep);
-    border-radius: 6px;
-}
-
-.mlive-side { flex-direction: row; align-items: center; }
-.mlive-side--home { justify-content: flex-end; }
-
-.mlive-team {
-    font-size: 14px;
-    color: var(--color-chalk);
-    -unity-font-style: bold;
-}
-
-.mlive-score {
-    font-size: 22px;
-    color: var(--color-chalk);
-    -unity-font-style: bold;
-    margin-left: 10px;
-    margin-right: 10px;
-    min-width: 26px;
-    -unity-text-align: middle-center;
-}
-
-/* リードしているチームのスコアだけアンバー（状態コード：盤面ビュー例外） */
-.mlive-score--lead { color: var(--color-lamp); }
-
-.mlive-inning {
-    font-size: 13px;
-    color: var(--color-muted);
-    letter-spacing: 1px;
-    min-width: 88px;
-    -unity-text-align: middle-center;
-}
-
-/* 打者ラベル（実況バーの左） */
+/* 打者ラベル（実況バーの左）。上部のスコアバー/BSO帯は LineScorePanel（components.uss の .lsc*）へ
+   移したので、ここにあった .mlive-sb / .mlive-bso / .mlive-dot / .mlive-base 等は削除済み。 */
 .mlive-batter {
     font-size: 12px;
     color: var(--color-muted);
     margin-right: 10px;
     min-width: 96px;
 }
-
-/* 中継風カウント（BSO）＋塁ダイヤ帯。盤面HUD＝状態コード配色（ball緑/strike黄/out赤・走者=黄）。
-   点灯は is-on クラスのトグルで表現（chip-btn--on / mlive-score--lead と同じ idiom）。 */
-.mlive-bso {
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    padding: 6px 12px;
-    background-color: var(--color-panel-deep);
-    border-radius: 6px;
-}
-
-.mlive-count { flex-direction: column; }
-
-.mlive-count-row {
-    flex-direction: row;
-    align-items: center;
-    height: 16px;
-}
-
-.mlive-count-key {
-    font-size: 11px;
-    color: var(--color-muted);
-    width: 16px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-center;
-}
-
-.mlive-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 5px;
-    margin-left: 4px;
-    background-color: var(--color-line);
-}
-
-.mlive-dot--ball.is-on { background-color: var(--color-good); }
-.mlive-dot--strike.is-on { background-color: var(--color-lamp); }
-.mlive-dot--out.is-on { background-color: var(--color-warn); }
-
-/* 塁ダイヤ（正ひし形。2塁=上・1塁=右・3塁=左。占有＝アンバー＝2D俯瞰の走者色と一致） */
-.mlive-diamond {
-    width: 46px;
-    height: 46px;
-    margin-left: 28px;
-    position: relative;
-}
-
-/* 空塁も淡いグレーで見せ、常に正ひし形として読めるようにする（占有＝アンバーで一目） */
-.mlive-base {
-    position: absolute;
-    width: 15px;
-    height: 15px;
-    background-color: var(--color-faint);
-    rotate: 45deg;
-}
-
-.mlive-base--second { top: 0; left: 15px; }
-.mlive-base--first { top: 15px; left: 30px; }
-.mlive-base--third { top: 15px; left: 0; }
-
-.mlive-base.is-on { background-color: var(--color-lamp); }
 
 /* 実況バー・操作列は列幅に合わせる（MatchDetail の固定820px上書き） */
 .mlive-col--center .md-caption { width: auto; margin-top: 0; }

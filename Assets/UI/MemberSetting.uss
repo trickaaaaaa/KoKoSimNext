@@ -61,7 +61,6 @@
 .ms-section {
     font-size: var(--fs-label);
     color: var(--color-muted);
-    -unity-font-style: bold;
     margin-top: var(--sp-3);
     margin-bottom: var(--sp-2);
 }
@@ -104,9 +103,9 @@
     margin-right: 2px;
 }
 .ms-tab:hover { color: var(--color-chalk); }
-.ms-tab--on { background-color: var(--color-panel-hover); color: var(--color-chalk); border-color: var(--color-line-focus); -unity-font-style: bold; }
+.ms-tab--on { background-color: var(--color-panel-hover); color: var(--color-chalk); border-color: var(--color-line-focus); }
 
 .ms-cmp-scroll { flex-grow: 1; }
 .ms-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }
-.ms-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); -unity-font-style: bold; letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: var(--sp-1); }
+.ms-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: var(--sp-1); }
 .ms-cmp-apt { margin-top: var(--sp-1); }

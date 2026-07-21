@@ -10,7 +10,6 @@
 .md-title {
     font-size: 18px;
     color: var(--color-chalk);
-    -unity-font-style: bold;
     letter-spacing: 2px;
 }
 
@@ -25,7 +24,7 @@
 /* ステージ（球場＋実況＋操作をまとめるパネル） */
 .md-stage {
     background-color: var(--color-panel);
-    border-radius: 10px;
+    border-radius: var(--radius-card);
     padding: 10px;
     align-items: flex-start;
 }
@@ -36,7 +35,7 @@
     width: 820px;
     height: 561px;
     background-color: var(--field-grass);
-    border-radius: 6px;
+    border-radius: var(--radius-chip);
     flex-shrink: 0;
 }
 
@@ -46,7 +45,7 @@
     align-items: center;
     margin-top: 10px;
     background-color: var(--color-panel-deep);
-    border-radius: 6px;
+    border-radius: var(--radius-chip);
     padding: 9px 12px;
     min-height: 40px;
     width: 820px;
@@ -59,7 +58,7 @@
     letter-spacing: 1px;
     color: var(--color-ink);
     background-color: var(--color-lamp);
-    border-radius: 4px;
+    border-radius: var(--radius-chip);
     padding: 1px 8px;
     margin-right: 10px;
     display: none;

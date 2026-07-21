@@ -227,6 +227,208 @@
 
    移行が終わったら -unity-font-style: bold は原則禁止（実ウェイトで表現する）。 */
 
+/* ── 疑似ボールドの実ウェイト置換（設計書16 F3・2026-07-21）─────────────────
+   `-unity-font-style: bold` は SDF を機械的に太らせる疑似ボールドで、字画が潰れて濁る。
+   全画面から撤去し、代わりに IBM Plex Sans JP の実ウェイト（SemiBold / Medium）を当てる。
+
+   USS には @extend も「変数にアセットを入れる」手段も無い（後者は既知の罠として不採用）。
+   URL を各画面へばら撒くと単一ソースが壊れるので、**置換先のセレクタをここに列挙する**方式にした。
+   移行の受け皿なので、**新しく書くコードはこの表に足さず `.f-body-bd` / `.f-body-md` を直接付ける**こと。
+
+   この2ブロックは `.f-display` 等のユーティリティより**前**に置いてある。同じ詳細度なら後勝ちなので、
+   要素に `.f-num` や `.f-display` を明示的に付ければそちらが必ず勝つ（＝個別指定で上書きできる）。
+   ただし複合セレクタ（`.abil-row--lg .abil-row__label` 等）は詳細度が高く単一クラスに勝つ点に注意。 */
+
+/* SemiBold：見出し・強調・ボタン・大きめの数値（旧 bold の大半） */
+.rank-chip,
+.abil-row__value,
+.abil-row__note,
+.abil-row--lg .abil-row__label,
+.num-badge,
+.seg__cell--on,
+.filter-chip--on,
+.panel__title,
+.slot-card__name,
+.cmp-row__val--win,
+.cmp-card__name,
+.lineup-row__ord,
+.lineup-row__name,
+.pos-chip,
+.sp-pill__name,
+.radar-axis--lg .radar-axis__l,
+.radar-axis--lg .radar-axis__v,
+.mlineup-row__name,
+.mup-name,
+.mup-today,
+.mup-pitches,
+.matchup-bar__vs,
+.pitch-call__judge,
+.bs-cell--team,
+.bs-cell--total,
+.school__name,
+.meter__v,
+.advance,
+.panel__title,
+.vs__team,
+.stat__v,
+.day__m,
+.cell--head,
+.grade,
+.cell--name,
+.eff-row__v,
+.eff-foot__v,
+.menu-chip,
+.edit-slot__name,
+.edit-slot__btn,
+.proj--up,
+.fat--warn,
+.result-banner,
+.sb-cell--team,
+.sb-cell--rhe,
+.stat-sub,
+.st-cell--head,
+.st-name,
+.st-ip,
+.st-num--hi,
+.mfeed--header,
+.mfeed--run,
+.tp-mark__sym,
+Button.tp-cta,
+.tp-empty__title,
+.tp-pcard__no,
+.tp-pcard__nm,
+.tp-roster__name,
+.brk-name--win,
+.brk-champ__name,
+.sb2-badge,
+.sb2-name,
+.sb2-cell__v,
+.sb2-meter__v,
+.card__hd-title,
+.hm-ts__v,
+.nm-team__n,
+.nm-vs,
+.pd2-numbox__no,
+.pd2-name,
+.pd2-captain,
+.pd2-card__t,
+.ts-overall-value,
+.pd2-hidden-v,
+.pd2-hidden-v--unknown,
+.pd2-pv--num,
+.pd2-stat__v,
+.tm-banner__top,
+.tm-banner__open,
+.tm-dialog__vs,
+.tm-result__headline,
+.tm-btn--primary,
+.nt-hd__t,
+.nt-d__name,
+.lu-title,
+.lu-section,
+.lu-btn--go,
+.lu-tab--on,
+.lu-stat-name,
+.md-title,
+.mlive-col-title,
+.mlive-team,
+.mlive-score,
+.mp-title,
+.mp-side__name,
+.mp-cta,
+.mr-title,
+.mr-outcome,
+.mr-cta,
+.mr-col__name,
+.msub-title,
+.msub-section,
+.msub-btn--go,
+.ms-section,
+.ms-tab--on,
+.pm-title,
+.pm-card__t,
+.pm-cta,
+.tp-camp__title,
+.tp-camp__mult,
+.tp-coach__title,
+.nom-slot__num,
+.tp-toolbar__title,
+.tp-th,
+.preset-open__label,
+.tpm-preset__name,
+.tpm-preset__check,
+.tpm-done,
+.tp-ed-id__num,
+.tp-ed-who__name,
+.nom-btn--on,
+.tp-ed-section__title,
+.mslot__icon,
+.mslot__min,
+.tp-tpl__title,
+.tp-toast,
+.tpm-card .gainbar__lv {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-SemiBold.asset?fileID=11400000&guid=5c6d942636708417b84a53f7f084f0f8&type=2#IBMPlexSansJP-SemiBold");
+}
+
+/* Medium：12px 以下の小さな強調（SemiBold だと字画が潰れて読みにくくなる帯） */
+.banner__badge,
+.field-chip__num,
+.field-chip__name,
+.cmp-btn,
+.cmp-head__lab,
+.cmp-card__lab,
+.stat-col__title,
+.mlineup-row__ord,
+.mlineup-row__pos,
+.mlineup-subhead,
+.mlineup-pitcher__tag,
+.fd-tag,
+.pd2-numbox__role,
+.pd2-skill__name,
+.lu-cmp-group,
+.mlive-count-key,
+.mr-subhead,
+.msub-cmp-group,
+.ms-cmp-group {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Medium.asset?fileID=11400000&guid=e0684afefb1bb435cac49ce90b59ce4e&type=2#IBMPlexSansJP-Medium");
+}
+
+/* ── 校名・大会名・ページ見出しの明朝化（設計書16 §2・F3）───────────────────
+   「校名は常に太明朝」がリスタイルのシグネチャ規則。校名と、記事の柱にあたるページ見出しを
+   ここで明朝へ寄せる。上の SemiBold/Medium 表より後に置いてあるので、両方に載る要素は明朝が勝つ。
+
+   **人名（選手名・監督名）は入れていない。**明朝にするかは未決（design-16 §9-6）。
+   本文・ラベル・表のセルは絶対に入れない（暗背景で細い横画が潰れる＝§8のリスク）。 */
+
+/* ExtraBold：16〜28px の校名・見出し（この帯は横画が残る ExtraBold でないと潰れる） */
+.sb2-name,
+.school__name,
+.vs__team,
+.nm-team__n,
+.mp-title,
+.mp-side__name,
+.mr-title,
+.mr-outcome,
+.mr-col__name,
+.lu-title,
+.msub-title,
+.pm-title,
+.md-title,
+.mlive-col-title,
+.tp-empty__title,
+.nt-hd__t,
+.tm-dialog__vs,
+.tm-result__headline,
+.result-banner {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+
+/* Bold：32px 以上の大見出しだけ（ExtraBold より端正に出る帯） */
+.tm-banner__top,
+.tm-banner__open {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-Bold.asset?fileID=11400000&guid=79e45b7605bce4026b70c4d8d01cf21b&type=2#ShipporiMinchoB1-Bold");
+}
+
 /* ── ディスプレイ（太明朝）Shippori Mincho B1 ──────────────────────────
    16px以上・太ウェイト限定。本文には絶対に使わない（暗背景で細い横画が潰れる）。
    既定は ExtraBold。24px以下の見出し・校名はこちらでないと横画が残らないため、
