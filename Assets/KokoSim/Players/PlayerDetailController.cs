@@ -27,17 +27,22 @@ namespace KokoSim.Unity.Players
         private VisualElement _chart;
         private readonly List<PitchArc> _chartArcs = new List<PitchArc>();
         private Vector2 _chartCenter;
-        private const float BallR = 17f;
+        private const float BallR = 19f;
+        // 扇の内半径（ボール縁のすぐ外側）。ここまでは引き伸ばさず、外側だけ横に伸ばす。
+        private const float ArcInner = BallR + 4f;
 
         // 扇1枚分の描画パラメータ（LayoutChart で確定し OnPaintChart が読む）。
         private struct PitchArc
         {
             public float AngleDeg;    // 変化方向（画面座標系・0度=右／時計回り）
             public float HalfDeg;     // 扇の半幅
-            public float Inner;       // 内半径（ボール縁の外側）
             public float Outer;       // 外半径（＝変化量）
             public Color Col;         // キレ等級色
         }
+
+        // チャート枠は横長（カード幅いっぱい・高さ300前後）なので、扇とラベルを横方向へ引き伸ばして
+        // 余白を使い切る。伸長は全球種に同率でかかるので、方向ごとの相対比較は保たれる。
+        private Vector2 _chartScale = Vector2.one;
 
         private void OnEnable()
         {
@@ -175,6 +180,7 @@ namespace KokoSim.Unity.Players
 
             _chartCenter = new Vector2(rect.width * 0.5f, rect.height * 0.5f);
             var radius = Mathf.Min(rect.width, rect.height) * 0.40f;
+            _chartScale = new Vector2(Mathf.Clamp(rect.width / Mathf.Max(1f, rect.height) * 0.5f, 1f, 1.7f), 1f);
             _chartArcs.Clear();
 
             foreach (var child in _chart.Children())
@@ -186,17 +192,16 @@ namespace KokoSim.Unity.Players
                 if (dir.sqrMagnitude < 0.0001f) dir = new Vector2(0f, -1f);
                 dir = dir.normalized;
 
-                var inner = BallR + 4f;
                 // 扇の長さ＝変化量。ストレートは Break01 が短尺固定なので自然に短い扇になる。
-                var outer = Mathf.Max(inner + 8f, Mathf.Lerp(radius * 0.34f, radius * 0.92f, Mathf.Clamp01(pt.Break01)));
+                var outer = Mathf.Max(ArcInner + 10f, Mathf.Lerp(radius * 0.34f, radius * 0.92f, Mathf.Clamp01(pt.Break01)));
                 // 幅は固定。ストレートだけ「伸び」を幅で表す（1-B: 長さではなく太さで読ませる）。
                 var half = pt.IsFastball ? Mathf.Lerp(13f, 26f, Mathf.Clamp01(pt.Extend01)) : 15f;
 
+                var angleDeg = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
                 _chartArcs.Add(new PitchArc
                 {
-                    AngleDeg = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg,
+                    AngleDeg = angleDeg,
                     HalfDeg = half,
-                    Inner = inner,
                     Outer = outer,
                     Col = RankPalette.Of(pt.Kire),
                 });
@@ -205,7 +210,7 @@ namespace KokoSim.Unity.Players
                 var lh = child.resolvedStyle.height;
                 if (lw < 1f) lw = 96f;
                 if (lh < 1f) lh = 28f;
-                var end = _chartCenter + dir * (outer + 22f);
+                var end = PolarPoint(_chartCenter, outer + 26f, angleDeg);
                 // ラベルはチャート矩形の内側に収める（外周方向でも切れないように）。
                 child.style.left = Mathf.Clamp(end.x - lw * 0.5f, 0f, Mathf.Max(0f, rect.width - lw));
                 child.style.top = Mathf.Clamp(end.y - lh * 0.5f, 0f, Mathf.Max(0f, rect.height - lh));
@@ -220,22 +225,24 @@ namespace KokoSim.Unity.Players
             if (c.x < 1f && c.y < 1f) return;
 
             // 各球種の扇（塗り＝キレ等級色の半透明、先端に同色の帯で変化量の端を明示）。
+            // 横方向へ引き伸ばすため Painter2D.Arc は使わず、円弧を等分サンプルした多角形で描く。
+            const int Seg = 14;
             foreach (var a in _chartArcs)
             {
-                var a1 = new Angle(a.AngleDeg - a.HalfDeg, AngleUnit.Degree);
-                var a2 = new Angle(a.AngleDeg + a.HalfDeg, AngleUnit.Degree);
+                var from = a.AngleDeg - a.HalfDeg;
+                var to = a.AngleDeg + a.HalfDeg;
 
                 p.BeginPath();
-                p.MoveTo(PolarPoint(c, a.Inner, a.AngleDeg - a.HalfDeg));
-                p.Arc(c, a.Inner, a1, a2);
-                p.Arc(c, a.Outer, a2, a1, ArcDirection.CounterClockwise);
+                p.MoveTo(PolarPoint(c, ArcInner, from));
+                for (var i = 1; i <= Seg; i++) p.LineTo(PolarPoint(c, ArcInner, Mathf.Lerp(from, to, i / (float)Seg)));
+                for (var i = Seg; i >= 0; i--) p.LineTo(PolarPoint(c, a.Outer, Mathf.Lerp(from, to, i / (float)Seg)));
                 p.ClosePath();
                 p.fillColor = new Color(a.Col.r, a.Col.g, a.Col.b, 0.26f);
                 p.Fill();
 
                 p.BeginPath();
-                p.MoveTo(PolarPoint(c, a.Outer, a.AngleDeg - a.HalfDeg));
-                p.Arc(c, a.Outer, a1, a2);
+                p.MoveTo(PolarPoint(c, a.Outer, from));
+                for (var i = 1; i <= Seg; i++) p.LineTo(PolarPoint(c, a.Outer, Mathf.Lerp(from, to, i / (float)Seg)));
                 p.strokeColor = new Color(a.Col.r, a.Col.g, a.Col.b, 0.90f);
                 p.lineWidth = 2.5f;
                 p.Stroke();
@@ -306,11 +313,16 @@ namespace KokoSim.Unity.Players
             return u * u * u * p0 + 3f * u * u * t * p1 + 3f * u * t * t * p2 + t * t * t * p3;
         }
 
-        private static Vector2 PolarPoint(Vector2 c, float r, float deg)
+        // 内半径ぶんは等方（ボール縁に必ず接する）、その外側だけ横へ引き伸ばす。
+        private Vector2 PolarPoint(Vector2 c, float r, float deg)
         {
             var rad = deg * Mathf.Deg2Rad;
-            return c + new Vector2(Mathf.Cos(rad) * r, Mathf.Sin(rad) * r);
+            var u = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+            return c + u * ArcInner + Scale(u * Mathf.Max(0f, r - ArcInner));
         }
+
+        // 横長枠に合わせた非等方スケール（全球種同率なので相対比較は保たれる）。
+        private Vector2 Scale(Vector2 v) => new Vector2(v.x * _chartScale.x, v.y * _chartScale.y);
 
         private static Angle Deg(float d) => new Angle(d, AngleUnit.Degree);
 
