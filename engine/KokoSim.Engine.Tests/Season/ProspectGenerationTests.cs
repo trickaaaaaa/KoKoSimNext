@@ -273,4 +273,63 @@ public sealed class ProspectGenerationTests
         Assert.True(Gap(GrowthType.Late) > Gap(GrowthType.Standard),
             $"Lateのリードcap上振れが無い (Late={Gap(GrowthType.Late):F1} Std={Gap(GrowthType.Standard):F1})");
     }
+
+    // --- 調子の初期値（設計書02 §3.3, issue #50）: 全員Normal(0)固定ではなく定常分布からサンプリングする ---
+
+    [Fact]
+    public void ConditionValue_IsNotAllZero_AndHasSpreadAcrossStates()
+    {
+        var pop = Cohort(C.TalentCenterDefault);
+
+        // 全員「普通」固定（全員0.0）ではない＝生成直後から個体差が出ている。
+        Assert.True(pop.Any(p => p.ConditionValue != 0.0), "調子の初期値が全員0（普通固定）になっている");
+
+        // 量子化した5段階のうち複数段階が生成直後から出現する（Excellent/Terribleまで含む極端値は稀でよい）。
+        var states = pop.Select(p => FormModel.Quantize(p.ConditionValue)).Distinct().Count();
+        Assert.True(states >= 3, $"初期調子の段階が偏りすぎている: {states}種のみ");
+    }
+
+    [Fact]
+    public void ConditionValue_MatchesStationaryDistribution()
+    {
+        var f = new FormCoefficients();
+        var pop = Cohort(C.TalentCenterDefault);
+        var values = pop.Select(p => p.ConditionValue).ToList();
+
+        Assert.All(values, v => Assert.InRange(v, -1.0, 1.0));
+
+        // 平均は0近傍（能力の積み上げを崩さない中立分布）。
+        Assert.InRange(values.Average(), -0.05, 0.05);
+
+        // 標準偏差は週次AR(1)の定常σ（≈0.42）に近い（クランプの影響で僅かに縮む程度は許容）。
+        var mean = values.Average();
+        var sd = Math.Sqrt(values.Average(v => (v - mean) * (v - mean)));
+        Assert.InRange(sd, f.StationaryConditionSigma - 0.08, f.StationaryConditionSigma + 0.08);
+    }
+
+    [Fact]
+    public void ConditionValue_IsDeterministic_SameSeedSameValue()
+    {
+        var a = ProspectGenerator.Intake(1, C, new Xoshiro256Random(33));
+        var b = ProspectGenerator.Intake(1, C, new Xoshiro256Random(33));
+        for (var i = 0; i < a.Count; i++)
+            Assert.Equal(a[i].ConditionValue, b[i].ConditionValue);
+    }
+
+    [Fact]
+    public void ConditionValue_DoesNotPerturb_ExistingAbilityRollSequence()
+    {
+        // 初期調子は独立Forkストリームで抽選する＝既存の能力・氏名ロール列は1ビットも変わらない（不変条件#2）。
+        var a = ProspectGenerator.Intake(1, C, new Xoshiro256Random(7));
+        var b = ProspectGenerator.Intake(1, C, new Xoshiro256Random(7));
+        Assert.Equal(a.Count, b.Count);
+        for (var i = 0; i < a.Count; i++)
+        {
+            Assert.Equal(a[i].Name, b[i].Name);
+            foreach (var k in AbilityKinds.All)
+                Assert.Equal(a[i].Level(k), b[i].Level(k));
+            Assert.Equal(a[i].Mental, b[i].Mental);
+            Assert.Equal(a[i].Lead, b[i].Lead);
+        }
+    }
 }
