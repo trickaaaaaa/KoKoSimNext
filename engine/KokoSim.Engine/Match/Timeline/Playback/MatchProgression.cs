@@ -386,7 +386,8 @@ public sealed class MatchProgression
             _p.Away.LiveBench(), _p.Away.LiveBullpen());
         var home = new LiveTeamSnapshot(_p.Home.LiveLineup(), _p.Home.LivePitcherLine(),
             _p.Home.LiveBench(), _p.Home.LiveBullpen());
-        return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0);
+        return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
+            _p.Away.LiveLine(), _p.Home.LiveLine());
     }
 
     /// <summary>

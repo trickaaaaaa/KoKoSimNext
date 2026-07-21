@@ -1104,3 +1104,122 @@
     letter-spacing: 3px;
     color: var(--color-muted);
 }
+
+/* ═══ LineScorePanel：甲子園式ラインスコア（設計書16 §4-2・F2 案A「統合1枚板」）═════════
+   本リスタイルの本丸。1枚の黒面に「回別得点＋R/H/E」と「B/S/O ランプ＋塁ダイヤ」を横並びで収める
+   （現行の mlive-sb ＋ mlive-bso の2段を置き換える）。高さは現行2段と同じ約108pxに収める。
+
+   境界規則の例外: 掲示板の中は原則すべてドットだが、**校名だけは太明朝**にする
+   （「校名は常に太明朝」が本リスタイルのシグネチャ規則＝design-16 §1。2026-07-21 にユーザー判断で確定）。
+
+   マスは C# 側（LineScorePanel.Fill）が回数ぶん生成する。延長で回が増えたら --dense へ切り替えて
+   マス幅を詰める（列を flex-shrink で潰さない＝UI-BUILD-METHOD の落とし穴）。 */
+.lsc {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--sb-face);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-1) var(--sp-3);
+    margin-bottom: 6px;
+    flex-shrink: 0;
+}
+.lsc-board { flex-shrink: 0; }
+.lsc-row { flex-direction: row; align-items: center; height: var(--sb-cell-h); flex-shrink: 0; }
+.lsc-row--head { height: var(--lsc-head-h); }
+
+/* ── マス ────────────────────────────────────────────────────────────
+   回のマスと R/H/E のマスは幅だけ違い、行高は共有する。枠線は隣と共有して二重線にしない。 */
+.lsc-cell {
+    width: var(--lsc-cell-w);
+    height: 100%;
+    font-size: var(--fs-dot-32);
+    color: var(--color-chalk);
+    -unity-text-align: middle-center;
+    border-width: var(--border-w);
+    border-color: var(--sb-grid);
+    margin-right: -1px;
+    flex-shrink: 0;
+    padding: 0;
+}
+.lsc--dense .lsc-cell { width: var(--lsc-cell-w-dense); font-size: var(--fs-dot-16); }
+/* R / H / E は集計欄。回のマスより広く取り、掲示板の縦罫で回と分ける。 */
+.lsc-cell--total { width: var(--lsc-total-w); }
+.lsc-cell--sep { border-left-width: 2px; border-left-color: var(--color-line-focus); }
+/* 得点が入った回のマスだけ点灯（実物の電球が灯る比喩）。盤面ビューなので色＝状態コード
+   ＝UI原則②の本数制限の対象外（CLAUDE.md の但し書き）。 */
+.lsc-cell--lit { color: var(--color-lamp); }
+/* まだ来ていない回は「・」ではなく空マス。地の色を一段落として空であることを示す。 */
+.lsc-cell--empty { color: var(--color-faint); }
+
+/* 見出し行（回番号と R/H/E の見出し）。値より一段小さいドット。 */
+.lsc-row--head .lsc-cell {
+    font-size: var(--fs-dot-16);
+    color: var(--color-muted);
+    border-width: 0;
+}
+/* 進行中の回だけ見出しを点灯させ、どこを見ればよいか一目で分かるようにする。 */
+.lsc-row--head .lsc-cell--now { color: var(--color-lamp); }
+
+/* 校名セル。掲示板の中だが校名だけは太明朝（.f-display を C# 側で付与）。 */
+.lsc-cell--name {
+    width: var(--lsc-name-w);
+    height: 100%;
+    font-size: 18px;
+    color: var(--color-chalk);
+    -unity-text-align: middle-left;
+    padding-left: var(--sp-2);
+    border-width: 0;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* 見出し行の左上は実物では空欄。ここに現在の回（4回表）をドットで置く。 */
+.lsc-cell--inning {
+    width: var(--lsc-name-w);
+    height: 100%;
+    font-size: var(--fs-dot-16);
+    color: var(--color-lamp);
+    -unity-text-align: middle-left;
+    padding-left: var(--sp-2);
+    flex-shrink: 0;
+}
+
+/* ── B/S/O ランプ＋塁ダイヤ（掲示板の右袖） ─────────────────────────
+   ランプ色は現行ルール準拠（B=緑 / S=黄 / O=赤）＋必ず文字併記で色覚対応（設計書16 §4-2）。 */
+.lsc-count { flex-direction: row; align-items: center; margin-left: 24px; flex-shrink: 0; }
+.lsc-lamps { flex-direction: column; flex-shrink: 0; }
+.lsc-lamp-row { flex-direction: row; align-items: center; height: 18px; }
+.lsc-lamp-key {
+    font-size: var(--fs-dot-16);
+    color: var(--color-muted);
+    width: 18px;
+    -unity-text-align: middle-center;
+}
+/* 消灯の電球。黒面(--sb-face)の上では --color-line だと沈んで消えるので、
+   「消えている電球がそこにある」と読める明度（--line-focus）まで上げる。 */
+.lsc-lamp {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    margin-left: 5px;
+    background-color: var(--color-line-focus);
+    flex-shrink: 0;
+}
+.lsc-lamp--ball.is-on { background-color: var(--color-good); }
+.lsc-lamp--strike.is-on { background-color: var(--color-lamp); }
+.lsc-lamp--out.is-on { background-color: var(--color-warn); }
+
+/* 塁ダイヤ（正ひし形。2塁=上・1塁=右・3塁=左）。占有＝アンバー＝2D俯瞰の走者色と一致させる。 */
+.lsc-diamond { width: 46px; height: 46px; margin-left: 24px; flex-shrink: 0; }
+.lsc-base {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    background-color: var(--color-faint);
+    rotate: 45deg;
+}
+.lsc-base--second { top: 0; left: 15px; }
+.lsc-base--first { top: 15px; left: 30px; }
+.lsc-base--third { top: 15px; left: 0; }
+.lsc-base.is-on { background-color: var(--color-lamp); }

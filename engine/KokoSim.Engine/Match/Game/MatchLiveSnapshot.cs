@@ -44,12 +44,30 @@ public sealed record LiveTeamSnapshot(
     IReadOnlyList<LiveBatterSlot> Bench, IReadOnlyList<LivePitcherToday> Bullpen);
 
 /// <summary>
-/// 試合のライブ観戦スナップショット（両チームのスタメン列・現投手・現在の攻撃側/打者）。
+/// ライブ観戦のラインスコア1チーム分（回別得点＋R/H/E）。設計書16 §4-2 の LineScorePanel が引く観測データ。
+/// <see cref="InningRuns"/> は<b>完了した半回だけ</b>を持つ（半回が終わった時点で確定するため）。
+/// 進行中の半回で既に入った点は <see cref="PendingRuns"/> に分けてある。UI はこの2つを
+/// 「確定セル＋進行中セル」に描き分ければよく、UI側で得点を再計算する必要がない（不変条件: 数値はエンジン集計から）。
+/// </summary>
+/// <param name="Name">校名。</param>
+/// <param name="InningRuns">完了した半回の得点（添字0＝1回）。</param>
+/// <param name="PendingRuns">進行中の半回でこれまでに入った点（守備側なら常に0）。</param>
+/// <param name="Runs">総得点 R。</param>
+/// <param name="Hits">安打 H。</param>
+/// <param name="Errors">失策 E。</param>
+public sealed record LiveLineScore(
+    string Name, IReadOnlyList<int> InningRuns, int PendingRuns, int Runs, int Hits, int Errors);
+
+/// <summary>
+/// 試合のライブ観戦スナップショット（両チームのスタメン列・現投手・現在の攻撃側/打者・ラインスコア）。
 /// <see cref="Timeline.Playback.MatchProgression.Snapshot"/> が試合中の可変状態から組む観測データ。
 /// </summary>
 /// <param name="Away">先攻チーム。</param>
 /// <param name="Home">後攻チーム。</param>
 /// <param name="OffenseIsTop">現在の攻撃側が先攻(表)なら true。</param>
 /// <param name="CurrentBatterOrder">現在の打者の打順（1-9。攻撃側列のハイライト用）。</param>
+/// <param name="AwayLine">先攻のラインスコア。</param>
+/// <param name="HomeLine">後攻のラインスコア。</param>
 public sealed record MatchLiveSnapshot(
-    LiveTeamSnapshot Away, LiveTeamSnapshot Home, bool OffenseIsTop, int CurrentBatterOrder);
+    LiveTeamSnapshot Away, LiveTeamSnapshot Home, bool OffenseIsTop, int CurrentBatterOrder,
+    LiveLineScore AwayLine, LiveLineScore HomeLine);

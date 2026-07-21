@@ -185,4 +185,55 @@ public sealed class MatchLiveSnapshotTests
         Assert.DoesNotContain(before.Home.Lineup.Select(s => s.Name),
             n => n == PinchHitterName); // 代打前には居なかった
     }
+
+    // 設計書16 §4-2 LineScorePanel の観測データ。完走後のラインスコアがボックススコアと一致すること
+    // （UI側で回別得点を組み立てさせない＝数値はエンジン集計から引く、の担保）。
+    [Fact]
+    public void Snapshot_LineScoreMatchesResult()
+    {
+        var prog = NewProg();
+        while (prog.Advance()) { }
+        var result = prog.BuildResult();
+        var snap = prog.Snapshot();
+
+        Assert.Equal(result.AwayName, snap.AwayLine.Name);
+        Assert.Equal(result.HomeName, snap.HomeLine.Name);
+        Assert.Equal(result.AwayRuns, snap.AwayLine.Runs);
+        Assert.Equal(result.HomeRuns, snap.HomeLine.Runs);
+        Assert.Equal(result.AwayHits, snap.AwayLine.Hits);
+        Assert.Equal(result.HomeHits, snap.HomeLine.Hits);
+        Assert.Equal(result.AwayErrors, snap.AwayLine.Errors);
+        Assert.Equal(result.HomeErrors, snap.HomeLine.Errors);
+        Assert.Equal(result.AwayLineScore, snap.AwayLine.InningRuns);
+        Assert.Equal(result.HomeLineScore, snap.HomeLine.InningRuns);
+
+        // 試合終了後は進行中の半回が無いので、回別得点の合計＝総得点（PendingRuns は 0）。
+        Assert.Equal(0, snap.AwayLine.PendingRuns);
+        Assert.Equal(0, snap.HomeLine.PendingRuns);
+        Assert.Equal(result.AwayRuns, snap.AwayLine.InningRuns.Sum());
+    }
+
+    // 試合中は「確定した半回の得点（InningRuns）＋進行中の半回の得点（PendingRuns）＝総得点 R」が常に成り立つ。
+    // 進行中の半回はまだ InningRuns に載らないので、この不変式が破れると掲示板の合計が狂う。
+    [Fact]
+    public void Snapshot_LineScoreSplitsPendingHalfInning()
+    {
+        var prog = NewProg();
+        var checkedMidGame = 0;
+
+        while (prog.Advance())
+        {
+            var snap = prog.Snapshot();
+            Assert.Equal(snap.AwayLine.Runs, snap.AwayLine.InningRuns.Sum() + snap.AwayLine.PendingRuns);
+            Assert.Equal(snap.HomeLine.Runs, snap.HomeLine.InningRuns.Sum() + snap.HomeLine.PendingRuns);
+
+            // 守備側に進行中の半回は無い（＝PendingRuns は必ず0）。
+            if (snap.OffenseIsTop) Assert.Equal(0, snap.HomeLine.PendingRuns);
+            else Assert.Equal(0, snap.AwayLine.PendingRuns);
+
+            checkedMidGame++;
+        }
+
+        Assert.True(checkedMidGame > 20, $"試合中の検証回数が少なすぎる: {checkedMidGame}");
+    }
 }

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LineScorePanel（部品辞書 / 設計書16 §4-2）。甲子園式ラインスコア。
+     1枚の黒面に「回別得点＋R/H/E」と「B/S/O ランプ＋塁ダイヤ」を横並びで収める（F2 案A）。
+     MatchLive 上部の2段（スコアバー＋BSO帯）をこれ1枚で置き換える。
+
+     置くのは行の器だけで、マス（回数ぶん）は C# 側 LineScorePanel.Fill が生成する。
+     延長で回が増えたときはルート要素に lsc の修飾子 dense が付き、マス幅が詰まる。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="lsc-root" class="lsc">
+        <ui:VisualElement class="lsc-board">
+            <ui:VisualElement name="lsc-head" class="lsc-row lsc-row--head" />
+            <ui:VisualElement name="lsc-away" class="lsc-row" />
+            <ui:VisualElement name="lsc-home" class="lsc-row" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="lsc-count">
+            <ui:VisualElement class="lsc-lamps">
+                <ui:VisualElement class="lsc-lamp-row">
+                    <ui:Label class="lsc-lamp-key f-dot" text="B" />
+                    <ui:VisualElement name="lsc-b1" class="lsc-lamp lsc-lamp--ball" />
+                    <ui:VisualElement name="lsc-b2" class="lsc-lamp lsc-lamp--ball" />
+                    <ui:VisualElement name="lsc-b3" class="lsc-lamp lsc-lamp--ball" />
+                </ui:VisualElement>
+                <ui:VisualElement class="lsc-lamp-row">
+                    <ui:Label class="lsc-lamp-key f-dot" text="S" />
+                    <ui:VisualElement name="lsc-s1" class="lsc-lamp lsc-lamp--strike" />
+                    <ui:VisualElement name="lsc-s2" class="lsc-lamp lsc-lamp--strike" />
+                </ui:VisualElement>
+                <ui:VisualElement class="lsc-lamp-row">
+                    <ui:Label class="lsc-lamp-key f-dot" text="O" />
+                    <ui:VisualElement name="lsc-o1" class="lsc-lamp lsc-lamp--out" />
+                    <ui:VisualElement name="lsc-o2" class="lsc-lamp lsc-lamp--out" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="lsc-diamond">
+                <ui:VisualElement name="lsc-base-2" class="lsc-base lsc-base--second" />
+                <ui:VisualElement name="lsc-base-3" class="lsc-base lsc-base--third" />
+                <ui:VisualElement name="lsc-base-1" class="lsc-base lsc-base--first" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

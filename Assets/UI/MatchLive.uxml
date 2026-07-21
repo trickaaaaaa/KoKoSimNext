@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="LineScorePanel" src="Components/LineScorePanel.uxml" />
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
@@ -19,43 +20,10 @@
             <!-- 中央列: スコアボード＋盤面＋実況 -->
             <ui:VisualElement class="mlive-col mlive-col--center">
 
-                <ui:VisualElement class="mlive-sb">
-                    <ui:VisualElement class="mlive-side">
-                        <ui:Label name="away-name" class="mlive-team" text="先攻" />
-                        <ui:Label name="away-score" class="mlive-score" text="0" />
-                    </ui:VisualElement>
-                    <ui:Label name="inning" class="mlive-inning" text="—" />
-                    <ui:VisualElement class="mlive-side mlive-side--home">
-                        <ui:Label name="home-score" class="mlive-score" text="0" />
-                        <ui:Label name="home-name" class="mlive-team" text="後攻" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:VisualElement class="mlive-bso">
-                    <ui:VisualElement class="mlive-count">
-                        <ui:VisualElement class="mlive-count-row">
-                            <ui:Label class="mlive-count-key" text="B" />
-                            <ui:VisualElement name="b1" class="mlive-dot mlive-dot--ball" />
-                            <ui:VisualElement name="b2" class="mlive-dot mlive-dot--ball" />
-                            <ui:VisualElement name="b3" class="mlive-dot mlive-dot--ball" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="mlive-count-row">
-                            <ui:Label class="mlive-count-key" text="S" />
-                            <ui:VisualElement name="s1" class="mlive-dot mlive-dot--strike" />
-                            <ui:VisualElement name="s2" class="mlive-dot mlive-dot--strike" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="mlive-count-row">
-                            <ui:Label class="mlive-count-key" text="O" />
-                            <ui:VisualElement name="o1" class="mlive-dot mlive-dot--out" />
-                            <ui:VisualElement name="o2" class="mlive-dot mlive-dot--out" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="mlive-diamond">
-                        <ui:VisualElement name="base-2" class="mlive-base mlive-base--second" />
-                        <ui:VisualElement name="base-3" class="mlive-base mlive-base--third" />
-                        <ui:VisualElement name="base-1" class="mlive-base mlive-base--first" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
+                <!-- 甲子園式ラインスコア（設計書16 §4-2）。旧スコアバー＋BSO帯の2段をこれ1枚で置き換える。
+                     回別得点は LineScorePanel.Fill が、B/S/O ランプと塁ダイヤは MatchLiveController が
+                     1球ごとに lsc-b1 / lsc-base-1 等の name をトグルして駆動する。 -->
+                <ui:Instance template="LineScorePanel" />
 
                 <ui:VisualElement class="mlive-field-wrap">
                     <ui:VisualElement name="field-host" class="mlive-field" />

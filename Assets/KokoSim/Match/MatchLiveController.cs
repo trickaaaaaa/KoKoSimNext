@@ -5,6 +5,7 @@ using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
+using KokoSim.Unity.Components;   // 部品辞書（LineScorePanel）
 using KokoSim.Unity.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -63,7 +64,11 @@ namespace KokoSim.Unity.Match
 
         private VisualElement _root;
         private Match2DPlaybackElement _view;
-        private Label _caption, _result, _batter, _awayScore, _homeScore, _inning;
+        private Label _caption, _result, _batter;
+
+        // ラインスコアを描き直したかのフラグ。掲示板は「プレーが確定してから点を掲げる」（実物の運用と同じ）
+        // ので、打席の演出が resolved になった瞬間に1回だけ更新する（毎フレーム Snapshot を組み直さない）。
+        private bool _lineScorePosted;
         private Button _nextPa, _subOpen, _skip;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
@@ -135,11 +140,6 @@ namespace KokoSim.Unity.Match
             _caption = _root.Q<Label>("caption");
             _result = _root.Q<Label>("result-chip");
             _batter = _root.Q<Label>("batter");
-            _awayScore = _root.Q<Label>("away-score");
-            _homeScore = _root.Q<Label>("home-score");
-            _inning = _root.Q<Label>("inning");
-            SetText("away-name", awayName);
-            SetText("home-name", homeName);
 
             _nextPa = _root.Q<Button>("next-pa");
             if (_nextPa != null) _nextPa.clicked += OnNextPa;
@@ -152,10 +152,11 @@ namespace KokoSim.Unity.Match
             WireSpeed("spd-1", 1f); WireSpeed("spd-2", 2f); WireSpeed("spd-4", 4f);
             WirePitchTactics();
 
-            _ballDots = new[] { _root.Q<VisualElement>("b1"), _root.Q<VisualElement>("b2"), _root.Q<VisualElement>("b3") };
-            _strikeDots = new[] { _root.Q<VisualElement>("s1"), _root.Q<VisualElement>("s2") };
-            _outDots = new[] { _root.Q<VisualElement>("o1"), _root.Q<VisualElement>("o2") };
-            _bases = new[] { _root.Q<VisualElement>("base-1"), _root.Q<VisualElement>("base-2"), _root.Q<VisualElement>("base-3") };
+            // B/S/O ランプと塁ダイヤは LineScorePanel（部品辞書）の右袖。1球ごとに動くのでここから直接トグルする。
+            _ballDots = new[] { _root.Q<VisualElement>("lsc-b1"), _root.Q<VisualElement>("lsc-b2"), _root.Q<VisualElement>("lsc-b3") };
+            _strikeDots = new[] { _root.Q<VisualElement>("lsc-s1"), _root.Q<VisualElement>("lsc-s2") };
+            _outDots = new[] { _root.Q<VisualElement>("lsc-o1"), _root.Q<VisualElement>("lsc-o2") };
+            _bases = new[] { _root.Q<VisualElement>("lsc-base-1"), _root.Q<VisualElement>("lsc-base-2"), _root.Q<VisualElement>("lsc-base-3") };
 
             _pitchCall = _root.Q<VisualElement>("pitch-call");
             _pitchCallJudge = _root.Q<Label>("pitch-call-judge");
@@ -166,6 +167,8 @@ namespace KokoSim.Unity.Match
             _subPanel.Bind();
             BuildGame();
             _subPanel.SetMatch(_prog, _managerIsAway);
+            // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
+            PostLineScore(1, isTop: true, finished: false);
             SetBackHomeVisible(false);
             EnterTacticsWindow("試合開始。采配を選んで打席へ。");
             RefreshPanel();   // 初期スタメン列（今日の成績は0・現打者/HUDは打席開始で点灯）
@@ -217,6 +220,7 @@ namespace KokoSim.Unity.Match
             _capHistHost?.Clear();
             ClearSegHighlight(_ptBattingSeg);
             ClearSegHighlight(_ptDefenseSeg);
+            _lineScorePosted = false;
             SetCount(0, 0);
             SetOuts(0);
             SetBases(false, false, false);
@@ -239,8 +243,7 @@ namespace KokoSim.Unity.Match
                 _homeTeam = null;   // 実試合は進行体が保持（代打候補名の外部参照は使わない）
                 _awayDisp = req.AwayName ?? awayName;
                 _homeDisp = req.HomeName ?? homeName;
-                SetText("away-name", _awayDisp);
-                SetText("home-name", _homeDisp);
+                // 掲示板の校名はエンジンの観測データ（LiveLineScore.Name）から出るのでここでは埋めない。
                 SetColumnTitles();
                 return;
             }
@@ -602,28 +605,28 @@ namespace KokoSim.Unity.Match
             UpdateScoreboard(_current, resolved);
         }
 
-        // ── スコアボード ──
+        // ── ラインスコア（LineScorePanel。設計書16 §4-2） ──
+        // 数値はすべてエンジンの観測データ（MatchLiveSnapshot.AwayLine/HomeLine）から引き、UI側で得点を組み立てない。
+        // resolved=false（打席の演出中）は掲示せず、確定した瞬間に1回だけ掲げる＝実物の掲示板と同じ運用。
         private void UpdateScoreboard(LivePlateAppearance item, bool resolved)
         {
-            var away = resolved ? item.AwayScore : item.AwayScore - (item.IsTop ? item.RunsScored : 0);
-            var home = resolved ? item.HomeScore : item.HomeScore - (item.IsTop ? 0 : item.RunsScored);
-            SetScore(_awayScore, away, away > home);
-            SetScore(_homeScore, home, home > away);
-            if (_inning != null) _inning.text = item.Inning + "回" + (item.IsTop ? "表" : "裏");
+            if (!resolved) { _lineScorePosted = false; return; }
+            if (_lineScorePosted) return;
+            _lineScorePosted = true;
+            PostLineScore(item.Inning, item.IsTop, finished: false);
         }
 
         private void UpdateScoreboardFinal(GameResult r)
         {
-            SetScore(_awayScore, r.AwayRuns, r.AwayRuns > r.HomeRuns);
-            SetScore(_homeScore, r.HomeRuns, r.HomeRuns > r.AwayRuns);
-            if (_inning != null) _inning.text = r.InningsPlayed + "回";
+            _lineScorePosted = true;
+            PostLineScore(r.InningsPlayed, isTop: false, finished: true);
         }
 
-        private static void SetScore(Label l, int v, bool lead)
+        private void PostLineScore(int inning, bool isTop, bool finished)
         {
-            if (l == null) return;
-            l.text = v.ToString();
-            l.EnableInClassList("mlive-score--lead", lead);
+            if (_prog == null) return;
+            var snap = _prog.Snapshot();
+            LineScorePanel.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
         }
 
         // ── 中継風カウント（BSO）＋塁ダイヤ ──
