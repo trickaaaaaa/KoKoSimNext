@@ -20,6 +20,12 @@ public sealed record PitchPlan
 
     /// <summary>球威スコア（打者のミートと突き合わせて空振り率を決める無次元量）。</summary>
     public required double Stuff { get; init; }
+
+    /// <summary>
+    /// この球を投げた投手のコントロールLevel。打球質（芯を外させる度合い）の算出に使う
+    /// （<see cref="Batting.ContactModel.PitcherContactQualityBias"/>）。既定50＝リーグ平均で恒等。
+    /// </summary>
+    public double ControlLevel { get; init; } = 50.0;
 }
 
 /// <summary>
@@ -79,6 +85,7 @@ public static class PitchSelection
             AimY = aimY,
             VelocityKmh = pitchVelo,
             Stuff = stuff,
+            ControlLevel = pitcher.Control,
         };
     }
 

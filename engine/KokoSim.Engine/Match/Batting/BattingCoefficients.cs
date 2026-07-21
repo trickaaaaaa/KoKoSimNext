@@ -50,10 +50,18 @@ public sealed record BattingCoefficients
     public double FoulShare { get; init; } = 0.40;
 
     // --- 球威（stuff）の算出 ---
-    /// <summary>基準球速[km/h]（この球速で stuff=0 寄与）。</summary>
-    public double StuffBaseVelocityKmh { get; init; } = 130.0;
-    /// <summary>球速1km/hあたりの stuff 寄与（対数オッズ）。</summary>
-    public double StuffPerKmh { get; init; } = 0.020;
+    /// <summary>
+    /// 基準球速[km/h]（この球速で stuff=0 寄与）。リーグ平均投手の平均リリース球速
+    /// （最速 <see cref="Players.PitcherAttributes.LeagueAverage"/> 132km/h − 平均ドロップ4km/h）に置く。
+    /// ここを母平均に合わせておくことで <see cref="StuffPerKmh"/> を振っても平均球威が動かない＝帯中立。
+    /// </summary>
+    public double StuffBaseVelocityKmh { get; init; } = 128.0;
+    /// <summary>
+    /// 球速1km/hあたりの stuff 寄与（対数オッズ）。球速Level→km/h の傾き 0.47 と掛けて
+    /// <b>球速1レベル ≈ ミート1レベル</b>（<see cref="WhiffContactSlope"/>=0.030）になるよう定める
+    /// （0.064×0.47≈0.030）。旧値0.020では球速1レベルがミート0.31レベル相当しかなかった。
+    /// </summary>
+    public double StuffPerKmh { get; init; } = 0.064;
 
     // --- 打球生成 ---
     /// <summary>打球初速上限[km/h] の切片（パワー0相当）。設計書02は 100 + P×0.6 だが伸び不足のため係数化。</summary>
@@ -77,6 +85,21 @@ public sealed record BattingCoefficients
     public double BearingSigma { get; init; } = 20.0;
     /// <summary>芯を外すと初速が落ちる度合い（品質1で満初速, 0で係数分だけ残る）。</summary>
     public double MinQualityVeloFactor { get; init; } = 0.55;
+
+    // --- コンタクト品質への投手側寄与（「打たせて取る」の土台） ---
+    // 打球質が打者能力だけで決まると、技巧派の優位は与四球の少なさからしか生まれず
+    // 「弱い打球を打たせる＝結果が守備力に左右される」という型の個性が成立しない。
+    // 3項とも基準値で寄与0＝リーグ平均投手では恒等（帯中立）に組む。
+    /// <summary>コンタクト品質への球速寄与の基準[km/h]（平均的な配球の実投球速度＝この球速で寄与0）。</summary>
+    public double ContactQualityVelocityRefKmh { get; init; } = 121.5;
+    /// <summary>実投球速度1km/hあたりのコンタクト品質寄与。正＝速い球は当たれば強い打球になる（本格派の代償）。</summary>
+    public double ContactQualityPerKmh { get; init; } = 0.0010;
+    /// <summary>投手コントロール(−50)あたりのコンタクト品質寄与。負＝制球が良いほど芯を外させる。</summary>
+    public double ContactQualityPerControl { get; init; } = -0.0010;
+    /// <summary>コンタクト品質への誘発変化合成量の基準[m]（リーグ平均球速×平均キレ＝この変化量で寄与0）。</summary>
+    public double ContactQualityBreakRefM { get; init; } = 0.47;
+    /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>
+    public double ContactQualityPerBreakM { get; init; } = -0.30;
 
     /// <summary>打球の平均角[deg]を弾道値から線形補間。</summary>
     public double MeanLaunchAngle(int launchTendency)
