@@ -111,7 +111,6 @@ namespace KokoSim.Unity.Home
         private static readonly TournamentSchedule Schedule = new TournamentSchedule();
         private const int ManagerSchoolId = -1;      // 自校（生成校と衝突しない専用ID）
         private const int FieldPrefectureId = 13;    // 神奈川（Prefecture.Id は0基点＝JIS番号-1。#14→13, 校数≒211）
-        private static KokoSim.Engine.Nation.Nation _nation;   // 出場校の母集団（決定論・初回のみ生成）
 
         public HomeState(ulong seed = 42)
         {
@@ -308,12 +307,9 @@ namespace KokoSim.Unity.Home
 
         private static List<School> BuildField(School manager)
         {
-            if (_nation == null)
-                _nation = NationGenerator.Generate(
-                    KokoSim.Unity.Shell.SchoolNameVocabProvider.Default, NationCoeff, new Xoshiro256Random(2026));
-
+            // 母集団は NationService（全画面の単一ソース）。練習試合の申込先と同じ School を引く。
             var field = new List<School> { manager };
-            foreach (var s in _nation.InPrefecture(FieldPrefectureId))
+            foreach (var s in KokoSim.Unity.Shell.NationService.PrefectureSchools)
             {
                 if (s.Id == manager.Id) continue;
                 field.Add(s);
@@ -380,7 +376,8 @@ namespace KokoSim.Unity.Home
             var _year = KokoSim.Unity.Shell.GameClock.YearIndex;   // 共有年度
             var view = new HomeView();
             view.WeekLabel = KokoSim.Unity.Shell.SeasonClock.CurrentLabel(_year, _week);   // 共通「YYYY年M月W週目」
-            view.Funds = "¥120万";
+            // 資金は監督メタ（ManagerService）が単一ソース。練習試合の費用減算がそのまま反映される。
+            view.Funds = "¥" + KokoSim.Unity.Shell.ManagerService.Manager.Funds.ToString("0") + "万";
             view.FameGrade = "D";
             view.TrustGrade = "C";
 

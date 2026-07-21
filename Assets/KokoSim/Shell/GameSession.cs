@@ -4,9 +4,11 @@
 // 静的なこのホルダーに置き、どの画面へ移動しても大会状態が失われないようにする。
 using System;
 using System.Collections.Generic;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Practice;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
@@ -106,6 +108,26 @@ namespace KokoSim.Unity.Shell
         private void ApplyMatchGrowth(GameResult detail, bool managerWasAway)
             => MatchGrowthModel.Apply(detail, managerWasAway, RosterService.Roster,
                 GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
+
+        /// <summary>
+        /// 練習試合を申し込み、成立したら消化する（設計書03 §週ターン③）。週1制約・資金・受諾判定は
+        /// エンジン（<see cref="PracticeMatchScheduler"/>）が持つ。成績は通算スコープにだけ積み
+        /// （isOfficial=false ＝ 公式戦通算・今大会には残さない）、実戦成長は公式戦と同じく発生させる。
+        /// 大会の進行状態（LastOutcome/ResultPending）は触らない＝大会の演出フローと混ざらない。
+        /// </summary>
+        public PracticeMatchOutcome PlayPracticeMatch(School managerSchool, School opponent, IRandomSource rng)
+        {
+            var outcome = ManagerService.Practice.Request(
+                ManagerService.Manager, managerSchool, opponent, ManagerService.AbsoluteWeek,
+                new PlayerMatchResolver(), rng);
+
+            if (outcome.Detail is { } detail)
+            {
+                Stats.FoldGame(detail.Result, detail.ManagerIsAway, isOfficial: false);
+                ApplyMatchGrowth(detail.Result, detail.ManagerIsAway);
+            }
+            return outcome;
+        }
 
         /// <summary>自校の次戦を自動消化する。結果を UI 表示待ちにする。</summary>
         public PlayerMatchOutcome PlayMatch()

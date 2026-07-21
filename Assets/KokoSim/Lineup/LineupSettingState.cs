@@ -550,13 +550,15 @@ namespace KokoSim.Unity.Lineup
             };
         }
 
-        // 成績2列（通算／今大会）。GameSession.Stats を選手IDで引く。未接続は "—"。
+        // 成績3列（通算／公式戦通算／今大会）。GameSession.Stats を選手IDで引く。未接続は "—"。
+        // 「通算」は練習試合を含む全試合、「公式戦」は大会の試合だけ（練習試合は入らない）。
         private static List<StatColumnView> BuildStats(DevelopingPlayer p)
         {
             var stats = GameSession.Current.Stats;
             return new List<StatColumnView>
             {
                 Column("通算", stats.Career.Get(p.Id), p.IsPitcher),
+                Column("公式戦", stats.Official.Get(p.Id), p.IsPitcher),
                 Column("今大会", stats.CurrentTournament.Get(p.Id), p.IsPitcher),
             };
         }
