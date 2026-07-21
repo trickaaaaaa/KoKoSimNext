@@ -6,8 +6,8 @@ namespace KokoSim.Unity.Shell
 {
     /// <summary>
     /// 調子の表情顔（設計書02 §3.3・パワプロ式5段階）。SDFフォントに絵文字が無いため Painter2D で描画する。
-    /// 眺めてスキャンするだけで状態が拾える（UI原則⑥）。調子は自校選手のみ持つ概念なので、相手校など
-    /// 調子不明のときは <see cref="Set"/>(null) で非表示（中立）にする。
+    /// 眺めてスキャンするだけで状態が拾える（UI原則⑥）。自校は常に真値、相手校は監督の育成眼に応じた
+    /// 誤認あり（<see cref="FormModel.Observe"/>, issue #47）だが、どちらも必ず何らかの表情を描く。
     /// 色は tokens.uss の状態色を映す（RankPalette と同じミラー方針）。盤面/状態色はアクセント本数制限の対象外。
     /// </summary>
     public sealed class ConditionFace : VisualElement
@@ -20,7 +20,7 @@ namespace KokoSim.Unity.Shell
         private static readonly Color Terrible = new(0xE8 / 255f, 0x6A / 255f, 0x4A / 255f);   // warn
         private static readonly Color Ink = new(0x14 / 255f, 0x23 / 255f, 0x1B / 255f);        // 顔上の暗インク
 
-        private Condition? _condition;
+        private Condition _condition = Condition.Normal;
 
         public ConditionFace()
         {
@@ -29,8 +29,8 @@ namespace KokoSim.Unity.Shell
             pickingMode = PickingMode.Ignore;
         }
 
-        /// <summary>調子を設定（null=非表示/中立）。</summary>
-        public void Set(Condition? c)
+        /// <summary>調子を設定。</summary>
+        public void Set(Condition c)
         {
             _condition = c;
             MarkDirtyRepaint();
@@ -57,8 +57,7 @@ namespace KokoSim.Unity.Shell
 
         private void OnGenerate(MeshGenerationContext ctx)
         {
-            if (_condition is not { } c) return; // null=描かない（中立）
-
+            var c = _condition;
             var r = contentRect;
             if (r.width <= 0 || r.height <= 0) return;
 

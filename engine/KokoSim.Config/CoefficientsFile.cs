@@ -590,6 +590,9 @@ public static class CoefficientsLoader
         public double VelocityPerDayFormKmh { get; set; } = D.VelocityPerDayFormKmh;
         public double WeeklyPersistence { get; set; } = D.WeeklyPersistence;
         public double WeeklySigma { get; set; } = D.WeeklySigma;
+        public double ObserveSigmaBase { get; set; } = D.ObserveSigmaBase;
+        public double ObserveSigmaPerTalentEye { get; set; } = D.ObserveSigmaPerTalentEye;
+        public double ObserveSigmaMin { get; set; } = D.ObserveSigmaMin;
 
         public KokoSim.Engine.Players.FormCoefficients ToModel() => new()
         {
@@ -608,6 +611,9 @@ public static class CoefficientsLoader
             VelocityPerDayFormKmh = VelocityPerDayFormKmh,
             WeeklyPersistence = WeeklyPersistence,
             WeeklySigma = WeeklySigma,
+            ObserveSigmaBase = ObserveSigmaBase,
+            ObserveSigmaPerTalentEye = ObserveSigmaPerTalentEye,
+            ObserveSigmaMin = ObserveSigmaMin,
         };
     }
 

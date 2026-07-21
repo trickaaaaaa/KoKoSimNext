@@ -141,6 +141,11 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(4, bundle.EnemyAi.GambleStartMinTier);
         Assert.Equal(1.8, bundle.EnemyAi.SmallBallGambleStartFactor, 6);
 
+        // 相手校の調子観測（誤認モデル, issue #47）も YAML から束縛される。
+        Assert.Equal(0.65, bundle.Form.ObserveSigmaBase, 6);
+        Assert.Equal(-0.0063, bundle.Form.ObserveSigmaPerTalentEye, 6);
+        Assert.Equal(0.02, bundle.Form.ObserveSigmaMin, 6);
+
         // チーム総合力6指標の重み（設計決定 2026-07-18）も YAML から束縛される。
         Assert.Equal(0.28, bundle.TeamStrength.PitchingWeight, 6);
         Assert.Equal(0.24, bundle.TeamStrength.BattingWeight, 6);
