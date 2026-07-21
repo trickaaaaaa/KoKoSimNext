@@ -115,7 +115,13 @@ public sealed record ThrowSegment : PlaybackBallSegment
 public sealed record PlaybackMove(double T0, double T1, PlaybackVec To);
 
 /// <summary>走者1人の塁間レッグ（t0→t1 で from→to）。mock: run。</summary>
-public sealed record PlaybackRun(double T0, double T1, PlaybackVec From, PlaybackVec To);
+public sealed record PlaybackRun(double T0, double T1, PlaybackVec From, PlaybackVec To)
+{
+    /// <summary>このレッグの終端でアウトになったか（判定オーバーレイ, Issue #59）。</summary>
+    public bool OutAtEnd { get; init; }
+    /// <summary>このレッグの終端が守備との際どい判定だったか（セーフ側のみ表示に使う, Issue #59）。</summary>
+    public bool CloseCall { get; init; }
+}
 
 /// <summary>走者（複数レッグ＋任意の消滅時刻 hideAt＋表示ラベル）。mock: runners[i]。</summary>
 public sealed record PlaybackRunner

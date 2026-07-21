@@ -150,6 +150,12 @@ public sealed record BaserunningCoefficients
     /// 1.55 で「内野前進は生還率を抑える(通常より下)＝AIの前進判断が正しく報われる」。</summary>
     public double HomeGrounderStartDelaySeconds { get; init; } = 1.55;
 
+    /// <summary>
+    /// 判定オーバーレイ（Issue #59）: margin[s]の絶対値がこの値未満なら「際どい」＝セーフ表示の対象。
+    /// アウトは常に表示するため使わない。表示専用（判定・帯には無関係, 決定論を変えない）。
+    /// </summary>
+    public double CloseCallMarginSeconds { get; init; } = 0.15;
+
     // === ライナー併殺（コンタクト始動の走者が打球を空中で捕られ塁へ戻れない, 設計書12 §4, G2）===
     // 本塁の時間勝負と同型: 走者が捕球までに稼いだリード(走行) vs 守備の塁への戻し送球。
     /// <summary>コンタクト始動〜走り出しの反応[s]（接触と同時に飛び出す＝ほぼ即時）。</summary>

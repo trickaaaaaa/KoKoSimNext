@@ -2,6 +2,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
     <Style src="MatchDetail.uss" />
     <ui:VisualElement class="ui-root md-root">
 
