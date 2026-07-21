@@ -22,6 +22,8 @@ public static class PlayerNamesLoader
         {
             FamilyNames = Convert(dto.FamilyNames) ?? d.FamilyNames,
             GivenNames = Convert(dto.GivenNames) ?? d.GivenNames,
+            GivenWeightExponent = dto.GivenWeightExponent is > 0 and <= 1
+                ? dto.GivenWeightExponent.Value : d.GivenWeightExponent,
         };
     }
 
@@ -41,6 +43,7 @@ public static class PlayerNamesLoader
     {
         public List<WeightedNameDto>? FamilyNames { get; set; }
         public List<WeightedNameDto>? GivenNames { get; set; }
+        public double? GivenWeightExponent { get; set; }
     }
 
     private sealed class WeightedNameDto
