@@ -204,6 +204,33 @@ public sealed class FormModelTests
         Assert.True(positiveWeeks > 150, $"絶好調が翌週に持ち越されない: {positiveWeeks}/200");
     }
 
+    // --- 初期化（issue #50）: 週次AR(1)の定常分布からサンプリングする ---
+
+    [Fact]
+    public void StationaryConditionSigma_MatchesAr1StationaryVariance()
+    {
+        // 定常分布のσ = WeeklySigma / √(1 − persistence²)。現行係数(0.75, 0.28)なら ≈0.42。
+        Assert.InRange(F.StationaryConditionSigma, 0.40, 0.44);
+    }
+
+    [Fact]
+    public void SampleInitialCondition_MatchesStationarySigma_AndIsDeterministic()
+    {
+        var rng = new Xoshiro256Random(5);
+        var samples = Enumerable.Range(0, 20000).Select(_ => FormModel.SampleInitialCondition(rng, F)).ToList();
+
+        Assert.All(samples, v => Assert.InRange(v, -1.0, 1.0));
+        Assert.InRange(samples.Average(), -0.02, 0.02);
+
+        var mean = samples.Average();
+        var sd = System.Math.Sqrt(samples.Average(v => (v - mean) * (v - mean)));
+        Assert.InRange(sd, F.StationaryConditionSigma - 0.03, F.StationaryConditionSigma + 0.03);
+
+        var a = FormModel.SampleInitialCondition(new Xoshiro256Random(9), F);
+        var b = FormModel.SampleInitialCondition(new Xoshiro256Random(9), F);
+        Assert.Equal(a, b);
+    }
+
     // --- Season 接続: 週次更新で調子が分布し、5段階すべてが出現する ---
 
     [Fact]

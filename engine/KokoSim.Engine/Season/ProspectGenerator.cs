@@ -135,7 +135,8 @@ public static class ProspectGenerator
 
     public static IReadOnlyList<DevelopingPlayer> Intake(int year, RosterCoefficients c, IRandomSource rng,
         PlayerNameVocab? nameVocab = null, double? talentCenter = null, SkillCoefficients? skills = null,
-        PersonalityCoefficients? personalities = null, IEnumerable<string>? existingNames = null)
+        PersonalityCoefficients? personalities = null, IEnumerable<string>? existingNames = null,
+        FormCoefficients? form = null)
     {
         var vocab = nameVocab ?? new PlayerNameVocab();
         // 同一チーム内で下の名前が被らないよう、既存部員の名前も含めて持ち回る（苗字の重複はOK）。
@@ -144,13 +145,14 @@ public static class ProspectGenerator
             foreach (var n in existingNames) usedGiven.Add(GivenPart(n));
         var skillCoeff = skills ?? new SkillCoefficients();
         var personalityCoeff = personalities ?? new PersonalityCoefficients();
+        var formCoeff = form ?? new FormCoefficients();
         var center = talentCenter ?? c.TalentCenterDefault;
         var count = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.IntakeMean, c.IntakeSd)), c.IntakeMin, c.IntakeMax);
         var list = new List<DevelopingPlayer>(count);
         for (var i = 0; i < count; i++)
         {
             var isPitcher = rng.NextDouble() < c.PitcherShare;
-            list.Add(Create(year, i, isPitcher, center, c, rng, vocab, skillCoeff, personalityCoeff, usedGiven));
+            list.Add(Create(year, i, isPitcher, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));
         }
         return list;
     }
@@ -165,7 +167,7 @@ public static class ProspectGenerator
 
     private static DevelopingPlayer Create(int year, int index, bool isPitcher, double talentCenter,
         RosterCoefficients c, IRandomSource rng, PlayerNameVocab vocab, SkillCoefficients skillCoeff,
-        PersonalityCoefficients personalityCoeff, ISet<string> usedGiven)
+        PersonalityCoefficients personalityCoeff, FormCoefficients formCoeff, ISet<string> usedGiven)
     {
         var growth = SampleGrowthType(rng);
 
@@ -238,6 +240,10 @@ public static class ProspectGenerator
             Skills = SkillGenerator.Generate(isPitcher, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff),
             // 怪我耐性（隠し, 設計書01 §1.1）。身体系と同様に才能と独立。
             InjuryResistance = MathUtil.Clamp(rng.NextGaussian(50, 15), 10, 90),
+            // 調子の初期値（設計書02 §3.3, issue #50）: 週次AR(1)の定常分布から抽選。
+            // 独立ストリームで抽選し既存の能力ロール列を1ビットも変えない（決定論・分布テスト非破壊）。
+            ConditionValue = Players.FormModel.SampleInitialCondition(
+                rng.Fork(ConditionStreamId(year, index)), formCoeff),
         };
 
         // 守備位置適性（設計書01 §1.1）: 本職は事前に決めず、地力＋系統の向き不向き＋ポジ個体差から創発させる。
@@ -429,6 +435,9 @@ public static class ProspectGenerator
 
     /// <summary>球質タイプ抽選の独立ストリーム（能力ロール列を乱さない）。</summary>
     private static ulong ArchetypeStreamId(int year, int index) => 0x7B15_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>調子の初期値抽選の独立ストリームID（他ストリームと別の上位ビット, issue #50）。</summary>
+    private static ulong ConditionStreamId(int year, int index) => 0x2F84_0000UL ^ (ulong)(year * 1000 + index + 1);
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
     private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
