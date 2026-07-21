@@ -187,7 +187,7 @@ public sealed class TeamState
             var a = _bat.TryGetValue(p, out var acc) ? acc : null;
             slots.Add(new LiveBatterSlot(
                 i + 1, p.SourceId, p.UniformNumber, p.Name, p.Position, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i]));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue));
         }
         return slots;
     }
@@ -211,7 +211,7 @@ public sealed class TeamState
         var a = _pit.TryGetValue(p, out var acc) ? acc : null;
         return new LivePitcherToday(
             p.SourceId, p.UniformNumber, p.Name, p.Throws,
-            a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0);
+            a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue);
     }
 
     /// <summary>ライブ観戦の野手控え（未出場の交代候補）。打順は持たないので Order=0。観測データ。</summary>
@@ -223,7 +223,7 @@ public sealed class TeamState
             var a = _bat.TryGetValue(p, out var acc) ? acc : null;
             list.Add(new LiveBatterSlot(
                 0, p.SourceId, p.UniformNumber, p.Name, p.Position, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue));
         }
         return list;
     }
@@ -237,7 +237,7 @@ public sealed class TeamState
             var a = _pit.TryGetValue(p, out var acc) ? acc : null;
             list.Add(new LivePitcherToday(
                 p.SourceId, p.UniformNumber, p.Name, p.Throws,
-                a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0));
+                a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue));
         }
         return list;
     }

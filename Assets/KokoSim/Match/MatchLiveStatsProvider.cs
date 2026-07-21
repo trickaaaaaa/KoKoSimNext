@@ -1,7 +1,6 @@
-using System.Collections.Generic;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Players;
-using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 using KokoSim.Unity.Shell;
 
@@ -9,26 +8,50 @@ namespace KokoSim.Unity.Match
 {
     /// <summary>
     /// ライブ観戦の表示合成（設計書06・不変条件「数値はエンジン集計から引く」）。エンジンのスナップショット
-    /// （今日の成績・左右・守備位置）に、Shell 側の単一ソースから通算・背番号・調子を <see cref="Player.SourceId"/>
-    /// をキーに join する。自校のみ join 成立（相手校は SourceId=null で背番号フォールバック・調子非表示・通算「—」）。
-    /// UI 側で数値を再計算しない（表示専用）。
+    /// （今日の成績・左右・守備位置・調子の真値）に、Shell 側の単一ソースから通算成績を <see cref="Player.SourceId"/>
+    /// をキーに join する（相手校は SourceId=null で通算「—」）。
+    /// 調子は自校=常に真値、相手校=監督の育成眼に応じた誤認モデル（<see cref="FormModel.Observe"/>）を通す
+    /// （設計書02 §3.3, issue #47）。観測ノイズは試合ごとに固定した RNG を選手名で Fork するため、
+    /// 同一試合中は同じ見え方になる（決定論・不変条件#2）。UI 側で数値を再計算しない（表示専用）。
     /// </summary>
     public sealed class MatchLiveStatsProvider
     {
-        private readonly Dictionary<int, DevelopingPlayer> _byId = new();
+        private static int _seq;
+
         private readonly PlayerStatStore _stats;
+        private readonly IRandomSource _observeRng;
+        private readonly FormCoefficients _formCoeff = new();
 
         public MatchLiveStatsProvider()
         {
-            foreach (var p in RosterService.Roster) _byId[p.Id] = p;
             _stats = GameSession.Current.Stats;
+            // 試合ごとに独立した決定論ストリーム（週・年度・生成連番から導出。GameSession.ApplyMatchInjuries と同型）。
+            _observeRng = new Xoshiro256Random(
+                0x0BF0_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_seq)));
         }
 
-        /// <summary>調子（自校のみ。相手校など不明は null＝表情顔を出さない）。</summary>
-        public Condition? ConditionOf(int? sourceId) =>
-            sourceId is int id && _byId.TryGetValue(id, out var dp)
-                ? FormModel.Quantize(dp.ConditionValue)
-                : (Condition?)null;
+        /// <summary>
+        /// 調子（自校=常に真値。相手校=育成眼に応じた誤認あり）。<paramref name="name"/> は相手校の観測ノイズを
+        /// 選手ごとに Fork で固定するためのキー（Fork は親ストリームを進めないため、同一選手は毎回同じ結果になる）。
+        /// </summary>
+        public Condition ConditionOf(int? sourceId, double conditionValue, string name) =>
+            sourceId is int
+                ? FormModel.Quantize(conditionValue)
+                : FormModel.Observe(conditionValue, ManagerService.Manager.TalentEye,
+                    _observeRng.Fork(NameStreamId(name)), _formCoeff);
+
+        // 選手名 → Fork streamId（FNV-1a 64bit）。相手校の生成選手には SourceId が無いため、
+        // 名前を安定キーとして使う（同一試合の同一選手なら常に同じ streamId）。
+        private static ulong NameStreamId(string name)
+        {
+            var hash = 0xcbf29ce484222325UL;
+            foreach (var ch in name)
+            {
+                hash ^= ch;
+                hash *= 0x100000001b3UL;
+            }
+            return hash;
+        }
 
         /// <summary>公式戦通算の打撃成績（試合数0＝未出場は null）。</summary>
         public BattingStatLine? CareerBatting(int? sourceId)

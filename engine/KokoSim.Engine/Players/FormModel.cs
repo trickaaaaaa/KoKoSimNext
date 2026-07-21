@@ -43,6 +43,14 @@ public sealed record FormCoefficients
     /// <summary>前週の持ち越し（1に近いほど波が長い）。</summary>
     public double WeeklyPersistence { get; init; } = 0.75;
     public double WeeklySigma { get; init; } = 0.28;
+
+    // --- 相手校の調子観測（§3.3「監督の育成眼が高いほど正確、低いと誤認」, issue #47） ---
+    /// <summary>育成眼0時の観測ノイズσ（連続値に加算後に量子化。段階幅0.35〜0.4なので2段階外す誤認もあり得る）。</summary>
+    public double ObserveSigmaBase { get; init; } = 0.65;
+    /// <summary>育成眼1あたりのσ減少（負値）。TalentEye=100で下限に達する＝ほぼ真値。</summary>
+    public double ObserveSigmaPerTalentEye { get; init; } = -0.0063;
+    /// <summary>σの下限（0にはしない＝育成眼MAXでも僅かな誤差は残す）。</summary>
+    public double ObserveSigmaMin { get; init; } = 0.02;
 }
 
 /// <summary>
@@ -116,6 +124,20 @@ public static class FormModel
     {
         var v = current * f.WeeklyPersistence + rng.NextGaussian(0, f.WeeklySigma);
         return MathUtil.Clamp(v, -1.0, 1.0);
+    }
+
+    /// <summary>
+    /// 相手校の調子観測（§3.3「監督の育成眼が高いほど正確に見える、低いと曖昧/誤認」, issue #47）。
+    /// 真値 <paramref name="actualValue"/> に育成眼依存のσでガウスノイズを乗せてから5段階量子化する
+    /// （連続値ノイズ→量子化方式。育成眼が低いほどσが大きく、隣接段階どころか2段階外す誤認もあり得る）。
+    /// 呼び出し側が同一試合中は同じ rng（Fork 等で固定した状態）を渡すことで、観測結果が試合中ぶれない
+    /// （決定論・不変条件#2）。自チームは常に真値なので Quantize を直接使う（本関数を呼ばない）。
+    /// </summary>
+    public static Condition Observe(double actualValue, double talentEye, IRandomSource rng, FormCoefficients f)
+    {
+        var sigma = Math.Max(f.ObserveSigmaMin, f.ObserveSigmaBase + talentEye * f.ObserveSigmaPerTalentEye);
+        var noisy = actualValue + rng.NextGaussian(0, sigma);
+        return Quantize(noisy);
     }
 
     private static int ClampAbility(double v) => (int)MathUtil.Clamp(Math.Round(v), 1, 100);

@@ -239,6 +239,10 @@ form:
   # 週次の波（数日〜数週間続く。毎試合振り直さない）
   weekly_persistence: 0.75
   weekly_sigma: 0.28
+  # 相手校の調子観測（監督の育成眼が高いほど正確、低いと誤認。issue #47）
+  observe_sigma_base: 0.65          # 育成眼0時のノイズσ
+  observe_sigma_per_talent_eye: -0.0063  # 育成眼1あたりのσ減少（TalentEye=100でσ下限）
+  observe_sigma_min: 0.02           # σの下限（育成眼MAXでも僅かな誤差は残す）
 
 # --- 特殊能力の効果量・出現率（設計書10）🟡 スキルなしの選手には作用しない（帯不変） ---
 # スキルの定義（id・カテゴリ・説明）は data/skills.yaml。ここは効果の強さと生成率だけ。

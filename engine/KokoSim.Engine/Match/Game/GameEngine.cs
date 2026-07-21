@@ -946,7 +946,8 @@ public static class GameEngine
             batter.SourceId, batter.Bats, batter.Position,
             pitcher.SourceId, pitcher.Name, pitcher.Throws,
             batter.UniformNumber, pitcher.UniformNumber,
-            pitchLog));
+            pitchLog,
+            batter.ConditionValue, pitcher.ConditionValue));
     }
 
     /// <summary>バント処理時の進塁: 一・二塁走者が1つ進む（三塁走者は自重）。batter 非null なら打者一塁へ。</summary>
