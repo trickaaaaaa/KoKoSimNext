@@ -66,13 +66,22 @@ public static class HomePlayResolver
         return s.BallFieldedAtSeconds + c.OutfieldTransferSeconds + throwTime + c.HomeTagSeconds;
     }
 
+    /// <summary>
+    /// 生還判定のmargin[s]（守備所要−走者所要＋バイアス。判定オーバーレイ, Issue #59）。
+    /// 0=判定境界、正=セーフ（生還）寄り、負=アウト（憤死）寄り。
+    /// </summary>
+    public static double Margin(
+        Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
+        double extraStartDelaySeconds = 0.0)
+        => DefenseTimeSeconds(s, c)
+           - RunnerTimeSeconds(runner, fromBase, field, c, extraStartDelaySeconds) + c.HomeSuccessBias;
+
     /// <summary>生還成功確率（走塁と同式の logistic）。extraStartDelaySeconds=走者の追加スタート遅延（G1）。</summary>
     public static double SuccessProbability(
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
         double extraStartDelaySeconds = 0.0)
     {
-        var margin = DefenseTimeSeconds(s, c)
-                     - RunnerTimeSeconds(runner, fromBase, field, c, extraStartDelaySeconds) + c.HomeSuccessBias;
+        var margin = Margin(runner, fromBase, s, field, c, extraStartDelaySeconds);
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.HomeMarginScale), 0.01, 0.99);
     }
 

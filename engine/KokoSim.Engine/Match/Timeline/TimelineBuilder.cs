@@ -33,6 +33,8 @@ public static class TimelineBuilder
     /// <summary>
     /// 打球プレーのタイムラインを構築。play=守備解決の詳細、fielders=現守備陣、
     /// formations=陣形ルール表（null なら既定表）。時刻は投球開始=0、接触=0.85s。
+    /// closeCallMarginSeconds=判定オーバーレイ（Issue #59）の際どさしきい値[s]（既定は
+    /// <see cref="BaserunningCoefficients.CloseCallMarginSeconds"/> の初期値と同値）。
     /// </summary>
     public static PlayTimeline BuildBattedBall(
         FieldingPlay play,
@@ -40,7 +42,8 @@ public static class TimelineBuilder
         FieldGeometry field,
         FormationTable? formations,
         bool runnersOn,
-        string resultText)
+        string resultText,
+        double closeCallMarginSeconds = 0.15)
     {
         var table = formations ?? FormationTable.Default;
         var landing = new TimelinePoint(play.LandingX, play.LandingZ);
@@ -100,10 +103,12 @@ public static class TimelineBuilder
         // 打者走者（常に一塁へ走る。本塁打はダイヤモンド一周の簡略で一塁まで表現）。
         var batterArrive = ContactAt + play.BatterToFirstSeconds;
         var batterOut = play.Result == BattedBallResult.Out && !play.IsFly;
+        // 判定オーバーレイ（Issue #59）: 一塁送球が絡んだ判定（force out / 内野安打）のみ際どさを評価。
+        var batterCloseCall = play.JudgementMarginSeconds is { } jm && Math.Abs(jm) < closeCallMarginSeconds;
         runners.Add(new RunnerLeg
         {
             Label = "打", T0 = ContactAt + 0.10, T1 = batterArrive,
-            From = Home, To = BasePoint(field, "first"), OutAtEnd = batterOut,
+            From = Home, To = BasePoint(field, "first"), OutAtEnd = batterOut, CloseCall = batterCloseCall,
         });
 
         // 結果確定時刻: アウト/送球到達/野手処理/着地のうちプレーを決めた時刻。
@@ -305,6 +310,8 @@ public static class TimelineBuilder
                     From = BasePoint(field, from),
                     To = b + 1 >= 4 ? Home : BasePoint(field, to),
                     OutAtEnd = m.Out && b + 1 == m.ToBase,
+                    // 判定オーバーレイ（Issue #59）: CloseCall は決着レッグ（この移動の最終区間）にだけ乗せる。
+                    CloseCall = m.CloseCall && b + 1 == m.ToBase,
                 });
                 t = t1;
             }

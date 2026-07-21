@@ -120,6 +120,13 @@ namespace KokoSim.Unity.Match
         private readonly List<Label> _fielderLabels = new();
         private readonly List<Label> _runnerLabels = new();
 
+        // 打球・走塁プレーの判定オーバーレイ（issue #59）。アウトは常時、セーフはCloseCall(際どい)時のみ、
+        // レッグ終端(T1)から一定時間だけ大きく表示する。#6 の PitchCall と同じ器(.pitch-call)を流用。
+        // t の純関数として毎フレーム再評価する（SetTime がシーク時も含め常に呼ばれるため専用クロック不要）。
+        private const double JudgementHoldSeconds = 0.6;
+        private VisualElement _judgementHost;
+        private Label _judgementLabel;
+
         public Match2DPlaybackElement()
         {
             pickingMode = PickingMode.Ignore;
@@ -137,6 +144,13 @@ namespace KokoSim.Unity.Match
                 _fielderLabels.Add(l);
                 Add(l);
             }
+
+            _judgementHost = new VisualElement { pickingMode = PickingMode.Ignore };
+            _judgementHost.AddToClassList("pitch-call");
+            _judgementLabel = new Label { pickingMode = PickingMode.Ignore };
+            _judgementLabel.AddToClassList("pitch-call__judge");
+            _judgementHost.Add(_judgementLabel);
+            Add(_judgementHost);
         }
 
         private Label MakeTokenLabel()
@@ -207,6 +221,7 @@ namespace KokoSim.Unity.Match
             if (second) _runners.Add(("走", Second));
             if (third) _runners.Add(("走", Third));
 
+            UpdateJudgement(0); // _play=null＝何も見つからず非表示になる（前プレーの判定表示を持ち越さない）。
             UpdateLabels();
             MarkDirtyRepaint();
         }
@@ -242,8 +257,50 @@ namespace KokoSim.Unity.Match
                 }
             }
 
+            UpdateJudgement(t);
             UpdateLabels();
             MarkDirtyRepaint();
+        }
+
+        /// <summary>
+        /// 判定オーバーレイ（issue #59）。t の純関数として、レッグ終端(T1)が (t-hold, t] に入る最新の
+        /// 判定を探す。アウトは常時、セーフは CloseCall（際どい判定）の時だけ対象＝<see cref="PlaybackRun"/>
+        /// 側で既にゲーティング済みのデータをそのまま表示するだけ（描画専用・判定/帯には無関係）。
+        /// 1プレー内に複数の判定がある場合（併殺等）は、直近（最大T1）のものだけを表示する。
+        /// </summary>
+        private void UpdateJudgement(double t)
+        {
+            string text = null;
+            var isOut = false;
+            var bestT1 = double.NegativeInfinity;
+
+            if (_play != null)
+            {
+                foreach (var runner in _play.Runners)
+                {
+                    foreach (var seg in runner.Segs)
+                    {
+                        if (!seg.OutAtEnd && !seg.CloseCall) continue;
+                        if (seg.T1 > t || seg.T1 <= t - JudgementHoldSeconds) continue;
+                        if (seg.T1 < bestT1) continue;
+                        bestT1 = seg.T1;
+                        isOut = seg.OutAtEnd;
+                        text = isOut ? "アウト" : "セーフ";
+                    }
+                }
+            }
+
+            if (text == null)
+            {
+                _judgementHost.style.display = DisplayStyle.None;
+                return;
+            }
+
+            _judgementLabel.text = text;
+            _judgementLabel.EnableInClassList("pitch-call__judge--out", isOut);
+            _judgementLabel.EnableInClassList("pitch-call__judge--safe", !isOut);
+            _judgementHost.style.display = DisplayStyle.Flex;
+            _judgementHost.BringToFront(); // 走者ラベルが後から追加されても常に最前面に出す。
         }
 
         // ── 射影（mock: px(p)=[CX+p.x*S, OY-p.y*S] を要素サイズへ uniform 拡縮・レターボックス） ──

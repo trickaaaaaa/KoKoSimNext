@@ -190,6 +190,7 @@ baserunning:
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅
   home_success_bias: 2.00                    # 憤死≈0.26/試合・得点≈4.08/チームへ校正（Slice C, Heavy実測）
+  close_call_margin_seconds: 0.15            # 判定オーバーレイ（Issue #59）: |margin|がこれ未満なら「際どい」＝セーフ表示。アウトは常時表示のため無関係
   # ライナー併殺（コンタクト始動の一塁走者が捕られ戻れず, 設計書12 §4, G2）
   liner_break_reaction_seconds: 0.05         # 接触と同時に飛び出す＝ほぼ即時
   liner_commit_cap_seconds: 1.00             # 「盲目的に走る」時間の上限（長い滞空でもリードが伸び続けない）

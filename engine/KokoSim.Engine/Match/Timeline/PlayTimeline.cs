@@ -66,6 +66,11 @@ public sealed record RunnerLeg
     public required TimelinePoint To { get; init; }
     /// <summary>このレッグの終端でアウトになったか（タッチ/フォース）。</summary>
     public bool OutAtEnd { get; init; }
+    /// <summary>
+    /// 判定オーバーレイ（Issue #59）: このレッグの終端が守備との際どい判定だったか。
+    /// アウトは常に表示するため使わない。セーフのみ、この値が true のときだけ表示する。
+    /// </summary>
+    public bool CloseCall { get; init; }
 }
 
 /// <summary>時刻付きキャプション（実況テキストのフック。文言はUI層が整形してもよい）。</summary>
