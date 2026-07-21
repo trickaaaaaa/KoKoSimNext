@@ -665,11 +665,14 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .np-name { font-size: 15px; color: #E8ECEA; }
 .np-pos { font-size: 11px; color: #9AA5A0; margin-top: 1px; }
 .np-cond { font-size: 17px; -unity-font-style: bold; margin-right: 10px; }
-.cond--best { color: #F5C64A; }
-.cond--good { color: #9FCB3B; }
-.cond--normal { color: #9AA5A0; }
-.cond--bad { color: #EE8A3C; }
-.cond--worst { color: #E86A4A; }
+/* 調子5段階の色（ホーム注目選手・選手一覧など全画面共通）。
+   値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
+   色分岐はC#側で Condition enum から行い、表示文字列で比較しない。 */
+.cond--best { color: #F5C64A; }    /* = --cond-best 絶好調 */
+.cond--good { color: #9FCB3B; }    /* = --cond-good 好調 */
+.cond--normal { color: #9AA5A0; }  /* = --cond-normal 普通 */
+.cond--bad { color: #EE8A3C; }     /* = --cond-bad 不調 */
+.cond--worst { color: #E86A4A; }   /* = --cond-worst 絶不調 */
 
 /* --- 通知フィード --- */
 .fd-item { flex-direction: row; align-items: stretch; border-bottom-width: 1px; border-bottom-color: #232E28; }

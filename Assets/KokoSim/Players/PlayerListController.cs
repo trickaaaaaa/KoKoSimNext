@@ -11,10 +11,6 @@ namespace KokoSim.Unity.Players
     [RequireComponent(typeof(UIDocument))]
     public sealed class PlayerListController : MonoBehaviour
     {
-        private static readonly Color CondUp = new Color(0.725f, 0.831f, 0.353f);   // 絶好調
-        private static readonly Color CondMid = new Color(0.937f, 0.957f, 0.918f);  // 普通
-        private static readonly Color CondDown = new Color(0.91f, 0.416f, 0.29f);   // 疲れ
-
         private PlayerListState _state;
         private VisualElement _root;
 
@@ -99,15 +95,29 @@ namespace KokoSim.Unity.Players
             }
             row.Add(ability);
 
-            // 調子
+            // 調子（5段階すべてに色。色はUSSクラス側の単一ソース .cond--* に委ねる）
             var cond = Cell(r.Condition, "cell--narrow");
-            cond.style.color = r.Condition == "絶好調" ? CondUp : r.Condition == "疲れ" ? CondDown : CondMid;
+            cond.AddToClassList(CondClass(r.ConditionLevel));
             row.Add(cond);
 
             return row;
         }
 
         // ===== 補助 =====
+
+        // 調子5段階 → 色クラス（tokens.uss の調子色を写した KokoSimTheme.uss .cond--* が単一ソース）。
+        // 表示文字列で比較すると到達不能分岐を生むため、必ず enum で分岐する。
+        private static string CondClass(KokoSim.Engine.Players.Condition c)
+        {
+            switch (c)
+            {
+                case KokoSim.Engine.Players.Condition.Excellent: return "cond--best";
+                case KokoSim.Engine.Players.Condition.Good: return "cond--good";
+                case KokoSim.Engine.Players.Condition.Poor: return "cond--bad";
+                case KokoSim.Engine.Players.Condition.Terrible: return "cond--worst";
+                default: return "cond--normal";
+            }
+        }
 
         private void SetText(string name, string text)
         {
