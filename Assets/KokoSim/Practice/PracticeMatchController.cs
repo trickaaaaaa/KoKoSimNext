@@ -83,7 +83,7 @@ namespace KokoSim.Unity.Practice
         /// <summary>共通トップバーの動的値（週・自校の総合ランク）を埋める。他画面と同じ単一ソース。</summary>
         private void RenderTopBar(string funds)
         {
-            SetText("week", GameClock.CurrentLabel());
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
             SetText("funds", funds);   // 部費残高は監督メタ（ManagerService）が単一ソース
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank == null) return;

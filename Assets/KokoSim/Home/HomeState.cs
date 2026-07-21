@@ -55,6 +55,10 @@ namespace KokoSim.Unity.Home
         public string WeekLabel = "";
         public string CountdownLabel = "夏予選まで";
         public string CountdownValue = "";
+        /// <summary>掲示板の升目に載せる短縮カウントダウン（"15週" / "3日" / "本日試合" / "開催中" / "―"）。</summary>
+        public string CountdownCells = "";
+        /// <summary>年の小書きに続けて出す補足（"夏の大会 3日目"）。升目には載せない。</summary>
+        public string WeekSuffix = "";
         public string Funds = "";
         public string FameGrade = "D";
         public string TrustGrade = "C";
@@ -372,7 +376,7 @@ namespace KokoSim.Unity.Home
             view.CountdownLabel = "次戦まで";
 
             var kindWord = s.Kind == TournamentKind.Summer ? "夏" : "秋";
-            view.WeekLabel += "　" + kindWord + "の大会 " + (s.TournamentDay + 1) + "日目";
+            view.WeekSuffix = kindWord + "の大会 " + (s.TournamentDay + 1) + "日目";
 
             view.HomeTeam = "桜丘";
             view.HomeSub = "自校";
@@ -382,6 +386,7 @@ namespace KokoSim.Unity.Home
             if (r.Finished)
             {
                 view.CountdownValue = "―";
+                view.CountdownCells = "―";
                 view.GameTag = r.IsChampion ? "優勝" : "敗退";
                 view.AwayTeam = "―";
                 view.AwaySub = "";
@@ -392,6 +397,7 @@ namespace KokoSim.Unity.Home
                 var days = s.DaysUntilNextMatch;
                 var reached = s.ReachedMatchDay;
                 view.CountdownValue = reached ? "本日 試合" : days + " 日";
+                view.CountdownCells = reached ? "本日試合" : days + "日";
                 view.GameTag = r.RoundName;
                 view.AwayTeam = r.NextOpponent?.Name ?? "―";
                 view.AwaySub = r.NextOpponent != null ? "ランク " + r.NextOpponentTier : "";
@@ -440,6 +446,7 @@ namespace KokoSim.Unity.Home
                 view.CountdownLabel = "夏予選まで";
                 var left = _calendar.SummerTournamentStartWeek - week;
                 view.CountdownValue = left > 0 ? "残り " + left + " 週" : "開催中";
+                view.CountdownCells = left > 0 ? left + "週" : "開催中";
             }
 
             // 個別指導（設計書04。枠のみ＝上位2名を仮表示＋空き1。効果はエンジン未接続 Q7）。

@@ -182,5 +182,65 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:Label text="SchoolName（校名は常に太明朝。小書きはサンセリフのまま／通常・大）" class="panel__title" style="margin-top: 20px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row; align-items: center;">
+            <ui:VisualElement class="school-name" style="margin-right: 28px;">
+                <ui:Label text="弘学学園高校" class="school-name__main f-display" />
+                <ui:Label text="神奈川・第1シード" class="school-name__sub" />
+            </ui:VisualElement>
+            <ui:VisualElement class="school-name school-name--lg">
+                <ui:Label text="県立桜丘高校" class="school-name__main f-display" />
+                <ui:Label text="自校" class="school-name__sub" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label text="RuleHead（新聞の柱見出し。英語eyebrowの置き換え・アンバーは使わない）" class="panel__title" style="margin-top: 20px; margin-bottom: 6px;" />
+        <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label text="大会展望" class="rule-head__text f-display" />
+        </ui:VisualElement>
+
+        <ui:Label text="ScoreboardStrip（升目グリッド。値マス=32pxドット／単位マス=16px淡色／点灯=アンバー）" class="panel__title" style="margin-top: 20px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:VisualElement class="sbs">
+                <ui:VisualElement class="sbs-group">
+                    <ui:VisualElement class="sbs-group__head">
+                        <ui:Label text="現在" class="sbs-group__k f-dot" />
+                        <ui:Label text="2026年" class="sbs-group__sup f-dot" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="sbs-cells">
+                        <ui:Label text="4" class="sbs-cell f-dot" />
+                        <ui:Label text="月" class="sbs-cell sbs-cell--unit f-dot" />
+                        <ui:Label text="1" class="sbs-cell f-dot" />
+                        <ui:Label text="週" class="sbs-cell sbs-cell--unit f-dot" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="sbs-gap" />
+                <ui:VisualElement class="sbs-group">
+                    <ui:VisualElement class="sbs-group__head">
+                        <ui:Label text="夏予選まで" class="sbs-group__k f-dot" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="sbs-cells">
+                        <ui:Label text="1" class="sbs-cell sbs-cell--lit f-dot" />
+                        <ui:Label text="5" class="sbs-cell sbs-cell--lit f-dot" />
+                        <ui:Label text="週" class="sbs-cell sbs-cell--unit f-dot" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement style="width: 24px;" />
+            <ui:VisualElement class="sbs">
+                <ui:VisualElement class="sbs-group">
+                    <ui:VisualElement class="sbs-group__head">
+                        <ui:Label text="次戦まで" class="sbs-group__k f-dot" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="sbs-cells">
+                        <ui:Label text="開" class="sbs-cell sbs-cell--wide sbs-cell--lit f-dot" />
+                        <ui:Label text="催" class="sbs-cell sbs-cell--wide sbs-cell--lit f-dot" />
+                        <ui:Label text="中" class="sbs-cell sbs-cell--wide sbs-cell--lit f-dot" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>

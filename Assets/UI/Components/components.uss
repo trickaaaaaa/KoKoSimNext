@@ -12,7 +12,7 @@
     min-width: 23px;
     height: 26px;
     -unity-text-align: middle-center;
-    border-radius: 5px;
+    border-radius: 2px;   /* 角タイル（ピル型を廃止・設計書16 F1）*/
     font-size: var(--fs-body);
     -unity-font-style: bold;
     padding-left: 5px;
@@ -1009,3 +1009,98 @@
 .bs-cell--total { width: 38px; -unity-font-style: bold; }
 /* 得点欄だけ一段大きく（数字が主役・UI原則③）。装飾はしない。 */
 .bs-cell--runs { font-size: var(--fs-num); }
+
+/* ═══ ScoreboardStrip：電光掲示板の帯（設計書16 §4-1・F1-b 案B「升目グリッド」）═══════
+   「二つの声のルール」の掲示板側。黒面（--sb-face）に升目を切り、値を1文字1マスの
+   ドット文字（.f-dot）で並べる。この部品の中は必ずドット、外に出たら明朝＋サンセリフ。
+
+   借りるのは視覚言語であって情報ではない（design-16 §1）。ここに出すのは
+   TopBar の既存情報（週・カウントダウン）だけで、試合スコアは出さない。
+
+   マスは C# 側（UiComponents.FillScoreboardCells）が値文字列から1文字ずつ生成する。
+   非数値（「開催中」「本日 試合」「―」）もそのまま升目に載るので分岐が要らない。 */
+.sbs {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--sb-face);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-1) var(--sp-4);
+    flex-shrink: 0;
+}
+/* 1グループ＝ラベル行＋升目行（現在／夏予選まで）。 */
+.sbs-group { align-items: center; flex-shrink: 0; }
+.sbs-group__head { flex-direction: row; align-items: center; margin-bottom: 3px; }
+/* ラベルもドットで出す（掲示板の中だから）。DotGothic16 は和文もドット字形を持つ。 */
+.sbs-group__k {
+    font-size: var(--fs-dot-16);
+    color: var(--color-muted);
+    letter-spacing: 1px;
+}
+/* 升目に載せない添え字（年など）。マス外の小ドットで、値の主役を奪わない。 */
+.sbs-group__sup {
+    font-size: var(--fs-dot-16);
+    color: var(--color-faint);
+    margin-left: var(--sp-2);
+}
+.sbs-cells { flex-direction: row; align-items: center; }
+/* 升目1マス。半角＝数字の幅を既定にし、全角の単位漢字だけ --wide で広げる。 */
+.sbs-cell {
+    width: var(--sb-cell-w);
+    height: var(--sb-cell-h);
+    font-size: var(--fs-dot-32);
+    color: var(--color-chalk);
+    -unity-text-align: middle-center;
+    border-width: var(--border-w);
+    border-color: var(--sb-grid);
+    margin-right: -1px;   /* 隣のマスと枠線を共有して二重線にしない */
+    flex-shrink: 0;       /* 掲示板は絶対に潰さない（UI-BUILD-METHOD 落とし穴） */
+    padding: 0;
+}
+.sbs-cell--wide { width: var(--sb-cell-w-wide); }
+/* 単位（月・週）のマスは値より一段落とす＝数字が主役（UI原則③）。 */
+.sbs-cell--unit { color: var(--color-muted); font-size: var(--fs-dot-16); }
+/* 点灯マス。アンバーは掲示板内でも最重要値だけ（UI原則②・design-16 §8）。 */
+.sbs-cell--lit { color: var(--color-lamp); }
+/* グループ間の間隔。線は引かず黒面の余白で分ける（UI原則④）。 */
+.sbs-gap { width: 40px; flex-shrink: 0; }
+
+/* ═══ SchoolName：校名（設計書16 §4-3）═════════════════════════════════
+   「校名は常に太明朝」が本リスタイルのシグネチャ規則（design-16 §1）。
+   校名＝掲示板の外＝中継テロップ／新聞の語彙なので、掲示板のドットとは絶対に混ぜない。
+   明朝は 16px 以上・太ウェイト限定（暗背景で細い横画が潰れるため）。
+   都道府県・シード等の小書きはサンセリフのままにして、明朝は固有名詞だけに絞る。 */
+.school-name { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.school-name__main {
+    font-size: 20px;
+    color: var(--color-chalk);
+    letter-spacing: 1px;
+}
+.school-name__sub {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin-left: var(--sp-2);
+}
+/* 対戦カード・展望の主役校など「1画面で1つだけ大きく」出す用途（UI原則②）。 */
+.school-name--lg .school-name__main { font-size: 26px; }
+
+/* ═══ RuleHead：新聞の柱見出し（設計書16 §5「英語eyebrow廃止」の受け皿）═══════
+   英語の eyebrow（TOURNAMENT PREVIEW ―― 等）を置き換える日本語の柱見出し。
+   縦罫＋明朝の小見出しで「記事の柱」を表す。アンバーは使わない
+   （見出しは全画面に何度も出るのでアクセントにすると希少性が壊れる＝UI原則②）。 */
+.rule-head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: var(--sp-2);
+}
+.rule-head__rule {
+    width: 3px;
+    height: 16px;
+    background-color: var(--color-muted);
+    margin-right: var(--sp-2);
+    flex-shrink: 0;
+}
+.rule-head__text {
+    font-size: var(--fs-label);
+    letter-spacing: 3px;
+    color: var(--color-muted);
+}

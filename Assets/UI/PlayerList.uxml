@@ -3,8 +3,10 @@
      （以前は独自のコンパクトヘッダーだったため画面間で上部UIが不一致だった）。TopBar は固定・スクロール外。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="Components/components.uss" />
     <Style src="KokoSimTheme.uss" />
-    <ui:VisualElement class="root">
+    <ui:VisualElement class="root ui-root">
 
       <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
       <ui:Instance template="TopBar" />

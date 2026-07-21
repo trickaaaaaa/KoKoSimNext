@@ -4,6 +4,7 @@
      アクティブタブの強調は ScreenRouter が付ける（ここでは付けない）。
      動的値（週・部費・名声・信頼度・総合ランク）は各画面のコントローラが name で埋める。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="ScoreboardStrip" src="ScoreboardStrip.uxml" />
     <ui:VisualElement class="sb2">
         <ui:VisualElement class="sb2-left">
             <ui:Label name="badge" class="sb2-badge" text="桜" />
@@ -21,15 +22,7 @@
         </ui:VisualElement>
 
         <ui:VisualElement class="sb2-center">
-            <ui:VisualElement class="sb2-cell">
-                <ui:Label class="sb2-cell__k" text="現在" />
-                <ui:Label name="week" class="sb2-cell__v" text="2026年4月1週目" />
-            </ui:VisualElement>
-            <ui:VisualElement class="sb2-div" />
-            <ui:VisualElement class="sb2-cell">
-                <ui:Label name="countdown-k" class="sb2-cell__k" text="夏予選まで" />
-                <ui:Label name="countdown" class="sb2-cell__v sb2-cell__v--amber" text="残り 15 週" />
-            </ui:VisualElement>
+            <ui:Instance template="ScoreboardStrip" />
         </ui:VisualElement>
 
         <ui:VisualElement class="sb2-right">

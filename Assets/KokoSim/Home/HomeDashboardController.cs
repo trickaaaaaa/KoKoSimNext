@@ -393,9 +393,8 @@ namespace KokoSim.Unity.Home
             SetText("badge", v.Badge);
             SetText("school-name", v.SchoolName);
             SetText("pref", v.Prefecture);
-            SetText("week", v.WeekLabel);
-            SetText("countdown-k", v.CountdownLabel);
-            SetText("countdown", v.CountdownValue);
+            // 掲示板の升目（週・カウントダウン）。大会モードでは文言が変わるので上書き版を使う。
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root, v.CountdownLabel, v.CountdownCells, v.WeekSuffix);
             SetText("funds", v.Funds);
             SetText("fame", v.FameGrade);
             SetText("trust", v.TrustGrade);

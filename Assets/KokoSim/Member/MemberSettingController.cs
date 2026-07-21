@@ -69,7 +69,7 @@ namespace KokoSim.Unity.Member
         {
             var v = _state.BuildView();
 
-            SetText("week", KokoSim.Unity.Shell.GameClock.CurrentLabel());
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null)
             {

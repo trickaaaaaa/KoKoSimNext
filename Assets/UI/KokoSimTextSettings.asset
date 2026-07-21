@@ -13,9 +13,10 @@ MonoBehaviour:
   m_Name: KokoSimTextSettings
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.PanelTextSettings
   m_Version: 
-  m_DefaultFontAsset: {fileID: 11400000, guid: aa1b28686c2d84c489628717f9662630, type: 2}
+  m_DefaultFontAsset: {fileID: 11400000, guid: 1c2f415f2731d410cad039b0f26f6602, type: 2}
   m_DefaultFontAssetPath: Fonts & Materials/
-  m_FallbackFontAssets: []
+  m_FallbackFontAssets:
+  - {fileID: 11400000, guid: 1c2f415f2731d410cad039b0f26f6602, type: 2}
   m_MatchMaterialPreset: 0
   m_MissingCharacterUnicode: 0
   m_ClearDynamicDataOnBuild: 1
