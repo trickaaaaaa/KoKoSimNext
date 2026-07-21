@@ -92,7 +92,7 @@ public static class AtBatSimulation
                     for (var b = 0; b < Buckets; b++) { row[b] = data[b * Kinds + k]; sum += row[b]; }
                     if (sum == 0) continue;
                     // 本塁打はフライ判定より前に確定するため fly/ground の区別を持たない。
-                    sb.Append(c, k == 4 ? $"| {KindNames[k]} |" : $"| {KindNames[k]}-{name} |");
+                    sb.Append(k == 4 ? "| " + KindNames[k] + " |" : "| " + KindNames[k] + "-" + name + " |");
                     foreach (var v in row) sb.Append(c, $" {v} |");
                     sb.AppendLine();
                 }
