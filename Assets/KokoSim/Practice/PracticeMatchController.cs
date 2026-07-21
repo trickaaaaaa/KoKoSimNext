@@ -19,12 +19,9 @@ namespace KokoSim.Unity.Practice
     {
         private PracticeMatchState _state;
         private VisualElement _root;
-        private VisualElement _radar;
+        private RadarChartView _radar;
 
-        private readonly List<RadarAxis> _radarAxes = new List<RadarAxis>();
         private readonly List<AbilityBar> _factors = new List<AbilityBar>();
-        private readonly List<VisualElement> _axisNodes = new List<VisualElement>();
-        private string _overallGrade = "D";
         private int _selectedId = int.MinValue;
 
         private const float RadiusFactor = 0.34f;
@@ -41,16 +38,8 @@ namespace KokoSim.Unity.Practice
             var request = _root.Q<Button>("pm-request");
             if (request != null) request.clicked += () => { _state.Request(); Render(); };
 
-            _radar = _root.Q<VisualElement>("pm-radar");
-            if (_radar != null)
-            {
-                _radar.generateVisualContent += OnPaintRadar;
-                _radar.RegisterCallback<GeometryChangedEvent>(_ =>
-                {
-                    _radar.MarkDirtyRepaint();
-                    RepositionAxes();
-                });
-            }
+            // レーダーは部品辞書の共通部品（描画＋軸ラベル配置は RadarChartView が持つ）。
+            _radar = new RadarChartView(_root.Q<VisualElement>("pm-radar"), RadiusFactor, LabelOffset);
 
             Render();
         }
@@ -150,14 +139,8 @@ namespace KokoSim.Unity.Practice
                 ? "未選択"
                 : d.Name + "　総合 " + d.TierLetter + "（" + d.Overall + "）　受諾見込み " + d.AcceptPercent + "%");
 
-            _radarAxes.Clear();
             _factors.Clear();
-            if (d != null)
-            {
-                _overallGrade = d.TierLetter;
-                _radarAxes.AddRange(d.Radar);
-                _factors.AddRange(d.Factors);
-            }
+            if (d != null) _factors.AddRange(d.Factors);
 
             var host = _root.Q<VisualElement>("pm-factors");
             if (host != null)
@@ -182,9 +165,7 @@ namespace KokoSim.Unity.Practice
                 }
             }
 
-            BuildAxisLabels();
-            RepositionAxes();
-            if (_radar != null) _radar.MarkDirtyRepaint();
+            _radar.SetData(d?.Radar, d?.TierLetter);
         }
 
         private void SetText(string name, string text)
@@ -193,49 +174,5 @@ namespace KokoSim.Unity.Practice
             if (l != null) l.text = text;
         }
 
-        // ===== レーダー（チーム総合力パネルと同じ描画流儀） =====
-
-        private void BuildAxisLabels()
-        {
-            if (_radar == null) return;
-            foreach (var n in _axisNodes) n.RemoveFromHierarchy();
-            _axisNodes.Clear();
-
-            foreach (var f in _factors)
-            {
-                var node = new VisualElement();
-                node.AddToClassList("pm-axis");
-                node.pickingMode = PickingMode.Ignore;
-                var label = new Label(f.Label); label.AddToClassList("pm-axis__l");
-                var val = new Label(f.Value.ToString()); val.AddToClassList("pm-axis__v");
-                node.Add(label); node.Add(val);
-                _radar.Add(node);
-                _axisNodes.Add(node);
-            }
-        }
-
-        private void RepositionAxes()
-        {
-            if (_radar == null) return;
-            var rect = _radar.contentRect;
-            if (rect.width < 4 || rect.height < 4) return;
-
-            var cx = rect.width * 0.5f;
-            var cy = rect.height * 0.5f;
-            var radius = Mathf.Min(rect.width, rect.height) * RadiusFactor;
-            var n = _axisNodes.Count;
-
-            for (var i = 0; i < n; i++)
-            {
-                var pt = RadarChart.AxisPoint(cx, cy, radius * LabelOffset, i, n);
-                var node = _axisNodes[i];
-                node.style.left = pt.x;
-                node.style.top = pt.y;
-                node.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
-            }
-        }
-
-        private void OnPaintRadar(MeshGenerationContext ctx)
-            => RadarChart.Paint(ctx, _radarAxes, _overallGrade, RadiusFactor);
     }
 }

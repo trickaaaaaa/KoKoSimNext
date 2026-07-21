@@ -62,7 +62,7 @@ namespace KokoSim.Unity.Squad
                 Grade = grade,
                 Pct = pct,
             });
-            v.Radar.Add(new RadarAxis { Label = label, Value01 = pct });
+            v.Radar.Add(new RadarAxis { Label = label, Value01 = pct, ValueText = iv.ToString() });
         }
 
         // 最も低い2指標を弱点として指摘する自動コメント（強調部と助言部に分割）。

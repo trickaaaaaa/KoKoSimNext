@@ -168,18 +168,7 @@
 .pm-factors {
     margin-top: var(--sp-3);
 }
-.pm-axis {
-    position: absolute;
-    align-items: center;
-}
-.pm-axis__l {
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
-}
-.pm-axis__v {
-    font-size: var(--fs-num);
-    color: var(--color-chalk);
-}
+/* レーダー軸ラベルは部品辞書 components.uss の radar-axis 系に一本化（issue #7）。 */
 
 /* ── 申込フッター（主要操作は1つだけ・大きく） ───────────────── */
 .pm-foot {

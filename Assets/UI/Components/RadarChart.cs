@@ -113,4 +113,114 @@ namespace KokoSim.Unity.Components
             return new Vector2(cx + Mathf.Cos(ang) * r, cy + Mathf.Sin(ang) * r);
         }
     }
+
+    /// <summary>軸ラベルの段階（部品辞書 components.uss の radar-axis 系クラスに対応）。</summary>
+    public enum RadarLabelSize
+    {
+        /// <summary>ラベルを出さない（能力バランスなど、凡例を別に持つ画面）。</summary>
+        None,
+        /// <summary>小（カード内の小型レーダー）。</summary>
+        Normal,
+        /// <summary>大（1画面を占める主役レーダー）。</summary>
+        Large,
+    }
+
+    /// <summary>
+    /// レーダー1枚ぶんのバインダ（部品辞書・UI原則⑤）。ホスト要素への描画配線・軸ラベルの生成・
+    /// 角度に沿った再配置までを1箇所に持つ。各画面は「ホストを渡して SetData するだけ」にして、
+    /// 画面ごとに Painter2D とラベル配置をコピーしない（3箇所目のコピーを作らない）。
+    /// </summary>
+    public sealed class RadarChartView
+    {
+        private readonly VisualElement _host;
+        private readonly float _radiusFactor;
+        private readonly float _labelOffset;
+        private readonly RadarLabelSize _labelSize;
+
+        private readonly List<RadarAxis> _axes = new List<RadarAxis>();
+        private readonly List<VisualElement> _axisNodes = new List<VisualElement>();
+        private string _grade = "D";
+
+        /// <param name="host">レーダーを描く器（UXML の name 付き VisualElement）。</param>
+        /// <param name="radiusFactor">短辺に対する半径比。</param>
+        /// <param name="labelOffset">半径に対する軸ラベルの距離比。</param>
+        /// <param name="labelSize">軸ラベルの段階（None＝出さない）。</param>
+        public RadarChartView(VisualElement host, float radiusFactor = 0.36f, float labelOffset = 1.20f,
+            RadarLabelSize labelSize = RadarLabelSize.Normal)
+        {
+            _host = host;
+            _radiusFactor = radiusFactor;
+            _labelOffset = labelOffset;
+            _labelSize = labelSize;
+            if (_host == null) return;
+            _host.generateVisualContent += OnPaint;
+            _host.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                _host.MarkDirtyRepaint();
+                Reposition();
+            });
+        }
+
+        /// <summary>表示データを差し替える（軸は真上から時計回り。<paramref name="grade"/> が塗り色を決める）。</summary>
+        public void SetData(IReadOnlyList<RadarAxis> axes, string grade)
+        {
+            _axes.Clear();
+            if (axes != null) _axes.AddRange(axes);
+            _grade = string.IsNullOrEmpty(grade) ? "D" : grade;
+            BuildAxisLabels();
+            Reposition();
+            if (_host != null) _host.MarkDirtyRepaint();
+        }
+
+        private void BuildAxisLabels()
+        {
+            if (_host == null) return;
+            foreach (var n in _axisNodes) n.RemoveFromHierarchy();
+            _axisNodes.Clear();
+            if (_labelSize == RadarLabelSize.None) return;
+
+            foreach (var a in _axes)
+            {
+                var node = new VisualElement();
+                node.AddToClassList("radar-axis");
+                if (_labelSize == RadarLabelSize.Large) node.AddToClassList("radar-axis--lg");
+                node.pickingMode = PickingMode.Ignore;
+
+                var label = new Label(a.Label);
+                label.AddToClassList("radar-axis__l");
+                node.Add(label);
+                if (!string.IsNullOrEmpty(a.ValueText))
+                {
+                    var val = new Label(a.ValueText);
+                    val.AddToClassList("radar-axis__v");
+                    node.Add(val);
+                }
+                _host.Add(node);
+                _axisNodes.Add(node);
+            }
+        }
+
+        private void Reposition()
+        {
+            if (_host == null || _axisNodes.Count == 0) return;
+            var rect = _host.contentRect;
+            if (rect.width < 4 || rect.height < 4) return;
+
+            var cx = rect.width * 0.5f;
+            var cy = rect.height * 0.5f;
+            var radius = Mathf.Min(rect.width, rect.height) * _radiusFactor;
+            var n = _axisNodes.Count;
+
+            for (var i = 0; i < n; i++)
+            {
+                var pt = RadarChart.AxisPoint(cx, cy, radius * _labelOffset, i, n);
+                var node = _axisNodes[i];
+                node.style.left = pt.x;
+                node.style.top = pt.y;
+                node.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
+            }
+        }
+
+        private void OnPaint(MeshGenerationContext ctx) => RadarChart.Paint(ctx, _axes, _grade, _radiusFactor);
+    }
 }

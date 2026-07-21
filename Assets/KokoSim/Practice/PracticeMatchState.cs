@@ -221,7 +221,12 @@ namespace KokoSim.Unity.Practice
                 Grade = grade,
                 Pct = pct,
             });
-            d.Radar.Add(new RadarAxis { Label = label, Value01 = pct });
+            d.Radar.Add(new RadarAxis
+            {
+                Label = label,
+                Value01 = pct,
+                ValueText = ((int)Math.Round(value)).ToString(),
+            });
         }
 
         private static School Find(int schoolId)

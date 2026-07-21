@@ -19,12 +19,9 @@ namespace KokoSim.Unity.Squad
     {
         private TeamStrengthState _state;
         private VisualElement _root;
-        private VisualElement _radar;
+        private RadarChartView _radar;
 
-        private readonly List<RadarAxis> _radarAxes = new List<RadarAxis>();
         private readonly List<AbilityBar> _factors = new List<AbilityBar>();
-        private readonly List<VisualElement> _axisNodes = new List<VisualElement>();
-        private string _overallGrade = "D";
 
         private const float RadiusFactor = 0.36f;
         private const float LabelOffset = 1.20f;
@@ -48,16 +45,9 @@ namespace KokoSim.Unity.Squad
             var back = _root.Q<Button>("back-home");
             if (back != null) back.clicked += () => FindObjectOfType<ScreenRouter>()?.Show("HomeDashboard");
 
-            _radar = _root.Q<VisualElement>("radar");
-            if (_radar != null)
-            {
-                _radar.generateVisualContent += OnPaintRadar;
-                _radar.RegisterCallback<GeometryChangedEvent>(_ =>
-                {
-                    _radar.MarkDirtyRepaint();
-                    RepositionAxes();
-                });
-            }
+            // レーダーは部品辞書の共通部品（描画＋軸ラベル配置は RadarChartView が持つ）。
+            _radar = new RadarChartView(_root.Q<VisualElement>("radar"), RadiusFactor, LabelOffset,
+                RadarLabelSize.Large);
 
             Render();
         }
@@ -65,7 +55,6 @@ namespace KokoSim.Unity.Squad
         private void Render()
         {
             var v = _state.BuildView();
-            _overallGrade = v.OverallGrade;
 
             // ヘッダー: 総合ランク チップ ＋ (値) 形式「E (41)」（1.5倍拡大）。
             var chip = _root.Q<VisualElement>("overall-chip");
@@ -91,55 +80,9 @@ namespace KokoSim.Unity.Squad
                     : $"<b><color=#E68A4A>{v.AnalysisWeak}。</color></b> {v.AnalysisAdvice}";
             }
 
-            // レーダー描画データ。
-            _radarAxes.Clear(); _radarAxes.AddRange(v.Radar);
+            // レーダー描画データ（軸ラベル＋数値の生成/配置は共通部品に委ねる）。
             _factors.Clear(); _factors.AddRange(v.Factors);
-
-            BuildAxisLabels();
-            RepositionAxes();
-            if (_radar != null) _radar.MarkDirtyRepaint();
-        }
-
-        // ===== レーダー軸ラベル（数値は1色統一・強調はサイズ/太さ） =====
-
-        private void BuildAxisLabels()
-        {
-            if (_radar == null) return;
-            foreach (var n in _axisNodes) n.RemoveFromHierarchy();
-            _axisNodes.Clear();
-
-            foreach (var f in _factors)
-            {
-                var node = new VisualElement();
-                node.AddToClassList("ts-axis");
-                node.pickingMode = PickingMode.Ignore;
-                var label = new Label(f.Label); label.AddToClassList("ts-axis__l");
-                var val = new Label(f.Value.ToString()); val.AddToClassList("ts-axis__v");
-                node.Add(label); node.Add(val);
-                _radar.Add(node);
-                _axisNodes.Add(node);
-            }
-        }
-
-        private void RepositionAxes()
-        {
-            if (_radar == null) return;
-            var rect = _radar.contentRect;
-            if (rect.width < 4 || rect.height < 4) return;
-
-            var cx = rect.width * 0.5f;
-            var cy = rect.height * 0.5f;
-            var radius = Mathf.Min(rect.width, rect.height) * RadiusFactor;
-            var n = _axisNodes.Count;
-
-            for (var i = 0; i < n; i++)
-            {
-                var pt = RadarChart.AxisPoint(cx, cy, radius * LabelOffset, i, n);
-                var node = _axisNodes[i];
-                node.style.left = pt.x;
-                node.style.top = pt.y;
-                node.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
-            }
+            _radar.SetData(v.Radar, v.OverallGrade);
         }
 
         // ===== 右カラムの指標バー（内訳＋ランク連動色） =====
@@ -155,9 +98,5 @@ namespace KokoSim.Unity.Squad
                 Size = AbilityRowSize.Large,
             });
 
-        // ===== レーダー描画（Painter2D＋頂点カラーメッシュ・総合ランク連動色） =====
-
-        private void OnPaintRadar(MeshGenerationContext ctx)
-            => RadarChart.Paint(ctx, _radarAxes, _overallGrade, RadiusFactor);
     }
 }
