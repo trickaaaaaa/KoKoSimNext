@@ -53,6 +53,12 @@ public sealed record GameResult
     public TacticsTally AwayTactics { get; init; } = new();
     public TacticsTally HomeTactics { get; init; } = new();
 
+    /// <summary>
+    /// 試合中に発生した怪我（設計書03 §3.5, 両軍・発生順）。観測データで試合結果には影響しない。
+    /// 自校分は試合後に <see cref="Season.MatchInjuryLedger"/> がロスターへ反映する。
+    /// </summary>
+    public IReadOnlyList<MatchInjuryEvent> Injuries { get; init; } = Array.Empty<MatchInjuryEvent>();
+
     public bool HomeWon => HomeRuns > AwayRuns;
     public bool Tied => HomeRuns == AwayRuns;
     public int TotalRuns => AwayRuns + HomeRuns;
@@ -178,6 +184,7 @@ public static class GameEngine
             HomePitching = home.BuildPitchingLines(),
             AwayTactics = TallyOf(away),
             HomeTactics = TallyOf(home),
+            Injuries = p.Injuries,
         };
     }
 
@@ -263,6 +270,16 @@ public static class GameEngine
             var batter = offense.PeekBatter();
             var batterOrder = offense.CurrentBatterOrder; // ライブ観戦のスタメン列ハイライト用（打順消費前に採取）
             var currentPitcher = defense.CurrentPitcher; // 成績計上用の投手アイデンティティ
+
+            // 試合中の受傷（設計書03 §3.5・issue #29 B）。判定はすべて Fork した専用ストリームなので
+            // 本体の乱数順・試合結果は不変。この打席で起きた分をタイムラインのキャプションにも載せる。
+            List<MatchInjuryEvent>? paInjuries = null;
+            void Hurt(MatchInjuryEvent? e)
+            {
+                if (e is null) return;
+                p.Injuries.Add(e);
+                (paInjuries ??= new List<MatchInjuryEvent>()).Add(e);
+            }
 
             // プレッシャー指数（設計書02 §3）: 状況から自動算出。采配判断にも渡す。
             var pressureIdx = PressureModel.Compute(new PressureSituation(
@@ -500,6 +517,14 @@ public static class GameEngine
                         var safe = StealResolver.Resolve(
                             bases.First, defense.Catcher, ctx.Baserunning, rng, pitchout, stealStart) == StealResult.Safe;
                         offense.RecordSteal(safe);
+                        // 全力疾走・スライディング（設計書03 §3.5）: 盗塁企図ごとに走者が受傷しうる。
+                        if (bases.First is { } slider)
+                        {
+                            Hurt(MatchInjuryModel.Roll(
+                                InjuryScene.Sliding, ctx.MatchInjury.SlidingProb, slider, offense.Name,
+                                inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog,
+                                sub: session.PitchCount));
+                        }
                         if (safe)
                         {
                             bases.Second = bases.First;
@@ -583,6 +608,23 @@ public static class GameEngine
             var res = session.Result;
             defense.AddPitches(res.Pitches, gearWeight);
             p.TotalPitches += res.Pitches;
+
+            // 死球（設計書03 §3.5）: 当たり所によっては骨折・打撲。
+            if (res.Result == PlateAppearanceResult.HitByPitch)
+            {
+                Hurt(MatchInjuryModel.Roll(
+                    InjuryScene.HitByPitch, ctx.MatchInjury.HitByPitchProb, batter, offense.Name,
+                    inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog));
+            }
+
+            // 投球過多（設計書03 §3.5）: スタミナ目安を大きく超えて投げ続けた投手の肩肘。
+            if (defense.FatiguePitches
+                > (currentPitcher.Pitching?.StaminaPitches ?? 90.0) + ctx.MatchInjury.OveruseOverPitches)
+            {
+                Hurt(MatchInjuryModel.Roll(
+                    InjuryScene.Overuse, ctx.MatchInjury.OveruseProb, currentPitcher, defense.Name,
+                    inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog));
+            }
 
             // バント決着（設計書15 Phase D-2b）: セッションがバント経路で確定した場合、進塁は AdvanceOnBunt
             // （一・二塁走者のみ1つ進む・三塁走者は自重）専用ルールで、ApplyDetailed の一般経路は使わない。
@@ -686,6 +728,9 @@ public static class GameEngine
             var preSecond = bases.Second is not null;
             var preThird = bases.Third is not null;
             var outsBefore = outs;
+            // 本塁クロスプレーの受傷候補（設計書03 §3.5）。刺された走者を個別に特定する経路が無いため、
+            // 本塁を狙う可能性が最も高い先行走者を候補にする（観測用の近似。判定には一切使わない）。
+            var leadRunnerBefore = bases.Third ?? bases.Second ?? bases.First;
 
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
             var (runs, extraOuts, homeOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
@@ -694,6 +739,39 @@ public static class GameEngine
             offense.Runs += runs;
             runsThisHalf += runs;
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
+
+            // 本塁クロスプレー（設計書03 §3.5・設計書12 §3）: 走者と捕手の接触。どちらが負傷するかも
+            // Fork した専用ストリームで決める（本体の乱数順に触れない）。
+            if (homeOuts > 0 && ctx.MatchInjury.HomeCollisionProb > 0.0)
+            {
+                var pick = rng.Fork(MatchInjuryModel.StreamId(
+                    inning, isTop, log.Count, Players.InjuryScene.HomeCollision, sub: 1));
+                var catcherHurt = MathUtil.Chance(ctx.MatchInjury.HomeCollisionCatcherShare, pick);
+                var victim = catcherHurt ? defense.Catcher : leadRunnerBefore;
+                if (victim is not null)
+                {
+                    Hurt(MatchInjuryModel.Roll(
+                        Players.InjuryScene.HomeCollision, ctx.MatchInjury.HomeCollisionProb, victim,
+                        catcherHurt ? defense.Name : offense.Name,
+                        inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog));
+                }
+            }
+
+            // フェンス激突（設計書03 §3.5・設計書13）: フェンス際まで追って捕った外野手。
+            if (ctx.MatchInjury.FenceCrashProb > 0.0
+                && res.Play is { IsFly: true, FielderRole: { } role } fpc
+                && fpc.Result == Match.Fielding.BattedBallResult.Out
+                && IsOutfield(role))
+            {
+                var fenceDist = ctx.Field.FenceDistance(fpc.BearingDeg * Math.PI / 180.0);
+                if (fenceDist - fpc.RangeM <= ctx.MatchInjury.FenceCrashMarginM
+                    && defense.PlayerAtPosition(role) is { } outfielder)
+                {
+                    Hurt(MatchInjuryModel.Roll(
+                        Players.InjuryScene.FenceCrash, ctx.MatchInjury.FenceCrashProb, outfielder, defense.Name,
+                        inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog));
+                }
+            }
 
             // タイムラインへ走者レッグを合成（CHANGELOG 32: 走者進塁の動きも再生対象）。
             var timeline = res.Timeline;
@@ -802,6 +880,18 @@ public static class GameEngine
             var postSecond = bases.Second is not null;
             var postThird = bases.Third is not null;
 
+            // 受傷をタイムラインのキャプションへ載せる（設計書03 §3.5 の表示接続）。
+            // タイムライン捕捉オフ（統計シム）では timeline が null なので何も起きない＝ゼロコスト。
+            if (timeline is not null && paInjuries is not null)
+            {
+                var caps = new List<Match.Timeline.TimelineCaption>(timeline.Captions);
+                foreach (var e in paInjuries)
+                {
+                    caps.Add(new Match.Timeline.TimelineCaption(timeline.Duration, e.Caption(ctx.InjuryCatalog)));
+                }
+                timeline = timeline with { Captions = caps };
+            }
+
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
@@ -879,6 +969,12 @@ public static class GameEngine
     }
 
     private static int ClampAbility(double v) => Math.Clamp((int)Math.Round(v), 1, 100);
+
+    /// <summary>外野手か（フェンス激突の対象判定用）。</summary>
+    private static bool IsOutfield(Match.Field.FieldPosition pos)
+        => pos is Match.Field.FieldPosition.LeftField
+               or Match.Field.FieldPosition.CenterField
+               or Match.Field.FieldPosition.RightField;
 
     /// <summary>1球采配（設計書15 §2.3）の判断RNG用Fork streamId。inning/半イニング/PA添字/球数から
     /// 決定論的に導出し、末尾に攻守を分けるsaltを混ぜる（同じ球でも攻撃側・守備側で別ストリーム）。</summary>
@@ -1018,6 +1114,8 @@ public sealed class GameProgress
     public int TotalPitches { get; set; }
     /// <summary>打席の速報記録（打席確定ごとに追記される）。</summary>
     public List<PlayLogEntry> Log { get; } = new();
+    /// <summary>試合中に発生した怪我（設計書03 §3.5）。観測データ＝試合進行・乱数順には影響しない。</summary>
+    public List<MatchInjuryEvent> Injuries { get; } = new();
 
     public GameProgress(Team awayTeam, Team homeTeam, TeamState away, TeamState home,
         GameContext ctx, IRandomSource rng, Dictionary<Player, double> dayForm)

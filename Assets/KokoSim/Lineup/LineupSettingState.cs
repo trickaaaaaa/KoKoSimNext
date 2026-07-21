@@ -29,6 +29,8 @@ namespace KokoSim.Unity.Lineup
         public bool IsPicked;
         public bool IsPosPicked;          // 守備位置チップが選択中（次のチップクリックで入替）
         public bool IsCaptain;
+        /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空（設計書03 §3.5）。</summary>
+        public string Injury = "";
     }
 
     /// <summary>控え（打順外）の1選手。</summary>
@@ -41,6 +43,8 @@ namespace KokoSim.Unity.Lineup
         public string OverallGrade = "C";
         public bool IsPitcher;
         public bool IsPicked;
+        /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空（設計書03 §3.5）。</summary>
+        public string Injury = "";
     }
 
     /// <summary>成績1項目（ラベル＋値）。値未接続は "—"。</summary>
@@ -431,11 +435,43 @@ namespace KokoSim.Unity.Lineup
 
         // ── View 構築 ──
 
+        /// <summary>故障中の短縮表示（傷病名・段階）。健常なら空（設計書03 §3.5）。</summary>
+        private static string InjuryChipText(DevelopingPlayer p)
+            => p.Injury == KokoSim.Engine.Players.InjurySeverity.None
+                ? ""
+                : KokoSim.Unity.Shell.InjuryLabel.Type(p.InjuryType) + "・"
+                  + KokoSim.Unity.Shell.InjuryLabel.Severity(p.Injury);
+
+        /// <summary>
+        /// スタメン（＋DH先発）に怪我人がいるときの警告（設計書03 §3.5「押して出場」）。
+        /// 出場させると悪化する可能性があり、悪化しなくても全治が延びる＝原則として損な選択であることを明示する。
+        /// </summary>
+        private string InjuredStarterWarning()
+        {
+            var names = new List<string>();
+            for (var i = 0; i < 9; i++)
+            {
+                var p = _roster[_idx[i]];
+                if (p.Injury != KokoSim.Engine.Players.InjurySeverity.None) names.Add(p.Name);
+            }
+            if (_usesDh && _spIdx >= 0)
+            {
+                var sp = _roster[_spIdx];
+                if (sp.Injury != KokoSim.Engine.Players.InjurySeverity.None) names.Add(sp.Name);
+            }
+            if (names.Count == 0) return "";
+            return "故障者を起用中（" + string.Join("・", names)
+                   + "）。出場すると全治が延び、悪化する場合があります。";
+        }
+
+
         public LineupSettingView BuildView()
         {
             var v = new LineupSettingView { Tab = _tab, UsesDh = _usesDh, CanConfirm = !_shortage };
             if (_shortage)
                 v.WarnText = "ベンチ入りが9人未満です。メンバー設定で背番号を割り当ててください。";
+            else
+                v.WarnText = InjuredStarterWarning();
 
             for (var i = 0; i < 9; i++)
             {
@@ -459,6 +495,7 @@ namespace KokoSim.Unity.Lineup
                     IsPicked = _picked == _idx[i] && _pickKind == PickKind.OrderPlayer,
                     IsPosPicked = _pickKind == PickKind.SlotPosition && _posPickSlot == i,
                     IsCaptain = p.IsCaptain,
+                    Injury = InjuryChipText(p),
                 });
             }
 
@@ -489,6 +526,7 @@ namespace KokoSim.Unity.Lineup
                     OverallGrade = OverallGrade(p),
                     IsPitcher = p.IsPitcher,
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
+                    Injury = InjuryChipText(p),
                 });
             }
 

@@ -63,6 +63,7 @@
                 <ui:Label name="meta-tb" class="pd2-meta__i" text="右投右打" />
                 <ui:Label name="meta-style" class="pd2-meta__i" text="投法：オーバースロー" />
                 <ui:Label name="meta-velo" class="pd2-meta__i" text="最速 141 km/h" />
+                <ui:Label name="meta-injury" class="pd2-meta__i pd2-meta__i--injury" text="" />
               </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement class="pd2-overall">

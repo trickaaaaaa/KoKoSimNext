@@ -14,6 +14,8 @@ public sealed record SeasonContext
     public Players.SkillCoefficients Skills { get; init; } = new();
     public Players.PersonalityCoefficients Personalities { get; init; } = new();
     public InjuryCoefficients Injury { get; init; } = new();
+    /// <summary>傷病カタログ（data/injuries.yaml）。種類→部位→段階の一貫抽選に使う（設計書03 §3.5）。</summary>
+    public Players.InjuryCatalog InjuryCatalog { get; init; } = Players.InjuryCatalog.Default;
     public GrowthEventCoefficients Growth { get; init; } = new();
     public IReadOnlyList<GameEvent> Events { get; init; } = Array.Empty<GameEvent>();
 
@@ -106,11 +108,11 @@ public static class SeasonEngine
                 {
                     if (p.Injury == Players.InjurySeverity.None)
                     {
-                        InjuryModel.WeeklyCheck(p, injuryRng, ctx.Injury, ctx.Skills);
+                        InjuryModel.WeeklyCheck(p, injuryRng, ctx.Injury, ctx.Skills, ctx.InjuryCatalog);
                     }
                     else
                     {
-                        InjuryModel.WeeklyRecover(p, ctx.Injury);
+                        InjuryModel.WeeklyRecover(p, ctx.Injury, ctx.InjuryCatalog);
                     }
                 }
 

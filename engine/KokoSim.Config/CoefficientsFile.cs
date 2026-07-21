@@ -35,6 +35,7 @@ public sealed record CoefficientsBundle
     public TacticsCoefficients Tactics { get; init; } = new();
     public EnemyAiCoefficients EnemyAi { get; init; } = new();
     public InjuryCoefficients Injury { get; init; } = new();
+    public MatchInjuryCoefficients MatchInjury { get; init; } = new();
     public GrowthEventCoefficients Growth { get; init; } = new();
     public InsightCoefficients Insight { get; init; } = new();
     public ManagerGrowthCoefficients ManagerGrowth { get; init; } = new();
@@ -114,6 +115,7 @@ public static class CoefficientsLoader
             Tactics = Tactics?.ToModel() ?? new TacticsCoefficients(),
             EnemyAi = EnemyAi?.ToModel() ?? new EnemyAiCoefficients(),
             Injury = Injury?.ToModel() ?? new InjuryCoefficients(),
+            MatchInjury = Injury?.ToMatchModel() ?? new MatchInjuryCoefficients(),
             Growth = Growth?.ToModel() ?? new GrowthEventCoefficients(),
             Insight = Insight?.ToModel() ?? new InsightCoefficients(),
             ManagerGrowth = ManagerGrowth?.ToModel() ?? new ManagerGrowthCoefficients(),
@@ -624,7 +626,33 @@ public static class CoefficientsLoader
         public double SeverePerformanceFactor { get; set; } = D.SeverePerformanceFactor;
         public double PlayThroughWorsenProb { get; set; } = D.PlayThroughWorsenProb;
         public int WorsenExtraWeeks { get; set; } = D.WorsenExtraWeeks;
+        public int PlayThroughExtraWeeks { get; set; } = D.PlayThroughExtraWeeks;
         public double MedicalRecoveryFactor { get; set; } = D.MedicalRecoveryFactor;
+
+        // --- 試合中の場面駆動（同じ injury: ブロックから MatchInjuryCoefficients も組む） ---
+        private static readonly MatchInjuryCoefficients M = new();
+        public double MatchHitByPitchProb { get; set; } = M.HitByPitchProb;
+        public double MatchHomeCollisionProb { get; set; } = M.HomeCollisionProb;
+        public double MatchHomeCollisionCatcherShare { get; set; } = M.HomeCollisionCatcherShare;
+        public double MatchFenceCrashProb { get; set; } = M.FenceCrashProb;
+        public double MatchFenceCrashMarginM { get; set; } = M.FenceCrashMarginM;
+        public double MatchSlidingProb { get; set; } = M.SlidingProb;
+        public double MatchOveruseProb { get; set; } = M.OveruseProb;
+        public double MatchOveruseOverPitches { get; set; } = M.OveruseOverPitches;
+
+        /// <summary>怪我耐性の掛け方は週次と共通（resistance_slope を共有する）。</summary>
+        public MatchInjuryCoefficients ToMatchModel() => new()
+        {
+            HitByPitchProb = MatchHitByPitchProb,
+            HomeCollisionProb = MatchHomeCollisionProb,
+            HomeCollisionCatcherShare = MatchHomeCollisionCatcherShare,
+            FenceCrashProb = MatchFenceCrashProb,
+            FenceCrashMarginM = MatchFenceCrashMarginM,
+            SlidingProb = MatchSlidingProb,
+            OveruseProb = MatchOveruseProb,
+            OveruseOverPitches = MatchOveruseOverPitches,
+            ResistanceSlope = ResistanceSlope,
+        };
 
         public InjuryCoefficients ToModel() => new()
         {
@@ -640,6 +668,7 @@ public static class CoefficientsLoader
             SeverePerformanceFactor = SeverePerformanceFactor,
             PlayThroughWorsenProb = PlayThroughWorsenProb,
             WorsenExtraWeeks = WorsenExtraWeeks,
+            PlayThroughExtraWeeks = PlayThroughExtraWeeks,
             MedicalRecoveryFactor = MedicalRecoveryFactor,
         };
     }

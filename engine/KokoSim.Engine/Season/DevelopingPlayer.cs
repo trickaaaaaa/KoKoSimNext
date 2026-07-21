@@ -119,6 +119,8 @@ public sealed class DevelopingPlayer
     // --- 怪我（設計書03 §3.5: 段階制・常に可視） ---
     public InjurySeverity Injury { get; set; } = InjurySeverity.None;
     public InjurySite InjurySite { get; set; }
+    /// <summary>傷病の種類（表示名は data/injuries.yaml。None=種類なしの旧データ）。</summary>
+    public InjuryType InjuryType { get; set; } = InjuryType.None;
     public int InjuryWeeksRemaining { get; set; }
     /// <summary>怪我耐性（隠し, 1〜100。高いほど発生しにくい）。</summary>
     public double InjuryResistance { get; init; } = 50.0;
