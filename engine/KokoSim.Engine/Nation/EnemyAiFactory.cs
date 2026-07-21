@@ -18,6 +18,7 @@ public static class EnemyAiFactory
         School school,
         TacticsCoefficients? tactics = null,
         BaserunningCoefficients? baserunning = null,
-        EnemyAiCoefficients? aiCoeff = null)
-        => new(ProfileFor(school), tactics, baserunning, aiCoeff);
+        EnemyAiCoefficients? aiCoeff = null,
+        Players.FormCoefficients? form = null)
+        => new(ProfileFor(school), tactics, baserunning, aiCoeff, form);
 }

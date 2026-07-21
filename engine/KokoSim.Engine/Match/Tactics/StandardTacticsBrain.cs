@@ -16,11 +16,14 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 {
     private readonly TacticsCoefficients _c;
     private readonly BaserunningCoefficients _br;
+    private readonly FormCoefficients _form;
 
-    public StandardTacticsBrain(TacticsCoefficients? coefficients = null, BaserunningCoefficients? baserunning = null)
+    public StandardTacticsBrain(TacticsCoefficients? coefficients = null, BaserunningCoefficients? baserunning = null,
+        FormCoefficients? form = null)
     {
         _c = coefficients ?? new TacticsCoefficients();
         _br = baserunning ?? new BaserunningCoefficients();
+        _form = form ?? new FormCoefficients();
     }
 
     public OffensiveSign CallOffense(in TacticsSituation s, IRandomSource rng)
@@ -201,18 +204,35 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
     // ===== 選手交代（設計書09 §6）。判断は決定論（能力の極値を選ぶ）。RNGは使わない。 =====
 
-    /// <summary>代打: 終盤の僅差〜小ビハインドで、非力な打者（投手除く）を明確に上回る控えへ替える。</summary>
+    /// <summary>
+    /// 代打: 終盤の僅差〜小ビハインドで、非力な打者（投手除く）を明確に上回る控えへ替える。
+    /// 評価は生のミートではなく調子込みの実効値（設計書11 §4「代打」, issue #48）。
+    /// 絶不調の好打者はケイリングを割り込んで対象になり得るし、絶好調の控えは僅差の比較を覆し得る。
+    /// </summary>
     public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng)
     {
         if (s.UpcomingBatterIsPitcher) return null;                       // 投手枠代打は継投結合のため後続（C-2対象外）
         if (s.Inning < _c.PinchHitFromInning) return null;
         if (s.ScoreDiff < _c.PinchHitMinDiff || s.ScoreDiff > _c.PinchHitMaxDiff) return null;
-        if (s.UpcomingBatter.Contact > _c.PinchHitContactCeiling) return null;
+        var upcomingContact = EffectiveContact(s.UpcomingBatter);
+        if (upcomingContact > _c.PinchHitContactCeiling) return null;
 
-        var best = BestBy(s.Bench, p => p.Contact);
-        if (best is null || best.Contact < s.UpcomingBatter.Contact + _c.PinchHitImprovement) return null;
+        var best = BestBy(s.Bench, EffectiveContact);
+        if (best is null || EffectiveContact(best) < upcomingContact + _c.PinchHitImprovement) return null;
         return best;
     }
+
+    /// <summary>調子込みのミート実効値（設計書11 §4, issue #48）。当日の出来（dayForm）は含まない。</summary>
+    private int EffectiveContact(Player p) => FormModel.EffectiveAbility(p.Contact, p.Condition, _form.ContactPerStep);
+
+    /// <summary>
+    /// 打順の並べ替え（設計書11 §4「オーダー編成」, issue #48）。守備位置は変えず、調子（のみ）で
+    /// 並び順を安定ソートする＝同条件内は元の並びを保ち、絶不調の打者だけが下がる。能力ベースの
+    /// オーダー最適化（校風の好み・左右のバランス等）は本Issueの対象外（設計書11 §4の未実装分）。
+    /// 選手交代と同型で RNG は使わない（決定論）。
+    /// </summary>
+    public IReadOnlyList<Player> ComposeBattingOrder(IReadOnlyList<Player> order)
+        => order.OrderByDescending(p => FormModel.Step(p.Condition)).ToList();
 
     /// <summary>代走: 終盤に1点を取りにいく場面、鈍足の走者を明確に速い控えへ替える（得点に近い走者を優先）。</summary>
     public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng)

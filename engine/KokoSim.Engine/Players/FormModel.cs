@@ -140,5 +140,14 @@ public static class FormModel
         return Quantize(noisy);
     }
 
+    /// <summary>
+    /// 実効能力（調子補正後）。敵AI・委任采配のオーダー編成/代打判断（設計書11 §4, issue #48）が
+    /// 「調子込みの実力」で候補を評価するための変換。<paramref name="perStep"/> は
+    /// <see cref="FormCoefficients.ContactPerStep"/> 等を渡す想定（打席解決と同じ効果量を再利用）。
+    /// 試合限りの好不調（dayForm）は事前に分からない情報のため含めない。
+    /// </summary>
+    public static int EffectiveAbility(int ability, Condition c, double perStep)
+        => ClampAbility(ability + Step(c) * perStep);
+
     private static int ClampAbility(double v) => (int)MathUtil.Clamp(Math.Round(v), 1, 100);
 }
