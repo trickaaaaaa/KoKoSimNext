@@ -831,7 +831,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-headmain { flex-grow: 1; flex-direction: row; align-items: center; justify-content: space-between; padding: 16px 24px; }
 .pd2-nameline { flex-direction: row; align-items: center; }
 .pd2-name { font-size: 32px; letter-spacing: 2px; color: #E8ECEA; margin-right: 14px; }
-.pd2-cond { font-size: 15px; color: #F5C64A; }
+/* 調子は表情顔（ConditionFace）が主、文字表記は詳細画面なので併記する（issue #51）。 */
+.pd2-cond-face { margin-right: 6px; }
+.pd2-cond { font-size: 15px; margin-right: 14px; }
 
 /* 主将バッジ（設計書09 §8）: 名前脇の金地ピル。 */
 .pd2-captain {
@@ -1081,6 +1083,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nt-fact { flex-direction: row; align-items: center; width: 50%; height: 22px; }
 .nt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
 .nt-fact__v { font-size: var(--fs-label); color: var(--color-chalk); -unity-text-align: middle-right; padding-right: 10px; }
+/* 調子 fact 行: 表情顔＋文字表記の併記（issue #51）。 */
+.nt-fact__v-row { flex-direction: row; align-items: center; }
+.nt-fact__cond-face { margin-right: 6px; }
 .nt-d__cap { font-size: var(--fs-cap); color: var(--color-faint); margin-top: 8px; letter-spacing: 1px; }
 .nt-d__skills { flex-direction: row; flex-wrap: wrap; margin-top: 4px; flex-grow: 1; overflow: hidden; }
 .nt-skill { font-size: var(--fs-cap); color: var(--color-chalk); background-color: var(--color-panel-deep);

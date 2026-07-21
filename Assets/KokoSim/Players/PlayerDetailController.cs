@@ -84,6 +84,15 @@ namespace KokoSim.Unity.Players
             SetText("name", v.Name);
             SetText("cond", v.Condition);
             SetColor("cond", v.ConditionColorHex);
+            // 調子は表情顔（ConditionFace）が主。文字表記は詳細画面なので併記する（issue #51）。
+            var condFaceHost = _root.Q<VisualElement>("cond-face");
+            if (condFaceHost != null)
+            {
+                condFaceHost.Clear();
+                var face = new ConditionFace();
+                face.Set(v.ConditionLevel);
+                condFaceHost.Add(face);
+            }
             SetDisplay("captain-badge", v.IsCaptain);
             // 既に主将なら指名ボタンを隠す（重複指名の抑止）。
             SetDisplay("designate-captain", !v.IsCaptain);
