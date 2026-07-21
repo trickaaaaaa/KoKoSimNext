@@ -67,6 +67,8 @@ namespace KokoSim.Unity.Players
         public string Name = "";
         public string Condition = "普通";
         public string ConditionColorHex = "#EFF4EA";
+        // 表情顔（ConditionFace）の描画に使う enum（表示文字列は比較に使わない）。
+        public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
         /// <summary>故障表示（設計書03 §3.5: 傷病名・部位・段階・全治まで残り週）。健常なら空文字。</summary>
         public string Injury = "";
         public string GradeLabel = "1年";
@@ -134,6 +136,7 @@ namespace KokoSim.Unity.Players
             if (_roster.Count == 0) return new PlayerDetailView();
             index = System.Math.Max(0, System.Math.Min(index, _roster.Count - 1));
             var p = _roster[index];
+            var condition = FormModel.Quantize(p.ConditionValue);
             var v = new PlayerDetailView
             {
                 Number = (index + 1).ToString(),
@@ -141,10 +144,11 @@ namespace KokoSim.Unity.Players
                 IsPitcher = p.IsPitcher,
                 GradeLabel = p.Grade + "年",
                 ThrowsBats = ThrowsBatsJp(p.Throws, p.Bats),
-                Condition = ConditionJp(p.ConditionValue),
+                Condition = ConditionLabels.Jp(condition),
+                ConditionLevel = condition,
                 IsCaptain = p.IsCaptain,
             };
-            v.ConditionColorHex = CondColor(v.Condition);
+            v.ConditionColorHex = ConditionLabels.ColorHex(condition);
             // 故障（設計書03 §3.5: 常に可視）。文言は engine のカタログ由来（InjuryLabel が単一ソース）。
             v.Injury = KokoSim.Unity.Shell.InjuryLabel.Full(p);
             v.CanDesignateCaptain = CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar);
@@ -332,31 +336,6 @@ namespace KokoSim.Unity.Players
             string T = throws == Handedness.Left ? "左投" : "右投";
             string B = bats == Handedness.Left ? "左打" : bats == Handedness.Switch ? "両打" : "右打";
             return T + B;
-        }
-
-        // 調子（内部連続値→5段階）を日本語表示（設計書02 §3.3。正ソースは FormModel）。
-        private static string ConditionJp(double conditionValue)
-        {
-            switch (KokoSim.Engine.Players.FormModel.Quantize(conditionValue))
-            {
-                case KokoSim.Engine.Players.Condition.Excellent: return "絶好調";
-                case KokoSim.Engine.Players.Condition.Good: return "好調";
-                case KokoSim.Engine.Players.Condition.Poor: return "不調";
-                case KokoSim.Engine.Players.Condition.Terrible: return "絶不調";
-                default: return "普通";
-            }
-        }
-
-        private static string CondColor(string c)
-        {
-            switch (c)
-            {
-                case "絶好調": return "#F5C64A";
-                case "好調": return "#9FCB3B";
-                case "不調": return "#E86A4A";
-                case "絶不調": return "#E86A4A";
-                default: return "#EFF4EA";
-            }
         }
 
         // ストレートの扇の長さ（変化量軸では短尺固定。伸びは Extend01＝扇の幅で読ませる）。

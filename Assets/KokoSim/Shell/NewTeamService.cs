@@ -20,6 +20,8 @@ namespace KokoSim.Unity.Shell
         public int OverallValue;
         public int Mental;
         public string Condition = "普通";
+        // 表情顔（ConditionFace）の描画に使う enum（表示文字列は比較に使わない）。
+        public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
         /// <summary>自動選出された暫定主将か（初期選択に使う）。</summary>
         public bool IsInterim;
     }
@@ -74,6 +76,7 @@ namespace KokoSim.Unity.Shell
             foreach (var p in CaptainSelector.DesignationCandidates(roster))
             {
                 var overall = (int)System.Math.Round(p.AverageLevel());
+                var condition = FormModel.Quantize(p.ConditionValue);
                 view.Candidates.Add(new CaptainCandidateRow
                 {
                     ActiveIndex = IndexIn(active, p),
@@ -84,7 +87,8 @@ namespace KokoSim.Unity.Shell
                     OverallValue = overall,
                     OverallGrade = Tiers.FromStrength(overall).ToString(),
                     Mental = p.Mental,
-                    Condition = ConditionJp(FormModel.Quantize(p.ConditionValue)),
+                    Condition = ConditionLabels.Jp(condition),
+                    ConditionLevel = condition,
                     IsInterim = p.IsCaptain,
                 });
             }
@@ -111,19 +115,6 @@ namespace KokoSim.Unity.Shell
         {
             for (var i = 0; i < list.Count; i++) if (ReferenceEquals(list[i], p)) return i;
             return -1;
-        }
-
-        // 調子5段階の日本語表示（段階の正ソースは FormModel.Quantize, 設計書02 §3.3）。
-        private static string ConditionJp(Condition condition)
-        {
-            switch (condition)
-            {
-                case Condition.Excellent: return "絶好調";
-                case Condition.Good: return "好調";
-                case Condition.Poor: return "不調";
-                case Condition.Terrible: return "絶不調";
-                default: return "普通";
-            }
         }
     }
 }
