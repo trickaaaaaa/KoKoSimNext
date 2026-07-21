@@ -101,8 +101,21 @@ fielding:
   force_out_margin_seconds: 0.0
   error_base_prob: 0.018
   error_catching_slope: 0.0003
-  double_distance_m: 80.0
-  triple_distance_m: 113.0
+  # 空中捕球の守備範囲（Issue #24 原因2）。滞空時間比例のままだと深い飛球ほど守備範囲が
+  # 無制限に広がるため、走れる時間に絶対上限を掛け、走路取りの巧拙（守備力）で伸縮させる。
+  # 守備50・上限未満では従来（滞空×1.00）と同一。
+  catch_reach_fielding_slope: 0.004
+  catch_reach_cap_seconds: 4.00
+  # --- 塁打数の決定（Issue #24 原因1: 距離しきい値を廃止し、転がり＋幾何＋走力の連続量へ） ---
+  roll_decel_mps2: 2.60          # 着地後の転がりの減速度（芝・土の摩擦＋バウンド損失）
+  roll_retention_flat: 0.72      # 水平に近いライナーがバウンドで保持する前進速度の割合（滑って伸びる）
+  roll_retention_steep: 0.25     # 真上から落ちる大飛球が保持する割合（失速して死ぬ）
+  fence_carom_seconds: 0.40      # フェンス到達打球の跳ね返り処理の追加時間
+  outfield_pickup_seconds: 0.30  # 転がる打球を拾い上げる時間
+  throw_distance_drag_per_m: 0.0045  # 送球の失速: 到達 = 距離÷送球速度×(1+距離×この値)
+  running_top_speed_factor: 1.15 # 一塁到達後の巡航速度倍率（本塁→一塁の平均速度に対する比）
+  base_turn_seconds: 0.30        # 塁を回る方向転換のロス
+  extra_base_margin_seconds: 0.40  # 進塁判断マージン（走者所要＋この値 ≤ 送球到達 で次の塁へ）
   # 守備位置適性→実効守備力の補正（設計書01 §1.1）。基準50で×1.0、本職＝高適性でボーナス、慣れないポジでペナルティ。
   aptitude_neutral: 50.0
   aptitude_slope_per_point: 0.006
@@ -706,10 +719,14 @@ roster:
   archetype_finesse_control: 3
   archetype_finesse_stamina: 1
   archetype_finesse_pitch_rank: 3
+  # 軟投派の上乗せは 2026-07-21（Issue #24）に再校正。打球の塁打数を転がり込みの幾何で
+  # 決めるようにした結果、打球初速の低さ（＝転がらない＝長打になりにくい）が以前より価値を持ち、
+  # 軟投派だけ失点が下がった（実測 3.65 vs 技巧派 3.96）。キレ+5→+3・制球+4→+3 で実戦中立へ戻す
+  # （Archetypes_AreBalanceNeutral_InActualGames）。
   archetype_soft_toss_velocity: -14
-  archetype_soft_toss_control: 4
+  archetype_soft_toss_control: 3
   archetype_soft_toss_stamina: 2
-  archetype_soft_toss_pitch_rank: 5
+  archetype_soft_toss_pitch_rank: 3
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0

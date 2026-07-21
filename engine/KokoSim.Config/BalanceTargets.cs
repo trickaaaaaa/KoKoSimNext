@@ -16,6 +16,16 @@ public sealed record BalanceTargets
     public required Band StrikeoutRate { get; init; }
     public required Band WalkRate { get; init; }
     public required Band HomeRunRate { get; init; }
+
+    // ===== 長打の量と配分（Issue #24）。塁打数を幾何と走力から決めるようにした結果の帯 =====
+    /// <summary>長打率 SLG。</summary>
+    public Band Slugging { get; init; } = new(0.380, 0.480);
+    /// <summary>二塁打率（打席あたり）。</summary>
+    public Band DoubleRate { get; init; } = new(0.035, 0.058);
+    /// <summary>三塁打率（打席あたり）。</summary>
+    public Band TripleRate { get; init; } = new(0.002, 0.009);
+    /// <summary>二塁打÷本塁打。長打の「種類の配分」が壊れていないことを直接見る指標（実野球はおよそ2〜2.5）。</summary>
+    public Band DoublesPerHomeRun { get; init; } = new(1.30, 2.60);
 }
 
 /// <summary>Phase 2（試合）の許容帯。</summary>
@@ -68,6 +78,10 @@ public static class BalanceTargetsLoader
             StrikeoutRate = a.StrikeoutRate!.ToBand(),
             WalkRate = a.WalkRate!.ToBand(),
             HomeRunRate = a.HomeRunRate!.ToBand(),
+            Slugging = a.Slugging?.ToBand() ?? new Band(0.380, 0.480),
+            DoubleRate = a.DoubleRate?.ToBand() ?? new Band(0.035, 0.058),
+            TripleRate = a.TripleRate?.ToBand() ?? new Band(0.002, 0.009),
+            DoublesPerHomeRun = a.DoublesPerHomeRun?.ToBand() ?? new Band(1.30, 2.60),
         };
     }
 
@@ -130,6 +144,10 @@ public static class BalanceTargetsLoader
         public BandDto? StrikeoutRate { get; set; }
         public BandDto? WalkRate { get; set; }
         public BandDto? HomeRunRate { get; set; }
+        public BandDto? Slugging { get; set; }
+        public BandDto? DoubleRate { get; set; }
+        public BandDto? TripleRate { get; set; }
+        public BandDto? DoublesPerHomeRun { get; set; }
     }
 
     private sealed class GamesDto
