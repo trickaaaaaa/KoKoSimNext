@@ -86,6 +86,11 @@ namespace KokoSim.Unity.Lineup
                 ord.AddToClassList("lineup-row__ord");
                 row.Add(ord);
 
+                var num = new Label(NumText(r.UniformNumber));
+                num.AddToClassList("num-badge");
+                num.AddToClassList("num-badge--sm");
+                row.Add(num);
+
                 var posCell = new VisualElement();
                 posCell.AddToClassList("lineup-row__pos");
                 posCell.Add(PosChip(r));
@@ -169,6 +174,11 @@ namespace KokoSim.Unity.Lineup
                 var row = new VisualElement();
                 row.AddToClassList("bench-row");
                 if (b.IsPicked) row.AddToClassList("bench-row--picked");
+
+                var num = new Label(NumText(b.UniformNumber));
+                num.AddToClassList("num-badge");
+                num.AddToClassList("num-badge--sm");
+                row.Add(num);
 
                 var name = new Label(b.Name);
                 name.AddToClassList("bench-row__name");
@@ -411,6 +421,8 @@ namespace KokoSim.Unity.Lineup
             d.AddToClassList("apt-node__dash");
             return d;
         }
+
+        private static string NumText(int n) => n > 0 ? n.ToString() : "";
 
         private static VisualElement NewChild(string cls)
         {
