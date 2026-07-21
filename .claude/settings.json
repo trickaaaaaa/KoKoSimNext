@@ -200,7 +200,9 @@
       "Bash(ls -la /Users/seiya.oda/Unity/KoKoSimNext/.claude/ 2>/dev/null; echo \"---\"; cat /Users/seiya.oda/Unity/KoKoSimNext/.claude/settings.json 2>/dev/null; echo \"---local---\"; cat /Users/seiya.oda/Unity/KoKoSimNext/.claude/settings.local.json 2>/dev/null; echo \"---user---\"; cat /Users/seiya.oda/.claude/settings.json 2>/dev/null)",
       "Bash(git commit -m ' *)",
       "Edit(/.claude/skills/issue/**)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Bash(cp /Users/seiya.oda/.claude.json /Users/seiya.oda/.claude.json.bak-20260721)",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "/private/tmp/kprobe",
