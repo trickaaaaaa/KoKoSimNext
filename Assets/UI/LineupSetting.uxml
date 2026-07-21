@@ -32,6 +32,7 @@
                         <ui:VisualElement class="lu-table">
                             <ui:VisualElement class="lu-thead">
                                 <ui:Label text="順" class="lu-th lu-th--ord" />
+                                <ui:Label text="番" class="lu-th lu-th--num" />
                                 <ui:Label text="守" class="lu-th lu-th--pos" />
                                 <ui:Label text="選手" class="lu-th lu-th--name" />
                                 <ui:Label text="学年・投打" class="lu-th lu-th--info" />

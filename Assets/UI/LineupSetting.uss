@@ -57,6 +57,7 @@
 .lu-root .lineup-row__ord { font-size: 21px; }
 .lu-root .lineup-row__name { font-size: 24px; }
 .lu-root .lineup-row__info { font-size: 15px; }
+.lineup-row .num-badge { margin-left: var(--sp-2); }
 .lineup-row .pos-chip { min-width: 36px; height: 34px; font-size: 19px; }
 .lineup-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
 /* 選手名と「学年・投打」の間の通算成績。学年・投打と同じ控えめグレー・名前より目立たせない。 */
@@ -65,6 +66,7 @@
 /* 控えも行高・文字をスタメンと揃える（成績は付けない＝幅節約）。ランクチップも同スケール。 */
 .lu-root .bench-row__name { font-size: 24px; }
 .lu-root .bench-row__tag { font-size: 14px; }
+.bench-row .num-badge { margin-right: var(--sp-2); }
 .bench-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
 .lu-thead {
     flex-direction: row;
@@ -78,6 +80,7 @@
 }
 .lu-th { font-size: var(--fs-th); color: var(--color-muted); }
 .lu-th--ord { width: 22px; -unity-text-align: middle-center; }
+.lu-th--num { width: 22px; -unity-text-align: middle-center; margin-left: var(--sp-2); }
 .lu-th--pos { width: 40px; -unity-text-align: middle-center; margin-left: var(--sp-2); }
 .lu-th--name { flex-grow: 1; flex-basis: 0; margin-left: var(--sp-2); }
 .lu-th--info { width: 96px; }
