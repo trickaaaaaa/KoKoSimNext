@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using Xunit;
@@ -111,5 +112,46 @@ public sealed class PlayerMatchResolverTests
         Assert.False(r.PlayerActive);
         Assert.NotNull(outcome.Detail);
         Assert.NotNull(r.BuildBracketView().ChampionName); // 背景消化で優勝校は確定
+    }
+
+    // ===== Issue #40: 相手校への敵AI采配注入後も Resolve/BeginLive の決定論契約が成立すること =====
+    //
+    // 実装本体（Assets/KokoSim/Shell/PlayerMatchResolver.BuildOpponentTeam）は Unity 側 asmdef にあり
+    // xunit から直接参照できないため、同ファイルがしていること（StrengthTeamFactory.ForSchool の結果に
+    // EnemyAiFactory.BrainFor を注入 → GameEngine.Play／MatchProgression を同一 teams・同一 rng.Fork(2) で
+    // 呼ぶ）をここで再現する。ブレイン自体は rng を消費しないので、注入後も両者は完全一致するはず。
+
+    private static Team OpponentTeamWithAiTactics(School opponent)
+        => StrengthTeamFactory.ForSchool(opponent, yearIndex: 1) with { Tactics = EnemyAiFactory.BrainFor(opponent) };
+
+    private static Team ManagerTeamStub()
+        => StrengthTeamFactory.Create(58, "自校", new Xoshiro256Random(999));
+
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void OpponentTactics_Injected_ResolveAndBeginLive_ProduceSameBoxScore(ulong seed)
+    {
+        var opponent = Sch(200, 82); // A tier: 代打・伝令などフル運用可能な帯
+
+        // Resolve 相当。
+        var resolveRng = new Xoshiro256Random(seed);
+        var resolveResult = GameEngine.Play(
+            OpponentTeamWithAiTactics(opponent), ManagerTeamStub(), new GameContext(), resolveRng.Fork(2));
+
+        // BeginLive 相当（唯一の差は CaptureTimelines=true）。
+        var liveRng = new Xoshiro256Random(seed);
+        var prog = new MatchProgression(
+            OpponentTeamWithAiTactics(opponent), ManagerTeamStub(),
+            new GameContext { CaptureTimelines = true }, liveRng.Fork(2));
+        while (prog.Advance()) { /* 采配なしで最後まで進める */ }
+        var liveResult = prog.BuildResult();
+
+        Assert.Equal(resolveResult.AwayRuns, liveResult.AwayRuns);
+        Assert.Equal(resolveResult.HomeRuns, liveResult.HomeRuns);
+        Assert.Equal(resolveResult.TotalPitches, liveResult.TotalPitches);
+        Assert.Equal(resolveResult.AwaySubstitutions, liveResult.AwaySubstitutions);
+        Assert.Equal(resolveResult.HomeSubstitutions, liveResult.HomeSubstitutions);
     }
 }
