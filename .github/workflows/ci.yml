@@ -2,11 +2,17 @@ name: engine-ci
 
 # エンジンの CI: dotnet test が回ることが Phase 0 の完了条件（design-07 §3）。
 #
-# ジョブ構成（PRのCIが12分かかっていた問題への対応 / issue #17）:
+# ジョブ構成（PRのCIが12分かかっていた問題への対応 / issue #17, #23）:
 #   fast  … Category!=Heavy。日常ループ相当。数分で返るPRの主フィードバック
-#   heavy … Category=Heavy の統計回帰。fast と**並列**に走らせ、さらに3シャードに分割する
+#   heavy … Category=Heavy の統計回帰。fast と**並列**に走らせ、さらにシャードに分割する
 #           （不変条件#5「バランス影響のある変更後は統計回帰を必ず実行」を毎PRで満たすため、
 #             Heavy を条件付き実行にはしない。短くするのは分割と並列化で行う）
+#
+# シャード分割の原則（issue #23）:
+#   - クラス単位では均等にならない（1クラス内は xUnit が逐次実行するため、
+#     重いクラスの合計時間がそのままシャードの下限になる）。**メソッド単位**で割る
+#   - 最後の `rest` は否定フィルタの受け皿にする。新しい Heavy テストを足しても
+#     どのシャードにも入らず落ちる事故が起きない（網羅性は tools/check-heavy-shards.sh が検証）
 on:
   push:
     paths:
@@ -50,6 +56,11 @@ jobs:
           dotnet test engine/KokoSim.sln --configuration Release --no-build
           --filter "Category!=Heavy"
 
+      # heavy シャードの網羅性（取りこぼし・重複なし）を検証する。
+      # heavy 側に置くと同じ検査を6回走らせることになるので fast に相乗りさせる。
+      - name: Heavy shard coverage
+        run: bash tools/check-heavy-shards.sh
+
   heavy:
     name: heavy (${{ matrix.shard.name }})
     runs-on: ubuntu-latest
@@ -57,15 +68,23 @@ jobs:
       fail-fast: false
       matrix:
         shard:
-          # 実測（run 29747743052）で最も重いのがタイムライン記録のコスト計測。
-          # これは経過時間の比を見る性能テストなので、他テストと同居させると
-          # ランナーの CPU 競合で比がぶれる。専用シャードで単独実行する。
+          # タイムライン記録のコスト計測は経過時間の「比」を見る性能テストなので、
+          # 他テストと同居させるとランナーの CPU 競合で比がぶれる。専用シャードで単独実行する。
           - name: timeline-cost
             filter: "Category=Heavy&FullyQualifiedName~CaptureTimelinesCost"
-          - name: balance
-            filter: "Category=Heavy&FullyQualifiedName~Tests.Balance."
+          # 旧 balance シャード（10分28秒）の内訳で最も重い2件。球場3種×2シードのフル試合実測。
+          - name: stadium-runs
+            filter: "Category=Heavy&FullyQualifiedName~StadiumRegressionTests.NarrowStandardWide_OrderRunsPerTeam"
+          - name: stadium-hr
+            filter: "Category=Heavy&FullyQualifiedName~Balance.StadiumRegressionTests&FullyQualifiedName!~NarrowStandardWide_OrderRunsPerTeam"
+          - name: game
+            filter: "Category=Heavy&(FullyQualifiedName~Balance.GameRegressionTests|FullyQualifiedName~Balance.BalanceRegressionTests)"
+          # 型3種×守備2水準×1500試合＝9000試合を単一メソッドで回すため単独シャード。
+          - name: archetype-defense
+            filter: "Category=Heavy&FullyQualifiedName~PitcherArchetypeTests.PowerPitchers_StrikeOutMore"
+          # 受け皿。上のどれにも入らない Heavy（Nation/PlayerMatchCalibration/型の中立性 ほか）はここで走る。
           - name: rest
-            filter: "Category=Heavy&FullyQualifiedName!~CaptureTimelinesCost&FullyQualifiedName!~Tests.Balance."
+            filter: "Category=Heavy&FullyQualifiedName!~CaptureTimelinesCost&FullyQualifiedName!~Balance.StadiumRegressionTests&FullyQualifiedName!~Balance.GameRegressionTests&FullyQualifiedName!~Balance.BalanceRegressionTests&FullyQualifiedName!~PitcherArchetypeTests.PowerPitchers_StrikeOutMore"
     steps:
       - uses: actions/checkout@v4
 
