@@ -450,6 +450,7 @@ public static class CoefficientsLoader
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
         public double HomeGrounderStartDelaySeconds { get; set; } = D.HomeGrounderStartDelaySeconds;
+        public double CloseCallMarginSeconds { get; set; } = D.CloseCallMarginSeconds;
         // ライナー併殺（設計書12 §4, G2）
         public double LinerBreakReactionSeconds { get; set; } = D.LinerBreakReactionSeconds;
         public double LinerCommitCapSeconds { get; set; } = D.LinerCommitCapSeconds;
@@ -534,6 +535,7 @@ public static class CoefficientsLoader
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,
             HomeGrounderStartDelaySeconds = HomeGrounderStartDelaySeconds,
+            CloseCallMarginSeconds = CloseCallMarginSeconds,
             LinerBreakReactionSeconds = LinerBreakReactionSeconds,
             LinerCommitCapSeconds = LinerCommitCapSeconds,
             LinerReferenceSprintSpeedMps = LinerReferenceSprintSpeedMps,
