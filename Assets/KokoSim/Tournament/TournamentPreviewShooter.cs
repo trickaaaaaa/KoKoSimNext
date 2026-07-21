@@ -55,6 +55,14 @@ namespace KokoSim.Unity.Tournament
             // ── 3. トーナメントビュー ──
             yield return Capture(doc, 1600, 900, "01-bracket");
 
+            // 樹形図ブロック（自校カードへ自動スクロール済みの状態）を単体で撮る。
+            var page = doc.rootVisualElement.Q<ScrollView>(className: "scroll");
+            if (page != null) page.scrollOffset = new Vector2(0, 260);
+            yield return null; yield return null;
+            yield return Capture(doc, 1600, 900, "01b-bracket-tree");
+            if (page != null) page.scrollOffset = Vector2.zero;
+            yield return null;
+
             // ── 4. 大会展望ビューへ（CTA と同じ遷移をAPIで確実に起こす） ──
             var ctrl = doc.GetComponent<TournamentPreviewController>();
             if (ctrl == null) { Debug.LogError("[TP] Controller が見つからない"); yield break; }
