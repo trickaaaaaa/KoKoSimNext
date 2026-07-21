@@ -17,8 +17,9 @@ namespace KokoSim.Unity.Match
     /// 各打席のタイムラインを <see cref="Match2DPlaybackElement"/> で再生する。描画部品は再利用するが、
     /// 7サンプルの再生ハーネス（MatchDetailController/PlaybackSamples）には干渉しない。
     ///
-    /// 采配窓は最小実装: 「次の打席へ（采配なし）」＋「代打を送る」（自校の次打席へ・1種のみ）＋
-    /// 「スキップ（委任）」（残りを委任AIへ）。サイン・伝令・継投の本UIは設計書09準拠の別タスク。
+    /// 采配窓は「次の打席へ（采配なし）」＋「選手交代」（代打・代走・投手交代・守備交代・DH解除を
+    /// <see cref="MatchSubstitutionPanel"/> のモーダルで出し分け）＋「スキップ（委任）」（残りを委任AIへ）。
+    /// サイン・伝令の本UIは設計書09準拠の別タスク。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class MatchLiveController : MonoBehaviour
@@ -49,6 +50,8 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float noPlayHoldSeconds = 1.2f;
         [Tooltip("投球フェーズの1球あたり表示時間[秒]（×2/×4速度に連動）。")]
         [SerializeField] private float pitchIntervalSeconds = 0.45f;
+        [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
+        [SerializeField] private float pitchCallHoldSeconds = 0.35f;
         [Tooltip("自校（後攻 home）の采配能力（委任AIの強さ・スキップ時に使用）。")]
         [SerializeField] private int managerTacticalSense = 70;
 
@@ -61,8 +64,12 @@ namespace KokoSim.Unity.Match
         private VisualElement _root;
         private Match2DPlaybackElement _view;
         private Label _caption, _result, _batter, _awayScore, _homeScore, _inning;
-        private Button _nextPa, _pinchHit, _skip;
+        private Button _nextPa, _subOpen, _skip;
+        // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
+        private MatchSubstitutionPanel _subPanel;
         private readonly List<Button> _speedButtons = new();
+        // 速度ボタンのハンドラ（ラムダのため OnDisable で外せるよう保持する）。
+        private readonly List<(Button Button, System.Action Handler)> _speedHandlers = new();
 
         // 3カラム（左=自校 / 右=相手）＋マッチアップHUD＋実況履歴。表示専用（数値はエンジン集計 Snapshot から引く）。
         private VisualElement _leftLineup, _rightLineup, _leftPitcher, _rightPitcher, _hudHost, _capHistHost;
@@ -91,12 +98,26 @@ namespace KokoSim.Unity.Match
         private int _pitchIdx;
         private float _pitchClock;
         private bool _inPitchPhase;   // 投球フェーズ（B/S点灯）中か。false なら打球フェーズ/静止。
+        private bool _pitchBallVisible;   // 投球フェーズで今の1球の投球軌道を流しているか（#5）。
+
+        // 1球ごとの判定オーバーレイ（issue #6）。判定＋球速球種を盤面上に大きく短時間だけ出す。
+        // 球速・球種は実1球記録がある打席だけ（合成投球列は null＝出さない）。表示専用。
+        private VisualElement _pitchCall;
+        private Label _pitchCallJudge, _pitchCallDetail;
+        private float _pitchCallClock;
+        private bool _pitchCallOn;
 
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
 
+            // ScreenRouter は同じ GameObject を SetActive で付け外しするだけなので、このコンポーネントは
+            // 試合をまたいで生存する。試合ごとの状態は必ずここで初期化する（前試合の _gameOver 等の持ち越しで
+            // 2試合目の操作ボタンが全無効になる不具合を防ぐ）。
+            ResetPerMatchState();
+
             var host = _root.Q<VisualElement>("field-host");
+            host?.Clear();   // 前回の盤面要素を残さない（OnEnable ごとに積み上がるのを防ぐ）
             _view = new Match2DPlaybackElement();
             _view.SetColumnFraming(true);   // 全景の3カラム中央＝列内を使い切る既定ビューポート
             host?.Add(_view);
@@ -122,8 +143,8 @@ namespace KokoSim.Unity.Match
 
             _nextPa = _root.Q<Button>("next-pa");
             if (_nextPa != null) _nextPa.clicked += OnNextPa;
-            _pinchHit = _root.Q<Button>("pinch-hit");
-            if (_pinchHit != null) _pinchHit.clicked += OnPinchHit;
+            _subOpen = _root.Q<Button>("sub-open");
+            if (_subOpen != null) _subOpen.clicked += OnOpenSubstitution;
             _skip = _root.Q<Button>("skip");
             if (_skip != null) _skip.clicked += OnSkip;
             _backHome = _root.Q<Button>("back-home");
@@ -136,11 +157,72 @@ namespace KokoSim.Unity.Match
             _outDots = new[] { _root.Q<VisualElement>("o1"), _root.Q<VisualElement>("o2") };
             _bases = new[] { _root.Q<VisualElement>("base-1"), _root.Q<VisualElement>("base-2"), _root.Q<VisualElement>("base-3") };
 
+            _pitchCall = _root.Q<VisualElement>("pitch-call");
+            _pitchCallJudge = _root.Q<Label>("pitch-call-judge");
+            _pitchCallDetail = _root.Q<Label>("pitch-call-detail");
+
+            ResetPerMatchVisuals();
+            _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied);
+            _subPanel.Bind();
             BuildGame();
+            _subPanel.SetMatch(_prog, _managerIsAway);
             SetBackHomeVisible(false);
             EnterTacticsWindow("試合開始。采配を選んで打席へ。");
             RefreshPanel();   // 初期スタメン列（今日の成績は0・現打者/HUDは打席開始で点灯）
             _view.SetResting(false, false, false);   // 打席開始前も守備陣を定位置に表示（盤面を空にしない）
+        }
+
+        // 画面を離れるときにハンドラを外す（OnEnable が毎回登録するため、外さないと往復のたび多重登録になり
+        // 1クリックで複数打席進んでしまう）。
+        private void OnDisable()
+        {
+            if (_nextPa != null) _nextPa.clicked -= OnNextPa;
+            if (_subOpen != null) _subOpen.clicked -= OnOpenSubstitution;
+            _subPanel?.Close();
+            if (_skip != null) _skip.clicked -= OnSkip;
+            if (_backHome != null) _backHome.clicked -= OnBackHome;
+            foreach (var (b, h) in _speedHandlers) b.clicked -= h;
+            _speedHandlers.Clear();
+            _speedButtons.Clear();
+        }
+
+        // 試合ごとに初期化する進行状態（試合をまたいだ持ち越し禁止）。要素クエリ前に呼べるフィールドだけを扱う。
+        private void ResetPerMatchState()
+        {
+            _gameOver = false;
+            _replaying = false;
+            _finalResult = null;
+            _onComplete = null;
+            _current = null;
+            _prog = null;
+            _homeTeam = null;
+            _t = 0;
+            _speed = 1f;
+            _pitchIdx = 0;
+            _pitchClock = 0f;
+            _inPitchPhase = false;
+            _pitchBallVisible = false;
+            _pitchCallClock = 0f;
+            _pitchCallOn = false;
+            _pitchBattingChoice = null;
+            _pitchPolicyChoice = null;
+            _capHist.Clear();
+            _speedButtons.Clear();
+            _speedHandlers.Clear();
+        }
+
+        // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
+        private void ResetPerMatchVisuals()
+        {
+            _capHistHost?.Clear();
+            ClearSegHighlight(_ptBattingSeg);
+            ClearSegHighlight(_ptDefenseSeg);
+            SetCount(0, 0);
+            SetOuts(0);
+            SetBases(false, false, false);
+            HidePitchCall();
+            foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb.name == "spd-1");
+            if (_result != null) _result.style.display = DisplayStyle.None;
         }
 
         private void BuildGame()
@@ -170,7 +252,7 @@ namespace KokoSim.Unity.Match
             var awayRng = new KokoSim.Engine.Core.Xoshiro256Random(gameSeed ^ 0x1234ABCDUL);
             var away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(58, awayName, awayRng);
             // デモの自校（home＝左列）は実部員（RosterService）から組み、背番号・調子・通算の join を実機同様に見せる。
-            var home = RosterTeamBuilder.Build(RosterService.Roster, homeName);
+            var home = RosterTeamBuilder.Build(RosterService.Active, homeName);
             // RosterTeamBuilder.Build は控えを設定しないため、代打采配のデモ用に控えを付与する。
             home = home with { Bench = BuildBench() };
             _homeTeam = home;
@@ -228,7 +310,7 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = note;
             var canAct = !_gameOver;
             SetEnabled(_nextPa, canAct);
-            SetEnabled(_pinchHit, canAct);
+            SetEnabled(_subOpen, canAct);
             SetEnabled(_skip, canAct);
         }
 
@@ -238,14 +320,19 @@ namespace KokoSim.Unity.Match
             ResolveAndReplayNext();
         }
 
-        // 代打（自校の次打席へ・控え先頭）。自校が先攻(away)か後攻(home)かは _managerIsAway。
-        private void OnPinchHit()
+        // 選手交代（設計書09 §6）。攻撃中／守備中で出せる選択肢はモーダル側が出し分ける。
+        // 自校が先攻(away)か後攻(home)かは _managerIsAway。
+        private void OnOpenSubstitution()
         {
-            if (_gameOver) return;
-            var ok = _prog.PinchHitUpcoming(offenseIsAway: _managerIsAway, benchIndex: 0);
-            if (_caption != null)
-                _caption.text = ok ? "代打を送った。次の自校の打席に入る。" : "代打を送れない（控えなし）。";
-            if (ok) RefreshPanel();   // 該当スロットを代打へ即入替（退いた選手名を薄く併記）
+            if (_gameOver || _prog == null) return;
+            _subPanel?.Open();
+        }
+
+        // 交代確定後（即時・取り消し不可）。該当スロットを即入替（退いた選手名を薄く併記）。
+        private void OnSubstitutionApplied()
+        {
+            RefreshPanel();
+            if (_caption != null) _caption.text = "選手交代を行った。";
         }
 
         private void OnSkip()
@@ -257,7 +344,7 @@ namespace KokoSim.Unity.Match
             EndGame(result);
         }
 
-        // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら「戻る」導線を出す。
+        // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら試合結果画面へ渡す。
         private void EndGame(GameResult result)
         {
             _gameOver = true;
@@ -266,7 +353,35 @@ namespace KokoSim.Unity.Match
             UpdateScoreboardFinal(result);
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }
             EnterTacticsWindow("試合終了。");
-            SetBackHomeVisible(_onComplete != null);
+            if (!HandOffToResultScreen()) SetBackHomeVisible(_onComplete != null);
+        }
+
+        /// <summary>
+        /// 試合結果画面（issue #13）へ自動遷移する。大会への結果反映（OnComplete）は結果画面の「閉じる」へ
+        /// そのまま預ける＝従来「戻る」ボタンが担っていた後処理を1つ先の画面へ移すだけで、大会の進行は不変。
+        /// ルータ不在／デモ観戦（OnComplete なし）のときは遷移せず、従来どおり「戻る」導線に任せる。
+        /// </summary>
+        private bool HandOffToResultScreen()
+        {
+            var router = KokoSim.Unity.Shell.ScreenRouter.Instance;
+            if (router == null || _onComplete == null) return false;
+
+            var cb = _onComplete;
+            var final = _finalResult;
+            _onComplete = null;
+            SetBackHomeVisible(false);
+            KokoSim.Unity.MatchResult.MatchResultController.Pending =
+                new KokoSim.Unity.MatchResult.MatchResultController.MatchResultRequest
+                {
+                    Result = final,
+                    ManagerIsAway = _managerIsAway,
+                    AwayName = _awayDisp,
+                    HomeName = _homeDisp,
+                    OnClose = () => cb(final),
+                };
+            // 終局はクリック配信中（委任スキップ）にも起きるため、同期 Show は使わず必ず遅延切替にする。
+            router.ShowDeferred("MatchResult");
+            return true;
         }
 
         // ライブ観戦（大会フロー）: 結果を大会へ戻して画面遷移する。呼び出し側の OnComplete が遷移を担う。
@@ -352,6 +467,7 @@ namespace KokoSim.Unity.Match
             // 投球フェーズ（B/S を1球ずつ点灯）。盤面は静止で待つ。
             _pitchIdx = 0;
             _pitchClock = 0f;
+            HidePitchCall();
             // Play==null（三振・四球）でも守備陣＋走者を静止表示する（打席前の塁状況）。
             if (_current.Play != null) _view.SetPlay(_current.Play);
             else _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
@@ -360,17 +476,33 @@ namespace KokoSim.Unity.Match
 
             var pitches = _current.PitchSeq?.Pitches;
             _inPitchPhase = pitches != null && pitches.Count > 0;
-            if (!_inPitchPhase) EnterBattedBallOrHold(); // 投球列が空でも先へ進む
+            if (_inPitchPhase) BeginPitchBall(0);        // 1球目の投球軌道を盤面へ（#5）
+            else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
 
             SetEnabled(_nextPa, false);
-            SetEnabled(_pinchHit, false);
+            SetEnabled(_subOpen, false);
             SetEnabled(_skip, false);
+        }
+
+        // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
+        // 捕手からの返球は描画しない。打球になる最後の1球だけは、続く打球タイムラインが同じ投球
+        // セグメントを先頭に持つので二重に描かず、静止表示のまま打球フェーズへ渡す。
+        private void BeginPitchBall(int index)
+        {
+            var last = _current.PitchSeq.Pitches.Count - 1;
+            _pitchBallVisible = _current.Play == null || index < last;
+            if (_pitchBallVisible)
+                _view.SetPlay(PitchPlaybackFactory.PitchOnly(
+                    _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore));
+            else
+                _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
         }
 
         // 投球フェーズ終了→打球再生（Play あり）または結果保持（三振・四球）。
         private void EnterBattedBallOrHold()
         {
             _inPitchPhase = false;
+            _pitchBallVisible = false;
             _t = 0;
             if (_current.Play != null)
             {
@@ -390,6 +522,7 @@ namespace KokoSim.Unity.Match
         // 打席解決: 塁ダイヤを結果へ更新してから采配窓へ。
         private void FinishPaView()
         {
+            HidePitchCall();
             SetBases(_current.BaseFirstAfter, _current.BaseSecondAfter, _current.BaseThirdAfter);
             PushHistory(HistoryLine(_current));   // プレー確定ごとに実況履歴へ1件積む
             EnterTacticsWindow(NextPrompt());
@@ -397,19 +530,30 @@ namespace KokoSim.Unity.Match
 
         private void Update()
         {
+            // 判定オーバーレイは自前の寿命で消す（打球再生へ移った直後の1球分もそのまま見せる）。
+            if (_pitchCallOn)
+            {
+                _pitchCallClock += Time.deltaTime * _speed;
+                if (_pitchCallClock >= pitchCallHoldSeconds) HidePitchCall();
+            }
+
             if (!_replaying || _current == null) return;
 
             if (_inPitchPhase)
             {
                 _pitchClock += Time.deltaTime * _speed;
+                // 1球ぶんの投球軌道を毎フレーム進める（0.45s で本塁到達。以降は到達点で保持）。
+                if (_pitchBallVisible) _view.SetTime(_pitchClock);
                 var pitches = _current.PitchSeq.Pitches;
                 while (_inPitchPhase && _pitchClock >= pitchIntervalSeconds)
                 {
                     _pitchClock -= pitchIntervalSeconds;
                     var pt = pitches[_pitchIdx];
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
+                    ShowPitchCall(pt);
                     _pitchIdx++;
                     if (_pitchIdx >= pitches.Count) EnterBattedBallOrHold();
+                    else BeginPitchBall(_pitchIdx);   // 次の1球の投球軌道を頭から流す
                 }
                 return;
             }
@@ -498,6 +642,85 @@ namespace KokoSim.Unity.Match
 
         private void SetOuts(int outs) => SetDots(_outDots, outs);
 
+        // ── 1球ごとの判定オーバーレイ（issue #6） ──
+        // 判定（ストライク/ボール/ファール…）を盤面上に大きく出し、実1球記録がある打席では球速・球種を併記する。
+        // 合成投球列（実記録なし・PitchSequenceSynthesizer）は球種・球速を持たないので判定だけを出す。
+        private void ShowPitchCall(PitchToken pt)
+        {
+            if (_pitchCall == null || _pitchCallJudge == null) return;
+
+            _pitchCallJudge.text = PitchJudgeJp(pt.Kind);
+            _pitchCallJudge.EnableInClassList("pitch-call__judge--strike", IsStrikeCall(pt.Kind));
+            _pitchCallJudge.EnableInClassList("pitch-call__judge--ball", pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Ball);
+
+            if (_pitchCallDetail != null)
+            {
+                var detail = PitchDetailText(pt);
+                _pitchCallDetail.text = detail;
+                _pitchCallDetail.style.display = detail.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
+            _pitchCall.style.display = DisplayStyle.Flex;
+            _pitchCallOn = true;
+            _pitchCallClock = 0f;
+        }
+
+        private void HidePitchCall()
+        {
+            _pitchCallOn = false;
+            _pitchCallClock = 0f;
+            if (_pitchCall != null) _pitchCall.style.display = DisplayStyle.None;
+        }
+
+        private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>
+            k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
+
+        private static string PitchJudgeJp(KokoSim.Engine.Match.AtBat.PitchKind k)
+        {
+            switch (k)
+            {
+                case KokoSim.Engine.Match.AtBat.PitchKind.Ball: return "ボール";
+                case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return "ストライク";
+                case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return "ストライク";
+                case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return "ファール";
+                case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "打った";
+                case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "死球";
+                default: return "";
+            }
+        }
+
+        // 判定の内訳（見逃し/空振り）＋球種＋球速。球種・球速は実1球記録がある打席だけ出す。
+        private static string PitchDetailText(PitchToken pt)
+        {
+            var note = pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike ? "見逃し"
+                : pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike ? "空振り" : "";
+            var pitch = pt.PitchType.HasValue ? PitchJp(pt.PitchType.Value) : "";
+            var velo = pt.VelocityKmh.HasValue
+                ? Mathf.RoundToInt((float)pt.VelocityKmh.Value).ToString() + "km/h" : "";
+
+            var s = note;
+            if (pitch.Length > 0) s = s.Length > 0 ? s + "　" + pitch : pitch;
+            if (velo.Length > 0) s = s.Length > 0 ? s + " " + velo : velo;
+            return s;
+        }
+
+        private static string PitchJp(PitchType t)
+        {
+            switch (t)
+            {
+                case PitchType.Fastball: return "ストレート";
+                case PitchType.TwoSeam: return "ツーシーム";
+                case PitchType.Cutter: return "カットボール";
+                case PitchType.Slider: return "スライダー";
+                case PitchType.Curve: return "カーブ";
+                case PitchType.Fork: return "フォーク";
+                case PitchType.Changeup: return "チェンジアップ";
+                case PitchType.Shuuto: return "シュート";
+                case PitchType.Sinker: return "シンカー";
+                default: return t.ToString();
+            }
+        }
+
         private void SetBases(bool first, bool second, bool third)
         {
             _bases?[0]?.EnableInClassList("is-on", first);   // base-1（一塁）
@@ -511,11 +734,13 @@ namespace KokoSim.Unity.Match
             var b = _root.Q<Button>(name);
             if (b == null) return;
             _speedButtons.Add(b);
-            b.clicked += () =>
+            System.Action handler = () =>
             {
                 _speed = speed;
                 foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
             };
+            b.clicked += handler;
+            _speedHandlers.Add((b, handler));
         }
 
         private static void SetEnabled(Button b, bool on) { if (b != null) b.SetEnabled(on); }
@@ -846,6 +1071,23 @@ namespace KokoSim.Unity.Match
             RefreshPanel();
             return true;
         }
+
+        /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
+        public void OpenSubstitutionForCapture() => _subPanel?.Open();
+
+        /// <summary>スクショ用: 自校が今「攻撃側」か（交代モーダルの出し分け確認用）。</summary>
+        public bool ManagerOnOffenseForCapture
+            => _prog != null && _prog.SubstitutionOptions(_managerIsAway).IsOffense;
+
+        /// <summary>スクショ用: 今このタイミングで代走を出せるか（塁上に走者がいる攻撃中）。</summary>
+        public bool ManagerCanPinchRunForCapture
+            => _prog != null && _prog.SubstitutionOptions(_managerIsAway).CanPinchRun;
+
+        /// <summary>スクショ用: 選手交代モーダルを閉じる。</summary>
+        public void CloseSubstitutionForCapture() => _subPanel?.Close();
+
+        /// <summary>スクショ用: 交代種別タブを選ぶ（0=代打 1=代走 2=投手交代 3=守備交代 4=DH解除）。</summary>
+        public void SelectSubstitutionKindForCapture(int index) => _subPanel?.SelectKindForCapture(index);
 
         /// <summary>スクショ用: 自校の控え先頭（代打候補）の名前。</summary>
         public string HomeBenchZeroName =>

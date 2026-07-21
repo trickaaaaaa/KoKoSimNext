@@ -33,6 +33,12 @@ public sealed record FieldingPlay
     public required double ApexHeightM { get; init; }
     public required double RangeM { get; init; }
     public required double BearingDeg { get; init; }
+    /// <summary>
+    /// 打球の回収点（着地後の転がりの終端。X=+一塁側, Z=センター方向）[m]。
+    /// 転がりを解かない経路（ファウル・本塁打・空中捕球・内野ゴロ）では着地点と同値。
+    /// </summary>
+    public double FieldedX { get; init; }
+    public double FieldedZ { get; init; }
     /// <summary>処理した野手（フライ捕球/ゴロ処理）。ファウル・本塁打では null。</summary>
     public FieldPosition? FielderRole { get; init; }
     /// <summary>野手が打球に到達（捕球/処理）した時刻[s]。</summary>
@@ -103,6 +109,8 @@ public static class FieldingResolver
             Result = result,
             LandingX = landing.X,
             LandingZ = landing.Z,
+            FieldedX = landing.X,
+            FieldedZ = landing.Z,
             HangTimeSeconds = ground.HangTimeSeconds,
             ApexHeightM = ground.ApexHeightM,
             RangeM = range,
@@ -122,7 +130,7 @@ public static class FieldingResolver
         if (isFly)
         {
             var (catcher, reach) = NearestReach(fielders, landing);
-            if (reach <= ground.HangTimeSeconds * coeff.CatchReachFactor)
+            if (reach <= CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff))
             {
                 var result = MaybeError(fielders, landing, coeff, rng, BattedBallResult.Out);
                 return Base(result) with
@@ -133,14 +141,8 @@ public static class FieldingResolver
                     FielderThrowSpeedMps = catcher.Attributes.ThrowSpeedMps,
                 };
             }
-            // 捕れないフライ → 安打。深さで単/二/三塁打。追いつく野手が処理。
-            return Base(HitByDepth(range, coeff)) with
-            {
-                IsFly = true,
-                FielderRole = catcher.Position,
-                FieldedAtSeconds = Math.Max(reach, ground.HangTimeSeconds),
-                FielderThrowSpeedMps = catcher.Attributes.ThrowSpeedMps,
-            };
+            // 捕れないフライ → 安打。着地後の転がりと幾何・走力で塁打数を決める。
+            return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime) with { IsFly = true };
         }
 
         // ゴロ/低いライナー。
@@ -174,27 +176,49 @@ public static class FieldingResolver
             };
         }
 
-        // 内野を抜けた（外野への低い打球）→ 安打。深さで塁打数。最寄り野手が処理に走る。
-        var (nearest, nearestReach) = NearestReach(fielders, landing);
-        return Base(HitByDepth(range, coeff)) with
+        // 内野を抜けた（外野への低い打球）→ 安打。転がりと幾何・走力で塁打数を決める。
+        return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime);
+    }
+
+    /// <summary>
+    /// 空中で捕れなかった打球（＝安打）の解決。着地後の転がり → 回収 → 各塁への送球 vs 打者走者。
+    /// 乱数は消費しない（決定論・進塁判断は幾何と時間のみで決まる）。
+    /// </summary>
+    private static FieldingPlay Hit(
+        Func<BattedBallResult, FieldingPlay> baseOf,
+        BallisticIntegrator.GroundResult ground,
+        Vector3D landing,
+        double fenceDistanceM,
+        FieldGeometry field,
+        BatterAttributes batter,
+        IReadOnlyList<Fielder> fielders,
+        FieldingCoefficients coeff,
+        double runnerTime)
+    {
+        var roll = ExtraBaseResolver.ComputeRoll(
+            landing, ground.LandingVelocity, ground.HangTimeSeconds, fenceDistanceM, coeff);
+        var (retriever, retrieveAt) = ExtraBaseResolver.Retrieve(fielders, roll, coeff);
+        var result = ExtraBaseResolver.ResolveBases(
+            roll, retriever, retrieveAt, field, batter, runnerTime, coeff);
+        var fieldedPoint = roll.PositionAt(retrieveAt);
+        return baseOf(result) with
         {
-            FielderRole = nearest.Position,
-            FieldedAtSeconds = Math.Max(nearestReach, ground.HangTimeSeconds),
-            FielderThrowSpeedMps = nearest.Attributes.ThrowSpeedMps,
+            FieldedX = fieldedPoint.X,
+            FieldedZ = fieldedPoint.Z,
+            FielderRole = retriever.Position,
+            FieldedAtSeconds = retrieveAt,
+            FielderThrowSpeedMps = retriever.Attributes.ThrowSpeedMps,
         };
     }
 
-    private static BattedBallResult HitByDepth(double range, FieldingCoefficients coeff)
+    /// <summary>
+    /// 空中捕球で走れる時間の上限[s]。滞空時間比例（＝深い飛球ほど守備範囲が広がる）に
+    /// 絶対上限を掛け、走路取りの巧拙（守備力）で伸縮させる。守備50・上限未満では従来と同一。
+    /// </summary>
+    private static double CatchTimeBudget(double hangTime, Fielder fielder, FieldingCoefficients coeff)
     {
-        if (range >= coeff.TripleDistanceM)
-        {
-            return BattedBallResult.Triple;
-        }
-        if (range >= coeff.DoubleDistanceM)
-        {
-            return BattedBallResult.Double;
-        }
-        return BattedBallResult.Single;
+        var routeFactor = 1.0 + (fielder.Attributes.Fielding - 50) * coeff.CatchReachFieldingSlope;
+        return Math.Min(hangTime * coeff.CatchReachFactor, coeff.CatchReachCapSeconds) * routeFactor;
     }
 
     private static BattedBallResult MaybeError(

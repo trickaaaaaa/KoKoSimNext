@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
     <ui:VisualElement class="root">
 
       <!-- ===== スコアボードヘッダー（home と共通の sb2） ===== -->
@@ -28,6 +30,7 @@
         <ui:Label name="nav-home" class="nav__item" text="ホーム" />
         <ui:Label name="nav-players" class="nav__item nav__item--on" text="選手" />
         <ui:Label name="nav-training" class="nav__item" text="練習" />
+        <ui:Label name="nav-practice" class="nav__item" text="練習試合" />
         <ui:Label name="nav-match" class="nav__item" text="試合" />
         <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
         <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
@@ -52,6 +55,7 @@
                 <ui:Label name="captain-badge" class="pd2-captain" text="主将" />
                 <ui:Label name="cond" class="pd2-cond" text="絶好調" />
                 <ui:Button name="designate-captain" class="pd2-capbtn" text="主将に指名" />
+                <ui:Label name="designate-reason" class="pd2-caphint" text="" />
               </ui:VisualElement>
               <ui:VisualElement class="pd2-meta">
                 <ui:Label name="meta-grade" class="pd2-meta__i" text="3年" />
@@ -112,7 +116,7 @@
           <ui:VisualElement class="pd2-card pd2-card--pitch">
             <ui:VisualElement class="pd2-card__hd">
               <ui:Label class="pd2-card__t" text="球種変化チャート" />
-              <ui:Label class="pd2-card__note" text="中心＝ボール / チップ＝キレ S〜G" />
+              <ui:Label class="pd2-card__note" text="扇の長さ＝変化量 / 色・チップ＝キレ S〜G / ストレートは幅＝伸び" />
             </ui:VisualElement>
             <ui:VisualElement class="pd2-card__body">
               <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />

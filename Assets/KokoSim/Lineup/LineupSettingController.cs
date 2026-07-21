@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using KokoSim.Engine.Match.Field;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Lineup
 {
@@ -22,20 +22,11 @@ namespace KokoSim.Unity.Lineup
 
         private LineupSettingState _state;
         private VisualElement _root;
-        private VisualElement _posMenu;   // 守備位置ドロップダウン（浮遊）
-        private int _posMenuSlot = -1;
 
         private void OnEnable()
         {
             _state = new LineupSettingState();
             _root = GetComponent<UIDocument>().rootVisualElement;
-
-            _posMenu = new VisualElement();
-            _posMenu.AddToClassList("pos-menu");
-            _posMenu.style.display = DisplayStyle.None;
-            _root.Add(_posMenu);
-            // 盤面クリックでメニューを閉じる（メニュー自身のクリックは伝播停止で除外）。
-            _root.RegisterCallback<ClickEvent>(_ => HidePosMenu());
 
             Click("lu-ok", OnOk);
             Click("lu-cancel", OnCancel);
@@ -47,7 +38,6 @@ namespace KokoSim.Unity.Lineup
 
         private void Render()
         {
-            HidePosMenu();
             var v = _state.BuildView();
 
             // 画面専用ヘッダーに「この試合」の文脈を出す（共通ナビは非表示）。大会外表示（テスト等）は空。
@@ -62,8 +52,17 @@ namespace KokoSim.Unity.Lineup
             }
             SetText("lu-match", match);
 
+            // 編成不備（ベンチ入り9人未満）は警告を出して確定を塞ぐ。正常時は警告行そのものを消す。
+            var warn = _root.Q<Label>("lu-warn");
+            if (warn != null)
+            {
+                warn.text = v.WarnText;
+                warn.style.display = string.IsNullOrEmpty(v.WarnText) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+            _root.Q<Button>("lu-ok")?.SetEnabled(v.CanConfirm);
+
             var rank = _root.Q<VisualElement>("lu-team-rank");
-            if (rank != null) { rank.Clear(); rank.Add(RankChip(v.TeamRankGrade)); }
+            if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChip(v.TeamRankGrade)); }
 
             BuildRows(v);
             BuildDhBar(v);
@@ -106,12 +105,13 @@ namespace KokoSim.Unity.Lineup
                 info.AddToClassList("lineup-row__info");
                 row.Add(info);
 
-                row.Add(RankChip(r.OverallGrade));
+                row.Add(UiComponents.RankChip(r.OverallGrade));
 
                 var slot = r.Order - 1;
                 var pidx = r.PlayerIndex;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickRow(slot); Render(); });
                 row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
+                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
                 host.Add(row);
             }
         }
@@ -124,42 +124,13 @@ namespace KokoSim.Unity.Lineup
             else if (r.IsPitcherSlot) chip.AddToClassList("pos-chip--fixed");
             if (r.PosEditable)
             {
+                if (r.IsPosPicked) chip.AddToClassList("pos-chip--picked");
+                // 打順行と同じ操作モデル：1回目のクリックで選択、2回目に別スロットのチップで守備位置を入替。
+                // 行クリック（打順入替）へ伝播させないよう停止する。
                 var slot = r.Order - 1;
-                chip.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); TogglePosMenu(slot, chip); });
+                chip.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); _state.ClickPosition(slot); Render(); });
             }
             return chip;
-        }
-
-        // ── 守備位置ドロップダウン ──
-        private void TogglePosMenu(int slot, VisualElement anchor)
-        {
-            if (_posMenuSlot == slot && _posMenu.style.display == DisplayStyle.Flex) { HidePosMenu(); return; }
-            _posMenu.Clear();
-            _posMenuSlot = slot;
-            foreach (var pos in LineupSettingState.FielderPositions)
-            {
-                var item = new Label(LineupSettingState.PosLabel(pos));
-                item.AddToClassList("pos-menu__item");
-                var p = pos;
-                item.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); _state.SetSlotPosition(slot, p); Render(); });
-                _posMenu.Add(item);
-            }
-            _posMenu.style.display = DisplayStyle.Flex;
-            _posMenu.BringToFront();
-            _posMenu.schedule.Execute(() =>
-            {
-                var wb = anchor.worldBound;
-                var local = _root.WorldToLocal(new Vector2(wb.xMin, wb.yMax + 2f));
-                _posMenu.style.left = local.x;
-                _posMenu.style.top = local.y;
-            });
-        }
-
-        private void HidePosMenu()
-        {
-            if (_posMenu == null) return;
-            _posMenu.style.display = DisplayStyle.None;
-            _posMenuSlot = -1;
         }
 
         // ── DH制トグル＋先発投手 ──
@@ -182,7 +153,7 @@ namespace KokoSim.Unity.Lineup
             var name = new Label(v.StartingPitcherName);
             name.AddToClassList("sp-pill__name");
             pill.Add(name);
-            pill.Add(RankChip(v.StartingPitcherGrade));
+            pill.Add(UiComponents.RankChip(v.StartingPitcherGrade));
             pill.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _state.ClickStartingPitcher(); Render(); });
             sp.Add(pill);
         }
@@ -205,11 +176,12 @@ namespace KokoSim.Unity.Lineup
                 var tag = new Label(b.IsPitcher ? "投" : "野");
                 tag.AddToClassList("bench-row__tag");
                 row.Add(tag);
-                row.Add(RankChip(b.OverallGrade));
+                row.Add(UiComponents.RankChip(b.OverallGrade));
 
                 var idx = b.Index;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickBench(idx); Render(); });
                 row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
+                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
                 host.Add(row);
             }
         }
@@ -250,6 +222,7 @@ namespace KokoSim.Unity.Lineup
                     var group = new Label(v.TabLabels[v.Tab]);
                     group.AddToClassList("lu-cmp-group");
                     rows.Add(group);
+                    rows.Add(UiComponents.CompareHeader());
                     foreach (var r in v.Rows2) rows.Add(CompareRowEl(r));
                 }
             }
@@ -342,7 +315,7 @@ namespace KokoSim.Unity.Lineup
                 var pos = AptPos[i + 1];
                 el.style.top = Length.Percent(pos.Top);
                 el.style.left = Length.Percent(pos.Left);
-                el.Add(has ? AptRank(grades[i]) : AptDash());
+                el.Add(has ? UiComponents.RankChip(grades[i]) : AptDash());
                 slots.Add(el);
             }
             field.Add(slots);
@@ -368,7 +341,7 @@ namespace KokoSim.Unity.Lineup
             var meta = new VisualElement();
             meta.AddToClassList("cmp-card__meta");
             meta.Add(GradeLabel(card.GradeLabel));
-            meta.Add(RankChip(card.OverallGrade));
+            meta.Add(UiComponents.RankChip(card.OverallGrade));
             if (card.IsCaptain)
             {
                 var cap = new Label("主将");
@@ -380,44 +353,32 @@ namespace KokoSim.Unity.Lineup
             el.Add(meta);
         }
 
-        private VisualElement CompareRowEl(CompareRowView r)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("cmp-row");
-
-            row.Add(ValueLabel(r.HasA ? r.ValueA.ToString() : "—", "cmp-row__val--l", r.HasA && r.Winner == -1));
-            var sideL = new VisualElement();
-            sideL.AddToClassList("cmp-row__side");
-            sideL.AddToClassList("cmp-row__side--l");
-            if (r.HasA) sideL.Add(Bar("cmp-row__bar--a", r.ValueA));
-            row.Add(sideL);
-
-            var lab = new Label(r.Label);
-            lab.AddToClassList("cmp-row__lab");
-            row.Add(lab);
-
-            var sideR = new VisualElement();
-            sideR.AddToClassList("cmp-row__side");
-            sideR.AddToClassList("cmp-row__side--r");
-            if (r.HasB) sideR.Add(Bar("cmp-row__bar--b", r.ValueB));
-            row.Add(sideR);
-            row.Add(ValueLabel(r.HasB ? r.ValueB.ToString() : "—", "cmp-row__val--r", r.HasB && r.Winner == 1));
-
-            return row;
-        }
+        // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
+        private static VisualElement CompareRowEl(CompareRowView r)
+            => UiComponents.CompareRow(new CompareRowData
+            {
+                Label = r.Label,
+                ValueA = r.ValueA, ValueB = r.ValueB,
+                HasA = r.HasA, HasB = r.HasB,
+                Winner = r.Winner,
+            });
 
         // ── 確定操作 ──
         private void OnOk()
         {
+            if (!_state.CanConfirm) return;   // 編成不備（ベンチ入り9人未満）では確定させない
             KokoSim.Unity.Shell.GameSession.Current.Lineup = _state.ToLineupSpec();
-            // AwaitingMatchStart は立てたまま → ホーム復帰で自校戦を消化する。
-            KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("HomeDashboard");
+            // AwaitingMatchStart は立てたまま → 試合開始前画面（対戦カード）を挟み、そこの「試合開始」で
+            // ホームへ戻って自校戦を消化する（issue #7）。
+            // クリック配信中に同期 Show すると UITK のイベント木が壊れて全画面が非アクティブに落ちるため、
+            // ScreenRouter 自身が用意する遅延切替（次フレーム）を使う（ScreenRouter の _pending 参照）。
+            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("MatchPreview");
         }
 
         private void OnCancel()
         {
             KokoSim.Unity.Shell.GameSession.Current.AwaitingMatchStart = false;   // 試合は消化しない
-            KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("HomeDashboard");
+            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
         }
 
         private void RenderCompareOnly() => BuildCompare(_state.BuildView());
@@ -442,21 +403,7 @@ namespace KokoSim.Unity.Lineup
             return l;
         }
 
-        private static Label RankChip(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
-        private static Label AptRank(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
         private static Label AptDash()
         {
@@ -470,24 +417,6 @@ namespace KokoSim.Unity.Lineup
             var el = new VisualElement();
             el.AddToClassList(cls);
             return el;
-        }
-
-        private static Label ValueLabel(string text, string sideMod, bool win)
-        {
-            var l = new Label(text);
-            l.AddToClassList("cmp-row__val");
-            l.AddToClassList(sideMod);
-            if (win) l.AddToClassList("cmp-row__val--win");
-            return l;
-        }
-
-        private static VisualElement Bar(string colorMod, int value)
-        {
-            var bar = new VisualElement();
-            bar.AddToClassList("cmp-row__bar");
-            bar.AddToClassList(colorMod);
-            bar.style.width = Length.Percent(Mathf.Clamp(value, 0, 100));
-            return bar;
         }
 
         private void SetText(string name, string text)

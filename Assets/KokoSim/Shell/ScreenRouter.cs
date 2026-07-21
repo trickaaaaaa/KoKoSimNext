@@ -24,16 +24,23 @@ namespace KokoSim.Unity.Shell
             ("nav-players", "PlayerList"),
             ("nav-member", "MemberSetting"),
             ("nav-training", "TrainingPlan"),
+            ("nav-practice", "PracticeMatch"),
             ("nav-match", "MatchScreen"),
             ("nav-tournament", "TournamentPreview"),
         };
 
         // タブに現れない従属画面（一覧→詳細／試合前スタメン設定など）。ナビ項目は持たないが Show 対象＋
         // 起動時 SetActive(false) 管理に含める。LineupSetting は大会の試合開始フローからのみ遷移する。
-        // MatchLive は試合開始フロー（スタメンOK→ホーム→ライブ観戦）からのみ遷移する実試合の2D俯瞰観戦画面。
-        private static readonly string[] ExtraScreens = { "PlayerDetail", "LineupSetting", "TeamStrength", "MatchLive" };
+        // MatchPreview は試合開始フロー（スタメンOK→対戦カード→試合開始）の中継画面。
+        // MatchLive は試合開始フロー（対戦カード→ホーム→ライブ観戦）からのみ遷移する実試合の2D俯瞰観戦画面。
+        // MatchResult はその出口（ライブ観戦の終局で自動遷移するボックススコア画面。閉じるとホームへ戻る）。
+        private static readonly string[] ExtraScreens =
+            { "PlayerDetail", "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult" };
 
         private const string DefaultScreen = "HomeDashboard";
+
+        // ホーム以外で「今週を進める」を持つ画面。ここで引退週に入ったらホームの主将指名モーダルへ回送する。
+        private static readonly string[] WeekAdvancers = { "TrainingPlan", "TournamentPreview", "PracticeMatch" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>
         public static ScreenRouter Instance { get; private set; }
@@ -47,11 +54,20 @@ namespace KokoSim.Unity.Shell
         // 累積登録された複数ハンドラも同じ文字列を代入するだけになり無害化される。
         private string _pending;
 
+        // 現在アクティブな画面 GameObject 名（回送の判定に使う）。
+        private string _current;
+
         private void Awake() => Instance = this;
 
         // 遅延した画面切替をイベント配信外（次フレーム）で処理する。
         private void Update()
         {
+            // 新チーム発足（夏の3年引退の翌週）の主将指名は、どの画面で週を進めても
+            // ホームの指名モーダルへ回送する（導線を1箇所に集約する, 設計書09 §8）。
+            // 回送元は「週を進められる画面」だけに限る（試合中フローの画面から引き剥がさない）。
+            if (_pending == null && NewTeamService.Pending && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
+                _pending = DefaultScreen;
+
             if (_pending == null) return;
             var target = _pending;
             _pending = null;
@@ -135,6 +151,7 @@ namespace KokoSim.Unity.Shell
         {
             foreach (var kv in _screens)
                 kv.Value.SetActive(kv.Key == target);
+            _current = target;
 
             if (!_screens.TryGetValue(target, out var go)) return;
             var doc = go.GetComponent<UIDocument>();

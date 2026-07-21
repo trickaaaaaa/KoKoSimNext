@@ -61,8 +61,9 @@ public static class SeasonEngine
             var graduating = roster.Where(p => p.Grade > 3).ToList();
             var gradAvg = graduating.Count > 0 ? graduating.Average(p => p.AverageLevel()) : 0;
             roster.RemoveAll(p => p.Grade > 3);
+            // 在籍部員の氏名を渡し、新入生の下の名前が既存部員と被らないようにする（重複回避）。
             roster.AddRange(ProspectGenerator.Intake(year, ctx.Roster, rng, skills: ctx.Skills,
-                personalities: ctx.Personalities));
+                personalities: ctx.Personalities, existingNames: roster.Select(p => p.Name).ToList()));
 
             // 主将の年度更新（設計書09 §8）: 3年生引退で主将が抜けたら選び直す。手動指名が在籍なら尊重。
             CaptainSelector.EnsureCaptain(roster);
@@ -73,6 +74,11 @@ public static class SeasonEngine
             var budget = ctx.BudgetMinutes ?? ctx.Training.DefaultBudgetMinutes;
             for (var week = 0; week < ctx.Calendar.WeeksPerYear; week++)
             {
+                // 引退週フック（設計書03 §2 / 09 §8）: 夏の3年引退の翌週＝新チーム発足。3年を引退フラグ扱いに
+                // （ロスターには残す。除去は年度替わりの卒業）し、新チームの最上級生から暫定主将を立てる。
+                // 以降は指名ウィンドウ中だけプレイヤーが差し替える。
+                RosterLifecycle.OnWeekEntered(roster, week, ctx.Calendar);
+
                 var campMult = ctx.Calendar.CampMultiplier(week, ctx.Training);
                 foreach (var p in roster)
                 {

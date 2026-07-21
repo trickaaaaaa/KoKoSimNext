@@ -129,9 +129,11 @@ public sealed class SkillTests
         var p = pitcher ?? PitcherAttributes.LeagueAverage;
         var ctx = new AtBatContext { Skills = mods };
         int hits = 0, atBats = 0, pitches = 0, balls = 0, hr = 0;
-        var rng = new Xoshiro256Random(20260716);
         for (var i = 0; i < n; i++)
         {
+            // 打席ごとに同じ種から引き直す（共通乱数法）。スキル有無の2条件が同じ乱数列を共有するので
+            // 差の分散が大幅に下がり、小さい効果量でも少ない打席数で符号が安定する。
+            var rng = new Xoshiro256Random((ulong)(20260716 + i));
             var r = AtBatResolver.ResolveDetailed(b, p, ctx, rng);
             pitches += r.Pitches;
             if (r.Result is PlateAppearanceResult.Walk) balls++;
@@ -154,6 +156,8 @@ public sealed class SkillTests
     [Fact]
     public void DeceptiveBall_LowersOpponentAverage()
     {
+        // 被打率の期待差は 0.01 程度で、独立乱数だと 6000打席のσ（≈0.008）に埋もれて符号が反転しうる。
+        // SimAtBats は打席ごとに同じ種から引き直す（共通乱数法）ので、この差は安定して観測できる。
         var plain = SimAtBats(SkillPlayMods.None).avg;
         var deceptive = SimAtBats(SkillPlayMods.None with { StuffBonus = C.DeceptiveBallStuffBonus }).avg;
         Assert.True(deceptive < plain, $"クセ球で被打率が下がるはず: {deceptive:F3} vs {plain:F3}");

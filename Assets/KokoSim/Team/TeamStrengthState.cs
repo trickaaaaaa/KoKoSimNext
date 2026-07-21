@@ -31,7 +31,7 @@ namespace KokoSim.Unity.Squad
 
         public TeamStrengthView BuildView()
         {
-            var s = TeamStrengthProfile.Compute(RosterService.Roster, Coeff);
+            var s = TeamStrengthProfile.Compute(RosterService.Active, Coeff);
             var v = new TeamStrengthView
             {
                 OverallValue = (int)Math.Round(s.Overall),
@@ -61,9 +61,8 @@ namespace KokoSim.Unity.Squad
                 Value = iv,
                 Grade = grade,
                 Pct = pct,
-                BarColorHex = RankPalette.Hex(grade), // バー色＝ランク連動（単一ソース）
             });
-            v.Radar.Add(new RadarAxis { Label = label, Value01 = pct });
+            v.Radar.Add(new RadarAxis { Label = label, Value01 = pct, ValueText = iv.ToString() });
         }
 
         // 最も低い2指標を弱点として指摘する自動コメント（強調部と助言部に分割）。

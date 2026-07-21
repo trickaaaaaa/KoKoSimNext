@@ -1,6 +1,7 @@
 using KokoSim.Engine.Season;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Training
 {
@@ -64,7 +65,7 @@ namespace KokoSim.Unity.Training
             // 共通トップバー（スコアボード）: 週とチーム総合力ランクを埋める。
             SetText("week", v.WeekLabel);   // 共通「YYYY年M月W週目」（SeasonClock 由来）
             var rank = _root.Q<VisualElement>("team-rank");
-            if (rank != null) { rank.Clear(); var g = new Label(v.TeamRankGrade); g.AddToClassList("grade"); g.AddToClassList("grade--" + v.TeamRankGrade); rank.Add(g); }
+            if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChip(v.TeamRankGrade)); }
 
             SetText("roster-title", "部員別 練習割当");
             SetText("roster-count", "/ " + v.RosterCount + "名");
@@ -372,40 +373,28 @@ namespace KokoSim.Unity.Training
         }
 
         // ── 部品ファクトリ ─────────────────────────
-        // 能力バー1行: アイコン＋能力名＋横バー。showLevel=true で「今週の成長」ラベル（＋N / ％ / —）を付す。
+        // 能力バー1行は部品辞書の AbilityRow に一本化（UI原則⑤）。
+        // showLevel=true で「今週の成長」ラベル（＋N / ％ / —）を右端に付す。バーは今週の伸び、
+        // ランクチップは**現在の能力値**を表す（相対強調バーは Grade 空でチップ無し）。
         private static VisualElement AbilityBar(GainBar gb, bool showLevel)
         {
             var grows = gb.LevelsGained > 0 || gb.Progress > 0.0001;
-            var rowEl = new VisualElement(); rowEl.AddToClassList("gainbar-row");
-            if (showLevel && !grows) rowEl.AddToClassList("gainbar-row--none");   // 伸びない能力は淡色
-
-            var icon = new Label(gb.Icon); icon.AddToClassList("gainbar__icon"); rowEl.Add(icon);
-            var name = new Label(gb.AbilityJp); name.AddToClassList("gainbar__name"); rowEl.Add(name);
-
-            var track = new VisualElement(); track.AddToClassList("stat-bar"); track.AddToClassList("gainbar__track");
-            var fill = new VisualElement(); fill.AddToClassList("stat-bar__fill");
-            fill.style.width = Length.Percent(Mathf.Clamp01((float)gb.Progress) * 100f);
-            track.Add(fill);
-            rowEl.Add(track);
-
-            if (showLevel)
+            return UiComponents.AbilityRow(new AbilityRowData
             {
-                var lv = new Label(gb.LevelsGained > 0 ? "＋" + gb.LevelsGained
-                    : grows ? Mathf.RoundToInt((float)gb.Progress * 100f) + "%" : "—");
-                lv.AddToClassList("gainbar__lv");
-                if (!grows) lv.AddToClassList("gainbar__lv--none");
-                rowEl.Add(lv);
-            }
-            return rowEl;
+                Icon = gb.Icon,
+                Label = gb.AbilityJp,
+                Pct = (float)gb.Progress,
+                Grade = gb.Grade,
+                Dim = showLevel && !grows,   // 伸びない能力は淡色（一覧には常に出す）
+                Note = showLevel
+                    ? (gb.LevelsGained > 0 ? "＋" + gb.LevelsGained
+                        : grows ? Mathf.RoundToInt((float)gb.Progress * 100f) + "%" : "—")
+                    : "",
+                NoteMuted = !grows,
+            });
         }
 
-        private static VisualElement GradeBadge(string grade)
-        {
-            var b = new Label(grade);
-            b.AddToClassList("rank-chip");
-            b.AddToClassList("rank-chip--" + grade);
-            return b;
-        }
+        private static VisualElement GradeBadge(string grade) => UiComponents.RankChip(grade);
 
         private static Label Tag(string text, string classes)
         {

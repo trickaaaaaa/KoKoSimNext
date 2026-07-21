@@ -41,6 +41,17 @@ public static class ContactModel
         return MathUtil.Logistic(z);
     }
 
+    /// <summary>
+    /// コンタクト品質への投手側の寄与（「打たせて取る」の土台）。打球初速・打球角のばらつきの双方を通じて
+    /// 打球質を動かす。速い球は当たれば強い打球になり（本格派の代償）、制球とキレは芯を外させる（技巧派の武器）。
+    /// 3項とも基準値で0＝リーグ平均投手では恒等なので、係数を入れても得点環境の平均は動かない。
+    /// </summary>
+    public static double PitcherContactQualityBias(
+        PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
+        => coeff.ContactQualityPerKmh * (plan.VelocityKmh - coeff.ContactQualityVelocityRefKmh)
+           + coeff.ContactQualityPerControl * (plan.ControlLevel - 50.0)
+           + coeff.ContactQualityPerBreakM * (features.BreakMagnitudeM - coeff.ContactQualityBreakRefM);
+
     public static (ContactOutcome Outcome, BattedBall? Ball) Resolve(
         BatterAttributes batter,
         PitchPlan plan,
@@ -62,8 +73,10 @@ public static class ContactModel
         }
 
         // フェア: コンタクト品質 → 初速・角度・方向。バレル(品質>1)で満初速を少し越える。
+        // 投手側の寄与（球速/制球/キレ）が入るため、同じ打者でも「打たせて取る」投手には弱い打球になる。
         var quality = MathUtil.Clamp(
             coeff.QualityMean + coeff.QualityContactSlope * (batter.Contact - 50)
+                + PitcherContactQualityBias(plan, features, coeff)
                 + rng.NextGaussian(0, coeff.QualitySigma),
             0.05, 1.05);
 

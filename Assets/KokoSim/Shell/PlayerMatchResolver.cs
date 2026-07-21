@@ -45,15 +45,19 @@ namespace KokoSim.Unity.Shell
         /// 渡された試合 rng には依存させない（＝大会の進行状況や観戦の有無で相手が変わらない）。
         /// Resolve / BeginLive の双方がこの1メソッドを使うことで、両者が同一チームになる契約を守る。
         /// </summary>
-        private static Team BuildOpponentTeam(School opponent)
+        public static Team BuildOpponentTeam(School opponent)
             => StrengthTeamFactory.ForSchool(opponent, GameSession.Current.Year);
 
-        private static Team BuildManagerTeam(string name)
+        /// <summary>
+        /// 自校ラインナップを組む。試合開始前画面（対戦カード）も同じ入口を通し、
+        /// 表示したスタメンと実際に出場するスタメンが必ず一致する契約を守る。
+        /// </summary>
+        public static Team BuildManagerTeam(string name)
         {
             var lineup = GameSession.Current.Lineup;
             if (lineup != null) return RosterTeamBuilder.BuildFromLineup(lineup);
             // 未設定＝スタメン画面を通らなかった場合は能力順の自動編成（従来同等の編成）。
-            return RosterTeamBuilder.Build(RosterService.Roster, name);
+            return RosterTeamBuilder.Build(RosterService.Active, name);
         }
     }
 }
