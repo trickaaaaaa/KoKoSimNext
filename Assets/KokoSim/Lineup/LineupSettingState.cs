@@ -15,6 +15,7 @@ namespace KokoSim.Unity.Lineup
     public sealed class LineupRowView
     {
         public int Order;                 // 打順 1〜9
+        public int UniformNumber;         // 背番号（メンバー設定で割当。0＝未割当）
         public string PosKanji = "";      // 守備位置漢字（DHは「指」・投手は「投」）
         public bool IsPitcherSlot;        // 非DHの投手スロット（守備位置は固定）
         public bool IsDhSlot;
@@ -34,6 +35,7 @@ namespace KokoSim.Unity.Lineup
     public sealed class BenchRowView
     {
         public int Index;
+        public int UniformNumber;         // 背番号（メンバー設定で割当。0＝未割当）
         public string Name = "";
         public string GradeLabel = "";
         public string OverallGrade = "C";
@@ -443,6 +445,7 @@ namespace KokoSim.Unity.Lineup
                 v.Rows.Add(new LineupRowView
                 {
                     Order = i + 1,
+                    UniformNumber = p.UniformNumber,
                     PosKanji = isDh ? "指" : PosKanji[_pos[i]],
                     IsPitcherSlot = isPitcherSlot,
                     IsDhSlot = isDh,
@@ -480,6 +483,7 @@ namespace KokoSim.Unity.Lineup
                 v.Bench.Add(new BenchRowView
                 {
                     Index = i,
+                    UniformNumber = p.UniformNumber,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
                     OverallGrade = OverallGrade(p),
