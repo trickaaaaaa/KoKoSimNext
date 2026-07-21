@@ -79,10 +79,12 @@
     margin-left: var(--sp-1);
 }
 
-/* 6角形（部品辞書 RadarChart が描く。軸ラベルは radar-axis 系）。 */
+/* 6角形（部品辞書 RadarChart が描く。軸ラベルは radar-axis 系）。
+   スタメンが増える編成（DH制＝打順外の先発投手行が付く）では、あふれさせず6角形側を縮める。 */
 .mp-radar {
-    height: 280px;
-    flex-shrink: 0;
+    height: 300px;
+    min-height: 220px;
+    flex-shrink: 1;
     background-color: var(--color-panel-deep);
     border-radius: var(--radius-panel);
     margin-bottom: var(--sp-2);
