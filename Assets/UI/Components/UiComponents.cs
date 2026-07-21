@@ -112,6 +112,38 @@ namespace KokoSim.Unity.Components
             return box;
         }
 
+        // ===== VerticalName（縦書き選手名・甲子園両翼式。設計書16 §9-2 の試作） =====
+
+        /// <summary>
+        /// 縦書きの選手名1列（打順／守備／姓を1字1行）。UI Toolkit に縦書きが無いので
+        /// 1文字＝1 Label のスタックで組む。姓だけを立てるのが実物の両翼（名は出さない）。
+        /// </summary>
+        public static VisualElement VerticalName(string order, string position, string family, bool lit = false)
+        {
+            var col = new VisualElement();
+            col.AddToClassList("vname");
+            if (lit) col.AddToClassList("vname--lit");
+
+            var ord = new Label(order);
+            ord.AddToClassList("vname__ord");
+            ord.AddToClassList("f-dot");
+            col.Add(ord);
+
+            var pos = new Label(position);
+            pos.AddToClassList("vname__pos");
+            pos.AddToClassList("f-dot");
+            col.Add(pos);
+
+            foreach (var ch in family ?? "")
+            {
+                var c = new Label(ch.ToString());
+                c.AddToClassList("vname__ch");
+                c.AddToClassList("f-display");   // 校名と同じ太明朝（人名も掲示板の外の声）
+                col.Add(c);
+            }
+            return col;
+        }
+
         // ===== RuleHead（新聞の柱見出し。英語 eyebrow の置き換え） =====
 
         /// <summary>縦罫＋明朝の小見出し。アンバーは使わない（見出しは頻出するため）。</summary>

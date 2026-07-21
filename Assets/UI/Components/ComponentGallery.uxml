@@ -242,5 +242,35 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:Label text="VerticalName（縦書き選手名・甲子園両翼式。設計書16 §9-2 の試作。採否はF2ゲート）" class="panel__title" style="margin-top: 20px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:VisualElement class="vname-wing">
+                <ui:VisualElement class="vname">
+                    <ui:Label text="1" class="vname__ord f-dot" />
+                    <ui:Label text="捕" class="vname__pos f-dot" />
+                    <ui:Label text="中" class="vname__ch f-display" />
+                    <ui:Label text="田" class="vname__ch f-display" />
+                </ui:VisualElement>
+                <ui:VisualElement class="vname">
+                    <ui:Label text="2" class="vname__ord f-dot" />
+                    <ui:Label text="一" class="vname__pos f-dot" />
+                    <ui:Label text="田" class="vname__ch f-display" />
+                    <ui:Label text="中" class="vname__ch f-display" />
+                </ui:VisualElement>
+                <ui:VisualElement class="vname vname--lit">
+                    <ui:Label text="3" class="vname__ord f-dot" />
+                    <ui:Label text="二" class="vname__pos f-dot" />
+                    <ui:Label text="菊" class="vname__ch f-display" />
+                    <ui:Label text="地" class="vname__ch f-display" />
+                </ui:VisualElement>
+                <ui:VisualElement class="vname">
+                    <ui:Label text="4" class="vname__ord f-dot" />
+                    <ui:Label text="三" class="vname__pos f-dot" />
+                    <ui:Label text="荒" class="vname__ch f-display" />
+                    <ui:Label text="木" class="vname__ch f-display" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>

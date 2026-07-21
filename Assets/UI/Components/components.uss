@@ -1223,3 +1223,43 @@
 .lsc-base--first { top: 15px; left: 30px; }
 .lsc-base--third { top: 15px; left: 0; }
 .lsc-base.is-on { background-color: var(--color-lamp); }
+
+/* ═══ VerticalName：縦書き選手名（甲子園両翼式）══════════════════════════
+   設計書16 §9-2 の試作用。UI Toolkit に縦書き（writing-mode）は無いので、
+   1文字＝1 Label のスタックで組む自作部品にする。掲示板の両翼と同じく
+   「打順 → 守備 → 姓を1字1行」の縦列を打順ぶん横に並べる。
+
+   採否は F2 のゲートでユーザーが決める（design-16 §9-2）。不採用なら丸ごと削除できるよう、
+   画面側に一切のロジックを持たせず、この辞書エントリだけで完結させてある。 */
+.vname-wing {
+    flex-direction: row;
+    background-color: var(--sb-face);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-3) var(--sp-2);
+    flex-shrink: 0;
+}
+.vname { width: 32px; align-items: center; flex-shrink: 0; }
+.vname__ord {
+    font-size: var(--fs-dot-16);
+    color: var(--color-muted);
+    height: 20px;
+    -unity-text-align: middle-center;
+}
+.vname__pos {
+    font-size: var(--fs-dot-16);
+    color: var(--color-chalk);
+    height: 22px;
+    margin-bottom: var(--sp-1);
+    -unity-text-align: middle-center;
+}
+/* 1文字ぶんのマス。明朝は16px以上・太ウェイト限定なので22pxで置く。 */
+.vname__ch {
+    font-size: 22px;
+    color: var(--color-chalk);
+    height: 26px;
+    -unity-text-align: middle-center;
+    margin: 0;
+    padding: 0;
+}
+/* 自校・注目選手など「1列だけ立てる」用（アンバーは列単位でしか使わない）。 */
+.vname--lit .vname__ch { color: var(--color-lamp); }
