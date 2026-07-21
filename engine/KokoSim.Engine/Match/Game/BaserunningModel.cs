@@ -173,8 +173,18 @@ public static class BaserunningModel
         var runs = 0;
         var extraOuts = 0;
         var homeOutUsed = false; // 1プレーで本塁アウトは最大1（1球は2箇所へ投げられない）
-        Player? newSecond = null;
-        Player? newThird = null;
+
+        // 打者の到達塁（単打/野選=1塁、二塁打=2塁）。先行走者から順にこの塁を明け渡す義務があるかを決める。
+        var batterBase = isDouble ? 2 : 1;
+        // フォース進塁（#87）: 打者の到達塁とその先の塁が連続して埋まっている走者は自重できない
+        // （＝バックアップの塁が無い）。二塁打の一塁走者は打者が二塁に入るだけで一塁は空くため対象外。
+        var r2Forced = batterBase == 2 ? r2 is not null : r1 is not null && r2 is not null;
+        var r3Forced = r2Forced && r3 is not null;
+
+        // 走者の行き先を塁ごとに保持（#87: newSecond/newThird の2変数上書きで走者が消える構造を廃止）。
+        Player? third = null;
+        Player? second = null;
+        Player? first = null;
 
         // 本塁突入の裁定。home=null は従来の確率テーブル（決定論・乱数消費順を保存）。
         // tableUnconditional=true は「テーブル時は無条件生還」（三塁走者・二塁打の二塁走者）。
@@ -195,18 +205,29 @@ public static class BaserunningModel
             return HomeVerdict.OutAtHome;
         }
 
-        // 三塁走者（先行）: テーブル時は無条件生還。
+        // 三塁走者（先行）: テーブル時は無条件生還。フォース時（満塁）は自重不可＝RNGを消費せず確定生還
+        // （凡打側の r3Forced と同じ流儀。物理レース化は #89 で扱う）。
         if (r3 is not null)
         {
-            switch (TryHome(r3, 3, 0.0, tableUnconditional: true))
+            if (r3Forced)
             {
-                case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r3, 3, 4, false)); break;
-                case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r3, 3, 4, Out: true)); break;
-                default: newThird = r3; break; // 自重＝三塁で止まる（移動なし）
+                runs++;
+                mv?.Add(new RunnerMove(r3, 3, 4, false));
+            }
+            else
+            {
+                switch (TryHome(r3, 3, 0.0, tableUnconditional: true))
+                {
+                    case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r3, 3, 4, false)); break;
+                    case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r3, 3, 4, Out: true)); break;
+                    default: third = r3; break; // 自重＝三塁で止まる（移動なし）
+                }
             }
         }
 
         // 二塁走者: 単打は SecondToHomeOnSingle、二塁打はテーブル時無条件。
+        // フォース時（一塁走者あり、または二塁打で打者が二塁を占有）は自重不可＝三塁へ確定進塁。
+        // r3Forced により三塁は必ず空いている（上のブロックで確定済み）。
         if (r2 is not null)
         {
             switch (TryHome(r2, 2, coeff.SecondToHomeOnSingle, tableUnconditional: isDouble))
@@ -214,8 +235,8 @@ public static class BaserunningModel
                 case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r2, 2, 4, false)); break;
                 case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r2, 2, 4, Out: true)); break;
                 default:
-                    if (newThird is null) { newThird = r2; mv?.Add(new RunnerMove(r2, 2, 3, false)); }
-                    else newSecond = r2; // 三塁が塞がっていれば二塁に留まる
+                    if (r2Forced || third is null) { third = r2; mv?.Add(new RunnerMove(r2, 2, 3, false)); }
+                    else second = r2; // 三塁が塞がっていれば（非フォース）二塁に留まる
                     break;
             }
         }
@@ -225,37 +246,41 @@ public static class BaserunningModel
         {
             if (isDouble)
             {
+                // 二塁打では打者が二塁を占有するのみ＝一塁走者は非フォース（一塁は空く）。
                 switch (TryHome(r1, 1, coeff.FirstToHomeOnDouble, tableUnconditional: false))
                 {
                     case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r1, 1, 4, false)); break;
                     case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r1, 1, 4, Out: true)); break;
                     default:
-                        if (newThird is null) { newThird = r1; mv?.Add(new RunnerMove(r1, 1, 3, false)); }
-                        else { newSecond = r1; mv?.Add(new RunnerMove(r1, 1, 2, false)); }
+                        if (third is null) { third = r1; mv?.Add(new RunnerMove(r1, 1, 3, false)); }
+                        else first = r1; // 三塁封鎖＝一塁に留まる（打者は二塁なので一塁は空いている）
                         break;
                 }
             }
             else
             {
-                if (MathUtil.Chance(P(coeff.FirstToThirdOnSingle, r1.Baserunning, coeff), rng) && newThird is null)
+                // 単打では打者が一塁を占有する＝一塁走者は常にフォース（最低でも二塁は確定）。
+                // Chance() の評価順は変更前と同一に保つ（third の空き判定を先に短絡させない＝RNG消費順を保存）。
+                if (MathUtil.Chance(P(coeff.FirstToThirdOnSingle, r1.Baserunning, coeff), rng) && third is null)
                 {
-                    newThird = r1;
+                    third = r1;
                     mv?.Add(new RunnerMove(r1, 1, 3, false));
                 }
                 else
                 {
-                    newSecond = r1;
+                    second = r1;
                     mv?.Add(new RunnerMove(r1, 1, 2, false));
                 }
             }
         }
 
+        // 各走者は互いに異なる塁へ割り当て済み（フォース済みの先行走者は必ず塁を明け渡す）ため、
+        // 打者の占有と衝突しない。
+        if (third is not null) bases.Third = third;
+        if (second is not null) bases.Second = second;
+        if (first is not null) bases.First = first;
         if (isDouble) bases.Second = batter; else bases.First = batter;
         mv?.Add(new RunnerMove(batter, 0, isDouble ? 2 : 1, false));
-        // 打者の占有と重ならない範囲で走者を置く。
-        if (newThird is not null) bases.Third = newThird;
-        if (newSecond is not null && bases.Second is null) bases.Second = newSecond;
-        else if (newSecond is not null && bases.First is null) bases.First = newSecond;
 
         return (runs, extraOuts);
     }
