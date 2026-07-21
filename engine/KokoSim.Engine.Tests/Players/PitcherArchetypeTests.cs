@@ -21,6 +21,42 @@ public sealed class PitcherArchetypeTests
     private static IEnumerable<Player> PitchersOf(Team t)
         => t.BattingOrder.Concat(t.Bullpen).Where(p => p.Pitching is not null);
 
+    /// <summary>
+    /// 実戦計測は本番と同じ data/coefficients.yaml で回す（C#既定値は YAML と乖離しており、
+    /// 既定値で校正すると本番の得点環境と違う土俵で中立性を見てしまう）。
+    /// </summary>
+    private static GameContext YamlContext()
+    {
+        var b = KokoSim.Config.CoefficientsLoader.LoadFromFile(
+            KokoSim.Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("coefficients.yaml"));
+        return new GameContext
+        {
+            Aerodynamics = b.Aerodynamics, Pitching = b.Pitching, Batting = b.Batting,
+            Fielding = b.Fielding, Baserunning = b.Baserunning, Fatigue = b.Fatigue,
+            Form = b.Form, Skills = b.Skills, Pressure = b.Pressure, Tactics = b.Tactics,
+        };
+    }
+
+    /// <summary>型のオフセットを載せた投手の1試合あたり失点と奪三振率を実測する。</summary>
+    private static (double RunsAllowed, double StrikeoutRate) MeasureArchetype(
+        PitcherArchetype a, GameContext ctx, int games, int defenseLevel = 55, int baseLv = 68)
+    {
+        var c = new PitcherArchetypeCoefficients();
+        var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(a, c);
+        int L(double x) => (int)MathUtil.Clamp(System.Math.Round(x), 10, 99);
+        var mine = FixedTeam(L(baseLv + dv), L(baseLv + dc), L(baseLv + ds), L(baseLv + dr), "自", defenseLevel);
+        var foe = FixedTeam(baseLv, baseLv, baseLv, baseLv, "敵");
+
+        double runs = 0, k = 0, bf = 0;
+        for (var i = 0; i < games; i++)
+        {
+            var r = GameEngine.Play(foe, mine, ctx, new Xoshiro256Random((ulong)(i * 7919 + 13)));
+            runs += r.AwayRuns;
+            foreach (var line in r.HomePitching) { k += line.StrikeOuts; bf += line.BattersFaced; }
+        }
+        return (runs / games, k / System.Math.Max(1, bf));
+    }
+
     // ===== 変換式（不変条件#1: 表示層→物理層は一箇所集約） =====
 
     [Fact]
@@ -122,8 +158,8 @@ public sealed class PitcherArchetypeTests
         // 球速が型を分ける主軸（本格派 > 技巧派 > 軟投派）。
         Assert.True(AvgVelocity(PitcherArchetype.Power) > AvgVelocity(PitcherArchetype.Finesse) + 5);
         Assert.True(AvgVelocity(PitcherArchetype.Finesse) > AvgVelocity(PitcherArchetype.SoftToss));
-        // 制球は逆順だが差は小さい。現行シムでは制球の価値が球速より大きく、大きく振ると
-        // 本格派が一方的に不利になるため（実測で校正済み・Archetypes_AreBalanceNeutral_InActualGames 参照）。
+        // 制球は逆順だが差は小さい。球速を物理層へ接続した後も制球（与四球）の失点価値は球速の約4倍あり、
+        // 大きく振ると本格派が一方的に不利になるため（実測で校正済み・Archetypes_AreBalanceNeutral_InActualGames 参照）。
         Assert.True(AvgControl(PitcherArchetype.SoftToss) > AvgControl(PitcherArchetype.Power) + 3);
         Assert.True(AvgControl(PitcherArchetype.Finesse) > AvgControl(PitcherArchetype.Power));
     }
@@ -132,31 +168,17 @@ public sealed class PitcherArchetypeTests
     /// ★型は<b>実戦で</b>バランス中立: 型を変えても1試合あたりの失点がほぼ揃うこと。
     /// 合成式（球速.40/制球.25…）の加重和で0になることを見る"式の中立"は循環論法なので採らない
     /// ＝オフセットは式に合わせて設計したのだから式では必ず0になる。実際に試合を回して確かめる。
-    /// 現行シムは制球（与四球）の価値が球速（奪三振）より大きく、素朴な「球速+12/制球-10」では
-    /// 本格派の失点が 3.10 対 技巧派 2.71 と明確に不利だった。その再発を防ぐ回帰。
+    /// 球速を物理層へ接続した後（issue #14）も制球（与四球）の失点価値は球速の約4倍あり、
+    /// 素朴な「球速+12/制球-10」では本格派が明確に不利になる。その再発を防ぐ回帰。
     /// </summary>
     [Fact]
     [Trait("Category", "Heavy")]   // 型4種×400試合のフルエンジン実測
     public void Archetypes_AreBalanceNeutral_InActualGames()
     {
-        const int baseLv = 68;
-        const int games = 400;
-        var c = new PitcherArchetypeCoefficients();
-        var ctx = new GameContext();
-
+        var ctx = YamlContext();
         var runsAllowed = new Dictionary<PitcherArchetype, double>();
         foreach (PitcherArchetype a in System.Enum.GetValues(typeof(PitcherArchetype)))
-        {
-            var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(a, c);
-            int L(double x) => (int)MathUtil.Clamp(System.Math.Round(x), 10, 99);
-            var mine = FixedTeam(L(baseLv + dv), L(baseLv + dc), L(baseLv + ds), L(baseLv + dr), "自");
-            var foe = FixedTeam(baseLv, baseLv, baseLv, baseLv, "敵");
-
-            double runs = 0;
-            for (var i = 0; i < games; i++)
-                runs += GameEngine.Play(foe, mine, ctx, new Xoshiro256Random((ulong)(i * 7919 + 13))).AwayRuns;
-            runsAllowed[a] = runs / games;
-        }
+            runsAllowed[a] = MeasureArchetype(a, ctx, games: 400).RunsAllowed;
 
         var spread = runsAllowed.Values.Max() - runsAllowed.Values.Min();
         Assert.True(spread < 0.25,
@@ -164,21 +186,57 @@ public sealed class PitcherArchetypeTests
             + string.Join(" / ", runsAllowed.Select(kv => $"{PitcherArchetypes.Label(kv.Key)}{kv.Value:F2}")));
     }
 
+    /// <summary>
+    /// ★issue #14 ①④: 本格派は<b>自力で</b>アウトを取る（奪三振が明確に多い）ため守備力への依存が小さく、
+    /// 技巧派・軟投派は打たせて取る（インプレー打球が多い）ため失点が守備力に大きく左右される。
+    /// 「守備型チームは技巧派が生きる／守備が穴なら本格派が要る」という編成の駆け引きの土台を固定する。
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Heavy")]   // 型3種×守備2水準×1500試合のフルエンジン実測
+    public void PowerPitchers_StrikeOutMore_AndDependLessOnDefense()
+    {
+        const int games = 1500;
+        const int weakDefense = 20;
+        const int strongDefense = 90;
+        var ctx = YamlContext();
+
+        var power = MeasureArchetype(PitcherArchetype.Power, ctx, games, weakDefense);
+        var powerStrong = MeasureArchetype(PitcherArchetype.Power, ctx, games, strongDefense);
+        var finesse = MeasureArchetype(PitcherArchetype.Finesse, ctx, games, weakDefense);
+        var finesseStrong = MeasureArchetype(PitcherArchetype.Finesse, ctx, games, strongDefense);
+        var softToss = MeasureArchetype(PitcherArchetype.SoftToss, ctx, games, weakDefense);
+        var softTossStrong = MeasureArchetype(PitcherArchetype.SoftToss, ctx, games, strongDefense);
+
+        // ① 速球＝空振りが取れる: 本格派の奪三振率が技巧派・軟投派を明確に上回る。
+        Assert.True(power.StrikeoutRate > finesse.StrikeoutRate + 0.03,
+            $"本格派の奪三振率が技巧派を上回らない: {power.StrikeoutRate:P2} vs {finesse.StrikeoutRate:P2}");
+        Assert.True(power.StrikeoutRate > softToss.StrikeoutRate + 0.03,
+            $"本格派の奪三振率が軟投派を上回らない: {power.StrikeoutRate:P2} vs {softToss.StrikeoutRate:P2}");
+
+        // ④ 打たせて取る＝守備依存: 守備を振ったときの失点変化が本格派より大きい。
+        var powerSwing = power.RunsAllowed - powerStrong.RunsAllowed;
+        var contactSwing = ((finesse.RunsAllowed - finesseStrong.RunsAllowed)
+            + (softToss.RunsAllowed - softTossStrong.RunsAllowed)) / 2.0;
+        Assert.True(contactSwing > powerSwing + 0.10,
+            $"打たせて取る型の守備依存が本格派より大きくない: 技巧/軟投{contactSwing:F3} vs 本格{powerSwing:F3}");
+    }
+
     // 能力を指定した投手＋固定打線のチーム（実測の対照条件をそろえるため）。
-    private static Team FixedTeam(int velLv, int ctrlLv, int stamLv, int rankLv, string name)
+    private static Team FixedTeam(int velLv, int ctrlLv, int stamLv, int rankLv, string name, int defenseLv = 55)
     {
         Player Bat(FieldPosition pos) => new()
         {
             Name = pos.ToString(), Position = pos,
             Contact = 55, Power = 55, LaunchTendency = 50, Discipline = 55,
-            Speed = 55, ArmStrength = 55, ThrowAccuracy = 55, Fielding = 55, Catching = 55,
+            Speed = 55, ArmStrength = defenseLv, ThrowAccuracy = defenseLv,
+            Fielding = defenseLv, Catching = defenseLv,
             Bunt = 55, Steal = 55, Baserunning = 55,
         };
         var pitcher = new Player
         {
             Name = name + "P", Position = FieldPosition.Pitcher,
             Contact = 30, Power = 30, LaunchTendency = 50, Discipline = 50,
-            Speed = 50, ArmStrength = 50, ThrowAccuracy = 50, Fielding = 50, Catching = 50,
+            Speed = 50, ArmStrength = 50, ThrowAccuracy = 50, Fielding = defenseLv, Catching = defenseLv,
             Bunt = 50, Steal = 50, Baserunning = 50,
             Pitching = new PitcherAttributes
             {

@@ -255,6 +255,11 @@ public static class CoefficientsLoader
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
         public double BearingSigma { get; set; } = D.BearingSigma;
         public double MinQualityVeloFactor { get; set; } = D.MinQualityVeloFactor;
+        public double ContactQualityVelocityRefKmh { get; set; } = D.ContactQualityVelocityRefKmh;
+        public double ContactQualityPerKmh { get; set; } = D.ContactQualityPerKmh;
+        public double ContactQualityPerControl { get; set; } = D.ContactQualityPerControl;
+        public double ContactQualityBreakRefM { get; set; } = D.ContactQualityBreakRefM;
+        public double ContactQualityPerBreakM { get; set; } = D.ContactQualityPerBreakM;
 
         public BattingCoefficients ToModel() => new()
         {
@@ -283,6 +288,11 @@ public static class CoefficientsLoader
             LaunchAngleSigma = LaunchAngleSigma,
             BearingSigma = BearingSigma,
             MinQualityVeloFactor = MinQualityVeloFactor,
+            ContactQualityVelocityRefKmh = ContactQualityVelocityRefKmh,
+            ContactQualityPerKmh = ContactQualityPerKmh,
+            ContactQualityPerControl = ContactQualityPerControl,
+            ContactQualityBreakRefM = ContactQualityBreakRefM,
+            ContactQualityPerBreakM = ContactQualityPerBreakM,
         };
     }
 

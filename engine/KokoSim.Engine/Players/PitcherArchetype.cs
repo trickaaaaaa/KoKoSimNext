@@ -22,8 +22,10 @@ public enum PitcherArchetype
 /// <summary>
 /// 球質タイプの出現割合と、型ごとのレベル配分オフセット（data/coefficients.yaml 駆動・不変条件#4）。
 /// オフセットは<b>実際の試合の失点が型によらず揃うよう実測で校正</b>してある（式の上での加重和ではない）。
-/// 現行シムでは制球（与四球）の価値が球速（奪三振）より大きいため、制球の振れ幅は小さく取ってある。
-/// 素朴に「球速+12/制球-10」とすると本格派の失点が 3.10 と突出して不利になる（実測値・PitcherArchetypeTests 参照）。
+/// <para>実測の限界失点（baseLv68・自校固定打線・YAML係数）: 球速 −0.015/Lv・制球 −0.057/Lv・キレ −0.009/Lv。
+/// 球速の空振り価値は物理層接続（<see cref="Match.Batting.BattingCoefficients.StuffPerKmh"/>）で3倍になったが、
+/// 与四球経由で効く制球の失点価値は依然その約4倍あるため、制球の振れ幅は±5程度が中立の上限。
+/// 本格派は設計書02「球速とキレで押し込む」に合わせてキレを+に戻し、その分の代償を制球で払う配分にしてある。</para>
 /// </summary>
 public sealed record PitcherArchetypeCoefficients
 {
@@ -32,23 +34,23 @@ public sealed record PitcherArchetypeCoefficients
     public double FinesseShare { get; init; } = 0.22;
     public double SoftTossShare { get; init; } = 0.08;
 
-    // --- 本格派: 球速↑（制球の代償は小さめ） ---
-    public double PowerVelocity { get; init; } = 14;
-    public double PowerControl { get; init; } = -2;
+    // --- 本格派: 球速↑・キレ↑（代償は制球とスタミナ） ---
+    public double PowerVelocity { get; init; } = 12;
+    public double PowerControl { get; init; } = -4;
     public double PowerStamina { get; init; } = -2;
-    public double PowerPitchRank { get; init; } = -1;
+    public double PowerPitchRank { get; init; } = 2;
 
     // --- 技巧派: 球速↓ 制球・キレ↑ ---
     public double FinesseVelocity { get; init; } = -10;
     public double FinesseControl { get; init; } = 3;
     public double FinesseStamina { get; init; } = 1;
-    public double FinessePitchRank { get; init; } = 2;
+    public double FinessePitchRank { get; init; } = 3;
 
     // --- 軟投派: 球速↓↓ 制球・キレ↑ ---
     public double SoftTossVelocity { get; init; } = -14;
     public double SoftTossControl { get; init; } = 4;
     public double SoftTossStamina { get; init; } = 2;
-    public double SoftTossPitchRank { get; init; } = 3;
+    public double SoftTossPitchRank { get; init; } = 5;
 }
 
 /// <summary>球質タイプの抽選・オフセット適用・表示名（純関数）。</summary>
