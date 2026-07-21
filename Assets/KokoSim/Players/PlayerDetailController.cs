@@ -195,7 +195,7 @@ namespace KokoSim.Unity.Players
                 dir = dir.normalized;
 
                 // 扇の長さ＝変化量。ストレートは Break01 が短尺固定なので自然に短い扇になる。
-                var outer = Mathf.Max(ArcInner + 10f, Mathf.Lerp(radius * 0.34f, radius * 0.92f, Mathf.Clamp01(pt.Break01)));
+                var outer = Mathf.Max(ArcInner + 10f, Mathf.Lerp(radius * 0.26f, radius * 0.92f, Mathf.Clamp01(pt.Break01)));
                 // 幅は固定。ストレートだけ「伸び」を幅で表す（1-B: 長さではなく太さで読ませる）。
                 var half = pt.IsFastball ? Mathf.Lerp(13f, 26f, Mathf.Clamp01(pt.Extend01)) : 15f;
 
