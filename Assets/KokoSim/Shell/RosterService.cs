@@ -43,6 +43,10 @@ namespace KokoSim.Unity.Shell
             for (var i = 0; i < list.Count; i++) list[i].Id = i + 1;
 
             UniformNumberAssigner.AutoAssign(list);   // 初期背番号を能力順で仮割当（プレイヤーが後で編集）
+
+            // 主将（設計書09 §8）: ゲーム開始時点で必ず1名決まっている（最上級生の統率力最大）。
+            // プレイヤーが選び直せるのは夏の3年引退後＝新チーム発足時だけ（CaptainSelector.IsDesignationWindow）。
+            CaptainSelector.EnsureCaptain(list);
             return list;
         }
     }

@@ -737,6 +737,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     margin-left: 16px;
 }
 .pd2-capbtn:hover { background-color: rgba(245, 198, 74, 0.24); }
+/* 指名ウィンドウ外は押せない（設計書09 §8）。アンバーの主張を落として理由ラベルへ視線を渡す。 */
+.pd2-capbtn:disabled { opacity: 0.35; }
+.pd2-caphint { font-size: var(--fs-cap); color: var(--tx-2); margin-left: var(--sp-2); }
 .pd2-meta { flex-direction: row; flex-wrap: wrap; margin-top: 10px; }
 .pd2-meta__i { font-size: 14px; color: #9AA5A0; margin-right: 20px; }
 .pd2-overall { align-items: center; padding-left: 24px; border-left-width: 1px; border-left-color: #232E28; }
