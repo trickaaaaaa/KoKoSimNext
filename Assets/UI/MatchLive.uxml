@@ -59,6 +59,11 @@
                 <ui:VisualElement class="mlive-field-wrap">
                     <ui:VisualElement name="field-host" class="mlive-field" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
+                    <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい） -->
+                    <ui:VisualElement name="pitch-call" class="pitch-call">
+                        <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" />
+                        <ui:Label name="pitch-call-detail" class="pitch-call__detail" text="" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <!-- 1球采配ショートカット（設計書15 Phase C-3, Q12-2: 全球で常駐）。低彩度の常時1行帯。
