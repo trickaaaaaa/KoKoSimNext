@@ -1,12 +1,11 @@
 // ViewModel層（設計書06 §3.3 選手詳細、mock: 野球部監督GM standalone-src 「選手詳細」画面）。
-// UnityEngine 非依存。一覧(PlayerListState)と同一 seed=42 の roster を再現し、安定 index で1名を開く。
+// UnityEngine 非依存。一覧(PlayerListState)と同じ共有ロスター(RosterService)を参照し、安定 index で1名を開く。
 // 成長履歴・公式戦成績・球種の物理計測値はエンジン未接続のためプレースホルダ（正直に空状態表示）。
 using System.Collections.Generic;
-using System.Linq;
-using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
+using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Players
 {
@@ -65,6 +64,10 @@ namespace KokoSim.Unity.Players
         public string PosParen = "野手";
         public string ThrowsBats = "右投右打";
         public bool IsCaptain;
+        /// <summary>この選手を今この週に主将へ指名できるか（設計書09 §8: 新チーム発足時のみ）。</summary>
+        public bool CanDesignateCaptain;
+        /// <summary>指名できない理由（できるときは空）。ボタン非活性時に添える。</summary>
+        public string DesignateReason = "";
         public string PitchStyle = "";
         public int TopVelocityKmh;
         public bool IsPitcher;
@@ -91,33 +94,30 @@ namespace KokoSim.Unity.Players
     /// </summary>
     public sealed class PlayerDetailState
     {
-        private readonly List<DevelopingPlayer> _roster = new List<DevelopingPlayer>();
+        // 全画面で共有する単一ソースのロスター（主将フラグを含む可変状態を画面間で一致させる, RosterService）。
+        private readonly IReadOnlyList<DevelopingPlayer> _roster;
+        private readonly SeasonCalendar _calendar = new SeasonCalendar();
 
-        public PlayerDetailState(ulong seed = 42)
+        public PlayerDetailState()
         {
-            var rng = new Xoshiro256Random(seed);
-            var roster = new RosterCoefficients();
-            for (var grade = 1; grade <= 3; grade++)
-            {
-                foreach (var p in ProspectGenerator.Intake(grade, roster, rng))
-                {
-                    p.Grade = grade;
-                    _roster.Add(p);
-                }
-            }
-
-            // 主将を選定（設計書09 §8: 最上級生から統率力で自動選定）。
-            CaptainSelector.EnsureCaptain(_roster);
+            _roster = RosterService.Roster;   // 主将は生成時に EnsureCaptain 済み（必ず1名）
         }
 
         public int Count => _roster.Count;
 
-        /// <summary>主将を手動指名する（設計書09 §8）。UIの「主将に指名」から呼ぶ。</summary>
-        public void DesignateCaptain(int index)
+        /// <summary>
+        /// 主将を手動指名する（設計書09 §8）。UIの「主将に指名」から呼ぶ。
+        /// 指名できるのは夏の3年引退後＝新チーム発足時の候補（新最上級生）だけ。可否は engine 側の純関数で判定する。
+        /// </summary>
+        /// <returns>指名できたら true（false なら状態は変えていない）。</returns>
+        public bool DesignateCaptain(int index)
         {
-            if (_roster.Count == 0) return;
+            if (_roster.Count == 0) return false;
             index = System.Math.Max(0, System.Math.Min(index, _roster.Count - 1));
-            CaptainSelector.Designate(_roster, _roster[index]);
+            var p = _roster[index];
+            if (!CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar)) return false;
+            CaptainSelector.Designate(_roster, p);
+            return true;
         }
 
         public PlayerDetailView BuildView(int index)
@@ -136,6 +136,8 @@ namespace KokoSim.Unity.Players
                 IsCaptain = p.IsCaptain,
             };
             v.ConditionColorHex = CondColor(v.Condition);
+            v.CanDesignateCaptain = CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar);
+            v.DesignateReason = v.CanDesignateCaptain ? "" : DesignateReasonJp(p);
 
             var overall = (int)System.Math.Round(p.AverageLevel());
             v.OverallValue = overall;
@@ -280,6 +282,14 @@ namespace KokoSim.Unity.Players
         }
 
         // ===== 補助 =====
+
+        /// <summary>指名できない理由（設計書09 §8）。期間外か、候補（新最上級生）でないかを区別して伝える。</summary>
+        private string DesignateReasonJp(DevelopingPlayer p)
+        {
+            if (!CaptainSelector.IsDesignationWindow(GameClock.Week, _calendar))
+                return "主将は夏の3年引退後（新チーム発足時）に指名できます";
+            return "主将は新チームの最上級生から指名します";
+        }
 
         private static AbilityBar Bar(DevelopingPlayer p, AbilityKind k, string label)
         {
