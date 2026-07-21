@@ -344,7 +344,7 @@ namespace KokoSim.Unity.Match
             EndGame(result);
         }
 
-        // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら「戻る」導線を出す。
+        // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら試合結果画面へ渡す。
         private void EndGame(GameResult result)
         {
             _gameOver = true;
@@ -353,7 +353,35 @@ namespace KokoSim.Unity.Match
             UpdateScoreboardFinal(result);
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }
             EnterTacticsWindow("試合終了。");
-            SetBackHomeVisible(_onComplete != null);
+            if (!HandOffToResultScreen()) SetBackHomeVisible(_onComplete != null);
+        }
+
+        /// <summary>
+        /// 試合結果画面（issue #13）へ自動遷移する。大会への結果反映（OnComplete）は結果画面の「閉じる」へ
+        /// そのまま預ける＝従来「戻る」ボタンが担っていた後処理を1つ先の画面へ移すだけで、大会の進行は不変。
+        /// ルータ不在／デモ観戦（OnComplete なし）のときは遷移せず、従来どおり「戻る」導線に任せる。
+        /// </summary>
+        private bool HandOffToResultScreen()
+        {
+            var router = KokoSim.Unity.Shell.ScreenRouter.Instance;
+            if (router == null || _onComplete == null) return false;
+
+            var cb = _onComplete;
+            var final = _finalResult;
+            _onComplete = null;
+            SetBackHomeVisible(false);
+            KokoSim.Unity.MatchResult.MatchResultController.Pending =
+                new KokoSim.Unity.MatchResult.MatchResultController.MatchResultRequest
+                {
+                    Result = final,
+                    ManagerIsAway = _managerIsAway,
+                    AwayName = _awayDisp,
+                    HomeName = _homeDisp,
+                    OnClose = () => cb(final),
+                };
+            // 終局はクリック配信中（委任スキップ）にも起きるため、同期 Show は使わず必ず遅延切替にする。
+            router.ShowDeferred("MatchResult");
+            return true;
         }
 
         // ライブ観戦（大会フロー）: 結果を大会へ戻して画面遷移する。呼び出し側の OnComplete が遷移を担う。

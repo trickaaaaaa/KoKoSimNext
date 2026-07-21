@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Shell;   // RankPalette（ランク色のコード側単一ソース）
@@ -182,6 +183,33 @@ namespace KokoSim.Unity.Components
 
             row.Add(CompareSide("a", d.HasA, d.ValueA, d.Winner == -1));
             row.Add(CompareSide("b", d.HasB, d.ValueB, d.Winner == 1));
+            return row;
+        }
+
+        // ===== BoxRow（ボックススコア表の1行） =====
+
+        /// <summary>
+        /// ボックススコア表の1行（試合結果画面のイニングスコア／打撃／投手／打席結果に共通）。
+        /// セルは (テキスト, 列種別) の並びで渡す。列種別は components.uss の .bs-cell--* に対応し、
+        /// 空白区切りで複数指定できる（例 "pa dim"＝打席結果セルを淡く）。
+        /// 見出し行とデータ行が同じ列種別を使うことで、幅が構造的に揃う（横ずれの対策）。
+        /// </summary>
+        public static VisualElement BoxRow(
+            IEnumerable<(string Text, string Kind)> cells, bool header = false, bool alt = false)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("bs-row");
+            if (header) row.AddToClassList("bs-row--head");
+            if (alt) row.AddToClassList("bs-row--alt");
+
+            foreach (var (text, kind) in cells)
+            {
+                var cell = new Label(text);
+                cell.AddToClassList("bs-cell");
+                foreach (var k in kind.Split(' '))
+                    if (k.Length > 0) cell.AddToClassList("bs-cell--" + k);
+                row.Add(cell);
+            }
             return row;
         }
 

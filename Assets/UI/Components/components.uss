@@ -927,3 +927,85 @@
     padding: var(--sp-1) var(--sp-2);
     margin-top: var(--sp-1);
 }
+
+/* ── BoxRow：ボックススコア表の1行（試合結果画面のイニングスコア／打撃／投手／打席結果に共通）──
+   密度は正義（UI原則①）。行高32px・数値は右揃え・列幅は種別クラスで固定してヘッダーとデータを揃える。
+   線はヘッダー下だけ（UI原則④）。データ行は面の明度差だけで仕切る（枠線を引かない）。 */
+.bs-row {
+    flex-direction: row;
+    align-items: center;
+    height: 32px;
+    flex-shrink: 0;
+}
+/* 表の見出し行。ここだけ罫線を引く（機能のある線）。 */
+.bs-row--head {
+    height: 26px;
+    background-color: var(--color-panel-deep);
+    border-bottom-width: var(--border-w);
+    border-bottom-color: var(--color-line);
+}
+.bs-row--head .bs-cell {
+    font-size: var(--fs-th);
+    color: var(--color-muted);
+    -unity-font-style: normal;
+}
+/* 交互の地色（読み違い防止。線ではなく面で行を仕切る）。 */
+.bs-row--alt { background-color: var(--color-panel-deep); }
+
+/* セル既定：数値は右揃え・桁揃え（UI原則③）。種別クラスで幅と揃えを決める。 */
+.bs-cell {
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    -unity-text-align: middle-right;
+    flex-shrink: 0;
+    padding-right: var(--sp-1);
+}
+.bs-cell--pos { width: 24px; -unity-text-align: middle-center; color: var(--color-muted); padding-right: 0; }
+.bs-cell--name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: var(--sp-2);
+}
+.bs-cell--num { width: 32px; }
+.bs-cell--avg { width: 48px; }
+.bs-cell--inn { width: 46px; }        /* 投球回（5 2/3） */
+.bs-cell--mark { width: 22px; -unity-text-align: middle-center; color: var(--color-muted); padding-right: 0; }
+/* 打席結果セル（1〜n打席目）。等分割で伸ばす。 */
+.bs-cell--pa {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    -unity-text-align: middle-center;
+    padding-right: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+/* 打席結果グリッドの打者名。等分割セルに幅を奪われないよう固定幅にする。 */
+.bs-cell--paname {
+    width: 104px;
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: var(--sp-2);
+}
+/* 出塁しなかった打席は淡く（一覧のスキャンで出塁だけ拾える＝UI原則⑥）。 */
+.bs-cell--dim { color: var(--color-faint); }
+.bs-cell--empty { color: var(--color-line); }
+
+/* イニングスコア専用の列（校名／各回／計H E）。 */
+.bs-cell--team {
+    width: 132px;
+    -unity-text-align: middle-left;
+    -unity-font-style: bold;
+    padding-left: var(--sp-2);
+}
+.bs-cell--inning { width: 30px; -unity-text-align: middle-center; padding-right: 0; }
+.bs-cell--total { width: 38px; -unity-font-style: bold; }
+/* 得点欄だけ一段大きく（数字が主役・UI原則③）。装飾はしない。 */
+.bs-cell--runs { font-size: var(--fs-num); }
