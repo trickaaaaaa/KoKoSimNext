@@ -27,6 +27,18 @@ public sealed record FieldingCoefficients
     /// <summary>空中捕球に許容する到達時間の倍率（滞空時間×この値まで間に合えば捕球）。</summary>
     public double CatchReachFactor { get; init; } = 1.00;
 
+    /// <summary>
+    /// 空中捕球の到達可否に効く守備力の傾き（打球判断＝走路取りの巧拙）。
+    /// 実効倍率 = CatchReachFactor ×(1 + (Fielding−50)×この値)。守備50で 1.0＝恒等（帯不変）。
+    /// </summary>
+    public double CatchReachFieldingSlope { get; init; } = 0.004;
+
+    /// <summary>
+    /// 空中捕球で走れる時間の上限[s]（滞空時間比例のままだと深い飛球ほど守備範囲が無制限に広がるため）。
+    /// 走れる距離 ≈ (この値 − 反応遅延)×スプリント速度。
+    /// </summary>
+    public double CatchReachCapSeconds { get; init; } = 4.00;
+
     /// <summary>送球の持ち替え・リリース所要[s]。</summary>
     public double ThrowTransferSeconds { get; init; } = 0.70;
 
@@ -58,8 +70,38 @@ public sealed record FieldingCoefficients
     /// <summary>捕球(Catching−50)あたりのエラー減少。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0003;
 
-    /// <summary>二塁打と判定する安打の最小到達距離[m]（外野の間を抜けた深い打球）。</summary>
-    public double DoubleDistanceM { get; init; } = 80.0;
-    /// <summary>三塁打と判定する最小到達距離[m]（稀。深い gap のみ）。</summary>
-    public double TripleDistanceM { get; init; } = 113.0;
+    // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
+
+    /// <summary>着地後の転がりの減速度[m/s²]（芝・土の摩擦＋バウンドの損失を集約）。</summary>
+    public double RollDecelMps2 { get; init; } = 2.60;
+
+    /// <summary>水平に近い打球（ライナー）が最初のバウンドで保持する前進速度の割合。滑って伸びる。</summary>
+    public double RollRetentionFlat { get; init; } = 0.72;
+
+    /// <summary>真上から落ちる打球（大飛球）が最初のバウンドで保持する前進速度の割合。失速して死ぬ。</summary>
+    public double RollRetentionSteep { get; init; } = 0.25;
+
+    /// <summary>フェンスに達した打球の跳ね返り処理に要する追加時間[s]（カロムの方向は当面無視）。</summary>
+    public double FenceCaromSeconds { get; init; } = 0.40;
+
+    /// <summary>外野手が転がる打球を拾い上げるのに要する時間[s]（内野ゴロの InfieldPlayOverheadSeconds 相当）。</summary>
+    public double OutfieldPickupSeconds { get; init; } = 0.30;
+
+    /// <summary>
+    /// 送球距離1mあたりの失速係数[1/m]。到達時間 = 距離÷送球速度×(1 + 距離×この値)。
+    /// 長い送球ほど山なり／中継が要るぶん遅くなることを、しきい値なしの連続量で表す。
+    /// </summary>
+    public double ThrowDistanceDragPerM { get; init; } = 0.0045;
+
+    /// <summary>一塁到達後の巡航速度倍率（静止からの加速を含む「本塁→一塁」平均速度に対する比）。</summary>
+    public double RunningTopSpeedFactor { get; init; } = 1.15;
+
+    /// <summary>塁を回るロス[s]（ベースを踏んでの方向転換）。</summary>
+    public double BaseTurnSeconds { get; init; } = 0.30;
+
+    /// <summary>
+    /// 進塁を試みる判断マージン[s]（走者所要＋この値 ≤ 送球到達 なら次の塁を陥れる）。
+    /// 送球の逸れ・捕球・タッチのロスがあるため「送球より僅かに遅い」程度なら実戦では次の塁を陥れる。
+    /// </summary>
+    public double ExtraBaseMarginSeconds { get; init; } = 0.40;
 }

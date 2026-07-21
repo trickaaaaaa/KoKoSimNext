@@ -46,11 +46,11 @@ public sealed record PitcherArchetypeCoefficients
     public double FinesseStamina { get; init; } = 1;
     public double FinessePitchRank { get; init; } = 3;
 
-    // --- 軟投派: 球速↓↓ 制球・キレ↑ ---
+    // --- 軟投派: 球速↓↓ 制球・キレ↑（上乗せは Issue #24 の打球変更後に実戦で再校正済み） ---
     public double SoftTossVelocity { get; init; } = -14;
-    public double SoftTossControl { get; init; } = 4;
+    public double SoftTossControl { get; init; } = 3;
     public double SoftTossStamina { get; init; } = 2;
-    public double SoftTossPitchRank { get; init; } = 5;
+    public double SoftTossPitchRank { get; init; } = 3;
 }
 
 /// <summary>球質タイプの抽選・オフセット適用・表示名（純関数）。</summary>

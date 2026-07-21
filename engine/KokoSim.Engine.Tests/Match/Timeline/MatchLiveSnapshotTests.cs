@@ -52,10 +52,12 @@ public sealed class MatchLiveSnapshotTests
         };
     }
 
+    // シードは「7回に到達し、その後に代打の打順が回ってくる」局面を選んだもの
+    // （Issue #24 で打球の塁打数決定が変わり、42 では代打の打順が回る前に試合が終わるようになった）。
     private static MatchProgression NewProg() =>
         new(Team("A", withSourceIds: false, withBench: true),
             Team("H", withSourceIds: true, withBench: true),
-            new GameContext { CaptureTimelines = true }, 42UL);
+            new GameContext { CaptureTimelines = true }, 43UL);
 
     // スタメン列は打順1〜9で、名前・守備位置・SourceId が現ラインナップと一致する。
     [Fact]
