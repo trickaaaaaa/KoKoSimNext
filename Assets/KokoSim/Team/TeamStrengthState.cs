@@ -31,7 +31,7 @@ namespace KokoSim.Unity.Squad
 
         public TeamStrengthView BuildView()
         {
-            var s = TeamStrengthProfile.Compute(RosterService.Roster, Coeff);
+            var s = TeamStrengthProfile.Compute(RosterService.Active, Coeff);
             var v = new TeamStrengthView
             {
                 OverallValue = (int)Math.Round(s.Overall),

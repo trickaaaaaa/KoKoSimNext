@@ -994,3 +994,59 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tm-btn { min-width: 120px; height: 40px; -unity-text-align: middle-center; font-size: 16px; border-radius: 10px; margin: 0 8px; }
 .tm-btn--primary { background-color: #F5C64A; color: #12160F; -unity-font-style: bold; border-width: 0; }
 .tm-btn--ghost { background-color: #202A24; color: #E8ECEA; border-width: 1px; border-color: #232E28; }
+
+/* ===== 新チーム発足：次期主将の指名モーダル（設計書09 §8・案C 左リスト＋右詳細） =====
+   同一document内オーバーレイ（部品辞書の modal-scrim / modal-card を使用）。既定は display:none。
+   列幅はヘッダーとデータ行が同じトークンを参照する（横ずれの構造対策・UI-BUILD-METHOD Step 1）。
+   アクセント黄はこのモーダル内で「選択中の行」と「主要CTA」の2箇所だけに絞る（UI原則②）。 */
+.nt-card { width: 900px; padding: 20px 24px 18px 24px; }
+
+.nt-hd { flex-direction: row; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.nt-hd__t { font-size: var(--fs-page); -unity-font-style: bold; color: var(--color-chalk); letter-spacing: 2px; }
+.nt-hd__s { font-size: var(--fs-label); color: var(--color-muted); }
+.nt-lead { font-size: var(--fs-label); color: var(--color-muted); margin-top: 4px; margin-bottom: 12px; flex-shrink: 0; }
+
+.nt-body { flex-direction: row; height: 320px; flex-shrink: 0; }
+
+/* 左：候補リスト */
+.nt-list { flex-grow: 1; flex-basis: 0; min-width: 0; background-color: var(--color-panel); border-radius: var(--radius-card); padding: 6px 8px 8px 8px; }
+.nt-th { flex-direction: row; align-items: center; height: 26px; flex-shrink: 0;
+    border-bottom-width: 1px; border-bottom-color: var(--color-line); }
+.nt-th__c { font-size: var(--fs-cap); color: var(--color-faint); }
+.nt-rows { flex-grow: 1; }
+
+.nt-row { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; padding-left: 6px;
+    border-left-width: 3px; border-left-color: rgba(0, 0, 0, 0); border-radius: 4px; }
+.nt-row:hover { background-color: var(--color-row-hover); }
+.nt-row--on { background-color: var(--color-panel-hover); border-left-color: var(--color-lamp); }
+
+.nt-c-no { width: 34px; flex-shrink: 0; -unity-text-align: middle-right; padding-right: 8px;
+    font-size: var(--fs-label); color: var(--color-muted); }
+.nt-c-name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-body); color: var(--color-chalk); }
+.nt-c-pos { width: 30px; flex-shrink: 0; -unity-text-align: middle-center; font-size: var(--fs-label); color: var(--color-muted); }
+.nt-c-rank { width: 46px; flex-shrink: 0; flex-direction: row; justify-content: center; align-items: center; }
+.nt-c-mental { width: 46px; flex-shrink: 0; -unity-text-align: middle-right; padding-right: 8px;
+    font-size: var(--fs-label); color: var(--color-chalk); }
+.nt-c-cond { width: 58px; flex-shrink: 0; -unity-text-align: middle-right; font-size: var(--fs-label); }
+.nt-c-tag { width: 44px; flex-shrink: 0; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-faint); }
+
+/* 右：選択中の詳細 */
+.nt-detail { width: 300px; flex-shrink: 0; margin-left: 12px; background-color: var(--color-panel);
+    border-radius: var(--radius-card); padding: 12px 14px; }
+.nt-d__name { font-size: 20px; -unity-font-style: bold; color: var(--color-chalk); }
+.nt-d__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
+.nt-d__radar { height: 140px; flex-shrink: 0; margin-top: 4px; }
+.nt-d__facts { flex-direction: row; flex-wrap: wrap; margin-top: 6px; flex-shrink: 0; }
+.nt-fact { flex-direction: row; align-items: center; width: 50%; height: 22px; }
+.nt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
+.nt-fact__v { font-size: var(--fs-label); color: var(--color-chalk); -unity-text-align: middle-right; padding-right: 10px; }
+.nt-d__cap { font-size: var(--fs-cap); color: var(--color-faint); margin-top: 8px; letter-spacing: 1px; }
+.nt-d__skills { flex-direction: row; flex-wrap: wrap; margin-top: 4px; }
+.nt-skill { font-size: var(--fs-cap); color: var(--color-chalk); background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip); padding: 2px 8px; margin-right: 4px; margin-top: 4px; }
+.nt-skill--none { color: var(--color-faint); background-color: rgba(0, 0, 0, 0); padding-left: 0; }
+
+/* 足元：注記＋主要CTA（1画面1つ・大きく。UI原則⑦） */
+.nt-foot { flex-direction: row; align-items: center; justify-content: space-between; margin-top: 14px; flex-shrink: 0; }
+.nt-foot__note { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
+.nt-ok { min-width: 220px; margin-right: 0; }

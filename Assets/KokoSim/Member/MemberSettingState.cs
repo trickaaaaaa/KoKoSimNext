@@ -80,7 +80,7 @@ namespace KokoSim.Unity.Member
     }
 
     /// <summary>
-    /// メンバー設定（背番号1〜20割当＋2選手比較）の状態。全画面共有の RosterService.Roster を
+    /// メンバー設定（背番号1〜20割当＋2選手比較）の状態。全画面共有の RosterService.Active を
     /// 単一ソースに、背番号割当は UniformNumberAssigner（エンジン）へ委譲する。ここはUnityEngine非依存。
     /// </summary>
     public sealed class MemberSettingState
@@ -132,7 +132,7 @@ namespace KokoSim.Unity.Member
 
         public MemberSettingState()
         {
-            _roster = RosterService.Roster;
+            _roster = RosterService.Active;
         }
 
         // ── 操作（コントローラから呼ぶ。呼び出し後に再描画する） ──

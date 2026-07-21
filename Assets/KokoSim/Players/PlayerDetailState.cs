@@ -107,7 +107,7 @@ namespace KokoSim.Unity.Players
 
         public PlayerDetailState()
         {
-            _roster = RosterService.Roster;   // 主将は生成時に EnsureCaptain 済み（必ず1名）
+            _roster = RosterService.Active;   // 主将は生成時に EnsureCaptain 済み（必ず1名）
         }
 
         public int Count => _roster.Count;

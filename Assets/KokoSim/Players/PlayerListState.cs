@@ -63,7 +63,7 @@ namespace KokoSim.Unity.Players
         public PlayerListState()
         {
             // 全画面で共有する単一ソースのロスター（背番号など可変状態を画面間で一致させる, RosterService）。
-            _roster = RosterService.Roster;
+            _roster = RosterService.Active;
             for (var i = 0; i < _roster.Count; i++)
                 _indexOf[_roster[i]] = i;
         }

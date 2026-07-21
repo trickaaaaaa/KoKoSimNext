@@ -88,6 +88,13 @@ public sealed class DevelopingPlayer
     public bool IsCaptain { get; set; }
 
     /// <summary>
+    /// 引退済みか（設計書03 §2: 夏の第17週で3年生が引退）。引退してもロスターからは除去せず
+    /// このフラグを立てて残す（＝記録は残るが、練習・試合・選手一覧の対象から外れる）。
+    /// 除去は年度替わり（4月）の卒業でまとめて行う。フラグ操作は <see cref="RosterLifecycle"/> に集約する。
+    /// </summary>
+    public bool IsRetired { get; set; }
+
+    /// <summary>
     /// 背番号（設計書06 §3.3b: 1〜20＝ベンチ入り、0＝ベンチ外）。監督がメンバー設定画面で割り当てる。
     /// ロスター内で1〜20は一意（重複させない）。割当・検証は <see cref="UniformNumberAssigner"/> に集約する。
     /// 選抜（RosterTeamBuilder）とは独立に持つ純データで、乱数を含まない（不変条件#2）。
