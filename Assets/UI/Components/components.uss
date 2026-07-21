@@ -898,6 +898,10 @@
 }
 .pitch-call__judge--strike { color: var(--color-lamp); }
 .pitch-call__judge--ball { color: var(--color-good); }
+/* 打球・走塁プレーの判定オーバーレイ（issue #59）。PitchCallと同じ器・idiomを流用する。
+   アウト＝警告色（常時表示）、セーフ＝良好色（際どい判定の時だけ表示、呼び出し側が出し分ける）。 */
+.pitch-call__judge--out { color: var(--color-warn); }
+.pitch-call__judge--safe { color: var(--color-good); }
 /* 球種・球速（実1球記録がある打席のみ。合成投球列では出さない）。 */
 .pitch-call__detail {
     font-size: var(--fs-body);

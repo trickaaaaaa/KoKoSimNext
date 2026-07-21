@@ -1,3 +1,4 @@
+using System;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
@@ -109,6 +110,38 @@ public sealed class HomePlayResolverTests
         var a = ScoreRate(runner, 2, s, trials: 500, seed: 42);
         var b = ScoreRate(runner, 2, s, trials: 500, seed: 42);
         Assert.Equal(a, b);
+    }
+
+    // --- 判定オーバーレイ（Issue #59）: Margin はSuccessProbabilityの内部計算と一致し、logistic(0)=0.5 ---
+
+    [Fact]
+    public void Margin_MatchesSuccessProbability_ViaLogistic()
+    {
+        var runner = Runner(60, 55);
+        var s = Situation(70, 3.0);
+        var margin = HomePlayResolver.Margin(runner, 2, s, Field, C);
+        var prob = HomePlayResolver.SuccessProbability(runner, 2, s, Field, C);
+        Assert.Equal(MathUtil.Clamp(MathUtil.Logistic(margin / C.HomeMarginScale), 0.01, 0.99), prob, 9);
+    }
+
+    [Fact]
+    public void Margin_Zero_ImpliesFiftyFiftyProbability()
+    {
+        // margin=0 の境界ちょうどでは logistic(0)=0.5（HomeMarginScaleに関わらず）。
+        var runner = Runner();
+        // 処理点を調整してmarginがほぼ0になる地点を探索（境界=SuccessProbability≈0.5）。
+        HomePlaySituation Near(double d) => Situation(d, 3.0);
+        var lo = 10.0; var hi = 150.0;
+        for (var i = 0; i < 60; i++)
+        {
+            var mid = (lo + hi) / 2;
+            var m = HomePlayResolver.Margin(runner, 2, Near(mid), Field, C);
+            if (m < 0) lo = mid; else hi = mid;
+        }
+        var boundaryMargin = HomePlayResolver.Margin(runner, 2, Near((lo + hi) / 2), Field, C);
+        var boundaryProb = HomePlayResolver.SuccessProbability(runner, 2, Near((lo + hi) / 2), Field, C);
+        Assert.True(Math.Abs(boundaryMargin) < 0.01, $"境界探索が収束していない: margin={boundaryMargin}");
+        Assert.True(Math.Abs(boundaryProb - 0.5) < 0.01, $"margin≈0でも確率が0.5から離れている: {boundaryProb}");
     }
 
     [Fact]
