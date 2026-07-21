@@ -33,8 +33,9 @@ namespace KokoSim.Unity.Shell
         // 起動時 SetActive(false) 管理に含める。LineupSetting は大会の試合開始フローからのみ遷移する。
         // MatchPreview は試合開始フロー（スタメンOK→対戦カード→試合開始）の中継画面。
         // MatchLive は試合開始フロー（対戦カード→ホーム→ライブ観戦）からのみ遷移する実試合の2D俯瞰観戦画面。
+        // MatchResult はその出口（ライブ観戦の終局で自動遷移するボックススコア画面。閉じるとホームへ戻る）。
         private static readonly string[] ExtraScreens =
-            { "PlayerDetail", "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive" };
+            { "PlayerDetail", "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult" };
 
         private const string DefaultScreen = "HomeDashboard";
 

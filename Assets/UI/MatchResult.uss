@@ -1,0 +1,120 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   MatchResult.uss — 試合結果画面の配置のみ（UI-BUILD-METHOD Step 4・issue #13 B案）
+   ───────────────────────────────────────────────────────────────────────
+   表の見た目（行・セル・列幅）は components.uss の BoxRow（bs-row / bs-cell）が持つ。
+   ここは「上＝勝敗＋イニングスコア／下＝左右2カラム」という割り付けだけを持ち、
+   色・余白・角丸は tokens を参照する。gap/grid は使わない（USS非対応）。
+   固定寸法セクションは flex-shrink:0（付けないと縦方向で潰れる）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.mr-root {
+    flex-grow: 1;
+    background-color: var(--color-field);
+}
+
+/* ── ヘッダー：勝敗＋スコア＋唯一の操作（閉じる） ── */
+.mr-topbar {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-header);
+    flex-shrink: 0;
+    background-color: var(--color-strip);
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+}
+.mr-title { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; }
+/* 勝敗表記。アンバーはこの画面では勝利表記と閉じるCTAだけ（UI原則2）。 */
+.mr-outcome {
+    font-size: var(--fs-page);
+    -unity-font-style: bold;
+    color: var(--color-chalk);
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    margin-left: var(--sp-4);
+}
+.mr-outcome--win { color: var(--color-lamp); }
+.mr-score { font-size: var(--fs-body); color: var(--color-chalk); margin-left: var(--sp-3); }
+.mr-spacer { flex-grow: 1; }
+.mr-cta {
+    height: 40px;
+    min-width: 120px;
+    flex-shrink: 0;
+    background-color: var(--color-lamp);
+    color: var(--color-ink);
+    font-size: var(--fs-body);
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: var(--radius-panel);
+}
+.mr-cta:hover { background-color: var(--color-lamp-hi); }
+
+/* ── イニングスコア：内容ぶんの幅だけ取る面（全幅に広げると右が間延びする） ── */
+.mr-linescore {
+    flex-shrink: 0;
+    align-self: flex-start;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-panel);
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-1);
+    padding-right: var(--sp-2);
+    margin-left: var(--sp-4);
+    margin-top: var(--sp-3);
+    margin-bottom: var(--sp-3);
+}
+
+/* ── 本体：左＝自校／右＝相手の2カラム並置（同じ幅・同じ構成） ── */
+.mr-body {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-bottom: var(--sp-4);
+}
+.mr-cols { flex-direction: row; }
+.mr-col {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-panel);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-bottom: var(--sp-3);
+    margin-right: var(--sp-3);
+}
+/* 右カラムは右余白を作らない（左右の外周を対称に見せる）。USSは last-child 非対応のため修飾子で指定。 */
+.mr-col--right { margin-right: 0; }
+
+.mr-col__head {
+    flex-direction: row;
+    align-items: center;
+    height: 36px;
+    flex-shrink: 0;
+}
+.mr-col__cap {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    letter-spacing: 1px;
+    margin-right: var(--sp-2);
+}
+.mr-col__name {
+    font-size: var(--fs-page);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 表の見出し（野手／投手／打席結果）。線は引かず、余白と小さな淡色文字で仕切る（UI原則4）。 */
+.mr-subhead {
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    height: 22px;
+    flex-shrink: 0;
+    -unity-text-align: middle-left;
+    margin-top: var(--sp-2);
+}

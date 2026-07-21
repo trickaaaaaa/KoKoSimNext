@@ -67,6 +67,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>打率表記（.342／通算なしは「—」）。</summary>
         public static string Avg(BattingStatLine? b) => b is null ? "—" : FormatAvg(b.Average);
+        /// <summary>打率表記（.342 形式）。1試合ぶんの打率（試合結果画面）もこの書式に揃える。</summary>
+        public static string Avg(double average) => FormatAvg(average);
         /// <summary>防御率表記（2.14／登板なしは「—」）。</summary>
         public static string Era(PitchingStatLine? p) => p is null ? "—" : p.Era.ToString("0.00");
 
