@@ -1,0 +1,220 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   PracticeMatch.uss — 練習試合画面（設計書03 週ターン / 設計書04 名声）
+   ───────────────────────────────────────────────────────────────────────
+   値は tokens.uss の変数のみを参照する（直書き禁止）。
+   区切りは面の明度差で作り、罫線は表のヘッダー下だけに引く（UI原則④）。
+   アクセント（lamp）は主要CTA1箇所だけに使う（UI原則②/⑦）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.pm-main {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+
+/* ── 見出し ─────────────────────────────────────────────── */
+.pm-masthead {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-3);
+}
+.pm-kicker {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    letter-spacing: 1px;
+}
+.pm-mastline {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--sp-1);
+}
+.pm-title {
+    font-size: var(--fs-page);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+}
+.pm-mastmeta { flex-direction: row; }
+.pm-kv {
+    flex-direction: row;
+    align-items: center;
+    margin-left: var(--sp-4);
+}
+.pm-kv__k {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-right: var(--sp-2);
+}
+.pm-kv__v {
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+    -unity-text-align: middle-right;
+}
+
+/* ── 2カラム本体 ─────────────────────────────────────────── */
+.pm-body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+.pm-card {
+    background-color: var(--sf-card);
+    border-radius: var(--radius-card);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+.pm-card--list {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-right: var(--sp-3);
+}
+.pm-card--detail {
+    width: var(--w-editor);
+    flex-shrink: 0;
+}
+.pm-card__hd {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+.pm-card__t {
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+}
+.pm-card__note {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+}
+
+/* ── 申込先テーブル（行高32px・数値は右揃え） ───────────────── */
+.pm-thead {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-thead);
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--divider);
+}
+.pm-th {
+    font-size: var(--fs-th);
+    color: var(--color-muted);
+}
+.pm-th--name { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.pm-th--tier { width: var(--col-pm-tier); flex-shrink: 0; }
+.pm-th--trad { width: var(--col-pm-trad); flex-shrink: 0; }
+.pm-th--num {
+    width: var(--col-pm-num);
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+}
+
+.pm-rows { flex-grow: 1; }
+
+.pm-row {
+    flex-direction: row;
+    align-items: center;
+    height: 32px;
+    flex-shrink: 0;
+    padding-left: var(--sp-1);
+    padding-right: var(--sp-1);
+    border-radius: var(--radius-chip);
+}
+.pm-row:hover { background-color: var(--color-row-hover); }
+.pm-row--on {
+    background-color: var(--sf-hover);
+    border-left-width: 2px;
+    border-left-color: var(--line-focus);
+}
+.pm-row__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+}
+.pm-row__tier {
+    width: var(--col-pm-tier);
+    flex-shrink: 0;
+    flex-direction: row;
+}
+.pm-row__trad {
+    width: var(--col-pm-trad);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+}
+.pm-row__num {
+    width: var(--col-pm-num);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+    -unity-text-align: middle-right;
+}
+.pm-row__num--weak { color: var(--color-muted); }
+
+/* ── 右カラム：6角形と指標 ───────────────────────────────── */
+.pm-radar {
+    height: 190px;
+    flex-shrink: 0;
+    background-color: var(--sf-inset);
+    border-radius: var(--radius-panel);
+}
+.pm-factors {
+    margin-top: var(--sp-3);
+}
+.pm-axis {
+    position: absolute;
+    align-items: center;
+}
+.pm-axis__l {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+}
+.pm-axis__v {
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+}
+
+/* ── 申込フッター（主要操作は1つだけ・大きく） ───────────────── */
+.pm-foot {
+    flex-grow: 1;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    margin-top: var(--sp-3);
+}
+.pm-status {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    white-space: normal;
+    margin-bottom: var(--sp-2);
+}
+.pm-status--warn { color: var(--color-warn); }
+.pm-cta {
+    height: 52px;
+    flex-shrink: 0;
+    background-color: var(--color-lamp);
+    color: var(--color-ink);
+    font-size: var(--fs-body);
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: var(--radius-panel);
+}
+.pm-cta:hover { background-color: var(--color-lamp-hi); }
+.pm-cta--off {
+    background-color: var(--sf-inset);
+    color: var(--color-faint);
+}
+.pm-cta--off:hover { background-color: var(--sf-inset); }
+
+.pm-empty {
+    font-size: var(--fs-label);
+    color: var(--color-faint);
+    -unity-text-align: middle-center;
+    margin-top: var(--sp-4);
+}

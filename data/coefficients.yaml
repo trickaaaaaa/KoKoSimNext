@@ -590,6 +590,15 @@ tournament:
   first_round_day: 1      # 開幕(0日目)から初戦までの日数
   round_gap_days: 3       # ラウンド間の中○日（「試合までXX日」の刻み）
 
+# --- 練習試合（設計書03 §週ターン③・設計書04 §名声の効果） ---
+practice_match:
+  cost: 1.0                 # 1試合あたりの費用[万円]
+  base_accept: 0.80         # 同格・名声0での受諾確率
+  tier_gap_penalty: 0.20    # 相手が1ティア格上になるごとの減点
+  fame_weight: 0.40         # 名声100あたりの受諾確率加点
+  min_accept: 0.02
+  max_accept: 0.98
+
 # --- 監督キャリア（設計書04 §1） ---
 career:
   coaching_growth_per_year: 3.0     # 采配経験による指導力上昇

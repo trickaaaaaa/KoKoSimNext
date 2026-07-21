@@ -115,6 +115,12 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(0.50, bundle.Tactics.SendHomeMinSuccess, 6);
         Assert.Equal(0.30, bundle.Tactics.SendHomeTwoOutRelax, 6);
         Assert.Equal(0.50, bundle.Tactics.SendHomeAggressionSpan, 6);
+
+        // 練習試合（設計書03 §週ターン③）の係数も YAML から束縛される。
+        Assert.Equal(1.0, bundle.PracticeMatch.Cost, 6);
+        Assert.Equal(0.80, bundle.PracticeMatch.BaseAccept, 6);
+        Assert.Equal(0.20, bundle.PracticeMatch.TierGapPenalty, 6);
+        Assert.Equal(0.40, bundle.PracticeMatch.FameWeight, 6);
         Assert.Equal(1.55, bundle.Baserunning.HomeGrounderStartDelaySeconds, 6); // G1 ゴロ走者遅延
 
         // ライナー併殺（G2, 設計書12 §4）の係数も YAML から束縛される。

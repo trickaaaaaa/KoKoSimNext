@@ -7,6 +7,7 @@ using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Practice;
 using KokoSim.Engine.Season;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -43,6 +44,7 @@ public sealed record CoefficientsBundle
     public NationCoefficients Nation { get; init; } = new();
     public CareerCoefficients Career { get; init; } = new();
     public TournamentSchedule Tournament { get; init; } = new();
+    public PracticeMatchCoefficients PracticeMatch { get; init; } = new();
 }
 
 /// <summary>
@@ -93,6 +95,7 @@ public static class CoefficientsLoader
         public NationDto? Nation { get; set; }
         public CareerDto? Career { get; set; }
         public TournamentDto? Tournament { get; set; }
+        public PracticeMatchDto? PracticeMatch { get; set; }
 
         public CoefficientsBundle ToBundle() => new()
         {
@@ -120,6 +123,7 @@ public static class CoefficientsLoader
             Nation = Nation?.ToModel() ?? new NationCoefficients(),
             Career = Career?.ToModel() ?? new CareerCoefficients(),
             Tournament = Tournament?.ToModel() ?? new TournamentSchedule(),
+            PracticeMatch = PracticeMatch?.ToModel() ?? new PracticeMatchCoefficients(),
         };
     }
 
@@ -133,6 +137,27 @@ public static class CoefficientsLoader
         {
             FirstRoundDay = FirstRoundDay,
             RoundGapDays = RoundGapDays,
+        };
+    }
+
+    private sealed class PracticeMatchDto
+    {
+        private static readonly PracticeMatchCoefficients D = new();
+        public double Cost { get; set; } = D.Cost;
+        public double BaseAccept { get; set; } = D.BaseAccept;
+        public double TierGapPenalty { get; set; } = D.TierGapPenalty;
+        public double FameWeight { get; set; } = D.FameWeight;
+        public double MinAccept { get; set; } = D.MinAccept;
+        public double MaxAccept { get; set; } = D.MaxAccept;
+
+        public PracticeMatchCoefficients ToModel() => new()
+        {
+            Cost = Cost,
+            BaseAccept = BaseAccept,
+            TierGapPenalty = TierGapPenalty,
+            FameWeight = FameWeight,
+            MinAccept = MinAccept,
+            MaxAccept = MaxAccept,
         };
     }
 
