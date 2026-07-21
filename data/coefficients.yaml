@@ -226,6 +226,7 @@ form:
   power_per_step: 2.0
   control_per_step: 2.5
   velocity_per_step_kmh: 0.6
+  sharpness_per_step: 2.5    # キレ(PitchRank/球種Sharpness)への補正。Controlと同スケール（issue #49）
   # 試合限りの好不調（当日の出来。大半は微小・スパイクは十数試合に一度）
   day_form_base_sigma: 0.15
   day_form_clamp: 0.45
@@ -236,6 +237,7 @@ form:
   power_per_day_form: 2.0
   control_per_day_form: 5.0
   velocity_per_day_form_kmh: 1.5
+  sharpness_per_day_form: 5.0  # キレへの当日補正。Controlと同スケール（issue #49）
   # 週次の波（数日〜数週間続く。毎試合振り直さない）
   weekly_persistence: 0.75
   weekly_sigma: 0.28

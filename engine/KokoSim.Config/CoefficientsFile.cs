@@ -579,6 +579,7 @@ public static class CoefficientsLoader
         public double PowerPerStep { get; set; } = D.PowerPerStep;
         public double ControlPerStep { get; set; } = D.ControlPerStep;
         public double VelocityPerStepKmh { get; set; } = D.VelocityPerStepKmh;
+        public double SharpnessPerStep { get; set; } = D.SharpnessPerStep;
         public double DayFormBaseSigma { get; set; } = D.DayFormBaseSigma;
         public double DayFormClamp { get; set; } = D.DayFormClamp;
         public double DayFormSpikeProb { get; set; } = D.DayFormSpikeProb;
@@ -588,6 +589,7 @@ public static class CoefficientsLoader
         public double PowerPerDayForm { get; set; } = D.PowerPerDayForm;
         public double ControlPerDayForm { get; set; } = D.ControlPerDayForm;
         public double VelocityPerDayFormKmh { get; set; } = D.VelocityPerDayFormKmh;
+        public double SharpnessPerDayForm { get; set; } = D.SharpnessPerDayForm;
         public double WeeklyPersistence { get; set; } = D.WeeklyPersistence;
         public double WeeklySigma { get; set; } = D.WeeklySigma;
         public double ObserveSigmaBase { get; set; } = D.ObserveSigmaBase;
@@ -600,6 +602,7 @@ public static class CoefficientsLoader
             PowerPerStep = PowerPerStep,
             ControlPerStep = ControlPerStep,
             VelocityPerStepKmh = VelocityPerStepKmh,
+            SharpnessPerStep = SharpnessPerStep,
             DayFormBaseSigma = DayFormBaseSigma,
             DayFormClamp = DayFormClamp,
             DayFormSpikeProb = DayFormSpikeProb,
@@ -609,6 +612,7 @@ public static class CoefficientsLoader
             PowerPerDayForm = PowerPerDayForm,
             ControlPerDayForm = ControlPerDayForm,
             VelocityPerDayFormKmh = VelocityPerDayFormKmh,
+            SharpnessPerDayForm = SharpnessPerDayForm,
             WeeklyPersistence = WeeklyPersistence,
             WeeklySigma = WeeklySigma,
             ObserveSigmaBase = ObserveSigmaBase,
