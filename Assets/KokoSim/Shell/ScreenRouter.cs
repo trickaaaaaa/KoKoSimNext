@@ -24,6 +24,7 @@ namespace KokoSim.Unity.Shell
             ("nav-players", "PlayerList"),
             ("nav-member", "MemberSetting"),
             ("nav-training", "TrainingPlan"),
+            ("nav-practice", "PracticeMatch"),
             ("nav-match", "MatchScreen"),
             ("nav-tournament", "TournamentPreview"),
         };

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 練習試合 画面（設計書03 週ターン 週末アクション / 設計書04 名声の効果）。
+     上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。
+     左＝同県内の申込先テーブル（行高32px・データ濃密）、右＝選択した相手の6角形と申込条件。
+     主要操作は右下の1つだけ（申し込む）。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="PracticeMatch.uss" />
+    <ui:VisualElement class="root ui-root">
+
+      <ui:Instance template="TopBar" />
+
+      <ui:VisualElement class="pm-main">
+
+        <!-- 見出し（週・自校・資金） -->
+        <ui:VisualElement class="pm-masthead">
+          <ui:Label class="pm-kicker" text="PRACTICE ── 練習試合" />
+          <ui:VisualElement class="pm-mastline">
+            <ui:Label name="pm-own" class="pm-title" text="" />
+            <ui:VisualElement class="pm-mastmeta">
+              <ui:VisualElement class="pm-kv">
+                <ui:Label class="pm-kv__k" text="資金" />
+                <ui:Label name="pm-funds" class="pm-kv__v" text="" />
+              </ui:VisualElement>
+              <ui:VisualElement class="pm-kv">
+                <ui:Label class="pm-kv__k" text="費用" />
+                <ui:Label name="pm-cost" class="pm-kv__v" text="" />
+              </ui:VisualElement>
+              <ui:VisualElement class="pm-kv">
+                <ui:Label class="pm-kv__k" text="現在" />
+                <ui:Label name="pm-week" class="pm-kv__v" text="" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="pm-body">
+
+          <!-- 左：申込先テーブル -->
+          <ui:VisualElement class="pm-card pm-card--list">
+            <ui:VisualElement class="pm-card__hd">
+              <ui:Label class="pm-card__t" text="申込先（県内校）" />
+              <ui:Label name="pm-count" class="pm-card__note" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="pm-thead">
+              <ui:Label class="pm-th pm-th--name" text="学校" />
+              <ui:Label class="pm-th pm-th--tier" text="格" />
+              <ui:Label class="pm-th pm-th--num" text="総合" />
+              <ui:Label class="pm-th pm-th--trad" text="伝統" />
+              <ui:Label class="pm-th pm-th--num" text="受諾" />
+            </ui:VisualElement>
+            <ui:ScrollView mode="Vertical" class="pm-rows">
+              <ui:VisualElement name="pm-list" />
+            </ui:ScrollView>
+          </ui:VisualElement>
+
+          <!-- 右：選択した相手の6角形と申込 -->
+          <ui:VisualElement class="pm-card pm-card--detail">
+            <ui:VisualElement class="pm-card__hd">
+              <ui:Label class="pm-card__t" text="相手校の戦力" />
+              <ui:Label name="pm-detail-name" class="pm-card__note" text="未選択" />
+            </ui:VisualElement>
+            <ui:VisualElement name="pm-radar" class="pm-radar" />
+            <ui:VisualElement name="pm-factors" class="pm-factors" />
+            <ui:VisualElement class="pm-foot">
+              <ui:Label name="pm-status" class="pm-status" text="" />
+              <ui:Button name="pm-request" class="pm-cta" text="相手校を選んでください" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+        </ui:VisualElement>
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
