@@ -45,7 +45,12 @@ public sealed class AtBatSession
     private int _pitchCount;
     private AtBatResult? _result;
     private readonly List<PitchRecord> _pitchLog = new();
+    /// <summary>デバッグ観測（設計書17 §4.1）。<c>CaptureTrace</c> のときだけ実体を持つ。</summary>
+    private readonly List<Debugging.PitchTrace>? _pitchTraces;
     private PitchTrajectoryFeatures? _lastPitchFeatures;
+    // 投球開始時のカウント（観測用。RecordPitch はカウント加算「後」に呼ばれるため控えておく）。
+    private int _ballsAtPitchStart;
+    private int _strikesAtPitchStart;
 
     private AtBatSession(
         BatterAttributes batter, Player? batterPlayer, Player? thirdBaseRunner, double squeezeWasteProbability,
@@ -58,6 +63,7 @@ public sealed class AtBatSession
         _pitcher = pitcher;
         _ctx = ctx;
         _batting = batting;
+        _pitchTraces = ctx.CaptureTrace ? new List<Debugging.PitchTrace>() : null;
     }
 
     /// <summary>現在のボールカウント（未消化の投球前の値）。</summary>
@@ -71,6 +77,14 @@ public sealed class AtBatSession
 
     /// <summary>ここまでに実際に解決した1球ごとの記録（設計書15 §4）。1球采配の状況入力・UI観測の両方から参照する。</summary>
     public IReadOnlyList<PitchRecord> PitchLog => _pitchLog;
+
+    /// <summary>
+    /// ここまでのデバッグ観測レコード（設計書17 §4.1）。<c>AtBatContext.CaptureTrace</c> が偽なら常に空。
+    /// 打席解決層が埋められる範囲（意図・実着弾・打者判断・打球）だけが入っており、局面・状態・采配・RNG は
+    /// 試合層（<see cref="Game.GameEngine"/>）が <c>with</c> で足してからシンクへ流す。
+    /// </summary>
+    public IReadOnlyList<Debugging.PitchTrace> PitchTraces
+        => (IReadOnlyList<Debugging.PitchTrace>?)_pitchTraces ?? System.Array.Empty<Debugging.PitchTrace>();
 
     /// <summary>直前に投じた球の結果（設計書15 §2.3, 1球采配の状況入力）。まだ1球も投げていなければnull。</summary>
     public PitchKind? LastPitchKind => _pitchLog.Count > 0 ? _pitchLog[^1].Kind : null;
@@ -161,6 +175,8 @@ public sealed class AtBatSession
 
         var pitchIndex = _pitchCount; // 0始まりの投球番号（従来ループの pitch 変数）
         _pitchCount = pitchIndex + 1; // 従来の pitch + 1（=消費球数）
+        _ballsAtPitchStart = _balls;   // 観測用（設計書17 §4.1）。以降のカウント加算より前の値。
+        _strikesAtPitchStart = _strikes;
 
         // ① 配球（球種選択＋毎球球速サンプリング §1.1d） → ② 投球生成（狙い＋コントロールσ散布）
         var gear = gearOverride ?? ctx.Gear;
@@ -182,7 +198,7 @@ public sealed class AtBatSession
             && loc.Y >= ctx.Pitching.HbpBodyBottomM && loc.Y <= ctx.Pitching.HbpBodyTopM
             && !MathUtil.Chance(ctx.Pitching.HbpDodgeProb, rng))
         {
-            RecordPitch(PitchKind.HitByPitch, plan, loc);
+            RecordPitch(PitchKind.HitByPitch, plan, loc, inZone);
             return Finish(PlateAppearanceResult.HitByPitch);
         }
 
@@ -200,24 +216,24 @@ public sealed class AtBatSession
             {
                 case BuntResult.MissedBunt:
                     _strikes++;
-                    RecordPitch(PitchKind.SwingingStrike, plan, loc);
+                    RecordPitch(PitchKind.SwingingStrike, plan, loc, inZone, swung: true);
                     return Continue();
 
                 case BuntResult.Foul:
                     _strikes++;
-                    RecordPitch(PitchKind.Foul, plan, loc);
+                    RecordPitch(PitchKind.Foul, plan, loc, inZone, swung: true);
                     return Continue();
 
                 case BuntResult.PopOut:
-                    RecordPitch(PitchKind.InPlay, plan, loc);
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true);
                     return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
 
                 case BuntResult.SacrificeSuccess:
-                    RecordPitch(PitchKind.InPlay, plan, loc);
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true);
                     return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
 
                 case BuntResult.InfieldHit:
-                    RecordPitch(PitchKind.InPlay, plan, loc);
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true);
                     return FinishBunt(PlateAppearanceResult.Single, bunt);
             }
         }
@@ -241,7 +257,7 @@ public sealed class AtBatSession
                 // ウエストを読まれた（守備がピッチアウトで対抗）: 打者はバントを試みられずボール、
                 // 飛び出した三塁走者が挟殺される。打席は確定せず、以降は強攻へフォールバックする。
                 _balls++;
-                RecordPitch(PitchKind.Ball, plan, loc);
+                RecordPitch(PitchKind.Ball, plan, loc, inZone);
                 return new PitchResolution(EndsPlateAppearance: false, SqueezeRunnerCaughtAtThird: true);
             }
 
@@ -251,7 +267,7 @@ public sealed class AtBatSession
                 BuntResult.Foul => PitchKind.Foul,
                 _ => PitchKind.InPlay, // PopOut / SacrificeSuccess / InfieldHit
             };
-            RecordPitch(kind, plan, loc);
+            RecordPitch(kind, plan, loc, inZone, swung: true);
             var sqResult = sq.Bunt == BuntResult.InfieldHit ? PlateAppearanceResult.Single : PlateAppearanceResult.InPlayOut;
             return FinishSqueeze(sqResult, sq);
         }
@@ -265,18 +281,24 @@ public sealed class AtBatSession
             || (battingOverride is null && !forcedTake && pitchIndex == 0 && ctx.Skills.FirstPitchSwingProb > 0.0
                 && MathUtil.Chance(ctx.Skills.FirstPitchSwingProb, rng));
         var distanceOutsideM = ctx.StrikeZone.DistanceOutsideM(loc.X, loc.Y);
+        // 観測用のスイング確率（設計書17 §4.1）。DecideSwing が内部で使うのと同じ純関数で、乱数を消費しない。
+        // CaptureTrace が偽なら1回も呼ばない＝既定パスはゼロコスト。
+        var swingProb = ctx.CaptureTrace
+            ? BatterDecision.SwingProbability(
+                inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting)
+            : 0.0;
         if (!forcedSwing && (forcedTake
             || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng)))
         {
             if (inZone)
             {
                 _strikes++;
-                RecordPitch(PitchKind.CalledStrike, plan, loc);
+                RecordPitch(PitchKind.CalledStrike, plan, loc, inZone, swingProb);
             }
             else
             {
                 _balls++;
-                RecordPitch(PitchKind.Ball, plan, loc);
+                RecordPitch(PitchKind.Ball, plan, loc, inZone, swingProb);
             }
 
             if (_strikes >= 3) return Finish(PlateAppearanceResult.Strikeout);
@@ -290,13 +312,13 @@ public sealed class AtBatSession
         {
             case ContactOutcome.Whiff:
                 _strikes++;
-                RecordPitch(PitchKind.SwingingStrike, plan, loc);
+                RecordPitch(PitchKind.SwingingStrike, plan, loc, inZone, swingProb, swung: true);
                 if (_strikes >= 3) return Finish(PlateAppearanceResult.Strikeout);
                 return Continue();
 
             case ContactOutcome.Foul:
                 if (_strikes < 2) _strikes++;
-                RecordPitch(PitchKind.Foul, plan, loc);
+                RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: ball);
                 return Continue();
 
             case ContactOutcome.InPlay:
@@ -306,10 +328,10 @@ public sealed class AtBatSession
                 if (play.Result == BattedBallResult.Foul)
                 {
                     if (_strikes < 2) _strikes++;
-                    RecordPitch(PitchKind.Foul, plan, loc);
+                    RecordPitch(PitchKind.Foul, plan, loc, inZone, swingProb, swung: true, ball: ball);
                     return Continue();
                 }
-                RecordPitch(PitchKind.InPlay, plan, loc);
+                RecordPitch(PitchKind.InPlay, plan, loc, inZone, swingProb, swung: true, ball: ball);
 
                 var pa = play.Result switch
                 {
@@ -344,13 +366,51 @@ public sealed class AtBatSession
         return Continue();
     }
 
-    /// <summary>この1球の解決済みの値をそのまま写す（設計書15 §4）。新たな抽選はしない。</summary>
-    private void RecordPitch(PitchKind kind, PitchPlan plan, ControlScatter.Location loc)
+    /// <summary>
+    /// この1球の解決済みの値をそのまま写す（設計書15 §4）。新たな抽選はしない。
+    /// <c>CaptureTrace</c> のときはデバッグ観測（設計書17 §4.1）も同じ値から1件組む。
+    /// </summary>
+    /// <param name="inZone">実着弾がストライクゾーン内か（呼び出し前に算出済み）。</param>
+    /// <param name="swingProbability">この球のスイング確率（純関数・観測専用。判定に使った値そのもの）。</param>
+    /// <param name="swung">打者が振ったか（バント/スクイズの試行もスイング扱い）。</param>
+    /// <param name="ball">コンタクトした打球（InPlay/Foul でなければ null）。</param>
+    private void RecordPitch(
+        PitchKind kind, PitchPlan plan, ControlScatter.Location loc,
+        bool inZone, double swingProbability = 0.0, bool swung = false, Batting.BattedBall? ball = null)
     {
         // 弾道積分は毎球RK4×2本(スピンあり/なし)とコストが高いため、Timeline同様CaptureTimeline時のみ
         // （観戦する試合だけ）計算する。既定（統計シム・裏試合）はゼロコスト（設計書15 §4「Phase Bの作業」）。
         var trajectory = _ctx.CaptureTimeline ? ComputeTrajectory(plan) : null;
         _pitchLog.Add(new PitchRecord(kind, _balls, _strikes, plan.Type, loc.X, loc.Y, plan.VelocityKmh, trajectory));
+
+        if (_pitchTraces is null) return;
+        var f = _lastPitchFeatures ?? default;
+        _pitchTraces.Add(new Debugging.PitchTrace
+        {
+            // PitchRecord の Balls/Strikes は「この球の解決後」の値だが、トレースは「投じる前の状況」を持つ
+            // （JSONL の "cnt" が実況のカウント表示と一致するため）。投球開始時に控えた値を使う。
+            BallsBefore = _ballsAtPitchStart,
+            StrikesBefore = _strikesAtPitchStart,
+            PitchNoInPa = _pitchCount,
+            PlanType = plan.Type,
+            PlanAimX = plan.AimX,
+            PlanAimY = plan.AimY,
+            PlanVelocityKmh = plan.VelocityKmh,
+            PlanStuff = plan.Stuff,
+            ActualX = loc.X,
+            ActualY = loc.Y,
+            ActualKmh = plan.VelocityKmh,
+            FlightTimeSeconds = f.FlightTimeSeconds,
+            InducedVerticalBreakM = f.InducedVerticalBreakM,
+            InducedHorizontalBreakM = f.InducedHorizontalBreakM,
+            InZone = inZone,
+            SwingProbability = swingProbability,
+            Swung = swung,
+            Kind = kind,
+            ExitVelocityKmh = ball?.ExitVelocityKmh,
+            LaunchAngleDeg = ball?.LaunchAngleDeg,
+            SprayAngleDeg = ball?.BearingDeg,
+        });
     }
 
     /// <summary>

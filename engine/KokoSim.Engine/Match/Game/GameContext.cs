@@ -68,6 +68,21 @@ public sealed record GameContext
     /// <summary>守備陣形ルール表（CHANGELOG 33, data/defensive-formations.yaml から注入。null=既定表）。</summary>
     public Match.Timeline.FormationTable? Formations { get; init; }
 
+    // ===== デバッグ観測（設計書17 §4.2, F1）。CaptureTimelines と同型のゲート。 =====
+    // 既定 false＝統計シム・裏試合はゼロコスト。観測は乱数を1回も追加消費しないので帯も digest も不変。
+
+    /// <summary>1球単位の構造化トレース（<see cref="Debugging.PitchTrace"/>）を出すか。既定オフ。</summary>
+    public bool CaptureTrace { get; init; }
+
+    /// <summary>観測の出口。engine は渡すだけで IO は持たない（不変条件#3）。null なら観測しない。</summary>
+    public Debugging.IDebugTraceSink? TraceSink { get; init; }
+
+    /// <summary>注入シナリオid（設計書17 §3.4）。非nullの試合は digest・統計集計の対象外。通常はnull。</summary>
+    public string? ScenarioId { get; init; }
+
+    /// <summary>観測が実際に走るか（フラグとシンクの両方が揃ったときだけ）。</summary>
+    public bool TracingEnabled => CaptureTrace && TraceSink is not null;
+
     /// <summary>指定守備陣で打席解決用コンテキストを作る。gear/directive/take は采配（設計書09）、skills はスキル（設計書10）が設定する。</summary>
     public AtBatContext ToAtBatContext(IReadOnlyList<Fielder> fielders, bool runnersOn = false,
         PitcherGear gear = PitcherGear.Normal, Tactics.PitchDirective? directive = null,
@@ -88,6 +103,7 @@ public sealed record GameContext
         CatcherLead = catcherLead,
         Skills = skills ?? SkillPlayMods.None,
         CaptureTimeline = CaptureTimelines,
+        CaptureTrace = TracingEnabled,
         Formations = Formations,
         RunnersOn = runnersOn,
         IntentionalWalk = intentionalWalk,

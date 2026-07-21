@@ -281,7 +281,7 @@ public static class GameSimulation
         };
     }
 
-    private static GameContext BuildContext(string? coefficientsPath, FieldGeometry? field = null)
+    internal static GameContext BuildContext(string? coefficientsPath, FieldGeometry? field = null)
     {
         var geom = field ?? new FieldGeometry();
         if (coefficientsPath is null) return new GameContext { Field = geom };
@@ -353,7 +353,7 @@ public static class GameSimulation
         };
     }
 
-    private static Team GenerateTeam(IRandomSource rng, string name)
+    internal static Team GenerateTeam(IRandomSource rng, string name)
     {
         var order = new List<Player>(9);
         foreach (var pos in FieldSlots)

@@ -17,6 +17,21 @@ public sealed record GameSaveState(ulong Seed, int ConfirmedPlateAppearances)
 {
     // 将来: 適用した采配決定列（代打/代走/サイン/伝令）をここに持たせ、再生時に同じ打席で適用する。
     public IReadOnlyList<GameDecision> Decisions { get; init; } = System.Array.Empty<GameDecision>();
+
+    /// <summary>
+    /// 開始時点の RNG 内部状態（設計書17 §3.2, F0）。非null なら <see cref="Seed"/> より優先して復元に使う。
+    /// シードを持たない乱数源（大会の隔離Fork ストリーム）で始まった試合を中断保存できるようにするための追加。
+    /// 既存セーブは null＝従来どおり <see cref="Seed"/> から復元する（完全後方互換）。
+    /// </summary>
+    public ulong[]? RngState { get; init; }
+
+    /// <summary>
+    /// 現在の打席の中で確定済みの投球窓の数（設計書17 §3.2 / §6.2, F0）。
+    /// <see cref="ConfirmedPlateAppearances"/> ぶん再生したあと、さらにこの数だけ
+    /// <see cref="GameStepKind.Pitch"/> 窓を進めた位置で復元する＝pitch粒度のシーク。
+    /// 既定0＝打席境界での復元（従来と完全一致）。
+    /// </summary>
+    public int ConfirmedPitchesInCurrentPa { get; init; }
 }
 
 /// <summary>
@@ -85,7 +100,12 @@ public static class GameReplay
     /// </summary>
     public static ResumedGame Restore(Team awayTeam, Team homeTeam, GameContext ctx, GameSaveState save)
     {
-        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, new Xoshiro256Random(save.Seed));
+        // 開始乱数源: RngState があればそこから（大会Fork経路の中断保存, 設計書17 §3.2）、
+        // 無ければ従来どおりシードから。既存セーブは RngState=null なので挙動不変。
+        var rng = save.RngState is { } st
+            ? Xoshiro256Random.FromState(st)
+            : new Xoshiro256Random(save.Seed);
+        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, rng);
         var e = GameEngine.Steps(p).GetEnumerator();
 
         // 采配決定を「その球の直前」に適用しながら、確定打席数ぶん再生する（設計書15 Phase D-1）。
@@ -100,9 +120,10 @@ public static class GameReplay
         var paIndex = 0;
         var pitchIndex = 0;
         ApplyDecisionsBefore(p, decisionsByStep, paIndex, pitchIndex); // 打席頭（call#1より前）
+        var exhausted = false;
         while (paIndex < save.ConfirmedPlateAppearances)
         {
-            if (!e.MoveNext()) break; // 試合が先に終わっていた（保存ステップ数が過大）→ そこで打ち切り
+            if (!e.MoveNext()) { exhausted = true; break; } // 試合が先に終わっていた（保存ステップ数が過大）→ そこで打ち切り
             if (e.Current.Kind == GameStepKind.Pitch)
             {
                 ApplyDecisionsBefore(p, decisionsByStep, paIndex, pitchIndex); // 増分前＝この窓が指す球への予約
@@ -114,6 +135,24 @@ public static class GameReplay
                 pitchIndex = 0;
                 ApplyDecisionsBefore(p, decisionsByStep, paIndex, pitchIndex);
             }
+        }
+
+        // pitch粒度の復元（設計書17 §3.2 / §6.2, F0）: 打席境界まで戻したあと、保存時に消化済みだった
+        // 投球窓のぶんだけさらに進める。MatchProgression.AdvancePitch と同じ数え方（増分前の値で予約適用）。
+        // 既存セーブは ConfirmedPitchesInCurrentPa=0 なのでこのループを1回も回らない＝挙動不変。
+        while (!exhausted && pitchIndex < save.ConfirmedPitchesInCurrentPa)
+        {
+            if (!e.MoveNext()) break;
+            if (e.Current.Kind != GameStepKind.Pitch)
+            {
+                // 保存球数が実際の打席の球数を超えていた（壊れたセーブ）→ 打席確定として受け止めて打ち切る。
+                paIndex++;
+                pitchIndex = 0;
+                ApplyDecisionsBefore(p, decisionsByStep, paIndex, pitchIndex);
+                break;
+            }
+            ApplyDecisionsBefore(p, decisionsByStep, paIndex, pitchIndex);
+            pitchIndex++;
         }
         return new ResumedGame(p, e);
     }

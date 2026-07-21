@@ -53,6 +53,15 @@ public sealed record GameResult
     public TacticsTally AwayTactics { get; init; } = new();
     public TacticsTally HomeTactics { get; init; } = new();
 
+    /// <summary>
+    /// デバッグの強制発動（設計書17 §6.1, F4）を1回でも使ったか。真の試合は<b>結果が人為的</b>なので、
+    /// 決定論ゲート（digest）にも統計集計にも入れてはいけない。既定 false＝通常の試合。
+    /// </summary>
+    public bool HasForcedOutcomes { get; init; }
+
+    /// <summary>注入シナリオid（設計書17 §3.4）。非nullなら開始状態が baseline と違う＝digest対象外。</summary>
+    public string? ScenarioId { get; init; }
+
     public bool HomeWon => HomeRuns > AwayRuns;
     public bool Tied => HomeRuns == AwayRuns;
     public int TotalRuns => AwayRuns + HomeRuns;
@@ -92,6 +101,16 @@ public static class GameEngine
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng,
         IReadOnlyDictionary<Player, int>? priorWeekPitches = null)
     {
+        // デバッグ観測（設計書17 §4, F1）。既定オフ＝この分岐に入らず従来と完全に同じ経路。
+        // ヘッダは「まだ1回も引いていない乱数状態」を持つ必要があるので、dayForm 抽選より前に組む。
+        Debugging.GameTraceHeader? traceHeader = null;
+        if (ctx.TracingEnabled)
+        {
+            traceHeader = BuildTraceHeader(awayTeam, homeTeam, ctx, rng);
+            // 値は素通しのデコレータ（設計書17 §4.5）。包んでも乱数列は1ビットも変わらない。
+            rng = new Debugging.CountingRandomSource(rng);
+        }
+
         var away = new TeamState(awayTeam);
         var home = new TeamState(homeTeam);
         // 球数制限（設計書05 §1.3）。既定 WeeklyPitchLimit=MaxValue＝無効＝従来の継投挙動と完全一致。
@@ -102,8 +121,44 @@ public static class GameEngine
         // 大半は微小・スパイクは十数試合に一度。事前に見えない（投げて/打って初めて分かる）。
         var dayForm = SampleDayForms(awayTeam, homeTeam, ctx, rng);
 
-        return new GameProgress(awayTeam, homeTeam, away, home, ctx, rng, dayForm);
+        var progress = new GameProgress(awayTeam, homeTeam, away, home, ctx, rng, dayForm);
+        if (traceHeader is not null) ctx.TraceSink!.OnGameStart(traceHeader);
+        return progress;
     }
+
+    /// <summary>観測ヘッダ（設計書17 §4.1）。再現に必要な最小情報（RNG状態・対戦カード指紋）を先頭に置く。</summary>
+    private static Debugging.GameTraceHeader BuildTraceHeader(
+        Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng)
+    {
+        var raw = Debugging.CountingRandomSource.UnwrapAll(rng);
+        var stateHex = "";
+        if (raw is Xoshiro256Random xo)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var w in xo.CaptureState())
+                sb.Append(w.ToString("x16", System.Globalization.CultureInfo.InvariantCulture));
+            stateHex = sb.ToString();
+        }
+        return new Debugging.GameTraceHeader
+        {
+            AwayName = awayTeam.Name,
+            HomeName = homeTeam.Name,
+            RngStateHex = stateHex,
+            FixtureFingerprint = Debugging.ReproToken.Fingerprint(awayTeam, homeTeam, ctx),
+            ScenarioId = ctx.ScenarioId,
+            RegulationInnings = ctx.RegulationInnings,
+            TieBreakEnabled = ctx.TieBreakEnabled,
+            MercyRuleEnabled = ctx.MercyRuleEnabled,
+        };
+    }
+
+    /// <summary>観測レコード上の選手識別子。成績集計と同じ SourceId を優先し、無ければ名前。</summary>
+    private static string TraceIdOf(Player p)
+        => p.SourceId is { } id ? "#" + id.ToString(System.Globalization.CultureInfo.InvariantCulture) : p.Name;
+
+    /// <summary>塁占有の短縮表記（"---" / "1-3" / "123"）。観測専用。</summary>
+    private static string BaseOccupancy(bool first, bool second, bool third)
+        => new string(new[] { first ? '1' : '-', second ? '2' : '-', third ? '3' : '-' });
 
     /// <summary>
     /// 打席境界ごとに <see cref="GameStep"/> を1つ yield する進行イテレータ（設計書09 の采配窓の土台）。
@@ -143,6 +198,18 @@ public static class GameEngine
 
     /// <summary>進行状態から最終 GameResult を組む（バッチ drain 後・対話完走後のどちらでも使える）。</summary>
     public static GameResult BuildResult(GameProgress p)
+    {
+        var result = BuildResultCore(p);
+        // 観測の終端（設計書17 §4.2）。BuildResult は複数回呼ばれうるので一度だけ流す。
+        if (p.Ctx.TracingEnabled && !p.TraceEndEmitted)
+        {
+            p.TraceEndEmitted = true;
+            p.Ctx.TraceSink!.OnGameEnd(result);
+        }
+        return result;
+    }
+
+    private static GameResult BuildResultCore(GameProgress p)
     {
         var away = p.Away;
         var home = p.Home;
@@ -220,6 +287,10 @@ public static class GameEngine
         var outs = 0;
         var runsThisHalf = 0;
 
+        // デバッグ観測（設計書17 §4）。既定 null＝以降の観測分岐はすべて素通り＝従来と完全一致。
+        var traceSink = p.TraceSink;
+        var rngStats = p.RngStats;
+
         // 完了した打席の境界を通知するヘルパ（将来は投球単位へ細分化）。log.Count-1＝直前に追記した打席。
         // 併せて局面スナップショット（塁・アウト・表裏）を GameProgress へ載せる＝対話UIの交代seam（観測のみ）。
         GameStep Pa()
@@ -227,6 +298,24 @@ public static class GameEngine
             p.CurrentBases = bases;
             p.CurrentOuts = outs;
             p.CurrentIsTop = isTop;
+            // 打席の観測レコード（設計書17 §4.1）。この時点で outs は当該打席ぶんを加算済み。
+            if (traceSink is not null && log.Count > 0)
+            {
+                var last = log[log.Count - 1];
+                traceSink.OnPlateAppearance(new Debugging.PaTrace
+                {
+                    Inning = last.Inning,
+                    IsTop = last.IsTop,
+                    BatterId = last.BatterSourceId is { } bid
+                        ? "#" + bid.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        : last.BatterName,
+                    Result = last.Result,
+                    Rbi = last.RunsScored,
+                    OutsAfter = outs,
+                    Pitches = last.Pitches,
+                    RunnerSummary = BaseOccupancy(last.BaseFirstAfter, last.BaseSecondAfter, last.BaseThirdAfter),
+                });
+            }
             return new(GameStepKind.PlateAppearance, inning, isTop, log.Count - 1);
         }
 
@@ -415,11 +504,24 @@ public static class GameEngine
             // 一括 ResolveDetailed と実装・RNG消費が完全一致（yield は乱数非消費）＝バッチ Play と対話進行は同一結果。
             var session = AtBatSession.Begin(batterAttrs, pitcher, abCtx, batterPlayer: batter,
                 thirdBaseRunner: squeezeThirdRunner, squeezeWasteProbability: squeezeWaste);
+
+            // 采配ラベル（観測専用・設計書17 §4.1）。sign はバント/スクイズ/敬遠で Swing へ畳まれた後なので、
+            // 畳む前の別名（buntSign/squeezeSign/IntentionalWalk）から表示用に復元する。
+            var paSignLabel = traceSink is null ? null
+                : defTactics.IntentionalWalk ? "IntentionalWalk"
+                : squeezeSign?.ToString() ?? buntSign?.ToString()
+                  ?? (sign != OffensiveSign.Swing ? sign.ToString() : null);
+
             var squeezeAbandoned = false;
             var stealEndedHalf = false;
             while (!session.IsComplete)
             {
                 yield return Pitch();
+
+                // 観測（設計書17 §4）: この球の乱数消費を測るため、采配窓を抜けた直後の値を控える。
+                var drawsAtPitchStart = rngStats?.Draws ?? 0;
+                var tracesBeforePitch = session.PitchTraces.Count;
+                PitchPolicy? tracePolicy = null;
 
                 // 塁上/アウト数は盗塁の毎球判定（下）で打席途中に変わりうるため、brain へ渡す前に
                 // 毎球作り直す（打者・スコア差等その他のフィールドは打席内不変なので変えない）。
@@ -470,7 +572,11 @@ public static class GameEngine
                         situation, session.Balls, session.Strikes, session.PitchCount, session.LastPitchKind);
                     var d = defensePitchBrain.CallPitchAction(
                         pSituation, rng.Fork(PitchStreamId(inning, isTop, log.Count, session.PitchCount, 0xDEF5_0000UL)));
-                    if (d?.Policy is { } policyOverride) pitchOverride = ctx.Tactics.DirectiveFor(policyOverride, batter.Bats);
+                    if (d?.Policy is { } policyOverride)
+                    {
+                        pitchOverride = ctx.Tactics.DirectiveFor(policyOverride, batter.Bats);
+                        tracePolicy = policyOverride; // 観測専用
+                    }
                     gearOverride = d?.Gear;
                 }
 
@@ -531,10 +637,41 @@ public static class GameEngine
                 // brain でも手動でも同じ扱い）。予約なし（未セット）ならフィールド読み取りのみでRNG非消費。
                 if (offense.ConsumePendingPitchBattingOverride() is { } manualBatting) battingOverride = manualBatting;
                 var (manualPolicy, manualGear) = defense.ConsumePendingPitchDefenseOverride();
-                if (manualPolicy is { } mp) pitchOverride = ctx.Tactics.DirectiveFor(mp, batter.Bats);
+                if (manualPolicy is { } mp)
+                {
+                    pitchOverride = ctx.Tactics.DirectiveFor(mp, batter.Bats);
+                    tracePolicy = mp; // 観測専用
+                }
                 if (manualGear is { } mg) gearOverride = mg;
 
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride);
+
+                // 1球の観測レコードを完成させて流す（設計書17 §4.1）。打席解決層が埋めた意図・実着弾・打者判断へ、
+                // 試合層しか知らない局面・状態・采配・RNG消費を足す。乱数は1回も追加消費しない。
+                void EmitPitchTrace()
+                {
+                    if (traceSink is null) return;
+                    var traces = session.PitchTraces;
+                    if (traces.Count <= tracesBeforePitch) return; // 敬遠など1球も投げずに確定した打席
+                    traceSink.OnPitch(traces[traces.Count - 1] with
+                    {
+                        Inning = inning,
+                        IsTop = isTop,
+                        Outs = outs,
+                        BatterId = TraceIdOf(batter),
+                        PitcherId = TraceIdOf(currentPitcher),
+                        PitchNoInGame = p.TotalPitches + session.PitchCount,
+                        PressureIndex = pressureIdx,
+                        Rattled = defense.PitcherRattled,
+                        PitchingFatigue = (int)System.Math.Round(defense.FatiguePitches),
+                        Gear = gearOverride ?? defTactics.Gear,
+                        Policy = tracePolicy ?? defTactics.Policy,
+                        ChosenSign = battingOverride?.ToString() ?? paSignLabel,
+                        RngStreamId = rngStats?.LastForkStreamId ?? 0UL,
+                        RngDrawsInPitch = (int)((rngStats?.Draws ?? 0) - drawsAtPitchStart),
+                    });
+                }
+
                 if (pitchRes.SqueezeRunnerCaughtAtThird)
                 {
                     // スクイズのウエストを読まれた（設計書15 Phase D-2c）: 三塁走者が挟殺され、打者は
@@ -542,7 +679,7 @@ public static class GameEngine
                     // （盗塁死で3アウトになる場合と同じ扱い＝この打者は次イニング先頭）。
                     bases.Third = null;
                     outs++;
-                    if (outs >= 3) { squeezeAbandoned = true; break; }
+                    if (outs >= 3) { squeezeAbandoned = true; EmitPitchTrace(); break; }
                 }
 
                 // 暴投・パスボール（design-14 P2-8, 設計書15 Phase D-3）: 走者ありの各投球のうち、実際に
@@ -569,6 +706,9 @@ public static class GameEngine
                         offense.WildPitchCount++;
                     }
                 }
+
+                // この1球ぶんの観測を流す（暴投判定まで含めて「この球の窓」の乱数消費に数える）。
+                EmitPitchTrace();
             }
             if (squeezeAbandoned || stealEndedHalf) continue;
 
@@ -1043,4 +1183,16 @@ public sealed class GameProgress
     public int CurrentOuts { get; internal set; }
     /// <summary>直近に確定した打席が表（先攻の攻撃）だったか。交代対象チームの攻守判定に使う。</summary>
     public bool CurrentIsTop { get; internal set; } = true;
+
+    // ===== デバッグ観測（設計書17 §4, F1）。すべて観測専用で試合結果には影響しない。 =====
+
+    /// <summary>観測の出口（<see cref="GameContext.TracingEnabled"/> が偽なら null）。</summary>
+    public Debugging.IDebugTraceSink? TraceSink => Ctx.TracingEnabled ? Ctx.TraceSink : null;
+
+    /// <summary>乱数消費の集計器（観測時のみ非null）。</summary>
+    public Debugging.CountingRandomSource.Counter? RngStats
+        => (Rng as Debugging.CountingRandomSource)?.Stats;
+
+    /// <summary><see cref="GameEngine.BuildResult"/> の OnGameEnd を一度だけ流すためのフラグ。</summary>
+    internal bool TraceEndEmitted { get; set; }
 }

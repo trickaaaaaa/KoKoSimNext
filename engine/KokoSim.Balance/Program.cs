@@ -26,8 +26,61 @@ internal static class CommandLine
             "simulate-nation" => RunSimulateNation(args[1..]),
             "simulate-manager" => RunSimulateManager(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
+            "trace" => RunTrace(args[1..]),
+            "trace-diff" => RunTraceDiff(args[1..]),
             _ => Fail($"未知のコマンド: {args[0]}"),
         };
+    }
+
+    /// <summary>デバッグ観測（設計書17 §4.4）: 1球単位のトレースを JSONL で書き出す。</summary>
+    private static int RunTrace(string[] args)
+    {
+        var o = new KokoSim.Balance.Debugging.TraceCommand.Options();
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--games": o = o with { Games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture) }; break;
+                case "--seed": o = o with { Seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture) }; break;
+                case "--out": o = o with { OutPath = RequireValue(args, ref i) }; break;
+                case "--coefficients": o = o with { CoefficientsPath = RequireValue(args, ref i) }; break;
+                case "--stadium": o = o with { Field = ResolveStadium(RequireValue(args, ref i)) }; break;
+                case "--tactics": o = o with { UseTacticsBrain = true }; break;
+                case "--only": o = o with { Only = KokoSim.Balance.Debugging.TraceCommand.ParseKinds(RequireValue(args, ref i)) }; break;
+                case "--scenario": o = o with { ScenarioId = RequireValue(args, ref i) }; break;
+                case "--force": o = o with { Force = RequireValue(args, ref i) }; break;
+                case "--measure": o = o with { MeasureOverhead = true }; break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+
+        var summary = KokoSim.Balance.Debugging.TraceCommand.Run(o);
+        Console.Write(KokoSim.Balance.Debugging.TraceCommand.Report(summary, o));
+        return 0;
+    }
+
+    /// <summary>デバッグ観測（設計書17 §4.4）: 2本のトレースの「最初に食い違った球」と分布差を出す。</summary>
+    private static int RunTraceDiff(string[] args)
+    {
+        string? a = null, b = null, reportPath = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--a": a = RequireValue(args, ref i); break;
+                case "--b": b = RequireValue(args, ref i); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        if (a is null || b is null) return Fail("trace-diff には --a と --b が必要です。");
+
+        var result = KokoSim.Balance.Debugging.TraceDiff.Compare(a, b);
+        var text = KokoSim.Balance.Debugging.TraceDiff.Report(result, a, b);
+        Console.Write(text);
+        WriteReport(reportPath, text);
+        // 食い違いがあれば非ゼロ終了（CI から「回帰した」の判定に使える）。
+        return result.Identical ? 0 : 2;
     }
 
     private static int RunCalibrate(string[] args)
@@ -344,6 +397,12 @@ internal static class CommandLine
         Console.WriteLine("                  [--autumn data] [--start-year 2025]   # 秋の大会フロー(秋季→地区→神宮→センバツ)を併走");
         Console.WriteLine("  simulate-manager[--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml]");
         Console.WriteLine("                  [--autumn data] [--start-year 2025]   # 監督校の秋季→センバツ経路を記録");
+        Console.WriteLine();
+        Console.WriteLine("  # デバッグ観測（設計書17）");
+        Console.WriteLine("  trace           [--games N] [--seed S] [--out out/trace.jsonl] [--only game|pitch|pa|end]");
+        Console.WriteLine("                  [--coefficients ...] [--stadium ID] [--tactics] [--scenario ID] [--force NAME] [--measure]");
+        Console.WriteLine("  trace-diff      --a out/before.jsonl --b out/after.jsonl [--report out/diff.md]");
+        Console.WriteLine("                  # 最初に食い違った球と分布差を出す。食い違いがあれば終了コード2");
     }
 
     private static int Fail(string message)
