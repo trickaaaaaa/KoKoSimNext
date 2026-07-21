@@ -246,14 +246,24 @@ public static class BaserunningModel
         {
             if (isDouble)
             {
-                // 二塁打では打者が二塁を占有するのみ＝一塁走者は非フォース（一塁は空く）。
+                // 二塁打では打者が二塁を占有する＝一塁走者は一塁にも二塁にも戻れない（#88）。
                 switch (TryHome(r1, 1, coeff.FirstToHomeOnDouble, tableUnconditional: false))
                 {
                     case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r1, 1, 4, false)); break;
                     case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r1, 1, 4, Out: true)); break;
                     default:
                         if (third is null) { third = r1; mv?.Add(new RunnerMove(r1, 1, 3, false)); }
-                        else first = r1; // 三塁封鎖＝一塁に留まる（打者は二塁なので一塁は空いている）
+                        else if (currentOuts + extraOuts < 3)
+                        {
+                            // 三塁に先行走者が自重中＝一塁走者は追い越せないため、先行走者を本塁へ押し出して
+                            // 三塁を明け渡させる（フォースの延長。#88）。
+                            var pushed = third;
+                            runs++;
+                            PushHeldRunnerHome(mv, pushed, fromBase: ReferenceEquals(pushed, r2) ? 2 : 3);
+                            third = r1;
+                            mv?.Add(new RunnerMove(r1, 1, 3, false));
+                        }
+                        else first = r1; // 既に3アウト＝以降の塁状況は結果に影響しない
                         break;
                 }
             }
@@ -283,6 +293,23 @@ public static class BaserunningModel
         mv?.Add(new RunnerMove(batter, 0, isDouble ? 2 : 1, false));
 
         return (runs, extraOuts);
+    }
+
+    /// <summary>三塁で自重していた先行走者を、後続走者に追い越されるため本塁へ押し出す（#88）。
+    /// 既にその走者の三塁到達move（FromBase→3）が記録済みなら、それを直接本塁行きへ書き換えて単一の
+    /// moveにする（2段階の見た目上の移動を避ける）。move未記録（三塁で静止していた走者）なら新規追加する。</summary>
+    private static void PushHeldRunnerHome(List<RunnerMove>? mv, Player runner, int fromBase)
+    {
+        if (mv is null) return;
+        for (var i = mv.Count - 1; i >= 0; i--)
+        {
+            if (ReferenceEquals(mv[i].Runner, runner) && mv[i].ToBase == 3)
+            {
+                mv[i] = mv[i] with { ToBase = 4 };
+                return;
+            }
+        }
+        mv.Add(new RunnerMove(runner, fromBase, 4, false));
     }
 
     /// <summary>失策の連鎖（design-14 P1-6）: 悪送球1本で塁上の走者全員＋打者走者が1つ多く進む、という単一事象として
