@@ -27,7 +27,7 @@ namespace KokoSim.Unity.Players
         private VisualElement _chart;
         private readonly List<PitchArc> _chartArcs = new List<PitchArc>();
         private Vector2 _chartCenter;
-        private const float BallR = 19f;
+        private const float BallR = 22f;
         // 扇の内半径（ボール縁のすぐ外側）。ここまでは引き伸ばさず、外側だけ横に伸ばす。
         private const float ArcInner = BallR + 4f;
 
@@ -179,8 +179,8 @@ namespace KokoSim.Unity.Players
             if (rect.width < 40f || rect.height < 40f) return;
 
             _chartCenter = new Vector2(rect.width * 0.5f, rect.height * 0.5f);
-            var radius = Mathf.Min(rect.width, rect.height) * 0.40f;
-            _chartScale = new Vector2(Mathf.Clamp(rect.width / Mathf.Max(1f, rect.height) * 0.5f, 1f, 1.7f), 1f);
+            var radius = Mathf.Min(rect.width, rect.height) * 0.44f;
+            _chartScale = new Vector2(Mathf.Clamp(rect.width / Mathf.Max(1f, rect.height) * 0.5f, 1f, 2.2f), 1f);
             _chartArcs.Clear();
 
             foreach (var child in _chart.Children())
