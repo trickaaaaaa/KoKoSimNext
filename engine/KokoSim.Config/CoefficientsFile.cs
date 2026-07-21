@@ -1317,8 +1317,18 @@ public static class CoefficientsLoader
         public double ArchetypeSoftTossControl { get; set; } = AD.SoftTossControl;
         public double ArchetypeSoftTossStamina { get; set; } = AD.SoftTossStamina;
         public double ArchetypeSoftTossPitchRank { get; set; } = AD.SoftTossPitchRank;
+        // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。自校・AI校で共有する。
+        public double LineupLeadoffDisciplineWeight { get; set; } = LD.LeadoffDisciplineWeight;
+        public double LineupLeadoffContactWeight { get; set; } = LD.LeadoffContactWeight;
+        public double LineupLeadoffSpeedWeight { get; set; } = LD.LeadoffSpeedWeight;
+        public double LineupSecondContactWeight { get; set; } = LD.SecondContactWeight;
+        public double LineupSecondBuntWeight { get; set; } = LD.SecondBuntWeight;
+        public double LineupOverallContactWeight { get; set; } = LD.OverallContactWeight;
+        public double LineupOverallPowerWeight { get; set; } = LD.OverallPowerWeight;
+        public double LineupDhPitcherBattingGap { get; set; } = LD.DhPitcherBattingGap;
 
         private static readonly PitcherArchetypeCoefficients AD = new();
+        private static readonly LineupCoefficients LD = new();
 
         public RosterCoefficients ToModel() => new()
         {
@@ -1339,6 +1349,17 @@ public static class CoefficientsLoader
                 SoftTossControl = ArchetypeSoftTossControl,
                 SoftTossStamina = ArchetypeSoftTossStamina,
                 SoftTossPitchRank = ArchetypeSoftTossPitchRank,
+            },
+            Lineup = new LineupCoefficients
+            {
+                LeadoffDisciplineWeight = LineupLeadoffDisciplineWeight,
+                LeadoffContactWeight = LineupLeadoffContactWeight,
+                LeadoffSpeedWeight = LineupLeadoffSpeedWeight,
+                SecondContactWeight = LineupSecondContactWeight,
+                SecondBuntWeight = LineupSecondBuntWeight,
+                OverallContactWeight = LineupOverallContactWeight,
+                OverallPowerWeight = LineupOverallPowerWeight,
+                DhPitcherBattingGap = LineupDhPitcherBattingGap,
             },
             IntakeMean = IntakeMean,
             IntakeSd = IntakeSd,
