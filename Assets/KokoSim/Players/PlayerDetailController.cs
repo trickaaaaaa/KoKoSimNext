@@ -182,6 +182,8 @@ namespace KokoSim.Unity.Players
             var radius = Mathf.Min(rect.width, rect.height) * 0.44f;
             _chartScale = new Vector2(Mathf.Clamp(rect.width / Mathf.Max(1f, rect.height) * 0.5f, 1f, 2.2f), 1f);
             _chartArcs.Clear();
+            var chips = new List<VisualElement>();
+            var boxes = new List<Rect>();
 
             foreach (var child in _chart.Children())
             {
@@ -214,11 +216,61 @@ namespace KokoSim.Unity.Players
                 // 隣り合う球種どうしのチップ重なりも、方向ごとに外へ押し出すことで減る。
                 var tip = PolarPoint(_chartCenter, outer + 12f, angleDeg);
                 var end = tip + new Vector2(dir.x * lw * 0.5f, dir.y * lh * 0.5f);
-                // ラベルはチャート矩形の内側に収める（外周方向でも切れないように）。
-                child.style.left = Mathf.Clamp(end.x - lw * 0.5f, 0f, Mathf.Max(0f, rect.width - lw));
-                child.style.top = Mathf.Clamp(end.y - lh * 0.5f, 0f, Mathf.Max(0f, rect.height - lh));
+                chips.Add(child);
+                boxes.Add(new Rect(end.x - lw * 0.5f, end.y - lh * 0.5f, lw, lh));
+            }
+
+            SeparateChips(boxes, rect);
+            for (var i = 0; i < chips.Count; i++)
+            {
+                chips[i].style.left = boxes[i].x;
+                chips[i].style.top = boxes[i].y;
             }
             _chart.MarkDirtyRepaint();
+        }
+
+        // ラベルの重なりを解く（変化方向が近い球種同士＝落ち球が重なりやすい）。
+        // 侵入量の小さい軸へ押し分ける AABB リラクゼーション。最後にチャート矩形へ収める。
+        private static void SeparateChips(List<Rect> boxes, Rect rect)
+        {
+            const float Gap = 4f;
+            for (var pass = 0; pass < 12; pass++)
+            {
+                var moved = false;
+                for (var i = 0; i < boxes.Count; i++)
+                for (var j = i + 1; j < boxes.Count; j++)
+                {
+                    var a = boxes[i];
+                    var b = boxes[j];
+                    var dx = (a.center.x - b.center.x);
+                    var dy = (a.center.y - b.center.y);
+                    var ox = (a.width + b.width) * 0.5f + Gap - Mathf.Abs(dx);
+                    var oy = (a.height + b.height) * 0.5f + Gap - Mathf.Abs(dy);
+                    if (ox <= 0f || oy <= 0f) continue;
+
+                    if (oy <= ox)
+                    {
+                        var s = (dy >= 0f ? 1f : -1f) * oy * 0.5f;
+                        a.y += s; b.y -= s;
+                    }
+                    else
+                    {
+                        var s = (dx >= 0f ? 1f : -1f) * ox * 0.5f;
+                        a.x += s; b.x -= s;
+                    }
+                    boxes[i] = a; boxes[j] = b;
+                    moved = true;
+                }
+                if (!moved) break;
+            }
+
+            for (var i = 0; i < boxes.Count; i++)
+            {
+                var b = boxes[i];
+                b.x = Mathf.Clamp(b.x, 0f, Mathf.Max(0f, rect.width - b.width));
+                b.y = Mathf.Clamp(b.y, 0f, Mathf.Max(0f, rect.height - b.height));
+                boxes[i] = b;
+            }
         }
 
         private void OnPaintChart(MeshGenerationContext ctx)
