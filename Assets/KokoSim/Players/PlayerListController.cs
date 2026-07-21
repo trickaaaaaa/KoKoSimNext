@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
+using KokoSim.Unity.Shell;      // 部品辞書（ConditionFace）
 
 namespace KokoSim.Unity.Players
 {
@@ -98,28 +99,29 @@ namespace KokoSim.Unity.Players
             // 調子／故障（設計書03 §3.5・UI原則⑥）: 怪我中はこの列が「傷病名・段階」の警告表示になる。
             // 離脱中の選手の調子は判断材料にならないので列は増やさず差し替える（詳細は行クリック→選手詳細）。
             var injured = r.Injury.Length > 0;
-            var cond = Cell(injured ? r.Injury : r.Condition, "cell--narrow");
-            cond.AddToClassList(injured ? "cond--worst" : CondClass(r.ConditionLevel));
+            var cond = new VisualElement();
+            cond.AddToClassList("cell");
+            cond.AddToClassList("cell--narrow");
+            if (injured)
+            {
+                var injuryLabel = new Label(r.Injury);
+                injuryLabel.AddToClassList("cell");
+                injuryLabel.AddToClassList("cond--worst");
+                cond.Add(injuryLabel);
+            }
+            else
+            {
+                // 調子は表情顔（ConditionFace）に統一（issue #51）。文字表記は tooltip に残す。
+                var face = new ConditionFace { tooltip = r.Condition };
+                face.Set(r.ConditionLevel);
+                cond.Add(face);
+            }
             row.Add(cond);
 
             return row;
         }
 
         // ===== 補助 =====
-
-        // 調子5段階 → 色クラス（tokens.uss の調子色を写した KokoSimTheme.uss .cond--* が単一ソース）。
-        // 表示文字列で比較すると到達不能分岐を生むため、必ず enum で分岐する。
-        private static string CondClass(KokoSim.Engine.Players.Condition c)
-        {
-            switch (c)
-            {
-                case KokoSim.Engine.Players.Condition.Excellent: return "cond--best";
-                case KokoSim.Engine.Players.Condition.Good: return "cond--good";
-                case KokoSim.Engine.Players.Condition.Poor: return "cond--bad";
-                case KokoSim.Engine.Players.Condition.Terrible: return "cond--worst";
-                default: return "cond--normal";
-            }
-        }
 
         private void SetText(string name, string text)
         {

@@ -127,7 +127,7 @@ namespace KokoSim.Unity.Players
                 IsPitcher = p.IsPitcher,
                 OverallValue = overall,
                 OverallGrade = Tiers.FromStrength(overall).ToString(),
-                Condition = ConditionJp(condition),
+                Condition = ConditionLabels.Jp(condition),
                 ConditionLevel = condition,
                 // 故障（設計書03 §3.5・UI原則⑥）: 一覧をスキャンするだけで離脱者が拾えるようにする。
                 Injury = p.Injury == KokoSim.Engine.Players.InjurySeverity.None
@@ -158,19 +158,6 @@ namespace KokoSim.Unity.Players
         {
             var v = p.Level(k);
             return new AbilityChip { Grade = Tiers.FromStrength(v).ToString(), Label = label, Value = v };
-        }
-
-        // 調子5段階を日本語表示（設計書02 §3.3。段階の正ソースは FormModel.Quantize）。
-        private static string ConditionJp(KokoSim.Engine.Players.Condition condition)
-        {
-            switch (condition)
-            {
-                case KokoSim.Engine.Players.Condition.Excellent: return "絶好調";
-                case KokoSim.Engine.Players.Condition.Good: return "好調";
-                case KokoSim.Engine.Players.Condition.Poor: return "不調";
-                case KokoSim.Engine.Players.Condition.Terrible: return "絶不調";
-                default: return "普通";
-            }
         }
 
         private static string SortJp(PlayerSort s)
