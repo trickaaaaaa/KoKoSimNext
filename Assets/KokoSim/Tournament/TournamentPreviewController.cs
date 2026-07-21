@@ -39,6 +39,14 @@ namespace KokoSim.Unity.Tournament
             var advance = _root.Q<Button>("advance");
             if (advance != null) advance.clicked += () => { GameClock.Advance(+1); Render(); };
 
+            // 樹形図のラウンド名帯を縦スクロールに追従させる（横は列と一緒に動く）。
+            var brk = _root.Q<ScrollView>("tp-bracket-scroll");
+            if (brk != null)
+            {
+                brk.verticalScroller.valueChanged -= SyncBracketHead;
+                brk.verticalScroller.valueChanged += SyncBracketHead;
+            }
+
             Render();
         }
 
@@ -154,8 +162,10 @@ namespace KokoSim.Unity.Tournament
         private void RenderBracketTree(TournamentBracketView view)
         {
             var host = _root.Q<VisualElement>("tp-bracket");
-            if (host == null) return;
+            var head = _root.Q<VisualElement>("tp-bracket-head");
+            if (host == null || head == null) return;
             host.Clear();
+            head.Clear();
 
             var tree = TournamentPreviewState.BuildBracketTree(view);
             if (tree.Rounds.Count == 0)
@@ -170,9 +180,10 @@ namespace KokoSim.Unity.Tournament
                 var col = tree.Rounds[r];
                 var isFinal = r == tree.Rounds.Count - 1;
 
+                head.Add(ColumnHead(col.Name, hasLead: r > 0, hasElbow: true));
+
                 var colEl = new VisualElement();
                 colEl.AddToClassList("brk-col");
-                colEl.Add(ColumnHead(col.Name, r > 0));
 
                 var body = new VisualElement();
                 body.AddToClassList("brk-col__body");
@@ -194,18 +205,41 @@ namespace KokoSim.Unity.Tournament
                 host.Add(colEl);
             }
 
+            head.Add(ColumnHead("優勝", hasLead: true, hasElbow: false));
             host.Add(ChampionColumn(tree));
 
             var scroll = _root.Q<ScrollView>("tp-bracket-scroll");
             if (scroll != null && focus != null) CenterOn(scroll, focus);
         }
 
-        private static Label ColumnHead(string text, bool hasLead)
+        /// <summary>ラウンド名帯を縦スクロール量ぶん下げて、ビューポート上端に貼り付ける。</summary>
+        private void SyncBracketHead(float offsetY)
         {
+            var head = _root.Q<VisualElement>("tp-bracket-head");
+            if (head != null) head.style.top = offsetY;
+        }
+
+        /// <summary>
+        /// ラウンド名の見出しセル。列と同じ寸法トークン（接続線の帯を空要素で置く）で組み、
+        /// 見出しと列の横位置が必ず一致するようにする。
+        /// </summary>
+        private static VisualElement ColumnHead(string text, bool hasLead, bool hasElbow)
+        {
+            var cell = new VisualElement();
+            cell.AddToClassList("brk-hcell");
+            if (hasLead) cell.Add(Spacer("brk-lead"));
             var l = new Label(text);
             l.AddToClassList("brk-col__name");
-            if (hasLead) l.AddToClassList("brk-col__name--lead");
-            return l;
+            cell.Add(l);
+            if (hasElbow) cell.Add(Spacer("brk-elbow"));
+            return cell;
+        }
+
+        private static VisualElement Spacer(string cls)
+        {
+            var e = new VisualElement();
+            e.AddToClassList(cls);
+            return e;
         }
 
         private static VisualElement BuildBracketCard(TournamentPreviewState.BracketCardRow c)
@@ -245,7 +279,6 @@ namespace KokoSim.Unity.Tournament
         {
             var col = new VisualElement();
             col.AddToClassList("brk-col");
-            col.Add(ColumnHead("優勝", true));
 
             var body = new VisualElement();
             body.AddToClassList("brk-col__body");
@@ -320,7 +353,7 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>初期表示で自校のカードをビューポート中央に置く（レイアウト確定後に1回だけ）。</summary>
-        private static void CenterOn(ScrollView scroll, VisualElement target)
+        private void CenterOn(ScrollView scroll, VisualElement target)
         {
             EventCallback<GeometryChangedEvent> cb = null;
             cb = _ =>
@@ -334,6 +367,7 @@ namespace KokoSim.Unity.Tournament
                         Mathf.Max(0f, content.x - view.x)),
                     Mathf.Clamp(pos.y + target.layout.height * 0.5f - view.y * 0.5f, 0f,
                         Mathf.Max(0f, content.y - view.y)));
+                SyncBracketHead(scroll.scrollOffset.y);
             };
             target.RegisterCallback(cb);
         }

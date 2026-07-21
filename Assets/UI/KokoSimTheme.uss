@@ -597,14 +597,20 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     background-color: var(--sf-base); border-radius: var(--radius-card);
     padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2);
 }
-.brk-tree { flex-direction: row; align-items: stretch; }
+.brk-tree { flex-direction: row; align-items: stretch; padding-top: var(--h-thead); }
 .brk-col { flex-shrink: 0; }
+.brk-col__body { flex-grow: 1; }
+
+/* ラウンド名の帯（樹形図の上に浮かせて縦スクロールに追従＝列名を常に見せる）。 */
+.brk-head {
+    position: absolute; left: 0; top: 0; flex-direction: row;
+    height: var(--h-thead); background-color: var(--sf-base);
+}
+.brk-hcell { flex-direction: row; flex-shrink: 0; }
 .brk-col__name {
     height: var(--h-thead); width: var(--brk-card-w); flex-shrink: 0; margin: 0;
     font-size: var(--fs-th); color: var(--tx-2); -unity-text-align: middle-center;
 }
-.brk-col__name--lead { margin-left: var(--brk-lead-w); }
-.brk-col__body { flex-grow: 1; }
 
 /* カード枠：等分してカードを中央寄せ＝樹形図の縦位置そのもの。 */
 .brk-slot { flex-direction: row; align-items: center; flex-grow: 1; min-height: var(--brk-pitch); }
@@ -644,8 +650,8 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .brk-elbow--flat { flex-direction: column; }
 .brk-elbow__part { flex-grow: 1; flex-basis: 0; }
 .brk-half { flex-grow: 1; flex-basis: 0; }
-.brk-half--h { border-bottom-width: 1px; border-bottom-color: var(--divider); }
-.brk-half--v { border-left-width: 1px; border-left-color: var(--divider); }
+.brk-half--h { border-bottom-width: 1px; border-bottom-color: var(--line-focus); }
+.brk-half--v { border-left-width: 1px; border-left-color: var(--line-focus); }
 .brk-half--fav { border-bottom-color: var(--color-lamp); border-left-color: var(--color-lamp); }
 
 /* 優勝欄（決勝の右）。 */
@@ -916,6 +922,8 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     width: 6px; min-height: 40px; margin: 0;
 }
 #unity-dragger:hover { background-color: rgba(232, 236, 234, 0.30); }
+/* 横スクロールのつまみは縦横が入れ替わる（高さ6px・最小長40px）。 */
+.unity-scroller--horizontal #unity-dragger { width: auto; height: 6px; min-height: 0; min-width: 40px; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    リファイン追補：カード類の枠線を廃し「面の明度」で区切る（全画面共通・後勝ち）
