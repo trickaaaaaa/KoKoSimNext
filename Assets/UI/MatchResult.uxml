@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 試合結果画面（UI-BUILD-METHOD Step 4・issue #13 B案）。ライブ観戦の終局から自動で開く出口画面。
+     上＝勝敗・スコア・イニングスコア（全幅固定）、下＝左が自校／右が相手の2カラム並置。
+     各カラムは同じ構成（野手成績・投手成績・打席結果）で、両校を一望できる。
+     主要操作は「閉じる」1つだけ（UI原則7）。表の行は MatchResultController が部品辞書の BoxRow で生成する。
+     スタイルは tokens 〜 KokoSimTheme 〜 components 〜 画面USS の順。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="MatchResult.uss" />
+
+    <ui:VisualElement class="ui-root mr-root">
+
+        <!-- 画面専用ヘッダー（共通ナビは出さない：この画面は試合フロー専用）。 -->
+        <ui:VisualElement class="mr-topbar">
+            <ui:Label text="試合結果" class="mr-title" />
+            <ui:Label name="mr-outcome" text="" class="mr-outcome" />
+            <ui:Label name="mr-score" text="" class="mr-score" />
+            <ui:VisualElement class="mr-spacer" />
+            <ui:Button name="mr-close" text="閉じる" class="mr-cta" />
+        </ui:VisualElement>
+
+        <!-- イニングスコア（見出し行＋先攻・後攻の2行）。内容ぶんだけの幅で左に置く。 -->
+        <ui:VisualElement class="mr-linescore">
+            <ui:VisualElement name="mr-line-head" />
+            <ui:VisualElement name="mr-line-away" />
+            <ui:VisualElement name="mr-line-home" />
+        </ui:VisualElement>
+
+        <!-- 本体：左＝自校／右＝相手の2カラム。縦にあふれる編成（代打が多い試合）だけスクロールする。 -->
+        <ui:ScrollView name="mr-body" class="mr-body">
+            <ui:VisualElement class="mr-cols">
+
+                <ui:VisualElement class="mr-col">
+                    <ui:VisualElement class="mr-col__head">
+                        <ui:Label name="mr-left-cap" text="自校" class="mr-col__cap" />
+                        <ui:Label name="mr-left-name" text="" class="mr-col__name" />
+                    </ui:VisualElement>
+                    <ui:Label text="野手" class="mr-subhead" />
+                    <ui:VisualElement name="mr-left-bat" />
+                    <ui:Label text="投手" class="mr-subhead" />
+                    <ui:VisualElement name="mr-left-pit" />
+                    <ui:Label text="打席結果" class="mr-subhead" />
+                    <ui:VisualElement name="mr-left-pa" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="mr-col mr-col--right">
+                    <ui:VisualElement class="mr-col__head">
+                        <ui:Label name="mr-right-cap" text="相手" class="mr-col__cap" />
+                        <ui:Label name="mr-right-name" text="" class="mr-col__name" />
+                    </ui:VisualElement>
+                    <ui:Label text="野手" class="mr-subhead" />
+                    <ui:VisualElement name="mr-right-bat" />
+                    <ui:Label text="投手" class="mr-subhead" />
+                    <ui:VisualElement name="mr-right-pit" />
+                    <ui:Label text="打席結果" class="mr-subhead" />
+                    <ui:VisualElement name="mr-right-pa" />
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+        </ui:ScrollView>
+
+    </ui:VisualElement>
+</ui:UXML>
