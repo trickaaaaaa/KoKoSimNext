@@ -697,19 +697,76 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* --- 3カラム本体（外側スクロールなし・内部スクロール） --- */
 .dash { flex-grow: 1; flex-direction: row; padding: 14px; overflow: hidden; }
 .dash-col { flex-direction: column; overflow: hidden; }
-.dash-col--a { width: 350px; flex-shrink: 0; margin-right: 14px; }
+.dash-col--a { width: 440px; flex-shrink: 0; margin-right: 14px; }
 .dash-col--b { flex-grow: 1; margin-right: 14px; }
 .dash-col--c { width: 372px; flex-shrink: 0; }
 
 /* --- カード（ヘッダーバー付きパネル） --- */
 /* カード：枠線を廃し明度(面色)で区切る・角丸12・余白拡大（リファイン） */
-.card { background-color: #18211C; border-width: 0; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
-.card--grow { flex-grow: 1; }
+/* flex-shrink の既定は 1 なので、付けないとカラムが詰まったとき固定高カードが黙って潰れ、
+   中身が overflow:hidden で切れる（UI-BUILD-METHOD「固定高セクションは flex-shrink:0」）。
+   伸縮を担うのは .card--grow だけにする。 */
+.card { background-color: #18211C; border-width: 0; border-radius: 12px; margin-bottom: 16px; overflow: hidden; flex-shrink: 0; }
+/* flex-grow だけだと中身（ScrollView）の希望高でカードが膨らみ、同じカラムの後続カードを
+   はみ出させる（.dash-col は overflow:hidden なので押し出された分は切れる）。
+   UI Toolkit(Yoga) は flex-shrink の既定が 0 なので、明示的に 1 と min-height:0 を与えて
+   内容より小さく縮めるようにし、あふれはカード内スクロールで受ける。 */
+.card--grow { flex-grow: 1; flex-shrink: 1; min-height: 0; }
+.card__scroll { min-height: 0; }
 .card__hd { flex-direction: row; align-items: center; justify-content: space-between; padding: 14px 16px 10px 16px; flex-shrink: 0; }
 .card__hd-title { font-size: 16px; -unity-font-style: bold; letter-spacing: 1px; color: #E8ECEA; }
 .card__hd-sub { font-size: 12px; color: #9AA5A0; letter-spacing: 1px; }
 .card__body { padding: 6px 16px 16px 16px; }
 .card__scroll { flex-grow: 1; }
+
+/* ═══ ホーム（情報構成 案A・2026-07-21） ═══════════════════════════════
+   左＝部の実力（6指標レーダー）＋故障者 / 中＝チーム成績＋チーム内ランキング /
+   右＝今週の出来事＋個別指導。数値は右揃え・行高32px（UI原則①③）。 */
+
+/* --- 部の実力（レーダーは部品辞書 RadarChartView が描く） --- */
+.hm-ts { padding-bottom: 12px; }
+.hm-ts__top { flex-direction: row; align-items: center; }
+.hm-ts__k { font-size: var(--fs-cap); color: var(--tx-2); letter-spacing: 2px; margin-right: var(--sp-2); }
+.hm-ts__v { font-size: 28px; -unity-font-style: bold; color: var(--tx-1); margin-left: var(--sp-3); }
+.hm-radar { height: 292px; flex-shrink: 0; align-items: center; justify-content: center; }
+
+/* --- チーム成績（項目 × 通算/公式戦/今大会） --- */
+.hm-srow { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.hm-sc-k { width: var(--col-hm-sc-k); flex-shrink: 0; font-size: var(--fs-label); color: var(--tx-2); margin: 0; padding: 0; }
+.hm-sc-v { width: var(--col-hm-sc-v); flex-shrink: 0; font-size: var(--fs-num); color: var(--tx-1); margin: 0; padding: 0; -unity-text-align: middle-right; }
+.hm-sc-v--none { color: var(--tx-3); }
+
+/* --- チーム内ランキング（部門 × 1〜3位。各枠は「選手名＋数値」） --- */
+.hm-rrow { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.hm-rk-k { width: var(--col-hm-rk-k); flex-shrink: 0; font-size: var(--fs-label); color: var(--tx-2); margin: 0; padding: 0; }
+.hm-rk-e { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center;
+           justify-content: space-between; margin: 0; padding: 0 var(--sp-2) 0 0; }
+/* 長い姓名でも数値が押し出されないよう、縮むのは名前側だけにする。 */
+.hm-rk-e__n { font-size: var(--fs-label); color: var(--tx-1); overflow: hidden; flex-shrink: 1; min-width: 0; }
+.hm-rk-e__v { font-size: var(--fs-num); color: var(--tx-1); -unity-text-align: middle-right; flex-shrink: 0; }
+.hm-rk-e--none { color: var(--tx-3); font-size: var(--fs-label); }
+
+/* --- 故障者（部位・程度・復帰まで。重度だけ警告色＝UI原則②） --- */
+.hm-inj { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.hm-inj__no { width: var(--col-hm-inj-no); flex-shrink: 0; font-size: var(--fs-cap); color: var(--tx-3); margin: 0; padding: 0; -unity-text-align: middle-right; }
+.hm-inj__n { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--tx-1); margin: 0 0 0 var(--sp-3); padding: 0; overflow: hidden; }
+.hm-inj__st { width: var(--col-hm-inj-st); flex-shrink: 0; font-size: var(--fs-label); color: var(--tx-2); margin: 0; padding: 0; }
+.hm-inj__st--severe { color: var(--color-warn); }
+.hm-inj__bk { width: var(--col-hm-inj-bk); flex-shrink: 0; font-size: var(--fs-num); color: var(--tx-2); margin: 0; padding: 0; -unity-text-align: middle-right; }
+.hm-inj--none { font-size: var(--fs-label); color: var(--tx-3); padding: var(--sp-2) 0; }
+
+/* ランキングは打撃／投手を横2列に並べる（縦1列だと12部門が入らずスクロール送りになるため）。
+   中央カラムは幅に余裕があるので、縦を半分にして全部門を一目に収める。 */
+.hm-rk2 { flex-direction: row; flex-grow: 1; min-height: 0; }
+.hm-rk2__col { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.hm-rk2__gap { width: 24px; flex-shrink: 0; }
+
+/* --- 表の見出し（成績・ランキング共通。列幅は上のデータ側と同じ変数を参照） --- */
+.hm-th { flex-direction: row; align-items: center; height: var(--h-thead); flex-shrink: 0;
+         border-bottom-width: 1px; border-bottom-color: var(--divider); }
+.hm-th__c { font-size: var(--fs-th); color: var(--tx-3); letter-spacing: 1px; margin: 0; padding: 0; }
+.hm-th__c--r { -unity-text-align: middle-right; }
+.hm-th__c--sec { color: var(--tx-2); }
 
 /* --- 次の試合 --- */
 .nm-teams { flex-direction: row; align-items: center; }
@@ -720,29 +777,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nm-meta { flex-direction: row; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top-width: 1px; border-top-color: #232E28; }
 .nm-meta__i { font-size: 12px; color: #9AA5A0; margin-right: 16px; }
 
-/* --- 部の状態（ゲージ） --- */
-.g-row { margin-bottom: 13px; }
-.g-row__top { flex-direction: row; justify-content: space-between; margin-bottom: 5px; }
-.g-row__k { font-size: 13px; color: #9AA5A0; }
-.g-row__v { font-size: 16px; -unity-font-style: bold; }
-.g-row__v--good { color: #9FCB3B; }
-.g-row__v--amber { color: #F5C64A; }
-.gauge { height: 9px; background-color: #202A24; border-radius: 4px; overflow: hidden; }
-.gauge__fill { height: 100%; }
-.gauge__fill--good { background-color: #9FCB3B; }
-.gauge__fill--amber { background-color: #F5C64A; }
-.inj-row { flex-direction: row; align-items: center; justify-content: space-between; padding-top: 11px; border-top-width: 1px; border-top-color: #232E28; }
-.inj-row__v { font-size: 15px; -unity-font-style: bold; color: #9AA5A0; }
-.inj-row__v--warn { color: #E86A4A; }
-
-/* --- 注目選手 --- */
-.np-row { flex-direction: row; align-items: center; padding: 10px 14px; border-bottom-width: 1px; border-bottom-color: #232E28; }
-.np-no { width: 30px; height: 30px; border-width: 0; background-color: #202A24; border-radius: 6px; -unity-text-align: middle-center; font-size: 15px; -unity-font-style: bold; color: #E8ECEA; margin-right: 11px; flex-shrink: 0; }
-.np-body { flex-grow: 1; }
-.np-name { font-size: 15px; color: #E8ECEA; }
-.np-pos { font-size: 11px; color: #9AA5A0; margin-top: 1px; }
-.np-cond { font-size: 17px; -unity-font-style: bold; margin-right: 10px; }
-/* 調子5段階の色（ホーム注目選手・選手一覧など全画面共通）。
+/* 調子5段階の色（選手一覧・主将指名など全画面共通）。
    値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
    色分岐はC#側で Condition enum から行い、表示文字列で比較しない。 */
 .cond--best { color: #F5C64A; }    /* = --cond-best 絶好調 */
@@ -760,22 +795,13 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .fd-time { font-size: 12px; color: #5C6660; }
 .fd-text { font-size: 15px; color: #E8ECEA; white-space: normal; }
 
-/* --- 練習計画（曜日リスト） --- */
-.pd-row { flex-direction: row; align-items: center; padding: 9px 14px; border-bottom-width: 1px; border-bottom-color: #232E28; }
-.pd-row--match { background-color: rgba(245, 198, 74, 0.10); }
-.pd-day { width: 26px; -unity-text-align: middle-center; font-size: 15px; -unity-font-style: bold; color: #9AA5A0; flex-shrink: 0; }
-.pd-day--match { color: #F5C64A; }
-.pd-menu-wrap { flex-grow: 1; border-left-width: 3px; border-left-color: #232E28; padding: 4px 10px; margin-left: 4px; }
-.pd-menu-wrap--match { border-left-color: #F5C64A; }
-.pd-menu { font-size: 14px; color: #E8ECEA; white-space: normal; }
-.pd-menu--match { color: #F5C64A; -unity-font-style: bold; }
-.pd-badge { font-size: 11px; letter-spacing: 1px; color: #0E1512; background-color: #F5C64A; padding: 2px 7px; -unity-font-style: bold; flex-shrink: 0; }
-
 /* --- 個別指導 --- */
-.gd-slot { flex-direction: row; align-items: center; justify-content: space-between; background-color: #202A24; border-width: 0; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+.gd-slot { flex-direction: row; align-items: center; justify-content: space-between; background-color: #202A24; border-width: 0; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; flex-shrink: 0; }
 .gd-slot--empty { background-color: transparent; border-width: 1px; border-color: #232E28; -unity-text-align: middle-center; }
 .gd-name { font-size: 14px; color: #E8ECEA; }
-.gd-focus { font-size: 12px; color: #F5C64A; }
+/* 指導の主眼はアンバーにしない（UI原則②: 1画面3箇所まで。ホームは「今週を進める」と
+   カウントダウンで既に2箇所使うため、枠が2つある指導ラベルに配ると必ず超過する）。 */
+.gd-focus { font-size: 12px; color: #9AA5A0; }
 .gd-empty-t { font-size: 13px; color: #5C6660; -unity-text-align: middle-center; flex-grow: 1; }
 
 /* ============================================================ */

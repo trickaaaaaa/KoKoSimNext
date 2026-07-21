@@ -5,9 +5,10 @@ using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 namespace KokoSim.Unity.Home
 {
     /// <summary>
-    /// ホーム ダッシュボード（設計書06, mock-ui-v2-dashboard.html）。UIDocument へ HomeState を束ね、
-    /// スコアボードヘッダー・次の試合・部の状態ゲージ・注目選手・通知フィード・練習計画・個別指導を描画する。
-    /// 「今週を進める」で週送り→育成・イベントをフィードに流し再描画する。
+    /// ホーム ダッシュボード（設計書06・情報構成 案A 2026-07-21）。UIDocument へ HomeState を束ね、
+    /// 左＝部の実力（6指標レーダー）＋故障者 / 中＝チーム成績＋チーム内ランキング /
+    /// 右＝今週の出来事＋個別指導 を描画する。「次の試合」は大会モード中だけ出す。
+    /// 「今週を進める」で週送り→育成・怪我・イベントをフィードに流し再描画する。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class HomeDashboardController : MonoBehaviour
@@ -25,6 +26,11 @@ namespace KokoSim.Unity.Home
         private KokoSim.Unity.Components.RadarChartView _ntRadar;
         private int _ntPick = -1;
 
+        // 「部の実力」の6角形（部品辞書 RadarChartView）。総合力パネルと同じ絵をカードサイズで出す。
+        private KokoSim.Unity.Components.RadarChartView _tsRadar;
+        private const float TeamRadarRadius = 0.30f;
+        private const float TeamRadarLabelOffset = 1.34f;
+
         // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
         // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
         private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk;
@@ -33,7 +39,8 @@ namespace KokoSim.Unity.Home
 
         private void OnEnable()
         {
-            _state = new HomeState();
+            // セッション常駐（画面往復で通知フィードと成長が消えないよう、単一の状態を使い回す）。
+            _state = HomeState.Current;
             _root = GetComponent<UIDocument>().rootVisualElement;
 
             _banner = _root.Q<VisualElement>("tm-banner");
@@ -42,6 +49,8 @@ namespace KokoSim.Unity.Home
             _newTeam = _root.Q<VisualElement>("nt-modal");
             _ntRadar = new KokoSim.Unity.Components.RadarChartView(
                 _root.Q<VisualElement>("nt-d-radar"), NewTeamRadarRadius);
+            _tsRadar = new KokoSim.Unity.Components.RadarChartView(
+                _root.Q<VisualElement>("hm-radar"), TeamRadarRadius, TeamRadarLabelOffset);
 
             _advanceBtn = _root.Q<Button>("advance");
             if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
@@ -395,64 +404,152 @@ namespace KokoSim.Unity.Home
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChipLegacy(v.TeamRankGrade)); }
 
-            // チーム総合力（6指標の総合ランク）を部の状態に表示（クリックで専用パネル）。
-            var tsChip = _root.Q<VisualElement>("team-strength-chip");
-            if (tsChip != null)
+            RenderTeamStrength();
+
+            // 次の試合は大会モード中だけ出す（通常週にダミーの対戦カードを置かない）。
+            var nextMatch = _root.Q<VisualElement>("next-match");
+            if (nextMatch != null)
+                nextMatch.style.display = v.TournamentMode ? DisplayStyle.Flex : DisplayStyle.None;
+            if (v.TournamentMode)
             {
-                var ts = new KokoSim.Unity.Squad.TeamStrengthState().BuildView();
-                tsChip.Clear();
-                tsChip.Add(UiComponents.RankChipLegacy(ts.OverallGrade));
+                SetText("game-tag", v.GameTag);
+                SetText("home-team", v.HomeTeam);
+                SetText("away-team", v.AwayTeam);
+                SetText("home-sub", v.HomeSub);
+                SetText("away-sub", v.AwaySub);
+                SetText("game-date", v.GameDate);
+                SetText("venue", v.Venue);
+                SetText("weather", "天気 " + v.Weather);
             }
 
-            // 次の試合。
-            SetText("game-tag", v.GameTag);
-            SetText("home-team", v.HomeTeam);
-            SetText("away-team", v.AwayTeam);
-            SetText("home-sub", v.HomeSub);
-            SetText("away-sub", v.AwaySub);
-            SetText("game-date", v.GameDate);
-            SetText("venue", v.Venue);
-            SetText("weather", "天気 " + v.Weather);
-
-            // 部の状態。
-            var inj = _root.Q<Label>("injuries");
-            if (inj != null)
+            // 故障者（0名でもカードは残し「該当なし」を出す＝週をまたいでレイアウトが動かない）。
+            SetText("injury-count", v.Injured.Count + " 名");
+            var injList = _root.Q<VisualElement>("injury-list");
+            if (injList != null)
             {
-                inj.text = v.Injuries + " 名" + (string.IsNullOrEmpty(v.InjuredNames) ? "" : "（" + v.InjuredNames + "）");
-                inj.EnableInClassList("inj-row__v--warn", v.Injuries > 0);
+                injList.Clear();
+                if (v.Injured.Count == 0)
+                {
+                    var none = new Label("該当なし");
+                    none.AddToClassList("hm-inj--none");
+                    injList.Add(none);
+                }
+                else
+                {
+                    foreach (var r in v.Injured) injList.Add(BuildInjured(r));
+                }
             }
 
-            BuildList("roster-rows", v.Roster, BuildNotable);
+            BuildList("team-stats", KokoSim.Unity.Shell.TeamStatsService.TeamTotals(), BuildStatRow);
+            RenderRankings();
             BuildList("feed-list", v.Feed, BuildFeed);
-            BuildList("plan-days", v.Plan, BuildDay);
             BuildList("guidance-list", v.Guidance, BuildGuidance);
             SetText("guidance-count", "残り枠 " + (v.GuidanceTotal - v.GuidanceUsed) + " / " + v.GuidanceTotal);
         }
 
+        /// <summary>チームランクのカード（総合ランク＋6角形）。総合力パネルと同じ ViewModel を引く。
+        /// 弱点の言語化（AnalysisWeak/Advice）はレーダーを見れば判るのでホームには出さない。</summary>
+        private void RenderTeamStrength()
+        {
+            var ts = new KokoSim.Unity.Squad.TeamStrengthState().BuildView();
+
+            var tsChip = _root.Q<VisualElement>("team-strength-chip");
+            if (tsChip != null)
+            {
+                tsChip.Clear();
+                tsChip.Add(UiComponents.RankChipLegacy(ts.OverallGrade));
+            }
+            SetText("team-strength-value", ts.OverallValue.ToString());
+            if (_tsRadar != null) _tsRadar.SetData(ts.Radar, ts.OverallGrade);
+        }
+
         // ===== 行ビルダー =====
 
-        private static VisualElement BuildNotable(RosterRow r)
+        /// <summary>チーム成績の1行（項目名＋通算/公式戦/今大会。未計上は淡色の「—」）。</summary>
+        private static VisualElement BuildStatRow(KokoSim.Unity.Shell.TeamStatRow r)
         {
             var row = new VisualElement();
-            row.AddToClassList("np-row");
+            row.AddToClassList("hm-srow");
 
-            var no = new Label(string.IsNullOrEmpty(r.Number) ? "–" : r.Number);
-            no.AddToClassList("np-no");
-            row.Add(no);
+            var k = new Label(r.Label);
+            k.AddToClassList("hm-sc-k");
+            row.Add(k);
 
-            var body = new VisualElement();
-            body.AddToClassList("np-body");
-            var name = new Label(r.Name); name.AddToClassList("np-name");
-            var pos = new Label(r.Position); pos.AddToClassList("np-pos");
-            body.Add(name); body.Add(pos);
-            row.Add(body);
+            row.Add(StatCell(r.Career));
+            row.Add(StatCell(r.Official));
+            row.Add(StatCell(r.Tournament));
+            return row;
+        }
 
-            var cond = new Label(CondArrow(r.Condition));
-            cond.AddToClassList("np-cond");
-            cond.AddToClassList(CondClass(r.Condition));
-            row.Add(cond);
+        private static Label StatCell(string text)
+        {
+            var cell = new Label(text);
+            cell.AddToClassList("hm-sc-v");
+            if (text == "—") cell.AddToClassList("hm-sc-v--none");
+            return cell;
+        }
 
-            row.Add(UiComponents.RankChipLegacy(r.OverallGrade));
+        /// <summary>チーム内ランキング。打撃／投手を左右2列へ振り分ける（区分名は各列の見出しが持つ）。</summary>
+        private void RenderRankings()
+        {
+            var bat = _root.Q<VisualElement>("rank-bat");
+            var pit = _root.Q<VisualElement>("rank-pit");
+            if (bat != null) bat.Clear();
+            if (pit != null) pit.Clear();
+
+            foreach (var r in KokoSim.Unity.Shell.TeamStatsService.Rankings())
+            {
+                var host = r.Section == "投手" ? pit : bat;
+                if (host != null) host.Add(BuildRankRow(r));
+            }
+        }
+
+        /// <summary>チーム内ランキングの1部門（1〜3位。該当なしの枠は淡色の「—」で必ず埋める）。</summary>
+        private static VisualElement BuildRankRow(KokoSim.Unity.Shell.RankRow r)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("hm-rrow");
+
+            var k = new Label(r.Label);
+            k.AddToClassList("hm-rk-k");
+            row.Add(k);
+
+            foreach (var e in r.Top)
+            {
+                if (e.Empty)
+                {
+                    var none = new Label("—");
+                    none.AddToClassList("hm-rk-e");
+                    none.AddToClassList("hm-rk-e--none");
+                    row.Add(none);
+                    continue;
+                }
+
+                var cell = new VisualElement();
+                cell.AddToClassList("hm-rk-e");
+                var name = new Label(e.Name); name.AddToClassList("hm-rk-e__n");
+                var val = new Label(e.Value); val.AddToClassList("hm-rk-e__v");
+                cell.Add(name); cell.Add(val);
+                row.Add(cell);
+            }
+            return row;
+        }
+
+        /// <summary>故障者の1行（背番号／名前／部位・程度／復帰まで。重度だけ警告色＝UI原則②）。</summary>
+        private static VisualElement BuildInjured(InjuredRow r)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("hm-inj");
+
+            var no = new Label(r.Number); no.AddToClassList("hm-inj__no"); row.Add(no);
+            var name = new Label(r.Name); name.AddToClassList("hm-inj__n"); row.Add(name);
+
+            var st = new Label(r.Site + "・" + r.Severity);
+            st.AddToClassList("hm-inj__st");
+            if (r.Severe) st.AddToClassList("hm-inj__st--severe");
+            row.Add(st);
+
+            var back = new Label(r.Back); back.AddToClassList("hm-inj__bk"); row.Add(back);
             return row;
         }
 
@@ -489,35 +586,6 @@ namespace KokoSim.Unity.Home
             return item;
         }
 
-        private static VisualElement BuildDay(PlanDay d)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("pd-row");
-            if (d.Match) row.AddToClassList("pd-row--match");
-
-            var day = new Label(d.Day);
-            day.AddToClassList("pd-day");
-            if (d.Match) day.AddToClassList("pd-day--match");
-            row.Add(day);
-
-            var wrap = new VisualElement();
-            wrap.AddToClassList("pd-menu-wrap");
-            if (d.Match) wrap.AddToClassList("pd-menu-wrap--match");
-            var menu = new Label(d.Menu);
-            menu.AddToClassList("pd-menu");
-            if (d.Match) menu.AddToClassList("pd-menu--match");
-            wrap.Add(menu);
-            row.Add(wrap);
-
-            if (d.Match)
-            {
-                var badge = new Label("試合日");
-                badge.AddToClassList("pd-badge");
-                row.Add(badge);
-            }
-            return row;
-        }
-
         private static VisualElement BuildGuidance(GuidanceSlot g)
         {
             var slot = new VisualElement();
@@ -539,18 +607,6 @@ namespace KokoSim.Unity.Home
         }
 
         // ===== 補助 =====
-
-        private static string CondArrow(string c)
-        {
-            switch (c)
-            {
-                case "絶好調": return "↑↑";
-                case "好調": return "↑";
-                case "不調": return "↓";
-                case "絶不調": return "↓↓";
-                default: return "→";
-            }
-        }
 
         private static string CondClass(string c)
         {
@@ -587,12 +643,6 @@ namespace KokoSim.Unity.Home
         {
             var label = _root.Q<Label>(name);
             if (label != null) label.text = text;
-        }
-
-        private void SetWidth(string name, int percent)
-        {
-            var e = _root.Q<VisualElement>(name);
-            if (e != null) e.style.width = Length.Percent(Mathf.Clamp(percent, 0, 100));
         }
 
         private void BuildList<T>(string containerName, System.Collections.Generic.List<T> items,

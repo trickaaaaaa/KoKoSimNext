@@ -5,6 +5,7 @@ using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Unity.Shell;
 
@@ -26,20 +27,15 @@ namespace KokoSim.Unity.Home
         public string Label = "";
     }
 
-    public sealed class RosterRow
+    /// <summary>故障者1名ぶんの表示行（設計書03 §3.5: 症状は常に可視）。</summary>
+    public sealed class InjuredRow
     {
+        public string Number = "—";
         public string Name = "";
-        public string Number = "";
-        public string Position = "";
-        public string OverallGrade = "C";
-        public string Condition = "普通"; // 絶好調/好調/普通/不調/絶不調
-    }
-
-    public sealed class PlanDay
-    {
-        public string Day = "月";
-        public string Menu = "打撃";
-        public bool Match;              // 試合日
+        public string Site = "";       // 肩 / 肘 / 腰 / 膝 / 足首 / 手
+        public string Severity = "";   // 軽度 / 中度 / 重度
+        public string Back = "";       // 復帰まで（例「あと 4 週」）
+        public bool Severe;            // 重度＝警告色（UI原則②: 本当の警告だけ）
     }
 
     public sealed class GuidanceSlot
@@ -72,38 +68,33 @@ namespace KokoSim.Unity.Home
         public string Venue = "自校グラウンド";
         public string Weather = "曇";
 
-        public int Injuries;
-        public string InjuredNames = "";
-
         public bool TournamentMode;   // 大会モード中は次戦カード/カウントダウンを大会仕様に切替える
 
         public int GuidanceUsed;
         public int GuidanceTotal = 3;
 
-        public List<PlanDay> Plan = new List<PlanDay>();
-        public List<RosterRow> Roster = new List<RosterRow>();
+        public List<InjuredRow> Injured = new List<InjuredRow>();
         public List<FeedItem> Feed = new List<FeedItem>();
         public List<GuidanceSlot> Guidance = new List<GuidanceSlot>();
     }
 
     /// <summary>
     /// ホーム画面の状態機械。純エンジンを駆動して「今週を進める」を実体化する。
-    /// 週送りで練習→育成・イベントを回し、結果をフィードに流す（設計書06 §2: 通知フィード駆動）。
+    /// 週送りで練習→育成・怪我・イベントを回し、結果をフィードに流す（設計書06 §2: 通知フィード駆動）。
+    ///
+    /// 部員は全画面共有の <see cref="RosterService"/> を単一ソースにする（2026-07-21）。
+    /// 以前はここだけ seed=42 で私物のロスターを再生成しており、週送りの成長が共有ロスターへ届かず
+    /// 画面往復で消えていた（引退は GameClock 経由で共有側に起きるため、育てた選手と引退する選手が別物だった）。
+    /// あわせて状態自体もセッション常駐（<see cref="Current"/>）にし、通知フィードが画面往復で消えないようにする。
     /// </summary>
     public sealed class HomeState
     {
-        private static readonly string[] DayNames = { "月", "火", "水", "木", "金", "土", "日" };
-        private static readonly TrainingMenu[] WeekMenus =
-        {
-            TrainingMenu.Batting, TrainingMenu.Defense, TrainingMenu.Pitching,
-            TrainingMenu.Strength, TrainingMenu.BaseRunning, TrainingMenu.Running, TrainingMenu.Rest,
-        };
-
         private readonly IRandomSource _rng;
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
         private readonly GrowthStageTable _stages = new GrowthStageTable();
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
-        private readonly List<DevelopingPlayer> _roster = new List<DevelopingPlayer>();
+        private readonly InjuryCoefficients _injury = new InjuryCoefficients();
+        private readonly SkillCoefficients _skills = new SkillCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
         // 現在週/年度は全画面共有の GameClock、大会モードの進行は GameSession を単一ソースとする（画面ごとに持たない）。
@@ -112,26 +103,25 @@ namespace KokoSim.Unity.Home
         private const int ManagerSchoolId = -1;      // 自校（生成校と衝突しない専用ID）
         private const int FieldPrefectureId = 13;    // 神奈川（Prefecture.Id は0基点＝JIS番号-1。#14→13, 校数≒211）
 
+        private static HomeState _current;
+
+        /// <summary>セッション常駐の実体（通知フィードが画面往復で消えないようにする）。</summary>
+        public static HomeState Current => _current ?? (_current = new HomeState());
+
+        /// <summary>週送りの対象＝全画面共有の在籍部員（引退者は含まない）。</summary>
+        private static IReadOnlyList<DevelopingPlayer> Roster => RosterService.Active;
+
         public HomeState(ulong seed = 42)
         {
             _rng = new Xoshiro256Random(seed);
-            var roster = new RosterCoefficients();
-            // 3学年ぶんの部員を用意。
-            for (var grade = 1; grade <= 3; grade++)
-            {
-                foreach (var p in ProspectGenerator.Intake(grade, roster, _rng))
-                {
-                    p.Grade = grade;
-                    _roster.Add(p);
-                }
-            }
             _feed.Add(new FeedItem { When = "先週", Text = "新チームが始動した。", Kind = FeedKind.Normal, Tag = "情報" });
         }
 
-        /// <summary>今週を進める: 全部員を1週練習させ→共有週を進め、大会開幕週なら大会モードへ入る。</summary>
+        /// <summary>今週を進める: 全部員を1週練習させ→怪我の週次処理→共有週を進め、大会開幕週なら大会モードへ入る。</summary>
         public void AdvanceWeek()
         {
             RunPracticeWeek(1.0);                       // 通常週の練習（効果1.0）
+            RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（全画面へ反映）
 
             // 大会開幕週に到達したら大会モードへ遷移（要件1）。
@@ -150,7 +140,7 @@ namespace KokoSim.Unity.Home
             var campMult = _calendar.CampMultiplier(week, _training) * extraMult;
             var newItems = new List<FeedItem>();
 
-            foreach (var p in _roster)
+            foreach (var p in Roster)
             {
                 if (!_calendar.CanTrain(p.Grade, week)) continue;
                 var stage = _calendar.StageIndex(p.Grade, week);
@@ -169,6 +159,48 @@ namespace KokoSim.Unity.Home
                             Tag = "成長",
                         });
                     }
+                }
+            }
+
+            PushFeed(newItems);
+        }
+
+        /// <summary>
+        /// 怪我の週次処理（設計書03 §3.5: 発生判定→回復進行）。SeasonEngine と同じ順序・同じ独立ストリームで回す。
+        /// 発生・復帰はフィードへ流す（通知フィード駆動）。怪我中の選手は DevelopmentModel 側で練習が止まる。
+        /// </summary>
+        private void RunInjuryWeek()
+        {
+            var week = KokoSim.Unity.Shell.GameClock.Week;
+            var year = KokoSim.Unity.Shell.GameClock.YearIndex;
+            var rng = _rng.Fork(0x1213_0000UL ^ (ulong)(year * 100 + week));
+            var newItems = new List<FeedItem>();
+
+            foreach (var p in Roster)
+            {
+                if (p.Injury == InjurySeverity.None)
+                {
+                    if (!InjuryModel.WeeklyCheck(p, rng, _injury, _skills)) continue;
+                    newItems.Add(new FeedItem
+                    {
+                        When = "今週",
+                        Text = p.Name + " が " + SiteJp(p.InjurySite) + " を故障（"
+                               + SeverityJp(p.Injury) + "・全治 " + WeeksToFullRecovery(p) + " 週）",
+                        Kind = FeedKind.Warn,
+                        Tag = "警告",
+                    });
+                }
+                else
+                {
+                    InjuryModel.WeeklyRecover(p, _injury);
+                    if (p.Injury != InjurySeverity.None) continue;
+                    newItems.Add(new FeedItem
+                    {
+                        When = "今週",
+                        Text = p.Name + " が怪我から復帰した。",
+                        Kind = FeedKind.Up,
+                        Tag = "情報",
+                    });
                 }
             }
 
@@ -213,24 +245,16 @@ namespace KokoSim.Unity.Home
         public void AdvanceDay()
         {
             var practiceDue = GameSession.Current.AdvanceDay();
-            if (practiceDue) RunPracticeWeek(_training.TournamentPracticeMult);
+            if (!practiceDue) return;
+            RunPracticeWeek(_training.TournamentPracticeMult);
+            RunInjuryWeek();
         }
 
         /// <summary>自校の次戦を自動消化する（要件7「はい」）。結果をフィード化する。</summary>
         public PlayerMatchOutcome PlayMatch()
         {
             var o = GameSession.Current.PlayMatch();
-            var verb = o.ManagerWon ? "○ 勝利" : "● 敗戦";
-            PushFeed(new List<FeedItem>
-            {
-                new FeedItem
-                {
-                    When = "本日",
-                    Text = o.RoundName + " vs " + o.OpponentName + "　" + o.ManagerScore + "-" + o.OpponentScore + "　" + verb,
-                    Kind = o.ManagerWon ? FeedKind.Up : FeedKind.Warn,
-                    Tag = o.ManagerWon ? "情報" : "警告",
-                },
-            });
+            PushMatchFeed(o);
             return o;
         }
 
@@ -241,6 +265,12 @@ namespace KokoSim.Unity.Home
         public PlayerMatchOutcome CompleteMatch(KokoSim.Engine.Match.Game.GameResult result)
         {
             var o = GameSession.Current.CompleteMatch(result);
+            PushMatchFeed(o);
+            return o;
+        }
+
+        private void PushMatchFeed(PlayerMatchOutcome o)
+        {
             var verb = o.ManagerWon ? "○ 勝利" : "● 敗戦";
             PushFeed(new List<FeedItem>
             {
@@ -252,7 +282,6 @@ namespace KokoSim.Unity.Home
                     Tag = o.ManagerWon ? "情報" : "警告",
                 },
             });
-            return o;
         }
 
         /// <summary>結果表示を閉じる。大会が終了していれば通常モードへ戻す（要件）。</summary>
@@ -297,9 +326,9 @@ namespace KokoSim.Unity.Home
             });
         }
 
-        private School BuildManagerSchool()
+        private static School BuildManagerSchool()
         {
-            var trainable = _roster.Where(p => p.Grade <= 3).ToList();
+            var trainable = Roster.Where(p => p.Grade <= 3).ToList();
             // 総合＝6指標のリーグ標準化総合（③）。旧 Average(AverageLevel) から統一。
             var strength = trainable.Count == 0 ? 40.0 : KokoSim.Unity.Shell.TeamOverall.Of(trainable);
             return new School { Id = ManagerSchoolId, Name = "桜丘", PrefectureId = FieldPrefectureId, Strength = strength };
@@ -335,7 +364,7 @@ namespace KokoSim.Unity.Home
         }
 
         /// <summary>次の試合カード＋カウントダウンを大会仕様で埋める（要件4・5）。</summary>
-        private void FillTournamentView(HomeView view, int week)
+        private void FillTournamentView(HomeView view)
         {
             var s = GameSession.Current;
             var r = s.Runner;
@@ -372,61 +401,49 @@ namespace KokoSim.Unity.Home
 
         public HomeView BuildView()
         {
-            var _week = KokoSim.Unity.Shell.GameClock.Week;        // 共有現在週
-            var _year = KokoSim.Unity.Shell.GameClock.YearIndex;   // 共有年度
+            var week = KokoSim.Unity.Shell.GameClock.Week;        // 共有現在週
+            var year = KokoSim.Unity.Shell.GameClock.YearIndex;   // 共有年度
             var view = new HomeView();
-            view.WeekLabel = KokoSim.Unity.Shell.SeasonClock.CurrentLabel(_year, _week);   // 共通「YYYY年M月W週目」
+            view.WeekLabel = KokoSim.Unity.Shell.SeasonClock.CurrentLabel(year, week);   // 共通「YYYY年M月W週目」
             // 資金は監督メタ（ManagerService）が単一ソース。練習試合の費用減算がそのまま反映される。
             view.Funds = "¥" + KokoSim.Unity.Shell.ManagerService.Manager.Funds.ToString("0") + "万";
             view.FameGrade = "D";
             view.TrustGrade = "C";
 
-            var trainable = _roster.Where(p => p.Grade <= 3).ToList();
-            view.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(trainable);
+            var roster = Roster;
+            view.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(roster);
 
-            // 部の状態。
-            view.Injuries = 0;
-            view.InjuredNames = "";
-
-            if (GameSession.Current.InTournament)
+            // 故障者（設計書03 §3.5: 部位・程度は常に可視）。重い順→学年順で並べる。
+            foreach (var p in roster.Where(x => x.Injury != InjurySeverity.None)
+                         .OrderByDescending(x => (int)x.Injury).ThenBy(x => x.Id))
             {
-                FillTournamentView(view, _week);
-            }
-            else
-            {
-                // 通常モード: 夏予選までの残り週（設計書03: 夏は第15週前後）。次戦は練習試合の仮表示。
-                view.TournamentMode = false;
-                view.CountdownLabel = "夏予選まで";
-                var left = _calendar.SummerTournamentStartWeek - _week;
-                view.CountdownValue = left > 0 ? "残り " + left + " 週" : "開催中";
-
-                view.GameTag = "練習試合";
-                view.GameDate = "第" + (_week + 2) + "週（土）";
-                view.Venue = "自校グラウンド";
-                view.Weather = "曇";
-            }
-
-            // 練習計画（メニュー巡回を7日で表現。土曜は練習試合）。
-            for (var d = 0; d < 7; d++)
-            {
-                var isMatch = d == 5; // 土
-                var m = WeekMenus[(_week + d) % WeekMenus.Length];
-                view.Plan.Add(new PlanDay
+                view.Injured.Add(new InjuredRow
                 {
-                    Day = DayNames[d],
-                    Menu = isMatch ? "練習試合 vs 北都大付属" : MenuJp(m),
-                    Match = isMatch,
+                    Number = p.UniformNumber == 0 ? "—" : p.UniformNumber.ToString(),
+                    Name = p.Name,
+                    Site = SiteJp(p.InjurySite),
+                    Severity = SeverityJp(p.Injury),
+                    Back = "あと " + WeeksToFullRecovery(p) + " 週",
+                    Severe = p.Injury == InjurySeverity.Severe,
                 });
             }
 
-            // 注目選手（中核平均が高い順に4名）。
-            foreach (var p in _roster.OrderByDescending(x => x.AverageLevel()).Take(4))
+            if (GameSession.Current.InTournament)
             {
-                view.Roster.Add(BuildRow(p));
+                FillTournamentView(view);
+            }
+            else
+            {
+                // 通常モード: 夏予選までの残り週（設計書03: 夏は第15週前後）。
+                // 「次の試合」カードは大会モード中だけ出す（通常週はダミーの対戦カードを出さない）。
+                view.TournamentMode = false;
+                view.CountdownLabel = "夏予選まで";
+                var left = _calendar.SummerTournamentStartWeek - week;
+                view.CountdownValue = left > 0 ? "残り " + left + " 週" : "開催中";
             }
 
             // 個別指導（設計書04。枠のみ＝上位2名を仮表示＋空き1。効果はエンジン未接続 Q7）。
-            var top = _roster.OrderByDescending(x => x.AverageLevel()).Take(2).ToList();
+            var top = roster.OrderByDescending(x => x.AverageLevel()).Take(2).ToList();
             view.Guidance.Add(new GuidanceSlot { Name = top.Count > 0 ? top[0].Name : "", Focus = "打撃強化", Empty = top.Count == 0 });
             view.Guidance.Add(new GuidanceSlot { Name = top.Count > 1 ? top[1].Name : "", Focus = "投球", Empty = top.Count <= 1 });
             view.Guidance.Add(new GuidanceSlot { Empty = true });
@@ -436,28 +453,51 @@ namespace KokoSim.Unity.Home
             return view;
         }
 
-        private static RosterRow BuildRow(DevelopingPlayer p)
+        // ===== 表示用の変換 =====
+
+        private static readonly TrainingMenu[] WeekMenus =
         {
-            var overall = (int)p.AverageLevel();
-            return new RosterRow
-            {
-                Name = p.Name,
-                Position = p.IsPitcher ? "投手" : "野手",
-                OverallGrade = Tiers.FromStrength(overall).ToString(),
-                Condition = ConditionJp(p.ConditionValue),
-            };
+            TrainingMenu.Batting, TrainingMenu.Defense, TrainingMenu.Pitching,
+            TrainingMenu.Strength, TrainingMenu.BaseRunning, TrainingMenu.Running, TrainingMenu.Rest,
+        };
+
+        /// <summary>
+        /// 完治までの残り週。回復は段階を1つずつ下げる方式（Severe→Moderate→Minor→完治）なので、
+        /// 現段階の残り週に下位段階の回復週を足し込む（<see cref="InjuryModel"/> の内部規則と同じ計算）。
+        /// </summary>
+        private int WeeksToFullRecovery(DevelopingPlayer p)
+        {
+            var weeks = p.InjuryWeeksRemaining;
+            if (p.Injury == InjurySeverity.Severe) weeks += Recovery(_injury.ModerateRecoveryWeeks);
+            if (p.Injury == InjurySeverity.Severe || p.Injury == InjurySeverity.Moderate)
+                weeks += Recovery(_injury.MinorRecoveryWeeks);
+            return Math.Max(1, weeks);
         }
 
-        // 調子（内部連続値→5段階）を日本語表示（設計書02 §3.3。正ソースは FormModel）。
-        private static string ConditionJp(double conditionValue)
+        private int Recovery(int baseWeeks)
+            => Math.Max(1, (int)Math.Round(baseWeeks * _injury.MedicalRecoveryFactor));
+
+        private static string SeverityJp(InjurySeverity s)
         {
-            switch (KokoSim.Engine.Players.FormModel.Quantize(conditionValue))
+            switch (s)
             {
-                case KokoSim.Engine.Players.Condition.Excellent: return "絶好調";
-                case KokoSim.Engine.Players.Condition.Good: return "好調";
-                case KokoSim.Engine.Players.Condition.Poor: return "不調";
-                case KokoSim.Engine.Players.Condition.Terrible: return "絶不調";
-                default: return "普通";
+                case InjurySeverity.Minor: return "軽度";
+                case InjurySeverity.Moderate: return "中度";
+                case InjurySeverity.Severe: return "重度";
+                default: return "";
+            }
+        }
+
+        private static string SiteJp(InjurySite s)
+        {
+            switch (s)
+            {
+                case InjurySite.Shoulder: return "肩";
+                case InjurySite.Elbow: return "肘";
+                case InjurySite.Back: return "腰";
+                case InjurySite.Knee: return "膝";
+                case InjurySite.Ankle: return "足首";
+                default: return "手";
             }
         }
 
@@ -485,22 +525,6 @@ namespace KokoSim.Unity.Home
                 case AbilityKind.Stamina: return "スタミナ";
                 case AbilityKind.PitchRank: return "球種";
                 default: return k.ToString();
-            }
-        }
-
-        private static string MenuJp(TrainingMenu m)
-        {
-            switch (m)
-            {
-                case TrainingMenu.Batting: return "打撃";
-                case TrainingMenu.Strength: return "筋力";
-                case TrainingMenu.BaseRunning: return "走塁";
-                case TrainingMenu.Defense: return "守備";
-                case TrainingMenu.Throwing: return "遠投";
-                case TrainingMenu.Pitching: return "投げ込み";
-                case TrainingMenu.BreakingBall: return "変化球";
-                case TrainingMenu.Running: return "走り込み";
-                default: return "休養";
             }
         }
     }

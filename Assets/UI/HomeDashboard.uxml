@@ -12,10 +12,10 @@
       <!-- ===== ダッシュボード本体（3カラム・外側スクロールなし） ===== -->
       <ui:VisualElement class="dash">
 
-        <!-- COL1: 次の試合 / 部の状態 / 注目選手 -->
+        <!-- COL1（主役）: 次の試合（大会モード時のみ） / 部の実力＝6指標レーダー / 故障者 -->
         <ui:VisualElement class="dash-col dash-col--a">
-          <!-- 次の試合 -->
-          <ui:VisualElement class="card">
+          <!-- 次の試合。通常週はダミーの対戦カードを出さないので、コントローラが display で開閉する -->
+          <ui:VisualElement name="next-match" class="card">
             <ui:VisualElement class="card__hd">
               <ui:Label class="card__hd-title" text="次の試合" />
               <ui:Label name="game-tag" class="card__hd-sub" text="練習試合" />
@@ -40,56 +40,86 @@
             </ui:VisualElement>
           </ui:VisualElement>
 
-          <!-- 部の状態 -->
+          <!-- チームランク（6指標レーダー）。カード本体クリックでチーム総合力の専用パネルへ -->
           <ui:VisualElement class="card">
             <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="部の状態" />
+              <ui:Label class="card__hd-title" text="チームランク" />
+            </ui:VisualElement>
+            <ui:VisualElement name="team-strength-row" class="card__body hm-ts">
+              <ui:VisualElement class="hm-ts__top">
+                <ui:Label class="hm-ts__k" text="総合" />
+                <ui:VisualElement name="team-strength-chip" class="pd2-overall__chip" />
+                <ui:Label name="team-strength-value" class="hm-ts__v" text="—" />
+              </ui:VisualElement>
+              <ui:VisualElement name="hm-radar" class="hm-radar" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <!-- 故障者（設計書03 §3.5: 部位・程度は常に可視） -->
+          <ui:VisualElement class="card card--grow">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="故障者" />
+              <ui:Label name="injury-count" class="card__hd-sub" text="0 名" />
+            </ui:VisualElement>
+            <ui:ScrollView mode="Vertical" class="card__scroll">
+              <ui:VisualElement name="injury-list" />
+            </ui:ScrollView>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- COL2: チーム成績 / チーム内ランキング -->
+        <ui:VisualElement class="dash-col dash-col--b">
+          <ui:VisualElement class="card">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="チーム成績" />
             </ui:VisualElement>
             <ui:VisualElement class="card__body">
-              <ui:VisualElement name="team-strength-row" class="inj-row">
-                <ui:Label class="g-row__k" text="チーム総合力" />
-                <ui:VisualElement name="team-strength-chip" class="pd2-overall__chip" />
+              <ui:VisualElement class="hm-th">
+                <ui:Label class="hm-sc-k hm-th__c" text="" />
+                <ui:Label class="hm-sc-v hm-th__c hm-th__c--r" text="通算" />
+                <ui:Label class="hm-sc-v hm-th__c hm-th__c--r" text="公式戦" />
+                <ui:Label class="hm-sc-v hm-th__c hm-th__c--r" text="今大会" />
               </ui:VisualElement>
-              <ui:VisualElement class="inj-row">
-                <ui:Label class="g-row__k" text="怪我人" />
-                <ui:Label name="injuries" class="inj-row__v" text="0 名" />
-              </ui:VisualElement>
+              <ui:VisualElement name="team-stats" />
             </ui:VisualElement>
           </ui:VisualElement>
 
-          <!-- 注目選手（内部スクロール） -->
           <ui:VisualElement class="card card--grow">
             <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="注目選手" />
+              <ui:Label class="card__hd-title" text="チーム内ランキング" />
+              <ui:Label class="card__hd-sub" text="通算" />
             </ui:VisualElement>
-            <ui:ScrollView mode="Vertical" class="card__scroll">
-              <ui:VisualElement name="roster-rows" />
-            </ui:ScrollView>
+            <ui:VisualElement class="card__body hm-rk2">
+              <ui:VisualElement class="hm-rk2__col">
+                <ui:VisualElement class="hm-th">
+                  <ui:Label class="hm-rk-k hm-th__c hm-th__c--sec" text="打撃" />
+                  <ui:Label class="hm-rk-e hm-th__c" text="1位" />
+                  <ui:Label class="hm-rk-e hm-th__c" text="2位" />
+                </ui:VisualElement>
+                <ui:VisualElement name="rank-bat" />
+              </ui:VisualElement>
+              <ui:VisualElement class="hm-rk2__gap" />
+              <ui:VisualElement class="hm-rk2__col">
+                <ui:VisualElement class="hm-th">
+                  <ui:Label class="hm-rk-k hm-th__c hm-th__c--sec" text="投手" />
+                  <ui:Label class="hm-rk-e hm-th__c" text="1位" />
+                  <ui:Label class="hm-rk-e hm-th__c" text="2位" />
+                </ui:VisualElement>
+                <ui:VisualElement name="rank-pit" />
+              </ui:VisualElement>
+            </ui:VisualElement>
           </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- COL2: 通知フィード（内部スクロール） -->
-        <ui:VisualElement class="dash-col dash-col--b">
-          <ui:VisualElement class="card card--grow">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="通知フィード" />
-              <ui:Label class="card__hd-sub" text="今週の出来事" />
-            </ui:VisualElement>
-            <ui:ScrollView mode="Vertical" class="card__scroll">
-              <ui:VisualElement name="feed-list" />
-            </ui:ScrollView>
-          </ui:VisualElement>
-        </ui:VisualElement>
-
-        <!-- COL3: 練習計画 / 個別指導 -->
+        <!-- COL3: 今週の出来事 / 個別指導 -->
         <ui:VisualElement class="dash-col dash-col--c">
           <ui:VisualElement class="card card--grow">
             <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="今週の練習計画" />
-              <ui:Label class="card__hd-sub" text="週間メニュー" />
+              <ui:Label class="card__hd-title" text="今週の出来事" />
+              <ui:Label class="card__hd-sub" text="通知フィード" />
             </ui:VisualElement>
             <ui:ScrollView mode="Vertical" class="card__scroll">
-              <ui:VisualElement name="plan-days" />
+              <ui:VisualElement name="feed-list" />
             </ui:ScrollView>
           </ui:VisualElement>
 
