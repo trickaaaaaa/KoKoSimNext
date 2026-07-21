@@ -53,6 +53,10 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float pitchIntervalSeconds = 0.45f;
         [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
         [SerializeField] private float pitchCallHoldSeconds = 0.35f;
+        [Tooltip("得点オーバーレイ（issue #60）の1点あたりの加算間隔[秒]（加点前の一時停止にも使う）。")]
+        [SerializeField] private float scoreCallStepSeconds = 0.5f;
+        [Tooltip("得点オーバーレイが最終スコアに達してから消えるまでの表示時間[秒]。")]
+        [SerializeField] private float scoreCallFinalHoldSeconds = 1.1f;
         [Tooltip("自校（後攻 home）の采配能力（委任AIの強さ・スキップ時に使用）。")]
         [SerializeField] private int managerTacticalSense = 70;
 
@@ -112,6 +116,15 @@ namespace KokoSim.Unity.Match
         private float _pitchCallClock;
         private bool _pitchCallOn;
 
+        // 得点時の大型スコアオーバーレイ（issue #60）。加点前スコア→1点ずつの加算アニメ→加点後スコアを
+        // 自前クロックで演出する（PitchCallと同じ「Update()の専用クロックで寿命管理」方式）。表示専用。
+        private VisualElement _scoreCall;
+        private Label _scoreCallOwnName, _scoreCallOwnNum, _scoreCallOppNum, _scoreCallOppName;
+        private float _scoreCallClock;
+        private bool _scoreCallOn;
+        private int _scoreCallOwnScore, _scoreCallOppScore, _scoreCallRunsRemaining;
+        private bool _scoreCallOwnScoring;
+
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
@@ -162,6 +175,12 @@ namespace KokoSim.Unity.Match
             _pitchCallJudge = _root.Q<Label>("pitch-call-judge");
             _pitchCallDetail = _root.Q<Label>("pitch-call-detail");
 
+            _scoreCall = _root.Q<VisualElement>("score-call");
+            _scoreCallOwnName = _root.Q<Label>("score-call-own-name");
+            _scoreCallOwnNum = _root.Q<Label>("score-call-own-num");
+            _scoreCallOppNum = _root.Q<Label>("score-call-opp-num");
+            _scoreCallOppName = _root.Q<Label>("score-call-opp-name");
+
             ResetPerMatchVisuals();
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied);
             _subPanel.Bind();
@@ -207,6 +226,8 @@ namespace KokoSim.Unity.Match
             _pitchBallVisible = false;
             _pitchCallClock = 0f;
             _pitchCallOn = false;
+            _scoreCallClock = 0f;
+            _scoreCallOn = false;
             _pitchBattingChoice = null;
             _pitchPolicyChoice = null;
             _capHist.Clear();
@@ -225,6 +246,7 @@ namespace KokoSim.Unity.Match
             SetOuts(0);
             SetBases(false, false, false);
             HidePitchCall();
+            HideScoreCall();
             foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb.name == "spd-1");
             if (_result != null) _result.style.display = DisplayStyle.None;
         }
@@ -471,6 +493,7 @@ namespace KokoSim.Unity.Match
             _pitchIdx = 0;
             _pitchClock = 0f;
             HidePitchCall();
+            HideScoreCall();
             // Play==null（三振・四球）でも守備陣＋走者を静止表示する（打席前の塁状況）。
             if (_current.Play != null) _view.SetPlay(_current.Play);
             else _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
@@ -526,6 +549,7 @@ namespace KokoSim.Unity.Match
         private void FinishPaView()
         {
             HidePitchCall();
+            HideScoreCall();
             SetBases(_current.BaseFirstAfter, _current.BaseSecondAfter, _current.BaseThirdAfter);
             PushHistory(HistoryLine(_current));   // プレー確定ごとに実況履歴へ1件積む
             EnterTacticsWindow(NextPrompt());
@@ -539,6 +563,8 @@ namespace KokoSim.Unity.Match
                 _pitchCallClock += Time.deltaTime * _speed;
                 if (_pitchCallClock >= pitchCallHoldSeconds) HidePitchCall();
             }
+            // 得点オーバーレイも自前の寿命で加算演出→消去まで進める（issue #60）。
+            if (_scoreCallOn) AdvanceScoreCall(Time.deltaTime * _speed);
 
             if (!_replaying || _current == null) return;
 
@@ -614,6 +640,7 @@ namespace KokoSim.Unity.Match
             if (_lineScorePosted) return;
             _lineScorePosted = true;
             PostLineScore(item.Inning, item.IsTop, finished: false);
+            if (item.RunsScored > 0) BeginScoreCall(item);
         }
 
         private void UpdateScoreboardFinal(GameResult r)
@@ -673,6 +700,62 @@ namespace KokoSim.Unity.Match
             _pitchCallOn = false;
             _pitchCallClock = 0f;
             if (_pitchCall != null) _pitchCall.style.display = DisplayStyle.None;
+        }
+
+        // ── 得点時の大型スコアオーバーレイ（issue #60） ──
+        // 並びは自校－相手校固定（先攻/後攻に依存しない）。加点前スコアを表示してから、得点数ぶん
+        // 1点ずつ加算する演出を挟み、最終スコアで一呼吸おいて自動的に消える。加算タイミングは各走者の
+        // 本塁生還時刻ではなく「判定確定後に等間隔で連続再生」（PlaybackRunに生還/アウトの意味フラグが
+        // 無く走者ごとの生還検知には新規実装が要るため、描画専用スコープで低リスクな方を選んだ）。
+        private void BeginScoreCall(LivePlateAppearance item)
+        {
+            if (_scoreCall == null || _scoreCallOwnNum == null || _scoreCallOppNum == null) return;
+
+            var ownIsAway = _managerIsAway;
+            var awayBefore = item.IsTop ? item.AwayScore - item.RunsScored : item.AwayScore;
+            var homeBefore = item.IsTop ? item.HomeScore : item.HomeScore - item.RunsScored;
+            _scoreCallOwnScore = ownIsAway ? awayBefore : homeBefore;
+            _scoreCallOppScore = ownIsAway ? homeBefore : awayBefore;
+            _scoreCallOwnScoring = item.IsTop == ownIsAway;
+            _scoreCallRunsRemaining = item.RunsScored;
+            _scoreCallClock = 0f;
+            _scoreCallOn = true;
+
+            if (_scoreCallOwnName != null) _scoreCallOwnName.text = ownIsAway ? _awayDisp : _homeDisp;
+            if (_scoreCallOppName != null) _scoreCallOppName.text = ownIsAway ? _homeDisp : _awayDisp;
+            RefreshScoreCallLabels();
+            _scoreCall.style.display = DisplayStyle.Flex;
+        }
+
+        private void AdvanceScoreCall(float dt)
+        {
+            _scoreCallClock += dt;
+            if (_scoreCallRunsRemaining > 0)
+            {
+                if (_scoreCallClock < scoreCallStepSeconds) return;
+                _scoreCallClock -= scoreCallStepSeconds;
+                if (_scoreCallOwnScoring) _scoreCallOwnScore++; else _scoreCallOppScore++;
+                _scoreCallRunsRemaining--;
+                RefreshScoreCallLabels();
+            }
+            else if (_scoreCallClock >= scoreCallFinalHoldSeconds)
+            {
+                HideScoreCall();
+            }
+        }
+
+        private void RefreshScoreCallLabels()
+        {
+            if (_scoreCallOwnNum != null) _scoreCallOwnNum.text = _scoreCallOwnScore.ToString();
+            if (_scoreCallOppNum != null) _scoreCallOppNum.text = _scoreCallOppScore.ToString();
+        }
+
+        private void HideScoreCall()
+        {
+            _scoreCallOn = false;
+            _scoreCallClock = 0f;
+            _scoreCallRunsRemaining = 0;
+            if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None;
         }
 
         private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>

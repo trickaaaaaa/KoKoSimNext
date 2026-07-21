@@ -33,6 +33,16 @@
                         <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" />
                         <ui:Label name="pitch-call-detail" class="pitch-call__detail" text="" />
                     </ui:VisualElement>
+                    <!-- 得点時の大型スコア（issue #60）。自校－相手校固定・加点前→1点ずつ加算→加点後で自動的に消える。 -->
+                    <ui:VisualElement name="score-call" class="score-call">
+                        <ui:VisualElement class="score-call__panel">
+                            <ui:Label name="score-call-own-name" class="score-call__team f-display" text="" />
+                            <ui:Label name="score-call-own-num" class="score-call__num f-num-bd" text="" />
+                            <ui:Label name="score-call-sep" class="score-call__sep f-num-bd" text="-" />
+                            <ui:Label name="score-call-opp-num" class="score-call__num f-num-bd" text="" />
+                            <ui:Label name="score-call-opp-name" class="score-call__team f-display" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <!-- 1球采配ショートカット（設計書15 Phase C-3, Q12-2: 全球で常駐）。低彩度の常時1行帯。

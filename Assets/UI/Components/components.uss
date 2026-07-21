@@ -898,6 +898,10 @@
 }
 .pitch-call__judge--strike { color: var(--color-lamp); }
 .pitch-call__judge--ball { color: var(--color-good); }
+/* 打球・走塁プレーの判定オーバーレイ（issue #59）。PitchCallと同じ器・idiomを流用する。
+   アウト＝警告色（常時表示）、セーフ＝良好色（際どい判定の時だけ表示、呼び出し側が出し分ける）。 */
+.pitch-call__judge--out { color: var(--color-warn); }
+.pitch-call__judge--safe { color: var(--color-good); }
 /* 球種・球速（実1球記録がある打席のみ。合成投球列では出さない）。 */
 .pitch-call__detail {
     font-size: var(--fs-body);
@@ -907,6 +911,46 @@
     border-radius: var(--radius-chip);
     padding: var(--sp-1) var(--sp-2);
     margin-top: var(--sp-1);
+}
+
+/* ScoreCall：得点時の大型スコアオーバーレイ（issue #60）。位置・半透明パネル・既定非表示は
+   PitchCall（#6）と同じ盤面overlay idiomを踏襲。並びは自校－相手校固定（先攻/後攻に依存しない）。
+   校名は設計書16のシグネチャ規則「校名は常に太明朝」（.f-display、LineScorePanelと同じ扱い）、
+   得点はコンデンス数字（.f-num-bd、UI原則③）。1枚の半透明パネルに5要素を横並びで収める。 */
+.score-call {
+    position: absolute;
+    left: 0; right: 0; top: 20%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+.score-call__panel {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(14, 26, 19, 0.82);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-2) var(--sp-4);
+}
+.score-call__team {
+    font-size: var(--fs-body);
+    -unity-text-align: middle-center;
+    color: var(--color-chalk);
+    padding: 0 var(--sp-2);
+}
+.score-call__num {
+    font-size: var(--fs-callout);
+    -unity-text-align: middle-center;
+    letter-spacing: 1px;
+    color: var(--color-lamp);
+    min-width: 40px;
+    padding: 0 var(--sp-1);
+}
+.score-call__sep {
+    font-size: var(--fs-callout);
+    -unity-text-align: middle-center;
+    color: var(--color-chalk);
+    padding: 0 var(--sp-1);
 }
 
 /* ── BoxRow：ボックススコア表の1行（試合結果画面のイニングスコア／打撃／投手／打席結果に共通）──
