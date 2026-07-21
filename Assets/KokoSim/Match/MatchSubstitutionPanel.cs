@@ -397,8 +397,9 @@ namespace KokoSim.Unity.Match
             var group = new Label(pitcherView ? "投球" : "打撃・走守");
             group.AddToClassList("msub-cmp-group");
             _cmpRows.Add(group);
+            _cmpRows.Add(UiComponents.CompareHeader("退く", "入る"));
             foreach (var (label, a, b) in CompareRows(outgoing, incoming, pitcherView))
-                _cmpRows.Add(CompareRow(label, a, b));
+                _cmpRows.Add(CompareRowEl(label, a, b));
         }
 
         private Player SelectedOutgoing()
@@ -477,49 +478,15 @@ namespace KokoSim.Unity.Match
         private static int Stamina(Player p)
             => p?.Pitching == null ? -1 : Mathf.Clamp(Mathf.RoundToInt((float)p.Pitching.StaminaPitches * 100f / 160f), 0, 100);
 
-        private static VisualElement CompareRow(string label, int a, int b)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("cmp-row");
-            var win = a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0;
-
-            row.Add(ValueLabel(a < 0 ? "—" : a.ToString(), "cmp-row__val--l", win == -1));
-            var l = new VisualElement();
-            l.AddToClassList("cmp-row__side");
-            l.AddToClassList("cmp-row__side--l");
-            if (a >= 0) l.Add(Bar("cmp-row__bar--a", a));
-            row.Add(l);
-
-            var lab = new Label(label);
-            lab.AddToClassList("cmp-row__lab");
-            row.Add(lab);
-
-            var r = new VisualElement();
-            r.AddToClassList("cmp-row__side");
-            r.AddToClassList("cmp-row__side--r");
-            if (b >= 0) r.Add(Bar("cmp-row__bar--b", b));
-            row.Add(r);
-            row.Add(ValueLabel(b < 0 ? "—" : b.ToString(), "cmp-row__val--r", win == 1));
-            return row;
-        }
-
-        private static Label ValueLabel(string text, string sideMod, bool win)
-        {
-            var l = new Label(text);
-            l.AddToClassList("cmp-row__val");
-            l.AddToClassList(sideMod);
-            if (win) l.AddToClassList("cmp-row__val--win");
-            return l;
-        }
-
-        private static VisualElement Bar(string colorMod, int value)
-        {
-            var bar = new VisualElement();
-            bar.AddToClassList("cmp-row__bar");
-            bar.AddToClassList(colorMod);
-            bar.style.width = Length.Percent(Mathf.Clamp(value, 0, 100));
-            return bar;
-        }
+        // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。負値は「その選手がいない」を表す。
+        private static VisualElement CompareRowEl(string label, int a, int b)
+            => UiComponents.CompareRow(new CompareRowData
+            {
+                Label = label,
+                ValueA = a, ValueB = b,
+                HasA = a >= 0, HasB = b >= 0,
+                Winner = a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0,
+            });
 
         // ── 注記＋確定 ──
 
