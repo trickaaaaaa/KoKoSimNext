@@ -95,6 +95,7 @@ namespace KokoSim.Unity.Match
         private int _pitchIdx;
         private float _pitchClock;
         private bool _inPitchPhase;   // 投球フェーズ（B/S点灯）中か。false なら打球フェーズ/静止。
+        private bool _pitchBallVisible;   // 投球フェーズで今の1球の投球軌道を流しているか（#5）。
 
         // 1球ごとの判定オーバーレイ（issue #6）。判定＋球速球種を盤面上に大きく短時間だけ出す。
         // 球速・球種は実1球記録がある打席だけ（合成投球列は null＝出さない）。表示専用。
@@ -193,8 +194,12 @@ namespace KokoSim.Unity.Match
             _pitchIdx = 0;
             _pitchClock = 0f;
             _inPitchPhase = false;
+<<<<<<< HEAD
+            _pitchBallVisible = false;
+=======
             _pitchCallClock = 0f;
             _pitchCallOn = false;
+>>>>>>> origin/main
             _pitchBattingChoice = null;
             _pitchPolicyChoice = null;
             _capHist.Clear();
@@ -434,17 +439,33 @@ namespace KokoSim.Unity.Match
 
             var pitches = _current.PitchSeq?.Pitches;
             _inPitchPhase = pitches != null && pitches.Count > 0;
-            if (!_inPitchPhase) EnterBattedBallOrHold(); // 投球列が空でも先へ進む
+            if (_inPitchPhase) BeginPitchBall(0);        // 1球目の投球軌道を盤面へ（#5）
+            else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
 
             SetEnabled(_nextPa, false);
             SetEnabled(_pinchHit, false);
             SetEnabled(_skip, false);
         }
 
+        // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
+        // 捕手からの返球は描画しない。打球になる最後の1球だけは、続く打球タイムラインが同じ投球
+        // セグメントを先頭に持つので二重に描かず、静止表示のまま打球フェーズへ渡す。
+        private void BeginPitchBall(int index)
+        {
+            var last = _current.PitchSeq.Pitches.Count - 1;
+            _pitchBallVisible = _current.Play == null || index < last;
+            if (_pitchBallVisible)
+                _view.SetPlay(PitchPlaybackFactory.PitchOnly(
+                    _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore));
+            else
+                _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
+        }
+
         // 投球フェーズ終了→打球再生（Play あり）または結果保持（三振・四球）。
         private void EnterBattedBallOrHold()
         {
             _inPitchPhase = false;
+            _pitchBallVisible = false;
             _t = 0;
             if (_current.Play != null)
             {
@@ -484,6 +505,8 @@ namespace KokoSim.Unity.Match
             if (_inPitchPhase)
             {
                 _pitchClock += Time.deltaTime * _speed;
+                // 1球ぶんの投球軌道を毎フレーム進める（0.45s で本塁到達。以降は到達点で保持）。
+                if (_pitchBallVisible) _view.SetTime(_pitchClock);
                 var pitches = _current.PitchSeq.Pitches;
                 while (_inPitchPhase && _pitchClock >= pitchIntervalSeconds)
                 {
@@ -493,6 +516,7 @@ namespace KokoSim.Unity.Match
                     ShowPitchCall(pt);
                     _pitchIdx++;
                     if (_pitchIdx >= pitches.Count) EnterBattedBallOrHold();
+                    else BeginPitchBall(_pitchIdx);   // 次の1球の投球軌道を頭から流す
                 }
                 return;
             }
