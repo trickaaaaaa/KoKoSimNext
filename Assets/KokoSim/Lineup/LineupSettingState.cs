@@ -102,7 +102,7 @@ namespace KokoSim.Unity.Lineup
     }
 
     /// <summary>
-    /// 試合前スタメン設定の状態。全画面共有 <see cref="RosterService.Roster"/> を単一ソースに、打順9人＋守備位置・
+    /// 試合前スタメン設定の状態。全画面共有 <see cref="RosterService.Active"/> を単一ソースに、打順9人＋守備位置・
     /// DH・先発を編集し、確定で <see cref="GameSession.Lineup"/>（<see cref="LineupSpec"/>）へ書き出す。UnityEngine 非依存。
     /// </summary>
     public sealed class LineupSettingState
@@ -182,7 +182,7 @@ namespace KokoSim.Unity.Lineup
 
         public LineupSettingState()
         {
-            _roster = RosterService.Roster;
+            _roster = RosterService.Active;
             var benchIn = Enumerable.Range(0, _roster.Count).Where(i => _roster[i].UniformNumber >= 1).ToList();
             // ベンチ入りが9人に満たない編成では打順を組めない。画面は従来通り全部員で描いたうえで確定を塞ぎ、
             // メンバー設定でベンチ入りを増やしてもらう（不正な LineupSpec はエンジンが弾く）。

@@ -100,7 +100,7 @@ namespace KokoSim.Unity.Tournament
 
         private static void SetUpTournament()
         {
-            var roster = RosterService.Roster;
+            var roster = RosterService.Active;
             var strength = TeamOverall.Of(roster);
             var manager = new School
             {

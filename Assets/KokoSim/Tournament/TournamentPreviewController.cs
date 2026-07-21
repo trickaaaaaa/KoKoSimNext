@@ -91,7 +91,7 @@ namespace KokoSim.Unity.Tournament
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank == null) return;
             rank.Clear();
-            var grade = TeamOverall.GradeOf(RosterService.Roster);
+            var grade = TeamOverall.GradeOf(RosterService.Active);
             rank.Add(UiComponents.RankChipLegacy(grade));
         }
 

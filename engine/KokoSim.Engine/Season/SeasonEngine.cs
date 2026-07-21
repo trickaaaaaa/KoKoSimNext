@@ -74,9 +74,10 @@ public static class SeasonEngine
             var budget = ctx.BudgetMinutes ?? ctx.Training.DefaultBudgetMinutes;
             for (var week = 0; week < ctx.Calendar.WeeksPerYear; week++)
             {
-                // 引退週フック（設計書09 §8）: 夏の3年引退の翌週＝新チーム発足。旧主将（引退3年）を外し、
-                // 新チームの最上級生から暫定主将を立てる。以降は指名ウィンドウ中だけプレイヤーが差し替える。
-                if (CaptainSelector.IsNewTeamStartWeek(week, ctx.Calendar)) CaptainSelector.BeginNewTeam(roster);
+                // 引退週フック（設計書03 §2 / 09 §8）: 夏の3年引退の翌週＝新チーム発足。3年を引退フラグ扱いに
+                // （ロスターには残す。除去は年度替わりの卒業）し、新チームの最上級生から暫定主将を立てる。
+                // 以降は指名ウィンドウ中だけプレイヤーが差し替える。
+                RosterLifecycle.OnWeekEntered(roster, week, ctx.Calendar);
 
                 var campMult = ctx.Calendar.CampMultiplier(week, ctx.Training);
                 foreach (var p in roster)

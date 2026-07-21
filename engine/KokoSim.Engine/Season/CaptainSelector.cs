@@ -26,10 +26,12 @@ public static class CaptainSelector
     public static DevelopingPlayer? SelectAuto(IReadOnlyList<DevelopingPlayer> roster)
     {
         foreach (var p in roster) p.IsCaptain = false;
-        if (roster.Count == 0) return null;
+        // 引退済み（夏で引退した3年）は候補外。ロスターに残っていても主将にはしない（RosterLifecycle）。
+        var eligible = roster.Where(p => !p.IsRetired).ToList();
+        if (eligible.Count == 0) return null;
 
-        var topGrade = roster.Max(p => p.Grade);
-        var chosen = roster
+        var topGrade = eligible.Max(p => p.Grade);
+        var chosen = eligible
             .Where(p => p.Grade == topGrade)
             .OrderByDescending(LeadershipPower)
             .ThenByDescending(p => p.Leadership)
@@ -45,6 +47,9 @@ public static class CaptainSelector
     /// </summary>
     public static DevelopingPlayer? EnsureCaptain(IReadOnlyList<DevelopingPlayer> roster)
     {
+        // 引退済みの主将は在籍扱いしない（引退週フックを通さず週が飛んだ場合の保険）。
+        foreach (var p in roster) if (p.IsRetired) p.IsCaptain = false;
+
         // IsCaptain が複数付いていたら不整合。1名以下に正規化してから判定。
         var flagged = roster.Where(p => p.IsCaptain).ToList();
         if (flagged.Count == 1) return flagged[0];
@@ -82,7 +87,7 @@ public static class CaptainSelector
 
     /// <summary>新チームの構成員（3年生は夏で引退済み＝除外）。順序は元ロスターのまま（決定論）。</summary>
     public static IReadOnlyList<DevelopingPlayer> NewTeamMembers(IReadOnlyList<DevelopingPlayer> roster)
-        => roster.Where(p => p.Grade < 3).ToList();
+        => roster.Where(p => !p.IsRetired && p.Grade < 3).ToList();
 
     /// <summary>
     /// 指名候補（新チームの最上級生＝新3年）。統率力の生値は伏せたまま UI で選ばせるため、

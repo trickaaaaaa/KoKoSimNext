@@ -52,7 +52,7 @@ namespace KokoSim.Unity.Shell
             Id = ManagerSchoolId,
             Name = ManagerSchoolName,
             PrefectureId = PrefectureId,
-            Strength = TeamOverall.Of(RosterService.Roster),
+            Strength = TeamOverall.Of(RosterService.Active),
         };
     }
 }

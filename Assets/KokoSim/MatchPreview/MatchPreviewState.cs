@@ -71,7 +71,7 @@ namespace KokoSim.Unity.MatchPreview
             // 自校＝後攻(home)固定（PlayerMatchResolver・OPEN-Q #6）。相手が先攻。
             var ownTeam = PlayerMatchResolver.BuildManagerTeam(NationService.ManagerSchoolName);
             v.Own = BuildSide("自校", NationService.ManagerSchoolName, "後攻", ownTeam,
-                TeamStrengthProfile.Compute(RosterService.Roster, Coeff));
+                TeamStrengthProfile.Compute(RosterService.Active, Coeff));
 
             if (opponent == null)
             {

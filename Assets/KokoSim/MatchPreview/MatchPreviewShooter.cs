@@ -58,7 +58,7 @@ namespace KokoSim.Unity.MatchPreview
 
         private static void SetUpTournament()
         {
-            var roster = RosterService.Roster;
+            var roster = RosterService.Active;
             var manager = new School
             {
                 Id = ManagerSchoolId,
