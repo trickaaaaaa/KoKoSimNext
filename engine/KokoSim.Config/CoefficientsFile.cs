@@ -7,6 +7,7 @@ using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Practice;
 using KokoSim.Engine.Season;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -43,6 +44,7 @@ public sealed record CoefficientsBundle
     public NationCoefficients Nation { get; init; } = new();
     public CareerCoefficients Career { get; init; } = new();
     public TournamentSchedule Tournament { get; init; } = new();
+    public PracticeMatchCoefficients PracticeMatch { get; init; } = new();
 }
 
 /// <summary>
@@ -93,6 +95,7 @@ public static class CoefficientsLoader
         public NationDto? Nation { get; set; }
         public CareerDto? Career { get; set; }
         public TournamentDto? Tournament { get; set; }
+        public PracticeMatchDto? PracticeMatch { get; set; }
 
         public CoefficientsBundle ToBundle() => new()
         {
@@ -120,6 +123,7 @@ public static class CoefficientsLoader
             Nation = Nation?.ToModel() ?? new NationCoefficients(),
             Career = Career?.ToModel() ?? new CareerCoefficients(),
             Tournament = Tournament?.ToModel() ?? new TournamentSchedule(),
+            PracticeMatch = PracticeMatch?.ToModel() ?? new PracticeMatchCoefficients(),
         };
     }
 
@@ -133,6 +137,27 @@ public static class CoefficientsLoader
         {
             FirstRoundDay = FirstRoundDay,
             RoundGapDays = RoundGapDays,
+        };
+    }
+
+    private sealed class PracticeMatchDto
+    {
+        private static readonly PracticeMatchCoefficients D = new();
+        public double Cost { get; set; } = D.Cost;
+        public double BaseAccept { get; set; } = D.BaseAccept;
+        public double TierGapPenalty { get; set; } = D.TierGapPenalty;
+        public double FameWeight { get; set; } = D.FameWeight;
+        public double MinAccept { get; set; } = D.MinAccept;
+        public double MaxAccept { get; set; } = D.MaxAccept;
+
+        public PracticeMatchCoefficients ToModel() => new()
+        {
+            Cost = Cost,
+            BaseAccept = BaseAccept,
+            TierGapPenalty = TierGapPenalty,
+            FameWeight = FameWeight,
+            MinAccept = MinAccept,
+            MaxAccept = MaxAccept,
         };
     }
 
@@ -255,6 +280,11 @@ public static class CoefficientsLoader
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
         public double BearingSigma { get; set; } = D.BearingSigma;
         public double MinQualityVeloFactor { get; set; } = D.MinQualityVeloFactor;
+        public double ContactQualityVelocityRefKmh { get; set; } = D.ContactQualityVelocityRefKmh;
+        public double ContactQualityPerKmh { get; set; } = D.ContactQualityPerKmh;
+        public double ContactQualityPerControl { get; set; } = D.ContactQualityPerControl;
+        public double ContactQualityBreakRefM { get; set; } = D.ContactQualityBreakRefM;
+        public double ContactQualityPerBreakM { get; set; } = D.ContactQualityPerBreakM;
 
         public BattingCoefficients ToModel() => new()
         {
@@ -283,6 +313,11 @@ public static class CoefficientsLoader
             LaunchAngleSigma = LaunchAngleSigma,
             BearingSigma = BearingSigma,
             MinQualityVeloFactor = MinQualityVeloFactor,
+            ContactQualityVelocityRefKmh = ContactQualityVelocityRefKmh,
+            ContactQualityPerKmh = ContactQualityPerKmh,
+            ContactQualityPerControl = ContactQualityPerControl,
+            ContactQualityBreakRefM = ContactQualityBreakRefM,
+            ContactQualityPerBreakM = ContactQualityPerBreakM,
         };
     }
 
@@ -299,8 +334,17 @@ public static class CoefficientsLoader
         public double ForceOutMarginSeconds { get; set; } = D.ForceOutMarginSeconds;
         public double ErrorBaseProb { get; set; } = D.ErrorBaseProb;
         public double ErrorCatchingSlope { get; set; } = D.ErrorCatchingSlope;
-        public double DoubleDistanceM { get; set; } = D.DoubleDistanceM;
-        public double TripleDistanceM { get; set; } = D.TripleDistanceM;
+        public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
+        public double CatchReachCapSeconds { get; set; } = D.CatchReachCapSeconds;
+        public double RollDecelMps2 { get; set; } = D.RollDecelMps2;
+        public double RollRetentionFlat { get; set; } = D.RollRetentionFlat;
+        public double RollRetentionSteep { get; set; } = D.RollRetentionSteep;
+        public double FenceCaromSeconds { get; set; } = D.FenceCaromSeconds;
+        public double OutfieldPickupSeconds { get; set; } = D.OutfieldPickupSeconds;
+        public double ThrowDistanceDragPerM { get; set; } = D.ThrowDistanceDragPerM;
+        public double RunningTopSpeedFactor { get; set; } = D.RunningTopSpeedFactor;
+        public double BaseTurnSeconds { get; set; } = D.BaseTurnSeconds;
+        public double ExtraBaseMarginSeconds { get; set; } = D.ExtraBaseMarginSeconds;
         public double AptitudeNeutral { get; set; } = D.AptitudeNeutral;
         public double AptitudeSlopePerPoint { get; set; } = D.AptitudeSlopePerPoint;
         public double AptitudeFactorMin { get; set; } = D.AptitudeFactorMin;
@@ -318,8 +362,17 @@ public static class CoefficientsLoader
             ForceOutMarginSeconds = ForceOutMarginSeconds,
             ErrorBaseProb = ErrorBaseProb,
             ErrorCatchingSlope = ErrorCatchingSlope,
-            DoubleDistanceM = DoubleDistanceM,
-            TripleDistanceM = TripleDistanceM,
+            CatchReachFieldingSlope = CatchReachFieldingSlope,
+            CatchReachCapSeconds = CatchReachCapSeconds,
+            RollDecelMps2 = RollDecelMps2,
+            RollRetentionFlat = RollRetentionFlat,
+            RollRetentionSteep = RollRetentionSteep,
+            FenceCaromSeconds = FenceCaromSeconds,
+            OutfieldPickupSeconds = OutfieldPickupSeconds,
+            ThrowDistanceDragPerM = ThrowDistanceDragPerM,
+            RunningTopSpeedFactor = RunningTopSpeedFactor,
+            BaseTurnSeconds = BaseTurnSeconds,
+            ExtraBaseMarginSeconds = ExtraBaseMarginSeconds,
             AptitudeNeutral = AptitudeNeutral,
             AptitudeSlopePerPoint = AptitudeSlopePerPoint,
             AptitudeFactorMin = AptitudeFactorMin,

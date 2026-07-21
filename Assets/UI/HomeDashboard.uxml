@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="Components/components.uss" />
     <Style src="KokoSimTheme.uss" />
     <ui:VisualElement class="root">
 
@@ -123,6 +125,48 @@
           <ui:VisualElement class="tm-dialog__btns">
             <ui:Button name="tm-dialog-no" class="tm-btn tm-btn--ghost" text="いいえ" />
             <ui:Button name="tm-dialog-yes" class="tm-btn tm-btn--primary" text="はい" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- 新チーム発足: 次期主将の指名（設計書09 §8）。左に候補リスト、右に選択中の詳細（案C）。
+           候補は新最上級生。統率力の生値は出さず、可視情報（総合・精神力・調子・特殊能力）で選ばせる。 -->
+      <ui:VisualElement name="nt-modal" class="ui-root modal-scrim">
+        <ui:VisualElement class="modal-card nt-card">
+          <ui:VisualElement class="nt-hd">
+            <ui:Label class="nt-hd__t" text="新チーム始動" />
+            <ui:Label name="nt-retired" class="nt-hd__s" text="" />
+          </ui:VisualElement>
+          <ui:Label name="nt-lead" class="nt-lead" text="" />
+
+          <ui:VisualElement class="nt-body">
+            <!-- 左: 候補リスト（32px行） -->
+            <ui:VisualElement class="nt-list">
+              <ui:VisualElement class="nt-th">
+                <ui:Label class="nt-c-no nt-th__c" text="背" />
+                <ui:Label class="nt-c-name nt-th__c" text="選手" />
+                <ui:Label class="nt-c-pos nt-th__c" text="守" />
+                <ui:Label class="nt-c-rank nt-th__c" text="総合" />
+                <ui:Label class="nt-c-mental nt-th__c" text="精神" />
+                <ui:Label class="nt-c-cond nt-th__c" text="調子" />
+              </ui:VisualElement>
+              <ui:ScrollView name="nt-rows" class="nt-rows" />
+            </ui:VisualElement>
+
+            <!-- 右: 選択中の詳細（レーダー＋可視情報＋特殊能力） -->
+            <ui:VisualElement class="nt-detail">
+              <ui:Label name="nt-d-name" class="nt-d__name" text="" />
+              <ui:Label name="nt-d-sub" class="nt-d__sub" text="" />
+              <ui:VisualElement name="nt-d-radar" class="nt-d__radar" />
+              <ui:VisualElement name="nt-d-facts" class="nt-d__facts" />
+              <ui:Label class="nt-d__cap" text="特殊能力" />
+              <ui:VisualElement name="nt-d-skills" class="nt-d__skills" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="nt-foot">
+            <ui:Label name="nt-note" class="nt-foot__note" text="" />
+            <ui:Button name="nt-ok" class="tm-btn tm-btn--primary nt-ok" text="この選手を主将にする" />
           </ui:VisualElement>
         </ui:VisualElement>
       </ui:VisualElement>

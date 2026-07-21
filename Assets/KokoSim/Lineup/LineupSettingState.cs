@@ -26,6 +26,7 @@ namespace KokoSim.Unity.Lineup
         public string StatText = "";      // 通算の簡易成績（打率・本・点。全員打撃成績・データ無しは「-」）
         public int PlayerIndex = -1;      // 共有ロスターの安定index
         public bool IsPicked;
+        public bool IsPosPicked;          // 守備位置チップが選択中（次のチップクリックで入替）
         public bool IsCaptain;
     }
 
@@ -90,6 +91,8 @@ namespace KokoSim.Unity.Lineup
         public CompareCardView CardB = new CompareCardView();
         public int Tab;
         public string[] TabLabels = { "打撃・走塁", "守備・投手" };
+        public bool CanConfirm = true;      // ベンチ入りが9人未満なら false（確定ボタンを塞ぐ）
+        public string WarnText = "";        // 上の理由（空＝警告なし）
         public List<CompareRowView> Rows2 = new List<CompareRowView>();  // 比較能力行
         public bool ShowApt;
         public bool HasAptA;
@@ -99,12 +102,12 @@ namespace KokoSim.Unity.Lineup
     }
 
     /// <summary>
-    /// 試合前スタメン設定の状態。全画面共有 <see cref="RosterService.Roster"/> を単一ソースに、打順9人＋守備位置・
+    /// 試合前スタメン設定の状態。全画面共有 <see cref="RosterService.Active"/> を単一ソースに、打順9人＋守備位置・
     /// DH・先発を編集し、確定で <see cref="GameSession.Lineup"/>（<see cref="LineupSpec"/>）へ書き出す。UnityEngine 非依存。
     /// </summary>
     public sealed class LineupSettingState
     {
-        private enum PickKind { None, OrderPlayer, StartingPitcher }
+        private enum PickKind { None, OrderPlayer, StartingPitcher, SlotPosition }
 
         // 守備位置→漢字。
         private static readonly Dictionary<FieldPosition, string> PosKanji = new()
@@ -114,15 +117,12 @@ namespace KokoSim.Unity.Lineup
             { FieldPosition.LeftField, "左" }, { FieldPosition.CenterField, "中" }, { FieldPosition.RightField, "右" },
         };
 
-        // 選択できる守備位置（投手を除く8つ・野手スロットの守備位置ドロップダウン）。
-        public static readonly FieldPosition[] FielderPositions =
+        // 野手の守備位置（投手を除く8つ・背番号2〜9の慣例順）。初期打順のシードに使う。
+        private static readonly FieldPosition[] FielderPositions =
         {
             FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase, FieldPosition.ThirdBase,
             FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
         };
-
-        /// <summary>守備位置の漢字ラベル（守備位置ドロップダウン用）。</summary>
-        public static string PosLabel(FieldPosition p) => PosKanji[p];
 
         // 比較タブ①打撃・走塁（＋守備適性ダイヤ） ②守備・投手。メンバー設定と同一定義。
         private static readonly (string Label, Func<DevelopingPlayer, int> Get)[] TabBat =
@@ -160,6 +160,11 @@ namespace KokoSim.Unity.Lineup
 
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
 
+        // 出場登録できる選手＝ベンチ入り（背番号1〜20。設計書06 §3.3b）のロスターindex。
+        // スタメン・控え・ブルペンはすべてこの集合からしか選べない（ベンチ外は候補に出さない）。
+        private readonly List<int> _eligible;
+        private readonly bool _shortage;   // ベンチ入りが9人未満＝打順を組めない（確定を塞ぐ）
+
         // 打順（9スロット）：各スロットのロスターindexと守備位置。
         private readonly int[] _idx = new int[9];
         private readonly FieldPosition[] _pos = new FieldPosition[9];
@@ -170,13 +175,19 @@ namespace KokoSim.Unity.Lineup
 
         // 操作状態：クリック選択＝比較の左＋入替の主体。ホバー＝比較の右。
         private int _picked = -1;
+        private int _posPickSlot = -1;   // 守備位置ピック中の打順スロット（PickKind.SlotPosition のとき有効）
         private PickKind _pickKind = PickKind.None;
         private int _hovered = -1;
         private int _tab;
 
         public LineupSettingState()
         {
-            _roster = RosterService.Roster;
+            _roster = RosterService.Active;
+            var benchIn = Enumerable.Range(0, _roster.Count).Where(i => _roster[i].UniformNumber >= 1).ToList();
+            // ベンチ入りが9人に満たない編成では打順を組めない。画面は従来通り全部員で描いたうえで確定を塞ぎ、
+            // メンバー設定でベンチ入りを増やしてもらう（不正な LineupSpec はエンジンが弾く）。
+            _shortage = benchIn.Count < 9;
+            _eligible = _shortage ? Enumerable.Range(0, _roster.Count).ToList() : benchIn;
             SeedFromUniformNumbers();
         }
 
@@ -234,8 +245,9 @@ namespace KokoSim.Unity.Lineup
             return ByAbility().First(i => !InOrder(i));
         }
 
+        // 候補列挙は常にベンチ入りのみ（自動シード・控え一覧・ToLineupSpec のベンチ/ブルペンが全部これを通る）。
         private IEnumerable<int> ByAbility() =>
-            Enumerable.Range(0, _roster.Count).OrderByDescending(i => _roster[i].AverageLevel());
+            _eligible.OrderByDescending(i => _roster[i].AverageLevel());
 
         private bool InOrder(int idx)
         {
@@ -255,6 +267,7 @@ namespace KokoSim.Unity.Lineup
         public void ClickRow(int slot)
         {
             if (slot < 0 || slot > 8) return;
+            if (_pickKind == PickKind.SlotPosition) ClearPick();   // 守備位置ピックとは排他
             var idx = _idx[slot];
             if (_picked < 0) { _picked = idx; _pickKind = PickKind.OrderPlayer; return; }
             if (_picked == idx) { ClearPick(); return; }
@@ -277,6 +290,8 @@ namespace KokoSim.Unity.Lineup
         public void ClickBench(int idx)
         {
             if (idx < 0 || idx >= _roster.Count) return;
+            if (!_eligible.Contains(idx)) return;   // ベンチ外は出場登録できない（安全網。候補にも出していない）
+            if (_pickKind == PickKind.SlotPosition) ClearPick();   // 守備位置ピックとは排他
             if (_picked < 0) { _picked = idx; _pickKind = PickKind.OrderPlayer; return; }
             if (_picked == idx) { ClearPick(); return; }
 
@@ -297,23 +312,43 @@ namespace KokoSim.Unity.Lineup
         {
             if (!_usesDh) return;
             if (_pickKind == PickKind.StartingPitcher) { ClearPick(); return; }
+            ClearPick();   // 守備位置ピックとは排他
             _picked = _spIdx; _pickKind = PickKind.StartingPitcher;
         }
 
-        /// <summary>守備位置変更：slot の守備位置を pos に。既に pos を持つ野手スロットと位置を交換（一意を保つ）。</summary>
-        public void SetSlotPosition(int slot, FieldPosition pos)
+        /// <summary>
+        /// 守備位置チップ クリック：1回目で選択、2回目に別スロットのチップで両者の守備位置を入替（打順ピックと同じ操作モデル）。
+        /// 同じチップの再クリックで解除。DH・（非DH時の）投手スロットは対象外。
+        /// </summary>
+        public void ClickPosition(int slot)
         {
-            if (slot < 0 || slot > 8) return;
-            if (_usesDh && slot == _dhSlot) return;         // DHは守備に就かない
-            if (!_usesDh && slot == _pitcherSlot) return;   // 投手スロットは固定
-            for (var i = 0; i < 9; i++)
+            if (!PosSwappable(slot)) return;
+            if (_pickKind == PickKind.SlotPosition)
             {
-                if (i == slot) continue;
-                if ((_usesDh && i == _dhSlot)) continue;
-                if (_pos[i] == pos) { _pos[i] = _pos[slot]; break; } // 相手スロットへ元の位置を渡す
+                if (_posPickSlot == slot) { ClearPick(); return; }
+                SwapSlotPositions(_posPickSlot, slot);
+                return;
             }
-            _pos[slot] = pos;
+            ClearPick();                     // 打順・先発の選択とは排他（片方を選ぶともう片方は解除）
+            _posPickSlot = slot;
+            _pickKind = PickKind.SlotPosition;
+        }
+
+        /// <summary>2つの打順スロットの守備位置を入れ替える（交換なので9守備位置の一意性は保たれる）。</summary>
+        public void SwapSlotPositions(int a, int b)
+        {
+            if (a == b || !PosSwappable(a) || !PosSwappable(b)) return;
+            (_pos[a], _pos[b]) = (_pos[b], _pos[a]);
             ClearPick();
+        }
+
+        // 守備位置を動かせるスロットか（DHは守備に就かない・非DHの投手スロットは固定）。
+        private bool PosSwappable(int slot)
+        {
+            if (slot < 0 || slot > 8) return false;
+            if (_usesDh && slot == _dhSlot) return false;
+            if (!_usesDh && slot == _pitcherSlot) return false;
+            return true;
         }
 
         /// <summary>DH制のON/OFF切替。</summary>
@@ -350,9 +385,16 @@ namespace KokoSim.Unity.Lineup
             return -1;
         }
 
+        /// <summary>スタメンを確定できるか（ベンチ入り9人未満なら不可）。</summary>
+        public bool CanConfirm => !_shortage;
+
+        /// <summary>カーソルを合わせた選手。未選択なら比較の左、選択中なら比較の右に出る。-1＝ホバーなし。</summary>
         public void SetHovered(int index) => _hovered = index;
+
+        /// <summary>カーソルが外れた（行/チップの PointerLeave）。表示が残らないようホバーを解除する。</summary>
+        public void ClearHovered(int index) { if (_hovered == index) _hovered = -1; }
         public void SetTab(int tab) => _tab = Math.Clamp(tab, 0, 1);
-        private void ClearPick() { _picked = -1; _pickKind = PickKind.None; }
+        private void ClearPick() { _picked = -1; _posPickSlot = -1; _pickKind = PickKind.None; }
 
         /// <summary>編集内容を試合用スタメン仕様へ確定（GameSession.Lineup へ書き出す用）。</summary>
         public LineupSpec ToLineupSpec()
@@ -389,7 +431,9 @@ namespace KokoSim.Unity.Lineup
 
         public LineupSettingView BuildView()
         {
-            var v = new LineupSettingView { Tab = _tab, UsesDh = _usesDh };
+            var v = new LineupSettingView { Tab = _tab, UsesDh = _usesDh, CanConfirm = !_shortage };
+            if (_shortage)
+                v.WarnText = "ベンチ入りが9人未満です。メンバー設定で背番号を割り当ててください。";
 
             for (var i = 0; i < 9; i++)
             {
@@ -410,6 +454,7 @@ namespace KokoSim.Unity.Lineup
                     StatText = CareerBatLine(p),
                     PlayerIndex = _idx[i],
                     IsPicked = _picked == _idx[i] && _pickKind == PickKind.OrderPlayer,
+                    IsPosPicked = _pickKind == PickKind.SlotPosition && _posPickSlot == i,
                     IsCaptain = p.IsCaptain,
                 });
             }
@@ -426,7 +471,7 @@ namespace KokoSim.Unity.Lineup
             var used = new HashSet<int>();
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
             if (_usesDh && _spIdx >= 0) used.Add(_spIdx);
-            foreach (var i in Enumerable.Range(0, _roster.Count)
+            foreach (var i in _eligible
                          .Where(i => !used.Contains(i))
                          .OrderByDescending(i => _roster[i].IsPitcher ? 1 : 0)
                          .ThenByDescending(i => _roster[i].AverageLevel()))
@@ -447,7 +492,8 @@ namespace KokoSim.Unity.Lineup
             v.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(_roster);
 
             // 比較：左＝選択中、右＝ホバー中（選択があるとき・別人のとき）。
-            var leftIdx = _picked;
+            // 未選択のときはホバーだけで能力値を見せる（左＝ホバー選手）。クリック不要で一覧を舐められる。
+            var leftIdx = _picked >= 0 ? _picked : _hovered;
             var rightIdx = (_picked >= 0 && _hovered != _picked) ? _hovered : -1;
             v.CardA = MakeCard(leftIdx);
             v.CardB = MakeCard(rightIdx);
@@ -504,13 +550,15 @@ namespace KokoSim.Unity.Lineup
             };
         }
 
-        // 成績2列（通算／今大会）。GameSession.Stats を選手IDで引く。未接続は "—"。
+        // 成績3列（通算／公式戦通算／今大会）。GameSession.Stats を選手IDで引く。未接続は "—"。
+        // 「通算」は練習試合を含む全試合、「公式戦」は大会の試合だけ（練習試合は入らない）。
         private static List<StatColumnView> BuildStats(DevelopingPlayer p)
         {
             var stats = GameSession.Current.Stats;
             return new List<StatColumnView>
             {
                 Column("通算", stats.Career.Get(p.Id), p.IsPitcher),
+                Column("公式戦", stats.Official.Get(p.Id), p.IsPitcher),
                 Column("今大会", stats.CurrentTournament.Get(p.Id), p.IsPitcher),
             };
         }

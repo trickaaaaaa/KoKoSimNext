@@ -117,6 +117,14 @@
 /* スタメン＋控えの下と確定ボタンの間を詰めるスペーサ（CTAを最下部へ）。 */
 .lu-spacer { flex-grow: 1; }
 
+/* 編成不備の警告（ベンチ入り9人未満）。本当の警告なので警告色を使う（UI原則②）。既定は非表示。 */
+.lu-warn {
+    color: var(--color-warn);
+    font-size: var(--fs-label);
+    margin-top: var(--sp-3);
+    display: none;
+}
+
 .lu-actions { flex-direction: row; margin-top: var(--sp-3); }
 .lu-btn {
     height: 44px;

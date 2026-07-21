@@ -2,6 +2,7 @@ using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Unity.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Tournament
 {
@@ -34,6 +35,18 @@ namespace KokoSim.Unity.Tournament
             var back = _root.Q<Button>("tp-back");
             if (back != null) back.clicked += () => { _showPreview = false; Render(); };
 
+            // 共通トップバーの「今週を進める」で共有週を進める（選手/練習画面と同じ扱い＝GameClock 単一ソース）。
+            var advance = _root.Q<Button>("advance");
+            if (advance != null) advance.clicked += () => { GameClock.Advance(+1); Render(); };
+
+            // 樹形図のラウンド名帯を縦スクロールに追従させる（横は列と一緒に動く）。
+            var brk = _root.Q<ScrollView>("tp-bracket-scroll");
+            if (brk != null)
+            {
+                brk.verticalScroller.valueChanged -= SyncBracketHead;
+                brk.verticalScroller.valueChanged += SyncBracketHead;
+            }
+
             Render();
         }
 
@@ -49,6 +62,8 @@ namespace KokoSim.Unity.Tournament
             var session = GameSession.Current;
             var inTournament = session.InTournament;
 
+            RenderTopBar();
+
             Show(_empty, !inTournament);
             Show(_bracketView, inTournament && !_showPreview);
             Show(_previewView, inTournament && _showPreview);
@@ -62,6 +77,22 @@ namespace KokoSim.Unity.Tournament
         private static void Show(VisualElement e, bool visible)
         {
             if (e != null) e.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        /// <summary>
+        /// 共通トップバー（Components/TopBar.uxml）の動的値を埋める。週は全画面共有の GameClock、
+        /// 総合ランクは共有ロスター由来の TeamOverall を単一ソースとして引く（選手/メンバー/練習画面と同じ）。
+        /// 部費・名声・信頼度は現状どの画面も固定表示のため TopBar の既定値をそのまま使う。
+        /// </summary>
+        private void RenderTopBar()
+        {
+            SetText("week", GameClock.CurrentLabel());
+
+            var rank = _root.Q<VisualElement>("team-rank");
+            if (rank == null) return;
+            rank.Clear();
+            var grade = TeamOverall.GradeOf(RosterService.Active);
+            rank.Add(UiComponents.RankChipLegacy(grade));
         }
 
         // ===== ビュー1: トーナメント（今大会の経過） =====
@@ -88,6 +119,8 @@ namespace KokoSim.Unity.Tournament
                 next = "次戦　" + runner.RoundName + "　vs " + (runner.NextOpponent?.Name ?? "―")
                        + "　（あと " + session.DaysUntilNextMatch + " 日）";
             SetText("tb-next", next);
+
+            RenderBracketTree(view);
 
             // 自校の勝ち上がりを先頭にまとめ、その下に他校の結果を置く（200校規模で自校が埋もれないように）。
             var mine = new System.Collections.Generic.List<BracketMatch>();
@@ -119,6 +152,225 @@ namespace KokoSim.Unity.Tournament
 
         /// <summary>他校結果の表示上限（全部出すと200校規模でスクロールが破綻するため）。</summary>
         private const int OtherMatchLimit = 40;
+
+        // ===== 樹形図（トーナメント表） =====
+
+        /// <summary>
+        /// 樹形図を描く。列＝ラウンド（左→右）、カードは前段2枚の中点に自動で並ぶ（縦位置の計算はUSS任せ）。
+        /// 全カードを省略なく出し、初期表示は自校の最新カードを中央に置く。
+        /// </summary>
+        private void RenderBracketTree(TournamentBracketView view)
+        {
+            var host = _root.Q<VisualElement>("tp-bracket");
+            var head = _root.Q<VisualElement>("tp-bracket-head");
+            if (host == null || head == null) return;
+            host.Clear();
+            head.Clear();
+
+            var tree = TournamentPreviewState.BuildBracketTree(view);
+            if (tree.Rounds.Count == 0)
+            {
+                host.Add(Note("トーナメント表はまだ組まれていません。"));
+                return;
+            }
+
+            VisualElement focus = null;
+            for (var r = 0; r < tree.Rounds.Count; r++)
+            {
+                var col = tree.Rounds[r];
+                var isFinal = r == tree.Rounds.Count - 1;
+
+                head.Add(ColumnHead(col.Name, hasLead: r > 0, hasElbow: true));
+
+                var colEl = new VisualElement();
+                colEl.AddToClassList("brk-col");
+
+                var body = new VisualElement();
+                body.AddToClassList("brk-col__body");
+                foreach (var card in col.Cards)
+                {
+                    var slot = new VisualElement();
+                    slot.AddToClassList("brk-slot");
+                    if (r > 0) slot.Add(Lead(card.ManagerInvolved));
+                    var cardEl = BuildBracketCard(card);
+                    slot.Add(cardEl);
+                    // 決勝の右は優勝欄へまっすぐ1本（上下に折れない）。
+                    slot.Add(isFinal
+                        ? FlatConnector(card.ManagerAdvances)
+                        : Elbow(card.SlotIndex % 2 == 0, card.ManagerAdvances));
+                    body.Add(slot);
+                    if (ReferenceEquals(tree.ManagerFocus, card)) focus = cardEl;
+                }
+                colEl.Add(body);
+                host.Add(colEl);
+            }
+
+            head.Add(ColumnHead("優勝", hasLead: true, hasElbow: false));
+            host.Add(ChampionColumn(tree));
+
+            var scroll = _root.Q<ScrollView>("tp-bracket-scroll");
+            if (scroll != null && focus != null) CenterOn(scroll, focus);
+        }
+
+        /// <summary>ラウンド名帯を縦スクロール量ぶん下げて、ビューポート上端に貼り付ける。</summary>
+        private void SyncBracketHead(float offsetY)
+        {
+            var head = _root.Q<VisualElement>("tp-bracket-head");
+            if (head != null) head.style.top = offsetY;
+        }
+
+        /// <summary>
+        /// ラウンド名の見出しセル。列と同じ寸法トークン（接続線の帯を空要素で置く）で組み、
+        /// 見出しと列の横位置が必ず一致するようにする。
+        /// </summary>
+        private static VisualElement ColumnHead(string text, bool hasLead, bool hasElbow)
+        {
+            var cell = new VisualElement();
+            cell.AddToClassList("brk-hcell");
+            if (hasLead) cell.Add(Spacer("brk-lead"));
+            var l = new Label(text);
+            l.AddToClassList("brk-col__name");
+            cell.Add(l);
+            if (hasElbow) cell.Add(Spacer("brk-elbow"));
+            return cell;
+        }
+
+        private static VisualElement Spacer(string cls)
+        {
+            var e = new VisualElement();
+            e.AddToClassList(cls);
+            return e;
+        }
+
+        private static VisualElement BuildBracketCard(TournamentPreviewState.BracketCardRow c)
+        {
+            var card = new VisualElement();
+            card.AddToClassList("brk-card");
+            if (c.ManagerInvolved) card.AddToClassList("brk-card--fav");
+            var top = SlotLine(c.Top);
+            top.AddToClassList("brk-line--top");
+            card.Add(top);
+            card.Add(SlotLine(c.Bottom));
+            return card;
+        }
+
+        private static VisualElement SlotLine(TournamentPreviewState.BracketSlotRow s)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("brk-line");
+
+            var name = new Label(s.Name);
+            name.AddToClassList("brk-name");
+            if (s.IsManager) name.AddToClassList("brk-name--fav");
+            else if (!s.IsDetermined) name.AddToClassList("brk-name--tbd");
+            else if (s.IsLoser) name.AddToClassList("brk-name--out");
+            if (s.IsWinner) name.AddToClassList("brk-name--win");
+            row.Add(name);
+
+            var score = new Label(s.Score);
+            score.AddToClassList("brk-score");
+            if (s.IsLoser) score.AddToClassList("brk-score--out");
+            row.Add(score);
+            return row;
+        }
+
+        /// <summary>優勝欄（決勝の右）。自校優勝のときだけアンバー。</summary>
+        private static VisualElement ChampionColumn(TournamentPreviewState.BracketTreeView tree)
+        {
+            var col = new VisualElement();
+            col.AddToClassList("brk-col");
+
+            var body = new VisualElement();
+            body.AddToClassList("brk-col__body");
+            var slot = new VisualElement();
+            slot.AddToClassList("brk-slot");
+            slot.Add(Lead(tree.ManagerIsChampion));
+
+            var card = new VisualElement();
+            card.AddToClassList("brk-champ");
+            var cap = new Label("CHAMPION");
+            cap.AddToClassList("brk-champ__cap");
+            card.Add(cap);
+            var name = new Label(tree.ChampionName ?? "（未定）");
+            name.AddToClassList("brk-champ__name");
+            if (tree.ChampionName == null) name.AddToClassList("brk-champ__name--tbd");
+            else if (tree.ManagerIsChampion) name.AddToClassList("brk-champ__name--fav");
+            card.Add(name);
+
+            slot.Add(card);
+            body.Add(slot);
+            col.Add(body);
+            return col;
+        }
+
+        /// <summary>前段から入る横線（帯の縦中央に1本）。</summary>
+        private static VisualElement Lead(bool fav) => Connector("brk-lead", fav, upper: true);
+
+        /// <summary>決勝→優勝欄のまっすぐな1本。</summary>
+        private static VisualElement FlatConnector(bool fav)
+        {
+            var e = Connector("brk-elbow", fav, upper: true);
+            e.AddToClassList("brk-elbow--flat");
+            return e;
+        }
+
+        /// <summary>横線と縦線の直角。down=true でカード中央から下（＝組の上側カード）へ折れる。</summary>
+        private static VisualElement Elbow(bool down, bool fav)
+        {
+            var e = new VisualElement();
+            e.AddToClassList("brk-elbow");
+            e.Add(Connector("brk-elbow__part", fav, upper: true));    // 左半分＝カードから出る横線
+            e.Add(Vertical(down, fav));                               // 右半分の左端＝中点へ伸びる縦線
+            return e;
+        }
+
+        /// <summary>上下2分割の帯。upper 側に横線（＝帯の縦中央に線が来る）。</summary>
+        private static VisualElement Connector(string cls, bool fav, bool upper)
+        {
+            var e = new VisualElement();
+            e.AddToClassList(cls);
+            e.Add(Half(upper ? "brk-half--h" : null, fav && upper));
+            e.Add(Half(upper ? null : "brk-half--h", fav && !upper));
+            return e;
+        }
+
+        private static VisualElement Vertical(bool down, bool fav)
+        {
+            var e = new VisualElement();
+            e.AddToClassList("brk-elbow__part");
+            e.Add(Half(down ? null : "brk-half--v", fav && !down));
+            e.Add(Half(down ? "brk-half--v" : null, fav && down));
+            return e;
+        }
+
+        private static VisualElement Half(string lineClass, bool fav)
+        {
+            var e = new VisualElement();
+            e.AddToClassList("brk-half");
+            if (lineClass != null) e.AddToClassList(lineClass);
+            if (lineClass != null && fav) e.AddToClassList("brk-half--fav");
+            return e;
+        }
+
+        /// <summary>初期表示で自校のカードをビューポート中央に置く（レイアウト確定後に1回だけ）。</summary>
+        private void CenterOn(ScrollView scroll, VisualElement target)
+        {
+            EventCallback<GeometryChangedEvent> cb = null;
+            cb = _ =>
+            {
+                target.UnregisterCallback(cb);
+                var view = scroll.contentViewport.layout.size;
+                var content = scroll.contentContainer.layout.size;
+                var pos = target.ChangeCoordinatesTo(scroll.contentContainer, Vector2.zero);
+                scroll.scrollOffset = new Vector2(
+                    Mathf.Clamp(pos.x + target.layout.width * 0.5f - view.x * 0.5f, 0f,
+                        Mathf.Max(0f, content.x - view.x)),
+                    Mathf.Clamp(pos.y + target.layout.height * 0.5f - view.y * 0.5f, 0f,
+                        Mathf.Max(0f, content.y - view.y)));
+                SyncBracketHead(scroll.scrollOffset.y);
+            };
+            target.RegisterCallback(cb);
+        }
 
         private static Label Note(string text)
         {
@@ -202,9 +454,8 @@ namespace KokoSim.Unity.Tournament
             var name = new Label(c.Name);
             name.AddToClassList("tp-team-name");
             sub.Add(name);
-            var chip = new Label("総合 " + c.TierLetter);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + c.TierLetter);
+            var chip = UiComponents.RankChipLegacy(c.TierLetter);
+            chip.text = "総合 " + c.TierLetter;
             chip.style.marginLeft = 8;
             sub.Add(chip);
             var seed = new Label(c.SeedLabel);

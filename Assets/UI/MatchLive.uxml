@@ -5,6 +5,7 @@
     <Style src="Components/components.uss" />
     <Style src="MatchDetail.uss" />
     <Style src="MatchLive.uss" />
+    <Style src="MatchSubstitution.uss" />
     <ui:VisualElement class="ui-root mlive-root">
         <ui:VisualElement class="mlive-3col">
 
@@ -59,6 +60,11 @@
                 <ui:VisualElement class="mlive-field-wrap">
                     <ui:VisualElement name="field-host" class="mlive-field" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
+                    <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい） -->
+                    <ui:VisualElement name="pitch-call" class="pitch-call">
+                        <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" />
+                        <ui:Label name="pitch-call-detail" class="pitch-call__detail" text="" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <!-- 1球采配ショートカット（設計書15 Phase C-3, Q12-2: 全球で常駐）。低彩度の常時1行帯。
@@ -89,7 +95,7 @@
                 <ui:VisualElement class="md-controls">
                     <ui:VisualElement class="md-group">
                         <ui:Button name="next-pa" class="chip-btn md-replay" text="▶ 次の打席へ" />
-                        <ui:Button name="pinch-hit" class="chip-btn" text="代打を送る" />
+                        <ui:Button name="sub-open" class="chip-btn" text="⇄ 選手交代" />
                         <ui:Button name="skip" class="chip-btn" text="⏭ スキップ（委任）" />
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
@@ -109,6 +115,58 @@
                 <ui:VisualElement name="right-pitcher" class="mlive-pitcher-host" />
             </ui:VisualElement>
 
+        </ui:VisualElement>
+
+        <!-- 選手交代モーダル（設計書09 §6）。同一ドキュメント内オーバーレイ（modal-scrim/modal-card）。
+             骨組みだけ置き、行・比較は MatchSubstitutionPanel が部品辞書で動的生成する。
+             スタメン設定と同じ部品（lineup-row / bench-row / pos-chip / rank-chip / abil-row）を使う。 -->
+        <ui:VisualElement name="sub-modal" class="ui-root modal-scrim">
+            <ui:VisualElement class="modal-card msub-card">
+
+                <ui:VisualElement class="msub-head">
+                    <ui:Label text="選手交代" class="msub-title" />
+                    <ui:Label name="msub-phase" text="" class="msub-phase" />
+                    <ui:VisualElement name="msub-kinds" class="seg seg--auto msub-kinds" />
+                    <ui:VisualElement class="msub-head__spacer" />
+                    <ui:Button name="msub-close" text="✕" class="msub-close" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="msub-body">
+
+                    <!-- 左：退く選手（打順9人／塁上の走者／現投手） -->
+                    <ui:VisualElement class="msub-outs">
+                        <ui:Label name="msub-outs-cap" text="退く選手" class="msub-section" />
+                        <ui:ScrollView mode="Vertical" class="msub-scroll">
+                            <ui:VisualElement name="msub-out-rows" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+
+                    <!-- 中：入る選手（控え／ブルペン／DHの行き先） -->
+                    <ui:VisualElement class="msub-ins">
+                        <ui:Label name="msub-ins-cap" text="入る選手" class="msub-section" />
+                        <ui:ScrollView mode="Vertical" class="msub-scroll">
+                            <ui:VisualElement name="msub-in-rows" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+
+                    <!-- 右：能力比較（退く選手 ↔ 入る選手） -->
+                    <ui:VisualElement class="msub-compare panel">
+                        <ui:VisualElement class="msub-cmp-cards">
+                            <ui:VisualElement name="msub-cmp-a" class="cmp-card msub-cmp-card--a" />
+                            <ui:VisualElement name="msub-cmp-b" class="cmp-card" />
+                        </ui:VisualElement>
+                        <ui:ScrollView mode="Vertical" class="msub-cmp-scroll">
+                            <ui:VisualElement name="msub-cmp-rows" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:Label name="msub-note" text="" class="msub-note" />
+                <ui:VisualElement class="msub-actions">
+                    <ui:Button name="msub-cancel" text="やめる" class="msub-btn msub-btn--ghost" />
+                    <ui:Button name="msub-ok" text="この交代を確定 ▶" class="msub-btn msub-btn--go" />
+                </ui:VisualElement>
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

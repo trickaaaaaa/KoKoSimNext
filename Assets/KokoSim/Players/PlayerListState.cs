@@ -29,7 +29,9 @@ namespace KokoSim.Unity.Players
         public string OverallGrade = "D";
         public int OverallValue;
         public List<AbilityChip> Abilities = new List<AbilityChip>();
-        public string Condition = "普通";   // 絶好調 / 好調 / 普通 / 不調 / 絶不調
+        public string Condition = "普通";   // 絶好調 / 好調 / 普通 / 不調 / 絶不調（表示文字列）
+        // 色分岐はこの5段階 enum で行う（表示文字列で比較しない。到達不能分岐の再発防止）。
+        public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
     }
 
     public sealed class PlayerListView
@@ -61,7 +63,7 @@ namespace KokoSim.Unity.Players
         public PlayerListState()
         {
             // 全画面で共有する単一ソースのロスター（背番号など可変状態を画面間で一致させる, RosterService）。
-            _roster = RosterService.Roster;
+            _roster = RosterService.Active;
             for (var i = 0; i < _roster.Count; i++)
                 _indexOf[_roster[i]] = i;
         }
@@ -113,6 +115,7 @@ namespace KokoSim.Unity.Players
         private PlayerRow BuildRow(DevelopingPlayer p)
         {
             var overall = (int)System.Math.Round(p.AverageLevel());
+            var condition = KokoSim.Engine.Players.FormModel.Quantize(p.ConditionValue);
             var row = new PlayerRow
             {
                 Index = _indexOf.TryGetValue(p, out var idx) ? idx : 0,
@@ -122,7 +125,8 @@ namespace KokoSim.Unity.Players
                 IsPitcher = p.IsPitcher,
                 OverallValue = overall,
                 OverallGrade = Tiers.FromStrength(overall).ToString(),
-                Condition = ConditionJp(p.ConditionValue),
+                Condition = ConditionJp(condition),
+                ConditionLevel = condition,
             };
 
             if (p.IsPitcher)
@@ -149,10 +153,10 @@ namespace KokoSim.Unity.Players
             return new AbilityChip { Grade = Tiers.FromStrength(v).ToString(), Label = label, Value = v };
         }
 
-        // 調子（内部連続値→5段階）を日本語表示（設計書02 §3.3。正ソースは FormModel）。
-        private static string ConditionJp(double conditionValue)
+        // 調子5段階を日本語表示（設計書02 §3.3。段階の正ソースは FormModel.Quantize）。
+        private static string ConditionJp(KokoSim.Engine.Players.Condition condition)
         {
-            switch (KokoSim.Engine.Players.FormModel.Quantize(conditionValue))
+            switch (condition)
             {
                 case KokoSim.Engine.Players.Condition.Excellent: return "絶好調";
                 case KokoSim.Engine.Players.Condition.Good: return "好調";

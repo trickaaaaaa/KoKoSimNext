@@ -34,6 +34,8 @@ namespace KokoSim.Unity.Training
         public string Icon = "";
         public double Progress;    // 0..1（次レベルまでの割合）
         public int LevelsGained;   // この週で上がったレベル数（0=進捗のみ）
+        public int Value;          // 現在の能力値（0=未設定＝相対強調バー）
+        public string Grade = "";  // 現在値のランク S〜G（空＝ランクを持たない相対バー）
     }
 
     /// <summary>プリセット選択肢（統合モーダルの一覧）。説明文と「伸びる能力」の相対バーを持つ。</summary>
@@ -165,7 +167,7 @@ namespace KokoSim.Unity.Training
         private readonly GrowthStageTable _stages = new GrowthStageTable();
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
 
-        private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用（全画面共有の RosterService.Roster）
+        private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用（全画面共有の RosterService.Active）
         private readonly TrainingPlan[] _plans;          // 選手索引→練習計画
         private readonly bool[] _delegated;              // 選手索引→委任フラグ（UI状態）
         private readonly List<int> _nominated = new List<int>(); // 個別指導3枠（選手索引・最大3, UI状態）
@@ -182,7 +184,7 @@ namespace KokoSim.Unity.Training
         public TrainingPlanState()
         {
             // 全画面で共有する単一ソースのロスター（背番号はメンバー設定画面と一致, RosterService）。
-            _roster = RosterService.Roster;
+            _roster = RosterService.Active;
             _plans = new TrainingPlan[_roster.Count];
             _delegated = new bool[_roster.Count];
             for (var i = 0; i < _roster.Count; i++)
@@ -452,6 +454,9 @@ namespace KokoSim.Unity.Training
                     AbilityJp = AbilityJp(k), Icon = AbilityIcon(k),
                     Progress = System.Math.Clamp(gain, 0.0, 1.0),   // 1レベル=満タン、複数レベルはLevelsGainedで表示
                     LevelsGained = p.Level(k) - beforeLv[k],
+                    // ランク併記は「今週の伸び」ではなく**現在の能力値**を表す（UI原則③）。
+                    Value = p.Level(k),
+                    Grade = Tiers.FromStrength(p.Level(k)).ToString(),
                 });
             }
             return bars;

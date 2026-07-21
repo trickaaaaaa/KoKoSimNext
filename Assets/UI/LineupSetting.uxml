@@ -61,9 +61,10 @@
                 </ui:VisualElement>
 
                 <!-- 確定操作（下部・全幅） -->
+                <ui:Label name="lu-warn" text="" class="lu-warn" />
                 <ui:VisualElement class="lu-actions">
                     <ui:Button name="lu-cancel" text="キャンセル" class="lu-btn lu-btn--ghost" />
-                    <ui:Button name="lu-ok" text="この打順で試合開始 ▶" class="lu-btn lu-btn--go" />
+                    <ui:Button name="lu-ok" text="この打順で決定 ▶" class="lu-btn lu-btn--go" />
                 </ui:VisualElement>
             </ui:VisualElement>
 

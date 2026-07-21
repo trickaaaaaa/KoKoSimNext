@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
     <ui:VisualElement class="root">
 
       <!-- ===== スコアボードヘッダー（選手詳細と共通の sb2） ===== -->
@@ -28,6 +30,7 @@
         <ui:Label name="nav-home" class="nav__item nav__item--on" text="ホーム" />
         <ui:Label name="nav-players" class="nav__item" text="選手" />
         <ui:Label name="nav-training" class="nav__item" text="練習" />
+        <ui:Label name="nav-practice" class="nav__item" text="練習試合" />
         <ui:Label name="nav-match" class="nav__item" text="試合" />
         <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
         <ui:Label name="nav-scout" class="nav__item" text="スカウト" />

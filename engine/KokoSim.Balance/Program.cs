@@ -252,11 +252,15 @@ internal static class CommandLine
         string? reportPath = null;
         string? coefficientsPath = null;
         string? stadiumId = null;
+        var histogram = false;
 
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
+                case "--histogram":
+                    histogram = true;
+                    break;
                 case "--at-bats":
                 case "--games":
                     atBats = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
@@ -278,7 +282,7 @@ internal static class CommandLine
             }
         }
 
-        var stats = AtBatSimulation.Run(atBats, seed, coefficientsPath, ResolveStadium(stadiumId));
+        var stats = AtBatSimulation.Run(atBats, seed, coefficientsPath, ResolveStadium(stadiumId), histogram);
         var text = AtBatSimulation.Report(stats, seed);
         Console.Write(text);
 
@@ -332,7 +336,7 @@ internal static class CommandLine
         Console.WriteLine("KokoSim.Balance — ヘッドレスシミュレーションCLI");
         Console.WriteLine();
         Console.WriteLine("使い方:");
-        Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml]");
+        Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram]");
         Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--tactics]");
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");

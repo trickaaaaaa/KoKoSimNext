@@ -51,13 +51,40 @@ public sealed record BracketMatch(
     int LoserScore,
     bool ManagerInvolved);
 
+/// <summary>
+/// 樹形図の1スロット（カードの上側/下側）。まだ校名が確定していない枠は TeamName=null（「Aブロック勝者」待ち）。
+/// Score は当該カードが消化済みのときだけ非null。
+/// </summary>
+public sealed record BracketSlot(string? TeamName, bool IsManager, bool IsWinner, int? Score)
+{
+    /// <summary>校名が確定しているか（未消化ラウンドの空枠は false）。</summary>
+    public bool IsDetermined => TeamName is not null;
+}
+
+/// <summary>
+/// 樹形図の1カード（対戦枠）。Round は0基点（0＝初戦）、SlotIndex はそのラウンド内のカード位置。
+/// 勝者は次ラウンドの SlotIndex/2 のカードに現れる（<see cref="BracketSlot"/> の上下は SlotIndex%2）。
+/// </summary>
+public sealed record BracketCard(
+    int Round,
+    int SlotIndex,
+    string RoundName,
+    BracketSlot Top,
+    BracketSlot Bottom,
+    bool IsBye,
+    bool IsPlayed);
+
+/// <summary>樹形図の1ラウンド（カード列）。Round は0基点。</summary>
+public sealed record BracketRound(int Round, string RoundName, IReadOnlyList<BracketCard> Cards);
+
 /// <summary>大会概要（ブラケット状態＋自校の状況）。UIの「大会・全国」タブが描画する。</summary>
 public sealed record TournamentBracketView(
     string Title,
     IReadOnlyList<BracketMatch> Matches,
     string? ChampionName,
     bool ManagerIsChampion,
-    bool ManagerEliminated);
+    bool ManagerEliminated,
+    IReadOnlyList<BracketRound> Rounds);
 
 /// <summary>
 /// 自校の大会進行体（大会モードの中核）。シード付きシングルエリミネーション（設計書05 §1.2）を、
@@ -74,6 +101,14 @@ public sealed class TournamentRunner
     private readonly int _totalRounds;
     private readonly List<BracketMatch> _matches = new();
 
+    /// <summary>ラウンド r（0基点）開始時の各スロットの残存校。未到達ラウンドは null（＝校名未確定）。</summary>
+    private readonly School?[]?[] _roundEntrants;
+    /// <summary>消化済みカードの結果（ラウンド×スロット）。樹形図のスコア併記に使う。</summary>
+    private readonly Dictionary<(int Round, int Slot), CardResult> _cardResults = new();
+
+    /// <summary>樹形図用の1カード結果。TopWon は上側スロット（添字 2i）が勝ったか。</summary>
+    private sealed record CardResult(bool TopWon, int WinnerScore, int LoserScore);
+
     private School?[] _current;
     private int _roundIndex;          // 消化済みラウンド数（不戦勝も1ラウンドとして進む＝日程が進む）
     private School? _nextOpponent;
@@ -84,9 +119,13 @@ public sealed class TournamentRunner
     /// Complete で終局結果を受けて自校カードと以降のカードを確定する。Next は自校スロット(Slot)と
     /// それ以降が未充填の途中状態（Complete で埋める）。本流RNGの消費順は自動 ResolveRound と同一。
     /// </summary>
+    /// <remarks>
+    /// Live は Begin が返したのと同一のライブ観戦ハンドル。UI が Complete し損ねた（観戦画面を離脱した等）
+    /// ときに <see cref="ResumePendingLiveMatch"/> で同じ進行体へ復帰できるよう保持する。
+    /// </remarks>
     private sealed record PendingLiveMatch(
         School?[] Cur, School?[] Next, int Slot, School Mgr, School Opp,
-        string RoundName, int RoundsRemaining, bool ManagerIsAway);
+        string RoundName, int RoundsRemaining, bool ManagerIsAway, LivePlayerMatch Live);
 
     public string Title { get; }
     public bool PlayerActive { get; private set; } = true;
@@ -125,6 +164,9 @@ public sealed class TournamentRunner
             var seed = order[slot] - 1;
             _current[slot] = seed < seeded.Count ? seeded[seed] : null;
         }
+
+        _roundEntrants = new School?[]?[_totalRounds + 1];
+        _roundEntrants[0] = (School?[])_current.Clone();   // 初期シード配置は確定済み＝樹形図の起点。
 
         AdvanceUntilPlayerMatch();
     }
@@ -177,12 +219,15 @@ public sealed class TournamentRunner
     /// 自校カードは詳細を隔離Fork のライブ進行体に委ねて一時停止する（この時点では勝敗未確定）。
     /// UI が進行体を進めて終局したら <see cref="CompleteNextPlayerMatch"/> に結果を戻すこと。
     /// 本流RNGの消費は <see cref="PlayNextPlayerMatch"/> とバイト一致（＝観戦してもしなくても同じ大会展開）。
+    ///
+    /// 未完了のライブ自校戦が残っている（前回 Complete まで到達せず画面を離れた）ときは、新たに Begin せず
+    /// その進行体をそのまま返す＝再開する。Begin だけが積み上がって大会が進めなくなる状態を作らないため。
     /// </summary>
     public LivePlayerMatch BeginNextPlayerMatch()
     {
+        if (_pending is not null) return _pending.Live;   // 取り残されたライブ戦へ復帰（例外で詰ませない）。
         if (Finished) throw new InvalidOperationException("大会は自校にとって終了しています。");
         if (_nextOpponent is null) throw new InvalidOperationException("次戦相手が未確定です。");
-        if (_pending is not null) throw new InvalidOperationException("進行中のライブ自校戦があります（先に Complete してください）。");
         if (_playerResolver is null) throw new InvalidOperationException("ライブ観戦には IPlayerMatchResolver が必要です。");
 
         var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
@@ -221,8 +266,60 @@ public sealed class TournamentRunner
         return outcome;
     }
 
+    /// <summary>
+    /// ライブ観戦中の自校戦が Complete されないまま残っているか。UI が観戦画面から離脱した場合の検知に使う。
+    /// </summary>
+    public bool HasPendingLiveMatch => _pending is not null;
+
+    /// <summary>
+    /// 取り残されたライブ自校戦へ復帰する（<see cref="BeginNextPlayerMatch"/> が返したのと同一の進行体）。
+    /// 本流RNGは一切消費しない＝復帰しても大会展開は変わらない。
+    /// </summary>
+    public LivePlayerMatch ResumePendingLiveMatch()
+        => _pending?.Live ?? throw new InvalidOperationException("進行中のライブ自校戦がありません。");
+
     public TournamentBracketView BuildBracketView()
-        => new(Title, _matches.ToList(), ChampionName, IsChampion, !PlayerActive);
+        => new(Title, _matches.ToList(), ChampionName, IsChampion, !PlayerActive, BuildRounds());
+
+    /// <summary>
+    /// 樹形図（ラウンド×スロット）を組み立てる。未到達ラウンドのカードは空枠（TeamName=null）として返し、
+    /// 片側だけ確定している枠は片側だけ埋まる。表示専用＝RNGを消費しない（不変条件#2）。
+    /// </summary>
+    private IReadOnlyList<BracketRound> BuildRounds()
+    {
+        var rounds = new List<BracketRound>(_totalRounds);
+        for (var r = 0; r < _totalRounds; r++)
+        {
+            var entrants = _roundEntrants[r];
+            var cardCount = (_roundEntrants[0]!.Length >> r) / 2;
+            var roundName = RoundNameFor(_totalRounds - r);
+            var cards = new List<BracketCard>(cardCount);
+            for (var i = 0; i < cardCount; i++)
+            {
+                var a = entrants?[2 * i];
+                var b = entrants?[2 * i + 1];
+                _cardResults.TryGetValue((r, i), out var result);
+                var topWon = result?.TopWon ?? false;
+                cards.Add(new BracketCard(
+                    r, i, roundName,
+                    SlotOf(a, result is not null && topWon, result is null ? null : (topWon ? result.WinnerScore : result.LoserScore)),
+                    SlotOf(b, result is not null && !topWon, result is null ? null : (topWon ? result.LoserScore : result.WinnerScore)),
+                    IsBye: entrants is not null && (a is null) != (b is null),
+                    IsPlayed: result is not null));
+            }
+            rounds.Add(new BracketRound(r, roundName, cards));
+        }
+        return rounds;
+    }
+
+    private BracketSlot SlotOf(School? school, bool isWinner, int? score)
+        => new(school?.Name, school is not null && school.Id == _managerId, isWinner, score);
+
+    /// <summary>残存校配列のサイズからラウンド添字（0基点）を導く。_roundIndex とは独立＝背景消化でも正しい。</summary>
+    private int RoundIndexOf(School?[] cur) => _totalRounds - TournamentRecorder.RoundsRemaining(cur.Length);
+
+    private void RecordCard(int round, int slot, bool topWon, int winnerScore, int loserScore)
+        => _cardResults[(round, slot)] = new CardResult(topWon, winnerScore, loserScore);
 
     // ===== 内部進行 =====
 
@@ -278,6 +375,7 @@ public sealed class TournamentRunner
     private School?[] ResolveRound(School?[] cur, string roundName, int roundsRemaining, out PlayerMatchOutcome? outcome)
     {
         outcome = null;
+        var round = RoundIndexOf(cur);
         var next = new School?[cur.Length / 2];
         for (var i = 0; i < next.Length; i++)
         {
@@ -311,12 +409,14 @@ public sealed class TournamentRunner
                     Detail: r, ManagerWasAway: detail.ManagerIsAway);
                 _matches.Add(new BracketMatch(
                     roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, true));
+                RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
                 next[i] = winner;
                 continue;
             }
 
             _matches.Add(new BracketMatch(
                 roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, involvesManager));
+            RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
 
             if (involvesManager)
             {
@@ -331,6 +431,7 @@ public sealed class TournamentRunner
 
             next[i] = winner;
         }
+        _roundEntrants[round + 1] = next;
         return next;
     }
 
@@ -341,6 +442,7 @@ public sealed class TournamentRunner
     /// </summary>
     private LivePlayerMatch BeginRound(School?[] cur, string roundName, int roundsRemaining)
     {
+        var round = RoundIndexOf(cur);
         var next = new School?[cur.Length / 2];
         for (var i = 0; i < next.Length; i++)
         {
@@ -360,11 +462,14 @@ public sealed class TournamentRunner
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)));
-                _pending = new PendingLiveMatch(cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway);
-                return new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName);
+                var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName);
+                _pending = new PendingLiveMatch(
+                    cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway, handle);
+                return handle;
             }
 
             _matches.Add(new BracketMatch(roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, false));
+            RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
             next[i] = winner;
         }
         throw new InvalidOperationException("このラウンドに自校の試合がありません（不戦勝は AdvanceUntilPlayerMatch で消化済みのはず）。");
@@ -386,7 +491,9 @@ public sealed class TournamentRunner
         var loser = managerWon ? p.Opp : p.Mgr;
         var winScore = Math.Max(mgrRuns, oppRuns);
         var loseScore = Math.Min(mgrRuns, oppRuns);
+        var round = RoundIndexOf(p.Cur);
         _matches.Add(new BracketMatch(p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winScore, loseScore, true));
+        RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore);
         p.Next[p.Slot] = winner;
 
         // 自校スロット以降の残りカードを本流で解決（このラウンドの自校戦は1つだけ＝以降は非自校カード）。
@@ -400,9 +507,11 @@ public sealed class TournamentRunner
             var (w, l, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
             var (ws, ls) = SynthesizeScore(margin);
             _matches.Add(new BracketMatch(p.RoundName, p.RoundsRemaining, w.Name, l.Name, ws, ls, false));
+            RecordCard(round, i, w.Id == a.Id, ws, ls);
             p.Next[i] = w;
         }
 
+        _roundEntrants[round + 1] = p.Next;
         _current = p.Next;
         return new PlayerMatchOutcome(
             managerWon, p.Opp.Name, p.Opp.Tier, mgrRuns, oppRuns, p.RoundName, IsChampion: false,

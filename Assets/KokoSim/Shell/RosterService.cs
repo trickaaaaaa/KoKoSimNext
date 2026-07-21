@@ -21,8 +21,16 @@ namespace KokoSim.Unity.Shell
 
         private static List<DevelopingPlayer> _roster;
 
-        /// <summary>共有ロスター（セッション内で同一インスタンス・順序安定）。初回アクセスで生成。</summary>
+        /// <summary>共有ロスター（セッション内で同一インスタンス・順序安定）。初回アクセスで生成。引退者も含む。</summary>
         public static IReadOnlyList<DevelopingPlayer> Roster => _roster ??= Build(DefaultSeed);
+
+        /// <summary>
+        /// 在籍中の部員だけを抜き出したロスター（夏で引退した3年を除く, RosterLifecycle）。
+        /// 選手一覧・メンバー設定・スタメン・練習・試合編成はこちらを単一ソースにする
+        /// （引退者は「フラグを立てて残す」方式なので <see cref="Roster"/> には残り続ける）。
+        /// 呼ぶたびに元ロスター順のスナップショットを作る＝画面をまたいでも index が一致する。
+        /// </summary>
+        public static IReadOnlyList<DevelopingPlayer> Active => RosterLifecycle.Active(Roster);
 
         private static List<DevelopingPlayer> Build(ulong seed)
         {
@@ -43,6 +51,10 @@ namespace KokoSim.Unity.Shell
             for (var i = 0; i < list.Count; i++) list[i].Id = i + 1;
 
             UniformNumberAssigner.AutoAssign(list);   // 初期背番号を能力順で仮割当（プレイヤーが後で編集）
+
+            // 主将（設計書09 §8）: ゲーム開始時点で必ず1名決まっている（最上級生の統率力最大）。
+            // プレイヤーが選び直せるのは夏の3年引退後＝新チーム発足時だけ（CaptainSelector.IsDesignationWindow）。
+            CaptainSelector.EnsureCaptain(list);
             return list;
         }
     }

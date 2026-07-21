@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Players
 {
@@ -10,10 +11,6 @@ namespace KokoSim.Unity.Players
     [RequireComponent(typeof(UIDocument))]
     public sealed class PlayerListController : MonoBehaviour
     {
-        private static readonly Color CondUp = new Color(0.725f, 0.831f, 0.353f);   // 絶好調
-        private static readonly Color CondMid = new Color(0.937f, 0.957f, 0.918f);  // 普通
-        private static readonly Color CondDown = new Color(0.91f, 0.416f, 0.29f);   // 疲れ
-
         private PlayerListState _state;
         private VisualElement _root;
 
@@ -46,10 +43,7 @@ namespace KokoSim.Unity.Players
             if (rank != null)
             {
                 rank.Clear();
-                var g = new Label(v.TeamRankGrade);
-                g.AddToClassList("grade");
-                g.AddToClassList("grade--" + v.TeamRankGrade);
-                rank.Add(g);
+                rank.Add(UiComponents.RankChipLegacy(v.TeamRankGrade));
             }
 
             var rows = _root.Q<VisualElement>("player-rows");
@@ -82,7 +76,7 @@ namespace KokoSim.Unity.Players
             overall.AddToClassList("cell--narrow");
             overall.style.flexDirection = FlexDirection.Row;
             overall.style.alignItems = Align.Center;
-            overall.Add(MakeGradeChip(r.OverallGrade));
+            overall.Add(UiComponents.RankChipLegacy(r.OverallGrade));
             overall.Add(new Label(r.OverallValue.ToString()));
             row.Add(overall);
 
@@ -93,7 +87,7 @@ namespace KokoSim.Unity.Players
             ability.AddToClassList("ability-cell");
             foreach (var chip in r.Abilities)
             {
-                ability.Add(MakeGradeChip(chip.Grade));
+                ability.Add(UiComponents.RankChipLegacy(chip.Grade));
                 var lbl = new Label(chip.Label);
                 lbl.style.marginRight = 10;
                 lbl.style.fontSize = 11;
@@ -101,15 +95,29 @@ namespace KokoSim.Unity.Players
             }
             row.Add(ability);
 
-            // 調子
+            // 調子（5段階すべてに色。色はUSSクラス側の単一ソース .cond--* に委ねる）
             var cond = Cell(r.Condition, "cell--narrow");
-            cond.style.color = r.Condition == "絶好調" ? CondUp : r.Condition == "疲れ" ? CondDown : CondMid;
+            cond.AddToClassList(CondClass(r.ConditionLevel));
             row.Add(cond);
 
             return row;
         }
 
         // ===== 補助 =====
+
+        // 調子5段階 → 色クラス（tokens.uss の調子色を写した KokoSimTheme.uss .cond--* が単一ソース）。
+        // 表示文字列で比較すると到達不能分岐を生むため、必ず enum で分岐する。
+        private static string CondClass(KokoSim.Engine.Players.Condition c)
+        {
+            switch (c)
+            {
+                case KokoSim.Engine.Players.Condition.Excellent: return "cond--best";
+                case KokoSim.Engine.Players.Condition.Good: return "cond--good";
+                case KokoSim.Engine.Players.Condition.Poor: return "cond--bad";
+                case KokoSim.Engine.Players.Condition.Terrible: return "cond--worst";
+                default: return "cond--normal";
+            }
+        }
 
         private void SetText(string name, string text)
         {
@@ -125,14 +133,6 @@ namespace KokoSim.Unity.Players
             l.AddToClassList("cell");
             if (!string.IsNullOrEmpty(modifier)) l.AddToClassList(modifier);
             return l;
-        }
-
-        private static Label MakeGradeChip(string grade)
-        {
-            var chip = new Label(grade);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + grade);
-            return chip;
         }
     }
 }

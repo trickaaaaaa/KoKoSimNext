@@ -1,30 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 大会・全国 画面。上部は他画面と同じ共通トップバー（Components/TopBar.uxml）を単一ソースとして使う
+     （以前は header/board/nav を直書きしていたため、メンバータブ欠落・動的値なし・スクロール追従の
+     不一致が起きていた）。TopBar は固定・スクロール外。アクティブタブ強調は ScreenRouter が付ける。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <ui:VisualElement class="root ui-root">
-      <ui:ScrollView mode="Vertical" class="scroll">
 
-        <!-- ===== ヘッダー ===== -->
-        <ui:VisualElement class="header">
-            <ui:VisualElement class="board">
-                <ui:VisualElement class="school">
-                    <ui:Label class="school__pref" text="神奈川" />
-                    <ui:Label class="school__name" text="県立桜丘高校" />
-                    <ui:Label class="school__week" text="大会・全国" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:VisualElement class="nav">
-                <ui:Label name="nav-home" class="nav__item" text="ホーム" />
-                <ui:Label name="nav-players" class="nav__item" text="選手" />
-                <ui:Label name="nav-training" class="nav__item" text="練習" />
-                <ui:Label name="nav-tournament" class="nav__item nav__item--on" text="大会・全国" />
-                <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
-                <ui:Label name="nav-management" class="nav__item" text="経営" />
-                <ui:Label name="nav-career" class="nav__item" text="キャリア" />
-                <ui:Label name="nav-records" class="nav__item" text="記録" />
-            </ui:VisualElement>
-        </ui:VisualElement>
+      <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
+      <ui:Instance template="TopBar" />
+
+      <ui:ScrollView mode="Vertical" class="scroll">
 
         <!-- ===== メイン ===== -->
         <ui:VisualElement class="main">
@@ -49,6 +36,14 @@
                 <ui:VisualElement class="tp-cta-wrap">
                     <ui:Button name="tp-go-preview" class="tp-cta" text="大会展望を見る　▶" />
                 </ui:VisualElement>
+
+                <ui:Label name="tb-h-tree" class="tp-h2" text="トーナメント表" />
+                <ui:ScrollView name="tp-bracket-scroll" mode="VerticalAndHorizontal" class="brk-scroll">
+                    <ui:VisualElement name="tp-bracket" class="brk-tree" />
+                    <!-- ラウンド名の帯。樹形図の上に浮かせ、縦スクロール量ぶん下げて上端に貼り付ける
+                         （横スクロールには列と一緒に追従する）。列と同じ寸法トークンで組んで幅を揃える。 -->
+                    <ui:VisualElement name="tp-bracket-head" class="brk-head" />
+                </ui:ScrollView>
 
                 <ui:Label name="tb-h-mine" class="tp-h2" text="自校の戦績" />
                 <ui:VisualElement name="tp-my-matches" />

@@ -19,6 +19,52 @@
             <ui:Label text="G" class="rank-chip rank-chip--G" style="margin-right: 6px;" />
         </ui:VisualElement>
 
+        <ui:Label text="RankChip サイズ（通常 / 大 / 特大）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="flex-direction: row; align-items: center;">
+            <ui:Label text="B" class="rank-chip rank-chip--B" style="margin-right: 10px;" />
+            <ui:Label text="B" class="rank-chip rank-chip--B rank-chip--lg" style="margin-right: 10px;" />
+            <ui:Label text="B" class="rank-chip rank-chip--B rank-chip--xl" />
+        </ui:VisualElement>
+
+        <ui:Label text="AbilityRow（能力名／数値／バー／ランク併記。上2行=通常, 3行目=補足付き, 下=大）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="width: 520px;">
+            <ui:VisualElement class="abil-row abil-row--divided">
+                <ui:VisualElement class="abil-row__name"><ui:Label text="ミート" class="abil-row__label" /></ui:VisualElement>
+                <ui:Label text="82" class="abil-row__value" />
+                <ui:VisualElement class="abil-row__bar"><ui:VisualElement class="abil-row__fill" style="width: 82%; background-color: rgb(244, 206, 91);" /></ui:VisualElement>
+                <ui:Label text="S" class="rank-chip rank-chip--S" />
+            </ui:VisualElement>
+            <ui:VisualElement class="abil-row abil-row--divided">
+                <ui:VisualElement class="abil-row__name"><ui:Label text="選球眼" class="abil-row__label" /></ui:VisualElement>
+                <ui:Label text="47" class="abil-row__value" />
+                <ui:VisualElement class="abil-row__bar"><ui:VisualElement class="abil-row__fill" style="width: 47%; background-color: rgb(86, 169, 110);" /></ui:VisualElement>
+                <ui:Label text="E" class="rank-chip rank-chip--E" />
+            </ui:VisualElement>
+            <ui:VisualElement class="abil-row" style="margin-top: 10px;">
+                <ui:Label text="打" class="abil-row__icon" />
+                <ui:VisualElement class="abil-row__name"><ui:Label text="パワー" class="abil-row__label" /></ui:VisualElement>
+                <ui:VisualElement class="abil-row__bar"><ui:VisualElement class="abil-row__fill" style="width: 35%; background-color: rgb(168, 198, 78);" /></ui:VisualElement>
+                <ui:Label text="D" class="rank-chip rank-chip--D" />
+                <ui:Label text="＋1" class="abil-row__note" />
+            </ui:VisualElement>
+            <ui:VisualElement class="abil-row abil-row--dim">
+                <ui:Label text="走" class="abil-row__icon" />
+                <ui:VisualElement class="abil-row__name"><ui:Label text="走力" class="abil-row__label" /></ui:VisualElement>
+                <ui:VisualElement class="abil-row__bar"><ui:VisualElement class="abil-row__fill" style="width: 0%;" /></ui:VisualElement>
+                <ui:Label text="F" class="rank-chip rank-chip--F" />
+                <ui:Label text="—" class="abil-row__note abil-row__note--muted" />
+            </ui:VisualElement>
+            <ui:VisualElement class="abil-row abil-row--lg" style="margin-top: 12px;">
+                <ui:VisualElement class="abil-row__name">
+                    <ui:Label text="投手力" class="abil-row__label" />
+                    <ui:Label text="球速 / 制球 / スタミナ / 球種" class="abil-row__sub" />
+                </ui:VisualElement>
+                <ui:Label text="63" class="abil-row__value" />
+                <ui:VisualElement class="abil-row__bar"><ui:VisualElement class="abil-row__fill" style="width: 63%; background-color: rgb(236, 139, 60);" /></ui:VisualElement>
+                <ui:Label text="B" class="rank-chip rank-chip--B" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <ui:Label text="NumberBadge" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
         <ui:VisualElement style="flex-direction: row;">
             <ui:Label text="1" class="num-badge" style="margin-right: 8px;" />

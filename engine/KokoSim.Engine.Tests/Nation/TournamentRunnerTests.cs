@@ -137,6 +137,109 @@ public sealed class TournamentRunnerTests
         Assert.True(outcome.ManagerScore > outcome.OpponentScore);   // 勝者スコアが上。
     }
 
+    // ===== 樹形図（BracketRound/BracketCard, 設計書05 §1.2） =====
+
+    /// <summary>N=64 を最後まで回し、ラウンド構造・勝者の伝播・優勝校までの充填を検証する。</summary>
+    [Fact]
+    public void Bracket_Rounds_HaveHalvingSlots_AndWinnersPropagate()
+    {
+        var r = NewRunner(Field(60, 63, 55), seed: 11);
+        PlayToEnd(r);
+        var rounds = r.BuildBracketView().Rounds;
+
+        Assert.Equal(new[] { 32, 16, 8, 4, 2, 1 }, rounds.Select(x => x.Cards.Count).ToArray());
+        Assert.Equal(new[] { "1回戦", "2回戦", "3回戦", "準々決勝", "準決勝", "決勝" },
+            rounds.Select(x => x.RoundName).ToArray());
+
+        for (var i = 0; i < rounds.Count; i++)
+        {
+            Assert.Equal(i, rounds[i].Round);
+            for (var s = 0; s < rounds[i].Cards.Count; s++) Assert.Equal(s, rounds[i].Cards[s].SlotIndex);
+        }
+
+        // 各カードの勝者が次ラウンドの SlotIndex/2（上下は SlotIndex%2）に現れる。
+        for (var i = 0; i < rounds.Count - 1; i++)
+        {
+            foreach (var card in rounds[i].Cards)
+            {
+                var winner = WinnerNameOf(card);
+                Assert.NotNull(winner);
+                var nextCard = rounds[i + 1].Cards[card.SlotIndex / 2];
+                var nextSlot = card.SlotIndex % 2 == 0 ? nextCard.Top : nextCard.Bottom;
+                Assert.Equal(winner, nextSlot.TeamName);
+            }
+        }
+
+        // 決勝スロットまで埋まり、優勝校＝決勝の勝者。
+        var final = rounds[^1].Cards[0];
+        Assert.True(final.IsPlayed);
+        Assert.Equal(r.BuildBracketView().ChampionName, WinnerNameOf(final));
+    }
+
+    /// <summary>未消化ラウンドは空枠として返る（初戦だけ確定・以降は校名未確定）。</summary>
+    [Fact]
+    public void Bracket_UnplayedRounds_AreEmptyFrames()
+    {
+        var r = NewRunner(Field(60, 15, 55), seed: 3);
+        var rounds = r.BuildBracketView().Rounds;
+
+        Assert.Equal(4, rounds.Count);
+        Assert.All(rounds[0].Cards, c => Assert.True(c.Top.IsDetermined && c.Bottom.IsDetermined));
+        Assert.All(rounds[0].Cards, c => Assert.False(c.IsPlayed));      // 自校の初戦待ちで未消化。
+        Assert.All(rounds[^1].Cards, c =>
+        {
+            Assert.False(c.Top.IsDetermined);
+            Assert.False(c.Bottom.IsDetermined);
+            Assert.Null(c.Top.Score);
+        });
+
+        // 自校の枠は初戦から自校としてマークされる（UIのアンバー強調の根拠）。
+        Assert.Contains(rounds[0].Cards, c => c.Top.IsManager || c.Bottom.IsManager);
+    }
+
+    /// <summary>消化済みカードはスコアと勝者フラグを持ち、不戦勝は IsBye で表現される。</summary>
+    [Fact]
+    public void Bracket_PlayedCards_CarryScores_AndByesAreMarked()
+    {
+        var r = NewRunner(Field(99, 2, 40));                              // 3校＝サイズ4、自校は初戦不戦勝。
+        var first = r.BuildBracketView().Rounds[0].Cards;
+        Assert.Contains(first, c => c.IsBye);
+        Assert.All(first.Where(c => c.IsBye), c => Assert.False(c.IsPlayed));
+
+        PlayToEnd(r);
+        foreach (var card in r.BuildBracketView().Rounds.SelectMany(x => x.Cards).Where(c => c.IsPlayed))
+        {
+            Assert.NotNull(card.Top.Score);
+            Assert.NotNull(card.Bottom.Score);
+            Assert.True(card.Top.IsWinner ^ card.Bottom.IsWinner);        // 勝者はどちらか一方だけ。
+            var (win, lose) = card.Top.IsWinner
+                ? (card.Top.Score!.Value, card.Bottom.Score!.Value)
+                : (card.Bottom.Score!.Value, card.Top.Score!.Value);
+            Assert.True(win > lose);
+        }
+    }
+
+    /// <summary>同シードならスロット配置・スコアまで完全一致する（不変条件#2）。</summary>
+    [Fact]
+    public void Bracket_Determinism_SameSeedSameSlots()
+    {
+        var a = NewRunner(Field(60, 63, 55), seed: 5);
+        var b = NewRunner(Field(60, 63, 55), seed: 5);
+        PlayToEnd(a);
+        PlayToEnd(b);
+
+        var ra = a.BuildBracketView().Rounds;
+        var rb = b.BuildBracketView().Rounds;
+        Assert.Equal(ra.Count, rb.Count);
+        for (var i = 0; i < ra.Count; i++) Assert.Equal(ra[i].Cards, rb[i].Cards);
+    }
+
+    private static string? WinnerNameOf(BracketCard card)
+        => card.Top.IsWinner ? card.Top.TeamName
+            : card.Bottom.IsWinner ? card.Bottom.TeamName
+            : card.IsBye ? (card.Top.TeamName ?? card.Bottom.TeamName)
+            : null;
+
     // ライブ観戦（Begin/Complete 制御反転）が自動消化（PlayNextPlayerMatch）と同じ大会展開になる＝
     // 「観戦してもしなくても結果は同じ」＋「本流RNGの消費順は不変」の核心保証（設計書の決定論ゲート相当）。
     [Theory]
@@ -182,6 +285,40 @@ public sealed class TournamentRunnerTests
             Assert.Equal(va.Matches[i].WinnerScore, vb.Matches[i].WinnerScore);
             Assert.Equal(va.Matches[i].LoserScore, vb.Matches[i].LoserScore);
         }
+    }
+
+    // Complete し損ねたライブ自校戦（観戦画面を離脱した等）から復帰できること。Begin を再度呼んでも例外で
+    // 詰まず、同一の進行体が返り、そのまま Complete して大会が進む＝取り残しが行き止まりにならない保証。
+    [Fact]
+    public void PendingLiveMatch_IsResumable_AndDoesNotBlockTournament()
+    {
+        var resolver = new LiveConsistentResolver();
+        var r = new TournamentRunner(Field(70, 15, 55), Sch(1, 70), Coeff,
+            new Xoshiro256Random(2026), Schedule, "t", resolver);
+
+        var first = r.BeginNextPlayerMatch();
+        Assert.True(r.HasPendingLiveMatch);
+
+        // 観戦画面を離脱した想定＝Complete せずに再度 Begin / Resume する。
+        var again = r.BeginNextPlayerMatch();
+        Assert.Same(first.Progression, again.Progression);
+        Assert.Equal(first.OpponentName, again.OpponentName);
+        Assert.Same(first.Progression, r.ResumePendingLiveMatch().Progression);
+
+        while (again.Progression.Advance()) { /* 采配なしで全打席 */ }
+        r.CompleteNextPlayerMatch(again.Progression.BuildResult());
+
+        Assert.False(r.HasPendingLiveMatch);
+        Assert.Equal(Schedule.MatchDay(1), r.NextMatchDay);   // ラウンドが進んだ（日程が据え置かれない）。
+    }
+
+    [Fact]
+    public void ResumePendingLiveMatch_ThrowsWhenNothingPending()
+    {
+        var r = new TournamentRunner(Field(70, 15, 55), Sch(1, 70), Coeff,
+            new Xoshiro256Random(3), Schedule, "t", new LiveConsistentResolver());
+        Assert.False(r.HasPendingLiveMatch);
+        Assert.Throws<System.InvalidOperationException>(() => r.ResumePendingLiveMatch());
     }
 
     /// <summary>

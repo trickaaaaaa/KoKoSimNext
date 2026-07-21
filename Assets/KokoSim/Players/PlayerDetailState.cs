@@ -1,23 +1,21 @@
 // ViewModel層（設計書06 §3.3 選手詳細、mock: 野球部監督GM standalone-src 「選手詳細」画面）。
-// UnityEngine 非依存。一覧(PlayerListState)と同一 seed=42 の roster を再現し、安定 index で1名を開く。
+// UnityEngine 非依存。一覧(PlayerListState)と同じ共有ロスター(RosterService)を参照し、安定 index で1名を開く。
 // 成長履歴・公式戦成績・球種の物理計測値はエンジン未接続のためプレースホルダ（正直に空状態表示）。
 using System.Collections.Generic;
-using System.Linq;
-using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
+using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Players
 {
-    /// <summary>能力1行（ラベル・内部値・等級・バー割合0〜1・バー色hex）。</summary>
+    /// <summary>能力1行（ラベル・内部値・等級・バー割合0〜1）。バー色は等級から部品側で決まる（RankPalette）。</summary>
     public sealed class AbilityBar
     {
         public string Label = "";
         public int Value;
         public string Grade = "D";
         public float Pct;
-        public string BarColorHex = "#9FCB3B";
     }
 
     /// <summary>隠しパラメータ1項（未判明なら Known=false で「？」）。</summary>
@@ -35,7 +33,10 @@ namespace KokoSim.Unity.Players
         public string Kire = "C";     // キレ（Sharpness→S〜G）＝チップ
         public float DirX;            // 変化方向（画面座標系: +x右 / +y下）
         public float DirY;
-        public float Break01;         // 変化量 0〜1（中心からの距離）
+        public float Break01;         // 変化量 0〜1（扇の長さ）
+        // ストレートは「変化量」ではなく「伸び」で読ませる（扇の長さは短尺固定・幅で伸びを表す）。
+        public bool IsFastball;
+        public float Extend01;        // 伸び 0〜1（ストレートのみ意味を持つ＝扇の幅）
         // 参考値（Statcast風・表示近似）。
         public int Velo;
         public string Move = "";
@@ -52,6 +53,10 @@ namespace KokoSim.Unity.Players
     {
         public string Label = "";
         public float Value01;
+
+        /// <summary>軸ラベル脇に出す数値（空＝数値を出さない）。隣に並ぶ指標バーと桁を一致させるため
+        /// 呼び出し側が整形済みの文字列を渡す（RadarChartView が Value01 から導かない＝丸め差を作らない）。</summary>
+        public string ValueText = "";
     }
 
     /// <summary>選手詳細に表示する一式（スナップショット）。</summary>
@@ -66,6 +71,10 @@ namespace KokoSim.Unity.Players
         public string PosParen = "野手";
         public string ThrowsBats = "右投右打";
         public bool IsCaptain;
+        /// <summary>この選手を今この週に主将へ指名できるか（設計書09 §8: 新チーム発足時のみ）。</summary>
+        public bool CanDesignateCaptain;
+        /// <summary>指名できない理由（できるときは空）。ボタン非活性時に添える。</summary>
+        public string DesignateReason = "";
         public string PitchStyle = "";
         public int TopVelocityKmh;
         public bool IsPitcher;
@@ -92,33 +101,30 @@ namespace KokoSim.Unity.Players
     /// </summary>
     public sealed class PlayerDetailState
     {
-        private readonly List<DevelopingPlayer> _roster = new List<DevelopingPlayer>();
+        // 全画面で共有する単一ソースのロスター（主将フラグを含む可変状態を画面間で一致させる, RosterService）。
+        private readonly IReadOnlyList<DevelopingPlayer> _roster;
+        private readonly SeasonCalendar _calendar = new SeasonCalendar();
 
-        public PlayerDetailState(ulong seed = 42)
+        public PlayerDetailState()
         {
-            var rng = new Xoshiro256Random(seed);
-            var roster = new RosterCoefficients();
-            for (var grade = 1; grade <= 3; grade++)
-            {
-                foreach (var p in ProspectGenerator.Intake(grade, roster, rng))
-                {
-                    p.Grade = grade;
-                    _roster.Add(p);
-                }
-            }
-
-            // 主将を選定（設計書09 §8: 最上級生から統率力で自動選定）。
-            CaptainSelector.EnsureCaptain(_roster);
+            _roster = RosterService.Active;   // 主将は生成時に EnsureCaptain 済み（必ず1名）
         }
 
         public int Count => _roster.Count;
 
-        /// <summary>主将を手動指名する（設計書09 §8）。UIの「主将に指名」から呼ぶ。</summary>
-        public void DesignateCaptain(int index)
+        /// <summary>
+        /// 主将を手動指名する（設計書09 §8）。UIの「主将に指名」から呼ぶ。
+        /// 指名できるのは夏の3年引退後＝新チーム発足時の候補（新最上級生）だけ。可否は engine 側の純関数で判定する。
+        /// </summary>
+        /// <returns>指名できたら true（false なら状態は変えていない）。</returns>
+        public bool DesignateCaptain(int index)
         {
-            if (_roster.Count == 0) return;
+            if (_roster.Count == 0) return false;
             index = System.Math.Max(0, System.Math.Min(index, _roster.Count - 1));
-            CaptainSelector.Designate(_roster, _roster[index]);
+            var p = _roster[index];
+            if (!CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar)) return false;
+            CaptainSelector.Designate(_roster, p);
+            return true;
         }
 
         public PlayerDetailView BuildView(int index)
@@ -137,6 +143,8 @@ namespace KokoSim.Unity.Players
                 IsCaptain = p.IsCaptain,
             };
             v.ConditionColorHex = CondColor(v.Condition);
+            v.CanDesignateCaptain = CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar);
+            v.DesignateReason = v.CanDesignateCaptain ? "" : DesignateReasonJp(p);
 
             var overall = (int)System.Math.Round(p.AverageLevel());
             v.OverallValue = overall;
@@ -222,7 +230,10 @@ namespace KokoSim.Unity.Players
                         Kire = Tiers.FromStrength(baseVel).ToString(),   // 球速＝ストレートのキレ相当
                         DirX = df.x,
                         DirY = df.y,
-                        Break01 = ClampF(0.5f + baseVel / 200f, 0.5f, 1.0f),
+                        // ストレートは変化球ではない＝変化量は短尺固定。伸びは Extend01（扇の幅）で表す。
+                        Break01 = FastballBreak01,
+                        IsFastball = true,
+                        Extend01 = ClampF(baseVel / 100f, 0f, 1f),
                         Velo = Kmh(baseVel),
                         Move = "—",
                         Rpm = 2000 + baseVel * 4,
@@ -235,15 +246,18 @@ namespace KokoSim.Unity.Players
                     var velo = isFast ? Kmh(baseVel) : Kmh(baseVel) - 8 - (lp.SharpnessOffset % 20);
                     var kireScore = Clamp(50 + lp.SharpnessOffset * 2, 1, 100);
                     var dir = PitchDir(lp.Type);
-                    // 変化量: 球威+キレのオフセットから 0.42〜1.0。ストレートは伸び（キレ）主体。
-                    var breakScore = isFast ? lp.SharpnessOffset : (lp.PowerOffset + lp.SharpnessOffset);
+                    // 変化量: 球威+キレのオフセットから 0.42〜1.0。
+                    // ストレートだけは変化球ではないので短尺固定にし、伸び（キレ）は扇の幅で表す。
+                    var breakScore = lp.PowerOffset + lp.SharpnessOffset;
                     v.Pitches.Add(new PitchData
                     {
                         Name = PitchJp(lp.Type),
                         Kire = Tiers.FromStrength(kireScore).ToString(),
                         DirX = dir.x,
                         DirY = dir.y,
-                        Break01 = ClampF(0.45f + breakScore / 46f, 0.42f, 1.0f),
+                        Break01 = isFast ? FastballBreak01 : ClampF(0.45f + breakScore / 46f, 0.42f, 1.0f),
+                        IsFastball = isFast,
+                        Extend01 = isFast ? ClampF((baseVel + lp.SharpnessOffset * 2) / 100f, 0f, 1f) : 0f,
                         Velo = velo,
                         Move = isFast ? "—" : (18 + (lp.SharpnessOffset % 30)) + "cm",
                         Rpm = 1800 + lp.PowerOffset * 6 + (isFast ? 400 : 0),
@@ -282,6 +296,14 @@ namespace KokoSim.Unity.Players
 
         // ===== 補助 =====
 
+        /// <summary>指名できない理由（設計書09 §8）。期間外か、候補（新最上級生）でないかを区別して伝える。</summary>
+        private string DesignateReasonJp(DevelopingPlayer p)
+        {
+            if (!CaptainSelector.IsDesignationWindow(GameClock.Week, _calendar))
+                return "主将は夏の3年引退後（新チーム発足時）に指名できます";
+            return "主将は新チームの最上級生から指名します";
+        }
+
         private static AbilityBar Bar(DevelopingPlayer p, AbilityKind k, string label)
         {
             var v = p.Level(k);
@@ -291,16 +313,11 @@ namespace KokoSim.Unity.Players
                 Value = v,
                 Grade = Tiers.FromStrength(v).ToString(),
                 Pct = System.Math.Max(0f, System.Math.Min(1f, v / 100f)),
-                BarColorHex = BarColor(v),
             };
         }
 
         private static RadarAxis Axis(DevelopingPlayer p, AbilityKind k, string label)
             => new RadarAxis { Label = label, Value01 = System.Math.Max(0f, System.Math.Min(1f, p.Level(k) / 100f)) };
-
-        // 内部値→バー色（帯で色分け）。
-        private static string BarColor(int v)
-            => v >= 80 ? "#F5C64A" : v >= 65 ? "#9FCB3B" : v >= 50 ? "#6B8CA8" : "#5C7466";
 
         // 球速内部値(1〜100)→km/h（表示近似。実シムの物理変換はエンジン係数側）。
         private static int Kmh(int velLevel)
@@ -337,6 +354,9 @@ namespace KokoSim.Unity.Players
                 default: return "#EFF4EA";
             }
         }
+
+        // ストレートの扇の長さ（変化量軸では短尺固定。伸びは Extend01＝扇の幅で読ませる）。
+        private const float FastballBreak01 = 0.15f;
 
         // 球種ごとの変化方向（画面座標系: +x右 / +y下。上=伸び）。プロスピ風チャートの配置。
         private static (float x, float y) PitchDir(PitchType t)

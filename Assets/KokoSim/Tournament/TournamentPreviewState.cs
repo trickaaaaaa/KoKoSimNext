@@ -52,6 +52,45 @@ namespace KokoSim.Unity.Tournament
             public List<MemberRow> Members;
         }
 
+        /// <summary>樹形図の1スロット（カードの上側／下側）の表示行。</summary>
+        public sealed class BracketSlotRow
+        {
+            public string Name;         // 校名。未確定枠は「（未定）」、不戦勝の空き枠は「（不戦勝）」
+            public string Score;        // 消化済みカードのみ。未消化は空文字
+            public bool IsManager;      // 自校ライン（アンバー強調）
+            public bool IsWinner;       // 勝ち上がった側
+            public bool IsLoser;        // 消化済みかつ敗者（グレーアウト）
+            public bool IsDetermined;   // 校名が確定しているか
+        }
+
+        /// <summary>樹形図の1カード（対戦枠）。Round は0基点、SlotIndex はラウンド内のカード位置。</summary>
+        public sealed class BracketCardRow
+        {
+            public int Round, SlotIndex;
+            public string RoundName;
+            public BracketSlotRow Top, Bottom;
+            public bool ManagerInvolved;   // このカードに自校がいる（左からの接続線＋枠をアンバーに）
+            public bool ManagerAdvances;   // 自校がこのカードを勝ち上がった（右への接続線をアンバーに）
+            public bool IsBye;
+        }
+
+        /// <summary>樹形図の1ラウンド＝1列。</summary>
+        public sealed class BracketRoundColumn
+        {
+            public int Round;
+            public string Name;
+            public List<BracketCardRow> Cards = new List<BracketCardRow>();
+        }
+
+        /// <summary>樹形図（ラウンド×スロットの2次元）。Controller はこれを描画するだけ。</summary>
+        public sealed class BracketTreeView
+        {
+            public List<BracketRoundColumn> Rounds = new List<BracketRoundColumn>();
+            public string ChampionName;        // 未確定は null
+            public bool ManagerIsChampion;
+            public BracketCardRow ManagerFocus;   // 初期表示でスクロールする先（自校の最新カード）
+        }
+
         public sealed class View
         {
             public string Title;
@@ -133,6 +172,59 @@ namespace KokoSim.Unity.Tournament
             }
 
             return v;
+        }
+
+        /// <summary>
+        /// エンジンのブラケット出力（TournamentRunner.BuildBracketView）を樹形図の描画用に変換する。
+        /// ここでは表示文言と強調フラグを決めるだけで、勝敗・スロット配置はエンジンの値をそのまま使う。
+        /// </summary>
+        public static BracketTreeView BuildBracketTree(TournamentBracketView view)
+        {
+            var tree = new BracketTreeView();
+            if (view == null || view.Rounds == null) return tree;
+            tree.ChampionName = view.ChampionName;
+            tree.ManagerIsChampion = view.ManagerIsChampion;
+
+            foreach (var r in view.Rounds)
+            {
+                var col = new BracketRoundColumn { Round = r.Round, Name = r.RoundName };
+                foreach (var c in r.Cards)
+                {
+                    var row = new BracketCardRow
+                    {
+                        Round = c.Round,
+                        SlotIndex = c.SlotIndex,
+                        RoundName = c.RoundName,
+                        IsBye = c.IsBye,
+                        Top = Slot(c.Top, c),
+                        Bottom = Slot(c.Bottom, c),
+                    };
+                    row.ManagerInvolved = c.Top.IsManager || c.Bottom.IsManager;
+                    row.ManagerAdvances = (row.Top.IsManager && row.Top.IsWinner)
+                                          || (row.Bottom.IsManager && row.Bottom.IsWinner);
+                    col.Cards.Add(row);
+                    // ラウンド順に走査するので、最後に残るのが自校の最新カード（＝初期スクロール先）。
+                    if (row.ManagerInvolved) tree.ManagerFocus = row;
+                }
+                tree.Rounds.Add(col);
+            }
+            return tree;
+        }
+
+        private static BracketSlotRow Slot(BracketSlot s, BracketCard card)
+        {
+            // 不戦勝カードの空き側は「（不戦勝）」。相手側は勝者扱いにして自校ラインを途切れさせない。
+            var name = s.IsDetermined ? s.TeamName : (card.IsBye ? "（不戦勝）" : "（未定）");
+            var isWinner = s.IsWinner || (card.IsBye && s.IsDetermined);
+            return new BracketSlotRow
+            {
+                Name = name,
+                Score = s.Score.HasValue ? s.Score.Value.ToString() : "",
+                IsManager = s.IsManager,
+                IsWinner = isWinner,
+                IsLoser = card.IsPlayed && !s.IsWinner,
+                IsDetermined = s.IsDetermined,
+            };
         }
 
         private static string Sym(ContenderMark m) => m switch

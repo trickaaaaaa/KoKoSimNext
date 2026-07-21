@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Member
 {
@@ -73,10 +74,7 @@ namespace KokoSim.Unity.Member
             if (rank != null)
             {
                 rank.Clear();
-                var g = new Label(v.TeamRankGrade);
-                g.AddToClassList("grade");
-                g.AddToClassList("grade--" + v.TeamRankGrade);
-                rank.Add(g);
+                rank.Add(UiComponents.RankChip(v.TeamRankGrade));
             }
 
             SetText("ms-pool-title",
@@ -214,6 +212,7 @@ namespace KokoSim.Unity.Member
             var pidx = slot.PlayerIndex;
             el.RegisterCallback<ClickEvent>(_ => { _state.ClickSlot(n); Render(); });
             el.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
+            el.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
         }
 
         // 枠カードの共通中身（2行）：①背番号＋名前(中央)＋位置ランク ②学年・投打＋解除。
@@ -229,7 +228,7 @@ namespace KokoSim.Unity.Member
                 var name = new Label(slot.Name);
                 name.AddToClassList("slot-card__name");
                 top.Add(name);
-                top.Add(RankChip(slot.RankGrade));
+                top.Add(UiComponents.RankChip(slot.RankGrade));
                 el.Add(top);
 
                 var sub = new VisualElement();
@@ -264,7 +263,7 @@ namespace KokoSim.Unity.Member
                 var name = new Label(Surname(slot.Name));
                 name.AddToClassList("field-chip__name");
                 el.Add(name);
-                el.Add(RankChip(slot.RankGrade));
+                el.Add(UiComponents.RankChip(slot.RankGrade));
             }
             else
             {
@@ -286,7 +285,12 @@ namespace KokoSim.Unity.Member
                 ShowPopover(n);
                 RenderCompareOnly();
             });
-            el.RegisterCallback<PointerLeaveEvent>(_ => HidePopover(n));
+            el.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                HidePopover(n);
+                _state.ClearHovered(pidx);
+                RenderCompareOnly();
+            });
         }
 
         // 姓（フルネームの先頭トークン）。チップは省スペースなので姓のみ。フル名はポップオーバー。
@@ -315,7 +319,7 @@ namespace KokoSim.Unity.Member
             var name = new Label(slot.Name);
             name.AddToClassList("slot-card__name");
             top.Add(name);
-            top.Add(RankChip(slot.RankGrade));
+            top.Add(UiComponents.RankChip(slot.RankGrade));
             _popover.Add(top);
 
             var sub = new VisualElement();
@@ -368,7 +372,6 @@ namespace KokoSim.Unity.Member
             {
                 var chip = new VisualElement();
                 chip.AddToClassList("pool-chip");
-                if (p.Assigned) chip.AddToClassList("pool-chip--assigned");
                 if (p.IsPicked) chip.AddToClassList("pool-chip--picked");
 
                 var body = new VisualElement();
@@ -379,13 +382,14 @@ namespace KokoSim.Unity.Member
                 var meta = new VisualElement();
                 meta.AddToClassList("pool-chip__meta");
                 meta.Add(GradeLabel(p.GradeLabel));
-                meta.Add(RankChip(p.OverallGrade));
+                meta.Add(UiComponents.RankChip(p.OverallGrade));
                 body.Add(meta);
                 chip.Add(body);
 
                 var idx = p.Index;
                 chip.RegisterCallback<ClickEvent>(_ => { _state.ClickPool(idx); Render(); });
                 chip.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
+                chip.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
                 host.Add(chip);
             }
         }
@@ -425,6 +429,7 @@ namespace KokoSim.Unity.Member
                 var group = new Label(v.TabLabels[v.Tab]);
                 group.AddToClassList("ms-cmp-group");
                 rows.Add(group);
+                rows.Add(UiComponents.CompareHeader());
                 foreach (var r in v.Rows) rows.Add(CompareRowEl(r));
             }
 
@@ -467,20 +472,13 @@ namespace KokoSim.Unity.Member
                 var pos = AptPos[i + 1];
                 el.style.top = Length.Percent(pos.Top);
                 el.style.left = Length.Percent(pos.Left);
-                el.Add(has ? AptRank(grades[i]) : AptDash());
+                el.Add(has ? UiComponents.RankChip(grades[i]) : AptDash());
                 slots.Add(el);
             }
             field.Add(slots);
             return field;
         }
 
-        private static Label AptRank(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
         private static Label AptDash()
         {
@@ -515,7 +513,7 @@ namespace KokoSim.Unity.Member
             var meta = new VisualElement();
             meta.AddToClassList("cmp-card__meta");
             meta.Add(GradeLabel(card.GradeLabel));
-            meta.Add(RankChip(card.OverallGrade));
+            meta.Add(UiComponents.RankChip(card.OverallGrade));
             if (card.IsCaptain)
             {
                 var cap = new Label("主将");
@@ -527,31 +525,15 @@ namespace KokoSim.Unity.Member
             el.Add(meta);
         }
 
-        private VisualElement CompareRowEl(CompareRow r)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("cmp-row");
-
-            row.Add(ValueLabel(r.HasA ? r.ValueA.ToString() : "—", "cmp-row__val--l", r.HasA && r.Winner == -1));
-            var sideL = new VisualElement();
-            sideL.AddToClassList("cmp-row__side");
-            sideL.AddToClassList("cmp-row__side--l");
-            if (r.HasA) sideL.Add(Bar("cmp-row__bar--a", r.ValueA));
-            row.Add(sideL);
-
-            var lab = new Label(r.Label);
-            lab.AddToClassList("cmp-row__lab");
-            row.Add(lab);
-
-            var sideR = new VisualElement();
-            sideR.AddToClassList("cmp-row__side");
-            sideR.AddToClassList("cmp-row__side--r");
-            if (r.HasB) sideR.Add(Bar("cmp-row__bar--b", r.ValueB));
-            row.Add(sideR);
-            row.Add(ValueLabel(r.HasB ? r.ValueB.ToString() : "—", "cmp-row__val--r", r.HasB && r.Winner == 1));
-
-            return row;
-        }
+        // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
+        private static VisualElement CompareRowEl(CompareRow r)
+            => UiComponents.CompareRow(new CompareRowData
+            {
+                Label = r.Label,
+                ValueA = r.ValueA, ValueB = r.ValueB,
+                HasA = r.HasA, HasB = r.HasB,
+                Winner = r.Winner,
+            });
 
         // ── 部品ヘルパ ──
 
@@ -582,13 +564,6 @@ namespace KokoSim.Unity.Member
             return l;
         }
 
-        private static Label RankChip(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("rank-chip");
-            c.AddToClassList("rank-chip--" + grade);
-            return c;
-        }
 
         private Label ClearButton(int number)
         {
@@ -601,24 +576,6 @@ namespace KokoSim.Unity.Member
                 Render();
             });
             return x;
-        }
-
-        private static Label ValueLabel(string text, string sideMod, bool win)
-        {
-            var l = new Label(text);
-            l.AddToClassList("cmp-row__val");
-            l.AddToClassList(sideMod);
-            if (win) l.AddToClassList("cmp-row__val--win");
-            return l;
-        }
-
-        private static VisualElement Bar(string colorMod, int value)
-        {
-            var bar = new VisualElement();
-            bar.AddToClassList("cmp-row__bar");
-            bar.AddToClassList(colorMod);
-            bar.style.width = Length.Percent(Mathf.Clamp(value, 0, 100));
-            return bar;
         }
 
         private void SetText(string name, string text)

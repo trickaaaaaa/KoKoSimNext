@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Home
 {
@@ -18,7 +19,17 @@ namespace KokoSim.Unity.Home
 
         private HomeState _state;
         private VisualElement _root;
-        private VisualElement _banner, _dialog, _result;
+        private VisualElement _banner, _dialog, _result, _newTeam;
+
+        // 新チーム発足（次期主将の指名）モーダルの選択状態。RosterService.Active 内の index を持つ。
+        private KokoSim.Unity.Components.RadarChartView _ntRadar;
+        private int _ntPick = -1;
+
+        // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
+        // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
+        private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk;
+        private VisualElement _tsRow;
+        private EventCallback<ClickEvent> _tsRowClick;
 
         private void OnEnable()
         {
@@ -28,21 +39,31 @@ namespace KokoSim.Unity.Home
             _banner = _root.Q<VisualElement>("tm-banner");
             _dialog = _root.Q<VisualElement>("tm-dialog");
             _result = _root.Q<VisualElement>("tm-result");
+            _newTeam = _root.Q<VisualElement>("nt-modal");
+            _ntRadar = new KokoSim.Unity.Components.RadarChartView(
+                _root.Q<VisualElement>("nt-d-radar"), NewTeamRadarRadius);
 
-            var advance = _root.Q<Button>("advance");
-            if (advance != null) advance.clicked += OnAdvance;
+            _advanceBtn = _root.Q<Button>("advance");
+            if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
 
-            Wire("tm-dialog-yes", OnMatchYes);
-            Wire("tm-dialog-no", OnMatchNo);
-            Wire("tm-result-ok", OnResultOk);
+            _dialogYes = Wire("tm-dialog-yes", OnMatchYes);
+            _dialogNo = Wire("tm-dialog-no", OnMatchNo);
+            _resultOk = Wire("tm-result-ok", OnResultOk);
+            _newTeamOk = Wire("nt-ok", OnNewTeamConfirm);
 
             // 部の状態「チーム総合力」行 → 6角形の専用パネルへ（行クリックで詳細）。
-            var tsRow = _root.Q<VisualElement>("team-strength-row");
-            if (tsRow != null)
-                tsRow.RegisterCallback<ClickEvent>(_ =>
-                    KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("TeamStrength"));
+            _tsRow = _root.Q<VisualElement>("team-strength-row");
+            if (_tsRow != null)
+            {
+                _tsRowClick = _ => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TeamStrength");
+                _tsRow.RegisterCallback(_tsRowClick);
+            }
 
             Render();
+
+            // 他画面（練習・大会・練習試合）で週を進めて引退週に入った場合はここへ回送されてくる。
+            // その回送分もこの1箇所で受けて指名モーダルを開く（導線をホームに集約する）。
+            if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
             if (session.AwaitingMatchStart)
@@ -83,7 +104,8 @@ namespace KokoSim.Unity.Home
                 OnComplete = result =>
                 {
                     homeState.CompleteMatch(result);                 // 大会へ結果反映＋成績畳み込み＋ResultPending
-                    KokoSim.Unity.Shell.ScreenRouter.Instance?.Show("HomeDashboard");   // 戻ると OnEnable が結果表示
+                    // 「戻る」のクリック配信中なので同期 Show は不可（イベント木が壊れて全画面が落ちる）。
+                    KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");   // 戻ると OnEnable が結果表示
                 },
             };
             // この StartLiveMatch は HomeDashboard.OnEnable（＝スタメンOKの Show("HomeDashboard") の内側）から
@@ -92,10 +114,23 @@ namespace KokoSim.Unity.Home
             router.ShowDeferred("MatchLive");
         }
 
-        private void Wire(string name, System.Action handler)
+        private Button Wire(string name, System.Action handler)
         {
             var btn = _root.Q<Button>(name);
             if (btn != null) btn.clicked += handler;
+            return btn;
+        }
+
+        // 画面を離れるときに登録を解除する（OnEnable が毎回登録するため、外さないと往復のたび多重登録になる）。
+        private void OnDisable()
+        {
+            if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
+            if (_dialogYes != null) _dialogYes.clicked -= OnMatchYes;
+            if (_dialogNo != null) _dialogNo.clicked -= OnMatchNo;
+            if (_resultOk != null) _resultOk.clicked -= OnResultOk;
+            if (_newTeamOk != null) _newTeamOk.clicked -= OnNewTeamConfirm;
+            if (_tsRow != null && _tsRowClick != null) _tsRow.UnregisterCallback(_tsRowClick);
+            _tsRowClick = null;
         }
 
         // ===== 大会モード進行（要件1〜7） =====
@@ -112,8 +147,154 @@ namespace KokoSim.Unity.Home
             {
                 _state.AdvanceWeek();
                 Render();
-                if (_state.BannerPending) ShowBanner();        // 大会開幕演出（要件1・2）
+                if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();  // 引退週＝新チーム発足（設計書09 §8）
+                else if (_state.BannerPending) ShowBanner();    // 大会開幕演出（要件1・2）
             }
+        }
+
+        // ===== 新チーム発足：次期主将の指名（設計書09 §8・案C 左リスト＋右詳細） =====
+
+        private const float NewTeamRadarRadius = 0.34f;
+
+        /// <summary>指名モーダルを開く。初期選択は自動選出済みの暫定主将（そのまま確定してもよい）。</summary>
+        private void ShowNewTeam()
+        {
+            if (_newTeam == null) return;
+            var view = KokoSim.Unity.Shell.NewTeamService.BuildView();
+            if (view.Candidates.Count == 0)
+            {
+                // 新チームが空（下級生ゼロ）＝指名しようがない。導線を閉じて通常進行へ戻す。
+                KokoSim.Unity.Shell.NewTeamService.Clear();
+                return;
+            }
+
+            _ntPick = -1;
+            foreach (var c in view.Candidates) if (c.IsInterim) _ntPick = c.ActiveIndex;
+            if (_ntPick < 0) _ntPick = view.Candidates[0].ActiveIndex;
+
+            RenderNewTeam(view);
+            _newTeam.style.display = DisplayStyle.Flex;
+            _newTeam.BringToFront();
+        }
+
+        private void RenderNewTeam(KokoSim.Unity.Shell.NewTeamView view)
+        {
+            SetText("nt-lead", view.Lead);
+            SetText("nt-retired", view.RetiredLabel);
+            SetText("nt-note", "指名できるのは新チーム発足のこの1回だけです。");
+
+            var rows = _root.Q<ScrollView>("nt-rows");
+            if (rows != null)
+            {
+                rows.Clear();
+                foreach (var c in view.Candidates) rows.Add(BuildCandidateRow(c));
+            }
+            RenderNewTeamDetail();
+        }
+
+        private VisualElement BuildCandidateRow(KokoSim.Unity.Shell.CaptainCandidateRow c)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("nt-row");
+            if (c.ActiveIndex == _ntPick) row.AddToClassList("nt-row--on");
+
+            var no = new Label(c.Number); no.AddToClassList("nt-c-no"); row.Add(no);
+            var name = new Label(c.Name); name.AddToClassList("nt-c-name"); row.Add(name);
+            var pos = new Label(c.Position); pos.AddToClassList("nt-c-pos"); row.Add(pos);
+
+            var rank = new VisualElement(); rank.AddToClassList("nt-c-rank");
+            rank.Add(UiComponents.RankChipLegacy(c.OverallGrade));
+            row.Add(rank);
+
+            var mental = new Label(c.Mental.ToString()); mental.AddToClassList("nt-c-mental"); row.Add(mental);
+
+            var cond = new Label(c.Condition);
+            cond.AddToClassList("nt-c-cond");
+            cond.AddToClassList(CondClass(c.Condition));
+            row.Add(cond);
+
+            var index = c.ActiveIndex;
+            row.RegisterCallback<ClickEvent>(_ => OnPickCandidate(index));
+            return row;
+        }
+
+        private void OnPickCandidate(int activeIndex)
+        {
+            if (_ntPick == activeIndex) return;
+            _ntPick = activeIndex;
+            RenderNewTeam(KokoSim.Unity.Shell.NewTeamService.BuildView());
+        }
+
+        // 右ペイン：選択中の候補を選手詳細と同じ ViewModel で描く（レーダー・可視情報・特殊能力）。
+        // 統率力は主将本人しか判らない隠しパラメータなので出さない（設計書09 §8）。
+        private void RenderNewTeamDetail()
+        {
+            if (_ntPick < 0) return;
+            var v = new KokoSim.Unity.Players.PlayerDetailState().BuildView(_ntPick);
+
+            SetText("nt-d-name", v.Name);
+            SetText("nt-d-sub", v.GradeLabel + " / " + v.PosParen + " / " + v.ThrowsBats);
+            if (_ntRadar != null) _ntRadar.SetData(v.Radar, v.OverallGrade);
+
+            var facts = _root.Q<VisualElement>("nt-d-facts");
+            if (facts != null)
+            {
+                facts.Clear();
+                facts.Add(Fact("総合", v.OverallValue.ToString()));
+                facts.Add(Fact("精神力", MentalOf(v)));
+                facts.Add(Fact("調子", v.Condition));
+                facts.Add(Fact("性格", PersonalityOf(v)));
+            }
+
+            var skills = _root.Q<VisualElement>("nt-d-skills");
+            if (skills != null)
+            {
+                skills.Clear();
+                if (v.HasSkills)
+                {
+                    foreach (var s in v.Skills)
+                    {
+                        var chip = new Label(s.Name);
+                        chip.AddToClassList("nt-skill");
+                        skills.Add(chip);
+                    }
+                }
+                else
+                {
+                    var none = new Label("なし");
+                    none.AddToClassList("nt-skill");
+                    none.AddToClassList("nt-skill--none");
+                    skills.Add(none);
+                }
+            }
+        }
+
+        private static VisualElement Fact(string key, string value)
+        {
+            var e = new VisualElement();
+            e.AddToClassList("nt-fact");
+            var k = new Label(key); k.AddToClassList("nt-fact__k");
+            var v = new Label(value); v.AddToClassList("nt-fact__v");
+            e.Add(k); e.Add(v);
+            return e;
+        }
+
+        // 隠しパラメータ一覧（選手詳細と同じ判明ルール）から取り出す。未判明は「？」のまま出す。
+        private static string HiddenOf(KokoSim.Unity.Players.PlayerDetailView v, string key)
+        {
+            foreach (var h in v.Hidden) if (h.Key == key) return h.Known ? h.Value : "？";
+            return "？";
+        }
+
+        private static string MentalOf(KokoSim.Unity.Players.PlayerDetailView v) => HiddenOf(v, "精神力");
+        private static string PersonalityOf(KokoSim.Unity.Players.PlayerDetailView v) => HiddenOf(v, "性格");
+
+        private void OnNewTeamConfirm()
+        {
+            KokoSim.Unity.Shell.NewTeamService.Confirm(_ntPick);
+            if (_newTeam != null) _newTeam.style.display = DisplayStyle.None;
+            Render();
+            if (_state.BannerPending) ShowBanner();   // 指名の後に大会開幕演出が残っていれば続けて出す
         }
 
         private void ShowBanner()
@@ -157,7 +338,7 @@ namespace KokoSim.Unity.Home
             if (router != null)
             {
                 KokoSim.Unity.Shell.GameSession.Current.AwaitingMatchStart = true;
-                router.Show("LineupSetting");
+                router.ShowDeferred("LineupSetting");   // 「はい」のクリック配信中なので遅延切替
                 return;
             }
             // フォールバック（ルータ不在）：従来どおり即消化。
@@ -212,7 +393,7 @@ namespace KokoSim.Unity.Home
 
             // チーム総合力ランクチップ。
             var rank = _root.Q<VisualElement>("team-rank");
-            if (rank != null) { rank.Clear(); rank.Add(GradeChip(v.TeamRankGrade)); }
+            if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChipLegacy(v.TeamRankGrade)); }
 
             // チーム総合力（6指標の総合ランク）を部の状態に表示（クリックで専用パネル）。
             var tsChip = _root.Q<VisualElement>("team-strength-chip");
@@ -220,7 +401,7 @@ namespace KokoSim.Unity.Home
             {
                 var ts = new KokoSim.Unity.Squad.TeamStrengthState().BuildView();
                 tsChip.Clear();
-                tsChip.Add(GradeChip(ts.OverallGrade));
+                tsChip.Add(UiComponents.RankChipLegacy(ts.OverallGrade));
             }
 
             // 次の試合。
@@ -271,7 +452,7 @@ namespace KokoSim.Unity.Home
             cond.AddToClassList(CondClass(r.Condition));
             row.Add(cond);
 
-            row.Add(GradeChip(r.OverallGrade));
+            row.Add(UiComponents.RankChipLegacy(r.OverallGrade));
             return row;
         }
 
@@ -358,14 +539,6 @@ namespace KokoSim.Unity.Home
         }
 
         // ===== 補助 =====
-
-        private static Label GradeChip(string grade)
-        {
-            var chip = new Label(grade);
-            chip.AddToClassList("grade");
-            chip.AddToClassList("grade--" + grade);
-            return chip;
-        }
 
         private static string CondArrow(string c)
         {

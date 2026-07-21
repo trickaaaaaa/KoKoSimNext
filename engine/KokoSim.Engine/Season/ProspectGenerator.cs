@@ -135,9 +135,13 @@ public static class ProspectGenerator
 
     public static IReadOnlyList<DevelopingPlayer> Intake(int year, RosterCoefficients c, IRandomSource rng,
         PlayerNameVocab? nameVocab = null, double? talentCenter = null, SkillCoefficients? skills = null,
-        PersonalityCoefficients? personalities = null)
+        PersonalityCoefficients? personalities = null, IEnumerable<string>? existingNames = null)
     {
         var vocab = nameVocab ?? new PlayerNameVocab();
+        // 同一チーム内で下の名前が被らないよう、既存部員の名前も含めて持ち回る（苗字の重複はOK）。
+        var usedGiven = new HashSet<string>();
+        if (existingNames != null)
+            foreach (var n in existingNames) usedGiven.Add(GivenPart(n));
         var skillCoeff = skills ?? new SkillCoefficients();
         var personalityCoeff = personalities ?? new PersonalityCoefficients();
         var center = talentCenter ?? c.TalentCenterDefault;
@@ -146,14 +150,22 @@ public static class ProspectGenerator
         for (var i = 0; i < count; i++)
         {
             var isPitcher = rng.NextDouble() < c.PitcherShare;
-            list.Add(Create(year, i, isPitcher, center, c, rng, vocab, skillCoeff, personalityCoeff));
+            list.Add(Create(year, i, isPitcher, center, c, rng, vocab, skillCoeff, personalityCoeff, usedGiven));
         }
         return list;
     }
 
+    /// <summary>「苗字　名前」から下の名前だけを取り出す（区切りが無ければ全体を名前とみなす）。</summary>
+    private static string GivenPart(string fullName)
+    {
+        if (string.IsNullOrEmpty(fullName)) return "";
+        var i = fullName.LastIndexOf('　');
+        return i >= 0 ? fullName.Substring(i + 1) : fullName;
+    }
+
     private static DevelopingPlayer Create(int year, int index, bool isPitcher, double talentCenter,
         RosterCoefficients c, IRandomSource rng, PlayerNameVocab vocab, SkillCoefficients skillCoeff,
-        PersonalityCoefficients personalityCoeff)
+        PersonalityCoefficients personalityCoeff, ISet<string> usedGiven)
     {
         var growth = SampleGrowthType(rng);
 
@@ -201,7 +213,8 @@ public static class ProspectGenerator
         var p = new DevelopingPlayer
         {
             // 氏名は独立ストリーム(Fork)で抽選し、能力ロール列と分離（決定論・名前テスト非破壊）。
-            Name = PlayerNameGenerator.Generate(vocab, rng.Fork(NameStreamId(year, index))),
+            // 重複回避のリロールも同じ Fork ストリーム内で完結する＝主RNGの消費列は不変。
+            Name = PlayerNameGenerator.Generate(vocab, rng.Fork(NameStreamId(year, index)), usedGiven),
             Grade = 1,
             IsPitcher = isPitcher,
             GrowthType = growth,

@@ -122,8 +122,10 @@ public sealed class MatchProgressionTests
     [Fact]
     public void PinchHitInSeventh_AppearsInSubsequentPlateAppearances()
     {
+        // シードは「7回に到達し、その後に代打の打順が回ってくる」局面を選んだもの
+        // （Issue #24 で打球の塁打数決定が変わり、42 では代打の打順が回る前に試合が終わるようになった）。
         var prog = new MatchProgression(Team("A", true), Team("H", true),
-            new GameContext { CaptureTimelines = true }, 42UL);
+            new GameContext { CaptureTimelines = true }, 43UL);
 
         // 7回に到達するまで手動で進める。
         while (prog.Advance() && prog.Current!.Inning < 7) { }
@@ -190,6 +192,11 @@ public sealed class MatchProgressionTests
                 Assert.Equal(entry.PitchLog[i].Kind, seq[i].Kind);
                 Assert.Equal(entry.PitchLog[i].BallsAfter, seq[i].BallsAfter);
                 Assert.Equal(entry.PitchLog[i].StrikesAfter, seq[i].StrikesAfter);
+                // 球種・球速も実記録のまま貫通する（1球ごとの判定オーバーレイ表示用・表示専用）。
+                Assert.Equal(entry.PitchLog[i].PitchType, seq[i].PitchType);
+                Assert.Equal(entry.PitchLog[i].VelocityKmh, seq[i].VelocityKmh);
+                Assert.NotNull(seq[i].VelocityKmh);
+                Assert.InRange(seq[i].VelocityKmh!.Value, 60.0, 180.0);
             }
             index++;
         }

@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Players; // AbilityBar / RadarAxis を共用
 using KokoSim.Unity.Shell;   // ScreenRouter / RankPalette（ランク色の単一ソース）
+using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Squad
 {
@@ -18,12 +19,9 @@ namespace KokoSim.Unity.Squad
     {
         private TeamStrengthState _state;
         private VisualElement _root;
-        private VisualElement _radar;
+        private RadarChartView _radar;
 
-        private readonly List<RadarAxis> _radarAxes = new List<RadarAxis>();
         private readonly List<AbilityBar> _factors = new List<AbilityBar>();
-        private readonly List<VisualElement> _axisNodes = new List<VisualElement>();
-        private string _overallGrade = "D";
 
         private const float RadiusFactor = 0.36f;
         private const float LabelOffset = 1.20f;
@@ -47,16 +45,9 @@ namespace KokoSim.Unity.Squad
             var back = _root.Q<Button>("back-home");
             if (back != null) back.clicked += () => FindObjectOfType<ScreenRouter>()?.Show("HomeDashboard");
 
-            _radar = _root.Q<VisualElement>("radar");
-            if (_radar != null)
-            {
-                _radar.generateVisualContent += OnPaintRadar;
-                _radar.RegisterCallback<GeometryChangedEvent>(_ =>
-                {
-                    _radar.MarkDirtyRepaint();
-                    RepositionAxes();
-                });
-            }
+            // レーダーは部品辞書の共通部品（描画＋軸ラベル配置は RadarChartView が持つ）。
+            _radar = new RadarChartView(_root.Q<VisualElement>("radar"), RadiusFactor, LabelOffset,
+                RadarLabelSize.Large);
 
             Render();
         }
@@ -64,11 +55,10 @@ namespace KokoSim.Unity.Squad
         private void Render()
         {
             var v = _state.BuildView();
-            _overallGrade = v.OverallGrade;
 
             // ヘッダー: 総合ランク チップ ＋ (値) 形式「E (41)」（1.5倍拡大）。
             var chip = _root.Q<VisualElement>("overall-chip");
-            if (chip != null) { chip.Clear(); chip.Add(XlGradeChip(v.OverallGrade)); }
+            if (chip != null) { chip.Clear(); chip.Add(UiComponents.RankChip(v.OverallGrade, RankChipSize.XLarge)); }
             var ov = _root.Q<Label>("overall-value");
             if (ov != null) ov.text = "(" + v.OverallValue + ")";
 
@@ -90,190 +80,23 @@ namespace KokoSim.Unity.Squad
                     : $"<b><color=#E68A4A>{v.AnalysisWeak}。</color></b> {v.AnalysisAdvice}";
             }
 
-            // レーダー描画データ。
-            _radarAxes.Clear(); _radarAxes.AddRange(v.Radar);
+            // レーダー描画データ（軸ラベル＋数値の生成/配置は共通部品に委ねる）。
             _factors.Clear(); _factors.AddRange(v.Factors);
-
-            BuildAxisLabels();
-            RepositionAxes();
-            if (_radar != null) _radar.MarkDirtyRepaint();
-        }
-
-        // ===== レーダー軸ラベル（数値は1色統一・強調はサイズ/太さ） =====
-
-        private void BuildAxisLabels()
-        {
-            if (_radar == null) return;
-            foreach (var n in _axisNodes) n.RemoveFromHierarchy();
-            _axisNodes.Clear();
-
-            foreach (var f in _factors)
-            {
-                var node = new VisualElement();
-                node.AddToClassList("ts-axis");
-                node.pickingMode = PickingMode.Ignore;
-                var label = new Label(f.Label); label.AddToClassList("ts-axis__l");
-                var val = new Label(f.Value.ToString()); val.AddToClassList("ts-axis__v");
-                node.Add(label); node.Add(val);
-                _radar.Add(node);
-                _axisNodes.Add(node);
-            }
-        }
-
-        private void RepositionAxes()
-        {
-            if (_radar == null) return;
-            var rect = _radar.contentRect;
-            if (rect.width < 4 || rect.height < 4) return;
-
-            var cx = rect.width * 0.5f;
-            var cy = rect.height * 0.5f;
-            var radius = Mathf.Min(rect.width, rect.height) * RadiusFactor;
-            var n = _axisNodes.Count;
-
-            for (var i = 0; i < n; i++)
-            {
-                var ang = -Mathf.PI / 2f + (Mathf.PI * 2f) * i / n;
-                var lx = cx + Mathf.Cos(ang) * radius * LabelOffset;
-                var ly = cy + Mathf.Sin(ang) * radius * LabelOffset;
-                var node = _axisNodes[i];
-                node.style.left = lx;
-                node.style.top = ly;
-                node.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
-            }
+            _radar.SetData(v.Radar, v.OverallGrade);
         }
 
         // ===== 右カラムの指標バー（内訳＋ランク連動色） =====
 
         private static VisualElement BuildFactor(AbilityBar a)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("ts-frow");
-
-            var nameCol = new VisualElement();
-            nameCol.AddToClassList("ts-frow__name");
-            var l = new Label(a.Label); l.AddToClassList("ts-frow__l"); nameCol.Add(l);
-            var sub = new Label(Composition.TryGetValue(a.Label, out var c) ? c : "");
-            sub.AddToClassList("ts-frow__sub"); nameCol.Add(sub);
-            row.Add(nameCol);
-
-            var val = new Label(a.Value.ToString()); val.AddToClassList("ts-frow__v"); row.Add(val);
-
-            var bar = new VisualElement(); bar.AddToClassList("ts-frow__bar");
-            var fill = new VisualElement(); fill.AddToClassList("ts-frow__fill");
-            fill.style.width = Length.Percent(Mathf.Clamp01(a.Pct) * 100f);
-            fill.style.backgroundColor = Hex(a.BarColorHex); // ＝RankPalette.Hex(grade)
-            bar.Add(fill); row.Add(bar);
-
-            row.Add(GradeChip(a.Grade));
-            return row;
-        }
-
-        // ===== レーダー描画（Painter2D＋頂点カラーメッシュ・総合ランク連動色） =====
-
-        private void OnPaintRadar(MeshGenerationContext ctx)
-        {
-            var n = _radarAxes.Count;
-            if (n < 3) return;
-            var rect = ctx.visualElement.contentRect;
-            if (rect.width < 4 || rect.height < 4) return;
-
-            var cx = rect.width * 0.5f;
-            var cy = rect.height * 0.5f;
-            var radius = Mathf.Min(rect.width, rect.height) * RadiusFactor;
-            var p = ctx.painter2D;
-
-            // グリッド: 5段階（20/40/60/80/100）。最外周だけ明るく、内側は暗く細く。
-            var gridInner = new Color(0.17f, 0.24f, 0.20f);
-            var gridOuter = new Color(0.40f, 0.52f, 0.45f);
-            for (var r = 1; r <= 5; r++)
+            => UiComponents.AbilityRow(new AbilityRowData
             {
-                var isOuter = r == 5;
-                p.BeginPath();
-                for (var i = 0; i < n; i++)
-                {
-                    var pt = AxisPoint(cx, cy, radius * (r / 5f), i, n);
-                    if (i == 0) p.MoveTo(pt); else p.LineTo(pt);
-                }
-                p.ClosePath();
-                p.strokeColor = isOuter ? gridOuter : gridInner;
-                p.lineWidth = isOuter ? 1.6f : 1f;
-                p.Stroke();
-            }
-            for (var i = 0; i < n; i++)
-            {
-                p.BeginPath();
-                p.MoveTo(new Vector2(cx, cy));
-                p.LineTo(AxisPoint(cx, cy, radius, i, n));
-                p.strokeColor = gridInner;
-                p.lineWidth = 1f; p.Stroke();
-            }
+                Label = a.Label,
+                Sub = Composition.TryGetValue(a.Label, out var c) ? c : "",
+                Value = a.Value.ToString(),
+                Pct = a.Pct,
+                Grade = a.Grade,
+                Size = AbilityRowSize.Large,
+            });
 
-            // データ塗り: 総合ランク連動色で中心→外へグラデ（黄アクセントは使わない）。
-            var rc = RankPalette.Of(_overallGrade);
-            var centerCol = (Color32)new Color(rc.r, rc.g, rc.b, 0.28f);
-            var rimCol = (Color32)new Color(rc.r * 0.68f, rc.g * 0.68f, rc.b * 0.68f, 0.62f);
-
-            var rim = new Vector2[n];
-            for (var i = 0; i < n; i++)
-            {
-                var val = Mathf.Clamp01(_radarAxes[i].Value01);
-                rim[i] = AxisPoint(cx, cy, radius * Mathf.Max(0.04f, val), i, n);
-            }
-            var mesh = ctx.Allocate(n + 1, n * 3);
-            mesh.SetNextVertex(new Vertex { position = new Vector3(cx, cy, Vertex.nearZ), tint = centerCol });
-            for (var i = 0; i < n; i++)
-                mesh.SetNextVertex(new Vertex { position = new Vector3(rim[i].x, rim[i].y, Vertex.nearZ), tint = rimCol });
-            for (var i = 0; i < n; i++)
-            {
-                mesh.SetNextIndex(0);
-                mesh.SetNextIndex((ushort)(1 + i));
-                mesh.SetNextIndex((ushort)(1 + ((i + 1) % n)));
-            }
-
-            // 輪郭線（太め 2.5px）＋頂点ドット（4px）＝ランク連動色（濃いめ）。
-            var line = new Color(rc.r, rc.g, rc.b, 1f);
-            p.BeginPath();
-            for (var i = 0; i < n; i++) { if (i == 0) p.MoveTo(rim[i]); else p.LineTo(rim[i]); }
-            p.ClosePath();
-            p.strokeColor = line; p.lineWidth = 2.5f; p.Stroke();
-
-            foreach (var pt in rim)
-            {
-                p.BeginPath();
-                p.MoveTo(new Vector2(pt.x - 2f, pt.y));
-                p.LineTo(new Vector2(pt.x, pt.y - 2f));
-                p.LineTo(new Vector2(pt.x + 2f, pt.y));
-                p.LineTo(new Vector2(pt.x, pt.y + 2f));
-                p.ClosePath();
-                p.fillColor = line; p.Fill();
-            }
-        }
-
-        private static Vector2 AxisPoint(float cx, float cy, float r, int i, int n)
-        {
-            var ang = -Mathf.PI / 2f + (Mathf.PI * 2f) * i / n; // 真上始点・時計回り
-            return new Vector2(cx + Mathf.Cos(ang) * r, cy + Mathf.Sin(ang) * r);
-        }
-
-        // ===== 補助 =====
-
-        private static Label GradeChip(string grade)
-        {
-            var c = new Label(grade);
-            c.AddToClassList("grade");
-            c.AddToClassList("grade--" + grade);
-            return c;
-        }
-
-        private static Label XlGradeChip(string grade)
-        {
-            var c = GradeChip(grade);
-            c.AddToClassList("grade--xl");
-            return c;
-        }
-
-        private static Color Hex(string hex)
-            => ColorUtility.TryParseHtmlString(hex, out var c) ? c : Color.white;
     }
 }
