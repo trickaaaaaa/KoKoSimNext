@@ -1,0 +1,100 @@
+# 傷病カタログ（設計書03 §3.5）。engine は id だけを扱い、表示名・部位・段階分布・回復倍率・場面重みはここが単一ソース。
+#
+# id                 : エンジンの InjuryType enum と一致（必須）
+# name               : UI 表示名（日本語）
+# recovery_week_factor: 段階ごとの基準回復週（coefficients.yaml injury: *_recovery_weeks）に掛ける倍率
+# severity           : 段階分布。minor+moderate の残りが severe
+# sites              : 取りうる部位と重み（空なら全部位一様）
+# scenes             : 発生場面ごとの抽選重み。未掲載の場面ではその傷病は起きない
+#                      weekly=週次基礎率 / hit_by_pitch=死球 / home_collision=本塁クロスプレー
+#                      fence_crash=フェンス激突 / sliding=盗塁のスライディング / overuse=投球過多
+
+injuries:
+  - id: Sprain
+    name: 捻挫
+    recovery_week_factor: 0.8
+    severity: { minor: 0.80, moderate: 0.17 }
+    sites:
+      - { site: Ankle, weight: 0.50 }
+      - { site: Knee, weight: 0.25 }
+      - { site: Hand, weight: 0.15 }
+      - { site: Back, weight: 0.10 }
+    scenes:
+      weekly: 1.0
+      home_collision: 2.0
+      fence_crash: 1.5
+      sliding: 4.0
+
+  - id: Strain
+    name: 肉離れ
+    recovery_week_factor: 1.0
+    severity: { minor: 0.65, moderate: 0.30 }
+    sites:
+      - { site: Back, weight: 0.35 }
+      - { site: Knee, weight: 0.25 }
+      - { site: Shoulder, weight: 0.20 }
+      - { site: Elbow, weight: 0.20 }
+    scenes:
+      weekly: 1.0
+      sliding: 3.0
+      overuse: 1.0
+
+  - id: Fracture
+    name: 骨折
+    recovery_week_factor: 2.0
+    severity: { minor: 0.25, moderate: 0.45 }
+    sites:
+      - { site: Hand, weight: 0.45 }
+      - { site: Ankle, weight: 0.20 }
+      - { site: Elbow, weight: 0.15 }
+      - { site: Shoulder, weight: 0.10 }
+      - { site: Back, weight: 0.10 }
+    scenes:
+      weekly: 0.15
+      hit_by_pitch: 2.0
+      home_collision: 1.2
+      fence_crash: 1.0
+
+  - id: Bruise
+    name: 打撲
+    recovery_week_factor: 0.5
+    severity: { minor: 0.90, moderate: 0.09 }
+    sites:
+      - { site: Hand, weight: 0.30 }
+      - { site: Knee, weight: 0.20 }
+      - { site: Back, weight: 0.20 }
+      - { site: Shoulder, weight: 0.15 }
+      - { site: Elbow, weight: 0.15 }
+    scenes:
+      weekly: 0.6
+      hit_by_pitch: 6.0
+      home_collision: 4.0
+      fence_crash: 4.0
+      sliding: 2.0
+
+  - id: LigamentTear
+    name: 靭帯損傷
+    recovery_week_factor: 2.5
+    severity: { minor: 0.10, moderate: 0.40 }
+    sites:
+      - { site: Knee, weight: 0.40 }
+      - { site: Elbow, weight: 0.30 }
+      - { site: Ankle, weight: 0.20 }
+      - { site: Shoulder, weight: 0.10 }
+    scenes:
+      weekly: 0.10
+      home_collision: 1.0
+      fence_crash: 0.8
+      sliding: 0.6
+
+  - id: Inflammation
+    name: 疲労性炎症
+    recovery_week_factor: 1.2
+    severity: { minor: 0.65, moderate: 0.30 }
+    sites:
+      - { site: Shoulder, weight: 0.40 }
+      - { site: Elbow, weight: 0.35 }
+      - { site: Back, weight: 0.25 }
+    scenes:
+      weekly: 1.2
+      overuse: 8.0

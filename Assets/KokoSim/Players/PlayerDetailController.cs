@@ -98,6 +98,9 @@ namespace KokoSim.Unity.Players
             SetText("meta-style", v.PitchStyle);
             SetDisplay("meta-velo", v.IsPitcher);
             SetText("meta-velo", "最速 " + v.TopVelocityKmh + " km/h");
+            // 故障（設計書03 §3.5）: 怪我している時だけ警告色で出す（UI原則②）。
+            SetDisplay("meta-injury", v.Injury.Length > 0);
+            SetText("meta-injury", v.Injury);
 
             var chip = _root.Q<VisualElement>("overall-chip");
             if (chip != null) { chip.Clear(); chip.Add(UiComponents.RankChip(v.OverallGrade, RankChipSize.Large)); }

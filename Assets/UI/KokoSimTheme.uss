@@ -860,6 +860,8 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-caphint { font-size: var(--fs-cap); color: var(--tx-2); margin-left: var(--sp-2); }
 .pd2-meta { flex-direction: row; flex-wrap: wrap; margin-top: 10px; }
 .pd2-meta__i { font-size: 14px; color: #9AA5A0; margin-right: 20px; }
+/* 故障中だけ警告色（UI原則②: 本当の警告にだけ使う）。健常時はこの要素自体を隠す。 */
+.pd2-meta__i--injury { color: var(--color-warn); }
 .pd2-overall { align-items: center; padding-left: 24px; border-left-width: 1px; border-left-color: #232E28; }
 .pd2-overall__k { font-size: 11px; color: #9AA5A0; letter-spacing: 2px; margin-bottom: 8px; }
 .pd2-overall__chip { flex-direction: row; }

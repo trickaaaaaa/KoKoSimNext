@@ -67,6 +67,8 @@ namespace KokoSim.Unity.Players
         public string Name = "";
         public string Condition = "普通";
         public string ConditionColorHex = "#EFF4EA";
+        /// <summary>故障表示（設計書03 §3.5: 傷病名・部位・段階・全治まで残り週）。健常なら空文字。</summary>
+        public string Injury = "";
         public string GradeLabel = "1年";
         public string PosParen = "野手";
         public string ThrowsBats = "右投右打";
@@ -143,6 +145,8 @@ namespace KokoSim.Unity.Players
                 IsCaptain = p.IsCaptain,
             };
             v.ConditionColorHex = CondColor(v.Condition);
+            // 故障（設計書03 §3.5: 常に可視）。文言は engine のカタログ由来（InjuryLabel が単一ソース）。
+            v.Injury = KokoSim.Unity.Shell.InjuryLabel.Full(p);
             v.CanDesignateCaptain = CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar);
             v.DesignateReason = v.CanDesignateCaptain ? "" : DesignateReasonJp(p);
 

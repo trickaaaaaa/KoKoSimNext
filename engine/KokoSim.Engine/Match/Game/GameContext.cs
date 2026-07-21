@@ -22,6 +22,15 @@ public sealed record GameContext
     public Players.SkillCoefficients Skills { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();
 
+    /// <summary>
+    /// 試合中の受傷係数（設計書03 §3.5）。判定は Fork した専用ストリームで引くため、
+    /// 値を変えても試合結果・乱数順は動かない（観測データのみ）。
+    /// </summary>
+    public MatchInjuryCoefficients MatchInjury { get; init; } = new();
+
+    /// <summary>傷病カタログ（data/injuries.yaml）。空にすると試合中の受傷は一切起きない。</summary>
+    public Players.InjuryCatalog InjuryCatalog { get; init; } = Players.InjuryCatalog.Default;
+
     /// <summary>大会段階のプレッシャー加点（練習試合0 / 予選+1 / 甲子園+2 / 決勝+3, 設計書02 §3.1）。</summary>
     public int PressureStageBonus { get; init; }
     /// <summary>負けたら引退（3年夏）のプレッシャー加点フラグ。</summary>

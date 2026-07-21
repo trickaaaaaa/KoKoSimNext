@@ -80,6 +80,12 @@ public sealed record Player
     /// <summary>怪我の段階（設計書03 §3.5, 常に可視）。能力ダウンは投影時に一律係数で反映済み。采配判断用の表示。</summary>
     public InjurySeverity Injury { get; init; } = InjurySeverity.None;
 
+    /// <summary>
+    /// 怪我耐性（隠し, 1〜100。設計書01 L34）。試合中の場面駆動の受傷判定（設計書03 §3.5）で
+    /// 週次判定と同じ掛け方をするために投影する。物理層の解決には一切使わない＝帯不変。
+    /// </summary>
+    public double InjuryResistance { get; init; } = 50.0;
+
     /// <summary>投手能力（投手のみ非null）。</summary>
     public PitcherAttributes? Pitching { get; init; }
 

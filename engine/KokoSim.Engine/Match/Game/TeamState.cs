@@ -49,6 +49,12 @@ public sealed class TeamState
     /// <summary>捕手（盗塁刺しの送球主体）。捕手が打順にいなければ先頭打者で代用。</summary>
     public Player Catcher => _lineup.FirstOrDefault(p => p.Position == FieldPosition.Catcher)
                              ?? _lineup[0];
+
+    /// <summary>その守備位置に就いている選手（不在なら null）。観測用＝結果・乱数順に影響しない。</summary>
+    public Player? PlayerAtPosition(FieldPosition pos)
+        => pos == FieldPosition.Pitcher
+            ? CurrentPitcher
+            : _lineup.FirstOrDefault(p => p.Position == pos);
     public int PitchesThrown { get; private set; }
     public int Runs { get; set; }
     public int PitcherChanges { get; private set; }

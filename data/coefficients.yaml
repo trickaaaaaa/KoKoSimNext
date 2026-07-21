@@ -470,7 +470,18 @@ injury:
   severe_performance_factor: 0.70
   play_through_worsen_prob: 0.30
   worsen_extra_weeks: 3
+  play_through_extra_weeks: 1    # 悪化しなくても出場1試合ごとに全治が延びる週（0で従来挙動）
   medical_recovery_factor: 1.0   # 医療施設で短縮（設計書04の備品, 未接続時1.0）
+  # --- 試合中の場面駆動の受傷（設計書03 §3.5・設計書12）。傷病の種類は data/injuries.yaml。
+  # 判定は Fork した専用ストリームで引くため、ここを動かしても試合結果・統計帯は動かない（観測データ）。
+  match_hit_by_pitch_prob: 0.010        # 死球1回あたり
+  match_home_collision_prob: 0.020      # 本塁クロスプレー憤死1回あたり
+  match_home_collision_catcher_share: 0.35  # うち捕手側が負傷する割合（残りは走者）
+  match_fence_crash_prob: 0.030         # フェンス際の飛球を捕った外野手1回あたり
+  match_fence_crash_margin_m: 2.5       # 「フェンス際」と見なす着地点〜フェンス距離[m]
+  match_sliding_prob: 0.0035            # 盗塁企図1回あたり
+  match_overuse_prob: 0.008             # 投球過多の投手が1打席ごとに
+  match_overuse_over_pitches: 25        # 投球過多と見なすスタミナ目安球数の超過分[球]
 
 # --- 選手成長イベント（設計書03 §5.5: 覚醒/開眼/スランプ/伸び悩み/イップス）🟡 ---
 # 原則: 上昇はレアな福音、下降は文脈必須（理不尽回避）。覚醒率・恒久ダウン率は設計書07で検証
