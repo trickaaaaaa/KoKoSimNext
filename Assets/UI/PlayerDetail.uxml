@@ -55,6 +55,7 @@
                 <ui:Label name="captain-badge" class="pd2-captain" text="主将" />
                 <ui:Label name="cond" class="pd2-cond" text="絶好調" />
                 <ui:Button name="designate-captain" class="pd2-capbtn" text="主将に指名" />
+                <ui:Label name="designate-reason" class="pd2-caphint" text="" />
               </ui:VisualElement>
               <ui:VisualElement class="pd2-meta">
                 <ui:Label name="meta-grade" class="pd2-meta__i" text="3年" />

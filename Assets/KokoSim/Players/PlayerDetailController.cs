@@ -16,6 +16,7 @@ namespace KokoSim.Unity.Players
     {
         private PlayerDetailState _state;
         private VisualElement _root;
+        private Button _designateButton;
         private readonly List<RadarAxis> _radarAxes = new List<RadarAxis>();
 
         // 球種変化チャート（プロスピ風）。
@@ -32,12 +33,12 @@ namespace KokoSim.Unity.Players
             var back = _root.Q<Button>("back-list");
             if (back != null) back.clicked += () => FindObjectOfType<ScreenRouter>()?.Show("PlayerList");
 
-            // 主将に指名（設計書09 §8）: この選手を主将に据えて再描画（バッジが付く）。
-            var designate = _root.Q<Button>("designate-captain");
-            if (designate != null) designate.clicked += () =>
+            // 主将に指名（設計書09 §8）: 新チーム発足時（夏の3年引退直後）だけ受け付ける。
+            // 期間外・候補外は非活性にして理由を添えるため、ボタン参照を保持しておく。
+            _designateButton = _root.Q<Button>("designate-captain");
+            if (_designateButton != null) _designateButton.clicked += () =>
             {
-                _state.DesignateCaptain(PlayerSelection.Index);
-                Render();
+                if (_state.DesignateCaptain(PlayerSelection.Index)) Render();
             };
 
             var radar = _root.Q<VisualElement>("radar");
@@ -70,6 +71,10 @@ namespace KokoSim.Unity.Players
             SetDisplay("captain-badge", v.IsCaptain);
             // 既に主将なら指名ボタンを隠す（重複指名の抑止）。
             SetDisplay("designate-captain", !v.IsCaptain);
+            // 指名ウィンドウ外・候補外は押せない。理由はボタン脇に添える（設計書09 §8）。
+            if (_designateButton != null) _designateButton.SetEnabled(v.CanDesignateCaptain);
+            SetDisplay("designate-reason", !v.IsCaptain && !v.CanDesignateCaptain);
+            SetText("designate-reason", v.DesignateReason);
             SetText("meta-grade", v.GradeLabel);
             SetText("meta-pos", v.PosParen);
             SetText("meta-tb", v.ThrowsBats);
