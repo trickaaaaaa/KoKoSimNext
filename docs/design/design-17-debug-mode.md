@@ -521,6 +521,10 @@ return KokoSim.Unity.Debugging.DebugBridge.DumpState();   // JSON が返る
 
 ### 12.4 積み残し
 
-- 大会フローから起こすライブ観戦（`MatchLiveController.Pending` 経路）は、`GameContext` を呼び出し側が組むため
-  HUD の観測が刺さっていない。デモ生成の試合と `DebugBridge` 起点の試合は観測付き。
-- `ScenarioBuilder` の `"player"` 解決は現状フォールバックの生成校。Unity 側の実部員（`RosterService`）との接続は未配線。
+いずれも個別 issue に切り出し済み。
+
+- **#95**: 大会フローから起こすライブ観戦（`MatchLiveController.Pending` 経路）は、`GameContext` を
+  `PlayerMatchResolver.BeginLive` が組むため HUD の観測が刺さっていない。
+  デモ生成の試合と `DebugBridge` 起点の試合は観測付き。
+- **#96**: `ScenarioBuilder` の `"player"` 解決は現状フォールバックの生成校。
+  `DebugBridge.StartMatch` が `playerTeam` を渡していないため、Unity 側の実部員（`RosterService`）との接続は未配線。
