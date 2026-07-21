@@ -186,6 +186,18 @@ public sealed class TeamState
         return slots;
     }
 
+    /// <summary>
+    /// ライブ観戦のラインスコア（回別得点＋R/H/E）。<see cref="InningRuns"/> は半回が終わって初めて
+    /// 記録されるので、進行中の半回で入った点は「総得点 − 記録済みの合計」として分離して返す
+    /// （UI側で差分を取らせない＝数値はエンジン集計から引く、の徹底）。観測データ。
+    /// </summary>
+    public LiveLineScore LiveLine()
+    {
+        var recorded = 0;
+        foreach (var r in _inningRuns) recorded += r;
+        return new LiveLineScore(Name, _inningRuns.ToList(), Runs - recorded, Runs, Hits, Errors);
+    }
+
     /// <summary>ライブ観戦の現投手の今日の成績（球数/投球回/失点/奪三振）。観測データ。</summary>
     public LivePitcherToday LivePitcherLine()
     {
