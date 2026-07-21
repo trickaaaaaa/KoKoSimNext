@@ -652,7 +652,7 @@ namespace KokoSim.Unity.Match
         {
             if (_pitchCall == null || _pitchCallJudge == null) return;
 
-            _pitchCallJudge.text = PitchJudgeJp(pt.Kind);
+            _pitchCallJudge.text = PitchJudgeJp(pt);
             _pitchCallJudge.EnableInClassList("pitch-call__judge--strike", IsStrikeCall(pt.Kind));
             _pitchCallJudge.EnableInClassList("pitch-call__judge--ball", pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Ball);
 
@@ -678,16 +678,17 @@ namespace KokoSim.Unity.Match
         private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>
             k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
 
-        private static string PitchJudgeJp(KokoSim.Engine.Match.AtBat.PitchKind k)
+        // 四球成立の瞬間（4球目）は「ボール」ではなく「フォアボール」を表示する（issue #61）。
+        private static string PitchJudgeJp(PitchToken pt)
         {
-            switch (k)
+            switch (pt.Kind)
             {
-                case KokoSim.Engine.Match.AtBat.PitchKind.Ball: return "ボール";
+                case KokoSim.Engine.Match.AtBat.PitchKind.Ball: return pt.BallsAfter >= 4 ? "フォアボール" : "ボール";
                 case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return "ストライク";
                 case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return "ストライク";
                 case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return "ファール";
                 case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "打った";
-                case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "死球";
+                case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "デッドボール";
                 default: return "";
             }
         }
