@@ -167,7 +167,7 @@ namespace KokoSim.Unity.Training
         private readonly GrowthStageTable _stages = new GrowthStageTable();
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
 
-        private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用（全画面共有の RosterService.Roster）
+        private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用（全画面共有の RosterService.Active）
         private readonly TrainingPlan[] _plans;          // 選手索引→練習計画
         private readonly bool[] _delegated;              // 選手索引→委任フラグ（UI状態）
         private readonly List<int> _nominated = new List<int>(); // 個別指導3枠（選手索引・最大3, UI状態）
@@ -184,7 +184,7 @@ namespace KokoSim.Unity.Training
         public TrainingPlanState()
         {
             // 全画面で共有する単一ソースのロスター（背番号はメンバー設定画面と一致, RosterService）。
-            _roster = RosterService.Roster;
+            _roster = RosterService.Active;
             _plans = new TrainingPlan[_roster.Count];
             _delegated = new bool[_roster.Count];
             for (var i = 0; i < _roster.Count; i++)

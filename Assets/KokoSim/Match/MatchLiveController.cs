@@ -252,7 +252,7 @@ namespace KokoSim.Unity.Match
             var awayRng = new KokoSim.Engine.Core.Xoshiro256Random(gameSeed ^ 0x1234ABCDUL);
             var away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(58, awayName, awayRng);
             // デモの自校（home＝左列）は実部員（RosterService）から組み、背番号・調子・通算の join を実機同様に見せる。
-            var home = RosterTeamBuilder.Build(RosterService.Roster, homeName);
+            var home = RosterTeamBuilder.Build(RosterService.Active, homeName);
             // RosterTeamBuilder.Build は控えを設定しないため、代打采配のデモ用に控えを付与する。
             home = home with { Bench = BuildBench() };
             _homeTeam = home;

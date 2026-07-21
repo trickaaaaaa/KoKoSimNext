@@ -57,7 +57,7 @@ namespace KokoSim.Unity.Shell
             var lineup = GameSession.Current.Lineup;
             if (lineup != null) return RosterTeamBuilder.BuildFromLineup(lineup);
             // 未設定＝スタメン画面を通らなかった場合は能力順の自動編成（従来同等の編成）。
-            return RosterTeamBuilder.Build(RosterService.Roster, name);
+            return RosterTeamBuilder.Build(RosterService.Active, name);
         }
     }
 }

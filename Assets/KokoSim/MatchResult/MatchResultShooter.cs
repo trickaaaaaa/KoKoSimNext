@@ -66,7 +66,7 @@ namespace KokoSim.Unity.MatchResult
         // 実エンジンで試合を消化して条件に合うものを探す（表示検証用。独立シード＝セッションの乱数列に触らない）。
         private static GameResult FindGame(Kind kind, out ulong usedSeed)
         {
-            var home = RosterTeamBuilder.Build(RosterService.Roster, HomeName);
+            var home = RosterTeamBuilder.Build(RosterService.Active, HomeName);
             for (ulong seed = 2026; seed < 3026; seed++)
             {
                 var away = StrengthTeamFactory.Create(58, AwayName, new Xoshiro256Random(seed ^ 0x1234ABCDUL));

@@ -88,7 +88,7 @@ namespace KokoSim.Unity.Practice
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank == null) return;
             rank.Clear();
-            rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Roster)));
+            rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Active)));
         }
 
         private void RenderList(List<PracticeOpponentRow> rows)
