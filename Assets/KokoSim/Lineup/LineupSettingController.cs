@@ -222,6 +222,7 @@ namespace KokoSim.Unity.Lineup
                     var group = new Label(v.TabLabels[v.Tab]);
                     group.AddToClassList("lu-cmp-group");
                     rows.Add(group);
+                    rows.Add(UiComponents.CompareHeader());
                     foreach (var r in v.Rows2) rows.Add(CompareRowEl(r));
                 }
             }
@@ -352,31 +353,15 @@ namespace KokoSim.Unity.Lineup
             el.Add(meta);
         }
 
-        private VisualElement CompareRowEl(CompareRowView r)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("cmp-row");
-
-            row.Add(ValueLabel(r.HasA ? r.ValueA.ToString() : "—", "cmp-row__val--l", r.HasA && r.Winner == -1));
-            var sideL = new VisualElement();
-            sideL.AddToClassList("cmp-row__side");
-            sideL.AddToClassList("cmp-row__side--l");
-            if (r.HasA) sideL.Add(Bar("cmp-row__bar--a", r.ValueA));
-            row.Add(sideL);
-
-            var lab = new Label(r.Label);
-            lab.AddToClassList("cmp-row__lab");
-            row.Add(lab);
-
-            var sideR = new VisualElement();
-            sideR.AddToClassList("cmp-row__side");
-            sideR.AddToClassList("cmp-row__side--r");
-            if (r.HasB) sideR.Add(Bar("cmp-row__bar--b", r.ValueB));
-            row.Add(sideR);
-            row.Add(ValueLabel(r.HasB ? r.ValueB.ToString() : "—", "cmp-row__val--r", r.HasB && r.Winner == 1));
-
-            return row;
-        }
+        // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
+        private static VisualElement CompareRowEl(CompareRowView r)
+            => UiComponents.CompareRow(new CompareRowData
+            {
+                Label = r.Label,
+                ValueA = r.ValueA, ValueB = r.ValueB,
+                HasA = r.HasA, HasB = r.HasB,
+                Winner = r.Winner,
+            });
 
         // ── 確定操作 ──
         private void OnOk()
@@ -431,24 +416,6 @@ namespace KokoSim.Unity.Lineup
             var el = new VisualElement();
             el.AddToClassList(cls);
             return el;
-        }
-
-        private static Label ValueLabel(string text, string sideMod, bool win)
-        {
-            var l = new Label(text);
-            l.AddToClassList("cmp-row__val");
-            l.AddToClassList(sideMod);
-            if (win) l.AddToClassList("cmp-row__val--win");
-            return l;
-        }
-
-        private static VisualElement Bar(string colorMod, int value)
-        {
-            var bar = new VisualElement();
-            bar.AddToClassList("cmp-row__bar");
-            bar.AddToClassList(colorMod);
-            bar.style.width = Length.Percent(Mathf.Clamp(value, 0, 100));
-            return bar;
         }
 
         private void SetText(string name, string text)
