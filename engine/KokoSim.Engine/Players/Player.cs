@@ -77,6 +77,13 @@ public sealed record Player
     /// <summary>調子（設計書02 §3.3）。週次の波を Season 層が更新し、投影時に載せる。試合中は補正係数として作用。</summary>
     public Condition Condition { get; init; } = Condition.Normal;
 
+    /// <summary>
+    /// 調子の内部連続値（-1〜+1）。<see cref="Condition"/>（5段階量子化済み）と同じ源だが、
+    /// 相手校の調子を監督の育成眼で観測する誤認モデル（<see cref="FormModel.Observe"/>）が
+    /// 量子化前の真値を必要とするため、投影時にそのまま保持する（設計書02 §3.3, issue #47）。
+    /// </summary>
+    public double ConditionValue { get; init; }
+
     /// <summary>怪我の段階（設計書03 §3.5, 常に可視）。能力ダウンは投影時に一律係数で反映済み。采配判断用の表示。</summary>
     public InjurySeverity Injury { get; init; } = InjurySeverity.None;
 

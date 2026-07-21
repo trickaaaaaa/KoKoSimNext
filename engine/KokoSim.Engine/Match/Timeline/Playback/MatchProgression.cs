@@ -56,6 +56,10 @@ public sealed class LivePlateAppearance
     public int BatterNumber { get; init; }
     /// <summary>対戦投手の背番号（0=番号なし）。</summary>
     public int PitcherNumber { get; init; }
+    /// <summary>打者の調子の真値（連続値。相手校の観測誤認は Shell 側, issue #47）。</summary>
+    public double BatterConditionValue { get; init; }
+    /// <summary>対戦投手の調子の真値（連続値）。</summary>
+    public double PitcherConditionValue { get; init; }
 }
 
 /// <summary>設計書15 Phase D-1: <see cref="MatchProgression.AdvancePitch"/> が止まった境界の種類。</summary>
@@ -369,6 +373,8 @@ public sealed class MatchProgression
             PitcherThrows = e.PitcherThrows,
             BatterNumber = e.BatterNumber,
             PitcherNumber = e.PitcherNumber,
+            BatterConditionValue = e.BatterConditionValue,
+            PitcherConditionValue = e.PitcherConditionValue,
         };
         _confirmed++;
         _pitchIndexInCurrentPa = 0;

@@ -18,9 +18,11 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="Hits">今日の安打。</param>
 /// <param name="Rbi">今日の打点。</param>
 /// <param name="ReplacedName">このスロットで直近に退いた選手名（交代表示用。無交代なら null）。</param>
+/// <param name="ConditionValue">調子の真値（連続値・両校とも）。相手校の観測誤認は Shell 側の
+/// <see cref="Players.FormModel.Observe"/> が計算する（設計書02 §3.3, issue #47）。</param>
 public sealed record LiveBatterSlot(
     int Order, int? SourceId, int Number, string Name, FieldPosition Position, Handedness Bats,
-    int AtBats, int Hits, int Rbi, string? ReplacedName);
+    int AtBats, int Hits, int Rbi, string? ReplacedName, double ConditionValue = 0.0);
 
 /// <summary>ライブ観戦の現投手の今日の成績。通算防御率は Shell 側で <see cref="SourceId"/> から join する。</summary>
 /// <param name="SourceId">選手ID（自校のみ。相手校は null）。</param>
@@ -31,9 +33,10 @@ public sealed record LiveBatterSlot(
 /// <param name="Outs">今日のアウト数（投球回＝Outs/3）。</param>
 /// <param name="Runs">今日の失点（RA。自責点は未追跡）。</param>
 /// <param name="StrikeOuts">今日の奪三振。</param>
+/// <param name="ConditionValue">調子の真値（連続値・両校とも。相手校の観測誤認は Shell 側, issue #47）。</param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,
-    int Pitches, int Outs, int Runs, int StrikeOuts);
+    int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0);
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。

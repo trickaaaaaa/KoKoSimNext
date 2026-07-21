@@ -53,6 +53,46 @@ public sealed class FormModelTests
         Assert.Equal(Condition.Terrible, FormModel.Quantize(-0.8));
     }
 
+    // --- 相手校の調子観測（§3.3「育成眼が高いほど正確、低いと誤認」, issue #47） ---
+
+    [Fact]
+    public void Observe_TalentEyeMax_MatchesTrueValue_AlmostAlways()
+    {
+        var rng = new Xoshiro256Random(1);
+        const double actual = 0.7; // Excellent 域
+        var matches = 0;
+        const int trials = 500;
+        for (var i = 0; i < trials; i++)
+        {
+            var observed = FormModel.Observe(actual, talentEye: 100, rng, F);
+            if (observed == FormModel.Quantize(actual)) matches++;
+        }
+        // σ≈下限(0.02)なので、ほぼ常に真値と同じ段階になる。
+        Assert.True(matches > trials * 0.95, $"育成眼MAXでも真値と一致しない: {matches}/{trials}");
+    }
+
+    [Fact]
+    public void Observe_TalentEyeMin_HasLargeVariance()
+    {
+        var rng = new Xoshiro256Random(2);
+        const double actual = 0.0; // Normal 域
+        var seen = new HashSet<Condition>();
+        for (var i = 0; i < 500; i++)
+        {
+            seen.Add(FormModel.Observe(actual, talentEye: 0, rng, F));
+        }
+        // σが大きいので、真値(Normal)以外の段階も相当出る（分散が大きい）。
+        Assert.True(seen.Count >= 3, $"育成眼MINでも誤認の分散が小さすぎる: {seen.Count}種のみ");
+    }
+
+    [Fact]
+    public void Observe_SameSeed_SameResult()
+    {
+        var a = FormModel.Observe(0.4, talentEye: 30, new Xoshiro256Random(99), F);
+        var b = FormModel.Observe(0.4, talentEye: 30, new Xoshiro256Random(99), F);
+        Assert.Equal(a, b);
+    }
+
     // --- 当日の出来の分布（§3.3b: 大半は微小・大崩れは十数試合に一度） ---
 
     [Fact]

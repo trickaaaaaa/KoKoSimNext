@@ -842,7 +842,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(s.SourceId));   // 相手校(null)は描かない
+            face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
             row.Add(face);
             row.Add(MakeLabel(MatchLiveStatsProvider.TodayLine(s.AtBats, s.Hits, s.Rbi), "mlineup-row__today"));
             return row;
@@ -858,7 +858,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(s.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(s.SourceId));
+            face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
         }
@@ -873,7 +873,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(p.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(p.SourceId));
+            face.Set(_statsProvider.ConditionOf(p.SourceId, p.ConditionValue, p.Name));
             row.Add(face);
             return row;
         }
@@ -959,7 +959,8 @@ namespace KokoSim.Unity.Match
             line1.Add(MakeLabel(MatchLiveStatsProvider.BatsLabel(_current.BatterBats), "mup-hand"));
             var face = new ConditionFace();
             face.AddToClassList("mup-cond");
-            face.Set(_statsProvider.ConditionOf(_current.BatterSourceId));
+            face.Set(_statsProvider.ConditionOf(
+                _current.BatterSourceId, _current.BatterConditionValue, _current.BatterName));
             line1.Add(face);
             block.Add(line1);
 

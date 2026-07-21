@@ -273,6 +273,7 @@ public static class RosterTeamBuilder
             Skills = dp.Skills,           // スキルはフラグなので怪我係数の対象外
             HasPitcherBackground = dp.HasPitcherBackground,
             Condition = FormModel.Quantize(dp.ConditionValue),
+            ConditionValue = dp.ConditionValue,
             Injury = dp.Injury,
             InjuryResistance = dp.InjuryResistance, // 試合中の受傷判定用（観測系。物理層には流れない）
             Pitching = pitching,
