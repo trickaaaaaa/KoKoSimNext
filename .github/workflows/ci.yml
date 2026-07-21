@@ -16,6 +16,10 @@ name: engine-ci
 #     どのシャードにも入らず落ちる事故が起きない（網羅性は tools/check-heavy-shards.sh が検証）
 on:
   push:
+    # main のみ。作業ブランチへの push は pull_request 側で検証されるため走らせない
+    # （PR ごとに CI が二重実行され Actions 分を倍消費していた対策。2026-07-22）
+    branches:
+      - main
     paths:
       - "engine/**"
       - "data/**"
