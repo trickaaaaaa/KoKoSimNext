@@ -10,7 +10,8 @@ name: engine-ci
 #
 # シャード分割の原則（issue #23）:
 #   - クラス単位では均等にならない（1クラス内は xUnit が逐次実行するため、
-#     重いクラスの合計時間がそのままシャードの下限になる）。**メソッド単位**で割る
+#     重いクラスの合計時間がそのままシャードの下限になる）。**メソッド単位**で割り、
+#     1メソッドでも重すぎるものは Theory の**シード単位**まで割る
 #   - 最後の `rest` は否定フィルタの受け皿にする。新しい Heavy テストを足しても
 #     どのシャードにも入らず落ちる事故が起きない（網羅性は tools/check-heavy-shards.sh が検証）
 on:
@@ -72,19 +73,23 @@ jobs:
           # 他テストと同居させるとランナーの CPU 競合で比がぶれる。専用シャードで単独実行する。
           - name: timeline-cost
             filter: "Category=Heavy&FullyQualifiedName~CaptureTimelinesCost"
-          # 旧 balance シャード（10分28秒）の内訳で最も重い2件。球場3種×2シードのフル試合実測。
-          - name: stadium-runs
-            filter: "Category=Heavy&FullyQualifiedName~StadiumRegressionTests.NarrowStandardWide_OrderRunsPerTeam"
-          - name: stadium-hr
-            filter: "Category=Heavy&FullyQualifiedName~Balance.StadiumRegressionTests&FullyQualifiedName!~NarrowStandardWide_OrderRunsPerTeam"
-          - name: game
-            filter: "Category=Heavy&(FullyQualifiedName~Balance.GameRegressionTests|FullyQualifiedName~Balance.BalanceRegressionTests)"
+          # 旧 balance シャード（10分28秒）で最も重い1メソッド。2シードまとめると5分45秒だったので
+          # シードでも割る。FullyQualifiedName は Theory の引数を含まないので DisplayName で分ける。
+          - name: stadium-runs-seed42
+            filter: "Category=Heavy&FullyQualifiedName~StadiumRegressionTests.NarrowStandardWide_OrderRunsPerTeam&DisplayName!~2024"
+          - name: stadium-runs-seed2024
+            filter: "Category=Heavy&FullyQualifiedName~StadiumRegressionTests.NarrowStandardWide_OrderRunsPerTeam&DisplayName~2024"
+          - name: game-bands
+            filter: "Category=Heavy&(FullyQualifiedName~GameRegressionTests.Games_StayWithinTargetBands|FullyQualifiedName~GameRegressionTests.TacticsGames_StayWithinTargetBands)"
+          - name: game-rest
+            filter: "Category=Heavy&(FullyQualifiedName~Balance.GameRegressionTests|FullyQualifiedName~Balance.BalanceRegressionTests)&FullyQualifiedName!~GameRegressionTests.Games_StayWithinTargetBands&FullyQualifiedName!~GameRegressionTests.TacticsGames_StayWithinTargetBands"
           # 型3種×守備2水準×1500試合＝9000試合を単一メソッドで回すため単独シャード。
+          # 逐次ループなので分割はここが限界（これ以上はテスト側の並列化か試合数の見直しが要る）。
           - name: archetype-defense
             filter: "Category=Heavy&FullyQualifiedName~PitcherArchetypeTests.PowerPitchers_StrikeOutMore"
-          # 受け皿。上のどれにも入らない Heavy（Nation/PlayerMatchCalibration/型の中立性 ほか）はここで走る。
+          # 受け皿。上のどれにも入らない Heavy（球場の本塁打/長打・Nation・型の中立性 ほか）はここで走る。
           - name: rest
-            filter: "Category=Heavy&FullyQualifiedName!~CaptureTimelinesCost&FullyQualifiedName!~Balance.StadiumRegressionTests&FullyQualifiedName!~Balance.GameRegressionTests&FullyQualifiedName!~Balance.BalanceRegressionTests&FullyQualifiedName!~PitcherArchetypeTests.PowerPitchers_StrikeOutMore"
+            filter: "Category=Heavy&FullyQualifiedName!~CaptureTimelinesCost&FullyQualifiedName!~StadiumRegressionTests.NarrowStandardWide_OrderRunsPerTeam&FullyQualifiedName!~Balance.GameRegressionTests&FullyQualifiedName!~Balance.BalanceRegressionTests&FullyQualifiedName!~PitcherArchetypeTests.PowerPitchers_StrikeOutMore"
     steps:
       - uses: actions/checkout@v4
 
