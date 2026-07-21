@@ -43,6 +43,77 @@ public sealed class FormModelTests
         Assert.True(coldP.Control < 50 && coldP.MaxVelocityKmh < 140.0);
     }
 
+    // --- キレ（PitchRank / 球種Sharpness）への補正（issue #49） ---
+
+    [Fact]
+    public void ApplyPitcher_Sharpness_IdentityAtNormal()
+    {
+        var p = new PitcherAttributes
+        {
+            Control = 58,
+            MaxVelocityKmh = 141.0,
+            PitchRank = 55,
+            Repertoire = new[]
+            {
+                new PitchSlot { Type = PitchType.Fastball, Power = 55, Sharpness = 55 },
+                new PitchSlot { Type = PitchType.Slider, Power = 48, Sharpness = 52 },
+            },
+        };
+        Assert.Equal(p, FormModel.ApplyPitcher(p, Condition.Normal, 0.0, F));
+    }
+
+    [Fact]
+    public void ApplyPitcher_Sharpness_ExcellentRaises_TerribleLowers()
+    {
+        var p = new PitcherAttributes
+        {
+            Control = 50,
+            MaxVelocityKmh = 140.0,
+            PitchRank = 50,
+            Repertoire = new[]
+            {
+                new PitchSlot { Type = PitchType.Fastball, Power = 50, Sharpness = 50 },
+                new PitchSlot { Type = PitchType.Slider, Power = 50, Sharpness = 50 },
+            },
+        };
+        var hot = FormModel.ApplyPitcher(p, Condition.Excellent, 0.0, F);
+        var cold = FormModel.ApplyPitcher(p, Condition.Terrible, 0.0, F);
+
+        Assert.True(hot.PitchRank > 50);
+        Assert.True(cold.PitchRank < 50);
+        Assert.All(hot.Repertoire!, slot => Assert.True(slot.Sharpness > 50));
+        Assert.All(cold.Repertoire!, slot => Assert.True(slot.Sharpness < 50));
+        // 球威(Power)は本Issueの対象外＝据え置き（設計上キレのみを補正する）。
+        Assert.All(hot.Repertoire!, slot => Assert.Equal(50, slot.Power));
+    }
+
+    [Fact]
+    public void ApplyPitcher_Sharpness_NoRepertoire_FallsBackToPitchRankOnly()
+    {
+        var p = new PitcherAttributes { Control = 50, MaxVelocityKmh = 140.0, PitchRank = 50 };
+        var hot = FormModel.ApplyPitcher(p, Condition.Excellent, 0.0, F);
+        Assert.True(hot.PitchRank > 50);
+        Assert.Null(hot.Repertoire);
+    }
+
+    [Fact]
+    public void ApplyPitcher_Sharpness_IsDeterministic()
+    {
+        var p = new PitcherAttributes
+        {
+            Control = 50,
+            MaxVelocityKmh = 140.0,
+            PitchRank = 50,
+            Repertoire = new[] { new PitchSlot { Type = PitchType.Fastball, Power = 50, Sharpness = 50 } },
+        };
+        var a = FormModel.ApplyPitcher(p, Condition.Good, dayForm: 0.3, F);
+        var b = FormModel.ApplyPitcher(p, Condition.Good, dayForm: 0.3, F);
+        // Repertoire は補正のたびに新しい配列を割り当てる（IReadOnlyList はレコードの既定Equalsが
+        // 参照比較になるため、要素の値で比較する）。
+        Assert.Equal(a.PitchRank, b.PitchRank);
+        Assert.Equal(a.Repertoire!.Single().Sharpness, b.Repertoire!.Single().Sharpness);
+    }
+
     [Fact]
     public void Quantize_MapsThresholds()
     {

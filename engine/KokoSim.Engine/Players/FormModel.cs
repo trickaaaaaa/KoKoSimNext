@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using KokoSim.Engine.Core;
 
 namespace KokoSim.Engine.Players;
@@ -24,6 +25,8 @@ public sealed record FormCoefficients
     public double PowerPerStep { get; init; } = 2.0;
     public double ControlPerStep { get; init; } = 2.5;
     public double VelocityPerStepKmh { get; init; } = 0.6;
+    /// <summary>キレ（PitchRank・球種ごとのSharpness）への補正（issue #49）。Controlと同スケール（1〜100軸）。</summary>
+    public double SharpnessPerStep { get; init; } = 2.5;
 
     // --- 試合限りの好不調（§3.3b, dayForm ∈ [-1, +1]。調子より効果小さめ） ---
     /// <summary>通常日の揺らぎσ（大半は体感できないレベル）。</summary>
@@ -38,6 +41,8 @@ public sealed record FormCoefficients
     public double PowerPerDayForm { get; init; } = 2.0;
     public double ControlPerDayForm { get; init; } = 5.0;
     public double VelocityPerDayFormKmh { get; init; } = 1.5;
+    /// <summary>キレへの当日補正（issue #49）。Controlと同スケール。</summary>
+    public double SharpnessPerDayForm { get; init; } = 5.0;
 
     // --- 週次の波（§3.3: 数日〜数週間続く。毎試合振り直さない） ---
     /// <summary>前週の持ち越し（1に近いほど波が長い）。</summary>
@@ -85,17 +90,36 @@ public static class FormModel
         };
     }
 
-    /// <summary>投手へ適用（コントロールσ・球威=球速天井に補正, §3.3）。キレ（球種2軸）への補正は🟡後続。</summary>
+    /// <summary>
+    /// 投手へ適用（コントロールσ・球威=球速天井・キレに補正, §3.3/§3.3b）。
+    /// キレは球種ごとの実値（<see cref="PitchSlot.Sharpness"/>）を補正する。ここが
+    /// <see cref="Match.Pitching.PitchingCoefficients.SpinRpmPerSharpness"/> 経由で回転数（物理層）へ
+    /// そのまま流れる（不変条件#1）。Repertoire が未指定（素質値 <see cref="PitcherAttributes.PitchRank"/>
+    /// からの遅延フォールバックのみ）の場合はその素質値側を補正する。
+    /// </summary>
     public static PitcherAttributes ApplyPitcher(PitcherAttributes p, Condition c, double dayForm, FormCoefficients f)
     {
         var step = Step(c);
         if (step == 0 && dayForm == 0.0) return p;
+        var sharpnessDelta = step * f.SharpnessPerStep + dayForm * f.SharpnessPerDayForm;
         return p with
         {
             Control = ClampAbility(p.Control + step * f.ControlPerStep + dayForm * f.ControlPerDayForm),
             MaxVelocityKmh = Math.Max(105.0,
                 p.MaxVelocityKmh + step * f.VelocityPerStepKmh + dayForm * f.VelocityPerDayFormKmh),
+            PitchRank = ClampAbility(p.PitchRank + sharpnessDelta),
+            Repertoire = p.Repertoire is null ? null : ApplySharpness(p.Repertoire, sharpnessDelta),
         };
+    }
+
+    private static IReadOnlyList<PitchSlot> ApplySharpness(IReadOnlyList<PitchSlot> repertoire, double delta)
+    {
+        var result = new PitchSlot[repertoire.Count];
+        for (var i = 0; i < repertoire.Count; i++)
+        {
+            result[i] = repertoire[i] with { Sharpness = ClampAbility(repertoire[i].Sharpness + delta) };
+        }
+        return result;
     }
 
     /// <summary>
