@@ -60,6 +60,16 @@ namespace KokoSim.Unity.Tournament
             if (page != null) page.scrollOffset = new Vector2(0, 260);
             yield return null; yield return null;
             yield return Capture(doc, 1600, 900, "01b-bracket-tree");
+            // 樹形図の右端（決勝〜優勝欄）。決勝は樹形図の縦中央にあるので縦も真ん中へ寄せる。
+            var brk = doc.rootVisualElement.Q<ScrollView>("tp-bracket-scroll");
+            if (brk != null)
+            {
+                brk.horizontalScroller.value = brk.horizontalScroller.highValue;
+                brk.verticalScroller.value = brk.verticalScroller.highValue * 0.5f;
+            }
+            yield return null; yield return null;
+            yield return Capture(doc, 1600, 900, "01c-bracket-final");
+
             if (page != null) page.scrollOffset = Vector2.zero;
             yield return null;
 
