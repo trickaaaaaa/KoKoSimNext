@@ -49,7 +49,7 @@ namespace KokoSim.Unity.Home
             // 指名を確定 → モーダルが閉じてホームへ戻る。
             var ok = doc.rootVisualElement.Q<Button>("nt-ok");
             if (ok == null) Debug.LogError("[NT] 確定ボタンが無い");
-            else Send(ok);
+            else Submit(ok);
             yield return null; yield return null;
             Debug.Log("[NT] after confirm pending=" + NewTeamService.Pending
                 + " captain=" + CaptainName());
@@ -77,6 +77,17 @@ namespace KokoSim.Unity.Home
         private static void Send(VisualElement target)
         {
             using (var e = ClickEvent.GetPooled())
+            {
+                e.target = target;
+                target.SendEvent(e);
+            }
+        }
+
+        // Button は Clickable マニピュレータ経由なので合成 ClickEvent では発火しない。
+        // キーボード/ゲームパッドの決定と同じ NavigationSubmitEvent を送って clicked を回す。
+        private static void Submit(VisualElement target)
+        {
+            using (var e = NavigationSubmitEvent.GetPooled())
             {
                 e.target = target;
                 target.SendEvent(e);
