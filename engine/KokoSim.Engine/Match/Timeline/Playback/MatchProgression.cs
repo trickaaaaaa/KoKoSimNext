@@ -79,12 +79,16 @@ public enum AdvancePitchResult
 /// </summary>
 public sealed class MatchProgression
 {
-    private readonly GameProgress _p;
-    private readonly IEnumerator<GameStep> _steps;
+    private GameProgress _p;
+    private IEnumerator<GameStep> _steps;
     private readonly List<GameDecision> _decisions = new();
     private readonly ulong _seed;
     private readonly bool _seedable;   // seed ベースで構築＝Save() で中断保存できるか
     private readonly ulong[]? _rngState; // 注入乱数の開始状態（設計書17 §3.2, F0）。非null なら Save() 可
+    // シーク（設計書17 §6.2, F4）で最初から再生し直すために試合設定を保持する。
+    private readonly Team _awayTeam;
+    private readonly Team _homeTeam;
+    private readonly GameContext _ctx;
 
     private int _confirmed;   // 確定した打席数
     private int _away, _home; // 進行中スコア
@@ -94,6 +98,9 @@ public sealed class MatchProgression
     {
         _seed = seed;
         _seedable = true;
+        _awayTeam = away;
+        _homeTeam = home;
+        _ctx = ctx;
         _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed));
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
@@ -110,6 +117,9 @@ public sealed class MatchProgression
     {
         _seed = 0;
         _seedable = false;
+        _awayTeam = away;
+        _homeTeam = home;
+        _ctx = ctx;
         // NewProgress は dayForm 抽選で rng を消費するので、控えるのは必ずその手前。
         _rngState = (rng as Xoshiro256Random)?.CaptureState();
         _p = GameEngine.NewProgress(away, home, ctx, rng);
@@ -418,6 +428,85 @@ public sealed class MatchProgression
 
     /// <summary>残りを采配追加なしで一括解決して最終結果を返す（「手動で最後まで」の残り消化）。</summary>
     public GameResult FinishRemaining() => DrainToEnd();
+
+    // ===== シーク・早送り（設計書17 §6.2, F4）。すべて既存の再生機構の上に載る＝結果は変わらない。 =====
+
+    /// <summary>N打席ぶん進める（早送り）。試合が終わったらそこで止まる。戻り値=実際に進めた打席数。</summary>
+    public int AdvancePa(int n)
+    {
+        var moved = 0;
+        while (moved < n && Advance()) moved++;
+        return moved;
+    }
+
+    /// <summary>
+    /// 今の半イニングが終わるまで進める（早送り）。<see cref="GameProgress.CurrentOuts"/> が3になった打席、
+    /// または試合終了で止まる。戻り値=進めた打席数。
+    /// </summary>
+    public int AdvanceUntilInningEnd()
+    {
+        var moved = 0;
+        while (Advance())
+        {
+            moved++;
+            if (_p.CurrentOuts >= 3) break;
+        }
+        return moved;
+    }
+
+    /// <summary>
+    /// 指定の位置（確定打席数, 打席内の消化球数）へシークする（設計書17 §6.2）。
+    /// 実装は「先頭から再生し直す」だけなので、往復しても同じ場面・同じトレースになる（決定論そのもの）。
+    /// 進む方向のシークでも再生し直す（現在位置からの差分進行と結果は同じだが、経路を1本に保つため）。
+    ///
+    /// <para><b>観測への影響</b>: 再生は実際の再シミュレーションなので、<c>CaptureTrace</c> が有効なら
+    /// 再生ぶんの <see cref="Debugging.PitchTrace"/> がもう一度シンクへ流れる。HUD のリングバッファは
+    /// 「今見えている試合」をそのまま映すので問題にならないが、JSONL へ書いている最中にシークすると
+    /// 同じ試合が2本ぶん記録される点は意識しておくこと。</para>
+    /// </summary>
+    public void SeekTo(int plateAppearances, int pitchesInCurrentPa = 0)
+    {
+        if (plateAppearances < 0 || pitchesInCurrentPa < 0)
+            throw new System.ArgumentOutOfRangeException(nameof(plateAppearances), "シーク位置は0以上である必要があります。");
+
+        var save = Save() with
+        {
+            ConfirmedPlateAppearances = plateAppearances,
+            ConfirmedPitchesInCurrentPa = pitchesInCurrentPa,
+        };
+        var resumed = GameReplay.Restore(_awayTeam, _homeTeam, _ctx, save);
+        _p = resumed.Progress;
+        _steps = resumed.Steps;
+
+        // 再生後の見かけの状態を組み直す（スコア・確定打席数は再生済みの Log から数え直す）。
+        _confirmed = 0;
+        _away = 0;
+        _home = 0;
+        foreach (var e in _p.Log)
+        {
+            if (e.IsTop) _away += e.RunsScored; else _home += e.RunsScored;
+            _confirmed++;
+        }
+        _pitchIndexInCurrentPa = pitchesInCurrentPa;
+        PendingPitchIndex = pitchesInCurrentPa > 0 ? pitchesInCurrentPa - 1 : 0;
+        IsFinished = false;
+        Current = null;
+    }
+
+    /// <summary>
+    /// 今の場面を指す再現トークン（設計書17 §3.3）。HUD に常時表示してコピーする用。
+    /// RNG状態を捕捉できない乱数源で構築した場合は null。
+    /// </summary>
+    public Debugging.ReproToken? ReproToken()
+    {
+        var state = _rngState ?? (_seedable ? new Xoshiro256Random(_seed).CaptureState() : null);
+        if (state is null) return null;
+        return new Debugging.ReproToken(state, _confirmed, _pitchIndexInCurrentPa,
+            Debugging.ReproToken.Fingerprint(_awayTeam, _homeTeam, _ctx));
+    }
+
+    /// <summary>次の1打席に効く強制発動を予約する（設計書17 §6.1, F4・デバッグ経路専用）。</summary>
+    public void ForceNext(Debugging.ForcedOutcome outcome) => _p.ForceNext(outcome);
 
     private GameResult DrainToEnd()
     {

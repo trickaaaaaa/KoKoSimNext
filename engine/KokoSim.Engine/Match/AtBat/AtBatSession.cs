@@ -51,6 +51,8 @@ public sealed class AtBatSession
     // 投球開始時のカウント（観測用。RecordPitch はカウント加算「後」に呼ばれるため控えておく）。
     private int _ballsAtPitchStart;
     private int _strikesAtPitchStart;
+    // 強制発動で固定された打席結果（設計書17 §6.1, F4）。デバッグ経路からのみ設定される。
+    private PlateAppearanceResult? _forcedResult;
 
     private AtBatSession(
         BatterAttributes batter, Player? batterPlayer, Player? thirdBaseRunner, double squeezeWasteProbability,
@@ -122,9 +124,21 @@ public sealed class AtBatSession
     /// スクイズのウエスト（外し）を守備側が読み切る確率（設計書02 §4.4 / 09 §1）。打席頭の状況（捕手リード・
     /// アウト数・点差）で決まり打席中は不変なので、GameEngine が1回だけ計算して渡す。既定0＝外さない。
     /// </param>
+    /// <param name="initialBalls">
+    /// 開始ボールカウント（設計書17 §3.4, F2 場面ジャンプ）。既定0＝通常どおり 0-0 から。
+    /// 途中カウントから始めても投球ループ・RNG消費順は一切変わらない（カウントは状態でしかない）。
+    /// </param>
+    /// <param name="initialStrikes">開始ストライクカウント。既定0。</param>
+    /// <param name="forcedResult">
+    /// 強制発動（設計書17 §6.1, F4）で固定する打席結果。非nullなら投球ループ自体をスキップし、
+    /// 投球数0・RNG非消費でこの結果を確定させる（敬遠と同じ経路）。<b>打球の物理層は偽装しない</b>ので、
+    /// 用途は下流（進塁・記録・タイムライン・UI）の検証に限る。
+    /// </param>
     public static AtBatSession Begin(
         BatterAttributes batter, PitcherAttributes pitcher, AtBatContext ctx, Player? batterPlayer = null,
-        Player? thirdBaseRunner = null, double squeezeWasteProbability = 0.0)
+        Player? thirdBaseRunner = null, double squeezeWasteProbability = 0.0,
+        int initialBalls = 0, int initialStrikes = 0,
+        PlateAppearanceResult? forcedResult = null)
     {
         // スキルの打球挙動補正（設計書10）。行動特性・球質だけをここで反映（数値補正は実効能力側で適用済み）。
         // 広角打法（打球方向σ）・粘り打ち（ファウル率）は打撃係数の1打席コピーへ。スキルなしなら共有係数のまま。
@@ -138,7 +152,12 @@ public sealed class AtBatSession
             };
         }
 
-        return new AtBatSession(batter, batterPlayer, thirdBaseRunner, squeezeWasteProbability, pitcher, ctx, batting);
+        var session = new AtBatSession(
+            batter, batterPlayer, thirdBaseRunner, squeezeWasteProbability, pitcher, ctx, batting);
+        session._balls = initialBalls;
+        session._strikes = initialStrikes;
+        session._forcedResult = forcedResult;
+        return session;
     }
 
     /// <summary>
@@ -165,6 +184,15 @@ public sealed class AtBatSession
         if (_ctx.IntentionalWalk)
         {
             _result = new AtBatResult(PlateAppearanceResult.Walk, _pitchCount) { PitchLog = _pitchLog };
+            return new PitchResolution(EndsPlateAppearance: true);
+        }
+
+        // 強制発動（設計書17 §6.1, F4）: 抽選をスキップして打席結果だけを固定する。敬遠と同じく
+        // 投球数0・RNG非消費で即確定する（＝物理層を1回も回さない＝偽装しない）。
+        if (_forcedResult is { } forced)
+        {
+            _forcedResult = null;
+            _result = new AtBatResult(forced, _pitchCount) { PitchLog = _pitchLog };
             return new PitchResolution(EndsPlateAppearance: true);
         }
 

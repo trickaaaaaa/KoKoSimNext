@@ -1,0 +1,87 @@
+# デバッグ用の場面ジャンプ（設計書17 §3.4・OPEN-QUESTIONS Q18-2 確定）
+#
+# このディレクトリ（data/debug/）はデバッグ専有。リリースビルドからは**ディレクトリ単位で除外**する。
+# 除外される前提なので、ファイルが無い場合はシナリオ0件で正常起動し、例外を投げない（Q18-2 の (4)）。
+#
+# 使い方:
+#   dotnet run --project engine/KokoSim.Balance -- trace --scenario bases-loaded-9th --out out/t.jsonl
+#   KokoSim.Unity.Debugging.DebugBridge.StartMatch("bases-loaded-9th", "0x9f3a5511")   # MCP / Editorメニュー
+#
+# フィールド:
+#   away/home    : "player" | "AI:tier=S..G" | "AI:strength=0..100"
+#   bases        : 占有塁の配列（1=一塁, 2=二塁, 3=三塁）。走者は「直前の打者たち」が入る
+#   count        : 先頭打者のカウント（balls 0-3 / strikes 0-2）
+#   batter       : 開始打順（1-9）
+#   pitcher_fatigue : 守備側投手の当日の累計球数
+#   modern_rules : dh / tiebreak（省略＝呼び出し側の GameContext のまま）
+#   force        : 強制発動（設計書17 §6.1）。ForcedOutcome の enum 名
+
+scenarios:
+  - id: bases-loaded-9th
+    name: 9回裏2死満塁・1点ビハインド
+    away: { school: "AI:tier=A", score: 4 }
+    home: { school: "player", score: 3 }
+    inning: 9
+    top: false
+    outs: 2
+    bases: [1, 2, 3]
+    count: { balls: 3, strikes: 2 }
+    batter: 4
+    pitcher_fatigue: 120
+    modern_rules: { dh: false, tiebreak: true }
+    seed: 20260721
+
+  - id: tiebreak-10th
+    name: タイブレーク10回表・無死一二塁
+    away: { school: "AI:tier=B", score: 2 }
+    home: { school: "player", score: 2 }
+    inning: 10
+    top: true
+    outs: 0
+    bases: [1, 2]
+    modern_rules: { tiebreak: true }
+    seed: 20260722
+
+  - id: wild-pitch-lab
+    name: 暴投検証（3ボール・走者三塁）
+    away: { school: "player", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 5
+    top: true
+    outs: 1
+    bases: [3]
+    count: { balls: 3, strikes: 0 }
+    force: WildPitch
+    seed: 20260723
+
+  - id: dropped-third-strike-lab
+    name: 振り逃げ検証（2死・一塁空き）
+    away: { school: "player", score: 1 }
+    home: { school: "AI:tier=C", score: 1 }
+    inning: 7
+    top: true
+    outs: 2
+    bases: [2]
+    count: { balls: 1, strikes: 2 }
+    force: DroppedThirdStrike
+    seed: 20260724
+
+  - id: walkoff-lab
+    name: サヨナラ検証（9回裏無死一三塁・同点）
+    away: { school: "AI:tier=B", score: 5 }
+    home: { school: "player", score: 5 }
+    inning: 9
+    top: false
+    outs: 0
+    bases: [1, 3]
+    batter: 3
+    pitcher_fatigue: 105
+    seed: 20260725
+
+  - id: fresh-start
+    name: 1回表の頭（基準・注入なしと同じ入り方）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "player", score: 0 }
+    inning: 1
+    top: true
+    seed: 20260726

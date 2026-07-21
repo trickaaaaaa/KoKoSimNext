@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Debugging;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
@@ -75,20 +76,52 @@ public static class TraceCommand
     private static void PlayAll(Options o, GameContext ctx, ITacticsBrain? brain, JsonlTraceSink? sink)
     {
         // 観測は逐次実行（JSONL の行順を試合順に保つため）。統計シムのような並列化はしない。
-        var traced = sink is null
-            ? ctx
-            : ctx with { CaptureTrace = true, TraceSink = sink, ScenarioId = o.ScenarioId };
+        GameContext Traced(GameContext c) => sink is null ? c : c with { CaptureTrace = true, TraceSink = sink };
 
-        var root = new Xoshiro256Random(o.Seed);
+        // 場面ジャンプ（設計書17 §3.4, F2）: --scenario 指定時は data/debug/scenarios.yaml から組む。
+        ScenarioBuilder.Built? scenario = null;
+        if (o.ScenarioId is not null)
+        {
+            var catalog = KokoSim.Config.DebugScenarioLoader.LoadFromRepoOrEmpty();
+            if (!catalog.TryGet(o.ScenarioId, out var def))
+            {
+                throw new System.ArgumentException(
+                    $"未知のシナリオid: {o.ScenarioId}（{KokoSim.Config.DebugScenarioLoader.DefaultRelativePath} に {catalog.Count} 件）");
+            }
+            scenario = ScenarioBuilder.Build(def, ctx, o.Seed);
+        }
+
+        // 強制発動（設計書17 §6.1）。--force が優先し、無ければシナリオ側の force 指定を使う。
+        var forceName = o.Force ?? (o.ScenarioId is null ? null : ScenarioForceOf(o.ScenarioId));
+        var forced = ForcedOutcome.None;
+        if (forceName is not null && !ForcedOutcomes.TryParse(forceName, out forced))
+        {
+            throw new System.ArgumentException(
+                $"未知の --force 値: {forceName}（{string.Join("|", System.Enum.GetNames(typeof(ForcedOutcome)))}）");
+        }
+
+        var root = new Xoshiro256Random(scenario?.Seed ?? o.Seed);
         for (var i = 0; i < o.Games; i++)
         {
             // simulate-games と同じ Fork 規約（i→ストリーム）。同じシードなら同じ対戦・同じ展開になる。
             var g = root.Fork((ulong)i);
-            var away = GameSimulation.GenerateTeam(g, "遠征校") with { Tactics = brain };
-            var home = GameSimulation.GenerateTeam(g, "地元校") with { Tactics = brain };
-            GameEngine.Play(away, home, traced, g);
+            var (a, h, c, start) = scenario is { } sc
+                ? (sc.Away, sc.Home, Traced(sc.Ctx), sc.Start)
+                : (GameSimulation.GenerateTeam(g, "遠征校") with { Tactics = brain },
+                   GameSimulation.GenerateTeam(g, "地元校") with { Tactics = brain },
+                   Traced(ctx), null);
+
+            var p = GameEngine.NewProgress(a, h, c, g, null, start);
+            // 強制発動（設計書17 §6.1, F4）: 最初の1打席に効かせる。--scenario の force 指定も同じ経路。
+            if (forced != ForcedOutcome.None) p.ForceNext(forced);
+            foreach (var _ in GameEngine.Steps(p)) { /* drain */ }
+            GameEngine.BuildResult(p);
         }
     }
+
+    /// <summary>シナリオYAML側の <c>force:</c> 指定を引く（未指定は null）。</summary>
+    private static string? ScenarioForceOf(string scenarioId)
+        => KokoSim.Config.DebugScenarioLoader.LoadFromRepoOrEmpty().TryGet(scenarioId, out var def) ? def.Force : null;
 
     /// <summary><c>--only</c> の値（"pitch" / "pa" / "game,end" …）を解釈する。</summary>
     public static JsonlTraceSink.Kinds ParseKinds(string value)
