@@ -110,6 +110,9 @@ namespace KokoSim.Unity.Lineup
                 info.AddToClassList("lineup-row__info");
                 row.Add(info);
 
+                // 故障中は警告チップ（部品辞書の .chip--out を流用＝新規の見た目を作らない）。
+                if (r.Injury.Length > 0) row.Add(InjuryChip(r.Injury));
+
                 row.Add(UiComponents.RankChip(r.OverallGrade));
 
                 var slot = r.Order - 1;
@@ -186,6 +189,7 @@ namespace KokoSim.Unity.Lineup
                 var tag = new Label(b.IsPitcher ? "投" : "野");
                 tag.AddToClassList("bench-row__tag");
                 row.Add(tag);
+                if (b.Injury.Length > 0) row.Add(InjuryChip(b.Injury));
                 row.Add(UiComponents.RankChip(b.OverallGrade));
 
                 var idx = b.Index;
@@ -394,6 +398,16 @@ namespace KokoSim.Unity.Lineup
         private void RenderCompareOnly() => BuildCompare(_state.BuildView());
 
         // ── 部品ヘルパ ──
+        /// <summary>故障チップ（設計書03 §3.5・UI原則②: 怪我は本当の警告なので警告色を使ってよい）。</summary>
+        private static Label InjuryChip(string text)
+        {
+            var l = new Label(text);
+            l.AddToClassList("chip");
+            l.AddToClassList("chip--tag");
+            l.AddToClassList("chip--out");
+            return l;
+        }
+
         private static Label CaptainMark()
         {
             var l = new Label("主");

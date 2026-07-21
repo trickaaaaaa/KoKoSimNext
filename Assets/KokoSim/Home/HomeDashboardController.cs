@@ -534,7 +534,7 @@ namespace KokoSim.Unity.Home
             return row;
         }
 
-        /// <summary>故障者の1行（背番号／名前／部位・程度／復帰まで。重度だけ警告色＝UI原則②）。</summary>
+        /// <summary>故障者の1行（背番号／名前／傷病名・部位・程度／復帰まで。重度だけ警告色＝UI原則②）。</summary>
         private static VisualElement BuildInjured(InjuredRow r)
         {
             var row = new VisualElement();
@@ -543,7 +543,9 @@ namespace KokoSim.Unity.Home
             var no = new Label(r.Number); no.AddToClassList("hm-inj__no"); row.Add(no);
             var name = new Label(r.Name); name.AddToClassList("hm-inj__n"); row.Add(name);
 
-            var st = new Label(r.Site + "・" + r.Severity);
+            // 傷病名は data/injuries.yaml 由来（種類なしの旧データは部位・程度だけになる）。
+            var diagnosis = string.IsNullOrEmpty(r.Type) ? r.Site : r.Type + "・" + r.Site;
+            var st = new Label(diagnosis + "・" + r.Severity);
             st.AddToClassList("hm-inj__st");
             if (r.Severe) st.AddToClassList("hm-inj__st--severe");
             row.Add(st);

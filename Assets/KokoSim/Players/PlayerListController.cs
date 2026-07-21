@@ -95,9 +95,11 @@ namespace KokoSim.Unity.Players
             }
             row.Add(ability);
 
-            // 調子（5段階すべてに色。色はUSSクラス側の単一ソース .cond--* に委ねる）
-            var cond = Cell(r.Condition, "cell--narrow");
-            cond.AddToClassList(CondClass(r.ConditionLevel));
+            // 調子／故障（設計書03 §3.5・UI原則⑥）: 怪我中はこの列が「傷病名・段階」の警告表示になる。
+            // 離脱中の選手の調子は判断材料にならないので列は増やさず差し替える（詳細は行クリック→選手詳細）。
+            var injured = r.Injury.Length > 0;
+            var cond = Cell(injured ? r.Injury : r.Condition, "cell--narrow");
+            cond.AddToClassList(injured ? "cond--worst" : CondClass(r.ConditionLevel));
             row.Add(cond);
 
             return row;

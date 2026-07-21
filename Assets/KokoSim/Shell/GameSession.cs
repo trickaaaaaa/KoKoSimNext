@@ -109,6 +109,34 @@ namespace KokoSim.Unity.Shell
             => MatchGrowthModel.Apply(detail, managerWasAway, RosterService.Roster,
                 GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
 
+        // 怪我（設計書03 §3.5）。週次処理（HomeState.RunInjuryWeek）と同じ既定係数を使う。
+        private static readonly InjuryCoefficients InjuryCoeff = new InjuryCoefficients();
+        private int _matchInjurySeq;
+
+        /// <summary>
+        /// 試合後の怪我処理（issue #29 B/C）: 試合中に発生した受傷をロスターへ反映し、
+        /// 怪我を押して出場した選手の悪化・全治延長を判定する。実戦成長と同じ合流点で1試合1回だけ呼ぶ。
+        /// 結果は通知フィード用に貯め、ホーム画面が <see cref="DrainInjuryNotices"/> で引き取る。
+        /// </summary>
+        private void ApplyMatchInjuries(GameResult detail, bool managerWasAway)
+        {
+            // 試合ごとに独立した決定論ストリーム（週・年度・試合連番から導出）。
+            var rng = new Xoshiro256Random(
+                0x2913_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_matchInjurySeq)));
+            var outcomes = MatchInjuryLedger.Apply(detail, managerWasAway, RosterService.Roster, rng, InjuryCoeff);
+            if (outcomes.Count > 0) _injuryNotices.AddRange(outcomes);
+        }
+
+        private readonly List<MatchInjuryOutcome> _injuryNotices = new List<MatchInjuryOutcome>();
+
+        /// <summary>試合後の怪我処理の結果を取り出して空にする（通知フィードへ流す用）。</summary>
+        public List<MatchInjuryOutcome> DrainInjuryNotices()
+        {
+            var list = new List<MatchInjuryOutcome>(_injuryNotices);
+            _injuryNotices.Clear();
+            return list;
+        }
+
         /// <summary>
         /// 練習試合を申し込み、成立したら消化する（設計書03 §週ターン③）。週1制約・資金・受諾判定は
         /// エンジン（<see cref="PracticeMatchScheduler"/>）が持つ。成績は通算スコープにだけ積み
@@ -125,6 +153,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail.Result, detail.ManagerIsAway, isOfficial: false);
                 ApplyMatchGrowth(detail.Result, detail.ManagerIsAway);
+                ApplyMatchInjuries(detail.Result, detail.ManagerIsAway);
             }
             return outcome;
         }
@@ -138,6 +167,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
             return LastOutcome;
@@ -159,6 +189,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
             return LastOutcome;

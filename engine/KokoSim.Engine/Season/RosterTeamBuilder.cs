@@ -274,6 +274,7 @@ public static class RosterTeamBuilder
             HasPitcherBackground = dp.HasPitcherBackground,
             Condition = FormModel.Quantize(dp.ConditionValue),
             Injury = dp.Injury,
+            InjuryResistance = dp.InjuryResistance, // 試合中の受傷判定用（観測系。物理層には流れない）
             Pitching = pitching,
         };
     }

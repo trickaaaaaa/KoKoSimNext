@@ -33,6 +33,7 @@ namespace KokoSim.Unity.Home
         public string Number = "—";
         public string Name = "";
         public string Site = "";       // 肩 / 肘 / 腰 / 膝 / 足首 / 手
+        public string Type = "";       // 捻挫 / 肉離れ / 骨折 / 打撲 / 靭帯損傷 / 疲労性炎症（種類なしは空）
         public string Severity = "";   // 軽度 / 中度 / 重度
         public string Back = "";       // 復帰まで（例「あと 4 週」）
         public bool Severe;            // 重度＝警告色（UI原則②: 本当の警告だけ）
@@ -184,19 +185,20 @@ namespace KokoSim.Unity.Home
             {
                 if (p.Injury == InjurySeverity.None)
                 {
-                    if (!InjuryModel.WeeklyCheck(p, rng, _injury, _skills)) continue;
+                    if (!InjuryModel.WeeklyCheck(p, rng, _injury, _skills, InjuryCatalog.Default)) continue;
                     newItems.Add(new FeedItem
                     {
                         When = "今週",
-                        Text = p.Name + " が " + SiteJp(p.InjurySite) + " を故障（"
-                               + SeverityJp(p.Injury) + "・全治 " + WeeksToFullRecovery(p) + " 週）",
+                        Text = p.Name + " が " + InjuryLabel.Diagnosis(p.InjuryType, p.InjurySite) + "（"
+                               + InjuryLabel.Severity(p.Injury) + "・全治 "
+                               + InjuryLabel.WeeksToFullRecovery(p) + " 週）",
                         Kind = FeedKind.Warn,
                         Tag = "警告",
                     });
                 }
                 else
                 {
-                    InjuryModel.WeeklyRecover(p, _injury);
+                    InjuryModel.WeeklyRecover(p, _injury, InjuryCatalog.Default);
                     if (p.Injury != InjurySeverity.None) continue;
                     newItems.Add(new FeedItem
                     {
@@ -276,7 +278,7 @@ namespace KokoSim.Unity.Home
         private void PushMatchFeed(PlayerMatchOutcome o)
         {
             var verb = o.ManagerWon ? "○ 勝利" : "● 敗戦";
-            PushFeed(new List<FeedItem>
+            var items = new List<FeedItem>
             {
                 new FeedItem
                 {
@@ -285,7 +287,38 @@ namespace KokoSim.Unity.Home
                     Kind = o.ManagerWon ? FeedKind.Up : FeedKind.Warn,
                     Tag = o.ManagerWon ? "情報" : "警告",
                 },
-            });
+            };
+            items.AddRange(InjuryFeedItems());
+            PushFeed(items);
+        }
+
+        /// <summary>
+        /// 試合中の受傷・押して出場の結果を通知フィードへ流す（設計書03 §3.5・設計書06 §3.1）。
+        /// 文言はエンジンの結果（傷病名・部位・段階・全治週）をそのまま整形するだけ。
+        /// </summary>
+        private static List<FeedItem> InjuryFeedItems()
+        {
+            var items = new List<FeedItem>();
+            foreach (var n in GameSession.Current.DrainInjuryNotices())
+            {
+                string text;
+                switch (n.Kind)
+                {
+                    case MatchInjuryOutcomeKind.Occurred:
+                        text = n.PlayerName + " が試合中に " + InjuryLabel.Diagnosis(n.Type, n.Site) + "（"
+                               + InjuryLabel.Severity(n.Severity) + "・全治 " + n.WeeksRemaining + " 週）";
+                        break;
+                    case MatchInjuryOutcomeKind.Worsened:
+                        text = n.PlayerName + " が押して出場し悪化（" + InjuryLabel.Severity(n.Severity)
+                               + "・あと " + n.WeeksRemaining + " 週）";
+                        break;
+                    default:
+                        text = n.PlayerName + " は怪我を押して出場した（復帰が " + n.WeeksRemaining + " 週先へ）";
+                        break;
+                }
+                items.Add(new FeedItem { When = "本日", Text = text, Kind = FeedKind.Warn, Tag = "警告" });
+            }
+            return items;
         }
 
         /// <summary>結果表示を閉じる。大会が終了していれば通常モードへ戻す（要件）。</summary>
@@ -427,9 +460,10 @@ namespace KokoSim.Unity.Home
                 {
                     Number = p.UniformNumber == 0 ? "—" : p.UniformNumber.ToString(),
                     Name = p.Name,
-                    Site = SiteJp(p.InjurySite),
-                    Severity = SeverityJp(p.Injury),
-                    Back = "あと " + WeeksToFullRecovery(p) + " 週",
+                    Site = InjuryLabel.Site(p.InjurySite),
+                    Type = InjuryLabel.Type(p.InjuryType),
+                    Severity = InjuryLabel.Severity(p.Injury),
+                    Back = "あと " + InjuryLabel.WeeksToFullRecovery(p) + " 週",
                     Severe = p.Injury == InjurySeverity.Severe,
                 });
             }
@@ -467,46 +501,6 @@ namespace KokoSim.Unity.Home
             TrainingMenu.Batting, TrainingMenu.Defense, TrainingMenu.Pitching,
             TrainingMenu.Strength, TrainingMenu.BaseRunning, TrainingMenu.Running, TrainingMenu.Rest,
         };
-
-        /// <summary>
-        /// 完治までの残り週。回復は段階を1つずつ下げる方式（Severe→Moderate→Minor→完治）なので、
-        /// 現段階の残り週に下位段階の回復週を足し込む（<see cref="InjuryModel"/> の内部規則と同じ計算）。
-        /// </summary>
-        private int WeeksToFullRecovery(DevelopingPlayer p)
-        {
-            var weeks = p.InjuryWeeksRemaining;
-            if (p.Injury == InjurySeverity.Severe) weeks += Recovery(_injury.ModerateRecoveryWeeks);
-            if (p.Injury == InjurySeverity.Severe || p.Injury == InjurySeverity.Moderate)
-                weeks += Recovery(_injury.MinorRecoveryWeeks);
-            return Math.Max(1, weeks);
-        }
-
-        private int Recovery(int baseWeeks)
-            => Math.Max(1, (int)Math.Round(baseWeeks * _injury.MedicalRecoveryFactor));
-
-        private static string SeverityJp(InjurySeverity s)
-        {
-            switch (s)
-            {
-                case InjurySeverity.Minor: return "軽度";
-                case InjurySeverity.Moderate: return "中度";
-                case InjurySeverity.Severe: return "重度";
-                default: return "";
-            }
-        }
-
-        private static string SiteJp(InjurySite s)
-        {
-            switch (s)
-            {
-                case InjurySite.Shoulder: return "肩";
-                case InjurySite.Elbow: return "肘";
-                case InjurySite.Back: return "腰";
-                case InjurySite.Knee: return "膝";
-                case InjurySite.Ankle: return "足首";
-                default: return "手";
-            }
-        }
 
         private static Dictionary<AbilityKind, int> Snapshot(DevelopingPlayer p)
         {

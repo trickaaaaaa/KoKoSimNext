@@ -143,6 +143,8 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 球場 / 球場格 | Stadium / StadiumTier(Municipal/Prefectural/National) | data/stadiums.yaml。寸法→FieldGeometry（設計書13） |
 | 両翼 / 中堅 / フェンス高 | LeftFenceM＋RightFenceM / CenterFenceM / FenceHeightM | 左右非対称対応。本塁打判定に直結（設計書13 §2） |
 | 怪物 | Phenom | 才能外れ値の隠しフラグ。一芸特化型/総合型（OPEN-QUESTIONS Q20, design-04 §2） |
+| 怪我の種類（傷病名） | InjuryType | 捻挫/肉離れ/骨折/打撲/靭帯損傷/疲労性炎症。定義は `data/injuries.yaml`（InjuryCatalog）。抽選は種類→部位→段階の順（design-03 §3.5） |
+| 受傷の場面 | InjuryScene | 週次/死球/本塁クロスプレー/フェンス激突/スライディング/投球過多。試合中判定は Fork した専用ストリームで引き試合結果に影響させない |
 
 ## 進め方
 

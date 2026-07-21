@@ -32,6 +32,8 @@ namespace KokoSim.Unity.Players
         public string Condition = "普通";   // 絶好調 / 好調 / 普通 / 不調 / 絶不調（表示文字列）
         // 色分岐はこの5段階 enum で行う（表示文字列で比較しない。到達不能分岐の再発防止）。
         public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
+        /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空。詳細は行クリック→選手詳細（UI原則⑦）。</summary>
+        public string Injury = "";
     }
 
     public sealed class PlayerListView
@@ -127,6 +129,11 @@ namespace KokoSim.Unity.Players
                 OverallGrade = Tiers.FromStrength(overall).ToString(),
                 Condition = ConditionJp(condition),
                 ConditionLevel = condition,
+                // 故障（設計書03 §3.5・UI原則⑥）: 一覧をスキャンするだけで離脱者が拾えるようにする。
+                Injury = p.Injury == KokoSim.Engine.Players.InjurySeverity.None
+                    ? ""
+                    : KokoSim.Unity.Shell.InjuryLabel.Type(p.InjuryType) + "・"
+                      + KokoSim.Unity.Shell.InjuryLabel.Severity(p.Injury),
             };
 
             if (p.IsPitcher)
