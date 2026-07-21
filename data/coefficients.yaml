@@ -68,8 +68,10 @@ batting:
   # Sharpness→rpm→変化量の経路で弾道へ織り込み済みのため完全置換（二重計上回避）。校正ノブ。
   whiff_break_slope: 1.5
   foul_share: 0.40               # コンタクト中のファウル割合
-  stuff_base_velocity_kmh: 130.0
-  stuff_per_kmh: 0.020
+  # 球速→球威。基準はリーグ平均投手の平均リリース球速（最速132 − 平均ドロップ4）に置き、
+  # 傾きは「球速1レベル ≈ ミート1レベル」になるよう 0.030 ÷ 0.47(km/h per level) ≈ 0.064 とする。
+  stuff_base_velocity_kmh: 128.0
+  stuff_per_kmh: 0.064
   exit_velo_intercept_kmh: 125.0 # 打球初速上限の切片
   exit_velo_per_power: 0.82      # パワー1あたり初速上限
   quality_mean: 0.62
@@ -80,6 +82,12 @@ batting:
   launch_angle_sigma: 12.0
   bearing_sigma: 20.0
   min_quality_velo_factor: 0.55
+  # コンタクト品質への投手側寄与（「打たせて取る」の土台）。3項とも基準値で寄与0＝リーグ平均投手で恒等。
+  contact_quality_velocity_ref_kmh: 121.5  # 平均的な配球の実投球速度（ストレート比0.55×球種の球速比込み）
+  contact_quality_per_kmh: 0.0010          # 速い球は当たれば強い打球（本格派の代償）
+  contact_quality_per_control: -0.0010     # 制球が良いほど芯を外させる（技巧派の武器）
+  contact_quality_break_ref_m: 0.47        # 132km/h・2200rpm の誘発変化合成量
+  contact_quality_per_break_m: -0.30       # 変化が大きいほど詰まる
 
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
@@ -675,22 +683,24 @@ roster:
   # 球質タイプ（設計書01 §1.1b / 02 §2）: 投手総合は変えず、球速・制球・スタミナ・キレの配分だけ振り替える。
   # これにより「球速＝投手の良さ」ではなくなり、同じ総合ランクに本格派と技巧派が併存する。
   # オフセットは「実際の試合の失点が型によらず揃う」よう実測で校正（式の加重和ではない）。
-  # 現行シムは制球(与四球)の価値が球速(奪三振)より大きいため、制球の振れ幅は小さく取る。
+  # 実測の限界失点（baseLv68）: 球速 −0.015/Lv・制球 −0.057/Lv・キレ −0.009/Lv。
+  # 球速を物理層へ接続して空振り価値を3倍にしたが、制球の失点価値は依然その約4倍あるため
+  # 制球の振れ幅は±5程度が中立の上限。本格派は設計書02「球速とキレで押し込む」に沿ってキレを+へ戻した。
   archetype_power_share: 0.25        # 本格派
   archetype_finesse_share: 0.22      # 技巧派
   archetype_soft_toss_share: 0.08    # 軟投派（残りはバランス型）
-  archetype_power_velocity: 14
-  archetype_power_control: -2
+  archetype_power_velocity: 12
+  archetype_power_control: -4
   archetype_power_stamina: -2
-  archetype_power_pitch_rank: -1
+  archetype_power_pitch_rank: 2
   archetype_finesse_velocity: -10
   archetype_finesse_control: 3
   archetype_finesse_stamina: 1
-  archetype_finesse_pitch_rank: 2
+  archetype_finesse_pitch_rank: 3
   archetype_soft_toss_velocity: -14
   archetype_soft_toss_control: 4
   archetype_soft_toss_stamina: 2
-  archetype_soft_toss_pitch_rank: 3
+  archetype_soft_toss_pitch_rank: 5
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0
