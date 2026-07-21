@@ -2,6 +2,27 @@
 
 実装で勝手に確定せず、ここに記録して相談する（CLAUDE.md「進め方」）。
 
+## Q21. AI校（相手校）の Condition が常に Normal 固定（issue #48 実装時に発見・2026-07-22）
+
+issue #48（敵AIのオーダー編成・代打判断に調子を反映）を実装する過程で発見。実装自体は完了しているが、
+**AI校（相手校）の試合では実際には一切効果を発揮しない**状態になっている。要判断ではなく実装済み機能の
+限界の記録だが、次にこの効果を活かすには方針判断が要るためここに残す。
+
+- **現状**: `StrengthTeamFactory.Create`（相手校の Player 生成）は `Condition`/`ConditionValue` を一切
+  設定しない＝常に既定値（`Condition.Normal` / `ConditionValue = 0.0`）。週次の調子ランダムウォーク
+  （`FormModel.NextWeeklyCondition`）は `SeasonEngine` が自校ロスター（`DevelopingPlayer`）にのみ適用しており、
+  相手校は毎回その場生成（校ID＋年度からの決定論生成）のため持ち越す状態がない。
+- **今回実装した範囲**: `StandardTacticsBrain.CallPinchHit`/`ComposeBattingOrder`・`AiTacticsBrain` 側は
+  `Player.Condition` を正しく参照するので、Condition が変動する自校ロスターの選手（例えば自校の控え）を
+  そのまま使うテストでは意図通り動く。`PlayerMatchResolver.BuildOpponentTeam` にも `ComposeBattingOrder`
+  を配線済みだが、相手校の Condition が常に Normal のため**現状は恒等（並び替えなし）にしかならない**。
+- **要判断**: 相手校にも試合ごとの調子variance を持たせるか。持たせる場合、(a) 校生成と同じ決定論契約
+  （校ID＋年度のみに依存、観戦の有無で変わらない）を維持しつつ Fork ストリームで初期抽選するか、
+  (b) 週次ランダムウォークに相当する何かを大会進行に連動させるか、(c) 現状維持（相手校は常にNormalのまま、
+  この機能は自校の委任采配限定の効果と割り切る）。(a)/(b) は Q16（相手校の決定論生成契約）と同根の論点。
+
+Issue: [#48](https://github.com/trickaaaaaa/KoKoSimNext/issues/48)（実装は完了・本項は追加の方針判断向け）
+
 ## Q18. デバッグモードの残未決（設計書17 起票時・2026-07-21）
 
 Issue: [#85](https://github.com/trickaaaaaa/KoKoSimNext/issues/85)

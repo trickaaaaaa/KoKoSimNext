@@ -46,10 +46,17 @@ namespace KokoSim.Unity.Shell
         /// Resolve / BeginLive の双方がこの1メソッドを使うことで、両者が同一チームになる契約を守る。
         /// 敵AI采配（設計書11）を注入し、代打・代走・守備固め・サイン・伝令を校の三層プロファイルに
         /// 応じて運用させる（Issue #40）。ブレイン自体は rng を消費しない＝チーム生成の決定論は不変。
+        /// オーダー編成（設計書11 §4「代打」「オーダー編成」, issue #48）も同じブレインで並べ替える。
+        /// 判断可否の乱数は校ID＋年度から Fork した専用ストリーム（試合 rng とは独立）＝この並べ替えも
+        /// 校ID＋年度だけで決定論的に決まる。
         /// </summary>
         public static Team BuildOpponentTeam(School opponent)
-            => StrengthTeamFactory.ForSchool(opponent, GameSession.Current.Year)
-                with { Tactics = EnemyAiFactory.BrainFor(opponent) };
+        {
+            var team = StrengthTeamFactory.ForSchool(opponent, GameSession.Current.Year);
+            var brain = EnemyAiFactory.BrainFor(opponent);
+            var orderRng = StrengthTeamFactory.SeedFor(opponent.Id, GameSession.Current.Year).Fork(0x0BDE_0000UL);
+            return team with { BattingOrder = brain.ComposeBattingOrder(team.BattingOrder, orderRng), Tactics = brain };
+        }
 
         /// <summary>
         /// 自校ラインナップを組む。試合開始前画面（対戦カード）も同じ入口を通し、

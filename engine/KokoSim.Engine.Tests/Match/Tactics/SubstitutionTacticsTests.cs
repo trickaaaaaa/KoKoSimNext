@@ -13,6 +13,7 @@ namespace KokoSim.Engine.Tests.Match.Tactics;
 /// <summary>
 /// 選手交代の采配（設計書09 §6, C-2）。StandardTacticsBrain の判断（決定論）と、
 /// 実試合への配線（控え非空＋Brainありのときだけ交代が起きる＝既定オフで従来一致）を検証。
+/// 代打判断の調子込み評価とオーダー編成（設計書11 §4, issue #48）もここで扱う。
 /// </summary>
 public sealed class SubstitutionTacticsTests
 {
@@ -57,6 +58,147 @@ public sealed class SubstitutionTacticsTests
         var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, starter, false,
             new List<Player> { starter }, bench);
         Assert.Null(brain.CallPinchHit(sit, Rng));
+    }
+
+    // ===== 代打判断の調子込み評価（設計書11 §4「代打」, issue #48） =====
+
+    [Fact]
+    public void PinchHit_TerribleConditionBatter_BecomesEligibleBelowCeiling()
+    {
+        // 生ミート50はケイリング(46)超で本来は代打対象にすらならないが、絶不調(-2段階×2.5=-5)で
+        // 実効45まで下がりケイリングを割り込む＝絶不調の好打者が代打の対象になる。
+        var brain = new StandardTacticsBrain();
+        var slumping = P("絶不調の主砲", contact: 50) with { Condition = Condition.Terrible };
+        var bench = new List<Player> { P("代打", contact: 90) };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, slumping, false,
+            new List<Player> { slumping }, bench);
+
+        Assert.Equal("代打", brain.CallPinchHit(sit, Rng)!.Name);
+    }
+
+    [Fact]
+    public void PinchHit_NormalConditionBatter_AboveCeiling_NotReplaced()
+    {
+        // 対照: 同じ生ミートでも通常の調子ならケイリング超のままで代打は出ない（回帰確認）。
+        var brain = new StandardTacticsBrain();
+        var normal = P("好調", contact: 50);
+        var bench = new List<Player> { P("代打", contact: 90) };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, normal, false,
+            new List<Player> { normal }, bench);
+
+        Assert.Null(brain.CallPinchHit(sit, Rng));
+    }
+
+    [Fact]
+    public void PinchHit_ExcellentConditionBench_TipsMarginalCandidateIntoSelection()
+    {
+        // 控え(生40)は通常の調子なら +8 < 既定improvement(12) で選ばれないが、絶好調(+2段階×2.5=+5)で
+        // 実効45となり 32+12=44 を上回る＝絶好調の控えが代打に選ばれる。
+        var brain = new StandardTacticsBrain();
+        var weak = P("非力", contact: 32);
+        var marginal = P("控え", contact: 40) with { Condition = Condition.Excellent };
+        var bench = new List<Player> { marginal };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, weak, false,
+            new List<Player> { weak }, bench);
+
+        Assert.Equal("控え", brain.CallPinchHit(sit, Rng)!.Name);
+    }
+
+    [Fact]
+    public void PinchHit_NormalConditionBench_SameRawContact_NotSelected()
+    {
+        // 対照: 同じ生ミートでも通常の調子なら improvement を満たさず選ばれない（回帰確認）。
+        var brain = new StandardTacticsBrain();
+        var weak = P("非力", contact: 32);
+        var marginal = P("控え", contact: 40);
+        var bench = new List<Player> { marginal };
+        var sit = new SubstitutionSituation(8, 9, 0, 0, null, null, null, weak, false,
+            new List<Player> { weak }, bench);
+
+        Assert.Null(brain.CallPinchHit(sit, Rng));
+    }
+
+    // ===== オーダー編成: StandardTacticsBrain（設計書11 §4, issue #48） =====
+
+    [Fact]
+    public void ComposeBattingOrder_MovesTerribleConditionBatterDown_KeepsPositionAndRelativeOrder()
+    {
+        var brain = new StandardTacticsBrain();
+        var order = new List<Player>
+        {
+            P("1番", contact: 50) with { Position = FieldPosition.Catcher },
+            P("2番", contact: 50) with { Position = FieldPosition.FirstBase },
+            P("3番", contact: 50) with { Position = FieldPosition.SecondBase },
+            P("4番絶不調", contact: 80) with { Position = FieldPosition.ThirdBase, Condition = Condition.Terrible },
+            P("5番", contact: 50) with { Position = FieldPosition.Shortstop },
+        };
+
+        var result = brain.ComposeBattingOrder(order);
+
+        Assert.Equal("4番絶不調", result[^1].Name);                 // 最下位へ下がる
+        Assert.Equal(FieldPosition.ThirdBase, result[^1].Position); // 守備位置は変わらない
+        // 安定ソート: 絶不調以外は元の相対順のまま。
+        Assert.Equal(new[] { "1番", "2番", "3番", "5番" }, result.Take(4).Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ComposeBattingOrder_AllNormalCondition_OrderUnchanged()
+    {
+        var brain = new StandardTacticsBrain();
+        var order = new List<Player> { P("1番"), P("2番"), P("3番") };
+
+        var result = brain.ComposeBattingOrder(order);
+
+        Assert.Equal(order.Select(p => p.Name), result.Select(p => p.Name));
+    }
+
+    // ===== オーダー編成: AiTacticsBrain（③豪腕依存は据え置き・①戦術眼で気づく確率が変わる） =====
+
+    private static List<Player> MixedConditionOrder()
+    {
+        var positions = new[]
+        {
+            FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
+            FieldPosition.ThirdBase, FieldPosition.Shortstop, FieldPosition.LeftField,
+            FieldPosition.CenterField, FieldPosition.RightField, FieldPosition.Pitcher,
+        };
+        var list = new List<Player>();
+        for (var i = 0; i < positions.Length; i++)
+        {
+            var cond = i switch { 3 => Condition.Terrible, 6 => Condition.Excellent, _ => Condition.Normal };
+            list.Add(P($"打順{i + 1}") with { Position = positions[i], Condition = cond });
+        }
+        return list;
+    }
+
+    [Fact]
+    public void ComposeBattingOrder_AiTacticsBrain_AceDependent_NeverReorders()
+    {
+        var order = MixedConditionOrder();
+        var brain = new AiTacticsBrain(new AiProfile(TacticalSense: 95, TierRank: 7, SchoolStyle.AceDependent));
+        for (ulong i = 0; i < 100; i++)
+        {
+            var result = brain.ComposeBattingOrder(order, new Xoshiro256Random(i));
+            Assert.Equal(order.Select(p => p.Name), result.Select(p => p.Name));
+        }
+    }
+
+    [Fact]
+    public void ComposeBattingOrder_AiTacticsBrain_HighSense_ReordersMoreOftenThanLowSense()
+    {
+        var order = MixedConditionOrder();
+        int Reorders(int sense)
+        {
+            var brain = new AiTacticsBrain(new AiProfile(sense, TierRank: 7, SchoolStyle.Standard));
+            var n = 0;
+            for (ulong i = 0; i < 300; i++)
+            {
+                var result = brain.ComposeBattingOrder(order, new Xoshiro256Random(i));
+                if (!result.Select(p => p.Name).SequenceEqual(order.Select(p => p.Name))) n++;
+            }
+            return n;
+        }
+        Assert.True(Reorders(95) > Reorders(10), "戦術眼が高いほど調子を反映した並べ替えを行うはず");
     }
 
     [Fact]

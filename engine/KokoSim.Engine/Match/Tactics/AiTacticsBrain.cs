@@ -21,13 +21,14 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         AiProfile profile,
         TacticsCoefficients? baseCoeff = null,
         BaserunningCoefficients? baserunning = null,
-        EnemyAiCoefficients? aiCoeff = null)
+        EnemyAiCoefficients? aiCoeff = null,
+        Players.FormCoefficients? form = null)
     {
         _profile = profile;
         _ai = aiCoeff ?? new EnemyAiCoefficients();
         // ③ 校風で采配係数を偏らせ、その係数で共通の基準采配を構成する。
         var styled = ApplyStyle(baseCoeff ?? new TacticsCoefficients(), profile.Style, _ai);
-        _inner = new StandardTacticsBrain(styled, baserunning);
+        _inner = new StandardTacticsBrain(styled, baserunning, form);
         // ① 采配能力→最適解選択率。
         _optimalProb = MathUtil.Clamp(
             _ai.OptimalBase + profile.TacticalSense * _ai.OptimalPerSense, _ai.OptimalFloor, _ai.OptimalCap);
@@ -136,6 +137,17 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         var pick = _inner.CallDefensiveSub(s, rng);
         if (pick is null) return null;
         return MathUtil.Chance(_optimalProb, rng) ? pick : null;
+    }
+
+    /// <summary>
+    /// 打順の並べ替え（設計書11 §4「オーダー編成」, issue #48）。③豪腕依存は「打線は水物」で
+    /// 調子によるいじりをしない。①戦術眼が足りないと気づかず見送る（他の判断と同じ丸め方）。
+    /// </summary>
+    public IReadOnlyList<Players.Player> ComposeBattingOrder(IReadOnlyList<Players.Player> order, IRandomSource rng)
+    {
+        if (_profile.Style == SchoolStyle.AceDependent) return order;
+        if (!MathUtil.Chance(_optimalProb, rng)) return order;
+        return _inner.ComposeBattingOrder(order);
     }
 
     // --- ② ティア・ゲート: 引き出しにない高度な戦術は素の手へ落とす ---
