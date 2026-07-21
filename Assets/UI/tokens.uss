@@ -83,6 +83,12 @@
     --fs-callout: 40px;   /* 盤面オーバーレイの大型読み上げ（投球判定など・短時間表示） */
     --fs-num: 15px;       /* 数値（疲労・分） */
 
+    /* 掲示板（.f-dot 専用）。16の整数倍以外は使わない＝非整数倍はドットが濁る（F0で実証済み）。 */
+    --fs-dot-16: 16px;
+    --fs-dot-32: 32px;
+    --fs-dot-48: 48px;
+    /* 掲示板の面。カード面(--sf-card)より暗い黒緑で「球場が掲示している」面を作る。 */
+    --sb-face: #0A0F0C;
 
     /* ── スペーシング段階（モック実測） ─────────────────────────── */
     --sp-1: 4px;
@@ -184,4 +190,55 @@
    ※ KokoSimTheme.uss の .root も同じ指定を持つ（ホーム等の既存画面はそちらで担保）。 */
 .ui-root {
     -unity-font-definition: url("project://database/Assets/UI/KokoSimFont.asset?fileID=11400000&guid=aa1b28686c2d84c489628717f9662630&type=2#KokoSimFont");
+}
+
+/* ═══ 書体3役＋掲示板（設計書16 F0・2026-07-21 確定）══════════════════════
+   フォント指定は var() ではなくユーティリティクラスで行う（USS変数にアセット参照を
+   入れる方式は採らない＝既知の var 系の罠を回避）。役割は4つだけで、この外に出ない。
+
+     .f-display / .f-display-lg  太明朝   校名・大会名・ページ見出し
+     .f-body / -md / -bd         サンセリフ ラベル・本文・ボタン（疑似ボールド全廃）
+     .f-num / .f-num-bd          コンデンス 表・打率・金額・背番号
+     .f-dot                      ドット    掲示板部品の中だけ
+
+   移行が終わったら -unity-font-style: bold は原則禁止（実ウェイトで表現する）。 */
+
+/* ── ディスプレイ（太明朝）Shippori Mincho B1 ──────────────────────────
+   16px以上・太ウェイト限定。本文には絶対に使わない（暗背景で細い横画が潰れる）。
+   既定は ExtraBold。24px以下の見出し・校名はこちらでないと横画が残らないため、
+   使用頻度の高い側を既定に置く。32px以上の大見出しだけ、より端正な Bold を使う
+   （＝ -lg の方がウェイトは軽い。名前はサイズ用途を表す）。 */
+.f-display {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
+}
+.f-display-lg {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-Bold.asset?fileID=11400000&guid=79e45b7605bce4026b70c4d8d01cf21b&type=2#ShipporiMinchoB1-Bold");
+}
+
+/* ── 本文・UI（サンセリフ）IBM Plex Sans JP ─────────────────────────── */
+.f-body {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Regular.asset?fileID=11400000&guid=1c2f415f2731d410cad039b0f26f6602&type=2#IBMPlexSansJP-Regular");
+}
+.f-body-md {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Medium.asset?fileID=11400000&guid=e0684afefb1bb435cac49ce90b59ce4e&type=2#IBMPlexSansJP-Medium");
+}
+.f-body-bd {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-SemiBold.asset?fileID=11400000&guid=5c6d942636708417b84a53f7f084f0f8&type=2#IBMPlexSansJP-SemiBold");
+}
+
+/* ── データ数字（コンデンス）Oswald ────────────────────────────────────
+   欧文フォントなので和文グリフを持たない。数値だけを載せる Label に付ける
+   （和文と混ぜる行は Label を分ける＝既存の sb2-cell__k / __v 方式）。 */
+.f-num {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/Oswald-Medium.asset?fileID=11400000&guid=932206d30144143c79b25b15892c3c31&type=2#Oswald-Medium");
+}
+.f-num-bd {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/Oswald-SemiBold.asset?fileID=11400000&guid=56177966b74534dd8938dac51a4a1c48&type=2#Oswald-SemiBold");
+}
+
+/* ── 掲示板（ドット）DotGothic16 ───────────────────────────────────────
+   掲示板部品（ScoreboardStrip / LineScorePanel）の中だけで使う。外に出たら明朝＋サンセリフ。
+   サイズは16の整数倍限定（非整数倍はアンチエイリアスでドット感が消えることを F0 で確認済み）。 */
+.f-dot {
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/DotGothic16-Regular.asset?fileID=11400000&guid=839c1a34b75a04eed8050c3c5190d1f6&type=2#DotGothic16-Regular");
 }
