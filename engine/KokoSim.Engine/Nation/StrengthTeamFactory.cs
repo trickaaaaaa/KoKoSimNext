@@ -32,12 +32,14 @@ public static class StrengthTeamFactory
     /// **単一ソース**。同じ校・同じ年度なら常に同一チーム＝展望で見た選手が実戦でそのまま出てくる。
     /// 年度を混ぜるのは3年生が抜けて代替わりするため（年が変わればメンバーも変わる）。
     /// 渡す rng に依存しないので、大会の進行状況や観戦の有無に関係なく再現できる。
+    /// <paramref name="modernRules"/>/<paramref name="calendarYear"/> は DH使用判断（issue #54）専用の
+    /// 任意入力。両方揃ったときだけ検討する（既定 null＝DH不使用＝従来挙動と完全一致）。
     /// </summary>
     public static Team ForSchool(School school, int yearIndex,
         PersonalityCoefficients? personalityCoeff = null, PlayerNameVocab? nameVocab = null,
-        RosterCoefficients? rosterCoeff = null)
+        RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null)
         => Create(school.Strength, school.Name, SeedFor(school.Id, yearIndex),
-            personalityCoeff, nameVocab, rosterCoeff);
+            personalityCoeff, nameVocab, rosterCoeff, modernRules, calendarYear);
 
     /// <summary>校ID＋年度から生成シードを導出する（決定論・不変条件#2）。</summary>
     public static IRandomSource SeedFor(int schoolId, int yearIndex)
@@ -45,7 +47,7 @@ public static class StrengthTeamFactory
 
     public static Team Create(double strength, string name, IRandomSource rng,
         PersonalityCoefficients? personalityCoeff = null, PlayerNameVocab? nameVocab = null,
-        RosterCoefficients? rosterCoeff = null)
+        RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null)
     {
         var pc = personalityCoeff ?? new PersonalityCoefficients();
         var vocab = nameVocab ?? new PlayerNameVocab();
@@ -97,7 +99,10 @@ public static class StrengthTeamFactory
                 with { UniformNumber = 10 + i, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
 
-        return new Team { Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen, Bench = bench };
+        var team = new Team { Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen, Bench = bench };
+        // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。既に確定した能力ロールだけを材料にする決定論変換
+        // （rng は使わない）＝展望（TournamentPreview）と実戦（Shell）が同じここを通り自動で一致する。
+        return LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);
     }
 
     /// <summary>

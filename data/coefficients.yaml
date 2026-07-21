@@ -747,3 +747,14 @@ roster:
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0
+  # 打順編成＋DH使用判断（issue #54, 設計書11 §4「オーダー編成」）。自校・AI校で共有する。
+  # 1番=出塁力＋走力、2番=小技・ミート、中軸=打撃総合（最強打者は4番）、6番以降=残りを打撃総合順。
+  lineup_leadoff_discipline_weight: 0.45
+  lineup_leadoff_contact_weight: 0.30
+  lineup_leadoff_speed_weight: 0.25
+  lineup_second_contact_weight: 0.55
+  lineup_second_bunt_weight: 0.45
+  lineup_overall_contact_weight: 0.5
+  lineup_overall_power_weight: 0.5
+  # DH使用判断: 投手の打撃総合（ミート＋パワー）が野手平均よりこれ以上低ければDHを使う。
+  lineup_dh_pitcher_batting_gap: 15.0

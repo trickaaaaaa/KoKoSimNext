@@ -1,6 +1,7 @@
 using System;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Season;
@@ -107,6 +108,9 @@ public sealed record RosterCoefficients
 
     /// <summary>球質タイプ（本格派/技巧派/軟投派）の出現割合と配分オフセット。自校・AI校で共有する。</summary>
     public PitcherArchetypeCoefficients Archetypes { get; init; } = new();
+
+    /// <summary>打順編成＋DH使用判断（issue #54, 設計書11 §4）。自校・AI校で共有する。</summary>
+    public LineupCoefficients Lineup { get; init; } = new();
 }
 
 /// <summary>
