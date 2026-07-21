@@ -44,9 +44,12 @@ namespace KokoSim.Unity.Shell
         /// 展望で見た注目選手が実際の対戦相手としてそのまま出てくる（設計書06 §3.5b）。
         /// 渡された試合 rng には依存させない（＝大会の進行状況や観戦の有無で相手が変わらない）。
         /// Resolve / BeginLive の双方がこの1メソッドを使うことで、両者が同一チームになる契約を守る。
+        /// 敵AI采配（設計書11）を注入し、代打・代走・守備固め・サイン・伝令を校の三層プロファイルに
+        /// 応じて運用させる（Issue #40）。ブレイン自体は rng を消費しない＝チーム生成の決定論は不変。
         /// </summary>
         public static Team BuildOpponentTeam(School opponent)
-            => StrengthTeamFactory.ForSchool(opponent, GameSession.Current.Year);
+            => StrengthTeamFactory.ForSchool(opponent, GameSession.Current.Year)
+                with { Tactics = EnemyAiFactory.BrainFor(opponent) };
 
         /// <summary>
         /// 自校ラインナップを組む。試合開始前画面（対戦カード）も同じ入口を通し、

@@ -89,6 +89,63 @@ public sealed class PlayerMatchCalibrationTests
             $"非対称マッチが集計モデルの傾きから乖離: sEquiv={sEquiv:F1} maxDiff={maxDiff:F3} → {detail}");
     }
 
+    /// <summary>
+    /// Issue #40（相手校への敵AI采配注入）後の校正: 上のテストと同じラダーだが、相手に
+    /// <see cref="EnemyAiFactory.BrainFor"/> を注入した状態（=本流 PlayerMatchResolver.BuildOpponentTeam
+    /// と同じ配線）で自校戦の勝率帯が同じ許容帯に収まることを固定する。TacticalSense/Style は
+    /// School の既定値（50, Standard）＝校情報未設定の平均的な学校を模す。
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Heavy")] // 実ロスター vs strengthラダー(AI采配込み)のフルエンジン照合（数十秒）
+    public void RosterTeam_VsStrengthLadder_WithAiTactics_IsMonotonic_AndMatchesAggregateSlope()
+    {
+        var gameCtx = new GameContext();
+        var nation = new NationCoefficients();
+        var roster = BuildRoster(42);
+        double[] ladder = { 35, 40, 45, 50, 55, 60, 65 };
+        const int n = 300;
+
+        var rates = new double[ladder.Length];
+        var root = new Xoshiro256Random(7);
+        for (var li = 0; li < ladder.Length; li++)
+        {
+            var school = new School { Id = 900 + li, Name = "相手", PrefectureId = 0, Strength = ladder[li] };
+            var wins = 0;
+            for (var i = 0; i < n; i++)
+            {
+                var g = root.Fork((ulong)(li * 1000 + i));
+                var away = StrengthTeamFactory.Create(ladder[li], "相手", g) with { Tactics = EnemyAiFactory.BrainFor(school) };
+                var home = RosterTeamBuilder.Build(roster, "自校");
+                var r = GameEngine.Play(away, home, gameCtx, g);
+                if (r.HomeRuns > r.AwayRuns) wins++;
+                else if (r.Tied && g.NextDouble() < 0.5) wins++;
+            }
+            rates[li] = (double)wins / n;
+        }
+
+        for (var i = 1; i < ladder.Length; i++)
+        {
+            Assert.True(rates[i] <= rates[i - 1] + 0.05,
+                $"ラダーが単調でない: s={ladder[i - 1]}→{rates[i - 1]:F3}, s={ladder[i]}→{rates[i]:F3} " +
+                $"[{string.Join(", ", rates.Select(r => r.ToString("F3")))}]");
+        }
+
+        var sEquiv = EstimateEquivalentStrength(ladder, rates);
+        Assert.True(sEquiv > ladder[0] && sEquiv < ladder[^1],
+            $"等価強さがラダー外: {sEquiv:F1} [{string.Join(", ", rates.Select(r => r.ToString("F3")))}]");
+
+        var maxDiff = 0.0;
+        var detail = "";
+        for (var i = 0; i < ladder.Length; i++)
+        {
+            var model = AggregateMatch.WinProbability(sEquiv, ladder[i], nation);
+            maxDiff = Math.Max(maxDiff, Math.Abs(model - rates[i]));
+            detail += $"s={ladder[i]}: engine={rates[i]:F3} model={model:F3}; ";
+        }
+        Assert.True(maxDiff <= 0.12,
+            $"AI采配込みの非対称マッチが集計モデルの傾きから乖離: sEquiv={sEquiv:F1} maxDiff={maxDiff:F3} → {detail}");
+    }
+
     private static double EstimateEquivalentStrength(double[] ladder, double[] rates)
     {
         for (var i = 1; i < ladder.Length; i++)
