@@ -4,6 +4,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Timeline.Playback;
 
@@ -139,11 +140,117 @@ public sealed class MatchProgression
     /// </summary>
     public bool PinchHitUpcoming(bool offenseIsAway, int benchIndex)
     {
-        var team = _p.OffenseOf(offenseIsAway);
-        if (benchIndex < 0 || benchIndex >= team.Bench.Count) return false;
-        if (!team.PinchHitNext(team.Bench[benchIndex])) return false;
+        if (!SubstitutionCommands.PinchHit(_p, offenseIsAway, benchIndex)) return false;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PinchHit, offenseIsAway, benchIndex));
         return true;
+    }
+
+    // ===== 選手交代（設計書09 §6）。打席境界の采配窓で呼ぶ。乱数を消費しないので帯は不変。 =====
+    // 適用は必ず SubstitutionCommands（添字ベース）を通し、同じ関数を GameReplay も使う。
+    // ＝「同シード＋同交代操作 → 同結果」と Save/Load 往復の一致が構造的に保証される（不変条件#2）。
+
+    /// <summary>
+    /// 今この打席境界で teamIsAway 側の監督が選べる交代の一覧（観測データ）。
+    /// 攻撃中なら代打（次打者）／代走（塁上の走者）、守備中なら投手交代／守備交代／DH解除が候補になる。
+    /// </summary>
+    public SubstitutionOptions SubstitutionOptions(bool teamIsAway)
+    {
+        var team = _p.OffenseOf(teamIsAway);
+        // 3アウト後は次の半イニング＝攻守が入れ替わる。試合開始前（未進行）は表＝先攻の攻撃から。
+        var halfEnded = _p.CurrentOuts >= 3;
+        var battingIsAway = halfEnded ? !_p.CurrentIsTop : _p.CurrentIsTop;
+        var isOffense = battingIsAway == teamIsAway;
+
+        var runners = new List<RunnerChoice>(3);
+        if (isOffense && !halfEnded && !IsFinished && _p.CurrentBases is { } bases)
+        {
+            if (bases.First is { } r1) runners.Add(new RunnerChoice(0, r1));
+            if (bases.Second is { } r2) runners.Add(new RunnerChoice(1, r2));
+            if (bases.Third is { } r3) runners.Add(new RunnerChoice(2, r3));
+        }
+
+        return new SubstitutionOptions
+        {
+            TeamIsAway = teamIsAway,
+            IsOffense = isOffense,
+            IsFinished = IsFinished,
+            Lineup = team.CurrentLineup,
+            UpcomingBatterSlot = team.CurrentBatterOrder - 1,
+            CurrentPitcher = team.CurrentPitcher,
+            PitcherSlot = team.UsesDh ? -1 : team.PitcherSlot,
+            UsesDh = team.UsesDh,
+            DhSlot = team.DhSlot,
+            Runners = runners,
+            Bench = team.Bench,
+            Bullpen = team.AvailableBullpen,
+            UsedBench = Unavailable(team.RosterBench, team.Bench),
+            UsedBullpen = Unavailable(team.RosterBullpen, team.AvailableBullpen),
+        };
+    }
+
+    /// <summary>代打: 次打者を控え sub に代える。控えに sub が居なければ false。</summary>
+    public bool PinchHit(bool teamIsAway, Player sub)
+    {
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).Bench, sub);
+        return idx >= 0 && PinchHitUpcoming(teamIsAway, idx);
+    }
+
+    /// <summary>代走: baseIndex（0=一塁,1=二塁,2=三塁）の走者を控え sub に代える。塁の参照も差し替わる。</summary>
+    public bool PinchRun(bool teamIsAway, int baseIndex, Player sub)
+    {
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).Bench, sub);
+        if (idx < 0 || !SubstitutionCommands.PinchRun(_p, teamIsAway, baseIndex, idx)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PinchRun, teamIsAway, idx,
+            TargetIndex: baseIndex));
+        return true;
+    }
+
+    /// <summary>投手交代: ブルペンの sub を指名して継投する（先頭固定ではない）。</summary>
+    public bool ChangePitcher(bool teamIsAway, Player sub)
+    {
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailableBullpen, sub);
+        if (idx < 0 || !SubstitutionCommands.ChangePitcher(_p, teamIsAway, idx)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ChangePitcher, teamIsAway, idx));
+        return true;
+    }
+
+    /// <summary>守備交代: 出場中の outgoing を控え sub に代える（守備位置を継承）。</summary>
+    public bool DefensiveSub(bool teamIsAway, Player outgoing, Player sub)
+    {
+        var team = _p.OffenseOf(teamIsAway);
+        var slot = IndexOf(team.CurrentLineup, outgoing);
+        var idx = IndexOf(team.Bench, sub);
+        if (slot < 0 || idx < 0 || !SubstitutionCommands.DefensiveSub(_p, teamIsAway, slot, idx)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.DefensiveSub, teamIsAway, idx,
+            TargetIndex: slot));
+        return true;
+    }
+
+    /// <summary>
+    /// DH解除（不可逆・設計書09 §6）。at 指定＝DHの選手がその守備位置に就く（元の守備者が退場）、
+    /// null＝DHの選手はそのまま退場。どちらも投手がDHの打順スロットへ入る。
+    /// </summary>
+    public bool ReleaseDh(bool teamIsAway, Field.FieldPosition? at)
+    {
+        if (!SubstitutionCommands.ReleaseDh(_p, teamIsAway, at)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ReleaseDh, teamIsAway, BenchIndex: 0, At: at));
+        return true;
+    }
+
+    /// <summary>原本から「まだ使える分」を除いた差＝使い切った控え（原本の並びを保つ）。</summary>
+    private static IReadOnlyList<Player> Unavailable(IReadOnlyList<Player> roster, IReadOnlyList<Player> available)
+    {
+        var used = new List<Player>();
+        foreach (var p in roster)
+            if (IndexOf(available, p) < 0) used.Add(p);
+        return used;
+    }
+
+    private static int IndexOf(IReadOnlyList<Player> list, Player p)
+    {
+        for (var i = 0; i < list.Count; i++)
+            if (list[i] == p) return i;
+        return -1;
     }
 
     /// <summary>
