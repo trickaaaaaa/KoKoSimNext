@@ -821,7 +821,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .row--click:hover { background-color: #232E28; }
 
 /* --- 球種変化チャート（プロスピ風） --- */
-.pd2-pitchchart { min-height: 300px; flex-grow: 1; }
+.pd2-pitchchart { min-height: 340px; flex-grow: 1; }
 .pd2-pchip { position: absolute; flex-direction: row; align-items: center; background-color: #0E1512; border-width: 1px; border-color: #232E28; padding: 4px 9px; }
 .pd2-pchip__name { font-size: 13px; color: #E8ECEA; margin-right: 8px; }
 

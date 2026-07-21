@@ -33,7 +33,10 @@ namespace KokoSim.Unity.Players
         public string Kire = "C";     // キレ（Sharpness→S〜G）＝チップ
         public float DirX;            // 変化方向（画面座標系: +x右 / +y下）
         public float DirY;
-        public float Break01;         // 変化量 0〜1（中心からの距離）
+        public float Break01;         // 変化量 0〜1（扇の長さ）
+        // ストレートは「変化量」ではなく「伸び」で読ませる（扇の長さは短尺固定・幅で伸びを表す）。
+        public bool IsFastball;
+        public float Extend01;        // 伸び 0〜1（ストレートのみ意味を持つ＝扇の幅）
         // 参考値（Statcast風・表示近似）。
         public int Velo;
         public string Move = "";
@@ -227,7 +230,10 @@ namespace KokoSim.Unity.Players
                         Kire = Tiers.FromStrength(baseVel).ToString(),   // 球速＝ストレートのキレ相当
                         DirX = df.x,
                         DirY = df.y,
-                        Break01 = ClampF(0.5f + baseVel / 200f, 0.5f, 1.0f),
+                        // ストレートは変化球ではない＝変化量は短尺固定。伸びは Extend01（扇の幅）で表す。
+                        Break01 = FastballBreak01,
+                        IsFastball = true,
+                        Extend01 = ClampF(baseVel / 100f, 0f, 1f),
                         Velo = Kmh(baseVel),
                         Move = "—",
                         Rpm = 2000 + baseVel * 4,
@@ -240,15 +246,18 @@ namespace KokoSim.Unity.Players
                     var velo = isFast ? Kmh(baseVel) : Kmh(baseVel) - 8 - (lp.SharpnessOffset % 20);
                     var kireScore = Clamp(50 + lp.SharpnessOffset * 2, 1, 100);
                     var dir = PitchDir(lp.Type);
-                    // 変化量: 球威+キレのオフセットから 0.42〜1.0。ストレートは伸び（キレ）主体。
-                    var breakScore = isFast ? lp.SharpnessOffset : (lp.PowerOffset + lp.SharpnessOffset);
+                    // 変化量: 球威+キレのオフセットから 0.42〜1.0。
+                    // ストレートだけは変化球ではないので短尺固定にし、伸び（キレ）は扇の幅で表す。
+                    var breakScore = lp.PowerOffset + lp.SharpnessOffset;
                     v.Pitches.Add(new PitchData
                     {
                         Name = PitchJp(lp.Type),
                         Kire = Tiers.FromStrength(kireScore).ToString(),
                         DirX = dir.x,
                         DirY = dir.y,
-                        Break01 = ClampF(0.45f + breakScore / 46f, 0.42f, 1.0f),
+                        Break01 = isFast ? FastballBreak01 : ClampF(0.45f + breakScore / 46f, 0.42f, 1.0f),
+                        IsFastball = isFast,
+                        Extend01 = isFast ? ClampF((baseVel + lp.SharpnessOffset * 2) / 100f, 0f, 1f) : 0f,
                         Velo = velo,
                         Move = isFast ? "—" : (18 + (lp.SharpnessOffset % 30)) + "cm",
                         Rpm = 1800 + lp.PowerOffset * 6 + (isFast ? 400 : 0),
@@ -345,6 +354,9 @@ namespace KokoSim.Unity.Players
                 default: return "#EFF4EA";
             }
         }
+
+        // ストレートの扇の長さ（変化量軸では短尺固定。伸びは Extend01＝扇の幅で読ませる）。
+        private const float FastballBreak01 = 0.15f;
 
         // 球種ごとの変化方向（画面座標系: +x右 / +y下。上=伸び）。プロスピ風チャートの配置。
         private static (float x, float y) PitchDir(PitchType t)
