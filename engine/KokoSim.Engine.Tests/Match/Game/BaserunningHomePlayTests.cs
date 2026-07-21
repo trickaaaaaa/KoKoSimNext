@@ -253,4 +253,117 @@ public sealed class BaserunningHomePlayTests
             Assert.Equal(preRunners + 1, onBase.Count + runs + extraOuts); // 元の走者+打者 = 塁上+得点+アウト
         }
     }
+
+    // --- #88: 二塁打で一塁走者が一塁に残ってしまうバグの回帰 ---
+    // 打者は二塁打で必ず二塁を占有するため、一塁走者は一塁にも二塁にも戻れない。三塁が先行走者(自重)
+    // で塞がっている場合は、その先行走者を本塁へ押し出して一塁走者が三塁に入る（フォースの延長）。
+
+    [Fact]
+    public void Double_FirstAndSecondRunner_BothHold_SecondRunnerPushedHome_FirstTakesThird()
+    {
+        // 近距離・速い処理・強肩・超慎重＝二塁走者・一塁走者ともに本塁は自重したい状況。
+        var home = Context(distanceM: 10, fieldedAt: 0.3, arm: 80, aggression: 0.0);
+        var rng = new Xoshiro256Random(5);
+        var r1 = new Player { Name = "R1", Baserunning = 50 };
+        var r2 = new Player { Name = "R2", Baserunning = 50 };
+        var batter = new Player { Name = "Batter" };
+        var bases = new BaseState { First = r1, Second = r2 };
+
+        var (runs, extraOuts, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+            bases, PlateAppearanceResult.Double, batter, 0, C, rng, collectMoves: true, home);
+
+        Assert.Equal(1, runs);        // 二塁走者(先行)は三塁を明け渡すため押し出され本塁へ
+        Assert.Equal(0, extraOuts);
+        Assert.Null(bases.First);     // 一塁に残る結末は無い（#88の症状そのもの）
+        Assert.Same(batter, bases.Second);
+        Assert.Same(r1, bases.Third); // 一塁走者は三塁まで進む
+        Assert.Single(moves, m => ReferenceEquals(m.Runner, r2)); // r2のmoveは1本(2→4)。2→3→4の2段階にしない
+        Assert.Contains(moves, m => m.Runner == r2 && m.FromBase == 2 && m.ToBase == 4 && !m.Out);
+        Assert.Contains(moves, m => m.Runner == r1 && m.FromBase == 1 && m.ToBase == 3 && !m.Out);
+        Assert.Contains(moves, m => m.Runner == batter && m.FromBase == 0 && m.ToBase == 2 && !m.Out);
+    }
+
+    [Fact]
+    public void Double_FirstAndThirdRunner_BothHold_ThirdRunnerPushedHome_FirstTakesThird()
+    {
+        // 二塁走者がいなくても、三塁走者(自重)が塞いでいれば同じ押し出しが起きる。
+        var home = Context(distanceM: 10, fieldedAt: 0.3, arm: 80, aggression: 0.0);
+        var rng = new Xoshiro256Random(5);
+        var r1 = new Player { Name = "R1", Baserunning = 50 };
+        var r3 = new Player { Name = "R3", Baserunning = 50 };
+        var batter = new Player { Name = "Batter" };
+        var bases = new BaseState { First = r1, Third = r3 };
+
+        var (runs, extraOuts, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+            bases, PlateAppearanceResult.Double, batter, 0, C, rng, collectMoves: true, home);
+
+        Assert.Equal(1, runs);
+        Assert.Equal(0, extraOuts);
+        Assert.Null(bases.First);
+        Assert.Same(batter, bases.Second);
+        Assert.Same(r1, bases.Third);
+        Assert.Contains(moves, m => m.Runner == r3 && m.FromBase == 3 && m.ToBase == 4 && !m.Out);
+        Assert.Contains(moves, m => m.Runner == r1 && m.FromBase == 1 && m.ToBase == 3 && !m.Out);
+    }
+
+    // --- #88 完了条件: RunnerMove の最終legの行き先と最終 BaseState が常に一致する ---
+
+    [Fact]
+    public void RunnerMoves_LastLegPerRunner_MatchesFinalBaseStateOrScoring()
+    {
+        var rng = new Xoshiro256Random(880088);
+        var results = new[]
+        {
+            PlateAppearanceResult.Single, PlateAppearanceResult.Double, PlateAppearanceResult.ReachedOnError,
+        };
+
+        for (var trial = 0; trial < 5000; trial++)
+        {
+            var r1 = rng.NextDouble() < 0.5 ? new Player { Name = "R1", Baserunning = rng.NextInt(20, 90) } : null;
+            var r2 = rng.NextDouble() < 0.5 ? new Player { Name = "R2", Baserunning = rng.NextInt(20, 90) } : null;
+            var r3 = rng.NextDouble() < 0.5 ? new Player { Name = "R3", Baserunning = rng.NextInt(20, 90) } : null;
+            var batter = new Player { Name = "Batter" };
+            var bases = new BaseState { First = r1, Second = r2, Third = r3 };
+
+            HomePlayContext? home = rng.NextDouble() < 0.5
+                ? Context(
+                    distanceM: rng.NextInt(10, 100), fieldedAt: 0.3 + rng.NextDouble() * 3.0,
+                    arm: rng.NextInt(30, 95), aggression: rng.NextDouble())
+                : null;
+            var result = results[rng.NextInt(0, results.Length)];
+
+            var (_, _, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, result, batter, currentOuts: 0, C, rng, collectMoves: true, home);
+
+            var runnersWithOrigin = new (Player? Runner, int OriginBase)[]
+                { (r1, 1), (r2, 2), (r3, 3), (batter, 0) };
+
+            foreach (var (runner, originBase) in runnersWithOrigin)
+            {
+                if (runner is null) continue;
+                var lastLeg = moves.LastOrDefault(m => ReferenceEquals(m.Runner, runner));
+                int? finalBase = ReferenceEquals(bases.First, runner) ? 1
+                    : ReferenceEquals(bases.Second, runner) ? 2
+                    : ReferenceEquals(bases.Third, runner) ? 3
+                    : null;
+
+                if (lastLeg is null)
+                {
+                    Assert.True(originBase == finalBase,
+                        $"move記録が無いのに元の塁からいなくなった: {runner.Name} origin={originBase} final={finalBase}");
+                    continue;
+                }
+                if (lastLeg.Out || lastLeg.ToBase == 4)
+                {
+                    Assert.True(finalBase is null,
+                        $"得点/アウトのはずが塁上に残っている: {runner.Name} final={finalBase}");
+                }
+                else
+                {
+                    Assert.True(lastLeg.ToBase == finalBase,
+                        $"最終move(ToBase={lastLeg.ToBase})と塁状態(final={finalBase})が不一致: {runner.Name}");
+                }
+            }
+        }
+    }
 }
