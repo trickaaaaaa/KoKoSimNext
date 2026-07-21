@@ -5,8 +5,17 @@ using KokoSim.Engine.Match.AtBat;
 
 namespace KokoSim.Engine.Match.Timeline.Playback;
 
-/// <summary>1球とその直後のカウント（B/S）。</summary>
-public readonly record struct PitchToken(PitchKind Kind, int BallsAfter, int StrikesAfter);
+/// <summary>
+/// 1球とその直後のカウント（B/S）。<see cref="PitchType"/> / <see cref="VelocityKmh"/> は
+/// 実1球記録（<see cref="PitchRecord"/>）由来の観測値で、**実記録がない合成列では null**（＝表示側は出さない）。
+/// 表示専用の付帯情報で、判定・帯には一切関与しない。
+/// </summary>
+public readonly record struct PitchToken(
+    PitchKind Kind,
+    int BallsAfter,
+    int StrikesAfter,
+    Players.PitchType? PitchType = null,
+    double? VelocityKmh = null);
 
 /// <summary>1打席の投球列（中継風カウントの合成データ）。</summary>
 public sealed record PitchSequence(IReadOnlyList<PitchToken> Pitches)
@@ -22,6 +31,10 @@ public sealed record PitchSequence(IReadOnlyList<PitchToken> Pitches)
 /// 妥当な投球列を合成する。合成は専用の <see cref="Xoshiro256Random"/>（打席固有のハッシュ由来シード）だけを
 /// 使い、メインの試合 RNG ストリームには一切触れない。総投球数と最終カウント（K=3ストライク／BB=4ボール／
 /// インプレー=打った瞬間）は実データと整合し、途中の内訳は妥当だが架空。判定・帯には無関係。
+///
+/// 球種・球速（<see cref="PitchToken.PitchType"/> / <see cref="PitchToken.VelocityKmh"/>）は**載せない**（null のまま）。
+/// 合成列は実際に投げられた球ではないため、それらしい球種・球速をでっち上げると
+/// 「見えている情報＝実データ」という約束が崩れる。表示側は null を「球種・球速は出さない」として扱う。
 /// </summary>
 public static class PitchSequenceSynthesizer
 {
