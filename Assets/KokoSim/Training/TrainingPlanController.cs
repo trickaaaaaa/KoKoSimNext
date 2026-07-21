@@ -62,8 +62,8 @@ namespace KokoSim.Unity.Training
         {
             var v = _state.BuildView();
 
-            // 共通トップバー（スコアボード）: 週とチーム総合力ランクを埋める。
-            SetText("week", v.WeekLabel);   // 共通「YYYY年M月W週目」（SeasonClock 由来）
+            // 共通トップバー（スコアボード）: 掲示板の升目（週・夏予選までの残り）とチーム総合力ランクを埋める。
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChip(v.TeamRankGrade)); }
 

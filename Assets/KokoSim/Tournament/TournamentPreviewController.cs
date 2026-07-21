@@ -86,7 +86,7 @@ namespace KokoSim.Unity.Tournament
         /// </summary>
         private void RenderTopBar()
         {
-            SetText("week", GameClock.CurrentLabel());
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
 
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank == null) return;
@@ -393,10 +393,16 @@ namespace KokoSim.Unity.Tournament
             var round = new Label(m.RoundName);
             round.AddToClassList("tp-seed");
             sub.Add(round);
-            var line = new Label(m.WinnerName + "  " + m.WinnerScore + " － " + m.LoserScore + "  " + m.LoserName);
-            line.AddToClassList("tp-team-name");
-            line.style.marginLeft = 8;
-            sub.Add(line);
+            // 校名は太明朝・スコアはコンデンス数字なので、1つの Label に混ぜず分割する
+            // （Oswald は欧文専用で和文グリフを持たない＝設計書16 §2 の罠2）。
+            var win = UiComponents.SchoolName(m.WinnerName);
+            win.style.marginLeft = 8;
+            sub.Add(win);
+            var score = new Label(m.WinnerScore + " － " + m.LoserScore);
+            score.AddToClassList("tp-mscore");
+            score.AddToClassList("f-num");
+            sub.Add(score);
+            sub.Add(UiComponents.SchoolName(m.LoserName));
             body.Add(sub);
 
             row.Add(body);
@@ -451,9 +457,8 @@ namespace KokoSim.Unity.Tournament
 
             var sub = new VisualElement();
             sub.AddToClassList("tp-team-sub");
-            var name = new Label(c.Name);
-            name.AddToClassList("tp-team-name");
-            sub.Add(name);
+            // 校名は常に太明朝＝SchoolName 部品（設計書16 §1 のシグネチャ規則）。
+            sub.Add(UiComponents.SchoolName(c.Name));
             var chip = UiComponents.RankChipLegacy(c.TierLetter);
             chip.text = "総合 " + c.TierLetter;
             chip.style.marginLeft = 8;
@@ -516,9 +521,7 @@ namespace KokoSim.Unity.Tournament
 
             var head = new VisualElement();
             head.AddToClassList("tp-roster__head");
-            var name = new Label(r.SchoolName);
-            name.AddToClassList("tp-roster__name");
-            head.Add(name);
+            head.Add(UiComponents.SchoolName(r.SchoolName));   // 校名は常に太明朝
             var tag = new Label(r.Tag);
             tag.AddToClassList("tp-roster__tag");
             head.Add(tag);
@@ -548,7 +551,9 @@ namespace KokoSim.Unity.Tournament
         {
             var row = new VisualElement();
             row.AddToClassList("tp-mrow");
-            row.Add(Cell(m.Number, "tp-mc--no"));
+            var no = Cell(m.Number, "tp-mc--no");
+            no.AddToClassList("f-num");   // 背番号はコンデンス数字（UI原則③）
+            row.Add(no);
             row.Add(Cell(m.Name, "tp-mc--name"));
             row.Add(Cell(m.Grade, "tp-mc--grade"));
             row.Add(Cell(m.Hand, "tp-mc--hand"));
@@ -573,6 +578,7 @@ namespace KokoSim.Unity.Tournament
             l.AddToClassList("tp-bar__label");
             var val = new Label(value.ToString());
             val.AddToClassList("tp-bar__val");
+            val.AddToClassList("f-num");   // 数値はコンデンス書体（UI原則③・設計書16 §2）
             top.Add(l);
             top.Add(val);
             bar.Add(top);

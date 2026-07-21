@@ -25,5 +25,22 @@ namespace KokoSim.Unity.Shell
             var calYear = SeasonBaseYear + (yearIndex - 1) + d.YearOffset;
             return calYear + "年" + d.Month + "月" + d.WeekOfMonth + "週目";
         }
+
+        /// <summary>
+        /// 掲示板の升目に載せる短縮形（"M月W週"）。年は升目に載せず <see cref="YearLabel"/> の
+        /// 小書きに回す（設計書16 F1-b 案B）。書式を画面ごとに作らないための単一ソース。
+        /// </summary>
+        public static string CompactLabel(int yearIndex, int week)
+        {
+            var d = Calendar.DateOf(week);
+            return d.Month + "月" + d.WeekOfMonth + "週";
+        }
+
+        /// <summary>暦年の小書き（"YYYY年"）。年度と4月始まりの繰り上がりは CurrentLabel と同じ規則。</summary>
+        public static string YearLabel(int yearIndex, int week)
+        {
+            var d = Calendar.DateOf(week);
+            return (SeasonBaseYear + (yearIndex - 1) + d.YearOffset) + "年";
+        }
     }
 }

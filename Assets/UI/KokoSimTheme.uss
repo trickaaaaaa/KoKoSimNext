@@ -1,15 +1,17 @@
 /* KokoSim スコアボードテーマ（設計書06）。モック mock-home-dashboard.html を UI Toolkit(Flexbox) へ移植。
    UI Toolkit は CSS grid 非対応のため grid は flex で表現。色覚対応の等級カラーを共通言語とする。
-   フォントは丸ゴシック（KokoSimFont, PanelSettings既定）。字間は詰めすぎず親しみやすいポップ調。 */
+   書体は設計書16の3役制（本文=IBM Plex Sans JP / 見出し・校名=Shippori Mincho B1 / 数字=Oswald）＋
+   掲示板のドット(DotGothic16)。役割クラスは tokens.uss の .f-* に集約し、ここでは指定しない。 */
 
 .root {
     flex-grow: 1;
     background-color: #0E1512;   /* --field 深緑 */
     color: #E8ECEA;              /* --chalk */
     font-size: 18px;
-    /* SDF丸ゴ(KokoSimFont)を明示指定。既定テーマの legacy ビットマップフォント(NotInter)を上書きし、
-       全子孫へ継承させる。これが無いとテキストが legacy フォントで拡大描画されて滲む（設計書06）。 */
-    -unity-font-definition: url("project://database/Assets/UI/KokoSimFont.asset?fileID=11400000&guid=aa1b28686c2d84c489628717f9662630&type=2#KokoSimFont");
+    /* 既定フォント＝IBM Plex Sans JP Regular（tokens.uss .ui-root と同一・設計書16 F1-a）。
+       既定テーマの legacy ビットマップフォント(NotInter)を上書きし、全子孫へ継承させる。
+       これが無いとテキストが legacy フォントで拡大描画されて滲む（設計書06）。 */
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Regular.asset?fileID=11400000&guid=1c2f415f2731d410cad039b0f26f6602&type=2#IBMPlexSansJP-Regular");
 }
 
 /* UI Toolkit は Web と違いパネルが固定高。コンテナが flex-shrink で潰れて
@@ -237,7 +239,7 @@
 .grade {
     min-width: 23px;
     -unity-text-align: middle-center;
-    border-radius: 5px;
+    border-radius: 2px;   /* 角タイル（ピル型を廃止・設計書16 F1）*/
     font-size: 16px;
     -unity-font-style: bold;
     padding: 2px 5px;
@@ -444,26 +446,37 @@
     border-bottom-width: 3px; border-bottom-color: #232E28;
     padding-bottom: 12px; margin-bottom: 16px;
 }
-.tp-kicker { font-size: 14px; letter-spacing: 3px; color: #F5C64A; -unity-font-style: bold; }
-.tp-title { font-size: 30px; -unity-font-style: bold; letter-spacing: 1px; color: #E8ECEA; margin-top: 4px; margin-bottom: 6px; white-space: normal; }
-.tp-meta { font-size: 14px; color: #9AA5A0; white-space: normal; }
-
-.tp-lead {
-    background-color: #18211C; border-width: 1px; border-color: #232E28; border-radius: 8px;
-    padding: 14px 16px; font-size: 16px; -unity-font-style: italic; color: #E8ECEA;
-    white-space: normal; margin-bottom: 4px;
+/* 大会名は 32px 超の大見出しなので明朝 Bold（.f-display-lg）。設計書16 §2 の書体表どおり。
+   疑似ボールド（-unity-font-style: bold）は使わない＝実ウェイトで出す。 */
+.tp-title {
+    font-size: 34px; letter-spacing: 2px; color: var(--color-chalk);
+    margin-top: var(--sp-1); margin-bottom: var(--sp-2); white-space: normal;
 }
+.tp-meta { font-size: 14px; color: var(--color-muted); white-space: normal; }
+
+/* リード文は「読み物」だが本文であることに変わりはないのでサンセリフ（明朝は見出し・固有名詞のみ）。
+   疑似イタリックは Plex に実イタリックが無く斜体変形になるため廃止した（design-16 §2）。 */
+.tp-lead {
+    background-color: var(--sf-card); border-width: 0;
+    border-radius: var(--radius-card);
+    padding: 14px 16px; font-size: 16px; color: var(--color-chalk);
+    white-space: normal; margin-bottom: var(--sp-1);
+}
+/* 節見出し（新聞の柱見出し）。縦罫は白に落としアンバーを使わない
+   ＝1画面に何本も出るものをアクセントにすると希少性が壊れる（UI原則②）。 */
 .tp-h2 {
-    font-size: 20px; -unity-font-style: bold; letter-spacing: 1px; color: #E8ECEA;
-    border-left-width: 4px; border-left-color: #F5C64A; padding-left: 11px;
+    font-size: 20px; letter-spacing: 2px; color: var(--color-chalk);
+    border-left-width: 3px; border-left-color: var(--color-muted); padding-left: 11px;
     margin-top: 22px; margin-bottom: 12px;
 }
 
+/* 出場校カード。枠線ではなく面の明度で区切る（UI原則④）。角丸はカードトークンに従う。 */
 .tp-team {
-    flex-direction: row; background-color: #18211C; border-width: 1px; border-color: #232E28;
-    border-radius: 8px; padding: 12px 14px; margin-bottom: 9px;
+    flex-direction: row; background-color: var(--sf-card); border-width: 0;
+    border-radius: var(--radius-card); padding: 12px 14px; margin-bottom: 9px;
 }
-.tp-team--fav { border-color: #F5C64A; }
+/* 優勝候補だけは左端の太罫（新聞の柱）で示す。全周アンバー枠は面を飾りすぎるのでやめた。 */
+.tp-team--fav { border-left-width: 3px; border-left-color: var(--color-lamp); }
 
 .tp-mark { width: 64px; align-items: center; justify-content: flex-start; }
 .tp-mark__sym { font-size: 34px; -unity-font-style: bold; }
@@ -474,18 +487,26 @@
 
 .tp-body { flex-grow: 1; }
 .tp-team-sub { flex-direction: row; align-items: center; flex-wrap: wrap; }
-.tp-team-name { font-size: 18px; -unity-font-style: bold; color: #E8ECEA; }
-.tp-seed { font-size: 13px; color: #9AA5A0; margin-left: 8px; }
+.tp-team-name { font-size: 18px; color: var(--color-chalk); }
+.tp-seed { font-size: 13px; color: var(--color-muted); margin-left: 8px; }
+/* 試合結果のスコア。校名（明朝）と混ぜず独立 Label にしてコンデンス数字を当てる。 */
+.tp-mscore {
+    font-size: 18px; color: var(--color-chalk);
+    margin-left: var(--sp-3); margin-right: var(--sp-3);
+    letter-spacing: 1px;
+}
 .tp-blurb { font-size: 15px; color: #E8ECEA; white-space: normal; margin-top: 5px; margin-bottom: 9px; }
 
 .tp-bars { flex-direction: row; }
 .tp-bar { flex-grow: 1; margin-right: 14px; }
 .tp-bar__top { flex-direction: row; justify-content: space-between; margin-bottom: 3px; }
-.tp-bar__label { font-size: 13px; color: #9AA5A0; }
-.tp-bar__val { font-size: 13px; color: #E8ECEA; }
-.tp-track { height: 6px; background-color: #202A24; border-radius: 3px; border-width: 1px; border-color: #232E28; }
-.tp-fill { height: 100%; background-color: #F5C64A; border-radius: 2px; }
-.tp-fill--def { background-color: #69B98B; }
+.tp-bar__label { font-size: 13px; color: var(--color-muted); }
+/* 数値はコンデンス（.f-num を C# 側で付与）。桁が揃うよう右寄せにする（UI原則③）。 */
+.tp-bar__val { font-size: var(--fs-num); color: var(--color-chalk); -unity-text-align: middle-right; }
+/* 丸端バー → 角端（design-16 §5）。トラックの枠線も落とし、面の明度差だけで示す。 */
+.tp-track { height: 6px; background-color: var(--sf-inset); border-radius: 0; border-width: 0; }
+.tp-fill { height: 100%; background-color: var(--color-lamp); border-radius: 0; }
+.tp-fill--def { background-color: var(--color-good); }
 
 /* ── 大会展望：追加部品（トークン参照。UI-BUILD-METHOD Step 2「辞書に足してから使う」） ──
    ビュー切替（トーナメント⇄展望）・空状態・注目選手カード・登録メンバー表。 */
@@ -981,7 +1002,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     background-color: #18211C;   /* --sf-card */
     border-width: 1px;
     border-color: #232E28;       /* --color-line */
-    border-radius: 16px;         /* --radius-modal */
+    border-radius: var(--radius-modal);
     flex-direction: column;
     align-items: center;
     padding: 28px 40px;

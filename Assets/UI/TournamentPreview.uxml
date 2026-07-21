@@ -5,6 +5,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="TopBar" src="Components/TopBar.uxml" />
     <Style src="tokens.uss" />
+    <Style src="Components/components.uss" />
     <Style src="KokoSimTheme.uss" />
     <ui:VisualElement class="root ui-root">
 
@@ -26,8 +27,11 @@
             <!-- ビュー1：トーナメント（自校の勝ち上がりと各回戦の結果） -->
             <ui:VisualElement name="tp-view-bracket">
                 <ui:VisualElement class="tp-masthead">
-                    <ui:Label class="tp-kicker" text="TOURNAMENT ── 今大会の経過" />
-                    <ui:Label name="tb-title" class="tp-title" text="" />
+                    <ui:VisualElement class="rule-head">
+                        <ui:VisualElement class="rule-head__rule" />
+                        <ui:Label class="rule-head__text f-display" text="今大会の経過" />
+                    </ui:VisualElement>
+                    <ui:Label name="tb-title" class="tp-title f-display-lg" text="" />
                     <ui:Label name="tb-meta" class="tp-meta" text="" />
                 </ui:VisualElement>
 
@@ -37,7 +41,7 @@
                     <ui:Button name="tp-go-preview" class="tp-cta" text="大会展望を見る　▶" />
                 </ui:VisualElement>
 
-                <ui:Label name="tb-h-tree" class="tp-h2" text="トーナメント表" />
+                <ui:Label name="tb-h-tree" class="tp-h2 f-display" text="トーナメント表" />
                 <ui:ScrollView name="tp-bracket-scroll" mode="VerticalAndHorizontal" class="brk-scroll">
                     <ui:VisualElement name="tp-bracket" class="brk-tree" />
                     <!-- ラウンド名の帯。樹形図の上に浮かせ、縦スクロール量ぶん下げて上端に貼り付ける
@@ -45,18 +49,21 @@
                     <ui:VisualElement name="tp-bracket-head" class="brk-head" />
                 </ui:ScrollView>
 
-                <ui:Label name="tb-h-mine" class="tp-h2" text="自校の戦績" />
+                <ui:Label name="tb-h-mine" class="tp-h2 f-display" text="自校の戦績" />
                 <ui:VisualElement name="tp-my-matches" />
 
-                <ui:Label name="tb-h-others" class="tp-h2" text="他校の結果" />
+                <ui:Label name="tb-h-others" class="tp-h2 f-display" text="他校の結果" />
                 <ui:VisualElement name="tp-matches" />
             </ui:VisualElement>
 
             <!-- ビュー2：大会展望（優勝争いの構図・注目選手・登録メンバー） -->
             <ui:VisualElement name="tp-view-preview">
                 <ui:VisualElement class="tp-masthead">
-                    <ui:Label class="tp-kicker" text="TOURNAMENT PREVIEW ── 大会展望" />
-                    <ui:Label name="tp-title" class="tp-title" text="" />
+                    <ui:VisualElement class="rule-head">
+                        <ui:VisualElement class="rule-head__rule" />
+                        <ui:Label class="rule-head__text f-display" text="大会展望" />
+                    </ui:VisualElement>
+                    <ui:Label name="tp-title" class="tp-title f-display-lg" text="" />
                     <ui:Label name="tp-meta" class="tp-meta" text="" />
                 </ui:VisualElement>
 
@@ -64,13 +71,13 @@
 
                 <ui:Label name="tp-lead" class="tp-lead" text="" />
 
-                <ui:Label class="tp-h2" text="優勝争いの構図" />
+                <ui:Label class="tp-h2 f-display" text="優勝争いの構図" />
                 <ui:VisualElement name="tp-contenders" />
 
-                <ui:Label class="tp-h2" text="注目選手" />
+                <ui:Label class="tp-h2 f-display" text="注目選手" />
                 <ui:VisualElement name="tp-notables" class="tp-players" />
 
-                <ui:Label class="tp-h2" text="出場校メンバー" />
+                <ui:Label class="tp-h2 f-display" text="出場校メンバー" />
                 <ui:VisualElement name="tp-rosters" />
             </ui:VisualElement>
 

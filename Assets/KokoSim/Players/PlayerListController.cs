@@ -36,8 +36,8 @@ namespace KokoSim.Unity.Players
             SetText("sort-btn", "並び: " + v.SortLabel);
             SetText("filter-btn", "表示: " + v.FilterLabel);
 
-            // 共通トップバー（スコアボード）: 現在日付（全画面共有の GameClock）とチーム総合力ランクを埋める。
-            SetText("week", KokoSim.Unity.Shell.GameClock.CurrentLabel());
+            // 共通トップバー（スコアボード）: 掲示板の升目（週・夏予選までの残り）とチーム総合力ランクを埋める。
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
 
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null)

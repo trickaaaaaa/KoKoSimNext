@@ -85,6 +85,50 @@ namespace KokoSim.Unity.Components
             return chip;
         }
 
+        // ===== SchoolName（設計書16 §4-3。校名は常に太明朝） =====
+
+        /// <summary>
+        /// 校名＋小書き（都道府県・シード等）。校名だけを太明朝（.f-display）にし、
+        /// 小書きはサンセリフのまま残す＝明朝を固有名詞に絞る（design-16 §1 の境界規則）。
+        /// large は「1画面で1つだけ大きく出す」主役校用（UI原則②）。
+        /// </summary>
+        public static VisualElement SchoolName(string name, string sub = "", bool large = false)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("school-name");
+            if (large) box.AddToClassList("school-name--lg");
+
+            var main = new Label(name);
+            main.AddToClassList("school-name__main");
+            main.AddToClassList("f-display");   // 太明朝（ExtraBold。26px以下はこちらでないと横画が残らない）
+            box.Add(main);
+
+            if (!string.IsNullOrEmpty(sub))
+            {
+                var s = new Label(sub);
+                s.AddToClassList("school-name__sub");
+                box.Add(s);
+            }
+            return box;
+        }
+
+        // ===== RuleHead（新聞の柱見出し。英語 eyebrow の置き換え） =====
+
+        /// <summary>縦罫＋明朝の小見出し。アンバーは使わない（見出しは頻出するため）。</summary>
+        public static VisualElement RuleHead(string text)
+        {
+            var head = new VisualElement();
+            head.AddToClassList("rule-head");
+            var rule = new VisualElement();
+            rule.AddToClassList("rule-head__rule");
+            head.Add(rule);
+            var label = new Label(text);
+            label.AddToClassList("rule-head__text");
+            label.AddToClassList("f-display");
+            head.Add(label);
+            return head;
+        }
+
         // ===== AbilityRow =====
 
         /// <summary>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ScoreboardStrip（部品辞書 / 設計書16 §4-1）。TopBar 中央セルの電光掲示板。
+     黒面に升目を切り、値を1文字1マスのドット文字で並べる（F1-b 案B「升目グリッド」）。
+     升目のマスは C# 側 UiComponents.FillScoreboardCells が値文字列から生成するので、
+     ここに置くのは「マスの入れ物」だけ。ラベル・添え字は各画面コントローラが name で埋める。
+
+     出す情報は TopBar の既存情報（週・カウントダウン）に限る。試合スコアは出さない
+     ＝掲示板から借りるのは視覚言語であって情報ではない（design-16 の第1節）。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="sbs">
+        <ui:VisualElement class="sbs-group">
+            <ui:VisualElement class="sbs-group__head">
+                <ui:Label class="sbs-group__k f-dot" text="現在" />
+                <ui:Label name="week-year" class="sbs-group__sup f-dot" text="2026年" />
+            </ui:VisualElement>
+            <ui:VisualElement name="week-cells" class="sbs-cells" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="sbs-gap" />
+
+        <ui:VisualElement class="sbs-group">
+            <ui:VisualElement class="sbs-group__head">
+                <ui:Label name="countdown-k" class="sbs-group__k f-dot" text="夏予選まで" />
+            </ui:VisualElement>
+            <ui:VisualElement name="countdown-cells" class="sbs-cells" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

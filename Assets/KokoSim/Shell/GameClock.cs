@@ -61,5 +61,8 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>共通トップバー「現在」表示（YYYY年M月W週目）。</summary>
         public static string CurrentLabel() => SeasonClock.CurrentLabel(YearIndex, Week);
+
+        /// <summary>夏予選開幕までの残り週（0以下＝開催中）。トップバーのカウントダウンの単一ソース。</summary>
+        public static int WeeksUntilSummer => Calendar.SummerTournamentStartWeek - Week;
     }
 }
