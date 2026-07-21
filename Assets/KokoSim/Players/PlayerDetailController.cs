@@ -22,11 +22,22 @@ namespace KokoSim.Unity.Players
         // 能力バランスの半径比（軸ラベルは出さず、左の能力バー一覧が凡例を兼ねる）。
         private const float RadiusFactor = 0.42f;
 
-        // 球種変化チャート（プロスピ風）。
+        // 球種変化チャート（プロスピ風・扇形セクター塗り）。
+        // 扇の長さ＝変化量 / 幅＝固定（ストレートのみ伸びで可変） / 色＝キレ等級（RankPalette）。
         private VisualElement _chart;
-        private readonly List<(Vector2 End, Color Col)> _chartLines = new List<(Vector2, Color)>();
+        private readonly List<PitchArc> _chartArcs = new List<PitchArc>();
         private Vector2 _chartCenter;
-        private const float BallR = 15f;
+        private const float BallR = 17f;
+
+        // 扇1枚分の描画パラメータ（LayoutChart で確定し OnPaintChart が読む）。
+        private struct PitchArc
+        {
+            public float AngleDeg;    // 変化方向（画面座標系・0度=右／時計回り）
+            public float HalfDeg;     // 扇の半幅
+            public float Inner;       // 内半径（ボール縁の外側）
+            public float Outer;       // 外半径（＝変化量）
+            public Color Col;         // キレ等級色
+        }
 
         private void OnEnable()
         {
@@ -138,7 +149,7 @@ namespace KokoSim.Unity.Players
         {
             if (_chart == null) return;
             _chart.Clear();            // ラベル除去（generateVisualContent はエレメント自体に残る）
-            _chartLines.Clear();
+            _chartArcs.Clear();
             _chart.style.display = has ? DisplayStyle.Flex : DisplayStyle.None;
             if (!has) { _chart.MarkDirtyRepaint(); return; }
 
@@ -155,7 +166,7 @@ namespace KokoSim.Unity.Players
             _chart.MarkDirtyRepaint();
         }
 
-        // 中心・半径から各ラベルを変化方向×変化量の位置へ置き、線の終点を記録する。
+        // 中心・半径から扇の寸法を決め、各ラベルを扇の先端の外側へ置く。
         private void LayoutChart()
         {
             if (_chart == null) return;
@@ -164,7 +175,7 @@ namespace KokoSim.Unity.Players
 
             _chartCenter = new Vector2(rect.width * 0.5f, rect.height * 0.5f);
             var radius = Mathf.Min(rect.width, rect.height) * 0.40f;
-            _chartLines.Clear();
+            _chartArcs.Clear();
 
             foreach (var child in _chart.Children())
             {
@@ -175,18 +186,29 @@ namespace KokoSim.Unity.Players
                 if (dir.sqrMagnitude < 0.0001f) dir = new Vector2(0f, -1f);
                 dir = dir.normalized;
 
-                // 変化量が小さくても中心から十分離す（半径の60〜100%）。
-                var reach = radius * (0.60f + 0.40f * Mathf.Clamp01(pt.Break01));
-                var end = _chartCenter + dir * reach;
+                var inner = BallR + 4f;
+                // 扇の長さ＝変化量。ストレートは Break01 が短尺固定なので自然に短い扇になる。
+                var outer = Mathf.Max(inner + 8f, Mathf.Lerp(radius * 0.34f, radius * 0.92f, Mathf.Clamp01(pt.Break01)));
+                // 幅は固定。ストレートだけ「伸び」を幅で表す（1-B: 長さではなく太さで読ませる）。
+                var half = pt.IsFastball ? Mathf.Lerp(13f, 26f, Mathf.Clamp01(pt.Extend01)) : 15f;
+
+                _chartArcs.Add(new PitchArc
+                {
+                    AngleDeg = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg,
+                    HalfDeg = half,
+                    Inner = inner,
+                    Outer = outer,
+                    Col = RankPalette.Of(pt.Kire),
+                });
 
                 var lw = child.resolvedStyle.width;
                 var lh = child.resolvedStyle.height;
                 if (lw < 1f) lw = 96f;
                 if (lh < 1f) lh = 28f;
-                child.style.left = end.x - lw * 0.5f;
-                child.style.top = end.y - lh * 0.5f;
-
-                _chartLines.Add((end, RankPalette.Of(pt.Kire)));
+                var end = _chartCenter + dir * (outer + 22f);
+                // ラベルはチャート矩形の内側に収める（外周方向でも切れないように）。
+                child.style.left = Mathf.Clamp(end.x - lw * 0.5f, 0f, Mathf.Max(0f, rect.width - lw));
+                child.style.top = Mathf.Clamp(end.y - lh * 0.5f, 0f, Mathf.Max(0f, rect.height - lh));
             }
             _chart.MarkDirtyRepaint();
         }
@@ -197,41 +219,100 @@ namespace KokoSim.Unity.Players
             var c = _chartCenter;
             if (c.x < 1f && c.y < 1f) return;
 
-            // 変化方向の点線（中心ボール縁から終点まで、色＝キレ等級）。
-            foreach (var ln in _chartLines)
+            // 各球種の扇（塗り＝キレ等級色の半透明、先端に同色の帯で変化量の端を明示）。
+            foreach (var a in _chartArcs)
             {
-                var d = ln.End - c;
-                var dist = d.magnitude;
-                if (dist < 1f) continue;
-                d /= dist;
-                for (var s = BallR + 3f; s < dist; s += 7f)
-                {
-                    var pos = c + d * s;
-                    p.BeginPath();
-                    p.Arc(pos, 2.3f, new Angle(0f, AngleUnit.Degree), new Angle(360f, AngleUnit.Degree));
-                    p.fillColor = ln.Col; p.Fill();
-                }
+                var a1 = new Angle(a.AngleDeg - a.HalfDeg, AngleUnit.Degree);
+                var a2 = new Angle(a.AngleDeg + a.HalfDeg, AngleUnit.Degree);
+
+                p.BeginPath();
+                p.MoveTo(PolarPoint(c, a.Inner, a.AngleDeg - a.HalfDeg));
+                p.Arc(c, a.Inner, a1, a2);
+                p.Arc(c, a.Outer, a2, a1, ArcDirection.CounterClockwise);
+                p.ClosePath();
+                p.fillColor = new Color(a.Col.r, a.Col.g, a.Col.b, 0.26f);
+                p.Fill();
+
+                p.BeginPath();
+                p.MoveTo(PolarPoint(c, a.Outer, a.AngleDeg - a.HalfDeg));
+                p.Arc(c, a.Outer, a1, a2);
+                p.strokeColor = new Color(a.Col.r, a.Col.g, a.Col.b, 0.90f);
+                p.lineWidth = 2.5f;
+                p.Stroke();
             }
 
-            // 中心のボール（白丸＋赤い縫い目2本）。
+            DrawBall(p, c);
+        }
+
+        // 中心のボール（2-A: ベジェ縫い目＋ステッチ、淡いハイライト、薄い影）。
+        private static void DrawBall(Painter2D p, Vector2 c)
+        {
+            // 接地影（扇の上に浮かせず、ボールの下に薄く敷くだけ）。
             p.BeginPath();
-            p.Arc(c, BallR, new Angle(0f, AngleUnit.Degree), new Angle(360f, AngleUnit.Degree));
+            p.Arc(c + new Vector2(0f, 2.5f), BallR * 1.04f, Deg(0f), Deg(360f));
+            p.fillColor = new Color(0f, 0f, 0f, 0.30f); p.Fill();
+
+            // 球体。
+            p.BeginPath();
+            p.Arc(c, BallR, Deg(0f), Deg(360f));
             p.fillColor = new Color(0.941f, 0.957f, 0.918f); p.Fill();
+
+            // 左上のハイライト（艶。装飾のグローではなく球形を示す面）。
             p.BeginPath();
-            p.Arc(c, BallR, new Angle(0f, AngleUnit.Degree), new Angle(360f, AngleUnit.Degree));
+            p.Arc(c + new Vector2(-BallR * 0.30f, -BallR * 0.32f), BallR * 0.46f, Deg(0f), Deg(360f));
+            p.fillColor = new Color(1f, 1f, 1f, 0.55f); p.Fill();
+
+            // 縁取り（背景から球を切り出す最小限の線）。
+            p.BeginPath();
+            p.Arc(c, BallR, Deg(0f), Deg(360f));
             p.strokeColor = new Color(0.30f, 0.35f, 0.30f); p.lineWidth = 1f; p.Stroke();
 
+            // 縫い目2本＝左右対称のベジェ曲線。各6個のステッチ短線を曲線の接線に直交して置く。
             var red = new Color(0.85f, 0.30f, 0.22f);
-            p.strokeColor = red; p.lineWidth = 1.6f;
-            p.BeginPath();
-            p.Arc(c + new Vector2(-BallR * 1.35f, 0f), BallR * 1.55f,
-                new Angle(-32f, AngleUnit.Degree), new Angle(32f, AngleUnit.Degree));
-            p.Stroke();
-            p.BeginPath();
-            p.Arc(c + new Vector2(BallR * 1.35f, 0f), BallR * 1.55f,
-                new Angle(148f, AngleUnit.Degree), new Angle(212f, AngleUnit.Degree));
-            p.Stroke();
+            DrawSeam(p, c, -1f, red);
+            DrawSeam(p, c, 1f, red);
         }
+
+        // side = -1 で左の縫い目、+1 で右の縫い目（中心へ向かって弓なりに反る）。
+        private static void DrawSeam(Painter2D p, Vector2 c, float side, Color red)
+        {
+            var p0 = c + new Vector2(side * BallR * 0.66f, -BallR * 0.80f);
+            var c1 = c + new Vector2(-side * BallR * 0.24f, -BallR * 0.44f);
+            var c2 = c + new Vector2(-side * BallR * 0.24f, BallR * 0.44f);
+            var p3 = c + new Vector2(side * BallR * 0.66f, BallR * 0.80f);
+
+            p.BeginPath();
+            p.MoveTo(p0);
+            p.BezierCurveTo(c1, c2, p3);
+            p.strokeColor = red; p.lineWidth = 1.4f; p.Stroke();
+
+            for (var i = 0; i < 6; i++)
+            {
+                var t = 0.10f + 0.16f * i;
+                var pos = Cubic(p0, c1, c2, p3, t);
+                var tan = Cubic(p0, c1, c2, p3, t + 0.02f) - Cubic(p0, c1, c2, p3, t - 0.02f);
+                if (tan.sqrMagnitude < 0.0001f) continue;
+                var n = new Vector2(-tan.y, tan.x).normalized * (BallR * 0.20f);
+                p.BeginPath();
+                p.MoveTo(pos - n);
+                p.LineTo(pos + n);
+                p.strokeColor = red; p.lineWidth = 1.1f; p.Stroke();
+            }
+        }
+
+        private static Vector2 Cubic(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float t)
+        {
+            var u = 1f - t;
+            return u * u * u * p0 + 3f * u * u * t * p1 + 3f * u * t * t * p2 + t * t * t * p3;
+        }
+
+        private static Vector2 PolarPoint(Vector2 c, float r, float deg)
+        {
+            var rad = deg * Mathf.Deg2Rad;
+            return c + new Vector2(Mathf.Cos(rad) * r, Mathf.Sin(rad) * r);
+        }
+
+        private static Angle Deg(float d) => new Angle(d, AngleUnit.Degree);
 
         private static VisualElement BuildSkill(SkillInfo s)
         {
