@@ -210,7 +210,10 @@ namespace KokoSim.Unity.Players
                 var lh = child.resolvedStyle.height;
                 if (lw < 1f) lw = 96f;
                 if (lh < 1f) lh = 28f;
-                var end = PolarPoint(_chartCenter, outer + 26f, angleDeg);
+                // ラベルは扇の先端の「外側」へ逃がす（チップの近い辺が先端に接する位置）。
+                // 隣り合う球種どうしのチップ重なりも、方向ごとに外へ押し出すことで減る。
+                var tip = PolarPoint(_chartCenter, outer + 12f, angleDeg);
+                var end = tip + new Vector2(dir.x * lw * 0.5f, dir.y * lh * 0.5f);
                 // ラベルはチャート矩形の内側に収める（外周方向でも切れないように）。
                 child.style.left = Mathf.Clamp(end.x - lw * 0.5f, 0f, Mathf.Max(0f, rect.width - lw));
                 child.style.top = Mathf.Clamp(end.y - lh * 0.5f, 0f, Mathf.Max(0f, rect.height - lh));
