@@ -1,0 +1,115 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   MatchPreview.uss — 試合開始前（対戦カード）画面の配置のみ（UI-BUILD-METHOD Step 4）
+   ───────────────────────────────────────────────────────────────────────
+   見た目の最小単位は components.uss（部品辞書）。ここは左右2カラムの割り付けなど
+   「この画面固有の並べ方」だけを持ち、色・余白・角丸は tokens を参照する。
+   gap/grid/擬似要素は使わない（USS非対応）。固定寸法セクションは flex-shrink:0。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.mp-root {
+    flex-grow: 1;
+    background-color: var(--color-field);
+}
+
+/* 画面専用ヘッダー（共通TopBarの代替・全幅ストリップ）。ナビタブや「今週を進める」は出さない。 */
+.mp-topbar {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-header);
+    flex-shrink: 0;
+    background-color: var(--color-strip);
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+}
+.mp-title { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; }
+.mp-match { font-size: var(--fs-label); color: var(--color-muted); margin-left: var(--sp-4); }
+
+/* ── 本体：左＝自校／右＝相手校の完全ミラー2カラム（同じ幅・同じ構成） ── */
+.mp-body {
+    flex-direction: row;
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+}
+.mp-side {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-panel);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-2);
+    padding-bottom: var(--sp-3);
+    margin-right: var(--sp-3);
+}
+/* 右カラムは右余白を作らない（左右の外周を対称に見せる）。USSは last-child 非対応のため修飾子で指定。 */
+.mp-side--right { margin-right: 0; }
+
+/* 校名ヘッダー行（キャプション・校名・先攻後攻・総合ランク）。線は引かず余白と地色で仕切る。 */
+.mp-side__head {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    flex-shrink: 0;
+}
+.mp-side__cap {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    letter-spacing: 1px;
+    margin-right: var(--sp-2);
+}
+.mp-side__name {
+    font-size: var(--fs-page);
+    color: var(--color-chalk);
+    -unity-font-style: bold;
+    margin-right: var(--sp-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mp-side__spacer { flex-grow: 1; }
+.mp-side__k { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+.mp-side__rank { flex-direction: row; }
+.mp-side__value {
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+    -unity-text-align: middle-right;
+    margin-left: var(--sp-1);
+}
+
+/* 6角形（部品辞書 RadarChart が描く。軸ラベルは radar-axis 系）。
+   スタメンが増える編成（DH制＝打順外の先発投手行が付く）では、あふれさせず6角形側を縮める。 */
+.mp-radar {
+    height: 300px;
+    min-height: 220px;
+    flex-shrink: 1;
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-panel);
+    margin-bottom: var(--sp-2);
+}
+
+/* スタメン一覧（行は部品辞書の MLineupRow ＝ 行高32px）。 */
+.mp-lineup { flex-grow: 1; }
+.mp-lineup .mlineup-row { background-color: var(--color-panel-deep); }
+
+/* ── フッター：主要操作は「試合開始」1つだけ・大きく（UI原則⑦） ── */
+.mp-foot {
+    flex-shrink: 0;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-4);
+}
+.mp-cta {
+    height: 56px;
+    flex-shrink: 0;
+    background-color: var(--color-lamp);
+    color: var(--color-ink);
+    font-size: var(--fs-body);
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: var(--radius-panel);
+}
+.mp-cta:hover { background-color: var(--color-lamp-hi); }

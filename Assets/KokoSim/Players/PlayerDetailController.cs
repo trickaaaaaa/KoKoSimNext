@@ -17,7 +17,10 @@ namespace KokoSim.Unity.Players
         private PlayerDetailState _state;
         private VisualElement _root;
         private Button _designateButton;
-        private readonly List<RadarAxis> _radarAxes = new List<RadarAxis>();
+        private RadarChartView _radar;
+
+        // 能力バランスの半径比（軸ラベルは出さず、左の能力バー一覧が凡例を兼ねる）。
+        private const float RadiusFactor = 0.42f;
 
         // 球種変化チャート（プロスピ風）。
         private VisualElement _chart;
@@ -41,12 +44,9 @@ namespace KokoSim.Unity.Players
                 if (_state.DesignateCaptain(PlayerSelection.Index)) Render();
             };
 
-            var radar = _root.Q<VisualElement>("radar");
-            if (radar != null)
-            {
-                radar.generateVisualContent += OnPaintRadar;
-                radar.RegisterCallback<GeometryChangedEvent>(_ => radar.MarkDirtyRepaint());
-            }
+            // レーダーは部品辞書の共通部品（チーム総合力・練習試合・試合開始前と同一の描画）。
+            _radar = new RadarChartView(_root.Q<VisualElement>("radar"), RadiusFactor,
+                labelSize: RadarLabelSize.None);
 
             _chart = _root.Q<VisualElement>("pitch-chart");
             if (_chart != null)
@@ -104,11 +104,8 @@ namespace KokoSim.Unity.Players
             BuildStatRow("tourn-stats", v.TournamentStats);
             BuildStatRow("career-stats", v.CareerStats);
 
-            // レーダー描画データ更新。
-            _radarAxes.Clear();
-            _radarAxes.AddRange(v.Radar);
-            var radar = _root.Q<VisualElement>("radar");
-            if (radar != null) radar.MarkDirtyRepaint();
+            // レーダー描画データ更新（塗り色は総合ランク連動＝部品辞書の既定）。
+            _radar.SetData(v.Radar, v.OverallGrade);
         }
 
         // ===== 行ビルダー =====
@@ -257,63 +254,6 @@ namespace KokoSim.Unity.Players
                 var k = new Label(s.Label); k.AddToClassList("pd2-stat__k"); cell.Add(k);
                 box.Add(cell);
             }
-        }
-
-        // ===== レーダー描画（Painter2D） =====
-
-        private void OnPaintRadar(MeshGenerationContext ctx)
-        {
-            var n = _radarAxes.Count;
-            if (n < 3) return;
-            var rect = ctx.visualElement.contentRect;
-            if (rect.width < 4 || rect.height < 4) return;
-
-            var cx = rect.width * 0.5f;
-            var cy = rect.height * 0.5f;
-            var radius = Mathf.Min(rect.width, rect.height) * 0.42f;
-            var p = ctx.painter2D;
-
-            // グリッド（0.5, 1.0 リング）。
-            var grid = new Color(0.24f, 0.33f, 0.27f);
-            foreach (var ring in new[] { 0.5f, 1.0f })
-            {
-                p.BeginPath();
-                for (var i = 0; i < n; i++)
-                {
-                    var pt = Vertex(cx, cy, radius * ring, i, n);
-                    if (i == 0) p.MoveTo(pt); else p.LineTo(pt);
-                }
-                p.ClosePath();
-                p.strokeColor = grid; p.lineWidth = 1f; p.Stroke();
-            }
-            // スポーク。
-            for (var i = 0; i < n; i++)
-            {
-                p.BeginPath();
-                p.MoveTo(new Vector2(cx, cy));
-                p.LineTo(Vertex(cx, cy, radius, i, n));
-                p.strokeColor = grid; p.lineWidth = 1f; p.Stroke();
-            }
-            // 値ポリゴン。
-            p.BeginPath();
-            for (var i = 0; i < n; i++)
-            {
-                var val = Mathf.Clamp01(_radarAxes[i].Value01);
-                var pt = Vertex(cx, cy, radius * Mathf.Max(0.04f, val), i, n);
-                if (i == 0) p.MoveTo(pt); else p.LineTo(pt);
-            }
-            p.ClosePath();
-            p.fillColor = new Color(0.961f, 0.776f, 0.290f, 0.28f); // #F5C64A 28%
-            p.Fill();
-            p.strokeColor = new Color(0.961f, 0.776f, 0.290f, 1f);
-            p.lineWidth = 2f; p.Stroke();
-        }
-
-        private static Vector2 Vertex(float cx, float cy, float r, int i, int n)
-        {
-            // 頂点は真上始点、時計回り。
-            var ang = -Mathf.PI / 2f + (Mathf.PI * 2f) * i / n;
-            return new Vector2(cx + Mathf.Cos(ang) * r, cy + Mathf.Sin(ang) * r);
         }
 
         // ===== 補助 =====
