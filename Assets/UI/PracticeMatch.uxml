@@ -15,23 +15,15 @@
 
       <ui:VisualElement class="pm-main">
 
-        <!-- 見出し（週・自校・資金） -->
+        <!-- 見出し（自校の総合と1試合あたりの費用。資金残高は共通トップバーが持つ） -->
         <ui:VisualElement class="pm-masthead">
           <ui:Label class="pm-kicker" text="PRACTICE ── 練習試合" />
           <ui:VisualElement class="pm-mastline">
             <ui:Label name="pm-own" class="pm-title" text="" />
             <ui:VisualElement class="pm-mastmeta">
               <ui:VisualElement class="pm-kv">
-                <ui:Label class="pm-kv__k" text="資金" />
-                <ui:Label name="pm-funds" class="pm-kv__v" text="" />
-              </ui:VisualElement>
-              <ui:VisualElement class="pm-kv">
-                <ui:Label class="pm-kv__k" text="費用" />
+                <ui:Label class="pm-kv__k" text="1試合あたりの費用" />
                 <ui:Label name="pm-cost" class="pm-kv__v" text="" />
-              </ui:VisualElement>
-              <ui:VisualElement class="pm-kv">
-                <ui:Label class="pm-kv__k" text="現在" />
-                <ui:Label name="pm-week" class="pm-kv__v" text="" />
               </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>

@@ -160,13 +160,12 @@
 
 /* ── 右カラム：6角形と指標 ───────────────────────────────── */
 .pm-radar {
-    height: 240px;
+    height: 190px;
     flex-shrink: 0;
     background-color: var(--sf-inset);
     border-radius: var(--radius-panel);
 }
 .pm-factors {
-    flex-shrink: 0;
     margin-top: var(--sp-3);
 }
 .pm-axis {
@@ -185,6 +184,7 @@
 /* ── 申込フッター（主要操作は1つだけ・大きく） ───────────────── */
 .pm-foot {
     flex-grow: 1;
+    flex-shrink: 0;
     justify-content: flex-end;
     margin-top: var(--sp-3);
 }
