@@ -57,29 +57,31 @@ public static class StrengthTeamFactory
         // 1ビットも変えない（裏試合の決定論保存）。
         var salt = 0x50E1_0000UL;
         var nameSalt = 0x4E17_0000UL;      // 氏名用の Fork ソルト（主RNG非消費）
+        // 同一チーム内で下の名前が被らないよう、採用済みの名前を持ち回る（苗字の重複はOK＝現実にもある）。
+        var usedGiven = new HashSet<string>();
         var profileSalt = 0x6A17_0000UL;   // 投打・学年用の Fork ソルト（主RNG非消費）
         // 背番号は高校野球の慣例に沿って採番: 先発の野手＝守備位置番号(2〜9)、エース＝1、控え野手＝10〜17、控え投手＝18〜。
         foreach (var pos in FieldSlots)
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: true);
-            order.Add(PositionPlayer(pos, strength, rng, pc, salt++, GenName(vocab, rng, ref nameSalt))
+            order.Add(PositionPlayer(pos, strength, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven))
                 with { UniformNumber = PositionNumber(pos), Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
         var acePr = Profile(rc, rng, ref profileSalt, starter: true);
-        order.Add(Pitcher(GenName(vocab, rng, ref nameSalt), strength, rng, pc, salt++, ac, archSalt++)
+        order.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength, rng, pc, salt++, ac, archSalt++)
             with { UniformNumber = 1, Throws = acePr.Throws, Bats = acePr.Bats, Grade = acePr.Grade });
 
         var bullpen = new List<Player>();
         foreach (var (number, drop) in new[] { (18, 4.0), (19, 2.0) })
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
-            bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt), strength - drop, rng, pc, salt++, ac, archSalt++)
+            bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - drop, rng, pc, salt++, ac, archSalt++)
                 with { UniformNumber = number, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
         // 背番号20（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
         var relief20 = rng.Fork(0x9A20_0000UL);
         var pr20 = Profile(rc, rng, ref profileSalt, starter: false);
-        bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt), strength - 6, relief20, pc, salt++, ac, archSalt++)
+        bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - 6, relief20, pc, salt++, ac, archSalt++)
             with { UniformNumber = 20, Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade });
 
         // 控え（全員生成・ベンチ入りメンバとして背番号10〜を採番）。能力・氏名とも Fork ストリーム由来＝
@@ -91,7 +93,7 @@ public static class StrengthTeamFactory
         {
             var ability = rng.Fork(benchSalt++);   // 控えの能力ロールは Fork（主RNG非消費）
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
-            bench.Add(PositionPlayer(BenchSlots[i], strength - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt))
+            bench.Add(PositionPlayer(BenchSlots[i], strength - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven))
                 with { UniformNumber = 10 + i, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
 
@@ -135,9 +137,13 @@ public static class StrengthTeamFactory
         _ => 0,
     };
 
-    /// <summary>氏名を Fork（親状態非消費）で生成する。主RNGの消費列を変えないため決定論を保つ。</summary>
-    private static string GenName(PlayerNameVocab vocab, IRandomSource rng, ref ulong nameSalt)
-        => PlayerNameGenerator.Generate(vocab, rng.Fork(nameSalt++));
+    /// <summary>
+    /// 氏名を Fork（親状態非消費）で生成する。主RNGの消費列を変えないため決定論を保つ。
+    /// 下の名前の重複回避リロールも Fork ストリーム内で完結する。
+    /// </summary>
+    private static string GenName(PlayerNameVocab vocab, IRandomSource rng, ref ulong nameSalt,
+        ISet<string> usedGiven)
+        => PlayerNameGenerator.Generate(vocab, rng.Fork(nameSalt++), usedGiven);
 
     private static int Ability(double center, IRandomSource rng)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(center, 6)), 10, 99);
