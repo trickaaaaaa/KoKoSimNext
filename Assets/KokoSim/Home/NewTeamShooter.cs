@@ -41,7 +41,7 @@ namespace KokoSim.Unity.Home
 
             // 候補を選び替える（右ペインが追従することの確認）。
             var rows = doc.rootVisualElement.Q<ScrollView>("nt-rows");
-            var picked = PickRow(rows, 3);
+            var picked = PickRow(rows, 6);
             if (!picked) Debug.LogWarning("[NT] 候補行が3行未満（選び替えショットは同じ絵になる）");
             yield return null; yield return null;
             yield return Capture(doc, "01-designation-picked");
@@ -54,6 +54,16 @@ namespace KokoSim.Unity.Home
             Debug.Log("[NT] after confirm pending=" + NewTeamService.Pending
                 + " captain=" + CaptainName());
             yield return Capture(doc, "02-home-after");
+
+            // 引退した3年が選手一覧から消えていること（引退フラグ方式の受け入れ）。
+            var list = Open("PlayerList");
+            if (list == null) Debug.LogError("[NT] PlayerList が見つからない");
+            else
+            {
+                yield return null; yield return null;
+                Debug.Log("[NT] roster=" + RosterService.Roster.Count + " active=" + RosterService.Active.Count);
+                yield return Capture(list, "03-players-after");
+            }
 
             Debug.Log("[NT] DONE all shots");
         }
@@ -95,18 +105,20 @@ namespace KokoSim.Unity.Home
         }
 
         // HomeDashboard を一度落として付け直す（OnEnable を走らせてモーダルを開かせる）。
-        private static UIDocument Reopen()
+        private static UIDocument Reopen() => Open("HomeDashboard");
+
+        // 指定画面だけをアクティブにして開き直す（OnEnable を確実に走らせる）。
+        private static UIDocument Open(string screen)
         {
-            UIDocument home = null;
+            UIDocument target = null;
             foreach (var d in Resources.FindObjectsOfTypeAll<UIDocument>())
             {
                 if (!d.gameObject.scene.IsValid()) continue;
-                var isHome = d.gameObject.name == "HomeDashboard";
+                if (d.gameObject.name == screen) target = d;
                 d.gameObject.SetActive(false);
-                if (isHome) home = d;
             }
-            if (home != null) home.gameObject.SetActive(true);
-            return home;
+            if (target != null) target.gameObject.SetActive(true);
+            return target;
         }
 
         private IEnumerator Capture(UIDocument doc, string file)
