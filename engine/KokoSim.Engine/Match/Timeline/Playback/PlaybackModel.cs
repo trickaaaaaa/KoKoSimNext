@@ -31,11 +31,14 @@ public abstract record PlaybackBallSegment(double T0, double T1)
 }
 
 /// <summary>投球（マウンド→本塁）。mock: pitchSeg。</summary>
-public sealed record PitchSegment(double StartT) : PlaybackBallSegment(StartT, StartT + 0.45)
+public sealed record PitchSegment(double StartT) : PlaybackBallSegment(StartT, StartT + DurationSeconds)
 {
+    /// <summary>投球1球の所要時間[秒]（mock: pitchSeg の 0.45 と同値）。</summary>
+    public const double DurationSeconds = 0.45;
+
     public override PlaybackBall At(double tt)
     {
-        var u = tt / 0.45;
+        var u = tt / DurationSeconds;
         return new PlaybackBall(0, 17.4 - 16.6 * u, 1.7 - 1.1 * u);
     }
 }
