@@ -8,9 +8,10 @@
    gap/grid/擬似要素は使わない（USS非対応）。固定寸法セクションは flex-shrink:0。
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* 高さは中身に合わせる（空白を作らない＝密度優先）。あふれは各列のスクロールに収める。 */
 .msub-card {
-    width: 88%;
-    height: 82%;
+    width: 80%;
+    max-height: 88%;
     padding-left: var(--sp-4);
     padding-right: var(--sp-4);
     padding-top: var(--sp-3);
@@ -52,9 +53,10 @@
 .msub-close:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
 
 /* ── 本体：左＝退く選手 / 中＝入る選手 / 右＝能力比較 ── */
-.msub-body { flex-direction: row; align-items: stretch; flex-grow: 1; min-height: 0; }
-.msub-outs { width: 40%; flex-shrink: 0; }
-.msub-ins { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-4); }
+/* 行が最も幅を要る「退く選手」に余りを与え、控え列は固定幅に留める（横に間延びさせない）。 */
+.msub-body { flex-direction: row; align-items: stretch; flex-shrink: 0; }
+.msub-outs { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.msub-ins { width: 30%; flex-shrink: 0; margin-left: var(--sp-4); }
 .msub-section {
     font-size: var(--fs-label);
     color: var(--color-muted);
@@ -62,8 +64,8 @@
     margin-bottom: var(--sp-2);
     flex-shrink: 0;
 }
-/* height:0＋flex-grow で「中身が高さを決めない」ようにし、あふれは内部スクロールに収める。 */
-.msub-scroll { flex-grow: 1; min-height: 0; height: 0; }
+/* 打順9行ぶんは素で入る高さを上限にし、それ以上は内部スクロール（カードは中身の高さで止まる）。 */
+.msub-scroll { max-height: 400px; }
 
 /* 選べない行（退場済み・対象外）。押しても何も起きないので、色だけで区別する（UI原則⑥）。 */
 .msub-row--off { opacity: 0.38; }
@@ -97,7 +99,7 @@
     border-color: var(--color-line);
 }
 .msub-cmp-card--a { border-right-width: var(--border-w); border-right-color: var(--color-line); }
-.msub-cmp-scroll { flex-grow: 1; min-height: 0; height: 0; margin-top: var(--sp-2); }
+.msub-cmp-scroll { max-height: 340px; margin-top: var(--sp-2); }
 .msub-cmp-group {
     font-size: var(--fs-cap);
     color: var(--color-muted);

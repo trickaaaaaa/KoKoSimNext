@@ -217,11 +217,11 @@ namespace KokoSim.Unity.Match
                         if (!selectable) tag = "投手";
                         break;
                     case SubstitutionKind.ReleaseDh:
-                        if (i == _opt.DhSlot) tag = "DH";
+                        if (_opt.UsesDh && i == _opt.DhSlot) tag = "DH";
                         break;
                 }
                 var picked = _kind == SubstitutionKind.PinchHit ? i == _opt.UpcomingBatterSlot
-                    : _kind == SubstitutionKind.ReleaseDh ? i == _opt.DhSlot
+                    : _kind == SubstitutionKind.ReleaseDh ? _opt.UsesDh && i == _opt.DhSlot
                     : _outIndex == i;
                 var row = LineupRow(i + 1, p, selectable, picked, tag);
                 if (selectable)
@@ -323,6 +323,14 @@ namespace KokoSim.Unity.Match
 
         private void BuildDhChoices()
         {
+            if (!_opt.UsesDh)
+            {
+                // DH未使用（または解除済み）。理由は下の1行に出るので、ここは選択肢を出さない。
+                var none = new Label("選べる行き先はない。");
+                none.AddToClassList("cmp-card__empty");
+                _inRows.Add(none);
+                return;
+            }
             // 分岐1: DHの選手がその守備位置に就く（元の守備者が退場）。分岐2: DHはそのまま退場。
             foreach (var pos in _opt.DhFieldingChoices())
             {
@@ -401,7 +409,8 @@ namespace KokoSim.Unity.Match
                 case SubstitutionKind.PinchHit:
                     return _opt.UpcomingBatterSlot >= 0 ? _opt.Lineup[_opt.UpcomingBatterSlot] : null;
                 case SubstitutionKind.ReleaseDh:
-                    return _opt.UsesDh && _opt.DhSlot >= 0 ? _opt.Lineup[_opt.DhSlot] : null;
+                    return _opt.UsesDh && _opt.DhSlot >= 0 && _opt.DhSlot < _opt.Lineup.Count
+                        ? _opt.Lineup[_opt.DhSlot] : null;
                 default:
                     return _outIndex >= 0 && _outIndex < _opt.Lineup.Count ? _opt.Lineup[_outIndex] : null;
             }
