@@ -50,6 +50,10 @@ namespace KokoSim.Unity.Players
     {
         public string Label = "";
         public float Value01;
+
+        /// <summary>軸ラベル脇に出す数値（空＝数値を出さない）。隣に並ぶ指標バーと桁を一致させるため
+        /// 呼び出し側が整形済みの文字列を渡す（RadarChartView が Value01 から導かない＝丸め差を作らない）。</summary>
+        public string ValueText = "";
     }
 
     /// <summary>選手詳細に表示する一式（スナップショット）。</summary>

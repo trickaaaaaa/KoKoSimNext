@@ -31,8 +31,10 @@ namespace KokoSim.Unity.Shell
 
         // タブに現れない従属画面（一覧→詳細／試合前スタメン設定など）。ナビ項目は持たないが Show 対象＋
         // 起動時 SetActive(false) 管理に含める。LineupSetting は大会の試合開始フローからのみ遷移する。
-        // MatchLive は試合開始フロー（スタメンOK→ホーム→ライブ観戦）からのみ遷移する実試合の2D俯瞰観戦画面。
-        private static readonly string[] ExtraScreens = { "PlayerDetail", "LineupSetting", "TeamStrength", "MatchLive" };
+        // MatchPreview は試合開始フロー（スタメンOK→対戦カード→試合開始）の中継画面。
+        // MatchLive は試合開始フロー（対戦カード→ホーム→ライブ観戦）からのみ遷移する実試合の2D俯瞰観戦画面。
+        private static readonly string[] ExtraScreens =
+            { "PlayerDetail", "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive" };
 
         private const string DefaultScreen = "HomeDashboard";
 

@@ -779,10 +779,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .ts-analysis { border-top-width: 1px; border-top-color: #232E28; padding: 16px 20px 6px 20px; }
 .ts-analysis__k { font-size: 11px; color: #9DB3A0; letter-spacing: 2px; margin-bottom: 4px; }
 .ts-analysis__t { font-size: 15px; color: #C7D2CB; white-space: normal; }
-/* レーダー軸ラベル（ラベル1.5倍・数値2倍・数値は1色統一で強調はサイズ/太さ） */
-.ts-axis { position: absolute; align-items: center; }
-.ts-axis__l { font-size: 18px; color: #9DB3A0; -unity-font-style: bold; margin-bottom: 1px; }
-.ts-axis__v { font-size: 40px; -unity-font-style: bold; color: #EFF4EA; }
+/* レーダー軸ラベルは部品辞書 components.uss の radar-axis 系（--lg 修飾子）に一本化（issue #7）。 */
 /* 総合ランク: チップ＋(値) を1行に（1.5倍拡大） */
 .ts-overall-line { flex-direction: row; align-items: center; }
 .ts-overall-value { font-size: 34px; -unity-font-style: bold; color: #E8ECEA; margin-left: 8px; }

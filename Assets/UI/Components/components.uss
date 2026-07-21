@@ -674,6 +674,18 @@
 /* ── ConditionFace：調子の表情顔（Painter2D・C# ConditionFace が描画）。5段階（0=絶好調〜4=絶不調）。 ── */
 .cond-face { width: 18px; height: 18px; flex-shrink: 0; }
 
+/* ── RadarChart：レーダーの軸ラベル（絶対配置の位置は C# RadarChartView が角度から算出）。
+   小=カード内の従属レーダー / 大(--lg)=1画面の主役レーダー。数値は1色（chalk）で強調はサイズと太さだけ。 ── */
+.radar-axis { position: absolute; align-items: center; }
+.radar-axis__l { font-size: var(--fs-cap); color: var(--color-muted); }
+.radar-axis__v { font-size: var(--fs-num); color: var(--color-chalk); }
+.radar-axis--lg .radar-axis__l {
+    font-size: 18px;
+    -unity-font-style: bold;
+    margin-bottom: 1px;
+}
+.radar-axis--lg .radar-axis__v { font-size: 40px; -unity-font-style: bold; }
+
 /* ── MLineupRow：ライブ観戦のスタメン1行（行高32px基準・左右ミラー可）。
    順序: 打順・背番号・姓・守備位置・調子・今日の成績。右列は row-reverse でミラー。 ── */
 .mlineup-row {
@@ -737,6 +749,14 @@
     flex-shrink: 0;
 }
 .mlineup-row__cond { margin-left: var(--sp-1); margin-right: var(--sp-1); }
+/* 従属メタ（学年・投打など・成績を出さない場面の右端寄せ小文字）。名前より目立たせない。 */
+.mlineup-row__meta {
+    -unity-text-align: middle-right;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-right: var(--sp-1);
+    flex-shrink: 0;
+}
 
 /* ── 控えセクション見出し（「控え」） ── */
 .mlineup-subhead {
