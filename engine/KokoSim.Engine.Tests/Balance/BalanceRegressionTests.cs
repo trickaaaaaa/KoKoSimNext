@@ -31,6 +31,17 @@ public sealed class BalanceRegressionTests
             $"BB% {stats.WalkRate:F3} が帯 [{targets.WalkRate.Min}, {targets.WalkRate.Max}] 外");
         Assert.True(targets.HomeRunRate.Contains(stats.HomeRunRate),
             $"HR% {stats.HomeRunRate:F4} が帯 [{targets.HomeRunRate.Min}, {targets.HomeRunRate.Max}] 外");
+
+        // 長打の量と配分（Issue #24）。二塁打が構造的に出ない／三塁打が単一距離バケットに
+        // 集中する状態への逆戻りをここで止める。
+        Assert.True(targets.Slugging.Contains(stats.Slugging),
+            $"SLG {stats.Slugging:F3} が帯 [{targets.Slugging.Min}, {targets.Slugging.Max}] 外");
+        Assert.True(targets.DoubleRate.Contains(stats.DoubleRate),
+            $"2B% {stats.DoubleRate:F4} が帯 [{targets.DoubleRate.Min}, {targets.DoubleRate.Max}] 外");
+        Assert.True(targets.TripleRate.Contains(stats.TripleRate),
+            $"3B% {stats.TripleRate:F4} が帯 [{targets.TripleRate.Min}, {targets.TripleRate.Max}] 外");
+        Assert.True(targets.DoublesPerHomeRun.Contains(stats.DoublesPerHomeRun),
+            $"2B÷HR {stats.DoublesPerHomeRun:F2} が帯 [{targets.DoublesPerHomeRun.Min}, {targets.DoublesPerHomeRun.Max}] 外");
     }
 
     [Fact]
