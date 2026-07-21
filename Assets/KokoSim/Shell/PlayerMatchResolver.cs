@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
 namespace KokoSim.Unity.Shell
@@ -39,6 +41,9 @@ namespace KokoSim.Unity.Shell
             return new PlayerMatchLive(prog, ManagerIsAway: false);
         }
 
+        /// <summary>DH判定に使う現代ルール（現状トグルなし・年代連動の既定値, 設計書05 §1.3）。</summary>
+        private static readonly ModernRules Rules = new();
+
         /// <summary>
         /// 相手校ラインナップを「校ID＋年度」から決定論生成する。大会展望が同じ入口で同じチームを引くので、
         /// 展望で見た注目選手が実際の対戦相手としてそのまま出てくる（設計書06 §3.5b）。
@@ -46,16 +51,32 @@ namespace KokoSim.Unity.Shell
         /// Resolve / BeginLive の双方がこの1メソッドを使うことで、両者が同一チームになる契約を守る。
         /// 敵AI采配（設計書11）を注入し、代打・代走・守備固め・サイン・伝令を校の三層プロファイルに
         /// 応じて運用させる（Issue #40）。ブレイン自体は rng を消費しない＝チーム生成の決定論は不変。
-        /// オーダー編成（設計書11 §4「代打」「オーダー編成」, issue #48）も同じブレインで並べ替える。
+        /// 打順の能力ベース編成＋DH使用判断（issue #54）は StrengthTeamFactory 側（校ID＋年度の決定論）
+        /// で完結済み。ここではその上に調子（Condition）ベースの並べ替え（issue #48）だけを重ねる。
         /// 判断可否の乱数は校ID＋年度から Fork した専用ストリーム（試合 rng とは独立）＝この並べ替えも
         /// 校ID＋年度だけで決定論的に決まる。
         /// </summary>
         public static Team BuildOpponentTeam(School opponent)
         {
-            var team = StrengthTeamFactory.ForSchool(opponent, GameSession.Current.Year);
+            var yearIndex = GameSession.Current.Year;
+            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
+            var team = StrengthTeamFactory.ForSchool(opponent, yearIndex, modernRules: Rules, calendarYear: calendarYear);
             var brain = EnemyAiFactory.BrainFor(opponent);
-            var orderRng = StrengthTeamFactory.SeedFor(opponent.Id, GameSession.Current.Year).Fork(0x0BDE_0000UL);
-            return team with { BattingOrder = brain.ComposeBattingOrder(team.BattingOrder, orderRng), Tactics = brain };
+            var orderRng = StrengthTeamFactory.SeedFor(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
+            var reordered = brain.ComposeBattingOrder(team.BattingOrder, orderRng);
+            // DhSlot は並べ替え前のインデックス基準なので、DH使用時は同一参照を辿って引き直す
+            // （調子の並べ替えは常に恒等だが、将来 Q21 が解決して相手校にも調子差が付いたときの保険）。
+            var dhSlot = team.UsesDh ? IndexOfReference(reordered, team.BattingOrder[team.DhSlot]) : team.DhSlot;
+            return team with { BattingOrder = reordered, DhSlot = dhSlot, Tactics = brain };
+        }
+
+        private static int IndexOfReference(IReadOnlyList<Player> list, Player target)
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (ReferenceEquals(list[i], target)) return i;
+            }
+            return -1;
         }
 
         /// <summary>
