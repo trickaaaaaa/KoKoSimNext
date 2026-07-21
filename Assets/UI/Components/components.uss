@@ -909,6 +909,46 @@
     margin-top: var(--sp-1);
 }
 
+/* ScoreCall：得点時の大型スコアオーバーレイ（issue #60）。位置・半透明パネル・既定非表示は
+   PitchCall（#6）と同じ盤面overlay idiomを踏襲。並びは自校－相手校固定（先攻/後攻に依存しない）。
+   校名は設計書16のシグネチャ規則「校名は常に太明朝」（.f-display、LineScorePanelと同じ扱い）、
+   得点はコンデンス数字（.f-num-bd、UI原則③）。1枚の半透明パネルに5要素を横並びで収める。 */
+.score-call {
+    position: absolute;
+    left: 0; right: 0; top: 20%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+.score-call__panel {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(14, 26, 19, 0.82);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-2) var(--sp-4);
+}
+.score-call__team {
+    font-size: var(--fs-body);
+    -unity-text-align: middle-center;
+    color: var(--color-chalk);
+    padding: 0 var(--sp-2);
+}
+.score-call__num {
+    font-size: var(--fs-callout);
+    -unity-text-align: middle-center;
+    letter-spacing: 1px;
+    color: var(--color-lamp);
+    min-width: 40px;
+    padding: 0 var(--sp-1);
+}
+.score-call__sep {
+    font-size: var(--fs-callout);
+    -unity-text-align: middle-center;
+    color: var(--color-chalk);
+    padding: 0 var(--sp-1);
+}
+
 /* ── BoxRow：ボックススコア表の1行（試合結果画面のイニングスコア／打撃／投手／打席結果に共通）──
    密度は正義（UI原則①）。行高32px・数値は右揃え・列幅は種別クラスで固定してヘッダーとデータを揃える。
    線はヘッダー下だけ（UI原則④）。データ行は面の明度差だけで仕切る（枠線を引かない）。 */
