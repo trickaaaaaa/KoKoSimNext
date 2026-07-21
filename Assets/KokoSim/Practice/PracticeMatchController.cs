@@ -227,93 +227,15 @@ namespace KokoSim.Unity.Practice
 
             for (var i = 0; i < n; i++)
             {
-                var ang = -Mathf.PI / 2f + (Mathf.PI * 2f) * i / n;
+                var pt = RadarChart.AxisPoint(cx, cy, radius * LabelOffset, i, n);
                 var node = _axisNodes[i];
-                node.style.left = cx + Mathf.Cos(ang) * radius * LabelOffset;
-                node.style.top = cy + Mathf.Sin(ang) * radius * LabelOffset;
+                node.style.left = pt.x;
+                node.style.top = pt.y;
                 node.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
             }
         }
 
         private void OnPaintRadar(MeshGenerationContext ctx)
-        {
-            var n = _radarAxes.Count;
-            if (n < 3) return;
-            var rect = ctx.visualElement.contentRect;
-            if (rect.width < 4 || rect.height < 4) return;
-
-            var cx = rect.width * 0.5f;
-            var cy = rect.height * 0.5f;
-            var radius = Mathf.Min(rect.width, rect.height) * RadiusFactor;
-            var p = ctx.painter2D;
-
-            var gridInner = new Color(0.17f, 0.24f, 0.20f);
-            var gridOuter = new Color(0.40f, 0.52f, 0.45f);
-            for (var r = 1; r <= 5; r++)
-            {
-                p.BeginPath();
-                for (var i = 0; i < n; i++)
-                {
-                    var pt = AxisPoint(cx, cy, radius * (r / 5f), i, n);
-                    if (i == 0) p.MoveTo(pt); else p.LineTo(pt);
-                }
-                p.ClosePath();
-                p.strokeColor = r == 5 ? gridOuter : gridInner;
-                p.lineWidth = r == 5 ? 1.6f : 1f;
-                p.Stroke();
-            }
-            for (var i = 0; i < n; i++)
-            {
-                p.BeginPath();
-                p.MoveTo(new Vector2(cx, cy));
-                p.LineTo(AxisPoint(cx, cy, radius, i, n));
-                p.strokeColor = gridInner;
-                p.lineWidth = 1f; p.Stroke();
-            }
-
-            var rc = RankPalette.Of(_overallGrade);
-            var centerCol = (Color32)new Color(rc.r, rc.g, rc.b, 0.28f);
-            var rimCol = (Color32)new Color(rc.r * 0.68f, rc.g * 0.68f, rc.b * 0.68f, 0.62f);
-
-            var rim = new Vector2[n];
-            for (var i = 0; i < n; i++)
-            {
-                var val = Mathf.Clamp01(_radarAxes[i].Value01);
-                rim[i] = AxisPoint(cx, cy, radius * Mathf.Max(0.04f, val), i, n);
-            }
-            var mesh = ctx.Allocate(n + 1, n * 3);
-            mesh.SetNextVertex(new Vertex { position = new Vector3(cx, cy, Vertex.nearZ), tint = centerCol });
-            for (var i = 0; i < n; i++)
-                mesh.SetNextVertex(new Vertex { position = new Vector3(rim[i].x, rim[i].y, Vertex.nearZ), tint = rimCol });
-            for (var i = 0; i < n; i++)
-            {
-                mesh.SetNextIndex(0);
-                mesh.SetNextIndex((ushort)(1 + i));
-                mesh.SetNextIndex((ushort)(1 + ((i + 1) % n)));
-            }
-
-            var line = new Color(rc.r, rc.g, rc.b, 1f);
-            p.BeginPath();
-            for (var i = 0; i < n; i++) { if (i == 0) p.MoveTo(rim[i]); else p.LineTo(rim[i]); }
-            p.ClosePath();
-            p.strokeColor = line; p.lineWidth = 2.5f; p.Stroke();
-
-            foreach (var pt in rim)
-            {
-                p.BeginPath();
-                p.MoveTo(new Vector2(pt.x - 2f, pt.y));
-                p.LineTo(new Vector2(pt.x, pt.y - 2f));
-                p.LineTo(new Vector2(pt.x + 2f, pt.y));
-                p.LineTo(new Vector2(pt.x, pt.y + 2f));
-                p.ClosePath();
-                p.fillColor = line; p.Fill();
-            }
-        }
-
-        private static Vector2 AxisPoint(float cx, float cy, float r, int i, int n)
-        {
-            var ang = -Mathf.PI / 2f + (Mathf.PI * 2f) * i / n; // 真上始点・時計回り
-            return new Vector2(cx + Mathf.Cos(ang) * r, cy + Mathf.Sin(ang) * r);
-        }
+            => RadarChart.Paint(ctx, _radarAxes, _overallGrade, RadiusFactor);
     }
 }
