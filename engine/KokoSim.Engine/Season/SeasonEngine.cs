@@ -65,7 +65,8 @@ public static class SeasonEngine
             roster.RemoveAll(p => p.Grade > 3);
             // 在籍部員の氏名を渡し、新入生の下の名前が既存部員と被らないようにする（重複回避）。
             roster.AddRange(ProspectGenerator.Intake(year, ctx.Roster, rng, skills: ctx.Skills,
-                personalities: ctx.Personalities, existingNames: roster.Select(p => p.Name).ToList()));
+                personalities: ctx.Personalities, existingNames: roster.Select(p => p.Name).ToList(),
+                form: ctx.Form));
 
             // 主将の年度更新（設計書09 §8）: 3年生引退で主将が抜けたら選び直す。手動指名が在籍なら尊重。
             CaptainSelector.EnsureCaptain(roster);

@@ -49,6 +49,13 @@ public sealed record FormCoefficients
     public double WeeklyPersistence { get; init; } = 0.75;
     public double WeeklySigma { get; init; } = 0.28;
 
+    /// <summary>
+    /// 初期 ConditionValue 抽選用の定常分布σ（issue #50）。AR(1) N(0, WeeklySigma²) を
+    /// WeeklyPersistence で回し続けた定常状態の分散から導出する（WeeklySigma/WeeklyPersistenceの
+    /// 変更に自動追従し、初期分布と週次の波を常に整合させる）。
+    /// </summary>
+    public double StationaryConditionSigma => WeeklySigma / Math.Sqrt(1 - WeeklyPersistence * WeeklyPersistence);
+
     // --- 相手校の調子観測（§3.3「監督の育成眼が高いほど正確、低いと誤認」, issue #47） ---
     /// <summary>育成眼0時の観測ノイズσ（連続値に加算後に量子化。段階幅0.35〜0.4なので2段階外す誤認もあり得る）。</summary>
     public double ObserveSigmaBase { get; init; } = 0.65;
@@ -149,6 +156,13 @@ public static class FormModel
         var v = current * f.WeeklyPersistence + rng.NextGaussian(0, f.WeeklySigma);
         return MathUtil.Clamp(v, -1.0, 1.0);
     }
+
+    /// <summary>
+    /// 選手生成時の初期 ConditionValue 抽選（issue #50）。週次AR(1)の定常分布 N(0, σ_stationary²) から
+    /// サンプリングする。全員 Normal(0) 固定ではなく、シーズン序盤・新チーム発足直後から個体差が出る。
+    /// </summary>
+    public static double SampleInitialCondition(IRandomSource rng, FormCoefficients f)
+        => MathUtil.Clamp(rng.NextGaussian(0, f.StationaryConditionSigma), -1.0, 1.0);
 
     /// <summary>
     /// 相手校の調子観測（§3.3「監督の育成眼が高いほど正確に見える、低いと曖昧/誤認」, issue #47）。
