@@ -116,7 +116,7 @@
           <ui:VisualElement class="pd2-card pd2-card--pitch">
             <ui:VisualElement class="pd2-card__hd">
               <ui:Label class="pd2-card__t" text="球種変化チャート" />
-              <ui:Label class="pd2-card__note" text="中心＝ボール / チップ＝キレ S〜G" />
+              <ui:Label class="pd2-card__note" text="扇の長さ＝変化量 / 色・チップ＝キレ S〜G / ストレートは幅＝伸び" />
             </ui:VisualElement>
             <ui:VisualElement class="pd2-card__body">
               <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />
