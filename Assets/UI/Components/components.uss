@@ -151,6 +151,9 @@
 /* 文字数が可変なラベル向け（強攻/待て等）。幅固定セルではなくパディングで揃える。 */
 .seg--auto .seg__cell { width: auto; height: 24px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
 .seg__cell--on { background-color: var(--color-lamp); color: var(--color-ink); -unity-font-style: bold; }
+/* 今は選べないセル（局面が合わない・控えが尽きた等）。押せないことを色だけで示す。 */
+.seg__cell--off { color: var(--color-faint); }
+.seg__cell--off:hover { color: var(--color-faint); }
 .seg__cell--hard { background-color: var(--color-warn); color: var(--color-chalk); }
 
 /* ── Chip：小ラベル（配分チップ・タグ） ─────────────────────────────── */

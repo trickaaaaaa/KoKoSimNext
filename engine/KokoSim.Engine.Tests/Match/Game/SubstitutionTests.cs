@@ -172,4 +172,111 @@ public sealed class SubstitutionTests
         var state = new TeamState(MakeTeam());
         Assert.False(state.ReleaseDh());
     }
+
+    // ===== 投手交代（指名継投, issue #22 A） =====
+
+    private static Player Rp(string name)
+        => At(FieldPosition.Pitcher, name) with { Pitching = PitcherAttributes.LeagueAverage };
+
+    private static Team MakeTeamWithBullpen(params string[] bullpen)
+    {
+        var t = MakeTeam();
+        return t with { Bullpen = bullpen.Select(Rp).ToList() };
+    }
+
+    [Fact]
+    public void ChangePitcherTo_DesignatesAnyBullpenPitcher_NotOnlyTheHead()
+    {
+        var state = new TeamState(MakeTeamWithBullpen("第2", "第3", "第4"));
+        var third = state.AvailableBullpen[2];
+
+        Assert.True(state.ChangePitcherTo(third));
+
+        Assert.Equal("第4", state.CurrentPitcher.Name);
+        Assert.Equal(1, state.PitcherChanges);
+        // 指名した投手だけがブルペンから消え、飛ばした投手はまだ登板できる。
+        Assert.Equal(new[] { "第2", "第3" }, state.AvailableBullpen.Select(p => p.Name));
+        // 非DH制なので打順の投手スロットも入れ替わる。
+        Assert.Equal("第4", state.CurrentLineup[8].Name);
+    }
+
+    [Fact]
+    public void TryChangePitcher_StillTakesTheHeadOfTheBullpen()
+    {
+        var state = new TeamState(MakeTeamWithBullpen("第2", "第3"));
+
+        Assert.True(state.TryChangePitcher());
+
+        Assert.Equal("第2", state.CurrentPitcher.Name);
+        Assert.Equal(new[] { "第3" }, state.AvailableBullpen.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ChangePitcherTo_RetiredPitcherCannotReturn()
+    {
+        var state = new TeamState(MakeTeamWithBullpen("第2"));
+        var starter = state.CurrentPitcher;
+        var reliever = state.AvailableBullpen[0];
+
+        Assert.True(state.ChangePitcherTo(reliever));
+
+        Assert.True(state.IsRetired(starter));                 // 降板した先発は再登板不可
+        Assert.False(state.ChangePitcherTo(starter));           // リエントリー禁止
+        Assert.False(state.ChangePitcherTo(state.CurrentPitcher)); // 登板中の投手も指名できない
+        Assert.Empty(state.AvailableBullpen);
+        Assert.False(state.TryChangePitcher());
+    }
+
+    [Fact]
+    public void NonDh_PinchHitForPitcherSlot_RetiresPitcher_AndNextChangeRestoresTheSlot()
+    {
+        // 打順を投手スロット（8番）まで進めてから代打を送る＝非DH制の「投手に代打」。
+        var sub = At(FieldPosition.FirstBase, "代打", contact: 90);
+        var team = MakeTeamWithBullpen("第2") with { Bench = new[] { sub } };
+        var state = new TeamState(team);
+        for (var i = 0; i < 8; i++) state.NextBatter();
+        var starter = state.CurrentPitcher;
+        Assert.Equal(starter, state.PeekBatter());
+
+        Assert.True(state.PinchHitNext(sub));
+        Assert.Equal("代打", state.CurrentLineup[8].Name);
+        Assert.True(state.IsRetired(starter));   // 投手は退場＝守備再開前に必ず継投が要る（C-2）
+
+        // 継投すると投手スロットの打者が新投手で上書きされ、9人が成立する。
+        Assert.True(state.TryChangePitcher());
+        Assert.Equal("第2", state.CurrentLineup[8].Name);
+        Assert.Equal(9, state.DefensiveAlignment(new FieldGeometry()).Count);
+    }
+
+    [Fact]
+    public void Dh_ReleaseThenChangePitcher_NewPitcherBatsInTheFormerDhSlot_AndDhNeverReturns()
+    {
+        var team = MakeDhTeam() with { Bullpen = new[] { Rp("第2") } };
+        var state = new TeamState(team);
+
+        Assert.True(state.ReleaseDh());
+        Assert.False(state.UsesDh);
+        Assert.False(state.ReleaseDh());   // 不可逆＝そのゲーム中DHは復活しない
+
+        Assert.True(state.ChangePitcherTo(state.AvailableBullpen[0]));
+        // DH解除後は投手が打順内（元DHスロット）。継投で打者としても入れ替わる。
+        Assert.Equal(8, state.PitcherSlot);
+        Assert.Equal("第2", state.CurrentLineup[8].Name);
+        Assert.Equal(state.CurrentPitcher, state.CurrentLineup[8]);
+        Assert.Equal(9, state.DefensiveAlignment(new FieldGeometry()).Count);
+    }
+
+    [Fact]
+    public void Dh_ChangePitcherWhileDhAlive_DoesNotTouchTheBattingOrder()
+    {
+        var team = MakeDhTeam() with { Bullpen = new[] { Rp("第2") } };
+        var state = new TeamState(team);
+        var before = state.CurrentLineup.ToList();
+
+        Assert.True(state.ChangePitcherTo(state.AvailableBullpen[0]));
+
+        Assert.True(state.UsesDh);                  // DH制は継投では消えない
+        Assert.Equal(before, state.CurrentLineup);  // 投手は打順外なのでラインナップ不変
+        Assert.Equal("第2", state.CurrentPitcher.Name);
+    }
 }
