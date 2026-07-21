@@ -17,8 +17,9 @@ namespace KokoSim.Unity.Match
     /// 各打席のタイムラインを <see cref="Match2DPlaybackElement"/> で再生する。描画部品は再利用するが、
     /// 7サンプルの再生ハーネス（MatchDetailController/PlaybackSamples）には干渉しない。
     ///
-    /// 采配窓は最小実装: 「次の打席へ（采配なし）」＋「代打を送る」（自校の次打席へ・1種のみ）＋
-    /// 「スキップ（委任）」（残りを委任AIへ）。サイン・伝令・継投の本UIは設計書09準拠の別タスク。
+    /// 采配窓は「次の打席へ（采配なし）」＋「選手交代」（代打・代走・投手交代・守備交代・DH解除を
+    /// <see cref="MatchSubstitutionPanel"/> のモーダルで出し分け）＋「スキップ（委任）」（残りを委任AIへ）。
+    /// サイン・伝令の本UIは設計書09準拠の別タスク。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class MatchLiveController : MonoBehaviour
@@ -63,7 +64,9 @@ namespace KokoSim.Unity.Match
         private VisualElement _root;
         private Match2DPlaybackElement _view;
         private Label _caption, _result, _batter, _awayScore, _homeScore, _inning;
-        private Button _nextPa, _pinchHit, _skip;
+        private Button _nextPa, _subOpen, _skip;
+        // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
+        private MatchSubstitutionPanel _subPanel;
         private readonly List<Button> _speedButtons = new();
         // 速度ボタンのハンドラ（ラムダのため OnDisable で外せるよう保持する）。
         private readonly List<(Button Button, System.Action Handler)> _speedHandlers = new();
@@ -140,8 +143,8 @@ namespace KokoSim.Unity.Match
 
             _nextPa = _root.Q<Button>("next-pa");
             if (_nextPa != null) _nextPa.clicked += OnNextPa;
-            _pinchHit = _root.Q<Button>("pinch-hit");
-            if (_pinchHit != null) _pinchHit.clicked += OnPinchHit;
+            _subOpen = _root.Q<Button>("sub-open");
+            if (_subOpen != null) _subOpen.clicked += OnOpenSubstitution;
             _skip = _root.Q<Button>("skip");
             if (_skip != null) _skip.clicked += OnSkip;
             _backHome = _root.Q<Button>("back-home");
@@ -159,7 +162,10 @@ namespace KokoSim.Unity.Match
             _pitchCallDetail = _root.Q<Label>("pitch-call-detail");
 
             ResetPerMatchVisuals();
+            _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied);
+            _subPanel.Bind();
             BuildGame();
+            _subPanel.SetMatch(_prog, _managerIsAway);
             SetBackHomeVisible(false);
             EnterTacticsWindow("試合開始。采配を選んで打席へ。");
             RefreshPanel();   // 初期スタメン列（今日の成績は0・現打者/HUDは打席開始で点灯）
@@ -171,7 +177,8 @@ namespace KokoSim.Unity.Match
         private void OnDisable()
         {
             if (_nextPa != null) _nextPa.clicked -= OnNextPa;
-            if (_pinchHit != null) _pinchHit.clicked -= OnPinchHit;
+            if (_subOpen != null) _subOpen.clicked -= OnOpenSubstitution;
+            _subPanel?.Close();
             if (_skip != null) _skip.clicked -= OnSkip;
             if (_backHome != null) _backHome.clicked -= OnBackHome;
             foreach (var (b, h) in _speedHandlers) b.clicked -= h;
@@ -194,12 +201,9 @@ namespace KokoSim.Unity.Match
             _pitchIdx = 0;
             _pitchClock = 0f;
             _inPitchPhase = false;
-<<<<<<< HEAD
             _pitchBallVisible = false;
-=======
             _pitchCallClock = 0f;
             _pitchCallOn = false;
->>>>>>> origin/main
             _pitchBattingChoice = null;
             _pitchPolicyChoice = null;
             _capHist.Clear();
@@ -306,7 +310,7 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = note;
             var canAct = !_gameOver;
             SetEnabled(_nextPa, canAct);
-            SetEnabled(_pinchHit, canAct);
+            SetEnabled(_subOpen, canAct);
             SetEnabled(_skip, canAct);
         }
 
@@ -316,14 +320,19 @@ namespace KokoSim.Unity.Match
             ResolveAndReplayNext();
         }
 
-        // 代打（自校の次打席へ・控え先頭）。自校が先攻(away)か後攻(home)かは _managerIsAway。
-        private void OnPinchHit()
+        // 選手交代（設計書09 §6）。攻撃中／守備中で出せる選択肢はモーダル側が出し分ける。
+        // 自校が先攻(away)か後攻(home)かは _managerIsAway。
+        private void OnOpenSubstitution()
         {
-            if (_gameOver) return;
-            var ok = _prog.PinchHitUpcoming(offenseIsAway: _managerIsAway, benchIndex: 0);
-            if (_caption != null)
-                _caption.text = ok ? "代打を送った。次の自校の打席に入る。" : "代打を送れない（控えなし）。";
-            if (ok) RefreshPanel();   // 該当スロットを代打へ即入替（退いた選手名を薄く併記）
+            if (_gameOver || _prog == null) return;
+            _subPanel?.Open();
+        }
+
+        // 交代確定後（即時・取り消し不可）。該当スロットを即入替（退いた選手名を薄く併記）。
+        private void OnSubstitutionApplied()
+        {
+            RefreshPanel();
+            if (_caption != null) _caption.text = "選手交代を行った。";
         }
 
         private void OnSkip()
@@ -443,7 +452,7 @@ namespace KokoSim.Unity.Match
             else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
 
             SetEnabled(_nextPa, false);
-            SetEnabled(_pinchHit, false);
+            SetEnabled(_subOpen, false);
             SetEnabled(_skip, false);
         }
 
@@ -1034,6 +1043,15 @@ namespace KokoSim.Unity.Match
             RefreshPanel();
             return true;
         }
+
+        /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
+        public void OpenSubstitutionForCapture() => _subPanel?.Open();
+
+        /// <summary>スクショ用: 選手交代モーダルを閉じる。</summary>
+        public void CloseSubstitutionForCapture() => _subPanel?.Close();
+
+        /// <summary>スクショ用: 交代種別タブを選ぶ（0=代打 1=代走 2=投手交代 3=守備交代 4=DH解除）。</summary>
+        public void SelectSubstitutionKindForCapture(int index) => _subPanel?.SelectKindForCapture(index);
 
         /// <summary>スクショ用: 自校の控え先頭（代打候補）の名前。</summary>
         public string HomeBenchZeroName =>

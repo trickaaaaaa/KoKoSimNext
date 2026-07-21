@@ -12,7 +12,7 @@ namespace KokoSim.Engine.Match.Game;
 public sealed class TeamState
 {
     private readonly Team _team;
-    private readonly Queue<Player> _bullpen;
+    private readonly List<Player> _bullpen;   // 未登板の控え投手（先頭＝登板順の既定。指名継投で任意位置を抜く）
     private int _battingIndex;
 
     // ===== 可変ラインナップ（設計書09 §6, 選手交代）。無交代なら初期＝_team.BattingOrder と一致。 =====
@@ -27,7 +27,7 @@ public sealed class TeamState
     public TeamState(Team team)
     {
         _team = team;
-        _bullpen = new Queue<Player>(team.Bullpen);
+        _bullpen = new List<Player>(team.Bullpen);
         _lineup = team.BattingOrder.ToArray();
         _bench = new List<Player>(team.Bench);
         _usesDh = team.UsesDh;
@@ -214,7 +214,7 @@ public sealed class TeamState
     public IReadOnlyList<LivePitcherToday> LiveBullpen()
     {
         var list = new List<LivePitcherToday>(_bullpen.Count);
-        foreach (var p in _bullpen)   // Queue は登板順で列挙
+        foreach (var p in _bullpen)   // 登板順で列挙
         {
             var a = _pit.TryGetValue(p, out var acc) ? acc : null;
             list.Add(new LivePitcherToday(
@@ -414,11 +414,21 @@ public sealed class TeamState
     /// <summary>現投手が球数上限に達したか（達したら次打者は投げられない＝継投必須）。</summary>
     public bool CurrentPitcherAtWeeklyLimit() => WeeklyPitchesFor(CurrentPitcher) >= _weeklyPitchLimit;
 
-    /// <summary>控え投手が残っていれば継投する。動揺はリセット（新しい投手は落ち着いて入る）。</summary>
+    /// <summary>控え投手が残っていれば継投する（ブルペン先頭＝登板順の指名ラッパ）。動揺はリセット。</summary>
     public bool TryChangePitcher()
+        => _bullpen.Count > 0 && ChangePitcherTo(_bullpen[0]);
+
+    /// <summary>
+    /// ブルペン中の任意の投手を指名して継投する（設計書09 §6・プレイヤー采配の継投）。
+    /// ブルペンに sub が居なければ false（＝既に登板済み／退場済みは指名できない＝リエントリー禁止）。
+    /// 動揺はリセット（新しい投手は落ち着いて入る）。
+    /// </summary>
+    public bool ChangePitcherTo(Player sub)
     {
-        if (_bullpen.Count == 0) return false;
-        CurrentPitcher = _bullpen.Dequeue();
+        if (!_bullpen.Remove(sub)) return false;
+        // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
+        _retired.Add(CurrentPitcher);
+        CurrentPitcher = sub;
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
         if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;
         PitchesThrown = 0;
@@ -427,6 +437,9 @@ public sealed class TeamState
         ClearRattled();
         return true;
     }
+
+    /// <summary>まだ登板していない控え投手（登板順＝Team.Bullpen の並び）。交代UIの指名候補。</summary>
+    public IReadOnlyList<Player> AvailableBullpen => _bullpen;
 
     // ===== 選手交代（設計書09 §6）。高校野球ルール＝リエントリー禁止（退いた選手は再出場できない）。 =====
     /// <summary>現在の打順9人（交代反映済み）。UI・テスト・采配判断用。</summary>
@@ -440,6 +453,21 @@ public sealed class TeamState
 
     /// <summary>控えにこの選手が残っているか（交代可否の判定）。</summary>
     public bool IsAvailable(Player sub) => _bench.Contains(sub);
+
+    /// <summary>この試合で退場済みか（リエントリー禁止＝再出場できない）。交代UIのグレーアウト判定に使う。</summary>
+    public bool IsRetired(Player p) => _retired.Contains(p);
+
+    /// <summary>試合開始時の野手控え（交代UIが「使い切った控え」をグレーアウト表示するための原本）。</summary>
+    public IReadOnlyList<Player> RosterBench => _team.Bench;
+
+    /// <summary>試合開始時のブルペン（同上・登板済みをグレーアウト表示するための原本）。</summary>
+    public IReadOnlyList<Player> RosterBullpen => _team.Bullpen;
+
+    /// <summary>投手が入っている打順スロット（0始まり。DH制では「投手が入る予定の」スロット＝DH解除で確定）。</summary>
+    public int PitcherSlot => _pitcherSlot;
+
+    /// <summary>DHが入っている打順スロット（0始まり。DH制のときだけ意味を持つ）。</summary>
+    public int DhSlot => _dhSlot;
 
     /// <summary>次打者へ代打を送る（退いた打者の打順・守備位置を継承）。控えに sub が無ければ false。</summary>
     public bool PinchHitNext(Player sub) => SubstituteAtSlot(_battingIndex, sub);

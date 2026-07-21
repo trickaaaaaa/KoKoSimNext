@@ -216,16 +216,23 @@ public static class GameEngine
         var dayForm = p.DayForm;
         var inning = p.Inning; // 半イニングは単一イニング内で完結（p.Inning は Steps が進める）
 
+        var bases = new BaseState();
+        var outs = 0;
+        var runsThisHalf = 0;
+
         // 完了した打席の境界を通知するヘルパ（将来は投球単位へ細分化）。log.Count-1＝直前に追記した打席。
-        GameStep Pa() => new(GameStepKind.PlateAppearance, inning, isTop, log.Count - 1);
+        // 併せて局面スナップショット（塁・アウト・表裏）を GameProgress へ載せる＝対話UIの交代seam（観測のみ）。
+        GameStep Pa()
+        {
+            p.CurrentBases = bases;
+            p.CurrentOuts = outs;
+            p.CurrentIsTop = isTop;
+            return new(GameStepKind.PlateAppearance, inning, isTop, log.Count - 1);
+        }
 
         // 1球ごとの采配窓（設計書15 §2.2）。各投球の「前」に yield する。LogIndex はこの打席が確定したら
         // 載る添字（log.Count）。乱数は消費しないので挟んでも結果は不変。Phase A では消費側が読み飛ばす。
         GameStep Pitch() => new(GameStepKind.Pitch, inning, isTop, log.Count);
-
-        var bases = new BaseState();
-        var outs = 0;
-        var runsThisHalf = 0;
 
         // イニング頭は投手が落ち着いて入り直す（動揺はイニングを跨がない）。
         defense.ClearRattled();
@@ -1024,4 +1031,14 @@ public sealed class GameProgress
 
     /// <summary>攻撃側の TeamState（isTop=true なら先攻 away）。対話采配の適用先判定に使う。</summary>
     public TeamState OffenseOf(bool isTop) => isTop ? Away : Home;
+
+    // ===== 打席境界の局面スナップショット（観測seam。打席が確定するたび更新される） =====
+    // 対話進行（MatchProgression）の交代UIが「今この瞬間、誰が塁にいて何アウトか」を知るために使う。
+    // 書き込みは PlayHalfSteps の打席境界のみ・乱数を消費しないので試合結果には一切影響しない。
+    /// <summary>直近に確定した打席時点の塁状況（未進行なら null）。代走の塁差し替えもこの実体に対して行う。</summary>
+    public BaseState? CurrentBases { get; internal set; }
+    /// <summary>直近に確定した打席の直後のアウト数（3ならその半イニングは終了済み＝塁上は無効）。</summary>
+    public int CurrentOuts { get; internal set; }
+    /// <summary>直近に確定した打席が表（先攻の攻撃）だったか。交代対象チームの攻守判定に使う。</summary>
+    public bool CurrentIsTop { get; internal set; } = true;
 }

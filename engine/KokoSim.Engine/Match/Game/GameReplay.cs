@@ -28,10 +28,22 @@ public sealed record GameSaveState(ulong Seed, int ConfirmedPlateAppearances)
 /// Advance() ベースの旧セーブは常に0（打席頭適用）で、そのまま新しい適用点でも互換に読める。
 /// AdvancePitch() で打席途中に一時停止して予約した場合のみ、その時点の球数が入る。
 /// </param>
+/// <param name="BenchIndex">
+/// 交代で「入る」選手の添字。<see cref="GameDecisionKind.PinchHit"/>/<see cref="GameDecisionKind.PinchRun"/>/
+/// <see cref="GameDecisionKind.DefensiveSub"/> は野手控え（TeamState.Bench）の添字、
+/// <see cref="GameDecisionKind.ChangePitcher"/> はブルペン（TeamState.AvailableBullpen）の添字。
+/// </param>
+/// <param name="TargetIndex">
+/// 交代で「退く」側の指定。<see cref="GameDecisionKind.PinchRun"/> は塁の添字（0=一塁,1=二塁,2=三塁）、
+/// <see cref="GameDecisionKind.DefensiveSub"/> は打順スロット（0-8）。他の種別では未使用。
+/// </param>
+/// <param name="At">
+/// <see cref="GameDecisionKind.ReleaseDh"/> でDHの選手が就く守備位置（null＝DHはそのまま退場）。
+/// </param>
 public sealed record GameDecision(
     int AtStep, GameDecisionKind Kind, bool OffenseIsAway, int BenchIndex,
     PitchBattingOverride? Batting = null, PitchPolicy? Policy = null, Pitching.PitcherGear? Gear = null,
-    int PitchIndex = 0);
+    int PitchIndex = 0, int TargetIndex = 0, Field.FieldPosition? At = null);
 
 public enum GameDecisionKind
 {
@@ -40,7 +52,15 @@ public enum GameDecisionKind
     PitchBattingOverride,
     /// <summary>1球采配の守備側手動指示（設計書15 Phase C-3）。OffenseIsAway=攻撃側の判定に使う（守備側はその逆）。</summary>
     PitchDefenseOverride,
-    // 将来: PinchRun, DefensiveSub, Sign, Timeout, ...
+    /// <summary>代走（設計書09 §6）。OffenseIsAway=攻撃側が先攻か。TargetIndex=塁の添字。</summary>
+    PinchRun,
+    /// <summary>投手交代（指名継投, 設計書09 §6）。OffenseIsAway=**守備側**が先攻か。BenchIndex=ブルペン添字。</summary>
+    ChangePitcher,
+    /// <summary>守備交代（設計書09 §6）。OffenseIsAway=**守備側**が先攻か。TargetIndex=打順スロット。</summary>
+    DefensiveSub,
+    /// <summary>DH解除（設計書09 §6・不可逆）。OffenseIsAway=**守備側**が先攻か。At=DHが就く守備位置。</summary>
+    ReleaseDh,
+    // 将来: Sign, Timeout, ...
 }
 
 /// <summary>復元された進行（状態＋続きを回すための enumerator）。drain して <see cref="GameEngine.BuildResult"/> へ。</summary>
@@ -125,16 +145,25 @@ public static class GameReplay
             switch (d.Kind)
             {
                 case GameDecisionKind.PinchHit:
-                    var team = p.OffenseOf(d.OffenseIsAway); // OffenseOf(isTop): isTop=true=先攻away
-                    var bench = team.Bench;
-                    if (d.BenchIndex >= 0 && d.BenchIndex < bench.Count)
-                        team.PinchHitNext(bench[d.BenchIndex]);
+                    SubstitutionCommands.PinchHit(p, d.OffenseIsAway, d.BenchIndex);
                     break;
                 case GameDecisionKind.PitchBattingOverride:
                     p.OffenseOf(d.OffenseIsAway).SetPendingPitchBattingOverride(d.Batting);
                     break;
                 case GameDecisionKind.PitchDefenseOverride:
                     p.OffenseOf(!d.OffenseIsAway).SetPendingPitchDefenseOverride(d.Policy, d.Gear);
+                    break;
+                case GameDecisionKind.PinchRun:
+                    SubstitutionCommands.PinchRun(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);
+                    break;
+                case GameDecisionKind.ChangePitcher:
+                    SubstitutionCommands.ChangePitcher(p, d.OffenseIsAway, d.BenchIndex);
+                    break;
+                case GameDecisionKind.DefensiveSub:
+                    SubstitutionCommands.DefensiveSub(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);
+                    break;
+                case GameDecisionKind.ReleaseDh:
+                    SubstitutionCommands.ReleaseDh(p, d.OffenseIsAway, d.At);
                     break;
             }
         }

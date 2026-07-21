@@ -1,0 +1,144 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   MatchSubstitution.uss — 試合中の選手交代モーダルの配置のみ（設計書09 §6 / issue #22）
+   ───────────────────────────────────────────────────────────────────────
+   見た目の最小単位は components.uss（部品辞書）。ここは3カラム分割や列幅など
+   「このモーダル固有の並べ方」だけを持ち、色・余白・角丸は tokens を参照する。
+   スタメン設定（LineupSetting）と同じ部品（lineup-row / bench-row / pos-chip /
+   rank-chip / cmp-card / cmp-row）を使うので、行の見た目はあちらと揃う。
+   gap/grid/擬似要素は使わない（USS非対応）。固定寸法セクションは flex-shrink:0。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.msub-card {
+    width: 88%;
+    height: 82%;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+
+/* ── ヘッダー：見出し＋攻守バッジ＋種別セグメント＋閉じる ── */
+.msub-head {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: var(--sp-3);
+}
+.msub-title { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; }
+.msub-phase {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-left: var(--sp-3);
+}
+.msub-kinds { margin-left: var(--sp-4); }
+.msub-head__spacer { flex-grow: 1; }
+.msub-close {
+    width: 30px;
+    height: 30px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+}
+.msub-close:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
+
+/* ── 本体：左＝退く選手 / 中＝入る選手 / 右＝能力比較 ── */
+.msub-body { flex-direction: row; align-items: stretch; flex-grow: 1; min-height: 0; }
+.msub-outs { width: 40%; flex-shrink: 0; }
+.msub-ins { flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-4); }
+.msub-section {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    -unity-font-style: bold;
+    margin-bottom: var(--sp-2);
+    flex-shrink: 0;
+}
+/* height:0＋flex-grow で「中身が高さを決めない」ようにし、あふれは内部スクロールに収める。 */
+.msub-scroll { flex-grow: 1; min-height: 0; height: 0; }
+
+/* 選べない行（退場済み・対象外）。押しても何も起きないので、色だけで区別する（UI原則⑥）。 */
+.msub-row--off { opacity: 0.38; }
+/* 塁タグ（一塁/二塁/三塁）。走者の位置を1目盛で示す小片。 */
+.msub-base-tag {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-radius: 3px;
+    padding-left: 5px;
+    padding-right: 5px;
+    margin-right: var(--sp-2);
+}
+
+/* ── 右：2選手比較（スタメン設定の比較パネルと同じ部品） ── */
+.msub-compare {
+    width: 300px;
+    flex-shrink: 0;
+    margin-left: var(--sp-4);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+.msub-cmp-cards {
+    flex-direction: row;
+    flex-shrink: 0;
+    background-color: var(--color-panel);
+    border-radius: var(--radius-chip);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+}
+.msub-cmp-card--a { border-right-width: var(--border-w); border-right-color: var(--color-line); }
+.msub-cmp-scroll { flex-grow: 1; min-height: 0; height: 0; margin-top: var(--sp-2); }
+.msub-cmp-group {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    margin-top: var(--sp-2);
+    margin-bottom: var(--sp-1);
+}
+
+/* ── 注記＋確定操作 ── */
+/* 交代は取り消せない・交代できない理由を1行で出す。既定は副次文字、不可の理由だけ警告色（UI原則②）。 */
+.msub-note {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin-top: var(--sp-3);
+    flex-shrink: 0;
+}
+.msub-note--warn { color: var(--color-warn); }
+
+.msub-actions { flex-direction: row; margin-top: var(--sp-2); flex-shrink: 0; }
+.msub-btn {
+    height: 44px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-body);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+}
+.msub-btn--ghost {
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    margin-right: var(--sp-2);
+}
+.msub-btn--ghost:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
+.msub-btn--go {
+    flex-grow: 1;
+    background-color: var(--color-lamp);
+    color: var(--color-ink);
+    -unity-font-style: bold;
+}
+.msub-btn--go:hover { background-color: var(--color-lamp-hi); }
+.msub-btn--go:disabled { background-color: var(--color-panel-deep); color: var(--color-faint); }
