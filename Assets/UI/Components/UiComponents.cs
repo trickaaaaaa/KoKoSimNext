@@ -30,6 +30,20 @@ namespace KokoSim.Unity.Components
     }
 
     /// <summary>
+    /// 2選手比較行1本ぶんの入力。値は 0..100 の表示スケール。
+    /// 片側が未選択なら Has* を false にする（値は「—」・バーなしで表示）。
+    /// </summary>
+    public sealed class CompareRowData
+    {
+        public string Label = "";   // 能力名
+        public int ValueA;          // A の値（HasA が true のときのみ使う）
+        public int ValueB;          // B の値（HasB が true のときのみ使う）
+        public bool HasA;
+        public bool HasB;
+        public int Winner;          // -1=A が優位 / 1=B が優位 / 0=同値・比較不能
+    }
+
+    /// <summary>
     /// 部品辞書（docs/design/UI-BUILD-METHOD.md Step 2）の生成ファクトリ。
     /// 見た目は Assets/UI/Components/components.uss のクラスに定義し、ここは組み立てだけを行う。
     /// 各画面コントローラでチップ・バー行を private に自作しないこと（UI原則⑤）。
@@ -131,6 +145,82 @@ namespace KokoSim.Unity.Components
             }
 
             return row;
+        }
+
+        // ===== CompareRow（2選手の能力対比） =====
+
+        /// <summary>
+        /// 比較表のヘッダ（A/B カラムの見出し）。どちらのカラムかを色に頼らず読めるようにする。
+        /// <see cref="CompareRow"/> の並びの直前に1本だけ置く。
+        /// </summary>
+        public static VisualElement CompareHeader(string labelA = "A", string labelB = "B")
+        {
+            var head = new VisualElement();
+            head.AddToClassList("cmp-head");
+
+            var spacer = new VisualElement();
+            spacer.AddToClassList("cmp-head__spacer");
+            head.Add(spacer);
+
+            head.Add(HeadCol(labelA, "a"));
+            head.Add(HeadCol(labelB, "b"));
+            return head;
+        }
+
+        /// <summary>
+        /// 2選手比較の1行（項目名｜A: 値＋バー｜B: 値＋バー）。
+        /// A/B のバーはどちらも同じ左起点から右へ同一スケールで伸びるので、長さの差がそのまま優劣になる。
+        /// </summary>
+        public static VisualElement CompareRow(CompareRowData d)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("cmp-row");
+
+            var lab = new Label(d.Label);
+            lab.AddToClassList("cmp-row__lab");
+            row.Add(lab);
+
+            row.Add(CompareSide("a", d.HasA, d.ValueA, d.Winner == -1));
+            row.Add(CompareSide("b", d.HasB, d.ValueB, d.Winner == 1));
+            return row;
+        }
+
+        private static VisualElement HeadCol(string text, string side)
+        {
+            var col = new VisualElement();
+            col.AddToClassList("cmp-head__col");
+            col.AddToClassList("cmp-head__col--" + side);
+
+            var lab = new Label(text);
+            lab.AddToClassList("cmp-head__lab");
+            lab.AddToClassList("cmp-head__lab--" + side);
+            col.Add(lab);
+            return col;
+        }
+
+        private static VisualElement CompareSide(string side, bool has, int value, bool win)
+        {
+            var el = new VisualElement();
+            el.AddToClassList("cmp-row__side");
+            el.AddToClassList("cmp-row__side--" + side);
+
+            var val = new Label(has ? value.ToString() : "—");
+            val.AddToClassList("cmp-row__val");
+            if (has && win) val.AddToClassList("cmp-row__val--win");
+            el.Add(val);
+
+            var track = new VisualElement();
+            track.AddToClassList("cmp-row__track");
+            if (has)
+            {
+                var bar = new VisualElement();
+                bar.AddToClassList("cmp-row__bar");
+                bar.AddToClassList("cmp-row__bar--" + side);
+                bar.style.width = Length.Percent(Mathf.Clamp(value, 0, 100));
+                track.Add(bar);
+            }
+            el.Add(track);
+            return el;
         }
     }
 }

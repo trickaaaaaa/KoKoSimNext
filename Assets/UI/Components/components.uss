@@ -431,19 +431,49 @@
 .cmp-btn--a-on { background-color: var(--cmp-a); color: var(--color-ink); border-color: var(--cmp-a); }
 .cmp-btn--b-on { background-color: var(--cmp-b); color: var(--color-ink); border-color: var(--cmp-b); }
 
-/* ── CompareBar：2選手の能力対比（左右対向バー＋差分） ─────────────── */
+/* ── CompareBar：2選手の能力対比（A/B 2カラム並置・どちらも左起点で右へ伸びる） ──
+   項目名を左に固定し、右にAカラム／Bカラムを横並びにする。カラム内は 値 → トラック の順で、
+   バーは必ず同じ左起点から右へ伸ばす（旧レイアウトの線対称＝蝶形は起点が逆で優劣を読めなかった）。
+   行高14pxは維持（UI原則①）。どちらのカラムかは色（--cmp-a/--cmp-b）とヘッダ見出しの併記で示す。 */
+.cmp-head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 3px;
+    padding-bottom: 2px;
+    border-bottom-width: var(--border-w);
+    border-bottom-color: var(--color-line);
+}
+.cmp-head__spacer { width: 56px; flex-shrink: 0; }
+.cmp-head__col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; }
+.cmp-head__col--b { margin-left: var(--sp-2); }
+.cmp-head__lab {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: var(--color-ink);
+    border-radius: 3px;
+    padding-left: 5px;
+    padding-right: 5px;
+    letter-spacing: 1px;
+}
+.cmp-head__lab--a { background-color: var(--cmp-a); }
+.cmp-head__lab--b { background-color: var(--cmp-b); }
 .cmp-row { flex-direction: row; align-items: center; margin-top: 2px; margin-bottom: 2px; }
-.cmp-row__side { flex-grow: 1; flex-basis: 0; flex-direction: row; align-items: center; height: 14px; }
-.cmp-row__side--l { justify-content: flex-end; }
-.cmp-row__side--r { justify-content: flex-start; }
-.cmp-row__bar { height: 8px; border-radius: 4px; }
+.cmp-row__lab { width: 56px; flex-shrink: 0; -unity-text-align: middle-left; font-size: var(--fs-cap); color: var(--color-muted); }
+.cmp-row__side { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; height: 14px; }
+.cmp-row__side--b { margin-left: var(--sp-2); }
+.cmp-row__track { flex-grow: 1; flex-basis: 0; min-width: 0; height: 8px; background-color: var(--color-panel-deep); border-radius: 4px; }
+.cmp-row__bar { height: 100%; border-radius: 4px; }
 .cmp-row__bar--a { background-color: var(--cmp-a); }
 .cmp-row__bar--b { background-color: var(--cmp-b); }
-.cmp-row__val { font-size: var(--fs-cap); color: var(--color-muted); width: 22px; }
-.cmp-row__val--l { -unity-text-align: middle-right; margin-right: var(--sp-1); }
-.cmp-row__val--r { -unity-text-align: middle-left; margin-left: var(--sp-1); }
+.cmp-row__val {
+    width: 22px;
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    -unity-text-align: middle-right;
+    margin-right: var(--sp-1);
+}
 .cmp-row__val--win { color: var(--color-chalk); -unity-font-style: bold; }
-.cmp-row__lab { width: 64px; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-muted); }
 .cmp-card {
     flex-grow: 1;
     flex-basis: 0;
