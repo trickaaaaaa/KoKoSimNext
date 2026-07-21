@@ -21,7 +21,7 @@
     padding-left: var(--sp-4);
     padding-right: var(--sp-4);
 }
-.mp-title { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; }
+.mp-title { font-size: var(--fs-page); color: var(--color-chalk); }
 .mp-match { font-size: var(--fs-label); color: var(--color-muted); margin-left: var(--sp-4); }
 
 /* ── 本体：左＝自校／右＝相手校の完全ミラー2カラム（同じ幅・同じ構成） ── */
@@ -63,7 +63,6 @@
 .mp-side__name {
     font-size: var(--fs-page);
     color: var(--color-chalk);
-    -unity-font-style: bold;
     margin-right: var(--sp-2);
     white-space: nowrap;
     overflow: hidden;
@@ -108,7 +107,6 @@
     background-color: var(--color-lamp);
     color: var(--color-ink);
     font-size: var(--fs-body);
-    -unity-font-style: bold;
     border-width: 0;
     border-radius: var(--radius-panel);
 }

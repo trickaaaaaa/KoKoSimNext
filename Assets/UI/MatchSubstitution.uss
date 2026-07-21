@@ -25,7 +25,7 @@
     flex-shrink: 0;
     margin-bottom: var(--sp-3);
 }
-.msub-title { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; }
+.msub-title { font-size: var(--fs-page); color: var(--color-chalk); }
 .msub-phase {
     font-size: var(--fs-cap);
     color: var(--color-muted);
@@ -60,7 +60,6 @@
 .msub-section {
     font-size: var(--fs-label);
     color: var(--color-muted);
-    -unity-font-style: bold;
     margin-bottom: var(--sp-2);
     flex-shrink: 0;
 }
@@ -74,7 +73,7 @@
     font-size: var(--fs-cap);
     color: var(--color-muted);
     background-color: var(--color-panel-deep);
-    border-radius: 3px;
+    border-radius: var(--radius-chip);
     padding-left: 5px;
     padding-right: 5px;
     margin-right: var(--sp-2);
@@ -103,7 +102,6 @@
 .msub-cmp-group {
     font-size: var(--fs-cap);
     color: var(--color-muted);
-    -unity-font-style: bold;
     letter-spacing: 1px;
     margin-top: var(--sp-2);
     margin-bottom: var(--sp-1);
@@ -140,7 +138,6 @@
     flex-grow: 1;
     background-color: var(--color-lamp);
     color: var(--color-ink);
-    -unity-font-style: bold;
 }
 .msub-btn--go:hover { background-color: var(--color-lamp-hi); }
 .msub-btn--go:disabled { background-color: var(--color-panel-deep); color: var(--color-faint); }

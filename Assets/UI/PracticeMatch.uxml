@@ -17,7 +17,11 @@
 
         <!-- 見出し（自校の総合と1試合あたりの費用。資金残高は共通トップバーが持つ） -->
         <ui:VisualElement class="pm-masthead">
-          <ui:Label class="pm-kicker" text="PRACTICE ── 練習試合" />
+          <!-- 英語eyebrow廃止 → 新聞の柱見出し（RuleHead・設計書16 §5） -->
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="練習試合" />
+          </ui:VisualElement>
           <ui:VisualElement class="pm-mastline">
             <ui:Label name="pm-own" class="pm-title" text="" />
             <ui:VisualElement class="pm-mastmeta">

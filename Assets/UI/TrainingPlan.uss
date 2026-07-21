@@ -26,14 +26,14 @@
     padding-top: 10px; padding-bottom: 10px;
 }
 .tp-camp { flex-grow: 1; margin-right: 14px; }   /* .banner を継承 */
-.tp-camp__title { font-size: 15px; color: var(--color-chalk); -unity-font-style: bold; }
-.tp-camp__mult { font-size: 14px; color: var(--color-lamp); -unity-font-style: bold; margin-left: var(--sp-2); }
+.tp-camp__title { font-size: 15px; color: var(--color-chalk); }
+.tp-camp__mult { font-size: 14px; color: var(--color-lamp); margin-left: var(--sp-2); }
 .tp-camp__note { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
 .tp-camp__head { flex-direction: row; align-items: center; }
 .tp-camp__body { flex-grow: 1; }
 
 .tp-coach { flex-direction: row; align-items: center; }
-.tp-coach__title { font-size: var(--fs-label); color: var(--color-muted); -unity-font-style: bold; margin-right: var(--sp-3); white-space: normal; width: 52px; }
+.tp-coach__title { font-size: var(--fs-label); color: var(--color-muted); margin-right: var(--sp-3); white-space: normal; width: 52px; }
 .tp-coach__slots { flex-direction: row; }
 .nom-slot {
     flex-shrink: 0;
@@ -45,9 +45,8 @@
 }
 .nom-slot--empty { border-color: var(--color-line-soft); }
 .nom-slot__num {
-    font-size: var(--fs-label); color: var(--color-ink); background-color: var(--color-lamp);
-    -unity-font-style: bold; width: 22px; height: 22px;
-    -unity-text-align: middle-center; border-radius: 11px; margin-right: var(--sp-2);
+    font-size: var(--fs-label); color: var(--color-ink); background-color: var(--color-lamp); width: 22px; height: 22px;
+    -unity-text-align: middle-center; border-radius: var(--radius-chip); margin-right: var(--sp-2);
 }
 .nom-slot--empty .nom-slot__num { background-color: var(--color-line); color: var(--color-muted); }
 .nom-slot__name { font-size: var(--fs-label); color: var(--color-chalk); }
@@ -62,7 +61,7 @@
     border-bottom-width: var(--border-w); border-bottom-color: var(--color-line);
     padding-left: var(--sp-4); padding-right: var(--sp-4);
 }
-.tp-toolbar__title { font-size: var(--fs-body); color: var(--color-chalk); -unity-font-style: bold; }
+.tp-toolbar__title { font-size: var(--fs-body); color: var(--color-chalk); }
 .tp-toolbar__count { font-size: 14px; color: var(--color-muted); margin-left: var(--sp-2); }
 .tp-toolbar__spacer { flex-grow: 1; }
 .tp-toolbar__cap { font-size: 12px; color: var(--color-muted); margin-left: 14px; margin-right: var(--sp-1); letter-spacing: 1px; }
@@ -78,7 +77,7 @@
 }
 /* 固定列は flex-shrink: 0（付けないと隣の flex-grow 列の中身が広い行だけ幅を奪われ列がずれる＝横ずれの真因）。
    見出しLabelは既定 margin/padding を持つので 0 に潰し、データ列(VisualElement)と列境界を一致させる。 */
-.tp-th { font-size: 14px; color: var(--color-muted); letter-spacing: 1px; -unity-font-style: bold; flex-shrink: 0; margin: 0; padding: 0; }
+.tp-th { font-size: 14px; color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
 .tp-th--id { width: var(--col-id); }
 .tp-th--grade { width: var(--col-grade); -unity-text-align: middle-center; }
 .tp-th--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
@@ -122,10 +121,11 @@
 }
 .preset-open:hover { border-color: var(--line-focus); background-color: var(--sf-hover); }
 .preset-open__texts { flex-direction: column; flex-grow: 1; }
-.preset-open__label { font-size: 16px; color: var(--color-chalk); -unity-font-style: bold; }
+.preset-open__label { font-size: 16px; color: var(--color-chalk); }
 .preset-open__label--custom { color: var(--color-lamp); }
 .preset-open__focus { font-size: 13px; color: var(--color-muted); margin-top: 3px; }
-.preset-open__go { font-size: 15px; color: var(--color-lamp); flex-shrink: 0; }
+/* 行ごとに反復する導線なのでアクセントにしない（30行ぶん黄が並ぶと希少性が壊れる＝UI原則②）。 */
+.preset-open__go { font-size: 15px; color: var(--color-muted); flex-shrink: 0; }
 
 /* copy */
 .copy-btn {
@@ -187,11 +187,11 @@
 .tpm-preset:hover { border-color: var(--color-lamp); }
 .tpm-preset--on { border-color: var(--color-lamp); background-color: var(--color-panel); }
 .tpm-preset__head { flex-direction: row; align-items: center; }
-.tpm-preset__name { font-size: 16px; color: var(--color-chalk); -unity-font-style: bold; }
+.tpm-preset__name { font-size: 16px; color: var(--color-chalk); }
 .tpm-preset--on .tpm-preset__name { color: var(--color-lamp); }
 .tpm-preset__check {
     width: 22px; height: 22px; -unity-text-align: middle-center; margin-right: var(--sp-2);
-    color: var(--color-lamp); font-size: 16px; -unity-font-style: bold;
+    color: var(--color-lamp); font-size: 16px;
 }
 .tpm-preset__desc { font-size: 13px; color: var(--color-muted); white-space: normal; margin-top: 4px; margin-bottom: var(--sp-2); }
 .tpm-preset__bars { flex-direction: column; }
@@ -211,7 +211,7 @@
 }
 .tpm-done {
     font-size: var(--fs-label); color: var(--color-ink); background-color: var(--color-lamp);
-    border-width: var(--border-w); border-color: var(--color-lamp); border-radius: var(--radius-chip); -unity-font-style: bold;
+    border-width: var(--border-w); border-color: var(--color-lamp); border-radius: var(--radius-chip);
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
 }
 .tpm-done:hover { background-color: var(--color-lamp-hi); }
@@ -226,8 +226,8 @@
     border-width: 2px; border-color: var(--color-lamp); border-radius: var(--radius-panel); margin-right: var(--sp-3);
 }
 .tp-ed-id__cap { font-size: 9px; color: var(--color-muted); letter-spacing: 1px; }
-.tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--color-lamp); -unity-font-style: bold; }
-.tp-ed-who__name { font-size: var(--fs-page); color: var(--color-chalk); -unity-font-style: bold; margin-right: var(--sp-2); }
+.tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--color-lamp); }
+.tp-ed-who__name { font-size: var(--fs-page); color: var(--color-chalk); margin-right: var(--sp-2); }
 .nom-btn {
     font-size: 12px; color: var(--color-lamp);
     background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--color-lamp); border-radius: var(--radius-chip);
@@ -235,12 +235,12 @@
     flex-shrink: 0;
 }
 .nom-btn:hover { background-color: var(--color-panel-hover); }
-.nom-btn--on { background-color: var(--color-lamp); color: var(--color-ink); -unity-font-style: bold; }
+.nom-btn--on { background-color: var(--color-lamp); color: var(--color-ink); }
 
 .tp-ed-bar__remain { font-size: 14px; color: var(--color-muted); margin-bottom: var(--sp-1); }
 
 .tp-ed-section { flex-shrink: 0; flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
-.tp-ed-section__title { font-size: 15px; color: var(--color-lamp); -unity-font-style: bold; letter-spacing: 1px; }
+.tp-ed-section__title { font-size: 15px; color: var(--color-lamp); letter-spacing: 1px; }
 .tp-ed-section__title--mt { margin-top: var(--sp-4); margin-bottom: var(--sp-2); }
 .tp-ed-section__lock { font-size: 13px; color: var(--color-warn); margin-left: 10px; }
 
@@ -256,16 +256,16 @@
 .mslot--locked { opacity: 0.5; }
 .mslot__icon {
     width: 34px; height: 34px; -unity-text-align: middle-center;
-    background-color: var(--color-panel); color: var(--color-lamp); -unity-font-style: bold;
+    background-color: var(--color-panel); color: var(--color-lamp);
     border-radius: var(--radius-chip); margin-right: 12px; font-size: 16px;
 }
 .mslot__body { flex-grow: 1; }
 .mslot__name { font-size: 16px; color: var(--color-chalk); }
 .mslot__eff { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
-.mslot__min { width: 56px; -unity-text-align: middle-center; font-size: 17px; color: var(--color-lamp); -unity-font-style: bold; }
+.mslot__min { width: 56px; -unity-text-align: middle-center; font-size: 17px; color: var(--color-lamp); }
 
 /* templates（フッター内） */
-.tp-tpl__title { font-size: var(--fs-label); color: var(--color-muted); -unity-font-style: bold; margin-right: var(--sp-3); }
+.tp-tpl__title { font-size: var(--fs-label); color: var(--color-muted); margin-right: var(--sp-3); }
 .tp-tpl__list { flex-direction: row; flex-wrap: wrap; }
 .tpl-chip {
     font-size: 12px; color: var(--color-chalk); background-color: var(--color-panel);
@@ -285,7 +285,7 @@
 .tp-toast {
     position: absolute; bottom: 24px; left: 50%;
     translate: -50% 0;
-    background-color: var(--color-lamp); color: var(--color-ink); -unity-font-style: bold;
+    background-color: var(--color-lamp); color: var(--color-ink);
     font-size: 14px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: var(--radius-panel);
     display: none;
 }
@@ -324,13 +324,13 @@
 .tpm-head {
     background-color: var(--m-raise);
     border-bottom-width: 0;
-    border-top-left-radius: 16px; border-top-right-radius: 16px;
+    border-top-left-radius: var(--radius-card); border-top-right-radius: var(--radius-card);
     padding-left: 24px; padding-right: 20px; padding-top: 18px; padding-bottom: 18px;
 }
 .tpm-foot {
     background-color: var(--m-raise);
     border-top-width: 0;
-    border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;
+    border-bottom-left-radius: var(--radius-card); border-bottom-right-radius: var(--radius-card);
     padding-left: 24px; padding-right: 24px; padding-top: 16px; padding-bottom: 16px;
 }
 .tpm-side {
@@ -348,7 +348,7 @@
 /* 練習メニュー枠(mslot)：枠線廃止・カード面・上下14pxへ拡大・角丸12 */
 .tpm-card .mslot {
     background-color: var(--m-card);
-    border-width: 0; border-radius: 12px;
+    border-width: 0; border-radius: var(--radius-card);
     padding-left: 16px; padding-right: 16px; padding-top: 14px; padding-bottom: 14px;
     margin-bottom: 10px;
 }
@@ -366,7 +366,7 @@
 /* プリセットカード：枠線は選択時のフォーカス枠のみ。面の明度で区切る・角丸12・余白拡大 */
 .tpm-card .tpm-preset {
     background-color: var(--m-card);
-    border-width: 0; border-radius: 12px;
+    border-width: 0; border-radius: var(--radius-card);
     padding-left: 16px; padding-right: 16px; padding-top: 12px; padding-bottom: 12px;
     margin-bottom: 10px;
 }
@@ -385,7 +385,7 @@
 .tpm-card .stat-bar__fill { background-color: #7E8C84; }
 .tpm-card .gainbar__icon { background-color: #22302A; color: var(--t2); }
 .tpm-card .gainbar__name { color: var(--t2); }
-.tpm-card .gainbar__lv   { color: var(--t1); -unity-font-style: bold; }   /* %＝白 */
+.tpm-card .gainbar__lv   { color: var(--t1); }   /* %＝白 */
 .tpm-card .gainbar__lv--none { color: var(--t3); }
 
 /* バジェット（残り分）だけは最重要数値→黄アクセントを維持（バー＋数値ラベル） */
@@ -407,7 +407,7 @@
 .tpm-card .tp-tpl__title { color: var(--t2); }
 .tpm-card .tpl-chip {
     color: var(--t1); background-color: var(--m-card);
-    border-width: 0; border-radius: 8px;
+    border-width: 0; border-radius: var(--radius-card);
     padding-top: 4px; padding-bottom: 4px;
 }
 .tpm-card .tpl-chip:hover { background-color: var(--m-hover); border-width: 0; }
@@ -417,7 +417,7 @@
 
 /* 決定ボタン(CTA)：黄を維持・余白と角丸を少し充実 */
 .tpm-card .tpm-done {
-    border-radius: 10px;
+    border-radius: var(--radius-card);
     padding-left: 22px; padding-right: 22px; padding-top: 8px; padding-bottom: 8px;
 }
 

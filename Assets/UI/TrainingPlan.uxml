@@ -18,7 +18,7 @@
         <!-- ═══ SUB STRIP: 合宿バナー + 個別指導3枠 ═══ -->
         <ui:VisualElement class="tp-strip">
             <ui:VisualElement name="camp-banner" class="banner tp-camp">
-                <ui:Label text="CAMP" class="banner__badge" />
+                <ui:Label text="合宿" class="banner__badge" />
                 <ui:VisualElement class="tp-camp__body">
                     <ui:VisualElement class="tp-camp__head">
                         <ui:Label name="camp-title" text="冬合宿・鍛錬期" class="tp-camp__title" />

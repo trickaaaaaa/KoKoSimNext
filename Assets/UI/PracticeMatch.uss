@@ -19,11 +19,6 @@
     flex-shrink: 0;
     margin-bottom: var(--sp-3);
 }
-.pm-kicker {
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
-    letter-spacing: 1px;
-}
 .pm-mastline {
     flex-direction: row;
     justify-content: space-between;
@@ -33,7 +28,6 @@
 .pm-title {
     font-size: var(--fs-page);
     color: var(--color-chalk);
-    -unity-font-style: bold;
 }
 .pm-mastmeta { flex-direction: row; }
 .pm-kv {
@@ -85,7 +79,6 @@
 .pm-card__t {
     font-size: var(--fs-body);
     color: var(--color-chalk);
-    -unity-font-style: bold;
 }
 .pm-card__note {
     font-size: var(--fs-cap);
@@ -190,7 +183,6 @@
     background-color: var(--color-lamp);
     color: var(--color-ink);
     font-size: var(--fs-body);
-    -unity-font-style: bold;
     border-width: 0;
     border-radius: var(--radius-panel);
 }
