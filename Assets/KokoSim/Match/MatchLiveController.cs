@@ -49,6 +49,8 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float noPlayHoldSeconds = 1.2f;
         [Tooltip("投球フェーズの1球あたり表示時間[秒]（×2/×4速度に連動）。")]
         [SerializeField] private float pitchIntervalSeconds = 0.45f;
+        [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
+        [SerializeField] private float pitchCallHoldSeconds = 0.35f;
         [Tooltip("自校（後攻 home）の采配能力（委任AIの強さ・スキップ時に使用）。")]
         [SerializeField] private int managerTacticalSense = 70;
 
@@ -93,6 +95,13 @@ namespace KokoSim.Unity.Match
         private int _pitchIdx;
         private float _pitchClock;
         private bool _inPitchPhase;   // 投球フェーズ（B/S点灯）中か。false なら打球フェーズ/静止。
+
+        // 1球ごとの判定オーバーレイ（issue #6）。判定＋球速球種を盤面上に大きく短時間だけ出す。
+        // 球速・球種は実1球記録がある打席だけ（合成投球列は null＝出さない）。表示専用。
+        private VisualElement _pitchCall;
+        private Label _pitchCallJudge, _pitchCallDetail;
+        private float _pitchCallClock;
+        private bool _pitchCallOn;
 
         private void OnEnable()
         {
@@ -144,6 +153,10 @@ namespace KokoSim.Unity.Match
             _outDots = new[] { _root.Q<VisualElement>("o1"), _root.Q<VisualElement>("o2") };
             _bases = new[] { _root.Q<VisualElement>("base-1"), _root.Q<VisualElement>("base-2"), _root.Q<VisualElement>("base-3") };
 
+            _pitchCall = _root.Q<VisualElement>("pitch-call");
+            _pitchCallJudge = _root.Q<Label>("pitch-call-judge");
+            _pitchCallDetail = _root.Q<Label>("pitch-call-detail");
+
             ResetPerMatchVisuals();
             BuildGame();
             SetBackHomeVisible(false);
@@ -180,6 +193,8 @@ namespace KokoSim.Unity.Match
             _pitchIdx = 0;
             _pitchClock = 0f;
             _inPitchPhase = false;
+            _pitchCallClock = 0f;
+            _pitchCallOn = false;
             _pitchBattingChoice = null;
             _pitchPolicyChoice = null;
             _capHist.Clear();
@@ -196,6 +211,7 @@ namespace KokoSim.Unity.Match
             SetCount(0, 0);
             SetOuts(0);
             SetBases(false, false, false);
+            HidePitchCall();
             foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb.name == "spd-1");
             if (_result != null) _result.style.display = DisplayStyle.None;
         }
@@ -409,6 +425,7 @@ namespace KokoSim.Unity.Match
             // 投球フェーズ（B/S を1球ずつ点灯）。盤面は静止で待つ。
             _pitchIdx = 0;
             _pitchClock = 0f;
+            HidePitchCall();
             // Play==null（三振・四球）でも守備陣＋走者を静止表示する（打席前の塁状況）。
             if (_current.Play != null) _view.SetPlay(_current.Play);
             else _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
@@ -447,6 +464,7 @@ namespace KokoSim.Unity.Match
         // 打席解決: 塁ダイヤを結果へ更新してから采配窓へ。
         private void FinishPaView()
         {
+            HidePitchCall();
             SetBases(_current.BaseFirstAfter, _current.BaseSecondAfter, _current.BaseThirdAfter);
             PushHistory(HistoryLine(_current));   // プレー確定ごとに実況履歴へ1件積む
             EnterTacticsWindow(NextPrompt());
@@ -454,6 +472,13 @@ namespace KokoSim.Unity.Match
 
         private void Update()
         {
+            // 判定オーバーレイは自前の寿命で消す（打球再生へ移った直後の1球分もそのまま見せる）。
+            if (_pitchCallOn)
+            {
+                _pitchCallClock += Time.deltaTime * _speed;
+                if (_pitchCallClock >= pitchCallHoldSeconds) HidePitchCall();
+            }
+
             if (!_replaying || _current == null) return;
 
             if (_inPitchPhase)
@@ -465,6 +490,7 @@ namespace KokoSim.Unity.Match
                     _pitchClock -= pitchIntervalSeconds;
                     var pt = pitches[_pitchIdx];
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
+                    ShowPitchCall(pt);
                     _pitchIdx++;
                     if (_pitchIdx >= pitches.Count) EnterBattedBallOrHold();
                 }
@@ -554,6 +580,85 @@ namespace KokoSim.Unity.Match
         }
 
         private void SetOuts(int outs) => SetDots(_outDots, outs);
+
+        // ── 1球ごとの判定オーバーレイ（issue #6） ──
+        // 判定（ストライク/ボール/ファール…）を盤面上に大きく出し、実1球記録がある打席では球速・球種を併記する。
+        // 合成投球列（実記録なし・PitchSequenceSynthesizer）は球種・球速を持たないので判定だけを出す。
+        private void ShowPitchCall(PitchToken pt)
+        {
+            if (_pitchCall == null || _pitchCallJudge == null) return;
+
+            _pitchCallJudge.text = PitchJudgeJp(pt.Kind);
+            _pitchCallJudge.EnableInClassList("pitch-call__judge--strike", IsStrikeCall(pt.Kind));
+            _pitchCallJudge.EnableInClassList("pitch-call__judge--ball", pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Ball);
+
+            if (_pitchCallDetail != null)
+            {
+                var detail = PitchDetailText(pt);
+                _pitchCallDetail.text = detail;
+                _pitchCallDetail.style.display = detail.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
+            _pitchCall.style.display = DisplayStyle.Flex;
+            _pitchCallOn = true;
+            _pitchCallClock = 0f;
+        }
+
+        private void HidePitchCall()
+        {
+            _pitchCallOn = false;
+            _pitchCallClock = 0f;
+            if (_pitchCall != null) _pitchCall.style.display = DisplayStyle.None;
+        }
+
+        private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>
+            k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
+
+        private static string PitchJudgeJp(KokoSim.Engine.Match.AtBat.PitchKind k)
+        {
+            switch (k)
+            {
+                case KokoSim.Engine.Match.AtBat.PitchKind.Ball: return "ボール";
+                case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return "ストライク";
+                case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return "ストライク";
+                case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return "ファール";
+                case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "打った";
+                case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "死球";
+                default: return "";
+            }
+        }
+
+        // 判定の内訳（見逃し/空振り）＋球種＋球速。球種・球速は実1球記録がある打席だけ出す。
+        private static string PitchDetailText(PitchToken pt)
+        {
+            var note = pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike ? "見逃し"
+                : pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike ? "空振り" : "";
+            var pitch = pt.PitchType.HasValue ? PitchJp(pt.PitchType.Value) : "";
+            var velo = pt.VelocityKmh.HasValue
+                ? Mathf.RoundToInt((float)pt.VelocityKmh.Value).ToString() + "km/h" : "";
+
+            var s = note;
+            if (pitch.Length > 0) s = s.Length > 0 ? s + "　" + pitch : pitch;
+            if (velo.Length > 0) s = s.Length > 0 ? s + " " + velo : velo;
+            return s;
+        }
+
+        private static string PitchJp(PitchType t)
+        {
+            switch (t)
+            {
+                case PitchType.Fastball: return "ストレート";
+                case PitchType.TwoSeam: return "ツーシーム";
+                case PitchType.Cutter: return "カットボール";
+                case PitchType.Slider: return "スライダー";
+                case PitchType.Curve: return "カーブ";
+                case PitchType.Fork: return "フォーク";
+                case PitchType.Changeup: return "チェンジアップ";
+                case PitchType.Shuuto: return "シュート";
+                case PitchType.Sinker: return "シンカー";
+                default: return t.ToString();
+            }
+        }
 
         private void SetBases(bool first, bool second, bool third)
         {

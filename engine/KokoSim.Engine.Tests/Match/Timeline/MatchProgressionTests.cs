@@ -190,6 +190,11 @@ public sealed class MatchProgressionTests
                 Assert.Equal(entry.PitchLog[i].Kind, seq[i].Kind);
                 Assert.Equal(entry.PitchLog[i].BallsAfter, seq[i].BallsAfter);
                 Assert.Equal(entry.PitchLog[i].StrikesAfter, seq[i].StrikesAfter);
+                // 球種・球速も実記録のまま貫通する（1球ごとの判定オーバーレイ表示用・表示専用）。
+                Assert.Equal(entry.PitchLog[i].PitchType, seq[i].PitchType);
+                Assert.Equal(entry.PitchLog[i].VelocityKmh, seq[i].VelocityKmh);
+                Assert.NotNull(seq[i].VelocityKmh);
+                Assert.InRange(seq[i].VelocityKmh!.Value, 60.0, 180.0);
             }
             index++;
         }
