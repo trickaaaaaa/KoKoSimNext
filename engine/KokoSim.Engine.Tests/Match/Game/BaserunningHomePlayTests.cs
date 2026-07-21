@@ -187,4 +187,70 @@ public sealed class BaserunningHomePlayTests
         var (_, linerOutMoves) = ContactR1OnFly(StartType.Contact, isFly: false);
         Assert.Equal(0, linerOutMoves);
     }
+
+    // --- #87: 満塁の単打で二塁走者が消失するバグの回帰 ---
+    // (1) newSecond/newThird の2変数上書き (2) 安打側のフォース進塁の欠落、の両方を検出する。
+
+    [Fact]
+    public void BasesLoaded_Single_ForcedRunners_NoneVanish_ThirdCannotHoldAtThird()
+    {
+        // 三塁への送球が有利（近距離・速い処理・強肩）＋超慎重(aggression=0)＝二塁走者は本来なら自重したい
+        // 状況。しかし満塁なのでフォース: 三塁走者は自重不可（無条件生還）、二塁走者は自重できず三塁へ、
+        // 一塁走者は二塁へ確定する。誰も消えない。
+        var home = Context(distanceM: 10, fieldedAt: 0.3, arm: 80, aggression: 0.0);
+        var rng = new Xoshiro256Random(5);
+        var r1 = new Player { Name = "R1", Baserunning = 50 };
+        var r2 = new Player { Name = "R2", Baserunning = 50 };
+        var r3 = new Player { Name = "R3", Baserunning = 50 };
+        var batter = new Player { Name = "Batter" };
+        var bases = new BaseState { First = r1, Second = r2, Third = r3 };
+
+        var (runs, extraOuts, _, _, _, moves) = BaserunningModel.ApplyDetailed(
+            bases, PlateAppearanceResult.Single, batter, 0, C, rng, collectMoves: true, home);
+
+        Assert.Equal(1, runs);       // 三塁走者(フォース)は自重できず無条件生還
+        Assert.Equal(0, extraOuts);
+        Assert.Equal(3, bases.RunnerCount); // 誰も消えない: 二塁走者・一塁走者・打者が塁上に残る
+        Assert.Same(r2, bases.Third);   // 二塁走者は自重できず三塁へ押し出される
+        Assert.Same(r1, bases.Second);  // 一塁走者は二塁へ確定
+        Assert.Same(batter, bases.First);
+        Assert.Contains(moves, m => m.Runner == r3 && m.FromBase == 3 && m.ToBase == 4 && !m.Out);
+        Assert.Contains(moves, m => m.Runner == r2 && m.FromBase == 2 && m.ToBase == 3 && !m.Out);
+        Assert.Contains(moves, m => m.Runner == r1 && m.FromBase == 1 && m.ToBase == 2 && !m.Out);
+    }
+
+    // --- #87 完了条件: 打席の前後で 走者数 + 得点 + アウト が保存される（走者を落とさない） ---
+
+    [Fact]
+    public void RunnerAdvance_ConservesRunnerCountAcrossRandomConfigurations()
+    {
+        var rng = new Xoshiro256Random(2026);
+        var results = new[]
+        {
+            PlateAppearanceResult.Single, PlateAppearanceResult.Double, PlateAppearanceResult.ReachedOnError,
+        };
+
+        for (var trial = 0; trial < 5000; trial++)
+        {
+            var r1 = rng.NextDouble() < 0.5 ? new Player { Name = "R1", Baserunning = rng.NextInt(20, 90) } : null;
+            var r2 = rng.NextDouble() < 0.5 ? new Player { Name = "R2", Baserunning = rng.NextInt(20, 90) } : null;
+            var r3 = rng.NextDouble() < 0.5 ? new Player { Name = "R3", Baserunning = rng.NextInt(20, 90) } : null;
+            var batter = new Player { Name = "Batter" };
+            var bases = new BaseState { First = r1, Second = r2, Third = r3 };
+            var preRunners = bases.RunnerCount;
+
+            HomePlayContext? home = rng.NextDouble() < 0.5
+                ? Context(
+                    distanceM: rng.NextInt(10, 100), fieldedAt: 0.3 + rng.NextDouble() * 3.0,
+                    arm: rng.NextInt(30, 95), aggression: rng.NextDouble())
+                : null;
+            var result = results[rng.NextInt(0, results.Length)];
+
+            var (runs, extraOuts) = BaserunningModel.Apply(bases, result, batter, currentOuts: 0, C, rng, home);
+
+            var onBase = new[] { bases.First, bases.Second, bases.Third }.Where(p => p is not null).ToList();
+            Assert.True(onBase.Count == onBase.Distinct().Count(), "同じ走者が複数の塁に重複している");
+            Assert.Equal(preRunners + 1, onBase.Count + runs + extraOuts); // 元の走者+打者 = 塁上+得点+アウト
+        }
+    }
 }
