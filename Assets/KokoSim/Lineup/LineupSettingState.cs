@@ -388,7 +388,11 @@ namespace KokoSim.Unity.Lineup
         /// <summary>スタメンを確定できるか（ベンチ入り9人未満なら不可）。</summary>
         public bool CanConfirm => !_shortage;
 
+        /// <summary>カーソルを合わせた選手。未選択なら比較の左、選択中なら比較の右に出る。-1＝ホバーなし。</summary>
         public void SetHovered(int index) => _hovered = index;
+
+        /// <summary>カーソルが外れた（行/チップの PointerLeave）。表示が残らないようホバーを解除する。</summary>
+        public void ClearHovered(int index) { if (_hovered == index) _hovered = -1; }
         public void SetTab(int tab) => _tab = Math.Clamp(tab, 0, 1);
         private void ClearPick() { _picked = -1; _posPickSlot = -1; _pickKind = PickKind.None; }
 
@@ -488,7 +492,8 @@ namespace KokoSim.Unity.Lineup
             v.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(_roster);
 
             // 比較：左＝選択中、右＝ホバー中（選択があるとき・別人のとき）。
-            var leftIdx = _picked;
+            // 未選択のときはホバーだけで能力値を見せる（左＝ホバー選手）。クリック不要で一覧を舐められる。
+            var leftIdx = _picked >= 0 ? _picked : _hovered;
             var rightIdx = (_picked >= 0 && _hovered != _picked) ? _hovered : -1;
             v.CardA = MakeCard(leftIdx);
             v.CardB = MakeCard(rightIdx);

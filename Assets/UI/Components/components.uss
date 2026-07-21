@@ -319,6 +319,7 @@
 }
 .field-chip:hover { border-color: var(--color-line-focus); }
 .field-chip--picked { border-color: var(--color-lamp); background-color: rgba(40, 58, 44, 0.95); }
+.field-chip--picked:hover { border-color: var(--color-lamp); }
 .field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-lamp); -unity-font-style: bold; }
 .field-chip__name { font-size: var(--fs-cap); color: var(--color-chalk); -unity-font-style: bold; margin-left: 4px; margin-right: 3px; white-space: nowrap; }
 .field-chip__empty { font-size: var(--fs-cap); color: var(--color-faint); margin-left: 4px; }
@@ -388,6 +389,7 @@
 }
 .bench-slot:hover { border-color: var(--color-line-focus); }
 .bench-slot--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+.bench-slot--picked:hover { border-color: var(--color-lamp); }
 
 /* ── PoolChip：割当元プール（部員一覧の小片） ──────────────────────── */
 .pool-chip {
@@ -406,6 +408,7 @@
 }
 .pool-chip:hover { border-color: var(--color-line-focus); }
 .pool-chip--picked { border-color: var(--color-lamp); opacity: 1; }
+.pool-chip--picked:hover { border-color: var(--color-lamp); }
 .pool-chip__body { margin-left: var(--sp-2); margin-right: var(--sp-2); }
 .pool-chip__name { font-size: var(--fs-label); color: var(--color-chalk); }
 .pool-chip__meta { flex-direction: row; align-items: center; margin-top: 1px; }
@@ -463,12 +466,17 @@
     min-height: 40px;
     background-color: var(--color-panel);
     border-radius: var(--radius-chip);
+    /* 枠は常設で色だけ替える（ホバーで幅が増えると行がずれるため）。既定は面と同色＝見えない。 */
+    border-width: var(--border-w);
+    border-color: var(--color-panel);
     margin-bottom: 3px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-.lineup-row:hover { background-color: var(--color-row-hover); }
+/* ホバー＝枠（--color-line-focus）／選択＝枠（--color-lamp）。選択行をホバーしても選択色を保つ。 */
+.lineup-row:hover { background-color: var(--color-row-hover); border-color: var(--color-line-focus); }
 .lineup-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
+.lineup-row--picked:hover { border-color: var(--color-lamp); }
 .lineup-row__ord {
     width: 22px;
     -unity-text-align: middle-center;
@@ -521,12 +529,16 @@
     flex-shrink: 0;
     background-color: var(--color-panel);
     border-radius: var(--radius-chip);
+    /* lineup-row と同じ：枠は常設・色だけ替える（幅の増減で行がずれない）。 */
+    border-width: var(--border-w);
+    border-color: var(--color-panel);
     margin-bottom: 3px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-.bench-row:hover { background-color: var(--color-row-hover); }
+.bench-row:hover { background-color: var(--color-row-hover); border-color: var(--color-line-focus); }
 .bench-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
+.bench-row--picked:hover { border-color: var(--color-lamp); }
 .bench-row__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--color-chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: var(--sp-2); }
 .bench-row__tag { font-size: 10px; color: var(--color-muted); background-color: var(--color-panel-deep); border-radius: 3px; padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
 

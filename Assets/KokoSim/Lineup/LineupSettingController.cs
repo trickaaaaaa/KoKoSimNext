@@ -111,6 +111,7 @@ namespace KokoSim.Unity.Lineup
                 var pidx = r.PlayerIndex;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickRow(slot); Render(); });
                 row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
+                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
                 host.Add(row);
             }
         }
@@ -180,6 +181,7 @@ namespace KokoSim.Unity.Lineup
                 var idx = b.Index;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickBench(idx); Render(); });
                 row.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
+                row.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
                 host.Add(row);
             }
         }

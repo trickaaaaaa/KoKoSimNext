@@ -212,6 +212,7 @@ namespace KokoSim.Unity.Member
             var pidx = slot.PlayerIndex;
             el.RegisterCallback<ClickEvent>(_ => { _state.ClickSlot(n); Render(); });
             el.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(pidx); RenderCompareOnly(); });
+            el.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
         }
 
         // 枠カードの共通中身（2行）：①背番号＋名前(中央)＋位置ランク ②学年・投打＋解除。
@@ -284,7 +285,12 @@ namespace KokoSim.Unity.Member
                 ShowPopover(n);
                 RenderCompareOnly();
             });
-            el.RegisterCallback<PointerLeaveEvent>(_ => HidePopover(n));
+            el.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                HidePopover(n);
+                _state.ClearHovered(pidx);
+                RenderCompareOnly();
+            });
         }
 
         // 姓（フルネームの先頭トークン）。チップは省スペースなので姓のみ。フル名はポップオーバー。
@@ -383,6 +389,7 @@ namespace KokoSim.Unity.Member
                 var idx = p.Index;
                 chip.RegisterCallback<ClickEvent>(_ => { _state.ClickPool(idx); Render(); });
                 chip.RegisterCallback<PointerEnterEvent>(_ => { _state.SetHovered(idx); RenderCompareOnly(); });
+                chip.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(idx); RenderCompareOnly(); });
                 host.Add(chip);
             }
         }

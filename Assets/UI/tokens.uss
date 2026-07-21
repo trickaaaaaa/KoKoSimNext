@@ -36,6 +36,7 @@
     --color-panel-deep: #202A24;   /* = --sf-inset 小片・入力・ヘッダー地 */
     --color-line: #232E28;         /* = --divider 罫線は淡く（実質“面の境界”に降格） */
     --color-line-soft: #1C2620;    /* さらに弱い行区切り */
+    --color-line-focus: #3A4C42;   /* = --line-focus focus/ホバー枠（選択の --color-lamp とは別物） */
     --color-row-hover: #1F2A24;    /* 行ホバー */
     --color-panel-hover: #263129;  /* = --sf-hover ボタン/チップ ホバー面 */
 
