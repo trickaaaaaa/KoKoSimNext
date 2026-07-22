@@ -1112,6 +1112,8 @@ public static class CoefficientsLoader
         public int TimeoutDurationPa { get; set; } = D.TimeoutDurationPa;
         public int RattledConsecutiveBaserunners { get; set; } = D.RattledConsecutiveBaserunners;
         public double RattledNegativeAmplify { get; set; } = D.RattledNegativeAmplify;
+        public int RattledThresholdMentalOffset { get; set; } = D.RattledThresholdMentalOffset;
+        public int RattledRecoveryOuts { get; set; } = D.RattledRecoveryOuts;
         public double CaptainMitigationPerPower { get; set; } = D.CaptainMitigationPerPower;
         public double CaptainBenchFactor { get; set; } = D.CaptainBenchFactor;
         // 1球采配（設計書15 §2.3, Phase C）
@@ -1209,6 +1211,8 @@ public static class CoefficientsLoader
             TimeoutDurationPa = TimeoutDurationPa,
             RattledConsecutiveBaserunners = RattledConsecutiveBaserunners,
             RattledNegativeAmplify = RattledNegativeAmplify,
+            RattledThresholdMentalOffset = RattledThresholdMentalOffset,
+            RattledRecoveryOuts = RattledRecoveryOuts,
             CaptainMitigationPerPower = CaptainMitigationPerPower,
             CaptainBenchFactor = CaptainBenchFactor,
             PitchTacticsTwoStrikeForceSwingProb = PitchTacticsTwoStrikeForceSwingProb,

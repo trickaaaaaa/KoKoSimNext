@@ -372,21 +372,32 @@ public sealed class TeamState
     public void TickOffenseCalm() { if (OffenseCalmPa > 0) OffenseCalmPa--; }
     public void TickDefenseCalm() { if (DefenseCalmPa > 0) DefenseCalmPa--; }
 
-    /// <summary>投手の「動揺」（連続出塁で発生, §3）。伝令・イニング跨ぎ・継投で解除。</summary>
+    /// <summary>投手の「動揺」（連続出塁で発生, §3）。伝令・イニング跨ぎ・継投、またはアウト累積の自然回復で解除。</summary>
     public bool PitcherRattled { get; private set; }
     private int _consecutiveBaserunners;
+    private int _outsSinceRattled;
 
-    public void NotePitchingResult(PlateAppearanceResult r, int rattledThreshold)
+    /// <summary>
+    /// rattledThreshold: 精神力込みの発生閾値（<see cref="Tactics.TacticsCoefficients.RattledThresholdFor"/>）。
+    /// outsThisPa/recoveryOuts: 動揺中に無失点でアウトを積んだ数がrecoveryOutsに達すると自然回復（issue #73）。
+    /// </summary>
+    public void NotePitchingResult(PlateAppearanceResult r, int rattledThreshold, int outsThisPa, int recoveryOuts)
     {
         if (r.IsHit() || r is PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch
             or PlateAppearanceResult.ReachedOnError)
         {
             _consecutiveBaserunners++;
             if (_consecutiveBaserunners >= rattledThreshold) PitcherRattled = true;
+            _outsSinceRattled = 0;
         }
         else
         {
             _consecutiveBaserunners = 0;
+            if (PitcherRattled)
+            {
+                _outsSinceRattled += outsThisPa;
+                if (_outsSinceRattled >= recoveryOuts) ClearRattled();
+            }
         }
     }
 
@@ -394,6 +405,7 @@ public sealed class TeamState
     {
         PitcherRattled = false;
         _consecutiveBaserunners = 0;
+        _outsSinceRattled = 0;
     }
 
     /// <summary>

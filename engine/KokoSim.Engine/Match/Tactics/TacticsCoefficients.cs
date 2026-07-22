@@ -1,3 +1,4 @@
+using System;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Tactics;
@@ -184,6 +185,10 @@ public sealed record TacticsCoefficients
     /// <summary>動揺: 連続出塁がこの数に達すると投手が動揺し、負補正が増幅される。</summary>
     public int RattledConsecutiveBaserunners { get; init; } = 3;
     public double RattledNegativeAmplify { get; init; } = 1.4;
+    /// <summary>動揺の発生耐性（精神力50で従来と同値, 100で+offset・0で-offset）。</summary>
+    public int RattledThresholdMentalOffset { get; init; } = 1;
+    /// <summary>動揺後、無失点でこの数だけアウトを重ねると自然回復（伝令・継投を使わず解除）。</summary>
+    public int RattledRecoveryOuts { get; init; } = 2;
     /// <summary>主将: 統率力（統率傾向×精神力/100, 0〜100）1あたりの負補正緩和。ベンチ時は大きく減衰。</summary>
     public double CaptainMitigationPerPower { get; init; } = 0.004;
     public double CaptainBenchFactor { get; init; } = 0.30;
@@ -202,4 +207,14 @@ public sealed record TacticsCoefficients
         },
         _ => PitchDirective.Identity,
     };
+
+    /// <summary>
+    /// 動揺の発生閾値（連続出塁数）。精神力50なら <see cref="RattledConsecutiveBaserunners"/> のまま（従来と同値）、
+    /// 高いほど閾値が上がって動揺しにくく、低いほど下がって動揺しやすい（PressureModel と同じ(mental-50)/50の式）。
+    /// </summary>
+    public int RattledThresholdFor(int mental)
+    {
+        var offset = (int)Math.Round((mental - 50) / 50.0 * RattledThresholdMentalOffset);
+        return Math.Max(1, RattledConsecutiveBaserunners + offset);
+    }
 }

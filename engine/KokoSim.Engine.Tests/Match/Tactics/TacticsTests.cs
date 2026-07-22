@@ -452,19 +452,63 @@ public sealed class TacticsTests
     [Fact]
     public void Rattled_ConsecutiveBaserunners_SetsAndClears()
     {
+        // recoveryOuts=99 で自然回復（issue #73）を無効化し、発生・伝令解除・連続カウントのリセットだけを見る。
+        const int noRecovery = 99;
         var st = new TeamState(TeamOf("A"));
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
-        st.NotePitchingResult(PlateAppearanceResult.Walk, 3);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.Walk, 3, 0, noRecovery);
         Assert.False(st.PitcherRattled);
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
         Assert.True(st.PitcherRattled);
         st.ClearRattled(); // 伝令で解除
         Assert.False(st.PitcherRattled);
         // アウトで連続カウントはリセットされる。
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
-        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3);
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        Assert.False(st.PitcherRattled);
+    }
+
+    [Fact]
+    public void Rattled_MentalRaisesThreshold_HigherMentalHarderToRattle()
+    {
+        var lowThreshold = C.RattledThresholdFor(0);
+        var baseThreshold = C.RattledThresholdFor(50);
+        var highThreshold = C.RattledThresholdFor(100);
+        Assert.Equal(C.RattledConsecutiveBaserunners, baseThreshold); // 精神力50は従来と同値
+        Assert.True(highThreshold > baseThreshold); // 精神力が高いほど動揺しにくい
+        Assert.True(lowThreshold < baseThreshold);  // 精神力が低いほど動揺しやすい
+    }
+
+    [Fact]
+    public void Rattled_RecoversNaturallyAfterEnoughOuts()
+    {
+        var st = new TeamState(TeamOf("A"));
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2);
+        Assert.True(st.PitcherRattled); // まだ1アウトなので継続
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2);
+        Assert.False(st.PitcherRattled); // 2アウト目で自然回復
+    }
+
+    [Fact]
+    public void Rattled_RecoveryProgressResetsOnNewBaserunner()
+    {
+        var st = new TeamState(TeamOf("A"));
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2); // 1アウト進捗
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);    // 出塁で回復進捗リセット
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2); // 1アウト目（リセット後）
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2); // 2アウト目でようやく回復
         Assert.False(st.PitcherRattled);
     }
 

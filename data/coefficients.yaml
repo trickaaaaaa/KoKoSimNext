@@ -443,6 +443,8 @@ tactics:
   timeout_duration_pa: 3
   rattled_consecutive_baserunners: 3
   rattled_negative_amplify: 1.4
+  rattled_threshold_mental_offset: 1   # 精神力50で従来同値・100で+1しにくく・0で-1しやすく（issue #73）
+  rattled_recovery_outs: 2             # 動揺後、無失点でこの数アウトを重ねると自然回復（issue #73）
   captain_mitigation_per_power: 0.004   # 統率力（統率傾向×精神力/100）1あたりの負補正緩和
   captain_bench_factor: 0.30
   # 1球采配（設計書15 §2.3, Phase C）
