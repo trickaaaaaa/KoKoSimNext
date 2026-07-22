@@ -251,6 +251,12 @@ namespace KokoSim.Unity.Tournament
             top.AddToClassList("brk-line--top");
             card.Add(top);
             card.Add(SlotLine(c.Bottom));
+            if (c.MercyEnded)
+            {
+                var mercy = new Label("コールド");
+                mercy.AddToClassList("brk-mercy");
+                card.Add(mercy);
+            }
             return card;
         }
 
@@ -403,6 +409,12 @@ namespace KokoSim.Unity.Tournament
             score.AddToClassList("tp-mscore");
             score.AddToClassList("f-num");
             sub.Add(score);
+            if (m.MercyEnded)
+            {
+                var mercy = new Label("コールド");
+                mercy.AddToClassList("tp-seed");
+                sub.Add(mercy);
+            }
             sub.Add(UiComponents.SchoolName(m.LoserName));
             body.Add(sub);
 

@@ -91,7 +91,8 @@ namespace KokoSim.Unity.MatchResult
             {
                 OutcomeText = r.Tied ? "引き分け" : ownRuns > oppRuns ? "勝利" : "敗戦",
                 ManagerWon = !r.Tied && ownRuns > oppRuns,
-                ScoreText = ownName + "  " + ownRuns + " - " + oppRuns + "  " + oppName,
+                ScoreText = ownName + "  " + ownRuns + " - " + oppRuns + "  " + oppName
+                    + (r.MercyEnded ? $"（{r.InningsPlayed}回コールド）" : ""),
                 AwayLine = LineRow(awayName, isOwn: managerIsAway, r.AwayRuns, r.AwayHits, r.AwayErrors),
                 HomeLine = LineRow(homeName, isOwn: !managerIsAway, r.HomeRuns, r.HomeHits, r.HomeErrors),
                 Own = Side(r, managerIsAway, ownName, "自校", isOwn: true,
