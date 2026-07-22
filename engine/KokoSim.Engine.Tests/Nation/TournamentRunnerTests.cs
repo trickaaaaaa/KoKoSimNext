@@ -91,6 +91,42 @@ public sealed class TournamentRunnerTests
         }
     }
 
+    /// <summary>
+    /// issue #138: 試合後の大会処理（ブラケットのフルシム＝FinishBracketInBackground/AdvanceUntilPlayerMatch）を
+    /// Unity 側で別スレッド（Task.Run）へ載せ替えてメインスレッドから外しても、同シードなら最終大会結果が
+    /// 同期実行版と完全一致することを保証する（不変条件#2 決定論・オーナー判断 Q3(a)）。
+    /// エンジンは単一スレッド逐次のままなので、各手（PlayNextPlayerMatch）を呼び出しスレッドで回しても
+    /// スレッドプールで回しても RNG 消費順・取り込み順は不変＝結果は一致する。
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task OffThreadCompletion_MatchesSyncResult()
+    {
+        var field = Field(60, 15, 55);
+
+        // 同期実行版（従来どおり呼び出しスレッドで消化）。
+        var sync = NewRunner(field, seed: 7);
+        PlayToEnd(sync);
+
+        // 非同期実行版（各手をスレッドプールで実行してからメインへ join＝Unity の Task.Run 相当）。
+        var async = NewRunner(field, seed: 7);
+        while (!async.Finished)
+            await System.Threading.Tasks.Task.Run(() => async.PlayNextPlayerMatch());
+
+        var vs = sync.BuildBracketView();
+        var va = async.BuildBracketView();
+        Assert.Equal(sync.IsChampion, async.IsChampion);
+        Assert.Equal(vs.ChampionName, va.ChampionName);
+        Assert.Equal(vs.Matches.Count, va.Matches.Count);
+        for (var i = 0; i < vs.Matches.Count; i++)
+        {
+            Assert.Equal(vs.Matches[i].RoundName, va.Matches[i].RoundName);
+            Assert.Equal(vs.Matches[i].WinnerName, va.Matches[i].WinnerName);
+            Assert.Equal(vs.Matches[i].LoserName, va.Matches[i].LoserName);
+            Assert.Equal(vs.Matches[i].WinnerScore, va.Matches[i].WinnerScore);
+            Assert.Equal(vs.Matches[i].LoserScore, va.Matches[i].LoserScore);
+        }
+    }
+
     [Fact]
     public void NextMatchDay_AdvancesByGap_WhenNoByes()
     {
