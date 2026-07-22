@@ -619,6 +619,10 @@ training:
   # 監督指導力を注入すると 投手系←Coaching.Pitching / 守備・走塁系←Coaching.Defense / 打撃系←Coaching.Batting で駆動。
   coaching_level: 20.0
   coaching_slope: 0.005       # 1+指導力×slope×素直さ。名将(指導力90)→factor≈1.45（設計書02）
+  # 個別指導3枠（#126・OPEN-QUESTIONS Q7(a)）: 指名選手の主効果expへ #115のcoachingFactor比を
+  # もう一段乗せる。追加倍率=1+(coachingFactor比−1)×bonus_scale。指名なし/coaching未注入なら1.0で従来一致。
+  individual_coaching_slots: 3
+  individual_coaching_bonus_scale: 1.0
   # 施設レベル→(係数, 週練習時間[分])（#115・設計書03 §4 / 04）。index=施設レベル。Lv0=現状(1.0/300)で従来一致。
   # 資金/名声からレベルを上げる接続は将来（OPEN-QUESTIONS Q6）。現状は SeasonContext.FacilityLevel の注入口のみ。
   # 「豪腕素質×名将＋フル施設(Lv4)で3年+15〜20km/h」が成立するよう据える（out/overnight/issue-115 で実測）。

@@ -58,7 +58,8 @@ public static class DevelopmentModel
             var scale = minutes / refMinutes;
             var eff = TrainingMenus.Effects(menu);
             if (eff.Main is { } mainAbility)
-                ApplyExp(p, mainAbility, common * scale * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor), c);
+                ApplyExp(p, mainAbility, common * scale * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
+                    * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor), c);
             foreach (var subAbility in eff.Subs)
                 ApplyExp(p, subAbility, common * scale * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
             // 守備位置適性は守備・走塁分野（Defense 指導力）で駆動する。
@@ -77,6 +78,21 @@ public static class DevelopmentModel
         if (coaching is null) return 1.0;
         var factor = 1.0 + coaching.LevelFor(ability) * c.CoachingSlope * receptivity;
         return factor / baselineFactor;
+    }
+
+    /// <summary>
+    /// 個別指導3枠の追加倍率（Issue #126・OPEN-QUESTIONS Q7(a)）。<paramref name="p"/> が指名中
+    /// （<see cref="DevelopingPlayer.IndividualCoaching"/>）のときだけ、その週の主効果expへ
+    /// #115のcoachingFactor比（<see cref="CoachAdj"/>）をもう一段乗せる。
+    /// 追加倍率 = 1 + (coachingFactor比 − 1) × IndividualCoachingBonusScale。
+    /// 非指名 or coaching=null（比=1.0）なら 1.0＝従来一致。
+    /// </summary>
+    private static double IndividualCoachingBonus(AbilityKind ability, DevelopingPlayer p,
+        CoachingProfile? coaching, TrainingCoefficients c, double receptivity, double baselineFactor)
+    {
+        if (!p.IndividualCoaching) return 1.0;
+        var ratio = CoachAdj(ability, coaching, c, receptivity, baselineFactor);
+        return 1.0 + (ratio - 1.0) * c.IndividualCoachingBonusScale;
     }
 
     public static void TrainWeek(
@@ -116,7 +132,8 @@ public static class DevelopmentModel
         var defenseAdj = CoachAdj(AbilityKind.Fielding, coaching, c, receptivity, baselineFactor);
 
         if (eff.Main is { } mainAbility)
-            ApplyExp(p, mainAbility, common * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor), c);
+            ApplyExp(p, mainAbility, common * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)
+                * IndividualCoachingBonus(mainAbility, p, coaching, c, receptivity, baselineFactor), c);
         foreach (var subAbility in eff.Subs)
             ApplyExp(p, subAbility, common * c.SubFactor * CoachAdj(subAbility, coaching, c, receptivity, baselineFactor), c);
         // 守備位置適性（設計書01 §1.1）: 守備分野の伸びしろを乗せる（Defense 指導力）。

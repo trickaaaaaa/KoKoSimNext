@@ -23,6 +23,20 @@ public sealed record TrainingCoefficients
     public double CoachingSlope { get; init; } = 0.005;
 
     /// <summary>
+    /// 個別指導3枠のスロット数上限（Issue #126・設計書06 §3.3）。エンジン側では強制しない
+    /// （UI側の <c>TrainingPlanState.ToggleNominate</c> がこの値を上限として使う）。
+    /// </summary>
+    public int IndividualCoachingSlots { get; init; } = 3;
+
+    /// <summary>
+    /// 個別指導3枠の追加倍率スケール（Issue #126・OPEN-QUESTIONS Q7(a)）。指名選手の主効果expにだけ、
+    /// 分野別指導力由来のcoachingFactor比（Issue #115・<see cref="DevelopmentModel"/> の中立点比）を
+    /// もう一段乗せる: 追加倍率 = 1 + (coachingFactor比 − 1) × このスケール。
+    /// 既定1.0＝#115の写像をそのまま流用。coaching=null または指名なしなら追加倍率は1.0（従来一致）。
+    /// </summary>
+    public double IndividualCoachingBonusScale { get; init; } = 1.0;
+
+    /// <summary>
     /// 施設レベル→(係数, 週練習時間) 対応表（Issue #115・設計書03 §4）。index=施設レベル。
     /// 空（既定）なら <see cref="FacilityCoef"/> / <see cref="DefaultBudgetMinutes"/> をそのまま使い従来一致。
     /// SeasonContext.FacilityLevel で選択し、レベル0はここでも現状値に据える。
