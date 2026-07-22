@@ -24,6 +24,10 @@ public sealed record BaserunningCoefficients
     /// <summary>失策出塁（ReachedOnError）時、全走者＋打者に追加1進塁が発生する基準確率（design-14 P1-6）。
     /// 既定0＝機能オフ、乱数消費順・結果とも Single と完全一致。</summary>
     public double ErrorExtraAdvanceProb { get; init; } = 0.0;
+    /// <summary>送球者の送球精度(ThrowAccuracy−50)あたりのErrorExtraAdvanceProb減少幅（Issue #37）。
+    /// 送球者が特定できる内野ゴロの失策（フライ捕球の落球は対象外）にのみ適用。ThrowAccuracy50 or
+    /// 送球者不明では従来通りErrorExtraAdvanceProbそのまま＝恒等。</summary>
+    public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.0015;
     /// <summary>一塁空き or 2アウトの三振で振り逃げが成立する基準確率（design-14 P1-2）。
     /// 既定0＝機能オフ、乱数消費順・結果とも従来と完全一致。</summary>
     public double DropThirdStrikeReachProb { get; init; } = 0.0;

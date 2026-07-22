@@ -142,6 +142,23 @@
 - **帯影響**: 失策絡みの失点が増える。失点分布・被失策時の期待得点。
 - **テスト**: 失策多発設定で「失策1つあたりの平均進塁」が基準を上回ることを確認。
 
+**送球精度の接続（Issue #37, 決定A=(a)簡易確率式）**:
+`ThrowAccuracy` は表示値を直接 `悪送球確率 = base − (ThrowAccuracy−50)×slope` へ投入する簡易式で消費する
+（σ経由の幾何モデルは見送り。将来「送球連鎖描画」系タスクで再検討）。
+
+- **内野ゴロ→一塁送球の失策**（`FieldingResolver.MaybeGroundBallError`）: 捕球ロール（`Catching`, 既存の
+  `ErrorBaseProb`/`ErrorCatchingSlope`）→送球ロール（`ThrowAccuracy`, 新設 `ThrowErrorBaseProb`/
+  `ThrowErrorAccuracySlope`）の2段階で按分（決定B）。`ThrowErrorBaseProb=0` なので `ThrowAccuracy=50`
+  で送球ロールの寄与が0＝従来の捕球ロール単独と恒等。フライ捕球の落球（`MaybeError`）は対象外＝送球という
+  事象が発生していないため従来通り `Catching` のみ。
+- **失策連鎖の按分**（`BaserunningModel.ApplyDetailed` の `errorThrowerAccuracy` 引数, 決定C）: 送球者が
+  特定できる内野ゴロの送球エラーに限り、`ErrorExtraAdvanceProb` を送球者本人の `ThrowAccuracy` で
+  `coeff.ErrorExtraAdvanceProb − (ThrowAccuracy−50)×ErrorExtraAdvanceAccuracySlope` へ按分する。フライ落球
+  （送球者不在）・守備位置未解決時は引数 `null` のまま＝従来の一律確率。`GameEngine` が
+  `res.Play is { IsFly: false, FielderRole }` から送球者を解決して橋渡しする（`HomePlayContext` と同様、
+  `FieldingPlay` の幾何・野手情報を側路で運ぶ構成）。
+- **盗塁阻止・本塁クロスプレー中継・帰塁送球への適用**（決定D）: 本Issueでは未着手。段階導入（1コミット=1適用箇所）で追う。
+
 ### P2-7. 死球（HBP）
 
 - **現状**: 列挙型に無し。四球のみ。

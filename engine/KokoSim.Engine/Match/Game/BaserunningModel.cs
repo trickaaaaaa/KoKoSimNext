@@ -61,7 +61,7 @@ public static class BaserunningModel
         bool ErrorExtraAdvanceOccurred, IReadOnlyList<RunnerMove> Moves) ApplyDetailed(
         BaseState bases, PlateAppearanceResult result, Player batter,
         int currentOuts, BaserunningCoefficients coeff, IRandomSource rng, bool collectMoves = true,
-        HomePlayContext? home = null, StartType r1Start = StartType.Normal)
+        HomePlayContext? home = null, StartType r1Start = StartType.Normal, int? errorThrowerAccuracy = null)
     {
         var mv = collectMoves ? new List<RunnerMove>() : null;
         var r1 = bases.First;
@@ -94,7 +94,13 @@ public static class BaserunningModel
                 var errorExtraAdvanceOccurred = false;
                 if (coeff.ErrorExtraAdvanceProb > 0.0)
                 {
-                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, coeff, rng, mv);
+                    // 送球者が特定できる（内野ゴロの送球エラー）場合のみThrowAccuracyで按分（Issue #37）。
+                    // ThrowAccuracy50 or 送球者不明（フライ落球等）ではErrorExtraAdvanceProbそのまま＝恒等。
+                    var prob = errorThrowerAccuracy is { } acc
+                        ? MathUtil.Clamp(
+                            coeff.ErrorExtraAdvanceProb - (acc - 50) * coeff.ErrorExtraAdvanceAccuracySlope, 0.0, 1.0)
+                        : coeff.ErrorExtraAdvanceProb;
+                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, prob, rng, mv);
                     runs += extraRuns;
                     errorExtraAdvanceOccurred = occurred;
                 }
@@ -373,13 +379,14 @@ public static class BaserunningModel
     }
 
     /// <summary>失策の連鎖（design-14 P1-6）: 悪送球1本で塁上の走者全員＋打者走者が1つ多く進む、という単一事象として
-    /// 一括モデル化する（個別確率ではない）。<paramref name="coeff"/>.ErrorExtraAdvanceProb &gt; 0 のときのみ呼ばれる。</summary>
+    /// 一括モデル化する（個別確率ではない）。呼び出し元で <paramref name="prob"/> &gt; 0 のときのみ呼ばれる
+    /// （<paramref name="prob"/>はErrorExtraAdvanceProbを送球者のThrowAccuracyで按分した後の値, Issue #37）。</summary>
     private static (int Runs, bool Occurred) ApplyErrorExtraAdvance(
         BaseState bases, Player batter, int currentOuts, int extraOuts,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+        double prob, IRandomSource rng, List<RunnerMove>? mv)
     {
         if (currentOuts + extraOuts >= 3) return (0, false);
-        if (!MathUtil.Chance(coeff.ErrorExtraAdvanceProb, rng)) return (0, false);
+        if (!MathUtil.Chance(prob, rng)) return (0, false);
 
         var runs = 0;
         var third = bases.Third;

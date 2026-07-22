@@ -352,6 +352,64 @@ public sealed class BaserunningPlaysTests
         Assert.True(on > off, $"失策連鎖を有効化しても平均得点が増えない: off={off:F2} on={on:F2}");
     }
 
+    // --- 失策連鎖のσ（ThrowAccuracy）駆動化（Issue #37）: 送球者が特定できる内野ゴロの送球エラーのみ按分 ---
+
+    [Fact]
+    public void ErrorExtraAdvance_ThrowerAccuracy50_MatchesUnknownThrowerExactly()
+    {
+        var coeff = C with { ErrorExtraAdvanceProb = 0.5 };
+        for (ulong seed = 0; seed < 100; seed++)
+        {
+            var basesUnknown = new BaseState
+            {
+                Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 },
+            };
+            var unknown = BaserunningModel.ApplyDetailed(
+                basesUnknown, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed));
+
+            var basesAvg = new BaseState
+            {
+                Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 },
+            };
+            var avgAccuracy = BaserunningModel.ApplyDetailed(
+                basesAvg, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed),
+                errorThrowerAccuracy: 50);
+
+            Assert.Equal(unknown.Runs, avgAccuracy.Runs);
+            Assert.Equal(unknown.ExtraOuts, avgAccuracy.ExtraOuts);
+        }
+    }
+
+    [Fact]
+    public void ErrorExtraAdvance_LowerThrowerAccuracy_RaisesAverageRunsPerError()
+    {
+        double AvgRuns(int? accuracy, int trials = 4000, ulong seed = 7)
+        {
+            var coeff = C with { ErrorExtraAdvanceProb = 0.3 };
+            var rng = new Xoshiro256Random(seed);
+            var total = 0;
+            for (var i = 0; i < trials; i++)
+            {
+                var bases = new BaseState
+                {
+                    Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 },
+                };
+                var (runs, _, _, _, _, _) = BaserunningModel.ApplyDetailed(
+                    bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng,
+                    errorThrowerAccuracy: accuracy);
+                total += runs;
+            }
+            return (double)total / trials;
+        }
+
+        var worstArm = AvgRuns(0);
+        var average = AvgRuns(50);
+        var bestArm = AvgRuns(100);
+
+        Assert.True(worstArm > average, $"worst={worstArm:F2} average={average:F2}");
+        Assert.True(average >= bestArm, $"average={average:F2} best={bestArm:F2}");
+    }
+
     // --- 振り逃げ（第3ストライク不捕球, design-14 P1-2）: 既定オフでは従来の試合結果と完全一致 ---
     // 判定自体は GameEngine.PlayHalf（private）に埋め込まれているため、BaserunningModel.IsBatterOut の
     // 純関数部分は直接、rng消費・帯への影響は GameEngine.Play を通した統計的な検証で担保する。

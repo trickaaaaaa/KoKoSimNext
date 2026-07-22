@@ -70,6 +70,15 @@ public sealed record FieldingCoefficients
     /// <summary>捕球(Catching−50)あたりのエラー減少。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0003;
 
+    /// <summary>
+    /// 内野ゴロ→一塁送球の送球エラー基準確率（ThrowAccuracy50時）。既定0＝ThrowAccuracy50で恒等
+    /// （Issue #37）。捕球ロール（ErrorBaseProb系, Catching）→送球ロール（この確率, ThrowAccuracy）の
+    /// 2段階で判定し、どちらかが成立すれば失策とする。フライ捕球（<see cref="MaybeError"/>単独）には適用しない。
+    /// </summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.0;
+    /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。</summary>
+    public double ThrowErrorAccuracySlope { get; init; } = 0.0003;
+
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 
     /// <summary>着地後の転がりの減速度[m/s²]（芝・土の摩擦＋バウンドの損失を集約）。</summary>

@@ -343,6 +343,8 @@ public static class CoefficientsLoader
         public double ForceOutMarginSeconds { get; set; } = D.ForceOutMarginSeconds;
         public double ErrorBaseProb { get; set; } = D.ErrorBaseProb;
         public double ErrorCatchingSlope { get; set; } = D.ErrorCatchingSlope;
+        public double ThrowErrorBaseProb { get; set; } = D.ThrowErrorBaseProb;
+        public double ThrowErrorAccuracySlope { get; set; } = D.ThrowErrorAccuracySlope;
         public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
         public double CatchReachCapSeconds { get; set; } = D.CatchReachCapSeconds;
         public double RollDecelMps2 { get; set; } = D.RollDecelMps2;
@@ -371,6 +373,8 @@ public static class CoefficientsLoader
             ForceOutMarginSeconds = ForceOutMarginSeconds,
             ErrorBaseProb = ErrorBaseProb,
             ErrorCatchingSlope = ErrorCatchingSlope,
+            ThrowErrorBaseProb = ThrowErrorBaseProb,
+            ThrowErrorAccuracySlope = ThrowErrorAccuracySlope,
             CatchReachFieldingSlope = CatchReachFieldingSlope,
             CatchReachCapSeconds = CatchReachCapSeconds,
             RollDecelMps2 = RollDecelMps2,
@@ -401,6 +405,7 @@ public static class CoefficientsLoader
         public double DoublePlayProb { get; set; } = D.DoublePlayProb;
         public double FieldersChoiceProb { get; set; } = D.FieldersChoiceProb;
         public double ErrorExtraAdvanceProb { get; set; } = D.ErrorExtraAdvanceProb;
+        public double ErrorExtraAdvanceAccuracySlope { get; set; } = D.ErrorExtraAdvanceAccuracySlope;
         public double DropThirdStrikeReachProb { get; set; } = D.DropThirdStrikeReachProb;
         public double DropThirdStrikeCatchingSlope { get; set; } = D.DropThirdStrikeCatchingSlope;
         // 暴投・パスボール（design-14 P2-8, 設計書15 Phase D-3）
@@ -497,6 +502,7 @@ public static class CoefficientsLoader
             DoublePlayProb = DoublePlayProb,
             FieldersChoiceProb = FieldersChoiceProb,
             ErrorExtraAdvanceProb = ErrorExtraAdvanceProb,
+            ErrorExtraAdvanceAccuracySlope = ErrorExtraAdvanceAccuracySlope,
             DropThirdStrikeReachProb = DropThirdStrikeReachProb,
             DropThirdStrikeCatchingSlope = DropThirdStrikeCatchingSlope,
             WildPitchProb = WildPitchProb,

@@ -165,7 +165,7 @@ public static class FieldingResolver
 
             if (defenseTime + coeff.ForceOutMarginSeconds <= runnerTime)
             {
-                var result = MaybeError(fielders, landing, coeff, rng, BattedBallResult.Out);
+                var result = MaybeGroundBallError(infielder, coeff, rng, BattedBallResult.Out);
                 return Base(result) with
                 {
                     FielderRole = infielder.Position,
@@ -236,12 +236,37 @@ public static class FieldingResolver
         IRandomSource rng, BattedBallResult onSuccess)
     {
         var f = NearestFielder(fielders, landing);
-        var errProb = coeff.ErrorBaseProb - (f.Attributes.Catching - 50) * coeff.ErrorCatchingSlope;
-        if (MathUtil.Chance(MathUtil.Clamp(errProb, 0.001, 0.2), rng))
+        if (MathUtil.Chance(CatchErrorProb(f, coeff), rng))
         {
             return BattedBallResult.Error;
         }
         return onSuccess;
+    }
+
+    /// <summary>
+    /// 内野ゴロ→一塁送球の失策判定（Issue #37）。捕球ロール（Catching）→送球ロール（ThrowAccuracy）の
+    /// 2段階で按分し、どちらかが成立すれば失策とする。ThrowAccuracy50では送球ロールの確率が0になり
+    /// 捕球ロールのみだった従来挙動と恒等（帯不変）。
+    /// </summary>
+    private static BattedBallResult MaybeGroundBallError(
+        Fielder infielder, FieldingCoefficients coeff, IRandomSource rng, BattedBallResult onSuccess)
+    {
+        if (MathUtil.Chance(CatchErrorProb(infielder, coeff), rng))
+        {
+            return BattedBallResult.Error;
+        }
+        var throwErrProb = coeff.ThrowErrorBaseProb - (infielder.Attributes.ThrowAccuracy - 50) * coeff.ThrowErrorAccuracySlope;
+        if (MathUtil.Chance(MathUtil.Clamp(throwErrProb, 0.0, 0.2), rng))
+        {
+            return BattedBallResult.Error;
+        }
+        return onSuccess;
+    }
+
+    private static double CatchErrorProb(Fielder f, FieldingCoefficients coeff)
+    {
+        var errProb = coeff.ErrorBaseProb - (f.Attributes.Catching - 50) * coeff.ErrorCatchingSlope;
+        return MathUtil.Clamp(errProb, 0.001, 0.2);
     }
 
     private static double ReachTime(Fielder f, Vector3D target)

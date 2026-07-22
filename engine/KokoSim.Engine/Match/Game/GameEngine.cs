@@ -826,10 +826,19 @@ public static class GameEngine
             // 本塁を狙う可能性が最も高い先行走者を候補にする（観測用の近似。判定には一切使わない）。
             var leadRunnerBefore = bases.Third ?? bases.Second ?? bases.First;
 
+            // 失策連鎖（design-14 P1-6）のσ駆動化（Issue #37）: 内野ゴロの送球エラーのみ、送球者本人の
+            // ThrowAccuracyで按分する。フライ落球（送球者不在）や守備位置未解決時はnull＝従来の一律確率のまま。
+            int? errorThrowerAccuracy = null;
+            if (res.Result == PlateAppearanceResult.ReachedOnError
+                && res.Play is { IsFly: false, FielderRole: { } throwerRole })
+            {
+                errorThrowerAccuracy = defense.PlayerAtPosition(throwerRole)?.ThrowAccuracy;
+            }
+
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, ctx.Baserunning, rng, collectMoves: ctx.CaptureTimelines,
-                homePlay, r1Start);
+                homePlay, r1Start, errorThrowerAccuracy);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
