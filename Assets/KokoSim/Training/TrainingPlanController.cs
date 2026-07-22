@@ -35,7 +35,8 @@ namespace KokoSim.Unity.Training
         private void WireStaticButtons()
         {
             // 共通トップバーの「今週を進める」で週送り（合宿・成長段階プレビューが連動）。
-            Click("advance", () => { _state.StepWeek(+1); Render(); });
+            // 全タブ共通の進週処理へ集約（issue #134: 大会モード中はホームへ回送して日送りへ引き継ぐ）。
+            Click("advance", () => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(Render));
             // モーダル内の操作（対象は選択選手）。押下後も Render で開いたまま最新化する。
             Click("template-save", () => { _state.SaveTemplate(); Toast("週テンプレを保存しました"); Render(); });
             Click("delegate-toggle", () => { _state.ToggleDelegate(_state.SelectedIndex); Render(); });

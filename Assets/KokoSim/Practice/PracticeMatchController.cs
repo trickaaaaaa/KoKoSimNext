@@ -32,8 +32,9 @@ namespace KokoSim.Unity.Practice
             _state = new PracticeMatchState();
             _root = GetComponent<UIDocument>().rootVisualElement;
 
+            // 全タブ共通の進週処理へ集約（issue #134: 大会モード中はホームへ回送して日送りへ引き継ぐ）。
             var advance = _root.Q<Button>("advance");
-            if (advance != null) advance.clicked += () => { GameClock.Advance(+1); Render(); };
+            if (advance != null) advance.clicked += () => WeekAdvance.FromSideScreen(Render);
 
             var request = _root.Q<Button>("pm-request");
             if (request != null) request.clicked += () => { _state.Request(); Render(); };
