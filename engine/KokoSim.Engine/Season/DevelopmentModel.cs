@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace KokoSim.Engine.Season;
@@ -101,8 +102,12 @@ public static class DevelopmentModel
     {
         if (p.Level(ability) >= p.Cap(ability)) return;
 
-        // 伸びしろ係数（分野別成長効率倍率, 設計書02 §5.1）。既定1.0では従来と同一。
-        p.AddExp(ability, delta * p.GrowthMultiplier(ability));
+        // 伸びしろ係数（分野別成長効率倍率, 設計書02 §5.1）× 能力別 trainability（伸ばしやすさ, Issue #114）。
+        // trainability は能力の素質の形（内在特性）。逸材（IsProdigy）は素質固定の減衰（<1.0）を免除する
+        // （＝規格外の俊足が稀に伸びる）。既定（全1.0）では従来と1ビットも変わらない（不変条件#2）。
+        var trainability = c.Trainability.For(ability);
+        if (p.IsProdigy) trainability = Math.Max(1.0, trainability);
+        p.AddExp(ability, delta * p.GrowthMultiplier(ability) * trainability);
         while (p.Level(ability) < p.Cap(ability))
         {
             var required = c.RequiredExp(p.Level(ability));

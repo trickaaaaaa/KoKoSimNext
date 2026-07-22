@@ -55,6 +55,13 @@ public sealed class DevelopingPlayer
     public GrowthType GrowthType { get; init; } = GrowthType.Standard;
     public double PersonalityFactor { get; init; } = 1.0; // 練習効率 0.8〜1.2
 
+    /// <summary>
+    /// 逸材（隠しフラグ, Issue #114 / OPEN-QUESTIONS Q20）。素質固定能力（足）の才能上限圧縮・
+    /// trainability 減衰を免除される稀な外れ値＝「規格外の俊足」等。生成時に低確率でロールする
+    /// （既定 false・出現率は data 駆動の RosterCoefficients.ProdigyProb）。
+    /// </summary>
+    public bool IsProdigy { get; init; }
+
     /// <summary>精神力（設計書02 §3）。実戦出場でのみ成長する系（練習では伸びない, MatchGrowthModel）。</summary>
     public int Mental { get; set; } = 50;
     /// <summary>精神力の実戦経験値（設計書02 §5.3a, Q8）。必要expは能力値と同じ曲線。</summary>

@@ -620,6 +620,30 @@ training:
   level_up_base: 100.0        # 必要exp = base × growth^level
   level_up_growth: 1.05
   aptitude_required_exp_factor: 0.6   # 守備位置適性は能力より緩い必要exp（<1.0で速く伸びる, 守備適性 未決1）
+  # 能力別 trainability（伸ばしやすさ, Issue #114）: 能力の素質の形（内在特性）。exp加算時に乗算する。
+  # GrowthMultiplier（分野別の伸びしろ・個体差）や環境倍率（監督指導力・施設 #115）とは直交する。
+  # 既定は全1.0で従来と1ビットも変わらない。未指定の能力は1.0。
+  # 方針（会話 2026-07-22）: 足=素質固定でフラット／技術系=相対的に伸びやすい／球速=1.0固定（環境が担う）／弾道=触らない。
+  # 値はたたき台（要統計回帰校正・出力レポートは out/overnight/issue-114/）。
+  trainability:
+    speed: 0.4            # 足＝素質固定。ほぼ伸びない（足の速い子／遅い子の手触り）
+    # 技術で決まる能力＝相対的に伸びやすい
+    fielding: 1.25
+    catching: 1.25
+    throw_accuracy: 1.25
+    discipline: 1.20
+    control: 1.20
+    pitch_rank: 1.20
+    bunt: 1.30
+    contact: 1.15
+    # 以下は現状維持（1.0固定・明示）: 肩/球速/スタミナ/パワー/盗塁/走塁判断/弾道
+    arm_strength: 1.0
+    velocity: 1.0        # 球速は素質で伸ばさない。「+20km/h」は環境倍率が担う（#115）
+    stamina: 1.0
+    power: 1.0
+    steal: 1.0
+    baserunning: 1.0
+    launch_tendency: 1.0 # 型属性（触らない）
   summer_camp_mult: 2.0       # 設計書04 §4
   winter_camp_mult: 2.5
   tournament_practice_mult: 0.5   # 大会モード中は練習効果が落ちる（設計書03/05）。<1.0で低下
@@ -782,6 +806,12 @@ roster:
   cap_gap_mean: 26.0
   cap_gap_sd: 10.0
   late_cap_bonus: 6.0         # 晩成の才能上限上方補正（設計書02 §5.2）
+  # 能力別 才能上限gap圧縮（Issue #114）: 素質固定能力（足）は「伸びる速さ」だけでなく「天井」も近い＝両方きつく。
+  # gap（mean/sd）に乗じる。既定1.0で従来一致。cap_gap_mean 26×0.4≈10（＝天井も近い）。逸材は免除。
+  speed_cap_gap_factor: 0.4
+  # 逸材（隠しフラグ, Issue #114 / Q20）の出現率。素質固定能力の cap 圧縮・trainability 減衰を免除
+  # ＝規格外の俊足が稀に出る。既定0.0（逸材なし＝従来一致）。値はたたき台（要実測校正）。
+  prodigy_prob: 0.02
   # 隠し属性「投手経歴」（野手の変化球上振れの素, §1.1b）
   pitcher_background_prob: 0.06
   # 変化球レパートリー（設計書02 §2.2）: 投手1〜3球種／野手0〜1（経歴持ちは上振れ）🟡
