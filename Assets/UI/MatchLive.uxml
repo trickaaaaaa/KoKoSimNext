@@ -83,6 +83,9 @@
                         <ui:Button name="spd-2" class="chip-btn" text="×2" />
                         <ui:Button name="spd-4" class="chip-btn" text="×4" />
                     </ui:VisualElement>
+                    <ui:VisualElement class="md-group">
+                        <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
             </ui:VisualElement>

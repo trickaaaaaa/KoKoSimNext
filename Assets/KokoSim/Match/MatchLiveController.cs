@@ -74,6 +74,10 @@ namespace KokoSim.Unity.Match
         // ので、打席の演出が resolved になった瞬間に1回だけ更新する（毎フレーム Snapshot を組み直さない）。
         private bool _lineScorePosted;
         private Button _nextPa, _subOpen, _skip;
+        // タイムライン駆動カメラワーク（design-06/12・Issue #119）の観戦設定トグル。既定オフ＝現行の固定全景。
+        // ×4速時は酔い防止のため強制的に全景固定へ戻す（スキップは委任でその場で試合が終わるため対象外）。
+        private Button _camWork;
+        private bool _cameraWorkWanted;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
         private readonly List<Button> _speedButtons = new();
@@ -163,6 +167,9 @@ namespace KokoSim.Unity.Match
             _backHome = _root.Q<Button>("back-home");
             if (_backHome != null) _backHome.clicked += OnBackHome;
             WireSpeed("spd-05", 0.5f); WireSpeed("spd-1", 1f); WireSpeed("spd-2", 2f); WireSpeed("spd-4", 4f);
+            _camWork = _root.Q<Button>("cam-work");
+            if (_camWork != null) _camWork.clicked += OnToggleCameraWork;
+            ApplyCameraWorkState();
             WirePitchTactics();
 
             // B/S/O ランプと塁ダイヤは LineScorePanel（部品辞書）の右袖。1球ごとに動くのでここから直接トグルする。
@@ -205,6 +212,7 @@ namespace KokoSim.Unity.Match
             _subPanel?.Close();
             if (_skip != null) _skip.clicked -= OnSkip;
             if (_backHome != null) _backHome.clicked -= OnBackHome;
+            if (_camWork != null) _camWork.clicked -= OnToggleCameraWork;
             foreach (var (b, h) in _speedHandlers) b.clicked -= h;
             _speedHandlers.Clear();
             _speedButtons.Clear();
@@ -235,6 +243,7 @@ namespace KokoSim.Unity.Match
             _capHist.Clear();
             _speedButtons.Clear();
             _speedHandlers.Clear();
+            _cameraWorkWanted = false;
         }
 
         // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
@@ -559,6 +568,9 @@ namespace KokoSim.Unity.Match
 
         private void Update()
         {
+            // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
+            _view.CameraWorkEnabled = _cameraWorkWanted && _speed < 4f;
+
             // 判定オーバーレイは自前の寿命で消す（打球再生へ移った直後の1球分もそのまま見せる）。
             if (_pitchCallOn)
             {
@@ -830,6 +842,18 @@ namespace KokoSim.Unity.Match
             };
             b.clicked += handler;
             _speedHandlers.Add((b, handler));
+        }
+
+        // カメラ演出トグル（Issue #119）。押すたびオン/オフ、既定オフ。
+        private void OnToggleCameraWork()
+        {
+            _cameraWorkWanted = !_cameraWorkWanted;
+            ApplyCameraWorkState();
+        }
+
+        private void ApplyCameraWorkState()
+        {
+            _camWork?.EnableInClassList("chip-btn--on", _cameraWorkWanted);
         }
 
         private static void SetEnabled(Button b, bool on) { if (b != null) b.SetEnabled(on); }

@@ -203,10 +203,11 @@ public static class PlaybackSamples
                 new PlaybackRunner
                 {
                     Label = "走",
-                    Segs = new[]
+                    Segs = new PlaybackRun[]
                     {
                         Run(0.0, 0.85, First, First), Run(0.85, 3.85, First, Second),
-                        Run(3.85, 6.85, Second, Third), Run(6.85, 9.85, Third, Home),
+                        Run(3.85, 6.85, Second, Third),
+                        Run(6.85, 9.85, Third, Home) with { OutAtEnd = true },
                     },
                     HideAt = 9.75,
                 },
