@@ -11,20 +11,14 @@ namespace KokoSim.Unity.Players
 {
     public enum PlayerSort { Overall, Grade, Condition, Name }
 
-    public sealed class AbilityChip
-    {
-        public string Grade = "D";   // S〜G
-        public string Label = "";
-        public int Value;
-    }
-
     public sealed class PlayerRow
     {
         public int Index;                 // roster 生成順の安定 index（詳細画面へ受け渡す）
         public string Name = "";
         public string GradeLabel = "1年";
-        /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力の4つ, Issue #30）。総合ランクは廃止（2026-07-22 owner決定）。</summary>
-        public List<AbilityChip> Abilities = new List<AbilityChip>();
+        /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力の4つ, Issue #30）。総合ランクは廃止（2026-07-22 owner決定）。
+        /// 部品辞書 <see cref="KokoSim.Unity.Components.UiComponents.CategoryRankChips"/> にそのまま渡す（Issue #140）。</summary>
+        public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);
         public string Condition = "普通";   // 絶好調 / 好調 / 普通 / 不調 / 絶不調（表示文字列）
         // 色分岐はこの5段階 enum で行う（表示文字列で比較しない。到達不能分岐の再発防止）。
         public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
@@ -48,8 +42,8 @@ namespace KokoSim.Unity.Players
     /// </summary>
     public sealed class PlayerListState
     {
-        // カテゴリ別ランクの重み（チーム総合力と同じ既定係数を流用, Issue #30・2026-07-22 owner決定 候補A）。
-        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+        // カテゴリ別ランクの重み（単一静的ソースを参照, Issue #30・2026-07-22 owner決定 候補A・#140 集約）。
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         private readonly Dictionary<DevelopingPlayer, int> _indexOf = new Dictionary<DevelopingPlayer, int>();
@@ -116,18 +110,8 @@ namespace KokoSim.Unity.Players
 
             // カテゴリ別ランク（打撃力/走力/守備力/投手力）: 野手/投手を問わず常に4つ計算する
             // （Issue #30・2026-07-22 owner決定 候補A。非該当側も生成時の余技能力値からそのまま算出する）。
-            var strength = PlayerStrengthProfile.Compute(p, Coeff);
-            row.Abilities.Add(CategoryChip("打撃力", strength.Batting));
-            row.Abilities.Add(CategoryChip("走力", strength.Mobility));
-            row.Abilities.Add(CategoryChip("守備力", strength.Defense));
-            row.Abilities.Add(CategoryChip("投手力", strength.Pitching));
+            row.Strength = PlayerStrengthProfile.Compute(p, Coeff);
             return row;
-        }
-
-        private static AbilityChip CategoryChip(string label, double value)
-        {
-            var v = (int)System.Math.Round(value);
-            return new AbilityChip { Grade = Tiers.FromStrength(value).ToString(), Label = label, Value = v };
         }
 
         private static string SortJp(PlayerSort s)

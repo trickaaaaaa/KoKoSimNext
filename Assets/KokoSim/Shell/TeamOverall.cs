@@ -11,7 +11,7 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public static class TeamOverall
     {
-        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         /// <summary>ロスターの総合力（0〜100, 較正済み）。空なら 0。</summary>
         public static double Of(IReadOnlyList<DevelopingPlayer> roster)

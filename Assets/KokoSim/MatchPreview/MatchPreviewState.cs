@@ -56,7 +56,7 @@ namespace KokoSim.Unity.MatchPreview
     /// </summary>
     public sealed class MatchPreviewState
     {
-        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         // レーダーの頂点順（上から時計回り）＝チーム総合力パネルと同一。並べて比較できるよう揃える。
         private static readonly string[] FactorLabels =
