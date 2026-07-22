@@ -14,7 +14,6 @@ namespace KokoSim.Unity.Shell
         public int ActiveIndex;
         public string Number = "–";
         public string Name = "";
-        public string Position = "野";
         public string GradeLabel = "3年";
         public string OverallGrade = "D";
         public int OverallValue;
@@ -82,7 +81,6 @@ namespace KokoSim.Unity.Shell
                     ActiveIndex = IndexIn(active, p),
                     Number = p.UniformNumber >= 1 ? p.UniformNumber.ToString() : "–",
                     Name = p.Name,
-                    Position = p.IsPitcher ? "投" : "野",
                     GradeLabel = p.Grade + "年",
                     OverallValue = overall,
                     OverallGrade = Tiers.FromStrength(overall).ToString(),

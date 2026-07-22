@@ -43,10 +43,9 @@
 
         <!-- ===== プレイヤーヘッダー ===== -->
         <ui:VisualElement class="pd2-head">
+          <!-- 投/野の役割表記は出さない（役割はプレイヤーが決める, Issue #93）。識別は背番号と名前。 -->
           <ui:VisualElement class="pd2-numbox">
-            <ui:Label name="role" class="pd2-numbox__role" text="P" />
             <ui:Label name="number" class="pd2-numbox__no" text="1" />
-            <ui:Label name="role-sub" class="pd2-numbox__sub" text="投手" />
           </ui:VisualElement>
           <ui:VisualElement class="pd2-headmain">
             <ui:VisualElement class="pd2-headmain__top">
@@ -60,7 +59,6 @@
               </ui:VisualElement>
               <ui:VisualElement class="pd2-meta">
                 <ui:Label name="meta-grade" class="pd2-meta__i" text="3年" />
-                <ui:Label name="meta-pos" class="pd2-meta__i" text="投手（P）" />
                 <ui:Label name="meta-tb" class="pd2-meta__i" text="右投右打" />
                 <ui:Label name="meta-style" class="pd2-meta__i" text="投法：オーバースロー" />
                 <ui:Label name="meta-velo" class="pd2-meta__i" text="最速 141 km/h" />
@@ -122,7 +120,6 @@
             </ui:VisualElement>
             <ui:VisualElement class="pd2-card__body">
               <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />
-              <ui:Label name="pitch-empty" class="pd2-empty" text="投手ではありません" />
             </ui:VisualElement>
           </ui:VisualElement>
 

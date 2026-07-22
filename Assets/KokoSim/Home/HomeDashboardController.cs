@@ -209,7 +209,6 @@ namespace KokoSim.Unity.Home
 
             var no = new Label(c.Number); no.AddToClassList("nt-c-no"); row.Add(no);
             var name = new Label(c.Name); name.AddToClassList("nt-c-name"); row.Add(name);
-            var pos = new Label(c.Position); pos.AddToClassList("nt-c-pos"); row.Add(pos);
 
             var rank = new VisualElement(); rank.AddToClassList("nt-c-rank");
             rank.Add(UiComponents.RankChipLegacy(c.OverallGrade));
@@ -247,7 +246,8 @@ namespace KokoSim.Unity.Home
             var v = new KokoSim.Unity.Players.PlayerDetailState().BuildView(_ntPick);
 
             SetText("nt-d-name", v.Name);
-            SetText("nt-d-sub", v.GradeLabel + " / " + v.PosParen + " / " + v.ThrowsBats);
+            // 役割（投手/野手）は出さない（プレイヤーが決める, Issue #93）。学年と利き手のみ。
+            SetText("nt-d-sub", v.GradeLabel + " / " + v.ThrowsBats);
             if (_ntRadar != null) _ntRadar.SetData(v.Radar, v.OverallGrade);
 
             var facts = _root.Q<VisualElement>("nt-d-facts");

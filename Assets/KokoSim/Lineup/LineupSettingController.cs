@@ -189,9 +189,7 @@ namespace KokoSim.Unity.Lineup
                 var name = new Label(b.Name);
                 name.AddToClassList("bench-row__name");
                 row.Add(name);
-                var tag = new Label(b.IsPitcher ? "投" : "野");
-                tag.AddToClassList("bench-row__tag");
-                row.Add(tag);
+                // 控えの投/野タグは出さない（役割はプレイヤーが決める, Issue #93）。識別は背番号と名前。
                 if (b.Injury.Length > 0) row.Add(InjuryChip(b.Injury));
                 row.Add(UiComponents.RankChip(b.OverallGrade));
 

@@ -81,8 +81,6 @@ namespace KokoSim.Unity.Players
         {
             var v = _state.BuildView(PlayerSelection.Index);
 
-            SetText("role", v.IsPitcher ? "P" : "F");
-            SetText("role-sub", v.RoleLabel);
             SetText("number", v.Number);
             SetText("name", v.Name);
             SetText("cond", v.Condition);
@@ -104,11 +102,9 @@ namespace KokoSim.Unity.Players
             SetDisplay("designate-reason", !v.IsCaptain && !v.CanDesignateCaptain);
             SetText("designate-reason", v.DesignateReason);
             SetText("meta-grade", v.GradeLabel);
-            SetText("meta-pos", v.PosParen);
             SetText("meta-tb", v.ThrowsBats);
-            SetDisplay("meta-style", v.IsPitcher);
+            // 投法・最速は全選手で表示（役割でゲートしない, Issue #93）。
             SetText("meta-style", v.PitchStyle);
-            SetDisplay("meta-velo", v.IsPitcher);
             SetText("meta-velo", "最速 " + v.TopVelocityKmh + " km/h");
             // 故障（設計書03 §3.5）: 怪我している時だけ警告色で出す（UI原則②）。
             SetDisplay("meta-injury", v.Injury.Length > 0);
@@ -121,10 +117,8 @@ namespace KokoSim.Unity.Players
             BuildList("fielder-abils", v.FielderAbilities, BuildAbil);
             BuildList("hidden-list", v.Hidden, BuildHidden);
 
-            // 球種変化チャート（プロスピ風・投手のみ）。
+            // 球種変化チャート（全選手・未習得ならストレートのみ, Issue #93）。空状態文言は廃止した。
             BuildPitchChart(v.Pitches, v.HasPitchData);
-            SetDisplay("pitch-empty", !v.HasPitchData);
-            SetText("pitch-empty", v.IsPitcher ? "登録球種がありません" : "投手ではありません");
 
             // 特殊能力。
             BuildList("skills-list", v.Skills, BuildSkill);
