@@ -2,7 +2,10 @@ using KokoSim.Engine.Match.Field;
 
 namespace KokoSim.Engine.Match.Game;
 
-/// <summary>個人打撃成績（1試合）。プレー記録から集計。HitByPitches は SourceId より後（互換のため末尾追加）。</summary>
+/// <summary>
+/// 個人打撃成績（1試合）。プレー記録から集計。HitByPitches は SourceId より後（互換のため末尾追加）。
+/// Position は表示専用＝DHスロットは <see cref="FieldPosition.DesignatedHitter"/>（issue #70）。
+/// </summary>
 public sealed record BattingLine(
     int Order, FieldPosition Position, string Name,
     int PlateAppearances, int AtBats, int Hits, int Doubles, int Triples, int HomeRuns,

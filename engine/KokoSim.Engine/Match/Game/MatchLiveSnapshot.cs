@@ -12,7 +12,7 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="SourceId">選手ID（自校のみ。相手校生成選手は null）。</param>
 /// <param name="Number">背番号（0=番号なし/ベンチ外・1〜=ベンチ入り）。</param>
 /// <param name="Name">選手名。</param>
-/// <param name="Position">守備位置。</param>
+/// <param name="Position">守備位置（DHスロットは <see cref="FieldPosition.DesignatedHitter"/>）。</param>
 /// <param name="Bats">左右打。</param>
 /// <param name="AtBats">今日の打数。</param>
 /// <param name="Hits">今日の安打。</param>

@@ -14,7 +14,9 @@ namespace KokoSim.Unity.Shell
     /// 自校の一戦だけを詳細試合エンジン（GameEngine）で解決する Shell 実装（設計書05 §1.4）。
     /// 自校ロスター＋スタメン（GameSession.Lineup）を持つのはこの層なのでここに置く。相手校は
     /// DevelopingPlayer を持たないため学校から生成（StrengthTeamFactory.ForSchool）。
-    /// 自校＝後攻(home)固定（OPEN-Q #6）。
+    /// 自校の先攻/後攻は <see cref="HomeAwayAssignment"/> が対戦の組み合わせ（校ID対＋年度＋週）から
+    /// 決定論で決める（OPEN-Q 未決I, issue #70）。大会本流の乱数には依存しないので、対戦カード画面
+    /// （<see cref="MatchPreview.MatchPreviewState"/>）でも同じ入口で先読みできる。
     /// 渡される rng は TournamentRunner が本流から Fork した隔離ストリーム（本流の乱数列に影響しない）。
     /// スタメン未設定時は自動編成（RosterTeamBuilder.Build）へフォールバックする。
     /// </summary>
@@ -25,9 +27,11 @@ namespace KokoSim.Unity.Shell
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent);
             var ctx = new GameContext();
-            // 自校＝後攻(home)。away=相手, home=自校。
-            var result = GameEngine.Play(oppTeam, mgrTeam, ctx, rng.Fork(2));
-            return new PlayerMatchDetail(result, ManagerIsAway: false);
+            var managerIsAway = ManagerIsAway(manager, opponent);
+            var result = managerIsAway
+                ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2))
+                : GameEngine.Play(oppTeam, mgrTeam, ctx, rng.Fork(2));
+            return new PlayerMatchDetail(result, ManagerIsAway: managerIsAway);
         }
 
         public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng)
@@ -38,9 +42,19 @@ namespace KokoSim.Unity.Shell
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent);
             var ctx = new GameContext { CaptureTimelines = true };
-            var prog = new MatchProgression(oppTeam, mgrTeam, ctx, rng.Fork(2));
-            return new PlayerMatchLive(prog, ManagerIsAway: false);
+            var managerIsAway = ManagerIsAway(manager, opponent);
+            var prog = managerIsAway
+                ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2))
+                : new MatchProgression(oppTeam, mgrTeam, ctx, rng.Fork(2));
+            return new PlayerMatchLive(prog, ManagerIsAway: managerIsAway);
         }
+
+        /// <summary>
+        /// この対戦の自校先攻/後攻。対戦カード画面（<see cref="MatchPreview.MatchPreviewState"/>）も
+        /// 同じ入口を通すことで、表示した先攻/後攻と実際の試合が必ず一致する契約を守る。
+        /// </summary>
+        public static bool ManagerIsAway(School manager, School opponent)
+            => HomeAwayAssignment.ManagerIsAway(manager.Id, opponent.Id, GameClock.YearIndex, GameClock.Week);
 
         /// <summary>DH判定に使う現代ルール（現状トグルなし・年代連動の既定値, 設計書05 §1.3）。</summary>
         private static readonly ModernRules Rules = new();

@@ -142,18 +142,21 @@ public sealed class TeamState
             var p = _team.BattingOrder[i];
             starters.Add(p);
             var a = _bat.TryGetValue(p, out var acc) ? acc : new BatAccum();
-            lines.Add(Line(i + 1, p, a));
+            // DHスロットは守備に就かない＝表示だけ FieldPosition.DesignatedHitter（内部の本来守備位置は
+            // Player.Position に温存＝守備適性計算・DH解除時の引き継ぎに使う, issue #70）。
+            var displayPos = _team.UsesDh && i == _team.DhSlot ? FieldPosition.DesignatedHitter : p.Position;
+            lines.Add(Line(i + 1, p, displayPos, a));
         }
         // 救援投手など途中出場で打席に立った選手を追記（合計がチーム安打と一致する）。
         foreach (var kv in _bat)
         {
             if (starters.Contains(kv.Key)) continue;
-            lines.Add(Line(_team.PitcherSlot + 1, kv.Key, kv.Value));
+            lines.Add(Line(_team.PitcherSlot + 1, kv.Key, kv.Key.Position, kv.Value));
         }
         return lines;
 
-        static BattingLine Line(int order, Player p, BatAccum a)
-            => new(order, p.Position, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
+        static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
+            => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
                 a.HBP);
     }
 
@@ -185,8 +188,10 @@ public sealed class TeamState
         {
             var p = _lineup[i];
             var a = _bat.TryGetValue(p, out var acc) ? acc : null;
+            // 現在DHが解除されていれば(_usesDh=false)このスロットは実守備位置を表示する（issue #70）。
+            var displayPos = _usesDh && i == _dhSlot ? FieldPosition.DesignatedHitter : p.Position;
             slots.Add(new LiveBatterSlot(
-                i + 1, p.SourceId, p.UniformNumber, p.Name, p.Position, p.Bats,
+                i + 1, p.SourceId, p.UniformNumber, p.Name, displayPos, p.Bats,
                 a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue));
         }
         return slots;

@@ -3,7 +3,11 @@ using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Field;
 
-/// <summary>守備位置の役割。</summary>
+/// <summary>
+/// 守備位置の役割。<see cref="DesignatedHitter"/> は打撃成績の表示専用（設計書09, issue #70）で、
+/// 実際の守備には就かない＝<see cref="Fielder"/> や守備配置・2D俯瞰には現れない。
+/// 選手の本来の守備適性計算（<see cref="Season.DevelopingPlayer.Aptitude"/>）には使わない。
+/// </summary>
 public enum FieldPosition
 {
     Pitcher,
@@ -15,6 +19,7 @@ public enum FieldPosition
     LeftField,
     CenterField,
     RightField,
+    DesignatedHitter,
 }
 
 /// <summary>1人の野手（守備位置＋能力）。</summary>

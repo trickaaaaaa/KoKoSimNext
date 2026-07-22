@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
@@ -68,13 +69,13 @@ namespace KokoSim.Unity.MatchPreview
             var runner = gs.Runner;
             var opponent = runner != null && !runner.Finished ? runner.NextOpponent : null;
 
-            // 自校＝後攻(home)固定（PlayerMatchResolver・OPEN-Q #6）。相手が先攻。
             var ownTeam = PlayerMatchResolver.BuildManagerTeam(NationService.ManagerSchoolName);
-            v.Own = BuildSide("自校", NationService.ManagerSchoolName, "後攻", ownTeam,
-                TeamStrengthProfile.Compute(RosterService.Active, Coeff));
 
             if (opponent == null)
             {
+                // 相手未確定＝先攻/後攻も未定（HomeAwayAssignment は対戦の組み合わせが要る）。既定表示のみ。
+                v.Own = BuildSide("自校", NationService.ManagerSchoolName, "後攻", ownTeam,
+                    TeamStrengthProfile.Compute(RosterService.Active, Coeff));
                 v.Ready = false;
                 v.MatchLine = gs.Title;
                 v.Opponent = new MatchPreviewSideView
@@ -86,8 +87,14 @@ namespace KokoSim.Unity.MatchPreview
                 return v;
             }
 
+            // 自校の先攻/後攻は対戦の組み合わせ（校ID対＋年度＋週）から決定論で決まる（issue #70）。
+            // 実試合（PlayerMatchResolver.Resolve/BeginLive）と同じ入口なので表示と実際が必ず一致する。
+            var managerIsAway = PlayerMatchResolver.ManagerIsAway(NationService.ManagerSchool(), opponent);
+            v.Own = BuildSide("自校", NationService.ManagerSchoolName, managerIsAway ? "先攻" : "後攻", ownTeam,
+                TeamStrengthProfile.Compute(RosterService.Active, Coeff));
+
             var oppTeam = PlayerMatchResolver.BuildOpponentTeam(opponent);
-            v.Opponent = BuildSide("相手", opponent.Name, "先攻", oppTeam,
+            v.Opponent = BuildSide("相手", opponent.Name, managerIsAway ? "後攻" : "先攻", oppTeam,
                 ScoutedTeamProfile.Compute(oppTeam, Coeff));
             v.Ready = true;
             v.MatchLine = string.Join("　", new[]
@@ -127,7 +134,7 @@ namespace KokoSim.Unity.MatchPreview
                 side.Lineup.Add(new MatchPreviewSlotView
                 {
                     Order = (i + 1).ToString(),
-                    PosKanji = isDh ? "指" : MatchLiveStatsProvider.PosAbbr(p.Position),
+                    PosKanji = MatchLiveStatsProvider.PosAbbr(isDh ? FieldPosition.DesignatedHitter : p.Position),
                     Name = p.Name,
                     Meta = Meta(p),
                     Grade = GradeOf(projected, i),

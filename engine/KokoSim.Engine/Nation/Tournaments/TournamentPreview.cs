@@ -140,10 +140,14 @@ public static class TournamentPreviewBuilder
 
     private static RosterExcerpt BuildRoster(PreviewContender c, Match.Game.Team team)
     {
+        // DHスロットの選手は本来守備位置ではなく「指」を表示する（enum由来・issue #70）。
+        var dhPlayer = team.UsesDh ? team.BattingOrder[team.DhSlot] : null;
         var members = team.BattingOrder.Concat(team.Bullpen).Concat(team.Bench)
             .OrderBy(p => p.UniformNumber)
             .Select(p => new RosterMember(
-                p.UniformNumber, p.Name, PositionLabel(p.Position), p.Grade, HandednessLabel(p.Throws, p.Bats)))
+                p.UniformNumber, p.Name,
+                PositionLabel(ReferenceEquals(p, dhPlayer) ? Match.Field.FieldPosition.DesignatedHitter : p.Position),
+                p.Grade, HandednessLabel(p.Throws, p.Bats)))
             .ToList();
         var seedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : $"第{c.Seed}シード";
         return new RosterExcerpt(c.Name, c.Tier, seedLabel, c.Blurb, members);
@@ -160,6 +164,7 @@ public static class TournamentPreviewBuilder
         Match.Field.FieldPosition.LeftField => "左",
         Match.Field.FieldPosition.CenterField => "中",
         Match.Field.FieldPosition.RightField => "右",
+        Match.Field.FieldPosition.DesignatedHitter => "指",
         _ => "―",
     };
 

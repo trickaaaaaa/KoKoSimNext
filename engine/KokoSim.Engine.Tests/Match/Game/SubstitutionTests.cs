@@ -173,6 +173,41 @@ public sealed class SubstitutionTests
         Assert.False(state.ReleaseDh());
     }
 
+    // ===== DHスロットの表示位置（enum由来の「指」表記, issue #70） =====
+    // Player.Position 自体は本来守備位置を内部保持（守備適性計算・ReleaseDh の引き継ぎに必須）。
+    // 表示専用の BattingLine/LiveBatterSlot だけが DesignatedHitter を返す。
+
+    [Fact]
+    public void BuildBattingLines_DhSlot_ShowsDesignatedHitter_OthersKeepRealPosition()
+    {
+        var state = new TeamState(MakeDhTeam());
+        var lines = state.BuildBattingLines();
+
+        Assert.Equal(FieldPosition.DesignatedHitter, lines[8].Position);
+        for (var i = 0; i < 8; i++) Assert.NotEqual(FieldPosition.DesignatedHitter, lines[i].Position);
+        // 内部の Player.Position は本来守備位置のまま（守備適性計算に必要）。
+        Assert.Equal(FieldPosition.Catcher, state.CurrentLineup[8].Position);
+    }
+
+    [Fact]
+    public void LiveLineup_DhSlot_ShowsDesignatedHitter_AndRevertsAfterReleaseDh()
+    {
+        var state = new TeamState(MakeDhTeam());
+        Assert.Equal(FieldPosition.DesignatedHitter, state.LiveLineup()[8].Position);
+
+        Assert.True(state.ReleaseDh(FieldPosition.LeftField));
+        // DH解除後はそのスロットに投手が入り、実守備位置（投手）を表示する。
+        Assert.Equal(FieldPosition.Pitcher, state.LiveLineup()[8].Position);
+    }
+
+    [Fact]
+    public void BuildBattingLines_AndLiveLineup_NonDhTeam_NeverShowDesignatedHitter()
+    {
+        var state = new TeamState(MakeTeam());
+        Assert.DoesNotContain(state.BuildBattingLines(), l => l.Position == FieldPosition.DesignatedHitter);
+        Assert.DoesNotContain(state.LiveLineup(), l => l.Position == FieldPosition.DesignatedHitter);
+    }
+
     // ===== 投手交代（指名継投, issue #22 A） =====
 
     private static Player Rp(string name)

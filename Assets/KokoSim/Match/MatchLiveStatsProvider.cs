@@ -69,7 +69,7 @@ namespace KokoSim.Unity.Match
 
         // ── 表示用の短縮ラベル（部品側でなく共通の書式を1箇所に集約） ──
 
-        /// <summary>守備位置の1文字略記（投捕一二三遊左中右）。</summary>
+        /// <summary>守備位置の1文字略記（投捕一二三遊左中右・DHは指）。</summary>
         public static string PosAbbr(FieldPosition pos) => pos switch
         {
             FieldPosition.Pitcher => "投",
@@ -81,6 +81,7 @@ namespace KokoSim.Unity.Match
             FieldPosition.LeftField => "左",
             FieldPosition.CenterField => "中",
             FieldPosition.RightField => "右",
+            FieldPosition.DesignatedHitter => "指",
             _ => "—",
         };
 
