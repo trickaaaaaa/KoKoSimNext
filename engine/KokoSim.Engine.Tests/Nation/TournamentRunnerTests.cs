@@ -7,6 +7,7 @@ using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Season;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Nation;
@@ -413,6 +414,65 @@ public sealed class TournamentRunnerTests
         Assert.True(outcome.MercyEnded);
         var playedCard = r.BuildBracketView().Matches.Single(m => m.ManagerInvolved);
         Assert.True(playedCard.MercyEnded);
+    }
+
+    /// <summary>
+    /// ブラケット全試合（自校戦＋裏試合）の勝敗が漏れなく <see cref="SchoolRecordBook"/> へ積まれる回帰テスト
+    /// （issue #84）。1試合＝1勝1敗なので、全校の勝ち数の総和は試合数に一致するはず。
+    /// </summary>
+    [Fact]
+    public void FoldTournament_SumOfWins_EqualsMatchCount()
+    {
+        var r = NewRunner(Field(55, 15, 50), seed: 3);
+        PlayToEnd(r);
+        var matches = r.BuildBracketView().Matches;
+
+        var book = new SchoolRecordBook();
+        book.FoldTournament(matches, TournamentKind.Summer, currentYear: 2028);
+
+        var totalWins = 0;
+        var totalLosses = 0;
+        foreach (var rec in book.Records.Values)
+        {
+            totalWins += rec.OfficialWins;
+            totalLosses += rec.OfficialLosses;
+        }
+        Assert.Equal(matches.Count, totalWins);
+        Assert.Equal(matches.Count, totalLosses);
+    }
+
+    [Fact]
+    public void FoldTournament_SummerChampion_GetsKoshienAppearance()
+    {
+        var r = NewRunner(Field(99, 7, 30), seed: 3); // 自校が確実に優勝する戦力差。
+        PlayToEnd(r);
+        Assert.True(r.IsChampion);
+        var matches = r.BuildBracketView().Matches;
+
+        var book = new SchoolRecordBook();
+        book.FoldTournament(matches, TournamentKind.Summer, currentYear: 2028);
+
+        var championRecord = book.For(1); // Sch(1, ...) が自校。
+        Assert.Equal(1, championRecord.SummerAppearances);
+        Assert.Equal(2028, championRecord.LastSummerYear);
+        Assert.Equal("初出場", championRecord.SummerAppearanceLabel);
+        Assert.Equal(BestResult.Appearance, championRecord.BestResult);
+    }
+
+    [Fact]
+    public void FoldTournament_AutumnTournament_DoesNotRecordKoshienAppearance()
+    {
+        var r = NewRunner(Field(99, 7, 30), seed: 3);
+        PlayToEnd(r);
+        var matches = r.BuildBracketView().Matches;
+
+        var book = new SchoolRecordBook();
+        book.FoldTournament(matches, TournamentKind.Autumn, currentYear: 2028);
+
+        Assert.Equal(0, book.For(1).SummerAppearances);
+        Assert.Equal(0, book.For(1).TotalAppearances);
+        // 秋も公式戦なので勝敗は積む。
+        Assert.True(book.For(1).OfficialWins > 0);
     }
 
     /// <summary>強豪 vs 弱小で確実に大差コールドを起こすリゾルバ（GameEngineTests の弱小生成と同じ狙い）。</summary>
