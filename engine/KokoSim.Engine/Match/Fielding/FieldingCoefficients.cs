@@ -104,4 +104,59 @@ public sealed record FieldingCoefficients
     /// 送球の逸れ・捕球・タッチのロスがあるため「送球より僅かに遅い」程度なら実戦では次の塁を陥れる。
     /// </summary>
     public double ExtraBaseMarginSeconds { get; init; } = 0.40;
+
+    // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14）: 着地後も物理層で軌道を継続する ---
+
+    /// <summary>接地の反発係数 e（硬式球×内野土/芝の平均）。バウンド頂点は e² で減衰する。</summary>
+    public double BounceRestitution { get; init; } = 0.45;
+
+    /// <summary>接地時の動摩擦係数 μ。水平の減速量 = μ(1+e)|v⊥|。</summary>
+    public double BounceFrictionMu { get; init; } = 0.50;
+
+    /// <summary>
+    /// 1回の接地で保持する水平速度の下限比（滑り→転がり遷移。一様球の理論値 5/7 ≒ 0.714）。
+    /// 摩擦の力積がこれを越えて効くことはない＝水平に近い打球は滑って伸びる。
+    /// </summary>
+    public double BounceRollingRetention { get; init; } = 0.7143;
+
+    /// <summary>これを下回る鉛直初速[m/s]の弾みは転がり扱いにする（弾み列の打ち切り）。</summary>
+    public double BounceMinLaunchMps { get; init; } = 0.60;
+
+    /// <summary>「バウンド」に分類する最大バウンド頂点[m]（これ未満は「ゴロ」）。</summary>
+    public double BouncerApexThresholdM { get; init; } = 1.20;
+
+    /// <summary>「ライナー」に分類する頂点÷水平到達距離の上限（これ以下は低い弾道＝ライナー）。</summary>
+    public double LinerApexRangeRatio { get; init; } = 0.10;
+
+    /// <summary>内野手がグラブを出して捕れる高さの上限[m]（跳んで届く範囲を含む）。これを越える弾みは頭上を抜ける。</summary>
+    public double InfielderReachHeightM { get; init; } = 2.20;
+
+    /// <summary>
+    /// 内野手の横の守備範囲[m]（グラブ＋ダイビングで届く半径）。打球がこの半径内を通れば
+    /// 内野手は処理できる（＝内野を抜けない）。どの内野手もこの範囲で捕えられず外野まで達する強い打球だけが
+    /// 「内野を抜ける」（Issue #63 やること2＝ホール／頭上の二次展開）。大きいほど内野を抜けにくい＝帯校正ノブ。
+    /// </summary>
+    public double InfielderFieldingRadiusM { get; init; } = 4.20;
+
+    /// <summary>
+    /// 高く弾むバウンド（チョッパー）で内野手が待たされる時間の係数（Issue #63 やること1）。
+    /// 待ち時間 = この係数 × √(2×最大バウンド頂点/g)＝頂点からの自由落下時間。
+    /// 大きいほど高バウンドが内野安打になりやすい。0で従来（待ちなし）。
+    /// </summary>
+    public double ChopperWaitFactor { get; init; } = 0.55;
+
+    /// <summary>内野境界の通過時刻を求める走査の時間刻み[s]（頭上抜けの判定精度）。</summary>
+    public double InfieldInterceptStepSeconds { get; init; } = 0.02;
+
+    /// <summary>イレギュラーバウンドの発生確率（一律。球場の土質との接続は将来の別Issue）。</summary>
+    public double IrregularBounceProb { get; init; } = 0.030;
+
+    /// <summary>イレギュラー時の横ぶれの最大角[deg]（±この範囲で一様）。</summary>
+    public double IrregularBounceLateralDeg { get; init; } = 12.0;
+
+    /// <summary>イレギュラー時の反発係数の揺らぎ幅（e が ×[1−この値, 1+この値] の範囲で振れる）。</summary>
+    public double IrregularBounceRestitutionSwing { get; init; } = 0.60;
+
+    /// <summary>イレギュラーバウンドで処理する打球のエラー確率への加算。</summary>
+    public double ErrorIrregularBonus { get; init; } = 0.10;
 }

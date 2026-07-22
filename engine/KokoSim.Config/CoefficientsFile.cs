@@ -351,6 +351,21 @@ public static class CoefficientsLoader
         public double AptitudeSlopePerPoint { get; set; } = D.AptitudeSlopePerPoint;
         public double AptitudeFactorMin { get; set; } = D.AptitudeFactorMin;
         public double AptitudeFactorMax { get; set; } = D.AptitudeFactorMax;
+        // 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14）
+        public double BounceRestitution { get; set; } = D.BounceRestitution;
+        public double BounceFrictionMu { get; set; } = D.BounceFrictionMu;
+        public double BounceRollingRetention { get; set; } = D.BounceRollingRetention;
+        public double BounceMinLaunchMps { get; set; } = D.BounceMinLaunchMps;
+        public double BouncerApexThresholdM { get; set; } = D.BouncerApexThresholdM;
+        public double LinerApexRangeRatio { get; set; } = D.LinerApexRangeRatio;
+        public double InfielderReachHeightM { get; set; } = D.InfielderReachHeightM;
+        public double InfielderFieldingRadiusM { get; set; } = D.InfielderFieldingRadiusM;
+        public double ChopperWaitFactor { get; set; } = D.ChopperWaitFactor;
+        public double InfieldInterceptStepSeconds { get; set; } = D.InfieldInterceptStepSeconds;
+        public double IrregularBounceProb { get; set; } = D.IrregularBounceProb;
+        public double IrregularBounceLateralDeg { get; set; } = D.IrregularBounceLateralDeg;
+        public double IrregularBounceRestitutionSwing { get; set; } = D.IrregularBounceRestitutionSwing;
+        public double ErrorIrregularBonus { get; set; } = D.ErrorIrregularBonus;
 
         public FieldingCoefficients ToModel() => new()
         {
@@ -379,6 +394,20 @@ public static class CoefficientsLoader
             AptitudeSlopePerPoint = AptitudeSlopePerPoint,
             AptitudeFactorMin = AptitudeFactorMin,
             AptitudeFactorMax = AptitudeFactorMax,
+            BounceRestitution = BounceRestitution,
+            BounceFrictionMu = BounceFrictionMu,
+            BounceRollingRetention = BounceRollingRetention,
+            BounceMinLaunchMps = BounceMinLaunchMps,
+            BouncerApexThresholdM = BouncerApexThresholdM,
+            LinerApexRangeRatio = LinerApexRangeRatio,
+            InfielderReachHeightM = InfielderReachHeightM,
+            InfielderFieldingRadiusM = InfielderFieldingRadiusM,
+            ChopperWaitFactor = ChopperWaitFactor,
+            InfieldInterceptStepSeconds = InfieldInterceptStepSeconds,
+            IrregularBounceProb = IrregularBounceProb,
+            IrregularBounceLateralDeg = IrregularBounceLateralDeg,
+            IrregularBounceRestitutionSwing = IrregularBounceRestitutionSwing,
+            ErrorIrregularBonus = ErrorIrregularBonus,
         };
     }
 

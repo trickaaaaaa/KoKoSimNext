@@ -50,7 +50,6 @@ public static class ExtraBaseResolver
         double fenceDistanceM, FieldingCoefficients c)
     {
         var vh = Math.Sqrt(landingVelocity.X * landingVelocity.X + landingVelocity.Z * landingVelocity.Z);
-        var landingRange = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
         if (vh <= 1e-6)
         {
             return new RollPath(landing, new Vector3D(0, 0, 1), 0, c.RollDecelMps2, 0, hangTimeSeconds, hangTimeSeconds, false);
@@ -60,7 +59,22 @@ public static class ExtraBaseResolver
         var descentRatio = Math.Abs(landingVelocity.Y) / (Math.Abs(landingVelocity.Y) + vh); // 0=水平, 1=垂直
         var retention = MathUtil.Clamp(
             c.RollRetentionFlat + (c.RollRetentionSteep - c.RollRetentionFlat) * descentRatio, 0.0, 1.0);
-        var v0 = vh * retention;
+        return RollFrom(landing, dir, vh * retention, hangTimeSeconds, fenceDistanceM, c);
+    }
+
+    /// <summary>
+    /// すでに接地して転がっている状態から転がりを解く（接地の速度保持は適用済み）。
+    /// バウンドで内野を抜けた打球（Issue #63）を、Issue #24 で校正済みのこの集約モデルへ引き継ぐのに使う。
+    /// </summary>
+    public static RollPath RollFrom(
+        Vector3D start, Vector3D direction, double speedMps, double startSeconds,
+        double fenceDistanceM, FieldingCoefficients c)
+    {
+        var dir = direction;
+        var v0 = Math.Max(0.0, speedMps);
+        var landing = start;
+        var hangTimeSeconds = startSeconds;
+        var landingRange = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
         var decel = Math.Max(0.1, c.RollDecelMps2);
 
         var freeRoll = v0 * v0 / (2.0 * decel);

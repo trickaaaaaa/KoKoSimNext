@@ -14,9 +14,10 @@ public enum BallSegmentKind
 {
     Pitch,   // 投球（マウンド→本塁）
     Flight,  // 打球の滞空（接触→着地）
-    Roll,    // ゴロ/バウンド（減速転がり）
+    Roll,    // ゴロ（低い減速転がり）
     Throw,   // 送球（野手→野手/塁）
     Carry,   // 野手が保持して移動（タッチに向かう等）
+    Bounce,  // バウンド（高く弾む打球。Issue #63。ApexHeightM＝最大バウンド頂点）
 }
 
 /// <summary>
