@@ -354,6 +354,21 @@ tactics:
   squeeze_min_bunt: 55
   steal_min_success: 0.72          # 解決式の成功見込みがこの値以上で仕掛ける
   steal_prob: 0.45
+  # 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。塁状況が排他のため
+  # 一・三塁の重盗（baserunning.double_steal_third_break_prob）とは競合しない。
+  # 三盗: 解決式の実現可能な見込み天井自体が二盗（≈0.95）よりずっと低い（俊足×弱肩でも≈0.4〜0.65）ため、
+  # 0.30は「三盗レンジの中で上位のみ」という相対的な選別線（TacticsCoefficients.StealThirdMinSuccess参照）。
+  steal_third_min_success: 0.30
+  steal_third_prob: 0.25
+  steal_third_max_outs: 0          # 無死のみ
+  steal_third_max_diff_abs: 3      # 大差では狙わない
+  # 本盗: 解決式は守備側を投手クイック＋タッチのみで評価し走者の塁間走破に追いつけないため、成功見込みは
+  # どの選手でも解決式の下限(0.01)に張り付く＝成功見込みでの選別が無意味。閾値0＝常に通過させ、頻度は
+  # steal_home_prob と状況条件だけで絞る「超高閾値のギャンブル枠」。
+  steal_home_min_success: 0.0
+  steal_home_prob: 0.10
+  steal_home_max_outs: 1
+  steal_home_max_diff_abs: 1       # 僅差のみ（スクイズと競合する場面はGameEngine側で単純上書き）
   hit_and_run_prob: 0.07
   hit_and_run_min_contact: 55
   hit_and_run_max_power: 65
@@ -452,6 +467,8 @@ enemy_ai:
   # ② ティア層: 各戦術の最低ティア（0=G 〜 7=S）
   safety_bunt_min_tier: 2           # E: 状況セーフティ
   steal_min_tier: 2                 # E: 状況盗塁
+  steal_third_min_tier: 4            # C: issue #67 三盗は状況を見極めた上位校のみ
+  steal_home_min_tier: 6             # A: issue #67 本盗は超高閾値のギャンブル枠＝最上位のみ
   gamble_start_min_tier: 4          # C: ギャンブル始動（好ジャンプ・意表, G3b）
   squeeze_min_tier: 5               # B: 上級
   hit_and_run_min_tier: 5           # B: 上級

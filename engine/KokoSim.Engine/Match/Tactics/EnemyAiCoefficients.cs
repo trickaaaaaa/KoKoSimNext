@@ -19,6 +19,9 @@ public sealed record EnemyAiCoefficients
     public int SafetyBuntMinTier { get; init; } = 2;   // E: 状況に応じたセーフティ
     public int StealMinTier { get; init; } = 2;        // E: 状況に応じた盗塁
     public int GambleStartMinTier { get; init; } = 4;  // C: ギャンブル始動（好ジャンプ・意表）は上級の判断（G3b）
+    // issue #67: 三盗・本盗は二盗より難度が高い判断のため、上位ティアのみに引き出しを絞る。
+    public int StealThirdMinTier { get; init; } = 4;   // C: 状況を見極めた三盗
+    public int StealHomeMinTier { get; init; } = 6;    // A: 超高閾値のギャンブル枠は最上位のみ
     public int SqueezeMinTier { get; init; } = 5;      // B: 上級
     public int HitAndRunMinTier { get; init; } = 5;    // B: 上級
     public int BusterMinTier { get; init; } = 5;       // B: 上級（シフト読みの裏）
