@@ -158,6 +158,10 @@ public static class NationGenerator
             ? rng.Fork(0xD157_0000UL ^ (ulong)id).NextInt(0, districtCount)
             : null;
 
+        // 監督傾向（issue #55, 決定3: 傾向なし55% / 1個35% / 2個10%）。校風と別軸で0〜2個重なる。
+        // 独立ストリーム(Fork)で付与＝強さ・名声・校風・地区の生成列を1ビットも乱さない（全国統計テスト非破壊）。
+        var traits = SampleManagerTraits(rng.Fork(0x77A1_0000UL ^ (ulong)id));
+
         return new School
         {
             Id = id,
@@ -170,8 +174,39 @@ public static class NationGenerator
             Style = style,
             TacticalSense = tacticalSense,
             DistrictId = districtId,
+            ManagerTraits = traits,
         };
     }
+
+    private static readonly Match.Tactics.ManagerTrait[] AllTraits =
+        (Match.Tactics.ManagerTrait[])System.Enum.GetValues(typeof(Match.Tactics.ManagerTrait));
+
+    /// <summary>
+    /// 監督傾向の付与（issue #55, 決定3）。傾向なし55% / 1個35% / 2個10%。2個目は1個目と異なり、かつ
+    /// 継投で相反する組（エース酷使＋継投早め）を避ける。渡された隔離ストリームだけを消費（決定論）。
+    /// </summary>
+    private static IReadOnlyList<Match.Tactics.ManagerTrait> SampleManagerTraits(IRandomSource rng)
+    {
+        var r = rng.NextDouble();
+        var count = r < 0.55 ? 0 : r < 0.90 ? 1 : 2;
+        if (count == 0) return System.Array.Empty<Match.Tactics.ManagerTrait>();
+
+        var first = AllTraits[rng.NextInt(0, AllTraits.Length)];
+        if (count == 1) return new[] { first };
+
+        Match.Tactics.ManagerTrait second;
+        do
+        {
+            second = AllTraits[rng.NextInt(0, AllTraits.Length)];
+        }
+        while (second == first || IsConflicting(first, second));
+        return new[] { first, second };
+    }
+
+    /// <summary>エース酷使 ⇔ 継投早め は継投しきい値で相反するため同居させない。</summary>
+    private static bool IsConflicting(Match.Tactics.ManagerTrait a, Match.Tactics.ManagerTrait b)
+        => (a == Match.Tactics.ManagerTrait.AceOveruse && b == Match.Tactics.ManagerTrait.QuickHook)
+           || (a == Match.Tactics.ManagerTrait.QuickHook && b == Match.Tactics.ManagerTrait.AceOveruse);
 
     /// <summary>校風の付与（設計書11 §3。型なしが最多、他は少数ずつ）。</summary>
     private static Match.Tactics.SchoolStyle SampleStyle(IRandomSource rng)

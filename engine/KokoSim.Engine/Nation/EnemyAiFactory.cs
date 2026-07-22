@@ -13,12 +13,20 @@ public static class EnemyAiFactory
     public static AiProfile ProfileFor(School school)
         => new(school.TacticalSense, (int)school.Tier, school.Style);
 
-    /// <summary>学校の敵AI采配（共通の采配システムに三層を被せる）。</summary>
+    /// <summary>
+    /// 学校の敵AI采配（共通の采配システムに三層を被せる）。校風（<see cref="AiTacticsBrain.ApplyStyle"/>）に
+    /// 加えて監督傾向（issue #55, <see cref="ManagerTraitEffects.ApplyTactics"/>）を采配係数へ重ねる。
+    /// 傾向なし（既定）は恒等＝従来挙動・帯不変。継投系・抜擢型はここ（采配ブレイン）ではなくチーム編成側で効く。
+    /// </summary>
     public static AiTacticsBrain BrainFor(
         School school,
         TacticsCoefficients? tactics = null,
         BaserunningCoefficients? baserunning = null,
         EnemyAiCoefficients? aiCoeff = null,
         Players.FormCoefficients? form = null)
-        => new(ProfileFor(school), tactics, baserunning, aiCoeff, form);
+    {
+        var ai = aiCoeff ?? new EnemyAiCoefficients();
+        var withTraits = ManagerTraitEffects.ApplyTactics(tactics ?? new TacticsCoefficients(), school.ManagerTraits, ai);
+        return new AiTacticsBrain(ProfileFor(school), withTraits, baserunning, ai, form);
+    }
 }

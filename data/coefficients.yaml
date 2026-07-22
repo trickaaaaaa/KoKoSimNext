@@ -462,6 +462,27 @@ enemy_ai:
   defensive_sub_inning_earlier: 1        # 守り勝つ: 守備固めを早める
   small_ball_pinch_run_inning_earlier: 1 # 機動力: 代走を早める
   ace_dependent_defense_timeout_keep_prob: 0.45
+  # ④ 監督傾向層（issue #55, 校風と別軸で0〜2個重なる采配の癖）
+  bunt_heavy_bunt_factor: 1.5                 # 1) バント多用
+  bunt_heavy_bunt_inning_earlier: 2
+  run_and_gun_steal_factor: 1.6              # 2) 盗塁・エンドラン好き
+  run_and_gun_hit_and_run_factor: 1.8
+  run_and_gun_steal_min_success_relax: 0.06
+  ace_overuse_relieve_margin_factor: 1.6     # 3) エース酷使（継投を引っ張る＝諸刃）
+  ace_overuse_hard_cap_add: 15.0
+  quick_hook_relieve_margin_factor: 0.45     # 4) 継投早め
+  quick_hook_defensive_sub_inning_earlier: 1
+  aggressive_pinch_hit_inning_earlier: 2     # 5) 代打積極
+  aggressive_pinch_hit_ceiling_relax: 6
+  aggressive_pinch_hit_improvement_relax: 4
+  promoter_condition_weight: 9.0             # 6) 抜擢型（調子重み・起用判断）
+  promoter_min_condition_step: 1
+  squeeze_lover_squeeze_factor: 2.0          # 7) スクイズ好き
+  aggressive_gear_push_innings_more: 1       # 8) 強気ギア
+  aggressive_gear_push_diff_more: 1
+  aggressive_gear_coast_lead_later: 2
+  cautious_intentional_walk_prob: 0.55       # 9) 慎重（敬遠ためらわない）
+  cautious_intentional_walk_min_power_relax: 4
 
 # --- 怪我（設計書03 §3.5: 段階制・常に可視・押して出場は悪化リスク）🟡 ---
 injury:

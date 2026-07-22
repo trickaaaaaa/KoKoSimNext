@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace KokoSim.Engine.Nation;
 
 /// <summary>設立区分（設計書05 §2.2）。</summary>
@@ -26,6 +28,14 @@ public sealed class School
 
     /// <summary>校風＝采配の個性（設計書11 §3）。敵AIの手を偏らせる。</summary>
     public Match.Tactics.SchoolStyle Style { get; set; } = Match.Tactics.SchoolStyle.Standard;
+
+    /// <summary>
+    /// 監督傾向＝采配の癖（issue #55, 決定1: A-1）。校風と別軸で0〜2個まで重なる。空＝傾向なし。
+    /// Nation は決定論生成（保存されず毎回再生成）なので、この新フィールドは既存セーブを壊さない
+    /// （＝セーブに後付けで配らない: 既存世界を継続しても AI校は再生成され、破壊的変更にならない）。
+    /// </summary>
+    public IReadOnlyList<Match.Tactics.ManagerTrait> ManagerTraits { get; set; }
+        = System.Array.Empty<Match.Tactics.ManagerTrait>();
 
     /// <summary>AI校の采配能力（1〜100, 設計書04/11 §1）。ティアと独立＝「引き出しは多いが凡将」等が生まれる。</summary>
     public int TacticalSense { get; set; } = 50;

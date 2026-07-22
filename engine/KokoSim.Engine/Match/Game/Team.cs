@@ -40,6 +40,14 @@ public sealed record Team
     /// <summary>DH制のときの先発投手（打順外）。DhSlot≧0 なら必須。</summary>
     public Player? StartingPitcher { get; init; }
 
+    /// <summary>
+    /// チーム別の投手疲労係数（issue #55, 監督傾向「エース酷使／継投早め」, 決定4: B-1）。
+    /// null=既定＝<c>GameContext.Fatigue</c> をそのまま使う（従来挙動・帯不変）。非nullなら
+    /// このチームの継投しきい値（<see cref="PitchingFatigue.ShouldRelieve"/>）に適用される。
+    /// 疲労の減衰カーブは <c>GameContext.Fatigue</c> と共通＝監督は継投「時期」だけを変える。
+    /// </summary>
+    public FatigueCoefficients? Fatigue { get; init; }
+
     /// <summary>DH制か。</summary>
     public bool UsesDh => DhSlot >= 0;
 }

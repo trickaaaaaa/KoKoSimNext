@@ -1,6 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
@@ -37,9 +40,11 @@ public static class StrengthTeamFactory
     /// </summary>
     public static Team ForSchool(School school, int yearIndex,
         PersonalityCoefficients? personalityCoeff = null, PlayerNameVocab? nameVocab = null,
-        RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null)
+        RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null,
+        EnemyAiCoefficients? aiCoeff = null, FormCoefficients? form = null)
         => Create(school.Strength, school.Name, SeedFor(school.Id, yearIndex),
-            personalityCoeff, nameVocab, rosterCoeff, modernRules, calendarYear);
+            personalityCoeff, nameVocab, rosterCoeff, modernRules, calendarYear,
+            school.ManagerTraits, aiCoeff, form);
 
     /// <summary>校ID＋年度から生成シードを導出する（決定論・不変条件#2）。</summary>
     public static IRandomSource SeedFor(int schoolId, int yearIndex)
@@ -47,7 +52,9 @@ public static class StrengthTeamFactory
 
     public static Team Create(double strength, string name, IRandomSource rng,
         PersonalityCoefficients? personalityCoeff = null, PlayerNameVocab? nameVocab = null,
-        RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null)
+        RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null,
+        IReadOnlyList<ManagerTrait>? traits = null, EnemyAiCoefficients? aiCoeff = null,
+        FormCoefficients? form = null)
     {
         var pc = personalityCoeff ?? new PersonalityCoefficients();
         var vocab = nameVocab ?? new PlayerNameVocab();
@@ -99,10 +106,76 @@ public static class StrengthTeamFactory
                 with { UniformNumber = 10 + i, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
 
+        // 監督傾向・抜擢型（issue #55）: Compose の前に控えを先発へ抜擢する（オーダー編成に効く傾向）。
+        // 調子ロールは主RNGを乱さない Fork ストリーム＝既存の能力生成列を1ビットも変えない（帯・決定論保護）。
+        var ai = aiCoeff ?? new EnemyAiCoefficients();
+        if (ManagerTraitEffects.HasPromoter(traits))
+        {
+            ApplyPromoter(order, bench, rng.Fork(0x9C55_0000UL), rc.Lineup, ai, form ?? new FormCoefficients());
+        }
+
         var team = new Team { Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen, Bench = bench };
         // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。既に確定した能力ロールだけを材料にする決定論変換
         // （rng は使わない）＝展望（TournamentPreview）と実戦（Shell）が同じここを通り自動で一致する。
-        return LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);
+        var composed = LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);
+        // 監督傾向・継投系（issue #55, 決定4: B-1）: エース酷使/継投早めのチームだけ継投しきい値を差し替える。
+        // 傾向なしは null＝GameContext.Fatigue に落ちる（従来と完全一致・帯不変）。
+        return composed with { Fatigue = ManagerTraitEffects.FatigueOverride(new FatigueCoefficients(), traits, ai) };
+    }
+
+    /// <summary>
+    /// 抜擢型（issue #55, 監督傾向 <see cref="ManagerTrait.Promoter"/>）。控え（背番号10〜）に決定論の調子を振り、
+    /// 好調（Good以上）の控えを、同じ守備位置の先発より「調子込みの起用価値」が上回るなら先発へ抜擢する
+    /// （押し出された正位置選手はベンチへ＝守備固め/代打候補として #40 の交代判断に乗る）。調子ロールは渡された
+    /// 隔離ストリーム（校ID＋年度から Fork）で順に引くので、大会展望（ForSchool 経由）と実戦が同一結果になる。
+    /// order/bench を破壊的に更新する（Compose の前に呼ぶ）。
+    /// </summary>
+    private static void ApplyPromoter(
+        List<Player> order, List<Player> bench, IRandomSource rng,
+        LineupCoefficients lineup, EnemyAiCoefficients ai, FormCoefficients form)
+    {
+        if (bench.Count == 0) return;
+        var sigma = form.StationaryConditionSigma;
+
+        var bestIdx = -1;
+        var bestStep = 0;
+        var bestScore = double.NegativeInfinity;
+        var bestCv = 0.0;
+        var bestCond = Condition.Normal;
+        for (var i = 0; i < bench.Count; i++)
+        {
+            // 全控えを1回ずつロール（分岐に関係なく消費数を固定＝決定論）。
+            var cv = rng.NextGaussian(0, sigma);
+            var cond = FormModel.Quantize(cv);
+            var step = FormModel.Step(cond);
+            if (step < ai.PromoterMinConditionStep) continue;   // Good未満は抜擢対象外
+            var score = LineupOrderer.BattingScore(bench[i], lineup) + ai.PromoterConditionWeight * step;
+            if (step > bestStep || (step == bestStep && score > bestScore))
+            {
+                bestIdx = i;
+                bestStep = step;
+                bestScore = score;
+                bestCv = cv;
+                bestCond = cond;
+            }
+        }
+        if (bestIdx < 0) return;   // 今年は好調の控えがいない＝抜擢なし
+
+        var benchPlayer = bench[bestIdx];
+        // 同じ守備位置の先発（末尾＝投手枠は除外）を探す。
+        var slot = -1;
+        for (var i = 0; i < order.Count - 1; i++)
+        {
+            if (order[i].Position == benchPlayer.Position) { slot = i; break; }
+        }
+        if (slot < 0) return;
+
+        var starter = order[slot];
+        // 抜擢の価値があるとき（調子込みで先発の素の打撃を上回る）だけ入れ替える＝諸刃を無闇に負わない。
+        if (bestScore <= LineupOrderer.BattingScore(starter, lineup)) return;
+
+        order[slot] = benchPlayer with { Condition = bestCond, ConditionValue = bestCv };
+        bench[bestIdx] = starter;   // 押し出された先発はベンチへ（守備位置は同一）
     }
 
     /// <summary>
