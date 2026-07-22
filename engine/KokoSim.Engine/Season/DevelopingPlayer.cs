@@ -120,6 +120,10 @@ public sealed class DevelopingPlayer
     /// <summary>練習計画（設計書03 §3.1）。null = お任せ（IsPitcher で自動選択）。UIから設定・コピー。</summary>
     public TrainingPlan? Plan { get; set; }
 
+    /// <summary>個別指導3枠に指名中か（設計書06 §3.3・Issue #126）。true の週は主効果expへ分野別指導力
+    /// 由来の追加倍率が乗る（DevelopmentModel.TrainWeek/TrainWeekPlan）。既定false=従来一致。</summary>
+    public bool IndividualCoaching { get; set; }
+
     /// <summary>調子の内部連続値（-1〜+1, 設計書02 §3.3）。週次更新。表示・投影は FormModel.Quantize で5段階化。</summary>
     public double ConditionValue { get; set; }
 

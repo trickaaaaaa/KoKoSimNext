@@ -5,8 +5,10 @@
 // 効果プレビューは各選手ごとに seed=42 部員を再生成して1週ドライラン（非破壊・決定論）。
 //
 // 【エンジン実データ駆動】背番号ランク・総合力グレード(Tiers.FromStrength)・使用率・伸び見込み・
-//   守備適性(Aptitude/DefenseXメニュー)・合宿倍率＆週送り(SeasonCalendar)。
-// 【UIセッション状態（エンジン未実装機能の視覚シェル）】個別指導3枠・委任トグル・週テンプレ保存/呼出・
+//   守備適性(Aptitude/DefenseXメニュー)・合宿倍率＆週送り(SeasonCalendar)・
+//   個別指導3枠（DevelopingPlayer.IndividualCoaching, Issue #126）: 指名は共有ロスター本体へ書き込み、
+//   分野別指導力（監督メタ, #115）由来の追加倍率が主効果expへ実際に乗る（DevelopmentModel）。
+// 【UIセッション状態（エンジン未実装機能の視覚シェル）】委任トグル・週テンプレ保存/呼出・
 //   学年フィルタ/ソート。これらは成長ロジックに未接続（design-03/04で今後実装予定の枠）。
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
@@ -168,7 +170,6 @@ namespace KokoSim.Unity.Training
         private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用（全画面共有の RosterService.Active）
         private readonly TrainingPlan[] _plans;          // 選手索引→練習計画
         private readonly bool[] _delegated;              // 選手索引→委任フラグ（UI状態）
-        private readonly List<int> _nominated = new List<int>(); // 個別指導3枠（選手索引・最大3, UI状態）
         private readonly List<string> _templates = new List<string>(); // 週テンプレ名（UI状態）
         private int _selected;
         // 現在週は全画面共有の GameClock を単一ソースとする（週送りで変化。合宿バナー・成長段階に反映）。
@@ -270,15 +271,20 @@ namespace KokoSim.Unity.Training
 
         public bool IsDelegated(int index) => index >= 0 && index < _delegated.Length && _delegated[index];
 
-        /// <summary>個別指導3枠の指名トグル（UI状態）。上限3。</summary>
+        /// <summary>個別指導3枠の指名トグル（設計書06 §3.3・Issue #126）。上限は係数
+        /// TrainingCoefficients.IndividualCoachingSlots（既定3）。共有ロスター本体（DevelopingPlayer.
+        /// IndividualCoaching）へ直接書き込むため、指名は育成式（DevelopmentModel）へ実効果を持つ。</summary>
         public void ToggleNominate(int index)
         {
             if (index < 0 || index >= _roster.Count) return;
-            if (_nominated.Contains(index)) _nominated.Remove(index);
-            else if (_nominated.Count < 3) _nominated.Add(index);
+            if (_roster[index].IndividualCoaching) { _roster[index].IndividualCoaching = false; return; }
+
+            var count = 0;
+            foreach (var p in _roster) if (p.IndividualCoaching) count++;
+            if (count < _training.IndividualCoachingSlots) _roster[index].IndividualCoaching = true;
         }
 
-        public bool IsNominated(int index) => _nominated.Contains(index);
+        public bool IsNominated(int index) => index >= 0 && index < _roster.Count && _roster[index].IndividualCoaching;
 
         /// <summary>選択選手の現在計画を週テンプレとして保存（UI状態）。</summary>
         public void SaveTemplate() => _templates.Add("テンプレ" + (_templates.Count + 1));
@@ -342,12 +348,15 @@ namespace KokoSim.Unity.Training
 
         private void BuildNominations(TrainingPlanView view)
         {
+            var nominatedIdx = new List<int>();
+            for (var i = 0; i < _roster.Count; i++) if (_roster[i].IndividualCoaching) nominatedIdx.Add(i);
+
             view.Nominations.Clear();
-            for (var s = 0; s < 3; s++)
+            for (var s = 0; s < _training.IndividualCoachingSlots; s++)
             {
-                if (s < _nominated.Count)
+                if (s < nominatedIdx.Count)
                 {
-                    var idx = _nominated[s];
+                    var idx = nominatedIdx[s];
                     view.Nominations.Add(NumTextAt(idx) + " " + _roster[idx].Name);
                 }
                 else view.Nominations.Add("空き");
@@ -362,7 +371,7 @@ namespace KokoSim.Unity.Training
             view.SelYear = sel.Grade + "年";
             view.SelHand = HandednessLabels.Combined(sel.Throws, sel.Bats);
             view.SelGrade = Tiers.FromStrength(sel.AverageLevel()).ToString();
-            view.SelNominated = _nominated.Contains(_selected);
+            view.SelNominated = sel.IndividualCoaching;
             view.SelNomLabel = view.SelNominated ? "個別指導 指名中" : "個別指導に指名";
             view.DelegateOn = _delegated[_selected];
             view.DelegateStateLabel = _delegated[_selected] ? "委任中" : "手動";
@@ -429,6 +438,10 @@ namespace KokoSim.Unity.Training
             var alloc = ResolvedAllocations(index);
 
             var p = FreshRoster()[index];   // 非破壊ドライラン（捨てるインスタンス）
+            // 個別指導3枠（Issue #126）: このプレビュー用インスタンスへ指名状態を写す（実選手側は
+            // ToggleNominate が書き込み済み）。監督の分野別指導力（#115）も注入し、追加倍率を可視化する。
+            p.IndividualCoaching = IsNominated(index);
+            var coaching = CoachingProfile.FromManager(KokoSim.Unity.Shell.ManagerService.Manager);
             var beforeProg = new Dictionary<AbilityKind, double>();
             var beforeLv = new Dictionary<AbilityKind, int>();
             foreach (var k in GrowthDisplayOrder) { beforeProg[k] = LevelProgress(p, k); beforeLv[k] = p.Level(k); }
@@ -437,7 +450,8 @@ namespace KokoSim.Unity.Training
             {
                 var camp = _calendar.CampMultiplier(_week, _training);
                 var stage = _calendar.StageIndex(p.Grade, _week);
-                DevelopmentModel.TrainWeekPlan(p, alloc, _training.ReferenceWeekMinutes, stage, camp, _stages, _training);
+                DevelopmentModel.TrainWeekPlan(p, alloc, _training.ReferenceWeekMinutes, stage, camp, _stages, _training,
+                    coaching: coaching);
             }
 
             foreach (var k in GrowthDisplayOrder)
