@@ -5,7 +5,7 @@
     <Style src="../tokens.uss" />
     <Style src="components.uss" />
     <ui:VisualElement class="ui-root" style="flex-grow: 1; background-color: rgb(20, 35, 27); padding-left: 24px; padding-right: 24px; padding-top: 20px; padding-bottom: 20px;">
-        <ui:Label text="部品辞書 プレビュー" style="font-size: 18px; color: rgb(245, 198, 74); -unity-font-style: bold; margin-bottom: 16px;" />
+        <ui:Label text="部品辞書 プレビュー" class="f-body-bd" style="font-size: 18px; color: rgb(245, 198, 74); margin-bottom: 16px;" />
 
         <ui:Label text="RankChip（S〜G）" class="panel__title" style="margin-top: 8px; margin-bottom: 6px;" />
         <ui:VisualElement style="flex-direction: row;">
@@ -108,7 +108,7 @@
         <ui:VisualElement class="banner" style="width: 480px;">
             <ui:Label text="CAMP" class="banner__badge" />
             <ui:VisualElement style="flex-grow: 1;">
-                <ui:Label text="冬合宿・鍛錬期  ×2.5 経験値" style="font-size: 15px; color: rgb(239, 244, 234); -unity-font-style: bold;" />
+                <ui:Label text="冬合宿・鍛錬期  ×2.5 経験値" class="f-body-bd" style="font-size: 15px; color: rgb(239, 244, 234);" />
                 <ui:Label text="対外試合禁止期間（12〜3月）— 育成の山場です。" style="font-size: 12px; color: rgb(157, 179, 160); margin-top: 2px;" />
             </ui:VisualElement>
         </ui:VisualElement>
