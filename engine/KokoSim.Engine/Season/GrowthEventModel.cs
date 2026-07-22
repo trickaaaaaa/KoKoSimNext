@@ -29,6 +29,8 @@ public sealed record GrowthEventCoefficients
     /// <summary>覚醒の条件: 調子がこれ以上（好調持続の上に起きる）。</summary>
     public double AwakeningConditionMin { get; init; } = 0.2;
     public int AwakeningGain { get; init; } = 4;
+    /// <summary>覚醒発生時の調子押し上げ（設計書02 §3.3「イベントで上下」, issue #46）。</summary>
+    public double AwakeningConditionBoost { get; init; } = 0.15;
 
     public double BreakthroughWeeklyProb { get; init; } = 0.003;
     public int BreakthroughGain { get; init; } = 3;
@@ -41,6 +43,8 @@ public sealed record GrowthEventCoefficients
     public int SlumpWeeksMax { get; init; } = 6;
     /// <summary>スランプ中の能力一律係数（怪我より軽い）。</summary>
     public double SlumpPerformanceFactor { get; init; } = 0.93;
+    /// <summary>スランプ発生時の調子押し下げ（設計書02 §3.3「イベントで上下」, issue #46）。</summary>
+    public double SlumpConditionDrop { get; init; } = 0.15;
 
     /// <summary>伸び悩みの条件: 分野の現在値が上限にこの範囲まで迫っている（=「限界の顕在化」）。</summary>
     public double PlateauCapProximity { get; init; } = 3.0;
@@ -107,6 +111,7 @@ public static class GrowthEventModel
         {
             Raise(p, kinds[rng.NextInt(0, kinds.Length)], c.AwakeningGain);
         }
+        p.ConditionValue = MathUtil.Clamp(p.ConditionValue + c.AwakeningConditionBoost, -1.0, 1.0);
         notices.Add(new GrowthNotice(p, GrowthEventType.Awakening, null));
         return true;
     }
@@ -130,6 +135,7 @@ public static class GrowthEventModel
         if (!MathUtil.Chance(c.SlumpWeeklyProb, rng)) return false;
 
         p.SlumpWeeks = c.SlumpWeeksMin + rng.NextInt(0, c.SlumpWeeksMax - c.SlumpWeeksMin + 1);
+        p.ConditionValue = MathUtil.Clamp(p.ConditionValue - c.SlumpConditionDrop, -1.0, 1.0);
         notices.Add(new GrowthNotice(p, GrowthEventType.Slump, null));
         return true;
     }

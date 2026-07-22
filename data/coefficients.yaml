@@ -254,6 +254,18 @@ form:
   observe_sigma_base: 0.65          # 育成眼0時のノイズσ
   observe_sigma_per_talent_eye: -0.0063  # 育成眼1あたりのσ減少（TalentEye=100でσ下限）
   observe_sigma_min: 0.02           # σの下限（育成眼MAXでも僅かな誤差は残す）
+  # 試合結果によるConditionValueフィードバック（自校の詳細シム1試合ぶん。issue #46）
+  match_hit_bonus: 0.02             # 好打: 安打1本あたりの加点
+  match_home_run_bonus: 0.03        # 好打: 本塁打1本あたりの追加加点
+  match_hitless_min_at_bats: 3      # 不振判定: この打数以上で無安打なら減点対象
+  match_hitless_penalty: 0.04       # 不振の減点
+  match_quality_start_min_outs: 15  # 好投判定: 投球回(アウト数)がこれ以上（15=5回）
+  match_quality_start_max_runs: 2   # 好投判定: 失点がこれ以下
+  match_quality_start_bonus: 0.05   # 好投の加点
+  match_rocked_runs_threshold: 5    # 被弾判定: 失点がこれ以上
+  match_rocked_penalty: 0.05        # 被弾の減点
+  match_blowout_loss_margin: 7      # 大敗判定: 点差がこれ以上
+  match_blowout_loss_penalty: 0.03  # 大敗時、出場者全員への追加減点
 
 # --- 特殊能力の効果量・出現率（設計書10）🟡 スキルなしの選手には作用しない（帯不変） ---
 # スキルの定義（id・カテゴリ・説明）は data/skills.yaml。ここは効果の強さと生成率だけ。
@@ -526,6 +538,7 @@ growth:
   awakening_growth_threshold: 1.15
   awakening_condition_min: 0.2
   awakening_gain: 4
+  awakening_condition_boost: 0.15    # 覚醒発生時の調子押し上げ（イベント→ConditionValue, issue #46）
   breakthrough_weekly_prob: 0.003
   breakthrough_gain: 3
   slump_weekly_prob: 0.0025
@@ -533,6 +546,7 @@ growth:
   slump_weeks_min: 3
   slump_weeks_max: 6
   slump_performance_factor: 0.93
+  slump_condition_drop: 0.15         # スランプ発生時の調子押し下げ（イベント→ConditionValue, issue #46）
   plateau_cap_proximity: 3.0
   plateau_weekly_prob: 0.004
   plateau_growth_factor: 0.6
