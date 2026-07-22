@@ -49,8 +49,8 @@ namespace KokoSim.Unity.Match
         [SerializeField] private string homeName = "桜丘";
         [Tooltip("タイムラインを持たない打席（三振・四球）の表示時間[秒]。")]
         [SerializeField] private float noPlayHoldSeconds = 1.2f;
-        [Tooltip("投球フェーズの1球あたり表示時間[秒]（×2/×4速度に連動）。")]
-        [SerializeField] private float pitchIntervalSeconds = 0.45f;
+        [Tooltip("投球フェーズの1球あたり表示時間[秒]（×0.5/×2/×4速度に連動）。投球飛翔0.45秒より長くし、着弾後の一呼吸を確保する（issue #135）。")]
+        [SerializeField] private float pitchIntervalSeconds = 1.0f;
         [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
         [SerializeField] private float pitchCallHoldSeconds = 0.35f;
         [Tooltip("得点オーバーレイ（issue #60）の1点あたりの加算間隔[秒]（加点前の一時停止にも使う）。")]
@@ -162,7 +162,7 @@ namespace KokoSim.Unity.Match
             if (_skip != null) _skip.clicked += OnSkip;
             _backHome = _root.Q<Button>("back-home");
             if (_backHome != null) _backHome.clicked += OnBackHome;
-            WireSpeed("spd-1", 1f); WireSpeed("spd-2", 2f); WireSpeed("spd-4", 4f);
+            WireSpeed("spd-05", 0.5f); WireSpeed("spd-1", 1f); WireSpeed("spd-2", 2f); WireSpeed("spd-4", 4f);
             WirePitchTactics();
 
             // B/S/O ランプと塁ダイヤは LineScorePanel（部品辞書）の右袖。1球ごとに動くのでここから直接トグルする。
