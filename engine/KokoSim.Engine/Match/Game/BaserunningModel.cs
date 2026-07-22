@@ -474,7 +474,8 @@ public static class BaserunningModel
 
         var runs = 0;
         // 3塁走者の生還。内野ゴロ(併殺なし)は守備深さ駆動の本塁レース（G1, 設計書12 §4/§5）、
-        // それ以外（犠飛=フライ・home無し）は従来の SacFlyScoreProb テーブル。
+        // フライ(犠飛)は捕球時刻起点のタッチアップ物理レース（Issue #90, 設計書12 §3.5）、
+        // home無し（単体テスト・純テーブル経路）は従来の SacFlyScoreProb テーブル。
         if (r3 is not null)
         {
             // フォースの三塁走者（満塁ゴロ）: 自重できない（後続に押し出される）。
@@ -539,7 +540,33 @@ public static class BaserunningModel
                 }
                 // 自重は三塁に残る（bases.Third は r3 のまま）。
             }
-            else if (MathUtil.Chance(coeff.SacFlyScoreProb, rng)) // Normal・フライ(犠飛)・home無し＝従来テーブル
+            // 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）: フライ捕球の実試合経路（home!=null・IsFly）は
+            // 定数テーブルでなく物理レース。走者は捕球時刻にスタート（二次リードなし＝全塁間を走る）、深い外野
+            // フライは送球が長く生還、浅いフライは自重。送り判定→秒の勝負で生還 or 本塁憤死（本塁と同じ流儀）。
+            else if (home is { IsFly: true } hfly && extraOuts == 0)
+            {
+                var tagUp = HomePlayResolver.TagUpHomeParams(coeff);
+                var prob = HomePlayResolver.TagUpSuccessProbability(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp);
+                if (HomeSendDecision.ShouldSend(prob, currentOuts, hfly.Aggression, hfly.Tactics))
+                {
+                    var tagMargin = HomePlayResolver.TagUpMargin(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp);
+                    var tagCloseCall = Math.Abs(tagMargin) < coeff.CloseCallMarginSeconds;
+                    if (HomePlayResolver.TagUpResolveSafe(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp, rng))
+                    {
+                        runs++;
+                        mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = tagCloseCall });
+                    }
+                    else
+                    {
+                        extraOuts++; homeOuts++; // タッチアップ失敗＝本塁での走塁死
+                        mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = tagCloseCall });
+                    }
+                    bases.Third = null;
+                    r3 = null;
+                }
+                // 自重（浅いフライ）は三塁に残る（RNG非消費＝本塁レースの流儀, 不変条件#2）。
+            }
+            else if (MathUtil.Chance(coeff.SacFlyScoreProb, rng)) // home無し＝従来テーブル（単体テスト・純テーブル経路）
             {
                 runs++;
                 mv?.Add(new RunnerMove(r3, 3, 4, false));

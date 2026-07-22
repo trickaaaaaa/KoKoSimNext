@@ -461,6 +461,9 @@ public static class CoefficientsLoader
         public double ThirdTagSeconds { get; set; } = D.ThirdTagSeconds;
         public double ThirdMarginScale { get; set; } = D.ThirdMarginScale;
         public double ThirdSuccessBias { get; set; } = D.ThirdSuccessBias;
+        // 犠飛のタッチアップ（Issue #90）
+        public double TagUpMarginScale { get; set; } = D.TagUpMarginScale;
+        public double TagUpSuccessBias { get; set; } = D.TagUpSuccessBias;
         public double CloseCallMarginSeconds { get; set; } = D.CloseCallMarginSeconds;
         // ライナー併殺（設計書12 §4, G2）
         public double LinerBreakReactionSeconds { get; set; } = D.LinerBreakReactionSeconds;
@@ -549,6 +552,8 @@ public static class CoefficientsLoader
             ThirdTagSeconds = ThirdTagSeconds,
             ThirdMarginScale = ThirdMarginScale,
             ThirdSuccessBias = ThirdSuccessBias,
+            TagUpMarginScale = TagUpMarginScale,
+            TagUpSuccessBias = TagUpSuccessBias,
             CloseCallMarginSeconds = CloseCallMarginSeconds,
             LinerBreakReactionSeconds = LinerBreakReactionSeconds,
             LinerCommitCapSeconds = LinerCommitCapSeconds,
