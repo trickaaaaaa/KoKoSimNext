@@ -454,7 +454,7 @@ public sealed class TeamState
     /// </summary>
     public bool ChangePitcherTo(Player sub)
     {
-        if (!_bullpen.Remove(sub)) return false;
+        if (!_bullpen.Remove(sub) && !_bench.Remove(sub)) return false;
         // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
         _retired.Add(CurrentPitcher);
         CurrentPitcher = sub;
@@ -469,6 +469,12 @@ public sealed class TeamState
 
     /// <summary>まだ登板していない控え投手（登板順＝Team.Bullpen の並び）。交代UIの指名候補。</summary>
     public IReadOnlyList<Player> AvailableBullpen => _bullpen;
+
+    /// <summary>
+    /// 投手交代で指名できる全候補（ブルペン＋野手控え。issue #137: 野手も投手として登板できる）。
+    /// 添字は <see cref="ChangePitcherTo"/> 呼び出しの Player 引数解決に使う（SubstitutionCommands/GameReplay 共通）。
+    /// </summary>
+    public IReadOnlyList<Player> AvailablePitcherCandidates => _bullpen.Concat(_bench).ToList();
 
     // ===== 選手交代（設計書09 §6）。高校野球ルール＝リエントリー禁止（退いた選手は再出場できない）。 =====
     /// <summary>現在の打順9人（交代反映済み）。UI・テスト・采配判断用。</summary>

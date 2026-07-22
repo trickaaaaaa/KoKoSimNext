@@ -314,4 +314,32 @@ public sealed class SubstitutionTests
         Assert.Equal(before, state.CurrentLineup);  // 投手は打順外なのでラインナップ不変
         Assert.Equal("第2", state.CurrentPitcher.Name);
     }
+
+    // ===== 投手交代でベンチ（野手）を指名できる（issue #137） =====
+
+    [Fact]
+    public void AvailablePitcherCandidates_CombinesBullpenAndBench()
+    {
+        var fielder = At(FieldPosition.CenterField, "野手控え");
+        var team = MakeTeamWithBullpen("第2", "第3") with { Bench = new[] { fielder } };
+        var state = new TeamState(team);
+
+        Assert.Equal(new[] { "第2", "第3", "野手控え" }, state.AvailablePitcherCandidates.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ChangePitcherTo_CanDesignateAFielderFromTheBench_NotOnlyTheBullpen()
+    {
+        var fielder = At(FieldPosition.CenterField, "野手控え");
+        var team = MakeTeam(new[] { fielder }); // ブルペンは空。ベンチの野手だけが控え。
+        var state = new TeamState(team);
+        var starter = state.CurrentPitcher;
+
+        Assert.True(state.ChangePitcherTo(fielder));
+
+        Assert.Equal("野手控え", state.CurrentPitcher.Name);
+        Assert.True(state.IsRetired(starter));
+        Assert.DoesNotContain(fielder, state.Bench);            // ベンチから消費
+        Assert.Equal("野手控え", state.CurrentLineup[8].Name);  // 非DH制なので投手スロットも入れ替わる
+    }
 }
