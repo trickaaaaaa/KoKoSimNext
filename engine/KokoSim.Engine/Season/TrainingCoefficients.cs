@@ -19,6 +19,13 @@ public sealed record TrainingCoefficients
     public double LevelUpBase { get; init; } = 100.0;
     public double LevelUpGrowth { get; init; } = 1.05;
 
+    /// <summary>
+    /// 守備位置適性の必要exp倍率（&lt;1.0で速く伸びる, 守備適性 未決1・2026-07-22）。
+    /// 能力レベルの必要exp（LevelUpBase×LevelUpGrowth^v）にこれを乗じて適性専用に緩める。
+    /// 既定1.0＝後方互換（従来は能力と同曲線を共用していた）。
+    /// </summary>
+    public double AptitudeRequiredExpFactor { get; init; } = 1.0;
+
     /// <summary>合宿の経験値倍率（設計書04 §4: 夏×2.0 / 冬×2.5）。</summary>
     public double SummerCampMult { get; init; } = 2.0;
     public double WinterCampMult { get; init; } = 2.5;

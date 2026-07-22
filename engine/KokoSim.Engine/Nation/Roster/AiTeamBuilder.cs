@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
@@ -41,6 +42,26 @@ public static class AiTeamBuilder
         var pitchers = active.Where(p => p.IsPitcher).OrderByDescending(PitcherScore).ToList();
         var fielders = active.Where(p => !p.IsPitcher).ToList();
 
+        // 相手校の当季調子variance（Q21・2026-07-22）。(校ID, 年度, 選手ID) の決定論シードから
+        // 自校と同じ定常分布 N(0, σ_stationary²) で抽選し、Player.Condition/ConditionValue へ焼く。
+        // 展望（TournamentPreview）と実戦は同じ (校ID, 年度) でここを通るため観測は当季を通して固定＝
+        // 「展望で見た調子がそのまま出る」一致契約と決定論（不変条件#2）を保つ。試合ごと（ラウンド単位）に
+        // 揺らす per-round variance は展望との一致にラウンド識別子の伝播が要るため将来増分（OPEN-QUESTIONS Q21）。
+        var conditionRoot = new Xoshiro256Random(
+            0x0C0D_0000UL ^ (ulong)(long)school.Id ^ ((ulong)(long)yearIndex * 0x9E37_79B9UL));
+
+        Player Snap(AiPlayer p, int number)
+        {
+            var v = FormModel.SampleInitialCondition(conditionRoot.Fork((ulong)(uint)p.Id), deps.Form);
+            return p.Snapshot with
+            {
+                UniformNumber = number,
+                Grade = p.Grade,
+                ConditionValue = v,
+                Condition = FormModel.Quantize(v),
+            };
+        }
+
         var order = new List<Player>(9);
         var bench = new List<Player>();
         var usedFielders = new HashSet<int>();
@@ -54,26 +75,26 @@ public static class AiTeamBuilder
                 .FirstOrDefault();
             if (best is null) continue;   // 保険（コホート構成上は起きない）
             usedFielders.Add(best.Id);
-            order.Add(best.Snapshot with { UniformNumber = PositionNumber(pos), Grade = best.Grade });
+            order.Add(Snap(best, PositionNumber(pos)));
         }
 
         // エース（最良投手）を打順末尾（投手スロット8）へ。
         var ace = pitchers.FirstOrDefault();
         if (ace is not null)
-            order.Add(ace.Snapshot with { UniformNumber = 1, Grade = ace.Grade });
+            order.Add(Snap(ace, 1));
 
         // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号10〜。
         var benchFielders = fielders.Where(p => !usedFielders.Contains(p.Id))
             .OrderByDescending(FielderScore).ToList();
         var num = 10;
         foreach (var f in benchFielders)
-            bench.Add(f.Snapshot with { UniformNumber = num++, Grade = f.Grade });
+            bench.Add(Snap(f, num++));
 
         // ブルペン（エース以外の投手）。背番号18〜。
         var bullpen = new List<Player>();
         var pnum = 18;
         foreach (var p in pitchers.Skip(1))
-            bullpen.Add(p.Snapshot with { UniformNumber = pnum++, Grade = p.Grade });
+            bullpen.Add(Snap(p, pnum++));
 
         var team = new Team
         {

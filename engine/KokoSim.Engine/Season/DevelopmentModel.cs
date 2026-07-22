@@ -126,7 +126,8 @@ public static class DevelopmentModel
         p.AddAptitudeExp(pos, delta * p.DefenseGrowth);
         while (p.Aptitude(pos) < p.AptitudeCap(pos))
         {
-            var required = c.RequiredExp(p.Aptitude(pos));
+            // 適性は能力レベルより緩い必要exp（ユーティリティを現実的な年数で作れるように・守備適性 未決1）。
+            var required = c.RequiredExp(p.Aptitude(pos)) * c.AptitudeRequiredExpFactor;
             if (p.AptitudeExp(pos) < required) break;
             p.ConsumeAptitudeExp(pos, required);
             p.IncrementAptitude(pos);
