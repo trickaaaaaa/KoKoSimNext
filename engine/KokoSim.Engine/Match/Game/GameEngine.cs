@@ -469,10 +469,11 @@ public static class GameEngine
                     };
                 Tactics.PitchDirective? pitchOverride = null;
                 PitcherGear? gearOverride = null;
-                // 盗塁を試みるか＋始動種別（設計書15 Phase D-2d）。旧来は打席頭で一度きりだったが、
-                // 毎球の独立試行へ置き換えたため任意の球の前で発動しうる（解決式は StealResolver 等の
-                // 従来のまま、下の盗塁ブロックで解決する）。
+                // 盗塁を試みるか＋始動種別＋狙う塁（設計書15 Phase D-2d／issue #67で三盗・本盗へ拡張）。
+                // 旧来は打席頭で一度きりだったが、毎球の独立試行へ置き換えたため任意の球の前で発動しうる
+                // （解決式は StealResolver 等の従来のまま、下の盗塁ブロックで解決する）。
                 StartType? stealAttempt = null;
+                var stealTarget = StealTarget.Second;
                 if (offense.Tactics is IPitchTacticsBrain offensePitchBrain)
                 {
                     var pSituation = new PitchTacticsSituation(
@@ -484,6 +485,7 @@ public static class GameEngine
                     // バント方針という非null既定が加わったことで「上書きは値がある時だけ」に変更が必要になった。
                     if (d?.Batting is { } brainBatting) battingOverride = brainBatting;
                     stealAttempt = d?.StealAttempt;
+                    stealTarget = d?.StealTarget ?? StealTarget.Second;
                 }
                 if (defense.Tactics is IPitchTacticsBrain defensePitchBrain)
                 {
@@ -500,7 +502,8 @@ public static class GameEngine
                 // PickoffResolver→StealReadModel.RollPitchout→StealResolver→重盗ロールの呼び出し順は
                 // 旧来の打席頭一括判定と不変。3アウト目ならこの打席は未決着のまま次イニングへ
                 // （スクイズの挟殺と同じ扱い＝設計書15 Phase D-2c の squeezeAbandoned を踏襲）。
-                if (stealAttempt is { } stealStart && bases.First is not null && bases.Second is null)
+                if (stealAttempt is { } stealStart && stealTarget == StealTarget.Second
+                    && bases.First is not null && bases.Second is null)
                 {
                     // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ
                     // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ。
@@ -551,6 +554,78 @@ public static class GameEngine
                             bases.Third = null;
                         }
 
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                }
+                // 三盗（issue #67）: 二塁のみ在塁でのみ判断側が返す（塁状況が排他のため一・三塁の重盗とは無競合）。
+                else if (stealAttempt is { } thirdStart && stealTarget == StealTarget.Third
+                    && bases.Second is not null && bases.First is null && bases.Third is null)
+                {
+                    if (PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng))
+                    {
+                        offense.PickoffCount++;
+                        outs++;
+                        bases.Second = null;
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                    else
+                    {
+                        var pitchout = StealReadModel.RollPitchout(
+                            bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
+                        var safe = StealResolver.Resolve(
+                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart,
+                            StealTarget.Third) == StealResult.Safe;
+                        offense.RecordSteal(safe);
+                        if (bases.Second is { } thirdSlider)
+                        {
+                            Hurt(MatchInjuryModel.Roll(
+                                InjuryScene.Sliding, ctx.MatchInjury.SlidingProb, thirdSlider, offense.Name,
+                                inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog,
+                                sub: session.PitchCount));
+                        }
+                        if (safe) { bases.Third = bases.Second; } else { outs++; }
+                        bases.Second = null;
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                }
+                // 本盗（issue #67, design-14）: 三塁のみ在塁でのみ判断側が返す。同じ球でスクイズが確定していれば
+                // 三塁走者は既にそちらへ使われているため、本盗は試みない（単純上書き, Q12-3と同型）。
+                else if (stealAttempt is { } homeStart && stealTarget == StealTarget.Home
+                    && bases.Third is not null && bases.Second is null && bases.First is null
+                    && battingOverride != PitchBattingOverride.Squeeze)
+                {
+                    if (PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng))
+                    {
+                        offense.PickoffCount++;
+                        outs++;
+                        bases.Third = null;
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                    else
+                    {
+                        var pitchout = StealReadModel.RollPitchout(
+                            bases.Third, defense.Catcher, currentPitcher, homeStart, ctx.Baserunning, rng);
+                        var safe = StealResolver.Resolve(
+                            bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart,
+                            StealTarget.Home) == StealResult.Safe;
+                        offense.RecordSteal(safe);
+                        if (bases.Third is { } homeSlider)
+                        {
+                            Hurt(MatchInjuryModel.Roll(
+                                InjuryScene.Sliding, ctx.MatchInjury.SlidingProb, homeSlider, offense.Name,
+                                inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog,
+                                sub: session.PitchCount));
+                        }
+                        if (safe)
+                        {
+                            offense.Runs += 1;
+                            runsThisHalf += 1;
+                        }
+                        else
+                        {
+                            outs++;
+                        }
+                        bases.Third = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }

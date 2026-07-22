@@ -72,25 +72,35 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         var gear = coreOk ? d?.Gear : null;
 
         // 盗塁（設計書12 §5「セオリー vs 意表」）: 正着を外すと（①）、無謀な盗塁に走ることがある
-        // （旧 Misfire、ティア不問）。正着どおりなら②ティア（StealMinTier）を満たした時だけ_innerの
-        // 判断（試みるか＋始動種別）を使う。ギャンブル始動は別途、さらに上級の判断（GambleStartMinTier）。
+        // （旧 Misfire、ティア不問。二盗のみ＝無謀を働くのは従来からの型で、三盗・本盗はセオリー判断時のみ）。
+        // 正着どおりなら②ティア（狙う塁ごとに独立の下限。issue #67: 三盗・本盗は二盗より高いティアを要求）
+        // を満たした時だけ_innerの判断（試みるか＋始動種別＋狙う塁）を使う。ギャンブル始動は別途、
+        // さらに上級の判断（GambleStartMinTier）。
         StartType? steal;
+        var stealTarget = d?.StealTarget ?? StealTarget.Second;
         if (!optimal)
         {
             steal = s.Base.OnFirst is not null && s.Base.OnSecond is null && s.Base.Outs < 2
                     && MathUtil.Chance(_ai.RecklessOnMissProb, rng)
                 ? StartType.Normal
                 : null;
+            stealTarget = StealTarget.Second;
         }
         else
         {
-            steal = _profile.TierRank >= _ai.StealMinTier ? d?.StealAttempt : null;
+            var stealTierOk = stealTarget switch
+            {
+                StealTarget.Third => _profile.TierRank >= _ai.StealThirdMinTier,
+                StealTarget.Home => _profile.TierRank >= _ai.StealHomeMinTier,
+                _ => _profile.TierRank >= _ai.StealMinTier,
+            };
+            steal = stealTierOk ? d?.StealAttempt : null;
         }
         if (steal == StartType.Gamble && _profile.TierRank < _ai.GambleStartMinTier) steal = StartType.Normal;
 
         return batting is null && policy is null && gear is null && steal is null
             ? null
-            : new PitchTacticsDirective(batting, policy, gear, steal);
+            : new PitchTacticsDirective(batting, policy, gear, steal, stealTarget);
     }
 
     public bool CallOffenseTimeout(in TacticsSituation s, IRandomSource rng)
@@ -187,6 +197,14 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             {
                 StealProb = Clamp01(b.StealProb * ai.SmallBallStealFactor),
                 StealMinSuccess = MathUtil.Clamp(b.StealMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.4, 0.99),
+                // issue #67: 機動力校は三盗・本盗も同じ重みで多用する（狙う塁ごとに専用係数は設けない）。
+                // 三盗・本盗は解決式の実現可能レンジ自体が二盗よりずっと低い（StealThirdMinSuccess/
+                // StealHomeMinSuccessのコメント参照）ため、下限クランプは二盗と同じ0.4を流用しない
+                // （0.4だと素の既定値0.30/0.0より緩和後の値が高くなり、校風で"渋くなる"逆転が起きる）。
+                StealThirdProb = Clamp01(b.StealThirdProb * ai.SmallBallStealFactor),
+                StealThirdMinSuccess = MathUtil.Clamp(b.StealThirdMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.05, 0.99),
+                StealHomeProb = Clamp01(b.StealHomeProb * ai.SmallBallStealFactor),
+                StealHomeMinSuccess = MathUtil.Clamp(b.StealHomeMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.0, 0.99),
                 GambleStartProb = Clamp01(b.GambleStartProb * ai.SmallBallGambleStartFactor),
                 SacBuntProb = Clamp01(b.SacBuntProb * ai.SmallBallBuntFactor),
                 SacBuntFromInning = System.Math.Max(1, b.SacBuntFromInning - ai.SmallBallBuntInningEarlier),

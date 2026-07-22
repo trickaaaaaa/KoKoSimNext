@@ -30,6 +30,29 @@ public sealed record TacticsCoefficients
     public double StealMinSuccess { get; init; } = 0.72;
     public double StealProb { get; init; } = 0.45;
 
+    // ===== 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。 =====
+    // 一・三塁の重盗（DoubleStealThirdBreakProb）とは塁状況が排他（重盗は一塁+三塁）のため優先順位の
+    // 競合はない。三塁が絡む唯一の競合はスクイズ（本盗も三塁走者が起点）で、GameEngine 側で
+    // 「この球スクイズが確定していれば本盗は試みない」という単純上書きで解消する（Q12-3と同型）。
+    /// <summary>三盗: 二盗より選別的な成功見込み閾値（実測ベースの初期値）。三盗はキャッチャーの三塁送球が
+    /// 二塁送球より短い一方、StealThirdSuccessBiasの下方補正が上回るため、解決式が返す実現可能な見込みの
+    /// 天井自体が二盗（≈0.95）よりずっと低い（俊足×弱肩でも≈0.4〜0.65）。よって0.30は「二盗と同じ絶対値」
+    /// ではなく「三盗の実現可能レンジの中で上位のみ」という相対的な選別線。</summary>
+    public double StealThirdMinSuccess { get; init; } = 0.30;
+    public double StealThirdProb { get; init; } = 0.25;
+    /// <summary>三盗を考えるアウトカウント上限（0=無死のみ）と、大差では狙わない点差上限。</summary>
+    public int StealThirdMaxOuts { get; init; } = 0;
+    public int StealThirdMaxDiffAbs { get; init; } = 3;
+
+    /// <summary>本盗: 超高閾値のギャンブル枠。解決式（StealResolver）は投手クイック＋タッチのみで守備側を
+    /// 評価し、走者側の塁間走破（3秒超）に追いつけないため、どの選手の組み合わせでも成功見込みは解決式の
+    /// 下限（0.01）に張り付く＝「成功見込みで選別する」こと自体が意味を持たない。よって閾値は0（常に通過）
+    /// とし、発生頻度は StealHomeProb と状況条件（アウトカウント・点差）だけで絞る。</summary>
+    public double StealHomeMinSuccess { get; init; } = 0.0;
+    public double StealHomeProb { get; init; } = 0.10;
+    public int StealHomeMaxOuts { get; init; } = 1;
+    public int StealHomeMaxDiffAbs { get; init; } = 1;
+
     public double HitAndRunProb { get; init; } = 0.07;
     public int HitAndRunMinContact { get; init; } = 55;
     public int HitAndRunMaxPower { get; init; } = 65;

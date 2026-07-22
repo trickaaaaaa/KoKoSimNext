@@ -1,4 +1,5 @@
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Game;
 
 namespace KokoSim.Engine.Match.Tactics;
 
@@ -37,16 +38,18 @@ public readonly record struct PitchTacticsSituation(
 /// （<see cref="PitchDirective"/>）への解決は呼び出し側（GameEngine）が行う。
 /// </summary>
 /// <param name="StealAttempt">
-/// この球で一塁走者に盗塁を試みさせるか（設計書15 Phase D-2d）。null=試みない。非null=その始動種別
-/// （Normal/Gamble）で試みる。打席頭一度きりだった判断（旧 ITacticsBrain.CallOffense/CallStartType）を
-/// 毎球の独立試行へ置き換えたもの。解決自体（PickoffResolver/StealReadModel/StealResolver）は
+/// この球で走者に盗塁を試みさせるか（設計書15 Phase D-2d／issue #67で三盗・本盗へ拡張）。null=試みない。
+/// 非null=その始動種別（Normal/Gamble）で試みる。打席頭一度きりだった判断（旧 ITacticsBrain.CallOffense/
+/// CallStartType）を毎球の独立試行へ置き換えたもの。解決自体（PickoffResolver/StealReadModel/StealResolver）は
 /// GameEngine がこの指示を受けてから行う（ここでは「試みるか」だけを返す）。
 /// </param>
+/// <param name="StealTarget">狙う塁（既定Second＝従来どおり一塁→二塁）。StealAttemptがnullなら無視される。</param>
 public readonly record struct PitchTacticsDirective(
     PitchBattingOverride? Batting = null,
     PitchPolicy? Policy = null,
     Pitching.PitcherGear? Gear = null,
-    StartType? StealAttempt = null);
+    StartType? StealAttempt = null,
+    StealTarget StealTarget = StealTarget.Second);
 
 /// <summary>
 /// 1球ごとの采配判断（設計書15 §2.3）。実装は任意（optional interface）。<see cref="ITacticsBrain"/> の
