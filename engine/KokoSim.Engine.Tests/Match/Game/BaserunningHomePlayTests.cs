@@ -103,9 +103,9 @@ public sealed class BaserunningHomePlayTests
         for (var i = 0; i < trials; i++)
         {
             var bases = new BaseState { Third = runner };
-            var (r, _, h, _, _, _) = BaserunningModel.ApplyDetailed(
+            var (r, _, baseOuts, _, _, _) = BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: false, Grounder(depth));
-            runs += r; homeOuts += h;
+            runs += r; homeOuts += baseOuts.Home;
         }
         return (runs, homeOuts);
     }

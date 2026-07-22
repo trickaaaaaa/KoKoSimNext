@@ -190,6 +190,10 @@ baserunning:
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅
   home_success_bias: 2.00                    # 憤死≈0.26/試合・得点≈4.08/チームへ校正（Slice C, Heavy実測）
+  # 三塁への進塁レース（単打の一塁→三塁, Issue #89, 設計書12 §3.5/§4.6）: 本塁と同型で三塁ベースへ解く
+  third_tag_seconds: 0.10                     # 三塁でのベースタッチ（本塁クロスプレーより短い）
+  third_margin_scale: 0.45                    # margin→確率のlogistic幅（本塁より広め＝打球の深さ・外野の肩を効かせる）
+  third_success_bias: 1.50                    # 一塁→三塁の到達率・三塁憤死を現実値へ校正（Heavy実測, Issue #89）
   close_call_margin_seconds: 0.15            # 判定オーバーレイ（Issue #59）: |margin|がこれ未満なら「際どい」＝セーフ表示。アウトは常時表示のため無関係
   # ライナー併殺（コンタクト始動の一塁走者が捕られ戻れず, 設計書12 §4, G2）
   liner_break_reaction_seconds: 0.05         # 接触と同時に飛び出す＝ほぼ即時
@@ -381,6 +385,10 @@ tactics:
   send_home_min_success: 0.50        # 中立采配の送り閾値（Slice C校正: 憤死を目標帯へ）
   send_home_two_out_relax: 0.30      # 2アウトは緩和（積極的に還す）
   send_home_aggression_span: 0.50    # aggression(0..1)で閾値を±動かす幅
+  # 三塁への送り判定（単打の一塁→三塁, Issue #89）: 三塁は失うものが小さく閾値は本塁より低め
+  send_third_min_success: 0.60       # 中立采配で三塁へ回す閾値
+  send_third_two_out_relax: 0.25     # 2アウトは緩和
+  send_third_aggression_span: 0.45   # aggression(0..1)で閾値を±動かす幅
   # 内野深さ×ゴロ×本塁（G1, 設計書12 §4/§5）は深さで本塁プレーの有無を分岐（前進=勝負/後退=献上/通常=テーブル）。
   # 送りバイアスは baserunning.home_grounder_start_delay_seconds で調整。
   # 守備指示判断

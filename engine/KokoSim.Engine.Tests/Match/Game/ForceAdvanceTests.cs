@@ -92,11 +92,11 @@ public sealed class ForceAdvanceTests
         {
             var r3 = new Player { Speed = 50, Baserunning = 50 };
             var bases = new BaseState { First = new Player(), Second = new Player(), Third = r3 };
-            var (runs, _, homeOuts, _, _, _) = BaserunningModel.ApplyDetailed(
+            var (runs, _, baseOuts, _, _, _) = BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: false,
                 Grounder(DefenseDepth.In));
             scored += runs;
-            gunnedDown += homeOuts;
+            gunnedDown += baseOuts.Home;
             if (ReferenceEquals(bases.Third, r3)) held++;
         }
         Assert.True(scored > 0, "本塁封殺の勝負で一度も生還しない");

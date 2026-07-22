@@ -457,6 +457,10 @@ public static class CoefficientsLoader
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
         public double HomeGrounderStartDelaySeconds { get; set; } = D.HomeGrounderStartDelaySeconds;
+        // 三塁への進塁レース（単打の一塁→三塁, Issue #89）
+        public double ThirdTagSeconds { get; set; } = D.ThirdTagSeconds;
+        public double ThirdMarginScale { get; set; } = D.ThirdMarginScale;
+        public double ThirdSuccessBias { get; set; } = D.ThirdSuccessBias;
         public double CloseCallMarginSeconds { get; set; } = D.CloseCallMarginSeconds;
         // ライナー併殺（設計書12 §4, G2）
         public double LinerBreakReactionSeconds { get; set; } = D.LinerBreakReactionSeconds;
@@ -542,6 +546,9 @@ public static class CoefficientsLoader
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,
             HomeGrounderStartDelaySeconds = HomeGrounderStartDelaySeconds,
+            ThirdTagSeconds = ThirdTagSeconds,
+            ThirdMarginScale = ThirdMarginScale,
+            ThirdSuccessBias = ThirdSuccessBias,
             CloseCallMarginSeconds = CloseCallMarginSeconds,
             LinerBreakReactionSeconds = LinerBreakReactionSeconds,
             LinerCommitCapSeconds = LinerCommitCapSeconds,
@@ -1052,6 +1059,10 @@ public static class CoefficientsLoader
         public double SendHomeMinSuccess { get; set; } = D.SendHomeMinSuccess;
         public double SendHomeTwoOutRelax { get; set; } = D.SendHomeTwoOutRelax;
         public double SendHomeAggressionSpan { get; set; } = D.SendHomeAggressionSpan;
+        // 三塁への送り判定（単打の一塁→三塁, Issue #89）
+        public double SendThirdMinSuccess { get; set; } = D.SendThirdMinSuccess;
+        public double SendThirdTwoOutRelax { get; set; } = D.SendThirdTwoOutRelax;
+        public double SendThirdAggressionSpan { get; set; } = D.SendThirdAggressionSpan;
         // 守備指示判断
         public double BuntShiftProb { get; set; } = D.BuntShiftProb;
         public int InfieldInFromInning { get; set; } = D.InfieldInFromInning;
@@ -1159,6 +1170,9 @@ public static class CoefficientsLoader
             SendHomeMinSuccess = SendHomeMinSuccess,
             SendHomeTwoOutRelax = SendHomeTwoOutRelax,
             SendHomeAggressionSpan = SendHomeAggressionSpan,
+            SendThirdMinSuccess = SendThirdMinSuccess,
+            SendThirdTwoOutRelax = SendThirdTwoOutRelax,
+            SendThirdAggressionSpan = SendThirdAggressionSpan,
             BuntShiftProb = BuntShiftProb,
             InfieldInFromInning = InfieldInFromInning,
             InfieldInMaxLead = InfieldInMaxLead,

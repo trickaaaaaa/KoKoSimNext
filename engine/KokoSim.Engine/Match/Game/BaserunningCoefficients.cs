@@ -150,6 +150,20 @@ public sealed record BaserunningCoefficients
     /// 1.55 で「内野前進は生還率を抑える(通常より下)＝AIの前進判断が正しく報われる」。</summary>
     public double HomeGrounderStartDelaySeconds { get; init; } = 1.55;
 
+    // === 三塁への進塁レース（単打の一塁→三塁, Issue #89, 設計書12 §3.5/§4.6）===
+    // 本塁と同じ「走者(走力＋走塁判断) vs 外野処理＋中継＋三塁送球」を三塁ベースで解く。
+    // 走者反応・二次リード・外野処理/中継の各係数は本塁と共有し、塁固有はタッチ・バイアス・幅の3つだけ分離する。
+    /// <summary>三塁でのタッチ[s]（ベースタッチ。本塁のクロスプレーより短い）。</summary>
+    public double ThirdTagSeconds { get; init; } = 0.10;
+    /// <summary>三塁到達 margin→確率の logistic 幅[s]。本塁より広め＝打球の深さ・外野の肩が
+    /// 送り/自重の境界を跨ぐよう感度を持たせる（Issue #89 の主眼）。</summary>
+    public double ThirdMarginScale { get; init; } = 0.45;
+    /// <summary>三塁到達確率バイアス[s]（一塁→三塁の到達率・三塁憤死頻度を現実値へ寄せる校正項）。
+    /// 走者物理の保守性（小さい二次リード・加速ランプ非モデル化・スプリント下限）を吸収する。
+    /// Heavy 実測で校正（Issue #89）: 1.50 で得点≈5.0/チーム（帯内・変更前5.19からの微減）、
+    /// 三塁憤死≈0.20/試合（帯 0.02–0.40 内）。</summary>
+    public double ThirdSuccessBias { get; init; } = 1.50;
+
     /// <summary>
     /// 判定オーバーレイ（Issue #59）: margin[s]の絶対値がこの値未満なら「際どい」＝セーフ表示の対象。
     /// アウトは常に表示するため使わない。表示専用（判定・帯には無関係, 決定論を変えない）。

@@ -103,7 +103,8 @@ handoff §B の「併殺の名手 = `BaserunningModel` の DP に**野手 identi
 - **Slice C 配線**: 本塁生還プレー（三塁走者の無条件生還／単打の二塁走者／二塁打の一塁走者・失策含む）を送り判定＋レースへ置換。`FieldingPlay` を `ApplyDetailed` へ延伸（F1配線を再利用）。幾何は結果に効くので常時計算（AtBatResult.Play 常時保持）。null コンテキストは従来テーブルへフォールバック＝既存テスト・決定論を保存。多走者は先行→後続で裁定、3アウトで打ち切り（ラリーキル）、1プレー本塁アウトは最大1。
 - **Heavy 校正着地**: `home_success_bias=2.00`・`send_home_min_success=0.50` で **得点≈4.08/チーム（帯3.5–6.0内）・憤死≈0.26/試合（目標0.25–0.30）・際どい計≈8/試合**。`balance-targets.yaml games_10k.home_play_outs_per_game: 0.12–0.42`（warn相当）＋ `GameRegressionTests` で検証。
 - **Slice D 完了（2026-07-17）**: バックホームの**送球連鎖描画** `TimelineBuilder.AppendBackHomeThrows`（外野処理点→中継(>60m)/直接(≤60m)→本塁）＋実況「本塁へ突っ込む——送球！」「タッチアウト！ 本塁で憤死」。GameEngine が本塁Outレッグ検出時に適用。表示専用・帯無影響（`Capture_DoesNotAffectGameOutcome` が担保、Heavy は CaptureTimelines=false で本経路を通らない）。
-- **残タスク**: **犠飛**はタッグアップの走者時計が異なるため別スライス（現状テーブル据え置き）。**一塁→三塁**は本塁プレー外で据え置き（**三塁打**は §3.6 で回収済み）。**aggressionの三層（校風/ティア/采配）写像**は残Q10。**安全側の際どいセーフ**（送られたが生還）の送球描画は「送った」シグナルが未伝搬のため未実装（憤死＝Out時のみ描画）。
+- **残タスク**: **犠飛**はタッグアップの走者時計が異なるため別スライス（現状テーブル据え置き）。**aggressionの三層（校風/ティア/采配）写像**は残Q10。**安全側の際どいセーフ**（送られたが生還）の送球描画は「送った」シグナルが未伝搬のため未実装（憤死＝Out時のみ描画）。
+- **一塁→三塁 物理レース化 完了（Issue #89, 2026-07-23）**: 単打の一塁→三塁を固定確率テーブル（`first_to_third_on_single`）から本塁と同型のレースへ置換。`HomePlayResolver` を目標塁で一般化（`BasePlayParams`＝送球先座標/タッチ/バイアス/幅を塁ごとに分離、本塁は現状値で挙動据え置き）し、送球先を三塁ベースとした守備所要（中継しきい値 `cutoff_distance_threshold_m` 共有）と `HomeSendDecision.ShouldSendThird`（閾値・2アウト緩和・aggression）で解く。**三塁での走塁死**を `RunnerMove(1→3, Out)` として `extraOuts` へ算入（`GameResult.ThirdPlayOuts`）。1プレー1送球の制約（`outThrowUsed`）を本塁と共有＝本塁と三塁を同時に刺さない。旧テーブルは `HomePlayContext` が無い純テーブル経路（単体テスト）のフォールバックとして存置。係数は `data/coefficients.yaml`（`baserunning.third_*` / `tactics.send_third_*`）。**Heavy 校正着地**: `third_success_bias=1.50` で 得点≈5.0/チーム（変更前5.19からの微減・帯3.5–6.0内）・三塁憤死≈0.20/試合（`balance-targets.yaml third_play_outs_per_game: 0.02–0.40`）。RNG消費順が変わるため決定論ベースライン再ベースライン済み。
 
 ### 3.6 安打の塁打数（Issue #24, 2026-07-21）
 
@@ -185,7 +186,7 @@ AVG .255→**.273**・得点 4.08→**5.14**/チーム（いずれも `balance-t
 - **G1（内野深さ×ゴロ×本塁）完了**: `ApplyInPlayOut` の三塁走者判定が守備の内野深さで分岐（`HomePlayContext.InfieldDepth`）。**後退=献上(無条件生還)／前進=本塁で時間の勝負(F2レース再利用・自重 or 生還 or 憤死)／通常=従来テーブル**。ゴロ走者は「打球を読んでから走る」ぶん遅い（`HomeGrounderStartDelaySeconds`=1.55）＝前進守備が生還率を通常より下げる＝AIの前進判断が正しく報われる。快足走者は前進でも突入し際どいクロスプレー（生還/タッチアウト）が創発。
 - **帯**: 内野前進は稀（終盤僅差のみ・`InfieldInFromInning`）なので得点帯・憤死帯とも実質不変（4.08/0.26 のまま, Heavy 17緑）。憤死カウントは `ApplyDetailed` が本塁憤死数を返し F2外野＋G1内野を厳密集計。
 - **描画**: 憤死時は Slice D の `AppendBackHomeThrows` を流用（本塁Outレッグ＋送球＋「タッチアウト」）。
-- **残**: G2（スタート種別 Contact/Gamble・ライナー併殺）／G3（守備の読み・ピッチアウト）。三塁打/一塁→三塁/犠飛は据え置き。
+- **残**: G2（スタート種別 Contact/Gamble・ライナー併殺）／G3（守備の読み・ピッチアウト）。三塁打/犠飛は据え置き（**一塁→三塁**は §3.5 の残タスク欄のとおり Issue #89 で物理レース化完了）。
 
 ### 4.7 実装（G2 完了, 2026-07-17）
 - **StartType軸**: `Tactics.StartType { Normal, Contact, Gamble }` を新設（Q10決定どおりOffensiveSign非拡張）。今スライスで配線したのは **Contact** のみ。**Gamble**（盗塁の好ジャンプ・読まれると無防備）は G3 の読み/ピッチアウトモデルとセットで配線予定のため、値は定義のみで未使用。
