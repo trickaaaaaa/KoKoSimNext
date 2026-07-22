@@ -1038,7 +1038,8 @@ public static class GameEngine
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
         offense.RecordBatting(batter, result, runs);
         defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches);
-        defense.NotePitchingResult(result, ctx.Tactics.RattledConsecutiveBaserunners);
+        defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
+            outsThisPa, ctx.Tactics.RattledRecoveryOuts);
         offense.TickOffenseCalm();
         defense.TickDefenseCalm();
         log.Add(new PlayLogEntry(inning, isTop, batter.Name, result, runs, timeline,
