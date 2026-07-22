@@ -16,6 +16,9 @@ namespace KokoSim.Unity.Shell
 {
     public enum GameMode { Normal, Tournament }
 
+    /// <summary>終了した大会の後始末に必要な情報（issue #139: Runner が null化された後も参照できるようにする）。</summary>
+    public readonly record struct TournamentWrapUp(string Title, int TournamentDay, bool IsChampion);
+
     /// <summary>大会モードの進行状態（現在の進行体・大会内経過日・演出フラグ）を全画面へ共有する。</summary>
     public sealed class GameSession
     {
@@ -40,6 +43,13 @@ namespace KokoSim.Unity.Shell
         /// <summary>直近の試合結果をUIが未表示か。</summary>
         public bool ResultPending { get; private set; }
         public PlayerMatchOutcome LastOutcome { get; private set; }
+
+        /// <summary>
+        /// 直前に終了した大会の後始末（週送り・通知フィード）がまだ済んでいなければその情報を持つ（issue #139）。
+        /// モード自体は敗退/優勝を検知した瞬間に <see cref="Mode"/>=Normal へ戻すが、時計送りと通知は
+        /// 従来どおり結果モーダルを閉じたタイミング（<see cref="ConsumeTournamentWrapUp"/>）で行う。
+        /// </summary>
+        public TournamentWrapUp? PendingTournamentWrapUp { get; private set; }
 
         /// <summary>
         /// 自校選手の成績ストア（通算＝永続／今大会＝大会ごとリセット）。純エンジンの集計器を横断状態として保持。
@@ -182,6 +192,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
+            ExitTournamentIfFinished();
             return LastOutcome;
         }
 
@@ -205,18 +216,36 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
+            ExitTournamentIfFinished();
             return LastOutcome;
         }
 
         public void ConsumeResult() => ResultPending = false;
 
-        /// <summary>通常モードへ戻す。</summary>
-        public void ExitTournament()
+        /// <summary>
+        /// 大会が自校にとって終了していれば（優勝 or 敗退）、結果モーダルの表示状態はそのまま保って
+        /// 大会モードだけ即座に抜ける（issue #139）。以前はこの離脱が結果モーダルのOKクリック
+        /// （<see cref="Unity.Home.HomeState.DismissResult"/>）だけに依存しており、OKへ辿り着けない限り
+        /// <see cref="Mode"/> が Tournament のまま残り、終了済みランナーの下で日送りがループし続けた
+        /// （<see cref="TournamentDay"/> だけが進み、共有クロック <see cref="GameClock"/> は進まない）。
+        /// 時計送り・通知フィードは従来どおり <see cref="ConsumeTournamentWrapUp"/> 経由でOKクリック時に行う。
+        /// </summary>
+        private void ExitTournamentIfFinished()
         {
+            if (Runner == null || !Runner.Finished) return;
+            PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion);
             Mode = GameMode.Normal;
             Runner = null;
             BannerPending = false;
-            ResultPending = false;
+            // ResultPending はここでは変えない＝結果モーダルは引き続き表示する。
+        }
+
+        /// <summary>大会終了の後始末情報を取り出して消費する（結果モーダルのOKクリックから1回だけ呼ぶ）。</summary>
+        public TournamentWrapUp? ConsumeTournamentWrapUp()
+        {
+            var w = PendingTournamentWrapUp;
+            PendingTournamentWrapUp = null;
+            return w;
         }
     }
 }
