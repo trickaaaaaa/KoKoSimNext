@@ -1,8 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Players;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Nation;
@@ -121,6 +124,44 @@ public sealed class TournamentPreviewTests
             });
             Assert.False(string.IsNullOrWhiteSpace(r.SeedLabel));
         }
+    }
+
+    // ===== DHスロットの登録メンバー表記（enum由来の「指」, issue #70） =====
+
+    private static Team MakeDhTeam()
+    {
+        var fielders = new[]
+        {
+            FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase, FieldPosition.ThirdBase,
+            FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
+        };
+        var order = fielders.Select((p, i) => new Player { Position = p, Name = $"{p}先発", UniformNumber = i + 2 })
+            .ToList();
+        order.Add(new Player { Position = FieldPosition.Catcher, Name = "DH打者", UniformNumber = 10 });
+        var pitcher = new Player
+        {
+            Position = FieldPosition.Pitcher, Name = "先発P", UniformNumber = 1,
+            Pitching = PitcherAttributes.LeagueAverage,
+        };
+        return new Team
+        {
+            Name = "強打学園", BattingOrder = order, DhSlot = 8, StartingPitcher = pitcher,
+            Bullpen = new List<Player> { pitcher },
+        };
+    }
+
+    [Fact]
+    public void Rosters_DhSlot_ShowsDesignatedHitterLabel_NotRealPosition()
+    {
+        var dhTeam = MakeDhTeam();
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) => school.Name == "強打学園" ? dhTeam : StrengthTeamFactory.ForSchool(school, year));
+
+        var roster = p.Rosters.First(r => r.SchoolName == "強打学園");
+        var dhMember = roster.Members.First(m => m.Name == "DH打者");
+        Assert.Equal("指", dhMember.PositionLabel);
+        // 他の野手は実守備位置のまま。
+        Assert.Contains(roster.Members, m => m.Name == "Catcher先発" && m.PositionLabel == "捕");
     }
 
     /// <summary>

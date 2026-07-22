@@ -115,12 +115,13 @@ namespace KokoSim.Unity.Lineup
     {
         private enum PickKind { None, OrderPlayer, StartingPitcher, SlotPosition }
 
-        // 守備位置→漢字。
+        // 守備位置→漢字。DHは指名打者の「指」（enum由来・issue #70）。
         private static readonly Dictionary<FieldPosition, string> PosKanji = new()
         {
             { FieldPosition.Pitcher, "投" }, { FieldPosition.Catcher, "捕" }, { FieldPosition.FirstBase, "一" },
             { FieldPosition.SecondBase, "二" }, { FieldPosition.ThirdBase, "三" }, { FieldPosition.Shortstop, "遊" },
             { FieldPosition.LeftField, "左" }, { FieldPosition.CenterField, "中" }, { FieldPosition.RightField, "右" },
+            { FieldPosition.DesignatedHitter, "指" },
         };
 
         // 野手の守備位置（投手を除く8つ・背番号2〜9の慣例順）。初期打順のシードに使う。
@@ -482,7 +483,7 @@ namespace KokoSim.Unity.Lineup
                 {
                     Order = i + 1,
                     UniformNumber = p.UniformNumber,
-                    PosKanji = isDh ? "指" : PosKanji[_pos[i]],
+                    PosKanji = PosKanji[isDh ? FieldPosition.DesignatedHitter : _pos[i]],
                     IsPitcherSlot = isPitcherSlot,
                     IsDhSlot = isDh,
                     PosEditable = !isDh && !isPitcherSlot,
