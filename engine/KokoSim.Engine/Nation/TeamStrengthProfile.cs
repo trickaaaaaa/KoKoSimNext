@@ -107,26 +107,26 @@ public static class TeamStrengthProfile
         return new TeamStrength(batting, pitching, defense, mobility, depth, mental, overall);
     }
 
-    // --- 1選手の合成（サブ重み合計1.0） ---
+    // --- 1選手の合成（サブ重み合計1.0）。PlayerStrengthProfile（選手個人のカテゴリ別ランク）も同じ式を共有する ---
 
-    private static double BatterComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
+    internal static double BatterComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
         => p.Level(AbilityKind.Contact) * c.ContactWeight
          + p.Level(AbilityKind.Power) * c.PowerWeight
          + p.Level(AbilityKind.LaunchTendency) * c.LaunchWeight
          + p.Level(AbilityKind.Discipline) * c.DisciplineWeight;
 
-    private static double PitcherComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
+    internal static double PitcherComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
         => p.Level(AbilityKind.Velocity) * c.VelocityWeight
          + p.Level(AbilityKind.Control) * c.ControlWeight
          + p.Level(AbilityKind.Stamina) * c.StaminaWeight
          + p.Level(AbilityKind.PitchRank) * c.PitchRankWeight;
 
-    private static double DefenseComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
+    internal static double DefenseComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
         => p.Level(AbilityKind.Fielding) * c.FieldingWeight
          + p.Level(AbilityKind.Catching) * c.CatchingWeight
          + p.Level(AbilityKind.ArmStrength) * c.ArmWeight;
 
-    private static double MobilityComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
+    internal static double MobilityComposite(DevelopingPlayer p, TeamStrengthCoefficients c)
         => p.Level(AbilityKind.Speed) * c.SpeedWeight
          + p.Level(AbilityKind.Steal) * c.StealWeight;
 

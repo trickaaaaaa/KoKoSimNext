@@ -30,8 +30,7 @@
                         <ui:Label class="cell cell--head cell--name" text="選手" />
                         <ui:Label class="cell cell--head cell--narrow" text="学年" />
                         <ui:Label class="cell cell--head cell--narrow" text="守備" />
-                        <ui:Label class="cell cell--head cell--narrow" text="総合" />
-                        <ui:Label class="cell cell--head cell--wide" text="主要能力" />
+                        <ui:Label class="cell cell--head cell--wide" text="カテゴリ別ランク" />
                         <ui:Label class="cell cell--head cell--narrow" text="調子／故障" />
                     </ui:VisualElement>
                     <ui:VisualElement name="player-rows" />
