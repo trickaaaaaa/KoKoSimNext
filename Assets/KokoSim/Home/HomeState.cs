@@ -329,22 +329,24 @@ namespace KokoSim.Unity.Home
             return items;
         }
 
-        /// <summary>結果表示を閉じる。大会が終了していれば通常モードへ戻す（要件）。</summary>
+        /// <summary>
+        /// 結果表示を閉じる。大会モード自体は敗退/優勝を検知した時点で <see cref="GameSession"/> が
+        /// 既に抜けている（issue #139）。ここでは後始末（週送り・通知フィード）だけを行う。
+        /// </summary>
         public void DismissResult()
         {
             GameSession.Current.ConsumeResult();
-            var r = GameSession.Current.Runner;
-            if (r != null && r.Finished)
+            var wrapUp = GameSession.Current.ConsumeTournamentWrapUp();
+            if (wrapUp is { } w)
             {
-                var summary = r.IsChampion ? GameSession.Current.Title + " 優勝！" : GameSession.Current.Title + " 敗退";
+                var summary = w.IsChampion ? w.Title + " 優勝！" : w.Title + " 敗退";
                 PushFeed(new List<FeedItem>
                 {
-                    new FeedItem { When = "大会", Text = summary, Kind = r.IsChampion ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
+                    new FeedItem { When = "大会", Text = summary, Kind = w.IsChampion ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
                 });
-                // 大会が消費した週ぶん共有週を進めてから通常モードへ戻す。
-                var weeks = System.Math.Max(1, GameSession.Current.TournamentDay / 7);
+                // 大会が消費した週ぶん共有週を進める（大会モードは既に抜けているのでここでは時計だけ）。
+                var weeks = System.Math.Max(1, w.TournamentDay / 7);
                 KokoSim.Unity.Shell.GameClock.Advance(weeks);
-                GameSession.Current.ExitTournament();
             }
         }
 
