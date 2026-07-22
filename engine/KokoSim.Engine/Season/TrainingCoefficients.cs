@@ -20,6 +20,12 @@ public sealed record TrainingCoefficients
     public double LevelUpGrowth { get; init; } = 1.05;
 
     /// <summary>
+    /// 能力別 trainability（伸ばしやすさ）係数（Issue #114）。exp加算時に乗算する内在特性。
+    /// 既定（全1.0）で従来と完全一致。
+    /// </summary>
+    public TrainabilityCoefficients Trainability { get; init; } = new();
+
+    /// <summary>
     /// 守備位置適性の必要exp倍率（&lt;1.0で速く伸びる, 守備適性 未決1・2026-07-22）。
     /// 能力レベルの必要exp（LevelUpBase×LevelUpGrowth^v）にこれを乗じて適性専用に緩める。
     /// 既定1.0＝後方互換（従来は能力と同曲線を共用していた）。

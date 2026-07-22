@@ -855,6 +855,7 @@ public static class CoefficientsLoader
         public double LevelUpBase { get; set; } = D.LevelUpBase;
         public double LevelUpGrowth { get; set; } = D.LevelUpGrowth;
         public double AptitudeRequiredExpFactor { get; set; } = D.AptitudeRequiredExpFactor;
+        public TrainabilityDto? Trainability { get; set; }
         public double SummerCampMult { get; set; } = D.SummerCampMult;
         public double WinterCampMult { get; set; } = D.WinterCampMult;
         public double TournamentPracticeMult { get; set; } = D.TournamentPracticeMult;
@@ -874,6 +875,7 @@ public static class CoefficientsLoader
             LevelUpBase = LevelUpBase,
             LevelUpGrowth = LevelUpGrowth,
             AptitudeRequiredExpFactor = AptitudeRequiredExpFactor,
+            Trainability = Trainability?.ToModel() ?? new TrainabilityCoefficients(),
             SummerCampMult = SummerCampMult,
             WinterCampMult = WinterCampMult,
             TournamentPracticeMult = TournamentPracticeMult,
@@ -882,6 +884,47 @@ public static class CoefficientsLoader
             MatchMentalExp = MatchMentalExp,
             MatchLeadExp = MatchLeadExp,
             MatchBaserunningExp = MatchBaserunningExp,
+        };
+    }
+
+    private sealed class TrainabilityDto
+    {
+        private static readonly TrainabilityCoefficients D = new();
+        public double Contact { get; set; } = D.Contact;
+        public double Power { get; set; } = D.Power;
+        public double LaunchTendency { get; set; } = D.LaunchTendency;
+        public double Discipline { get; set; } = D.Discipline;
+        public double Speed { get; set; } = D.Speed;
+        public double ArmStrength { get; set; } = D.ArmStrength;
+        public double Fielding { get; set; } = D.Fielding;
+        public double Catching { get; set; } = D.Catching;
+        public double Velocity { get; set; } = D.Velocity;
+        public double Control { get; set; } = D.Control;
+        public double Stamina { get; set; } = D.Stamina;
+        public double PitchRank { get; set; } = D.PitchRank;
+        public double Bunt { get; set; } = D.Bunt;
+        public double Steal { get; set; } = D.Steal;
+        public double Baserunning { get; set; } = D.Baserunning;
+        public double ThrowAccuracy { get; set; } = D.ThrowAccuracy;
+
+        public TrainabilityCoefficients ToModel() => new()
+        {
+            Contact = Contact,
+            Power = Power,
+            LaunchTendency = LaunchTendency,
+            Discipline = Discipline,
+            Speed = Speed,
+            ArmStrength = ArmStrength,
+            Fielding = Fielding,
+            Catching = Catching,
+            Velocity = Velocity,
+            Control = Control,
+            Stamina = Stamina,
+            PitchRank = PitchRank,
+            Bunt = Bunt,
+            Steal = Steal,
+            Baserunning = Baserunning,
+            ThrowAccuracy = ThrowAccuracy,
         };
     }
 
@@ -1422,6 +1465,8 @@ public static class CoefficientsLoader
         public double CapGapMean { get; set; } = D.CapGapMean;
         public double CapGapSd { get; set; } = D.CapGapSd;
         public double LateCapBonus { get; set; } = D.LateCapBonus;
+        public double SpeedCapGapFactor { get; set; } = D.SpeedCapGapFactor;
+        public double ProdigyProb { get; set; } = D.ProdigyProb;
         // 投手経歴
         public double PitcherBackgroundProb { get; set; } = D.PitcherBackgroundProb;
         // 変化球レパートリー（設計書02 §2.2）
@@ -1538,6 +1583,8 @@ public static class CoefficientsLoader
             CapGapMean = CapGapMean,
             CapGapSd = CapGapSd,
             LateCapBonus = LateCapBonus,
+            SpeedCapGapFactor = SpeedCapGapFactor,
+            ProdigyProb = ProdigyProb,
             PitcherBackgroundProb = PitcherBackgroundProb,
             PitcherSecondPitchProb = PitcherSecondPitchProb,
             PitcherThirdPitchProb = PitcherThirdPitchProb,

@@ -80,6 +80,22 @@ public sealed record RosterCoefficients
     public double CapGapSd { get; init; } = 10.0;
     public double LateCapBonus { get; init; } = 6.0;
 
+    /// <summary>
+    /// 足(Speed) の才能上限gap圧縮係数（Issue #114）。素質固定能力は「伸びる速さ」だけでなく「天井」も近い
+    /// ＝両方きつく。gap（mean/sd）にこれを乗じる。既定1.0で従来と一致（能力別 gap 係数の第一号）。
+    /// 逸材（IsProdigy）はこの圧縮を免除し規格外の俊足になりうる（<see cref="CapGapFactor"/> で分岐）。
+    /// </summary>
+    public double SpeedCapGapFactor { get; init; } = 1.0;
+
+    /// <summary>
+    /// 逸材（隠しフラグ, Issue #114 / Q20）の生成時出現率。素質固定能力の cap 圧縮・trainability 減衰を免除する。
+    /// 既定0.0＝逸材なし（従来と完全一致）。出現率は data 駆動。
+    /// </summary>
+    public double ProdigyProb { get; init; } = 0.0;
+
+    /// <summary>能力別の才能上限gap圧縮係数（Issue #114）。素質固定能力（足）のみ&lt;1.0、他は1.0。</summary>
+    public double CapGapFactor(AbilityKind k) => k == AbilityKind.Speed ? SpeedCapGapFactor : 1.0;
+
     // --- 隠し属性「投手経歴」（設計書01 §1.1b）: 野手の変化球上振れの素 ---
     public double PitcherBackgroundProb { get; init; } = 0.06;
 
@@ -216,6 +232,11 @@ public static class ProspectGenerator
         var profile = personalityCoeff.Profile(personality);
         leadership = (int)MathUtil.Clamp(leadership + profile.LeadershipMeanOffset, 1, 99);
 
+        // 逸材（隠しフラグ, Issue #114 / Q20）: 専用Forkストリームで低確率ロール＝既存の能力ロール列を1ビットも
+        // 乱さない（不変条件#2）。ProdigyProb=0（既定）なら常に false。SetWithCap（足のcap圧縮免除）と
+        // ApplyExp（trainability減衰免除）が p.IsProdigy を参照する。
+        var isProdigy = rng.Fork(ProdigyStreamId(year, index)).NextDouble() < c.ProdigyProb;
+
         var p = new DevelopingPlayer
         {
             // 氏名は独立ストリーム(Fork)で抽選し、能力ロール列と分離（決定論・名前テスト非破壊）。
@@ -224,6 +245,7 @@ public static class ProspectGenerator
             Grade = 1,
             IsPitcher = isPitcher,
             GrowthType = growth,
+            IsProdigy = isProdigy,
             Throws = throws,
             Bats = bats,
             PitchingGrowth = pitchingGrowth,
@@ -416,7 +438,13 @@ public static class ProspectGenerator
     private static void SetWithCap(DevelopingPlayer p, AbilityKind k, int level,
         RosterCoefficients c, GrowthType growth, IRandomSource rng)
     {
-        var gap = rng.NextGaussian(c.CapGapMean, c.CapGapSd) + (growth == GrowthType.Late ? c.LateCapBonus : 0);
+        // 能力別 cap gap 圧縮（Issue #114）: 素質固定能力（足）は天井も近い＝両方きつく。逸材（IsProdigy）は免除。
+        // gap の mean/sd を同率で縮める。NextGaussian は mean/sd に依らず同数の乱数を消費するため、
+        // 係数1.0（既定・非逸材の他能力）では従来と1ビットも変わらない（不変条件#2）。
+        var gapFactor = c.CapGapFactor(k);
+        if (p.IsProdigy) gapFactor = Math.Max(1.0, gapFactor);
+        var gap = rng.NextGaussian(c.CapGapMean * gapFactor, c.CapGapSd * gapFactor)
+                  + (growth == GrowthType.Late ? c.LateCapBonus : 0);
         var cap = (int)MathUtil.Clamp(Math.Round(level + gap), level + 2, 99);
         p.SetLevel(k, level);
         p.SetCap(k, cap);
@@ -442,6 +470,9 @@ public static class ProspectGenerator
 
     /// <summary>調子の初期値抽選の独立ストリームID（他ストリームと別の上位ビット, issue #50）。</summary>
     private static ulong ConditionStreamId(int year, int index) => 0x2F84_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>逸材フラグ抽選の独立ストリームID（他ストリームと別の上位ビット, Issue #114）。</summary>
+    private static ulong ProdigyStreamId(int year, int index) => 0x6C43_0000UL ^ (ulong)(year * 1000 + index + 1);
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
     private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
