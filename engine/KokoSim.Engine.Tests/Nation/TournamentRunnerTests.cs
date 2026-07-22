@@ -273,6 +273,11 @@ public sealed class TournamentRunnerTests
         Assert.Equal(auto.IsChampion, live.IsChampion);
         Assert.Equal(auto.PlayerActive, live.PlayerActive);
 
+        // 観戦（BeginLive）と自動消化（Resolve）は同一ラウンド順で常に同じ mercyRuleEnabled を受け取る
+        // （設計書05 §1.3, Q18の決定論契約＝観戦しても大会結果もルールも変わらない）。
+        Assert.Equal(resolver.ResolveMercySeen, resolver.LiveMercySeen);
+        Assert.NotEmpty(resolver.ResolveMercySeen);
+
         // 裏試合も含め大会概要（ブラケット全行）がバイト一致＝本流RNG消費順が完全に保たれている。
         var va = auto.BuildBracketView();
         var vb = live.BuildBracketView();
@@ -327,14 +332,26 @@ public sealed class TournamentRunnerTests
     /// </summary>
     private sealed class LiveConsistentResolver : IPlayerMatchResolver
     {
-        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng)
-            => new(GameEngine.Play(MakeTeam(opponent.Name, opponent.Strength),
-                MakeTeam(manager.Name, manager.Strength), new GameContext(), rng.Fork(2)), ManagerIsAway: false);
+        /// <summary>Resolve/BeginLive が受け取った mercyRuleEnabled を呼び出し順に記録（決定論契約の検証用）。</summary>
+        public List<bool> ResolveMercySeen { get; } = new();
+        public List<bool> LiveMercySeen { get; } = new();
 
-        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng)
-            => new(new MatchProgression(MakeTeam(opponent.Name, opponent.Strength),
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        {
+            ResolveMercySeen.Add(mercyRuleEnabled);
+            return new(GameEngine.Play(MakeTeam(opponent.Name, opponent.Strength),
+                MakeTeam(manager.Name, manager.Strength), new GameContext { MercyRuleEnabled = mercyRuleEnabled },
+                rng.Fork(2)), ManagerIsAway: false);
+        }
+
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        {
+            LiveMercySeen.Add(mercyRuleEnabled);
+            return new(new MatchProgression(MakeTeam(opponent.Name, opponent.Strength),
                 MakeTeam(manager.Name, manager.Strength),
-                new GameContext { CaptureTimelines = true }, rng.Fork(2)), ManagerIsAway: false);
+                new GameContext { CaptureTimelines = true, MercyRuleEnabled = mercyRuleEnabled }, rng.Fork(2)),
+                ManagerIsAway: false);
+        }
 
         private static Team MakeTeam(string name, double strength)
         {
@@ -350,6 +367,91 @@ public sealed class TournamentRunnerTests
                 Pos(FieldPosition.ThirdBase), Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField),
                 Pos(FieldPosition.CenterField), Pos(FieldPosition.RightField),
                 Pos(FieldPosition.Pitcher) with { Name = name + "P", Pitching = PitcherAttributes.LeagueAverage },
+            };
+            return new Team { Name = name, BattingOrder = order, PitcherSlot = 8 };
+        }
+    }
+
+    // ===== コールドゲーム（マーシールール）の大会単位トグル（設計書05 §1.3, OPEN-QUESTIONS Q18） =====
+
+    [Fact]
+    public void MercyRule_OnForEarlyRounds_OffForFinal()
+    {
+        // 4校＝2ラウンド（準決勝→決勝）。自校は毎回勝ち上がるよう最強シードにする。
+        var resolver = new LiveConsistentResolver();
+        var r = new TournamentRunner(Field(99, 3, 20), Sch(1, 99), Coeff,
+            new Xoshiro256Random(1), Schedule, "t", resolver);
+
+        while (!r.Finished) r.PlayNextPlayerMatch();
+
+        Assert.Equal(new[] { true, false }, resolver.ResolveMercySeen);   // 準決勝=ON, 決勝=OFF
+    }
+
+    [Fact]
+    public void MercyRule_AlwaysOff_WhenNationalTournament()
+    {
+        var resolver = new LiveConsistentResolver();
+        var r = new TournamentRunner(Field(99, 3, 20), Sch(1, 99), Coeff,
+            new Xoshiro256Random(1), Schedule, "t", resolver, isNationalTournament: true);
+
+        while (!r.Finished) r.PlayNextPlayerMatch();
+
+        Assert.All(resolver.ResolveMercySeen, Assert.False);
+        Assert.NotEmpty(resolver.ResolveMercySeen);
+    }
+
+    [Fact]
+    public void MercyEnded_PropagatesToOutcome_AndBracketMatch()
+    {
+        // 自校=強豪・相手=弱小の準決勝で大差コールドが起きるはずの資源配分（GameEngineTests の弱小生成と同じ狙い）。
+        var resolver = new MercyProneResolver();
+        var r = new TournamentRunner(Field(99, 3, 20), Sch(1, 99), Coeff,
+            new Xoshiro256Random(1), Schedule, "t", resolver);
+
+        var outcome = r.PlayNextPlayerMatch();   // 準決勝（ラウンド残り2）＝コールドON。
+
+        Assert.True(outcome.MercyEnded);
+        var playedCard = r.BuildBracketView().Matches.Single(m => m.ManagerInvolved);
+        Assert.True(playedCard.MercyEnded);
+    }
+
+    /// <summary>強豪 vs 弱小で確実に大差コールドを起こすリゾルバ（GameEngineTests の弱小生成と同じ狙い）。</summary>
+    private sealed class MercyProneResolver : IPlayerMatchResolver
+    {
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        {
+            var ctx = new GameContext { MercyRuleEnabled = mercyRuleEnabled };
+            var result = GameEngine.Play(WeakTeam(opponent.Name), StrongTeam(manager.Name), ctx, rng.Fork(2));
+            return new(result, ManagerIsAway: false);
+        }
+
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+            => throw new System.NotSupportedException();
+
+        private static Team StrongTeam(string name) => MakeTeam(name, 90);
+        private static Team WeakTeam(string name) => MakeTeam(name, 5);
+
+        private static Team MakeTeam(string name, int ability)
+        {
+            Player Pos(FieldPosition p) => new()
+            {
+                Position = p, Contact = ability, Power = ability, LaunchTendency = 50, Discipline = ability,
+                Speed = ability, ArmStrength = ability, Fielding = ability, Catching = ability,
+            };
+            var order = new List<Player>
+            {
+                Pos(FieldPosition.Catcher), Pos(FieldPosition.FirstBase), Pos(FieldPosition.SecondBase),
+                Pos(FieldPosition.ThirdBase), Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField),
+                Pos(FieldPosition.CenterField), Pos(FieldPosition.RightField),
+                Pos(FieldPosition.Pitcher) with
+                {
+                    Name = name + "P",
+                    Pitching = new PitcherAttributes
+                    {
+                        MaxVelocityKmh = ability >= 50 ? 150 : 110, Control = ability, StaminaPitches = 90,
+                        PitchRank = ability,
+                    },
+                },
             };
             return new Team { Name = name, BattingOrder = order, PitcherSlot = 8 };
         }

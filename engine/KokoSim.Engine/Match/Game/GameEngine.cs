@@ -14,6 +14,8 @@ public sealed record GameResult
     public required int AwayRuns { get; init; }
     public required int HomeRuns { get; init; }
     public required int InningsPlayed { get; init; }
+    /// <summary>コールドゲーム（マーシールール）成立で打ち切られたか（設計書05 §1.3, OPEN-QUESTIONS Q18）。</summary>
+    public bool MercyEnded { get; init; }
     public required int TotalPitches { get; init; }
     public required int PitcherChanges { get; init; }
     /// <summary>選手交代の回数（代打・代走・守備固め・DH解除。設計書09 §6, 無指示/控え空なら0）。</summary>
@@ -143,7 +145,11 @@ public static class GameEngine
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs != p.Away.Runs) break;
             // 延長上限（引き分け許容）。
             if (p.Inning >= ctx.MaxInnings) break;
-            if (ctx.MercyRuleEnabled && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs)) break;
+            if (ctx.MercyRuleEnabled && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+            {
+                p.MercyEnded = true;
+                break;
+            }
         }
     }
 
@@ -159,6 +165,7 @@ public static class GameEngine
             AwayRuns = away.Runs,
             HomeRuns = home.Runs,
             InningsPlayed = p.Inning,
+            MercyEnded = p.MercyEnded,
             TotalPitches = p.TotalPitches,
             PitcherChanges = away.PitcherChanges + home.PitcherChanges,
             AwaySubstitutions = away.Substitutions,
@@ -1144,7 +1151,8 @@ public static class GameEngine
     private static double FormOf(Dictionary<Player, double> dayForm, Player p)
         => dayForm.TryGetValue(p, out var v) ? v : 0.0;
 
-    private static bool IsMercy(int inning, int away, int home)
+    /// <summary>コールドゲーム（マーシールール）判定（設計書05 §1.3, OPEN-QUESTIONS Q18）。internal はテスト専用。</summary>
+    internal static bool IsMercy(int inning, int away, int home)
     {
         var diff = Math.Abs(home - away);
         return (inning >= 5 && diff >= 10) || (inning >= 7 && diff >= 7);
@@ -1190,6 +1198,8 @@ public sealed class GameProgress
 
     /// <summary>現在のイニング（Steps が進める）。</summary>
     public int Inning { get; set; } = 1;
+    /// <summary>コールドゲーム（マーシールール）成立で打ち切られたか。</summary>
+    public bool MercyEnded { get; set; }
     /// <summary>両軍累計球数。</summary>
     public int TotalPitches { get; set; }
     /// <summary>打席の速報記録（打席確定ごとに追記される）。</summary>

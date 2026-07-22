@@ -28,7 +28,8 @@ public sealed record PlayerMatchOutcome(
     string RoundName,
     bool IsChampion,
     GameResult? Detail = null,
-    bool ManagerWasAway = false);
+    bool ManagerWasAway = false,
+    bool MercyEnded = false);
 
 /// <summary>
 /// ライブ観戦する自校戦の受け渡し（<see cref="TournamentRunner.BeginNextPlayerMatch"/> の戻り）。
@@ -41,7 +42,10 @@ public sealed record LivePlayerMatch(
     string OpponentName,
     string RoundName);
 
-/// <summary>大会概要の1試合行。ManagerInvolved で自校ハイライトを表現する。</summary>
+/// <summary>
+/// 大会概要の1試合行。ManagerInvolved で自校ハイライトを表現する。
+/// MercyEnded はコールドゲーム（マーシールール）成立で打ち切られたか（設計書05 §1.3, Q18）。裏試合合成スコアは常にfalse。
+/// </summary>
 public sealed record BracketMatch(
     string RoundName,
     int RoundsRemaining,
@@ -49,7 +53,8 @@ public sealed record BracketMatch(
     string LoserName,
     int WinnerScore,
     int LoserScore,
-    bool ManagerInvolved);
+    bool ManagerInvolved,
+    bool MercyEnded = false);
 
 /// <summary>
 /// 樹形図の1スロット（カードの上側/下側）。まだ校名が確定していない枠は TeamName=null（「Aブロック勝者」待ち）。
@@ -72,7 +77,8 @@ public sealed record BracketCard(
     BracketSlot Top,
     BracketSlot Bottom,
     bool IsBye,
-    bool IsPlayed);
+    bool IsPlayed,
+    bool MercyEnded = false);
 
 /// <summary>樹形図の1ラウンド（カード列）。Round は0基点。</summary>
 public sealed record BracketRound(int Round, string RoundName, IReadOnlyList<BracketCard> Cards);
@@ -108,7 +114,7 @@ public sealed class TournamentRunner
     private readonly Dictionary<(int Round, int Slot), CardResult> _cardResults = new();
 
     /// <summary>樹形図用の1カード結果。TopWon は上側スロット（添字 2i）が勝ったか。</summary>
-    private sealed record CardResult(bool TopWon, int WinnerScore, int LoserScore);
+    private sealed record CardResult(bool TopWon, int WinnerScore, int LoserScore, bool MercyEnded = false);
 
     private School?[] _current;
     private int _roundIndex;          // 消化済みラウンド数（不戦勝も1ラウンドとして進む＝日程が進む）
@@ -135,6 +141,8 @@ public sealed class TournamentRunner
     public bool Finished => IsChampion || !PlayerActive;
     public string? ChampionName { get; private set; }
 
+    private readonly bool _isNationalTournament;
+
     public TournamentRunner(
         IReadOnlyList<School> entrants,
         School manager,
@@ -143,7 +151,8 @@ public sealed class TournamentRunner
         TournamentSchedule schedule,
         string title,
         IPlayerMatchResolver? playerResolver = null,
-        IBackgroundMatchResolver? backgroundResolver = null)
+        IBackgroundMatchResolver? backgroundResolver = null,
+        bool isNationalTournament = false)
     {
         if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
         if (entrants.All(s => s.Id != manager.Id)) throw new ArgumentException("自校が参加校に含まれていません。");
@@ -154,6 +163,7 @@ public sealed class TournamentRunner
         _playerResolver = playerResolver;
         _backgroundResolver = backgroundResolver;
         _managerId = manager.Id;
+        _isNationalTournament = isNationalTournament;
         Title = title;
 
         // 強さ順にシード（同値は Id で決定化）。不足分は不戦勝(null)。
@@ -308,7 +318,8 @@ public sealed class TournamentRunner
                     SlotOf(a, result is not null && topWon, result is null ? null : (topWon ? result.WinnerScore : result.LoserScore)),
                     SlotOf(b, result is not null && !topWon, result is null ? null : (topWon ? result.LoserScore : result.WinnerScore)),
                     IsBye: entrants is not null && (a is null) != (b is null),
-                    IsPlayed: result is not null));
+                    IsPlayed: result is not null,
+                    MercyEnded: result?.MercyEnded ?? false));
             }
             rounds.Add(new BracketRound(r, roundName, cards));
         }
@@ -321,8 +332,8 @@ public sealed class TournamentRunner
     /// <summary>残存校配列のサイズからラウンド添字（0基点）を導く。_roundIndex とは独立＝背景消化でも正しい。</summary>
     private int RoundIndexOf(School?[] cur) => _totalRounds - TournamentRecorder.RoundsRemaining(cur.Length);
 
-    private void RecordCard(int round, int slot, bool topWon, int winnerScore, int loserScore)
-        => _cardResults[(round, slot)] = new CardResult(topWon, winnerScore, loserScore);
+    private void RecordCard(int round, int slot, bool topWon, int winnerScore, int loserScore, bool mercyEnded = false)
+        => _cardResults[(round, slot)] = new CardResult(topWon, winnerScore, loserScore, mercyEnded);
 
     // ===== 内部進行 =====
 
@@ -396,7 +407,8 @@ public sealed class TournamentRunner
                 ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
-                var detail = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)));
+                var detail = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
+                    MercyRuleEnabledFor(roundsRemaining));
                 var r = detail.Result;
                 var mgrRuns = detail.ManagerIsAway ? r.AwayRuns : r.HomeRuns;
                 var oppRuns = detail.ManagerIsAway ? r.HomeRuns : r.AwayRuns;
@@ -407,9 +419,9 @@ public sealed class TournamentRunner
                 var mls = Math.Min(mgrRuns, oppRuns);
                 outcome = new PlayerMatchOutcome(
                     managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, roundName, IsChampion: false,
-                    Detail: r, ManagerWasAway: detail.ManagerIsAway);
-                _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mws, mls, true));
-                RecordCard(round, i, mw.Id == a.Id, mws, mls);
+                    Detail: r, ManagerWasAway: detail.ManagerIsAway, MercyEnded: r.MercyEnded);
+                _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mws, mls, true, r.MercyEnded));
+                RecordCard(round, i, mw.Id == a.Id, mws, mls, r.MercyEnded);
                 next[i] = mw;
                 continue;
             }
@@ -461,7 +473,8 @@ public sealed class TournamentRunner
                 ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
-                var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)));
+                var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
+                    MercyRuleEnabledFor(roundsRemaining));
                 var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName);
                 _pending = new PendingLiveMatch(
                     cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway, handle);
@@ -493,8 +506,9 @@ public sealed class TournamentRunner
         var winScore = Math.Max(mgrRuns, oppRuns);
         var loseScore = Math.Min(mgrRuns, oppRuns);
         var round = RoundIndexOf(p.Cur);
-        _matches.Add(new BracketMatch(p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winScore, loseScore, true));
-        RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore);
+        _matches.Add(new BracketMatch(
+            p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winScore, loseScore, true, result.MercyEnded));
+        RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore, result.MercyEnded);
         p.Next[p.Slot] = winner;
 
         // 自校スロット以降の残りカードを本流で解決（このラウンドの自校戦は1つだけ＝以降は非自校カード）。
@@ -515,7 +529,7 @@ public sealed class TournamentRunner
         _current = p.Next;
         return new PlayerMatchOutcome(
             managerWon, p.Opp.Name, p.Opp.Tier, mgrRuns, oppRuns, p.RoundName, IsChampion: false,
-            Detail: result, ManagerWasAway: p.ManagerIsAway);
+            Detail: result, ManagerWasAway: p.ManagerIsAway, MercyEnded: result.MercyEnded);
     }
 
     /// <summary>得点差(margin)から表示用スコアを合成する（敗者0〜3点＋差）。決定論（注入乱数）。</summary>
@@ -583,6 +597,13 @@ public sealed class TournamentRunner
             if (cur[i]?.Id == _managerId) return i;
         return -1;
     }
+
+    /// <summary>
+    /// コールドゲーム（マーシールール）の有無（設計書05 §1.3, OPEN-QUESTIONS Q18）。
+    /// 甲子園本大会（<see cref="_isNationalTournament"/>）＋地方大会の決勝（roundsRemaining==1）はOFF、
+    /// それ以外の地方大会はON。
+    /// </summary>
+    private bool MercyRuleEnabledFor(int roundsRemaining) => !_isNationalTournament && roundsRemaining != 1;
 
     private string RoundNameFor(int roundsRemaining) => roundsRemaining switch
     {

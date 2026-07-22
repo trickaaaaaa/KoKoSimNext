@@ -72,6 +72,7 @@ namespace KokoSim.Unity.Tournament
             public bool ManagerInvolved;   // このカードに自校がいる（左からの接続線＋枠をアンバーに）
             public bool ManagerAdvances;   // 自校がこのカードを勝ち上がった（右への接続線をアンバーに）
             public bool IsBye;
+            public bool MercyEnded;        // コールドゲーム（マーシールール）成立で打ち切られたか（設計書05 §1.3, Q18）
         }
 
         /// <summary>樹形図の1ラウンド＝1列。</summary>
@@ -200,6 +201,7 @@ namespace KokoSim.Unity.Tournament
                         IsBye = c.IsBye,
                         Top = Slot(c.Top, c),
                         Bottom = Slot(c.Bottom, c),
+                        MercyEnded = c.MercyEnded,
                     };
                     row.ManagerInvolved = c.Top.IsManager || c.Bottom.IsManager;
                     row.ManagerAdvances = (row.Top.IsManager && row.Top.IsWinner)

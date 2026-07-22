@@ -73,7 +73,8 @@ public sealed class PracticeMatchScheduler
         if (rng.NextDouble() >= chance)
             return new PracticeMatchOutcome(false, PracticeMatchRejection.Declined, chance, null);
 
-        var detail = resolver.Resolve(managerSchool, opponent, rng.Fork(0x9159_2AC5UL));
+        // 練習試合は大会ラウンドの概念がない＝コールドゲームは常にOFF（設計書05 §1.3, Q18は大会限定）。
+        var detail = resolver.Resolve(managerSchool, opponent, rng.Fork(0x9159_2AC5UL), mercyRuleEnabled: false);
         manager.Funds -= _c.Cost;
         LastPlayedWeek = week;
         return new PracticeMatchOutcome(true, PracticeMatchRejection.None, chance, detail);

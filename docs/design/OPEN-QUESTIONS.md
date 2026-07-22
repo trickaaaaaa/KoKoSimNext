@@ -221,6 +221,12 @@ ONはテストダイジェストのみ）。裏試合はスコア合成方式（
 5. **統計帯** → **確定: Balance CLI は OFF 維持**（帯は9回完走前提・再校正不要）。裏試合の合成スコアも現状のまま。
    裏試合フルシム化（Q15）が入る際に裏試合側の GameContext へ同トグルを適用して自然解消
 
+**実装完了（2026-07-23・issue #71）**: `TournamentRunner` が大会種別（`isNationalTournament`）＋
+ラウンド残数から `mercyRuleEnabled` を決定し、`IPlayerMatchResolver.Resolve`/`BeginLive` の両方へ同一値を
+渡すよう配線（`PlayerMatchResolver`）。`GameResult.MercyEnded` を新設し、試合結果画面・大会ブラケットの
+スコア横に「コールド」を注記。Balance CLI・裏試合合成スコアは既定どおり不変。設計書05 §1.3 に明文化。
+本項クローズ。
+
 Issue: [#71](https://github.com/trickaaaaaa/KoKoSimNext/issues/71)
 
 ## Q17. 調子（Condition/Form）の設計と実装の乖離（仕様調査で発見・2026-07-21）

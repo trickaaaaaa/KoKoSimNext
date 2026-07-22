@@ -22,11 +22,11 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public sealed class PlayerMatchResolver : IPlayerMatchResolver
     {
-        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng)
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
         {
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent);
-            var ctx = new GameContext();
+            var ctx = new GameContext { MercyRuleEnabled = mercyRuleEnabled };
             var managerIsAway = ManagerIsAway(manager, opponent);
             var result = managerIsAway
                 ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2))
@@ -34,14 +34,14 @@ namespace KokoSim.Unity.Shell
             return new PlayerMatchDetail(result, ManagerIsAway: managerIsAway);
         }
 
-        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng)
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
         {
-            // Resolve と同一の teams＋同一Fork で組む（相手＝校ID固定生成, rng.Fork(2)=試合）。
+            // Resolve と同一の teams＋同一Fork＋同一 mercyRuleEnabled で組む（相手＝校ID固定生成, rng.Fork(2)=試合）。
             // 唯一の差は CaptureTimelines=true（観戦用タイムライン）。これは RNG 中立なので、
             // 全打席を進めた結果は Resolve のボックススコアと一致する＝観戦しても大会結果は変わらない。
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent);
-            var ctx = new GameContext { CaptureTimelines = true };
+            var ctx = new GameContext { CaptureTimelines = true, MercyRuleEnabled = mercyRuleEnabled };
             var managerIsAway = ManagerIsAway(manager, opponent);
             var prog = managerIsAway
                 ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2))
