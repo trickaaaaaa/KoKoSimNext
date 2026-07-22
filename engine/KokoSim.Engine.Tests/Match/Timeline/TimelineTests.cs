@@ -525,4 +525,47 @@ public sealed class TimelineTests
         Assert.True(tl.Duration >= baseArrive, "Duration が返球到達より短い");
         foreach (var b in tl.Ball) Assert.True(b.T1 <= tl.Duration + 1e-6);
     }
+
+    // --- #136: 中継のボール経由点と中継野手(カットオフ)の立ち位置が一致すること ---
+    // （不一致だと「野手のいない無人のフィールドにボールが落ちる」表示になる回帰バグ）
+
+    [Fact]
+    public void OutfieldReturnThrow_CutoffWaypoint_MatchesCutoffFielderPosition()
+    {
+        var field = new FieldGeometry();
+        var play = OutfieldHit(100) with { Result = BattedBallResult.Triple }; // 深い当たり＝中継が入る
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        // カットオフ役は「中継点へ出る」動きと「決着後に定位置へ戻る」動きの2つを持ちうる（#2）。
+        // 中継点への往路（T0が早い方）を中継野手の立ち位置として検証する。
+        var cutoffMove = baseTl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
+
+        var tl = TimelineBuilder.AppendOutfieldReturnThrow(baseTl, play, field, "third", runnerArriveAnchor: 13.0);
+
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        Assert.Equal(2, throws.Count); // 外野→カット→三塁
+        Assert.True(Near(throws[0].To, cutoffMove.To), "ボールの中継点が中継野手の立ち位置と一致しない");
+        Assert.True(Near(throws[1].From, cutoffMove.To), "2本目送球の起点が中継野手の立ち位置と一致しない");
+    }
+
+    [Fact]
+    public void BackHomeThrows_CutoffWaypoint_MatchesCutoffFielderPosition()
+    {
+        var field = new FieldGeometry();
+        var play = OutfieldHit(75); // 深い当たり（>60m）＝中継が入る
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+
+        // カットオフ役は「中継点へ出る」動きと「決着後に定位置へ戻る」動きの2つを持ちうる（#2）。
+        // 中継点への往路（T0が早い方）を中継野手の立ち位置として検証する。
+        var cutoffMove = baseTl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
+
+        var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, homeArriveAnchor: 7.5, runnerOut: true);
+
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        Assert.Equal(2, throws.Count); // 外野→カット→本塁
+        Assert.True(Near(throws[0].To, cutoffMove.To), "ボールの中継点が中継野手の立ち位置と一致しない");
+        Assert.True(Near(throws[1].From, cutoffMove.To), "2本目送球の起点が中継野手の立ち位置と一致しない");
+    }
 }
