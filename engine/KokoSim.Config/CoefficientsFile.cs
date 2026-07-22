@@ -619,6 +619,17 @@ public static class CoefficientsLoader
         public double ObserveSigmaBase { get; set; } = D.ObserveSigmaBase;
         public double ObserveSigmaPerTalentEye { get; set; } = D.ObserveSigmaPerTalentEye;
         public double ObserveSigmaMin { get; set; } = D.ObserveSigmaMin;
+        public double MatchHitBonus { get; set; } = D.MatchHitBonus;
+        public double MatchHomeRunBonus { get; set; } = D.MatchHomeRunBonus;
+        public double MatchHitlessMinAtBats { get; set; } = D.MatchHitlessMinAtBats;
+        public double MatchHitlessPenalty { get; set; } = D.MatchHitlessPenalty;
+        public double MatchQualityStartMinOuts { get; set; } = D.MatchQualityStartMinOuts;
+        public double MatchQualityStartMaxRuns { get; set; } = D.MatchQualityStartMaxRuns;
+        public double MatchQualityStartBonus { get; set; } = D.MatchQualityStartBonus;
+        public double MatchRockedRunsThreshold { get; set; } = D.MatchRockedRunsThreshold;
+        public double MatchRockedPenalty { get; set; } = D.MatchRockedPenalty;
+        public double MatchBlowoutLossMargin { get; set; } = D.MatchBlowoutLossMargin;
+        public double MatchBlowoutLossPenalty { get; set; } = D.MatchBlowoutLossPenalty;
 
         public KokoSim.Engine.Players.FormCoefficients ToModel() => new()
         {
@@ -642,6 +653,17 @@ public static class CoefficientsLoader
             ObserveSigmaBase = ObserveSigmaBase,
             ObserveSigmaPerTalentEye = ObserveSigmaPerTalentEye,
             ObserveSigmaMin = ObserveSigmaMin,
+            MatchHitBonus = MatchHitBonus,
+            MatchHomeRunBonus = MatchHomeRunBonus,
+            MatchHitlessMinAtBats = MatchHitlessMinAtBats,
+            MatchHitlessPenalty = MatchHitlessPenalty,
+            MatchQualityStartMinOuts = MatchQualityStartMinOuts,
+            MatchQualityStartMaxRuns = MatchQualityStartMaxRuns,
+            MatchQualityStartBonus = MatchQualityStartBonus,
+            MatchRockedRunsThreshold = MatchRockedRunsThreshold,
+            MatchRockedPenalty = MatchRockedPenalty,
+            MatchBlowoutLossMargin = MatchBlowoutLossMargin,
+            MatchBlowoutLossPenalty = MatchBlowoutLossPenalty,
         };
     }
 
@@ -714,6 +736,7 @@ public static class CoefficientsLoader
         public double AwakeningGrowthThreshold { get; set; } = D.AwakeningGrowthThreshold;
         public double AwakeningConditionMin { get; set; } = D.AwakeningConditionMin;
         public int AwakeningGain { get; set; } = D.AwakeningGain;
+        public double AwakeningConditionBoost { get; set; } = D.AwakeningConditionBoost;
         public double BreakthroughWeeklyProb { get; set; } = D.BreakthroughWeeklyProb;
         public int BreakthroughGain { get; set; } = D.BreakthroughGain;
         public double SlumpWeeklyProb { get; set; } = D.SlumpWeeklyProb;
@@ -721,6 +744,7 @@ public static class CoefficientsLoader
         public int SlumpWeeksMin { get; set; } = D.SlumpWeeksMin;
         public int SlumpWeeksMax { get; set; } = D.SlumpWeeksMax;
         public double SlumpPerformanceFactor { get; set; } = D.SlumpPerformanceFactor;
+        public double SlumpConditionDrop { get; set; } = D.SlumpConditionDrop;
         public double PlateauCapProximity { get; set; } = D.PlateauCapProximity;
         public double PlateauWeeklyProb { get; set; } = D.PlateauWeeklyProb;
         public double PlateauGrowthFactor { get; set; } = D.PlateauGrowthFactor;
@@ -734,6 +758,7 @@ public static class CoefficientsLoader
             AwakeningGrowthThreshold = AwakeningGrowthThreshold,
             AwakeningConditionMin = AwakeningConditionMin,
             AwakeningGain = AwakeningGain,
+            AwakeningConditionBoost = AwakeningConditionBoost,
             BreakthroughWeeklyProb = BreakthroughWeeklyProb,
             BreakthroughGain = BreakthroughGain,
             SlumpWeeklyProb = SlumpWeeklyProb,
@@ -741,6 +766,7 @@ public static class CoefficientsLoader
             SlumpWeeksMin = SlumpWeeksMin,
             SlumpWeeksMax = SlumpWeeksMax,
             SlumpPerformanceFactor = SlumpPerformanceFactor,
+            SlumpConditionDrop = SlumpConditionDrop,
             PlateauCapProximity = PlateauCapProximity,
             PlateauWeeklyProb = PlateauWeeklyProb,
             PlateauGrowthFactor = PlateauGrowthFactor,

@@ -100,6 +100,9 @@ namespace KokoSim.Unity.Shell
         private static readonly SeasonCalendar GrowthCalendar = new SeasonCalendar();
         private static readonly GrowthStageTable GrowthStages = new GrowthStageTable();
         private static readonly TrainingCoefficients GrowthTraining = new TrainingCoefficients();
+        // 調子（設計書02 §3.3）用の係数。週次AR(1)（HomeState）と同じ既定値運用。
+        private static readonly KokoSim.Engine.Players.FormCoefficients FormCoeff =
+            new KokoSim.Engine.Players.FormCoefficients();
 
         /// <summary>
         /// 実戦成長ループ（Q8）: 詳細シムの自校戦1試合ぶん、出場者の精神力/走塁判断/捕手リードを伸ばす。
@@ -108,6 +111,13 @@ namespace KokoSim.Unity.Shell
         private void ApplyMatchGrowth(GameResult detail, bool managerWasAway)
             => MatchGrowthModel.Apply(detail, managerWasAway, RosterService.Roster,
                 GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
+
+        /// <summary>
+        /// 試合結果による調子フィードバック（設計書02 §3.3, issue #46）: 詳細シムの自校戦1試合ぶん、
+        /// 出場者の ConditionValue を好投/好打で+、被弾/大敗で−へ動かす。実戦成長と同じ合流点で適用。
+        /// </summary>
+        private void ApplyMatchCondition(GameResult detail, bool managerWasAway)
+            => MatchConditionModel.Apply(detail, managerWasAway, RosterService.Roster, FormCoeff);
 
         // 怪我（設計書03 §3.5）。週次処理（HomeState.RunInjuryWeek）と同じ既定係数を使う。
         private static readonly InjuryCoefficients InjuryCoeff = new InjuryCoefficients();
@@ -153,6 +163,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail.Result, detail.ManagerIsAway, isOfficial: false);
                 ApplyMatchGrowth(detail.Result, detail.ManagerIsAway);
+                ApplyMatchCondition(detail.Result, detail.ManagerIsAway);
                 ApplyMatchInjuries(detail.Result, detail.ManagerIsAway);
             }
             return outcome;
@@ -167,6 +178,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
@@ -189,6 +201,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;

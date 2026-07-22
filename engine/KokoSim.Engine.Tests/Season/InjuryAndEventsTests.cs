@@ -169,6 +169,78 @@ public sealed class InjuryAndEventsTests
         Assert.True(during.Contact < 60);
     }
 
+    // ===== イベント→ConditionValueフィードバック（設計書02 §3.3「イベントで上下」, issue #46） =====
+
+    [Fact]
+    public void Awakening_BoostsConditionValue()
+    {
+        var rng = new Xoshiro256Random(21);
+        var star = Guy();
+        star.BattingGrowth = 1.4;
+        star.ConditionValue = 0.5;
+        foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline })
+        {
+            star.SetLevel(k, 40);
+            star.SetCap(k, 99);
+        }
+        var before = star.ConditionValue;
+        var notices = GrowthEventModel.Week(new[] { star }, rng, Sure());
+
+        Assert.Contains(notices, n => n.Type == GrowthEventType.Awakening);
+        Assert.True(star.ConditionValue > before, "覚醒発生で調子が上がっていない");
+    }
+
+    [Fact]
+    public void Slump_LowersConditionValue()
+    {
+        var rng = new Xoshiro256Random(22);
+        var c = new GrowthEventCoefficients { SlumpWeeklyProb = 1.0, AwakeningWeeklyProb = 0, BreakthroughWeeklyProb = 0, PlateauWeeklyProb = 0, YipsWeeklyProb = 0 };
+        var low = Guy();
+        low.ConditionValue = -0.5;
+        var before = low.ConditionValue;
+
+        var fired = GrowthEventModel.Week(new[] { low }, rng, c);
+
+        Assert.Contains(fired, n => n.Type == GrowthEventType.Slump);
+        Assert.True(low.ConditionValue < before, "スランプ発生で調子が下がっていない");
+    }
+
+    [Fact]
+    public void EventConditionFeedback_ClampsToRange()
+    {
+        // 絶好調寄りから連発しても+1を超えない（既存の週次AR(1)クランプと同じ規約）。
+        var rng = new Xoshiro256Random(23);
+        var star = Guy();
+        star.ConditionValue = 0.95;
+        star.BattingGrowth = 1.4;
+        foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline })
+            star.SetCap(k, 99);
+        GrowthEventModel.Week(new[] { star }, rng, Sure());
+        Assert.InRange(star.ConditionValue, -1.0, 1.0);
+    }
+
+    [Fact]
+    public void EventConditionFeedback_IsDeterministic()
+    {
+        var a = Guy();
+        a.BattingGrowth = 1.4;
+        a.ConditionValue = 0.5;
+        var b = Guy();
+        b.BattingGrowth = 1.4;
+        b.ConditionValue = 0.5;
+        foreach (var p in new[] { a, b })
+            foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline })
+            {
+                p.SetLevel(k, 40);
+                p.SetCap(k, 99);
+            }
+
+        GrowthEventModel.Week(new[] { a }, new Xoshiro256Random(24), Sure());
+        GrowthEventModel.Week(new[] { b }, new Xoshiro256Random(24), Sure());
+
+        Assert.Equal(a.ConditionValue, b.ConditionValue);
+    }
+
     [Fact]
     public void Plateau_OnlyNearCap_AndPermanentlyLowersGrowth()
     {
