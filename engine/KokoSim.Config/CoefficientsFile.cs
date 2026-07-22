@@ -5,6 +5,7 @@ using KokoSim.Engine.Career;
 using KokoSim.Engine.Match.Pitching;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Practice;
@@ -41,6 +42,7 @@ public sealed record CoefficientsBundle
     public ManagerGrowthCoefficients ManagerGrowth { get; init; } = new();
     public TrainingCoefficients Training { get; init; } = new();
     public RosterCoefficients Roster { get; init; } = new();
+    public PersistentRosterCoefficients PersistentRoster { get; init; } = new();
     public TeamStrengthCoefficients TeamStrength { get; init; } = new();
     public NationCoefficients Nation { get; init; } = new();
     public CareerCoefficients Career { get; init; } = new();
@@ -92,6 +94,7 @@ public static class CoefficientsLoader
         public ManagerGrowthDto? ManagerGrowth { get; set; }
         public TrainingDto? Training { get; set; }
         public RosterDto? Roster { get; set; }
+        public PersistentRosterDto? PersistentRoster { get; set; }
         public TeamStrengthDto? TeamStrength { get; set; }
         public NationDto? Nation { get; set; }
         public CareerDto? Career { get; set; }
@@ -121,6 +124,7 @@ public static class CoefficientsLoader
             ManagerGrowth = ManagerGrowth?.ToModel() ?? new ManagerGrowthCoefficients(),
             Training = Training?.ToModel() ?? new TrainingCoefficients(),
             Roster = Roster?.ToModel() ?? new RosterCoefficients(),
+            PersistentRoster = PersistentRoster?.ToModel() ?? new PersistentRosterCoefficients(),
             TeamStrength = TeamStrength?.ToModel() ?? new TeamStrengthCoefficients(),
             Nation = Nation?.ToModel() ?? new NationCoefficients(),
             Career = Career?.ToModel() ?? new CareerCoefficients(),
@@ -1456,6 +1460,66 @@ public static class CoefficientsLoader
             AptitudePositionNoiseSd = AptitudePositionNoiseSd,
             InitLevelMean = InitLevelMean,
             InitLevelSd = InitLevelSd,
+        };
+    }
+
+    private sealed class PersistentRosterDto
+    {
+        private static readonly PersistentRosterCoefficients D = new();
+        private static readonly PhenomCoefficients PD = new();
+        public int PitchersPerCohort { get; set; } = D.PitchersPerCohort;
+        public double FreshmanGap { get; set; } = D.FreshmanGap;
+        public double FameRecruitWeight { get; set; } = D.FameRecruitWeight;
+        public double AnnualGrowth { get; set; } = D.AnnualGrowth;
+        public double SeniorGrowthFactor { get; set; } = D.SeniorGrowthFactor;
+        public double TargetTolerance { get; set; } = D.TargetTolerance;
+        public double MaxResidualPerNode { get; set; } = D.MaxResidualPerNode;
+        public double SummerNodeShare { get; set; } = D.SummerNodeShare;
+        public double AutumnNodeShare { get; set; } = D.AutumnNodeShare;
+        public double WinterNodeShare { get; set; } = D.WinterNodeShare;
+        // 怪物（Phenom）
+        public double PhenomSpikeRatePerSchoolYear { get; set; } = PD.SpikeRatePerSchoolYear;
+        public double PhenomAllRoundRatePerSchoolYear { get; set; } = PD.AllRoundRatePerSchoolYear;
+        public double PhenomAceWeight { get; set; } = PD.AceWeight;
+        public double PhenomFinesseWeight { get; set; } = PD.FinesseWeight;
+        public double PhenomSluggerWeight { get; set; } = PD.SluggerWeight;
+        public double PhenomSpeedsterWeight { get; set; } = PD.SpeedsterWeight;
+        public double PhenomStrongArmWeight { get; set; } = PD.StrongArmWeight;
+        public int PhenomMainMin { get; set; } = PD.MainMin;
+        public int PhenomMainMax { get; set; } = PD.MainMax;
+        public int PhenomSupportMin { get; set; } = PD.SupportMin;
+        public int PhenomSupportMax { get; set; } = PD.SupportMax;
+        public int PhenomAllRoundMin { get; set; } = PD.AllRoundMin;
+        public int PhenomAllRoundMax { get; set; } = PD.AllRoundMax;
+
+        public PersistentRosterCoefficients ToModel() => new()
+        {
+            PitchersPerCohort = PitchersPerCohort,
+            FreshmanGap = FreshmanGap,
+            FameRecruitWeight = FameRecruitWeight,
+            AnnualGrowth = AnnualGrowth,
+            SeniorGrowthFactor = SeniorGrowthFactor,
+            TargetTolerance = TargetTolerance,
+            MaxResidualPerNode = MaxResidualPerNode,
+            SummerNodeShare = SummerNodeShare,
+            AutumnNodeShare = AutumnNodeShare,
+            WinterNodeShare = WinterNodeShare,
+            Phenom = new PhenomCoefficients
+            {
+                SpikeRatePerSchoolYear = PhenomSpikeRatePerSchoolYear,
+                AllRoundRatePerSchoolYear = PhenomAllRoundRatePerSchoolYear,
+                AceWeight = PhenomAceWeight,
+                FinesseWeight = PhenomFinesseWeight,
+                SluggerWeight = PhenomSluggerWeight,
+                SpeedsterWeight = PhenomSpeedsterWeight,
+                StrongArmWeight = PhenomStrongArmWeight,
+                MainMin = PhenomMainMin,
+                MainMax = PhenomMainMax,
+                SupportMin = PhenomSupportMin,
+                SupportMax = PhenomSupportMax,
+                AllRoundMin = PhenomAllRoundMin,
+                AllRoundMax = PhenomAllRoundMax,
+            },
         };
     }
 

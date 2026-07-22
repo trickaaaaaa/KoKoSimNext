@@ -780,3 +780,33 @@ roster:
   lineup_overall_power_weight: 0.5
   # DH使用判断: 投手の打撃総合（ミート＋パワー）が野手平均よりこれ以上低ければDHを使う。
   lineup_dh_pitcher_batting_gap: 15.0
+
+# ===== AI校の永続ロスター（設計書 OPEN-QUESTIONS Q19/Q20 · #80/#82）=====
+# 他校の選手個人が入学〜引退の3年間在籍し節目成長する（使い捨て生成を廃止）。怪物（Phenom）も同居。
+# バランス調整はこのセクションで行う（不変条件#4）。
+persistent_roster:
+  pitchers_per_cohort: 3        # 各学年の投手数（野手は守備8位置に1人ずつ＝コホート=8+これ）
+  freshman_gap: 8.0             # 新入生の能力中心 = Strength − これ（未熟スタート・3年で開花）
+  fame_recruit_weight: 0.04     # 名声由来の入学時上振れ（(Fame−50)×これ）
+  annual_growth: 6.0            # 逆算配分のベースライン年間成長素点
+  senior_growth_factor: 0.4     # 3年（引退間際）の成長係数
+  target_tolerance: 3.0         # 逆算配分の許容誤差（翌夏チーム総合 vs 進化後Strength）
+  max_residual_per_node: 4.0    # 逆算残差補正の1節目あたり上限
+  # 年3節目の分割比（夏大会後 / 秋大会後 / 冬明け）。合計1.0。
+  summer_node_share: 0.34
+  autumn_node_share: 0.33
+  winter_node_share: 0.33
+  # 怪物（Phenom）: 全4000校一様・名声重み無し（Q20 §2）。出現率・型比・能力帯はここで調整。
+  phenom_spike_rate_per_school_year: 0.00038      # 尖り型 ≒ 全国 期待1.5人/年（年1〜2人/全国, Q20 §3）
+  phenom_all_round_rate_per_school_year: 0.00008  # 総合型 ≒ 全国 期待0.32人/年（数年に1人）
+  phenom_ace_weight: 1.0        # 剛腕（球速S＋キレ/スタミナ）
+  phenom_finesse_weight: 1.0    # 超技巧（制球S＋キレ）
+  phenom_slugger_weight: 1.0    # スラッガー（パワーS＋ミート/弾道）
+  phenom_speedster_weight: 1.0  # 韋駄天（走力S＋ミート/盗塁/走塁）
+  phenom_strong_arm_weight: 1.0 # 鉄砲肩（肩S＋守備/捕球）
+  phenom_main_min: 90           # 主軸能力の帯（S帯）
+  phenom_main_max: 99
+  phenom_support_min: 70        # 支持能力の底上げ帯
+  phenom_support_max: 82
+  phenom_all_round_min: 82      # 総合型の主要能力帯（S級）
+  phenom_all_round_max: 95
