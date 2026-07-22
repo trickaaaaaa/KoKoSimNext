@@ -40,6 +40,28 @@ public sealed class CoefficientsLoaderTests
     }
 
     [Fact]
+    public void ParsesPersistentRoster()
+    {
+        const string yaml = """
+            version: 1
+            persistent_roster:
+              pitchers_per_cohort: 4
+              freshman_gap: 9.5
+              phenom_spike_rate_per_school_year: 0.002
+              phenom_main_min: 88
+              phenom_support_max: 84
+            """;
+
+        var bundle = CoefficientsLoader.Parse(yaml);
+
+        Assert.Equal(4, bundle.PersistentRoster.PitchersPerCohort);
+        Assert.Equal(9.5, bundle.PersistentRoster.FreshmanGap, 6);
+        Assert.Equal(0.002, bundle.PersistentRoster.Phenom.SpikeRatePerSchoolYear, 6);
+        Assert.Equal(88, bundle.PersistentRoster.Phenom.MainMin);
+        Assert.Equal(84, bundle.PersistentRoster.Phenom.SupportMax);
+    }
+
+    [Fact]
     public void ParsesFieldersChoiceProb()
     {
         const string yaml = """

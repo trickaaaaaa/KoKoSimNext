@@ -58,7 +58,8 @@ public static class TournamentPreviewBuilder
     };
 
     public static TournamentPreview Build(
-        string title, IReadOnlyList<School> entrants, int berths, string nextStageName, int yearIndex = 1)
+        string title, IReadOnlyList<School> entrants, int berths, string nextStageName, int yearIndex = 1,
+        System.Func<School, int, Match.Game.Team>? teamProvider = null)
     {
         if (entrants.Count == 0) throw new System.ArgumentException("出場校が空です。");
 
@@ -98,7 +99,9 @@ public static class TournamentPreviewBuilder
         foreach (var c in contenders)
         {
             if (!byName.TryGetValue(c.Name, out var school)) continue;
-            var team = StrengthTeamFactory.ForSchool(school, yearIndex);
+            // 実戦と同一ソース。永続ロスター（#80）を注入すれば展望＝実戦の一致契約を保つ（既定は従来の ForSchool）。
+            var team = teamProvider is not null ? teamProvider(school, yearIndex)
+                : StrengthTeamFactory.ForSchool(school, yearIndex);
             notables.Add(PickNotable(c, team));
             rosters.Add(BuildRoster(c, team));
         }

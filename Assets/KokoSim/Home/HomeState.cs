@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
@@ -350,16 +351,32 @@ namespace KokoSim.Unity.Home
         {
             var manager = BuildManagerSchool();
             var field = BuildField(manager);
+            var yearIndex = KokoSim.Unity.Shell.GameClock.YearIndex;
+            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             // 大会シードは母種（プレイ毎に変動）＋年・種別で導出。これで「毎回まったく同じ試合」を解消しつつ、
             // 同じ母種なら完全再現される（決定論は維持）。年・種別を混ぜて同一ゲーム内の各大会も別展開にする。
             var seed = KokoSim.Unity.Shell.GameSeed.Master
-                       ^ (ulong)(9000 + KokoSim.Unity.Shell.GameClock.YearIndex * 10 + (int)kind);
-            // 自校の一戦だけ詳細試合エンジンで解決（成績が実データで積まれる）。裏試合は従来の抽象シムのまま。
+                       ^ (ulong)(9000 + yearIndex * 10 + (int)kind);
+
+            // 裏試合フルシム（#43）: 全国通算成績の今大会スコープをリセットし、自県の裏試合を永続ロスターの
+            // GameEngine.Play で解決する resolver を用意する（成績を全国集計へ積む・敵AI采配を注入）。
+            var stats = NationService.TournamentStats;
+            stats.StartTournament();
+            var brains = new EnemyAiBrainFactory();
+            var homeBg = new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats,
+                modernRules: null, calendarYear: calendarYear, brains: brains);
+
+            // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
-                TournamentTitle(kind), new PlayerMatchResolver());
+                TournamentTitle(kind), new PlayerMatchResolver(), homeBg);
             // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
             GameSession.Current.EnterTournament(kind, TournamentTitle(kind), runner, field);
-            GameSession.Current.Year = KokoSim.Unity.Shell.GameClock.YearIndex;
+            GameSession.Current.Year = yearIndex;
+
+            // 他県（全国46県）の裏試合をバックグラウンドでフルシム（自県は上の runner が対話的に消化＝除外）。
+            // 全4000校の試合が同一エンジンで解決され、勝ち上がり校の個人成績が全国通算へ積まれる（新聞の受け皿）。
+            NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
+                yearIndex, calendarYear, NationService.PrefectureId, seed, brains);
 
             PushFeed(new List<FeedItem>
             {

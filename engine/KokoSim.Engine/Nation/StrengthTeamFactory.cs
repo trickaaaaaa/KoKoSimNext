@@ -183,7 +183,7 @@ public static class StrengthTeamFactory
     /// 投打の分布は ProspectGenerator.Create（設計書01 §1.1c）と同じ条件付き抽選＝自校と同一の傾向にする。
     /// 学年は先発を上級生寄り・控えを下級生寄りに配分する（高校野球の実感に沿う）。
     /// </summary>
-    private static (Handedness Throws, Handedness Bats, int Grade) Profile(
+    internal static (Handedness Throws, Handedness Bats, int Grade) Profile(
         RosterCoefficients c, IRandomSource rng, ref ulong profileSalt, bool starter)
     {
         var r = rng.Fork(profileSalt++);
@@ -223,7 +223,7 @@ public static class StrengthTeamFactory
         ISet<string> usedGiven)
         => PlayerNameGenerator.Generate(vocab, rng.Fork(nameSalt++), usedGiven);
 
-    private static int Ability(double center, IRandomSource rng)
+    internal static int Ability(double center, IRandomSource rng)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(center, 6)), 10, 99);
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
@@ -233,7 +233,7 @@ public static class StrengthTeamFactory
     private static int Grade(int pitchRank, IRandomSource rng)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(pitchRank, 8)), 1, 100);
 
-    private static Player PositionPlayer(FieldPosition pos, double strength, IRandomSource rng,
+    internal static Player PositionPlayer(FieldPosition pos, double strength, IRandomSource rng,
         PersonalityCoefficients pc, ulong salt, string playerName)
     {
         // Ability() の呼び出し順を従来どおり保ち、乱数消費列を不変にする（決定論の後方互換, 2A）。
@@ -271,7 +271,7 @@ public static class StrengthTeamFactory
         };
     }
 
-    private static Player Pitcher(string name, double strength, IRandomSource rng,
+    internal static Player Pitcher(string name, double strength, IRandomSource rng,
         PersonalityCoefficients pc, ulong salt, PitcherArchetypeCoefficients ac, ulong archetypeSalt)
     {
         var contact = Ability(strength - 20, rng);

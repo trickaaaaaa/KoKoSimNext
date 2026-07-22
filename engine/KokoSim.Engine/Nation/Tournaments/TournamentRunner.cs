@@ -97,6 +97,7 @@ public sealed class TournamentRunner
     private readonly IRandomSource _rng;
     private readonly TournamentSchedule _schedule;
     private readonly IPlayerMatchResolver? _playerResolver;
+    private readonly IBackgroundMatchResolver? _backgroundResolver;
     private readonly int _managerId;
     private readonly int _totalRounds;
     private readonly List<BracketMatch> _matches = new();
@@ -141,7 +142,8 @@ public sealed class TournamentRunner
         IRandomSource rng,
         TournamentSchedule schedule,
         string title,
-        IPlayerMatchResolver? playerResolver = null)
+        IPlayerMatchResolver? playerResolver = null,
+        IBackgroundMatchResolver? backgroundResolver = null)
     {
         if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
         if (entrants.All(s => s.Id != manager.Id)) throw new ArgumentException("自校が参加校に含まれていません。");
@@ -150,6 +152,7 @@ public sealed class TournamentRunner
         _rng = rng;
         _schedule = schedule;
         _playerResolver = playerResolver;
+        _backgroundResolver = backgroundResolver;
         _managerId = manager.Id;
         Title = title;
 
@@ -385,14 +388,12 @@ public sealed class TournamentRunner
             if (b is null) { next[i] = a; continue; }
 
             var involvesManager = a.Id == _managerId || b.Id == _managerId;
-            // 抽象パスは常に実行して _rng を同一消費する（自校戦を詳細化しても背景試合の乱数列を不変に保つ＝
-            // 決定論・Fork隔離の要）。自校戦かつ resolver 有りのときだけ、この結果を詳細シムの実結果で上書きする。
-            var (winner, loser, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
-            var (winScore, loseScore) = SynthesizeScore(margin);
 
             if (involvesManager && _playerResolver is not null)
             {
-                // 詳細シムは Fork した隔離ストリームのみ使用（本流 _rng は一切消費しない）。勝敗・スコアは実結果から。
+                // 自校戦は詳細シム（Fork 隔離ストリームのみ使用）。集計モデル経路では、背景カードと同量の
+                // 本流消費を保つためダミー消費する（フルシムは背景も Fork ＝消費ゼロで自動整合）。
+                ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
                 var detail = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)));
@@ -400,20 +401,21 @@ public sealed class TournamentRunner
                 var mgrRuns = detail.ManagerIsAway ? r.AwayRuns : r.HomeRuns;
                 var oppRuns = detail.ManagerIsAway ? r.HomeRuns : r.AwayRuns;
                 var managerWon = mgrRuns > oppRuns;
-                winner = managerWon ? mgr : opp;
-                loser = managerWon ? opp : mgr;
-                winScore = Math.Max(mgrRuns, oppRuns);
-                loseScore = Math.Min(mgrRuns, oppRuns);
+                var mw = managerWon ? mgr : opp;
+                var ml = managerWon ? opp : mgr;
+                var mws = Math.Max(mgrRuns, oppRuns);
+                var mls = Math.Min(mgrRuns, oppRuns);
                 outcome = new PlayerMatchOutcome(
                     managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, roundName, IsChampion: false,
                     Detail: r, ManagerWasAway: detail.ManagerIsAway);
-                _matches.Add(new BracketMatch(
-                    roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, true));
-                RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
-                next[i] = winner;
+                _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mws, mls, true));
+                RecordCard(round, i, mw.Id == a.Id, mws, mls);
+                next[i] = mw;
                 continue;
             }
 
+            // 背景カード（フルシム or 集計モデル）。自校が resolver 無しで関与する場合もここ。
+            var (winner, loser, winScore, loseScore) = ResolveBackgroundCard(a, b, roundsRemaining, i);
             _matches.Add(new BracketMatch(
                 roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, involvesManager));
             RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
@@ -451,14 +453,12 @@ public sealed class TournamentRunner
             if (a is null) { next[i] = b; continue; }
             if (b is null) { next[i] = a; continue; }
 
-            // ResolveRound と同一の本流消費（自校カードでも詳細を捨てて消費順を保つ＝決定論）。
-            var (winner, loser, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
-            var (winScore, loseScore) = SynthesizeScore(margin);
-
             var involvesManager = a.Id == _managerId || b.Id == _managerId;
             if (involvesManager)
             {
                 // 自校カード: 詳細は隔離Fork のライブ進行体へ。ここで停止し、Complete で確定する。
+                // ResolveRound と同一の本流消費順を保つ（集計モデル経路のみダミー消費・フルシムは消費なし）。
+                ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)));
@@ -468,6 +468,7 @@ public sealed class TournamentRunner
                 return handle;
             }
 
+            var (winner, loser, winScore, loseScore) = ResolveBackgroundCard(a, b, roundsRemaining, i);
             _matches.Add(new BracketMatch(roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, false));
             RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
             next[i] = winner;
@@ -504,8 +505,7 @@ public sealed class TournamentRunner
             if (a is null) { p.Next[i] = b; continue; }
             if (b is null) { p.Next[i] = a; continue; }
 
-            var (w, l, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
-            var (ws, ls) = SynthesizeScore(margin);
+            var (w, l, ws, ls) = ResolveBackgroundCard(a, b, p.RoundsRemaining, i);
             _matches.Add(new BracketMatch(p.RoundName, p.RoundsRemaining, w.Name, l.Name, ws, ls, false));
             RecordCard(round, i, w.Id == a.Id, ws, ls);
             p.Next[i] = w;
@@ -524,6 +524,54 @@ public sealed class TournamentRunner
         var loser = _rng.NextInt(0, 4);
         return (loser + Math.Max(1, margin), loser);
     }
+
+    /// <summary>
+    /// 裏試合カード（自校非関与）を解決する。フルシム有効なら両校ロスターを <see cref="GameEngine"/> で解いて
+    /// 実スコアを返し（＋全国成績へ畳み込み）、無効なら従来の集計モデル（<see cref="AggregateMatch"/>）を使う。
+    /// フルシムは本流 _rng を消費せず Fork 隔離ストリームのみ使う（決定論・背景試合の独立性）。
+    /// </summary>
+    private (School Winner, School Loser, int WinScore, int LoseScore) ResolveBackgroundCard(
+        School a, School b, int roundsRemaining, int slot)
+    {
+        if (_backgroundResolver is not null)
+        {
+            var r = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot)));
+            return DecideFromRuns(a, b, r);
+        }
+        var (winner, loser, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
+        var (ws, ls) = SynthesizeScore(margin);
+        return (winner, loser, ws, ls);
+    }
+
+    /// <summary>
+    /// フルシム結果（a=先攻・b=後攻）から勝敗と表示スコアを決める。引き分け（延長上限）は安打数→強さ→Id で
+    /// 決定論的に解決する（knockout は勝者が要る）。
+    /// </summary>
+    private static (School Winner, School Loser, int WinScore, int LoseScore) DecideFromRuns(
+        School a, School b, GameResult r)
+    {
+        var aWon = r.AwayRuns > r.HomeRuns
+            || (r.AwayRuns == r.HomeRuns && (r.AwayHits > r.HomeHits
+                || (r.AwayHits == r.HomeHits && (a.Strength > b.Strength || (a.Strength >= b.Strength && a.Id < b.Id)))));
+        var winner = aWon ? a : b;
+        var loser = aWon ? b : a;
+        return (winner, loser, Math.Max(r.AwayRuns, r.HomeRuns), Math.Min(r.AwayRuns, r.HomeRuns));
+    }
+
+    /// <summary>
+    /// フルシム有効時、自校カードでも「背景カードと同量の本流消費」を保つためのダミー消費（集計モデル経路のみ）。
+    /// フルシムでは背景も Fork のため消費ゼロ＝自校カードも消費ゼロで整合する（何もしない）。
+    /// </summary>
+    private void ConsumeLegacyManagerCardRng(School a, School b)
+    {
+        if (_backgroundResolver is not null) return;   // フルシム: 背景も Fork ＝消費なしで揃う
+        var (_, _, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
+        SynthesizeScore(margin);   // 破棄（本流消費だけ従来と一致させる）
+    }
+
+    /// <summary>裏試合フルシム用 Fork ストリームID（ラウンド×スロットで一意・決定論）。自校戦とも本流とも別系列。</summary>
+    private static ulong BackgroundStream(int roundsRemaining, int slot)
+        => 0xB6B6_0000UL ^ ((ulong)roundsRemaining << 16) ^ (uint)slot;
 
     /// <summary>自校戦の詳細シム用 Fork ストリームID（ラウンド×スロットで一意・決定論）。本流とは別系列。</summary>
     private static ulong PlayerMatchStream(int roundsRemaining, int slot)

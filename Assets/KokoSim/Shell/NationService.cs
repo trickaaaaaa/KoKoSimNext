@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Roster;
+using KokoSim.Engine.Stats;
 
 namespace KokoSim.Unity.Shell
 {
@@ -54,5 +56,39 @@ namespace KokoSim.Unity.Shell
             PrefectureId = PrefectureId,
             Strength = TeamOverall.Of(RosterService.Active),
         };
+
+        // ===== AI校の永続ロスター（#80）＋全国通算成績（#43）=====
+        // 使い捨て生成（StrengthTeamFactory.ForSchool）を廃し、全4000校の選手個人を年をまたいで継続させる。
+        // 生成はロスター参照時に (校ID, 年度) から遅延ブートストラップ（決定論）。GameContext と同様、係数は既定
+        // （Unity側は coefficients.yaml を読まない従来挙動に合わせる。調整はテスト/Balance CLI 経由）。
+
+        private static readonly AiRosterDeps RosterDeps = new AiRosterDeps();
+        private static NationRosters _rosters;
+        private static NationTournamentStats _tournamentStats;
+        private static Dictionary<int, School> _schoolById;
+
+        /// <summary>全国の永続ロスター保持庫（遅延生成の単一ソース）。</summary>
+        public static NationRosters Rosters => _rosters ?? (_rosters = new NationRosters(RosterDeps));
+
+        /// <summary>全国の今大会通算成績（裏試合フルシムが積む単一ソース）。</summary>
+        public static NationTournamentStats TournamentStats
+            => _tournamentStats ?? (_tournamentStats = new NationTournamentStats());
+
+        /// <summary>学校ID→School 解決（成長ターゲット＝進化後Strength を引く）。自校IDは対象外＝null。</summary>
+        public static School SchoolById(int id)
+        {
+            if (_schoolById == null)
+            {
+                _schoolById = new Dictionary<int, School>();
+                foreach (var s in Nation.Schools) _schoolById[s.Id] = s;
+            }
+            return _schoolById.TryGetValue(id, out var found) ? found : null;
+        }
+
+        /// <summary>夏大会後の代替わり: 生成済み全校の3年生を引退させる（秋の新チーム＝下級生のみ）。</summary>
+        public static void RetireAiGraduates() => Rosters.RetireGraduatesAll();
+
+        /// <summary>年度替わり（4月）: 生成済み全校で進級・新入生加入・逆算配分成長を適用する。</summary>
+        public static void AdvanceAiYear(int newYearIndex) => Rosters.AdvanceExistingYear(SchoolById, newYearIndex);
     }
 }

@@ -74,6 +74,13 @@ public sealed record Player
     /// <summary>特殊能力（設計書10）。有無フラグ制。可視/隠しを内包。既定は空（従来挙動と一致）。</summary>
     public SkillSet Skills { get; init; } = SkillSet.Empty;
 
+    /// <summary>
+    /// 怪物（隠しフラグ, 設計書 OPEN-QUESTIONS Q20）。既定 None＝通常選手。AI校の永続ロスター生成
+    /// （新入生コホート）で稀にロールされ、新聞・大会展望・テストから参照する。物理層の解決には使わない
+    /// （能力は生成時に既に引き上げ済み＝帯は能力分布経由でのみ動く）。
+    /// </summary>
+    public PhenomType Phenom { get; init; } = PhenomType.None;
+
     /// <summary>調子（設計書02 §3.3）。週次の波を Season 層が更新し、投影時に載せる。試合中は補正係数として作用。</summary>
     public Condition Condition { get; init; } = Condition.Normal;
 

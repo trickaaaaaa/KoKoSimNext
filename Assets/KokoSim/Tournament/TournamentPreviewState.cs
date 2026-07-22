@@ -109,11 +109,13 @@ namespace KokoSim.Unity.Tournament
 
             // 上位2校が次のステージへ（秋＝地区/関東、夏＝甲子園）。現状の大会構造に合わせた表示上の既定。
             var summer = session.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
+            // 注目選手・登録メンバーは実戦と同一の永続ロスター（#80）から引く＝展望で見た選手が実戦で出る。
             var preview = TournamentPreviewBuilder.Build(
                 session.Title, session.Field,
                 berths: summer ? 1 : 2,
                 nextStageName: summer ? "甲子園" : "地区大会",
-                yearIndex: session.Year);
+                yearIndex: session.Year,
+                teamProvider: (school, year) => KokoSim.Unity.Shell.NationService.Rosters.TeamFor(school, year));
 
             var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
 
