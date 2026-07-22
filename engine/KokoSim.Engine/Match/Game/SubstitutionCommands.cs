@@ -10,8 +10,8 @@ namespace KokoSim.Engine.Match.Game;
 /// （<see cref="GameReplay"/>）が**同じ関数**を通ることで、「同シード＋同交代操作 → 同結果」が構造的に保証される。
 ///
 /// ここでの添字はすべて「その時点の可変状態」に対するもの:
-/// 控え野手＝<see cref="TeamState.Bench"/>、控え投手＝<see cref="TeamState.AvailableBullpen"/>、
-/// 打順スロット＝0-8、塁＝0(一塁)/1(二塁)/2(三塁)。
+/// 控え野手＝<see cref="TeamState.Bench"/>、投手交代の候補＝<see cref="TeamState.AvailablePitcherCandidates"/>
+/// （ブルペン＋野手控え）、打順スロット＝0-8、塁＝0(一塁)/1(二塁)/2(三塁)。
 /// 乱数は一切消費しない（交代は決定的操作）。
 /// </summary>
 internal static class SubstitutionCommands
@@ -38,12 +38,15 @@ internal static class SubstitutionCommands
         return true;
     }
 
-    /// <summary>ブルペンの投手を指名して継投（teamIsAway=交代するチーム＝守備側が先攻か）。</summary>
-    public static bool ChangePitcher(GameProgress p, bool teamIsAway, int bullpenIndex)
+    /// <summary>
+    /// 投手交代候補（ブルペン＋野手控え, <see cref="TeamState.AvailablePitcherCandidates"/>）から指名して継投する
+    /// （teamIsAway=交代するチーム＝守備側が先攻か。issue #137: 野手も投手として登板できる）。
+    /// </summary>
+    public static bool ChangePitcher(GameProgress p, bool teamIsAway, int candidateIndex)
     {
         var team = p.OffenseOf(teamIsAway);
-        var pen = team.AvailableBullpen;
-        return bullpenIndex >= 0 && bullpenIndex < pen.Count && team.ChangePitcherTo(pen[bullpenIndex]);
+        var candidates = team.AvailablePitcherCandidates;
+        return candidateIndex >= 0 && candidateIndex < candidates.Count && team.ChangePitcherTo(candidates[candidateIndex]);
     }
 
     /// <summary>守備交代（打順スロット slot の選手を控えへ）。</summary>

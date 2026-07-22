@@ -209,10 +209,10 @@ public sealed class MatchProgression
         return true;
     }
 
-    /// <summary>投手交代: ブルペンの sub を指名して継投する（先頭固定ではない）。</summary>
+    /// <summary>投手交代: ブルペンまたは野手控えの sub を指名して継投する（先頭固定ではない。issue #137）。</summary>
     public bool ChangePitcher(bool teamIsAway, Player sub)
     {
-        var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailableBullpen, sub);
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, sub);
         if (idx < 0 || !SubstitutionCommands.ChangePitcher(_p, teamIsAway, idx)) return false;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ChangePitcher, teamIsAway, idx));
         return true;
