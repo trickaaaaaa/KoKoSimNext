@@ -242,4 +242,29 @@ public sealed class DevelopmentTests
             DevelopmentModel.TrainWeek(focused, TrainingMenu.DefenseSS, 0, 1.0, stages, c);
         Assert.True(focused.Aptitude(FieldPosition.Shortstop) > p.Aptitude(FieldPosition.Shortstop));
     }
+
+    // --- 適性の緩め係数（守備適性 未決1）: 必要expを下げると同じ週数で適性が速く伸びる ---
+
+    [Fact]
+    public void AptitudeRequiredExpFactor_BelowOne_GrowsFaster()
+    {
+        var stages = new GrowthStageTable();
+
+        var baseline = new DevelopingPlayer();
+        var eased = new DevelopingPlayer();
+        var strict = new TrainingCoefficients { AptitudeRequiredExpFactor = 1.0 };
+        var loose = new TrainingCoefficients { AptitudeRequiredExpFactor = 0.6 };
+
+        for (var i = 0; i < 30; i++)
+        {
+            DevelopmentModel.TrainWeek(baseline, TrainingMenu.DefenseSS, 0, 1.0, stages, strict);
+            DevelopmentModel.TrainWeek(eased, TrainingMenu.DefenseSS, 0, 1.0, stages, loose);
+        }
+
+        // 緩め係数（必要exp×0.6）の方が同じ週数で適性が高くなる。
+        Assert.True(eased.Aptitude(FieldPosition.Shortstop) > baseline.Aptitude(FieldPosition.Shortstop),
+            $"eased={eased.Aptitude(FieldPosition.Shortstop)} vs baseline={baseline.Aptitude(FieldPosition.Shortstop)}");
+        // 既定係数1.0は従来挙動（能力と同曲線を共用）を保つ回帰。
+        Assert.Equal(1.0, new TrainingCoefficients().AptitudeRequiredExpFactor);
+    }
 }

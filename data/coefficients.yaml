@@ -574,6 +574,7 @@ training:
   coaching_slope: 0.005
   level_up_base: 100.0        # 必要exp = base × growth^level
   level_up_growth: 1.05
+  aptitude_required_exp_factor: 0.6   # 守備位置適性は能力より緩い必要exp（<1.0で速く伸びる, 守備適性 未決1）
   summer_camp_mult: 2.0       # 設計書04 §4
   winter_camp_mult: 2.5
   tournament_practice_mult: 0.5   # 大会モード中は練習効果が落ちる（設計書03/05）。<1.0で低下

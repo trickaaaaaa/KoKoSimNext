@@ -816,6 +816,7 @@ public static class CoefficientsLoader
         public double CoachingSlope { get; set; } = D.CoachingSlope;
         public double LevelUpBase { get; set; } = D.LevelUpBase;
         public double LevelUpGrowth { get; set; } = D.LevelUpGrowth;
+        public double AptitudeRequiredExpFactor { get; set; } = D.AptitudeRequiredExpFactor;
         public double SummerCampMult { get; set; } = D.SummerCampMult;
         public double WinterCampMult { get; set; } = D.WinterCampMult;
         public double TournamentPracticeMult { get; set; } = D.TournamentPracticeMult;
@@ -834,6 +835,7 @@ public static class CoefficientsLoader
             CoachingSlope = CoachingSlope,
             LevelUpBase = LevelUpBase,
             LevelUpGrowth = LevelUpGrowth,
+            AptitudeRequiredExpFactor = AptitudeRequiredExpFactor,
             SummerCampMult = SummerCampMult,
             WinterCampMult = WinterCampMult,
             TournamentPracticeMult = TournamentPracticeMult,
