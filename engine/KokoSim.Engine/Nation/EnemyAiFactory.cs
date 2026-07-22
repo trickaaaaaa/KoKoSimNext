@@ -30,3 +30,12 @@ public static class EnemyAiFactory
         return new AiTacticsBrain(ProfileFor(school), withTraits, baserunning, ai, form);
     }
 }
+
+/// <summary>
+/// 裏試合フルシムの敵AI采配供給（<see cref="Tournaments.IEnemyBrainFactory"/> の既定実装）。全校の継投・交代を
+/// <see cref="EnemyAiFactory.BrainFor"/> で駆動する（設計書11 / #40）。エンジン内で完結＝Shell はこれを差すだけ。
+/// </summary>
+public sealed class EnemyAiBrainFactory : Tournaments.IEnemyBrainFactory
+{
+    public Match.Tactics.ITacticsBrain BrainFor(School school) => EnemyAiFactory.BrainFor(school);
+}

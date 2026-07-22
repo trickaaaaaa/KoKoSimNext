@@ -31,7 +31,19 @@ namespace KokoSim.Unity.Shell
         {
             if (delta >= 0)
             {
-                for (var i = 0; i < delta; i++) { Step(1); EnterWeek(); }
+                for (var i = 0; i < delta; i++)
+                {
+                    var prevYear = YearIndex;
+                    Step(1);
+                    if (YearIndex != prevYear)
+                    {
+                        // 年度替わり（4月）: AI校も進級・新入生加入・逆算配分成長（#80）。背景の全国裏試合を
+                        // 完了させてからロスターを触る（背景タスクとロスター変更を重ねない）。
+                        NationBackgroundSim.EnsureCompleted();
+                        NationService.AdvanceAiYear(YearIndex);
+                    }
+                    EnterWeek();
+                }
                 return;
             }
             Step(delta);   // 巻き戻し（練習画面のプレビュー）は遷移フックを回さない
@@ -53,7 +65,13 @@ namespace KokoSim.Unity.Shell
         private static void EnterWeek()
         {
             var t = RosterLifecycle.OnWeekEntered(RosterService.Roster, Week, Calendar);
-            if (t != null) NewTeamService.Open(t);
+            if (t != null)
+            {
+                NewTeamService.Open(t);
+                // AI校も夏後に代替わり: 進行中の全国裏試合を完了させてから3年生を引退させる（#80・秋は下級生のみ）。
+                NationBackgroundSim.EnsureCompleted();
+                NationService.RetireAiGraduates();
+            }
         }
 
         /// <summary>シーズン頭（週0・年度1）へ戻す。</summary>

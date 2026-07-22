@@ -12,15 +12,24 @@ namespace KokoSim.Engine.Stats;
 public sealed class NationTournamentStats
 {
     private readonly Dictionary<int, StatBook> _bySchool = new();
+    // 全国裏試合はバックグラウンドスレッドで回し得る（設計書05 §1.4）。自校県（メインスレッド）と
+    // 他県（背景スレッド）が同時に別校を畳み込むため、辞書構造の競合をロックで防ぐ（校キーは disjoint）。
+    private readonly object _gate = new();
 
     /// <summary>学校IDの今大会成績（未登録なら null）。UIの相手校成績欄・新聞が引く。</summary>
-    public StatBook? ForSchool(int schoolId) => _bySchool.TryGetValue(schoolId, out var b) ? b : null;
+    public StatBook? ForSchool(int schoolId)
+    {
+        lock (_gate) return _bySchool.TryGetValue(schoolId, out var b) ? b : null;
+    }
 
-    /// <summary>成績を持つ学校ID一覧（新聞・注目選手の走査用）。</summary>
-    public IReadOnlyCollection<int> Schools => _bySchool.Keys;
+    /// <summary>成績を持つ学校ID一覧（新聞・注目選手の走査用・スナップショット）。</summary>
+    public IReadOnlyCollection<int> Schools
+    {
+        get { lock (_gate) return new List<int>(_bySchool.Keys); }
+    }
 
     /// <summary>大会切替時に全消去（今大会スコープ, Q15未決3 の「今大会」相当）。</summary>
-    public void StartTournament() => _bySchool.Clear();
+    public void StartTournament() { lock (_gate) _bySchool.Clear(); }
 
     private StatBook BookFor(int schoolId)
     {
@@ -34,8 +43,11 @@ public sealed class NationTournamentStats
     /// </summary>
     public void FoldMatch(int awaySchoolId, int homeSchoolId, GameResult result)
     {
-        Fold(awaySchoolId, result, managerIsAway: true);
-        Fold(homeSchoolId, result, managerIsAway: false);
+        lock (_gate)
+        {
+            Fold(awaySchoolId, result, managerIsAway: true);
+            Fold(homeSchoolId, result, managerIsAway: false);
+        }
     }
 
     private void Fold(int schoolId, GameResult result, bool managerIsAway)

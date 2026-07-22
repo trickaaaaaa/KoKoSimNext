@@ -3,6 +3,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
@@ -60,9 +61,11 @@ namespace KokoSim.Unity.Shell
         {
             var yearIndex = GameSession.Current.Year;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
-            var team = StrengthTeamFactory.ForSchool(opponent, yearIndex, modernRules: Rules, calendarYear: calendarYear);
+            // 永続ロスター（#80）から相手校チームを組む。使い捨て生成を廃し、秋に対戦した2年生が翌夏に成長して
+            // 戻ってくる。展望（TournamentPreview）も同じ Rosters.TeamFor を通り実戦と一致する。
+            var team = NationService.Rosters.TeamFor(opponent, yearIndex, Rules, calendarYear);
             var brain = EnemyAiFactory.BrainFor(opponent);
-            var orderRng = StrengthTeamFactory.SeedFor(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
+            var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
             var reordered = brain.ComposeBattingOrder(team.BattingOrder, orderRng);
             // DhSlot は並べ替え前のインデックス基準なので、DH使用時は同一参照を辿って引き直す
             // （調子の並べ替えは常に恒等だが、将来 Q21 が解決して相手校にも調子差が付いたときの保険）。

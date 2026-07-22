@@ -73,6 +73,38 @@ public sealed class NationalTournamentEngineTests
     }
 
     [Fact]
+    public void SharedContainers_AreThreadSafe_AcrossParallelPrefectures()
+    {
+        // 全国裏試合の背景スレッド化（設計書05 §1.4）を模す: 同一の rosters/stats へ複数県が並行に積む。
+        // 県キーは disjoint なので論理競合はなく、辞書構造の破損だけをロックが防ぐ（例外なく完走すること）。
+        var deps = new AiRosterDeps();
+        var rosters = new NationRosters(deps);
+        var stats = new NationTournamentStats();
+        var ctx = new GameContext();
+
+        var prefs = Enumerable.Range(1, 6).Select(p => MakePrefectureSchools(p * 1000, 8)).ToList();
+
+        System.Threading.Tasks.Parallel.ForEach(prefs.Select((s, i) => (s, i)), pair =>
+        {
+            var bg = new BackgroundMatchResolver(rosters, ctx, yearIndex: 1, stats: stats);
+            var runner = new TournamentRunner(pair.s, pair.s[0], Coeff, new Xoshiro256Random((ulong)(pair.i + 1)),
+                Schedule, $"P{pair.i}", playerResolver: null, backgroundResolver: bg);
+            while (!runner.Finished) runner.PlayNextPlayerMatch();
+        });
+
+        Assert.True(stats.Schools.Count >= 6);
+        var hits = stats.Schools.Sum(id => stats.ForSchool(id)!.Players.Values.Sum(p => p.Batting.Hits));
+        Assert.True(hits > 0);
+    }
+
+    private static List<School> MakePrefectureSchools(int baseId, int count)
+        => Enumerable.Range(0, count).Select(i => new School
+        {
+            Id = baseId + i, Name = $"校{baseId + i}", PrefectureId = baseId / 1000,
+            Strength = 44 + (i * 31) % 38, Fame = 45,
+        }).ToList();
+
+    [Fact]
     public void RunSummer_SkipsExcludedPrefecture()
     {
         var nation = MakeMiniNation();
