@@ -42,6 +42,31 @@ public sealed class StatBookTests
         Assert.Equal(3, s.Hits);
     }
 
+    // issue #91: 盗塁の個人集計。
+    [Fact]
+    public void BattingAdd_AccumulatesStolenBasesAndCaughtStealing()
+    {
+        var s = new BattingStatLine();
+        s.Add(new BattingLine(1, FieldPosition.FirstBase, "X", 4, 4, 2, 0, 0, 0, 0, 0, 0, SourceId: 1,
+            HitByPitches: 0, StolenBases: 2, CaughtStealing: 1));
+        s.Add(new BattingLine(1, FieldPosition.FirstBase, "X", 3, 3, 1, 0, 0, 0, 0, 0, 0, SourceId: 1,
+            HitByPitches: 0, StolenBases: 1, CaughtStealing: 0));
+
+        Assert.Equal(3, s.StolenBases);
+        Assert.Equal(1, s.CaughtStealing);
+    }
+
+    // issue #91: 失策の個人集計。
+    [Fact]
+    public void FieldingAdd_AccumulatesErrorsAcrossGames()
+    {
+        var s = new FieldingStatLine();
+        s.Add(new FieldingLine(SourceId: 1, Position: FieldPosition.Shortstop, Name: "X", Errors: 1));
+        s.Add(new FieldingLine(SourceId: 1, Position: FieldPosition.Shortstop, Name: "X", Errors: 2));
+
+        Assert.Equal(3, s.Errors);
+    }
+
     // ── 派生値（投手） ──
     [Fact]
     public void PitchingDerived_MatchesHandComputed()
@@ -83,6 +108,22 @@ public sealed class StatBookTests
         Assert.Null(book.Get(99));                   // 相手校打者（SourceId=99）は自校帳簿に載らない
         Assert.Equal(2, book.Get(1)!.Batting.Hits);
         Assert.Equal(1, book.Get(2)!.Pitching.Wins);
+    }
+
+    // issue #91: 守備成績（失策）も打撃・投手と同じ帰属ルールで畳み込まれる。
+    [Fact]
+    public void FoldGame_AttributesFieldingErrorsToManagerSideOnly()
+    {
+        var book = new StatBook();
+        var r = ResultManagerHome() with
+        {
+            HomeFielding = new[] { new FieldingLine(SourceId: 4, Position: FieldPosition.Shortstop, Name: "遊撃", Errors: 1) },
+            AwayFielding = new[] { new FieldingLine(SourceId: 98, Position: FieldPosition.Shortstop, Name: "敵遊撃", Errors: 2) },
+        };
+        book.FoldGame(r, managerIsAway: false, winPid: 2, losePid: null);
+
+        Assert.Equal(1, book.Get(4)!.Fielding.Errors);
+        Assert.Null(book.Get(98));                   // 相手校の失策は自校帳簿に載らない
     }
 
     [Fact]

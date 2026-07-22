@@ -77,8 +77,20 @@ public sealed class TeamState
     /// <summary>攻撃したイニングごとの得点（表/裏の各ハーフで1要素追加）。</summary>
     public IReadOnlyList<int> InningRuns => _inningRuns;
     public void AddHit() => Hits++;
-    public void AddError() => Errors++;
     public void RecordInningRuns(int runs) => _inningRuns.Add(runs);
+
+    /// <summary>
+    /// 失策をチーム計＋当該守備選手へ帰属させる（issue #91）。fielder が解決できない場合（想定外）でも
+    /// チーム計は必ず加算する＝<see cref="Errors"/> と個人失策の合計が食い違わないようにする。
+    /// </summary>
+    public void RecordFieldingError(Player? fielder, FieldPosition role)
+    {
+        Errors++;
+        if (fielder is null) return;
+        if (!_field.TryGetValue(fielder, out var a)) { a = new FieldAccum(); _field[fielder] = a; }
+        a.Position = role;
+        a.Errors++;
+    }
 
     // ===== 采配の集計（設計書09。記録のみ＝試合結果には影響しない。無指示なら常に0） =====
     public int StealAttempts { get; private set; }
@@ -86,15 +98,25 @@ public sealed class TeamState
     public int SacrificeBunts { get; private set; }
     public int SacrificeBuntSuccesses { get; private set; }
     public int Squeezes { get; private set; }
-    public void RecordSteal(bool success) { StealAttempts++; if (success) StealSuccesses++; }
+
+    /// <summary>盗塁企図を走者個人＋チーム計へ記録する（issue #91）。</summary>
+    public void RecordSteal(Player runner, bool success)
+    {
+        StealAttempts++;
+        if (success) StealSuccesses++;
+        if (!_bat.TryGetValue(runner, out var a)) { a = new BatAccum(); _bat[runner] = a; }
+        if (success) a.SB++; else a.CS++;
+    }
     public void RecordSacrificeBunt(bool success) { SacrificeBunts++; if (success) SacrificeBuntSuccesses++; }
     public void RecordSqueeze() => Squeezes++;
 
     // ===== 個人成績（ボックススコア） =====
-    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP; }
+    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS; }
     private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches, HB; }
+    private sealed class FieldAccum { public FieldPosition Position; public int Errors; }
     private readonly Dictionary<Player, BatAccum> _bat = new();
     private readonly Dictionary<Player, PitAccum> _pit = new();
+    private readonly Dictionary<Player, FieldAccum> _field = new();
 
     /// <summary>打者の1打席を記録（rbi ≈ そのプレーで入った得点）。</summary>
     public void RecordBatting(Player batter, PlateAppearanceResult r, int rbi)
@@ -157,7 +179,16 @@ public sealed class TeamState
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
-                a.HBP);
+                a.HBP, a.SB, a.CS);
+    }
+
+    /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>
+    public IReadOnlyList<FieldingLine> BuildFieldingLines()
+    {
+        var lines = new List<FieldingLine>(_field.Count);
+        foreach (var kv in _field)
+            lines.Add(new FieldingLine(kv.Key.SourceId, kv.Value.Position, kv.Key.Name, kv.Value.Errors));
+        return lines;
     }
 
     /// <summary>登板順の投手成績（先発→登板したブルペン）。</summary>

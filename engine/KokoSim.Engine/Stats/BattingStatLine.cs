@@ -20,6 +20,8 @@ public sealed class BattingStatLine
     public int Walks { get; private set; }
     public int HitByPitches { get; private set; }
     public int StrikeOuts { get; private set; }
+    public int StolenBases { get; private set; }
+    public int CaughtStealing { get; private set; }
 
     /// <summary>単打＝安打−（二塁打＋三塁打＋本塁打）。</summary>
     public int Singles => Hits - Doubles - Triples - HomeRuns;
@@ -54,5 +56,7 @@ public sealed class BattingStatLine
         Walks += l.Walks;
         HitByPitches += l.HitByPitches;
         StrikeOuts += l.StrikeOuts;
+        StolenBases += l.StolenBases;
+        CaughtStealing += l.CaughtStealing;
     }
 }
