@@ -337,7 +337,11 @@ public static class GameEngine
                 PitcherGear.Coast => ctx.Pitching.GearCoastStaminaFactor,
                 _ => 1.0,
             };
-            var pitcher = PitchingFatigue.Effective(currentPitcher, defense.FatiguePitches, ctx.Fatigue);
+            // チーム別疲労係数（issue #55, 監督傾向, 決定4: B-1）。傾向なしのチームは null＝ctx.Fatigue に落ちる
+            // （＝従来と完全一致・帯不変）。減衰カーブ（VelocityDrop/ControlDrop）は共通なので、エース酷使でも
+            // 実効能力の算出結果は ctx.Fatigue と同値＝変わるのは継投「時期」（ShouldRelieve）だけ。
+            var fatigue = defense.Fatigue ?? ctx.Fatigue;
+            var pitcher = PitchingFatigue.Effective(currentPitcher, defense.FatiguePitches, fatigue);
             // 調子・当日の出来（設計書02 §3.3/§3.3b）。
             pitcher = Players.FormModel.ApplyPitcher(pitcher, currentPitcher.Condition, FormOf(dayForm, currentPitcher), ctx.Form);
             var batterAttrs = Players.FormModel.ApplyBatter(batter.ToBatter(), batter.Condition, FormOf(dayForm, batter), ctx.Form);
@@ -638,7 +642,7 @@ public static class GameEngine
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
                     batterOrder: batterOrder, pitchLog: res.PitchLog);
                 outs += buntOuts;
-                if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, ctx.Fatigue)
+                if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, defense.Fatigue ?? ctx.Fatigue)
                     || defense.CurrentPitcherAtWeeklyLimit())
                 {
                     defense.TryChangePitcher();
@@ -674,7 +678,7 @@ public static class GameEngine
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
                     batterOrder: batterOrder, pitchLog: res.PitchLog);
                 outs += sqOuts;
-                if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, ctx.Fatigue)
+                if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, defense.Fatigue ?? ctx.Fatigue)
                     || defense.CurrentPitcherAtWeeklyLimit())
                 {
                     defense.TryChangePitcher();
@@ -901,7 +905,7 @@ public static class GameEngine
 
             outs += outsThisPa;
 
-            if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, ctx.Fatigue)
+            if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, defense.Fatigue ?? ctx.Fatigue)
                         || defense.CurrentPitcherAtWeeklyLimit())
             {
                 defense.TryChangePitcher();

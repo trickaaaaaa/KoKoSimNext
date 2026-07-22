@@ -1194,6 +1194,27 @@ public static class CoefficientsLoader
         public int DefensiveSubInningEarlier { get; set; } = D.DefensiveSubInningEarlier;
         public int SmallBallPinchRunInningEarlier { get; set; } = D.SmallBallPinchRunInningEarlier;
         public double AceDependentDefenseTimeoutKeepProb { get; set; } = D.AceDependentDefenseTimeoutKeepProb;
+        // ④ 監督傾向層（issue #55）
+        public double BuntHeavyBuntFactor { get; set; } = D.BuntHeavyBuntFactor;
+        public int BuntHeavyBuntInningEarlier { get; set; } = D.BuntHeavyBuntInningEarlier;
+        public double RunAndGunStealFactor { get; set; } = D.RunAndGunStealFactor;
+        public double RunAndGunHitAndRunFactor { get; set; } = D.RunAndGunHitAndRunFactor;
+        public double RunAndGunStealMinSuccessRelax { get; set; } = D.RunAndGunStealMinSuccessRelax;
+        public double AceOveruseRelieveMarginFactor { get; set; } = D.AceOveruseRelieveMarginFactor;
+        public double AceOveruseHardCapAdd { get; set; } = D.AceOveruseHardCapAdd;
+        public double QuickHookRelieveMarginFactor { get; set; } = D.QuickHookRelieveMarginFactor;
+        public int QuickHookDefensiveSubInningEarlier { get; set; } = D.QuickHookDefensiveSubInningEarlier;
+        public int AggressivePinchHitInningEarlier { get; set; } = D.AggressivePinchHitInningEarlier;
+        public int AggressivePinchHitCeilingRelax { get; set; } = D.AggressivePinchHitCeilingRelax;
+        public int AggressivePinchHitImprovementRelax { get; set; } = D.AggressivePinchHitImprovementRelax;
+        public double PromoterConditionWeight { get; set; } = D.PromoterConditionWeight;
+        public int PromoterMinConditionStep { get; set; } = D.PromoterMinConditionStep;
+        public double SqueezeLoverSqueezeFactor { get; set; } = D.SqueezeLoverSqueezeFactor;
+        public int AggressiveGearPushInningsMore { get; set; } = D.AggressiveGearPushInningsMore;
+        public int AggressiveGearPushDiffMore { get; set; } = D.AggressiveGearPushDiffMore;
+        public int AggressiveGearCoastLeadLater { get; set; } = D.AggressiveGearCoastLeadLater;
+        public double CautiousIntentionalWalkProb { get; set; } = D.CautiousIntentionalWalkProb;
+        public int CautiousIntentionalWalkMinPowerRelax { get; set; } = D.CautiousIntentionalWalkMinPowerRelax;
 
         public EnemyAiCoefficients ToModel() => new()
         {
@@ -1233,6 +1254,26 @@ public static class CoefficientsLoader
             DefensiveSubInningEarlier = DefensiveSubInningEarlier,
             SmallBallPinchRunInningEarlier = SmallBallPinchRunInningEarlier,
             AceDependentDefenseTimeoutKeepProb = AceDependentDefenseTimeoutKeepProb,
+            BuntHeavyBuntFactor = BuntHeavyBuntFactor,
+            BuntHeavyBuntInningEarlier = BuntHeavyBuntInningEarlier,
+            RunAndGunStealFactor = RunAndGunStealFactor,
+            RunAndGunHitAndRunFactor = RunAndGunHitAndRunFactor,
+            RunAndGunStealMinSuccessRelax = RunAndGunStealMinSuccessRelax,
+            AceOveruseRelieveMarginFactor = AceOveruseRelieveMarginFactor,
+            AceOveruseHardCapAdd = AceOveruseHardCapAdd,
+            QuickHookRelieveMarginFactor = QuickHookRelieveMarginFactor,
+            QuickHookDefensiveSubInningEarlier = QuickHookDefensiveSubInningEarlier,
+            AggressivePinchHitInningEarlier = AggressivePinchHitInningEarlier,
+            AggressivePinchHitCeilingRelax = AggressivePinchHitCeilingRelax,
+            AggressivePinchHitImprovementRelax = AggressivePinchHitImprovementRelax,
+            PromoterConditionWeight = PromoterConditionWeight,
+            PromoterMinConditionStep = PromoterMinConditionStep,
+            SqueezeLoverSqueezeFactor = SqueezeLoverSqueezeFactor,
+            AggressiveGearPushInningsMore = AggressiveGearPushInningsMore,
+            AggressiveGearPushDiffMore = AggressiveGearPushDiffMore,
+            AggressiveGearCoastLeadLater = AggressiveGearCoastLeadLater,
+            CautiousIntentionalWalkProb = CautiousIntentionalWalkProb,
+            CautiousIntentionalWalkMinPowerRelax = CautiousIntentionalWalkMinPowerRelax,
         };
     }
 
