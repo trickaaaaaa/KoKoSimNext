@@ -559,8 +559,7 @@ namespace KokoSim.Unity.Match
         private static string NameOf(Player p)
             => p.UniformNumber > 0 ? p.UniformNumber + "  " + p.Name : p.Name;
 
-        private static string HandLabel(Player p)
-            => (p.Throws == Handedness.Left ? "左投" : "右投") + (p.Bats == Handedness.Left ? "左打" : "右打");
+        private static string HandLabel(Player p) => HandednessLabels.Combined(p.Throws, p.Bats);
 
         /// <summary>総合ランク（投手は投手能力・野手は打撃走守の平均）。表示専用。</summary>
         private static string GradeOf(Player p)

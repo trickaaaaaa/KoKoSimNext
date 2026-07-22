@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Unity.Shell;
 
@@ -206,7 +207,7 @@ namespace KokoSim.Unity.Member
                     var p = _roster[idx];
                     slot.Name = p.Name;
                     slot.GradeLabel = p.Grade + "年";
-                    slot.HandLabel = HandLabel(p);
+                    slot.HandLabel = HandednessLabels.Combined(p.Throws, p.Bats);
                     slot.RankGrade = n <= 9 ? SlotRank(p, n) : OverallGrade(p);
                     slot.IsCaptain = p.IsCaptain;
                     v.AssignedCount++;
@@ -315,15 +316,5 @@ namespace KokoSim.Unity.Member
         }
 
         private static string OverallGrade(DevelopingPlayer p) => Tiers.FromStrength(p.AverageLevel()).ToString();
-
-        // 投打（例「右投左打」）。列挙の名前先頭文字で判定（L=左, S=両, 既定=右）。
-        private static string HandLabel(DevelopingPlayer p)
-        {
-            var t = p.Throws.ToString();
-            var b = p.Bats.ToString();
-            var tj = t.StartsWith("L") ? "左投" : t.StartsWith("S") ? "両投" : "右投";
-            var bj = b.StartsWith("L") ? "左打" : b.StartsWith("S") ? "両打" : "右打";
-            return tj + bj;
-        }
     }
 }

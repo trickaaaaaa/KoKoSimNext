@@ -85,15 +85,7 @@ namespace KokoSim.Unity.Players
             var ability = new VisualElement();
             ability.AddToClassList("cell");
             ability.AddToClassList("cell--wide");
-            ability.AddToClassList("ability-cell");
-            foreach (var chip in r.Abilities)
-            {
-                ability.Add(UiComponents.RankChipLegacy(chip.Grade));
-                var lbl = new Label(chip.Label);
-                lbl.style.marginRight = 10;
-                lbl.style.fontSize = 11;
-                ability.Add(lbl);
-            }
+            ability.Add(UiComponents.CategoryRankChips(r.Strength));
             row.Add(ability);
 
             // 調子／故障（設計書03 §3.5・UI原則⑥）: 怪我中はこの列が「傷病名・段階」の警告表示になる。

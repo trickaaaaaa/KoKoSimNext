@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Unity.Shell;
 
@@ -314,7 +315,7 @@ namespace KokoSim.Unity.Training
                     NumText = NumTextAt(i),
                     BenchOut = _roster[i].UniformNumber == 0,
                     GradeLabel = src.Grade + "年",
-                    HandLabel = HandLabel(src),
+                    HandLabel = HandednessLabels.Combined(src.Throws, src.Bats),
                     OverallGrade = Tiers.FromStrength(src.AverageLevel()).ToString(),
                     PresetJp = _delegated[i] ? "委任" : PresetJp(_plans[i].Preset),
                     FocusSummary = _delegated[i] ? "コーチ一任" : FocusSummary(ResolvedAllocations(i)),
@@ -359,7 +360,7 @@ namespace KokoSim.Unity.Training
             view.SelNumText = NumTextAt(_selected);
             view.SelBenchOut = _roster[_selected].UniformNumber == 0;
             view.SelYear = sel.Grade + "年";
-            view.SelHand = HandLabel(sel);
+            view.SelHand = HandednessLabels.Combined(sel.Throws, sel.Bats);
             view.SelGrade = Tiers.FromStrength(sel.AverageLevel()).ToString();
             view.SelNominated = _nominated.Contains(_selected);
             view.SelNomLabel = view.SelNominated ? "個別指導 指名中" : "個別指導に指名";
@@ -561,15 +562,6 @@ namespace KokoSim.Unity.Training
             var names = new List<string>();
             foreach (var a in sorted) { if (names.Count >= 3) break; names.Add(MenuJp(a.Menu)); }
             return names.Count == 0 ? "休養のみ" : string.Join("・", names);
-        }
-
-        private static string HandLabel(DevelopingPlayer p)
-        {
-            var t = p.Throws.ToString();
-            var b = p.Bats.ToString();
-            var tj = t.StartsWith("L") ? "左投" : t.StartsWith("S") ? "両投" : "右投";
-            var bj = b.StartsWith("L") ? "左打" : b.StartsWith("S") ? "両打" : "右打";
-            return tj + bj;
         }
 
         private static string PresetJp(TrainingPreset preset) => preset switch

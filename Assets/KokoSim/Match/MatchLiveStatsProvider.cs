@@ -85,9 +85,8 @@ namespace KokoSim.Unity.Match
             _ => "—",
         };
 
-        public static string ThrowsLabel(Handedness h) => (h == Handedness.Left ? "左" : "右") + "投";
-        public static string BatsLabel(Handedness h) =>
-            (h == Handedness.Switch ? "両" : h == Handedness.Left ? "左" : "右") + "打";
+        public static string ThrowsLabel(Handedness h) => HandednessLabels.Throws(h);
+        public static string BatsLabel(Handedness h) => HandednessLabels.Bats(h);
 
         /// <summary>打率表記（.342／通算なしは「—」）。</summary>
         public static string Avg(BattingStatLine? b) => b is null ? "—" : FormatAvg(b.Average);

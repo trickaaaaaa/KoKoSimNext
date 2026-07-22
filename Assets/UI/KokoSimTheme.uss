@@ -279,7 +279,6 @@
 .cell--name { flex-grow: 2.2; }
 .cell--wide { flex-grow: 3.2; }
 .cell--narrow { flex-grow: 0.8; }
-.ability-cell { flex-direction: row; flex-wrap: wrap; align-items: center; }
 
 /* ===== 練習計画 ===== */
 .day__e { font-size: 14px; color: #9AA5A0; margin-top: 3px; -unity-text-align: middle-center; white-space: normal; }
