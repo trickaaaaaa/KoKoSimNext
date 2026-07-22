@@ -23,9 +23,6 @@ namespace KokoSim.Unity.Players
             var sortBtn = _root.Q<Button>("sort-btn");
             if (sortBtn != null) sortBtn.clicked += () => { _state.CycleSort(); Render(); };
 
-            var filterBtn = _root.Q<Button>("filter-btn");
-            if (filterBtn != null) filterBtn.clicked += () => { _state.CycleFilter(); Render(); };
-
             Render();
         }
 
@@ -33,9 +30,8 @@ namespace KokoSim.Unity.Players
         {
             var v = _state.BuildView();
 
-            SetText("counts", "計" + v.Total + "名（野" + v.BatterCount + "・投" + v.PitcherCount + "）");
+            SetText("counts", "計" + v.Total + "名");
             SetText("sort-btn", "並び: " + v.SortLabel);
-            SetText("filter-btn", "表示: " + v.FilterLabel);
 
             // 共通トップバー（スコアボード）: 掲示板の升目（週・夏予選までの残り）とチーム総合力ランクを埋める。
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
@@ -70,7 +66,6 @@ namespace KokoSim.Unity.Players
             row.Add(Cell(r.Name, "cell--name"));
             // 学年は「2年」の混植なので数字だけ Oswald に載せる（決定2-B）。
             row.Add(KokoSim.Unity.Components.UiComponents.NumUnitAuto(r.GradeLabel, false, "cell cell--narrow"));
-            row.Add(Cell(r.Position, "cell--narrow"));
 
             // カテゴリ別ランク（打撃力/走力/守備力/投手力）: 総合ランクは廃止（Issue #30・2026-07-22 owner決定）。
             var ability = new VisualElement();

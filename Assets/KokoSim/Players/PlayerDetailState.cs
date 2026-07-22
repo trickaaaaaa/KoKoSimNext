@@ -63,7 +63,6 @@ namespace KokoSim.Unity.Players
     public sealed class PlayerDetailView
     {
         public string Number = "1";
-        public string RoleLabel = "野手";
         public string Name = "";
         public string Condition = "普通";
         public string ConditionColorHex = "#EFF4EA";
@@ -72,7 +71,6 @@ namespace KokoSim.Unity.Players
         /// <summary>故障表示（設計書03 §3.5: 傷病名・部位・段階・全治まで残り週）。健常なら空文字。</summary>
         public string Injury = "";
         public string GradeLabel = "1年";
-        public string PosParen = "野手";
         public string ThrowsBats = "右投右打";
         public bool IsCaptain;
         /// <summary>この選手を今この週に主将へ指名できるか（設計書09 §8: 新チーム発足時のみ）。</summary>
@@ -109,6 +107,9 @@ namespace KokoSim.Unity.Players
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
 
+        // カテゴリ別ランクの重み（一覧と同じ既定係数を流用, Issue #30・#93 レーダー統一）。
+        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+
         public PlayerDetailState()
         {
             _roster = RosterService.Active;   // 主将は生成時に EnsureCaptain 済み（必ず1名）
@@ -141,7 +142,6 @@ namespace KokoSim.Unity.Players
             {
                 Number = (index + 1).ToString(),
                 Name = p.Name,
-                IsPitcher = p.IsPitcher,
                 GradeLabel = p.Grade + "年",
                 ThrowsBats = ThrowsBatsJp(p.Throws, p.Bats),
                 Condition = ConditionLabels.Jp(condition),
@@ -158,18 +158,9 @@ namespace KokoSim.Unity.Players
             v.OverallValue = overall;
             v.OverallGrade = Tiers.FromStrength(overall).ToString();
 
-            if (p.IsPitcher)
-            {
-                v.RoleLabel = "投手";
-                v.PosParen = "投手（P）";
-                v.PitchStyle = "投法：オーバースロー"; // 投法はモデル未保持のため既定表記
-                v.TopVelocityKmh = Kmh(p.Level(AbilityKind.Velocity));
-            }
-            else
-            {
-                v.RoleLabel = "野手";
-                v.PosParen = "野手";
-            }
+            // 投法・最速は全選手で表示する（誰を投手に据えるかはプレイヤーが決めるため、判断材料を全員分出す, Issue #93）。
+            v.PitchStyle = "投法：オーバースロー"; // 投法はモデル未保持のため既定表記
+            v.TopVelocityKmh = Kmh(p.Level(AbilityKind.Velocity));
 
             // 投手能力・野手能力（両方表示：モック準拠）。
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Velocity, "球速"));
@@ -186,24 +177,14 @@ namespace KokoSim.Unity.Players
             v.FielderAbilities.Add(Bar(p, AbilityKind.Fielding, "守備"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Catching, "捕球"));
 
-            // レーダー（現在能力から実描画）。
-            if (p.IsPitcher)
-            {
-                v.Radar.Add(Axis(p, AbilityKind.Velocity, "球速"));
-                v.Radar.Add(Axis(p, AbilityKind.Control, "制球"));
-                v.Radar.Add(Axis(p, AbilityKind.Stamina, "スタミナ"));
-                v.Radar.Add(Axis(p, AbilityKind.PitchRank, "球種"));
-                v.Radar.Add(new RadarAxis { Label = "精神", Value01 = p.Mental / 100f });
-            }
-            else
-            {
-                v.Radar.Add(Axis(p, AbilityKind.Contact, "ミート"));
-                v.Radar.Add(Axis(p, AbilityKind.Power, "パワー"));
-                v.Radar.Add(Axis(p, AbilityKind.Speed, "走力"));
-                v.Radar.Add(Axis(p, AbilityKind.ArmStrength, "肩"));
-                v.Radar.Add(Axis(p, AbilityKind.Fielding, "守備"));
-                v.Radar.Add(Axis(p, AbilityKind.Discipline, "選球眼"));
-            }
+            // 能力バランス（レーダー）: 全選手で #30 の4カテゴリ軸（打撃力/走力/守備力/投手力）＋精神に統一する。
+            // 役割（投/野）でUIの軸を切り替えない（誰を投手にするかはプレイヤーが決める, Issue #93）。
+            var strength = PlayerStrengthProfile.Compute(p, Coeff);
+            v.Radar.Add(CategoryAxis("打撃力", strength.Batting));
+            v.Radar.Add(CategoryAxis("走力", strength.Mobility));
+            v.Radar.Add(CategoryAxis("守備力", strength.Defense));
+            v.Radar.Add(CategoryAxis("投手力", strength.Pitching));
+            v.Radar.Add(new RadarAxis { Label = "精神", Value01 = p.Mental / 100f });
 
             // 隠しパラメータ（推定）: 精神力のみ判明扱い、他はスカウト/面談で段階判明＝？。
             v.Hidden.Add(new HiddenParam { Key = "才能上限", Value = "？", Known = false });
@@ -220,13 +201,13 @@ namespace KokoSim.Unity.Players
             v.Hidden.Add(new HiddenParam { Key = "統率傾向", Value = p.Leadership.ToString(), Known = p.IsCaptain });
             v.Hidden.Add(new HiddenParam { Key = "故障耐性", Value = "？", Known = false });
 
-            // 球種データ（投手のみ・表示近似）。
-            if (p.IsPitcher)
+            // 球種データ（全選手・表示近似）。誰を投手に据えるかはプレイヤーが決めるため、球種チャートは
+            // 役割でゲートせず全員に出す。習得球種が無ければストレートだけを表示する（Issue #93）。
             {
                 v.HasPitchData = true;
                 var baseVel = p.Level(AbilityKind.Velocity);
 
-                // ストレートは全投手が投げる基準球。LearnedPitches に無ければ上方向に必ず追加する。
+                // ストレートは基準球。LearnedPitches に無ければ上方向に必ず追加する（未習得選手はこの1球だけになる）。
                 var hasFast = false;
                 foreach (var lp in p.LearnedPitches) if (lp.Type == PitchType.Fastball) hasFast = true;
                 if (!hasFast)
@@ -280,25 +261,9 @@ namespace KokoSim.Unity.Players
             }
             v.HasSkills = v.Skills.Count > 0;
 
-            // 簡易成績（公式戦ログ未接続＝プレースホルダ）。
-            if (p.IsPitcher)
-            {
-                v.TournamentStats.Add(("防御率", "—"));
-                v.TournamentStats.Add(("勝敗", "—"));
-                v.TournamentStats.Add(("奪三振", "—"));
-                v.CareerStats.Add(("防御率", "—"));
-                v.CareerStats.Add(("勝敗", "—"));
-                v.CareerStats.Add(("奪三振", "—"));
-            }
-            else
-            {
-                v.TournamentStats.Add(("打率", "—"));
-                v.TournamentStats.Add(("本塁打", "—"));
-                v.TournamentStats.Add(("打点", "—"));
-                v.CareerStats.Add(("打率", "—"));
-                v.CareerStats.Add(("本塁打", "—"));
-                v.CareerStats.Add(("打点", "—"));
-            }
+            // 簡易成績（公式戦ログ未接続＝プレースホルダ）。役割でUIを切り替えず、打撃・投手の両方を全選手で出す（Issue #93）。
+            AddBothStats(v.TournamentStats);
+            AddBothStats(v.CareerStats);
             return v;
         }
 
@@ -324,8 +289,20 @@ namespace KokoSim.Unity.Players
             };
         }
 
-        private static RadarAxis Axis(DevelopingPlayer p, AbilityKind k, string label)
-            => new RadarAxis { Label = label, Value01 = System.Math.Max(0f, System.Math.Min(1f, p.Level(k) / 100f)) };
+        // カテゴリ別ランク（0〜100 スケール）を 0〜1 のレーダー軸へ正規化する（Issue #93）。
+        private static RadarAxis CategoryAxis(string label, double value)
+            => new RadarAxis { Label = label, Value01 = System.Math.Max(0f, System.Math.Min(1f, (float)value / 100f)) };
+
+        // 簡易成績（打撃3項＋投手3項）を両方積む。役割でUIを切り替えない（Issue #93）。データ未接続なので値は「—」。
+        private static void AddBothStats(List<(string Label, string Value)> stats)
+        {
+            stats.Add(("打率", "—"));
+            stats.Add(("本塁打", "—"));
+            stats.Add(("打点", "—"));
+            stats.Add(("防御率", "—"));
+            stats.Add(("勝敗", "—"));
+            stats.Add(("奪三振", "—"));
+        }
 
         // 球速内部値(1〜100)→km/h（表示近似。実シムの物理変換はエンジン係数側）。
         private static int Kmh(int velLevel)

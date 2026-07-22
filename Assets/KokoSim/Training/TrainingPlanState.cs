@@ -66,8 +66,6 @@ namespace KokoSim.Unity.Training
         public bool BenchOut;
         public string GradeLabel = "1年";
         public string HandLabel = "右投右打";
-        public string Position = "野";
-        public bool IsPitcher;
         public string OverallGrade = "C";  // 総合 S〜G
         public string PresetJp = "お任せ";
         public string FocusSummary = "";   // 現在の主眼メニュー（分の多い順・行の余白に表示）
@@ -108,7 +106,6 @@ namespace KokoSim.Unity.Training
         public int SelectedTotal;
         public int SelectedRemaining;
         public bool SelectedIsCustom;
-        public bool SelectedIsPitcher;
         public bool DelegateOn;
         public string DelegateStateLabel = "手動";
 
@@ -318,8 +315,6 @@ namespace KokoSim.Unity.Training
                     BenchOut = _roster[i].UniformNumber == 0,
                     GradeLabel = src.Grade + "年",
                     HandLabel = HandLabel(src),
-                    Position = src.IsPitcher ? "投" : "野",
-                    IsPitcher = src.IsPitcher,
                     OverallGrade = Tiers.FromStrength(src.AverageLevel()).ToString(),
                     PresetJp = _delegated[i] ? "委任" : PresetJp(_plans[i].Preset),
                     FocusSummary = _delegated[i] ? "コーチ一任" : FocusSummary(ResolvedAllocations(i)),
@@ -368,7 +363,6 @@ namespace KokoSim.Unity.Training
             view.SelGrade = Tiers.FromStrength(sel.AverageLevel()).ToString();
             view.SelNominated = _nominated.Contains(_selected);
             view.SelNomLabel = view.SelNominated ? "個別指導 指名中" : "個別指導に指名";
-            view.SelectedIsPitcher = sel.IsPitcher;
             view.DelegateOn = _delegated[_selected];
             view.DelegateStateLabel = _delegated[_selected] ? "委任中" : "手動";
 

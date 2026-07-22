@@ -21,7 +21,6 @@
                         <ui:Label class="panel__title" text="部員名簿" />
                         <ui:VisualElement class="toolbar__ctrls">
                             <ui:Label name="counts" class="toolbar__counts" text="計28名" />
-                            <ui:Button name="filter-btn" class="chip-btn" text="表示: 全員" />
                             <ui:Button name="sort-btn" class="chip-btn" text="並び: 総合順" />
                         </ui:VisualElement>
                     </ui:VisualElement>
@@ -29,7 +28,6 @@
                     <ui:VisualElement class="row row--head">
                         <ui:Label class="cell cell--head cell--name" text="選手" />
                         <ui:Label class="cell cell--head cell--narrow" text="学年" />
-                        <ui:Label class="cell cell--head cell--narrow" text="守備" />
                         <ui:Label class="cell cell--head cell--wide" text="カテゴリ別ランク" />
                         <ui:Label class="cell cell--head cell--narrow" text="調子／故障" />
                     </ui:VisualElement>

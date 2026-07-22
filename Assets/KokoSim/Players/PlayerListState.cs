@@ -10,7 +10,6 @@ using KokoSim.Unity.Shell;
 namespace KokoSim.Unity.Players
 {
     public enum PlayerSort { Overall, Grade, Condition, Name }
-    public enum PositionFilter { All, Batter, Pitcher }
 
     public sealed class AbilityChip
     {
@@ -24,8 +23,6 @@ namespace KokoSim.Unity.Players
         public int Index;                 // roster 生成順の安定 index（詳細画面へ受け渡す）
         public string Name = "";
         public string GradeLabel = "1年";
-        public string Position = "野";
-        public bool IsPitcher;
         /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力の4つ, Issue #30）。総合ランクは廃止（2026-07-22 owner決定）。</summary>
         public List<AbilityChip> Abilities = new List<AbilityChip>();
         public string Condition = "普通";   // 絶好調 / 好調 / 普通 / 不調 / 絶不調（表示文字列）
@@ -39,18 +36,14 @@ namespace KokoSim.Unity.Players
     {
         public string Title = "選手一覧";
         public int Total;
-        public int BatterCount;
-        public int PitcherCount;
         public PlayerSort Sort;
-        public PositionFilter Filter;
         public string SortLabel = "";
-        public string FilterLabel = "";
         public string TeamRankGrade = "C";   // 共通トップバー（スコアボード）へ表示するチーム総合力ランク
         public List<PlayerRow> Rows = new List<PlayerRow>();
     }
 
     /// <summary>
-    /// 選手一覧の状態。純エンジンで生成した部員をソート/フィルタして表に整形する。
+    /// 選手一覧の状態。純エンジンで生成した部員をソートして表に整形する。
     /// ホーム画面と同じ seed=42 の部員を再現し、同一チームとして見せる。
     /// </summary>
     public sealed class PlayerListState
@@ -62,7 +55,6 @@ namespace KokoSim.Unity.Players
         private readonly Dictionary<DevelopingPlayer, int> _indexOf = new Dictionary<DevelopingPlayer, int>();
 
         public PlayerSort Sort { get; private set; } = PlayerSort.Overall;
-        public PositionFilter Filter { get; private set; } = PositionFilter.All;
 
         public PlayerListState()
         {
@@ -73,27 +65,18 @@ namespace KokoSim.Unity.Players
         }
 
         public void SetSort(PlayerSort sort) => Sort = sort;
-        public void SetFilter(PositionFilter filter) => Filter = filter;
 
         /// <summary>ソートを順送りで切り替える（ボタン1つで循環）。</summary>
         public void CycleSort()
             => Sort = (PlayerSort)(((int)Sort + 1) % 4);
-
-        /// <summary>フィルタを順送りで切り替える。</summary>
-        public void CycleFilter()
-            => Filter = (PositionFilter)(((int)Filter + 1) % 3);
 
         public PlayerListView BuildView()
         {
             var view = new PlayerListView
             {
                 Total = _roster.Count,
-                BatterCount = _roster.Count(p => !p.IsPitcher),
-                PitcherCount = _roster.Count(p => p.IsPitcher),
                 Sort = Sort,
-                Filter = Filter,
                 SortLabel = SortJp(Sort),
-                FilterLabel = FilterJp(Filter),
             };
 
             // 共通トップバー用：6指標のリーグ標準化総合からチーム総合力ランクを算出（③, 全画面統一）。
@@ -101,8 +84,6 @@ namespace KokoSim.Unity.Players
                 view.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(_roster);
 
             IEnumerable<DevelopingPlayer> q = _roster;
-            if (Filter == PositionFilter.Batter) q = q.Where(p => !p.IsPitcher);
-            else if (Filter == PositionFilter.Pitcher) q = q.Where(p => p.IsPitcher);
 
             switch (Sort)
             {
@@ -124,8 +105,6 @@ namespace KokoSim.Unity.Players
                 Index = _indexOf.TryGetValue(p, out var idx) ? idx : 0,
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
-                Position = p.IsPitcher ? "投" : "野",
-                IsPitcher = p.IsPitcher,
                 Condition = ConditionLabels.Jp(condition),
                 ConditionLevel = condition,
                 // 故障（設計書03 §3.5・UI原則⑥）: 一覧をスキャンするだけで離脱者が拾えるようにする。
@@ -160,17 +139,6 @@ namespace KokoSim.Unity.Players
                 case PlayerSort.Condition: return "調子順";
                 case PlayerSort.Name: return "名前順";
                 default: return s.ToString();
-            }
-        }
-
-        private static string FilterJp(PositionFilter f)
-        {
-            switch (f)
-            {
-                case PositionFilter.All: return "全員";
-                case PositionFilter.Batter: return "野手";
-                case PositionFilter.Pitcher: return "投手";
-                default: return f.ToString();
             }
         }
     }
