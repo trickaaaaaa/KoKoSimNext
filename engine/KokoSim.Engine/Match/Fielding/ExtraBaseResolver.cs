@@ -122,7 +122,9 @@ public static class ExtraBaseResolver
         FieldGeometry field, BatterAttributes batter, double batterToFirstSeconds, FieldingCoefficients c)
     {
         var ball = path.PositionAt(retrieveAtSeconds);
-        var ready = retrieveAtSeconds + c.OutfieldPickupSeconds + c.ThrowTransferSeconds;
+        var transferSeconds = retriever.Attributes.TransferSeconds(
+            c.ThrowTransferSeconds, c.TransferFieldingSlope, c.TransferSecondsFloor);
+        var ready = retrieveAtSeconds + c.OutfieldPickupSeconds + transferSeconds;
         var arm = retriever.Attributes.ThrowSpeedMps;
 
         double ThrowArrivesAt(Vector3D target)

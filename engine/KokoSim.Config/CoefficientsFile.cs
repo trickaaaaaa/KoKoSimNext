@@ -336,6 +336,8 @@ public static class CoefficientsLoader
         public double FlyApexThresholdM { get; set; } = D.FlyApexThresholdM;
         public double CatchReachFactor { get; set; } = D.CatchReachFactor;
         public double ThrowTransferSeconds { get; set; } = D.ThrowTransferSeconds;
+        public double TransferFieldingSlope { get; set; } = D.TransferFieldingSlope;
+        public double TransferSecondsFloor { get; set; } = D.TransferSecondsFloor;
         public double InfieldPlayOverheadSeconds { get; set; } = D.InfieldPlayOverheadSeconds;
         public double RunnerReactionSeconds { get; set; } = D.RunnerReactionSeconds;
         public double LeftBatterFirstStepBonusSeconds { get; set; } = D.LeftBatterFirstStepBonusSeconds;
@@ -364,6 +366,8 @@ public static class CoefficientsLoader
             FlyApexThresholdM = FlyApexThresholdM,
             CatchReachFactor = CatchReachFactor,
             ThrowTransferSeconds = ThrowTransferSeconds,
+            TransferFieldingSlope = TransferFieldingSlope,
+            TransferSecondsFloor = TransferSecondsFloor,
             InfieldPlayOverheadSeconds = InfieldPlayOverheadSeconds,
             RunnerReactionSeconds = RunnerReactionSeconds,
             LeftBatterFirstStepBonusSeconds = LeftBatterFirstStepBonusSeconds,
@@ -415,6 +419,8 @@ public static class CoefficientsLoader
         public double StealReactionSlope { get; set; } = D.StealReactionSlope;
         public double PitcherQuickSeconds { get; set; } = D.PitcherQuickSeconds;
         public double PopTransferSeconds { get; set; } = D.PopTransferSeconds;
+        public double TransferFieldingSlope { get; set; } = D.TransferFieldingSlope;
+        public double TransferSecondsFloor { get; set; } = D.TransferSecondsFloor;
         public double TagSeconds { get; set; } = D.TagSeconds;
         public double StealMarginScale { get; set; } = D.StealMarginScale;
         public double StealSuccessBias { get; set; } = D.StealSuccessBias;
@@ -509,6 +515,8 @@ public static class CoefficientsLoader
             StealReactionSlope = StealReactionSlope,
             PitcherQuickSeconds = PitcherQuickSeconds,
             PopTransferSeconds = PopTransferSeconds,
+            TransferFieldingSlope = TransferFieldingSlope,
+            TransferSecondsFloor = TransferSecondsFloor,
             TagSeconds = TagSeconds,
             StealMarginScale = StealMarginScale,
             StealSuccessBias = StealSuccessBias,

@@ -810,7 +810,8 @@ public static class GameEngine
                 var homePlaySituation = new HomePlaySituation(
                     new Vector3D(fp.FieldedX, 0, fp.FieldedZ),
                     fp.FieldedAtSeconds ?? fp.HangTimeSeconds,
-                    arm);
+                    arm,
+                    fp.FielderFieldingAbility ?? 50);
                 // aggression は中立固定（校風/ティア/采配の三層写像は残Q10）。
                 // 守備の内野深さ（G1）＝ゴロ凡打の三塁走者判定へ「前進で刺す/後退で献上」を反映。
                 homePlay = new HomePlayContext(

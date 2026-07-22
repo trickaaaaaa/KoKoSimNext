@@ -16,10 +16,14 @@ public enum HomePlayResult
 /// 本塁への送球の起点情報（外野が打球を処理した点・時刻・肩）。
 /// FieldingPlay から派生させて渡す（Slice C で配線）。座標は本塁原点・平面。
 /// </summary>
+/// <param name="OutfielderFieldingAbility">
+/// 処理野手の守備(Fielding)[1〜100]（トランスファー秒数の起点, Issue #36）。既定50＝従来の固定秒数と恒等。
+/// </param>
 public readonly record struct HomePlaySituation(
     Vector3D BallFieldedPoint,
     double BallFieldedAtSeconds,
-    double OutfielderThrowSpeedMps);
+    double OutfielderThrowSpeedMps,
+    int OutfielderFieldingAbility = 50);
 
 /// <summary>
 /// 本塁クロスプレーの解決（設計書12 §3, F2）。盗塁 <see cref="StealResolver"/> と同型の「時間の勝負」。
@@ -90,7 +94,9 @@ public static class HomePlayResolver
             throwTime = dist / s.OutfielderThrowSpeedMps; // 直接返球
         }
 
-        return s.BallFieldedAtSeconds + c.OutfieldTransferSeconds + throwTime + tagSeconds;
+        var outfieldTransfer = new FielderAttributes { Fielding = s.OutfielderFieldingAbility }.TransferSeconds(
+            c.OutfieldTransferSeconds, c.TransferFieldingSlope, c.TransferSecondsFloor);
+        return s.BallFieldedAtSeconds + outfieldTransfer + throwTime + tagSeconds;
     }
 
     /// <summary>本塁への送球所要時間[s]（後方互換: 送球先=原点・タッチ=HomeTagSeconds）。</summary>

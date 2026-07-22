@@ -94,6 +94,10 @@ fielding:
   fly_apex_threshold_m: 2.5
   catch_reach_factor: 1.00
   throw_transfer_seconds: 0.70
+  # トランスファー(捕球→送球の握り替え)の能力紐づけ（Issue #36, design-02 §1.2）。守備(Fielding−50)あたりの
+  # 短縮/延長。守備50で各baseSecondsと恒等（帯不変）。throw/pop/outfield/doubled_offの各transferへ共通適用。
+  transfer_fielding_slope: 0.003
+  transfer_seconds_floor: 0.15
   infield_play_overhead_seconds: 0.30  # 内野ゴロ処理の実戦オーバーヘッド（時間軸校正, §4.1b）
   runner_reaction_seconds: 0.45        # 実戦オフセット（設計書02 §4.1b: 走力50右で本塁→一塁≈4.2s）
   left_batter_first_step_bonus_seconds: 0.13  # 左打者は一塁が近く速い（§4.1b）
@@ -147,6 +151,10 @@ baserunning:
   steal_reaction_slope: 0.004
   pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
   pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋送球時間）
+  # トランスファーの能力紐づけ（Issue #36, design-02 §1.2, fielding.transfer_fielding_slope と同値）。
+  # pop/outfield/doubled_offの各transferへ適用。relay(中継)は具体的な選手識別を持たないため対象外。
+  transfer_fielding_slope: 0.003
+  transfer_seconds_floor: 0.15
   tag_seconds: 0.10
   steal_margin_scale: 0.22         # margin→成功確率のlogistic幅（Step4再校正: 肩差が効く幅に拡張）
   steal_success_bias: 0.38         # リーグ平均成功率の校正項（🟡, Step4再校正）

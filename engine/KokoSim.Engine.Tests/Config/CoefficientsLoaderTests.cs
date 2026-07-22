@@ -151,6 +151,12 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(0.30, bundle.Baserunning.DoubledOffTransferSeconds, 6);
         Assert.Equal(0.0, bundle.Baserunning.DoubledOffSuccessBias, 6);
 
+        // トランスファーの守備(Fielding)紐づけ（Issue #36, design-02 §1.2）も YAML から束縛される。
+        Assert.Equal(0.003, bundle.Fielding.TransferFieldingSlope, 6);
+        Assert.Equal(0.15, bundle.Fielding.TransferSecondsFloor, 6);
+        Assert.Equal(0.003, bundle.Baserunning.TransferFieldingSlope, 6);
+        Assert.Equal(0.15, bundle.Baserunning.TransferSecondsFloor, 6);
+
         // 守備の読み/ピッチアウト（G3, 設計書12 §5）の係数も YAML から束縛される。
         Assert.Equal(0.42, bundle.Baserunning.StealExpectednessIntercept, 6);
         Assert.Equal(0.50, bundle.Baserunning.StealReadIntercept, 6);

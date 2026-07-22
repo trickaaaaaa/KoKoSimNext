@@ -55,7 +55,9 @@ public static class StealResolver
         {
             var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
             var throwTime = throwDistance / catcher.ToFielder().ThrowSpeedMps;
-            var popTime = c.PopTransferSeconds + throwTime;
+            var transferSeconds = catcher.ToFielder().TransferSeconds(
+                c.PopTransferSeconds, c.TransferFieldingSlope, c.TransferSecondsFloor);
+            var popTime = transferSeconds + throwTime;
             defense = c.PitcherQuickSeconds + popTime + c.TagSeconds;
         }
         if (pitchout)

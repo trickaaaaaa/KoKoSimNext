@@ -55,8 +55,16 @@ public sealed record BaserunningCoefficients
     public double StealReactionSlope { get; init; } = 0.004;
     /// <summary>投手クイック[s]（投法補正は後回し, §2.2）。</summary>
     public double PitcherQuickSeconds { get; init; } = 1.40;
-    /// <summary>捕手の握り替え[s]（ポップタイム＝これ＋送球時間）。</summary>
+    /// <summary>捕手の握り替え[s]（守備50時の基準値。ポップタイム＝これ＋送球時間）。</summary>
     public double PopTransferSeconds { get; init; } = 0.70;
+    /// <summary>
+    /// トランスファー(捕球→送球の握り替え)秒数の短縮/延長の傾き[s/point]（守備Fielding(−50起点)あたり,
+    /// 設計書02 §1.2, Issue #36）。守備50で恒等（帯不変, 不変条件#5）。Pop/Outfield/DoubledOffの各transferへ適用。
+    /// Relay(中継)は具体的な選手識別を持たないため対象外（据え置き）。<see cref="Match.Fielding.FieldingCoefficients.TransferFieldingSlope"/>と同値。
+    /// </summary>
+    public double TransferFieldingSlope { get; init; } = 0.003;
+    /// <summary>トランスファー秒数の下限[s]（握り替えが無制限に速くならないための床）。</summary>
+    public double TransferSecondsFloor { get; init; } = 0.15;
     /// <summary>タッチ[s]。</summary>
     public double TagSeconds { get; init; } = 0.10;
     /// <summary>margin→成功確率のlogistic幅[s]（Step4再校正: 反応係数を上げ絶対タイムを現実化した分、

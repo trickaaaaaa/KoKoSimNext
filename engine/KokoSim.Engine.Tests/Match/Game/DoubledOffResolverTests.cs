@@ -102,4 +102,22 @@ public sealed class DoubledOffResolverTests
         var b = SafeRate(runner, 0.5, 15, 30, trials: 500, seed: 42);
         Assert.Equal(a, b);
     }
+
+    // --- トランスファー(捕球→送球の握り替え)の守備(Fielding)紐づけ（Issue #36, design-02 §1.2）---
+
+    [Fact]
+    public void DefenseReturnSeconds_DefaultFielderFieldingAbility_IsFifty()
+    {
+        var withoutParam = DoubledOffResolver.DefenseReturnSeconds(15, 30, C);
+        var withExplicit50 = DoubledOffResolver.DefenseReturnSeconds(15, 30, C, fielderFieldingAbility: 50);
+        Assert.Equal(withoutParam, withExplicit50, 9);
+    }
+
+    [Fact]
+    public void DefenseReturnSeconds_HigherFielderFielding_IsFaster()
+    {
+        var slow = DoubledOffResolver.DefenseReturnSeconds(15, 30, C, fielderFieldingAbility: 20);
+        var fast = DoubledOffResolver.DefenseReturnSeconds(15, 30, C, fielderFieldingAbility: 90);
+        Assert.True(fast < slow, $"守備が高いほど戻し送球が速くなっていない: slow={slow} fast={fast}");
+    }
 }

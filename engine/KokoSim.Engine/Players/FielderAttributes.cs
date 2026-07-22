@@ -41,6 +41,14 @@ public sealed record FielderAttributes
     public double ReactionDelaySeconds => 0.60 - Fielding * 0.004;
 
     /// <summary>
+    /// 送球への持ち替え(トランスファー)所要秒数（設計書02 §1.2, Issue #36）。
+    /// baseSeconds − (Fielding−50)×fieldingSlope、floorSeconds下限。Fielding=50でbaseSecondsと恒等
+    /// （帯不変, 不変条件#5）。傾き/下限は場面ごとの *Coefficients（data/coefficients.yaml 駆動）から渡す。
+    /// </summary>
+    public double TransferSeconds(double baseSeconds, double fieldingSlope, double floorSeconds)
+        => Math.Max(floorSeconds, baseSeconds - (Fielding - 50) * fieldingSlope);
+
+    /// <summary>
     /// 送球散布σ[cm]（設計書02 §1.2: 40 − Ac×0.36, 下限4cm）。
     /// 悪送球・逸れの大きさ。守備解決で中継/カバー連携・進塁を誘発する（2A では値のみ、適用は後続スライス）。
     /// </summary>

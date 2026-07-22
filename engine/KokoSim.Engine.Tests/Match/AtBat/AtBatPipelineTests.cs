@@ -65,6 +65,37 @@ public sealed class AtBatPipelineTests
         Assert.NotEqual(BattedBallResult.Foul, res);
     }
 
+    // --- トランスファー(捕球→送球の握り替え)の守備(Fielding)紐づけ（Issue #36, design-02 §1.2）---
+
+    [Fact]
+    public void FieldingResolver_InfieldGrounder_AtFieldingFifty_TransferSlopeHasNoEffect()
+    {
+        // 守備50はトランスファー傾きの起点＝どんな傾き値でも影響が0（帯不変, 不変条件#5）。
+        var ball = new BattedBall { ExitVelocityMps = 32, LaunchAngleDeg = -3, BearingDeg = 5 };
+        var fielders = Field.StandardAlignment(new FielderAttributes { Fielding = 50 });
+        var withSlope = FieldingResolver.ResolveDetailed(ball, Field, Aero, BatterAttributes.LeagueAverage,
+            fielders, new FieldingCoefficients(), new Xoshiro256Random(3));
+        var withoutSlope = FieldingResolver.ResolveDetailed(ball, Field, Aero, BatterAttributes.LeagueAverage,
+            fielders, new FieldingCoefficients { TransferFieldingSlope = 0 }, new Xoshiro256Random(3));
+        Assert.NotNull(withSlope.ThrowArriveSeconds);
+        Assert.Equal(withSlope.ThrowArriveSeconds, withoutSlope.ThrowArriveSeconds);
+    }
+
+    [Fact]
+    public void FieldingResolver_InfieldGrounder_HigherInfielderFielding_ThrowArrivesSooner()
+    {
+        var ball = new BattedBall { ExitVelocityMps = 32, LaunchAngleDeg = -3, BearingDeg = 5 };
+        var coeff = new FieldingCoefficients();
+        var slow = FieldingResolver.ResolveDetailed(ball, Field, Aero, BatterAttributes.LeagueAverage,
+            Field.StandardAlignment(new FielderAttributes { Fielding = 20 }), coeff, new Xoshiro256Random(3));
+        var fast = FieldingResolver.ResolveDetailed(ball, Field, Aero, BatterAttributes.LeagueAverage,
+            Field.StandardAlignment(new FielderAttributes { Fielding = 90 }), coeff, new Xoshiro256Random(3));
+        Assert.NotNull(slow.ThrowArriveSeconds);
+        Assert.NotNull(fast.ThrowArriveSeconds);
+        Assert.True(fast.ThrowArriveSeconds < slow.ThrowArriveSeconds,
+            $"守備が高いほど送球到達が早くなっていない: slow={slow.ThrowArriveSeconds} fast={fast.ThrowArriveSeconds}");
+    }
+
     // --- 打席解決 ---
 
     [Fact]

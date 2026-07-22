@@ -39,8 +39,17 @@ public sealed record FieldingCoefficients
     /// </summary>
     public double CatchReachCapSeconds { get; init; } = 4.00;
 
-    /// <summary>送球の持ち替え・リリース所要[s]。</summary>
+    /// <summary>送球の持ち替え・リリース所要[s]（守備50時の基準値。実効値は<see cref="FielderAttributes.TransferSeconds"/>）。</summary>
     public double ThrowTransferSeconds { get; init; } = 0.70;
+
+    /// <summary>
+    /// トランスファー(捕球→送球の握り替え)秒数の短縮/延長の傾き[s/point]（守備Fielding(−50起点)あたり,
+    /// 設計書02 §1.2, Issue #36）。守備50で恒等（帯不変, 不変条件#5）。
+    /// </summary>
+    public double TransferFieldingSlope { get; init; } = 0.003;
+
+    /// <summary>トランスファー秒数の下限[s]（握り替えが無制限に速くならないための床）。</summary>
+    public double TransferSecondsFloor { get; init; } = 0.15;
 
     /// <summary>
     /// 内野ゴロ処理の実戦オーバーヘッド[s]（設計書02 §4.1b の時間軸校正）。捕球姿勢づくり・ステップ・
