@@ -26,8 +26,7 @@ namespace KokoSim.Unity.Players
         public string GradeLabel = "1年";
         public string Position = "野";
         public bool IsPitcher;
-        public string OverallGrade = "D";
-        public int OverallValue;
+        /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力の4つ, Issue #30）。総合ランクは廃止（2026-07-22 owner決定）。</summary>
         public List<AbilityChip> Abilities = new List<AbilityChip>();
         public string Condition = "普通";   // 絶好調 / 好調 / 普通 / 不調 / 絶不調（表示文字列）
         // 色分岐はこの5段階 enum で行う（表示文字列で比較しない。到達不能分岐の再発防止）。
@@ -56,6 +55,9 @@ namespace KokoSim.Unity.Players
     /// </summary>
     public sealed class PlayerListState
     {
+        // カテゴリ別ランクの重み（チーム総合力と同じ既定係数を流用, Issue #30・2026-07-22 owner決定 候補A）。
+        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         private readonly Dictionary<DevelopingPlayer, int> _indexOf = new Dictionary<DevelopingPlayer, int>();
 
@@ -116,7 +118,6 @@ namespace KokoSim.Unity.Players
 
         private PlayerRow BuildRow(DevelopingPlayer p)
         {
-            var overall = (int)System.Math.Round(p.AverageLevel());
             var condition = KokoSim.Engine.Players.FormModel.Quantize(p.ConditionValue);
             var row = new PlayerRow
             {
@@ -125,8 +126,6 @@ namespace KokoSim.Unity.Players
                 GradeLabel = p.Grade + "年",
                 Position = p.IsPitcher ? "投" : "野",
                 IsPitcher = p.IsPitcher,
-                OverallValue = overall,
-                OverallGrade = Tiers.FromStrength(overall).ToString(),
                 Condition = ConditionLabels.Jp(condition),
                 ConditionLevel = condition,
                 // 故障（設計書03 §3.5・UI原則⑥）: 一覧をスキャンするだけで離脱者が拾えるようにする。
@@ -136,28 +135,20 @@ namespace KokoSim.Unity.Players
                       + KokoSim.Unity.Shell.InjuryLabel.Severity(p.Injury),
             };
 
-            if (p.IsPitcher)
-            {
-                row.Abilities.Add(Chip(p, AbilityKind.Velocity, "球速"));
-                row.Abilities.Add(Chip(p, AbilityKind.Control, "制球"));
-                row.Abilities.Add(Chip(p, AbilityKind.Stamina, "スタミナ"));
-                row.Abilities.Add(Chip(p, AbilityKind.PitchRank, "球種"));
-            }
-            else
-            {
-                row.Abilities.Add(Chip(p, AbilityKind.Contact, "ミート"));
-                row.Abilities.Add(Chip(p, AbilityKind.Power, "パワー"));
-                row.Abilities.Add(Chip(p, AbilityKind.Speed, "走力"));
-                row.Abilities.Add(Chip(p, AbilityKind.ArmStrength, "肩"));
-                row.Abilities.Add(Chip(p, AbilityKind.Fielding, "守備"));
-            }
+            // カテゴリ別ランク（打撃力/走力/守備力/投手力）: 野手/投手を問わず常に4つ計算する
+            // （Issue #30・2026-07-22 owner決定 候補A。非該当側も生成時の余技能力値からそのまま算出する）。
+            var strength = PlayerStrengthProfile.Compute(p, Coeff);
+            row.Abilities.Add(CategoryChip("打撃力", strength.Batting));
+            row.Abilities.Add(CategoryChip("走力", strength.Mobility));
+            row.Abilities.Add(CategoryChip("守備力", strength.Defense));
+            row.Abilities.Add(CategoryChip("投手力", strength.Pitching));
             return row;
         }
 
-        private static AbilityChip Chip(DevelopingPlayer p, AbilityKind k, string label)
+        private static AbilityChip CategoryChip(string label, double value)
         {
-            var v = p.Level(k);
-            return new AbilityChip { Grade = Tiers.FromStrength(v).ToString(), Label = label, Value = v };
+            var v = (int)System.Math.Round(value);
+            return new AbilityChip { Grade = Tiers.FromStrength(value).ToString(), Label = label, Value = v };
         }
 
         private static string SortJp(PlayerSort s)

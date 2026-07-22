@@ -72,19 +72,7 @@ namespace KokoSim.Unity.Players
             row.Add(KokoSim.Unity.Components.UiComponents.NumUnitAuto(r.GradeLabel, false, "cell cell--narrow"));
             row.Add(Cell(r.Position, "cell--narrow"));
 
-            // 総合（等級チップ）
-            var overall = new VisualElement();
-            overall.AddToClassList("cell");
-            overall.AddToClassList("cell--narrow");
-            overall.style.flexDirection = FlexDirection.Row;
-            overall.style.alignItems = Align.Center;
-            overall.Add(UiComponents.RankChipLegacy(r.OverallGrade));
-            var overallVal = new Label(r.OverallValue.ToString());   // 純数値＝コンデンス体（決定2-B）
-            overallVal.AddToClassList("f-num-bd");
-            overall.Add(overallVal);
-            row.Add(overall);
-
-            // 主要能力（チップ＋ラベルの並び）
+            // カテゴリ別ランク（打撃力/走力/守備力/投手力）: 総合ランクは廃止（Issue #30・2026-07-22 owner決定）。
             var ability = new VisualElement();
             ability.AddToClassList("cell");
             ability.AddToClassList("cell--wide");
