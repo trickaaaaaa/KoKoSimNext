@@ -143,9 +143,10 @@ namespace KokoSim.Unity.Shell
                 qualify: s => s.Batting.PlateAppearances >= paNeeded && s.Batting.AtBats > 0,
                 key: s => s.Batting.Ops,
                 text: s => Avg3(s.Batting.Ops)));
-            // 盗塁は枠だけ用意する。エンジンが選手別の盗塁を集計していないため常に空欄
-            // （TacticsTally は GameResult にチーム単位でしか無く、選手成績へ畳み込まれていない）。
-            rows.Add(Placeholder("打撃", "盗塁"));
+            rows.Add(Build(book, names, "打撃", "盗塁", descending: true,
+                qualify: s => s.Batting.StolenBases > 0,
+                key: s => s.Batting.StolenBases,
+                text: s => s.Batting.StolenBases.ToString()));
 
             // 投手。率系（防御率・WHIP）は規定投球回、数系（勝利・奪三振・投球回）は1以上。
             rows.Add(Build(book, names, "投手", "防御率", descending: false,

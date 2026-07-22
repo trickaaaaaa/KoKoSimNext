@@ -50,6 +50,9 @@ public sealed record GameResult
     /// <summary>個人投手成績（登板順）。</summary>
     public IReadOnlyList<PitchingLine> AwayPitching { get; init; } = Array.Empty<PitchingLine>();
     public IReadOnlyList<PitchingLine> HomePitching { get; init; } = Array.Empty<PitchingLine>();
+    /// <summary>個人守備成績（失策があった選手のみ。issue #91）。合計は AwayErrors/HomeErrors と一致する。</summary>
+    public IReadOnlyList<FieldingLine> AwayFielding { get; init; } = Array.Empty<FieldingLine>();
+    public IReadOnlyList<FieldingLine> HomeFielding { get; init; } = Array.Empty<FieldingLine>();
 
     /// <summary>采配の集計（盗塁・犠打・スクイズ。無指示＝全ゼロ）。設計書09/11。</summary>
     public TacticsTally AwayTactics { get; init; } = new();
@@ -189,6 +192,8 @@ public static class GameEngine
             HomeBatting = home.BuildBattingLines(),
             AwayPitching = away.BuildPitchingLines(),
             HomePitching = home.BuildPitchingLines(),
+            AwayFielding = away.BuildFieldingLines(),
+            HomeFielding = home.BuildFieldingLines(),
             AwayTactics = TallyOf(away),
             HomeTactics = TallyOf(home),
             Injuries = p.Injuries,
@@ -530,7 +535,7 @@ public static class GameEngine
                             bases.First, defense.Catcher, currentPitcher, stealStart, ctx.Baserunning, rng);
                         var safe = StealResolver.Resolve(
                             bases.First, defense.Catcher, ctx.Baserunning, rng, pitchout, stealStart) == StealResult.Safe;
-                        offense.RecordSteal(safe);
+                        offense.RecordSteal(bases.First, safe);
                         // 全力疾走・スライディング（設計書03 §3.5）: 盗塁企図ごとに走者が受傷しうる。
                         if (bases.First is { } slider)
                         {
@@ -582,7 +587,7 @@ public static class GameEngine
                         var safe = StealResolver.Resolve(
                             bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart,
                             StealTarget.Third) == StealResult.Safe;
-                        offense.RecordSteal(safe);
+                        offense.RecordSteal(bases.Second, safe);
                         if (bases.Second is { } thirdSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -615,7 +620,7 @@ public static class GameEngine
                         var safe = StealResolver.Resolve(
                             bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart,
                             StealTarget.Home) == StealResult.Safe;
-                        offense.RecordSteal(safe);
+                        offense.RecordSteal(bases.Third, safe);
                         if (bases.Third is { } homeSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -978,10 +983,20 @@ public static class GameEngine
                 timeline = timeline with { Captions = caps };
             }
 
+            // 失策の個人帰属（issue #91）: FielderRole（守備位置）から当該選手を引く。守備位置は必ず埋まっている
+            // ため通常は解決できるが、万一 null でもチーム計（AddError相当）は FinishPlateAppearance 側で必ず加算する。
+            Player? errorFielder = null;
+            Match.Field.FieldPosition errorRole = default;
+            if (res.Result == PlateAppearanceResult.ReachedOnError && res.Play is { FielderRole: { } eRole })
+            {
+                errorRole = eRole;
+                errorFielder = defense.PlayerAtPosition(eRole);
+            }
+
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
-                batterOrder, res.PitchLog);
+                batterOrder, res.PitchLog, errorFielder, errorRole);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -1015,10 +1030,12 @@ public static class GameEngine
         bool baseFirstBefore = false, bool baseSecondBefore = false, bool baseThirdBefore = false,
         bool baseFirstAfter = false, bool baseSecondAfter = false, bool baseThirdAfter = false,
         int batterOrder = 0,
-        IReadOnlyList<AtBat.PitchRecord>? pitchLog = null)
+        IReadOnlyList<AtBat.PitchRecord>? pitchLog = null,
+        Player? errorFielder = null,
+        Match.Field.FieldPosition errorRole = default)
     {
         if (result.IsHit()) offense.AddHit();
-        if (result == PlateAppearanceResult.ReachedOnError) defense.AddError();
+        if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
         offense.RecordBatting(batter, result, runs);
         defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches);
         defense.NotePitchingResult(result, ctx.Tactics.RattledConsecutiveBaserunners);
@@ -1084,7 +1101,7 @@ public static class GameEngine
 
         var catcher = defense.Catcher;
         var safe = StealResolver.Resolve(runner, catcher, ctx.Baserunning, rng) == StealResult.Safe;
-        offense.RecordSteal(safe);
+        offense.RecordSteal(runner, safe);
         if (safe)
         {
             bases.Second = runner;
