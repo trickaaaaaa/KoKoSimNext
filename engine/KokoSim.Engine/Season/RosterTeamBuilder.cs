@@ -56,11 +56,16 @@ public static class RosterTeamBuilder
             if (captainDp != null && ReferenceEquals(dp, captainDp)) captainPlayer = pl;
         }
 
+        // 守備位置適性を反映した本職優先の割当（設計書01 §1.1, OPEN-QUESTIONS 未決2b）。
+        // 打順（fielders の能力順）はそのまま維持し、どのポジションに就くかだけを適性で最適化する。
+        var assignment = AssignFieldPositions(fielders, new FieldingCoefficients());
+
         var order = new List<Player>(9);
         for (var i = 0; i < FieldSlots.Length; i++)
         {
             var dp = i < fielders.Count ? fielders[i] : (starter ?? all.FirstOrDefault());
-            var pl = ToPlayer(dp, FieldSlots[i], asPitcher: false);
+            var pos = FieldSlots[assignment[i]];
+            var pl = ToPlayer(dp, pos, asPitcher: false);
             order.Add(pl);
             TrackCaptain(dp, pl);
         }
@@ -90,6 +95,59 @@ public static class RosterTeamBuilder
             Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen,
             Tactics = tactics, Captain = captainPlayer,
         };
+    }
+
+    /// <summary>
+    /// 野手8人を8守備位置へ、適性補正後の実効守備力（Fielding×AptitudeFactor）の総和が最大になるよう割り当てる
+    /// （設計書01 §1.1「本職優先」/ OPEN-QUESTIONS 未決2b）。8!=40320通りの全探索（決定論・状態を持たない）。
+    /// <paramref name="fielders"/> が8人に満たない場合、不足分の行は重み0で埋め、余った位置は
+    /// <see cref="Build"/> 側の欠員補充（先発投手の使い回し等）にそのまま渡す。
+    /// 全員の適性が同値（既定50）などで割当が同点の場合は、探索順の性質上 fielders[i]→FieldSlots[i]
+    /// （割当前の既定順）が選ばれる。
+    /// </summary>
+    private static int[] AssignFieldPositions(IReadOnlyList<DevelopingPlayer> fielders, FieldingCoefficients coeff)
+    {
+        var n = FieldSlots.Length;
+        var m = Math.Min(fielders.Count, n);
+
+        var weight = new double[n][];
+        for (var i = 0; i < n; i++)
+        {
+            weight[i] = new double[n];
+            if (i >= m) continue; // 実選手が足りない行は重み0＝どこに置いても総和に影響しない
+            var fieldingLevel = fielders[i].Level(AbilityKind.Fielding);
+            for (var j = 0; j < n; j++)
+                weight[i][j] = fieldingLevel * coeff.AptitudeFactor(fielders[i].Aptitude(FieldSlots[j]));
+        }
+
+        var used = new bool[n];
+        var current = new int[n];
+        var best = new int[n];
+        var bestScore = double.NegativeInfinity;
+
+        void Recurse(int i, double scoreSoFar)
+        {
+            if (i == n)
+            {
+                if (scoreSoFar > bestScore)
+                {
+                    bestScore = scoreSoFar;
+                    Array.Copy(current, best, n);
+                }
+                return;
+            }
+            for (var j = 0; j < n; j++)
+            {
+                if (used[j]) continue;
+                used[j] = true;
+                current[i] = j;
+                Recurse(i + 1, scoreSoFar + weight[i][j]);
+                used[j] = false;
+            }
+        }
+
+        Recurse(0, 0);
+        return best;
     }
 
     /// <summary>
