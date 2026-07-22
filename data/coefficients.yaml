@@ -614,9 +614,20 @@ manager_growth:
 training:
   base_main_exp: 85.0
   sub_factor: 0.4
-  facility_coef: 1.0
-  coaching_level: 20.0        # Phase 5で監督メタ（分野別指導力）に置換
-  coaching_slope: 0.005
+  facility_coef: 1.0          # 施設レベル0（施設なし）の基準施設係数。facility_tiers で上位を注入（#115）
+  # 基準指導力（中立点, #115）。監督メタ（分野別指導力）を注入しないときの既定＝この指導力で従来と1ビット一致。
+  # 監督指導力を注入すると 投手系←Coaching.Pitching / 守備・走塁系←Coaching.Defense / 打撃系←Coaching.Batting で駆動。
+  coaching_level: 20.0
+  coaching_slope: 0.005       # 1+指導力×slope×素直さ。名将(指導力90)→factor≈1.45（設計書02）
+  # 施設レベル→(係数, 週練習時間[分])（#115・設計書03 §4 / 04）。index=施設レベル。Lv0=現状(1.0/300)で従来一致。
+  # 資金/名声からレベルを上げる接続は将来（OPEN-QUESTIONS Q6）。現状は SeasonContext.FacilityLevel の注入口のみ。
+  # 「豪腕素質×名将＋フル施設(Lv4)で3年+15〜20km/h」が成立するよう据える（out/overnight/issue-115 で実測）。
+  facility_tiers:
+    - { coef: 1.00, budget_minutes: 300 }   # Lv0 施設なし（現状・従来一致）
+    - { coef: 1.35, budget_minutes: 400 }   # Lv1
+    - { coef: 1.70, budget_minutes: 500 }   # Lv2
+    - { coef: 2.05, budget_minutes: 600 }   # Lv3
+    - { coef: 2.40, budget_minutes: 700 }   # Lv4 フル施設（名門・強豪）
   level_up_base: 100.0        # 必要exp = base × growth^level
   level_up_growth: 1.05
   aptitude_required_exp_factor: 0.6   # 守備位置適性は能力より緩い必要exp（<1.0で速く伸びる, 守備適性 未決1）
