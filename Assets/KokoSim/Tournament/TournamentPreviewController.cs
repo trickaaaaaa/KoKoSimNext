@@ -35,9 +35,9 @@ namespace KokoSim.Unity.Tournament
             var back = _root.Q<Button>("tp-back");
             if (back != null) back.clicked += () => { _showPreview = false; Render(); };
 
-            // 共通トップバーの「今週を進める」で共有週を進める（選手/練習画面と同じ扱い＝GameClock 単一ソース）。
+            // 共通トップバーの「今週を進める」で共有週を進める（全タブ共通の進週処理へ集約, issue #134）。
             var advance = _root.Q<Button>("advance");
-            if (advance != null) advance.clicked += () => { GameClock.Advance(+1); Render(); };
+            if (advance != null) advance.clicked += () => WeekAdvance.FromSideScreen(Render);
 
             // 樹形図のラウンド名帯を縦スクロールに追従させる（横は列と一緒に動く）。
             var brk = _root.Q<ScrollView>("tp-bracket-scroll");

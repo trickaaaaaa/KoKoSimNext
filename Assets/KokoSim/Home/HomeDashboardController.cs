@@ -70,9 +70,11 @@ namespace KokoSim.Unity.Home
 
             Render();
 
-            // 他画面（練習・大会・練習試合）で週を進めて引退週に入った場合はここへ回送されてくる。
-            // その回送分もこの1箇所で受けて指名モーダルを開く（導線をホームに集約する）。
+            // 他画面（練習・大会・練習試合・選手・メンバー）で週を進めて引退週／大会開幕週に入った場合は
+            // ここへ回送されてくる（ScreenRouter が Pending/BannerPending を見て回送する, issue #134）。
+            // その回送分もこの1箇所で受けて指名モーダル／開幕バナーを出す（演出の導線をホームに集約する）。
             if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            else if (_state.BannerPending) ShowBanner();
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
             if (session.AwaitingMatchStart)
@@ -332,6 +334,7 @@ namespace KokoSim.Unity.Home
 
         private void ShowBanner()
         {
+            _state.PushTournamentOpenFeed();   // 「大会が開幕した」を通知フィードへ（大会遷移は TournamentEntry が実施済み）
             _state.ConsumeBanner();
             if (_banner == null) return;
             SetText("tm-banner-top", _state.BannerTop);

@@ -14,6 +14,7 @@ namespace KokoSim.Unity.Players
     {
         private PlayerListState _state;
         private VisualElement _root;
+        private Button _advanceBtn;
 
         private void OnEnable()
         {
@@ -23,8 +24,21 @@ namespace KokoSim.Unity.Players
             var sortBtn = _root.Q<Button>("sort-btn");
             if (sortBtn != null) sortBtn.clicked += () => { _state.CycleSort(); Render(); };
 
+            // 共通トップバーの「今週を進める」を配線（issue #134: 以前は未配線で死にボタンだった）。
+            // ScreenRouter が SetActive で付け外しするだけなので、OnDisable で必ず外す（多重登録＝多重進週の防止）。
+            _advanceBtn = _root.Q<Button>("advance");
+            if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
+
             Render();
         }
+
+        private void OnDisable()
+        {
+            if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
+        }
+
+        // 全タブ共通の進週処理へ集約（大会モード中はホームへ回送して日送りへ引き継ぐ）。
+        private void OnAdvance() => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(Render);
 
         private void Render()
         {
