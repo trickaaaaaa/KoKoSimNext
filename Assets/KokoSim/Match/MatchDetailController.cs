@@ -115,6 +115,9 @@ namespace KokoSim.Unity.Match
         /// 単に SetTime(t) すると彗星の尾が出ない。ここで再生到達と同じ軌跡を再現する）。
         /// UnityMCP execute_code から: controller.CaptureSeek(playIndex, t)。
         /// </summary>
+        /// <summary>タイムライン駆動カメラワーク（Issue #119）の有効/無効。検証用に外から叩けるよう公開。</summary>
+        public void SetCameraWork(bool on) => _view.CameraWorkEnabled = on;
+
         public void CaptureSeek(int playIndex, double t)
         {
             _paused = true;
