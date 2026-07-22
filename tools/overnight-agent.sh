@@ -63,8 +63,10 @@ command -v gh >/dev/null || { echo "gh が見つかりません" >&2; exit 1; }
 [ -f "$PROMPT_TEMPLATE" ] || { echo "プロンプトテンプレートがありません: $PROMPT_TEMPLATE" >&2; exit 1; }
 
 # 処理対象: needs-human / agent-failed を除く open issue。bug を先に、あとは番号昇順。
+# --author で自分（リポジトリ所有者）の issue に限定する。public 化後に他人が issue を立てても
+# 夜間エージェント（--dangerously-skip-permissions）が実行しないための安全弁。
 fetch_issues() {
-  gh issue list --state open --limit 100 --json number,title,labels --jq '
+  gh issue list --state open --limit 100 --author "trickaaaaaa" --json number,title,labels --jq '
     [ .[] | select( ( [.labels[].name] | (index("needs-human") or index("agent-failed")) ) | not ) ]
     | sort_by( (if ([.labels[].name] | index("bug")) then 0 else 1 end), .number )
     | .[] | "\(.number)\t\(.title)"'
