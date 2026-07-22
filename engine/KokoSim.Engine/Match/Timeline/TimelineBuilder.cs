@@ -410,6 +410,20 @@ public static class TimelineBuilder
     private const double BackHomeCutoffThresholdM = 60.0;
 
     /// <summary>
+    /// タイムラインに既に置かれている中継(カットオフ)野手の位置（<see cref="FielderTask.Cutoff"/>）を返す。
+    /// 中継送球のボール経由点と野手の立ち位置を**単一の座標ソース**にするために使う（#136）。
+    /// 陣形ルールにカットオフ割当が無い/野手が既にその場にいて移動が発生しない場合は null。
+    /// </summary>
+    private static TimelinePoint? FindCutoffFielderPoint(PlayTimeline timeline)
+    {
+        foreach (var m in timeline.Moves)
+        {
+            if (m.Task == FielderTask.Cutoff) return m.To;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// バックホーム（本塁クロスプレー）の送球連鎖を描く（設計書12 §3, F2 Slice D）。
     /// 外野処理点→(中継 or 直接)→本塁の Throw と「本塁へ突っ込む／タッチアウト」実況を追加する。
     /// 結果不変・乱数不使用の表示専用。homeArriveAnchor=本塁での決着時刻（憤死走者レッグの終端）。
@@ -425,8 +439,10 @@ public static class TimelineBuilder
         var ball = new List<BallSegment>(timeline.Ball);
         if (dist > BackHomeCutoffThresholdM)
         {
-            // 中継: カットマンは本塁〜処理点の中間。外野→カット→本塁の2本。
-            var cutoff = new TimelinePoint(fieldPoint.X * 0.5, fieldPoint.Z * 0.5);
+            // 中継: カットマン位置は陣形ルールが実際に配置した中継野手と同一座標ソースにする（#136）。
+            // 割当が無い場合のみ、本塁〜処理点の中間という従来の近似にフォールバックする。
+            var cutoff = FindCutoffFielderPoint(timeline)
+                ?? new TimelinePoint(fieldPoint.X * 0.5, fieldPoint.Z * 0.5);
             var pivotAt = fieldedAt + (homeArrive - fieldedAt) * 0.55; // 長い外野送球に多めの時間を割く
             ball.Add(new BallSegment { Kind = BallSegmentKind.Throw, T0 = fieldedAt, T1 = pivotAt, From = fieldPoint, To = cutoff });
             ball.Add(new BallSegment { Kind = BallSegmentKind.Throw, T0 = pivotAt, T1 = homeArrive, From = cutoff, To = Home });
@@ -473,7 +489,9 @@ public static class TimelineBuilder
         {
             // 中継: 外野→カットマン(中間)へ速く返し、カットマンがボールを持って間を作り、
             // 走者の到達直後に塁へ投げる（保持中は BallAt がセグメント間で位置を保持）。
-            var cutoff = new TimelinePoint((fieldPoint.X + target.X) * 0.5, (fieldPoint.Z + target.Z) * 0.5);
+            // カットマン位置は陣形ルールが実際に配置した中継野手と同一座標ソースにする（#136）。
+            var cutoff = FindCutoffFielderPoint(timeline)
+                ?? new TimelinePoint((fieldPoint.X + target.X) * 0.5, (fieldPoint.Z + target.Z) * 0.5);
             var cutoffArrive = fieldedAt + Distance(fieldPoint, cutoff) / DpThrowSpeedMps;
             var finalDur = Distance(cutoff, target) / DpThrowSpeedMps;
             arrive = Math.Max(cutoffArrive + DpTransferSeconds + finalDur, runnerArriveAnchor + 0.3);
