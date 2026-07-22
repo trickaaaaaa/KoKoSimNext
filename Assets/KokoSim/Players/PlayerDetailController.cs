@@ -49,6 +49,9 @@ namespace KokoSim.Unity.Players
             _state = new PlayerDetailState();
             _root = GetComponent<UIDocument>().rootVisualElement;
 
+            // 背番号は純数字（index+1）＝コンデンス数字書体（design-16 §2「純数字セルのみ」）。62px の大見出し数字なので f-num-bd。
+            _root.Q<Label>("number")?.AddToClassList("f-num-bd");
+
             var back = _root.Q<Button>("back-list");
             if (back != null) back.clicked += () => FindObjectOfType<ScreenRouter>()?.Show("PlayerList");
 
@@ -410,7 +413,7 @@ namespace KokoSim.Unity.Players
             foreach (var s in stats)
             {
                 var cell = new VisualElement(); cell.AddToClassList("pd2-stat");
-                var val = new Label(s.Value); val.AddToClassList("pd2-stat__v"); cell.Add(val);
+                var val = new Label(s.Value); val.AddToClassList("pd2-stat__v"); val.AddToClassList("f-num-bd"); cell.Add(val);
                 var k = new Label(s.Label); k.AddToClassList("pd2-stat__k"); cell.Add(k);
                 box.Add(cell);
             }

@@ -1129,6 +1129,12 @@
     color: var(--color-muted);
 }
 
+/* ═══ NumUnit：数字＋和文単位の混植セル（設計書16 §2・決定2-B）═════════════════
+   数字（.nu-num＝Oswald）と和文単位（.nu-unit）を1行に並べる。単位は数字より一段落とした
+   ミュートで添える（数字を主役にする＝UI原則③）。色・サイズはセル側の文脈を継承する。 */
+.nu-wrap { flex-direction: row; align-items: center; }
+.nu-unit { color: var(--color-muted); margin-left: 2px; }
+
 /* ═══ LineScorePanel：甲子園式ラインスコア（設計書16 §4-2・F2 案A「統合1枚板」）═════════
    本リスタイルの本丸。1枚の黒面に「回別得点＋R/H/E」と「B/S/O ランプ＋塁ダイヤ」を横並びで収める
    （現行の mlive-sb ＋ mlive-bso の2段を置き換える）。高さは現行2段と同じ約108pxに収める。

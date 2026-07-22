@@ -84,11 +84,13 @@ namespace KokoSim.Unity.Lineup
 
                 var ord = new Label(r.Order.ToString());
                 ord.AddToClassList("lineup-row__ord");
+                ord.AddToClassList("f-num-bd");
                 row.Add(ord);
 
                 var num = new Label(NumText(r.UniformNumber));
                 num.AddToClassList("num-badge");
                 num.AddToClassList("num-badge--sm");
+                num.AddToClassList("f-num");
                 row.Add(num);
 
                 var posCell = new VisualElement();
@@ -181,6 +183,7 @@ namespace KokoSim.Unity.Lineup
                 var num = new Label(NumText(b.UniformNumber));
                 num.AddToClassList("num-badge");
                 num.AddToClassList("num-badge--sm");
+                num.AddToClassList("f-num");
                 row.Add(num);
 
                 var name = new Label(b.Name);

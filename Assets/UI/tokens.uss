@@ -397,8 +397,8 @@ Button.tp-cta,
    「校名は常に太明朝」がリスタイルのシグネチャ規則。校名と、記事の柱にあたるページ見出しを
    ここで明朝へ寄せる。上の SemiBold/Medium 表より後に置いてあるので、両方に載る要素は明朝が勝つ。
 
-   **人名（選手名・監督名）は入れていない。**明朝にするかは未決（design-16 §9-6）。
-   本文・ラベル・表のセルは絶対に入れない（暗背景で細い横画が潰れる＝§8のリスク）。 */
+   **人名（選手名・監督名）は 2026-07-22 に明朝化を決定（design-16 §9-6, 3-A）。**下の「人名の明朝化」ブロックで
+   別立てにしてある。それ以外の本文・ラベル・数値セルは従来どおり入れない（暗背景で細い横画が潰れる＝§8のリスク）。 */
 
 /* ExtraBold：16〜28px の校名・見出し（この帯は横画が残る ExtraBold でないと潰れる） */
 .sb2-name,
@@ -427,6 +427,39 @@ Button.tp-cta,
 .tm-banner__top,
 .tm-banner__open {
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-Bold.asset?fileID=11400000&guid=79e45b7605bce4026b70c4d8d01cf21b&type=2#ShipporiMinchoB1-Bold");
+}
+
+/* ── 人名の明朝化（設計書16 §9-6・2026-07-22 決定 3-A）─────────────────────
+   選手名・監督名・主将候補名も明朝に寄せ、新聞見出しの一貫性を最優先する。
+   一覧表の可読性低下は許容済み（ユーザー決定）。表セルの小さい名前も含めて ExtraBold で載せる
+   （小サイズは横画が細い Bold だと暗背景で潰れるため、必ず ExtraBold 側）。
+   ここに入れるのは「人名だけ」。大会名（.tm-banner__name 等）や数値セルは対象外。 */
+.pd2-name,               /* 選手詳細の大見出し名 */
+.pd2-pchip__name,        /* 選手詳細・比較チップの名前 */
+.pd2-pv--name,           /* 選手詳細・比較行の名前 */
+.cell--name,             /* 部員名簿テーブルの選手列 */
+.slot-card__name,        /* スタメン枠カードの選手名 */
+.cmp-card__name,         /* 比較カードの選手名 */
+.lineup-row__name,       /* スタメン設定・行の選手名 */
+.bench-row__name,        /* 控えベンチ・行の選手名 */
+.sp-pill__name,          /* 先発投手ピルの選手名 */
+.mlineup-row__name,      /* 試合ラインナップ・行の選手名 */
+.mup-name,               /* マッチアップHUDの選手名 */
+.edit-slot__name,        /* 個別指導スロット編集の選手名 */
+.st-name,                /* 成績表の選手名 */
+.tp-roster__name,        /* 練習割当テーブルの選手名 */
+.tp-ed-who__name,        /* 練習モーダル・見出しの選手名 */
+.tp-pcard__nm,           /* 大会プレビュー・選手カードの名前 */
+.field-chip__name,       /* 球場図チップの選手名 */
+.pool-chip__name,        /* メンバー設定・選手プールの名前 */
+.trow__name,             /* 練習割当テーブル・行の選手名（実クラスは trow__name） */
+.nom-slot__name,         /* 個別指導枠に指名された選手名 */
+.gd-name,                /* ホーム・個別指導枠の選手名 */
+.hm-rk-e__n,             /* ホーム・チーム内ランキングの選手名 */
+.hm-inj__n,              /* ホーム・故障者リストの選手名 */
+.nt-c-name,              /* 新チーム発足・主将候補リストの名前 */
+.nt-d__name {            /* 新チーム発足・主将候補詳細の名前 */
+    -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/ShipporiMinchoB1-ExtraBold.asset?fileID=11400000&guid=7f2420c220fb74dc88a61dafe12284b0&type=2#ShipporiMinchoB1-ExtraBold");
 }
 
 /* ── ディスプレイ（太明朝）Shippori Mincho B1 ──────────────────────────

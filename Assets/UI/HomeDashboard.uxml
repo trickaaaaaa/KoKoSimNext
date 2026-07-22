@@ -9,37 +9,51 @@
       <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
       <ui:Instance template="TopBar" />
 
+      <!-- ===== 主役ブロック: 直近の予定（全幅ヒーロー帯・design-16 §5 / 決定1-A）=====
+           均等3カラムを破って本文最上部に横断で載る主役。大会週は「次の試合」（対戦カード）、
+           通常週は「夏予選まで残りN週」（前向きの予定表はエンジン未実装のためカウントダウンで代替）。
+           コントローラが hm-hero-match / hm-hero-plain を display で二者択一する。 -->
+      <ui:VisualElement name="home-hero" class="hm-hero">
+        <ui:VisualElement class="rule-head hm-hero__eyebrow">
+          <ui:VisualElement class="rule-head__rule" />
+          <ui:Label class="rule-head__text" text="直近の予定" />
+        </ui:VisualElement>
+
+        <!-- 大会週: 対戦カード（round｜自校 VS 相手｜日程・球場・天気） -->
+        <ui:VisualElement name="hm-hero-match" class="hm-hero__match">
+          <ui:Label name="game-tag" class="hm-hero__round" text="２回戦" />
+          <ui:VisualElement class="hm-hero__teams">
+            <ui:VisualElement class="nm-team">
+              <ui:Label name="home-team" class="nm-team__n" text="桜丘" />
+              <ui:Label name="home-sub" class="nm-team__s" text="自校" />
+            </ui:VisualElement>
+            <ui:Label class="nm-vs" text="VS" />
+            <ui:VisualElement class="nm-team">
+              <ui:Label name="away-team" class="nm-team__n" text="享栄" />
+              <ui:Label name="away-sub" class="nm-team__s" text="ランク B" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+          <ui:VisualElement class="hm-hero__meta">
+            <ui:Label name="game-date" class="hm-hero__when" text="本日 試合" />
+            <ui:Label name="venue" class="nm-meta__i" text="甲子園" />
+            <ui:Label name="weather" class="nm-meta__i" text="天気 曇" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 通常週: 夏予選カウントダウン（数値は Oswald＝Label を数字と単位に分割） -->
+        <ui:VisualElement name="hm-hero-plain" class="hm-hero__plain">
+          <ui:Label name="hero-cd-label" class="hm-hero__cd-k" text="夏予選まで" />
+          <ui:Label name="hero-cd-num" class="hm-hero__cd-num f-num-bd" text="15" />
+          <ui:Label name="hero-cd-unit" class="hm-hero__cd-unit" text="週" />
+          <ui:Label name="hero-week" class="hm-hero__cd-sub" text="2026年 4月1週目" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
       <!-- ===== ダッシュボード本体（3カラム・外側スクロールなし） ===== -->
       <ui:VisualElement class="dash">
 
-        <!-- COL1（主役）: 次の試合（大会モード時のみ） / 部の実力＝6指標レーダー / 故障者 -->
+        <!-- COL1: 部の実力＝6指標レーダー / 故障者（「次の試合」は主役ヒーロー帯へ移設） -->
         <ui:VisualElement class="dash-col dash-col--a">
-          <!-- 次の試合。通常週はダミーの対戦カードを出さないので、コントローラが display で開閉する -->
-          <ui:VisualElement name="next-match" class="card">
-            <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="次の試合" />
-              <ui:Label name="game-tag" class="card__hd-sub" text="練習試合" />
-            </ui:VisualElement>
-            <ui:VisualElement class="card__body">
-              <ui:VisualElement class="nm-teams">
-                <ui:VisualElement class="nm-team">
-                  <ui:Label name="home-team" class="nm-team__n" text="桜丘" />
-                  <ui:Label name="home-sub" class="nm-team__s" text="自校" />
-                </ui:VisualElement>
-                <ui:Label class="nm-vs" text="VS" />
-                <ui:VisualElement class="nm-team">
-                  <ui:Label name="away-team" class="nm-team__n" text="北都大付属" />
-                  <ui:Label name="away-sub" class="nm-team__s" text="県立・強豪" />
-                </ui:VisualElement>
-              </ui:VisualElement>
-              <ui:VisualElement class="nm-meta">
-                <ui:Label name="game-date" class="nm-meta__i" text="第2週（土）" />
-                <ui:Label name="venue" class="nm-meta__i" text="自校グラウンド" />
-                <ui:Label name="weather" class="nm-meta__i" text="天気 曇" />
-              </ui:VisualElement>
-            </ui:VisualElement>
-          </ui:VisualElement>
-
           <!-- チームランク（6指標レーダー）。カード本体クリックでチーム総合力の専用パネルへ -->
           <ui:VisualElement class="card">
             <ui:VisualElement class="card__hd">
@@ -49,7 +63,7 @@
               <ui:VisualElement class="hm-ts__top">
                 <ui:Label class="hm-ts__k" text="総合" />
                 <ui:VisualElement name="team-strength-chip" class="pd2-overall__chip" />
-                <ui:Label name="team-strength-value" class="hm-ts__v" text="—" />
+                <ui:Label name="team-strength-value" class="hm-ts__v f-num-bd" text="—" />
               </ui:VisualElement>
               <ui:VisualElement name="hm-radar" class="hm-radar" />
             </ui:VisualElement>

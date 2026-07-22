@@ -80,7 +80,9 @@ namespace KokoSim.Unity.MatchPreview
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-row");
-            row.Add(Text(s.Order, "mlineup-row__ord"));
+            var ord = Text(s.Order, "mlineup-row__ord");
+            ord.AddToClassList("f-num");
+            row.Add(ord);
             row.Add(Text(s.PosKanji, "mlineup-row__pos"));
             row.Add(Text(s.Name, "mlineup-row__name"));
             row.Add(Text(s.Meta, "mlineup-row__meta"));

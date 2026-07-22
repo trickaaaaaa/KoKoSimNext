@@ -178,7 +178,9 @@ namespace KokoSim.Unity.Match
             _scoreCall = _root.Q<VisualElement>("score-call");
             _scoreCallOwnName = _root.Q<Label>("score-call-own-name");
             _scoreCallOwnNum = _root.Q<Label>("score-call-own-num");
+            _scoreCallOwnNum?.AddToClassList("f-num-bd");
             _scoreCallOppNum = _root.Q<Label>("score-call-opp-num");
+            _scoreCallOppNum?.AddToClassList("f-num-bd");
             _scoreCallOppName = _root.Q<Label>("score-call-opp-name");
 
             ResetPerMatchVisuals();
@@ -918,12 +920,12 @@ namespace KokoSim.Unity.Match
             if (mirror) row.AddToClassList("mlineup-row--mirror");
             if (atBat) row.AddToClassList("mlineup-row--at-bat");
 
-            row.Add(MakeLabel(s.Order.ToString(), "mlineup-row__ord"));
+            row.Add(MakeLabel(s.Order.ToString(), "mlineup-row__ord", "f-num"));
             row.Add(MakeLabel(MatchLiveStatsProvider.PosAbbr(s.Position), "mlineup-row__pos"));
             row.Add(MakeLabel(s.Name, "mlineup-row__name"));   // フルネーム
             if (!string.IsNullOrEmpty(s.ReplacedName))
                 row.Add(MakeLabel("←" + s.ReplacedName, "mlineup-row__replaced"));
-            row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm"));
+            row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm", "f-num"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
             face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
@@ -938,7 +940,7 @@ namespace KokoSim.Unity.Match
             var row = new VisualElement();
             row.AddToClassList("mlineup-benchrow");
             if (mirror) row.AddToClassList("mlineup-row--mirror");
-            row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm"));
+            row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm", "f-num"));
             row.Add(MakeLabel(s.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
@@ -953,7 +955,7 @@ namespace KokoSim.Unity.Match
             var row = new VisualElement();
             row.AddToClassList("mlineup-benchrow");
             if (mirror) row.AddToClassList("mlineup-row--mirror");
-            row.Add(MakeLabel(NumText(p.Number), "num-badge", "num-badge--sm"));
+            row.Add(MakeLabel(NumText(p.Number), "num-badge", "num-badge--sm", "f-num"));
             row.Add(MakeLabel(p.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
@@ -1010,7 +1012,7 @@ namespace KokoSim.Unity.Match
             block.AddToClassList("mup-block--pitcher");
 
             var line1 = MakeRow("mup-line");
-            line1.Add(MakeLabel(NumText(_current.PitcherNumber), "num-badge", "num-badge--sm"));
+            line1.Add(MakeLabel(NumText(_current.PitcherNumber), "num-badge", "num-badge--sm", "f-num"));
             line1.Add(MakeLabel(_current.PitcherName, "mup-name"));
             line1.Add(MakeLabel(MatchLiveStatsProvider.ThrowsLabel(_current.PitcherThrows), "mup-hand"));
             block.Add(line1);
@@ -1022,7 +1024,7 @@ namespace KokoSim.Unity.Match
 
             var line3 = MakeRow("mup-line");
             line3.Add(MakeLabel("球数", "mup-pitches__lab"));
-            var pc = MakeLabel(def.Pitches.ToString(), "mup-pitches");
+            var pc = MakeLabel(def.Pitches.ToString(), "mup-pitches", "f-num");
             if (def.Pitches > 100) pc.AddToClassList("mup-pitches--alert");
             else if (def.Pitches > 80) pc.AddToClassList("mup-pitches--warn");
             line3.Add(pc);
@@ -1038,7 +1040,7 @@ namespace KokoSim.Unity.Match
             block.AddToClassList("mup-block--batter");
 
             var line1 = MakeRow("mup-line");
-            line1.Add(MakeLabel(NumText(_current.BatterNumber), "num-badge", "num-badge--sm"));
+            line1.Add(MakeLabel(NumText(_current.BatterNumber), "num-badge", "num-badge--sm", "f-num"));
             line1.Add(MakeLabel(_current.BatterName, "mup-name"));
             line1.Add(MakeLabel(MatchLiveStatsProvider.BatsLabel(_current.BatterBats), "mup-hand"));
             var face = new ConditionFace();

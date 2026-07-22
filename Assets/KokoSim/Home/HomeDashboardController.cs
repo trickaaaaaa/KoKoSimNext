@@ -429,10 +429,14 @@ namespace KokoSim.Unity.Home
 
             RenderTeamStrength();
 
-            // 次の試合は大会モード中だけ出す（通常週にダミーの対戦カードを置かない）。
-            var nextMatch = _root.Q<VisualElement>("next-match");
-            if (nextMatch != null)
-                nextMatch.style.display = v.TournamentMode ? DisplayStyle.Flex : DisplayStyle.None;
+            // 主役ヒーロー帯（直近の予定）を二態で切替える。大会週＝対戦カード、通常週＝夏予選カウントダウン
+            // （前向きの予定表はエンジン未実装のためカウントダウンで代替＝design-16 §5 の但し書き）。
+            var heroMatch = _root.Q<VisualElement>("hm-hero-match");
+            var heroPlain = _root.Q<VisualElement>("hm-hero-plain");
+            if (heroMatch != null)
+                heroMatch.style.display = v.TournamentMode ? DisplayStyle.Flex : DisplayStyle.None;
+            if (heroPlain != null)
+                heroPlain.style.display = v.TournamentMode ? DisplayStyle.None : DisplayStyle.Flex;
             if (v.TournamentMode)
             {
                 SetText("game-tag", v.GameTag);
@@ -443,6 +447,13 @@ namespace KokoSim.Unity.Home
                 SetText("game-date", v.GameDate);
                 SetText("venue", v.Venue);
                 SetText("weather", "天気 " + v.Weather);
+            }
+            else
+            {
+                SetText("hero-cd-label", v.CountdownLabel);
+                SetText("hero-cd-num", v.HeroBigValue);
+                SetText("hero-cd-unit", v.HeroBigUnit);
+                SetText("hero-week", v.WeekLabel);
             }
 
             // 故障者（0名でもカードは残し「該当なし」を出す＝週をまたいでレイアウトが動かない）。
@@ -508,6 +519,7 @@ namespace KokoSim.Unity.Home
         {
             var cell = new Label(text);
             cell.AddToClassList("hm-sc-v");
+            cell.AddToClassList("f-num");   // 成績値は純数値＝コンデンス体（決定2-B・純数値セル）
             if (text == "—") cell.AddToClassList("hm-sc-v--none");
             return cell;
         }
@@ -551,7 +563,7 @@ namespace KokoSim.Unity.Home
                 var cell = new VisualElement();
                 cell.AddToClassList("hm-rk-e");
                 var name = new Label(e.Name); name.AddToClassList("hm-rk-e__n");
-                var val = new Label(e.Value); val.AddToClassList("hm-rk-e__v");
+                var val = new Label(e.Value); val.AddToClassList("hm-rk-e__v"); val.AddToClassList("f-num");
                 cell.Add(name); cell.Add(val);
                 row.Add(cell);
             }

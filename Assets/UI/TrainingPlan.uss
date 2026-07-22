@@ -27,7 +27,7 @@
 }
 .tp-camp { flex-grow: 1; margin-right: 14px; }   /* .banner を継承 */
 .tp-camp__title { font-size: 15px; color: var(--color-chalk); }
-.tp-camp__mult { font-size: 14px; color: var(--color-lamp); margin-left: var(--sp-2); }
+.tp-camp__mult { font-size: 14px; color: var(--color-chalk); margin-left: var(--sp-2); }   /* 数値ラベル＝白（黄はデータに使わない・4-B） */
 .tp-camp__note { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
 .tp-camp__head { flex-direction: row; align-items: center; }
 .tp-camp__body { flex-grow: 1; }
@@ -240,7 +240,7 @@
 .tp-ed-bar__remain { font-size: 14px; color: var(--color-muted); margin-bottom: var(--sp-1); }
 
 .tp-ed-section { flex-shrink: 0; flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
-.tp-ed-section__title { font-size: 15px; color: var(--color-lamp); letter-spacing: 1px; }
+.tp-ed-section__title { font-size: 15px; color: var(--color-chalk); letter-spacing: 1px; }   /* 見出しは白（黄はCTAと最重要数値だけ・4-B）。モーダルの REFINE でも白に上書き済み */
 .tp-ed-section__title--mt { margin-top: var(--sp-4); margin-bottom: var(--sp-2); }
 .tp-ed-section__lock { font-size: 13px; color: var(--color-warn); margin-left: 10px; }
 
@@ -262,7 +262,7 @@
 .mslot__body { flex-grow: 1; }
 .mslot__name { font-size: 16px; color: var(--color-chalk); }
 .mslot__eff { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
-.mslot__min { width: 56px; -unity-text-align: middle-center; font-size: 17px; color: var(--color-lamp); }
+.mslot__min { width: 56px; -unity-text-align: middle-center; font-size: 17px; color: var(--color-chalk); }   /* 分＝編集値：白（黄はやめる・4-B）。モーダルの REFINE でも白に上書き済み */
 
 /* templates（フッター内） */
 .tp-tpl__title { font-size: var(--fs-label); color: var(--color-muted); margin-right: var(--sp-3); }

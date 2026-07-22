@@ -161,6 +161,55 @@ namespace KokoSim.Unity.Components
             return head;
         }
 
+        // ===== NumUnit（数字＋和文単位の混植セル）=====
+
+        /// <summary>
+        /// 数字＋和文単位を Label 分割して並べる（設計書16 §2・決定2-B「混植セルは Label を分ける」）。
+        /// 数字だけコンデンス体（Oswald＝f-num / bold で f-num-bd）に載せ、単位はサンセリフのまま。
+        /// 例: NumUnit("2", "年")／NumUnit("45", "名")／NumUnit("15", "週")。
+        /// containerClass に既存の列クラス（"cell cell--narrow" 等）を渡してレイアウトを流用する。
+        /// </summary>
+        public static VisualElement NumUnit(string digits, string unit, bool bold = false, string containerClass = null)
+        {
+            var wrap = new VisualElement();
+            wrap.AddToClassList("nu-wrap");
+            if (!string.IsNullOrEmpty(containerClass))
+                foreach (var c in containerClass.Split(' '))
+                    if (c.Length > 0) wrap.AddToClassList(c);
+            var num = new Label(digits);
+            num.AddToClassList(bold ? "f-num-bd" : "f-num");
+            num.AddToClassList("nu-num");
+            wrap.Add(num);
+            if (!string.IsNullOrEmpty(unit))
+            {
+                var u = new Label(unit);
+                u.AddToClassList("nu-unit");
+                wrap.Add(u);
+            }
+            return wrap;
+        }
+
+        /// <summary>
+        /// "2年" / "45名" のような「先頭の半角数字＋和文単位」文字列を分割して <see cref="NumUnit"/> にする。
+        /// 数字を含まない（"—" 等）ときは分割せずそのまま1枚の Label で返す（豆腐・空セル対策）。
+        /// </summary>
+        public static VisualElement NumUnitAuto(string text, bool bold = false, string containerClass = null)
+        {
+            var n = 0;
+            while (n < text.Length && text[n] >= '0' && text[n] <= '9') n++;
+            if (n == 0)
+            {
+                var wrap = new VisualElement();
+                wrap.AddToClassList("nu-wrap");
+                if (!string.IsNullOrEmpty(containerClass))
+                    foreach (var c in containerClass.Split(' '))
+                        if (c.Length > 0) wrap.AddToClassList(c);
+                wrap.Add(new Label(text));
+                return wrap;
+            }
+            return NumUnit(text.Substring(0, n), text.Substring(n), bold, containerClass);
+        }
+
         // ===== AbilityRow =====
 
         /// <summary>
@@ -199,6 +248,7 @@ namespace KokoSim.Unity.Components
             {
                 var val = new Label(d.Value);
                 val.AddToClassList("abil-row__value");
+                val.AddToClassList("f-num");   // 能力内部値は純数値＝コンデンス体（決定2-B・部品駆動の全画面へ一括適用）
                 row.Add(val);
             }
 
@@ -284,9 +334,26 @@ namespace KokoSim.Unity.Components
                 cell.AddToClassList("bs-cell");
                 foreach (var k in kind.Split(' '))
                     if (k.Length > 0) cell.AddToClassList("bs-cell--" + k);
+                // 数字だけのセル（回別得点・R/H/E・打数など、ヘッダーの回数字も含む）はコンデンス体に。
+                // 校名・打席結果など和文を含むセルは対象外＝内容判定で豆腐を避ける（決定2-B）。
+                if (IsNumericCell(text)) cell.AddToClassList("f-num");
                 row.Add(cell);
             }
             return row;
+        }
+
+        /// <summary>Oswald（欧文専用）に載せてよい「数字だけのセル」か。数字・小数点・記号のみを許可し、
+        /// 和文/かなを含むものは false。空文字は false（無駄なクラス付与を避ける）。</summary>
+        private static bool IsNumericCell(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            foreach (var c in text)
+            {
+                var ok = (c >= '0' && c <= '9') || c == '.' || c == ',' || c == ':' ||
+                         c == '/' || c == '%' || c == '+' || c == '-' || c == '–' || c == '—' || c == ' ';
+                if (!ok) return false;
+            }
+            return true;
         }
 
         private static VisualElement HeadCol(string text, string side)
@@ -310,6 +377,7 @@ namespace KokoSim.Unity.Components
 
             var val = new Label(has ? value.ToString() : "—");
             val.AddToClassList("cmp-row__val");
+            val.AddToClassList("f-num");   // 比較値は純数値＝コンデンス体（決定2-B）
             if (has && win) val.AddToClassList("cmp-row__val--win");
             el.Add(val);
 

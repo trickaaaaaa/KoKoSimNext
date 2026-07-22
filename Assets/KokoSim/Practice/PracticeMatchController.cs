@@ -116,6 +116,7 @@ namespace KokoSim.Unity.Practice
 
             var overall = new Label(r.Overall.ToString());
             overall.AddToClassList("pm-row__num");
+            overall.AddToClassList("f-num");
             row.Add(overall);
 
             var trad = new Label(r.Tradition);
@@ -125,6 +126,7 @@ namespace KokoSim.Unity.Practice
             // 受諾見込み。低い相手は淡色にして「断られやすさ」を一目で拾えるようにする（UI原則⑥）。
             var accept = new Label(r.AcceptPercent + "%");
             accept.AddToClassList("pm-row__num");
+            accept.AddToClassList("f-num");
             if (r.AcceptPercent < 40) accept.AddToClassList("pm-row__num--weak");
             row.Add(accept);
 

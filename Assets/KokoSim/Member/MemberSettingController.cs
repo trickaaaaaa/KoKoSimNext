@@ -256,6 +256,7 @@ namespace KokoSim.Unity.Member
         {
             var badge = new Label(slot.Number.ToString());
             badge.AddToClassList("field-chip__num");
+            badge.AddToClassList("f-num");
             el.Add(badge);
 
             if (slot.PlayerIndex >= 0)
@@ -541,6 +542,7 @@ namespace KokoSim.Unity.Member
         {
             var b = new Label(n.ToString());
             b.AddToClassList("num-badge");
+            b.AddToClassList("f-num");
             return b;
         }
 

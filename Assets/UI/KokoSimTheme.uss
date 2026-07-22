@@ -781,7 +781,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .hm-th__c--r { -unity-text-align: middle-right; }
 .hm-th__c--sec { color: var(--tx-2); }
 
-/* --- 次の試合 --- */
+/* --- 次の試合（旧COL Aカード。nm-team/nm-vs はヒーロー帯でも流用） --- */
 .nm-teams { flex-direction: row; align-items: center; }
 .nm-team { flex-grow: 1; align-items: center; }
 .nm-team__n { font-size: 19px; color: #E8ECEA; }
@@ -789,6 +789,37 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nm-vs { font-size: 20px; color: #9AA5A0; margin: 0 8px; }
 .nm-meta { flex-direction: row; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top-width: 1px; border-top-color: #232E28; }
 .nm-meta__i { font-size: 12px; color: #9AA5A0; margin-right: 16px; }
+
+/* --- 主役ブロック: 直近の予定（全幅ヒーロー帯・design-16 §5 / 決定1-A） ---
+   .dash（padding:14）の上に横断で載る主役。左に柱見出し（rule-head）、右に対戦カード or
+   夏予選カウントダウン。均等3カラムより一段高い面(--sf-card)で「本文の主役」であることを示す。 */
+.hm-hero {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    background-color: #18211C;              /* = .card と同じカード面 */
+    border-radius: var(--radius-card);
+    margin: 14px 14px 0 14px;               /* dash の padding と左右を揃える。下は dash 側が空ける */
+    padding: 16px 22px;
+    min-height: 86px;
+}
+.hm-hero__eyebrow { margin-bottom: 0; margin-right: 22px; flex-shrink: 0; }
+
+/* 大会週: 対戦カード */
+.hm-hero__match { flex-direction: row; align-items: center; flex-grow: 1; }
+.hm-hero__round { font-size: 15px; letter-spacing: 2px; color: #E8ECEA; margin-right: 24px; flex-shrink: 0; }
+.hm-hero__teams { flex-direction: row; align-items: center; flex-shrink: 0; }
+.hm-hero .nm-team__n { font-size: 24px; }   /* ヒーローでは校名をひとまわり大きく（明朝は tokens 側で適用） */
+.hm-hero .nm-vs { font-size: 18px; margin: 0 14px; }
+.hm-hero__meta { flex-direction: row; align-items: center; margin-left: auto; flex-shrink: 0; }
+.hm-hero__when { font-size: 14px; color: #E8ECEA; letter-spacing: 1px; margin-right: 18px; }
+
+/* 通常週: 夏予選カウントダウン（数字は Oswald＝f-num-bd を UXML で付与） */
+.hm-hero__plain { flex-direction: row; align-items: baseline; flex-grow: 1; }
+.hm-hero__cd-k { font-size: 15px; color: #9AA5A0; letter-spacing: 2px; margin-right: 16px; }
+.hm-hero__cd-num { font-size: 40px; color: #E8ECEA; }
+.hm-hero__cd-unit { font-size: 16px; color: #9AA5A0; margin-left: 4px; }
+.hm-hero__cd-sub { font-size: 13px; color: #9AA5A0; margin-left: auto; }
 
 /* 調子5段階の色（選手一覧・主将指名など全画面共通）。
    値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
