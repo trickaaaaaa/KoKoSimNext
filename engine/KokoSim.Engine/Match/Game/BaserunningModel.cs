@@ -31,6 +31,7 @@ public static class BaserunningModel
     {
         var (runs, extraOuts, _, _, _, _) = ApplyDetailed(bases, result, batter, currentOuts, coeff, rng, collectMoves: false, home);
         return (runs, extraOuts);
+        // 注: ApplyDetailed の第3要素は (Home, Third) の憤死内訳（本塁クロスプレー/三塁到達レース）。
     }
 
     /// <summary>この打席で打者自身がアウトになるか。野選（FC）成立時は先行走者のみアウトで打者は生存（design-14 P1-1）。
@@ -51,12 +52,13 @@ public static class BaserunningModel
 
     /// <summary>
     /// 進塁の詳細版（走者の動きを記録, タイムライン用）。判定・乱数消費順は Apply と同一。
-    /// HomeOuts=本塁クロスプレーで刺された走者数（F2/G1の統計参考値。ExtraOuts の内数）。
+    /// BaseOuts=(Home, Third) 塁上での憤死内訳。Home=本塁クロスプレー（F2/G1）、Third=単打の一塁→三塁
+    /// レース（Issue #89）で刺された走者数（いずれも ExtraOuts の内数。統計参考値）。
     /// BatterSafeOnFc=野選（FC, design-14 P1-1）成立で打者が一塁生存したか。
     /// ErrorExtraAdvanceOccurred=失策連鎖（design-14 P1-6）が成立したか（統計参考値）。
     /// </summary>
-    public static (int Runs, int ExtraOuts, int HomeOuts, bool BatterSafeOnFc, bool ErrorExtraAdvanceOccurred,
-        IReadOnlyList<RunnerMove> Moves) ApplyDetailed(
+    public static (int Runs, int ExtraOuts, (int Home, int Third) BaseOuts, bool BatterSafeOnFc,
+        bool ErrorExtraAdvanceOccurred, IReadOnlyList<RunnerMove> Moves) ApplyDetailed(
         BaseState bases, PlateAppearanceResult result, Player batter,
         int currentOuts, BaserunningCoefficients coeff, IRandomSource rng, bool collectMoves = true,
         HomePlayContext? home = null, StartType r1Start = StartType.Normal)
@@ -69,24 +71,24 @@ public static class BaserunningModel
         switch (result)
         {
             case PlateAppearanceResult.Strikeout:
-                return (0, 0, 0, false, false, Moves(mv));
+                return (0, 0, (0, 0), false, false, Moves(mv));
 
             case PlateAppearanceResult.Walk:
             case PlateAppearanceResult.HitByPitch: // 死球はボールデッド＝四球と同じフォース進塁のみ
             {
                 var (runs, outs) = ApplyWalk(bases, batter, r1, r2, r3, mv);
-                return (runs, outs, 0, false, false, Moves(mv));
+                return (runs, outs, (0, 0), false, false, Moves(mv));
             }
 
             case PlateAppearanceResult.Single:
             {
-                var (runs, outs) = ApplyRunnerAdvance(bases, batter, r1, r2, r3, currentOuts, coeff, rng, isDouble: false, mv, home);
-                return (runs, outs, outs, false, false, Moves(mv)); // 安打の追加アウトは全て本塁憤死
+                var (runs, outs, homeOuts, thirdOuts) = ApplyRunnerAdvance(bases, batter, r1, r2, r3, currentOuts, coeff, rng, isDouble: false, mv, home);
+                return (runs, outs, (homeOuts, thirdOuts), false, false, Moves(mv)); // 安打の追加アウト=本塁憤死＋三塁憤死
             }
 
             case PlateAppearanceResult.ReachedOnError:
             {
-                var (runs, outs) = ApplyRunnerAdvance(bases, batter, r1, r2, r3, currentOuts, coeff, rng, isDouble: false, mv, home);
+                var (runs, outs, homeOuts, thirdOuts) = ApplyRunnerAdvance(bases, batter, r1, r2, r3, currentOuts, coeff, rng, isDouble: false, mv, home);
                 // 失策の連鎖（design-14 P1-6）: 悪送球で全走者＋打者が追加1個進む。既定オフ(ErrorExtraAdvanceProb=0)
                 // では MathUtil.Chance 自体を呼ばずrng消費ゼロ＝Single と乱数消費順・結果とも完全一致。
                 var errorExtraAdvanceOccurred = false;
@@ -96,13 +98,13 @@ public static class BaserunningModel
                     runs += extraRuns;
                     errorExtraAdvanceOccurred = occurred;
                 }
-                return (runs, outs, outs, false, errorExtraAdvanceOccurred, Moves(mv));
+                return (runs, outs, (homeOuts, thirdOuts), false, errorExtraAdvanceOccurred, Moves(mv));
             }
 
             case PlateAppearanceResult.Double:
             {
-                var (runs, outs) = ApplyRunnerAdvance(bases, batter, r1, r2, r3, currentOuts, coeff, rng, isDouble: true, mv, home);
-                return (runs, outs, outs, false, false, Moves(mv));
+                var (runs, outs, homeOuts, thirdOuts) = ApplyRunnerAdvance(bases, batter, r1, r2, r3, currentOuts, coeff, rng, isDouble: true, mv, home);
+                return (runs, outs, (homeOuts, thirdOuts), false, false, Moves(mv));
             }
 
             case PlateAppearanceResult.Triple:
@@ -114,7 +116,7 @@ public static class BaserunningModel
                 mv?.Add(new RunnerMove(batter, 0, 3, false));
                 bases.Clear();
                 bases.Third = batter;
-                return (runs, 0, 0, false, false, Moves(mv));
+                return (runs, 0, (0, 0), false, false, Moves(mv));
             }
 
             case PlateAppearanceResult.HomeRun:
@@ -125,17 +127,17 @@ public static class BaserunningModel
                 if (r1 is not null) mv?.Add(new RunnerMove(r1, 1, 4, false));
                 mv?.Add(new RunnerMove(batter, 0, 4, false));
                 bases.Clear();
-                return (runs, 0, 0, false, false, Moves(mv));
+                return (runs, 0, (0, 0), false, false, Moves(mv));
             }
 
             case PlateAppearanceResult.InPlayOut:
             {
                 var (runs, outs, homeOuts, batterSafeOnFc) = ApplyInPlayOut(bases, batter, r1, r2, r3, currentOuts, coeff, rng, mv, home, r1Start);
-                return (runs, outs, homeOuts, batterSafeOnFc, false, Moves(mv));
+                return (runs, outs, (homeOuts, 0), batterSafeOnFc, false, Moves(mv)); // 凡打の塁上憤死は本塁のみ
             }
 
             default:
-                return (0, 0, 0, false, false, Moves(mv));
+                return (0, 0, (0, 0), false, false, Moves(mv));
         }
     }
 
@@ -174,14 +176,17 @@ public static class BaserunningModel
     /// <summary>本塁突入の裁定結果（設計書12 §3, F2）。</summary>
     private enum HomeVerdict { Scored, Held, OutAtHome }
 
-    private static (int, int) ApplyRunnerAdvance(
+    private static (int Runs, int ExtraOuts, int HomeOuts, int ThirdOuts) ApplyRunnerAdvance(
         BaseState bases, Player batter, Player? r1, Player? r2, Player? r3, int currentOuts,
         BaserunningCoefficients coeff, IRandomSource rng, bool isDouble, List<RunnerMove>? mv, HomePlayContext? home)
     {
         bases.Clear();
         var runs = 0;
         var extraOuts = 0;
-        var homeOutUsed = false; // 1プレーで本塁アウトは最大1（1球は2箇所へ投げられない）
+        var homeOuts = 0;   // 本塁クロスプレー憤死（統計参考値。extraOuts の内数）
+        var thirdOuts = 0;  // 単打の一塁→三塁レース憤死（Issue #89。extraOuts の内数）
+        // 1プレーで送球先は1箇所＝アウトは最大1（1球は2箇所へ投げられない）。本塁・三塁で共有する（#89）。
+        var outThrowUsed = false;
 
         // 打者の到達塁（単打/野選=1塁、二塁打=2塁）。先行走者から順にこの塁を明け渡す義務があるかを決める。
         var batterBase = isDouble ? 2 : 1;
@@ -213,8 +218,8 @@ public static class BaserunningModel
             var margin = HomePlayResolver.Margin(runner, fromBase, h.Situation, h.Field, coeff);
             var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
             var res = HomePlayResolver.Resolve(runner, fromBase, h.Situation, h.Field, coeff, rng);
-            if (res == HomePlayResult.Safe || homeOutUsed) return (HomeVerdict.Scored, closeCall);
-            homeOutUsed = true;
+            if (res == HomePlayResult.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall);
+            outThrowUsed = true;
             return (HomeVerdict.OutAtHome, closeCall);
         }
 
@@ -233,7 +238,7 @@ public static class BaserunningModel
                 switch (verdict3)
                 {
                     case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = closeCall3 }); break;
-                    case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = closeCall3 }); break;
+                    case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = closeCall3 }); break;
                     default: third = r3; break; // 自重＝三塁で止まる（移動なし）
                 }
             }
@@ -248,7 +253,7 @@ public static class BaserunningModel
             switch (verdict2)
             {
                 case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r2, 2, 4, false) { CloseCall = closeCall2 }); break;
-                case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r2, 2, 4, Out: true) { CloseCall = closeCall2 }); break;
+                case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r2, 2, 4, Out: true) { CloseCall = closeCall2 }); break;
                 default:
                     if (r2Forced || third is null) { third = r2; mv?.Add(new RunnerMove(r2, 2, 3, false)); }
                     else second = r2; // 三塁が塞がっていれば（非フォース）二塁に留まる
@@ -266,7 +271,7 @@ public static class BaserunningModel
                 switch (verdict1)
                 {
                     case HomeVerdict.Scored: runs++; mv?.Add(new RunnerMove(r1, 1, 4, false) { CloseCall = closeCall1 }); break;
-                    case HomeVerdict.OutAtHome: extraOuts++; mv?.Add(new RunnerMove(r1, 1, 4, Out: true) { CloseCall = closeCall1 }); break;
+                    case HomeVerdict.OutAtHome: extraOuts++; homeOuts++; mv?.Add(new RunnerMove(r1, 1, 4, Out: true) { CloseCall = closeCall1 }); break;
                     default:
                         if (third is null) { third = r1; mv?.Add(new RunnerMove(r1, 1, 3, false)); }
                         else if (currentOuts + extraOuts < 3)
@@ -283,9 +288,48 @@ public static class BaserunningModel
                         break;
                 }
             }
+            else if (home is { } h3 && third is null)
+            {
+                // 単打の一塁→三塁を物理レース化（Issue #89）。打球の深さ・方向（外野処理点）と外野の肩から
+                // 三塁送球所要を組み、走者(走力＋走塁判断)との秒勝負で解く。三塁が塞がっていれば二塁止まり。
+                // 送り判定で自重した場合は本塁と同じ流儀で RNG を消費しない（決定論・消費順は home!=null 経路の慣習）。
+                var third3 = HomePlayResolver.ThirdParams(h3.Field, coeff);
+                var prob = HomePlayResolver.SuccessProbability(r1, 1, h3.Situation, h3.Field, coeff, third3);
+                if (!HomeSendDecision.ShouldSendThird(prob, currentOuts + extraOuts, h3.Aggression, h3.Tactics))
+                {
+                    second = r1; // 自重＝二塁で止まる（RNG非消費）
+                    mv?.Add(new RunnerMove(r1, 1, 2, false));
+                }
+                else if (outThrowUsed)
+                {
+                    third = r1; // 送球は既に他塁で使用済み＝三塁は無血進塁（RNG非消費）
+                    mv?.Add(new RunnerMove(r1, 1, 3, false));
+                }
+                else
+                {
+                    var margin = HomePlayResolver.Margin(r1, 1, h3.Situation, h3.Field, coeff, third3);
+                    var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
+                    if (HomePlayResolver.ResolveSafe(r1, 1, h3.Situation, h3.Field, coeff, third3, rng))
+                    {
+                        third = r1;
+                        mv?.Add(new RunnerMove(r1, 1, 3, false) { CloseCall = closeCall });
+                    }
+                    else
+                    {
+                        extraOuts++; thirdOuts++; outThrowUsed = true; // 三塁で刺殺（走者はアウト＝塁上に残らない）
+                        mv?.Add(new RunnerMove(r1, 1, 3, Out: true) { CloseCall = closeCall });
+                    }
+                }
+            }
+            else if (home is not null)
+            {
+                // home!=null かつ三塁が先行走者で塞がっている＝一塁走者は追い越せず二塁止まり（送球なし＝RNG非消費）。
+                second = r1;
+                mv?.Add(new RunnerMove(r1, 1, 2, false));
+            }
             else
             {
-                // 単打では打者が一塁を占有する＝一塁走者は常にフォース（最低でも二塁は確定）。
+                // 従来テーブル（home==null: 単体テスト・純テーブル経路）。決定論・乱数消費順を保存する。
                 // Chance() の評価順は変更前と同一に保つ（third の空き判定を先に短絡させない＝RNG消費順を保存）。
                 if (MathUtil.Chance(P(coeff.FirstToThirdOnSingle, r1.Baserunning, coeff), rng) && third is null)
                 {
@@ -308,7 +352,7 @@ public static class BaserunningModel
         if (isDouble) bases.Second = batter; else bases.First = batter;
         mv?.Add(new RunnerMove(batter, 0, isDouble ? 2 : 1, false));
 
-        return (runs, extraOuts);
+        return (runs, extraOuts, homeOuts, thirdOuts);
     }
 
     /// <summary>三塁で自重していた先行走者を、後続走者に追い越されるため本塁へ押し出す（#88）。

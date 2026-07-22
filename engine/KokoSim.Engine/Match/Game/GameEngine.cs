@@ -23,6 +23,8 @@ public sealed record GameResult
     public int HomeSubstitutions { get; init; }
     /// <summary>本塁クロスプレーで刺された走者の総数（両軍計。バックホーム憤死, 設計書12 §3 F2。統計参考値）。</summary>
     public int HomePlayOuts { get; init; }
+    /// <summary>単打の一塁→三塁レースで三塁憤死した走者の総数（両軍計。Issue #89, 設計書12 §3.5。統計参考値）。</summary>
+    public int ThirdPlayOuts { get; init; }
 
     // ===== design-14 第1段（P1）新プレー発生数（両軍計。統計参考値） =====
     public int FieldersChoiceCount { get; init; }
@@ -174,6 +176,7 @@ public static class GameEngine
             AwaySubstitutions = away.Substitutions,
             HomeSubstitutions = home.Substitutions,
             HomePlayOuts = away.HomePlayOuts + home.HomePlayOuts,
+            ThirdPlayOuts = away.ThirdPlayOuts + home.ThirdPlayOuts,
             FieldersChoiceCount = away.FieldersChoiceCount + home.FieldersChoiceCount,
             DroppedThirdStrikeCount = away.DroppedThirdStrikeCount + home.DroppedThirdStrikeCount,
             ErrorExtraAdvanceCount = away.ErrorExtraAdvanceCount + home.ErrorExtraAdvanceCount,
@@ -824,9 +827,11 @@ public static class GameEngine
             var leadRunnerBefore = bases.Third ?? bases.Second ?? bases.First;
 
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
-            var (runs, extraOuts, homeOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
+            var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, ctx.Baserunning, rng, collectMoves: ctx.CaptureTimelines,
                 homePlay, r1Start);
+            var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
+            var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
             runsThisHalf += runs;
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
@@ -964,6 +969,7 @@ public static class GameEngine
             var outsThisPa = (batterOut ? 1 : 0) + extraOuts + extraOutsFromSign;
 
             offense.HomePlayOuts += homeOuts; // 本塁クロスプレー憤死（F2外野＋G1内野ゴロ, 統計参考値）
+            offense.ThirdPlayOuts += thirdOuts; // 単打の一塁→三塁レース憤死（Issue #89, 統計参考値）
             if (batterSafeOnFc) offense.FieldersChoiceCount++; // 野選（FC, design-14 P1-1。統計参考値）
 
             // 打席解決後の塁状況（塁ダイヤを結果へ更新, #4）。outs はこの後 outsThisPa を加算する前の値。

@@ -31,7 +31,7 @@ public static class GameResultDigest
         var c = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
         sb.AppendLine(string.Create(c, $"{r.AwayName}|{r.HomeName}|A{r.AwayRuns}|H{r.HomeRuns}|IP{r.InningsPlayed}|TP{r.TotalPitches}|PC{r.PitcherChanges}"));
-        sb.AppendLine(string.Create(c, $"sub{r.AwaySubstitutions}/{r.HomeSubstitutions} hpo{r.HomePlayOuts} fc{r.FieldersChoiceCount} d3{r.DroppedThirdStrikeCount} eea{r.ErrorExtraAdvanceCount} pk{r.PickoffCount} iw{r.IntentionalWalkCount} ds3{r.DoubleStealThirdBreakCount}"));
+        sb.AppendLine(string.Create(c, $"sub{r.AwaySubstitutions}/{r.HomeSubstitutions} hpo{r.HomePlayOuts} tpo{r.ThirdPlayOuts} fc{r.FieldersChoiceCount} d3{r.DroppedThirdStrikeCount} eea{r.ErrorExtraAdvanceCount} pk{r.PickoffCount} iw{r.IntentionalWalkCount} ds3{r.DoubleStealThirdBreakCount}"));
         sb.AppendLine(string.Create(c, $"lineA:{string.Join(",", r.AwayLineScore)} lineH:{string.Join(",", r.HomeLineScore)} hits{r.AwayHits}/{r.HomeHits} err{r.AwayErrors}/{r.HomeErrors}"));
         sb.AppendLine(string.Create(c, $"tacA:{r.AwayTactics} tacH:{r.HomeTactics}"));
 

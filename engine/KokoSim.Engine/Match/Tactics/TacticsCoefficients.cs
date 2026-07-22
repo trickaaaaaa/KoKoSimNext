@@ -78,6 +78,15 @@ public sealed record TacticsCoefficients
     /// <summary>aggression(0=超慎重, 0.5=中立, 1=超積極)で閾値を動かす幅。機動力校・攻めの監督で下がる。</summary>
     public double SendHomeAggressionSpan { get; init; } = 0.50;
 
+    // ===== 三塁への送り判定（単打の一塁→三塁, Issue #89, 設計書12 §3.5）=====
+    // 本塁と同型だが、三塁は失うものが小さく積極的に回す＝閾値は本塁より低め。
+    /// <summary>中立采配で三塁へ回す閾値（到達見込みがこの値以上で回す）。</summary>
+    public double SendThirdMinSuccess { get; init; } = 0.60;
+    /// <summary>2アウトは緩和（三塁で止めても得点に直結しない＝積極的に回す）。</summary>
+    public double SendThirdTwoOutRelax { get; init; } = 0.25;
+    /// <summary>aggression で閾値を動かす幅。</summary>
+    public double SendThirdAggressionSpan { get; init; } = 0.45;
+
     // ===== 守備指示判断 =====
     public double BuntShiftProb { get; init; } = 0.50;
     public int InfieldInFromInning { get; init; } = 8;
