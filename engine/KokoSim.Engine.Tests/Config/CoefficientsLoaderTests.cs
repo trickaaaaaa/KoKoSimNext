@@ -176,6 +176,11 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(9, bundle.TeamStrength.LineupSize);
         Assert.Equal(1.037, bundle.TeamStrength.OverallScale, 6);   // リーグ標準化（③）
         Assert.Equal(-6.6, bundle.TeamStrength.OverallOffset, 6);
+
+        // 試合間の回復モデル（issue #41）も YAML から束縛される。
+        Assert.Equal(7.0, bundle.PitchRecovery.FullRecoveryDays, 6);
+        Assert.Equal(100.0, bundle.PitchRecovery.ReferencePitches, 6);
+        Assert.Equal(0.5, bundle.PitchRecovery.MaxReductionFraction, 6);
     }
 
     /// <summary>テスト実行ディレクトリから上へ辿って data/ 配下のファイルを探す。</summary>
