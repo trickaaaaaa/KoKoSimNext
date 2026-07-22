@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
@@ -43,6 +44,58 @@ public sealed class GameRecordAndTeamTests
 
         // 氏名が育成選手から引き継がれる（既定"選手"のままでない）。
         Assert.Contains(team.BattingOrder, p => p.Name != "選手");
+    }
+
+    /// <summary>能力値のみで守備位置適性を持たせた育成選手（Fielding は全員同一水準）。</summary>
+    private static DevelopingPlayer MakeFielderWithAptitude(string name, params (FieldPosition Pos, int Value)[] aptitudes)
+    {
+        var p = new DevelopingPlayer { Name = name };
+        foreach (var k in AbilityKinds.All) { p.SetLevel(k, 60); p.SetCap(k, 99); }
+        foreach (var (pos, value) in aptitudes) p.SetAptitude(pos, value);
+        return p;
+    }
+
+    private static List<DevelopingPlayer> RosterWithCatcherAptitudeCases()
+    {
+        var pitcher = new DevelopingPlayer { Name = "投手", IsPitcher = true };
+        foreach (var k in AbilityKinds.All) { pitcher.SetLevel(k, 60); pitcher.SetCap(k, 99); }
+
+        return new List<DevelopingPlayer>
+        {
+            pitcher,
+            // 捕手専門: 捕手適性だけ突出。他は中庸(50)のまま。
+            MakeFielderWithAptitude("捕手専門", (FieldPosition.Catcher, 90)),
+            // 捕手不向き: 捕手適性が著しく低い。他ポジション適性は中庸。
+            MakeFielderWithAptitude("捕手不向き", (FieldPosition.Catcher, 10)),
+            MakeFielderWithAptitude("内野汎用A"),
+            MakeFielderWithAptitude("内野汎用B"),
+            MakeFielderWithAptitude("内野汎用C"),
+            MakeFielderWithAptitude("外野汎用A"),
+            MakeFielderWithAptitude("外野汎用B"),
+            MakeFielderWithAptitude("外野汎用C"),
+        };
+    }
+
+    [Fact]
+    public void RosterTeamBuilder_Build_AssignsCatcherSpecialist_ToCatcher_NotLowAptitudePlayer()
+    {
+        var team = RosterTeamBuilder.Build(RosterWithCatcherAptitudeCases(), "適性校");
+
+        var catcher = team.BattingOrder.Single(p => p.Position == FieldPosition.Catcher);
+        Assert.Equal("捕手専門", catcher.Name);
+        Assert.DoesNotContain(team.BattingOrder, p => p.Name == "捕手不向き" && p.Position == FieldPosition.Catcher);
+    }
+
+    [Fact]
+    public void RosterTeamBuilder_Build_PositionAssignment_IsDeterministic()
+    {
+        var roster = RosterWithCatcherAptitudeCases();
+        var teamA = RosterTeamBuilder.Build(roster, "決定論校");
+        var teamB = RosterTeamBuilder.Build(roster, "決定論校");
+
+        var assignmentsA = teamA.BattingOrder.Select(p => (p.Name, p.Position)).ToList();
+        var assignmentsB = teamB.BattingOrder.Select(p => (p.Name, p.Position)).ToList();
+        Assert.Equal(assignmentsA, assignmentsB);
     }
 
     // ===== 速報記録 =====
