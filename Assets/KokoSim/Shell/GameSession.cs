@@ -17,7 +17,19 @@ namespace KokoSim.Unity.Shell
     public enum GameMode { Normal, Tournament }
 
     /// <summary>終了した大会の後始末に必要な情報（issue #139: Runner が null化された後も参照できるようにする）。</summary>
-    public readonly record struct TournamentWrapUp(string Title, int TournamentDay, bool IsChampion);
+    public sealed class TournamentWrapUp
+    {
+        public string Title { get; }
+        public int TournamentDay { get; }
+        public bool IsChampion { get; }
+
+        public TournamentWrapUp(string title, int tournamentDay, bool isChampion)
+        {
+            Title = title;
+            TournamentDay = tournamentDay;
+            IsChampion = isChampion;
+        }
+    }
 
     /// <summary>大会モードの進行状態（現在の進行体・大会内経過日・演出フラグ）を全画面へ共有する。</summary>
     public sealed class GameSession
