@@ -852,6 +852,7 @@ public static class CoefficientsLoader
         public double FacilityCoef { get; set; } = D.FacilityCoef;
         public double CoachingLevel { get; set; } = D.CoachingLevel;
         public double CoachingSlope { get; set; } = D.CoachingSlope;
+        public List<FacilityTierDto>? FacilityTiers { get; set; }
         public double LevelUpBase { get; set; } = D.LevelUpBase;
         public double LevelUpGrowth { get; set; } = D.LevelUpGrowth;
         public double AptitudeRequiredExpFactor { get; set; } = D.AptitudeRequiredExpFactor;
@@ -872,6 +873,9 @@ public static class CoefficientsLoader
             FacilityCoef = FacilityCoef,
             CoachingLevel = CoachingLevel,
             CoachingSlope = CoachingSlope,
+            FacilityTiers = FacilityTiers is null
+                ? new TrainingCoefficients().FacilityTiers
+                : FacilityTiers.Select(t => t.ToModel()).ToList(),
             LevelUpBase = LevelUpBase,
             LevelUpGrowth = LevelUpGrowth,
             AptitudeRequiredExpFactor = AptitudeRequiredExpFactor,
@@ -885,6 +889,15 @@ public static class CoefficientsLoader
             MatchLeadExp = MatchLeadExp,
             MatchBaserunningExp = MatchBaserunningExp,
         };
+    }
+
+    private sealed class FacilityTierDto
+    {
+        private static readonly FacilityTier D = new();
+        public double Coef { get; set; } = D.Coef;
+        public int BudgetMinutes { get; set; } = D.BudgetMinutes;
+
+        public FacilityTier ToModel() => new() { Coef = Coef, BudgetMinutes = BudgetMinutes };
     }
 
     private sealed class TrainabilityDto

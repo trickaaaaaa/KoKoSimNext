@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace KokoSim.Engine.Season;
 
 /// <summary>育成式の係数（設計書02 §5.1, YAML駆動）。</summary>
@@ -8,12 +11,23 @@ public sealed record TrainingCoefficients
     /// <summary>副効果の倍率。</summary>
     public double SubFactor { get; init; } = 0.4;
 
-    /// <summary>施設係数。</summary>
+    /// <summary>施設係数（施設レベル0＝現状の基準値）。<see cref="FacilityTiers"/> 未指定時の既定施設係数。</summary>
     public double FacilityCoef { get; init; } = 1.0;
-    /// <summary>指導力（分野別, Phase 5で監督メタに置換）。暫定固定値。</summary>
+    /// <summary>
+    /// 基準指導力（Issue #115）。監督メタ（<see cref="CoachingProfile"/>）を注入しない場合に全分野へ適用する既定値、
+    /// かつ分野別指導力の「中立点」＝この指導力なら従来のシムと1ビット一致する（不変条件#2）。
+    /// 監督指導力を注入すると各能力分野が Manager.Coaching.* で駆動される。
+    /// </summary>
     public double CoachingLevel { get; init; } = 20.0;
     /// <summary>指導力1あたりの効率係数（設計書02: 1 + 指導力×0.005）。</summary>
     public double CoachingSlope { get; init; } = 0.005;
+
+    /// <summary>
+    /// 施設レベル→(係数, 週練習時間) 対応表（Issue #115・設計書03 §4）。index=施設レベル。
+    /// 空（既定）なら <see cref="FacilityCoef"/> / <see cref="DefaultBudgetMinutes"/> をそのまま使い従来一致。
+    /// SeasonContext.FacilityLevel で選択し、レベル0はここでも現状値に据える。
+    /// </summary>
+    public IReadOnlyList<FacilityTier> FacilityTiers { get; init; } = Array.Empty<FacilityTier>();
 
     /// <summary>レベルアップ必要exp = LevelUpBase × LevelUpGrowth^v（設計書02: 100 × 1.05^v）。</summary>
     public double LevelUpBase { get; init; } = 100.0;
