@@ -979,6 +979,10 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-pitchchart { min-height: 340px; flex-grow: 1; }
 .pd2-pchip { position: absolute; flex-direction: row; align-items: center; background-color: #0E1512; border-width: 1px; border-color: #232E28; padding: 4px 9px; }
 .pd2-pchip__name { font-size: 13px; color: #E8ECEA; margin-right: 8px; }
+/* ストレートのみ添えるMAX球速（Issue #130）。数字はnu-num(Oswald)側で右揃え・コンデンス済み。 */
+.pd2-pchip__velo { margin-right: 8px; }
+.pd2-pchip__velo .nu-num { font-size: var(--fs-label); color: var(--color-chalk); }
+.pd2-pchip__velo .nu-unit { font-size: var(--fs-cap); }
 
 /* ═══════════════════════════════════════════════════════════════════════
    ミニマルスクロールバー（全画面共通・リファイン）

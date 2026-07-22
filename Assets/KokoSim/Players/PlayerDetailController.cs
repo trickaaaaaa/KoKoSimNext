@@ -118,7 +118,7 @@ namespace KokoSim.Unity.Players
             BuildList("hidden-list", v.Hidden, BuildHidden);
 
             // 球種変化チャート（全選手・未習得ならストレートのみ, Issue #93）。空状態文言は廃止した。
-            BuildPitchChart(v.Pitches, v.HasPitchData);
+            BuildPitchChart(v.Pitches, v.HasPitchData, v.TopVelocityKmh);
 
             // 特殊能力。
             BuildList("skills-list", v.Skills, BuildSkill);
@@ -159,7 +159,7 @@ namespace KokoSim.Unity.Players
         // ===== 球種変化チャート（プロスピ風） =====
 
         // 各球種のラベルチップを配置（絶対配置）。位置は LayoutChart でレイアウト後に確定する。
-        private void BuildPitchChart(List<PitchData> pitches, bool has)
+        private void BuildPitchChart(List<PitchData> pitches, bool has, int topVelocityKmh)
         {
             if (_chart == null) return;
             _chart.Clear();            // ラベル除去（generateVisualContent はエレメント自体に残る）
@@ -173,6 +173,13 @@ namespace KokoSim.Unity.Players
                 chip.AddToClassList("pd2-pchip");
                 chip.userData = pt;
                 var name = new Label(pt.Name); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
+                // ストレートのみMAX球速を添える（他球種には出さない, Issue #130）。
+                // 最速ヘッダ（meta-velo）と同じ v.TopVelocityKmh を流用し、値を必ず一致させる。
+                if (pt.IsFastball)
+                {
+                    var velo = UiComponents.NumUnit(topVelocityKmh.ToString(), "km/h", false, "pd2-pchip__velo");
+                    chip.Add(velo);
+                }
                 chip.Add(UiComponents.RankChip(pt.Kire));
                 _chart.Add(chip);
             }
