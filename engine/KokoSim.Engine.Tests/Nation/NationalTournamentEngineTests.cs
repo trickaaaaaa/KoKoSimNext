@@ -112,4 +112,35 @@ public sealed class NationalTournamentEngineTests
         Assert.Equal(2, results.Count);
         Assert.DoesNotContain(results, r => r.PrefectureId == 2);
     }
+
+    // 北海道(0)・東京(12)は夏の地方大会だけ2区画に分割される（設計書05 §1.1 / issue #65）。
+    private static NationModel MakeNationWithHokkaidoAndTokyo()
+    {
+        var prefs = new List<Prefecture> { new(0, "北海道", 8), new(12, "東京", 8) };
+        var schools = new List<School>();
+        var id = 0;
+        foreach (var pref in prefs)
+        {
+            for (var s = 0; s < 8; s++)
+            {
+                schools.Add(new School
+                {
+                    Id = id++, Name = $"{pref.Name}校{s}", PrefectureId = pref.Id, Strength = 40 + s, Fame = 45,
+                });
+            }
+        }
+        return new NationModel(prefs, schools);
+    }
+
+    [Fact]
+    public void RunSummer_SplitsHokkaidoAndTokyoIntoTwoRegionsEach()
+    {
+        var nation = MakeNationWithHokkaidoAndTokyo();
+        var (results, _) = RunAll(nation, 11);
+
+        Assert.Equal(4, results.Count);
+        var names = results.Select(r => r.PrefectureName).OrderBy(n => n).ToList();
+        Assert.Equal(new[] { "北北海道", "南北海道", "東東京", "西東京" }.OrderBy(n => n), names);
+        Assert.All(results, r => Assert.True(r.PrefectureId == 0 || r.PrefectureId == 12));
+    }
 }
