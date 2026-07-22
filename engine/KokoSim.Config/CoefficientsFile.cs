@@ -29,6 +29,7 @@ public sealed record CoefficientsBundle
     public FieldingCoefficients Fielding { get; init; } = new();
     public BaserunningCoefficients Baserunning { get; init; } = new();
     public FatigueCoefficients Fatigue { get; init; } = new();
+    public PitchRecoveryCoefficients PitchRecovery { get; init; } = new();
     public KokoSim.Engine.Players.FormCoefficients Form { get; init; } = new();
     public KokoSim.Engine.Players.SkillCoefficients Skills { get; init; } = new();
     public KokoSim.Engine.Players.PersonalityCoefficients Personalities { get; init; } = new();
@@ -82,6 +83,7 @@ public static class CoefficientsLoader
         public FieldingDto? Fielding { get; set; }
         public BaserunningDto? Baserunning { get; set; }
         public FatigueDto? Fatigue { get; set; }
+        public PitchRecoveryDto? PitchRecovery { get; set; }
         public FormDto? Form { get; set; }
         public SkillsDto? Skills { get; set; }
         public PersonalitiesDto? Personalities { get; set; }
@@ -111,6 +113,7 @@ public static class CoefficientsLoader
             Fielding = Fielding?.ToModel() ?? new FieldingCoefficients(),
             Baserunning = Baserunning?.ToModel() ?? new BaserunningCoefficients(),
             Fatigue = Fatigue?.ToModel() ?? new FatigueCoefficients(),
+            PitchRecovery = PitchRecovery?.ToModel() ?? new PitchRecoveryCoefficients(),
             Form = Form?.ToModel() ?? new KokoSim.Engine.Players.FormCoefficients(),
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
             Personalities = Personalities?.ToModel() ?? new KokoSim.Engine.Players.PersonalityCoefficients(),
@@ -575,6 +578,21 @@ public static class CoefficientsLoader
             ControlDropPerOverPitch = ControlDropPerOverPitch,
             RelievePitchMargin = RelievePitchMargin,
             HardCapPitches = HardCapPitches,
+        };
+    }
+
+    private sealed class PitchRecoveryDto
+    {
+        private static readonly PitchRecoveryCoefficients D = new();
+        public double FullRecoveryDays { get; set; } = D.FullRecoveryDays;
+        public double ReferencePitches { get; set; } = D.ReferencePitches;
+        public double MaxReductionFraction { get; set; } = D.MaxReductionFraction;
+
+        public PitchRecoveryCoefficients ToModel() => new()
+        {
+            FullRecoveryDays = FullRecoveryDays,
+            ReferencePitches = ReferencePitches,
+            MaxReductionFraction = MaxReductionFraction,
         };
     }
 
