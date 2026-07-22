@@ -361,6 +361,16 @@ namespace KokoSim.Unity.Home
             while (_feed.Count > 12) _feed.RemoveAt(_feed.Count - 1);
         }
 
+        /// <summary>
+        /// 次戦相手カードに添える通算戦績の一言（issue #84）。新規パネルは作らず既存の1行に追記するだけに留める。
+        /// まだ公式戦の対戦がない校（0勝0敗）は表示しない＝全校が同じ文言で埋まるノイズを避ける。
+        /// </summary>
+        private static string OfficialRecordSuffix(SchoolRecord record)
+        {
+            var total = record.OfficialWins + record.OfficialLosses;
+            return total > 0 ? " ／ 通算" + record.OfficialWins + "勝" + record.OfficialLosses + "敗" : "";
+        }
+
         /// <summary>次の試合カード＋カウントダウンを大会仕様で埋める（要件4・5）。</summary>
         private void FillTournamentView(HomeView view)
         {
@@ -394,7 +404,9 @@ namespace KokoSim.Unity.Home
                 view.CountdownCells = reached ? "本日試合" : days + "日";
                 view.GameTag = r.RoundName;
                 view.AwayTeam = r.NextOpponent?.Name ?? "―";
-                view.AwaySub = r.NextOpponent != null ? "ランク " + r.NextOpponentTier : "";
+                view.AwaySub = r.NextOpponent != null
+                    ? "ランク " + r.NextOpponentTier + OfficialRecordSuffix(s.Records.For(r.NextOpponent.Id))
+                    : "";
                 view.GameDate = reached ? "本日 試合" : "試合まで " + days + " 日";
             }
         }

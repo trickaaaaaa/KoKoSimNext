@@ -45,12 +45,16 @@ public sealed record LivePlayerMatch(
 /// <summary>
 /// 大会概要の1試合行。ManagerInvolved で自校ハイライトを表現する。
 /// MercyEnded はコールドゲーム（マーシールール）成立で打ち切られたか（設計書05 §1.3, Q18）。裏試合合成スコアは常にfalse。
+/// WinnerId/LoserId は通算戦績（<see cref="SchoolRecordBook"/>, issue #84）の集計キー。表示名だけでは
+/// 学校を同定できないため、大会終了時にブラケットから戦績を再集計できるよう School.Id を保持する。
 /// </summary>
 public sealed record BracketMatch(
     string RoundName,
     int RoundsRemaining,
     string WinnerName,
     string LoserName,
+    int WinnerId,
+    int LoserId,
     int WinnerScore,
     int LoserScore,
     bool ManagerInvolved,
@@ -420,7 +424,7 @@ public sealed class TournamentRunner
                 outcome = new PlayerMatchOutcome(
                     managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, roundName, IsChampion: false,
                     Detail: r, ManagerWasAway: detail.ManagerIsAway, MercyEnded: r.MercyEnded);
-                _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mws, mls, true, r.MercyEnded));
+                _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mw.Id, ml.Id, mws, mls, true, r.MercyEnded));
                 RecordCard(round, i, mw.Id == a.Id, mws, mls, r.MercyEnded);
                 next[i] = mw;
                 continue;
@@ -429,7 +433,7 @@ public sealed class TournamentRunner
             // 背景カード（フルシム or 集計モデル）。自校が resolver 無しで関与する場合もここ。
             var (winner, loser, winScore, loseScore) = ResolveBackgroundCard(a, b, roundsRemaining, i);
             _matches.Add(new BracketMatch(
-                roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, involvesManager));
+                roundName, roundsRemaining, winner.Name, loser.Name, winner.Id, loser.Id, winScore, loseScore, involvesManager));
             RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
 
             if (involvesManager)
@@ -482,7 +486,7 @@ public sealed class TournamentRunner
             }
 
             var (winner, loser, winScore, loseScore) = ResolveBackgroundCard(a, b, roundsRemaining, i);
-            _matches.Add(new BracketMatch(roundName, roundsRemaining, winner.Name, loser.Name, winScore, loseScore, false));
+            _matches.Add(new BracketMatch(roundName, roundsRemaining, winner.Name, loser.Name, winner.Id, loser.Id, winScore, loseScore, false));
             RecordCard(round, i, winner.Id == a.Id, winScore, loseScore);
             next[i] = winner;
         }
@@ -507,7 +511,7 @@ public sealed class TournamentRunner
         var loseScore = Math.Min(mgrRuns, oppRuns);
         var round = RoundIndexOf(p.Cur);
         _matches.Add(new BracketMatch(
-            p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winScore, loseScore, true, result.MercyEnded));
+            p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winner.Id, loser.Id, winScore, loseScore, true, result.MercyEnded));
         RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore, result.MercyEnded);
         p.Next[p.Slot] = winner;
 
@@ -520,7 +524,7 @@ public sealed class TournamentRunner
             if (b is null) { p.Next[i] = a; continue; }
 
             var (w, l, ws, ls) = ResolveBackgroundCard(a, b, p.RoundsRemaining, i);
-            _matches.Add(new BracketMatch(p.RoundName, p.RoundsRemaining, w.Name, l.Name, ws, ls, false));
+            _matches.Add(new BracketMatch(p.RoundName, p.RoundsRemaining, w.Name, l.Name, w.Id, l.Id, ws, ls, false));
             RecordCard(round, i, w.Id == a.Id, ws, ls);
             p.Next[i] = w;
         }

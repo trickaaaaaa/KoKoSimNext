@@ -70,6 +70,12 @@ namespace KokoSim.Unity.Shell
         public PlayerStatStore Stats { get; } = new PlayerStatStore();
 
         /// <summary>
+        /// 学校ごとの通算戦績（公式戦勝敗・甲子園出場回数, issue #84）。Stats と同様に大会をまたいで永続する。
+        /// 大会終了時にブラケット全試合（自校戦＋裏試合）を <see cref="ExitTournamentIfFinished"/> で畳み込む。
+        /// </summary>
+        public SchoolRecordBook Records { get; } = new SchoolRecordBook();
+
+        /// <summary>
         /// 試合前スタメン設定（打順・守備位置・DH・先発）。試合開始フローのスタメン画面で確定して書き込む。
         /// null＝未設定（RosterTeamBuilder.Build の自動編成へフォールバック）。
         /// </summary>
@@ -245,6 +251,8 @@ namespace KokoSim.Unity.Shell
         private void ExitTournamentIfFinished()
         {
             if (Runner == null || !Runner.Finished) return;
+            // ブラケット全試合（自校戦＋裏試合）を通算戦績へ畳み込む（issue #84）。夏の優勝校は甲子園出場として記録。
+            Records.FoldTournament(Runner.BuildBracketView().Matches, Kind, Year);
             PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion);
             Mode = GameMode.Normal;
             Runner = null;
