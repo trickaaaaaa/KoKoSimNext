@@ -194,6 +194,10 @@ baserunning:
   third_tag_seconds: 0.10                     # 三塁でのベースタッチ（本塁クロスプレーより短い）
   third_margin_scale: 0.45                    # margin→確率のlogistic幅（本塁より広め＝打球の深さ・外野の肩を効かせる）
   third_success_bias: 1.50                    # 一塁→三塁の到達率・三塁憤死を現実値へ校正（Heavy実測, Issue #89）
+  # 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）: 走者は捕球時刻にスタート（二次リードなし＝全塁間27.4mを走る）、
+  # 守備も同じ捕球時刻から送球＝共通起点が捕球時刻。深い外野フライは送球が長く生還、浅いフライは自重/憤死。
+  tag_up_margin_scale: 0.40                   # margin→生還確率のlogistic幅（本塁クロスプレーより広め＝深さ・肩を効かせる）
+  tag_up_success_bias: 1.50                   # 生還率・本塁憤死頻度を現実値へ校正（Heavy実測, Issue #90。球質タイプ中立を維持）
   close_call_margin_seconds: 0.15            # 判定オーバーレイ（Issue #59）: |margin|がこれ未満なら「際どい」＝セーフ表示。アウトは常時表示のため無関係
   # ライナー併殺（コンタクト始動の一塁走者が捕られ戻れず, 設計書12 §4, G2）
   liner_break_reaction_seconds: 0.05         # 接触と同時に飛び出す＝ほぼ即時

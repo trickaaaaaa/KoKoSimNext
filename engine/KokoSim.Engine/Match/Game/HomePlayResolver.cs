@@ -141,4 +141,46 @@ public static class HomePlayResolver
         => ResolveSafe(runner, fromBase, s, field, c, HomeParams(c), rng, extraStartDelaySeconds)
             ? HomePlayResult.Safe
             : HomePlayResult.OutAtHome;
+
+    // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
+    // タッグアップは本塁クロスプレー（安打・ゴロの本塁レース）と1点だけ違う: 走者の時計の起点が
+    // 「打球の到達」ではなく「捕球の瞬間」＝離塁は捕球後。守備も同じ捕球時刻から送球する（DefenseTimeSeconds
+    // は BallFieldedAtSeconds を含む）ため、共通起点は捕球時刻になり互いに相殺する。残る勝負は
+    // 「塁間を全部走る時間（二次リードなし）」対「捕球地点→塁の送球時間」だけ＝打球の深さ・方向と外野の肩が効く。
+
+    /// <summary>犠飛のタッチアップ用レース係数束（本塁へ還す想定）。送球先=本塁・タッチ=HomeTagSeconds、
+    /// バイアス/幅はタッチアップ固有（<see cref="BaserunningCoefficients.TagUpSuccessBias"/> /
+    /// <see cref="BaserunningCoefficients.TagUpMarginScale"/>）。</summary>
+    public static BasePlayParams TagUpHomeParams(BaserunningCoefficients c)
+        => new(4, new Vector3D(0, 0, 0), c.HomeTagSeconds, c.TagUpSuccessBias, c.TagUpMarginScale);
+
+    /// <summary>
+    /// タッチアップ走者が目標塁へ到達する所要時間[s]（接触基準）。離塁は捕球後なので起点は捕球時刻
+    /// （<paramref name="s"/>.BallFieldedAtSeconds）。二次リードは取れない（捕球時にベースへ触れている）ため
+    /// 塁間は全距離を走る。
+    /// </summary>
+    public static double TagUpRunnerTimeSeconds(
+        Player runner, int fromBase, int toBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c)
+    {
+        var startDelay = Math.Max(0.10, c.HomeRunnerReactionIntercept - runner.Baserunning * c.HomeRunnerReactionSlope);
+        var distance = (toBase - fromBase) * field.BaseDistanceM; // 二次リードなし＝全塁間
+        return s.BallFieldedAtSeconds + distance / runner.ToFielder().SprintSpeedMps + startDelay;
+    }
+
+    /// <summary>タッチアップ到達の margin[s]（守備所要−走者所要＋バイアス）。塁は <paramref name="p"/> で指定。</summary>
+    public static double TagUpMargin(
+        Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c, in BasePlayParams p)
+        => DefenseTimeSeconds(s, p.TargetPoint, p.TagSeconds, c)
+           - TagUpRunnerTimeSeconds(runner, fromBase, p.TargetBase, s, field, c) + p.SuccessBias;
+
+    /// <summary>タッチアップ生還成功確率（走塁と同式の logistic）。塁は <paramref name="p"/> で指定。</summary>
+    public static double TagUpSuccessProbability(
+        Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c, in BasePlayParams p)
+        => MathUtil.Clamp(MathUtil.Logistic(TagUpMargin(runner, fromBase, s, field, c, p) / p.MarginScale), 0.01, 0.99);
+
+    /// <summary>タッチアップの到達レースを解決（true=生還 / false=本塁憤死）。塁は <paramref name="p"/> で指定。</summary>
+    public static bool TagUpResolveSafe(
+        Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
+        in BasePlayParams p, IRandomSource rng)
+        => MathUtil.Chance(TagUpSuccessProbability(runner, fromBase, s, field, c, p), rng);
 }

@@ -16,7 +16,8 @@ namespace KokoSim.Engine.Match.Game;
 /// 三層（校風/ティア/采配）写像は残Q10。現状は中立固定で配線する。</param>
 /// <param name="InfieldDepth">守備側の内野深さ（設計書12 §4/§5, G1）。前進=本塁で刺す/後退=献上を
 /// ゴロ凡打の三塁走者判定へ反映する（深さの相互参照）。</param>
-/// <param name="IsFly">この打球がフライか（犠飛はタッグアップの時計が異なるため G1 の対象外＝従来テーブル）。</param>
+/// <param name="IsFly">この打球がフライか。ゴロ(false)は G1 の守備深さ駆動の本塁レース、フライ(true)は
+/// 捕球時刻を起点とする犠飛タッチアップの物理レース（Issue #90, 設計書12 §3.5）へ分岐する。</param>
 public readonly record struct HomePlayContext(
     FieldGeometry Field,
     HomePlaySituation Situation,
