@@ -376,7 +376,7 @@ namespace KokoSim.Unity.Lineup
         }
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
-        private static VisualElement CompareRowEl(CompareRowView r)
+        private static VisualElement CompareRowEl(KokoSim.Unity.Shell.PlayerCompareRow r)
             => UiComponents.CompareRow(new CompareRowData
             {
                 Label = r.Label,
