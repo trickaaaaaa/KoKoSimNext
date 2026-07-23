@@ -138,6 +138,18 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(0.30, bundle.Tactics.SendHomeTwoOutRelax, 6);
         Assert.Equal(0.50, bundle.Tactics.SendHomeAggressionSpan, 6);
 
+        // 施設（Issue #128）: 4系統が YAML から束縛され、全系統Lv3で旧Lv4包絡 (2.40 / 700分) を再現する
+        // ＝ yaml と C#既定(FacilityCatalog.Default)のドリフト検出。年間固定支出も束縛される。
+        Assert.Equal(4, bundle.Facilities.Facilities.Count);
+        var maxSet = new KokoSim.Engine.Season.FacilitySet();
+        foreach (var f in bundle.Facilities.Facilities) maxSet.SetLevel(f.Id, f.MaxLevel);
+        var (coefAdd, budgetAdd) = bundle.Facilities.Aggregate(maxSet);
+        Assert.Equal(1.40, coefAdd, 3);
+        Assert.Equal(400, budgetAdd);
+        Assert.Equal(20.0, bundle.Career.SummerCampCost, 6);
+        Assert.Equal(25.0, bundle.Career.WinterCampCost, 6);
+        Assert.Equal(15.0, bundle.Career.ScoutCost, 6);
+
         // 練習試合（設計書03 §週ターン③）の係数も YAML から束縛される。
         Assert.Equal(1.0, bundle.PracticeMatch.Cost, 6);
         Assert.Equal(0.80, bundle.PracticeMatch.BaseAccept, 6);
