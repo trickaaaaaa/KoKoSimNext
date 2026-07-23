@@ -154,6 +154,40 @@ public sealed class GameRecordAndTeamTests
     }
 
     [Fact]
+    public void Play_RecordsPersonalRuns_SummingToTeamRuns()
+    {
+        // 得点（個人の生還数, issue #77）: 打者別 Runs の合計＝チーム総得点。CaptureTimelines 未指定でも成立
+        // （GameEngine は自校詳細試合専用で常に moves を収集する）。複数シードで多様な得点経路を通す。
+        for (ulong seed = 1; seed <= 30; seed++)
+        {
+            var away = StrengthTeam(58, "遠征校", seed * 2);
+            var home = StrengthTeam(52, "地元校", seed * 2 + 1);
+            var result = GameEngine.Play(away, home, new GameContext(), new Xoshiro256Random(seed));
+
+            Assert.Equal(result.AwayRuns, result.AwayBatting.Sum(b => b.Runs));
+            Assert.Equal(result.HomeRuns, result.HomeBatting.Sum(b => b.Runs));
+        }
+    }
+
+    [Fact]
+    public void Play_RecordsHomeRunsAllowed_MatchingOpponentHomeRuns()
+    {
+        // 被本塁打（issue #77）: 投手陣の被本塁打合計＝相手打線の本塁打合計。
+        var totalHra = 0;
+        for (ulong seed = 1; seed <= 40; seed++)
+        {
+            var away = StrengthTeam(62, "強打校", seed * 3);
+            var home = StrengthTeam(48, "投手校", seed * 3 + 1);
+            var result = GameEngine.Play(away, home, new GameContext(), new Xoshiro256Random(seed));
+
+            Assert.Equal(result.AwayBatting.Sum(b => b.HomeRuns), result.HomePitching.Sum(p => p.HomeRunsAllowed));
+            Assert.Equal(result.HomeBatting.Sum(b => b.HomeRuns), result.AwayPitching.Sum(p => p.HomeRunsAllowed));
+            totalHra += result.HomePitching.Sum(p => p.HomeRunsAllowed) + result.AwayPitching.Sum(p => p.HomeRunsAllowed);
+        }
+        Assert.True(totalHra > 0, "40試合で被本塁打が一度も記録されない＝配線ミス");
+    }
+
+    [Fact]
     public void Play_IsDeterministic_IncludingLog()
     {
         var a1 = StrengthTeam(55, "A", 5);

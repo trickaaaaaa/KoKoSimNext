@@ -19,6 +19,11 @@ namespace KokoSim.Unity.Players
         private Button _designateButton;
         private RadarChartView _radar;
 
+        // 成績タブ（issue #77）: 0=能力 / 1=成績。スコープ: 0=通算 / 1=公式戦 / 2=大会別。
+        private int _tab;
+        private int _scope;
+        private PlayerDetailView _view;
+
         // 能力バランスの半径比（軸ラベルは出さず、左の能力バー一覧が凡例を兼ねる）。
         private const float RadiusFactor = 0.42f;
 
@@ -74,12 +79,21 @@ namespace KokoSim.Unity.Players
                 _chart.RegisterCallback<GeometryChangedEvent>(_ => LayoutChart());
             }
 
+            // タブ（能力/成績）・スコープ（通算/公式戦/大会別）の切替（issue #77）。
+            WireClick("tab-abilities-btn", () => { _tab = 0; ApplyTab(); });
+            WireClick("tab-stats-btn", () => { _tab = 1; ApplyTab(); });
+            WireClick("scope-career", () => { _scope = 0; ApplyScope(); });
+            WireClick("scope-official", () => { _scope = 1; ApplyScope(); });
+            WireClick("scope-tourn", () => { _scope = 2; ApplyScope(); });
+
             Render();
+            ApplyTab();
         }
 
         private void Render()
         {
             var v = _state.BuildView(PlayerSelection.Index);
+            _view = v;
 
             SetText("number", v.Number);
             SetText("name", v.Name);
@@ -124,13 +138,125 @@ namespace KokoSim.Unity.Players
             BuildList("skills-list", v.Skills, BuildSkill);
             SetDisplay("skills-empty", !v.HasSkills);
 
-            // 簡易成績。
-            SetText("tourn-label", "今大会（データ未接続）");
-            BuildStatRow("tourn-stats", v.TournamentStats);
-            BuildStatRow("career-stats", v.CareerStats);
+            // 成績（issue #77）はタブ表示時に RenderStats で描く。
 
             // レーダー描画データ更新（塗り色は総合ランク連動＝部品辞書の既定）。
             _radar.SetData(v.Radar, v.OverallGrade);
+        }
+
+        // ===== 成績タブ（issue #77） =====
+
+        private void WireClick(string name, System.Action onClick)
+        {
+            var el = _root.Q<Label>(name);
+            if (el != null) el.RegisterCallback<ClickEvent>(_ => onClick());
+        }
+
+        private void ApplyTab()
+        {
+            SetDisplay("tab-abilities", _tab == 0);
+            SetDisplay("tab-stats", _tab == 1);
+            Toggle("tab-abilities-btn", "pd2-tab--on", _tab == 0);
+            Toggle("tab-stats-btn", "pd2-tab--on", _tab == 1);
+            if (_tab == 1) ApplyScope();
+        }
+
+        private void ApplyScope()
+        {
+            Toggle("scope-career", "pd2-scope__item--on", _scope == 0);
+            Toggle("scope-official", "pd2-scope__item--on", _scope == 1);
+            Toggle("scope-tourn", "pd2-scope__item--on", _scope == 2);
+            RenderStats();
+        }
+
+        private void RenderStats()
+        {
+            if (_view == null) return;
+            var isTourn = _scope == 2;
+            SetDisplay("scope-panel", !isTourn);
+            SetDisplay("tourn-panel", isTourn);
+
+            if (isTourn)
+            {
+                RenderTournamentRows(_view.TournamentRows);
+                SetDisplay("stats-empty", _view.TournamentRows.Count == 0);
+                return;
+            }
+
+            var s = _scope == 1 ? _view.OfficialStatsFull : _view.CareerStatsFull;
+            FillCells("bat-cells", s.Batting);
+            FillCells("pit-cells", s.Pitching);
+            SetDisplay("bat-card", s.HasBatting);
+            SetDisplay("pit-card", s.HasPitching);
+            SetDisplay("stats-empty", !s.HasBatting && !s.HasPitching);
+        }
+
+        private void FillCells(string container, List<StatCell> cells)
+        {
+            var box = _root.Q<VisualElement>(container);
+            if (box == null) return;
+            box.Clear();
+            foreach (var c in cells) box.Add(BuildStatCell(c));
+        }
+
+        // 1指標セル: ラベル（小）＋値（コンデンス数字・右揃え）。装飾なし（UI原則③）。
+        private static VisualElement BuildStatCell(StatCell c)
+        {
+            var cell = new VisualElement();
+            cell.AddToClassList("pd2-statcell");
+            var k = new Label(c.Label);
+            k.AddToClassList("pd2-statcell__k");
+            var val = new Label(c.Value);
+            val.AddToClassList("pd2-statcell__v");
+            val.AddToClassList("f-num");
+            cell.Add(k);
+            cell.Add(val);
+            return cell;
+        }
+
+        private void RenderTournamentRows(List<TournamentStatRow> rows)
+        {
+            var box = _root.Q<VisualElement>("tourn-rows");
+            if (box == null) return;
+            box.Clear();
+            foreach (var r in rows)
+            {
+                var row = new VisualElement();
+                row.AddToClassList("pd2-trow");
+
+                var head = new VisualElement();
+                head.AddToClassList("pd2-trow__head");
+                var num = new Label(r.Number);
+                num.AddToClassList("pd2-trow__num");
+                num.AddToClassList("f-num");
+                var slot = new Label(r.Slot);
+                slot.AddToClassList("pd2-trow__slot");
+                head.Add(num);
+                head.Add(slot);
+                row.Add(head);
+
+                var bat = new VisualElement();
+                bat.AddToClassList("pd2-statgrid");
+                foreach (var c in r.Batting) bat.Add(BuildStatCell(c));
+                row.Add(bat);
+
+                if (r.HasPitching)
+                {
+                    var pit = new VisualElement();
+                    pit.AddToClassList("pd2-statgrid");
+                    pit.AddToClassList("pd2-statgrid--pit");
+                    foreach (var c in r.Pitching) pit.Add(BuildStatCell(c));
+                    row.Add(pit);
+                }
+                box.Add(row);
+            }
+        }
+
+        private void Toggle(string name, string cls, bool on)
+        {
+            var el = _root.Q(name);
+            if (el == null) return;
+            if (on) el.AddToClassList(cls); else el.RemoveFromClassList(cls);
         }
 
         // ===== 行ビルダー =====
@@ -404,20 +530,6 @@ namespace KokoSim.Unity.Players
             var name = new Label(s.Name); name.AddToClassList("pd2-skill__name"); wrap.Add(name);
             var desc = new Label(s.Desc); desc.AddToClassList("pd2-skill__desc"); wrap.Add(desc);
             return wrap;
-        }
-
-        private void BuildStatRow(string container, List<(string Label, string Value)> stats)
-        {
-            var box = _root.Q<VisualElement>(container);
-            if (box == null) return;
-            box.Clear();
-            foreach (var s in stats)
-            {
-                var cell = new VisualElement(); cell.AddToClassList("pd2-stat");
-                var val = new Label(s.Value); val.AddToClassList("pd2-stat__v"); val.AddToClassList("f-num-bd"); cell.Add(val);
-                var k = new Label(s.Label); k.AddToClassList("pd2-stat__k"); cell.Add(k);
-                box.Add(cell);
-            }
         }
 
         // ===== 補助 =====

@@ -253,11 +253,27 @@ namespace KokoSim.Unity.Shell
             if (Runner == null || !Runner.Finished) return;
             // ブラケット全試合（自校戦＋裏試合）を通算戦績へ畳み込む（issue #84）。夏の優勝校は甲子園出場として記録。
             Records.FoldTournament(Runner.BuildBracketView().Matches, Kind, Year);
+            // 大会別アーカイブ（issue #77）: 今大会成績を「当時の学年×大会枠」＋当時の背番号で確定する。
+            // 現状フローは夏(県)=SummerPref・秋(県)=Autumn のみ。甲子園/センバツ枠は tournament Phase 3 で populate。
+            ArchiveTournamentStats();
             PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion);
             Mode = GameMode.Normal;
             Runner = null;
             BannerPending = false;
             // ResultPending はここでは変えない＝結果モーダルは引き続き表示する。
+        }
+
+        /// <summary>
+        /// 今大会成績を大会別アーカイブへ確定する（issue #77）。TournamentKind→TournamentSlot を写し、
+        /// 在籍部員の (当時の学年, 当時の背番号) を sourceId=DevelopingPlayer.Id で引いて渡す。
+        /// </summary>
+        private void ArchiveTournamentStats()
+        {
+            var slot = Kind == TournamentKind.Autumn ? TournamentSlot.Autumn : TournamentSlot.SummerPref;
+            var info = new Dictionary<int, (int Grade, int UniformNumber)>();
+            foreach (var p in RosterService.Roster)
+                if (p.Id > 0) info[p.Id] = (p.Grade, p.UniformNumber);
+            Stats.ArchiveCurrentTournament(slot, info);
         }
 
         /// <summary>大会終了の後始末情報を取り出して消費する（結果モーダルのOKクリックから1回だけ呼ぶ）。</summary>
