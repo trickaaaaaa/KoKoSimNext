@@ -43,7 +43,8 @@ namespace KokoSim.Unity.Member
         public bool Present;
         public string Name = "";
         public string GradeLabel = "";
-        public string OverallGrade = "";
+        public string HandLabel = "";    // 投打（例「右投左打」）
+        public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);   // カテゴリ別ランク（打撃/走力/守備/投手）
         public bool IsCaptain;
     }
 
@@ -123,6 +124,9 @@ namespace KokoSim.Unity.Member
             ("スタミナ", p => p.Level(AbilityKind.Stamina)),
             ("球種", p => p.Level(AbilityKind.PitchRank)),
         };
+
+        // カテゴリ別ランク算出係数（チーム総合力パネル等と同一・単一ソース、Issue #140）。
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         // 統合モデル：_picked＝クリックで選択中の選手（比較の左）。_hovered＝カーソルを合わせた選手（比較の右）。
@@ -291,7 +295,8 @@ namespace KokoSim.Unity.Member
                 Present = true,
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
-                OverallGrade = OverallGrade(p),
+                HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
+                Strength = PlayerStrengthProfile.Compute(p, Coeff),
                 IsCaptain = p.IsCaptain,
             };
         }

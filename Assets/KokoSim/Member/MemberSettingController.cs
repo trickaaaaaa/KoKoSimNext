@@ -444,7 +444,6 @@ namespace KokoSim.Unity.Member
                 var group = new Label(v.TabLabels[v.Tab]);
                 group.AddToClassList("ms-cmp-group");
                 rows.Add(group);
-                rows.Add(UiComponents.CompareHeader());
                 foreach (var r in v.Rows) rows.Add(CompareRowEl(r));
             }
 
@@ -528,7 +527,9 @@ namespace KokoSim.Unity.Member
             var meta = new VisualElement();
             meta.AddToClassList("cmp-card__meta");
             meta.Add(GradeLabel(card.GradeLabel));
-            meta.Add(UiComponents.RankChip(card.OverallGrade));
+            var hand = new Label(card.HandLabel);
+            hand.AddToClassList("cmp-card__hand");
+            meta.Add(hand);
             if (card.IsCaptain)
             {
                 var cap = new Label("主将");
@@ -538,6 +539,7 @@ namespace KokoSim.Unity.Member
                 meta.Add(cap);
             }
             el.Add(meta);
+            el.Add(UiComponents.CategoryRankChips(card.Strength));
         }
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
