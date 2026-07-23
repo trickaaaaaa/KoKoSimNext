@@ -1702,6 +1702,9 @@ public static class CoefficientsLoader
         private static readonly PersistentRosterCoefficients D = new();
         private static readonly PhenomCoefficients PD = new();
         public int PitchersPerCohort { get; set; } = D.PitchersPerCohort;
+        public int PitcherPoolSize { get; set; } = D.PitcherPoolSize;
+        public double PitcherEmergenceBias { get; set; } = D.PitcherEmergenceBias;
+        public int PitcherCountFloor { get; set; } = D.PitcherCountFloor;
         public double FreshmanGap { get; set; } = D.FreshmanGap;
         public double FameRecruitWeight { get; set; } = D.FameRecruitWeight;
         public double AnnualGrowth { get; set; } = D.AnnualGrowth;
@@ -1729,6 +1732,9 @@ public static class CoefficientsLoader
         public PersistentRosterCoefficients ToModel() => new()
         {
             PitchersPerCohort = PitchersPerCohort,
+            PitcherPoolSize = PitcherPoolSize,
+            PitcherEmergenceBias = PitcherEmergenceBias,
+            PitcherCountFloor = PitcherCountFloor,
             FreshmanGap = FreshmanGap,
             FameRecruitWeight = FameRecruitWeight,
             AnnualGrowth = AnnualGrowth,
