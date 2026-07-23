@@ -679,7 +679,10 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     border-radius: var(--radius-chip); padding: var(--sp-1) var(--sp-2);
 }
 .brk-champ__cap { font-size: var(--fs-cap); color: var(--tx-2); margin: 0; letter-spacing: 1px; }
-.brk-champ__name { font-size: var(--fs-label); color: var(--tx-1); margin: 0; }
+.brk-champ__name {
+    font-size: var(--fs-label); color: var(--tx-1); margin: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .brk-champ__name--fav { color: var(--sky); }
 .brk-champ__name--tbd { color: var(--tx-3); -unity-font-style: normal; }
 

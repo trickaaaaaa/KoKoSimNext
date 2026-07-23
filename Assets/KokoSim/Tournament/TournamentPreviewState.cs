@@ -57,7 +57,7 @@ namespace KokoSim.Unity.Tournament
         /// <summary>樹形図の1スロット（カードの上側／下側）の表示行。</summary>
         public sealed class BracketSlotRow
         {
-            public string Name;         // 校名。未確定枠は「（未定）」、不戦勝の空き枠は「（不戦勝）」
+            public string Name;         // 校名。未確定枠（不戦勝の空き枠を含む）は「（未定）」
             public string Score;        // 消化済みカードのみ。未消化は空文字
             public bool IsManager;      // 自校ライン（アンバー強調）
             public bool IsWinner;       // 勝ち上がった側
@@ -227,8 +227,9 @@ namespace KokoSim.Unity.Tournament
 
         private static BracketSlotRow Slot(BracketSlot s, BracketCard card)
         {
-            // 不戦勝カードの空き側は「（不戦勝）」。相手側は勝者扱いにして自校ラインを途切れさせない。
-            var name = s.IsDetermined ? s.TeamName : (card.IsBye ? "（不戦勝）" : "（未定）");
+            // 不戦勝カードの空き側は Controller 側で描画自体を省く（issue #188）。相手側は勝者扱いにして
+            // 自校ラインを途切れさせない。
+            var name = s.IsDetermined ? s.TeamName : "（未定）";
             var isWinner = s.IsWinner || (card.IsBye && s.IsDetermined);
             return new BracketSlotRow
             {
