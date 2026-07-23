@@ -195,10 +195,10 @@ namespace KokoSim.Unity.Players
             v.TopVelocityKmh = Kmh(p.Level(AbilityKind.Velocity));
 
             // 投手能力・野手能力（両方表示：モック準拠）。
-            v.PitcherAbilities.Add(Bar(p, AbilityKind.Velocity, "球速"));
-            v.PitcherAbilities.Add(Bar(p, AbilityKind.Control, "制球"));
-            v.PitcherAbilities.Add(Bar(p, AbilityKind.Stamina, "スタミナ"));
-            v.PitcherAbilities.Add(Bar(p, AbilityKind.PitchRank, "球種"));
+            v.PitcherAbilities.Add(Bar(p, AbilityKind.Velocity, AbilityLabels.Jp(AbilityKind.Velocity)));
+            v.PitcherAbilities.Add(Bar(p, AbilityKind.Control, AbilityLabels.Jp(AbilityKind.Control)));
+            v.PitcherAbilities.Add(Bar(p, AbilityKind.Stamina, AbilityLabels.Jp(AbilityKind.Stamina)));
+            v.PitcherAbilities.Add(Bar(p, AbilityKind.PitchRank, AbilityLabels.Jp(AbilityKind.PitchRank)));
 
             v.FielderAbilities.Add(Bar(p, AbilityKind.Contact, "ミート"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Power, "パワー"));
@@ -447,9 +447,10 @@ namespace KokoSim.Unity.Players
             }
         }
 
-        // 球速内部値(1〜100)→km/h（表示近似。実シムの物理変換はエンジン係数側）。
+        // 球速内部値(1〜100)→km/h。変換はエンジンの公開API（表示層→物理層の唯一の集約点, 不変条件#1）に一本化する。
+        // UI側で式を再実装しない（旧独自式 118+Lv*0.42 は廃止, issue #94）。
         private static int Kmh(int velLevel)
-            => (int)System.Math.Round(118 + velLevel * 0.42);
+            => (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(velLevel));
 
         // ストレートの扇の長さ（変化量軸では短尺固定。伸びは Extend01＝扇の幅で読ませる）。
         private const float FastballBreak01 = 0.15f;

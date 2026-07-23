@@ -82,6 +82,11 @@ namespace KokoSim.Unity.Lineup
         public bool HasA;
         public bool HasB;
         public int Winner;   // -1=A, 0=互角, 1=B
+        // 物理量表示（issue #94）: 球速行だけ km/h テキスト＋Levelバー幅。null/負なら Level 生値表示。
+        public string TextA;
+        public string TextB;
+        public int FillA = -1;
+        public int FillB = -1;
     }
 
     public sealed class LineupSettingView
@@ -152,11 +157,16 @@ namespace KokoSim.Unity.Lineup
             ("肩", p => p.Level(AbilityKind.ArmStrength)),
             ("送球", p => p.Level(AbilityKind.ThrowAccuracy)),
             ("リード", p => p.Lead),
-            ("球速", p => p.Level(AbilityKind.Velocity)),
-            ("制球", p => p.Level(AbilityKind.Control)),
-            ("スタミナ", p => p.Level(AbilityKind.Stamina)),
-            ("球種", p => p.Level(AbilityKind.PitchRank)),
+            (AbilityLabels.Jp(AbilityKind.Velocity), p => p.Level(AbilityKind.Velocity)),
+            (AbilityLabels.Jp(AbilityKind.Control), p => p.Level(AbilityKind.Control)),
+            (AbilityLabels.Jp(AbilityKind.Stamina), p => p.Level(AbilityKind.Stamina)),
+            (AbilityLabels.Jp(AbilityKind.PitchRank), p => p.Level(AbilityKind.PitchRank)),
         };
+
+        // 球速行の判定と km/h 表示（issue #94）。変換はエンジンの公開APIに一本化（UI側で式を再実装しない）。
+        private static readonly string VelocityLabel = AbilityLabels.Jp(AbilityKind.Velocity);
+        private static string KmhText(int velLevel)
+            => (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(velLevel)) + "km/h";
 
         // 守備適性ダイヤ用の9守備位置（投捕一二三遊左中右順）。
         private static readonly FieldPosition[] AptOrder =
@@ -560,6 +570,12 @@ namespace KokoSim.Unity.Lineup
                 if (b != null) row.ValueB = get(b);
                 if (a != null && b != null)
                     row.Winner = row.ValueA > row.ValueB ? -1 : row.ValueA < row.ValueB ? 1 : 0;
+                // 球速だけ物理量なので km/h テキスト表示（バー幅は Level のまま, issue #94）。
+                if (label == VelocityLabel)
+                {
+                    if (a != null) { row.TextA = KmhText(row.ValueA); row.FillA = row.ValueA; }
+                    if (b != null) { row.TextB = KmhText(row.ValueB); row.FillB = row.ValueB; }
+                }
                 v.Rows2.Add(row);
             }
         }

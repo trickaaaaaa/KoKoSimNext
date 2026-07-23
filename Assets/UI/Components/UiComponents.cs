@@ -43,6 +43,12 @@ namespace KokoSim.Unity.Components
         public bool HasA;
         public bool HasB;
         public int Winner;          // -1=A が優位 / 1=B が優位 / 0=同値・比較不能
+        // --- 物理量表示（issue #94）: 表示テキストとバー幅を分離。既定 null/負値なら ValueA/ValueB をそのまま使う
+        //     ＝従来 caller は無改修で同一表示。球速行だけ TextA="148km/h"（engine変換）＋FillA=Level(0-100) を渡す。 ---
+        public string TextA;        // A の値ラベル上書き（null＝ValueA.ToString()）
+        public string TextB;        // B の値ラベル上書き（null＝ValueB.ToString()）
+        public int FillA = -1;      // A のバー幅[0-100]（負＝ValueA を流用）。表示スケール統一のため Level を渡す
+        public int FillB = -1;      // B のバー幅[0-100]（負＝ValueB を流用）
     }
 
     /// <summary>
@@ -334,8 +340,8 @@ namespace KokoSim.Unity.Components
             lab.AddToClassList("cmp-row__lab");
             row.Add(lab);
 
-            row.Add(CompareSide("a", d.HasA, d.ValueA, d.Winner == -1));
-            row.Add(CompareSide("b", d.HasB, d.ValueB, d.Winner == 1));
+            row.Add(CompareSide("a", d.HasA, d.ValueA, d.TextA, d.FillA, d.Winner == -1));
+            row.Add(CompareSide("b", d.HasB, d.ValueB, d.TextB, d.FillB, d.Winner == 1));
             return row;
         }
 
@@ -396,15 +402,17 @@ namespace KokoSim.Unity.Components
             return col;
         }
 
-        private static VisualElement CompareSide(string side, bool has, int value, bool win)
+        // text: 値ラベルの上書き（null＝value.ToString()）。fill: バー幅[0-100]（負＝value を流用）。
+        // 表示テキストとバー幅を分離し、球速など物理量は「テキスト=km/h・バー=Level(0-100)」で出せるようにする（issue #94）。
+        private static VisualElement CompareSide(string side, bool has, int value, string text, int fill, bool win)
         {
             var el = new VisualElement();
             el.AddToClassList("cmp-row__side");
             el.AddToClassList("cmp-row__side--" + side);
 
-            var val = new Label(has ? value.ToString() : "—");
+            var val = new Label(has ? (text ?? value.ToString()) : "—");
             val.AddToClassList("cmp-row__val");
-            val.AddToClassList("f-num");   // 比較値は純数値＝コンデンス体（決定2-B）
+            val.AddToClassList("f-num");   // 比較値は純数値＝コンデンス体（km/h も欧文なので Oswald で可, 決定2-B）
             if (has && win) val.AddToClassList("cmp-row__val--win");
             el.Add(val);
 
@@ -415,7 +423,7 @@ namespace KokoSim.Unity.Components
                 var bar = new VisualElement();
                 bar.AddToClassList("cmp-row__bar");
                 bar.AddToClassList("cmp-row__bar--" + side);
-                bar.style.width = Length.Percent(Mathf.Clamp(value, 0, 100));
+                bar.style.width = Length.Percent(Mathf.Clamp(fill >= 0 ? fill : value, 0, 100));
                 track.Add(bar);
             }
             el.Add(track);

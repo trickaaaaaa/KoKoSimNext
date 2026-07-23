@@ -376,6 +376,8 @@ namespace KokoSim.Unity.Lineup
                 ValueA = r.ValueA, ValueB = r.ValueB,
                 HasA = r.HasA, HasB = r.HasB,
                 Winner = r.Winner,
+                TextA = r.TextA, TextB = r.TextB,   // 球速の km/h テキスト（issue #94）
+                FillA = r.FillA, FillB = r.FillB,
             });
 
         // ── 確定操作 ──

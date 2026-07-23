@@ -680,25 +680,7 @@ namespace KokoSim.Unity.Training
             _ => "能",
         };
 
-        private static string AbilityJp(AbilityKind k) => k switch
-        {
-            AbilityKind.Contact => "ミート",
-            AbilityKind.Power => "パワー",
-            AbilityKind.LaunchTendency => "弾道",
-            AbilityKind.Discipline => "選球眼",
-            AbilityKind.Speed => "走力",
-            AbilityKind.ArmStrength => "肩",
-            AbilityKind.Fielding => "守備",
-            AbilityKind.Catching => "捕球",
-            AbilityKind.Velocity => "球速",
-            AbilityKind.Control => "制球",
-            AbilityKind.Stamina => "スタミナ",
-            AbilityKind.PitchRank => "球種",
-            AbilityKind.Bunt => "バント",
-            AbilityKind.Steal => "盗塁",
-            AbilityKind.Baserunning => "走塁",
-            AbilityKind.ThrowAccuracy => "送球",
-            _ => k.ToString(),
-        };
+        // 能力表示名は単一ソース（KokoSim.Unity.Shell.AbilityLabels）に集約（issue #94）。
+        private static string AbilityJp(AbilityKind k) => KokoSim.Unity.Shell.AbilityLabels.Jp(k);
     }
 }
