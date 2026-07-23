@@ -25,6 +25,10 @@ public static class PlateAppearanceResultExtensions
     public static bool IsAtBat(this PlateAppearanceResult r)
         => r is not (PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch);
 
+    /// <summary>打席確定球がインプレー/被安打を生んだか（issue #180。三振・四球・死球は対象外）。</summary>
+    public static bool IsBattedBall(this PlateAppearanceResult r)
+        => r is not (PlateAppearanceResult.Strikeout or PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch);
+
     /// <summary>塁打数（長打率用）。</summary>
     public static int TotalBases(this PlateAppearanceResult r) => r switch
     {

@@ -174,9 +174,42 @@ namespace KokoSim.Unity.Players
             var s = _scope == 1 ? _view.OfficialStatsFull : _view.CareerStatsFull;
             FillCells("bat-cells", s.Batting);
             FillCells("pit-cells", s.Pitching);
+            RenderPitchTypeRows(s.PitchTypeBattingAgainst);
             SetDisplay("bat-card", s.HasBatting);
             SetDisplay("pit-card", s.HasPitching);
+            SetDisplay("pitchtype-card", s.PitchTypeBattingAgainst.Count > 0);
             SetDisplay("stats-empty", !s.HasBatting && !s.HasPitching);
+        }
+
+        // 球種別被打率（issue #180）: 球種名（見出し）＋打数/安打/本塁打/被打率（統計セル行）。
+        // 大会別アーカイブの pd2-trow と同じ構造（部品辞書の外に出ない）。
+        private void RenderPitchTypeRows(List<PitchTypeStatRow> rows)
+        {
+            var box = _root.Q<VisualElement>("pitchtype-rows");
+            if (box == null) return;
+            box.Clear();
+            foreach (var r in rows)
+            {
+                var row = new VisualElement();
+                row.AddToClassList("pd2-trow");
+
+                var head = new VisualElement();
+                head.AddToClassList("pd2-trow__head");
+                var slot = new Label(r.Label);
+                slot.AddToClassList("pd2-trow__slot");
+                head.Add(slot);
+                row.Add(head);
+
+                var grid = new VisualElement();
+                grid.AddToClassList("pd2-statgrid");
+                grid.Add(BuildStatCell(new StatCell("被打数", r.AtBats)));
+                grid.Add(BuildStatCell(new StatCell("被安打", r.Hits)));
+                grid.Add(BuildStatCell(new StatCell("被本塁打", r.HomeRuns)));
+                grid.Add(BuildStatCell(new StatCell("被打率", r.Average)));
+                row.Add(grid);
+
+                box.Add(row);
+            }
         }
 
         private void FillCells(string container, List<StatCell> cells)

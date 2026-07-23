@@ -188,6 +188,10 @@
                 <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="投手成績" /></ui:VisualElement>
                 <ui:VisualElement name="pit-cells" class="pd2-statgrid" />
               </ui:VisualElement>
+              <ui:VisualElement name="pitchtype-card" class="card">
+                <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="球種別被打率" /></ui:VisualElement>
+                <ui:VisualElement name="pitchtype-rows" />
+              </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement name="tourn-panel" class="card">
