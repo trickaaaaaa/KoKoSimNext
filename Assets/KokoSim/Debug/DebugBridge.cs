@@ -38,6 +38,8 @@ namespace KokoSim.Unity.Debugging
         private static GameContext _ctx;
         private static string _scenarioId;
         private static ulong _seed;
+        // "player" 指定を実部員で解決したか（設計書17 §6, #96）。"roster"=自校ロスター／"generated"=生成校。
+        private static string _playerTeamSource = "generated";
 
         // ===== 一覧・起動 =====
 
@@ -79,7 +81,10 @@ namespace KokoSim.Unity.Debugging
                 {
                     if (!DebugScenarios.Catalog.TryGet(scenarioId, out var def))
                         return Err("unknown-scenario:" + scenarioId);
-                    var built = ScenarioBuilder.Build(def, ctx, seed);
+                    // "player" 指定を実部員で解決する（設計書17 §6, #96）。ロスター未ロード時は null を渡し、
+                    // engine 側の既定（平均55の生成校）へフォールバックする＝CLI/engineテストと同じ契約。
+                    var playerTeam = TryBuildPlayerTeam(out _playerTeamSource);
+                    var built = ScenarioBuilder.Build(def, ctx, seed, playerTeam);
                     _away = built.Away;
                     _home = built.Home;
                     ctx = built.Ctx;
@@ -93,6 +98,7 @@ namespace KokoSim.Unity.Debugging
                     _away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(60, "遠征校", g);
                     _home = KokoSim.Engine.Nation.StrengthTeamFactory.Create(60, "自校", g);
                     _scenarioId = null;
+                    _playerTeamSource = "generated"; // シナリオ無し＝"player"の概念なし。両校とも生成校。
                 }
 
                 _ctx = ctx;
@@ -264,8 +270,9 @@ namespace KokoSim.Unity.Debugging
                 var sb = new StringBuilder("{\"ok\":true,\"isTop\":");
                 sb.Append(TraceJson.Bool(s.OffenseIsTop))
                   .Append(",\"batterOrder\":").Append(TraceJson.Int(s.CurrentBatterOrder))
-                  .Append(",\"away\":{\"lineup\":").Append(TraceJson.Int(s.Away.Lineup.Count)).Append('}')
-                  .Append(",\"home\":{\"lineup\":").Append(TraceJson.Int(s.Home.Lineup.Count)).Append('}')
+                  .Append(",\"playerTeam\":").Append(TraceJson.Str(_playerTeamSource ?? "generated"))
+                  .Append(",\"away\":").Append(TeamLineupJson(s.Away))
+                  .Append(",\"home\":").Append(TeamLineupJson(s.Home))
                   .Append('}');
                 return sb.ToString();
             }
@@ -303,11 +310,62 @@ namespace KokoSim.Unity.Debugging
 
         // ===== 内部 =====
 
+        /// <summary>
+        /// 自校ラインナップをロスターから組む（設計書17 §6, #96）。表示スタメンと出場スタメンが一致する
+        /// 契約を二重化しないため <see cref="PlayerMatchResolver.BuildManagerTeam"/> を唯一の入口として再利用する。
+        /// タイトル直後などロスター未ロード時は null＝engine 既定（生成校）へフォールバックし、
+        /// どちらを使ったかを <paramref name="source"/>（"roster"/"generated"）で返す。
+        /// </summary>
+        private static KokoSim.Engine.Match.Game.Team TryBuildPlayerTeam(out string source)
+        {
+            try
+            {
+                var roster = RosterService.Active;
+                if (roster == null || roster.Count == 0) { source = "generated"; return null; }
+                var team = PlayerMatchResolver.BuildManagerTeam("自校");
+                source = "roster";
+                return team;
+            }
+            catch
+            {
+                // BuildManagerTeam は GameSession.Current を参照するため、未初期化なら生成校へ退避する。
+                source = "generated";
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// スナップショット1チームのスタメン列を JSON へ（設計書17 §6, #96 受け入れ: 実部員の氏名・背番号が出ること）。
+        /// 自校を実部員で解決していれば <c>num</c>（背番号）と <c>id</c>（選手ID）が実値、生成校は 0/null。
+        /// </summary>
+        private static string TeamLineupJson(KokoSim.Engine.Match.Game.LiveTeamSnapshot team)
+        {
+            var sb = new StringBuilder("{\"lineup\":[");
+            var first = true;
+            foreach (var slot in team.Lineup)
+            {
+                if (!first) sb.Append(',');
+                first = false;
+                sb.Append("{\"order\":").Append(TraceJson.Int(slot.Order))
+                  .Append(",\"num\":").Append(TraceJson.Int(slot.Number))
+                  .Append(",\"name\":").Append(TraceJson.Str(slot.Name))
+                  .Append(",\"pos\":").Append(TraceJson.Str(slot.Position.ToString()))
+                  .Append(",\"id\":").Append(slot.SourceId.HasValue ? TraceJson.Int(slot.SourceId.Value) : "null")
+                  .Append('}');
+            }
+            sb.Append("],\"pitcher\":{\"num\":").Append(TraceJson.Int(team.Pitcher.Number))
+              .Append(",\"name\":").Append(TraceJson.Str(team.Pitcher.Name))
+              .Append(",\"id\":").Append(team.Pitcher.SourceId.HasValue ? TraceJson.Int(team.Pitcher.SourceId.Value) : "null")
+              .Append("}}");
+            return sb.ToString();
+        }
+
         private static string StateBody()
         {
             var sb = new StringBuilder("{\"scenario\":");
             sb.Append(_scenarioId == null ? "null" : TraceJson.Str(_scenarioId))
               .Append(",\"seed\":").Append(TraceJson.Str("0x" + _seed.ToString("x16")))
+              .Append(",\"playerTeam\":").Append(TraceJson.Str(_playerTeamSource ?? "generated"))
               .Append(",\"pa\":").Append(TraceJson.Int(_prog.ConfirmedPlateAppearances))
               .Append(",\"away\":").Append(TraceJson.Int(_prog.AwayScore))
               .Append(",\"home\":").Append(TraceJson.Int(_prog.HomeScore))
