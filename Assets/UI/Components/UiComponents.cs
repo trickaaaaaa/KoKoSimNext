@@ -112,10 +112,10 @@ namespace KokoSim.Unity.Components
 
         private static void AddCategoryChip(VisualElement box, string label, Tier tier)
         {
-            box.Add(RankChipLegacy(tier.ToString()));
             var lbl = new Label(label);
             lbl.AddToClassList("cat-rank-chips__label");
             box.Add(lbl);
+            box.Add(RankChipLegacy(tier.ToString()));
         }
 
         // ===== SchoolName（設計書16 §4-3。校名は常に太明朝） =====

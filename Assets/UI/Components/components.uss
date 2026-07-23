@@ -35,7 +35,7 @@
 /* ── CategoryRankChips：選手のカテゴリ別ランク（打撃力/走力/守備力/投手力, Issue #30/#140） ─
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
-.cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+.cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-left: var(--sp-2); }
 
 /* ═══ design-19 デーゲーム・フルNB：枠＋ベタ影の器（G0 技術検証）═════════════════════
    USS に box-shadow / 擬似要素は無いので、ベタ影を2方式で再現する（design-19 §2）。
