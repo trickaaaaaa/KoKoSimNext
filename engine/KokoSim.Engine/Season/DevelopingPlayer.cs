@@ -37,14 +37,43 @@ public sealed class DevelopingPlayer
 
     public string Name { get; init; } = "部員";
     public int Grade { get; set; } = 1;             // 学年 1〜3
-    public bool IsPitcher { get; init; }
+
+    // 投手役の内部状態（Issue #174）。null＝未指定＝投手適性から創発。明示値＝プレイヤー/生成の指名。
+    private bool? _pitcherRole;
+
+    /// <summary>
+    /// 投手として起用するか（設計書01 §1.1・Issue #174「投手も創発」）。
+    /// 生成時の一律コイン投げ（旧 PitcherShare）は廃止。未指定（既定）なら投手適性が全守備位置適性を
+    /// 上回るときだけ true＝守備位置と同列の創発。プレイヤーが明示設定するとその選択が優先される
+    /// （position-is-player-decided）。同適性（既定50一律）では投手にならない＝従来の既定（野手）と一致。
+    /// </summary>
+    public bool IsPitcher
+    {
+        get => _pitcherRole ?? IsNaturalPitcher();
+        set => _pitcherRole = value;
+    }
+
+    /// <summary>役割が明示指名済みか（false＝適性からの創発, Issue #174）。</summary>
+    public bool HasExplicitRole => _pitcherRole.HasValue;
+
+    /// <summary>指名を解除して適性からの創発に戻す（お任せ, Issue #174）。</summary>
+    public void ClearRole() => _pitcherRole = null;
+
+    /// <summary>投手適性が全守備位置適性を厳密に上回るか（創発の投手判定, Issue #174）。</summary>
+    private bool IsNaturalPitcher()
+    {
+        var pitcherApt = _aptitude[(int)FieldPosition.Pitcher];
+        for (var i = 0; i < _aptitude.Length; i++)
+            if (i != (int)FieldPosition.Pitcher && _aptitude[i] >= pitcherApt) return false;
+        return true;
+    }
 
     /// <summary>投打の利き（設計書01 §1.1c）。生成分布は 2B で実装、既定は右。</summary>
     public Handedness Throws { get; init; } = Handedness.Right;
     public Handedness Bats { get; init; } = Handedness.Right;
 
-    /// <summary>隠し属性「投手経歴」（設計書01 §1.1b）。野手の変化球上振れの素。</summary>
-    public bool HasPitcherBackground { get; init; }
+    /// <summary>隠し属性「投手経歴」（設計書01 §1.1b）。野手の変化球上振れの素。生成時に適性確定後に設定（Issue #174）。</summary>
+    public bool HasPitcherBackground { get; set; }
 
     /// <summary>
     /// 習得済み変化球（ストレートは必修のため含めない, 設計書02 §2.2）。

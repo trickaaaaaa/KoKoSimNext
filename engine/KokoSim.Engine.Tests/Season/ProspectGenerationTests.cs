@@ -332,4 +332,60 @@ public sealed class ProspectGenerationTests
             Assert.Equal(a[i].Lead, b[i].Lead);
         }
     }
+
+    // --- 投手の創発（Issue #174: 生成時決め打ち廃止） ---
+
+    private static int BestFieldAptitude(DevelopingPlayer p)
+    {
+        var best = 0;
+        foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
+            if (pos != FieldPosition.Pitcher) best = Math.Max(best, p.Aptitude(pos));
+        return best;
+    }
+
+    [Fact]
+    public void PitcherRole_EmergesFromAptitude_NotCoinFlip()
+    {
+        // 投手役は投手適性から創発する＝役割投手の投手適性は野手より明確に高い（コイン投げではない）。
+        var pop = Cohort(C.TalentCenterDefault);
+        var pitchers = pop.Where(p => p.IsPitcher).ToList();
+        var fielders = pop.Where(p => !p.IsPitcher).ToList();
+        Assert.NotEmpty(pitchers);
+
+        var pitcherApt = pitchers.Average(p => p.Aptitude(FieldPosition.Pitcher));
+        var fielderApt = fielders.Average(p => p.Aptitude(FieldPosition.Pitcher));
+        Assert.True(pitcherApt > fielderApt + 8.0,
+            $"役割投手の投手適性({pitcherApt:F1})が野手({fielderApt:F1})より十分高くない＝適性由来でない");
+
+        // 供給率は妥当な範囲（旧 PitcherShare 0.30 近傍。厳密一致は要求しない＝創発）。
+        var rate = pitchers.Count / (double)pop.Count;
+        Assert.InRange(rate, 0.20, 0.42);
+    }
+
+    [Fact]
+    public void PitcherSupply_VariesAcrossCohorts_IncludingScarceYears()
+    {
+        // 世代によって投手適性者が少ない/多い年が自然に起こりうる（固定30%ではない）。
+        var counts = new List<int>();
+        for (var s = 0; s < 400; s++)
+        {
+            var cohort = ProspectGenerator.Intake(1, C, new Xoshiro256Random((ulong)(5000 + s)));
+            counts.Add(cohort.Count(p => p.IsPitcher));
+        }
+        Assert.True(counts.Distinct().Count() >= 4, "投手数が世代でばらつかない（固定供給になっている）");
+        Assert.True(counts.Min() <= 1, "投手が枯渇する『苦肉の年』が一度も起きない＝供給が固定的すぎる");
+        Assert.True(counts.Max() >= 4, "投手が揃う年が起きない＝供給が固定的すぎる");
+    }
+
+    [Fact]
+    public void PitcherRate_IsIndependentOfSchoolStrength()
+    {
+        // 決定（校連動は入れない・Issue #174）: 投手供給率は校の強さ（talentCenter）に連動しない。
+        double Rate(double center) =>
+            Cohort(center).Count(p => p.IsPitcher) / (double)Cohort(center).Count;
+        var weak = Rate(20.0);   // 弱小校相当
+        var strong = Rate(70.0); // 強豪校相当
+        Assert.True(Math.Abs(weak - strong) < 0.05,
+            $"投手率が校の強さに連動している（弱={weak:P1} 強={strong:P1}）＝フラット創発でない");
+    }
 }
