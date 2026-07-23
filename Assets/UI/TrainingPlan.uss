@@ -26,9 +26,9 @@
     padding-top: 10px; padding-bottom: 10px;
 }
 .tp-camp { flex-grow: 1; margin-right: 14px; }   /* .banner を継承 */
-.tp-camp__title { font-size: 15px; color: var(--color-chalk); }
-.tp-camp__mult { font-size: 14px; color: var(--color-chalk); margin-left: var(--sp-2); }   /* 数値ラベル＝白（黄はデータに使わない・4-B） */
-.tp-camp__note { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
+.tp-camp__title { font-size: 19px; color: var(--color-chalk); }
+.tp-camp__mult { font-size: 18px; color: var(--color-chalk); margin-left: var(--sp-2); }   /* 数値ラベル＝白（黄はデータに使わない・4-B） */
+.tp-camp__note { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
 .tp-camp__head { flex-direction: row; align-items: center; }
 .tp-camp__body { flex-grow: 1; }
 
@@ -62,9 +62,9 @@
     padding-left: var(--sp-4); padding-right: var(--sp-4);
 }
 .tp-toolbar__title { font-size: var(--fs-body); color: var(--color-chalk); }
-.tp-toolbar__count { font-size: 14px; color: var(--color-muted); margin-left: var(--sp-2); }
+.tp-toolbar__count { font-size: 18px; color: var(--color-muted); margin-left: var(--sp-2); }
 .tp-toolbar__spacer { flex-grow: 1; }
-.tp-toolbar__cap { font-size: 12px; color: var(--color-muted); margin-left: 14px; margin-right: var(--sp-1); letter-spacing: 1px; }
+.tp-toolbar__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-left: 14px; margin-right: var(--sp-1); letter-spacing: 1px; }
 .tp-toolbar__group { flex-direction: row; }
 
 /* header row（列幅は --col-* をデータと共有） */
@@ -77,7 +77,7 @@
 }
 /* 固定列は flex-shrink: 0（付けないと隣の flex-grow 列の中身が広い行だけ幅を奪われ列がずれる＝横ずれの真因）。
    見出しLabelは既定 margin/padding を持つので 0 に潰し、データ列(VisualElement)と列境界を一致させる。 */
-.tp-th { font-size: 14px; color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
+.tp-th { font-size: 18px; color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
 .tp-th--id { width: var(--col-id); }
 .tp-th--grade { width: var(--col-grade); -unity-text-align: middle-center; }
 .tp-th--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
@@ -107,7 +107,7 @@
 
 .trow__num { margin-right: 12px; }   /* .num-badge を継承 */
 .trow__idtext { flex-direction: column; }
-.trow__name { font-size: 18px; color: var(--color-chalk); }
+.trow__name { font-size: 22px; color: var(--color-chalk); }
 .trow__name:hover { color: var(--color-lamp); }
 .trow__meta { flex-direction: row; margin-top: 4px; }
 
@@ -121,24 +121,24 @@
 }
 .preset-open:hover { border-color: var(--line-focus); background-color: var(--sf-hover); }
 .preset-open__texts { flex-direction: column; flex-grow: 1; }
-.preset-open__label { font-size: 16px; color: var(--color-chalk); }
+.preset-open__label { font-size: 20px; color: var(--color-chalk); }
 .preset-open__label--custom { color: var(--color-lamp); }
-.preset-open__focus { font-size: 13px; color: var(--color-muted); margin-top: 3px; }
+.preset-open__focus { font-size: var(--fs-label); color: var(--color-muted); margin-top: 3px; }
 /* 行ごとに反復する導線なのでアクセントにしない（30行ぶん黄が並ぶと希少性が壊れる＝UI原則②）。 */
-.preset-open__go { font-size: 15px; color: var(--color-muted); flex-shrink: 0; }
+.preset-open__go { font-size: 19px; color: var(--color-muted); flex-shrink: 0; }
 
 /* copy */
 .copy-btn {
     width: 34px; height: 34px; -unity-text-align: middle-center;
     background-color: var(--color-panel-deep); color: var(--color-lamp);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: 17px;
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: 21px;
 }
 .copy-btn:hover { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
 .copy-btn--disabled { color: var(--color-line); }
 
 /* ═══ ability bar 行（伸びバー・プリセット強調で共用） ═══ */
 /* 伸びバーは部品辞書 components.uss の .abil-row に一本化（issue #3）。ここは空状態の文言だけ残す。 */
-.gain-none { font-size: 13px; color: var(--color-faint); margin-top: var(--sp-1); }
+.gain-none { font-size: var(--fs-label); color: var(--color-faint); margin-top: var(--sp-1); }
 
 /* ═══ 統合モーダル（tp-modal = modal-scrim, card = modal-card） ═══ */
 .tpm-card { width: 900px; max-width: 94%; max-height: 88%; }
@@ -160,7 +160,7 @@
 .tpm-close {
     width: 34px; height: 34px; -unity-text-align: middle-center;
     background-color: var(--color-panel); color: var(--color-chalk);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: 15px;
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: 19px;
 }
 .tpm-close:hover { border-color: var(--color-warn); color: var(--color-warn); }
 
@@ -187,13 +187,13 @@
 .tpm-preset:hover { border-color: var(--color-lamp); }
 .tpm-preset--on { border-color: var(--color-lamp); background-color: var(--color-panel); }
 .tpm-preset__head { flex-direction: row; align-items: center; }
-.tpm-preset__name { font-size: 16px; color: var(--color-chalk); }
+.tpm-preset__name { font-size: 20px; color: var(--color-chalk); }
 .tpm-preset--on .tpm-preset__name { color: var(--color-lamp); }
 .tpm-preset__check {
     width: 22px; height: 22px; -unity-text-align: middle-center; margin-right: var(--sp-2);
-    color: var(--color-lamp); font-size: 16px;
+    color: var(--color-lamp); font-size: 20px;
 }
-.tpm-preset__desc { font-size: 13px; color: var(--color-muted); white-space: normal; margin-top: 4px; margin-bottom: var(--sp-2); }
+.tpm-preset__desc { font-size: var(--fs-label); color: var(--color-muted); white-space: normal; margin-top: 4px; margin-bottom: var(--sp-2); }
 .tpm-preset__bars { flex-direction: column; }
 
 /* 伸びバー（右側パネル・スクロール内） */
@@ -218,18 +218,18 @@
 
 /* ── 選択選手ヘッダーの部品（モーダルで再利用） ── */
 .tp-ed-head__spacer { flex-grow: 1; }
-.tp-ed-head__meta { font-size: 14px; color: var(--color-muted); white-space: normal; }
+.tp-ed-head__meta { font-size: 18px; color: var(--color-muted); white-space: normal; }
 .tp-ed-id {
     flex-shrink: 0;
     width: 54px; height: 54px;
     align-items: center; justify-content: center; flex-direction: column;
     border-width: 2px; border-color: var(--color-lamp); border-radius: var(--radius-panel); margin-right: var(--sp-3);
 }
-.tp-ed-id__cap { font-size: 9px; color: var(--color-muted); letter-spacing: 1px; }
+.tp-ed-id__cap { font-size: 13px; color: var(--color-muted); letter-spacing: 1px; }
 .tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--color-lamp); }
 .tp-ed-who__name { font-size: var(--fs-page); color: var(--color-chalk); margin-right: var(--sp-2); }
 .nom-btn {
-    font-size: 12px; color: var(--color-lamp);
+    font-size: var(--fs-cap); color: var(--color-lamp);
     background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--color-lamp); border-radius: var(--radius-chip);
     padding-left: var(--sp-2); padding-right: var(--sp-2); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
     flex-shrink: 0;
@@ -237,12 +237,12 @@
 .nom-btn:hover { background-color: var(--color-panel-hover); }
 .nom-btn--on { background-color: var(--color-lamp); color: var(--color-ink); }
 
-.tp-ed-bar__remain { font-size: 14px; color: var(--color-muted); margin-bottom: var(--sp-1); }
+.tp-ed-bar__remain { font-size: 18px; color: var(--color-muted); margin-bottom: var(--sp-1); }
 
 .tp-ed-section { flex-shrink: 0; flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
-.tp-ed-section__title { font-size: 15px; color: var(--color-chalk); letter-spacing: 1px; }   /* 見出しは白（黄はCTAと最重要数値だけ・4-B）。モーダルの REFINE でも白に上書き済み */
+.tp-ed-section__title { font-size: 19px; color: var(--color-chalk); letter-spacing: 1px; }   /* 見出しは白（黄はCTAと最重要数値だけ・4-B）。モーダルの REFINE でも白に上書き済み */
 .tp-ed-section__title--mt { margin-top: var(--sp-4); margin-bottom: var(--sp-2); }
-.tp-ed-section__lock { font-size: 13px; color: var(--color-warn); margin-left: 10px; }
+.tp-ed-section__lock { font-size: var(--fs-label); color: var(--color-warn); margin-left: 10px; }
 
 /* menu slot（±10分・StepperRow。攻撃メニューと守備ポジションで共用・縦並び） */
 .mslot {
@@ -257,18 +257,18 @@
 .mslot__icon {
     width: 34px; height: 34px; -unity-text-align: middle-center;
     background-color: var(--color-panel); color: var(--color-lamp);
-    border-radius: var(--radius-chip); margin-right: 12px; font-size: 16px;
+    border-radius: var(--radius-chip); margin-right: 12px; font-size: 20px;
 }
 .mslot__body { flex-grow: 1; }
-.mslot__name { font-size: 16px; color: var(--color-chalk); }
-.mslot__eff { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
-.mslot__min { width: 56px; -unity-text-align: middle-center; font-size: 17px; color: var(--color-chalk); }   /* 分＝編集値：白（黄はやめる・4-B）。モーダルの REFINE でも白に上書き済み */
+.mslot__name { font-size: 20px; color: var(--color-chalk); }
+.mslot__eff { font-size: var(--fs-label); color: var(--color-muted); margin-top: 2px; }
+.mslot__min { width: 56px; -unity-text-align: middle-center; font-size: 21px; color: var(--color-chalk); }   /* 分＝編集値：白（黄はやめる・4-B）。モーダルの REFINE でも白に上書き済み */
 
 /* templates（フッター内） */
 .tp-tpl__title { font-size: var(--fs-label); color: var(--color-muted); margin-right: var(--sp-3); }
 .tp-tpl__list { flex-direction: row; flex-wrap: wrap; }
 .tpl-chip {
-    font-size: 12px; color: var(--color-chalk); background-color: var(--color-panel);
+    font-size: var(--fs-cap); color: var(--color-chalk); background-color: var(--color-panel);
     border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
     padding-left: 10px; padding-right: 10px; padding-top: var(--sp-1); padding-bottom: var(--sp-1); margin-right: var(--sp-2);
 }
@@ -286,7 +286,7 @@
     position: absolute; bottom: 24px; left: 50%;
     translate: -50% 0;
     background-color: var(--color-lamp); color: var(--color-ink);
-    font-size: 14px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: var(--radius-panel);
+    font-size: 18px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: var(--radius-panel);
     display: none;
 }
 

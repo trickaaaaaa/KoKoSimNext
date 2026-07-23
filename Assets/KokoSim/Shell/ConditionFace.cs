@@ -22,11 +22,27 @@ namespace KokoSim.Unity.Shell
 
         private Condition _condition = Condition.Normal;
 
+        // 顔の輪郭リング（design-19 デーゲーム・フルNB）。明地では灰系の「普通」顔が地に溶けるため、
+        // USS 側で `--face-ring: <色>` を与えた画面（.sk-day）だけインク枠を描く。
+        // 既定は無指定＝リングなし＝夜スキンの見た目は不変（scope 保証）。
+        private static readonly CustomStyleProperty<Color> RingProp = new("--face-ring");
+        private Color _ring = new(0f, 0f, 0f, 0f);  // α=0＝リングなし
+
         public ConditionFace()
         {
             AddToClassList("cond-face");
             generateVisualContent += OnGenerate;
+            RegisterCallback<CustomStyleResolvedEvent>(OnCustomStyle);
             pickingMode = PickingMode.Ignore;
+        }
+
+        private void OnCustomStyle(CustomStyleResolvedEvent e)
+        {
+            if (e.customStyle.TryGetValue(RingProp, out var c) && c != _ring)
+            {
+                _ring = c;
+                MarkDirtyRepaint();
+            }
         }
 
         /// <summary>調子を設定。</summary>
@@ -71,6 +87,16 @@ namespace KokoSim.Unity.Shell
             p.BeginPath();
             p.Arc(new Vector2(cx, cy), rad, 0f, 360f);
             p.Fill();
+
+            // 明地スキンのインク輪郭（--face-ring 指定時のみ）。灰系の「普通」も地から立つ。
+            if (_ring.a > 0f)
+            {
+                p.strokeColor = _ring;
+                p.lineWidth = Mathf.Max(1.5f, rad * 0.14f);
+                p.BeginPath();
+                p.Arc(new Vector2(cx, cy), rad, 0f, 360f);
+                p.Stroke();
+            }
 
             // 目（2点）。
             var eyeR = rad * 0.16f;

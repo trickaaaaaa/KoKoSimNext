@@ -1,38 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 選手一覧。上部は Home/練習 と同じ共通トップバー（Components/TopBar.uxml）を単一ソースとして使う
-     （以前は独自のコンパクトヘッダーだったため画面間で上部UIが不一致だった）。TopBar は固定・スクロール外。 -->
+     （以前は独自のコンパクトヘッダーだったため画面間で上部UIが不一致だった）。TopBar は固定・スクロール外。
+     design-19「デーゲーム・フルNB」G0：この画面だけ先行して昼スキン化する（scope = .sk-day）。
+     TopBar/nav は共通シェルなので G1 で全面切替する（G0 では夜のまま据え置き）。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="TopBar" src="Components/TopBar.uxml" />
     <Style src="tokens.uss" />
     <Style src="Components/components.uss" />
     <Style src="KokoSimTheme.uss" />
-    <ui:VisualElement class="root ui-root">
+    <Style src="PlayerList.uss" />
+    <ui:VisualElement class="root ui-root sk-day">
 
-      <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
+      <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース／G0では夜のまま） ===== -->
       <ui:Instance template="TopBar" />
 
       <ui:ScrollView mode="Vertical" class="scroll">
 
-        <!-- ===== メイン（単一カラム） ===== -->
+        <!-- ===== メイン（単一カラム・昼の球場地の上） ===== -->
         <ui:VisualElement class="main">
             <ui:VisualElement class="col-full">
-                <ui:VisualElement class="panel">
-                    <ui:VisualElement class="toolbar">
-                        <ui:Label class="panel__title" text="部員名簿" />
-                        <ui:VisualElement class="toolbar__ctrls">
-                            <ui:Label name="counts" class="toolbar__counts" text="計28名" />
-                            <ui:Button name="sort-btn" class="chip-btn" text="並び: 総合順" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
 
-                    <ui:VisualElement class="row row--head">
-                        <ui:Label class="cell cell--head cell--name" text="選手" />
-                        <ui:Label class="cell cell--head cell--narrow" text="学年" />
-                        <ui:Label class="cell cell--head cell--wide" text="カテゴリ別ランク" />
-                        <ui:Label class="cell cell--head cell--narrow" text="調子／故障" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="player-rows" />
+              <!-- 部員名簿カード＝案ロ（背面プレート）でベタ影を出す主役カード。
+                   子順は「影→前面」（後の兄弟が上に描画される）。 -->
+              <ui:VisualElement class="nb-plate">
+                <ui:VisualElement class="nb-plate__shadow" />
+                <ui:VisualElement class="panel nb-plate__front">
+
+                  <!-- 見出しプレート（芝・白抜き題字）＝PlateHeader 部品 -->
+                  <ui:VisualElement class="plate-header plate-header--grass">
+                      <ui:Label class="plate-header__title" text="部員名簿" />
+                      <ui:Label name="counts" class="plate-header__sub" text="計28名" />
+                      <ui:VisualElement class="plate-header__spacer" />
+                      <ui:Button name="sort-btn" class="tool-btn" text="並び: 総合順" />
+                  </ui:VisualElement>
+
+                  <!-- テーブル地＝薄い土の井（dirt-well トークン）。この上に白い行パネルを1枚ずつ積む。 -->
+                  <ui:VisualElement class="table-zone">
+                      <ui:VisualElement class="row row--head">
+                          <ui:Label class="cell cell--head cell--name" text="選手" />
+                          <ui:Label class="cell cell--head cell--narrow" text="学年" />
+                          <ui:Label class="cell cell--head cell--wide" text="カテゴリ別ランク" />
+                          <ui:Label class="cell cell--head cell--narrow" text="調子／故障" />
+                      </ui:VisualElement>
+                      <ui:VisualElement name="player-rows" class="rows" />
+                  </ui:VisualElement>
+
                 </ui:VisualElement>
+              </ui:VisualElement>
+
             </ui:VisualElement>
         </ui:VisualElement>
 

@@ -94,7 +94,7 @@
 /* 打者ラベル（実況バーの左）。上部のスコアバー/BSO帯は LineScorePanel（components.uss の .lsc*）へ
    移したので、ここにあった .mlive-sb / .mlive-bso / .mlive-dot / .mlive-base 等は削除済み。 */
 .mlive-batter {
-    font-size: 12px;
+    font-size: var(--fs-cap);
     color: var(--color-muted);
     margin-right: 10px;
     min-width: 96px;

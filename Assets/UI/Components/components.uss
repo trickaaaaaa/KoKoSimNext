@@ -35,6 +35,81 @@
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
 
+/* ═══ design-19 デーゲーム・フルNB：枠＋ベタ影の器（G0 技術検証）═════════════════════
+   USS に box-shadow / 擬似要素は無いので、ベタ影を2方式で再現する（design-19 §2）。
+     ・案イ NbBorder … 非対称ボーダー（右/下だけ影色で太らせる）。1要素で済む＝行など量産部品向け。
+     ・案ロ NbPlate  … 背面プレート（wrapper 内に absolute の黒プレートを敷き前面を左上へ寄せる）。
+                        真の"ずれた影"が出る＝カード級・CTA など少数の主役向け。要素数は倍。
+   どちらも枠色・影色・地色は tokens.uss のインク／面トークンだけを読む。 */
+
+/* ── 案イ：非対称ボーダー（NbBorder）。単一要素にクラス1枚で付く量産用 ── */
+.nb-border {
+    background-color: var(--day-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);
+    border-left-width: var(--nb-border);
+    border-right-width: var(--nb-border);
+    border-bottom-width: var(--nb-border);
+    border-radius: 0;
+}
+/* 右下だけ影ぶん太らせて「右下にベタ影が落ちている」ように見せる（枠2px＋影3px＝5px）。 */
+.nb-border--shadow {
+    border-right-width: 5px;   /* --nb-border(2) + --nb-shadow(3) */
+    border-bottom-width: 5px;
+}
+
+/* ── 案ロ：背面プレート（NbPlate）。wrapper＋影プレート＋前面の3要素 ──
+   wrapper は影ぶんの余白を margin で確保し、影は out-of-flow（レイアウトを押し広げない）。
+   前面は不透明面で影の重なり部分を隠す。子順は「影→前面」（後の兄弟が上に描画される）。 */
+.nb-plate {
+    margin-right: var(--nb-shadow-card);
+    margin-bottom: var(--nb-shadow-card);
+}
+.nb-plate__shadow {
+    position: absolute;      /* out-of-flow＝wrapper サイズに影響しない */
+    left: var(--nb-shadow-card);
+    top: var(--nb-shadow-card);
+    width: 100%;             /* = 前面(flow子)の幅。offset ぶん右下へ食み出す＝ベタ影 */
+    height: 100%;
+    background-color: var(--ink);
+}
+.nb-plate__front {
+    background-color: var(--day-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border-card);
+    border-left-width: var(--nb-border-card);
+    border-right-width: var(--nb-border-card);
+    border-bottom-width: var(--nb-border-card);
+    border-radius: 0;
+}
+
+/* ── PlateHeader：ペンキ塗りの見出しプレート（芝＝主／土＝副／空＝操作）＋白抜き題字 ──
+   カードの上縁に敷く帯。題字は白抜き、右端にツール操作（並び替え等）を置ける。 */
+.plate-header {
+    flex-direction: row;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom-width: var(--nb-border-card);
+    border-bottom-color: var(--ink);
+}
+.plate-header--grass { background-color: var(--grass); }
+.plate-header--dirt  { background-color: var(--dirt); }
+.plate-header--sky   { background-color: var(--sky); }
+.plate-header__title {
+    font-size: var(--fs-page);
+    letter-spacing: 3px;
+    color: #FFFFFF;                    /* 芝/空プレートの白抜き題字 */
+}
+.plate-header--dirt .plate-header__title { color: var(--ink); }   /* 土プレートは明るいのでインク題字 */
+.plate-header__sub {
+    font-size: var(--fs-cap);
+    color: #FFFFFF;
+    opacity: 0.82;
+    margin-left: 14px;
+}
+.plate-header--dirt .plate-header__sub { color: var(--ink); }
+.plate-header__spacer { flex-grow: 1; }
+
 /* ── AbilityRow：能力バー行（アイコン／能力名＋副題／数値／バー／ランクチップ／補足） ─
    能力バーを出す画面はこの部品だけを使う（UI原則③ランク併記・⑤部品辞書の外に出ない）。
    バー色はランク連動色を C# 側（RankPalette＝--rank-*）から与えるためここでは指定しない。
@@ -96,6 +171,9 @@
 
 /* 大（チーム総合力パネル）：指標名を太く、数値を大きく、バーを太くする */
 .abil-row--lg .abil-row__name { width: 182px; }
+/* 内訳subは名前列の中で折り返す。既定の nowrap だと長い内訳（投手力の「球種（エース偏重）」等）が
+   固定幅182pxを越えて右隣の数値に重なって描画される（fs-cap 13px化で顕在化した衝突）。 */
+.abil-row--lg .abil-row__sub { white-space: normal; }
 .abil-row--lg .abil-row__label { font-size: var(--fs-body); }
 .abil-row--lg .abil-row__value { width: 58px; font-size: 34px; margin-right: var(--sp-4); }
 .abil-row--lg .abil-row__bar { height: 12px; margin-right: var(--sp-4); }
@@ -151,7 +229,7 @@
 }
 .seg__cell:hover { color: var(--color-chalk); }
 .seg--sm .seg__cell { width: 26px; height: 26px; }
-.seg--lg .seg__cell { width: 40px; height: 32px; font-size: 14px; }
+.seg--lg .seg__cell { width: 40px; height: 32px; font-size: 18px; }
 /* 文字数が可変なラベル向け（強攻/待て等）。幅固定セルではなくパディングで揃える。 */
 .seg--auto .seg__cell { width: auto; height: 24px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
 .seg__cell--on { background-color: var(--color-lamp); color: var(--color-ink); }
@@ -286,7 +364,7 @@
 .banner__badge {
     background-color: var(--color-lamp);
     color: var(--color-ink);
-    font-size: 12px;
+    font-size: var(--fs-cap);
     letter-spacing: 2px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
@@ -325,9 +403,12 @@
 .field-chip:hover { border-color: var(--color-line-focus); }
 .field-chip--picked { border-color: var(--color-lamp); background-color: rgba(40, 58, 44, 0.95); }
 .field-chip--picked:hover { border-color: var(--color-lamp); }
-.field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-lamp); }
-.field-chip__name { font-size: var(--fs-cap); color: var(--color-chalk); margin-left: 4px; margin-right: 3px; white-space: nowrap; }
-.field-chip__empty { font-size: var(--fs-cap); color: var(--color-faint); margin-left: 4px; }
+/* 球場図チップの文字は盤面ジオメトリ都合の固定サイズ（--fs-cap連動だと底上げで図上のチップ同士が重なる。
+   13px＝視認性改善後も重ならないことをスクショで確認済みの値）。 */
+.field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: 13px; color: var(--color-lamp); }
+.field-chip__name { font-size: 13px; color: var(--color-chalk); margin-left: 4px; margin-right: 3px; white-space: nowrap; }
+.field-chip__empty { font-size: 13px; color: var(--color-faint); margin-left: 4px; }
+/* 球場図の小型チップは17px固定ボックス（盤面ジオメトリ都合）＝文字サイズ底上げの対象外 */
 .field-chip .rank-chip { min-width: 17px; height: 17px; font-size: 10px; }
 
 /* フルカードのポップオーバー（ホバー/選択時のみ・チップの真上）。 */
@@ -447,7 +528,7 @@
 .cmp-head__col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; }
 .cmp-head__col--b { margin-left: var(--sp-2); }
 .cmp-head__lab {
-    font-size: 10px;
+    font-size: 14px;
     color: var(--color-ink);
     border-radius: var(--radius-chip);
     padding-left: 5px;
@@ -481,7 +562,7 @@
     padding-top: var(--sp-3);
     padding-bottom: var(--sp-3);
 }
-.cmp-card__lab { font-size: 10px; color: var(--color-ink); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
+.cmp-card__lab { font-size: 14px; color: var(--color-ink); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
 .cmp-card__lab--a { background-color: var(--cmp-a); }
 .cmp-card__lab--b { background-color: var(--cmp-b); }
 .cmp-card__name { font-size: var(--fs-body); color: var(--color-chalk); margin-top: var(--sp-2); }
@@ -571,7 +652,7 @@
 .bench-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
 .bench-row--picked:hover { border-color: var(--color-lamp); }
 .bench-row__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--color-chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: var(--sp-2); }
-.bench-row__tag { font-size: 10px; color: var(--color-muted); background-color: var(--color-panel-deep); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
+.bench-row__tag { font-size: 14px; color: var(--color-muted); background-color: var(--color-panel-deep); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
 
 /* ── SpPill：先発投手ピル（DH制時のみ・クリックで選択→控え投手クリックで差替） ── */
 .sp-pill {
@@ -678,7 +759,7 @@
 .radar-axis__l { font-size: var(--fs-cap); color: var(--color-muted); }
 .radar-axis__v { font-size: var(--fs-num); color: var(--color-chalk); }
 .radar-axis--lg .radar-axis__l {
-    font-size: 18px;
+    font-size: 22px;
     margin-bottom: 1px;
 }
 .radar-axis--lg .radar-axis__v { font-size: 40px; }
@@ -721,7 +802,7 @@
     margin-right: var(--sp-1);
 }
 .mlineup-row__replaced {
-    font-size: 9px;
+    font-size: 13px;
     color: var(--color-faint);
     margin-right: var(--sp-1);
     white-space: nowrap;
@@ -793,7 +874,7 @@
 }
 .mlineup-pitcher--mirror { flex-direction: row-reverse; }
 .mlineup-pitcher__tag {
-    font-size: 9px;
+    font-size: 13px;
     color: var(--color-muted);
     width: 20px;
     flex-shrink: 0;
@@ -1102,7 +1183,7 @@
    都道府県・シード等の小書きはサンセリフのままにして、明朝は固有名詞だけに絞る。 */
 .school-name { flex-direction: row; align-items: center; flex-wrap: wrap; }
 .school-name__main {
-    font-size: 20px;
+    font-size: 24px;
     color: var(--color-chalk);
     letter-spacing: 1px;
 }
@@ -1201,7 +1282,7 @@
 .lsc-cell--name {
     width: var(--lsc-name-w);
     height: 100%;
-    font-size: 18px;
+    font-size: 22px;
     color: var(--color-chalk);
     -unity-text-align: middle-left;
     padding-left: var(--sp-2);

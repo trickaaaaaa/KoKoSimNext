@@ -198,4 +198,8 @@
     color: var(--color-faint);
     -unity-text-align: middle-center;
     margin-top: var(--sp-4);
+    /* 文字サイズ底上げで1行に収まらなくなったためパネル内で折り返す（はみ出し防止） */
+    white-space: normal;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
 }
