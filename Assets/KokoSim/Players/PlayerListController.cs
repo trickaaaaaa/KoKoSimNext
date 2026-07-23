@@ -16,10 +16,19 @@ namespace KokoSim.Unity.Players
         private VisualElement _root;
         private Button _advanceBtn;
 
+        // マスターディテール化（issue #131）: 能力詳細は同じ UIDocument に埋め込まれた
+        // PlayerDetailController が担う（別画面・別GameObjectではない。ScreenRouter は
+        // 複数UIDocument同居を許さないため、詳細は一覧と同一画面に同居させる設計）。
+        private PlayerDetailController _detail;
+
+        // 初回描画で先頭行を既定選択にするための一度きりのフラグ（以降はホバーで更新）。
+        private bool _hasHovered;
+
         private void OnEnable()
         {
             _state = new PlayerListState();
             _root = GetComponent<UIDocument>().rootVisualElement;
+            _detail = GetComponent<PlayerDetailController>();
 
             var sortBtn = _root.Q<Button>("sort-btn");
             if (sortBtn != null) sortBtn.clicked += () => { _state.CycleSort(); Render(); };
@@ -59,6 +68,11 @@ namespace KokoSim.Unity.Players
 
             var rows = _root.Q<VisualElement>("player-rows");
             if (rows == null) return;
+
+            // 初回描画（未ホバー）は先頭行を既定選択にする。ホバー後は上書きしない
+            // （並び替え等の再描画のたびに選択が先頭へ戻らないようにする）。
+            if (!_hasHovered && v.Rows.Count > 0) PlayerSelection.Index = v.Rows[0].Index;
+
             rows.Clear();
             foreach (var r in v.Rows) rows.Add(BuildRow(r));
         }
@@ -67,16 +81,18 @@ namespace KokoSim.Unity.Players
         {
             var row = new VisualElement();
             row.AddToClassList("row-panel");   // 共通部品：白パネル＋インク枠＋ベタ影（components.uss）
-            row.AddToClassList("row--click");
 
-            // 行クリックで選手詳細へ（安定 index を受け渡す）。
+            // マスターディテール化（issue #131）: クリックで別画面へ遷移せず、ホバーで右ペインの
+            // 能力詳細を差し替える。ハイライトは components.uss の .row-panel:hover（桜淡）をそのまま使う。
             var idx = r.Index;
-            row.RegisterCallback<ClickEvent>(_ =>
+            row.RegisterCallback<PointerEnterEvent>(_ =>
             {
+                _hasHovered = true;
                 PlayerSelection.Index = idx;
-                FindObjectOfType<KokoSim.Unity.Shell.ScreenRouter>()?.Show("PlayerDetail");
+                _detail?.RenderForSelection();
             });
 
+            row.Add(NumberCell(r.UniformNumber));
             row.Add(Cell(r.Name, "cell--name"));
             // 学年は「2年」の混植なので数字だけ Oswald に載せる（決定2-B）。
             row.Add(KokoSim.Unity.Components.UiComponents.NumUnitAuto(r.GradeLabel, false, "cell cell--narrow"));
@@ -89,7 +105,7 @@ namespace KokoSim.Unity.Players
             row.Add(ability);
 
             // 調子／故障（設計書03 §3.5・UI原則⑥）: 怪我中はこの列が「傷病名・段階」の警告表示になる。
-            // 離脱中の選手の調子は判断材料にならないので列は増やさず差し替える（詳細は行クリック→選手詳細）。
+            // 離脱中の選手の調子は判断材料にならないので列は増やさず差し替える（詳細は行ホバー→右ペイン）。
             var injured = r.Injury.Length > 0;
             var cond = new VisualElement();
             cond.AddToClassList("cell");
@@ -115,6 +131,16 @@ namespace KokoSim.Unity.Players
         }
 
         // ===== 補助 =====
+
+        // 背番号セル（issue #131）: 数字だけなのでコンデンス体（f-num）。列幅・右揃えは .cell--no（PlayerList.uss）。
+        private static Label NumberCell(string text)
+        {
+            var l = new Label(text);
+            l.AddToClassList("cell");
+            l.AddToClassList("cell--no");
+            l.AddToClassList("f-num");
+            return l;
+        }
 
         private void SetText(string name, string text)
         {
