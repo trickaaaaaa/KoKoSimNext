@@ -180,7 +180,7 @@
     flex-shrink: 0;
     -unity-text-align: middle-center;
     background-color: var(--color-panel);
-    color: var(--color-lamp);
+    color: var(--ink);
     border-radius: var(--radius-chip);
     font-size: var(--fs-label);
     margin-right: var(--sp-2);
@@ -211,7 +211,7 @@
     flex-shrink: 0;
     font-size: var(--fs-label);
     -unity-text-align: middle-right;
-    color: var(--color-lamp);
+    color: var(--ink);
     margin-left: var(--sp-2);
 }
 .abil-row__note--muted { color: var(--color-muted); -unity-font-style: normal; }
@@ -253,7 +253,7 @@
 .stat-bar__fill {
     height: 100%;
     border-radius: 0;
-    background-color: var(--color-lamp);
+    background-color: var(--sky);
 }
 .stat-bar--good .stat-bar__fill { background-color: var(--color-good); }
 .stat-bar--warn .stat-bar__fill { background-color: var(--color-warn); }
@@ -279,7 +279,7 @@
 .seg--lg .seg__cell { width: 40px; height: 32px; font-size: 18px; }
 /* 文字数が可変なラベル向け（強攻/待て等）。幅固定セルではなくパディングで揃える。 */
 .seg--auto .seg__cell { width: auto; height: 24px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
-.seg__cell--on { background-color: var(--color-lamp); color: var(--color-ink); }
+.seg__cell--on { background-color: var(--sky); color: #FFFFFF; }
 /* 今は選べないセル（局面が合わない・控えが尽きた等）。押せないことを色だけで示す。 */
 .seg__cell--off { color: var(--color-faint); }
 .seg__cell--off:hover { color: var(--color-faint); }
@@ -323,8 +323,8 @@
     background-color: var(--color-panel-deep);
     margin-left: var(--sp-1);
 }
-.filter-chip:hover { border-color: var(--color-lamp); color: var(--color-chalk); }
-.filter-chip--on { background-color: var(--color-lamp); color: var(--color-ink); border-color: var(--color-lamp); }
+.filter-chip:hover { border-color: var(--sky); color: var(--color-chalk); }
+.filter-chip--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 
 /* ── Switch：オン/オフトグル（委任など） ────────────────────────────── */
 .switch {
@@ -343,7 +343,7 @@
     background-color: var(--color-muted);
     margin-left: 3px;
 }
-.switch--on { background-color: var(--color-lamp); border-color: var(--color-lamp); }
+.switch--on { background-color: var(--sky); border-color: var(--sky); }
 .switch--on .switch__knob { background-color: var(--color-ink); margin-left: 22px; }
 
 /* ── StepButton：（− 値 +）の増減ボタン ─────────────────────────────── */
@@ -360,7 +360,7 @@
     margin-left: 2px;
     margin-right: 2px;
 }
-.step-btn:hover { border-color: var(--color-lamp); }
+.step-btn:hover { border-color: var(--sky); }
 .step-btn--locked { color: var(--color-line); }
 
 /* ── Panel：見出し付きの区切り枠（画面の基本容器） ───────────────────── */
@@ -372,7 +372,7 @@
 }
 .panel__title {
     font-size: var(--fs-label);
-    color: var(--color-lamp);
+    color: var(--ink);
     letter-spacing: 1px;
 }
 
@@ -401,7 +401,7 @@
     align-items: center;
     background-color: var(--color-panel);
     border-width: var(--border-w);
-    border-color: var(--color-lamp);
+    border-color: var(--ink);
     border-radius: var(--radius-panel);
     padding-left: var(--sp-3);
     padding-right: var(--sp-3);
@@ -409,8 +409,8 @@
     padding-bottom: var(--sp-2);
 }
 .banner__badge {
-    background-color: var(--color-lamp);
-    color: var(--color-ink);
+    background-color: var(--sky);
+    color: #FFFFFF;
     font-size: var(--fs-cap);
     letter-spacing: 2px;
     padding-left: var(--sp-2);
@@ -448,8 +448,8 @@
     padding-right: 4px;
 }
 .field-chip:hover { border-color: var(--color-line-focus); }
-.field-chip--picked { border-color: var(--color-lamp); background-color: rgba(40, 58, 44, 0.95); }
-.field-chip--picked:hover { border-color: var(--color-lamp); }
+.field-chip--picked { border-color: var(--sky); background-color: rgba(40, 58, 44, 0.95); }
+.field-chip--picked:hover { border-color: var(--sky); }
 /* 球場図チップの文字は盤面ジオメトリ都合の固定サイズ（--fs-cap連動だと底上げで図上のチップ同士が重なる。
    13px＝視認性改善後も重ならないことをスクショで確認済みの値）。 */
 .field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: 13px; color: var(--color-lamp); }
@@ -520,8 +520,8 @@
     margin-bottom: var(--sp-2);
 }
 .bench-slot:hover { border-color: var(--color-line-focus); }
-.bench-slot--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
-.bench-slot--picked:hover { border-color: var(--color-lamp); }
+.bench-slot--picked { border-color: var(--sky); background-color: var(--color-panel-hover); }
+.bench-slot--picked:hover { border-color: var(--sky); }
 
 /* ── PoolChip：割当元プール（部員一覧の小片） ──────────────────────── */
 .pool-chip {
@@ -539,8 +539,8 @@
     margin-bottom: var(--sp-2);
 }
 .pool-chip:hover { border-color: var(--color-line-focus); }
-.pool-chip--picked { border-color: var(--color-lamp); opacity: 1; }
-.pool-chip--picked:hover { border-color: var(--color-lamp); }
+.pool-chip--picked { border-color: var(--sky); opacity: 1; }
+.pool-chip--picked:hover { border-color: var(--sky); }
 .pool-chip__body { margin-left: var(--sp-2); margin-right: var(--sp-2); }
 .pool-chip__name { font-size: var(--fs-label); color: var(--color-chalk); }
 .pool-chip__meta { flex-direction: row; align-items: center; margin-top: 1px; }
@@ -555,7 +555,7 @@
     border-radius: var(--radius-chip);
     margin-left: 2px;
 }
-.cmp-btn:hover { border-color: var(--color-lamp); color: var(--color-lamp); }
+.cmp-btn:hover { border-color: var(--sky); color: var(--sky); }
 .cmp-btn--a-on { background-color: var(--cmp-a); color: var(--color-ink); border-color: var(--cmp-a); }
 .cmp-btn--b-on { background-color: var(--cmp-b); color: var(--color-ink); border-color: var(--cmp-b); }
 
@@ -676,11 +676,11 @@
     padding-left: 4px;
     padding-right: 4px;
 }
-.pos-chip:hover { border-color: var(--color-lamp); }
+.pos-chip:hover { border-color: var(--sky); }
 .pos-chip--fixed { color: var(--color-muted); background-color: var(--color-line-soft); }
-.pos-chip--dh { color: var(--color-lamp); background-color: var(--color-line-soft); }
+.pos-chip--dh { color: var(--sky); background-color: var(--color-line-soft); }
 /* 選択中（1つ目のチップをクリック済み）。bench-row--picked / sp-pill--picked と同じ表現。 */
-.pos-chip--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+.pos-chip--picked { border-color: var(--sky); background-color: var(--color-panel-hover); }
 
 /* ── BenchRow：控え（打順外）の1行（名前＋投/野タグ＋総合ランク） ── */
 .bench-row {
@@ -716,8 +716,8 @@
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-.sp-pill:hover { border-color: var(--color-lamp); }
-.sp-pill--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+.sp-pill:hover { border-color: var(--sky); }
+.sp-pill--picked { border-color: var(--sky); background-color: var(--color-panel-hover); }
 .sp-pill__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
 .sp-pill__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-2); }
 

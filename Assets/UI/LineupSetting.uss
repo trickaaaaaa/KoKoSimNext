@@ -146,10 +146,10 @@
 .lu-btn--ghost:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
 .lu-btn--go {
     flex-grow: 1;
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     color: var(--color-ink);
 }
-.lu-btn--go:hover { background-color: var(--color-lamp-hi); }
+.lu-btn--go:hover { background-color: var(--color-cta-hi); }
 
 /* ── 右：2選手比較＋成績 ── */
 .lu-compare {

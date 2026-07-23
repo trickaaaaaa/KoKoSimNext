@@ -45,7 +45,7 @@
 }
 .nom-slot--empty { border-color: var(--color-line-soft); }
 .nom-slot__num {
-    font-size: var(--fs-label); color: var(--color-ink); background-color: var(--color-lamp); width: 22px; height: 22px;
+    font-size: var(--fs-label); color: #FFFFFF; background-color: var(--ink); width: 22px; height: 22px;
     -unity-text-align: middle-center; border-radius: var(--radius-chip); margin-right: var(--sp-2);
 }
 .nom-slot--empty .nom-slot__num { background-color: var(--color-line); color: var(--color-muted); }
@@ -102,7 +102,7 @@
 .trow__num { margin-right: 12px; }   /* .num-badge を継承 */
 .trow__idtext { flex-direction: column; }
 .trow__name { font-size: 22px; color: var(--color-chalk); }
-.trow__name:hover { color: var(--color-lamp); }
+.trow__name:hover { color: var(--sky); }
 .trow__meta { flex-direction: row; margin-top: 4px; }
 
 /* preset-open：行の「練習設定」列＝プリセット名＋主眼メニュー＋変更（クリックでモーダル・余白を埋めて全幅） */
@@ -116,7 +116,7 @@
 .preset-open:hover { border-color: var(--line-focus); background-color: var(--sf-hover); }
 .preset-open__texts { flex-direction: column; flex-grow: 1; }
 .preset-open__label { font-size: 20px; color: var(--color-chalk); }
-.preset-open__label--custom { color: var(--color-lamp); }
+.preset-open__label--custom { color: var(--sky); }
 .preset-open__focus { font-size: var(--fs-label); color: var(--color-muted); margin-top: 3px; }
 /* 行ごとに反復する導線なのでアクセントにしない（30行ぶん黄が並ぶと希少性が壊れる＝UI原則②）。 */
 .preset-open__go { font-size: 19px; color: var(--color-muted); flex-shrink: 0; }
@@ -124,10 +124,10 @@
 /* copy */
 .copy-btn {
     width: 34px; height: 34px; -unity-text-align: middle-center;
-    background-color: var(--color-panel-deep); color: var(--color-lamp);
+    background-color: var(--color-panel-deep); color: var(--sky);
     border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: 21px;
 }
-.copy-btn:hover { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+.copy-btn:hover { border-color: var(--sky); background-color: var(--color-panel-hover); }
 .copy-btn--disabled { color: var(--color-line); }
 
 /* ═══ ability bar 行（伸びバー・プリセット強調で共用） ═══ */
@@ -178,14 +178,14 @@
     padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
     margin-bottom: var(--sp-2);
 }
-.tpm-preset:hover { border-color: var(--color-lamp); }
-.tpm-preset--on { border-color: var(--color-lamp); background-color: var(--color-panel); }
+.tpm-preset:hover { border-color: var(--sky); }
+.tpm-preset--on { border-color: var(--sky); background-color: var(--color-panel); }
 .tpm-preset__head { flex-direction: row; align-items: center; }
 .tpm-preset__name { font-size: 20px; color: var(--color-chalk); }
-.tpm-preset--on .tpm-preset__name { color: var(--color-lamp); }
+.tpm-preset--on .tpm-preset__name { color: var(--sky); }
 .tpm-preset__check {
     width: 22px; height: 22px; -unity-text-align: middle-center; margin-right: var(--sp-2);
-    color: var(--color-lamp); font-size: 20px;
+    color: var(--sky); font-size: 20px;
 }
 .tpm-preset__desc { font-size: var(--fs-label); color: var(--color-muted); white-space: normal; margin-top: 4px; margin-bottom: var(--sp-2); }
 .tpm-preset__bars { flex-direction: column; }
@@ -204,11 +204,11 @@
     border-bottom-left-radius: var(--radius-panel); border-bottom-right-radius: var(--radius-panel);
 }
 .tpm-done {
-    font-size: var(--fs-label); color: var(--color-ink); background-color: var(--color-lamp);
-    border-width: var(--border-w); border-color: var(--color-lamp); border-radius: var(--radius-chip);
+    font-size: var(--fs-label); color: #FFFFFF; background-color: var(--color-cta);
+    border-width: var(--border-w); border-color: var(--color-cta); border-radius: var(--radius-chip);
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
 }
-.tpm-done:hover { background-color: var(--color-lamp-hi); }
+.tpm-done:hover { background-color: var(--color-cta-hi); }
 
 /* ── 選択選手ヘッダーの部品（モーダルで再利用） ── */
 .tp-ed-head__spacer { flex-grow: 1; }
@@ -217,19 +217,19 @@
     flex-shrink: 0;
     width: 54px; height: 54px;
     align-items: center; justify-content: center; flex-direction: column;
-    border-width: 2px; border-color: var(--color-lamp); border-radius: var(--radius-panel); margin-right: var(--sp-3);
+    border-width: 2px; border-color: var(--sky); border-radius: var(--radius-panel); margin-right: var(--sp-3);
 }
 .tp-ed-id__cap { font-size: 13px; color: var(--color-muted); letter-spacing: 1px; }
-.tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--color-lamp); }
+.tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--sky); }
 .tp-ed-who__name { font-size: var(--fs-page); color: var(--color-chalk); margin-right: var(--sp-2); }
 .nom-btn {
-    font-size: var(--fs-cap); color: var(--color-lamp);
-    background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--color-lamp); border-radius: var(--radius-chip);
+    font-size: var(--fs-cap); color: var(--sky);
+    background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--sky); border-radius: var(--radius-chip);
     padding-left: var(--sp-2); padding-right: var(--sp-2); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
     flex-shrink: 0;
 }
 .nom-btn:hover { background-color: var(--color-panel-hover); }
-.nom-btn--on { background-color: var(--color-lamp); color: var(--color-ink); }
+.nom-btn--on { background-color: var(--sky); color: var(--color-ink); }
 
 .tp-ed-bar__remain { font-size: 18px; color: var(--color-muted); margin-bottom: var(--sp-1); }
 
@@ -250,7 +250,7 @@
 .mslot--locked { opacity: 0.5; }
 .mslot__icon {
     width: 34px; height: 34px; -unity-text-align: middle-center;
-    background-color: var(--color-panel); color: var(--color-lamp);
+    background-color: var(--color-panel); color: var(--sky);
     border-radius: var(--radius-chip); margin-right: 12px; font-size: 20px;
 }
 .mslot__body { flex-grow: 1; }
@@ -266,11 +266,11 @@
     border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
     padding-left: 10px; padding-right: 10px; padding-top: var(--sp-1); padding-bottom: var(--sp-1); margin-right: var(--sp-2);
 }
-.tpl-chip:hover { border-color: var(--color-lamp); }
+.tpl-chip:hover { border-color: var(--sky); }
 .tpl-chip--none { color: var(--color-faint); }
 .tp-tpl__save {
-    font-size: var(--fs-label); color: var(--color-lamp);
-    background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--color-lamp); border-radius: var(--radius-chip);
+    font-size: var(--fs-label); color: var(--sky);
+    background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--sky); border-radius: var(--radius-chip);
     padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-1); padding-bottom: var(--sp-1); margin-left: var(--sp-2);
 }
 .tp-tpl__save:hover { background-color: var(--color-panel-hover); }
@@ -279,7 +279,7 @@
 .tp-toast {
     position: absolute; bottom: 24px; left: 50%;
     translate: -50% 0;
-    background-color: var(--color-lamp); color: var(--color-ink);
+    background-color: var(--sky); color: var(--color-ink);
     font-size: 18px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: var(--radius-panel);
     display: none;
 }
@@ -371,7 +371,7 @@
 }
 .tpm-card .tpm-preset__name { color: var(--t1); }
 .tpm-card .tpm-preset--on .tpm-preset__name { color: var(--t1); }
-.tpm-card .tpm-preset__check { color: var(--color-lamp); }   /* チェックのみ小さくアクセント可 */
+.tpm-card .tpm-preset__check { color: var(--sky); }   /* チェックのみ小さくアクセント可 */
 .tpm-card .tpm-preset__desc { color: var(--t2); }
 
 /* 伸びバー（右サイド）＆プリセット内バー：黄を廃し中立グレーの面で表現 */
@@ -383,7 +383,7 @@
 .tpm-card .gainbar__lv--none { color: var(--t3); }
 
 /* バジェット（残り分）だけは最重要数値→黄アクセントを維持（バー＋数値ラベル） */
-.tpm-card #sel-budget-fill { background-color: var(--color-lamp); }
+.tpm-card #sel-budget-fill { background-color: var(--sky); }
 .tpm-card .tp-ed-bar__remain { color: var(--t2); }
 
 /* 背番号バッジ：黄→中立。番号は白 */

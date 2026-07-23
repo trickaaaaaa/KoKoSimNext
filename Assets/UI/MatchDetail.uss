@@ -57,7 +57,7 @@
     font-size: var(--fs-cap);
     letter-spacing: 1px;
     color: var(--color-ink);
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     border-radius: var(--radius-chip);
     padding: 1px 8px;
     margin-right: 10px;

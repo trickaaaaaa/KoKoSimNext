@@ -59,7 +59,7 @@
 .school__week {
     font-size: 25px;
     letter-spacing: 1px;
-    color: var(--color-lamp);             /* --lamp 電光ランプ */
+    color: var(--ink);             /* --lamp 電光ランプ */
 }
 .meters { flex-direction: row; }
 .meter {
@@ -151,7 +151,7 @@
     padding: 16px;
     align-items: center;
 }
-.vs__tag { font-size: 19px; color: var(--color-lamp); letter-spacing: 2px; }
+.vs__tag { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; }
 .vs__teams { flex-direction: row; align-items: center; margin: 10px 0 6px 0; }
 .vs__team { font-size: 26px; margin: 0 10px; }
 .vs__x { color: var(--color-muted); margin: 0 6px; }
@@ -166,7 +166,7 @@
     border-color: var(--color-line);
     overflow: hidden;
 }
-.bar__fill { height: 100%; background-color: var(--color-lamp); }
+.bar__fill { height: 100%; background-color: var(--sky); }
 .note { font-size: 20px; color: var(--color-muted); margin-top: 10px; white-space: normal; }
 
 /* ===== 部の状態 ===== */
@@ -195,7 +195,7 @@
     padding: 8px 12px;
     margin-bottom: 6px;
 }
-.feed__item--up { border-left-color: var(--color-lamp); }
+.feed__item--up { border-left-color: var(--sky); }
 .feed__item--warn { border-left-color: var(--color-warn); }
 .feed__when { font-size: 18px; color: var(--color-muted); margin-bottom: 2px; }
 .feed__text { font-size: 21px; }
@@ -216,8 +216,8 @@
 .day__d { font-size: 19px; color: var(--color-muted); letter-spacing: 1px; }
 .day__m { font-size: 21px; margin-top: 3px; }
 .day--rest .day__m { color: var(--color-muted); }
-.day--match { border-color: var(--color-lamp); }
-.day--match .day__m { color: var(--color-lamp); }
+.day--match { border-color: var(--sky); }
+.day--match .day__m { color: var(--sky); }
 
 /* ===== 注目選手テーブル ===== */
 .row {
@@ -275,7 +275,7 @@
     padding: 7px 14px;
     margin-left: 8px;
 }
-.chip-btn:hover { border-color: var(--color-lamp); color: var(--color-lamp); }
+.chip-btn:hover { border-color: var(--sky); color: var(--sky); }
 
 /* 列幅（.cell の等幅を上書き。基底の後に置き同特異度で勝つ） */
 .cell--name { flex-grow: 2.2; }
@@ -285,10 +285,10 @@
 /* ===== 練習計画 ===== */
 .day__e { font-size: 18px; color: var(--color-muted); margin-top: 3px; -unity-text-align: middle-center; white-space: normal; }
 .day--edit { }
-.day--edit:hover { border-color: var(--color-lamp); }
+.day--edit:hover { border-color: var(--sky); }
 .chip-btn--hard { border-color: var(--color-warn); color: var(--color-warn); }
 .chip-btn--light { border-color: var(--color-good); color: var(--color-good); }
-.chip-btn--on { background-color: var(--color-lamp); color: var(--color-ink); border-color: var(--color-lamp); }
+.chip-btn--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 
 .eff-row {
     flex-direction: row;
@@ -308,7 +308,7 @@
     padding: 8px 4px 0 4px;
 }
 .eff-foot__k { font-size: 18px; color: var(--color-muted); letter-spacing: 1px; }
-.eff-foot__v { font-size: 24px; color: var(--color-lamp); }
+.eff-foot__v { font-size: 24px; color: var(--ink); }
 
 .coach-row { flex-direction: row; }
 .coach-slot {
@@ -338,13 +338,13 @@
     -unity-text-align: middle-center;
     padding: 6px 12px;
 }
-.menu-chip:hover { border-color: var(--color-lamp); color: var(--color-lamp); }
+.menu-chip:hover { border-color: var(--sky); color: var(--sky); }
 .menu-chip--rest { background-color: var(--color-panel-deep); color: var(--color-muted); border-color: var(--color-line); }
 .menu-chip--locked { background-color: var(--color-field); color: var(--color-faint); border-color: var(--color-line); }
 .menu-chip--locked:hover { border-color: var(--color-line); color: var(--color-faint); }
 
 /* 選択行のハイライト */
-.row--selected { background-color: #1F2A24; border-left-width: 3px; border-left-color: var(--color-lamp); }
+.row--selected { background-color: var(--sakura-tint); border-left-width: 3px; border-left-color: var(--ink); }
 
 /* 分配分エディタ（選択選手のメニュー別 分） */
 .edit-slot {
@@ -371,7 +371,7 @@
     width: 32px;
     padding: 2px;
 }
-.edit-slot__btn:hover { border-color: var(--color-lamp); color: var(--color-lamp); }
+.edit-slot__btn:hover { border-color: var(--sky); color: var(--sky); }
 .coach-row { flex-direction: row; flex-wrap: wrap; }
 .proj--up { color: #B9D45A; }
 .proj--none { color: var(--color-faint); }
@@ -409,7 +409,7 @@
 .sb-cell--lead { color: var(--color-lamp); }
 
 /* ===== 出場成績テーブル（打撃・投手） ===== */
-.stat-sub { font-size: 19px; color: var(--color-lamp); margin: 8px 0 4px 2px; letter-spacing: 1px; }
+.stat-sub { font-size: 19px; color: var(--ink); margin: 8px 0 4px 2px; letter-spacing: 1px; }
 .st-row {
     flex-direction: row;
     align-items: center;
@@ -428,7 +428,7 @@
 .st-num--hi { color: #B9D45A; }
 
 .mfeed { padding: 5px 4px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
-.mfeed--header { color: var(--color-lamp); font-size: 19px; margin-top: 8px; letter-spacing: 1px; }
+.mfeed--header { color: var(--ink); font-size: 19px; margin-top: 8px; letter-spacing: 1px; }
 .mfeed--hit { color: var(--color-chalk); font-size: 20px; }
 .mfeed--run { color: #B9D45A; font-size: 21px; }
 
@@ -469,11 +469,11 @@
     border-radius: var(--radius-card); padding: 12px 14px; margin-bottom: 9px;
 }
 /* 優勝候補だけは左端の太罫（新聞の柱）で示す。全周アンバー枠は面を飾りすぎるのでやめた。 */
-.tp-team--fav { border-left-width: 3px; border-left-color: var(--color-lamp); }
+.tp-team--fav { border-left-width: 3px; border-left-color: var(--sky); }
 
 .tp-mark { width: 64px; align-items: center; justify-content: flex-start; }
 .tp-mark__sym { font-size: 34px; }
-.tp-mark__sym--fav { color: var(--color-lamp); }
+.tp-mark__sym--fav { color: var(--sky); }
 .tp-mark__sym--cont { color: var(--color-chalk); }
 .tp-mark__sym--dark { color: var(--color-warn); }
 .tp-mark__label { font-size: var(--fs-cap); letter-spacing: 1px; color: var(--color-muted); margin-top: 2px; }
@@ -498,7 +498,7 @@
 .tp-bar__val { font-size: var(--fs-num); color: var(--color-chalk); -unity-text-align: middle-right; }
 /* 丸端バー → 角端（design-16 §5）。トラックの枠線も落とし、面の明度差だけで示す。 */
 .tp-track { height: 6px; background-color: var(--sf-inset); border-radius: 0; border-width: 0; }
-.tp-fill { height: 100%; background-color: var(--color-lamp); border-radius: 0; }
+.tp-fill { height: 100%; background-color: var(--sky); border-radius: 0; }
 .tp-fill--def { background-color: var(--color-good); }
 
 /* ── 大会展望：追加部品（トークン参照。UI-BUILD-METHOD Step 2「辞書に足してから使う」） ──
@@ -508,12 +508,12 @@
 .tp-cta-wrap { align-items: center; margin-top: var(--sp-4); margin-bottom: var(--sp-4); flex-shrink: 0; }
 /* 既定テーマの .unity-button と同順位で当たるため、型＋クラスで特異度を上げて確実に勝たせる。 */
 Button.tp-cta {
-    background-color: var(--color-lamp); color: var(--color-ink);
+    background-color: var(--color-cta); color: #FFFFFF;
     font-size: var(--fs-page); letter-spacing: 1px;
     border-width: 0; border-radius: var(--radius-card);
     padding: var(--sp-3) 40px; min-width: 320px; margin: 0;
 }
-Button.tp-cta:hover { background-color: var(--color-lamp-hi); }
+Button.tp-cta:hover { background-color: var(--color-cta-hi); }
 
 /* 戻る導線は控えめ（アクセントを CTA に集中させる）。 */
 Button.tp-back {
@@ -557,7 +557,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-pcard__no--field { background-color: var(--color-good); }
 .tp-pcard__nm { font-size: var(--fs-body); color: var(--tx-1); margin-left: var(--sp-2); }
 .tp-pcard__sub { font-size: var(--fs-cap); color: var(--tx-2); margin-left: var(--sp-2); }
-.tp-pcard__stat { font-size: var(--fs-label); color: var(--color-lamp); margin-bottom: var(--sp-1); white-space: normal; }
+.tp-pcard__stat { font-size: var(--fs-label); color: var(--ink); margin-bottom: var(--sp-1); white-space: normal; }
 .tp-pcard__blurb { font-size: var(--fs-label); color: var(--tx-1); white-space: normal; }
 
 /* 登録メンバー：校ごとのブロック＋背番号順の表。 */
@@ -572,7 +572,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-roster__name { font-size: var(--fs-body); color: var(--tx-1); }
 .tp-roster__tag {
     font-size: var(--fs-cap); letter-spacing: 1px; color: var(--color-ink);
-    background-color: var(--color-lamp); border-radius: var(--radius-chip); padding: 1px var(--sp-2);
+    background-color: var(--sky); border-radius: var(--radius-chip); padding: 1px var(--sp-2);
 }
 .tp-roster__sub {
     font-size: var(--fs-label); color: var(--tx-2); white-space: normal;
@@ -598,7 +598,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-mc--grade { width: var(--col-mem-grade); flex-shrink: 0; -unity-text-align: middle-right; }
 .tp-mc--hand { width: var(--col-mem-hand); flex-shrink: 0; -unity-text-align: middle-right; }
 /* 背番号だけアンバー（モックの td.n 相当）。数値は右揃え・装飾なし。 */
-.tp-mrow .tp-mc--no { color: var(--color-lamp); }
+.tp-mrow .tp-mc--no { color: var(--ink); }
 .tp-mrow .tp-mc--hand { color: var(--tx-2); }
 
 /* ===== トーナメント表（樹形図・列＝ラウンドの横スクロール） =====
@@ -634,7 +634,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     background-color: var(--sf-card); border-radius: var(--radius-chip); overflow: hidden;
 }
 /* 自校ラインだけ左端にアンバーの縁（データ画面のアクセントは自校ラインに絞る＝UI原則2）。 */
-.brk-card--fav { border-left-width: 2px; border-left-color: var(--color-lamp); }
+.brk-card--fav { border-left-width: 2px; border-left-color: var(--sky); }
 
 .brk-line {
     flex-direction: row; align-items: center; height: var(--brk-slot-h);
@@ -650,7 +650,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .brk-name--win { }
 .brk-name--out { color: var(--tx-3); }
 .brk-name--tbd { color: var(--tx-3); }
-.brk-name--fav { color: var(--color-lamp); }
+.brk-name--fav { color: var(--sky); }
 /* 数値は右揃え・全カード同一幅（UI原則3）。 */
 .brk-score {
     width: var(--brk-score-w); flex-shrink: 0; margin: 0;
@@ -671,7 +671,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .brk-half { flex-grow: 1; flex-basis: 0; }
 .brk-half--h { border-bottom-width: 1px; border-bottom-color: var(--line-focus); }
 .brk-half--v { border-left-width: 1px; border-left-color: var(--line-focus); }
-.brk-half--fav { border-bottom-color: var(--color-lamp); border-left-color: var(--color-lamp); }
+.brk-half--fav { border-bottom-color: var(--sky); border-left-color: var(--sky); }
 
 /* 優勝欄（決勝の右）。 */
 .brk-champ {
@@ -680,7 +680,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 }
 .brk-champ__cap { font-size: var(--fs-cap); color: var(--tx-2); margin: 0; letter-spacing: 1px; }
 .brk-champ__name { font-size: var(--fs-label); color: var(--tx-1); margin: 0; }
-.brk-champ__name--fav { color: var(--color-lamp); }
+.brk-champ__name--fav { color: var(--sky); }
 .brk-champ__name--tbd { color: var(--tx-3); -unity-font-style: normal; }
 
 /* ================================================================ */
@@ -862,7 +862,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* --- プレイヤーヘッダー --- */
 .pd2-head { flex-direction: row; align-items: stretch; background-color: var(--color-panel); border-width: 1px; border-color: var(--color-line); margin: 14px; }
 .pd2-numbox { width: 122px; background-color: var(--color-strip); border-right-width: 1px; border-right-color: var(--color-line); align-items: center; justify-content: center; padding: 14px 0; }
-.pd2-numbox__role { color: var(--color-lamp); font-size: var(--fs-cap); letter-spacing: 3px; }
+.pd2-numbox__role { color: var(--sky); font-size: var(--fs-cap); letter-spacing: 3px; }
 .pd2-numbox__no { font-size: 62px; color: var(--color-chalk); }
 .pd2-numbox__sub { font-size: var(--fs-cap); color: var(--color-muted); }
 .pd2-headmain { flex-grow: 1; flex-direction: row; align-items: center; justify-content: space-between; padding: 16px 24px; }
@@ -885,9 +885,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* 主将に指名ボタン: 控えめなアウトライン調。 */
 .pd2-capbtn {
     background-color: rgba(245, 198, 74, 0.12);
-    color: var(--color-lamp);
+    color: var(--sky);
     border-width: 1px;
-    border-color: var(--color-lamp);
+    border-color: var(--sky);
     border-radius: var(--radius-chip);
     font-size: var(--fs-label);
     padding: 4px 12px;
@@ -963,14 +963,14 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 
 /* --- 特殊能力 --- */
 .pd2-skill { margin-bottom: 11px; }
-.pd2-skill__name { font-size: var(--fs-cap); color: var(--color-lamp); background-color: rgba(245,198,74,0.12); border-width: 1px; border-color: var(--color-lamp); padding: 3px 10px; align-self: flex-start; }
+.pd2-skill__name { font-size: var(--fs-cap); color: var(--sky); background-color: rgba(245,198,74,0.12); border-width: 1px; border-color: var(--sky); padding: 3px 10px; align-self: flex-start; }
 .pd2-skill__desc { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 5px; white-space: normal; }
 
 /* --- 簡易成績 --- */
-.pd2-stat-label { font-size: var(--fs-cap); color: var(--color-lamp); letter-spacing: 1px; margin-top: 8px; margin-bottom: 6px; }
+.pd2-stat-label { font-size: var(--fs-cap); color: var(--sky); letter-spacing: 1px; margin-top: 8px; margin-bottom: 6px; }
 .pd2-stat-row { flex-direction: row; margin-bottom: 6px; }
 .pd2-stat { flex-grow: 1; flex-basis: 0; background-color: var(--color-strip); border-width: 1px; border-color: var(--color-line); padding: 8px 4px; align-items: center; margin-right: 6px; }
-.pd2-stat__v { font-size: 24px; color: var(--color-lamp); }
+.pd2-stat__v { font-size: 24px; color: var(--ink); }
 .pd2-stat__k { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
 
 /* 行クリック可能な一覧行 */
@@ -1019,7 +1019,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 }
 .tp-team, .tp-lead, .pd2-head, .pd2-card, .vs, .coach-slot, .edit-slot, .stat, .day { border-radius: var(--radius-card); }
 /* 優勝候補だけは意味のある左アクセント（黄）を細く残す（全周枠は廃止） */
-.tp-team--fav { border-left-width: 3px; border-left-color: var(--color-lamp); }
+.tp-team--fav { border-left-width: 3px; border-left-color: var(--sky); }
 /* 通知フィード（旧レイアウト）：全周枠は廃止し左アクセントのみ残す */
 .feed__item { border-width: 0; border-left-width: 3px; border-left-color: var(--color-line); }
 
@@ -1075,7 +1075,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 
 /* 大会モードのボタン（主要=黄CTA・副次=ゴースト） */
 .tm-btn { min-width: 120px; height: 40px; -unity-text-align: middle-center; font-size: 20px; border-radius: var(--radius-card); margin: 0 8px; }
-.tm-btn--primary { background-color: var(--color-lamp); color: #12160F; border-width: 0; }
+.tm-btn--primary { background-color: var(--color-cta); color: #FFFFFF; border-width: 0; }
 .tm-btn--ghost { background-color: var(--color-panel-deep); color: var(--color-chalk); border-width: 1px; border-color: var(--color-line); }
 
 /* ===== 新チーム発足：次期主将の指名モーダル（設計書09 §8・案C 左リスト＋右詳細） =====
@@ -1102,7 +1102,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nt-row { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; padding-left: 6px;
     border-left-width: 3px; border-left-color: rgba(0, 0, 0, 0); border-radius: var(--radius-chip); }
 .nt-row:hover { background-color: var(--color-row-hover); }
-.nt-row--on { background-color: var(--color-panel-hover); border-left-color: var(--color-lamp); }
+.nt-row--on { background-color: var(--color-panel-hover); border-left-color: var(--sky); }
 
 .nt-c-no { width: 34px; flex-shrink: 0; -unity-text-align: middle-right; padding-right: 8px;
     font-size: var(--fs-label); color: var(--color-muted); }

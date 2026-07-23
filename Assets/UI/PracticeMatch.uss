@@ -180,13 +180,13 @@
 .pm-cta {
     height: 52px;
     flex-shrink: 0;
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     color: var(--color-ink);
     font-size: var(--fs-body);
     border-width: 0;
     border-radius: var(--radius-panel);
 }
-.pm-cta:hover { background-color: var(--color-lamp-hi); }
+.pm-cta:hover { background-color: var(--color-cta-hi); }
 .pm-cta--off {
     background-color: var(--sf-inset);
     color: var(--color-faint);

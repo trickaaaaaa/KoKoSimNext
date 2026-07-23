@@ -104,10 +104,10 @@
 .mp-cta {
     height: 56px;
     flex-shrink: 0;
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     color: var(--color-ink);
     font-size: var(--fs-body);
     border-width: 0;
     border-radius: var(--radius-panel);
 }
-.mp-cta:hover { background-color: var(--color-lamp-hi); }
+.mp-cta:hover { background-color: var(--color-cta-hi); }
