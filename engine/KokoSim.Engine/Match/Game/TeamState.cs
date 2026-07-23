@@ -202,7 +202,7 @@ public sealed class TeamState
         {
             if (p == null || seen.Contains(p) || !_pit.TryGetValue(p, out var a)) return;
             seen.Add(p);
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB));
+            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber));
         }
         Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
         foreach (var p in _team.Bullpen) Add(p);

@@ -11,6 +11,9 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// </summary>
 public interface IBackgroundMatchResolver
 {
-    /// <summary>away（先攻）と home（後攻）の1試合をフルシムで解決し、結果を返す（成績畳み込みは実装側）。</summary>
-    GameResult Resolve(School away, School home, IRandomSource rng);
+    /// <summary>
+    /// away（先攻）と home（後攻）の1試合をフルシムで解決し、結果を返す（成績畳み込みは実装側）。
+    /// <paramref name="context"/> は大会進行コンテキスト（エース温存判断, issue #42。既定 null＝常時エース先発）。
+    /// </summary>
+    GameResult Resolve(School away, School home, IRandomSource rng, TournamentMatchContext? context = null);
 }

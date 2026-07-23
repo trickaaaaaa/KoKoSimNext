@@ -168,10 +168,12 @@ public sealed class PracticeMatchTests
     /// <summary>詳細シムの継ぎ目のスタブ（乱数を1回消費して結果を作る＝決定論を検証できる）。</summary>
     private sealed class StubResolver : IPlayerMatchResolver
     {
-        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
             => new(Box(rng.NextInt(0, 10)), ManagerIsAway: false);
 
-        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
             => throw new NotSupportedException("練習試合はライブ観戦をまだ持たない。");
     }
 

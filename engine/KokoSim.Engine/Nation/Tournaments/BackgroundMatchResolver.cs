@@ -41,10 +41,12 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
         _onMatch = onMatch;
     }
 
-    public GameResult Resolve(School away, School home, IRandomSource rng)
+    public GameResult Resolve(School away, School home, IRandomSource rng, TournamentMatchContext? context = null)
     {
-        var awayTeam = WithBrain(_rosters.TeamFor(away, _yearIndex, _modernRules, _calendarYear), away);
-        var homeTeam = WithBrain(_rosters.TeamFor(home, _yearIndex, _modernRules, _calendarYear), home);
+        var awayAceRest = AceRestContext.From(context, home.Tier);
+        var homeAceRest = AceRestContext.From(context, away.Tier);
+        var awayTeam = WithBrain(_rosters.TeamFor(away, _yearIndex, _modernRules, _calendarYear, awayAceRest), away);
+        var homeTeam = WithBrain(_rosters.TeamFor(home, _yearIndex, _modernRules, _calendarYear, homeAceRest), home);
         var result = GameEngine.Play(awayTeam, homeTeam, _ctx, rng.Fork(2));
         _stats?.FoldMatch(away.Id, home.Id, result);
         _onMatch?.Invoke(away.Id, home.Id, result);

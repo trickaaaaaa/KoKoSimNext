@@ -111,6 +111,8 @@ public sealed class TournamentRunner
     private readonly int _managerId;
     private readonly int _totalRounds;
     private readonly List<BracketMatch> _matches = new();
+    /// <summary>大会中の投手球数台帳（issue #41）。エース温存判断（issue #42）の消耗入力として本大会内で共有する。</summary>
+    private readonly TournamentPitchLedger _pitchLedger = new();
 
     /// <summary>ラウンド r（0基点）開始時の各スロットの残存校。未到達ラウンドは null（＝校名未確定）。</summary>
     private readonly School?[]?[] _roundEntrants;
@@ -136,7 +138,7 @@ public sealed class TournamentRunner
     /// </remarks>
     private sealed record PendingLiveMatch(
         School?[] Cur, School?[] Next, int Slot, School Mgr, School Opp,
-        string RoundName, int RoundsRemaining, bool ManagerIsAway, LivePlayerMatch Live);
+        string RoundName, int RoundsRemaining, bool ManagerIsAway, LivePlayerMatch Live, int MatchDay);
 
     public string Title { get; }
     public bool PlayerActive { get; private set; } = true;
@@ -411,8 +413,10 @@ public sealed class TournamentRunner
                 ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
+                var matchDay = _schedule.MatchDay(round);
+                var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
                 var detail = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
-                    MercyRuleEnabledFor(roundsRemaining));
+                    MercyRuleEnabledFor(roundsRemaining), context);
                 var r = detail.Result;
                 var mgrRuns = detail.ManagerIsAway ? r.AwayRuns : r.HomeRuns;
                 var oppRuns = detail.ManagerIsAway ? r.HomeRuns : r.AwayRuns;
@@ -426,6 +430,7 @@ public sealed class TournamentRunner
                     Detail: r, ManagerWasAway: detail.ManagerIsAway, MercyEnded: r.MercyEnded);
                 _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mw.Id, ml.Id, mws, mls, true, r.MercyEnded));
                 RecordCard(round, i, mw.Id == a.Id, mws, mls, r.MercyEnded);
+                RecordOutings(r, detail.ManagerIsAway ? mgr : opp, detail.ManagerIsAway ? opp : mgr, matchDay);
                 next[i] = mw;
                 continue;
             }
@@ -477,11 +482,13 @@ public sealed class TournamentRunner
                 ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
+                var matchDay = _schedule.MatchDay(round);
+                var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
-                    MercyRuleEnabledFor(roundsRemaining));
+                    MercyRuleEnabledFor(roundsRemaining), context);
                 var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName);
                 _pending = new PendingLiveMatch(
-                    cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway, handle);
+                    cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway, handle, matchDay);
                 return handle;
             }
 
@@ -513,6 +520,7 @@ public sealed class TournamentRunner
         _matches.Add(new BracketMatch(
             p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winner.Id, loser.Id, winScore, loseScore, true, result.MercyEnded));
         RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore, result.MercyEnded);
+        RecordOutings(result, p.ManagerIsAway ? p.Mgr : p.Opp, p.ManagerIsAway ? p.Opp : p.Mgr, p.MatchDay);
         p.Next[p.Slot] = winner;
 
         // 自校スロット以降の残りカードを本流で解決（このラウンドの自校戦は1つだけ＝以降は非自校カード）。
@@ -553,12 +561,34 @@ public sealed class TournamentRunner
     {
         if (_backgroundResolver is not null)
         {
-            var r = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot)));
+            var matchDay = _schedule.MatchDay(_totalRounds - roundsRemaining);
+            var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
+            var r = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot)), context);
+            RecordOutings(r, a, b, matchDay);
             return DecideFromRuns(a, b, r);
         }
         var (winner, loser, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
         var (ws, ls) = SynthesizeScore(margin);
         return (winner, loser, ws, ls);
+    }
+
+    /// <summary>
+    /// 試合結果から両軍投手の球数を大会台帳（#41）へ記録する（エース温存判断, issue #42 の消耗入力）。
+    /// 自校投手は SourceId、相手校生成投手は (校ID, 背番号) をキーにする（<see cref="PitcherLedgerKey"/>）。
+    /// </summary>
+    private void RecordOutings(GameResult r, School awaySchool, School homeSchool, int matchDay)
+    {
+        RecordSide(r.AwayPitching, awaySchool.Id, matchDay);
+        RecordSide(r.HomePitching, homeSchool.Id, matchDay);
+    }
+
+    private void RecordSide(IReadOnlyList<PitchingLine> lines, int schoolId, int matchDay)
+    {
+        foreach (var l in lines)
+        {
+            var key = l.SourceId is int sid ? PitcherLedgerKey.ForPlayer(sid) : PitcherLedgerKey.ForOpponent(schoolId, l.UniformNumber);
+            _pitchLedger.Record(key, l.Pitches, matchDay);
+        }
     }
 
     /// <summary>

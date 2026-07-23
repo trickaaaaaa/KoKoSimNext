@@ -1,3 +1,4 @@
+using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
@@ -27,4 +28,7 @@ public sealed record AiRosterDeps
 
     /// <summary>調子係数（相手校の試合ごと調子variance の抽選に使う・Q21）。既存生成と共有。</summary>
     public FormCoefficients Form { get; init; } = new();
+
+    /// <summary>敵AI係数（校風・ティア。<see cref="AiTeamBuilder"/> のエース温存判断で使う, issue #42）。</summary>
+    public EnemyAiCoefficients EnemyAi { get; init; } = new();
 }

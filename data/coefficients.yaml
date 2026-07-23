@@ -534,6 +534,19 @@ enemy_ai:
   aggressive_gear_coast_lead_later: 2
   cautious_intentional_walk_prob: 0.55       # 9) 慎重（敬遠ためらわない）
   cautious_intentional_walk_min_power_relax: 4
+  # ⑤ エース温存層: 先発選択（issue #42, 設計書11 §2/§3）🟡実測校正
+  ace_rest_min_tier: 3                        # D: ローテ運用の基本判断（未満は常時エース先発）
+  ace_rest_base: 0.05
+  ace_rest_tier_gap_weight: 0.05              # 相手とのティア差1段あたり（自校が格上なほど加点）
+  ace_rest_rounds_remaining_weight: 0.05      # この試合の後に残るラウンド数1つあたり（決勝は加点なし）
+  ace_rest_fatigue_weight: 0.35               # エースの直近消耗負荷（0〜1正規化）
+  ace_rest_fatigue_window_days: 7             # 消耗負荷を見る直近日数の窓（#41 台帳）
+  ace_rest_fatigue_reference_pitches: 100.0   # 消耗負荷=1.0とみなす基準球数
+  ace_rest_floor: 0.0
+  ace_rest_cap: 0.85
+  ace_rest_ace_dependent_factor: 0.2          # 豪腕依存: 打線は水物＝エースにほぼ常に頼る
+  ace_rest_defensive_minded_factor: 1.6       # 守り勝つ野球: ローテ管理に積極的
+  ace_rest_total_baseball_factor: 1.4         # 全員野球: 選手層を使い回す方針の一環
 
 # --- 怪我（設計書03 §3.5: 段階制・常に可視・押して出場は悪化リスク）🟡 ---
 injury:
