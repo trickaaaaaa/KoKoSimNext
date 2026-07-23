@@ -49,6 +49,8 @@ public sealed record CoefficientsBundle
     public CareerCoefficients Career { get; init; } = new();
     public TournamentSchedule Tournament { get; init; } = new();
     public PracticeMatchCoefficients PracticeMatch { get; init; } = new();
+    /// <summary>施設カタログ（Issue #128）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
+    public FacilityCatalog Facilities { get; init; } = FacilityCatalog.Default;
 }
 
 /// <summary>
@@ -102,6 +104,7 @@ public static class CoefficientsLoader
         public CareerDto? Career { get; set; }
         public TournamentDto? Tournament { get; set; }
         public PracticeMatchDto? PracticeMatch { get; set; }
+        public List<FacilityDefDto>? Facilities { get; set; }
 
         public CoefficientsBundle ToBundle() => new()
         {
@@ -133,7 +136,35 @@ public static class CoefficientsLoader
             Career = Career?.ToModel() ?? new CareerCoefficients(),
             Tournament = Tournament?.ToModel() ?? new TournamentSchedule(),
             PracticeMatch = PracticeMatch?.ToModel() ?? new PracticeMatchCoefficients(),
+            Facilities = Facilities is null
+                ? FacilityCatalog.Default
+                : new FacilityCatalog { Facilities = Facilities.Select(f => f.ToModel()).ToList() },
         };
+    }
+
+    private sealed class FacilityDefDto
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public List<FacilityTierDtoNew>? Tiers { get; set; }
+
+        public FacilityDef ToModel() => new()
+        {
+            Id = Id,
+            Name = Name,
+            Tiers = Tiers is null
+                ? new[] { new FacilityUpgrade() }
+                : Tiers.Select(t => t.ToModel()).ToList(),
+        };
+    }
+
+    private sealed class FacilityTierDtoNew
+    {
+        public double Cost { get; set; }
+        public double CoefAdd { get; set; }
+        public int BudgetAdd { get; set; }
+
+        public FacilityUpgrade ToModel() => new() { Cost = Cost, CoefAdd = CoefAdd, BudgetAdd = BudgetAdd };
     }
 
     private sealed class TournamentDto
@@ -1848,6 +1879,9 @@ public static class CoefficientsLoader
         public double TrustPoorSeasonPenalty { get; set; } = D.TrustPoorSeasonPenalty;
         public double AnnualBudgetBase { get; set; } = D.AnnualBudgetBase;
         public double BudgetPerTrust { get; set; } = D.BudgetPerTrust;
+        public double SummerCampCost { get; set; } = D.SummerCampCost;
+        public double WinterCampCost { get; set; } = D.WinterCampCost;
+        public double ScoutCost { get; set; } = D.ScoutCost;
         public double NewSchoolStrengthMean { get; set; } = D.NewSchoolStrengthMean;
         public double NewSchoolStrengthSd { get; set; } = D.NewSchoolStrengthSd;
         public double FreeChoiceSchoolStrength { get; set; } = D.FreeChoiceSchoolStrength;
@@ -1873,6 +1907,9 @@ public static class CoefficientsLoader
             TrustPoorSeasonPenalty = TrustPoorSeasonPenalty,
             AnnualBudgetBase = AnnualBudgetBase,
             BudgetPerTrust = BudgetPerTrust,
+            SummerCampCost = SummerCampCost,
+            WinterCampCost = WinterCampCost,
+            ScoutCost = ScoutCost,
             NewSchoolStrengthMean = NewSchoolStrengthMean,
             NewSchoolStrengthSd = NewSchoolStrengthSd,
             FreeChoiceSchoolStrength = FreeChoiceSchoolStrength,
