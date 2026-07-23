@@ -560,23 +560,10 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-pcard__stat { font-size: var(--fs-label); color: var(--ink); margin-bottom: var(--sp-1); white-space: normal; }
 .tp-pcard__blurb { font-size: var(--fs-label); color: var(--tx-1); white-space: normal; }
 
-/* 登録メンバー：校ごとのブロック＋背番号順の表。 */
+/* 登録メンバー：背番号順の表を収める枠（校別詳細ページ, issue #189）。 */
 .tp-roster {
     background-color: var(--sf-card); border-radius: var(--radius-card);
     margin-bottom: var(--sp-3); overflow: hidden;
-}
-.tp-roster__head {
-    flex-direction: row; align-items: center; justify-content: space-between;
-    background-color: var(--sf-inset); padding: var(--sp-2) var(--sp-4);
-}
-.tp-roster__name { font-size: var(--fs-body); color: var(--tx-1); }
-.tp-roster__tag {
-    font-size: var(--fs-cap); letter-spacing: 1px; color: var(--color-ink);
-    background-color: var(--sky); border-radius: var(--radius-chip); padding: 1px var(--sp-2);
-}
-.tp-roster__sub {
-    font-size: var(--fs-label); color: var(--tx-2); white-space: normal;
-    padding: var(--sp-2) var(--sp-4) 0 var(--sp-4);
 }
 
 /* 表：見出しとデータが同一の列幅トークンを参照する（横ずれの構造対策）。行高32px基準（UI原則1）。 */
@@ -651,6 +638,8 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .brk-name--out { color: var(--tx-3); }
 .brk-name--tbd { color: var(--tx-3); }
 .brk-name--fav { color: var(--sky); }
+/* 校別詳細へ遷移できる校名（issue #189）。新規装飾は増やさず、hover だけ既存アクセントで示す。 */
+.brk-name--clickable:hover { color: var(--sky); }
 /* 数値は右揃え・全カード同一幅（UI原則3）。 */
 .brk-score {
     width: var(--brk-score-w); flex-shrink: 0; margin: 0;

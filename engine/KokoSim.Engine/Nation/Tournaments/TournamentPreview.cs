@@ -66,23 +66,19 @@ public static class TournamentPreviewBuilder
         // シード＝強さ順（Knockout と同じ序列）。同強さは Id で安定化。
         var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
         var ratings = ranked.ToDictionary(s => s.Id, Rate);
+        var marks = ComputeMarks(ranked, ratings, berths);
 
         var contenders = new List<PreviewContender>();
-        var darkHorse = PickDarkHorse(ranked, ratings, berths);
-
         for (var i = 0; i < ranked.Count; i++)
         {
             var s = ranked[i];
-            var mark = i == 0 ? ContenderMark.Favorite
-                : i <= 2 ? ContenderMark.Contender
-                : ReferenceEquals(s, darkHorse) ? ContenderMark.DarkHorse
-                : ContenderMark.None;
+            var mark = marks[s.Id];
             if (mark == ContenderMark.None) continue;
 
             var rating = ratings[s.Id];
             contenders.Add(new PreviewContender(
                 Seed: i + 1, Mark: mark, Name: s.Name, Tier: s.Tier, Rating: rating,
-                Blurb: Blurb(mark, rating, s.Style)));
+                Blurb: Blurb(mark, rating, s.Style, s.Id, seed: i + 1, fieldSize: ranked.Count)));
         }
         // ◎○○▲ の順（マーク→シード）。
         contenders = contenders
@@ -107,6 +103,51 @@ public static class TournamentPreviewBuilder
         }
 
         return new TournamentPreview(title, meta, lead, contenders, notables, rosters);
+    }
+
+    /// <summary>
+    /// 出場校のうち任意の1校（格付け校に限らない）の登録メンバー・チーム寸評をオンデマンドで組む
+    /// （issue #189。従来の <see cref="Build"/> は格付け校ぶんしか Rosters を作らないため、
+    /// トーナメント表クリックでどの校を選んでも詳細を出せるようにする窓口）。
+    /// 格付け（◎○▲/無印）・シード・寸評は Build と同じロジックで算出するため、展望と矛盾しない。
+    /// </summary>
+    public static RosterExcerpt BuildRosterFor(
+        School school, IReadOnlyList<School> entrants, int berths, int yearIndex = 1,
+        System.Func<School, int, Match.Game.Team>? teamProvider = null)
+    {
+        var ranked = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
+        var seed = ranked.FindIndex(s => s.Id == school.Id) + 1;
+        if (seed <= 0) throw new System.ArgumentException("school が entrants に含まれていません。", nameof(school));
+
+        var ratings = ranked.ToDictionary(s => s.Id, Rate);
+        var marks = ComputeMarks(ranked, ratings, berths);
+        var mark = marks[school.Id];
+        var rating = ratings[school.Id];
+
+        var team = teamProvider is not null ? teamProvider(school, yearIndex)
+            : StrengthTeamFactory.ForSchool(school, yearIndex);
+
+        var contender = new PreviewContender(
+            Seed: seed, Mark: mark, Name: school.Name, Tier: school.Tier, Rating: rating,
+            Blurb: Blurb(mark, rating, school.Style, school.Id, seed, ranked.Count));
+        return BuildRoster(contender, team);
+    }
+
+    /// <summary>格付け（◎○▲/無印）を出場校全体ぶん一括で決める（Build/BuildRosterFor で共有）。</summary>
+    private static Dictionary<int, ContenderMark> ComputeMarks(
+        IReadOnlyList<School> ranked, IReadOnlyDictionary<int, TeamRating> ratings, int berths)
+    {
+        var darkHorse = PickDarkHorse(ranked, ratings, berths);
+        var marks = new Dictionary<int, ContenderMark>(ranked.Count);
+        for (var i = 0; i < ranked.Count; i++)
+        {
+            var s = ranked[i];
+            marks[s.Id] = i == 0 ? ContenderMark.Favorite
+                : i <= 2 ? ContenderMark.Contender
+                : ReferenceEquals(s, darkHorse) ? ContenderMark.DarkHorse
+                : ContenderMark.None;
+        }
+        return marks;
     }
 
     // ===== 注目選手・登録メンバー（材料は実戦と同一の ForSchool 出力） =====
@@ -276,21 +317,53 @@ public static class TournamentPreviewBuilder
         _ => "勝負強さ",
     };
 
-    private static string Blurb(ContenderMark mark, TeamRating r, SchoolStyle style)
+    /// <summary>
+    /// チーム寸評（issue #189）。校風・3軸・シード・出場校数から複数の言い回しを用意し、seed（校ID）から
+    /// 導いた決定論乱数で1本を選ぶ。同じ格付け・校風の校が並んでも文言が揃わないようにする狙い
+    /// （不変条件#2: 乱数は必ずシード付き IRandomSource 経由。System.Random 直 new は禁止）。
+    /// </summary>
+    private static string Blurb(ContenderMark mark, TeamRating r, SchoolStyle style, int schoolId, int seed, int fieldSize)
     {
         var strong = AxisName(r, strongest: true);
         var weak = AxisName(r, strongest: false);
-        return mark switch
-        {
-            ContenderMark.Favorite =>
-                $"死角の少ない優勝候補。{strong}を軸に、撃ち勝つ試合も守り勝つ試合もできる。",
-            ContenderMark.Contender =>
-                $"{strong}が武器の実力校。{weak}に不安を残すが、噛み合えば頂点も見えてくる。",
-            ContenderMark.DarkHorse =>
-                $"戦力値では一歩譲るが、{StyleFlavor(style)}で上位を脅かす伏兵。短期決戦では侮れない。",
-            _ => "",
-        };
+        var flavor = StyleFlavor(style);
+        var templates = BlurbTemplates(mark, strong, weak, flavor, seed, fieldSize);
+        var rng = new Xoshiro256Random(0xB1EB_0000UL ^ (ulong)schoolId);
+        return templates[rng.NextInt(0, templates.Count)];
     }
+
+    private static IReadOnlyList<string> BlurbTemplates(
+        ContenderMark mark, string strong, string weak, string flavor, int seed, int fieldSize) => mark switch
+    {
+        ContenderMark.Favorite => new[]
+        {
+            $"死角の少ない優勝候補。{strong}を軸に、撃ち勝つ試合も守り勝つ試合もできる。",
+            $"今大会の本命。{strong}の破壊力は頭ひとつ抜けており、{weak}にも大きな穴はない。",
+            $"戦力・実績とも申し分ない大本命。{flavor}で相手を寄せ付けない試合運びが持ち味。",
+            $"{strong}を武器に隙のない仕上がり。優勝から逆算した戦い方ができるチーム。",
+        },
+        ContenderMark.Contender => new[]
+        {
+            $"{strong}が武器の実力校。{weak}に不安を残すが、噛み合えば頂点も見えてくる。",
+            $"優勝候補の一角。{flavor}で上位に食らいつく力を持つ。",
+            $"{strong}の水準は本命校にも引けを取らない。{weak}の安定感が鍵を握る。",
+            "対抗格の一番手。勢いに乗れば台風の目になり得る戦力を備える。",
+        },
+        ContenderMark.DarkHorse => new[]
+        {
+            $"戦力値では一歩譲るが、{flavor}で上位を脅かす伏兵。短期決戦では侮れない。",
+            $"無印評価ながら{strong}に光るものがあり、一泡吹かせる可能性を秘める。",
+            $"シード校ではないが{flavor}が持ち味。番狂わせを起こす力は十分にある。",
+            $"地力こそ上位に譲るものの、{flavor}で流れを引き寄せれば侮れない。",
+        },
+        _ => new[]
+        {
+            $"全{fieldSize}校中{seed}番目の戦力評価。{strong}に持ち味があり、上位相手にも簡単には転ばない。",
+            $"上位校ほどの決め手は無いが、{flavor}で試合を作れるチーム。組み合わせ次第で上位を脅かす。",
+            $"{strong}を軸にした堅実な戦い方が持ち味。大きく崩れないタイプの一校。",
+            $"地力では上位に一歩譲るが、{weak}さえ克服できれば台風の目になり得る。",
+        },
+    };
 
     private static string BuildLead(
         IReadOnlyList<PreviewContender> contenders, int entrantCount, int berths, string nextStageName)
