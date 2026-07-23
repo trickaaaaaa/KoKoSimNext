@@ -39,12 +39,32 @@ public sealed record SeasonContext
     public int FacilityLevel { get; init; }
 
     /// <summary>
-    /// 施設レベル → (施設係数, 週練習時間[分]) の解決（Issue #115）。
-    /// レベル0 または FacilityTiers 未指定なら Training の既定値をそのまま返す＝従来と1ビット一致。
+    /// 多軸の施設保有状態（Issue #128）。null＝未注入で従来の単一軸（<see cref="FacilityLevel"/>）にフォールバック。
+    /// 注入時は <see cref="FacilityCatalog"/> と突き合わせ、全系統の効果を基準へ加算する。
+    /// 全系統Lv0で加算0＝従来と1ビット一致（不変条件#2）。
+    /// </summary>
+    public FacilitySet? Facilities { get; init; }
+
+    /// <summary>施設カタログ（Issue #128）。<see cref="Facilities"/> 注入時に効果・上限の参照に使う。</summary>
+    public FacilityCatalog FacilityCatalog { get; init; } = FacilityCatalog.Default;
+
+    /// <summary>
+    /// 施設 → (施設係数, 週練習時間[分]) の解決。
+    /// <see cref="Facilities"/> 注入時は多軸（Issue #128）を基準へ加算。未注入時は単一軸（Issue #115）に従い、
+    /// どちらも施設0で Training の既定値（1.0 / 300分）と1ビット一致する。
     /// </summary>
     public (double FacilityCoef, int BudgetMinutes) ResolveFacility()
     {
         var defaultBudget = BudgetMinutes ?? Training.DefaultBudgetMinutes;
+
+        // 多軸（Issue #128）: 各系統の効果を基準へ加算。BudgetMinutes 明示注入時はそれを基準にする。
+        if (Facilities is not null)
+        {
+            var (coefAdd, budgetAdd) = FacilityCatalog.Aggregate(Facilities);
+            return (Training.FacilityCoef + coefAdd, defaultBudget + budgetAdd);
+        }
+
+        // 単一軸（Issue #115・後方互換）。
         var tiers = Training.FacilityTiers;
         if (FacilityLevel <= 0 || tiers.Count == 0)
             return (Training.FacilityCoef, defaultBudget);
