@@ -423,36 +423,17 @@ public static class ProspectGenerator
         FieldPosition.CenterField, FieldPosition.RightField,
     };
 
-    private static bool IsInfield(FieldPosition p) =>
-        p is FieldPosition.FirstBase or FieldPosition.SecondBase or FieldPosition.ThirdBase or FieldPosition.Shortstop;
-
     /// <summary>
     /// 守備位置適性を創発的に付与（設計書01 §1.1）。本職は事前に決めない。
     /// 地力(base)＋系統(投/捕/内/外)ごとの独立な向き不向き＋ポジ個体差の和。
     /// 全ポジ器用・捕手専門・器用貧乏など、結果としてのプロフィールがそのまま個性になる。
+    /// ロール本体は <see cref="AptitudeRoller"/> に共有（Issue #177: AI校と同じロールを使う）。
     /// </summary>
     private static void AssignAptitudes(DevelopingPlayer p, RosterCoefficients c, IRandomSource rng)
     {
-        var baseLevel = rng.NextGaussian(c.AptitudeBaseMean, c.AptitudeBaseSd);
-        // 系統ごとの向き不向き（独立）。捕手・投手はそれぞれ独立の専門系統。
-        var affPitcher = rng.NextGaussian(0, c.AptitudeGroupAffinitySd);
-        var affCatcher = rng.NextGaussian(0, c.AptitudeGroupAffinitySd);
-        var affInfield = rng.NextGaussian(0, c.AptitudeGroupAffinitySd);
-        var affOutfield = rng.NextGaussian(0, c.AptitudeGroupAffinitySd);
-
+        var apt = AptitudeRoller.Roll(c, rng);
         foreach (var pos in AllPositions)
-        {
-            var affinity = pos switch
-            {
-                FieldPosition.Pitcher => affPitcher,
-                FieldPosition.Catcher => affCatcher,
-                _ when IsInfield(pos) => affInfield,
-                _ => affOutfield,
-            };
-            var v = (int)MathUtil.Clamp(
-                Math.Round(baseLevel + affinity + rng.NextGaussian(0, c.AptitudePositionNoiseSd)), 1, 99);
-            p.SetAptitude(pos, v);
-        }
+            p.SetAptitude(pos, apt[(int)pos]);
     }
 
     /// <summary>現在値を設定し、才能上限＝現在値＋gap（凸凹・晩成補正）を振る。</summary>

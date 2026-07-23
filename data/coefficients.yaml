@@ -960,7 +960,12 @@ roster:
 # 他校の選手個人が入学〜引退の3年間在籍し節目成長する（使い捨て生成を廃止）。怪物（Phenom）も同居。
 # バランス調整はこのセクションで行う（不変条件#4）。
 persistent_roster:
-  pitchers_per_cohort: 3        # 各学年の投手数（野手は守備8位置に1人ずつ＝コホート=8+これ）
+  pitchers_per_cohort: 3        # 各学年の投手数の狙い値（Issue #177: 決め打ちでなく創発の目標値）
+  # 投手創発（Issue #177）: 適性プール(pitcher_pool_size人)から投手適性の高い順に選ぶ。
+  # 「適性+bias > 最良守備適性」の人数が実人数（豊作/苦作の年ができる）。floor人を割ったら昇格で底上げ。
+  pitcher_pool_size: 6           # コホートごとの投手適性プール人数
+  pitcher_emergence_bias: 15.0   # 投手適性へのバイアス（供給率を狙い値へ寄せる。帯校正で決める）
+  pitcher_count_floor: 1         # コホートあたりの投手人数下限（0人化を構造的に防ぐ）
   freshman_gap: 8.0             # 新入生の能力中心 = Strength − これ（未熟スタート・3年で開花）
   fame_recruit_weight: 0.04     # 名声由来の入学時上振れ（(Fame−50)×これ）
   annual_growth: 6.0            # 逆算配分のベースライン年間成長素点

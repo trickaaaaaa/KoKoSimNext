@@ -56,8 +56,11 @@ public static class AiRosterFactory
             players.Add((ai, false));
         }
 
-        // 投手 N人。
-        for (var i = 0; i < pc.PitchersPerCohort; i++)
+        // 投手（Issue #177: 役割固定のN人から投手適性プールの創発へ）。適性プールを独立Forkでロールし
+        // （主RNGの消費列は乱さない）、投手適性の高い順に選ぶ。実人数は「適性クリア人数」だが
+        // floor人を割ったら適性上位から底上げする＝0人化を構造的に防ぐ（下限保証）。
+        var pitcherOrder = ResolvePitcherPool(pc, deps.Roster, rng);
+        for (var i = 0; i < pitcherOrder.Count; i++)
         {
             var name = PlayerNameGenerator.Generate(deps.NameVocab, rng.Fork(nameSalt++), usedGiven);
             var pr = StrengthTeamFactory.Profile(deps.Roster, rng, ref profileSalt, starter: i == 0);
@@ -120,6 +123,35 @@ public static class AiRosterFactory
     /// <summary>新入生の能力中心（未熟スタート＝Strength − FreshmanGap ＋ 名声上振れ）。</summary>
     internal static double RecruitCenter(School school, PersistentRosterCoefficients c)
         => MathUtil.Clamp(school.Strength - c.FreshmanGap + (school.Fame - 50.0) * c.FameRecruitWeight, 10.0, 95.0);
+
+    /// <summary>
+    /// 投手創発（Issue #177）: 適性プール（<see cref="PersistentRosterCoefficients.PitcherPoolSize"/> 人）を
+    /// 独立Forkでロールし、「投手適性＋バイアス &gt; 最良守備適性」をクリアした人数を実投手数とする。
+    /// floor人を割ったら適性上位から底上げして満たす＝0人化を構造的に防ぐ。戻り値は投手適性の高い順
+    /// （先頭＝エース格。呼び出し側で starter フラグに使う）。適性ロールは主RNGを消費しない。
+    /// </summary>
+    private static List<int> ResolvePitcherPool(PersistentRosterCoefficients pc, RosterCoefficients rc, IRandomSource rng)
+    {
+        var poolSize = Math.Max(pc.PitcherPoolSize, pc.PitcherCountFloor);
+        var scored = new List<(int Index, double Score, bool Clears)>(poolSize);
+        for (var i = 0; i < poolSize; i++)
+        {
+            var apt = AptitudeRoller.Roll(rc, rng.Fork(PitcherAptitudeSalt + (ulong)i));
+            var pitcherApt = apt[(int)FieldPosition.Pitcher];
+            var bestField = AptitudeRoller.BestField(apt);
+            var score = pitcherApt + pc.PitcherEmergenceBias - bestField;
+            scored.Add((i, score, score > 0));
+        }
+        // 適性の高い順（同点は index 昇順）＝先頭ほどエース格。
+        scored = scored.OrderByDescending(s => s.Score).ThenBy(s => s.Index).ToList();
+
+        var count = Math.Max(pc.PitcherCountFloor, scored.Count(s => s.Clears));
+        count = Math.Min(count, poolSize);
+        return scored.Take(count).Select(s => s.Index).ToList();
+    }
+
+    /// <summary>投手創発（Issue #177）の適性ロール用 Fork ソルト（他ストリームと別の上位ビット）。</summary>
+    private const ulong PitcherAptitudeSalt = 0x6F3A_0000UL;
 
     /// <summary>怪物種別に合うコホート成員を選ぶ（投手系→投手・鉄砲肩→捕手・打撃系→野手）。見つからねば −1。</summary>
     private static int PickPhenomMember(
