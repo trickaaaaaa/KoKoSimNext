@@ -101,7 +101,6 @@ namespace KokoSim.Unity.Tournament
             public string Lead;
             public List<ContenderRow> Contenders = new List<ContenderRow>();
             public List<NotableRow> Notables = new List<NotableRow>();
-            public List<RosterBlock> Rosters = new List<RosterBlock>();
         }
 
         /// <summary>大会が開催中でなければ null（呼び出し側は空状態を出す）。</summary>
@@ -161,30 +160,49 @@ namespace KokoSim.Unity.Tournament
                 });
             }
 
-            foreach (var r in preview.Rosters)
-            {
-                var block = new RosterBlock
-                {
-                    SchoolName = r.SchoolName,
-                    TierLetter = r.Tier.ToString(),
-                    Tag = "総合 " + r.Tier + " ／ " + r.SeedLabel,
-                    Sub = r.TeamBlurb,
-                    Members = new List<MemberRow>(r.Members.Count),
-                };
-                foreach (var m in r.Members)
-                {
-                    block.Members.Add(new MemberRow
-                    {
-                        Number = m.UniformNumber.ToString(),
-                        Name = m.Name + "（" + m.PositionLabel + "）",
-                        Grade = m.Grade + "年",
-                        Hand = m.HandednessLabel,
-                    });
-                }
-                v.Rosters.Add(block);
-            }
-
             return v;
+        }
+
+        /// <summary>
+        /// 樹形図でクリックされた1校の校別詳細（ベンチ入りメンバー表＋チーム寸評）を組む（issue #189）。
+        /// 展望の Contenders（格付け校のみ）とは独立に、出場校なら誰でもオンデマンドで生成できる。
+        /// 大会が開催中でない・該当校が見つからない場合は null（呼び出し側は既存ビューのままにする）。
+        /// </summary>
+        public static RosterBlock BuildSchoolDetail(string schoolName)
+        {
+            var session = KokoSim.Unity.Shell.GameSession.Current;
+            if (!session.InTournament || session.Field == null || session.Field.Count == 0) return null;
+
+            var school = session.Field.FirstOrDefault(s => s.Name == schoolName);
+            if (school == null) return null;
+
+            var summer = session.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
+            var excerpt = TournamentPreviewBuilder.BuildRosterFor(
+                school, session.Field, berths: summer ? 1 : 2, yearIndex: session.Year,
+                teamProvider: (s, year) => KokoSim.Unity.Shell.NationService.Rosters.TeamFor(s, year));
+
+            // 通算戦績（issue #84）は寸評の頭に付け足す（展望の Contenders 行と同じ扱い）。
+            var history = KoshienHistoryText(session.Records.For(school.Id));
+
+            var block = new RosterBlock
+            {
+                SchoolName = excerpt.SchoolName,
+                TierLetter = excerpt.Tier.ToString(),
+                Tag = "総合 " + excerpt.Tier + " ／ " + excerpt.SeedLabel,
+                Sub = history + excerpt.TeamBlurb,
+                Members = new List<MemberRow>(excerpt.Members.Count),
+            };
+            foreach (var m in excerpt.Members)
+            {
+                block.Members.Add(new MemberRow
+                {
+                    Number = m.UniformNumber.ToString(),
+                    Name = m.Name + "（" + m.PositionLabel + "）",
+                    Grade = m.Grade + "年",
+                    Hand = m.HandednessLabel,
+                });
+            }
+            return block;
         }
 
         /// <summary>

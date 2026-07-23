@@ -14,7 +14,7 @@ namespace KokoSim.Unity.Tournament
 {
     /// <summary>
     /// 【開発用・エディタ限定】大会展望画面の受け入れスクショ。大会モードを組み立ててから
-    /// トーナメントビュー → 大会展望ビュー（構図／注目選手／登録メンバー）を1セッションで撮る。
+    /// トーナメントビュー → 大会展望ビュー（構図／注目選手） → 校別詳細ビューを1セッションで撮る。
     /// 使い捨て。確認後に削除してよい。
     /// </summary>
     public sealed class TournamentPreviewShooter : MonoBehaviour
@@ -91,9 +91,16 @@ namespace KokoSim.Unity.Tournament
             yield return null; yield return null;
             yield return Capture(doc, 1600, 900, "03-preview-notables");
 
-            if (scroll != null) scroll.scrollOffset = new Vector2(0, 1750);
+            // ── 5. 校別詳細ビュー（樹形図の高校名クリックと同じ導線をAPIで確実に起こす, issue #189） ──
+            var field = GameSession.Current.Field;
+            var target = field != null && field.Count > 0 ? field[0].Name : null;
+            if (target == null) { Debug.LogError("[TP] 出場校が見つからない"); yield break; }
+            ctrl.ShowSchoolDetail(target);
+            yield return null;
+
+            if (scroll != null) scroll.scrollOffset = Vector2.zero;
             yield return null; yield return null;
-            yield return Capture(doc, 1600, 900, "04-preview-roster");
+            yield return Capture(doc, 1600, 900, "04-detail");
 
             Debug.Log("[TP] DONE all shots");
         }

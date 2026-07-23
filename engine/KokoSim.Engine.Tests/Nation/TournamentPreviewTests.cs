@@ -244,4 +244,74 @@ public sealed class TournamentPreviewTests
             a.Contenders.Select(c => (c.Name, c.Mark, c.Rating.Batting, c.Rating.Pitching, c.Rating.Defense)),
             b.Contenders.Select(c => (c.Name, c.Mark, c.Rating.Batting, c.Rating.Pitching, c.Rating.Defense)));
     }
+
+    // ===== 任意校ロスターのオンデマンド生成（issue #189） =====
+
+    /// <summary>
+    /// 格付け（◎○▲）が付かない無印校でも、クリックされた校のロスター・寸評をオンデマンドで組める。
+    /// 従来の Build().Rosters は格付け校ぶんしか作らないため、樹形図のどの校名をクリックしても
+    /// 詳細を出せるようにする窓口が本メソッド。
+    /// </summary>
+    [Fact]
+    public void BuildRosterFor_UnmarkedSchool_ReturnsFullRosterAndBlurb()
+    {
+        var field = Field();
+        var plain = field.First(s => s.Name == "県立B");   // 無印（◎○▲どれにも入らない下位校）
+        var baseline = TournamentPreviewBuilder.Build("秋季テスト県大会", field, berths: 2, "地区大会");
+        Assert.DoesNotContain(baseline.Contenders, c => c.Name == "県立B");   // 前提: 無印であること
+
+        var roster = TournamentPreviewBuilder.BuildRosterFor(plain, field, berths: 2);
+
+        Assert.Equal("県立B", roster.SchoolName);
+        Assert.Equal(20, roster.Members.Count);
+        Assert.False(string.IsNullOrWhiteSpace(roster.TeamBlurb));
+        Assert.False(string.IsNullOrWhiteSpace(roster.SeedLabel));
+    }
+
+    /// <summary>任意校ロスターも決定論（同入力→同出力）を維持する。</summary>
+    [Fact]
+    public void BuildRosterFor_IsDeterministic()
+    {
+        var field = Field();
+        var plain = field.First(s => s.Name == "県立B");
+
+        var a = TournamentPreviewBuilder.BuildRosterFor(plain, field, berths: 2, yearIndex: 3);
+        var b = TournamentPreviewBuilder.BuildRosterFor(plain, field, berths: 2, yearIndex: 3);
+
+        Assert.Equal(a.TeamBlurb, b.TeamBlurb);
+        Assert.Equal(a.Members.Select(m => (m.Name, m.UniformNumber)), b.Members.Select(m => (m.Name, m.UniformNumber)));
+    }
+
+    /// <summary>存在しない校（entrants に含まれない）を渡すと明示的に失敗する。</summary>
+    [Fact]
+    public void BuildRosterFor_SchoolNotInEntrants_Throws()
+    {
+        var field = Field();
+        var outsider = Sch(999, 50, name: "対象外高校");
+        Assert.Throws<System.ArgumentException>(() => TournamentPreviewBuilder.BuildRosterFor(outsider, field, berths: 2));
+    }
+
+    /// <summary>
+    /// 寸評の語彙バリエーション（issue #189「なるべく多い語彙で」）。同じ格付け・校風の校が並んでも
+    /// 文言が使い回しにならないことを、多数の無印校の寸評が複数種類に分散することで確認する。
+    /// </summary>
+    [Fact]
+    public void Blurb_Vocabulary_VariesAcrossSchools()
+    {
+        var many = Enumerable.Range(1, 40)
+            .Select(id => Sch(id, 45, SchoolStyle.Standard, $"分散{id}高校"))
+            .ToList();
+
+        // 無印カテゴリの4テンプレートそれぞれに固有の一節（テンプレ選択の判別マーカー）。
+        var markers = new[] { "戦力評価", "組み合わせ次第", "堅実な戦い方が持ち味", "克服できれば" };
+
+        var usedTemplates = many
+            .Select(s => TournamentPreviewBuilder.BuildRosterFor(s, many, berths: 2).TeamBlurb)
+            .Select(blurb => markers.FirstOrDefault(blurb.Contains))
+            .Where(m => m != null)
+            .Distinct()
+            .Count();
+
+        Assert.True(usedTemplates > 1, "同一格付け・校風でも寸評テンプレートが複数種類に分散するはず");
+    }
 }

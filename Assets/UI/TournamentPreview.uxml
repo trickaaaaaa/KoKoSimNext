@@ -76,9 +76,25 @@
 
                 <ui:Label class="tp-h2 f-display" text="注目選手" />
                 <ui:VisualElement name="tp-notables" class="tp-players" />
+            </ui:VisualElement>
 
-                <ui:Label class="tp-h2 f-display" text="出場校メンバー" />
-                <ui:VisualElement name="tp-rosters" />
+            <!-- ビュー3：校別詳細（トーナメント表の高校名クリックで開く。issue #189） -->
+            <ui:VisualElement name="tp-view-detail">
+                <ui:VisualElement class="tp-masthead">
+                    <ui:VisualElement class="rule-head">
+                        <ui:VisualElement class="rule-head__rule" />
+                        <ui:Label class="rule-head__text f-display" text="校別詳細" />
+                    </ui:VisualElement>
+                    <ui:Label name="td-title" class="tp-title f-display-lg" text="" />
+                    <ui:Label name="td-tag" class="tp-meta" text="" />
+                </ui:VisualElement>
+
+                <ui:Button name="tp-detail-back" class="tp-back" text="◀ トーナメント表に戻る" />
+
+                <ui:Label name="td-blurb" class="tp-lead" text="" />
+
+                <ui:Label class="tp-h2 f-display" text="ベンチ入りメンバー" />
+                <ui:VisualElement name="td-roster" class="tp-roster" />
             </ui:VisualElement>
 
           </ui:VisualElement>
