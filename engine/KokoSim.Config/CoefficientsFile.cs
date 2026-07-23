@@ -343,6 +343,9 @@ public static class CoefficientsLoader
         public double ForceOutMarginSeconds { get; set; } = D.ForceOutMarginSeconds;
         public double ErrorBaseProb { get; set; } = D.ErrorBaseProb;
         public double ErrorCatchingSlope { get; set; } = D.ErrorCatchingSlope;
+        public double ErrorCatchingSlopeStrong { get; set; } = D.ErrorCatchingSlopeStrong;
+        public double ErrorMinProb { get; set; } = D.ErrorMinProb;
+        public double ErrorMaxProb { get; set; } = D.ErrorMaxProb;
         public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
         public double CatchReachCapSeconds { get; set; } = D.CatchReachCapSeconds;
         public double RollDecelMps2 { get; set; } = D.RollDecelMps2;
@@ -371,6 +374,9 @@ public static class CoefficientsLoader
             ForceOutMarginSeconds = ForceOutMarginSeconds,
             ErrorBaseProb = ErrorBaseProb,
             ErrorCatchingSlope = ErrorCatchingSlope,
+            ErrorCatchingSlopeStrong = ErrorCatchingSlopeStrong,
+            ErrorMinProb = ErrorMinProb,
+            ErrorMaxProb = ErrorMaxProb,
             CatchReachFieldingSlope = CatchReachFieldingSlope,
             CatchReachCapSeconds = CatchReachCapSeconds,
             RollDecelMps2 = RollDecelMps2,

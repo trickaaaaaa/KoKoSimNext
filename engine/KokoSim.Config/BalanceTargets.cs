@@ -36,14 +36,18 @@ public sealed record GameTargets
     public required Band MinutesPerGame { get; init; }
     public required Band InningsPerGame { get; init; }
     /// <summary>本塁クロスプレー憤死/試合の参考帯（設計書12 §3 F2, Q9）。広め＝得点帯と競合させない warn 相当。</summary>
-    public Band HomePlayOutsPerGame { get; init; } = new(0.12, 0.42);
+    public Band HomePlayOutsPerGame { get; init; } = new(0.12, 0.50);
     /// <summary>三塁憤死/試合の参考帯（単打の一塁→三塁レース, Issue #89, 設計書12 §3.5）。広め＝warn 相当。</summary>
     public Band ThirdPlayOutsPerGame { get; init; } = new(0.02, 0.40);
+
+    /// <summary>失策数/試合（両軍計）。乱数生成母平均≈3.4（弱小裾の大量失策込み・中央値C50同士は≈2.4）。issue #123で新設。</summary>
+    public Band ErrorsPerGame { get; init; } = new(1.8, 3.6);
 
     // ===== design-14 第1段（P1）新プレー発生率/試合（両軍計）。采配Brain不要＝無指示でも発生する常時系 =====
     public Band FieldersChoicePerGame { get; init; } = new(0.10, 1.20);
     public Band DroppedThirdStrikePerGame { get; init; } = new(0.02, 0.40);
-    public Band ErrorExtraAdvancePerGame { get; init; } = new(0.02, 0.40);
+    /// <summary>失策連鎖/試合。失策総数に比例するため issue #123 で 0.02〜0.40 → 0.10〜0.80 へ拡張。</summary>
+    public Band ErrorExtraAdvancePerGame { get; init; } = new(0.10, 0.80);
     /// <summary>暴投・パスボール/試合の参考帯（design-14 P2-8, 設計書15 Phase D-3）。</summary>
     public Band WildPitchPerGame { get; init; } = new(0.15, 1.00);
 }
@@ -98,11 +102,12 @@ public static class BalanceTargetsLoader
             PitchesPerGame = g.PitchesPerGame!.ToBand(),
             MinutesPerGame = g.MinutesPerGame!.ToBand(),
             InningsPerGame = g.InningsPerGame!.ToBand(),
-            HomePlayOutsPerGame = g.HomePlayOutsPerGame?.ToBand() ?? new Band(0.12, 0.42),
+            HomePlayOutsPerGame = g.HomePlayOutsPerGame?.ToBand() ?? new Band(0.12, 0.50),
             ThirdPlayOutsPerGame = g.ThirdPlayOutsPerGame?.ToBand() ?? new Band(0.02, 0.40),
+            ErrorsPerGame = g.ErrorsPerGame?.ToBand() ?? new Band(1.8, 3.6),
             FieldersChoicePerGame = g.FieldersChoicePerGame?.ToBand() ?? new Band(0.10, 1.20),
             DroppedThirdStrikePerGame = g.DroppedThirdStrikePerGame?.ToBand() ?? new Band(0.02, 0.40),
-            ErrorExtraAdvancePerGame = g.ErrorExtraAdvancePerGame?.ToBand() ?? new Band(0.02, 0.40),
+            ErrorExtraAdvancePerGame = g.ErrorExtraAdvancePerGame?.ToBand() ?? new Band(0.10, 0.80),
             WildPitchPerGame = g.WildPitchPerGame?.ToBand() ?? new Band(0.15, 1.00),
         };
     }
@@ -161,6 +166,7 @@ public static class BalanceTargetsLoader
         public BandDto? InningsPerGame { get; set; }
         public BandDto? HomePlayOutsPerGame { get; set; }
         public BandDto? ThirdPlayOutsPerGame { get; set; }
+        public BandDto? ErrorsPerGame { get; set; }
         public BandDto? FieldersChoicePerGame { get; set; }
         public BandDto? DroppedThirdStrikePerGame { get; set; }
         public BandDto? ErrorExtraAdvancePerGame { get; set; }

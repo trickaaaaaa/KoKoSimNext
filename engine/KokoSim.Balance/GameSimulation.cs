@@ -40,6 +40,8 @@ public static class GameSimulation
         public long TotalPitcherChanges { get; init; }
         public long TotalHomePlayOuts { get; init; }
         public long TotalThirdPlayOuts { get; init; }
+        /// <summary>失策総数（両軍計・全試合計。issue #123: 試合単位の失策率の校正用）。</summary>
+        public long TotalErrors { get; init; }
 
         // ===== design-14 第1段（P1）新プレー発生数（両軍計・全試合計） =====
         public long TotalFieldersChoice { get; init; }
@@ -79,6 +81,8 @@ public static class GameSimulation
         public double AverageHomePlayOutsPerGame => Games > 0 ? (double)TotalHomePlayOuts / Games : 0;
         /// <summary>三塁憤死/試合（両軍計。単打の一塁→三塁レース, Issue #89の参考指標）。</summary>
         public double AverageThirdPlayOutsPerGame => Games > 0 ? (double)TotalThirdPlayOuts / Games : 0;
+        /// <summary>失策数/試合（両軍計。issue #123: 甲子園実測≈2.1〜2.7）。</summary>
+        public double ErrorsPerGame => Games > 0 ? (double)TotalErrors / Games : 0;
         public double AveragePitchesPerGame => Games > 0 ? (double)TotalPitches / Games : 0;
         public double AverageInnings => Games > 0 ? (double)TotalInnings / Games : 0;
         public double HomeWinRate => Games > 0 ? (double)HomeWins / Games : 0;
@@ -147,7 +151,7 @@ public static class GameSimulation
     private sealed class Accumulator
     {
         public readonly int[] Hist = new int[30];
-        public long TotalRuns, TotalPitches, TotalInnings, TotalChanges, TotalHomePlayOuts, TotalThirdPlayOuts;
+        public long TotalRuns, TotalPitches, TotalInnings, TotalChanges, TotalHomePlayOuts, TotalThirdPlayOuts, TotalErrors;
         public long TotalFc, TotalDropThird, TotalErrorExtra, TotalPickoffs, TotalIntentionalWalks, TotalDoubleSteal;
         public long TotalWildPitches;
         public long TotalStealAttempts, TotalStealSuccesses;
@@ -168,6 +172,7 @@ public static class GameSimulation
             TotalChanges += r.PitcherChanges;
             TotalHomePlayOuts += r.HomePlayOuts;
             TotalThirdPlayOuts += r.ThirdPlayOuts;
+            TotalErrors += r.AwayErrors + r.HomeErrors;
             TotalFc += r.FieldersChoiceCount;
             TotalDropThird += r.DroppedThirdStrikeCount;
             TotalErrorExtra += r.ErrorExtraAdvanceCount;
@@ -221,6 +226,7 @@ public static class GameSimulation
             TotalChanges += o.TotalChanges;
             TotalHomePlayOuts += o.TotalHomePlayOuts;
             TotalThirdPlayOuts += o.TotalThirdPlayOuts;
+            TotalErrors += o.TotalErrors;
             TotalFc += o.TotalFc;
             TotalDropThird += o.TotalDropThird;
             TotalErrorExtra += o.TotalErrorExtra;
@@ -264,6 +270,7 @@ public static class GameSimulation
             TotalPitcherChanges = TotalChanges,
             TotalHomePlayOuts = TotalHomePlayOuts,
             TotalThirdPlayOuts = TotalThirdPlayOuts,
+            TotalErrors = TotalErrors,
             TotalFieldersChoice = TotalFc,
             TotalDroppedThirdStrike = TotalDropThird,
             TotalErrorExtraAdvance = TotalErrorExtra,
@@ -398,6 +405,7 @@ public static class GameSimulation
         sb.AppendLine(c, $"| 平均継投数/試合 | {(double)s.TotalPitcherChanges / s.Games:F2} | 参考 |");
         sb.AppendLine(c, $"| 本塁憤死/試合 | {s.AverageHomePlayOutsPerGame:F3} | 0.12–0.42 |");
         sb.AppendLine(c, $"| 三塁憤死/試合 | {s.AverageThirdPlayOutsPerGame:F3} | 0.02–0.40 |");
+        sb.AppendLine(c, $"| 失策数/試合（両軍計） | {s.ErrorsPerGame:F2} | 1.8–3.6 |");
         sb.AppendLine(c, $"| 三振率（打席あたり） | {s.StrikeoutRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 四球率（打席あたり） | {s.WalkRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 死球率（打席あたり） | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
