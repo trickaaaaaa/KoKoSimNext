@@ -72,6 +72,15 @@
           </ui:VisualElement>
         </ui:VisualElement>
 
+        <!-- ===== タブ（能力 / 成績, issue #77） ===== -->
+        <ui:VisualElement name="pd2-tabs" class="pd2-tabs">
+          <ui:Label name="tab-abilities-btn" class="pd2-tab pd2-tab--on" text="能力" />
+          <ui:Label name="tab-stats-btn" class="pd2-tab" text="成績" />
+        </ui:VisualElement>
+
+        <!-- ===== 能力タブ ===== -->
+        <ui:VisualElement name="tab-abilities">
+
         <!-- ===== 能力（投手・野手 2カラム） ===== -->
         <ui:VisualElement class="pd2-row">
           <ui:VisualElement class="card card--half">
@@ -131,15 +140,39 @@
                 <ui:Label name="skills-empty" class="pd2-empty" text="特殊能力はまだ発見されていません" />
               </ui:VisualElement>
             </ui:VisualElement>
-            <ui:VisualElement class="card">
-              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="簡易成績" /></ui:VisualElement>
-              <ui:VisualElement class="card__body">
-                <ui:Label name="tourn-label" class="pd2-stat-label" text="今大会（未接続）" />
-                <ui:VisualElement name="tourn-stats" class="pd2-stat-row" />
-                <ui:Label class="pd2-stat-label" text="公式戦通算（高校3年間）" />
-                <ui:VisualElement name="career-stats" class="pd2-stat-row" />
-              </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        </ui:VisualElement>
+        <!-- /能力タブ -->
+
+        <!-- ===== 成績タブ（issue #77） ===== -->
+        <ui:VisualElement name="tab-stats" class="pd2-stats-tab">
+          <ui:VisualElement class="pd2-scope">
+            <ui:Label name="scope-career" class="pd2-scope__item pd2-scope__item--on" text="通算（練習含む）" />
+            <ui:Label name="scope-official" class="pd2-scope__item" text="公式戦通算" />
+            <ui:Label name="scope-tourn" class="pd2-scope__item" text="大会別" />
+          </ui:VisualElement>
+
+          <ui:Label name="stats-empty" class="pd2-empty" text="まだ公式戦の記録がありません" />
+
+          <ui:VisualElement name="scope-panel">
+            <ui:VisualElement name="bat-card" class="card">
+              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="打撃成績" /></ui:VisualElement>
+              <ui:VisualElement name="bat-cells" class="pd2-statgrid" />
             </ui:VisualElement>
+            <ui:VisualElement name="pit-card" class="card">
+              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="投手成績" /></ui:VisualElement>
+              <ui:VisualElement name="pit-cells" class="pd2-statgrid" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement name="tourn-panel" class="card">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="大会別成績" />
+              <ui:Label class="card__hd-sub" text="学年×大会（当時の背番号）／夏は県・甲子園別枠・秋は合算" />
+            </ui:VisualElement>
+            <ui:VisualElement name="tourn-rows" />
           </ui:VisualElement>
         </ui:VisualElement>
 

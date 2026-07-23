@@ -2,9 +2,12 @@
 // UnityEngine 非依存。一覧(PlayerListState)と同じ共有ロスター(RosterService)を参照し、安定 index で1名を開く。
 // 成長履歴・公式戦成績・球種の物理計測値はエンジン未接続のためプレースホルダ（正直に空状態表示）。
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
+using KokoSim.Engine.Stats;
 using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Players
@@ -92,10 +95,39 @@ namespace KokoSim.Unity.Players
         public bool HasPitchData;
         public bool HasSkills;
 
-        // 簡易成績（公式戦データ未接続＝プレースホルダ）。
-        public string TournamentLabel = "今大会（未接続）";
-        public List<(string Label, string Value)> TournamentStats = new List<(string, string)>();
-        public List<(string Label, string Value)> CareerStats = new List<(string, string)>();
+        // 成績（issue #77）: エンジン接続（PlayerStatStore を SourceId で引く）。スコープ3種＋大会別。
+        public ScopeStats CareerStatsFull = new ScopeStats();    // 通算（練習試合含む）
+        public ScopeStats OfficialStatsFull = new ScopeStats();  // 公式戦通算
+        public List<TournamentStatRow> TournamentRows = new List<TournamentStatRow>(); // 大会別（学年×大会）
+        public bool HasAnyStats;   // いずれかのスコープに1試合でも記録があるか
+    }
+
+    /// <summary>成績1指標（ラベル＋値。値は整形済み文字列）。</summary>
+    public sealed class StatCell
+    {
+        public string Label = "";
+        public string Value = "";
+        public StatCell() { }
+        public StatCell(string label, string value) { Label = label; Value = value; }
+    }
+
+    /// <summary>1スコープ分の打撃・投手フルライン（issue #77）。</summary>
+    public sealed class ScopeStats
+    {
+        public bool HasBatting;
+        public bool HasPitching;
+        public List<StatCell> Batting = new List<StatCell>();
+        public List<StatCell> Pitching = new List<StatCell>();
+    }
+
+    /// <summary>大会別の1行（学年×大会枠＋当時の背番号, issue #77）。</summary>
+    public sealed class TournamentStatRow
+    {
+        public string Slot = "";      // 例「2年夏（県）」
+        public string Number = "";    // 当時の背番号
+        public bool HasPitching;
+        public List<StatCell> Batting = new List<StatCell>();
+        public List<StatCell> Pitching = new List<StatCell>();
     }
 
     /// <summary>
@@ -261,9 +293,9 @@ namespace KokoSim.Unity.Players
             }
             v.HasSkills = v.Skills.Count > 0;
 
-            // 簡易成績（公式戦ログ未接続＝プレースホルダ）。役割でUIを切り替えず、打撃・投手の両方を全選手で出す（Issue #93）。
-            AddBothStats(v.TournamentStats);
-            AddBothStats(v.CareerStats);
+            // 成績（issue #77）: PlayerStatStore を SourceId(=DevelopingPlayer.Id) で引いて接続。
+            // 役割でUIを切り替えず打撃・投手の両方を全選手で出す（Issue #93）。記録が無ければ空状態を正直に表示。
+            BuildStats(v, p.Id);
             return v;
         }
 
@@ -293,15 +325,126 @@ namespace KokoSim.Unity.Players
         private static RadarAxis CategoryAxis(string label, double value)
             => new RadarAxis { Label = label, Value01 = System.Math.Max(0f, System.Math.Min(1f, (float)value / 100f)) };
 
-        // 簡易成績（打撃3項＋投手3項）を両方積む。役割でUIを切り替えない（Issue #93）。データ未接続なので値は「—」。
-        private static void AddBothStats(List<(string Label, string Value)> stats)
+        // ===== 成績（issue #77） =====
+
+        private static readonly CultureInfo Ci = CultureInfo.InvariantCulture;
+        // 打率・出塁率などの率（先頭0を落として .341 表記, 3桁）。
+        private static string Rate3(double v) => v.ToString(".000", Ci);
+        // 防御率・WHIP・K9（2桁小数）。
+        private static string Dec2(double v) => v.ToString("0.00", Ci);
+        private static string N(int v) => v.ToString(Ci);
+
+        private void BuildStats(PlayerDetailView v, int sourceId)
         {
-            stats.Add(("打率", "—"));
-            stats.Add(("本塁打", "—"));
-            stats.Add(("打点", "—"));
-            stats.Add(("防御率", "—"));
-            stats.Add(("勝敗", "—"));
-            stats.Add(("奪三振", "—"));
+            var store = GameSession.Current.Stats;
+            BuildScope(v.CareerStatsFull, sourceId > 0 ? store.Career.Get(sourceId) : null);
+            BuildScope(v.OfficialStatsFull, sourceId > 0 ? store.Official.Get(sourceId) : null);
+            if (sourceId > 0) BuildTournamentRows(v.TournamentRows, store.Archive, sourceId);
+
+            v.HasAnyStats = v.CareerStatsFull.HasBatting || v.CareerStatsFull.HasPitching
+                || v.OfficialStatsFull.HasBatting || v.OfficialStatsFull.HasPitching
+                || v.TournamentRows.Count > 0;
+        }
+
+        private static void BuildScope(ScopeStats dst, PlayerStats stats)
+        {
+            if (stats == null) return;
+            if (stats.Batting.Games > 0 || stats.Batting.PlateAppearances > 0)
+            {
+                dst.HasBatting = true;
+                FillBatting(dst.Batting, stats.Batting);
+            }
+            if (stats.Pitching.Games > 0 || stats.Pitching.BattersFaced > 0)
+            {
+                dst.HasPitching = true;
+                FillPitching(dst.Pitching, stats.Pitching);
+            }
+        }
+
+        // 打撃フルライン（issue #77 の載せたい指標）。数値セルは右揃え表示（部品側で整える）。
+        private static void FillBatting(List<StatCell> cells, BattingStatLine b)
+        {
+            cells.Add(new StatCell("試合", N(b.Games)));
+            cells.Add(new StatCell("打率", Rate3(b.Average)));
+            cells.Add(new StatCell("打数", N(b.AtBats)));
+            cells.Add(new StatCell("安打", N(b.Hits)));
+            cells.Add(new StatCell("二塁打", N(b.Doubles)));
+            cells.Add(new StatCell("三塁打", N(b.Triples)));
+            cells.Add(new StatCell("本塁打", N(b.HomeRuns)));
+            cells.Add(new StatCell("打点", N(b.Rbi)));
+            cells.Add(new StatCell("得点", N(b.Runs)));
+            cells.Add(new StatCell("四球", N(b.Walks)));
+            cells.Add(new StatCell("死球", N(b.HitByPitches)));
+            cells.Add(new StatCell("三振", N(b.StrikeOuts)));
+            cells.Add(new StatCell("盗塁", N(b.StolenBases)));
+            cells.Add(new StatCell("盗塁率", (b.StolenBases + b.CaughtStealing) > 0 ? Rate3(b.StolenBaseRate) : "—"));
+            cells.Add(new StatCell("出塁率", Rate3(b.Obp)));
+            cells.Add(new StatCell("長打率", Rate3(b.Slg)));
+            cells.Add(new StatCell("OPS", Rate3(b.Ops)));
+        }
+
+        // 投手フルライン（高校野球のため勝敗・セーブは載せない, issue #77）。
+        private static void FillPitching(List<StatCell> cells, PitchingStatLine p)
+        {
+            cells.Add(new StatCell("登板", N(p.Games)));
+            cells.Add(new StatCell("先発", N(p.GamesStarted)));
+            cells.Add(new StatCell("防御率", Dec2(p.Era)));
+            cells.Add(new StatCell("投球回", p.InningsText));
+            cells.Add(new StatCell("被安打", N(p.Hits)));
+            cells.Add(new StatCell("失点", N(p.Runs)));
+            cells.Add(new StatCell("被本塁打", N(p.HomeRunsAllowed)));
+            cells.Add(new StatCell("奪三振", N(p.StrikeOuts)));
+            cells.Add(new StatCell("K/9", Dec2(p.KPer9)));
+            cells.Add(new StatCell("与四球", N(p.Walks)));
+            cells.Add(new StatCell("与死球", N(p.HitBatters)));
+            cells.Add(new StatCell("球数", N(p.Pitches)));
+            cells.Add(new StatCell("WHIP", Dec2(p.Whip)));
+        }
+
+        // 大会枠の並び順（学年内で春→夏県→夏甲子園→秋の暦順, issue #77）。
+        private static int SlotOrder(TournamentSlot s) => s switch
+        {
+            TournamentSlot.Senbatsu => 0,
+            TournamentSlot.SummerPref => 1,
+            TournamentSlot.SummerKoshien => 2,
+            TournamentSlot.Autumn => 3,
+            _ => 9,
+        };
+
+        private static string SlotJp(TournamentSlot s) => s switch
+        {
+            TournamentSlot.SummerPref => "夏（県）",
+            TournamentSlot.SummerKoshien => "夏（甲子園）",
+            TournamentSlot.Autumn => "秋",
+            TournamentSlot.Senbatsu => "春（センバツ）",
+            _ => "",
+        };
+
+        // 大会別（学年×大会枠＋当時の背番号）を暦順に整形（issue #77）。
+        private static void BuildTournamentRows(List<TournamentStatRow> rows, TournamentArchive archive, int sourceId)
+        {
+            var keys = archive.Keys
+                .Where(k => archive.Get(k, sourceId) != null)
+                .OrderBy(k => k.Grade).ThenBy(k => SlotOrder(k.Slot))
+                .ToList();
+
+            foreach (var key in keys)
+            {
+                var a = archive.Get(key, sourceId);
+                if (a == null) continue;
+                var row = new TournamentStatRow
+                {
+                    Slot = key.Grade + "年 " + SlotJp(key.Slot),
+                    Number = a.UniformNumber > 0 ? a.UniformNumber.ToString(Ci) : "—",
+                };
+                if (a.Batting.Games > 0 || a.Batting.PlateAppearances > 0) FillBatting(row.Batting, a.Batting);
+                if (a.Pitching.Games > 0 || a.Pitching.BattersFaced > 0)
+                {
+                    row.HasPitching = true;
+                    FillPitching(row.Pitching, a.Pitching);
+                }
+                rows.Add(row);
+            }
         }
 
         // 球速内部値(1〜100)→km/h（表示近似。実シムの物理変換はエンジン係数側）。

@@ -988,6 +988,30 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-stat__v { font-size: 24px; color: var(--ink); }
 .pd2-stat__k { font-size: 13px; color: var(--color-muted); margin-top: 2px; }
 
+/* ===== 成績タブ（issue #77）: 能力/成績タブ・スコープ切替・成績グリッド ===== */
+.pd2-tabs { flex-direction: row; border-bottom-width: 2px; border-color: var(--color-line); margin: 0 14px 12px 14px; }
+.pd2-tab { color: var(--color-muted); font-size: 20px; letter-spacing: 1px; padding: 10px 22px; border-bottom-width: 2px; border-color: rgba(0, 0, 0, 0); margin-bottom: -2px; }
+.pd2-tab:hover { color: var(--color-chalk); }
+.pd2-tab--on { color: var(--ink); border-color: var(--ink); }
+
+.pd2-stats-tab { padding: 0 14px 20px 14px; }
+
+.pd2-scope { flex-direction: row; margin-bottom: 12px; }
+.pd2-scope__item { color: var(--color-muted); font-size: var(--fs-cap); letter-spacing: 1px; padding: 8px 16px; background-color: var(--color-strip); border-width: 1px; border-color: var(--color-line); margin-right: 6px; }
+.pd2-scope__item:hover { color: var(--color-chalk); }
+.pd2-scope__item--on { color: var(--ink); background-color: var(--color-panel); border-color: var(--ink); }
+
+.pd2-statgrid { flex-direction: row; flex-wrap: wrap; padding: 8px 6px 4px 6px; }
+.pd2-statgrid--pit { border-top-width: 1px; border-color: var(--color-line); margin-top: 4px; }
+.pd2-statcell { width: 76px; padding: 4px 7px; margin: 0 4px 6px 0; background-color: var(--color-strip); border-width: 1px; border-color: var(--color-line); }
+.pd2-statcell__k { font-size: 11px; color: var(--color-muted); letter-spacing: 1px; }
+.pd2-statcell__v { font-size: var(--fs-num); color: var(--ink); -unity-text-align: middle-right; }
+
+.pd2-trow { margin-bottom: 10px; padding-bottom: 6px; border-bottom-width: 1px; border-color: var(--color-line); }
+.pd2-trow__head { flex-direction: row; align-items: center; padding: 4px 8px; }
+.pd2-trow__num { font-size: 20px; color: var(--sky); width: 34px; -unity-text-align: middle-right; margin-right: 10px; }
+.pd2-trow__slot { font-size: var(--fs-body); color: var(--color-chalk); letter-spacing: 1px; }
+
 /* 行クリック可能な一覧行 */
 .row--click:hover { background-color: var(--color-line); }
 
