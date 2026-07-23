@@ -77,8 +77,9 @@ public sealed record FieldingCoefficients
     // 失策モデル（issue #123, 2026-07-23）。既定値は data/coefficients.yaml と同値＝実ゲーム（Unity は
     // new GameContext() の既定を使う）とsim/テストで同じ守備力連動になるよう揃える。変更時は
     // determinism-baseline.txt の再生成が必要（DeterminismBaselineDump）。
-    /// <summary>捕球エラーの基準確率（Catching50時）＝両軍計≈2.4/試合。</summary>
-    public double ErrorBaseProb { get; init; } = 0.064;
+    /// <summary>捕球エラーの基準確率（Catching50時）。送球ロール(ThrowErrorBaseProb)有効化に伴い再配分（issue #169, 2026-07-23）：
+    /// 旧0.064（捕球のみで両軍計≈2.4/試合校正）から、内野ゴロ失策の約40%を送球由来へ移す分だけ捕球側を下げた値。</summary>
+    public double ErrorBaseProb { get; init; } = 0.0384;
     /// <summary>捕球(Catching−50)あたりのエラー変化（守備が平均より低い側＝弱小の傾き）。急にして弱小同士を大量失策に。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0065;
     /// <summary>守備が平均(50)より高い側の傾き（弱小側 ErrorCatchingSlope と非対称）。緩くして精鋭側に
@@ -93,8 +94,9 @@ public sealed record FieldingCoefficients
     // 送球エラー（内野ゴロ→一塁の2段階目, Issue #37 / design-14 P1-6b）。捕球ロール(Catching)の後に
     // 送球ロール(ThrowAccuracy)を引く。既定 base=0.0 は「送球ロールを一切引かない」＝現行の捕球のみ判定と
     // 乱数消費順・結果とも完全一致（ErrorExtraAdvanceProb と同じ gating 方式で決定論を保つ）。
-    /// <summary>送球エラーの基準確率（ThrowAccuracy50時）。0.0＝送球ロール無効（現行と恒等, 決定論不変）。</summary>
-    public double ThrowErrorBaseProb { get; init; } = 0.0;
+    /// <summary>送球エラーの基準確率（ThrowAccuracy50時）。issue #169で 0.0→0.0266 に正値化＝実ゲームで悪送球が発火。
+    /// Ac50 で内野ゴロ失策の約40%が送球由来になる按分（残り≈60%が捕球由来 ErrorBaseProb）。決定論baselineは再生成済み。</summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.0266;
     /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;

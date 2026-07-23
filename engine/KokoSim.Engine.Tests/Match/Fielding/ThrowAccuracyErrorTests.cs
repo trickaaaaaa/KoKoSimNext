@@ -37,8 +37,9 @@ public sealed class ThrowAccuracyErrorTests
     [Fact]
     public void ThrowErrorDisabled_IsIdenticalToCatchOnly()
     {
-        // base=0（既定）では送球ロールを一切引かない＝ThrowAccuracy を変えても結果が1件も変わらない。
-        var coeff = new FieldingCoefficients(); // ThrowErrorBaseProb=0
+        // base=0 では送球ロールを一切引かない＝ThrowAccuracy を変えても結果が1件も変わらない（恒等の担保）。
+        // 既定は issue #169 で正値化されたため、ここは明示的に 0 を指定して恒等性を検証する。
+        var coeff = new FieldingCoefficients { ThrowErrorBaseProb = 0 };
         for (ulong seed = 1; seed <= 400; seed++)
         {
             Assert.Equal(Grounder(coeff, 10, seed), Grounder(coeff, 90, seed));
@@ -62,7 +63,7 @@ public sealed class ThrowAccuracyErrorTests
     public void ThrowError_AtAccuracyFifty_AddsBaselineErrorAboveCatchOnly()
     {
         // Ac=50 でも送球ロール（base>0）ぶん失策は増える（捕球のみ<2段階）。恒等は base=0 側で担保。
-        var catchOnly = new FieldingCoefficients();
+        var catchOnly = new FieldingCoefficients { ThrowErrorBaseProb = 0 };
         var twoStage = new FieldingCoefficients { ThrowErrorBaseProb = 0.10 };
         Assert.True(ErrorRate(twoStage, 50) > ErrorRate(catchOnly, 50));
     }
