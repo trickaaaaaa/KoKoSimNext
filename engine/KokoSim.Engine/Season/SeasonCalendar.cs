@@ -25,8 +25,10 @@ public sealed record SeasonCalendar
     /// <summary>冬合宿の週（12月末〜1月）。</summary>
     public int WinterCampWeek { get; init; } = 38;
 
-    /// <summary>夏の地方大会が開幕する週（7月, 3年生引退の直前 ≒ 第15週。設計書05 §1.1）。</summary>
-    public int SummerTournamentStartWeek { get; init; } = 15;
+    /// <summary>夏の地方大会が開幕する週（7月1週目 ≒ 第13週。現実の夏の地方予選は7月上旬開幕。設計書05 §1.1 / OPEN-QUESTIONS Q23）。
+    /// 大会は「大会モード」1週ターン内で抽象日を一気消化するため、開幕週はトーナメント内部日程(MatchDay)には影響しない
+    /// ＝この定数変更は帯/決定論baselineに無影響（暦表示と引退week17までの余裕にのみ効く）。</summary>
+    public int SummerTournamentStartWeek { get; init; } = 13;
     /// <summary>秋季県大会が開幕する週（9月, 新チームの初公式戦 ≒ 第23週。設計書05 §1.1）。</summary>
     public int AutumnTournamentStartWeek { get; init; } = 23;
 

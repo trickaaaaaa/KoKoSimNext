@@ -8,8 +8,9 @@ public sealed record TournamentSchedule
 {
     /// <summary>初戦の試合日（開幕=0日目からの相対）。</summary>
     public int FirstRoundDay { get; init; } = 1;
-    /// <summary>ラウンド間の日数間隔（中○日）。</summary>
-    public int RoundGapDays { get; init; } = 3;
+    /// <summary>ラウンド間の日数間隔（＝中(RoundGapDays−1)日）。既定2＝中1日＝地方予選の連戦感（8ラウンド×2日＝決勝は15日目≒2週強）。
+    /// MatchDay に直結し、AceRestSelector の温存抽選ストリーム(seed に MatchDay を含む)を左右するため帯/決定論baselineに効く（OPEN-QUESTIONS Q23）。</summary>
+    public int RoundGapDays { get; init; } = 2;
 
     /// <summary>ラウンド index（0基点＝初戦）の試合日を返す。</summary>
     public int MatchDay(int roundIndex) => FirstRoundDay + roundIndex * RoundGapDays;

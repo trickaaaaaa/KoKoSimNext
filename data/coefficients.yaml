@@ -763,7 +763,7 @@ nation:
 # --- 大会モード日程（設計書03/05, 抽象日カウント） ---
 tournament:
   first_round_day: 1      # 開幕(0日目)から初戦までの日数
-  round_gap_days: 3       # ラウンド間の中○日（「試合までXX日」の刻み）
+  round_gap_days: 2       # ラウンド間の日数間隔＝中1日（地方予選の連戦感。8ラウンド×2日＝決勝15日目。OPEN-QUESTIONS Q23）
 
 # --- 練習試合（設計書03 §週ターン③・設計書04 §名声の効果） ---
 practice_match:

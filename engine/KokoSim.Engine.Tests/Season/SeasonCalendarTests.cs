@@ -41,6 +41,16 @@ public sealed class SeasonCalendarTests
     }
 
     [Fact]
+    public void DateOf_SummerTournamentStartWeek_IsEarlyJuly()
+    {
+        // 夏の地方大会開幕週(第13週)は7月1週目であること（OPEN-QUESTIONS Q23で早期化。現実の夏予選＝7月上旬開幕）。
+        var (month, wom, _) = _cal.DateOf(_cal.SummerTournamentStartWeek);
+        Assert.Equal((7, 1), (month, wom));
+        // 開幕(13)→引退(17)は同月内に中4週の余裕がある（大会モードは1週内で消化）。
+        Assert.True(_cal.SummerRetireWeek - _cal.SummerTournamentStartWeek >= 3);
+    }
+
+    [Fact]
     public void DateOf_JanToMar_AreNextCalendarYear()
     {
         // 後半の1〜3月は暦年が翌年(YearOffset=1)。
