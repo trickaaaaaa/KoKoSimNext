@@ -373,7 +373,8 @@ public sealed class TournamentRunnerTests
         public List<bool> ResolveMercySeen { get; } = new();
         public List<bool> LiveMercySeen { get; } = new();
 
-        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
         {
             ResolveMercySeen.Add(mercyRuleEnabled);
             return new(GameEngine.Play(MakeTeam(opponent.Name, opponent.Strength),
@@ -381,7 +382,8 @@ public sealed class TournamentRunnerTests
                 rng.Fork(2)), ManagerIsAway: false);
         }
 
-        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
         {
             LiveMercySeen.Add(mercyRuleEnabled);
             return new(new MatchProgression(MakeTeam(opponent.Name, opponent.Strength),
@@ -514,14 +516,16 @@ public sealed class TournamentRunnerTests
     /// <summary>強豪 vs 弱小で確実に大差コールドを起こすリゾルバ（GameEngineTests の弱小生成と同じ狙い）。</summary>
     private sealed class MercyProneResolver : IPlayerMatchResolver
     {
-        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
         {
             var ctx = new GameContext { MercyRuleEnabled = mercyRuleEnabled };
             var result = GameEngine.Play(WeakTeam(opponent.Name), StrongTeam(manager.Name), ctx, rng.Fork(2));
             return new(result, ManagerIsAway: false);
         }
 
-        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled)
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
             => throw new System.NotSupportedException();
 
         private static Team StrongTeam(string name) => MakeTeam(name, 90);

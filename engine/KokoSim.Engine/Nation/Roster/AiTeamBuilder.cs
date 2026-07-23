@@ -26,18 +26,19 @@ public static class AiTeamBuilder
 
     /// <summary>
     /// ロスターから Team を構成する。<paramref name="modernRules"/>/<paramref name="calendarYear"/> は
-    /// DH使用判断用（既定 null＝DH不使用＝従来挙動）。rng を使わない純関数（決定論）。
+    /// DH使用判断用（既定 null＝DH不使用＝従来挙動）。<paramref name="aceRest"/> はエース温存判断（issue #42）
+    /// の入力（既定 null＝常時エース先発＝従来挙動）。rng を使わない純関数（決定論）。
     /// </summary>
     public static Team Build(AiSchoolRoster roster, School school, int yearIndex, AiRosterDeps deps,
-        ModernRules? modernRules = null, int? calendarYear = null)
+        ModernRules? modernRules = null, int? calendarYear = null, AceRestContext? aceRest = null)
         => BuildFrom(roster.Players.Where(p => p.Grade is >= 1 and <= 3).ToList(), school, yearIndex, deps,
-            modernRules, calendarYear);
+            modernRules, calendarYear, aceRest);
 
     /// <summary>
     /// 指定の在校生リストから Team を組む（<see cref="AiRosterCycle"/> の逆算配分が怪物除外の総合力を測るのに使う）。
     /// </summary>
     internal static Team BuildFrom(IReadOnlyList<AiPlayer> active, School school, int yearIndex, AiRosterDeps deps,
-        ModernRules? modernRules = null, int? calendarYear = null)
+        ModernRules? modernRules = null, int? calendarYear = null, AceRestContext? aceRest = null)
     {
         var pitchers = active.Where(p => p.IsPitcher).OrderByDescending(PitcherScore).ToList();
         var fielders = active.Where(p => !p.IsPitcher).ToList();
@@ -78,11 +79,6 @@ public static class AiTeamBuilder
             order.Add(Snap(best, PositionNumber(pos)));
         }
 
-        // エース（最良投手）を打順末尾（投手スロット8）へ。
-        var ace = pitchers.FirstOrDefault();
-        if (ace is not null)
-            order.Add(Snap(ace, 1));
-
         // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号10〜。
         var benchFielders = fielders.Where(p => !usedFielders.Contains(p.Id))
             .OrderByDescending(FielderScore).ToList();
@@ -90,11 +86,29 @@ public static class AiTeamBuilder
         foreach (var f in benchFielders)
             bench.Add(Snap(f, num++));
 
-        // ブルペン（エース以外の投手）。背番号18〜。
-        var bullpen = new List<Player>();
+        // エース（最良投手）＝背番号は常に AceUniformNumber（1）。控え投手は背番号18〜。
+        // 番号は温存の有無に関わらずロスター順位で固定＝大会を跨いだ台帳キー（#41）の同定を安定させる。
+        var trueAce = pitchers.FirstOrDefault();
+        var snappedAce = trueAce is not null ? Snap(trueAce, AceRestSelector.AceUniformNumber) : null;
         var pnum = 18;
-        foreach (var p in pitchers.Skip(1))
-            bullpen.Add(Snap(p, pnum++));
+        var relief = pitchers.Skip(1).Select(p => Snap(p, pnum++)).ToList();
+
+        // 温存判断（issue #42）。相手・残ラウンド・エースの消耗（#41台帳）・校風から次点投手を先発させるか決める。
+        var starter = snappedAce;
+        var bullpen = new List<Player>();
+        if (snappedAce is not null && relief.Count > 0 && aceRest is not null
+            && AceRestSelector.ShouldRestAce(school, aceRest, deps.EnemyAi))
+        {
+            starter = relief[0];
+            bullpen.Add(snappedAce);
+            bullpen.AddRange(relief.Skip(1));
+        }
+        else
+        {
+            bullpen.AddRange(relief);
+        }
+        if (starter is not null)
+            order.Add(starter);
 
         var team = new Team
         {

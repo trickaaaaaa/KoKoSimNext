@@ -1367,6 +1367,19 @@ public static class CoefficientsLoader
         public int AggressiveGearCoastLeadLater { get; set; } = D.AggressiveGearCoastLeadLater;
         public double CautiousIntentionalWalkProb { get; set; } = D.CautiousIntentionalWalkProb;
         public int CautiousIntentionalWalkMinPowerRelax { get; set; } = D.CautiousIntentionalWalkMinPowerRelax;
+        // ⑤ エース温存層（issue #42）
+        public int AceRestMinTier { get; set; } = D.AceRestMinTier;
+        public double AceRestBase { get; set; } = D.AceRestBase;
+        public double AceRestTierGapWeight { get; set; } = D.AceRestTierGapWeight;
+        public double AceRestRoundsRemainingWeight { get; set; } = D.AceRestRoundsRemainingWeight;
+        public double AceRestFatigueWeight { get; set; } = D.AceRestFatigueWeight;
+        public int AceRestFatigueWindowDays { get; set; } = D.AceRestFatigueWindowDays;
+        public double AceRestFatigueReferencePitches { get; set; } = D.AceRestFatigueReferencePitches;
+        public double AceRestFloor { get; set; } = D.AceRestFloor;
+        public double AceRestCap { get; set; } = D.AceRestCap;
+        public double AceRestAceDependentFactor { get; set; } = D.AceRestAceDependentFactor;
+        public double AceRestDefensiveMindedFactor { get; set; } = D.AceRestDefensiveMindedFactor;
+        public double AceRestTotalBaseballFactor { get; set; } = D.AceRestTotalBaseballFactor;
 
         public EnemyAiCoefficients ToModel() => new()
         {
@@ -1428,6 +1441,18 @@ public static class CoefficientsLoader
             AggressiveGearCoastLeadLater = AggressiveGearCoastLeadLater,
             CautiousIntentionalWalkProb = CautiousIntentionalWalkProb,
             CautiousIntentionalWalkMinPowerRelax = CautiousIntentionalWalkMinPowerRelax,
+            AceRestMinTier = AceRestMinTier,
+            AceRestBase = AceRestBase,
+            AceRestTierGapWeight = AceRestTierGapWeight,
+            AceRestRoundsRemainingWeight = AceRestRoundsRemainingWeight,
+            AceRestFatigueWeight = AceRestFatigueWeight,
+            AceRestFatigueWindowDays = AceRestFatigueWindowDays,
+            AceRestFatigueReferencePitches = AceRestFatigueReferencePitches,
+            AceRestFloor = AceRestFloor,
+            AceRestCap = AceRestCap,
+            AceRestAceDependentFactor = AceRestAceDependentFactor,
+            AceRestDefensiveMindedFactor = AceRestDefensiveMindedFactor,
+            AceRestTotalBaseballFactor = AceRestTotalBaseballFactor,
         };
     }
 

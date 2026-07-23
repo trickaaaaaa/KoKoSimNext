@@ -90,4 +90,28 @@ public sealed record EnemyAiCoefficients
     // 9) 慎重: 一塁空きの強打者に敬遠を選びやすい（既定 0＝無効を正の確率へ）
     public double CautiousIntentionalWalkProb { get; init; } = 0.55;
     public int CautiousIntentionalWalkMinPowerRelax { get; init; } = 4; // 敬遠対象のパワー下限を下げる
+
+    // === ⑤ エース温存層: 先発選択（issue #42, 設計書11 §2/§3） ===
+    /// <summary>ローテ運用（先発差し替え）自体の最低ティア（0=G〜7=S）。未満は常時エース先発。</summary>
+    public int AceRestMinTier { get; init; } = 3;   // D: ローテ運用の基本判断
+    /// <summary>温存確率スコアの基準値（他項の加点前）。</summary>
+    public double AceRestBase { get; init; } = 0.05;
+    /// <summary>相手とのティア差（自校が格上なほど加点）1段あたりの重み。</summary>
+    public double AceRestTierGapWeight { get; init; } = 0.05;
+    /// <summary>この試合の後に残るラウンド数（決勝なら0＝加点なし）1ラウンドあたりの重み。</summary>
+    public double AceRestRoundsRemainingWeight { get; init; } = 0.05;
+    /// <summary>エースの直近消耗負荷（0〜1に正規化）の重み。</summary>
+    public double AceRestFatigueWeight { get; init; } = 0.35;
+    /// <summary>消耗負荷を見る直近日数の窓（#41 TournamentPitchLedger.PitchesWithin）。</summary>
+    public int AceRestFatigueWindowDays { get; init; } = 7;
+    /// <summary>消耗負荷=1.0とみなす基準球数。</summary>
+    public double AceRestFatigueReferencePitches { get; init; } = 100.0;
+    public double AceRestFloor { get; init; } = 0.0;
+    public double AceRestCap { get; init; } = 0.85;
+    /// <summary>豪腕依存: 打線は水物＝エースにほぼ常に頼る（温存スコアを大きく減衰）。</summary>
+    public double AceRestAceDependentFactor { get; init; } = 0.2;
+    /// <summary>守り勝つ野球: 先の相手を見据えた継投・ローテ管理に積極的。</summary>
+    public double AceRestDefensiveMindedFactor { get; init; } = 1.6;
+    /// <summary>全員野球: 選手層を使い回す方針の一環でローテにも積極的。</summary>
+    public double AceRestTotalBaseballFactor { get; init; } = 1.4;
 }
