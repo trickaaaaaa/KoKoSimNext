@@ -2,6 +2,19 @@
 
 実装で勝手に確定せず、ここに記録して相談する（CLAUDE.md「進め方」）。
 
+## Q23. 夏の地方大会の開幕週とトーナメント日程の妥当性（2026-07-23）→ **確定（2026-07-23・ユーザー確定）**
+
+Issue: [#175](https://github.com/trickaaaaaa/KoKoSimNext/issues/175)
+
+> **確定（2026-07-23・ユーザー確定）**:
+> 1. **開幕週を第15週（7月3週目）→ 第13週（7月1週目）へ早める**。現実の夏の地方予選（7月上旬開幕）に合わせ、開幕→引退(週17)の暦幅を広げる。大会モードは1週ターン内で抽象日を一気消化するため、開幕週はトーナメント内部日程(`MatchDay`)には無影響＝**この定数変更だけなら帯/決定論baselineに効かない**。`SeasonCalendar.SummerTournamentStartWeek = 13`。
+> 2. **`round_gap_days` を 3（中2日）→ 2（中1日）へ**。地方予選の連戦感を強める。`MatchDay = 1 + round×2` で8ラウンドなら決勝=15日目（≒2週強）。C#既定（`TournamentSchedule.RoundGapDays`）とYAML（`coefficients.yaml tournament.round_gap_days`）の**両方**を変更（Unityは `new TournamentSchedule()` 既定で動くため）。
+> 3. **帯再校正**: `round_gap_days` は `MatchDay` を左右し、`AceRestSelector` のエース温存抽選 seed（`MatchDay<<24` を含む）を変えるため裏試合のエース選択がずれる → Heavy統計回帰で帯内を確認。なお `PitchRecoveryModel`（球数→実効スタミナ減）は実戦シム未配線（testのみ）で、実効経路は温存抽選のみ。
+
+確定前の調査（記録）:
+- `round_gap_days=3` でも8ラウンド×3日＝22日≒現実の3週間夏予選相当で既に妥当だったが、連戦感重視で中1日（gap=2）を採用。
+- 開幕週=13 は `MonthOrder`/`WeeksPerMonth` 換算で 7月1週目（週13〜17が7月）。`SeasonCalendarTests.DateOf_SummerTournamentStartWeek_IsEarlyJuly` で固定。
+
 ## Q22. 夏場の気温連動オフェンス増加（乱打戦化）の実装方針（2026-07-22）→ **置き場所確定（2026-07-22・実装は別セッション）**
 
 Issue: [#120](https://github.com/trickaaaaaa/KoKoSimNext/issues/120)
