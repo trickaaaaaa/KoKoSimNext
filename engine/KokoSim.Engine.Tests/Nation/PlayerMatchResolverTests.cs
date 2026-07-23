@@ -37,7 +37,8 @@ public sealed class PlayerMatchResolverTests
         public StubResolver(int mgrRuns, int oppRuns, int forkDraws)
         { _mgrRuns = mgrRuns; _oppRuns = oppRuns; _forkDraws = forkDraws; }
 
-        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng)
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
         {
             for (var i = 0; i < _forkDraws; i++) rng.NextDouble(); // 隔離ストリームを消費（本流に漏れなければ影響ゼロ）
             var result = new GameResult
@@ -50,7 +51,8 @@ public sealed class PlayerMatchResolverTests
         }
 
         // このスタブは自動消化パスの検証専用（固定スコア）。ライブ進行は別テスト（LiveConsistentResolver）で検証する。
-        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng)
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
             => throw new System.NotSupportedException("StubResolver は自動消化のみ（ライブ非対応）。");
     }
 

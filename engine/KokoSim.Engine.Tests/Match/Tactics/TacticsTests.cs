@@ -136,6 +136,90 @@ public sealed class TacticsTests
         Assert.Equal(0, GambleCount(brain, empty, 200));
     }
 
+    // ===== StandardTacticsBrain: 三盗・本盗（issue #67, design-14 未決A） =====
+
+    [Fact]
+    public void Brain_StealThird_OnlyWhenSecondOnlyOccupied()
+    {
+        var brain = new StandardTacticsBrain(C);
+        var runner = P(speed: 95, steal: 95);
+        var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
+        var second = Situation(outs: 0, second: runner, catcher: weakCatcher);
+        Assert.True(StealTargetCount(brain, second, StealTarget.Third, 400) > 0, "三盗候補で一度も企図されない");
+
+        // 一塁が埋まっている（=二盗の対象で三盗候補ではない）と三盗は出ない。
+        var withFirst = Situation(outs: 0, first: P(), second: runner, catcher: weakCatcher);
+        Assert.Equal(0, StealTargetCount(brain, withFirst, StealTarget.Third, 400));
+
+        // 三塁も埋まっている（=一・三塁の重盗の塁状況）と三盗は出ない。
+        var withThird = Situation(outs: 0, second: runner, third: P(), catcher: weakCatcher);
+        Assert.Equal(0, StealTargetCount(brain, withThird, StealTarget.Third, 400));
+    }
+
+    [Fact]
+    public void Brain_StealThird_RespectsOutsAndScoreDiffLimits()
+    {
+        var brain = new StandardTacticsBrain(C);
+        var runner = P(speed: 95, steal: 95);
+        var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
+        var tooManyOuts = Situation(outs: C.StealThirdMaxOuts + 1, second: runner, catcher: weakCatcher);
+        Assert.Equal(0, StealTargetCount(brain, tooManyOuts, StealTarget.Third, 400));
+
+        var blowout = Situation(outs: 0, diff: C.StealThirdMaxDiffAbs + 5, second: runner, catcher: weakCatcher);
+        Assert.Equal(0, StealTargetCount(brain, blowout, StealTarget.Third, 400));
+    }
+
+    [Fact]
+    public void Brain_StealHome_OnlyWhenThirdOnlyOccupied_AndAlwaysGambles()
+    {
+        var brain = new StandardTacticsBrain(C);
+        var runner = P(speed: 95, steal: 95);
+        var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
+        var third = Situation(outs: 0, third: runner, catcher: weakCatcher);
+        var count = StealTargetCount(brain, third, StealTarget.Home, 600);
+        Assert.True(count > 0, "本盗候補で一度も企図されない");
+        Assert.Equal(count, GambleTargetCount(brain, third, StealTarget.Home, 600));
+
+        // 一塁・二塁が埋まっていれば本盗の対象塁状況ではない。
+        var withFirst = Situation(outs: 0, first: P(), third: runner, catcher: weakCatcher);
+        Assert.Equal(0, StealTargetCount(brain, withFirst, StealTarget.Home, 400));
+    }
+
+    [Fact]
+    public void Brain_StealHome_RespectsOutsAndScoreDiffLimits()
+    {
+        var brain = new StandardTacticsBrain(C);
+        var runner = P(speed: 95, steal: 95);
+        var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
+        var tooManyOuts = Situation(outs: C.StealHomeMaxOuts + 1, third: runner, catcher: weakCatcher);
+        Assert.Equal(0, StealTargetCount(brain, tooManyOuts, StealTarget.Home, 400));
+
+        var blowout = Situation(outs: 0, diff: C.StealHomeMaxDiffAbs + 5, third: runner, catcher: weakCatcher);
+        Assert.Equal(0, StealTargetCount(brain, blowout, StealTarget.Home, 400));
+    }
+
+    private static int StealTargetCount(StandardTacticsBrain brain, TacticsSituation s, StealTarget target, int n)
+    {
+        var c = 0;
+        for (ulong i = 0; i < (ulong)n; i++)
+        {
+            var d = brain.CallPitchAction(new PitchTacticsSituation(s, 0, 0, 0, null), new Xoshiro256Random(i));
+            if (d?.StealAttempt is not null && d.Value.StealTarget == target) c++;
+        }
+        return c;
+    }
+
+    private static int GambleTargetCount(StandardTacticsBrain brain, TacticsSituation s, StealTarget target, int n)
+    {
+        var c = 0;
+        for (ulong i = 0; i < (ulong)n; i++)
+        {
+            var d = brain.CallPitchAction(new PitchTacticsSituation(s, 0, 0, 0, null), new Xoshiro256Random(i));
+            if (d?.StealAttempt == StartType.Gamble && d.Value.StealTarget == target) c++;
+        }
+        return c;
+    }
+
     private static int StealAttemptCount(StandardTacticsBrain brain, TacticsSituation s, int n)
     {
         var c = 0;
@@ -368,19 +452,63 @@ public sealed class TacticsTests
     [Fact]
     public void Rattled_ConsecutiveBaserunners_SetsAndClears()
     {
+        // recoveryOuts=99 で自然回復（issue #73）を無効化し、発生・伝令解除・連続カウントのリセットだけを見る。
+        const int noRecovery = 99;
         var st = new TeamState(TeamOf("A"));
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
-        st.NotePitchingResult(PlateAppearanceResult.Walk, 3);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.Walk, 3, 0, noRecovery);
         Assert.False(st.PitcherRattled);
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
         Assert.True(st.PitcherRattled);
         st.ClearRattled(); // 伝令で解除
         Assert.False(st.PitcherRattled);
         // アウトで連続カウントはリセットされる。
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
-        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3);
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
-        st.NotePitchingResult(PlateAppearanceResult.Single, 3);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, noRecovery);
+        Assert.False(st.PitcherRattled);
+    }
+
+    [Fact]
+    public void Rattled_MentalRaisesThreshold_HigherMentalHarderToRattle()
+    {
+        var lowThreshold = C.RattledThresholdFor(0);
+        var baseThreshold = C.RattledThresholdFor(50);
+        var highThreshold = C.RattledThresholdFor(100);
+        Assert.Equal(C.RattledConsecutiveBaserunners, baseThreshold); // 精神力50は従来と同値
+        Assert.True(highThreshold > baseThreshold); // 精神力が高いほど動揺しにくい
+        Assert.True(lowThreshold < baseThreshold);  // 精神力が低いほど動揺しやすい
+    }
+
+    [Fact]
+    public void Rattled_RecoversNaturallyAfterEnoughOuts()
+    {
+        var st = new TeamState(TeamOf("A"));
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2);
+        Assert.True(st.PitcherRattled); // まだ1アウトなので継続
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2);
+        Assert.False(st.PitcherRattled); // 2アウト目で自然回復
+    }
+
+    [Fact]
+    public void Rattled_RecoveryProgressResetsOnNewBaserunner()
+    {
+        var st = new TeamState(TeamOf("A"));
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2); // 1アウト進捗
+        st.NotePitchingResult(PlateAppearanceResult.Single, 3, 0, 2);    // 出塁で回復進捗リセット
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2); // 1アウト目（リセット後）
+        Assert.True(st.PitcherRattled);
+        st.NotePitchingResult(PlateAppearanceResult.InPlayOut, 3, 1, 2); // 2アウト目でようやく回復
         Assert.False(st.PitcherRattled);
     }
 

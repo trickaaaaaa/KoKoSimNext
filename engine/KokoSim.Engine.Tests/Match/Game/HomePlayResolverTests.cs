@@ -152,4 +152,70 @@ public sealed class HomePlayResolverTests
         var longThrow = HomePlayResolver.DefenseTimeSeconds(Situation(90, 0.0), C);
         Assert.True(longThrow > shortThrow, "遠い送球ほど時間がかかる");
     }
+
+    // --- 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）: 純関数の単調性・方向・境界 ---
+
+    private static double TagUpScoreRate(Player runner, HomePlaySituation s, int trials = 4000, ulong seed = 5)
+    {
+        var rng = new Xoshiro256Random(seed);
+        var p = HomePlayResolver.TagUpHomeParams(C);
+        var safe = 0;
+        for (var i = 0; i < trials; i++)
+            if (HomePlayResolver.TagUpResolveSafe(runner, 3, s, Field, C, p, rng)) safe++;
+        return (double)safe / trials;
+    }
+
+    [Fact]
+    public void TagUp_DeepFly_ScoresMoreThan_ShallowFly()
+    {
+        // 深い中堅フライ（処理点95m・遅い捕球）＞浅い左翼フライ（処理点45m・早い捕球）。
+        // 起点は捕球時刻なので滞空は相殺し、送球距離（深さ）で決まる（Issue #90 の主眼）。
+        var runner = Runner();
+        var shallow = TagUpScoreRate(runner, Situation(45, 1.8));
+        var deep = TagUpScoreRate(runner, Situation(95, 3.6));
+        Assert.True(deep > shallow + 0.05, $"深いフライで生還率が上がっていない: shallow={shallow} deep={deep}");
+    }
+
+    [Fact]
+    public void TagUp_FasterRunner_ScoresMore()
+    {
+        var s = Situation(62, 2.6); // 接戦帯（走力差が生還率に出る中程度の深さ）
+        var slow = TagUpScoreRate(Runner(speed: 25), s);
+        var fast = TagUpScoreRate(Runner(speed: 85), s);
+        Assert.True(fast > slow + 0.05, $"走力でタッチアップ生還率が上がっていない: slow={slow} fast={fast}");
+    }
+
+    [Fact]
+    public void TagUp_StrongerArm_GunsDownMore()
+    {
+        var runner = Runner();
+        var s = new Func<int, HomePlaySituation>(arm => Situation(62, 2.6, arm));
+        var weak = TagUpScoreRate(runner, s(20));
+        var cannon = TagUpScoreRate(runner, s(90));
+        Assert.True(weak > cannon + 0.03, $"強肩でタッチアップ憤死が増えていない: weak={weak} cannon={cannon}");
+    }
+
+    [Fact]
+    public void TagUp_RunnerStartsAtCatch_HangTimeCancels()
+    {
+        // タッチアップは走者も守備も捕球時刻が共通起点＝margin は捕球時刻に依存しない（同じ処理点なら滞空が
+        // 違っても margin は不変）。深さ（送球距離）だけが効くことの契約。
+        var runner = Runner(60, 55);
+        var early = HomePlayResolver.TagUpMargin(runner, 3, Situation(70, 1.5), Field, C, HomePlayResolver.TagUpHomeParams(C));
+        var late = HomePlayResolver.TagUpMargin(runner, 3, Situation(70, 4.5), Field, C, HomePlayResolver.TagUpHomeParams(C));
+        Assert.Equal(early, late, 9);
+    }
+
+    [Fact]
+    public void TagUp_Probability_IsClampedAndDeterministic()
+    {
+        var p = HomePlayResolver.TagUpHomeParams(C);
+        var pEasy = HomePlayResolver.TagUpSuccessProbability(Runner(85), 3, Situation(110, 4.5), Field, C, p);
+        var pHard = HomePlayResolver.TagUpSuccessProbability(Runner(20), 3, Situation(25, 1.0, arm: 95), Field, C, p);
+        Assert.InRange(pEasy, 0.01, 0.99);
+        Assert.InRange(pHard, 0.01, 0.99);
+        Assert.True(pEasy > pHard, $"深いフライが浅いフライより生還しやすくない: easy={pEasy} hard={pHard}");
+        Assert.Equal(TagUpScoreRate(Runner(60, 55), Situation(65, 2.7), 500, 42),
+                     TagUpScoreRate(Runner(60, 55), Situation(65, 2.7), 500, 42));
+    }
 }

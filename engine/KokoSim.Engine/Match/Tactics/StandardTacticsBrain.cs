@@ -172,24 +172,50 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
         return batting is null && policy is null && steal is null
             ? null
-            : new PitchTacticsDirective(batting, policy, StealAttempt: steal);
+            : new PitchTacticsDirective(batting, policy, StealAttempt: steal?.Start, StealTarget: steal?.Target ?? StealTarget.Second);
     }
 
     /// <summary>
-    /// 盗塁を試みるか＋始動種別（設計書12 §5, G3b／設計書15 Phase D-2d）。旧来は打席頭で一度だけ
-    /// （<c>ITacticsBrain.CallOffense</c>/<c>CallStartType</c>）判定していたが、毎球の独立試行へ置き換えた
-    /// （＝任意の球の前で発動しうる。解決式・係数はそのまま、試行回数が増える分だけ発動タイミングが多様化）。
-    /// 一塁走者・二塁空き・2アウト未満でのみ判定する。成功見込みが際どいほど、好ジャンプ・意表の
-    /// ギャンブルに賭ける（見込みが十分高い盗塁は通常始動で堅実に決める＝無防備リスクを負わない）。
+    /// 盗塁を試みるか＋始動種別＋狙う塁（設計書12 §5, G3b／設計書15 Phase D-2d／issue #67で三盗・本盗へ拡張）。
+    /// 旧来は打席頭で一度だけ（<c>ITacticsBrain.CallOffense</c>/<c>CallStartType</c>）判定していたが、
+    /// 毎球の独立試行へ置き換えた（＝任意の球の前で発動しうる。解決式・係数はそのまま、試行回数が増える分だけ
+    /// 発動タイミングが多様化）。塁状況は排他（一塁のみ在塁＝二盗候補／二塁のみ在塁＝三盗候補／三塁のみ在塁＝
+    /// 本盗候補）なので同時に複数の狙いが競合することはない。一・三塁の重盗（DoubleStealThirdBreakProb）は
+    /// 一塁+三塁在塁が前提でこの分岐に一切入らないため、優先順位の整理は不要（塁状況で自然に排他）。
     /// </summary>
-    private StartType? CallStealAttempt(in TacticsSituation s, IRandomSource rng)
+    private (StartType Start, StealTarget Target)? CallStealAttempt(in TacticsSituation s, IRandomSource rng)
     {
-        if (s.OnFirst is null || s.OnSecond is not null || s.Outs >= 2) return null;
-        var estimate = StealResolver.SuccessProbability(s.OnFirst, s.Catcher, _br);
-        if (estimate < _c.StealMinSuccess || rng.NextDouble() >= _c.StealProb) return null;
-        return estimate < _c.GambleStartMaxSuccess && rng.NextDouble() < _c.GambleStartProb
+        if (s.OnFirst is not null && s.OnSecond is null && s.Outs < 2)
+        {
+            return AttemptSteal(s.OnFirst, s.Catcher, StealTarget.Second, _c.StealMinSuccess, _c.StealProb, rng);
+        }
+        if (s.OnFirst is null && s.OnSecond is not null && s.OnThird is null
+            && s.Outs <= _c.StealThirdMaxOuts && System.Math.Abs(s.ScoreDiff) <= _c.StealThirdMaxDiffAbs)
+        {
+            return AttemptSteal(s.OnSecond, s.Catcher, StealTarget.Third, _c.StealThirdMinSuccess, _c.StealThirdProb, rng);
+        }
+        if (s.OnFirst is null && s.OnSecond is null && s.OnThird is not null
+            && s.Outs <= _c.StealHomeMaxOuts && System.Math.Abs(s.ScoreDiff) <= _c.StealHomeMaxDiffAbs)
+        {
+            // 本盗は超高閾値のギャンブル枠（design-14）: 仕掛けると決めたら常に好ジャンプの一発勝負。
+            var estimate = StealResolver.SuccessProbability(s.OnThird, s.Catcher, _br, target: StealTarget.Home);
+            if (estimate < _c.StealHomeMinSuccess || rng.NextDouble() >= _c.StealHomeProb) return null;
+            return (StartType.Gamble, StealTarget.Home);
+        }
+        return null;
+    }
+
+    /// <summary>成功見込みがこの値以上のときだけ確率的に仕掛け、際どいほど好ジャンプ・意表のギャンブルに賭ける
+    /// （見込みが十分高い盗塁は通常始動で堅実に決める＝無防備リスクを負わない）。二盗・三盗で共通の型。</summary>
+    private (StartType Start, StealTarget Target)? AttemptSteal(
+        Player runner, Player catcher, StealTarget target, double minSuccess, double attemptProb, IRandomSource rng)
+    {
+        var estimate = StealResolver.SuccessProbability(runner, catcher, _br, target: target);
+        if (estimate < minSuccess || rng.NextDouble() >= attemptProb) return null;
+        var start = estimate < _c.GambleStartMaxSuccess && rng.NextDouble() < _c.GambleStartProb
             ? StartType.Gamble
             : StartType.Normal;
+        return (start, target);
     }
 
     public bool CallOffenseTimeout(in TacticsSituation s, IRandomSource rng)

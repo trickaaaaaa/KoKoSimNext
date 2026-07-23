@@ -16,6 +16,21 @@ namespace KokoSim.Unity.Shell
 {
     public enum GameMode { Normal, Tournament }
 
+    /// <summary>終了した大会の後始末に必要な情報（issue #139: Runner が null化された後も参照できるようにする）。</summary>
+    public sealed class TournamentWrapUp
+    {
+        public string Title { get; }
+        public int TournamentDay { get; }
+        public bool IsChampion { get; }
+
+        public TournamentWrapUp(string title, int tournamentDay, bool isChampion)
+        {
+            Title = title;
+            TournamentDay = tournamentDay;
+            IsChampion = isChampion;
+        }
+    }
+
     /// <summary>大会モードの進行状態（現在の進行体・大会内経過日・演出フラグ）を全画面へ共有する。</summary>
     public sealed class GameSession
     {
@@ -42,10 +57,23 @@ namespace KokoSim.Unity.Shell
         public PlayerMatchOutcome LastOutcome { get; private set; }
 
         /// <summary>
+        /// 直前に終了した大会の後始末（週送り・通知フィード）がまだ済んでいなければその情報を持つ（issue #139）。
+        /// モード自体は敗退/優勝を検知した瞬間に <see cref="Mode"/>=Normal へ戻すが、時計送りと通知は
+        /// 従来どおり結果モーダルを閉じたタイミング（<see cref="ConsumeTournamentWrapUp"/>）で行う。
+        /// </summary>
+        public TournamentWrapUp? PendingTournamentWrapUp { get; private set; }
+
+        /// <summary>
         /// 自校選手の成績ストア（通算＝永続／今大会＝大会ごとリセット）。純エンジンの集計器を横断状態として保持。
         /// 詳細シムで回った自校戦のボックススコアを PlayMatch で畳み込む。スタメン画面の成績欄はこれを引く。
         /// </summary>
         public PlayerStatStore Stats { get; } = new PlayerStatStore();
+
+        /// <summary>
+        /// 学校ごとの通算戦績（公式戦勝敗・甲子園出場回数, issue #84）。Stats と同様に大会をまたいで永続する。
+        /// 大会終了時にブラケット全試合（自校戦＋裏試合）を <see cref="ExitTournamentIfFinished"/> で畳み込む。
+        /// </summary>
+        public SchoolRecordBook Records { get; } = new SchoolRecordBook();
 
         /// <summary>
         /// 試合前スタメン設定（打順・守備位置・DH・先発）。試合開始フローのスタメン画面で確定して書き込む。
@@ -100,6 +128,9 @@ namespace KokoSim.Unity.Shell
         private static readonly SeasonCalendar GrowthCalendar = new SeasonCalendar();
         private static readonly GrowthStageTable GrowthStages = new GrowthStageTable();
         private static readonly TrainingCoefficients GrowthTraining = new TrainingCoefficients();
+        // 調子（設計書02 §3.3）用の係数。週次AR(1)（HomeState）と同じ既定値運用。
+        private static readonly KokoSim.Engine.Players.FormCoefficients FormCoeff =
+            new KokoSim.Engine.Players.FormCoefficients();
 
         /// <summary>
         /// 実戦成長ループ（Q8）: 詳細シムの自校戦1試合ぶん、出場者の精神力/走塁判断/捕手リードを伸ばす。
@@ -108,6 +139,13 @@ namespace KokoSim.Unity.Shell
         private void ApplyMatchGrowth(GameResult detail, bool managerWasAway)
             => MatchGrowthModel.Apply(detail, managerWasAway, RosterService.Roster,
                 GameClock.Week, GrowthCalendar, GrowthStages, GrowthTraining);
+
+        /// <summary>
+        /// 試合結果による調子フィードバック（設計書02 §3.3, issue #46）: 詳細シムの自校戦1試合ぶん、
+        /// 出場者の ConditionValue を好投/好打で+、被弾/大敗で−へ動かす。実戦成長と同じ合流点で適用。
+        /// </summary>
+        private void ApplyMatchCondition(GameResult detail, bool managerWasAway)
+            => MatchConditionModel.Apply(detail, managerWasAway, RosterService.Roster, FormCoeff);
 
         // 怪我（設計書03 §3.5）。週次処理（HomeState.RunInjuryWeek）と同じ既定係数を使う。
         private static readonly InjuryCoefficients InjuryCoeff = new InjuryCoefficients();
@@ -153,6 +191,7 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail.Result, detail.ManagerIsAway, isOfficial: false);
                 ApplyMatchGrowth(detail.Result, detail.ManagerIsAway);
+                ApplyMatchCondition(detail.Result, detail.ManagerIsAway);
                 ApplyMatchInjuries(detail.Result, detail.ManagerIsAway);
             }
             return outcome;
@@ -167,9 +206,11 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
+            ExitTournamentIfFinished();
             return LastOutcome;
         }
 
@@ -189,21 +230,42 @@ namespace KokoSim.Unity.Shell
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
+                ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
+            ExitTournamentIfFinished();
             return LastOutcome;
         }
 
         public void ConsumeResult() => ResultPending = false;
 
-        /// <summary>通常モードへ戻す。</summary>
-        public void ExitTournament()
+        /// <summary>
+        /// 大会が自校にとって終了していれば（優勝 or 敗退）、結果モーダルの表示状態はそのまま保って
+        /// 大会モードだけ即座に抜ける（issue #139）。以前はこの離脱が結果モーダルのOKクリック
+        /// （<see cref="Unity.Home.HomeState.DismissResult"/>）だけに依存しており、OKへ辿り着けない限り
+        /// <see cref="Mode"/> が Tournament のまま残り、終了済みランナーの下で日送りがループし続けた
+        /// （<see cref="TournamentDay"/> だけが進み、共有クロック <see cref="GameClock"/> は進まない）。
+        /// 時計送り・通知フィードは従来どおり <see cref="ConsumeTournamentWrapUp"/> 経由でOKクリック時に行う。
+        /// </summary>
+        private void ExitTournamentIfFinished()
         {
+            if (Runner == null || !Runner.Finished) return;
+            // ブラケット全試合（自校戦＋裏試合）を通算戦績へ畳み込む（issue #84）。夏の優勝校は甲子園出場として記録。
+            Records.FoldTournament(Runner.BuildBracketView().Matches, Kind, Year);
+            PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion);
             Mode = GameMode.Normal;
             Runner = null;
             BannerPending = false;
-            ResultPending = false;
+            // ResultPending はここでは変えない＝結果モーダルは引き続き表示する。
+        }
+
+        /// <summary>大会終了の後始末情報を取り出して消費する（結果モーダルのOKクリックから1回だけ呼ぶ）。</summary>
+        public TournamentWrapUp? ConsumeTournamentWrapUp()
+        {
+            var w = PendingTournamentWrapUp;
+            PendingTournamentWrapUp = null;
+            return w;
         }
     }
 }

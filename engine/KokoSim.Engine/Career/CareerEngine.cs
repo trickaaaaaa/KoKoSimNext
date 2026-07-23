@@ -164,18 +164,20 @@ public static class CareerEngine
     private static (bool ReachedKoshien, bool NationalChampion, int Wins) SimulateSeason(
         NationState nation, School managerSchool, int prefId, NationCoefficients coeff, IRandomSource rng)
     {
-        var reps = new List<School>(nation.Prefectures.Count);
+        var reps = new List<School>(49);
         var managerWins = 0;
         var reachedKoshien = false;
 
-        foreach (var pref in nation.Prefectures)
+        // 夏の地方大会（49地方=北海道・東京だけ2分割, 設計書05 §1.1 / issue #65）。監督校は所属区画にのみ加える。
+        foreach (var region in SummerRegions.Build(nation.Prefectures))
         {
-            var entrants = nation.InPrefecture(pref.Id).ToList();
-            if (pref.Id == prefId) entrants.Add(managerSchool);
+            var entrants = SummerRegions.Entrants(nation, region).ToList();
+            var managerInRegion = region.Contains(managerSchool);
+            if (managerInRegion) entrants.Add(managerSchool);
             if (entrants.Count == 0) continue;
 
             var result = TournamentEngine.Run(entrants, coeff, rng);
-            if (pref.Id == prefId)
+            if (managerInRegion)
             {
                 managerWins += result.WinsBySchool.TryGetValue(managerSchool.Id, out var w) ? w : 0;
                 reachedKoshien = result.Champion.Id == managerSchool.Id;

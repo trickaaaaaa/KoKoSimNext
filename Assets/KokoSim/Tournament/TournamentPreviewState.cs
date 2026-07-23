@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 
 namespace KokoSim.Unity.Tournament
@@ -72,6 +74,7 @@ namespace KokoSim.Unity.Tournament
             public bool ManagerInvolved;   // このカードに自校がいる（左からの接続線＋枠をアンバーに）
             public bool ManagerAdvances;   // 自校がこのカードを勝ち上がった（右への接続線をアンバーに）
             public bool IsBye;
+            public bool MercyEnded;        // コールドゲーム（マーシールール）成立で打ち切られたか（設計書05 §1.3, Q18）
         }
 
         /// <summary>樹形図の1ラウンド＝1列。</summary>
@@ -119,8 +122,16 @@ namespace KokoSim.Unity.Tournament
 
             var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
 
+            // 通算戦績（issue #84）はGameSession側の記録簿にあり、engineのプレビュー生成は校名しか
+            // 持たないため、ここで校名→Idを引いて寸評の頭に付け足す（新規パネル・新規要素は作らない）。
+            var idByName = session.Field.ToDictionary(s => s.Name, s => s.Id);
+            var records = session.Records;
+
             foreach (var c in preview.Contenders)
             {
+                var history = idByName.TryGetValue(c.Name, out var schoolId)
+                    ? KoshienHistoryText(records.For(schoolId))
+                    : "";
                 v.Contenders.Add(new ContenderRow
                 {
                     MarkSym = Sym(c.Mark),
@@ -130,7 +141,7 @@ namespace KokoSim.Unity.Tournament
                     Name = c.Name,
                     TierLetter = c.Tier.ToString(),
                     SeedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : "第" + c.Seed + "シード",
-                    Blurb = c.Blurb,
+                    Blurb = history + c.Blurb,
                     Batting = c.Rating.Batting,
                     Pitching = c.Rating.Pitching,
                     Defense = c.Rating.Defense,
@@ -200,6 +211,7 @@ namespace KokoSim.Unity.Tournament
                         IsBye = c.IsBye,
                         Top = Slot(c.Top, c),
                         Bottom = Slot(c.Bottom, c),
+                        MercyEnded = c.MercyEnded,
                     };
                     row.ManagerInvolved = c.Top.IsManager || c.Bottom.IsManager;
                     row.ManagerAdvances = (row.Top.IsManager && row.Top.IsWinner)
@@ -227,6 +239,25 @@ namespace KokoSim.Unity.Tournament
                 IsLoser = card.IsPlayed && !s.IsWinner,
                 IsDetermined = s.IsDetermined,
             };
+        }
+
+        /// <summary>
+        /// 優勝候補行の寸評に添える甲子園出場歴（issue #84「甲子園 夏5回・春2回」等）。未出場は空文字。
+        /// 最高成績が準優勝以上なら添える（優勝は#65で甲子園本戦が実装されるまで発生しない）。
+        /// </summary>
+        private static string KoshienHistoryText(SchoolRecord r)
+        {
+            if (r.TotalAppearances == 0) return "";
+            var parts = new List<string>();
+            if (r.SummerAppearances > 0) parts.Add("夏" + r.SummerAppearances + "回");
+            if (r.SpringAppearances > 0) parts.Add("春" + r.SpringAppearances + "回");
+            var best = r.BestResult switch
+            {
+                BestResult.Champion => "優勝経験／",
+                BestResult.RunnerUp => "準優勝経験／",
+                _ => "",
+            };
+            return "甲子園 " + best + string.Join("・", parts) + "。";
         }
 
         private static string Sym(ContenderMark m) => m switch

@@ -107,8 +107,8 @@ namespace KokoSim.Unity.Players
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
 
-        // カテゴリ別ランクの重み（一覧と同じ既定係数を流用, Issue #30・#93 レーダー統一）。
-        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+        // カテゴリ別ランクの重み（単一静的ソースを参照, Issue #30・#93 レーダー統一・#140 集約）。
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         public PlayerDetailState()
         {
@@ -143,7 +143,7 @@ namespace KokoSim.Unity.Players
                 Number = (index + 1).ToString(),
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
-                ThrowsBats = ThrowsBatsJp(p.Throws, p.Bats),
+                ThrowsBats = HandednessLabels.Combined(p.Throws, p.Bats),
                 Condition = ConditionLabels.Jp(condition),
                 ConditionLevel = condition,
                 IsCaptain = p.IsCaptain,
@@ -307,13 +307,6 @@ namespace KokoSim.Unity.Players
         // 球速内部値(1〜100)→km/h（表示近似。実シムの物理変換はエンジン係数側）。
         private static int Kmh(int velLevel)
             => (int)System.Math.Round(118 + velLevel * 0.42);
-
-        private static string ThrowsBatsJp(Handedness throws, Handedness bats)
-        {
-            string T = throws == Handedness.Left ? "左投" : "右投";
-            string B = bats == Handedness.Left ? "左打" : bats == Handedness.Switch ? "両打" : "右打";
-            return T + B;
-        }
 
         // ストレートの扇の長さ（変化量軸では短尺固定。伸びは Extend01＝扇の幅で読ませる）。
         private const float FastballBreak01 = 0.15f;

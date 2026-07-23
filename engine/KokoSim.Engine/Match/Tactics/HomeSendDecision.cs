@@ -11,18 +11,30 @@ namespace KokoSim.Engine.Match.Tactics;
 public static class HomeSendDecision
 {
     /// <summary>
-    /// 送りの閾値（生還推定確率がこれ以上なら還す）。
+    /// 本塁送りの閾値（生還推定確率がこれ以上なら還す）。
     /// aggression: 0=超慎重, 0.5=中立, 1=超積極（機動力校・攻めの監督）。
     /// </summary>
     public static double SendThreshold(int outs, double aggression, TacticsCoefficients c)
-    {
-        var t = c.SendHomeMinSuccess;
-        if (outs >= 2) t -= c.SendHomeTwoOutRelax;      // 2アウトは失うものが少なく積極的に還す
-        t -= (aggression - 0.5) * c.SendHomeAggressionSpan;
-        return MathUtil.Clamp(t, 0.05, 0.95);
-    }
+        => Threshold(outs, aggression, c.SendHomeMinSuccess, c.SendHomeTwoOutRelax, c.SendHomeAggressionSpan);
 
     /// <summary>生還推定確率と状況から、還す(true)か自重(false)かを決める。</summary>
     public static bool ShouldSend(double scoreProbability, int outs, double aggression, TacticsCoefficients c)
         => scoreProbability >= SendThreshold(outs, aggression, c);
+
+    /// <summary>三塁送りの閾値（単打の一塁→三塁, Issue #89）。本塁と同型・係数のみ三塁固有。</summary>
+    public static double SendThirdThreshold(int outs, double aggression, TacticsCoefficients c)
+        => Threshold(outs, aggression, c.SendThirdMinSuccess, c.SendThirdTwoOutRelax, c.SendThirdAggressionSpan);
+
+    /// <summary>三塁到達推定確率と状況から、回す(true)か自重(false)かを決める（Issue #89）。</summary>
+    public static bool ShouldSendThird(double reachProbability, int outs, double aggression, TacticsCoefficients c)
+        => reachProbability >= SendThirdThreshold(outs, aggression, c);
+
+    /// <summary>送り閾値の共通式（本塁・三塁で係数だけ差し替え）。</summary>
+    private static double Threshold(int outs, double aggression, double minSuccess, double twoOutRelax, double aggressionSpan)
+    {
+        var t = minSuccess;
+        if (outs >= 2) t -= twoOutRelax;                // 2アウトは失うものが少なく積極的に送る
+        t -= (aggression - 0.5) * aggressionSpan;
+        return MathUtil.Clamp(t, 0.05, 0.95);
+    }
 }

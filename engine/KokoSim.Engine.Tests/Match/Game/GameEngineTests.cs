@@ -123,6 +123,50 @@ public sealed class GameEngineTests
         Assert.Equal(a.TotalPitches, b.TotalPitches);
     }
 
+    // --- コールドゲーム（マーシールール, 設計書05 §1.3, OPEN-QUESTIONS Q18） ---
+
+    [Theory]
+    [InlineData(5, 0, 9, false)]    // 5回9点差はまだ継続
+    [InlineData(5, 0, 10, true)]   // 5回10点差で成立
+    [InlineData(4, 0, 15, false)]  // 4回はどれだけ点差があっても未成立（5回未満）
+    [InlineData(6, 0, 6, false)]   // 7回未満は7点差では未成立
+    [InlineData(7, 0, 7, true)]    // 7回7点差で成立
+    [InlineData(7, 0, 6, false)]   // 7回6点差はまだ継続
+    public void IsMercy_BoundaryConditions(int inning, int away, int home, bool expected)
+        => Assert.Equal(expected, GameEngine.IsMercy(inning, away, home));
+
+    [Fact]
+    public void MercyRuleEnabled_EndsGameEarly_WhenLopsided()
+    {
+        // 弱小チーム相手なら早々に大差がつき、有効時は規定回(9)前に打ち切られるはずの試合を探す。
+        var ctx = new GameContext { MercyRuleEnabled = true };
+        var strong = BuildTeam("強豪");
+        var weak = BuildWeakTeam("弱小");
+        var foundMercyEnded = false;
+        for (ulong seed = 0; seed < 50; seed++)
+        {
+            var r = GameEngine.Play(strong, weak, ctx, new Xoshiro256Random(seed));
+            if (!r.MercyEnded) continue;
+            foundMercyEnded = true;
+            Assert.True(r.InningsPlayed < ctx.RegulationInnings || GameEngine.IsMercy(r.InningsPlayed, r.AwayRuns, r.HomeRuns));
+            Assert.True(GameEngine.IsMercy(r.InningsPlayed, r.AwayRuns, r.HomeRuns));
+        }
+        Assert.True(foundMercyEnded, "大差の対戦カードなのにコールドが一度も成立しなかった（設定または閾値を見直す）。");
+    }
+
+    [Fact]
+    public void MercyRuleDisabled_NeverSetsMercyEnded()
+    {
+        var ctx = new GameContext { MercyRuleEnabled = false };
+        var strong = BuildTeam("強豪");
+        var weak = BuildWeakTeam("弱小");
+        for (ulong seed = 0; seed < 50; seed++)
+        {
+            var r = GameEngine.Play(strong, weak, ctx, new Xoshiro256Random(seed));
+            Assert.False(r.MercyEnded);
+        }
+    }
+
     [Fact]
     public void HomeLeadingAfterTop9_DoesNotBatBottom()
     {
@@ -172,6 +216,44 @@ public sealed class GameEngineTests
             BattingOrder = order,
             PitcherSlot = 8,
             Bullpen = new[] { Pitcher(name + "R1"), Pitcher(name + "R2") },
+        };
+    }
+
+    // --- コールドゲーム統合テスト用: 平均チーム相手に大差がつく極端な弱小チーム ---
+
+    private static Player WeakPosition(FieldPosition pos) => new()
+    {
+        Position = pos,
+        Contact = 5, Power = 5, LaunchTendency = 50, Discipline = 5,
+        Speed = 20, ArmStrength = 20, Fielding = 5, Catching = 5,
+    };
+
+    private static Player WeakPitcher(string name) => WeakPosition(FieldPosition.Pitcher) with
+    {
+        Name = name,
+        Pitching = new PitcherAttributes { MaxVelocityKmh = 110, Control = 1, StaminaPitches = 45, PitchRank = 1 },
+    };
+
+    private static Team BuildWeakTeam(string name)
+    {
+        var order = new List<Player>
+        {
+            WeakPosition(FieldPosition.Catcher),
+            WeakPosition(FieldPosition.FirstBase),
+            WeakPosition(FieldPosition.SecondBase),
+            WeakPosition(FieldPosition.ThirdBase),
+            WeakPosition(FieldPosition.Shortstop),
+            WeakPosition(FieldPosition.LeftField),
+            WeakPosition(FieldPosition.CenterField),
+            WeakPosition(FieldPosition.RightField),
+            WeakPitcher(name + "P"),
+        };
+        return new Team
+        {
+            Name = name,
+            BattingOrder = order,
+            PitcherSlot = 8,
+            Bullpen = new[] { WeakPitcher(name + "R1"), WeakPitcher(name + "R2") },
         };
     }
 }

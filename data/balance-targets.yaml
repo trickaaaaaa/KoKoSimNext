@@ -29,7 +29,10 @@ games_10k:
   minutes_per_game: { min: 90, max: 160 }       # 推定試合時間[分]
   innings_per_game: { min: 9.0, max: 9.8 }      # 平均イニング
   # 本塁クロスプレー憤死/試合（設計書12 §3 F2, Q9）。実測≈0.26。広め＝得点帯と競合させない warn 相当。
-  home_play_outs_per_game: { min: 0.12, max: 0.42 }
+  # 上限を 0.42→0.50 に拡張（issue #123, 2026-07-23）: 守備力連動強化で失策→出塁増→本塁クロスプレー増の分。
+  home_play_outs_per_game: { min: 0.12, max: 0.50 }
+  # 三塁憤死/試合（単打の一塁→三塁レース, Issue #89, 設計書12 §3.5）。広め＝warn 相当。
+  third_play_outs_per_game: { min: 0.02, max: 0.40 }
   # --- design-14 第1段（P1）: 采配Brain不要＝無指示でも発生する常時系（2026-07-17校正, 🟡広め帯） ---
   # 野選（FC）: 実測≈0.46-0.48/試合（両軍計）。
   fielders_choice_per_game: { min: 0.10, max: 1.20 }

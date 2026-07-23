@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Unity.Shell;
 
@@ -42,7 +43,8 @@ namespace KokoSim.Unity.Member
         public bool Present;
         public string Name = "";
         public string GradeLabel = "";
-        public string OverallGrade = "";
+        public string HandLabel = "";    // 投打（例「右投左打」）
+        public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);   // カテゴリ別ランク（打撃/走力/守備/投手）
         public bool IsCaptain;
     }
 
@@ -122,6 +124,9 @@ namespace KokoSim.Unity.Member
             ("スタミナ", p => p.Level(AbilityKind.Stamina)),
             ("球種", p => p.Level(AbilityKind.PitchRank)),
         };
+
+        // カテゴリ別ランク算出係数（チーム総合力パネル等と同一・単一ソース、Issue #140）。
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         // 統合モデル：_picked＝クリックで選択中の選手（比較の左）。_hovered＝カーソルを合わせた選手（比較の右）。
@@ -206,7 +211,7 @@ namespace KokoSim.Unity.Member
                     var p = _roster[idx];
                     slot.Name = p.Name;
                     slot.GradeLabel = p.Grade + "年";
-                    slot.HandLabel = HandLabel(p);
+                    slot.HandLabel = HandednessLabels.Combined(p.Throws, p.Bats);
                     slot.RankGrade = n <= 9 ? SlotRank(p, n) : OverallGrade(p);
                     slot.IsCaptain = p.IsCaptain;
                     v.AssignedCount++;
@@ -290,7 +295,8 @@ namespace KokoSim.Unity.Member
                 Present = true,
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
-                OverallGrade = OverallGrade(p),
+                HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
+                Strength = PlayerStrengthProfile.Compute(p, Coeff),
                 IsCaptain = p.IsCaptain,
             };
         }
@@ -315,15 +321,5 @@ namespace KokoSim.Unity.Member
         }
 
         private static string OverallGrade(DevelopingPlayer p) => Tiers.FromStrength(p.AverageLevel()).ToString();
-
-        // 投打（例「右投左打」）。列挙の名前先頭文字で判定（L=左, S=両, 既定=右）。
-        private static string HandLabel(DevelopingPlayer p)
-        {
-            var t = p.Throws.ToString();
-            var b = p.Bats.ToString();
-            var tj = t.StartsWith("L") ? "左投" : t.StartsWith("S") ? "両投" : "右投";
-            var bj = b.StartsWith("L") ? "左打" : b.StartsWith("S") ? "両打" : "右打";
-            return tj + bj;
-        }
     }
 }

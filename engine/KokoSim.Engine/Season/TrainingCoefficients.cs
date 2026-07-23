@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace KokoSim.Engine.Season;
 
 /// <summary>育成式の係数（設計書02 §5.1, YAML駆動）。</summary>
@@ -8,16 +11,47 @@ public sealed record TrainingCoefficients
     /// <summary>副効果の倍率。</summary>
     public double SubFactor { get; init; } = 0.4;
 
-    /// <summary>施設係数。</summary>
+    /// <summary>施設係数（施設レベル0＝現状の基準値）。<see cref="FacilityTiers"/> 未指定時の既定施設係数。</summary>
     public double FacilityCoef { get; init; } = 1.0;
-    /// <summary>指導力（分野別, Phase 5で監督メタに置換）。暫定固定値。</summary>
+    /// <summary>
+    /// 基準指導力（Issue #115）。監督メタ（<see cref="CoachingProfile"/>）を注入しない場合に全分野へ適用する既定値、
+    /// かつ分野別指導力の「中立点」＝この指導力なら従来のシムと1ビット一致する（不変条件#2）。
+    /// 監督指導力を注入すると各能力分野が Manager.Coaching.* で駆動される。
+    /// </summary>
     public double CoachingLevel { get; init; } = 20.0;
     /// <summary>指導力1あたりの効率係数（設計書02: 1 + 指導力×0.005）。</summary>
     public double CoachingSlope { get; init; } = 0.005;
 
+    /// <summary>
+    /// 個別指導3枠のスロット数上限（Issue #126・設計書06 §3.3）。エンジン側では強制しない
+    /// （UI側の <c>TrainingPlanState.ToggleNominate</c> がこの値を上限として使う）。
+    /// </summary>
+    public int IndividualCoachingSlots { get; init; } = 3;
+
+    /// <summary>
+    /// 個別指導3枠の追加倍率スケール（Issue #126・OPEN-QUESTIONS Q7(a)）。指名選手の主効果expにだけ、
+    /// 分野別指導力由来のcoachingFactor比（Issue #115・<see cref="DevelopmentModel"/> の中立点比）を
+    /// もう一段乗せる: 追加倍率 = 1 + (coachingFactor比 − 1) × このスケール。
+    /// 既定1.0＝#115の写像をそのまま流用。coaching=null または指名なしなら追加倍率は1.0（従来一致）。
+    /// </summary>
+    public double IndividualCoachingBonusScale { get; init; } = 1.0;
+
+    /// <summary>
+    /// 施設レベル→(係数, 週練習時間) 対応表（Issue #115・設計書03 §4）。index=施設レベル。
+    /// 空（既定）なら <see cref="FacilityCoef"/> / <see cref="DefaultBudgetMinutes"/> をそのまま使い従来一致。
+    /// SeasonContext.FacilityLevel で選択し、レベル0はここでも現状値に据える。
+    /// </summary>
+    public IReadOnlyList<FacilityTier> FacilityTiers { get; init; } = Array.Empty<FacilityTier>();
+
     /// <summary>レベルアップ必要exp = LevelUpBase × LevelUpGrowth^v（設計書02: 100 × 1.05^v）。</summary>
     public double LevelUpBase { get; init; } = 100.0;
     public double LevelUpGrowth { get; init; } = 1.05;
+
+    /// <summary>
+    /// 能力別 trainability（伸ばしやすさ）係数（Issue #114）。exp加算時に乗算する内在特性。
+    /// 既定（全1.0）で従来と完全一致。
+    /// </summary>
+    public TrainabilityCoefficients Trainability { get; init; } = new();
 
     /// <summary>
     /// 守備位置適性の必要exp倍率（&lt;1.0で速く伸びる, 守備適性 未決1・2026-07-22）。

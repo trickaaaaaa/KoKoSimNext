@@ -54,9 +54,14 @@ public sealed class NationRosters
         foreach (var s in schools) GetOrBootstrap(s, yearIndex);
     }
 
-    /// <summary>学校の現在ロスターから試合可能な Team を組む（展望・実戦の単一ソース）。</summary>
-    public Team TeamFor(School school, int yearIndex, ModernRules? modernRules = null, int? calendarYear = null)
-        => AiTeamBuilder.Build(GetOrBootstrap(school, yearIndex), school, yearIndex, _deps, modernRules, calendarYear);
+    /// <summary>
+    /// 学校の現在ロスターから試合可能な Team を組む（展望・実戦の単一ソース）。<paramref name="aceRest"/> は
+    /// エース温存判断（issue #42）の入力（既定 null＝常時エース先発＝展望・従来呼び出しと同じ挙動）。
+    /// </summary>
+    public Team TeamFor(School school, int yearIndex, ModernRules? modernRules = null, int? calendarYear = null,
+        AceRestContext? aceRest = null)
+        => AiTeamBuilder.Build(GetOrBootstrap(school, yearIndex), school, yearIndex, _deps, modernRules, calendarYear,
+            aceRest);
 
     /// <summary>
     /// 夏大会後の代替わり: 生成済み全校の3年生を引退させる（秋の新チーム＝下級生のみ）。

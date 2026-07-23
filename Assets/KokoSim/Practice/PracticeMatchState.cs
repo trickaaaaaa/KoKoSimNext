@@ -55,7 +55,7 @@ namespace KokoSim.Unity.Practice
     /// </summary>
     public sealed class PracticeMatchState
     {
-        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         // 相手校の6指標は「校ID＋年度」で決まる決定論なので、画面を開き直しても同じ値になる。都度の再集計は重いためキャッシュする。
         private static readonly Dictionary<int, TeamStrength> ProfileCache = new Dictionary<int, TeamStrength>();

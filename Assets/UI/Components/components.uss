@@ -30,6 +30,11 @@
 .rank-chip--lg { min-width: 46px; height: 44px; font-size: 28px; border-radius: var(--radius-chip); padding-left: 12px; padding-right: 12px; }
 .rank-chip--xl { min-width: 64px; height: 60px; font-size: 40px; border-radius: var(--radius-card); padding-left: 18px; padding-right: 18px; }
 
+/* ── CategoryRankChips：選手のカテゴリ別ランク（打撃力/走力/守備力/投手力, Issue #30/#140） ─
+   選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
+.cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+
 /* ── AbilityRow：能力バー行（アイコン／能力名＋副題／数値／バー／ランクチップ／補足） ─
    能力バーを出す画面はこの部品だけを使う（UI原則③ランク併記・⑤部品辞書の外に出ない）。
    バー色はランク連動色を C# 側（RankPalette＝--rank-*）から与えるためここでは指定しない。
@@ -481,7 +486,9 @@
 .cmp-card__lab--b { background-color: var(--cmp-b); }
 .cmp-card__name { font-size: var(--fs-body); color: var(--color-chalk); margin-top: var(--sp-2); }
 .cmp-card__meta { flex-direction: row; align-items: center; margin-top: 2px; }
+.cmp-card__hand { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-1); }
 .cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }
+.cmp-card .cat-rank-chips { margin-top: var(--sp-2); }
 
 /* ── LineupRow：打順1枠の行（順・守・選手・学年投打・総合ランク）。行高32px基準（UI原則①） ──
    スタメン設定の打順表で使う。列幅は画面USS（LineupSetting.uss）側の .lu-row__* 幅と揃える。 */

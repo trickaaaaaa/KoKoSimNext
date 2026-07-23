@@ -108,10 +108,7 @@ namespace KokoSim.Unity.Home
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
         // 現在週/年度は全画面共有の GameClock、大会モードの進行は GameSession を単一ソースとする（画面ごとに持たない）。
-        private static readonly NationCoefficients NationCoeff = new NationCoefficients();
-        private static readonly TournamentSchedule Schedule = new TournamentSchedule();
-        private const int ManagerSchoolId = -1;      // 自校（生成校と衝突しない専用ID）
-        private const int FieldPrefectureId = 13;    // 神奈川（Prefecture.Id は0基点＝JIS番号-1。#14→13, 校数≒211）
+        // 大会モードの構築（進行体・裏試合フルシム）は TournamentEntry（Shell）へ移した（issue #134）。
 
         private static HomeState _current;
 
@@ -127,19 +124,25 @@ namespace KokoSim.Unity.Home
             _feed.Add(new FeedItem { When = "先週", Text = "新チームが始動した。", Kind = FeedKind.Normal, Tag = "情報" });
         }
 
-        /// <summary>今週を進める: 全部員を1週練習させ→怪我の週次処理→共有週を進め、大会開幕週なら大会モードへ入る。</summary>
+        /// <summary>今週を進める: 全部員を1週練習させ→怪我の週次処理→共有週を進める。
+        /// 大会開幕週の大会モード遷移は共通クロック <see cref="GameClock"/> の週入りフックへ集約した
+        /// （issue #134: どのタブから進めても同じ地点で判定する）。開幕バナーは <see cref="BannerPending"/> を
+        /// 見てホームが出す。</summary>
         public void AdvanceWeek()
         {
             RunPracticeWeek(1.0);                       // 通常週の練習（効果1.0）
             RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
-            KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（全画面へ反映）
+            KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
+        }
 
-            // 大会開幕週に到達したら大会モードへ遷移（要件1）。
-            if (GameSession.Current.Mode == GameMode.Normal)
+        /// <summary>開幕演出（バナー）を出す直前に「大会が開幕した」を通知フィードへ流す（設計書06 §2）。
+        /// 大会モード遷移自体は <see cref="TournamentEntry"/> が行うため、フィード投入だけをここに残す。</summary>
+        public void PushTournamentOpenFeed()
+        {
+            PushFeed(new List<FeedItem>
             {
-                var kind = _calendar.TournamentStartingAt(KokoSim.Unity.Shell.GameClock.Week);
-                if (kind is { } k) EnterTournament(k);
-            }
+                new FeedItem { When = "本日", Text = GameSession.Current.Title + " が開幕した。", Kind = FeedKind.Discover, Tag = "情報" },
+            });
         }
 
         /// <summary>1週ぶんの練習を適用する。extraMult は大会モード時の効果低下（&lt;1.0）に使う。</summary>
@@ -326,91 +329,28 @@ namespace KokoSim.Unity.Home
             return items;
         }
 
-        /// <summary>結果表示を閉じる。大会が終了していれば通常モードへ戻す（要件）。</summary>
+        /// <summary>
+        /// 結果表示を閉じる。大会モード自体は敗退/優勝を検知した時点で <see cref="GameSession"/> が
+        /// 既に抜けている（issue #139）。ここでは後始末（週送り・通知フィード）だけを行う。
+        /// </summary>
         public void DismissResult()
         {
             GameSession.Current.ConsumeResult();
-            var r = GameSession.Current.Runner;
-            if (r != null && r.Finished)
+            var wrapUp = GameSession.Current.ConsumeTournamentWrapUp();
+            if (wrapUp is { } w)
             {
-                var summary = r.IsChampion ? GameSession.Current.Title + " 優勝！" : GameSession.Current.Title + " 敗退";
+                var summary = w.IsChampion ? w.Title + " 優勝！" : w.Title + " 敗退";
                 PushFeed(new List<FeedItem>
                 {
-                    new FeedItem { When = "大会", Text = summary, Kind = r.IsChampion ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
+                    new FeedItem { When = "大会", Text = summary, Kind = w.IsChampion ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
                 });
-                // 大会が消費した週ぶん共有週を進めてから通常モードへ戻す。
-                var weeks = System.Math.Max(1, GameSession.Current.TournamentDay / 7);
+                // 大会が消費した週ぶん共有週を進める（大会モードは既に抜けているのでここでは時計だけ）。
+                var weeks = System.Math.Max(1, w.TournamentDay / 7);
                 KokoSim.Unity.Shell.GameClock.Advance(weeks);
-                GameSession.Current.ExitTournament();
             }
         }
 
         public void ConsumeBanner() => GameSession.Current.ConsumeBanner();
-
-        private void EnterTournament(TournamentKind kind)
-        {
-            var manager = BuildManagerSchool();
-            var field = BuildField(manager);
-            var yearIndex = KokoSim.Unity.Shell.GameClock.YearIndex;
-            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
-            // 大会シードは母種（プレイ毎に変動）＋年・種別で導出。これで「毎回まったく同じ試合」を解消しつつ、
-            // 同じ母種なら完全再現される（決定論は維持）。年・種別を混ぜて同一ゲーム内の各大会も別展開にする。
-            var seed = KokoSim.Unity.Shell.GameSeed.Master
-                       ^ (ulong)(9000 + yearIndex * 10 + (int)kind);
-
-            // 裏試合フルシム（#43）: 全国通算成績の今大会スコープをリセットし、自県の裏試合を永続ロスターの
-            // GameEngine.Play で解決する resolver を用意する（成績を全国集計へ積む・敵AI采配を注入）。
-            var stats = NationService.TournamentStats;
-            stats.StartTournament();
-            var brains = new EnemyAiBrainFactory();
-            var homeBg = new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats,
-                modernRules: null, calendarYear: calendarYear, brains: brains);
-
-            // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
-            var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
-                TournamentTitle(kind), new PlayerMatchResolver(), homeBg);
-            // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
-            GameSession.Current.EnterTournament(kind, TournamentTitle(kind), runner, field);
-            GameSession.Current.Year = yearIndex;
-
-            // 他県（全国46県）の裏試合をバックグラウンドでフルシム（自県は上の runner が対話的に消化＝除外）。
-            // 全4000校の試合が同一エンジンで解決され、勝ち上がり校の個人成績が全国通算へ積まれる（新聞の受け皿）。
-            NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
-                yearIndex, calendarYear, NationService.PrefectureId, seed, brains);
-
-            PushFeed(new List<FeedItem>
-            {
-                new FeedItem { When = "本日", Text = TournamentTitle(kind) + " が開幕した。", Kind = FeedKind.Discover, Tag = "情報" },
-            });
-        }
-
-        private static School BuildManagerSchool()
-        {
-            var trainable = Roster.Where(p => p.Grade <= 3).ToList();
-            // 総合＝6指標のリーグ標準化総合（③）。旧 Average(AverageLevel) から統一。
-            var strength = trainable.Count == 0 ? 40.0 : KokoSim.Unity.Shell.TeamOverall.Of(trainable);
-            return new School { Id = ManagerSchoolId, Name = "桜丘", PrefectureId = FieldPrefectureId, Strength = strength };
-        }
-
-        private static List<School> BuildField(School manager)
-        {
-            // 母集団は NationService（全画面の単一ソース）。練習試合の申込先と同じ School を引く。
-            var field = new List<School> { manager };
-            foreach (var s in KokoSim.Unity.Shell.NationService.PrefectureSchools)
-            {
-                if (s.Id == manager.Id) continue;
-                field.Add(s);
-            }
-            return field;
-        }
-
-        private static string TournamentTitle(TournamentKind kind)
-        {
-            var year = SeasonBaseDisplayYear();
-            return kind == TournamentKind.Summer
-                ? year + "年 選手権神奈川大会"
-                : year + "年 秋季神奈川県大会";
-        }
 
         private static int SeasonBaseDisplayYear()
             => KokoSim.Unity.Shell.SeasonClock.SeasonBaseYear + (KokoSim.Unity.Shell.GameClock.YearIndex - 1);
@@ -419,6 +359,16 @@ namespace KokoSim.Unity.Home
         {
             foreach (var it in newItems.Take(6)) _feed.Insert(0, it);
             while (_feed.Count > 12) _feed.RemoveAt(_feed.Count - 1);
+        }
+
+        /// <summary>
+        /// 次戦相手カードに添える通算戦績の一言（issue #84）。新規パネルは作らず既存の1行に追記するだけに留める。
+        /// まだ公式戦の対戦がない校（0勝0敗）は表示しない＝全校が同じ文言で埋まるノイズを避ける。
+        /// </summary>
+        private static string OfficialRecordSuffix(SchoolRecord record)
+        {
+            var total = record.OfficialWins + record.OfficialLosses;
+            return total > 0 ? " ／ 通算" + record.OfficialWins + "勝" + record.OfficialLosses + "敗" : "";
         }
 
         /// <summary>次の試合カード＋カウントダウンを大会仕様で埋める（要件4・5）。</summary>
@@ -454,7 +404,9 @@ namespace KokoSim.Unity.Home
                 view.CountdownCells = reached ? "本日試合" : days + "日";
                 view.GameTag = r.RoundName;
                 view.AwayTeam = r.NextOpponent?.Name ?? "―";
-                view.AwaySub = r.NextOpponent != null ? "ランク " + r.NextOpponentTier : "";
+                view.AwaySub = r.NextOpponent != null
+                    ? "ランク " + r.NextOpponentTier + OfficialRecordSuffix(s.Records.For(r.NextOpponent.Id))
+                    : "";
                 view.GameDate = reached ? "本日 試合" : "試合まで " + days + " 日";
             }
         }

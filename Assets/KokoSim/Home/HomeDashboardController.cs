@@ -70,9 +70,11 @@ namespace KokoSim.Unity.Home
 
             Render();
 
-            // 他画面（練習・大会・練習試合）で週を進めて引退週に入った場合はここへ回送されてくる。
-            // その回送分もこの1箇所で受けて指名モーダルを開く（導線をホームに集約する）。
+            // 他画面（練習・大会・練習試合・選手・メンバー）で週を進めて引退週／大会開幕週に入った場合は
+            // ここへ回送されてくる（ScreenRouter が Pending/BannerPending を見て回送する, issue #134）。
+            // その回送分もこの1箇所で受けて指名モーダル／開幕バナーを出す（演出の導線をホームに集約する）。
             if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            else if (_state.BannerPending) ShowBanner();
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
             if (session.AwaitingMatchStart)
@@ -112,9 +114,15 @@ namespace KokoSim.Unity.Home
                 ManagerTacticalSense = 70,
                 OnComplete = result =>
                 {
-                    homeState.CompleteMatch(result);                 // 大会へ結果反映＋成績畳み込み＋ResultPending
-                    // 「戻る」のクリック配信中なので同期 Show は不可（イベント木が壊れて全画面が落ちる）。
-                    KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");   // 戻ると OnEnable が結果表示
+                    // issue #138: CompleteMatch は残りブラケットのフルシム＋全国背景シムへの join を含み重い。
+                    // メインスレッドで回すと結果画面クローズがしばらくフリーズするため、Task.Run で別スレッドへ
+                    // 載せ替える（engine は単一スレッド逐次のまま＝決定論は不変, Q1(a)）。処理中は結果画面
+                    // （ボックススコア）を出したままにし（Q2(a) 最小UI＝新規部品なし）、完了後にメインスレッドで
+                    // ホームへ遷移する（OnEnable が ResultPending を見て大会結果モーダルを出す）。
+                    KokoSim.Unity.Shell.BackgroundGameOp.Run(
+                        () => homeState.CompleteMatch(result),        // 大会へ結果反映＋成績畳み込み＋ResultPending
+                        // 「戻る」のクリック配信中なので同期 Show は不可（イベント木が壊れて全画面が落ちる）。
+                        () => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard"));
                 },
             };
             // この StartLiveMatch は HomeDashboard.OnEnable（＝スタメンOKの Show("HomeDashboard") の内側）から
@@ -146,6 +154,9 @@ namespace KokoSim.Unity.Home
 
         private void OnAdvance()
         {
+            // issue #138: 試合後処理をバックグラウンドで回している間は週送りを受け付けない
+            // （メインスレッドの GameClock/ロスター変更が背景処理と競合するのを防ぐ）。
+            if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;
             if (_state.InTournament)
             {
                 _state.AdvanceDay();
@@ -332,6 +343,7 @@ namespace KokoSim.Unity.Home
 
         private void ShowBanner()
         {
+            _state.PushTournamentOpenFeed();   // 「大会が開幕した」を通知フィードへ（大会遷移は TournamentEntry が実施済み）
             _state.ConsumeBanner();
             if (_banner == null) return;
             SetText("tm-banner-top", _state.BannerTop);
@@ -401,9 +413,13 @@ namespace KokoSim.Unity.Home
 
         private void OnResultOk()
         {
+            if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;   // 処理中の二度押しを無視
             if (_result != null) _result.style.display = DisplayStyle.None;
-            _state.DismissResult();
-            Render();
+            // issue #138: 大会終了時の DismissResult は消費週ぶんの週送り（GameClock.Advance）を伴い、その途中で
+            // 全国背景シムへの join（NationBackgroundSim.EnsureCompleted の t.Wait）が走ってメインスレッドを固める。
+            // ここも Task.Run で別スレッドへ載せ替え（フリーズ源B, Q1(a)）、完了後にメインスレッドで再描画する。
+            // 通常の結果（未終了＝週送りなし）は即返るので体感は変わらない。
+            KokoSim.Unity.Shell.BackgroundGameOp.Run(() => _state.DismissResult(), Render);
         }
 
         private void Render()

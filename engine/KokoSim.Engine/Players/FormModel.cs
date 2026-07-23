@@ -63,6 +63,31 @@ public sealed record FormCoefficients
     public double ObserveSigmaPerTalentEye { get; init; } = -0.0063;
     /// <summary>σの下限（0にはしない＝育成眼MAXでも僅かな誤差は残す）。</summary>
     public double ObserveSigmaMin { get; init; } = 0.02;
+
+    // --- 試合結果によるConditionValueフィードバック（§3.3「試合での結果…で上下」, issue #46） ---
+    // 🟡「調子が支配的にならない」よう1試合あたりの増減は小さめ（週次の波(sigma=0.28)より一桁小さい）。
+    /// <summary>好打: 安打1本あたりの調子加点。</summary>
+    public double MatchHitBonus { get; init; } = 0.02;
+    /// <summary>好打: 本塁打1本あたりの追加加点（安打加点に上乗せ）。</summary>
+    public double MatchHomeRunBonus { get; init; } = 0.03;
+    /// <summary>不振判定: この打数以上で無安打なら減点対象（早打ちの少ない打数を除外）。</summary>
+    public double MatchHitlessMinAtBats { get; init; } = 3;
+    /// <summary>不振: 規定打数以上で無安打だったときの減点。</summary>
+    public double MatchHitlessPenalty { get; init; } = 0.04;
+    /// <summary>好投判定: 投球イニング（アウト数）がこれ以上（15＝5回）。</summary>
+    public double MatchQualityStartMinOuts { get; init; } = 15;
+    /// <summary>好投判定: 失点がこれ以下。</summary>
+    public double MatchQualityStartMaxRuns { get; init; } = 2;
+    /// <summary>好投の加点。</summary>
+    public double MatchQualityStartBonus { get; init; } = 0.05;
+    /// <summary>被弾判定: 失点がこれ以上。</summary>
+    public double MatchRockedRunsThreshold { get; init; } = 5;
+    /// <summary>被弾の減点。</summary>
+    public double MatchRockedPenalty { get; init; } = 0.05;
+    /// <summary>大敗判定: 点差がこれ以上。</summary>
+    public double MatchBlowoutLossMargin { get; init; } = 7;
+    /// <summary>大敗時、出場者全員への追加減点（個人成績の加減点とは別枠）。</summary>
+    public double MatchBlowoutLossPenalty { get; init; } = 0.03;
 }
 
 /// <summary>

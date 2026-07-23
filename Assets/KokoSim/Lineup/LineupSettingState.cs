@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 using KokoSim.Unity.Shell;
@@ -489,7 +490,7 @@ namespace KokoSim.Unity.Lineup
                     PosEditable = !isDh && !isPitcherSlot,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
-                    HandLabel = HandLabel(p),
+                    HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
                     OverallGrade = OverallGrade(p),
                     StatText = CareerBatLine(p),
                     PlayerIndex = _idx[i],
@@ -638,14 +639,5 @@ namespace KokoSim.Unity.Lineup
         }
 
         private static string OverallGrade(DevelopingPlayer p) => Tiers.FromStrength(p.AverageLevel()).ToString();
-
-        private static string HandLabel(DevelopingPlayer p)
-        {
-            var t = p.Throws.ToString();
-            var b = p.Bats.ToString();
-            var tj = t.StartsWith("L") ? "左投" : t.StartsWith("S") ? "両投" : "右投";
-            var bj = b.StartsWith("L") ? "左打" : b.StartsWith("S") ? "両打" : "右打";
-            return tj + bj;
-        }
     }
 }

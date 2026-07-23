@@ -31,7 +31,8 @@ public sealed record GameSaveState(ulong Seed, int ConfirmedPlateAppearances)
 /// <param name="BenchIndex">
 /// 交代で「入る」選手の添字。<see cref="GameDecisionKind.PinchHit"/>/<see cref="GameDecisionKind.PinchRun"/>/
 /// <see cref="GameDecisionKind.DefensiveSub"/> は野手控え（TeamState.Bench）の添字、
-/// <see cref="GameDecisionKind.ChangePitcher"/> はブルペン（TeamState.AvailableBullpen）の添字。
+/// <see cref="GameDecisionKind.ChangePitcher"/> は投手交代候補（TeamState.AvailablePitcherCandidates＝
+/// ブルペン＋野手控え, issue #137）の添字。
 /// </param>
 /// <param name="TargetIndex">
 /// 交代で「退く」側の指定。<see cref="GameDecisionKind.PinchRun"/> は塁の添字（0=一塁,1=二塁,2=三塁）、
@@ -54,7 +55,7 @@ public enum GameDecisionKind
     PitchDefenseOverride,
     /// <summary>代走（設計書09 §6）。OffenseIsAway=攻撃側が先攻か。TargetIndex=塁の添字。</summary>
     PinchRun,
-    /// <summary>投手交代（指名継投, 設計書09 §6）。OffenseIsAway=**守備側**が先攻か。BenchIndex=ブルペン添字。</summary>
+    /// <summary>投手交代（指名継投, 設計書09 §6）。OffenseIsAway=**守備側**が先攻か。BenchIndex=投手交代候補添字（issue #137）。</summary>
     ChangePitcher,
     /// <summary>守備交代（設計書09 §6）。OffenseIsAway=**守備側**が先攻か。TargetIndex=打順スロット。</summary>
     DefensiveSub,

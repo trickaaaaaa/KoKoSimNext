@@ -34,6 +34,7 @@ public sealed class StatBook
     {
         var batting = managerIsAway ? r.AwayBatting : r.HomeBatting;
         var pitching = managerIsAway ? r.AwayPitching : r.HomePitching;
+        var fielding = managerIsAway ? r.AwayFielding : r.HomeFielding;
 
         foreach (var line in batting)
             if (line.SourceId is int id) For(id).Batting.Add(line);
@@ -45,5 +46,8 @@ public sealed class StatBook
             if (line.SourceId is not int id) continue;
             For(id).Pitching.Add(line, started: i == 0, win: winPid == id, loss: losePid == id);
         }
+
+        foreach (var line in fielding)
+            if (line.SourceId is int id) For(id).Fielding.Add(line);
     }
 }

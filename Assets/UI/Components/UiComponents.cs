@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Engine.Nation;  // PlayerStrength（カテゴリ別ランクチップの入力）
 using KokoSim.Unity.Shell;   // RankPalette（ランク色のコード側単一ソース）
 
 namespace KokoSim.Unity.Components
@@ -83,6 +84,32 @@ namespace KokoSim.Unity.Components
                 case RankChipSize.XLarge: chip.AddToClassList("grade--xl"); break;
             }
             return chip;
+        }
+
+        // ===== CategoryRankChips（選手のカテゴリ別ランク: 打撃力/走力/守備力/投手力, Issue #30/#140） =====
+
+        /// <summary>
+        /// 選手1名のカテゴリ別ランクチップを4つ並べる（PlayerStrength＝打撃力/走力/守備力/投手力）。
+        /// 各画面がチップ＋ラベルを直書きしない（UI原則⑤）。components.uss 未読み込みの画面
+        /// （選手一覧など）にも出せるよう <see cref="RankChipLegacy"/> を使う。
+        /// </summary>
+        public static VisualElement CategoryRankChips(PlayerStrength s)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("cat-rank-chips");
+            AddCategoryChip(box, "打撃力", s.BattingTier);
+            AddCategoryChip(box, "走力", s.MobilityTier);
+            AddCategoryChip(box, "守備力", s.DefenseTier);
+            AddCategoryChip(box, "投手力", s.PitchingTier);
+            return box;
+        }
+
+        private static void AddCategoryChip(VisualElement box, string label, Tier tier)
+        {
+            box.Add(RankChipLegacy(tier.ToString()));
+            var lbl = new Label(label);
+            lbl.AddToClassList("cat-rank-chips__label");
+            box.Add(lbl);
         }
 
         // ===== SchoolName（設計書16 §4-3。校名は常に太明朝） =====

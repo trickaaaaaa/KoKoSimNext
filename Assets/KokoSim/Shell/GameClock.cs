@@ -59,15 +59,25 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
-        /// 週に入った直後のシーズン遷移（設計書03 §2 / 09 §8）。夏の引退週の翌週なら
-        /// 3年を引退扱いにして新チームを発足させ、主将指名の導線（NewTeamService）を開く。
+        /// 週に入った直後のシーズン遷移（設計書03 §2 / 05 §1.1 / 09 §8）。大会開幕週と新チーム発足週
+        /// （夏の引退）を単一フック <see cref="SeasonTransitions.OnWeekEntered"/> でまとめて拾い、
+        /// どのタブから週を進めても同じ地点で処理する（issue #134: 大会入りをホーム限定にしない）。
+        /// UI演出（開幕バナー・試合ダイアログ）はここでは行わず、Home 側が <see cref="GameSession"/> の
+        /// フラグを見て出す（遷移とUI提示を分離）。非Homeタブからの遷移は BannerPending を見て
+        /// <see cref="ScreenRouter"/> がホームへ回送する。
         /// </summary>
         private static void EnterWeek()
         {
-            var t = RosterLifecycle.OnWeekEntered(RosterService.Roster, Week, Calendar);
-            if (t != null)
+            var t = SeasonTransitions.OnWeekEntered(RosterService.Roster, Week, Calendar);
+
+            // 大会開幕週なら大会モードへ入る（要件1）。二重入場を避けるため通常モードのときだけ。
+            if (t.TournamentStarting is { } kind && GameSession.Current.Mode == GameMode.Normal)
+                TournamentEntry.Enter(kind);
+
+            // 新チーム発足（夏の3年引退の翌週）: 主将指名の導線（NewTeamService）を開き、AI校も代替わりさせる。
+            if (t.NewTeam != null)
             {
-                NewTeamService.Open(t);
+                NewTeamService.Open(t.NewTeam);
                 // AI校も夏後に代替わり: 進行中の全国裏試合を完了させてから3年生を引退させる（#80・秋は下級生のみ）。
                 NationBackgroundSim.EnsureCompleted();
                 NationService.RetireAiGraduates();

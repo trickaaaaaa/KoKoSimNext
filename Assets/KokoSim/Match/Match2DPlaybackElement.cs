@@ -48,6 +48,18 @@ namespace KokoSim.Unity.Match
             MarkDirtyRepaint();
         }
 
+        // ── タイムライン駆動カメラワーク（design-06/design-12・Issue #119） ──
+        // Viewport(t) は CameraPlanBuilder/CameraEvaluator（純関数・engine 側）が生成/評価する。
+        // このクラスは「今アクティブな視野があれば、その中心・ズームで Project する」だけを担う。
+        // OFF、または視野がほぼ全景（ZoomMult≈1）のときは既存の固定 Project（fillColumn 込み）を
+        // そのまま使う＝カメラワークが無効な間・プレー間の見た目は今までと1px も変わらない。
+        private const double WideZoomEpsilon = 1.02;
+        private IReadOnlyList<CameraKeyframe> _cameraPlan;
+        private CameraViewport? _activeViewport;
+
+        /// <summary>観戦設定のトグル（既定オフ＝現行の固定全景）。呼び出し側（コントローラ）が毎フレーム設定してよい。</summary>
+        public bool CameraWorkEnabled { get; set; }
+
         // 固定ジオメトリ。塁座標・マウンドは共通ソース FieldDiagramGeometry を参照（地理は共通）。
         private static Vector2 V2((double X, double Y) t) => new((float)t.X, (float)t.Y);
         private static readonly Vector2 Home = V2(FieldDiagramGeometry.Home);
@@ -196,6 +208,7 @@ namespace KokoSim.Unity.Match
         {
             _play = play;
             _trail.Clear();
+            _cameraPlan = play != null ? CameraPlanBuilder.Build(play) : null;
             SetTime(0);
         }
 
@@ -208,6 +221,8 @@ namespace KokoSim.Unity.Match
         {
             _play = null;
             _trail.Clear();
+            _cameraPlan = null;
+            _activeViewport = null;
             _fielders.Clear();
             _runners.Clear();
             _ballState = null;
@@ -232,6 +247,16 @@ namespace KokoSim.Unity.Match
             _fielders.Clear();
             _runners.Clear();
             _ballState = null;
+
+            if (CameraWorkEnabled && _cameraPlan != null)
+            {
+                var vp = CameraEvaluator.ViewportAt(_cameraPlan, t);
+                _activeViewport = vp.ZoomMult > WideZoomEpsilon ? vp : null;
+            }
+            else
+            {
+                _activeViewport = null;
+            }
 
             if (_play != null)
             {
@@ -304,10 +329,21 @@ namespace KokoSim.Unity.Match
         }
 
         // ── 射影（mock: px(p)=[CX+p.x*S, OY-p.y*S] を要素サイズへ uniform 拡縮・レターボックス） ──
+        // デザインキャンバス全体が収まる基準スケール（camera work のズーム倍率=1に対応、fillColumn 非依存）。
+        private float BaselineScale
+        {
+            get
+            {
+                var r = contentRect;
+                return Mathf.Min(r.width / DesignW, r.height / DesignH);
+            }
+        }
+
         private float Scale
         {
             get
             {
+                if (_activeViewport.HasValue) return BaselineScale * (float)_activeViewport.Value.ZoomMult;
                 var r = contentRect;
                 if (_fillColumn)
                 {
@@ -315,14 +351,25 @@ namespace KokoSim.Unity.Match
                     var spanPx = _centerM * S;
                     return spanPx > 0f ? r.height * (FillHomeFrac - FillTopFrac) / spanPx : 1f;
                 }
-                return Mathf.Min(r.width / DesignW, r.height / DesignH);
+                return BaselineScale;
             }
         }
+
+        // 線の太さ・トークン半径（野手/走者/ボール）用のズーム非依存スケール（Issue #119・design-06/12）。
+        // camera work 中でも「座標だけがズームで動き、装飾サイズは画面上で一定」を保つために Scale とは別に持つ。
+        private float DecoScale => _activeViewport.HasValue ? BaselineScale : Scale;
 
         private Vector2 Project(Vector2 m)
         {
             var r = contentRect;
             var k = Scale;
+            if (_activeViewport.HasValue)
+            {
+                var vp = _activeViewport.Value;
+                return new Vector2(
+                    r.width * 0.5f + (m.x - (float)vp.Cx) * S * k,
+                    r.height * 0.5f - (m.y - (float)vp.Cy) * S * k);
+            }
             float offX, offY;
             if (_fillColumn)
             {
@@ -352,12 +399,13 @@ namespace KokoSim.Unity.Match
             if (r.width < 4f || r.height < 4f) return;
             var p = mgc.painter2D;
             var k = Scale;
+            var decoK = DecoScale; // 線の太さ・トークン半径はズーム非依存（画面上で一定に保つ, Issue #119）
 
-            DrawField(p, r, k);
-            DrawTrail(p, k);
-            DrawFielders(p, k);
-            DrawRunners(p, k);
-            DrawBall(p, k);
+            DrawField(p, r, k, decoK);
+            DrawTrail(p, decoK);
+            DrawFielders(p, decoK);
+            DrawRunners(p, decoK);
+            DrawBall(p, decoK);
         }
 
         // drawField（昼光版）。「暗い額縁の中の明るい昼の球場」を作るため層を分けて塗る：
@@ -367,7 +415,7 @@ namespace KokoSim.Unity.Match
         // ストライプは本塁→フェンスの全扇で塗り、後段のダート扇・トラックが内外を上塗りする
         // ＝柄は自然に「外野芝のみ」に残る（ClaudeDesign 見本 2026-07-20 の視覚言語）。
         // 座標変換 Project は共通（fillColumn 対応）。
-        private void DrawField(Painter2D p, Rect r, float k)
+        private void DrawField(Painter2D p, Rect r, float k, float decoK)
         {
             const float q = Mathf.PI / 4f; // 45°（両翼＝ファウル線の角度）
 
@@ -466,7 +514,7 @@ namespace KokoSim.Unity.Match
 
             // ⑧ フェンス弧（θ=-45°..45°・r=両翼+(中堅-両翼)cos2θ・明芝に映える濃緑）。将来 stadiums.yaml 駆動へ。
             p.strokeColor = _fence;
-            p.lineWidth = 4f * k;
+            p.lineWidth = 4f * decoK;
             p.BeginPath();
             for (var i = 0; i <= 60; i++)
             {
@@ -478,7 +526,7 @@ namespace KokoSim.Unity.Match
 
             // ⑨ ファウルライン（本塁→[±67.2,67.2]）。昼の石灰ライン＝不透明度100%でくっきり。
             p.strokeColor = _chalk;
-            p.lineWidth = 2f * k;
+            p.lineWidth = 2f * decoK;
             StrokeLine(p, Project(Home), Project(new Vector2(67.2f, 67.2f)));
             StrokeLine(p, Project(Home), Project(new Vector2(-67.2f, 67.2f)));
 
@@ -486,7 +534,7 @@ namespace KokoSim.Unity.Match
             //    実寸[m]で引く（ボックス1.22×1.83等）。線は細め＝ファウルラインより従の階層。
             //    ネクストバッターズサークルは不採用（2026-07-20 ユーザー判断）。
             p.strokeColor = _chalk;
-            p.lineWidth = 1.2f * k;
+            p.lineWidth = 1.2f * decoK;
             StrokeRectM(p, 0.37f, -0.91f, 1.59f, 0.92f);    // 右打席
             StrokeRectM(p, -1.59f, -0.91f, -0.37f, 0.92f);  // 左打席
             StrokeRectM(p, -1.2f, -3.1f, 1.2f, -0.7f);      // キャッチャーボックス（簡略形）
@@ -617,7 +665,7 @@ namespace KokoSim.Unity.Match
         // ── ラベル配置（トークン中心へ） ──
         private void UpdateLabels()
         {
-            var k = Scale;
+            var k = DecoScale; // ラベル箱・文字もトークン半径と同じくズーム非依存（Issue #119）
             for (var i = 0; i < _fielderLabels.Count; i++)
             {
                 var lbl = _fielderLabels[i];

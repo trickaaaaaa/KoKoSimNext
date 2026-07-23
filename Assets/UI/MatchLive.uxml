@@ -78,9 +78,13 @@
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
                     <ui:VisualElement class="md-group">
+                        <ui:Button name="spd-05" class="chip-btn" text="×0.5" />
                         <ui:Button name="spd-1" class="chip-btn chip-btn--on" text="×1" />
                         <ui:Button name="spd-2" class="chip-btn" text="×2" />
                         <ui:Button name="spd-4" class="chip-btn" text="×4" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="md-group">
+                        <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 

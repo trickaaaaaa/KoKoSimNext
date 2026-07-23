@@ -60,6 +60,8 @@ public sealed class TeamState
     public int PitcherChanges { get; private set; }
     /// <summary>本塁クロスプレーで刺された自軍走者の数（バックホーム憤死, 設計書12 §3 F2。統計参考値）。</summary>
     public int HomePlayOuts { get; set; }
+    /// <summary>単打の一塁→三塁レースで三塁憤死した自軍走者の数（Issue #89, 設計書12 §3.5。統計参考値）。</summary>
+    public int ThirdPlayOuts { get; set; }
 
     // ===== design-14 第1段（P1）新プレー発生数（統計参考値。試合結果には影響しない） =====
     public int FieldersChoiceCount { get; set; }
@@ -77,8 +79,20 @@ public sealed class TeamState
     /// <summary>攻撃したイニングごとの得点（表/裏の各ハーフで1要素追加）。</summary>
     public IReadOnlyList<int> InningRuns => _inningRuns;
     public void AddHit() => Hits++;
-    public void AddError() => Errors++;
     public void RecordInningRuns(int runs) => _inningRuns.Add(runs);
+
+    /// <summary>
+    /// 失策をチーム計＋当該守備選手へ帰属させる（issue #91）。fielder が解決できない場合（想定外）でも
+    /// チーム計は必ず加算する＝<see cref="Errors"/> と個人失策の合計が食い違わないようにする。
+    /// </summary>
+    public void RecordFieldingError(Player? fielder, FieldPosition role)
+    {
+        Errors++;
+        if (fielder is null) return;
+        if (!_field.TryGetValue(fielder, out var a)) { a = new FieldAccum(); _field[fielder] = a; }
+        a.Position = role;
+        a.Errors++;
+    }
 
     // ===== 采配の集計（設計書09。記録のみ＝試合結果には影響しない。無指示なら常に0） =====
     public int StealAttempts { get; private set; }
@@ -86,15 +100,25 @@ public sealed class TeamState
     public int SacrificeBunts { get; private set; }
     public int SacrificeBuntSuccesses { get; private set; }
     public int Squeezes { get; private set; }
-    public void RecordSteal(bool success) { StealAttempts++; if (success) StealSuccesses++; }
+
+    /// <summary>盗塁企図を走者個人＋チーム計へ記録する（issue #91）。</summary>
+    public void RecordSteal(Player runner, bool success)
+    {
+        StealAttempts++;
+        if (success) StealSuccesses++;
+        if (!_bat.TryGetValue(runner, out var a)) { a = new BatAccum(); _bat[runner] = a; }
+        if (success) a.SB++; else a.CS++;
+    }
     public void RecordSacrificeBunt(bool success) { SacrificeBunts++; if (success) SacrificeBuntSuccesses++; }
     public void RecordSqueeze() => Squeezes++;
 
     // ===== 個人成績（ボックススコア） =====
-    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP; }
+    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS; }
     private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches, HB; }
+    private sealed class FieldAccum { public FieldPosition Position; public int Errors; }
     private readonly Dictionary<Player, BatAccum> _bat = new();
     private readonly Dictionary<Player, PitAccum> _pit = new();
+    private readonly Dictionary<Player, FieldAccum> _field = new();
 
     /// <summary>打者の1打席を記録（rbi ≈ そのプレーで入った得点）。</summary>
     public void RecordBatting(Player batter, PlateAppearanceResult r, int rbi)
@@ -157,7 +181,16 @@ public sealed class TeamState
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
-                a.HBP);
+                a.HBP, a.SB, a.CS);
+    }
+
+    /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>
+    public IReadOnlyList<FieldingLine> BuildFieldingLines()
+    {
+        var lines = new List<FieldingLine>(_field.Count);
+        foreach (var kv in _field)
+            lines.Add(new FieldingLine(kv.Key.SourceId, kv.Value.Position, kv.Key.Name, kv.Value.Errors));
+        return lines;
     }
 
     /// <summary>登板順の投手成績（先発→登板したブルペン）。</summary>
@@ -169,7 +202,7 @@ public sealed class TeamState
         {
             if (p == null || seen.Contains(p) || !_pit.TryGetValue(p, out var a)) return;
             seen.Add(p);
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB));
+            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber));
         }
         Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
         foreach (var p in _team.Bullpen) Add(p);
@@ -341,21 +374,32 @@ public sealed class TeamState
     public void TickOffenseCalm() { if (OffenseCalmPa > 0) OffenseCalmPa--; }
     public void TickDefenseCalm() { if (DefenseCalmPa > 0) DefenseCalmPa--; }
 
-    /// <summary>投手の「動揺」（連続出塁で発生, §3）。伝令・イニング跨ぎ・継投で解除。</summary>
+    /// <summary>投手の「動揺」（連続出塁で発生, §3）。伝令・イニング跨ぎ・継投、またはアウト累積の自然回復で解除。</summary>
     public bool PitcherRattled { get; private set; }
     private int _consecutiveBaserunners;
+    private int _outsSinceRattled;
 
-    public void NotePitchingResult(PlateAppearanceResult r, int rattledThreshold)
+    /// <summary>
+    /// rattledThreshold: 精神力込みの発生閾値（<see cref="Tactics.TacticsCoefficients.RattledThresholdFor"/>）。
+    /// outsThisPa/recoveryOuts: 動揺中に無失点でアウトを積んだ数がrecoveryOutsに達すると自然回復（issue #73）。
+    /// </summary>
+    public void NotePitchingResult(PlateAppearanceResult r, int rattledThreshold, int outsThisPa, int recoveryOuts)
     {
         if (r.IsHit() || r is PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch
             or PlateAppearanceResult.ReachedOnError)
         {
             _consecutiveBaserunners++;
             if (_consecutiveBaserunners >= rattledThreshold) PitcherRattled = true;
+            _outsSinceRattled = 0;
         }
         else
         {
             _consecutiveBaserunners = 0;
+            if (PitcherRattled)
+            {
+                _outsSinceRattled += outsThisPa;
+                if (_outsSinceRattled >= recoveryOuts) ClearRattled();
+            }
         }
     }
 
@@ -363,6 +407,7 @@ public sealed class TeamState
     {
         PitcherRattled = false;
         _consecutiveBaserunners = 0;
+        _outsSinceRattled = 0;
     }
 
     /// <summary>
@@ -454,7 +499,7 @@ public sealed class TeamState
     /// </summary>
     public bool ChangePitcherTo(Player sub)
     {
-        if (!_bullpen.Remove(sub)) return false;
+        if (!_bullpen.Remove(sub) && !_bench.Remove(sub)) return false;
         // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
         _retired.Add(CurrentPitcher);
         CurrentPitcher = sub;
@@ -469,6 +514,12 @@ public sealed class TeamState
 
     /// <summary>まだ登板していない控え投手（登板順＝Team.Bullpen の並び）。交代UIの指名候補。</summary>
     public IReadOnlyList<Player> AvailableBullpen => _bullpen;
+
+    /// <summary>
+    /// 投手交代で指名できる全候補（ブルペン＋野手控え。issue #137: 野手も投手として登板できる）。
+    /// 添字は <see cref="ChangePitcherTo"/> 呼び出しの Player 引数解決に使う（SubstitutionCommands/GameReplay 共通）。
+    /// </summary>
+    public IReadOnlyList<Player> AvailablePitcherCandidates => _bullpen.Concat(_bench).ToList();
 
     // ===== 選手交代（設計書09 §6）。高校野球ルール＝リエントリー禁止（退いた選手は再出場できない）。 =====
     /// <summary>現在の打順9人（交代反映済み）。UI・テスト・采配判断用。</summary>

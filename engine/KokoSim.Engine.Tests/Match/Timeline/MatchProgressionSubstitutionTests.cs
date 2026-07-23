@@ -188,6 +188,26 @@ public sealed class MatchProgressionSubstitutionTests
     }
 
     [Fact]
+    public void ChangePitcher_CanDesignateAFielderFromTheBench_NotOnlyTheBullpen()
+    {
+        // issue #137: 投手交代の候補はブルペン（3人）だけでなくベンチ（野手含む）にも及ぶ。
+        var prog = NewProg(13UL);
+        var opt = AdvanceUntilDefense(prog, teamIsAway: false);
+        Assert.NotNull(opt);
+
+        Assert.Equal(opt!.Bullpen.Count + opt.Bench.Count, opt.PitcherCandidates.Count);
+        var fielder = opt.Bench[0];
+        Assert.Contains(opt.PitcherCandidates, p => p.Name == fielder.Name);
+
+        Assert.True(prog.ChangePitcher(teamIsAway: false, fielder));
+
+        var after = prog.SubstitutionOptions(teamIsAway: false);
+        Assert.Equal(fielder.Name, after.CurrentPitcher.Name);
+        Assert.DoesNotContain(after.Bench, p => p.Name == fielder.Name);   // ベンチから消費
+        Assert.Equal(opt.Bullpen.Count, after.Bullpen.Count);              // ブルペンは手つかず
+    }
+
+    [Fact]
     public void DefensiveSub_SwapsAFielder_AndInheritsThePosition()
     {
         var prog = NewProg(17UL);
@@ -335,6 +355,35 @@ public sealed class MatchProgressionSubstitutionTests
         var straight = GameResultDigest.Sha256Of(prog.FinishRemaining());
 
         // 保存物（JSON往復でシリアライズ可能性も実証）→ 復元 → 続行。
+        var json = JsonSerializer.Serialize(save);
+        var back = JsonSerializer.Deserialize<GameSaveState>(json)!;
+        var resumed = GameReplay.Restore(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, back);
+        while (resumed.Steps.MoveNext()) { /* 続行 */ }
+        var restored = GameResultDigest.Sha256Of(GameEngine.BuildResult(resumed.Progress));
+
+        Assert.Equal(straight, restored);
+    }
+
+    [Theory]
+    [InlineData(3UL)]
+    [InlineData(31UL)]
+    public void SaveLoadRoundTrip_WithBenchPitcherChange_ProducesTheSameResult(ulong seed)
+    {
+        // issue #137: 投手交代候補（ブルペン＋ベンチ）の添字がセーブへそのまま乗るため、
+        // ベンチ側（添字がブルペンより後ろ）を指名したケースも Save/Load 往復で一致すること。
+        var prog = NewProg(seed);
+        var applied = false;
+        while (!applied && prog.Advance())
+        {
+            var def = prog.SubstitutionOptions(teamIsAway: false);
+            if (def.CanChangePitcher && def.Bench.Count > 0)
+                applied = prog.ChangePitcher(false, def.Bench[0]);
+        }
+        Assert.True(applied, "シナリオがベンチからの投手指名を実際に行使していない（テストの前提が崩れている）");
+
+        var save = prog.Save();
+        var straight = GameResultDigest.Sha256Of(prog.FinishRemaining());
+
         var json = JsonSerializer.Serialize(save);
         var back = JsonSerializer.Deserialize<GameSaveState>(json)!;
         var resumed = GameReplay.Restore(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, back);

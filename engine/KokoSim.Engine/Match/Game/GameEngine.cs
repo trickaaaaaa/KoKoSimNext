@@ -14,6 +14,8 @@ public sealed record GameResult
     public required int AwayRuns { get; init; }
     public required int HomeRuns { get; init; }
     public required int InningsPlayed { get; init; }
+    /// <summary>コールドゲーム（マーシールール）成立で打ち切られたか（設計書05 §1.3, OPEN-QUESTIONS Q18）。</summary>
+    public bool MercyEnded { get; init; }
     public required int TotalPitches { get; init; }
     public required int PitcherChanges { get; init; }
     /// <summary>選手交代の回数（代打・代走・守備固め・DH解除。設計書09 §6, 無指示/控え空なら0）。</summary>
@@ -21,6 +23,8 @@ public sealed record GameResult
     public int HomeSubstitutions { get; init; }
     /// <summary>本塁クロスプレーで刺された走者の総数（両軍計。バックホーム憤死, 設計書12 §3 F2。統計参考値）。</summary>
     public int HomePlayOuts { get; init; }
+    /// <summary>単打の一塁→三塁レースで三塁憤死した走者の総数（両軍計。Issue #89, 設計書12 §3.5。統計参考値）。</summary>
+    public int ThirdPlayOuts { get; init; }
 
     // ===== design-14 第1段（P1）新プレー発生数（両軍計。統計参考値） =====
     public int FieldersChoiceCount { get; init; }
@@ -48,6 +52,9 @@ public sealed record GameResult
     /// <summary>個人投手成績（登板順）。</summary>
     public IReadOnlyList<PitchingLine> AwayPitching { get; init; } = Array.Empty<PitchingLine>();
     public IReadOnlyList<PitchingLine> HomePitching { get; init; } = Array.Empty<PitchingLine>();
+    /// <summary>個人守備成績（失策があった選手のみ。issue #91）。合計は AwayErrors/HomeErrors と一致する。</summary>
+    public IReadOnlyList<FieldingLine> AwayFielding { get; init; } = Array.Empty<FieldingLine>();
+    public IReadOnlyList<FieldingLine> HomeFielding { get; init; } = Array.Empty<FieldingLine>();
 
     /// <summary>采配の集計（盗塁・犠打・スクイズ。無指示＝全ゼロ）。設計書09/11。</summary>
     public TacticsTally AwayTactics { get; init; } = new();
@@ -143,7 +150,11 @@ public static class GameEngine
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs != p.Away.Runs) break;
             // 延長上限（引き分け許容）。
             if (p.Inning >= ctx.MaxInnings) break;
-            if (ctx.MercyRuleEnabled && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs)) break;
+            if (ctx.MercyRuleEnabled && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+            {
+                p.MercyEnded = true;
+                break;
+            }
         }
     }
 
@@ -159,11 +170,13 @@ public static class GameEngine
             AwayRuns = away.Runs,
             HomeRuns = home.Runs,
             InningsPlayed = p.Inning,
+            MercyEnded = p.MercyEnded,
             TotalPitches = p.TotalPitches,
             PitcherChanges = away.PitcherChanges + home.PitcherChanges,
             AwaySubstitutions = away.Substitutions,
             HomeSubstitutions = home.Substitutions,
             HomePlayOuts = away.HomePlayOuts + home.HomePlayOuts,
+            ThirdPlayOuts = away.ThirdPlayOuts + home.ThirdPlayOuts,
             FieldersChoiceCount = away.FieldersChoiceCount + home.FieldersChoiceCount,
             DroppedThirdStrikeCount = away.DroppedThirdStrikeCount + home.DroppedThirdStrikeCount,
             ErrorExtraAdvanceCount = away.ErrorExtraAdvanceCount + home.ErrorExtraAdvanceCount,
@@ -182,6 +195,8 @@ public static class GameEngine
             HomeBatting = home.BuildBattingLines(),
             AwayPitching = away.BuildPitchingLines(),
             HomePitching = home.BuildPitchingLines(),
+            AwayFielding = away.BuildFieldingLines(),
+            HomeFielding = home.BuildFieldingLines(),
             AwayTactics = TallyOf(away),
             HomeTactics = TallyOf(home),
             Injuries = p.Injuries,
@@ -469,10 +484,11 @@ public static class GameEngine
                     };
                 Tactics.PitchDirective? pitchOverride = null;
                 PitcherGear? gearOverride = null;
-                // 盗塁を試みるか＋始動種別（設計書15 Phase D-2d）。旧来は打席頭で一度きりだったが、
-                // 毎球の独立試行へ置き換えたため任意の球の前で発動しうる（解決式は StealResolver 等の
-                // 従来のまま、下の盗塁ブロックで解決する）。
+                // 盗塁を試みるか＋始動種別＋狙う塁（設計書15 Phase D-2d／issue #67で三盗・本盗へ拡張）。
+                // 旧来は打席頭で一度きりだったが、毎球の独立試行へ置き換えたため任意の球の前で発動しうる
+                // （解決式は StealResolver 等の従来のまま、下の盗塁ブロックで解決する）。
                 StartType? stealAttempt = null;
+                var stealTarget = StealTarget.Second;
                 if (offense.Tactics is IPitchTacticsBrain offensePitchBrain)
                 {
                     var pSituation = new PitchTacticsSituation(
@@ -484,6 +500,7 @@ public static class GameEngine
                     // バント方針という非null既定が加わったことで「上書きは値がある時だけ」に変更が必要になった。
                     if (d?.Batting is { } brainBatting) battingOverride = brainBatting;
                     stealAttempt = d?.StealAttempt;
+                    stealTarget = d?.StealTarget ?? StealTarget.Second;
                 }
                 if (defense.Tactics is IPitchTacticsBrain defensePitchBrain)
                 {
@@ -500,7 +517,8 @@ public static class GameEngine
                 // PickoffResolver→StealReadModel.RollPitchout→StealResolver→重盗ロールの呼び出し順は
                 // 旧来の打席頭一括判定と不変。3アウト目ならこの打席は未決着のまま次イニングへ
                 // （スクイズの挟殺と同じ扱い＝設計書15 Phase D-2c の squeezeAbandoned を踏襲）。
-                if (stealAttempt is { } stealStart && bases.First is not null && bases.Second is null)
+                if (stealAttempt is { } stealStart && stealTarget == StealTarget.Second
+                    && bases.First is not null && bases.Second is null)
                 {
                     // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ
                     // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ。
@@ -520,7 +538,7 @@ public static class GameEngine
                             bases.First, defense.Catcher, currentPitcher, stealStart, ctx.Baserunning, rng);
                         var safe = StealResolver.Resolve(
                             bases.First, defense.Catcher, ctx.Baserunning, rng, pitchout, stealStart) == StealResult.Safe;
-                        offense.RecordSteal(safe);
+                        offense.RecordSteal(bases.First, safe);
                         // 全力疾走・スライディング（設計書03 §3.5）: 盗塁企図ごとに走者が受傷しうる。
                         if (bases.First is { } slider)
                         {
@@ -551,6 +569,78 @@ public static class GameEngine
                             bases.Third = null;
                         }
 
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                }
+                // 三盗（issue #67）: 二塁のみ在塁でのみ判断側が返す（塁状況が排他のため一・三塁の重盗とは無競合）。
+                else if (stealAttempt is { } thirdStart && stealTarget == StealTarget.Third
+                    && bases.Second is not null && bases.First is null && bases.Third is null)
+                {
+                    if (PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng))
+                    {
+                        offense.PickoffCount++;
+                        outs++;
+                        bases.Second = null;
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                    else
+                    {
+                        var pitchout = StealReadModel.RollPitchout(
+                            bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
+                        var safe = StealResolver.Resolve(
+                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart,
+                            StealTarget.Third) == StealResult.Safe;
+                        offense.RecordSteal(bases.Second, safe);
+                        if (bases.Second is { } thirdSlider)
+                        {
+                            Hurt(MatchInjuryModel.Roll(
+                                InjuryScene.Sliding, ctx.MatchInjury.SlidingProb, thirdSlider, offense.Name,
+                                inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog,
+                                sub: session.PitchCount));
+                        }
+                        if (safe) { bases.Third = bases.Second; } else { outs++; }
+                        bases.Second = null;
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                }
+                // 本盗（issue #67, design-14）: 三塁のみ在塁でのみ判断側が返す。同じ球でスクイズが確定していれば
+                // 三塁走者は既にそちらへ使われているため、本盗は試みない（単純上書き, Q12-3と同型）。
+                else if (stealAttempt is { } homeStart && stealTarget == StealTarget.Home
+                    && bases.Third is not null && bases.Second is null && bases.First is null
+                    && battingOverride != PitchBattingOverride.Squeeze)
+                {
+                    if (PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng))
+                    {
+                        offense.PickoffCount++;
+                        outs++;
+                        bases.Third = null;
+                        if (outs >= 3) { stealEndedHalf = true; break; }
+                    }
+                    else
+                    {
+                        var pitchout = StealReadModel.RollPitchout(
+                            bases.Third, defense.Catcher, currentPitcher, homeStart, ctx.Baserunning, rng);
+                        var safe = StealResolver.Resolve(
+                            bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart,
+                            StealTarget.Home) == StealResult.Safe;
+                        offense.RecordSteal(bases.Third, safe);
+                        if (bases.Third is { } homeSlider)
+                        {
+                            Hurt(MatchInjuryModel.Roll(
+                                InjuryScene.Sliding, ctx.MatchInjury.SlidingProb, homeSlider, offense.Name,
+                                inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog,
+                                sub: session.PitchCount));
+                        }
+                        if (safe)
+                        {
+                            offense.Runs += 1;
+                            runsThisHalf += 1;
+                        }
+                        else
+                        {
+                            outs++;
+                        }
+                        bases.Third = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }
@@ -737,9 +827,11 @@ public static class GameEngine
             var leadRunnerBefore = bases.Third ?? bases.Second ?? bases.First;
 
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
-            var (runs, extraOuts, homeOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
+            var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, ctx.Baserunning, rng, collectMoves: ctx.CaptureTimelines,
                 homePlay, r1Start);
+            var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
+            var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
             runsThisHalf += runs;
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
@@ -877,6 +969,7 @@ public static class GameEngine
             var outsThisPa = (batterOut ? 1 : 0) + extraOuts + extraOutsFromSign;
 
             offense.HomePlayOuts += homeOuts; // 本塁クロスプレー憤死（F2外野＋G1内野ゴロ, 統計参考値）
+            offense.ThirdPlayOuts += thirdOuts; // 単打の一塁→三塁レース憤死（Issue #89, 統計参考値）
             if (batterSafeOnFc) offense.FieldersChoiceCount++; // 野選（FC, design-14 P1-1。統計参考値）
 
             // 打席解決後の塁状況（塁ダイヤを結果へ更新, #4）。outs はこの後 outsThisPa を加算する前の値。
@@ -896,10 +989,20 @@ public static class GameEngine
                 timeline = timeline with { Captions = caps };
             }
 
+            // 失策の個人帰属（issue #91）: FielderRole（守備位置）から当該選手を引く。守備位置は必ず埋まっている
+            // ため通常は解決できるが、万一 null でもチーム計（AddError相当）は FinishPlateAppearance 側で必ず加算する。
+            Player? errorFielder = null;
+            Match.Field.FieldPosition errorRole = default;
+            if (res.Result == PlateAppearanceResult.ReachedOnError && res.Play is { FielderRole: { } eRole })
+            {
+                errorRole = eRole;
+                errorFielder = defense.PlayerAtPosition(eRole);
+            }
+
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
-                batterOrder, res.PitchLog);
+                batterOrder, res.PitchLog, errorFielder, errorRole);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -933,13 +1036,16 @@ public static class GameEngine
         bool baseFirstBefore = false, bool baseSecondBefore = false, bool baseThirdBefore = false,
         bool baseFirstAfter = false, bool baseSecondAfter = false, bool baseThirdAfter = false,
         int batterOrder = 0,
-        IReadOnlyList<AtBat.PitchRecord>? pitchLog = null)
+        IReadOnlyList<AtBat.PitchRecord>? pitchLog = null,
+        Player? errorFielder = null,
+        Match.Field.FieldPosition errorRole = default)
     {
         if (result.IsHit()) offense.AddHit();
-        if (result == PlateAppearanceResult.ReachedOnError) defense.AddError();
+        if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
         offense.RecordBatting(batter, result, runs);
         defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches);
-        defense.NotePitchingResult(result, ctx.Tactics.RattledConsecutiveBaserunners);
+        defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
+            outsThisPa, ctx.Tactics.RattledRecoveryOuts);
         offense.TickOffenseCalm();
         defense.TickDefenseCalm();
         log.Add(new PlayLogEntry(inning, isTop, batter.Name, result, runs, timeline,
@@ -1002,7 +1108,7 @@ public static class GameEngine
 
         var catcher = defense.Catcher;
         var safe = StealResolver.Resolve(runner, catcher, ctx.Baserunning, rng) == StealResult.Safe;
-        offense.RecordSteal(safe);
+        offense.RecordSteal(runner, safe);
         if (safe)
         {
             bases.Second = runner;
@@ -1069,7 +1175,8 @@ public static class GameEngine
     private static double FormOf(Dictionary<Player, double> dayForm, Player p)
         => dayForm.TryGetValue(p, out var v) ? v : 0.0;
 
-    private static bool IsMercy(int inning, int away, int home)
+    /// <summary>コールドゲーム（マーシールール）判定（設計書05 §1.3, OPEN-QUESTIONS Q18）。internal はテスト専用。</summary>
+    internal static bool IsMercy(int inning, int away, int home)
     {
         var diff = Math.Abs(home - away);
         return (inning >= 5 && diff >= 10) || (inning >= 7 && diff >= 7);
@@ -1115,6 +1222,8 @@ public sealed class GameProgress
 
     /// <summary>現在のイニング（Steps が進める）。</summary>
     public int Inning { get; set; } = 1;
+    /// <summary>コールドゲーム（マーシールール）成立で打ち切られたか。</summary>
+    public bool MercyEnded { get; set; }
     /// <summary>両軍累計球数。</summary>
     public int TotalPitches { get; set; }
     /// <summary>打席の速報記録（打席確定ごとに追記される）。</summary>

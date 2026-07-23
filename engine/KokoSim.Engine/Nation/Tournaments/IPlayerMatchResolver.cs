@@ -20,12 +20,19 @@ public sealed record PlayerMatchLive(MatchProgression Progression, bool ManagerI
 /// </summary>
 public interface IPlayerMatchResolver
 {
-    /// <summary>自校 manager と相手 opponent の一戦を詳細シムで解決する（自動消化・一括）。</summary>
-    PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng);
+    /// <summary>
+    /// 自校 manager と相手 opponent の一戦を詳細シムで解決する（自動消化・一括）。
+    /// <paramref name="mercyRuleEnabled"/> は大会側（<see cref="TournamentRunner"/>）が大会種別・
+    /// ラウンドから決定する試合ルール（設計書05 §1.3, OPEN-QUESTIONS Q18）。BeginLive と必ず同じ値を渡すこと。
+    /// <paramref name="context"/> は大会進行コンテキスト（相手のエース温存判断, issue #42。既定 null＝常時エース先発）。
+    /// </summary>
+    PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+        TournamentMatchContext? context = null);
 
     /// <summary>
     /// 自校 manager と相手 opponent の一戦を「打席単位でライブ進行」する進行体を作る（観戦用）。
-    /// Resolve と同じ teams+rng を使うため、采配なしで全打席進めた結果は Resolve と一致する。
+    /// Resolve と同じ teams+rng+mercyRuleEnabled+context を使うため、采配なしで全打席進めた結果は Resolve と一致する。
     /// </summary>
-    PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng);
+    PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+        TournamentMatchContext? context = null);
 }

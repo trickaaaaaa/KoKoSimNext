@@ -279,7 +279,6 @@
 .cell--name { flex-grow: 2.2; }
 .cell--wide { flex-grow: 3.2; }
 .cell--narrow { flex-grow: 0.8; }
-.ability-cell { flex-direction: row; flex-wrap: wrap; align-items: center; }
 
 /* ===== 練習計画 ===== */
 .day__e { font-size: 14px; color: #9AA5A0; margin-top: 3px; -unity-text-align: middle-center; white-space: normal; }
@@ -656,6 +655,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     font-size: var(--fs-label); color: var(--tx-1); -unity-text-align: middle-right;
 }
 .brk-score--out { color: var(--tx-3); }
+/* コールドゲーム注記（設計書05 §1.3, Q18）。カード内に1行だけ添える控えめなキャプション。 */
+.brk-mercy {
+    font-size: var(--fs-cap); color: var(--tx-2); margin: 0;
+    padding-left: var(--sp-2); padding-bottom: var(--sp-1);
+}
 
 /* 接続線：lead＝前段から入る横線／elbow＝左半分が横線・右半分の左端が縦線。 */
 .brk-lead { width: var(--brk-lead-w); flex-shrink: 0; align-self: stretch; }
@@ -974,6 +978,10 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-pitchchart { min-height: 340px; flex-grow: 1; }
 .pd2-pchip { position: absolute; flex-direction: row; align-items: center; background-color: #0E1512; border-width: 1px; border-color: #232E28; padding: 4px 9px; }
 .pd2-pchip__name { font-size: 13px; color: #E8ECEA; margin-right: 8px; }
+/* ストレートのみ添えるMAX球速（Issue #130）。数字はnu-num(Oswald)側で右揃え・コンデンス済み。 */
+.pd2-pchip__velo { margin-right: 8px; }
+.pd2-pchip__velo .nu-num { font-size: var(--fs-label); color: var(--color-chalk); }
+.pd2-pchip__velo .nu-unit { font-size: var(--fs-cap); }
 
 /* ═══════════════════════════════════════════════════════════════════════
    ミニマルスクロールバー（全画面共通・リファイン）

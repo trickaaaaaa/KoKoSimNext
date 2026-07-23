@@ -39,8 +39,10 @@ namespace KokoSim.Unity.Shell
 
         private const string DefaultScreen = "HomeDashboard";
 
-        // ホーム以外で「今週を進める」を持つ画面。ここで引退週に入ったらホームの主将指名モーダルへ回送する。
-        private static readonly string[] WeekAdvancers = { "TrainingPlan", "TournamentPreview", "PracticeMatch" };
+        // ホーム以外で「今週を進める」を持つ画面。ここで引退週／大会開幕週に入ったら、主将指名モーダル／
+        // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
+        private static readonly string[] WeekAdvancers =
+            { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>
         public static ScreenRouter Instance { get; private set; }
@@ -62,10 +64,15 @@ namespace KokoSim.Unity.Shell
         // 遅延した画面切替をイベント配信外（次フレーム）で処理する。
         private void Update()
         {
-            // 新チーム発足（夏の3年引退の翌週）の主将指名は、どの画面で週を進めても
-            // ホームの指名モーダルへ回送する（導線を1箇所に集約する, 設計書09 §8）。
-            // 回送元は「週を進められる画面」だけに限る（試合中フローの画面から引き剥がさない）。
-            if (_pending == null && NewTeamService.Pending && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
+            // バックグラウンド Task（試合後の大会処理）の完了をメインスレッドで反映する（issue #138）。
+            MainThreadDispatcher.Drain();
+
+            // 新チーム発足（夏の3年引退の翌週）の主将指名／夏・秋の大会開幕バナーは、どの画面で週を進めても
+            // ホームで出す（導線を1箇所に集約する, 設計書09 §8 / issue #134）。回送元は「週を進められる画面」だけに
+            // 限る（試合中フローの画面から引き剥がさない）。BannerPending はホームが開幕演出を出して下ろす。
+            if (_pending == null
+                && (NewTeamService.Pending || GameSession.Current.BannerPending)
+                && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
                 _pending = DefaultScreen;
 
             if (_pending == null) return;

@@ -23,7 +23,7 @@ public sealed record NationYear(
 public sealed record NationHistory(IReadOnlyList<NationYear> Years, Nation FinalNation);
 
 /// <summary>
-/// 全国運営エンジン（設計書05）。毎年: 47県の地方大会 → 甲子園 → AI校進化。
+/// 全国運営エンジン（設計書05）。毎年: 夏の地方大会（49地方） → 甲子園 → AI校進化。
 /// DoD: 10年で勢力図が変動しつつ全国統計が安定。決定論。
 /// </summary>
 public static class NationEngine
@@ -57,18 +57,18 @@ public static class NationEngine
         {
             var totalWins = new Dictionary<int, int>();
 
-            // 47県の地方大会 → 各県代表。
-            var reps = new List<School>(47);
-            foreach (var pref in nation.Prefectures)
+            // 夏の地方大会（49地方=47県のうち北海道・東京だけ2分割, 設計書05 §1.1 / issue #65）→ 各代表。
+            var reps = new List<School>(49);
+            foreach (var region in SummerRegions.Build(nation.Prefectures))
             {
-                var entrants = nation.InPrefecture(pref.Id).ToList();
+                var entrants = SummerRegions.Entrants(nation, region).ToList();
                 if (entrants.Count == 0) continue;
                 var result = TournamentEngine.Run(entrants, coeff, rng);
                 Accumulate(totalWins, result.WinsBySchool);
                 reps.Add(result.Champion);
             }
 
-            // 甲子園（代表49→ここでは47代表）。
+            // 甲子園（49代表）。
             var koshien = TournamentEngine.Run(reps, coeff, rng);
             Accumulate(totalWins, koshien.WinsBySchool);
             var champion = koshien.Champion;

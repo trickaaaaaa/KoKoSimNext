@@ -132,7 +132,7 @@ public static class TournamentPreviewBuilder
             Name: p.Name,
             Grade: p.Grade,
             PositionLabel: PositionLabel(p.Position),
-            HandednessLabel: HandednessLabel(p.Throws, p.Bats),
+            HandednessLabel: Players.HandednessLabels.Combined(p.Throws, p.Bats),
             IsPitcher: pitcherLed,
             StatLine: pitcherLed ? PitcherStatLine(p) : BatterStatLine(p),
             Blurb: pitcherLed ? PitcherBlurb(p) : BatterBlurb(p));
@@ -147,7 +147,7 @@ public static class TournamentPreviewBuilder
             .Select(p => new RosterMember(
                 p.UniformNumber, p.Name,
                 PositionLabel(ReferenceEquals(p, dhPlayer) ? Match.Field.FieldPosition.DesignatedHitter : p.Position),
-                p.Grade, HandednessLabel(p.Throws, p.Bats)))
+                p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats)))
             .ToList();
         var seedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : $"第{c.Seed}シード";
         return new RosterExcerpt(c.Name, c.Tier, seedLabel, c.Blurb, members);
@@ -167,14 +167,6 @@ public static class TournamentPreviewBuilder
         Match.Field.FieldPosition.DesignatedHitter => "指",
         _ => "―",
     };
-
-    private static string HandednessLabel(Players.Handedness throws, Players.Handedness bats)
-        => $"{(throws == Players.Handedness.Left ? "左" : "右")}投{bats switch
-        {
-            Players.Handedness.Left => "左",
-            Players.Handedness.Switch => "両",
-            _ => "右",
-        }}打";
 
     // --- 成績の見込み値（能力からの決定論導出＝読み物用の合成。裏試合は成績が付かないため実測値は存在しない） ---
 

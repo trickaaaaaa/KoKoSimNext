@@ -22,11 +22,12 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public sealed class PlayerMatchResolver : IPlayerMatchResolver
     {
-        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng)
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
         {
             var mgrTeam = BuildManagerTeam(manager.Name);
-            var oppTeam = BuildOpponentTeam(opponent);
-            var ctx = new GameContext();
+            var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
+            var ctx = new GameContext { MercyRuleEnabled = mercyRuleEnabled };
             var managerIsAway = ManagerIsAway(manager, opponent);
             var result = managerIsAway
                 ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2))
@@ -34,14 +35,15 @@ namespace KokoSim.Unity.Shell
             return new PlayerMatchDetail(result, ManagerIsAway: managerIsAway);
         }
 
-        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng)
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
         {
-            // Resolve と同一の teams＋同一Fork で組む（相手＝校ID固定生成, rng.Fork(2)=試合）。
+            // Resolve と同一の teams＋同一Fork＋同一 mercyRuleEnabled+context で組む（相手＝校ID固定生成, rng.Fork(2)=試合）。
             // 唯一の差は CaptureTimelines=true（観戦用タイムライン）。これは RNG 中立なので、
             // 全打席を進めた結果は Resolve のボックススコアと一致する＝観戦しても大会結果は変わらない。
             var mgrTeam = BuildManagerTeam(manager.Name);
-            var oppTeam = BuildOpponentTeam(opponent);
-            var ctx = new GameContext { CaptureTimelines = true };
+            var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
+            var ctx = new GameContext { CaptureTimelines = true, MercyRuleEnabled = mercyRuleEnabled };
             var managerIsAway = ManagerIsAway(manager, opponent);
             var prog = managerIsAway
                 ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2))
@@ -71,13 +73,21 @@ namespace KokoSim.Unity.Shell
         /// 判断可否の乱数は校ID＋年度から Fork した専用ストリーム（試合 rng とは独立）＝この並べ替えも
         /// 校ID＋年度だけで決定論的に決まる。
         /// </summary>
-        public static Team BuildOpponentTeam(School opponent)
+        public static Team BuildOpponentTeam(School opponent) => BuildOpponentTeam(opponent, aceRest: null);
+
+        /// <summary>
+        /// <paramref name="aceRest"/> 付きの内部版。展望（<see cref="MatchPreview.MatchPreviewState"/>）は
+        /// 引数なしの公開版を使い続けるため常時エース先発のまま＝「展望の先発は当日と異なることがある」を
+        /// 表記変更なしで許容する仕様（OPEN-QUESTIONS Q16 論点(c), 2026-07-21確定）。実際の試合解決
+        /// （<see cref="Resolve"/>/<see cref="BeginLive"/>）だけがエース温存判断（issue #42）を反映する。
+        /// </summary>
+        private static Team BuildOpponentTeam(School opponent, AceRestContext? aceRest)
         {
             var yearIndex = GameSession.Current.Year;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             // 永続ロスター（#80）から相手校チームを組む。使い捨て生成を廃し、秋に対戦した2年生が翌夏に成長して
             // 戻ってくる。展望（TournamentPreview）も同じ Rosters.TeamFor を通り実戦と一致する。
-            var team = NationService.Rosters.TeamFor(opponent, yearIndex, Rules, calendarYear);
+            var team = NationService.Rosters.TeamFor(opponent, yearIndex, Rules, calendarYear, aceRest);
             var brain = EnemyAiFactory.BrainFor(opponent);
             var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
             var reordered = brain.ComposeBattingOrder(team.BattingOrder, orderRng);

@@ -103,9 +103,9 @@ public sealed class BaserunningHomePlayTests
         for (var i = 0; i < trials; i++)
         {
             var bases = new BaseState { Third = runner };
-            var (r, _, h, _, _, _) = BaserunningModel.ApplyDetailed(
+            var (r, _, baseOuts, _, _, _) = BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: false, Grounder(depth));
-            runs += r; homeOuts += h;
+            runs += r; homeOuts += baseOuts.Home;
         }
         return (runs, homeOuts);
     }
@@ -134,6 +134,101 @@ public sealed class BaserunningHomePlayTests
         var (runs, homeOuts) = GrounderR3(DefenseDepth.In, fast);
         Assert.True(runs > 0, "快足でも一度も生還しない");
         Assert.True(homeOuts > 0, "内野前進で本塁憤死(タッチアウト)が一度も出ない");
+    }
+
+    // --- Issue #90: 犠飛のタッチアップ（フライ捕球の実試合経路で r3 が捕球時刻起点の物理レース） ---
+
+    // 犠飛の外野フライ捕球（処理点 distanceM・肩 arm・捕球時刻 fieldedAt）。IsFly:true・ゴロ深さは無関係。
+    private static HomePlayContext SacFly(double distanceM, double fieldedAt, int arm = 50, double aggression = 0.5)
+        => new(Field,
+            new HomePlaySituation(new Vector3D(0, 0, distanceM), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps),
+            new TacticsCoefficients(), aggression, DefenseDepth.Normal, IsFly: true);
+
+    private static (int runs, int homeOuts, int outMoves, int scoreMoves) SacFlyR3(
+        HomePlayContext home, Player runner, int trials = 3000, ulong seed = 5)
+    {
+        var rng = new Xoshiro256Random(seed);
+        int runs = 0, homeOuts = 0, outMoves = 0, scoreMoves = 0;
+        for (var i = 0; i < trials; i++)
+        {
+            var bases = new BaseState { Third = runner };
+            var (r, _, baseOuts, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: true, home);
+            runs += r;
+            homeOuts += baseOuts.Home;
+            outMoves += moves.Count(m => m is { FromBase: 3, ToBase: 4, Out: true });
+            scoreMoves += moves.Count(m => m is { FromBase: 3, ToBase: 4, Out: false });
+        }
+        return (runs, homeOuts, outMoves, scoreMoves);
+    }
+
+    [Fact]
+    public void SacFly_DeepOutfieldFly_ScoresRunnerFromThird()
+    {
+        // 深い中堅フライ（95m・遅い捕球）＝送球が長く、平均走者は悠々タッチアップ生還。
+        var (runs, homeOuts, _, _) = SacFlyR3(SacFly(distanceM: 95, fieldedAt: 3.6), new Player { Speed = 50, Baserunning = 50 });
+        Assert.True(runs >= 2850, $"深い犠飛で生還が少なすぎる: {runs}/3000");
+        Assert.True(homeOuts < 150, $"深い犠飛で憤死が多すぎる（送球が長く圧倒的に生還・ごく稀な刺殺のみ想定）: {homeOuts}/3000");
+    }
+
+    [Fact]
+    public void SacFly_ShallowFly_RunnerHolds_NoRunNoOut()
+    {
+        // 浅い左翼フライ（30m・早い捕球・強肩）＝送球が短く自重。生還も憤死も出ず三塁に残る（RNG非消費の流儀）。
+        var runner = new Player { Speed = 50, Baserunning = 50 };
+        var rng = new Xoshiro256Random(5);
+        int runs = 0, outs = 0, heldAtThird = 0;
+        for (var i = 0; i < 2000; i++)
+        {
+            var bases = new BaseState { Third = runner };
+            var (r, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: false,
+                SacFly(distanceM: 30, fieldedAt: 1.2, arm: 85));
+            runs += r; outs += extraOuts;
+            if (ReferenceEquals(bases.Third, runner)) heldAtThird++;
+        }
+        Assert.Equal(0, runs);         // 浅いフライでは自重＝生還ゼロ
+        Assert.Equal(0, outs);         // 自重なので憤死も出ない
+        Assert.Equal(2000, heldAtThird); // 走者は三塁に残る
+    }
+
+    [Fact]
+    public void SacFly_ContestedFly_ProducesBothScoresAndHomeOuts()
+    {
+        // 接戦帯（中程度の深さ・積極送り）＝タッチアップ生還と本塁憤死の両方が出る。憤死は追加アウト＋本塁Outレッグ。
+        var (runs, homeOuts, outMoves, scoreMoves) = SacFlyR3(
+            SacFly(distanceM: 58, fieldedAt: 2.4, arm: 70, aggression: 1.0), new Player { Speed = 55, Baserunning = 50 });
+        Assert.True(runs > 0, "接戦帯の犠飛で生還が一度も出ない");
+        Assert.True(homeOuts > 0, "タッチアップ失敗（本塁走塁死）が一度も出ない");
+        Assert.Equal(homeOuts, outMoves);   // 追加アウトは本塁Outレッグと一致
+        Assert.Equal(runs, scoreMoves);     // 生還数は本塁Safeレッグと一致
+    }
+
+    [Fact]
+    public void SacFly_FasterRunner_ScoresMoreThanSlow()
+    {
+        // 同じ中程度の深さのフライで、快足＞鈍足の順に生還が単調。
+        var context = SacFly(distanceM: 55, fieldedAt: 2.3, arm: 60, aggression: 0.7);
+        var slow = SacFlyR3(context, new Player { Speed = 20, Baserunning = 30 });
+        var fast = SacFlyR3(context, new Player { Speed = 90, Baserunning = 85 });
+        Assert.True(fast.runs > slow.runs, $"快足が鈍足より生還していない: slow={slow.runs} fast={fast.runs}");
+    }
+
+    [Fact]
+    public void SacFly_NullContext_FallsBackToTable_Unchanged()
+    {
+        // 回帰: home=null（純テーブル経路・単体テスト）は従来の SacFlyScoreProb（≈0.30）のまま。憤死は出ない。
+        var rng = new Xoshiro256Random(5);
+        int runs = 0, outs = 0;
+        for (var i = 0; i < 5000; i++)
+        {
+            var bases = new BaseState { Third = new Player { Speed = 50, Baserunning = 50 } };
+            var (r, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, C, rng, collectMoves: false, home: null);
+            runs += r; outs += extraOuts;
+        }
+        Assert.InRange(runs / 5000.0, 0.26, 0.34); // SacFlyScoreProb=0.30 近傍
+        Assert.Equal(0, outs);                       // テーブル経路では走塁死は出ない
     }
 
     // --- G2: ライナー併殺（コンタクト始動の一塁走者が空中で捕られ戻れない, 設計書12 §4） ---

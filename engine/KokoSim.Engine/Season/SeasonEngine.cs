@@ -20,10 +20,40 @@ public sealed record SeasonContext
     public IReadOnlyList<GameEvent> Events { get; init; } = Array.Empty<GameEvent>();
 
     /// <summary>
-    /// 週あたり練習時間[分]（施設供給, 設計書03 §3.1/§4）。null = Training.DefaultBudgetMinutes を使う。
-    /// 将来 School/施設Lv から算出して注入する口。増やすと全選手の成長・疲労が増える。
+    /// 週あたり練習時間[分]（施設供給, 設計書03 §3.1/§4）。null = 施設レベル（<see cref="FacilityLevel"/>）から解決、
+    /// それも無ければ Training.DefaultBudgetMinutes を使う。将来 School/施設Lv から算出して注入する口。
     /// </summary>
     public int? BudgetMinutes { get; init; }
+
+    /// <summary>
+    /// 監督の分野別指導力（Issue #115・設計書04 §1）。null＝基準指導力（Training.CoachingLevel）を全分野に適用＝
+    /// 従来のシムと1ビット一致（不変条件#2）。CoachingProfile.FromManager で監督メタから注入する。
+    /// </summary>
+    public CoachingProfile? Coaching { get; init; }
+
+    /// <summary>
+    /// 学校の施設レベル（Issue #115・設計書03 §4 / 04）。0＝施設なし（現状の 1.0 / 300分）で従来一致。
+    /// Training.FacilityTiers を index として引き、施設係数と週練習時間を決める。
+    /// 資金・名声からレベルを上げる接続は将来（OPEN-QUESTIONS Q6）。ここは注入口のみ。
+    /// </summary>
+    public int FacilityLevel { get; init; }
+
+    /// <summary>
+    /// 施設レベル → (施設係数, 週練習時間[分]) の解決（Issue #115）。
+    /// レベル0 または FacilityTiers 未指定なら Training の既定値をそのまま返す＝従来と1ビット一致。
+    /// </summary>
+    public (double FacilityCoef, int BudgetMinutes) ResolveFacility()
+    {
+        var defaultBudget = BudgetMinutes ?? Training.DefaultBudgetMinutes;
+        var tiers = Training.FacilityTiers;
+        if (FacilityLevel <= 0 || tiers.Count == 0)
+            return (Training.FacilityCoef, defaultBudget);
+
+        var idx = Math.Min(FacilityLevel, tiers.Count - 1);
+        var tier = tiers[idx];
+        // BudgetMinutes を明示注入した場合はそれを優先（施設係数のみ施設レベルから）。
+        return (tier.Coef, BudgetMinutes ?? tier.BudgetMinutes);
+    }
 }
 
 /// <summary>1年の記録。</summary>
@@ -74,7 +104,9 @@ public static class SeasonEngine
             scheduler.ResetAnnualFlags();
             var eventsFired = 0;
 
-            var budget = ctx.BudgetMinutes ?? ctx.Training.DefaultBudgetMinutes;
+            // 施設レベル→施設係数・週練習時間（Issue #115）。レベル0で従来と1ビット一致。
+            var (facilityCoef, budget) = ctx.ResolveFacility();
+            var training = ctx.Training with { FacilityCoef = facilityCoef };
             for (var week = 0; week < ctx.Calendar.WeeksPerYear; week++)
             {
                 // 引退週フック（設計書03 §2 / 09 §8）: 夏の3年引退の翌週＝新チーム発足。3年を引退フラグ扱いに
@@ -91,8 +123,8 @@ public static class SeasonEngine
                     var alloc = TrainingPresets.Resolve(plan, p.IsPitcher, budget);
                     var stage = ctx.Calendar.StageIndex(p.Grade, week);
                     DevelopmentModel.TrainWeekPlan(
-                        p, alloc, ctx.Training.ReferenceWeekMinutes,
-                        stage, campMult, ctx.Stages, ctx.Training, ctx.Skills, ctx.Personalities);
+                        p, alloc, training.ReferenceWeekMinutes,
+                        stage, campMult, ctx.Stages, training, ctx.Skills, ctx.Personalities, ctx.Coaching);
                 }
 
                 // 調子の週次更新（設計書02 §3.3: 数週間続く波）。

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Players;
 
@@ -58,9 +59,18 @@ public sealed class SubstitutionOptions
     /// <summary>もう使えない控え投手（登板済み）。UIはグレーアウトして選ばせない。</summary>
     public required IReadOnlyList<Player> UsedBullpen { get; init; }
 
+    /// <summary>
+    /// 投手交代で指名できる全候補（ブルペン＋野手控え。issue #137: 野手も投手として登板できる）。
+    /// <see cref="MatchProgression.ChangePitcher"/> の Player 引数はこの一覧の中から選ぶ。
+    /// </summary>
+    public IReadOnlyList<Player> PitcherCandidates => Bullpen.Concat(Bench).ToList();
+
+    /// <summary>もう指名できない投手交代候補（登板済みブルペン＋出場済み控え）。</summary>
+    public IReadOnlyList<Player> UsedPitcherCandidates => UsedBullpen.Concat(UsedBench).ToList();
+
     public bool CanPinchHit => !IsFinished && IsOffense && Bench.Count > 0;
     public bool CanPinchRun => !IsFinished && IsOffense && Bench.Count > 0 && Runners.Count > 0;
-    public bool CanChangePitcher => !IsFinished && !IsOffense && Bullpen.Count > 0;
+    public bool CanChangePitcher => !IsFinished && !IsOffense && PitcherCandidates.Count > 0;
     public bool CanDefensiveSub => !IsFinished && !IsOffense && Bench.Count > 0;
     public bool CanReleaseDh => !IsFinished && !IsOffense && UsesDh;
 
@@ -79,7 +89,7 @@ public sealed class SubstitutionOptions
                 return Bench.Count == 0 ? "控えの野手が残っていない。" : null;
             case SubstitutionKind.ChangePitcher:
                 if (IsOffense) return "攻撃中は投手交代できない。";
-                return Bullpen.Count == 0 ? "登板できる控え投手が残っていない。" : null;
+                return PitcherCandidates.Count == 0 ? "登板できる控えが残っていない。" : null;
             case SubstitutionKind.DefensiveSub:
                 if (IsOffense) return "攻撃中は守備交代できない。";
                 return Bench.Count == 0 ? "控えの野手が残っていない。" : null;

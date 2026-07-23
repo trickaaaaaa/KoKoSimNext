@@ -27,7 +27,7 @@ namespace KokoSim.Unity.Squad
     /// </summary>
     public sealed class TeamStrengthState
     {
-        private static readonly TeamStrengthCoefficients Coeff = new TeamStrengthCoefficients();
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         public TeamStrengthView BuildView()
         {

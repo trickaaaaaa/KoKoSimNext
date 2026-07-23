@@ -298,20 +298,21 @@ namespace KokoSim.Unity.Match
             }
 
             var usePen = _kind == SubstitutionKind.ChangePitcher;
-            if (_insCap != null) _insCap.text = usePen ? "ブルペン" : "控え";
+            if (_insCap != null) _insCap.text = usePen ? "投手候補" : "控え";
 
-            var available = usePen ? _opt.Bullpen : _opt.Bench;
+            // 投手交代の候補はブルペン＋ベンチ（野手含む・issue #137）。
+            var available = usePen ? _opt.PitcherCandidates : _opt.Bench;
             for (var i = 0; i < available.Count; i++)
             {
                 var idx = i;
-                var row = BenchRow(available[i], usePen, dim: false, picked: _inIndex == i, note: "");
+                var row = BenchRow(available[i], dim: false, picked: _inIndex == i, note: "");
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _inIndex = idx; Render(); });
                 _inRows.Add(row);
             }
 
             // 使い切った控え／登板済みの投手はグレーアウトで残す（リエントリー禁止が一目で分かる）。
-            var used = usePen ? _opt.UsedBullpen : _opt.UsedBench;
-            foreach (var p in used) _inRows.Add(BenchRow(p, usePen, dim: true, picked: false, note: "出場済"));
+            var used = usePen ? _opt.UsedPitcherCandidates : _opt.UsedBench;
+            foreach (var p in used) _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
 
             if (available.Count == 0 && used.Count == 0)
             {
@@ -355,8 +356,9 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        /// <summary>控え行（スタメン設定と同じ bench-row 部品）。</summary>
-        private VisualElement BenchRow(Player p, bool isPitcher, bool dim, bool picked, string note)
+        /// <summary>控え行（スタメン設定と同じ bench-row 部品）。タグは選手本来の守備位置
+        /// （投手交代候補の野手はそのまま守備位置を表示＝ブルペン投手は Position が投手なので従来通り「投」）。</summary>
+        private VisualElement BenchRow(Player p, bool dim, bool picked, string note)
         {
             var row = new VisualElement();
             row.AddToClassList("bench-row");
@@ -367,7 +369,7 @@ namespace KokoSim.Unity.Match
             name.AddToClassList("bench-row__name");
             row.Add(name);
 
-            var tag = new Label(isPitcher ? "投" : PosJp(p.Position));
+            var tag = new Label(PosJp(p.Position));
             tag.AddToClassList("bench-row__tag");
             row.Add(tag);
 
@@ -420,7 +422,7 @@ namespace KokoSim.Unity.Match
         private Player SelectedIncoming()
         {
             if (_kind == SubstitutionKind.ReleaseDh) return null;
-            var list = _kind == SubstitutionKind.ChangePitcher ? _opt.Bullpen : _opt.Bench;
+            var list = _kind == SubstitutionKind.ChangePitcher ? _opt.PitcherCandidates : _opt.Bench;
             return _inIndex >= 0 && _inIndex < list.Count ? list[_inIndex] : null;
         }
 
@@ -519,7 +521,7 @@ namespace KokoSim.Unity.Match
             SubstitutionKind.PinchRun when _baseIndex < 0 => "代走に出す走者を選ぶ。",
             SubstitutionKind.DefensiveSub when _outIndex < 0 => "退く守備者を選ぶ。",
             SubstitutionKind.ReleaseDh => "DHの行き先を選ぶ。",
-            SubstitutionKind.ChangePitcher => "ブルペンから登板させる投手を選ぶ。",
+            SubstitutionKind.ChangePitcher => "登板させる投手を選ぶ。",
             _ => "控えから入る選手を選ぶ。",
         };
 
@@ -530,7 +532,7 @@ namespace KokoSim.Unity.Match
             {
                 SubstitutionKind.PinchHit => _prog.PinchHit(_teamIsAway, _opt.Bench[_inIndex]),
                 SubstitutionKind.PinchRun => _prog.PinchRun(_teamIsAway, _baseIndex, _opt.Bench[_inIndex]),
-                SubstitutionKind.ChangePitcher => _prog.ChangePitcher(_teamIsAway, _opt.Bullpen[_inIndex]),
+                SubstitutionKind.ChangePitcher => _prog.ChangePitcher(_teamIsAway, _opt.PitcherCandidates[_inIndex]),
                 SubstitutionKind.DefensiveSub => _prog.DefensiveSub(_teamIsAway, _opt.Lineup[_outIndex], _opt.Bench[_inIndex]),
                 SubstitutionKind.ReleaseDh => _prog.ReleaseDh(_teamIsAway, _dhAt),
                 _ => false,
@@ -557,8 +559,7 @@ namespace KokoSim.Unity.Match
         private static string NameOf(Player p)
             => p.UniformNumber > 0 ? p.UniformNumber + "  " + p.Name : p.Name;
 
-        private static string HandLabel(Player p)
-            => (p.Throws == Handedness.Left ? "左投" : "右投") + (p.Bats == Handedness.Left ? "左打" : "右打");
+        private static string HandLabel(Player p) => HandednessLabels.Combined(p.Throws, p.Bats);
 
         /// <summary>総合ランク（投手は投手能力・野手は打撃走守の平均）。表示専用。</summary>
         private static string GradeOf(Player p)

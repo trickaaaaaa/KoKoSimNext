@@ -33,6 +33,7 @@ namespace KokoSim.Unity.Member
 
         private MemberSettingState _state;
         private VisualElement _root;
+        private Button _advanceBtn;
         private VisualElement _fieldHost;
         private BaseballFieldElement _field;
         private FieldMarkersElement _markers;   // 立ち位置点＋引き出し線
@@ -62,8 +63,21 @@ namespace KokoSim.Unity.Member
 
             Click("ms-auto", () => { _state.AutoAssign(); Render(); });
 
+            // 共通トップバーの「今週を進める」を配線（issue #134: 以前は未配線で死にボタンだった）。
+            // ScreenRouter が SetActive で付け外しするだけなので、OnDisable で必ず外す（多重登録＝多重進週の防止）。
+            _advanceBtn = _root.Q<Button>("advance");
+            if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
+
             Render();
         }
+
+        private void OnDisable()
+        {
+            if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
+        }
+
+        // 全タブ共通の進週処理へ集約（大会モード中はホームへ回送して日送りへ引き継ぐ）。
+        private void OnAdvance() => KokoSim.Unity.Shell.WeekAdvance.FromSideScreen(Render);
 
         private void Render()
         {
@@ -430,7 +444,6 @@ namespace KokoSim.Unity.Member
                 var group = new Label(v.TabLabels[v.Tab]);
                 group.AddToClassList("ms-cmp-group");
                 rows.Add(group);
-                rows.Add(UiComponents.CompareHeader());
                 foreach (var r in v.Rows) rows.Add(CompareRowEl(r));
             }
 
@@ -514,7 +527,9 @@ namespace KokoSim.Unity.Member
             var meta = new VisualElement();
             meta.AddToClassList("cmp-card__meta");
             meta.Add(GradeLabel(card.GradeLabel));
-            meta.Add(UiComponents.RankChip(card.OverallGrade));
+            var hand = new Label(card.HandLabel);
+            hand.AddToClassList("cmp-card__hand");
+            meta.Add(hand);
             if (card.IsCaptain)
             {
                 var cap = new Label("主将");
@@ -524,6 +539,7 @@ namespace KokoSim.Unity.Member
                 meta.Add(cap);
             }
             el.Add(meta);
+            el.Add(UiComponents.CategoryRankChips(card.Strength));
         }
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
