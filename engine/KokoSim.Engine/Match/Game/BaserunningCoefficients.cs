@@ -57,6 +57,14 @@ public sealed record BaserunningCoefficients
     public double PitcherQuickSeconds { get; init; } = 1.40;
     /// <summary>捕手の握り替え[s]（ポップタイム＝これ＋送球時間）。</summary>
     public double PopTransferSeconds { get; init; } = 0.70;
+    /// <summary>
+    /// トランスファー倍率の守備(Fielding)傾き（Issue #36）。走塁系の各握り替え（捕手ポップ/外野返球/中継/帰塁）
+    /// に共通。倍率 = max(min, 1 − (Fielding−50)×この値)。守備50で×1.0＝恒等（帯不変）。
+    /// <see cref="Fielding.FieldingCoefficients.ThrowTransferFieldingSlope"/> と値を揃える。
+    /// </summary>
+    public double TransferFieldingSlope { get; init; } = 0.004;
+    /// <summary>トランスファー倍率の下限（最速側クランプ, Issue #36）。</summary>
+    public double TransferFactorMin { get; init; } = 0.70;
     /// <summary>タッチ[s]。</summary>
     public double TagSeconds { get; init; } = 0.10;
     /// <summary>margin→成功確率のlogistic幅[s]（Step4再校正: 反応係数を上げ絶対タイムを現実化した分、

@@ -50,6 +50,8 @@ public sealed record FieldingPlay
     public bool IsFly { get; init; }
     /// <summary>処理野手の送球速度[m/s]（本塁クロスプレーの中継起点, 設計書12 §3 F2）。処理野手なしでは null。</summary>
     public double? FielderThrowSpeedMps { get; init; }
+    /// <summary>処理野手の守備(Fielding)。返球・中継の握り替えの能力伸縮に使う（Issue #36）。既定50＝恒等。</summary>
+    public int FielderFielding { get; init; } = 50;
     /// <summary>
     /// 一塁での判定margin[s]（判定オーバーレイ, Issue #59）。守備所要−走者所要＋ForceOutMarginSeconds
     /// （0=判定境界、正=セーフ寄り、負=アウト寄り）。内野ゴロで一塁送球が絡んだ判定のみ非null。
@@ -144,6 +146,7 @@ public static class FieldingResolver
                     FielderRole = catcher.Position,
                     FieldedAtSeconds = ground.HangTimeSeconds,
                     FielderThrowSpeedMps = catcher.Attributes.ThrowSpeedMps,
+                    FielderFielding = catcher.Attributes.Fielding,
                 };
             }
             // 捕れないフライ → 安打。着地後の転がりと幾何・走力で塁打数を決める。
@@ -157,8 +160,11 @@ public static class FieldingResolver
             var infielder = NearestInfielder(fielders, landing);
             var fieldTime = ReachTime(infielder, landing);
             var throwDist = (field.FirstBase - landing).Length;
+            // 握り替え（トランスファー）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
+            var transfer = coeff.ThrowTransferSeconds
+                           * infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin);
             var defenseTime = fieldTime + coeff.InfieldPlayOverheadSeconds
-                              + coeff.ThrowTransferSeconds + throwDist / infielder.Attributes.ThrowSpeedMps;
+                              + transfer + throwDist / infielder.Attributes.ThrowSpeedMps;
             // 判定margin（Issue #59）: 0=判定境界（=defenseTime+ForceOutMargin と runnerTime が拮抗）、
             // 正=セーフ寄り、負=アウト寄り。表示専用（判定・帯には影響しない）。
             var judgementMargin = defenseTime - runnerTime + coeff.ForceOutMarginSeconds;
@@ -172,6 +178,7 @@ public static class FieldingResolver
                     FieldedAtSeconds = fieldTime,
                     ThrowArriveSeconds = defenseTime,
                     FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
+                    FielderFielding = infielder.Attributes.Fielding,
                     JudgementMarginSeconds = judgementMargin,
                 };
             }
@@ -182,6 +189,7 @@ public static class FieldingResolver
                 FieldedAtSeconds = fieldTime,
                 ThrowArriveSeconds = defenseTime,
                 FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
+                FielderFielding = infielder.Attributes.Fielding,
                 JudgementMarginSeconds = judgementMargin,
             };
         }
@@ -218,6 +226,7 @@ public static class FieldingResolver
             FielderRole = retriever.Position,
             FieldedAtSeconds = retrieveAt,
             FielderThrowSpeedMps = retriever.Attributes.ThrowSpeedMps,
+            FielderFielding = retriever.Attributes.Fielding,
         };
     }
 

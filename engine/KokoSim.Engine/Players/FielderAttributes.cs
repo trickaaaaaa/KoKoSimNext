@@ -45,4 +45,12 @@ public sealed record FielderAttributes
     /// 悪送球・逸れの大きさ。守備解決で中継/カバー連携・進塁を誘発する（2A では値のみ、適用は後続スライス）。
     /// </summary>
     public double ThrowScatterSigmaCm => Math.Max(4.0, 40.0 - ThrowAccuracy * 0.36);
+
+    /// <summary>
+    /// 送球トランスファー（捕球→送球の握り替え）倍率（設計書02 §1.2, Issue #36）。各トランスファー固定秒に
+    /// 乗じる。守備(Fielding)50で×1.0＝現行固定値と恒等（帯不変, 不変条件#5。捕手 Lead と同方式）。守備が高い
+    /// ほど短縮（速い＝倍率<1）、低いほど延長（遅い＝倍率>1）。傾き・下限倍率は YAML 駆動（不変条件#4）。
+    /// </summary>
+    public double TransferFactor(double slopePerPoint, double minFactor)
+        => Math.Max(minFactor, 1.0 - (Fielding - 50) * slopePerPoint);
 }

@@ -43,6 +43,15 @@ public sealed record FieldingCoefficients
     public double ThrowTransferSeconds { get; init; } = 0.70;
 
     /// <summary>
+    /// トランスファー倍率の守備(Fielding)傾き（Issue #36）。倍率 = max(min, 1 − (Fielding−50)×この値)。
+    /// 守備50で×1.0＝恒等（帯不変）。走塁系（捕手ポップ/外野返球/中継/帰塁）の同名係数と値を揃える。
+    /// </summary>
+    public double ThrowTransferFieldingSlope { get; init; } = 0.004;
+
+    /// <summary>トランスファー倍率の下限（最速側のクランプ, Issue #36）。守備が高いほどここへ張り付く。</summary>
+    public double ThrowTransferFactorMin { get; init; } = 0.70;
+
+    /// <summary>
     /// 内野ゴロ処理の実戦オーバーヘッド[s]（設計書02 §4.1b の時間軸校正）。捕球姿勢づくり・ステップ・
     /// 打球が野手へ転がる時間を集約した項。走者を実戦タイム（本塁→一塁≈4.2s）へ合わせても
     /// 内野安打率が現実的に保たれるよう、守備側も同じ秒軸へ引き上げる。

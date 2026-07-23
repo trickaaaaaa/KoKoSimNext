@@ -336,6 +336,8 @@ public static class CoefficientsLoader
         public double FlyApexThresholdM { get; set; } = D.FlyApexThresholdM;
         public double CatchReachFactor { get; set; } = D.CatchReachFactor;
         public double ThrowTransferSeconds { get; set; } = D.ThrowTransferSeconds;
+        public double ThrowTransferFieldingSlope { get; set; } = D.ThrowTransferFieldingSlope;
+        public double ThrowTransferFactorMin { get; set; } = D.ThrowTransferFactorMin;
         public double InfieldPlayOverheadSeconds { get; set; } = D.InfieldPlayOverheadSeconds;
         public double RunnerReactionSeconds { get; set; } = D.RunnerReactionSeconds;
         public double LeftBatterFirstStepBonusSeconds { get; set; } = D.LeftBatterFirstStepBonusSeconds;
@@ -367,6 +369,8 @@ public static class CoefficientsLoader
             FlyApexThresholdM = FlyApexThresholdM,
             CatchReachFactor = CatchReachFactor,
             ThrowTransferSeconds = ThrowTransferSeconds,
+            ThrowTransferFieldingSlope = ThrowTransferFieldingSlope,
+            ThrowTransferFactorMin = ThrowTransferFactorMin,
             InfieldPlayOverheadSeconds = InfieldPlayOverheadSeconds,
             RunnerReactionSeconds = RunnerReactionSeconds,
             LeftBatterFirstStepBonusSeconds = LeftBatterFirstStepBonusSeconds,
@@ -421,6 +425,8 @@ public static class CoefficientsLoader
         public double StealReactionSlope { get; set; } = D.StealReactionSlope;
         public double PitcherQuickSeconds { get; set; } = D.PitcherQuickSeconds;
         public double PopTransferSeconds { get; set; } = D.PopTransferSeconds;
+        public double TransferFieldingSlope { get; set; } = D.TransferFieldingSlope;
+        public double TransferFactorMin { get; set; } = D.TransferFactorMin;
         public double TagSeconds { get; set; } = D.TagSeconds;
         public double StealMarginScale { get; set; } = D.StealMarginScale;
         public double StealSuccessBias { get; set; } = D.StealSuccessBias;
@@ -515,6 +521,8 @@ public static class CoefficientsLoader
             StealReactionSlope = StealReactionSlope,
             PitcherQuickSeconds = PitcherQuickSeconds,
             PopTransferSeconds = PopTransferSeconds,
+            TransferFieldingSlope = TransferFieldingSlope,
+            TransferFactorMin = TransferFactorMin,
             TagSeconds = TagSeconds,
             StealMarginScale = StealMarginScale,
             StealSuccessBias = StealSuccessBias,

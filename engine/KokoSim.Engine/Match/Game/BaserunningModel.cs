@@ -459,7 +459,7 @@ public static class BaserunningModel
             var catchToFirstM = (liner.Field.FirstBase - liner.Situation.BallFieldedPoint).Length;
             if (DoubledOffResolver.Resolve(
                     r1, liner.Situation.BallFieldedAtSeconds, catchToFirstM, liner.Situation.OutfielderThrowSpeedMps,
-                    coeff, rng) == DoubledOffResult.DoubledOff)
+                    coeff, rng, liner.Situation.OutfielderFielding) == DoubledOffResult.DoubledOff)
             {
                 extraOuts++;
                 mv?.Add(new RunnerMove(r1, 1, 1, Out: true)); // 一塁へ戻れず憤死
