@@ -236,8 +236,12 @@ public static class FieldingResolver
         IRandomSource rng, BattedBallResult onSuccess)
     {
         var f = NearestFielder(fielders, landing);
-        var errProb = coeff.ErrorBaseProb - (f.Attributes.Catching - 50) * coeff.ErrorCatchingSlope;
-        if (MathUtil.Chance(MathUtil.Clamp(errProb, 0.001, 0.2), rng))
+        // 守備力連動は非対称: 平均(50)より下（弱小）は急傾斜で大量失策へ、上（精鋭）は緩傾斜で
+        // 「守備を上げるほど失策が減る」勾配を残す（下限へ潰さない, issue #123）。
+        var catchingDelta = f.Attributes.Catching - 50;
+        var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
+        var errProb = coeff.ErrorBaseProb - catchingDelta * slope;
+        if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
         {
             return BattedBallResult.Error;
         }

@@ -65,10 +65,21 @@ public sealed record FieldingCoefficients
     /// <summary>一塁でのアウト判定の安全マージン[s]（守備側がこの秒数だけ余裕を持てばアウト）。</summary>
     public double ForceOutMarginSeconds { get; init; } = 0.0;
 
-    /// <summary>捕球エラーの基準確率（Catching50時）。</summary>
-    public double ErrorBaseProb { get; init; } = 0.018;
-    /// <summary>捕球(Catching−50)あたりのエラー減少。</summary>
-    public double ErrorCatchingSlope { get; init; } = 0.0003;
+    // 失策モデル（issue #123, 2026-07-23）。既定値は data/coefficients.yaml と同値＝実ゲーム（Unity は
+    // new GameContext() の既定を使う）とsim/テストで同じ守備力連動になるよう揃える。変更時は
+    // determinism-baseline.txt の再生成が必要（DeterminismBaselineDump）。
+    /// <summary>捕球エラーの基準確率（Catching50時）＝両軍計≈2.4/試合。</summary>
+    public double ErrorBaseProb { get; init; } = 0.064;
+    /// <summary>捕球(Catching−50)あたりのエラー変化（守備が平均より低い側＝弱小の傾き）。急にして弱小同士を大量失策に。</summary>
+    public double ErrorCatchingSlope { get; init; } = 0.0065;
+    /// <summary>守備が平均(50)より高い側の傾き（弱小側 ErrorCatchingSlope と非対称）。緩くして精鋭側に
+    /// 「守備を上げるほど失策が減る」勾配を残す（下限へ潰さない＝能力向上の意味を保つ, issue #123 2026-07-23）。</summary>
+    public double ErrorCatchingSlopeStrong { get; init; } = 0.001;
+    /// <summary>捕球エラー確率の下限クランプ（守備力が高いほどここへ張り付く）。</summary>
+    public double ErrorMinProb { get; init; } = 0.001;
+    /// <summary>捕球エラー確率の上限クランプ（守備力が低いほどここへ張り付く）。守備が低い同士の試合を
+    /// 大量失策（両校計10個規模）にするための天井。</summary>
+    public double ErrorMaxProb { get; init; } = 0.30;
 
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 

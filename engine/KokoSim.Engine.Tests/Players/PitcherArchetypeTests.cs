@@ -170,6 +170,11 @@ public sealed class PitcherArchetypeTests
     /// ＝オフセットは式に合わせて設計したのだから式では必ず0になる。実際に試合を回して確かめる。
     /// 球速を物理層へ接続した後（issue #14）も制球（与四球）の失点価値は球速の約4倍あり、
     /// 素朴な「球速+12/制球-10」では本格派が明確に不利になる。その再発を防ぐ回帰。
+    /// 帯（spread &lt; 0.50）: issue #123（守備力連動の失策強化）で 0.25→0.50 へ緩めた。失策はインプレー打球に
+    /// 比例するため、打たせて取る型（軟投/技巧）ほど失策失点が増える（実測: バランス4.36 / 本格4.44 / 技巧4.56 /
+    /// 軟投4.64 ＝ spread 0.28）。これは隣接テスト PowerPitchers_StrikeOutMore_AndDependLessOnDefense が
+    /// 設計意図として持つ「打たせて取る＝守備依存」の自然な延長で、型の順位が壊れる異常ではない
+    /// （オフセット再校正ではなく帯緩和で許容＝オーナー判断2026-07-23）。
     /// </summary>
     [Fact]
     [Trait("Category", "Heavy")]   // 型4種×400試合のフルエンジン実測
@@ -181,7 +186,7 @@ public sealed class PitcherArchetypeTests
             runsAllowed[a] = MeasureArchetype(a, ctx, games: 400).RunsAllowed;
 
         var spread = runsAllowed.Values.Max() - runsAllowed.Values.Min();
-        Assert.True(spread < 0.25,
+        Assert.True(spread < 0.50,
             "型ごとの失点差が大きすぎる（実戦でバランス中立でない）: "
             + string.Join(" / ", runsAllowed.Select(kv => $"{PitcherArchetypes.Label(kv.Key)}{kv.Value:F2}")));
     }
