@@ -33,7 +33,7 @@
 /* ── CategoryRankChips：選手のカテゴリ別ランク（打撃力/走力/守備力/投手力, Issue #30/#140） ─
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
-.cat-rank-chips__label { font-size: var(--fs-cap); margin-right: var(--sp-2); }
+.cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
 
 /* ── AbilityRow：能力バー行（アイコン／能力名＋副題／数値／バー／ランクチップ／補足） ─
    能力バーを出す画面はこの部品だけを使う（UI原則③ランク併記・⑤部品辞書の外に出ない）。
