@@ -2,8 +2,21 @@ using KokoSim.Engine.Core;
 
 namespace KokoSim.Engine.Nation;
 
+/// <summary>
+/// 追跡対象校が戦った1試合の記録（相手の強さと勝敗）。名声のアップセット項算出に使う（issue #170）。
+/// 不戦勝（bye）は対戦が成立しないので記録しない。
+/// </summary>
+public sealed record TrackedMatch(double OpponentStrength, bool Won);
+
 /// <summary>トーナメント結果。優勝校と各校の勝利数（進出度＝名声更新に使う）。</summary>
-public sealed record TournamentResult(School Champion, IReadOnlyDictionary<int, int> WinsBySchool);
+public sealed record TournamentResult(School Champion, IReadOnlyDictionary<int, int> WinsBySchool)
+{
+    /// <summary>
+    /// trackSchoolId で指定した校が戦った試合の記録（相手の格差ベースの名声更新に使う, issue #170）。
+    /// 指定なし・当該校が不参加なら空。記録は結果に一切影響しない（乱数消費・優勝判定は不変）。
+    /// </summary>
+    public IReadOnlyList<TrackedMatch> TrackedMatches { get; init; } = System.Array.Empty<TrackedMatch>();
+}
 
 /// <summary>
 /// シード付きシングルエリミネーション（設計書05 §1.2）。強豪をブラケット対角に分散配置する。
@@ -11,12 +24,17 @@ public sealed record TournamentResult(School Champion, IReadOnlyDictionary<int, 
 /// </summary>
 public static class TournamentEngine
 {
-    public static TournamentResult Run(IReadOnlyList<School> entrants, NationCoefficients coeff, IRandomSource rng)
+    public static TournamentResult Run(
+        IReadOnlyList<School> entrants, NationCoefficients coeff, IRandomSource rng,
+        int? trackSchoolId = null)
     {
         if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
 
         var wins = new Dictionary<int, int>();
         foreach (var s in entrants) wins[s.Id] = 0;
+
+        // 追跡対象校が戦った試合を溜める（record=観測のみ・乱数を消費しない＝結果不変, 不変条件#2）。
+        List<TrackedMatch>? tracked = trackSchoolId is not null ? new List<TrackedMatch>() : null;
 
         if (entrants.Count == 1) return new TournamentResult(entrants[0], wins);
 
@@ -47,13 +65,23 @@ public static class TournamentEngine
                 {
                     winner = AggregateMatch.Play(a, b, coeff, rng);
                     wins[winner.Id]++;
+                    if (tracked is not null)
+                    {
+                        if (a.Id == trackSchoolId)
+                            tracked.Add(new TrackedMatch(b.Strength, winner.Id == a.Id));
+                        else if (b.Id == trackSchoolId)
+                            tracked.Add(new TrackedMatch(a.Strength, winner.Id == b.Id));
+                    }
                 }
                 next[i] = winner;
             }
             current = next;
         }
 
-        return new TournamentResult(current[0]!, wins);
+        return new TournamentResult(current[0]!, wins)
+        {
+            TrackedMatches = tracked ?? (IReadOnlyList<TrackedMatch>)System.Array.Empty<TrackedMatch>(),
+        };
     }
 
     internal static int NextPowerOfTwo(int n)
