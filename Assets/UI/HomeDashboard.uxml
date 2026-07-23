@@ -45,7 +45,6 @@
           <ui:Label name="hero-cd-label" class="hm-hero__cd-k" text="夏予選まで" />
           <ui:Label name="hero-cd-num" class="hm-hero__cd-num f-num-bd" text="15" />
           <ui:Label name="hero-cd-unit" class="hm-hero__cd-unit" text="週" />
-          <ui:Label name="hero-week" class="hm-hero__cd-sub" text="2026年 4月1週目" />
         </ui:VisualElement>
       </ui:VisualElement>
 
