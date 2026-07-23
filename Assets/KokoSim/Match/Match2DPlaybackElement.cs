@@ -45,7 +45,7 @@ namespace KokoSim.Unity.Match
         {
             _fillColumn = on;
             UpdateLabels();
-            MarkDirtyRepaint();
+            MarkDirtyRepaintAll();
         }
 
         // ── タイムライン駆動カメラワーク（design-06/design-12・Issue #119） ──
@@ -56,6 +56,10 @@ namespace KokoSim.Unity.Match
         private const double WideZoomEpsilon = 1.02;
         private IReadOnlyList<CameraKeyframe> _cameraPlan;
         private CameraViewport? _activeViewport;
+        // 直近に静的フィールド層(_fieldLayer)を描いたときの視野。SetTime() は毎フレーム呼ばれるが、
+        // 視野が変わっていなければ Project() の出力（フィールド形状の画面位置）も変わらないので
+        // 静的フィールドの再描画（Painter2D 約400呼び出し）を省く（issue #160・盤面フリーズ対策）。
+        private CameraViewport? _lastFieldViewport;
 
         /// <summary>観戦設定のトグル（既定オフ＝現行の固定全景）。呼び出し側（コントローラ）が毎フレーム設定してよい。</summary>
         public bool CameraWorkEnabled { get; set; }
@@ -139,15 +143,26 @@ namespace KokoSim.Unity.Match
         private VisualElement _judgementHost;
         private Label _judgementLabel;
 
+        // 動く要素（軌跡・野手・走者・ボール）専用の子レイヤー。静的フィールド（this 自身の
+        // generateVisualContent）と再描画頻度を分離するための層分け（issue #160）。
+        private readonly VisualElement _actorsLayer;
+
         public Match2DPlaybackElement()
         {
             pickingMode = PickingMode.Ignore;
             style.position = Position.Absolute;
             style.left = 0; style.top = 0; style.right = 0; style.bottom = 0;
             style.overflow = Overflow.Hidden;
-            generateVisualContent += OnGenerate;
+            generateVisualContent += OnGenerateField;
             RegisterCallback<CustomStyleResolvedEvent>(OnStyles);
-            RegisterCallback<GeometryChangedEvent>(_ => { UpdateLabels(); MarkDirtyRepaint(); });
+            RegisterCallback<GeometryChangedEvent>(_ => { UpdateLabels(); MarkDirtyRepaintAll(); });
+
+            _actorsLayer = new VisualElement { pickingMode = PickingMode.Ignore };
+            _actorsLayer.style.position = Position.Absolute;
+            _actorsLayer.style.left = 0; _actorsLayer.style.top = 0;
+            _actorsLayer.style.right = 0; _actorsLayer.style.bottom = 0;
+            _actorsLayer.generateVisualContent += OnGenerateActors;
+            Add(_actorsLayer);
 
             for (var i = 0; i < FielderOrder.Length; i++)
             {
@@ -200,7 +215,7 @@ namespace KokoSim.Unity.Match
             if (cs.TryGetValue(GrassStripeProp, out var gs)) _grassStripe = gs;
             if (cs.TryGetValue(WarningProp, out var wa)) _warning = wa;
             foreach (var l in _fielderLabels) l.style.color = _chalk;
-            MarkDirtyRepaint();
+            MarkDirtyRepaintAll();
         }
 
         /// <summary>再生するプレーを差し替える（軌跡クリア・t=0 相当）。</summary>
@@ -238,7 +253,7 @@ namespace KokoSim.Unity.Match
 
             UpdateJudgement(0); // _play=null＝何も見つからず非表示になる（前プレーの判定表示を持ち越さない）。
             UpdateLabels();
-            MarkDirtyRepaint();
+            MarkDirtyRepaintAll();
         }
 
         /// <summary>時刻 t のアクター位置を確定し、軌跡へ1点積む（描画は次の repaint で）。</summary>
@@ -284,7 +299,20 @@ namespace KokoSim.Unity.Match
 
             UpdateJudgement(t);
             UpdateLabels();
+            // 動く要素は毎フレーム再描画するが、静的フィールド（芝・ダート・フェンス弧など約400 Painter2D
+            // 呼び出し）は Project() の出力を左右する視野が変わったときだけ再描画する（issue #160）。
+            // カメラワーク無効時（既定）は _activeViewport が常に null のままなので、打球再生中も
+            // フィールドの再描画が完全に止まる。
+            _actorsLayer.MarkDirtyRepaint();
+            if (_activeViewport != _lastFieldViewport) MarkDirtyRepaintAll();
+        }
+
+        /// <summary>静的フィールド層と動的アクター層の両方を再描画対象にする（頻度が低い変更専用）。</summary>
+        private void MarkDirtyRepaintAll()
+        {
             MarkDirtyRepaint();
+            _actorsLayer.MarkDirtyRepaint();
+            _lastFieldViewport = _activeViewport;
         }
 
         /// <summary>
@@ -393,7 +421,9 @@ namespace KokoSim.Unity.Match
         }
 
         // ── 描画 ──
-        private void OnGenerate(MeshGenerationContext mgc)
+        // 静的フィールド（芝・ダート・フェンス弧など）。this 自身の generateVisualContent＝
+        // MarkDirtyRepaintAll() が呼ばれたとき（視野変化・リサイズ・スタイル変化）だけ再描画する（issue #160）。
+        private void OnGenerateField(MeshGenerationContext mgc)
         {
             var r = contentRect;
             if (r.width < 4f || r.height < 4f) return;
@@ -402,6 +432,16 @@ namespace KokoSim.Unity.Match
             var decoK = DecoScale; // 線の太さ・トークン半径はズーム非依存（画面上で一定に保つ, Issue #119）
 
             DrawField(p, r, k, decoK);
+        }
+
+        // 動く要素（軌跡・野手・走者・ボール）。_actorsLayer の generateVisualContent＝毎フレーム再描画する。
+        private void OnGenerateActors(MeshGenerationContext mgc)
+        {
+            var r = contentRect;
+            if (r.width < 4f || r.height < 4f) return;
+            var p = mgc.painter2D;
+            var decoK = DecoScale;
+
             DrawTrail(p, decoK);
             DrawFielders(p, decoK);
             DrawRunners(p, decoK);
