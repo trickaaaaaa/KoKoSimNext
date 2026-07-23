@@ -10,7 +10,7 @@ public sealed record BattingLine(
     int Order, FieldPosition Position, string Name,
     int PlateAppearances, int AtBats, int Hits, int Doubles, int Triples, int HomeRuns,
     int Rbi, int Walks, int StrikeOuts, int? SourceId = null, int HitByPitches = 0,
-    int StolenBases = 0, int CaughtStealing = 0, int Runs = 0)
+    int StolenBases = 0, int CaughtStealing = 0, int Runs = 0, int SacrificeFlies = 0)
 {
     /// <summary>打率（打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;
