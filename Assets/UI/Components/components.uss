@@ -626,19 +626,21 @@
     flex-grow: 1;
     flex-basis: 0;
     min-height: 40px;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-chip);
-    /* 枠は常設で色だけ替える（ホバーで幅が増えると行がずれるため）。既定は面と同色＝見えない。 */
-    border-width: var(--border-w);
-    border-color: var(--color-panel);
-    margin-bottom: 3px;
+    /* 行の独立パネル化（共通言語＝row-panel と同じ白面＋インク枠＋ベタ影・角0）。
+       打順表は密なので影は 4px（枠2+影2）に抑え、行間も 6px にする。 */
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border); border-left-width: var(--nb-border);
+    border-right-width: 4px; border-bottom-width: 4px;
+    border-radius: 0;
+    margin-bottom: 6px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-/* ホバー＝枠（--color-line-focus）／選択＝枠（--color-lamp）。選択行をホバーしても選択色を保つ。 */
-.lineup-row:hover { background-color: var(--color-row-hover); border-color: var(--color-line-focus); }
-.lineup-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
-.lineup-row--picked:hover { border-color: var(--color-lamp); }
+/* ホバー＝桜淡 ／ 選択（入替対象）＝桜（row-panel--selected と同じ選択言語）。 */
+.lineup-row:hover { background-color: var(--sakura-tint); }
+.lineup-row--picked { background-color: var(--sakura); }
+.lineup-row--picked:hover { background-color: var(--sakura); }
 .lineup-row__ord {
     width: 22px;
     -unity-text-align: middle-center;
@@ -686,18 +688,19 @@
     align-items: center;
     height: 64px;
     flex-shrink: 0;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-chip);
-    /* lineup-row と同じ：枠は常設・色だけ替える（幅の増減で行がずれない）。 */
-    border-width: var(--border-w);
-    border-color: var(--color-panel);
-    margin-bottom: 3px;
+    /* lineup-row と同じ独立パネル（白面＋インク枠＋ベタ影4px・角0）。 */
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border); border-left-width: var(--nb-border);
+    border-right-width: 4px; border-bottom-width: 4px;
+    border-radius: 0;
+    margin-bottom: 6px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-.bench-row:hover { background-color: var(--color-row-hover); border-color: var(--color-line-focus); }
-.bench-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
-.bench-row--picked:hover { border-color: var(--color-lamp); }
+.bench-row:hover { background-color: var(--sakura-tint); }
+.bench-row--picked { background-color: var(--sakura); }
+.bench-row--picked:hover { background-color: var(--sakura); }
 .bench-row__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--color-chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: var(--sp-2); }
 .bench-row__tag { font-size: 14px; color: var(--color-muted); background-color: var(--color-panel-deep); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
 
