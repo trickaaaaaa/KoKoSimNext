@@ -116,7 +116,8 @@ public static class DeterminismCards
         Speed = 50, ArmStrength = 50, Fielding = 50, Catching = 50,
     };
 
-    private static Team Team(string name)
+    /// <summary>決定論ゲートの標準チーム（設計書17 F2 のシナリオテストからも同じ構成を使う）。</summary>
+    public static Team Team(string name)
     {
         var order = new List<Player>
         {

@@ -169,6 +169,10 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 怪物 | Phenom | 才能外れ値の隠しフラグ。一芸特化型/総合型（OPEN-QUESTIONS Q20, design-04 §2） |
 | 怪我の種類（傷病名） | InjuryType | 捻挫/肉離れ/骨折/打撲/靭帯損傷/疲労性炎症。定義は `data/injuries.yaml`（InjuryCatalog）。抽選は種類→部位→段階の順（design-03 §3.5） |
 | 受傷の場面 | InjuryScene | 週次/死球/本塁クロスプレー/フェンス激突/スライディング/投球過多。試合中判定は Fork した専用ストリームで引き試合結果に影響させない |
+| 1球トレース / 観測の出口 | PitchTrace / IDebugTraceSink | 設計書17。`GameContext.CaptureTrace`＋`TraceSink` の両方が揃った時だけ走る観測データ（既定オフ・帯不変） |
+| 再現トークン | ReproToken | `k1:<rngState>:<pa>:<pitch>:<fixtureFp>`。指紋不一致は警告して再生しない（設計書17 §3.3） |
+| 場面ジャンプ / 強制発動 | ScenarioStart / ForcedOutcome | デバッグ注入。`GameResult.ScenarioId` / `HasForcedOutcomes` が立った試合は digest・統計から除外（設計書17 §3.4/§6.1） |
+| デバッグ橋渡し | DebugBridge | MCP `execute_code`（C#6）から叩く static＋JSON文字列のみのAPI（設計書17 §7） |
 
 ## 進め方
 

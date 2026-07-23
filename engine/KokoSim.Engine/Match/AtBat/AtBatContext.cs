@@ -49,6 +49,12 @@ public sealed record AtBatContext
     /// <summary>タイムライン出力（CHANGELOG 32）。既定オフ＝統計シムはゼロコスト。UI再生時のみオン。</summary>
     public bool CaptureTimeline { get; init; }
 
+    /// <summary>
+    /// 1球の構造化トレース（設計書17 §4, F1）。既定オフ＝統計シムはゼロコスト。
+    /// オンでも新たな抽選は一切せず、解決済みの値と純関数の値を写すだけ＝乱数消費は不変。
+    /// </summary>
+    public bool CaptureTrace { get; init; }
+
     /// <summary>守備陣形ルール表（CHANGELOG 33）。null なら既定表。</summary>
     public Match.Timeline.FormationTable? Formations { get; init; }
 

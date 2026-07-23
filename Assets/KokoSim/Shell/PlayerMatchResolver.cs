@@ -44,6 +44,13 @@ namespace KokoSim.Unity.Shell
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var ctx = new GameContext { CaptureTimelines = true, MercyRuleEnabled = mercyRuleEnabled };
+#if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
+            // 大会フローの実試合にもデバッグHUDの観測を差し込む（設計書17 §5/§12.4, #95）。HUDが閉じていれば
+            // AttachTo は恒等（Enabled==false→ctxをそのまま返す）＝観戦の有無で大会結果が変わらない契約
+            // （このメソッド冒頭のコメント／Resolve との box score 一致）を壊さない。CaptureTrace は RNG 中立。
+            // 裏処理（Resolve）には付けない＝コストゼロを維持する。
+            ctx = Unity.Debugging.DebugTraceHub.AttachTo(ctx);
+#endif
             var managerIsAway = ManagerIsAway(manager, opponent);
             var prog = managerIsAway
                 ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2))

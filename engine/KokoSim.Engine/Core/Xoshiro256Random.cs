@@ -99,4 +99,57 @@ public sealed class Xoshiro256Random : IRandomSource
         var mixed = _s0 ^ RotateLeft(streamId + 0x9E3779B97F4A7C15UL, 32);
         return new Xoshiro256Random(mixed);
     }
+
+    // ===== 状態の捕捉と復元（設計書17 §3.2・F0 再現基盤） =====
+    // シードを持たない乱数源（大会の Fork ストリーム等）でも「今この瞬間」から再開できるようにする。
+    // <see cref="IRandomSource"/> には足さない（実装差し替えの自由度を残す＝設計書17 §3.2）。
+
+    /// <summary>捕捉状態の語数。xoshiro の 4 ワード＋Box-Muller 予備値（値・有無）で 6。</summary>
+    public const int StateWords = 6;
+
+    /// <summary>
+    /// 現在の内部状態をコピーで返す（設計書17 §3.2）。<see cref="FromState"/> と往復させると、
+    /// 以降の乱数列が1ビットも違わずに再現される。
+    ///
+    /// <para>設計書17 §3.2 は「4要素」と書いているが、<see cref="NextGaussian"/> の Box-Muller は
+    /// 予備値を1つキャッシュしており、これを落とすと復元後の正規乱数が半周ズレる（=決定論が壊れる）。
+    /// よって 4 ワードに予備値の bit 表現と有無フラグを足した 6 要素を単一ソースとする。</para>
+    /// </summary>
+    public ulong[] CaptureState() => new[]
+    {
+        _s0, _s1, _s2, _s3,
+        unchecked((ulong)BitConverter.DoubleToInt64Bits(_spareGaussian)),
+        _hasSpareGaussian ? 1UL : 0UL,
+    };
+
+    /// <summary>
+    /// <see cref="CaptureState"/> の出力から乱数源を復元する。予備値を持たない4要素配列
+    /// （旧セーブ・手書きトークン）も受け付け、その場合は予備値なしとして扱う。
+    /// </summary>
+    public static Xoshiro256Random FromState(ulong[] state)
+    {
+        if (state is null) throw new ArgumentNullException(nameof(state));
+        if (state.Length != 4 && state.Length != StateWords)
+        {
+            throw new ArgumentException(
+                $"RNG状態は4要素または{StateWords}要素である必要があります（実際: {state.Length}）。", nameof(state));
+        }
+        if (state[0] == 0 && state[1] == 0 && state[2] == 0 && state[3] == 0)
+        {
+            // xoshiro は全ゼロ状態から抜け出せない（常に0を返す）。壊れたセーブを黙って受けない。
+            throw new ArgumentException("RNG状態が全ゼロです（xoshiro の不正状態）。", nameof(state));
+        }
+
+        var r = new Xoshiro256Random(0UL);
+        r._s0 = state[0];
+        r._s1 = state[1];
+        r._s2 = state[2];
+        r._s3 = state[3];
+        if (state.Length == StateWords)
+        {
+            r._spareGaussian = BitConverter.Int64BitsToDouble(unchecked((long)state[4]));
+            r._hasSpareGaussian = state[5] != 0UL;
+        }
+        return r;
+    }
 }
