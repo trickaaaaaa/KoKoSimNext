@@ -15,6 +15,8 @@ namespace KokoSim.Unity.Players
     {
         public int Index;                 // roster 生成順の安定 index（詳細画面へ受け渡す）
         public string Name = "";
+        /// <summary>背番号の表示テキスト（メンバー設定で割当。ベンチ外は「—」＝他画面と同じ表記, issue #131）。</summary>
+        public string UniformNumber = "—";
         public string GradeLabel = "1年";
         /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力の4つ, Issue #30）。総合ランクは廃止（2026-07-22 owner決定）。
         /// 部品辞書 <see cref="KokoSim.Unity.Components.UiComponents.CategoryRankChips"/> にそのまま渡す（Issue #140）。</summary>
@@ -98,6 +100,7 @@ namespace KokoSim.Unity.Players
             {
                 Index = _indexOf.TryGetValue(p, out var idx) ? idx : 0,
                 Name = p.Name,
+                UniformNumber = p.UniformNumber == 0 ? "—" : p.UniformNumber.ToString(),
                 GradeLabel = p.Grade + "年",
                 Condition = ConditionLabels.Jp(condition),
                 ConditionLevel = condition,

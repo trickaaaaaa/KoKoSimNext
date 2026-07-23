@@ -10,6 +10,9 @@ namespace KokoSim.Unity.Players
     /// 選手詳細のコントローラ（設計書06 §3.3、mock「選手詳細」）。
     /// PlayerSelection.Index の1名を PlayerDetailState から整形してバインドする。
     /// 能力バランスは Painter2D で実描画（現在能力から）。成長推移・公式戦成績はエンジン未接続で空状態。
+    /// マスターディテール化（issue #131）: 独立画面ではなく、PlayerList と同じ GameObject・同じ
+    /// UIDocument（PlayerList.uxml の右ペイン）に同居させる。切替入口は <see cref="RenderForSelection"/>
+    /// （PlayerListController が行ホバーのたびに呼ぶ）。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PlayerDetailController : MonoBehaviour
@@ -39,9 +42,6 @@ namespace KokoSim.Unity.Players
             // 背番号は純数字（index+1）＝コンデンス数字書体（design-16 §2「純数字セルのみ」）。62px の大見出し数字なので f-num-bd。
             _root.Q<Label>("number")?.AddToClassList("f-num-bd");
 
-            var back = _root.Q<Button>("back-list");
-            if (back != null) back.clicked += () => FindObjectOfType<ScreenRouter>()?.Show("PlayerList");
-
             // 主将に指名（設計書09 §8）: 新チーム発足時（夏の3年引退直後）だけ受け付ける。
             // 期間外・候補外は非活性にして理由を添えるため、ボタン参照を保持しておく。
             _designateButton = _root.Q<Button>("designate-captain");
@@ -65,6 +65,17 @@ namespace KokoSim.Unity.Players
 
             Render();
             ApplyTab();
+        }
+
+        /// <summary>
+        /// マスターディテール化（issue #131）: 部員名簿（PlayerListController）が行ホバーのたびに呼ぶ入口。
+        /// PlayerSelection.Index は呼び出し側が更新済みの前提。能力タブは Render() で再描画されるが、
+        /// 成績タブ表示中は RenderStats() も呼ばないと選手を切り替えても数値が古いまま残る。
+        /// </summary>
+        public void RenderForSelection()
+        {
+            Render();
+            if (_tab == 1) RenderStats();
         }
 
         private void Render()

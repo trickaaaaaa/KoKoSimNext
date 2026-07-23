@@ -1,9 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   PlayerList.uss — 選手一覧の画面固有スタイルだけを置く。
+   PlayerList.uss — 選手一覧＋能力詳細（マスターディテール, issue #131）の画面固有スタイルだけを置く。
    昼NBスキンは tokens/KokoSimTheme(全面) が担い、行の独立パネル化は
    共通部品 components.uss の .row-well / .row-panel / .plate-header / .tool-btn / .nb-plate
-   に集約した（G1・ユーザー要望で共通化）。ここに残すのは「見出し行の列合わせ」だけ。
+   に集約した（G1・ユーザー要望で共通化）。ここに残すのは「見出し行の列合わせ」と
+   「左右2ペイン分割」「この画面だけの行高48px基準への上書き」。
    ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── マスターディテール：左=部員名簿／右=能力詳細（issue #131 owner選択 A案）。
+   TopBar の下を横並びにし、左右それぞれが独自スクロールを持つ（案A＝情報量フル維持）。
+   比率は左40:右60（owner決定時点で「好みの範囲」と明記された目安値）。 */
+.pl-split { flex-direction: row; flex-grow: 1; min-height: 0; }
+.pl-split__left { flex-grow: 0; flex-shrink: 0; width: 40%; }
+.pl-split__right { flex-grow: 0; flex-shrink: 0; width: 60%; padding: 0 var(--sp-4) var(--sp-4) var(--sp-4); }
 
 /* 見出し行：井（row-well）の中に置くがパネルにはしない。列は行パネルの内容と揃える。
    行パネル内容の左右インセット（左＝枠2+pad16／右＝枠5+pad16）を、井の padding(12) を除いた
@@ -18,3 +26,28 @@
 
 /* 行の中の調子顔は一覧で拾いやすいよう少し大きめに（既定18→26）。 */
 .pl-cond-face { width: 26px; height: 26px; }
+
+/* ── 行高48px基準への上書き（issue #131 owner追記・2026-07-23）。
+   共通部品 .row-panel の既定（--h-row=60px）はそのまま他画面と共有し、この画面（部員名簿の
+   データ行だけ）を --fs-page（24px）に上げて拡げた行高と釣り合わせる（トークンの段階内, UI原則⑤）。
+   セレクタは #player-rows 配下だけに絞り、見出し行（.pl-thead）の小さい文字には触れない。
+   （USSは一般兄弟結合子 `~` 非対応＝子孫結合子で書く。UI-BUILD-METHOD.md 記載の既知の罠） */
+#player-rows .row-panel { min-height: 48px; }
+#player-rows .cell { font-size: var(--fs-page); }
+#player-rows .pl-cond-face { width: 30px; height: 30px; }
+
+/* 背番号列：数字のみの固定幅・右揃え（UI原則③＝数字は右揃え・桁を揃える）。 */
+.cell--no {
+    flex-grow: 0;
+    flex-shrink: 0;
+    width: var(--col-pl-no);
+    -unity-text-align: middle-right;
+}
+
+/* 選手名列：和文6文字＋姓名間スペース分の固定幅（issue #131 owner追記）。
+   flex-grow の比例配分をやめ、空いた分は .cell--wide（カテゴリ別ランク）へ回す。 */
+.cell--name {
+    flex-grow: 0;
+    flex-shrink: 0;
+    width: var(--col-pl-name);
+}
