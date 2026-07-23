@@ -52,23 +52,6 @@ namespace KokoSim.Unity.Member
         public System.Collections.Generic.List<PitchChartDatum> Pitches = new System.Collections.Generic.List<PitchChartDatum>();
     }
 
-    /// <summary>比較の1能力行。</summary>
-    public sealed class CompareRow
-    {
-        public string Label = "";
-        public int ValueA;
-        public int ValueB;
-        public bool HasA;
-        public bool HasB;
-        public int Winner;   // -1=A, 0=互角/該当なし, 1=B
-        // 物理量表示（issue #94）: 球速行だけ km/h テキスト＋Levelバー幅を持つ。null/負なら Level 生値表示。
-        public string TextA;
-        public string TextB;
-        public int FillA = -1;
-        public int FillB = -1;
-    }
-
-
     public sealed class MemberSettingView
     {
         public int AssignedCount;
@@ -78,10 +61,10 @@ namespace KokoSim.Unity.Member
         public List<PoolView> Pool = new List<PoolView>();
         public CompareCard CardA = new CompareCard();
         public CompareCard CardB = new CompareCard();
-        public int Tab;                  // 0=打撃走塁（＋守備適性ダイヤ） / 1=守備投手
-        public string[] TabLabels = { "打撃・走塁", "守備・投手" };
-        public List<CompareRow> Rows = new List<CompareRow>();
-        // 守備適性ダイヤ（打撃・走塁タブ内に併載・選手ごとに1枚）。ShowApt=false のタブでは描かない。
+        public int Tab;                  // 0=野手能力（＋守備適性ダイヤ） / 1=投手能力
+        public string[] TabLabels = PlayerCompareTabs.TabLabels;
+        public List<PlayerCompareRow> Rows = new List<PlayerCompareRow>();
+        // 守備適性ダイヤ（野手能力タブ内に併載・選手ごとに1枚）。ShowApt=false のタブでは描かない。
         // AptA/AptB は9守備位置（投捕一二三遊左中右順）のランク（G〜S）。未選択の側は Has*=false。
         public bool ShowApt;
         public bool HasAptA;
@@ -108,36 +91,8 @@ namespace KokoSim.Unity.Member
             FieldPosition.RightField,
         };
 
-        // 比較タブ①打撃・走塁（＋守備適性ダイヤ） ②守備・投手（守備力=Fielding含む）。全能力を網羅。
-        private static readonly (string Label, Func<DevelopingPlayer, int> Get)[] TabBat =
-        {
-            ("ミート", p => p.Level(AbilityKind.Contact)),
-            ("パワー", p => p.Level(AbilityKind.Power)),
-            ("弾道", p => p.Level(AbilityKind.LaunchTendency)),
-            ("選球眼", p => p.Level(AbilityKind.Discipline)),
-            ("走力", p => p.Level(AbilityKind.Speed)),
-            ("バント", p => p.Level(AbilityKind.Bunt)),
-            ("盗塁", p => p.Level(AbilityKind.Steal)),
-            ("走塁", p => p.Level(AbilityKind.Baserunning)),
-            ("精神力", p => p.Mental),
-        };
-        private static readonly (string Label, Func<DevelopingPlayer, int> Get)[] TabDef =
-        {
-            ("守備力", p => p.Level(AbilityKind.Fielding)),
-            ("捕球", p => p.Level(AbilityKind.Catching)),
-            ("肩", p => p.Level(AbilityKind.ArmStrength)),
-            ("送球", p => p.Level(AbilityKind.ThrowAccuracy)),
-            ("リード", p => p.Lead),
-            (AbilityLabels.Jp(AbilityKind.Velocity), p => p.Level(AbilityKind.Velocity)),
-            (AbilityLabels.Jp(AbilityKind.Control), p => p.Level(AbilityKind.Control)),
-            (AbilityLabels.Jp(AbilityKind.Stamina), p => p.Level(AbilityKind.Stamina)),
-            (AbilityLabels.Jp(AbilityKind.PitchRank), p => p.Level(AbilityKind.PitchRank)),
-        };
-
-        // 球速行の判定と km/h 表示（issue #94）。変換はエンジンの公開APIに一本化（UI側で式を再実装しない）。
-        private static readonly string VelocityLabel = AbilityLabels.Jp(AbilityKind.Velocity);
-        private static string KmhText(int velLevel)
-            => (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(velLevel)) + "km/h";
+        // 比較タブ①野手能力（＋守備適性ダイヤ） ②投手能力。タブ定義・行組み立ては単一ソース
+        // KokoSim.Unity.Shell.PlayerCompareTabs（スタメン決定画面と共有, issue #192）。
 
         // カテゴリ別ランク算出係数（チーム総合力パネル等と同一・単一ソース、Issue #140）。
         private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
@@ -269,27 +224,10 @@ namespace KokoSim.Unity.Member
         {
             var a = leftIdx >= 0 ? _roster[leftIdx] : null;
             var b = rightIdx >= 0 ? _roster[rightIdx] : null;
-            if (a == null && b == null) return;
-
-            var table = _tab == 0 ? TabBat : TabDef;
-            foreach (var (label, get) in table)
-            {
-                var row = new CompareRow { Label = label, HasA = a != null, HasB = b != null };
-                if (a != null) row.ValueA = get(a);
-                if (b != null) row.ValueB = get(b);
-                if (a != null && b != null)
-                    row.Winner = row.ValueA > row.ValueB ? -1 : row.ValueA < row.ValueB ? 1 : 0;
-                // 球速だけは物理量なので km/h テキスト表示（バー幅は Level のまま＝全行が同じ土俵で伸びる, issue #94）。
-                if (label == VelocityLabel)
-                {
-                    if (a != null) { row.TextA = KmhText(row.ValueA); row.FillA = row.ValueA; }
-                    if (b != null) { row.TextB = KmhText(row.ValueB); row.FillB = row.ValueB; }
-                }
-                v.Rows.Add(row);
-            }
+            v.Rows = PlayerCompareTabs.BuildRows(_tab, a, b);
         }
 
-        // 守備適性ダイヤ（打撃・走塁タブでのみ表示）。選手ごとに1枚ぶん、9守備位置のランクを作る。
+        // 守備適性ダイヤ（野手能力タブでのみ表示）。選手ごとに1枚ぶん、9守備位置のランクを作る。
         private void BuildAptNodes(MemberSettingView v, int leftIdx, int rightIdx)
         {
             var a = leftIdx >= 0 ? _roster[leftIdx] : null;
