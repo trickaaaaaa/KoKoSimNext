@@ -8,6 +8,7 @@ using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
+using KokoSim.Unity.Components;   // PitchChartDatum（球種チャート部品への詰め替え, issue #94）
 using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Players
@@ -44,6 +45,27 @@ namespace KokoSim.Unity.Players
         public int Velo;
         public string Move = "";
         public int Rpm;
+
+        /// <summary>球種チャート部品（部品辞書 PitchChartView）への詰め替え。ストレートには最速 km/h を添える
+        /// （meta-velo と同じ値を渡して一致させる, issue #94/#130）。他球種は VeloText を出さない。</summary>
+        public static List<PitchChartDatum> ToPitchChartData(List<PitchData> pitches, int topVelocityKmh)
+        {
+            var list = new List<PitchChartDatum>();
+            if (pitches == null) return list;
+            foreach (var pt in pitches)
+                list.Add(new PitchChartDatum
+                {
+                    Name = pt.Name,
+                    Kire = pt.Kire,
+                    DirX = pt.DirX,
+                    DirY = pt.DirY,
+                    Break01 = pt.Break01,
+                    IsFastball = pt.IsFastball,
+                    Extend01 = pt.Extend01,
+                    VeloText = pt.IsFastball ? topVelocityKmh.ToString(CultureInfo.InvariantCulture) : null,
+                });
+            return list;
+        }
     }
 
     public sealed class SkillInfo
@@ -235,56 +257,9 @@ namespace KokoSim.Unity.Players
 
             // 球種データ（全選手・表示近似）。誰を投手に据えるかはプレイヤーが決めるため、球種チャートは
             // 役割でゲートせず全員に出す。習得球種が無ければストレートだけを表示する（Issue #93）。
-            {
-                v.HasPitchData = true;
-                var baseVel = p.Level(AbilityKind.Velocity);
-
-                // ストレートは基準球。LearnedPitches に無ければ上方向に必ず追加する（未習得選手はこの1球だけになる）。
-                var hasFast = false;
-                foreach (var lp in p.LearnedPitches) if (lp.Type == PitchType.Fastball) hasFast = true;
-                if (!hasFast)
-                {
-                    var df = PitchDir(PitchType.Fastball);
-                    v.Pitches.Add(new PitchData
-                    {
-                        Name = "ストレート",
-                        Kire = Tiers.FromStrength(baseVel).ToString(),   // 球速＝ストレートのキレ相当
-                        DirX = df.x,
-                        DirY = df.y,
-                        // ストレートは変化球ではない＝変化量は短尺固定。伸びは Extend01（扇の幅）で表す。
-                        Break01 = FastballBreak01,
-                        IsFastball = true,
-                        Extend01 = ClampF(baseVel / 100f, 0f, 1f),
-                        Velo = Kmh(baseVel),
-                        Move = "—",
-                        Rpm = 2000 + baseVel * 4,
-                    });
-                }
-
-                foreach (var lp in p.LearnedPitches)
-                {
-                    var isFast = lp.Type == PitchType.Fastball;
-                    var velo = isFast ? Kmh(baseVel) : Kmh(baseVel) - 8 - (lp.SharpnessOffset % 20);
-                    var kireScore = Clamp(50 + lp.SharpnessOffset * 2, 1, 100);
-                    var dir = PitchDir(lp.Type);
-                    // 変化量: 球威+キレのオフセットから 0.42〜1.0。
-                    // ストレートだけは変化球ではないので短尺固定にし、伸び（キレ）は扇の幅で表す。
-                    var breakScore = lp.PowerOffset + lp.SharpnessOffset;
-                    v.Pitches.Add(new PitchData
-                    {
-                        Name = PitchJp(lp.Type),
-                        Kire = Tiers.FromStrength(kireScore).ToString(),
-                        DirX = dir.x,
-                        DirY = dir.y,
-                        Break01 = isFast ? FastballBreak01 : ClampF(0.45f + breakScore / 46f, 0.42f, 1.0f),
-                        IsFastball = isFast,
-                        Extend01 = isFast ? ClampF((baseVel + lp.SharpnessOffset * 2) / 100f, 0f, 1f) : 0f,
-                        Velo = velo,
-                        Move = isFast ? "—" : (18 + (lp.SharpnessOffset % 30)) + "cm",
-                        Rpm = 1800 + lp.PowerOffset * 6 + (isFast ? 400 : 0),
-                    });
-                }
-            }
+            // 生成ロジックは比較UI（メンバー/スタメン設定のミニチャート）と共用するため静的ヘルパへ集約（issue #94）。
+            v.HasPitchData = true;
+            v.Pitches.AddRange(BuildPitchData(p));
 
             // 特殊能力（実データ。生成選手は未保有が多い＝空状態を正直に表示）。
             foreach (var sk in p.Skills.Visible)
@@ -451,6 +426,58 @@ namespace KokoSim.Unity.Players
         // UI側で式を再実装しない（旧独自式 118+Lv*0.42 は廃止, issue #94）。
         private static int Kmh(int velLevel)
             => (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(velLevel));
+
+        /// <summary>選手の持ち球（LearnedPitches）→球種チャート用 PitchData 一覧（表示近似）。
+        /// 詳細画面と比較UI（メンバー/スタメン設定のミニチャート）で同じ絵を出すための単一ソース（issue #94/#93）。
+        /// ストレートは基準球として必ず含める（未習得選手はこの1球だけ）。</summary>
+        public static List<PitchData> BuildPitchData(DevelopingPlayer p)
+        {
+            var list = new List<PitchData>();
+            var baseVel = p.Level(AbilityKind.Velocity);
+
+            var hasFast = false;
+            foreach (var lp in p.LearnedPitches) if (lp.Type == PitchType.Fastball) hasFast = true;
+            if (!hasFast)
+            {
+                var df = PitchDir(PitchType.Fastball);
+                list.Add(new PitchData
+                {
+                    Name = "ストレート",
+                    Kire = Tiers.FromStrength(baseVel).ToString(),   // 球速＝ストレートのキレ相当
+                    DirX = df.x,
+                    DirY = df.y,
+                    Break01 = FastballBreak01,   // 変化球ではない＝短尺固定。伸びは Extend01（扇の幅）で表す
+                    IsFastball = true,
+                    Extend01 = ClampF(baseVel / 100f, 0f, 1f),
+                    Velo = Kmh(baseVel),
+                    Move = "—",
+                    Rpm = 2000 + baseVel * 4,
+                });
+            }
+
+            foreach (var lp in p.LearnedPitches)
+            {
+                var isFast = lp.Type == PitchType.Fastball;
+                var velo = isFast ? Kmh(baseVel) : Kmh(baseVel) - 8 - (lp.SharpnessOffset % 20);
+                var kireScore = Clamp(50 + lp.SharpnessOffset * 2, 1, 100);
+                var dir = PitchDir(lp.Type);
+                var breakScore = lp.PowerOffset + lp.SharpnessOffset;
+                list.Add(new PitchData
+                {
+                    Name = PitchJp(lp.Type),
+                    Kire = Tiers.FromStrength(kireScore).ToString(),
+                    DirX = dir.x,
+                    DirY = dir.y,
+                    Break01 = isFast ? FastballBreak01 : ClampF(0.45f + breakScore / 46f, 0.42f, 1.0f),
+                    IsFastball = isFast,
+                    Extend01 = isFast ? ClampF((baseVel + lp.SharpnessOffset * 2) / 100f, 0f, 1f) : 0f,
+                    Velo = velo,
+                    Move = isFast ? "—" : (18 + (lp.SharpnessOffset % 30)) + "cm",
+                    Rpm = 1800 + lp.PowerOffset * 6 + (isFast ? 400 : 0),
+                });
+            }
+            return list;
+        }
 
         // ストレートの扇の長さ（変化量軸では短尺固定。伸びは Extend01＝扇の幅で読ませる）。
         private const float FastballBreak01 = 0.15f;

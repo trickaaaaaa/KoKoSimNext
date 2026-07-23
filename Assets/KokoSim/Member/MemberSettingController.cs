@@ -540,6 +540,13 @@ namespace KokoSim.Unity.Member
             }
             el.Add(meta);
             el.Add(UiComponents.CategoryRankChips(card.Strength));
+
+            // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
+            // 未習得選手もストレート1球が出る（投/野でゲートしない, Issue #93）。
+            var chartHost = new VisualElement();
+            chartHost.AddToClassList("cmp-card__pitch");
+            el.Add(chartHost);
+            new PitchChartView(chartHost, compact: true).SetData(card.Pitches);
         }
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。

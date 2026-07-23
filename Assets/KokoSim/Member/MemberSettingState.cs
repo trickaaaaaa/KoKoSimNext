@@ -5,6 +5,8 @@ using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
+using KokoSim.Unity.Components;   // PitchChartDatum（持ち球ミニチャート, issue #94）
+using KokoSim.Unity.Players;      // PlayerDetailState.BuildPitchData / PitchData（球種データ単一ソース）
 using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Member
@@ -46,6 +48,8 @@ namespace KokoSim.Unity.Member
         public string HandLabel = "";    // 投打（例「右投左打」）
         public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);   // カテゴリ別ランク（打撃/走力/守備/投手）
         public bool IsCaptain;
+        // 持ち球のミニ球種変化チャート用データ（issue #94 案C）。未習得選手はストレート1球のみ。
+        public System.Collections.Generic.List<PitchChartDatum> Pitches = new System.Collections.Generic.List<PitchChartDatum>();
     }
 
     /// <summary>比較の1能力行。</summary>
@@ -306,6 +310,7 @@ namespace KokoSim.Unity.Member
         {
             if (index < 0 || index >= _roster.Count) return new CompareCard { Present = false };
             var p = _roster[index];
+            var topKmh = (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(p.Level(AbilityKind.Velocity)));
             return new CompareCard
             {
                 Present = true,
@@ -314,6 +319,8 @@ namespace KokoSim.Unity.Member
                 HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
                 Strength = PlayerStrengthProfile.Compute(p, Coeff),
                 IsCaptain = p.IsCaptain,
+                // 持ち球（ミニ球種チャート）は詳細画面と同じ生成ロジック（単一ソース, issue #94 案C）。
+                Pitches = PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(p), topKmh),
             };
         }
 

@@ -6,6 +6,8 @@ using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
+using KokoSim.Unity.Components;   // PitchChartDatum（持ち球ミニチャート, issue #94）
+using KokoSim.Unity.Players;      // PlayerDetailState.BuildPitchData / PitchData（球種データ単一ソース）
 using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Lineup
@@ -71,6 +73,8 @@ namespace KokoSim.Unity.Lineup
         public string OverallGrade = "C";
         public bool IsCaptain;
         public List<StatColumnView> Stats = new List<StatColumnView>();  // [通算, 今大会]
+        // 持ち球のミニ球種変化チャート用データ（issue #94 案C）。未習得選手はストレート1球のみ。
+        public List<PitchChartDatum> Pitches = new List<PitchChartDatum>();
     }
 
     /// <summary>比較の1能力行。</summary>
@@ -599,6 +603,7 @@ namespace KokoSim.Unity.Lineup
         {
             if (index < 0 || index >= _roster.Count) return new CompareCardView { Present = false };
             var p = _roster[index];
+            var topKmh = (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(p.Level(AbilityKind.Velocity)));
             return new CompareCardView
             {
                 Present = true,
@@ -607,6 +612,8 @@ namespace KokoSim.Unity.Lineup
                 OverallGrade = OverallGrade(p),
                 IsCaptain = p.IsCaptain,
                 Stats = BuildStats(p),
+                // 持ち球（ミニ球種チャート）は詳細画面と同じ生成ロジック（単一ソース, issue #94 案C）。
+                Pitches = PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(p), topKmh),
             };
         }
 
