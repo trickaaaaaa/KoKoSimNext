@@ -566,6 +566,7 @@ public static class GameEngine
                             offense.DoubleStealThirdBreakCount++;
                             offense.Runs += 1;
                             runsThisHalf += 1;
+                            if (bases.Third is { } dsScorer) offense.RecordRun(dsScorer); // 得点帰属（issue #77）
                             bases.Third = null;
                         }
 
@@ -635,6 +636,7 @@ public static class GameEngine
                         {
                             offense.Runs += 1;
                             runsThisHalf += 1;
+                            if (bases.Third is { } homeScorer) offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
                         }
                         else
                         {
@@ -682,9 +684,11 @@ public static class GameEngine
                         0.0, 1.0);
                     if (MathUtil.Chance(wpProb + pbProb, rng))
                     {
+                        var wpScorer = bases.Third; // 暴投/捕逸で生還するのは三塁走者（issue #77 得点帰属）
                         var wpRuns = BaserunningModel.ApplyBatteryMiss(bases);
                         offense.Runs += wpRuns;
                         runsThisHalf += wpRuns;
+                        if (wpRuns > 0 && wpScorer is not null) offense.RecordRun(wpScorer);
                         offense.WildPitchCount++;
                     }
                 }
@@ -754,6 +758,7 @@ public static class GameEngine
             // インラインブロックで処理済み。つまり sq.RunnerOut はここでは常に false）。
             if (res.Squeeze is { } sq)
             {
+                var sqScorer = bases.Third; // スクイズで生還するのは三塁走者（issue #77 得点帰属。null化の前に捕捉）
                 var sqOuts = sq.BatterOut ? 1 : 0;
                 if (sq.Bunt is BuntResult.SacrificeSuccess or BuntResult.InfieldHit)
                 {
@@ -764,6 +769,7 @@ public static class GameEngine
 
                 offense.Runs += sq.Runs;
                 runsThisHalf += sq.Runs;
+                if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
                     batterOrder: batterOrder, pitchLog: res.PitchLog);
@@ -830,13 +836,18 @@ public static class GameEngine
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
             // 失策連鎖（design-14 P1-6b）の送球精度連動用: 失策を犯した野手の ThrowAccuracy（未処理球では既定50）。
             var errorThrowAccuracy = res.Play?.FielderThrowAccuracy ?? 50;
+            // collectMoves は常に true（GameEngine は自校の詳細試合専用＝裏試合は通らない, RNG中立）。
+            // 得点帰属（issue #77）に本塁到達 RunnerMove を使うため、観戦しない試合でも moves を収集する。
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
-                bases, res.Result, batter, outs, ctx.Baserunning, rng, collectMoves: ctx.CaptureTimelines,
+                bases, res.Result, batter, outs, ctx.Baserunning, rng, collectMoves: true,
                 homePlay, r1Start, errorThrowAccuracy);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
             runsThisHalf += runs;
+            // 本塁到達（ToBase>=4・非アウト）した走者へ得点を帰属（issue #77）。
+            foreach (var m in runnerMoves)
+                if (m.ToBase >= 4 && !m.Out) offense.RecordRun(m.Runner);
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
 
             // 本塁クロスプレー（設計書03 §3.5・設計書12 §3）: 走者と捕手の接触。どちらが負傷するかも

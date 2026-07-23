@@ -113,8 +113,8 @@ public sealed class TeamState
     public void RecordSqueeze() => Squeezes++;
 
     // ===== 個人成績（ボックススコア） =====
-    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS; }
-    private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches, HB; }
+    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R; }
+    private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches, HB, HRA; }
     private sealed class FieldAccum { public FieldPosition Position; public int Errors; }
     private readonly Dictionary<Player, BatAccum> _bat = new();
     private readonly Dictionary<Player, PitAccum> _pit = new();
@@ -136,6 +136,13 @@ public sealed class TeamState
         a.RBI += rbi;
     }
 
+    /// <summary>走者/打者の生還を記録（得点＝個人の生還数, issue #77）。打席と独立に本塁到達で1加算。</summary>
+    public void RecordRun(Player runner)
+    {
+        if (!_bat.TryGetValue(runner, out var a)) { a = new BatAccum(); _bat[runner] = a; }
+        a.R++;
+    }
+
     /// <summary>投手の対戦1打者を記録。</summary>
     public void RecordPitching(Player pitcher, PlateAppearanceResult r, int runs, int outs, int pitches)
     {
@@ -143,6 +150,7 @@ public sealed class TeamState
         a.BF++;
         if (r.IsHit()) a.H++;
         a.Runs += runs;
+        if (r == PlateAppearanceResult.HomeRun) a.HRA++;   // 被本塁打（issue #77）
         if (r == PlateAppearanceResult.Strikeout) a.SO++;
         if (r == PlateAppearanceResult.Walk) a.BB++;
         if (r == PlateAppearanceResult.HitByPitch) a.HB++;
@@ -181,7 +189,7 @@ public sealed class TeamState
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
-                a.HBP, a.SB, a.CS);
+                a.HBP, a.SB, a.CS, a.R);
     }
 
     /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>
@@ -202,7 +210,7 @@ public sealed class TeamState
         {
             if (p == null || seen.Contains(p) || !_pit.TryGetValue(p, out var a)) return;
             seen.Add(p);
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber));
+            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA));
         }
         Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
         foreach (var p in _team.Bullpen) Add(p);

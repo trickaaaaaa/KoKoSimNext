@@ -10,7 +10,7 @@ public sealed record BattingLine(
     int Order, FieldPosition Position, string Name,
     int PlateAppearances, int AtBats, int Hits, int Doubles, int Triples, int HomeRuns,
     int Rbi, int Walks, int StrikeOuts, int? SourceId = null, int HitByPitches = 0,
-    int StolenBases = 0, int CaughtStealing = 0)
+    int StolenBases = 0, int CaughtStealing = 0, int Runs = 0)
 {
     /// <summary>打率（打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;
@@ -23,7 +23,7 @@ public sealed record BattingLine(
 /// </summary>
 public sealed record PitchingLine(
     string Name, int Outs, int BattersFaced, int Hits, int Runs, int StrikeOuts, int Walks, int Pitches,
-    int? SourceId = null, int HitBatters = 0, int UniformNumber = 0)
+    int? SourceId = null, int HitBatters = 0, int UniformNumber = 0, int HomeRunsAllowed = 0)
 {
     /// <summary>投球回（アウト数/3）。例: 7回1/3 → "7 1/3"。</summary>
     public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");

@@ -22,6 +22,8 @@ public sealed class BattingStatLine
     public int StrikeOuts { get; private set; }
     public int StolenBases { get; private set; }
     public int CaughtStealing { get; private set; }
+    /// <summary>得点（個人の生還数, issue #77）。</summary>
+    public int Runs { get; private set; }
 
     /// <summary>単打＝安打−（二塁打＋三塁打＋本塁打）。</summary>
     public int Singles => Hits - Doubles - Triples - HomeRuns;
@@ -58,5 +60,10 @@ public sealed class BattingStatLine
         StrikeOuts += l.StrikeOuts;
         StolenBases += l.StolenBases;
         CaughtStealing += l.CaughtStealing;
+        Runs += l.Runs;
     }
+
+    /// <summary>盗塁成功率（企図0なら0）。企図＝盗塁＋盗塁死。</summary>
+    public double StolenBaseRate => (StolenBases + CaughtStealing) > 0
+        ? (double)StolenBases / (StolenBases + CaughtStealing) : 0.0;
 }

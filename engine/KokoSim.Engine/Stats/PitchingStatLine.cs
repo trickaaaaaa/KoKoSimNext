@@ -20,6 +20,8 @@ public sealed class PitchingStatLine
     public int Walks { get; private set; }
     public int HitBatters { get; private set; }
     public int Pitches { get; private set; }
+    /// <summary>被本塁打（issue #77）。</summary>
+    public int HomeRunsAllowed { get; private set; }
 
     /// <summary>投球回テキスト（例: 7回1/3 → "7 1/3"）。</summary>
     public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");
@@ -48,5 +50,6 @@ public sealed class PitchingStatLine
         Walks += l.Walks;
         HitBatters += l.HitBatters;
         Pitches += l.Pitches;
+        HomeRunsAllowed += l.HomeRunsAllowed;
     }
 }
