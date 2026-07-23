@@ -1877,6 +1877,9 @@ public static class CoefficientsLoader
         public double FameNationalChampion { get; set; } = D.FameNationalChampion;
         public double FamePerWin { get; set; } = D.FamePerWin;
         public double FameDecay { get; set; } = D.FameDecay;
+        public double FameUpsetWinPerTier { get; set; } = D.FameUpsetWinPerTier;
+        public double FameUpsetLossPerTier { get; set; } = D.FameUpsetLossPerTier;
+        public double FameUpsetSeasonCap { get; set; } = D.FameUpsetSeasonCap;
         public double TrustReset { get; set; } = D.TrustReset;
         public double TrustPerWin { get; set; } = D.TrustPerWin;
         public double TrustKoshien { get; set; } = D.TrustKoshien;
@@ -1905,6 +1908,9 @@ public static class CoefficientsLoader
             FameNationalChampion = FameNationalChampion,
             FamePerWin = FamePerWin,
             FameDecay = FameDecay,
+            FameUpsetWinPerTier = FameUpsetWinPerTier,
+            FameUpsetLossPerTier = FameUpsetLossPerTier,
+            FameUpsetSeasonCap = FameUpsetSeasonCap,
             TrustReset = TrustReset,
             TrustPerWin = TrustPerWin,
             TrustKoshien = TrustKoshien,

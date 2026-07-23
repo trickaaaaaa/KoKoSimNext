@@ -30,6 +30,16 @@ public sealed record CareerCoefficients
     public double FamePerWin { get; init; } = 1.5;
     public double FameDecay { get; init; } = 0.92;
 
+    // --- 番狂わせ連動の名声変動（issue #170, 設計書04 §1.2） ---
+    // FamePerWin は「勝った事実」への一律加算のまま。ここは勝敗に加えて「相手との Tier 格差」だけを見る
+    // 追加項で、順当な結果には効かない＝二重計上にならない（金星/取りこぼしのボーナス・ペナルティ）。
+    /// <summary>格上に勝った時、Tier 格差1段あたりの名声上昇（金星）。</summary>
+    public double FameUpsetWinPerTier { get; init; } = 3.0;
+    /// <summary>格下に負けた時、Tier 格差1段あたりの名声低下（取りこぼし）。取りこぼしはやや重く。</summary>
+    public double FameUpsetLossPerTier { get; init; } = 3.5;
+    /// <summary>1シーズンの金星による名声上昇の上限（頭打ち＝短期で急上昇させない）。</summary>
+    public double FameUpsetSeasonCap { get; init; } = 8.0;
+
     // --- 信頼度（設計書04 §1.2, 校内・転任でリセット） ---
     public double TrustReset { get; init; } = 50.0;
     public double TrustPerWin { get; init; } = 4.0;

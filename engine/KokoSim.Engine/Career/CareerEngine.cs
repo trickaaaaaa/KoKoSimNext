@@ -83,7 +83,11 @@ public static class CareerEngine
             };
 
             // 全国大会（47県予選→甲子園）。監督校を自県に加える。
-            var (reachedKoshien, nationalChampion, wins) = SimulateSeason(nation, managerSchool, prefId, nationCoeff, rng);
+            var (reachedKoshien, nationalChampion, wins, upsetMatches) =
+                SimulateSeason(nation, managerSchool, prefId, nationCoeff, rng);
+
+            // 番狂わせ連動の名声デルタ（issue #170）。自校 vs 相手の Tier 格差で金星/取りこぼしを算出。
+            var upsetFameDelta = FameUpsetModel.SeasonDelta(upsetMatches, managerSchool.Strength, c);
 
             // 秋の大会フロー（設計書05 §1.5/§4）。監督校を全校に加えた一時全国で回す。
             // 独立ストリーム(Fork)＝夏の予選・監督成長・AI進化の乱数列を乱さない（既存キャリアの決定論を保存）。
@@ -102,7 +106,7 @@ public static class CareerEngine
             }
 
             // メタ更新。
-            ApplyResults(manager, reachedKoshien, nationalChampion, wins, c);
+            ApplyResults(manager, reachedKoshien, nationalChampion, wins, upsetFameDelta, c);
             manager.CareerYears++;
             if (reachedKoshien) manager.KoshienAppearances++;
 
@@ -161,12 +165,14 @@ public static class CareerEngine
         };
     }
 
-    private static (bool ReachedKoshien, bool NationalChampion, int Wins) SimulateSeason(
+    private static (bool ReachedKoshien, bool NationalChampion, int Wins, IReadOnlyList<TrackedMatch> UpsetMatches) SimulateSeason(
         NationState nation, School managerSchool, int prefId, NationCoefficients coeff, IRandomSource rng)
     {
         var reps = new List<School>(49);
         var managerWins = 0;
         var reachedKoshien = false;
+        // 監督校が戦った試合の格差記録（金星/取りこぼしの名声算出用, issue #170）。
+        var upsetMatches = new List<TrackedMatch>();
 
         // 夏の地方大会（49地方=北海道・東京だけ2分割, 設計書05 §1.1 / issue #65）。監督校は所属区画にのみ加える。
         foreach (var region in SummerRegions.Build(nation.Prefectures))
@@ -176,29 +182,33 @@ public static class CareerEngine
             if (managerInRegion) entrants.Add(managerSchool);
             if (entrants.Count == 0) continue;
 
-            var result = TournamentEngine.Run(entrants, coeff, rng);
+            var result = TournamentEngine.Run(
+                entrants, coeff, rng, trackSchoolId: managerInRegion ? managerSchool.Id : null);
             if (managerInRegion)
             {
                 managerWins += result.WinsBySchool.TryGetValue(managerSchool.Id, out var w) ? w : 0;
                 reachedKoshien = result.Champion.Id == managerSchool.Id;
+                upsetMatches.AddRange(result.TrackedMatches);
             }
             reps.Add(result.Champion);
         }
 
         // 甲子園。
-        var koshien = TournamentEngine.Run(reps, coeff, rng);
+        var koshien = TournamentEngine.Run(
+            reps, coeff, rng, trackSchoolId: reachedKoshien ? managerSchool.Id : null);
         var nationalChampion = false;
         if (reachedKoshien)
         {
             managerWins += koshien.WinsBySchool.TryGetValue(managerSchool.Id, out var kw) ? kw : 0;
             nationalChampion = koshien.Champion.Id == managerSchool.Id;
+            upsetMatches.AddRange(koshien.TrackedMatches);
         }
 
-        return (reachedKoshien, nationalChampion, managerWins);
+        return (reachedKoshien, nationalChampion, managerWins, upsetMatches);
     }
 
     private static void ApplyResults(
-        Manager m, bool reachedKoshien, bool nationalChampion, int wins, CareerCoefficients c)
+        Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameDelta, CareerCoefficients c)
     {
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする
         // （「気づいたら練れていた」の意図に沿った緩やかなカーブ。線形だと十数年で99へ急上昇し
@@ -216,12 +226,14 @@ public static class CareerEngine
         m.TacticalSense = Grow(m.TacticalSense, 0.7);
         m.TalentEye = Grow(m.TalentEye, 0.5);
 
-        // 名声（持ち越し）。
+        // 名声（持ち越し）。FamePerWin は勝利一律の加算、upsetFameDelta は Tier 格差ぶんの金星/取りこぼし
+        // （順当な結果には効かない＝二重計上でない, issue #170）。
         m.Fame = MathUtil.Clamp(
             m.Fame * c.FameDecay
                 + c.FamePerWin * wins
                 + (reachedKoshien ? c.FameKoshienAppearance : 0)
-                + (nationalChampion ? c.FameNationalChampion : 0),
+                + (nationalChampion ? c.FameNationalChampion : 0)
+                + upsetFameDelta,
             0, 100);
 
         // 信頼度（校内）。

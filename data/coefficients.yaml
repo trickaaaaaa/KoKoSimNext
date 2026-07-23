@@ -789,6 +789,10 @@ career:
   fame_national_champion: 45.0
   fame_per_win: 1.5
   fame_decay: 0.92
+  # 番狂わせ連動の名声変動（issue #170）。格上撃破=金星で↑、格下敗北=取りこぼしで↓。順当な結果には効かない。
+  fame_upset_win_per_tier: 3.0    # 格上に勝った時のTier格差1段あたりの上昇（金星）
+  fame_upset_loss_per_tier: 3.5   # 格下に負けた時のTier格差1段あたりの低下（取りこぼし・やや重く）
+  fame_upset_season_cap: 8.0      # 1シーズンの金星上昇の頭打ち（短期で急上昇させない）
   trust_reset: 50.0                 # 転任で信頼度リセット
   trust_per_win: 4.0
   trust_koshien: 20.0
