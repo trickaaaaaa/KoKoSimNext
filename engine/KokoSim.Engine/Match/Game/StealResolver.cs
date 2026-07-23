@@ -54,8 +54,11 @@ public static class StealResolver
         else
         {
             var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
-            var throwTime = throwDistance / catcher.ToFielder().ThrowSpeedMps;
-            var popTime = c.PopTransferSeconds + throwTime;
+            var catcherFielder = catcher.ToFielder();
+            var throwTime = throwDistance / catcherFielder.ThrowSpeedMps;
+            // 捕手の握り替え（ポップ）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
+            var popTransfer = c.PopTransferSeconds * catcherFielder.TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+            var popTime = popTransfer + throwTime;
             defense = c.PitcherQuickSeconds + popTime + c.TagSeconds;
         }
         if (pitchout)

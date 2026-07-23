@@ -43,6 +43,15 @@ public sealed record FieldingCoefficients
     public double ThrowTransferSeconds { get; init; } = 0.70;
 
     /// <summary>
+    /// トランスファー倍率の守備(Fielding)傾き（Issue #36）。倍率 = max(min, 1 − (Fielding−50)×この値)。
+    /// 守備50で×1.0＝恒等（帯不変）。走塁系（捕手ポップ/外野返球/中継/帰塁）の同名係数と値を揃える。
+    /// </summary>
+    public double ThrowTransferFieldingSlope { get; init; } = 0.004;
+
+    /// <summary>トランスファー倍率の下限（最速側のクランプ, Issue #36）。守備が高いほどここへ張り付く。</summary>
+    public double ThrowTransferFactorMin { get; init; } = 0.70;
+
+    /// <summary>
     /// 内野ゴロ処理の実戦オーバーヘッド[s]（設計書02 §4.1b の時間軸校正）。捕球姿勢づくり・ステップ・
     /// 打球が野手へ転がる時間を集約した項。走者を実戦タイム（本塁→一塁≈4.2s）へ合わせても
     /// 内野安打率が現実的に保たれるよう、守備側も同じ秒軸へ引き上げる。
@@ -80,6 +89,15 @@ public sealed record FieldingCoefficients
     /// <summary>捕球エラー確率の上限クランプ（守備力が低いほどここへ張り付く）。守備が低い同士の試合を
     /// 大量失策（両校計10個規模）にするための天井。</summary>
     public double ErrorMaxProb { get; init; } = 0.30;
+
+    // 送球エラー（内野ゴロ→一塁の2段階目, Issue #37 / design-14 P1-6b）。捕球ロール(Catching)の後に
+    // 送球ロール(ThrowAccuracy)を引く。既定 base=0.0 は「送球ロールを一切引かない」＝現行の捕球のみ判定と
+    // 乱数消費順・結果とも完全一致（ErrorExtraAdvanceProb と同じ gating 方式で決定論を保つ）。
+    /// <summary>送球エラーの基準確率（ThrowAccuracy50時）。0.0＝送球ロール無効（現行と恒等, 決定論不変）。</summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.0;
+    /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
+    /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
+    public double ThrowErrorAccuracySlope { get; init; } = 0.004;
 
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 

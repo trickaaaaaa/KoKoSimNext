@@ -142,6 +142,24 @@
 - **帯影響**: 失策絡みの失点が増える。失点分布・被失策時の期待得点。
 - **テスト**: 失策多発設定で「失策1つあたりの平均進塁」が基準を上回ることを確認。
 
+#### P1-6b. 送球精度（ThrowAccuracy）の接続（Issue #37, 2026-07-23）
+
+送球精度 `ThrowAccuracy` は変換式・生成・成長まで実装済みだが守備解決から未参照だった。悪送球の発生を
+送球者の能力で動かす。写像方式は**簡易確率式（能力値直接・σ非経由）**を採用（決定点A=(a)）。
+
+- **失策連鎖のσ→能力駆動化**: 連鎖確率 = `ErrorExtraAdvanceProb − (Ac−50)×ErrorExtraAdvanceAccuracySlope`
+  （送球者＝失策を犯した野手の `ThrowAccuracy`。clamp は既存 min/max を流用）。**Ac=50 で現行の一律確率と恒等**
+  （傾き項=0）＝リーグ平均で校正値・乱数消費順とも不変（帯不変, 不変条件#5）。傾き既定は 0.0（＝現行と完全一致）、
+  YAML で正値を与えると精度連動が有効化（`ErrorExtraAdvanceProb` の sim/Unity 分離と同じ運用）。
+- **内野ゴロ→一塁送球の按分（2段階, 決定点B）**: 捕球ロール（`Catching`, 現行 `MaybeError`）→ 送球ロール
+  （`ThrowAccuracy`）の順で判定する。送球ロールの失策確率 = `ThrowErrorBaseProb − (Ac−50)×ThrowErrorAccuracySlope`。
+  `ThrowErrorBaseProb` 既定 0.0（＝送球ロールを一切引かない＝現行の捕球のみ判定と乱数消費順・結果とも完全一致）。
+  正値を与えると送球エラーが加算され、`ThrowAccuracy` が低いほど内野ゴロが安打/失策になりやすくなる。捕球エラー
+  （`ErrorBaseProb`, Catching）と送球エラー（`ThrowErrorBaseProb`, ThrowAccuracy）は独立ロールで、
+  低い方が悪いと悪送球になる二段関門。空中捕球（フライ）は送球を伴わないため従来どおり捕球ロールのみ。
+- **係数（`data/coefficients.yaml`）**: `fielding.throw_error_base_prob` / `throw_error_accuracy_slope`、
+  `baserunning.error_extra_advance_accuracy_slope`。傾き・下限は #4 に従い YAML 駆動。
+
 ### P2-7. 死球（HBP）
 
 - **現状**: 列挙型に無し。四球のみ。

@@ -19,7 +19,9 @@ public enum HomePlayResult
 public readonly record struct HomePlaySituation(
     Vector3D BallFieldedPoint,
     double BallFieldedAtSeconds,
-    double OutfielderThrowSpeedMps);
+    double OutfielderThrowSpeedMps,
+    // 処理野手の守備(Fielding)。返球・中継の握り替えを能力で伸縮（Issue #36）。既定50＝現行固定値と恒等。
+    int OutfielderFielding = 50);
 
 /// <summary>
 /// 本塁クロスプレーの解決（設計書12 §3, F2）。盗塁 <see cref="StealResolver"/> と同型の「時間の勝負」。
@@ -77,20 +79,24 @@ public static class HomePlayResolver
         var dz = s.BallFieldedPoint.Z - targetPoint.Z;
         var dist = Math.Sqrt(dx * dx + dz * dz);
 
+        // 握り替え倍率（Issue #36）: 処理野手の守備で外野返球・中継の持ち替えを伸縮。守備50で×1.0＝恒等。
+        var transferFactor = new Players.FielderAttributes { Fielding = s.OutfielderFielding }
+            .TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+
         double throwTime;
         if (dist > c.CutoffDistanceThresholdM)
         {
             // 中継: カットマンは送球先ベースから CutoffFractionFromHome の位置。
             var legToCutoff = dist * (1.0 - c.CutoffFractionFromHome) / s.OutfielderThrowSpeedMps;
             var legToTarget = dist * c.CutoffFractionFromHome / c.RelayThrowSpeedMps;
-            throwTime = legToCutoff + c.RelayTransferSeconds + legToTarget;
+            throwTime = legToCutoff + c.RelayTransferSeconds * transferFactor + legToTarget;
         }
         else
         {
             throwTime = dist / s.OutfielderThrowSpeedMps; // 直接返球
         }
 
-        return s.BallFieldedAtSeconds + c.OutfieldTransferSeconds + throwTime + tagSeconds;
+        return s.BallFieldedAtSeconds + c.OutfieldTransferSeconds * transferFactor + throwTime + tagSeconds;
     }
 
     /// <summary>本塁への送球所要時間[s]（後方互換: 送球先=原点・タッチ=HomeTagSeconds）。</summary>

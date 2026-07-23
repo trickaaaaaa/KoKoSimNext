@@ -61,7 +61,7 @@ public static class BaserunningModel
         bool ErrorExtraAdvanceOccurred, IReadOnlyList<RunnerMove> Moves) ApplyDetailed(
         BaseState bases, PlateAppearanceResult result, Player batter,
         int currentOuts, BaserunningCoefficients coeff, IRandomSource rng, bool collectMoves = true,
-        HomePlayContext? home = null, StartType r1Start = StartType.Normal)
+        HomePlayContext? home = null, StartType r1Start = StartType.Normal, int errorThrowAccuracy = 50)
     {
         var mv = collectMoves ? new List<RunnerMove>() : null;
         var r1 = bases.First;
@@ -94,7 +94,7 @@ public static class BaserunningModel
                 var errorExtraAdvanceOccurred = false;
                 if (coeff.ErrorExtraAdvanceProb > 0.0)
                 {
-                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, coeff, rng, mv);
+                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, coeff, rng, mv, errorThrowAccuracy);
                     runs += extraRuns;
                     errorExtraAdvanceOccurred = occurred;
                 }
@@ -376,10 +376,13 @@ public static class BaserunningModel
     /// 一括モデル化する（個別確率ではない）。<paramref name="coeff"/>.ErrorExtraAdvanceProb &gt; 0 のときのみ呼ばれる。</summary>
     private static (int Runs, bool Occurred) ApplyErrorExtraAdvance(
         BaseState bases, Player batter, int currentOuts, int extraOuts,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, int throwAccuracy)
     {
         if (currentOuts + extraOuts >= 3) return (0, false);
-        if (!MathUtil.Chance(coeff.ErrorExtraAdvanceProb, rng)) return (0, false);
+        // 送球精度連動（Issue #37）: 送球者の精度が低いほど連鎖しやすい。Ac=50 で base と恒等（傾き項=0）。
+        var prob = MathUtil.Clamp(
+            coeff.ErrorExtraAdvanceProb - (throwAccuracy - 50) * coeff.ErrorExtraAdvanceAccuracySlope, 0.0, 1.0);
+        if (!MathUtil.Chance(prob, rng)) return (0, false);
 
         var runs = 0;
         var third = bases.Third;
@@ -459,7 +462,7 @@ public static class BaserunningModel
             var catchToFirstM = (liner.Field.FirstBase - liner.Situation.BallFieldedPoint).Length;
             if (DoubledOffResolver.Resolve(
                     r1, liner.Situation.BallFieldedAtSeconds, catchToFirstM, liner.Situation.OutfielderThrowSpeedMps,
-                    coeff, rng) == DoubledOffResult.DoubledOff)
+                    coeff, rng, liner.Situation.OutfielderFielding) == DoubledOffResult.DoubledOff)
             {
                 extraOuts++;
                 mv?.Add(new RunnerMove(r1, 1, 1, Out: true)); // 一塁へ戻れず憤死

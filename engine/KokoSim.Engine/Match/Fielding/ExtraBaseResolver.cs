@@ -122,7 +122,10 @@ public static class ExtraBaseResolver
         FieldGeometry field, BatterAttributes batter, double batterToFirstSeconds, FieldingCoefficients c)
     {
         var ball = path.PositionAt(retrieveAtSeconds);
-        var ready = retrieveAtSeconds + c.OutfieldPickupSeconds + c.ThrowTransferSeconds;
+        // 回収野手の握り替えを守備力で伸縮（Issue #36。内野ゴロ→一塁と同じ ThrowTransferSeconds を共有）。
+        var transfer = c.ThrowTransferSeconds
+                       * retriever.Attributes.TransferFactor(c.ThrowTransferFieldingSlope, c.ThrowTransferFactorMin);
+        var ready = retrieveAtSeconds + c.OutfieldPickupSeconds + transfer;
         var arm = retriever.Attributes.ThrowSpeedMps;
 
         double ThrowArrivesAt(Vector3D target)

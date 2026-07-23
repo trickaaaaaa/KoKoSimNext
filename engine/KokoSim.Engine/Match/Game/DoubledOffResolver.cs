@@ -35,23 +35,30 @@ public static class DoubledOffResolver
         return c.DoubledOffReverseSeconds + lead / runner.ToFielder().SprintSpeedMps;
     }
 
-    /// <summary>守備の送球所要時間[s]（捕球点→塁, 握り替え＋送球＋タッチ）。</summary>
-    public static double DefenseReturnSeconds(double catchToBaseM, double throwSpeedMps, BaserunningCoefficients c)
-        => c.DoubledOffTransferSeconds + catchToBaseM / throwSpeedMps + c.DoubledOffTagSeconds;
+    /// <summary>守備の送球所要時間[s]（捕球点→塁, 握り替え＋送球＋タッチ）。
+    /// fielderFielding=捕球野手の守備。握り替えを能力で伸縮（Issue #36）。既定50＝現行固定値と恒等。</summary>
+    public static double DefenseReturnSeconds(double catchToBaseM, double throwSpeedMps, BaserunningCoefficients c,
+        int fielderFielding = 50)
+    {
+        var transfer = c.DoubledOffTransferSeconds
+                       * new FielderAttributes { Fielding = fielderFielding }.TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        return transfer + catchToBaseM / throwSpeedMps + c.DoubledOffTagSeconds;
+    }
 
     /// <summary>塁へ戻れる（Safe）確率（走塁と同式のlogistic）。</summary>
     public static double SuccessProbability(
-        Player runner, double caughtAtSeconds, double catchToBaseM, double throwSpeedMps, BaserunningCoefficients c)
+        Player runner, double caughtAtSeconds, double catchToBaseM, double throwSpeedMps, BaserunningCoefficients c,
+        int fielderFielding = 50)
     {
-        var margin = DefenseReturnSeconds(catchToBaseM, throwSpeedMps, c)
+        var margin = DefenseReturnSeconds(catchToBaseM, throwSpeedMps, c, fielderFielding)
                      - RunnerReturnSeconds(runner, caughtAtSeconds, c) + c.DoubledOffSuccessBias;
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.DoubledOffMarginScale), 0.01, 0.99);
     }
 
     public static DoubledOffResult Resolve(
         Player runner, double caughtAtSeconds, double catchToBaseM, double throwSpeedMps,
-        BaserunningCoefficients c, IRandomSource rng)
-        => MathUtil.Chance(SuccessProbability(runner, caughtAtSeconds, catchToBaseM, throwSpeedMps, c), rng)
+        BaserunningCoefficients c, IRandomSource rng, int fielderFielding = 50)
+        => MathUtil.Chance(SuccessProbability(runner, caughtAtSeconds, catchToBaseM, throwSpeedMps, c, fielderFielding), rng)
             ? DoubledOffResult.Safe
             : DoubledOffResult.DoubledOff;
 }

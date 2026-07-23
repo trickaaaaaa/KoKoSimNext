@@ -24,6 +24,10 @@ public sealed record BaserunningCoefficients
     /// <summary>失策出塁（ReachedOnError）時、全走者＋打者に追加1進塁が発生する基準確率（design-14 P1-6）。
     /// 既定0＝機能オフ、乱数消費順・結果とも Single と完全一致。</summary>
     public double ErrorExtraAdvanceProb { get; init; } = 0.0;
+    /// <summary>失策連鎖の送球精度連動（Issue #37 / design-14 P1-6b）。連鎖確率 = ErrorExtraAdvanceProb −
+    /// (送球者 ThrowAccuracy − 50)×この値。既定0＝送球精度非連動＝現行の一律確率と恒等（Ac=50でも常に恒等）。
+    /// 正値で「送球が不正確な野手の失策ほど連鎖しやすい」。乱数消費は base のゲート下で1回のまま不変。</summary>
+    public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.0;
     /// <summary>一塁空き or 2アウトの三振で振り逃げが成立する基準確率（design-14 P1-2）。
     /// 既定0＝機能オフ、乱数消費順・結果とも従来と完全一致。</summary>
     public double DropThirdStrikeReachProb { get; init; } = 0.0;
@@ -57,6 +61,14 @@ public sealed record BaserunningCoefficients
     public double PitcherQuickSeconds { get; init; } = 1.40;
     /// <summary>捕手の握り替え[s]（ポップタイム＝これ＋送球時間）。</summary>
     public double PopTransferSeconds { get; init; } = 0.70;
+    /// <summary>
+    /// トランスファー倍率の守備(Fielding)傾き（Issue #36）。走塁系の各握り替え（捕手ポップ/外野返球/中継/帰塁）
+    /// に共通。倍率 = max(min, 1 − (Fielding−50)×この値)。守備50で×1.0＝恒等（帯不変）。
+    /// <see cref="Fielding.FieldingCoefficients.ThrowTransferFieldingSlope"/> と値を揃える。
+    /// </summary>
+    public double TransferFieldingSlope { get; init; } = 0.004;
+    /// <summary>トランスファー倍率の下限（最速側クランプ, Issue #36）。</summary>
+    public double TransferFactorMin { get; init; } = 0.70;
     /// <summary>タッチ[s]。</summary>
     public double TagSeconds { get; init; } = 0.10;
     /// <summary>margin→成功確率のlogistic幅[s]（Step4再校正: 反応係数を上げ絶対タイムを現実化した分、

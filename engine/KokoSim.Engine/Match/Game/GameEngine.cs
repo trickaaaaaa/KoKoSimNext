@@ -810,7 +810,8 @@ public static class GameEngine
                 var homePlaySituation = new HomePlaySituation(
                     new Vector3D(fp.FieldedX, 0, fp.FieldedZ),
                     fp.FieldedAtSeconds ?? fp.HangTimeSeconds,
-                    arm);
+                    arm,
+                    fp.FielderFielding);
                 // aggression は中立固定（校風/ティア/采配の三層写像は残Q10）。
                 // 守備の内野深さ（G1）＝ゴロ凡打の三塁走者判定へ「前進で刺す/後退で献上」を反映。
                 homePlay = new HomePlayContext(
@@ -827,9 +828,11 @@ public static class GameEngine
             var leadRunnerBefore = bases.Third ?? bases.Second ?? bases.First;
 
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
+            // 失策連鎖（design-14 P1-6b）の送球精度連動用: 失策を犯した野手の ThrowAccuracy（未処理球では既定50）。
+            var errorThrowAccuracy = res.Play?.FielderThrowAccuracy ?? 50;
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, ctx.Baserunning, rng, collectMoves: ctx.CaptureTimelines,
-                homePlay, r1Start);
+                homePlay, r1Start, errorThrowAccuracy);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
