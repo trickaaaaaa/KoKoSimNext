@@ -91,6 +91,17 @@ C#から差し込むデータは、UXMLの `name` 属性で明示的に受け渡
 | `Banner` | 強調告知バー（合宿など） |
 | `Row` | 一覧の1行（複数部品を横に組む器） |
 
+#### design-19「デーゲーム・フルNB」で確立した容器部品（新規画面はこれらを使う。自作カードclassを新設しない）
+
+| 部品（クラス） | 役割・使い方 |
+|---|---|
+| **`.card`** | **カードの唯一の器**（旧 `.card`/`.pd2-card`/`.pm-card` を統合）。白面＋インク枠＋案イのベタ影＋芝の塗り見出し帯。見出しは `.card__hd`（色替えは `--dirt`/`--sky`）＋題字 `.card__hd-title`／副題 `.card__hd-sub`、本文は `.card__body`。内部にScrollViewを持つ本文は `.card__body--fill`。縦積みは既定、横並びは `.card--half`（等幅）/`--radar`/`--hidden`/`--pitch`/`--list`/`--detail`、スクロール伸縮は `.card--grow` |
+| **`RowWell` + `RowPanel`** | 一覧の「行を独立パネル化」する器（`.row-well` の上に `.row-panel` を積む）。選択は `.row-panel--selected`（桜）。**行を並べる画面は必ずこれを使う**（罫線区切りを自作しない） |
+| **`PlateHeader`** | 主役カード/一覧の塗り見出し帯（`.plate-header--grass/--dirt/--sky` ＋白抜き題字）。案ロの背面プレート `.nb-plate` と併用する主役カード向け |
+| **`ScoreboardStrip`** | トップバー中央の電光掲示板（`.sbs`）。黒緑面＋升目マトリクス＋電光アンバー数字。**掲示板の中だけ**ドット字＋アンバー（外はインク文字） |
+
+> **昼NBスキンの継承**：新規画面は ①`tokens.uss`/`components.uss`/`KokoSimTheme.uss` をこの順で `<Style>` する ②トップバーは `<ui:Instance template="TopBar">` 1行 ③器は上表の `.card`／`.row-well`+`.row-panel`／`.plate-header` を組み合わせる ④色・寸法は `var(--...)` のみ（直書き禁止）。この4点を守れば昼NBデザインは自動で継承される。
+
 各部品は**サンプルデータ入りのプレビュー**（UI Builder のPreview、またはStep 3の単体スクショ）を持つ。
 
 > 既存の `TrainingPlan.uss` に作ったインラインクラス（`.grade` `.trow` `.ubar` `.seg` `.mslot` `.switch`
