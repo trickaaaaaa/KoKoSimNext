@@ -111,7 +111,7 @@ namespace KokoSim.Unity.Home
                 ManagerIsAway = live.ManagerIsAway,
                 AwayName = live.ManagerIsAway ? "桜丘" : live.OpponentName,
                 HomeName = live.ManagerIsAway ? live.OpponentName : "桜丘",
-                ManagerTacticalSense = 70,
+                ManagerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi,
                 OnComplete = result =>
                 {
                     // issue #138: CompleteMatch は残りブラケットのフルシム＋全国背景シムへの join を含み重い。

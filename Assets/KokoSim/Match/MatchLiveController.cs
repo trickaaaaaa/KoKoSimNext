@@ -285,6 +285,8 @@ namespace KokoSim.Unity.Match
             // デモ/スクショ用の自前生成（本番フローでは通らない）。
             _managerIsAway = false;
             _onComplete = null;
+            // 委任AIの采配値も成長した監督の実値を使う（旧ハードコード70を廃す, issue #171）。
+            managerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi;
             // デモの相手校（away＝右列）は本番と同じ StrengthTeamFactory 生成（氏名＋控え8人つき）で観戦する。
             var awayRng = new KokoSim.Engine.Core.Xoshiro256Random(gameSeed ^ 0x1234ABCDUL);
             var away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(58, awayName, awayRng);
