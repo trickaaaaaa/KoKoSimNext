@@ -52,4 +52,22 @@ public sealed class PitchingStatLine
         Pitches += l.Pitches;
         HomeRunsAllowed += l.HomeRunsAllowed;
     }
+
+    /// <summary>別の累積投手成績を合算する（大会別アーカイブの秋合算＝県/地区/神宮, issue #77）。</summary>
+    public void Merge(PitchingStatLine o)
+    {
+        Games += o.Games;
+        GamesStarted += o.GamesStarted;
+        Wins += o.Wins;
+        Losses += o.Losses;
+        Outs += o.Outs;
+        BattersFaced += o.BattersFaced;
+        Hits += o.Hits;
+        Runs += o.Runs;
+        StrikeOuts += o.StrikeOuts;
+        Walks += o.Walks;
+        HitBatters += o.HitBatters;
+        Pitches += o.Pitches;
+        HomeRunsAllowed += o.HomeRunsAllowed;
+    }
 }

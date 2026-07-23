@@ -19,8 +19,19 @@ public sealed class PlayerStatStore
     /// <summary>今大会成績（大会開始時にクリア）。</summary>
     public StatBook CurrentTournament { get; } = new();
 
-    /// <summary>大会開始時に今大会スコープをリセット（通算・公式戦通算は保持）。</summary>
+    /// <summary>大会別アーカイブ（学年×大会枠＋当時の背番号, issue #77）。永続・セーブ横断。</summary>
+    public TournamentArchive Archive { get; } = new();
+
+    /// <summary>大会開始時に今大会スコープをリセット（通算・公式戦通算・アーカイブは保持）。</summary>
     public void StartTournament() => CurrentTournament.Clear();
+
+    /// <summary>
+    /// 大会終了時に今大会成績を大会別アーカイブへ確定する（issue #77）。次の StartTournament が
+    /// CurrentTournament をクリアする前に呼ぶ。playerInfo は sourceId→(当時の学年, 当時の背番号)。
+    /// </summary>
+    public void ArchiveCurrentTournament(TournamentSlot slot,
+        IReadOnlyDictionary<int, (int Grade, int UniformNumber)> playerInfo)
+        => Archive.Archive(slot, CurrentTournament, playerInfo);
 
     /// <summary>
     /// 1試合ぶんの詳細結果を各スコープへ畳み込む。勝敗投手は自動判定（<see cref="DecisionOfRecord"/>）。

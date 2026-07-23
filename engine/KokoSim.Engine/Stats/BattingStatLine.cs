@@ -63,6 +63,25 @@ public sealed class BattingStatLine
         Runs += l.Runs;
     }
 
+    /// <summary>別の累積打撃成績を合算する（大会別アーカイブの秋合算＝県/地区/神宮, issue #77）。</summary>
+    public void Merge(BattingStatLine o)
+    {
+        Games += o.Games;
+        PlateAppearances += o.PlateAppearances;
+        AtBats += o.AtBats;
+        Hits += o.Hits;
+        Doubles += o.Doubles;
+        Triples += o.Triples;
+        HomeRuns += o.HomeRuns;
+        Rbi += o.Rbi;
+        Walks += o.Walks;
+        HitByPitches += o.HitByPitches;
+        StrikeOuts += o.StrikeOuts;
+        StolenBases += o.StolenBases;
+        CaughtStealing += o.CaughtStealing;
+        Runs += o.Runs;
+    }
+
     /// <summary>盗塁成功率（企図0なら0）。企図＝盗塁＋盗塁死。</summary>
     public double StolenBaseRate => (StolenBases + CaughtStealing) > 0
         ? (double)StolenBases / (StolenBases + CaughtStealing) : 0.0;
