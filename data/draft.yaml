@@ -1,0 +1,35 @@
+# ドラフト（NPB指名・ドラフト候補・注目度）係数 — 設計書20
+#
+# 注目度は「評価スコア」であり、打席・打球・守備の解決確率ではない（二層構造=不変条件#1の対象外）。
+# C# 既定（DraftCoefficients）が Unity 実プレイの真値。この YAML は sim/テスト調整用の上書き。
+# 未指定フィールドは C# 既定のまま（DraftLoader が null 合体）。ドラフトは表示専用・独立Fork乱数=帯不変。
+
+draft:
+  # --- 注目度の合成加重（能力 vs 実績。合計は任意、相対比で効く） ---
+  ability_weight: 0.5
+  performance_weight: 0.5
+  # 能力合成に混ぜる隠し上限（才能キャップ）の比率（0=現在値のみ, 1=上限のみ）。プロは伸びしろを見る。
+  ceiling_blend: 0.35
+
+  # --- 打者の実績スコア（OPS基準＋1試合あたり本塁打） ---
+  batter_ops_base: 0.700
+  batter_ops_scale: 45.0
+  batter_hr_per_game_scale: 6.0
+  batter_min_plate_appearances: 40   # これ未満の打席数は中立50へ収縮
+
+  # --- 投手の実績スコア（ERA基準＋K/9） ---
+  pitcher_era_base: 3.50
+  pitcher_era_scale: 6.0
+  pitcher_k9_base: 7.0
+  pitcher_k9_scale: 2.0
+  pitcher_min_batters_faced: 60      # これ未満の対戦打者数は中立50へ収縮
+
+  # --- 予想順位バンド境界（注目度→予想。設計書20 §3.1） ---
+  first_round_threshold: 86.0        # 1位候補
+  upper_round_threshold: 76.0        # 上位（2〜3位）
+  middle_round_threshold: 66.0       # 中位（4〜6位）
+  candidate_threshold: 58.0          # 候補入りの下限（下位/育成）。これ未満は候補でない
+
+  # --- 指名確定（10月最終週・3年のみ。設計書20 §3.2） ---
+  nomination_midpoint: 64.0          # 指名確率50%となる注目度
+  nomination_spread: 6.0             # ロジスティックの傾き
