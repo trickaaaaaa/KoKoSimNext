@@ -9,7 +9,7 @@
     <Style src="Components/components.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="PlayerList.uss" />
-    <ui:VisualElement class="root ui-root sk-day">
+    <ui:VisualElement class="root ui-root">
 
       <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース／G0では夜のまま） ===== -->
       <ui:Instance template="TopBar" />
@@ -24,7 +24,7 @@
                    子順は「影→前面」（後の兄弟が上に描画される）。 -->
               <ui:VisualElement class="nb-plate">
                 <ui:VisualElement class="nb-plate__shadow" />
-                <ui:VisualElement class="panel nb-plate__front">
+                <ui:VisualElement class="nb-plate__front">
 
                   <!-- 見出しプレート（芝・白抜き題字）＝PlateHeader 部品 -->
                   <ui:VisualElement class="plate-header plate-header--grass">
@@ -34,15 +34,15 @@
                       <ui:Button name="sort-btn" class="tool-btn" text="並び: 総合順" />
                   </ui:VisualElement>
 
-                  <!-- テーブル地＝薄い土の井（dirt-well トークン）。この上に白い行パネルを1枚ずつ積む。 -->
-                  <ui:VisualElement class="table-zone">
-                      <ui:VisualElement class="row row--head">
+                  <!-- テーブル地＝薄い土の井（共通部品 row-well）。この上に白い行パネル（row-panel）を積む。 -->
+                  <ui:VisualElement class="row-well">
+                      <ui:VisualElement class="pl-thead">
                           <ui:Label class="cell cell--head cell--name" text="選手" />
                           <ui:Label class="cell cell--head cell--narrow" text="学年" />
                           <ui:Label class="cell cell--head cell--wide" text="カテゴリ別ランク" />
                           <ui:Label class="cell cell--head cell--narrow" text="調子／故障" />
                       </ui:VisualElement>
-                      <ui:VisualElement name="player-rows" class="rows" />
+                      <ui:VisualElement name="player-rows" />
                   </ui:VisualElement>
 
                 </ui:VisualElement>

@@ -66,7 +66,7 @@ namespace KokoSim.Unity.Players
         private VisualElement BuildRow(PlayerRow r)
         {
             var row = new VisualElement();
-            row.AddToClassList("row");
+            row.AddToClassList("row-panel");   // 共通部品：白パネル＋インク枠＋ベタ影（components.uss）
             row.AddToClassList("row--click");
 
             // 行クリックで選手詳細へ（安定 index を受け渡す）。
@@ -105,6 +105,7 @@ namespace KokoSim.Unity.Players
             {
                 // 調子は表情顔（ConditionFace）に統一（issue #51）。文字表記は tooltip に残す。
                 var face = new ConditionFace { tooltip = r.Condition };
+                face.AddToClassList("pl-cond-face");
                 face.Set(r.ConditionLevel);
                 cond.Add(face);
             }

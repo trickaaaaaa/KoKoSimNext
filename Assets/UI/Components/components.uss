@@ -76,7 +76,8 @@
     background-color: var(--ink);
 }
 .nb-plate__front {
-    background-color: var(--day-card);
+    flex-shrink: 0;
+    background-color: var(--sf-card);
     border-color: var(--ink);
     border-top-width: var(--nb-border-card);
     border-left-width: var(--nb-border-card);
@@ -111,6 +112,50 @@
 }
 .plate-header--dirt .plate-header__sub { color: var(--ink); }
 .plate-header__spacer { flex-grow: 1; }
+
+/* ── RowWell + RowPanel：一覧の「行を独立パネル化」する共通部品（design-19）───────────
+   罫線区切りをやめ、薄い土の井（RowWell）の上に、白い行パネル（RowPanel）を1枚ずつ積む。
+   選手一覧・練習割当など**行を並べるあらゆる画面で共通に使う**（各画面で自作しない）。
+   行の中身レイアウト（セルの列幅・並び）は各画面が担い、器の見た目だけをここで一元化する。
+   影は案イ（非対称ボーダー：右下だけ太らせる）＝1要素で済む量産向け（G0で採用決定）。 */
+.row-well {
+    background-color: var(--dirt-well);
+    padding: 6px 12px 18px 12px;
+}
+.row-panel {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    min-height: var(--h-row);
+    background-color: var(--sf-card);        /* 昼＝白 */
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);       /* 2px */
+    border-left-width: var(--nb-border);
+    border-right-width: 5px;                  /* 枠2 + ベタ影3（案イ） */
+    border-bottom-width: 5px;
+    border-radius: 0;
+    margin-bottom: 12px;
+    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    padding-top: 8px; padding-bottom: 8px;
+}
+/* クリックで詳細/モーダルへ開く行のホバー（桜色）。 */
+.row-panel:hover { background-color: var(--sakura-tint); }
+/* 選択行＝桜色＋左端インクの太帯。 */
+.row-panel--selected { background-color: var(--sakura-tint); border-left-width: 5px; border-left-color: var(--ink); }
+
+/* ── ToolButton：見出しプレート等に置く操作ボタン（白地・空青文字・インク枠＋小ベタ影）──
+   並び替え・切替など。CTA（赤）とは別＝操作系は空の青（design-19 §5）。 */
+.tool-btn {
+    background-color: var(--sf-card);
+    color: var(--sky);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border); border-left-width: var(--nb-border);
+    border-right-width: 4px; border-bottom-width: 4px;   /* 枠2 + 影2 */
+    border-radius: 0;
+    font-size: var(--fs-label);
+    padding: 8px 16px;
+}
+.tool-btn:hover { color: var(--ink); }
 
 /* ── AbilityRow：能力バー行（アイコン／能力名＋副題／数値／バー／ランクチップ／補足） ─
    能力バーを出す画面はこの部品だけを使う（UI原則③ランク併記・⑤部品辞書の外に出ない）。

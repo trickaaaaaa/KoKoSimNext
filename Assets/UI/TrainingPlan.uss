@@ -72,8 +72,10 @@
     flex-shrink: 0;
     flex-direction: row; align-items: center;
     height: var(--h-thead); background-color: var(--color-panel-deep);
-    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line);
-    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    border-bottom-width: 0;
+    /* 行が独立パネル化（row-well+row-panel）したので、見出しの列開始位置を行パネルの内容インセットに合わせる。
+       左＝井12+枠2+pad16=30 ／ 右＝井12+枠5+pad16=33（＋スクロールバー用ガター6）。 */
+    padding-left: 30px; padding-right: 33px;
 }
 /* 固定列は flex-shrink: 0（付けないと隣の flex-grow 列の中身が広い行だけ幅を奪われ列がずれる＝横ずれの真因）。
    見出しLabelは既定 margin/padding を持つので 0 に潰し、データ列(VisualElement)と列境界を一致させる。 */
@@ -88,17 +90,9 @@
 
 .tp-scroll { flex-grow: 1; }
 
-/* rows：上揃え（flex-start）で段差を解消。列幅はヘッダーと同一 --col-*。 */
-.trow {
-    flex-shrink: 0;
-    flex-direction: row; align-items: center;
-    min-height: var(--h-row);
-    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line-soft);
-    padding-left: var(--sp-4); padding-right: var(--sp-4);
-    padding-top: 12px; padding-bottom: 12px;
-}
-.trow:hover { background-color: var(--color-row-hover); }
-.trow--selected { background-color: var(--color-panel); }
+/* rows：行の器（白パネル＋インク枠＋ベタ影＋行間・ホバー・選択）は共通部品 .row-panel が担う
+   （components.uss）。ここでは列幅など TrainingPlan 固有のセルだけを定義する。
+   列幅はヘッダー（tp-th--*）と同一 --col-* を参照する。 */
 .tcell { flex-direction: row; align-items: center; flex-shrink: 0; }
 .tcell--id { width: var(--col-id); }
 .tcell--grade { width: var(--col-grade); justify-content: center; }

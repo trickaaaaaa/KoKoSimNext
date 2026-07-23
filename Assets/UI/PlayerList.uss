@@ -1,109 +1,20 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   PlayerList.uss — design-19「デーゲーム・フルNB」G0 技術検証（この画面だけ先行）
-   ───────────────────────────────────────────────────────────────────────
-   スコープは .sk-day 配下だけ（＝他画面へ波及しない）。全面切替は G1。
-   すべて tokens.uss の昼トークン（--day-* / --ink / --grass / --dirt-well 等）を読む。
-   セレクタは `.sk-day X`（詳細度 0,2,0）で KokoSimTheme.uss の単一クラス（0,1,0）に勝たせる。
-   影の再現は2方式を併用して比較する（design-19 §2）:
-     ・カード（部員名簿）＝案ロ 背面プレート（.nb-plate*）… 真のずれた影が出る
-     ・行パネル＝案イ 非対称ボーダー（右下だけ太らせる）… 1要素で済む量産向け
+   PlayerList.uss — 選手一覧の画面固有スタイルだけを置く。
+   昼NBスキンは tokens/KokoSimTheme(全面) が担い、行の独立パネル化は
+   共通部品 components.uss の .row-well / .row-panel / .plate-header / .tool-btn / .nb-plate
+   に集約した（G1・ユーザー要望で共通化）。ここに残すのは「見出し行の列合わせ」だけ。
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* 画面地＝白球の白。root は KokoSimTheme で暗緑を直書きしているので 0,2,0 で上書きする。 */
-.root.sk-day {
-    background-color: var(--day-base);
-    color: var(--day-tx-1);
-}
-
-/* メイン領域は地色を透かす（root の白を見せる）。周囲に球場地の余白を取る。 */
-.sk-day .main {
+/* 見出し行：井（row-well）の中に置くがパネルにはしない。列は行パネルの内容と揃える。
+   行パネル内容の左右インセット（左＝枠2+pad16／右＝枠5+pad16）を、井の padding(12) を除いた
+   差分だけ見出しにも与えて、下の行パネルとカラムをそろえる。 */
+.pl-thead {
+    flex-direction: row;
+    align-items: center;
     background-color: rgba(0, 0, 0, 0);
-    padding: 20px 22px 26px 22px;
+    padding: 6px 21px 8px 18px;
 }
-.sk-day .footer { color: var(--day-tx-3); }
+.pl-thead .cell--head { color: var(--color-faint); }
 
-/* ── 部員名簿カード＝案ロ（背面プレート）。.panel の暗面/余白/角丸を無効化して器に徹する ── */
-.sk-day .nb-plate__front {
-    background-color: var(--day-card);
-    border-color: var(--ink);
-    border-top-width: var(--nb-border-card);
-    border-left-width: var(--nb-border-card);
-    border-right-width: var(--nb-border-card);
-    border-bottom-width: var(--nb-border-card);
-    border-radius: 0;
-    padding: 0;
-    margin-bottom: 0;
-}
-
-/* ── 見出しプレート（芝・白抜き）内のツールボタン＝案イの小型版（枠2px＋影2px） ──
-   操作系は空の青（--sky）を文字色に。地は白、枠と影はインク。 */
-.sk-day .tool-btn {
-    background-color: var(--day-card);
-    color: var(--sky);
-    border-color: var(--ink);
-    border-top-width: var(--nb-border);
-    border-left-width: var(--nb-border);
-    border-right-width: 4px;      /* 枠2px + 影2px */
-    border-bottom-width: 4px;
-    border-radius: 0;
-    font-size: var(--fs-label);
-    padding: 8px 16px;
-}
-.sk-day .tool-btn:hover { color: var(--ink); }
-
-/* ── テーブル地＝薄い土の井。白い行パネルをこの上に積む（罫線区切りは廃止） ── */
-.sk-day .table-zone {
-    background-color: var(--dirt-well);
-}
-.sk-day .rows {
-    padding: 6px 12px 18px 12px;
-}
-
-/* 見出し行（パネルにしない）。行パネル内容の左端（12+2+18=32px）に合わせる。 */
-.sk-day .row--head {
-    background-color: rgba(0, 0, 0, 0);
-    border-bottom-width: 0;
-    padding: 4px 32px 8px 32px;
-}
-.sk-day .cell--head { color: var(--day-tx-3); }
-
-/* ── 行パネル＝案イ（非対称ボーダー）。白面＋インク枠2px＋右下ベタ影3px（枠2+影3=5px） ── */
-.sk-day .rows .row {
-    background-color: var(--day-card);
-    border-color: var(--ink);
-    border-top-width: var(--nb-border);
-    border-left-width: var(--nb-border);
-    border-right-width: 5px;
-    border-bottom-width: 5px;
-    border-radius: 0;
-    margin-bottom: 12px;
-    padding: 0 18px;
-    min-height: var(--h-row);
-}
-/* 選択行（桜色）。この画面は永続選択を持たないが、桜スキンの受け皿として定義しておく。 */
-.sk-day .rows .row--selected {
-    background-color: var(--sakura-tint);
-    border-left-width: 5px;
-    border-left-color: var(--ink);
-}
-.sk-day .row--click:hover { background-color: var(--sakura-tint); }
-
-/* ── ランクチップ（.grade 系）＝インク2px枠・角0。ランク色（--rank-*）は不変（状態コード） ──
-   文字色は基底（暗＝#101408）/ A・F・G（明）をそのまま活かすため、ここでは色を触らず枠だけ足す。 */
-.sk-day .grade {
-    border-width: var(--nb-border);
-    border-color: var(--ink);
-    border-radius: 0;
-}
-.sk-day .cat-rank-chips__label { color: var(--day-tx-2); }
-
-/* 故障中セルの警告表示（白地でも読める警告色のまま）。 */
-.sk-day .cond--worst { color: var(--color-warn); }
-
-/* ── 調子の表情顔：明地では灰系の「普通」が地に溶けるのでインク輪郭を与える（design-19 §6・§2）。
-   ConditionFace が --face-ring を読んで枠を描く（この指定が無い夜スキンでは枠なし＝不変）。 */
-.sk-day .cond-face {
-    --face-ring: #131512;   /* = --ink。カスタムプロパティに var() は入れない（既知の罠）＝リテラルで持つ */
-    width: 26px;
-    height: 26px;
-}
+/* 行の中の調子顔は一覧で拾いやすいよう少し大きめに（既定18→26）。 */
+.pl-cond-face { width: 26px; height: 26px; }

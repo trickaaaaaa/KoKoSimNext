@@ -153,7 +153,8 @@ namespace KokoSim.Unity.Training
                 var idx = r.Index; // 捕捉
                 var row = new VisualElement();
                 row.AddToClassList("trow");
-                if (r.Selected) row.AddToClassList("trow--selected");
+                row.AddToClassList("row-panel");   // 共通部品：白パネル＋インク枠＋ベタ影（components.uss）
+                if (r.Selected) row.AddToClassList("row-panel--selected");
 
                 // 背番号／選手／学年（投/野ポジションは非表示）
                 var idCell = new VisualElement();
