@@ -51,13 +51,16 @@
     flex-direction: row;
     flex-grow: 1;
 }
+/* design-19 フルNB：インク枠＋ベタ影（案イ）＋塗り見出し帯。padding はカードから body へ移す。 */
 .pm-card {
     background-color: var(--sf-card);
-    border-radius: var(--radius-card);
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    padding-top: var(--sp-3);
-    padding-bottom: var(--sp-3);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border-card);
+    border-left-width: var(--nb-border-card);
+    border-right-width: var(--nb-card-edge);
+    border-bottom-width: var(--nb-card-edge);
+    border-radius: 0;
+    overflow: hidden;
 }
 .pm-card--list {
     flex-grow: 1;
@@ -74,15 +77,28 @@
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
-    margin-bottom: var(--sp-2);
+    padding: 11px 16px;
+    background-color: var(--grass);
+    border-bottom-width: var(--nb-border-card);
+    border-bottom-color: var(--ink);
+}
+.pm-card__body {
+    flex-grow: 1;
+    min-height: 0;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
 }
 .pm-card__t {
     font-size: var(--fs-body);
-    color: var(--color-chalk);
+    color: #FFFFFF;
+    letter-spacing: 1px;
 }
 .pm-card__note {
     font-size: var(--fs-cap);
-    color: var(--color-muted);
+    color: #FFFFFF;
+    opacity: 0.82;
 }
 
 /* ── 申込先テーブル（行高32px・数値は右揃え） ───────────────── */
@@ -181,7 +197,7 @@
     height: 52px;
     flex-shrink: 0;
     background-color: var(--color-cta);
-    color: var(--color-ink);
+    color: #FFFFFF;
     font-size: var(--fs-body);
     border-width: 0;
     border-radius: var(--radius-panel);

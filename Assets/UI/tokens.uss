@@ -237,6 +237,9 @@
     --nb-border-card: 3px;   /* カードの枠 */
     --nb-shadow:      3px;   /* 行パネルのベタ影オフセット */
     --nb-shadow-card: 7px;   /* カードのベタ影オフセット */
+    /* 案イ（単一要素）でカードのベタ影を出す時の右下枠幅＝枠3px＋影7px。
+       USS は border-width を calc/var 加算できないので合算値を1トークンに固定する。 */
+    --nb-card-edge:   10px;  /* = --nb-border-card + --nb-shadow-card（案イ右下枠） */
 }
 
 /* ── 基底クラス：既定フォント＝IBM Plex Sans JP Regular（設計書16 F1-a・2026-07-21）───
