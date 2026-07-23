@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Career;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Practice;
 using KokoSim.Engine.Season;
 
@@ -40,5 +42,63 @@ namespace KokoSim.Unity.Shell
         /// 年をまたいでも単調増加する絶対週番号（週1制約のキー）。GameClock の年度＋週から導く。
         /// </summary>
         public static int AbsoluteWeek => (GameClock.YearIndex - 1) * 50 + GameClock.Week;
+
+        /// <summary>
+        /// 試合の委任AIが読む采配値（設計書09/11）。旧ハードコード70を廃し、成長した監督の実値を単一入口で返す
+        /// （issue #171）。0-99 帯の TacticalSense を int へ丸めて渡す。
+        /// </summary>
+        public static int TacticalSenseForAi =>
+            (int)System.Math.Round(MathUtil.Clamp(Manager.TacticalSense, 0, 99));
+
+        // 監督成長の二重適用ガード（issue #171）。年度替わりは GameClock が複数回叩きうるため、
+        // 「終了した年度」を1回だけ処理する。0＝未適用。
+        private static int _lastGrownYear;
+        // 前回成長適用時点の自校 通算成績スナップショット（このシーズンぶんの勝数・甲子園到達を差分で取る）。
+        private static int _grownWinsBaseline;
+        private static int _grownKoshienBaseline;
+
+        /// <summary>直近の年度替わりで発火した監督成長イベント（ホーム通知フィード用・任意消費）。</summary>
+        public static IReadOnlyList<ManagerGrowthNotice> LastGrowthNotices { get; private set; } =
+            System.Array.Empty<ManagerGrowthNotice>();
+
+        /// <summary>
+        /// 監督成長の内部状態をリセットする（新規ゲーム開始時。<see cref="GameClock.Reset"/> と対で呼ぶ）。
+        /// </summary>
+        public static void ResetGrowth()
+        {
+            _lastGrownYear = 0;
+            _grownWinsBaseline = 0;
+            _grownKoshienBaseline = 0;
+            LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
+        }
+
+        /// <summary>
+        /// 終了した年度 <paramref name="endedYearIndex"/> の自校年間成績を集計し、監督メタ（指導力・采配・
+        /// 育成眼・名声・信頼度・資金）と節目イベントを1年ぶん適用する（issue #171・設計書04 §1.1/§1.1b）。
+        /// 年間成績は自校（<see cref="NationService.ManagerSchoolId"/>）の通算戦績スナップショット差分から取る
+        /// （夏の県予選優勝＝甲子園到達。全国優勝は甲子園本戦の実プレイ接続まで false）。
+        /// 二重適用しない（同じ年度を複数回呼んでも1回だけ）。節目イベントの抽選は母種由来の独立ストリームで引き、
+        /// 本編の乱数列を乱さない（不変条件#2 決定論・同母種同結果）。
+        /// </summary>
+        public static void ApplyYearlyGrowth(int endedYearIndex)
+        {
+            if (endedYearIndex <= _lastGrownYear) return;   // 二重適用ガード
+
+            // 自校の通算戦績から、このシーズンぶんの勝数・甲子園到達を差分で取る。
+            var record = GameSession.Current.Records.For(NationService.ManagerSchoolId);
+            var wins = System.Math.Max(0, record.OfficialWins - _grownWinsBaseline);
+            var reachedKoshien = record.SummerAppearances > _grownKoshienBaseline;
+
+            // 節目イベント抽選は母種＋年度から導く独立ストリーム（本編の乱数列を乱さない・同母種同結果）。
+            var milestoneRng = new Xoshiro256Random(GameSeed.Master ^ (0xA6A6_0000UL ^ (ulong)endedYearIndex));
+
+            // 全国優勝は甲子園本戦が実プレイに接続する（tournament Phase 3）まで到達不能＝false 固定。
+            LastGrowthNotices = ManagerSeasonUpdate.Apply(
+                Manager, reachedKoshien, nationalChampion: false, wins, milestoneRng);
+
+            _lastGrownYear = endedYearIndex;
+            _grownWinsBaseline = record.OfficialWins;
+            _grownKoshienBaseline = record.SummerAppearances;
+        }
     }
 }

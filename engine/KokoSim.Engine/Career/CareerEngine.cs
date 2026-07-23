@@ -207,7 +207,7 @@ public static class CareerEngine
         return (reachedKoshien, nationalChampion, managerWins, upsetMatches);
     }
 
-    private static void ApplyResults(
+    internal static void ApplyResults(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameDelta, CareerCoefficients c)
     {
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする

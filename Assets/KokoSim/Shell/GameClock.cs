@@ -41,6 +41,9 @@ namespace KokoSim.Unity.Shell
                         // 完了させてからロスターを触る（背景タスクとロスター変更を重ねない）。
                         NationBackgroundSim.EnsureCompleted();
                         NationService.AdvanceAiYear(YearIndex);
+                        // 終了した年度ぶんの監督メタ更新（指導力・采配・名声・信頼度・節目イベント, issue #171）。
+                        // 夏/秋の大会はこの年度内に消化済み＝自校の年間成績が確定した後で1年1回だけ適用する。
+                        ManagerService.ApplyYearlyGrowth(prevYear);
                     }
                     EnterWeek();
                 }
@@ -84,8 +87,8 @@ namespace KokoSim.Unity.Shell
             }
         }
 
-        /// <summary>シーズン頭（週0・年度1）へ戻す。</summary>
-        public static void Reset() { Week = 0; YearIndex = 1; }
+        /// <summary>シーズン頭（週0・年度1）へ戻す。監督成長の年度ガードも初期化する（issue #171）。</summary>
+        public static void Reset() { Week = 0; YearIndex = 1; ManagerService.ResetGrowth(); }
 
         /// <summary>共通トップバー「現在」表示（YYYY年M月W週目）。</summary>
         public static string CurrentLabel() => SeasonClock.CurrentLabel(YearIndex, Week);
