@@ -12,7 +12,9 @@
     min-width: 23px;
     height: 26px;
     -unity-text-align: middle-center;
-    border-radius: var(--radius-chip);   /* 角タイル（ピル型を廃止・設計書16 F1）*/
+    border-radius: var(--radius-chip);   /* 角タイル（昼NBで 0＝角） */
+    border-width: 2px;                    /* design-19：ランクチップはインク2px枠（明地でチップを締める） */
+    border-color: var(--ink);
     font-size: var(--fs-body);
     padding-left: 5px;
     padding-right: 5px;
@@ -751,7 +753,9 @@
 }
 
 /* ── ConditionFace：調子の表情顔（Painter2D・C# ConditionFace が描画）。5段階（0=絶好調〜4=絶不調）。 ── */
-.cond-face { width: 18px; height: 18px; flex-shrink: 0; }
+/* 昼NB：灰系の「普通」が白地に溶けるので全画面でインク輪郭を出す（design-19。ConditionFace が読む）。
+   夜へ戻すときはこの --face-ring 行を消せばリングも消える（既定α=0）。 */
+.cond-face { width: 18px; height: 18px; flex-shrink: 0; --face-ring: #131512; }
 
 /* ── RadarChart：レーダーの軸ラベル（絶対配置の位置は C# RadarChartView が角度から算出）。
    小=カード内の従属レーダー / 大(--lg)=1画面の主役レーダー。数値は1色（chalk）で強調はサイズと太さだけ。 ── */
@@ -1145,13 +1149,13 @@
 /* ラベルもドットで出す（掲示板の中だから）。DotGothic16 は和文もドット字形を持つ。 */
 .sbs-group__k {
     font-size: var(--fs-dot-16);
-    color: var(--color-muted);
+    color: var(--sb-ink-2);   /* 掲示板は黒島（昼夜とも黒）＝文字は常に明色（--color-* に追従させない） */
     letter-spacing: 1px;
 }
 /* 升目に載せない添え字（年など）。マス外の小ドットで、値の主役を奪わない。 */
 .sbs-group__sup {
     font-size: var(--fs-dot-16);
-    color: var(--color-faint);
+    color: var(--sb-ink-2);
     margin-left: var(--sp-2);
 }
 .sbs-cells { flex-direction: row; align-items: center; }
@@ -1160,7 +1164,7 @@
     width: var(--sb-cell-w);
     height: var(--sb-cell-h);
     font-size: var(--fs-dot-32);
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);   /* 黒島の上の主数字＝常に明色 */
     -unity-text-align: middle-center;
     border-width: var(--border-w);
     border-color: var(--sb-grid);
@@ -1170,7 +1174,7 @@
 }
 .sbs-cell--wide { width: var(--sb-cell-w-wide); }
 /* 単位（月・週）のマスは値より一段落とす＝数字が主役（UI原則③）。 */
-.sbs-cell--unit { color: var(--color-muted); font-size: var(--fs-dot-16); }
+.sbs-cell--unit { color: var(--sb-ink-2); font-size: var(--fs-dot-16); }
 /* 点灯マス。アンバーは掲示板内でも最重要値だけ（UI原則②・design-16 §8）。 */
 .sbs-cell--lit { color: var(--color-lamp); }
 /* グループ間の間隔。線は引かず黒面の余白で分ける（UI原則④）。 */
@@ -1251,7 +1255,7 @@
     width: var(--lsc-cell-w);
     height: 100%;
     font-size: var(--fs-dot-32);
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);   /* 黒島の上の主数字＝常に明色 */
     -unity-text-align: middle-center;
     border-width: var(--border-w);
     border-color: var(--sb-grid);
@@ -1262,7 +1266,7 @@
 .lsc--dense .lsc-cell { width: var(--lsc-cell-w-dense); font-size: var(--fs-dot-16); }
 /* R / H / E は集計欄。回のマスより広く取り、掲示板の縦罫で回と分ける。 */
 .lsc-cell--total { width: var(--lsc-total-w); }
-.lsc-cell--sep { border-left-width: 2px; border-left-color: var(--color-line-focus); }
+.lsc-cell--sep { border-left-width: 2px; border-left-color: var(--sb-board-line); }
 /* 得点が入った回のマスだけ点灯（実物の電球が灯る比喩）。盤面ビューなので色＝状態コード
    ＝UI原則②の本数制限の対象外（CLAUDE.md の但し書き）。 */
 .lsc-cell--lit { color: var(--color-lamp); }
@@ -1272,7 +1276,7 @@
 /* 見出し行（回番号と R/H/E の見出し）。値より一段小さいドット。 */
 .lsc-row--head .lsc-cell {
     font-size: var(--fs-dot-16);
-    color: var(--color-muted);
+    color: var(--sb-ink-2);
     border-width: 0;
 }
 /* 進行中の回だけ見出しを点灯させ、どこを見ればよいか一目で分かるようにする。 */
@@ -1283,7 +1287,7 @@
     width: var(--lsc-name-w);
     height: 100%;
     font-size: 22px;
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);
     -unity-text-align: middle-left;
     padding-left: var(--sp-2);
     border-width: 0;
@@ -1310,7 +1314,7 @@
 .lsc-lamp-row { flex-direction: row; align-items: center; height: 18px; }
 .lsc-lamp-key {
     font-size: var(--fs-dot-16);
-    color: var(--color-muted);
+    color: var(--sb-ink-2);
     width: 18px;
     -unity-text-align: middle-center;
 }
@@ -1321,7 +1325,7 @@
     height: 12px;
     border-radius: 6px;
     margin-left: 5px;
-    background-color: var(--color-line-focus);
+    background-color: var(--sb-board-line);   /* 消灯の電球＝黒島の上で見える淡グレー */
     flex-shrink: 0;
 }
 .lsc-lamp--ball.is-on { background-color: var(--color-good); }

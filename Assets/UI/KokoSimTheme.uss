@@ -235,7 +235,9 @@
 .grade {
     min-width: 23px;
     -unity-text-align: middle-center;
-    border-radius: var(--radius-chip);   /* 角タイル（ピル型を廃止・設計書16 F1）*/
+    border-radius: var(--radius-chip);   /* 角タイル（昼NBで 0＝角） */
+    border-width: 2px;                    /* design-19：ランクチップはインク2px枠 */
+    border-color: var(--ink);
     font-size: 20px;
     padding: 2px 5px;
     margin-right: 5px;
@@ -1135,3 +1137,39 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nt-foot { flex-direction: row; align-items: center; justify-content: space-between; margin-top: 14px; flex-shrink: 0; }
 .nt-foot__note { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
 .nt-ok { min-width: 220px; margin-right: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   design-19 G1 昼スキン上書き（TopBar/nav/CTA）。tokens 反転で全面が昼になった後、
+   「スコアボードは昼でも黒」「nav は白地インク枠・選択=空青」「CTA=応援団赤」を上書きする。
+   ファイル末尾＝同特異度で後勝ち。夜へ戻す時はこのブロックごと外せばよい（可逆）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* --- スコアボード(sb2)は黒島のまま（夜との連続性の錨・design-19 §0）--- */
+.sb2 { background-color: var(--sf-board); border-bottom-color: var(--ink); border-bottom-width: 3px; }
+.sb2-left { border-right-color: var(--sb-board-line); }
+.sb2-rank { border-left-color: var(--sb-board-line); }
+.sb2-right { border-left-color: var(--sb-board-line); }
+.sb2-div { background-color: var(--sb-board-line); }
+.sb2-badge { background-color: var(--sb-badge); color: var(--sb-ink-1); border-width: 2px; border-color: var(--sb-board-line); }
+.sb2-name, .sb2-rank__t, .sb2-cell__v, .sb2-meter__v { color: var(--sb-ink-1); }
+.sb2-pref, .sb2-rank__k, .sb2-cell__k, .sb2-meter__k { color: var(--sb-ink-2); }
+/* 掲示板の電光黄・名声/信頼度の意味色は黒面の上でそのまま活きるので不変（--color-lamp / fame / trust）。 */
+
+/* --- ナビ帯：白地に沈め、下端をインク太罫で締める。選択タブは空の青。 --- */
+.nav {
+    background-color: var(--sf-base);
+    border-bottom-width: 3px; border-bottom-color: var(--ink);
+    padding: 10px 18px 0 18px; margin-top: 0;
+}
+.nav__item { color: var(--ink); border-radius: 0; }
+.nav__item:hover { color: var(--sky); }
+.nav__item--on { background-color: var(--sky); color: #FFFFFF; border-radius: 0; }
+
+/* --- 主要CTA（今週を進める等）＝応援団赤・白抜き・インク枠＋ベタ影（案イ小型）。UI原則⑦ --- */
+.advance {
+    background-color: var(--color-cta); color: #FFFFFF;
+    border-color: var(--ink);
+    border-top-width: 2px; border-left-width: 2px; border-right-width: 4px; border-bottom-width: 4px;
+    border-radius: 0;
+}
+.advance:hover { background-color: #F0563C; }
