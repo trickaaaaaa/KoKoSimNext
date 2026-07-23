@@ -1299,7 +1299,11 @@ public static class GameEngine
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
         offense.RecordBatting(batter, result, runs, isSacFly);
-        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches);
+        // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
+        PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay
+            ? pl[^1].PitchType
+            : null;
+        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches, decisivePitch);
         defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
             outsThisPa, ctx.Tactics.RattledRecoveryOuts);
         offense.TickOffenseCalm();

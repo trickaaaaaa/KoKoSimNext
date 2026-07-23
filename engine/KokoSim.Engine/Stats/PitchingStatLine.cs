@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Stats;
 
@@ -22,6 +24,12 @@ public sealed class PitchingStatLine
     public int Pitches { get; private set; }
     /// <summary>被本塁打（issue #77）。</summary>
     public int HomeRunsAllowed { get; private set; }
+
+    private readonly Dictionary<PitchType, PitchTypeAccum> _byPitch = new();
+
+    /// <summary>球種ごとの被打成績（issue #180）。打席確定球がインプレー/被安打の打席のみ集計対象。</summary>
+    public IReadOnlyDictionary<PitchType, PitchTypeBattingLine> BattingAgainstByPitch
+        => ToBattingLines(_byPitch);
 
     /// <summary>投球回テキスト（例: 7回1/3 → "7 1/3"）。</summary>
     public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");
@@ -51,6 +59,9 @@ public sealed class PitchingStatLine
         HitBatters += l.HitBatters;
         Pitches += l.Pitches;
         HomeRunsAllowed += l.HomeRunsAllowed;
+        if (l.BattingAgainstByPitch is { } byPitch)
+            foreach (var (type, line) in byPitch)
+                AddPitchType(type, line.AtBats, line.Hits, line.HomeRuns);
     }
 
     /// <summary>別の累積投手成績を合算する（大会別アーカイブの秋合算＝県/地区/神宮, issue #77）。</summary>
@@ -69,5 +80,25 @@ public sealed class PitchingStatLine
         HitBatters += o.HitBatters;
         Pitches += o.Pitches;
         HomeRunsAllowed += o.HomeRunsAllowed;
+        foreach (var (type, line) in o.BattingAgainstByPitch)
+            AddPitchType(type, line.AtBats, line.Hits, line.HomeRuns);
     }
+
+    private void AddPitchType(PitchType type, int atBats, int hits, int homeRuns)
+    {
+        if (!_byPitch.TryGetValue(type, out var a)) { a = new PitchTypeAccum(); _byPitch[type] = a; }
+        a.AtBats += atBats;
+        a.Hits += hits;
+        a.HomeRuns += homeRuns;
+    }
+
+    private static IReadOnlyDictionary<PitchType, PitchTypeBattingLine> ToBattingLines(Dictionary<PitchType, PitchTypeAccum> src)
+    {
+        var result = new Dictionary<PitchType, PitchTypeBattingLine>(src.Count);
+        foreach (var (type, a) in src)
+            result[type] = new PitchTypeBattingLine(a.AtBats, a.Hits, a.HomeRuns);
+        return result;
+    }
+
+    private sealed class PitchTypeAccum { public int AtBats, Hits, HomeRuns; }
 }
