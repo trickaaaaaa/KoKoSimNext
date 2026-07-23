@@ -105,6 +105,7 @@ namespace KokoSim.Unity.Match
         private float _speed = 1f;
         private bool _replaying;   // 再生中（true）か采配窓待ち（false）か
         private bool _gameOver;
+        private bool _pendingAdvanceResult;   // BackgroundGameOp 経由の Advance() 結果の受け渡し（issue #160）
 
         // 中継風カウント（BSO）＋塁ダイヤ（#4）。投球フェーズで B/S を1球ずつ点灯させる。
         private VisualElement[] _ballDots, _strikeDots, _outDots, _bases;
@@ -355,10 +356,21 @@ namespace KokoSim.Unity.Match
             SetEnabled(_skip, canAct);
         }
 
+        // 打席解決（_prog.Advance()）は重い場合があり（issue #160）、メインスレッドで同期実行すると
+        // ボタン押下の瞬間にフリーズする。ここだけ BackgroundGameOp（issue #138 で確立した唯一の
+        // 背景実行経路）へ載せ、押下直後にボタンを無効化＝二重発火を防いでからバックグラウンドへ回す。
+        // スクショ用の同期経路（AdvanceForCapture→ResolveAndReplayNext）はここを通らず従来どおり。
         private void OnNextPa()
         {
-            if (_gameOver) return;
-            ResolveAndReplayNext();
+            if (_gameOver || BackgroundGameOp.Running) return;
+            SetEnabled(_nextPa, false);
+            SetEnabled(_subOpen, false);
+            SetEnabled(_skip, false);
+            PushPitchTacticsChoice();
+            var prog = _prog;
+            BackgroundGameOp.Run(
+                work: () => _pendingAdvanceResult = prog.Advance(),
+                onDone: () => FinishAdvance(_pendingAdvanceResult));
         }
 
         // 選手交代（設計書09 §6）。攻撃中／守備中で出せる選択肢はモーダル側が出し分ける。
@@ -482,10 +494,18 @@ namespace KokoSim.Unity.Match
             foreach (var c in seg.Children()) c.RemoveFromClassList("seg__cell--on");
         }
 
+        // 同期版（スクショ用 AdvanceForCapture 専用。issue #160 以降の対話操作は OnNextPa の
+        // 背景実行経路を使うため、ここは呼ばれても Advance() のコストをそのまま払う）。
         private void ResolveAndReplayNext()
         {
             PushPitchTacticsChoice();
-            if (!_prog.Advance())
+            FinishAdvance(_prog.Advance());
+        }
+
+        // Advance() が返ったあとの共通後処理（同期・背景実行のどちらからも呼ぶ）。
+        private void FinishAdvance(bool advanced)
+        {
+            if (!advanced)
             {
                 ResetPitchTacticsChoice();
                 EndGame(_prog.BuildResult());
