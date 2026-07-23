@@ -795,9 +795,48 @@ career:
   trust_poor_season_penalty: 12.0
   annual_budget_base: 80.0
   budget_per_trust: 0.8
+  # 年間固定支出（Issue #128, 万円）。年度替わりに予算から差し引く。0で従来一致。
+  summer_camp_cost: 20.0            # 夏合宿費（設計書04 §4）
+  winter_camp_cost: 25.0            # 冬合宿費（設計書04 §4・冬は長め）
+  scout_cost: 15.0                  # スカウト（新入生勧誘）の年間費用（#127連動）
   new_school_strength_mean: 34.0    # 教員監督の赴任先は弱小
   new_school_strength_sd: 6.0
   free_choice_school_strength: 48.0 # フリー化後の本拠地
+
+# --- 施設（Issue #128・設計書03 §4 / 04 §4）: funds→施設購入の支出先。多軸（照明/室内/寮/トレ） ---
+# 各系統は tiers[0]=施設なし（費用0・効果0）から並べる。全系統Lv0で従来一致（不変条件#2）。
+# 全系統Lv3の合計で coef_add=+1.40 / budget_add=+400分 ＝ 基準(1.0/300)に足すと (2.40, 700分) で
+# 旧 training.facility_tiers Lv4 と一致し #115 の校正を保つ。cost はたたき台（要バランス調整）。
+# Unity実プレイは FacilityCatalog.Default（C#既定・本ブロックと同値）を使う。
+facilities:
+  - id: lighting          # 照明設備: 夜間練習で練習時間↑
+    name: 照明設備
+    tiers:
+      - {}
+      - { cost: 40,  budget_add: 80 }
+      - { cost: 70,  budget_add: 80 }
+      - { cost: 110, budget_add: 90 }
+  - id: indoor            # 室内練習場: 雨天でも練習（時間）＋設備（効率）
+    name: 室内練習場
+    tiers:
+      - {}
+      - { cost: 60,  coef_add: 0.15, budget_add: 50 }
+      - { cost: 100, coef_add: 0.15, budget_add: 50 }
+      - { cost: 160, coef_add: 0.15, budget_add: 50 }
+  - id: dorm              # 寮: 生活・体調管理で効率↑
+    name: 寮
+    tiers:
+      - {}
+      - { cost: 50,  coef_add: 0.15 }
+      - { cost: 90,  coef_add: 0.15 }
+      - { cost: 140, coef_add: 0.15 }
+  - id: weight            # トレーニング場: ウェイト・マシンで効率↑
+    name: トレーニング場
+    tiers:
+      - {}
+      - { cost: 40,  coef_add: 0.15 }
+      - { cost: 70,  coef_add: 0.15 }
+      - { cost: 110, coef_add: 0.20 }
 
 # --- 新入生生成（設計書04 §2.1・設計書01 §1.1b-c）: 名声→総合力→凸凹配分 ---
 roster:
@@ -805,7 +844,10 @@ roster:
   intake_sd: 1.5
   intake_min: 8
   intake_max: 13
-  pitcher_share: 0.30
+  pitcher_share: 0.30              # 旧: 生成時の投手決め打ち率（#174で廃止・生成では未使用）
+  # 投手適性→投手能力の創発（#174）: 生成時決め打ちを廃し投手も適性から創発させる。
+  pitcher_aptitude_bias: 8.0       # 投手適性への供給バイアス（創発投手率を狙い値へ。帯校正で決める）
+  pitcher_aptitude_weight_span: 6.0 # 投手寄せ重みwのロジスティック幅（小=二極化/大=なだらか）
   # 総合力（名声由来。既定は一般校相当。名声接続後は talentCenter を上書き）
   talent_center_default: 32.0
   talent_sd: 8.0

@@ -229,7 +229,10 @@ public static class CareerEngine
         if (wins == 0) trust -= c.TrustPoorSeasonPenalty;
         m.Trust = MathUtil.Clamp(trust, 0, 100);
 
-        // 資金。
+        // 資金。年間予算を加算し、合宿費・スカウト費を差し引く（Issue #128）。
+        // 固定支出は既定0で従来一致。資金は下限0で止める（借金しない）。
         m.Funds += c.AnnualBudgetBase + c.BudgetPerTrust * m.Trust;
+        m.Funds -= c.SummerCampCost + c.WinterCampCost + c.ScoutCost;
+        if (m.Funds < 0) m.Funds = 0;
     }
 }

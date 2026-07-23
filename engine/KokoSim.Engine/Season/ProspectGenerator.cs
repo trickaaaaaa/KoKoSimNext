@@ -13,7 +13,25 @@ public sealed record RosterCoefficients
     public double IntakeSd { get; init; } = 1.5;
     public int IntakeMin { get; init; } = 8;
     public int IntakeMax { get; init; } = 13;
+    /// <summary>
+    /// 旧: 生成時に投手を決め打つ確率（Issue #174 で廃止）。投手役は投手適性からの創発に置換したため
+    /// 生成では未使用。互換のため残置（他コードが参照する場合のドキュメント値）。
+    /// </summary>
     public double PitcherShare { get; init; } = 0.30;
+
+    // --- 投手適性→投手能力の創発（Issue #174: 生成時決め打ち廃止） ---
+    /// <summary>
+    /// 投手寄せ判定のバイアス（Issue #174）。投手適性に加算してから最良守備位置適性と比較する。
+    /// 投手は守備8ポジの最大値（＝より多くの候補の max）と競うため、無バイアスだと創発投手率が
+    /// 実プレイに必要な水準より低くなる。この加算で投手供給率を狙い値へ寄せる（帯校正で決める）。
+    /// </summary>
+    public double PitcherAptitudeBias { get; init; } = 8.0;
+    /// <summary>
+    /// 投手適性→投手能力の連続化スパン（Issue #174）。(投手適性＋bias − 最良守備適性) をこの幅で
+    /// ロジスティック squash して投手寄せ重み w∈[0,1] を作る。小さいほど二極化（≒従来のON/OFF）、
+    /// 大きいほどなだらか。投手能力の中心（制球/キレ/投手センス）は offCenter↔total を w で補間する。
+    /// </summary>
+    public double PitcherAptitudeWeightSpan { get; init; } = 6.0;
 
     // --- 総合力（名声由来）。既定は一般校相当。名声接続は SeasonEngine 側で talentCenter を渡す（後続） ---
     /// <summary>総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する。</summary>
@@ -170,10 +188,7 @@ public static class ProspectGenerator
         var count = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.IntakeMean, c.IntakeSd)), c.IntakeMin, c.IntakeMax);
         var list = new List<DevelopingPlayer>(count);
         for (var i = 0; i < count; i++)
-        {
-            var isPitcher = rng.NextDouble() < c.PitcherShare;
-            list.Add(Create(year, i, isPitcher, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));
-        }
+            list.Add(Create(year, i, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));
         return list;
     }
 
@@ -185,7 +200,7 @@ public static class ProspectGenerator
         return i >= 0 ? fullName.Substring(i + 1) : fullName;
     }
 
-    private static DevelopingPlayer Create(int year, int index, bool isPitcher, double talentCenter,
+    private static DevelopingPlayer Create(int year, int index, double talentCenter,
         RosterCoefficients c, IRandomSource rng, PlayerNameVocab vocab, SkillCoefficients skillCoeff,
         PersonalityCoefficients personalityCoeff, FormCoefficients formCoeff, ISet<string> usedGiven)
     {
@@ -243,7 +258,6 @@ public static class ProspectGenerator
             // 重複回避のリロールも同じ Fork ストリーム内で完結する＝主RNGの消費列は不変。
             Name = PlayerNameGenerator.Generate(vocab, rng.Fork(NameStreamId(year, index)), usedGiven),
             Grade = 1,
-            IsPitcher = isPitcher,
             GrowthType = growth,
             IsProdigy = isProdigy,
             Throws = throws,
@@ -251,7 +265,6 @@ public static class ProspectGenerator
             PitchingGrowth = pitchingGrowth,
             BattingGrowth = battingGrowth,
             DefenseGrowth = defenseGrowth,
-            HasPitcherBackground = !isPitcher && rng.NextDouble() < c.PitcherBackgroundProb,
             // ③勤勉さ: タイプ中心＋個体ジッタ。主ストリームの NextGaussian 消費は従来と同数＝能力ロール列不変。
             PersonalityFactor = MathUtil.Clamp(
                 profile.SelfGrowthFactor + rng.NextGaussian(0, personalityCoeff.FactorJitterSd),
@@ -262,8 +275,6 @@ public static class ProspectGenerator
             Leadership = leadership,
             Lead = lead,
             LeadCap = leadCap,
-            // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。
-            Skills = SkillGenerator.Generate(isPitcher, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff),
             // 怪我耐性（隠し, 設計書01 §1.1）。身体系と同様に才能と独立。
             InjuryResistance = MathUtil.Clamp(rng.NextGaussian(50, 15), 10, 90),
             // 調子の初期値（設計書02 §3.3, issue #50）: 週次AR(1)の定常分布から抽選。
@@ -273,8 +284,20 @@ public static class ProspectGenerator
         };
 
         // 守備位置適性（設計書01 §1.1）: 本職は事前に決めず、地力＋系統の向き不向き＋ポジ個体差から創発させる。
-        // 独立ストリーム(Fork)で抽選し、既存の能力ロール列を1ビットも変えない（決定論・分布テスト非破壊）。
+        // 投手適性もここで全選手に振る（Issue #174: 投手も守備位置と同列の創発）。独立ストリーム(Fork)。
         AssignAptitudes(p, c, rng.Fork(AptitudeStreamId(year, index)));
+
+        // 投手役は投手適性から創発（旧 PitcherShare コイン投げ廃止, Issue #174）。
+        // 役割判定は供給バイアス込み（実プレイに必要な投手率へ寄せる）で決め、明示ロールとして持たせる。
+        // 一方 w（能力の連続補間の重み）は素の適性差から作る＝明確な野手は w≈0 で打撃が total を保つ
+        // （バイアスを w に混ぜると全野手の打撃が下がり帯が大きくずれるため分離）。
+        var (naturalPitcher, w) = ResolvePitcherRole(p, c);
+        p.IsPitcher = naturalPitcher;
+
+        // 隠し「投手経歴」は野手のみ（適性確定後に判定, 設計書01 §1.1b）。主ストリームで1ドロー。
+        p.HasPitcherBackground = !naturalPitcher && rng.NextDouble() < c.PitcherBackgroundProb;
+        // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。投手判定は創発ロール。
+        p.Skills = SkillGenerator.Generate(naturalPitcher, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff);
 
         // --- Stage 1: 運動能力ベースライン（名声独立） ---
         foreach (var k in Physical)
@@ -289,35 +312,33 @@ public static class ProspectGenerator
             SetWithCap(p, AbilityKind.LaunchTendency, lt, c, growth, rng);
         }
 
-        // --- Stage 2: 総合力→専門能力へ凸凹配分 ---
+        // --- Stage 2: 総合力→専門能力へ凸凹配分（投手寄せは w で連続化, Issue #174） ---
         var total = MathUtil.Clamp(rng.NextGaussian(talentCenter, c.TalentSd), c.TalentMin, c.TalentMax);
         var concentration = MathUtil.Clamp(rng.NextGaussian(c.ConcentrationMean, c.ConcentrationSd), 0.05, 1.0);
         var offCenter = total * c.OffSpecialtyFactor;
 
-        // 投手センス（隠し）: 総合力の一部。投手は上振れ、野手は低い。球速levelの土台。
-        var pitcherSense = isPitcher
-            ? MathUtil.Clamp(total + rng.NextGaussian(c.PitcherSenseBonus, 6), 10, 95)
-            : MathUtil.Clamp(total * c.NonPitcherSenseFactor + rng.NextGaussian(0, 6), 5, 60);
+        // 投手センス（隠し, 球速levelの土台）: 野手水準(total×係数) ↔ 投手上振れ(total+bonus) を w で補間。
+        // 二段分岐を廃し、投手適性に対して連続に振る（旧: isPitcher で total+bonus か total×0.45 の二択）。
+        var senseMean = Lerp(total * c.NonPitcherSenseFactor, total + c.PitcherSenseBonus, w);
+        var pitcherSense = MathUtil.Clamp(senseMean + rng.NextGaussian(0, 6), 5, 95);
 
-        if (isPitcher)
-        {
-            Distribute(p, PitchingSkill, total, concentration, c.SpecialtyFloor, c, growth, rng);
-            Distribute(p, BattingSkill, offCenter, concentration, c.OffSpecialtyFloor, c, growth, rng);
-        }
-        else
-        {
-            Distribute(p, BattingSkill, total, concentration, c.SpecialtyFloor, c, growth, rng);
-            Distribute(p, PitchingSkill, offCenter, concentration, c.OffSpecialtyFloor, c, growth, rng);
-        }
+        // 専門配分の中心・フロアも w で連続補間（w=1で投手が本業＝total／w=0で野手が本業＝total）。
+        // 投手系(制球/キレ)は offCenter↔total、打撃・守備系は total↔offCenter を逆向きに補間する。
+        var pitchingCenter = Lerp(offCenter, total, w);
+        var battingCenter = Lerp(total, offCenter, w);
+        var pitchingFloor = (int)Math.Round(Lerp(c.OffSpecialtyFloor, c.SpecialtyFloor, w));
+        var battingFloor = (int)Math.Round(Lerp(c.SpecialtyFloor, c.OffSpecialtyFloor, w));
+        Distribute(p, PitchingSkill, pitchingCenter, concentration, pitchingFloor, c, growth, rng);
+        Distribute(p, BattingSkill, battingCenter, concentration, battingFloor, c, growth, rng);
 
         // 投手球速level = 地肩 ＋ 投手センス（設計書01 §1.1b-3）。地肩は Stage1 で確定済み。
         var arm = p.Level(AbilityKind.ArmStrength);
         var veloLevel = (int)MathUtil.Clamp(
             Math.Round(arm * c.VelocityArmWeight + pitcherSense * c.VelocitySenseWeight), 1, 100);
 
-        // 球質タイプ（設計書01 §1.1b「技巧派投手」）: 投手総合はほぼ変えず、球速・制球・スタミナ・キレの
-        // 配分だけを振り替える。専用Forkストリームで抽選＝既存の能力ロール列を1ビットも乱さない（不変条件#2）。
-        if (isPitcher)
+        // 球質タイプ（設計書01 §1.1b「技巧派投手」）: 投手にのみ付与＝創発の投手判定で分岐。
+        // 投手総合はほぼ変えず球速・制球・スタミナ・キレの配分だけ振り替える。専用Forkストリームで抽選。
+        if (naturalPitcher)
         {
             var archetype = PitcherArchetypes.Sample(
                 rng.Fork(ArchetypeStreamId(year, index)), c.Archetypes);
@@ -330,8 +351,8 @@ public static class ProspectGenerator
         SetWithCap(p, AbilityKind.Velocity, veloLevel, c, growth, rng);
 
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
-        // 投手: 1〜3球種／野手: 0〜1（投手経歴持ちは1〜2に上振れ）。
-        LearnPitches(p, isPitcher, c, rng);
+        // 投手: 1〜3球種／野手: 0〜1（投手経歴持ちは1〜2に上振れ）。判定は創発ロール。
+        LearnPitches(p, naturalPitcher, c, rng);
 
         return p;
     }
@@ -476,6 +497,26 @@ public static class ProspectGenerator
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
     private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
+
+    /// <summary>線形補間（Issue #174: 投手寄せ重み w による能力中心の連続補間）。</summary>
+    private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+    /// <summary>
+    /// 投手役（創発）と投手寄せ重み w∈[0,1] を返す（Issue #174）。
+    /// 役割: 投手適性＋供給バイアス が最良守備位置適性を上回れば投手（供給率を狙い値へ寄せる）。
+    /// w: 素の適性差 (投手適性 − 最良守備適性) をスパンでロジスティック squash（バイアス非混入）。
+    ///    明確な野手は w≈0 で打撃が total を保ち、明確な投手は w≈1 で投手能力が total になる。
+    /// </summary>
+    private static (bool NaturalPitcher, double Weight) ResolvePitcherRole(DevelopingPlayer p, RosterCoefficients c)
+    {
+        var aptPitcher = p.Aptitude(FieldPosition.Pitcher);
+        var bestField = 0;
+        foreach (var pos in AllPositions)
+            if (pos != FieldPosition.Pitcher) bestField = Math.Max(bestField, p.Aptitude(pos));
+        var naturalPitcher = aptPitcher + c.PitcherAptitudeBias > bestField;
+        var w = 1.0 / (1.0 + Math.Exp(-(aptPitcher - bestField) / c.PitcherAptitudeWeightSpan));
+        return (naturalPitcher, w);
+    }
 
     private static GrowthType SampleGrowthType(IRandomSource rng)
     {
