@@ -160,6 +160,16 @@
 - **係数（`data/coefficients.yaml`）**: `fielding.throw_error_base_prob` / `throw_error_accuracy_slope`、
   `baserunning.error_extra_advance_accuracy_slope`。傾き・下限は #4 に従い YAML 駆動。
 
+> **実ゲーム発火（Issue #169, 2026-07-23確定）**: #37 の配線を実ゲームで有効化。送球ロールと失策連鎖を
+> **C#既定＋YAMLの両方**で正値化（Unity実プレーは `new GameContext()` 既定で動くため、sim/Unity係数分離に従い両方必須）。
+> - `throw_error_base_prob`: 0.0 → **0.0266**（Ac50 で内野ゴロ失策の**約40%が送球由来**・残り約60%が捕球由来）
+> - `error_base_prob`: 0.064 → **0.0384**（送球ぶんを捕球側から再配分。総失策の母平均は≈3.4→≈2.9で甲子園実測寄りに改善）
+> - `error_extra_advance_prob`: C#既定 0.0 → **0.20**（YAML既存値に一致）＝失策連鎖を実ゲームでON
+> - `error_extra_advance_accuracy_slope`: C#既定 0.0 → **0.003**（YAML既存値に一致）＝連鎖の送球精度連動をON
+>
+> 2段階化で rng 消費順が変わるため**決定論baseline（determinism-baseline.txt）を再生成**。Heavy統計回帰で
+> 失策数/試合・失策連鎖・BABIP・内野安打の全帯内を確認。ThrowAccuracy の高低で失策/悪送球が実ゲームでも単調に変わる。
+
 ### P2-7. 死球（HBP）
 
 - **現状**: 列挙型に無し。四球のみ。

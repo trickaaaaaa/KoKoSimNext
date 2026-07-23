@@ -281,8 +281,11 @@ public sealed class BaserunningPlaysTests
     // --- 失策の連鎖（design-14 P1-6）: 既定オフでは Single と完全に同一のrng消費・結果 ---
 
     [Fact]
-    public void ErrorExtraAdvance_Disabled_ByDefault_MatchesSingleExactly()
+    public void ErrorExtraAdvance_Disabled_MatchesSingleExactly()
     {
+        // 連鎖 prob=0 では ReachedOnError は Single と rng消費・結果とも完全一致（恒等の担保）。
+        // 既定は issue #169 で正値化されたため、ここは明示的に 0 を指定する。
+        var off = C with { ErrorExtraAdvanceProb = 0 };
         for (ulong seed = 0; seed < 100; seed++)
         {
             var first = new Player { Baserunning = 50 };
@@ -292,11 +295,11 @@ public sealed class BaserunningPlaysTests
 
             var basesSingle = new BaseState { First = first, Second = second, Third = third };
             var single = BaserunningModel.ApplyDetailed(
-                basesSingle, PlateAppearanceResult.Single, batter, 0, C, new Xoshiro256Random(seed));
+                basesSingle, PlateAppearanceResult.Single, batter, 0, off, new Xoshiro256Random(seed));
 
             var basesError = new BaseState { First = first, Second = second, Third = third };
             var error = BaserunningModel.ApplyDetailed(
-                basesError, PlateAppearanceResult.ReachedOnError, batter, 0, C, new Xoshiro256Random(seed));
+                basesError, PlateAppearanceResult.ReachedOnError, batter, 0, off, new Xoshiro256Random(seed));
 
             Assert.Equal(single.Runs, error.Runs);
             Assert.Equal(single.ExtraOuts, error.ExtraOuts);
@@ -384,8 +387,8 @@ public sealed class BaserunningPlaysTests
     [Fact]
     public void ErrorExtraAdvance_SlopeZero_IsAccuracyIndependentAndIdentical()
     {
-        // 傾き0（既定）では ThrowAccuracy を変えても結果が1件も変わらない＝現行の一律確率と恒等。
-        var coeff = C with { ErrorExtraAdvanceProb = 0.30 }; // ErrorExtraAdvanceAccuracySlope は既定0
+        // 傾き0 では ThrowAccuracy を変えても結果が1件も変わらない＝一律確率と恒等（既定は #169 で正値化のため明示的に0を指定）。
+        var coeff = C with { ErrorExtraAdvanceProb = 0.30, ErrorExtraAdvanceAccuracySlope = 0 };
         for (ulong seed = 0; seed < 200; seed++)
         {
             var bLo = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };

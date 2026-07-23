@@ -123,9 +123,9 @@ public sealed class MatchProgressionTests
     public void PinchHitInSeventh_AppearsInSubsequentPlateAppearances()
     {
         // シードは「7回に到達し、その後に代打の打順が回ってくる」局面を選んだもの
-        // （Issue #24 で打球の塁打数決定が変わり、42 では代打の打順が回る前に試合が終わるようになった）。
+        // （Issue #24 で塁打数決定が変わり 42→43、Issue #169 で送球エラー2段階化でrng消費が変わり 43→1 に更新）。
         var prog = new MatchProgression(Team("A", true), Team("H", true),
-            new GameContext { CaptureTimelines = true }, 43UL);
+            new GameContext { CaptureTimelines = true }, 1UL);
 
         // 7回に到達するまで手動で進める。
         while (prog.Advance() && prog.Current!.Inning < 7) { }

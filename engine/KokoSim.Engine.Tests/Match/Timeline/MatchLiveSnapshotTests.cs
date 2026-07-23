@@ -59,6 +59,13 @@ public sealed class MatchLiveSnapshotTests
             Team("H", withSourceIds: true, withBench: true),
             new GameContext { CaptureTimelines = true }, 43UL);
 
+    // 代打シナリオ専用の進行（「7回到達後に代打の打順が回る」局面のシード）。
+    // Issue #24 で 42→43、Issue #169 の送球エラー2段階化で rng 消費が変わり 43→1 に更新。
+    private static MatchProgression NewPinchHitProg() =>
+        new(Team("A", withSourceIds: false, withBench: true),
+            Team("H", withSourceIds: true, withBench: true),
+            new GameContext { CaptureTimelines = true }, 1UL);
+
     // スタメン列は打順1〜9で、名前・守備位置・SourceId が現ラインナップと一致する。
     [Fact]
     public void Snapshot_LineupIsBattingOrder_WithIdentity()
@@ -160,7 +167,7 @@ public sealed class MatchLiveSnapshotTests
     [Fact]
     public void PinchHit_SwapsSlot_AndRecordsReplacedName()
     {
-        var prog = NewProg();
+        var prog = NewPinchHitProg();
         while (prog.Advance() && prog.Current!.Inning < 7) { }
         Assert.False(prog.IsFinished, "7回到達前に試合終了（別シードを使う）");
 
