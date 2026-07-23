@@ -80,4 +80,21 @@ public sealed class AiTeamBuilderStarterTests
         var starter = team.BattingOrder[team.PitcherSlot];
         Assert.Equal(AceRestSelector.AceUniformNumber, starter.UniformNumber);
     }
+
+    /// <summary>issue #191: 永続ロスター（3学年）は20人を大きく超えるため、打ち切りが無いと背番号21以降が
+    /// ベンチ/ブルペンに混入する。ベンチ入り20人制（背番号1〜20）に収まることを検証する。</summary>
+    [Fact]
+    public void Build_CapsRosterAtTwentyUniformNumbers()
+    {
+        var deps = new AiRosterDeps();
+        var school = MakeSchool(1, 70);
+        var roster = AiRosterFactory.Bootstrap(school, 1, deps);   // 3学年ぶん＝20人を大きく超える母数
+
+        var team = AiTeamBuilder.Build(roster, school, 1, deps);
+
+        var all = team.BattingOrder.Concat(team.Bench).Concat(team.Bullpen).ToList();
+        Assert.All(all, p => Assert.InRange(p.UniformNumber, 1, 20));
+        Assert.Equal(all.Count, all.Select(p => p.UniformNumber).Distinct().Count());
+        Assert.True(all.Count <= 20);
+    }
 }

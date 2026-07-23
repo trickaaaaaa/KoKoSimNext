@@ -24,6 +24,11 @@ public static class AiTeamBuilder
         FieldPosition.CenterField, FieldPosition.RightField,
     };
 
+    // ベンチ入り20人制（背番号1〜20）: 先発9（野手8＋エース1）＋控え野手8（10〜17）＋控え投手3（18〜20）＝20。
+    // StrengthTeamFactory と同じ背番号規則（design-06 §3.3b）。
+    private const int BenchFielderSlots = 8;
+    private const int BullpenSlots = 3;
+
     /// <summary>
     /// ロスターから Team を構成する。<paramref name="modernRules"/>/<paramref name="calendarYear"/> は
     /// DH使用判断用（既定 null＝DH不使用＝従来挙動）。<paramref name="aceRest"/> はエース温存判断（issue #42）
@@ -79,19 +84,19 @@ public static class AiTeamBuilder
             order.Add(Snap(best, PositionNumber(pos)));
         }
 
-        // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号10〜。
+        // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号10〜17（ベンチ入り20人制、StrengthTeamFactoryと同じ規則）。
         var benchFielders = fielders.Where(p => !usedFielders.Contains(p.Id))
-            .OrderByDescending(FielderScore).ToList();
+            .OrderByDescending(FielderScore).Take(BenchFielderSlots).ToList();
         var num = 10;
         foreach (var f in benchFielders)
             bench.Add(Snap(f, num++));
 
-        // エース（最良投手）＝背番号は常に AceUniformNumber（1）。控え投手は背番号18〜。
+        // エース（最良投手）＝背番号は常に AceUniformNumber（1）。控え投手は背番号18〜20（最大3人）。
         // 番号は温存の有無に関わらずロスター順位で固定＝大会を跨いだ台帳キー（#41）の同定を安定させる。
         var trueAce = pitchers.FirstOrDefault();
         var snappedAce = trueAce is not null ? Snap(trueAce, AceRestSelector.AceUniformNumber) : null;
         var pnum = 18;
-        var relief = pitchers.Skip(1).Select(p => Snap(p, pnum++)).ToList();
+        var relief = pitchers.Skip(1).Take(BullpenSlots).Select(p => Snap(p, pnum++)).ToList();
 
         // 温存判断（issue #42）。相手・残ラウンド・エースの消耗（#41台帳）・校風から次点投手を先発させるか決める。
         var starter = snappedAce;
