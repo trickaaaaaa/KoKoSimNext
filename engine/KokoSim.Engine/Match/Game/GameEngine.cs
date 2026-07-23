@@ -1249,10 +1249,15 @@ public static class GameEngine
                 errorFielder = defense.PlayerAtPosition(eRole);
             }
 
+            // 犠飛（issue #68）: フライ捕球の打席で、タッチアップにより走者が生還した場合。3アウト目の凡打では
+            // ApplyInPlayOut が即座に (0 runs) を返す（アウトカウント確認は現状 outs>=2 ガード）ため、
+            // ここで runs>0 を見るだけで「3アウト目ではない」ことも保証される＝AB非算入の対象を安全に絞れる。
+            var isSacFly = res.Result == PlateAppearanceResult.InPlayOut && homePlay is { IsFly: true } && runs > 0;
+
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
-                batterOrder, res.PitchLog, errorFielder, errorRole);
+                batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -1288,11 +1293,12 @@ public static class GameEngine
         int batterOrder = 0,
         IReadOnlyList<AtBat.PitchRecord>? pitchLog = null,
         Player? errorFielder = null,
-        Match.Field.FieldPosition errorRole = default)
+        Match.Field.FieldPosition errorRole = default,
+        bool isSacFly = false)
     {
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
-        offense.RecordBatting(batter, result, runs);
+        offense.RecordBatting(batter, result, runs, isSacFly);
         defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches);
         defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
             outsThisPa, ctx.Tactics.RattledRecoveryOuts);

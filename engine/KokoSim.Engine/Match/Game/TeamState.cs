@@ -113,19 +113,20 @@ public sealed class TeamState
     public void RecordSqueeze() => Squeezes++;
 
     // ===== 個人成績（ボックススコア） =====
-    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R; }
+    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF; }
     private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches, HB, HRA; }
     private sealed class FieldAccum { public FieldPosition Position; public int Errors; }
     private readonly Dictionary<Player, BatAccum> _bat = new();
     private readonly Dictionary<Player, PitAccum> _pit = new();
     private readonly Dictionary<Player, FieldAccum> _field = new();
 
-    /// <summary>打者の1打席を記録（rbi ≈ そのプレーで入った得点）。</summary>
-    public void RecordBatting(Player batter, PlateAppearanceResult r, int rbi)
+    /// <summary>打者の1打席を記録（rbi ≈ そのプレーで入った得点）。isSacFly＝犠飛（issue #68）は打数から除外する。</summary>
+    public void RecordBatting(Player batter, PlateAppearanceResult r, int rbi, bool isSacFly = false)
     {
         if (!_bat.TryGetValue(batter, out var a)) { a = new BatAccum(); _bat[batter] = a; }
         a.PA++;
-        if (r.IsAtBat()) a.AB++;
+        if (isSacFly) a.SF++;
+        if (r.IsAtBat() && !isSacFly) a.AB++;
         if (r.IsHit()) a.H++;
         if (r == PlateAppearanceResult.Double) a.Doubles++;
         if (r == PlateAppearanceResult.Triple) a.Triples++;
@@ -189,7 +190,7 @@ public sealed class TeamState
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
-                a.HBP, a.SB, a.CS, a.R);
+                a.HBP, a.SB, a.CS, a.R, a.SF);
     }
 
     /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>

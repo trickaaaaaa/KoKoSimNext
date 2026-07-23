@@ -348,6 +348,7 @@ namespace KokoSim.Unity.Players
             cells.Add(new StatCell("本塁打", N(b.HomeRuns)));
             cells.Add(new StatCell("打点", N(b.Rbi)));
             cells.Add(new StatCell("得点", N(b.Runs)));
+            cells.Add(new StatCell("犠飛", N(b.SacrificeFlies)));
             cells.Add(new StatCell("四球", N(b.Walks)));
             cells.Add(new StatCell("死球", N(b.HitByPitches)));
             cells.Add(new StatCell("三振", N(b.StrikeOuts)));
