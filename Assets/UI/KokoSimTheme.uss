@@ -1153,16 +1153,17 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
    ファイル末尾＝同特異度で後勝ち。夜へ戻す時はこのブロックごと外せばよい（可逆）。
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* --- スコアボード(sb2)は黒島のまま（夜との連続性の錨・design-19 §0）--- */
-.sb2 { background-color: var(--sf-board); border-bottom-color: var(--ink); border-bottom-width: 3px; }
-.sb2-left { border-right-color: var(--sb-board-line); }
-.sb2-rank { border-left-color: var(--sb-board-line); }
-.sb2-right { border-left-color: var(--sb-board-line); }
-.sb2-div { background-color: var(--sb-board-line); }
-.sb2-badge { background-color: var(--sb-badge); color: var(--sb-ink-1); border-width: 2px; border-color: var(--sb-board-line); }
-.sb2-name, .sb2-rank__t, .sb2-cell__v, .sb2-meter__v { color: var(--sb-ink-1); }
-.sb2-pref, .sb2-rank__k, .sb2-cell__k, .sb2-meter__k { color: var(--sb-ink-2); }
-/* 掲示板の電光黄・名声/信頼度の意味色は黒面の上でそのまま活きるので不変（--color-lamp / fame / trust）。 */
+/* --- トップバー帯は明地（ナビと同質）。黒は中央の掲示板ストリップ(sbs)だけに閉じ込める。
+       校名・ランク・部費/名声/CTA はインク文字で明地に載る（design-19：黒い島を最小化）。 --- */
+.sb2 { background-color: var(--sf-base); border-bottom-width: 0; }
+.sb2-left { border-right-color: var(--divider); }
+.sb2-rank { border-left-color: var(--divider); }
+.sb2-right { border-left-color: var(--divider); }
+.sb2-div { background-color: var(--divider); }
+.sb2-badge { background-color: var(--sf-inset); color: var(--ink); border-width: 2px; border-color: var(--ink); }
+.sb2-name, .sb2-rank__t, .sb2-meter__v { color: var(--tx-1); }
+.sb2-pref, .sb2-rank__k, .sb2-meter__k { color: var(--tx-2); }
+/* 名声/信頼度の意味色（fame/trust）と掲示板ストリップ内の電光黄は不変。 */
 
 /* --- ナビ帯：白地に沈め、下端をインク太罫で締める。選択タブは空の青。 --- */
 .nav {

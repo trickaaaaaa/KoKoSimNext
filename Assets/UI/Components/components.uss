@@ -1183,11 +1183,16 @@
 
    マスは C# 側（UiComponents.FillScoreboardCells）が値文字列から1文字ずつ生成する。
    非数値（「開催中」「本日 試合」「―」）もそのまま升目に載るので分岐が要らない。 */
+/* 明地トップバーの上で「掲示板＝黒い島」を独立させるため、インク枠＋案イの小ベタ影を付ける
+   （design-19：黒面積は掲示板ストリップだけに閉じ込め、盤面をマウントした電光掲示板に見せる）。 */
 .sbs {
     flex-direction: row;
     align-items: center;
     background-color: var(--sb-face);
-    border-radius: var(--radius-panel);
+    border-color: var(--ink);
+    border-top-width: 2px; border-left-width: 2px;
+    border-right-width: 4px; border-bottom-width: 4px;
+    border-radius: 0;
     padding: var(--sp-1) var(--sp-4);
     flex-shrink: 0;
 }
