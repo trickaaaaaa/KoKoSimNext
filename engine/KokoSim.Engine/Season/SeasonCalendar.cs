@@ -32,7 +32,14 @@ public sealed record SeasonCalendar
     /// <summary>秋季県大会が開幕する週（9月, 新チームの初公式戦 ≒ 第23週。設計書05 §1.1）。</summary>
     public int AutumnTournamentStartWeek { get; init; } = 23;
 
+    /// <summary>ドラフト指名の週（10月最終週 ≒ 第28週。3年生は夏に引退済みだが卒業までロスターに残る。設計書20 §4）。
+    /// 表示・スケジュールのアンカーのみ＝指名は独立Fork乱数の表示専用処理で、帯/決定論baselineに無影響。</summary>
+    public int DraftWeek { get; init; } = 28;
+
     public bool IsFirstHalf(int week) => week < SecondHalfStartWeek;
+
+    /// <summary>その週がドラフト指名週か（設計書20 §4）。週送りループの指名フック判定に使う。</summary>
+    public bool IsDraftWeek(int week) => week == DraftWeek;
 
     /// <summary>その週に開幕する大会があれば種別を返す（なければ null）。大会モードへの遷移判定に使う。</summary>
     public TournamentKind? TournamentStartingAt(int week)
