@@ -44,12 +44,28 @@ public readonly record struct PitchTacticsSituation(
 /// GameEngine がこの指示を受けてから行う（ここでは「試みるか」だけを返す）。
 /// </param>
 /// <param name="StealTarget">狙う塁（既定Second＝従来どおり一塁→二塁）。StealAttemptがnullなら無視される。</param>
+/// <param name="Explanation">
+/// 観測専用の判断内訳（設計書17 §5 P4, F3）。<b>エンジンはこの値を一切読まない</b>＝結果に影響しない。
+/// <see cref="IExplainTactics.ExplainDecisions"/> が立っているときだけ埋まり、既定は null（生成コストゼロ）。
+/// デバッグHUDと JSONL の <c>ai.cand</c> に流れ、「AI校が何を見てその手を選んだか」を可視化する。
+/// </param>
 public readonly record struct PitchTacticsDirective(
     PitchBattingOverride? Batting = null,
     PitchPolicy? Policy = null,
     Pitching.PitcherGear? Gear = null,
     StartType? StealAttempt = null,
-    StealTarget StealTarget = StealTarget.Second);
+    StealTarget StealTarget = StealTarget.Second,
+    string? Explanation = null);
+
+/// <summary>
+/// 判断の内訳を観測用に吐ける brain（設計書17 §5 P4, F3）。実装は任意。
+/// エンジンは観測が有効なときにこのフラグを立てるだけで、判断そのものには一切関与しない。
+/// </summary>
+public interface IExplainTactics
+{
+    /// <summary>真のあいだ <see cref="PitchTacticsDirective.Explanation"/> を埋める。</summary>
+    bool ExplainDecisions { get; set; }
+}
 
 /// <summary>
 /// 1球ごとの采配判断（設計書15 §2.3）。実装は任意（optional interface）。<see cref="ITacticsBrain"/> の

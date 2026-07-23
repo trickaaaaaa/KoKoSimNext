@@ -83,33 +83,55 @@ public enum AdvancePitchResult
 /// </summary>
 public sealed class MatchProgression
 {
-    private readonly GameProgress _p;
-    private readonly IEnumerator<GameStep> _steps;
+    private GameProgress _p;
+    private IEnumerator<GameStep> _steps;
     private readonly List<GameDecision> _decisions = new();
     private readonly ulong _seed;
     private readonly bool _seedable;   // seed ベースで構築＝Save() で中断保存できるか
+    private readonly ulong[]? _rngState; // 注入乱数の開始状態（設計書17 §3.2, F0）。非null なら Save() 可
+    // シーク（設計書17 §6.2, F4）で最初から再生し直すために試合設定を保持する。
+    private readonly Team _awayTeam;
+    private readonly Team _homeTeam;
+    private readonly GameContext _ctx;
+    private readonly Debugging.ScenarioStart? _scenarioStart; // 注入で始めた試合は再生時も同じ局面から起こす
 
     private int _confirmed;   // 確定した打席数
-    private int _away, _home; // 進行中スコア
     private int _pitchIndexInCurrentPa; // AdvancePitch() で現在の打席内に何回Pitch窓が来たか（0始まり）
 
-    public MatchProgression(Team away, Team home, GameContext ctx, ulong seed)
+    /// <param name="scenarioStart">
+    /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
+    /// 注入した試合は <see cref="GameResult.ScenarioId"/> が立ち、digest・統計集計から外れる。
+    /// </param>
+    public MatchProgression(Team away, Team home, GameContext ctx, ulong seed,
+        Debugging.ScenarioStart? scenarioStart = null)
     {
         _seed = seed;
         _seedable = true;
-        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed));
+        _awayTeam = away;
+        _homeTeam = home;
+        _ctx = ctx;
+        _scenarioStart = scenarioStart;
+        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed), null, scenarioStart);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
 
     /// <summary>
     /// 注入乱数で駆動する（大会の隔離Fork ストリームをそのまま渡す用）。<see cref="GameEngine.Play"/> に
     /// 同じ away/home/ctx/rng を渡した結果とバイト一致で進行する（＝観戦しても大会結果は不変）。
-    /// seed を持たないため <see cref="Save"/> による中断保存は非対応（本配線は別タスク）。
+    ///
+    /// <para>設計書17 §3.2（F0・穴#2の解消）: 渡された乱数源が <see cref="Xoshiro256Random"/> なら
+    /// <b>試合開始前の内部状態を控える</b>ので、シードを持たなくても <see cref="Save"/> で中断保存できる。
+    /// それ以外の実装（テスト用の固定乱数など）では従来どおり <see cref="Save"/> は使えない。</para>
     /// </summary>
     public MatchProgression(Team away, Team home, GameContext ctx, IRandomSource rng)
     {
         _seed = 0;
         _seedable = false;
+        _awayTeam = away;
+        _homeTeam = home;
+        _ctx = ctx;
+        // NewProgress は dayForm 抽選で rng を消費するので、控えるのは必ずその手前。
+        _rngState = (rng as Xoshiro256Random)?.CaptureState();
         _p = GameEngine.NewProgress(away, home, ctx, rng);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
@@ -118,8 +140,11 @@ public sealed class MatchProgression
     public LivePlateAppearance? Current { get; private set; }
     public bool IsFinished { get; private set; }
     public int ConfirmedPlateAppearances => _confirmed;
-    public int AwayScore => _away;
-    public int HomeScore => _home;
+    // 進行中スコアは engine の実値をそのまま映す（自前で足し込まない）。設計書17 F2/F4 で
+    // 「打席に紐づかない得点」（場面ジャンプの注入・暴投での生還・重盗の生還）が入ったため、
+    // PlayLogEntry.RunsScored の合計では実スコアとズレる。
+    public int AwayScore => _p.Away.Runs;
+    public int HomeScore => _p.Home.Runs;
 
     /// <summary>
     /// 設計書15 Phase D-1: 今ここで <see cref="SetPitchBattingOverride"/>/<see cref="SetPitchDefenseOverride"/>
@@ -129,13 +154,21 @@ public sealed class MatchProgression
     /// </summary>
     public int PendingPitchIndex { get; private set; }
 
-    /// <summary>中断保存の状態（シード＋確定打席数＋采配決定列）。<see cref="GameReplay.Restore"/> で復元できる。</summary>
+    /// <summary>
+    /// 中断保存の状態（シード or RNG状態＋確定打席数＋打席内の消化球数＋采配決定列）。
+    /// <see cref="GameReplay.Restore"/> で復元できる。設計書17 F0 で Fork注入経路にも解禁した。
+    /// </summary>
     public GameSaveState Save()
     {
-        if (!_seedable)
+        if (!_seedable && _rngState is null)
             throw new System.InvalidOperationException(
-                "注入乱数で構築した MatchProgression は seed を持たないため Save() で中断保存できません。");
-        return new(_seed, _confirmed) { Decisions = _decisions.ToArray() };
+                "この MatchProgression は seed も捕捉可能なRNG状態も持たないため Save() で中断保存できません。");
+        return new(_seed, _confirmed)
+        {
+            Decisions = _decisions.ToArray(),
+            RngState = _rngState,
+            ConfirmedPitchesInCurrentPa = _pitchIndexInCurrentPa,
+        };
     }
 
     /// <summary>
@@ -330,7 +363,6 @@ public sealed class MatchProgression
     private void ConfirmPlateAppearance(GameStep step)
     {
         var e = _p.Log[step.LogIndex];
-        if (e.IsTop) _away += e.RunsScored; else _home += e.RunsScored;
 
         // 投球列（設計書15 §4）: AtBatSession が解いた実データを最優先。バント/スクイズ等 PitchLog が無い
         // 経路（統一はPhase D）だけ、結果と整合する合成列にフォールバックする（打席固有シード＝メインRNG非依存）。
@@ -350,8 +382,8 @@ public sealed class MatchProgression
         {
             Inning = step.Inning,
             IsTop = step.IsTop,
-            AwayScore = _away,
-            HomeScore = _home,
+            AwayScore = AwayScore,
+            HomeScore = HomeScore,
             BatterName = e.BatterName,
             RunsScored = e.RunsScored,
             Result = e.Result,
@@ -411,14 +443,84 @@ public sealed class MatchProgression
     /// <summary>残りを采配追加なしで一括解決して最終結果を返す（「手動で最後まで」の残り消化）。</summary>
     public GameResult FinishRemaining() => DrainToEnd();
 
+    // ===== シーク・早送り（設計書17 §6.2, F4）。すべて既存の再生機構の上に載る＝結果は変わらない。 =====
+
+    /// <summary>N打席ぶん進める（早送り）。試合が終わったらそこで止まる。戻り値=実際に進めた打席数。</summary>
+    public int AdvancePa(int n)
+    {
+        var moved = 0;
+        while (moved < n && Advance()) moved++;
+        return moved;
+    }
+
+    /// <summary>
+    /// 今の半イニングが終わるまで進める（早送り）。<see cref="GameProgress.CurrentOuts"/> が3になった打席、
+    /// または試合終了で止まる。戻り値=進めた打席数。
+    /// </summary>
+    public int AdvanceUntilInningEnd()
+    {
+        var moved = 0;
+        while (Advance())
+        {
+            moved++;
+            if (_p.CurrentOuts >= 3) break;
+        }
+        return moved;
+    }
+
+    /// <summary>
+    /// 指定の位置（確定打席数, 打席内の消化球数）へシークする（設計書17 §6.2）。
+    /// 実装は「先頭から再生し直す」だけなので、往復しても同じ場面・同じトレースになる（決定論そのもの）。
+    /// 進む方向のシークでも再生し直す（現在位置からの差分進行と結果は同じだが、経路を1本に保つため）。
+    ///
+    /// <para><b>観測への影響</b>: 再生は実際の再シミュレーションなので、<c>CaptureTrace</c> が有効なら
+    /// 再生ぶんの <see cref="Debugging.PitchTrace"/> がもう一度シンクへ流れる。HUD のリングバッファは
+    /// 「今見えている試合」をそのまま映すので問題にならないが、JSONL へ書いている最中にシークすると
+    /// 同じ試合が2本ぶん記録される点は意識しておくこと。</para>
+    /// </summary>
+    public void SeekTo(int plateAppearances, int pitchesInCurrentPa = 0)
+    {
+        if (plateAppearances < 0 || pitchesInCurrentPa < 0)
+            throw new System.ArgumentOutOfRangeException(nameof(plateAppearances), "シーク位置は0以上である必要があります。");
+
+        var save = Save() with
+        {
+            ConfirmedPlateAppearances = plateAppearances,
+            ConfirmedPitchesInCurrentPa = pitchesInCurrentPa,
+        };
+        var resumed = GameReplay.Restore(_awayTeam, _homeTeam, _ctx, save, _scenarioStart);
+        _p = resumed.Progress;
+        _steps = resumed.Steps;
+
+        // 再生後の見かけの状態を組み直す（スコアは _p 直読みなので同期不要）。
+        _confirmed = _p.Log.Count;
+        _pitchIndexInCurrentPa = pitchesInCurrentPa;
+        PendingPitchIndex = pitchesInCurrentPa > 0 ? pitchesInCurrentPa - 1 : 0;
+        IsFinished = false;
+        Current = null;
+    }
+
+    /// <summary>
+    /// 今の場面を指す再現トークン（設計書17 §3.3）。HUD に常時表示してコピーする用。
+    /// RNG状態を捕捉できない乱数源で構築した場合は null。
+    /// </summary>
+    public Debugging.ReproToken? ReproToken()
+    {
+        var state = _rngState ?? (_seedable ? new Xoshiro256Random(_seed).CaptureState() : null);
+        if (state is null) return null;
+        return new Debugging.ReproToken(state, _confirmed, _pitchIndexInCurrentPa,
+            Debugging.ReproToken.Fingerprint(_awayTeam, _homeTeam, _ctx));
+    }
+
+    /// <summary>次の1打席に効く強制発動を予約する（設計書17 §6.1, F4・デバッグ経路専用）。</summary>
+    public void ForceNext(Debugging.ForcedOutcome outcome) => _p.ForceNext(outcome);
+
     private GameResult DrainToEnd()
     {
         while (_steps.MoveNext())
         {
             // Pitch 窓（設計書15）は打席確定ではないのでスコア加算・確定カウントの対象外。
             if (_steps.Current.Kind != GameStepKind.PlateAppearance) continue;
-            var e = _p.Log[_steps.Current.LogIndex];
-            if (e.IsTop) _away += e.RunsScored; else _home += e.RunsScored;
             _confirmed++;
         }
         IsFinished = true;

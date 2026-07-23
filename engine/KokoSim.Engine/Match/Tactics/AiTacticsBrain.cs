@@ -10,7 +10,7 @@ namespace KokoSim.Engine.Match.Tactics;
 /// 「AIは同じ采配システムの選択肢を選ぶだけ」＝AI専用の裏ルールを作らない（不変条件）。
 /// 委任采配は本クラスをプレイヤー自身の采配能力＋Standard校風で使う（§7）。
 /// </summary>
-public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain
+public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplainTactics
 {
     private readonly StandardTacticsBrain _inner;
     private readonly AiProfile _profile;
@@ -36,6 +36,12 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
     /// <summary>この AI が最適解を選ぶ確率（テスト・寸評用）。</summary>
     public double OptimalProbability => _optimalProb;
+
+    /// <summary>
+    /// 観測用の判断内訳を吐くか（設計書17 §5 P4, F3）。観測が有効なときだけ GameEngine が立てる。
+    /// 判断そのものには一切影響しない（文字列を1本組むだけ）。
+    /// </summary>
+    public bool ExplainDecisions { get; set; }
 
     public OffensiveSign CallOffense(in TacticsSituation s, IRandomSource rng)
     {
@@ -98,9 +104,21 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         }
         if (steal == StartType.Gamble && _profile.TierRank < _ai.GambleStartMinTier) steal = StartType.Normal;
 
-        return batting is null && policy is null && gear is null && steal is null
+        // 観測（設計書17 §5 P4）: この AI は「スコア比較」ではなく「①能力値の当たり外れ×②ティア関門」で
+        // 手を絞る構造なので、候補スコアを捏造せず<b>関門の通過状況をそのまま</b>出す。
+        // 素の判断（_inner）とティア下限を並べれば「なぜその手になったか」が1行で読める。
+        var explanation = ExplainDecisions
+            ? string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "inner={0}/{1}/{2}/{3},optimal={4}(p={5:F2}),tier={6},minPitch={7},minSteal={8}",
+                d?.Batting?.ToString() ?? "-", d?.Policy?.ToString() ?? "-",
+                d?.Gear?.ToString() ?? "-", d?.StealAttempt?.ToString() ?? "-",
+                optimal ? 1 : 0, _optimalProb, _profile.TierRank, _ai.PitchTacticsMinTier, _ai.StealMinTier)
+            : null;
+
+        return batting is null && policy is null && gear is null && steal is null && explanation is null
             ? null
-            : new PitchTacticsDirective(batting, policy, gear, steal, stealTarget);
+            : new PitchTacticsDirective(batting, policy, gear, steal, stealTarget, explanation);
     }
 
     public bool CallOffenseTimeout(in TacticsSituation s, IRandomSource rng)

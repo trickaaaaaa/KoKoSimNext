@@ -393,13 +393,15 @@ public static class DebugBridge
 
 ## 9. フェーズ計画とDoD
 
-| # | フェーズ | 内容 | 結果への影響 |
-|---|---|---|---|
-| **F0** | 再現基盤 | 母種の露出・固定・起動ログ、`Xoshiro256Random.CaptureState/FromState`、`GameSaveState.RngState`、再現トークン、Fork経路の `Save()` 解禁 | なし |
-| **F1** | 観測（engine） | `PitchTrace`/`PaTrace`/`GameTraceHeader`、`IDebugTraceSink`、`GameContext.CaptureTrace`、`JsonlTraceSink`、CLI `trace`／`trace-diff`、`CountingRandomSource` | なし |
-| **F2** | 注入（場面）＋MCP | `data/debug-scenarios.yaml`＋`ScenarioBuilder`、`DebugBridge`、Editorメニュー | 注入時のみ |
-| **F3** | HUD（Unity） | `RingBufferTraceSink`、F1オーバーレイ（ASCII3案→実装）、`TacticsDecision` の候補スコア露出 | なし |
-| **F4** | 強制発動＋シーク | `ForcedOutcome`、pitch粒度シーク、早送り、`HasForcedOutcomes` 除外 | 強制時のみ |
+> **状態: F0〜F4 すべて完了（2026-07-21）**。実装での逸脱と実測値は §12 を参照。
+
+| # | フェーズ | 内容 | 結果への影響 | 状態 |
+|---|---|---|---|---|
+| **F0** | 再現基盤 | 母種の露出・固定・起動ログ、`Xoshiro256Random.CaptureState/FromState`、`GameSaveState.RngState`、再現トークン、Fork経路の `Save()` 解禁 | なし | ✅ |
+| **F1** | 観測（engine） | `PitchTrace`/`PaTrace`/`GameTraceHeader`、`IDebugTraceSink`、`GameContext.CaptureTrace`、`JsonlTraceSink`、CLI `trace`／`trace-diff`、`CountingRandomSource` | なし | ✅ |
+| **F2** | 注入（場面）＋MCP | `data/debug/scenarios.yaml`＋`ScenarioBuilder`、`DebugBridge`、Editorメニュー | 注入時のみ | ✅ |
+| **F3** | HUD（Unity） | `RingBufferTraceSink`、F1オーバーレイ（A案＝右サイドバー縦一列）、采配の判断内訳の露出 | なし | ✅ |
+| **F4** | 強制発動＋シーク | `ForcedOutcome`、pitch粒度シーク、早送り、`HasForcedOutcomes` 除外 | 強制時のみ | ✅ |
 
 **順序の根拠**: F1 を最優先にするのは、**トレースがあるとF2以降の検証自体が安くなる**から（自分で作った機能を自分で検証できる）。
 F4 を最後にするのは、**唯一RNG消費順を変える層**で、他の層が緑であることを前提にしたいため。
@@ -471,3 +473,54 @@ return KokoSim.Unity.Debugging.DebugBridge.DumpState();   // JSON が返る
 
 **なし**（`docs/design/OPEN-QUESTIONS.md` **Q18** は 2026-07-21 に Q18-1・Q18-2 とも確定してクローズ）。
 実装中に新たな未決を発見したら OPEN-QUESTIONS に追記して報告する。
+
+---
+
+## 12. 実装記録（2026-07-21・F0〜F4 完了）
+
+本書のスケッチから**意図的に変えた点**と、DoDの**実測値**を残す。以後はこちらが実装の単一ソース。
+
+### 12.1 設計からの逸脱と理由
+
+| 箇所 | 本書のスケッチ | 実装 | 理由 |
+|---|---|---|---|
+| §3.2 `CaptureState()` | 4要素（xoshiro の4ワード） | **6要素**（4ワード＋Box-Muller予備値＋有無フラグ） | 4要素だと `NextGaussian` を奇数回引いた直後の復元で正規乱数が半周ズレる＝決定論が壊れる。`FromState` は旧式の4要素も受ける |
+| §4.1 `PitchTrace` | `readonly record struct`（位置引数30個） | `sealed record`（init プロパティ） | 打席解決層（意図・実着弾・打者判断）と試合層（局面・状態・采配・RNG）の2箇所から埋めるため。生成は `CaptureTrace` 時のみ |
+| §4.2 `RingBufferTraceSink` | Unity 側の部品 | **engine 側**（`KokoSim.Engine.Debugging`） | IOもUnity参照も持たない純データ構造。engine に置けばリングの巻き戻り境界をテストで固定できる（不変条件#3は守ったまま） |
+| §4.3 JSONL の組み立て | シンク側で実装 | engine の `TraceJson`（純関数）へ集約 | CLI と Unity(`DebugBridge`) の両方が同じ関数を通す。二重実装すると `jq` のレシピが片方だけ壊れる |
+| §3.4 YAML パース | （未指定） | engine の `ScenarioYamlParser`（純パーサ）＋ IO は Config/Unity 側 | Unity は YamlDotNet を持たない。`SchoolNameVocabParser` と同じ分け方で、CLI と Unity の解釈のズレを構造的に潰す |
+| §3.4 `data/debug/` の Unity 供給 | StreamingAssets 経路を流用 | **StreamingAssets へ複製しない**。Editor/Development Build はリポジトリの `data/debug/` を直読み | StreamingAssets へ置くとビルドに同梱されてしまい Q18-2 の「ディレクトリ単位で除外」と矛盾する。直読みなら除外を1行も書かずに除外できる |
+| §5 P4 候補スコア | `TacticsDecision` に候補スコア配列 | `PitchTacticsDirective.Explanation`（文字列）＋ `IExplainTactics` | `AiTacticsBrain` は「スコア比較」ではなく「①能力値の当たり外れ×②ティア関門」で手を絞る構造。候補スコアを捏造せず、実際の関門通過状況を出す |
+| §6.1 `ForcedOutcome` | 26種 | 19種（`TriplePlay` / `Balk` / `Squeeze` / `EnterTieBreak` / `WalkOff` を除外） | いずれも単独の抽選ゲートを持たず、守備の共同解決や試合状況の帰結として現れる。固定するには物理層の偽装か第二の解決経路が要り、どちらも不変条件#1に反する。`EnterTieBreak` は `TieBreakEnabled` ＋シナリオの開始イニング指定で作れる |
+| §6.1 実装方式 | 抽選をスキップして固定 | 打席結果系は**投球ループごとスキップ**（敬遠と同じ・物理層を1回も回さない）／稀プレー系は**該当ゲートの確率を1.0にした1打席コピーの走塁係数**（抽選自体は残す） | 後者は乱数消費順が「そのゲートを既定オンにした状態」と一致するので、副作用の範囲が読める |
+| §5 HUD の等幅 | 等幅フォント | 固定幅 Label を横に並べて整列 | プロジェクトに等幅フォントが無く、空白詰めでは球種名の長さ差（Fork/Slider/Fastball）で桁が崩れる。整列はフォントに頼らずレイアウトで取る |
+
+### 12.2 副次的に直したもの
+
+- `MatchProgression.AwayScore/HomeScore` を **engine の実スコア直読み**に変更（従来は `PlayLogEntry.RunsScored` の自前合計）。
+  場面ジャンプの注入得点・暴投での生還・重盗の生還など「打席に紐づかない得点」を取りこぼしていた。
+- `GameReplay.Restore` / `MatchProgression` に `ScenarioStart` を通す口を追加（注入で始めた試合をシークしても同じ局面から起きる）。
+
+### 12.3 DoD 実測
+
+| 項目 | 結果 |
+|---|---|
+| **F1 中核: `CaptureTrace` on/off の digest 一致** | 全4カード × 50シード = 200試合で完全一致 |
+| `determinism-baseline.txt` | 再ベースライン無しで緑 |
+| `dotnet test --filter "Category!=Heavy"` | 856緑 |
+| `-c Release --filter "Category=Heavy"` | 統計帯すべて緑 |
+| **観測オンのオーバーヘッド** | **5.4〜7.3%**（300試合・`trace --measure` を単独実行。目標 +10% 未満）※ xUnit の Heavy は並列実行で CPU を取り合うため、目標値の判定には使わない |
+| `trace-diff` | 係数（`straight_share` +0.02）を1つ変えたトレースの最初の食い違い球（1回裏 0-0 1球目・通算40球目・`plan.ty` が Fork→Fastball）を正しく指した |
+| F0 Fork注入の Save/Restore | digest 一致。既存セーブ（`RngState=null`）も従来どおり復元 |
+| F2 全シナリオ | 6件すべて宣言どおりの局面（イニング・表裏・アウト・走者・カウント・得点・打順・球数）で起動 |
+| F2 `DebugBridge` | 全メソッドを `execute_code`（C#6/codedom）から実行して確認。異常系はすべて `{"ok":false,"err":...}` を返し例外を投げない |
+| F2 `data/debug/` 欠損 | `ListScenarios()` が 0件で ok を返す（例外なし） |
+| F4 全 `ForcedOutcome` | 19種すべて1回で発動し、下流（進塁・記録・タイムライン）が破綻せず完走 |
+| F4 pitch粒度シーク | 往復（進む→戻る→進む）で同一トレース。シーク後に最後まで流すと中断なし実行と digest 一致 |
+| F3 HUD | A案（右サイドバー縦一列）で実装。表示専用でリングバッファを読むだけ＝`CaptureTrace` on/off の digest 一致に含まれる |
+
+### 12.4 積み残し
+
+- 大会フローから起こすライブ観戦（`MatchLiveController.Pending` 経路）は、`GameContext` を呼び出し側が組むため
+  HUD の観測が刺さっていない。デモ生成の試合と `DebugBridge` 起点の試合は観測付き。
+- `ScenarioBuilder` の `"player"` 解決は現状フォールバックの生成校。Unity 側の実部員（`RosterService`）との接続は未配線。

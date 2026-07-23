@@ -119,6 +119,12 @@ Issue: [#85](https://github.com/trickaaaaaa/KoKoSimNext/issues/85)
 
 **設計書17 §3.4 / §8 へ反映済み**。
 
+**実装時の補足（2026-07-21・F2 完了時）**: (1) の「StreamingAssets 同期経路をそのまま流用」は**採らなかった**。
+StreamingAssets へ複製するとビルドに同梱されてしまい、(3) の「ディレクトリ単位で除外」と矛盾するため。
+Editor/Development Build ではリポジトリの `data/debug/` を直読みする（除外を1行も書かずに除外できる）。
+YAML の解釈は engine の純パーサ（`ScenarioYamlParser`）に置き、CLI(YamlDotNet 経路) と Unity が同一コードで読む。
+詳細は設計書17 §12.1。
+
 ## Q20. 怪物（Phenom）の出現 — AI校の才能外れ値（2026-07-21）→ **実装済み（2026-07-22・#43/#80と一括）**
 
 Issue: [#82](https://github.com/trickaaaaaa/KoKoSimNext/issues/82)
