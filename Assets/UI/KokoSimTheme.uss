@@ -805,8 +805,13 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     flex-shrink: 0;
     flex-direction: row;
     align-items: center;
-    background-color: var(--color-panel);              /* = .card と同じカード面 */
-    border-radius: var(--radius-card);
+    background-color: var(--sf-card);                  /* = .card と同じ白面 */
+    border-color: var(--ink);                          /* design-19：主役帯も他カードと同じNB枠＋ベタ影 */
+    border-top-width: var(--nb-border-card);
+    border-left-width: var(--nb-border-card);
+    border-right-width: var(--nb-card-edge);
+    border-bottom-width: var(--nb-card-edge);
+    border-radius: 0;
     margin: 14px 14px 0 14px;               /* dash の padding と左右を揃える。下は dash 側が空ける */
     padding: 16px 22px;
     min-height: 86px;
@@ -1059,8 +1064,10 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tm-banner__inner { flex-direction: column; align-items: center; }
 .tm-banner__top { font-size: 40px; color: var(--color-lamp); letter-spacing: 3px; }
 .tm-banner__rule { height: 2px; width: 220px; background-color: var(--color-lamp); margin: 14px 0; }
-.tm-banner__name { font-size: 26px; color: var(--color-chalk); letter-spacing: 2px; }
-.tm-banner__open { font-size: 34px; color: var(--color-chalk); letter-spacing: 8px; margin-top: 18px; }
+/* 開幕バナーは暗幕(0.88)の上の劇的告知＝スコアボードと同じ「暗い島は明色文字」。
+   昼で --color-chalk がインク（暗）へ反転するため、常時明色の --sb-ink-1 を使う。 */
+.tm-banner__name { font-size: 26px; color: var(--sb-ink-1); letter-spacing: 2px; }
+.tm-banner__open { font-size: 34px; color: var(--sb-ink-1); letter-spacing: 8px; margin-top: 18px; }
 
 /* 試合開始ダイアログ */
 .tm-dialog__round { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; }
