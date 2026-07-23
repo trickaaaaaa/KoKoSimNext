@@ -366,6 +366,13 @@ namespace KokoSim.Unity.Lineup
                 meta.Add(cap);
             }
             el.Add(meta);
+
+            // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
+            // 未習得選手もストレート1球が出る（投/野でゲートしない, Issue #93）。
+            var chartHost = new VisualElement();
+            chartHost.AddToClassList("cmp-card__pitch");
+            el.Add(chartHost);
+            new PitchChartView(chartHost, compact: true).SetData(card.Pitches);
         }
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
@@ -376,6 +383,8 @@ namespace KokoSim.Unity.Lineup
                 ValueA = r.ValueA, ValueB = r.ValueB,
                 HasA = r.HasA, HasB = r.HasB,
                 Winner = r.Winner,
+                TextA = r.TextA, TextB = r.TextB,   // 球速の km/h テキスト（issue #94）
+                FillA = r.FillA, FillB = r.FillB,
             });
 
         // ── 確定操作 ──

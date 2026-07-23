@@ -3,7 +3,9 @@ using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Season;      // AbilityKind（能力ラベル単一ソースの引数, issue #94）
 using KokoSim.Unity.Components;   // 部品辞書（RankChip）
+using KokoSim.Unity.Shell;        // 能力ラベル単一ソース（AbilityLabels, issue #94）
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -401,7 +403,13 @@ namespace KokoSim.Unity.Match
             _cmpRows.Add(group);
             _cmpRows.Add(UiComponents.CompareHeader("退く", "入る"));
             foreach (var (label, a, b) in CompareRows(outgoing, incoming, pitcherView))
-                _cmpRows.Add(CompareRowEl(label, a, b));
+            {
+                // 球速だけ物理量なので km/h テキスト表示（バー幅は Level のまま＝他能力と同じ土俵, issue #94）。
+                if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Velocity))
+                    _cmpRows.Add(CompareRowEl(label, a, b, KmhText(outgoing), KmhText(incoming)));
+                else
+                    _cmpRows.Add(CompareRowEl(label, a, b));
+            }
         }
 
         private Player SelectedOutgoing()
@@ -455,10 +463,10 @@ namespace KokoSim.Unity.Match
         {
             if (pitcherView)
             {
-                yield return ("球速", Velocity(a), Velocity(b));
-                yield return ("制球", a?.Pitching?.Control ?? -1, b?.Pitching?.Control ?? -1);
-                yield return ("キレ", a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
-                yield return ("スタミナ", Stamina(a), Stamina(b));
+                yield return (AbilityLabels.Jp(AbilityKind.Velocity), Velocity(a), Velocity(b));
+                yield return (AbilityLabels.Jp(AbilityKind.Control), a?.Pitching?.Control ?? -1, b?.Pitching?.Control ?? -1);
+                yield return (AbilityLabels.Jp(AbilityKind.PitchRank), a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
+                yield return (AbilityLabels.Jp(AbilityKind.Stamina), Stamina(a), Stamina(b));
                 yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
                 yield break;
             }
@@ -473,22 +481,30 @@ namespace KokoSim.Unity.Match
             yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
         }
 
-        // 球速・スタミナは物理量なので 0-100 の表示スケールへ写す（表示専用・エンジンの値は触らない）。
+        // 球速(km/h)→Level(0-100)は物理量→表示層の逆変換をエンジン公開APIに一本化（独自式廃止, issue #94）。
+        // バーは他画面（Member/Lineup/詳細）と同じ Level 土俵に揃う。km/h のテキスト表示は Phase 2 で対応。
         private static int Velocity(Player p)
-            => p?.Pitching == null ? -1 : Mathf.Clamp(Mathf.RoundToInt((float)(p.Pitching.MaxVelocityKmh - 110.0) * 2f), 0, 100);
+            => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromVelocityKmh(p.Pitching.MaxVelocityKmh);
 
         private static int Stamina(Player p)
             => p?.Pitching == null ? -1 : Mathf.Clamp(Mathf.RoundToInt((float)p.Pitching.StaminaPitches * 100f / 160f), 0, 100);
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。負値は「その選手がいない」を表す。
-        private static VisualElement CompareRowEl(string label, int a, int b)
+        // textA/textB を渡すと値ラベルを上書き（球速の km/h 表示用, issue #94）。バー幅は a/b(Level) のまま。
+        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null)
             => UiComponents.CompareRow(new CompareRowData
             {
                 Label = label,
                 ValueA = a, ValueB = b,
                 HasA = a >= 0, HasB = b >= 0,
                 Winner = a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0,
+                TextA = a >= 0 ? textA : null,
+                TextB = b >= 0 ? textB : null,
             });
+
+        // 球速の km/h テキスト（表示専用・変換はエンジン公開APIに集約, issue #94）。投手でなければ空。
+        private static string KmhText(Player p)
+            => p?.Pitching == null ? null : (int)System.Math.Round(p.Pitching.MaxVelocityKmh) + "km/h";
 
         // ── 注記＋確定 ──
 

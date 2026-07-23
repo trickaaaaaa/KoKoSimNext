@@ -617,6 +617,8 @@
 .cmp-card__hand { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-1); }
 .cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }
 .cmp-card .cat-rank-chips { margin-top: var(--sp-2); }
+/* 持ち球のミニ球種変化チャート（部品 PitchChartView・compact）。Painter2D 描画のため固定高を確保（issue #94） */
+.cmp-card__pitch { height: 104px; margin-top: var(--sp-2); }
 
 /* ── LineupRow：打順1枠の行（順・守・選手・学年投打・総合ランク）。行高32px基準（UI原則①） ──
    スタメン設定の打順表で使う。列幅は画面USS（LineupSetting.uss）側の .lu-row__* 幅と揃える。 */

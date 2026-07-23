@@ -485,24 +485,7 @@ namespace KokoSim.Unity.Home
             return d;
         }
 
-        private static string AbilityJp(AbilityKind k)
-        {
-            switch (k)
-            {
-                case AbilityKind.Contact: return "ミート";
-                case AbilityKind.Power: return "パワー";
-                case AbilityKind.LaunchTendency: return "弾道";
-                case AbilityKind.Discipline: return "選球眼";
-                case AbilityKind.Speed: return "走力";
-                case AbilityKind.ArmStrength: return "肩";
-                case AbilityKind.Fielding: return "守備";
-                case AbilityKind.Catching: return "捕球";
-                case AbilityKind.Velocity: return "球速";
-                case AbilityKind.Control: return "制球";
-                case AbilityKind.Stamina: return "スタミナ";
-                case AbilityKind.PitchRank: return "球種";
-                default: return k.ToString();
-            }
-        }
+        // 能力表示名は単一ソース（KokoSim.Unity.Shell.AbilityLabels）に集約（issue #94）。
+        private static string AbilityJp(AbilityKind k) => KokoSim.Unity.Shell.AbilityLabels.Jp(k);
     }
 }

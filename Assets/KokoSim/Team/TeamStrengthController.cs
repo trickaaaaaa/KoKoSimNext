@@ -30,7 +30,7 @@ namespace KokoSim.Unity.Squad
         private static readonly Dictionary<string, string> Composition = new Dictionary<string, string>
         {
             { "打撃力", "ミート / パワー / 弾道 / 選球眼" },
-            { "投手力", "球速 / 制球 / スタミナ / 球種（エース偏重）" },
+            { "投手力", "球速 / 制球 / スタミナ / キレ（エース偏重）" },
             { "守備力", "守備 / 捕球 / 肩" },
             { "機動力", "走力 / 盗塁" },
             { "選手層", "控えの厚み ＋ 投手の枚数" },
