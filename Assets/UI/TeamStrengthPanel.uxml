@@ -65,14 +65,14 @@
 
         <!-- ===== 6角形 / 指標バー ===== -->
         <ui:VisualElement class="pd2-row pd2-row--last ts-row">
-          <ui:VisualElement class="pd2-card pd2-card--grow">
-            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="チーム戦力バランス" /></ui:VisualElement>
+          <ui:VisualElement class="card card--col">
+            <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="チーム戦力バランス" /></ui:VisualElement>
             <ui:VisualElement name="radar" class="pd2-radar ts-radar" />
           </ui:VisualElement>
-          <ui:VisualElement class="pd2-card pd2-card--grow">
-            <ui:VisualElement class="pd2-card__hd">
-              <ui:Label class="pd2-card__t" text="指標" />
-              <ui:Label class="pd2-card__note" text="数値は 0〜100（各指標の集計値）" />
+          <ui:VisualElement class="card card--col">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="指標" />
+              <ui:Label class="card__hd-sub" text="数値は 0〜100（各指標の集計値）" />
             </ui:VisualElement>
             <ui:VisualElement name="factors" class="ts-factors" />
             <ui:VisualElement class="ts-analysis">

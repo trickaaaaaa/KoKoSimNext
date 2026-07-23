@@ -36,12 +36,12 @@
         <ui:VisualElement class="pm-body">
 
           <!-- 左：申込先テーブル -->
-          <ui:VisualElement class="pm-card pm-card--list">
-            <ui:VisualElement class="pm-card__hd">
-              <ui:Label class="pm-card__t" text="申込先（県内校）" />
-              <ui:Label name="pm-count" class="pm-card__note" text="" />
+          <ui:VisualElement class="card card--list">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="申込先（県内校）" />
+              <ui:Label name="pm-count" class="card__hd-sub" text="" />
             </ui:VisualElement>
-            <ui:VisualElement class="pm-card__body">
+            <ui:VisualElement class="card__body card__body--fill">
               <ui:VisualElement class="pm-thead">
                 <ui:Label class="pm-th pm-th--name" text="学校" />
                 <ui:Label class="pm-th pm-th--tier" text="格" />
@@ -56,12 +56,12 @@
           </ui:VisualElement>
 
           <!-- 右：選択した相手の6角形と申込 -->
-          <ui:VisualElement class="pm-card pm-card--detail">
-            <ui:VisualElement class="pm-card__hd">
-              <ui:Label class="pm-card__t" text="相手校の戦力" />
-              <ui:Label name="pm-detail-name" class="pm-card__note" text="未選択" />
+          <ui:VisualElement class="card card--detail">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="相手校の戦力" />
+              <ui:Label name="pm-detail-name" class="card__hd-sub" text="未選択" />
             </ui:VisualElement>
-            <ui:VisualElement class="pm-card__body">
+            <ui:VisualElement class="card__body card__body--fill">
               <ui:VisualElement name="pm-radar" class="pm-radar" />
               <ui:VisualElement name="pm-factors" class="pm-factors" />
               <ui:VisualElement class="pm-foot">

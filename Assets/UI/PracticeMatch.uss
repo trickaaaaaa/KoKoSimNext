@@ -51,54 +51,18 @@
     flex-direction: row;
     flex-grow: 1;
 }
-/* design-19 フルNB：インク枠＋ベタ影（案イ）＋塗り見出し帯。padding はカードから body へ移す。 */
-.pm-card {
-    background-color: var(--sf-card);
-    border-color: var(--ink);
-    border-top-width: var(--nb-border-card);
-    border-left-width: var(--nb-border-card);
-    border-right-width: var(--nb-card-edge);
-    border-bottom-width: var(--nb-card-edge);
-    border-radius: 0;
-    overflow: hidden;
-}
-.pm-card--list {
+/* カード本体・見出し帯は共通 .card / .card__hd に一本化（design-19）。
+   ここは練習試合固有の「並べ方（左右2カラム）」だけを card--* 修飾子で足す。
+   本文の伸縮（表スクロール充填・CTAの下寄せ）は共通 .card__body--fill を UXML で付与。 */
+.card--list {
     flex-grow: 1;
     flex-basis: 0;
     min-width: 0;
     margin-right: var(--sp-3);
 }
-.pm-card--detail {
+.card--detail {
     width: var(--w-editor);
     flex-shrink: 0;
-}
-.pm-card__hd {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    flex-shrink: 0;
-    padding: 11px 16px;
-    background-color: var(--grass);
-    border-bottom-width: var(--nb-border-card);
-    border-bottom-color: var(--ink);
-}
-.pm-card__body {
-    flex-grow: 1;
-    min-height: 0;
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-    padding-top: var(--sp-3);
-    padding-bottom: var(--sp-3);
-}
-.pm-card__t {
-    font-size: var(--fs-body);
-    color: #FFFFFF;
-    letter-spacing: 1px;
-}
-.pm-card__note {
-    font-size: var(--fs-cap);
-    color: #FFFFFF;
-    opacity: 0.82;
 }
 
 /* ── 申込先テーブル（行高32px・数値は右揃え） ───────────────── */

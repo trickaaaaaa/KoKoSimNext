@@ -739,6 +739,21 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .card__hd-sub { font-size: var(--fs-cap); color: #FFFFFF; opacity: 0.82; letter-spacing: 1px; }
 .card__body { padding: 6px 16px 16px 16px; }
 .card__scroll { flex-grow: 1; }
+/* ── 横並びカードの寸法（左右に並べる時。列間は margin-right で作る）───────────
+   旧 pd2-card--half/--grow/--radar/--hidden/--pitch を .card に統合（部品一本化・design-19）。
+   縦積み(margin-bottom)と横並び(margin-right)が両立するよう、横並びは modifier で右余白を持つ。 */
+.card--half   { flex-grow: 1; flex-basis: 0; margin-right: 14px; }   /* 等幅で伸縮 */
+.card--col    { flex-grow: 1; flex-basis: 0; margin-right: 14px; }   /* 等幅列（旧 pd2-card--grow） */
+.card--radar  { width: 318px; margin-right: 14px; }                  /* レーダー固定幅 */
+.card--hidden { width: 338px; margin-right: 14px; }                  /* 隠しパラメータ固定幅 */
+.card--pitch  { flex-grow: 1; flex-basis: 0; margin-right: 14px; }   /* 球種チャート */
+/* 内部に ScrollView を持つカードで本文を伸ばす（旧 pm-card__body の flex-grow を担う）。 */
+.card__body--fill { flex-grow: 1; min-height: 0; }
+/* 見出し帯の色替え（芝＝既定 / 土＝副 / 空＝操作）。plate-header と同じ役割語彙。 */
+.card__hd--dirt { background-color: var(--dirt); }
+.card__hd--dirt .card__hd-title { color: var(--ink); }
+.card__hd--dirt .card__hd-sub { color: var(--ink); }
+.card__hd--sky { background-color: var(--sky); }
 
 /* ═══ ホーム（情報構成 案A・2026-07-21） ═══════════════════════════════
    左＝部の実力（6指標レーダー）＋故障者 / 中＝チーム成績＋チーム内ランキング /
@@ -913,20 +928,13 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-overall__chip { flex-direction: row; }
 .grade--lg { font-size: 28px; min-width: 46px; padding: 6px 12px; border-radius: var(--radius-chip); margin-right: 0; }
 
-/* --- 行レイアウト（カード） --- */
+/* --- 行/列レイアウト（カードの器は共通 .card。ここは並べ方の容器だけ）---
+   カード本体・見出し帯・寸法修飾子は .card / .card__hd / .card--* に一本化した（design-19）。
+   選手詳細・チーム総合力はこの容器の中に .card を並べる。 */
 .pd2-row { flex-direction: row; margin-left: 14px; margin-right: 0; margin-bottom: 14px; }
-.pd2-card { background-color: var(--sf-card); border-color: var(--ink); border-top-width: var(--nb-border-card); border-left-width: var(--nb-border-card); border-right-width: var(--nb-card-edge); border-bottom-width: var(--nb-card-edge); border-radius: 0; margin-right: 14px; overflow: hidden; }
-.pd2-card--half { flex-grow: 1; flex-basis: 0; }
-.pd2-card--radar { width: 318px; }
-.pd2-card--grow { flex-grow: 1; flex-basis: 0; }
-.pd2-card--hidden { width: 338px; }
-.pd2-card--pitch { flex-grow: 1; flex-basis: 0; }
 .pd2-col-right { width: 360px; margin-right: 14px; }
-.pd2-col-right .pd2-card { margin-right: 0; margin-bottom: 14px; }
-.pd2-card__hd { flex-direction: row; align-items: center; justify-content: space-between; padding: 11px 16px; background-color: var(--grass); border-bottom-width: var(--nb-border-card); border-bottom-color: var(--ink); }
-.pd2-card__t { font-size: 19px; color: #FFFFFF; letter-spacing: 1px; }
-.pd2-card__note { font-size: var(--fs-cap); color: #FFFFFF; opacity: 0.82; }
-.pd2-card__body { padding: 12px 14px; }
+/* 右カラムのカードは横並びでなく縦積み＝右余白を消し下余白を付ける（modifier の margin-right を上書き）。 */
+.pd2-col-right .card { margin-right: 0; margin-bottom: 14px; }
 
 /* --- 能力バー --- */
 .pd2-abils { padding: 6px 14px 12px 14px; }
@@ -1020,11 +1028,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
    PlayerDetail / Tournament / Match 等の残存枠線をまとめて無効化し、角丸12へ統一する。
    枠線を残すのは focus/入力/スコアボード格子（sb-cell）と、意味を持つ左アクセントのみ。
    ═══════════════════════════════════════════════════════════════════════ */
-.tp-team, .tp-lead, .pd2-head, .pd2-card, .pd2-stat,
+.tp-team, .tp-lead, .pd2-head, .pd2-stat,
 .vs, .stat, .day, .coach-slot, .edit-slot {
     border-width: 0;
 }
-.tp-team, .tp-lead, .pd2-head, .pd2-card, .vs, .coach-slot, .edit-slot, .stat, .day { border-radius: var(--radius-card); }
+.tp-team, .tp-lead, .pd2-head, .vs, .coach-slot, .edit-slot, .stat, .day { border-radius: var(--radius-card); }
 /* 優勝候補だけは意味のある左アクセント（黄）を細く残す（全周枠は廃止） */
 .tp-team--fav { border-left-width: 3px; border-left-color: var(--sky); }
 /* 通知フィード（旧レイアウト）：全周枠は廃止し左アクセントのみ残す */
