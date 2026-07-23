@@ -136,8 +136,8 @@
 .msub-btn--ghost:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
 .msub-btn--go {
     flex-grow: 1;
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     color: var(--color-ink);
 }
-.msub-btn--go:hover { background-color: var(--color-lamp-hi); }
+.msub-btn--go:hover { background-color: var(--color-cta-hi); }
 .msub-btn--go:disabled { background-color: var(--color-panel-deep); color: var(--color-faint); }

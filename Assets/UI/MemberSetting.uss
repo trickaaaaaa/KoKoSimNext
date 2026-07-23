@@ -45,7 +45,7 @@
     padding-top: var(--sp-1);
     padding-bottom: var(--sp-1);
 }
-.ms-auto-btn:hover, .ms-swap-btn:hover { border-color: var(--color-lamp); color: var(--color-lamp); }
+.ms-auto-btn:hover, .ms-swap-btn:hover { border-color: var(--sky); color: var(--sky); }
 
 /* 球場図は縦長固定幅。内野ダイヤを描画幅の約50%に取り、外野をフェンス弧まで縦に収める。 */
 .ms-field {
@@ -103,7 +103,7 @@
     margin-right: 2px;
 }
 .ms-tab:hover { color: var(--color-chalk); }
-.ms-tab--on { background-color: var(--color-panel-hover); color: var(--color-chalk); border-color: var(--color-line-focus); }
+.ms-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 
 .ms-cmp-scroll { flex-grow: 1; }
 .ms-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }

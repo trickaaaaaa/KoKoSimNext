@@ -1,0 +1,20 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   PlayerList.uss — 選手一覧の画面固有スタイルだけを置く。
+   昼NBスキンは tokens/KokoSimTheme(全面) が担い、行の独立パネル化は
+   共通部品 components.uss の .row-well / .row-panel / .plate-header / .tool-btn / .nb-plate
+   に集約した（G1・ユーザー要望で共通化）。ここに残すのは「見出し行の列合わせ」だけ。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 見出し行：井（row-well）の中に置くがパネルにはしない。列は行パネルの内容と揃える。
+   行パネル内容の左右インセット（左＝枠2+pad16／右＝枠5+pad16）を、井の padding(12) を除いた
+   差分だけ見出しにも与えて、下の行パネルとカラムをそろえる。 */
+.pl-thead {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0);
+    padding: 6px 21px 8px 18px;
+}
+.pl-thead .cell--head { color: var(--color-faint); }
+
+/* 行の中の調子顔は一覧で拾いやすいよう少し大きめに（既定18→26）。 */
+.pl-cond-face { width: 26px; height: 26px; }

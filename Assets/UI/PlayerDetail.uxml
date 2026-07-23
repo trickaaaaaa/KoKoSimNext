@@ -74,17 +74,17 @@
 
         <!-- ===== 能力（投手・野手 2カラム） ===== -->
         <ui:VisualElement class="pd2-row">
-          <ui:VisualElement class="pd2-card pd2-card--half">
-            <ui:VisualElement class="pd2-card__hd">
-              <ui:Label class="pd2-card__t" text="投手能力" />
-              <ui:Label class="pd2-card__note" text="数値は内部値（1〜100）" />
+          <ui:VisualElement class="card card--half">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="投手能力" />
+              <ui:Label class="card__hd-sub" text="数値は内部値（1〜100）" />
             </ui:VisualElement>
             <ui:VisualElement name="pitcher-abils" class="pd2-abils" />
           </ui:VisualElement>
-          <ui:VisualElement class="pd2-card pd2-card--half">
-            <ui:VisualElement class="pd2-card__hd">
-              <ui:Label class="pd2-card__t" text="野手能力" />
-              <ui:Label class="pd2-card__note" text="数値は内部値（1〜100）" />
+          <ui:VisualElement class="card card--half">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="野手能力" />
+              <ui:Label class="card__hd-sub" text="数値は内部値（1〜100）" />
             </ui:VisualElement>
             <ui:VisualElement name="fielder-abils" class="pd2-abils" />
           </ui:VisualElement>
@@ -92,19 +92,19 @@
 
         <!-- ===== レーダー / 成長推移 / 隠しパラメータ ===== -->
         <ui:VisualElement class="pd2-row">
-          <ui:VisualElement class="pd2-card pd2-card--radar">
-            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="能力バランス" /></ui:VisualElement>
+          <ui:VisualElement class="card card--radar">
+            <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="能力バランス" /></ui:VisualElement>
             <ui:VisualElement name="radar" class="pd2-radar" />
           </ui:VisualElement>
-          <ui:VisualElement class="pd2-card pd2-card--grow">
-            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="成長推移" /></ui:VisualElement>
+          <ui:VisualElement class="card card--col">
+            <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="成長推移" /></ui:VisualElement>
             <ui:VisualElement name="growth" class="pd2-growth">
               <ui:Label class="pd2-empty" text="成長履歴は次シーズンから記録されます" />
             </ui:VisualElement>
           </ui:VisualElement>
-          <ui:VisualElement class="pd2-card pd2-card--hidden">
-            <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="隠しパラメータ（推定）" /></ui:VisualElement>
-            <ui:VisualElement class="pd2-card__body">
+          <ui:VisualElement class="card card--hidden">
+            <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="隠しパラメータ（推定）" /></ui:VisualElement>
+            <ui:VisualElement class="card__body">
               <ui:VisualElement name="hidden-list" />
               <ui:Label class="pd2-hidden-note" text="試合起用・面談・スカウトで段階的に判明します。" />
             </ui:VisualElement>
@@ -113,27 +113,27 @@
 
         <!-- ===== 球種データ / 特殊能力・成績 ===== -->
         <ui:VisualElement class="pd2-row pd2-row--last">
-          <ui:VisualElement class="pd2-card pd2-card--pitch">
-            <ui:VisualElement class="pd2-card__hd">
-              <ui:Label class="pd2-card__t" text="球種変化チャート" />
-              <ui:Label class="pd2-card__note" text="扇の長さ＝変化量 / 色・チップ＝キレ S〜G / ストレートは幅＝伸び" />
+          <ui:VisualElement class="card card--pitch">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="球種変化チャート" />
+              <ui:Label class="card__hd-sub" text="扇の長さ＝変化量 / 色・チップ＝キレ S〜G / ストレートは幅＝伸び" />
             </ui:VisualElement>
-            <ui:VisualElement class="pd2-card__body">
+            <ui:VisualElement class="card__body">
               <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />
             </ui:VisualElement>
           </ui:VisualElement>
 
           <ui:VisualElement class="pd2-col-right">
-            <ui:VisualElement class="pd2-card">
-              <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="特殊能力" /></ui:VisualElement>
-              <ui:VisualElement class="pd2-card__body">
+            <ui:VisualElement class="card">
+              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="特殊能力" /></ui:VisualElement>
+              <ui:VisualElement class="card__body">
                 <ui:VisualElement name="skills-list" />
                 <ui:Label name="skills-empty" class="pd2-empty" text="特殊能力はまだ発見されていません" />
               </ui:VisualElement>
             </ui:VisualElement>
-            <ui:VisualElement class="pd2-card">
-              <ui:VisualElement class="pd2-card__hd"><ui:Label class="pd2-card__t" text="簡易成績" /></ui:VisualElement>
-              <ui:VisualElement class="pd2-card__body">
+            <ui:VisualElement class="card">
+              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="簡易成績" /></ui:VisualElement>
+              <ui:VisualElement class="card__body">
                 <ui:Label name="tourn-label" class="pd2-stat-label" text="今大会（未接続）" />
                 <ui:VisualElement name="tourn-stats" class="pd2-stat-row" />
                 <ui:Label class="pd2-stat-label" text="公式戦通算（高校3年間）" />

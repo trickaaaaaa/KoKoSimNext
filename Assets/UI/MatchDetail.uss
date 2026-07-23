@@ -8,13 +8,13 @@
 }
 
 .md-title {
-    font-size: 18px;
+    font-size: 22px;
     color: var(--color-chalk);
     letter-spacing: 2px;
 }
 
 .md-sub {
-    font-size: 12px;
+    font-size: var(--fs-cap);
     color: var(--color-muted);
     margin-top: 4px;
     margin-bottom: 12px;
@@ -54,10 +54,10 @@
 
 /* 結果バッジ（resAt 到達で表示。既定は非表示） */
 .md-result {
-    font-size: 12px;
+    font-size: var(--fs-cap);
     letter-spacing: 1px;
     color: var(--color-ink);
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     border-radius: var(--radius-chip);
     padding: 1px 8px;
     margin-right: 10px;
@@ -65,7 +65,7 @@
 }
 
 .md-caption-text {
-    font-size: 14px;
+    font-size: 18px;
     color: var(--color-chalk);
     white-space: normal;
     flex-grow: 1;

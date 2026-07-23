@@ -40,13 +40,13 @@
     height: 40px;
     min-width: 120px;
     flex-shrink: 0;
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     color: var(--color-ink);
     font-size: var(--fs-body);
     border-width: 0;
     border-radius: var(--radius-panel);
 }
-.mr-cta:hover { background-color: var(--color-lamp-hi); }
+.mr-cta:hover { background-color: var(--color-cta-hi); }
 
 /* ── イニングスコア：内容ぶんの幅だけ取る面（全幅に広げると右が間延びする） ── */
 .mr-linescore {

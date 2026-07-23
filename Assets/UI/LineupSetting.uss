@@ -54,18 +54,18 @@
 .lu-rows { flex-grow: 1; }
 
 /* 行拡大に合わせて文字を1.3〜1.5倍（選手名を最大に）。ランク/守備チップはこの画面のみ拡大（共有部品を汚さない）。 */
-.lu-root .lineup-row__ord { font-size: 21px; }
+.lu-root .lineup-row__ord { font-size: 25px; }
 .lu-root .lineup-row__name { font-size: 24px; }
-.lu-root .lineup-row__info { font-size: 15px; }
+.lu-root .lineup-row__info { font-size: 19px; }
 .lineup-row .num-badge { margin-left: var(--sp-2); }
 .lineup-row .pos-chip { min-width: 36px; height: 34px; font-size: 19px; }
 .lineup-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
 /* 選手名と「学年・投打」の間の通算成績。学年・投打と同じ控えめグレー・名前より目立たせない。 */
-.lu-root .lineup-row__stat { font-size: 15px; color: var(--color-muted); margin-right: var(--sp-3); }
+.lu-root .lineup-row__stat { font-size: 19px; color: var(--color-muted); margin-right: var(--sp-3); }
 
 /* 控えも行高・文字をスタメンと揃える（成績は付けない＝幅節約）。ランクチップも同スケール。 */
 .lu-root .bench-row__name { font-size: 24px; }
-.lu-root .bench-row__tag { font-size: 14px; }
+.lu-root .bench-row__tag { font-size: 18px; }
 .bench-row .num-badge { margin-right: var(--sp-2); }
 .bench-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
 .lu-thead {
@@ -146,10 +146,10 @@
 .lu-btn--ghost:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
 .lu-btn--go {
     flex-grow: 1;
-    background-color: var(--color-lamp);
+    background-color: var(--color-cta);
     color: var(--color-ink);
 }
-.lu-btn--go:hover { background-color: var(--color-lamp-hi); }
+.lu-btn--go:hover { background-color: var(--color-cta-hi); }
 
 /* ── 右：2選手比較＋成績 ── */
 .lu-compare {
@@ -185,7 +185,7 @@
     margin-right: 2px;
 }
 .lu-tab:hover { color: var(--color-chalk); }
-.lu-tab--on { background-color: var(--color-panel-hover); color: var(--color-chalk); border-color: var(--color-line-focus); }
+.lu-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 
 .lu-cmp-scroll { flex-grow: 1; }
 .lu-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }

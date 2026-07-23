@@ -12,7 +12,9 @@
     min-width: 23px;
     height: 26px;
     -unity-text-align: middle-center;
-    border-radius: var(--radius-chip);   /* 角タイル（ピル型を廃止・設計書16 F1）*/
+    border-radius: var(--radius-chip);   /* 角タイル（昼NBで 0＝角） */
+    border-width: 2px;                    /* design-19：ランクチップはインク2px枠（明地でチップを締める） */
+    border-color: var(--ink);
     font-size: var(--fs-body);
     padding-left: 5px;
     padding-right: 5px;
@@ -34,6 +36,126 @@
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+
+/* ═══ design-19 デーゲーム・フルNB：枠＋ベタ影の器（G0 技術検証）═════════════════════
+   USS に box-shadow / 擬似要素は無いので、ベタ影を2方式で再現する（design-19 §2）。
+     ・案イ NbBorder … 非対称ボーダー（右/下だけ影色で太らせる）。1要素で済む＝行など量産部品向け。
+     ・案ロ NbPlate  … 背面プレート（wrapper 内に absolute の黒プレートを敷き前面を左上へ寄せる）。
+                        真の"ずれた影"が出る＝カード級・CTA など少数の主役向け。要素数は倍。
+   どちらも枠色・影色・地色は tokens.uss のインク／面トークンだけを読む。 */
+
+/* ── 案イ：非対称ボーダー（NbBorder）。単一要素にクラス1枚で付く量産用 ── */
+.nb-border {
+    background-color: var(--day-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);
+    border-left-width: var(--nb-border);
+    border-right-width: var(--nb-border);
+    border-bottom-width: var(--nb-border);
+    border-radius: 0;
+}
+/* 右下だけ影ぶん太らせて「右下にベタ影が落ちている」ように見せる（枠2px＋影3px＝5px）。 */
+.nb-border--shadow {
+    border-right-width: 5px;   /* --nb-border(2) + --nb-shadow(3) */
+    border-bottom-width: 5px;
+}
+
+/* ── 案ロ：背面プレート（NbPlate）。wrapper＋影プレート＋前面の3要素 ──
+   wrapper は影ぶんの余白を margin で確保し、影は out-of-flow（レイアウトを押し広げない）。
+   前面は不透明面で影の重なり部分を隠す。子順は「影→前面」（後の兄弟が上に描画される）。 */
+.nb-plate {
+    margin-right: var(--nb-shadow-card);
+    margin-bottom: var(--nb-shadow-card);
+}
+.nb-plate__shadow {
+    position: absolute;      /* out-of-flow＝wrapper サイズに影響しない */
+    left: var(--nb-shadow-card);
+    top: var(--nb-shadow-card);
+    width: 100%;             /* = 前面(flow子)の幅。offset ぶん右下へ食み出す＝ベタ影 */
+    height: 100%;
+    background-color: var(--ink);
+}
+.nb-plate__front {
+    flex-shrink: 0;
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border-card);
+    border-left-width: var(--nb-border-card);
+    border-right-width: var(--nb-border-card);
+    border-bottom-width: var(--nb-border-card);
+    border-radius: 0;
+}
+
+/* ── PlateHeader：ペンキ塗りの見出しプレート（芝＝主／土＝副／空＝操作）＋白抜き題字 ──
+   カードの上縁に敷く帯。題字は白抜き、右端にツール操作（並び替え等）を置ける。 */
+.plate-header {
+    flex-direction: row;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom-width: var(--nb-border-card);
+    border-bottom-color: var(--ink);
+}
+.plate-header--grass { background-color: var(--grass); }
+.plate-header--dirt  { background-color: var(--dirt); }
+.plate-header--sky   { background-color: var(--sky); }
+.plate-header__title {
+    font-size: var(--fs-page);
+    letter-spacing: 3px;
+    color: #FFFFFF;                    /* 芝/空プレートの白抜き題字 */
+}
+.plate-header--dirt .plate-header__title { color: var(--ink); }   /* 土プレートは明るいのでインク題字 */
+.plate-header__sub {
+    font-size: var(--fs-cap);
+    color: #FFFFFF;
+    opacity: 0.82;
+    margin-left: 14px;
+}
+.plate-header--dirt .plate-header__sub { color: var(--ink); }
+.plate-header__spacer { flex-grow: 1; }
+
+/* ── RowWell + RowPanel：一覧の「行を独立パネル化」する共通部品（design-19）───────────
+   罫線区切りをやめ、薄い土の井（RowWell）の上に、白い行パネル（RowPanel）を1枚ずつ積む。
+   選手一覧・練習割当など**行を並べるあらゆる画面で共通に使う**（各画面で自作しない）。
+   行の中身レイアウト（セルの列幅・並び）は各画面が担い、器の見た目だけをここで一元化する。
+   影は案イ（非対称ボーダー：右下だけ太らせる）＝1要素で済む量産向け（G0で採用決定）。 */
+.row-well {
+    background-color: var(--dirt-well);
+    padding: 6px 12px 18px 12px;
+}
+.row-panel {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    min-height: var(--h-row);
+    background-color: var(--sf-card);        /* 昼＝白 */
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);       /* 2px */
+    border-left-width: var(--nb-border);
+    border-right-width: 5px;                  /* 枠2 + ベタ影3（案イ） */
+    border-bottom-width: 5px;
+    border-radius: 0;
+    margin-bottom: 12px;
+    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    padding-top: 8px; padding-bottom: 8px;
+}
+/* クリックで詳細/モーダルへ開く行のホバー（桜色）。 */
+.row-panel:hover { background-color: var(--sakura-tint); }
+/* 選択行＝桜色＋左端インクの太帯。 */
+.row-panel--selected { background-color: var(--sakura-tint); border-left-width: 5px; border-left-color: var(--ink); }
+
+/* ── ToolButton：見出しプレート等に置く操作ボタン（白地・空青文字・インク枠＋小ベタ影）──
+   並び替え・切替など。CTA（赤）とは別＝操作系は空の青（design-19 §5）。 */
+.tool-btn {
+    background-color: var(--sf-card);
+    color: var(--sky);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border); border-left-width: var(--nb-border);
+    border-right-width: 4px; border-bottom-width: 4px;   /* 枠2 + 影2 */
+    border-radius: 0;
+    font-size: var(--fs-label);
+    padding: 8px 16px;
+}
+.tool-btn:hover { color: var(--ink); }
 
 /* ── AbilityRow：能力バー行（アイコン／能力名＋副題／数値／バー／ランクチップ／補足） ─
    能力バーを出す画面はこの部品だけを使う（UI原則③ランク併記・⑤部品辞書の外に出ない）。
@@ -58,7 +180,7 @@
     flex-shrink: 0;
     -unity-text-align: middle-center;
     background-color: var(--color-panel);
-    color: var(--color-lamp);
+    color: var(--ink);
     border-radius: var(--radius-chip);
     font-size: var(--fs-label);
     margin-right: var(--sp-2);
@@ -89,13 +211,16 @@
     flex-shrink: 0;
     font-size: var(--fs-label);
     -unity-text-align: middle-right;
-    color: var(--color-lamp);
+    color: var(--ink);
     margin-left: var(--sp-2);
 }
 .abil-row__note--muted { color: var(--color-muted); -unity-font-style: normal; }
 
 /* 大（チーム総合力パネル）：指標名を太く、数値を大きく、バーを太くする */
 .abil-row--lg .abil-row__name { width: 182px; }
+/* 内訳subは名前列の中で折り返す。既定の nowrap だと長い内訳（投手力の「球種（エース偏重）」等）が
+   固定幅182pxを越えて右隣の数値に重なって描画される（fs-cap 13px化で顕在化した衝突）。 */
+.abil-row--lg .abil-row__sub { white-space: normal; }
 .abil-row--lg .abil-row__label { font-size: var(--fs-body); }
 .abil-row--lg .abil-row__value { width: 58px; font-size: 34px; margin-right: var(--sp-4); }
 .abil-row--lg .abil-row__bar { height: 12px; margin-right: var(--sp-4); }
@@ -128,7 +253,7 @@
 .stat-bar__fill {
     height: 100%;
     border-radius: 0;
-    background-color: var(--color-lamp);
+    background-color: var(--sky);
 }
 .stat-bar--good .stat-bar__fill { background-color: var(--color-good); }
 .stat-bar--warn .stat-bar__fill { background-color: var(--color-warn); }
@@ -151,10 +276,10 @@
 }
 .seg__cell:hover { color: var(--color-chalk); }
 .seg--sm .seg__cell { width: 26px; height: 26px; }
-.seg--lg .seg__cell { width: 40px; height: 32px; font-size: 14px; }
+.seg--lg .seg__cell { width: 40px; height: 32px; font-size: 18px; }
 /* 文字数が可変なラベル向け（強攻/待て等）。幅固定セルではなくパディングで揃える。 */
 .seg--auto .seg__cell { width: auto; height: 24px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
-.seg__cell--on { background-color: var(--color-lamp); color: var(--color-ink); }
+.seg__cell--on { background-color: var(--sky); color: #FFFFFF; }
 /* 今は選べないセル（局面が合わない・控えが尽きた等）。押せないことを色だけで示す。 */
 .seg__cell--off { color: var(--color-faint); }
 .seg__cell--off:hover { color: var(--color-faint); }
@@ -198,8 +323,8 @@
     background-color: var(--color-panel-deep);
     margin-left: var(--sp-1);
 }
-.filter-chip:hover { border-color: var(--color-lamp); color: var(--color-chalk); }
-.filter-chip--on { background-color: var(--color-lamp); color: var(--color-ink); border-color: var(--color-lamp); }
+.filter-chip:hover { border-color: var(--sky); color: var(--color-chalk); }
+.filter-chip--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 
 /* ── Switch：オン/オフトグル（委任など） ────────────────────────────── */
 .switch {
@@ -218,7 +343,7 @@
     background-color: var(--color-muted);
     margin-left: 3px;
 }
-.switch--on { background-color: var(--color-lamp); border-color: var(--color-lamp); }
+.switch--on { background-color: var(--sky); border-color: var(--sky); }
 .switch--on .switch__knob { background-color: var(--color-ink); margin-left: 22px; }
 
 /* ── StepButton：（− 値 +）の増減ボタン ─────────────────────────────── */
@@ -235,7 +360,7 @@
     margin-left: 2px;
     margin-right: 2px;
 }
-.step-btn:hover { border-color: var(--color-lamp); }
+.step-btn:hover { border-color: var(--sky); }
 .step-btn--locked { color: var(--color-line); }
 
 /* ── Panel：見出し付きの区切り枠（画面の基本容器） ───────────────────── */
@@ -247,7 +372,7 @@
 }
 .panel__title {
     font-size: var(--fs-label);
-    color: var(--color-lamp);
+    color: var(--ink);
     letter-spacing: 1px;
 }
 
@@ -276,7 +401,7 @@
     align-items: center;
     background-color: var(--color-panel);
     border-width: var(--border-w);
-    border-color: var(--color-lamp);
+    border-color: var(--ink);
     border-radius: var(--radius-panel);
     padding-left: var(--sp-3);
     padding-right: var(--sp-3);
@@ -284,9 +409,9 @@
     padding-bottom: var(--sp-2);
 }
 .banner__badge {
-    background-color: var(--color-lamp);
-    color: var(--color-ink);
-    font-size: 12px;
+    background-color: var(--sky);
+    color: #FFFFFF;
+    font-size: var(--fs-cap);
     letter-spacing: 2px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
@@ -323,11 +448,14 @@
     padding-right: 4px;
 }
 .field-chip:hover { border-color: var(--color-line-focus); }
-.field-chip--picked { border-color: var(--color-lamp); background-color: rgba(40, 58, 44, 0.95); }
-.field-chip--picked:hover { border-color: var(--color-lamp); }
-.field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-lamp); }
-.field-chip__name { font-size: var(--fs-cap); color: var(--color-chalk); margin-left: 4px; margin-right: 3px; white-space: nowrap; }
-.field-chip__empty { font-size: var(--fs-cap); color: var(--color-faint); margin-left: 4px; }
+.field-chip--picked { border-color: var(--sky); background-color: rgba(40, 58, 44, 0.95); }
+.field-chip--picked:hover { border-color: var(--sky); }
+/* 球場図チップの文字は盤面ジオメトリ都合の固定サイズ（--fs-cap連動だと底上げで図上のチップ同士が重なる。
+   13px＝視認性改善後も重ならないことをスクショで確認済みの値）。 */
+.field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: 13px; color: var(--color-lamp); }
+.field-chip__name { font-size: 13px; color: var(--color-chalk); margin-left: 4px; margin-right: 3px; white-space: nowrap; }
+.field-chip__empty { font-size: 13px; color: var(--color-faint); margin-left: 4px; }
+/* 球場図の小型チップは17px固定ボックス（盤面ジオメトリ都合）＝文字サイズ底上げの対象外 */
 .field-chip .rank-chip { min-width: 17px; height: 17px; font-size: 10px; }
 
 /* フルカードのポップオーバー（ホバー/選択時のみ・チップの真上）。 */
@@ -392,8 +520,8 @@
     margin-bottom: var(--sp-2);
 }
 .bench-slot:hover { border-color: var(--color-line-focus); }
-.bench-slot--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
-.bench-slot--picked:hover { border-color: var(--color-lamp); }
+.bench-slot--picked { border-color: var(--sky); background-color: var(--color-panel-hover); }
+.bench-slot--picked:hover { border-color: var(--sky); }
 
 /* ── PoolChip：割当元プール（部員一覧の小片） ──────────────────────── */
 .pool-chip {
@@ -411,8 +539,8 @@
     margin-bottom: var(--sp-2);
 }
 .pool-chip:hover { border-color: var(--color-line-focus); }
-.pool-chip--picked { border-color: var(--color-lamp); opacity: 1; }
-.pool-chip--picked:hover { border-color: var(--color-lamp); }
+.pool-chip--picked { border-color: var(--sky); opacity: 1; }
+.pool-chip--picked:hover { border-color: var(--sky); }
 .pool-chip__body { margin-left: var(--sp-2); margin-right: var(--sp-2); }
 .pool-chip__name { font-size: var(--fs-label); color: var(--color-chalk); }
 .pool-chip__meta { flex-direction: row; align-items: center; margin-top: 1px; }
@@ -427,7 +555,7 @@
     border-radius: var(--radius-chip);
     margin-left: 2px;
 }
-.cmp-btn:hover { border-color: var(--color-lamp); color: var(--color-lamp); }
+.cmp-btn:hover { border-color: var(--sky); color: var(--sky); }
 .cmp-btn--a-on { background-color: var(--cmp-a); color: var(--color-ink); border-color: var(--cmp-a); }
 .cmp-btn--b-on { background-color: var(--cmp-b); color: var(--color-ink); border-color: var(--cmp-b); }
 
@@ -447,7 +575,7 @@
 .cmp-head__col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; }
 .cmp-head__col--b { margin-left: var(--sp-2); }
 .cmp-head__lab {
-    font-size: 10px;
+    font-size: 14px;
     color: var(--color-ink);
     border-radius: var(--radius-chip);
     padding-left: 5px;
@@ -481,7 +609,7 @@
     padding-top: var(--sp-3);
     padding-bottom: var(--sp-3);
 }
-.cmp-card__lab { font-size: 10px; color: var(--color-ink); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
+.cmp-card__lab { font-size: 14px; color: var(--color-ink); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
 .cmp-card__lab--a { background-color: var(--cmp-a); }
 .cmp-card__lab--b { background-color: var(--cmp-b); }
 .cmp-card__name { font-size: var(--fs-body); color: var(--color-chalk); margin-top: var(--sp-2); }
@@ -498,19 +626,21 @@
     flex-grow: 1;
     flex-basis: 0;
     min-height: 40px;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-chip);
-    /* 枠は常設で色だけ替える（ホバーで幅が増えると行がずれるため）。既定は面と同色＝見えない。 */
-    border-width: var(--border-w);
-    border-color: var(--color-panel);
-    margin-bottom: 3px;
+    /* 行の独立パネル化（共通言語＝row-panel と同じ白面＋インク枠＋ベタ影・角0）。
+       打順表は密なので影は 4px（枠2+影2）に抑え、行間も 6px にする。 */
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border); border-left-width: var(--nb-border);
+    border-right-width: 4px; border-bottom-width: 4px;
+    border-radius: 0;
+    margin-bottom: 6px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-/* ホバー＝枠（--color-line-focus）／選択＝枠（--color-lamp）。選択行をホバーしても選択色を保つ。 */
-.lineup-row:hover { background-color: var(--color-row-hover); border-color: var(--color-line-focus); }
-.lineup-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
-.lineup-row--picked:hover { border-color: var(--color-lamp); }
+/* ホバー＝桜淡 ／ 選択（入替対象）＝桜（row-panel--selected と同じ選択言語）。 */
+.lineup-row:hover { background-color: var(--sakura-tint); }
+.lineup-row--picked { background-color: var(--sakura); }
+.lineup-row--picked:hover { background-color: var(--sakura); }
 .lineup-row__ord {
     width: 22px;
     -unity-text-align: middle-center;
@@ -546,11 +676,11 @@
     padding-left: 4px;
     padding-right: 4px;
 }
-.pos-chip:hover { border-color: var(--color-lamp); }
+.pos-chip:hover { border-color: var(--sky); }
 .pos-chip--fixed { color: var(--color-muted); background-color: var(--color-line-soft); }
-.pos-chip--dh { color: var(--color-lamp); background-color: var(--color-line-soft); }
+.pos-chip--dh { color: var(--sky); background-color: var(--color-line-soft); }
 /* 選択中（1つ目のチップをクリック済み）。bench-row--picked / sp-pill--picked と同じ表現。 */
-.pos-chip--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+.pos-chip--picked { border-color: var(--sky); background-color: var(--color-panel-hover); }
 
 /* ── BenchRow：控え（打順外）の1行（名前＋投/野タグ＋総合ランク） ── */
 .bench-row {
@@ -558,20 +688,21 @@
     align-items: center;
     height: 64px;
     flex-shrink: 0;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-chip);
-    /* lineup-row と同じ：枠は常設・色だけ替える（幅の増減で行がずれない）。 */
-    border-width: var(--border-w);
-    border-color: var(--color-panel);
-    margin-bottom: 3px;
+    /* lineup-row と同じ独立パネル（白面＋インク枠＋ベタ影4px・角0）。 */
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border); border-left-width: var(--nb-border);
+    border-right-width: 4px; border-bottom-width: 4px;
+    border-radius: 0;
+    margin-bottom: 6px;
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-.bench-row:hover { background-color: var(--color-row-hover); border-color: var(--color-line-focus); }
-.bench-row--picked { background-color: var(--color-panel-hover); border-width: var(--border-w); border-color: var(--color-lamp); }
-.bench-row--picked:hover { border-color: var(--color-lamp); }
+.bench-row:hover { background-color: var(--sakura-tint); }
+.bench-row--picked { background-color: var(--sakura); }
+.bench-row--picked:hover { background-color: var(--sakura); }
 .bench-row__name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-label); color: var(--color-chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: var(--sp-2); }
-.bench-row__tag { font-size: 10px; color: var(--color-muted); background-color: var(--color-panel-deep); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
+.bench-row__tag { font-size: 14px; color: var(--color-muted); background-color: var(--color-panel-deep); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; margin-right: var(--sp-2); }
 
 /* ── SpPill：先発投手ピル（DH制時のみ・クリックで選択→控え投手クリックで差替） ── */
 .sp-pill {
@@ -585,8 +716,8 @@
     padding-left: var(--sp-2);
     padding-right: var(--sp-2);
 }
-.sp-pill:hover { border-color: var(--color-lamp); }
-.sp-pill--picked { border-color: var(--color-lamp); background-color: var(--color-panel-hover); }
+.sp-pill:hover { border-color: var(--sky); }
+.sp-pill--picked { border-color: var(--sky); background-color: var(--color-panel-hover); }
 .sp-pill__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
 .sp-pill__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-2); }
 
@@ -670,7 +801,9 @@
 }
 
 /* ── ConditionFace：調子の表情顔（Painter2D・C# ConditionFace が描画）。5段階（0=絶好調〜4=絶不調）。 ── */
-.cond-face { width: 18px; height: 18px; flex-shrink: 0; }
+/* 昼NB：灰系の「普通」が白地に溶けるので全画面でインク輪郭を出す（design-19。ConditionFace が読む）。
+   夜へ戻すときはこの --face-ring 行を消せばリングも消える（既定α=0）。 */
+.cond-face { width: 18px; height: 18px; flex-shrink: 0; --face-ring: #131512; }
 
 /* ── RadarChart：レーダーの軸ラベル（絶対配置の位置は C# RadarChartView が角度から算出）。
    小=カード内の従属レーダー / 大(--lg)=1画面の主役レーダー。数値は1色（chalk）で強調はサイズと太さだけ。 ── */
@@ -678,7 +811,7 @@
 .radar-axis__l { font-size: var(--fs-cap); color: var(--color-muted); }
 .radar-axis__v { font-size: var(--fs-num); color: var(--color-chalk); }
 .radar-axis--lg .radar-axis__l {
-    font-size: 18px;
+    font-size: 22px;
     margin-bottom: 1px;
 }
 .radar-axis--lg .radar-axis__v { font-size: 40px; }
@@ -721,7 +854,7 @@
     margin-right: var(--sp-1);
 }
 .mlineup-row__replaced {
-    font-size: 9px;
+    font-size: 13px;
     color: var(--color-faint);
     margin-right: var(--sp-1);
     white-space: nowrap;
@@ -793,7 +926,7 @@
 }
 .mlineup-pitcher--mirror { flex-direction: row-reverse; }
 .mlineup-pitcher__tag {
-    font-size: 9px;
+    font-size: 13px;
     color: var(--color-muted);
     width: 20px;
     flex-shrink: 0;
@@ -1050,36 +1183,46 @@
 
    マスは C# 側（UiComponents.FillScoreboardCells）が値文字列から1文字ずつ生成する。
    非数値（「開催中」「本日 試合」「―」）もそのまま升目に載るので分岐が要らない。 */
+/* 明地トップバーの上の「電光掲示板」。黒緑の面＋深いインクのベゼル（筐体）＋升目マトリクスで
+   甲子園の電光掲示板に寄せる。黒面積はこの島だけに閉じ込める（design-19）。
+   ・ベゼル＝インク3px枠＋右下を太らせた案イ影（マウントした盤面の立体感）
+   ・盤面の内側に一段黒い余白（padding）を取り、升目が筐体に嵌まって見える。 */
 .sbs {
     flex-direction: row;
     align-items: center;
     background-color: var(--sb-face);
-    border-radius: var(--radius-panel);
-    padding: var(--sp-1) var(--sp-4);
+    border-color: var(--ink);
+    border-top-width: 3px; border-left-width: 3px;
+    border-right-width: 5px; border-bottom-width: 5px;
+    border-radius: 0;
+    padding: 6px 14px 8px 14px;
     flex-shrink: 0;
 }
 /* 1グループ＝ラベル行＋升目行（現在／夏予選まで）。 */
 .sbs-group { align-items: center; flex-shrink: 0; }
-.sbs-group__head { flex-direction: row; align-items: center; margin-bottom: 3px; }
+/* ラベル行は升目に密着させ「盤面の見出し」に見せる（浮いた灰キャプションにしない）。 */
+.sbs-group__head { flex-direction: row; align-items: center; margin-bottom: 4px; }
 /* ラベルもドットで出す（掲示板の中だから）。DotGothic16 は和文もドット字形を持つ。 */
 .sbs-group__k {
     font-size: var(--fs-dot-16);
-    color: var(--color-muted);
+    color: var(--sb-ink-2);   /* 掲示板は黒島＝文字は常に明色（--color-* に追従させない） */
     letter-spacing: 1px;
 }
 /* 升目に載せない添え字（年など）。マス外の小ドットで、値の主役を奪わない。 */
 .sbs-group__sup {
     font-size: var(--fs-dot-16);
-    color: var(--color-faint);
+    color: var(--sb-ink-2);
     margin-left: var(--sp-2);
 }
 .sbs-cells { flex-direction: row; align-items: center; }
-/* 升目1マス。半角＝数字の幅を既定にし、全角の単位漢字だけ --wide で広げる。 */
+/* 升目1マス。地を面より一段明るい「消灯セル」にし、枠を明るめの緑グレーにして
+   マトリクスをはっきり見せる＝電光掲示板の要。数字は電光アンバーで点灯。 */
 .sbs-cell {
     width: var(--sb-cell-w);
     height: var(--sb-cell-h);
     font-size: var(--fs-dot-32);
-    color: var(--color-chalk);
+    color: var(--color-lamp);        /* 値マス＝電光アンバー（掲示板内は電光数字専用でOK） */
+    background-color: var(--sb-cell-bg);
     -unity-text-align: middle-center;
     border-width: var(--border-w);
     border-color: var(--sb-grid);
@@ -1088,12 +1231,12 @@
     padding: 0;
 }
 .sbs-cell--wide { width: var(--sb-cell-w-wide); }
-/* 単位（月・週）のマスは値より一段落とす＝数字が主役（UI原則③）。 */
-.sbs-cell--unit { color: var(--color-muted); font-size: var(--fs-dot-16); }
-/* 点灯マス。アンバーは掲示板内でも最重要値だけ（UI原則②・design-16 §8）。 */
-.sbs-cell--lit { color: var(--color-lamp); }
+/* 単位（月・週）のマスは値より一段落とす＝数字が主役（UI原則③）。地はセルのまま。 */
+.sbs-cell--unit { color: var(--sb-ink-2); font-size: var(--fs-dot-16); }
+/* 点灯マス＝最重要値（カウントダウン）。アンバー地の凹みで「点灯している」感を強める。 */
+.sbs-cell--lit { color: var(--color-lamp-hi); background-color: var(--sb-lit-bg); }
 /* グループ間の間隔。線は引かず黒面の余白で分ける（UI原則④）。 */
-.sbs-gap { width: 40px; flex-shrink: 0; }
+.sbs-gap { width: 34px; flex-shrink: 0; }
 
 /* ═══ SchoolName：校名（設計書16 §4-3）═════════════════════════════════
    「校名は常に太明朝」が本リスタイルのシグネチャ規則（design-16 §1）。
@@ -1102,7 +1245,7 @@
    都道府県・シード等の小書きはサンセリフのままにして、明朝は固有名詞だけに絞る。 */
 .school-name { flex-direction: row; align-items: center; flex-wrap: wrap; }
 .school-name__main {
-    font-size: 20px;
+    font-size: 24px;
     color: var(--color-chalk);
     letter-spacing: 1px;
 }
@@ -1170,7 +1313,7 @@
     width: var(--lsc-cell-w);
     height: 100%;
     font-size: var(--fs-dot-32);
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);   /* 黒島の上の主数字＝常に明色 */
     -unity-text-align: middle-center;
     border-width: var(--border-w);
     border-color: var(--sb-grid);
@@ -1181,7 +1324,7 @@
 .lsc--dense .lsc-cell { width: var(--lsc-cell-w-dense); font-size: var(--fs-dot-16); }
 /* R / H / E は集計欄。回のマスより広く取り、掲示板の縦罫で回と分ける。 */
 .lsc-cell--total { width: var(--lsc-total-w); }
-.lsc-cell--sep { border-left-width: 2px; border-left-color: var(--color-line-focus); }
+.lsc-cell--sep { border-left-width: 2px; border-left-color: var(--sb-board-line); }
 /* 得点が入った回のマスだけ点灯（実物の電球が灯る比喩）。盤面ビューなので色＝状態コード
    ＝UI原則②の本数制限の対象外（CLAUDE.md の但し書き）。 */
 .lsc-cell--lit { color: var(--color-lamp); }
@@ -1191,7 +1334,7 @@
 /* 見出し行（回番号と R/H/E の見出し）。値より一段小さいドット。 */
 .lsc-row--head .lsc-cell {
     font-size: var(--fs-dot-16);
-    color: var(--color-muted);
+    color: var(--sb-ink-2);
     border-width: 0;
 }
 /* 進行中の回だけ見出しを点灯させ、どこを見ればよいか一目で分かるようにする。 */
@@ -1201,8 +1344,8 @@
 .lsc-cell--name {
     width: var(--lsc-name-w);
     height: 100%;
-    font-size: 18px;
-    color: var(--color-chalk);
+    font-size: 22px;
+    color: var(--sb-ink-1);
     -unity-text-align: middle-left;
     padding-left: var(--sp-2);
     border-width: 0;
@@ -1229,7 +1372,7 @@
 .lsc-lamp-row { flex-direction: row; align-items: center; height: 18px; }
 .lsc-lamp-key {
     font-size: var(--fs-dot-16);
-    color: var(--color-muted);
+    color: var(--sb-ink-2);
     width: 18px;
     -unity-text-align: middle-center;
 }
@@ -1240,7 +1383,7 @@
     height: 12px;
     border-radius: 6px;
     margin-left: 5px;
-    background-color: var(--color-line-focus);
+    background-color: var(--sb-board-line);   /* 消灯の電球＝黒島の上で見える淡グレー */
     flex-shrink: 0;
 }
 .lsc-lamp--ball.is-on { background-color: var(--color-good); }

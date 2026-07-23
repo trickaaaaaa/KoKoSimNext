@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <ui:VisualElement class="root">
       <ui:ScrollView mode="Vertical" class="scroll">

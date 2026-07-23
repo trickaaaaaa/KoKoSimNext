@@ -55,7 +55,7 @@
             </ui:VisualElement>
 
             <ui:ScrollView mode="Vertical" class="tp-scroll">
-                <ui:VisualElement name="train-rows" />
+                <ui:VisualElement name="train-rows" class="row-well" />
             </ui:ScrollView>
         </ui:VisualElement>
 
