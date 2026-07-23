@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Stats;
 using Xunit;
 
@@ -84,6 +86,41 @@ public sealed class StatBookTests
         Assert.Equal(3.0, s.Era, 4);                // 2*27/18
         Assert.Equal(7.0 / 6.0, s.Whip, 4);         // (5+2)*3/18 = 21/18
         Assert.Equal(10.5, s.KPer9, 4);             // 7*27/18
+    }
+
+    // issue #180: 球種別被打の畳み込み（試合をまたいだ加算＋大会別アーカイブ相当の合算）。
+    [Fact]
+    public void PitchingAdd_AccumulatesBattingAgainstByPitch_AcrossGames()
+    {
+        var s = new PitchingStatLine();
+        s.Add(new PitchingLine("P", Outs: 18, BattersFaced: 24, Hits: 5, Runs: 2, StrikeOuts: 7, Walks: 2, Pitches: 90,
+                BattingAgainstByPitch: new Dictionary<PitchType, PitchTypeBattingLine>
+                {
+                    [PitchType.Fastball] = new(AtBats: 10, Hits: 3, HomeRuns: 1),
+                    [PitchType.Slider] = new(AtBats: 4, Hits: 1, HomeRuns: 0),
+                }),
+            started: true, win: true, loss: false);
+        s.Add(new PitchingLine("P", Outs: 15, BattersFaced: 20, Hits: 3, Runs: 1, StrikeOuts: 5, Walks: 1, Pitches: 75,
+                BattingAgainstByPitch: new Dictionary<PitchType, PitchTypeBattingLine>
+                {
+                    [PitchType.Fastball] = new(AtBats: 6, Hits: 2, HomeRuns: 0),
+                    [PitchType.Curve] = new(AtBats: 3, Hits: 1, HomeRuns: 0),
+                }),
+            started: true, win: false, loss: true);
+
+        var byPitch = s.BattingAgainstByPitch;
+        Assert.Equal(16, byPitch[PitchType.Fastball].AtBats);
+        Assert.Equal(5, byPitch[PitchType.Fastball].Hits);
+        Assert.Equal(1, byPitch[PitchType.Fastball].HomeRuns);
+        Assert.Equal(0.3125, byPitch[PitchType.Fastball].Average, 4);
+        Assert.Equal(4, byPitch[PitchType.Slider].AtBats);
+        Assert.Equal(3, byPitch[PitchType.Curve].AtBats);
+        Assert.False(byPitch.ContainsKey(PitchType.Changeup));
+
+        var merged = new PitchingStatLine();
+        merged.Merge(s);
+        Assert.Equal(16, merged.BattingAgainstByPitch[PitchType.Fastball].AtBats);
+        Assert.Equal(3, merged.BattingAgainstByPitch[PitchType.Curve].AtBats);
     }
 
     [Fact]

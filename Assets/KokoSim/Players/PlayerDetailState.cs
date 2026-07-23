@@ -140,6 +140,18 @@ namespace KokoSim.Unity.Players
         public bool HasPitching;
         public List<StatCell> Batting = new List<StatCell>();
         public List<StatCell> Pitching = new List<StatCell>();
+        /// <summary>球種別被打率（issue #180）。投げたことのある球種のみ載る。</summary>
+        public List<PitchTypeStatRow> PitchTypeBattingAgainst = new List<PitchTypeStatRow>();
+    }
+
+    /// <summary>球種別被打1行（issue #180）。打席確定球（インプレー/被安打の球）だけを対象に集計。</summary>
+    public sealed class PitchTypeStatRow
+    {
+        public string Label = "";
+        public string AtBats = "";
+        public string Hits = "";
+        public string HomeRuns = "";
+        public string Average = "";
     }
 
     /// <summary>大会別の1行（学年×大会枠＋当時の背番号, issue #77）。</summary>
@@ -333,6 +345,7 @@ namespace KokoSim.Unity.Players
             {
                 dst.HasPitching = true;
                 FillPitching(dst.Pitching, stats.Pitching);
+                FillPitchTypeBattingAgainst(dst.PitchTypeBattingAgainst, stats.Pitching);
             }
         }
 
@@ -375,6 +388,24 @@ namespace KokoSim.Unity.Players
             cells.Add(new StatCell("与死球", N(p.HitBatters)));
             cells.Add(new StatCell("球数", N(p.Pitches)));
             cells.Add(new StatCell("WHIP", Dec2(p.Whip)));
+        }
+
+        // 球種別被打率（issue #180）: 打席確定球がインプレー/被安打の打席のみ集計対象＝公式打数とは別概念。
+        // 投げたことのある（＝1打数以上ある）球種のみ載せる。
+        private static void FillPitchTypeBattingAgainst(List<PitchTypeStatRow> rows, PitchingStatLine p)
+        {
+            foreach (PitchType t in System.Enum.GetValues(typeof(PitchType)))
+            {
+                if (!p.BattingAgainstByPitch.TryGetValue(t, out var line) || line.AtBats == 0) continue;
+                rows.Add(new PitchTypeStatRow
+                {
+                    Label = PitchJp(t),
+                    AtBats = N(line.AtBats),
+                    Hits = N(line.Hits),
+                    HomeRuns = N(line.HomeRuns),
+                    Average = Rate3(line.Average),
+                });
+            }
         }
 
         // 大会枠の並び順（学年内で春→夏県→夏甲子園→秋の暦順, issue #77）。

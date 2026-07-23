@@ -188,6 +188,33 @@ public sealed class GameRecordAndTeamTests
     }
 
     [Fact]
+    public void Play_RecordsBattingAgainstByPitch_ConsistentWithHitsAndHomeRuns()
+    {
+        // 球種別被打（issue #180）: 決め球（インプレーで終わった打席）が必ずタグ付けされるため、
+        // 球種別内訳の合計は投手ラインの被安打・被本塁打・対戦打者数と厳密に整合する。
+        var sawAnyPitchType = false;
+        for (ulong seed = 1; seed <= 30; seed++)
+        {
+            var away = StrengthTeam(58, "強打校", seed * 5);
+            var home = StrengthTeam(52, "投手校", seed * 5 + 1);
+            var result = GameEngine.Play(away, home, new GameContext(), new Xoshiro256Random(seed));
+
+            foreach (var line in result.AwayPitching.Concat(result.HomePitching))
+            {
+                var byPitch = line.BattingAgainstByPitch;
+                if (byPitch is null) continue;
+                sawAnyPitchType |= byPitch.Count > 0;
+
+                Assert.Equal(line.Hits, byPitch.Values.Sum(v => v.Hits));
+                Assert.Equal(line.HomeRunsAllowed, byPitch.Values.Sum(v => v.HomeRuns));
+                Assert.True(byPitch.Values.Sum(v => v.AtBats) <= line.BattersFaced);
+                Assert.All(byPitch.Values, v => Assert.True(v.Hits <= v.AtBats));
+            }
+        }
+        Assert.True(sawAnyPitchType, "30試合で球種別被打が一度も記録されない＝配線ミス");
+    }
+
+    [Fact]
     public void Play_IsDeterministic_IncludingLog()
     {
         var a1 = StrengthTeam(55, "A", 5);
