@@ -805,7 +805,10 @@ roster:
   intake_sd: 1.5
   intake_min: 8
   intake_max: 13
-  pitcher_share: 0.30
+  pitcher_share: 0.30              # 旧: 生成時の投手決め打ち率（#174で廃止・生成では未使用）
+  # 投手適性→投手能力の創発（#174）: 生成時決め打ちを廃し投手も適性から創発させる。
+  pitcher_aptitude_bias: 8.0       # 投手適性への供給バイアス（創発投手率を狙い値へ。帯校正で決める）
+  pitcher_aptitude_weight_span: 6.0 # 投手寄せ重みwのロジスティック幅（小=二極化/大=なだらか）
   # 総合力（名声由来。既定は一般校相当。名声接続後は talentCenter を上書き）
   talent_center_default: 32.0
   talent_sd: 8.0
