@@ -850,7 +850,6 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .hm-hero__cd-k { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; margin-right: 16px; }
 .hm-hero__cd-num { font-size: 40px; color: var(--color-chalk); }
 .hm-hero__cd-unit { font-size: 20px; color: var(--color-muted); margin-left: 4px; }
-.hm-hero__cd-sub { font-size: var(--fs-label); color: var(--color-muted); margin-left: auto; }
 
 /* 調子5段階の色（選手一覧・主将指名など全画面共通）。
    値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
