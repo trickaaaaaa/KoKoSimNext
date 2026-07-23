@@ -113,6 +113,12 @@
   ほど短縮（速い）、低いほど延長（遅い）。傾き 0.004・下限倍率 0.70 は `data/coefficients.yaml`
   （`fielding.throw_transfer_fielding_slope` / `throw_transfer_factor_min`、走塁系は `baserunning.*`）駆動。
 
+- **送球精度（ThrowAccuracy）の守備解決への接続（2026-07-23・Issue #37）**: 上表の送球散布σは値のみ実装済で
+  守備解決から未参照だった。当面は**簡易確率式（能力値直接・σ非経由。決定点A=(a)）**で悪送球の発生を能力駆動にする
+  ＝内野ゴロ送球エラーと失策連鎖を `ThrowAccuracy` 連動にする（式・係数は design-14 P1-6b）。σを使う幾何モデル
+  （着弾点サンプリング）は投球コントロール（`ControlScatter`）と同型の発展タスクとして温存（不変条件#1の完全準拠は
+  将来スライスで回収）。
+
 - **初速式の改訂（2026-07-20・Q1クローズ）**: 旧式 `100 + P×0.6`（P50→130km/h）では物理層の弾道積分で
   外野フェンス（95〜118m）をほぼ越えられず、HR率帯（2〜4%）に構造的に届かないことがPhase 1実測で判明。
   `125 + P×0.82` へ正式改訂（`data/coefficients.yaml` の `batting.exit_velo_intercept_kmh` /

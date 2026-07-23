@@ -110,6 +110,10 @@ fielding:
   error_catching_slope_strong: 0.001  # 平均超（精鋭側）の傾き。緩くして精鋭に失策の勾配を残す
   error_min_prob: 0.001               # 失策確率の下限
   error_max_prob: 0.30                # 失策確率の上限（弱小同士の大量失策の天井）
+  # 送球エラー（内野ゴロ→一塁の2段階目, Issue #37 / design-14 P1-6b）。捕球ロール(Catching)の後の送球ロール(ThrowAccuracy)。
+  # base=0 で送球ロールを引かない＝現行の捕球のみ判定と完全一致（決定論不変）。正値で悪送球が能力駆動に。
+  throw_error_base_prob: 0.0          # 送球エラー基準確率（ThrowAccuracy50時）。0で無効＝恒等
+  throw_error_accuracy_slope: 0.004   # 送球精度(Ac−50)あたりの悪送球減少幅
   # 空中捕球の守備範囲（Issue #24 原因2）。滞空時間比例のままだと深い飛球ほど守備範囲が
   # 無制限に広がるため、走れる時間に絶対上限を掛け、走路取りの巧拙（守備力）で伸縮させる。
   # 守備50・上限未満では従来（滞空×1.00）と同一。
@@ -143,6 +147,8 @@ baserunning:
   double_play_prob: 0.13
   fielders_choice_prob: 0.06       # 野選（FC, design-14 P1-1）: DP不成立時に先行走者アウト＋打者一塁生存（2026-07-17校正）
   error_extra_advance_prob: 0.20   # 失策連鎖（design-14 P1-6）: ReachedOnError時に全走者+打者へ追加1進塁（2026-07-17校正）
+  error_extra_advance_accuracy_slope: 0.003  # 失策連鎖の送球精度連動（Issue #37）: 確率=prob−(Ac−50)×これ。0で非連動＝恒等
+
   drop_third_strike_reach_prob: 0.001      # 振り逃げ（design-14 P1-2）: 一塁空き or 2アウトの三振で成立（2026-07-17校正）
   drop_third_strike_catching_slope: 0.002  # 捕手Catching(-50)あたりの成立確率減少幅
   wild_pitch_prob: 0.0012          # 暴投（design-14 P2-8）: 走者あり・実球（Ball/CalledStrike/SwingingStrike）ごとの基準確率（2026-07-20校正）

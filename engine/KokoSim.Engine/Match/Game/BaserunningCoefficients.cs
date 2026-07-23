@@ -24,6 +24,10 @@ public sealed record BaserunningCoefficients
     /// <summary>失策出塁（ReachedOnError）時、全走者＋打者に追加1進塁が発生する基準確率（design-14 P1-6）。
     /// 既定0＝機能オフ、乱数消費順・結果とも Single と完全一致。</summary>
     public double ErrorExtraAdvanceProb { get; init; } = 0.0;
+    /// <summary>失策連鎖の送球精度連動（Issue #37 / design-14 P1-6b）。連鎖確率 = ErrorExtraAdvanceProb −
+    /// (送球者 ThrowAccuracy − 50)×この値。既定0＝送球精度非連動＝現行の一律確率と恒等（Ac=50でも常に恒等）。
+    /// 正値で「送球が不正確な野手の失策ほど連鎖しやすい」。乱数消費は base のゲート下で1回のまま不変。</summary>
+    public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.0;
     /// <summary>一塁空き or 2アウトの三振で振り逃げが成立する基準確率（design-14 P1-2）。
     /// 既定0＝機能オフ、乱数消費順・結果とも従来と完全一致。</summary>
     public double DropThirdStrikeReachProb { get; init; } = 0.0;

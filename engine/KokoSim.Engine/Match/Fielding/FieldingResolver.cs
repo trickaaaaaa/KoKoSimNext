@@ -52,6 +52,8 @@ public sealed record FieldingPlay
     public double? FielderThrowSpeedMps { get; init; }
     /// <summary>処理野手の守備(Fielding)。返球・中継の握り替えの能力伸縮に使う（Issue #36）。既定50＝恒等。</summary>
     public int FielderFielding { get; init; } = 50;
+    /// <summary>処理野手の送球精度(ThrowAccuracy)。失策連鎖の能力駆動に使う（Issue #37）。既定50＝恒等。</summary>
+    public int FielderThrowAccuracy { get; init; } = 50;
     /// <summary>
     /// 一塁での判定margin[s]（判定オーバーレイ, Issue #59）。守備所要−走者所要＋ForceOutMarginSeconds
     /// （0=判定境界、正=セーフ寄り、負=アウト寄り）。内野ゴロで一塁送球が絡んだ判定のみ非null。
@@ -147,6 +149,7 @@ public static class FieldingResolver
                     FieldedAtSeconds = ground.HangTimeSeconds,
                     FielderThrowSpeedMps = catcher.Attributes.ThrowSpeedMps,
                     FielderFielding = catcher.Attributes.Fielding,
+                    FielderThrowAccuracy = catcher.Attributes.ThrowAccuracy,
                 };
             }
             // 捕れないフライ → 安打。着地後の転がりと幾何・走力で塁打数を決める。
@@ -171,7 +174,8 @@ public static class FieldingResolver
 
             if (defenseTime + coeff.ForceOutMarginSeconds <= runnerTime)
             {
-                var result = MaybeError(fielders, landing, coeff, rng, BattedBallResult.Out);
+                // 捕球ロール(Catching)→送球ロール(ThrowAccuracy)の2段階（Issue #37, design-14 P1-6b）。
+                var result = MaybeInfieldError(fielders, landing, infielder, coeff, rng);
                 return Base(result) with
                 {
                     FielderRole = infielder.Position,
@@ -179,6 +183,7 @@ public static class FieldingResolver
                     ThrowArriveSeconds = defenseTime,
                     FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
                     FielderFielding = infielder.Attributes.Fielding,
+                    FielderThrowAccuracy = infielder.Attributes.ThrowAccuracy,
                     JudgementMarginSeconds = judgementMargin,
                 };
             }
@@ -190,6 +195,7 @@ public static class FieldingResolver
                 ThrowArriveSeconds = defenseTime,
                 FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
                 FielderFielding = infielder.Attributes.Fielding,
+                FielderThrowAccuracy = infielder.Attributes.ThrowAccuracy,
                 JudgementMarginSeconds = judgementMargin,
             };
         }
@@ -227,6 +233,7 @@ public static class FieldingResolver
             FieldedAtSeconds = retrieveAt,
             FielderThrowSpeedMps = retriever.Attributes.ThrowSpeedMps,
             FielderFielding = retriever.Attributes.Fielding,
+            FielderThrowAccuracy = retriever.Attributes.ThrowAccuracy,
         };
     }
 
@@ -240,9 +247,9 @@ public static class FieldingResolver
         return Math.Min(hangTime * coeff.CatchReachFactor, coeff.CatchReachCapSeconds) * routeFactor;
     }
 
-    private static BattedBallResult MaybeError(
-        IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff,
-        IRandomSource rng, BattedBallResult onSuccess)
+    /// <summary>捕球エラー（Catching）ロール。rng を1回消費（守備力連動, issue #123）。</summary>
+    private static bool CatchErrorOccurs(
+        IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff, IRandomSource rng)
     {
         var f = NearestFielder(fielders, landing);
         // 守備力連動は非対称: 平均(50)より下（弱小）は急傾斜で大量失策へ、上（精鋭）は緩傾斜で
@@ -250,11 +257,35 @@ public static class FieldingResolver
         var catchingDelta = f.Attributes.Catching - 50;
         var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
         var errProb = coeff.ErrorBaseProb - catchingDelta * slope;
-        if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
+        return MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng);
+    }
+
+    /// <summary>捕球のみのエラー判定（空中捕球用）。捕球ロール1回のみ。</summary>
+    private static BattedBallResult MaybeError(
+        IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff,
+        IRandomSource rng, BattedBallResult onSuccess)
+        => CatchErrorOccurs(fielders, landing, coeff, rng) ? BattedBallResult.Error : onSuccess;
+
+    /// <summary>
+    /// 内野ゴロ→一塁送球のエラー判定（Issue #37, design-14 P1-6b）。捕球ロール(Catching)→送球ロール(ThrowAccuracy)の
+    /// 2段階。送球ロールは <see cref="FieldingCoefficients.ThrowErrorBaseProb"/> &gt; 0 のときのみ引く＝既定0では
+    /// 捕球ロールのみ（現行と乱数消費順・結果とも完全一致, 決定論不変）。
+    /// </summary>
+    private static BattedBallResult MaybeInfieldError(
+        IReadOnlyList<Fielder> fielders, Vector3D landing, Fielder infielder,
+        FieldingCoefficients coeff, IRandomSource rng)
+    {
+        if (CatchErrorOccurs(fielders, landing, coeff, rng)) return BattedBallResult.Error;
+        if (coeff.ThrowErrorBaseProb > 0.0)
         {
-            return BattedBallResult.Error;
+            // 送球精度が高いほど悪送球が減る。クランプは捕球エラーと共通の min/max を流用。
+            var errProb = coeff.ThrowErrorBaseProb - (infielder.Attributes.ThrowAccuracy - 50) * coeff.ThrowErrorAccuracySlope;
+            if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
+            {
+                return BattedBallResult.Error;
+            }
         }
-        return onSuccess;
+        return BattedBallResult.Out;
     }
 
     private static double ReachTime(Fielder f, Vector3D target)

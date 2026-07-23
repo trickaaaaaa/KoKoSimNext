@@ -352,6 +352,55 @@ public sealed class BaserunningPlaysTests
         Assert.True(on > off, $"失策連鎖を有効化しても平均得点が増えない: off={off:F2} on={on:F2}");
     }
 
+    // --- 失策連鎖の送球精度連動（Issue #37, design-14 P1-6b） ---
+
+    private static double ChainRate(BaserunningCoefficients coeff, int throwAccuracy, int trials = 5000, ulong seed = 21)
+    {
+        var rng = new Xoshiro256Random(seed);
+        var occurred = 0;
+        for (var i = 0; i < trials; i++)
+        {
+            var bases = new BaseState
+            {
+                Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 },
+            };
+            var (_, _, _, _, chain, _) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng,
+                errorThrowAccuracy: throwAccuracy);
+            if (chain) occurred++;
+        }
+        return (double)occurred / trials;
+    }
+
+    [Fact]
+    public void ErrorExtraAdvance_AccuracyDriven_LowerAccuracyChainsMore()
+    {
+        // 送球精度連動を有効化（傾き>0）。精度が低い野手の失策ほど連鎖しやすい（単調）。
+        var coeff = C with { ErrorExtraAdvanceProb = 0.30, ErrorExtraAdvanceAccuracySlope = 0.004 };
+        Assert.True(ChainRate(coeff, 10) > ChainRate(coeff, 50), "精度低で連鎖が増えない");
+        Assert.True(ChainRate(coeff, 50) > ChainRate(coeff, 90), "精度高で連鎖が減らない");
+    }
+
+    [Fact]
+    public void ErrorExtraAdvance_SlopeZero_IsAccuracyIndependentAndIdentical()
+    {
+        // 傾き0（既定）では ThrowAccuracy を変えても結果が1件も変わらない＝現行の一律確率と恒等。
+        var coeff = C with { ErrorExtraAdvanceProb = 0.30 }; // ErrorExtraAdvanceAccuracySlope は既定0
+        for (ulong seed = 0; seed < 200; seed++)
+        {
+            var bLo = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
+            var lo = BaserunningModel.ApplyDetailed(
+                bLo, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed),
+                errorThrowAccuracy: 10);
+            var bHi = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
+            var hi = BaserunningModel.ApplyDetailed(
+                bHi, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed),
+                errorThrowAccuracy: 90);
+            Assert.Equal(lo.Runs, hi.Runs);
+            Assert.Equal(lo.ErrorExtraAdvanceOccurred, hi.ErrorExtraAdvanceOccurred);
+        }
+    }
+
     // --- 振り逃げ（第3ストライク不捕球, design-14 P1-2）: 既定オフでは従来の試合結果と完全一致 ---
     // 判定自体は GameEngine.PlayHalf（private）に埋め込まれているため、BaserunningModel.IsBatterOut の
     // 純関数部分は直接、rng消費・帯への影響は GameEngine.Play を通した統計的な検証で担保する。

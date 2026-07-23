@@ -90,6 +90,15 @@ public sealed record FieldingCoefficients
     /// 大量失策（両校計10個規模）にするための天井。</summary>
     public double ErrorMaxProb { get; init; } = 0.30;
 
+    // 送球エラー（内野ゴロ→一塁の2段階目, Issue #37 / design-14 P1-6b）。捕球ロール(Catching)の後に
+    // 送球ロール(ThrowAccuracy)を引く。既定 base=0.0 は「送球ロールを一切引かない」＝現行の捕球のみ判定と
+    // 乱数消費順・結果とも完全一致（ErrorExtraAdvanceProb と同じ gating 方式で決定論を保つ）。
+    /// <summary>送球エラーの基準確率（ThrowAccuracy50時）。0.0＝送球ロール無効（現行と恒等, 決定論不変）。</summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.0;
+    /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
+    /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
+    public double ThrowErrorAccuracySlope { get; init; } = 0.004;
+
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 
     /// <summary>着地後の転がりの減速度[m/s²]（芝・土の摩擦＋バウンドの損失を集約）。</summary>
