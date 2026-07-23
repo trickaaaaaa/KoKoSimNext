@@ -20,6 +20,7 @@ namespace KokoSim.Unity.Match
         private IEnumerator Start()
         {
             Application.runInBackground = true;
+            MatchLiveController.CaptureMode = true;   // 自動連続進行(issue #173)を止め、AdvanceForCapture で手動駆動する
             EnsureOnlyMatchLive();
             yield return null;
             yield return null;

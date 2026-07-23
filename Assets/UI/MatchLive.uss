@@ -100,5 +100,13 @@
     min-width: 96px;
 }
 
+/* 伝令の残数表示（タイム＝伝令中断。issue #173）。操作列に常駐する状態ラベル＝低彩度で控えめに。 */
+.mlive-timeout {
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    margin-right: 14px;
+    -unity-text-align: middle-left;
+}
+
 /* 実況バー・操作列は列幅に合わせる（MatchDetail の固定820px上書き） */
 .mlive-col--center .md-caption { width: auto; margin-top: 0; }
