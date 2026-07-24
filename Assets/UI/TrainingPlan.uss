@@ -219,7 +219,7 @@
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-3); padding-bottom: var(--sp-3);
 }
 .tpm-col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: column; margin-right: 18px; }
-.tpm-col:last-child { margin-right: 0; }
+.tpm-col--growth { margin-right: 0; }
 .tpm-col__title { font-size: var(--fs-cap); color: var(--color-chalk); letter-spacing: 1px; flex-shrink: 0; margin-bottom: var(--sp-2); }
 .tpm-col__list { flex-direction: column; flex-shrink: 0; }
 /* 節見出し（野手練習/投手練習・Issue #133-⑥）。列見出しより一段淡い従属見出し。 */
