@@ -16,18 +16,24 @@ namespace KokoSim.Unity.Training
     {
         private static readonly (string Label, int Grade)[] YearFilters =
             { ("全学年", 0), ("1年", 1), ("2年", 2), ("3年", 3) };
+        private static readonly (string Label, int Mode)[] BenchFilters =
+            { ("全員", 0), ("ベンチ入り", 1), ("ベンチ外", 2) };
         private static readonly string[] SortLabels = { "学年順", "総合" };
 
         private TrainingPlanState _state;
         private VisualElement _root;
         private VisualElement _modal;
+        private VisualElement _copyModal;
         private bool _modalOpen;
+        private bool _copyOpen;     // 複製ピッカー（コピー元を選ぶ, Issue #133-⑤）
+        private int _copyTarget;    // コピー先の選手索引
 
         private void OnEnable()
         {
             _state = new TrainingPlanState();
             _root = GetComponent<UIDocument>().rootVisualElement;
             _modal = _root.Q<VisualElement>("tp-modal");
+            _copyModal = _root.Q<VisualElement>("tp-copy-modal");
             WireStaticButtons();
             Render();
         }
@@ -43,6 +49,21 @@ namespace KokoSim.Unity.Training
             Click("sel-nom", () => { _state.ToggleNominate(_state.SelectedIndex); Render(); });
             Click("modal-close", CloseModal);
             Click("modal-done", CloseModal);
+            Click("copy-close", CloseCopyPicker);
+        }
+
+        private void OpenCopyPicker(int target)
+        {
+            _copyTarget = target;
+            _copyOpen = true;
+            Render();
+            _copyModal?.BringToFront();
+        }
+
+        private void CloseCopyPicker()
+        {
+            _copyOpen = false;
+            Render();
         }
 
         private void OpenModal(int index)
@@ -76,6 +97,7 @@ namespace KokoSim.Unity.Training
             BuildFilters(v);
             BuildRows(v);
             BuildModal(v);
+            BuildCopyModal(v);
         }
 
         // ── 合宿バナー ──────────────────────────────
@@ -128,6 +150,20 @@ namespace KokoSim.Unity.Training
                 }
             }
 
+            // 在籍（全員/ベンチ入り/ベンチ外, Issue #133-④）。ベンチ判定は背番号1–20=入り・0=外。
+            var benchHost = _root.Q<VisualElement>("bench-filters");
+            if (benchHost != null)
+            {
+                benchHost.Clear();
+                foreach (var (label, mode) in BenchFilters)
+                {
+                    var m = mode; // 捕捉
+                    var chip = MakeChip(label, v.BenchFilter == mode);
+                    chip.RegisterCallback<ClickEvent>(_ => { _state.SetBenchFilter(m); Render(); });
+                    benchHost.Add(chip);
+                }
+            }
+
             var sortHost = _root.Q<VisualElement>("sort-modes");
             if (sortHost != null)
             {
@@ -172,18 +208,15 @@ namespace KokoSim.Unity.Training
                 var meta = new VisualElement();
                 meta.AddToClassList("trow__meta");
                 meta.Add(Tag(r.GradeLabel, "chip chip--tag"));
+                meta.Add(Tag(r.HandLabel, "chip chip--tag"));   // 投打（Issue #133-②）
                 if (r.BenchOut) meta.Add(Tag("ベンチ外", "chip chip--tag chip--out"));
+                // カテゴリ別ランク（打/走/守/投・総合ランクは廃止, Issue #133-①。部品辞書コンパクト版）。
+                meta.Add(UiComponents.CategoryRankChipsCompact(r.Strength));
                 idText.Add(meta);
                 idCell.Add(idText);
                 row.Add(idCell);
 
-                // 総合グレード
-                var gradeCell = new VisualElement();
-                gradeCell.AddToClassList("tcell"); gradeCell.AddToClassList("tcell--grade");
-                gradeCell.Add(GradeBadge(r.OverallGrade));
-                row.Add(gradeCell);
-
-                // 練習設定（現在のプリセット名＋主眼メニュー・クリックでモーダル）
+                // 練習設定（プリセット名＋主眼メニュー｜配分の積み上げ横バー｜変更▸・クリックでモーダル）
                 var presetCell = new VisualElement();
                 presetCell.AddToClassList("tcell"); presetCell.AddToClassList("tcell--preset");
                 var open = new VisualElement();
@@ -194,18 +227,18 @@ namespace KokoSim.Unity.Training
                 texts.Add(pl);
                 var focus = new Label(r.FocusSummary); focus.AddToClassList("preset-open__focus"); texts.Add(focus);
                 open.Add(texts);
+                open.Add(AllocationBar(r.Chips, v.Budget));   // 空き帯にメニュー別色の積み上げバー（Issue #133-③）
                 var go = new Label("変更 ▸"); go.AddToClassList("preset-open__go"); open.Add(go);
                 open.RegisterCallback<ClickEvent>(_ => OpenModal(idx));
                 presetCell.Add(open);
                 row.Add(presetCell);
 
-                // 複製（上の選手の計画をコピー）
+                // 複製（コピー元を選んでこの選手へ写す, Issue #133-⑤。直上固定「↑」は廃止）
                 var copyCell = new VisualElement();
                 copyCell.AddToClassList("tcell"); copyCell.AddToClassList("tcell--copy");
-                var copy = new Label("↑");
+                var copy = new Label("複");
                 copy.AddToClassList("copy-btn");
-                if (idx > 0) copy.RegisterCallback<ClickEvent>(_ => { _state.CopyPlanFrom(idx, idx - 1); Toast("上の選手の計画を複製"); Render(); });
-                else copy.AddToClassList("copy-btn--disabled");
+                copy.RegisterCallback<ClickEvent>(_ => OpenCopyPicker(idx));
                 copyCell.Add(copy);
                 row.Add(copyCell);
 
@@ -219,10 +252,12 @@ namespace KokoSim.Unity.Training
             if (_modal != null) _modal.style.display = _modalOpen ? DisplayStyle.Flex : DisplayStyle.None;
             if (!_modalOpen) return;
 
-            // ヘッダー（背番号・名前・学年/利き手/総合。投/野ポジションは出さない）
+            // ヘッダー（背番号・名前・学年/利き手＋カテゴリ別ランク。総合ランクは廃止・投/野ポジションは出さない）
             SetText("sel-num", v.SelNumText);
             SetText("sel-name", v.SelectedName);
-            SetText("sel-meta", v.SelYear + "・" + v.SelHand + "・総合 " + v.SelGrade);
+            SetText("sel-meta", v.SelYear + "・" + v.SelHand);
+            var cats = _root.Q<VisualElement>("sel-cats");
+            if (cats != null) { cats.Clear(); cats.Add(UiComponents.CategoryRankChipsCompact(v.SelStrength)); }
             var benchTag = _root.Q<Label>("sel-benchout");
             if (benchTag != null) benchTag.style.display = v.SelBenchOut ? DisplayStyle.Flex : DisplayStyle.None;
 
@@ -289,6 +324,15 @@ namespace KokoSim.Unity.Training
             var sel = v.SelectedIndex;
             foreach (var s in v.SelectedSlots)
             {
+                // 打撃系/投手系の繋ぎ目に節見出し（Issue #133-⑥。既存の節見出しスタイルを流用）。
+                if (s.SectionJp != "")
+                {
+                    var head = new Label(s.SectionJp);
+                    head.AddToClassList("tp-ed-section__title");
+                    head.AddToClassList("tpm-menugroup");
+                    host.Add(head);
+                }
+
                 var menu = s.Menu; // 捕捉
                 var slot = new VisualElement();
                 slot.AddToClassList("mslot");
@@ -354,6 +398,53 @@ namespace KokoSim.Unity.Training
             foreach (var gb in v.SelectedGrowth) host.Add(AbilityBar(gb, true));
         }
 
+        // ── 複製ピッカー（コピー元を選ぶ・Issue #133-⑤） ─────────
+        // 対象（コピー先）は _copyTarget。一覧のフィルタに関わらず全部員から選べる（v.CopyRows・学年順）。
+        private void BuildCopyModal(TrainingPlanView v)
+        {
+            if (_copyModal != null) _copyModal.style.display = _copyOpen ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!_copyOpen) return;
+
+            var targetName = "";
+            foreach (var r in v.CopyRows) if (r.Index == _copyTarget) { targetName = r.Name; break; }
+            SetText("copy-name", targetName);
+
+            var host = _root.Q<VisualElement>("copy-list");
+            if (host == null) return;
+            host.Clear();
+            foreach (var r in v.CopyRows)
+            {
+                if (r.Index == _copyTarget) continue;   // 自分自身は選べない
+                var src = r.Index; var srcName = r.Name; // 捕捉
+                var row = new VisualElement();
+                row.AddToClassList("tpc-row");
+
+                var num = new Label(r.NumText);
+                num.AddToClassList("num-badge");
+                if (r.BenchOut) num.AddToClassList("num-badge--out");
+                row.Add(num);
+
+                var body = new VisualElement(); body.AddToClassList("tpc-row__body");
+                var name = new Label(r.Name); name.AddToClassList("tpc-row__name"); body.Add(name);
+                var meta = new Label(r.GradeLabel + "・" + r.HandLabel); meta.AddToClassList("tpc-row__meta"); body.Add(meta);
+                row.Add(body);
+
+                var plan = new VisualElement(); plan.AddToClassList("tpc-row__plan");
+                var preset = new Label(r.PresetJp); preset.AddToClassList("tpc-row__preset"); plan.Add(preset);
+                plan.Add(AllocationBar(r.Chips, v.Budget));   // どんな配分かを見て選べる（一覧と同じ積み上げバー）
+                row.Add(plan);
+
+                row.RegisterCallback<ClickEvent>(_ =>
+                {
+                    _state.CopyPlanFrom(_copyTarget, src);
+                    _copyOpen = false;
+                    Toast(srcName + " の計画を複製しました");
+                    Render();
+                });
+                host.Add(row);
+            }
+        }
+
         private void BuildTemplates(TrainingPlanView v)
         {
             var host = _root.Q<VisualElement>("template-list");
@@ -396,7 +487,22 @@ namespace KokoSim.Unity.Training
             });
         }
 
-        private static VisualElement GradeBadge(string grade) => UiComponents.RankChip(grade);
+        // 練習配分の積み上げ横バー（Issue #133-③・部品辞書 StackedBar）。幅は Budget を分母に正規化し、
+        // 休養は塗らない＝右側の余白として残す。色クラス対応（メニュー別）は部品辞書に集約。
+        private static VisualElement AllocationBar(System.Collections.Generic.List<MenuSlot> chips, int budget)
+        {
+            var segs = new System.Collections.Generic.List<UiComponents.StackedBarSegment>();
+            foreach (var c in chips)
+                segs.Add(new UiComponents.StackedBarSegment
+                {
+                    StyleClass = UiComponents.TrainingMenuColorClass(c.Menu),
+                    Fraction = budget > 0 ? (float)c.Minutes / budget : 0f,
+                    Tooltip = c.MenuJp + " " + c.Minutes + "分",
+                });
+            var bar = UiComponents.StackedBar(segs);
+            bar.AddToClassList("preset-open__bar");
+            return bar;
+        }
 
         private static Label Tag(string text, string classes)
         {

@@ -40,6 +40,8 @@
                 <ui:Label name="roster-title" text="部員別 練習割当" class="tp-toolbar__title" />
                 <ui:Label name="roster-count" text="/ 45名" class="tp-toolbar__count" />
                 <ui:VisualElement class="tp-toolbar__spacer" />
+                <ui:Label text="在籍" class="tp-toolbar__cap" />
+                <ui:VisualElement name="bench-filters" class="tp-toolbar__group" />
                 <ui:Label text="学年" class="tp-toolbar__cap" />
                 <ui:VisualElement name="year-filters" class="tp-toolbar__group" />
                 <ui:Label text="並び" class="tp-toolbar__cap" />
@@ -48,7 +50,6 @@
 
             <ui:VisualElement class="tp-thead">
                 <ui:Label text="背番号 ／ 選手 ／ 学年" class="tp-th tp-th--id" />
-                <ui:Label text="総合" class="tp-th tp-th--grade" />
                 <ui:Label text="練習設定" class="tp-th tp-th--preset" />
                 <ui:Label text="複製" class="tp-th tp-th--copy" />
                 <ui:VisualElement class="tp-thead__gutter" />
@@ -76,7 +77,10 @@
                             <ui:Label name="sel-name" text="選手名" class="tp-ed-who__name" />
                             <ui:Label name="sel-benchout" text="ベンチ外" class="chip chip--tag chip--out" />
                         </ui:VisualElement>
-                        <ui:Label name="sel-meta" text="2年・右投左打・総合 B" class="tp-ed-head__meta tpm-head__meta" />
+                        <ui:VisualElement class="tpm-head__metarow">
+                            <ui:Label name="sel-meta" text="2年・右投左打" class="tp-ed-head__meta tpm-head__meta" />
+                            <ui:VisualElement name="sel-cats" class="tpm-head__cats" />
+                        </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="tp-ed-head__spacer" />
                     <ui:Button name="sel-nom" text="★ 個別指導に指名" class="nom-btn" />
@@ -130,6 +134,21 @@
                     <ui:VisualElement class="tp-ed-head__spacer" />
                     <ui:Button name="modal-done" text="決定" class="tpm-done" />
                 </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ═══ 複製ピッカー（コピー元を選ぶ・Issue #133-⑤。行は Controller が動的生成） ═══ -->
+        <ui:VisualElement name="tp-copy-modal" class="ui-root modal-scrim">
+            <ui:VisualElement class="modal-card tpc-card">
+                <ui:VisualElement class="tpc-head">
+                    <ui:Label name="copy-name" text="選手名" class="tp-ed-who__name" />
+                    <ui:Label text="へコピーする計画を選ぶ" class="tp-ed-section__title" />
+                    <ui:VisualElement class="tp-ed-head__spacer" />
+                    <ui:Button name="copy-close" text="✕" class="tpm-close" />
+                </ui:VisualElement>
+                <ui:ScrollView mode="Vertical" class="tpc-scroll">
+                    <ui:VisualElement name="copy-list" class="tpc-list" />
+                </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
