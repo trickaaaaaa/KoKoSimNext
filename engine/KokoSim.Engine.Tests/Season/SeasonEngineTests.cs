@@ -70,6 +70,34 @@ public sealed class SeasonEngineTests
     }
 
     [Fact]
+    public void Fame_Unset_MatchesLegacyBehavior()
+    {
+        // 不変条件#2: Fame未注入（既定null）は従来のシムと1ビット一致する。
+        var ctx = LoadContext();
+        var withoutFameField = SeasonEngine.Run(10, ctx, new Xoshiro256Random(42));
+        var withNullFame = SeasonEngine.Run(10, ctx with { Fame = null }, new Xoshiro256Random(42));
+        for (var i = 0; i < withoutFameField.Years.Count; i++)
+        {
+            Assert.Equal(withoutFameField.Years[i].RosterCount, withNullFame.Years[i].RosterCount);
+            Assert.Equal(withoutFameField.Years[i].AvgLevelRegulars, withNullFame.Years[i].AvgLevelRegulars, 9);
+        }
+    }
+
+    [Fact]
+    public void HigherFame_RaisesGraduatingAverage()
+    {
+        // 「勝つ→名声→良い新入生」の正フィードバック（issue #127）。名声が高いほど卒業生平均が上がる。
+        var baseCtx = LoadContext();
+        var famousCtx = baseCtx with { Fame = 100 };
+
+        double GradAvg(SeasonContext ctx) => SeasonEngine.Run(10, ctx, new Xoshiro256Random(42))
+            .Years.Where(y => y.GraduatingAvgLevel > 0).Average(y => y.GraduatingAvgLevel);
+
+        Assert.True(GradAvg(famousCtx) > GradAvg(baseCtx with { Fame = 0 }),
+            "名声を上げても卒業生平均が上がらない");
+    }
+
+    [Fact]
     public void Events_Fire()
     {
         var summary = SeasonEngine.Run(10, LoadContext(), new Xoshiro256Random(42));

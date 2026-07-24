@@ -33,12 +33,37 @@ public sealed record RosterCoefficients
     /// </summary>
     public double PitcherAptitudeWeightSpan { get; init; } = 6.0;
 
-    // --- 総合力（名声由来）。既定は一般校相当。名声接続は SeasonEngine 側で talentCenter を渡す（後続） ---
+    // --- 総合力（名声由来）。既定は一般校相当。名声接続は SeasonEngine 側で talentCenter を渡す ---
     /// <summary>総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する。</summary>
     public double TalentCenterDefault { get; init; } = 32.0;
     public double TalentSd { get; init; } = 8.0;
     public double TalentMin { get; init; } = 10.0;
     public double TalentMax { get; init; } = 90.0;
+
+    /// <summary>
+    /// 名声(Fame, 0-100)由来のtalentCenter上振れ幅の上限（頭打ち, issue #127・設計書04 §2.1）。
+    /// 既定8.0＝Fame最大でも TalentCenterDefault(32)→40程度に留める（控えめな幅。暴走ループ防止）。
+    /// </summary>
+    public double FameTalentCenterSpan { get; init; } = 8.0;
+
+    /// <summary>
+    /// 名声由来の上振れが頭打ちへ漸近する速さ（指数飽和の時定数, issue #127）。
+    /// 小さいほど低い名声でも早く頭打ちに近づき、大きいほど線形に近い緩やかな伸びになる。
+    /// </summary>
+    public double FameTalentCenterTau { get; init; } = 30.0;
+
+    /// <summary>
+    /// 名声(Fame, 0-100)から新入生の総合力中心(talentCenter)を求める（設計書04 §2.1・issue #127）。
+    /// TalentCenterDefault を基準に、名声が高いほど指数飽和カーブ（線形→漸近）で上振れる。
+    /// 上限は TalentCenterDefault + FameTalentCenterSpan に頭打ち＝「勝つ→怪物→また勝つ」の暴走防止が必須要件。
+    /// Fame=0（または未注入）で TalentCenterDefault と厳密に一致する（不変条件#2: 名声フィードバックoffは従来一致）。
+    /// </summary>
+    public double TalentCenterFromFame(double fame)
+    {
+        var f = Math.Max(0.0, fame);
+        var shift = FameTalentCenterSpan * (1.0 - Math.Exp(-f / FameTalentCenterTau));
+        return TalentCenterDefault + shift;
+    }
 
     // --- 凸凹配分（設計書04 §2.1: 総ポイントをランダム重みで配分・偏り自体もばらつく） ---
     /// <summary>配分の偏り強度σ。大きいほど内訳が凸凹（金太郎飴回避）。偏り自体もばらつかせる。</summary>
