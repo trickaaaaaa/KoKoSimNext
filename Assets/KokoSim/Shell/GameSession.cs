@@ -4,6 +4,7 @@
 // 静的なこのホルダーに置き、どの画面へ移動しても大会状態が失われないようにする。
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
@@ -112,6 +113,36 @@ namespace KokoSim.Unity.Shell
             ResultPending = false;
             LastOutcome = null;
             Stats.StartTournament();   // 今大会成績をリセット（通算は保持）
+            KickPrefetch();            // 初戦ラウンドの自県裏カードを暇な時間に先行フルシムして温める。
+        }
+
+        // ===== 自県裏カードのプレフェッチ（#試合開始前ロード短縮） =====
+        // 自県の裏カード（自校非関与）は1球フルシムが重い（約0.79ms/球×305球＝約240ms/試合、1回戦で約100試合＝
+        // 約25秒）。これを「試合開始の瞬間にメインスレッドで一気に」ではなく「開幕〜次戦までの暇な時間に背景スレッドで
+        // 先に解いて温める」ことでフリーズを消す。プレフェッチと本解決は BeginMatch/PlayMatch 冒頭の Join で必ず
+        // 時間的に排他し（同時に台帳/乱数へ触れない）、本解決は MemoizingBackgroundResolver のキャッシュ命中で即返る。
+        // 決定論は不変（BackgroundPrefetchTests でプレフェッチ有無のバイト一致を担保）。
+        private Task _prefetchTask;
+
+        /// <summary>現ラウンドの自県裏カードを背景スレッドで先行解決（キャッシュを温める）。自校の実対戦カードは対象外。</summary>
+        private void KickPrefetch()
+        {
+            var runner = Runner;
+            if (runner == null || runner.Finished || !runner.PlayerActive) return;
+            _prefetchTask = Task.Run(() =>
+            {
+                try { runner.PrefetchCurrentRoundBackgroundCards(); }
+                catch { /* 個々の県カードの失敗は握り潰す（本解決がフォールバックで解く） */ }
+            });
+        }
+
+        /// <summary>プレフェッチ完了を待つ（本解決の直前に呼び、背景と前景の同時アクセスを避ける）。通常は既に完了済み＝即返る。</summary>
+        private void JoinPrefetch()
+        {
+            var t = _prefetchTask;
+            if (t == null) return;
+            try { t.Wait(); } catch { /* 上の catch と同様に無視 */ }
+            _prefetchTask = null;
         }
 
         public void ConsumeBanner() => BannerPending = false;
@@ -200,6 +231,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>自校の次戦を自動消化する。結果を UI 表示待ちにする。</summary>
         public PlayerMatchOutcome PlayMatch()
         {
+            JoinPrefetch();   // 現ラウンドのプレフェッチを完了させてから本解決（背景と前景を排他）。
             LastOutcome = Runner.PlayNextPlayerMatch();
             // 詳細シムで回った自校戦なら、ボックススコアを通算/今大会成績へ畳み込む。
             if (LastOutcome.Detail is { } detail)
@@ -211,6 +243,7 @@ namespace KokoSim.Unity.Shell
             }
             ResultPending = true;
             ExitTournamentIfFinished();
+            KickPrefetch();   // 次ラウンドの自県裏カードを先行して温める（未終了時のみ）。
             return LastOutcome;
         }
 
@@ -218,7 +251,11 @@ namespace KokoSim.Unity.Shell
         /// 自校の次戦を「ライブ観戦」で始める。返す進行体をUIが打席単位で進め、終局後 <see cref="CompleteMatch"/> へ結果を戻す。
         /// PlayMatch（一括自動消化）と決定論的に同じ大会展開になる（観戦してもしなくても結果は同じ）。
         /// </summary>
-        public LivePlayerMatch BeginMatch() => Runner.BeginNextPlayerMatch();
+        public LivePlayerMatch BeginMatch()
+        {
+            JoinPrefetch();   // 現ラウンドのプレフェッチを完了させてから本解決（キャッシュ命中で即返る／背景と前景を排他）。
+            return Runner.BeginNextPlayerMatch();
+        }
 
         /// <summary>
         /// ライブ観戦した自校戦の終局結果を大会へ反映する。ボックススコアを成績へ畳み込み、結果表示待ちにする。
@@ -235,6 +272,7 @@ namespace KokoSim.Unity.Shell
             }
             ResultPending = true;
             ExitTournamentIfFinished();
+            KickPrefetch();   // 次ラウンドの自県裏カードを先行して温める（未終了時のみ）。
             return LastOutcome;
         }
 

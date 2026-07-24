@@ -342,6 +342,39 @@ public sealed class TournamentRunner
     private void RecordCard(int round, int slot, bool topWon, int winnerScore, int loserScore, bool mercyEnded = false)
         => _cardResults[(round, slot)] = new CardResult(topWon, winnerScore, loserScore, mercyEnded);
 
+    /// <summary>
+    /// 現ラウンドの自校非関与カードを「先に解いてキャッシュへ温める」プレフェッチ（#試合開始前ロード短縮）。
+    /// <see cref="ResolveRound"/> の裏カード分岐と同一の fork キー・同一 context で <see cref="_backgroundResolver"/>
+    /// を呼ぶだけで、ランナー状態（<see cref="_current"/>/<see cref="_matches"/>/<see cref="_cardResults"/>/
+    /// <see cref="_pitchLedger"/> 等）は一切変更しない＝<b>読み取り専用</b>。よって背景スレッドから安全に呼べ、
+    /// あとで本流の <see cref="BeginRound"/>/<see cref="ResolveRound"/> が同じカードを解くときはキャッシュ命中で即返る
+    /// （<see cref="_backgroundResolver"/> が <see cref="MemoizingBackgroundResolver"/> のとき）。
+    ///
+    /// <para>呼び出し規約: このラウンドの直前ラウンドまでが本流で解決済み（＝<see cref="_pitchLedger"/> が
+    /// このラウンドの試合日以前の登板を確定済み）の状態で呼ぶこと。Shell はプレフェッチ完了を join してから
+    /// 本解決へ入り、プレフェッチ（背景）と本解決（前景）が時間的に重ならないようにする＝台帳・rng の同時
+    /// アクセスを避ける。自校が敗退/優勝済み（<see cref="Finished"/>）や自校が実対戦を持つ前の不戦勝途中では何もしない。</para>
+    /// </summary>
+    public void PrefetchCurrentRoundBackgroundCards()
+    {
+        if (_backgroundResolver is null || Finished) return;
+        var cur = _current;
+        if (cur.Length < 2) return;
+        var round = RoundIndexOf(cur);
+        var roundsRemaining = TournamentRecorder.RoundsRemaining(cur.Length);
+        var matchDay = _schedule.MatchDay(round);
+        for (var i = 0; i < cur.Length / 2; i++)
+        {
+            var a = cur[2 * i];
+            var b = cur[2 * i + 1];
+            if (a is null || b is null) continue;                       // 不戦勝（裏カードなし）
+            if (a.Id == _managerId || b.Id == _managerId) continue;     // 自校カードはライブ解決＝プレフェッチしない
+            var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
+            // ResolveRound の裏カード分岐と同一呼び出し（結果は捨てる＝メモ化 resolver が温める）。
+            _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, i)), context);
+        }
+    }
+
     // ===== 内部進行 =====
 
     /// <summary>自校が実対戦相手を得るまでラウンドを進める（不戦勝は解決して次へ）。</summary>
