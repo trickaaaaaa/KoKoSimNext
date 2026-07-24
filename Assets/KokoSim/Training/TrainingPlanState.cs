@@ -40,6 +40,8 @@ namespace KokoSim.Unity.Training
         public int LevelsGained;   // この週で上がったレベル数（0=進捗のみ）
         public int Value;          // 現在の能力値（0=未設定＝相対強調バー）
         public string Grade = "";  // 現在値のランク S〜G（空＝ランクを持たない相対バー）
+        // 弾道など優劣のないタイプ軸（issue #219）: 非空なら Grade の代わりにこのラベルをチップ表示する
+        public string TypeLabel = "";
     }
 
     /// <summary>プリセット選択肢（プリセット帯の1チップ。説明はツールチップで持つ, issue #222④）。</summary>
@@ -586,8 +588,10 @@ namespace KokoSim.Unity.Training
                     Progress = System.Math.Clamp(gain, 0.0, 1.0),   // 1レベル=満タン、複数レベルはLevelsGainedで表示
                     LevelsGained = p.Level(k) - beforeLv[k],
                     // ランク併記は「今週の伸び」ではなく**現在の能力値**を表す（UI原則③）。
+                    // 弾道は優劣のないタイプ軸なのでランクチップではなくタイプラベルを出す（issue #219）。
                     Value = p.Level(k),
-                    Grade = Tiers.FromStrength(p.Level(k)).ToString(),
+                    Grade = k == AbilityKind.LaunchTendency ? "" : Tiers.FromStrength(p.Level(k)).ToString(),
+                    TypeLabel = k == AbilityKind.LaunchTendency ? KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(p.Level(k)) : "",
                 });
             }
             return bars;

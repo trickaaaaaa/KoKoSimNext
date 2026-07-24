@@ -20,6 +20,8 @@ namespace KokoSim.Unity.Players
         public int Value;
         public string Grade = "D";
         public float Pct;
+        // 弾道など優劣のないタイプ軸（issue #219）: 非空ならバー＋ランクチップの代わりにこのラベルを表示する
+        public string TypeLabel = "";
     }
 
     /// <summary>隠しパラメータ1項（未判明なら Known=false で「？」）。</summary>
@@ -292,6 +294,12 @@ namespace KokoSim.Unity.Players
         private static AbilityBar Bar(DevelopingPlayer p, AbilityKind k, string label)
         {
             var v = p.Level(k);
+            // 弾道はゴロ型〜フライ型のタイプ軸で優劣軸ではない（issue #219）。ランクチップ＋バーではなく
+            // タイプラベルのみを表示する（内部値 v 自体は変えない）。
+            if (k == AbilityKind.LaunchTendency)
+            {
+                return new AbilityBar { Label = label, Value = v, TypeLabel = LaunchTendencyLabels.Jp(v) };
+            }
             return new AbilityBar
             {
                 Label = label,

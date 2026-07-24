@@ -544,6 +544,7 @@ namespace KokoSim.Unity.Training
                 Label = gb.AbilityJp,
                 Pct = (float)gb.Progress,
                 Grade = gb.Grade,
+                TypeLabel = gb.TypeLabel,
                 Dim = showLevel && !grows,   // 伸びない能力は淡色（一覧には常に出す）
                 Note = showLevel
                     ? (gb.LevelsGained > 0 ? "＋" + gb.LevelsGained

@@ -36,6 +36,22 @@
 .rank-chip--lg { min-width: 44px; height: 44px; font-size: 28px; padding-left: 12px; padding-right: 12px; }
 .rank-chip--xl { min-width: 60px; height: 60px; font-size: 40px; padding-left: 18px; padding-right: 18px; }
 
+/* ── TypeChip：タイプ軸バッジ（弾道＝ゴロ型〜フライ型など優劣のない値, issue #219） ─
+   RankChip の虹色（--rank-*）は使わない。単色・中立（--color-panel-deep地/--color-chalk文字）で
+   「これは優劣ではない」ことが色そのもので分かるようにする。 */
+.type-chip {
+    height: 24px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-cap);
+    color: var(--color-chalk);
+    background-color: var(--color-panel-deep);
+    border-radius: var(--radius-chip);
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    margin-right: var(--sp-3);
+}
+
 /* ── CategoryRankChips：選手のカテゴリ別ランク（打撃力/走力/守備力/投手力, Issue #30/#140） ─
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
@@ -707,6 +723,12 @@
     margin-right: var(--sp-1);
 }
 .cmp-row__val--win { color: var(--color-chalk); }
+/* タイプ軸表示（弾道など優劣のない値, issue #219）: 数値専用の固定22px幅/右揃え/14px高では
+   和文ラベル（例「ややフライ型」）が収まらず隣接行と重なるため、バー(track)を消してラベルに
+   側全体を明け渡す。幅・行高・寄せを別枠で緩める。 */
+.cmp-row--type .cmp-row__side { height: auto; }
+.cmp-row--type .cmp-row__val { width: auto; flex-grow: 1; -unity-text-align: middle-left; color: var(--color-chalk); }
+.cmp-row--type .cmp-row__track { display: none; }
 .cmp-card {
     flex-grow: 1;
     flex-basis: 0;

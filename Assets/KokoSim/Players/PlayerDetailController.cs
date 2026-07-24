@@ -276,6 +276,8 @@ namespace KokoSim.Unity.Players
                 Value = a.Value.ToString(),
                 Pct = a.Pct,
                 Grade = a.Grade,
+                TypeLabel = a.TypeLabel,
+                HideBar = !string.IsNullOrEmpty(a.TypeLabel),
                 Divided = true,
             });
 

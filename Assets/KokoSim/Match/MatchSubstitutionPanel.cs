@@ -407,6 +407,9 @@ namespace KokoSim.Unity.Match
                 // 球速だけ物理量なので km/h テキスト表示（バー幅は Level のまま＝他能力と同じ土俵, issue #94）。
                 if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Velocity))
                     _cmpRows.Add(CompareRowEl(label, a, b, KmhText(outgoing), KmhText(incoming)));
+                // 弾道は優劣のないタイプ軸なので数値・バーではなくタイプラベルで表示する（issue #219）。
+                else if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
+                    _cmpRows.Add(CompareRowEl(label, a, b, TypeText(a), TypeText(b), hideBar: true));
                 else
                     _cmpRows.Add(CompareRowEl(label, a, b));
             }
@@ -491,20 +494,26 @@ namespace KokoSim.Unity.Match
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。負値は「その選手がいない」を表す。
         // textA/textB を渡すと値ラベルを上書き（球速の km/h 表示用, issue #94）。バー幅は a/b(Level) のまま。
-        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null)
+        // hideBar=true は優劣のないタイプ軸（弾道, issue #219）向け：バーを出さず優劣ハイライトもしない。
+        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false)
             => UiComponents.CompareRow(new CompareRowData
             {
                 Label = label,
                 ValueA = a, ValueB = b,
                 HasA = a >= 0, HasB = b >= 0,
-                Winner = a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0,
+                Winner = hideBar || a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0,
                 TextA = a >= 0 ? textA : null,
                 TextB = b >= 0 ? textB : null,
+                HideBar = hideBar,
             });
 
         // 球速の km/h テキスト（表示専用・変換はエンジン公開APIに集約, issue #94）。投手でなければ空。
         private static string KmhText(Player p)
             => p?.Pitching == null ? null : (int)System.Math.Round(p.Pitching.MaxVelocityKmh) + "km/h";
+
+        // 弾道タイプのテキスト（issue #219）。値が無ければ null（"—" 表示）。
+        private static string TypeText(int launchTendency)
+            => launchTendency < 0 ? null : LaunchTendencyLabels.Jp(launchTendency);
 
         // ── 注記＋確定 ──
 
