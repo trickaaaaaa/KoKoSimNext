@@ -552,6 +552,76 @@ public sealed class TeamState
     /// </summary>
     public IReadOnlyList<Player> AvailablePitcherCandidates => _bullpen.Concat(_bench).ToList();
 
+    /// <summary>
+    /// 継投人選のランキング候補（issue #209 Phase C）。ブルペン＋ベンチ（Phase B）に加え、
+    /// <b>在フィールドのレギュラー野手</b>（現投手を除く打順の守備者）を含める。緊急登板で二刀流の主力を
+    /// マウンドへ上げられるようにする。在フィールド野手を引くと守備に穴が開くため、実登板は
+    /// <see cref="RelieveWith"/>→<see cref="PromoteFielderToMound"/> が投野交代で backfill する。
+    /// DH制では投手が打順外＝投野交代の打順整合が別問題になるので、当面は在フィールド野手を含めない
+    /// （ブルペン＋ベンチのみ＝Phase B 相当）。返す要素は <see cref="_lineup"/> の実インスタンス
+    /// （<see cref="RelieveWith"/> の参照一致判定に使う）。
+    /// </summary>
+    public IReadOnlyList<Player> ReliefRankingCandidates
+    {
+        get
+        {
+            var list = new List<Player>(_bullpen.Count + _bench.Count + 8);
+            list.AddRange(_bullpen);
+            list.AddRange(_bench);
+            if (!_usesDh)
+            {
+                for (var i = 0; i < _lineup.Length; i++)
+                {
+                    if (i != _pitcherSlot) list.Add(_lineup[i]); // 現投手以外の在フィールド野手
+                }
+            }
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// 指名された投手で継投する（issue #209 Phase C の交代ルータ）。sub が在フィールドのレギュラー野手なら
+    /// 投野交代（<see cref="PromoteFielderToMound"/>）で backfill し、ブルペン／ベンチなら従来の
+    /// <see cref="ChangePitcherTo"/>。参照一致で「今守備に就いている sub」を特定する。
+    /// </summary>
+    public bool RelieveWith(Player sub)
+    {
+        if (!_usesDh)
+        {
+            for (var i = 0; i < _lineup.Length; i++)
+            {
+                if (i != _pitcherSlot && ReferenceEquals(_lineup[i], sub)) return PromoteFielderToMound(sub, i);
+            }
+        }
+        return ChangePitcherTo(sub);
+    }
+
+    /// <summary>
+    /// 投野交代（issue #209 Phase C, path ①）。在フィールドの野手 <paramref name="fielder"/>（打順スロット
+    /// <paramref name="fSlot"/>）をマウンドへ上げ、退く投手をその野手が空けた守備位置へ回す。両者ともゲームに残り
+    /// （<see cref="_retired"/> に触れない＝リエントリー禁止に抵触しない）、ベンチも消費しない（後で守備位置を戻せる）。
+    /// 打順は不変（同じ9人が同じスロットのまま守備位置だけ入れ替わる）。野手は潜在能力を実能力として確定する。
+    /// </summary>
+    private bool PromoteFielderToMound(Player fielder, int fSlot)
+    {
+        var retiringPitcher = CurrentPitcher;
+        var vacated = fielder.Position;   // 野手が空ける守備位置（旧投手がここへ入る）
+        // 野手をマウンドへ: 潜在投手能力を実能力（Pitching）として確定（ChangePitcherTo と同型）。守備位置は投手へ。
+        var mound = fielder.Pitching is null && fielder.LatentPitching is { } latent
+            ? fielder with { Pitching = latent, Position = FieldPosition.Pitcher }
+            : fielder with { Position = FieldPosition.Pitcher };
+        // 旧投手は退場せず、空いた守備位置へ回る（打順スロットは旧投手スロットのまま）。
+        _lineup[_pitcherSlot] = retiringPitcher with { Position = vacated };
+        _lineup[fSlot] = mound;
+        CurrentPitcher = mound;
+        _pitcherSlot = fSlot;   // 投手の打順スロットは新投手（元野手）のスロットへ移る（非DH不変条件を維持）
+        PitchesThrown = 0;
+        FatiguePitches = 0;
+        PitcherChanges++;
+        ClearRattled();
+        return true;
+    }
+
     // ===== 選手交代（設計書09 §6）。高校野球ルール＝リエントリー禁止（退いた選手は再出場できない）。 =====
     /// <summary>現在の打順9人（交代反映済み）。UI・テスト・采配判断用。</summary>
     public IReadOnlyList<Player> CurrentLineup => _lineup;

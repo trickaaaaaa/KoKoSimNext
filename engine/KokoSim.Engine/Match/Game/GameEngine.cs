@@ -1392,9 +1392,9 @@ public static class GameEngine
         if (defense.Tactics is { } brain)
         {
             var staminaTarget = (defense.CurrentPitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
-            // 継投人選の候補＝ブルペン＋ベンチ（野手含む。issue #209 Phase B）。在フィールドのレギュラー野手＋
-            // 守備穴のbackfillは Phase C で追加する。
-            var candidates = defense.AvailablePitcherCandidates;
+            // 継投人選の候補＝ブルペン＋ベンチ＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
+            // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
+            var candidates = defense.ReliefRankingCandidates;
             var sit = new PitchingChangeSituation(
                 inning, ctx.RegulationInnings, outs,
                 defense.Runs - offense.Runs, runsThisHalf, defense.PitcherRattled,
@@ -1403,9 +1403,10 @@ public static class GameEngine
             var forked = rng.Fork(ReliefStreamId(inning, isTop, paIndex));
             if (brain.CallPitchingChange(sit, forked) is { } decision)
             {
-                // Reliever 指定があればその投手を指名（横断ランキング）。null は engine 既定＝ブルペン先頭
-                // （StandardTacticsBrain／無指示は常に null＝従来挙動と1ビットも変わらない＝帯不変）。
-                if (decision.Reliever is { } reliever) defense.ChangePitcherTo(reliever);
+                // Reliever 指定があればその投手を指名（横断ランキング）。在フィールド野手なら投野交代で backfill。
+                // null は engine 既定＝ブルペン先頭（StandardTacticsBrain／無指示は常に null＝従来挙動と
+                // 1ビットも変わらない＝帯不変）。
+                if (decision.Reliever is { } reliever) defense.RelieveWith(reliever);
                 else defense.TryChangePitcher();
             }
         }
