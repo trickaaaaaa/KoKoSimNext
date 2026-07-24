@@ -1,5 +1,5 @@
 // ViewModel層（設計書06 §3.2 選手一覧）。UnityEngine 非依存に保つ。
-// ソート・フィルタ付きテーブル（守備位置・学年・能力・調子）。
+// ソート・フィルタ付きテーブル（守備位置・学年・能力）。調子は試合系画面限定のため出さない（issue #214）。
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
@@ -9,7 +9,7 @@ using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Players
 {
-    public enum PlayerSort { Overall, Grade, Condition, Name }
+    public enum PlayerSort { Overall, Grade, Name }
 
     public sealed class PlayerRow
     {
@@ -21,9 +21,6 @@ namespace KokoSim.Unity.Players
         /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力の4つ, Issue #30）。総合ランクは廃止（2026-07-22 owner決定）。
         /// 部品辞書 <see cref="KokoSim.Unity.Components.UiComponents.CategoryRankChips"/> にそのまま渡す（Issue #140）。</summary>
         public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);
-        public string Condition = "普通";   // 絶好調 / 好調 / 普通 / 不調 / 絶不調（表示文字列）
-        // 色分岐はこの5段階 enum で行う（表示文字列で比較しない。到達不能分岐の再発防止）。
-        public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
         /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空。詳細は行クリック→選手詳細（UI原則⑦）。</summary>
         public string Injury = "";
     }
@@ -64,7 +61,7 @@ namespace KokoSim.Unity.Players
 
         /// <summary>ソートを順送りで切り替える（ボタン1つで循環）。</summary>
         public void CycleSort()
-            => Sort = (PlayerSort)(((int)Sort + 1) % 4);
+            => Sort = (PlayerSort)(((int)Sort + 1) % 3);
 
         public PlayerListView BuildView()
         {
@@ -85,7 +82,6 @@ namespace KokoSim.Unity.Players
             {
                 case PlayerSort.Overall: q = q.OrderByDescending(p => p.AverageLevel()); break;
                 case PlayerSort.Grade: q = q.OrderByDescending(p => p.Grade).ThenByDescending(p => p.AverageLevel()); break;
-                case PlayerSort.Condition: q = q.OrderByDescending(p => p.ConditionValue); break;
                 case PlayerSort.Name: q = q.OrderBy(p => p.Name, System.StringComparer.Ordinal); break;
             }
 
@@ -95,15 +91,12 @@ namespace KokoSim.Unity.Players
 
         private PlayerRow BuildRow(DevelopingPlayer p)
         {
-            var condition = KokoSim.Engine.Players.FormModel.Quantize(p.ConditionValue);
             var row = new PlayerRow
             {
                 Index = _indexOf.TryGetValue(p, out var idx) ? idx : 0,
                 Name = p.Name,
                 UniformNumber = p.UniformNumber == 0 ? "—" : p.UniformNumber.ToString(),
                 GradeLabel = p.Grade + "年",
-                Condition = ConditionLabels.Jp(condition),
-                ConditionLevel = condition,
                 // 故障（設計書03 §3.5・UI原則⑥）: 一覧をスキャンするだけで離脱者が拾えるようにする。
                 Injury = p.Injury == KokoSim.Engine.Players.InjurySeverity.None
                     ? ""
@@ -123,7 +116,6 @@ namespace KokoSim.Unity.Players
             {
                 case PlayerSort.Overall: return "総合順";
                 case PlayerSort.Grade: return "学年順";
-                case PlayerSort.Condition: return "調子順";
                 case PlayerSort.Name: return "名前順";
                 default: return s.ToString();
             }

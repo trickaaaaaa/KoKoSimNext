@@ -45,9 +45,9 @@
                       <ui:VisualElement class="pl-thead">
                           <ui:Label class="cell cell--head cell--no" text="番" />
                           <ui:Label class="cell cell--head cell--name" text="選手" />
-                          <ui:Label class="cell cell--head cell--narrow" text="学年" />
+                          <ui:Label class="cell cell--head cell--grade" text="学年" />
                           <ui:Label class="cell cell--head cell--wide" text="カテゴリ別ランク" />
-                          <ui:Label class="cell cell--head cell--narrow" text="調子／故障" />
+                          <ui:Label class="cell cell--head cell--narrow" text="故障" />
                       </ui:VisualElement>
                       <ui:VisualElement name="player-rows" />
                   </ui:VisualElement>
@@ -75,16 +75,12 @@
                 <ui:VisualElement class="pd2-nameline">
                   <ui:Label name="name" class="pd2-name" text="三宅 航平" />
                   <ui:Label name="captain-badge" class="pd2-captain" text="主将" />
-                  <ui:VisualElement name="cond-face" class="pd2-cond-face" />
-                  <ui:Label name="cond" class="pd2-cond" text="絶好調" />
                   <ui:Button name="designate-captain" class="pd2-capbtn" text="主将に指名" />
                   <ui:Label name="designate-reason" class="pd2-caphint" text="" />
                 </ui:VisualElement>
                 <ui:VisualElement class="pd2-meta">
                   <ui:Label name="meta-grade" class="pd2-meta__i" text="3年" />
                   <ui:Label name="meta-tb" class="pd2-meta__i" text="右投右打" />
-                  <ui:Label name="meta-style" class="pd2-meta__i" text="投法：オーバースロー" />
-                  <ui:Label name="meta-velo" class="pd2-meta__i" text="最速 141 km/h" />
                   <ui:Label name="meta-injury" class="pd2-meta__i pd2-meta__i--injury" text="" />
                 </ui:VisualElement>
               </ui:VisualElement>
@@ -109,9 +105,10 @@
             <ui:VisualElement class="card card--half">
               <ui:VisualElement class="card__hd">
                 <ui:Label class="card__hd-title" text="投手能力" />
-                <ui:Label class="card__hd-sub" text="数値は内部値（1〜100）" />
+                <ui:Label class="card__hd-sub" text="球速は km/h・他は内部値（1〜100）" />
               </ui:VisualElement>
               <ui:VisualElement name="pitcher-abils" class="pd2-abils" />
+              <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />
             </ui:VisualElement>
             <ui:VisualElement class="card card--half">
               <ui:VisualElement class="card__hd">
@@ -143,25 +140,13 @@
             </ui:VisualElement>
           </ui:VisualElement>
 
-          <!-- ===== 球種データ / 特殊能力・成績 ===== -->
+          <!-- ===== 特殊能力（球種変化チャートは投手能力カード内へ移設, issue #215） ===== -->
           <ui:VisualElement class="pd2-row pd2-row--last">
-            <ui:VisualElement class="card card--pitch">
-              <ui:VisualElement class="card__hd">
-                <ui:Label class="card__hd-title" text="球種変化チャート" />
-                <ui:Label class="card__hd-sub" text="扇の長さ＝変化量 / 色・チップ＝キレ S〜G / ストレートは幅＝伸び" />
-              </ui:VisualElement>
+            <ui:VisualElement class="card card--half">
+              <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="特殊能力" /></ui:VisualElement>
               <ui:VisualElement class="card__body">
-                <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />
-              </ui:VisualElement>
-            </ui:VisualElement>
-
-            <ui:VisualElement class="pd2-col-right">
-              <ui:VisualElement class="card">
-                <ui:VisualElement class="card__hd"><ui:Label class="card__hd-title" text="特殊能力" /></ui:VisualElement>
-                <ui:VisualElement class="card__body">
-                  <ui:VisualElement name="skills-list" />
-                  <ui:Label name="skills-empty" class="pd2-empty" text="特殊能力はまだ発見されていません" />
-                </ui:VisualElement>
+                <ui:VisualElement name="skills-list" />
+                <ui:Label name="skills-empty" class="pd2-empty" text="特殊能力はまだ発見されていません" />
               </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>

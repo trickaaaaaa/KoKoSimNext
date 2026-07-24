@@ -134,6 +134,37 @@ namespace KokoSim.Unity.Components
             box.Add(RankChipLegacy(tier.ToString()));
         }
 
+        /// <summary>
+        /// カテゴリ別ランクの2段組（上=打撃力・走力／下=守備力・投手力）。1段4組では行幅が足りず
+        /// 中途半端に折り返す一覧行用（選手一覧）。ラベルを固定幅・右揃えにして上下段のチップ列を
+        /// 縦に揃える（UI原則①「整列で捌く」③「桁を揃える」）。
+        /// </summary>
+        public static VisualElement CategoryRankChipsTwoRow(PlayerStrength s)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("cat-rank-rows");
+            box.Add(CategoryChipRow("打撃力", s.BattingTier, "走力", s.MobilityTier));
+            box.Add(CategoryChipRow("守備力", s.DefenseTier, "投手力", s.PitchingTier));
+            return box;
+        }
+
+        private static VisualElement CategoryChipRow(string label1, Tier t1, string label2, Tier t2)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("cat-rank-rows__row");
+            AddCategoryPair(row, label1, t1);
+            AddCategoryPair(row, label2, t2);
+            return row;
+        }
+
+        private static void AddCategoryPair(VisualElement row, string label, Tier tier)
+        {
+            var lbl = new Label(label);
+            lbl.AddToClassList("cat-rank-rows__label");
+            row.Add(lbl);
+            row.Add(RankChipLegacy(tier.ToString()));
+        }
+
         // ===== StackedBar（積み上げ横バー: 練習配分の割合可視化, Issue #133） =====
 
         /// <summary>

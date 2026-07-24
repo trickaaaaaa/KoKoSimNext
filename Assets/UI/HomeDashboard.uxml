@@ -173,7 +173,7 @@
       </ui:VisualElement>
 
       <!-- 新チーム発足: 次期主将の指名（設計書09 §8）。左に候補リスト、右に選択中の詳細（案C）。
-           候補は新最上級生。統率力の生値は出さず、可視情報（総合・精神力・調子・特殊能力）で選ばせる。 -->
+           候補は新最上級生。統率力の生値は出さず、可視情報（総合・精神力・性格・特殊能力）で選ばせる。 -->
       <ui:VisualElement name="nt-modal" class="ui-root modal-scrim">
         <ui:VisualElement class="modal-card nt-card">
           <ui:VisualElement class="nt-hd">
@@ -190,7 +190,6 @@
                 <ui:Label class="nt-c-name nt-th__c" text="選手" />
                 <ui:Label class="nt-c-rank nt-th__c" text="総合" />
                 <ui:Label class="nt-c-mental nt-th__c" text="精神" />
-                <ui:Label class="nt-c-cond nt-th__c" text="調子" />
               </ui:VisualElement>
               <ui:ScrollView name="nt-rows" class="nt-rows" />
             </ui:VisualElement>

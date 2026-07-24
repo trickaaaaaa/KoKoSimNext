@@ -18,9 +18,6 @@ namespace KokoSim.Unity.Shell
         public string OverallGrade = "D";
         public int OverallValue;
         public int Mental;
-        public string Condition = "普通";
-        // 表情顔（ConditionFace）の描画に使う enum（表示文字列は比較に使わない）。
-        public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
         /// <summary>自動選出された暫定主将か（初期選択に使う）。</summary>
         public bool IsInterim;
     }
@@ -75,7 +72,6 @@ namespace KokoSim.Unity.Shell
             foreach (var p in CaptainSelector.DesignationCandidates(roster))
             {
                 var overall = (int)System.Math.Round(p.AverageLevel());
-                var condition = FormModel.Quantize(p.ConditionValue);
                 view.Candidates.Add(new CaptainCandidateRow
                 {
                     ActiveIndex = IndexIn(active, p),
@@ -85,8 +81,6 @@ namespace KokoSim.Unity.Shell
                     OverallValue = overall,
                     OverallGrade = Tiers.FromStrength(overall).ToString(),
                     Mental = p.Mental,
-                    Condition = ConditionLabels.Jp(condition),
-                    ConditionLevel = condition,
                     IsInterim = p.IsCaptain,
                 });
             }
