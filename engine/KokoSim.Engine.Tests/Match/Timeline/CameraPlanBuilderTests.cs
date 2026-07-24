@@ -13,6 +13,22 @@ namespace KokoSim.Engine.Tests.Match.Timeline;
 /// </summary>
 public sealed class CameraPlanBuilderTests
 {
+    // #208 回帰: ResAt=+∞（結果チップを出さないプレー＝PitchPlaybackFactory.PitchOnly）でも、
+    // 生成ループが停止し有限個のキーフレームで返ること（以前は end=∞ で無限ループ→OOM だった）。
+    [Fact]
+    public void Build_Terminates_WhenResAtIsInfinite()
+    {
+        var play = PitchPlaybackFactory.PitchOnly(first: true, second: false, third: true);
+        Assert.False(double.IsFinite(play.ResAt));   // 前提: 投球のみプレーは ResAt=+∞
+
+        var plan = CameraPlanBuilder.Build(play);
+
+        Assert.NotEmpty(plan);
+        // 上限（MaxPlanSeconds=120s）÷ サンプル間隔（0.08s）＋端数を大きく超えないこと＝暴走していない。
+        Assert.True(plan.Count < 2000, $"キーフレームが多すぎる（暴走の疑い）: {plan.Count}");
+        Assert.All(plan, kf => Assert.True(double.IsFinite(kf.T)));
+    }
+
     [Fact]
     public void Build_StartsOnPitchFraming_MoundToHome()
     {

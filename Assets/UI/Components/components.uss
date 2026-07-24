@@ -35,7 +35,7 @@
 /* ── CategoryRankChips：選手のカテゴリ別ランク（打撃力/走力/守備力/投手力, Issue #30/#140） ─
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
-.cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+.cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-left: var(--sp-2); }
 
 /* ═══ design-19 デーゲーム・フルNB：枠＋ベタ影の器（G0 技術検証）═════════════════════
    USS に box-shadow / 擬似要素は無いので、ベタ影を2方式で再現する（design-19 §2）。
@@ -224,6 +224,41 @@
 .abil-row--lg .abil-row__label { font-size: var(--fs-body); }
 .abil-row--lg .abil-row__value { width: 58px; font-size: 34px; margin-right: var(--sp-4); }
 .abil-row--lg .abil-row__bar { height: 12px; margin-right: var(--sp-4); }
+
+/* ── SimProgress：背景処理の進捗ストリップ（#208） ─────────────────────
+   画面下端に「ロード中」＋充填バーだけを出す表示。大会名・県数など内部情報は出さない
+   （ラベルは固定・バーの充填だけで進捗を表す）。レイアウト流し込みの最下段に置き（絶対配置に
+   しない＝CTA など下端の本文を覆わない）、上端インク線で本文と分節する（UI原則④）。
+   非表示時は display:none で場所も取らない（完了で即消える）。 */
+.sim-load {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: var(--sp-2) var(--sp-4);
+    background-color: var(--color-panel);
+    border-top-width: var(--nb-border);
+    border-top-color: var(--ink);
+}
+.sim-load__label {
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    margin-right: var(--sp-3);
+    flex-shrink: 0;
+}
+.sim-load__track {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    height: 8px;
+    background-color: var(--color-panel-deep);
+    border-radius: 0;
+}
+.sim-load__fill {
+    height: 100%;
+    width: 0;
+    background-color: var(--ink);
+    border-radius: 0;
+}
 
 /* ── NumberBadge：背番号バッジ ─────────────────────────────────────── */
 .num-badge {

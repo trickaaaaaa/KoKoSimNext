@@ -114,7 +114,12 @@ public sealed class TeamState
 
     // ===== 個人成績（ボックススコア） =====
     private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF; }
-    private sealed class PitAccum { public int BF, H, Runs, SO, BB, Outs, Pitches, HB, HRA; }
+    private sealed class PitAccum
+    {
+        public int BF, H, Runs, SO, BB, Outs, Pitches, HB, HRA;
+        public readonly Dictionary<PitchType, PitchTypeAccum> ByPitch = new();
+    }
+    private sealed class PitchTypeAccum { public int AtBats, Hits, HomeRuns; }
     private sealed class FieldAccum { public FieldPosition Position; public int Errors; }
     private readonly Dictionary<Player, BatAccum> _bat = new();
     private readonly Dictionary<Player, PitAccum> _pit = new();
@@ -144,8 +149,9 @@ public sealed class TeamState
         a.R++;
     }
 
-    /// <summary>投手の対戦1打者を記録。</summary>
-    public void RecordPitching(Player pitcher, PlateAppearanceResult r, int runs, int outs, int pitches)
+    /// <summary>投手の対戦1打者を記録。decisivePitch＝打席確定球の球種（インプレー/被安打を生んだ球のみ, issue #180）。</summary>
+    public void RecordPitching(Player pitcher, PlateAppearanceResult r, int runs, int outs, int pitches,
+        PitchType? decisivePitch = null)
     {
         if (!_pit.TryGetValue(pitcher, out var a)) { a = new PitAccum(); _pit[pitcher] = a; }
         a.BF++;
@@ -157,6 +163,13 @@ public sealed class TeamState
         if (r == PlateAppearanceResult.HitByPitch) a.HB++;
         a.Outs += outs;
         a.Pitches += pitches;
+        if (decisivePitch.HasValue && r.IsBattedBall())
+        {
+            if (!a.ByPitch.TryGetValue(decisivePitch.Value, out var pa)) { pa = new PitchTypeAccum(); a.ByPitch[decisivePitch.Value] = pa; }
+            pa.AtBats++;
+            if (r.IsHit()) pa.Hits++;
+            if (r == PlateAppearanceResult.HomeRun) pa.HomeRuns++;
+        }
     }
 
     /// <summary>当該試合でこの打者が既に完了した打席数（尻上がり等の試合内非線形スキル用, 設計書10）。</summary>
@@ -211,7 +224,10 @@ public sealed class TeamState
         {
             if (p == null || seen.Contains(p) || !_pit.TryGetValue(p, out var a)) return;
             seen.Add(p);
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA));
+            IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? byPitch = a.ByPitch.Count > 0
+                ? a.ByPitch.ToDictionary(kv => kv.Key, kv => new PitchTypeBattingLine(kv.Value.AtBats, kv.Value.Hits, kv.Value.HomeRuns))
+                : null;
+            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch));
         }
         Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
         foreach (var p in _team.Bullpen) Add(p);

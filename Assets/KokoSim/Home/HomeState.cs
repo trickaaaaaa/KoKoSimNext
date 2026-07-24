@@ -54,7 +54,6 @@ namespace KokoSim.Unity.Home
         public string Prefecture = "神奈川県";
         public string Badge = "桜";
         public string TeamRankGrade = "C";
-        public string WeekLabel = "";
         public string CountdownLabel = "夏予選まで";
         public string CountdownValue = "";
         /// <summary>掲示板の升目に載せる短縮カウントダウン（"15週" / "3日" / "本日試合" / "開催中" / "―"）。</summary>
@@ -414,9 +413,7 @@ namespace KokoSim.Unity.Home
         public HomeView BuildView()
         {
             var week = KokoSim.Unity.Shell.GameClock.Week;        // 共有現在週
-            var year = KokoSim.Unity.Shell.GameClock.YearIndex;   // 共有年度
             var view = new HomeView();
-            view.WeekLabel = KokoSim.Unity.Shell.SeasonClock.CurrentLabel(year, week);   // 共通「YYYY年M月W週目」
             // 資金は監督メタ（ManagerService）が単一ソース。練習試合の費用減算がそのまま反映される。
             view.Funds = "¥" + KokoSim.Unity.Shell.ManagerService.Manager.Funds.ToString("0") + "万";
             view.FameGrade = "D";

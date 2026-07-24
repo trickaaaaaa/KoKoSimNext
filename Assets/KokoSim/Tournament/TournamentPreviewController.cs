@@ -9,17 +9,22 @@ namespace KokoSim.Unity.Tournament
 {
     /// <summary>
     /// 大会画面のコントローラ（設計書06 §3.5b）。UIDocument（TournamentPreview.uxml）に
-    /// 2つのサブビューを持ち、画面内で切り替える（新規シーンGameObjectを作らない）。
+    /// 3つのサブビューを持ち、画面内で切り替える（新規シーンGameObjectを作らない）。
     ///   1. トーナメント: 自校の勝ち上がり＋各回戦の結果（既定）
-    ///   2. 大会展望: 優勝争いの構図＋注目選手＋登録メンバー
+    ///   2. 大会展望: 優勝争いの構図＋注目選手
+    ///   3. 校別詳細: トーナメント表の高校名クリックで開く（ベンチ入りメンバー表＋チーム寸評, issue #189）
     /// 本機能は大会モード中のみ有効。開催中でなければ空状態を出す。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class TournamentPreviewController : MonoBehaviour
     {
         private VisualElement _root;
-        private VisualElement _empty, _bracketView, _previewView;
-        private bool _showPreview;   // false=トーナメント / true=大会展望
+        private VisualElement _empty, _bracketView, _previewView, _detailView;
+
+        /// <summary>3ビュー切替（Bracket=トーナメント / Preview=大会展望 / Detail=校別詳細）。</summary>
+        private enum ViewMode { Bracket, Preview, Detail }
+        private ViewMode _mode;
+        private string _detailSchool;   // Detail 表示中の校名（クリック元＝樹形図の高校名, issue #189）
 
         private void OnEnable()
         {
@@ -27,14 +32,17 @@ namespace KokoSim.Unity.Tournament
             _empty = _root.Q<VisualElement>("tp-empty");
             _bracketView = _root.Q<VisualElement>("tp-view-bracket");
             _previewView = _root.Q<VisualElement>("tp-view-preview");
+            _detailView = _root.Q<VisualElement>("tp-view-detail");
 
             // 画面を開き直すたびトーナメントから始める（大会の現況が最初に目に入る）。
-            _showPreview = false;
+            _mode = ViewMode.Bracket;
 
             var go = _root.Q<Button>("tp-go-preview");
-            if (go != null) go.clicked += () => { _showPreview = true; Render(); };
+            if (go != null) go.clicked += () => { _mode = ViewMode.Preview; Render(); };
             var back = _root.Q<Button>("tp-back");
-            if (back != null) back.clicked += () => { _showPreview = false; Render(); };
+            if (back != null) back.clicked += () => { _mode = ViewMode.Bracket; Render(); };
+            var detailBack = _root.Q<Button>("tp-detail-back");
+            if (detailBack != null) detailBack.clicked += () => { _mode = ViewMode.Bracket; Render(); };
 
             // 共通トップバーの「今週を進める」で共有週を進める（全タブ共通の進週処理へ集約, issue #134）。
             var advance = _root.Q<Button>("advance");
@@ -54,7 +62,15 @@ namespace KokoSim.Unity.Tournament
         /// <summary>ビューを明示的に切り替える（スクショ・自動検証用。通常はCTA/戻るボタンから遷移する）。</summary>
         public void ShowPreviewView(bool preview)
         {
-            _showPreview = preview;
+            _mode = preview ? ViewMode.Preview : ViewMode.Bracket;
+            Render();
+        }
+
+        /// <summary>校別詳細を明示的に開く（スクショ・自動検証用。通常は樹形図の高校名クリックから遷移する）。</summary>
+        public void ShowSchoolDetail(string schoolName)
+        {
+            _detailSchool = schoolName;
+            _mode = ViewMode.Detail;
             Render();
         }
 
@@ -66,13 +82,18 @@ namespace KokoSim.Unity.Tournament
             RenderTopBar();
 
             Show(_empty, !inTournament);
-            Show(_bracketView, inTournament && !_showPreview);
-            Show(_previewView, inTournament && _showPreview);
+            Show(_bracketView, inTournament && _mode == ViewMode.Bracket);
+            Show(_previewView, inTournament && _mode == ViewMode.Preview);
+            Show(_detailView, inTournament && _mode == ViewMode.Detail);
 
             if (!inTournament) return;
 
-            if (_showPreview) RenderPreview();
-            else RenderBracket(session.Runner.BuildBracketView());
+            switch (_mode)
+            {
+                case ViewMode.Preview: RenderPreview(); break;
+                case ViewMode.Detail: RenderDetail(); break;
+                default: RenderBracket(session.Runner.BuildBracketView()); break;
+            }
         }
 
         private static void Show(VisualElement e, bool visible)
@@ -181,16 +202,16 @@ namespace KokoSim.Unity.Tournament
 
             // 左ブロック：ラウンド0→準決勝まで、通常どおり左→右。
             for (var r = 0; r < finalRound; r++)
-                host.Add(BuildBlockColumn(tree, r, finalRound, mirrored: false, head, ref focus));
+                host.Add(BuildBlockColumn(tree, r, finalRound, mirrored: false, head, ref focus, OpenSchoolDetail));
 
             // 中央：決勝＋優勝欄（1列にまとめる。両ブロックの準決勝がここへ直結する）。
             head.Add(ColumnHead(tree.Rounds[finalRound].Name, hasLead: false, hasElbow: true));
             head.Add(ColumnHead("優勝", hasLead: false, hasElbow: false));
-            host.Add(BuildFinalColumn(tree, ref focus));
+            host.Add(BuildFinalColumn(tree, ref focus, OpenSchoolDetail));
 
             // 右ブロック：準決勝→ラウンド0を逆順に並べ、接続線を左右反転して決勝へ向き合わせる。
             for (var r = finalRound - 1; r >= 0; r--)
-                host.Add(BuildBlockColumn(tree, r, finalRound, mirrored: true, head, ref focus));
+                host.Add(BuildBlockColumn(tree, r, finalRound, mirrored: true, head, ref focus, OpenSchoolDetail));
 
             var scroll = _root.Q<ScrollView>("tp-bracket-scroll");
             if (scroll != null && focus != null) CenterOn(scroll, focus);
@@ -201,7 +222,8 @@ namespace KokoSim.Unity.Tournament
         /// mirrored=true は右ブロック（後半スロット・接続線を左右反転して決勝側を向く）。
         /// </summary>
         private static VisualElement BuildBlockColumn(TournamentPreviewState.BracketTreeView tree,
-            int r, int finalRound, bool mirrored, VisualElement head, ref VisualElement focus)
+            int r, int finalRound, bool mirrored, VisualElement head, ref VisualElement focus,
+            System.Action<string> onSchoolClick)
         {
             var col = tree.Rounds[r];
             var half = col.Cards.Count / 2;
@@ -219,7 +241,7 @@ namespace KokoSim.Unity.Tournament
             {
                 var slot = new VisualElement();
                 slot.AddToClassList("brk-slot");
-                var cardEl = BuildBracketCard(card);
+                var cardEl = BuildBracketCard(card, onSchoolClick);
                 var outConnector = isBlockFinal
                     ? FlatConnector(card.ManagerAdvances)
                     : mirrored
@@ -248,7 +270,8 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>中央列：決勝カード＋優勝欄を1つの枠にまとめる（両ブロックの準決勝がここへ直結する）。</summary>
-        private static VisualElement BuildFinalColumn(TournamentPreviewState.BracketTreeView tree, ref VisualElement focus)
+        private static VisualElement BuildFinalColumn(TournamentPreviewState.BracketTreeView tree, ref VisualElement focus,
+            System.Action<string> onSchoolClick)
         {
             var col = new VisualElement();
             col.AddToClassList("brk-col");
@@ -262,7 +285,7 @@ namespace KokoSim.Unity.Tournament
             if (finalRound.Cards.Count > 0)
             {
                 var card = finalRound.Cards[0];
-                var cardEl = BuildBracketCard(card);
+                var cardEl = BuildBracketCard(card, onSchoolClick);
                 slot.Add(cardEl);
                 if (ReferenceEquals(tree.ManagerFocus, card)) focus = cardEl;
             }
@@ -319,7 +342,8 @@ namespace KokoSim.Unity.Tournament
             return e;
         }
 
-        private static VisualElement BuildBracketCard(TournamentPreviewState.BracketCardRow c)
+        private static VisualElement BuildBracketCard(TournamentPreviewState.BracketCardRow c,
+            System.Action<string> onSchoolClick)
         {
             var card = new VisualElement();
             card.AddToClassList("brk-card");
@@ -329,14 +353,15 @@ namespace KokoSim.Unity.Tournament
             {
                 // 不戦勝は「（不戦勝）」の偽対戦相手を出さず、勝ち上がる校名だけを1行で見せる
                 // （露出させない＝issue #188）。2行カードと違い対戦線を引かないので自然に区別がつく。
-                card.Add(SlotLine(c.Top.IsDetermined ? c.Top : c.Bottom));
+                // 不戦勝カードはクリック不可（issue #189: 未確定枠・不戦勝はクリック不可）。
+                card.Add(SlotLine(c.Top.IsDetermined ? c.Top : c.Bottom, clickable: false, onSchoolClick));
                 return card;
             }
 
-            var top = SlotLine(c.Top);
+            var top = SlotLine(c.Top, c.Top.IsDetermined, onSchoolClick);
             top.AddToClassList("brk-line--top");
             card.Add(top);
-            card.Add(SlotLine(c.Bottom));
+            card.Add(SlotLine(c.Bottom, c.Bottom.IsDetermined, onSchoolClick));
             if (c.MercyEnded)
             {
                 var mercy = new Label("コールド");
@@ -346,7 +371,10 @@ namespace KokoSim.Unity.Tournament
             return card;
         }
 
-        private static VisualElement SlotLine(TournamentPreviewState.BracketSlotRow s)
+        /// <summary>樹形図1行（校名＋スコア）。clickable=true かつ校名が確定していれば校別詳細へ遷移する
+        /// （issue #189。未確定枠「（未定）」・不戦勝は clickable=false で渡ってくる）。</summary>
+        private static VisualElement SlotLine(TournamentPreviewState.BracketSlotRow s, bool clickable,
+            System.Action<string> onSchoolClick)
         {
             var row = new VisualElement();
             row.AddToClassList("brk-line");
@@ -357,6 +385,12 @@ namespace KokoSim.Unity.Tournament
             else if (!s.IsDetermined) name.AddToClassList("brk-name--tbd");
             else if (s.IsLoser) name.AddToClassList("brk-name--out");
             if (s.IsWinner) name.AddToClassList("brk-name--win");
+            if (clickable && s.IsDetermined)
+            {
+                name.AddToClassList("brk-name--clickable");
+                var schoolName = s.Name;
+                name.RegisterCallback<ClickEvent>(_ => onSchoolClick(schoolName));
+            }
             row.Add(name);
 
             var score = new Label(s.Score);
@@ -519,7 +553,28 @@ namespace KokoSim.Unity.Tournament
 
             Fill("tp-contenders", v.Contenders, BuildCard);
             Fill("tp-notables", v.Notables, BuildNotable);
-            Fill("tp-rosters", v.Rosters, BuildRoster);
+        }
+
+        // ===== ビュー3: 校別詳細（トーナメント表の高校名クリック, issue #189） =====
+
+        /// <summary>樹形図の高校名クリックの入口。未確定枠・不戦勝は SlotLine 側で clickable=false にして
+        /// そもそもここへ来ないようにしている。</summary>
+        private void OpenSchoolDetail(string schoolName) => ShowSchoolDetail(schoolName);
+
+        private void RenderDetail()
+        {
+            var r = TournamentPreviewState.BuildSchoolDetail(_detailSchool);
+            if (r == null) return;
+
+            SetText("td-title", r.SchoolName);
+            SetText("td-tag", r.Tag);
+            SetText("td-blurb", r.Sub);
+
+            var host = _root.Q<VisualElement>("td-roster");
+            if (host == null) return;
+            host.Clear();
+            host.Add(MemberHeader());
+            foreach (var m in r.Members) host.Add(MemberRow(m));
         }
 
         private void Fill<T>(string hostName, System.Collections.Generic.List<T> items,
@@ -611,29 +666,7 @@ namespace KokoSim.Unity.Tournament
             return card;
         }
 
-        /// <summary>登録メンバー（校ヘッダ＋寸評＋背番号順の表）。表示は背番号・氏名・学年・投打まで。</summary>
-        private static VisualElement BuildRoster(TournamentPreviewState.RosterBlock r)
-        {
-            var block = new VisualElement();
-            block.AddToClassList("tp-roster");
-
-            var head = new VisualElement();
-            head.AddToClassList("tp-roster__head");
-            head.Add(UiComponents.SchoolName(r.SchoolName));   // 校名は常に太明朝
-            var tag = new Label(r.Tag);
-            tag.AddToClassList("tp-roster__tag");
-            head.Add(tag);
-            block.Add(head);
-
-            var sub = new Label(r.Sub);
-            sub.AddToClassList("tp-roster__sub");
-            block.Add(sub);
-
-            block.Add(MemberHeader());
-            foreach (var m in r.Members) block.Add(MemberRow(m));
-            return block;
-        }
-
+        /// <summary>登録メンバー表の見出し行（背番号・選手・学年・投打）。校別詳細ページの表で使う。</summary>
         private static VisualElement MemberHeader()
         {
             var th = new VisualElement();

@@ -158,12 +158,26 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public void ShowDeferred(string target) => _pending = target;
 
+        // #208: 画面ごとの背景シム消化ペース。ライブ観戦=停止／試合直前の対戦カード・結果=全開で集中消化／他=通常。
+        // ブースト＝静止画面なので並列全開で回し、下端に「ロード中」を出す（MatchPreview＝両校ランク/スタメン表示）。
+        private static NationBackgroundSim.SimThrottle ThrottleFor(string screen) => screen switch
+        {
+            "MatchLive" => NationBackgroundSim.SimThrottle.Paused,
+            "MatchPreview" => NationBackgroundSim.SimThrottle.Boost,
+            "MatchResult" => NationBackgroundSim.SimThrottle.Boost,
+            _ => NationBackgroundSim.SimThrottle.Normal,
+        };
+
         /// <summary>指定画面のみをアクティブにし、そのナビにクリックを配線する。</summary>
         public void Show(string target)
         {
             foreach (var kv in _screens)
                 kv.Value.SetActive(kv.Key == target);
             _current = target;
+
+            // #208: 背景の全国裏試合の消化ペースを画面ごとに切り替える。ライブ観戦中は停止（2D再生の
+            // 滑らかさを守る）、静止画面（スタメン設定・結果）は全開で集中消化、それ以外は通常レート。
+            NationBackgroundSim.SetThrottle(ThrottleFor(target));
 
             if (!_screens.TryGetValue(target, out var go)) return;
             var doc = go.GetComponent<UIDocument>();
@@ -181,6 +195,11 @@ namespace KokoSim.Unity.Shell
                 // 即 Show せず遅延（再入防止）。Update が次フレームで実際の切替を行う。
                 item.RegisterCallback<ClickEvent>(_ => _pending = next);
             }
+
+            // #208: ブースト画面（スタメン設定・結果）では背景シムの集中消化中だけ下端に「ロード中」を出す。
+            // 完了で自動的に消える（オーバーレイ側が Running を毎フレーム見て display を切る）。
+            if (ThrottleFor(target) == NationBackgroundSim.SimThrottle.Boost)
+                SimProgressOverlay.Attach(root);
         }
     }
 }

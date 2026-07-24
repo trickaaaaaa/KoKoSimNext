@@ -46,13 +46,20 @@ public static class CameraPlanBuilder
     private const double LeadSeconds = 0.25;            // 先取りサンプリング（事前計画ゆえの遅れ対策）
     private const double ReturnToWideDelaySeconds = 0.9; // ResAt から全景へ戻すまでの間
     private const double WideSettleBufferSeconds = 3.0;  // 全景へのレート制限付き復帰が収束するまでの生成余白（実再生は play.Dur までしか参照しないため無害）
+    private const double MaxPlanSeconds = 120.0;         // キーフレーム生成の上限（#208 暴走・OOM 防止。1プレーは現実に数秒）
 
     public const double ZoomRateCapPerSecond = 2.0;  // ズーム変化は毎秒2倍以内
     public const double PanSpeedCapMPerSecond = 45.0; // パン速度上限（実測球速に追従しつつ急旋回を避ける値）
 
     public static IReadOnlyList<CameraKeyframe> Build(PlaybackPlay play)
     {
-        var end = Math.Max(play.Dur, play.ResAt + ReturnToWideDelaySeconds) + WideSettleBufferSeconds;
+        // ResAt は「結果チップを出さない」プレー（投球のみ＝PitchPlaybackFactory）で +∞ になる。そのまま
+        // end に混ぜると end=∞ となり、下のサンプリングループ（clampedT>=end で停止）が永久に止まらず
+        // キーフレームを確保し続けて OOM する（#208 の真因）。非有限な ResAt は「無し」として無視する。
+        var resEnd = double.IsFinite(play.ResAt) ? play.ResAt + ReturnToWideDelaySeconds : 0.0;
+        var dur = double.IsFinite(play.Dur) ? play.Dur : 0.0;
+        // 1プレーの再生は現実的に数秒。異常に長い（or 非有限）継続時間でもキーフレーム暴走で OOM しないよう上限を設ける。
+        var end = Math.Min(Math.Max(dur, resEnd) + WideSettleBufferSeconds, MaxPlanSeconds);
         var kfs = new List<CameraKeyframe>();
 
         double cx = WideCx, cy = WideCy, zoom = WideZoom;

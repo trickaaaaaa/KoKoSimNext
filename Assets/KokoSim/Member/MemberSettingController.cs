@@ -450,7 +450,7 @@ namespace KokoSim.Unity.Member
             BuildApt(v);
         }
 
-        // ── 守備適性ダイヤ（打撃・走塁タブ内・選手ごとに1枚を横並び） ──
+        // ── 守備適性ダイヤ（野手能力タブ内・選手ごとに1枚を横並び） ──
         private void BuildApt(MemberSettingView v)
         {
             var host = _root.Q<VisualElement>("ms-cmp-apt");
@@ -550,7 +550,7 @@ namespace KokoSim.Unity.Member
         }
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。
-        private static VisualElement CompareRowEl(CompareRow r)
+        private static VisualElement CompareRowEl(KokoSim.Unity.Shell.PlayerCompareRow r)
             => UiComponents.CompareRow(new CompareRowData
             {
                 Label = r.Label,

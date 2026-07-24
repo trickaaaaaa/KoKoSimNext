@@ -21,15 +21,22 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
     private readonly int? _calendarYear;
     private readonly IEnemyBrainFactory? _brains;
     private readonly System.Action<int, int, GameResult>? _onMatch;
+    private readonly System.Action? _afterMatch;
 
     /// <param name="onMatch">
     /// 解決した各裏試合の (先攻校ID, 後攻校ID, 結果) を受け取る任意コールバック（記録の解像度2層, Q15未決2）。
     /// Shell が自校関与＋注目試合のボックススコア/継投履歴を選択保存するのに使う（null＝記録なし＝成績のみ）。
     /// </param>
+    /// <param name="afterMatch">
+    /// 各裏試合を1つ解決し終えるたびに呼ぶ任意フック（#208）。Shell の背景ワーカーが「試合と試合の合間で
+    /// スロットル状態を見てスピン待機／即継続する」ために使う＝ライブ観戦中はここで即座に手を止められ、
+    /// 県丸ごとを走り切ってしまわない（stop-the-world GC の連発を止める）。結果・乱数には触れない＝決定論不変。
+    /// </param>
     public BackgroundMatchResolver(
         NationRosters rosters, GameContext ctx, int yearIndex,
         NationTournamentStats? stats = null, ModernRules? modernRules = null, int? calendarYear = null,
-        IEnemyBrainFactory? brains = null, System.Action<int, int, GameResult>? onMatch = null)
+        IEnemyBrainFactory? brains = null, System.Action<int, int, GameResult>? onMatch = null,
+        System.Action? afterMatch = null)
     {
         _rosters = rosters;
         _ctx = ctx;
@@ -39,6 +46,7 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
         _calendarYear = calendarYear;
         _brains = brains;
         _onMatch = onMatch;
+        _afterMatch = afterMatch;
     }
 
     public GameResult Resolve(School away, School home, IRandomSource rng, TournamentMatchContext? context = null)
@@ -50,6 +58,7 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
         var result = GameEngine.Play(awayTeam, homeTeam, _ctx, rng.Fork(2));
         _stats?.FoldMatch(away.Id, home.Id, result);
         _onMatch?.Invoke(away.Id, home.Id, result);
+        _afterMatch?.Invoke();   // #208: 試合の合間でワーカーがスロットル（Paused=停止）を反映できる継ぎ目。
         return result;
     }
 

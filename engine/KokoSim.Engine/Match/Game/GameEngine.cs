@@ -1172,7 +1172,7 @@ public static class GameEngine
                             timeline, bhPlay, ctx.Field, o.T1, runnerOut: true);
                         homeThrowAdded = true;
                     }
-                    else if (safeAtHome is { } s && bhPlay.RangeM > 46.0)
+                    else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield))
                     {
                         // 外野安打での生還は際どくなくても返球を描く（ボールが外野で死なない, #7）。
                         timeline = Match.Timeline.TimelineBuilder.AppendBackHomeThrows(
@@ -1183,7 +1183,7 @@ public static class GameEngine
 
                 // 本塁送球が無い外野安打は、先頭走者の到達塁へ返球してボールを内野へ戻す（#6）。
                 // 返球到達は打者走者の到達時刻（"打"レッグ終端＝到達塁）に紐付けて、送球が走者を追い越さないようにする。
-                if (!homeThrowAdded && res.Play is { RangeM: > 46.0 } ofHit
+                if (!homeThrowAdded && res.Play is { } ofHit && (ofHit.RangeM > 46.0 || ofHit.ThroughInfield)
                     && ofHit.Result is Match.Fielding.BattedBallResult.Single
                         or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple)
                 {
@@ -1299,7 +1299,11 @@ public static class GameEngine
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
         offense.RecordBatting(batter, result, runs, isSacFly);
-        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches);
+        // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
+        PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay
+            ? pl[^1].PitchType
+            : null;
+        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches, decisivePitch);
         defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
             outsThisPa, ctx.Tactics.RattledRecoveryOuts);
         offense.TickOffenseCalm();

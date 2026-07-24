@@ -469,7 +469,6 @@ namespace KokoSim.Unity.Home
                 SetText("hero-cd-label", v.CountdownLabel);
                 SetText("hero-cd-num", v.HeroBigValue);
                 SetText("hero-cd-unit", v.HeroBigUnit);
-                SetText("hero-week", v.WeekLabel);
             }
 
             // 故障者（0名でもカードは残し「該当なし」を出す＝週をまたいでレイアウトが動かない）。
