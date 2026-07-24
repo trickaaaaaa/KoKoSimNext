@@ -45,8 +45,6 @@
                 <ui:VisualElement name="bench-filters" class="tp-toolbar__group" />
                 <ui:Label text="学年" class="tp-toolbar__cap" />
                 <ui:VisualElement name="year-filters" class="tp-toolbar__group" />
-                <ui:Label text="並び" class="tp-toolbar__cap" />
-                <ui:VisualElement name="sort-modes" class="tp-toolbar__group" />
             </ui:VisualElement>
 
             <ui:VisualElement class="tp-thead">

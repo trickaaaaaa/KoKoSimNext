@@ -4,7 +4,7 @@ using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;      // AbilityKind（能力ラベル単一ソースの引数, issue #94）
-using KokoSim.Unity.Components;   // 部品辞書（RankChip）
+using KokoSim.Unity.Components;   // 部品辞書（CompareRow等）
 using KokoSim.Unity.Shell;        // 能力ラベル単一ソース（AbilityLabels, issue #94）
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -282,7 +282,6 @@ namespace KokoSim.Unity.Match
             info.AddToClassList("lineup-row__info");
             row.Add(info);
 
-            row.Add(UiComponents.RankChip(GradeOf(p)));
             return row;
         }
 
@@ -382,7 +381,6 @@ namespace KokoSim.Unity.Match
                 row.Add(n);
             }
 
-            row.Add(UiComponents.RankChip(GradeOf(p)));
             return row;
         }
 
@@ -458,7 +456,6 @@ namespace KokoSim.Unity.Match
             var hand = new Label(HandLabel(p));
             hand.AddToClassList("bench-row__tag");
             meta.Add(hand);
-            meta.Add(UiComponents.RankChip(GradeOf(p)));
             el.Add(meta);
         }
 
@@ -585,17 +582,6 @@ namespace KokoSim.Unity.Match
             => p.UniformNumber > 0 ? p.UniformNumber + "  " + p.Name : p.Name;
 
         private static string HandLabel(Player p) => HandednessLabels.Combined(p.Throws, p.Bats);
-
-        /// <summary>総合ランク（投手は投手能力・野手は打撃走守の平均）。表示専用。</summary>
-        private static string GradeOf(Player p)
-        {
-            double overall;
-            if (p.Pitching is { } pit)
-                overall = (Velocity(p) * 0.40 + pit.Control * 0.25 + Stamina(p) * 0.15 + pit.PitchRank * 0.20);
-            else
-                overall = (p.Contact + p.Power + p.Discipline + p.Speed + p.Fielding + p.Catching) / 6.0;
-            return Tiers.FromStrength(overall).ToString();
-        }
 
         private static string PosJp(FieldPosition pos) => pos switch
         {

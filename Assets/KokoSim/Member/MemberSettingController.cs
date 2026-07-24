@@ -230,7 +230,7 @@ namespace KokoSim.Unity.Member
             el.RegisterCallback<PointerLeaveEvent>(_ => { _state.ClearHovered(pidx); RenderCompareOnly(); });
         }
 
-        // 枠カードの共通中身（2行）：①背番号＋名前(中央)＋位置ランク ②学年・投打＋解除。
+        // 枠カードの共通中身（2行）：①背番号＋名前(中央) ②学年・投打＋解除（背番号10〜20は総合ランク非表示, issue #220）。
         private void FillCard(VisualElement el, SlotView slot)
         {
             var top = new VisualElement();
@@ -243,7 +243,6 @@ namespace KokoSim.Unity.Member
                 var name = new Label(slot.Name);
                 name.AddToClassList("slot-card__name");
                 top.Add(name);
-                top.Add(UiComponents.RankChip(slot.RankGrade));
                 el.Add(top);
 
                 var sub = new VisualElement();
@@ -398,7 +397,6 @@ namespace KokoSim.Unity.Member
                 var meta = new VisualElement();
                 meta.AddToClassList("pool-chip__meta");
                 meta.Add(GradeLabel(p.GradeLabel));
-                meta.Add(UiComponents.RankChip(p.OverallGrade));
                 body.Add(meta);
                 chip.Add(body);
 

@@ -1,7 +1,6 @@
 // ViewModel層（設計書06 §1: エンジン→ViewModel→UXML）。UnityEngine 非依存に保つ。
 using System.Collections.Generic;
 using System.Linq;
-using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
@@ -15,8 +14,6 @@ namespace KokoSim.Unity.Shell
         public string Number = "–";
         public string Name = "";
         public string GradeLabel = "3年";
-        public string OverallGrade = "D";
-        public int OverallValue;
         public int Mental;
         /// <summary>自動選出された暫定主将か（初期選択に使う）。</summary>
         public bool IsInterim;
@@ -71,15 +68,12 @@ namespace KokoSim.Unity.Shell
 
             foreach (var p in CaptainSelector.DesignationCandidates(roster))
             {
-                var overall = (int)System.Math.Round(p.AverageLevel());
                 view.Candidates.Add(new CaptainCandidateRow
                 {
                     ActiveIndex = IndexIn(active, p),
                     Number = p.UniformNumber >= 1 ? p.UniformNumber.ToString() : "–",
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
-                    OverallValue = overall,
-                    OverallGrade = Tiers.FromStrength(overall).ToString(),
                     Mental = p.Mental,
                     IsInterim = p.IsCaptain,
                 });

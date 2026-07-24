@@ -221,10 +221,6 @@ namespace KokoSim.Unity.Home
             var no = new Label(c.Number); no.AddToClassList("nt-c-no"); row.Add(no);
             var name = new Label(c.Name); name.AddToClassList("nt-c-name"); row.Add(name);
 
-            var rank = new VisualElement(); rank.AddToClassList("nt-c-rank");
-            rank.Add(UiComponents.RankChipLegacy(c.OverallGrade));
-            row.Add(rank);
-
             var mental = new Label(c.Mental.ToString()); mental.AddToClassList("nt-c-mental"); row.Add(mental);
 
             var index = c.ActiveIndex;
@@ -255,7 +251,6 @@ namespace KokoSim.Unity.Home
             if (facts != null)
             {
                 facts.Clear();
-                facts.Add(Fact("総合", v.OverallValue.ToString()));
                 facts.Add(Fact("精神力", MentalOf(v)));
                 facts.Add(Fact("性格", PersonalityOf(v)));
             }
