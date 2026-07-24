@@ -7,30 +7,34 @@
    画面側USS（TrainingPlan.uss）はここに無い見た目を自作せず、必要なら辞書へ追加する。
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── RankChip：総合/能力ランク S〜G（色覚対応・文字併記前提） ───────── */
+/* ── RankChip：総合/能力ランク S〜G（パワプロ風レター画像 Assets/UI/Images/ranks/） ─
+   ランク文字は画像に焼き込み済み（色覚対応＝色＋文字併記はクリア）。Label のテキストは
+   レイアウト幅と読み上げのために残し、色を透明にして画像とダブらせない。
+   周辺の塗り色（バー・レーダー等）は tokens.uss --rank-* ＝画像から抽出した代表色を使う。 */
 .rank-chip {
-    min-width: 23px;
-    height: 26px;
+    min-width: 30px;
+    height: 32px;
     -unity-text-align: middle-center;
-    border-radius: var(--radius-chip);   /* 角タイル（昼NBで 0＝角） */
-    border-width: 2px;                    /* design-19：ランクチップはインク2px枠（明地でチップを締める） */
-    border-color: var(--ink);
     font-size: var(--fs-body);
     padding-left: 5px;
     padding-right: 5px;
-    color: var(--color-ink);
+    color: rgba(0, 0, 0, 0);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position-x: center;
+    background-position-y: center;
 }
-.rank-chip--S { background-color: var(--rank-s); }
-.rank-chip--A { background-color: var(--rank-a); color: var(--color-chalk); }
-.rank-chip--B { background-color: var(--rank-b); }
-.rank-chip--C { background-color: var(--rank-c); }
-.rank-chip--D { background-color: var(--rank-d); }
-.rank-chip--E { background-color: var(--rank-e); }
-.rank-chip--F { background-color: var(--rank-f); color: var(--color-chalk); }
-.rank-chip--G { background-color: var(--rank-g); color: var(--color-chalk); }
+.rank-chip--S { background-image: url("project:///Assets/UI/Images/ranks/rank-S.png"); }
+.rank-chip--A { background-image: url("project:///Assets/UI/Images/ranks/rank-A.png"); }
+.rank-chip--B { background-image: url("project:///Assets/UI/Images/ranks/rank-B.png"); }
+.rank-chip--C { background-image: url("project:///Assets/UI/Images/ranks/rank-C.png"); }
+.rank-chip--D { background-image: url("project:///Assets/UI/Images/ranks/rank-D.png"); }
+.rank-chip--E { background-image: url("project:///Assets/UI/Images/ranks/rank-E.png"); }
+.rank-chip--F { background-image: url("project:///Assets/UI/Images/ranks/rank-F.png"); }
+.rank-chip--G { background-image: url("project:///Assets/UI/Images/ranks/rank-G.png"); }
 /* サイズ違い：総合ランクなど「1画面で1つだけ大きく出す」用途に限る（強調は希少資源＝UI原則②）。 */
-.rank-chip--lg { min-width: 46px; height: 44px; font-size: 28px; border-radius: var(--radius-chip); padding-left: 12px; padding-right: 12px; }
-.rank-chip--xl { min-width: 64px; height: 60px; font-size: 40px; border-radius: var(--radius-card); padding-left: 18px; padding-right: 18px; }
+.rank-chip--lg { min-width: 44px; height: 44px; font-size: 28px; padding-left: 12px; padding-right: 12px; }
+.rank-chip--xl { min-width: 60px; height: 60px; font-size: 40px; padding-left: 18px; padding-right: 18px; }
 
 /* ── CategoryRankChips：選手のカテゴリ別ランク（打撃力/走力/守備力/投手力, Issue #30/#140） ─
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
@@ -48,8 +52,8 @@
 /* コンパクト版（Issue #133・練習計画の行メタ枠）：1字ラベル「打走守投」＋小チップで横幅を詰める。 */
 .cat-rank-chips--compact .cat-rank-chips__label { margin-left: 2px; margin-right: 2px; }
 .cat-rank-chips--compact .grade {
-    min-width: 20px; height: 22px; font-size: var(--fs-cap);
-    padding-left: 3px; padding-right: 3px; border-width: var(--border-w);
+    min-width: 24px; height: 26px; font-size: var(--fs-cap);
+    padding-left: 3px; padding-right: 3px;
 }
 
 /* ── StackedBar：積み上げ横バー（練習配分の割合可視化, Issue #133） ─
@@ -548,6 +552,8 @@
 
 /* ── SlotCard：背番号枠の中身（2行：①背番号＋名前＋位置ランク ②学年・投打・解除） ── */
 .slot-card__top { flex-direction: row; align-items: center; }
+/* カード幅が固定でチップを拡大すると選手名が「…」に切れるため、カード内は小さめ固定。 */
+.slot-card__top .rank-chip { min-width: 22px; height: 24px; padding-left: 2px; padding-right: 2px; }
 .slot-card__name {
     flex-grow: 1;
     flex-basis: 0;

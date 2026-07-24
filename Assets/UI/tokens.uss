@@ -56,16 +56,18 @@
     --color-good: #69B98B;         /* 良好（疲労バー低） */
 
     /* ── カラー：ランクS〜G（色覚対応・文字併記前提。全画面共通の単一ソース） ──────────────
-       S=金 / A=赤 / B=橙 / C=黄 / D=黄緑 / E=緑 / F=グレー / G=暗灰。段階順の色相ランプ。
-       この定義を正とし、KokoSimTheme.uss .grade--X と C# RankPalette.cs を必ず一致させること。 */
-    --rank-s: #F4CE5B;
-    --rank-a: #E4553B;
-    --rank-b: #EC8B3C;
-    --rank-c: #E6C245;
-    --rank-d: #A8C64E;
-    --rank-e: #56A96E;
-    --rank-f: #7E8C93;
-    --rank-g: #566257;
+       パワプロ風レター画像（Assets/UI/Images/ranks/）から抽出した代表色。
+       S=金 / A=ピンク / B=赤 / C=黄 / D=緑 / E=青 / F=銀 / G=灰。
+       チップは画像表示（components.uss .rank-chip / KokoSimTheme.uss .grade）、
+       この変数はバー・レーダー等の塗り用。C# RankPalette.cs を必ず一致させること。 */
+    --rank-s: #E19900;
+    --rank-a: #F3279B;
+    --rank-b: #EF2323;
+    --rank-c: #F4CB3C;
+    --rank-d: #56C662;
+    --rank-e: #409AF6;
+    --rank-f: #B1B9C1;
+    --rank-g: #81888E;
 
     /* ── カラー：調子5段階（絶好調〜絶不調・全画面共通の単一ソース） ──────────────
        絶好調=金 / 好調=黄緑 / 普通=中立グレー / 不調=橙 / 絶不調=警告赤。

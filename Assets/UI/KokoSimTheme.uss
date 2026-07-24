@@ -232,26 +232,30 @@
 .cell--head { font-size: 18px; color: var(--color-muted); letter-spacing: 1px; }
 
 /* ===== 等級チップ（S〜G 共通カラー, 色覚対応で文字併記） ===== */
+/* 等級チップはパワプロ風レター画像（components.uss .rank-chip と同方式のミラー）。
+   文字は画像に焼き込み済み。Label テキストはレイアウト幅のために残し透明化する。
+   塗り色（バー・レーダー等）は tokens.uss --rank-* ＝画像から抽出した代表色（RankPalette.cs と3面同期）。 */
 .grade {
-    min-width: 23px;
+    min-width: 28px;
+    height: 30px;
     -unity-text-align: middle-center;
-    border-radius: var(--radius-chip);   /* 角タイル（昼NBで 0＝角） */
-    border-width: 2px;                    /* design-19：ランクチップはインク2px枠 */
-    border-color: var(--ink);
     font-size: 20px;
     padding: 2px 5px;
     margin-right: 5px;
-    color: #101408;
+    color: rgba(0, 0, 0, 0);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position-x: center;
+    background-position-y: center;
 }
-/* ランク色は tokens.uss --rank-* が正。ここはトークン非読込の画面向けミラー（値を必ず一致させる）。 */
-.grade--S { background-color: #F4CE5B; }
-.grade--A { background-color: #E4553B; color: #E8ECEA; }
-.grade--B { background-color: #EC8B3C; }
-.grade--C { background-color: #E6C245; }
-.grade--D { background-color: #A8C64E; }
-.grade--E { background-color: #56A96E; color: #0B1A10; }
-.grade--F { background-color: #7E8C93; color: #E8ECEA; }
-.grade--G { background-color: #566257; color: #E8ECEA; }
+.grade--S { background-image: url("project:///Assets/UI/Images/ranks/rank-S.png"); }
+.grade--A { background-image: url("project:///Assets/UI/Images/ranks/rank-A.png"); }
+.grade--B { background-image: url("project:///Assets/UI/Images/ranks/rank-B.png"); }
+.grade--C { background-image: url("project:///Assets/UI/Images/ranks/rank-C.png"); }
+.grade--D { background-image: url("project:///Assets/UI/Images/ranks/rank-D.png"); }
+.grade--E { background-image: url("project:///Assets/UI/Images/ranks/rank-E.png"); }
+.grade--F { background-image: url("project:///Assets/UI/Images/ranks/rank-F.png"); }
+.grade--G { background-image: url("project:///Assets/UI/Images/ranks/rank-G.png"); }
 
 /* ===== 選手一覧（単一カラム／ツールバー／列幅） ===== */
 .col-full { flex-grow: 1; flex-basis: 100%; }
@@ -913,7 +917,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-overall { align-items: center; padding-left: 24px; border-left-width: 1px; border-left-color: var(--color-line); }
 .pd2-overall__k { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 2px; margin-bottom: 8px; }
 .pd2-overall__chip { flex-direction: row; }
-.grade--lg { font-size: 28px; min-width: 46px; padding: 6px 12px; border-radius: var(--radius-chip); margin-right: 0; }
+.grade--lg { font-size: 28px; min-width: 44px; height: 44px; padding: 6px 12px; margin-right: 0; }
 
 /* --- 行/列レイアウト（カードの器は共通 .card。ここは並べ方の容器だけ）---
    カード本体・見出し帯・寸法修飾子は .card / .card__hd / .card--* に一本化した（design-19）。
@@ -941,7 +945,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* 総合ランク: チップ＋(値) を1行に（1.5倍拡大） */
 .ts-overall-line { flex-direction: row; align-items: center; }
 .ts-overall-value { font-size: 34px; color: var(--color-chalk); margin-left: 8px; }
-.grade--xl { font-size: 40px; min-width: 64px; padding: 8px 18px; border-radius: var(--radius-card); margin-right: 0; }
+.grade--xl { font-size: 40px; min-width: 60px; height: 60px; padding: 8px 18px; margin-right: 0; }
 .pd2-growth { flex-grow: 1; min-height: 180px; align-items: center; justify-content: center; }
 .pd2-empty { font-size: var(--fs-cap); color: var(--color-faint); -unity-text-align: middle-center; white-space: normal; padding: 20px; }
 
