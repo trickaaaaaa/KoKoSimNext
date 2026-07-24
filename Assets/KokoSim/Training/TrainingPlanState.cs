@@ -12,6 +12,7 @@
 //   学年フィルタ/ソート。これらは成長ロジックに未接続（design-03/04で今後実装予定の枠）。
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
@@ -41,14 +42,13 @@ namespace KokoSim.Unity.Training
         public string Grade = "";  // 現在値のランク S〜G（空＝ランクを持たない相対バー）
     }
 
-    /// <summary>プリセット選択肢（統合モーダルの一覧）。説明文と「伸びる能力」の相対バーを持つ。</summary>
+    /// <summary>プリセット選択肢（プリセット帯の1チップ。説明はツールチップで持つ, issue #222④）。</summary>
     public sealed class PresetOption
     {
         public TrainingPreset Preset;
         public string Jp = "";
         public string Desc = "";
         public bool Selected;
-        public List<GainBar> Emphasis = new List<GainBar>();  // 伸びる能力の相対強調（Progress=0..1）
     }
 
     /// <summary>守備ポジション別の適性と割当（守備適性割当口）。</summary>
@@ -111,6 +111,9 @@ namespace KokoSim.Unity.Training
         public bool SelectedIsCustom;
         public bool DelegateOn;
         public string DelegateStateLabel = "手動";
+        public bool SelHasPrev;
+        public bool SelHasNext;
+        public bool AtBudgetLimit;   // 残り0分（issue #222③・±/バーを無効表示にするための旗）
 
         public List<PlayerTrainRow> Rows = new List<PlayerTrainRow>();
         public List<MenuSlot> SelectedSlots = new List<MenuSlot>();   // 選択選手のメニュー別 分（編集用）
@@ -184,11 +187,21 @@ namespace KokoSim.Unity.Training
         private readonly GrowthStageTable _stages = new GrowthStageTable();
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
 
+        /// <summary>週テンプレ1件（名前＋配分のスナップショット, issue #222⑤）。呼出で他選手へ適用する。</summary>
+        private sealed class SavedTemplate
+        {
+            public string Name = "";
+            public TrainingPlan Plan;
+        }
+
         private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用（全画面共有の RosterService.Active）
         private readonly TrainingPlan[] _plans;          // 選手索引→練習計画
         private readonly bool[] _delegated;              // 選手索引→委任フラグ（UI状態）
-        private readonly List<string> _templates = new List<string>(); // 週テンプレ名（UI状態）
+        private readonly List<SavedTemplate> _templates = new List<SavedTemplate>(); // 週テンプレ（UI状態）
         private int _selected;
+        // モーダルを開いた（＝選手を選択した）時点の配分スナップショット。「元に戻す」の復元先（issue #222⑥）。
+        private TrainingPlan _revertPlan;
+        private int _revertIndex = -1;
         // 現在週は全画面共有の GameClock を単一ソースとする（週送りで変化。合宿バナー・成長段階に反映）。
         private static int _week => KokoSim.Unity.Shell.GameClock.Week;
         private int _yearFilter;
@@ -212,7 +225,37 @@ namespace KokoSim.Unity.Training
 
         public void SelectPlayer(int index)
         {
-            if (index >= 0 && index < _plans.Length) _selected = index;
+            if (index < 0 || index >= _plans.Length) return;
+            _selected = index;
+            _revertPlan = _plans[index];
+            _revertIndex = index;
+        }
+
+        /// <summary>ヘッダーの◀前／次▶（issue #222⑥）。一覧の現在フィルタ/ソート順で前後の選手へ切替。</summary>
+        public void StepSelected(int delta)
+        {
+            var idx = SortedFilteredIndices();
+            var pos = idx.IndexOf(_selected);
+            if (pos < 0) return;
+            var next = pos + delta;
+            if (next < 0 || next >= idx.Count) return;
+            SelectPlayer(idx[next]);
+        }
+
+        private bool CanStepSelected(int delta)
+        {
+            var idx = SortedFilteredIndices();
+            var pos = idx.IndexOf(_selected);
+            if (pos < 0) return false;
+            var next = pos + delta;
+            return next >= 0 && next < idx.Count;
+        }
+
+        /// <summary>「元に戻す」：このモーダルを開いた（＝選手を選択した）時点の配分へ復元（issue #222⑥）。</summary>
+        public void RevertSelected()
+        {
+            if (_revertIndex != _selected || _delegated[_selected]) return;
+            _plans[_selected] = _revertPlan;
         }
 
         /// <summary>週送り（合宿・成長段階のプレビューが連動）。</summary>
@@ -253,18 +296,31 @@ namespace KokoSim.Unity.Training
             _plans[target] = _plans[source];
         }
 
-        /// <summary>Custom編集: 指定メニューの分を増減。プリセットは Custom へ切替。budget 超過は加算をクランプ。</summary>
+        /// <summary>Custom編集: 指定メニューの分を増減（±ボタン・長押しリピート用）。プリセットは Custom へ切替。
+        /// budget 超過は加算をクランプ（issue #222③・無音クランプ自体は据え置きだが、UI側で上限0を可視化する）。</summary>
         public void AdjustMinutes(int index, TrainingMenu menu, int deltaSteps)
         {
             if (index < 0 || index >= _plans.Length || _delegated[index]) return;
-            // 休養は除外して集計（budget を占有させない＝残りとして扱う）。含めると上限が Budget 未満に張り付く。
             var slots = new Dictionary<TrainingMenu, int>();
             foreach (var a in CustomSnapshot(index)) slots[a.Menu] = a.Minutes;
-
             slots.TryGetValue(menu, out var cur);
-            var delta = deltaSteps * MinuteStep;
-            var next = System.Math.Max(0, cur + delta);
+            ApplyMenuMinutes(index, slots, menu, cur + deltaSteps * MinuteStep);
+        }
 
+        /// <summary>Custom編集: 指定メニューの分を絶対値で設定（ドラッグバー用, issue #222②）。
+        /// 10分単位へスナップし、他メニュー合計＋budget でクランプする。</summary>
+        public void SetMinutes(int index, TrainingMenu menu, int minutesAbs)
+        {
+            if (index < 0 || index >= _plans.Length || _delegated[index]) return;
+            var slots = new Dictionary<TrainingMenu, int>();
+            foreach (var a in CustomSnapshot(index)) slots[a.Menu] = a.Minutes;
+            var snapped = (System.Math.Max(0, minutesAbs) / MinuteStep) * MinuteStep;
+            ApplyMenuMinutes(index, slots, menu, snapped);
+        }
+
+        private void ApplyMenuMinutes(int index, Dictionary<TrainingMenu, int> slots, TrainingMenu menu, int rawNext)
+        {
+            var next = System.Math.Max(0, rawNext);
             // budget 超過は加算分を抑える。
             var others = 0;
             foreach (var kv in slots) if (kv.Key != menu) others += kv.Value;
@@ -305,8 +361,22 @@ namespace KokoSim.Unity.Training
 
         public bool IsNominated(int index) => index >= 0 && index < _roster.Count && _roster[index].IndividualCoaching;
 
-        /// <summary>選択選手の現在計画を週テンプレとして保存（UI状態）。</summary>
-        public void SaveTemplate() => _templates.Add("テンプレ" + (_templates.Count + 1));
+        /// <summary>選択選手の現在配分を週テンプレとして保存（UI状態）。</summary>
+        public void SaveTemplate()
+        {
+            var plan = new TrainingPlan { Preset = TrainingPreset.Custom, Allocations = CustomSnapshot(_selected) };
+            _templates.Add(new SavedTemplate { Name = "テンプレ" + (_templates.Count + 1), Plan = plan });
+        }
+
+        /// <summary>週テンプレの呼出（issue #222⑤）: 保存済み配分を選手へ適用する。委任中は無効。</summary>
+        public void ApplyTemplate(int index, string name)
+        {
+            if (index < 0 || index >= _plans.Length || _delegated[index]) return;
+            foreach (var t in _templates)
+                if (t.Name == name) { _plans[index] = t.Plan; return; }
+        }
+
+        public void RemoveTemplate(string name) => _templates.RemoveAll(t => t.Name == name);
 
         public TrainingPlanView BuildView()
         {
@@ -320,7 +390,7 @@ namespace KokoSim.Unity.Training
                 YearFilter = _yearFilter,
                 BenchFilter = _benchFilter,
                 SortMode = _sortMode,
-                Templates = new List<string>(_templates),
+                Templates = TemplateNames(),
             };
 
             // チーム総合力（共通トップバー表示）＝6指標のリーグ標準化総合を Tier 変換（③, 全画面統一）。
@@ -423,6 +493,8 @@ namespace KokoSim.Unity.Training
             view.SelNomLabel = view.SelNominated ? "個別指導 指名中" : "個別指導に指名";
             view.DelegateOn = _delegated[_selected];
             view.DelegateStateLabel = _delegated[_selected] ? "委任中" : "手動";
+            view.SelHasPrev = CanStepSelected(-1);
+            view.SelHasNext = CanStepSelected(+1);
 
             // 能力系メニューの編集スロット。
             var selAlloc = new Dictionary<TrainingMenu, int>();
@@ -454,8 +526,9 @@ namespace KokoSim.Unity.Training
             view.SelectedTotal = total;
             view.SelectedRemaining = Budget - total;
             view.SelectedIsCustom = _plans[_selected].Preset == TrainingPreset.Custom;
+            view.AtBudgetLimit = view.SelectedRemaining <= 0;
 
-            // プリセット選択肢（説明＋伸びる能力の相対バー）。
+            // プリセット選択肢（チップ＋ツールチップの説明）。
             var cur = _plans[_selected].Preset;
             foreach (var p in SelectablePresets)
                 view.PresetOptions.Add(new PresetOption
@@ -464,7 +537,6 @@ namespace KokoSim.Unity.Training
                     Jp = PresetJp(p),
                     Desc = PresetDesc(p),
                     Selected = !_delegated[_selected] && p == cur,
-                    Emphasis = PresetEmphasis(_selected, p),
                 });
 
             // 現在設定の伸びバー（この設定で伸びる能力・実効ドライラン）。
@@ -528,41 +600,6 @@ namespace KokoSim.Unity.Training
             return p.Level(k) + (req > 0 ? p.Exp(k) / req : 0.0);
         }
 
-        /// <summary>プリセットが「どの能力を伸ばすか」の相対強調バー（選手を変異させず算出）。
-        /// 解決済み配分の 主=分, 副=分×SubFactor を能力ごとに合算し、最大で正規化して 0..1 に。</summary>
-        private List<GainBar> PresetEmphasis(int index, TrainingPreset preset)
-        {
-            var plan = preset == TrainingPreset.Custom
-                ? new TrainingPlan { Preset = TrainingPreset.Custom, Allocations = ResolvedAllocations(index) }
-                : new TrainingPlan { Preset = preset };
-            var alloc = TrainingPresets.Resolve(plan, _roster[index].IsPitcher, Budget);
-
-            var w = new Dictionary<AbilityKind, double>();
-            foreach (var a in alloc)
-            {
-                var eff = TrainingMenus.Effects(a.Menu);
-                if (eff.Main is AbilityKind mk) { w.TryGetValue(mk, out var c); w[mk] = c + a.Minutes; }
-                foreach (var s in eff.Subs) { w.TryGetValue(s, out var c); w[s] = c + a.Minutes * _training.SubFactor; }
-            }
-
-            var bars = new List<GainBar>();
-            if (w.Count == 0) return bars;   // 守備適性のみ（Rest等）はバー無し
-            var max = 0.0;
-            foreach (var v in w.Values) if (v > max) max = v;
-            var keys = new List<AbilityKind>(w.Keys);
-            keys.Sort((a, b) => w[b].CompareTo(w[a]));
-            foreach (var k in keys)
-            {
-                if (bars.Count >= 5) break;   // 上位5能力まで
-                bars.Add(new GainBar
-                {
-                    AbilityJp = AbilityJp(k), Icon = AbilityIcon(k),
-                    Progress = max > 0 ? w[k] / max : 0.0, LevelsGained = 0,
-                });
-            }
-            return bars;
-        }
-
         private static string PresetDesc(TrainingPreset preset) => preset switch
         {
             TrainingPreset.PitcherAuto => "投手向け。投げ込み・変化球・球速・走り込みを自動で配分します。",
@@ -571,7 +608,7 @@ namespace KokoSim.Unity.Training
             TrainingPreset.DefenseFocus => "守備と送球を重点強化。堅い守りのチーム作りに。",
             TrainingPreset.AceDevelopment => "投げ込み・球速・変化球に集中。エースを一気に育てます。",
             TrainingPreset.SluggerDevelopment => "長打・打撃・筋力に集中。主砲の一発を伸ばします。",
-            _ => "各メニューの時間を自分で配分します（±30分）。プリセットなし＝カスタム。",
+            _ => "各メニューの時間を自分で配分します（10分単位）。プリセットなし＝カスタム。",
         };
 
         /// <summary>フィルタ＋ソート後の選手索引列（Row.Index は素の名簿索引を保持）。</summary>
@@ -601,6 +638,13 @@ namespace KokoSim.Unity.Training
         {
             var g = _roster[a].Grade.CompareTo(_roster[b].Grade);
             return g != 0 ? g : a.CompareTo(b);
+        }
+
+        private List<string> TemplateNames()
+        {
+            var names = new List<string>();
+            foreach (var t in _templates) names.Add(t.Name);
+            return names;
         }
 
         private IReadOnlyList<MenuAllocation> ResolvedAllocations(int index)

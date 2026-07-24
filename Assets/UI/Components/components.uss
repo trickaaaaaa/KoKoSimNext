@@ -80,6 +80,31 @@
 .stack-bar__seg--running    { background-color: var(--tm-running); }
 .stack-bar__seg--defpos     { background-color: var(--tm-defpos); }
 
+/* ── TimeAllocSlider：練習時間ドラッグバー（issue #222②） ─
+   トラックをクリック/ドラッグした位置を10分刻みへスナップして割り当てる。埋まっていない
+   右側は未配分（＝伸ばせる余地）。委任中は .ta-slider--locked で静的表示（ポインタ配線なし）。 */
+.ta-slider {
+    flex-grow: 1; flex-basis: 0; min-width: 0;
+    height: 10px;
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w); border-color: var(--color-line);
+}
+.ta-slider__fill { height: 100%; background-color: var(--color-muted); }
+.ta-slider__fill--batting    { background-color: var(--tm-batting); }
+.ta-slider__fill--power      { background-color: var(--tm-power); }
+.ta-slider__fill--discipline { background-color: var(--tm-discipline); }
+.ta-slider__fill--strength   { background-color: var(--tm-strength); }
+.ta-slider__fill--defense    { background-color: var(--tm-defense); }
+.ta-slider__fill--throwing   { background-color: var(--tm-throwing); }
+.ta-slider__fill--baserun    { background-color: var(--tm-baserun); }
+.ta-slider__fill--bunt       { background-color: var(--tm-bunt); }
+.ta-slider__fill--pitching   { background-color: var(--tm-pitching); }
+.ta-slider__fill--breaking   { background-color: var(--tm-breaking); }
+.ta-slider__fill--velocity   { background-color: var(--tm-velocity); }
+.ta-slider__fill--running    { background-color: var(--tm-running); }
+.ta-slider__fill--defpos     { background-color: var(--tm-defpos); }
+.ta-slider--locked { opacity: 0.5; }
+
 /* ═══ design-19 デーゲーム・フルNB：枠＋ベタ影の器（G0 技術検証）═════════════════════
    USS に box-shadow / 擬似要素は無いので、ベタ影を2方式で再現する（design-19 §2）。
      ・案イ NbBorder … 非対称ボーダー（右/下だけ影色で太らせる）。1要素で済む＝行など量産部品向け。

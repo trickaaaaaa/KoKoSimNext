@@ -137,18 +137,46 @@
 /* 伸びバーは部品辞書 components.uss の .abil-row に一本化（issue #3）。ここは空状態の文言だけ残す。 */
 .gain-none { font-size: var(--fs-label); color: var(--color-faint); margin-top: var(--sp-1); }
 
-/* ═══ 統合モーダル（tp-modal = modal-scrim, card = modal-card） ═══ */
-.tpm-card { width: 900px; max-width: 94%; max-height: 88%; }
+/* ═══ 統合モーダル（tp-modal = modal-scrim, card = modal-card。issue #222 で全面刷新） ═══
+   1440×840（パネル1600×900基準）・プリセット帯＋3カラム高密度化でスクロールを撲滅する。
+   design-19 デーゲームNBスキンへ追いつかせる（旧ダークREFINEブロックは廃止・白地カード＋インク枠＋
+   ベタ影＋赤CTAへ統一）。区切りは罫線でなく面の明度（--sf-card/--sf-raise/--sf-base）で作る（UI原則④）。 */
+#tp-modal.modal-scrim { background-color: rgba(6, 12, 8, 0.72); }
 
+.tpm-card {
+    width: 1440px; max-width: 96%;
+    height: 840px; max-height: 96%;
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border-card); border-left-width: var(--nb-border-card);
+    border-right-width: var(--nb-card-edge); border-bottom-width: var(--nb-card-edge);
+    border-radius: 0;
+    overflow: hidden;
+}
+.tpc-card {
+    border-color: var(--ink);
+    border-top-width: var(--nb-border-card); border-left-width: var(--nb-border-card);
+    border-right-width: var(--nb-card-edge); border-bottom-width: var(--nb-card-edge);
+    border-radius: 0;
+}
+
+/* ── ヘッダー：前後選手・背番号・名前・委任・個別指導・閉じる（issue #222⑥） ── */
 .tpm-head {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: 14px; padding-bottom: 14px;
-    background-color: var(--color-panel-deep);
-    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line);
-    border-top-left-radius: var(--radius-panel); border-top-right-radius: var(--radius-panel);
+    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: 12px; padding-bottom: 12px;
+    background-color: var(--sf-raise);
+    border-bottom-width: var(--nb-border); border-bottom-color: var(--ink);
 }
-.tpm-head__id { flex-direction: column; }
+.tpm-nav-btn {
+    font-size: var(--fs-cap); color: var(--sky); background-color: var(--sf-card);
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
+    padding-left: 10px; padding-right: 10px; padding-top: var(--sp-1); padding-bottom: var(--sp-1);
+    margin-left: var(--sp-1); margin-right: var(--sp-1); flex-shrink: 0;
+}
+.tpm-nav-btn:hover { border-color: var(--sky); }
+.tpm-nav-btn:disabled { opacity: 0.35; }
+.tpm-head__id { flex-direction: column; margin-left: var(--sp-2); }
 .tpm-head__namerow { flex-direction: row; align-items: center; }
 .tpm-head__metarow { flex-direction: row; align-items: center; margin-top: 2px; }
 .tpm-head__meta { margin-left: 0; }
@@ -157,130 +185,134 @@
 .tpm-delegate .switch { margin-right: var(--sp-2); }
 .tpm-delegate__state { font-size: var(--fs-cap); color: var(--color-muted); width: 44px; }
 .tpm-close {
-    width: 34px; height: 34px; -unity-text-align: middle-center;
-    background-color: var(--color-panel); color: var(--color-chalk);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip); font-size: 19px;
+    width: 32px; height: 32px; -unity-text-align: middle-center;
+    background-color: var(--sf-card); color: var(--color-chalk);
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0; font-size: 18px;
 }
 .tpm-close:hover { border-color: var(--color-warn); color: var(--color-warn); }
 
-.tpm-body { flex-direction: row; flex-grow: 1; min-height: 0; }
-.tpm-main { flex-grow: 1; padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-3); }
-.tpm-side {
-    flex-shrink: 0; width: 320px; flex-direction: column; min-height: 0;
-    background-color: var(--color-strip);
-    border-left-width: var(--border-w); border-left-color: var(--color-line);
+/* ── プリセット帯：横1行のチップ列＋残りバジェット（常時視界内・issue #222③④） ── */
+.tpm-preset-strip {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
+    background-color: var(--sf-raise);
+    border-bottom-width: var(--nb-border); border-bottom-color: var(--ink);
+}
+.tpm-preset-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.tpm-preset-chip {
+    font-size: var(--fs-cap); color: var(--color-chalk); background-color: var(--sf-card);
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
+    padding-left: 12px; padding-right: 12px; padding-top: 5px; padding-bottom: 5px; margin-right: var(--sp-2);
+}
+.tpm-preset-chip:hover { border-color: var(--sky); }
+.tpm-preset-chip--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+.tp-ed-section__lock { font-size: var(--fs-cap); color: var(--color-warn); margin-left: var(--sp-3); }
+.tpm-budget { flex-shrink: 0; width: 220px; margin-left: var(--sp-3); }
+.tp-ed-bar__remain { font-size: var(--fs-cap); color: var(--color-muted); margin-bottom: 3px; }
+.tp-ed-bar__remain--limit { color: var(--color-warn); }   /* 残り0分は警告色で強調（issue #222③） */
+
+/* ── 本体：3カラム（野手/投手練習｜守備｜伸びる能力）。21+13行がスクロールなしで一望（issue #222①） ── */
+.tpm-body3 {
+    flex-direction: row; flex-grow: 1; flex-shrink: 1; min-height: 0;
+    background-color: var(--sf-base);
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-3); padding-bottom: var(--sp-3);
 }
-.tpm-growth-scroll { flex-grow: 1; min-height: 0; margin-top: var(--sp-2); }
-.tpm-section--mt { margin-top: var(--sp-4); }
+.tpm-col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: column; margin-right: 18px; }
+.tpm-col--growth { margin-right: 0; }
+.tpm-col__title { font-size: var(--fs-cap); color: var(--color-chalk); letter-spacing: 1px; flex-shrink: 0; margin-bottom: var(--sp-2); }
+.tpm-col__list { flex-direction: column; flex-shrink: 0; }
+/* 節見出し（野手練習/投手練習・Issue #133-⑥）。列見出しより一段淡い従属見出し。 */
+.tpm-menugroup { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: 3px; }
+/* 伸びる能力カラムは行間を詰めて13行を一望に収める。 */
+.tpm-col--growth .abil-row { margin-bottom: var(--sp-1); }
 
-/* プリセット一覧（選択肢カード） */
-.tpm-presets { flex-direction: column; margin-top: var(--sp-2); }
-.tpm-preset {
-    flex-direction: column;
-    background-color: var(--color-panel-deep); border-radius: var(--radius-panel);
-    border-width: var(--border-w); border-color: var(--color-line-soft);
-    padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
-    margin-bottom: var(--sp-2);
+/* ── menu slot（issue #222①②③・攻撃メニューと守備ポジションで共用・行高32px基準） ── */
+.mslot {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    height: 32px;
+    background-color: var(--sf-card);
+    border-width: var(--border-w); border-color: var(--color-line);
+    padding-left: var(--sp-2); padding-right: 6px;
+    margin-bottom: 4px;
 }
-.tpm-preset:hover { border-color: var(--sky); }
-.tpm-preset--on { border-color: var(--sky); background-color: var(--color-panel); }
-.tpm-preset__head { flex-direction: row; align-items: center; }
-.tpm-preset__name { font-size: 20px; color: var(--color-chalk); }
-.tpm-preset--on .tpm-preset__name { color: var(--sky); }
-.tpm-preset__check {
-    width: 22px; height: 22px; -unity-text-align: middle-center; margin-right: var(--sp-2);
-    color: var(--sky); font-size: 20px;
+.mslot--locked { opacity: 0.5; }
+.mslot__icon {
+    width: 22px; height: 22px; flex-shrink: 0; -unity-text-align: middle-center;
+    background-color: var(--color-panel-deep); color: var(--ink);
+    border-radius: 0; margin-right: 6px; font-size: var(--fs-cap);
 }
-.tpm-preset__desc { font-size: var(--fs-label); color: var(--color-muted); white-space: normal; margin-top: 4px; margin-bottom: var(--sp-2); }
-.tpm-preset__bars { flex-direction: column; }
+.mslot__name { width: 64px; flex-shrink: 0; font-size: var(--fs-cap); color: var(--color-chalk); }
+.mslot__meta { width: 40px; flex-shrink: 0; font-size: var(--fs-cap); color: var(--color-muted); -unity-text-align: middle-right; margin-right: var(--sp-1); }
+.mslot__slider { margin-left: var(--sp-1); margin-right: var(--sp-2); }
+.mslot__min { width: 46px; flex-shrink: 0; justify-content: flex-end; margin-right: 2px; }
+.mslot__min .nu-num { font-size: var(--fs-cap); color: var(--color-chalk); }
+.mslot__min .nu-unit { font-size: var(--fs-cap); }
+/* ±ボタンはこの画面だけコンパクトサイズへ縮小（部品既定28pxは密度が要る他画面向け）。 */
+.mslot .step-btn { width: 22px; height: 22px; font-size: var(--fs-cap); margin-left: 2px; margin-right: 0; border-radius: 0; }
 
-/* 伸びバー（右側パネル・スクロール内） */
-.tpm-growth { flex-direction: column; }
-.tpm-budget { flex-shrink: 0; margin-top: var(--sp-3); }
-
-/* フッター */
+/* ── フッター：週テンプレ（呼出＋削除）＋元に戻す＋決定（issue #222⑤⑥） ── */
 .tpm-foot {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
-    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-3); padding-bottom: var(--sp-3);
-    border-top-width: var(--border-w); border-top-color: var(--color-line);
-    background-color: var(--color-panel-deep);
-    border-bottom-left-radius: var(--radius-panel); border-bottom-right-radius: var(--radius-panel);
+    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
+    background-color: var(--sf-raise);
+    border-top-width: var(--nb-border); border-top-color: var(--ink);
 }
+.tp-tpl__title { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-3); }
+.tp-tpl__list { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.tpl-chip {
+    flex-direction: row; align-items: center;
+    background-color: var(--sf-card);
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
+    padding-left: 10px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; margin-right: var(--sp-2);
+}
+.tpl-chip:hover { border-color: var(--sky); }
+.tpl-chip--locked { opacity: 0.5; }
+.tpl-chip--none { color: var(--color-faint); background-color: transparent; border-color: transparent; }
+.tpl-chip__label { font-size: var(--fs-cap); color: var(--color-chalk); }
+.tpl-chip__del { font-size: var(--fs-cap); color: var(--color-muted); margin-left: var(--sp-2); }
+.tpl-chip__del:hover { color: var(--color-warn); }
+.tp-tpl__save {
+    font-size: var(--fs-cap); color: var(--sky);
+    background-color: var(--sf-card); border-width: var(--border-w); border-color: var(--sky); border-radius: 0;
+    padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: 4px; padding-bottom: 4px; margin-left: var(--sp-2);
+}
+.tp-tpl__save:hover { background-color: var(--color-panel-hover); }
+.tp-ed-head__spacer { flex-grow: 1; }
+.tpm-revert {
+    font-size: var(--fs-cap); color: var(--color-chalk);
+    background-color: var(--sf-card); border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
+    padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: 6px; padding-bottom: 6px; margin-right: var(--sp-3);
+}
+.tpm-revert:hover { border-color: var(--ink); }
 .tpm-done {
     font-size: var(--fs-label); color: #FFFFFF; background-color: var(--color-cta);
-    border-width: var(--border-w); border-color: var(--color-cta); border-radius: var(--radius-chip);
+    border-width: var(--border-w); border-color: var(--color-cta); border-radius: 0;
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
 }
 .tpm-done:hover { background-color: var(--color-cta-hi); }
 
 /* ── 選択選手ヘッダーの部品（モーダルで再利用） ── */
-.tp-ed-head__spacer { flex-grow: 1; }
-.tp-ed-head__meta { font-size: 18px; color: var(--color-muted); white-space: normal; }
+.tp-ed-head__meta { font-size: var(--fs-cap); color: var(--color-muted); white-space: normal; }
 .tp-ed-id {
     flex-shrink: 0;
-    width: 54px; height: 54px;
+    width: 50px; height: 50px;
     align-items: center; justify-content: center; flex-direction: column;
-    border-width: 2px; border-color: var(--sky); border-radius: var(--radius-panel); margin-right: var(--sp-3);
+    border-width: var(--border-w); border-color: var(--ink); border-radius: 0; margin-right: var(--sp-3);
 }
-.tp-ed-id__cap { font-size: 13px; color: var(--color-muted); letter-spacing: 1px; }
-.tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--sky); }
-.tp-ed-who__name { font-size: var(--fs-page); color: var(--color-chalk); margin-right: var(--sp-2); }
+.tp-ed-id__cap { font-size: 12px; color: var(--color-muted); letter-spacing: 1px; }
+.tp-ed-id__num { font-size: var(--fs-num-lg); color: var(--color-chalk); }
+.tp-ed-who__name { font-size: var(--fs-body); color: var(--color-chalk); margin-right: var(--sp-2); }
 .nom-btn {
     font-size: var(--fs-cap); color: var(--sky);
-    background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--sky); border-radius: var(--radius-chip);
+    background-color: var(--sf-card); border-width: var(--border-w); border-color: var(--sky); border-radius: 0;
     padding-left: var(--sp-2); padding-right: var(--sp-2); padding-top: var(--sp-1); padding-bottom: var(--sp-1);
     flex-shrink: 0;
 }
 .nom-btn:hover { background-color: var(--color-panel-hover); }
-.nom-btn--on { background-color: var(--sky); color: var(--color-ink); }
-
-.tp-ed-bar__remain { font-size: 18px; color: var(--color-muted); margin-bottom: var(--sp-1); }
-
-.tp-ed-section { flex-shrink: 0; flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
-.tp-ed-section__title { font-size: 19px; color: var(--color-chalk); letter-spacing: 1px; }   /* 見出しは白（黄はCTAと最重要数値だけ・4-B）。モーダルの REFINE でも白に上書き済み */
-.tp-ed-section__title--mt { margin-top: var(--sp-4); margin-bottom: var(--sp-2); }
-.tp-ed-section__lock { font-size: var(--fs-label); color: var(--color-warn); margin-left: 10px; }
-/* メニュー一覧内の系統見出し（野手練習/投手練習・Issue #133-⑥）。節見出しを一段小さく淡くした従属見出し。 */
-.tpm-menugroup { font-size: var(--fs-label); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-2); margin-bottom: var(--sp-2); }
-
-/* menu slot（±10分・StepperRow。攻撃メニューと守備ポジションで共用・縦並び） */
-.mslot {
-    flex-shrink: 0;
-    flex-direction: row; align-items: center;
-    background-color: var(--color-panel-deep); border-radius: var(--radius-panel);
-    border-width: var(--border-w); border-color: var(--color-line-soft);
-    padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
-    margin-bottom: var(--sp-2);
-}
-.mslot--locked { opacity: 0.5; }
-.mslot__icon {
-    width: 34px; height: 34px; -unity-text-align: middle-center;
-    background-color: var(--color-panel); color: var(--sky);
-    border-radius: var(--radius-chip); margin-right: 12px; font-size: 20px;
-}
-.mslot__body { flex-grow: 1; }
-.mslot__name { font-size: 20px; color: var(--color-chalk); }
-.mslot__eff { font-size: var(--fs-label); color: var(--color-muted); margin-top: 2px; }
-.mslot__min { width: 56px; -unity-text-align: middle-center; font-size: 21px; color: var(--color-chalk); }   /* 分＝編集値：白（黄はやめる・4-B）。モーダルの REFINE でも白に上書き済み */
-
-/* templates（フッター内） */
-.tp-tpl__title { font-size: var(--fs-label); color: var(--color-muted); margin-right: var(--sp-3); }
-.tp-tpl__list { flex-direction: row; flex-wrap: wrap; }
-.tpl-chip {
-    font-size: var(--fs-cap); color: var(--color-chalk); background-color: var(--color-panel);
-    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
-    padding-left: 10px; padding-right: 10px; padding-top: var(--sp-1); padding-bottom: var(--sp-1); margin-right: var(--sp-2);
-}
-.tpl-chip:hover { border-color: var(--sky); }
-.tpl-chip--none { color: var(--color-faint); }
-.tp-tpl__save {
-    font-size: var(--fs-label); color: var(--sky);
-    background-color: var(--color-panel); border-width: var(--border-w); border-color: var(--sky); border-radius: var(--radius-chip);
-    padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-1); padding-bottom: var(--sp-1); margin-left: var(--sp-2);
-}
-.tp-tpl__save:hover { background-color: var(--color-panel-hover); }
+.nom-btn--on { background-color: var(--sky); color: #FFFFFF; }
 
 /* ═══ 複製ピッカー（tp-copy-modal・コピー元を選ぶ, Issue #133-⑤） ═══ */
 .tpc-card { width: 720px; max-width: 86%; max-height: 82%; }
@@ -288,8 +320,8 @@
     flex-shrink: 0;
     flex-direction: row; align-items: center;
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: 14px; padding-bottom: 14px;
-    background-color: var(--color-panel-deep);
-    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line);
+    background-color: var(--sf-raise);
+    border-bottom-width: var(--nb-border); border-bottom-color: var(--ink);
 }
 .tpc-scroll { flex-grow: 1; min-height: 0; }
 .tpc-list { padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
@@ -311,143 +343,7 @@
 .tp-toast {
     position: absolute; bottom: 24px; left: 50%;
     translate: -50% 0;
-    background-color: var(--sky); color: var(--color-ink);
-    font-size: 18px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: var(--radius-panel);
+    background-color: var(--sky); color: #FFFFFF;
+    font-size: 18px; padding-left: 20px; padding-right: 20px; padding-top: 10px; padding-bottom: 10px; border-radius: 0;
     display: none;
 }
-
-/* ═══════════════════════════════════════════════════════════════════════
-   REFINE（今風リファイン・練習設定モーダルのみ先行適用）
-   ───────────────────────────────────────────────────────────────────────
-   方針: ①枠線を廃し明度3段で区切る ②余白拡大 ③黄色をCTA(決定)と最重要数値(残分)に限定
-   ④角丸/暗幕オーバーレイ ⑤ミニマルスクロールバー。
-   色は将来 tokens.uss へ昇格しやすいよう .tpm-card にスコープ変数として定義（他画面に漏らさない）。
-   ※ UI Toolkit は box-shadow 非対応。モーダルの立体感は「暗幕＋段差＋角丸」で表現する。
-   ═══════════════════════════════════════════════════════════════════════ */
-
-/* 暗幕：半透明黒（緑がかった暗幕→ニュートラル黒へ・濃度UP） */
-#tp-modal.modal-scrim { background-color: rgba(0, 0, 0, 0.66); }
-
-/* モーダル面：明度3段のベース。枠線を廃し、角丸16px。
-   ※ Unity USS は「カスタムプロパティの値に var() を入れる」(--a: var(--b)) を非対応でパースエラーになる。
-   よってローカル別名はリテラル値で定義する（値は tokens.uss の sf 系 / tx 系トークンと一致させて手管理）。 */
-.tpm-card {
-    --m-base:  #0E1512;   /* = --sf-base */
-    --m-raise: #141C17;   /* = --sf-raise */
-    --m-card:  #18211C;   /* = --sf-card */
-    --m-hover: #263129;   /* = --sf-hover */
-    --m-focus: #3A4C42;   /* = --line-focus */
-    --t1: #E8ECEA;        /* = --tx-1 */
-    --t2: #9AA5A0;        /* = --tx-2 */
-    --t3: #5C6660;        /* = --tx-3 */
-
-    background-color: var(--m-base);
-    border-width: 0;
-    border-radius: var(--radius-modal);
-}
-
-/* ヘッダ／フッタ／サイド：枠線を廃し、明度差(raise)で区切る。角丸はカードに追従 */
-.tpm-head {
-    background-color: var(--m-raise);
-    border-bottom-width: 0;
-    border-top-left-radius: var(--radius-card); border-top-right-radius: var(--radius-card);
-    padding-left: 24px; padding-right: 20px; padding-top: 18px; padding-bottom: 18px;
-}
-.tpm-foot {
-    background-color: var(--m-raise);
-    border-top-width: 0;
-    border-bottom-left-radius: var(--radius-card); border-bottom-right-radius: var(--radius-card);
-    padding-left: 24px; padding-right: 24px; padding-top: 16px; padding-bottom: 16px;
-}
-.tpm-side {
-    background-color: var(--m-raise);
-    border-left-width: 0;
-    padding-left: 20px; padding-right: 20px; padding-top: 18px; padding-bottom: 18px;
-}
-.tpm-main { padding-left: 24px; padding-right: 24px; padding-top: 18px; }
-
-/* セクション見出し：黄→白。セクション間マージンは要素間(約10px)の2倍以上(28px) */
-.tpm-card .tp-ed-section__title { color: var(--t1); }
-.tpm-card .tp-ed-section__title--mt { margin-top: 28px; margin-bottom: 12px; }
-.tpm-card .tp-ed-section { margin-bottom: 12px; }
-
-/* 練習メニュー枠(mslot)：枠線廃止・カード面・上下14pxへ拡大・角丸12 */
-.tpm-card .mslot {
-    background-color: var(--m-card);
-    border-width: 0; border-radius: var(--radius-card);
-    padding-left: 16px; padding-right: 16px; padding-top: 14px; padding-bottom: 14px;
-    margin-bottom: 10px;
-}
-.tpm-card .mslot:hover { background-color: var(--m-hover); }
-.tpm-card .mslot__icon { background-color: #22302A; color: var(--t2); }
-.tpm-card .mslot__name { color: var(--t1); }
-.tpm-card .mslot__eff  { color: var(--t2); }
-.tpm-card .mslot__min  { color: var(--t1); }   /* 分＝編集値：白ボールド（黄はやめる） */
-
-/* ± ボタン：枠線廃止・面で表現 */
-.tpm-card .step-btn { background-color: #22302A; color: var(--t1); border-width: 0; }
-.tpm-card .step-btn:hover { background-color: #2C3B33; border-width: 0; }
-.tpm-card .step-btn--locked { color: var(--t3); }
-
-/* プリセットカード：枠線は選択時のフォーカス枠のみ。面の明度で区切る・角丸12・余白拡大 */
-.tpm-card .tpm-preset {
-    background-color: var(--m-card);
-    border-width: 0; border-radius: var(--radius-card);
-    padding-left: 16px; padding-right: 16px; padding-top: 12px; padding-bottom: 12px;
-    margin-bottom: 10px;
-}
-.tpm-card .tpm-preset:hover { background-color: var(--m-hover); border-width: 0; }
-.tpm-card .tpm-preset--on {
-    background-color: var(--m-hover);
-    border-width: 1px; border-color: var(--m-focus);   /* 選択＝枠線を残す唯一の用途 */
-}
-.tpm-card .tpm-preset__name { color: var(--t1); }
-.tpm-card .tpm-preset--on .tpm-preset__name { color: var(--t1); }
-.tpm-card .tpm-preset__check { color: var(--sky); }   /* チェックのみ小さくアクセント可 */
-.tpm-card .tpm-preset__desc { color: var(--t2); }
-
-/* 伸びバー（右サイド）＆プリセット内バー：黄を廃し中立グレーの面で表現 */
-.tpm-card .stat-bar { background-color: #232E28; border-width: 0; }
-.tpm-card .stat-bar__fill { background-color: #7E8C84; }
-.tpm-card .gainbar__icon { background-color: #22302A; color: var(--t2); }
-.tpm-card .gainbar__name { color: var(--t2); }
-.tpm-card .gainbar__lv   { color: var(--t1); }   /* %＝白 */
-.tpm-card .gainbar__lv--none { color: var(--t3); }
-
-/* バジェット（残り分）だけは最重要数値→黄アクセントを維持（バー＋数値ラベル） */
-.tpm-card #sel-budget-fill { background-color: var(--sky); }
-.tpm-card .tp-ed-bar__remain { color: var(--t2); }
-
-/* 背番号バッジ：黄→中立。番号は白 */
-.tpm-card .tp-ed-id { border-color: #2E3D36; }
-.tpm-card .tp-ed-id__num { color: var(--t1); }
-.tpm-card .tp-ed-id__cap { color: var(--t2); }
-.tpm-card .tp-ed-who__name { color: var(--t1); }
-.tpm-card .tp-ed-head__meta { color: var(--t2); }
-/* カテゴリ別ランクの1字ラベル（打走守投）はダーク面では中間トーンで読ませる（Issue #133） */
-.tpm-card .cat-rank-chips__label { color: var(--t2); }
-
-/* 個別指導ボタン：既定は中立アウトライン、指名中(--on)のみアクセント維持 */
-.tpm-card .nom-btn { color: var(--t2); border-color: #2E3D36; background-color: var(--m-card); }
-.tpm-card .nom-btn:hover { background-color: var(--m-hover); }
-
-/* フッターの週テンプレ：チップは枠線廃止・面で。保存は中立アウトライン */
-.tpm-card .tp-tpl__title { color: var(--t2); }
-.tpm-card .tpl-chip {
-    color: var(--t1); background-color: var(--m-card);
-    border-width: 0; border-radius: var(--radius-card);
-    padding-top: 4px; padding-bottom: 4px;
-}
-.tpm-card .tpl-chip:hover { background-color: var(--m-hover); border-width: 0; }
-.tpm-card .tpl-chip--none { color: var(--t3); }
-.tpm-card .tp-tpl__save { color: var(--t2); border-color: #2E3D36; background-color: var(--m-card); }
-.tpm-card .tp-tpl__save:hover { background-color: var(--m-hover); }
-
-/* 決定ボタン(CTA)：黄を維持・余白と角丸を少し充実 */
-.tpm-card .tpm-done {
-    border-radius: var(--radius-card);
-    padding-left: 22px; padding-right: 22px; padding-top: 8px; padding-bottom: 8px;
-}
-
-/* ミニマルスクロールバーは KokoSimTheme.uss のグローバル定義（全画面共通）に集約したため、
-   ここでのモーダル限定スコープは廃止（重複回避）。 */

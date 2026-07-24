@@ -221,6 +221,57 @@ namespace KokoSim.Unity.Components
             _ => "defpos",   // ポジション別守備9種＋内野/外野汎用
         };
 
+        // ===== TimeAllocSlider（練習時間ドラッグバー・issue #222②）=====
+
+        /// <summary>
+        /// 練習時間の割当をドラッグで調整するバー。トラック上のポインタ位置を stepMinutes 単位へ
+        /// スナップし、0..maxMinutes（＝現在値＋残り時間でクランプ済みの上限）へ収めて onChange を呼ぶ。
+        /// ±ボタンと役割を分けず併用する（①ドラッグで大きく動かす／②±で微調整）。
+        /// locked（委任中）は onChange を配線しない＝見た目だけの静的バーになる。
+        /// </summary>
+        public static VisualElement TimeAllocSlider(
+            int minutes, int maxMinutes, int stepMinutes, string colorClass, bool locked, System.Action<int> onChange)
+        {
+            var track = new VisualElement();
+            track.AddToClassList("ta-slider");
+            if (locked) track.AddToClassList("ta-slider--locked");
+
+            var fill = new VisualElement();
+            fill.AddToClassList("ta-slider__fill");
+            if (!string.IsNullOrEmpty(colorClass)) fill.AddToClassList("ta-slider__fill--" + colorClass);
+            fill.style.width = Length.Percent((maxMinutes > 0 ? Mathf.Clamp01((float)minutes / maxMinutes) : 0f) * 100f);
+            track.Add(fill);
+
+            if (locked || onChange == null || maxMinutes <= 0) return track;
+
+            void Seek(Vector2 localPos)
+            {
+                var w = track.resolvedStyle.width;
+                if (w <= 0f) return;
+                var frac = Mathf.Clamp01(localPos.x / w);
+                var raw = Mathf.RoundToInt(frac * maxMinutes);
+                var snapped = Mathf.Max(0, (raw / stepMinutes) * stepMinutes);
+                onChange(snapped);
+            }
+
+            track.RegisterCallback<PointerDownEvent>(e =>
+            {
+                track.CapturePointer(e.pointerId);
+                Seek(e.localPosition);
+                e.StopPropagation();
+            });
+            track.RegisterCallback<PointerMoveEvent>(e =>
+            {
+                if (track.HasPointerCapture(e.pointerId)) Seek(e.localPosition);
+            });
+            track.RegisterCallback<PointerUpEvent>(e =>
+            {
+                if (track.HasPointerCapture(e.pointerId)) track.ReleasePointer(e.pointerId);
+            });
+
+            return track;
+        }
+
         // ===== SchoolName（設計書16 §4-3。校名は常に太明朝） =====
 
         /// <summary>
