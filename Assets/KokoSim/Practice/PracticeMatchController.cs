@@ -57,7 +57,7 @@ namespace KokoSim.Unity.Practice
         {
             var v = _state.BuildView();
 
-            RenderTopBar(v.FundsText);
+            RenderTopBar();
             SetText("pm-own", v.OwnLabel);
             SetText("pm-cost", v.CostText);
             SetText("pm-count", v.Opponents.Count + "校");
@@ -81,11 +81,11 @@ namespace KokoSim.Unity.Practice
             }
         }
 
-        /// <summary>共通トップバーの動的値（週・自校の総合ランク）を埋める。他画面と同じ単一ソース。</summary>
-        private void RenderTopBar(string funds)
+        /// <summary>共通トップバーの動的値（週・メーター・自校の総合ランク）を埋める。他画面と同じ単一ソース。</summary>
+        private void RenderTopBar()
         {
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
-            SetText("funds", funds);   // 部費残高は監督メタ（ManagerService）が単一ソース
+            TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース）
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank == null) return;
             rank.Clear();

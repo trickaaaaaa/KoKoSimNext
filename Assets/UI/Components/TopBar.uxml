@@ -49,6 +49,7 @@
         <ui:Label name="nav-training" class="nav__item" text="練習" />
         <ui:Label name="nav-practice" class="nav__item" text="練習試合" />
         <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />
+        <ui:Label name="nav-manager" class="nav__item" text="監督" />
         <ui:Label name="nav-scout" class="nav__item" text="スカウト" />
         <ui:Label name="nav-management" class="nav__item" text="経営" />
         <ui:Label name="nav-career" class="nav__item" text="キャリア" />

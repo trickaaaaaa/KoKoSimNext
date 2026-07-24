@@ -1,0 +1,35 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ManagerScreen.uss — 監督画面（issue #172・設計書04 §1 監督メタ）
+   ───────────────────────────────────────────────────────────────────────
+   値は tokens.uss の変数のみを参照する（直書き禁止）。
+   カード本体・見出し帯・能力行は共通部品（.card / AbilityRow）に一本化し、
+   ここは監督画面固有の「並べ方（3カード横並び）」だけを足す。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.mg-main {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+
+/* ── 見出し ─────────────────────────────────────────────── */
+.mg-masthead {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-3);
+}
+
+/* ── 3カード横並び（等幅は共通 card 側の col 修飾子が持つ） ── */
+.mg-body {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+/* 資金の値（¥xx万＝和文混じりのため Oswald は使わない。pm-kv__v と同型） */
+.mg-funds__v {
+    flex-grow: 1;
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+    -unity-text-align: middle-right;
+}

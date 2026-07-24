@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 監督画面（issue #172・設計書04 §1 監督メタ）。表示専用＝ManagerService.Manager を読むだけ。
+     上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。
+     本文はカテゴリ別3カード（指導力／采配・育成／評価・資金）。能力行は部品辞書の AbilityRow を
+     コントローラが生成して各ホスト（name 指定の空要素）へ差し込む。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="ManagerScreen.uss" />
+    <ui:VisualElement class="root ui-root">
+
+      <ui:Instance template="TopBar" />
+
+      <ui:VisualElement class="mg-main">
+
+        <!-- 見出し（新聞の柱見出し＝RuleHead・設計書16 §5） -->
+        <ui:VisualElement class="mg-masthead">
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="監督" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- カテゴリ別3カード（横並び等幅） -->
+        <ui:VisualElement class="mg-body">
+
+          <ui:VisualElement class="card card--col">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="指導力" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body">
+              <ui:VisualElement name="mg-coaching" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="card card--col">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="采配・育成" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body">
+              <ui:VisualElement name="mg-tactics" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="card card--col">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="評価・資金" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body">
+              <ui:VisualElement name="mg-eval" />
+              <!-- 資金は能力ではないのでバー無し。ラベル列は AbilityRow と同じ幅クラスで揃える -->
+              <ui:VisualElement class="abil-row">
+                <ui:VisualElement class="abil-row__name">
+                  <ui:Label class="abil-row__label" text="資金" />
+                </ui:VisualElement>
+                <ui:Label name="mg-funds" class="mg-funds__v" text="" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+        </ui:VisualElement>
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
