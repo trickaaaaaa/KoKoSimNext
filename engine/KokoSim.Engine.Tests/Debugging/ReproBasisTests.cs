@@ -112,8 +112,10 @@ public sealed class ReproBasisTests
     }
 
     /// <summary>打席途中（Pitch窓）で中断しても、pitch粒度の位置ごと復元して結果が一致する。</summary>
+    // seed はバウンド導入（Issue #63）で rng ストリームが変わり、打席途中2球で止まる局面に到達する
+    // 値へ更新（旧 5→2。8打席後の次打席が2球以上続くこと＝mid-PA save が成立する前提を満たす）。
     [Theory]
-    [InlineData(5UL)]
+    [InlineData(2UL)]
     [InlineData(11UL)]
     public void InjectedRng_SaveMidPlateAppearance_MatchesUninterrupted(ulong seed)
     {

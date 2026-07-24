@@ -59,6 +59,19 @@ public sealed record FieldingPlay
     /// （0=判定境界、正=セーフ寄り、負=アウト寄り）。内野ゴロで一塁送球が絡んだ判定のみ非null。
     /// </summary>
     public double? JudgementMarginSeconds { get; init; }
+
+    // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
+
+    /// <summary>打球の4分類（ゴロ/バウンド/ライナー/フライ）。物理層の積分結果から導出する。</summary>
+    public BattedBallClass Class { get; init; } = BattedBallClass.Grounder;
+    /// <summary>最大バウンド頂点[m]（接地後の弾みの最高到達点。フライ/ライナー捕球では0）。</summary>
+    public double BounceApexHeightM { get; init; }
+    /// <summary>接地後の弾みの回数（転がりへ移行するまで）。</summary>
+    public int BounceCount { get; init; }
+    /// <summary>イレギュラーバウンドが発生したか（エラー確率へ加算される）。</summary>
+    public bool IrregularBounce { get; init; }
+    /// <summary>バウンド/転がりで内野を抜けた打球か（外野へ二次展開した）。</summary>
+    public bool ThroughInfield { get; init; }
 }
 
 /// <summary>
@@ -113,6 +126,11 @@ public static class FieldingResolver
         var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
         var fenceDist = field.FenceDistance(bearingRad);
 
+        // 4分類のうち「空を飛ぶ側」（Issue #63 (b)）。頂点÷水平到達距離が小さい＝低い弾道＝ライナー。
+        // 地上側（ゴロ/バウンド）は内野ゴロ経路でバウンド積分の結果から決める。
+        var airClass = ground.ApexHeightM / Math.Max(range, 1e-6) <= coeff.LinerApexRangeRatio
+            ? BattedBallClass.Liner : BattedBallClass.Fly;
+
         FieldingPlay Base(BattedBallResult result) => new()
         {
             Result = result,
@@ -125,6 +143,7 @@ public static class FieldingResolver
             RangeM = range,
             BearingDeg = ball.BearingDeg,
             BatterToFirstSeconds = runnerTime,
+            Class = airClass,
         };
 
         // 本塁打: フェンス距離を越えて着地し、かつ壁を越える高さで飛んでいる。
@@ -141,7 +160,7 @@ public static class FieldingResolver
             var (catcher, reach) = NearestReach(fielders, landing);
             if (reach <= CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff))
             {
-                var result = MaybeError(fielders, landing, coeff, rng, BattedBallResult.Out);
+                var result = MaybeError(fielders, landing, coeff, 0.0, rng, BattedBallResult.Out);
                 return Base(result) with
                 {
                     IsFly = true,
@@ -156,12 +175,51 @@ public static class FieldingResolver
             return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime) with { IsFly = true };
         }
 
-        // ゴロ/低いライナー。
+        // ゴロ/低いライナー。着地後のバウンド積分（Issue #63 (a)）をここで解く。
         if (range <= coeff.InfieldDepthM)
         {
-            // 内野が処理 → 一塁送球 vs 打者走者。
+            // イレギュラーはここで一律確率で抽選する（Issue #63 (c)）。
+            var irregular = DrawIrregular(coeff, rng);
+            var path = BouncePath.Compute(landing, ground.LandingVelocity, ground.HangTimeSeconds, coeff, irregular);
+            var groundClass = path.MaxBounceApexM >= coeff.BouncerApexThresholdM
+                ? BattedBallClass.Bouncer : BattedBallClass.Grounder;
+
+            FieldingPlay GroundBase(BattedBallResult result) => Base(result) with
+            {
+                Class = groundClass,
+                BounceApexHeightM = path.MaxBounceApexM,
+                BounceCount = path.Hops.Count,
+                IrregularBounce = path.Irregular,
+            };
+
+            // Issue #63 (b) やること2: バウンド/転がりで内野手を抜けて外野へ達する打球。
+            // どの内野手も打球を（守備範囲内・グラブの届く高さで）内野の外縁より手前で捕えられず、
+            // かつ外野まで運ぶ強い打球のときだけ「内野を抜けた」＝外野への二次展開。
+            // 内野で処理できる打球は従来どおり最寄り内野手が着地点で処理する（帯保存）。
+            var crossBoundary = path.TimeCrossingRange(coeff.InfieldDepthM, coeff.InfieldInterceptStepSeconds);
+            if (crossBoundary is { } oct && !InfielderCanCutOff(fielders, path, coeff))
+            {
+                // 抜けた先は Issue #24 で校正済みの集約転がりモデルへ引き継ぐ。
+                var td = path.TouchdownAtOrAfter(oct);
+                var through = td.Airborne
+                    ? ExtraBaseResolver.ComputeRoll(td.Position, td.Velocity, td.Seconds, fenceDist, coeff)
+                    : ExtraBaseResolver.RollFrom(
+                        td.Position, path.DirectionAt(td.Seconds), path.HorizontalSpeedAt(td.Seconds),
+                        td.Seconds, fenceDist, coeff);
+                return HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime)
+                    with { ThroughInfield = true };
+            }
+
+            // 内野が処理 → 一塁送球 vs 打者走者（従来ロジック＝帯保存）。処理点は着地点に一致させる。
             var infielder = NearestInfielder(fielders, landing);
             var fieldTime = ReachTime(infielder, landing);
+            // Issue #63 (a) やること1: 高く弾むバウンド（チョッパー）は落ちてくるまで野手が待たされる。
+            // 待ち時間＝最大バウンド頂点からの自由落下時間×係数（バウンド分類のときだけ効かせる）。
+            if (groundClass == BattedBallClass.Bouncer)
+            {
+                fieldTime += coeff.ChopperWaitFactor
+                             * Math.Sqrt(2.0 * path.MaxBounceApexM / BouncePath.GravityMps2);
+            }
             var throwDist = (field.FirstBase - landing).Length;
             // 握り替え（トランスファー）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
             var transfer = coeff.ThrowTransferSeconds
@@ -172,11 +230,14 @@ public static class FieldingResolver
             // 正=セーフ寄り、負=アウト寄り。表示専用（判定・帯には影響しない）。
             var judgementMargin = defenseTime - runnerTime + coeff.ForceOutMarginSeconds;
 
+            // イレギュラーバウンドは捕球ロールへ加算＝「アウトになる打球でも弾いて失策」になりうる（Issue #63 (c)）。
+            var errorBonus = irregular.Active ? coeff.ErrorIrregularBonus : 0.0;
             if (defenseTime + coeff.ForceOutMarginSeconds <= runnerTime)
             {
-                // 捕球ロール(Catching)→送球ロール(ThrowAccuracy)の2段階（Issue #37, design-14 P1-6b）。
-                var result = MaybeInfieldError(fielders, landing, infielder, coeff, rng);
-                return Base(result) with
+                // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
+                // 2段階失策（Issue #37/#63, design-14 P1-6b）。
+                var result = MaybeInfieldError(fielders, landing, infielder, coeff, rng, errorBonus);
+                return GroundBase(result) with
                 {
                     FielderRole = infielder.Position,
                     FieldedAtSeconds = fieldTime,
@@ -187,8 +248,8 @@ public static class FieldingResolver
                     JudgementMarginSeconds = judgementMargin,
                 };
             }
-            // 間に合わず内野安打。
-            return Base(BattedBallResult.Single) with
+            // 間に合わず内野安打（失策ロールは引かない＝main の校正モデルを保つ）。
+            return GroundBase(BattedBallResult.Single) with
             {
                 FielderRole = infielder.Position,
                 FieldedAtSeconds = fieldTime,
@@ -203,6 +264,49 @@ public static class FieldingResolver
         // 内野を抜けた（外野への低い打球）→ 安打。転がりと幾何・走力で塁打数を決める。
         return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime);
     }
+
+    /// <summary>
+    /// イレギュラーバウンドの抽選（Issue #63 (c)。一律確率＝球場の土質との接続は将来の別Issue）。
+    /// 乱数消費: 発生判定1回＋発生時に横ぶれ・反発の2回。
+    /// </summary>
+    private static IrregularBounce DrawIrregular(FieldingCoefficients coeff, IRandomSource rng)
+    {
+        if (!MathUtil.Chance(coeff.IrregularBounceProb, rng)) return IrregularBounce.None;
+        var lateral = (rng.NextDouble() * 2.0 - 1.0) * coeff.IrregularBounceLateralDeg;
+        var scale = 1.0 + (rng.NextDouble() * 2.0 - 1.0) * coeff.IrregularBounceRestitutionSwing;
+        return new IrregularBounce(true, lateral, scale);
+    }
+
+    /// <summary>
+    /// いずれかの内野手が、打球が内野の外縁を越える前に守備範囲（横の半径＋グラブの届く高さ）で
+    /// 打球のライン上を捕えられるか（Issue #63 やること2の判定）。乱数は消費しない＝決定論。
+    /// 捕えられない＝ホールを抜く／頭上を越すほど強い打球のときだけ内野を抜けたと判定する。
+    /// </summary>
+    private static bool InfielderCanCutOff(
+        IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
+    {
+        var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
+        var radius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
+        for (var t = path.HangTimeSeconds; ; t += step)
+        {
+            var p = path.PositionAt(t);
+            if (Math.Sqrt(p.X * p.X + p.Z * p.Z) > coeff.InfieldDepthM) return false; // 内野を出た
+            if (path.HeightAt(t) <= coeff.InfielderReachHeightM)                        // グラブの届く高さ
+            {
+                foreach (var f in fielders)
+                {
+                    if (!IsInfield(f)) continue;
+                    var travel = Math.Max(0.0, (p - f.Location).Length - radius);
+                    var reach = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
+                    if (reach <= t) return true; // この時刻・位置で捕えられる
+                }
+            }
+        }
+    }
+
+    private static bool IsInfield(Fielder f)
+        => f.Position is FieldPosition.FirstBase or FieldPosition.SecondBase
+            or FieldPosition.ThirdBase or FieldPosition.Shortstop or FieldPosition.Pitcher;
 
     /// <summary>
     /// 空中で捕れなかった打球（＝安打）の解決。着地後の転がり → 回収 → 各塁への送球 vs 打者走者。
@@ -221,6 +325,19 @@ public static class FieldingResolver
     {
         var roll = ExtraBaseResolver.ComputeRoll(
             landing, ground.LandingVelocity, ground.HangTimeSeconds, fenceDistanceM, coeff);
+        return HitFromRoll(baseOf, roll, field, batter, fielders, coeff, runnerTime);
+    }
+
+    /// <summary>転がり経路から回収・塁打数を決めて FieldingPlay を組む（乱数不使用・決定論）。</summary>
+    private static FieldingPlay HitFromRoll(
+        Func<BattedBallResult, FieldingPlay> baseOf,
+        ExtraBaseResolver.RollPath roll,
+        FieldGeometry field,
+        BatterAttributes batter,
+        IReadOnlyList<Fielder> fielders,
+        FieldingCoefficients coeff,
+        double runnerTime)
+    {
         var (retriever, retrieveAt) = ExtraBaseResolver.Retrieve(fielders, roll, coeff);
         var result = ExtraBaseResolver.ResolveBases(
             roll, retriever, retrieveAt, field, batter, runnerTime, coeff);
@@ -247,35 +364,39 @@ public static class FieldingResolver
         return Math.Min(hangTime * coeff.CatchReachFactor, coeff.CatchReachCapSeconds) * routeFactor;
     }
 
-    /// <summary>捕球エラー（Catching）ロール。rng を1回消費（守備力連動, issue #123）。</summary>
+    /// <summary>捕球エラー（Catching）ロール。rng を1回消費（守備力連動, issue #123）。
+    /// extraProb はイレギュラーバウンド等の失策確率への加算（Issue #63・既定0で恒等）。</summary>
     private static bool CatchErrorOccurs(
-        IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff, IRandomSource rng)
+        IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff, IRandomSource rng,
+        double extraProb = 0.0)
     {
         var f = NearestFielder(fielders, landing);
         // 守備力連動は非対称: 平均(50)より下（弱小）は急傾斜で大量失策へ、上（精鋭）は緩傾斜で
         // 「守備を上げるほど失策が減る」勾配を残す（下限へ潰さない, issue #123）。
         var catchingDelta = f.Attributes.Catching - 50;
         var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
-        var errProb = coeff.ErrorBaseProb - catchingDelta * slope;
+        var errProb = coeff.ErrorBaseProb - catchingDelta * slope + extraProb;
         return MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng);
     }
 
-    /// <summary>捕球のみのエラー判定（空中捕球用）。捕球ロール1回のみ。</summary>
+    /// <summary>捕球のみのエラー判定（空中捕球用）。捕球ロール1回のみ。
+    /// extraProb はイレギュラーバウンド加算（Issue #63・フライ捕球では0）。</summary>
     private static BattedBallResult MaybeError(
         IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff,
-        IRandomSource rng, BattedBallResult onSuccess)
-        => CatchErrorOccurs(fielders, landing, coeff, rng) ? BattedBallResult.Error : onSuccess;
+        double extraProb, IRandomSource rng, BattedBallResult onSuccess)
+        => CatchErrorOccurs(fielders, landing, coeff, rng, extraProb) ? BattedBallResult.Error : onSuccess;
 
     /// <summary>
     /// 内野ゴロ→一塁送球のエラー判定（Issue #37, design-14 P1-6b）。捕球ロール(Catching)→送球ロール(ThrowAccuracy)の
     /// 2段階。送球ロールは <see cref="FieldingCoefficients.ThrowErrorBaseProb"/> &gt; 0 のときのみ引く＝既定0では
-    /// 捕球ロールのみ（現行と乱数消費順・結果とも完全一致, 決定論不変）。
+    /// 捕球ロールのみ（現行と乱数消費順・結果とも完全一致, 決定論不変）。extraProb はイレギュラーバウンドを
+    /// 捕球ロールへ加算する（Issue #63・既定0で恒等）。
     /// </summary>
     private static BattedBallResult MaybeInfieldError(
         IReadOnlyList<Fielder> fielders, Vector3D landing, Fielder infielder,
-        FieldingCoefficients coeff, IRandomSource rng)
+        FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0)
     {
-        if (CatchErrorOccurs(fielders, landing, coeff, rng)) return BattedBallResult.Error;
+        if (CatchErrorOccurs(fielders, landing, coeff, rng, extraProb)) return BattedBallResult.Error;
         if (coeff.ThrowErrorBaseProb > 0.0)
         {
             // 送球精度が高いほど悪送球が減る。クランプは捕球エラーと共通の min/max を流用。
