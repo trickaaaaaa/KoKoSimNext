@@ -127,7 +127,8 @@ public readonly record struct PitchingChangeSituation(
     double FatiguePitches,       // ギア重み込みの実効消費球数
     double StaminaTarget,        // 現投手の目安投球数（StaminaPitches）
     double RelieveMargin,        // 継投しきい値の余白（FatigueCoefficients.RelievePitchMargin）
-    bool ReliefAvailable);       // 交代できる控え投手がいるか
+    bool ReliefAvailable,        // 交代できる控え投手がいるか
+    IReadOnlyList<Player> ReliefCandidates); // 継投人選の候補（ブルペン＋ベンチ。issue #209 Phase B）
 
 /// <summary>継投が発火した理由（テスト・観測用。挙動には影響しない）。</summary>
 public enum PitchingChangeReason
@@ -140,10 +141,11 @@ public enum PitchingChangeReason
 }
 
 /// <summary>
-/// 継投判断の結果（issue #209）。null=続投。Phase A では人選は既存の bullpen 先頭のままで、
-/// この決定は「替えるか否か＋理由」だけを表す（人選＝横断ランキングは Phase B で拡張）。
+/// 継投判断の結果（issue #209）。null=続投。<see cref="Reliever"/> が非null なら engine はその投手を指名して
+/// 交代する（横断ランキング人選＝Phase B）。null なら engine 既定＝ブルペン先頭で交代する
+/// （<see cref="StandardTacticsBrain"/>／無指示は常に null を返す＝従来挙動と1ビットも変わらない＝帯不変）。
 /// </summary>
-public readonly record struct PitchingChangeDecision(PitchingChangeReason Reason);
+public readonly record struct PitchingChangeDecision(PitchingChangeReason Reason, Player? Reliever = null);
 
 /// <summary>
 /// 配球方針が自動配球（PitchSelection）へ与える重み（設計書09 §2.2）。

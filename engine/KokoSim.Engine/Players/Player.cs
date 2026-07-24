@@ -103,6 +103,20 @@ public sealed record Player
     /// <summary>投手能力（投手のみ非null）。</summary>
     public PitcherAttributes? Pitching { get; init; }
 
+    /// <summary>
+    /// 潜在投手能力（issue #209 Phase B）。野手が緊急登板したときの投手能力の見積り。
+    /// 投/野の区別（#93）を壊さないため <see cref="Pitching"/> は野手では null のままにし、
+    /// 継投人選の評価・実登板時の能力確定にはこの別アクセサを使う。自校は隠しの真の投手レベルから、
+    /// AI校は運動能力から独立Forkで推定して詰める（本来の投手は Pitching が正なので通常 null）。
+    /// </summary>
+    public PitcherAttributes? LatentPitching { get; init; }
+
+    /// <summary>
+    /// 継投人選・実登板で使う「投げられる能力」。本来の投手は <see cref="Pitching"/>、
+    /// 野手は <see cref="LatentPitching"/>。どちらも無ければ null（＝評価不能・登板不可扱い）。
+    /// </summary>
+    public PitcherAttributes? ReliefPitching => Pitching ?? LatentPitching;
+
     public BatterAttributes ToBatter() => new()
     {
         Contact = Contact,

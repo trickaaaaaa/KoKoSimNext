@@ -176,7 +176,9 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
     {
         // 基本トリガー（疲労margin/ハードキャップ/週間球数）は無条件に尊重（決定論・RNG不使用）。
-        if (_inner.CallPitchingChange(s, rng) is { } basic) return basic;
+        // 人選だけ横断ランキングに載せ替える（issue #209 Phase B。RNG非依存＝決定論）。
+        if (_inner.CallPitchingChange(s, rng) is { } basic)
+            return basic with { Reliever = PickReliever(s) };
 
         // 交代先がいなければ高度トリガーも意味を持たない（＝RNGを引かず素通り）。
         if (!s.ReliefAvailable) return null;
@@ -186,7 +188,38 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         if (reason is null) return null;
 
         // ①能力値: 最適な継投の好機を掴む確率（専用Fork由来の rng を消費）。外すと続投＝好機を逃す。
-        return MathUtil.Chance(_optimalProb, rng) ? new PitchingChangeDecision(reason.Value) : null;
+        return MathUtil.Chance(_optimalProb, rng)
+            ? new PitchingChangeDecision(reason.Value, PickReliever(s))
+            : null;
+    }
+
+    /// <summary>
+    /// 横断ランキングによる継投人選（issue #209 Phase B, 設計書11 §4）。ブルペン投手・ベンチ（野手含む）を
+    /// 実能力値（<see cref="Players.PitcherAttributes.ReliefScore"/>）で比較して最良を返す（RNG不使用＝決定論）。
+    /// D2: 野手はブルペン最上位を1点でも上回った時だけ登板させる（＝同点はブルペン投手優先）。ブルペン投手が
+    /// 居なければ最良の野手を返す（緊急登板）。候補が無ければ null（engine 既定＝bullpen 先頭にフォールバック）。
+    /// </summary>
+    private static Players.Player? PickReliever(in PitchingChangeSituation s)
+    {
+        Players.Player? bestPitcher = null; var bestPitcherScore = double.NegativeInfinity;
+        Players.Player? bestFielder = null; var bestFielderScore = double.NegativeInfinity;
+        foreach (var c in s.ReliefCandidates)
+        {
+            // 評価は投げられる能力（本職＝Pitching／野手＝LatentPitching）。どちらも無い候補はランク不能で除外。
+            if (c.ReliefPitching is not { } rp) continue;
+            var score = rp.ReliefScore();
+            if (c.Pitching is not null) // 本職投手
+            {
+                if (score > bestPitcherScore) { bestPitcherScore = score; bestPitcher = c; }
+            }
+            else // 潜在能力で登板する野手
+            {
+                if (score > bestFielderScore) { bestFielderScore = score; bestFielder = c; }
+            }
+        }
+        if (bestPitcher is null) return bestFielder;                     // ブルペン投手ゼロ→野手（緊急登板）
+        if (bestFielder is not null && bestFielderScore > bestPitcherScore) return bestFielder; // D2: 上回れば野手
+        return bestPitcher;
     }
 
     /// <summary>

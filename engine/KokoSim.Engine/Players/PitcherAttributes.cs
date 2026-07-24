@@ -80,4 +80,12 @@ public sealed record PitcherAttributes
 
     /// <summary>リーグ平均的な投手（球速132km/h, 各50 = D帯, 目安90球）。</summary>
     public static PitcherAttributes LeagueAverage => new();
+
+    /// <summary>
+    /// 継投人選のランキングスコア（issue #209 Phase B）。球速・制球・キレ・スタミナを等級（Level）に
+    /// 揃えた素点和。AiTeamBuilder.PitcherScore と同一の合成で、ブルペン投手と野手の潜在能力を
+    /// 同じ土俵で比較する（球速単独で決まらない＝用語集 PitcherComposite の趣旨）。
+    /// </summary>
+    public double ReliefScore()
+        => LevelFromVelocityKmh(MaxVelocityKmh) + Control + PitchRank + LevelFromStaminaPitches(StaminaPitches);
 }

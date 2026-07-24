@@ -529,7 +529,11 @@ public sealed class TeamState
         if (!_bullpen.Remove(sub) && !_bench.Remove(sub)) return false;
         // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
         _retired.Add(CurrentPitcher);
-        CurrentPitcher = sub;
+        // 野手が緊急登板するとき、潜在投手能力を実能力として確定する（issue #209 Phase B）。
+        // これでリーグ平均でなく本人の（肩由来／隠しの）能力で投げる。本職投手は Pitching が正なので恒等。
+        CurrentPitcher = sub.Pitching is null && sub.LatentPitching is { } latent
+            ? sub with { Pitching = latent }
+            : sub;
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
         if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;
         PitchesThrown = 0;
