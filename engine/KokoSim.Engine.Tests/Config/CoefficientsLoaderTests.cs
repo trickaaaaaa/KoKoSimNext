@@ -40,6 +40,46 @@ public sealed class CoefficientsLoaderTests
     }
 
     [Fact]
+    public void ParsesWeatherBlock()
+    {
+        // Issue #120: weather ブロックが読めること。ブロック無しなら null（無効・従来挙動）。
+        const string yaml = """
+            version: 1
+            aerodynamics:
+              drag_coefficient: 0.35
+            mound:
+              release_to_plate_distance_m: 16.5
+            pitching:
+              control_to_sigma:
+                intercept_cm: 28.0
+                slope_cm_per_point: 0.20
+                min_sigma_cm: 3.0
+            weather:
+              enabled: true
+              mean_temperature_c: 32.0
+              density_damping: 0.5
+              fatigue_alpha_per_degree: 0.01
+            """;
+
+        var bundle = CoefficientsLoader.Parse(yaml);
+        Assert.NotNull(bundle.Weather);
+        Assert.True(bundle.Weather!.Enabled);
+        Assert.Equal(32.0, bundle.Weather.MeanTemperatureC, 6);
+        Assert.Equal(0.5, bundle.Weather.DensityDamping, 6);
+        Assert.Equal(0.01, bundle.Weather.FatigueAlphaPerDegree, 6);
+
+        // weather ブロック無し → null（従来挙動）。
+        var noWeather = CoefficientsLoader.Parse("""
+            version: 1
+            aerodynamics: { drag_coefficient: 0.35 }
+            mound: { release_to_plate_distance_m: 16.5 }
+            pitching:
+              control_to_sigma: { intercept_cm: 28.0, slope_cm_per_point: 0.20, min_sigma_cm: 3.0 }
+            """);
+        Assert.Null(noWeather.Weather);
+    }
+
+    [Fact]
     public void ParsesPersistentRoster()
     {
         const string yaml = """

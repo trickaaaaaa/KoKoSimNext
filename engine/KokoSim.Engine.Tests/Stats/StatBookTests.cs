@@ -74,8 +74,9 @@ public sealed class StatBookTests
     public void PitchingDerived_MatchesHandComputed()
     {
         var s = new PitchingStatLine();
-        // 6回(18アウト) 被安打5 失点2 奪三振7 与四球2 90球
-        s.Add(new PitchingLine("P", Outs: 18, BattersFaced: 24, Hits: 5, Runs: 2, StrikeOuts: 7, Walks: 2, Pitches: 90),
+        // 6回(18アウト) 被安打5 失点2(自責1・失策由来1) 奪三振7 与四球2 90球
+        s.Add(new PitchingLine("P", Outs: 18, BattersFaced: 24, Hits: 5, Runs: 2, StrikeOuts: 7, Walks: 2, Pitches: 90,
+                EarnedRuns: 1),
             started: true, win: true, loss: false);
 
         Assert.Equal(1, s.Games);
@@ -83,7 +84,8 @@ public sealed class StatBookTests
         Assert.Equal(1, s.Wins);
         Assert.Equal(0, s.Losses);
         Assert.Equal("6", s.InningsText);
-        Assert.Equal(3.0, s.Era, 4);                // 2*27/18
+        Assert.Equal(1.5, s.Era, 4);                // 1*27/18（自責点, issue #69）
+        Assert.Equal(3.0, s.Ra, 4);                 // 2*27/18（失点=RA）
         Assert.Equal(7.0 / 6.0, s.Whip, 4);         // (5+2)*3/18 = 21/18
         Assert.Equal(10.5, s.KPer9, 4);             // 7*27/18
     }

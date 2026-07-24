@@ -29,6 +29,8 @@ public sealed record CoefficientsBundle
     public FieldingCoefficients Fielding { get; init; } = new();
     public BaserunningCoefficients Baserunning { get; init; } = new();
     public FatigueCoefficients Fatigue { get; init; } = new();
+    /// <summary>試合ごとの天候（気温）モデル（Issue #120）。null＝weather ブロック無し＝無効（従来挙動）。</summary>
+    public WeatherCoefficients? Weather { get; init; }
     public PitchRecoveryCoefficients PitchRecovery { get; init; } = new();
     public KokoSim.Engine.Players.FormCoefficients Form { get; init; } = new();
     public KokoSim.Engine.Players.SkillCoefficients Skills { get; init; } = new();
@@ -85,6 +87,7 @@ public static class CoefficientsLoader
         public FieldingDto? Fielding { get; set; }
         public BaserunningDto? Baserunning { get; set; }
         public FatigueDto? Fatigue { get; set; }
+        public WeatherDto? Weather { get; set; }
         public PitchRecoveryDto? PitchRecovery { get; set; }
         public FormDto? Form { get; set; }
         public SkillsDto? Skills { get; set; }
@@ -116,6 +119,7 @@ public static class CoefficientsLoader
             Fielding = Fielding?.ToModel() ?? new FieldingCoefficients(),
             Baserunning = Baserunning?.ToModel() ?? new BaserunningCoefficients(),
             Fatigue = Fatigue?.ToModel() ?? new FatigueCoefficients(),
+            Weather = Weather?.ToModel(),   // Issue #120: weather ブロック無し＝null＝無効（従来挙動）
             PitchRecovery = PitchRecovery?.ToModel() ?? new PitchRecoveryCoefficients(),
             Form = Form?.ToModel() ?? new KokoSim.Engine.Players.FormCoefficients(),
             Skills = Skills?.ToModel() ?? new KokoSim.Engine.Players.SkillCoefficients(),
@@ -670,6 +674,33 @@ public static class CoefficientsLoader
             ControlDropPerOverPitch = ControlDropPerOverPitch,
             RelievePitchMargin = RelievePitchMargin,
             HardCapPitches = HardCapPitches,
+        };
+    }
+
+    private sealed class WeatherDto
+    {
+        private static readonly WeatherCoefficients D = new();
+        public bool Enabled { get; set; } = D.Enabled;
+        public double MeanTemperatureC { get; set; } = D.MeanTemperatureC;
+        public double TemperatureStdDevC { get; set; } = D.TemperatureStdDevC;
+        public double MinTemperatureC { get; set; } = D.MinTemperatureC;
+        public double MaxTemperatureC { get; set; } = D.MaxTemperatureC;
+        public double BaselineTemperatureC { get; set; } = D.BaselineTemperatureC;
+        public double DensityDamping { get; set; } = D.DensityDamping;
+        public double FatigueBaselineTemperatureC { get; set; } = D.FatigueBaselineTemperatureC;
+        public double FatigueAlphaPerDegree { get; set; } = D.FatigueAlphaPerDegree;
+
+        public WeatherCoefficients ToModel() => new()
+        {
+            Enabled = Enabled,
+            MeanTemperatureC = MeanTemperatureC,
+            TemperatureStdDevC = TemperatureStdDevC,
+            MinTemperatureC = MinTemperatureC,
+            MaxTemperatureC = MaxTemperatureC,
+            BaselineTemperatureC = BaselineTemperatureC,
+            DensityDamping = DensityDamping,
+            FatigueBaselineTemperatureC = FatigueBaselineTemperatureC,
+            FatigueAlphaPerDegree = FatigueAlphaPerDegree,
         };
     }
 
@@ -1551,6 +1582,9 @@ public static class CoefficientsLoader
         public double TalentSd { get; set; } = D.TalentSd;
         public double TalentMin { get; set; } = D.TalentMin;
         public double TalentMax { get; set; } = D.TalentMax;
+        // 名声→talentCenterフィードバック（Issue #127）
+        public double FameTalentCenterSpan { get; set; } = D.FameTalentCenterSpan;
+        public double FameTalentCenterTau { get; set; } = D.FameTalentCenterTau;
         // 凸凹配分
         public double ConcentrationMean { get; set; } = D.ConcentrationMean;
         public double ConcentrationSd { get; set; } = D.ConcentrationSd;
@@ -1678,6 +1712,8 @@ public static class CoefficientsLoader
             TalentSd = TalentSd,
             TalentMin = TalentMin,
             TalentMax = TalentMax,
+            FameTalentCenterSpan = FameTalentCenterSpan,
+            FameTalentCenterTau = FameTalentCenterTau,
             ConcentrationMean = ConcentrationMean,
             ConcentrationSd = ConcentrationSd,
             SpecialtyFloor = SpecialtyFloor,
