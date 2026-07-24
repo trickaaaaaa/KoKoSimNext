@@ -43,6 +43,8 @@ public sealed class BattingOrderContinuationTests
         public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
+        public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+            => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
     }
 
     /// <summary>毎球、一塁に走者がいれば無条件で通常始動の盗塁を試みるブレイン。</summary>
@@ -55,6 +57,8 @@ public sealed class BattingOrderContinuationTests
         public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
+        public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+            => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
 
         public PitchTacticsDirective? CallPitchAction(in PitchTacticsSituation s, IRandomSource rng)
             => s.Base.OnFirst is not null && s.Base.OnSecond is null

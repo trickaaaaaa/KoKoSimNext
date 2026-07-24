@@ -1491,6 +1491,16 @@ public static class CoefficientsLoader
         public double AceRestAceDependentFactor { get; set; } = D.AceRestAceDependentFactor;
         public double AceRestDefensiveMindedFactor { get; set; } = D.AceRestDefensiveMindedFactor;
         public double AceRestTotalBaseballFactor { get; set; } = D.AceRestTotalBaseballFactor;
+        // ⑥ 高度な継投層（issue #209）
+        public int BlowupReliefMinTier { get; set; } = D.BlowupReliefMinTier;
+        public int CloseLateReliefMinTier { get; set; } = D.CloseLateReliefMinTier;
+        public int RattledReliefMinTier { get; set; } = D.RattledReliefMinTier;
+        public int BlowupRunsInInning { get; set; } = D.BlowupRunsInInning;
+        public int CloseLateFromInning { get; set; } = D.CloseLateFromInning;
+        public int CloseLateMaxScoreDiff { get; set; } = D.CloseLateMaxScoreDiff;
+        public double CloseLateReliefMarginFactor { get; set; } = D.CloseLateReliefMarginFactor;
+        public int AceDependentReliefTierPenalty { get; set; } = D.AceDependentReliefTierPenalty;
+        public int DefensiveMindedReliefTierBonus { get; set; } = D.DefensiveMindedReliefTierBonus;
 
         public EnemyAiCoefficients ToModel() => new()
         {
@@ -1564,6 +1574,15 @@ public static class CoefficientsLoader
             AceRestAceDependentFactor = AceRestAceDependentFactor,
             AceRestDefensiveMindedFactor = AceRestDefensiveMindedFactor,
             AceRestTotalBaseballFactor = AceRestTotalBaseballFactor,
+            BlowupReliefMinTier = BlowupReliefMinTier,
+            CloseLateReliefMinTier = CloseLateReliefMinTier,
+            RattledReliefMinTier = RattledReliefMinTier,
+            BlowupRunsInInning = BlowupRunsInInning,
+            CloseLateFromInning = CloseLateFromInning,
+            CloseLateMaxScoreDiff = CloseLateMaxScoreDiff,
+            CloseLateReliefMarginFactor = CloseLateReliefMarginFactor,
+            AceDependentReliefTierPenalty = AceDependentReliefTierPenalty,
+            DefensiveMindedReliefTierBonus = DefensiveMindedReliefTierBonus,
         };
     }
 

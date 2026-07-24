@@ -47,6 +47,8 @@ public sealed class StealUnificationTests
         public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
+        public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+            => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
 
         public PitchTacticsDirective? CallPitchAction(in PitchTacticsSituation s, IRandomSource rng)
             => s.Base.OnFirst is not null && s.Base.OnSecond is null
@@ -67,6 +69,8 @@ public sealed class StealUnificationTests
         public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
+        public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+            => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
 
         public PitchTacticsDirective? CallPitchAction(in PitchTacticsSituation s, IRandomSource rng)
             => s.PitchNumber >= 2 && s.Base.OnFirst is not null && s.Base.OnSecond is null

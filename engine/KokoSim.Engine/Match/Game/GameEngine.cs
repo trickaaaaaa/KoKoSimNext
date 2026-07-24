@@ -979,11 +979,7 @@ public static class GameEngine
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
                     batterOrder: batterOrder, pitchLog: res.PitchLog);
                 outs += buntOuts;
-                if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, defense.Fatigue ?? ctx.Fatigue)
-                    || defense.CurrentPitcherAtWeeklyLimit())
-                {
-                    defense.TryChangePitcher();
-                }
+                MaybeChangePitcher(defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
                 {
                     offense.RecordInningRuns(runsThisHalf);
@@ -1020,11 +1016,7 @@ public static class GameEngine
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
                     batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns);
                 outs += sqOuts;
-                if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, defense.Fatigue ?? ctx.Fatigue)
-                    || defense.CurrentPitcherAtWeeklyLimit())
-                {
-                    defense.TryChangePitcher();
-                }
+                MaybeChangePitcher(defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
                 {
                     offense.RecordInningRuns(runsThisHalf);
@@ -1302,11 +1294,7 @@ public static class GameEngine
 
             outs += outsThisPa;
 
-            if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, defense.Fatigue ?? ctx.Fatigue)
-                        || defense.CurrentPitcherAtWeeklyLimit())
-            {
-                defense.TryChangePitcher();
-            }
+            MaybeChangePitcher(defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
 
             if (walkoff?.Invoke() == true)
             {
@@ -1386,6 +1374,41 @@ public static class GameEngine
         => pos is Match.Field.FieldPosition.LeftField
                or Match.Field.FieldPosition.CenterField
                or Match.Field.FieldPosition.RightField;
+
+    /// <summary>
+    /// 継投判断（設計書11 §4, issue #209）。打席境界ごとに呼ぶ。采配Brainがあれば <see cref="ITacticsBrain.CallPitchingChange"/>
+    /// に委ね（Standard＝従来の疲労球数トリガーそのまま／AI＝高度トリガー＋三層を被せる）、無指示（Brain=null）なら
+    /// 従来の engine 直判定を完全に踏襲する（＝帯不変）。判断RNGは専用Forkストリームで引くため試合結果RNGを進めない
+    /// （不変条件#2・裏試合帯不変）。人選は Phase A では bullpen 先頭のまま。
+    /// </summary>
+    private static void MaybeChangePitcher(
+        TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng,
+        int inning, bool isTop, int paIndex, int runsThisHalf, int outs)
+    {
+        var fatigue = defense.Fatigue ?? ctx.Fatigue;
+        var fatigueTriggered = PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, fatigue);
+        var atWeekly = defense.CurrentPitcherAtWeeklyLimit();
+
+        if (defense.Tactics is { } brain)
+        {
+            var staminaTarget = (defense.CurrentPitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
+            var sit = new PitchingChangeSituation(
+                inning, ctx.RegulationInnings, outs,
+                defense.Runs - offense.Runs, runsThisHalf, defense.PitcherRattled,
+                fatigueTriggered, atWeekly, defense.FatiguePitches, staminaTarget,
+                fatigue.RelievePitchMargin, defense.AvailableBullpen.Count > 0);
+            var forked = rng.Fork(ReliefStreamId(inning, isTop, paIndex));
+            if (brain.CallPitchingChange(sit, forked) is not null) defense.TryChangePitcher();
+        }
+        else if (fatigueTriggered || atWeekly)
+        {
+            defense.TryChangePitcher();
+        }
+    }
+
+    /// <summary>継投判断RNG用Fork streamId（issue #209）。1球采配/怪我/天候とは別saltで衝突を避ける。</summary>
+    private static ulong ReliefStreamId(int inning, bool isTop, int paIndex)
+        => 0xC0FFEE_2090_0000UL ^ ((ulong)(uint)inning << 32) ^ ((isTop ? 1UL : 0UL) << 31) ^ (ulong)(uint)paIndex;
 
     /// <summary>1球采配（設計書15 §2.3）の判断RNG用Fork streamId。inning/半イニング/PA添字/球数から
     /// 決定論的に導出し、末尾に攻守を分けるsaltを混ぜる（同じ球でも攻撃側・守備側で別ストリーム）。</summary>
