@@ -891,6 +891,11 @@ roster:
   talent_sd: 8.0
   talent_min: 10.0
   talent_max: 90.0
+  # 名声→talentCenterフィードバック（issue #127・設計書04 §2.1）: 監督の名声が高いほど良い新入生が集まる。
+  # 上振れは指数飽和カーブ（線形→漸近）で頭打ち＝「勝つ→怪物→また勝つ」の暴走ループ防止が必須要件。
+  # 既定は控えめな幅（Fame最大でも talent_center_default 32→40程度に留める）。
+  fame_talent_center_span: 8.0
+  fame_talent_center_tau: 30.0
   # 凸凹配分（総ポイントをランダム重みで配分・偏り自体もばらつく＝金太郎飴回避）
   concentration_mean: 0.35    # 偏り強度σ。大きいほど内訳が凸凹
   concentration_sd: 0.15

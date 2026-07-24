@@ -1582,6 +1582,9 @@ public static class CoefficientsLoader
         public double TalentSd { get; set; } = D.TalentSd;
         public double TalentMin { get; set; } = D.TalentMin;
         public double TalentMax { get; set; } = D.TalentMax;
+        // 名声→talentCenterフィードバック（Issue #127）
+        public double FameTalentCenterSpan { get; set; } = D.FameTalentCenterSpan;
+        public double FameTalentCenterTau { get; set; } = D.FameTalentCenterTau;
         // 凸凹配分
         public double ConcentrationMean { get; set; } = D.ConcentrationMean;
         public double ConcentrationSd { get; set; } = D.ConcentrationSd;
@@ -1709,6 +1712,8 @@ public static class CoefficientsLoader
             TalentSd = TalentSd,
             TalentMin = TalentMin,
             TalentMax = TalentMax,
+            FameTalentCenterSpan = FameTalentCenterSpan,
+            FameTalentCenterTau = FameTalentCenterTau,
             ConcentrationMean = ConcentrationMean,
             ConcentrationSd = ConcentrationSd,
             SpecialtyFloor = SpecialtyFloor,

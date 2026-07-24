@@ -49,6 +49,13 @@ public sealed record SeasonContext
     public FacilityCatalog FacilityCatalog { get; init; } = FacilityCatalog.Default;
 
     /// <summary>
+    /// 監督の名声（Fame, 0-100, Issue #127・設計書04 §2.1）。null＝名声フィードバックoff＝新入生の総合力中心は
+    /// 従来どおり Roster.TalentCenterDefault（不変条件#2）。注入時は Roster.TalentCenterFromFame で
+    /// 新入生の質へ反映する（勝つ→名声→良い新入生、の正フィードバック。上振れは頭打ちで暴走を防ぐ）。
+    /// </summary>
+    public double? Fame { get; init; }
+
+    /// <summary>
     /// 施設 → (施設係数, 週練習時間[分]) の解決。
     /// <see cref="Facilities"/> 注入時は多軸（Issue #128）を基準へ加算。未注入時は単一軸（Issue #115）に従い、
     /// どちらも施設0で Training の既定値（1.0 / 300分）と1ビット一致する。
@@ -113,10 +120,12 @@ public static class SeasonEngine
             var graduating = roster.Where(p => p.Grade > 3).ToList();
             var gradAvg = graduating.Count > 0 ? graduating.Average(p => p.AverageLevel()) : 0;
             roster.RemoveAll(p => p.Grade > 3);
+            // 名声由来のtalentCenter（Issue #127）。未注入(null)なら従来どおり既定値を使う（不変条件#2）。
+            var talentCenter = ctx.Fame is { } fame ? ctx.Roster.TalentCenterFromFame(fame) : (double?)null;
             // 在籍部員の氏名を渡し、新入生の下の名前が既存部員と被らないようにする（重複回避）。
             roster.AddRange(ProspectGenerator.Intake(year, ctx.Roster, rng, skills: ctx.Skills,
                 personalities: ctx.Personalities, existingNames: roster.Select(p => p.Name).ToList(),
-                form: ctx.Form));
+                form: ctx.Form, talentCenter: talentCenter));
 
             // 主将の年度更新（設計書09 §8）: 3年生引退で主将が抜けたら選び直す。手動指名が在籍なら尊重。
             CaptainSelector.EnsureCaptain(roster);
