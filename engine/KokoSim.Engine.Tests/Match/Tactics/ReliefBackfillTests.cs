@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
@@ -145,6 +146,23 @@ public sealed class ReliefBackfillTests
         Assert.Equal(reliever.Name, st.CurrentPitcher.Name);
         Assert.True(st.IsRetired(oldPitcher));
         Assert.Equal(1, st.PitcherChanges);
+    }
+
+    // ===== ボックススコア: 昇格した野手の投手行が欠落しない（issue #209 Phase C 表現） =====
+
+    [Fact]
+    public void BoxScore_IncludesPromotedFielderPitchingLine()
+    {
+        var strong = Attr(velLevel: 90, control: 60, staminaLevel: 45, pitchRank: 55);
+        var st = new TeamState(NonDhTeam("T", strong, Attr(30, 30, 30, 30)));
+        var ss = st.CurrentLineup.First(p => p.Name == "遊");
+        st.RelieveWith(ss); // 投野交代で遊撃手がマウンドへ
+
+        // 昇格した野手が実際に投げる（1打者三振）。Team.Bullpen に居ないので旧実装では投手行が欠落した。
+        st.RecordPitching(st.CurrentPitcher, PlateAppearanceResult.Strikeout, runs: 0, outs: 1, pitches: 4);
+
+        var lines = st.BuildPitchingLines();
+        Assert.Contains(lines, l => l.Name == "遊");
     }
 
     // ===== AI が在フィールドの二刀流を選び、GameEngine 結線で決定論を保つ =====
