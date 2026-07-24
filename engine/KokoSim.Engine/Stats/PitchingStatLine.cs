@@ -6,7 +6,9 @@ namespace KokoSim.Engine.Stats;
 
 /// <summary>
 /// 個人投手の累積成績（複数試合の集計）。1試合ぶんの <see cref="PitchingLine"/> ＋勝敗フラグを畳み込む。
-/// 防御率は失点ベース（自責点は現エンジン未追跡＝RA近似, OPEN-QUESTIONS）。純データ・決定論。
+/// 防御率は自責点ベース（issue #69。失策/失策連鎖で出塁・延命した走者の得点を除外する簡易規則。
+/// 詳細規則は docs/design/OPEN-QUESTIONS.md 未決E決定事項を参照）。失点ベースは <see cref="Ra"/> に残す。
+/// 純データ・決定論。
 /// </summary>
 public sealed class PitchingStatLine
 {
@@ -18,6 +20,8 @@ public sealed class PitchingStatLine
     public int BattersFaced { get; private set; }
     public int Hits { get; private set; }
     public int Runs { get; private set; }
+    /// <summary>自責点（issue #69）。Runs（失点）の内、失策/失策連鎖に起因しない得点。</summary>
+    public int EarnedRuns { get; private set; }
     public int StrikeOuts { get; private set; }
     public int Walks { get; private set; }
     public int HitBatters { get; private set; }
@@ -34,8 +38,11 @@ public sealed class PitchingStatLine
     /// <summary>投球回テキスト（例: 7回1/3 → "7 1/3"）。</summary>
     public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");
 
-    /// <summary>防御率＝失点×27/アウト数（9回換算の失点。自責点未追跡のためRA近似, アウト0なら0）。</summary>
-    public double Era => Outs > 0 ? Runs * 27.0 / Outs : 0.0;
+    /// <summary>防御率＝自責点×27/アウト数（9回換算の自責点, issue #69, アウト0なら0）。</summary>
+    public double Era => Outs > 0 ? EarnedRuns * 27.0 / Outs : 0.0;
+
+    /// <summary>失点率（RA）＝失点×27/アウト数（自責点を区別しない参考値, アウト0なら0）。</summary>
+    public double Ra => Outs > 0 ? Runs * 27.0 / Outs : 0.0;
 
     /// <summary>WHIP＝(被安打+与四球)/投球回（アウト0なら0）。</summary>
     public double Whip => Outs > 0 ? (Hits + Walks) * 3.0 / Outs : 0.0;
@@ -54,6 +61,7 @@ public sealed class PitchingStatLine
         BattersFaced += l.BattersFaced;
         Hits += l.Hits;
         Runs += l.Runs;
+        EarnedRuns += l.EarnedRuns;
         StrikeOuts += l.StrikeOuts;
         Walks += l.Walks;
         HitBatters += l.HitBatters;
@@ -75,6 +83,7 @@ public sealed class PitchingStatLine
         BattersFaced += o.BattersFaced;
         Hits += o.Hits;
         Runs += o.Runs;
+        EarnedRuns += o.EarnedRuns;
         StrikeOuts += o.StrikeOuts;
         Walks += o.Walks;
         HitBatters += o.HitBatters;

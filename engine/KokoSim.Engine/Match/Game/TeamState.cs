@@ -116,7 +116,7 @@ public sealed class TeamState
     private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF; }
     private sealed class PitAccum
     {
-        public int BF, H, Runs, SO, BB, Outs, Pitches, HB, HRA;
+        public int BF, H, Runs, EarnedRuns, SO, BB, Outs, Pitches, HB, HRA;
         public readonly Dictionary<PitchType, PitchTypeAccum> ByPitch = new();
     }
     private sealed class PitchTypeAccum { public int AtBats, Hits, HomeRuns; }
@@ -149,14 +149,16 @@ public sealed class TeamState
         a.R++;
     }
 
-    /// <summary>投手の対戦1打者を記録。decisivePitch＝打席確定球の球種（インプレー/被安打を生んだ球のみ, issue #180）。</summary>
+    /// <summary>投手の対戦1打者を記録。decisivePitch＝打席確定球の球種（インプレー/被安打を生んだ球のみ, issue #180）。
+    /// unearnedRuns＝runs の内、失策/失策連鎖に起因する自責点対象外の得点数（issue #69）。</summary>
     public void RecordPitching(Player pitcher, PlateAppearanceResult r, int runs, int outs, int pitches,
-        PitchType? decisivePitch = null)
+        PitchType? decisivePitch = null, int unearnedRuns = 0)
     {
         if (!_pit.TryGetValue(pitcher, out var a)) { a = new PitAccum(); _pit[pitcher] = a; }
         a.BF++;
         if (r.IsHit()) a.H++;
         a.Runs += runs;
+        a.EarnedRuns += runs - unearnedRuns;
         if (r == PlateAppearanceResult.HomeRun) a.HRA++;   // 被本塁打（issue #77）
         if (r == PlateAppearanceResult.Strikeout) a.SO++;
         if (r == PlateAppearanceResult.Walk) a.BB++;
@@ -227,7 +229,7 @@ public sealed class TeamState
             IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? byPitch = a.ByPitch.Count > 0
                 ? a.ByPitch.ToDictionary(kv => kv.Key, kv => new PitchTypeBattingLine(kv.Value.AtBats, kv.Value.Hits, kv.Value.HomeRuns))
                 : null;
-            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch));
+            lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns));
         }
         Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
         foreach (var p in _team.Bullpen) Add(p);

@@ -352,6 +352,9 @@ public static class GameEngine
         var bases = new BaseState();
         var outs = 0;
         var runsThisHalf = 0;
+        // 自責点（issue #69）: 失策で出塁 or 失策連鎖で延命した走者を集合で追跡し、生還時に自責から除外する。
+        // 半イニング内で使い切り（次の半イニングは新しい集合）。簡易規則の詳細は design-14/PitchingStatLine 参照。
+        var unearnedRunners = new HashSet<Player>();
 
         // デバッグ観測（設計書17 §4）。既定 null＝以降の観測分岐はすべて素通り＝従来と完全一致。
         var traceSink = p.TraceSink;
@@ -1004,10 +1007,13 @@ public static class GameEngine
 
                 offense.Runs += sq.Runs;
                 runsThisHalf += sq.Runs;
+                // スクイズ自体は失策由来ではないが、生還する三塁走者が既に失策で延命済み（issue #69）なら
+                // その1点は自責対象外のまま引き継ぐ。
+                var sqUnearnedRuns = sq.Runs > 0 && sqScorer is not null && unearnedRunners.Contains(sqScorer) ? sq.Runs : 0;
                 if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
-                    batterOrder: batterOrder, pitchLog: res.PitchLog);
+                    batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns);
                 outs += sqOuts;
                 if (PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, defense.Fatigue ?? ctx.Fatigue)
                     || defense.CurrentPitcherAtWeeklyLimit())
@@ -1063,6 +1069,11 @@ public static class GameEngine
             var preFirst = bases.First is not null;
             var preSecond = bases.Second is not null;
             var preThird = bases.Third is not null;
+            // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で
+            // 延命したとみなし自責対象外にする（簡易規則）。この後 ApplyDetailed が bases を書き換えるため先に控える。
+            var preFirstPlayer = bases.First;
+            var preSecondPlayer = bases.Second;
+            var preThirdPlayer = bases.Third;
             var outsBefore = outs;
             // 本塁クロスプレーの受傷候補（設計書03 §3.5）。刺された走者を個別に特定する経路が無いため、
             // 本塁を狙う可能性が最も高い先行走者を候補にする（観測用の近似。判定には一切使わない）。
@@ -1081,9 +1092,32 @@ public static class GameEngine
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
             runsThisHalf += runs;
-            // 本塁到達（ToBase>=4・非アウト）した走者へ得点を帰属（issue #77）。
+
+            // 自責点（issue #69・簡易規則）: 失策で出塁した打者走者、および失策連鎖（design-14 P1-6）で
+            // 延命した打席前からの走者を自責対象外として集合に積む。得点が絡む解決ロジック自体には触れない
+            // （記録のみ・帯不変）。
+            if (res.Result == PlateAppearanceResult.ReachedOnError)
+            {
+                unearnedRunners.Add(batter);
+                if (errorExtraAdvanceOccurred)
+                {
+                    if (preFirstPlayer is not null) unearnedRunners.Add(preFirstPlayer);
+                    if (preSecondPlayer is not null) unearnedRunners.Add(preSecondPlayer);
+                    if (preThirdPlayer is not null) unearnedRunners.Add(preThirdPlayer);
+                }
+            }
+
+            // 本塁到達（ToBase>=4・非アウト）した走者へ得点を帰属（issue #77）。同時に自責点対象外の
+            // 生還数を数える（issue #69）。
+            var unearnedRunsThisPa = 0;
             foreach (var m in runnerMoves)
-                if (m.ToBase >= 4 && !m.Out) offense.RecordRun(m.Runner);
+            {
+                if (m.ToBase >= 4 && !m.Out)
+                {
+                    offense.RecordRun(m.Runner);
+                    if (unearnedRunners.Contains(m.Runner)) unearnedRunsThisPa++;
+                }
+            }
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
 
             // 本塁クロスプレー（設計書03 §3.5・設計書12 §3）: 走者と捕手の接触。どちらが負傷するかも
@@ -1257,7 +1291,7 @@ public static class GameEngine
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
-                batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly);
+                batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -1294,7 +1328,8 @@ public static class GameEngine
         IReadOnlyList<AtBat.PitchRecord>? pitchLog = null,
         Player? errorFielder = null,
         Match.Field.FieldPosition errorRole = default,
-        bool isSacFly = false)
+        bool isSacFly = false,
+        int unearnedRuns = 0)
     {
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
@@ -1303,7 +1338,7 @@ public static class GameEngine
         PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay
             ? pl[^1].PitchType
             : null;
-        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches, decisivePitch);
+        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
         defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
             outsThisPa, ctx.Tactics.RattledRecoveryOuts);
         offense.TickOffenseCalm();

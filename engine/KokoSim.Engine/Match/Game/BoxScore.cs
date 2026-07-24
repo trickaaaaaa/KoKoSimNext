@@ -22,11 +22,12 @@ public sealed record BattingLine(
 /// 個人投手成績（1試合）。SourceId＝育成選手ID（相手校の生成投手は null）。HitBatters＝与死球。
 /// UniformNumber は SourceId/HitBatters より後（互換のため末尾追加）。相手校投手は SourceId が
 /// 常に null のため、大会を跨いだ同一投手の同定（#41 TournamentPitchLedger）に背番号を使う。
+/// EarnedRuns＝自責点（issue #69。簡易規則、詳細は PitchingStatLine 参照）。互換のため末尾追加。
 /// </summary>
 public sealed record PitchingLine(
     string Name, int Outs, int BattersFaced, int Hits, int Runs, int StrikeOuts, int Walks, int Pitches,
     int? SourceId = null, int HitBatters = 0, int UniformNumber = 0, int HomeRunsAllowed = 0,
-    IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? BattingAgainstByPitch = null)
+    IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? BattingAgainstByPitch = null, int EarnedRuns = 0)
 {
     /// <summary>投球回（アウト数/3）。例: 7回1/3 → "7 1/3"。</summary>
     public string InningsText => (Outs / 3) + (Outs % 3 == 0 ? "" : " " + (Outs % 3) + "/3");
