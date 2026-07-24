@@ -285,21 +285,22 @@ public static class RosterTeamBuilder
         var aptF = (fieldingCoeff ?? new FieldingCoefficients()).AptitudeFactor(dp.Aptitude(pos));
         int Field() => (int)MathUtil.Clamp(Math.Round(dp.Level(AbilityKind.Fielding) * injF * aptF), 1, 100);
 
-        PitcherAttributes? pitching = null;
-        if (asPitcher)
+        // 育成レイヤは全選手が投手4種レベル（球速/制球/スタミナ/キレ）を隠し持つ。投手はこれを Pitching に、
+        // 野手は LatentPitching に投影する（issue #209 Phase B。二刀流スター＝隠し投手力の高い野手を再現）。
+        // 材料は同一なので新規乱数は引かない＝決定論・帯不変。
+        var pitchRank = L(AbilityKind.PitchRank);
+        var builtPitching = new PitcherAttributes
         {
-            var pitchRank = L(AbilityKind.PitchRank);
-            pitching = new PitcherAttributes
-            {
-                // 球速Level→km/h は PitcherAttributes に一箇所集約（不変条件#1）。相手校生成と同一の式。
-                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(L(AbilityKind.Velocity)),
-                Control = L(AbilityKind.Control),
-                // スタミナ＝目安投球数（設計書02 §1.1e）。Level→球数の変換は一箇所に集約。
-                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(L(AbilityKind.Stamina)),
-                PitchRank = pitchRank,
-                Repertoire = BuildRepertoire(dp, pitchRank),
-            };
-        }
+            // 球速Level→km/h は PitcherAttributes に一箇所集約（不変条件#1）。相手校生成と同一の式。
+            MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(L(AbilityKind.Velocity)),
+            Control = L(AbilityKind.Control),
+            // スタミナ＝目安投球数（設計書02 §1.1e）。Level→球数の変換は一箇所に集約。
+            StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(L(AbilityKind.Stamina)),
+            PitchRank = pitchRank,
+            Repertoire = BuildRepertoire(dp, pitchRank),
+        };
+        var pitching = asPitcher ? builtPitching : null;
+        var latentPitching = asPitcher ? null : builtPitching;
 
         return new Player
         {
@@ -335,6 +336,7 @@ public static class RosterTeamBuilder
             Injury = dp.Injury,
             InjuryResistance = dp.InjuryResistance, // 試合中の受傷判定用（観測系。物理層には流れない）
             Pitching = pitching,
+            LatentPitching = latentPitching, // 野手の緊急登板用の潜在投手能力（#209 Phase B。投手は null）
         };
     }
 

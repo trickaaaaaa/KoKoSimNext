@@ -248,6 +248,9 @@ public static class StrengthTeamFactory
         // 性格（Fork＝親状態非消費）: 上の能力ロール列に影響しない。
         var personality = pc.Sample(rng.Fork(salt));
         var pp = pc.Profile(personality);
+        // 潜在投手能力（issue #209 Phase B）: AI校野手は隠し投手レベルを持たないので肩から推定する。
+        // 専用 Fork（性格の salt と別ストリーム）＝主RNG非消費で帯・決定論不変。緊急登板の人選/実登板でのみ参照。
+        var latentPitching = LatentPitchingEstimator.Estimate(arm, rng.Fork(salt ^ LatentPitchingSalt));
         return new Player
         {
             Name = playerName,
@@ -268,8 +271,12 @@ public static class StrengthTeamFactory
             Personality = personality,
             BuntSuccessBonus = pp.BuntSuccessBonus,
             ChanceHitFactor = pp.ChanceHitFactor,
+            LatentPitching = latentPitching,
         };
     }
+
+    /// <summary>潜在投手能力の Fork salt（性格 salt と衝突しない別ストリーム。issue #209 Phase B）。</summary>
+    private const ulong LatentPitchingSalt = 0x7A17_0000_0000_0000UL;
 
     internal static Player Pitcher(string name, double strength, IRandomSource rng,
         PersonalityCoefficients pc, ulong salt, PitcherArchetypeCoefficients ac, ulong archetypeSalt)

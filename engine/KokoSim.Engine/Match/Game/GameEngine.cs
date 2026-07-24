@@ -1392,13 +1392,22 @@ public static class GameEngine
         if (defense.Tactics is { } brain)
         {
             var staminaTarget = (defense.CurrentPitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
+            // 継投人選の候補＝ブルペン＋ベンチ（野手含む。issue #209 Phase B）。在フィールドのレギュラー野手＋
+            // 守備穴のbackfillは Phase C で追加する。
+            var candidates = defense.AvailablePitcherCandidates;
             var sit = new PitchingChangeSituation(
                 inning, ctx.RegulationInnings, outs,
                 defense.Runs - offense.Runs, runsThisHalf, defense.PitcherRattled,
                 fatigueTriggered, atWeekly, defense.FatiguePitches, staminaTarget,
-                fatigue.RelievePitchMargin, defense.AvailableBullpen.Count > 0);
+                fatigue.RelievePitchMargin, candidates.Count > 0, candidates);
             var forked = rng.Fork(ReliefStreamId(inning, isTop, paIndex));
-            if (brain.CallPitchingChange(sit, forked) is not null) defense.TryChangePitcher();
+            if (brain.CallPitchingChange(sit, forked) is { } decision)
+            {
+                // Reliever 指定があればその投手を指名（横断ランキング）。null は engine 既定＝ブルペン先頭
+                // （StandardTacticsBrain／無指示は常に null＝従来挙動と1ビットも変わらない＝帯不変）。
+                if (decision.Reliever is { } reliever) defense.ChangePitcherTo(reliever);
+                else defense.TryChangePitcher();
+            }
         }
         else if (fatigueTriggered || atWeekly)
         {

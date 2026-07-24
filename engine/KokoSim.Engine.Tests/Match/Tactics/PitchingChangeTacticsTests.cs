@@ -1,7 +1,10 @@
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Season;
 using KokoSim.Engine.Tests.Match.Game;
 using Xunit;
 
@@ -18,9 +21,27 @@ public sealed class PitchingChangeTacticsTests
     private static PitchingChangeSituation Sit(
         bool fatigueTriggered = false, bool atWeekly = false, bool reliefAvailable = true,
         int runsThisInning = 0, bool rattled = false, int inning = 5, int scoreDiff = 0,
-        double fatiguePitches = 0, double staminaTarget = 90, double relieveMargin = 25)
+        double fatiguePitches = 0, double staminaTarget = 90, double relieveMargin = 25,
+        System.Collections.Generic.IReadOnlyList<Player>? candidates = null)
         => new(inning, 9, 0, scoreDiff, runsThisInning, rattled, fatigueTriggered, atWeekly,
-               fatiguePitches, staminaTarget, relieveMargin, reliefAvailable);
+               fatiguePitches, staminaTarget, relieveMargin, reliefAvailable,
+               candidates ?? System.Array.Empty<Player>());
+
+    // ---- Phase B 人選テスト用の候補ビルダ ----
+    private static PitcherAttributes Attr(int velLevel, int control, int staminaLevel, int pitchRank)
+        => new()
+        {
+            MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velLevel),
+            Control = control,
+            StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staminaLevel),
+            PitchRank = pitchRank,
+        };
+
+    private static Player Reliever(string name, PitcherAttributes attr)
+        => new() { Name = name, Position = FieldPosition.Pitcher, Pitching = attr };
+
+    private static Player FielderWithLatent(string name, PitcherAttributes latent)
+        => new() { Name = name, Position = FieldPosition.FirstBase, LatentPitching = latent };
 
     /// <summary>異なるシードの独立rngで n 回問い合わせ、継投が返った回数を数える（①能力値ミスの分布を見る）。</summary>
     private static int CountFires(ITacticsBrain brain, PitchingChangeSituation s, int n = 300)
@@ -206,5 +227,155 @@ public sealed class PitchingChangeTacticsTests
         }
 
         Assert.True(advanced > baseline, $"高度継投有効={advanced} が 無指示ベースライン={baseline} を上回るはず");
+    }
+
+    // ===== Phase B: 横断ランキング人選（issue #209 Phase B） =====
+
+    /// <summary>基本トリガーで決定を得た時、Reliever に横断ランキングの最良投手が入る（RNG非依存で決定論）。</summary>
+    private static Player? PickedReliever(ITacticsBrain brain, params Player[] candidates)
+        => brain.CallPitchingChange(
+            Sit(fatigueTriggered: true, candidates: candidates), new Xoshiro256Random(1))!.Value.Reliever;
+
+    [Fact]
+    public void Ai_PicksHighestScoringBullpen_NotFirst()
+    {
+        var weak = Reliever("R1", Attr(velLevel: 30, control: 30, staminaLevel: 30, pitchRank: 30));
+        var strong = Reliever("R2", Attr(velLevel: 75, control: 75, staminaLevel: 70, pitchRank: 72));
+        var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
+
+        // 登板順の先頭(weak)でなく、投手能力が最良の R2 を選ぶ。
+        Assert.Equal("R2", PickedReliever(ai, weak, strong)!.Name);
+    }
+
+    [Fact]
+    public void Ai_PicksFielder_WhenLatentOutranksBullpen()
+    {
+        var weakPitcher = Reliever("R1", Attr(velLevel: 30, control: 30, staminaLevel: 30, pitchRank: 30));
+        // 強肩の野手（潜在能力がブルペン最上位を上回る）。
+        var acePosition = FielderWithLatent("SS", Attr(velLevel: 78, control: 60, staminaLevel: 45, pitchRank: 55));
+        var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
+
+        // D2: ブルペン最上位を1点でも上回る野手は登板させる。
+        Assert.Equal("SS", PickedReliever(ai, weakPitcher, acePosition)!.Name);
+    }
+
+    [Fact]
+    public void Ai_PrefersBullpenPitcher_OnScoreTie()
+    {
+        var attr = Attr(velLevel: 60, control: 55, staminaLevel: 50, pitchRank: 58);
+        var pitcher = Reliever("R1", attr);
+        var fielder = FielderWithLatent("SS", attr); // 同一スコア
+        var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
+
+        // 同点は本職投手を優先（D2 は「上回った時だけ」＝厳密超過）。
+        Assert.Equal("R1", PickedReliever(ai, pitcher, fielder)!.Name);
+    }
+
+    [Fact]
+    public void Ai_FallsBackToFielder_WhenNoBullpenPitcher()
+    {
+        var fielder = FielderWithLatent("SS", Attr(velLevel: 40, control: 30, staminaLevel: 25, pitchRank: 28));
+        var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
+
+        // ブルペン投手ゼロ（野手のみ）＝緊急登板で野手を選ぶ。
+        Assert.Equal("SS", PickedReliever(ai, fielder)!.Name);
+    }
+
+    [Fact]
+    public void Standard_LeavesRelieverNull_EvenWithStrongFielderCandidate()
+    {
+        // Standard／無指示は人選しない＝Reliever=null（engine 既定＝ブルペン先頭）。帯不変の担保。
+        var strongFielder = FielderWithLatent("SS", Attr(velLevel: 90, control: 80, staminaLevel: 70, pitchRank: 80));
+        var std = new StandardTacticsBrain();
+        var decision = std.CallPitchingChange(
+            Sit(fatigueTriggered: true, candidates: new[] { strongFielder }), new Xoshiro256Random(1));
+
+        Assert.NotNull(decision);
+        Assert.Null(decision!.Value.Reliever);
+    }
+
+    // ===== Phase B: 潜在投手能力の材料化 =====
+
+    [Fact]
+    public void Roster_ProjectsLatentPitchingForFielder_FromTrueLevels()
+    {
+        var dp = new DevelopingPlayer();
+        dp.SetLevel(AbilityKind.Velocity, 80);
+        dp.SetLevel(AbilityKind.Control, 75);
+        dp.SetLevel(AbilityKind.Stamina, 60);
+        dp.SetLevel(AbilityKind.PitchRank, 70);
+
+        // 野手として投影: Pitching は null のまま（#93 投/野区別）だが、隠しの真の投手レベルを LatentPitching に材料化。
+        var fielder = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Shortstop, asPitcher: false);
+        Assert.Null(fielder.Pitching);
+        Assert.NotNull(fielder.LatentPitching);
+        Assert.Equal(PitcherAttributes.VelocityKmhFromLevel(80), fielder.LatentPitching!.MaxVelocityKmh, 3);
+        Assert.Equal(75, fielder.LatentPitching!.Control);
+
+        // 投手として投影: Pitching が正、LatentPitching は null（本来の投手）。
+        var pitcher = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Pitcher, asPitcher: true);
+        Assert.NotNull(pitcher.Pitching);
+        Assert.Null(pitcher.LatentPitching);
+    }
+
+    [Fact]
+    public void StrengthFactory_PositionPlayer_HasLatentPitching_AndIsDeterministic()
+    {
+        var pc = new PersonalityCoefficients();
+        var a = StrengthTeamFactory.PositionPlayer(FieldPosition.CenterField, 60, new Xoshiro256Random(123), pc, 0xABCUL, "手");
+        var b = StrengthTeamFactory.PositionPlayer(FieldPosition.CenterField, 60, new Xoshiro256Random(123), pc, 0xABCUL, "手");
+
+        // AI校野手も投手能力は null（区別維持）だが、潜在能力は材料化される。
+        Assert.Null(a.Pitching);
+        Assert.NotNull(a.LatentPitching);
+        // 同シード同salt＝同じ潜在能力（決定論）。
+        Assert.Equal(a.LatentPitching!.MaxVelocityKmh, b.LatentPitching!.MaxVelocityKmh);
+        Assert.Equal(a.LatentPitching!.Control, b.LatentPitching!.Control);
+    }
+
+    [Fact]
+    public void StrengthFactory_LatentPitchingFork_DoesNotConsumeMainRng()
+    {
+        var pc = new PersonalityCoefficients();
+        var rng1 = new Xoshiro256Random(99);
+        _ = StrengthTeamFactory.PositionPlayer(FieldPosition.CenterField, 60, rng1, pc, 0x3UL, "手");
+        var afterFactory = rng1.CaptureState();
+
+        // PositionPlayer が主ストリームで引くのは能力8ドロー（contact/power/launch(50)/discipline/speed/arm/fielding/catching）
+        // だけ。性格・潜在投手能力はどちらも Fork＝主RNG非消費なので、能力8ドローだけ再現すれば状態は一致する。
+        var rng2 = new Xoshiro256Random(99);
+        foreach (var center in new[] { 60.0, 60, 50, 60, 60, 60, 60, 60 }) rng2.NextGaussian(center, 6);
+        var afterAbilitiesOnly = rng2.CaptureState();
+
+        Assert.Equal(afterAbilitiesOnly, afterFactory);
+    }
+
+    // ===== Phase B: 実登板で潜在能力が実能力（Pitching）として確定する =====
+
+    [Fact]
+    public void ChangePitcherTo_Fielder_MaterializesLatentPitchingOnMound()
+    {
+        Player F(string n, FieldPosition pos) => new() { Name = n, Position = pos };
+        var order = new System.Collections.Generic.List<Player>
+        {
+            F("捕", FieldPosition.Catcher), F("一", FieldPosition.FirstBase), F("二", FieldPosition.SecondBase),
+            F("三", FieldPosition.ThirdBase), F("遊", FieldPosition.Shortstop), F("左", FieldPosition.LeftField),
+            F("中", FieldPosition.CenterField), F("右", FieldPosition.RightField),
+            new() { Name = "先発", Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage },
+        };
+        var strongLatent = Attr(velLevel: 90, control: 60, staminaLevel: 45, pitchRank: 55);
+        var superFielder = FielderWithLatent("二刀流", strongLatent);
+        var team = new Team
+        {
+            Name = "T", BattingOrder = order, PitcherSlot = 8,
+            Bullpen = System.Array.Empty<Player>(), Bench = new[] { superFielder },
+        };
+        var st = new TeamState(team);
+
+        Assert.True(st.ChangePitcherTo(superFielder));
+        // 野手が登板したら、リーグ平均でなく本人の潜在能力で投げる（Pitching が確定）。
+        Assert.NotNull(st.CurrentPitcher.Pitching);
+        Assert.Equal(strongLatent.MaxVelocityKmh, st.CurrentPitcher.Pitching!.MaxVelocityKmh, 3);
+        Assert.NotEqual(PitcherAttributes.LeagueAverage.MaxVelocityKmh, st.CurrentPitcher.Pitching!.MaxVelocityKmh);
     }
 }
