@@ -587,34 +587,62 @@ public sealed class TeamState
     /// 指名された投手で継投する（issue #209 Phase C の交代ルータ）。sub が在フィールドのレギュラー野手なら
     /// 投野交代（<see cref="PromoteFielderToMound"/>）で backfill し、ブルペン／ベンチなら従来の
     /// <see cref="ChangePitcherTo"/>。参照一致で「今守備に就いている sub」を特定する。
+    /// <paramref name="backfill"/> は在フィールド野手登板時の ①/② 判定係数（null＝既定）。
     /// </summary>
-    public bool RelieveWith(Player sub)
+    public bool RelieveWith(Player sub, ReliefBackfillCoefficients? backfill = null)
     {
         if (!_usesDh)
         {
             for (var i = 0; i < _lineup.Length; i++)
             {
-                if (i != _pitcherSlot && ReferenceEquals(_lineup[i], sub)) return PromoteFielderToMound(sub, i);
+                if (i != _pitcherSlot && ReferenceEquals(_lineup[i], sub))
+                    return PromoteFielderToMound(sub, i, backfill ?? new ReliefBackfillCoefficients());
             }
         }
         return ChangePitcherTo(sub);
     }
 
     /// <summary>
-    /// 投野交代（issue #209 Phase C, path ①）。在フィールドの野手 <paramref name="fielder"/>（打順スロット
-    /// <paramref name="fSlot"/>）をマウンドへ上げ、退く投手をその野手が空けた守備位置へ回す。両者ともゲームに残り
-    /// （<see cref="_retired"/> に触れない＝リエントリー禁止に抵触しない）、ベンチも消費しない（後で守備位置を戻せる）。
-    /// 打順は不変（同じ9人が同じスロットのまま守備位置だけ入れ替わる）。野手は潜在能力を実能力として確定する。
+    /// 在フィールド野手の緊急登板（issue #209 Phase C）。<paramref name="fielder"/>（打順スロット
+    /// <paramref name="fSlot"/>）をマウンドへ上げ、空いた守備位置を backfill する。ベンチにその守備を旧投手より
+    /// 明確に上手く守れる野手が居て、かつ旧投手を残す打撃的価値が低ければ ②（旧投手退場＋ベンチ野手で補充）、
+    /// それ以外は ①（投野交代＝旧投手を空き守備へ回す・両者残留）。判定は <paramref name="backfill"/> 係数駆動。
     /// </summary>
-    private bool PromoteFielderToMound(Player fielder, int fSlot)
+    private bool PromoteFielderToMound(Player fielder, int fSlot, ReliefBackfillCoefficients backfill)
     {
         var retiringPitcher = CurrentPitcher;
-        var vacated = fielder.Position;   // 野手が空ける守備位置（旧投手がここへ入る）
+        var vacated = fielder.Position;   // 野手が空ける守備位置
         // 野手をマウンドへ: 潜在投手能力を実能力（Pitching）として確定（ChangePitcherTo と同型）。守備位置は投手へ。
         var mound = fielder.Pitching is null && fielder.LatentPitching is { } latent
             ? fielder with { Pitching = latent, Position = FieldPosition.Pitcher }
             : fielder with { Position = FieldPosition.Pitcher };
-        // 旧投手は退場せず、空いた守備位置へ回る（打順スロットは旧投手スロットのまま）。
+
+        // ②判定: 空き守備を旧投手より明確に上手く守れるベンチ野手が居るか（打力で基準を補正）。
+        var benchFielder = BestBenchDefender();
+        if (benchFielder is not null)
+        {
+            var battingDelta = (retiringPitcher.Contact + retiringPitcher.Power) / 2.0 - backfill.LeagueAverageBatting;
+            var requiredMargin = backfill.BaseFieldingMargin + backfill.BattingRetentionWeight * battingDelta;
+            if (benchFielder.Fielding - retiringPitcher.Fielding >= requiredMargin)
+            {
+                // ②: 旧投手は退場（リエントリー禁止）。ベンチ野手が旧投手の打順スロットへ入り、空いた守備位置を守る。
+                _bench.Remove(benchFielder);
+                _retired.Add(retiringPitcher);
+                _replacedAtSlot[_pitcherSlot] = retiringPitcher.Name;
+                _lineup[_pitcherSlot] = benchFielder with { Position = vacated };
+                _lineup[fSlot] = mound;
+                CurrentPitcher = mound;
+                _pitcherSlot = fSlot;
+                PitchesThrown = 0;
+                FatiguePitches = 0;
+                PitcherChanges++;
+                Substitutions++;   // ベンチ野手の投入は選手交代として計上
+                ClearRattled();
+                return true;
+            }
+        }
+
+        // ①: 投野交代（旧投手を空き守備へ回す・両者残留）。_retired/_bench に触れない＝リエントリー禁止に抵触しない。
         _lineup[_pitcherSlot] = retiringPitcher with { Position = vacated };
         _lineup[fSlot] = mound;
         CurrentPitcher = mound;
@@ -624,6 +652,17 @@ public sealed class TeamState
         PitcherChanges++;
         ClearRattled();
         return true;
+    }
+
+    /// <summary>ベンチで最も守備値が高い野手（空き守備位置の backfill 候補。居なければ null）。決定論・同値は先頭優先。</summary>
+    private Player? BestBenchDefender()
+    {
+        Player? best = null;
+        foreach (var p in _bench)
+        {
+            if (best is null || p.Fielding > best.Fielding) best = p;
+        }
+        return best;
     }
 
     // ===== 選手交代（設計書09 §6）。高校野球ルール＝リエントリー禁止（退いた選手は再出場できない）。 =====
