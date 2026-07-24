@@ -9,7 +9,7 @@ using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Players
 {
-    public enum PlayerSort { Overall, Grade, Name }
+    public enum PlayerSort { Grade, Name }
 
     public sealed class PlayerRow
     {
@@ -47,7 +47,7 @@ namespace KokoSim.Unity.Players
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         private readonly Dictionary<DevelopingPlayer, int> _indexOf = new Dictionary<DevelopingPlayer, int>();
 
-        public PlayerSort Sort { get; private set; } = PlayerSort.Overall;
+        public PlayerSort Sort { get; private set; } = PlayerSort.Grade;
 
         public PlayerListState()
         {
@@ -61,7 +61,7 @@ namespace KokoSim.Unity.Players
 
         /// <summary>ソートを順送りで切り替える（ボタン1つで循環）。</summary>
         public void CycleSort()
-            => Sort = (PlayerSort)(((int)Sort + 1) % 3);
+            => Sort = (PlayerSort)(((int)Sort + 1) % 2);
 
         public PlayerListView BuildView()
         {
@@ -80,8 +80,7 @@ namespace KokoSim.Unity.Players
 
             switch (Sort)
             {
-                case PlayerSort.Overall: q = q.OrderByDescending(p => p.AverageLevel()); break;
-                case PlayerSort.Grade: q = q.OrderByDescending(p => p.Grade).ThenByDescending(p => p.AverageLevel()); break;
+                case PlayerSort.Grade: q = q.OrderByDescending(p => p.Grade).ThenBy(p => p.Name, System.StringComparer.Ordinal); break;
                 case PlayerSort.Name: q = q.OrderBy(p => p.Name, System.StringComparer.Ordinal); break;
             }
 
@@ -114,7 +113,6 @@ namespace KokoSim.Unity.Players
         {
             switch (s)
             {
-                case PlayerSort.Overall: return "総合順";
                 case PlayerSort.Grade: return "学年順";
                 case PlayerSort.Name: return "名前順";
                 default: return s.ToString();

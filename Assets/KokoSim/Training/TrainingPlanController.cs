@@ -18,7 +18,6 @@ namespace KokoSim.Unity.Training
             { ("全学年", 0), ("1年", 1), ("2年", 2), ("3年", 3) };
         private static readonly (string Label, int Mode)[] BenchFilters =
             { ("全員", 0), ("ベンチ入り", 1), ("ベンチ外", 2) };
-        private static readonly string[] SortLabels = { "学年順", "総合" };
 
         private TrainingPlanState _state;
         private VisualElement _root;
@@ -185,19 +184,6 @@ namespace KokoSim.Unity.Training
                     var chip = MakeChip(label, v.BenchFilter == mode);
                     chip.RegisterCallback<ClickEvent>(_ => { _state.SetBenchFilter(m); Render(); });
                     benchHost.Add(chip);
-                }
-            }
-
-            var sortHost = _root.Q<VisualElement>("sort-modes");
-            if (sortHost != null)
-            {
-                sortHost.Clear();
-                for (var i = 0; i < SortLabels.Length; i++)
-                {
-                    var mode = i; // 捕捉
-                    var chip = MakeChip(SortLabels[i], v.SortMode == i);
-                    chip.RegisterCallback<ClickEvent>(_ => { _state.SetSortMode(mode); Render(); });
-                    sortHost.Add(chip);
                 }
             }
         }

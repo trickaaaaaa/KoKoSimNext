@@ -84,10 +84,6 @@
                   <ui:Label name="meta-injury" class="pd2-meta__i pd2-meta__i--injury" text="" />
                 </ui:VisualElement>
               </ui:VisualElement>
-              <ui:VisualElement class="pd2-overall">
-                <ui:Label class="pd2-overall__k" text="総合ランク" />
-                <ui:VisualElement name="overall-chip" class="pd2-overall__chip" />
-              </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>
 

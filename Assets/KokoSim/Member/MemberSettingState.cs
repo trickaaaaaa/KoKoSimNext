@@ -24,7 +24,7 @@ namespace KokoSim.Unity.Member
         public string Name = "";
         public string GradeLabel = "";   // 学年（例「2年」）
         public string HandLabel = "";    // 投打（例「右投左打」）
-        // 枠のランクチップ：1〜9は「その守備位置の適性」（投=投手ランク）、10〜20は総合。
+        // 枠のランクチップ：1〜9は「その守備位置の適性」（投=投手ランク）のみ。10〜20は非表示（issue #220）。
         public string RankGrade = "";
         public bool IsCaptain;
     }
@@ -35,7 +35,6 @@ namespace KokoSim.Unity.Member
         public int Index;
         public string Name = "";
         public string GradeLabel = "";
-        public string OverallGrade = "";
         public bool IsPicked;            // 選択中の選手
     }
 
@@ -181,7 +180,7 @@ namespace KokoSim.Unity.Member
                     slot.Name = p.Name;
                     slot.GradeLabel = p.Grade + "年";
                     slot.HandLabel = HandednessLabels.Combined(p.Throws, p.Bats);
-                    slot.RankGrade = n <= 9 ? SlotRank(p, n) : OverallGrade(p);
+                    slot.RankGrade = n <= 9 ? SlotRank(p, n) : "";
                     slot.IsCaptain = p.IsCaptain;
                     v.AssignedCount++;
                 }
@@ -201,7 +200,6 @@ namespace KokoSim.Unity.Member
                     Index = i,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
-                    OverallGrade = OverallGrade(p),
                     IsPicked = _picked == i,
                 });
             }
@@ -280,7 +278,5 @@ namespace KokoSim.Unity.Member
             }
             return Tiers.FromStrength(p.Aptitude(SlotPosition[number - 1])).ToString();
         }
-
-        private static string OverallGrade(DevelopingPlayer p) => Tiers.FromStrength(p.AverageLevel()).ToString();
     }
 }

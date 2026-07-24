@@ -125,10 +125,9 @@ namespace KokoSim.Unity.Training
         public List<string> Templates = new List<string>();          // 保存済み週テンプレ名
         public List<PlayerTrainRow> CopyRows = new List<PlayerTrainRow>(); // 複製ピッカー用の全部員（フィルタ非適用・学年順, Issue #133-⑤）
 
-        // フィルタ/ソートの選択状態
+        // フィルタの選択状態
         public int YearFilter;   // 0=全, 1..3=学年
         public int BenchFilter;  // 0=全員, 1=ベンチ入り, 2=ベンチ外（Issue #133-④）
-        public int SortMode;     // 0=学年順 1=総合
     }
 
     /// <summary>
@@ -208,7 +207,6 @@ namespace KokoSim.Unity.Training
         private static int _week => KokoSim.Unity.Shell.GameClock.Week;
         private int _yearFilter;
         private int _benchFilter;   // 0=全員, 1=ベンチ入り, 2=ベンチ外（Issue #133-④）
-        private int _sortMode;
 
         public int Budget => _training.DefaultBudgetMinutes;
         public int SelectedIndex => _selected;
@@ -268,7 +266,6 @@ namespace KokoSim.Unity.Training
 
         public void SetYearFilter(int grade) => _yearFilter = grade;
         public void SetBenchFilter(int mode) => _benchFilter = mode;
-        public void SetSortMode(int mode) => _sortMode = mode;
 
         /// <summary>選手のプリセットを設定（統合モーダルから選択）。委任中は無効。
         /// Custom は現在の解決済み配分を引き継いで手動編集の起点にする。</summary>
@@ -391,7 +388,6 @@ namespace KokoSim.Unity.Training
                 SelectedName = _roster[_selected].Name,
                 YearFilter = _yearFilter,
                 BenchFilter = _benchFilter,
-                SortMode = _sortMode,
                 Templates = TemplateNames(),
             };
 
@@ -629,11 +625,7 @@ namespace KokoSim.Unity.Training
                 idx.Add(i);
             }
 
-            idx.Sort((a, b) => _sortMode switch
-            {
-                1 => _roster[b].AverageLevel().CompareTo(_roster[a].AverageLevel()), // 総合 降順
-                _ => GradeSort(a, b),                                                // 学年順（安定）
-            });
+            idx.Sort(GradeSort);
             return idx;
         }
 

@@ -99,9 +99,6 @@ namespace KokoSim.Unity.Players
             SetDisplay("meta-injury", v.Injury.Length > 0);
             SetText("meta-injury", v.Injury);
 
-            var chip = _root.Q<VisualElement>("overall-chip");
-            if (chip != null) { chip.Clear(); chip.Add(UiComponents.RankChip(v.OverallGrade, RankChipSize.Large)); }
-
             BuildList("pitcher-abils", v.PitcherAbilities, BuildAbil);
             BuildList("fielder-abils", v.FielderAbilities, BuildAbil);
             BuildList("hidden-list", v.Hidden, BuildHidden);
