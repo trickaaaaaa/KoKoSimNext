@@ -233,6 +233,10 @@ public sealed class TeamState
         }
         Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
         foreach (var p in _team.Bullpen) Add(p);
+        // 在フィールドから昇格した野手・ベンチ出身の投手（issue #209 Phase C）は Team.Bullpen に居ないので
+        // 上の2経路では拾えない。実際に投げた投手（_pit に成績がある）で未計上の者を登板順（挿入順）に追加する。
+        // 先発・ブルペンは既に seen なのでスキップされ、通常試合の投手行は不変（＝決定論digestも不変）。
+        foreach (var p in _pit.Keys) Add(p);
         return lines;
     }
 
