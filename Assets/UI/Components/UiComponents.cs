@@ -547,6 +547,7 @@ namespace KokoSim.Unity.Components
         {
             var row = new VisualElement();
             row.AddToClassList("cmp-row");
+            if (d.HideBar) row.AddToClassList("cmp-row--type");   // 弾道など優劣のないタイプ軸（issue #219）
 
             var lab = new Label(d.Label);
             lab.AddToClassList("cmp-row__lab");
