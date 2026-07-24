@@ -1406,7 +1406,7 @@ public static class GameEngine
                 // Reliever 指定があればその投手を指名（横断ランキング）。在フィールド野手なら投野交代で backfill。
                 // null は engine 既定＝ブルペン先頭（StandardTacticsBrain／無指示は常に null＝従来挙動と
                 // 1ビットも変わらない＝帯不変）。
-                if (decision.Reliever is { } reliever) defense.RelieveWith(reliever);
+                if (decision.Reliever is { } reliever) defense.RelieveWith(reliever, ctx.ReliefBackfill);
                 else defense.TryChangePitcher();
             }
         }
