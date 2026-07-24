@@ -36,6 +36,15 @@
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-left: var(--sp-2); }
+/* 2段組（選手一覧の行）：上=打撃力・走力／下=守備力・投手力。1段4組では行幅が足りず中途半端に
+   折り返すため段を固定する。ラベルは固定幅・右揃えで上下段のチップ列を縦に揃え、ブロック全体は
+   セル内で右寄せ（align-items: flex-end）。 */
+.cat-rank-rows { align-items: flex-end; justify-content: center; }
+.cat-rank-rows__row { flex-direction: row; align-items: center; margin-top: 1px; margin-bottom: 1px; }
+.cat-rank-rows__label {
+    width: 58px; -unity-text-align: middle-right;
+    font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-1);
+}
 /* コンパクト版（Issue #133・練習計画の行メタ枠）：1字ラベル「打走守投」＋小チップで横幅を詰める。 */
 .cat-rank-chips--compact .cat-rank-chips__label { margin-left: 2px; margin-right: 2px; }
 .cat-rank-chips--compact .grade {

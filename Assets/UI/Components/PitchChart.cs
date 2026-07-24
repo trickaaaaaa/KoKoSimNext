@@ -80,6 +80,10 @@ namespace KokoSim.Unity.Components
                 if (pt.IsFastball && !_compact && !string.IsNullOrEmpty(pt.VeloText))
                     chip.Add(UiComponents.NumUnit(pt.VeloText, "km/h", false, "pd2-pchip__velo"));
                 chip.Add(UiComponents.RankChip(pt.Kire));
+                // 差し替え直後は resolvedStyle が未確定（幅が既定値扱い）のため、チップの実寸が
+                // 確定したタイミングで再レイアウトする。ホスト寸法が変わらない再描画（行ホバーでの
+                // 選手切替）では host の GeometryChangedEvent が来ないので、チップ側で拾うのが確実。
+                chip.RegisterCallback<GeometryChangedEvent>(_ => Layout());
                 _host.Add(chip);
             }
             Layout();

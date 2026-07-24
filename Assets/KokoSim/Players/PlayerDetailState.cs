@@ -47,7 +47,7 @@ namespace KokoSim.Unity.Players
         public int Rpm;
 
         /// <summary>球種チャート部品（部品辞書 PitchChartView）への詰め替え。ストレートには最速 km/h を添える
-        /// （meta-velo と同じ値を渡して一致させる, issue #94/#130）。他球種は VeloText を出さない。</summary>
+        /// （投手能力欄の球速と同じ値を渡して一致させる, issue #94/#130/#215）。他球種は VeloText を出さない。</summary>
         public static List<PitchChartDatum> ToPitchChartData(List<PitchData> pitches, int topVelocityKmh)
         {
             var list = new List<PitchChartDatum>();
@@ -89,10 +89,6 @@ namespace KokoSim.Unity.Players
     {
         public string Number = "1";
         public string Name = "";
-        public string Condition = "普通";
-        public string ConditionColorHex = "#EFF4EA";
-        // 表情顔（ConditionFace）の描画に使う enum（表示文字列は比較に使わない）。
-        public KokoSim.Engine.Players.Condition ConditionLevel = KokoSim.Engine.Players.Condition.Normal;
         /// <summary>故障表示（設計書03 §3.5: 傷病名・部位・段階・全治まで残り週）。健常なら空文字。</summary>
         public string Injury = "";
         public string GradeLabel = "1年";
@@ -102,7 +98,6 @@ namespace KokoSim.Unity.Players
         public bool CanDesignateCaptain;
         /// <summary>指名できない理由（できるときは空）。ボタン非活性時に添える。</summary>
         public string DesignateReason = "";
-        public string PitchStyle = "";
         public int TopVelocityKmh;
         public bool IsPitcher;
         public string OverallGrade = "D";
@@ -203,18 +198,14 @@ namespace KokoSim.Unity.Players
             if (_roster.Count == 0) return new PlayerDetailView();
             index = System.Math.Max(0, System.Math.Min(index, _roster.Count - 1));
             var p = _roster[index];
-            var condition = FormModel.Quantize(p.ConditionValue);
             var v = new PlayerDetailView
             {
                 Number = (index + 1).ToString(),
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
                 ThrowsBats = HandednessLabels.Combined(p.Throws, p.Bats),
-                Condition = ConditionLabels.Jp(condition),
-                ConditionLevel = condition,
                 IsCaptain = p.IsCaptain,
             };
-            v.ConditionColorHex = ConditionLabels.ColorHex(condition);
             // 故障（設計書03 §3.5: 常に可視）。文言は engine のカタログ由来（InjuryLabel が単一ソース）。
             v.Injury = KokoSim.Unity.Shell.InjuryLabel.Full(p);
             v.CanDesignateCaptain = CaptainSelector.CanDesignate(_roster, p, GameClock.Week, _calendar);
@@ -224,12 +215,14 @@ namespace KokoSim.Unity.Players
             v.OverallValue = overall;
             v.OverallGrade = Tiers.FromStrength(overall).ToString();
 
-            // 投法・最速は全選手で表示する（誰を投手に据えるかはプレイヤーが決めるため、判断材料を全員分出す, Issue #93）。
-            v.PitchStyle = "投法：オーバースロー"; // 投法はモデル未保持のため既定表記
+            // 最速（球種チャートのストレートに添える, issue #130）。ヘッダーの投法・最速メタ表記は廃止（issue #215）。
             v.TopVelocityKmh = Kmh(p.Level(AbilityKind.Velocity));
 
             // 投手能力・野手能力（両方表示：モック準拠）。
-            v.PitcherAbilities.Add(Bar(p, AbilityKind.Velocity, AbilityLabels.Jp(AbilityKind.Velocity)));
+            // 球速の数値は km/h 表記に一本化（issue #94/#215）。ランク・バー割合は内部値のまま。
+            var velocity = Bar(p, AbilityKind.Velocity, AbilityLabels.Jp(AbilityKind.Velocity));
+            velocity.Value = v.TopVelocityKmh;
+            v.PitcherAbilities.Add(velocity);
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Control, AbilityLabels.Jp(AbilityKind.Control)));
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Stamina, AbilityLabels.Jp(AbilityKind.Stamina)));
             v.PitcherAbilities.Add(Bar(p, AbilityKind.PitchRank, AbilityLabels.Jp(AbilityKind.PitchRank)));

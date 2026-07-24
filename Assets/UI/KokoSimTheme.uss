@@ -738,7 +738,6 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .card--col    { flex-grow: 1; flex-basis: 0; margin-right: 14px; }   /* 等幅列（旧 pd2-card--grow） */
 .card--radar  { width: 318px; margin-right: 14px; }                  /* レーダー固定幅 */
 .card--hidden { width: 338px; margin-right: 14px; }                  /* 隠しパラメータ固定幅 */
-.card--pitch  { flex-grow: 1; flex-basis: 0; margin-right: 14px; }   /* 球種チャート */
 /* 内部に ScrollView を持つカードで本文を伸ばす（旧 pm-card__body の flex-grow を担う）。 */
 .card__body--fill { flex-grow: 1; min-height: 0; }
 /* 見出し帯の色替え（芝＝既定 / 土＝副 / 空＝操作）。plate-header と同じ役割語彙。 */
@@ -881,9 +880,6 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-headmain { flex-grow: 1; flex-direction: row; align-items: center; justify-content: space-between; padding: 16px 24px; }
 .pd2-nameline { flex-direction: row; align-items: center; }
 .pd2-name { font-size: 32px; letter-spacing: 2px; color: var(--color-chalk); margin-right: 14px; }
-/* 調子は表情顔（ConditionFace）が主、文字表記は詳細画面なので併記する（issue #51）。 */
-.pd2-cond-face { margin-right: 6px; }
-.pd2-cond { font-size: 19px; margin-right: 14px; }
 
 /* 主将バッジ（設計書09 §8）: 名前脇の金地ピル。 */
 .pd2-captain {
@@ -1007,7 +1003,8 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .row--click:hover { background-color: var(--color-line); }
 
 /* --- 球種変化チャート（プロスピ風） --- */
-.pd2-pitchchart { min-height: 340px; flex-grow: 1; }
+/* 投手能力カード内へ埋め込み（issue #215）: 能力4行の下に置くため 340→280px に抑える。 */
+.pd2-pitchchart { min-height: 280px; flex-grow: 1; margin: 0 16px 16px 16px; }
 .pd2-pchip { position: absolute; flex-direction: row; align-items: center; background-color: var(--color-field); border-width: 1px; border-color: var(--color-line); padding: 4px 9px; }
 .pd2-pchip__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: 8px; }
 /* ストレートのみ添えるMAX球速（Issue #130）。数字はnu-num(Oswald)側で右揃え・コンデンス済み。 */
@@ -1143,7 +1140,6 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nt-c-rank { width: 46px; flex-shrink: 0; flex-direction: row; justify-content: center; align-items: center; }
 .nt-c-mental { width: 46px; flex-shrink: 0; -unity-text-align: middle-right; padding-right: 8px;
     font-size: var(--fs-label); color: var(--color-chalk); }
-.nt-c-cond { width: 58px; flex-shrink: 0; -unity-text-align: middle-right; font-size: var(--fs-label); }
 .nt-c-tag { width: 44px; flex-shrink: 0; -unity-text-align: middle-center; font-size: var(--fs-cap); color: var(--color-faint); }
 
 /* 右：選択中の詳細 */
@@ -1156,9 +1152,6 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nt-fact { flex-direction: row; align-items: center; width: 50%; height: 22px; }
 .nt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
 .nt-fact__v { font-size: var(--fs-label); color: var(--color-chalk); -unity-text-align: middle-right; padding-right: 10px; }
-/* 調子 fact 行: 表情顔＋文字表記の併記（issue #51）。 */
-.nt-fact__v-row { flex-direction: row; align-items: center; }
-.nt-fact__cond-face { margin-right: 6px; }
 .nt-d__cap { font-size: var(--fs-cap); color: var(--color-faint); margin-top: 8px; letter-spacing: 1px; }
 .nt-d__skills { flex-direction: row; flex-wrap: wrap; margin-top: 4px; flex-grow: 1; overflow: hidden; }
 .nt-skill { font-size: var(--fs-cap); color: var(--color-chalk); background-color: var(--color-panel-deep);

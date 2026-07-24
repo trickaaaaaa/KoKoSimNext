@@ -85,17 +85,6 @@ namespace KokoSim.Unity.Players
 
             SetText("number", v.Number);
             SetText("name", v.Name);
-            SetText("cond", v.Condition);
-            SetColor("cond", v.ConditionColorHex);
-            // 調子は表情顔（ConditionFace）が主。文字表記は詳細画面なので併記する（issue #51）。
-            var condFaceHost = _root.Q<VisualElement>("cond-face");
-            if (condFaceHost != null)
-            {
-                condFaceHost.Clear();
-                var face = new ConditionFace();
-                face.Set(v.ConditionLevel);
-                condFaceHost.Add(face);
-            }
             SetDisplay("captain-badge", v.IsCaptain);
             // 既に主将なら指名ボタンを隠す（重複指名の抑止）。
             SetDisplay("designate-captain", !v.IsCaptain);
@@ -105,9 +94,7 @@ namespace KokoSim.Unity.Players
             SetText("designate-reason", v.DesignateReason);
             SetText("meta-grade", v.GradeLabel);
             SetText("meta-tb", v.ThrowsBats);
-            // 投法・最速は全選手で表示（役割でゲートしない, Issue #93）。
-            SetText("meta-style", v.PitchStyle);
-            SetText("meta-velo", "最速 " + v.TopVelocityKmh + " km/h");
+            // 投法・最速のメタ表記は廃止（issue #215）。ストレート最速は球種チャート内の表記で読める（issue #130）。
             // 故障（設計書03 §3.5）: 怪我している時だけ警告色で出す（UI原則②）。
             SetDisplay("meta-injury", v.Injury.Length > 0);
             SetText("meta-injury", v.Injury);
@@ -306,7 +293,7 @@ namespace KokoSim.Unity.Players
         // ===== 球種変化チャート（プロスピ風） =====
 
         // ViewModel の PitchData を部品辞書の PitchChartDatum へ詰め替えて描画部品へ渡す。
-        // ストレートの最速だけは meta-velo と同じ v.TopVelocityKmh を流用し、値を必ず一致させる（Issue #130）。
+        // ストレートの最速は投手能力欄の球速と同じ v.TopVelocityKmh を流用し、値を必ず一致させる（Issue #130/#215）。
         private void BuildPitchChart(List<PitchData> pitches, bool has, int topVelocityKmh)
         {
             _pitchChart?.SetData(has ? PitchData.ToPitchChartData(pitches, topVelocityKmh) : null);
@@ -323,23 +310,12 @@ namespace KokoSim.Unity.Players
 
         // ===== 補助 =====
 
-        private static Color Hex(string hex)
-        {
-            return ColorUtility.TryParseHtmlString(hex, out var c) ? c : Color.white;
-        }
-
         private void SetText(string name, string text)
         {
             var l = _root.Q<Label>(name);
             if (l != null) { l.text = text; return; }
             var b = _root.Q<Button>(name);
             if (b != null) b.text = text;
-        }
-
-        private void SetColor(string name, string hex)
-        {
-            var l = _root.Q<Label>(name);
-            if (l != null) l.style.color = Hex(hex);
         }
 
         private void SetDisplay(string name, bool visible)

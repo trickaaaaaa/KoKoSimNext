@@ -227,16 +227,6 @@ namespace KokoSim.Unity.Home
 
             var mental = new Label(c.Mental.ToString()); mental.AddToClassList("nt-c-mental"); row.Add(mental);
 
-            // 調子は表情顔（ConditionFace）に統一（issue #51）。文字表記は tooltip に残す。
-            var cond = new VisualElement();
-            cond.AddToClassList("nt-c-cond");
-            cond.style.flexDirection = FlexDirection.Row;
-            cond.style.justifyContent = Justify.FlexEnd;
-            var condFace = new KokoSim.Unity.Shell.ConditionFace { tooltip = c.Condition };
-            condFace.Set(c.ConditionLevel);
-            cond.Add(condFace);
-            row.Add(cond);
-
             var index = c.ActiveIndex;
             row.RegisterCallback<ClickEvent>(_ => OnPickCandidate(index));
             return row;
@@ -267,7 +257,6 @@ namespace KokoSim.Unity.Home
                 facts.Clear();
                 facts.Add(Fact("総合", v.OverallValue.ToString()));
                 facts.Add(Fact("精神力", MentalOf(v)));
-                facts.Add(ConditionFact("調子", v.ConditionLevel, v.Condition));
                 facts.Add(Fact("性格", PersonalityOf(v)));
             }
 
@@ -301,25 +290,6 @@ namespace KokoSim.Unity.Home
             var k = new Label(key); k.AddToClassList("nt-fact__k");
             var v = new Label(value); v.AddToClassList("nt-fact__v");
             e.Add(k); e.Add(v);
-            return e;
-        }
-
-        // 調子の fact 行: 表情顔（ConditionFace）＋文字表記の併記（詳細画面は文字表記も残す方針, issue #51）。
-        private static VisualElement ConditionFact(string key, KokoSim.Engine.Players.Condition level, string value)
-        {
-            var e = new VisualElement();
-            e.AddToClassList("nt-fact");
-            var k = new Label(key); k.AddToClassList("nt-fact__k");
-
-            var valueRow = new VisualElement();
-            valueRow.AddToClassList("nt-fact__v-row");
-            var face = new KokoSim.Unity.Shell.ConditionFace();
-            face.AddToClassList("nt-fact__cond-face");
-            face.Set(level);
-            var v = new Label(value); v.AddToClassList("nt-fact__v");
-            valueRow.Add(face); valueRow.Add(v);
-
-            e.Add(k); e.Add(valueRow);
             return e;
         }
 

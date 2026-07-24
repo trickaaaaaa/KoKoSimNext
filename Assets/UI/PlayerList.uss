@@ -24,9 +24,6 @@
 }
 .pl-thead .cell--head { color: var(--color-faint); }
 
-/* 行の中の調子顔は一覧で拾いやすいよう少し大きめに（既定18→26）。 */
-.pl-cond-face { width: 26px; height: 26px; }
-
 /* ── 行高48px基準への上書き（issue #131 owner追記・2026-07-23）。
    共通部品 .row-panel の既定（--h-row=60px）はそのまま他画面と共有し、この画面（部員名簿の
    データ行だけ）を --fs-page（24px）に上げて拡げた行高と釣り合わせる（トークンの段階内, UI原則⑤）。
@@ -34,14 +31,20 @@
    （USSは一般兄弟結合子 `~` 非対応＝子孫結合子で書く。UI-BUILD-METHOD.md 記載の既知の罠） */
 #player-rows .row-panel { min-height: 48px; }
 #player-rows .cell { font-size: var(--fs-page); }
-#player-rows .pl-cond-face { width: 30px; height: 30px; }
 
-/* 背番号列：数字のみの固定幅・右揃え（UI原則③＝数字は右揃え・桁を揃える）。 */
+/* ── 固定幅列（背番号・選手名・学年）───────────────────────────
+   共通 .cell が flex-basis: 0 を持つため、width 指定だけでは主軸サイズが 0 に解決されて
+   文字が隣列へはみ出して重なる（Yoga は flex-basis を width より優先する）。
+   固定列は必ず flex-basis で幅を与えること（既知の罠・2026-07-24）。 */
+
+/* 背番号列：数字のみの固定幅・右揃え（UI原則③＝数字は右揃え・桁を揃える）。
+   右パディングで名前列と間隔を空ける（owner指示・2026-07-24: 背番号をもう少し左へ）。 */
 .cell--no {
     flex-grow: 0;
     flex-shrink: 0;
-    width: var(--col-pl-no);
+    flex-basis: var(--col-pl-no);
     -unity-text-align: middle-right;
+    padding-right: var(--sp-3);
 }
 
 /* 選手名列：和文6文字＋姓名間スペース分の固定幅（issue #131 owner追記）。
@@ -49,5 +52,12 @@
 .cell--name {
     flex-grow: 0;
     flex-shrink: 0;
-    width: var(--col-pl-name);
+    flex-basis: var(--col-pl-name);
+}
+
+/* 学年列：固定幅。 */
+.cell--grade {
+    flex-grow: 0;
+    flex-shrink: 0;
+    flex-basis: var(--col-pl-grade);
 }

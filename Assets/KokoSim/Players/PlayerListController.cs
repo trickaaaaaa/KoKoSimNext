@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
-using KokoSim.Unity.Shell;      // 部品辞書（ConditionFace）
 
 namespace KokoSim.Unity.Players
 {
@@ -58,7 +57,7 @@ namespace KokoSim.Unity.Players
 
             // 共通トップバー（スコアボード）: 掲示板の升目（週・夏予選までの残り）とチーム総合力ランクを埋める。
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
-            TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース）
+            KokoSim.Unity.Shell.TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース）
 
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null)
@@ -95,38 +94,31 @@ namespace KokoSim.Unity.Players
 
             row.Add(NumberCell(r.UniformNumber));
             row.Add(Cell(r.Name, "cell--name"));
-            // 学年は「2年」の混植なので数字だけ Oswald に載せる（決定2-B）。
-            row.Add(KokoSim.Unity.Components.UiComponents.NumUnitAuto(r.GradeLabel, false, "cell cell--narrow"));
+            // 学年は「2年」の混植なので数字だけ Oswald に載せる（決定2-B）。列は固定幅
+            // （flex-basis:0 の比例配分だと詰まった行で幅0になり文字が隣列へ重なる）。
+            row.Add(KokoSim.Unity.Components.UiComponents.NumUnitAuto(r.GradeLabel, false, "cell cell--grade"));
 
             // カテゴリ別ランク（打撃力/走力/守備力/投手力）: 総合ランクは廃止（Issue #30・2026-07-22 owner決定）。
+            // 2段組（上=打撃力・走力／下=守備力・投手力）＋右寄せで折返しの崩れをなくす（owner指示・2026-07-24）。
             var ability = new VisualElement();
             ability.AddToClassList("cell");
             ability.AddToClassList("cell--wide");
-            ability.Add(UiComponents.CategoryRankChips(r.Strength));
+            ability.Add(UiComponents.CategoryRankChipsTwoRow(r.Strength));
             row.Add(ability);
 
-            // 調子／故障（設計書03 §3.5・UI原則⑥）: 怪我中はこの列が「傷病名・段階」の警告表示になる。
-            // 離脱中の選手の調子は判断材料にならないので列は増やさず差し替える（詳細は行ホバー→右ペイン）。
-            var injured = r.Injury.Length > 0;
-            var cond = new VisualElement();
-            cond.AddToClassList("cell");
-            cond.AddToClassList("cell--narrow");
-            if (injured)
+            // 故障（設計書03 §3.5・UI原則⑥）: 怪我中だけ「傷病名・段階」を警告表示する。
+            // 調子は試合にしか影響しないため日常画面には出さない（issue #214: 表示は試合系画面に限定）。
+            var injury = new VisualElement();
+            injury.AddToClassList("cell");
+            injury.AddToClassList("cell--narrow");
+            if (r.Injury.Length > 0)
             {
                 var injuryLabel = new Label(r.Injury);
                 injuryLabel.AddToClassList("cell");
                 injuryLabel.AddToClassList("cond--worst");
-                cond.Add(injuryLabel);
+                injury.Add(injuryLabel);
             }
-            else
-            {
-                // 調子は表情顔（ConditionFace）に統一（issue #51）。文字表記は tooltip に残す。
-                var face = new ConditionFace { tooltip = r.Condition };
-                face.AddToClassList("pl-cond-face");
-                face.Set(r.ConditionLevel);
-                cond.Add(face);
-            }
-            row.Add(cond);
+            row.Add(injury);
 
             return row;
         }
