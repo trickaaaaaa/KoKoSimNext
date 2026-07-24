@@ -18,6 +18,14 @@ public sealed record GameContext
     public FieldingCoefficients Fielding { get; init; } = new();
     public BaserunningCoefficients Baserunning { get; init; } = new();
     public FatigueCoefficients Fatigue { get; init; } = new();
+
+    /// <summary>
+    /// 試合ごとの天候（気温）モデル（Issue #120, design-05 大会単位の味付け）。null または無効の間は
+    /// 気温生成も派生も行わず従来挙動。有効時は <see cref="WeatherModel.ApplyForMatch"/> が試合開始時に一度だけ
+    /// 専用Forkストリームで気温を引き、空気密度・投手消耗を派生させる（本体の乱数順・帯は不変）。
+    /// </summary>
+    public WeatherCoefficients? Weather { get; init; }
+
     public Players.FormCoefficients Form { get; init; } = new();
     public Players.SkillCoefficients Skills { get; init; } = new();
     public PressureCoefficients Pressure { get; init; } = new();

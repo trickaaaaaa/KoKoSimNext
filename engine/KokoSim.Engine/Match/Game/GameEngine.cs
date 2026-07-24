@@ -118,6 +118,11 @@ public static class GameEngine
         IReadOnlyDictionary<Player, int>? priorWeekPitches = null,
         Debugging.ScenarioStart? scenarioStart = null)
     {
+        // 試合ごとの天候（気温）モデル（Issue #120）。専用Forkストリームで気温を1回引き、空気密度・投手消耗を
+        // 派生させた ctx に差し替える。Fork は親 rng の状態を進めない＝以降の乱数順・決定論は不変。
+        // Weather が null／無効なら ctx はそのまま（従来挙動と完全一致）。
+        ctx = WeatherModel.ApplyForMatch(ctx, rng);
+
         // デバッグ観測（設計書17 §4, F1）。既定オフ＝この分岐に入らず従来と完全に同じ経路。
         // ヘッダは「まだ1回も引いていない乱数状態」を持つ必要があるので、dayForm 抽選より前に組む。
         Debugging.GameTraceHeader? traceHeader = null;

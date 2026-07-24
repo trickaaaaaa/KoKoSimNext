@@ -113,10 +113,16 @@ public static class GameSimulation
     /// 付与する（design-14 第1段の敬遠・重盗・牽制は采配Brainが盗塁/敬遠を選ばない限り発火しないため）。
     /// 既定 false は従来通り無指示＝Brainなしの試合（K/9・BB/9等の既存帯はこちらで校正済み、非破壊）。
     /// </summary>
+    /// <param name="applyWeather">
+    /// true で試合ごとの天候（気温）モデル（Issue #120）を有効にする。既定 false＝天候オフ＝従来のベースライン挙動
+    /// （既存 games_10k 帯はこちらで校正済み・非破壊）。夏場の乱打効果は applyWeather:true の専用回帰で測る。
+    /// </param>
     public static Stats Run(int games, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null,
-        bool useTacticsBrain = false)
+        bool useTacticsBrain = false, bool applyWeather = false)
     {
         var ctx = BuildContext(coefficientsPath, field);
+        // 天候は既定オフ。coefficients.yaml に weather ブロックがあっても applyWeather:false の間は剥がして従来挙動に固定する。
+        if (!applyWeather) ctx = ctx with { Weather = null };
         var brain = useTacticsBrain ? new StandardTacticsBrain(ctx.Tactics, ctx.Baserunning) : null;
         var root = new Xoshiro256Random(seed);
 
@@ -307,6 +313,7 @@ public static class GameSimulation
             Fielding = b.Fielding,
             Baserunning = b.Baserunning,
             Fatigue = b.Fatigue,
+            Weather = b.Weather,   // Issue #120: 天候（気温）モデル。null＝weather ブロック無し＝無効
             Form = b.Form,
             Skills = b.Skills,
             Pressure = b.Pressure,

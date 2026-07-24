@@ -112,6 +112,25 @@ public static class BalanceTargetsLoader
         };
     }
 
+    /// <summary>
+    /// 夏場の天候（気温）モデル有効時の許容帯（Issue #120, games_10k_summer セクション）。
+    /// 一般帯（games_10k）を土台に、games_10k_summer で指定された指標だけ上書きする（未指定は一般帯を流用）。
+    /// </summary>
+    public static GameTargets LoadGameSummerFromFile(string path) => ParseGameSummer(File.ReadAllText(path));
+
+    public static GameTargets ParseGameSummer(string yaml)
+    {
+        var baseTargets = ParseGame(yaml);
+        var s = Root(yaml).Games10kSummer;
+        if (s is null) return baseTargets;
+        return baseTargets with
+        {
+            RunsPerTeam = s.RunsPerTeam?.ToBand() ?? baseTargets.RunsPerTeam,
+            PitchesPerGame = s.PitchesPerGame?.ToBand() ?? baseTargets.PitchesPerGame,
+            InningsPerGame = s.InningsPerGame?.ToBand() ?? baseTargets.InningsPerGame,
+        };
+    }
+
     public static GameTacticsTargets LoadGameTacticsFromFile(string path) => ParseGameTactics(File.ReadAllText(path));
 
     public static GameTacticsTargets ParseGameTactics(string yaml)
@@ -144,6 +163,9 @@ public static class BalanceTargetsLoader
 
         [YamlMember(Alias = "games_10k_tactics")]
         public GamesTacticsDto? Games10kTactics { get; set; }
+
+        [YamlMember(Alias = "games_10k_summer")]
+        public GamesDto? Games10kSummer { get; set; }
     }
 
     private sealed class AtBatDto

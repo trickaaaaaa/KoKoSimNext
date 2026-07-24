@@ -260,6 +260,25 @@ fatigue:
   relieve_pitch_margin: 25.0
   hard_cap_pitches: 130.0
 
+# --- 試合ごとの天候（気温）モデル（Issue #120 / OPEN-QUESTIONS Q22, design-05 大会単位の味付け） ---
+# 気温を物理層（空気密度ρ・投手消耗）だけに効かせて「夏場は点が動きやすい」を創発させる（不変条件#1）。
+# 気温は試合開始時に専用Forkストリームで1回引くだけ＝本体の乱数順・決定論は不変（不変条件#2）。
+# enabled=true でも実プレイ側（C#既定 GameContext）は weather=null のまま＝この YAML は sim/Heavy 回帰でのみ効く
+# （メモリ「sim/Unity係数の乖離」）。実ゲーム反映は C#既定＋決定論baseline再生成を伴う後続作業。
+weather:
+  enabled: true
+  # 気温分布（決定1: 夏の甲子園を想定, 28〜36℃・平均32℃・σ2.5）
+  mean_temperature_c: 32.0
+  temperature_std_dev_c: 2.5
+  min_temperature_c: 28.0
+  max_temperature_c: 36.0
+  # 気温→空気密度（決定1=案B: ρ(T)=ρ0×(273.15+基準温)/(273.15+T) の基準差分に減衰係数 k=0.5 を掛け効きを半減）
+  baseline_temperature_c: 15.0   # この気温で aerodynamics.air_density の既定値になる基準
+  density_damping: 0.5           # k（0=無効, 1=物理そのまま）。極端な乱打戦を避けるため 0.5
+  # 気温→投手消耗（決定2=案A: 加算・線形。基準28℃超過1℃ごとに超過球数あたりの低下量を α だけ増やす。36℃で+8%）
+  fatigue_baseline_temperature_c: 28.0
+  fatigue_alpha_per_degree: 0.01
+
 # --- 試合間の回復モデル（設計書02 §1.1e・issue #41: 連戦で目安投球数が回復し切らない） ---
 # 前登板からの休養日数 × 直近ウィンドウの球数 → 実効の目安投球数を減衰させる。🟡 実測校正前のプレースホルダ。
 # 現状は台帳＋モデルのみで本流未配線（帯不変）。本流配線＋Heavy帯再校正は後続issue（#42含む）でまとめて行う。
