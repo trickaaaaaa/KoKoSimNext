@@ -13,6 +13,21 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public sealed record PrefectureResult(int PrefectureId, string PrefectureName, string? ChampionName);
 
 /// <summary>
+/// 裏試合（自校非関与の県）の解像度（#試合開始前ロード短縮）。
+/// <see cref="Full"/> は全カードを1球単位フルシムして全国通算成績へ積む（重い＝観戦しない試合まで詳細に解く）。
+/// <see cref="ChampionsOnly"/> は集計モデル（<see cref="AggregateMatch"/>）で勝敗だけ決めて優勝校を得る（軽い）。
+/// 甲子園本戦（Phase 3）や全国成績閲覧UIが未実装の現状、他46県は優勝校しか消費されないため既定はこちらで足りる。
+/// 個別県の詳細成績が必要になったら、その県だけ <see cref="Full"/> でオンデマンド再シムする。
+/// </summary>
+public enum SummerResolution
+{
+    /// <summary>全カード1球フルシム＋全国成績畳み込み（従来挙動）。</summary>
+    Full,
+    /// <summary>集計モデルで優勝校のみ即決（1球シムなし・成績畳み込みなし）。</summary>
+    ChampionsOnly,
+}
+
+/// <summary>
 /// 再開可能な夏の全国裏試合（#208 スライス化）。<see cref="Total"/> はシムする区画数（進捗バーの母数）、
 /// <see cref="Jobs"/> は1区画（＝1県、北海道・東京は分割区画）を丸ごと解決する遅延ジョブの並び。各ジョブは
 /// base 乱数から Fork した独立ストリームだけを消費し base 状態を進めない（Fork は純導出）ため、
@@ -58,35 +73,43 @@ public static class NationalTournamentEngine
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         int? excludePrefectureId = null, ModernRules? modernRules = null, int? calendarYear = null,
-        IEnemyBrainFactory? brains = null, Action? afterMatch = null)
+        IEnemyBrainFactory? brains = null, Action? afterMatch = null,
+        SummerResolution resolution = SummerResolution.Full)
     {
         var regions = SummerRegions.Build(nation.Prefectures);
         var jobs = regions
             .Where(r => !(excludePrefectureId is int ex && r.PrefectureId == ex))
             .Select(region => (Func<PrefectureResult>)(() => RunPrefecture(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-                region, modernRules, calendarYear, brains, afterMatch)))
+                region, modernRules, calendarYear, brains, afterMatch, resolution)))
             .ToList();
         return new SummerRun(jobs.Count, jobs);
     }
 
-    /// <summary>1区画（県 or 分割区画）の地方大会をフルシムし全国成績へ積む。base rng は Fork のみで不変。</summary>
+    /// <summary>
+    /// 1区画（県 or 分割区画）の地方大会を解決し優勝校を返す。base rng は Fork のみで不変。
+    /// <paramref name="resolution"/>＝Full は全カード1球フルシム＋全国成績畳み込み、ChampionsOnly は
+    /// 集計モデルで勝敗だけ決める（<see cref="TournamentRunner"/> を backgroundResolver=null で構築＝内蔵 AggregateMatch）。
+    /// </summary>
     private static PrefectureResult RunPrefecture(
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         SummerRegion region, ModernRules? modernRules, int? calendarYear, IEnemyBrainFactory? brains,
-        Action? afterMatch = null)
+        Action? afterMatch = null, SummerResolution resolution = SummerResolution.Full)
     {
         var field = SummerRegions.Entrants(nation, region).ToList();
         if (field.Count < 2)
             return new PrefectureResult(region.PrefectureId, region.Name, field.FirstOrDefault()?.Name);
 
-        var bg = new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
-            afterMatch: afterMatch);
+        // ChampionsOnly は集計モデル（backgroundResolver=null）＝1球シムも成績畳み込みもしない軽量経路。
+        IBackgroundMatchResolver? bg = resolution == SummerResolution.ChampionsOnly
+            ? null
+            : new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
+                afterMatch: afterMatch);
         // 北海道・東京の分割区画は forkキーへ分割位置を足して別ストリーム化（無分割の県は従来キーのまま不変）。
         var splitBit = region.Split is { } sp ? (uint)(sp + 1) << 24 : 0u;
         var prefRng = rng.Fork(0xF00D_0000UL ^ (uint)region.PrefectureId ^ splitBit);
-        // 自校非関与の区画なので nominal manager（field[0]）に playerResolver は付けない＝全カード裏試合フルシム。
+        // 自校非関与の区画なので nominal manager（field[0]）に playerResolver は付けない＝全カード裏試合として解く。
         var runner = new TournamentRunner(
             field, field[0], coeff, prefRng, schedule, $"{region.Name}大会",
             playerResolver: null, backgroundResolver: bg);

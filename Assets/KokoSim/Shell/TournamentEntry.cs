@@ -43,8 +43,11 @@ namespace KokoSim.Unity.Shell
             var stats = NationService.TournamentStats;
             stats.StartTournament();
             var brains = new EnemyAiBrainFactory();
-            var homeBg = new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats,
-                modernRules: null, calendarYear: calendarYear, brains: brains);
+            // 自県の裏カードはメモ化 resolver で包む＝プレフェッチ（GameSession が暇な時間に背景で先行解決）で温めた
+            // 結果を、本解決（BeginRound/ResolveRound）がキャッシュ命中で即座に再利用する（#試合開始前ロード短縮）。
+            var homeBg = new MemoizingBackgroundResolver(
+                new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats,
+                    modernRules: null, calendarYear: calendarYear, brains: brains));
 
             // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,

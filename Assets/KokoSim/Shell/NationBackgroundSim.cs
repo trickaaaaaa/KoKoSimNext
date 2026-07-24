@@ -93,10 +93,13 @@ namespace KokoSim.Unity.Shell
         {
             var rng = new Xoshiro256Random(seed ^ 0x4E37_1000UL);
             var ctx = new GameContext();
+            // 他46県（自校非関与）は優勝校のみ集計モデルで即決する（#試合開始前ロード短縮）。甲子園本戦・全国成績閲覧が
+            // 未実装の現状、他県は優勝校しか消費されないため1球フルシムは不要＝約4000試合の裏 churn（約5分・2GB確保）を消す。
+            // 自県は別途プレフェッチでフルシムする（TournamentEntry 側）。個別県の詳細が要る場面が来たらオンデマンド Full 化する。
             var run = NationalTournamentEngine.BeginSummer(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
                 excludePrefectureId: excludePrefectureId, modernRules: null, calendarYear: calendarYear,
-                brains: brains, afterMatch: PauseGate);
+                brains: brains, afterMatch: PauseGate, resolution: SummerResolution.ChampionsOnly);
 
             _throttle = (int)SimThrottle.Normal;
             _total = run.Total;
