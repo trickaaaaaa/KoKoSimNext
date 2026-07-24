@@ -35,7 +35,24 @@ namespace KokoSim.Unity.Training
             _modal = _root.Q<VisualElement>("tp-modal");
             _copyModal = _root.Q<VisualElement>("tp-copy-modal");
             WireStaticButtons();
+            WireOverlayClose(_modal, () => _modalOpen, CloseModal);
+            WireOverlayClose(_copyModal, () => _copyOpen, CloseCopyPicker);
             Render();
+        }
+
+        /// <summary>スクリムクリック・Escで閉じる（issue #222⑥）。カード内クリックは伝播停止し、
+        /// スクリム自体（カードの外側）のクリックだけが閉じる。Escはオーバーレイへフォーカスして拾う。</summary>
+        private static void WireOverlayClose(VisualElement scrim, System.Func<bool> isOpen, System.Action close)
+        {
+            if (scrim == null) return;
+            scrim.focusable = true;
+            scrim.RegisterCallback<ClickEvent>(_ => { if (isOpen()) close(); });
+            scrim.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (isOpen() && e.keyCode == KeyCode.Escape) { close(); e.StopPropagation(); }
+            });
+            var card = scrim.Q<VisualElement>(className: "modal-card");
+            card?.RegisterCallback<ClickEvent>(e => e.StopPropagation());
         }
 
         private void WireStaticButtons()
@@ -47,6 +64,10 @@ namespace KokoSim.Unity.Training
             Click("template-save", () => { _state.SaveTemplate(); Toast("週テンプレを保存しました"); Render(); });
             Click("delegate-toggle", () => { _state.ToggleDelegate(_state.SelectedIndex); Render(); });
             Click("sel-nom", () => { _state.ToggleNominate(_state.SelectedIndex); Render(); });
+            // 前後選手切替（issue #222⑥・一覧の現在フィルタ/ソート順）。
+            Click("sel-prev", () => { _state.StepSelected(-1); Render(); _modal?.Focus(); });
+            Click("sel-next", () => { _state.StepSelected(+1); Render(); _modal?.Focus(); });
+            Click("modal-revert", () => { _state.RevertSelected(); Toast("配分を元に戻しました"); Render(); });
             Click("modal-close", CloseModal);
             Click("modal-done", CloseModal);
             Click("copy-close", CloseCopyPicker);
@@ -58,6 +79,7 @@ namespace KokoSim.Unity.Training
             _copyOpen = true;
             Render();
             _copyModal?.BringToFront();
+            _copyModal?.Focus();
         }
 
         private void CloseCopyPicker()
@@ -72,6 +94,7 @@ namespace KokoSim.Unity.Training
             _modalOpen = true;
             Render();
             _modal?.BringToFront();
+            _modal?.Focus();
         }
 
         private void CloseModal()
@@ -271,13 +294,21 @@ namespace KokoSim.Unity.Training
             var lockHint = _root.Q<Label>("menu-lock-hint");
             if (lockHint != null) lockHint.style.display = v.DelegateOn ? DisplayStyle.Flex : DisplayStyle.None;
 
+            // 前後選手（issue #222⑥）：一覧の端では押せない（見た目でも分かる）。
+            var prevBtn = _root.Q<Button>("sel-prev");
+            if (prevBtn != null) prevBtn.SetEnabled(v.SelHasPrev);
+            var nextBtn = _root.Q<Button>("sel-next");
+            if (nextBtn != null) nextBtn.SetEnabled(v.SelHasNext);
+
             BuildPresetOptions(v);
             BuildMenuList(v);
             BuildDefenseGrid(v);
             BuildGrowth(v);
 
-            // 週バジェット残り＋バー
+            // 週バジェット残り＋バー（残り0分は強調して「なぜ増えないか」を視界内で分かるようにする, issue #222③）
             SetText("sel-remain", "残り " + v.SelectedRemaining + " / " + v.Budget + "分");
+            var remainLabel = _root.Q<Label>("sel-remain");
+            remainLabel?.EnableInClassList("tp-ed-bar__remain--limit", v.AtBudgetLimit);
             var budgetFill = _root.Q<VisualElement>("sel-budget-fill");
             if (budgetFill != null)
             {
@@ -288,6 +319,8 @@ namespace KokoSim.Unity.Training
             BuildTemplates(v);
         }
 
+        // プリセット帯（issue #222④）：横1行のチップ列。説明はツールチップで持たせ、
+        // カード内の「伸びる能力」5本バーは廃止（右カラムの実効ドライランが同じ役割を実データで担う）。
         private void BuildPresetOptions(TrainingPlanView v)
         {
             var host = _root.Q<VisualElement>("tpm-presets");
@@ -297,23 +330,12 @@ namespace KokoSim.Unity.Training
             foreach (var po in v.PresetOptions)
             {
                 var preset = po.Preset; // 捕捉
-                var card = new VisualElement();
-                card.AddToClassList("tpm-preset");
-                if (po.Selected) card.AddToClassList("tpm-preset--on");
-
-                var head = new VisualElement(); head.AddToClassList("tpm-preset__head");
-                var check = new Label(po.Selected ? "✓" : ""); check.AddToClassList("tpm-preset__check"); head.Add(check);
-                var name = new Label(po.Jp); name.AddToClassList("tpm-preset__name"); head.Add(name);
-                card.Add(head);
-
-                var desc = new Label(po.Desc); desc.AddToClassList("tpm-preset__desc"); card.Add(desc);
-
-                var bars = new VisualElement(); bars.AddToClassList("tpm-preset__bars");
-                foreach (var gb in po.Emphasis) bars.Add(AbilityBar(gb, false));
-                card.Add(bars);
-
-                card.RegisterCallback<ClickEvent>(_ => { _state.SetPreset(sel, preset); Render(); });
-                host.Add(card);
+                var chip = new Label(po.Jp);
+                chip.AddToClassList("tpm-preset-chip");
+                if (po.Selected) chip.AddToClassList("tpm-preset-chip--on");
+                chip.tooltip = po.Desc;
+                chip.RegisterCallback<ClickEvent>(_ => { _state.SetPreset(sel, preset); Render(); });
+                host.Add(chip);
             }
         }
 
@@ -329,32 +351,23 @@ namespace KokoSim.Unity.Training
                 if (s.SectionJp != "")
                 {
                     var head = new Label(s.SectionJp);
-                    head.AddToClassList("tp-ed-section__title");
                     head.AddToClassList("tpm-menugroup");
                     host.Add(head);
                 }
 
                 var menu = s.Menu; // 捕捉
-                var slot = new VisualElement();
-                slot.AddToClassList("mslot");
-                if (v.DelegateOn) slot.AddToClassList("mslot--locked");
-
-                var icon = new Label(s.Icon); icon.AddToClassList("mslot__icon"); slot.Add(icon);
-
-                var body = new VisualElement(); body.AddToClassList("mslot__body");
-                var name = new Label(s.MenuJp); name.AddToClassList("mslot__name"); body.Add(name);
-                var eff = new Label("主効果 " + s.MainEffectJp); eff.AddToClassList("mslot__eff"); body.Add(eff);
-                slot.Add(body);
-
-                slot.Add(StepButton("−", () => { _state.AdjustMinutes(sel, menu, -1); Render(); }, v.DelegateOn));
-                var min = new Label(s.Minutes + "分"); min.AddToClassList("mslot__min"); slot.Add(min);
-                slot.Add(StepButton("＋", () => { _state.AdjustMinutes(sel, menu, +1); Render(); }, v.DelegateOn));
-
-                host.Add(slot);
+                var maxForSlot = s.Minutes + v.SelectedRemaining;
+                host.Add(MenuRow(
+                    s.Icon, s.MenuJp, null, "主効果 " + s.MainEffectJp,
+                    s.Minutes, maxForSlot, UiComponents.TrainingMenuColorClass(menu),
+                    v.DelegateOn, v.AtBudgetLimit,
+                    () => { _state.AdjustMinutes(sel, menu, -1); Render(); },
+                    () => { _state.AdjustMinutes(sel, menu, +1); Render(); },
+                    m => { _state.SetMinutes(sel, menu, m); Render(); }));
             }
         }
 
-        // 守備適性も攻撃メニューと同じ粒度（mslot 行）で縦に並べる。
+        // 守備適性も攻撃メニューと同じ粒度（mslot 行）で縦に並べる（1画面3カラム化, issue #222①）。
         private void BuildDefenseGrid(TrainingPlanView v)
         {
             var host = _root.Q<VisualElement>("tpm-defense");
@@ -364,23 +377,50 @@ namespace KokoSim.Unity.Training
             foreach (var d in v.DefenseSlots)
             {
                 var menu = d.Menu; // 捕捉
-                var slot = new VisualElement();
-                slot.AddToClassList("mslot");
-                if (v.DelegateOn) slot.AddToClassList("mslot--locked");
-
-                var icon = new Label(d.Label); icon.AddToClassList("mslot__icon"); slot.Add(icon);
-
-                var body = new VisualElement(); body.AddToClassList("mslot__body");
-                var name = new Label(d.Label + "守備"); name.AddToClassList("mslot__name"); body.Add(name);
-                var eff = new Label("守備適性 現在 " + d.Aptitude); eff.AddToClassList("mslot__eff"); body.Add(eff);
-                slot.Add(body);
-
-                slot.Add(StepButton("−", () => { _state.AdjustMinutes(sel, menu, -1); Render(); }, v.DelegateOn));
-                var min = new Label(d.Minutes + "分"); min.AddToClassList("mslot__min"); slot.Add(min);
-                slot.Add(StepButton("＋", () => { _state.AdjustMinutes(sel, menu, +1); Render(); }, v.DelegateOn));
-
-                host.Add(slot);
+                var maxForSlot = d.Minutes + v.SelectedRemaining;
+                host.Add(MenuRow(
+                    d.Label, d.Label + "守備", "適" + d.Aptitude, null,
+                    d.Minutes, maxForSlot, "defpos",
+                    v.DelegateOn, v.AtBudgetLimit,
+                    () => { _state.AdjustMinutes(sel, menu, -1); Render(); },
+                    () => { _state.AdjustMinutes(sel, menu, +1); Render(); },
+                    m => { _state.SetMinutes(sel, menu, m); Render(); }));
             }
+        }
+
+        // 練習メニュー1行（issue #222①②③）: アイコン／名前／(任意)適性値／ドラッグバー／分／±。
+        // 攻撃メニューと守備ポジションで共用（36px基準の1行に圧縮・行高32px基準の趣旨に沿う）。
+        private static VisualElement MenuRow(
+            string icon, string name, string meta, string tip,
+            int minutes, int maxMinutes, string colorClass,
+            bool locked, bool atLimit,
+            System.Action onMinus, System.Action onPlus, System.Action<int> onSet)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("mslot");
+            if (locked) row.AddToClassList("mslot--locked");
+            if (!string.IsNullOrEmpty(tip)) row.tooltip = tip;
+
+            var ic = new Label(icon); ic.AddToClassList("mslot__icon"); row.Add(ic);
+            var nm = new Label(name); nm.AddToClassList("mslot__name"); row.Add(nm);
+
+            if (!string.IsNullOrEmpty(meta))
+            {
+                // 「適50」等の和文＋数字混植（Oswaldは和文グリフを持たないため単一Labelへf-numを付けない）。
+                var mt = new Label(meta); mt.AddToClassList("mslot__meta"); row.Add(mt);
+            }
+
+            var slider = UiComponents.TimeAllocSlider(minutes, maxMinutes, TrainingPresets.StepMinutes, colorClass, locked, onSet);
+            slider.AddToClassList("mslot__slider");
+            if (atLimit) slider.AddToClassList("ta-slider--maxed");
+            row.Add(slider);
+
+            row.Add(UiComponents.NumUnitAuto(minutes + "分", false, "mslot__min"));
+
+            row.Add(StepButton("−", onMinus, locked));
+            row.Add(StepButton("＋", onPlus, locked || atLimit));
+
+            return row;
         }
 
         // この設定で伸びる能力（実効ドライラン）。
@@ -446,6 +486,7 @@ namespace KokoSim.Unity.Training
             }
         }
 
+        // 週テンプレの呼出＋削除（issue #222⑤）: チップクリック＝選択選手へ適用、×＝削除。
         private void BuildTemplates(TrainingPlanView v)
         {
             var host = _root.Q<VisualElement>("template-list");
@@ -458,10 +499,35 @@ namespace KokoSim.Unity.Training
                 host.Add(none);
                 return;
             }
+            var sel = v.SelectedIndex;
             foreach (var name in v.Templates)
             {
-                var chip = new Label(name);
+                var n = name; // 捕捉
+                var chip = new VisualElement();
                 chip.AddToClassList("tpl-chip");
+                if (v.DelegateOn) chip.AddToClassList("tpl-chip--locked");
+
+                var label = new Label(n);
+                label.AddToClassList("tpl-chip__label");
+                if (!v.DelegateOn)
+                    label.RegisterCallback<ClickEvent>(_ =>
+                    {
+                        _state.ApplyTemplate(sel, n);
+                        Toast(n + " を適用しました");
+                        Render();
+                    });
+                chip.Add(label);
+
+                var del = new Label("×");
+                del.AddToClassList("tpl-chip__del");
+                del.RegisterCallback<ClickEvent>(e =>
+                {
+                    e.StopPropagation();
+                    _state.RemoveTemplate(n);
+                    Render();
+                });
+                chip.Add(del);
+
                 host.Add(chip);
             }
         }
@@ -520,11 +586,14 @@ namespace KokoSim.Unity.Training
             return c;
         }
 
-        private static Button StepButton(string text, System.Action onClick, bool locked)
+        // 長押しオートリピート（issue #222②）: UITK Clickable(action, delay, interval) で
+        // 押しっぱなし時に一定間隔で onClick を再発火させる（既定Buttonの単発クリックだけでは連打が要る）。
+        private static Button StepButton(string text, System.Action onClick, bool disabled)
         {
-            var b = new Button(onClick) { text = text };
+            var b = new Button { text = text };
+            b.clickable = new Clickable(onClick, 400, 80);
             b.AddToClassList("step-btn");
-            if (locked) { b.SetEnabled(false); b.AddToClassList("step-btn--locked"); }
+            if (disabled) { b.SetEnabled(false); b.AddToClassList("step-btn--locked"); }
             return b;
         }
 
