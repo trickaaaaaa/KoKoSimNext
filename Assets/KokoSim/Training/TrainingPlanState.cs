@@ -27,6 +27,7 @@ namespace KokoSim.Unity.Training
         public string Icon = "";
         public string MainEffectJp = "";
         public int Minutes;
+        public string SectionJp = "";   // 非空＝このスロットの直前に節見出しを挿す（野手練習/投手練習, Issue #133-⑥）
     }
 
     /// <summary>今週の見込み（exp進捗）。1週ドライラン後の「次レベルまでの割合」を主効果能力ごとに提示し、
@@ -69,10 +70,10 @@ namespace KokoSim.Unity.Training
         public bool BenchOut;
         public string GradeLabel = "1年";
         public string HandLabel = "右投右打";
-        public string OverallGrade = "C";  // 総合 S〜G
+        public PlayerStrength Strength;    // カテゴリ別ランク4種（打撃/走力/守備/投手, Issue #133。総合ランクは廃止）
         public string PresetJp = "お任せ";
         public string FocusSummary = "";   // 現在の主眼メニュー（分の多い順・行の余白に表示）
-        public List<MenuSlot> Chips = new List<MenuSlot>();  // 配分チップ（メニュー別 分）
+        public List<MenuSlot> Chips = new List<MenuSlot>();  // 積み上げ配分バーの元データ（メニュー別 分・固定順, Issue #133-③）
         public int UsedMin;
         public int UsagePct;
         public List<string> Gains = new List<string>();      // 伸び見込み（ミート+1 等・旧表示）
@@ -103,7 +104,7 @@ namespace KokoSim.Unity.Training
         public bool SelBenchOut;
         public string SelYear = "1年";
         public string SelHand = "右投右打";
-        public string SelGrade = "C";
+        public PlayerStrength SelStrength;   // カテゴリ別ランク（総合ランクは廃止, Issue #133-①）
         public bool SelNominated;
         public string SelNomLabel = "個別指導に指名";
         public int SelectedTotal;
@@ -118,9 +119,11 @@ namespace KokoSim.Unity.Training
         public List<PresetOption> PresetOptions = new List<PresetOption>(); // 統合モーダルのプリセット一覧
         public List<GainBar> SelectedGrowth = new List<GainBar>();    // この設定で伸びる能力（現在設定の伸びバー）
         public List<string> Templates = new List<string>();          // 保存済み週テンプレ名
+        public List<PlayerTrainRow> CopyRows = new List<PlayerTrainRow>(); // 複製ピッカー用の全部員（フィルタ非適用・学年順, Issue #133-⑤）
 
         // フィルタ/ソートの選択状態
         public int YearFilter;   // 0=全, 1..3=学年
+        public int BenchFilter;  // 0=全員, 1=ベンチ入り, 2=ベンチ外（Issue #133-④）
         public int SortMode;     // 0=学年順 1=総合
     }
 
@@ -132,6 +135,9 @@ namespace KokoSim.Unity.Training
     {
         private const int MinuteStep = TrainingPresets.StepMinutes;   // Custom編集の増減単位（10分・engineと共有）
 
+        // カテゴリ別ランクの重み（単一静的ソースを参照, Issue #30/#140/#133。PlayerListState と同型）。
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
+
         // Custom編集で提示する能力系メニュー（守備適性は別枠 DefenseSlots）。休養は列挙しない
         // （配分しなかった分＝残りが自動的に休養に相当する）。
         private static readonly TrainingMenu[] EditableMenus =
@@ -139,6 +145,18 @@ namespace KokoSim.Unity.Training
             TrainingMenu.Batting, TrainingMenu.PowerHitting, TrainingMenu.PlateDiscipline, TrainingMenu.Strength,
             TrainingMenu.Defense, TrainingMenu.Throwing, TrainingMenu.BaseRunning, TrainingMenu.Bunt,
             TrainingMenu.Pitching, TrainingMenu.BreakingBall, TrainingMenu.VelocityTraining, TrainingMenu.Running,
+        };
+
+        // 積み上げ配分バーの表示順（Issue #133-③）: 野手系→投手系（EditableMenus と同順）→ポジション別守備。
+        // 行ごとに同じ順で並べることで、縦スキャンで選手間の配分差を比較できる（UI原則①⑥）。休養は除外＝余白。
+        private static readonly TrainingMenu[] BarMenuOrder =
+        {
+            TrainingMenu.Batting, TrainingMenu.PowerHitting, TrainingMenu.PlateDiscipline, TrainingMenu.Strength,
+            TrainingMenu.Defense, TrainingMenu.Throwing, TrainingMenu.BaseRunning, TrainingMenu.Bunt,
+            TrainingMenu.Pitching, TrainingMenu.BreakingBall, TrainingMenu.VelocityTraining, TrainingMenu.Running,
+            TrainingMenu.DefenseP, TrainingMenu.DefenseC, TrainingMenu.Defense1B, TrainingMenu.Defense2B,
+            TrainingMenu.Defense3B, TrainingMenu.DefenseSS, TrainingMenu.DefenseLF, TrainingMenu.DefenseCF,
+            TrainingMenu.DefenseRF, TrainingMenu.DefenseInfield, TrainingMenu.DefenseOutfield,
         };
 
         // 守備適性割当口（9ポジション）: ポジション → 専用メニュー。
@@ -175,6 +193,7 @@ namespace KokoSim.Unity.Training
         // 現在週は全画面共有の GameClock を単一ソースとする（週送りで変化。合宿バナー・成長段階に反映）。
         private static int _week => KokoSim.Unity.Shell.GameClock.Week;
         private int _yearFilter;
+        private int _benchFilter;   // 0=全員, 1=ベンチ入り, 2=ベンチ外（Issue #133-④）
         private int _sortMode;
 
         public int Budget => _training.DefaultBudgetMinutes;
@@ -204,6 +223,7 @@ namespace KokoSim.Unity.Training
         }
 
         public void SetYearFilter(int grade) => _yearFilter = grade;
+        public void SetBenchFilter(int mode) => _benchFilter = mode;
         public void SetSortMode(int mode) => _sortMode = mode;
 
         /// <summary>選手のプリセットを設定（統合モーダルから選択）。委任中は無効。
@@ -299,6 +319,7 @@ namespace KokoSim.Unity.Training
                 SelectedIndex = _selected,
                 SelectedName = _roster[_selected].Name,
                 YearFilter = _yearFilter,
+                BenchFilter = _benchFilter,
                 SortMode = _sortMode,
                 Templates = new List<string>(_templates),
             };
@@ -309,28 +330,56 @@ namespace KokoSim.Unity.Training
             BuildCampBanner(view);
             BuildNominations(view);
 
-            // 行は「誰・総合・現在のプリセット」だけを持つ（配分/使用量/見込みは統合モーダルへ移設）。
-            var order = SortedFilteredIndices();
-            foreach (var i in order)
-            {
-                var src = _roster[i];
-                view.Rows.Add(new PlayerTrainRow
-                {
-                    Index = i,
-                    Name = src.Name,
-                    NumText = NumTextAt(i),
-                    BenchOut = _roster[i].UniformNumber == 0,
-                    GradeLabel = src.Grade + "年",
-                    HandLabel = HandednessLabels.Combined(src.Throws, src.Bats),
-                    OverallGrade = Tiers.FromStrength(src.AverageLevel()).ToString(),
-                    PresetJp = _delegated[i] ? "委任" : PresetJp(_plans[i].Preset),
-                    FocusSummary = _delegated[i] ? "コーチ一任" : FocusSummary(ResolvedAllocations(i)),
-                    Selected = i == _selected,
-                });
-            }
+            // 行は「誰・カテゴリ別ランク・投打・現在のプリセット＋配分バー」を持つ（詳細編集は統合モーダル）。
+            foreach (var i in SortedFilteredIndices()) view.Rows.Add(MakeRow(i));
+
+            // 複製ピッカー（コピー元を選ぶ, Issue #133-⑤）は一覧のフィルタに関わらず全部員から選べる（学年順・安定）。
+            var all = new List<int>();
+            for (var i = 0; i < _roster.Count; i++) all.Add(i);
+            all.Sort(GradeSort);
+            foreach (var i in all) view.CopyRows.Add(MakeRow(i));
 
             BuildSelected(view);
             return view;
+        }
+
+        /// <summary>一覧・複製ピッカーで共用する行データ（Issue #133）。</summary>
+        private PlayerTrainRow MakeRow(int i)
+        {
+            var src = _roster[i];
+            return new PlayerTrainRow
+            {
+                Index = i,
+                Name = src.Name,
+                NumText = NumTextAt(i),
+                BenchOut = src.UniformNumber == 0,
+                GradeLabel = src.Grade + "年",
+                HandLabel = HandednessLabels.Combined(src.Throws, src.Bats),
+                Strength = PlayerStrengthProfile.Compute(src, Coeff),
+                PresetJp = _delegated[i] ? "委任" : PresetJp(_plans[i].Preset),
+                FocusSummary = _delegated[i] ? "コーチ一任" : FocusSummary(ResolvedAllocations(i)),
+                Chips = AllocationChips(i),
+                Selected = i == _selected,
+            };
+        }
+
+        /// <summary>積み上げ配分バーの元データ（Issue #133-③）。解決済み配分を BarMenuOrder の固定順で列挙。
+        /// 休養は除外＝バー右側の余白として残り時間が読める。</summary>
+        private List<MenuSlot> AllocationChips(int index)
+        {
+            var alloc = new Dictionary<TrainingMenu, int>();
+            foreach (var a in ResolvedAllocations(index))
+                if (a.Menu != TrainingMenu.Rest && a.Minutes > 0)
+                {
+                    alloc.TryGetValue(a.Menu, out var cur);
+                    alloc[a.Menu] = cur + a.Minutes;
+                }
+
+            var list = new List<MenuSlot>();
+            foreach (var m in BarMenuOrder)
+                if (alloc.TryGetValue(m, out var min))
+                    list.Add(new MenuSlot { Menu = m, MenuJp = MenuJp(m), Minutes = min });
+            return list;
         }
 
         private void BuildCampBanner(TrainingPlanView view)
@@ -370,7 +419,7 @@ namespace KokoSim.Unity.Training
             view.SelBenchOut = _roster[_selected].UniformNumber == 0;
             view.SelYear = sel.Grade + "年";
             view.SelHand = HandednessLabels.Combined(sel.Throws, sel.Bats);
-            view.SelGrade = Tiers.FromStrength(sel.AverageLevel()).ToString();
+            view.SelStrength = PlayerStrengthProfile.Compute(sel, Coeff);
             view.SelNominated = sel.IndividualCoaching;
             view.SelNomLabel = view.SelNominated ? "個別指導 指名中" : "個別指導に指名";
             view.DelegateOn = _delegated[_selected];
@@ -387,6 +436,8 @@ namespace KokoSim.Unity.Training
                 view.SelectedSlots.Add(new MenuSlot
                 {
                     Menu = m, MenuJp = MenuJp(m), Icon = MenuIcon(m), MainEffectJp = MainEffectJp(m), Minutes = min,
+                    // 打撃系/投手系の繋ぎ目に節見出しを挿す（Issue #133-⑥。EditableMenus は野手系→投手系の順）。
+                    SectionJp = m == EditableMenus[0] ? "野手練習" : m == TrainingMenu.Pitching ? "投手練習" : "",
                 });
             }
 
@@ -529,7 +580,14 @@ namespace KokoSim.Unity.Training
         {
             var idx = new List<int>();
             for (var i = 0; i < _roster.Count; i++)
-                if (_yearFilter == 0 || _roster[i].Grade == _yearFilter) idx.Add(i);
+            {
+                if (_yearFilter != 0 && _roster[i].Grade != _yearFilter) continue;
+                // ベンチ入り＝背番号1–20、ベンチ外＝0（DevelopingPlayer.UniformNumber の確立済み判定, Issue #133-④）。
+                var benchOut = _roster[i].UniformNumber == 0;
+                if (_benchFilter == 1 && benchOut) continue;
+                if (_benchFilter == 2 && !benchOut) continue;
+                idx.Add(i);
+            }
 
             idx.Sort((a, b) => _sortMode switch
             {

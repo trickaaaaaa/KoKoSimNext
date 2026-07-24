@@ -81,7 +81,6 @@
    見出しLabelは既定 margin/padding を持つので 0 に潰し、データ列(VisualElement)と列境界を一致させる。 */
 .tp-th { font-size: 18px; color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
 .tp-th--id { width: var(--col-id); }
-.tp-th--grade { width: var(--col-grade); -unity-text-align: middle-center; }
 .tp-th--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
 .tp-th--copy { width: var(--col-copy); -unity-text-align: middle-center; }
 /* ヘッダーは ScrollView の外にあるため縦スクロールバー分だけ広い。右端に同幅のガターを置いて
@@ -95,7 +94,6 @@
    列幅はヘッダー（tp-th--*）と同一 --col-* を参照する。 */
 .tcell { flex-direction: row; align-items: center; flex-shrink: 0; }
 .tcell--id { width: var(--col-id); }
-.tcell--grade { width: var(--col-grade); justify-content: center; }
 .tcell--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
 .tcell--copy { width: var(--col-copy); justify-content: center; }
 
@@ -103,9 +101,12 @@
 .trow__idtext { flex-direction: column; }
 .trow__name { font-size: 22px; color: var(--color-chalk); }
 .trow__name:hover { color: var(--sky); }
-.trow__meta { flex-direction: row; margin-top: 4px; }
+/* メタ行は1行固定（折返し禁止・縦stretch防止）。チップ＋カテゴリ4チップを横一列に並べる（Issue #133）。 */
+.trow__meta { flex-direction: row; align-items: center; margin-top: 4px; }
+.trow__meta .cat-rank-chips { flex-wrap: nowrap; }
 
-/* preset-open：行の「練習設定」列＝プリセット名＋主眼メニュー＋変更（クリックでモーダル・余白を埋めて全幅） */
+/* preset-open：行の「練習設定」列＝プリセット名＋主眼メニュー｜配分積み上げバー｜変更（クリックでモーダル）。
+   旧「余白の正体」（space-between の空き帯）に積み上げバーを渡す（Issue #133-③・案B）。 */
 .preset-open {
     flex-direction: row; align-items: center; justify-content: space-between;
     height: 52px; flex-grow: 1;
@@ -114,7 +115,9 @@
     padding-left: 16px; padding-right: 14px; margin-right: var(--sp-4);
 }
 .preset-open:hover { border-color: var(--line-focus); background-color: var(--sf-hover); }
-.preset-open__texts { flex-direction: column; flex-grow: 1; }
+.preset-open__texts { flex-direction: column; flex-grow: 0; flex-shrink: 0; width: 240px; }
+/* 積み上げバー（部品 .stack-bar）を空き帯いっぱいに伸ばす。テキスト（主眼メニュー名）が凡例を兼ねる。 */
+.preset-open__bar { flex-grow: 1; margin-left: var(--sp-3); margin-right: var(--sp-4); }
 .preset-open__label { font-size: 20px; color: var(--color-chalk); }
 .preset-open__label--custom { color: var(--sky); }
 .preset-open__focus { font-size: var(--fs-label); color: var(--color-muted); margin-top: 3px; }
@@ -147,7 +150,9 @@
 }
 .tpm-head__id { flex-direction: column; }
 .tpm-head__namerow { flex-direction: row; align-items: center; }
-.tpm-head__meta { margin-left: 0; margin-top: 2px; }
+.tpm-head__metarow { flex-direction: row; align-items: center; margin-top: 2px; }
+.tpm-head__meta { margin-left: 0; }
+.tpm-head__cats { margin-left: var(--sp-2); }
 .tpm-delegate { flex-direction: row; align-items: center; margin-left: var(--sp-3); margin-right: var(--sp-3); }
 .tpm-delegate .switch { margin-right: var(--sp-2); }
 .tpm-delegate__state { font-size: var(--fs-cap); color: var(--color-muted); width: 44px; }
@@ -237,6 +242,8 @@
 .tp-ed-section__title { font-size: 19px; color: var(--color-chalk); letter-spacing: 1px; }   /* 見出しは白（黄はCTAと最重要数値だけ・4-B）。モーダルの REFINE でも白に上書き済み */
 .tp-ed-section__title--mt { margin-top: var(--sp-4); margin-bottom: var(--sp-2); }
 .tp-ed-section__lock { font-size: var(--fs-label); color: var(--color-warn); margin-left: 10px; }
+/* メニュー一覧内の系統見出し（野手練習/投手練習・Issue #133-⑥）。節見出しを一段小さく淡くした従属見出し。 */
+.tpm-menugroup { font-size: var(--fs-label); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-2); margin-bottom: var(--sp-2); }
 
 /* menu slot（±10分・StepperRow。攻撃メニューと守備ポジションで共用・縦並び） */
 .mslot {
@@ -274,6 +281,31 @@
     padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-1); padding-bottom: var(--sp-1); margin-left: var(--sp-2);
 }
 .tp-tpl__save:hover { background-color: var(--color-panel-hover); }
+
+/* ═══ 複製ピッカー（tp-copy-modal・コピー元を選ぶ, Issue #133-⑤） ═══ */
+.tpc-card { width: 720px; max-width: 86%; max-height: 82%; }
+.tpc-head {
+    flex-shrink: 0;
+    flex-direction: row; align-items: center;
+    padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: 14px; padding-bottom: 14px;
+    background-color: var(--color-panel-deep);
+    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line);
+}
+.tpc-scroll { flex-grow: 1; min-height: 0; }
+.tpc-list { padding-left: var(--sp-3); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
+.tpc-row {
+    flex-direction: row; align-items: center;
+    padding-left: var(--sp-2); padding-right: var(--sp-3); padding-top: var(--sp-2); padding-bottom: var(--sp-2);
+    border-bottom-width: var(--border-w); border-bottom-color: var(--color-line-soft);
+}
+.tpc-row:hover { background-color: var(--color-row-hover); }
+.tpc-row__body { width: 190px; flex-shrink: 0; margin-left: var(--sp-2); }
+.tpc-row__name { font-size: var(--fs-body); color: var(--color-chalk); }
+.tpc-row__meta { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
+.tpc-row__plan { flex-grow: 1; flex-direction: column; margin-left: var(--sp-3); }
+.tpc-row__preset { font-size: var(--fs-label); color: var(--color-chalk); margin-bottom: 4px; }
+/* ピッカー行内の積み上げバーは行の全幅を使う（.preset-open__bar の余白を打ち消す） */
+.tpc-row__plan .preset-open__bar { margin-left: 0; margin-right: 0; }
 
 /* toast */
 .tp-toast {
@@ -392,6 +424,8 @@
 .tpm-card .tp-ed-id__cap { color: var(--t2); }
 .tpm-card .tp-ed-who__name { color: var(--t1); }
 .tpm-card .tp-ed-head__meta { color: var(--t2); }
+/* カテゴリ別ランクの1字ラベル（打走守投）はダーク面では中間トーンで読ませる（Issue #133） */
+.tpm-card .cat-rank-chips__label { color: var(--t2); }
 
 /* 個別指導ボタン：既定は中立アウトライン、指名中(--on)のみアクセント維持 */
 .tpm-card .nom-btn { color: var(--t2); border-color: #2E3D36; background-color: var(--m-card); }

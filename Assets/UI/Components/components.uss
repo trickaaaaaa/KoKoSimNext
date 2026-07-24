@@ -36,6 +36,36 @@
    選手一覧など「行1本にチップ4つ＋ラベル」を並べる画面専用。チップ本体は RankChip/RankChipLegacy を流用。 */
 .cat-rank-chips { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cat-rank-chips__label { font-size: var(--fs-cap); color: var(--color-muted); margin-left: var(--sp-2); }
+/* コンパクト版（Issue #133・練習計画の行メタ枠）：1字ラベル「打走守投」＋小チップで横幅を詰める。 */
+.cat-rank-chips--compact .cat-rank-chips__label { margin-left: 2px; margin-right: 2px; }
+.cat-rank-chips--compact .grade {
+    min-width: 20px; height: 22px; font-size: var(--fs-cap);
+    padding-left: 3px; padding-right: 3px; border-width: var(--border-w);
+}
+
+/* ── StackedBar：積み上げ横バー（練習配分の割合可視化, Issue #133） ─
+   セグメント色は .stack-bar__seg--X（値は tokens.uss --tm-*）。合計<100% の残りは
+   トラック地（白面）が見える＝休養/残り時間。黄はCTA専用なので帯に使わない。 */
+.stack-bar {
+    flex-direction: row;
+    height: 16px;
+    background-color: var(--color-panel);
+    border-width: var(--border-w); border-color: var(--color-line);
+}
+.stack-bar__seg { height: 100%; flex-shrink: 0; }
+.stack-bar__seg--batting    { background-color: var(--tm-batting); }
+.stack-bar__seg--power      { background-color: var(--tm-power); }
+.stack-bar__seg--discipline { background-color: var(--tm-discipline); }
+.stack-bar__seg--strength   { background-color: var(--tm-strength); }
+.stack-bar__seg--defense    { background-color: var(--tm-defense); }
+.stack-bar__seg--throwing   { background-color: var(--tm-throwing); }
+.stack-bar__seg--baserun    { background-color: var(--tm-baserun); }
+.stack-bar__seg--bunt       { background-color: var(--tm-bunt); }
+.stack-bar__seg--pitching   { background-color: var(--tm-pitching); }
+.stack-bar__seg--breaking   { background-color: var(--tm-breaking); }
+.stack-bar__seg--velocity   { background-color: var(--tm-velocity); }
+.stack-bar__seg--running    { background-color: var(--tm-running); }
+.stack-bar__seg--defpos     { background-color: var(--tm-defpos); }
 
 /* ═══ design-19 デーゲーム・フルNB：枠＋ベタ影の器（G0 技術検証）═════════════════════
    USS に box-shadow / 擬似要素は無いので、ベタ影を2方式で再現する（design-19 §2）。

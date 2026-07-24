@@ -110,6 +110,22 @@ namespace KokoSim.Unity.Components
             return box;
         }
 
+        /// <summary>
+        /// カテゴリ別ランクのコンパクト版（1字ラベル「打走守投」＋小チップ）。行のメタ枠など
+        /// 幅の限られた場所用（Issue #133・練習計画）。フル版と同じくラベル＋文字併記（UI原則③）。
+        /// </summary>
+        public static VisualElement CategoryRankChipsCompact(PlayerStrength s)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("cat-rank-chips");
+            box.AddToClassList("cat-rank-chips--compact");
+            AddCategoryChip(box, "打", s.BattingTier);
+            AddCategoryChip(box, "走", s.MobilityTier);
+            AddCategoryChip(box, "守", s.DefenseTier);
+            AddCategoryChip(box, "投", s.PitchingTier);
+            return box;
+        }
+
         private static void AddCategoryChip(VisualElement box, string label, Tier tier)
         {
             var lbl = new Label(label);
@@ -117,6 +133,62 @@ namespace KokoSim.Unity.Components
             box.Add(lbl);
             box.Add(RankChipLegacy(tier.ToString()));
         }
+
+        // ===== StackedBar（積み上げ横バー: 練習配分の割合可視化, Issue #133） =====
+
+        /// <summary>
+        /// 積み上げ横バーのセグメント1本ぶんの入力。色は components.uss の
+        /// `.stack-bar__seg--{StyleClass}`（値は tokens.uss のトークン）で与える＝直書き禁止（UI原則⑤）。
+        /// </summary>
+        public sealed class StackedBarSegment
+        {
+            public string StyleClass = "";  // 色クラス接尾辞（空＝色なし）
+            public float Fraction;          // バー全幅に対する割合 0..1
+            public string Tooltip = "";     // ホバー凡例（メニュー名＋分）
+        }
+
+        /// <summary>
+        /// 積み上げ横バー。セグメントの合計が 1 未満なら右側が余白として残る
+        /// （練習配分では余白＝休養。塗らないことで「残り時間」が読める）。
+        /// </summary>
+        public static VisualElement StackedBar(IReadOnlyList<StackedBarSegment> segments)
+        {
+            var bar = new VisualElement();
+            bar.AddToClassList("stack-bar");
+            foreach (var s in segments)
+            {
+                var seg = new VisualElement();
+                seg.AddToClassList("stack-bar__seg");
+                if (!string.IsNullOrEmpty(s.StyleClass)) seg.AddToClassList("stack-bar__seg--" + s.StyleClass);
+                seg.style.width = Length.Percent(Mathf.Clamp01(s.Fraction) * 100f);
+                seg.tooltip = s.Tooltip;
+                bar.Add(seg);
+            }
+            return bar;
+        }
+
+        /// <summary>
+        /// 練習メニュー → 積み上げバー色クラス（tokens.uss --tm-*）の対応（Issue #133・ユーザー確定
+        /// 「メニュー別に色分け」）。ポジション別守備＋内外野汎用は判別不能な色数になるため defpos の
+        /// 1色に集約。休養は空文字＝塗らない（バー右側の余白として残す）。
+        /// </summary>
+        public static string TrainingMenuColorClass(KokoSim.Engine.Season.TrainingMenu m) => m switch
+        {
+            KokoSim.Engine.Season.TrainingMenu.Batting => "batting",
+            KokoSim.Engine.Season.TrainingMenu.PowerHitting => "power",
+            KokoSim.Engine.Season.TrainingMenu.PlateDiscipline => "discipline",
+            KokoSim.Engine.Season.TrainingMenu.Strength => "strength",
+            KokoSim.Engine.Season.TrainingMenu.Defense => "defense",
+            KokoSim.Engine.Season.TrainingMenu.Throwing => "throwing",
+            KokoSim.Engine.Season.TrainingMenu.BaseRunning => "baserun",
+            KokoSim.Engine.Season.TrainingMenu.Bunt => "bunt",
+            KokoSim.Engine.Season.TrainingMenu.Pitching => "pitching",
+            KokoSim.Engine.Season.TrainingMenu.BreakingBall => "breaking",
+            KokoSim.Engine.Season.TrainingMenu.VelocityTraining => "velocity",
+            KokoSim.Engine.Season.TrainingMenu.Running => "running",
+            KokoSim.Engine.Season.TrainingMenu.Rest => "",
+            _ => "defpos",   // ポジション別守備9種＋内野/外野汎用
+        };
 
         // ===== SchoolName（設計書16 §4-3。校名は常に太明朝） =====
 
