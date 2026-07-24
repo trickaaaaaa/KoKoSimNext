@@ -2,7 +2,7 @@
 // 部員一人ひとりに練習計画(TrainingPlan: 複数メニュー×練習時間[分])を割当する名簿型。
 // 練習時間の総量は budget（施設で増える, 現状は TrainingCoefficients.DefaultBudgetMinutes）。
 // プリセット（お任せ6種）・他選手からのコピー・Custom分編集・守備ポジション別割当に対応。
-// 効果プレビューは各選手ごとに seed=42 部員を再生成して1週ドライラン（非破壊・決定論）。
+// 効果プレビューは実選手のクローン（DevelopingPlayer.Clone, Issue #223）で1週ドライラン（非破壊・決定論）。
 //
 // 【エンジン実データ駆動】背番号ランク・総合力グレード(Tiers.FromStrength)・使用率・伸び見込み・
 //   守備適性(Aptitude/DefenseXメニュー)・合宿倍率＆週送り(SeasonCalendar)・
@@ -12,7 +12,6 @@
 //   学年フィルタ/ソート。これらは成長ロジックに未接続（design-03/04で今後実装予定の枠）。
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
-using KokoSim.Engine.Nation;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
@@ -488,7 +487,7 @@ namespace KokoSim.Unity.Training
             var bars = new List<GainBar>();
             var alloc = ResolvedAllocations(index);
 
-            var p = FreshRoster()[index];   // 非破壊ドライラン（捨てるインスタンス）
+            var p = _roster[index].Clone();   // 実選手の複製で非破壊ドライラン（Issue #223・捨てるインスタンス）
             // 個別指導3枠（Issue #126）: このプレビュー用インスタンスへ指名状態を写す（実選手側は
             // ToggleNominate が書き込み済み）。監督の分野別指導力（#115）も注入し、追加倍率を可視化する。
             p.IndividualCoaching = IsNominated(index);
@@ -610,20 +609,6 @@ namespace KokoSim.Unity.Training
         /// <summary>背番号の表示テキスト（ベンチ外は「—」）。単一ソースは DevelopingPlayer.UniformNumber。</summary>
         private string NumTextAt(int index)
             => _roster[index].UniformNumber == 0 ? "—" : _roster[index].UniformNumber.ToString();
-
-        private static List<DevelopingPlayer> FreshRoster()
-        {
-            var rng = new Xoshiro256Random(42);
-            var roster = new RosterCoefficients();
-            var list = new List<DevelopingPlayer>();
-            for (var grade = 1; grade <= 3; grade++)
-                foreach (var p in ProspectGenerator.Intake(grade, roster, rng))
-                {
-                    p.Grade = grade;
-                    list.Add(p);
-                }
-            return list;
-        }
 
         /// <summary>現在の配分の主眼メニューを分の多い順に上位3件、「投込・変化球・球速」の形で。</summary>
         private static string FocusSummary(IReadOnlyList<MenuAllocation> alloc)

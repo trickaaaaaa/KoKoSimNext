@@ -216,4 +216,67 @@ public sealed class DevelopingPlayer
         foreach (var k in kinds) sum += _level[(int)k];
         return sum / kinds.Length;
     }
+
+    /// <summary>
+    /// 可変状態の完全複製（Issue #223）。非破壊ドライラン（練習プレビュー等）用に、レベル/経験値/
+    /// 才能上限・守備適性＋適性exp・精神力/リード系・習得球種・隠し属性を丸ごと複製する。
+    /// 乱数は使わない（決定論、不変条件#2）。複製後にクローンへ加えた変更は元の選手に影響しない。
+    /// </summary>
+    public DevelopingPlayer Clone()
+    {
+        var clone = new DevelopingPlayer
+        {
+            Id = Id,
+            Name = Name,
+            Grade = Grade,
+            Throws = Throws,
+            Bats = Bats,
+            HasPitcherBackground = HasPitcherBackground,
+            GrowthType = GrowthType,
+            PersonalityFactor = PersonalityFactor,
+            IsProdigy = IsProdigy,
+            Mental = Mental,
+            MentalExp = MentalExp,
+            MentalCap = MentalCap,
+            Lead = Lead,
+            LeadExp = LeadExp,
+            LeadCap = LeadCap,
+            Leadership = Leadership,
+            Personality = Personality,
+            IsCaptain = IsCaptain,
+            IsRetired = IsRetired,
+            UniformNumber = UniformNumber,
+            Skills = Skills,
+            PitchingGrowth = PitchingGrowth,
+            BattingGrowth = BattingGrowth,
+            DefenseGrowth = DefenseGrowth,
+            Plan = Plan,
+            IndividualCoaching = IndividualCoaching,
+            ConditionValue = ConditionValue,
+            Injury = Injury,
+            InjurySite = InjurySite,
+            InjuryType = InjuryType,
+            InjuryWeeksRemaining = InjuryWeeksRemaining,
+            InjuryResistance = InjuryResistance,
+            SlumpWeeks = SlumpWeeks,
+            HasYips = HasYips,
+        };
+        if (HasExplicitRole) clone.IsPitcher = IsPitcher;
+
+        for (var i = 0; i < Count; i++)
+        {
+            clone._level[i] = _level[i];
+            clone._exp[i] = _exp[i];
+            clone._cap[i] = _cap[i];
+        }
+        for (var i = 0; i < PositionCount; i++)
+        {
+            clone._aptitude[i] = _aptitude[i];
+            clone._aptitudeExp[i] = _aptitudeExp[i];
+            clone._aptitudeCap[i] = _aptitudeCap[i];
+        }
+        clone.LearnedPitches.AddRange(LearnedPitches);
+
+        return clone;
+    }
 }
