@@ -104,6 +104,97 @@ public sealed class NationalTournamentEngineTests
             Strength = 44 + (i * 31) % 38, Fame = 45,
         }).ToList();
 
+    /// <summary>学校ごとの通算成績を並び順非依存の文字列へ畳む（決定論回帰の digest）。</summary>
+    private static string StatsDigest(NationTournamentStats stats)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var schoolId in stats.Schools.OrderBy(x => x))
+        {
+            var book = stats.ForSchool(schoolId)!;
+            sb.Append(schoolId).Append(':');
+            foreach (var (pid, line) in book.Players.OrderBy(kv => kv.Key))
+                sb.Append(pid).Append('#')
+                  .Append(line.Batting.Hits).Append('/')
+                  .Append(line.Batting.AtBats).Append('/')
+                  .Append(line.Pitching.StrikeOuts).Append('/')
+                  .Append(line.Pitching.Outs).Append(';');
+            sb.Append('|');
+        }
+        return sb.ToString();
+    }
+
+    [Fact]
+    public void BeginSummer_SlicedDriver_MatchesMonolithicRunSummer()
+    {
+        // 一括版（RunSummer）と、ジョブを1本ずつ順に実行する版（Shell の逐次スロットル駆動を模す）で、
+        // champion 列・stats digest が完全一致すること（#208 スライス化前後の決定論不変）。
+        var nation = MakeMiniNation();
+
+        var monoStats = new NationTournamentStats();
+        var monoResults = NationalTournamentEngine.RunSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, monoStats, new Xoshiro256Random(99));
+
+        var slicedStats = new NationTournamentStats();
+        var run = NationalTournamentEngine.BeginSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, slicedStats, new Xoshiro256Random(99));
+        var slicedResults = run.Jobs.Select(j => j()).ToList();   // 1本ずつ実行＝逐次スライス駆動
+
+        Assert.Equal(run.Total, run.Jobs.Count);                   // 母数＝ジョブ数（進捗バーの整合）
+        Assert.Equal(monoResults.Count, slicedResults.Count);
+        Assert.Equal(
+            monoResults.Select(r => (r.PrefectureId, r.ChampionName)),
+            slicedResults.Select(r => (r.PrefectureId, r.ChampionName)));
+        Assert.Equal(StatsDigest(monoStats), StatsDigest(slicedStats));
+    }
+
+    [Fact]
+    public void BeginSummer_ParallelJobs_MatchesSequential()
+    {
+        // ジョブを複数スレッドで並列実行しても（Shell の Boost 時の並列消化を模す）、逐次実行と
+        // champion・stats digest が完全一致すること（#208 並列化の決定論不変＝区画は独立 Fork）。
+        var nation = MakeMiniNation();
+
+        var seqStats = new NationTournamentStats();
+        var seqResults = NationalTournamentEngine.RunSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, seqStats, new Xoshiro256Random(123));
+
+        var parStats = new NationTournamentStats();
+        var run = NationalTournamentEngine.BeginSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, parStats, new Xoshiro256Random(123));
+        System.Threading.Tasks.Parallel.ForEach(run.Jobs, job => job());
+
+        Assert.Equal(StatsDigest(seqStats), StatsDigest(parStats));   // 並列でも積算結果は不変
+    }
+
+    [Fact]
+    public void BeginSummer_Total_EqualsPrefectureCount_AndOneJobPerPrefecture()
+    {
+        // スライス単位の上限＝1区画/ジョブ（確保フットプリントの刻み保証）。分割区画も1区画1ジョブ。
+        var nation = MakeNationWithHokkaidoAndTokyo();
+        var run = NationalTournamentEngine.BeginSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, new NationTournamentStats(), new Xoshiro256Random(3));
+
+        Assert.Equal(4, run.Total);                       // 北海道2区画＋東京2区画
+        Assert.Equal(4, run.Jobs.Count);                  // 母数ぶんきっかりジョブがある
+    }
+
+    [Fact]
+    public void BeginSummer_ExcludesPrefecture_FromTotalAndJobs()
+    {
+        var nation = MakeMiniNation();
+        var run = NationalTournamentEngine.BeginSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, new NationTournamentStats(), new Xoshiro256Random(7), excludePrefectureId: 2);
+
+        Assert.Equal(2, run.Total);
+        Assert.DoesNotContain(run.Jobs.Select(j => j()), r => r.PrefectureId == 2);
+    }
+
     [Fact]
     public void RunSummer_SkipsExcludedPrefecture()
     {

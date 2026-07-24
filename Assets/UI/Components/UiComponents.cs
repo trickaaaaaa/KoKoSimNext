@@ -307,6 +307,41 @@ namespace KokoSim.Unity.Components
             return row;
         }
 
+        // ===== SimProgress（背景処理の進捗ストリップ・#208） =====
+
+        /// <summary>
+        /// 画面下端の進捗ストリップ「ロード中」＋充填バー（#208）。ブースト画面（スタメン設定・結果）で
+        /// 背景の全国裏試合を集中消化している間だけ出す。大会名・県数などの内部情報は一切出さず、
+        /// ラベルは「ロード中」固定・バーの充填だけで進捗を表す。生成後は <see cref="SetSimProgress"/> で
+        /// 充填率を更新し、完了したら display:none で即消す（駆動は <c>SimProgressOverlay</c>）。
+        /// </summary>
+        public static VisualElement SimProgress()
+        {
+            var strip = new VisualElement { name = "sim-load" };
+            strip.AddToClassList("sim-load");
+
+            var label = new Label("ロード中");
+            label.AddToClassList("sim-load__label");
+            label.AddToClassList("f-body");   // 和文ラベル＝サンセリフ（書体3役ルール）
+            strip.Add(label);
+
+            var track = new VisualElement();
+            track.AddToClassList("sim-load__track");
+            var fill = new VisualElement { name = "sim-load__fill" };
+            fill.AddToClassList("sim-load__fill");
+            track.Add(fill);
+            strip.Add(track);
+
+            return strip;
+        }
+
+        /// <summary><see cref="SimProgress"/> のバー充填率(0..1)を更新する。</summary>
+        public static void SetSimProgress(VisualElement strip, float pct)
+        {
+            var fill = strip?.Q<VisualElement>("sim-load__fill");
+            if (fill != null) fill.style.width = Length.Percent(Mathf.Clamp01(pct) * 100f);
+        }
+
         // ===== CompareRow（2選手の能力対比） =====
 
         /// <summary>
