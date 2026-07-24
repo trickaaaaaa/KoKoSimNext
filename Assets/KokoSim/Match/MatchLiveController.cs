@@ -44,6 +44,13 @@ namespace KokoSim.Unity.Match
         /// <summary>次に MatchLive がアクティブ化されたとき消費するライブ観戦要求（一度使ったらクリア）。</summary>
         public static LiveMatchRequest Pending;
 
+        /// <summary>
+        /// スクショ用シューター（<see cref="AdvanceForCapture"/> で手動駆動する）が真にする。真の間は
+        /// 自動連続進行（issue #173）を止め、従来どおり1打席ずつ手動で解決させる。シューターは MatchLive を
+        /// アクティブ化する前にこれを立てること（OnEnable の自動開始を抑止するため）。
+        /// </summary>
+        public static bool CaptureMode;
+
         [SerializeField] private ulong gameSeed = 20260718UL;
         [SerializeField] private string awayName = "北都大付属";
         [SerializeField] private string homeName = "桜丘";
@@ -73,7 +80,13 @@ namespace KokoSim.Unity.Match
         // ラインスコアを描き直したかのフラグ。掲示板は「プレーが確定してから点を掲げる」（実物の運用と同じ）
         // ので、打席の演出が resolved になった瞬間に1回だけ更新する（毎フレーム Snapshot を組み直さない）。
         private bool _lineScorePosted;
-        private Button _nextPa, _subOpen, _skip;
+        // タイム（伝令）＝進行を中断して采配を差し込む主操作（issue #173）。再開で自動進行へ戻る。
+        private Button _time, _resume, _subOpen, _skip;
+        private Label _timeoutStatus;
+        // 自動連続進行の中断中フラグ（タイム発動〜再開の間 true）。盤面・自動進行の両方を止める。
+        private bool _paused;
+        // 自動進行を開始したか（OnEnable の一度だけ。スクショ時＝CaptureMode は開始しない）。
+        private bool _autoStarted;
         // タイムライン駆動カメラワーク（design-06/12・Issue #119）の観戦設定トグル。既定オフ＝現行の固定全景。
         // ×4速時は酔い防止のため強制的に全景固定へ戻す（スキップは委任でその場で試合が終わるため対象外）。
         private Button _camWork;
@@ -159,8 +172,11 @@ namespace KokoSim.Unity.Match
             _result = _root.Q<Label>("result-chip");
             _batter = _root.Q<Label>("batter");
 
-            _nextPa = _root.Q<Button>("next-pa");
-            if (_nextPa != null) _nextPa.clicked += OnNextPa;
+            _time = _root.Q<Button>("time");
+            if (_time != null) _time.clicked += OnTime;
+            _resume = _root.Q<Button>("resume");
+            if (_resume != null) _resume.clicked += OnResume;
+            _timeoutStatus = _root.Q<Label>("timeout-status");
             _subOpen = _root.Q<Button>("sub-open");
             if (_subOpen != null) _subOpen.clicked += OnOpenSubstitution;
             _skip = _root.Q<Button>("skip");
@@ -199,16 +215,22 @@ namespace KokoSim.Unity.Match
             // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
             PostLineScore(1, isTop: true, finished: false);
             SetBackHomeVisible(false);
-            EnterTacticsWindow("試合開始。采配を選んで打席へ。");
+            if (_caption != null) _caption.text = "試合開始。";
+            UpdateControlState();
             RefreshPanel();   // 初期スタメン列（今日の成績は0・現打者/HUDは打席開始で点灯）
             _view.SetResting(false, false, false);   // 打席開始前も守備陣を定位置に表示（盤面を空にしない）
+
+            // 自動連続進行（issue #173）: 打席頭で止めず終局まで流す。スクショ時（CaptureMode）は開始せず、
+            // シューターの AdvanceForCapture で従来どおり1打席ずつ手動駆動する。
+            if (!CaptureMode) StartAutoRun();
         }
 
         // 画面を離れるときにハンドラを外す（OnEnable が毎回登録するため、外さないと往復のたび多重登録になり
         // 1クリックで複数打席進んでしまう）。
         private void OnDisable()
         {
-            if (_nextPa != null) _nextPa.clicked -= OnNextPa;
+            if (_time != null) _time.clicked -= OnTime;
+            if (_resume != null) _resume.clicked -= OnResume;
             if (_subOpen != null) _subOpen.clicked -= OnOpenSubstitution;
             _subPanel?.Close();
             if (_skip != null) _skip.clicked -= OnSkip;
@@ -224,6 +246,8 @@ namespace KokoSim.Unity.Match
         {
             _gameOver = false;
             _replaying = false;
+            _paused = false;
+            _autoStarted = false;
             _finalResult = null;
             _onComplete = null;
             _current = null;
@@ -347,39 +371,72 @@ namespace KokoSim.Unity.Match
             return list;
         }
 
-        // ── 采配窓（打席前・再生停止中） ──
-        private void EnterTacticsWindow(string note)
+        // ── 自動連続進行（issue #173） ──
+        // 打席頭で止めず、再生終了→次打席を自動解決→再生、を連鎖する。プレイヤーは「タイム」（伝令）で
+        // 任意に中断し、采配を差し込んでから「再開」で自動進行へ戻る。設計書16 UI原則⑦「操作は少なく深く」。
+
+        // 最初の打席を起こす（OnEnable から1回だけ・スクショ時は呼ばない）。
+        private void StartAutoRun()
         {
-            _replaying = false;
-            if (_caption != null) _caption.text = note;
-            var canAct = !_gameOver;
-            SetEnabled(_nextPa, canAct);
-            SetEnabled(_subOpen, canAct);
-            SetEnabled(_skip, canAct);
+            if (_autoStarted) return;
+            _autoStarted = true;
+            AutoAdvanceNext();
         }
 
-        // 打席解決（_prog.Advance()）は重い場合があり（issue #160）、メインスレッドで同期実行すると
-        // ボタン押下の瞬間にフリーズする。ここだけ BackgroundGameOp（issue #138 で確立した唯一の
-        // 背景実行経路）へ載せ、押下直後にボタンを無効化＝二重発火を防いでからバックグラウンドへ回す。
-        // スクショ用の同期経路（AdvanceForCapture→ResolveAndReplayNext）はここを通らず従来どおり。
-        private void OnNextPa()
+        // 次の打席を解決して再生へ。打席解決（_prog.Advance()）は重い場合があり（issue #160）、
+        // メインスレッドで同期実行するとフリーズするので BackgroundGameOp（issue #138 の唯一の背景実行経路）へ
+        // 載せる。中断中（タイム）・終局・スクショ時・別解決の実行中は起こさない。
+        private void AutoAdvanceNext()
         {
-            if (_gameOver || BackgroundGameOp.Running) return;
-            SetEnabled(_nextPa, false);
-            SetEnabled(_subOpen, false);
-            SetEnabled(_skip, false);
+            if (_gameOver || _paused || CaptureMode) return;
+            if (_prog == null || BackgroundGameOp.Running) return;
+            if (_subPanel != null && _subPanel.IsOpen) return;   // 交代モーダルを開いている間は待つ
+            _replaying = false;
             PushPitchTacticsChoice();
+            UpdateControlState();
             var prog = _prog;
             BackgroundGameOp.Run(
                 work: () => _pendingAdvanceResult = prog.Advance(),
                 onDone: () => FinishAdvance(_pendingAdvanceResult));
         }
 
-        // 選手交代（設計書09 §6）。攻撃中／守備中で出せる選択肢はモーダル側が出し分ける。
-        // 自校が先攻(away)か後攻(home)かは _managerIsAway。
+        // 「タイム」（伝令）: 進行を中断し、伝令を1回消費して采配窓（選手交代モーダル）を開く。攻守は
+        // いまの表裏×自校の先後で自動判定（攻撃中＝攻撃伝令／守備中＝守備伝令）。残り0では発動しない。
+        // 効果は次に解決される打席から効く（エンジンの決定論経路を通す＝帯・digest不変。設計書09 §3）。
+        private void OnTime()
+        {
+            if (_gameOver || _paused || _prog == null) return;
+            if (BackgroundGameOp.Running) return;   // 解決中は打席境界が未確定なので受け付けない
+            var kind = _prog.CallTimeout(_managerIsAway);
+            if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
+
+            // 再生中なら _replaying はそのまま（Update が _paused で凍結する）。再開すると凍結地点から
+            // 続きが流れ、その打席の後処理（FinishPaView）も正しく走る。
+            _paused = true;
+            var kindJp = kind == MatchProgression.PlayerTimeoutResult.Offense ? "攻撃" : "守備";
+            if (_caption != null) _caption.text = "タイム（" + kindJp + "の伝令）。采配を差し込んで再開。";
+            RefreshPanel();       // 伝令消費を残数表示へ反映
+            UpdateControlState();
+            _subPanel?.Open();    // 采配窓（交代）をタイム発動時に開く導線
+        }
+
+        // 「再開」: 中断を解いて自動連続進行へ戻る。
+        private void OnResume()
+        {
+            if (_gameOver || !_paused) return;
+            _subPanel?.Close();
+            _paused = false;
+            if (_caption != null) _caption.text = "再開。";
+            UpdateControlState();
+            // 再生の途中で止めていたなら Update が続きを流す。打席境界で止めていたら次打席を起こす。
+            if (!_replaying) AutoAdvanceNext();
+        }
+
+        // 選手交代（設計書09 §6）。交代は伝令（タイム）の中でだけ行える＝中断中のみ再オープン可能。
+        // 攻撃中／守備中で出せる選択肢はモーダル側が出し分ける。自校が先攻(away)か後攻(home)かは _managerIsAway。
         private void OnOpenSubstitution()
         {
-            if (_gameOver || _prog == null) return;
+            if (_gameOver || _prog == null || !_paused) return;
             _subPanel?.Open();
         }
 
@@ -393,10 +450,12 @@ namespace KokoSim.Unity.Match
         private void OnSkip()
         {
             if (_gameOver) return;
+            _subPanel?.Close();
+            _paused = false;
             var result = _prog.SkipDelegateToAi(_managerIsAway, managerTacticalSense);
             _view.SetPlay(null);
-            if (_caption != null) _caption.text = "以降を委任して試合終了。";
             EndGame(result);
+            if (_caption != null) _caption.text = "以降を委任して試合終了。";
         }
 
         // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら試合結果画面へ渡す。
@@ -404,10 +463,12 @@ namespace KokoSim.Unity.Match
         {
             _gameOver = true;
             _replaying = false;
+            _paused = false;
             _finalResult = result;
             UpdateScoreboardFinal(result);
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }
-            EnterTacticsWindow("試合終了。");
+            if (_caption != null) _caption.text = "試合終了。";
+            UpdateControlState();
             if (!HandOffToResultScreen()) SetBackHomeVisible(_onComplete != null);
         }
 
@@ -496,7 +557,7 @@ namespace KokoSim.Unity.Match
             foreach (var c in seg.Children()) c.RemoveFromClassList("seg__cell--on");
         }
 
-        // 同期版（スクショ用 AdvanceForCapture 専用。issue #160 以降の対話操作は OnNextPa の
+        // 同期版（スクショ用 AdvanceForCapture 専用。issue #160 以降の対話操作は AutoAdvanceNext の
         // 背景実行経路を使うため、ここは呼ばれても Advance() のコストをそのまま払う）。
         private void ResolveAndReplayNext()
         {
@@ -543,9 +604,7 @@ namespace KokoSim.Unity.Match
             if (_inPitchPhase) BeginPitchBall(0);        // 1球目の投球軌道を盤面へ（#5）
             else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
 
-            SetEnabled(_nextPa, false);
-            SetEnabled(_subOpen, false);
-            SetEnabled(_skip, false);
+            UpdateControlState();
         }
 
         // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
@@ -583,20 +642,26 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        // 打席解決: 塁ダイヤを結果へ更新してから采配窓へ。
+        // 打席解決: 塁ダイヤを結果へ更新してから、中断中でなければ自動で次の打席を起こす（issue #173）。
         private void FinishPaView()
         {
             HidePitchCall();
             HideScoreCall();
             SetBases(_current.BaseFirstAfter, _current.BaseSecondAfter, _current.BaseThirdAfter);
             PushHistory(HistoryLine(_current));   // プレー確定ごとに実況履歴へ1件積む
-            EnterTacticsWindow(NextPrompt());
+            _replaying = false;
+            if (_gameOver) return;
+            if (_caption != null) _caption.text = NextPrompt();
+            AutoAdvanceNext();   // タイム中断中・スクショ時は内部で待つ（起こさない）
         }
 
         private void Update()
         {
             // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
             _view.CameraWorkEnabled = _cameraWorkWanted && _speed < 4f;
+
+            // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
+            if (_paused) return;
 
             // 判定オーバーレイは自前の寿命で消す（打球再生へ移った直後の1球分もそのまま見せる）。
             if (_pitchCallOn)
@@ -884,6 +949,44 @@ namespace KokoSim.Unity.Match
         }
 
         private static void SetEnabled(Button b, bool on) { if (b != null) b.SetEnabled(on); }
+
+        private static void SetVisible(VisualElement e, bool on)
+        {
+            if (e != null) e.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        // ── 操作状態（自動進行／タイム中断／終局。issue #173） ──
+        // 主操作は「タイム」1つ（設計書16 UI原則⑦）。中断中だけ「再開」と「選手交代」を出す。
+        private void UpdateControlState()
+        {
+            var over = _gameOver;
+            SetVisible(_time, !over && !_paused);
+            SetEnabled(_time, !over && !_paused && _prog != null && _prog.CanCallTimeout(_managerIsAway));
+            SetVisible(_resume, !over && _paused);
+            SetEnabled(_resume, !over && _paused);
+            SetEnabled(_subOpen, !over && _paused);   // 交代は伝令（タイム）の中でだけ
+            SetEnabled(_skip, !over);
+            UpdateTimeoutStatus();
+        }
+
+        // 伝令の残数（攻N/守M）を常時表示（issue #173）。残0の側では理由（〜の伝令なし）を添える。
+        private void UpdateTimeoutStatus()
+        {
+            if (_timeoutStatus == null) return;
+            if (_prog == null) { _timeoutStatus.text = ""; return; }
+            var off = _prog.OffenseTimeoutsLeft(_managerIsAway);
+            var def = _prog.DefenseTimeoutsLeft(_managerIsAway);
+            var s = "伝令 攻" + off + " / 守" + def;
+            if (!_gameOver && !_paused)
+            {
+                var onOffense = _prog.IsTeamOnOffense(_managerIsAway);
+                var left = onOffense ? off : def;
+                s += left > 0
+                    ? "（" + (onOffense ? "攻撃中" : "守備中") + "）"
+                    : "（" + (onOffense ? "攻撃" : "守備") + "の伝令なし）";
+            }
+            _timeoutStatus.text = s;
+        }
 
         private void SetBackHomeVisible(bool on)
         {

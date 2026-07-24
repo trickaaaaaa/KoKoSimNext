@@ -290,6 +290,75 @@ public sealed class MatchProgression
         return -1;
     }
 
+    // ===== 伝令（タイム。設計書09 §3・issue #173）。打席境界の采配窓でプレイヤーが発動する。 =====
+    // 攻守各3回・延長は毎回+1（TeamState 側で管理・延長付与は GameEngine が行う）。乱数を消費しないので帯不変。
+
+    /// <summary>プレイヤー発動の伝令の結果種別（<see cref="CallTimeout"/> の戻り値）。</summary>
+    public enum PlayerTimeoutResult
+    {
+        /// <summary>残り0／試合終了で発動できなかった（伝令を消費していない）。</summary>
+        Unavailable,
+        /// <summary>攻撃伝令（打者・走者へ）を1回消費した。</summary>
+        Offense,
+        /// <summary>守備伝令（マウンドへ）を1回消費した。</summary>
+        Defense,
+    }
+
+    /// <summary>
+    /// いま（この打席境界で）自校（teamIsAway）が攻撃側（打者側）か。3アウト直後は次の半イニングへ
+    /// 攻守が入れ替わるので、<see cref="SubstitutionOptions"/> と同じ規則で判定する（伝令の攻守判定に使う）。
+    /// </summary>
+    public bool IsTeamOnOffense(bool teamIsAway)
+    {
+        var halfEnded = _p.CurrentOuts >= 3;
+        var battingIsAway = halfEnded ? !_p.CurrentIsTop : _p.CurrentIsTop;
+        return battingIsAway == teamIsAway;
+    }
+
+    /// <summary>自校（teamIsAway）の攻撃伝令の残り回数（攻各3回・延長で+1, 設計書09 §3）。</summary>
+    public int OffenseTimeoutsLeft(bool teamIsAway) => _p.OffenseOf(teamIsAway).OffenseTimeoutsLeft;
+
+    /// <summary>自校（teamIsAway）の守備伝令の残り回数（守各3回・延長で+1, 設計書09 §3）。</summary>
+    public int DefenseTimeoutsLeft(bool teamIsAway) => _p.OffenseOf(teamIsAway).DefenseTimeoutsLeft;
+
+    /// <summary>
+    /// いまこの局面で自校（teamIsAway）が伝令をかけられるか（攻撃中なら攻撃伝令、守備中なら守備伝令の
+    /// 残りが1以上）。UI の「タイム」ボタンの活性判定に使う。
+    /// </summary>
+    public bool CanCallTimeout(bool teamIsAway)
+    {
+        if (IsFinished) return false;
+        return IsTeamOnOffense(teamIsAway)
+            ? OffenseTimeoutsLeft(teamIsAway) > 0
+            : DefenseTimeoutsLeft(teamIsAway) > 0;
+    }
+
+    /// <summary>
+    /// 設計書09 §3・issue #173: プレイヤーが今この打席境界で伝令をかける。自校（teamIsAway）が攻撃中なら
+    /// 攻撃伝令（打者の緊張を数打席緩和）、守備中なら守備伝令（投手の動揺解除＋数打席の負補正緩和）を1回消費する。
+    /// 残り0／試合終了なら <see cref="PlayerTimeoutResult.Unavailable"/> を返し、伝令を消費しない。
+    ///
+    /// <para>効果は既存のエンジン決定論経路（<c>TryUse*Timeout</c>＋<c>Start*Calm</c>／<c>ClearRattled</c>）を
+    /// そのまま通す。これらは乱数を一切消費しないので、同シード＋同操作なら結果が再現し、統計帯・digest は不変。
+    /// 効果は次に <see cref="Advance"/> で解決される打席から効く（今表示中の打席は既に確定済み）。
+    /// AI/brain 駆動の伝令（<see cref="GameEngine"/>）と同じ伝令カウンタを共有する。</para>
+    /// </summary>
+    public PlayerTimeoutResult CallTimeout(bool teamIsAway)
+    {
+        if (IsFinished) return PlayerTimeoutResult.Unavailable;
+        var team = _p.OffenseOf(teamIsAway);
+        if (IsTeamOnOffense(teamIsAway))
+        {
+            if (!team.TryUseOffenseTimeout()) return PlayerTimeoutResult.Unavailable;
+            team.StartOffenseCalm(_ctx.Tactics.TimeoutDurationPa);
+            return PlayerTimeoutResult.Offense;
+        }
+        if (!team.TryUseDefenseTimeout()) return PlayerTimeoutResult.Unavailable;
+        team.ClearRattled();
+        team.StartDefenseCalm(_ctx.Tactics.TimeoutDurationPa);
+        return PlayerTimeoutResult.Defense;
+    }
+
     /// <summary>
     /// 1球采配（設計書15 Phase C-3）: 次の1球への打撃指示（強攻/待て）を予約する。
     /// offenseIsAway=打撃指示の対象（攻撃側）が先攻(away)か。null=指示解除。1球限り（消費後は自動で解除）。

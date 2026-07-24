@@ -70,9 +70,13 @@
                     <ui:Label name="caption" class="md-caption-text" text="試合開始を待っています" />
                 </ui:VisualElement>
 
+                <!-- 自動連続進行＋タイム（伝令）中断（issue #173）。主操作は「タイム」1つ（UI原則⑦）。
+                     中断中だけ「再開」「選手交代」を出す。伝令の残数（攻N/守M）は常時表示する。 -->
                 <ui:VisualElement class="md-controls">
                     <ui:VisualElement class="md-group">
-                        <ui:Button name="next-pa" class="chip-btn md-replay" text="▶ 次の打席へ" />
+                        <ui:Button name="time" class="chip-btn md-replay" text="⏱ タイム（伝令）" />
+                        <ui:Button name="resume" class="chip-btn md-replay" text="▶ 再開" style="display: none;" />
+                        <ui:Label name="timeout-status" class="mlive-timeout" text="伝令 攻3 / 守3" />
                         <ui:Button name="sub-open" class="chip-btn" text="⇄ 選手交代" />
                         <ui:Button name="skip" class="chip-btn" text="⏭ スキップ（委任）" />
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
