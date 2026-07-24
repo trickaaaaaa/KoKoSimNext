@@ -412,7 +412,6 @@ namespace KokoSim.Unity.Training
 
             var slider = UiComponents.TimeAllocSlider(minutes, maxMinutes, TrainingPresets.StepMinutes, colorClass, locked, onSet);
             slider.AddToClassList("mslot__slider");
-            if (atLimit) slider.AddToClassList("ta-slider--maxed");
             row.Add(slider);
 
             row.Add(UiComponents.NumUnitAuto(minutes + "分", false, "mslot__min"));

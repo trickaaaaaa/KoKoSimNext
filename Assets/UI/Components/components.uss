@@ -104,7 +104,6 @@
 .ta-slider__fill--running    { background-color: var(--tm-running); }
 .ta-slider__fill--defpos     { background-color: var(--tm-defpos); }
 .ta-slider--locked { opacity: 0.5; }
-.ta-slider--maxed { border-color: var(--color-warn); }
 
 /* ═══ design-19 デーゲーム・フルNB：枠＋ベタ影の器（G0 技術検証）═════════════════════
    USS に box-shadow / 擬似要素は無いので、ベタ影を2方式で再現する（design-19 §2）。
