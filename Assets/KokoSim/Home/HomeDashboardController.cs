@@ -435,9 +435,7 @@ namespace KokoSim.Unity.Home
             SetText("pref", v.Prefecture);
             // 掲示板の升目（週・カウントダウン）。大会モードでは文言が変わるので上書き版を使う。
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root, v.CountdownLabel, v.CountdownCells, v.WeekSuffix);
-            SetText("funds", v.Funds);
-            SetText("fame", v.FameGrade);
-            SetText("trust", v.TrustGrade);
+            KokoSim.Unity.Shell.TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース・全画面共通）
 
             // チーム総合力ランクチップ。
             var rank = _root.Q<VisualElement>("team-rank");

@@ -36,7 +36,6 @@ namespace KokoSim.Unity.Practice
     {
         public string WeekLabel = "";
         public string OwnLabel = "";              // 自校名（総合 X / 値）
-        public string FundsText = "";
         public string CostText = "";
         public List<PracticeOpponentRow> Opponents = new List<PracticeOpponentRow>();
         public PracticeOpponentDetail Selected;   // null=未選択
@@ -82,7 +81,6 @@ namespace KokoSim.Unity.Practice
             {
                 WeekLabel = GameClock.CurrentLabel(),
                 OwnLabel = own.Name + "　総合 " + own.Tier + "（" + (int)Math.Round(own.Strength) + "）",
-                FundsText = "¥" + manager.Funds.ToString("0") + "万",
                 CostText = "¥" + scheduler.Cost.ToString("0") + "万",
             };
 

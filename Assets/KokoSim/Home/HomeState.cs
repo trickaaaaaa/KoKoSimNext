@@ -60,9 +60,6 @@ namespace KokoSim.Unity.Home
         public string CountdownCells = "";
         /// <summary>年の小書きに続けて出す補足（"夏の大会 3日目"）。升目には載せない。</summary>
         public string WeekSuffix = "";
-        public string Funds = "";
-        public string FameGrade = "D";
-        public string TrustGrade = "C";
 
         public string HomeTeam = "桜丘";
         public string AwayTeam = "北都大付属";
@@ -414,10 +411,7 @@ namespace KokoSim.Unity.Home
         {
             var week = KokoSim.Unity.Shell.GameClock.Week;        // 共有現在週
             var view = new HomeView();
-            // 資金は監督メタ（ManagerService）が単一ソース。練習試合の費用減算がそのまま反映される。
-            view.Funds = "¥" + KokoSim.Unity.Shell.ManagerService.Manager.Funds.ToString("0") + "万";
-            view.FameGrade = "D";
-            view.TrustGrade = "C";
+            // 資金・名声・信頼度のトップバー表示は TopBarMeters（ManagerService 単一ソース）へ集約済み。
 
             var roster = Roster;
             view.TeamRankGrade = KokoSim.Unity.Shell.TeamOverall.GradeOf(roster);

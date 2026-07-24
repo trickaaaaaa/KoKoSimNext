@@ -84,6 +84,7 @@ namespace KokoSim.Unity.Member
             var v = _state.BuildView();
 
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
+            KokoSim.Unity.Shell.TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース）
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null)
             {

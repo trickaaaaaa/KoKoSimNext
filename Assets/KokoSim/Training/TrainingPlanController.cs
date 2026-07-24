@@ -86,6 +86,7 @@ namespace KokoSim.Unity.Training
 
             // 共通トップバー（スコアボード）: 掲示板の升目（週・夏予選までの残り）とチーム総合力ランクを埋める。
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
+            KokoSim.Unity.Shell.TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース）
             var rank = _root.Q<VisualElement>("team-rank");
             if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChip(v.TeamRankGrade)); }
 
