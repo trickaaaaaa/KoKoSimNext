@@ -145,6 +145,8 @@ public sealed class BuntUnificationTests
         public Player? CallPinchHit(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng) => null;
         public (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng) => null;
+        public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+            => s.FatigueTriggered || s.AtWeeklyLimit ? new PitchingChangeDecision(PitchingChangeReason.Fatigue) : null;
     }
 
     /// <summary>常に送りバントを指示するチームで複数試合流すと、犠打が実際に記録される（配線が生きている）。</summary>

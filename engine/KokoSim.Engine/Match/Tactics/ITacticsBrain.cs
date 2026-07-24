@@ -37,4 +37,13 @@ public interface ITacticsBrain
 
     /// <summary>守備固め（守備側, イニング頭）。差し替える (退場, 控え) を返す。null=交代しない。</summary>
     (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng);
+
+    /// <summary>
+    /// 継投判断（守備側, 打席境界ごと。設計書11 §4, issue #209）。替えるなら理由付きで返す。null=続投。
+    /// 試合エンジンは疲労・球数上限を事前計算して <see cref="PitchingChangeSituation"/> に載せて渡し、
+    /// <see cref="StandardTacticsBrain"/> はそれをそのまま尊重＝従来挙動と完全一致（恒等）。高度な継投
+    /// トリガー（崩れ・僅差終盤・動揺）と三層は <see cref="AiTacticsBrain"/> が被せる（既定は無効＝帯不変）。
+    /// 人選は Phase A では engine 側の bullpen 先頭のまま（横断ランキングは Phase B）。
+    /// </summary>
+    PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng);
 }

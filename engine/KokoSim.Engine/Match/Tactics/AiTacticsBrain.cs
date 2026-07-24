@@ -168,6 +168,67 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     }
 
     /// <summary>
+    /// 継投（設計書11 §4, issue #209）。基本トリガー（疲労・球数上限）は必ず尊重（Standardと同一・RNG不使用）。
+    /// その上に高度トリガー（崩れ・僅差終盤・動揺）を②ティア関門・③校風・①能力値ミスで被せる。
+    /// 高度トリガーの各 MinTier は既定で到達不能(99)＝発火せず、基本トリガーの時しか RNG を引かない
+    /// （＝games_10k/tactics 帯・決定論baseline 不変, D1=(A)）。人選は Phase A では bullpen 先頭のまま。
+    /// </summary>
+    public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+    {
+        // 基本トリガー（疲労margin/ハードキャップ/週間球数）は無条件に尊重（決定論・RNG不使用）。
+        if (_inner.CallPitchingChange(s, rng) is { } basic) return basic;
+
+        // 交代先がいなければ高度トリガーも意味を持たない（＝RNGを引かず素通り）。
+        if (!s.ReliefAvailable) return null;
+
+        // ②ティア関門×③校風で高度トリガーの発火条件だけを判定（ここまで RNG は一切引かない）。
+        var reason = EvaluateAdvancedRelief(s);
+        if (reason is null) return null;
+
+        // ①能力値: 最適な継投の好機を掴む確率（専用Fork由来の rng を消費）。外すと続投＝好機を逃す。
+        return MathUtil.Chance(_optimalProb, rng) ? new PitchingChangeDecision(reason.Value) : null;
+    }
+
+    /// <summary>
+    /// 高度な継投トリガーの条件判定（RNG不使用）。③校風で実効ティアを補正し（豪腕依存＝引っ張る／
+    /// 守り勝つ＝早め）、②各トリガーの引き出し（MinTier）を満たしたものから理由を返す。既定は MinTier=99
+    /// のため誰も通らず null＝恒等。
+    /// </summary>
+    private PitchingChangeReason? EvaluateAdvancedRelief(in PitchingChangeSituation s)
+    {
+        // ③ 校風による実効ティア補正。
+        var effTier = _profile.TierRank + _profile.Style switch
+        {
+            SchoolStyle.AceDependent => -_ai.AceDependentReliefTierPenalty,   // 引っ張る＝関門を通りにくく
+            SchoolStyle.DefensiveMinded => _ai.DefensiveMindedReliefTierBonus, // 厚め・早め
+            _ => 0,
+        };
+
+        // 崩れ（連打・大量失点の火消し）: G-F でも持つ基本的な引き出し（設計書11 §4）。
+        if (effTier >= _ai.BlowupReliefMinTier && s.RunsAllowedThisInning >= _ai.BlowupRunsInInning)
+        {
+            return PitchingChangeReason.Blowup;
+        }
+
+        // 動揺（連続出塁で動じた投手を切替。現状は伝令・イニング跨ぎでしか解けない, 設計書09/§4）。
+        if (effTier >= _ai.RattledReliefMinTier && s.PitcherRattled)
+        {
+            return PitchingChangeReason.Rattled;
+        }
+
+        // 僅差終盤（点差×イニング）: 疲労margin を前倒しした早め継投で締める。
+        if (effTier >= _ai.CloseLateReliefMinTier
+            && s.Inning >= _ai.CloseLateFromInning
+            && System.Math.Abs(s.DefenseScoreDiff) <= _ai.CloseLateMaxScoreDiff
+            && s.FatiguePitches >= s.StaminaTarget + s.RelieveMargin * _ai.CloseLateReliefMarginFactor)
+        {
+            return PitchingChangeReason.CloseLate;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// 打順の並べ替え（設計書11 §4「オーダー編成」, issue #48）。③豪腕依存は「打線は水物」で
     /// 調子によるいじりをしない。①戦術眼が足りないと気づかず見送る（他の判断と同じ丸め方）。
     /// </summary>

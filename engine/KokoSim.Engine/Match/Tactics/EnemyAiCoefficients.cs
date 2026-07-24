@@ -114,4 +114,28 @@ public sealed record EnemyAiCoefficients
     public double AceRestDefensiveMindedFactor { get; init; } = 1.6;
     /// <summary>全員野球: 選手層を使い回す方針の一環でローテにも積極的。</summary>
     public double AceRestTotalBaseballFactor { get; init; } = 1.4;
+
+    // === ⑥ 高度な継投層（issue #209, 設計書11 §4） ===
+    // 疲労/球数上限を超えた「高度な継投トリガー」（崩れ・僅差終盤・動揺）の②ティア引き出し。
+    // 既定はいずれも到達不能(99)＝発火しない＝games_10k/tactics 帯・決定論baseline を1ビットも動かさない
+    // （issue #209 D1=(A) 帯不変維持。三層AIの効果は AI vs AI 専用テストで検証）。将来 (B) で帯を再校正して
+    // 実戦投入する際は、崩れ=0(G-F基本)・僅差終盤=2(E)・動揺=2(E) などの設計値へ YAML で下げる。
+    /// <summary>崩れ（イニング内の大量失点）による火消し継投の最低ティア（既定99=無効）。</summary>
+    public int BlowupReliefMinTier { get; init; } = 99;
+    /// <summary>僅差終盤（点差×イニング）の早め継投の最低ティア（既定99=無効）。</summary>
+    public int CloseLateReliefMinTier { get; init; } = 99;
+    /// <summary>動揺（連続出塁）による投手切替の最低ティア（既定99=無効）。</summary>
+    public int RattledReliefMinTier { get; init; } = 99;
+    /// <summary>崩れ判定: 当該半イニングの失点がこの数以上で火消し継投の候補。</summary>
+    public int BlowupRunsInInning { get; init; } = 4;
+    /// <summary>僅差終盤とみなす回（この回以降）。</summary>
+    public int CloseLateFromInning { get; init; } = 7;
+    /// <summary>僅差とみなす得失点差の絶対値の上限（守備側視点）。</summary>
+    public int CloseLateMaxScoreDiff { get; init; } = 2;
+    /// <summary>僅差終盤の早め継投: 疲労margin をこの倍率まで前倒しして早発火（&lt;1.0=早め）。</summary>
+    public double CloseLateReliefMarginFactor { get; init; } = 0.6;
+    /// <summary>③校風・豪腕依存: 高度継投の実効ティアをこの段だけ下げる（引っ張る＝関門を通りにくく）。</summary>
+    public int AceDependentReliefTierPenalty { get; init; } = 2;
+    /// <summary>③校風・守り勝つ: 高度継投の実効ティアをこの段だけ上げる（厚め・早め）。</summary>
+    public int DefensiveMindedReliefTierBonus { get; init; } = 1;
 }

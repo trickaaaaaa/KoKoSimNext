@@ -109,6 +109,43 @@ public readonly record struct SubstitutionSituation(
     IReadOnlyList<Player> Bench);
 
 /// <summary>
+/// 継投判断に渡す状況（issue #209, 設計書11 §4）。守備側（＝投げている側）視点で組む。
+/// <see cref="FatigueTriggered"/>／<see cref="AtWeeklyLimit"/> は試合エンジンが従来と同じ式で
+/// 事前計算した「基本トリガー」で、<see cref="StandardTacticsBrain"/> はこれをそのまま尊重して
+/// 従来挙動と1ビットも変わらない（恒等）。高度トリガー（崩れ・僅差終盤・動揺）用に生の球数・
+/// 得失点差・イニング内失点も併せて渡す（<see cref="AiTacticsBrain"/> のみが参照）。
+/// </summary>
+public readonly record struct PitchingChangeSituation(
+    int Inning,
+    int RegulationInnings,
+    int Outs,
+    int DefenseScoreDiff,        // 守備側視点の得失点差（正=リード）
+    int RunsAllowedThisInning,   // 当該半イニングの失点（崩れ検知）
+    bool PitcherRattled,         // 連続出塁による動揺（設計書09）
+    bool FatigueTriggered,       // PitchingFatigue.ShouldRelieve の結果（疲労margin/ハードキャップ）
+    bool AtWeeklyLimit,          // 週間球数制限に到達
+    double FatiguePitches,       // ギア重み込みの実効消費球数
+    double StaminaTarget,        // 現投手の目安投球数（StaminaPitches）
+    double RelieveMargin,        // 継投しきい値の余白（FatigueCoefficients.RelievePitchMargin）
+    bool ReliefAvailable);       // 交代できる控え投手がいるか
+
+/// <summary>継投が発火した理由（テスト・観測用。挙動には影響しない）。</summary>
+public enum PitchingChangeReason
+{
+    Fatigue,      // 疲労球数（従来トリガー）
+    WeeklyLimit,  // 週間球数制限（従来トリガー）
+    Blowup,       // 崩れ（イニング内の大量失点）
+    CloseLate,    // 僅差終盤（点差×イニング）
+    Rattled,      // 動揺（連続出塁）
+}
+
+/// <summary>
+/// 継投判断の結果（issue #209）。null=続投。Phase A では人選は既存の bullpen 先頭のままで、
+/// この決定は「替えるか否か＋理由」だけを表す（人選＝横断ランキングは Phase B で拡張）。
+/// </summary>
+public readonly record struct PitchingChangeDecision(PitchingChangeReason Reason);
+
+/// <summary>
 /// 配球方針が自動配球（PitchSelection）へ与える重み（設計書09 §2.2）。
 /// 全て0/1.0なら恒等＝おまかせ。効果はゾーン内比率・狙い位置という物理入力に出る（二層構造の維持）。
 /// </summary>

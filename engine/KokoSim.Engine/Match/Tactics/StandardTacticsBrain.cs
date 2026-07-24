@@ -292,6 +292,18 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         return (weakest, best);
     }
 
+    /// <summary>
+    /// 継投（設計書11 §4, issue #209）。基準采配は従来の疲労球数トリガーそのまま＝engine が事前計算した
+    /// <see cref="PitchingChangeSituation.FatigueTriggered"/>（疲労margin/ハードキャップ）または週間球数制限で
+    /// 替える。RNG は使わない（決定論・恒等）。人選は engine 側の bullpen 先頭のまま（横断ランキングは Phase B）。
+    /// </summary>
+    public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
+    {
+        if (s.FatigueTriggered) return new PitchingChangeDecision(PitchingChangeReason.Fatigue);
+        if (s.AtWeeklyLimit) return new PitchingChangeDecision(PitchingChangeReason.WeeklyLimit);
+        return null;
+    }
+
     /// <summary>控えから score が最大の選手を決定論で選ぶ（同値は控え順で先勝ち）。</summary>
     private static Player? BestBy(IReadOnlyList<Player> bench, System.Func<Player, int> score)
     {
