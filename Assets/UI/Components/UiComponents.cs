@@ -349,7 +349,7 @@ namespace KokoSim.Unity.Components
         // ===== AbilityRow =====
 
         /// <summary>
-        /// 能力バー行（アイコン／能力名＋副題／数値／バー／ランクチップ／補足）。
+        /// 能力バー行（アイコン／能力名＋副題／ランクチップ／バー／数値／補足）。
         /// バー色はランク連動（RankPalette＝tokens.uss --rank-*）で、画面側で色を決めない。
         /// </summary>
         public static VisualElement AbilityRow(AbilityRowData d)
@@ -380,13 +380,7 @@ namespace KokoSim.Unity.Components
             }
             row.Add(name);
 
-            if (!string.IsNullOrEmpty(d.Value))
-            {
-                var val = new Label(d.Value);
-                val.AddToClassList("abil-row__value");
-                val.AddToClassList("f-num");   // 能力内部値は純数値＝コンデンス体（決定2-B・部品駆動の全画面へ一括適用）
-                row.Add(val);
-            }
+            if (!string.IsNullOrEmpty(d.Grade)) row.Add(RankChip(d.Grade));
 
             var bar = new VisualElement();
             bar.AddToClassList("abil-row__bar");
@@ -397,7 +391,13 @@ namespace KokoSim.Unity.Components
             bar.Add(fill);
             row.Add(bar);
 
-            if (!string.IsNullOrEmpty(d.Grade)) row.Add(RankChip(d.Grade));
+            if (!string.IsNullOrEmpty(d.Value))
+            {
+                var val = new Label(d.Value);
+                val.AddToClassList("abil-row__value");
+                val.AddToClassList("f-num");   // 能力内部値は純数値＝コンデンス体（決定2-B・部品駆動の全画面へ一括適用）
+                row.Add(val);
+            }
 
             if (!string.IsNullOrEmpty(d.Note))
             {
