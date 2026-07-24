@@ -19,6 +19,8 @@ namespace KokoSim.Unity.Shell
         public string TextB;
         public int FillA = -1;
         public int FillB = -1;
+        // 弾道など優劣のないタイプ軸（issue #219）: true ならバーを出さず優劣ハイライトもしない
+        public bool HideBar;
     }
 
     /// <summary>
@@ -64,6 +66,9 @@ namespace KokoSim.Unity.Shell
         private static string KmhText(int velLevel)
             => (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(velLevel)) + "km/h";
 
+        // 弾道はゴロ型〜フライ型のタイプ軸で優劣軸ではない（issue #219）。数値・バーではなくタイプラベルで表示する。
+        private static readonly string LaunchTendencyLabel = AbilityLabels.Jp(AbilityKind.LaunchTendency);
+
         /// <summary>指定タブ（0=野手能力/1=投手能力）の比較行を組む。a/b は未選択なら null。</summary>
         public static List<PlayerCompareRow> BuildRows(int tab, DevelopingPlayer a, DevelopingPlayer b)
         {
@@ -82,6 +87,13 @@ namespace KokoSim.Unity.Shell
                 {
                     if (a != null) { row.TextA = KmhText(row.ValueA); row.FillA = row.ValueA; }
                     if (b != null) { row.TextB = KmhText(row.ValueB); row.FillB = row.ValueB; }
+                }
+                else if (label == LaunchTendencyLabel)
+                {
+                    row.HideBar = true;
+                    row.Winner = 0;
+                    if (a != null) row.TextA = LaunchTendencyLabels.Jp(row.ValueA);
+                    if (b != null) row.TextB = LaunchTendencyLabels.Jp(row.ValueB);
                 }
                 rows.Add(row);
             }

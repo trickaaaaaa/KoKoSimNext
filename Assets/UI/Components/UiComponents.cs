@@ -29,6 +29,9 @@ namespace KokoSim.Unity.Components
         public bool Dim;                 // 行全体を淡色
         public bool Divided;             // 行下に区切り線
         public AbilityRowSize Size = AbilityRowSize.Normal;
+        // --- タイプ軸表示（issue #219）: 弾道など優劣のない軸はランクチップの代わりにこの中立ラベルを出す ---
+        public string TypeLabel = "";    // 非空ならランクチップの代わりにこのラベルを表示（Grade は無視）
+        public bool HideBar;             // true: バー＋数値を出さずアイコン/名前/タイプラベルだけにする
     }
 
     /// <summary>
@@ -49,6 +52,9 @@ namespace KokoSim.Unity.Components
         public string TextB;        // B の値ラベル上書き（null＝ValueB.ToString()）
         public int FillA = -1;      // A のバー幅[0-100]（負＝ValueA を流用）。表示スケール統一のため Level を渡す
         public int FillB = -1;      // B のバー幅[0-100]（負＝ValueB を流用）
+        // --- タイプ軸表示（issue #219）: 弾道など優劣のない軸はバーを出さずラベルのみにする。
+        //     Winner も呼び出し側で 0 にして優劣ハイライトを出さないこと。 ---
+        public bool HideBar;
     }
 
     /// <summary>
@@ -71,6 +77,19 @@ namespace KokoSim.Unity.Components
                 case RankChipSize.Large: chip.AddToClassList("rank-chip--lg"); break;
                 case RankChipSize.XLarge: chip.AddToClassList("rank-chip--xl"); break;
             }
+            return chip;
+        }
+
+        // ===== TypeChip（issue #219） =====
+
+        /// <summary>
+        /// タイプ軸バッジ（弾道＝ゴロ型〜フライ型など優劣のない値の表示）。
+        /// RankChip と違い単色・中立色（tokens.uss --color-panel-deep/--color-chalk）で優劣色に見せない。
+        /// </summary>
+        public static Label TypeChip(string label)
+        {
+            var chip = new Label(label);
+            chip.AddToClassList("type-chip");
             return chip;
         }
 
@@ -431,23 +450,27 @@ namespace KokoSim.Unity.Components
             }
             row.Add(name);
 
-            if (!string.IsNullOrEmpty(d.Grade)) row.Add(RankChip(d.Grade));
+            if (!string.IsNullOrEmpty(d.TypeLabel)) row.Add(TypeChip(d.TypeLabel));
+            else if (!string.IsNullOrEmpty(d.Grade)) row.Add(RankChip(d.Grade));
 
-            var bar = new VisualElement();
-            bar.AddToClassList("abil-row__bar");
-            var fill = new VisualElement();
-            fill.AddToClassList("abil-row__fill");
-            fill.style.width = Length.Percent(Mathf.Clamp01(d.Pct) * 100f);
-            fill.style.backgroundColor = RankPalette.Of(string.IsNullOrEmpty(d.Grade) ? "D" : d.Grade);
-            bar.Add(fill);
-            row.Add(bar);
-
-            if (!string.IsNullOrEmpty(d.Value))
+            if (!d.HideBar)
             {
-                var val = new Label(d.Value);
-                val.AddToClassList("abil-row__value");
-                val.AddToClassList("f-num");   // 能力内部値は純数値＝コンデンス体（決定2-B・部品駆動の全画面へ一括適用）
-                row.Add(val);
+                var bar = new VisualElement();
+                bar.AddToClassList("abil-row__bar");
+                var fill = new VisualElement();
+                fill.AddToClassList("abil-row__fill");
+                fill.style.width = Length.Percent(Mathf.Clamp01(d.Pct) * 100f);
+                fill.style.backgroundColor = RankPalette.Of(string.IsNullOrEmpty(d.Grade) ? "D" : d.Grade);
+                bar.Add(fill);
+                row.Add(bar);
+
+                if (!string.IsNullOrEmpty(d.Value))
+                {
+                    var val = new Label(d.Value);
+                    val.AddToClassList("abil-row__value");
+                    val.AddToClassList("f-num");   // 能力内部値は純数値＝コンデンス体（決定2-B・部品駆動の全画面へ一括適用）
+                    row.Add(val);
+                }
             }
 
             if (!string.IsNullOrEmpty(d.Note))
@@ -529,8 +552,8 @@ namespace KokoSim.Unity.Components
             lab.AddToClassList("cmp-row__lab");
             row.Add(lab);
 
-            row.Add(CompareSide("a", d.HasA, d.ValueA, d.TextA, d.FillA, d.Winner == -1));
-            row.Add(CompareSide("b", d.HasB, d.ValueB, d.TextB, d.FillB, d.Winner == 1));
+            row.Add(CompareSide("a", d.HasA, d.ValueA, d.TextA, d.FillA, d.Winner == -1, d.HideBar));
+            row.Add(CompareSide("b", d.HasB, d.ValueB, d.TextB, d.FillB, d.Winner == 1, d.HideBar));
             return row;
         }
 
@@ -593,7 +616,7 @@ namespace KokoSim.Unity.Components
 
         // text: 値ラベルの上書き（null＝value.ToString()）。fill: バー幅[0-100]（負＝value を流用）。
         // 表示テキストとバー幅を分離し、球速など物理量は「テキスト=km/h・バー=Level(0-100)」で出せるようにする（issue #94）。
-        private static VisualElement CompareSide(string side, bool has, int value, string text, int fill, bool win)
+        private static VisualElement CompareSide(string side, bool has, int value, string text, int fill, bool win, bool hideBar = false)
         {
             var el = new VisualElement();
             el.AddToClassList("cmp-row__side");
@@ -601,13 +624,14 @@ namespace KokoSim.Unity.Components
 
             var val = new Label(has ? (text ?? value.ToString()) : "—");
             val.AddToClassList("cmp-row__val");
-            val.AddToClassList("f-num");   // 比較値は純数値＝コンデンス体（km/h も欧文なので Oswald で可, 決定2-B）
+            // タイプ軸ラベル（弾道など、issue #219）は和文なので Oswald(f-num) を当てない（書体3役ルール）。
+            if (!hideBar) val.AddToClassList("f-num");   // 比較値は純数値＝コンデンス体（km/h も欧文なので Oswald で可, 決定2-B）
             if (has && win) val.AddToClassList("cmp-row__val--win");
             el.Add(val);
 
             var track = new VisualElement();
             track.AddToClassList("cmp-row__track");
-            if (has)
+            if (has && !hideBar)
             {
                 var bar = new VisualElement();
                 bar.AddToClassList("cmp-row__bar");

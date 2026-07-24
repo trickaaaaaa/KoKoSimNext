@@ -560,6 +560,7 @@ namespace KokoSim.Unity.Member
                 Winner = r.Winner,
                 TextA = r.TextA, TextB = r.TextB,   // 球速の km/h テキスト（issue #94）
                 FillA = r.FillA, FillB = r.FillB,
+                HideBar = r.HideBar,   // 弾道のタイプ表示（issue #219）
             });
 
         // ── 部品ヘルパ ──
