@@ -118,6 +118,9 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
                 return 1.7 + (_dist / 9) * 4 * u * (1 - u);    // 山なりの送球（mock throw）
             case BallSegmentKind.Carry:
                 return 0.6;                                    // 野手が保持して移動（低め）
+            case BallSegmentKind.Bounce:
+                // バウンド（Issue #63）: 減衰しながら数回弾む。頂点は ApexHeightM、区間を通じて 3 山＋減衰。
+                return Math.Max(0.0, _apex) * Math.Abs(Math.Sin(Math.PI * 3 * u)) * (1.0 - 0.6 * u);
             case BallSegmentKind.Roll:
             default:
                 return 0.0;                                    // 地を這うゴロ

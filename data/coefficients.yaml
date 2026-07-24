@@ -129,6 +129,21 @@ fielding:
   running_top_speed_factor: 1.15 # 一塁到達後の巡航速度倍率（本塁→一塁の平均速度に対する比）
   base_turn_seconds: 0.30        # 塁を回る方向転換のロス
   extra_base_margin_seconds: 0.40  # 進塁判断マージン（走者所要＋この値 ≤ 送球到達 で次の塁へ）
+  # --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14）: 着地後も物理層で軌道を継続する ---
+  bounce_restitution: 0.45          # 反発係数 e（バウンド頂点は e² で減衰）
+  bounce_friction_mu: 0.50          # 接地の動摩擦係数 μ（水平減速 = μ(1+e)|v⊥|）
+  bounce_rolling_retention: 0.7143  # 1接地で保持する水平速度の下限比（滑り→転がり遷移。球の 5/7）
+  bounce_min_launch_mps: 0.60       # これ未満の鉛直初速は転がり扱い（弾み列の打ち切り）
+  bouncer_apex_threshold_m: 1.20    # 4分類: 最大バウンド頂点がこれ以上なら「バウンド」、未満は「ゴロ」
+  liner_apex_range_ratio: 0.10      # 4分類: 頂点÷水平到達距離がこれ以下なら「ライナー」、超なら「フライ」
+  infielder_reach_height_m: 2.20    # 内野手が届く高さ上限（これを越える弾みは頭上を抜ける）
+  infielder_fielding_radius_m: 4.20 # 内野手の横の守備範囲（グラブ＋ダイブ）。これを抜ける強い打球だけ外野へ
+  chopper_wait_factor: 0.55         # 高バウンド（チョッパー）で野手が待たされる時間の係数（内野安打に効く）
+  infield_intercept_step_seconds: 0.02  # 内野境界の通過時刻を求める走査刻み
+  irregular_bounce_prob: 0.030      # イレギュラーバウンドの発生確率（一律。土質接続は将来の別Issue）
+  irregular_bounce_lateral_deg: 12.0     # イレギュラーの横ぶれ最大角[deg]
+  irregular_bounce_restitution_swing: 0.60  # イレギュラーの反発係数の揺らぎ幅
+  error_irregular_bonus: 0.10       # イレギュラーバウンド処理時のエラー確率加算
   # 守備位置適性→実効守備力の補正（設計書01 §1.1）。基準50で×1.0、本職＝高適性でボーナス、慣れないポジでペナルティ。
   aptitude_neutral: 50.0
   aptitude_slope_per_point: 0.006

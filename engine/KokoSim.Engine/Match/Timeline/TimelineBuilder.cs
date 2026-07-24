@@ -70,12 +70,15 @@ public static class TimelineBuilder
         }
         else
         {
-            // ゴロ: 本塁→野手処理点(landing)まで一本のロールで転がす。放物線にせず地を這わせ、
-            // 送球はこのロール終端(=landing)から連続して出る（mock ③④ と同じ見た目）。
+            // ゴロ/バウンド（Issue #63 の4分類）: 本塁→処理点まで一本で転がす。
+            // 「バウンド」分類は高く弾む Bounce（頂点=最大バウンド頂点）、「ゴロ」は地を這う Roll。
+            // 内野を抜けたバウンド（ThroughInfield）は外野の回収点まで届かせる（ボールが内野で死なない）。
+            var groundTo = play.ThroughInfield ? FieldPointOf(play) : landing;
+            var groundKind = play.Class == BattedBallClass.Bouncer ? BallSegmentKind.Bounce : BallSegmentKind.Roll;
             ball.Add(new BallSegment
             {
-                Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = Math.Max(landAt, fieldedAt),
-                From = Home, To = landing,
+                Kind = groundKind, T0 = ContactAt, T1 = Math.Max(landAt, fieldedAt),
+                From = Home, To = groundTo, ApexHeightM = play.BounceApexHeightM,
             });
         }
 
@@ -431,7 +434,7 @@ public static class TimelineBuilder
     public static PlayTimeline AppendBackHomeThrows(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double homeArriveAnchor, bool runnerOut)
     {
-        var fieldPoint = new TimelinePoint(play.LandingX, play.LandingZ);
+        var fieldPoint = FieldPointOf(play);
         var dist = Distance(fieldPoint, Home);
         var fieldedAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
         var homeArrive = Math.Max(homeArriveAnchor, fieldedAt + 0.30); // 送球の物理下限を確保
@@ -475,11 +478,11 @@ public static class TimelineBuilder
     public static PlayTimeline AppendOutfieldReturnThrow(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, string leadBaseName, double runnerArriveAnchor)
     {
-        if (play.RangeM <= OutfieldDepthM) return timeline; // 外野へ抜けた打球のみ
+        if (!IsOutfieldHit(play)) return timeline; // 外野へ抜けた打球のみ（バウンド抜けを含む, Issue #63）
         foreach (var seg in timeline.Ball)
             if (seg.Kind == BallSegmentKind.Throw) return timeline; // 既存送球があれば二重返球しない
 
-        var fieldPoint = new TimelinePoint(play.LandingX, play.LandingZ);
+        var fieldPoint = FieldPointOf(play);
         var target = BasePoint(field, leadBaseName);
         var fieldedAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
 
@@ -519,6 +522,17 @@ public static class TimelineBuilder
         return Math.Sqrt(dx * dx + dz * dz);
     }
 
+    /// <summary>この打球が外野扱いの安打か（着地が外野／バウンドで内野を抜けた, Issue #63）。表示専用。</summary>
+    private static bool IsOutfieldHit(FieldingPlay play) => play.RangeM > OutfieldDepthM || play.ThroughInfield;
+
+    /// <summary>
+    /// 送球の起点にする「打球の処理点」。内野を抜けたバウンド（Issue #63）は外野の回収点(FieldedX/Z)、
+    /// それ以外は従来どおり着地点(LandingX/Z)。ThroughInfield でない打球では従来と完全に同値。
+    /// </summary>
+    private static TimelinePoint FieldPointOf(FieldingPlay play) => play.ThroughInfield
+        ? new TimelinePoint(play.FieldedX, play.FieldedZ)
+        : new TimelinePoint(play.LandingX, play.LandingZ);
+
     /// <summary>守備位置の日本語呼称（実況・結果表示用）。</summary>
     private static string PositionName(FieldPosition p) => p switch
     {
@@ -545,7 +559,7 @@ public static class TimelineBuilder
     /// </summary>
     private static string AreaName(FieldingPlay play)
     {
-        if (play.RangeM > OutfieldDepthM)
+        if (IsOutfieldHit(play))
         {
             if (play.BearingDeg < -15.0) return "レフト";
             if (play.BearingDeg > 15.0) return "ライト";
