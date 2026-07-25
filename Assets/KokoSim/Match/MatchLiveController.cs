@@ -143,6 +143,15 @@ namespace KokoSim.Unity.Match
         private int _scoreCallOwnScore, _scoreCallOppScore, _scoreCallRunsRemaining;
         private bool _scoreCallOwnScoring;
 
+        // 交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板が起きた瞬間に数秒だけ盤面へ浮かせる。
+        // PitchCall/ScoreCall と同じ「Update() の専用クロックで寿命管理」方式。表示専用。
+        [SerializeField] private float subCallHoldSeconds = 2.6f;
+        private VisualElement _subCall;
+        private Label _subCallTag, _subCallText;
+        private float _subCallClock;
+        private bool _subCallOn;
+        private int _subLogCount;   // 既に取り込んだ継投ログ件数（_prog.PitchingChanges との差分検知）
+
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
@@ -206,6 +215,9 @@ namespace KokoSim.Unity.Match
             _scoreCallOppNum = _root.Q<Label>("score-call-opp-num");
             _scoreCallOppNum?.AddToClassList("f-num-bd");
             _scoreCallOppName = _root.Q<Label>("score-call-opp-name");
+            _subCall = _root.Q<VisualElement>("sub-call");
+            _subCallTag = _root.Q<Label>("sub-call-tag");
+            _subCallText = _root.Q<Label>("sub-call-text");
 
             ResetPerMatchVisuals();
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied);
@@ -263,6 +275,9 @@ namespace KokoSim.Unity.Match
             _pitchCallOn = false;
             _scoreCallClock = 0f;
             _scoreCallOn = false;
+            _subCallClock = 0f;
+            _subCallOn = false;
+            _subLogCount = 0;
             _pitchBattingChoice = null;
             _pitchPolicyChoice = null;
             _capHist.Clear();
@@ -283,6 +298,7 @@ namespace KokoSim.Unity.Match
             SetBases(false, false, false);
             HidePitchCall();
             HideScoreCall();
+            HideSubCall();
             foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb.name == "spd-1");
             if (_result != null) _result.style.display = DisplayStyle.None;
         }
@@ -604,8 +620,84 @@ namespace KokoSim.Unity.Match
             if (_inPitchPhase) BeginPitchBall(0);        // 1球目の投球軌道を盤面へ（#5）
             else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
 
+            DrainSubstitutionEvents();   // 直前の Advance 中に起きた継投をポップアップ＋実況履歴へ（issue #209 表現）
             UpdateControlState();
         }
+
+        // ── 交代ポップアップ（issue #209 表現）──
+        // 直前の進行で増えた継投ログ（_prog.PitchingChanges）を取り込み、実況履歴に1行ずつ残しつつ
+        // 最新の1件を数秒のポップアップで盤面へ浮かせる。観測データの表示のみ＝試合結果に影響しない。
+        private void DrainSubstitutionEvents()
+        {
+            var log = _prog?.PitchingChanges;
+            if (log == null) return;
+            KokoSim.Engine.Match.Game.PitchingChangeEvent latest = null;
+            for (var i = _subLogCount; i < log.Count; i++)
+            {
+                var e = log[i];
+                PushHistory("⇄ " + SubEventText(e));
+                latest = e;
+            }
+            _subLogCount = log.Count;
+            if (latest != null) BeginSubCall(latest);
+        }
+
+        private void BeginSubCall(KokoSim.Engine.Match.Game.PitchingChangeEvent e)
+        {
+            if (_subCall == null || _subCallTag == null || _subCallText == null) return;
+            // 交代は「今起きたこと」を示す確定オーバーレイ。直前の球判定・得点演出が残っていると
+            // 上下に重なって読みづらいので、他の一過性オーバーレイを先に畳んでから前面に出す。
+            HidePitchCall();
+            HideScoreCall();
+            var kind = e.Change.Kind;
+            var isFielder = kind != KokoSim.Engine.Match.Game.PitchingChangeKind.BullpenRelief;
+            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.BullpenRelief ? "投手交代"
+                : kind == KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap ? "投野交代" : "野手登板";
+            _subCallTag.EnableInClassList("sub-call__tag--fielder", isFielder);   // 野手系だけアンバー点灯（一過性強調）
+            _subCallText.text = SubEventText(e);
+            _subCall.style.display = DisplayStyle.Flex;
+            _subCallOn = true;
+            _subCallClock = 0f;
+        }
+
+        private void HideSubCall()
+        {
+            _subCallOn = false;
+            _subCallClock = 0f;
+            if (_subCall != null) _subCall.style.display = DisplayStyle.None;
+        }
+
+        // 交代1件のテキスト（種別で出し分け）。backfill 先は「◯◯へ」で守備位置を添える。
+        private static string SubEventText(KokoSim.Engine.Match.Game.PitchingChangeEvent e)
+        {
+            var half = e.Inning + "回" + (e.IsTopHalf ? "表" : "裏");
+            var c = e.Change;
+            switch (c.Kind)
+            {
+                case KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap:
+                    return half + " " + c.InPitcherName + " が登板／" + c.OutPitcherName + " は" + PosJp(c.BackfillPosition) + "へ";
+                case KokoSim.Engine.Match.Game.PitchingChangeKind.FielderReliefWithBackfill:
+                    return half + " " + c.InPitcherName + " が登板／" + PosJp(c.BackfillPosition) + "は" + c.BackfillName;
+                case KokoSim.Engine.Match.Game.PitchingChangeKind.FielderToMound:
+                    return half + " " + c.InPitcherName + " が登板（" + c.OutPitcherName + " → 退く）";
+                default:
+                    return half + " " + c.OutPitcherName + " → " + c.InPitcherName;
+            }
+        }
+
+        private static string PosJp(KokoSim.Engine.Match.Field.FieldPosition? pos) => pos switch
+        {
+            KokoSim.Engine.Match.Field.FieldPosition.Pitcher => "投",
+            KokoSim.Engine.Match.Field.FieldPosition.Catcher => "捕",
+            KokoSim.Engine.Match.Field.FieldPosition.FirstBase => "一塁",
+            KokoSim.Engine.Match.Field.FieldPosition.SecondBase => "二塁",
+            KokoSim.Engine.Match.Field.FieldPosition.ThirdBase => "三塁",
+            KokoSim.Engine.Match.Field.FieldPosition.Shortstop => "遊撃",
+            KokoSim.Engine.Match.Field.FieldPosition.LeftField => "左翼",
+            KokoSim.Engine.Match.Field.FieldPosition.CenterField => "中堅",
+            KokoSim.Engine.Match.Field.FieldPosition.RightField => "右翼",
+            _ => "守備",
+        };
 
         // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
         // 捕手からの返球は描画しない。打球になる最後の1球だけは、続く打球タイムラインが同じ投球
@@ -671,6 +763,12 @@ namespace KokoSim.Unity.Match
             }
             // 得点オーバーレイも自前の寿命で加算演出→消去まで進める（issue #60）。
             if (_scoreCallOn) AdvanceScoreCall(Time.deltaTime * _speed);
+            // 交代ポップアップも自前の寿命で消す（issue #209 表現）。
+            if (_subCallOn)
+            {
+                _subCallClock += Time.deltaTime * _speed;
+                if (_subCallClock >= subCallHoldSeconds) HideSubCall();
+            }
 
             if (!_replaying || _current == null) return;
 
@@ -1318,6 +1416,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
         public void OpenSubstitutionForCapture() => _subPanel?.Open();
+
+        /// <summary>スクショ用: 交代ポップアップ（issue #209）を任意の継投ログで強制表示する。</summary>
+        public void ForceSubCallForCapture(KokoSim.Engine.Match.Game.PitchingChangeEvent e) => BeginSubCall(e);
 
         /// <summary>スクショ用: 自校が今「攻撃側」か（交代モーダルの出し分け確認用）。</summary>
         public bool ManagerOnOffenseForCapture

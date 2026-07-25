@@ -43,6 +43,15 @@
                             <ui:Label name="score-call-opp-name" class="score-call__team f-display" text="" />
                         </ui:VisualElement>
                     </ui:VisualElement>
+
+                    <!-- 交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板が起きた瞬間に数秒だけ盤面へ浮かせる。
+                         PitchCall/ScoreCall と同じ overlay idiom（半透明パネル・既定非表示・自前寿命で消去）。 -->
+                    <ui:VisualElement name="sub-call" class="sub-call">
+                        <ui:VisualElement class="sub-call__panel">
+                            <ui:Label name="sub-call-tag" class="sub-call__tag f-body" text="投手交代" />
+                            <ui:Label name="sub-call-text" class="sub-call__text f-body" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <!-- 1球采配ショートカット（設計書15 Phase C-3, Q12-2: 全球で常駐）。低彩度の常時1行帯。
