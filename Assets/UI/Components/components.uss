@@ -1223,6 +1223,47 @@
     padding: 0 var(--sp-1);
 }
 
+/* SubCall：交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板を数秒だけ盤面へ浮かせる。
+   PitchCall/ScoreCall と同じ overlay idiom（半透明パネル・既定非表示）。種別タグは1個だけの一過性強調で
+   アンバー（野手系だけ点灯・通常継投は無彩の面）。本文は暗い盤面の上なので掲示板と同じ --sb-ink-1（明色）。 */
+.sub-call {
+    position: absolute;
+    left: 0; right: 0; top: 9%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+.sub-call__panel {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(14, 26, 19, 0.82);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-2) var(--sp-4);
+}
+/* 盤面（緑）の上に浮かせる暗い島なので、文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-*。
+   デースキン反転（--color-chalk はインク暗色に反転）に引きずられないよう board 系トークンを使う。 */
+.sub-call__tag {
+    font-size: var(--fs-label);
+    -unity-text-align: middle-center;
+    color: var(--sb-ink-1);
+    background-color: var(--sb-board-line);
+    border-radius: var(--radius-chip);
+    padding: var(--sp-1) var(--sp-2);
+    margin-right: var(--sp-2);
+}
+/* 野手登板・投野交代は「眺めてニヤニヤ」対象＝一過性のアンバー点灯で際立たせる（UI原則⑥）。
+   アンバー面の上の文字は暗インク（--color-ink）。 */
+.sub-call__tag--fielder {
+    color: var(--color-ink);
+    background-color: var(--color-lamp);
+}
+.sub-call__text {
+    font-size: var(--fs-body);
+    -unity-text-align: middle-center;
+    color: var(--sb-ink-1);
+}
+
 /* ── BoxRow：ボックススコア表の1行（試合結果画面のイニングスコア／打撃／投手／打席結果に共通）──
    密度は正義（UI原則①）。行高32px・数値は右揃え・列幅は種別クラスで固定してヘッダーとデータを揃える。
    線はヘッダー下だけ（UI原則④）。データ行は面の明度差だけで仕切る（枠線を引かない）。 */
