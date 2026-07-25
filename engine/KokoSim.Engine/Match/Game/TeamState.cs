@@ -581,12 +581,12 @@ public sealed class TeamState
             var list = new List<Player>(_bullpen.Count + _bench.Count + 8);
             list.AddRange(_bullpen);
             list.AddRange(_bench);
-            if (!_usesDh)
+            // 在フィールドの守備野手を横断候補に含める。非DHは現投手スロットを、DHはDHスロット（守備に就かない）を除く。
+            // DHでは投手は打順外＝_lineup に居ないので、DHスロットを除けば残り8人がそのまま守備8人になる。
+            var skip = _usesDh ? _dhSlot : _pitcherSlot;
+            for (var i = 0; i < _lineup.Length; i++)
             {
-                for (var i = 0; i < _lineup.Length; i++)
-                {
-                    if (i != _pitcherSlot) list.Add(_lineup[i]); // 現投手以外の在フィールド野手
-                }
+                if (i != skip) list.Add(_lineup[i]);
             }
             return list;
         }
@@ -600,13 +600,13 @@ public sealed class TeamState
     /// </summary>
     public bool RelieveWith(Player sub, ReliefBackfillCoefficients? backfill = null)
     {
-        if (!_usesDh)
+        var skip = _usesDh ? _dhSlot : _pitcherSlot;
+        for (var i = 0; i < _lineup.Length; i++)
         {
-            for (var i = 0; i < _lineup.Length; i++)
-            {
-                if (i != _pitcherSlot && ReferenceEquals(_lineup[i], sub))
-                    return PromoteFielderToMound(sub, i, backfill ?? new ReliefBackfillCoefficients());
-            }
+            if (i != skip && ReferenceEquals(_lineup[i], sub))
+                return _usesDh
+                    ? PromoteFielderToMoundDh(sub, i, backfill ?? new ReliefBackfillCoefficients())
+                    : PromoteFielderToMound(sub, i, backfill ?? new ReliefBackfillCoefficients());
         }
         return ChangePitcherTo(sub);
     }
@@ -670,6 +670,68 @@ public sealed class TeamState
             retiringPitcher.Name, retiringPitcher.UniformNumber, retiringPitcher.SourceId,
             mound.Name, mound.UniformNumber, mound.SourceId,
             vacated, retiringPitcher.Name, retiringPitcher.UniformNumber, retiringPitcher.SourceId);
+        ClearRattled();
+        return true;
+    }
+
+    /// <summary>
+    /// DH制での在フィールド野手の緊急登板（issue #209）。<paramref name="fielder"/>（打順スロット <paramref name="fSlot"/>）を
+    /// マウンドへ上げ、DHを解除する。DHでは旧投手は打順外なので**必ず退場**（非DHの①「両者残留」は成立しない）。
+    /// 空いた守備位置の補充は非DHと同じ②判定：ベンチ最良守備者が元DHより明確に上手ければベンチ野手が入り元DHは退場、
+    /// そうでなければ元DHが守備に就く（DHを失って野手化・打順スロットは維持）。判定は <paramref name="backfill"/> 係数駆動。
+    /// </summary>
+    private bool PromoteFielderToMoundDh(Player fielder, int fSlot, ReliefBackfillCoefficients backfill)
+    {
+        var retiringPitcher = CurrentPitcher;   // DHでは打順外＝必ず退場
+        var vacated = fielder.Position;         // 野手が空ける守備位置
+        var mound = fielder.Pitching is null && fielder.LatentPitching is { } latent
+            ? fielder with { Pitching = latent, Position = FieldPosition.Pitcher }
+            : fielder with { Position = FieldPosition.Pitcher };
+        var dh = _lineup[_dhSlot];              // 元DH（守備に就いていない・打順スロット _dhSlot）
+
+        // ②判定: 空き守備を元DHより明確に上手く守れるベンチ野手が居るか（元DHの打力で基準を補正＝好打者DHは残す）。
+        var benchFielder = BestBenchDefender();
+        var useBench = false;
+        if (benchFielder is not null)
+        {
+            var battingDelta = (dh.Contact + dh.Power) / 2.0 - backfill.LeagueAverageBatting;
+            var requiredMargin = backfill.BaseFieldingMargin + backfill.BattingRetentionWeight * battingDelta;
+            useBench = benchFielder.Fielding - dh.Fielding >= requiredMargin;
+        }
+
+        // 共通: 野手Fをマウンドへ（打順スロット維持）、旧投手Pは退場、DH解除。
+        _retired.Add(retiringPitcher);
+        _lineup[fSlot] = mound;
+        CurrentPitcher = mound;
+        _pitcherSlot = fSlot;
+
+        Player backfiller;
+        if (useBench)
+        {
+            // ②: ベンチ野手が空き守備へ・元DHの打順スロットへ入る。元DHは退場（リエントリー禁止）。
+            _bench.Remove(benchFielder!);
+            _retired.Add(dh);
+            _replacedAtSlot[_dhSlot] = dh.Name;
+            _lineup[_dhSlot] = benchFielder! with { Position = vacated };
+            backfiller = benchFielder!;
+        }
+        else
+        {
+            // ①相当: 元DHが空き守備に就く（DHを失って野手化・打順スロット維持）。
+            _lineup[_dhSlot] = dh with { Position = vacated };
+            backfiller = dh;
+        }
+
+        _usesDh = false;   // 野手登板でDHは消滅（設計書09 §6 の ReleaseDh と同じ終着＝非DH整合状態）
+        PitchesThrown = 0;
+        FatiguePitches = 0;
+        PitcherChanges++;
+        Substitutions++;   // DH解除はロスターイベント（ReleaseDh と同じく計上）
+        LastPitchingChange = new PitchingChangeOutcome(
+            PitchingChangeKind.FielderReliefWithBackfill,
+            retiringPitcher.Name, retiringPitcher.UniformNumber, retiringPitcher.SourceId,
+            mound.Name, mound.UniformNumber, mound.SourceId,
+            vacated, backfiller.Name, backfiller.UniformNumber, backfiller.SourceId);
         ClearRattled();
         return true;
     }

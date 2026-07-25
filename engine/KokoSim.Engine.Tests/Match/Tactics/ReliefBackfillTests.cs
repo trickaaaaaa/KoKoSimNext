@@ -67,28 +67,112 @@ public sealed class ReliefBackfillTests
         Assert.DoesNotContain(cands, p => p.Name == "T先発");
     }
 
-    [Fact]
-    public void ReliefCandidates_ExcludeOnFieldRegulars_InDh()
+    /// <summary>DHチーム。遊撃(遊)に潜在投手能力・DHに打力/守備・ベンチ守備職人・ブルペン1枚を指定できる。</summary>
+    private static Team DhTeam(PitcherAttributes ssLatent, PitcherAttributes bullpenAttr,
+        int dhContact = 50, int dhPower = 50, int dhFielding = 50, int benchFielding = 50)
     {
         var order = new List<Player>
         {
             Field("捕", FieldPosition.Catcher), Field("一", FieldPosition.FirstBase),
             Field("二", FieldPosition.SecondBase), Field("三", FieldPosition.ThirdBase),
-            Field("遊", FieldPosition.Shortstop, Attr(80, 60, 45, 55)), Field("左", FieldPosition.LeftField),
+            Field("遊", FieldPosition.Shortstop, ssLatent), Field("左", FieldPosition.LeftField),
             Field("中", FieldPosition.CenterField), Field("右", FieldPosition.RightField),
-            Field("DH", FieldPosition.Catcher),
+            new()
+            {
+                Name = "DH", Position = FieldPosition.DesignatedHitter,
+                Contact = dhContact, Power = dhPower, Fielding = dhFielding,
+            },
         };
-        var team = new Team
+        return new Team
         {
             Name = "D", BattingOrder = order, DhSlot = 8,
             StartingPitcher = Arm("D先発", PitcherAttributes.LeagueAverage),
-            Bullpen = new[] { Arm("D中継ぎ", Attr(30, 30, 30, 30)) },
-            Bench = new[] { Field("D控", FieldPosition.FirstBase) },
+            Bullpen = new[] { Arm("D中継ぎ", bullpenAttr) },
+            Bench = new[] { new Player { Name = "守備職人", Position = FieldPosition.Shortstop, Fielding = benchFielding } },
         };
-        var st = new TeamState(team);
+    }
 
-        // DH制では在フィールド野手を含めない＝ブルペン1 + ベンチ1 = 2（Phase B 相当）。
-        Assert.Equal(2, st.ReliefRankingCandidates.Count);
+    [Fact]
+    public void ReliefCandidates_IncludeOnFieldRegulars_InDh()
+    {
+        var st = new TeamState(DhTeam(Attr(80, 60, 45, 55), Attr(30, 30, 30, 30)));
+        var cands = st.ReliefRankingCandidates;
+
+        // DHでも在フィールド野手8（DH除く打順9-1）を横断候補に含める＝ブルペン1 + ベンチ1 + 8 = 10。
+        Assert.Equal(10, cands.Count);
+        Assert.Contains(cands, p => p.Name == "遊");
+        // DHは守備に就かない＝候補に含めない。投手は打順外なので _lineup に居ない。
+        Assert.DoesNotContain(cands, p => p.Name == "DH");
+    }
+
+    // ===== DH制の投野交代（issue #209。野手登板でDH解除・空き守備は②判定で補充・旧投手は必ず退場） =====
+
+    [Fact]
+    public void Dh_PromoteOnFieldFielder_ReleasesDh_ExDhTakesField_WhenStrongHitter()
+    {
+        // 元DHが好打者(80/80)・守備45、ベンチ守備職人55 → margin=10+0.3*30=19 > 守備差10 → 元DHが空き守備へ（打力温存）。
+        var strong = Attr(velLevel: 90, control: 60, staminaLevel: 45, pitchRank: 55);
+        var st = new TeamState(DhTeam(strong, Attr(30, 30, 30, 30),
+            dhContact: 80, dhPower: 80, dhFielding: 45, benchFielding: 55));
+        var ss = st.CurrentLineup.First(p => p.Name == "遊");
+        var oldPitcher = st.CurrentPitcher;
+        var dh = st.CurrentLineup[st.DhSlot];
+
+        Assert.True(st.RelieveWith(ss));
+
+        Assert.False(st.UsesDh);                                  // 野手登板でDHは消滅
+        Assert.Equal("遊", st.CurrentPitcher.Name);               // 遊撃手がマウンドへ（潜在能力で投げる）
+        Assert.Equal(strong.MaxVelocityKmh, st.CurrentPitcher.Pitching!.MaxVelocityKmh, 3);
+        Assert.True(st.IsRetired(oldPitcher));                    // DHでは旧投手は打順外＝退場
+        Assert.False(st.IsRetired(dh));                           // 好打の元DHは残す（②に倒さない）
+        Assert.Equal("DH", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name); // 元DHが空いた遊撃を守る
+        Assert.Single(st.Bench);                                  // ベンチ非消費
+        Assert.Equal(9, st.DefensiveAlignment(new FieldGeometry()).Count);      // 守備穴なし
+        Assert.Equal(1, st.PitcherChanges);
+        Assert.Equal(PitchingChangeKind.FielderReliefWithBackfill, st.LastPitchingChange!.Value.Kind);
+        Assert.Equal("DH", st.LastPitchingChange!.Value.BackfillName);
+        Assert.Equal(FieldPosition.Shortstop, st.LastPitchingChange!.Value.BackfillPosition);
+    }
+
+    [Fact]
+    public void Dh_PromoteOnFieldFielder_ReleasesDh_BenchBackfills_WhenWeakHitter()
+    {
+        // 元DHが弱打(20/20)・守備45、ベンチ守備職人55 → margin=10+0.3*(-30)=1 ≤ 守備差10 → ベンチが空き守備へ・元DH退場。
+        var strong = Attr(velLevel: 90, control: 60, staminaLevel: 45, pitchRank: 55);
+        var st = new TeamState(DhTeam(strong, Attr(30, 30, 30, 30),
+            dhContact: 20, dhPower: 20, dhFielding: 45, benchFielding: 55));
+        var ss = st.CurrentLineup.First(p => p.Name == "遊");
+        var oldPitcher = st.CurrentPitcher;
+        var dh = st.CurrentLineup[st.DhSlot];
+
+        Assert.True(st.RelieveWith(ss));
+
+        Assert.False(st.UsesDh);
+        Assert.Equal("遊", st.CurrentPitcher.Name);
+        Assert.True(st.IsRetired(oldPitcher));                    // 旧投手は退場
+        Assert.True(st.IsRetired(dh));                            // 弱打の元DHも退場（②）
+        Assert.Equal("守備職人", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name); // ベンチ野手が空き守備へ
+        Assert.Empty(st.Bench);                                   // ベンチ消費
+        Assert.Equal(9, st.DefensiveAlignment(new FieldGeometry()).Count);
+        Assert.Equal(1, st.PitcherChanges);
+        Assert.Equal(1, st.Substitutions);
+        Assert.Equal("守備職人", st.LastPitchingChange!.Value.BackfillName);
+    }
+
+    [Fact]
+    public void Dh_RelieveWithBullpen_UsesNormalChange_KeepsDh()
+    {
+        var st = new TeamState(DhTeam(Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
+        var oldPitcher = st.CurrentPitcher;
+        var reliever = st.AvailableBullpen[0];
+
+        Assert.True(st.RelieveWith(reliever));
+
+        Assert.True(st.UsesDh);                                   // ブルペン継投ではDHは維持（野手を上げていない）
+        Assert.Equal(reliever.Name, st.CurrentPitcher.Name);
+        Assert.True(st.IsRetired(oldPitcher));
+        Assert.Equal(PitchingChangeKind.BullpenRelief, st.LastPitchingChange!.Value.Kind);
+        Assert.Equal(1, st.PitcherChanges);
     }
 
     // ===== 投野交代（backfill path ①） =====
