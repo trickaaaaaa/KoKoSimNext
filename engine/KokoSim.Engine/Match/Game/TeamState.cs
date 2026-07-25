@@ -58,6 +58,8 @@ public sealed class TeamState
     public int PitchesThrown { get; private set; }
     public int Runs { get; set; }
     public int PitcherChanges { get; private set; }
+    /// <summary>直近の継投の詳細（issue #209 表現。イニング非依存。ドライバがイニングを付けてログ化する）。観測専用。</summary>
+    public PitchingChangeOutcome? LastPitchingChange { get; private set; }
     /// <summary>本塁クロスプレーで刺された自軍走者の数（バックホーム憤死, 設計書12 §3 F2。統計参考値）。</summary>
     public int HomePlayOuts { get; set; }
     /// <summary>単打の一塁→三塁レースで三塁憤死した自軍走者の数（Issue #89, 設計書12 §3.5。統計参考値）。</summary>
@@ -532,10 +534,12 @@ public sealed class TeamState
     {
         if (!_bullpen.Remove(sub) && !_bench.Remove(sub)) return false;
         // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
-        _retired.Add(CurrentPitcher);
+        var outgoing = CurrentPitcher;
+        var wasFielder = sub.Pitching is null;   // 野手（本職でない）＝ベンチ野手登板
+        _retired.Add(outgoing);
         // 野手が緊急登板するとき、潜在投手能力を実能力として確定する（issue #209 Phase B）。
         // これでリーグ平均でなく本人の（肩由来／隠しの）能力で投げる。本職投手は Pitching が正なので恒等。
-        CurrentPitcher = sub.Pitching is null && sub.LatentPitching is { } latent
+        CurrentPitcher = wasFielder && sub.LatentPitching is { } latent
             ? sub with { Pitching = latent }
             : sub;
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
@@ -543,6 +547,11 @@ public sealed class TeamState
         PitchesThrown = 0;
         FatiguePitches = 0;
         PitcherChanges++;
+        LastPitchingChange = new PitchingChangeOutcome(
+            wasFielder ? PitchingChangeKind.FielderToMound : PitchingChangeKind.BullpenRelief,
+            outgoing.Name, outgoing.UniformNumber, outgoing.SourceId,
+            CurrentPitcher.Name, CurrentPitcher.UniformNumber, CurrentPitcher.SourceId,
+            null, null, 0, null);
         ClearRattled();
         return true;
     }
@@ -637,6 +646,11 @@ public sealed class TeamState
                 FatiguePitches = 0;
                 PitcherChanges++;
                 Substitutions++;   // ベンチ野手の投入は選手交代として計上
+                LastPitchingChange = new PitchingChangeOutcome(
+                    PitchingChangeKind.FielderReliefWithBackfill,
+                    retiringPitcher.Name, retiringPitcher.UniformNumber, retiringPitcher.SourceId,
+                    mound.Name, mound.UniformNumber, mound.SourceId,
+                    vacated, benchFielder.Name, benchFielder.UniformNumber, benchFielder.SourceId);
                 ClearRattled();
                 return true;
             }
@@ -650,6 +664,12 @@ public sealed class TeamState
         PitchesThrown = 0;
         FatiguePitches = 0;
         PitcherChanges++;
+        // ①の backfill は旧投手本人（空いた守備位置へ）。
+        LastPitchingChange = new PitchingChangeOutcome(
+            PitchingChangeKind.TwoWaySwap,
+            retiringPitcher.Name, retiringPitcher.UniformNumber, retiringPitcher.SourceId,
+            mound.Name, mound.UniformNumber, mound.SourceId,
+            vacated, retiringPitcher.Name, retiringPitcher.UniformNumber, retiringPitcher.SourceId);
         ClearRattled();
         return true;
     }
