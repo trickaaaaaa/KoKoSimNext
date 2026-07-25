@@ -46,6 +46,9 @@ public sealed record GameResult
     /// <summary>打席ごとのプレー記録（テキスト速報用）。</summary>
     public IReadOnlyList<PlayLogEntry> Log { get; init; } = Array.Empty<PlayLogEntry>();
 
+    /// <summary>継投ログ（issue #209 表現。継投・投野交代・野手登板）。観測専用＝決定論digestには含めない。</summary>
+    public IReadOnlyList<PitchingChangeEvent> PitchingChangeLog { get; init; } = Array.Empty<PitchingChangeEvent>();
+
     /// <summary>個人打撃成績（打順順9人）。</summary>
     public IReadOnlyList<BattingLine> AwayBatting { get; init; } = Array.Empty<BattingLine>();
     public IReadOnlyList<BattingLine> HomeBatting { get; init; } = Array.Empty<BattingLine>();
@@ -304,6 +307,7 @@ public static class GameEngine
             AwayErrors = away.Errors,
             HomeErrors = home.Errors,
             Log = p.Log,
+            PitchingChangeLog = p.PitchingChanges,
             AwayBatting = away.BuildBattingLines(),
             HomeBatting = home.BuildBattingLines(),
             AwayPitching = away.BuildPitchingLines(),
@@ -979,7 +983,7 @@ public static class GameEngine
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
                     batterOrder: batterOrder, pitchLog: res.PitchLog);
                 outs += buntOuts;
-                MaybeChangePitcher(defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
+                MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
                 {
                     offense.RecordInningRuns(runsThisHalf);
@@ -1016,7 +1020,7 @@ public static class GameEngine
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
                     batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns);
                 outs += sqOuts;
-                MaybeChangePitcher(defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
+                MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
                 {
                     offense.RecordInningRuns(runsThisHalf);
@@ -1294,7 +1298,7 @@ public static class GameEngine
 
             outs += outsThisPa;
 
-            MaybeChangePitcher(defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
+            MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
 
             if (walkoff?.Invoke() == true)
             {
@@ -1382,13 +1386,14 @@ public static class GameEngine
     /// （不変条件#2・裏試合帯不変）。人選は Phase A では bullpen 先頭のまま。
     /// </summary>
     private static void MaybeChangePitcher(
-        TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng,
+        GameProgress p, TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng,
         int inning, bool isTop, int paIndex, int runsThisHalf, int outs)
     {
         var fatigue = defense.Fatigue ?? ctx.Fatigue;
         var fatigueTriggered = PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, fatigue);
         var atWeekly = defense.CurrentPitcherAtWeeklyLimit();
 
+        var changed = false;
         if (defense.Tactics is { } brain)
         {
             var staminaTarget = (defense.CurrentPitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
@@ -1406,14 +1411,18 @@ public static class GameEngine
                 // Reliever 指定があればその投手を指名（横断ランキング）。在フィールド野手なら投野交代で backfill。
                 // null は engine 既定＝ブルペン先頭（StandardTacticsBrain／無指示は常に null＝従来挙動と
                 // 1ビットも変わらない＝帯不変）。
-                if (decision.Reliever is { } reliever) defense.RelieveWith(reliever, ctx.ReliefBackfill);
-                else defense.TryChangePitcher();
+                changed = decision.Reliever is { } reliever
+                    ? defense.RelieveWith(reliever, ctx.ReliefBackfill)
+                    : defense.TryChangePitcher();
             }
         }
         else if (fatigueTriggered || atWeekly)
         {
-            defense.TryChangePitcher();
+            changed = defense.TryChangePitcher();
         }
+
+        // 交代が成立した時だけ観測ログへ積む（issue #209 表現。観測専用＝決定論・帯には影響しない）。
+        if (changed) p.RecordPitchingChange(defense, isTop);
     }
 
     /// <summary>継投判断RNG用Fork streamId（issue #209）。1球采配/怪我/天候とは別saltで衝突を避ける。</summary>
@@ -1563,6 +1572,19 @@ public sealed class GameProgress
     public List<PlayLogEntry> Log { get; } = new();
     /// <summary>試合中に発生した怪我（設計書03 §3.5）。観測データ＝試合進行・乱数順には影響しない。</summary>
     public List<MatchInjuryEvent> Injuries { get; } = new();
+    /// <summary>継投のログ（issue #209 表現。継投・投野交代・野手登板の各1件）。観測専用＝試合結果・決定論には影響しない。</summary>
+    public List<PitchingChangeEvent> PitchingChanges { get; } = new();
+
+    /// <summary>
+    /// 守備側 <paramref name="defense"/> の直近の継投（<see cref="TeamState.LastPitchingChange"/>）を、
+    /// 現イニング・攻守を付けて <see cref="PitchingChanges"/> ログへ積む（issue #209 表現）。交代確定直後に呼ぶ。
+    /// <paramref name="isTop"/> は起きた半イニング（表＝先攻の攻撃）。観測専用。
+    /// </summary>
+    public void RecordPitchingChange(TeamState defense, bool isTop)
+    {
+        if (defense.LastPitchingChange is { } change)
+            PitchingChanges.Add(new PitchingChangeEvent(Inning, isTop, ReferenceEquals(defense, Away), change));
+    }
 
     public GameProgress(Team awayTeam, Team homeTeam, TeamState away, TeamState home,
         GameContext ctx, IRandomSource rng, Dictionary<Player, double> dayForm)

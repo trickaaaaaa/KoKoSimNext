@@ -226,6 +226,56 @@ public sealed class ReliefBackfillTests
 
     // ===== AI が在フィールドの二刀流を選び、GameEngine 結線で決定論を保つ =====
 
+    // ===== 交代ログ（issue #209 表現。GameResult.PitchingChangeLog） =====
+
+    [Fact]
+    public void PitchingChangeLog_RecordsOnFieldPromotion_AndIsDeterministic()
+    {
+        var coeff = new EnemyAiCoefficients
+        {
+            BlowupReliefMinTier = 0, RattledReliefMinTier = 0, CloseLateReliefMinTier = 0, BlowupRunsInInning = 1,
+        };
+        Team Make(string n) => NonDhTeam(n, Attr(92, 80, 60, 82), Attr(25, 25, 25, 25)) with
+        {
+            Tactics = new AiTacticsBrain(new AiProfile(90, 6, SchoolStyle.DefensiveMinded), aiCoeff: coeff),
+        };
+
+        var sawFielderRelief = false;
+        for (ulong seed = 1; seed <= 40; seed++)
+        {
+            var r1 = GameEngine.Play(Make("A"), Make("H"), new GameContext(), new Xoshiro256Random(seed));
+            var r2 = GameEngine.Play(Make("A"), Make("H"), new GameContext(), new Xoshiro256Random(seed));
+            // 同シード＝同一ログ（観測も決定論）。
+            Assert.Equal(r1.PitchingChangeLog.Count, r2.PitchingChangeLog.Count);
+            for (var i = 0; i < r1.PitchingChangeLog.Count; i++)
+                Assert.Equal(r1.PitchingChangeLog[i], r2.PitchingChangeLog[i]);
+
+            foreach (var e in r1.PitchingChangeLog)
+            {
+                Assert.InRange(e.Inning, 1, 15);
+                Assert.False(string.IsNullOrEmpty(e.Change.InPitcherName));
+                if (e.Change.Kind is PitchingChangeKind.TwoWaySwap or PitchingChangeKind.FielderReliefWithBackfill)
+                {
+                    sawFielderRelief = true;
+                    Assert.NotNull(e.Change.BackfillPosition);           // backfill 先が記録される
+                    Assert.False(string.IsNullOrEmpty(e.Change.BackfillName));
+                }
+            }
+        }
+        Assert.True(sawFielderRelief, "強力な遊撃×弱ブルペンで投野交代/野手登板が少なくとも1回は記録されるはず");
+    }
+
+    [Fact]
+    public void PitchingChangeLog_RecordsBullpenRelief_ForNormalRelief()
+    {
+        // ブルペン投手を指名する通常継投は BullpenRelief として記録される（プレイヤー采配経路と同じ ChangePitcherTo）。
+        var st = new TeamState(NonDhTeam("T", Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
+        Assert.True(st.ChangePitcherTo(st.AvailableBullpen[0]));
+        Assert.NotNull(st.LastPitchingChange);
+        Assert.Equal(PitchingChangeKind.BullpenRelief, st.LastPitchingChange!.Value.Kind);
+        Assert.Equal("T中継ぎ", st.LastPitchingChange!.Value.InPitcherName);
+    }
+
     [Fact]
     public void Game_AiPromotesOnFieldAce_IsDeterministic()
     {

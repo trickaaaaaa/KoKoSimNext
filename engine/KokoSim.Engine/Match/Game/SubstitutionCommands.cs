@@ -46,7 +46,11 @@ internal static class SubstitutionCommands
     {
         var team = p.OffenseOf(teamIsAway);
         var candidates = team.AvailablePitcherCandidates;
-        return candidateIndex >= 0 && candidateIndex < candidates.Count && team.ChangePitcherTo(candidates[candidateIndex]);
+        if (candidateIndex < 0 || candidateIndex >= candidates.Count || !team.ChangePitcherTo(candidates[candidateIndex]))
+            return false;
+        // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
+        p.RecordPitchingChange(team, isTop: !teamIsAway);
+        return true;
     }
 
     /// <summary>守備交代（打順スロット slot の選手を控えへ）。</summary>

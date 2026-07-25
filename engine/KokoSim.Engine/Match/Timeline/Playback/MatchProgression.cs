@@ -497,6 +497,9 @@ public sealed class MatchProgression
             _p.Away.LiveLine(), _p.Home.LiveLine());
     }
 
+    /// <summary>継投ログ（issue #209 表現。継投・投野交代・野手登板）。交代パネルの表示に使う。観測専用。</summary>
+    public System.Collections.Generic.IReadOnlyList<PitchingChangeEvent> PitchingChanges => _p.PitchingChanges;
+
     /// <summary>
     /// スキップ: 以降の采配を委任AI（設計書11・自分の采配能力＝TacticalSense）へ委ね、残りを一括解決して
     /// 最終結果を返す。途中までの采配（適用済みの代打など）は状態に載っているので当然引き継がれる。
