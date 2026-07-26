@@ -1,3 +1,5 @@
+using KokoSim.Engine.Match.Game;
+
 namespace KokoSim.Engine.Nation;
 
 /// <summary>
@@ -26,4 +28,14 @@ public sealed record ModernRules
     public int WeeklyPitchLimit { get; init; } = 500;
     public int EffectiveWeeklyPitchLimit(int year)
         => PitchLimitEnabled(year) ? WeeklyPitchLimit : int.MaxValue;
+
+    /// <summary>
+    /// 暦年に応じたタイブレーク・球数制限を <see cref="GameContext"/> へ反映する（設計書05 §1.3, issue #252）。
+    /// TieBreakEnabled/WeeklyPitchLimit だけを上書きし、他フィールド（MercyRuleEnabled 等）は呼び出し側のまま。
+    /// </summary>
+    public GameContext ApplyTo(GameContext ctx, int year) => ctx with
+    {
+        TieBreakEnabled = TieBreakEnabled(year),
+        WeeklyPitchLimit = EffectiveWeeklyPitchLimit(year),
+    };
 }
