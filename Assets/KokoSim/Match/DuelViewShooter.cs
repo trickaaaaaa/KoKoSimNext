@@ -45,17 +45,36 @@ namespace KokoSim.Unity.Match
             yield return null;
             yield return CaptureName("i-duel-4-board-back");
 
-            // §7-2 アンカー同期の観測: 対決ビューONのまま新しい打席を始め、投球フェーズを生で流しながら
-            // 約0.8s間隔で連写する（初球ワインドアップ3s→リリース→フォロー1.5s→次の振りかぶり、まで見える窓）
-            ctrl.ToggleDuelViewForCapture();
-            yield return null;
-            if (ctrl.AdvanceForCapture())
+            // §7-2 アンカー同期＋結果分岐の観測: 対決ビューONのまま「空振りを含む打席」を探し、
+            // その1球のスイング瞬間（初球ワインドアップ3.0s＋リリース間隔4.5s×n＋到達0.45s）を狙い撃ちで撮る。
+            // 打席送りで試合が替わると _duelOn が落ちるため、毎打席トグルを張り直す。
+            int targetIdx = -1;
+            var guard = 0;
+            while (guard++ < 60 && ctrl.AdvanceForCapture())
             {
-                for (int i = 0; i < 8; i++)
+                var pitches = ctrl.CurrentPa?.PitchSeq?.Pitches;
+                if (pitches == null) continue;
+                for (int i = 0; i < pitches.Count; i++)
                 {
-                    for (int f = 0; f < 40; f++) yield return null;
-                    yield return CaptureName("i-duel-sync-" + i);
+                    if (pitches[i].Kind == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike) { targetIdx = i; break; }
                 }
+                if (targetIdx >= 0) break;
+            }
+            if (targetIdx < 0) { Debug.LogError("[DuelShot] 空振りを含む打席が見つからない"); yield break; }
+            if (!ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();
+            // 対決ビューONで打席を頭からやり直す（ワインドアップ待ちから）
+            ctrl.RestartCurrentPaForCapture();
+            float swingAt = 3.0f + targetIdx * 4.5f + 0.45f;
+            var offsets = new[] { -0.45f, -0.1f, 0.25f, 0.7f };   // 振り出し前→当たり際→振り抜き→フォロー
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                float until = swingAt + offsets[i];
+                float t = 0f;
+                while (t < until) { t += Time.deltaTime; yield return null; }
+                yield return CaptureName("i-duel-swing-" + i);
+                // キャプチャ中も時計は進む: 次ショットは経過ぶんを引いた残りだけ待つのが正確だが、
+                // 使い捨てハーネスなので「打席頭からの絶対時刻」を毎回測り直す簡便法にする
+                ctrl.RestartCurrentPaForCapture();
             }
 
             Debug.Log("[DuelShot] DONE");
@@ -63,6 +82,9 @@ namespace KokoSim.Unity.Match
 
         private IEnumerator CaptureName(string file)
         {
+            // シェル側の遷移（NewTeamService.Clear直後のHome再活性化など）でMatchLive以外の文書が
+            // 前面へ戻ることがあるため、毎キャプチャ直前に取り除く
+            EnsureOnlyMatchLive();
             yield return null;
             yield return new WaitForEndOfFrame();
             yield return null;

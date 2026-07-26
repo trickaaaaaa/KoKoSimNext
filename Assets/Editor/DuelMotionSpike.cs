@@ -588,6 +588,65 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
+        /// §7-2第2弾（結果分岐）のアンカー実測: 空振り/見逃し/死球（打者・yaw90）と捕球（捕手・yaw0）の
+        /// 各クリップについて、追跡ボーン（打者=右手/捕手=左手ミット）の位置と区間速度を出力する。
+        /// スイング面通過・捕球はいずれも追跡ボーン速度のピーク近傍で読む（投手リリースと同じ流儀）。
+        /// </summary>
+        public static string RunReactionProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var jobs = new[]
+                {
+                    new { clip = "AA_Baseball_Batter_Swing_Type01_Miss",  yaw = 90f, bone = HumanBodyBones.RightHand },
+                    new { clip = "AA_Baseball_Batter_Strike",             yaw = 90f, bone = HumanBodyBones.Head },
+                    new { clip = "AA_Baseball_Batter_Hit_ByPitch_Type01", yaw = 90f, bone = HumanBodyBones.Head },
+                    new { clip = "AA_Baseball_Catcher_Catching_C",        yaw = 0f,  bone = HumanBodyBones.LeftHand },
+                };
+                var times = new[] { 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.30f, 0.35f, 0.40f, 0.45f, 0.50f, 0.60f, 0.70f, 0.85f };
+
+                var sb = new StringBuilder();
+                foreach (var j in jobs)
+                {
+                    var clip = FindClip(j.clip);
+                    sb.AppendLine(j.clip + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture));
+                    Vector3 prev = Vector3.zero;
+                    float prevT = -1f;
+                    foreach (var t in times)
+                    {
+                        var body = SpawnBody(root, "probe-r", Vector3.zero, j.yaw, Color.white);
+                        Sample(body, clip, t);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var p = anim.GetBoneTransform(j.bone).position;
+                        float speed = prevT >= 0f ? (p - prev).magnitude / ((t - prevT) * clip.length) : 0f;
+                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                            "  t={0:F2}({1:F2}s) bone=({2:F2},{3:F2},{4:F2}) v={5:F1}m/s",
+                            t, t * clip.length, p.x, p.y, p.z, speed));
+                        prev = p; prevT = t;
+                        Object.DestroyImmediate(body);
+                    }
+                }
+                Debug.Log("[DuelMotionSpike] reaction probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
         /// 投球クリップのyaw候補4種（-90/0/90/180）をリリース(0.53)と直後(0.60)で撮り比べる目視決着用。
         /// 出力: out/duel-stage/frame/pitchyaw_[yaw]_t[時刻].png（採用構図R-comp60）
         /// </summary>

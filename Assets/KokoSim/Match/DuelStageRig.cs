@@ -5,6 +5,17 @@ using UnityEngine.Playables;
 
 namespace KokoSim.Unity.Match
 {
+    /// <summary>対決ビューへ渡す1球の結果分類（design-18 §7-2 第2弾）。エンジンのPitchKindから写像する。</summary>
+    public enum DuelPitchOutcome
+    {
+        Take,           // ボール見送り（打者は待機のまま・捕手が捕球）
+        CalledStrike,   // 見逃しストライク（Batter_Strike＋捕球）
+        SwingMiss,      // 空振り（Swing_Miss＋捕球）
+        FoulContact,    // ファール（Swing_Hitting・走り出し前でカット・捕球なし）
+        InPlayContact,  // インプレー（Swing_Hittingフル＝走り出しまで・捕球なし）
+        HitByPitch,     // 死球（Hit_ByPitch・捕球なし）
+    }
+
     /// <summary>
     /// 対決ビューの実体（design-18 §7-1 A案・配線スパイク段階）。
     /// DuelStage レイヤーに簡易ステージ＋素体4体（UBC）を組み、StageCamera（確定構図R）が
@@ -40,8 +51,11 @@ namespace KokoSim.Unity.Match
         private Camera _camera;
         private GameObject _bat;
         private readonly List<Actor> _actors = new();
-        private Actor _pitcher, _batter;
+        private Actor _pitcher, _batter, _catcher;
         private float _acc;
+
+        // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
+        private AnimationClip _swingMissClip, _swingHitClip, _strikeTakeClip, _hbpClip, _catchClip;
 
         private sealed class Actor
         {
@@ -57,6 +71,9 @@ namespace KokoSim.Unity.Match
             public float AnkleOffset;
             public bool HoldAtEnd;   // クリップ末尾で頭姿勢のまま停止する（投手＝アンカー同期の合間はセット姿勢で待つ）
             public bool Holding;
+            public AnimationPlayableOutput Output;   // クリップ差し替え（結果分岐の一発物）用
+            public AnimationClip IdleClip;           // 一発物の終了後に戻る待機ループ（null=戻らない）
+            public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
         }
 
         public DuelStageRig()
@@ -73,6 +90,15 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
+            // 残骸掃除: HideAndDontSave はPlay終了・ドメインリロードを跨いで生き残るため、
+            // Disposeが走らず孤児化した過去のステージが同座標に重なって二重に映る（2026-07-26実害）。
+            foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
+            {
+                if (go != null && go.name == "~DuelStageLive" && go.transform.parent == null
+                    && (go.hideFlags & HideFlags.HideAndDontSave) != 0)
+                    Object.DestroyImmediate(go);
+            }
+
             _root = new GameObject("~DuelStageLive") { hideFlags = HideFlags.HideAndDontSave };
             _root.transform.position = StageOrigin;
             BuildGround(layer);
@@ -84,13 +110,22 @@ namespace KokoSim.Unity.Match
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
             _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
                 new Color(0.16f, 0.20f, 0.38f), 0f, layer);
-            var catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
+            _batter.IdleClip = batClip;
+            _catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
                 new Color(0.25f, 0.27f, 0.30f), 0f, layer);
+            _catcher.IdleClip = catClip;
             SpawnActor(body, umpClip, new Vector3(-0.35f, 0f, -1.7f), 0f,
                 new Color(0.12f, 0.12f, 0.13f), 0f, layer);
 
+            // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）
+            _swingMissClip = LoadClip("AA_Baseball_Batter_Swing_Type01_Miss");
+            _swingHitClip = LoadClip("AA_Baseball_Batter_Swing_Type01_Hitting");
+            _strikeTakeClip = LoadClip("AA_Baseball_Batter_Strike");
+            _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
+            _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
+
             _bat = SpawnBat(layer);
-            AttachMitt(catcher, layer);
+            AttachMitt(_catcher, layer);
 
             Target = CreateRt(BaseWidth, BaseHeight);
 
@@ -140,16 +175,32 @@ namespace KokoSim.Unity.Match
             _cutCountdown = -1f;
             SeekActor(_pitcher, 0f);
             GroundFix(_pitcher);
+            // 打席頭は打者・捕手を待機へ戻す（前打席の一発物が残っていても仕切り直す）
+            if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, 0f);
+            if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, 0f);
         }
+
+        // 結果分岐のアンカー（RunReactionProbe 実測 2026-07-26。値はクリップ内秒）:
+        // 空振り=スイング面通過1.2s / ミート=当たり1.05s（スイング走査実測t≈0.30×3.5s） /
+        // 見逃し=振り返り2.0s / 死球=のけぞり1.3s / 捕球=ミット提示0.4s（冒頭0.15sで構えて保持する作り）。
+        // 盤面の投球飛翔は0.45s（MatchLiveのSetTime基準）＝リリース時に「アンカー−0.45」へ頭出しすると
+        // ボール到達とアンカーが一致する。
+        private const float BallFlightSeconds = 0.45f;
+        private const float SwingMissPlane = 1.2f;
+        private const float SwingHitContact = 1.05f;
+        private const float StrikeReact = 2.0f;
+        private const float HbpReact = 1.3f;
+        private const float CatchMoment = 0.4f;
 
         /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
         /// 投手クリップをリリース時刻へスナップし、次の1球があれば（nextReleaseIn=リリース間隔）
         /// フォロースルーを FollowSeconds 見せてから次の振りかぶり位置へ切り替える予約を入れる。
         /// 間隔が振りかぶり＋フォローに足りない場合だけプリロールを削って間に合わせる。
+        /// あわせて1球の結果（outcome）に応じた打者・捕手の一発物をボール到達アンカーで頭出しする。
         /// クリップ内部の緩急は改変しない＝再生開始位置の逆算だけで合わせる（設計書18の掟）。
         /// </summary>
-        public void OnPitchReleased(float nextReleaseIn)
+        public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome)
         {
             if (!Available || _pitcher == null) return;
             SeekActor(_pitcher, ReleaseTime);
@@ -164,6 +215,51 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
+            ScheduleReactions(outcome);
+        }
+
+        /// <summary>打者・捕手の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。</summary>
+        private void ScheduleReactions(DuelPitchOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case DuelPitchOutcome.SwingMiss:
+                    SetActorClip(_batter, _swingMissClip, SwingMissPlane - BallFlightSeconds, 3.3f);
+                    break;
+                case DuelPitchOutcome.FoulContact:
+                    // 走り出し（≈1.9s＝正規化0.55）前でカットして打席へ戻る
+                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 1.7f);
+                    break;
+                case DuelPitchOutcome.InPlayContact:
+                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 0f);
+                    break;
+                case DuelPitchOutcome.CalledStrike:
+                    SetActorClip(_batter, _strikeTakeClip, StrikeReact - BallFlightSeconds, 3.2f);
+                    break;
+                case DuelPitchOutcome.HitByPitch:
+                    SetActorClip(_batter, _hbpClip, HbpReact - BallFlightSeconds, 4.2f);
+                    break;
+            }
+            bool catcherCatches = outcome == DuelPitchOutcome.Take
+                || outcome == DuelPitchOutcome.CalledStrike
+                || outcome == DuelPitchOutcome.SwingMiss;
+            if (catcherCatches)
+                SetActorClip(_catcher, _catchClip, Mathf.Max(0f, CatchMoment - BallFlightSeconds), 0f);
+        }
+
+        /// <summary>一発物クリップへ差し替えて頭出しする（終了後は Actor.IdleClip へ自動復帰）。</summary>
+        private static void SetActorClip(Actor a, AnimationClip clip, float seekTo, float endAt)
+        {
+            if (a == null || clip == null) return;
+            if (a.Clip != clip)
+            {
+                if (a.Playable.IsValid()) a.Playable.Destroy();
+                a.Playable = AnimationClipPlayable.Create(a.Graph, clip);
+                a.Output.SetSourcePlayable(a.Playable);
+                a.Clip = clip;
+            }
+            a.EndAt = endAt;
+            SeekActor(a, Mathf.Max(0f, seekTo));
         }
 
         /// <summary>毎フレーム呼ぶ。ポーズは1/12秒たまるごとに進む（時間量子化）。</summary>
@@ -337,9 +433,9 @@ namespace KokoSim.Unity.Match
                 actor.AnkleOffset = Mathf.Min(lf.position.y, rf.position.y) - go.transform.position.y;
 
             actor.Graph = PlayableGraph.Create("duel-" + clip.name);
-            var output = AnimationPlayableOutput.Create(actor.Graph, "out", animator);
+            actor.Output = AnimationPlayableOutput.Create(actor.Graph, "out", animator);
             actor.Playable = AnimationClipPlayable.Create(actor.Graph, clip);
-            output.SetSourcePlayable(actor.Playable);
+            actor.Output.SetSourcePlayable(actor.Playable);
 
             _actors.Add(actor);
             return actor;
@@ -385,9 +481,16 @@ namespace KokoSim.Unity.Match
         {
             if (a.Holding) return;
             a.Time += step;
-            if (a.Time >= a.Clip.length)
+            float end = a.EndAt > 0f && a.EndAt < a.Clip.length ? a.EndAt : a.Clip.length;
+            if (a.Time >= end)
             {
                 a.Time = 0f;
+                a.EndAt = 0f;
+                if (a.IdleClip != null && a.Clip != a.IdleClip)
+                {
+                    SetActorClip(a, a.IdleClip, 0f, 0f);   // 一発物（結果分岐）→待機ループへ復帰
+                    return;
+                }
                 RewindActor(a);
                 if (a.HoldAtEnd) a.Holding = true;
                 return;

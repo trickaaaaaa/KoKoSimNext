@@ -640,7 +640,15 @@ namespace KokoSim.Unity.Match
             UpdateScoreboard(_current, resolved: false);
             SetText("batter", _current.BatterName);
             RefreshPanel();   // 打席確定＝今日の成績・現打者ハイライト・マッチアップHUD を更新
+            BeginPaReplay();
 
+            DrainSubstitutionEvents();   // 直前の Advance 中に起きた継投をポップアップ＋実況履歴へ（issue #209 表現）
+            UpdateControlState();
+        }
+
+        // 現在ロード中の打席の再生を頭から始める（FinishAdvance の後半。スクショ用の打席リスタートと共用）。
+        private void BeginPaReplay()
+        {
             // BSO 初期化: アウト＝打席前、塁ダイヤ＝打席前、カウント＝0-0。結果チップは投球フェーズ中は隠す。
             SetOuts(_current.OutsBefore);
             SetBases(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
@@ -671,9 +679,6 @@ namespace KokoSim.Unity.Match
             }
             else if (_inPitchPhase) BeginPitchBall(0);   // 1球目の投球軌道を盤面へ（#5）
             else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
-
-            DrainSubstitutionEvents();   // 直前の Advance 中に起きた継投をポップアップ＋実況履歴へ（issue #209 表現）
-            UpdateControlState();
         }
 
         // ── 交代ポップアップ（issue #209 表現）──
@@ -765,8 +770,21 @@ namespace KokoSim.Unity.Match
                 _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
 
             // 対決ビューのアンカー同期（design-18 §7-2）: この瞬間＝リリース。次の1球があればリリース間隔を渡して
-            // フォロースルー→次の振りかぶりの切り替えを予約する
-            if (_duelOn) _duelRig?.OnPitchReleased(index < last ? duelPitchIntervalSeconds : -1f);
+            // フォロースルー→次の振りかぶりの切り替えを予約し、1球の結果で打者・捕手の一発物を分岐する（第2弾）
+            if (_duelOn && _duelRig != null)
+            {
+                var kind = _current.PitchSeq.Pitches[index].Kind;
+                var outcome = kind switch
+                {
+                    KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike => DuelPitchOutcome.CalledStrike,
+                    KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike => DuelPitchOutcome.SwingMiss,
+                    KokoSim.Engine.Match.AtBat.PitchKind.Foul => DuelPitchOutcome.FoulContact,
+                    KokoSim.Engine.Match.AtBat.PitchKind.InPlay => DuelPitchOutcome.InPlayContact,
+                    KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch => DuelPitchOutcome.HitByPitch,
+                    _ => DuelPitchOutcome.Take,
+                };
+                _duelRig.OnPitchReleased(index < last ? duelPitchIntervalSeconds : -1f, outcome);
+            }
         }
 
         // 投球フェーズ終了→打球再生（Play あり）または結果保持（三振・四球）。
@@ -1167,6 +1185,16 @@ namespace KokoSim.Unity.Match
 
         /// <summary>撮影ハーネス用（エディタ限定運用）: 対決ビューのトグルを外から叩く。</summary>
         internal void ToggleDuelViewForCapture() => OnToggleDuelView();
+
+        /// <summary>撮影ハーネス用: 対決ビューが表示中か（打席送りで試合が替わるとリセットされるため確認用）。</summary>
+        internal bool DuelViewOnForCapture => _duelOn;
+
+        /// <summary>撮影ハーネス用: 現在ロード中の打席の再生を頭からやり直す（対決ビューの狙い撃ち撮影用）。</summary>
+        internal void RestartCurrentPaForCapture()
+        {
+            if (_current == null) return;
+            BeginPaReplay();
+        }
 
         private void ApplyDuelViewState()
         {
