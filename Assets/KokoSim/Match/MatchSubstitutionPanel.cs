@@ -519,6 +519,8 @@ namespace KokoSim.Unity.Match
             if (_cmpRows == null) return;
             _cmpRows.Clear();
             var pitcherView = _kind == SubstitutionKind.ChangePitcher;
+            // 投球の表は球速を km/h で出すので値セルを表ごと広げる（issue #246）。
+            UiComponents.SetCompareUnitColumn(_cmpRows, pitcherView);
             var group = new Label(pitcherView ? "投球" : "打撃・走守");
             group.AddToClassList("msub-cmp-group");
             _cmpRows.Add(group);

@@ -69,6 +69,12 @@ namespace KokoSim.Unity.Shell
         // 弾道はゴロ型〜フライ型のタイプ軸で優劣軸ではない（issue #219）。数値・バーではなくタイプラベルで表示する。
         private static readonly string LaunchTendencyLabel = AbilityLabels.Jp(AbilityKind.LaunchTendency);
 
+        /// <summary>
+        /// そのタブの表が「単位つきの物理量」を含むか（issue #246）。投手能力タブは球速を km/h で出す（issue #94）ので
+        /// 値セルを広げないとラベルに重なる。切替は UiComponents.SetCompareUnitColumn（表ごと＝桁が揃う）。
+        /// </summary>
+        public static bool HasUnitValues(int tab) => tab == 1;
+
         /// <summary>指定タブ（0=野手能力/1=投手能力）の比較行を組む。a/b は未選択なら null。</summary>
         public static List<PlayerCompareRow> BuildRows(int tab, DevelopingPlayer a, DevelopingPlayer b)
         {
