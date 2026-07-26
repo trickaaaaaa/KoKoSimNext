@@ -25,30 +25,39 @@ namespace KokoSim.Unity.Member
         public static readonly Vector2 Mound = P(MemberFieldLayout.Mound);
 
         private const float DiamondWidthM = 38.8f;  // 1塁〜3塁の横幅
-        private const float DiamondFraction = 0.50f; // 描画幅に占めるダイヤ横幅の割合
+        // 描画幅に占めるダイヤ横幅の割合。両翼(WingFenceM・θ=±45°)が要素の半幅を超えない上限は
+        // DiamondFraction ≤ 0.5 × DiamondWidthM / (WingFenceM × sin45°) ≈ 0.280（issue #271 オーナー決定）。
+        // 0.28 を超えて大きくすると両翼が要素の外へ見切れる。.ms-field 幅は MemberSetting.uss 側で700pxに固定。
+        private const float DiamondFraction = 0.28f;
         private const float Aniso = 0.8f;            // 縦圧縮（Sy = Aniso·Sx）
         private const float HomeYFrac = 0.90f;       // 本塁の縦位置（下寄り）
+        // 縦の見切れ条件（中堅=WingFenceM側でなくCenterFenceM=122mが要素上端で切れない）：
+        // 必要高さ ≥ CenterFenceM × Sy / HomeYFrac = CenterFenceM × Sx × Aniso / HomeYFrac。
+        // .ms-field 幅700px・DiamondFraction 0.28 では Sx≈5.05px/m → 必要高さ≈548px。
+        // .ms-field は align-self:stretch で高さを親から継承するため、幅と同様に定数を変えたら
+        // この式で見切れないか再検算すること。
 
         // 球場寸法[m]（メンバー画面は標準球場）。検算済み定数 MemberFieldLayout を単一ソースに使う。
         public float WingM = (float)MemberFieldLayout.WingFenceM;
         public float CenterM = (float)MemberFieldLayout.CenterFenceM;
 
-        // 既定色は tokens と同値（CustomStyle 解決前・失敗時のフォールバック）。
-        private Color _grass = new Color(0.102f, 0.200f, 0.145f);   // #1A3325 フェア芝
-        private Color _foul = new Color(0.055f, 0.110f, 0.078f);    // #0E1C14 ファウル
-        private Color _infield = new Color(0.133f, 0.224f, 0.169f); // #22392B 内野芝
-        private Color _clay = new Color(0.431f, 0.290f, 0.188f);    // #6E4A30 ダート
-        private Color _chalk = new Color(0.937f, 0.957f, 0.918f);   // #EFF4EA チョーク
-        private Color _bg = new Color(0.078f, 0.137f, 0.106f);      // #14231B 球場の外
-        private Color _fence = new Color(0.290f, 0.416f, 0.322f);   // #4A6A52 フェンス線
+        // ── 色：盤面昼光セット（試合2D俯瞰と同じ --field-*-day を参照。design-19 G1でメンバー画面だけ
+        //    夜トークンが取り残されていた退行を解消。issue #271）。既定値は tokens と同値のフォールバック。 ──
+        private Color _grass = new Color(0.310f, 0.486f, 0.231f);   // #4F7C3B フェア芝（昼）
+        private Color _foul = new Color(0.271f, 0.427f, 0.204f);    // #456D34 ファウル（昼）
+        private Color _infield = new Color(0.353f, 0.541f, 0.267f); // #5A8A44 内野芝ダイヤ（昼）
+        private Color _clay = new Color(0.635f, 0.431f, 0.267f);    // #A26E44 ダート（昼）
+        private Color _chalk = new Color(0.937f, 0.957f, 0.918f);   // #EFF4EA チョーク（昼夜共通）
+        private Color _bg = new Color(0.078f, 0.137f, 0.106f);      // #14231B 球場の外（昼夜共通）
+        private Color _fence = new Color(0.122f, 0.227f, 0.149f);   // #1F3A26 フェンス線（昼）
 
-        private static readonly CustomStyleProperty<Color> GrassProp = new CustomStyleProperty<Color>("--field-grass");
-        private static readonly CustomStyleProperty<Color> FoulProp = new CustomStyleProperty<Color>("--field-foul");
-        private static readonly CustomStyleProperty<Color> InfieldProp = new CustomStyleProperty<Color>("--field-grass-infield");
-        private static readonly CustomStyleProperty<Color> ClayProp = new CustomStyleProperty<Color>("--field-clay");
+        private static readonly CustomStyleProperty<Color> GrassProp = new CustomStyleProperty<Color>("--field-grass-day");
+        private static readonly CustomStyleProperty<Color> FoulProp = new CustomStyleProperty<Color>("--field-foul-day");
+        private static readonly CustomStyleProperty<Color> InfieldProp = new CustomStyleProperty<Color>("--field-grass-infield-day");
+        private static readonly CustomStyleProperty<Color> ClayProp = new CustomStyleProperty<Color>("--field-clay-day");
         private static readonly CustomStyleProperty<Color> ChalkProp = new CustomStyleProperty<Color>("--field-chalk");
         private static readonly CustomStyleProperty<Color> BgProp = new CustomStyleProperty<Color>("--field-outside");
-        private static readonly CustomStyleProperty<Color> FenceProp = new CustomStyleProperty<Color>("--field-fence");
+        private static readonly CustomStyleProperty<Color> FenceProp = new CustomStyleProperty<Color>("--field-fence-day");
 
         public BaseballFieldElement()
         {

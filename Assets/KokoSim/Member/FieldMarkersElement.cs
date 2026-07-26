@@ -19,8 +19,11 @@ namespace KokoSim.Unity.Member
         }
 
         private readonly List<Marker> _markers = new List<Marker>();
+        // 既定色は tokens と同値（CustomStyle 解決前・失敗時のフォールバック）。--field-chalk は昼夜共通の明色。
         private Color _dot = new Color(0.937f, 0.957f, 0.918f);      // #EFF4EA
         private Color _lead = new Color(0.937f, 0.957f, 0.918f, 0.5f);
+
+        private static readonly CustomStyleProperty<Color> ChalkProp = new CustomStyleProperty<Color>("--field-chalk");
 
         public FieldMarkersElement()
         {
@@ -28,6 +31,17 @@ namespace KokoSim.Unity.Member
             style.position = Position.Absolute;
             style.left = 0; style.top = 0; style.right = 0; style.bottom = 0;
             generateVisualContent += OnGenerate;
+            RegisterCallback<CustomStyleResolvedEvent>(OnStyles);
+        }
+
+        private void OnStyles(CustomStyleResolvedEvent e)
+        {
+            if (e.customStyle.TryGetValue(ChalkProp, out var chalk))
+            {
+                _dot = chalk;
+                _lead = new Color(chalk.r, chalk.g, chalk.b, 0.5f);
+            }
+            MarkDirtyRepaint();
         }
 
         public void SetMarkers(IEnumerable<Marker> markers)

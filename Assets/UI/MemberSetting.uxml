@@ -33,7 +33,10 @@
                         <ui:VisualElement name="ms-field-slots" class="ms-field__slots" />
                     </ui:VisualElement>
 
-                    <ui:VisualElement class="ms-roster">
+                    <!-- .ms-field 拡幅（issue #271）で .ms-roster 側が狭まり列数が減った分、控え(10〜20)の
+                         行数が増えて縦に伸びる。列全体を縦スクロールにして「部員（ベンチ外）」が
+                         画面外へ押し出されて触れなくなるのを防ぐ（プール自体の内側スクロールは維持）。 -->
+                    <ui:ScrollView mode="Vertical" class="ms-roster">
                         <!-- 控え（背番号10〜20・横並び） -->
                         <ui:Label text="控え　背番号 10–20" class="ms-section" />
                         <ui:VisualElement name="ms-bench" class="ms-bench" />
@@ -43,7 +46,7 @@
                         <ui:ScrollView mode="Vertical" class="ms-pool-scroll">
                             <ui:VisualElement name="ms-pool" class="ms-pool" />
                         </ui:ScrollView>
-                    </ui:VisualElement>
+                    </ui:ScrollView>
                 </ui:VisualElement>
             </ui:VisualElement>
 
