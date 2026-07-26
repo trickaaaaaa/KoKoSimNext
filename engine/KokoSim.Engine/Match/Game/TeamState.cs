@@ -805,10 +805,13 @@ public sealed class TeamState
     public bool SwapDefensivePositions(int slotA, int slotB)
     {
         if (slotA == slotB || !IsSwappableDefenseSlot(slotA) || !IsSwappableDefenseSlot(slotB)) return false;
-        var a = _lineup[slotA];
-        var b = _lineup[slotB];
-        _lineup[slotA] = a with { Position = b.Position };
-        _lineup[slotB] = b with { Position = a.Position };
+        // 守備位置の入替規則はスタメン設定（試合前）と同一の単一ソース Season.DefenseAssignment.Swap を通す
+        // （issue #233/#256 の「規則の二重実装を解消」）。2枠の交換なので挙動は従来と同一＝帯不変。
+        var positions = new FieldPosition[_lineup.Length];
+        for (var i = 0; i < _lineup.Length; i++) positions[i] = _lineup[i].Position;
+        var next = Season.DefenseAssignment.Swap(positions, slotA, slotB);
+        for (var i = 0; i < _lineup.Length; i++)
+            if (_lineup[i].Position != next[i]) _lineup[i] = _lineup[i] with { Position = next[i] };
         return true;
     }
 
