@@ -230,7 +230,7 @@
    .row-panel 本体（他画面）はそのまま据え置き、必要な画面だけこのクラスを併せて付ける（UI原則⑤）。 */
 .row-panel--dense {
     min-height: var(--h-row-dense);
-    padding-top: 4px; padding-bottom: 4px;
+    padding-top: var(--sp-1); padding-bottom: var(--sp-1);
     margin-bottom: 6px;
 }
 

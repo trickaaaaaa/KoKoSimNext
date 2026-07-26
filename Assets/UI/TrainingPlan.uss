@@ -111,7 +111,7 @@
 .trow__name { font-size: 19px; color: var(--color-chalk); margin-right: var(--sp-2); }
 .trow__name:hover { color: var(--sky); }
 /* メタ行はベンチ外チップだけが残る（ベンチ入りの選手には出ない＝Issue #273「1行」）。 */
-.trow__meta { flex-direction: row; align-items: center; margin-top: 3px; }
+.trow__meta { flex-direction: row; align-items: center; margin-top: var(--sp-1); }
 
 /* preset-open：行の「練習設定」列＝プリセット名＋主眼メニュー｜配分積み上げバー｜変更（クリックでモーダル）。
    旧「余白の正体」（space-between の空き帯）に積み上げバーを渡す（Issue #133-③・案B）。 */
