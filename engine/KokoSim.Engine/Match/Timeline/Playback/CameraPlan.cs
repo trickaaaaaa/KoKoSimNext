@@ -65,10 +65,9 @@ public static class CameraPlanBuilder
         double cx = WideCx, cy = WideCy, zoom = WideZoom;
         var prevT = 0.0;
         var first = true;
-        for (var t = 0.0; ; t += SampleStepSeconds)
+        foreach (var clampedT in SampleTimes(play, end))
         {
-            var clampedT = Math.Min(t, end);
-            var raw = RawTargetAt(play, Math.Min(clampedT + LeadSeconds, end));
+            var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end));
             if (first)
             {
                 cx = raw.Cx; cy = raw.Cy; zoom = raw.ZoomMult;
@@ -76,16 +75,36 @@ public static class CameraPlanBuilder
             }
             else
             {
-                // 実際に経過した時間（最終サンプルは end で切り詰められ SampleStepSeconds より短くなり得る）でレート制限する。
+                // 実際に経過した時間（境界サンプルは間隔が SampleStepSeconds より短くなり得る）でレート制限する。
                 var dt = clampedT - prevT;
                 zoom = ClampZoomRate(zoom, raw.ZoomMult, dt);
                 (cx, cy) = ClampPan(cx, cy, raw.Cx, raw.Cy, dt);
             }
             kfs.Add(new CameraKeyframe(clampedT, cx, cy, zoom));
             prevT = clampedT;
-            if (clampedT >= end) break;
         }
         return kfs;
+    }
+
+    /// <summary>
+    /// キーフレームを打つ時刻の列（昇順・重複なし）。一定間隔のサンプリングに加えて、
+    /// ボールセグメントの境界時刻（投球→打球等の切り替わり）も必ず打つ。等間隔サンプリングだけだと
+    /// 区間の変わり目が2キーフレームの間（easeIO補間区間）に埋もれ、実際の切り替わりより早く
+    /// 視野が動き出してしまう（Issue #258: 投球中に打つ前からカメラが動く症状の残存要因）。
+    /// </summary>
+    private static IEnumerable<double> SampleTimes(PlaybackPlay play, double end)
+    {
+        var times = new SortedSet<double>();
+        for (var t = 0.0; t < end; t += SampleStepSeconds)
+            times.Add(t);
+        times.Add(end);
+
+        foreach (var seg in play.Ball)
+        {
+            if (seg.T0 > 0 && seg.T0 < end) times.Add(seg.T0);
+            if (seg.T1 > 0 && seg.T1 < end) times.Add(seg.T1);
+        }
+        return times;
     }
 
     private static double ClampZoomRate(double prev, double target, double dt)
@@ -107,40 +126,62 @@ public static class CameraPlanBuilder
         return (px + dx * k, py + dy * k);
     }
 
-    /// <summary>時刻 t で「本来映すべき」視野（レート制限をかける前の生の目標値）。</summary>
-    private static CameraViewport RawTargetAt(PlaybackPlay play, double t)
+    /// <summary>
+    /// 時刻 t で「本来映すべき」視野（レート制限をかける前の生の目標値）。
+    /// <paramref name="actualT"/>=実際の経過時刻（区間判定用）、<paramref name="leadT"/>=先取りサンプリング時刻
+    /// （<see cref="LeadSeconds"/> 分先。ボール追従の目標算出だけに使う）。区間判定を leadT でやると、
+    /// 投球区間の終盤（接触の LeadSeconds 秒前）で先取りが接触後の区間へ食い込み、打つ前からパンが
+    /// 始まってしまう（Issue #258）。固定フレーム区間中かどうかは常に actualT で判定する。
+    /// </summary>
+    private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT)
     {
-        if (t >= play.ResAt + ReturnToWideDelaySeconds) return Wide();
+        if (leadT >= play.ResAt + ReturnToWideDelaySeconds) return Wide();
 
-        var (covering, nextUpcoming) = FindSegmentAt(play, t);
+        var (covering, nextUpcoming) = FindSegmentAt(play, actualT);
 
-        if (covering is PitchSegment || (covering is null && nextUpcoming is PitchSegment))
+        // 投球区間は固定フレーム。ビュー側の忠実移植モデル（PitchSegment）とエンジン実出力
+        // （EndpointBallSegment＋Kind=Pitch。#258）の両方を拾う。
+        if (IsKind(covering, BallSegmentKind.Pitch)
+            || (covering is null && IsKind(nextUpcoming, BallSegmentKind.Pitch)))
             return FitBox(new PlaybackVec(0, 0), new PlaybackVec(FieldDiagramGeometry.Mound.X, FieldDiagramGeometry.Mound.Y), PitchZoom);
 
-        if (covering is ThrowSegment th)
+        // 送球区間は始点・終点を収めるフレーム。同じく両モデルを拾う（#258）。
+        if (IsKind(covering, BallSegmentKind.Throw))
         {
-            var from = th.At(0);
-            var to = th.At(th.T1 - th.T0);
+            var from = covering!.At(0);
+            var to = covering.At(covering.T1 - covering.T0);
             return FitBox(new PlaybackVec(from.X, from.Y), new PlaybackVec(to.X, to.Y));
         }
 
         // 打球（滞空/転がり）中、またはボール保持中の狭間 ＝ ボールを追う。
         // ただし走塁の結末に絡む区間（盗塁・走塁死・本塁クロスプレー）は「ボールと目標塁の中点」を追う。
-        var critical = FindCriticalRunAt(play, t);
+        var critical = FindCriticalRunAt(play, leadT);
         if (critical != null)
         {
-            var ballNow = PlaybackEvaluator.BallAt(play, t);
+            var ballNow = PlaybackEvaluator.BallAt(play, leadT);
             var ballPos = ballNow.HasValue ? new PlaybackVec(ballNow.Value.X, ballNow.Value.Y) : critical.To;
             return FitBox(ballPos, critical.To);
         }
 
-        var cur = PlaybackEvaluator.BallAt(play, t);
+        var cur = PlaybackEvaluator.BallAt(play, leadT);
         if (!cur.HasValue) return Wide();
         var curV = new PlaybackVec(cur.Value.X, cur.Value.Y);
-        var ahead = PlaybackEvaluator.BallAt(play, t + LookaheadSeconds);
+        var ahead = PlaybackEvaluator.BallAt(play, leadT + LookaheadSeconds);
         var aheadV = ahead.HasValue ? new PlaybackVec(ahead.Value.X, ahead.Value.Y) : curV;
         return FitBox(curV, aheadV);
     }
+
+    /// <summary>
+    /// セグメントが指定種別か（ビュー側の忠実移植モデル＝固定4型と、エンジン実出力の
+    /// <see cref="EndpointBallSegment"/>＋<see cref="BallSegmentKind"/> の両方を同一視して判定する。#258）。
+    /// </summary>
+    private static bool IsKind(PlaybackBallSegment? seg, BallSegmentKind kind) => (seg, kind) switch
+    {
+        (PitchSegment, BallSegmentKind.Pitch) => true,
+        (ThrowSegment, BallSegmentKind.Throw) => true,
+        (EndpointBallSegment eb, _) => eb.Kind == kind,
+        _ => false,
+    };
 
     private static (PlaybackBallSegment? Covering, PlaybackBallSegment? NextUpcoming) FindSegmentAt(PlaybackPlay play, double t)
     {
