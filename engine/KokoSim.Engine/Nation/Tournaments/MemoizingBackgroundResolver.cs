@@ -26,7 +26,7 @@ namespace KokoSim.Engine.Nation.Tournaments;
 public sealed class MemoizingBackgroundResolver : IBackgroundMatchResolver
 {
     private readonly IBackgroundMatchResolver _inner;
-    private readonly ConcurrentDictionary<(int Away, int Home, int RoundsRemaining), Lazy<GameResult>> _cache = new();
+    private readonly ConcurrentDictionary<(int Away, int Home, int RoundsRemaining, int TieReplay), Lazy<GameResult>> _cache = new();
 
     public MemoizingBackgroundResolver(IBackgroundMatchResolver inner)
         => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
@@ -34,7 +34,9 @@ public sealed class MemoizingBackgroundResolver : IBackgroundMatchResolver
     public GameResult Resolve(School away, School home, IRandomSource rng, TournamentMatchContext? context = null)
     {
         // カードはトーナメント内で一意（同一2校はシングルエリミで最大1回対戦）。ラウンド残数も鍵に含めて明示。
-        var key = (away.Id, home.Id, context?.RoundsRemaining ?? 0);
+        // 引き分け再試合（issue #253）は同一カードを別 rng で複数回解くため、再試合回（TieReplay）も鍵に含める
+        // ＝これがないと初戦の引き分けがキャッシュから返り続け、再試合が永久に決着しない。TieReplay=0 は従来の鍵と等価。
+        var key = (away.Id, home.Id, context?.RoundsRemaining ?? 0, context?.TieReplay ?? 0);
         var lazy = _cache.GetOrAdd(key, _ => new Lazy<GameResult>(
             () => _inner.Resolve(away, home, rng, context), LazyThreadSafetyMode.ExecutionAndPublication));
         return lazy.Value;

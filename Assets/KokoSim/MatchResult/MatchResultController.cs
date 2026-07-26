@@ -23,6 +23,8 @@ namespace KokoSim.Unity.MatchResult
             public bool ManagerIsAway;
             public string AwayName;
             public string HomeName;
+            /// <summary>大会戦（勝者が要る文脈）か。延長上限の引き分けを「引き分け（再試合）」と明示する（issue #253）。</summary>
+            public bool RematchOnTie;
             /// <summary>「閉じる」で呼ぶ後処理（大会への結果反映＋画面遷移）。null ならホームへ戻すだけ。</summary>
             public System.Action OnClose;
         }
@@ -47,9 +49,10 @@ namespace KokoSim.Unity.MatchResult
             var managerIsAway = req?.ManagerIsAway ?? false;
             var awayName = req?.AwayName ?? "先攻";
             var homeName = req?.HomeName ?? "後攻";
+            var rematchOnTie = req?.RematchOnTie ?? false;
             if (result == null) return;   // 要求なしで開かれた（スクショ等）: 骨組みだけ出す
 
-            Render(MatchResultState.Build(result, managerIsAway, awayName, homeName));
+            Render(MatchResultState.Build(result, managerIsAway, awayName, homeName, rematchOnTie));
         }
 
         // 画面を離れるときに登録を解除する（OnEnable が毎回登録するため、外さないと往復のたび多重登録になる）。

@@ -30,7 +30,9 @@ public sealed record PlayerMatchOutcome(
     bool IsChampion,
     GameResult? Detail = null,
     bool ManagerWasAway = false,
-    bool MercyEnded = false);
+    bool MercyEnded = false,
+    // 引き分け再試合（設計書05 §1.3）で行われた再試合数。0＝初戦で決着。>0 なら Detail は決着した再試合の結果。
+    int TieReplays = 0);
 
 /// <summary>
 /// ライブ観戦する自校戦の受け渡し（<see cref="TournamentRunner.BeginNextPlayerMatch"/> の戻り）。
@@ -114,6 +116,14 @@ public sealed class TournamentRunner
     private readonly List<BracketMatch> _matches = new();
     /// <summary>大会中の投手球数台帳（issue #41）。エース温存判断（issue #42）の消耗入力として本大会内で共有する。</summary>
     private readonly TournamentPitchLedger _pitchLedger = new();
+
+    /// <summary>
+    /// 引き分け再試合（設計書05 §1.3, issue #253）の上限回数。延長上限（15回, <see cref="GameContext.MaxInnings"/>）
+    /// で同点だった試合は別Fork の再試合で決着させるが、この回数を再試合しても決着しなければ規定
+    /// （安打数→強さ→Id, <see cref="DecideByReplay"/>）で強制決着し有限終了を保証する（安全弁）。
+    /// 4試合連続で15回引き分けになる確率は無視できるため、通常は 0〜1 回の再試合で決着する。
+    /// </summary>
+    private const int MaxTieReplays = 3;
 
     /// <summary>ラウンド r（0基点）開始時の各スロットの残存校。未到達ラウンドは null（＝校名未確定）。</summary>
     private readonly School?[]?[] _roundEntrants;
@@ -448,23 +458,31 @@ public sealed class TournamentRunner
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
                 var matchDay = _schedule.MatchDay(round);
-                var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
-                var detail = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
-                    MercyRuleEnabledFor(roundsRemaining), context);
-                var r = detail.Result;
-                var mgrRuns = detail.ManagerIsAway ? r.AwayRuns : r.HomeRuns;
-                var oppRuns = detail.ManagerIsAway ? r.HomeRuns : r.AwayRuns;
-                var managerWon = mgrRuns > oppRuns;
+                var mercy = MercyRuleEnabledFor(roundsRemaining);
+                // 初戦（再試合回0）は従来と完全一致（同一Fork・同一context）＝非引き分け試合は決定論baseline不変。
+                var first = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
+                    mercy, new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger));
+                var managerIsAway = first.ManagerIsAway;
+                var awaySchool = managerIsAway ? mgr : opp;
+                var homeSchool = managerIsAway ? opp : mgr;
+                var (decisive, awayWon, replays) = DecideByReplay(awaySchool, homeSchool, attempt =>
+                    attempt == 0 ? first.Result
+                        : _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i, attempt)),
+                            mercy, new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger, attempt)).Result);
+                var r = decisive;
+                var managerWon = managerIsAway ? awayWon : !awayWon;
+                var mgrRuns = managerIsAway ? r.AwayRuns : r.HomeRuns;
+                var oppRuns = managerIsAway ? r.HomeRuns : r.AwayRuns;
                 var mw = managerWon ? mgr : opp;
                 var ml = managerWon ? opp : mgr;
                 var mws = Math.Max(mgrRuns, oppRuns);
                 var mls = Math.Min(mgrRuns, oppRuns);
                 outcome = new PlayerMatchOutcome(
                     managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, roundName, IsChampion: false,
-                    Detail: r, ManagerWasAway: detail.ManagerIsAway, MercyEnded: r.MercyEnded);
+                    Detail: r, ManagerWasAway: managerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays);
                 _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mw.Id, ml.Id, mws, mls, true, r.MercyEnded));
                 RecordCard(round, i, mw.Id == a.Id, mws, mls, r.MercyEnded);
-                RecordOutings(r, detail.ManagerIsAway ? mgr : opp, detail.ManagerIsAway ? opp : mgr, matchDay);
+                RecordOutings(r, managerIsAway ? mgr : opp, managerIsAway ? opp : mgr, matchDay);
                 next[i] = mw;
                 continue;
             }
@@ -543,18 +561,29 @@ public sealed class TournamentRunner
         var p = _pending!;
         _pending = null;
 
-        var mgrRuns = p.ManagerIsAway ? result.AwayRuns : result.HomeRuns;
-        var oppRuns = p.ManagerIsAway ? result.HomeRuns : result.AwayRuns;
-        var managerWon = mgrRuns > oppRuns;
+        // 観戦した試合（再試合回0）が延長上限で引き分けなら、別Fork の再試合で決着させる（設計書05 §1.3, issue #253）。
+        // 再試合は観戦せず本流で自動解決するため、非観戦（自動消化）の ResolveRound と同一の決着関数・同一 Fork を通す
+        // ＝観戦してもしなくても大会展開は不変（決定論契約）。観戦した引き分け試合は結果画面で「再試合」と明示する。
+        var awaySchool = p.ManagerIsAway ? p.Mgr : p.Opp;
+        var homeSchool = p.ManagerIsAway ? p.Opp : p.Mgr;
+        var mercy = MercyRuleEnabledFor(p.RoundsRemaining);
+        var (decisive, awayWon, replays) = DecideByReplay(awaySchool, homeSchool, attempt =>
+            attempt == 0 ? result
+                : _playerResolver!.Resolve(p.Mgr, p.Opp, _rng.Fork(PlayerMatchStream(p.RoundsRemaining, p.Slot, attempt)),
+                    mercy, new TournamentMatchContext(p.RoundsRemaining, p.MatchDay, _pitchLedger, attempt)).Result);
+        var r = decisive;
+        var managerWon = p.ManagerIsAway ? awayWon : !awayWon;
+        var mgrRuns = p.ManagerIsAway ? r.AwayRuns : r.HomeRuns;
+        var oppRuns = p.ManagerIsAway ? r.HomeRuns : r.AwayRuns;
         var winner = managerWon ? p.Mgr : p.Opp;
         var loser = managerWon ? p.Opp : p.Mgr;
         var winScore = Math.Max(mgrRuns, oppRuns);
         var loseScore = Math.Min(mgrRuns, oppRuns);
         var round = RoundIndexOf(p.Cur);
         _matches.Add(new BracketMatch(
-            p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winner.Id, loser.Id, winScore, loseScore, true, result.MercyEnded));
-        RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore, result.MercyEnded);
-        RecordOutings(result, p.ManagerIsAway ? p.Mgr : p.Opp, p.ManagerIsAway ? p.Opp : p.Mgr, p.MatchDay);
+            p.RoundName, p.RoundsRemaining, winner.Name, loser.Name, winner.Id, loser.Id, winScore, loseScore, true, r.MercyEnded));
+        RecordCard(round, p.Slot, winner.Id == p.Cur[2 * p.Slot]!.Id, winScore, loseScore, r.MercyEnded);
+        RecordOutings(r, awaySchool, homeSchool, p.MatchDay);
         p.Next[p.Slot] = winner;
 
         // 自校スロット以降の残りカードを本流で解決（このラウンドの自校戦は1つだけ＝以降は非自校カード）。
@@ -575,7 +604,7 @@ public sealed class TournamentRunner
         _current = p.Next;
         return new PlayerMatchOutcome(
             managerWon, p.Opp.Name, p.Opp.Tier, mgrRuns, oppRuns, p.RoundName, IsChampion: false,
-            Detail: result, ManagerWasAway: p.ManagerIsAway, MercyEnded: result.MercyEnded);
+            Detail: r, ManagerWasAway: p.ManagerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays);
     }
 
     /// <summary>得点差(margin)から表示用スコアを合成する（敗者0〜3点＋差）。決定論（注入乱数）。</summary>
@@ -596,14 +625,23 @@ public sealed class TournamentRunner
         if (_backgroundResolver is not null)
         {
             var matchDay = _schedule.MatchDay(_totalRounds - roundsRemaining);
-            var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
-            var r = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot)), context);
-            RecordOutings(r, a, b, matchDay);
-            return DecideFromRuns(a, b, r);
+            // 引き分け再試合（設計書05 §1.3, issue #253）。初戦（attempt 0）は従来と同一 Fork・同一 context ＝
+            // 非引き分け試合は決定論baseline不変。延長上限で引き分けたときだけ別Fork の再試合を積む。
+            // 各試合（引き分け含む）を全国成績へ畳み込み・台帳へ記録する（再試合＝両試合とも公式試合という現実準拠）。
+            var (decisive, awayWon, _) = DecideByReplay(a, b, attempt =>
+            {
+                var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger, attempt);
+                var g = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot, attempt)), context);
+                RecordOutings(g, a, b, matchDay);
+                return g;
+            });
+            var winner = awayWon ? a : b;
+            var loser = awayWon ? b : a;
+            return (winner, loser, Math.Max(decisive.AwayRuns, decisive.HomeRuns), Math.Min(decisive.AwayRuns, decisive.HomeRuns));
         }
-        var (winner, loser, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
+        var (w, l, margin) = AggregateMatch.PlayDetailed(a, b, _coeff, _rng);
         var (ws, ls) = SynthesizeScore(margin);
-        return (winner, loser, ws, ls);
+        return (w, l, ws, ls);
     }
 
     /// <summary>
@@ -626,18 +664,27 @@ public sealed class TournamentRunner
     }
 
     /// <summary>
-    /// フルシム結果（a=先攻・b=後攻）から勝敗と表示スコアを決める。引き分け（延長上限）は安打数→強さ→Id で
-    /// 決定論的に解決する（knockout は勝者が要る）。
+    /// 引き分け再試合の共通決着関数（設計書05 §1.3, issue #253）。自校戦（自動消化 <see cref="ResolveRound"/>／
+    /// 観戦 <see cref="CompleteRound"/>）と裏試合（<see cref="ResolveBackgroundCard"/>）はすべてここを通る（経路一致）。
+    /// <paramref name="playGame"/>(attempt) で1試合を得、延長上限で引き分け（<see cref="GameResult.Tied"/>）なら
+    /// 別Fork の再試合を最大 <see cref="MaxTieReplays"/> 回まで繰り返す。全再試合でも引き分けなら規定
+    /// （安打数→強さ→Id）で強制決着し、有限終了を保証する（安全弁。4試合連続15回引き分けは無視できる確率）。
+    /// 各再試合は attempt を変えた別 Fork ＝決定論。<paramref name="away"/>/<paramref name="home"/> は
+    /// GameResult の先攻/後攻に対応する School（規定決着の強さ・Id 比較に使う）。
+    /// 戻り値: Decisive＝決着した（最後の）試合、AwayWon＝先攻が勝ったか、Replays＝行った再試合数（0＝初戦決着）。
     /// </summary>
-    private static (School Winner, School Loser, int WinScore, int LoseScore) DecideFromRuns(
-        School a, School b, GameResult r)
+    private static (GameResult Decisive, bool AwayWon, int Replays) DecideByReplay(
+        School away, School home, Func<int, GameResult> playGame)
     {
-        var aWon = r.AwayRuns > r.HomeRuns
+        var r = playGame(0);
+        var replays = 0;
+        while (r.Tied && replays < MaxTieReplays)
+            r = playGame(++replays);
+        var awayWon = r.AwayRuns > r.HomeRuns
             || (r.AwayRuns == r.HomeRuns && (r.AwayHits > r.HomeHits
-                || (r.AwayHits == r.HomeHits && (a.Strength > b.Strength || (a.Strength >= b.Strength && a.Id < b.Id)))));
-        var winner = aWon ? a : b;
-        var loser = aWon ? b : a;
-        return (winner, loser, Math.Max(r.AwayRuns, r.HomeRuns), Math.Min(r.AwayRuns, r.HomeRuns));
+                || (r.AwayHits == r.HomeHits && (away.Strength > home.Strength
+                    || (away.Strength >= home.Strength && away.Id < home.Id)))));
+        return (r, awayWon, replays);
     }
 
     /// <summary>
@@ -651,13 +698,19 @@ public sealed class TournamentRunner
         SynthesizeScore(margin);   // 破棄（本流消費だけ従来と一致させる）
     }
 
-    /// <summary>裏試合フルシム用 Fork ストリームID（ラウンド×スロットで一意・決定論）。自校戦とも本流とも別系列。</summary>
-    private static ulong BackgroundStream(int roundsRemaining, int slot)
-        => 0xB6B6_0000UL ^ ((ulong)roundsRemaining << 16) ^ (uint)slot;
+    /// <summary>
+    /// 裏試合フルシム用 Fork ストリームID（ラウンド×スロット×再試合回で一意・決定論）。自校戦とも本流とも別系列。
+    /// <paramref name="attempt"/>（引き分け再試合回, issue #253）は上位ビットへ載せる＝ attempt=0 は従来のIDと完全一致。
+    /// </summary>
+    private static ulong BackgroundStream(int roundsRemaining, int slot, int attempt = 0)
+        => 0xB6B6_0000UL ^ ((ulong)roundsRemaining << 16) ^ (uint)slot ^ ((ulong)(uint)attempt << 40);
 
-    /// <summary>自校戦の詳細シム用 Fork ストリームID（ラウンド×スロットで一意・決定論）。本流とは別系列。</summary>
-    private static ulong PlayerMatchStream(int roundsRemaining, int slot)
-        => 0xA5A50000UL ^ ((ulong)roundsRemaining << 16) ^ (uint)slot;
+    /// <summary>
+    /// 自校戦の詳細シム用 Fork ストリームID（ラウンド×スロット×再試合回で一意・決定論）。本流とは別系列。
+    /// <paramref name="attempt"/>（引き分け再試合回, issue #253）は上位ビットへ載せる＝ attempt=0 は従来のIDと完全一致。
+    /// </summary>
+    private static ulong PlayerMatchStream(int roundsRemaining, int slot, int attempt = 0)
+        => 0xA5A50000UL ^ ((ulong)roundsRemaining << 16) ^ (uint)slot ^ ((ulong)(uint)attempt << 40);
 
     private int IndexOfManager(School?[] cur)
     {
