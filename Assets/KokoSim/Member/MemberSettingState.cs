@@ -188,10 +188,11 @@ namespace KokoSim.Unity.Member
             }
             v.BenchOutCount = _roster.Count - v.AssignedCount;
 
-            // プール：ベンチ外（背番号未割当）だけを総合力降順で並べる。
+            // プール：ベンチ外（背番号未割当）だけを打撃力降順で並べる。
+            // 「選手個人の総合ランク」は #30 で廃止＝並べ替えキーも用途に合うカテゴリ別指標へ寄せた（issue #270）。
             var ordered = Enumerable.Range(0, _roster.Count)
                 .Where(i => _roster[i].UniformNumber == 0)
-                .OrderByDescending(i => _roster[i].AverageLevel());
+                .OrderByDescending(i => PlayerStrengthProfile.Compute(_roster[i], Coeff).Batting);
             foreach (var i in ordered)
             {
                 var p = _roster[i];
