@@ -57,6 +57,16 @@
     /* 盤面要素が全面を自前描画するが、隙間が出ても暗い額縁として読めるよう球場外色に合わせる。 */
     background-color: var(--field-outside);
 }
+/* 対決ビュー（設計書18 A案）。盤面と同じ額縁色でレターボックスを作り、
+   中のRT画像は DuelViewElement が整数倍サイズへスナップして中央に置く。既定は非表示。 */
+.mlive-duel {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--field-outside);
+}
 
 /* ── 1球采配ショートカット（設計書15 Phase C-3・常駐）。低彩度: 既定は無点灯、選択時のみ点灯。 ── */
 .mlive-pitchtactics {

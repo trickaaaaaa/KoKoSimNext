@@ -27,6 +27,9 @@
 
                 <ui:VisualElement class="mlive-field-wrap">
                     <ui:VisualElement name="field-host" class="mlive-field" />
+                    <!-- 対決ビュー（設計書18 A案）。盤面と差し替えで表示する3D RTのホスト。
+                         中身の DuelViewElement は MatchLiveController が生成し整数倍サイズへスナップする。 -->
+                    <ui:VisualElement name="duel-host" class="mlive-duel" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
                     <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい） -->
                     <ui:VisualElement name="pitch-call" class="pitch-call">
@@ -98,6 +101,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="md-group">
                         <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
+                        <ui:Button name="duel-view" class="chip-btn" text="対決ビュー（試）" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 

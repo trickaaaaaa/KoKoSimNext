@@ -91,6 +91,13 @@ namespace KokoSim.Unity.Match
         // ×4速時は酔い防止のため強制的に全景固定へ戻す（スキップは委任でその場で試合が終わるため対象外）。
         private Button _camWork;
         private bool _cameraWorkWanted;
+        // 対決ビュー（design-18 §7-1 A案）の配線スパイク。盤面⇄対決の切替トグル（試験導線）。
+        // 実体は DuelStageRig（UBC素体のループ芝居・12fps量子化）。エンジンpitch進行との同期は§7-2で接続する。
+        private Button _duelBtn;
+        private bool _duelOn;
+        private DuelStageRig _duelRig;
+        private DuelViewElement _duelImg;
+        private VisualElement _duelHost, _fieldHost;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
         private readonly List<Button> _speedButtons = new();
@@ -166,6 +173,7 @@ namespace KokoSim.Unity.Match
             _view = new Match2DPlaybackElement();
             _view.SetColumnFraming(true);   // 全景の3カラム中央＝列内を使い切る既定ビューポート
             host?.Add(_view);
+            _fieldHost = host;
 
             _leftLineup = _root.Q<VisualElement>("left-lineup");
             _rightLineup = _root.Q<VisualElement>("right-lineup");
@@ -196,6 +204,12 @@ namespace KokoSim.Unity.Match
             _camWork = _root.Q<Button>("cam-work");
             if (_camWork != null) _camWork.clicked += OnToggleCameraWork;
             ApplyCameraWorkState();
+            _duelHost = _root.Q<VisualElement>("duel-host");
+            _duelHost?.Clear();   // OnEnable ごとの積み上がり防止（field-host と同じ運用）
+            _duelImg = null;
+            _duelBtn = _root.Q<Button>("duel-view");
+            if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
+            ApplyDuelViewState();
             WirePitchTactics();
 
             // B/S/O ランプと塁ダイヤは LineScorePanel（部品辞書）の右袖。1球ごとに動くのでここから直接トグルする。
@@ -248,6 +262,10 @@ namespace KokoSim.Unity.Match
             if (_skip != null) _skip.clicked -= OnSkip;
             if (_backHome != null) _backHome.clicked -= OnBackHome;
             if (_camWork != null) _camWork.clicked -= OnToggleCameraWork;
+            if (_duelBtn != null) _duelBtn.clicked -= OnToggleDuelView;
+            _duelRig?.Dispose();
+            _duelRig = null;
+            _duelImg = null;
             foreach (var (b, h) in _speedHandlers) b.clicked -= h;
             _speedHandlers.Clear();
             _speedButtons.Clear();
@@ -284,6 +302,7 @@ namespace KokoSim.Unity.Match
             _speedButtons.Clear();
             _speedHandlers.Clear();
             _cameraWorkWanted = false;
+            _duelOn = false;
         }
 
         // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
@@ -754,6 +773,9 @@ namespace KokoSim.Unity.Match
             // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
             _view.PlaybackSpeed = _speed;
 
+            // 対決ビュー（試験導線）はポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
+            if (!_paused && _duelOn) _duelRig?.Tick(Time.deltaTime * _speed);
+
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
 
@@ -1057,6 +1079,34 @@ namespace KokoSim.Unity.Match
         private void ApplyCameraWorkState()
         {
             _camWork?.EnableInClassList("chip-btn--on", _cameraWorkWanted);
+        }
+
+        // 対決ビュー（design-18 §7-1 A案）の試験トグル。アセット未導入環境では何もしない（警告ログのみ）。
+        private void OnToggleDuelView()
+        {
+            if (!_duelOn)
+            {
+                _duelRig ??= new DuelStageRig();
+                if (!_duelRig.Available) return;
+                if (_duelImg == null)
+                {
+                    _duelImg = new DuelViewElement();
+                    _duelHost?.Add(_duelImg);
+                }
+                _duelImg.Bind(_duelRig.Target);
+            }
+            _duelOn = !_duelOn;
+            ApplyDuelViewState();
+        }
+
+        /// <summary>撮影ハーネス用（エディタ限定運用）: 対決ビューのトグルを外から叩く。</summary>
+        internal void ToggleDuelViewForCapture() => OnToggleDuelView();
+
+        private void ApplyDuelViewState()
+        {
+            if (_fieldHost != null) _fieldHost.style.display = _duelOn ? DisplayStyle.None : DisplayStyle.Flex;
+            if (_duelHost != null) _duelHost.style.display = _duelOn ? DisplayStyle.Flex : DisplayStyle.None;
+            _duelBtn?.EnableInClassList("chip-btn--on", _duelOn);
         }
 
         private static void SetEnabled(Button b, bool on) { if (b != null) b.SetEnabled(on); }
