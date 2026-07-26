@@ -63,8 +63,10 @@
     margin-bottom: var(--sp-2);
     flex-shrink: 0;
 }
-/* 打順9行ぶんは素で入る高さを上限にし、それ以上は内部スクロール（カードは中身の高さで止まる）。 */
-.msub-scroll { max-height: 400px; }
+/* 打順9行ぶんは素で入る高さを上限にし、それ以上は内部スクロール（カードは中身の高さで止まる）。
+   行高40px＋行間ピッチ46px（.lineup-row: min-height 40px + border-bottom 4px + margin-bottom 6px）
+   ×9行＝414px（issue #254。以前の400pxは行パネル化・文字サイズ底上げ前の値で14px不足していた）。 */
+.msub-scroll { max-height: 414px; }
 
 /* 選べない行（退場済み・対象外）。押しても何も起きないので、色だけで区別する（UI原則⑥）。 */
 .msub-row--off { opacity: 0.38; }
