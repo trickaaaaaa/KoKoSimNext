@@ -792,7 +792,9 @@
 .lineup-row__pos { width: 40px; margin-left: var(--sp-2); flex-direction: row; align-items: center; }
 .lineup-row__info { width: 96px; font-size: var(--fs-cap); color: var(--color-muted); }
 
-/* ── PosChip：守備位置チップ（クリックで選択→別チップのクリックで守備位置を入替）。投＝固定・指＝DH（非活性見た目） ── */
+/* ── PosChip：守備位置チップ（クリックで選択→別チップのクリックで守備位置を入替）。
+   スタメン設定では「投」も含めて9枠すべて入替可（issue #233）＝--fixed は使わない。
+   --fixed は入替できない場面（試合中の交代パネルの表示専用チップ）だけに残す。指＝DH（守備に就かない）。 ── */
 .pos-chip {
     min-width: 26px;
     height: 24px;

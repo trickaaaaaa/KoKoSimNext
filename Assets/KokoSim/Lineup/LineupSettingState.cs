@@ -20,9 +20,9 @@ namespace KokoSim.Unity.Lineup
         public int Order;                 // 打順 1〜9
         public int UniformNumber;         // 背番号（メンバー設定で割当。0＝未割当）
         public string PosKanji = "";      // 守備位置漢字（DHは「指」・投手は「投」）
-        public bool IsPitcherSlot;        // 非DHの投手スロット（守備位置は固定）
+        // 守備位置チップは9枠すべて編集可（「投」も含めて入れ替えられる, issue #233）。
+        // IsDhSlot は見た目（指＝守備に就かない）を分けるためだけに残す。
         public bool IsDhSlot;
-        public bool PosEditable;          // 守備位置を変更できる（野手スロットのみ）
         public string Name = "";
         public string GradeLabel = "";
         public string HandLabel = "";
@@ -93,6 +93,7 @@ namespace KokoSim.Unity.Lineup
         public string[] TabLabels = PlayerCompareTabs.TabLabels;
         public bool CanConfirm = true;      // ベンチ入りが9人未満なら false（確定ボタンを塞ぐ）
         public string WarnText = "";        // 上の理由（空＝警告なし）
+        public string HintText = "";        // 守備位置・先発の操作説明（打順表の下・控えめ）
         public List<PlayerCompareRow> Rows2 = new List<PlayerCompareRow>();  // 比較能力行
         public bool ShowApt;
         public bool HasAptA;
@@ -246,6 +247,16 @@ namespace KokoSim.Unity.Lineup
         {
             if (slot < 0 || slot > 8) return;
             if (_pickKind == PickKind.SlotPosition) ClearPick();   // 守備位置ピックとは排他
+
+            // 先発投手ピルを選んだ状態でのクリック＝先発と打順選手の入替（DH制。打順内の任意選手を
+            // 先発にできる, issue #233）。元の先発はその打順枠へ入り、守備位置は枠のものを引き継ぐ。
+            if (_pickKind == PickKind.StartingPitcher && _spIdx >= 0)
+            {
+                (_idx[slot], _spIdx) = (_spIdx, _idx[slot]);
+                ClearPick();
+                return;
+            }
+
             var idx = _idx[slot];
             if (_picked < 0) { _picked = idx; _pickKind = PickKind.OrderPlayer; return; }
             if (_picked == idx) { ClearPick(); return; }
@@ -285,22 +296,35 @@ namespace KokoSim.Unity.Lineup
             _picked = idx; _pickKind = PickKind.OrderPlayer;          // 控え⇄控えは再選択
         }
 
-        /// <summary>先発投手ピル クリック（DH制）：先発を比較対象に選択＝以後の控え投手クリックで差し替え。</summary>
+        /// <summary>
+        /// 先発投手ピル クリック（DH制）：先発を選択＝以後の控え/打順クリックで差し替え。
+        /// 逆順（先に選手を選んでからピル）も同じ結果になるようにしてある（issue #233）。
+        /// </summary>
         public void ClickStartingPitcher()
         {
             if (!_usesDh) return;
             if (_pickKind == PickKind.StartingPitcher) { ClearPick(); return; }
+
+            if (_pickKind == PickKind.OrderPlayer && _picked >= 0 && _picked != _spIdx)
+            {
+                var from = SlotOf(_picked);
+                // 打順の選手を選んだ状態でピル＝その選手が先発投手、元の先発が空いた打順枠へ。
+                if (from >= 0 && _spIdx >= 0) { (_idx[from], _spIdx) = (_spIdx, _idx[from]); ClearPick(); return; }
+                // 控えを選んだ状態でピル＝先発を差し替え（元の先発は控えへ戻る）。
+                if (from < 0) { _spIdx = _picked; ClearPick(); return; }
+            }
+
             ClearPick();   // 守備位置ピックとは排他
             _picked = _spIdx; _pickKind = PickKind.StartingPitcher;
         }
 
         /// <summary>
         /// 守備位置チップ クリック：1回目で選択、2回目に別スロットのチップで両者の守備位置を入替（打順ピックと同じ操作モデル）。
-        /// 同じチップの再クリックで解除。DH・（非DH時の）投手スロットは対象外。
+        /// 同じチップの再クリックで解除。9枠すべてが対象＝「投」「指」も動かせる（issue #233）。
         /// </summary>
         public void ClickPosition(int slot)
         {
-            if (!PosSwappable(slot)) return;
+            if (slot < 0 || slot > 8) return;
             if (_pickKind == PickKind.SlotPosition)
             {
                 if (_posPickSlot == slot) { ClearPick(); return; }
@@ -312,21 +336,23 @@ namespace KokoSim.Unity.Lineup
             _pickKind = PickKind.SlotPosition;
         }
 
-        /// <summary>2つの打順スロットの守備位置を入れ替える（交換なので9守備位置の一意性は保たれる）。</summary>
+        /// <summary>
+        /// 2つの打順スロットの守備位置を入れ替える。交換なので9守備位置の一意性は保たれる。
+        /// 「投」を任意の枠へ動かせる＝任意の選手を投手にできる（issue #233。投/野でゲートしない, issue #93）。
+        /// 入替規則と投手枠・DH枠の追従は engine の <see cref="DefenseAssignment"/> が単一ソース。
+        /// </summary>
         public void SwapSlotPositions(int a, int b)
         {
-            if (a == b || !PosSwappable(a) || !PosSwappable(b)) return;
-            (_pos[a], _pos[b]) = (_pos[b], _pos[a]);
+            if (a == b || a < 0 || b < 0 || a > 8 || b > 8) return;
+            var next = DefenseAssignment.Swap(_pos, a, b);
+            for (var i = 0; i < 9; i++) _pos[i] = next[i];
+            // 投手枠・DH枠は配列から引き直す（別に持つとズレる）。DH中は投手が打順外なので、
+            // 「指」の枠＝DHを解除したとき投手が戻る枠。
+            if (_usesDh)
+                _pitcherSlot = _dhSlot = DefenseAssignment.SlotOf(_pos, FieldPosition.DesignatedHitter);
+            else
+                _pitcherSlot = DefenseAssignment.SlotOf(_pos, FieldPosition.Pitcher);
             ClearPick();
-        }
-
-        // 守備位置を動かせるスロットか（DHは守備に就かない・非DHの投手スロットは固定）。
-        private bool PosSwappable(int slot)
-        {
-            if (slot < 0 || slot > 8) return false;
-            if (_usesDh && slot == _dhSlot) return false;
-            if (!_usesDh && slot == _pitcherSlot) return false;
-            return true;
         }
 
         /// <summary>DH制のON/OFF切替。</summary>
@@ -340,6 +366,9 @@ namespace KokoSim.Unity.Lineup
                 if (dh < 0) return;                // 野手控えが居なければ切替不可
                 _spIdx = pitcherIdx;
                 _idx[_pitcherSlot] = dh;
+                // 「指」は守備位置として保持する（守備に就かない枠を配列上でも一意に表す）。
+                // これで DH枠も他の枠と同じ入替1手で動かせる（issue #233）。
+                _pos[_pitcherSlot] = FieldPosition.DesignatedHitter;
                 _dhSlot = _pitcherSlot;
                 _usesDh = true;
             }
@@ -379,7 +408,12 @@ namespace KokoSim.Unity.Lineup
         {
             var order = new List<LineupSlot>(9);
             for (var i = 0; i < 9; i++)
-                order.Add(new LineupSlot(_roster[_idx[i]], _pos[i]));
+            {
+                // DH枠の守備位置は守備に就かない＝engine 側は読み飛ばす（RosterTeamBuilder が DhSlot をスキップし、
+                // TeamState が表示を「指」へ差し替える）。従来どおり投手を渡して受け口の入力を変えない。
+                var pos = _pos[i] == FieldPosition.DesignatedHitter ? FieldPosition.Pitcher : _pos[i];
+                order.Add(new LineupSlot(_roster[_idx[i]], pos));
+            }
 
             var used = new HashSet<int>();
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
@@ -445,19 +479,20 @@ namespace KokoSim.Unity.Lineup
             else
                 v.WarnText = InjuredStarterWarning();
 
+            // 操作の入口を1行だけ明記する（見つからない操作は無いのと同じ, issue #233）。
+            v.HintText = _usesDh
+                ? "守備位置：「守」チップを2つクリックで入替　先発投手：先発ピル→選手をクリック"
+                : "守備位置：「守」チップを2つクリックで入替（投も動かせる＝任意の選手を投手にできる）";
+
             for (var i = 0; i < 9; i++)
             {
                 var p = _roster[_idx[i]];
-                var isDh = _usesDh && i == _dhSlot;
-                var isPitcherSlot = !_usesDh && i == _pitcherSlot;
                 v.Rows.Add(new LineupRowView
                 {
                     Order = i + 1,
                     UniformNumber = p.UniformNumber,
-                    PosKanji = PosKanji[isDh ? FieldPosition.DesignatedHitter : _pos[i]],
-                    IsPitcherSlot = isPitcherSlot,
-                    IsDhSlot = isDh,
-                    PosEditable = !isDh && !isPitcherSlot,
+                    PosKanji = PosKanji[_pos[i]],
+                    IsDhSlot = _usesDh && i == _dhSlot,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
                     HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
