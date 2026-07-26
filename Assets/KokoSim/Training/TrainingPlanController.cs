@@ -200,9 +200,11 @@ namespace KokoSim.Unity.Training
                 var row = new VisualElement();
                 row.AddToClassList("trow");
                 row.AddToClassList("row-panel");   // 共通部品：白パネル＋インク枠＋ベタ影（components.uss）
+                row.AddToClassList("row-panel--dense");   // 高密度バリアント（Issue #273）
                 if (r.Selected) row.AddToClassList("row-panel--selected");
 
-                // 背番号／選手／学年（投/野ポジションは非表示）
+                // 背番号／選手／学年／投打（投/野ポジションは非表示）。学年・投打は名前と同じ上段へ
+                // （Issue #273：ベンチ外選手だけメタ行に「ベンチ外」チップが乗り2行になる＝それ以外は1行）。
                 var idCell = new VisualElement();
                 idCell.AddToClassList("tcell"); idCell.AddToClassList("tcell--id");
                 var num = new Label(r.NumText);
@@ -211,20 +213,31 @@ namespace KokoSim.Unity.Training
                 idCell.Add(num);
                 var idText = new VisualElement();
                 idText.AddToClassList("trow__idtext");
+                var top = new VisualElement();
+                top.AddToClassList("trow__top");
                 var nameLbl = new Label(r.Name);
                 nameLbl.AddToClassList("trow__name");
                 nameLbl.RegisterCallback<ClickEvent>(_ => OpenModal(idx));
-                idText.Add(nameLbl);
-                var meta = new VisualElement();
-                meta.AddToClassList("trow__meta");
-                meta.Add(Tag(r.GradeLabel, "chip chip--tag"));
-                meta.Add(Tag(r.HandLabel, "chip chip--tag"));   // 投打（Issue #133-②）
-                if (r.BenchOut) meta.Add(Tag("ベンチ外", "chip chip--tag chip--out"));
-                // カテゴリ別ランク（打/走/守/投・総合ランクは廃止, Issue #133-①。部品辞書コンパクト版）。
-                meta.Add(UiComponents.CategoryRankChipsCompact(r.Strength));
-                idText.Add(meta);
+                top.Add(nameLbl);
+                top.Add(Tag(r.GradeLabel, "chip chip--tag"));
+                top.Add(Tag(r.HandLabel, "chip chip--tag"));   // 投打（Issue #133-②）
+                idText.Add(top);
+                if (r.BenchOut)
+                {
+                    var meta = new VisualElement();
+                    meta.AddToClassList("trow__meta");
+                    meta.Add(Tag("ベンチ外", "chip chip--tag chip--out"));
+                    idText.Add(meta);
+                }
                 idCell.Add(idText);
                 row.Add(idCell);
+
+                // 能力（カテゴリ別ランク4組・総合ランクは廃止, Issue #133-①）。id列の固定幅470pxを
+                // 圧迫していたのを独立列へ分離＝ベンチ外チップが増えても見切れない（Issue #273）。
+                var rankCell = new VisualElement();
+                rankCell.AddToClassList("tcell"); rankCell.AddToClassList("tcell--rank");
+                rankCell.Add(UiComponents.CategoryRankChipsCompact(r.Strength));
+                row.Add(rankCell);
 
                 // 練習設定（プリセット名＋主眼メニュー｜配分の積み上げ横バー｜変更▸・クリックでモーダル）
                 var presetCell = new VisualElement();
@@ -246,7 +259,7 @@ namespace KokoSim.Unity.Training
                 // 複製（コピー元を選んでこの選手へ写す, Issue #133-⑤。直上固定「↑」は廃止）
                 var copyCell = new VisualElement();
                 copyCell.AddToClassList("tcell"); copyCell.AddToClassList("tcell--copy");
-                var copy = new Label("複");
+                var copy = new Label("複製");
                 copy.AddToClassList("copy-btn");
                 copy.RegisterCallback<ClickEvent>(_ => OpenCopyPicker(idx));
                 copyCell.Add(copy);
