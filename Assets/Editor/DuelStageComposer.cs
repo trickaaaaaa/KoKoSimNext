@@ -115,6 +115,10 @@ namespace KokoSim.EditorTools
                 new Vector3(-0.9f, 0.011f, 0f), new Vector3(1.2f, 0.012f, 1.8f), Rgb(0.75f, 0.68f, 0.58f));
             Primitive(root, PrimitiveType.Cube, "batter-box-R",
                 new Vector3(0.9f, 0.011f, 0f), new Vector3(1.2f, 0.012f, 1.8f), Rgb(0.75f, 0.68f, 0.58f));
+            // バックネット書き割り（単色の暗インク壁・DuelStageRigと同値）。
+            // 地面プレーンの尽きた先が背景色で抜けるのを塞ぐ（2026-07-26 構図リフレームD採用時に追加）
+            Primitive(root, PrimitiveType.Cube, "backstop-wall",
+                new Vector3(0f, 4f, -16f), new Vector3(34f, 8f, 0.5f), Rgb(0.12f, 0.20f, 0.16f));
 
             // プロキシ4体（カプセル胴＋球頭・7頭身）
             BuildProxy(root, "pitcher", new Vector3(0f, MoundHeight, MoundDistance), 1.0f, Rgb(0.92f, 0.92f, 0.90f));
@@ -257,10 +261,8 @@ namespace KokoSim.EditorTools
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 200f;
 
-            // 確定構図 R_off-l-tight（design-18 §7-1。注視点は2026-07-26にモーション実測で1.3→0.9へ改定）
-            cam.transform.position = new Vector3(-3.5f, 5.0f, MoundDistance + 35f);
-            cam.transform.LookAt(new Vector3(0f, 0.9f, 1f));
-            cam.fieldOfView = 5.5f;
+            // 確定構図 R-comp60（design-18 §7-1。2026-07-26 構図リフレームDで望遠圧縮に改定）
+            DuelMotionSpike.ApplyAdoptedCamera(cam);
 
             var skyColor = Rgb(0.55f, 0.78f, 0.90f);
             // データパスのクリア値: R=1（最遠深度）・GBA=0.5（法線ゼロ）。空との深度差でシルエット輪郭が立つ

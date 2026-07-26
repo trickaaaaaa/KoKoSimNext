@@ -97,9 +97,8 @@ namespace KokoSim.EditorTools
             cam.backgroundColor = new Color(0.55f, 0.78f, 0.90f);
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 200f;
-            cam.transform.position = new Vector3(-3.5f, 5.0f, DuelStageComposer.MoundDistance + 35f);
-            cam.transform.LookAt(new Vector3(0f, aimY, 1f));
-            cam.fieldOfView = 5.5f;
+            // aimY 変種は旧R構図の選定用だった。採用構図が R-comp60 になった現在は共通カメラを使う
+            ApplyAdoptedCamera(cam);
 
             var rt = new RenderTexture(480, 270, 24, RenderTextureFormat.ARGB32) { filterMode = FilterMode.Point };
             rt.Create();
@@ -209,9 +208,7 @@ namespace KokoSim.EditorTools
             cam.backgroundColor = new Color(0.55f, 0.78f, 0.90f);
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 200f;
-            cam.transform.position = new Vector3(-3.5f, 5.0f, DuelStageComposer.MoundDistance + 35f);
-            cam.transform.LookAt(new Vector3(0f, 0.9f, 1f));
-            cam.fieldOfView = 5.5f;
+            ApplyAdoptedCamera(cam);
 
             const float WindowStartSec = 1.8f; // t=0.30（足上げ前）
             const float WindowLenSec = 2.4f;   // →t=0.70（投げ終わり）
@@ -382,6 +379,170 @@ namespace KokoSim.EditorTools
             }
         }
 
+        /// <summary>
+        /// 構図バリアント一括レンダ（2026-07-26 監督指摘「上の空白が気になる・打者が小さい」の選定素材）。
+        /// 上の空白の正体は地面プレーンが尽きた先の背景色（実ゲームではバックネット/スタンドが立つ領域）。
+        /// 対処レバーは3つで、組み合わせを実写で並べる:
+        ///   ①簡易バックネット書き割り（構図不変・空白だけ埋める）
+        ///   ②ズーム詰め（FOV縮小＋注視点下げ＝全員大きく）
+        ///   ③望遠圧縮（カメラ後退＋FOV縮小＝投手/打者の距離差を圧縮して打者を相対的に大きく）
+        /// カメラは現行Rの俯角・横角を保ったまま後退量から高さ/横位置を逆算する。
+        /// 出力: out/duel-stage/frame/frame_[name]_t[時刻].png（480×270→1920×1080 Point拡大）
+        /// </summary>
+        public static string RunFrameVariants()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+
+                int layer = LayerMask.NameToLayer(DuelStageComposer.LayerName);
+                var outDir = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "out/duel-stage/frame");
+                Directory.CreateDirectory(outDir);
+
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var pitcher = SpawnBody(root, "body-pitcher",
+                    new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), -90f,
+                    new Color(0.92f, 0.92f, 0.90f));
+                var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f));
+                var catcher = SpawnBody(root, "body-catcher", new Vector3(0f, 0f, -1.0f), 0f, new Color(0.25f, 0.27f, 0.30f));
+                var umpire = SpawnBody(root, "body-umpire", new Vector3(-0.35f, 0f, -1.7f), 0f, new Color(0.12f, 0.12f, 0.13f));
+                var bat = SpawnBat(root);
+                AttachMitt(catcher);
+
+                Sample(batter, FindClip("AA_Baseball_Batter_Idle_Loop"), 0.30f); GroundFix(batter, 0f);
+                AlignBat(batter, bat);
+                Sample(catcher, FindClip("AA_Baseball_Catcher_Idle"), 0.50f); GroundFix(catcher, 0f);
+                Sample(umpire, FindClip("AA_Baseball_Umpire_Crouch_Idle"), 0.50f); GroundFix(umpire, 0f);
+
+                // バックネット書き割り（単色の暗インク壁1枚）。asis以外の変種で表示。
+                // 2トーン（壁+下段フェンス帯）は望遠圧縮でパッドが画面高3割の巨大縞に化けるため不採用（2026-07-26実写）。
+                // BuildStage恒常の壁とは別に自前で出し分けるので、恒常側は消しておく
+                var stageWall = root.transform.Find("backstop-wall");
+                if (stageWall != null) stageWall.gameObject.SetActive(false);
+                var wall = Primitive(root, PrimitiveType.Cube, "variant-backstop",
+                    new Vector3(0f, 4f, -16f), new Vector3(34f, 8f, 0.5f), new Color(0.12f, 0.20f, 0.16f), layer);
+
+                // 現行R: 俯角 atan((5.0-0.9)/52.44)=4.47°・横角 atan(3.5/52.44)=3.82° を全変種で維持
+                const float slopeV = 0.0782f;
+                const float slopeH = 0.0668f;
+                var variants = new[]
+                {
+                    new { name = "asis",    d = 35f,  fov = 5.5f,  aimY = 0.9f, backstop = false },
+                    new { name = "bs",      d = 35f,  fov = 5.5f,  aimY = 0.9f, backstop = true },
+                    new { name = "tight",   d = 35f,  fov = 4.3f,  aimY = 0.7f, backstop = true },
+                    new { name = "comp60",  d = 60f,  fov = 2.9f,  aimY = 0.8f, backstop = true },
+                    new { name = "comp100", d = 100f, fov = 1.85f, aimY = 0.8f, backstop = true },
+                };
+                var pitchTimes = new[] { 0.35f, 0.53f };
+
+                var camGo = new GameObject("~DuelStageCamera") { hideFlags = HideFlags.DontSave };
+                var cam = camGo.AddComponent<Camera>();
+                cam.cullingMask = 1 << layer;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.55f, 0.78f, 0.90f);
+                cam.nearClipPlane = 0.1f;
+                cam.farClipPlane = 400f;
+
+                var rt = new RenderTexture(480, 270, 24, RenderTextureFormat.ARGB32) { filterMode = FilterMode.Point };
+                rt.Create();
+                var big = new RenderTexture(1920, 1080, 0, RenderTextureFormat.ARGB32);
+                big.Create();
+
+                var sb = new StringBuilder();
+                try
+                {
+                    cam.targetTexture = rt;
+                    foreach (var v in variants)
+                    {
+                        wall.SetActive(v.backstop);
+                        float camZ = DuelStageComposer.MoundDistance + v.d;
+                        float dz = camZ - 1f;
+                        cam.transform.position = new Vector3(-dz * slopeH, v.aimY + dz * slopeV, camZ);
+                        cam.transform.LookAt(new Vector3(0f, v.aimY, 1f));
+                        cam.fieldOfView = v.fov;
+
+                        foreach (var t in pitchTimes)
+                        {
+                            Sample(pitcher, FindClip("AA_Baseball_Pitcher_Pitching_type01"), t);
+                            GroundFix(pitcher, DuelStageComposer.MoundHeight);
+                            int pitPx = DuelStageComposer.MeasureScreenHeight(cam, pitcher);
+                            int batPx = DuelStageComposer.MeasureScreenHeight(cam, batter);
+                            DuelStageComposer.Render(cam, rt);
+
+                            var prev = RenderTexture.active;
+                            Graphics.Blit(rt, big);
+                            RenderTexture.active = big;
+                            var tex = new Texture2D(1920, 1080, TextureFormat.RGBA32, false);
+                            tex.ReadPixels(new Rect(0, 0, 1920, 1080), 0, 0);
+                            tex.Apply();
+                            RenderTexture.active = prev;
+
+                            var file = string.Format(CultureInfo.InvariantCulture,
+                                "frame_{0}_t{1:000}.png", v.name, Mathf.RoundToInt(t * 100f));
+                            File.WriteAllBytes(Path.Combine(outDir, file), tex.EncodeToPNG());
+                            Object.DestroyImmediate(tex);
+                            sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                                "{0} pit={1}px bat={2}px ratio={3:F2}", file, pitPx, batPx, batPx / (float)pitPx));
+                        }
+                    }
+                }
+                finally
+                {
+                    cam.targetTexture = null;
+                    rt.Release(); Object.DestroyImmediate(rt);
+                    big.Release(); Object.DestroyImmediate(big);
+                    Object.DestroyImmediate(camGo);
+                }
+
+                Debug.Log("[DuelMotionSpike] frame variants -> " + outDir + "\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        private static GameObject Primitive(GameObject root, PrimitiveType type, string name,
+            Vector3 pos, Vector3 scale, Color color, int layer)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            go.name = name;
+            Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.transform.SetParent(root.transform, false);
+            go.transform.localPosition = pos;
+            go.transform.localScale = scale;
+            var mat = new Material(Shader.Find("KokoSim/DuelStageProxyLambert")) { hideFlags = HideFlags.DontSave };
+            mat.SetColor("_BaseColor", color);
+            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            go.layer = layer;
+            return go;
+        }
+
+        /// <summary>
+        /// 採用構図 R-comp60 のカメラ設定（2026-07-26 構図リフレームD採用・DuelStageRigと同値）。
+        /// 俯角4.5°・横角3.8°は旧Rのまま、後退60m+FOV2.9°の望遠圧縮で投手/打者の遠近差を潰す。
+        /// </summary>
+        internal static void ApplyAdoptedCamera(Camera cam)
+        {
+            const float dist = 60f;
+            const float aimY = 0.8f;
+            float camZ = DuelStageComposer.MoundDistance + dist;
+            float dz = camZ - 1f;
+            cam.transform.position = new Vector3(-dz * 0.0668f, aimY + dz * 0.0782f, camZ);
+            cam.transform.LookAt(new Vector3(0f, aimY, 1f));
+            cam.fieldOfView = 2.9f;
+        }
+
         private static void Render(Camera cam, RenderTexture rt)
         {
             DuelStageComposer.Render(cam, rt);
@@ -515,9 +676,7 @@ namespace KokoSim.EditorTools
             cam.backgroundColor = new Color(0.55f, 0.78f, 0.90f);
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 200f;
-            cam.transform.position = new Vector3(-3.5f, 5.0f, DuelStageComposer.MoundDistance + 35f);
-            cam.transform.LookAt(new Vector3(0f, 0.9f, 1f));
-            cam.fieldOfView = 5.5f;
+            ApplyAdoptedCamera(cam);
 
             var rt = new RenderTexture(480, 270, 24, RenderTextureFormat.ARGB32) { filterMode = FilterMode.Point };
             rt.Create();

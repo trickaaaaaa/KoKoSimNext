@@ -100,10 +100,15 @@ namespace KokoSim.Unity.Match
             _camera.backgroundColor = new Color(0.55f, 0.78f, 0.90f); // 夏空（盤面トーン連動は絵作り本実装で）
             _camera.nearClipPlane = 0.1f;
             _camera.farClipPlane = 200f;
-            // 確定構図 R_off-l-tight（design-18 §7-1・注視点0.9）
-            camGo.transform.localPosition = new Vector3(-3.5f, 5.0f, MoundDistance + 35f);
-            camGo.transform.LookAt(_root.transform.position + new Vector3(0f, 0.9f, 1f));
-            _camera.fieldOfView = 5.5f;
+            // 確定構図 R-comp60（design-18 §7-1・2026-07-26改定＝望遠圧縮）。
+            // 俯角4.5°・横角3.8°は旧Rのまま、後退60m+FOV2.9°で投手/打者の遠近差を圧縮する
+            const float dist = 60f;
+            const float aimY = 0.8f;
+            float camZ = MoundDistance + dist;
+            float dz = camZ - 1f;
+            camGo.transform.localPosition = new Vector3(-dz * 0.0668f, aimY + dz * 0.0782f, camZ);
+            camGo.transform.LookAt(_root.transform.position + new Vector3(0f, aimY, 1f));
+            _camera.fieldOfView = 2.9f;
             _camera.targetTexture = Target;
 
             // 初期ポーズを1回打っておく（トグル直後の素立ちTポーズを見せない）
@@ -163,6 +168,10 @@ namespace KokoSim.Unity.Match
                 new Color(0.75f, 0.68f, 0.58f), layer);
             Primitive(PrimitiveType.Cube, "batter-box-R", new Vector3(0.9f, 0.011f, 0f), new Vector3(1.2f, 0.012f, 1.8f),
                 new Color(0.75f, 0.68f, 0.58f), layer);
+            // バックネット書き割り（単色の暗インク壁）。地面プレーンの尽きた先が背景色で抜けるのを塞ぐ。
+            // 本実装のスタジアム背景（スタンド/ネット）に置き換わるまでの仮（2026-07-26 構図リフレームD採用時）
+            Primitive(PrimitiveType.Cube, "backstop-wall", new Vector3(0f, 4f, -16f), new Vector3(34f, 8f, 0.5f),
+                new Color(0.12f, 0.20f, 0.16f), layer);
         }
 
         private GameObject Primitive(PrimitiveType type, string name, Vector3 localPos, Vector3 localScale, Color color, int layer)
