@@ -138,4 +138,38 @@ public sealed record EnemyAiCoefficients
     public int AceDependentReliefTierPenalty { get; init; } = 2;
     /// <summary>③校風・守り勝つ: 高度継投の実効ティアをこの段だけ上げる（厚め・早め）。</summary>
     public int DefensiveMindedReliefTierBonus { get; init; } = 1;
+
+    // === ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2・設計書11） ===
+    // AIが「守備位置の入替（無料）」と「コンバート継投」を打てるようにする層。⑥と同じ運用で、
+    // MinTier 既定は到達不能(99)＝発火しない＝games_10k/tactics 帯・決定論baseline を1ビットも動かさない。
+    // 有効化して帯を実測してから採否を決める（issue #209 と同じ2段運用）。
+
+    // --- A-2: 僅差終盤の守備位置最適化（オーナー決定 2026-07-26） ---
+    /// <summary>守備位置の入替の最低ティア（既定99=無効）。</summary>
+    public int DefenseSwapMinTier { get; init; } = 99;
+    /// <summary>入替を検討する回（この回以降）。A-2＝終盤限定。</summary>
+    public int DefenseSwapFromInning { get; init; } = 7;
+    /// <summary>僅差とみなす得失点差の絶対値の上限（守備側視点）。A-2＝接戦限定。</summary>
+    public int DefenseSwapMaxScoreDiff { get; init; } = 2;
+    /// <summary>入替に必要な守備スコアの最小改善量。小さな改善で毎回動かさないための下限。</summary>
+    public double DefenseSwapMinGain { get; init; } = 4.0;
+    /// <summary>③校風・守り勝つ: 入替の実効ティアをこの段だけ上げる（守備の組み替えに積極的）。</summary>
+    public int DefensiveMindedSwapTierBonus { get; init; } = 1;
+    /// <summary>③校風・豪腕依存: 入替の実効ティアをこの段だけ下げる（投手任せで守備を動かさない）。</summary>
+    public int AceDependentSwapTierPenalty { get; init; } = 1;
+
+    // 守備位置ごとの負担重み（守備スコア = Σ 重み × Fielding を最大化する）。捕手・投手・DHは対象外。
+    public double DefenseWeightShortstop { get; init; } = 1.00;
+    public double DefenseWeightCenterField { get; init; } = 0.90;
+    public double DefenseWeightSecondBase { get; init; } = 0.80;
+    public double DefenseWeightThirdBase { get; init; } = 0.70;
+    public double DefenseWeightRightField { get; init; } = 0.55;
+    public double DefenseWeightLeftField { get; init; } = 0.45;
+    public double DefenseWeightFirstBase { get; init; } = 0.30;
+
+    // --- B-1: 打力温存のコンバート継投（オーナー決定 2026-07-26） ---
+    /// <summary>コンバート継投の最低ティア（既定99=無効）。</summary>
+    public int ConvertReliefMinTier { get; init; } = 99;
+    /// <summary>現投手の打力 (Contact+Power)/2 がこれ以上のときだけ、通常継投の代わりに守備へ回す。</summary>
+    public double ConvertReliefMinBatting { get; init; } = 60.0;
 }

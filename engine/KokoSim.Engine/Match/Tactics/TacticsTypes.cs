@@ -128,7 +128,26 @@ public readonly record struct PitchingChangeSituation(
     double StaminaTarget,        // 現投手の目安投球数（StaminaPitches）
     double RelieveMargin,        // 継投しきい値の余白（FatigueCoefficients.RelievePitchMargin）
     bool ReliefAvailable,        // 交代できる控え投手がいるか
-    IReadOnlyList<Player> ReliefCandidates); // 継投人選の候補（ブルペン＋ベンチ。issue #209 Phase B）
+    IReadOnlyList<Player> ReliefCandidates,  // 継投人選の候補（ブルペン＋ベンチ。issue #209 Phase B）
+    // --- コンバート継投（issue #255 B-1, 設計書09 §6.2）の判断に使う。既定 null＝従来の呼び出しと同じ ---
+    Player? CurrentPitcher = null,               // 現投手（守備へ回す候補。打力を見る）
+    IReadOnlyList<Player>? DefenseLineup = null, // 打順スロット順の現ラインナップ（Position つき）
+    IReadOnlyList<bool>? SwappableSlots = null,  // 各スロットが守備位置を動かせるか（投手・DHは false）
+    bool UsesDh = false);                        // DH制か（コンバート継投は非DHのみ＝「打順に残す」判断）
+
+/// <summary>
+/// 守備位置の入替（コンバート）の判断に渡す状況（issue #255, 設計書09 §2.3 / 設計書11）。守備側視点。
+/// イニング頭に1回だけ問い合わせる。入替は<b>交代回数を消費しない</b>ので、控えの有無に関係なく成立しうる。
+/// <see cref="Lineup"/> は打順スロット順（<c>Player.Position</c> が現在の守備位置）、
+/// <see cref="Swappable"/> は同じ添字で「そのスロットを動かせるか」（投手枠・DH枠は false）。
+/// <see cref="StandardTacticsBrain"/> は常に null を返す＝従来挙動と1ビットも変わらない（恒等）。
+/// </summary>
+public readonly record struct DefenseSwapSituation(
+    int Inning,
+    int RegulationInnings,
+    int ScoreDiff,                   // 守備側視点の得失点差（正=リード）
+    IReadOnlyList<Player> Lineup,
+    IReadOnlyList<bool> Swappable);
 
 /// <summary>継投が発火した理由（テスト・観測用。挙動には影響しない）。</summary>
 public enum PitchingChangeReason
@@ -145,7 +164,15 @@ public enum PitchingChangeReason
 /// 交代する（横断ランキング人選＝Phase B）。null なら engine 既定＝ブルペン先頭で交代する
 /// （<see cref="StandardTacticsBrain"/>／無指示は常に null を返す＝従来挙動と1ビットも変わらない＝帯不変）。
 /// </summary>
-public readonly record struct PitchingChangeDecision(PitchingChangeReason Reason, Player? Reliever = null);
+/// <para>
+/// <see cref="ConvertTo"/> が非null なら「コンバート継投」（issue #255 B-1, 設計書09 §6.2）＝現投手をその守備位置へ
+/// 回し、<see cref="Reliever"/> を登板させる（押し出された野手が退場＝交代1回消費）。null なら通常の継投。
+/// コンバートには人選が要るので <see cref="Reliever"/> と対で返すこと（片方だけなら engine は通常継投に落とす）。
+/// </para>
+public readonly record struct PitchingChangeDecision(
+    PitchingChangeReason Reason,
+    Player? Reliever = null,
+    Field.FieldPosition? ConvertTo = null);
 
 /// <summary>
 /// 配球方針が自動配球（PitchSelection）へ与える重み（設計書09 §2.2）。

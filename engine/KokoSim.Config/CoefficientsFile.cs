@@ -1503,6 +1503,22 @@ public static class CoefficientsLoader
         public double CloseLateReliefMarginFactor { get; set; } = D.CloseLateReliefMarginFactor;
         public int AceDependentReliefTierPenalty { get; set; } = D.AceDependentReliefTierPenalty;
         public int DefensiveMindedReliefTierBonus { get; set; } = D.DefensiveMindedReliefTierBonus;
+        // ⑦ 守備位置操作層（issue #255）
+        public int DefenseSwapMinTier { get; set; } = D.DefenseSwapMinTier;
+        public int DefenseSwapFromInning { get; set; } = D.DefenseSwapFromInning;
+        public int DefenseSwapMaxScoreDiff { get; set; } = D.DefenseSwapMaxScoreDiff;
+        public double DefenseSwapMinGain { get; set; } = D.DefenseSwapMinGain;
+        public int DefensiveMindedSwapTierBonus { get; set; } = D.DefensiveMindedSwapTierBonus;
+        public int AceDependentSwapTierPenalty { get; set; } = D.AceDependentSwapTierPenalty;
+        public double DefenseWeightShortstop { get; set; } = D.DefenseWeightShortstop;
+        public double DefenseWeightCenterField { get; set; } = D.DefenseWeightCenterField;
+        public double DefenseWeightSecondBase { get; set; } = D.DefenseWeightSecondBase;
+        public double DefenseWeightThirdBase { get; set; } = D.DefenseWeightThirdBase;
+        public double DefenseWeightRightField { get; set; } = D.DefenseWeightRightField;
+        public double DefenseWeightLeftField { get; set; } = D.DefenseWeightLeftField;
+        public double DefenseWeightFirstBase { get; set; } = D.DefenseWeightFirstBase;
+        public int ConvertReliefMinTier { get; set; } = D.ConvertReliefMinTier;
+        public double ConvertReliefMinBatting { get; set; } = D.ConvertReliefMinBatting;
 
         public EnemyAiCoefficients ToModel() => new()
         {
@@ -1585,6 +1601,21 @@ public static class CoefficientsLoader
             CloseLateReliefMarginFactor = CloseLateReliefMarginFactor,
             AceDependentReliefTierPenalty = AceDependentReliefTierPenalty,
             DefensiveMindedReliefTierBonus = DefensiveMindedReliefTierBonus,
+            DefenseSwapMinTier = DefenseSwapMinTier,
+            DefenseSwapFromInning = DefenseSwapFromInning,
+            DefenseSwapMaxScoreDiff = DefenseSwapMaxScoreDiff,
+            DefenseSwapMinGain = DefenseSwapMinGain,
+            DefensiveMindedSwapTierBonus = DefensiveMindedSwapTierBonus,
+            AceDependentSwapTierPenalty = AceDependentSwapTierPenalty,
+            DefenseWeightShortstop = DefenseWeightShortstop,
+            DefenseWeightCenterField = DefenseWeightCenterField,
+            DefenseWeightSecondBase = DefenseWeightSecondBase,
+            DefenseWeightThirdBase = DefenseWeightThirdBase,
+            DefenseWeightRightField = DefenseWeightRightField,
+            DefenseWeightLeftField = DefenseWeightLeftField,
+            DefenseWeightFirstBase = DefenseWeightFirstBase,
+            ConvertReliefMinTier = ConvertReliefMinTier,
+            ConvertReliefMinBatting = ConvertReliefMinBatting,
         };
     }
 

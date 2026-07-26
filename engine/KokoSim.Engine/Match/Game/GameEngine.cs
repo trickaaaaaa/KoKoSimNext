@@ -433,6 +433,10 @@ public static class GameEngine
         // 守備固め（設計書09 §6）: イニング頭に守備側が控えを起用。控え空/無指示なら素通り＝従来一致。
         MaybeDefensiveSub(defense, offense, ctx, rng, inning, bases);
 
+        // 守備位置の入替（設計書09 §2.3, issue #255）: 交代を挟んだ後の並びに対して組み替える。
+        // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
+        MaybeDefenseSwap(defense, offense, ctx, rng, inning, isTop);
+
         while (outs < 3)
         {
             // 選手交代（設計書09 §6, 攻撃側）: 代走→代打。控え空/無指示なら素通り＝従来と完全一致。
@@ -1404,16 +1408,23 @@ public static class GameEngine
                 inning, ctx.RegulationInnings, outs,
                 defense.Runs - offense.Runs, runsThisHalf, defense.PitcherRattled,
                 fatigueTriggered, atWeekly, defense.FatiguePitches, staminaTarget,
-                fatigue.RelievePitchMargin, candidates.Count > 0, candidates);
+                fatigue.RelievePitchMargin, candidates.Count > 0, candidates,
+                // コンバート継投（issue #255 B-1）の判断材料。既定Brainは参照しない＝恒等。
+                defense.CurrentPitcher, defense.CurrentLineup, SwappableSlotsOf(defense), defense.UsesDh);
             var forked = rng.Fork(ReliefStreamId(inning, isTop, paIndex));
             if (brain.CallPitchingChange(sit, forked) is { } decision)
             {
-                // Reliever 指定があればその投手を指名（横断ランキング）。在フィールド野手なら投野交代で backfill。
-                // null は engine 既定＝ブルペン先頭（StandardTacticsBrain／無指示は常に null＝従来挙動と
-                // 1ビットも変わらない＝帯不変）。
-                changed = decision.Reliever is { } reliever
-                    ? defense.RelieveWith(reliever, ctx.ReliefBackfill)
-                    : defense.TryChangePitcher();
+                // ConvertTo 指定はコンバート継投＝元投手をその守備位置へ回して Reliever を登板（issue #255）。
+                // Reliever 指定だけならその投手を指名（横断ランキング）。在フィールド野手なら投野交代で backfill。
+                // どちらも null は engine 既定＝ブルペン先頭（StandardTacticsBrain／無指示は常に null＝
+                // 従来挙動と1ビットも変わらない＝帯不変）。
+                changed = decision switch
+                {
+                    { ConvertTo: { } to, Reliever: { } r } => defense.ConvertPitcherAndRelieve(to, r)
+                                                              || defense.RelieveWith(r, ctx.ReliefBackfill),
+                    { Reliever: { } reliever } => defense.RelieveWith(reliever, ctx.ReliefBackfill),
+                    _ => defense.TryChangePitcher(),
+                };
             }
         }
         else if (fatigueTriggered || atWeekly)
@@ -1474,6 +1485,38 @@ public static class GameEngine
         {
             defense.DefensiveSub(d.Out, d.Sub);
         }
+    }
+
+    /// <summary>
+    /// 守備側のイニング頭の守備位置入替（コンバート）判断（issue #255, 設計書09 §2.3）。
+    /// 交代回数を消費しない手なので<b>控えが居なくても</b>問い合わせる（守備固めと違い Bench 条件が無い）。
+    /// 判断RNGは継投と同じく専用Forkストリームで引くため試合結果RNGを進めない（不変条件#2・裏試合帯不変）。
+    /// 既定Brain（Standard／無指示）は常に null を返すので、従来の試合結果と1ビットも変わらない。
+    /// </summary>
+    private static void MaybeDefenseSwap(
+        TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng, int inning, bool isTop)
+    {
+        if (defense.Tactics is null) return;
+        var sit = new Tactics.DefenseSwapSituation(
+            inning, ctx.RegulationInnings, defense.Runs - offense.Runs,
+            defense.CurrentLineup, SwappableSlotsOf(defense));
+        var forked = rng.Fork(DefenseSwapStreamId(inning, isTop));
+        if (defense.Tactics.CallDefenseSwap(sit, forked) is { } d)
+        {
+            defense.SwapDefensivePositions(d.SlotA, d.SlotB);
+        }
+    }
+
+    /// <summary>守備位置入替の判断RNG用Fork streamId（issue #255）。継投・1球采配・怪我とは別saltにする。</summary>
+    private static ulong DefenseSwapStreamId(int inning, bool isTop)
+        => 0xD3F5_5AA9_0000UL ^ ((ulong)(uint)inning << 32) ^ (isTop ? 1UL : 0UL);
+
+    /// <summary>打順スロットごとの「守備位置を動かせるか」（投手枠・DH枠は false）。</summary>
+    private static bool[] SwappableSlotsOf(TeamState team)
+    {
+        var flags = new bool[team.CurrentLineup.Count];
+        for (var i = 0; i < flags.Length; i++) flags[i] = team.IsSwappableDefenseSlot(i);
+        return flags;
     }
 
     /// <summary>攻撃側の打席頭の代走・代打判断（代走が先＝走者を確定してから打者を替える）。</summary>
