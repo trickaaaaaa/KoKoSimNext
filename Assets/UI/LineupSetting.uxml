@@ -36,7 +36,6 @@
                                 <ui:Label text="守" class="lu-th lu-th--pos" />
                                 <ui:Label text="選手" class="lu-th lu-th--name" />
                                 <ui:Label text="学年・投打" class="lu-th lu-th--info" />
-                                <ui:Label text="総合" class="lu-th lu-th--rank" />
                             </ui:VisualElement>
                             <ui:VisualElement name="lu-rows" class="lu-rows" />
                         </ui:VisualElement>

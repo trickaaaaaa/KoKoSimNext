@@ -116,7 +116,8 @@ namespace KokoSim.Unity.Lineup
                 // 故障中は警告チップ（部品辞書の .chip--out を流用＝新規の見た目を作らない）。
                 if (r.Injury.Length > 0) row.Add(InjuryChip(r.Injury));
 
-                row.Add(UiComponents.RankChip(r.OverallGrade));
+                // 選手個人の総合ランクチップは出さない（Issue #30 で廃止・#220 の決定1-D と同じ扱い）。
+                // カテゴリ別ランクは右の比較カードで見る。
 
                 var slot = r.Order - 1;
                 var pidx = r.PlayerIndex;
@@ -162,7 +163,6 @@ namespace KokoSim.Unity.Lineup
             var name = new Label(v.StartingPitcherName);
             name.AddToClassList("sp-pill__name");
             pill.Add(name);
-            pill.Add(UiComponents.RankChip(v.StartingPitcherGrade));
             pill.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _state.ClickStartingPitcher(); Render(); });
             sp.Add(pill);
         }
@@ -190,7 +190,7 @@ namespace KokoSim.Unity.Lineup
                 row.Add(name);
                 // 控えの投/野タグは出さない（役割はプレイヤーが決める, Issue #93）。識別は背番号と名前。
                 if (b.Injury.Length > 0) row.Add(InjuryChip(b.Injury));
-                row.Add(UiComponents.RankChip(b.OverallGrade));
+                // 打順行と同じく総合ランクチップは出さない（Issue #30/#270）。
 
                 var idx = b.Index;
                 row.RegisterCallback<ClickEvent>(_ => { _state.ClickBench(idx); Render(); });
@@ -359,7 +359,6 @@ namespace KokoSim.Unity.Lineup
             var meta = new VisualElement();
             meta.AddToClassList("cmp-card__meta");
             meta.Add(GradeLabel(card.GradeLabel));
-            meta.Add(UiComponents.RankChip(card.OverallGrade));
             if (card.IsCaptain)
             {
                 var cap = new Label("主将");
@@ -369,6 +368,9 @@ namespace KokoSim.Unity.Lineup
                 meta.Add(cap);
             }
             el.Add(meta);
+            // カテゴリ別ランク（打撃力/走力/守備力/投手力）。総合ランク1チップの置換先＝#30 の決定。
+            // 見た目はメンバー設定の比較カードと同一部品（UI原則⑤）。
+            el.Add(UiComponents.CategoryRankChips(card.Strength));
 
             // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
             // 未習得選手もストレート1球が出る（投/野でゲートしない, Issue #93）。
