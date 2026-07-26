@@ -444,11 +444,13 @@ namespace KokoSim.Unity.Match
             if (_subPanel != null && _subPanel.IsOpen) return;   // 交代モーダルを開いている間は待つ
             _replaying = false;
             PushPitchTacticsChoice();
-            UpdateControlState();
             var prog = _prog;
             BackgroundGameOp.Run(
                 work: () => _pendingAdvanceResult = prog.Advance(),
                 onDone: () => FinishAdvance(_pendingAdvanceResult));
+            // 解決中は「タイム」「スキップ」を伏せる（issue #278）。Running が立ってから評価するので
+            // Run の後で呼ぶ。復帰は FinishAdvance / EndGame 末尾の UpdateControlState が行う。
+            UpdateControlState();
         }
 
         // 「タイム」（伝令）: 進行を中断し、伝令を1回消費して采配窓（選手交代モーダル）を開く。攻守は
@@ -500,7 +502,10 @@ namespace KokoSim.Unity.Match
 
         private void OnSkip()
         {
-            if (_gameOver) return;
+            if (_gameOver || _prog == null) return;
+            // 解決中は打席境界が未確定＝進行体を背景スレッドと奪い合う（issue #278）。「タイム」と同じ扱いで弾く。
+            // ボタン自体も UpdateControlState で伏せているが、二重に守る（押下配信は1フレーム遅れうる）。
+            if (BackgroundGameOp.Running) return;
             _subPanel?.Close();
             _paused = false;
             var result = _prog.SkipDelegateToAi(_managerIsAway, managerTacticalSense);
@@ -1182,12 +1187,15 @@ namespace KokoSim.Unity.Match
         private void UpdateControlState()
         {
             var over = _gameOver;
+            // 打席解決中は進行体を背景スレッドが握っている＝どちらのハンドラも弾かれる（issue #278）。
+            // 「押せるのに効かない」を作らないよう、ボタン側も伏せる。
+            var resolving = BackgroundGameOp.Running;
             SetVisible(_time, !over && !_paused);
-            SetEnabled(_time, !over && !_paused && _prog != null && _prog.CanCallTimeout(_managerIsAway));
+            SetEnabled(_time, !over && !_paused && !resolving && _prog != null && _prog.CanCallTimeout(_managerIsAway));
             SetVisible(_resume, !over && _paused);
             SetEnabled(_resume, !over && _paused);
             SetEnabled(_subOpen, !over && _paused);   // 交代は伝令（タイム）の中でだけ
-            SetEnabled(_skip, !over);
+            SetEnabled(_skip, !over && !resolving);
             UpdateTimeoutStatus();
         }
 

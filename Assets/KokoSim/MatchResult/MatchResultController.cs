@@ -197,6 +197,10 @@ namespace KokoSim.Unity.MatchResult
         // クリック配信中に同期 Show するとUITKのイベント木が壊れるため、遷移は必ず遅延切替を使う。
         private void OnClose()
         {
+            // 後処理は BackgroundGameOp に載るが、これは単一スロットで実行中は Run が false を返して
+            // 何もしない。ここで受けてしまうと預かった後処理（成績畳み込み・実戦成長・大会反映）ごと
+            // 落ちたうえ、遷移も起きずに結果画面へ取り残される。実行中は受け付けない（issue #278）。
+            if (BackgroundGameOp.Running) return;
             var cb = _onClose;
             _onClose = null;
             if (cb != null) cb();
