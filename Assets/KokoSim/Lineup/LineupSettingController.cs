@@ -44,7 +44,12 @@ namespace KokoSim.Unity.Lineup
             var gs = KokoSim.Unity.Shell.GameSession.Current;
             var runner = gs.Runner;
             var match = "";
-            if (runner != null)
+            if (gs.PendingMatchIsPractice)
+            {
+                // 練習試合も同じスタメン設定画面を通る（issue #269）。文脈は大会名ではなく「練習試合」。
+                match = "練習試合　vs " + (gs.PracticeOpponent?.Name ?? "");
+            }
+            else if (runner != null)
             {
                 match = gs.Title;
                 if (!runner.Finished && runner.NextOpponent != null)
@@ -405,7 +410,10 @@ namespace KokoSim.Unity.Lineup
 
         private void OnCancel()
         {
-            KokoSim.Unity.Shell.GameSession.Current.AwaitingMatchStart = false;   // 試合は消化しない
+            var gs = KokoSim.Unity.Shell.GameSession.Current;
+            gs.AwaitingMatchStart = false;    // 試合は消化しない
+            // 練習試合はここで取りやめ＝申込ごと無かったことにする（費用・週枠は未確定なので何も戻さない）。
+            gs.ClearPracticeMatchFlow();
             KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
         }
 

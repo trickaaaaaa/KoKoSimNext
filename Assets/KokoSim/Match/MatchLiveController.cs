@@ -38,6 +38,11 @@ namespace KokoSim.Unity.Match
             public string AwayName;
             public string HomeName;
             public int ManagerTacticalSense = 70;
+            /// <summary>
+            /// 勝者が要る文脈か（大会戦＝true）。結果画面で延長上限の引き分けを「引き分け（再試合）」と
+            /// 明示するかに使う（issue #253）。練習試合は引き分けで終わるので false（issue #269）。
+            /// </summary>
+            public bool RematchOnTie = true;
             public System.Action<GameResult> OnComplete;
         }
 
@@ -118,6 +123,8 @@ namespace KokoSim.Unity.Match
         private PitchPolicy? _pitchPolicyChoice;
         private MatchLiveStatsProvider _statsProvider;
         private string _awayDisp = "先攻", _homeDisp = "後攻";
+        // 勝者が要る文脈か（大会戦=true／練習試合=false, issue #269）。結果画面の引き分け表記に渡す。
+        private bool _rematchOnTie = true;
         private readonly List<string> _capHist = new();   // 実況履歴（直近3件）
 
         private MatchProgression _prog;
@@ -340,6 +347,7 @@ namespace KokoSim.Unity.Match
                 _managerIsAway = req.ManagerIsAway;
                 _onComplete = req.OnComplete;
                 managerTacticalSense = req.ManagerTacticalSense;
+                _rematchOnTie = req.RematchOnTie;
                 _homeTeam = null;   // 実試合は進行体が保持（代打候補名の外部参照は使わない）
                 _awayDisp = req.AwayName ?? awayName;
                 _homeDisp = req.HomeName ?? homeName;
@@ -351,6 +359,7 @@ namespace KokoSim.Unity.Match
             // デモ/スクショ用の自前生成（本番フローでは通らない）。
             _managerIsAway = false;
             _onComplete = null;
+            _rematchOnTie = true;
             // 委任AIの采配値も成長した監督の実値を使う（旧ハードコード70を廃す, issue #171）。
             managerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi;
             // デモの相手校（away＝右列）は本番と同じ StrengthTeamFactory 生成（氏名＋控え8人つき）で観戦する。
@@ -535,8 +544,9 @@ namespace KokoSim.Unity.Match
                     ManagerIsAway = _managerIsAway,
                     AwayName = _awayDisp,
                     HomeName = _homeDisp,
-                    // 大会戦の観戦＝勝者が要る文脈。延長上限の引き分けは再試合で決着するため「引き分け（再試合）」と明示（issue #253）。
-                    RematchOnTie = true,
+                    // 大会戦の観戦＝勝者が要る文脈。延長上限の引き分けは再試合で決着するため「引き分け（再試合）」と
+                    // 明示（issue #253）。練習試合は引き分けで終わるので false（issue #269）。
+                    RematchOnTie = _rematchOnTie,
                     OnClose = () => cb(final),
                 };
             // 終局はクリック配信中（委任スキップ）にも起きるため、同期 Show は使わず必ず遅延切替にする。

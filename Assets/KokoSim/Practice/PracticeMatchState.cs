@@ -137,7 +137,12 @@ namespace KokoSim.Unity.Practice
             return v;
         }
 
-        /// <summary>選択中の相手へ申し込み、成立すれば試合を消化する。結果はメッセージに残す。</summary>
+        /// <summary>
+        /// 選択中の相手へ申し込む（issue #269）。ここでは<b>受諾判定まで</b>で、成立したら
+        /// 大会戦と同じ試合開始フロー（スタメン設定→対戦カード→ライブ観戦）へ回す。
+        /// 費用と週枠はライブ開始時（<see cref="GameSession.BeginPracticeMatch"/>）に確定する。
+        /// 断られた場合・資金不足・週枠消化済みは従来どおり画面内メッセージだけを更新する。
+        /// </summary>
         public void Request()
         {
             var opponent = Find(_selectedId);
@@ -146,36 +151,30 @@ namespace KokoSim.Unity.Practice
             var own = NationService.ManagerSchool();
             var week = ManagerService.AbsoluteWeek;
             // シードは「相手校ID＋絶対週」から導く決定論（不変条件#2）。同じ週に同じ相手なら同じ試合になる。
-            var rng = new Xoshiro256Random(0x9E37_79B9UL ^ (ulong)(long)opponent.Id ^ ((ulong)(long)week * 0x85EB_CA6BUL));
+            // 開始時（BeginPracticeMatch）も同じ種を作り直して受諾判定を同じ順で再消費するため、
+            // 観戦しても一括消化しても同じ試合になる契約が保たれる。
+            var rng = GameSession.PracticeMatchRng(opponent.Id, week);
 
-            var outcome = GameSession.Current.PlayPracticeMatch(own, opponent, rng);
-            _messageIsWarning = !outcome.Played;
-            switch (outcome.Rejection)
+            var acceptance = ManagerService.Practice.TryAccept(ManagerService.Manager, own, opponent, week, rng);
+            _messageIsWarning = !acceptance.Accepted;
+            switch (acceptance.Rejection)
             {
                 case PracticeMatchRejection.AlreadyPlayedThisWeek:
                     _message = "今週の練習試合は消化済みです（週1回まで）。";
-                    break;
+                    return;
                 case PracticeMatchRejection.InsufficientFunds:
                     _message = "資金が足りません。";
-                    break;
+                    return;
                 case PracticeMatchRejection.Declined:
                     _message = opponent.Name + " に申込を断られた（受諾見込み "
-                               + Percent(outcome.AcceptChance) + "％）。名声を上げれば格上とも組める。";
-                    break;
-                default:
-                    _message = ScoreLine(opponent.Name, outcome.Detail.Result);
-                    break;
+                               + Percent(acceptance.AcceptChance) + "％）。名声を上げれば格上とも組める。";
+                    return;
             }
-        }
 
-        private static string ScoreLine(string opponentName, GameResult r)
-        {
-            // 自校＝後攻(home)固定（PlayerMatchResolver）。
-            var mine = r.HomeRuns;
-            var theirs = r.AwayRuns;
-            var mark = mine > theirs ? "○" : mine < theirs ? "●" : "△";
-            return "練習試合 " + mark + "　vs " + opponentName + "　" + mine + " - " + theirs
-                   + "　（出場者の精神力・走塁判断・捕手リードが伸びた）";
+            // 成立 → 大会戦と同じ導線へ。スタメン設定OK→対戦カード→ホーム経由で MatchLive が始まる。
+            _message = "";
+            GameSession.Current.EnterPracticeMatchFlow(opponent, week);
+            ScreenRouter.Instance?.ShowDeferred("LineupSetting");
         }
 
         private static PracticeOpponentDetail BuildDetail(School s, School own)
