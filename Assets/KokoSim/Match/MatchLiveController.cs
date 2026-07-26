@@ -58,6 +58,8 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float noPlayHoldSeconds = 1.2f;
         [Tooltip("投球フェーズの1球あたり表示時間[秒]（×0.5/×2/×4速度に連動）。投球飛翔0.45秒より長くし、着弾後の一呼吸を確保する（issue #135）。")]
         [SerializeField] private float pitchIntervalSeconds = 1.0f;
+        [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。フル振りかぶり3.0秒＋フォロースルーが切り貼りなしで収まる長さにする。判定表示のタイミングは pitchIntervalSeconds のまま＝次の投球だけ遅れる。")]
+        [SerializeField] private float duelPitchIntervalSeconds = 4.5f;
         [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
         [SerializeField] private float pitchCallHoldSeconds = 0.35f;
         [Tooltip("得点オーバーレイ（issue #60）の1点あたりの加算間隔[秒]（加点前の一時停止にも使う）。")]
@@ -133,6 +135,11 @@ namespace KokoSim.Unity.Match
         private float _pitchClock;
         private bool _inPitchPhase;   // 投球フェーズ（B/S点灯）中か。false なら打球フェーズ/静止。
         private bool _pitchBallVisible;   // 投球フェーズで今の1球の投球軌道を流しているか（#5）。
+        private bool _pitchCallDone;      // 今の1球の判定表示＋カウント更新を済ませたか（対決ビュー中は次リリースと分離）。
+        private bool _pitchFirstPending;  // 対決ビューの初球ワインドアップ待ち（時計が0に達したらBeginPitchBall(0)）。
+
+        // 対決ビューの1球ペーシング（フル振りかぶり再生）を使うか（design-18 §7-2）。
+        private bool DuelPacingActive => _duelOn && _duelRig != null && _duelRig.Available;
 
         // 1球ごとの判定オーバーレイ（issue #6）。判定＋球速球種を盤面上に大きく短時間だけ出す。
         // 球速・球種は実1球記録がある打席だけ（合成投球列は null＝出さない）。表示専用。
@@ -636,7 +643,16 @@ namespace KokoSim.Unity.Match
 
             var pitches = _current.PitchSeq?.Pitches;
             _inPitchPhase = pitches != null && pitches.Count > 0;
-            if (_inPitchPhase) BeginPitchBall(0);        // 1球目の投球軌道を盤面へ（#5）
+            _pitchCallDone = false;
+            _pitchFirstPending = false;
+            if (_inPitchPhase && DuelPacingActive)
+            {
+                // 対決ビュー中は初球もワインドアップから: リリース時刻ぶん時計を巻き戻して待つ（design-18 §7-2）
+                _pitchClock = -DuelStageRig.ReleaseTime;
+                _pitchFirstPending = true;
+                _duelRig.OnPitchWindup();
+            }
+            else if (_inPitchPhase) BeginPitchBall(0);   // 1球目の投球軌道を盤面へ（#5）
             else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
 
             DrainSubstitutionEvents();   // 直前の Advance 中に起きた継投をポップアップ＋実況履歴へ（issue #209 表現）
@@ -731,8 +747,9 @@ namespace KokoSim.Unity.Match
             else
                 _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
 
-            // 対決ビューのアンカー同期（design-18 §7-2）: この瞬間＝リリース。次の1球があれば周期を渡してプリロール予約
-            if (_duelOn) _duelRig?.OnPitchReleased(index < last ? pitchIntervalSeconds : -1f);
+            // 対決ビューのアンカー同期（design-18 §7-2）: この瞬間＝リリース。次の1球があればリリース間隔を渡して
+            // フォロースルー→次の振りかぶりの切り替えを予約する
+            if (_duelOn) _duelRig?.OnPitchReleased(index < last ? duelPitchIntervalSeconds : -1f);
         }
 
         // 投球フェーズ終了→打球再生（Play あり）または結果保持（三振・四球）。
@@ -802,18 +819,38 @@ namespace KokoSim.Unity.Match
             if (_inPitchPhase)
             {
                 _pitchClock += Time.deltaTime * _speed;
+                // 対決ビュー中は初球をワインドアップから見せる＝時計が負の間はリリース前（design-18 §7-2）
+                if (_pitchClock < 0f) return;
+                if (_pitchFirstPending)
+                {
+                    _pitchFirstPending = false;
+                    BeginPitchBall(0);
+                }
                 // 1球ぶんの投球軌道を毎フレーム進める（0.45s で本塁到達。以降は到達点で保持）。
                 if (_pitchBallVisible) _view.SetTime(_pitchClock);
                 var pitches = _current.PitchSeq.Pitches;
-                while (_inPitchPhase && _pitchClock >= pitchIntervalSeconds)
+                // 判定＋カウント更新はリリース+pitchIntervalSeconds（従来タイミング）。
+                // 次のリリースだけ対決ビュー中は duelPitchIntervalSeconds まで遅らせ、フル振りかぶりを収める。
+                if (!_pitchCallDone && _pitchClock >= pitchIntervalSeconds)
                 {
-                    _pitchClock -= pitchIntervalSeconds;
+                    _pitchCallDone = true;
                     var pt = pitches[_pitchIdx];
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
                     ShowPitchCall(pt);
+                    if (_pitchIdx >= pitches.Count - 1)
+                    {
+                        _pitchIdx++;
+                        EnterBattedBallOrHold();   // 最後の1球は従来どおり判定直後に先へ進む
+                        return;
+                    }
+                }
+                float interval = DuelPacingActive ? duelPitchIntervalSeconds : pitchIntervalSeconds;
+                while (_inPitchPhase && _pitchCallDone && _pitchClock >= interval)
+                {
+                    _pitchClock -= interval;
+                    _pitchCallDone = false;
                     _pitchIdx++;
-                    if (_pitchIdx >= pitches.Count) EnterBattedBallOrHold();
-                    else BeginPitchBall(_pitchIdx);   // 次の1球の投球軌道を頭から流す
+                    BeginPitchBall(_pitchIdx);   // 次の1球の投球軌道を頭から流す
                 }
                 return;
             }

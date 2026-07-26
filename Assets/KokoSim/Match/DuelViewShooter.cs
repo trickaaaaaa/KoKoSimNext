@@ -46,14 +46,14 @@ namespace KokoSim.Unity.Match
             yield return CaptureName("i-duel-4-board-back");
 
             // §7-2 アンカー同期の観測: 対決ビューONのまま新しい打席を始め、投球フェーズを生で流しながら
-            // 約0.2s間隔で連写する（リリース→フォロー→カットバック→次リリースのサイクルが見えるはず）
+            // 約0.8s間隔で連写する（初球ワインドアップ3s→リリース→フォロー1.5s→次の振りかぶり、まで見える窓）
             ctrl.ToggleDuelViewForCapture();
             yield return null;
             if (ctrl.AdvanceForCapture())
             {
-                for (int i = 0; i < 6; i++)
+                for (int i = 0; i < 8; i++)
                 {
-                    for (int f = 0; f < 12; f++) yield return null;
+                    for (int f = 0; f < 40; f++) yield return null;
                     yield return CaptureName("i-duel-sync-" + i);
                 }
             }

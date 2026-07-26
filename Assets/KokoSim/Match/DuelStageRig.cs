@@ -124,14 +124,29 @@ namespace KokoSim.Unity.Match
         // ── §7-2 アンカー同期（第1弾＝投手のみ） ──────────────────────────
         // リリースのアンカー時刻は右手速度ピーク実測（RunPitcherProbe: t=0.50 × 6.00s＝8.5m/s ピーク）。
         // 本実装ではAnimationEventの注釈付けに置き換える（design-18 §7-2）。
-        private const float ReleaseTime = 3.0f;
+        // MatchLiveController が対決ビュー中の1球周期（duelPitchIntervalSeconds）の基準にも使う。
+        public const float ReleaseTime = 3.0f;
+        private const float FollowSeconds = 1.5f;   // リリース後に見せるフォロースルーの長さ（次の振りかぶりへ切る前）
         private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
         private float _cutClipTime;
 
         /// <summary>
+        /// 打席頭のワインドアップ入口。クリップ先頭（セット姿勢）から等速で再生を始める。
+        /// 呼び出し側が投球時計を −ReleaseTime から始めれば、時計0＝リリースにそのまま一致する。
+        /// </summary>
+        public void OnPitchWindup()
+        {
+            if (!Available || _pitcher == null) return;
+            _cutCountdown = -1f;
+            SeekActor(_pitcher, 0f);
+            GroundFix(_pitcher);
+        }
+
+        /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
-        /// 投手クリップをリリース時刻へスナップし、次の1球があれば（nextReleaseIn=1球周期）
-        /// フォロースルー後にリリースのプリロール位置へカットバックする予約を入れる。
+        /// 投手クリップをリリース時刻へスナップし、次の1球があれば（nextReleaseIn=リリース間隔）
+        /// フォロースルーを FollowSeconds 見せてから次の振りかぶり位置へ切り替える予約を入れる。
+        /// 間隔が振りかぶり＋フォローに足りない場合だけプリロールを削って間に合わせる。
         /// クリップ内部の緩急は改変しない＝再生開始位置の逆算だけで合わせる（設計書18の掟）。
         /// </summary>
         public void OnPitchReleased(float nextReleaseIn)
@@ -141,7 +156,7 @@ namespace KokoSim.Unity.Match
             GroundFix(_pitcher);
             if (nextReleaseIn > 0f)
             {
-                float preRoll = Mathf.Min(ReleaseTime, nextReleaseIn * 0.6f);
+                float preRoll = Mathf.Clamp(nextReleaseIn - FollowSeconds, 0.5f, ReleaseTime);
                 _cutCountdown = nextReleaseIn - preRoll;
                 _cutClipTime = ReleaseTime - preRoll;
             }
