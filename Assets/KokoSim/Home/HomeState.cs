@@ -103,6 +103,9 @@ namespace KokoSim.Unity.Home
         private readonly SkillCoefficients _skills = new SkillCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
+        // 個別指導枠の並べ替えに使うカテゴリ別指標の係数。他画面の比較カードと同一の単一ソース。
+        private static readonly TeamStrengthCoefficients GuidanceCoeff = TeamStrengthCoeff.Default;
+
         // 現在週/年度は全画面共有の GameClock、大会モードの進行は GameSession を単一ソースとする（画面ごとに持たない）。
         // 大会モードの構築（進行体・裏試合フルシム）は TournamentEntry（Shell）へ移した（issue #134）。
 
@@ -451,7 +454,9 @@ namespace KokoSim.Unity.Home
             }
 
             // 個別指導（設計書04。枠のみ＝上位2名を仮表示＋空き1。効果はエンジン未接続 Q7）。
-            var top = roster.OrderByDescending(x => x.AverageLevel()).Take(2).ToList();
+            // 並べ替えキーは打撃力（「選手個人の総合ランク」は #30 で廃止, issue #270）。
+            var top = roster.OrderByDescending(x => PlayerStrengthProfile.Compute(x, GuidanceCoeff).Batting)
+                .Take(2).ToList();
             view.Guidance.Add(new GuidanceSlot { Name = top.Count > 0 ? top[0].Name : "", Focus = "打撃強化", Empty = top.Count == 0 });
             view.Guidance.Add(new GuidanceSlot { Name = top.Count > 1 ? top[1].Name : "", Focus = "投球", Empty = top.Count <= 1 });
             view.Guidance.Add(new GuidanceSlot { Empty = true });

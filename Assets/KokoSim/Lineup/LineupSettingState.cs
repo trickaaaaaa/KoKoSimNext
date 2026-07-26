@@ -140,6 +140,9 @@ namespace KokoSim.Unity.Lineup
 
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
 
+        // カテゴリ別指標のメモ（並べ替えキー・比較カードで共用。null＝未集計）。
+        private readonly PlayerStrength[] _strength;
+
         // 出場登録できる選手＝ベンチ入り（背番号1〜20。設計書06 §3.3b）のロスターindex。
         // スタメン・控え・ブルペンはすべてこの集合からしか選べない（ベンチ外は候補に出さない）。
         private readonly List<int> _eligible;
@@ -163,6 +166,7 @@ namespace KokoSim.Unity.Lineup
         public LineupSettingState()
         {
             _roster = RosterService.Active;
+            _strength = new PlayerStrength[_roster.Count];
             var benchIn = Enumerable.Range(0, _roster.Count).Where(i => _roster[i].UniformNumber >= 1).ToList();
             // ベンチ入りが9人に満たない編成では打順を組めない。画面は従来通り全部員で描いたうえで確定を塞ぎ、
             // メンバー設定でベンチ入りを増やしてもらう（不正な LineupSpec はエンジンが弾く）。
@@ -212,22 +216,41 @@ namespace KokoSim.Unity.Lineup
 
         private int FallbackFielder(int slot)
         {
-            // 未割当時：まだ打順に居ない野手を能力順で拾う。
-            foreach (var i in ByAbility())
+            // 未割当時：まだ打順に居ない野手を打撃力順で拾う（打順に入れる枠なので打てる順）。
+            foreach (var i in ByBatting())
                 if (!_roster[i].IsPitcher && !InOrder(i)) return i;
-            return ByAbility().First(i => !InOrder(i));
+            return ByBatting().First(i => !InOrder(i));
         }
 
         private int FallbackPitcher()
         {
-            foreach (var i in ByAbility())
+            // 投手枠は投手力順（打撃力で選ぶと投げられない選手が9番に来る）。
+            foreach (var i in ByPitching())
                 if (_roster[i].IsPitcher && !InOrder(i)) return i;
-            return ByAbility().First(i => !InOrder(i));
+            return ByPitching().First(i => !InOrder(i));
         }
 
         // 候補列挙は常にベンチ入りのみ（自動シード・控え一覧・ToLineupSpec のベンチ/ブルペンが全部これを通る）。
-        private IEnumerable<int> ByAbility() =>
-            _eligible.OrderByDescending(i => _roster[i].AverageLevel());
+        // 並べ替えキーは枠の用途に合わせる（issue #270／#30 で「選手個人の総合ランク」は廃止済み）。
+        // 打順・ベンチ＝打撃力、ブルペン・投手枠＝投手力。指標はカテゴリ別ランクと同じ単一ソース。
+        private IEnumerable<int> ByBatting() =>
+            _eligible.OrderByDescending(i => Strength(i).Batting);
+
+        private IEnumerable<int> ByPitching() =>
+            _eligible.OrderByDescending(i => Strength(i).Pitching);
+
+        // 控え（ブルペン・ベンチ・控え一覧の表示）は背番号順。プレイヤーがメンバー設定で振った番号が
+        // そのまま控えの優先度＝継投順・代打順になる（オーナー決定 2026-07-26, issue #270）。
+        // ベンチ入り9人未満の異常編成では背番号なし（0）が混じるので末尾へ送る。
+        private IEnumerable<int> ByUniformNumber() =>
+            _eligible.OrderBy(i => _roster[i].UniformNumber == 0 ? int.MaxValue : _roster[i].UniformNumber);
+
+        // カテゴリ別指標はロスターが変わらない限り不変なので1度だけ集計する（並べ替えのたびに再計算しない）。
+        private PlayerStrength Strength(int index)
+        {
+            if (_strength[index] == null) _strength[index] = PlayerStrengthProfile.Compute(_roster[index], Coeff);
+            return _strength[index];
+        }
 
         private bool InOrder(int idx)
         {
@@ -388,7 +411,7 @@ namespace KokoSim.Unity.Lineup
 
         private int BestBenchHitter()
         {
-            foreach (var i in ByAbility())
+            foreach (var i in ByBatting())
                 if (!_roster[i].IsPitcher && !InOrder(i)) return i;
             return -1;
         }
@@ -420,10 +443,12 @@ namespace KokoSim.Unity.Lineup
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
             if (_usesDh && _spIdx >= 0) used.Add(_spIdx);
 
-            // 控え：打順外の投手＝ブルペン、野手＝ベンチ。
+            // 控え：打順外の投手＝ブルペン、野手＝ベンチ。並びがそのまま継投順・代打順になる。
+            // 順番は背番号順（オーナー決定 2026-07-26, issue #270）＝控えの優先度は
+            // メンバー設定で背番号を振った時点でプレイヤーが決めている。控え一覧の表示もこれと同じ順。
             var bullpen = new List<DevelopingPlayer>();
             var bench = new List<DevelopingPlayer>();
-            foreach (var i in ByAbility())
+            foreach (var i in ByUniformNumber())
             {
                 if (used.Contains(i)) continue;
                 if (_roster[i].IsPitcher) bullpen.Add(_roster[i]);
@@ -513,15 +538,14 @@ namespace KokoSim.Unity.Lineup
                 v.StartingPitcherPicked = _pickKind == PickKind.StartingPitcher;
             }
 
-            // 控え（打順外・投手先頭→総合力降順）。
+            // 控え（打順外・背番号順）。ToLineupSpec が積むブルペン/ベンチと同じ順なので、
+            // この一覧の上から順に継投・代打で出る（表示と実際が食い違わない, issue #270）。
             var used = new HashSet<int>();
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
             if (_usesDh && _spIdx >= 0) used.Add(_spIdx);
-            foreach (var i in _eligible
-                         .Where(i => !used.Contains(i))
-                         .OrderByDescending(i => _roster[i].IsPitcher ? 1 : 0)
-                         .ThenByDescending(i => _roster[i].AverageLevel()))
+            foreach (var i in ByUniformNumber())
             {
+                if (used.Contains(i)) continue;
                 var p = _roster[i];
                 v.Bench.Add(new BenchRowView
                 {
@@ -582,7 +606,8 @@ namespace KokoSim.Unity.Lineup
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
                 // カテゴリ別ランク（打撃力/走力/守備力/投手力）。メンバー設定の比較カードと同じ部品・同じ係数。
-                Strength = PlayerStrengthProfile.Compute(p, Coeff),
+                // 並べ替えキー（ByBatting/ByPitching）と同じメモを引く＝表示と並びで指標がズレない。
+                Strength = Strength(index),
                 IsCaptain = p.IsCaptain,
                 Stats = BuildStats(p),
                 // 持ち球（ミニ球種チャート）は詳細画面と同じ生成ロジック（単一ソース, issue #94 案C）。
