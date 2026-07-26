@@ -1077,7 +1077,14 @@ namespace KokoSim.EditorTools
 
         // ---- 素体・サンプリング ----------------------------------------------
 
-        private static GameObject SpawnBody(GameObject root, string name, Vector3 pos, float yawDeg, Color color)
+        /// <summary>バインドポーズで測った「足ボーン高さ−接地面」。GroundFix相当を外部で組む時に使う。</summary>
+        internal static float AnkleOffsetOf(GameObject body)
+        {
+            float v;
+            return AnkleOffset.TryGetValue(body, out v) ? v : 0f;
+        }
+
+        internal static GameObject SpawnBody(GameObject root, string name, Vector3 pos, float yawDeg, Color color)
         {
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
                 string.IsNullOrEmpty(BodyOverride) ? BodyFbx : BodyOverride);

@@ -522,14 +522,51 @@ namespace KokoSim.Unity.Match
             return bat;
         }
 
+        // 片手フォロースルー判定: 両手ボーン間隔がグリップ幅（実測~0.1m）を明確に超えたら上の手が離れたとみなす
+        private const float HandsApartThreshold = 0.22f;
+        private const float BatDropTime = 1.9f;   // Hittingクリップの走り出し（≈正規化0.55）以降はバットを放った扱いで非表示
+        private bool _batOneHand;
+        private Vector3 _batLocalPos;
+        private Quaternion _batLocalRot;
+
         private void AlignBat()
         {
             if (_bat == null || _batter == null) return;
-            var rh = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand).position;
-            var lh = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand).position;
-            var axis = (rh - lh).normalized;
-            _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
-            _bat.transform.position = lh + axis * (0.425f - 0.10f);
+            var lhT = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var rhT = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            if (lhT == null || rhT == null) return;
+
+            // インプレーの走り出し以降はバットを放った扱い（実物はトスするが小道具は消すのが最も自然）
+            if (_batter.Clip == _swingHitClip && _batter.Time >= BatDropTime)
+            {
+                _bat.SetActive(false);
+                return;
+            }
+            _bat.SetActive(true);
+
+            var lh = lhT.position;
+            var rh = rhT.position;
+            if (Vector3.Distance(lh, rh) <= HandsApartThreshold)
+            {
+                // 両手保持: 両手ボーンを結ぶ線に整列（§3.3の実測知見＝手ボーン軸は素体依存で使えない）
+                var axis = (rh - lh).normalized;
+                _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
+                _bat.transform.position = lh + axis * (0.425f - 0.10f);
+                _batOneHand = false;
+                return;
+            }
+
+            // 片手フォロースルー（右打者は振り抜きで右手が離れる）: 離れた瞬間の見た目を
+            // 下の手（左手）ボーンのローカルへ焼き付け、以後は左手に追従させる。
+            // ボーン軸の向きを仮定しない＝焼き付けオフセットなので素体が変わっても壊れない
+            if (!_batOneHand)
+            {
+                _batLocalPos = lhT.InverseTransformPoint(_bat.transform.position);
+                _batLocalRot = Quaternion.Inverse(lhT.rotation) * _bat.transform.rotation;
+                _batOneHand = true;
+            }
+            _bat.transform.position = lhT.TransformPoint(_batLocalPos);
+            _bat.transform.rotation = lhT.rotation * _batLocalRot;
         }
 
         private void AttachMitt(Actor catcher, int layer)
