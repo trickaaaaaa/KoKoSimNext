@@ -290,10 +290,10 @@ namespace KokoSim.EditorTools
                 var cam = camGo.AddComponent<Camera>();
                 cam.cullingMask = 1 << LayerMask.NameToLayer(DuelStageComposer.LayerName);
                 cam.orthographic = true;
-                cam.orthographicSize = 4.5f;
+                cam.orthographicSize = 11f;   // 本塁(z=0)〜マウンド(z=18.44)を1枚に収める（向きデバッグ用）
                 cam.clearFlags = CameraClearFlags.SolidColor;
                 cam.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
-                cam.transform.position = new Vector3(0f, 30f, 0.5f);
+                cam.transform.position = new Vector3(0f, 30f, 9f);
                 cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
                 cam.nearClipPlane = 0.1f;
                 cam.farClipPlane = 100f;
@@ -526,6 +526,149 @@ namespace KokoSim.EditorTools
             go.GetComponent<MeshRenderer>().sharedMaterial = mat;
             go.layer = layer;
             return go;
+        }
+
+        /// <summary>
+        /// 投球クリップの向き精密実測（§7-2で判明した「リリースが画面左手前へ飛ぶ」調査用）。
+        /// yaw=0でスポーンし、複数時刻の胸向きと「t=0からのルート移動方向」を分けて測る。
+        /// 投球はクリップ内回転（振りかぶり→リリースで体が回る）を含むため、単一時刻の胸向きでは
+        /// yawを決められない＝リリース時の胸向きと踏み込みの移動方向の両方で決める。
+        /// </summary>
+        public static string RunPitcherProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var clip = FindClip("AA_Baseball_Pitcher_Pitching_type01");
+                var sb = new StringBuilder();
+                var body0 = SpawnBody(root, "probe-p0", Vector3.zero, 0f, Color.white);
+                Sample(body0, clip, 0.001f);
+                var p0 = body0.transform.position;
+                Object.DestroyImmediate(body0);
+
+                Vector3 prevHand = Vector3.zero;
+                float prevT = -1f;
+                foreach (var t in new[] { 0.15f, 0.35f, 0.45f, 0.48f, 0.50f, 0.52f, 0.54f, 0.56f, 0.58f, 0.60f, 0.62f, 0.65f, 0.70f, 0.90f })
+                {
+                    var body = SpawnBody(root, "probe-p", Vector3.zero, 0f, Color.white);
+                    Sample(body, clip, t);
+                    var anim = body.GetComponentInChildren<Animator>();
+                    var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                    var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                    var hand = anim.GetBoneTransform(HumanBodyBones.RightHand).position;
+                    var facing = Vector3.Cross(ra - la, Vector3.up);
+                    facing.y = 0f; facing.Normalize();
+                    var disp = body.transform.position - p0;
+                    disp.y = 0f;
+                    // 右手の平均速度（前サンプル区間）＝リリース瞬間の推定（速度ピーク直後が手離れ）
+                    float speed = prevT >= 0f ? (hand - prevHand).magnitude / ((t - prevT) * clip.length) : 0f;
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "t={0:F2} chest=({1:F2},{2:F2}) disp=({3:F2},{4:F2}) hand=({5:F2},{6:F2},{7:F2}) v={8:F1}m/s",
+                        t, facing.x, facing.z, disp.x, disp.z, hand.x, hand.y, hand.z, speed));
+                    prevHand = hand; prevT = t;
+                    Object.DestroyImmediate(body);
+                }
+                Debug.Log("[DuelMotionSpike] pitcher probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
+        /// 投球クリップのyaw候補4種（-90/0/90/180）をリリース(0.53)と直後(0.60)で撮り比べる目視決着用。
+        /// 出力: out/duel-stage/frame/pitchyaw_[yaw]_t[時刻].png（採用構図R-comp60）
+        /// </summary>
+        public static string RunPitcherYawSheet()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                int layer = LayerMask.NameToLayer(DuelStageComposer.LayerName);
+                var outDir = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "out/duel-stage/frame");
+                Directory.CreateDirectory(outDir);
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f));
+                Sample(batter, FindClip("AA_Baseball_Batter_Idle_Loop"), 0.30f); GroundFix(batter, 0f);
+
+                var clip = FindClip("AA_Baseball_Pitcher_Pitching_type01");
+                var camGo = new GameObject("~DuelStageCamera") { hideFlags = HideFlags.DontSave };
+                var cam = camGo.AddComponent<Camera>();
+                cam.cullingMask = 1 << layer;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.55f, 0.78f, 0.90f);
+                cam.nearClipPlane = 0.1f;
+                cam.farClipPlane = 400f;
+                ApplyAdoptedCamera(cam);
+
+                var rt = new RenderTexture(480, 270, 24, RenderTextureFormat.ARGB32) { filterMode = FilterMode.Point };
+                rt.Create();
+                var big = new RenderTexture(1920, 1080, 0, RenderTextureFormat.ARGB32);
+                big.Create();
+                var sb = new StringBuilder();
+                try
+                {
+                    cam.targetTexture = rt;
+                    foreach (var yaw in new[] { -90f, 0f, 90f, 180f })
+                    {
+                        var pitcher = SpawnBody(root, "body-pitcher",
+                            new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), yaw,
+                            new Color(0.92f, 0.92f, 0.90f));
+                        foreach (var t in new[] { 0.53f, 0.60f })
+                        {
+                            Sample(pitcher, clip, t);
+                            GroundFix(pitcher, DuelStageComposer.MoundHeight);
+                            DuelStageComposer.Render(cam, rt);
+                            var prev = RenderTexture.active;
+                            Graphics.Blit(rt, big);
+                            RenderTexture.active = big;
+                            var tex = new Texture2D(1920, 1080, TextureFormat.RGBA32, false);
+                            tex.ReadPixels(new Rect(0, 0, 1920, 1080), 0, 0);
+                            tex.Apply();
+                            RenderTexture.active = prev;
+                            var file = string.Format(CultureInfo.InvariantCulture,
+                                "pitchyaw_{0}_t{1:000}.png", Mathf.RoundToInt(yaw), Mathf.RoundToInt(t * 100f));
+                            File.WriteAllBytes(Path.Combine(outDir, file), tex.EncodeToPNG());
+                            Object.DestroyImmediate(tex);
+                            sb.AppendLine(file);
+                        }
+                        Object.DestroyImmediate(pitcher);
+                    }
+                }
+                finally
+                {
+                    cam.targetTexture = null;
+                    rt.Release(); Object.DestroyImmediate(rt);
+                    big.Release(); Object.DestroyImmediate(big);
+                    Object.DestroyImmediate(camGo);
+                }
+                Debug.Log("[DuelMotionSpike] pitcher yaw sheet -> " + outDir + "\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
         }
 
         /// <summary>

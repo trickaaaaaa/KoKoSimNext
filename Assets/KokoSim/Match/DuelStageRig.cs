@@ -122,9 +122,9 @@ namespace KokoSim.Unity.Match
         }
 
         // ── §7-2 アンカー同期（第1弾＝投手のみ） ──────────────────────────
-        // リリースのアンカー時刻はクリップ実測（スイングシートの正規化0.53 × 6.00s）。
+        // リリースのアンカー時刻は右手速度ピーク実測（RunPitcherProbe: t=0.50 × 6.00s＝8.5m/s ピーク）。
         // 本実装ではAnimationEventの注釈付けに置き換える（design-18 §7-2）。
-        private const float ReleaseTime = 3.18f;
+        private const float ReleaseTime = 3.0f;
         private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
         private float _cutClipTime;
 
@@ -338,15 +338,28 @@ namespace KokoSim.Unity.Match
         {
             if (a == null) return;
             a.Holding = false;
-            a.Go.transform.localPosition = a.BasePos;
-            a.Go.transform.localRotation = a.BaseRot;
-            a.Playable.SetTime(0);
-            a.Graph.Evaluate(0f);
+            RewindActor(a);
             float target = Mathf.Clamp(clipTime, 0f, a.Clip.length - 0.001f);
             int steps = Mathf.Max(1, Mathf.CeilToInt(target * 60f));
             float dt = target / steps;
             for (int i = 0; i < steps; i++) a.Graph.Evaluate(dt);
             a.Time = target;
+        }
+
+        /// <summary>
+        /// クリップ先頭へ巻き戻す。常設グラフでの SetTime ジャンプは「直前時刻→0」のルートモーション差分を
+        /// transformへ注入する（毎回使い捨てグラフのスパイクSample()では出ない罠）ため、
+        /// 巻き戻しの間だけ applyRootMotion を切ってポーズだけ打ち直す。
+        /// </summary>
+        private static void RewindActor(Actor a)
+        {
+            a.Go.transform.localPosition = a.BasePos;
+            a.Go.transform.localRotation = a.BaseRot;
+            bool rm = a.Animator.applyRootMotion;
+            a.Animator.applyRootMotion = false;
+            a.Playable.SetTime(0);
+            a.Graph.Evaluate(0f);
+            a.Animator.applyRootMotion = rm;
         }
 
         /// <summary>
@@ -360,10 +373,7 @@ namespace KokoSim.Unity.Match
             if (a.Time >= a.Clip.length)
             {
                 a.Time = 0f;
-                a.Go.transform.localPosition = a.BasePos;
-                a.Go.transform.localRotation = a.BaseRot;
-                a.Playable.SetTime(0);
-                a.Graph.Evaluate(0f);
+                RewindActor(a);
                 if (a.HoldAtEnd) a.Holding = true;
                 return;
             }
