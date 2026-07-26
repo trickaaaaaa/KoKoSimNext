@@ -751,6 +751,8 @@ namespace KokoSim.Unity.Match
         {
             // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
             _view.CameraWorkEnabled = _cameraWorkWanted && _speed < 4f;
+            // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
+            _view.PlaybackSpeed = _speed;
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
@@ -811,11 +813,22 @@ namespace KokoSim.Unity.Match
             var noRunnersAfter = !_current.BaseFirstAfter && !_current.BaseSecondAfter && !_current.BaseThirdAfter;
             var deadOut = _current.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.InPlayOut
                           && _current.RunsScored == 0 && noRunnersAfter;
-            if (!deadOut) return play.Dur;
 
-            var lastEvent = play.ResAt;
-            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            return System.Math.Min(play.Dur, lastEvent + 0.6);
+            var end = play.Dur;
+            if (deadOut)
+            {
+                var lastEvent = play.ResAt;
+                foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
+                end = System.Math.Min(play.Dur, lastEvent + 0.6);
+            }
+
+            // 判定オーバーレイ（#59）の表示窓 [T1, T1+hold) を必ず含める（issue #236 症状A）。
+            // 内野ゴロの打者走者は「送球到達＝アウト成立」より後に一塁へ着く（T1＞ResAt）ので、
+            // 早切りだけだと最頻のアウトが一度も出ない。Dur でクランプしない（SetTime は t の純関数で、
+            // Dur を超えた時刻を評価しても最終フレームを保持するだけ）。
+            var judged = PlaybackEvaluator.LastJudgementTime(play);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            return end;
         }
 
         private string NextPrompt() =>

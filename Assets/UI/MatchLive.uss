@@ -83,12 +83,18 @@
 }
 .mlive-caphist__line {
     font-size: var(--fs-cap);
-    /* 実況履歴はチョーク白の70%不透明度まで上げる（前指示3の適用）。 */
-    color: rgba(232, 236, 234, 0.7);
+    /* 実況履歴は「読める副次文字」＝インク2段目（issue #236）。デーゲームNBスキン移行前は
+       チョーク白の70%不透明度を直書きしていたが、地が明るい昼スキンでは白系が消えて読めない。
+       盤面の外＝明るい地の上なのでトークンの副次文字色を使う（色の直書きもしない）。 */
+    color: var(--color-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    height: 15px;
+    /* 行高は文字サイズ（--fs-cap 17px）が収まる値にする。旧 15px は 2026-07-22 の文字サイズ底上げに
+       追従しておらず字の下半分が切れていた（文字が見えるようになって判明。issue #236）。
+       潰して収めるのは常に不正解＝盤面側が1行ぶん縮む方を取る（UI-BUILD-METHOD）。 */
+    height: 22px;
+    flex-shrink: 0;
 }
 
 /* 打者ラベル（実況バーの左）。上部のスコアバー/BSO帯は LineScorePanel（components.uss の .lsc*）へ

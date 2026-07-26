@@ -1156,12 +1156,15 @@
     align-items: center;
     display: none;
 }
-/* 判定テキスト。緑の盤面上でも読めるよう半透明パネルで浮かせる（mhud-panel と同じ idiom）。 */
+/* 判定テキスト。緑の盤面上でも読めるよう半透明パネルで浮かせる（mhud-panel と同じ idiom）。
+   文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-1。デーゲームNBスキン移行で --color-chalk が
+   暗インクへ反転したため、ここで chalk を参照すると暗地に暗文字＝読めなくなる（issue #236 症状B）。
+   パネルは design-19 §8「掲示板島は黒維持」に従って暗いまま据え置く。 */
 .pitch-call__judge {
     font-size: var(--fs-callout);
     -unity-text-align: middle-center;
     letter-spacing: 2px;
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);
     background-color: rgba(14, 26, 19, 0.82);
     border-radius: var(--radius-panel);
     padding: var(--sp-1) var(--sp-4);
@@ -1172,11 +1175,11 @@
    アウト＝警告色（常時表示）、セーフ＝良好色（際どい判定の時だけ表示、呼び出し側が出し分ける）。 */
 .pitch-call__judge--out { color: var(--color-warn); }
 .pitch-call__judge--safe { color: var(--color-good); }
-/* 球種・球速（実1球記録がある打席のみ。合成投球列では出さない）。 */
+/* 球種・球速（実1球記録がある打席のみ。合成投球列では出さない）。文字色は判定と同じ理由で --sb-ink-1。 */
 .pitch-call__detail {
     font-size: var(--fs-body);
     -unity-text-align: middle-center;
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);
     background-color: rgba(14, 26, 19, 0.82);
     border-radius: var(--radius-chip);
     padding: var(--sp-1) var(--sp-2);
@@ -1202,10 +1205,11 @@
     border-radius: var(--radius-panel);
     padding: var(--sp-2) var(--sp-4);
 }
+/* 校名・区切りも暗パネル上なので --sb-ink-1（明色）。chalk は昼スキンで暗インクへ反転している（#236 症状B）。 */
 .score-call__team {
     font-size: var(--fs-body);
     -unity-text-align: middle-center;
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);
     padding: 0 var(--sp-2);
 }
 .score-call__num {
@@ -1219,7 +1223,7 @@
 .score-call__sep {
     font-size: var(--fs-callout);
     -unity-text-align: middle-center;
-    color: var(--color-chalk);
+    color: var(--sb-ink-1);
     padding: 0 var(--sp-1);
 }
 

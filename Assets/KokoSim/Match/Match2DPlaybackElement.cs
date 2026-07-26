@@ -139,9 +139,20 @@ namespace KokoSim.Unity.Match
         // 打球・走塁プレーの判定オーバーレイ（issue #59）。アウトは常時、セーフはCloseCall(際どい)時のみ、
         // レッグ終端(T1)から一定時間だけ大きく表示する。#6 の PitchCall と同じ器(.pitch-call)を流用。
         // t の純関数として毎フレーム再評価する（SetTime がシーク時も含め常に呼ばれるため専用クロック不要）。
-        private const double JudgementHoldSeconds = 0.6;
+        /// <summary>判定を出しておく時間［実時間・秒］。</summary>
+        public const double JudgementHoldRealSeconds = 0.6;
         private VisualElement _judgementHost;
         private Label _judgementLabel;
+
+        /// <summary>
+        /// 再生倍速（コントローラが毎フレーム同期する）。表示窓はプレー時間軸で数えるため、
+        /// 倍速のままだと実時間では比例して縮む（×4速で0.15秒＝視認不能。issue #236 症状A）。
+        /// 倍速を掛けてプレー時間軸の窓を広げ、**実時間の見え方を一定**にする。
+        /// </summary>
+        public float PlaybackSpeed { get; set; } = 1f;
+
+        /// <summary>プレー時間軸での判定表示時間。再生の打ち切り時刻を決める側もこの値を使う。</summary>
+        public double JudgementHoldSeconds => JudgementHoldRealSeconds * Mathf.Max(0.01f, PlaybackSpeed);
 
         // 動く要素（軌跡・野手・走者・ボール）専用の子レイヤー。静的フィールド（this 自身の
         // generateVisualContent）と再描画頻度を分離するための層分け（issue #160）。
@@ -316,40 +327,21 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 判定オーバーレイ（issue #59）。t の純関数として、レッグ終端(T1)が (t-hold, t] に入る最新の
-        /// 判定を探す。アウトは常時、セーフは CloseCall（際どい判定）の時だけ対象＝<see cref="PlaybackRun"/>
-        /// 側で既にゲーティング済みのデータをそのまま表示するだけ（描画専用・判定/帯には無関係）。
-        /// 1プレー内に複数の判定がある場合（併殺等）は、直近（最大T1）のものだけを表示する。
+        /// 判定オーバーレイ（issue #59）。探索は engine 側の純関数
+        /// <see cref="PlaybackEvaluator.JudgementAt"/> が単一ソース（表示打ち切り時刻を決める
+        /// MatchLiveController 側と同じ規則を共有するため。issue #236 症状A）。ここは描画だけを担う。
         /// </summary>
         private void UpdateJudgement(double t)
         {
-            string text = null;
-            var isOut = false;
-            var bestT1 = double.NegativeInfinity;
-
-            if (_play != null)
-            {
-                foreach (var runner in _play.Runners)
-                {
-                    foreach (var seg in runner.Segs)
-                    {
-                        if (!seg.OutAtEnd && !seg.CloseCall) continue;
-                        if (seg.T1 > t || seg.T1 <= t - JudgementHoldSeconds) continue;
-                        if (seg.T1 < bestT1) continue;
-                        bestT1 = seg.T1;
-                        isOut = seg.OutAtEnd;
-                        text = isOut ? "アウト" : "セーフ";
-                    }
-                }
-            }
-
-            if (text == null)
+            var found = PlaybackEvaluator.JudgementAt(_play, t, JudgementHoldSeconds);
+            if (!found.HasValue)
             {
                 _judgementHost.style.display = DisplayStyle.None;
                 return;
             }
 
-            _judgementLabel.text = text;
+            var isOut = found.Value.IsOut;
+            _judgementLabel.text = isOut ? "アウト" : "セーフ";
             _judgementLabel.EnableInClassList("pitch-call__judge--out", isOut);
             _judgementLabel.EnableInClassList("pitch-call__judge--safe", !isOut);
             _judgementHost.style.display = DisplayStyle.Flex;

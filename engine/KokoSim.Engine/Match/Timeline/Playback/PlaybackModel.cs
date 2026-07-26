@@ -221,6 +221,44 @@ public static class PlaybackEvaluator
         return pos;
     }
 
+    /// <summary>
+    /// 時刻 t で表示すべき判定（Issue #59 の判定オーバーレイ）。レッグ終端 T1 が
+    /// <c>[t - holdSeconds, t]</c> に入る判定のうち直近（最大 T1）を返す。判定が無ければ null。
+    /// アウトは常時、セーフは <see cref="PlaybackRun.CloseCall"/>（際どい判定）だけを対象にする
+    /// ＝出し分けは既にデータ側でゲート済み。描画専用の純関数で、判定/帯には一切関与しない。
+    /// </summary>
+    public static (bool IsOut, double T1)? JudgementAt(PlaybackPlay play, double t, double holdSeconds)
+    {
+        if (play is null) return null;
+        (bool IsOut, double T1)? best = null;
+        foreach (var r in play.Runners)
+        foreach (var seg in r.Segs)
+        {
+            if (!seg.OutAtEnd && !seg.CloseCall) continue;
+            if (seg.T1 > t || seg.T1 <= t - holdSeconds) continue;   // 表示窓 [T1, T1+hold) の外
+            if (best.HasValue && seg.T1 < best.Value.T1) continue;   // 併殺等は直近の判定だけ出す
+            best = (seg.OutAtEnd, seg.T1);
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// プレー内で最後に出る判定の時刻（判定が無ければ null）。表示窓の終端を求めるのに使う
+    /// ＝再生の早切り時刻がこれ＋hold を下回ると判定が一度も見えない（issue #236 症状A）。
+    /// </summary>
+    public static double? LastJudgementTime(PlaybackPlay play)
+    {
+        if (play is null) return null;
+        double? last = null;
+        foreach (var r in play.Runners)
+        foreach (var seg in r.Segs)
+        {
+            if (!seg.OutAtEnd && !seg.CloseCall) continue;
+            if (!last.HasValue || seg.T1 > last.Value) last = seg.T1;
+        }
+        return last;
+    }
+
     /// <summary>時刻 t で表示すべき実況（最後に閾値を跨いだ caption）。mock: draw() の caption ループ。</summary>
     public static string CaptionAt(PlaybackPlay play, double t)
     {
