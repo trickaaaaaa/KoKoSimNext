@@ -16,6 +16,13 @@ public enum PitchingChangeKind
 
     /// <summary>在フィールド野手が登板し、旧投手は退場・空いた守備をベンチ野手が補充（path②）。</summary>
     FielderReliefWithBackfill,
+
+    /// <summary>
+    /// コンバート継投（issue #235）。旧投手を守備位置へ回し、控え投手が登板する。旧投手は退場せず
+    /// 打席に立ち続ける（＝再登板も可）。押し出された野手が退場する。
+    /// Backfill は「旧投手が就いた守備位置」＝<see cref="PitchingChangeKind.TwoWaySwap"/> と同じ意味で使う。
+    /// </summary>
+    PitcherConvertedRelief,
 }
 
 /// <summary>

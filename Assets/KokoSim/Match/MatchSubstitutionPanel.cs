@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Nation;
@@ -43,6 +44,11 @@ namespace KokoSim.Unity.Match
         private int _inIndex = -1;       // 控え（Bench）またはブルペン（Bullpen）の添字
         private FieldPosition? _dhAt;
         private bool _dhChoiceMade;
+
+        // 守備位置まわり（issue #235）。
+        private int _swapA = -1, _swapB = -1;   // 「守備位置」タブで入れ替える2つの打順スロット
+        private FieldPosition? _subAt;          // 守備交代で入る選手が就く守備位置（null＝退く選手の位置を継承）
+        private FieldPosition? _convertTo;      // 投手交代で元投手を残す守備位置（null＝退場＝通常の継投）
 
         public MatchSubstitutionPanel(VisualElement root, System.Action onApplied)
         {
@@ -101,7 +107,7 @@ namespace KokoSim.Unity.Match
             if (_scrim != null) _scrim.style.display = DisplayStyle.None;
         }
 
-        /// <summary>スクショ用: 種別タブを選ぶ（0=代打 1=代走 2=投手交代 3=守備交代 4=DH解除）。</summary>
+        /// <summary>スクショ用: 種別タブを選ぶ（0=代打 1=代走 2=投手交代 3=守備交代 4=守備位置 5=DH解除）。</summary>
         public void SelectKindForCapture(int index)
         {
             if (!_open || index < 0 || index >= KindTabs.Length) return;
@@ -117,6 +123,10 @@ namespace KokoSim.Unity.Match
             _inIndex = -1;
             _dhAt = null;
             _dhChoiceMade = false;
+            _swapA = -1;
+            _swapB = -1;
+            _subAt = null;
+            _convertTo = null;
             // 代打・投手交代は「退く側」が局面で一意に決まるので最初から選んでおく。
             if (_kind == SubstitutionKind.PinchHit) _outIndex = _opt.UpcomingBatterSlot;
         }
@@ -140,6 +150,8 @@ namespace KokoSim.Unity.Match
             (SubstitutionKind.PinchRun, "代走"),
             (SubstitutionKind.ChangePitcher, "投手交代"),
             (SubstitutionKind.DefensiveSub, "守備交代"),
+            // 選手の出入りが無い＝交代回数を消費しない操作は別タブに分ける（境界が見えるようにする, issue #235）。
+            (SubstitutionKind.SwapDefense, "守備位置"),
             (SubstitutionKind.ReleaseDh, "DH解除"),
         };
 
@@ -172,6 +184,7 @@ namespace KokoSim.Unity.Match
             SubstitutionKind.PinchRun => _opt.CanPinchRun,
             SubstitutionKind.ChangePitcher => _opt.CanChangePitcher,
             SubstitutionKind.DefensiveSub => _opt.CanDefensiveSub,
+            SubstitutionKind.SwapDefense => _opt.CanSwapDefense,
             SubstitutionKind.ReleaseDh => _opt.CanReleaseDh,
             _ => false,
         };
@@ -188,6 +201,7 @@ namespace KokoSim.Unity.Match
                     SubstitutionKind.PinchRun => "退く走者",
                     SubstitutionKind.ChangePitcher => "降板する投手",
                     SubstitutionKind.ReleaseDh => "打順（DHの位置）",
+                    SubstitutionKind.SwapDefense => "守備（2つクリックで入替）",
                     _ => "退く選手",
                 };
 
@@ -221,21 +235,42 @@ namespace KokoSim.Unity.Match
                     case SubstitutionKind.ReleaseDh:
                         if (_opt.UsesDh && i == _opt.DhSlot) tag = "DH";
                         break;
+                    case SubstitutionKind.SwapDefense:
+                        // 守備に就いている枠だけ動かせる（投手＝登板の変更なので投手交代タブ、DHは守備に就かない）。
+                        selectable = _opt.SwappableSlots.Contains(i);
+                        if (!selectable) tag = _opt.UsesDh && i == _opt.DhSlot ? "DH" : "投手";
+                        break;
                 }
                 var picked = _kind == SubstitutionKind.PinchHit ? i == _opt.UpcomingBatterSlot
                     : _kind == SubstitutionKind.ReleaseDh ? _opt.UsesDh && i == _opt.DhSlot
+                    : _kind == SubstitutionKind.SwapDefense ? i == _swapA || i == _swapB
                     : _outIndex == i;
                 var row = LineupRow(i + 1, p, selectable, picked, tag);
                 if (selectable)
                     row.RegisterCallback<ClickEvent>(e =>
                     {
                         e.StopPropagation();
+                        if (_kind == SubstitutionKind.SwapDefense) { PickSwap(slot); Render(); return; }
                         _outIndex = slot;
                         _baseIndex = _kind == SubstitutionKind.PinchRun ? BaseOf(_opt.Lineup[slot]) : -1;
                         Render();
                     });
                 _outRows.Add(row);
             }
+        }
+
+        /// <summary>
+        /// 守備位置の入替の選択（スタメン設定と同じ2クリック操作, issue #233/#235）。
+        /// 1つ目→2つ目で組み、同じ枠の再クリックで解除、2つ揃った状態で別の枠を押したら選び直し。
+        /// </summary>
+        private void PickSwap(int slot)
+        {
+            if (_swapA == slot) { _swapA = _swapB; _swapB = -1; return; }
+            if (_swapB == slot) { _swapB = -1; return; }
+            if (_swapA < 0) { _swapA = slot; return; }
+            if (_swapB < 0) { _swapB = slot; return; }
+            _swapA = slot;
+            _swapB = -1;
         }
 
         private int BaseOf(Player p)
@@ -263,7 +298,16 @@ namespace KokoSim.Unity.Match
             posCell.AddToClassList("lineup-row__pos");
             var chip = new Label(PosJp(p.Position));
             chip.AddToClassList("pos-chip");
-            chip.AddToClassList("pos-chip--fixed");
+            // 「守備位置」タブでは守備位置そのものが操作対象なので、動かせる枠のチップは活きて見せる
+            // （動かせない投手・DHだけ --fixed）。他のタブでは全部が表示専用（issue #235）。
+            if (_kind == SubstitutionKind.SwapDefense && selectable)
+            {
+                if (picked) chip.AddToClassList("pos-chip--picked");
+            }
+            else
+            {
+                chip.AddToClassList("pos-chip--fixed");
+            }
             posCell.Add(chip);
             row.Add(posCell);
 
@@ -297,6 +341,12 @@ namespace KokoSim.Unity.Match
                 BuildDhChoices();
                 return;
             }
+            if (_kind == SubstitutionKind.SwapDefense)
+            {
+                if (_insCap != null) _insCap.text = "入替の内容";
+                BuildSwapPreview();
+                return;
+            }
 
             var usePen = _kind == SubstitutionKind.ChangePitcher;
             if (_insCap != null) _insCap.text = usePen ? "投手候補" : "控え";
@@ -320,6 +370,79 @@ namespace KokoSim.Unity.Match
                 var empty = new Label("控えが登録されていない。");
                 empty.AddToClassList("cmp-card__empty");
                 _inRows.Add(empty);
+            }
+
+            // 入る選手を決めたあとの追加選択（issue #235）。既定は従来どおりなので、選ばなければ挙動は変わらない。
+            if (_kind == SubstitutionKind.DefensiveSub && _outIndex >= 0 && _inIndex >= 0) BuildSubPositionChoices();
+            else if (_kind == SubstitutionKind.ChangePitcher && _inIndex >= 0) BuildConvertChoices();
+        }
+
+        /// <summary>「守備位置」タブの中列＝いま何と何を入れ替えるのかの確認（選択そのものは左列で行う）。</summary>
+        private void BuildSwapPreview()
+        {
+            var note = new Label("選手は動かず、守備位置だけを交換する。交代回数は消費しない。");
+            note.AddToClassList("msub-hint");
+            _inRows.Add(note);
+            if (_swapA < 0) return;
+
+            _inRows.Add(ChoiceRow(SlotLabel(_swapA), picked: true));
+            if (_swapB < 0)
+            {
+                var more = new Label("もう1人をクリックする。");
+                more.AddToClassList("msub-hint");
+                _inRows.Add(more);
+                return;
+            }
+            _inRows.Add(ChoiceRow(SlotLabel(_swapB), picked: true));
+            _inRows.Add(ChoiceRow(
+                PosJp(_opt.Lineup[_swapA].Position) + " ⇄ " + PosJp(_opt.Lineup[_swapB].Position), picked: false));
+        }
+
+        private string SlotLabel(int slot)
+            => (slot + 1) + "番 " + PosJp(_opt.Lineup[slot].Position) + "  " + NameOf(_opt.Lineup[slot]);
+
+        /// <summary>守備交代で入る選手が就く守備位置（既定＝退く選手の位置を継承）。任意割当の入口（issue #235）。</summary>
+        private void BuildSubPositionChoices()
+        {
+            var cap = new Label("就く守備位置");
+            cap.AddToClassList("msub-cmp-group");
+            _inRows.Add(cap);
+
+            var inherited = _opt.Lineup[_outIndex].Position;
+            var keep = ChoiceRow("そのまま（" + PosJp(inherited) + "）", _subAt == null);
+            keep.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _subAt = null; Render(); });
+            _inRows.Add(keep);
+
+            foreach (var slot in _opt.SwappableSlots)
+            {
+                var pos = _opt.Lineup[slot].Position;
+                if (pos == inherited) continue;   // 「そのまま」と同じ
+                var p = pos;
+                var row = ChoiceRow(PosJp(pos) + "（" + NameOf(_opt.Lineup[slot]) + " が " + PosJp(inherited) + " へ）",
+                    _subAt == pos);
+                row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _subAt = p; Render(); });
+                _inRows.Add(row);
+            }
+        }
+
+        /// <summary>投手交代で元投手をどうするか。既定＝退場（従来の継投）／守備位置を選ぶとコンバート継投（issue #235）。</summary>
+        private void BuildConvertChoices()
+        {
+            var cap = new Label("元の投手");
+            cap.AddToClassList("msub-cmp-group");
+            _inRows.Add(cap);
+
+            var retire = ChoiceRow("退場させる（通常の継投）", _convertTo == null);
+            retire.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = null; Render(); });
+            _inRows.Add(retire);
+
+            foreach (var slot in _opt.SwappableSlots)
+            {
+                var pos = _opt.Lineup[slot].Position;
+                var p = pos;
+                var row = ChoiceRow(PosJp(pos) + "へ回す（" + NameOf(_opt.Lineup[slot]) + " が退場）", _convertTo == pos);
+                row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = p; Render(); });
+                _inRows.Add(row);
             }
         }
 
@@ -399,7 +522,9 @@ namespace KokoSim.Unity.Match
             var group = new Label(pitcherView ? "投球" : "打撃・走守");
             group.AddToClassList("msub-cmp-group");
             _cmpRows.Add(group);
-            _cmpRows.Add(UiComponents.CompareHeader("退く", "入る"));
+            _cmpRows.Add(_kind == SubstitutionKind.SwapDefense
+                ? UiComponents.CompareHeader("1人目", "2人目")   // 入替は「退く／入る」ではない
+                : UiComponents.CompareHeader("退く", "入る"));
             foreach (var (label, a, b) in CompareRows(outgoing, incoming, pitcherView))
             {
                 // 球速だけ物理量なので km/h テキスト表示（バー幅は Level のまま＝他能力と同じ土俵, issue #94）。
@@ -418,6 +543,8 @@ namespace KokoSim.Unity.Match
             switch (_kind)
             {
                 case SubstitutionKind.ChangePitcher: return _opt.CurrentPitcher;
+                case SubstitutionKind.SwapDefense:
+                    return _swapA >= 0 && _swapA < _opt.Lineup.Count ? _opt.Lineup[_swapA] : null;
                 case SubstitutionKind.PinchHit:
                     return _opt.UpcomingBatterSlot >= 0 ? _opt.Lineup[_opt.UpcomingBatterSlot] : null;
                 case SubstitutionKind.ReleaseDh:
@@ -431,6 +558,8 @@ namespace KokoSim.Unity.Match
         private Player SelectedIncoming()
         {
             if (_kind == SubstitutionKind.ReleaseDh) return null;
+            if (_kind == SubstitutionKind.SwapDefense)
+                return _swapB >= 0 && _swapB < _opt.Lineup.Count ? _opt.Lineup[_swapB] : null;
             var list = _kind == SubstitutionKind.ChangePitcher ? _opt.PitcherCandidates : _opt.Bench;
             return _inIndex >= 0 && _inIndex < list.Count ? list[_inIndex] : null;
         }
@@ -520,12 +649,30 @@ namespace KokoSim.Unity.Match
             var ready = blocked == null && SelectionComplete();
             if (_note != null)
             {
-                _note.text = blocked ?? (ready
-                    ? "この交代は即時に確定し、取り消せない（退いた選手は再出場できない）。"
-                    : SelectionHint());
+                _note.text = blocked ?? (ready ? ReadyNote() : SelectionHint());
                 _note.EnableInClassList("msub-note--warn", blocked != null);
             }
+            // 守備位置の入替は「交代」ではないので確定ボタンの言葉も変える（issue #235 方針①）。
+            if (_ok != null) _ok.text = _kind == SubstitutionKind.SwapDefense ? "この入替を確定 ▶" : "この交代を確定 ▶";
             _ok?.SetEnabled(ready);
+        }
+
+        /// <summary>選択が揃ったときの注記。何が起きるか（誰が退場するのか）を1行で言い切る。</summary>
+        private string ReadyNote()
+        {
+            // 選手の出入りが無い操作は「取り消せない・再出場できない」の警句が当たらない（issue #235 方針①）。
+            if (_kind == SubstitutionKind.SwapDefense)
+                return "守備位置の入替は交代回数を消費しない（何度でも行える）。";
+            // コンバート継投は退場するのが「元の投手」ではなく「押し出された野手」（issue #235 方針②）。
+            if (_kind == SubstitutionKind.ChangePitcher && _convertTo is { } to)
+                return "元の投手は退場せず" + PosJp(to) + "を守る（後で再登板もできる）。"
+                       + PosJp(to) + "の選手が退場する。";
+            // 任意割当の守備交代は「押し出された野手がどこへ回るか」を明示する（issue #235）。
+            if (_kind == SubstitutionKind.DefensiveSub && _subAt is { } at && _outIndex >= 0
+                && at != _opt.Lineup[_outIndex].Position)
+                return "入る選手が" + PosJp(at) + "に就き、" + PosJp(at) + "の選手が"
+                       + PosJp(_opt.Lineup[_outIndex].Position) + "へ回る。退いた選手は再出場できない。";
+            return "この交代は即時に確定し、取り消せない（退いた選手は再出場できない）。";
         }
 
         private bool SelectionComplete() => _kind switch
@@ -534,6 +681,7 @@ namespace KokoSim.Unity.Match
             SubstitutionKind.PinchRun => _baseIndex >= 0 && _inIndex >= 0,
             SubstitutionKind.ChangePitcher => _inIndex >= 0,
             SubstitutionKind.DefensiveSub => _outIndex >= 0 && _inIndex >= 0,
+            SubstitutionKind.SwapDefense => _swapA >= 0 && _swapB >= 0,
             SubstitutionKind.ReleaseDh => _dhChoiceMade,
             _ => false,
         };
@@ -542,6 +690,8 @@ namespace KokoSim.Unity.Match
         {
             SubstitutionKind.PinchRun when _baseIndex < 0 => "代走に出す走者を選ぶ。",
             SubstitutionKind.DefensiveSub when _outIndex < 0 => "退く守備者を選ぶ。",
+            SubstitutionKind.SwapDefense when _swapA < 0 => "入れ替える守備を2つクリックする。",
+            SubstitutionKind.SwapDefense => "もう1つの守備をクリックする。",
             SubstitutionKind.ReleaseDh => "DHの行き先を選ぶ。",
             SubstitutionKind.ChangePitcher => "登板させる投手を選ぶ。",
             _ => "控えから入る選手を選ぶ。",
@@ -554,8 +704,12 @@ namespace KokoSim.Unity.Match
             {
                 SubstitutionKind.PinchHit => _prog.PinchHit(_teamIsAway, _opt.Bench[_inIndex]),
                 SubstitutionKind.PinchRun => _prog.PinchRun(_teamIsAway, _baseIndex, _opt.Bench[_inIndex]),
-                SubstitutionKind.ChangePitcher => _prog.ChangePitcher(_teamIsAway, _opt.PitcherCandidates[_inIndex]),
-                SubstitutionKind.DefensiveSub => _prog.DefensiveSub(_teamIsAway, _opt.Lineup[_outIndex], _opt.Bench[_inIndex]),
+                // 元投手の行き先を選んでいればコンバート継投（元投手は残って守備へ・issue #235）。
+                SubstitutionKind.ChangePitcher => _convertTo is { } to
+                    ? _prog.ConvertPitcherAndRelieve(_teamIsAway, to, _opt.PitcherCandidates[_inIndex])
+                    : _prog.ChangePitcher(_teamIsAway, _opt.PitcherCandidates[_inIndex]),
+                SubstitutionKind.DefensiveSub => ApplyDefensiveSub(),
+                SubstitutionKind.SwapDefense => _prog.SwapDefensivePositions(_teamIsAway, _swapA, _swapB),
                 SubstitutionKind.ReleaseDh => _prog.ReleaseDh(_teamIsAway, _dhAt),
                 _ => false,
             };
@@ -574,6 +728,24 @@ namespace KokoSim.Unity.Match
             }
             Close();
             _onApplied?.Invoke();
+        }
+
+        /// <summary>
+        /// 守備交代の適用。入る位置を指定していれば、交代直後に守備位置だけを入れ替える（issue #235）。
+        /// 入替は交代回数を消費しないので、消費するのは交代1回のまま。
+        /// </summary>
+        private bool ApplyDefensiveSub()
+        {
+            var outgoing = _opt.Lineup[_outIndex];
+            if (!_prog.DefensiveSub(_teamIsAway, outgoing, _opt.Bench[_inIndex])) return false;
+            if (_subAt is not { } at || at == outgoing.Position) return true;
+            foreach (var slot in _opt.SwappableSlots)
+            {
+                if (_opt.Lineup[slot].Position != at) continue;
+                _prog.SwapDefensivePositions(_teamIsAway, _outIndex, slot);
+                break;
+            }
+            return true;
         }
 
         // ── 表示ヘルパ ──

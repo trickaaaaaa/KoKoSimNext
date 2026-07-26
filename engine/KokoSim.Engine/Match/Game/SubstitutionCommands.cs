@@ -66,6 +66,29 @@ internal static class SubstitutionCommands
     public static bool ReleaseDh(GameProgress p, bool teamIsAway, FieldPosition? at)
         => p.OffenseOf(teamIsAway).ReleaseDh(at);
 
+    /// <summary>
+    /// 守備位置の入替＝コンバート（issue #235）。打順スロット slotA と slotB の守備位置を交換する。
+    /// 選手の出入りが無いので交代回数は消費しない（野球ルール上「交代」ではない）。
+    /// </summary>
+    public static bool SwapDefense(GameProgress p, bool teamIsAway, int slotA, int slotB)
+        => p.OffenseOf(teamIsAway).SwapDefensivePositions(slotA, slotB);
+
+    /// <summary>
+    /// コンバート継投（issue #235）。現投手を守備位置 at へ回し、投手交代候補
+    /// （<see cref="TeamState.AvailablePitcherCandidates"/>）の candidateIndex を登板させる。
+    /// </summary>
+    public static bool ConvertRelief(GameProgress p, bool teamIsAway, FieldPosition? at, int candidateIndex)
+    {
+        if (at is not { } pos) return false;
+        var team = p.OffenseOf(teamIsAway);
+        var candidates = team.AvailablePitcherCandidates;
+        if (candidateIndex < 0 || candidateIndex >= candidates.Count) return false;
+        if (!team.ConvertPitcherAndRelieve(pos, candidates[candidateIndex])) return false;
+        // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
+        p.RecordPitchingChange(team, isTop: !teamIsAway);
+        return true;
+    }
+
     private static bool TryBench(TeamState team, int benchIndex, out Players.Player sub)
     {
         var bench = team.Bench;

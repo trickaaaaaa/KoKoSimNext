@@ -51,10 +51,12 @@ public sealed record GameSaveState(ulong Seed, int ConfirmedPlateAppearances)
 /// </param>
 /// <param name="TargetIndex">
 /// 交代で「退く」側の指定。<see cref="GameDecisionKind.PinchRun"/> は塁の添字（0=一塁,1=二塁,2=三塁）、
-/// <see cref="GameDecisionKind.DefensiveSub"/> は打順スロット（0-8）。他の種別では未使用。
+/// <see cref="GameDecisionKind.DefensiveSub"/> は打順スロット（0-8）。
+/// <see cref="GameDecisionKind.SwapDefense"/> は入替の片側の打順スロット（もう片側は BenchIndex）。他の種別では未使用。
 /// </param>
 /// <param name="At">
 /// <see cref="GameDecisionKind.ReleaseDh"/> でDHの選手が就く守備位置（null＝DHはそのまま退場）。
+/// <see cref="GameDecisionKind.ConvertRelief"/> では元投手が就く守備位置。
 /// </param>
 public sealed record GameDecision(
     int AtStep, GameDecisionKind Kind, bool OffenseIsAway, int BenchIndex,
@@ -76,6 +78,16 @@ public enum GameDecisionKind
     DefensiveSub,
     /// <summary>DH解除（設計書09 §6・不可逆）。OffenseIsAway=**守備側**が先攻か。At=DHが就く守備位置。</summary>
     ReleaseDh,
+    /// <summary>
+    /// 守備位置の入替＝コンバート（設計書09 §2 / issue #235）。OffenseIsAway=**守備側**が先攻か。
+    /// TargetIndex=打順スロットA／BenchIndex=打順スロットB。選手の出入りが無いので交代回数を消費しない。
+    /// </summary>
+    SwapDefense,
+    /// <summary>
+    /// コンバート継投（issue #235）。OffenseIsAway=**守備側**が先攻か。At=元投手が就く守備位置、
+    /// BenchIndex=投手交代候補（TeamState.AvailablePitcherCandidates）の添字。
+    /// </summary>
+    ConvertRelief,
     // 将来: Sign, Timeout, ...
 }
 
@@ -209,6 +221,12 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.ReleaseDh:
                     SubstitutionCommands.ReleaseDh(p, d.OffenseIsAway, d.At);
+                    break;
+                case GameDecisionKind.SwapDefense:
+                    SubstitutionCommands.SwapDefense(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);
+                    break;
+                case GameDecisionKind.ConvertRelief:
+                    SubstitutionCommands.ConvertRelief(p, d.OffenseIsAway, d.At, d.BenchIndex);
                     break;
             }
         }
