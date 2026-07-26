@@ -546,7 +546,7 @@
    コントローラが top/left を inline 指定して配置する（守備位置の慣例座標）。 */
 .field-diamond {
     position: relative;
-    background-color: var(--field-grass);
+    background-color: var(--field-grass-day);
     border-radius: var(--radius-panel);
     border-width: var(--border-w);
     border-color: var(--color-line);
@@ -554,13 +554,15 @@
 }
 /* 球場図の小型チップ（常設ラベル・高さ24px以下）。背番号＋姓＋ランクのみ。
    アンカーはチップ下端中央＝立ち位置点で、left/top は Controller が球場座標[m]から与える。
-   フルカード（学年/投打/×）はホバー時に field-pop で出す。 */
+   フルカード（学年/投打/×）はホバー時に field-pop で出す。
+   地は守備トークン地(--field-token-fill-day)と同系の濃色チップ＝明芝の上で守備位置トークンに見える配色
+   （試合2D俯瞰の濃色ディスクと同じ考え方）。文字は --field-chalk（昼夜共通の明色）で地に対して常に読める。 */
 .field-chip {
     position: absolute;
     height: 22px;
     flex-direction: row;
     align-items: center;
-    background-color: rgba(10, 18, 14, 0.92);
+    background-color: var(--field-chip-bg-day);
     border-width: var(--border-w);
     border-color: var(--color-line);
     border-radius: var(--radius-chip);
@@ -573,7 +575,7 @@
 /* 球場図チップの文字は盤面ジオメトリ都合の固定サイズ（--fs-cap連動だと底上げで図上のチップ同士が重なる。
    13px＝視認性改善後も重ならないことをスクショで確認済みの値）。 */
 .field-chip__num { min-width: 15px; -unity-text-align: middle-center; font-size: 13px; color: var(--color-lamp); }
-.field-chip__name { font-size: 13px; color: var(--color-chalk); margin-left: 4px; margin-right: 3px; white-space: nowrap; }
+.field-chip__name { font-size: 13px; color: var(--field-chalk); margin-left: 4px; margin-right: 3px; white-space: nowrap; }
 .field-chip__empty { font-size: 13px; color: var(--color-faint); margin-left: 4px; }
 /* 球場図の小型チップは17px固定ボックス（盤面ジオメトリ都合）＝文字サイズ底上げの対象外 */
 .field-chip .rank-chip { min-width: 17px; height: 17px; font-size: 10px; }

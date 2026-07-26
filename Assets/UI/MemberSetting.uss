@@ -47,9 +47,13 @@
 }
 .ms-auto-btn:hover, .ms-swap-btn:hover { border-color: var(--sky); color: var(--sky); }
 
-/* 球場図は縦長固定幅。内野ダイヤを描画幅の約50%に取り、外野をフェンス弧まで縦に収める。 */
+/* 球場図は横長化して全景（issue #271 オーナー決定 2026-07-26）。旧440px幅・DiamondFraction 0.50では
+   両翼(±45°・98m)が要素の半幅を1.79倍超過して見切れていた。700px幅・DiamondFraction 0.28
+   （BaseballFieldElement側の定数。式は同ファイルのコメント参照）で両翼が要素内に収まる。
+   代償として右の控え/部員プール列（.ms-roster）が狭くなり折り返しが増えるが、内野ダイヤの
+   大きさ・チップの情報量はほぼ現状維持。 */
 .ms-field {
-    width: 440px;
+    width: 700px;
     flex-shrink: 0;
     align-self: stretch;
 }
