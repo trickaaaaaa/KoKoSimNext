@@ -132,6 +132,8 @@ namespace KokoSim.Unity.Match
         // mock: draw()。ボール/野手/走者は要素側、実況とリザルトはここ。
         private void RenderFrame()
         {
+            // 判定オーバーレイ（#59）の表示窓を実時間で一定に保つ（#236 症状A。倍速でも潰れない）。
+            _view.PlaybackSpeed = _speed;
             _view.SetTime(_t);
 
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_play, _t);
