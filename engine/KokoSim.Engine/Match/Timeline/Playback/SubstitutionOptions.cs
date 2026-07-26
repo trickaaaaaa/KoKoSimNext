@@ -74,6 +74,45 @@ public sealed class SubstitutionOptions
     public bool CanDefensiveSub => !IsFinished && !IsOffense && Bench.Count > 0;
     public bool CanReleaseDh => !IsFinished && !IsOffense && UsesDh;
 
+    /// <summary>
+    /// 守備位置の入替（コンバート・issue #235）。控えが尽きていてもできる＝交代回数を消費しないので、
+    /// 入れ替えられる枠が2つ以上あれば常に可能。
+    /// </summary>
+    public bool CanSwapDefense => !IsFinished && !IsOffense && SwappableSlots.Count >= 2;
+
+    /// <summary>
+    /// 守備位置を入れ替えられる打順スロット（投手・DHの枠は除く）。UIはこの集合だけをクリック可能にする。
+    /// 判定は <see cref="Game.TeamState.IsSwappableDefenseSlot"/> と同じ（守備に就いている枠だけ）。
+    /// </summary>
+    public IReadOnlyList<int> SwappableSlots
+    {
+        get
+        {
+            var list = new List<int>(9);
+            for (var i = 0; i < Lineup.Count; i++)
+            {
+                if (UsesDh ? i == DhSlot : i == PitcherSlot) continue;
+                list.Add(i);
+            }
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// コンバート継投（issue #235）＝現投手を守備へ回して控え投手を登板させる。
+    /// 押し出される野手が要るので、守備に就いている枠が1つ以上＋登板候補が必要。
+    /// </summary>
+    public bool CanConvertRelief => !IsFinished && !IsOffense && PitcherCandidates.Count > 0
+                                    && SwappableSlots.Count > 0;
+
+    /// <summary>コンバート継投で元投手が就ける守備位置（今そこを守っている野手が退場する）。</summary>
+    public IReadOnlyList<FieldPosition> ConvertTargets()
+    {
+        var list = new List<FieldPosition>();
+        foreach (var i in SwappableSlots) list.Add(Lineup[i].Position);
+        return list;
+    }
+
     /// <summary>その交代が今できない理由を1行で返す（できるときは null）。UIの無効化ボタンの説明に使う。</summary>
     public string? BlockedReasonFor(SubstitutionKind kind)
     {
@@ -96,6 +135,9 @@ public sealed class SubstitutionOptions
             case SubstitutionKind.ReleaseDh:
                 if (IsOffense) return "攻撃中はDHを解除できない。";
                 return UsesDh ? null : "DHを使っていない（または解除済み）。";
+            case SubstitutionKind.SwapDefense:
+                if (IsOffense) return "攻撃中は守備位置を動かせない。";
+                return SwappableSlots.Count >= 2 ? null : "入れ替えられる守備が足りない。";
             default:
                 return null;
         }
@@ -125,4 +167,6 @@ public enum SubstitutionKind
     ChangePitcher,
     DefensiveSub,
     ReleaseDh,
+    /// <summary>守備位置の入替＝コンバート（issue #235）。選手の出入りが無く交代回数を消費しない。</summary>
+    SwapDefense,
 }

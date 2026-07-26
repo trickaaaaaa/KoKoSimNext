@@ -544,8 +544,9 @@ public sealed class TeamState
             : sub;
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
         if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;
-        PitchesThrown = 0;
-        FatiguePitches = 0;
+        // 球数・疲労は選手単位（issue #235）。退場した投手は戻れないので従来と同じ見え方になる。
+        SaveStintOf(outgoing);
+        LoadStintOf(CurrentPitcher);
         PitcherChanges++;
         LastPitchingChange = new PitchingChangeOutcome(
             wasFielder ? PitchingChangeKind.FielderToMound : PitchingChangeKind.BullpenRelief,
@@ -642,8 +643,8 @@ public sealed class TeamState
                 _lineup[fSlot] = mound;
                 CurrentPitcher = mound;
                 _pitcherSlot = fSlot;
-                PitchesThrown = 0;
-                FatiguePitches = 0;
+                SaveStintOf(retiringPitcher);
+                LoadStintOf(mound);
                 PitcherChanges++;
                 Substitutions++;   // ベンチ野手の投入は選手交代として計上
                 LastPitchingChange = new PitchingChangeOutcome(
@@ -661,8 +662,9 @@ public sealed class TeamState
         _lineup[fSlot] = mound;
         CurrentPitcher = mound;
         _pitcherSlot = fSlot;   // 投手の打順スロットは新投手（元野手）のスロットへ移る（非DH不変条件を維持）
-        PitchesThrown = 0;
-        FatiguePitches = 0;
+        // ①は旧投手が守備に残る＝後で再登板できる。降板時の球数・疲労を本人に紐づけて持ち回す（issue #235）。
+        SaveStintOf(retiringPitcher);
+        LoadStintOf(mound);
         PitcherChanges++;
         // ①の backfill は旧投手本人（空いた守備位置へ）。
         LastPitchingChange = new PitchingChangeOutcome(
@@ -723,8 +725,8 @@ public sealed class TeamState
         }
 
         _usesDh = false;   // 野手登板でDHは消滅（設計書09 §6 の ReleaseDh と同じ終着＝非DH整合状態）
-        PitchesThrown = 0;
-        FatiguePitches = 0;
+        SaveStintOf(retiringPitcher);
+        LoadStintOf(mound);
         PitcherChanges++;
         Substitutions++;   // DH解除はロスターイベント（ReleaseDh と同じく計上）
         LastPitchingChange = new PitchingChangeOutcome(
@@ -790,6 +792,107 @@ public sealed class TeamState
     {
         var slot = IndexOf(outgoing);
         return slot >= 0 && SubstituteAtSlot(slot, sub);
+    }
+
+    /// <summary>
+    /// 出場中の2人の守備位置を入れ替える（コンバート・設計書09 §2 / issue #235）。
+    /// 選手の出入りが無いので野球ルール上「交代」ではない＝<see cref="Substitutions"/> を消費せず、
+    /// 回数制限もない（審判告知のみ）。リエントリー禁止にも抵触しない。
+    /// 交換なので9守備位置の一意性は自動で保たれる（<see cref="Season.DefenseAssignment"/> と同じ規則）。
+    /// 投手スロット（非DH）とDHスロットは対象外＝投手が動くのは登板の変更なので
+    /// <see cref="RelieveWith"/> / <see cref="ConvertPitcherAndRelieve"/> を使う。
+    /// </summary>
+    public bool SwapDefensivePositions(int slotA, int slotB)
+    {
+        if (slotA == slotB || !IsSwappableDefenseSlot(slotA) || !IsSwappableDefenseSlot(slotB)) return false;
+        var a = _lineup[slotA];
+        var b = _lineup[slotB];
+        _lineup[slotA] = a with { Position = b.Position };
+        _lineup[slotB] = b with { Position = a.Position };
+        return true;
+    }
+
+    /// <summary>守備位置を入れ替えられる打順スロットか（投手・DHは対象外）。UIの選択可否と同じ判定。</summary>
+    public bool IsSwappableDefenseSlot(int slot)
+    {
+        if (slot < 0 || slot > 8) return false;
+        return _usesDh ? slot != _dhSlot : slot != _pitcherSlot;
+    }
+
+    /// <summary>
+    /// コンバート継投（issue #235 方針②）: 現投手を守備位置 <paramref name="to"/> へ回し、控え投手
+    /// <paramref name="reliever"/>（ブルペンまたは野手控え）を登板させる。<paramref name="to"/> を守っていた野手は
+    /// 退場し、その打順スロットが空く。
+    /// 非DH＝元投手は自分の打順スロットに残ったまま守備位置だけ移り、新投手が空いたスロットへ入る。
+    /// DH制＝元投手は打順外だったので、空いた打順スロットを引き継いで守備に就く（DHは維持・新投手は打順外）。
+    /// 元投手は<b>退場していない</b>＝打席に立ち続け、後で再登板もできる（リエントリー禁止は退場者にのみ適用）。
+    /// 球数・スティント疲労は選手単位で持ち回すので、コンバートを挟んでもスタミナは回復しない。
+    /// </summary>
+    public bool ConvertPitcherAndRelieve(FieldPosition to, Player reliever)
+    {
+        if (to is FieldPosition.Pitcher or FieldPosition.DesignatedHitter) return false;
+        var fSlot = SlotFieldingAt(to);
+        if (fSlot < 0) return false;
+        if (!_bullpen.Remove(reliever) && !_bench.Remove(reliever)) return false;
+
+        var oldPitcher = CurrentPitcher;
+        var displaced = _lineup[fSlot];
+        // 野手が登板するときは潜在投手能力を実能力として確定する（ChangePitcherTo と同型・issue #209 Phase B）。
+        var mound = reliever.Pitching is null && reliever.LatentPitching is { } latent
+            ? reliever with { Pitching = latent, Position = FieldPosition.Pitcher }
+            : reliever with { Position = FieldPosition.Pitcher };
+
+        _retired.Add(displaced);
+        _replacedAtSlot[fSlot] = displaced.Name;
+        if (_usesDh)
+        {
+            _lineup[fSlot] = oldPitcher with { Position = to };
+        }
+        else
+        {
+            _lineup[_pitcherSlot] = oldPitcher with { Position = to };
+            _lineup[fSlot] = mound;
+            _pitcherSlot = fSlot;
+        }
+
+        SaveStintOf(oldPitcher);
+        CurrentPitcher = mound;
+        LoadStintOf(mound);
+        PitcherChanges++;
+        Substitutions++;   // 押し出された野手が退場して控えが入る＝選手交代1回（位置移動そのものは無料）
+        LastPitchingChange = new PitchingChangeOutcome(
+            PitchingChangeKind.PitcherConvertedRelief,
+            oldPitcher.Name, oldPitcher.UniformNumber, oldPitcher.SourceId,
+            mound.Name, mound.UniformNumber, mound.SourceId,
+            to, oldPitcher.Name, oldPitcher.UniformNumber, oldPitcher.SourceId);
+        ClearRattled();
+        return true;
+    }
+
+    /// <summary>その守備位置に就いている打順スロット（投手・DHの枠は除く）。居なければ -1。</summary>
+    private int SlotFieldingAt(FieldPosition pos)
+    {
+        for (var i = 0; i < 9; i++)
+        {
+            if (!IsSwappableDefenseSlot(i)) continue;
+            if (_lineup[i].Position == pos) return i;
+        }
+        return -1;
+    }
+
+    // ===== スティント疲労の選手単位持ち回し（issue #235） =====
+    // コンバートで守備に回った元投手は退場していない＝後で再登板できる。降板時の球数・疲労を選手ごとに
+    // 保存し、再登板時に復元することで「コンバートを挟むとスタミナが回復する」抜け道を塞ぐ。
+    // 退場した投手は戻れないので、既存の交代経路の見え方は変わらない。
+    private readonly Dictionary<Player, (int Pitches, double Fatigue)> _stint = new();
+
+    private void SaveStintOf(Player pitcher) => _stint[pitcher] = (PitchesThrown, FatiguePitches);
+
+    /// <summary>その投手の前回降板時点の球数・疲労を復元する（初登板なら0＝従来どおり）。</summary>
+    private void LoadStintOf(Player pitcher)
+    {
+        if (_stint.TryGetValue(pitcher, out var s)) { PitchesThrown = s.Pitches; FatiguePitches = s.Fatigue; }
+        else { PitchesThrown = 0; FatiguePitches = 0; }
     }
 
     /// <summary>

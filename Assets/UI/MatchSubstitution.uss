@@ -68,6 +68,15 @@
 
 /* 選べない行（退場済み・対象外）。押しても何も起きないので、色だけで区別する（UI原則⑥）。 */
 .msub-row--off { opacity: 0.38; }
+/* 中列の説明文（何が起きるか・次に何をクリックするか）。1行に収まらないので折り返す
+   （.cmp-card__empty は中央寄せ1行用で、長文だと左右が切れて読めない）。 */
+.msub-hint {
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    white-space: normal;
+    margin-bottom: var(--sp-2);
+    flex-shrink: 0;
+}
 /* 塁タグ（一塁/二塁/三塁）。走者の位置を1目盛で示す小片。 */
 .msub-base-tag {
     font-size: var(--fs-cap);

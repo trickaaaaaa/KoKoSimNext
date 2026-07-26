@@ -264,6 +264,31 @@ public sealed class MatchProgression
     }
 
     /// <summary>
+    /// 守備位置の入替＝コンバート（設計書09 §2 / issue #235）。出場中の2人の守備位置だけを交換する。
+    /// <b>交代回数を消費しない</b>（選手の出入りが無い＝野球ルール上の「交代」ではない）が、
+    /// リプレイ再現のために決定列へは積む（不変条件#2）。
+    /// </summary>
+    public bool SwapDefensivePositions(bool teamIsAway, int slotA, int slotB)
+    {
+        if (!SubstitutionCommands.SwapDefense(_p, teamIsAway, slotA, slotB)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.SwapDefense, teamIsAway, slotB,
+            TargetIndex: slotA));
+        return true;
+    }
+
+    /// <summary>
+    /// コンバート継投（issue #235）。現投手を守備位置 at へ回し、reliever（ブルペンまたは野手控え）を
+    /// 登板させる。at を守っていた野手が退場する。元投手は残留＝打席に立ち続け、後で再登板もできる。
+    /// </summary>
+    public bool ConvertPitcherAndRelieve(bool teamIsAway, Field.FieldPosition at, Player reliever)
+    {
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, reliever);
+        if (idx < 0 || !SubstitutionCommands.ConvertRelief(_p, teamIsAway, at, idx)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ConvertRelief, teamIsAway, idx, At: at));
+        return true;
+    }
+
+    /// <summary>
     /// DH解除（不可逆・設計書09 §6）。at 指定＝DHの選手がその守備位置に就く（元の守備者が退場）、
     /// null＝DHの選手はそのまま退場。どちらも投手がDHの打順スロットへ入る。
     /// </summary>
