@@ -195,7 +195,8 @@ public static class FieldingResolver
             // Issue #63 (b) やること2: バウンド/転がりで内野手を抜けて外野へ達する打球。
             // どの内野手も打球を（守備範囲内・グラブの届く高さで）内野の外縁より手前で捕えられず、
             // かつ外野まで運ぶ強い打球のときだけ「内野を抜けた」＝外野への二次展開。
-            // 内野で処理できる打球は従来どおり最寄り内野手が着地点で処理する（帯保存）。
+            // この頭上抜け判定（crossBoundary かつ !InfielderCanCutOff）は Issue #261 でも一切変えない
+            // ＝ThroughInfield 件数・#63 の帯を保存する。内野で収まる打球の「処理野手」だけを実捕球点へ移す。
             var crossBoundary = path.TimeCrossingRange(coeff.InfieldDepthM, coeff.InfieldInterceptStepSeconds);
             if (crossBoundary is { } oct && !InfielderCanCutOff(fielders, path, coeff))
             {
@@ -210,9 +211,10 @@ public static class FieldingResolver
                     with { ThroughInfield = true };
             }
 
-            // 内野が処理 → 一塁送球 vs 打者走者（従来ロジック＝帯保存）。処理点は着地点に一致させる。
-            var infielder = NearestInfielder(fielders, landing);
-            var fieldTime = ReachTime(infielder, landing);
+            // 内野が処理 → 一塁送球 vs 打者走者。処理野手・処理時刻・捕球点はバウンド経路を辿って
+            // 「打球が実際に転がり込む内野手」を実捕球点で決める（Issue #261。着地点決め打ちを廃止）。
+            var (infielder, fieldTimeRaw, catchPoint) = FieldInfieldGrounder(fielders, path, coeff);
+            var fieldTime = fieldTimeRaw;
             // Issue #63 (a) やること1: 高く弾むバウンド（チョッパー）は落ちてくるまで野手が待たされる。
             // 待ち時間＝最大バウンド頂点からの自由落下時間×係数（バウンド分類のときだけ効かせる）。
             if (groundClass == BattedBallClass.Bouncer)
@@ -220,7 +222,7 @@ public static class FieldingResolver
                 fieldTime += coeff.ChopperWaitFactor
                              * Math.Sqrt(2.0 * path.MaxBounceApexM / BouncePath.GravityMps2);
             }
-            var throwDist = (field.FirstBase - landing).Length;
+            var throwDist = (field.FirstBase - catchPoint).Length;
             // 握り替え（トランスファー）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
             var transfer = coeff.ThrowTransferSeconds
                            * infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin);
@@ -235,10 +237,12 @@ public static class FieldingResolver
             if (defenseTime + coeff.ForceOutMarginSeconds <= runnerTime)
             {
                 // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
-                // 2段階失策（Issue #37/#63, design-14 P1-6b）。
-                var result = MaybeInfieldError(fielders, landing, infielder, coeff, rng, errorBonus);
+                // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
+                var result = MaybeInfieldError(fielders, catchPoint, infielder, coeff, rng, errorBonus);
                 return GroundBase(result) with
                 {
+                    FieldedX = catchPoint.X,
+                    FieldedZ = catchPoint.Z,
                     FielderRole = infielder.Position,
                     FieldedAtSeconds = fieldTime,
                     ThrowArriveSeconds = defenseTime,
@@ -251,6 +255,8 @@ public static class FieldingResolver
             // 間に合わず内野安打（失策ロールは引かない＝main の校正モデルを保つ）。
             return GroundBase(BattedBallResult.Single) with
             {
+                FieldedX = catchPoint.X,
+                FieldedZ = catchPoint.Z,
                 FielderRole = infielder.Position,
                 FieldedAtSeconds = fieldTime,
                 ThrowArriveSeconds = defenseTime,
@@ -302,6 +308,96 @@ public static class FieldingResolver
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// 内野ゴロの処理野手・処理時刻・捕球点を、バウンド経路（Issue #63 の <see cref="BouncePath"/>）を辿って決める
+    /// （Issue #261）。着地点（本塁前でワンバウンドした一点）ではなく「打球が実際に転がり込む内野手」が
+    /// 自分の守備範囲で処理する。乱数は消費しない＝決定論（不変条件#2）。
+    ///
+    /// 経路を時間刻みで走査し、内野手ごとに次の2つを集める:
+    /// <list type="bullet">
+    /// <item><b>処理野手（誰が）</b>: グラブの届く高さ・内野内を通る点で「その時刻までにその点へ実際に届く」
+    ///   最初の内野手。到達判定には遊びの半径を与えず実距離で見る（<see cref="InfielderCanCutOff"/> の頭上抜け判定
+    ///   ＝帯校正ノブ <see cref="FieldingCoefficients.InfielderFieldingRadiusM"/> はダイビングを含む広い半径で、
+    ///   これを流用すると通り道の近くを通っただけの打球までマウンドの投手が吸い込む＝本Issueの不具合になる）。
+    ///   投手はフォロースルー直後で守備体勢が崩れているぶん追加の反応遅延を負う
+    ///   （<see cref="FieldingCoefficients.PitcherFieldingReactionPenaltySeconds"/>）。</item>
+    /// <item><b>捕球点・処理時刻（どこで・いつ）</b>: 処理野手の守備位置に最も近く打球が通る点（＝最短の守備範囲）。
+    ///   前へ突っ込んで最速地点で捕るのではなく、自分の間合いで捕る（処理時刻は打球がその点へ来る時刻＝打球到達に
+    ///   間に合えば待ち、遅れれば追いつく時刻）。これにより送球距離・処理時刻が実戦的になる。</item>
+    /// </list>
+    /// 誰も間に合わないまま内野内で失速して死ぬ緩いゴロは、打球が最も近くを通った内野手が回収する（内野安打寄り）。
+    /// </summary>
+    private static (Fielder Fielder, double Time, Vector3D Point) FieldInfieldGrounder(
+        IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
+    {
+        var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
+        var end = path.SettleAtSeconds;
+
+        var infield = new List<Fielder>(5);
+        foreach (var f in fielders)
+        {
+            if (IsInfield(f)) infield.Add(f);
+        }
+        var n = infield.Count;
+        var gloveTime = new double[n];      // 実捕球できる最初のボール時刻（∞=最後まで間に合わない）
+        var zoneDist = new double[n];       // 守備位置への最接近距離
+        var zoneBallTime = new double[n];   // その最接近点を打球が通る時刻
+        var zonePoint = new Vector3D[n];    // その最接近点
+        for (var k = 0; k < n; k++)
+        {
+            gloveTime[k] = double.PositiveInfinity;
+            zoneDist[k] = double.MaxValue;
+            zoneBallTime[k] = path.HangTimeSeconds;
+            zonePoint[k] = path.Landing;
+        }
+
+        for (var t = path.HangTimeSeconds; t <= end + step; t += step)
+        {
+            var tt = Math.Min(t, end);
+            var p = path.PositionAt(tt);
+            if (Math.Sqrt(p.X * p.X + p.Z * p.Z) > coeff.InfieldDepthM) break; // 内野を出た
+            var aboveGlove = path.HeightAt(tt) > coeff.InfielderReachHeightM;  // グラブより高い（またぐ）
+            for (var k = 0; k < n; k++)
+            {
+                var f = infield[k];
+                var dist = (p - f.Location).Length;
+                if (dist < zoneDist[k]) { zoneDist[k] = dist; zoneBallTime[k] = tt; zonePoint[k] = p; }
+                if (aboveGlove || !double.IsPositiveInfinity(gloveTime[k])) continue;
+                var reach = dist / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
+                if (f.Position == FieldPosition.Pitcher) reach += coeff.PitcherFieldingReactionPenaltySeconds;
+                if (reach <= tt) gloveTime[k] = tt; // この点・時刻で実捕球できる
+            }
+        }
+
+        // 処理野手＝最初に実捕球できる内野手。誰も間に合わなければ最接近が最小の内野手（ゾーン最寄り）。
+        var best = -1;
+        var bestGlove = double.PositiveInfinity;
+        for (var k = 0; k < n; k++)
+        {
+            if (gloveTime[k] < bestGlove) { bestGlove = gloveTime[k]; best = k; }
+        }
+        if (best < 0)
+        {
+            var bestZone = double.MaxValue;
+            for (var k = 0; k < n; k++)
+            {
+                if (zoneDist[k] < bestZone) { bestZone = zoneDist[k]; best = k; }
+            }
+        }
+        if (best < 0)
+        {
+            // 内野内をグラブの届く高さで通る点が皆無（想定外）→ 従来どおり着地点の最寄り内野手。
+            var fallback = NearestInfielder(fielders, path.Landing);
+            return (fallback, ReachTime(fallback, path.Landing), path.Landing);
+        }
+
+        var chosen = infield[best];
+        var reachToZone = ReachTime(chosen, zonePoint[best]);
+        var time = Math.Max(zoneBallTime[best], reachToZone);
+        var point = time > zoneBallTime[best] ? path.PositionAt(time) : zonePoint[best];
+        return (chosen, time, point);
     }
 
     private static bool IsInfield(Fielder f)
