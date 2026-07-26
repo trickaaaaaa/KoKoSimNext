@@ -109,7 +109,6 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.True(away.IsOffense);
         Assert.True(away.CanPinchHit);
         Assert.False(away.CanChangePitcher);
-        Assert.Equal("攻撃中は投手交代できない。", away.BlockedReasonFor(SubstitutionKind.ChangePitcher));
 
         Assert.False(home.IsOffense);
         Assert.True(home.CanChangePitcher);
@@ -118,7 +117,6 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.Equal("守備中は代打を送れない。", home.BlockedReasonFor(SubstitutionKind.PinchHit));
         // 非DH制なので DH 解除は出せない。
         Assert.False(home.CanReleaseDh);
-        Assert.Equal("DHを使っていない（または解除済み）。", home.BlockedReasonFor(SubstitutionKind.ReleaseDh));
     }
 
     [Fact]

@@ -89,6 +89,36 @@ internal static class SubstitutionCommands
         return true;
     }
 
+    /// <summary>
+    /// 継投（issue #256 統合守備割当）。継投候補（<see cref="TeamState.ReliefRankingCandidates"/>＝ブルペン＋ベンチ＋
+    /// 在フィールドの守備野手）の candidateIndex を指名してマウンドへ上げる。在フィールド野手なら
+    /// <see cref="TeamState.RelieveWith"/> が投野交代で守備穴を backfill し、ブルペン／ベンチなら通常継投。
+    /// AIの継投（<see cref="GameEngine"/>）と同一の候補集合・同一ルータ・同一 backfill 係数（<c>p.Ctx.ReliefBackfill</c>）。
+    /// </summary>
+    public static bool Relieve(GameProgress p, bool teamIsAway, int candidateIndex)
+    {
+        var team = p.OffenseOf(teamIsAway);
+        var candidates = team.ReliefRankingCandidates;
+        if (candidateIndex < 0 || candidateIndex >= candidates.Count) return false;
+        if (!team.RelieveWith(candidates[candidateIndex], p.Ctx.ReliefBackfill)) return false;
+        // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
+        p.RecordPitchingChange(team, isTop: !teamIsAway);
+        return true;
+    }
+
+    /// <summary>
+    /// 守備割当（issue #256 統合守備割当）。控え候補（<see cref="TeamState.AvailablePitcherCandidates"/>＝ブルペン＋ベンチ）の
+    /// candidateIndex を守備スロット slot に就かせる。就いていた選手は退場する（守備固め／守備割当）。
+    /// 役割（投/野）で候補を分けない（#93）。就く守備位置は slot の守備位置を継承する。
+    /// </summary>
+    public static bool DefenseAssign(GameProgress p, bool teamIsAway, int slot, int candidateIndex)
+    {
+        var team = p.OffenseOf(teamIsAway);
+        var candidates = team.AvailablePitcherCandidates;
+        if (candidateIndex < 0 || candidateIndex >= candidates.Count) return false;
+        return team.AssignFielderToSlot(slot, candidates[candidateIndex]);
+    }
+
     private static bool TryBench(TeamState team, int benchIndex, out Players.Player sub)
     {
         var bench = team.Bench;

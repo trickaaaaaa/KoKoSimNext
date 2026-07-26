@@ -58,7 +58,8 @@
 - ただしリプレイ再現のため決定列（`GameDecisionKind.SwapDefense`）へは積む（不変条件#2）
 - 交換なので9守備位置の一意性は自動で保たれる。規則は engine の `DefenseAssignment`（試合前のスタメン設定と共通）
 - 投手スロット・DHスロットは対象外。投手が守備位置を動くのは「登板の変更」なので §6 の投野交代／コンバート継投で扱う
-- UI: 交代モーダルの「守備位置」タブ（2つクリックで入替）。交代回数を消費する操作とタブで分ける
+- UI: 守備中の交代モーダル「守備の割当」2ペイン（§6・issue #256）。在フィールド同士の枠を2つクリック＝入替。
+  `TeamState.SwapDefensivePositions`（`IsSwappableDefenseSlot` で投手・DH枠を除く）は AI の守備位置操作（§2.3 の敵AI継続）と共有する純データ規則で、プレイヤーUIもこの枠集合を「入替できる守備」として使う
 
 ## 3. 伝令（攻撃・守備 各3回/試合）
 
@@ -127,6 +128,30 @@
 - engine: `TeamState.ConvertPitcherAndRelieve` ／ 決定列は `GameDecisionKind.ConvertRelief`
 - 在フィールド野手をマウンドへ上げる**投野交代**（issue #209）は別コマンド（`RelieveWith`）。
   こちらは「野手が上がって旧投手が空き守備へ回る」＝向きが逆
+
+### 6.3 守備側の交代UI＝「守備の割当」（issue #256）
+
+守備中の交代は**1操作＝「誰を・どの守備に割り当てるか」**に統合した（旧・投手交代／守備交代／守備位置／DH解除の4タブを廃止）。
+スタメン設定（試合前・#233）と同じ**割当2ペイン**で、規則は同じ `Season.DefenseAssignment`（守備位置の一意性・投/指も1枠として動く・#93）に一本化する。
+
+- **左＝守備の割当10枠**（投・捕・一・二・三・遊・左・中・右・指）。**右＝控え一覧**（役割で分けずフラット・背番号順・出場済みは灰）。
+- **枠→枠**＝入替（可逆・誰も退場しない）。**枠→控え**＝投入（不可逆・退場が出る）。結果は操作から導出する:
+
+| 操作 | 導出される交代 | engine 受け口 |
+|---|---|---|
+| 控え → 投枠 | 継投 | `MatchProgression.Relieve`（→`RelieveWith`→`ChangePitcherTo`） |
+| 在フィールド野手枠 ⇄ 投枠 | 投野交代（空き守備を backfill） | `MatchProgression.Relieve`（→`PromoteFielderToMound`） |
+| 控え → 守備位置枠 | 守備固め／守備割当 | `MatchProgression.DefenseAssign`（→`AssignFielderToSlot`） |
+| 在フィールド ⇄ 在フィールド | 守備位置の入替 | `MatchProgression.SwapDefensivePositions` |
+| 投枠 → 控え投入＋元投手を守備位置へ | コンバート継投 | `MatchProgression.ConvertPitcherAndRelieve` |
+| 指枠 ⇄ 守備位置枠 ／ 指枠を退場 | DH解除 | `MatchProgression.ReleaseDh(pos / null)` |
+
+- **継投候補はプレイヤーもAIも同一集合** `TeamState.ReliefRankingCandidates`（ブルペン＋ベンチ＋在フィールドの守備野手）を通る
+  （`SubstitutionOptions.ReliefCandidates`）。在フィールド野手を指名すると投野交代で守備穴を backfill する（§6.2 と向きが逆）。
+- 継投は最頻操作なので、守備中にモーダルを開くと**[投]枠をプリセレクト**する（控えを1クリック→確定で従来と同手数）。
+- 可逆（入替）と不可逆（投入・DH解除＝退場）が同居するので、**確定前に「この操作で誰が退場するか」をフッタに必ず出す**。
+- 決定列は `GameDecisionKind.Relieve` / `DefenseAssign`（他は従来どおり）。全経路が添字ベースで Save/Load・委任AI再生と決定論一致（不変条件#2）。
+- AI の継投・守備位置操作（`GameEngine`）は従来の `RelieveWith` / `SwapDefensivePositions` 経路のまま＝統計帯は不変（issue #256 はプレイヤーUIの統合）。
 
 ## 7. タイブレーク
 

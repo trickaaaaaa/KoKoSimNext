@@ -88,6 +88,18 @@ public enum GameDecisionKind
     /// BenchIndex=投手交代候補（TeamState.AvailablePitcherCandidates）の添字。
     /// </summary>
     ConvertRelief,
+    /// <summary>
+    /// 継投（issue #256 統合守備割当）。OffenseIsAway=**守備側**が先攻か。BenchIndex=継投候補
+    /// （TeamState.ReliefRankingCandidates＝ブルペン＋ベンチ＋在フィールド野手）の添字。在フィールド野手なら投野交代で
+    /// 守備穴を backfill する。AIの継投（GameEngine）と同一の候補集合・同一ルータ（RelieveWith）を通る。
+    /// </summary>
+    Relieve,
+    /// <summary>
+    /// 守備割当（issue #256 統合守備割当）。OffenseIsAway=**守備側**が先攻か。TargetIndex=就かせる守備スロット（打順0-8）、
+    /// BenchIndex=控え候補（TeamState.AvailablePitcherCandidates＝ブルペン＋ベンチ）の添字。就いていた選手は退場する
+    /// （守備固め／守備割当）。役割（投/野）で候補を分けない（#93）。
+    /// </summary>
+    DefenseAssign,
     // 将来: Sign, Timeout, ...
 }
 
@@ -227,6 +239,12 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.ConvertRelief:
                     SubstitutionCommands.ConvertRelief(p, d.OffenseIsAway, d.At, d.BenchIndex);
+                    break;
+                case GameDecisionKind.Relieve:
+                    SubstitutionCommands.Relieve(p, d.OffenseIsAway, d.BenchIndex);
+                    break;
+                case GameDecisionKind.DefenseAssign:
+                    SubstitutionCommands.DefenseAssign(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);
                     break;
             }
         }

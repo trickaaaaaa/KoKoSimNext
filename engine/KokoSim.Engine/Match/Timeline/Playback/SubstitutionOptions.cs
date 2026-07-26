@@ -12,8 +12,9 @@ public readonly record struct RunnerChoice(int BaseIndex, Player Runner);
 /// 今この打席境界で監督が選べる選手交代の一覧（設計書09 §6）。<see cref="MatchProgression.SubstitutionOptions"/>
 /// が返す観測データで、これ自体は試合結果に影響しない（乱数も消費しない）。
 ///
-/// UIは「攻撃中なら代打／代走」「守備中なら投手交代／守備交代／DH解除」を出し分け、Can* が false の
-/// ボタンは無効化して <see cref="BlockedReasonFor"/> の1行を添える。
+/// UIは「攻撃中なら代打／代走」「守備中なら守備交代（割当）」を出し分ける（issue #256 で守備側の4タブ＝投手交代／
+/// 守備交代／守備位置／DH解除は「守備の割当」1操作へ統合。継投・投野交代・守備固め・コンバート・DH解除は割当から導出）。
+/// Can*／<see cref="BlockedReasonFor"/> は各操作が今できるかの観測に引き続き使う（統合後もUIの活性判定・理由表示に用いる）。
 /// </summary>
 public sealed class SubstitutionOptions
 {
@@ -58,6 +59,13 @@ public sealed class SubstitutionOptions
 
     /// <summary>もう使えない控え投手（登板済み）。UIはグレーアウトして選ばせない。</summary>
     public required IReadOnlyList<Player> UsedBullpen { get; init; }
+
+    /// <summary>
+    /// 継投で指名できる全候補（ブルペン＋ベンチ＋在フィールドの守備野手。issue #256）。AIの継投（GameEngine）と
+    /// 同一集合＝プレイヤーもAIと同じ人選ができる。<see cref="MatchProgression.Relieve"/> の Player 引数はこの中から選ぶ
+    /// （在フィールド野手を指名すると投野交代で守備穴を backfill する）。
+    /// </summary>
+    public required IReadOnlyList<Player> ReliefCandidates { get; init; }
 
     /// <summary>
     /// 投手交代で指名できる全候補（ブルペン＋野手控え。issue #137: 野手も投手として登板できる）。
@@ -126,18 +134,9 @@ public sealed class SubstitutionOptions
                 if (!IsOffense) return "守備中は代走を送れない。";
                 if (Runners.Count == 0) return "塁上に走者がいない。";
                 return Bench.Count == 0 ? "控えの野手が残っていない。" : null;
-            case SubstitutionKind.ChangePitcher:
-                if (IsOffense) return "攻撃中は投手交代できない。";
-                return PitcherCandidates.Count == 0 ? "登板できる控えが残っていない。" : null;
             case SubstitutionKind.DefensiveSub:
                 if (IsOffense) return "攻撃中は守備交代できない。";
                 return Bench.Count == 0 ? "控えの野手が残っていない。" : null;
-            case SubstitutionKind.ReleaseDh:
-                if (IsOffense) return "攻撃中はDHを解除できない。";
-                return UsesDh ? null : "DHを使っていない（または解除済み）。";
-            case SubstitutionKind.SwapDefense:
-                if (IsOffense) return "攻撃中は守備位置を動かせない。";
-                return SwappableSlots.Count >= 2 ? null : "入れ替えられる守備が足りない。";
             default:
                 return null;
         }
@@ -159,14 +158,15 @@ public sealed class SubstitutionOptions
     }
 }
 
-/// <summary>交代の種別（UIのボタン単位）。</summary>
+/// <summary>
+/// 交代の種別。攻撃側の攻撃タブ（代打／代走）と守備側の単一操作（守備の割当）を表す。
+/// issue #256 で守備側の旧4種（投手交代／守備交代／守備位置／DH解除）は「守備の割当」1操作へ統合し、
+/// 種別としては <see cref="DefensiveSub"/> に集約した（継投・投野交代・守備固め・コンバート・DH解除は割当から導出）。
+/// </summary>
 public enum SubstitutionKind
 {
     PinchHit,
     PinchRun,
-    ChangePitcher,
+    /// <summary>守備側の割当操作（issue #256）。継投・投野交代・守備固め・コンバート・DH解除の総称。</summary>
     DefensiveSub,
-    ReleaseDh,
-    /// <summary>守備位置の入替＝コンバート（issue #235）。選手の出入りが無く交代回数を消費しない。</summary>
-    SwapDefense,
 }

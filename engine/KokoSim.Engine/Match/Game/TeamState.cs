@@ -571,9 +571,9 @@ public sealed class TeamState
     /// <b>在フィールドのレギュラー野手</b>（現投手を除く打順の守備者）を含める。緊急登板で二刀流の主力を
     /// マウンドへ上げられるようにする。在フィールド野手を引くと守備に穴が開くため、実登板は
     /// <see cref="RelieveWith"/>→<see cref="PromoteFielderToMound"/> が投野交代で backfill する。
-    /// DH制では投手が打順外＝投野交代の打順整合が別問題になるので、当面は在フィールド野手を含めない
-    /// （ブルペン＋ベンチのみ＝Phase B 相当）。返す要素は <see cref="_lineup"/> の実インスタンス
-    /// （<see cref="RelieveWith"/> の参照一致判定に使う）。
+    /// DH制でも在フィールド野手を含める（issue #209 Phase C で DH の投野交代を実装済み。<see cref="PromoteFielderToMoundDh"/>
+    /// が野手登板＝DH解除として backfill する）。除くのは非DHなら現投手スロット、DHならDHスロット（守備に就かない）。
+    /// 返す要素は <see cref="_lineup"/> の実インスタンス（<see cref="RelieveWith"/> の参照一致判定に使う）。
     /// </summary>
     public IReadOnlyList<Player> ReliefRankingCandidates
     {
@@ -820,6 +820,15 @@ public sealed class TeamState
     }
 
     /// <summary>
+    /// 守備割当（issue #256 統合守備割当）。控え（ブルペン／ベンチ）の <paramref name="sub"/> を守備スロット
+    /// <paramref name="slot"/> に就かせる（守備固め／守備割当）。就いていた選手は退場する（リエントリー禁止）。
+    /// 就く守備位置は slot の現守備位置を継承する。投手スロット・DHスロットは対象外＝登板の変更は
+    /// <see cref="RelieveWith"/>、DH解除は <see cref="ReleaseDh"/> を使う。役割（投/野）で候補を分けない（#93）。
+    /// </summary>
+    public bool AssignFielderToSlot(int slot, Player sub)
+        => IsSwappableDefenseSlot(slot) && SubstituteAtSlot(slot, sub);
+
+    /// <summary>
     /// コンバート継投（issue #235 方針②）: 現投手を守備位置 <paramref name="to"/> へ回し、控え投手
     /// <paramref name="reliever"/>（ブルペンまたは野手控え）を登板させる。<paramref name="to"/> を守っていた野手は
     /// 退場し、その打順スロットが空く。
@@ -932,7 +941,9 @@ public sealed class TeamState
     /// </summary>
     private bool SubstituteAtSlot(int slot, Player sub)
     {
-        if (!_bench.Remove(sub)) return false;
+        // 控えは野手（_bench）／投手（_bullpen）で分けない＝どちらのプールからでも起用できる（#93 / issue #256）。
+        // 既存経路（代打・代走・守備交代）は _bench から渡すので _bench.Remove が先に成立し挙動は不変。
+        if (!_bench.Remove(sub) && !_bullpen.Remove(sub)) return false;
         var outgoing = _lineup[slot];
         _lineup[slot] = sub with { Position = outgoing.Position };
         _retired.Add(outgoing);
