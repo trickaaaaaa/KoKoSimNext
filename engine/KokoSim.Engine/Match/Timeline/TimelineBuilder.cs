@@ -138,6 +138,15 @@ public static class TimelineBuilder
             var ballFielder = play.FielderRole;
             var ballFielderMoved = false;
 
+            // 一塁カバーは実捕球者から動的に決める（Issue #257）。静的表のゾーン別担当は初期値止まりで
+            // 誰が実際に捕ったかを見ていない（例: Bunt/InfieldRight ではファースト以外が捕るとファーストは
+            // FieldBall 降格で役割を失い棒立ちになる）。表引き結果の一塁カバーだけ、このマッピングで上書きする
+            // （YAML 側の表は初期値として温存。ゾーン×捕球者の全組み合わせを展開しない）。
+            var firstBaseCoverer = ballFielder == FieldPosition.FirstBase
+                ? (zone == BallZone.Bunt ? FieldPosition.SecondBase : FieldPosition.Pitcher)
+                : FieldPosition.FirstBase;
+            var firstBaseCovered = false;
+
             foreach (var a in rule.Assignments)
             {
                 var isBallFielder = ballFielder is { } bf && a.Position == bf;
@@ -147,6 +156,12 @@ public static class TimelineBuilder
                     continue;
                 if (a.Task == FielderTask.Hold && !isBallFielder) continue; // 待機は移動なし
 
+                // 表の一塁カバー担当が動的な担当と一致しないなら押し出し＝持ち場待機（移動を生成しない）。
+                // 実捕球者自身の行（ボールへ向かう）は対象外。
+                if (a.Task == FielderTask.CoverBase && a.Target == "first" && !isBallFielder
+                    && a.Position != firstBaseCoverer)
+                    continue;
+
                 var fielder = Find(fielders, a.Position);
                 if (fielder is null) continue;
 
@@ -155,6 +170,7 @@ public static class TimelineBuilder
                 var task = isBallFielder ? FielderTask.FieldBall : a.Task;
                 var to = isBallFielder ? landing : ResolveTarget(a, landing, field, from);
                 if (isBallFielder) ballFielderMoved = true;
+                if (task == FielderTask.CoverBase && a.Target == "first") firstBaseCovered = true;
 
                 var dist = Distance(from, to);
                 if (dist < 0.5) continue;
@@ -194,6 +210,26 @@ public static class TimelineBuilder
                         var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
                         var t0 = ContactAt + 0.35;
                         moves.Add(new FielderMove { Role = bfr, T0 = t0, T1 = t0 + dist / speed, To = landing, Task = FielderTask.FieldBall });
+                    }
+                }
+            }
+
+            // 一塁カバーが表に無かった（実捕球者に押し出された）→動的な担当を注入する（Issue #257）。
+            // 例: Bunt/InfieldRight でファースト以外が捕った場合、静的表のファーストの行は FieldBall
+            // （＝実捕球者でなければ丸ごと降格）なので、このままでは誰も一塁に入らない。
+            if (!firstBaseCovered)
+            {
+                var coverer = Find(fielders, firstBaseCoverer);
+                if (coverer is not null)
+                {
+                    var from = new TimelinePoint(coverer.Location.X, coverer.Location.Z);
+                    var to = BasePoint(field, "first");
+                    var dist = Distance(from, to);
+                    if (dist >= 0.5)
+                    {
+                        var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
+                        var t0 = ContactAt + 0.35;
+                        moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t0 + dist / speed, To = to, Task = FielderTask.CoverBase });
                     }
                 }
             }

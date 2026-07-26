@@ -184,6 +184,61 @@ public sealed class TimelineTests
         }
     }
 
+    // --- Issue #257: 一塁カバーは実捕球者から動的に決める。静的表のゾーン別担当（bunt=セカンド固定,
+    // infield_right=ピッチャー固定）だけでは、ファースト以外が捕っても押し出されたファーストが役割を失い
+    // 棒立ちになる／実捕球者自身が唯一のカバー担当だった場合は誰も一塁に入らない、という回帰があった。 ---
+
+    private static FieldingPlay GroundOutAt(FieldPosition fielderRole, double bearingDeg, double rangeM)
+    {
+        var bearingRad = bearingDeg * System.Math.PI / 180.0;
+        return new FieldingPlay
+        {
+            Result = BattedBallResult.Out,
+            LandingX = rangeM * System.Math.Sin(bearingRad), LandingZ = rangeM * System.Math.Cos(bearingRad),
+            HangTimeSeconds = 0.3, ApexHeightM = 0.4,
+            RangeM = rangeM, BearingDeg = bearingDeg, FielderRole = fielderRole,
+            FieldedAtSeconds = 1.0, ThrowArriveSeconds = 2.0, BatterToFirstSeconds = 4.2, IsFly = false,
+        };
+    }
+
+    /// <summary>一塁ベース座標へ向かう移動の担当（複数居たら回帰）。誰も居なければ null。</summary>
+    private static FieldPosition? FirstBaseCoverer(PlayTimeline tl, FieldGeometry field)
+    {
+        var first = new TimelinePoint(field.FirstBase.X, field.FirstBase.Z);
+        var coverers = tl.Moves.Where(m => Near(m.To, first)).Select(m => m.Role).ToList();
+        Assert.True(coverers.Count <= 1, $"一塁への移動が複数（{string.Join(",", coverers)}）");
+        return coverers.Count == 1 ? coverers[0] : (FieldPosition?)null;
+    }
+
+    [Theory]
+    // Bunt: ファースト以外が捕ったら、押し出されずにファーストが一塁カバーへ入る。
+    [InlineData(FieldPosition.Pitcher, 0.0, 8.0, FieldPosition.FirstBase)]
+    [InlineData(FieldPosition.Catcher, 0.0, 8.0, FieldPosition.FirstBase)]
+    [InlineData(FieldPosition.ThirdBase, 0.0, 8.0, FieldPosition.FirstBase)]
+    // Bunt: ファーストが捕ったときだけ、静的表どおりセカンドが一塁カバーへ入る（既存の正常系）。
+    [InlineData(FieldPosition.FirstBase, 0.0, 8.0, FieldPosition.SecondBase)]
+    // InfieldRight: ファースト以外が捕ったらファーストが一塁カバーへ入る（ピッチャーが捕って
+    // 一塁カバーが1人も居なくなる回帰＋セカンドが捕ってピッチャー固定担当が残る回帰の両方）。
+    [InlineData(FieldPosition.SecondBase, 20.0, 30.0, FieldPosition.FirstBase)]
+    [InlineData(FieldPosition.Pitcher, 20.0, 30.0, FieldPosition.FirstBase)]
+    // InfieldRight: ファーストが捕ったときだけ、静的表どおりピッチャーが一塁カバーへ入る（既存の正常系）。
+    [InlineData(FieldPosition.FirstBase, 20.0, 30.0, FieldPosition.Pitcher)]
+    // InfieldLeft: 元々正常だった系の回帰確認（ショート/サードが捕ってもファーストが一塁カバーへ入る）。
+    [InlineData(FieldPosition.Shortstop, -20.0, 30.0, FieldPosition.FirstBase)]
+    [InlineData(FieldPosition.ThirdBase, -20.0, 30.0, FieldPosition.FirstBase)]
+    public void FirstBaseCover_FollowsActualFielder_NotStaticZoneTable(
+        FieldPosition fielderRole, double bearingDeg, double rangeM, FieldPosition expectedCoverer)
+    {
+        var field = new FieldGeometry();
+        var play = GroundOutAt(fielderRole, bearingDeg, rangeM);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var coverer = FirstBaseCoverer(tl, field);
+        Assert.Equal(expectedCoverer, coverer); // 一塁カバーが必ず1人、かつ表の通りの担当
+        Assert.NotEqual(fielderRole, coverer); // 実捕球者はカバー担当にならない
+    }
+
     // --- 磨き込み①: ゴロは地を這うロール／実況の具体化（表示専用・判定非干渉） ---
 
     private static FieldingPlay GrounderOut() => new()
