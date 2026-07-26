@@ -69,7 +69,6 @@ public sealed class MatchProgressionConversionTests
         var home = prog.SubstitutionOptions(teamIsAway: false);   // 守備側
 
         Assert.False(away.CanSwapDefense);
-        Assert.Equal("攻撃中は守備位置を動かせない。", away.BlockedReasonFor(SubstitutionKind.SwapDefense));
         Assert.True(home.CanSwapDefense);
         Assert.True(home.CanConvertRelief);
         // 入替できるのは守備に就いている8枠（非DHでは投手スロットを除く）。

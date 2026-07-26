@@ -1594,7 +1594,7 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 選手交代モーダルを閉じる。</summary>
         public void CloseSubstitutionForCapture() => _subPanel?.Close();
 
-        /// <summary>スクショ用: 交代種別タブを選ぶ（0=代打 1=代走 2=投手交代 3=守備交代 4=DH解除）。</summary>
+        /// <summary>スクショ用: 攻撃タブを選ぶ（0=代打 1=代走）。守備中はタブ無し＝守備の割当2ペイン（issue #256）。</summary>
         public void SelectSubstitutionKindForCapture(int index) => _subPanel?.SelectKindForCapture(index);
 
         /// <summary>スクショ用: 自校の控え先頭（代打候補）の名前。</summary>

@@ -222,6 +222,7 @@ public sealed class MatchProgression
             Bullpen = team.AvailableBullpen,
             UsedBench = Unavailable(team.RosterBench, team.Bench),
             UsedBullpen = Unavailable(team.RosterBullpen, team.AvailableBullpen),
+            ReliefCandidates = team.ReliefRankingCandidates,
         };
     }
 
@@ -248,6 +249,32 @@ public sealed class MatchProgression
         var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, sub);
         if (idx < 0 || !SubstitutionCommands.ChangePitcher(_p, teamIsAway, idx)) return false;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ChangePitcher, teamIsAway, idx));
+        return true;
+    }
+
+    /// <summary>
+    /// 継投（issue #256 統合守備割当）。継投候補（<see cref="SubstitutionOptions.ReliefCandidates"/>＝
+    /// ブルペン＋ベンチ＋在フィールドの守備野手）から sub を指名してマウンドへ上げる。在フィールド野手なら
+    /// 投野交代で守備穴を backfill する（<see cref="TeamState.RelieveWith"/>）。プレイヤーとAIが同じ候補集合・
+    /// 同じルータ・同じ backfill 係数を通る。ブルペン／ベンチ指名は <see cref="ChangePitcher"/> と同じ結果になる。
+    /// </summary>
+    public bool Relieve(bool teamIsAway, Player sub)
+    {
+        var idx = ReferenceIndexOf(_p.OffenseOf(teamIsAway).ReliefRankingCandidates, sub);
+        if (idx < 0 || !SubstitutionCommands.Relieve(_p, teamIsAway, idx)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.Relieve, teamIsAway, idx));
+        return true;
+    }
+
+    /// <summary>
+    /// 守備割当（issue #256 統合守備割当）。控え（ブルペン／ベンチ）の sub を守備スロット slot に就かせる
+    /// （守備固め／守備割当）。就いていた選手は退場する。役割（投/野）で候補を分けない（#93）。
+    /// </summary>
+    public bool DefenseAssign(bool teamIsAway, int slot, Player sub)
+    {
+        var idx = ReferenceIndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, sub);
+        if (idx < 0 || !SubstitutionCommands.DefenseAssign(_p, teamIsAway, slot, idx)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.DefenseAssign, teamIsAway, idx, TargetIndex: slot));
         return true;
     }
 
@@ -312,6 +339,18 @@ public sealed class MatchProgression
     {
         for (var i = 0; i < list.Count; i++)
             if (list[i] == p) return i;
+        return -1;
+    }
+
+    /// <summary>
+    /// 参照一致で添字を引く（issue #256）。継投候補には在フィールドの実インスタンス（<see cref="TeamState._lineup"/>）が
+    /// 含まれ、<see cref="TeamState.RelieveWith"/> が参照一致で在フィールド野手を判定するため、値一致では
+    /// 取り違え得る（同能力の別選手）。UIは観測で得た実インスタンスをそのまま渡す。
+    /// </summary>
+    private static int ReferenceIndexOf(IReadOnlyList<Player> list, Player p)
+    {
+        for (var i = 0; i < list.Count; i++)
+            if (ReferenceEquals(list[i], p)) return i;
         return -1;
     }
 
