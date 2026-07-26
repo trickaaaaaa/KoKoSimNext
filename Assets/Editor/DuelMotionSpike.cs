@@ -588,6 +588,174 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
+        /// §7-2第2弾（結果分岐）のアンカー実測: 空振り/見逃し/死球（打者・yaw90）と捕球（捕手・yaw0）の
+        /// 各クリップについて、追跡ボーン（打者=右手/捕手=左手ミット）の位置と区間速度を出力する。
+        /// スイング面通過・捕球はいずれも追跡ボーン速度のピーク近傍で読む（投手リリースと同じ流儀）。
+        /// </summary>
+        public static string RunReactionProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var jobs = new[]
+                {
+                    new { clip = "AA_Baseball_Batter_Swing_Type01_Miss",  yaw = 90f, bone = HumanBodyBones.RightHand },
+                    new { clip = "AA_Baseball_Batter_Strike",             yaw = 90f, bone = HumanBodyBones.Head },
+                    new { clip = "AA_Baseball_Batter_Hit_ByPitch_Type01", yaw = 90f, bone = HumanBodyBones.Head },
+                    new { clip = "AA_Baseball_Catcher_Catching_C",        yaw = 0f,  bone = HumanBodyBones.LeftHand },
+                };
+                var times = new[] { 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.30f, 0.35f, 0.40f, 0.45f, 0.50f, 0.60f, 0.70f, 0.85f };
+
+                var sb = new StringBuilder();
+                foreach (var j in jobs)
+                {
+                    var clip = FindClip(j.clip);
+                    sb.AppendLine(j.clip + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture));
+                    Vector3 prev = Vector3.zero;
+                    float prevT = -1f;
+                    foreach (var t in times)
+                    {
+                        var body = SpawnBody(root, "probe-r", Vector3.zero, j.yaw, Color.white);
+                        Sample(body, clip, t);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var p = anim.GetBoneTransform(j.bone).position;
+                        float speed = prevT >= 0f ? (p - prev).magnitude / ((t - prevT) * clip.length) : 0f;
+                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                            "  t={0:F2}({1:F2}s) bone=({2:F2},{3:F2},{4:F2}) v={5:F1}m/s",
+                            t, t * clip.length, p.x, p.y, p.z, speed));
+                        prev = p; prevT = t;
+                        Object.DestroyImmediate(body);
+                    }
+                }
+                Debug.Log("[DuelMotionSpike] reaction probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
+        /// 任意クリップの指定ボーン速度カーブを実測する汎用プローブ（クリップ差し替え時のアンカー再測定用）。
+        /// 速度ピーク＝スイングの面通過/当たり、速度が落ち着く点＝構え直り、の目安になる。
+        /// 例: RunClipSpeedProbe("AA_Baseball_Batter_Swing_Type02_Miss", "RightHand", 0.1f)
+        /// </summary>
+        public static string RunClipSpeedProbe(string clipName, string boneName, float stepSec)
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var clip = FindClip(clipName);
+                if (clip == null) return clipName + " NOT FOUND";
+                var bone = (HumanBodyBones)System.Enum.Parse(typeof(HumanBodyBones), boneName);
+                var sb = new StringBuilder();
+                sb.AppendLine(clipName + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture)
+                    + " bone=" + boneName);
+                Vector3 prev = Vector3.zero;
+                bool hasPrev = false;
+                int n = Mathf.FloorToInt(clip.length / stepSec);
+                for (int i = 0; i <= n; i++)
+                {
+                    float sec = Mathf.Min(clip.length - 0.001f, i * stepSec);
+                    var body = SpawnBody(root, "probe-s", Vector3.zero, 90f, Color.white);
+                    Sample(body, clip, sec / clip.length);
+                    var anim = body.GetComponentInChildren<Animator>();
+                    var p = anim.GetBoneTransform(bone).position;
+                    float speed = hasPrev ? (p - prev).magnitude / stepSec : 0f;
+                    sb.Append(string.Format(CultureInfo.InvariantCulture, " {0:F1}s={1:F1}", sec, speed));
+                    prev = p; hasPrev = true;
+                    Object.DestroyImmediate(body);
+                }
+                sb.Append('\n');
+                Debug.Log("[DuelMotionSpike] clip speed probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
+        /// 打者クリップの両手ボーン間隔カーブを0.1s刻みで実測する（AlignBatの片手判定閾値の根拠）。
+        /// 素体UBCは両手で握っていてもボーン間隔が~0.2m台あるため、閾値は「本当に手が離れた」区間と
+        /// 通常保持区間をこの表で分離できる値に置く。
+        /// </summary>
+        public static string RunHandGapProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var clips = new[]
+                {
+                    "AA_Baseball_Batter_Idle_Loop",
+                    "AA_Baseball_Batter_Swing_Type01_Miss",
+                    "AA_Baseball_Batter_Swing_Type01_Hitting",
+                    "AA_Baseball_Batter_Swing_Type02_Miss",
+                    "AA_Baseball_Batter_Swing_Type02_Hitting",
+                    "AA_Baseball_Batter_Strike",
+                    "AA_Baseball_Batter_Hit_ByPitch_Type01",
+                };
+                var sb = new StringBuilder();
+                foreach (var name in clips)
+                {
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(name + " NOT FOUND"); continue; }
+                    sb.Append(name + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture) + "\n ");
+                    int n = Mathf.FloorToInt(clip.length * 10f);
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * 0.1f);
+                        var body = SpawnBody(root, "probe-h", Vector3.zero, 90f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var lh = anim.GetBoneTransform(HumanBodyBones.LeftHand);
+                        var rh = anim.GetBoneTransform(HumanBodyBones.RightHand);
+                        float gap = (lh != null && rh != null) ? Vector3.Distance(lh.position, rh.position) : -1f;
+                        sb.Append(string.Format(CultureInfo.InvariantCulture, " {0:F1}s={1:F2}", sec, gap));
+                        Object.DestroyImmediate(body);
+                    }
+                    sb.Append('\n');
+                }
+                Debug.Log("[DuelMotionSpike] hand gap probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
         /// 投球クリップのyaw候補4種（-90/0/90/180）をリリース(0.53)と直後(0.60)で撮り比べる目視決着用。
         /// 出力: out/duel-stage/frame/pitchyaw_[yaw]_t[時刻].png（採用構図R-comp60）
         /// </summary>
@@ -1018,7 +1186,14 @@ namespace KokoSim.EditorTools
 
         // ---- 素体・サンプリング ----------------------------------------------
 
-        private static GameObject SpawnBody(GameObject root, string name, Vector3 pos, float yawDeg, Color color)
+        /// <summary>バインドポーズで測った「足ボーン高さ−接地面」。GroundFix相当を外部で組む時に使う。</summary>
+        internal static float AnkleOffsetOf(GameObject body)
+        {
+            float v;
+            return AnkleOffset.TryGetValue(body, out v) ? v : 0f;
+        }
+
+        internal static GameObject SpawnBody(GameObject root, string name, Vector3 pos, float yawDeg, Color color)
         {
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
                 string.IsNullOrEmpty(BodyOverride) ? BodyFbx : BodyOverride);

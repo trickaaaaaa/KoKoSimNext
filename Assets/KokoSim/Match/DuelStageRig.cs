@@ -5,6 +5,17 @@ using UnityEngine.Playables;
 
 namespace KokoSim.Unity.Match
 {
+    /// <summary>対決ビューへ渡す1球の結果分類（design-18 §7-2 第2弾）。エンジンのPitchKindから写像する。</summary>
+    public enum DuelPitchOutcome
+    {
+        Take,           // ボール見送り（打者は待機のまま・捕手が捕球）
+        CalledStrike,   // 見逃しストライク（Batter_Strike＋捕球）
+        SwingMiss,      // 空振り（Swing_Miss＋捕球）
+        FoulContact,    // ファール（Swing_Hitting・走り出し前でカット・捕球なし）
+        InPlayContact,  // インプレー（Swing_Hittingフル＝走り出しまで・捕球なし）
+        HitByPitch,     // 死球（Hit_ByPitch・捕球なし）
+    }
+
     /// <summary>
     /// 対決ビューの実体（design-18 §7-1 A案・配線スパイク段階）。
     /// DuelStage レイヤーに簡易ステージ＋素体4体（UBC）を組み、StageCamera（確定構図R）が
@@ -40,8 +51,11 @@ namespace KokoSim.Unity.Match
         private Camera _camera;
         private GameObject _bat;
         private readonly List<Actor> _actors = new();
-        private Actor _pitcher, _batter;
+        private Actor _pitcher, _batter, _catcher;
         private float _acc;
+
+        // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
+        private AnimationClip _swingMissClip, _swingHitClip, _strikeTakeClip, _hbpClip, _catchClip;
 
         private sealed class Actor
         {
@@ -57,6 +71,9 @@ namespace KokoSim.Unity.Match
             public float AnkleOffset;
             public bool HoldAtEnd;   // クリップ末尾で頭姿勢のまま停止する（投手＝アンカー同期の合間はセット姿勢で待つ）
             public bool Holding;
+            public AnimationPlayableOutput Output;   // クリップ差し替え（結果分岐の一発物）用
+            public AnimationClip IdleClip;           // 一発物の終了後に戻る待機ループ（null=戻らない）
+            public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
         }
 
         public DuelStageRig()
@@ -73,6 +90,15 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
+            // 残骸掃除: HideAndDontSave はPlay終了・ドメインリロードを跨いで生き残るため、
+            // Disposeが走らず孤児化した過去のステージが同座標に重なって二重に映る（2026-07-26実害）。
+            foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
+            {
+                if (go != null && go.name == "~DuelStageLive" && go.transform.parent == null
+                    && (go.hideFlags & HideFlags.HideAndDontSave) != 0)
+                    Object.DestroyImmediate(go);
+            }
+
             _root = new GameObject("~DuelStageLive") { hideFlags = HideFlags.HideAndDontSave };
             _root.transform.position = StageOrigin;
             BuildGround(layer);
@@ -84,13 +110,23 @@ namespace KokoSim.Unity.Match
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
             _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
                 new Color(0.16f, 0.20f, 0.38f), 0f, layer);
-            var catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
+            _batter.IdleClip = batClip;
+            _catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
                 new Color(0.25f, 0.27f, 0.30f), 0f, layer);
+            _catcher.IdleClip = catClip;
             SpawnActor(body, umpClip, new Vector3(-0.35f, 0f, -1.7f), 0f,
                 new Color(0.12f, 0.12f, 0.13f), 0f, layer);
 
+            // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
+            // スイングはType02＝レベルスイング（Type01は肩口のハイスイングで監督差し戻し 2026-07-27）
+            _swingMissClip = LoadClip("AA_Baseball_Batter_Swing_Type02_Miss");
+            _swingHitClip = LoadClip("AA_Baseball_Batter_Swing_Type02_Hitting");
+            _strikeTakeClip = LoadClip("AA_Baseball_Batter_Strike");
+            _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
+            _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
+
             _bat = SpawnBat(layer);
-            AttachMitt(catcher, layer);
+            AttachMitt(_catcher, layer);
 
             Target = CreateRt(BaseWidth, BaseHeight);
 
@@ -140,16 +176,32 @@ namespace KokoSim.Unity.Match
             _cutCountdown = -1f;
             SeekActor(_pitcher, 0f);
             GroundFix(_pitcher);
+            // 打席頭は打者・捕手を待機へ戻す（前打席の一発物が残っていても仕切り直す）
+            if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, 0f);
+            if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, 0f);
         }
+
+        // 結果分岐のアンカー（スイングはType02をRunClipSpeedProbeで実測 2026-07-27。値はクリップ内秒）:
+        // 空振り=スイング面通過1.2s（右手速度ピーク6.7m/s） / ミート=当たり1.25s（ピーク1.3sの直前） /
+        // 見逃し=振り返り2.0s / 死球=のけぞり1.3s / 捕球=ミット提示0.4s（冒頭0.15sで構えて保持する作り）。
+        // 盤面の投球飛翔は0.45s（MatchLiveのSetTime基準）＝リリース時に「アンカー−0.45」へ頭出しすると
+        // ボール到達とアンカーが一致する。
+        private const float BallFlightSeconds = 0.45f;
+        private const float SwingMissPlane = 1.2f;
+        private const float SwingHitContact = 1.25f;
+        private const float StrikeReact = 2.0f;
+        private const float HbpReact = 1.3f;
+        private const float CatchMoment = 0.4f;
 
         /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
         /// 投手クリップをリリース時刻へスナップし、次の1球があれば（nextReleaseIn=リリース間隔）
         /// フォロースルーを FollowSeconds 見せてから次の振りかぶり位置へ切り替える予約を入れる。
         /// 間隔が振りかぶり＋フォローに足りない場合だけプリロールを削って間に合わせる。
+        /// あわせて1球の結果（outcome）に応じた打者・捕手の一発物をボール到達アンカーで頭出しする。
         /// クリップ内部の緩急は改変しない＝再生開始位置の逆算だけで合わせる（設計書18の掟）。
         /// </summary>
-        public void OnPitchReleased(float nextReleaseIn)
+        public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome)
         {
             if (!Available || _pitcher == null) return;
             SeekActor(_pitcher, ReleaseTime);
@@ -164,6 +216,53 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
+            ScheduleReactions(outcome);
+        }
+
+        /// <summary>打者・捕手の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。</summary>
+        private void ScheduleReactions(DuelPitchOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case DuelPitchOutcome.SwingMiss:
+                    // Type02のMissは歩き直しが長い（両手への握り直りは実測5.9s）。次のリリース
+                    // （頭出し0.75+間隔4.5=クリップ5.25s）までに構えへ戻すため片手歩きの途中で打ち切る
+                    SetActorClip(_batter, _swingMissClip, SwingMissPlane - BallFlightSeconds, 5.2f);
+                    break;
+                case DuelPitchOutcome.FoulContact:
+                    // 走り出し（実測≈1.95s）前でカットして打席へ戻る
+                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 1.85f);
+                    break;
+                case DuelPitchOutcome.InPlayContact:
+                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 0f);
+                    break;
+                case DuelPitchOutcome.CalledStrike:
+                    SetActorClip(_batter, _strikeTakeClip, StrikeReact - BallFlightSeconds, 3.2f);
+                    break;
+                case DuelPitchOutcome.HitByPitch:
+                    SetActorClip(_batter, _hbpClip, HbpReact - BallFlightSeconds, 4.2f);
+                    break;
+            }
+            bool catcherCatches = outcome == DuelPitchOutcome.Take
+                || outcome == DuelPitchOutcome.CalledStrike
+                || outcome == DuelPitchOutcome.SwingMiss;
+            if (catcherCatches)
+                SetActorClip(_catcher, _catchClip, Mathf.Max(0f, CatchMoment - BallFlightSeconds), 0f);
+        }
+
+        /// <summary>一発物クリップへ差し替えて頭出しする（終了後は Actor.IdleClip へ自動復帰）。</summary>
+        private static void SetActorClip(Actor a, AnimationClip clip, float seekTo, float endAt)
+        {
+            if (a == null || clip == null) return;
+            if (a.Clip != clip)
+            {
+                if (a.Playable.IsValid()) a.Playable.Destroy();
+                a.Playable = AnimationClipPlayable.Create(a.Graph, clip);
+                a.Output.SetSourcePlayable(a.Playable);
+                a.Clip = clip;
+            }
+            a.EndAt = endAt;
+            SeekActor(a, Mathf.Max(0f, seekTo));
         }
 
         /// <summary>毎フレーム呼ぶ。ポーズは1/12秒たまるごとに進む（時間量子化）。</summary>
@@ -337,9 +436,9 @@ namespace KokoSim.Unity.Match
                 actor.AnkleOffset = Mathf.Min(lf.position.y, rf.position.y) - go.transform.position.y;
 
             actor.Graph = PlayableGraph.Create("duel-" + clip.name);
-            var output = AnimationPlayableOutput.Create(actor.Graph, "out", animator);
+            actor.Output = AnimationPlayableOutput.Create(actor.Graph, "out", animator);
             actor.Playable = AnimationClipPlayable.Create(actor.Graph, clip);
-            output.SetSourcePlayable(actor.Playable);
+            actor.Output.SetSourcePlayable(actor.Playable);
 
             _actors.Add(actor);
             return actor;
@@ -385,9 +484,16 @@ namespace KokoSim.Unity.Match
         {
             if (a.Holding) return;
             a.Time += step;
-            if (a.Time >= a.Clip.length)
+            float end = a.EndAt > 0f && a.EndAt < a.Clip.length ? a.EndAt : a.Clip.length;
+            if (a.Time >= end)
             {
                 a.Time = 0f;
+                a.EndAt = 0f;
+                if (a.IdleClip != null && a.Clip != a.IdleClip)
+                {
+                    SetActorClip(a, a.IdleClip, 0f, 0f);   // 一発物（結果分岐）→待機ループへ復帰
+                    return;
+                }
                 RewindActor(a);
                 if (a.HoldAtEnd) a.Holding = true;
                 return;
@@ -419,14 +525,55 @@ namespace KokoSim.Unity.Match
             return bat;
         }
 
+        // 片手フォロースルー判定: 両手ボーン間隔がグリップ間隔を明確に超えたら上の手が離れたとみなす。
+        // 素体UBCの両手ボーン間隔は「両手で握っていても」構えで~0.23mある（RunHandGapProbe実測）ため、
+        // 判定はスイング系クリップに限定する（構え/見逃し/死球は常に両手整列＝素の見た目を信じる）
+        private const float HandsApartThreshold = 0.28f;
+        private const float BatDropTime = 1.9f;   // Hittingクリップの走り出し（Type02実測≈1.95s）直前からバットを放った扱いで非表示
+        private bool _batOneHand;       // いま片手追従中か（診断用）
+        private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
+        private Vector3 _batLocalPos;
+        private Quaternion _batLocalRot;
+
         private void AlignBat()
         {
             if (_bat == null || _batter == null) return;
-            var rh = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand).position;
-            var lh = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand).position;
-            var axis = (rh - lh).normalized;
-            _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
-            _bat.transform.position = lh + axis * (0.425f - 0.10f);
+            var lhT = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var rhT = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            if (lhT == null || rhT == null) return;
+
+            // インプレーの走り出し以降はバットを放った扱い（実物はトスするが小道具は消すのが最も自然）
+            if (_batter.Clip == _swingHitClip && _batter.Time >= BatDropTime)
+            {
+                _bat.SetActive(false);
+                return;
+            }
+            _bat.SetActive(true);
+
+            var lh = lhT.position;
+            var rh = rhT.position;
+            bool swingClip = _batter.Clip == _swingMissClip || _batter.Clip == _swingHitClip;
+            _batOneHand = swingClip && _batGoodValid && Vector3.Distance(lh, rh) > HandsApartThreshold;
+            if (!_batOneHand)
+            {
+                // 両手保持: 両手ボーンを結ぶ線に整列（§3.3の実測知見＝手ボーン軸は素体依存で使えない）
+                var axis = (rh - lh).normalized;
+                _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
+                _bat.transform.position = lh + axis * (0.425f - 0.10f);
+                // 片手期の追従用に「最後に両手で持てていた見た目」を毎回焼き直す。
+                // 「離れた瞬間に初回焼き付け」だと、クリップ切替直後は直前クリップ末尾の残骸姿勢を
+                // 拾ってゴミオフセットが固定される（構えでバットが地面に刺さる事故の真因）
+                _batLocalPos = lhT.InverseTransformPoint(_bat.transform.position);
+                _batLocalRot = Quaternion.Inverse(lhT.rotation) * _bat.transform.rotation;
+                _batGoodValid = true;
+                return;
+            }
+
+            // 片手フォロースルー（右打者は振り抜きで右手が離れる）: 最後の両手整列時の見た目のまま
+            // 下の手（左手）ボーンに追従させる。ボーン軸の向きを仮定しない＝焼き付けオフセットなので
+            // 素体が変わっても壊れない
+            _bat.transform.position = lhT.TransformPoint(_batLocalPos);
+            _bat.transform.rotation = lhT.rotation * _batLocalRot;
         }
 
         private void AttachMitt(Actor catcher, int layer)
@@ -448,6 +595,33 @@ namespace KokoSim.Unity.Match
             go.layer = layer;
             foreach (Transform child in go.transform) SetLayerRecursive(child.gameObject, layer);
         }
+
+#if UNITY_EDITOR
+        // ---- 【開発用・エディタ限定】録画ハーネス（DuelViewRecorder）向け観測窓 ----
+
+        /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>
+        internal string BatDiagForCapture()
+        {
+            if (_batter == null || _batter.Animator == null) return "-\t0\t-1\tFalse\tFalse";
+            var lh = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var rh = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            float gap = (lh != null && rh != null) ? Vector3.Distance(lh.position, rh.position) : -1f;
+            string clip = _batter.Clip != null ? _batter.Clip.name : "-";
+            bool batOn = _bat != null && _bat.activeSelf;
+            return clip + "\t" + _batter.Time.ToString("F2") + "\t" + gap.ToString("F3")
+                + "\t" + _batOneHand + "\t" + batOn;
+        }
+
+        /// <summary>打者の左手ボーンのRT上ピクセル座標（クロップ中心の決定用）。</summary>
+        internal Vector2 BatterScreenPxForCapture()
+        {
+            if (_camera == null || _batter == null || _batter.Animator == null) return new Vector2(-1f, -1f);
+            var lh = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var p = lh != null ? lh.position : _batter.Go.transform.position + Vector3.up;
+            var sp = _camera.WorldToScreenPoint(p);
+            return new Vector2(sp.x, sp.y);
+        }
+#endif
 
         // ---- アセットロード（エディタ限定・ビルド同梱は本実装時に決める） --------
 
