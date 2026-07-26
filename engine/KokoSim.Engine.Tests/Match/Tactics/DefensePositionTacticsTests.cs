@@ -13,8 +13,10 @@ namespace KokoSim.Engine.Tests.Match.Tactics;
 /// <summary>
 /// 敵AI・委任采配の守備位置操作（issue #255, 設計書09 §2.3/§6.2・設計書11）。
 /// オーナー決定 <b>A-2</b>＝守備位置の入替は僅差終盤限定、<b>B-1</b>＝コンバート継投は元投手の打力温存トリガー。
-/// #209 と同じ2段運用で、既定係数（MinTier=99）では一切発火せず RNG も引かない＝
-/// games_10k/tactics 帯・決定論baseline を1ビットも動かさないことを保証する。
+/// #209 と同じ2段運用（①既定オフで配線 → ②有効化して帯を実測 → 採否）で入れ、実測後に
+/// 入替=D(3)・コンバート継投=B(5) で採用した（2026-07-26）。
+/// この層を通るのは <see cref="AiTacticsBrain"/> だけで <see cref="StandardTacticsBrain"/> は恒等のまま＝
+/// StandardTacticsBrain 駆動の games_10k/tactics 帯・決定論baseline は動かないことを併せて保証する。
 /// </summary>
 public sealed class DefensePositionTacticsTests
 {
@@ -71,7 +73,7 @@ public sealed class DefensePositionTacticsTests
         DefenseSwapMinGain = 4.0,
     };
 
-    // ===== 既定は恒等（帯・決定論baseline 不変の担保） =====
+    // ===== StandardTacticsBrain は恒等（統計シムの帯・決定論baseline 不変の担保） =====
 
     [Fact]
     public void Standard_NeverSwaps_AndDrawsNoRng()
@@ -85,15 +87,34 @@ public sealed class DefensePositionTacticsTests
     }
 
     [Fact]
-    public void Ai_DefaultCoefficients_NeverSwaps_AndDrawsNoRng()
+    public void Standard_NeverConverts_EvenForStrongHittingPitcher()
     {
-        // 最上位ティア・最高采配能力・守り勝つ校風でも、既定（MinTier=99）なら動かさず RNG も引かない。
-        var ai = new AiTacticsBrain(new AiProfile(100, 7, SchoolStyle.DefensiveMinded));
+        // 統計シム（games_10k / games_10k_tactics）が使うのはこの脳。⑦層を有効化しても
+        // コンバート継投を選ばない＝帯は動かない。
+        var brain = new StandardTacticsBrain();
+        var d = brain.CallPitchingChange(ReliefSit(Pitcher(99, 99)), new Xoshiro256Random(7));
+
+        Assert.Null(d?.ConvertTo);
+    }
+
+    // ===== ⑦層の有効化ティア（既定係数）=====
+
+    [Fact]
+    public void Ai_Swap_DefaultCoefficients_GateAtTierD()
+    {
+        // 既定 DefenseSwapMinTier=3（D）。関門を通らないティアでは RNG も引かない。
+        var below = new AiTacticsBrain(new AiProfile(100, 2, SchoolStyle.Standard));
         var rng = new Xoshiro256Random(3);
         var before = rng.CaptureState();
-
-        Assert.Null(ai.CallDefenseSwap(SwapSit(inning: 9, scoreDiff: 0), rng));
+        Assert.Null(below.CallDefenseSwap(SwapSit(inning: 9, scoreDiff: 0), rng));
         Assert.Equal(before, rng.CaptureState());
+
+        // ③校風で実効ティアが下がる側も同じ（豪腕依存 −1）。
+        var aceDependent = new AiTacticsBrain(new AiProfile(100, 3, SchoolStyle.AceDependent));
+        Assert.Equal(0, CountSwaps(aceDependent, SwapSit()));
+
+        // D 以上は既定のまま発火する（＝有効化されている）。
+        Assert.True(CountSwaps(new AiTacticsBrain(new AiProfile(100, 3, SchoolStyle.Standard)), SwapSit()) > 240);
     }
 
     // ===== A-2: 選ぶケース／選ばないケース =====
@@ -218,13 +239,18 @@ public sealed class DefensePositionTacticsTests
     };
 
     [Fact]
-    public void Ai_ConvertRelief_DefaultCoefficients_NeverConverts()
+    public void Ai_ConvertRelief_DefaultCoefficients_GateAtTierB()
     {
-        var ai = new AiTacticsBrain(new AiProfile(100, 7, SchoolStyle.Standard));
-        var d = ai.CallPitchingChange(ReliefSit(Pitcher(90, 90)), new Xoshiro256Random(1));
+        // 既定 ConvertReliefMinTier=5（B）。B未満は打力があっても通常継投のまま。
+        var below = new AiTacticsBrain(new AiProfile(100, 4, SchoolStyle.Standard));
+        var d = below.CallPitchingChange(ReliefSit(Pitcher(90, 90)), new Xoshiro256Random(1));
+        Assert.NotNull(d);                    // 基本トリガー（疲労）は関門と無関係＝継投そのものは起きる
+        Assert.Null(d!.Value.ConvertTo);
 
-        Assert.NotNull(d);                    // 基本トリガー（疲労）は既定でも尊重＝継投は起きる
-        Assert.Null(d!.Value.ConvertTo);      // が、コンバートは既定では選ばない＝通常継投
+        // B 以上は既定のままコンバートを選ぶ（＝有効化されている）。
+        var atTier = new AiTacticsBrain(new AiProfile(100, 5, SchoolStyle.Standard));
+        var converted = atTier.CallPitchingChange(ReliefSit(Pitcher(90, 90)), new Xoshiro256Random(1));
+        Assert.NotNull(converted!.Value.ConvertTo);
     }
 
     [Fact]
@@ -279,10 +305,10 @@ public sealed class DefensePositionTacticsTests
     }
 
     [Fact]
-    public void Game_DefaultAi_MatchesNoBrainBaseline_BitForBit()
+    public void Game_DefaultAi_IsDeterministic_WithEnabledDefaults()
     {
-        // 既定係数の AI を両校に載せても、守備位置操作は一切発火しない（＝⑦層は完全に恒等）。
-        // #209 の高度継投も既定無効なので、無指示ベースラインと1ビットも変わらない。
+        // ⑦層が既定で有効（入替D・コンバート継投B）になった後も、同シードなら同結果。
+        // 発火判定は rng.Fork した専用ストリームなので、本流の乱数消費順は回ごとに揺れない。
         Team WithAi(string n) => DeterminismCards.Team(n) with
         {
             Tactics = new AiTacticsBrain(new AiProfile(100, 7, SchoolStyle.DefensiveMinded)),

@@ -140,13 +140,14 @@ public sealed record EnemyAiCoefficients
     public int DefensiveMindedReliefTierBonus { get; init; } = 1;
 
     // === ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2・設計書11） ===
-    // AIが「守備位置の入替（無料）」と「コンバート継投」を打てるようにする層。⑥と同じ運用で、
-    // MinTier 既定は到達不能(99)＝発火しない＝games_10k/tactics 帯・決定論baseline を1ビットも動かさない。
-    // 有効化して帯を実測してから採否を決める（issue #209 と同じ2段運用）。
+    // AIが「守備位置の入替（無料）」と「コンバート継投」を打てるようにする層。#209 と同じ2段運用で
+    // 入れ（①既定オフで配線 → ②有効化して帯を実測 → 採否）、実測の結果このティアで採用した
+    // （オーナー決定 2026-07-26）。この層を通るのは AiTacticsBrain（相手校・委任采配）だけで、
+    // StandardTacticsBrain は恒等のまま＝games_10k/tactics 帯・決定論baseline は動かない。
 
     // --- A-2: 僅差終盤の守備位置最適化（オーナー決定 2026-07-26） ---
-    /// <summary>守備位置の入替の最低ティア（既定99=無効）。</summary>
-    public int DefenseSwapMinTier { get; init; } = 99;
+    /// <summary>守備位置の入替の最低ティア（3=D。守備固め <see cref="DefensiveSubMinTier"/> と同じ引き出し帯）。</summary>
+    public int DefenseSwapMinTier { get; init; } = 3;
     /// <summary>入替を検討する回（この回以降）。A-2＝終盤限定。</summary>
     public int DefenseSwapFromInning { get; init; } = 7;
     /// <summary>僅差とみなす得失点差の絶対値の上限（守備側視点）。A-2＝接戦限定。</summary>
@@ -168,8 +169,8 @@ public sealed record EnemyAiCoefficients
     public double DefenseWeightFirstBase { get; init; } = 0.30;
 
     // --- B-1: 打力温存のコンバート継投（オーナー決定 2026-07-26） ---
-    /// <summary>コンバート継投の最低ティア（既定99=無効）。</summary>
-    public int ConvertReliefMinTier { get; init; } = 99;
+    /// <summary>コンバート継投の最低ティア（5=B。交代枠を1つ払う上級の運用）。</summary>
+    public int ConvertReliefMinTier { get; init; } = 5;
     /// <summary>現投手の打力 (Contact+Power)/2 がこれ以上のときだけ、通常継投の代わりに守備へ回す。</summary>
     public double ConvertReliefMinBatting { get; init; } = 60.0;
 }
