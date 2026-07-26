@@ -117,9 +117,10 @@ namespace KokoSim.Unity.Match
             SpawnActor(body, umpClip, new Vector3(-0.35f, 0f, -1.7f), 0f,
                 new Color(0.12f, 0.12f, 0.13f), 0f, layer);
 
-            // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）
-            _swingMissClip = LoadClip("AA_Baseball_Batter_Swing_Type01_Miss");
-            _swingHitClip = LoadClip("AA_Baseball_Batter_Swing_Type01_Hitting");
+            // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
+            // スイングはType02＝レベルスイング（Type01は肩口のハイスイングで監督差し戻し 2026-07-27）
+            _swingMissClip = LoadClip("AA_Baseball_Batter_Swing_Type02_Miss");
+            _swingHitClip = LoadClip("AA_Baseball_Batter_Swing_Type02_Hitting");
             _strikeTakeClip = LoadClip("AA_Baseball_Batter_Strike");
             _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
             _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
@@ -180,14 +181,14 @@ namespace KokoSim.Unity.Match
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, 0f);
         }
 
-        // 結果分岐のアンカー（RunReactionProbe 実測 2026-07-26。値はクリップ内秒）:
-        // 空振り=スイング面通過1.2s / ミート=当たり1.05s（スイング走査実測t≈0.30×3.5s） /
+        // 結果分岐のアンカー（スイングはType02をRunClipSpeedProbeで実測 2026-07-27。値はクリップ内秒）:
+        // 空振り=スイング面通過1.2s（右手速度ピーク6.7m/s） / ミート=当たり1.25s（ピーク1.3sの直前） /
         // 見逃し=振り返り2.0s / 死球=のけぞり1.3s / 捕球=ミット提示0.4s（冒頭0.15sで構えて保持する作り）。
         // 盤面の投球飛翔は0.45s（MatchLiveのSetTime基準）＝リリース時に「アンカー−0.45」へ頭出しすると
         // ボール到達とアンカーが一致する。
         private const float BallFlightSeconds = 0.45f;
         private const float SwingMissPlane = 1.2f;
-        private const float SwingHitContact = 1.05f;
+        private const float SwingHitContact = 1.25f;
         private const float StrikeReact = 2.0f;
         private const float HbpReact = 1.3f;
         private const float CatchMoment = 0.4f;
@@ -224,11 +225,13 @@ namespace KokoSim.Unity.Match
             switch (outcome)
             {
                 case DuelPitchOutcome.SwingMiss:
-                    SetActorClip(_batter, _swingMissClip, SwingMissPlane - BallFlightSeconds, 3.3f);
+                    // Type02のMissは歩き直しが長い（両手への握り直りは実測5.9s）。次のリリース
+                    // （頭出し0.75+間隔4.5=クリップ5.25s）までに構えへ戻すため片手歩きの途中で打ち切る
+                    SetActorClip(_batter, _swingMissClip, SwingMissPlane - BallFlightSeconds, 5.2f);
                     break;
                 case DuelPitchOutcome.FoulContact:
-                    // 走り出し（≈1.9s＝正規化0.55）前でカットして打席へ戻る
-                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 1.7f);
+                    // 走り出し（実測≈1.95s）前でカットして打席へ戻る
+                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 1.85f);
                     break;
                 case DuelPitchOutcome.InPlayContact:
                     SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 0f);
@@ -526,7 +529,7 @@ namespace KokoSim.Unity.Match
         // 素体UBCの両手ボーン間隔は「両手で握っていても」構えで~0.23mある（RunHandGapProbe実測）ため、
         // 判定はスイング系クリップに限定する（構え/見逃し/死球は常に両手整列＝素の見た目を信じる）
         private const float HandsApartThreshold = 0.28f;
-        private const float BatDropTime = 1.9f;   // Hittingクリップの走り出し（≈正規化0.55）以降はバットを放った扱いで非表示
+        private const float BatDropTime = 1.9f;   // Hittingクリップの走り出し（Type02実測≈1.95s）直前からバットを放った扱いで非表示
         private bool _batOneHand;       // いま片手追従中か（診断用）
         private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;

@@ -647,6 +647,56 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
+        /// 任意クリップの指定ボーン速度カーブを実測する汎用プローブ（クリップ差し替え時のアンカー再測定用）。
+        /// 速度ピーク＝スイングの面通過/当たり、速度が落ち着く点＝構え直り、の目安になる。
+        /// 例: RunClipSpeedProbe("AA_Baseball_Batter_Swing_Type02_Miss", "RightHand", 0.1f)
+        /// </summary>
+        public static string RunClipSpeedProbe(string clipName, string boneName, float stepSec)
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var clip = FindClip(clipName);
+                if (clip == null) return clipName + " NOT FOUND";
+                var bone = (HumanBodyBones)System.Enum.Parse(typeof(HumanBodyBones), boneName);
+                var sb = new StringBuilder();
+                sb.AppendLine(clipName + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture)
+                    + " bone=" + boneName);
+                Vector3 prev = Vector3.zero;
+                bool hasPrev = false;
+                int n = Mathf.FloorToInt(clip.length / stepSec);
+                for (int i = 0; i <= n; i++)
+                {
+                    float sec = Mathf.Min(clip.length - 0.001f, i * stepSec);
+                    var body = SpawnBody(root, "probe-s", Vector3.zero, 90f, Color.white);
+                    Sample(body, clip, sec / clip.length);
+                    var anim = body.GetComponentInChildren<Animator>();
+                    var p = anim.GetBoneTransform(bone).position;
+                    float speed = hasPrev ? (p - prev).magnitude / stepSec : 0f;
+                    sb.Append(string.Format(CultureInfo.InvariantCulture, " {0:F1}s={1:F1}", sec, speed));
+                    prev = p; hasPrev = true;
+                    Object.DestroyImmediate(body);
+                }
+                sb.Append('\n');
+                Debug.Log("[DuelMotionSpike] clip speed probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
         /// 打者クリップの両手ボーン間隔カーブを0.1s刻みで実測する（AlignBatの片手判定閾値の根拠）。
         /// 素体UBCは両手で握っていてもボーン間隔が~0.2m台あるため、閾値は「本当に手が離れた」区間と
         /// 通常保持区間をこの表で分離できる値に置く。
@@ -670,6 +720,8 @@ namespace KokoSim.EditorTools
                     "AA_Baseball_Batter_Idle_Loop",
                     "AA_Baseball_Batter_Swing_Type01_Miss",
                     "AA_Baseball_Batter_Swing_Type01_Hitting",
+                    "AA_Baseball_Batter_Swing_Type02_Miss",
+                    "AA_Baseball_Batter_Swing_Type02_Hitting",
                     "AA_Baseball_Batter_Strike",
                     "AA_Baseball_Batter_Hit_ByPitch_Type01",
                 };
