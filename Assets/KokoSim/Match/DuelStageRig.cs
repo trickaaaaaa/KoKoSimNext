@@ -74,13 +74,15 @@ namespace KokoSim.Unity.Match
             _root.transform.position = StageOrigin;
             BuildGround(layer);
 
+            // yawはクリップごとの素の向き実測（DuelMotionSpike.RunFacingProbe 2026-07-26）から:
+            // 投手クリップだけ前方向−X（ルートモーション実測）、脇3クリップは素で+Z向き
             _pitcher = SpawnActor(body, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), -90f,
                 new Color(0.92f, 0.92f, 0.90f), MoundHeight, layer);
-            _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 180f,
+            _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
                 new Color(0.16f, 0.20f, 0.38f), 0f, layer);
-            var catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 90f,
+            var catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
                 new Color(0.25f, 0.27f, 0.30f), 0f, layer);
-            SpawnActor(body, umpClip, new Vector3(-0.35f, 0f, -1.7f), 90f,
+            SpawnActor(body, umpClip, new Vector3(-0.35f, 0f, -1.7f), 0f,
                 new Color(0.12f, 0.12f, 0.13f), 0f, layer);
 
             _bat = SpawnBat(layer);
