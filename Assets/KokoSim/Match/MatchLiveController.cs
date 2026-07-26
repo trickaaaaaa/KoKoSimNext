@@ -954,20 +954,28 @@ namespace KokoSim.Unity.Match
         // ── 1球ごとの判定オーバーレイ（issue #6） ──
         // 判定（ストライク/ボール/ファール…）を盤面上に大きく出し、実1球記録がある打席では球速・球種を併記する。
         // 合成投球列（実記録なし・PitchSequenceSynthesizer）は球種・球速を持たないので判定だけを出す。
+        // インプレーは判定文言を持たない（打球が飛ぶのは盤面で見えており、決着後はアウト/セーフと
+        // 結果ラベルが別途出る＝冗長。打球の飛び際に文字を被せない）。何を打たれたかを残すため
+        // 球種・球速の下段だけを出す。上下どちらも空なら器ごと出さない。
         private void ShowPitchCall(PitchToken pt)
         {
             if (_pitchCall == null || _pitchCallJudge == null) return;
 
-            _pitchCallJudge.text = PitchJudgeJp(pt);
+            var judge = PitchJudgeJp(pt);
+            _pitchCallJudge.text = judge;
+            _pitchCallJudge.style.display = judge.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
             _pitchCallJudge.EnableInClassList("pitch-call__judge--strike", IsStrikeCall(pt.Kind));
             _pitchCallJudge.EnableInClassList("pitch-call__judge--ball", pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Ball);
 
+            var detail = "";
             if (_pitchCallDetail != null)
             {
-                var detail = PitchDetailText(pt);
+                detail = PitchDetailText(pt);
                 _pitchCallDetail.text = detail;
                 _pitchCallDetail.style.display = detail.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
             }
+
+            if (judge.Length == 0 && detail.Length == 0) { HidePitchCall(); return; }
 
             _pitchCall.style.display = DisplayStyle.Flex;
             _pitchCallOn = true;
@@ -1049,7 +1057,7 @@ namespace KokoSim.Unity.Match
                 case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return "ストライク";
                 case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return "ストライク";
                 case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return "ファール";
-                case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "打った";
+                case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "";   // 打球再生と結果ラベルに任せる
                 case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "デッドボール";
                 default: return "";
             }
