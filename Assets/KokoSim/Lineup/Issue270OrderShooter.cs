@@ -70,9 +70,9 @@ namespace KokoSim.Unity.Lineup
             var spec = state.ToLineupSpec();
 
             var sb = new StringBuilder();
-            sb.AppendLine("[i270b] ブルペン（期待＝投手力降順）");
+            sb.AppendLine("[i270b] ブルペン＝継投順（期待＝背番号昇順）");
             foreach (var p in spec.Bullpen) sb.AppendLine("  " + Line(p));
-            sb.AppendLine("[i270b] ベンチ（期待＝打撃力降順）");
+            sb.AppendLine("[i270b] ベンチ＝代打順（期待＝背番号昇順）");
             foreach (var p in spec.Bench) sb.AppendLine("  " + Line(p));
 
             sb.AppendLine("[i270b] メンバー設定プール＝ベンチ外（期待＝打撃力降順）");

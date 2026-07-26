@@ -239,6 +239,12 @@ namespace KokoSim.Unity.Lineup
         private IEnumerable<int> ByPitching() =>
             _eligible.OrderByDescending(i => Strength(i).Pitching);
 
+        // 控え（ブルペン・ベンチ・控え一覧の表示）は背番号順。プレイヤーがメンバー設定で振った番号が
+        // そのまま控えの優先度＝継投順・代打順になる（オーナー決定 2026-07-26, issue #270）。
+        // ベンチ入り9人未満の異常編成では背番号なし（0）が混じるので末尾へ送る。
+        private IEnumerable<int> ByUniformNumber() =>
+            _eligible.OrderBy(i => _roster[i].UniformNumber == 0 ? int.MaxValue : _roster[i].UniformNumber);
+
         // カテゴリ別指標はロスターが変わらない限り不変なので1度だけ集計する（並べ替えのたびに再計算しない）。
         private PlayerStrength Strength(int index)
         {
@@ -437,15 +443,17 @@ namespace KokoSim.Unity.Lineup
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
             if (_usesDh && _spIdx >= 0) used.Add(_spIdx);
 
-            // 控え：打順外の投手＝ブルペン、野手＝ベンチ。並びがそのまま継投順・代打順になるので、
-            // ブルペンは投手力順・ベンチは打撃力順で積む（用途別のキー, issue #270）。
+            // 控え：打順外の投手＝ブルペン、野手＝ベンチ。並びがそのまま継投順・代打順になる。
+            // 順番は背番号順（オーナー決定 2026-07-26, issue #270）＝控えの優先度は
+            // メンバー設定で背番号を振った時点でプレイヤーが決めている。控え一覧の表示もこれと同じ順。
             var bullpen = new List<DevelopingPlayer>();
-            foreach (var i in ByPitching())
-                if (!used.Contains(i) && _roster[i].IsPitcher) bullpen.Add(_roster[i]);
-
             var bench = new List<DevelopingPlayer>();
-            foreach (var i in ByBatting())
-                if (!used.Contains(i) && !_roster[i].IsPitcher) bench.Add(_roster[i]);
+            foreach (var i in ByUniformNumber())
+            {
+                if (used.Contains(i)) continue;
+                if (_roster[i].IsPitcher) bullpen.Add(_roster[i]);
+                else bench.Add(_roster[i]);
+            }
 
             return new LineupSpec(
                 order,
@@ -530,18 +538,14 @@ namespace KokoSim.Unity.Lineup
                 v.StartingPitcherPicked = _pickKind == PickKind.StartingPitcher;
             }
 
-            // 控え（打順外・投手先頭）。並びは ToLineupSpec が積むブルペン/ベンチと同じキーにする
-            // ＝この一覧の上から順に継投・代打で出る（表示と実際が食い違わない, issue #270）。
+            // 控え（打順外・背番号順）。ToLineupSpec が積むブルペン/ベンチと同じ順なので、
+            // この一覧の上から順に継投・代打で出る（表示と実際が食い違わない, issue #270）。
             var used = new HashSet<int>();
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
             if (_usesDh && _spIdx >= 0) used.Add(_spIdx);
-            foreach (var i in _eligible
-                         .Where(i => !used.Contains(i))
-                         .OrderByDescending(i => _roster[i].IsPitcher ? 1 : 0)
-                         .ThenByDescending(i => _roster[i].IsPitcher
-                             ? Strength(i).Pitching
-                             : Strength(i).Batting))
+            foreach (var i in ByUniformNumber())
             {
+                if (used.Contains(i)) continue;
                 var p = _roster[i];
                 v.Bench.Add(new BenchRowView
                 {
