@@ -226,6 +226,13 @@
 .row-panel:hover { background-color: var(--sakura-tint); }
 /* 選択行＝桜色＋左端インクの太帯。 */
 .row-panel--selected { background-color: var(--sakura-tint); border-left-width: 5px; border-left-color: var(--ink); }
+/* 高密度バリアント：部員が多い画面（練習割当）で1画面に見える行数を増やす（Issue #273・オーナー決定値）。
+   .row-panel 本体（他画面）はそのまま据え置き、必要な画面だけこのクラスを併せて付ける（UI原則⑤）。 */
+.row-panel--dense {
+    min-height: var(--h-row-dense);
+    padding-top: var(--sp-1); padding-bottom: var(--sp-1);
+    margin-bottom: 6px;
+}
 
 /* ── ToolButton：見出しプレート等に置く操作ボタン（白地・空青文字・インク枠＋小ベタ影）──
    並び替え・切替など。CTA（赤）とは別＝操作系は空の青（design-19 §5）。 */
