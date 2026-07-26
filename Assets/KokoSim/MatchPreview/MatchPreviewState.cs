@@ -20,7 +20,7 @@ namespace KokoSim.Unity.MatchPreview
         public string PosKanji = "";  // 守備位置漢字（DH は「指」）
         public string Name = "";
         public string Meta = "";      // 学年・投打
-        public string Grade = "C";    // 総合ランク（S〜G）
+        // 選手個人の総合ランクは持たない（Issue #30 で廃止・#270 で本画面からも撤去）。
     }
 
     /// <summary>片側（自校 or 相手校）の対戦カード。</summary>
@@ -132,8 +132,6 @@ namespace KokoSim.Unity.MatchPreview
             AddAxis(side, FactorLabels[4], strength.Depth);
             AddAxis(side, FactorLabels[5], strength.Mental);
 
-            // 個人ランクは試合層 Player を集計用へ逆投影して求める（自校・相手校で同一の尺度）。
-            var projected = ScoutedTeamProfile.ToRoster(team);
             for (var i = 0; i < team.BattingOrder.Count; i++)
             {
                 var p = team.BattingOrder[i];
@@ -144,7 +142,6 @@ namespace KokoSim.Unity.MatchPreview
                     PosKanji = MatchLiveStatsProvider.PosAbbr(isDh ? FieldPosition.DesignatedHitter : p.Position),
                     Name = p.Name,
                     Meta = Meta(p),
-                    Grade = GradeOf(projected, i),
                 });
             }
 
@@ -156,7 +153,6 @@ namespace KokoSim.Unity.MatchPreview
                     PosKanji = "投",
                     Name = sp.Name,
                     Meta = Meta(sp),
-                    Grade = GradeOf(projected, projected.Count - 1),   // ToRoster は先発投手を末尾に積む
                 };
             }
             return side;
@@ -178,10 +174,5 @@ namespace KokoSim.Unity.MatchPreview
             var grade = p.Grade > 0 ? p.Grade + "年 " : "";
             return grade + MatchLiveStatsProvider.ThrowsLabel(p.Throws) + MatchLiveStatsProvider.BatsLabel(p.Bats);
         }
-
-        private static string GradeOf(IReadOnlyList<DevelopingPlayer> projected, int index)
-            => index >= 0 && index < projected.Count
-                ? Tiers.FromStrength(projected[index].AverageLevel()).ToString()
-                : "C";
     }
 }

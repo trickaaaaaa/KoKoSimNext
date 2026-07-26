@@ -168,6 +168,71 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     }
 
     /// <summary>
+    /// 守備位置の入替＝コンバート（issue #255 A-2, 設計書09 §2.3）。オーナー決定 A-2＝<b>僅差終盤限定</b>で、
+    /// リードを守る場面だけ守備を組み替える（無料の手なので毎回やらせると帯が大きく動くため範囲を絞る）。
+    /// ③校風で実効ティアを補正し、②ティア関門（既定 <c>DefenseSwapMinTier</c>=99＝誰も通らない＝恒等）で
+    /// 運用可否を決め、①能力値で好機を掴めるかを引く。関門を通らない限り RNG は一切引かない。
+    /// </summary>
+    public (int SlotA, int SlotB)? CallDefenseSwap(in DefenseSwapSituation s, IRandomSource rng)
+    {
+        // ③ 校風による実効ティア補正（守り勝つ＝組み替えに積極的／豪腕依存＝投手任せで動かさない）。
+        var effTier = _profile.TierRank + _profile.Style switch
+        {
+            SchoolStyle.DefensiveMinded => _ai.DefensiveMindedSwapTierBonus,
+            SchoolStyle.AceDependent => -_ai.AceDependentSwapTierPenalty,
+            _ => 0,
+        };
+        if (effTier < _ai.DefenseSwapMinTier) return null;   // ② 引き出しになければ運用しない（RNG不使用）
+
+        // A-2: 終盤かつ僅差のときだけ。ここまでも RNG は引かない。
+        if (s.Inning < _ai.DefenseSwapFromInning) return null;
+        if (System.Math.Abs(s.ScoreDiff) > _ai.DefenseSwapMaxScoreDiff) return null;
+
+        var best = BestSwap(s);
+        if (best is null) return null;
+
+        // ① 能力値: 改善に気づけるか。外すとそのまま＝好機を逃す（他の判断と同じ丸め方）。
+        return MathUtil.Chance(_optimalProb, rng) ? best : null;
+    }
+
+    /// <summary>
+    /// 守備スコア（Σ 守備位置の負担重み × Fielding）を最も改善する1組を返す（RNG不使用＝決定論）。
+    /// 入替(a,b)の改善量 = (w[posB] - w[posA]) × (fieldA - fieldB)＝「上手い方を重い位置へ」。
+    /// 捕手は専門職（リード・捕球）なので動かさない＝重み表に載せず候補から外す。
+    /// 同値は (slotA, slotB) の小さい方を採る（決定論の担保）。
+    /// </summary>
+    private (int SlotA, int SlotB)? BestSwap(in DefenseSwapSituation s)
+    {
+        (int A, int B)? best = null;
+        var bestGain = _ai.DefenseSwapMinGain;   // これ未満の改善では動かさない（> で比較＝閾値ちょうどは不採用）
+        var n = System.Math.Min(s.Lineup.Count, s.Swappable.Count);
+        for (var a = 0; a < n; a++)
+        {
+            if (!s.Swappable[a] || DefenseWeight(s.Lineup[a].Position) is not { } wa) continue;
+            for (var b = a + 1; b < n; b++)
+            {
+                if (!s.Swappable[b] || DefenseWeight(s.Lineup[b].Position) is not { } wb) continue;
+                var gain = (wb - wa) * (s.Lineup[a].Fielding - s.Lineup[b].Fielding);
+                if (gain > bestGain) { bestGain = gain; best = (a, b); }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>守備位置の負担重み。投手・捕手・DHは入替対象外なので null。</summary>
+    private double? DefenseWeight(Field.FieldPosition pos) => pos switch
+    {
+        Field.FieldPosition.Shortstop => _ai.DefenseWeightShortstop,
+        Field.FieldPosition.CenterField => _ai.DefenseWeightCenterField,
+        Field.FieldPosition.SecondBase => _ai.DefenseWeightSecondBase,
+        Field.FieldPosition.ThirdBase => _ai.DefenseWeightThirdBase,
+        Field.FieldPosition.RightField => _ai.DefenseWeightRightField,
+        Field.FieldPosition.LeftField => _ai.DefenseWeightLeftField,
+        Field.FieldPosition.FirstBase => _ai.DefenseWeightFirstBase,
+        _ => null,
+    };
+
+    /// <summary>
     /// 継投（設計書11 §4, issue #209）。基本トリガー（疲労・球数上限）は必ず尊重（Standardと同一・RNG不使用）。
     /// その上に高度トリガー（崩れ・僅差終盤・動揺）を②ティア関門・③校風・①能力値ミスで被せる。
     /// 高度トリガーの各 MinTier は既定で到達不能(99)＝発火せず、基本トリガーの時しか RNG を引かない
@@ -178,7 +243,10 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         // 基本トリガー（疲労margin/ハードキャップ/週間球数）は無条件に尊重（決定論・RNG不使用）。
         // 人選だけ横断ランキングに載せ替える（issue #209 Phase B。RNG非依存＝決定論）。
         if (_inner.CallPitchingChange(s, rng) is { } basic)
-            return basic with { Reliever = PickReliever(s) };
+        {
+            var basicReliever = PickReliever(s);
+            return basic with { Reliever = basicReliever, ConvertTo = ConvertTargetFor(s, basicReliever) };
+        }
 
         // 交代先がいなければ高度トリガーも意味を持たない（＝RNGを引かず素通り）。
         if (!s.ReliefAvailable) return null;
@@ -188,9 +256,42 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         if (reason is null) return null;
 
         // ①能力値: 最適な継投の好機を掴む確率（専用Fork由来の rng を消費）。外すと続投＝好機を逃す。
-        return MathUtil.Chance(_optimalProb, rng)
-            ? new PitchingChangeDecision(reason.Value, PickReliever(s))
-            : null;
+        if (!MathUtil.Chance(_optimalProb, rng)) return null;
+        var reliever = PickReliever(s);
+        return new PitchingChangeDecision(reason.Value, reliever, ConvertTargetFor(s, reliever));
+    }
+
+    /// <summary>
+    /// コンバート継投の行き先（issue #255 B-1, 設計書09 §6.2）。継投がすでに決まった上で、
+    /// 「元投手の打力が高いので打順に残したい」ときだけ通常継投の代わりに守備へ回す。
+    /// 打順に残す判断なので<b>非DHのみ</b>（DH制では元投手はもともと打席に立たない）。
+    /// ②ティア関門（既定 <c>ConvertReliefMinTier</c>=99＝誰も通らない＝恒等）。RNG不使用＝決定論。
+    /// 行き先は<b>負担の最も軽い守備位置</b>（＝押し出す野手の損失が最小）。同重みなら Fielding が低い方、
+    /// それも同値なら打順スロットの小さい方を採る。
+    /// </summary>
+    private Field.FieldPosition? ConvertTargetFor(in PitchingChangeSituation s, Players.Player? reliever)
+    {
+        if (_profile.TierRank < _ai.ConvertReliefMinTier) return null;
+        if (reliever is null) return null;            // 人選が無いと行き先を決められない＝通常継投に落とす
+        if (s.UsesDh) return null;                    // 「打順に残す」判断は非DHでのみ意味を持つ
+        if (s.CurrentPitcher is not { } pitcher) return null;
+        if (s.DefenseLineup is not { } lineup || s.SwappableSlots is not { } swappable) return null;
+
+        // 元投手の打力（ミート・パワーの平均）が閾値未満なら普通に替える＝打線に残す価値がない。
+        if ((pitcher.Contact + pitcher.Power) / 2.0 < _ai.ConvertReliefMinBatting) return null;
+
+        Field.FieldPosition? target = null;
+        var bestWeight = double.PositiveInfinity;
+        var bestFielding = int.MaxValue;
+        var n = System.Math.Min(lineup.Count, swappable.Count);
+        for (var i = 0; i < n; i++)
+        {
+            if (!swappable[i] || DefenseWeight(lineup[i].Position) is not { } w) continue;
+            var f = lineup[i].Fielding;
+            if (w > bestWeight || (w == bestWeight && f >= bestFielding)) continue;
+            bestWeight = w; bestFielding = f; target = lineup[i].Position;
+        }
+        return target;
     }
 
     /// <summary>
