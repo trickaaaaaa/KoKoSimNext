@@ -647,6 +647,63 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
+        /// 打者クリップの両手ボーン間隔カーブを0.1s刻みで実測する（AlignBatの片手判定閾値の根拠）。
+        /// 素体UBCは両手で握っていてもボーン間隔が~0.2m台あるため、閾値は「本当に手が離れた」区間と
+        /// 通常保持区間をこの表で分離できる値に置く。
+        /// </summary>
+        public static string RunHandGapProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var clips = new[]
+                {
+                    "AA_Baseball_Batter_Idle_Loop",
+                    "AA_Baseball_Batter_Swing_Type01_Miss",
+                    "AA_Baseball_Batter_Swing_Type01_Hitting",
+                    "AA_Baseball_Batter_Strike",
+                    "AA_Baseball_Batter_Hit_ByPitch_Type01",
+                };
+                var sb = new StringBuilder();
+                foreach (var name in clips)
+                {
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(name + " NOT FOUND"); continue; }
+                    sb.Append(name + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture) + "\n ");
+                    int n = Mathf.FloorToInt(clip.length * 10f);
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * 0.1f);
+                        var body = SpawnBody(root, "probe-h", Vector3.zero, 90f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var lh = anim.GetBoneTransform(HumanBodyBones.LeftHand);
+                        var rh = anim.GetBoneTransform(HumanBodyBones.RightHand);
+                        float gap = (lh != null && rh != null) ? Vector3.Distance(lh.position, rh.position) : -1f;
+                        sb.Append(string.Format(CultureInfo.InvariantCulture, " {0:F1}s={1:F2}", sec, gap));
+                        Object.DestroyImmediate(body);
+                    }
+                    sb.Append('\n');
+                }
+                Debug.Log("[DuelMotionSpike] hand gap probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
         /// 投球クリップのyaw候補4種（-90/0/90/180）をリリース(0.53)と直後(0.60)で撮り比べる目視決着用。
         /// 出力: out/duel-stage/frame/pitchyaw_[yaw]_t[時刻].png（採用構図R-comp60）
         /// </summary>

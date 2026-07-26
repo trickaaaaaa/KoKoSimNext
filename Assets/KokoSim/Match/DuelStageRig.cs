@@ -522,10 +522,13 @@ namespace KokoSim.Unity.Match
             return bat;
         }
 
-        // 片手フォロースルー判定: 両手ボーン間隔がグリップ幅（実測~0.1m）を明確に超えたら上の手が離れたとみなす
-        private const float HandsApartThreshold = 0.22f;
+        // 片手フォロースルー判定: 両手ボーン間隔がグリップ間隔を明確に超えたら上の手が離れたとみなす。
+        // 素体UBCの両手ボーン間隔は「両手で握っていても」構えで~0.23mある（RunHandGapProbe実測）ため、
+        // 判定はスイング系クリップに限定する（構え/見逃し/死球は常に両手整列＝素の見た目を信じる）
+        private const float HandsApartThreshold = 0.28f;
         private const float BatDropTime = 1.9f;   // Hittingクリップの走り出し（≈正規化0.55）以降はバットを放った扱いで非表示
-        private bool _batOneHand;
+        private bool _batOneHand;       // いま片手追従中か（診断用）
+        private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;
         private Quaternion _batLocalRot;
 
@@ -546,25 +549,26 @@ namespace KokoSim.Unity.Match
 
             var lh = lhT.position;
             var rh = rhT.position;
-            if (Vector3.Distance(lh, rh) <= HandsApartThreshold)
+            bool swingClip = _batter.Clip == _swingMissClip || _batter.Clip == _swingHitClip;
+            _batOneHand = swingClip && _batGoodValid && Vector3.Distance(lh, rh) > HandsApartThreshold;
+            if (!_batOneHand)
             {
                 // 両手保持: 両手ボーンを結ぶ線に整列（§3.3の実測知見＝手ボーン軸は素体依存で使えない）
                 var axis = (rh - lh).normalized;
                 _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
                 _bat.transform.position = lh + axis * (0.425f - 0.10f);
-                _batOneHand = false;
+                // 片手期の追従用に「最後に両手で持てていた見た目」を毎回焼き直す。
+                // 「離れた瞬間に初回焼き付け」だと、クリップ切替直後は直前クリップ末尾の残骸姿勢を
+                // 拾ってゴミオフセットが固定される（構えでバットが地面に刺さる事故の真因）
+                _batLocalPos = lhT.InverseTransformPoint(_bat.transform.position);
+                _batLocalRot = Quaternion.Inverse(lhT.rotation) * _bat.transform.rotation;
+                _batGoodValid = true;
                 return;
             }
 
-            // 片手フォロースルー（右打者は振り抜きで右手が離れる）: 離れた瞬間の見た目を
-            // 下の手（左手）ボーンのローカルへ焼き付け、以後は左手に追従させる。
-            // ボーン軸の向きを仮定しない＝焼き付けオフセットなので素体が変わっても壊れない
-            if (!_batOneHand)
-            {
-                _batLocalPos = lhT.InverseTransformPoint(_bat.transform.position);
-                _batLocalRot = Quaternion.Inverse(lhT.rotation) * _bat.transform.rotation;
-                _batOneHand = true;
-            }
+            // 片手フォロースルー（右打者は振り抜きで右手が離れる）: 最後の両手整列時の見た目のまま
+            // 下の手（左手）ボーンに追従させる。ボーン軸の向きを仮定しない＝焼き付けオフセットなので
+            // 素体が変わっても壊れない
             _bat.transform.position = lhT.TransformPoint(_batLocalPos);
             _bat.transform.rotation = lhT.rotation * _batLocalRot;
         }
@@ -588,6 +592,33 @@ namespace KokoSim.Unity.Match
             go.layer = layer;
             foreach (Transform child in go.transform) SetLayerRecursive(child.gameObject, layer);
         }
+
+#if UNITY_EDITOR
+        // ---- 【開発用・エディタ限定】録画ハーネス（DuelViewRecorder）向け観測窓 ----
+
+        /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>
+        internal string BatDiagForCapture()
+        {
+            if (_batter == null || _batter.Animator == null) return "-\t0\t-1\tFalse\tFalse";
+            var lh = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var rh = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            float gap = (lh != null && rh != null) ? Vector3.Distance(lh.position, rh.position) : -1f;
+            string clip = _batter.Clip != null ? _batter.Clip.name : "-";
+            bool batOn = _bat != null && _bat.activeSelf;
+            return clip + "\t" + _batter.Time.ToString("F2") + "\t" + gap.ToString("F3")
+                + "\t" + _batOneHand + "\t" + batOn;
+        }
+
+        /// <summary>打者の左手ボーンのRT上ピクセル座標（クロップ中心の決定用）。</summary>
+        internal Vector2 BatterScreenPxForCapture()
+        {
+            if (_camera == null || _batter == null || _batter.Animator == null) return new Vector2(-1f, -1f);
+            var lh = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var p = lh != null ? lh.position : _batter.Go.transform.position + Vector3.up;
+            var sp = _camera.WorldToScreenPoint(p);
+            return new Vector2(sp.x, sp.y);
+        }
+#endif
 
         // ---- アセットロード（エディタ限定・ビルド同梱は本実装時に決める） --------
 

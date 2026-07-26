@@ -1189,6 +1189,9 @@ namespace KokoSim.Unity.Match
         /// <summary>撮影ハーネス用: 対決ビューが表示中か（打席送りで試合が替わるとリセットされるため確認用）。</summary>
         internal bool DuelViewOnForCapture => _duelOn;
 
+        /// <summary>撮影ハーネス用: 対決ステージ（録画ハーネスがRTと診断値を直接読む）。</summary>
+        internal DuelStageRig DuelRigForCapture => _duelRig;
+
         /// <summary>撮影ハーネス用: 現在ロード中の打席の再生を頭からやり直す（対決ビューの狙い撃ち撮影用）。</summary>
         internal void RestartCurrentPaForCapture()
         {
