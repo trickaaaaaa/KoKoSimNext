@@ -55,6 +55,8 @@ namespace KokoSim.Unity.Match
             public Quaternion BaseRot;
             public float GroundY;
             public float AnkleOffset;
+            public bool HoldAtEnd;   // クリップ末尾で頭姿勢のまま停止する（投手＝アンカー同期の合間はセット姿勢で待つ）
+            public bool Holding;
         }
 
         public DuelStageRig()
@@ -79,6 +81,7 @@ namespace KokoSim.Unity.Match
             // 投手クリップだけ前方向−X（ルートモーション実測）、脇3クリップは素で+Z向き
             _pitcher = SpawnActor(body, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), -90f,
                 new Color(0.92f, 0.92f, 0.90f), MoundHeight, layer);
+            _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
             _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
                 new Color(0.16f, 0.20f, 0.38f), 0f, layer);
             var catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
@@ -118,10 +121,52 @@ namespace KokoSim.Unity.Match
             Available = true;
         }
 
+        // ── §7-2 アンカー同期（第1弾＝投手のみ） ──────────────────────────
+        // リリースのアンカー時刻はクリップ実測（スイングシートの正規化0.53 × 6.00s）。
+        // 本実装ではAnimationEventの注釈付けに置き換える（design-18 §7-2）。
+        private const float ReleaseTime = 3.18f;
+        private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
+        private float _cutClipTime;
+
+        /// <summary>
+        /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
+        /// 投手クリップをリリース時刻へスナップし、次の1球があれば（nextReleaseIn=1球周期）
+        /// フォロースルー後にリリースのプリロール位置へカットバックする予約を入れる。
+        /// クリップ内部の緩急は改変しない＝再生開始位置の逆算だけで合わせる（設計書18の掟）。
+        /// </summary>
+        public void OnPitchReleased(float nextReleaseIn)
+        {
+            if (!Available || _pitcher == null) return;
+            SeekActor(_pitcher, ReleaseTime);
+            GroundFix(_pitcher);
+            if (nextReleaseIn > 0f)
+            {
+                float preRoll = Mathf.Min(ReleaseTime, nextReleaseIn * 0.6f);
+                _cutCountdown = nextReleaseIn - preRoll;
+                _cutClipTime = ReleaseTime - preRoll;
+            }
+            else
+            {
+                _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
+            }
+        }
+
         /// <summary>毎フレーム呼ぶ。ポーズは1/12秒たまるごとに進む（時間量子化）。</summary>
         public void Tick(float deltaTime)
         {
             if (!Available) return;
+
+            // カットバック予約（アンカー同期のプリロール）。量子化と独立にプレー時間で数える
+            if (_cutCountdown >= 0f)
+            {
+                _cutCountdown -= deltaTime;
+                if (_cutCountdown < 0f)
+                {
+                    SeekActor(_pitcher, _cutClipTime);
+                    GroundFix(_pitcher);
+                }
+            }
+
             _acc += deltaTime;
             float step = 1f / PoseFps;
             bool stepped = false;
@@ -285,9 +330,32 @@ namespace KokoSim.Unity.Match
             return actor;
         }
 
-        /// <summary>1体を1ステップ進める。クリップ末尾でスポーン姿勢へ戻してループ（ルートモーションのドリフト対策）。</summary>
+        /// <summary>
+        /// クリップの頭出し（アンカー同期用）。ルートモーションはデルタ蓄積なので、
+        /// スポーン姿勢へ戻してから0→目標時刻を60fps刻みで前進させる（スパイクのSample()と同じ方式）。
+        /// </summary>
+        private static void SeekActor(Actor a, float clipTime)
+        {
+            if (a == null) return;
+            a.Holding = false;
+            a.Go.transform.localPosition = a.BasePos;
+            a.Go.transform.localRotation = a.BaseRot;
+            a.Playable.SetTime(0);
+            a.Graph.Evaluate(0f);
+            float target = Mathf.Clamp(clipTime, 0f, a.Clip.length - 0.001f);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(target * 60f));
+            float dt = target / steps;
+            for (int i = 0; i < steps; i++) a.Graph.Evaluate(dt);
+            a.Time = target;
+        }
+
+        /// <summary>
+        /// 1体を1ステップ進める。クリップ末尾でスポーン姿勢へ戻し、HoldAtEnd なら頭姿勢のまま停止
+        /// （投手＝次のアンカー同期まで待つ）、それ以外はループ（ルートモーションのドリフト対策の基準戻し込み）。
+        /// </summary>
         private void StepActor(Actor a, float step)
         {
+            if (a.Holding) return;
             a.Time += step;
             if (a.Time >= a.Clip.length)
             {
@@ -296,6 +364,7 @@ namespace KokoSim.Unity.Match
                 a.Go.transform.localRotation = a.BaseRot;
                 a.Playable.SetTime(0);
                 a.Graph.Evaluate(0f);
+                if (a.HoldAtEnd) a.Holding = true;
                 return;
             }
             a.Graph.Evaluate(step);

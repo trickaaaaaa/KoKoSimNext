@@ -730,6 +730,9 @@ namespace KokoSim.Unity.Match
                     _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore));
             else
                 _view.SetResting(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
+
+            // 対決ビューのアンカー同期（design-18 §7-2）: この瞬間＝リリース。次の1球があれば周期を渡してプリロール予約
+            if (_duelOn) _duelRig?.OnPitchReleased(index < last ? pitchIntervalSeconds : -1f);
         }
 
         // 投球フェーズ終了→打球再生（Play あり）または結果保持（三振・四球）。
