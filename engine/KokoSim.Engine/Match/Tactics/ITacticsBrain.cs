@@ -39,6 +39,13 @@ public interface ITacticsBrain
     (Player Out, Player Sub)? CallDefensiveSub(in SubstitutionSituation s, IRandomSource rng);
 
     /// <summary>
+    /// 守備位置の入替＝コンバート（守備側, イニング頭。設計書09 §2.3, issue #255）。入れ替える打順スロット対を返す。
+    /// null=動かさない。選手の出入りが無いので<b>交代回数を消費しない</b>（＝控えが居なくても打てる手）。
+    /// 既定実装は常に null＝この入口を知らない実装（テスト用の簡易Brain等）も従来どおり動く＝恒等。
+    /// </summary>
+    (int SlotA, int SlotB)? CallDefenseSwap(in DefenseSwapSituation s, IRandomSource rng) => null;
+
+    /// <summary>
     /// 継投判断（守備側, 打席境界ごと。設計書11 §4, issue #209）。替えるなら理由付きで返す。null=続投。
     /// 試合エンジンは疲労・球数上限を事前計算して <see cref="PitchingChangeSituation"/> に載せて渡し、
     /// <see cref="StandardTacticsBrain"/> はそれをそのまま尊重＝従来挙動と完全一致（恒等）。高度な継投

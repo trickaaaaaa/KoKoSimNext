@@ -599,6 +599,26 @@ enemy_ai:
   ace_rest_ace_dependent_factor: 0.2          # 豪腕依存: 打線は水物＝エースにほぼ常に頼る
   ace_rest_defensive_minded_factor: 1.6       # 守り勝つ野球: ローテ管理に積極的
   ace_rest_total_baseball_factor: 1.4         # 全員野球: 選手層を使い回す方針の一環
+  # ⑦ 守備位置操作層（issue #255, 設計書09 §2.3/§6.2）🟡実測校正
+  # AIが「守備位置の入替（交代回数を消費しない無料の手）」と「コンバート継投」を打てるようにする層。
+  # min_tier 既定は到達不能(99)＝発火しない＝games_10k/tactics 帯・決定論baseline を1ビットも動かさない。
+  # 有効化して帯を実測してから採否を決める（⑥ 高度な継投層と同じ2段運用）。
+  defense_swap_min_tier: 99                   # A-2: 守備位置の入替（既定99=無効。有効化時の設計値は 3=D 前後）
+  defense_swap_from_inning: 7                 # A-2: 終盤限定（この回以降）
+  defense_swap_max_score_diff: 2              # A-2: 僅差限定（守備側視点の点差の絶対値）
+  defense_swap_min_gain: 4.0                  # 守備スコアの最小改善量（これ以下では動かさない）
+  defensive_minded_swap_tier_bonus: 1         # 守り勝つ: 組み替えに積極的
+  ace_dependent_swap_tier_penalty: 1          # 豪腕依存: 投手任せで守備を動かさない
+  # 守備位置ごとの負担重み（守備スコア = Σ 重み × Fielding）。捕手・投手・DHは入替対象外なので持たない。
+  defense_weight_shortstop: 1.00
+  defense_weight_center_field: 0.90
+  defense_weight_second_base: 0.80
+  defense_weight_third_base: 0.70
+  defense_weight_right_field: 0.55
+  defense_weight_left_field: 0.45
+  defense_weight_first_base: 0.30
+  convert_relief_min_tier: 99                 # B-1: コンバート継投（既定99=無効。有効化時の設計値は 5=B 前後）
+  convert_relief_min_batting: 60.0            # 元投手の (ミート+パワー)/2 がこれ以上なら打順に残す
 
 # --- 怪我（設計書03 §3.5: 段階制・常に可視・押して出場は悪化リスク）🟡 ---
 injury:

@@ -293,6 +293,13 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     }
 
     /// <summary>
+    /// 守備位置の入替（issue #255, 設計書09 §2.3）。基準采配は<b>動かさない</b>＝従来の試合結果と
+    /// 1ビットも変わらない（恒等・RNG不使用）。守備の組み替えは AI 側の引き出し
+    /// （<see cref="AiTacticsBrain.CallDefenseSwap"/>）に閉じる。
+    /// </summary>
+    public (int SlotA, int SlotB)? CallDefenseSwap(in DefenseSwapSituation s, IRandomSource rng) => null;
+
+    /// <summary>
     /// 継投（設計書11 §4, issue #209）。基準采配は従来の疲労球数トリガーそのまま＝engine が事前計算した
     /// <see cref="PitchingChangeSituation.FatigueTriggered"/>（疲労margin/ハードキャップ）または週間球数制限で
     /// 替える。RNG は使わない（決定論・恒等）。人選は engine 側の bullpen 先頭のまま（横断ランキングは Phase B）。
