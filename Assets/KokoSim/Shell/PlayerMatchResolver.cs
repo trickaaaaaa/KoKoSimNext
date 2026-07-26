@@ -27,7 +27,7 @@ namespace KokoSim.Unity.Shell
         {
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
-            var ctx = new GameContext { MercyRuleEnabled = mercyRuleEnabled };
+            var ctx = Rules.ApplyTo(new GameContext { MercyRuleEnabled = mercyRuleEnabled }, CalendarYear());
             var managerIsAway = ManagerIsAway(manager, opponent);
             var result = managerIsAway
                 ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2))
@@ -43,7 +43,8 @@ namespace KokoSim.Unity.Shell
             // 全打席を進めた結果は Resolve のボックススコアと一致する＝観戦しても大会結果は変わらない。
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
-            var ctx = new GameContext { CaptureTimelines = true, MercyRuleEnabled = mercyRuleEnabled };
+            var ctx = Rules.ApplyTo(
+                new GameContext { CaptureTimelines = true, MercyRuleEnabled = mercyRuleEnabled }, CalendarYear());
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
             // 大会フローの実試合にもデバッグHUDの観測を差し込む（設計書17 §5/§12.4, #95）。HUDが閉じていれば
             // AttachTo は恒等（Enabled==false→ctxをそのまま返す）＝観戦の有無で大会結果が変わらない契約
@@ -65,8 +66,12 @@ namespace KokoSim.Unity.Shell
         public static bool ManagerIsAway(School manager, School opponent)
             => HomeAwayAssignment.ManagerIsAway(manager.Id, opponent.Id, GameClock.YearIndex, GameClock.Week);
 
-        /// <summary>DH判定に使う現代ルール（現状トグルなし・年代連動の既定値, 設計書05 §1.3）。</summary>
+        /// <summary>現代ルール（現状トグルなし・年代連動の既定値, 設計書05 §1.3）。DH判定と
+        /// タイブレーク/球数制限の GameContext 反映（issue #252）の両方でこの1インスタンスを使う。</summary>
         private static readonly ModernRules Rules = new();
+
+        /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
+        private static int CalendarYear() => SeasonClock.SeasonBaseYear + (GameSession.Current.Year - 1);
 
         /// <summary>
         /// 相手校ラインナップを「校ID＋年度」から決定論生成する。大会展望が同じ入口で同じチームを引くので、
@@ -91,7 +96,7 @@ namespace KokoSim.Unity.Shell
         private static Team BuildOpponentTeam(School opponent, AceRestContext? aceRest)
         {
             var yearIndex = GameSession.Current.Year;
-            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
+            var calendarYear = CalendarYear();
             // 永続ロスター（#80）から相手校チームを組む。使い捨て生成を廃し、秋に対戦した2年生が翌夏に成長して
             // 戻ってくる。展望（TournamentPreview）も同じ Rosters.TeamFor を通り実戦と一致する。
             var team = NationService.Rosters.TeamFor(opponent, yearIndex, Rules, calendarYear, aceRest);

@@ -51,6 +51,16 @@
   スコア横に「コールド」を注記する。裏試合の合成スコア（`TournamentRunner.SynthesizeScore`）とBalance CLIの
   統計回帰はイニング概念を持たない／帯が9回完走前提のため、当面OFF維持（裏試合フルシム化＝Q15が
   入る際に裏試合側のGameContextへ同トグルを適用して自然解消させる）
+- **タイブレーク・球数制限の配線【2026-07-26実装・issue #252】**: 上記2つは engine 側の解決ロジック
+  （`GameEngine`）は実装済みだったが、`GameContext` へ流し込む配線が自校戦にも裏試合にも存在せず、
+  実ゲームでは一度も発動していなかった。`ModernRules.ApplyTo(ctx, calendarYear)` を追加し、
+  **自校戦（`PlayerMatchResolver.Resolve`/`BeginLive`）にのみ**暦年から `TieBreakEnabled` /
+  `WeeklyPitchLimit` を適用する（`Resolve`/`BeginLive` は同一設定＝観戦しても結果は変わらない契約を維持）。
+  裏試合（`NationBackgroundSim` / `TournamentEntry` 経由の `BackgroundMatchResolver`）は、上のコールドと
+  同じ理由（全国4000校の得点分布・Balance CLI帯が動く）で**当面OFFのまま**据え置く。将来 裏試合にも
+  適用する場合は Heavy統計回帰の帯再検証とセットで行うこと。なお `TournamentPitchLedger` による
+  週またぎの持ち越し球数（`priorWeekPitches`）を `GameEngine.Play` へ渡す配線は本issueの範囲外
+  （既存コメントのとおり帯再校正とセットの別issue）で、単一試合内の `WeeklyPitchLimit` 適用のみ行う。
 
 ### 1.4 裏試合の処理（パフォーマンス設計）【2026-07-21改訂: 3層→2層／2026-07-22 実装: #43+#80+#82】
 

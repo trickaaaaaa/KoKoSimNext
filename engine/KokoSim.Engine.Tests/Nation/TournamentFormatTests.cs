@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using Xunit;
@@ -234,6 +235,45 @@ public sealed class TournamentFormatTests
         var rules = new ModernRules();
         Assert.Equal(int.MaxValue, rules.EffectiveWeeklyPitchLimit(2019));
         Assert.Equal(500, rules.EffectiveWeeklyPitchLimit(2021));
+    }
+
+    // ===== GameContext への年代連動反映（issue #252, ApplyTo） =====
+
+    [Fact]
+    public void ApplyTo_ModernYear_EnablesTieBreakAndPitchLimit()
+    {
+        var rules = new ModernRules();
+        var ctx = rules.ApplyTo(new GameContext(), 2026);
+        Assert.True(ctx.TieBreakEnabled);
+        Assert.Equal(500, ctx.WeeklyPitchLimit);
+    }
+
+    [Fact]
+    public void ApplyTo_PreIntroYear_LeavesRulesOff()
+    {
+        var rules = new ModernRules();
+        var ctx = rules.ApplyTo(new GameContext(), 2015);
+        Assert.False(ctx.TieBreakEnabled);
+        Assert.Equal(int.MaxValue, ctx.WeeklyPitchLimit);
+    }
+
+    [Fact]
+    public void ApplyTo_ForcedOff_OverridesModernYear()
+    {
+        var rules = new ModernRules { TieBreakForcedOff = true, PitchLimitForcedOff = true };
+        var ctx = rules.ApplyTo(new GameContext(), 2026);
+        Assert.False(ctx.TieBreakEnabled);
+        Assert.Equal(int.MaxValue, ctx.WeeklyPitchLimit);
+    }
+
+    [Fact]
+    public void ApplyTo_PreservesUnrelatedContextFields()
+    {
+        var rules = new ModernRules();
+        var ctx = rules.ApplyTo(new GameContext { MercyRuleEnabled = true, CaptureTimelines = true }, 2026);
+        Assert.True(ctx.MercyRuleEnabled);
+        Assert.True(ctx.CaptureTimelines);
+        Assert.Equal(10, ctx.TieBreakStartInning); // 既定のまま（設計書09 §7）
     }
 
     // ===== YAMLローダ（不変条件#4） =====
