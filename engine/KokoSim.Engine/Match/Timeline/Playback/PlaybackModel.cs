@@ -134,6 +134,12 @@ public sealed record PlaybackRunner
 /// <summary>時刻付き実況キャプション。mock: caps[i] = [t, text]。</summary>
 public readonly record struct PlaybackCaption(double T, string Text);
 
+/// <summary>
+/// 判定イベント1件（再生用, Issue #260）。<see cref="KokoSim.Engine.Match.Timeline.JudgementEvent"/>
+/// の再生側ミラー。走者レッグとは独立した確定時刻を持つ。
+/// </summary>
+public readonly record struct PlaybackJudgement(double T, bool IsOut, bool CloseCall, string Label);
+
 /// <summary>1プレーの再生データ（mock: PLAYS[i]）。</summary>
 public sealed record PlaybackPlay
 {
@@ -146,6 +152,8 @@ public sealed record PlaybackPlay
         = new Dictionary<FieldPosition, IReadOnlyList<PlaybackMove>>();
     public IReadOnlyList<PlaybackRunner> Runners { get; init; } = Array.Empty<PlaybackRunner>();
     public IReadOnlyList<PlaybackCaption> Caps { get; init; } = Array.Empty<PlaybackCaption>();
+    /// <summary>判定イベント列（Issue #260）。<see cref="PlaybackEvaluator.JudgementAt"/> の単一ソース。</summary>
+    public IReadOnlyList<PlaybackJudgement> Judgements { get; init; } = Array.Empty<PlaybackJudgement>();
 }
 
 /// <summary>
@@ -222,22 +230,22 @@ public static class PlaybackEvaluator
     }
 
     /// <summary>
-    /// 時刻 t で表示すべき判定（Issue #59 の判定オーバーレイ）。レッグ終端 T1 が
-    /// <c>[t - holdSeconds, t]</c> に入る判定のうち直近（最大 T1）を返す。判定が無ければ null。
-    /// アウトは常時、セーフは <see cref="PlaybackRun.CloseCall"/>（際どい判定）だけを対象にする
+    /// 時刻 t で表示すべき判定（Issue #59 の判定オーバーレイ）。確定時刻 T が
+    /// <c>[t - holdSeconds, t]</c> に入る判定のうち直近（最大 T）を返す。判定が無ければ null。
+    /// 判定イベント列（<see cref="PlaybackPlay.Judgements"/>）が単一ソース（Issue #260。
+    /// 走者レッグの終端に紐づけない＝フライの捕球アウトは捕球の瞬間に出せる）。
+    /// アウトは常時、セーフは <see cref="PlaybackJudgement.CloseCall"/>（際どい判定）だけを対象にする
     /// ＝出し分けは既にデータ側でゲート済み。描画専用の純関数で、判定/帯には一切関与しない。
     /// </summary>
     public static (bool IsOut, double T1)? JudgementAt(PlaybackPlay play, double t, double holdSeconds)
     {
         if (play is null) return null;
         (bool IsOut, double T1)? best = null;
-        foreach (var r in play.Runners)
-        foreach (var seg in r.Segs)
+        foreach (var j in play.Judgements)
         {
-            if (!seg.OutAtEnd && !seg.CloseCall) continue;
-            if (seg.T1 > t || seg.T1 <= t - holdSeconds) continue;   // 表示窓 [T1, T1+hold) の外
-            if (best.HasValue && seg.T1 < best.Value.T1) continue;   // 併殺等は直近の判定だけ出す
-            best = (seg.OutAtEnd, seg.T1);
+            if (j.T > t || j.T <= t - holdSeconds) continue;   // 表示窓 [T, T+hold) の外
+            if (best.HasValue && j.T < best.Value.T1) continue; // 併殺等は直近の判定だけ出す
+            best = (j.IsOut, j.T);
         }
         return best;
     }
@@ -250,12 +258,8 @@ public static class PlaybackEvaluator
     {
         if (play is null) return null;
         double? last = null;
-        foreach (var r in play.Runners)
-        foreach (var seg in r.Segs)
-        {
-            if (!seg.OutAtEnd && !seg.CloseCall) continue;
-            if (!last.HasValue || seg.T1 > last.Value) last = seg.T1;
-        }
+        foreach (var j in play.Judgements)
+            if (!last.HasValue || j.T > last.Value) last = j.T;
         return last;
     }
 

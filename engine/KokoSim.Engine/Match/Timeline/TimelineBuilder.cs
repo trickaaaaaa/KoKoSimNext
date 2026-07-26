@@ -114,6 +114,23 @@ public static class TimelineBuilder
             From = Home, To = BasePoint(field, "first"), OutAtEnd = batterOut, CloseCall = batterCloseCall,
         });
 
+        // 判定イベント（Issue #260）: 走者レッグの終端に縛られない、確定時刻付きの独立イベント。
+        // フライ・ライナー・ファウルフライの捕球アウトは捕球の瞬間（fieldedAt）に確定する。
+        // 内野ゴロの一塁フォースは打者走者レッグの終端（一塁到達＝判定が決まる瞬間）のまま。
+        var judgements = new List<JudgementEvent>();
+        if (play.IsFly && play.Result == BattedBallResult.Out)
+        {
+            judgements.Add(new JudgementEvent { Label = "打", T = fieldedAt, IsOut = true });
+        }
+        else if (batterOut)
+        {
+            judgements.Add(new JudgementEvent { Label = "打", T = batterArrive, IsOut = true });
+        }
+        else if (batterCloseCall)
+        {
+            judgements.Add(new JudgementEvent { Label = "打", T = batterArrive, IsOut = false, CloseCall = true });
+        }
+
         // 結果確定時刻: アウト/送球到達/野手処理/着地のうちプレーを決めた時刻。
         resolvedAt = play.Result switch
         {
@@ -252,6 +269,7 @@ public static class TimelineBuilder
             Moves = moves,
             Runners = runners,
             Captions = captions,
+            Judgements = judgements,
         };
     }
 
@@ -292,6 +310,11 @@ public static class TimelineBuilder
             {
                 new RunnerLeg { Label = "走", T0 = 0.0, T1 = runnerArrive, From = first, To = second, OutAtEnd = !safe },
             },
+            // 判定イベント（Issue #260）: 盗塁死は当該レッグ終端で確定。セーフは際どさを未評価のため
+            // 積まない（表示条件は #59 のまま維持＝従来もセーフの盗塁は判定オーバーレイの対象外）。
+            Judgements = safe
+                ? Array.Empty<JudgementEvent>()
+                : new[] { new JudgementEvent { Label = "走", T = runnerArrive, IsOut = true } },
             Captions = new[]
             {
                 new TimelineCaption(0.05, "スタートを切った！"),
@@ -315,6 +338,7 @@ public static class TimelineBuilder
         if (moves.Count == 0) return timeline;
 
         var legs = new List<RunnerLeg>(timeline.Runners);
+        var judgements = new List<JudgementEvent>(timeline.Judgements);
         var runnerIndex = 0;
         foreach (var m in moves)
         {
@@ -352,6 +376,12 @@ public static class TimelineBuilder
                     // 判定オーバーレイ（Issue #59）: CloseCall は決着レッグ（この移動の最終区間）にだけ乗せる。
                     CloseCall = m.CloseCall && b + 1 == m.ToBase,
                 });
+                // 判定イベント（Issue #260）: 走塁死・本塁クロスプレー等は決着レッグの終端で確定。
+                // セーフは際どい判定のときだけ積む（表示条件は #59 のまま維持）。
+                if (b + 1 == m.ToBase && (m.Out || m.CloseCall))
+                {
+                    judgements.Add(new JudgementEvent { Label = label, T = t1, IsOut = m.Out, CloseCall = m.CloseCall });
+                }
                 t = t1;
             }
         }
@@ -361,7 +391,7 @@ public static class TimelineBuilder
         {
             if (l.T1 + 1.0 > maxT) maxT = l.T1 + 1.0;
         }
-        return timeline with { Runners = legs, Duration = maxT };
+        return timeline with { Runners = legs, Duration = maxT, Judgements = judgements };
     }
 
     /// <summary>

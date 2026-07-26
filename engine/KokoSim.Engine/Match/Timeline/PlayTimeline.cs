@@ -78,6 +78,25 @@ public sealed record RunnerLeg
 public sealed record TimelineCaption(double T, string Text);
 
 /// <summary>
+/// 判定イベント1件（判定オーバーレイ, Issue #260）。走者レッグの副産物（終端T1・OutAtEnd/CloseCall流用）
+/// にせず、確定時刻を持つ独立イベントとしてタイムラインへ積む。フライ・ライナーの捕球アウトは
+/// 走者レッグの終端（一塁到達）より前の捕球の瞬間に確定するため、レッグと切り離す必要がある。
+/// </summary>
+public sealed record JudgementEvent
+{
+    /// <summary>対象走者の識別（"打"=打者走者, "走1"等）。UI表示・デバッグ用。</summary>
+    public required string Label { get; init; }
+    /// <summary>判定が確定した時刻[s]（フライ/ライナーは捕球の瞬間、塁上の勝負は決着レッグの終端）。</summary>
+    public required double T { get; init; }
+    /// <summary>true=アウト, false=セーフ。</summary>
+    public required bool IsOut { get; init; }
+    /// <summary>
+    /// セーフ側は際どい判定のときだけ積む（アウトは常時表示するため使わない, Issue #59 の表示条件を維持）。
+    /// </summary>
+    public bool CloseCall { get; init; }
+}
+
+/// <summary>
 /// 1プレーのタイムライン（エンジン出力契約, CHANGELOG 32）。
 /// 「誰が・どこから・どこへ・何時に到達・何時に捕球/送球」を座標＋時刻で持ち、
 /// UI は時刻 t を進めて再生するだけ。倍速・スロー・リプレイ・3D差し替えが全てこの上で成立する。
@@ -95,4 +114,7 @@ public sealed record PlayTimeline
     public IReadOnlyList<FielderMove> Moves { get; init; } = System.Array.Empty<FielderMove>();
     public IReadOnlyList<RunnerLeg> Runners { get; init; } = System.Array.Empty<RunnerLeg>();
     public IReadOnlyList<TimelineCaption> Captions { get; init; } = System.Array.Empty<TimelineCaption>();
+    /// <summary>判定イベント列（判定オーバーレイ, Issue #260）。時刻付きの独立イベントで、
+    /// 走者レッグの終端に依存せず「いつ判定が出るか」を表す。</summary>
+    public IReadOnlyList<JudgementEvent> Judgements { get; init; } = System.Array.Empty<JudgementEvent>();
 }
