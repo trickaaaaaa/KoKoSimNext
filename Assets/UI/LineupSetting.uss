@@ -86,6 +86,16 @@
 .lu-th--info { width: 96px; }
 .lu-th--rank { width: 40px; -unity-text-align: middle-right; }
 
+/* 守備位置・先発の操作説明（打順表の直下・1行）。操作の入口を示すだけの補助文字なので最弱の文字色。 */
+.lu-hint {
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    margin-top: var(--sp-1);
+    flex-shrink: 0;
+    /* 列幅に収まらなくなったら折り返す（切って読めなくするより1行増やす方を取る）。 */
+    white-space: normal;
+}
+
 /* DH制トグル＋先発 */
 .lu-dhbar {
     flex-direction: row;

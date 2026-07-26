@@ -41,6 +41,9 @@
                             <ui:VisualElement name="lu-rows" class="lu-rows" />
                         </ui:VisualElement>
 
+                        <!-- 守備位置・先発の操作説明（1行・控えめ）。DH制ON/OFFで文言が変わる。 -->
+                        <ui:Label name="lu-hint" text="" class="lu-hint" />
+
                         <!-- DH制トグル＋先発投手（DH時のみ先発ピルを出す） -->
                         <ui:VisualElement class="lu-dhbar">
                             <ui:Label text="指名打者（DH）" class="lu-dhbar__label" />

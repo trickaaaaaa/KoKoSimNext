@@ -60,6 +60,7 @@ namespace KokoSim.Unity.Lineup
                 warn.style.display = string.IsNullOrEmpty(v.WarnText) ? DisplayStyle.None : DisplayStyle.Flex;
             }
             _root.Q<Button>("lu-ok")?.SetEnabled(v.CanConfirm);
+            SetText("lu-hint", v.HintText);
 
             var rank = _root.Q<VisualElement>("lu-team-rank");
             if (rank != null) { rank.Clear(); rank.Add(UiComponents.RankChip(v.TeamRankGrade)); }
@@ -130,16 +131,14 @@ namespace KokoSim.Unity.Lineup
         {
             var chip = new Label(r.PosKanji);
             chip.AddToClassList("pos-chip");
+            // 「指」だけ色を分ける（守備に就かない枠）。「投」は他の守備位置と同格＝専用の見た目を持たない。
             if (r.IsDhSlot) chip.AddToClassList("pos-chip--dh");
-            else if (r.IsPitcherSlot) chip.AddToClassList("pos-chip--fixed");
-            if (r.PosEditable)
-            {
-                if (r.IsPosPicked) chip.AddToClassList("pos-chip--picked");
-                // 打順行と同じ操作モデル：1回目のクリックで選択、2回目に別スロットのチップで守備位置を入替。
-                // 行クリック（打順入替）へ伝播させないよう停止する。
-                var slot = r.Order - 1;
-                chip.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); _state.ClickPosition(slot); Render(); });
-            }
+            if (r.IsPosPicked) chip.AddToClassList("pos-chip--picked");
+            // 打順行と同じ操作モデル：1回目のクリックで選択、2回目に別スロットのチップで守備位置を入替。
+            // 9枠すべてが対象＝「投」も動かせる（任意の選手を投手にできる, issue #233）。
+            // 行クリック（打順入替）へ伝播させないよう停止する。
+            var slot = r.Order - 1;
+            chip.RegisterCallback<ClickEvent>(evt => { evt.StopPropagation(); _state.ClickPosition(slot); Render(); });
             return chip;
         }
 
