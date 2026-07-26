@@ -522,10 +522,14 @@ namespace KokoSim.Unity.Components
         // ===== CompareRow（2選手の能力対比） =====
 
         /// <summary>
-        /// 比較表のヘッダ（A/B カラムの見出し）。どちらのカラムかを色に頼らず読めるようにする。
-        /// <see cref="CompareRow"/> の並びの直前に1本だけ置く。
+        /// 比較表のヘッダ（2カラムの見出し）。<see cref="CompareRow"/> の並びの直前に1本だけ置く。
+        /// ラベルは**意味のある語だけ**を渡す（例: 選手交代の「退く」「入る」）。
+        /// 「A」「B」のような抽象記号は意味を持たないので渡さない（issue #234）。既定引数を置かないのは
+        /// プレースホルダが漏れるのを防ぐため＝どちらのカラムかは、上に並ぶ比較カードの**選手名**と
+        /// カラムのアクセント色（--cmp-a / --cmp-b）で判別する。見出しが要らない画面はこの部品を呼ばない
+        /// （メンバー設定・スタメン決定がその形）。
         /// </summary>
-        public static VisualElement CompareHeader(string labelA = "A", string labelB = "B")
+        public static VisualElement CompareHeader(string labelA, string labelB)
         {
             var head = new VisualElement();
             head.AddToClassList("cmp-head");
