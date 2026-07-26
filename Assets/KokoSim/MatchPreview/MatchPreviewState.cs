@@ -67,7 +67,11 @@ namespace KokoSim.Unity.MatchPreview
             var v = new MatchPreviewView();
             var gs = GameSession.Current;
             var runner = gs.Runner;
-            var opponent = runner != null && !runner.Finished ? runner.NextOpponent : null;
+            // 相手校は試合種別で供給元が変わる（issue #269）。練習試合は申込で確定した相手、
+            // 大会戦は進行体の次戦相手。以降の組み立ては両者で完全に同じ。
+            var opponent = gs.PendingMatchIsPractice
+                ? gs.PracticeOpponent
+                : runner != null && !runner.Finished ? runner.NextOpponent : null;
 
             var ownTeam = PlayerMatchResolver.BuildManagerTeam(NationService.ManagerSchoolName);
 
@@ -97,12 +101,15 @@ namespace KokoSim.Unity.MatchPreview
             v.Opponent = BuildSide("相手", opponent.Name, managerIsAway ? "後攻" : "先攻", oppTeam,
                 ScoutedTeamProfile.Compute(oppTeam, Coeff));
             v.Ready = true;
-            v.MatchLine = string.Join("　", new[]
-            {
-                gs.Title,
-                runner.RoundName,
-                NationService.ManagerSchoolName + " vs " + opponent.Name,
-            });
+            // 見出し: 大会戦＝「大会名　ラウンド　自校 vs 相手」、練習試合＝「練習試合　自校 vs 相手」（issue #269）。
+            v.MatchLine = gs.PendingMatchIsPractice
+                ? "練習試合　" + NationService.ManagerSchoolName + " vs " + opponent.Name
+                : string.Join("　", new[]
+                {
+                    gs.Title,
+                    runner.RoundName,
+                    NationService.ManagerSchoolName + " vs " + opponent.Name,
+                });
             return v;
         }
 

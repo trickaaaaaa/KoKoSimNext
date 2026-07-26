@@ -206,26 +206,83 @@ namespace KokoSim.Unity.Shell
             return list;
         }
 
-        /// <summary>
-        /// 練習試合を申し込み、成立したら消化する（設計書03 §週ターン③）。週1制約・資金・受諾判定は
-        /// エンジン（<see cref="PracticeMatchScheduler"/>）が持つ。成績は通算スコープにだけ積み
-        /// （isOfficial=false ＝ 公式戦通算・今大会には残さない）、実戦成長は公式戦と同じく発生させる。
-        /// 大会の進行状態（LastOutcome/ResultPending）は触らない＝大会の演出フローと混ざらない。
-        /// </summary>
-        public PracticeMatchOutcome PlayPracticeMatch(School managerSchool, School opponent, IRandomSource rng)
-        {
-            var outcome = ManagerService.Practice.Request(
-                ManagerService.Manager, managerSchool, opponent, ManagerService.AbsoluteWeek,
-                new PlayerMatchResolver(), rng);
+        // ===== 練習試合のライブ観戦（issue #269） =====
+        // 練習試合は必ずライブ観戦で行う＝一括消化（観戦しない）経路は持たない。時間短縮は MatchLive の
+        // 速度チップ（×0.5〜×4）と「スキップ（委任）」で代替する。エンジン側の一括経路
+        // （PracticeMatchScheduler.Request）は「観戦しても一括でも同じ試合になる」契約のテスト基準として残す。
 
-            if (outcome.Detail is { } detail)
-            {
-                Stats.FoldGame(detail.Result, detail.ManagerIsAway, isOfficial: false);
-                ApplyMatchGrowth(detail.Result, detail.ManagerIsAway);
-                ApplyMatchCondition(detail.Result, detail.ManagerIsAway);
-                ApplyMatchInjuries(detail.Result, detail.ManagerIsAway);
-            }
+        /// <summary>
+        /// 練習試合の申込が成立して、スタメン設定→対戦カード→ライブ観戦 のフローに入っている相手校。
+        /// null＝大会戦のフロー。<see cref="PendingMatchIsPractice"/> の実体。
+        /// </summary>
+        public School PracticeOpponent { get; private set; }
+
+        /// <summary>試合開始フローが練習試合か（false＝大会戦）。</summary>
+        public bool PendingMatchIsPractice => PracticeOpponent != null;
+
+        /// <summary>
+        /// 練習試合の相手校が確定した週（絶対週）。開始時に同じ乱数種を作り直すために持つ
+        /// （<see cref="PracticeMatchRng"/>）。
+        /// </summary>
+        private int _practiceWeek;
+
+        /// <summary>開始した練習試合で自校が先攻か（<see cref="PlayerMatchResolver.ManagerIsAway"/> の結果を保持）。</summary>
+        private bool _practiceManagerIsAway;
+
+        /// <summary>
+        /// 練習試合の申込成立を記録し、試合開始フロー（スタメン設定→対戦カード→MatchLive）へ入る。
+        /// 費用・週枠はまだ消費しない（<see cref="BeginPracticeMatch"/> で確定する）。
+        /// </summary>
+        public void EnterPracticeMatchFlow(School opponent, int week)
+        {
+            PracticeOpponent = opponent;
+            _practiceWeek = week;
+            AwaitingMatchStart = true;
+        }
+
+        /// <summary>試合開始フローを大会戦へ戻す（キャンセル・終局後の後始末）。</summary>
+        public void ClearPracticeMatchFlow() => PracticeOpponent = null;
+
+        /// <summary>
+        /// 練習試合の乱数種。相手校ID＋絶対週から決定論で導く（不変条件#2）。同じ週に同じ相手なら同じ試合になる。
+        /// 申込時の受諾判定（<see cref="PracticeMatchScheduler.TryAccept"/>）と開始時
+        /// （<see cref="PracticeMatchScheduler.BeginRequest"/>）で同じ種を作り直すことで、
+        /// 受諾判定の消費が揃い、一括消化（<see cref="PracticeMatchScheduler.Request"/>）と同じ試合になる。
+        /// </summary>
+        public static IRandomSource PracticeMatchRng(int opponentId, int week)
+            => new Xoshiro256Random(0x9E37_79B9UL ^ (ulong)(long)opponentId ^ ((ulong)(long)week * 0x85EB_CA6BUL));
+
+        /// <summary>
+        /// 練習試合をライブ観戦で開始する。ここで費用と週枠が確定する（申込成立＝費用発生）。
+        /// 大会の進行状態（Runner/LastOutcome/ResultPending）は一切触らない。
+        /// </summary>
+        public PracticeMatchLiveOutcome BeginPracticeMatch()
+        {
+            var opponent = PracticeOpponent;
+            if (opponent == null) return null;
+            var outcome = ManagerService.Practice.BeginRequest(
+                ManagerService.Manager, NationService.ManagerSchool(), opponent, _practiceWeek,
+                new PlayerMatchResolver(), PracticeMatchRng(opponent.Id, _practiceWeek));
+            // 先攻/後攻は終局後の成績畳み込み（CompletePracticeMatch）でも使うのでここで控える。
+            if (outcome.Live is { } live) _practiceManagerIsAway = live.ManagerIsAway;
             return outcome;
+        }
+
+        /// <summary>
+        /// ライブ観戦した練習試合の終局結果を反映する（issue #269）。中身は一括消化
+        /// （<see cref="PracticeMatchScheduler.Request"/> 経路）の後処理と同一＝通算スコープにだけ積み（isOfficial=false）、
+        /// 実戦成長・調子・怪我を適用する。<b>大会の <see cref="CompleteMatch"/> は呼ばない</b>
+        /// ＝練習試合は大会の進行状態を触らない契約。
+        /// </summary>
+        public void CompletePracticeMatch(GameResult result)
+        {
+            // 先攻/後攻は BeginPracticeMatch で解決済みの値を使う（対戦カード表示・実試合と必ず一致する）。
+            var managerIsAway = _practiceManagerIsAway;
+            Stats.FoldGame(result, managerIsAway, isOfficial: false);
+            ApplyMatchGrowth(result, managerIsAway);
+            ApplyMatchCondition(result, managerIsAway);
+            ApplyMatchInjuries(result, managerIsAway);
+            ClearPracticeMatchFlow();
         }
 
         /// <summary>自校の次戦を自動消化する。結果を UI 表示待ちにする。</summary>

@@ -94,6 +94,16 @@ namespace KokoSim.Unity.Home
         private void StartLiveMatch()
         {
             var router = KokoSim.Unity.Shell.ScreenRouter.Instance;
+            var session = KokoSim.Unity.Shell.GameSession.Current;
+
+            // 練習試合（issue #269）は大会の進行体を持たないので専用の開始経路へ分岐する。
+            // 画面フロー（LineupSetting→MatchPreview→MatchLive→MatchResult→ホーム）は大会戦と完全に同じ。
+            if (session.PendingMatchIsPractice)
+            {
+                StartLivePracticeMatch(router);
+                return;
+            }
+
             if (router == null)
             {
                 // フォールバック（ルータ不在）：従来どおり一括消化して即結果表示。
@@ -128,6 +138,54 @@ namespace KokoSim.Unity.Home
             // この StartLiveMatch は HomeDashboard.OnEnable（＝スタメンOKの Show("HomeDashboard") の内側）から
             // 走るため、ここで Show("MatchLive") を同期呼びすると Show がネストして全画面が非アクティブに落ちる。
             // 次フレームへ遅延して配信外で切り替える（ScreenRouter の再入対策と同じ機構）。
+            router.ShowDeferred("MatchLive");
+        }
+
+        /// <summary>
+        /// 練習試合をライブ観戦で開始する（issue #269）。費用と週枠はここ（BeginPracticeMatch）で確定する。
+        /// 終局後の後処理は <see cref="KokoSim.Unity.Shell.GameSession.CompletePracticeMatch"/> ＝通算スコープへの
+        /// 畳み込み・実戦成長・調子・怪我だけで、<b>大会の進行状態には触らない</b>。
+        /// </summary>
+        private void StartLivePracticeMatch(KokoSim.Unity.Shell.ScreenRouter router)
+        {
+            var session = KokoSim.Unity.Shell.GameSession.Current;
+            var opponentName = session.PracticeOpponent?.Name ?? "相手校";
+            var outcome = session.BeginPracticeMatch();
+            if (outcome == null || !outcome.Started || outcome.Live == null)
+            {
+                // 受諾済みのはずなので通常は来ない（週送り等で状況が変わった場合の保険）。導線を閉じて戻す。
+                session.ClearPracticeMatchFlow();
+                Render();
+                return;
+            }
+
+            if (router == null)
+            {
+                // フォールバック（ルータ不在）：観戦せず最後まで進めて結果だけ反映する。
+                session.CompletePracticeMatch(outcome.Live.Progression.FinishRemaining());
+                Render();
+                return;
+            }
+
+            var live = outcome.Live;
+            var ownName = KokoSim.Unity.Shell.NationService.ManagerSchoolName;
+            KokoSim.Unity.Match.MatchLiveController.Pending = new KokoSim.Unity.Match.MatchLiveController.LiveMatchRequest
+            {
+                Progression = live.Progression,
+                ManagerIsAway = live.ManagerIsAway,
+                AwayName = live.ManagerIsAway ? ownName : opponentName,
+                HomeName = live.ManagerIsAway ? opponentName : ownName,
+                ManagerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi,
+                RematchOnTie = false,   // 練習試合は引き分けで終わる（再試合はない）
+                OnComplete = result =>
+                {
+                    // 大会戦（CompleteMatch）と違いブラケットのフルシムを伴わないが、実戦成長・怪我・成績畳み込みは
+                    // 同じ重さなので同じ退避経路に載せる（メインスレッドを止めない, issue #138 と同型）。
+                    KokoSim.Unity.Shell.BackgroundGameOp.Run(
+                        () => KokoSim.Unity.Shell.GameSession.Current.CompletePracticeMatch(result),
+                        () => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard"));
+                },
+            };
             router.ShowDeferred("MatchLive");
         }
 
