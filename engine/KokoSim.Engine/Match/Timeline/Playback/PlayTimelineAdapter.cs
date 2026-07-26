@@ -77,6 +77,9 @@ public static class PlayTimelineAdapter
 /// </summary>
 public sealed record EndpointBallSegment : PlaybackBallSegment
 {
+    /// <summary>エンジン側の種別（投球/滞空/転がり/送球/保持/バウンド）。カメラ演出等の判定に使う（Issue #258）。</summary>
+    public BallSegmentKind Kind => _kind;
+
     private readonly BallSegmentKind _kind;
     private readonly double _fx, _fy, _tx, _ty, _apex, _dist;
 
