@@ -89,7 +89,7 @@ namespace KokoSim.Unity.Players
     /// <summary>選手詳細に表示する一式（スナップショット）。</summary>
     public sealed class PlayerDetailView
     {
-        public string Number = "1";
+        public string Number = "—";   // 背番号（未付与・選手なしは「—」。1 の既定はロスター先頭を騙るので使わない）
         public string Name = "";
         /// <summary>故障表示（設計書03 §3.5: 傷病名・部位・段階・全治まで残り週）。健常なら空文字。</summary>
         public string Injury = "";
@@ -202,7 +202,10 @@ namespace KokoSim.Unity.Players
             var p = _roster[index];
             var v = new PlayerDetailView
             {
-                Number = (index + 1).ToString(),
+                // 背番号の単一ソースは DevelopingPlayer.UniformNumber（engine UniformNumberAssigner が採番・
+                // メンバー設定で編集）。ロスターの並び順（index）は背番号と無関係なので使わない。
+                // 0＝ベンチ外（未付与）は左一覧と同じく「—」（issue #249）。
+                Number = p.UniformNumber > 0 ? p.UniformNumber.ToString(Ci) : "—",
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
                 ThrowsBats = HandednessLabels.Combined(p.Throws, p.Bats),
