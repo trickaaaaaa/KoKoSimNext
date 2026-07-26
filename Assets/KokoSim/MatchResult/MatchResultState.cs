@@ -78,7 +78,13 @@ namespace KokoSim.Unity.MatchResult
     /// </summary>
     public static class MatchResultState
     {
-        public static MatchResultView Build(GameResult r, bool managerIsAway, string awayName, string homeName)
+        /// <param name="rematchOnTie">
+        /// 大会戦（勝者が要る文脈）か。true のとき延長上限の引き分けは「引き分け（再試合）」と表示する
+        /// ＝この試合は再試合で決着する旨を明示し、大会が勝者を出すことと矛盾させない（issue #253）。
+        /// 練習試合など引き分けが最終結果になりうる文脈では false（＝素の「引き分け」）。
+        /// </param>
+        public static MatchResultView Build(GameResult r, bool managerIsAway, string awayName, string homeName,
+            bool rematchOnTie = false)
         {
             var ownRuns = managerIsAway ? r.AwayRuns : r.HomeRuns;
             var oppRuns = managerIsAway ? r.HomeRuns : r.AwayRuns;
@@ -89,7 +95,7 @@ namespace KokoSim.Unity.MatchResult
 
             var v = new MatchResultView
             {
-                OutcomeText = r.Tied ? "引き分け" : ownRuns > oppRuns ? "勝利" : "敗戦",
+                OutcomeText = r.Tied ? (rematchOnTie ? "引き分け（再試合）" : "引き分け") : ownRuns > oppRuns ? "勝利" : "敗戦",
                 ManagerWon = !r.Tied && ownRuns > oppRuns,
                 ScoreText = ownName + "  " + ownRuns + " - " + oppRuns + "  " + oppName
                     + (r.MercyEnded ? $"（{r.InningsPlayed}回コールド）" : ""),

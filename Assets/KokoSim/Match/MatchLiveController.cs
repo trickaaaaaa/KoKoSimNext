@@ -535,6 +535,8 @@ namespace KokoSim.Unity.Match
                     ManagerIsAway = _managerIsAway,
                     AwayName = _awayDisp,
                     HomeName = _homeDisp,
+                    // 大会戦の観戦＝勝者が要る文脈。延長上限の引き分けは再試合で決着するため「引き分け（再試合）」と明示（issue #253）。
+                    RematchOnTie = true,
                     OnClose = () => cb(final),
                 };
             // 終局はクリック配信中（委任スキップ）にも起きるため、同期 Show は使わず必ず遅延切替にする。

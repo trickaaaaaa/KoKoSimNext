@@ -360,7 +360,8 @@ namespace KokoSim.Unity.Home
         private void ShowResult(KokoSim.Engine.Nation.Tournaments.PlayerMatchOutcome o)
         {
             if (_result == null) return;
-            SetText("tm-result-round", o.RoundName);
+            // 引き分け再試合で決着した試合は「再試合」を併記し、大会が勝者を出すことと矛盾させない（issue #253）。
+            SetText("tm-result-round", o.RoundName + (o.TieReplays > 0 ? "・再試合" : ""));
 
             var headline = _root.Q<Label>("tm-result-headline");
             if (headline != null)
