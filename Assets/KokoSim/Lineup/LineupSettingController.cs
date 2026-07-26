@@ -237,7 +237,9 @@ namespace KokoSim.Unity.Lineup
                     var group = new Label(v.TabLabels[v.Tab]);
                     group.AddToClassList("lu-cmp-group");
                     rows.Add(group);
-                    rows.Add(UiComponents.CompareHeader());
+                    // 比較ヘッダは出さない（issue #234）。意味のない「A」「B」の見出しは置かず、どちらの
+                    // カラムかは真上に並ぶ比較カードの選手名＋カラムのアクセント色で判別する
+                    // （メンバー設定画面と同じ形）。
                     foreach (var r in v.Rows2) rows.Add(CompareRowEl(r));
                 }
             }
