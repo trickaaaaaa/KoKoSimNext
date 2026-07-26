@@ -198,6 +198,72 @@ public static class AtBatSimulation
         };
     }
 
+    /// <summary>
+    /// ゴロ（Grounder/Bouncer 分類）の処理野手の分布（Issue #261 診断・回帰）。守備位置ごとに
+    /// 「ゴロ全体」と「ゴロアウト（Result==Out）」を数える。母集団サンプリング・決定論並列は本体 Run と同一。
+    /// </summary>
+    public sealed record GroundFielderTally
+    {
+        /// <summary>FieldPosition ごとのゴロ全体件数（添字＝(int)FieldPosition）。</summary>
+        public required int[] All { get; init; }
+        /// <summary>FieldPosition ごとのゴロアウト件数。</summary>
+        public required int[] Outs { get; init; }
+        /// <summary>ゴロ（Grounder/Bouncer）の総数（処理野手が確定したもの）。</summary>
+        public int GroundBalls { get; init; }
+        /// <summary>ゴロアウトの総数。</summary>
+        public int GroundOuts { get; init; }
+
+        /// <summary>ゴロ全体に占める当該守備位置の割合。</summary>
+        public double AllFraction(FieldPosition p) => GroundBalls > 0 ? (double)All[(int)p] / GroundBalls : 0;
+        /// <summary>ゴロアウトに占める当該守備位置の割合。</summary>
+        public double OutFraction(FieldPosition p) => GroundOuts > 0 ? (double)Outs[(int)p] / GroundOuts : 0;
+    }
+
+    /// <summary>ゴロの処理野手分布を集計する（Issue #261）。乱数消費順・結果は Run と同じ経路。</summary>
+    public static GroundFielderTally RunGroundFielders(
+        int atBats, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null)
+    {
+        var ctx = BuildContext(coefficientsPath, field);
+        var root = new Xoshiro256Random(seed);
+        var forks = new IRandomSource[atBats];
+        for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
+
+        const int Positions = 10; // FieldPosition の数
+        // レイアウト: [0..P)=ゴロ全体, [P..2P)=ゴロアウト, [2P]=ゴロ数, [2P+1]=ゴロアウト数
+        var width = Positions * 2 + 2;
+        var total = new int[width];
+        Parallel.For(0, atBats,
+            () => new int[width],
+            (i, _, local) =>
+            {
+                var rng = forks[i];
+                var batter = SampleBatter(rng);
+                var pitcher = SamplePitcher(rng);
+                var detailed = AtBatResolver.ResolveDetailed(batter, pitcher, ctx, rng);
+                if (detailed.Play is { Class: BattedBallClass.Grounder or BattedBallClass.Bouncer } play
+                    && play.FielderRole is { } role)
+                {
+                    local[(int)role]++;
+                    local[Positions * 2]++;
+                    if (play.Result == BattedBallResult.Out)
+                    {
+                        local[Positions + (int)role]++;
+                        local[Positions * 2 + 1]++;
+                    }
+                }
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < width; k++) total[k] += local[k]; } });
+
+        return new GroundFielderTally
+        {
+            All = total[0..Positions],
+            Outs = total[Positions..(Positions * 2)],
+            GroundBalls = total[Positions * 2],
+            GroundOuts = total[Positions * 2 + 1],
+        };
+    }
+
     private static int SampleAbility(IRandomSource rng, double mean = 50, double sd = 12, int min = 20, int max = 88)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(mean, sd)), min, max);
 

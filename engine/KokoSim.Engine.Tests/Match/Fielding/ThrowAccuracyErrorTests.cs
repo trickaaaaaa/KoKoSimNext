@@ -18,10 +18,12 @@ public sealed class ThrowAccuracyErrorTests
     private static readonly Aerodynamics Aero = new();
     private static readonly FieldGeometry Field = new();
 
-    // 内野ゴロ（三遊間寄り）。TransferFactorTests と同じ設定で送球判定に載る打球。
+    // 内野ゴロ（遊撃へ強めの当たり）。一塁送球が確実に間に合ってアウトになる＝送球エラーロールが載る打球
+    // （Issue #261 で処理点を実捕球点へ移し内野処理オーバーヘッドを再校正したため、緩いゴロは内野安打になり
+    // 送球ロールに載らない。ここでは確実にアウトになる強いゴロを使う）。
     private static BattedBallResult Grounder(FieldingCoefficients coeff, int throwAccuracy, ulong seed)
         => FieldingResolver.Resolve(
-            new BattedBall { ExitVelocityMps = 26.0, LaunchAngleDeg = 4.0, BearingDeg = -12.0 },
+            new BattedBall { ExitVelocityMps = 34.0, LaunchAngleDeg = -4.0, BearingDeg = -12.0 },
             Field, Aero, BatterAttributes.LeagueAverage,
             Field.StandardAlignment(new FielderAttributes { ThrowAccuracy = throwAccuracy }),
             coeff, new Xoshiro256Random(seed));

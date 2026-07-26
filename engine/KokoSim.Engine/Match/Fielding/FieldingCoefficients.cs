@@ -55,8 +55,11 @@ public sealed record FieldingCoefficients
     /// 内野ゴロ処理の実戦オーバーヘッド[s]（設計書02 §4.1b の時間軸校正）。捕球姿勢づくり・ステップ・
     /// 打球が野手へ転がる時間を集約した項。走者を実戦タイム（本塁→一塁≈4.2s）へ合わせても
     /// 内野安打率が現実的に保たれるよう、守備側も同じ秒軸へ引き上げる。
+    /// Issue #261で0.30→0.88へ再校正: 処理点を着地点から実捕球点（打球が転がり込む内野手の間合い）へ移した結果、
+    /// 内野ゴロの処理が確実になりゴロアウトが増え（＝内野安打が減り）、二遊間ゴロで併殺も増えて得点環境が下がった。
+    /// この項で内野安打率・BABIP・得点/試合・夏場得点帯をすべて従来の許容帯へ戻す。data/coefficients.yaml と同値。
     /// </summary>
-    public double InfieldPlayOverheadSeconds { get; init; } = 0.30;
+    public double InfieldPlayOverheadSeconds { get; init; } = 0.88;
 
     /// <summary>
     /// 打者走者の実戦オフセット[s]（設計書02 §4.1b）。反応＋スイング後の走り出し＋静止からの加速不足を含む。
@@ -178,6 +181,14 @@ public sealed record FieldingCoefficients
 
     /// <summary>内野境界の通過時刻を求める走査の時間刻み[s]（頭上抜けの判定精度）。</summary>
     public double InfieldInterceptStepSeconds { get; init; } = 0.02;
+
+    /// <summary>
+    /// 投手がゴロを処理するときの追加反応遅延[s]（Issue #261）。投手は投球フォロースルー直後で守備体勢が
+    /// 崩れているため、中央付近を通る打球でもマウンド前の一点しか実質的に捕れない。この遅延を投手の到達時間に
+    /// 上乗せすることで、中堅寄りへ転がる打球は二遊間へ渡り、投ゴロが真のセンター返し・弱い前ゴロに収束する。
+    /// 0で従来（投手も他内野手と同じ反応）。処理野手の割り当てにのみ効き、頭上抜け判定（帯校正）には影響しない。
+    /// </summary>
+    public double PitcherFieldingReactionPenaltySeconds { get; init; } = 0.35;
 
     /// <summary>イレギュラーバウンドの発生確率（一律。球場の土質との接続は将来の別Issue）。</summary>
     public double IrregularBounceProb { get; init; } = 0.030;

@@ -120,6 +120,9 @@ public sealed class PlaybackJudgementTests
 
     // ── 実エンジン出力から内野ゴロ（アウト＋ゴロ軌道）のタイムラインを1つ採取する ──
     // 構成は PlayTimelineAdapterTests と同じ最小チーム＋固定シード（決定論）。
+    // 症状Aを実証できる打球＝「打者走者レッグの終端（判定時刻）が早切り（最後のボール事象+0.6）より後」に
+    // なる内野ゴロアウトを選ぶ（Issue #261 の処理点・時間軸再校正で送球到達が遅くなり、最初に見つかる
+    // アウトが際どい当たりだと判定時刻と早切りが拮抗して回帰の前提が崩れるため、明確に実証できる打球を採る）。
     private static PlayTimeline CollectGroundOut()
     {
         for (var seed = 1UL; seed <= 400; seed++)
@@ -133,11 +136,18 @@ public sealed class PlaybackJudgementTests
                 var tl = e.Timeline;
                 if (!tl.Ball.Any(b => b.Kind == BallSegmentKind.Roll)) continue;      // ゴロだけ
                 if (!tl.Ball.Any(b => b.Kind == BallSegmentKind.Throw)) continue;     // 一塁送球が絡む内野ゴロ
-                if (tl.Runners.Any(x => x.OutAtEnd)) return tl;
+                if (!tl.Runners.Any(x => x.OutAtEnd)) continue;
+
+                var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
+                var judged = PlaybackEvaluator.LastJudgementTime(play);
+                if (judged is null) continue;
+                var lastEvent = play.Ball.Aggregate(play.ResAt, (m, s) => Math.Max(m, s.T1));
+                var earlyCut = Math.Min(play.Dur, lastEvent + 0.6);
+                if (judged.Value > earlyCut) return tl; // 早切りが判定窓に届かない＝症状Aを実証できる打球
             }
         }
 
-        throw new InvalidOperationException("内野ゴロアウトのタイムラインが採取できなかった");
+        throw new InvalidOperationException("症状Aを実証できる内野ゴロアウトのタイムラインが採取できなかった");
     }
 
     private static Player Pos(FieldPosition pos) => new()

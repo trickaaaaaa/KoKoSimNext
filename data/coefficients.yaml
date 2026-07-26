@@ -96,7 +96,7 @@ fielding:
   throw_transfer_seconds: 0.70
   throw_transfer_fielding_slope: 0.004 # 握り替えの守備連動（Issue #36）: 倍率=max(min,1−(守備−50)×これ)。守備50で×1.0＝恒等
   throw_transfer_factor_min: 0.70      # トランスファー倍率の下限（最速側クランプ, Issue #36）
-  infield_play_overhead_seconds: 0.30  # 内野ゴロ処理の実戦オーバーヘッド（時間軸校正, §4.1b）
+  infield_play_overhead_seconds: 0.88  # 内野ゴロ処理の実戦オーバーヘッド（捕球姿勢・ステップ・送球体勢, 時間軸校正 §4.1b）。Issue #261で0.30→0.88へ再校正（実捕球点ベースの処理で内野ゴロが確実になりゴロアウトが増える＝内野安打が減る／二遊間ゴロで併殺が増え得点環境が下がる分を戻し、打率・BABIP・得点/試合・夏場得点帯をすべて許容帯へ収める）
   runner_reaction_seconds: 0.45        # 実戦オフセット（設計書02 §4.1b: 走力50右で本塁→一塁≈4.2s）
   left_batter_first_step_bonus_seconds: 0.13  # 左打者は一塁が近く速い（§4.1b）
   infield_depth_m: 46.0
@@ -140,6 +140,7 @@ fielding:
   infielder_fielding_radius_m: 4.20 # 内野手の横の守備範囲（グラブ＋ダイブ）。これを抜ける強い打球だけ外野へ
   chopper_wait_factor: 0.55         # 高バウンド（チョッパー）で野手が待たされる時間の係数（内野安打に効く）
   infield_intercept_step_seconds: 0.02  # 内野境界の通過時刻を求める走査刻み
+  pitcher_fielding_reaction_penalty_seconds: 0.35 # 投手のゴロ処理の追加反応遅延（Issue #261: フォロースルー直後で守備体勢が崩れる分。処理野手割り当てにのみ効く）
   irregular_bounce_prob: 0.030      # イレギュラーバウンドの発生確率（一律。土質接続は将来の別Issue）
   irregular_bounce_lateral_deg: 12.0     # イレギュラーの横ぶれ最大角[deg]
   irregular_bounce_restitution_swing: 0.60  # イレギュラーの反発係数の揺らぎ幅

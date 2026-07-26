@@ -411,6 +411,7 @@ public static class CoefficientsLoader
         public double InfielderFieldingRadiusM { get; set; } = D.InfielderFieldingRadiusM;
         public double ChopperWaitFactor { get; set; } = D.ChopperWaitFactor;
         public double InfieldInterceptStepSeconds { get; set; } = D.InfieldInterceptStepSeconds;
+        public double PitcherFieldingReactionPenaltySeconds { get; set; } = D.PitcherFieldingReactionPenaltySeconds;
         public double IrregularBounceProb { get; set; } = D.IrregularBounceProb;
         public double IrregularBounceLateralDeg { get; set; } = D.IrregularBounceLateralDeg;
         public double IrregularBounceRestitutionSwing { get; set; } = D.IrregularBounceRestitutionSwing;
@@ -460,6 +461,7 @@ public static class CoefficientsLoader
             InfielderFieldingRadiusM = InfielderFieldingRadiusM,
             ChopperWaitFactor = ChopperWaitFactor,
             InfieldInterceptStepSeconds = InfieldInterceptStepSeconds,
+            PitcherFieldingReactionPenaltySeconds = PitcherFieldingReactionPenaltySeconds,
             IrregularBounceProb = IrregularBounceProb,
             IrregularBounceLateralDeg = IrregularBounceLateralDeg,
             IrregularBounceRestitutionSwing = IrregularBounceRestitutionSwing,
