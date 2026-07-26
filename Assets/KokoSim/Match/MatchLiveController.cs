@@ -1093,6 +1093,7 @@ namespace KokoSim.Unity.Match
                     _duelImg = new DuelViewElement();
                     _duelHost?.Add(_duelImg);
                 }
+                _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
                 _duelImg.Bind(_duelRig.Target);
             }
             _duelOn = !_duelOn;

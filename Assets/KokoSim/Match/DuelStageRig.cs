@@ -19,8 +19,9 @@ namespace KokoSim.Unity.Match
     /// </summary>
     public sealed class DuelStageRig : System.IDisposable
     {
-        public const int RtWidth = 480;
-        public const int RtHeight = 270;
+        /// <summary>基準ドット密度（16:9・全画面時の確定解像度）。実RTはカラム実寸から適応する（EnsureSize）。</summary>
+        public const int BaseWidth = 480;
+        public const int BaseHeight = 270;
 
         private const string LayerName = "DuelStage";
         private const float MoundDistance = 18.44f;
@@ -88,9 +89,7 @@ namespace KokoSim.Unity.Match
             _bat = SpawnBat(layer);
             AttachMitt(catcher, layer);
 
-            Target = new RenderTexture(RtWidth, RtHeight, 24, RenderTextureFormat.ARGB32)
-            { name = "DuelStageLiveRT", filterMode = FilterMode.Point };
-            Target.Create();
+            Target = CreateRt(BaseWidth, BaseHeight);
 
             var camGo = new GameObject("StageCamera");
             camGo.transform.SetParent(_root.transform, false);
@@ -108,7 +107,7 @@ namespace KokoSim.Unity.Match
             float dz = camZ - 1f;
             camGo.transform.localPosition = new Vector3(-dz * 0.0668f, aimY + dz * 0.0782f, camZ);
             camGo.transform.LookAt(_root.transform.position + new Vector3(0f, aimY, 1f));
-            _camera.fieldOfView = 2.9f;
+            ApplyFov();
             _camera.targetTexture = Target;
 
             // 初期ポーズを1回打っておく（トグル直後の素立ちTポーズを見せない）
@@ -137,6 +136,47 @@ namespace KokoSim.Unity.Match
                 GroundFix(_pitcher);   // 投球ループはルートモーションでマウンドを降りるためコマ毎に接地
                 AlignBat();
             }
+        }
+
+        /// <summary>
+        /// RTをカラム実寸由来のサイズへ張り替える（DuelViewElementから）。同寸なら何もしない。
+        /// 縦横比はカラム追従だが、極端な縦長/横長は構図が壊れるためクランプする。
+        /// 水平視野角は基準（16:9で垂直2.9°）固定＝縦に長い分は上下に描画範囲が広がるだけで構図は切れない。
+        /// </summary>
+        public void EnsureSize(int width, int height)
+        {
+            if (!Available) return;
+            width = Mathf.Clamp(width, 160, 2048);
+            height = Mathf.Clamp(height, 90, 2048);
+            // 縦横比クランプ: 4:3より縦長・2.4:1より横長にはしない（壁の高さ・構図の担保範囲）
+            height = Mathf.Min(height, Mathf.FloorToInt(width * 0.75f));
+            width = Mathf.Min(width, Mathf.FloorToInt(height * 2.4f));
+            if (Target != null && Target.width == width && Target.height == height) return;
+
+            if (_camera != null) _camera.targetTexture = null;
+            if (Target != null) { Target.Release(); Object.DestroyImmediate(Target); }
+            Target = CreateRt(width, height);
+            if (_camera != null)
+            {
+                _camera.targetTexture = Target;
+                ApplyFov();
+            }
+        }
+
+        private static RenderTexture CreateRt(int width, int height)
+        {
+            var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
+            { name = "DuelStageLiveRT", filterMode = FilterMode.Point };
+            rt.Create();
+            return rt;
+        }
+
+        /// <summary>水平視野角を基準構図（垂直2.9°@16:9）で固定し、現RT縦横比から垂直FOVを逆算する。</summary>
+        private void ApplyFov()
+        {
+            float halfH = Mathf.Tan(2.9f * 0.5f * Mathf.Deg2Rad) * (16f / 9f);
+            float aspect = Target.width / (float)Target.height;
+            _camera.fieldOfView = 2f * Mathf.Atan(halfH / aspect) * Mathf.Rad2Deg;
         }
 
         public void Dispose()
