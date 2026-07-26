@@ -75,7 +75,8 @@ namespace KokoSim.Unity.MatchPreview
             }
         }
 
-        // 1行＝部品辞書の MLineupRow（打順・守備位置・氏名・学年投打・総合ランク）。
+        // 1行＝部品辞書の MLineupRow（打順・守備位置・氏名・学年投打）。
+        // 選手個人の総合ランクチップは出さない（Issue #30 で廃止・#270）。チーム総合ランクは上のヘッダに残る。
         private static VisualElement Row(MatchPreviewSlotView s)
         {
             var row = new VisualElement();
@@ -86,7 +87,6 @@ namespace KokoSim.Unity.MatchPreview
             row.Add(Text(s.PosKanji, "mlineup-row__pos"));
             row.Add(Text(s.Name, "mlineup-row__name"));
             row.Add(Text(s.Meta, "mlineup-row__meta"));
-            row.Add(UiComponents.RankChip(s.Grade));
             return row;
         }
 

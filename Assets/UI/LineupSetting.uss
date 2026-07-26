@@ -83,8 +83,9 @@
 .lu-th--num { width: 22px; -unity-text-align: middle-center; margin-left: var(--sp-2); }
 .lu-th--pos { width: 40px; -unity-text-align: middle-center; margin-left: var(--sp-2); }
 .lu-th--name { flex-grow: 1; flex-basis: 0; margin-left: var(--sp-2); }
-.lu-th--info { width: 96px; }
-.lu-th--rank { width: 40px; -unity-text-align: middle-right; }
+/* 総合ランク列は廃止（Issue #30/#270）。空いた幅は「学年・投打」に回して「右投右打」の切れを解消する。 */
+.lu-th--info { width: 128px; }
+.lu-root .lineup-row__info { width: 128px; }
 
 /* 守備位置・先発の操作説明（打順表の直下・1行）。操作の入口を示すだけの補助文字なので最弱の文字色。 */
 .lu-hint {

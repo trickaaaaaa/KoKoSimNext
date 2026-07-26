@@ -26,7 +26,6 @@ namespace KokoSim.Unity.Lineup
         public string Name = "";
         public string GradeLabel = "";
         public string HandLabel = "";
-        public string OverallGrade = "C";
         public string StatText = "";      // 通算の簡易成績（打率・本・点。全員打撃成績・データ無しは「-」）
         public int PlayerIndex = -1;      // 共有ロスターの安定index
         public bool IsPicked;
@@ -43,7 +42,6 @@ namespace KokoSim.Unity.Lineup
         public int UniformNumber;         // 背番号（メンバー設定で割当。0＝未割当）
         public string Name = "";
         public string GradeLabel = "";
-        public string OverallGrade = "C";
         public bool IsPitcher;
         public bool IsPicked;
         /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空（設計書03 §3.5）。</summary>
@@ -70,7 +68,8 @@ namespace KokoSim.Unity.Lineup
         public bool Present;
         public string Name = "";
         public string GradeLabel = "";
-        public string OverallGrade = "C";
+        /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力）。選手個人の総合ランクは廃止（Issue #30/#270）。</summary>
+        public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);
         public bool IsCaptain;
         public List<StatColumnView> Stats = new List<StatColumnView>();  // [通算, 今大会]
         // 持ち球のミニ球種変化チャート用データ（issue #94 案C）。未習得選手はストレート1球のみ。
@@ -83,7 +82,6 @@ namespace KokoSim.Unity.Lineup
         public List<BenchRowView> Bench = new List<BenchRowView>();
         public bool UsesDh;
         public string StartingPitcherName = "";
-        public string StartingPitcherGrade = "C";
         public bool StartingPitcherPicked;
         public string TeamRankGrade = "C";
 
@@ -109,6 +107,9 @@ namespace KokoSim.Unity.Lineup
     public sealed class LineupSettingState
     {
         private enum PickKind { None, OrderPlayer, StartingPitcher, SlotPosition }
+
+        // カテゴリ別ランク（比較カード）の合成係数。メンバー設定・選手一覧と同一の単一ソース。
+        private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
 
         // 守備位置→漢字。DHは指名打者の「指」（enum由来・issue #70）。
         private static readonly Dictionary<FieldPosition, string> PosKanji = new()
@@ -496,7 +497,6 @@ namespace KokoSim.Unity.Lineup
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
                     HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
-                    OverallGrade = OverallGrade(p),
                     StatText = CareerBatLine(p),
                     PlayerIndex = _idx[i],
                     IsPicked = _picked == _idx[i] && _pickKind == PickKind.OrderPlayer,
@@ -510,7 +510,6 @@ namespace KokoSim.Unity.Lineup
             {
                 var sp = _roster[_spIdx];
                 v.StartingPitcherName = sp.Name;
-                v.StartingPitcherGrade = OverallGrade(sp);
                 v.StartingPitcherPicked = _pickKind == PickKind.StartingPitcher;
             }
 
@@ -530,7 +529,6 @@ namespace KokoSim.Unity.Lineup
                     UniformNumber = p.UniformNumber,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
-                    OverallGrade = OverallGrade(p),
                     IsPitcher = p.IsPitcher,
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
                     Injury = InjuryChipText(p),
@@ -583,7 +581,8 @@ namespace KokoSim.Unity.Lineup
                 Present = true,
                 Name = p.Name,
                 GradeLabel = p.Grade + "年",
-                OverallGrade = OverallGrade(p),
+                // カテゴリ別ランク（打撃力/走力/守備力/投手力）。メンバー設定の比較カードと同じ部品・同じ係数。
+                Strength = PlayerStrengthProfile.Compute(p, Coeff),
                 IsCaptain = p.IsCaptain,
                 Stats = BuildStats(p),
                 // 持ち球（ミニ球種チャート）は詳細画面と同じ生成ロジック（単一ソース, issue #94 案C）。
@@ -634,7 +633,5 @@ namespace KokoSim.Unity.Lineup
             var avg = b.AtBats > 0 ? b.Average.ToString(".000") : "-";
             return "打率 " + avg + "　本 " + b.HomeRuns + "　点 " + b.Rbi;
         }
-
-        private static string OverallGrade(DevelopingPlayer p) => Tiers.FromStrength(p.AverageLevel()).ToString();
     }
 }
