@@ -23,32 +23,32 @@ public sealed class PlaybackJudgementTests
 {
     private const double Hold = 0.6;
 
-    private static PlaybackRun Leg(double t0, double t1, bool outAtEnd = false, bool closeCall = false) =>
-        new(t0, t1, new PlaybackVec(0, 0), new PlaybackVec(27, 0)) { OutAtEnd = outAtEnd, CloseCall = closeCall };
+    private static PlaybackJudgement J(double t, bool isOut, bool closeCall = false, string label = "打") =>
+        new(t, isOut, closeCall, label);
 
-    private static PlaybackPlay PlayWith(params PlaybackRun[] segs) => new()
+    private static PlaybackPlay PlayWith(params PlaybackJudgement[] judgements) => new()
     {
         Name = "test", Dur = 10, Result = "test", ResAt = 1,
         Ball = Array.Empty<PlaybackBallSegment>(),
-        Runners = new[] { new PlaybackRunner { Label = "打", Segs = segs } },
+        Judgements = judgements,
     };
 
     [Fact]
     public void JudgementAt_ShowsOut_OnlyInsideHoldWindow()
     {
-        var play = PlayWith(Leg(0.5, 4.0, outAtEnd: true));
+        var play = PlayWith(J(4.0, isOut: true));
 
         Assert.Null(PlaybackEvaluator.JudgementAt(play, 3.99, Hold));           // 判定前は出さない
-        Assert.True(PlaybackEvaluator.JudgementAt(play, 4.0, Hold)!.Value.IsOut);  // 終端の瞬間から
+        Assert.True(PlaybackEvaluator.JudgementAt(play, 4.0, Hold)!.Value.IsOut);  // 確定の瞬間から
         Assert.True(PlaybackEvaluator.JudgementAt(play, 4.59, Hold)!.Value.IsOut); // hold の直前まで
         Assert.Null(PlaybackEvaluator.JudgementAt(play, 4.61, Hold));           // hold 経過で消える
     }
 
     [Fact]
-    public void JudgementAt_IgnoresLegsWithoutJudgement()
+    public void JudgementAt_ReturnsNull_WhenNoJudgements()
     {
-        // 生還・進塁だけのレッグ（アウトでも際どくもない）は判定を出さない＝表示のゲートはデータ側。
-        var play = PlayWith(Leg(0.5, 4.0));
+        // 判定イベントが無いプレー（生還・進塁だけ）は判定を出さない＝表示のゲートはデータ側。
+        var play = PlayWith();
         Assert.Null(PlaybackEvaluator.JudgementAt(play, 4.0, Hold));
         Assert.Null(PlaybackEvaluator.LastJudgementTime(play));
     }
@@ -56,7 +56,7 @@ public sealed class PlaybackJudgementTests
     [Fact]
     public void JudgementAt_ShowsSafe_OnCloseCallOnly()
     {
-        var play = PlayWith(Leg(0.5, 4.0, closeCall: true));
+        var play = PlayWith(J(4.0, isOut: false, closeCall: true));
         var j = PlaybackEvaluator.JudgementAt(play, 4.2, Hold);
         Assert.NotNull(j);
         Assert.False(j!.Value.IsOut);   // 際どい判定＝セーフ表示
@@ -71,11 +71,7 @@ public sealed class PlaybackJudgementTests
         {
             Name = "dp", Dur = 10, Result = "dp", ResAt = 4,
             Ball = Array.Empty<PlaybackBallSegment>(),
-            Runners = new[]
-            {
-                new PlaybackRunner { Label = "走1", Segs = new[] { Leg(0.5, 3.0, outAtEnd: true) } },
-                new PlaybackRunner { Label = "打", Segs = new[] { Leg(0.5, 4.0, outAtEnd: true) } },
-            },
+            Judgements = new[] { J(3.0, isOut: true, label: "走1"), J(4.0, isOut: true, label: "打") },
         };
 
         Assert.Equal(3.0, PlaybackEvaluator.JudgementAt(play, 3.4, Hold)!.Value.T1, 6);
@@ -87,7 +83,7 @@ public sealed class PlaybackJudgementTests
     public void LastJudgementTime_ScalesWindowWithHold()
     {
         // 倍速再生では hold をプレー時間軸で広げる（実時間の見え方を一定にする）。窓の始点は変わらない。
-        var play = PlayWith(Leg(0.5, 4.0, outAtEnd: true));
+        var play = PlayWith(J(4.0, isOut: true));
         Assert.Null(PlaybackEvaluator.JudgementAt(play, 5.5, Hold));            // ×1 では消えている
         Assert.NotNull(PlaybackEvaluator.JudgementAt(play, 5.5, Hold * 4));     // ×4 なら まだ出ている
     }

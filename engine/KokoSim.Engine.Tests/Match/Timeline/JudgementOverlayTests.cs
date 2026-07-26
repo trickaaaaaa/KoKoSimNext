@@ -128,6 +128,60 @@ public sealed class JudgementOverlayTests
         Assert.False(BatterLeg(tl).CloseCall);
     }
 
+    // --- 判定イベント列（Issue #260）: フライは捕球の瞬間、内野ゴロは決着レッグ終端で1件だけ確定する ---
+
+    [Fact]
+    public void BuildBattedBall_FlyOut_JudgementFiresAtFieldedAt_NotAtBatterArrival()
+    {
+        // フライ・ライナーの捕球アウトは、打者走者が一塁へ走り切る時刻(BatterToFirstSeconds)ではなく
+        // 捕球の瞬間(FieldedAtSeconds)に判定が確定する（症状1＋2の回帰）。
+        var play = new FieldingPlay
+        {
+            Result = BattedBallResult.Out, LandingX = 0, LandingZ = 90, HangTimeSeconds = 3.0, ApexHeightM = 20,
+            RangeM = 90, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+            FieldedAtSeconds = 3.0, BatterToFirstSeconds = 4.2, IsFly = true,
+        };
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.True(j.IsOut);
+        Assert.Equal("打", j.Label);
+        Assert.Equal(ContactAtSeconds + play.FieldedAtSeconds.Value, j.T, 6);
+        Assert.NotEqual(ContactAtSeconds + play.BatterToFirstSeconds, j.T, 6);
+    }
+
+    [Fact]
+    public void BuildBattedBall_GroundOut_JudgementFiresOnce_AtBatterArrival()
+    {
+        var play = InfieldOut(judgementMargin: -0.9);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.True(j.IsOut);
+        Assert.Equal(BatterLeg(tl).T1, j.T, 6); // 打者走者レッグの終端＝一塁到達で決着
+    }
+
+    [Fact]
+    public void BuildBattedBall_CloseInfieldHit_JudgementFiresOnce_AsSafe()
+    {
+        var play = InfieldSingle(judgementMargin: 0.05);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.False(j.IsOut);
+        Assert.True(j.CloseCall);
+        Assert.Equal(BatterLeg(tl).T1, j.T, 6);
+    }
+
+    /// <summary>投球開始→接触までのリード[s]（TimelineBuilder の ContactAt と同値。private const のため複製）。</summary>
+    private const double ContactAtSeconds = 0.85;
+
     // --- PlayTimelineAdapter: OutAtEnd/CloseCall はそのままPlaybackRunへ通る ---
 
     [Fact]

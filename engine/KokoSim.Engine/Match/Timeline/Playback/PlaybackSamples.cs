@@ -217,6 +217,9 @@ public static class PlaybackSamples
                     Segs = new[] { Run(0.95, 4.55, Home, First), Run(4.55, 7.90, First, Second) },
                 },
             },
+            // 三塁走者が本塁で憤死（判定オーバーレイ, Issue #260）。捕球アウトと違い塁上の勝負なので
+            // 決着レッグの終端（9.85）で確定。
+            Judgements = new[] { new PlaybackJudgement(9.85, true, false, "走") },
             Caps = new[]
             {
                 Cap(0.05, "一塁に走者"), Cap(0.86, "痛烈！ 右中間を破った！"),
