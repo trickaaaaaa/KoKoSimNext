@@ -20,7 +20,11 @@ namespace KokoSim.EditorTools
     /// </summary>
     public static class DuelMotionSpike
     {
-        private const string BodyFbx = "Assets/DuelSpike/AnimatedHuman/AnimatedHuman.fbx";
+        // 素体はUBC Superheroが正（§7-5・2026-07-26監督選定）。旧Animated Humanは比較用に残置
+        private const string BodyFbx = "Assets/DuelSpike/UBC/SuperheroMale.fbx";
+
+        /// <summary>§7-5 素体比較用: 非nullならSpawnBodyがこちらのFBXを使う（例: Assets/DuelSpike/AnimatedHuman/AnimatedHuman.fbx）。</summary>
+        public static string BodyOverride;
         private const string ClipFbx = "Assets/Animo/AA_Basic_Baseball_Movement_Animations_Package/Animations/AA_Basic_Baseball_Movement_Animations_Package.fbx";
         private const float TargetHeight = 1.75f;
 
@@ -656,7 +660,8 @@ namespace KokoSim.EditorTools
 
         private static GameObject SpawnBody(GameObject root, string name, Vector3 pos, float yawDeg, Color color)
         {
-            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BodyFbx);
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                string.IsNullOrEmpty(BodyOverride) ? BodyFbx : BodyOverride);
             var go = (GameObject)Object.Instantiate(prefab);
             go.name = name;
             go.transform.SetParent(root.transform, false);

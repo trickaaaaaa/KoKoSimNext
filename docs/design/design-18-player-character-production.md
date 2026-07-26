@@ -87,8 +87,9 @@
 - **スパイク用（確定）**: 無料CC0ローポリ人型（Quaternius系等）。リグ付き・Humanoid化容易
   - ややスタイライズだがピクセル化後に判別可能か要スクショ検証
   - 導入記録（2026-07-26）: Quaternius「Animated Human」（OpenGameArt配布・CC0・License.txt同梱）を
-    `Assets/DuelSpike/AnimatedHuman/` に導入、Humanoid化済み（avatar valid）。2017年の旧素体のため、
-    頭身・造形が不足なら後継「Universal Base Characters」（itch.io・CC0）へ差し替え候補
+    `Assets/DuelSpike/AnimatedHuman/` に導入、Humanoid化済み（avatar valid）。同日、後継の
+    「Universal Base Characters」Standard版（itch.io・CC0）も取得し `Assets/DuelSpike/UBC/` に導入
+    → **比較の結果UBC Superhero Maleを採用**（§7-5）。Animated Humanは比較用に残置
 - **頭身厳密化が必要になった場合**: MakeHuman（CC0出力）で6.5頭身素体 → Blenderでデシメート＋フラットカラー化
 - Humanoidボーンさえ整っていれば **素体は後から差し替え可能**。スパイクは無料素体で走り、
   絵作り確定後に差し替え判断
@@ -337,7 +338,10 @@ Render Feature追加が品質段階ぶん必要（§2）。
      Hittingクリップは走り出しまで含む）＋バット/ミット小道具（§3.3の実装知見参照＝バットは両手整列）
    - 残り: ミットIK吸着（§4.5-③。球道との接続が要るためエンジン接続段階で検証）
 4. 横手投げ（サイドスロー）の扱い（オーバー・サブマリンは実弾あり。3種目をどうするか）
-5. 素体の最終選定（Quaternius続投 or MakeHuman差し替え）— §4.4のスクショ判定後
+5. 素体の最終選定 — **確定（2026-07-26）: Quaternius「Universal Base Characters」Superhero Male**
+   （CC0・`Assets/DuelSpike/UBC/`・比較シートでAnimated Human 2017と並べて監督選定）。
+   現代的な造形でリアル頭身方針に合致。無料Standard版はSuperhero体型のみ（Regular/Teenは有償Source版・
+   必要になったら追加購入を検討）。MakeHuman差し替えは頭身の不満が出た場合の予備のまま
 6. 縦縞のgo/no-go（§3.5.3 / §4.4基準4）— no-goなら中間色フォールバックへ縮退
 
 ---
