@@ -224,6 +224,8 @@ namespace KokoSim.Unity.Lineup
             var rows = _root.Q<VisualElement>("lu-cmp-rows");
             if (rows != null)
             {
+                // 投手能力タブは球速を km/h で出すので値セルを表ごと広げる（issue #246）。
+                UiComponents.SetCompareUnitColumn(rows, KokoSim.Unity.Shell.PlayerCompareTabs.HasUnitValues(v.Tab));
                 rows.Clear();
                 if (v.Rows2.Count == 0)
                 {

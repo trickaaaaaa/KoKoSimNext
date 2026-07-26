@@ -544,6 +544,15 @@ namespace KokoSim.Unity.Components
         }
 
         /// <summary>
+        /// 比較表の値セル幅を「単位つきの物理量（例「131km/h」）が収まる幅」に切り替える（issue #246）。
+        /// <paramref name="rowsHost"/>＝<see cref="CompareRow"/> を並べるホスト要素に付けるので、
+        /// <b>同じ表の全行が同じ幅</b>になりバーの起点と桁が揃ったままになる（行ごとに広げると崩れる）。
+        /// 投手能力の表のように単位つきの行を含むときだけ true にする。
+        /// </summary>
+        public static void SetCompareUnitColumn(VisualElement rowsHost, bool on)
+            => rowsHost?.EnableInClassList("cmp-rows--unit", on);
+
+        /// <summary>
         /// 2選手比較の1行（項目名｜A: 値＋バー｜B: 値＋バー）。
         /// A/B のバーはどちらも同じ左起点から右へ同一スケールで伸びるので、長さの差がそのまま優劣になる。
         /// </summary>
