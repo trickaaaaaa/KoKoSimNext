@@ -222,13 +222,6 @@ namespace KokoSim.Unity.Training
                 top.Add(Tag(r.GradeLabel, "chip chip--tag"));
                 top.Add(Tag(r.HandLabel, "chip chip--tag"));   // 投打（Issue #133-②）
                 idText.Add(top);
-                if (r.BenchOut)
-                {
-                    var meta = new VisualElement();
-                    meta.AddToClassList("trow__meta");
-                    meta.Add(Tag("ベンチ外", "chip chip--tag chip--out"));
-                    idText.Add(meta);
-                }
                 idCell.Add(idText);
                 row.Add(idCell);
 
