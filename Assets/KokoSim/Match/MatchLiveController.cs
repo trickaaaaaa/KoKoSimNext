@@ -1327,11 +1327,14 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        // 並び: 打順 / 守備位置 / 名前(フルネーム) / 背番号 / 調子 / 今日の成績（右列は row-reverse でミラー）。
+        // 並び: 打順 / 守備位置 / 名前(フルネーム) / 背番号 / 調子（右列は row-reverse でミラー）。
+        // 名前セルはライブ観戦だけ固定幅にする（mlineup-row--compact。試合前画面と共有クラスのため
+        // 画面ローカルの直書きにせずモディファイアで限定。issue #297）。
         private VisualElement BuildLineupRow(LiveBatterSlot s, bool mirror, bool atBat)
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-row");
+            row.AddToClassList("mlineup-row--compact");
             if (mirror) row.AddToClassList("mlineup-row--mirror");
             if (atBat) row.AddToClassList("mlineup-row--at-bat");
 
@@ -1345,7 +1348,6 @@ namespace KokoSim.Unity.Match
             face.AddToClassList("mlineup-row__cond");
             face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
             row.Add(face);
-            row.Add(MakeLabel(MatchLiveStatsProvider.TodayLine(s.AtBats, s.Hits, s.Rbi), "mlineup-row__today"));
             return row;
         }
 

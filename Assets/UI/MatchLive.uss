@@ -1,5 +1,7 @@
 /* 試合ライブ観戦（実試合を2D俯瞰で1試合まるごと再生）。全景＝FM型データ濃密の3カラム
-   （左=自校スタメン / 中央=盤面 / 右=相手校スタメン、目安 22% / 56% / 22%）。
+   （左=自校スタメン / 中央=盤面 / 右=相手校スタメン）。サイド列は今日の成績を持たず
+   「守備位置・名前・背番号・調子」だけなので固定幅（260px）に絞り、余った幅は中央の盤面へ回す
+   （旧: 22% / 56% / 22%。issue #297）。
    描画は Match2DPlaybackElement を再利用。色・角丸・余白は tokens.uss の変数のみ。
    部品（スタメン行・投手行・マッチアップHUD・調子顔）は Components/components.uss。 */
 
@@ -17,7 +19,7 @@
 }
 
 .mlive-col { flex-direction: column; min-height: 0; }
-.mlive-col--side { width: 22%; flex-shrink: 0; }
+.mlive-col--side { width: 260px; flex-shrink: 0; }
 .mlive-col--center {
     flex-grow: 1;
     flex-basis: 0;
