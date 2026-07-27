@@ -51,6 +51,7 @@ namespace KokoSim.Unity.Match
         public static readonly string[] ClipFbxSources =
         {
             "Assets/Motions/Duel/Pitcher_Pitching_01.fbx",
+            "Assets/Motions/Duel/Batter_Batting_01.fbx",
             "Assets/Animo/AA_Basic_Baseball_Movement_Animations_Package/Animations/AA_Basic_Baseball_Movement_Animations_Package.fbx",
         };
 
@@ -64,6 +65,20 @@ namespace KokoSim.Unity.Match
         /// `RunRootPathProbe` の踏み込みベクトル基準を採る（2026-07-27実測: t=3.5sの変位(1.23,-0.49)→+56〜68°）。
         /// </summary>
         public const float PitcherYaw = 236f;
+
+        /// <summary>
+        /// 打者のクリップ名。自作Rokokoモーション（Assets/Motions/Duel）に置き換え済み。
+        /// **構え→スイング→走り出しが1本**に入っているため、待機と一発物で同じクリップを区間違いで使う。
+        /// 素の向きはAA打者クリップと同じ+Z（RunFacingProbe実測 chest=82°/hips=103°→ yaw 90 のまま）。
+        /// </summary>
+        public const string BatterClipName = "Batter_Batting_01";
+
+        // 打者クリップ内の実測アンカー（RunClipSpeedProbe 0.05s刻み・右手速度 2026-07-27）:
+        // 0.0-1.7s=構え（ほぼ静止） / 1.7-2.8s=予備動作 / 2.85-3.15s=スイング（ピーク10.0m/s @3.05s） /
+        // 3.25s-=走り出し。待機は構え区間だけをループさせ、スイングは頭出しで呼ぶ。
+        private const float BatterIdleEnd = 1.70f;     // 待機ループの折り返し（ここから先を待機中に見せない）
+        private const float BatterSwingStart = 2.80f;  // ここから先が「振っている」区間（バット片手判定の許可域）
+        private const float BatterRunStart = 3.25f;    // 走り出し。ファール・空振りはここで打ち切って構えへ戻す
 
         public RenderTexture Target { get; private set; }
         public bool Available { get; private set; }
@@ -94,6 +109,8 @@ namespace KokoSim.Unity.Match
             public bool Holding;
             public AnimationPlayableOutput Output;   // クリップ差し替え（結果分岐の一発物）用
             public AnimationClip IdleClip;           // 一発物の終了後に戻る待機ループ（null=戻らない）
+            public float IdleEndAt;                  // 待機ループの折り返し時刻（0=クリップ末尾）。
+                                                     // 構えとスイングが同じクリップの打者は、ループのたびに張り直す必要がある
             public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
         }
 
@@ -102,7 +119,7 @@ namespace KokoSim.Unity.Match
             int layer = LayerMask.NameToLayer(LayerName);
             var body = LoadBody();
             var pitchClip = LoadClip(PitcherClipName);
-            var batClip = LoadClip("AA_Baseball_Batter_Idle_Loop");
+            var batClip = LoadClip(BatterClipName);
             var catClip = LoadClip("AA_Baseball_Catcher_Idle");
             var umpClip = LoadClip("AA_Baseball_Umpire_Crouch_Idle");
             if (layer < 0 || body == null || pitchClip == null || batClip == null || catClip == null || umpClip == null)
@@ -132,6 +149,8 @@ namespace KokoSim.Unity.Match
             _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
                 new Color(0.16f, 0.20f, 0.38f), 0f, layer);
             _batter.IdleClip = batClip;
+            _batter.IdleEndAt = BatterIdleEnd;
+            _batter.EndAt = BatterIdleEnd;   // 生成直後の初回ループでスイングまで流さない
             _catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
                 new Color(0.25f, 0.27f, 0.30f), 0f, layer);
             _catcher.IdleClip = catClip;
@@ -139,9 +158,10 @@ namespace KokoSim.Unity.Match
                 new Color(0.12f, 0.12f, 0.13f), 0f, layer);
 
             // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
-            // スイングはType02＝レベルスイング（Type01は肩口のハイスイングで監督差し戻し 2026-07-27）
-            _swingMissClip = LoadClip("AA_Baseball_Batter_Swing_Type02_Miss");
-            _swingHitClip = LoadClip("AA_Baseball_Batter_Swing_Type02_Hitting");
+            // 空振り/ミートとも自作打撃クリップの同じスイング区間を使う（収録が1本なので分岐を持てない）。
+            // 差は打ち切り位置だけ＝空振り・ファールは走り出し前で構えへ戻す（ScheduleReactions）
+            _swingMissClip = batClip;
+            _swingHitClip = batClip;
             _strikeTakeClip = LoadClip("AA_Baseball_Batter_Strike");
             _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
             _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
@@ -201,8 +221,8 @@ namespace KokoSim.Unity.Match
             SeekActor(_pitcher, 0f);
             GroundFix(_pitcher);
             // 打席頭は打者・捕手を待機へ戻す（前打席の一発物が残っていても仕切り直す）
-            if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, 0f);
-            if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, 0f);
+            if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
+            if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
         }
 
         // 結果分岐のアンカー（スイングはType02をRunClipSpeedProbeで実測 2026-07-27。値はクリップ内秒）:
@@ -211,8 +231,8 @@ namespace KokoSim.Unity.Match
         // 盤面の投球飛翔は0.45s（MatchLiveのSetTime基準）＝リリース時に「アンカー−0.45」へ頭出しすると
         // ボール到達とアンカーが一致する。
         private const float BallFlightSeconds = 0.45f;
-        private const float SwingMissPlane = 1.2f;
-        private const float SwingHitContact = 1.25f;
+        private const float SwingMissPlane = 3.05f;    // 自作打撃クリップ: 右手速度ピーク10.0m/s（2026-07-27実測）
+        private const float SwingHitContact = 3.05f;   // 同上。空振りとミートで収録が分かれていないため同値
         private const float StrikeReact = 2.0f;
         private const float HbpReact = 1.3f;
         private const float CatchMoment = 0.4f;
@@ -249,13 +269,12 @@ namespace KokoSim.Unity.Match
             switch (outcome)
             {
                 case DuelPitchOutcome.SwingMiss:
-                    // Type02のMissは歩き直しが長い（両手への握り直りは実測5.9s）。次のリリース
-                    // （頭出し0.75+間隔4.5=クリップ5.25s）までに構えへ戻すため片手歩きの途中で打ち切る
-                    SetActorClip(_batter, _swingMissClip, SwingMissPlane - BallFlightSeconds, 5.2f);
+                    // 空振り専用の収録が無いので同じスイングを使い、走り出し前で打ち切って構えへ戻す
+                    SetActorClip(_batter, _swingMissClip, SwingMissPlane - BallFlightSeconds, BatterRunStart);
                     break;
                 case DuelPitchOutcome.FoulContact:
-                    // 走り出し（実測≈1.95s）前でカットして打席へ戻る
-                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 1.85f);
+                    // 走り出し（実測3.25s）前でカットして打席へ戻る
+                    SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, BatterRunStart);
                     break;
                 case DuelPitchOutcome.InPlayContact:
                     SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 0f);
@@ -515,10 +534,13 @@ namespace KokoSim.Unity.Match
                 a.EndAt = 0f;
                 if (a.IdleClip != null && a.Clip != a.IdleClip)
                 {
-                    SetActorClip(a, a.IdleClip, 0f, 0f);   // 一発物（結果分岐）→待機ループへ復帰
+                    SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰
                     return;
                 }
                 RewindActor(a);
+                // 待機が「1本のクリップの一区間だけ」の場合はループのたびに区間を張り直す。
+                // 自作打撃クリップは構え→スイング→走り出しが1本なので、戻さないと待機中に振ってしまう
+                if (a.Clip == a.IdleClip) a.EndAt = a.IdleEndAt;
                 if (a.HoldAtEnd) a.Holding = true;
                 return;
             }
@@ -553,7 +575,7 @@ namespace KokoSim.Unity.Match
         // 素体UBCの両手ボーン間隔は「両手で握っていても」構えで~0.23mある（RunHandGapProbe実測）ため、
         // 判定はスイング系クリップに限定する（構え/見逃し/死球は常に両手整列＝素の見た目を信じる）
         private const float HandsApartThreshold = 0.28f;
-        private const float BatDropTime = 1.9f;   // Hittingクリップの走り出し（Type02実測≈1.95s）直前からバットを放った扱いで非表示
+        private const float BatDropTime = BatterRunStart;   // 走り出し（実測3.25s）からバットを放った扱いで非表示
         private bool _batOneHand;       // いま片手追従中か（診断用）
         private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;
@@ -567,7 +589,7 @@ namespace KokoSim.Unity.Match
             if (lhT == null || rhT == null) return;
 
             // インプレーの走り出し以降はバットを放った扱い（実物はトスするが小道具は消すのが最も自然）
-            if (_batter.Clip == _swingHitClip && _batter.Time >= BatDropTime)
+            if (_batter.Time >= BatDropTime)
             {
                 _bat.SetActive(false);
                 return;
@@ -576,8 +598,10 @@ namespace KokoSim.Unity.Match
 
             var lh = lhT.position;
             var rh = rhT.position;
-            bool swingClip = _batter.Clip == _swingMissClip || _batter.Clip == _swingHitClip;
-            _batOneHand = swingClip && _batGoodValid && Vector3.Distance(lh, rh) > HandsApartThreshold;
+            // 片手判定を許すのはスイング区間だけ。自作打撃クリップは構えもスイングも同じ1本なので
+            // クリップの同一性では区別できず、クリップ内時刻で見る（構えは BatterIdleEnd 以下）
+            bool swinging = _batter.Time >= BatterSwingStart;
+            _batOneHand = swinging && _batGoodValid && Vector3.Distance(lh, rh) > HandsApartThreshold;
             if (!_batOneHand)
             {
                 // 両手保持: 両手ボーンを結ぶ線に整列（§3.3の実測知見＝手ボーン軸は素体依存で使えない）

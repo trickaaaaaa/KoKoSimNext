@@ -348,6 +348,8 @@ namespace KokoSim.EditorTools
                     new { name = "pitcher", clip = KokoSim.Unity.Match.DuelStageRig.PitcherClipName, t = 0.15f, desired = new Vector3(0f, 0f, -1f) },
                     new { name = "batter",  clip = "AA_Baseball_Batter_Idle_Loop",        t = 0.30f, desired = new Vector3(1f, 0f, 0f) },
                     new { name = "swing",   clip = "AA_Baseball_Batter_Swing_Type01_Hitting", t = 0.10f, desired = new Vector3(1f, 0f, 0f) },
+                    // 自作Rokoko打撃（構え→スイング→走り出し）。構えの区間で素の向きを読む
+                    new { name = "bat-rkk", clip = "Batter_Batting_01", t = 0.10f, desired = new Vector3(1f, 0f, 0f) },
                     new { name = "catcher", clip = "AA_Baseball_Catcher_Idle",            t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
                     new { name = "umpire",  clip = "AA_Baseball_Umpire_Crouch_Idle",      t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
                 };
