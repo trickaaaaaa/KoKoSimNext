@@ -64,7 +64,7 @@ namespace KokoSim.Unity.Match
             if (!ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();
             // 対決ビューONで打席を頭からやり直す（ワインドアップ待ちから）
             ctrl.RestartCurrentPaForCapture();
-            float swingAt = 3.0f + targetIdx * 4.5f + 0.45f;
+            float swingAt = DuelStageRig.ReleaseTime + targetIdx * 4.5f + 0.45f;
             var offsets = new[] { -0.45f, -0.1f, 0.25f, 0.7f };   // 振り出し前→当たり際→振り抜き→フォロー
             for (int i = 0; i < offsets.Length; i++)
             {

@@ -42,7 +42,28 @@ namespace KokoSim.Unity.Match
         private static readonly Vector3 StageOrigin = new(0f, -500f, 0f);
 
         private const string BodyFbx = "Assets/DuelSpike/UBC/SuperheroMale.fbx";
-        private const string ClipFbx = "Assets/Animo/AA_Basic_Baseball_Movement_Animations_Package/Animations/AA_Basic_Baseball_Movement_Animations_Package.fbx";
+
+        /// <summary>
+        /// クリップ供給元（先勝ち＝同名なら先の要素が勝つ）。自作モーション（Assets/Motions＝Rokoko収録・
+        /// コミット可）を先に見て、無ければ購入パック（Assets/Animo＝再配布NG・gitignore）へ落ちる。
+        /// プローブ（DuelMotionSpike / DuelMotionCatalog）も同じ入口を通す＝実測と本番でクリップがずれない。
+        /// </summary>
+        public static readonly string[] ClipFbxSources =
+        {
+            "Assets/Motions/Duel/Pitcher_Pitching_01.fbx",
+            "Assets/Animo/AA_Basic_Baseball_Movement_Animations_Package/Animations/AA_Basic_Baseball_Movement_Animations_Package.fbx",
+        };
+
+        /// <summary>投手の投球クリップ名。自作Rokokoモーション（Assets/Motions/Duel）に置き換え済み。</summary>
+        public const string PitcherClipName = "Pitcher_Pitching_01";
+
+        /// <summary>
+        /// 投手クリップを本塁向き（−Z）へ揃えるyaw[度]。
+        /// 収録モーキャップはセット姿勢の向きと実際に踏み込んで投げる方向が一致しない（本クリップは約68°ずれ）。
+        /// 見えるべきは「打者へ投げている」ことなので、`RunFacingProbe` のセット姿勢基準（180°）ではなく
+        /// `RunRootPathProbe` の踏み込みベクトル基準を採る（2026-07-27実測: t=3.5sの変位(1.23,-0.49)→+56〜68°）。
+        /// </summary>
+        public const float PitcherYaw = 236f;
 
         public RenderTexture Target { get; private set; }
         public bool Available { get; private set; }
@@ -80,7 +101,7 @@ namespace KokoSim.Unity.Match
         {
             int layer = LayerMask.NameToLayer(LayerName);
             var body = LoadBody();
-            var pitchClip = LoadClip("AA_Baseball_Pitcher_Pitching_type01");
+            var pitchClip = LoadClip(PitcherClipName);
             var batClip = LoadClip("AA_Baseball_Batter_Idle_Loop");
             var catClip = LoadClip("AA_Baseball_Catcher_Idle");
             var umpClip = LoadClip("AA_Baseball_Umpire_Crouch_Idle");
@@ -103,9 +124,9 @@ namespace KokoSim.Unity.Match
             _root.transform.position = StageOrigin;
             BuildGround(layer);
 
-            // yawはクリップごとの素の向き実測（DuelMotionSpike.RunFacingProbe 2026-07-26）から:
-            // 投手クリップだけ前方向−X（ルートモーション実測）、脇3クリップは素で+Z向き
-            _pitcher = SpawnActor(body, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), -90f,
+            // yawはクリップごとの素の向き実測（DuelMotionSpike.RunFacingProbe）から:
+            // 投手クリップ（自作Rokoko）は素で+Z向き＝PitcherYaw、脇3クリップ（購入AA）も素で+Z向き
+            _pitcher = SpawnActor(body, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), PitcherYaw,
                 new Color(0.92f, 0.92f, 0.90f), MoundHeight, layer);
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
             _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
@@ -158,11 +179,14 @@ namespace KokoSim.Unity.Match
         }
 
         // ── §7-2 アンカー同期（第1弾＝投手のみ） ──────────────────────────
-        // リリースのアンカー時刻は右手速度ピーク実測（RunPitcherProbe: t=0.50 × 6.00s＝8.5m/s ピーク）。
+        // リリースのアンカー時刻は右手速度ピーク実測。自作Rokokoクリップ（4.27s）では
+        // RunClipSpeedProbe(0.05s刻み) の 3.05s＝13.7m/s がピーク（旧AAクリップは3.00s＝8.5m/s）。
+        // 収録の頭にあった静止1.2sはインポータのfirstFrame=36で落としてあり、その結果
+        // リリース時刻が旧クリップとほぼ同値に揃っている＝打席の間合いは据え置き。
         // 本実装ではAnimationEventの注釈付けに置き換える（design-18 §7-2）。
         // MatchLiveController が対決ビュー中の1球周期（duelPitchIntervalSeconds）の基準にも使う。
-        public const float ReleaseTime = 3.0f;
-        private const float FollowSeconds = 1.5f;   // リリース後に見せるフォロースルーの長さ（次の振りかぶりへ切る前）
+        public const float ReleaseTime = 3.05f;
+        private const float FollowSeconds = 1.2f;   // リリース後に見せるフォロースルーの長さ（クリップ末尾まで実測1.22s）
         private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
         private float _cutClipTime;
 
@@ -634,13 +658,20 @@ namespace KokoSim.Unity.Match
 #endif
         }
 
-        private static AnimationClip LoadClip(string clipName)
+        /// <summary>
+        /// 供給元FBX（ClipFbxSources）を順に見てクリップを名前引きする。プローブ側も同じ入口を使う。
+        /// FBXにはプレビュー複製（__preview__接頭辞）が同居するが、完全一致なので拾わない。
+        /// </summary>
+        public static AnimationClip LoadClip(string clipName)
         {
 #if UNITY_EDITOR
-            foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(ClipFbx))
+            foreach (var fbx in ClipFbxSources)
             {
-                var c = a as AnimationClip;
-                if (c != null && c.name == clipName) return c;
+                foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(fbx))
+                {
+                    var c = a as AnimationClip;
+                    if (c != null && c.name == clipName) return c;
+                }
             }
 #endif
             return null;

@@ -390,6 +390,24 @@ Render Feature追加が品質段階ぶん必要（§2）。
      **罠**: 録画中に `ScreenRouter` の遅延遷移（試合終了→MatchResult ハンドオフ等の `ShowDeferred`）が
      MatchLive を非活性化→ `OnDisable` が rig を Dispose して RT が黙って消える。録画中はルータの
      コンポーネントを `enabled=false` にして遷移を差し止める（`ShowDeferred` はルータUpdate適用のため）
+   - **投球モーションを自作モーキャップへ差し替え（2026-07-27）**: 購入AAの `Pitcher_Pitching_type01` を
+     Rokoko収録の自作クリップ `Assets/Motions/Duel/Pitcher_Pitching_01.fbx`（Mixamoプロファイル書き出し・
+     30fps）へ置換。クリップ供給元は `DuelStageRig.ClipFbxSources`（自作→購入の先勝ち）に一本化し、
+     プローブ（DuelMotionSpike / DuelMotionCatalog）も同じ入口を通す。インポート既定は
+     `Assets/Editor/DuelMotionImportDefaults.cs`（AssetPostprocessor・初回のみ適用）でコード固定する。
+     **差し替え時に測り直す3点**: ①素の向き（`RunFacingProbe`）②リリースアンカー（`RunClipSpeedProbe`の
+     右手速度ピーク）③クリップ長に対するフォロースルー残量。実測値は 素の向き+Z／リリース3.05s
+     （13.7m/s ピーク・旧AAは3.00s／8.5m/s）／末尾まで1.22s。
+     収録頭の静止1.2sはインポータの `firstFrame=36` で落とし、リリース時刻を旧クリップとほぼ同値へ
+     揃えた＝打席の間合い（`duelPitchIntervalSeconds` 4.5s前提の逆算）を据え置ける。
+     **モーキャップ特有の罠**: ①収録の立ち位置ドリフトがそのままルートモーションに乗る（本クリップは
+     フォロー〜復帰で横1.2m流れ、投手がマウンドの土から外れて画面外へ歩いた）→ クリップの
+     Bake Into Pose: Position XZ で水平移動を抜く ②セット姿勢の向きと実際に踏み込んで投げる方向が
+     収録では一致しない（本クリップは約68°ずれ）。`RunRootPathProbe`（本差し替えで追加）で
+     踏み込みベクトルを実測し、**セット基準でなくリリース基準でyawを決める**（採用 `PitcherYaw=236°`）。
+     ③Edit modeの単発描画はスキンが前ポーズのまま止まる既知現象のため、`RunPoseSheet` の絵は
+     モーション検証に使えない。**確認はPlay modeの `DuelViewRecorder` で行う**（骨・ルートの数値だけは
+     Edit modeでも正しい）
 3. **検証スパイクの段取りとgo/no-go基準**（論点5）
    - スパイク構成案: 無料素体＋パック投球/スイング＋自前RT方式（出費はモーション代のみ）
    - go/no-go項目に追加: 時間量子化の快・不快（§4.5-②）、ミットIK吸着の成立（§4.5-③）
