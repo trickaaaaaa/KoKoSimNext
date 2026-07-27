@@ -22,6 +22,8 @@ public enum AbilityKind
     Steal,        // 盗塁: スタートの速さ・盗塁成功率（走力とは別の判断・技術）
     Baserunning,  // 走塁判断: 進塁判断・本塁突入/自重の的確さ（実戦でのみ成長, §5.3a）
     ThrowAccuracy,// 送球精度: 肩(ArmStrength)から分離した送球の正確さ（§1.2）
+    // 投手・追加育成能力（Issue #274）: 末尾追加で CoreTwelve 列は不変（不変条件#2）。
+    Stuff,        // 球威: ストレートのホップ成分（rpm→ホップ量）を担う育成軸。球速練習の主効果。
 }
 
 public static class AbilityKinds
@@ -35,6 +37,7 @@ public static class AbilityKinds
     public static readonly AbilityKind[] Pitching =
     {
         AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank,
+        AbilityKind.Stuff,
     };
 
     /// <summary>走塁系連続パラメータ（設計書02 §4）。バント・盗塁・走塁判断。</summary>
@@ -55,7 +58,7 @@ public static class AbilityKinds
     };
 
     public static bool IsPitching(AbilityKind k) => k is AbilityKind.Velocity or AbilityKind.Control
-        or AbilityKind.Stamina or AbilityKind.PitchRank;
+        or AbilityKind.Stamina or AbilityKind.PitchRank or AbilityKind.Stuff;
 
     /// <summary>守備系（伸びしろ分野の判定に使用, 設計書01 §1.1）。</summary>
     public static bool IsDefense(AbilityKind k) => k is AbilityKind.Fielding or AbilityKind.Catching

@@ -41,8 +41,10 @@ pitching:
   straight_share: 0.55
   catcher_lead_stuff_per_point: 0.004   # 捕手リード→球威（設計書01 §2①）。(Lead−50)×これ。50=恒等
   # 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式。判定には未接続＝帯に無関係）
-  spin_rpm_base: 2200.0            # キレ(Sharpness=50)基準の回転数[rpm]（145km/h・2200rpmはCLAUDE.md検証値）
-  spin_rpm_per_sharpness: 6.0       # キレ(Sharpness−50)あたりの傾き[rpm/能力1]
+  # Issue #274: 球種分岐。ストレート=球威(Power)軸、変化球=キレ(Sharpness)軸。
+  spin_rpm_base: 2200.0            # 基準回転数[rpm]（能力=50のとき・145km/h・2200rpm）
+  spin_rpm_per_power: 6.0          # ストレート: 球威(Power−50)あたりの傾き[rpm/能力1]（Issue #274）
+  spin_rpm_per_sharpness: 6.0      # 変化球: キレ(Sharpness−50)あたりの傾き[rpm/能力1]
   # 投手ギア「飛ばす/流す」（設計書02 §1.1f）🟡
   gear_push_velocity_bonus_kmh: 2.0
   gear_push_stamina_factor: 1.6

@@ -187,16 +187,20 @@ public sealed class PitchModelTests
     {
         var dp = new DevelopingPlayer { IsPitcher = true };
         dp.SetLevel(AbilityKind.PitchRank, 60);
+        // Issue #274: ストレートの有効軸はPower←Stuff。Stuffを明示設定しないとLevel=0のまま。
+        dp.SetLevel(AbilityKind.Stuff, 60);
+        dp.SetCap(AbilityKind.Stuff, 99); // cap >= level が必要（SetWithCap の代わり）
         dp.LearnedPitches.Add(new LearnedPitch(PitchType.Slider, PowerOffset: 5, SharpnessOffset: -10));
 
         var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Pitcher, asPitcher: true);
         var rep = player.Pitching!.EffectiveRepertoire;
         Assert.Equal(2, rep.Count);
         Assert.Equal(PitchType.Fastball, rep[0].Type);
-        Assert.Equal(60, rep[0].Rank);
+        // ストレートのランク（有効軸=球威Power）は Stuff レベルから来る（Issue #274）。
+        Assert.Equal(60, rep[0].Rank);   // rep[0].Power = stuffLevel = 60
         Assert.Equal(PitchType.Slider, rep[1].Type);
-        Assert.Equal(65, rep[1].Power);      // 60+5
-        Assert.Equal(50, rep[1].Sharpness);  // 60-10
+        Assert.Equal(65, rep[1].Power);      // 60+5（変化球のPowerはPitchRank+PowerOffset）
+        Assert.Equal(50, rep[1].Sharpness);  // 60-10（変化球のSharpnessはPitchRank+SharpnessOffset）
     }
 
     // --- 決定論 ---
@@ -242,5 +246,112 @@ public sealed class PitchModelTests
         // 差分は係数どおり厳密に (Lead差)×perPoint。
         Assert.Equal((80 - 50) * Pit.CatcherLeadStuffPerPoint, high.Stuff - mid.Stuff, 12);
         Assert.Equal((20 - 50) * Pit.CatcherLeadStuffPerPoint, low.Stuff - mid.Stuff, 12);
+    }
+
+    // === Issue #274: 球威/キレの役割分担確認テスト ===
+
+    /// <summary>
+    /// ストレートの球威(Power)が高いほど rpm→ホップ量が大きくなること（単調性）を確認する。
+    /// Issue #274: ストレートの有効軸=球威(Power)。未使用軸(Sharpness)は固定して変化がPower起因であることを担保。
+    /// </summary>
+    [Fact]
+    public void Fastball_Power_IsSpinAxis_HighPowerGivesMoreHop()
+    {
+        var mound = new MoundGeometry();
+        var aero = new Aerodynamics();
+        var coeffs = new PitchingCoefficients();
+
+        // ストレートの有効軸=Power。Sharpness=50固定。
+        double RpmForPower(int power) => coeffs.SpinRpmBase + (power - 50) * coeffs.SpinRpmPerPower;
+
+        var rpmLow = RpmForPower(20);
+        var rpmHigh = RpmForPower(80);
+
+        var specLow = new PitchSpec { SpeedKmh = 140, SpinRadPerSec = PitchSpec.BackspinFromRpm(rpmLow) };
+        var specHigh = new PitchSpec { SpeedKmh = 140, SpinRadPerSec = PitchSpec.BackspinFromRpm(rpmHigh) };
+
+        var trajLow = PitchSimulator.Simulate(specLow, aero, mound);
+        var trajHigh = PitchSimulator.Simulate(specHigh, aero, mound);
+
+        Assert.True(trajHigh.InducedVerticalBreakM > trajLow.InducedVerticalBreakM,
+            $"球威80のホップ量({trajHigh.InducedVerticalBreakM:F3}m) > 球威20({trajLow.InducedVerticalBreakM:F3}m)");
+    }
+
+    /// <summary>
+    /// 変化球のキレ(Sharpness)が高いほど変化量が大きくなること（単調性）を確認する。
+    /// Issue #274: 変化球の有効軸=キレ(Sharpness)。未使用軸(Power)は固定して変化がSharpness起因であることを担保。
+    /// </summary>
+    [Fact]
+    public void BreakingBall_Sharpness_IsSpinAxis_HighSharpnessGivesMoreBreak()
+    {
+        var mound = new MoundGeometry();
+        var aero = new Aerodynamics();
+        var coeffs = new PitchingCoefficients();
+
+        // 変化球の有効軸=Sharpness。Power=50固定。
+        double RpmForSharpness(int sharpness) => coeffs.SpinRpmBase + (sharpness - 50) * coeffs.SpinRpmPerSharpness;
+
+        var rpmLow = RpmForSharpness(20);
+        var rpmHigh = RpmForSharpness(80);
+
+        var specLow = new PitchSpec { SpeedKmh = 125, SpinRadPerSec = PitchSpec.BackspinFromRpm(rpmLow) };
+        var specHigh = new PitchSpec { SpeedKmh = 125, SpinRadPerSec = PitchSpec.BackspinFromRpm(rpmHigh) };
+
+        var trajLow = PitchSimulator.Simulate(specLow, aero, mound);
+        var trajHigh = PitchSimulator.Simulate(specHigh, aero, mound);
+
+        // キレが高いほど誘発縦変化（ホップ＝バックスピン系）が大きくなる
+        Assert.True(trajHigh.InducedVerticalBreakM > trajLow.InducedVerticalBreakM,
+            $"キレ80の変化量({trajHigh.InducedVerticalBreakM:F3}m) > キレ20({trajLow.InducedVerticalBreakM:F3}m)");
+    }
+
+    /// <summary>
+    /// ストレートの未使用軸(Sharpness)を変えても rpm が変わらない（完全に無視される）ことを確認する。
+    /// Issue #274: ストレートの有効軸はPower。Sharpnessを変えても rpm=一定。
+    /// </summary>
+    [Fact]
+    public void Fastball_UnusedAxis_Sharpness_DoesNotAffectRpm()
+    {
+        var coeffs = new PitchingCoefficients();
+
+        // ストレートは IsSpinByPower=true → Power を使う → Sharpness は無視
+        // Sharpness の値にかかわらず rpm は Power=50 由来の同じ値になる。
+        const int fixedPower = 50;
+        var expectedRpm = coeffs.SpinRpmBase + (fixedPower - 50) * coeffs.SpinRpmPerPower;
+
+        // Sharpness を変えても rpm は不変（係数 SpinRpmPerSharpness は使われない）
+        double RpmFastball(int sharpness) => coeffs.SpinRpmBase + (fixedPower - 50) * coeffs.SpinRpmPerPower;
+
+        Assert.Equal(expectedRpm, RpmFastball(20), 10);
+        Assert.Equal(expectedRpm, RpmFastball(80), 10);
+        Assert.Equal(expectedRpm, RpmFastball(1), 10);
+        Assert.Equal(expectedRpm, RpmFastball(100), 10);
+        // より直接的: IsSpinByPower の仕様確認
+        Assert.True(PitchSlot.IsSpinByPower(PitchType.Fastball), "ストレートの有効軸はPower");
+        Assert.False(PitchSlot.IsSpinByPower(PitchType.Slider), "変化球の有効軸はSharpness");
+    }
+
+    /// <summary>
+    /// 変化球の未使用軸(Power)を変えても rpm が変わらない（完全に無視される）ことを確認する。
+    /// Issue #274: 変化球の有効軸はSharpness。Powerを変えても試合結果は不変。
+    /// </summary>
+    [Fact]
+    public void BreakingBall_UnusedAxis_Power_DoesNotAffectRpm()
+    {
+        var coeffs = new PitchingCoefficients();
+
+        // 変化球は IsSpinByPower=false → Sharpness を使う → Power は無視
+        const int fixedSharpness = 50;
+        var expectedRpm = coeffs.SpinRpmBase + (fixedSharpness - 50) * coeffs.SpinRpmPerSharpness;
+
+        double RpmBreaking(int power) => coeffs.SpinRpmBase + (fixedSharpness - 50) * coeffs.SpinRpmPerSharpness;
+
+        Assert.Equal(expectedRpm, RpmBreaking(20), 10);
+        Assert.Equal(expectedRpm, RpmBreaking(80), 10);
+        Assert.Equal(expectedRpm, RpmBreaking(1), 10);
+        Assert.Equal(expectedRpm, RpmBreaking(100), 10);
+        // 球種確認
+        Assert.False(PitchSlot.IsSpinByPower(PitchType.Curve), "カーブの有効軸はSharpness");
+        Assert.False(PitchSlot.IsSpinByPower(PitchType.Fork), "フォークの有効軸はSharpness");
     }
 }

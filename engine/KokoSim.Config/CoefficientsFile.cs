@@ -255,6 +255,8 @@ public static class CoefficientsLoader
         public double CatcherLeadStuffPerPoint { get; set; } = D.CatcherLeadStuffPerPoint;
         // 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式）
         public double SpinRpmBase { get; set; } = D.SpinRpmBase;
+        /// <summary>ストレートの球威(Power-50)あたりの回転数傾き（Issue #274）。</summary>
+        public double SpinRpmPerPower { get; set; } = D.SpinRpmPerPower;
         public double SpinRpmPerSharpness { get; set; } = D.SpinRpmPerSharpness;
         // 投手ギア（設計書02 §1.1f）
         public double GearPushVelocityBonusKmh { get; set; } = D.GearPushVelocityBonusKmh;
@@ -280,6 +282,7 @@ public static class CoefficientsLoader
                 StraightShare = StraightShare,
                 CatcherLeadStuffPerPoint = CatcherLeadStuffPerPoint,
                 SpinRpmBase = SpinRpmBase,
+                SpinRpmPerPower = SpinRpmPerPower,
                 SpinRpmPerSharpness = SpinRpmPerSharpness,
                 GearPushVelocityBonusKmh = GearPushVelocityBonusKmh,
                 GearPushStaminaFactor = GearPushStaminaFactor,

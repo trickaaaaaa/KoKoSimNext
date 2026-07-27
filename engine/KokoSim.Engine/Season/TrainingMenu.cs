@@ -73,8 +73,9 @@ public static class TrainingMenus
         TrainingMenu.Pitching => new(AbilityKind.Control, new[] { AbilityKind.Stamina }, NoPos),
         TrainingMenu.BreakingBall => new(AbilityKind.PitchRank, None, NoPos),
         TrainingMenu.Running => new(AbilityKind.Stamina, new[] { AbilityKind.Speed }, NoPos),
-        // 球速主体。副効果はスタミナ・パワーを少し（sub_factor倍）。コントロールは上げない。
-        TrainingMenu.VelocityTraining => new(AbilityKind.Velocity, new[] { AbilityKind.Stamina, AbilityKind.Power }, NoPos),
+        // 球速主体。副効果は球威・スタミナ・パワーを少し（sub_factor倍）。コントロールは上げない。
+        // Issue #274: 球威(Stuff)を球速練習の主な副効果として追加（球速が上がれば質も伴う）。
+        TrainingMenu.VelocityTraining => new(AbilityKind.Velocity, new[] { AbilityKind.Stuff, AbilityKind.Stamina, AbilityKind.Power }, NoPos),
         // バット操作技術。副効果はミートを少し。
         TrainingMenu.Bunt => new(AbilityKind.Bunt, new[] { AbilityKind.Contact }, NoPos),
         // ポジション別守備: そのポジションの適性だけ伸びる。
