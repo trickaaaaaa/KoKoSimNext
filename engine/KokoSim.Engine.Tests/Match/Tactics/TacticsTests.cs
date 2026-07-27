@@ -660,7 +660,9 @@ public sealed class TacticsTests
         {
             var runs = 0;
             var halves = 0;
-            for (ulong s = 0; s < 80; s++)
+            // 標本数: 延長にもつれる試合だけを数えるので、80試合では延長イニングが十数個しか集まらず
+            // 揺れで逆転しうる（issue #262 の得点環境変更で顕在化）。300試合まで増やして安定させる。
+            for (ulong s = 0; s < 300; s++)
             {
                 var r = GameEngine.Play(TeamOf("A"), TeamOf("H"), ctx, new Xoshiro256Random(s));
                 foreach (var line in new[] { r.AwayLineScore, r.HomeLineScore })
@@ -678,7 +680,7 @@ public sealed class TacticsTests
 
         var plainRate = ExtraRunRate(new GameContext { MaxInnings = 12 });
         var tbRate = ExtraRunRate(new GameContext { MaxInnings = 12, TieBreakEnabled = true, TieBreakStartInning = 10 });
-        Assert.True(tbRate > plainRate * 1.5, $"タイブレークで延長の得点率が上がるはず: {tbRate:F2} vs {plainRate:F2}");
+        Assert.True(tbRate > plainRate * 1.5, $"タイブレークで延長の得点率が上がるはず: tb={tbRate:F3} plain={plainRate:F3}");
     }
 
     // ===== YAML駆動（不変条件#4） =====

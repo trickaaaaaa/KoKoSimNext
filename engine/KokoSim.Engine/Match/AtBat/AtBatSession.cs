@@ -141,13 +141,18 @@ public sealed class AtBatSession
         PlateAppearanceResult? forcedResult = null)
     {
         // スキルの打球挙動補正（設計書10）。行動特性・球質だけをここで反映（数値補正は実効能力側で適用済み）。
-        // 広角打法（打球方向σ）・粘り打ち（ファウル率）は打撃係数の1打席コピーへ。スキルなしなら共有係数のまま。
+        // 広角打法（引っ張りバイアスの縮小, issue #262）・粘り打ち（ファウル率）は打撃係数の1打席コピーへ。
+        // スキルなしなら共有係数のまま。
         var batting = ctx.Batting;
-        if (ctx.Skills.BearingSigmaFactor != 1.0 || ctx.Skills.FoulShareFactor != 1.0)
+        if (ctx.Skills.BearingPullFactor != 1.0 || ctx.Skills.FoulShareFactor != 1.0)
         {
+            var pull = ctx.Skills.BearingPullFactor;
             batting = batting with
             {
-                BearingSigma = batting.BearingSigma * ctx.Skills.BearingSigmaFactor,
+                // 残差σは据え置き。引っ張り側の項だけを縮める＝「早くても差し込まれても方向が大こけしない」。
+                BearingPullPerTiming = batting.BearingPullPerTiming * pull,
+                BearingPullGroundDeg = batting.BearingPullGroundDeg * pull,
+                BearingPullFlyDeg = batting.BearingPullFlyDeg * pull,
                 FoulShare = MathUtil.Clamp(batting.FoulShare * ctx.Skills.FoulShareFactor, 0.0, 0.9),
             };
         }

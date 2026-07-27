@@ -52,6 +52,32 @@ public static class ContactModel
            + coeff.ContactQualityPerControl * (plan.ControlLevel - 50.0)
            + coeff.ContactQualityPerBreakM * (features.BreakMagnitudeM - coeff.ContactQualityBreakRefM);
 
+    /// <summary>
+    /// タイミングのズレの平均（設計書01 §2④, issue #262）。正＝差し込まれ（遅れ）／負＝早い。
+    /// 速い球・変化の大きい球ほど遅れ、ミートが良いほどズレない。実測から直接引けるよう Resolve と分離。
+    /// </summary>
+    public static double TimingOffsetMean(
+        BatterAttributes batter, PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
+        => coeff.TimingPerKmh * (plan.VelocityKmh - coeff.TimingRefKmh)
+           + coeff.TimingPerBreakM * (features.BreakMagnitudeM - coeff.TimingBreakRefM)
+           - coeff.TimingPerContact * (batter.Contact - 50);
+
+    /// <summary>
+    /// 打球方向[deg]（設計書01 §2⑤, issue #262）。−＝左翼（三塁側）／＋＝右翼（一塁側）。
+    /// 引っ張り/流しの量は「タイミングのズレ」と「打球種別（打球角）」で決まり、打者の左右が符号を与える
+    /// （右打者の引っ張り＝負／左打者の引っ張り＝正）。残差 <see cref="BattingCoefficients.BearingSigma"/> が
+    /// それ以外のばらつき（打点の上下・スイング軌道）をまとめて受ける。
+    /// </summary>
+    public static double BearingDeg(
+        BatterAttributes batter, double timingOffset, double launchAngleDeg,
+        BattingCoefficients coeff, IRandomSource rng)
+    {
+        var pull = coeff.BearingPullPerTiming * -timingOffset + coeff.LaunchAnglePullDeg(launchAngleDeg);
+        // スイッチは左打ち扱い（FieldingResolver の一塁到達ボーナスと同じ規約にそろえる）。
+        var pullSign = batter.Bats is Handedness.Left or Handedness.Switch ? 1.0 : -1.0;
+        return pullSign * pull + rng.NextGaussian(0, coeff.BearingSigma);
+    }
+
     public static (ContactOutcome Outcome, BattedBall? Ball) Resolve(
         BatterAttributes batter,
         PitchPlan plan,
@@ -87,7 +113,10 @@ public static class ContactModel
         // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。
         var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality));
         var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + rng.NextGaussian(0, angleSigma);
-        var bearing = rng.NextGaussian(0, coeff.BearingSigma);
+
+        // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。
+        var timing = TimingOffsetMean(batter, plan, features, coeff) + rng.NextGaussian(0, coeff.TimingSigma);
+        var bearing = BearingDeg(batter, timing, launchAngle, coeff, rng);
 
         var ball = new BattedBall
         {

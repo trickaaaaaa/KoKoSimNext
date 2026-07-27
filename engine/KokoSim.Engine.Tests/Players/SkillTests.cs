@@ -107,7 +107,7 @@ public sealed class SkillTests
         var batter = new SkillSet(new[] { Skill.SprayHitter, Skill.Grinder, Skill.FirstPitchSwinger });
         var pitcher = new SkillSet(new[] { Skill.DeceptiveBall });
         var m = SkillModel.PlayMods(batter, pitcher, 0, C);
-        Assert.Equal(C.SprayBearingFactor, m.BearingSigmaFactor);
+        Assert.Equal(C.SprayPullFactor, m.BearingPullFactor);
         Assert.Equal(C.GrinderFoulFactor, m.FoulShareFactor);
         Assert.Equal(C.FirstPitchSwingProb, m.FirstPitchSwingProb);
         Assert.Equal(C.DeceptiveBallStuffBonus, m.StuffBonus, 9);

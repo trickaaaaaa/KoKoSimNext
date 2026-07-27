@@ -11,8 +11,11 @@ public sealed record SkillCoefficients
     /// <summary>尻上がり(打): 当該試合の打席数1つあたりのミート補正と上限。</summary>
     public double SlowStarterBatContactPerPa { get; init; } = 1.6;
     public double SlowStarterBatMaxBonus { get; init; } = 6.0;
-    /// <summary>広角打法: 打球方向σの拡大倍率（シフト無効化）。打力には作用しない。</summary>
-    public double SprayBearingFactor { get; init; } = 1.35;
+    /// <summary>
+    /// 広角打法: 引っ張りバイアスの縮小倍率（&lt;1）。issue #262 でσ拡大から意味を変更＝
+    /// 「早くても差し込まれても方向が大こけしない＝どこへでも打ち返す」。残差σには作用しない。打力にも作用しない。
+    /// </summary>
+    public double SprayPullFactor { get; init; } = 0.55;
     /// <summary>初球から振る: 初球にスイングを仕掛ける確率。</summary>
     public double FirstPitchSwingProb { get; init; } = 0.62;
     /// <summary>粘り打ち: ファウル率の拡大倍率（球数を吐かせる）。</summary>

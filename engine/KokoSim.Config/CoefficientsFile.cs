@@ -326,6 +326,18 @@ public static class CoefficientsLoader
         public double LaunchAngleAtLt100 { get; set; } = D.LaunchAngleAtLt100;
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
         public double BearingSigma { get; set; } = D.BearingSigma;
+        // ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）
+        public double TimingSigma { get; set; } = D.TimingSigma;
+        public double TimingRefKmh { get; set; } = D.TimingRefKmh;
+        public double TimingPerKmh { get; set; } = D.TimingPerKmh;
+        public double TimingBreakRefM { get; set; } = D.TimingBreakRefM;
+        public double TimingPerBreakM { get; set; } = D.TimingPerBreakM;
+        public double TimingPerContact { get; set; } = D.TimingPerContact;
+        public double BearingPullPerTiming { get; set; } = D.BearingPullPerTiming;
+        public double BearingPullGroundDeg { get; set; } = D.BearingPullGroundDeg;
+        public double BearingPullFlyDeg { get; set; } = D.BearingPullFlyDeg;
+        public double BearingGroundAngleDeg { get; set; } = D.BearingGroundAngleDeg;
+        public double BearingFlyAngleDeg { get; set; } = D.BearingFlyAngleDeg;
         public double MinQualityVeloFactor { get; set; } = D.MinQualityVeloFactor;
         public double ContactQualityVelocityRefKmh { get; set; } = D.ContactQualityVelocityRefKmh;
         public double ContactQualityPerKmh { get; set; } = D.ContactQualityPerKmh;
@@ -359,6 +371,17 @@ public static class CoefficientsLoader
             LaunchAngleAtLt100 = LaunchAngleAtLt100,
             LaunchAngleSigma = LaunchAngleSigma,
             BearingSigma = BearingSigma,
+            TimingSigma = TimingSigma,
+            TimingRefKmh = TimingRefKmh,
+            TimingPerKmh = TimingPerKmh,
+            TimingBreakRefM = TimingBreakRefM,
+            TimingPerBreakM = TimingPerBreakM,
+            TimingPerContact = TimingPerContact,
+            BearingPullPerTiming = BearingPullPerTiming,
+            BearingPullGroundDeg = BearingPullGroundDeg,
+            BearingPullFlyDeg = BearingPullFlyDeg,
+            BearingGroundAngleDeg = BearingGroundAngleDeg,
+            BearingFlyAngleDeg = BearingFlyAngleDeg,
             MinQualityVeloFactor = MinQualityVeloFactor,
             ContactQualityVelocityRefKmh = ContactQualityVelocityRefKmh,
             ContactQualityPerKmh = ContactQualityPerKmh,
@@ -1066,7 +1089,7 @@ public static class CoefficientsLoader
         private static readonly KokoSim.Engine.Players.SkillCoefficients D = new();
         public double SlowStarterBatContactPerPa { get; set; } = D.SlowStarterBatContactPerPa;
         public double SlowStarterBatMaxBonus { get; set; } = D.SlowStarterBatMaxBonus;
-        public double SprayBearingFactor { get; set; } = D.SprayBearingFactor;
+        public double SprayPullFactor { get; set; } = D.SprayPullFactor;
         public double FirstPitchSwingProb { get; set; } = D.FirstPitchSwingProb;
         public double GrinderFoulFactor { get; set; } = D.GrinderFoulFactor;
         public double StreakyVarianceFactor { get; set; } = D.StreakyVarianceFactor;
@@ -1100,7 +1123,7 @@ public static class CoefficientsLoader
         {
             SlowStarterBatContactPerPa = SlowStarterBatContactPerPa,
             SlowStarterBatMaxBonus = SlowStarterBatMaxBonus,
-            SprayBearingFactor = SprayBearingFactor,
+            SprayPullFactor = SprayPullFactor,
             FirstPitchSwingProb = FirstPitchSwingProb,
             GrinderFoulFactor = GrinderFoulFactor,
             StreakyVarianceFactor = StreakyVarianceFactor,

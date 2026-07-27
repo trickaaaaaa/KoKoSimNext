@@ -63,10 +63,10 @@ public static class SkillModel
     /// <summary>打者・投手のスキルから1打席の挙動補正を合成（行動特性・球質のみ）。</summary>
     public static SkillPlayMods PlayMods(SkillSet batterSkills, SkillSet pitcherSkills, int priorBf, SkillCoefficients c)
     {
-        double firstPitch = 0.0, bearing = 1.0, foul = 1.0, stuff = 0.0;
+        double firstPitch = 0.0, bearingPull = 1.0, foul = 1.0, stuff = 0.0;
 
         if (batterSkills.Has(Skill.FirstPitchSwinger)) firstPitch = c.FirstPitchSwingProb;
-        if (batterSkills.Has(Skill.SprayHitter)) bearing = c.SprayBearingFactor;
+        if (batterSkills.Has(Skill.SprayHitter)) bearingPull = c.SprayPullFactor;
         if (batterSkills.Has(Skill.Grinder)) foul = c.GrinderFoulFactor;
 
         if (pitcherSkills.Has(Skill.DeceptiveBall)) stuff += c.DeceptiveBallStuffBonus;
@@ -75,7 +75,7 @@ public static class SkillModel
             stuff -= c.SecondTimeThroughStuffPenalty;
         if (pitcherSkills.Has(Skill.Monster)) stuff += c.MonsterStuffBonus;
 
-        return new SkillPlayMods(firstPitch, bearing, foul, stuff);
+        return new SkillPlayMods(firstPitch, bearingPull, foul, stuff);
     }
 
     /// <summary>ムラっけ: 当日の出来（day-form）の振れ幅の拡大倍率。スキルなしは1.0。</summary>

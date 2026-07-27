@@ -23,7 +23,7 @@ skills:
     category: batting
     hidden_eligible: false
     name: 広角打法
-    description: 打球方向が広くシフトを無効化しやすい（方向の質・打力ではない）
+    description: 引っ張りに寄らずどこへでも打ち返す＝シフトを無効化しやすい（方向の質・打力ではない）
   - id: FirstPitchSwinger
     category: batting
     hidden_eligible: false
