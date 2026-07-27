@@ -75,6 +75,13 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static bool HasUnitValues(int tab) => tab == 1;
 
+        /// <summary>
+        /// 持ち球のミニ球種チャートを出すタブか（issue #293）。投手能力タブでのみ表示し、
+        /// 野手能力タブでは出さない。ゲートは「タブ」で行い、選手の投/野区分ではゲートしない
+        /// （未習得選手もストレート1球が出る方針は維持, issue #93）。
+        /// </summary>
+        public static bool ShowPitchChart(int tab) => tab == 1;
+
         /// <summary>指定タブ（0=野手能力/1=投手能力）の比較行を組む。a/b は未選択なら null。</summary>
         public static List<PlayerCompareRow> BuildRows(int tab, DevelopingPlayer a, DevelopingPlayer b)
         {
