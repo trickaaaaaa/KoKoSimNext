@@ -1009,7 +1009,7 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* --- 球種変化チャート（プロスピ風） --- */
 /* 投手能力カード内へ埋め込み（issue #215）: 能力4行の下に置くため 340→280px に抑える。 */
 .pd2-pitchchart { min-height: 280px; flex-grow: 1; margin: 0 16px 16px 16px; }
-.pd2-pchip { position: absolute; flex-direction: row; align-items: center; background-color: var(--color-field); border-width: 1px; border-color: var(--color-line); padding: 4px 9px; }
+.pd2-pchip { position: absolute; flex-direction: row; align-items: center; }
 .pd2-pchip__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: 8px; }
 /* ストレートのみ添えるMAX球速（Issue #130）。数字はnu-num(Oswald)側で右揃え・コンデンス済み。 */
 .pd2-pchip__velo { margin-right: 8px; }
