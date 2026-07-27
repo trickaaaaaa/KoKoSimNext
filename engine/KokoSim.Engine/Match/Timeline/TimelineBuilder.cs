@@ -398,24 +398,49 @@ public static class TimelineBuilder
     /// 打席前に塁上にいて、この打球で動かなかった走者の静止トークンを足す（#3）。
     /// 移動レッグを持つ塁（走者が動いた）は二重に描かない。ラベルは移動走者("打"/"走1"…)と衝突しない
     /// "走一/走二/走三"。T0=0,T1=Duration の0長レッグ＝定点表示。結果不変・乱数不使用の表示専用。
+    ///
+    /// 2アウトのフライアウト（#299）はタッチアップ不要のため例外: 静止させず、接触直後
+    /// （<see cref="AppendRunnerLegs"/> と同じ ContactAt+0.10）から走者速度で次塁方向へスタートさせ、
+    /// 捕球時刻（イニング終了）でその位置に止める（帰塁の描画はしない）。0/1アウトのフライ・
+    /// ゴロアウトは従来どおり静止のまま（issue の「判断が要る点」によりフライの2アウトだけに限定）。
     /// </summary>
     public static PlayTimeline AppendHeldRunners(
         PlayTimeline timeline, bool first, bool second, bool third,
-        IReadOnlyList<RunnerMove> moves, FieldGeometry field)
+        Player? firstPlayer, Player? secondPlayer, Player? thirdPlayer,
+        IReadOnlyList<RunnerMove> moves, FieldGeometry field,
+        int outsBefore, FieldingPlay? play)
     {
         var movedFrom = new HashSet<int>();
         foreach (var m in moves) movedFrom.Add(m.FromBase); // 1/2/3（0=打者）
 
+        var autoRun = outsBefore == 2 && play is { IsFly: true, Result: BattedBallResult.Out };
+        var catchAt = autoRun ? ContactAt + (play!.FieldedAtSeconds ?? play.HangTimeSeconds) : 0.0;
+
         var legs = new List<RunnerLeg>(timeline.Runners);
-        void AddHeld(int b, bool occupied, string name, string label)
+        void AddHeld(int b, bool occupied, Player? runner, string name, string nextName, string label)
         {
             if (!occupied || movedFrom.Contains(b)) return;
             var pt = BasePoint(field, name);
+            if (autoRun && runner is not null)
+            {
+                var t0 = ContactAt + 0.10;
+                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = pt, OutAtEnd = false });
+                if (catchAt > t0)
+                {
+                    var speed = Math.Max(4.0, runner.ToFielder().SprintSpeedMps);
+                    var perBase = field.BaseDistanceM / speed + 0.35; // AppendRunnerLegs と同式
+                    var frac = Math.Clamp((catchAt - t0) / perBase, 0.0, 1.0);
+                    var next = BasePoint(field, nextName);
+                    var stop = new TimelinePoint(pt.X + (next.X - pt.X) * frac, pt.Z + (next.Z - pt.Z) * frac);
+                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = catchAt, From = pt, To = stop, OutAtEnd = false });
+                }
+                return;
+            }
             legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = timeline.Duration, From = pt, To = pt, OutAtEnd = false });
         }
-        AddHeld(1, first, "first", "走一");
-        AddHeld(2, second, "second", "走二");
-        AddHeld(3, third, "third", "走三");
+        AddHeld(1, first, firstPlayer, "first", "second", "走一");
+        AddHeld(2, second, secondPlayer, "second", "third", "走二");
+        AddHeld(3, third, thirdPlayer, "third", "home", "走三");
 
         if (legs.Count == timeline.Runners.Count) return timeline;
         return timeline with { Runners = legs };
