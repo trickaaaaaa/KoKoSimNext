@@ -25,12 +25,13 @@ namespace KokoSim.EditorTools
 
         /// <summary>§7-5 素体比較用: 非nullならSpawnBodyがこちらのFBXを使う（例: Assets/DuelSpike/AnimatedHuman/AnimatedHuman.fbx）。</summary>
         public static string BodyOverride;
-        private const string ClipFbx = "Assets/Animo/AA_Basic_Baseball_Movement_Animations_Package/Animations/AA_Basic_Baseball_Movement_Animations_Package.fbx";
+        // クリップ供給元は DuelStageRig.ClipFbxSources に一本化（FindClip 参照）
         private const float TargetHeight = 1.75f;
 
-        // 手の軌跡プローブ実測（2026-07-26）: 振りかぶり0.05-0.30/足上げ0.35-0.45/リリース≈0.52/
-        // フォロー0.55-0.65/戻り0.8-。リリース周辺に厚くコマを置く
-        private static readonly float[] PitchTimes = { 0.15f, 0.35f, 0.45f, 0.50f, 0.53f, 0.56f, 0.60f, 0.70f };
+        // 手の軌跡プローブ実測（自作Rokokoクリップ 4.27s・2026-07-27）: セット0.0-0.35/予備動作0.35-0.55/
+        // 足上げ〜踏み込み0.55-0.70/リリース≈0.715（3.05s）/フォロー0.75-0.85/立ち戻り0.95-。
+        // リリース周辺に厚くコマを置く（正規化時刻なのでクリップ差し替え時はここも測り直す）
+        private static readonly float[] PitchTimes = { 0.00f, 0.35f, 0.55f, 0.65f, 0.70f, 0.715f, 0.75f, 0.82f, 0.95f };
 
         public static string RunPoseSheet()
         {
@@ -67,16 +68,16 @@ namespace KokoSim.EditorTools
                 if (t != null) t.gameObject.SetActive(false);
             }
 
-            // 素体4体（色分けはプロキシ踏襲）。yawはクリップごとの素の向き実測（RunFacingProbe 2026-07-26）から:
-            // 投手クリップだけ前方向−X（ルートモーション実測）、脇3クリップ（打者/捕手/審判/スイング）は素で+Z向き
+            // 素体4体（色分けはプロキシ踏襲）。yawはクリップごとの素の向き実測（RunFacingProbe）から:
+            // 投手（自作Rokoko）も脇3クリップ（打者/捕手/審判/スイング・購入AA）も素で+Z向き
             var pitcher = SpawnBody(root, "body-pitcher",
-                new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), -90f,
-                new Color(0.92f, 0.92f, 0.90f)); // −X→−Z（本塁へ投げ下ろす）
+                new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), KokoSim.Unity.Match.DuelStageRig.PitcherYaw,
+                new Color(0.92f, 0.92f, 0.90f)); // +Z→−Z（本塁へ投げ下ろす）
             var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f)); // +Z→+X（右打者・本塁向き）
             var catcher = SpawnBody(root, "body-catcher", new Vector3(0f, 0f, -1.0f), 0f, new Color(0.25f, 0.27f, 0.30f)); // 素のまま+Z（投手向き）
             var umpire = SpawnBody(root, "body-umpire", new Vector3(-0.35f, 0f, -1.7f), 0f, new Color(0.12f, 0.12f, 0.13f));
 
-            var pitchClip = FindClip("AA_Baseball_Pitcher_Pitching_type01");
+            var pitchClip = FindClip(KokoSim.Unity.Match.DuelStageRig.PitcherClipName);
             var batClip = FindClip("AA_Baseball_Batter_Idle_Loop");
             var catClip = FindClip("AA_Baseball_Catcher_Idle");
             var umpClip = FindClip("AA_Baseball_Umpire_Crouch_Idle");
@@ -190,13 +191,13 @@ namespace KokoSim.EditorTools
             }
 
             var pitcher = SpawnBody(root, "body-pitcher",
-                new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), -90f,
+                new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), KokoSim.Unity.Match.DuelStageRig.PitcherYaw,
                 new Color(0.92f, 0.92f, 0.90f));
             var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f));
             var catcher = SpawnBody(root, "body-catcher", new Vector3(0f, 0f, -1.0f), 0f, new Color(0.25f, 0.27f, 0.30f));
             var umpire = SpawnBody(root, "body-umpire", new Vector3(-0.35f, 0f, -1.7f), 0f, new Color(0.12f, 0.12f, 0.13f));
 
-            var pitchClip = FindClip("AA_Baseball_Pitcher_Pitching_type01");
+            var pitchClip = FindClip(KokoSim.Unity.Match.DuelStageRig.PitcherClipName);
             Sample(batter, FindClip("AA_Baseball_Batter_Idle_Loop"), 0.30f); GroundFix(batter, 0f);
             Sample(catcher, FindClip("AA_Baseball_Catcher_Idle"), 0.50f); GroundFix(catcher, 0f);
             Sample(umpire, FindClip("AA_Baseball_Umpire_Crouch_Idle"), 0.50f); GroundFix(umpire, 0f);
@@ -274,7 +275,7 @@ namespace KokoSim.EditorTools
                 }
 
                 var pitcher = SpawnBody(root, "body-pitcher",
-                    new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), -90f,
+                    new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), KokoSim.Unity.Match.DuelStageRig.PitcherYaw,
                     new Color(0.92f, 0.92f, 0.90f));
                 var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f));
                 var catcher = SpawnBody(root, "body-catcher", new Vector3(0f, 0f, -1.0f), 0f, new Color(0.25f, 0.27f, 0.30f));
@@ -283,7 +284,7 @@ namespace KokoSim.EditorTools
                 Sample(batter, FindClip("AA_Baseball_Batter_Idle_Loop"), 0.30f); GroundFix(batter, 0f);
                 Sample(catcher, FindClip("AA_Baseball_Catcher_Idle"), 0.50f); GroundFix(catcher, 0f);
                 Sample(umpire, FindClip("AA_Baseball_Umpire_Crouch_Idle"), 0.50f); GroundFix(umpire, 0f);
-                Sample(pitcher, FindClip("AA_Baseball_Pitcher_Pitching_type01"), pitchT);
+                Sample(pitcher, FindClip(KokoSim.Unity.Match.DuelStageRig.PitcherClipName), pitchT);
                 GroundFix(pitcher, DuelStageComposer.MoundHeight);
 
                 var camGo = new GameObject("~topCam") { hideFlags = HideFlags.DontSave };
@@ -344,9 +345,11 @@ namespace KokoSim.EditorTools
 
                 var jobs = new[]
                 {
-                    new { name = "pitcher", clip = "AA_Baseball_Pitcher_Pitching_type01", t = 0.15f, desired = new Vector3(0f, 0f, -1f) },
+                    new { name = "pitcher", clip = KokoSim.Unity.Match.DuelStageRig.PitcherClipName, t = 0.15f, desired = new Vector3(0f, 0f, -1f) },
                     new { name = "batter",  clip = "AA_Baseball_Batter_Idle_Loop",        t = 0.30f, desired = new Vector3(1f, 0f, 0f) },
                     new { name = "swing",   clip = "AA_Baseball_Batter_Swing_Type01_Hitting", t = 0.10f, desired = new Vector3(1f, 0f, 0f) },
+                    // 自作Rokoko打撃（構え→スイング→走り出し）。構えの区間で素の向きを読む
+                    new { name = "bat-rkk", clip = "Batter_Batting_01", t = 0.10f, desired = new Vector3(1f, 0f, 0f) },
                     new { name = "catcher", clip = "AA_Baseball_Catcher_Idle",            t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
                     new { name = "umpire",  clip = "AA_Baseball_Umpire_Crouch_Idle",      t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
                 };
@@ -410,7 +413,7 @@ namespace KokoSim.EditorTools
                 }
 
                 var pitcher = SpawnBody(root, "body-pitcher",
-                    new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), -90f,
+                    new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), KokoSim.Unity.Match.DuelStageRig.PitcherYaw,
                     new Color(0.92f, 0.92f, 0.90f));
                 var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f));
                 var catcher = SpawnBody(root, "body-catcher", new Vector3(0f, 0f, -1.0f), 0f, new Color(0.25f, 0.27f, 0.30f));
@@ -472,7 +475,7 @@ namespace KokoSim.EditorTools
 
                         foreach (var t in pitchTimes)
                         {
-                            Sample(pitcher, FindClip("AA_Baseball_Pitcher_Pitching_type01"), t);
+                            Sample(pitcher, FindClip(KokoSim.Unity.Match.DuelStageRig.PitcherClipName), t);
                             GroundFix(pitcher, DuelStageComposer.MoundHeight);
                             int pitPx = DuelStageComposer.MeasureScreenHeight(cam, pitcher);
                             int batPx = DuelStageComposer.MeasureScreenHeight(cam, batter);
@@ -549,7 +552,7 @@ namespace KokoSim.EditorTools
                     if (t != null) t.gameObject.SetActive(false);
                 }
 
-                var clip = FindClip("AA_Baseball_Pitcher_Pitching_type01");
+                var clip = FindClip(KokoSim.Unity.Match.DuelStageRig.PitcherClipName);
                 var sb = new StringBuilder();
                 var body0 = SpawnBody(root, "probe-p0", Vector3.zero, 0f, Color.white);
                 Sample(body0, clip, 0.001f);
@@ -779,7 +782,7 @@ namespace KokoSim.EditorTools
                 var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f));
                 Sample(batter, FindClip("AA_Baseball_Batter_Idle_Loop"), 0.30f); GroundFix(batter, 0f);
 
-                var clip = FindClip("AA_Baseball_Pitcher_Pitching_type01");
+                var clip = FindClip(KokoSim.Unity.Match.DuelStageRig.PitcherClipName);
                 var camGo = new GameObject("~DuelStageCamera") { hideFlags = HideFlags.DontSave };
                 var cam = camGo.AddComponent<Camera>();
                 cam.cullingMask = 1 << layer;
@@ -967,7 +970,7 @@ namespace KokoSim.EditorTools
             }
 
             var pitcher = SpawnBody(root, "body-pitcher",
-                new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), -90f,
+                new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance), KokoSim.Unity.Match.DuelStageRig.PitcherYaw,
                 new Color(0.92f, 0.92f, 0.90f));
             var batter = SpawnBody(root, "body-batter", new Vector3(-0.9f, 0f, 0f), 90f, new Color(0.16f, 0.20f, 0.38f));
             var catcher = SpawnBody(root, "body-catcher", new Vector3(0f, 0f, -1.0f), 0f, new Color(0.25f, 0.27f, 0.30f));
@@ -976,7 +979,7 @@ namespace KokoSim.EditorTools
             AttachMitt(catcher);
 
             var swingClip = FindClip("AA_Baseball_Batter_Swing_Type01_Hitting");
-            Sample(pitcher, FindClip("AA_Baseball_Pitcher_Pitching_type01"), 0.58f); GroundFix(pitcher, DuelStageComposer.MoundHeight);
+            Sample(pitcher, FindClip(KokoSim.Unity.Match.DuelStageRig.PitcherClipName), 0.58f); GroundFix(pitcher, DuelStageComposer.MoundHeight);
             Sample(catcher, FindClip("AA_Baseball_Catcher_Idle"), 0.50f); GroundFix(catcher, 0f);
             Sample(umpire, FindClip("AA_Baseball_Umpire_Crouch_Idle"), 0.50f); GroundFix(umpire, 0f);
 
@@ -1271,6 +1274,62 @@ namespace KokoSim.EditorTools
             }
         }
 
+        /// <summary>
+        /// クリップのルート軌跡を本番と同じ配置（マウンド上・PitcherYaw）で秒刻みに実測する。
+        /// モーキャップは収録中の立ち位置ドリフトがそのままルートモーションに乗るため、
+        /// 「本塁方向（−Z）へどれだけ踏み込むか」と「横（X）へどれだけ流れるか」を分けて見る必要がある。
+        /// 出力は 1行1サンプル: 秒 / ステージローカルXZ / 開始位置からの変位 / 胸法線。
+        /// </summary>
+        public static string RunRootPathProbe(string clipName, float stepSec)
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var clip = FindClip(clipName);
+                if (clip == null) return clipName + " NOT FOUND";
+
+                var sb = new StringBuilder();
+                sb.AppendLine(clipName + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture)
+                    + "  (Z−=本塁方向 / X=横流れ)");
+                Vector3 start = Vector3.zero;
+                int n = Mathf.FloorToInt(clip.length / stepSec);
+                for (int i = 0; i <= n; i++)
+                {
+                    float sec = Mathf.Min(clip.length - 0.001f, i * stepSec);
+                    var body = SpawnBody(root, "probe-root",
+                        new Vector3(0f, DuelStageComposer.MoundHeight, DuelStageComposer.MoundDistance),
+                        KokoSim.Unity.Match.DuelStageRig.PitcherYaw, Color.white);
+                    Sample(body, clip, sec / clip.length);
+                    var p = body.transform.position;
+                    if (i == 0) start = p;
+                    var anim = body.GetComponentInChildren<Animator>();
+                    var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                    var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                    var facing = Vector3.Cross(ra - la, Vector3.up);
+                    facing.y = 0f; facing.Normalize();
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "t={0:F2} pos=({1:F2},{2:F2}) d=({3:F2},{4:F2}) chest=({5:F2},{6:F2})",
+                        sec, p.x, p.z, p.x - start.x, p.z - start.z, facing.x, facing.z));
+                    Object.DestroyImmediate(body);
+                }
+                Debug.Log("[DuelMotionSpike] root path probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
         private static readonly System.Collections.Generic.Dictionary<GameObject, float> AnkleOffset =
             new System.Collections.Generic.Dictionary<GameObject, float>();
 
@@ -1293,12 +1352,9 @@ namespace KokoSim.EditorTools
 
         private static AnimationClip FindClip(string clipName)
         {
-            foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(ClipFbx))
-            {
-                var c = a as AnimationClip;
-                if (c != null && c.name == clipName) return c;
-            }
-            return null;
+            // 供給元は本番リグと同じ入口（自作Assets/Motions → 購入Assets/Animoの順）で引く。
+            // 実測（アンカー・向き）と本番でクリップ実体がずれないための一本化。
+            return KokoSim.Unity.Match.DuelStageRig.LoadClip(clipName);
         }
 
         private static void SetLayerRecursive(GameObject go, int layer)
