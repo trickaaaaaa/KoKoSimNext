@@ -89,6 +89,8 @@ namespace KokoSim.Unity.Lineup
         public CompareCardView CardB = new CompareCardView();
         public int Tab;
         public string[] TabLabels = PlayerCompareTabs.TabLabels;
+        // 持ち球のミニ球種チャートを出すタブか（issue #293）。投手能力タブのみ。単一ソースは PlayerCompareTabs。
+        public bool ShowPitchChart;
         public bool CanConfirm = true;      // ベンチ入りが9人未満なら false（確定ボタンを塞ぐ）
         public string WarnText = "";        // 上の理由（空＝警告なし）
         public string HintText = "";        // 守備位置・先発の操作説明（打順表の下・控えめ）
@@ -568,6 +570,7 @@ namespace KokoSim.Unity.Lineup
             var rightIdx = (_picked >= 0 && _hovered != _picked) ? _hovered : -1;
             v.CardA = MakeCard(leftIdx);
             v.CardB = MakeCard(rightIdx);
+            v.ShowPitchChart = PlayerCompareTabs.ShowPitchChart(_tab);
             BuildRows(v, leftIdx, rightIdx);
             BuildAptNodes(v, leftIdx, rightIdx);
             return v;

@@ -411,8 +411,8 @@ namespace KokoSim.Unity.Member
         // ── 2選手比較 ──
         private void BuildCompare(MemberSettingView v)
         {
-            FillCompareCard("ms-cmp-a", true, v.CardA);
-            FillCompareCard("ms-cmp-b", false, v.CardB);
+            FillCompareCard("ms-cmp-a", true, v.CardA, v.ShowPitchChart);
+            FillCompareCard("ms-cmp-b", false, v.CardB, v.ShowPitchChart);
 
             var tabs = _root.Q<VisualElement>("ms-cmp-tabs");
             if (tabs != null)
@@ -509,7 +509,7 @@ namespace KokoSim.Unity.Member
             return el;
         }
 
-        private void FillCompareCard(string host, bool isA, CompareCard card)
+        private void FillCompareCard(string host, bool isA, CompareCard card, bool showPitchChart)
         {
             var el = _root.Q<VisualElement>(host);
             if (el == null) return;
@@ -543,11 +543,14 @@ namespace KokoSim.Unity.Member
             el.Add(UiComponents.CategoryRankChips(card.Strength));
 
             // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
-            // 未習得選手もストレート1球が出る（投/野でゲートしない, Issue #93）。
-            var chartHost = new VisualElement();
-            chartHost.AddToClassList("cmp-card__pitch");
-            el.Add(chartHost);
-            new PitchChartView(chartHost, compact: true).SetData(card.Pitches);
+            // 投手能力タブのときだけ出す（タブでゲート・投/野区分ではゲートしない, Issue #93/#293）。
+            if (showPitchChart)
+            {
+                var chartHost = new VisualElement();
+                chartHost.AddToClassList("cmp-card__pitch");
+                el.Add(chartHost);
+                new PitchChartView(chartHost, compact: true).SetData(card.Pitches);
+            }
         }
 
         // 行の見た目は部品辞書（UiComponents.CompareRow）に集約。ここは ViewModel の詰め替えだけ。

@@ -62,6 +62,8 @@ namespace KokoSim.Unity.Member
         public CompareCard CardB = new CompareCard();
         public int Tab;                  // 0=野手能力（＋守備適性ダイヤ） / 1=投手能力
         public string[] TabLabels = PlayerCompareTabs.TabLabels;
+        // 持ち球のミニ球種チャートを出すタブか（issue #293）。投手能力タブのみ。単一ソースは PlayerCompareTabs。
+        public bool ShowPitchChart;
         public List<PlayerCompareRow> Rows = new List<PlayerCompareRow>();
         // 守備適性ダイヤ（野手能力タブ内に併載・選手ごとに1枚）。ShowApt=false のタブでは描かない。
         // AptA/AptB は9守備位置（投捕一二三遊左中右順）のランク（G〜S）。未選択の側は Has*=false。
@@ -214,6 +216,7 @@ namespace KokoSim.Unity.Member
             var rightIdx = (_picked >= 0 && _hovered != _picked) ? _hovered : -1;
             v.CardA = MakeCard(leftIdx);
             v.CardB = MakeCard(rightIdx);
+            v.ShowPitchChart = PlayerCompareTabs.ShowPitchChart(_tab);
             BuildRows(v, leftIdx, rightIdx);
             BuildAptNodes(v, leftIdx, rightIdx);
             return v;
