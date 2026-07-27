@@ -48,7 +48,10 @@ public sealed class ForceAdvanceVisibilityTests
         // 一塁走者のフォース進塁（1→2）。接触前（t=0 = 投球フェーズの固定時刻）でも一塁に立っていること。
         var moves = new List<RunnerMove> { new(new Player { Speed = 50 }, 1, 2, Out: false) };
         var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field);
-        tl = TimelineBuilder.AppendHeldRunners(tl, first: true, second: false, third: false, moves, Field);
+        tl = TimelineBuilder.AppendHeldRunners(
+            tl, first: true, second: false, third: false,
+            firstPlayer: null, secondPlayer: null, thirdPlayer: null,
+            moves, Field, outsBefore: 0, GrounderOut());
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var runner = Assert.Single(play.Runners, r => r.Label == "走1");
@@ -71,7 +74,10 @@ public sealed class ForceAdvanceVisibilityTests
             new(new Player { Speed = 50 }, 1, 2, Out: false),
         };
         var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field);
-        tl = TimelineBuilder.AppendHeldRunners(tl, first: true, second: true, third: false, moves, Field);
+        tl = TimelineBuilder.AppendHeldRunners(
+            tl, first: true, second: true, third: false,
+            firstPlayer: null, secondPlayer: null, thirdPlayer: null,
+            moves, Field, outsBefore: 0, GrounderOut());
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var fromSecond = Assert.Single(play.Runners, r => r.Label == "走1"); // moves の順にラベル付与

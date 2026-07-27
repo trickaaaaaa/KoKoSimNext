@@ -1188,8 +1188,11 @@ public static class GameEngine
                 }
 
                 // 打席前から塁上にいて動かなかった走者を静止トークンで描く（#3）。移動走者とは二重に描かない。
+                // 2アウトのフライアウトはタッチアップ不要のため、静止させず接触直後にスタートさせる（#299）。
                 timeline = Match.Timeline.TimelineBuilder.AppendHeldRunners(
-                    timeline, preFirst, preSecond, preThird, runnerMoves, ctx.Field);
+                    timeline, preFirst, preSecond, preThird,
+                    preFirstPlayer, preSecondPlayer, preThirdPlayer,
+                    runnerMoves, ctx.Field, outsBefore, res.Play);
 
                 // バックホーム: 本塁で憤死した走者、または外野安打で生還した走者がいれば送球連鎖
                 // （外野→中継→本塁）を描く（設計書12 §3, F2 Slice D＋#7 セーフ生還も描く）。
