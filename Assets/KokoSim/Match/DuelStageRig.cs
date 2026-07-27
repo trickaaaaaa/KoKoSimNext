@@ -91,7 +91,7 @@ namespace KokoSim.Unity.Match
         private float _acc;
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
-        private AnimationClip _swingMissClip, _swingHitClip, _strikeTakeClip, _hbpClip, _catchClip;
+        private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _catchClip;
 
         private sealed class Actor
         {
@@ -112,6 +112,8 @@ namespace KokoSim.Unity.Match
             public float IdleEndAt;                  // 待機ループの折り返し時刻（0=クリップ末尾）。
                                                      // 構えとスイングが同じクリップの打者は、ループのたびに張り直す必要がある
             public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
+            public float HoldSeconds;                // 末尾到達時、待機へ戻る前にそのポーズで止める秒数（0=即戻る）
+            public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
         }
 
         public DuelStageRig()
@@ -154,7 +156,11 @@ namespace KokoSim.Unity.Match
             _catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
                 new Color(0.25f, 0.27f, 0.30f), 0f, layer);
             _catcher.IdleClip = catClip;
-            SpawnActor(body, umpClip, new Vector3(-0.35f, 0f, -1.7f), 0f,
+            // 球審は捕手の真後ろ・打者（x=-0.9側）から遠い肩越しに覗く「スロット」位置（#291）。
+            // 旧値(-0.35,-1.7)は捕手とのz間隔0.7mしか無く、しゃがみ姿勢同士の胴回りでめり込んで見えていた。
+            // z間隔を1.0mへ広げ、x offsetは打者と反対側（+x）へ倒して基準構図R-comp60から見て
+            // 捕手の背後に自然に収まるようにする。
+            SpawnActor(body, umpClip, new Vector3(0.35f, 0f, -2.0f), 0f,
                 new Color(0.12f, 0.12f, 0.13f), 0f, layer);
 
             // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
@@ -162,7 +168,6 @@ namespace KokoSim.Unity.Match
             // 差は打ち切り位置だけ＝空振り・ファールは走り出し前で構えへ戻す（ScheduleReactions）
             _swingMissClip = batClip;
             _swingHitClip = batClip;
-            _strikeTakeClip = LoadClip("AA_Baseball_Batter_Strike");
             _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
             _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
 
@@ -233,8 +238,9 @@ namespace KokoSim.Unity.Match
         private const float BallFlightSeconds = 0.45f;
         private const float SwingMissPlane = 3.05f;    // 自作打撃クリップ: 右手速度ピーク10.0m/s（2026-07-27実測）
         private const float SwingHitContact = 3.05f;   // 同上。空振りとミートで収録が分かれていないため同値
-        private const float StrikeReact = 2.0f;
         private const float HbpReact = 1.3f;
+        // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
+        private const float SwingMissHoldSeconds = 0.8f;
         private const float CatchMoment = 0.4f;
 
         /// <summary>
@@ -271,6 +277,7 @@ namespace KokoSim.Unity.Match
                 case DuelPitchOutcome.SwingMiss:
                     // 空振り専用の収録が無いので同じスイングを使い、走り出し前で打ち切って構えへ戻す
                     SetActorClip(_batter, _swingMissClip, SwingMissPlane - BallFlightSeconds, BatterRunStart);
+                    _batter.HoldSeconds = SwingMissHoldSeconds;   // 振り切りポーズでしばらく止めてから待機へ戻す
                     break;
                 case DuelPitchOutcome.FoulContact:
                     // 走り出し（実測3.25s）前でカットして打席へ戻る
@@ -279,9 +286,8 @@ namespace KokoSim.Unity.Match
                 case DuelPitchOutcome.InPlayContact:
                     SetActorClip(_batter, _swingHitClip, SwingHitContact - BallFlightSeconds, 0f);
                     break;
-                case DuelPitchOutcome.CalledStrike:
-                    SetActorClip(_batter, _strikeTakeClip, StrikeReact - BallFlightSeconds, 3.2f);
-                    break;
+                // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
+                // 捕手の捕球は下の catcherCatches に含めたまま残す
                 case DuelPitchOutcome.HitByPitch:
                     SetActorClip(_batter, _hbpClip, HbpReact - BallFlightSeconds, 4.2f);
                     break;
@@ -305,6 +311,8 @@ namespace KokoSim.Unity.Match
                 a.Clip = clip;
             }
             a.EndAt = endAt;
+            a.HoldSeconds = 0f;      // 新しいクリップへの差し替えは保留中のホールド予約を打ち消す
+            a.HoldRemaining = 0f;
             SeekActor(a, Mathf.Max(0f, seekTo));
         }
 
@@ -522,29 +530,61 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 1体を1ステップ進める。クリップ末尾でスポーン姿勢へ戻し、HoldAtEnd なら頭姿勢のまま停止
         /// （投手＝次のアンカー同期まで待つ）、それ以外はループ（ルートモーションのドリフト対策の基準戻し込み）。
+        /// HoldSeconds が設定されている場合は、末尾到達時にそのポーズのまま HoldSeconds 秒だけ据え置いてから
+        /// 待機へ戻す（空振りの振り切りポーズ用。design-18の掟によりクリップ内部の緩急は変えず、
+        /// 単に再生を一時停止するだけ）。
         /// </summary>
         private void StepActor(Actor a, float step)
         {
             if (a.Holding) return;
+            if (a.HoldRemaining > 0f)
+            {
+                a.HoldRemaining -= step;
+                if (a.HoldRemaining > 0f) return;
+                FinishOneShot(a);
+                return;
+            }
             a.Time += step;
             float end = a.EndAt > 0f && a.EndAt < a.Clip.length ? a.EndAt : a.Clip.length;
             if (a.Time >= end)
             {
-                a.Time = 0f;
-                a.EndAt = 0f;
-                if (a.IdleClip != null && a.Clip != a.IdleClip)
+                if (a.HoldSeconds > 0f)
                 {
-                    SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰
-                    return;
+                    a.HoldRemaining = a.HoldSeconds;
+                    a.HoldSeconds = 0f;
+                    return;   // 振り切りポーズのまま据え置き（Graph.Evaluateしない＝ポーズが進まない）
                 }
-                RewindActor(a);
-                // 待機が「1本のクリップの一区間だけ」の場合はループのたびに区間を張り直す。
-                // 自作打撃クリップは構え→スイング→走り出しが1本なので、戻さないと待機中に振ってしまう
-                if (a.Clip == a.IdleClip) a.EndAt = a.IdleEndAt;
-                if (a.HoldAtEnd) a.Holding = true;
+                FinishOneShot(a);
                 return;
             }
             a.Graph.Evaluate(step);
+            // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
+            // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
+            // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない
+            if (a == _batter && a.Clip == a.IdleClip && a.EndAt == a.IdleEndAt)
+            {
+                var lp = a.Go.transform.localPosition;
+                lp.x = a.BasePos.x;
+                lp.z = a.BasePos.z;
+                a.Go.transform.localPosition = lp;
+            }
+        }
+
+        /// <summary>末尾（またはホールド終了）到達時の後始末: 待機ループへ戻す、または恒久停止（投手）。</summary>
+        private void FinishOneShot(Actor a)
+        {
+            a.Time = 0f;
+            a.EndAt = 0f;
+            if (a.IdleClip != null && a.Clip != a.IdleClip)
+            {
+                SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰
+                return;
+            }
+            RewindActor(a);
+            // 待機が「1本のクリップの一区間だけ」の場合はループのたびに区間を張り直す。
+            // 自作打撃クリップは構え→スイング→走り出しが1本なので、戻さないと待機中に振ってしまう
+            if (a.Clip == a.IdleClip) a.EndAt = a.IdleEndAt;
+            if (a.HoldAtEnd) a.Holding = true;
         }
 
         /// <summary>低い方の足ボーンが接地面＋足首オフセットに来るよう縦だけ合わせる（ステージローカル）。</summary>
