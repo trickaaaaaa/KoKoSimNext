@@ -464,15 +464,26 @@ public sealed class AtBatSession
         return table.Lookup(plan.VelocityKmh, rpm);
     }
 
-    /// <summary>キレ(Sharpness)→rpm の写像（設計書15 §0.1 Q12-5、観測用ComputeTrajectoryと判定用ComputeFeaturesで共有）。</summary>
+    /// <summary>
+    /// 球種別の有効軸 → rpm の写像（Issue #274・設計書15 §0.1 Q12-5、観測用ComputeTrajectoryと判定用ComputeFeaturesで共有）。
+    /// ストレートは球威(Power)→ SpinRpmPerPower、変化球はキレ(Sharpness)→ SpinRpmPerSharpness。
+    /// </summary>
     private double RpmForPlan(PitchPlan plan)
     {
-        var sharpness = 50;
+        var rank = 50;
         foreach (var slot in _pitcher.EffectiveRepertoire)
         {
-            if (slot.Type == plan.Type) { sharpness = slot.Sharpness; break; }
+            if (slot.Type == plan.Type)
+            {
+                // Issue #274: ストレートは球威(Power)、変化球はキレ(Sharpness)を有効軸として使う。
+                rank = Players.PitchSlot.IsSpinByPower(slot.Type) ? slot.Power : slot.Sharpness;
+                break;
+            }
         }
-        return _ctx.Pitching.SpinRpmBase + (sharpness - 50) * _ctx.Pitching.SpinRpmPerSharpness;
+        var slope = Players.PitchSlot.IsSpinByPower(plan.Type)
+            ? _ctx.Pitching.SpinRpmPerPower
+            : _ctx.Pitching.SpinRpmPerSharpness;
+        return _ctx.Pitching.SpinRpmBase + (rank - 50) * slope;
     }
 
     /// <summary>enum 結果で打席を確定させる（三振/四球）。従来ループの early return と同一。</summary>

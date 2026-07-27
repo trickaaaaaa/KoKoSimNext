@@ -375,6 +375,18 @@ public static class ProspectGenerator
         }
         SetWithCap(p, AbilityKind.Velocity, veloLevel, c, growth, rng);
 
+        // 球威（Issue #274）: ストレートのホップ成分を担う育成軸。球速練習の主効果に接続。
+        // 本流 rng を1ビットも消費しないよう専用 Fork ストリームから引く（CoreTwelve列の後方互換を保つ）。
+        // 投手は球速と相関（強腕＝球に力が伝わりやすい）し ±ばらつきを持つ。野手はやや低め。
+        {
+            var stuffRng = rng.Fork(StuffStreamId(year, index));
+            var stuffBase = naturalPitcher
+                ? Lerp(total * c.NonPitcherSenseFactor, veloLevel + c.PitcherSenseBonus * 0.3, w)
+                : total * c.NonPitcherSenseFactor;
+            var stuffLevel = (int)MathUtil.Clamp(Math.Round(stuffBase + stuffRng.NextGaussian(0, 8)), 5, 95);
+            SetWithCap(p, AbilityKind.Stuff, stuffLevel, c, growth, stuffRng);
+        }
+
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
         // 投手: 1〜3球種／野手: 0〜1（投手経歴持ちは1〜2に上振れ）。判定は創発ロール。
         LearnPitches(p, naturalPitcher, c, rng);
@@ -500,6 +512,9 @@ public static class ProspectGenerator
 
     /// <summary>逸材フラグ抽選の独立ストリームID（他ストリームと別の上位ビット, Issue #114）。</summary>
     private static ulong ProdigyStreamId(int year, int index) => 0x6C43_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>球威抽選の独立ストリームID（CoreTwelve列を1ビットも乱さない, Issue #274）。</summary>
+    private static ulong StuffStreamId(int year, int index) => 0x8D52_0000UL ^ (ulong)(year * 1000 + index + 1);
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
     private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);

@@ -18,21 +18,28 @@ public enum PitchType
 
 /// <summary>
 /// 保有球種1つ（設計書02 §2.2）。ランクの内部は2軸（表示はランク1本に集約）:
-/// 球威=押し込む力（変化球は回転数→変化量）、キレ=空振り誘発力（曲がり始めの遅さ/手元の伸び）。
-/// ストレートも同じ体系を持つ（「球速150だが棒球」「140でも伸びる真っ直ぐ」を表現）。
+/// ストレート: 球威(Power)→rpm→ホップ量 が有効軸。キレ(Sharpness)は将来拡張のために残す（未使用）。
+/// 変化球: キレ(Sharpness)→rpm→変化量 が有効軸。球威(Power)は将来拡張のために残す（未使用）。
+/// Issue #274 で2軸の役割分担を確定（design-02 §2.2 参照）。
 /// </summary>
 public sealed record PitchSlot
 {
     public required PitchType Type { get; init; }
 
-    /// <summary>球威（1〜100）。</summary>
+    /// <summary>球威（1〜100）。ストレートの有効軸（rpm → ホップ量）。変化球では未使用（フィールド保持のみ）。</summary>
     public required int Power { get; init; }
 
-    /// <summary>キレ（1〜100）。</summary>
+    /// <summary>キレ（1〜100）。変化球の有効軸（rpm → 変化量）。ストレートでは未使用（フィールド保持のみ）。</summary>
     public required int Sharpness { get; init; }
 
-    /// <summary>表示ランクの内部値（2軸の平均）。G〜S の等級はこの値から引く。</summary>
-    public int Rank => (Power + Sharpness) / 2;
+    /// <summary>
+    /// 表示ランク（有効軸の値）。ストレートは球威(Power)、変化球はキレ(Sharpness)。
+    /// Issue #274: 平均ではなく「その球種の質を担う軸そのもの」を使う。
+    /// </summary>
+    public int Rank => IsSpinByPower(Type) ? Power : Sharpness;
+
+    /// <summary>rpm に使う軸が Power か（true=球威=ストレート系、false=キレ=変化球）。</summary>
+    public static bool IsSpinByPower(PitchType type) => type == PitchType.Fastball;
 
     /// <summary>球速比（設計書02 §2.1）。実投球速度 = サンプリング球速 × これ。</summary>
     public double SpeedRatio => Type switch

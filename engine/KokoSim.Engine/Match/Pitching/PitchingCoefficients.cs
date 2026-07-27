@@ -61,10 +61,15 @@ public sealed record PitchingCoefficients
 
     // === 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式） ===
     // Trajectory（弾道）は観測専用（判定に未接続, Phase E で本接続）。回転軸は全球種バックスピン固定
-    // （横変化は現状モデル化しない）。キレ（Sharpness）だけを回転数へ反映し、球威（Power）は使わない。
-    /// <summary>キレ(Sharpness=50)基準の回転数[rpm]（145km/h・2200rpm はCLAUDE.md検証値）。</summary>
+    // （横変化は現状モデル化しない）。
+    // Issue #274: 球種分岐で有効軸を切り替える。
+    //   ストレート: 球威(Power) → SpinRpmBase + (Power-50) × SpinRpmPerPower
+    //   変化球:     キレ(Sharpness) → SpinRpmBase + (Sharpness-50) × SpinRpmPerSharpness
+    /// <summary>基準回転数[rpm]（能力=50 のとき・145km/h・2200rpm はCLAUDE.md検証値）。</summary>
     public double SpinRpmBase { get; init; } = 2200.0;
-    /// <summary>キレ(Sharpness−50)あたりの回転数の傾き[rpm/能力1]。</summary>
+    /// <summary>ストレート: 球威(Power-50)あたりの回転数の傾き[rpm/能力1]（Issue #274）。</summary>
+    public double SpinRpmPerPower { get; init; } = 6.0;
+    /// <summary>変化球: キレ(Sharpness-50)あたりの回転数の傾き[rpm/能力1]。</summary>
     public double SpinRpmPerSharpness { get; init; } = 6.0;
 
     // === 投手ギア「飛ばす/流す」（設計書02 §1.1f）。エンジンフック（既定Normal） ===

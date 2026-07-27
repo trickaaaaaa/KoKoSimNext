@@ -12,7 +12,7 @@ namespace KokoSim.Unity.Components
     public sealed class PitchChartDatum
     {
         public string Name = "";
-        public string Kire = "C";     // キレ（Sharpness→S〜G）＝扇の色とチップ
+        public string Kire = "C";     // 有効軸ランク（ストレート=球威/Stuff、変化球=キレ/Sharpness）→S〜G。扇の色とチップ（Issue #274）
         public float DirX;            // 変化方向（画面座標系: +x右 / +y下）
         public float DirY;
         public float Break01;         // 変化量 0〜1（扇の長さ）

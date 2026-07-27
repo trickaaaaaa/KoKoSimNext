@@ -26,6 +26,8 @@ public sealed record TrainabilityCoefficients
     public double Control { get; init; } = 1.0;
     public double Stamina { get; init; } = 1.0;
     public double PitchRank { get; init; } = 1.0;
+    /// <summary>球威(Stuff)の trainability。PitchRank(キレ)と同スケール（Issue #274）。</summary>
+    public double Stuff { get; init; } = 1.0;
     public double Bunt { get; init; } = 1.0;
     public double Steal { get; init; } = 1.0;
     public double Baserunning { get; init; } = 1.0;
@@ -46,6 +48,7 @@ public sealed record TrainabilityCoefficients
         AbilityKind.Control => Control,
         AbilityKind.Stamina => Stamina,
         AbilityKind.PitchRank => PitchRank,
+        AbilityKind.Stuff => Stuff,
         AbilityKind.Bunt => Bunt,
         AbilityKind.Steal => Steal,
         AbilityKind.Baserunning => Baserunning,

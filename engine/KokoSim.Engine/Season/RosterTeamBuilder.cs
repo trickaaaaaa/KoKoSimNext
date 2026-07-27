@@ -285,10 +285,11 @@ public static class RosterTeamBuilder
         var aptF = (fieldingCoeff ?? new FieldingCoefficients()).AptitudeFactor(dp.Aptitude(pos));
         int Field() => (int)MathUtil.Clamp(Math.Round(dp.Level(AbilityKind.Fielding) * injF * aptF), 1, 100);
 
-        // 育成レイヤは全選手が投手4種レベル（球速/制球/スタミナ/キレ）を隠し持つ。投手はこれを Pitching に、
+        // 育成レイヤは全選手が投手5種レベル（球速/制球/スタミナ/キレ/球威）を隠し持つ。投手はこれを Pitching に、
         // 野手は LatentPitching に投影する（issue #209 Phase B。二刀流スター＝隠し投手力の高い野手を再現）。
         // 材料は同一なので新規乱数は引かない＝決定論・帯不変。
         var pitchRank = L(AbilityKind.PitchRank);
+        var stuffLevel = L(AbilityKind.Stuff);
         var builtPitching = new PitcherAttributes
         {
             // 球速Level→km/h は PitcherAttributes に一箇所集約（不変条件#1）。相手校生成と同一の式。
@@ -297,7 +298,7 @@ public static class RosterTeamBuilder
             // スタミナ＝目安投球数（設計書02 §1.1e）。Level→球数の変換は一箇所に集約。
             StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(L(AbilityKind.Stamina)),
             PitchRank = pitchRank,
-            Repertoire = BuildRepertoire(dp, pitchRank),
+            Repertoire = BuildRepertoire(dp, pitchRank, stuffLevel),
         };
         var pitching = asPitcher ? builtPitching : null;
         var latentPitching = asPitcher ? null : builtPitching;
@@ -343,13 +344,19 @@ public static class RosterTeamBuilder
     /// <summary>
     /// 育成レイヤの習得球種→試合用レパートリー（設計書02 §2.2）。
     /// ストレート必修＋習得変化球（ランク＝PitchRankレベル＋個体オフセット。育成で全球種が底上げされる）。
+    /// Issue #274: ストレートの有効軸(Power)は球威(Stuff)レベルから設定する。
     /// </summary>
-    private static IReadOnlyList<PitchSlot> BuildRepertoire(DevelopingPlayer dp, int pitchRank)
+    private static IReadOnlyList<PitchSlot> BuildRepertoire(DevelopingPlayer dp, int pitchRank, int stuffLevel)
     {
-        var list = new List<PitchSlot>(1 + dp.LearnedPitches.Count)
+        // ストレートの球威(Power)は育成能力「球威(Stuff)」から。
+        // Sharpnessは将来拡張用に保持するが現在は未使用（ストレートの有効軸はPower）。
+        var fastball = new PitchSlot
         {
-            PitchSlot.FastballOf(pitchRank),
+            Type = Players.PitchType.Fastball,
+            Power = stuffLevel,
+            Sharpness = stuffLevel, // 将来拡張用（現在未使用）
         };
+        var list = new List<PitchSlot>(1 + dp.LearnedPitches.Count) { fastball };
         foreach (var lp in dp.LearnedPitches)
         {
             list.Add(new PitchSlot

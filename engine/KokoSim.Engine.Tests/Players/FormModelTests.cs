@@ -63,8 +63,9 @@ public sealed class FormModelTests
     }
 
     [Fact]
-    public void ApplyPitcher_Sharpness_ExcellentRaises_TerribleLowers()
+    public void ApplyPitcher_PitchAxis_ExcellentRaises_TerribleLowers()
     {
+        // Issue #274: 調子補正は球種の有効軸に適用する。ストレート=球威(Power)、変化球=キレ(Sharpness)。
         var p = new PitcherAttributes
         {
             Control = 50,
@@ -81,10 +82,20 @@ public sealed class FormModelTests
 
         Assert.True(hot.PitchRank > 50);
         Assert.True(cold.PitchRank < 50);
-        Assert.All(hot.Repertoire!, slot => Assert.True(slot.Sharpness > 50));
-        Assert.All(cold.Repertoire!, slot => Assert.True(slot.Sharpness < 50));
-        // 球威(Power)は本Issueの対象外＝据え置き（設計上キレのみを補正する）。
-        Assert.All(hot.Repertoire!, slot => Assert.Equal(50, slot.Power));
+
+        // ストレート: 有効軸=球威(Power)が動く。未使用軸(Sharpness)は据え置き。
+        var hotFastball = hot.Repertoire!.First(s => s.Type == PitchType.Fastball);
+        var coldFastball = cold.Repertoire!.First(s => s.Type == PitchType.Fastball);
+        Assert.True(hotFastball.Power > 50, "絶好調ではストレートの球威(Power)が上がる");
+        Assert.True(coldFastball.Power < 50, "絶不調ではストレートの球威(Power)が下がる");
+        Assert.Equal(50, hotFastball.Sharpness); // ストレートのSharpness（未使用軸）は変わらない
+
+        // 変化球: 有効軸=キレ(Sharpness)が動く。未使用軸(Power)は据え置き。
+        var hotSlider = hot.Repertoire!.First(s => s.Type == PitchType.Slider);
+        var coldSlider = cold.Repertoire!.First(s => s.Type == PitchType.Slider);
+        Assert.True(hotSlider.Sharpness > 50, "絶好調では変化球のキレ(Sharpness)が上がる");
+        Assert.True(coldSlider.Sharpness < 50, "絶不調では変化球のキレ(Sharpness)が下がる");
+        Assert.Equal(50, hotSlider.Power); // 変化球のPower（未使用軸）は変わらない
     }
 
     [Fact]

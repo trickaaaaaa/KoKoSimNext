@@ -123,33 +123,40 @@ public static class FormModel
     }
 
     /// <summary>
-    /// 投手へ適用（コントロールσ・球威=球速天井・キレに補正, §3.3/§3.3b）。
-    /// キレは球種ごとの実値（<see cref="PitchSlot.Sharpness"/>）を補正する。ここが
-    /// <see cref="Match.Pitching.PitchingCoefficients.SpinRpmPerSharpness"/> 経由で回転数（物理層）へ
-    /// そのまま流れる（不変条件#1）。Repertoire が未指定（素質値 <see cref="PitcherAttributes.PitchRank"/>
-    /// からの遅延フォールバックのみ）の場合はその素質値側を補正する。
+    /// 投手へ適用（コントロールσ・球威=球速天井・有効軸に補正, §3.3/§3.3b）。
+    /// Issue #274: ストレートは球威(Power)、変化球はキレ(Sharpness)が有効軸。
+    /// 調子補正は両軸の有効軸側にのみ適用する（<see cref="ApplyPitchAxisForm"/>）。
+    /// Repertoire が未指定（素質値 <see cref="PitcherAttributes.PitchRank"/> からの遅延フォールバック）の
+    /// 場合はその素質値側を補正する（有効軸分岐なし・PitchRankは変化球キレの基準値として残す）。
     /// </summary>
     public static PitcherAttributes ApplyPitcher(PitcherAttributes p, Condition c, double dayForm, FormCoefficients f)
     {
         var step = Step(c);
         if (step == 0 && dayForm == 0.0) return p;
-        var sharpnessDelta = step * f.SharpnessPerStep + dayForm * f.SharpnessPerDayForm;
+        var axisDelta = step * f.SharpnessPerStep + dayForm * f.SharpnessPerDayForm;
         return p with
         {
             Control = ClampAbility(p.Control + step * f.ControlPerStep + dayForm * f.ControlPerDayForm),
             MaxVelocityKmh = Math.Max(105.0,
                 p.MaxVelocityKmh + step * f.VelocityPerStepKmh + dayForm * f.VelocityPerDayFormKmh),
-            PitchRank = ClampAbility(p.PitchRank + sharpnessDelta),
-            Repertoire = p.Repertoire is null ? null : ApplySharpness(p.Repertoire, sharpnessDelta),
+            PitchRank = ClampAbility(p.PitchRank + axisDelta),
+            Repertoire = p.Repertoire is null ? null : ApplyPitchAxisForm(p.Repertoire, axisDelta),
         };
     }
 
-    private static IReadOnlyList<PitchSlot> ApplySharpness(IReadOnlyList<PitchSlot> repertoire, double delta)
+    /// <summary>
+    /// 球種の有効軸（ストレート=Power、変化球=Sharpness）に調子補正 delta を適用する（Issue #274）。
+    /// 未使用軸（ストレートのSharpness・変化球のPower）は動かさない。
+    /// </summary>
+    private static IReadOnlyList<PitchSlot> ApplyPitchAxisForm(IReadOnlyList<PitchSlot> repertoire, double delta)
     {
         var result = new PitchSlot[repertoire.Count];
         for (var i = 0; i < repertoire.Count; i++)
         {
-            result[i] = repertoire[i] with { Sharpness = ClampAbility(repertoire[i].Sharpness + delta) };
+            var slot = repertoire[i];
+            result[i] = PitchSlot.IsSpinByPower(slot.Type)
+                ? slot with { Power = ClampAbility(slot.Power + delta) }      // ストレート: 球威(Power)を動かす
+                : slot with { Sharpness = ClampAbility(slot.Sharpness + delta) }; // 変化球: キレ(Sharpness)を動かす
         }
         return result;
     }
