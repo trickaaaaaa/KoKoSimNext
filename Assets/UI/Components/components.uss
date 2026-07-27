@@ -1001,16 +1001,18 @@
     margin-left: var(--sp-1);
     margin-right: var(--sp-1);
 }
-/* ライブ観戦の行だけ名前セルを固定幅にする（姓3+全角スペース+名3文字ぶん≒133px＝--fs-label 19px×7字）。
+/* ライブ観戦の行だけ名前セルを姓3+全角スペース+名3文字ぶん≒133px（--fs-label 19px×7字）に絞る。
    超過は上の text-overflow: ellipsis で省略（issue #297・ユーザー決定）。試合前画面（対戦カード）の
    スタメン一覧は .mlineup-row__name を共有クラスのまま伸縮利用しており、名前の右で学年/投打を
    右寄せしているため直接固定幅化できない → .mlineup-row--compact モディファイアで限定する。
-   控え/ブルペン行（.mlineup-benchrow）も同じサイド列なので幅を揃える。 */
+   控え/ブルペン行（.mlineup-benchrow）も同じサイド列なので幅を揃える。
+   width ではなく max-width にする（flex-grow:1/flex-basis:0 は base ルールのまま維持）:
+   交代済みスロットの ←旧選手名（.mlineup-row__replaced・flex-shrink:0）が同じ行に並ぶとき、
+   名前セルが残り幅ぶんだけ自分から縮む自己均衡が効かなくなり、背番号・調子顔が列の外へ
+   押し出されて見切れる（実機スクショで確認）。 */
 .mlineup-row--compact .mlineup-row__name,
 .mlineup-benchrow .mlineup-row__name {
-    flex-grow: 0;
-    flex-basis: auto;
-    width: 133px;
+    max-width: 133px;
 }
 .mlineup-row__replaced {
     font-size: 13px;
