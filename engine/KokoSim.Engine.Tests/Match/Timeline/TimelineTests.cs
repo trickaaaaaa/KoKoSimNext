@@ -290,6 +290,93 @@ public sealed class TimelineTests
         Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Roll);
     }
 
+    // --- Issue #300: 本塁打（捕球者なし=FielderRole null）で外野手がフェンス外まで打球を追わない ---
+
+    /// <summary>本塁打の FieldingPlay。FieldingResolver.ResolveDetailed の HomeRun 経路と同じ形
+    /// （FielderRole=null・IsFly=false のまま）で構築する。着地点はセンター方向フェンス(118m)の外。</summary>
+    private static FieldingPlay HomeRunPlay() => new()
+    {
+        Result = BattedBallResult.HomeRun,
+        LandingX = 0, LandingZ = 130.0, HangTimeSeconds = 4.2, ApexHeightM = 22.0,
+        RangeM = 130.0, BearingDeg = 0.0, BatterToFirstSeconds = 4.2,
+        FieldedX = 0, FieldedZ = 130.0,
+    };
+
+    [Fact]
+    public void HomeRun_BallDrawnAsFlight_NotRoll()
+    {
+        var field = new FieldGeometry();
+        var play = HomeRunPlay();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        // IsFly は本塁打では false のまま（FieldingResolver 側は変えない）だが、表示は放物線を選ぶ。
+        Assert.False(play.IsFly);
+        Assert.Contains(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
+        Assert.DoesNotContain(tl.Ball, b => b.Kind is BallSegmentKind.Roll or BallSegmentKind.Bounce);
+    }
+
+    [Fact]
+    public void HomeRun_FieldBallMove_StaysInsideFence_DoesNotChaseBeyondWall()
+    {
+        var field = new FieldGeometry();
+        var play = HomeRunPlay();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var fenceDist = field.FenceDistance(play.BearingDeg * System.Math.PI / 180.0);
+        var fieldBallMoves = tl.Moves.Where(m => m.Task == FielderTask.FieldBall).ToList();
+        Assert.NotEmpty(fieldBallMoves); // センターが FieldBall 役として動く（陣形表 OutfieldCenter）
+        foreach (var m in fieldBallMoves)
+        {
+            var range = System.Math.Sqrt(m.To.X * m.To.X + m.To.Z * m.To.Z);
+            Assert.True(range <= fenceDist + 1e-6, $"外野手がフェンス({fenceDist}m)の外({range}m)まで打球を追っている");
+        }
+        // ボールそのものは着地点（柵の外）まで飛ぶ＝本塁打らしい絵は保つ。野手だけが止まる。
+        var flight = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
+        Assert.Equal(play.LandingX, flight.To.X, 6);
+        Assert.Equal(play.LandingZ, flight.To.Z, 6);
+    }
+
+    [Fact]
+    public void NullFielderRole_AnyResult_FieldBallMove_StaysInsideFence()
+    {
+        // #300 の抜け道は Result==HomeRun 限定ではなく「FielderRole が null」全般（ファウル等）で
+        // 起きる。将来 FielderRole=null のまま着地点が柵外になる結果が増えても抜けないことを、
+        // Result を HomeRun 以外にした構成でも確認する（クランプの条件が Result ではなく
+        // FielderRole==null に懸かっていることの回帰）。
+        var field = new FieldGeometry();
+        var play = HomeRunPlay() with { Result = BattedBallResult.Out };
+        Assert.Null(play.FielderRole);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var fenceDist = field.FenceDistance(play.BearingDeg * System.Math.PI / 180.0);
+        var fieldBallMoves = tl.Moves.Where(m => m.Task == FielderTask.FieldBall).ToList();
+        Assert.NotEmpty(fieldBallMoves);
+        foreach (var m in fieldBallMoves)
+        {
+            var range = System.Math.Sqrt(m.To.X * m.To.X + m.To.Z * m.To.Z);
+            Assert.True(range <= fenceDist + 1e-6, $"外野手がフェンス({fenceDist}m)の外({range}m)まで打球を追っている");
+        }
+    }
+
+    [Fact]
+    public void HomeRun_FieldBallMove_DoesNotExceedLandingPoint()
+    {
+        // クランプが逆方向に壊れて（例: 距離0に潰れる等）野手が動かなくなる回帰も検出する。
+        // フェンス手前までは実際に近づく（着地点そのものよりは手前、かつ野手の元位置よりは大きく前進）。
+        var field = new FieldGeometry();
+        var play = HomeRunPlay();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var centerMove = Assert.Single(tl.Moves, m => m.Role == FieldPosition.CenterField && m.Task == FielderTask.FieldBall);
+        var range = System.Math.Sqrt(centerMove.To.X * centerMove.To.X + centerMove.To.Z * centerMove.To.Z);
+        Assert.True(range < play.RangeM, "野手の移動先が着地点まで届いている（クランプが効いていない）");
+        Assert.True(range > 70.0, "野手がフェンスへ向かって前進していない（クランプが過剰に効いている）");
+    }
+
     [Theory]
     [InlineData(BattedBallResult.Out, false, FieldPosition.Shortstop, false, "ショートゴロ")]
     [InlineData(BattedBallResult.Out, true, FieldPosition.CenterField, false, "センターフライ")]
