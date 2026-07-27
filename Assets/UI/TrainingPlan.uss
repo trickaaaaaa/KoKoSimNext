@@ -106,12 +106,10 @@
 
 .trow__num { margin-right: 12px; }   /* .num-badge を継承 */
 .trow__idtext { flex-direction: column; }
-/* 上段＝名前＋学年＋投打を同じ行に（Issue #273。旧メタ行から移動し、ベンチ外選手以外は常に1行で収まる）。 */
+/* 上段＝名前＋学年＋投打を同じ行に（Issue #273。ベンチ外チップ撤去で全行この1段のみ＝Issue #294）。 */
 .trow__top { flex-direction: row; align-items: center; }
 .trow__name { font-size: 19px; color: var(--color-chalk); margin-right: var(--sp-2); }
 .trow__name:hover { color: var(--sky); }
-/* メタ行はベンチ外チップだけが残る（ベンチ入りの選手には出ない＝Issue #273「1行」）。 */
-.trow__meta { flex-direction: row; align-items: center; margin-top: var(--sp-1); }
 
 /* preset-open：行の「練習設定」列＝プリセット名＋主眼メニュー｜配分積み上げバー｜変更（クリックでモーダル）。
    旧「余白の正体」（space-between の空き帯）に積み上げバーを渡す（Issue #133-③・案B）。 */
