@@ -379,4 +379,76 @@ public sealed class MatchProgressionUnifiedDefenseTests
 
         Assert.Equal(GameResultDigest.Sha256Of(batch), GameResultDigest.Sha256Of(prog.BuildResult()));
     }
+
+    // ===== 8. 継投直後の進行が有限ステップで打席を返す（issue #288 再現ガード） =====
+    //
+    // 症状: 対決ビュー中に自校の継投を確定して試合画面へ戻ると Unity ごとフリーズした。
+    // 単一スレッドの engine から見れば Relieve() は進行体（GameStep 列・ラインナップ）を壊さず、
+    // 直後の Advance()／FinishRemaining() は必ず有限ステップで打席を返し切る（＝engine 単体に
+    // 無限ループは無い。打席は AtBatResolver.MaxPitches、半イニングは3アウト、試合は MaxInnings で有界）。
+    // 実機のフリーズはメイン／背景スレッドの競合（#278 と同型）が主因で、UI 側の二重ガード（Apply の
+    // BackgroundGameOp.Running チェック）と、万一競合が滑り込んでも MatchProgression が安全上限で
+    // 例外化して落ちる（フリーズしない）ことで対処する。ここでは engine 側の有界性を回帰で固定する。
+
+    [Theory]
+    [InlineData(3UL)]
+    [InlineData(7UL)]
+    [InlineData(13UL)]
+    [InlineData(31UL)]
+    [InlineData(44UL)]
+    public void Advance_AfterBullpenRelief_ReturnsPlateAppearancesInFiniteSteps(ulong seed)
+    {
+        var prog = NewProg(seed);
+        var opt = AdvanceUntilDefense(prog, teamIsAway: false);
+        Assert.NotNull(opt);
+
+        // ブルペン継投（対決ビューで確定した「控え投手の投入」に相当）。
+        var reliever = opt!.Bullpen[0];
+        Assert.True(prog.Relieve(teamIsAway: false, reliever));
+        Assert.Equal(reliever.Name, prog.SubstitutionOptions(teamIsAway: false).CurrentPitcher.Name);
+
+        // 継投直後（試合画面へ戻った直後に background で走る Advance に相当）から、進行が
+        // 有限ステップで打席を返し続けること。安全上限に達すれば例外で落ちる（＝止まらない＝フリーズしない）。
+        var advanced = 0;
+        while (prog.Advance()) advanced++;
+        Assert.True(advanced > 0, "継投直後に1打席も進まなかった（進行が止まっている）");
+        Assert.True(prog.IsFinished, "継投を挟んでも試合は有限で終局する");
+    }
+
+    [Theory]
+    [InlineData(3UL)]
+    [InlineData(7UL)]
+    [InlineData(31UL)]
+    public void Advance_AfterOnFieldFielderRelief_ReturnsPlateAppearancesInFiniteSteps(ulong seed)
+    {
+        // 在フィールド野手登板（投野交代で守備穴を backfill する経路）でも同様に有限で進むこと。
+        var prog = NewProg(seed);
+        var opt = AdvanceUntilDefense(prog, teamIsAway: false);
+        Assert.NotNull(opt);
+
+        var ss = opt!.Lineup.First(p => p.Position == FieldPosition.Shortstop);
+        Assert.True(prog.Relieve(teamIsAway: false, ss));
+        Assert.Equal(ss.Name, prog.SubstitutionOptions(teamIsAway: false).CurrentPitcher.Name);
+
+        var advanced = 0;
+        while (prog.Advance()) advanced++;
+        Assert.True(advanced > 0, "継投直後に1打席も進まなかった（進行が止まっている）");
+        Assert.True(prog.IsFinished, "投野交代を挟んでも試合は有限で終局する");
+    }
+
+    [Theory]
+    [InlineData(3UL)]
+    [InlineData(31UL)]
+    public void FinishRemaining_AfterRelief_TerminatesFinitely(ulong seed)
+    {
+        // 「委任スキップ／残り一括消化」経路（DrainToEnd）も継投後に有界であること。
+        var prog = NewProg(seed);
+        var opt = AdvanceUntilDefense(prog, teamIsAway: false);
+        Assert.NotNull(opt);
+        Assert.True(prog.Relieve(teamIsAway: false, opt!.Bullpen[0]));
+
+        var result = prog.FinishRemaining();
+        Assert.True(prog.IsFinished);
+        Assert.True(result.InningsPlayed > 0);
+    }
 }

@@ -576,6 +576,11 @@ namespace KokoSim.Unity.Match
         private void Apply()
         {
             if (_prog == null || _opt == null) return;
+            // 解決中（背景スレッドで _prog.Advance() 実行中）は engine の進行体をメインスレッドから触らない
+            // （issue #288／#278 と同型の予防）。モーダルは _paused 中しか開かない建付けなので通常ここは
+            // 立たないが、押下配信は1フレーム遅れうるため二重に守る。競合させると進行体を奪い合い、
+            // 最悪 Unity ごとフリーズする（背景 Advance の列挙状態とラインナップの同時変更）。
+            if (BackgroundGameOp.Running) return;
             bool ok;
             if (_opt.IsOffense)
             {
