@@ -113,32 +113,43 @@ namespace KokoSim.Unity.Home
                 return;
             }
 
-            var live = _state.BeginMatch();
             var homeState = _state;   // クロージャで捕捉（この HomeState 経由で大会へ結果を戻す）
-            KokoSim.Unity.Match.MatchLiveController.Pending = new KokoSim.Unity.Match.MatchLiveController.LiveMatchRequest
-            {
-                Progression = live.Progression,
-                ManagerIsAway = live.ManagerIsAway,
-                AwayName = live.ManagerIsAway ? "桜丘" : live.OpponentName,
-                HomeName = live.ManagerIsAway ? live.OpponentName : "桜丘",
-                ManagerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi,
-                OnComplete = result =>
+
+            // issue #290: BeginMatch は自県裏カードのプレフェッチ未完了時に JoinPrefetch の Task.Wait で
+            // メインスレッドを最大約25秒固める（#138 で退避した CompleteMatch 側の同期実行と同型の取りこぼし）。
+            // ここも Task.Run で別スレッドへ載せ替える（engine は単一スレッド逐次のまま＝決定論は不変）。処理中は
+            // ホーム画面を出したままにし（最小UI＝新規部品なし）、完了後にメインスレッドでライブ観戦へ遷移する。
+            // 二重起動は BackgroundGameOp.Running が弾く（AwaitingMatchStart は OnEnable 冒頭で既に消費済み）。
+            KokoSim.Engine.Nation.Tournaments.LivePlayerMatch live = null;
+            KokoSim.Unity.Shell.BackgroundGameOp.Run(
+                () => live = homeState.BeginMatch(),
+                () =>
                 {
-                    // issue #138: CompleteMatch は残りブラケットのフルシム＋全国背景シムへの join を含み重い。
-                    // メインスレッドで回すと結果画面クローズがしばらくフリーズするため、Task.Run で別スレッドへ
-                    // 載せ替える（engine は単一スレッド逐次のまま＝決定論は不変, Q1(a)）。処理中は結果画面
-                    // （ボックススコア）を出したままにし（Q2(a) 最小UI＝新規部品なし）、完了後にメインスレッドで
-                    // ホームへ遷移する（OnEnable が ResultPending を見て大会結果モーダルを出す）。
-                    KokoSim.Unity.Shell.BackgroundGameOp.Run(
-                        () => homeState.CompleteMatch(result),        // 大会へ結果反映＋成績畳み込み＋ResultPending
-                        // 「戻る」のクリック配信中なので同期 Show は不可（イベント木が壊れて全画面が落ちる）。
-                        () => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard"));
-                },
-            };
-            // この StartLiveMatch は HomeDashboard.OnEnable（＝スタメンOKの Show("HomeDashboard") の内側）から
-            // 走るため、ここで Show("MatchLive") を同期呼びすると Show がネストして全画面が非アクティブに落ちる。
-            // 次フレームへ遅延して配信外で切り替える（ScreenRouter の再入対策と同じ機構）。
-            router.ShowDeferred("MatchLive");
+                    KokoSim.Unity.Match.MatchLiveController.Pending = new KokoSim.Unity.Match.MatchLiveController.LiveMatchRequest
+                    {
+                        Progression = live.Progression,
+                        ManagerIsAway = live.ManagerIsAway,
+                        AwayName = live.ManagerIsAway ? "桜丘" : live.OpponentName,
+                        HomeName = live.ManagerIsAway ? live.OpponentName : "桜丘",
+                        ManagerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi,
+                        OnComplete = result =>
+                        {
+                            // issue #138: CompleteMatch は残りブラケットのフルシム＋全国背景シムへの join を含み重い。
+                            // メインスレッドで回すと結果画面クローズがしばらくフリーズするため、Task.Run で別スレッドへ
+                            // 載せ替える（engine は単一スレッド逐次のまま＝決定論は不変, Q1(a)）。処理中は結果画面
+                            // （ボックススコア）を出したままにし（Q2(a) 最小UI＝新規部品なし）、完了後にメインスレッドで
+                            // ホームへ遷移する（OnEnable が ResultPending を見て大会結果モーダルを出す）。
+                            KokoSim.Unity.Shell.BackgroundGameOp.Run(
+                                () => homeState.CompleteMatch(result),        // 大会へ結果反映＋成績畳み込み＋ResultPending
+                                // 「戻る」のクリック配信中なので同期 Show は不可（イベント木が壊れて全画面が落ちる）。
+                                () => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("HomeDashboard"));
+                        },
+                    };
+                    // この StartLiveMatch は HomeDashboard.OnEnable（＝スタメンOKの Show("HomeDashboard") の内側）から
+                    // 走るため、ここで Show("MatchLive") を同期呼びすると Show がネストして全画面が非アクティブに落ちる。
+                    // 次フレームへ遅延して配信外で切り替える（ScreenRouter の再入対策と同じ機構）。
+                    KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("MatchLive");
+                });
         }
 
         /// <summary>
