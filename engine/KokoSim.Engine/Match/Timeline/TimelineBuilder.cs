@@ -58,9 +58,12 @@ public static class TimelineBuilder
         };
 
         // 打球: フライは放物線(Flight)、ゴロは地を這うロール(Roll)で表現（mockのゴロと同じ見た目）。
+        // 本塁打は IsFly が立たない（FieldingResolver は捕球判定に入る前に確定させて返すため。この
+        // フラグはフェンス激突の受傷判定等エンジン側でも参照するので表示のために書き換えない, Issue #300）。
+        // 表示だけ Result==HomeRun を見て放物線を選ぶ（着地点は柵の外＝本塁打らしく飛んでいく絵のまま）。
         var landAt = ContactAt + play.HangTimeSeconds;
         var fieldedAt = play.FieldedAtSeconds is { } f ? ContactAt + f : landAt;
-        if (play.IsFly)
+        if (play.IsFly || play.Result == BattedBallResult.HomeRun)
         {
             ball.Add(new BallSegment
             {
@@ -154,6 +157,10 @@ public static class TimelineBuilder
             // ボールが放置される」不一致を防ぐ（#8＋セカンドフライ問題）。
             var ballFielder = play.FielderRole;
             var ballFielderMoved = false;
+            // 実捕球者がいない打球（本塁打・ファウル等, FielderRole=null）で FieldBall 役に割り当てられた
+            // 野手の移動先。フェンスの外までは追わせず、フェンス際で止めて見送らせる（Issue #300）。
+            // ボールそのものの描画（Flight/Roll セグメント）は着地点(landing)のまま＝柵越えの絵は保つ。
+            var fieldBallTarget = ballFielder is null ? ClampToFence(landing, field, play.BearingDeg) : landing;
 
             // 一塁カバーは実捕球者から動的に決める（Issue #257）。静的表のゾーン別担当は初期値止まりで
             // 誰が実際に捕ったかを見ていない（例: Bunt/InfieldRight ではファースト以外が捕るとファーストは
@@ -185,7 +192,7 @@ public static class TimelineBuilder
                 var from = new TimelinePoint(fielder.Location.X, fielder.Location.Z);
                 // 実捕球者はゾーン役割を上書きしてボールへ（保持＝戻さない）。
                 var task = isBallFielder ? FielderTask.FieldBall : a.Task;
-                var to = isBallFielder ? landing : ResolveTarget(a, landing, field, from);
+                var to = isBallFielder ? landing : ResolveTarget(a, landing, field, from, fieldBallTarget);
                 if (isBallFielder) ballFielderMoved = true;
                 if (task == FielderTask.CoverBase && a.Target == "first") firstBaseCovered = true;
 
@@ -703,12 +710,12 @@ public static class TimelineBuilder
     }
 
     private static TimelinePoint ResolveTarget(
-        FormationAssignment a, TimelinePoint ball, FieldGeometry field, TimelinePoint from)
+        FormationAssignment a, TimelinePoint ball, FieldGeometry field, TimelinePoint from, TimelinePoint fieldBallTarget)
     {
         switch (a.Task)
         {
             case FielderTask.FieldBall:
-                return ball;
+                return fieldBallTarget;
             case FielderTask.CoverBase:
                 return BasePoint(field, a.Target);
             case FielderTask.Cutoff:
@@ -751,5 +758,24 @@ public static class TimelineBuilder
         if (d <= maxDist || d < 1e-9) return to;
         var s = maxDist / d;
         return new TimelinePoint(from.X + dx * s, from.Z + dz * s);
+    }
+
+    /// <summary>フェンス際の見送り余白[m]（フェンスへめり込ませない）。</summary>
+    private const double FenceApproachMarginM = 1.0;
+
+    /// <summary>
+    /// 実捕球者がいない打球（本塁打・ファウル等, FielderRole=null）で FieldBall 役の移動先をフェンス
+    /// 内側へ丸める（Issue #300）。本塁より外側へ着地する打球（本塁打）はフェンス際で止めて見送らせ、
+    /// フェンスの外まで追いかけさせない。着地点がフェンス内側ならそのまま返す（従来どおり）。
+    /// </summary>
+    private static TimelinePoint ClampToFence(TimelinePoint landing, FieldGeometry field, double bearingDeg)
+    {
+        var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
+        if (range < 1e-6) return landing;
+        var bearingRad = bearingDeg * Math.PI / 180.0;
+        var limit = Math.Max(0.0, field.FenceDistance(bearingRad) - FenceApproachMarginM);
+        if (range <= limit) return landing;
+        var s = limit / range;
+        return new TimelinePoint(landing.X * s, landing.Z * s);
     }
 }
