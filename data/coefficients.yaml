@@ -69,21 +69,36 @@ batting:
   # 誘発変化合成量[m]（設計書15 Phase E-2）あたりの空振り加算。旧stuff_per_pitch_rank（球種ランク直参照）は
   # Sharpness→rpm→変化量の経路で弾道へ織り込み済みのため完全置換（二重計上回避）。校正ノブ。
   whiff_break_slope: 1.5
-  foul_share: 0.40               # コンタクト中のファウル割合
+  foul_share: 0.35               # コンタクト中のファウル割合（方位角±45°超の幾何ファウルは別枠, issue #262）
   # 球速→球威。基準はリーグ平均投手の平均リリース球速（最速132 − 平均ドロップ4）に置き、
   # 傾きは「球速1レベル ≈ ミート1レベル」になるよう 0.030 ÷ 0.47(km/h per level) ≈ 0.064 とする。
   stuff_base_velocity_kmh: 128.0
   stuff_per_kmh: 0.064
   exit_velo_intercept_kmh: 125.0 # 打球初速上限の切片
   exit_velo_per_power: 0.82      # パワー1あたり初速上限
-  quality_mean: 0.62
+  quality_mean: 0.60             # コンタクト品質の平均（issue #262: 打球が散った分の得点増を吸収）
   quality_contact_slope: 0.0020
   quality_sigma: 0.17
   launch_angle_at_lt1: -5.0      # 弾道1の平均打球角
   launch_angle_at_lt100: 26.0    # 弾道100の平均打球角
   launch_angle_sigma: 12.0
-  bearing_sigma: 20.0
+  bearing_sigma: 19.0            # 打球方向の「残差」σ（引っ張り/流しを引いた後のばらつき）
   min_quality_velo_factor: 0.55
+  # ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）🟡実測校正
+  # 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。
+  # ズレは無次元（正＝差し込まれ／負＝早い）。これが引っ張り/流しへ変換され、打者の左右が符号を与える。
+  # 座標規約: −＝左翼（三塁側）／＋＝右翼（一塁側）。右打者の引っ張り＝負、左打者の引っ張り＝正。
+  timing_sigma: 1.0                  # ズレの標準偏差（無次元。bearing_pull_per_timing の単位になる）
+  timing_ref_kmh: 121.5              # ズレ寄与0の実投球速度
+  timing_per_kmh: 0.010              # 実投球速度1km/hあたりの平均ズレ（正＝速い球は差し込まれる）
+  timing_break_ref_m: 0.47           # ズレ寄与0の誘発変化合成量
+  timing_per_break_m: 0.60           # 変化量[m]あたりの平均ズレ（正＝変化が大きいほど差し込まれる）
+  timing_per_contact: 0.004          # ミート(−50)あたりのズレ縮小
+  bearing_pull_per_timing: 14.0       # ズレ1あたりの引っ張り角[deg]
+  bearing_pull_ground_deg: 28.0      # 純ゴロでの引っ張り角[deg]
+  bearing_pull_fly_deg: -6.0         # 純フライでの引っ張り角[deg]（負＝流し）
+  bearing_ground_angle_deg: 0.0      # 「純ゴロ」とみなす打球角（以下で頭打ち）
+  bearing_fly_angle_deg: 25.0        # 「純フライ」とみなす打球角（以上で頭打ち）
   # コンタクト品質への投手側寄与（「打たせて取る」の土台）。3項とも基準値で寄与0＝リーグ平均投手で恒等。
   contact_quality_velocity_ref_kmh: 121.5  # 平均的な配球の実投球速度（ストレート比0.55×球種の球速比込み）
   contact_quality_per_kmh: 0.0010          # 速い球は当たれば強い打球（本格派の代償）
@@ -335,7 +350,7 @@ skills:
   # 打撃系（試合内・行動特性）
   slow_starter_bat_contact_per_pa: 1.6   # 尻上がり: 打席数あたりのミート増
   slow_starter_bat_max_bonus: 6.0
-  spray_bearing_factor: 1.35             # 広角打法: 打球方向σ拡大（シフト無効化）
+  spray_pull_factor: 0.55                # 広角打法: 引っ張りバイアスの縮小倍率（issue #262。旧 spray_bearing_factor＝σ拡大は廃止）
   first_pitch_swing_prob: 0.62           # 初球から振る
   grinder_foul_factor: 1.30              # 粘り打ち: ファウル率拡大（球数を吐かせる）
   streaky_variance_factor: 1.7           # ムラっけ: 当日の出来の振れ幅拡大

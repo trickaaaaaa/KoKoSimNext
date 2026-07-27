@@ -109,7 +109,7 @@ public sealed class AtBatSessionTests
     [Fact]
     public void StepDrivenSession_MatchesResolveDetailed_WithSkillPlayMods()
     {
-        var skills = new SkillPlayMods { BearingSigmaFactor = 1.2, FoulShareFactor = 1.3, StuffBonus = 5.0, FirstPitchSwingProb = 0.4 };
+        var skills = new SkillPlayMods { BearingPullFactor = 0.7, FoulShareFactor = 1.3, StuffBonus = 5.0, FirstPitchSwingProb = 0.4 };
         var ctx = new AtBatContext { Fielders = Field.StandardAlignment(), Skills = skills };
         var batter = new BatterAttributes { Contact = 60, Power = 65 };
         var pitcher = PitcherAttributes.LeagueAverage;

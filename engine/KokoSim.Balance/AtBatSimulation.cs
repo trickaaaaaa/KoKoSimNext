@@ -264,6 +264,127 @@ public static class AtBatSimulation
         };
     }
 
+    /// <summary>
+    /// 打球方向の分布と外野の捕球者分布（issue #262 の診断・回帰）。方位角は10°刻み9ビン（−45〜45°）。
+    /// 母集団サンプリング・決定論並列は本体 <see cref="Run"/> と同一。
+    /// </summary>
+    public sealed record BearingProfile
+    {
+        /// <summary>方位角ビン（−45°から10°刻み・9ビン）のインプレー打球数。−＝左翼側／＋＝右翼側。</summary>
+        public required int[] Bins { get; init; }
+        /// <summary>外野手のフライ・ライナー捕球数（[0]=左 [1]=中 [2]=右）。</summary>
+        public required int[] Outfield { get; init; }
+        /// <summary>ビンに入ったインプレー打球の総数。</summary>
+        public int InPlay { get; init; }
+        /// <summary>外野手が捕ったフライ・ライナーの総数。</summary>
+        public int OutfieldCatches { get; init; }
+
+        public const int BinCount = 9;
+        public const double BinWidthDeg = 10.0;
+        public static double BinLowDeg(int index) => -45.0 + index * BinWidthDeg;
+
+        public double LeftShare => Share(0);
+        public double CenterShare => Share(1);
+        public double RightShare => Share(2);
+        private double Share(int i) => OutfieldCatches > 0 ? (double)Outfield[i] / OutfieldCatches : 0;
+
+        /// <summary>中央3分の1（|方位| &lt; 15°）に入るインプレー打球の割合。</summary>
+        public double CenterThirdShare
+            => InPlay > 0 ? (double)(Bins[3] + Bins[4] + Bins[5]) / InPlay : 0;
+
+        /// <summary>方位角の平均[deg]（ビン中央での近似）。負＝左翼側へ寄っている。</summary>
+        public double MeanBearingDeg
+        {
+            get
+            {
+                if (InPlay <= 0) return 0;
+                var sum = 0.0;
+                for (var i = 0; i < BinCount; i++) sum += (BinLowDeg(i) + BinWidthDeg / 2.0) * Bins[i];
+                return sum / InPlay;
+            }
+        }
+
+        public string ToMarkdown()
+        {
+            var sb = new StringBuilder();
+            var c = CultureInfo.InvariantCulture;
+            sb.AppendLine("| 方位角 | 件数 | 割合 |");
+            sb.AppendLine("|---|---|---|");
+            for (var i = 0; i < BinCount; i++)
+            {
+                var share = InPlay > 0 ? (double)Bins[i] / InPlay : 0;
+                sb.AppendLine(c, $"| {BinLowDeg(i):F0}〜{BinLowDeg(i) + BinWidthDeg:F0}° | {Bins[i]} | {share:P1} |");
+            }
+            sb.AppendLine(c, $"\n外野捕球: 左 {LeftShare:P1} / 中 {CenterShare:P1} / 右 {RightShare:P1}"
+                             + $"（計 {OutfieldCatches}）");
+            sb.AppendLine(c, $"中央3分の1（|方位| < 15°）: {CenterThirdShare:P1}（インプレー {InPlay}）");
+            return sb.ToString();
+        }
+    }
+
+    /// <summary>
+    /// 打球方向と外野捕球者の分布を集計する（issue #262）。乱数消費順・結果は Run と同じ経路。
+    /// <paramref name="batsOverride"/> を渡すと母集団の打席左右を固定できる（引っ張り方向の検証用）。
+    /// </summary>
+    public static BearingProfile RunBearingProfile(
+        int atBats, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null,
+        Handedness? batsOverride = null)
+    {
+        var ctx = BuildContext(coefficientsPath, field);
+        var root = new Xoshiro256Random(seed);
+        var forks = new IRandomSource[atBats];
+        for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
+
+        // レイアウト: [0..9)=方位角ビン, [9..12)=外野捕球(左/中/右), [12]=インプレー数, [13]=外野捕球数
+        const int Bins = BearingProfile.BinCount;
+        var width = Bins + 3 + 2;
+        var total = new int[width];
+        Parallel.For(0, atBats,
+            () => new int[width],
+            (i, _, local) =>
+            {
+                var rng = forks[i];
+                var batter = SampleBatter(rng);
+                if (batsOverride is { } bats) batter = batter with { Bats = bats };
+                var pitcher = SamplePitcher(rng);
+                var detailed = AtBatResolver.ResolveDetailed(batter, pitcher, ctx, rng);
+                if (detailed.Play is not { } play || play.Result == BattedBallResult.Foul) return local;
+
+                var bin = (int)((play.BearingDeg + 45.0) / BearingProfile.BinWidthDeg);
+                if (bin >= 0 && bin < Bins)
+                {
+                    local[bin]++;
+                    local[Bins + 3]++;
+                }
+
+                if (play.IsFly && play.FielderRole is { } role)
+                {
+                    var of = role switch
+                    {
+                        FieldPosition.LeftField => 0,
+                        FieldPosition.CenterField => 1,
+                        FieldPosition.RightField => 2,
+                        _ => -1,
+                    };
+                    if (of >= 0)
+                    {
+                        local[Bins + of]++;
+                        local[Bins + 4]++;
+                    }
+                }
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < width; k++) total[k] += local[k]; } });
+
+        return new BearingProfile
+        {
+            Bins = total[0..Bins],
+            Outfield = total[Bins..(Bins + 3)],
+            InPlay = total[Bins + 3],
+            OutfieldCatches = total[Bins + 4],
+        };
+    }
+
     private static int SampleAbility(IRandomSource rng, double mean = 50, double sd = 12, int min = 20, int max = 88)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(mean, sd)), min, max);
 
@@ -274,7 +395,21 @@ public static class AtBatSimulation
         LaunchTendency = SampleAbility(rng),
         Discipline = SampleAbility(rng),
         Speed = SampleAbility(rng),
+        Bats = SampleBats(rng),
     };
+
+    /// <summary>
+    /// 打席の左右。issue #262 で打球方向が左右で反転するようになったため、母集団の左右比を
+    /// 実ロスター（<see cref="Season.ProspectGenerator"/> / <see cref="Nation.StrengthTeamFactory"/>）と揃える。
+    /// それ以前は全員右打ちだったので、引っ張り方向が片側へ寄って分布が実態とずれる。
+    /// 確率は生成器の既定と同値（スイッチ3% ／ 左投12% ／ 左投の98%が左打 ／ 右投の40%が左打）。
+    /// </summary>
+    private static Handedness SampleBats(IRandomSource rng)
+    {
+        if (rng.NextDouble() < 0.03) return Handedness.Switch;
+        var throwsLeft = rng.NextDouble() < 0.12;
+        return rng.NextDouble() < (throwsLeft ? 0.98 : 0.40) ? Handedness.Left : Handedness.Right;
+    }
 
     private static PitcherAttributes SamplePitcher(IRandomSource rng)
     {

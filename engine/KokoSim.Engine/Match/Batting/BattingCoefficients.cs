@@ -46,8 +46,11 @@ public sealed record BattingCoefficients
     /// 織り込み済みのため、旧 StuffPerPitchRank（球種ランク直参照）を本項へ完全置換した（二重計上を避ける）。
     /// </summary>
     public double WhiffBreakSlope { get; init; } = 1.5;
-    /// <summary>コンタクトのうちファウルになる割合。</summary>
-    public double FoulShare { get; init; } = 0.40;
+    /// <summary>
+    /// コンタクトのうちファウルになる割合。方位角が±45°を越えて幾何的にファウルになる分は別枠で、
+    /// issue #262 で打球方向が広がった結果その別枠が増えたため、ここを 0.40→0.35 に下げて総ファウル率を保つ。
+    /// </summary>
+    public double FoulShare { get; init; } = 0.35;
 
     // --- 球威（stuff）の算出 ---
     /// <summary>
@@ -69,8 +72,8 @@ public sealed record BattingCoefficients
     /// <summary>打球初速上限[km/h] のパワー1あたり係数。</summary>
     public double ExitVeloPerPower { get; init; } = 0.82;
 
-    /// <summary>コンタクト品質(0〜1)の平均（互角時）。</summary>
-    public double QualityMean { get; init; } = 0.62;
+    /// <summary>コンタクト品質(0〜1)の平均（互角時）。issue #262 で打球が野手の間を抜けやすくなった分を 0.62→0.60 で吸収。</summary>
+    public double QualityMean { get; init; } = 0.60;
     /// <summary>コンタクト品質へのミート寄与((Contact−50)あたり)。</summary>
     public double QualityContactSlope { get; init; } = 0.0020;
     /// <summary>コンタクト品質の標準偏差。</summary>
@@ -81,8 +84,8 @@ public sealed record BattingCoefficients
     public double LaunchAngleAtLt100 { get; init; } = 26.0;
     /// <summary>打球角度の標準偏差[deg]。</summary>
     public double LaunchAngleSigma { get; init; } = 12.0;
-    /// <summary>方位角（引っ張り/流し）の標準偏差[deg]。</summary>
-    public double BearingSigma { get; init; } = 20.0;
+    /// <summary>方位角の残差（引っ張り/流しを引いた後のばらつき）の標準偏差[deg]。</summary>
+    public double BearingSigma { get; init; } = 19.0;
     /// <summary>芯を外すと初速が落ちる度合い（品質1で満初速, 0で係数分だけ残る）。</summary>
     public double MinQualityVeloFactor { get; init; } = 0.55;
 
@@ -101,7 +104,49 @@ public sealed record BattingCoefficients
     /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>
     public double ContactQualityPerBreakM { get; init; } = -0.30;
 
+    // --- ④ タイミングのズレ → ⑤ 打球方向（設計書01 §2④⑤, issue #262） ---
+    // 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。
+    // ズレは無次元（正＝差し込まれ／負＝早い）。⑤でこれが引っ張り/流しへ変換され、打者の左右が符号を与える。
+    // 座標規約: −＝左翼（三塁側）／＋＝右翼（一塁側）。右打者の引っ張り＝負、左打者の引っ張り＝正。
+
+    /// <summary>タイミングのズレの標準偏差（無次元）。1.0＝ここを単位に <see cref="BearingPullPerTiming"/> を測る。</summary>
+    public double TimingSigma { get; init; } = 1.0;
+    /// <summary>ズレ寄与0となる実投球速度[km/h]（平均的な配球の実投球速度）。</summary>
+    public double TimingRefKmh { get; init; } = 121.5;
+    /// <summary>実投球速度1km/hあたりの平均ズレ。正＝速い球ほど差し込まれる。</summary>
+    public double TimingPerKmh { get; init; } = 0.010;
+    /// <summary>ズレ寄与0となる誘発変化合成量[m]（リーグ平均球速×平均キレ）。</summary>
+    public double TimingBreakRefM { get; init; } = 0.47;
+    /// <summary>誘発変化合成量[m]あたりの平均ズレ。正＝変化が大きいほど差し込まれる。</summary>
+    public double TimingPerBreakM { get; init; } = 0.60;
+    /// <summary>ミート(−50)あたりのズレ縮小。正＝ミートが良いほど差し込まれない。</summary>
+    public double TimingPerContact { get; init; } = 0.004;
+
+    /// <summary>ズレ1あたりの引っ張り角[deg]。早い（ズレが負）ほど引っ張る。</summary>
+    public double BearingPullPerTiming { get; init; } = 14.0;
+    /// <summary>純ゴロ（打球角 <see cref="BearingGroundAngleDeg"/> 以下）での引っ張り角[deg]。</summary>
+    public double BearingPullGroundDeg { get; init; } = 28.0;
+    /// <summary>純フライ（打球角 <see cref="BearingFlyAngleDeg"/> 以上）での引っ張り角[deg]。負＝流し。</summary>
+    public double BearingPullFlyDeg { get; init; } = -6.0;
+    /// <summary>「純ゴロ」とみなす打球角[deg]。これ以下は <see cref="BearingPullGroundDeg"/> で頭打ち。</summary>
+    public double BearingGroundAngleDeg { get; init; } = 0.0;
+    /// <summary>「純フライ」とみなす打球角[deg]。これ以上は <see cref="BearingPullFlyDeg"/> で頭打ち。</summary>
+    public double BearingFlyAngleDeg { get; init; } = 25.0;
+
     /// <summary>打球の平均角[deg]を弾道値から線形補間。</summary>
     public double MeanLaunchAngle(int launchTendency)
         => LaunchAngleAtLt1 + (LaunchAngleAtLt100 - LaunchAngleAtLt1) * (launchTendency - 1) / 99.0;
+
+    /// <summary>
+    /// 打球種別（打球角）に応じた引っ張り角[deg]。ゴロは引っ張り寄り・フライは流し寄りという実野球の傾向。
+    /// 両端で頭打ちの線形補間。
+    /// </summary>
+    public double LaunchAnglePullDeg(double launchAngleDeg)
+    {
+        var span = BearingFlyAngleDeg - BearingGroundAngleDeg;
+        if (span <= 0.0) return BearingPullGroundDeg;
+        var t = (launchAngleDeg - BearingGroundAngleDeg) / span;
+        t = t < 0.0 ? 0.0 : t > 1.0 ? 1.0 : t;
+        return BearingPullGroundDeg + (BearingPullFlyDeg - BearingPullGroundDeg) * t;
+    }
 }
