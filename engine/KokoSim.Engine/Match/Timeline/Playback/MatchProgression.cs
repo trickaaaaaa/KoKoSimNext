@@ -98,6 +98,16 @@ public sealed class MatchProgression
     private int _confirmed;   // 確定した打席数
     private int _pitchIndexInCurrentPa; // AdvancePitch() で現在の打席内に何回Pitch窓が来たか（0始まり）
 
+    /// <summary>
+    /// 1回の <see cref="Advance"/>／<see cref="DrainToEnd"/> が回してよい <see cref="GameStep"/> 数の安全上限
+    /// （issue #288）。正常な試合は延長込みでも全ステップ数が数千どまりで、この桁上の値には絶対に達しない。
+    /// これを超えたら進行体が壊れている（例: 継投の適用がメイン／背景スレッドで競合し、列挙状態や
+    /// <see cref="TeamState"/> のラインナップが破損して打席境界が返らなくなった）と判断し、Unity ごとの
+    /// フリーズではなく例外で落とす。背景経路（<c>BackgroundGameOp</c>）ならこの例外は捕捉されログに残る。
+    /// カウンタを進めるだけで乱数は一切消費しない＝結果・digest・帯は不変（不変条件#2）。
+    /// </summary>
+    private const int MaxStepsPerAdvance = 1_000_000;
+
     /// <param name="scenarioStart">
     /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
     /// 注入した試合は <see cref="GameResult.ScenarioId"/> が立ち、digest・統計集計から外れる。
@@ -452,9 +462,12 @@ public sealed class MatchProgression
         if (IsFinished) return false;
         // 1球ごとの采配窓（GameStepKind.Pitch, 設計書15）は読み飛ばし、打席が確定した境界だけを表に出す。
         // 従来どおりの打席単位供給（Pitch 窓で一時停止したいなら AdvancePitch を使う＝Phase D-1）。
+        // 打席境界が返らず暴走したら（issue #288）フリーズではなく例外で落とす（下の安全弁）。
         GameStep step;
+        var steps = 0;
         do
         {
+            if (++steps > MaxStepsPerAdvance) throw ProgressionRunaway();
             if (!_steps.MoveNext())
             {
                 IsFinished = true;
@@ -653,8 +666,10 @@ public sealed class MatchProgression
 
     private GameResult DrainToEnd()
     {
+        var steps = 0;
         while (_steps.MoveNext())
         {
+            if (++steps > MaxStepsPerAdvance) throw ProgressionRunaway();
             // Pitch 窓（設計書15）は打席確定ではないのでスコア加算・確定カウントの対象外。
             if (_steps.Current.Kind != GameStepKind.PlateAppearance) continue;
             _confirmed++;
@@ -663,6 +678,11 @@ public sealed class MatchProgression
         Current = null;
         return GameEngine.BuildResult(_p);
     }
+
+    /// <summary>進行体の暴走（issue #288）を表す例外。<see cref="MaxStepsPerAdvance"/> を超えたときに投げる。</summary>
+    private static System.InvalidOperationException ProgressionRunaway()
+        => new("MatchProgression の進行が安全上限（" + MaxStepsPerAdvance +
+            " ステップ）を超えました。打席境界が返らず暴走しています（進行体の破損の疑い・issue #288）。");
 
     /// <summary>ここまでの進行から最終結果を組む（全打席 Advance し終えた後に呼ぶ）。</summary>
     public GameResult BuildResult() => GameEngine.BuildResult(_p);
