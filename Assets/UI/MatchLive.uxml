@@ -71,7 +71,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="md-group">
                         <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
-                        <ui:Button name="duel-view" class="chip-btn" text="対決ビュー（試）" />
+                        <ui:Button name="duel-view" class="chip-btn" text="対決ビュー" />
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
                 </ui:VisualElement>
