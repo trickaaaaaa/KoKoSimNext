@@ -1211,14 +1211,14 @@ public static class GameEngine
                     if (outAtHome is { } o)
                     {
                         timeline = Match.Timeline.TimelineBuilder.AppendBackHomeThrows(
-                            timeline, bhPlay, ctx.Field, o.T1, runnerOut: true);
+                            timeline, bhPlay, ctx.Field, o.T1, runnerOut: true, paBaserunning);
                         homeThrowAdded = true;
                     }
                     else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield))
                     {
                         // 外野安打での生還は際どくなくても返球を描く（ボールが外野で死なない, #7）。
                         timeline = Match.Timeline.TimelineBuilder.AppendBackHomeThrows(
-                            timeline, bhPlay, ctx.Field, s.T1, runnerOut: false);
+                            timeline, bhPlay, ctx.Field, s.T1, runnerOut: false, paBaserunning);
                         homeThrowAdded = true;
                     }
                 }
@@ -1234,7 +1234,7 @@ public static class GameEngine
                     foreach (var leg in timeline.Runners)
                         if (leg.Label == "打" && leg.T1 > runnerArrive) runnerArrive = leg.T1;
                     timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
-                        timeline, ofHit, ctx.Field, leadBase, runnerArrive);
+                        timeline, ofHit, ctx.Field, leadBase, runnerArrive, ctx.Fielding);
                 }
             }
 

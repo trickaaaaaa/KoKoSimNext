@@ -71,8 +71,23 @@ public static class HomePlayResolver
         Player runner, int fromBase, FieldGeometry field, BaserunningCoefficients c, double extraStartDelaySeconds = 0.0)
         => RunnerTimeSeconds(runner, fromBase, 4, field, c, extraStartDelaySeconds);
 
-    /// <summary>目標塁へ送球が到達する所要時間[s]（外野処理＋中継/直接＋タッチ, 接触基準）。</summary>
-    public static double DefenseTimeSeconds(HomePlaySituation s, Vector3D targetPoint, double tagSeconds, BaserunningCoefficients c)
+    /// <summary>
+    /// 送球経路の内訳（判定と表示の**単一ソース**, Issue #301③/#298-2）。
+    /// <see cref="DefenseTimeSeconds"/> はここから導出するので、タイムライン側がこの構造体を使って
+    /// 絵を描けば「送球の到達時刻が判定と矛盾する」ことが構造的に起きない。時刻は接触＝0秒基準。
+    /// </summary>
+    /// <param name="HasRelay">中継（カットマン経由）か。false なら直接返球。</param>
+    /// <param name="CutoffPoint">カットマンの理論位置（送球先ベースから <c>CutoffFractionFromHome</c> の位置）。直接返球では送球先と同値。</param>
+    /// <param name="ReleaseAtSeconds">処理野手が投げ始める時刻（＝回収＋外野の持ち替え）。</param>
+    /// <param name="ArriveAtSeconds">送球先ベースにボールが到達する時刻（タッチは含まない）。</param>
+    public readonly record struct ThrowPath(
+        bool HasRelay, Vector3D CutoffPoint, double ReleaseAtSeconds, double ArriveAtSeconds);
+
+    /// <summary>
+    /// 処理点→送球先ベースの送球経路と時刻を解く（中継しきい値・カットマン位置・肩・握り替えを一括）。
+    /// <see cref="DefenseTimeSeconds"/> の算式そのもの（切り出しただけで数値は不変）。
+    /// </summary>
+    public static ThrowPath ResolveThrowPath(HomePlaySituation s, Vector3D targetPoint, BaserunningCoefficients c)
     {
         // 処理点から送球先ベースまでの水平距離。
         var dx = s.BallFieldedPoint.X - targetPoint.X;
@@ -83,8 +98,9 @@ public static class HomePlayResolver
         var transferFactor = new Players.FielderAttributes { Fielding = s.OutfielderFielding }
             .TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
 
+        var hasRelay = dist > c.CutoffDistanceThresholdM;
         double throwTime;
-        if (dist > c.CutoffDistanceThresholdM)
+        if (hasRelay)
         {
             // 中継: カットマンは送球先ベースから CutoffFractionFromHome の位置。
             var legToCutoff = dist * (1.0 - c.CutoffFractionFromHome) / s.OutfielderThrowSpeedMps;
@@ -96,8 +112,20 @@ public static class HomePlayResolver
             throwTime = dist / s.OutfielderThrowSpeedMps; // 直接返球
         }
 
-        return s.BallFieldedAtSeconds + c.OutfieldTransferSeconds * transferFactor + throwTime + tagSeconds;
+        // 加算の順序は元の式のまま（左結合）＝浮動小数の結果までビット一致で保つ（帯不変）。
+        var release = s.BallFieldedAtSeconds + c.OutfieldTransferSeconds * transferFactor;
+        var cutoff = hasRelay
+            ? new Vector3D(
+                targetPoint.X + (s.BallFieldedPoint.X - targetPoint.X) * c.CutoffFractionFromHome,
+                0,
+                targetPoint.Z + (s.BallFieldedPoint.Z - targetPoint.Z) * c.CutoffFractionFromHome)
+            : targetPoint;
+        return new ThrowPath(hasRelay, cutoff, release, release + throwTime);
     }
+
+    /// <summary>目標塁へ送球が到達する所要時間[s]（外野処理＋中継/直接＋タッチ, 接触基準）。</summary>
+    public static double DefenseTimeSeconds(HomePlaySituation s, Vector3D targetPoint, double tagSeconds, BaserunningCoefficients c)
+        => ResolveThrowPath(s, targetPoint, c).ArriveAtSeconds + tagSeconds;
 
     /// <summary>本塁への送球所要時間[s]（後方互換: 送球先=原点・タッチ=HomeTagSeconds）。</summary>
     public static double DefenseTimeSeconds(HomePlaySituation s, BaserunningCoefficients c)

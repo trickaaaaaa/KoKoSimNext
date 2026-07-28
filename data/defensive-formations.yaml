@@ -4,6 +4,11 @@
 # target: ball / first / second / third / home / none
 # runners: any / none / on_base（省略=any）
 # ※このファイルは FormationTable.Default（エンジン内蔵の既定表）のミラー。調整はここを編集する。
+# ※Unity の実プレーは YAML を読まず FormationTable.Default で動くため、片方だけ直すと実ゲームに
+#   反映されない。両方を必ず同一内容に保つ（TimelineTests.FormationsYaml_MatchesDefaultTableExactly が検証）。
+#
+# 走者なし（runners: none）の行は「投手が本塁バックアップへ走らない」ためだけに存在する（Issue #298-1）。
+# 本塁への送球がありえない場面で投手がマウンドを離れるのを止める＝投手1行だけが走者ありと異なる。
 
 formations:
   - zone: bunt
@@ -75,5 +80,60 @@ formations:
       first_base:   { task: cover_base, target: first }
       third_base:   { task: cover_base, target: third }
       pitcher:      { task: backup, target: home }
+      catcher:      { task: cover_base, target: home }
+      left_field:   { task: hold, target: none }
+
+  # --- 走者なし（Issue #298-1）: 投手だけ hold へ差し替える。他8人は上の runners:any と同一。 ---
+  # bunt（投手が打球処理）と infield_right（投手が一塁カバー）は走者の有無に関わらず正しいので行を持たない。
+
+  - zone: infield_left
+    runners: none
+    assignments:
+      shortstop:    { task: field_ball, target: ball }
+      third_base:   { task: field_ball, target: ball }
+      second_base:  { task: cover_base, target: second }
+      first_base:   { task: cover_base, target: first }
+      pitcher:      { task: hold, target: none }
+      catcher:      { task: cover_base, target: home }
+      left_field:   { task: backup, target: ball }
+      center_field: { task: backup, target: second }
+      right_field:  { task: backup, target: first }
+
+  - zone: outfield_left
+    runners: none
+    assignments:
+      left_field:   { task: field_ball, target: ball }
+      center_field: { task: backup, target: ball }
+      shortstop:    { task: cutoff, target: second }
+      second_base:  { task: cover_base, target: second }
+      third_base:   { task: cover_base, target: third }
+      first_base:   { task: cover_base, target: first }
+      pitcher:      { task: hold, target: none }
+      catcher:      { task: cover_base, target: home }
+      right_field:  { task: hold, target: none }
+
+  - zone: outfield_center
+    runners: none
+    assignments:
+      center_field: { task: field_ball, target: ball }
+      left_field:   { task: backup, target: ball }
+      right_field:  { task: backup, target: ball }
+      second_base:  { task: cutoff, target: second }
+      shortstop:    { task: cover_base, target: second }
+      first_base:   { task: cover_base, target: first }
+      third_base:   { task: cover_base, target: third }
+      pitcher:      { task: hold, target: none }
+      catcher:      { task: cover_base, target: home }
+
+  - zone: outfield_right
+    runners: none
+    assignments:
+      right_field:  { task: field_ball, target: ball }
+      center_field: { task: backup, target: ball }
+      second_base:  { task: cutoff, target: second }
+      shortstop:    { task: cover_base, target: second }
+      first_base:   { task: cover_base, target: first }
+      third_base:   { task: cover_base, target: third }
+      pitcher:      { task: hold, target: none }
       catcher:      { task: cover_base, target: home }
       left_field:   { task: hold, target: none }

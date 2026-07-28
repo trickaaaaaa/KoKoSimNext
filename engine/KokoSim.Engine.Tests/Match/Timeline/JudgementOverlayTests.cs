@@ -58,6 +58,7 @@ public sealed class JudgementOverlayTests
         Result = BattedBallResult.Single,
         LandingX = -9.0, LandingZ = 30.0, HangTimeSeconds = 0.3, ApexHeightM = 0.4,
         RangeM = 31.3, BearingDeg = -16.0, FielderRole = FieldPosition.Shortstop,
+        FieldedX = -9.0, FieldedZ = 30.0,   // 内野ゴロの実捕球点（FieldingResolver と同じく必ず埋まる）
         FieldedAtSeconds = 1.4, ThrowArriveSeconds = 4.19, BatterToFirstSeconds = 4.2, IsFly = false,
         JudgementMarginSeconds = judgementMargin,
     };
@@ -67,6 +68,7 @@ public sealed class JudgementOverlayTests
         Result = BattedBallResult.Out,
         LandingX = -9.0, LandingZ = 30.0, HangTimeSeconds = 0.3, ApexHeightM = 0.4,
         RangeM = 31.3, BearingDeg = -16.0, FielderRole = FieldPosition.Shortstop,
+        FieldedX = -9.0, FieldedZ = 30.0,   // 内野ゴロの実捕球点（FieldingResolver と同じく必ず埋まる）
         FieldedAtSeconds = 1.4, ThrowArriveSeconds = 3.0, BatterToFirstSeconds = 4.2, IsFly = false,
         JudgementMarginSeconds = judgementMargin,
     };
@@ -119,6 +121,7 @@ public sealed class JudgementOverlayTests
         {
             Result = BattedBallResult.Out, LandingX = 0, LandingZ = 90, HangTimeSeconds = 3.0, ApexHeightM = 20,
             RangeM = 90, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+            FieldedX = 0, FieldedZ = 90,   // 空中捕球＝回収点は着地点（FieldingResolver.Base と同じ）
             FieldedAtSeconds = 3.0, BatterToFirstSeconds = 4.2, IsFly = true,
         };
         var tl = TimelineBuilder.BuildBattedBall(
@@ -139,6 +142,7 @@ public sealed class JudgementOverlayTests
         {
             Result = BattedBallResult.Out, LandingX = 0, LandingZ = 90, HangTimeSeconds = 3.0, ApexHeightM = 20,
             RangeM = 90, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+            FieldedX = 0, FieldedZ = 90,   // 空中捕球＝回収点は着地点（FieldingResolver.Base と同じ）
             FieldedAtSeconds = 3.0, BatterToFirstSeconds = 4.2, IsFly = true,
         };
         var tl = TimelineBuilder.BuildBattedBall(
