@@ -157,6 +157,12 @@ namespace KokoSim.Unity.Match
         private bool _pitchBallVisible;   // 投球フェーズで今の1球の投球軌道を流しているか（#5）。
         private bool _pitchCallDone;      // 今の1球の判定表示＋カウント更新を済ませたか（対決ビュー中は次リリースと分離）。
         private bool _pitchFirstPending;  // 対決ビューの初球ワインドアップ待ち（時計が0に達したらBeginPitchBall(0)）。
+        // ファウル打球の俯瞰表示（issue #313）。非nullの間＝今の1球がファウル打球の再生中で、値＝着地まで
+        // 保持すべき最短表示秒（次の1球へ切り替える interval をこの秒数まで延ばす）。
+        private float? _foulFlightHoldSeconds;
+        // BeginPitchBall が仕込んだ「この1球のファウル打球タイムライン」。pitchIntervalSeconds 到達時に
+        // Update() 側で表示へ差し替える（投球セグメントの二重表示を避けるため, issue #313）。
+        private PlaybackPlay _pendingFoulFlight;
 
         // 対決ビューの1球ペーシング（フル振りかぶり再生）を使うか（design-18 §7-2）。
         private bool DuelPacingActive => _duelOn && _duelRig != null && _duelRig.Available;
@@ -867,12 +873,16 @@ namespace KokoSim.Unity.Match
         };
 
         // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
-        // 捕手からの返球は描画しない。打球になる最後の1球だけは、続く打球タイムラインが同じ投球
-        // セグメントを先頭に持つので二重に描かず、静止表示のまま打球フェーズへ渡す。
+        // 捕手からの返球は描画しない。打球になる最後の1球・ファウル打球データを持つ1球は、続く
+        // タイムラインが同じ投球セグメントを先頭に持つので二重に描かず、静止表示のまま渡す
+        // （ファウルは pitchIntervalSeconds 到達時に Update() 側で差し替える, issue #313）。
         private void BeginPitchBall(int index)
         {
             var last = _current.PitchSeq.Pitches.Count - 1;
-            _pitchBallVisible = _current.Play == null || index < last;
+            var pt = _current.PitchSeq.Pitches[index];
+            _pendingFoulFlight = pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Foul ? pt.FoulFlight : null;
+
+            _pitchBallVisible = _pendingFoulFlight == null && (_current.Play == null || index < last);
             if (_pitchBallVisible)
                 _view.SetPlay(PitchPlaybackFactory.PitchOnly(
                     _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore));
@@ -883,8 +893,7 @@ namespace KokoSim.Unity.Match
             // フォロースルー→次の振りかぶりの切り替えを予約し、1球の結果で打者・捕手の一発物を分岐する（第2弾）
             if (_duelOn && _duelRig != null)
             {
-                var kind = _current.PitchSeq.Pitches[index].Kind;
-                var outcome = kind switch
+                var outcome = pt.Kind switch
                 {
                     KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike => DuelPitchOutcome.CalledStrike,
                     KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike => DuelPitchOutcome.SwingMiss,
@@ -972,7 +981,7 @@ namespace KokoSim.Unity.Match
                     _pitchFirstPending = false;
                     BeginPitchBall(0);
                 }
-                // 1球ぶんの投球軌道を毎フレーム進める（0.45s で本塁到達。以降は到達点で保持）。
+                // 1球ぶんの投球軌道（またはファウル打球の再生）を毎フレーム進める。
                 if (_pitchBallVisible) _view.SetTime(_pitchClock);
                 var pitches = _current.PitchSeq.Pitches;
                 // 判定＋カウント更新はリリース+pitchIntervalSeconds（従来タイミング）。
@@ -989,13 +998,33 @@ namespace KokoSim.Unity.Match
                         EnterBattedBallOrHold();   // 最後の1球は従来どおり判定直後に先へ進む
                         return;
                     }
+                    if (_pendingFoulFlight != null)
+                    {
+                        // ファウルでも打球は飛ぶので、打った瞬間から俯瞰へ切り替えて行方を見せる（issue #313）。
+                        // 復帰（対決ビューへ）は打球が地面へ着いてから＝次の1球のワインドアップに合わせる。
+                        SetDuelViewAuto(false);
+                        _view.SetPlay(_pendingFoulFlight);
+                        _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
+                        _pitchBallVisible = true;
+                        _pitchClock = 0f;   // このタイムラインの頭から（投球セグメントの二重表示を避ける）
+                        _view.SetTime(_pitchClock);
+                        _pendingFoulFlight = null;
+                    }
                 }
-                float interval = DuelPacingActive ? duelPitchIntervalSeconds : pitchIntervalSeconds;
-                while (_inPitchPhase && _pitchCallDone && _pitchClock >= interval)
+                while (_inPitchPhase && _pitchCallDone)
                 {
+                    var interval = DuelPacingActive ? duelPitchIntervalSeconds : pitchIntervalSeconds;
+                    if (_foulFlightHoldSeconds is { } hold) interval = Mathf.Max(interval, hold);
+                    if (_pitchClock < interval) break;
+
                     _pitchClock -= interval;
                     _pitchCallDone = false;
                     _pitchIdx++;
+                    if (_foulFlightHoldSeconds.HasValue)
+                    {
+                        _foulFlightHoldSeconds = null;
+                        SetDuelViewAuto(true);   // ファウル打球が地面へ着いたら対決ビューへ復帰（issue #313）
+                    }
                     BeginPitchBall(_pitchIdx);   // 次の1球の投球軌道を頭から流す
                 }
                 return;

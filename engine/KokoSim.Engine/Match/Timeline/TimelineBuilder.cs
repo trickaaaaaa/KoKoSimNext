@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using KokoSim.Engine.Match.Batting;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Pitching;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Timeline;
@@ -294,6 +296,64 @@ public static class TimelineBuilder
             Runners = runners,
             Captions = captions,
             Judgements = judgements,
+        };
+    }
+
+    /// <summary>
+    /// ファウル打球の短い再生タイムライン（Issue #313）。物理層（初速・角度・方向）が実際に生成された
+    /// ファウルだけが対象（<see cref="AtBat.PitchRecord.BattedBall"/> 非null）。守備側は一切解決しない
+    /// （ボールデッド＝アウト・進塁・失策は起こり得ない）ので、送球・守備陣形・判定オーバーレイは
+    /// 一切生成しない「投球→滞空/転がり→静止」だけの最小タイムライン。
+    ///
+    /// 着地点・滞空時間・頂点高さは <see cref="BallisticIntegrator.IntegrateToGround"/> を打球資料に
+    /// そのまま適用して求める（守備解決＝<see cref="FieldingResolver.ResolveDetailed"/> と同じ積分の使い回し。
+    /// 乱数は一切消費しない＝決定論・帯に無関係、不変条件#2）。塁上の走者は（動かないので）その場に
+    /// 静止表示する（<see cref="PitchPlaybackFactory.PitchOnly"/> と同じ扱い）。
+    /// </summary>
+    public static PlayTimeline BuildFoulFlight(
+        BattedBall ball, Aerodynamics aero, FieldingCoefficients coeff, FieldGeometry field,
+        bool runnerOnFirst, bool runnerOnSecond, bool runnerOnThird)
+    {
+        var ground = BallisticIntegrator.IntegrateToGround(
+            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
+        var landing = new TimelinePoint(ground.LandingPosition.X, ground.LandingPosition.Z);
+        var isFly = ground.ApexHeightM >= coeff.FlyApexThresholdM;
+        var landAt = ContactAt + ground.HangTimeSeconds;
+        var duration = landAt + 0.6; // 着地後の一呼吸（対決ビュー復帰までの間）
+
+        var segments = new List<BallSegment>
+        {
+            new()
+            {
+                Kind = BallSegmentKind.Pitch, T0 = ContactAt - PitchDuration, T1 = ContactAt,
+                From = Mound, To = Home,
+            },
+            new()
+            {
+                Kind = isFly ? BallSegmentKind.Flight : BallSegmentKind.Roll,
+                T0 = ContactAt, T1 = landAt, From = Home, To = landing, ApexHeightM = ground.ApexHeightM,
+            },
+        };
+
+        var runners = new List<RunnerLeg>();
+        void Held(bool occupied, string baseName, string label)
+        {
+            if (!occupied) return;
+            var pt = BasePoint(field, baseName);
+            runners.Add(new RunnerLeg { Label = label, T0 = 0, T1 = duration, From = pt, To = pt, OutAtEnd = false });
+        }
+        Held(runnerOnFirst, "first", "走一");
+        Held(runnerOnSecond, "second", "走二");
+        Held(runnerOnThird, "third", "走三");
+
+        return new PlayTimeline
+        {
+            Duration = duration,
+            Result = "ファウル",
+            ResolvedAt = landAt,
+            Ball = segments,
+            Runners = runners,
+            Captions = new[] { new TimelineCaption(ContactAt + 0.01, "ファウル！") },
         };
     }
 

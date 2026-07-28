@@ -414,7 +414,7 @@ public sealed class AtBatSession
         // 弾道積分は毎球RK4×2本(スピンあり/なし)とコストが高いため、Timeline同様CaptureTimeline時のみ
         // （観戦する試合だけ）計算する。既定（統計シム・裏試合）はゼロコスト（設計書15 §4「Phase Bの作業」）。
         var trajectory = _ctx.CaptureTimeline ? ComputeTrajectory(plan) : null;
-        _pitchLog.Add(new PitchRecord(kind, _balls, _strikes, plan.Type, loc.X, loc.Y, plan.VelocityKmh, trajectory));
+        _pitchLog.Add(new PitchRecord(kind, _balls, _strikes, plan.Type, loc.X, loc.Y, plan.VelocityKmh, trajectory, ball));
 
         if (_pitchTraces is null) return;
         var f = _lastPitchFeatures ?? default;

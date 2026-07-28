@@ -9,13 +9,16 @@ namespace KokoSim.Engine.Match.Timeline.Playback;
 /// 1球とその直後のカウント（B/S）。<see cref="PitchType"/> / <see cref="VelocityKmh"/> は
 /// 実1球記録（<see cref="PitchRecord"/>）由来の観測値で、**実記録がない合成列では null**（＝表示側は出さない）。
 /// 表示専用の付帯情報で、判定・帯には一切関与しない。
+/// <see cref="FoulFlight"/>（Issue #313）は物理層を持つファウル（<see cref="PitchRecord.BattedBall"/> 非null）
+/// だけが非null＝実記録がない合成列・物理を生成しないファウル（バント/スクイズ・FoulShare経路）は null のまま。
 /// </summary>
 public readonly record struct PitchToken(
     PitchKind Kind,
     int BallsAfter,
     int StrikesAfter,
     Players.PitchType? PitchType = null,
-    double? VelocityKmh = null);
+    double? VelocityKmh = null,
+    PlaybackPlay? FoulFlight = null);
 
 /// <summary>1打席の投球列（中継風カウントの合成データ）。</summary>
 public sealed record PitchSequence(IReadOnlyList<PitchToken> Pitches)
