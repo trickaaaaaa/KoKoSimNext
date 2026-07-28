@@ -167,8 +167,14 @@ public sealed class CoefficientsLoaderTests
 
         // 本塁クロスプレー係数（F2, 設計書12 §3）が YAML から実際に束縛される
         // （IgnoreUnmatchedProperties のため綴り違いは黙って既定値になる＝ここで実値を固定して検出する）。
-        Assert.Equal(2.00, bundle.Baserunning.HomeSuccessBias, 6);
+        Assert.Equal(1.57, bundle.Baserunning.HomeSuccessBias, 6);   // #316 で 2.00 から引き下げ
         Assert.Equal(0.25, bundle.Baserunning.HomeMarginScale, 6);
+        // 走者の物理（Issue #316）: 打者走者側（fielding）と同値でなければならない。
+        Assert.Equal(1.15, bundle.Baserunning.RunnerTopSpeedFactor, 6);
+        Assert.Equal(0.30, bundle.Baserunning.RunnerBaseTurnSeconds, 6);
+        Assert.Equal(bundle.Fielding.RunningTopSpeedFactor, bundle.Baserunning.RunnerTopSpeedFactor, 6);
+        Assert.Equal(bundle.Fielding.BaseTurnSeconds, bundle.Baserunning.RunnerBaseTurnSeconds, 6);
+        Assert.Equal(0.88, bundle.Baserunning.ThirdSuccessBias, 6);   // #316 で 1.50 から引き下げ
         Assert.Equal(32.0, bundle.Baserunning.RelayThrowSpeedMps, 6);
         Assert.Equal(60.0, bundle.Baserunning.CutoffDistanceThresholdM, 6);
         Assert.Equal(0.06, bundle.Baserunning.FieldersChoiceProb, 6); // 野選（FC, design-14 P1-1）帯再校正済み値（2026-07-17）

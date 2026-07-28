@@ -19,6 +19,7 @@ namespace KokoSim.Engine.Tests.Match.Timeline;
 public sealed class TwoOutFlyAutoRunTests
 {
     private static readonly FieldGeometry Field = new();
+    private static readonly BaserunningCoefficients Baserunning = new();
 
     private static FieldingPlay FlyOut() => new()
     {
@@ -47,7 +48,7 @@ public sealed class TwoOutFlyAutoRunTests
         var tl = TimelineBuilder.AppendHeldRunners(
             FlyOutTimeline(), first: true, second: false, third: false,
             runner, null, null,
-            moves: new List<RunnerMove>(), Field, outsBefore: 2, FlyOut());
+            moves: new List<RunnerMove>(), Field, outsBefore: 2, FlyOut(), Baserunning);
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var r = Assert.Single(play.Runners, x => x.Label == "走一");
@@ -79,7 +80,7 @@ public sealed class TwoOutFlyAutoRunTests
         var tl = TimelineBuilder.AppendHeldRunners(
             FlyOutTimeline(), first: true, second: false, third: false,
             runner, null, null,
-            moves: new List<RunnerMove>(), Field, outsBefore, FlyOut());
+            moves: new List<RunnerMove>(), Field, outsBefore, FlyOut(), Baserunning);
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var r = Assert.Single(play.Runners, x => x.Label == "走一");

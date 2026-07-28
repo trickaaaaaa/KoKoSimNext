@@ -45,9 +45,11 @@ public sealed class FirstToThirdRaceTests
         var toHome = HomePlayResolver.RunnerTimeSeconds(runner, 1, 4, Field, C);
         // 一塁→三塁(2塁) は一塁→本塁(3塁) より短い。
         Assert.True(toThird < toHome);
-        // 二次リードを差し引いた 2塁ぶんの距離 ÷ スプリント速度 ＋ スタート遅延 に一致。
+        // 走者の時計（Issue #316）: 二次リードを差し引いた2塁ぶんの距離 ÷ (スプリント速度×トップスピード係数)
+        // ＋ 回る塁の数×踏み直し損失（一塁→三塁は二塁を1つ回る）＋ スタート遅延。
         var expectedDist = (2 * Field.BaseDistanceM - C.HomeLeadDistanceM);
-        Assert.Equal(expectedDist / runner.ToFielder().SprintSpeedMps
+        Assert.Equal(expectedDist / (runner.ToFielder().SprintSpeedMps * C.RunnerTopSpeedFactor)
+            + 1 * C.RunnerBaseTurnSeconds
             + Math.Max(0.10, C.HomeRunnerReactionIntercept - 50 * C.HomeRunnerReactionSlope), toThird, 6);
     }
 

@@ -17,6 +17,13 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     /// 判定を伴わない進塁（無風の進塁等）は既定 false。表示専用・結果不変。
     /// </summary>
     public bool CloseCall { get; init; }
+
+    /// <summary>
+    /// 判定がこの走者に課した追加スタート遅延[s]（打球を読んでから走り出す＝G1のゴロ本塁レース）。
+    /// 表示側は <c>RunnerClock</c> へこれを渡すことで判定とまったく同じ到達時刻になる（Issue #316）。
+    /// 既定0＝追加遅延なし（ヒットでの進塁・フォース進塁・進塁打）。
+    /// </summary>
+    public double ExtraStartDelaySeconds { get; init; }
 }
 
 /// <summary>
@@ -224,7 +231,7 @@ public static class BaserunningModel
         }
 
         // 三塁走者（先行）: テーブル時は無条件生還。フォース時（満塁）は自重不可＝RNGを消費せず確定生還
-        // （凡打側の r3Forced と同じ流儀。物理レース化は #89 で扱う）。
+        // （凡打側の r3Forced と同じ流儀。時間の勝負にはしていない＝ルール上の確定進塁）。
         if (r3 is not null)
         {
             if (r3Forced)
@@ -493,12 +500,12 @@ public static class BaserunningModel
                 if (HomePlayResolver.Resolve(r3, 3, hforce.Situation, hforce.Field, coeff, rng, delay) == HomePlayResult.Safe)
                 {
                     runs++;
-                    mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = forceHomeCloseCall });
+                    mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay });
                 }
                 else
                 {
                     extraOuts++; homeOuts++; // 本塁封殺（フォースアウト）
-                    mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = forceHomeCloseCall });
+                    mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay });
                 }
                 bases.Third = null;
                 r3 = null;
@@ -531,12 +538,12 @@ public static class BaserunningModel
                     if (HomePlayResolver.Resolve(r3, 3, hi.Situation, hi.Field, coeff, rng, delay) == HomePlayResult.Safe)
                     {
                         runs++;
-                        mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = backHomeCloseCall });
+                        mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay });
                     }
                     else
                     {
                         extraOuts++; homeOuts++; // バックホーム憤死（本塁で刺殺）
-                        mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = backHomeCloseCall });
+                        mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay });
                     }
                     bases.Third = null;
                     r3 = null;
