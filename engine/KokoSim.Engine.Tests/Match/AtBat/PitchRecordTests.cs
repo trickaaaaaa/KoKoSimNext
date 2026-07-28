@@ -222,4 +222,72 @@ public sealed class PitchRecordTests
 
         Assert.True(checkedRecords > 50, $"検証件数が少ない（{checkedRecords}）");
     }
+
+    // --- BattedBall 観測（Issue #313: ファウルの打球データ） ---
+
+    /// <summary>
+    /// <see cref="PitchRecord.BattedBall"/> は「コンタクトが実際に物理層（初速・角度・方向）を生成し、
+    /// かつ FieldingResolver が方位角±45°超えでファウルと裁いた」経路だけが非null になる。
+    /// 確率だけで決まる「当たったが物理を生成しない」ファウル（<see cref="BattingCoefficients.FoulShare"/> 経路）
+    /// は解決済みの値そのものが存在しないため null のまま（設計書15 §4「解決済みの値の写しのみ」）。
+    /// 特定の乱数列を手で組む代わりに多数の打席を回し、両方の経路が実際に現れること・非nullのときは
+    /// 常に FieldingResolver と同じファウル判定基準（|BearingDeg| &gt; 45°）を満たすことを固定する。
+    /// </summary>
+    [Fact]
+    public void FoulBattedBall_PopulatedOnlyWhenPhysicsWasGenerated_AndMatchesFoulBearing()
+    {
+        var ctx = new AtBatContext { Fielders = Field.StandardAlignment() };
+        var foulsWithBall = new List<BattedBall>();
+        var foulsWithoutBall = 0;
+
+        foreach (var (_, batter, pitcher) in Matchups())
+        {
+            for (ulong seed = 1; seed <= 150; seed++)
+            {
+                var session = AtBatSession.Begin(batter, pitcher, ctx);
+                var rng = new Xoshiro256Random(seed);
+                while (!session.IsComplete) session.ThrowNextPitch(rng);
+
+                foreach (var rec in session.Result.PitchLog!)
+                {
+                    if (rec.Kind != PitchKind.Foul) continue;
+                    if (rec.BattedBall is { } ball) foulsWithBall.Add(ball);
+                    else foulsWithoutBall++;
+                }
+            }
+        }
+
+        Assert.True(foulsWithBall.Count > 0, "物理層を持つファウル（方位角超え経路）が1件も観測されなかった");
+        Assert.True(foulsWithoutBall > 0, "物理層を持たないファウル（FoulShare経路）が1件も観測されなかった");
+        Assert.All(foulsWithBall, b => Assert.True(System.Math.Abs(b.BearingDeg) > 45.0,
+            $"BattedBall はあるのに方位角がファウル域外 (BearingDeg={b.BearingDeg})"));
+    }
+
+    /// <summary>バント試行のファウルは打球データを持たない（BuntResolver は物理層を生成しないため）。</summary>
+    [Fact]
+    public void BuntFoul_NeverHasBattedBall()
+    {
+        var ctx = new AtBatContext { Fielders = Field.StandardAlignment() };
+        var batter = new BatterAttributes { Contact = 55 };
+        var bunter = new Player { Bunt = 55, Speed = 60 };
+        var pitcher = PitcherAttributes.LeagueAverage;
+        var buntFouls = 0;
+
+        for (ulong seed = 1; seed <= 200; seed++)
+        {
+            var session = AtBatSession.Begin(batter, pitcher, ctx, batterPlayer: bunter);
+            var rng = new Xoshiro256Random(seed);
+            while (!session.IsComplete)
+                session.ThrowNextPitch(rng, KokoSim.Engine.Match.Tactics.PitchBattingOverride.Bunt);
+
+            foreach (var rec in session.Result.PitchLog!)
+            {
+                if (rec.Kind != PitchKind.Foul) continue;
+                buntFouls++;
+                Assert.Null(rec.BattedBall);
+            }
+        }
+
+        Assert.True(buntFouls > 0, "バントのファウルが1件も観測されなかった（テスト条件を見直す）");
+    }
 }

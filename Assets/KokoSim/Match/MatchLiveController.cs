@@ -104,10 +104,13 @@ namespace KokoSim.Unity.Match
         // ×4速時は酔い防止のため強制的に全景固定へ戻す（スキップは委任でその場で試合が終わるため対象外）。
         private Button _camWork;
         private bool _cameraWorkWanted;
-        // 対決ビュー（design-18 §7-1 A案）の配線スパイク。盤面⇄対決の切替トグル（試験導線）。
-        // 実体は DuelStageRig（UBC素体のループ芝居・12fps量子化）。エンジンpitch進行との同期は§7-2で接続する。
+        // 対決ビュー（design-18 §7-1 A案）。既定の開始ビュー（issue #312）で、インプレー打球の間だけ
+        // 俯瞰へ自動で切り替わる。実体は DuelStageRig（UBC素体のループ芝居・12fps量子化）。
         private Button _duelBtn;
         private bool _duelOn;
+        // ユーザーが手動で対決ビューをOFF（俯瞰固定）にしたか。true の間は自動切替（打球/次打席）を止める。
+        // 再度手動でONにすると自動切替も復帰する（issue #312）。
+        private bool _duelManualOff;
         private DuelStageRig _duelRig;
         private DuelViewElement _duelImg;
         private VisualElement _duelHost, _fieldHost;
@@ -154,6 +157,12 @@ namespace KokoSim.Unity.Match
         private bool _pitchBallVisible;   // 投球フェーズで今の1球の投球軌道を流しているか（#5）。
         private bool _pitchCallDone;      // 今の1球の判定表示＋カウント更新を済ませたか（対決ビュー中は次リリースと分離）。
         private bool _pitchFirstPending;  // 対決ビューの初球ワインドアップ待ち（時計が0に達したらBeginPitchBall(0)）。
+        // ファウル打球の俯瞰表示（issue #313）。非nullの間＝今の1球がファウル打球の再生中で、値＝着地まで
+        // 保持すべき最短表示秒（次の1球へ切り替える interval をこの秒数まで延ばす）。
+        private float? _foulFlightHoldSeconds;
+        // BeginPitchBall が仕込んだ「この1球のファウル打球タイムライン」。pitchIntervalSeconds 到達時に
+        // Update() 側で表示へ差し替える（投球セグメントの二重表示を避けるため, issue #313）。
+        private PlaybackPlay _pendingFoulFlight;
 
         // 対決ビューの1球ペーシング（フル振りかぶり再生）を使うか（design-18 §7-2）。
         private bool DuelPacingActive => _duelOn && _duelRig != null && _duelRig.Available;
@@ -241,6 +250,7 @@ namespace KokoSim.Unity.Match
             _duelImg = null;
             _duelBtn = _root.Q<Button>("duel-view");
             if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
+            InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
             ApplyDuelViewState();
             WirePitchTactics();
 
@@ -340,6 +350,7 @@ namespace KokoSim.Unity.Match
             _speedHandlers.Clear();
             _cameraWorkWanted = false;
             _duelOn = false;
+            _duelManualOff = false;
         }
 
         // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
@@ -752,6 +763,8 @@ namespace KokoSim.Unity.Match
         // 現在ロード中の打席の再生を頭から始める（FinishAdvance の後半。スクショ用の打席リスタートと共用）。
         private void BeginPaReplay()
         {
+            SetDuelViewAuto(true);   // 次打席の開始で対決ビューへ復帰（issue #312。手動OFF中は据え置き）
+
             // BSO 初期化: アウト＝打席前、塁ダイヤ＝打席前、カウント＝0-0。結果チップは投球フェーズ中は隠す。
             SetOuts(_current.OutsBefore);
             SetBases(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
@@ -860,12 +873,16 @@ namespace KokoSim.Unity.Match
         };
 
         // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
-        // 捕手からの返球は描画しない。打球になる最後の1球だけは、続く打球タイムラインが同じ投球
-        // セグメントを先頭に持つので二重に描かず、静止表示のまま打球フェーズへ渡す。
+        // 捕手からの返球は描画しない。打球になる最後の1球・ファウル打球データを持つ1球は、続く
+        // タイムラインが同じ投球セグメントを先頭に持つので二重に描かず、静止表示のまま渡す
+        // （ファウルは pitchIntervalSeconds 到達時に Update() 側で差し替える, issue #313）。
         private void BeginPitchBall(int index)
         {
             var last = _current.PitchSeq.Pitches.Count - 1;
-            _pitchBallVisible = _current.Play == null || index < last;
+            var pt = _current.PitchSeq.Pitches[index];
+            _pendingFoulFlight = pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Foul ? pt.FoulFlight : null;
+
+            _pitchBallVisible = _pendingFoulFlight == null && (_current.Play == null || index < last);
             if (_pitchBallVisible)
                 _view.SetPlay(PitchPlaybackFactory.PitchOnly(
                     _current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore));
@@ -876,8 +893,7 @@ namespace KokoSim.Unity.Match
             // フォロースルー→次の振りかぶりの切り替えを予約し、1球の結果で打者・捕手の一発物を分岐する（第2弾）
             if (_duelOn && _duelRig != null)
             {
-                var kind = _current.PitchSeq.Pitches[index].Kind;
-                var outcome = kind switch
+                var outcome = pt.Kind switch
                 {
                     KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike => DuelPitchOutcome.CalledStrike,
                     KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike => DuelPitchOutcome.SwingMiss,
@@ -898,6 +914,7 @@ namespace KokoSim.Unity.Match
             _t = 0;
             if (_current.Play != null)
             {
+                SetDuelViewAuto(false);   // インプレー打球は打った瞬間から俯瞰で行方を見せる（issue #312）
                 _view.SetPlay(_current.Play);
                 RenderReplayFrame();
             }
@@ -931,7 +948,7 @@ namespace KokoSim.Unity.Match
             // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
             _view.PlaybackSpeed = _speed;
 
-            // 対決ビュー（試験導線）はポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
+            // 対決ビューはポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
             if (!_paused && _duelOn) _duelRig?.Tick(Time.deltaTime * _speed);
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
@@ -964,7 +981,7 @@ namespace KokoSim.Unity.Match
                     _pitchFirstPending = false;
                     BeginPitchBall(0);
                 }
-                // 1球ぶんの投球軌道を毎フレーム進める（0.45s で本塁到達。以降は到達点で保持）。
+                // 1球ぶんの投球軌道（またはファウル打球の再生）を毎フレーム進める。
                 if (_pitchBallVisible) _view.SetTime(_pitchClock);
                 var pitches = _current.PitchSeq.Pitches;
                 // 判定＋カウント更新はリリース+pitchIntervalSeconds（従来タイミング）。
@@ -981,13 +998,33 @@ namespace KokoSim.Unity.Match
                         EnterBattedBallOrHold();   // 最後の1球は従来どおり判定直後に先へ進む
                         return;
                     }
+                    if (_pendingFoulFlight != null)
+                    {
+                        // ファウルでも打球は飛ぶので、打った瞬間から俯瞰へ切り替えて行方を見せる（issue #313）。
+                        // 復帰（対決ビューへ）は打球が地面へ着いてから＝次の1球のワインドアップに合わせる。
+                        SetDuelViewAuto(false);
+                        _view.SetPlay(_pendingFoulFlight);
+                        _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
+                        _pitchBallVisible = true;
+                        _pitchClock = 0f;   // このタイムラインの頭から（投球セグメントの二重表示を避ける）
+                        _view.SetTime(_pitchClock);
+                        _pendingFoulFlight = null;
+                    }
                 }
-                float interval = DuelPacingActive ? duelPitchIntervalSeconds : pitchIntervalSeconds;
-                while (_inPitchPhase && _pitchCallDone && _pitchClock >= interval)
+                while (_inPitchPhase && _pitchCallDone)
                 {
+                    var interval = DuelPacingActive ? duelPitchIntervalSeconds : pitchIntervalSeconds;
+                    if (_foulFlightHoldSeconds is { } hold) interval = Mathf.Max(interval, hold);
+                    if (_pitchClock < interval) break;
+
                     _pitchClock -= interval;
                     _pitchCallDone = false;
                     _pitchIdx++;
+                    if (_foulFlightHoldSeconds.HasValue)
+                    {
+                        _foulFlightHoldSeconds = null;
+                        SetDuelViewAuto(true);   // ファウル打球が地面へ着いたら対決ビューへ復帰（issue #313）
+                    }
                     BeginPitchBall(_pitchIdx);   // 次の1球の投球軌道を頭から流す
                 }
                 return;
@@ -1267,22 +1304,53 @@ namespace KokoSim.Unity.Match
             _camWork?.EnableInClassList("chip-btn--on", _cameraWorkWanted);
         }
 
-        // 対決ビュー（design-18 §7-1 A案）の試験トグル。アセット未導入環境では何もしない（警告ログのみ）。
+        // 試合開始の既定ビュー（issue #312）: 対決ビューから始める。DuelStageRig が使えない環境
+        // （3Dアセット未導入・生成失敗）では従来どおり俯瞰にフォールバックする。
+        private void InitDuelViewDefault()
+        {
+            _duelRig ??= new DuelStageRig();
+            if (!_duelRig.Available) { _duelOn = false; return; }
+            EnsureDuelImg();
+            _duelOn = true;
+        }
+
+        private void EnsureDuelImg()
+        {
+            if (_duelImg == null)
+            {
+                _duelImg = new DuelViewElement();
+                _duelHost?.Add(_duelImg);
+            }
+            _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
+            _duelImg.Bind(_duelRig.Target);
+        }
+
+        // 対決ビューの手動トグル。アセット未導入環境では何もしない（警告ログのみ）。手動でOFFにした試合中は
+        // 打球/次打席の自動切替も止め、再度手動でONにすると自動切替が復帰する（issue #312）。
         private void OnToggleDuelView()
         {
             if (!_duelOn)
             {
                 _duelRig ??= new DuelStageRig();
                 if (!_duelRig.Available) return;
-                if (_duelImg == null)
-                {
-                    _duelImg = new DuelViewElement();
-                    _duelHost?.Add(_duelImg);
-                }
-                _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
-                _duelImg.Bind(_duelRig.Target);
+                EnsureDuelImg();
             }
             _duelOn = !_duelOn;
+            _duelManualOff = !_duelOn;
+            ApplyDuelViewState();
+        }
+
+        // 打席進行に連動した自動切替（次打席開始→対決 / インプレー打球→俯瞰）。手動OFF中は何もしない。
+        private void SetDuelViewAuto(bool on)
+        {
+            if (_duelManualOff || _duelOn == on) return;
+            if (on)
+            {
+                _duelRig ??= new DuelStageRig();
+                if (!_duelRig.Available) return;
+                EnsureDuelImg();
+            }
+            _duelOn = on;
             ApplyDuelViewState();
         }
 
