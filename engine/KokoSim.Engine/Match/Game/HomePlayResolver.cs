@@ -53,18 +53,27 @@ public static class HomePlayResolver
         => new(3, field.ThirdBase, c.ThirdTagSeconds, c.ThirdSuccessBias, c.ThirdMarginScale);
 
     /// <summary>
+    /// 塁上の走者の時計の文脈（Issue #316）。二次リードで前に出ており、走塁判断ぶんの反応遅延がある。
+    /// 判定・表示ともこの文脈で <see cref="RunnerClock"/> を呼べば同じ時刻になる。
+    /// </summary>
+    public static RunnerContext RunnerContextOf(Player runner, BaserunningCoefficients c)
+        => new(
+            StartDelaySeconds:
+                Math.Max(0.10, c.HomeRunnerReactionIntercept - runner.Baserunning * c.HomeRunnerReactionSlope),
+            LeadDistanceM: c.HomeLeadDistanceM,
+            TopSpeedFactor: c.RunnerTopSpeedFactor,
+            TurnSecondsPerBase: c.RunnerBaseTurnSeconds,
+            RoundsStartingBase: false);
+
+    /// <summary>
     /// 走者が目標塁へ到達する所要時間[s]（接触基準）。fromBase: 0〜3、toBase: 3=三塁/4=本塁。
     /// extraStartDelaySeconds=打球を読んでから走り出す等の追加遅延（G1ゴロ本塁レースで正値。ヒットは0）。
     /// </summary>
     public static double RunnerTimeSeconds(
         Player runner, int fromBase, int toBase, FieldGeometry field, BaserunningCoefficients c,
         double extraStartDelaySeconds = 0.0)
-    {
-        var startDelay = Math.Max(0.10, c.HomeRunnerReactionIntercept - runner.Baserunning * c.HomeRunnerReactionSlope);
-        var basesToGo = toBase - fromBase; // 本塁: 3塁=1,2塁=2,1塁=3 / 三塁: 1塁=2
-        var distance = Math.Max(0.0, basesToGo * field.BaseDistanceM - c.HomeLeadDistanceM);
-        return distance / runner.ToFielder().SprintSpeedMps + startDelay + extraStartDelaySeconds;
-    }
+        => RunnerClock.SegmentSeconds(
+            runner, fromBase, toBase, RunnerContextOf(runner, c), field, extraStartDelaySeconds);
 
     /// <summary>本塁への走者所要時間[s]（後方互換: toBase=4 固定）。</summary>
     public static double RunnerTimeSeconds(

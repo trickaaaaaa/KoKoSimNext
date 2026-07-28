@@ -1164,7 +1164,7 @@ public static class GameEngine
             {
                 if (runnerMoves.Count > 0)
                 {
-                    timeline = Match.Timeline.TimelineBuilder.AppendRunnerLegs(timeline, runnerMoves, ctx.Field);
+                    timeline = Match.Timeline.TimelineBuilder.AppendRunnerLegs(timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding);
 
                     // 併殺(二塁封殺)かつ内野ゴロなら、ボールの送球連鎖を 6-4-3 型に差し替える（設計書12 §2, F1 Slice 3）。
                     // 野選（FC, design-14 P1-1）も同じ二塁封殺 RunnerMove を積むが打者は生存するため、
@@ -1192,7 +1192,7 @@ public static class GameEngine
                 timeline = Match.Timeline.TimelineBuilder.AppendHeldRunners(
                     timeline, preFirst, preSecond, preThird,
                     preFirstPlayer, preSecondPlayer, preThirdPlayer,
-                    runnerMoves, ctx.Field, outsBefore, res.Play);
+                    runnerMoves, ctx.Field, outsBefore, res.Play, paBaserunning);
 
                 // バックホーム: 本塁で憤死した走者、または外野安打で生還した走者がいれば送球連鎖
                 // （外野→中継→本塁）を描く（設計書12 §3, F2 Slice D＋#7 セーフ生還も描く）。

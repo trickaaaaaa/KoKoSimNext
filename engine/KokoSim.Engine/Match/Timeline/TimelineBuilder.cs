@@ -357,7 +357,8 @@ public static class TimelineBuilder
     /// 走者が接触時刻まで盤面から消える（＝塁上に居ないように見える）。表示専用・結果不変。
     /// </summary>
     public static PlayTimeline AppendRunnerLegs(
-        PlayTimeline timeline, IReadOnlyList<RunnerMove> moves, FieldGeometry field)
+        PlayTimeline timeline, IReadOnlyList<RunnerMove> moves, FieldGeometry field,
+        BaserunningCoefficients baserunning, FieldingCoefficients fielding)
     {
         if (moves.Count == 0) return timeline;
 
@@ -366,16 +367,22 @@ public static class TimelineBuilder
         var runnerIndex = 0;
         foreach (var m in moves)
         {
-            var speed = Math.Max(4.0, m.Runner.ToFielder().SprintSpeedMps);
-            var perBase = field.BaseDistanceM / speed + 0.35; // ベースごとの所要（減速・踏み直し込みの簡略）
+            // 走者の時計は判定と共通（Issue #316）。打席から走り出す打者走者と、塁上でリードを
+            // 取ってから走る走者は物理が違うので、式ではなく文脈で分ける。以前はここだけ
+            // 「27.43/速度 + 0.35」という第4の式を持っていて、判定より 0.58〜1.63 秒遅かった。
+            var fromBox = m.FromBase == 0;
+            var speed = m.Runner.ToFielder().SprintSpeedMps;
+            var ctx = fromBox
+                ? ExtraBaseResolver.BatterContextOf(fielding)
+                : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
 
-            var label = m.FromBase == 0 ? "打" : $"走{++runnerIndex}";
-            var startBase = m.FromBase == 0 ? 1 : m.FromBase; // 打者は一塁到達後の続きから
-            var t = m.FromBase == 0
+            var label = fromBox ? "打" : $"走{++runnerIndex}";
+            var startBase = fromBox ? 1 : m.FromBase;          // 打者は一塁到達後の続きから
+            var t = fromBox
                 ? FindBatterArrive(timeline)                   // 一塁到達時刻から続ける
-                : ContactAt + 0.10;
+                : ContactAt + ctx.StartDelaySeconds + m.ExtraStartDelaySeconds;
 
-            if (m.FromBase == 0 && m.ToBase <= 1) continue;    // 打者の一塁までは既定レッグ
+            if (fromBox && m.ToBase <= 1) continue;            // 打者の一塁までは既定レッグ
 
             // 塁上の走者は移動開始まで元の塁に立たせる（待機レッグ）。打者走者は本塁の既定レッグがあるため対象外。
             if (m.FromBase >= 1 && m.ToBase > m.FromBase && t > 0)
@@ -388,7 +395,14 @@ public static class TimelineBuilder
             {
                 var from = BaseName(b);
                 var to = BaseName(b + 1);
-                var t1 = t + perBase;
+                // 打者走者は塁打数判定と同じ「1塁ぶんを積む」書き方、塁上の走者は本塁レースと同じ
+                // 「出発塁からの累積」。どちらも判定側とまったく同じ数式・同じ順序なので、
+                // 最終レッグの終端がそのまま判定に使われた到達時刻になる。
+                // （累積で書くのは二次リードを塁ごとに二重に引かないため）
+                var t1 = fromBox
+                    ? t + RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field)
+                    : ContactAt + RunnerClock.SegmentSeconds(
+                        speed, m.FromBase, b + 1, ctx, field, m.ExtraStartDelaySeconds);
                 legs.Add(new RunnerLeg
                 {
                     Label = label,
@@ -432,7 +446,7 @@ public static class TimelineBuilder
         PlayTimeline timeline, bool first, bool second, bool third,
         Player? firstPlayer, Player? secondPlayer, Player? thirdPlayer,
         IReadOnlyList<RunnerMove> moves, FieldGeometry field,
-        int outsBefore, FieldingPlay? play)
+        int outsBefore, FieldingPlay? play, BaserunningCoefficients baserunning)
     {
         var movedFrom = new HashSet<int>();
         foreach (var m in moves) movedFrom.Add(m.FromBase); // 1/2/3（0=打者）
@@ -447,12 +461,15 @@ public static class TimelineBuilder
             var pt = BasePoint(field, name);
             if (autoRun && runner is not null)
             {
-                var t0 = ContactAt + 0.10;
+                // 走者の時計は判定と共通（Issue #316）。塁上からのスタートなので
+                // AppendRunnerLegs の「塁上から」文脈とまったく同じ扱いにする。
+                var ctx = HomePlayResolver.RunnerContextOf(runner, baserunning);
+                var t0 = ContactAt + ctx.StartDelaySeconds;
                 legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = pt, OutAtEnd = false });
                 if (catchAt > t0)
                 {
-                    var speed = Math.Max(4.0, runner.ToFielder().SprintSpeedMps);
-                    var perBase = field.BaseDistanceM / speed + 0.35; // AppendRunnerLegs と同式
+                    var speed = runner.ToFielder().SprintSpeedMps;
+                    var perBase = RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field) - ctx.StartDelaySeconds;
                     var frac = Math.Clamp((catchAt - t0) / perBase, 0.0, 1.0);
                     var next = BasePoint(field, nextName);
                     var stop = new TimelinePoint(pt.X + (next.X - pt.X) * frac, pt.Z + (next.Z - pt.Z) * frac);

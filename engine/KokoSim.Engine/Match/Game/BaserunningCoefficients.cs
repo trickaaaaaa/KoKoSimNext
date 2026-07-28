@@ -138,6 +138,17 @@ public sealed record BaserunningCoefficients
     public double HomeRunnerReactionSlope { get; init; } = 0.004;
     /// <summary>塁上の二次リード分の距離短縮[m]（残り塁間距離から差し引く）。</summary>
     public double HomeLeadDistanceM { get; init; } = 3.5;
+    /// <summary>
+    /// 塁上の走者のトップスピード係数（Issue #316）。リードを取って動き出している走者は
+    /// 静止スタートより速い。打者走者側の <c>FieldingCoefficients.RunningTopSpeedFactor</c> と同値。
+    /// </summary>
+    public double RunnerTopSpeedFactor { get; init; } = 1.15;
+    /// <summary>
+    /// 塁上の走者がベースを1つ回るたびの損失[s]（Issue #316）。払うのは**目標塁の手前で回る塁**の数
+    /// （三塁→本塁は0回、二塁→本塁は三塁を回るので1回）。
+    /// 打者走者側の <c>FieldingCoefficients.BaseTurnSeconds</c> と同値。
+    /// </summary>
+    public double RunnerBaseTurnSeconds { get; init; } = 0.30;
     /// <summary>外野手の捕球→送球（グラブ離し）[s]。</summary>
     public double OutfieldTransferSeconds { get; init; } = 0.60;
     /// <summary>中継（カットマン）の握り替え[s]。</summary>
@@ -153,9 +164,11 @@ public sealed record BaserunningCoefficients
     /// <summary>margin→生還確率の logistic 幅[s]。</summary>
     public double HomeMarginScale { get; init; } = 0.25;
     /// <summary>生還確率バイアス[s]（憤死頻度・得点帯を現実値へ寄せる校正項）。
-    /// Slice C の Heavy 実測で 2.00 に着地＝憤死≈0.26/試合・得点≈4.08/チーム（帯 3.5–6.0 内）。
-    /// 走者物理の保守性（小さい二次リード・加速ランプ非モデル化・スプリント下限）をこの秒オフセットで吸収する。</summary>
-    public double HomeSuccessBias { get; init; } = 2.00;
+    /// 走者物理の保守性をこの秒オフセットで吸収する。
+    /// Issue #316 で走者の加速ランプ（トップスピード係数）をモデル化し、三塁→本塁が 0.43s 速くなったため、
+    /// 吸収していたぶんを差し引いて 2.00 → 1.57（実測に合わせたのではなく、直した秒数をそのまま引いた値）。
+    /// Heavy 実測: 本塁憤死 0.324–0.338/試合・得点 6.64–6.66/チーム（いずれも帯内）。</summary>
+    public double HomeSuccessBias { get; init; } = 1.57;
     /// <summary>ゴロ凡打で三塁走者が本塁を狙う際の追加スタート遅延[s]（G1, 設計書12 §4）。
     /// ヒットの走者(既に進行中)と違い、打球を読んでから走り出すぶん遅い＝内野前進で刺せる余地を作る。
     /// 1.55 で「内野前進は生還率を抑える(通常より下)＝AIの前進判断が正しく報われる」。</summary>
@@ -170,10 +183,11 @@ public sealed record BaserunningCoefficients
     /// 送り/自重の境界を跨ぐよう感度を持たせる（Issue #89 の主眼）。</summary>
     public double ThirdMarginScale { get; init; } = 0.45;
     /// <summary>三塁到達確率バイアス[s]（一塁→三塁の到達率・三塁憤死頻度を現実値へ寄せる校正項）。
-    /// 走者物理の保守性（小さい二次リード・加速ランプ非モデル化・スプリント下限）を吸収する。
-    /// Heavy 実測で校正（Issue #89）: 1.50 で得点≈5.0/チーム（帯内・変更前5.19からの微減）、
-    /// 三塁憤死≈0.20/試合（帯 0.02–0.40 内）。</summary>
-    public double ThirdSuccessBias { get; init; } = 1.50;
+    /// 走者物理の保守性を吸収する。
+    /// Issue #316 で加速ランプとベースを回る損失をモデル化し、一塁→三塁が 0.62s 速くなったため、
+    /// 吸収していたぶんを差し引いて 1.50 → 0.88（直した秒数をそのまま引いた値）。
+    /// Heavy 実測: 三塁憤死 0.219–0.239/試合＝#316 前（0.222–0.234）とほぼ同値に戻る。</summary>
+    public double ThirdSuccessBias { get; init; } = 0.88;
 
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは走者の時計の起点が「捕球の瞬間」である点だけが本塁クロスプレーと異なる。走者は捕球時刻に

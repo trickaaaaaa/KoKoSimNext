@@ -557,6 +557,8 @@ public static class CoefficientsLoader
         public double HomeRunnerReactionIntercept { get; set; } = D.HomeRunnerReactionIntercept;
         public double HomeRunnerReactionSlope { get; set; } = D.HomeRunnerReactionSlope;
         public double HomeLeadDistanceM { get; set; } = D.HomeLeadDistanceM;
+        public double RunnerTopSpeedFactor { get; set; } = D.RunnerTopSpeedFactor;
+        public double RunnerBaseTurnSeconds { get; set; } = D.RunnerBaseTurnSeconds;
         public double OutfieldTransferSeconds { get; set; } = D.OutfieldTransferSeconds;
         public double RelayTransferSeconds { get; set; } = D.RelayTransferSeconds;
         public double RelayThrowSpeedMps { get; set; } = D.RelayThrowSpeedMps;
@@ -652,6 +654,8 @@ public static class CoefficientsLoader
             HomeRunnerReactionIntercept = HomeRunnerReactionIntercept,
             HomeRunnerReactionSlope = HomeRunnerReactionSlope,
             HomeLeadDistanceM = HomeLeadDistanceM,
+            RunnerTopSpeedFactor = RunnerTopSpeedFactor,
+            RunnerBaseTurnSeconds = RunnerBaseTurnSeconds,
             OutfieldTransferSeconds = OutfieldTransferSeconds,
             RelayTransferSeconds = RelayTransferSeconds,
             RelayThrowSpeedMps = RelayThrowSpeedMps,

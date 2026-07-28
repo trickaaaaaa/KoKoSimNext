@@ -149,6 +149,20 @@ public static class ExtraBaseResolver
         => readySeconds + distanceM / armMps * (1.0 + distanceM * c.ThrowDistanceDragPerM);
 
     /// <summary>
+    /// 打者走者の時計の文脈（Issue #316）。打席から走り出すのでリードは無く、一塁を回った後は
+    /// 既に加速しきっているぶん速い（<c>RunningTopSpeedFactor</c>）。代わりにベースを回るたび
+    /// 減速・踏み直しで損する（<c>BaseTurnSeconds</c>）。スタート遅延は
+    /// <c>batterToFirstSeconds</c> 側に入っているのでここでは 0。
+    /// </summary>
+    public static RunnerContext BatterContextOf(FieldingCoefficients c)
+        => new(
+            StartDelaySeconds: 0.0,
+            LeadDistanceM: 0.0,
+            TopSpeedFactor: c.RunningTopSpeedFactor,
+            TurnSecondsPerBase: c.BaseTurnSeconds,
+            RoundsStartingBase: true);
+
+    /// <summary>
     /// 回収した野手の送球 vs 打者走者の時間比較で塁打数を決める。
     /// 二塁を狙えなければ単打、三塁まで狙えなければ二塁打。
     /// </summary>
@@ -163,8 +177,10 @@ public static class ExtraBaseResolver
         double ThrowArrivesAt(Vector3D target)
             => ThrowArriveSeconds(ready, (target - ball).Length, arm, c);
 
-        var sprint = batter.SpeedToFirstMps() * c.RunningTopSpeedFactor;
-        var perBase = field.BaseDistanceM / sprint + c.BaseTurnSeconds;
+        // 打者走者の塁間所要は走者の時計の「打席から」文脈（Issue #316）。一塁到達までは
+        // batterToFirstSeconds（打撃動作・左右差込み）なので、そこから1塁ずつ積む。
+        var perBase = RunnerClock.SegmentSeconds(
+            batter.SpeedToFirstMps(), 1, 2, BatterContextOf(c), field);
         var toSecond = batterToFirstSeconds + perBase;
         var toThird = toSecond + perBase;
 

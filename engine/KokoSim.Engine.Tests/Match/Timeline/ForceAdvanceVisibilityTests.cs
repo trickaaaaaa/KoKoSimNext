@@ -20,6 +20,8 @@ namespace KokoSim.Engine.Tests.Match.Timeline;
 public sealed class ForceAdvanceVisibilityTests
 {
     private static readonly FieldGeometry Field = new();
+    private static readonly BaserunningCoefficients Baserunning = new();
+    private static readonly FieldingCoefficients Fielding = new();
 
     private static FieldingPlay GrounderOut() => new()
     {
@@ -47,11 +49,11 @@ public sealed class ForceAdvanceVisibilityTests
     {
         // 一塁走者のフォース進塁（1→2）。接触前（t=0 = 投球フェーズの固定時刻）でも一塁に立っていること。
         var moves = new List<RunnerMove> { new(new Player { Speed = 50 }, 1, 2, Out: false) };
-        var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field);
+        var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field, Baserunning, Fielding);
         tl = TimelineBuilder.AppendHeldRunners(
             tl, first: true, second: false, third: false,
             firstPlayer: null, secondPlayer: null, thirdPlayer: null,
-            moves, Field, outsBefore: 0, GrounderOut());
+            moves, Field, outsBefore: 0, GrounderOut(), Baserunning);
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var runner = Assert.Single(play.Runners, r => r.Label == "走1");
@@ -73,11 +75,11 @@ public sealed class ForceAdvanceVisibilityTests
             new(new Player { Speed = 50 }, 2, 3, Out: false),
             new(new Player { Speed = 50 }, 1, 2, Out: false),
         };
-        var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field);
+        var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field, Baserunning, Fielding);
         tl = TimelineBuilder.AppendHeldRunners(
             tl, first: true, second: true, third: false,
             firstPlayer: null, secondPlayer: null, thirdPlayer: null,
-            moves, Field, outsBefore: 0, GrounderOut());
+            moves, Field, outsBefore: 0, GrounderOut(), Baserunning);
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var fromSecond = Assert.Single(play.Runners, r => r.Label == "走1"); // moves の順にラベル付与
@@ -94,7 +96,7 @@ public sealed class ForceAdvanceVisibilityTests
     {
         // 併殺の二塁封殺（1→2 でアウト）。接触前は一塁に立ち、封殺の瞬間（hideAt）に消える。
         var moves = new List<RunnerMove> { new(new Player { Speed = 50 }, 1, 2, Out: true) };
-        var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field);
+        var tl = TimelineBuilder.AppendRunnerLegs(GrounderTimeline(), moves, Field, Baserunning, Fielding);
 
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var runner = Assert.Single(play.Runners, r => r.Label == "走1");
