@@ -191,12 +191,15 @@ public sealed class TimelineTests
     private static FieldingPlay GroundOutAt(FieldPosition fielderRole, double bearingDeg, double rangeM)
     {
         var bearingRad = bearingDeg * System.Math.PI / 180.0;
+        var x = rangeM * System.Math.Sin(bearingRad);
+        var z = rangeM * System.Math.Cos(bearingRad);
         return new FieldingPlay
         {
             Result = BattedBallResult.Out,
-            LandingX = rangeM * System.Math.Sin(bearingRad), LandingZ = rangeM * System.Math.Cos(bearingRad),
+            LandingX = x, LandingZ = z,
             HangTimeSeconds = 0.3, ApexHeightM = 0.4,
             RangeM = rangeM, BearingDeg = bearingDeg, FielderRole = fielderRole,
+            FieldedX = x, FieldedZ = z,   // 実エンジン出力と同じく回収点を必ず埋める（FieldingResolver.Base）
             FieldedAtSeconds = 1.0, ThrowArriveSeconds = 2.0, BatterToFirstSeconds = 4.2, IsFly = false,
         };
     }
@@ -246,6 +249,7 @@ public sealed class TimelineTests
         Result = BattedBallResult.Out,
         LandingX = -9.0, LandingZ = 30.0, HangTimeSeconds = 0.3, ApexHeightM = 0.4,
         RangeM = 31.3, BearingDeg = -16.0, FielderRole = FieldPosition.Shortstop,
+        FieldedX = -9.0, FieldedZ = 30.0,   // 実捕球点（回収点は全経路で埋まる）
         FieldedAtSeconds = 1.4, ThrowArriveSeconds = 3.0, BatterToFirstSeconds = 4.2, IsFly = false,
     };
 
@@ -281,6 +285,7 @@ public sealed class TimelineTests
         {
             Result = BattedBallResult.Out, LandingX = 0, LandingZ = 88, HangTimeSeconds = 3.5, ApexHeightM = 25,
             RangeM = 88, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+            FieldedX = 0, FieldedZ = 88,   // 空中捕球＝回収点は着地点
             FieldedAtSeconds = 3.5, BatterToFirstSeconds = 4.2, IsFly = true,
         };
         var tl = TimelineBuilder.BuildBattedBall(
@@ -392,6 +397,7 @@ public sealed class TimelineTests
         {
             Result = result, LandingX = 0, LandingZ = 40, HangTimeSeconds = 1, ApexHeightM = 1,
             RangeM = 40, BearingDeg = 0, FielderRole = role, IsFly = isFly,
+            FieldedX = 0, FieldedZ = 40,
             ThrowArriveSeconds = infieldThrow ? 3.0 : (double?)null, BatterToFirstSeconds = 4.2,
         };
         Assert.Equal(expected, TimelineBuilder.DescribeResult(play));
@@ -466,6 +472,7 @@ public sealed class TimelineTests
         {
             Result = BattedBallResult.Out, LandingX = 0, LandingZ = 88, HangTimeSeconds = 3.5, ApexHeightM = 25,
             RangeM = 88, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+            FieldedX = 0, FieldedZ = 88,   // 空中捕球＝回収点は着地点
             FieldedAtSeconds = 3.5, BatterToFirstSeconds = 4.2, IsFly = true,
         };
         var baseTl = TimelineBuilder.BuildBattedBall(
@@ -550,6 +557,7 @@ public sealed class TimelineTests
         Result = BattedBallResult.Single,
         LandingX = 0, LandingZ = landingZ, HangTimeSeconds = 1.2, ApexHeightM = 3.0,
         RangeM = landingZ, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+        FieldedX = 0, FieldedZ = landingZ,   // 回収点（実エンジン出力と同じく必ず埋まる）
         FieldedAtSeconds = 3.2, BatterToFirstSeconds = 4.2, IsFly = false,
         FielderThrowSpeedMps = 31.9,
     };
@@ -689,6 +697,380 @@ public sealed class TimelineTests
         Assert.Equal(2, throws.Count); // 外野→カット→三塁
         Assert.True(Near(throws[0].To, cutoffMove.To), "ボールの中継点が中継野手の立ち位置と一致しない");
         Assert.True(Near(throws[1].From, cutoffMove.To), "2本目送球の起点が中継野手の立ち位置と一致しない");
+    }
+
+    // ═══ Issue #301: 打球の回収点(FieldedX/Z・FieldedAtSeconds)を表示の単一ソースにする ═══
+
+    /// <summary>外野へ抜けた飛球の安打。着地点(90m)から回収点(102m)まで転がってから回収される。</summary>
+    private static FieldingPlay FlyHitWithRoll() => new()
+    {
+        Result = BattedBallResult.Double,
+        LandingX = 0, LandingZ = 90.0, HangTimeSeconds = 3.4, ApexHeightM = 18.0,
+        RangeM = 90.0, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+        FieldedX = 0, FieldedZ = 102.0,          // 着地後に12m転がった先で回収
+        FieldedAtSeconds = 5.1,                  // 着地(3.4s)より後＝転がっている区間がある
+        BatterToFirstSeconds = 4.2, IsFly = true,
+        FielderThrowSpeedMps = 33.0, FielderFielding = 55,
+    };
+
+    /// <summary>#301②: 外野飛球の安打は着地点で静止せず、回収点まで転がる区間を持つ。</summary>
+    [Fact]
+    public void OutfieldFlyHit_BallRollsFromLandingToFieldedPoint()
+    {
+        var field = new FieldGeometry();
+        var play = FlyHitWithRoll();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var flight = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
+        var roll = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Roll);
+
+        // 転がりは着地点から始まり、エンジンの回収点で終わる（表示側で独自の転がりを発明しない）。
+        Assert.Equal(play.LandingX, roll.From.X, 6);
+        Assert.Equal(play.LandingZ, roll.From.Z, 6);
+        Assert.Equal(play.FieldedX, roll.To.X, 6);
+        Assert.Equal(play.FieldedZ, roll.To.Z, 6);
+        // 時刻も着地→回収でエンジンの値どおり、かつ放物線と連続。
+        Assert.Equal(flight.T1, roll.T0, 6);
+        Assert.Equal(0.85 + play.HangTimeSeconds, roll.T0, 6);
+        Assert.Equal(0.85 + play.FieldedAtSeconds!.Value, roll.T1, 6);
+    }
+
+    /// <summary>#301②: 空中捕球（回収点＝着地点）では転がり区間を足さない（従来の絵のまま）。</summary>
+    [Fact]
+    public void CaughtFly_HasNoRollSegment()
+    {
+        var field = new FieldGeometry();
+        var play = new FieldingPlay
+        {
+            Result = BattedBallResult.Out, LandingX = 0, LandingZ = 88, HangTimeSeconds = 3.5, ApexHeightM = 25,
+            RangeM = 88, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
+            FieldedX = 0, FieldedZ = 88, FieldedAtSeconds = 3.5, BatterToFirstSeconds = 4.2, IsFly = true,
+        };
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        Assert.Contains(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Roll);
+    }
+
+    /// <summary>時刻 t のボール位置（再生器と同じ「セグメント間は最後の位置で保持」規則）。</summary>
+    private static TimelinePoint BallAt(PlayTimeline tl, double t)
+    {
+        TimelinePoint held = new(0, 0);
+        foreach (var s in tl.Ball)
+        {
+            if (t < s.T0) return held;
+            var u = System.Math.Min(1.0, (t - s.T0) / System.Math.Max(1e-9, s.T1 - s.T0));
+            var at = new TimelinePoint(s.From.X + (s.To.X - s.From.X) * u, s.From.Z + (s.To.Z - s.From.Z) * u);
+            if (t <= s.T1) return at;
+            held = new TimelinePoint(s.To.X, s.To.Z);
+        }
+        return held;
+    }
+
+    /// <summary>時刻 t の野手位置（再生器 PlaybackEvaluator.FielderAt と同じ線形累積・T1以降は保持）。</summary>
+    private static TimelinePoint FielderAt(PlayTimeline tl, FieldPosition role, TimelinePoint start, double t)
+    {
+        var pos = start;
+        foreach (var m in tl.Moves)
+        {
+            if (m.Role != role) continue;
+            if (t <= m.T0) break;
+            var u = System.Math.Min(1.0, (t - m.T0) / System.Math.Max(1e-9, m.T1 - m.T0));
+            pos = new TimelinePoint(pos.X + (m.To.X - pos.X) * u, pos.Z + (m.To.Z - pos.Z) * u);
+        }
+        return pos;
+    }
+
+    /// <summary>
+    /// #301①: 回収した野手は回収時刻までにボールへ到達している（＝ボールを持っているはずの時刻に
+    /// 野手とボールの座標が一致する）。修正前は野手の移動が「反応0.35s＋距離÷走力」の別計算で、
+    /// 回収時刻に間に合わず「誰も触っていないのにボールが動き出す」絵になっていた。
+    /// </summary>
+    [Fact]
+    public void RetrievingFielder_ReachesBallByFieldedTime_AndSharesCoordinates()
+    {
+        var field = new FieldGeometry();
+        var play = FlyHitWithRoll();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var fieldedAt = 0.85 + play.FieldedAtSeconds!.Value;
+        var role = play.FielderRole!.Value;
+
+        // 実捕球者の移動レッグは回収点で終わり、回収時刻までに着く。
+        var legs = tl.Moves.Where(m => m.Role == role && m.Task == FielderTask.FieldBall).ToList();
+        var leg = Assert.Single(legs);
+        Assert.Equal(play.FieldedX, leg.To.X, 6);
+        Assert.Equal(play.FieldedZ, leg.To.Z, 6);
+        Assert.True(leg.T1 <= fieldedAt + 1e-6, $"回収時刻({fieldedAt:F2})に野手が間に合っていない(到達{leg.T1:F2})");
+
+        // 回収時刻のボールと野手が同じ場所にいる。
+        var startPos = field.StandardAlignment().Single(f => f.Position == role) is { } f0
+            ? new TimelinePoint(f0.Location.X, f0.Location.Z) : new TimelinePoint(0, 0);
+        var ball = BallAt(tl, fieldedAt);
+        var fielder = FielderAt(tl, role, startPos, fieldedAt);
+        Assert.True(System.Math.Abs(ball.X - fielder.X) < 0.5 && System.Math.Abs(ball.Z - fielder.Z) < 0.5,
+            $"回収時刻にボール({ball.X:F1},{ball.Z:F1})と野手({fielder.X:F1},{fielder.Z:F1})の座標が一致しない");
+    }
+
+    /// <summary>
+    /// #301①: 返球の開始時刻 ≧ その野手のボール到達時刻（＝誰も触っていないのに返球が始まらない）。
+    /// 全シードの全打球タイムラインで成り立つ不変条件として検証する。
+    /// </summary>
+    [Fact]
+    public void ThrowNeverStartsBeforeRetrievingFielderReachesBall()
+    {
+        var field = new FieldGeometry();
+        var checkedAny = 0;
+        for (ulong s = 0; s < 12; s++)   // 1試合に多数の送球があるので少数シードで十分
+        {
+            var r = CapturedGame(s);
+            foreach (var e in r.Log)
+            {
+                var tl = e.Timeline;
+                if (tl is null) continue;
+                var firstThrow = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).OrderBy(b => b.T0).FirstOrDefault();
+                if (firstThrow is null) continue;
+
+                // 実捕球者の「ボールへ向かう」レッグ（あれば）の到達時刻。無ければ定位置直撃で0距離。
+                var ballLeg = tl.Moves.Where(m => m.Task == FielderTask.FieldBall).OrderBy(m => m.T1).LastOrDefault();
+                if (ballLeg is null) continue;
+
+                Assert.True(firstThrow.T0 >= ballLeg.T1 - 1e-6,
+                    $"seed={s}: 野手到達({ballLeg.T1:F3})より前に返球が開始({firstThrow.T0:F3})");
+                checkedAny++;
+            }
+        }
+        Assert.True(checkedAny > 0, "送球を含むタイムラインが検査対象に無い");
+    }
+
+    /// <summary>
+    /// #298-2/#301③: バックホーム送球が距離に応じた時間をかける（0.30秒固定下限で200〜370m/sにならない）。
+    /// 描かれた各送球レッグの速度が、処理野手の肩から見て妥当な上限を超えないことを検証する。
+    /// </summary>
+    [Theory]
+    [InlineData(45.0)]   // 浅い＝直接返球
+    [InlineData(75.0)]   // 深い＝中継
+    [InlineData(110.0)]  // 最深部＝中継（従来ここが 0.30 秒で本塁到達＝370m/s になっていた）
+    public void BackHomeThrow_SpeedStaysPhysical_RegardlessOfRunnerAnchor(double landingZ)
+    {
+        var field = new FieldGeometry();
+        var play = OutfieldHit(landingZ) with { FieldedX = 0, FieldedZ = landingZ };
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+
+        // 走者アンカーを極端に早く（＝処理直後）置いても、送球が光速にならないこと。
+        var tl = TimelineBuilder.AppendBackHomeThrows(
+            baseTl, play, field, homeArriveAnchor: 0.85 + play.FieldedAtSeconds!.Value + 0.05, runnerOut: true);
+
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        Assert.NotEmpty(throws);
+        // 1本目は処理野手の肩、2本目（中継）は中継送球速度（BaserunningCoefficients.RelayThrowSpeedMps=32）。
+        var cap = System.Math.Max(play.FielderThrowSpeedMps!.Value, 32.0);
+        foreach (var t in throws)
+        {
+            var dist = System.Math.Sqrt(
+                System.Math.Pow(t.To.X - t.From.X, 2) + System.Math.Pow(t.To.Z - t.From.Z, 2));
+            var dur = t.T1 - t.T0;
+            Assert.True(dur > 0, "送球区間の所要が0以下");
+            var speed = dist / dur;
+            Assert.True(speed <= cap + 1e-6,
+                $"送球が上限({cap}m/s)を超えている: {speed:F1}m/s（{dist:F1}m を {dur:F2}s）");
+        }
+    }
+
+    /// <summary>
+    /// #298-2 完了条件: 実試合の全打球タイムラインで、どの送球セグメントも
+    /// <c>Distance / (T1 - T0)</c> が上限を超えない。修正前はバックホームだけ距離項が無く、
+    /// 外野深部（80〜110m）から 0.30 秒で本塁到達＝200〜370 m/s の絵になっていた。
+    /// </summary>
+    [Fact]
+    public void AllThrowSegments_StayUnderPhysicalSpeedCap_AcrossGames()
+    {
+        const double capMps = 40.0;  // 高校生の肩（〜35m/s）＋中継の余裕。バグ時は 200〜370m/s
+        var worst = 0.0;
+        var checkedAny = 0;
+        for (ulong s = 0; s < 20; s++)
+        {
+            foreach (var tl in CapturedGame(s).Log.Select(e => e.Timeline).Where(t => t is not null)!)
+            {
+                foreach (var t in tl!.Ball.Where(b => b.Kind == BallSegmentKind.Throw))
+                {
+                    var dist = System.Math.Sqrt(
+                        System.Math.Pow(t.To.X - t.From.X, 2) + System.Math.Pow(t.To.Z - t.From.Z, 2));
+                    var dur = t.T1 - t.T0;
+                    Assert.True(dur > 0, $"seed={s}: 送球区間の所要が0以下");
+                    var speed = dist / dur;
+                    if (speed > worst) worst = speed;
+                    Assert.True(speed <= capMps,
+                        $"seed={s}: 送球が上限({capMps}m/s)を超えた {speed:F1}m/s（{dist:F1}m を {dur:F2}s）");
+                    checkedAny++;
+                }
+            }
+        }
+        Assert.True(checkedAny > 0, "送球セグメントが検査対象に無い");
+    }
+
+    /// <summary>#301③: 送球速度が処理野手の肩に連動する（肩が強いほど早く着く）。</summary>
+    [Fact]
+    public void BackHomeThrow_StrongerArmArrivesEarlier()
+    {
+        var field = new FieldGeometry();
+        double ArriveWithArm(double arm)
+        {
+            var play = OutfieldHit(85.0) with { FieldedX = 0, FieldedZ = 85.0, FielderThrowSpeedMps = arm };
+            var baseTl = TimelineBuilder.BuildBattedBall(
+                play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+            // アンカーは遅く（＝ガードが効かない）置いて、物理だけを比較する。
+            var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, homeArriveAnchor: 0.0, runnerOut: true);
+            return tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).Max(b => b.T1);
+        }
+
+        var weak = ArriveWithArm(26.0);
+        var strong = ArriveWithArm(40.0);
+        Assert.True(strong < weak - 0.1, $"肩が絵に反映されていない（弱肩{weak:F2}s / 強肩{strong:F2}s）");
+    }
+
+    /// <summary>この打球のバックホーム送球が物理的に本塁へ着ける最速時刻[s]（「間」ゼロで飛ばしきった値）。</summary>
+    private static double EarliestBackHomeArrive(PlayTimeline baseTl, FieldingPlay play, FieldGeometry field)
+        => TimelineBuilder
+            .AppendBackHomeThrows(baseTl, play, field, homeArriveAnchor: 0.0, runnerOut: true)
+            .Ball.Where(b => b.Kind == BallSegmentKind.Throw).Max(b => b.T1);
+
+    /// <summary>
+    /// #301③ 絶対条件: 絵が判定と矛盾しない。セーフ確定なら送球は走者より後に着き、
+    /// アウト確定なら走者より先（同時まで）に着く。物理的に到達可能なアンカー範囲で検証する
+    /// （到達不能なケースは <see cref="BackHomeThrow_PhysicallyImpossibleOut_KeepsPhysicalSpeed"/>）。
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BackHomeThrow_NeverContradictsVerdict(bool runnerOut)
+    {
+        var field = new FieldGeometry();
+        var play = OutfieldHit(70.0) with { FieldedX = 0, FieldedZ = 70.0 };
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+
+        // 物理到達がアンカーの前後どちらに来ても矛盾しないことを、広い範囲のアンカーで確認する。
+        var floor = EarliestBackHomeArrive(baseTl, play, field);
+        for (var anchor = floor; anchor <= floor + 8.0; anchor += 0.5)
+        {
+            var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, anchor, runnerOut);
+            var arrive = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).Max(b => b.T1);
+            if (runnerOut)
+                Assert.True(arrive <= anchor + 1e-6, $"アウト確定なのに送球が走者({anchor:F2})より遅い({arrive:F2})");
+            else
+                Assert.True(arrive >= anchor - 1e-6, $"セーフ確定なのに送球が走者({anchor:F2})より先に着く({arrive:F2})");
+        }
+    }
+
+    /// <summary>
+    /// #301③ の残余ケース: 走者の表示到達が送球の物理最速より早いとき（本塁レースはロジスティック抽選
+    /// なので物理と逆に出ることがある）、矛盾は原理的に消せない。そのとき**送球を瞬間移動させない**
+    /// ＝物理最速のまま描くことを固定する（ボールを光速で飛ばして絵を合わせる方が悪い）。
+    /// </summary>
+    [Fact]
+    public void BackHomeThrow_PhysicallyImpossibleOut_KeepsPhysicalSpeed()
+    {
+        var field = new FieldGeometry();
+        var play = OutfieldHit(70.0) with { FieldedX = 0, FieldedZ = 70.0 };
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var floor = EarliestBackHomeArrive(baseTl, play, field);
+
+        // 到達不能なアンカー（物理最速より前）でも、送球は物理最速で止まる＝それより前へ詰めない。
+        var tl = TimelineBuilder.AppendBackHomeThrows(baseTl, play, field, floor - 2.0, runnerOut: true);
+        var arrive = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).Max(b => b.T1);
+        Assert.Equal(floor, arrive, 6);
+
+        // 送球速度も肩の範囲に収まっている（ガードのために光速化していない）。
+        var arm = play.FielderThrowSpeedMps!.Value;
+        foreach (var t in tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw))
+        {
+            var dist = System.Math.Sqrt(
+                System.Math.Pow(t.To.X - t.From.X, 2) + System.Math.Pow(t.To.Z - t.From.Z, 2));
+            Assert.True(dist / (t.T1 - t.T0) <= arm * 1.2 + 1e-6, "ガードのために送球が光速化している");
+        }
+    }
+
+    // ═══ Issue #298-1: 走者なしでは投手が本塁バックアップへ走らない ═══
+
+    [Theory]
+    [InlineData(BallZone.InfieldLeft)]
+    [InlineData(BallZone.OutfieldLeft)]
+    [InlineData(BallZone.OutfieldCenter)]
+    [InlineData(BallZone.OutfieldRight)]
+    public void FormationTable_PitcherHoldsWhenNoRunners_BacksUpHomeWhenRunnersOn(BallZone zone)
+    {
+        FormationAssignment Pitcher(bool runnersOn)
+            => FormationTable.Default.Lookup(zone, runnersOn)!.Assignments
+                .Single(a => a.Position == FieldPosition.Pitcher);
+
+        // 走者なし: その場待機（本塁への送球がありえないので動かない）。
+        Assert.Equal(FielderTask.Hold, Pitcher(false).Task);
+        // 走者あり: 従来どおり本塁バックアップ。
+        Assert.Equal(FielderTask.Backup, Pitcher(true).Task);
+        Assert.Equal("home", Pitcher(true).Target);
+    }
+
+    [Fact]
+    public void FormationTable_NoRunnersVariant_DiffersOnlyInPitcherRow()
+    {
+        foreach (BallZone zone in System.Enum.GetValues(typeof(BallZone)))
+        {
+            var on = FormationTable.Default.Lookup(zone, runnersOn: true)!;
+            var off = FormationTable.Default.Lookup(zone, runnersOn: false)!;
+            Assert.Equal(9, off.Assignments.Count); // 走者なしでも9人全員に役割
+            foreach (var a in on.Assignments.Where(a => a.Position != FieldPosition.Pitcher))
+            {
+                Assert.Contains(a, off.Assignments); // 投手以外は完全一致
+            }
+        }
+    }
+
+    [Fact]
+    public void NoRunners_PitcherDoesNotLeaveMoundForHomeBackup()
+    {
+        var field = new FieldGeometry();
+        // 外野への飛球（従来は投手が本塁後方へ走っていたゾーン）。
+        var play = FlyHitWithRoll();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+        Assert.DoesNotContain(tl.Moves, m => m.Role == FieldPosition.Pitcher);
+
+        // 走者ありなら従来どおりバックアップへ動く（機構を殺していないことの確認）。
+        var withRunners = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        Assert.Contains(withRunners.Moves, m => m.Role == FieldPosition.Pitcher && m.Task == FielderTask.Backup);
+    }
+
+    /// <summary>
+    /// 既定表と YAML の2面同期（Issue #298-1）。Unity 実プレーは YAML を読まず FormationTable.Default で
+    /// 動くため、片方だけ直すと実ゲームに反映されない。内容が完全一致していることを機械的に検証する。
+    /// </summary>
+    [Fact]
+    public void FormationsYaml_MatchesDefaultTableExactly()
+    {
+        var path = BalanceRegressionTests.FindDataFile("defensive-formations.yaml");
+        var yaml = FormationsLoader.LoadFromFile(path);
+        foreach (BallZone zone in System.Enum.GetValues(typeof(BallZone)))
+        {
+            foreach (var runnersOn in new[] { true, false })
+            {
+                var expected = FormationTable.Default.Lookup(zone, runnersOn);
+                var actual = yaml.Lookup(zone, runnersOn);
+                Assert.NotNull(actual);
+                Assert.Equal(expected!.RunnersOn, actual!.RunnersOn);
+                Assert.Equal(expected.Assignments.Count, actual.Assignments.Count);
+                foreach (var a in expected.Assignments)
+                {
+                    Assert.Contains(a, actual.Assignments);
+                }
+            }
+        }
     }
 
     [Fact]

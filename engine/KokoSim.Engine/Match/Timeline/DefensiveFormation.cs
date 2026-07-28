@@ -61,7 +61,47 @@ public sealed class FormationTable
     /// <summary>既定の陣形ルール表（YAML 未注入時のフォールバック。内容は data/defensive-formations.yaml と同一に保つ）。</summary>
     public static FormationTable Default { get; } = new(BuildDefaultRules());
 
+    /// <summary>
+    /// 走者なし専用ルールを作る（Issue #298-1）。既定行（走者不問）から投手の割当だけ
+    /// <see cref="FielderTask.Hold"/>（その場待機）へ差し替える。走者が居ない＝本塁への送球が
+    /// ありえない場面で投手がマウンドを離れて本塁バックアップへ走るのを止めるため。
+    /// 他8人の割当は走者ありと同一＝差分が投手1行だけであることをソース上で保証する。
+    /// </summary>
+    private static FormationRule NoRunnersVariant(FormationRule generic)
+    {
+        var swapped = new List<FormationAssignment>(generic.Assignments.Count);
+        foreach (var a in generic.Assignments)
+        {
+            swapped.Add(a.Position == FieldPosition.Pitcher
+                ? new FormationAssignment(FieldPosition.Pitcher, FielderTask.Hold, "none")
+                : a);
+        }
+        return new FormationRule(generic.Zone, RunnersOn: false, swapped);
+    }
+
     private static IReadOnlyList<FormationRule> BuildDefaultRules()
+    {
+        var generic = BuildGenericRules();
+        var rules = new List<FormationRule>(generic);
+        // 投手が本塁バックアップに回る（＝走者ありでのみ意味がある）ゾーンだけ、走者なし専用行を足す。
+        // Bunt は投手が打球処理、InfieldRight は投手が一塁カバー＝走者の有無に関わらず正しいので対象外。
+        foreach (var r in generic)
+        {
+            var pitcherBacksUpHome = false;
+            foreach (var a in r.Assignments)
+            {
+                if (a.Position == FieldPosition.Pitcher && a.Task == FielderTask.Backup && a.Target == "home")
+                {
+                    pitcherBacksUpHome = true;
+                    break;
+                }
+            }
+            if (pitcherBacksUpHome) rules.Add(NoRunnersVariant(r));
+        }
+        return rules;
+    }
+
+    private static IReadOnlyList<FormationRule> BuildGenericRules()
     {
         static FormationAssignment A(FieldPosition p, FielderTask t, string target = "none") => new(p, t, target);
 

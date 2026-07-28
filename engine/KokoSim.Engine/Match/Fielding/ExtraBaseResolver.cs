@@ -128,6 +128,27 @@ public static class ExtraBaseResolver
     }
 
     /// <summary>
+    /// 回収野手が投げ始められる時刻[s]（回収＋拾い上げ＋握り替え）。握り替えは守備力で伸縮
+    /// （Issue #36。内野ゴロ→一塁と同じ ThrowTransferSeconds を共有）。
+    /// 塁打数判定と表示タイムラインの**単一ソース**（Issue #301③）。
+    /// </summary>
+    public static double ReadySeconds(double retrieveAtSeconds, int fielding, FieldingCoefficients c)
+    {
+        var transfer = c.ThrowTransferSeconds
+                       * new FielderAttributes { Fielding = fielding }
+                           .TransferFactor(c.ThrowTransferFieldingSlope, c.ThrowTransferFactorMin);
+        return retrieveAtSeconds + c.OutfieldPickupSeconds + transfer;
+    }
+
+    /// <summary>
+    /// 回収点から目標塁へ送球が到達する時刻[s]。距離に比例して伸びる失速項（長い送球ほど山なり・
+    /// 中継が要る）を掛ける、しきい値なしの連続量。塁打数判定と表示タイムラインの**単一ソース**。
+    /// </summary>
+    public static double ThrowArriveSeconds(
+        double readySeconds, double distanceM, double armMps, FieldingCoefficients c)
+        => readySeconds + distanceM / armMps * (1.0 + distanceM * c.ThrowDistanceDragPerM);
+
+    /// <summary>
     /// 回収した野手の送球 vs 打者走者の時間比較で塁打数を決める。
     /// 二塁を狙えなければ単打、三塁まで狙えなければ二塁打。
     /// </summary>
@@ -136,18 +157,11 @@ public static class ExtraBaseResolver
         FieldGeometry field, BatterAttributes batter, double batterToFirstSeconds, FieldingCoefficients c)
     {
         var ball = path.PositionAt(retrieveAtSeconds);
-        // 回収野手の握り替えを守備力で伸縮（Issue #36。内野ゴロ→一塁と同じ ThrowTransferSeconds を共有）。
-        var transfer = c.ThrowTransferSeconds
-                       * retriever.Attributes.TransferFactor(c.ThrowTransferFieldingSlope, c.ThrowTransferFactorMin);
-        var ready = retrieveAtSeconds + c.OutfieldPickupSeconds + transfer;
+        var ready = ReadySeconds(retrieveAtSeconds, retriever.Attributes.Fielding, c);
         var arm = retriever.Attributes.ThrowSpeedMps;
 
         double ThrowArrivesAt(Vector3D target)
-        {
-            var d = (target - ball).Length;
-            // 距離に比例して伸びる失速項（長い送球ほど山なり・中継が要る）。しきい値なしの連続量。
-            return ready + d / arm * (1.0 + d * c.ThrowDistanceDragPerM);
-        }
+            => ThrowArriveSeconds(ready, (target - ball).Length, arm, c);
 
         var sprint = batter.SpeedToFirstMps() * c.RunningTopSpeedFactor;
         var perBase = field.BaseDistanceM / sprint + c.BaseTurnSeconds;
