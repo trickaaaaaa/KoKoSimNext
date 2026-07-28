@@ -3,6 +3,7 @@ using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
+using KokoSim.Engine.Tests.Match.Fielding;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Match.Timeline;
@@ -13,17 +14,23 @@ namespace KokoSim.Engine.Tests.Match.Timeline;
 /// </summary>
 public sealed class BounceTimelineTests
 {
-    private static FieldingPlay Bouncer(bool through = false) => new()
-    {
-        Result = through ? BattedBallResult.Single : BattedBallResult.Out,
-        LandingX = 2.0, LandingZ = 12.0, HangTimeSeconds = 0.2, ApexHeightM = 0.4,
-        RangeM = 12.2, BearingDeg = 6.0, FielderRole = FieldPosition.Shortstop,
-        FieldedAtSeconds = 1.6, ThrowArriveSeconds = through ? null : 3.0,
-        FieldedX = through ? 3.0 : 2.0, FieldedZ = through ? 60.0 : 12.0,
-        BatterToFirstSeconds = 4.2, IsFly = false,
-        Class = BattedBallClass.Bouncer, BounceApexHeightM = 1.8, BounceCount = 3,
-        ThroughInfield = through,
-    };
+    /// <summary>
+    /// 内野へ落ちる高いバウンド。<paramref name="through"/> で内野を抜けて外野の回収点(60m)まで届く。
+    /// 抜けた側の処理野手は**外野手**（回収役は転がり経路に一番近い野手＝<c>ExtraBaseResolver.Retrieve</c>
+    /// が選ぶので、60m地点をショートが処理する出力はリゾルバが作れない, Issue #315）。
+    /// </summary>
+    private static FieldingPlay Bouncer(bool through = false) => through
+        ? FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.CenterField, landingX: 2.0, landingZ: 12.0,
+            fieldedAtSeconds: 1.6, fieldedX: 3.0, fieldedZ: 60.0,
+            hangTimeSeconds: 0.2, apexHeightM: 0.4,
+            ballClass: BattedBallClass.Bouncer, throughInfield: true,
+            bounceApexHeightM: 1.8, bounceCount: 3)
+        : FieldingPlayFixtures.InfieldGrounder(
+            FieldPosition.Shortstop, fieldedX: 2.0, fieldedZ: 12.0,
+            fieldedAtSeconds: 1.6, throwArriveSeconds: 3.0,
+            hangTimeSeconds: 0.2, apexHeightM: 0.4,
+            ballClass: BattedBallClass.Bouncer, bounceApexHeightM: 1.8, bounceCount: 3);
 
     [Fact]
     public void BouncerPlay_EmitsBounceSegment_WithApex()
@@ -61,7 +68,7 @@ public sealed class BounceTimelineTests
 
         // 内野を抜けたバウンドは、内野の着地点で止まらず外野の回収点まで届く（ボールが内野で死なない）。
         var bounce = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Bounce);
-        Assert.Equal(play.FieldedZ, bounce.To.Z, 6);
+        Assert.Equal(play.FieldedZ!.Value, bounce.To.Z, 6);
     }
 
     [Fact]
