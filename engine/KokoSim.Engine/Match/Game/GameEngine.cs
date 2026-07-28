@@ -1058,9 +1058,9 @@ public static class GameEngine
             if (res.Play is { FielderThrowSpeedMps: { } arm } fp)
             {
                 // 送球の起点は「回収点」（安打では着地後の転がりの終端＝Issue #24）。転がりを解かない
-                // 経路では着地点と同値なので従来と一致する。
+                // 経路は null＝着地点フォールバックなので従来と一致する（Issue #315）。
                 var homePlaySituation = new HomePlaySituation(
-                    new Vector3D(fp.FieldedX, 0, fp.FieldedZ),
+                    new Vector3D(fp.FieldedX ?? fp.LandingX, 0, fp.FieldedZ ?? fp.LandingZ),
                     fp.FieldedAtSeconds ?? fp.HangTimeSeconds,
                     arm,
                     fp.FielderFielding);

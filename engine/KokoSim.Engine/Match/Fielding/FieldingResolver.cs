@@ -35,10 +35,15 @@ public sealed record FieldingPlay
     public required double BearingDeg { get; init; }
     /// <summary>
     /// 打球の回収点（着地後の転がりの終端。X=+一塁側, Z=センター方向）[m]。
-    /// 転がりを解かない経路（ファウル・本塁打・空中捕球・内野ゴロ）では着地点と同値。
+    /// <c>null</c> = 回収を解いていない経路（ファウル・本塁打・空中捕球）＝**着地点と同値**。
+    /// 読む側は必ず <c>?? LandingX/Z</c> でフォールバックすること。
+    ///
+    /// nullable なのは「未設定」を表現可能にするため（Issue #315）。非nullable の既定 0 は
+    /// 本塁という正当な座標なので、埋め忘れが型でも実行時でも検出されず、テストの手書き
+    /// フィクスチャが誤った挙動を「正しい」として固定してしまう事故が実際に起きた（Issue #301）。
     /// </summary>
-    public double FieldedX { get; init; }
-    public double FieldedZ { get; init; }
+    public double? FieldedX { get; init; }
+    public double? FieldedZ { get; init; }
     /// <summary>処理した野手（フライ捕球/ゴロ処理）。ファウル・本塁打では null。</summary>
     public FieldPosition? FielderRole { get; init; }
     /// <summary>野手が打球に到達（捕球/処理）した時刻[s]。</summary>
@@ -62,8 +67,12 @@ public sealed record FieldingPlay
 
     // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
 
-    /// <summary>打球の4分類（ゴロ/バウンド/ライナー/フライ）。物理層の積分結果から導出する。</summary>
-    public BattedBallClass Class { get; init; } = BattedBallClass.Grounder;
+    /// <summary>
+    /// 打球の4分類（ゴロ/バウンド/ライナー/フライ）。物理層の積分結果から導出する。
+    /// <c>null</c> = 未判定（分類が存在しないファウル。弾道積分を回す前に返す経路）。
+    /// 既定を <c>Grounder</c> にすると分類を持たない打球まで「ゴロ」と名乗るので nullable（Issue #315）。
+    /// </summary>
+    public BattedBallClass? Class { get; init; }
     /// <summary>最大バウンド頂点[m]（接地後の弾みの最高到達点。フライ/ライナー捕球では0）。</summary>
     public double BounceApexHeightM { get; init; }
     /// <summary>接地後の弾みの回数（転がりへ移行するまで）。</summary>
@@ -131,13 +140,14 @@ public static class FieldingResolver
         var airClass = ground.ApexHeightM / Math.Max(range, 1e-6) <= coeff.LinerApexRangeRatio
             ? BattedBallClass.Liner : BattedBallClass.Fly;
 
+        // 回収点(FieldedX/Z)はここでは埋めない。転がりを解く経路だけが上書きし、それ以外は
+        // null＝着地点フォールバックで同値になる（Issue #315）。本番でもフォールバックを通す
+        // ことで、テストだけが踏む死んだ経路にならないようにしている。
         FieldingPlay Base(BattedBallResult result) => new()
         {
             Result = result,
             LandingX = landing.X,
             LandingZ = landing.Z,
-            FieldedX = landing.X,
-            FieldedZ = landing.Z,
             HangTimeSeconds = ground.HangTimeSeconds,
             ApexHeightM = ground.ApexHeightM,
             RangeM = range,

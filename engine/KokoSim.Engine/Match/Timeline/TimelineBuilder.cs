@@ -92,6 +92,7 @@ public static class TimelineBuilder
             // ゴロ/バウンド（Issue #63 の4分類）: 本塁→処理点まで一本で転がす。
             // 「バウンド」分類は高く弾む Bounce（頂点=最大バウンド頂点）、「ゴロ」は地を這う Roll。
             // 処理点はエンジンの回収点（内野なら実捕球点=Issue #261、内野を抜けたなら外野の回収点=#63）。
+            // Class 未判定(null)は地を這う Roll 扱い＝分類前の既定と同じ（Issue #315）。
             var groundKind = play.Class == BattedBallClass.Bouncer ? BallSegmentKind.Bounce : BallSegmentKind.Roll;
             ball.Add(new BallSegment
             {
@@ -731,13 +732,13 @@ public static class TimelineBuilder
 
     /// <summary>
     /// 打球の処理点＝エンジンの回収点(FieldedX/Z)。ボールの終端・実捕球者の移動先・送球の起点を
-    /// すべてこの1点に揃える（Issue #301①②）。<see cref="FieldingPlay"/> は全経路で FieldedX/Z を
-    /// 埋める（転がりを解かない経路では着地点と同値＝FieldingResolver の Base()）ので、着地点しか
-    /// 意味を持たない打球では従来と完全に同値。以前は ThroughInfield のときだけ回収点を見ていたため、
-    /// 外野飛球の安打と内野ゴロ（実捕球点が着地点とズレる Issue #261）が取り残されていた。
+    /// すべてこの1点に揃える（Issue #301①②）。回収を解かない経路（ファウル・本塁打・空中捕球）は
+    /// <c>null</c> なので着地点へフォールバックする＝着地点しか意味を持たない打球では従来と完全に同値
+    /// （Issue #315）。以前は ThroughInfield のときだけ回収点を見ていたため、外野飛球の安打と
+    /// 内野ゴロ（実捕球点が着地点とズレる Issue #261）が取り残されていた。
     /// </summary>
     private static TimelinePoint FieldPointOf(FieldingPlay play)
-        => new(play.FieldedX, play.FieldedZ);
+        => new(play.FieldedX ?? play.LandingX, play.FieldedZ ?? play.LandingZ);
 
     /// <summary>
     /// 実捕球者の移動レッグを「回収時刻までに必ずボールへ着く」ように詰める（Issue #301①）。
