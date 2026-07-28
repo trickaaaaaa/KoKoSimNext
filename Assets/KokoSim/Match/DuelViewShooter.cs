@@ -29,19 +29,22 @@ namespace KokoSim.Unity.Match
             yield return null;
             Directory.CreateDirectory(Dir);
 
+            // issue #312 で対決ビューが既定ONになったため、この使い捨てハーネスは以後 On/Off を
+            // 明示的に確認してからトグルする（デフォルト値に依存しない）。
             // 数打席進めて盤面に生活感を出す
             for (int i = 0; i < 3; i++) ctrl.AdvanceForCapture();
             ctrl.FreezeCurrentAtResult();
+            if (ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();   // まず俯瞰を撮る
             yield return CaptureName("i-duel-1-board");
 
-            ctrl.ToggleDuelViewForCapture();
+            if (!ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();
             for (int i = 0; i < 30; i++) yield return null;   // 量子化ステップを数コマ進める
             yield return CaptureName("i-duel-2-duelview");
 
             for (int i = 0; i < 60; i++) yield return null;
             yield return CaptureName("i-duel-3-duelview-later");
 
-            ctrl.ToggleDuelViewForCapture();
+            if (ctrl.DuelViewOnForCapture) ctrl.ToggleDuelViewForCapture();
             yield return null;
             yield return CaptureName("i-duel-4-board-back");
 

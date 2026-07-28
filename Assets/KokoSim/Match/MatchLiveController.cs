@@ -104,10 +104,13 @@ namespace KokoSim.Unity.Match
         // ×4速時は酔い防止のため強制的に全景固定へ戻す（スキップは委任でその場で試合が終わるため対象外）。
         private Button _camWork;
         private bool _cameraWorkWanted;
-        // 対決ビュー（design-18 §7-1 A案）の配線スパイク。盤面⇄対決の切替トグル（試験導線）。
-        // 実体は DuelStageRig（UBC素体のループ芝居・12fps量子化）。エンジンpitch進行との同期は§7-2で接続する。
+        // 対決ビュー（design-18 §7-1 A案）。既定の開始ビュー（issue #312）で、インプレー打球の間だけ
+        // 俯瞰へ自動で切り替わる。実体は DuelStageRig（UBC素体のループ芝居・12fps量子化）。
         private Button _duelBtn;
         private bool _duelOn;
+        // ユーザーが手動で対決ビューをOFF（俯瞰固定）にしたか。true の間は自動切替（打球/次打席）を止める。
+        // 再度手動でONにすると自動切替も復帰する（issue #312）。
+        private bool _duelManualOff;
         private DuelStageRig _duelRig;
         private DuelViewElement _duelImg;
         private VisualElement _duelHost, _fieldHost;
@@ -241,6 +244,7 @@ namespace KokoSim.Unity.Match
             _duelImg = null;
             _duelBtn = _root.Q<Button>("duel-view");
             if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
+            InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
             ApplyDuelViewState();
             WirePitchTactics();
 
@@ -340,6 +344,7 @@ namespace KokoSim.Unity.Match
             _speedHandlers.Clear();
             _cameraWorkWanted = false;
             _duelOn = false;
+            _duelManualOff = false;
         }
 
         // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
@@ -752,6 +757,8 @@ namespace KokoSim.Unity.Match
         // 現在ロード中の打席の再生を頭から始める（FinishAdvance の後半。スクショ用の打席リスタートと共用）。
         private void BeginPaReplay()
         {
+            SetDuelViewAuto(true);   // 次打席の開始で対決ビューへ復帰（issue #312。手動OFF中は据え置き）
+
             // BSO 初期化: アウト＝打席前、塁ダイヤ＝打席前、カウント＝0-0。結果チップは投球フェーズ中は隠す。
             SetOuts(_current.OutsBefore);
             SetBases(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
@@ -898,6 +905,7 @@ namespace KokoSim.Unity.Match
             _t = 0;
             if (_current.Play != null)
             {
+                SetDuelViewAuto(false);   // インプレー打球は打った瞬間から俯瞰で行方を見せる（issue #312）
                 _view.SetPlay(_current.Play);
                 RenderReplayFrame();
             }
@@ -931,7 +939,7 @@ namespace KokoSim.Unity.Match
             // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
             _view.PlaybackSpeed = _speed;
 
-            // 対決ビュー（試験導線）はポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
+            // 対決ビューはポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
             if (!_paused && _duelOn) _duelRig?.Tick(Time.deltaTime * _speed);
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
@@ -1267,22 +1275,53 @@ namespace KokoSim.Unity.Match
             _camWork?.EnableInClassList("chip-btn--on", _cameraWorkWanted);
         }
 
-        // 対決ビュー（design-18 §7-1 A案）の試験トグル。アセット未導入環境では何もしない（警告ログのみ）。
+        // 試合開始の既定ビュー（issue #312）: 対決ビューから始める。DuelStageRig が使えない環境
+        // （3Dアセット未導入・生成失敗）では従来どおり俯瞰にフォールバックする。
+        private void InitDuelViewDefault()
+        {
+            _duelRig ??= new DuelStageRig();
+            if (!_duelRig.Available) { _duelOn = false; return; }
+            EnsureDuelImg();
+            _duelOn = true;
+        }
+
+        private void EnsureDuelImg()
+        {
+            if (_duelImg == null)
+            {
+                _duelImg = new DuelViewElement();
+                _duelHost?.Add(_duelImg);
+            }
+            _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
+            _duelImg.Bind(_duelRig.Target);
+        }
+
+        // 対決ビューの手動トグル。アセット未導入環境では何もしない（警告ログのみ）。手動でOFFにした試合中は
+        // 打球/次打席の自動切替も止め、再度手動でONにすると自動切替が復帰する（issue #312）。
         private void OnToggleDuelView()
         {
             if (!_duelOn)
             {
                 _duelRig ??= new DuelStageRig();
                 if (!_duelRig.Available) return;
-                if (_duelImg == null)
-                {
-                    _duelImg = new DuelViewElement();
-                    _duelHost?.Add(_duelImg);
-                }
-                _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
-                _duelImg.Bind(_duelRig.Target);
+                EnsureDuelImg();
             }
             _duelOn = !_duelOn;
+            _duelManualOff = !_duelOn;
+            ApplyDuelViewState();
+        }
+
+        // 打席進行に連動した自動切替（次打席開始→対決 / インプレー打球→俯瞰）。手動OFF中は何もしない。
+        private void SetDuelViewAuto(bool on)
+        {
+            if (_duelManualOff || _duelOn == on) return;
+            if (on)
+            {
+                _duelRig ??= new DuelStageRig();
+                if (!_duelRig.Available) return;
+                EnsureDuelImg();
+            }
+            _duelOn = on;
             ApplyDuelViewState();
         }
 
