@@ -1157,6 +1157,45 @@
     padding: var(--sp-2);
 }
 
+/* SignPad：指示パネル（issue #289。試合盤面・投手HUD直下の采配指示タイル。SignPad.cs が生成）。
+   設計書15 Phase C-3 の常駐1行帯の後継。攻撃中は打撃、守備中は配球だけを出し、既定（任せ/通常）は無点灯。
+   盤面overlayなので半透明パネルは mhud-panel と同じ inline rgba idiom。選択色は旧セグ選択と同じ --sky を踏襲。
+   タイルは flex-wrap で段組み＝定義が増えたら下へ折り返す（gap非対応のため間隔は margin で作る）。 */
+.signpad {
+    background-color: rgba(24, 33, 28, 0.85);
+    border-radius: var(--radius-panel);
+    padding: var(--sp-2);
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+.signpad__head { flex-direction: row; align-items: center; margin-bottom: var(--sp-1); }
+/* 暗パネル上の文字は昼スキンの chalk/muted（暗インク）だと沈む（issue #236 症状B と同根）。
+   主情報（攻撃/守備）は sb-ink-1、副ラベルは faint で階調を作る。 */
+.signpad__title { font-size: var(--fs-cap); color: var(--color-faint); margin-right: var(--sp-2); }
+.signpad__phase { font-size: var(--fs-cap); color: var(--sb-ink-1); }
+.signpad__group { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.signpad__grouplab { font-size: var(--fs-cap); color: var(--color-faint); margin-right: var(--sp-1); }
+.signpad__tile {
+    -unity-text-align: middle-center;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    min-width: 64px;
+    height: 28px;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    margin-right: var(--sp-1);
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+.signpad__tile:hover { color: var(--color-chalk); }
+.signpad__tile--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+.signpad__tile--off { color: var(--color-faint); }
+.signpad__tile--off:hover { color: var(--color-faint); }
+
 /* MatchupBar：同ブロックを横帯に並べた版（ComponentGallery 登録のみ・将来のリザルト/選手詳細で流用）。 */
 .matchup-bar {
     flex-direction: row;

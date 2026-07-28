@@ -70,61 +70,34 @@
     background-color: var(--field-outside);
 }
 
-/* ── 1球采配ショートカット（設計書15 Phase C-3・常駐）。低彩度: 既定は無点灯、選択時のみ点灯。 ── */
-.mlive-pitchtactics {
-    flex-direction: row;
-    align-items: center;
-    flex-shrink: 0;
-    padding: 4px 12px;
-    background-color: var(--color-panel-deep);
-    border-radius: var(--radius-chip);
-    margin-bottom: 6px;
-}
-.mlive-pitchtactics-label {
-    font-size: var(--fs-cap);
-    color: var(--color-faint);
-    margin-right: var(--sp-1);
-}
-.mlive-pitchtactics #pt-batting { margin-right: var(--sp-4); }
+/* 下部スタック（1球指示帯・実況履歴・実況バー・伝令残数）は issue #289 で撤去済み。
+   1球指示は盤面内の SignPad（components.uss の .signpad*）へ、タイム系操作は pause-modal へ移した。
+   実況ログはロジックのみ存続（MatchLiveController._capHist）＝描画スタイルは持たない。 */
 
-/* ── 実況履歴（直近3件を薄く積む省スペース型・実況バーの上） ── */
-.mlive-caphist {
-    flex-direction: column;
-    flex-shrink: 0;
-    margin-bottom: 4px;
+/* ── クリック中断ポップアップ（issue #289・案P1） ──
+   器は部品の modal-scrim / modal-card、ボタンは交代モーダルの msub-btn 系（MatchSubstitution.uss）を
+   流用し、ここでは寸法・整列だけを足す。主操作は「再開」1つ＝CTA 色はそこだけ（UI原則⑦/②）。 */
+.pausem-card {
+    width: 560px;
+    padding: var(--sp-4);
 }
-.mlive-caphist__line {
-    font-size: var(--fs-cap);
-    /* 実況履歴は「読める副次文字」＝インク2段目（issue #236）。デーゲームNBスキン移行前は
-       チョーク白の70%不透明度を直書きしていたが、地が明るい昼スキンでは白系が消えて読めない。
-       盤面の外＝明るい地の上なのでトークンの副次文字色を使う（色の直書きもしない）。 */
+.pausem-title {
+    font-size: var(--fs-page);
+    color: var(--color-chalk);
+    -unity-text-align: middle-center;
+    margin-bottom: var(--sp-1);
+}
+.pausem-situation {
+    font-size: var(--fs-body);
     color: var(--color-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    /* 行高は文字サイズ（--fs-cap 17px）が収まる値にする。旧 15px は 2026-07-22 の文字サイズ底上げに
-       追従しておらず字の下半分が切れていた（文字が見えるようになって判明。issue #236）。
-       潰して収めるのは常に不正解＝盤面側が1行ぶん縮む方を取る（UI-BUILD-METHOD）。 */
-    height: 22px;
-    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    margin-bottom: var(--sp-2);
 }
-
-/* 打者ラベル（実況バーの左）。上部のスコアバー/BSO帯は LineScorePanel（components.uss の .lsc*）へ
-   移したので、ここにあった .mlive-sb / .mlive-bso / .mlive-dot / .mlive-base 等は削除済み。 */
-.mlive-batter {
-    font-size: var(--fs-cap);
-    color: var(--color-muted);
-    margin-right: 10px;
-    min-width: 96px;
+.pausem-row { flex-direction: row; margin-top: var(--sp-2); }
+.pausem-btn {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 56px;
+    /* 伝令ボタンは2行（残数を2行目に出す）。既定の nowrap だと改行が効かない。 */
+    white-space: normal;
 }
-
-/* 伝令の残数表示（タイム＝伝令中断。issue #173）。操作列に常駐する状態ラベル＝低彩度で控えめに。 */
-.mlive-timeout {
-    font-size: var(--fs-cap);
-    color: var(--color-faint);
-    margin-right: 14px;
-    -unity-text-align: middle-left;
-}
-
-/* 実況バー・操作列は列幅に合わせる（MatchDetail の固定820px上書き） */
-.mlive-col--center .md-caption { width: auto; margin-top: 0; }

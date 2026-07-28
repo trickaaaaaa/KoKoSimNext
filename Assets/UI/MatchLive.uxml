@@ -57,42 +57,12 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- 1球采配ショートカット（設計書15 Phase C-3, Q12-2: 全球で常駐）。低彩度の常時1行帯。
-                     既定(任せ/通常)は無点灯＝目立たせない。プレイヤーが上書きを選んだ時だけ1球だけ点灯する。 -->
-                <ui:VisualElement class="mlive-pitchtactics">
-                    <ui:Label class="mlive-pitchtactics-label" text="打撃" />
-                    <ui:VisualElement name="pt-batting" class="seg seg--auto">
-                        <ui:Label name="pt-batting-swing" class="seg__cell" text="強攻" />
-                        <ui:Label name="pt-batting-take" class="seg__cell" text="待て" />
-                        <ui:Label name="pt-batting-auto" class="seg__cell" text="任せ" />
-                    </ui:VisualElement>
-                    <ui:Label class="mlive-pitchtactics-label" text="配球" />
-                    <ui:VisualElement name="pt-defense" class="seg seg--auto">
-                        <ui:Label name="pt-defense-break" class="seg__cell" text="変化球" />
-                        <ui:Label name="pt-defense-zone" class="seg__cell" text="ゾーン" />
-                        <ui:Label name="pt-defense-auto" class="seg__cell" text="通常" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:VisualElement name="caption-history" class="mlive-caphist" />
-
-                <ui:VisualElement class="md-caption">
-                    <ui:Label name="batter" class="mlive-batter" text="" />
-                    <ui:Label name="result-chip" class="md-result" text="" />
-                    <ui:Label name="caption" class="md-caption-text" text="試合開始を待っています" />
-                </ui:VisualElement>
-
-                <!-- 自動連続進行＋タイム（伝令）中断（issue #173）。主操作は「タイム」1つ（UI原則⑦）。
-                     中断中だけ「再開」「選手交代」を出す。伝令の残数（攻N/守M）は常時表示する。 -->
+                <!-- 残置した常時操作（issue #289 で操作列を縮小）: 速度・カメラ演出・対決ビューだけ。
+                     1球指示は盤面内・投手HUD直下の SignPad へ、タイム・選手交代・スキップは
+                     「盤面クリック→中断ポップアップ」(pause-modal) へ集約した。実況帯（履歴・実況バー）は
+                     撤去＝ロジックのみ存続（MatchLiveController）。back-home はデモ観戦（結果画面へ
+                     渡さない文脈）の終局時だけ出るフォールバック導線。 -->
                 <ui:VisualElement class="md-controls">
-                    <ui:VisualElement class="md-group">
-                        <ui:Button name="time" class="chip-btn md-replay" text="⏱ タイム（伝令）" />
-                        <ui:Button name="resume" class="chip-btn md-replay" text="▶ 再開" style="display: none;" />
-                        <ui:Label name="timeout-status" class="mlive-timeout" text="伝令 攻3 / 守3" />
-                        <ui:Button name="sub-open" class="chip-btn" text="⇄ 選手交代" />
-                        <ui:Button name="skip" class="chip-btn" text="⏭ スキップ（委任）" />
-                        <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
-                    </ui:VisualElement>
                     <ui:VisualElement class="md-group">
                         <ui:Button name="spd-05" class="chip-btn" text="×0.5" />
                         <ui:Button name="spd-1" class="chip-btn chip-btn--on" text="×1" />
@@ -102,6 +72,7 @@
                     <ui:VisualElement class="md-group">
                         <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
                         <ui:Button name="duel-view" class="chip-btn" text="対決ビュー（試）" />
+                        <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -114,6 +85,25 @@
                 <ui:VisualElement name="right-pitcher" class="mlive-pitcher-host" />
             </ui:VisualElement>
 
+        </ui:VisualElement>
+
+        <!-- クリック中断ポップアップ（issue #289・案P1）。盤面のどこをクリックしても進行を一時停止して開く。
+             クリック中断は演出の停止だけ＝エンジンに触れない（伝令は消費しない。消費は中の「伝令を送る」だけ）。
+             選手交代は伝令なしで可（設計書09 §3 改・issue #289）。sub-modal より前に置く＝交代モーダルが上に重なる。
+             器は部品の modal-scrim / modal-card、ボタンは交代モーダルと同じ msub-btn 系を流用。 -->
+        <ui:VisualElement name="pause-modal" class="ui-root modal-scrim">
+            <ui:VisualElement class="modal-card pausem-card">
+                <ui:Label class="pausem-title" text="タイム" />
+                <ui:Label name="pm-situation" class="pausem-situation" text="" />
+                <ui:VisualElement class="pausem-row">
+                    <ui:Button name="pm-timeout" class="msub-btn msub-btn--ghost pausem-btn" text="📣 伝令を送る" />
+                    <ui:Button name="pm-sub" class="msub-btn msub-btn--ghost pausem-btn" text="⇄ 選手交代" />
+                </ui:VisualElement>
+                <ui:VisualElement class="pausem-row">
+                    <ui:Button name="pm-skip" class="msub-btn msub-btn--ghost pausem-btn" text="⏭ スキップ（委任）" />
+                    <ui:Button name="pm-resume" class="msub-btn msub-btn--go pausem-btn" text="▶ 再開" />
+                </ui:VisualElement>
+            </ui:VisualElement>
         </ui:VisualElement>
 
         <!-- 選手交代モーダル（設計書09 §6）。同一ドキュメント内オーバーレイ（modal-scrim/modal-card）。
