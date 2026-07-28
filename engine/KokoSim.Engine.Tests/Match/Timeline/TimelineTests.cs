@@ -9,6 +9,7 @@ using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Tests.Balance;
+using KokoSim.Engine.Tests.Match.Fielding;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Match.Timeline;
@@ -191,17 +192,11 @@ public sealed class TimelineTests
     private static FieldingPlay GroundOutAt(FieldPosition fielderRole, double bearingDeg, double rangeM)
     {
         var bearingRad = bearingDeg * System.Math.PI / 180.0;
-        var x = rangeM * System.Math.Sin(bearingRad);
-        var z = rangeM * System.Math.Cos(bearingRad);
-        return new FieldingPlay
-        {
-            Result = BattedBallResult.Out,
-            LandingX = x, LandingZ = z,
-            HangTimeSeconds = 0.3, ApexHeightM = 0.4,
-            RangeM = rangeM, BearingDeg = bearingDeg, FielderRole = fielderRole,
-            FieldedX = x, FieldedZ = z,   // 実エンジン出力と同じく回収点を必ず埋める（FieldingResolver.Base）
-            FieldedAtSeconds = 1.0, ThrowArriveSeconds = 2.0, BatterToFirstSeconds = 4.2, IsFly = false,
-        };
+        return FieldingPlayFixtures.InfieldGrounder(
+            fielderRole,
+            fieldedX: rangeM * System.Math.Sin(bearingRad),
+            fieldedZ: rangeM * System.Math.Cos(bearingRad),
+            fieldedAtSeconds: 1.0, throwArriveSeconds: 2.0);
     }
 
     /// <summary>一塁ベース座標へ向かう移動の担当（複数居たら回帰）。誰も居なければ null。</summary>
@@ -244,14 +239,13 @@ public sealed class TimelineTests
 
     // --- 磨き込み①: ゴロは地を這うロール／実況の具体化（表示専用・判定非干渉） ---
 
-    private static FieldingPlay GrounderOut() => new()
-    {
-        Result = BattedBallResult.Out,
-        LandingX = -9.0, LandingZ = 30.0, HangTimeSeconds = 0.3, ApexHeightM = 0.4,
-        RangeM = 31.3, BearingDeg = -16.0, FielderRole = FieldPosition.Shortstop,
-        FieldedX = -9.0, FieldedZ = 30.0,   // 実捕球点（回収点は全経路で埋まる）
-        FieldedAtSeconds = 1.4, ThrowArriveSeconds = 3.0, BatterToFirstSeconds = 4.2, IsFly = false,
-    };
+    /// <summary>
+    /// 三遊間のゴロアウト。着地点(-6,20)と実捕球点(-9,30)を**わざとズラす**（Issue #261 で実際に
+    /// そうなった形）。両者が同値だと「着地点を見ている」バグが緑のまま通ってしまう（Issue #315）。
+    /// </summary>
+    private static FieldingPlay GrounderOut()
+        => FieldingPlayFixtures.InfieldGrounder(
+            FieldPosition.Shortstop, landingX: -6.0, landingZ: 20.0);
 
     [Fact]
     public void Grounder_BallIsRoll_NotFly_AndThrowStartsWhereItWasFielded()
@@ -265,11 +259,12 @@ public sealed class TimelineTests
         // ゴロは放物線(Flight)を出さない。地を這うロールで表現する。
         Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
         var roll = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Roll);
-        // 本塁から野手処理点(landing)まで転がる。
+        // 本塁から**実捕球点**まで転がる（着地点で止めない, Issue #261/#301）。
         Assert.Equal(0.0, roll.From.X, 6);
         Assert.Equal(0.0, roll.From.Z, 6);
-        Assert.Equal(play.LandingX, roll.To.X, 6);
-        Assert.Equal(play.LandingZ, roll.To.Z, 6);
+        Assert.Equal(play.FieldedX!.Value, roll.To.X, 6);
+        Assert.Equal(play.FieldedZ!.Value, roll.To.Z, 6);
+        Assert.NotEqual(play.LandingZ, roll.To.Z, 6); // 着地点と取り違えていない
         // 一塁送球はロール終端（＝捕球点）から連続して始まる。
         var throwSeg = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
         Assert.Equal(roll.To.X, throwSeg.From.X, 6);
@@ -281,13 +276,7 @@ public sealed class TimelineTests
     public void FlyBall_StillUsesParabolaFlight()
     {
         var field = new FieldGeometry();
-        var play = new FieldingPlay
-        {
-            Result = BattedBallResult.Out, LandingX = 0, LandingZ = 88, HangTimeSeconds = 3.5, ApexHeightM = 25,
-            RangeM = 88, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
-            FieldedX = 0, FieldedZ = 88,   // 空中捕球＝回収点は着地点
-            FieldedAtSeconds = 3.5, BatterToFirstSeconds = 4.2, IsFly = true,
-        };
+        var play = FieldingPlayFixtures.CaughtFly(FieldPosition.CenterField);
         var tl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
 
@@ -297,15 +286,9 @@ public sealed class TimelineTests
 
     // --- Issue #300: 本塁打（捕球者なし=FielderRole null）で外野手がフェンス外まで打球を追わない ---
 
-    /// <summary>本塁打の FieldingPlay。FieldingResolver.ResolveDetailed の HomeRun 経路と同じ形
-    /// （FielderRole=null・IsFly=false のまま）で構築する。着地点はセンター方向フェンス(118m)の外。</summary>
-    private static FieldingPlay HomeRunPlay() => new()
-    {
-        Result = BattedBallResult.HomeRun,
-        LandingX = 0, LandingZ = 130.0, HangTimeSeconds = 4.2, ApexHeightM = 22.0,
-        RangeM = 130.0, BearingDeg = 0.0, BatterToFirstSeconds = 4.2,
-        FieldedX = 0, FieldedZ = 130.0,
-    };
+    /// <summary>本塁打の FieldingPlay（FielderRole=null・IsFly=false のまま）。
+    /// 着地点はセンター方向フェンス(118m)の外。</summary>
+    private static FieldingPlay HomeRunPlay() => FieldingPlayFixtures.HomeRun();
 
     [Fact]
     public void HomeRun_BallDrawnAsFlight_NotRoll()
@@ -382,24 +365,34 @@ public sealed class TimelineTests
         Assert.True(range > 70.0, "野手がフェンスへ向かって前進していない（クランプが過剰に効いている）");
     }
 
+    // infieldGrounder は「内野ゴロ経路で解決したか」。内野ゴロは結果がアウトでも失策でも一塁送球の
+    // 勝負をするので ThrowArriveSeconds を必ず持つ（＝リゾルバが作れない組み合わせを書かない, Issue #315）。
     [Theory]
-    [InlineData(BattedBallResult.Out, false, FieldPosition.Shortstop, false, "ショートゴロ")]
-    [InlineData(BattedBallResult.Out, true, FieldPosition.CenterField, false, "センターフライ")]
-    [InlineData(BattedBallResult.Single, false, FieldPosition.LeftField, false, "レフト前ヒット")]
-    [InlineData(BattedBallResult.Single, false, FieldPosition.Shortstop, true, "内野安打")]
-    [InlineData(BattedBallResult.Double, false, FieldPosition.RightField, false, "ライトへの二塁打")]
-    [InlineData(BattedBallResult.Error, false, FieldPosition.Shortstop, false, "ショートのエラー")]
-    [InlineData(BattedBallResult.HomeRun, true, null, false, "ホームラン")]
+    [InlineData(BattedBallResult.Out, true, FieldPosition.Shortstop, "ショートゴロ")]
+    [InlineData(BattedBallResult.Single, true, FieldPosition.Shortstop, "内野安打")]
+    [InlineData(BattedBallResult.Error, true, FieldPosition.Shortstop, "ショートのエラー")]
+    [InlineData(BattedBallResult.Out, false, FieldPosition.CenterField, "センターフライ")]
+    [InlineData(BattedBallResult.Single, false, FieldPosition.LeftField, "レフト前ヒット")]
+    [InlineData(BattedBallResult.Double, false, FieldPosition.RightField, "ライトへの二塁打")]
+    [InlineData(BattedBallResult.HomeRun, false, null, "ホームラン")]
     public void DescribeResult_IsSpecific(
-        BattedBallResult result, bool isFly, FieldPosition? role, bool infieldThrow, string expected)
+        BattedBallResult result, bool infieldGrounder, FieldPosition? role, string expected)
     {
-        var play = new FieldingPlay
+        // 外野手の担当方向へ実際に飛ばす（役割と方位が食い違ったフィクスチャを書かない）。
+        var landingX = role switch
         {
-            Result = result, LandingX = 0, LandingZ = 40, HangTimeSeconds = 1, ApexHeightM = 1,
-            RangeM = 40, BearingDeg = 0, FielderRole = role, IsFly = isFly,
-            FieldedX = 0, FieldedZ = 40,
-            ThrowArriveSeconds = infieldThrow ? 3.0 : (double?)null, BatterToFirstSeconds = 4.2,
+            FieldPosition.LeftField => -30.0,
+            FieldPosition.RightField => 30.0,
+            _ => 0.0,
         };
+        var play =
+            role is null ? FieldingPlayFixtures.HomeRun()
+            : infieldGrounder ? FieldingPlayFixtures.InfieldGrounder(role.Value) with { Result = result }
+            : result == BattedBallResult.Out
+                ? FieldingPlayFixtures.CaughtFly(role.Value)
+                : FieldingPlayFixtures.OutfieldHit(
+                    role.Value, landingX, landingZ: 60.0, fieldedAtSeconds: 2.5) with { Result = result };
+
         Assert.Equal(expected, TimelineBuilder.DescribeResult(play));
     }
 
@@ -422,9 +415,9 @@ public sealed class TimelineTests
         Assert.Equal(2, throws.Count);
         var second = new TimelinePoint(field.SecondBase.X, field.SecondBase.Z);
         var first = new TimelinePoint(field.FirstBase.X, field.FirstBase.Z);
-        // 1本目: 野手処理点(=捕球点)→二塁。
-        Assert.Equal(play.LandingX, throws[0].From.X, 6);
-        Assert.Equal(play.LandingZ, throws[0].From.Z, 6);
+        // 1本目: 実捕球点→二塁（着地点ではない, Issue #315）。
+        Assert.Equal(play.FieldedX!.Value, throws[0].From.X, 6);
+        Assert.Equal(play.FieldedZ!.Value, throws[0].From.Z, 6);
         Assert.Equal(second.X, throws[0].To.X, 6);
         Assert.Equal(second.Z, throws[0].To.Z, 6);
         // 2本目: 二塁→一塁。
@@ -468,13 +461,7 @@ public sealed class TimelineTests
     public void DoublePlayThrows_FlyBall_LeavesTimelineUnchanged()
     {
         var field = new FieldGeometry();
-        var play = new FieldingPlay
-        {
-            Result = BattedBallResult.Out, LandingX = 0, LandingZ = 88, HangTimeSeconds = 3.5, ApexHeightM = 25,
-            RangeM = 88, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
-            FieldedX = 0, FieldedZ = 88,   // 空中捕球＝回収点は着地点
-            FieldedAtSeconds = 3.5, BatterToFirstSeconds = 4.2, IsFly = true,
-        };
+        var play = FieldingPlayFixtures.CaughtFly(FieldPosition.CenterField);
         var baseTl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
 
@@ -552,15 +539,10 @@ public sealed class TimelineTests
 
     // --- F2 Slice D: バックホーム憤死の送球連鎖描画（外野→中継→本塁）＋実況 ---
 
-    private static FieldingPlay OutfieldHit(double landingZ) => new()
-    {
-        Result = BattedBallResult.Single,
-        LandingX = 0, LandingZ = landingZ, HangTimeSeconds = 1.2, ApexHeightM = 3.0,
-        RangeM = landingZ, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
-        FieldedX = 0, FieldedZ = landingZ,   // 回収点（実エンジン出力と同じく必ず埋まる）
-        FieldedAtSeconds = 3.2, BatterToFirstSeconds = 4.2, IsFly = false,
-        FielderThrowSpeedMps = 31.9,
-    };
+    /// <summary>センター前へ抜けたゴロの安打。着地点＝回収点（転がりが短く止まった形）。</summary>
+    private static FieldingPlay OutfieldHit(double landingZ)
+        => FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.CenterField, landingX: 0, landingZ: landingZ, fieldedAtSeconds: 3.2);
 
     [Fact]
     public void BackHomeThrows_DeepBall_DrawsRelayChainToHome_WithOutCaption()
@@ -702,16 +684,14 @@ public sealed class TimelineTests
     // ═══ Issue #301: 打球の回収点(FieldedX/Z・FieldedAtSeconds)を表示の単一ソースにする ═══
 
     /// <summary>外野へ抜けた飛球の安打。着地点(90m)から回収点(102m)まで転がってから回収される。</summary>
-    private static FieldingPlay FlyHitWithRoll() => new()
-    {
-        Result = BattedBallResult.Double,
-        LandingX = 0, LandingZ = 90.0, HangTimeSeconds = 3.4, ApexHeightM = 18.0,
-        RangeM = 90.0, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
-        FieldedX = 0, FieldedZ = 102.0,          // 着地後に12m転がった先で回収
-        FieldedAtSeconds = 5.1,                  // 着地(3.4s)より後＝転がっている区間がある
-        BatterToFirstSeconds = 4.2, IsFly = true,
-        FielderThrowSpeedMps = 33.0, FielderFielding = 55,
-    };
+    private static FieldingPlay FlyHitWithRoll()
+        => FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.CenterField, landingX: 0, landingZ: 90.0,
+            fieldedAtSeconds: 5.1,               // 着地(3.4s)より後＝転がっている区間がある
+            fieldedZ: 102.0,                     // 着地後に12m転がった先で回収
+            result: BattedBallResult.Double,
+            hangTimeSeconds: 3.4, apexHeightM: 18.0, isFly: true,
+            throwSpeedMps: 33.0, fielding: 55);
 
     /// <summary>#301②: 外野飛球の安打は着地点で静止せず、回収点まで転がる区間を持つ。</summary>
     [Fact]
@@ -728,8 +708,8 @@ public sealed class TimelineTests
         // 転がりは着地点から始まり、エンジンの回収点で終わる（表示側で独自の転がりを発明しない）。
         Assert.Equal(play.LandingX, roll.From.X, 6);
         Assert.Equal(play.LandingZ, roll.From.Z, 6);
-        Assert.Equal(play.FieldedX, roll.To.X, 6);
-        Assert.Equal(play.FieldedZ, roll.To.Z, 6);
+        Assert.Equal(play.FieldedX!.Value, roll.To.X, 6);
+        Assert.Equal(play.FieldedZ!.Value, roll.To.Z, 6);
         // 時刻も着地→回収でエンジンの値どおり、かつ放物線と連続。
         Assert.Equal(flight.T1, roll.T0, 6);
         Assert.Equal(0.85 + play.HangTimeSeconds, roll.T0, 6);
@@ -741,17 +721,43 @@ public sealed class TimelineTests
     public void CaughtFly_HasNoRollSegment()
     {
         var field = new FieldGeometry();
-        var play = new FieldingPlay
-        {
-            Result = BattedBallResult.Out, LandingX = 0, LandingZ = 88, HangTimeSeconds = 3.5, ApexHeightM = 25,
-            RangeM = 88, BearingDeg = 0, FielderRole = FieldPosition.CenterField,
-            FieldedX = 0, FieldedZ = 88, FieldedAtSeconds = 3.5, BatterToFirstSeconds = 4.2, IsFly = true,
-        };
+        var play = FieldingPlayFixtures.CaughtFly(FieldPosition.CenterField);
         var tl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
 
         Assert.Contains(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
         Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Roll);
+    }
+
+    /// <summary>
+    /// #315: 回収点を持たない打球（空中捕球・本塁打＝リゾルバが FieldedX/Z を書かない経路）でも、
+    /// 処理点は**着地点**へフォールバックする。
+    ///
+    /// 回収点が非nullable だった頃は未設定＝(0,0)＝本塁で、この打球は「センターが本塁へ突っ込み、
+    /// ボールも本塁で終わる」絵になっていた。既定値がドメイン上ありうる座標だったせいで、
+    /// 型でも実行時でも検出されずテストだけが緑で通っていた形（Issue #301 が生き残った原因）。
+    /// </summary>
+    [Fact]
+    public void PlayWithoutFieldPoint_FallsBackToLanding_NotHomePlate()
+    {
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.CaughtFly(FieldPosition.CenterField, landingZ: 88.0);
+        Assert.Null(play.FieldedX); // 前提: この経路は回収点を書かない（書いてしまうと検査にならない）
+        Assert.Null(play.FieldedZ);
+
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        // ボールの放物線は着地点で終わる（本塁 Z=0 へ戻らない）。
+        var flight = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
+        Assert.Equal(play.LandingX, flight.To.X, 6);
+        Assert.Equal(play.LandingZ, flight.To.Z, 6);
+
+        // 捕球者も着地点へ向かう（本塁へ突っ込まない）。
+        var leg = Assert.Single(
+            tl.Moves, m => m.Role == FieldPosition.CenterField && m.Task == FielderTask.FieldBall);
+        Assert.Equal(play.LandingX, leg.To.X, 6);
+        Assert.Equal(play.LandingZ, leg.To.Z, 6);
     }
 
     /// <summary>時刻 t のボール位置（再生器と同じ「セグメント間は最後の位置で保持」規則）。</summary>
@@ -802,8 +808,8 @@ public sealed class TimelineTests
         // 実捕球者の移動レッグは回収点で終わり、回収時刻までに着く。
         var legs = tl.Moves.Where(m => m.Role == role && m.Task == FielderTask.FieldBall).ToList();
         var leg = Assert.Single(legs);
-        Assert.Equal(play.FieldedX, leg.To.X, 6);
-        Assert.Equal(play.FieldedZ, leg.To.Z, 6);
+        Assert.Equal(play.FieldedX!.Value, leg.To.X, 6);
+        Assert.Equal(play.FieldedZ!.Value, leg.To.Z, 6);
         Assert.True(leg.T1 <= fieldedAt + 1e-6, $"回収時刻({fieldedAt:F2})に野手が間に合っていない(到達{leg.T1:F2})");
 
         // 回収時刻のボールと野手が同じ場所にいる。
