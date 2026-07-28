@@ -87,10 +87,16 @@ namespace KokoSim.Unity.Match
         // ラインスコアを描き直したかのフラグ。掲示板は「プレーが確定してから点を掲げる」（実物の運用と同じ）
         // ので、打席の演出が resolved になった瞬間に1回だけ更新する（毎フレーム Snapshot を組み直さない）。
         private bool _lineScorePosted;
-        // タイム（伝令）＝進行を中断して采配を差し込む主操作（issue #173）。再開で自動進行へ戻る。
-        private Button _time, _resume, _subOpen, _skip;
-        private Label _timeoutStatus;
-        // 自動連続進行の中断中フラグ（タイム発動〜再開の間 true）。盤面・自動進行の両方を止める。
+        // クリック中断ポップアップ（issue #289・案P1）。盤面クリック＝演出だけを止める自由中断で、
+        // エンジンには触れない（CallTimeout を呼ばない＝伝令・動揺解除は動かさない）。
+        // 伝令・選手交代・スキップ・再開はこのポップアップに集約する。
+        // 旧「タイム（伝令）中断」（issue #173）との2種別は、交代が伝令不要になったことで
+        // ボタン可否の差が消えたため 1本の _paused に統合した（伝令は中断中に押せる1アクションへ降格）。
+        private VisualElement _pauseModal;
+        private Label _pmSituation;
+        private Button _pmTimeout, _pmSub, _pmSkip, _pmResume;
+        private bool _timeoutSentThisPause;   // 1中断につき伝令1回（連打で複数消費させない）
+        // 自動連続進行の中断中フラグ（ポップアップ表示〜再開の間 true）。盤面・自動進行の両方を止める。
         private bool _paused;
         // 自動進行を開始したか（OnEnable の一度だけ。スクショ時＝CaptureMode は開始しない）。
         private bool _autoStarted;
@@ -111,14 +117,18 @@ namespace KokoSim.Unity.Match
         // 速度ボタンのハンドラ（ラムダのため OnDisable で外せるよう保持する）。
         private readonly List<(Button Button, System.Action Handler)> _speedHandlers = new();
 
-        // 3カラム（左=自校 / 右=相手）＋マッチアップHUD＋実況履歴。表示専用（数値はエンジン集計 Snapshot から引く）。
+        // 3カラム（左=自校 / 右=相手）＋マッチアップHUD。表示専用（数値はエンジン集計 Snapshot から引く）。
+        // 左下コーナーは「上=投手HUD／下=指示パネル」の常設スタック（issue #289）。HUD はスロットの
+        // 中身だけを打席ごとに入れ替え、SignPad は入れ替えない（選択状態・攻守フェーズを保持する）。
         private VisualElement _leftLineup, _rightLineup, _leftPitcher, _rightPitcher, _hudHost, _capHistHost;
+        private VisualElement _hudPitcherSlot, _hudBatterSlot;
         private Label _leftTeam, _rightTeam;
 
-        // 1球采配ショートカット（設計書15 Phase C-3, Q12-2: 全球で常駐）。ITacticsBrain を経由しない
+        // 1球采配（設計書15 Phase C-3 → issue #289 で SignPad 化）。ITacticsBrain を経由しない
         // プレイヤーの手動指示。次に解決される打席の最初の1球にだけ効き、Advance() のたび自動で選択解除する
         // （エンジン側の「1球指示は消費後クリア」と表示を一致させる＝実は1球限りだと分かる）。
-        private VisualElement _ptBattingSeg, _ptDefenseSeg;
+        // 攻撃中は打撃指示だけ・守備中は配球指示だけを出す（SetPhase）。定義は BuildSignPad に集約。
+        private SignPad _signPad;
         private PitchBattingOverride? _pitchBattingChoice;
         private PitchPolicy? _pitchPolicyChoice;
         private MatchLiveStatsProvider _statsProvider;
@@ -194,24 +204,32 @@ namespace KokoSim.Unity.Match
             _leftPitcher = _root.Q<VisualElement>("left-pitcher");
             _rightPitcher = _root.Q<VisualElement>("right-pitcher");
             _hudHost = _root.Q<VisualElement>("hud-host");
+            BuildHudCorners();   // 左下=投手HUD＋指示パネルの常設スタック／右下=打者HUD（issue #289）
             _capHistHost = _root.Q<VisualElement>("caption-history");
             _leftTeam = _root.Q<Label>("left-team");
             _rightTeam = _root.Q<Label>("right-team");
             _statsProvider = new MatchLiveStatsProvider();
 
+            // 実況バー（caption/result/batter）は issue #289 で撤去済み＝クエリは null を返し、
+            // 各所の書き込みは null ガードで素通りする（実況ロジック自体は _capHist に残す）。
             _caption = _root.Q<Label>("caption");
             _result = _root.Q<Label>("result-chip");
             _batter = _root.Q<Label>("batter");
 
-            _time = _root.Q<Button>("time");
-            if (_time != null) _time.clicked += OnTime;
-            _resume = _root.Q<Button>("resume");
-            if (_resume != null) _resume.clicked += OnResume;
-            _timeoutStatus = _root.Q<Label>("timeout-status");
-            _subOpen = _root.Q<Button>("sub-open");
-            if (_subOpen != null) _subOpen.clicked += OnOpenSubstitution;
-            _skip = _root.Q<Button>("skip");
-            if (_skip != null) _skip.clicked += OnSkip;
+            // クリック中断ポップアップ（issue #289）。盤面クリックの検出はルートで拾い、
+            // 残置した操作列・指示パネル・モーダル内のクリックは除外する（IsPauseExempt）。
+            _pauseModal = _root.Q<VisualElement>("pause-modal");
+            _pmSituation = _root.Q<Label>("pm-situation");
+            _pmTimeout = _root.Q<Button>("pm-timeout");
+            if (_pmTimeout != null) _pmTimeout.clicked += OnSendTimeout;
+            _pmSub = _root.Q<Button>("pm-sub");
+            if (_pmSub != null) _pmSub.clicked += OnOpenSubstitution;
+            _pmSkip = _root.Q<Button>("pm-skip");
+            if (_pmSkip != null) _pmSkip.clicked += OnSkip;
+            _pmResume = _root.Q<Button>("pm-resume");
+            if (_pmResume != null) _pmResume.clicked += OnResume;
+            _pauseModal?.RegisterCallback<PointerDownEvent>(OnPauseScrimDown);
+            _root.RegisterCallback<PointerDownEvent>(OnRootPointerDown);
             _backHome = _root.Q<Button>("back-home");
             if (_backHome != null) _backHome.clicked += OnBackHome;
             WireSpeed("spd-05", 0.5f); WireSpeed("spd-1", 1f); WireSpeed("spd-2", 2f); WireSpeed("spd-4", 4f);
@@ -252,6 +270,8 @@ namespace KokoSim.Unity.Match
             _subPanel.Bind();
             BuildGame();
             _subPanel.SetMatch(_prog, _managerIsAway);
+            // 指示パネルの初期フェーズ（1打席目の攻守）。以降は FinishAdvance が打席ごとに追従させる。
+            if (_prog != null) _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
             // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
             PostLineScore(1, isTop: true, finished: false);
             SetBackHomeVisible(false);
@@ -269,11 +289,13 @@ namespace KokoSim.Unity.Match
         // 1クリックで複数打席進んでしまう）。
         private void OnDisable()
         {
-            if (_time != null) _time.clicked -= OnTime;
-            if (_resume != null) _resume.clicked -= OnResume;
-            if (_subOpen != null) _subOpen.clicked -= OnOpenSubstitution;
+            if (_pmTimeout != null) _pmTimeout.clicked -= OnSendTimeout;
+            if (_pmResume != null) _pmResume.clicked -= OnResume;
+            if (_pmSub != null) _pmSub.clicked -= OnOpenSubstitution;
+            if (_pmSkip != null) _pmSkip.clicked -= OnSkip;
+            _pauseModal?.UnregisterCallback<PointerDownEvent>(OnPauseScrimDown);
+            _root?.UnregisterCallback<PointerDownEvent>(OnRootPointerDown);
             _subPanel?.Close();
-            if (_skip != null) _skip.clicked -= OnSkip;
             if (_backHome != null) _backHome.clicked -= OnBackHome;
             if (_camWork != null) _camWork.clicked -= OnToggleCameraWork;
             if (_duelBtn != null) _duelBtn.clicked -= OnToggleDuelView;
@@ -291,6 +313,7 @@ namespace KokoSim.Unity.Match
             _gameOver = false;
             _replaying = false;
             _paused = false;
+            _timeoutSentThisPause = false;
             _autoStarted = false;
             _finalResult = null;
             _onComplete = null;
@@ -323,8 +346,8 @@ namespace KokoSim.Unity.Match
         private void ResetPerMatchVisuals()
         {
             _capHistHost?.Clear();
-            ClearSegHighlight(_ptBattingSeg);
-            ClearSegHighlight(_ptDefenseSeg);
+            _signPad?.ClearSelection();
+            SetVisible(_pauseModal, false);   // 前試合の中断ポップアップを持ち越さない
             _lineScorePosted = false;
             SetCount(0, 0);
             SetOuts(0);
@@ -453,39 +476,121 @@ namespace KokoSim.Unity.Match
             UpdateControlState();
         }
 
-        // 「タイム」（伝令）: 進行を中断し、伝令を1回消費して采配窓（選手交代モーダル）を開く。攻守は
-        // いまの表裏×自校の先後で自動判定（攻撃中＝攻撃伝令／守備中＝守備伝令）。残り0では発動しない。
-        // 効果は次に解決される打席から効く（エンジンの決定論経路を通す＝帯・digest不変。設計書09 §3）。
-        private void OnTime()
+        // ── クリック中断（issue #289） ──
+        // 盤面のどこをクリックしても進行を一時停止してポップアップを開く。中断そのものはエンジンに
+        // 一切触れない（CallTimeout を呼ばない＝伝令は減らない・動揺解除も走らない）。
+        // 再生中なら _replaying はそのまま（Update が _paused で凍結する）。再開すると凍結地点から
+        // 続きが流れ、その打席の後処理（FinishPaView）も正しく走る。
+        private void OnRootPointerDown(PointerDownEvent evt)
         {
+            if (CaptureMode) return;   // スクショハーネス中は中断を出さない（バッチ撮影を暗幕で潰さない）
             if (_gameOver || _paused || _prog == null) return;
-            if (BackgroundGameOp.Running) return;   // 解決中は打席境界が未確定なので受け付けない
-            var kind = _prog.CallTimeout(_managerIsAway);
-            if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
-
-            // 再生中なら _replaying はそのまま（Update が _paused で凍結する）。再開すると凍結地点から
-            // 続きが流れ、その打席の後処理（FinishPaView）も正しく走る。
-            _paused = true;
-            var kindJp = kind == MatchProgression.PlayerTimeoutResult.Offense ? "攻撃" : "守備";
-            if (_caption != null) _caption.text = "タイム（" + kindJp + "の伝令）。采配を差し込んで再開。";
-            RefreshPanel();       // 伝令消費を残数表示へ反映
-            UpdateControlState();
-            _subPanel?.Open();    // 采配窓（交代）をタイム発動時に開く導線
+            if (_subPanel != null && _subPanel.IsOpen) return;
+            if (IsPauseExempt(evt.target as VisualElement)) return;
+            OpenPauseMenu();
         }
 
-        // 「再開」: 中断を解いて自動連続進行へ戻る。
+        // 中断クリックの対象外＝押した操作の実行と中断が二重反応しない場所。
+        // ボタン全般（速度・カメラ・対決ビュー等）／指示パネル（SignPad）／モーダル内。
+        private static bool IsPauseExempt(VisualElement e)
+        {
+            for (var v = e; v != null; v = v.parent)
+            {
+                if (v is Button) return true;
+                if (v.ClassListContains("signpad")) return true;
+                if (v.ClassListContains("modal-scrim")) return true;
+            }
+            return false;
+        }
+
+        // 暗幕（カードの外）クリックは「再開」と同じ＝もう1クリックで即戻れる。
+        private void OnPauseScrimDown(PointerDownEvent evt)
+        {
+            if (evt.target == _pauseModal) OnResume();
+        }
+
+        private void OpenPauseMenu()
+        {
+            _paused = true;
+            _timeoutSentThisPause = false;
+            UpdatePauseMenu();
+            SetVisible(_pauseModal, true);
+        }
+
+        // ポップアップ内ボタンの活性と表示。打席解決中（BackgroundGameOp）はエンジンを触る操作
+        //（伝令・交代・スキップ）を伏せ、解決完了時の UpdateControlState 経由で復帰する（issue #278 と同じ守り）。
+        private void UpdatePauseMenu()
+        {
+            if (_prog == null) return;
+            if (_pmSituation != null) _pmSituation.text = PauseSituationText();
+            var resolving = BackgroundGameOp.Running;
+            if (_pmTimeout != null)
+            {
+                var off = _prog.OffenseTimeoutsLeft(_managerIsAway);
+                var def = _prog.DefenseTimeoutsLeft(_managerIsAway);
+                _pmTimeout.text = _timeoutSentThisPause
+                    ? "📣 伝令を送った"
+                    : "📣 伝令を送る\n攻" + off + " / 守" + def;
+                SetEnabled(_pmTimeout,
+                    !resolving && !_timeoutSentThisPause && _prog.CanCallTimeout(_managerIsAway));
+            }
+            SetEnabled(_pmSub, !resolving);
+            SetEnabled(_pmSkip, !resolving);
+        }
+
+        // 局面サマリ（ポップアップ見出し）。表示中の打席の開始時点の情報だけを出す＝解決済みスコアの
+        // ネタバレをしない（掲示板・盤面の見た目と一致させる）。
+        private string PauseSituationText()
+        {
+            if (_current == null) return _awayDisp + "　－　" + _homeDisp;
+            var half = _current.Inning + "回" + (_current.IsTop ? "表" : "裏");
+            var outs = _current.OutsBefore == 0 ? "無死" : _current.OutsBefore + "死";
+            var runners = RunnersText(_current.BaseFirstBefore, _current.BaseSecondBefore, _current.BaseThirdBefore);
+            // 打席前スコアへ巻き戻す（LivePlateAppearance のスコアは解決後。BeginScoreCall と同じ導出）。
+            var awayBefore = _current.IsTop ? _current.AwayScore - _current.RunsScored : _current.AwayScore;
+            var homeBefore = _current.IsTop ? _current.HomeScore : _current.HomeScore - _current.RunsScored;
+            return half + " " + outs + " " + runners + "　" + _awayDisp + " " + awayBefore + " - " + homeBefore + " " + _homeDisp;
+        }
+
+        private static string RunnersText(bool first, bool second, bool third)
+        {
+            if (!first && !second && !third) return "走者なし";
+            if (first && second && third) return "満塁";
+            var s = "";
+            if (first) s += "一";
+            if (second) s += (s.Length > 0 ? "・" : "") + "二";
+            if (third) s += (s.Length > 0 ? "・" : "") + "三";
+            return s + "塁";
+        }
+
+        // 「伝令を送る」（ポップアップ内）: ここで初めて伝令を1回消費する（クリック中断自体は消費しない）。
+        // 攻守はいまの表裏×自校の先後で自動判定（攻撃中＝攻撃伝令／守備中＝守備伝令）。残り0では発動しない。
+        // 効果は次に解決される打席から効く（エンジンの決定論経路を通す＝帯・digest不変。設計書09 §3）。
+        private void OnSendTimeout()
+        {
+            if (_gameOver || !_paused || _prog == null) return;
+            if (BackgroundGameOp.Running) return;   // 解決中は打席境界が未確定なので受け付けない
+            if (_timeoutSentThisPause) return;      // 1中断につき1回
+            var kind = _prog.CallTimeout(_managerIsAway);
+            if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
+            _timeoutSentThisPause = true;
+            UpdatePauseMenu();   // 残数と送信済み表示を反映
+        }
+
+        // 「再開」: 中断を解いて自動連続進行へ戻る。暗幕クリックでも呼ばれる（OnPauseScrimDown）。
         private void OnResume()
         {
             if (_gameOver || !_paused) return;
             _subPanel?.Close();
+            SetVisible(_pauseModal, false);
             _paused = false;
-            if (_caption != null) _caption.text = "再開。";
             UpdateControlState();
             // 再生の途中で止めていたなら Update が続きを流す。打席境界で止めていたら次打席を起こす。
             if (!_replaying) AutoAdvanceNext();
         }
 
-        // 選手交代（設計書09 §6）。交代は伝令（タイム）の中でだけ行える＝中断中のみ再オープン可能。
+        // 選手交代（設計書09 §6）。issue #289 で伝令の消費とは切り離した＝中断中ならいつでも開ける。
+        // 交代モーダルは pause-modal の上に重なり、閉じるとポップアップへ戻る。
         // 攻撃中／守備中で出せる選択肢はモーダル側が出し分ける。自校が先攻(away)か後攻(home)かは _managerIsAway。
         private void OnOpenSubstitution()
         {
@@ -507,6 +612,7 @@ namespace KokoSim.Unity.Match
             // ボタン自体も UpdateControlState で伏せているが、二重に守る（押下配信は1フレーム遅れうる）。
             if (BackgroundGameOp.Running) return;
             _subPanel?.Close();
+            SetVisible(_pauseModal, false);
             _paused = false;
             var result = _prog.SkipDelegateToAi(_managerIsAway, managerTacticalSense);
             _view.SetPlay(null);
@@ -520,6 +626,8 @@ namespace KokoSim.Unity.Match
             _gameOver = true;
             _replaying = false;
             _paused = false;
+            // 中断ポップアップを開いたまま背景解決が終局に達した場合も閉じる（結果画面へ暗幕を残さない）。
+            SetVisible(_pauseModal, false);
             _finalResult = result;
             UpdateScoreboardFinal(result);
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }
@@ -570,27 +678,26 @@ namespace KokoSim.Unity.Match
         }
 
         // ── 1球采配ショートカット（設計書15 Phase C-3） ──
+        // 指示パネルの定義（issue #289。定義配列駆動＝種類を増やすときはここへ1件足すだけ）。
+        // エンジンのプレイヤー窓口は現状 SetPitchBattingOverride / SetPitchDefenseOverride の2本だけ。
+        // バント・盗塁・守備陣形などの窓口が増えたら、対応する SignDef を足して OnSelect を配線する
+        //（アイコン化は SignDef.Icon を指定するだけ。パネル側のレイアウト変更は不要）。
         private void WirePitchTactics()
         {
-            _ptBattingSeg = _root.Q<VisualElement>("pt-batting");
-            _ptDefenseSeg = _root.Q<VisualElement>("pt-defense");
-            WireSegCell("pt-batting-swing", _ptBattingSeg, () => _pitchBattingChoice = PitchBattingOverride.ForceSwing);
-            WireSegCell("pt-batting-take", _ptBattingSeg, () => _pitchBattingChoice = PitchBattingOverride.ForceTake);
-            WireSegCell("pt-batting-auto", _ptBattingSeg, () => _pitchBattingChoice = null);
-            WireSegCell("pt-defense-break", _ptDefenseSeg, () => _pitchPolicyChoice = PitchPolicy.BreakingHeavy);
-            WireSegCell("pt-defense-zone", _ptDefenseSeg, () => _pitchPolicyChoice = PitchPolicy.ControlFirst);
-            WireSegCell("pt-defense-auto", _ptDefenseSeg, () => _pitchPolicyChoice = null);
-        }
-
-        private void WireSegCell(string name, VisualElement seg, System.Action onPick)
-        {
-            var cell = _root.Q<Label>(name);
-            if (cell == null || seg == null) return;
-            cell.pickingMode = PickingMode.Position;
-            cell.RegisterCallback<ClickEvent>(_ =>
+            _signPad?.SetDefs(new[]
             {
-                onPick();
-                foreach (var c in seg.Children()) c.EnableInClassList("seg__cell--on", c == cell);
+                new SignPad.SignDef { Id = "batting-swing", Label = "強攻", Offense = true, Group = "batting",
+                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceSwing },
+                new SignPad.SignDef { Id = "batting-take", Label = "待て", Offense = true, Group = "batting",
+                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceTake },
+                new SignPad.SignDef { Id = "batting-auto", Label = "任せ", Offense = true, Group = "batting",
+                    GroupLabel = "打撃", IsDefault = true, OnSelect = () => _pitchBattingChoice = null },
+                new SignPad.SignDef { Id = "policy-break", Label = "変化球", Offense = false, Group = "policy",
+                    GroupLabel = "配球", OnSelect = () => _pitchPolicyChoice = PitchPolicy.BreakingHeavy },
+                new SignPad.SignDef { Id = "policy-zone", Label = "ゾーン", Offense = false, Group = "policy",
+                    GroupLabel = "配球", OnSelect = () => _pitchPolicyChoice = PitchPolicy.ControlFirst },
+                new SignPad.SignDef { Id = "policy-auto", Label = "通常", Offense = false, Group = "policy",
+                    GroupLabel = "配球", IsDefault = true, OnSelect = () => _pitchPolicyChoice = null },
             });
         }
 
@@ -606,14 +713,7 @@ namespace KokoSim.Unity.Match
         {
             _pitchBattingChoice = null;
             _pitchPolicyChoice = null;
-            ClearSegHighlight(_ptBattingSeg);
-            ClearSegHighlight(_ptDefenseSeg);
-        }
-
-        private static void ClearSegHighlight(VisualElement seg)
-        {
-            if (seg == null) return;
-            foreach (var c in seg.Children()) c.RemoveFromClassList("seg__cell--on");
+            _signPad?.ClearSelection();
         }
 
         // 同期版（スクショ用 AdvanceForCapture 専用。issue #160 以降の対話操作は AutoAdvanceNext の
@@ -640,6 +740,9 @@ namespace KokoSim.Unity.Match
             UpdateScoreboard(_current, resolved: false);
             SetText("batter", _current.BatterName);
             RefreshPanel();   // 打席確定＝今日の成績・現打者ハイライト・マッチアップHUD を更新
+            // 指示パネルの攻守出し分け（issue #289）。指示は「次に解決される打席」に効くので、
+            // 表示中打席（_current）の表裏ではなくエンジンの現在境界（＝次打席の攻守）で切り替える。
+            _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
             BeginPaReplay();
 
             DrainSubstitutionEvents();   // 直前の Advance 中に起きた継投をポップアップ＋実況履歴へ（issue #209 表現）
@@ -1213,40 +1316,14 @@ namespace KokoSim.Unity.Match
             if (e != null) e.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // ── 操作状態（自動進行／タイム中断／終局。issue #173） ──
-        // 主操作は「タイム」1つ（設計書16 UI原則⑦）。中断中だけ「再開」と「選手交代」を出す。
+        // ── 操作状態（issue #289 で操作列をポップアップへ集約） ──
+        // 残置した操作列（速度・カメラ・対決ビュー）は常時有効＝状態を持たない。
+        // 打席解決中の守り（issue #278: 進行体を背景スレッドが握っている間はエンジンを触る操作を伏せる）は
+        // ポップアップ側のボタン活性（UpdatePauseMenu）が引き継ぐ。解決完了時（FinishAdvance/EndGame）に
+        // ここが呼ばれるので、開いていれば表示を復帰させる。
         private void UpdateControlState()
         {
-            var over = _gameOver;
-            // 打席解決中は進行体を背景スレッドが握っている＝どちらのハンドラも弾かれる（issue #278）。
-            // 「押せるのに効かない」を作らないよう、ボタン側も伏せる。
-            var resolving = BackgroundGameOp.Running;
-            SetVisible(_time, !over && !_paused);
-            SetEnabled(_time, !over && !_paused && !resolving && _prog != null && _prog.CanCallTimeout(_managerIsAway));
-            SetVisible(_resume, !over && _paused);
-            SetEnabled(_resume, !over && _paused);
-            SetEnabled(_subOpen, !over && _paused);   // 交代は伝令（タイム）の中でだけ
-            SetEnabled(_skip, !over && !resolving);
-            UpdateTimeoutStatus();
-        }
-
-        // 伝令の残数（攻N/守M）を常時表示（issue #173）。残0の側では理由（〜の伝令なし）を添える。
-        private void UpdateTimeoutStatus()
-        {
-            if (_timeoutStatus == null) return;
-            if (_prog == null) { _timeoutStatus.text = ""; return; }
-            var off = _prog.OffenseTimeoutsLeft(_managerIsAway);
-            var def = _prog.DefenseTimeoutsLeft(_managerIsAway);
-            var s = "伝令 攻" + off + " / 守" + def;
-            if (!_gameOver && !_paused)
-            {
-                var onOffense = _prog.IsTeamOnOffense(_managerIsAway);
-                var left = onOffense ? off : def;
-                s += left > 0
-                    ? "（" + (onOffense ? "攻撃中" : "守備中") + "）"
-                    : "（" + (onOffense ? "攻撃" : "守備") + "の伝令なし）";
-            }
-            _timeoutStatus.text = s;
+            if (_paused) UpdatePauseMenu();
         }
 
         private void SetBackHomeVisible(bool on)
@@ -1394,32 +1471,54 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        // ── マッチアップHUD（盤面上に画面座標固定・左下=投手/右下=打者） ──
-        private void RefreshHud(MatchLiveSnapshot snap)
+        // ── マッチアップHUD＋指示パネル（盤面上に画面座標固定・左下=投手HUD+指示/右下=打者HUD） ──
+        // コーナーは OnEnable で常設し（BuildHudCorners）、打席ごとに HUD スロットの中身だけを
+        // 入れ替える。SignPad を作り直さないのは選択状態と攻守フェーズを打席をまたいで保持するため
+        //（issue #289。左下は「上=投手HUD／下=指示パネル」の縦積み・下端アンカーはコーナーが取る）。
+        private void BuildHudCorners()
         {
             if (_hudHost == null) return;
             _hudHost.Clear();
-            if (_current == null) return;   // 打席開始前は空（トークンを隠さない）
+
+            var left = new VisualElement { pickingMode = PickingMode.Ignore };
+            left.AddToClassList("mhud-corner");
+            left.AddToClassList("mhud-corner--left");
+            _hudPitcherSlot = new VisualElement { pickingMode = PickingMode.Ignore };
+            left.Add(_hudPitcherSlot);
+            _signPad = new SignPad();
+            left.Add(_signPad);
+            _hudHost.Add(left);
+
+            var right = new VisualElement { pickingMode = PickingMode.Ignore };
+            right.AddToClassList("mhud-corner");
+            right.AddToClassList("mhud-corner--right");
+            _hudBatterSlot = new VisualElement { pickingMode = PickingMode.Ignore };
+            right.Add(_hudBatterSlot);
+            _hudHost.Add(right);
+        }
+
+        private void RefreshHud(MatchLiveSnapshot snap)
+        {
+            if (_hudPitcherSlot == null || _hudBatterSlot == null) return;
+            _hudPitcherSlot.Clear();
+            _hudBatterSlot.Clear();
+            if (_current == null) return;   // 打席開始前はHUDだけ空（指示パネルは常設のまま）
 
             var defPitcher = _current.IsTop ? snap.Home.Pitcher : snap.Away.Pitcher; // 守備側投手
             var offense = _current.IsTop ? snap.Away.Lineup : snap.Home.Lineup;
             LiveBatterSlot batterToday = _current.BatterOrder >= 1 && _current.BatterOrder <= offense.Count
                 ? offense[_current.BatterOrder - 1] : null;
 
-            _hudHost.Add(HudCorner("mhud-corner--left", BuildHudPitcher(defPitcher)));
-            _hudHost.Add(HudCorner("mhud-corner--right", BuildHudBatter(batterToday)));
+            _hudPitcherSlot.Add(HudPanel(BuildHudPitcher(defPitcher)));
+            _hudBatterSlot.Add(HudPanel(BuildHudBatter(batterToday)));
         }
 
-        private static VisualElement HudCorner(string sideClass, VisualElement block)
+        private static VisualElement HudPanel(VisualElement block)
         {
-            var corner = new VisualElement();
-            corner.AddToClassList("mhud-corner");
-            corner.AddToClassList(sideClass);
-            var panel = new VisualElement();
+            var panel = new VisualElement { pickingMode = PickingMode.Ignore };
             panel.AddToClassList("mhud-panel");
             panel.Add(block);
-            corner.Add(panel);
-            return corner;
+            return panel;
         }
 
         private VisualElement BuildHudPitcher(LivePitcherToday def)
@@ -1539,29 +1638,30 @@ namespace KokoSim.Unity.Match
         public void SelectPitchBattingForCapture(PitchBattingOverride? v)
         {
             _pitchBattingChoice = v;
-            var name = v switch
+            var id = v switch
             {
-                PitchBattingOverride.ForceSwing => "pt-batting-swing",
-                PitchBattingOverride.ForceTake => "pt-batting-take",
-                _ => "pt-batting-auto",
+                PitchBattingOverride.ForceSwing => "batting-swing",
+                PitchBattingOverride.ForceTake => "batting-take",
+                _ => "batting-auto",
             };
-            if (_ptBattingSeg == null) return;
-            foreach (var c in _ptBattingSeg.Children()) c.EnableInClassList("seg__cell--on", c.name == name);
+            _signPad?.Select(id);   // OnSelect 経由で choice も入る（クリックと同経路。直接代入は保険）
         }
 
-        /// <summary>スクショ用: 1球采配ショートカットをクリックしたのと同じ状態にする（配球側）。</summary>
+        /// <summary>スクショ用: 指示パネル（SignPad）をクリックしたのと同じ状態にする（配球側）。</summary>
         public void SelectPitchDefenseForCapture(PitchPolicy? v)
         {
             _pitchPolicyChoice = v;
-            var name = v switch
+            var id = v switch
             {
-                PitchPolicy.BreakingHeavy => "pt-defense-break",
-                PitchPolicy.ControlFirst => "pt-defense-zone",
-                _ => "pt-defense-auto",
+                PitchPolicy.BreakingHeavy => "policy-break",
+                PitchPolicy.ControlFirst => "policy-zone",
+                _ => "policy-auto",
             };
-            if (_ptDefenseSeg == null) return;
-            foreach (var c in _ptDefenseSeg.Children()) c.EnableInClassList("seg__cell--on", c.name == name);
+            _signPad?.Select(id);
         }
+
+        /// <summary>スクショ用: クリック中断ポップアップを強制表示する（クリックと同経路）。</summary>
+        public void OpenPauseMenuForCapture() => OpenPauseMenu();
 
         /// <summary>スクショ用: 次の打席を1つ解決してロードする（Update 非依存）。試合終了なら false。</summary>
         public bool AdvanceForCapture()

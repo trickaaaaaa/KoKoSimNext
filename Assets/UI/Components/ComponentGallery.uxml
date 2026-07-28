@@ -269,5 +269,21 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:Label text="SignPad（指示パネル。issue #289。実体は SignPad.cs が定義配列から生成・これは静的サンプル）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+        <ui:VisualElement style="width: 300px;">
+            <ui:VisualElement class="signpad">
+                <ui:VisualElement class="signpad__head">
+                    <ui:Label text="指示" class="signpad__title" />
+                    <ui:Label text="攻撃" class="signpad__phase" />
+                </ui:VisualElement>
+                <ui:VisualElement class="signpad__group">
+                    <ui:Label text="打撃" class="signpad__grouplab" />
+                    <ui:Label text="強攻" class="signpad__tile signpad__tile--on" />
+                    <ui:Label text="待て" class="signpad__tile" />
+                    <ui:Label text="任せ" class="signpad__tile" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>
