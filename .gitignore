@@ -24,6 +24,13 @@ out/
 Assets/Animo/
 Assets/Animo.meta
 
+# --- アート中間生成物（AI生成の高密度FBX。デシメート後の *_lo.fbx だけを Assets 側で追跡） ---
+art-src/
+
+# --- Unity クラッシュ復旧シーン（自動生成の退避物） ---
+Assets/_Recovery/
+Assets/_Recovery.meta
+
 # --- OS / IDE ---
 .DS_Store
 .vs/

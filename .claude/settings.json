@@ -202,7 +202,8 @@
       "Edit(/.claude/skills/issue/**)",
       "Bash(gh run *)",
       "Bash(cp /Users/seiya.oda/.claude.json /Users/seiya.oda/.claude.json.bak-20260721)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(exit 0)"
     ],
     "additionalDirectories": [
       "/private/tmp/kprobe",

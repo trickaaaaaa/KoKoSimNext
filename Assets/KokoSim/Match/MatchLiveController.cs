@@ -1295,6 +1295,21 @@ namespace KokoSim.Unity.Match
         /// <summary>撮影ハーネス用: 対決ステージ（録画ハーネスがRTと診断値を直接読む）。</summary>
         internal DuelStageRig DuelRigForCapture => _duelRig;
 
+        /// <summary>
+        /// 撮影ハーネス用: 対決ステージを作り直す（着衣メッシュの差し替え比較=痩せ3段シート用。
+        /// DuelStageRig.UniformMeshOverrideForCapture を変えてから呼ぶ）。表示中なら新RTを結線し直す。
+        /// </summary>
+        internal void RebuildDuelRigForCapture()
+        {
+            _duelRig?.Dispose();
+            _duelRig = new DuelStageRig();
+            if (_duelOn && _duelRig.Available && _duelImg != null)
+            {
+                _duelImg.Rig = _duelRig;
+                _duelImg.Bind(_duelRig.Target);
+            }
+        }
+
         /// <summary>撮影ハーネス用: 現在ロード中の打席の再生を頭からやり直す（対決ビューの狙い撃ち撮影用）。</summary>
         internal void RestartCurrentPaForCapture()
         {

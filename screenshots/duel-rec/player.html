@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>対決ビュー録画プレーヤー（バット追従検証）</title>
+<style>
+  body { background:#14231B; color:#E8E4D8; font-family:sans-serif; margin:16px; }
+  img  { image-rendering: pixelated; width: 861px; max-width: 100%; border:1px solid #1D3227; }
+  .bar { margin:8px 0; display:flex; gap:12px; align-items:center; }
+  button { font-size:15px; padding:4px 14px; }
+  #info { font-variant-numeric: tabular-nums; }
+</style>
+<h3>対決ビュー録画（12fps・114コマ / 空振り打席まるごと・スイング=Type02）</h3>
+<div class="bar">
+  <button id="play">再生 / 停止</button>
+  <input id="seek" type="range" min="0" max="113" value="0" style="flex:1">
+  <span id="info"></span>
+</div>
+<img id="v" src="full-000.png" alt="">
+<p>スペース=再生/停止、←→=1コマ送り。t≈コマ番号/12秒。構え→ワインドアップ→スイング→片手フォロースルー→握り直し→構え復帰→次球見送り。</p>
+<script>
+  const N = 114; let i = 0, timer = null;
+  const v = document.getElementById('v'), seek = document.getElementById('seek'), info = document.getElementById('info');
+  for (let k = 0; k < N; k++) { const im = new Image(); im.src = 'full-' + String(k).padStart(3, '0') + '.png'; }
+  function show(k) {
+    i = (k + N) % N;
+    v.src = 'full-' + String(i).padStart(3, '0') + '.png';
+    seek.value = i;
+    info.textContent = i + ' / ' + (N - 1) + '  t=' + (i / 12).toFixed(2) + 's';
+  }
+  function toggle() {
+    if (timer) { clearInterval(timer); timer = null; }
+    else timer = setInterval(() => show(i + 1), 1000 / 12);
+  }
+  document.getElementById('play').onclick = toggle;
+  seek.oninput = () => { if (timer) toggle(); show(+seek.value); };
+  document.addEventListener('keydown', e => {
+    if (e.key === ' ') { e.preventDefault(); toggle(); }
+    if (e.key === 'ArrowRight') { if (timer) toggle(); show(i + 1); }
+    if (e.key === 'ArrowLeft')  { if (timer) toggle(); show(i - 1); }
+  });
+  show(0);
+</script>

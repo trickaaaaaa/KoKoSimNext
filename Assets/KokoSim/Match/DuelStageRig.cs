@@ -17,6 +17,40 @@ namespace KokoSim.Unity.Match
     }
 
     /// <summary>
+    /// 対決ビューの絵作りパラメータ一式（カメラ構図＋空色＋シェーダのライト）。既定値は確定構図
+    /// R-comp60（design-18 §7-1・2026-07-26改定）と DuelStageProxyLambert のシェーダ既定に一致し、
+    /// 既定のままなら従来のハードコード時代と同じ絵になる。
+    /// DuelCalibrationWindow（Assets/Editor）がPlay中にスライダで差し替え、確定値は Default へ焼き戻す運用。
+    /// </summary>
+    [System.Serializable]
+    public struct DuelCalibration
+    {
+        public float Dist;       // 注視点からの後退距離[m]（望遠圧縮の強さ。カメラz = マウンド + Dist）
+        public float AimY;       // 注視点の高さ[m]
+        public float AimZ;       // 注視点のz[m]（本塁=0・正=マウンド側）
+        public float PitchDeg;   // 俯角[度]
+        public float YawDeg;     // 横角[度]（正=既定と同じ側＝カメラx負）
+        public float FovDeg;     // 16:9時の垂直FOV[度]（ApplyFovが縦横比から逆算する基準）
+        public Color Sky;        // カメラ背景色（夏空）
+        public float Ambient;    // シェーダ _Ambient（環境光の下限）
+        public Vector3 LightDir; // シェーダ _LightDir（ワールド・面へ向かう向き）
+
+        public static DuelCalibration Default => new DuelCalibration
+        {
+            Dist = 60f,
+            AimY = 0.8f,
+            AimZ = 1f,
+            // 俯角4.5°・横角3.8°: 旧ハードコードのオフセット係数（0.0782 / 0.0668）を角度へ逆算した値
+            PitchDeg = Mathf.Atan(0.0782f) * Mathf.Rad2Deg,
+            YawDeg = Mathf.Atan(0.0668f) * Mathf.Rad2Deg,
+            FovDeg = 2.9f,
+            Sky = new Color(0.55f, 0.78f, 0.90f),
+            Ambient = 0.45f,
+            LightDir = new Vector3(-0.35f, -0.85f, -0.4f),
+        };
+    }
+
+    /// <summary>
     /// 対決ビューの実体（design-18 §7-1 A案・配線スパイク段階）。
     /// DuelStage レイヤーに簡易ステージ＋素体4体（UBC）を組み、StageCamera（確定構図R）が
     /// RT 480×270・Point へ毎フレーム描画する。キャラのポーズ更新だけ 12fps に量子化（§4.2 確定値）、
@@ -42,6 +76,49 @@ namespace KokoSim.Unity.Match
         private static readonly Vector3 StageOrigin = new(0f, -500f, 0f);
 
         private const string BodyFbx = "Assets/DuelSpike/UBC/SuperheroMale.fbx";
+
+        /// <summary>
+        /// 着衣メッシュ（DuelUniformBaker が焼いた U2 資産。design-18 §3.5）。
+        /// 痩せ強度は Slim1（中＝がっしり型。肩・胴×0.90/上腕×0.84/腿×0.92）＝2026-07-28 比較シートで監督選定。
+        /// 無ければ素体のまま出す（着衣は表示品質の話であり対決ビュー自体は止めない）。
+        /// </summary>
+        private const string UniformMeshAsset = "Assets/DuelSpike/Generated/Body_Uniform_Slim1.asset";
+        private const string BodyMeshName = "SuperHero_Male";
+
+        /// <summary>
+        /// 役割別の6領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[8] に流し込む）。
+        /// チームカラーの実データ配管（School側に色は未定義・MatchLiveSnapshotにSchoolIdも無い）が
+        /// できるまでの定数。将来は RankPalette と同型の TeamColorPalette（部品辞書）へ移す（CLAUDE.md）。
+        /// </summary>
+        private readonly struct UniformPalette
+        {
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes;
+
+            public UniformPalette(Color shirt, Color pants, Color undershirt, Color socks)
+            {
+                Shirt = shirt;
+                Pants = pants;
+                Undershirt = undershirt;
+                Socks = socks;
+                Skin = new Color(0.85f, 0.68f, 0.55f);
+                Shoes = new Color(0.15f, 0.15f, 0.16f);
+            }
+
+            /// <summary>守備側（投手・捕手）: 白ユニ＋紺のアンダー/ソックス。</summary>
+            public static UniformPalette Fielding => new(
+                new Color(0.93f, 0.92f, 0.88f), new Color(0.93f, 0.92f, 0.88f),
+                new Color(0.16f, 0.20f, 0.38f), new Color(0.16f, 0.20f, 0.38f));
+
+            /// <summary>攻撃側（打者）: ライトグレー＋えんじ。守備側と輪郭が重なっても見分くため色相を離す。</summary>
+            public static UniformPalette Batting => new(
+                new Color(0.80f, 0.79f, 0.75f), new Color(0.80f, 0.79f, 0.75f),
+                new Color(0.52f, 0.16f, 0.18f), new Color(0.52f, 0.16f, 0.18f));
+
+            /// <summary>球審: 紺シャツ＋グレースラックス（実物の球審装束）。</summary>
+            public static UniformPalette Umpire => new(
+                new Color(0.14f, 0.16f, 0.22f), new Color(0.38f, 0.39f, 0.42f),
+                new Color(0.14f, 0.16f, 0.22f), new Color(0.14f, 0.16f, 0.22f));
+        }
 
         /// <summary>
         /// クリップ供給元（先勝ち＝同名なら先の要素が勝つ）。自作モーション（Assets/Motions＝Rokoko収録・
@@ -81,14 +158,28 @@ namespace KokoSim.Unity.Match
         private const float BatterRunStart = 3.25f;    // 走り出し。ファール・空振りはここで打ち切って構えへ戻す
 
         public RenderTexture Target { get; private set; }
+
+        /// <summary>
+        /// 色数制限（ポスタライズ）の段数。0または1で無効＝素通し。
+        /// 監督選定（2026-07-28・絵柄マトリクス）: **6段・輪郭なし** を採用既定とする。
+        /// 実装は DuelStagePixelPost の Pass0 をカメラ出力→Target のブリット1枚で常時適用。
+        /// </summary>
+        public static float PosterizeLevels = 6f;
+
+        private RenderTexture _colorRt;   // ポスト前のカメラ出力（ポスタライズ有効時のみ生成）
+        private Material _postMat;
         public bool Available { get; private set; }
 
         private GameObject _root;
         private Camera _camera;
         private GameObject _bat;
         private readonly List<Actor> _actors = new();
+        // 生成した全マテリアル（HideAndDontSave はドメインリロードを跨いで残るため、Disposeで明示破棄する。
+        // 従来も漏れていたが、領域色でマテリアル数が増えるのを機に修正）
+        private readonly List<Material> _materials = new();
         private Actor _pitcher, _batter, _catcher;
         private float _acc;
+        private float _fovBaseDeg = 2.9f;   // 16:9時の垂直FOV（ApplyCalibrationが上書き。既定=R-comp60）
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
         private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _catchClip;
@@ -114,6 +205,8 @@ namespace KokoSim.Unity.Match
             public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
             public float HoldSeconds;                // 末尾到達時、待機へ戻る前にそのポーズで止める秒数（0=即戻る）
             public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
+            public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
+            public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
         }
 
         public DuelStageRig()
@@ -146,22 +239,22 @@ namespace KokoSim.Unity.Match
             // yawはクリップごとの素の向き実測（DuelMotionSpike.RunFacingProbe）から:
             // 投手クリップ（自作Rokoko）は素で+Z向き＝PitcherYaw、脇3クリップ（購入AA）も素で+Z向き
             _pitcher = SpawnActor(body, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), PitcherYaw,
-                new Color(0.92f, 0.92f, 0.90f), MoundHeight, layer);
+                UniformPalette.Fielding, MoundHeight, layer);
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
             _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
-                new Color(0.16f, 0.20f, 0.38f), 0f, layer);
+                UniformPalette.Batting, 0f, layer);
             _batter.IdleClip = batClip;
             _batter.IdleEndAt = BatterIdleEnd;
             _batter.EndAt = BatterIdleEnd;   // 生成直後の初回ループでスイングまで流さない
             _catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
-                new Color(0.25f, 0.27f, 0.30f), 0f, layer);
+                UniformPalette.Fielding, 0f, layer);
             _catcher.IdleClip = catClip;
             // 球審は捕手の真後ろ・打者（x=-0.9側）から遠い肩越しに覗く「スロット」位置（#291）。
             // 旧値(-0.35,-1.7)は捕手とのz間隔0.7mしか無く、しゃがみ姿勢同士の胴回りでめり込んで見えていた。
             // z間隔を1.0mへ広げ、x offsetは打者と反対側（+x）へ倒して基準構図R-comp60から見て
             // 捕手の背後に自然に収まるようにする。
-            SpawnActor(body, umpClip, new Vector3(0.35f, 0f, -2.0f), 0f,
-                new Color(0.12f, 0.12f, 0.13f), 0f, layer);
+            var umpire = SpawnActor(body, umpClip, new Vector3(0.35f, 0f, -2.0f), 0f,
+                UniformPalette.Umpire, 0f, layer);
 
             // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
             // 空振り/ミートとも自作打撃クリップの同じスイング区間を使う（収録が1本なので分岐を持てない）。
@@ -181,26 +274,85 @@ namespace KokoSim.Unity.Match
             _camera = camGo.AddComponent<Camera>();
             _camera.cullingMask = 1 << layer;
             _camera.clearFlags = CameraClearFlags.SolidColor;
-            _camera.backgroundColor = new Color(0.55f, 0.78f, 0.90f); // 夏空（盤面トーン連動は絵作り本実装で）
             _camera.nearClipPlane = 0.1f;
             _camera.farClipPlane = 200f;
-            // 確定構図 R-comp60（design-18 §7-1・2026-07-26改定＝望遠圧縮）。
-            // 俯角4.5°・横角3.8°は旧Rのまま、後退60m+FOV2.9°で投手/打者の遠近差を圧縮する
-            const float dist = 60f;
-            const float aimY = 0.8f;
-            float camZ = MoundDistance + dist;
-            float dz = camZ - 1f;
-            camGo.transform.localPosition = new Vector3(-dz * 0.0668f, aimY + dz * 0.0782f, camZ);
-            camGo.transform.LookAt(_root.transform.position + new Vector3(0f, aimY, 1f));
-            ApplyFov();
             _camera.targetTexture = Target;
+
+            // ポスタライズ常設（監督選定 2026-07-28: 6段・輪郭なし）。カメラは中間RTへ描き、
+            // カメラ描画完了フックで Pass0 を当てて Target へ落とす。シェーダ欠落時は従来どおり素通し
+            var postShader = Shader.Find("KokoSim/DuelStagePixelPost");
+            if (postShader != null)
+            {
+                _postMat = new Material(postShader) { hideFlags = HideFlags.HideAndDontSave };
+                _colorRt = CreateRt(BaseWidth, BaseHeight);
+                _camera.targetTexture = _colorRt;
+                UnityEngine.Rendering.RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+            }
 
             // 初期ポーズを1回打っておく（トグル直後の素立ちTポーズを見せない）
             foreach (var a in _actors) StepActor(a, 0.001f);
             GroundFix(_pitcher);
             AlignBat();
 
+            // 装備（design-18 §3.3: 打者=ヘルメット/守備=帽子）。初期ポーズ評価後に
+            // 視線ターゲット（投手→本塁、他3者→マウンド）から向きを実測して焼き付ける（AttachGear仕様）。
+            // 投手だけはセット姿勢の顔が投球方向と約68°ずれる（PitcherYawの経緯と同じ収録特性）ため、
+            // 顔が確実に本塁を向くリリース時刻の姿勢で焼き、初期姿勢へ巻き戻す
+            var mound = new Vector3(0f, MoundHeight, MoundDistance);
+            SeekActor(_pitcher, ReleaseTime);
+            AttachGear(_pitcher, GearKind.Cap, Vector3.zero, UniformPalette.Fielding.Undershirt, layer);
+            SeekActor(_pitcher, 0.001f);
+            GroundFix(_pitcher);
+            // ヘルメットはチーム色でなく暗紺: 実際の高校野球のヘルメットは黒/紺が大半で、
+            // チーム色（えんじ等）だと肌の顔と並んで「髪」に見える（2026-07-28 スクショで実害）
+            // ヘルメットの紺は壁(0.12,0.20,0.16)と同輝度だと頭が背景に溶けて「頭が無い」絵になる
+            // （2026-07-28監督指摘）。ポスタライズ6段で2段ぶん明るい紺にして輪郭を立てる
+            AttachGear(_batter, GearKind.Helmet, mound, new Color(0.28f, 0.31f, 0.45f), layer);
+            AttachGear(_catcher, GearKind.CatcherGear, mound, UniformPalette.Fielding.Undershirt, layer);
+            AttachGear(umpire, GearKind.UmpireGear, mound, new Color(0.13f, 0.13f, 0.15f), layer);
+
+            // 絵作り一式（構図R-comp60・夏空・ライト）。数値の実体は DuelCalibration.Default に集約し、
+            // キャリブレーションツール（DuelCalibrationWindow）が上書き中ならその値で作る。
+            // 全マテリアル（装備分含む）が出揃った後に呼ぶ＝ライト系を漏れなく反映する
+            ApplyCalibration(CalibrationOverride ?? DuelCalibration.Default);
+
             Available = true;
+            Live = this;
+        }
+
+        /// <summary>生きている対決ステージ（Play中に対決ビューを開いている間だけ非null）。キャリブレーションツールの入口。</summary>
+        public static DuelStageRig Live { get; private set; }
+
+        /// <summary>
+        /// キャリブレーションツールの上書き値（null=既定）。設定中はrigを作り直しても
+        /// （打席送り・RebuildDuelRigForCapture）調整中の見た目が維持される。
+        /// </summary>
+        public static DuelCalibration? CalibrationOverride;
+
+        /// <summary>
+        /// 絵作りパラメータを反映する（生成時と、キャリブレーションツールのスライダ操作から毎回）。
+        /// カメラ位置は「注視点(0, AimY, AimZ)から俯角・横角の方向へ後退」の逆算で、
+        /// 既定値なら従来のハードコード定数（-dz*0.0668 / +dz*0.0782）と同じ位置になる。
+        /// </summary>
+        public void ApplyCalibration(DuelCalibration cal)
+        {
+            if (_camera == null) return;
+            _fovBaseDeg = cal.FovDeg;
+            _camera.backgroundColor = cal.Sky;
+            float camZ = MoundDistance + cal.Dist;
+            float dz = camZ - cal.AimZ;
+            _camera.transform.localPosition = new Vector3(
+                -dz * Mathf.Tan(cal.YawDeg * Mathf.Deg2Rad),
+                cal.AimY + dz * Mathf.Tan(cal.PitchDeg * Mathf.Deg2Rad),
+                camZ);
+            _camera.transform.LookAt(_root.transform.position + new Vector3(0f, cal.AimY, cal.AimZ));
+            ApplyFov();
+            foreach (var m in _materials)
+            {
+                if (m == null) continue;
+                m.SetFloat("_Ambient", cal.Ambient);
+                m.SetVector("_LightDir", cal.LightDir);
+            }
         }
 
         // ── §7-2 アンカー同期（第1弾＝投手のみ） ──────────────────────────
@@ -366,11 +518,29 @@ namespace KokoSim.Unity.Match
             if (_camera != null) _camera.targetTexture = null;
             if (Target != null) { Target.Release(); Object.DestroyImmediate(Target); }
             Target = CreateRt(width, height);
+            if (_colorRt != null)
+            {
+                _colorRt.Release(); Object.DestroyImmediate(_colorRt);
+                _colorRt = CreateRt(width, height);   // ポスト前RTはTargetと常に同寸
+            }
             if (_camera != null)
             {
-                _camera.targetTexture = Target;
+                _camera.targetTexture = _colorRt != null ? _colorRt : Target;
                 ApplyFov();
             }
+        }
+
+        /// <summary>ステージカメラの描画完了直後にポスタライズを当てて Target へ落とす（毎フレーム）。</summary>
+        private void OnEndCameraRendering(UnityEngine.Rendering.ScriptableRenderContext ctx, Camera cam)
+        {
+            if (cam != _camera || _postMat == null || _colorRt == null || Target == null) return;
+            if (PosterizeLevels < 2f)
+            {
+                Graphics.Blit(_colorRt, Target);
+                return;
+            }
+            _postMat.SetFloat("_PosterLevels", PosterizeLevels);
+            Graphics.Blit(_colorRt, Target, _postMat, 0);
         }
 
         private static RenderTexture CreateRt(int width, int height)
@@ -384,7 +554,7 @@ namespace KokoSim.Unity.Match
         /// <summary>水平視野角を基準構図（垂直2.9°@16:9）で固定し、現RT縦横比から垂直FOVを逆算する。</summary>
         private void ApplyFov()
         {
-            float halfH = Mathf.Tan(2.9f * 0.5f * Mathf.Deg2Rad) * (16f / 9f);
+            float halfH = Mathf.Tan(_fovBaseDeg * 0.5f * Mathf.Deg2Rad) * (16f / 9f);
             float aspect = Target.width / (float)Target.height;
             _camera.fieldOfView = 2f * Mathf.Atan(halfH / aspect) * Mathf.Rad2Deg;
         }
@@ -396,10 +566,19 @@ namespace KokoSim.Unity.Match
                 if (a.Graph.IsValid()) a.Graph.Destroy();
             }
             _actors.Clear();
+            foreach (var m in _materials) if (m != null) Object.DestroyImmediate(m);
+            _materials.Clear();
+            if (_postMat != null)
+            {
+                UnityEngine.Rendering.RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+                Object.DestroyImmediate(_postMat); _postMat = null;
+            }
             if (_camera != null) _camera.targetTexture = null;
+            if (_colorRt != null) { _colorRt.Release(); Object.DestroyImmediate(_colorRt); _colorRt = null; }
             if (Target != null) { Target.Release(); Object.DestroyImmediate(Target); Target = null; }
             if (_root != null) { Object.DestroyImmediate(_root); _root = null; }
             Available = false;
+            if (Live == this) Live = null;
         }
 
         // ---- ステージ ---------------------------------------------------------
@@ -437,22 +616,51 @@ namespace KokoSim.Unity.Match
             return go;
         }
 
-        private static Material FlatMaterial(Color color)
+        private Material FlatMaterial(Color color)
         {
             // シーンライト非依存の自前Lambert（Assets/DuelSpike/DuelStageProxyLambert.shader）
             var mat = new Material(Shader.Find("KokoSim/DuelStageProxyLambert")) { hideFlags = HideFlags.HideAndDontSave };
             mat.SetColor("_BaseColor", color);
+            _materials.Add(mat);
+            return mat;
+        }
+
+        /// <summary>着衣メッシュの6領域塗り分けマテリアル（_RegionColors は Properties 宣言不可＝配列セット）。</summary>
+        private Material RegionMaterial(UniformPalette pal)
+        {
+            var mat = FlatMaterial(Color.white);
+            mat.SetFloat("_UseRegions", 1f);
+            var colors = new Color[8];
+            colors[(int)DuelUniformMeshBuilder.Region.Shirt] = pal.Shirt;
+            colors[(int)DuelUniformMeshBuilder.Region.Pants] = pal.Pants;
+            colors[(int)DuelUniformMeshBuilder.Region.Undershirt] = pal.Undershirt;
+            colors[(int)DuelUniformMeshBuilder.Region.Socks] = pal.Socks;
+            colors[(int)DuelUniformMeshBuilder.Region.Skin] = pal.Skin;
+            colors[(int)DuelUniformMeshBuilder.Region.Shoes] = pal.Shoes;
+            colors[6] = Color.magenta;   // 未使用領域＝出たらバグ（目で分かる色）
+            colors[7] = Color.magenta;
+            mat.SetColorArray("_RegionColors", colors);
             return mat;
         }
 
         // ---- 素体 -------------------------------------------------------------
 
-        private Actor SpawnActor(GameObject bodyPrefab, AnimationClip clip, Vector3 pos, float yawDeg, Color color,
-            float groundY, int layer)
+        private Actor SpawnActor(GameObject bodyPrefab, AnimationClip clip, Vector3 pos, float yawDeg,
+            UniformPalette pal, float groundY, int layer)
         {
             var go = Object.Instantiate(bodyPrefab);
             go.name = "body-" + clip.name;
             go.transform.SetParent(_root.transform, false);
+
+            // 着衣メッシュ（U2）: 本体SMRのメッシュをベイク資産へ差し替え、目・眉は消す（顔なし方針。
+            // 従来は肌と同色マテリアルで偶然隠れていただけ＝領域色化で露出するため明示的に無効化）。
+            // bindposes/boneWeightsは原本のままなのでボーン配列・Animatorはそのまま効く
+            var uniformMesh = LoadUniformMesh();
+            foreach (var smr0 in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                if (smr0.name == BodyMeshName && uniformMesh != null) smr0.sharedMesh = uniformMesh;
+                else if (smr0.name != BodyMeshName) smr0.gameObject.SetActive(false);
+            }
 
             var rs = go.GetComponentsInChildren<Renderer>();
             var b = rs[0].bounds;
@@ -462,7 +670,8 @@ namespace KokoSim.Unity.Match
             go.transform.localPosition = pos;
             go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
 
-            var mat = FlatMaterial(color);
+            // 着衣メッシュはUV1の領域IDで塗り分け、素体フォールバック時は肌色一色
+            var mat = uniformMesh != null ? RegionMaterial(pal) : FlatMaterial(pal.Skin);
             foreach (var r in rs) r.sharedMaterial = mat;
             foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
                 smr.updateWhenOffscreen = true;   // バウンズをバインド箱でなく実ポーズ追従に
@@ -485,6 +694,18 @@ namespace KokoSim.Unity.Match
             var rf = animator.GetBoneTransform(HumanBodyBones.RightFoot);
             if (lf != null && rf != null)
                 actor.AnkleOffset = Mathf.Min(lf.position.y, rf.position.y) - go.transform.position.y;
+
+            // 頭蓋の上・前方向をボーンローカルで実測（AttachGear用）。クリップ評価前＝素立ちTポーズは
+            // 頭が水平・顔がルート正面と保証される唯一のポーズ。頭ボーンのローカル軸は素体依存で
+            // 信用できないため、「Tポーズのワールド上向き／ルート正面」を逆変換して持ち、
+            // 装着時に現ポーズへ順変換して使う。前方向も実測するのは、視線ターゲットの水平投影で
+            // 前を決めると頭が傾いた姿勢で枠がロールし「帽子の斜め被り」になるため（2026-07-28実害）
+            var headBone = animator.GetBoneTransform(HumanBodyBones.Head);
+            actor.HeadUpLocal = headBone != null
+                ? headBone.InverseTransformDirection(Vector3.up) : Vector3.up;
+            // UBC素体のバインドポーズは顔がルート **-Z** 向き（+Zで測るとキャップが後ろ被りになる実測 2026-07-28）
+            actor.HeadFwdLocal = headBone != null
+                ? headBone.InverseTransformDirection(-go.transform.forward) : Vector3.forward;
 
             actor.Graph = PlayableGraph.Create("duel-" + clip.name);
             actor.Output = AnimationPlayableOutput.Create(actor.Graph, "out", animator);
@@ -616,6 +837,14 @@ namespace KokoSim.Unity.Match
         // 判定はスイング系クリップに限定する（構え/見逃し/死球は常に両手整列＝素の見た目を信じる）
         private const float HandsApartThreshold = 0.28f;
         private const float BatDropTime = BatterRunStart;   // 走り出し（実測3.25s）からバットを放った扱いで非表示
+        // 構えのバット仰角（水平から）。手→手の実測線はこの素体だと拳が積み重ならず横に開くため
+        // 構えでは軸が寝てバットが水平に見える（監督指摘 2026-07-28）→ ヨーだけ実測から拾い、仰角は立てる
+        private const float StanceBatElevationDeg = 60f;
+        // 振り抜き後の巻き付き仰角。振り切りポーズの手→手実測線はほぼ投手方向＝カメラ軸を向き、
+        // 円柱が数pxの点に潰れて「バットが消えた」絵になる（2026-07-28 プローブ実測）。
+        // 実物はバレルがリード肩越しに捕手側へ巻き付くので、逆ヨー×この仰角の合成軸で表す
+        private const float FollowBatElevationDeg = 35f;
+        private const float GripBelowHalf = 0.15f;   // グリップ中点からノブ端までの距離（実物: 拳2個+ノブ余り）
         private bool _batOneHand;       // いま片手追従中か（診断用）
         private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;
@@ -628,26 +857,70 @@ namespace KokoSim.Unity.Match
             var rhT = _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand);
             if (lhT == null || rhT == null) return;
 
-            // インプレーの走り出し以降はバットを放った扱い（実物はトスするが小道具は消すのが最も自然）
-            if (_batter.Time >= BatDropTime)
+            // インプレーの走り出し以降はバットを放った扱い（実物はトスするが小道具は消すのが最も自然）。
+            // 放すのは「クリップを走り出しの先まで流す＝実際に走る」インプレー（EndAt=0）だけ。
+            // 空振り・ファールは EndAt=BatterRunStart で打ち切る＝Timeが3.25に達した停止ポーズでも
+            // 打者は走らないので持ったまま（旧実装は空振りの振り切りホールドでバットが消えていた）
+            if (_batter.Time >= BatDropTime && _batter.EndAt <= 0f)
             {
                 _bat.SetActive(false);
                 return;
             }
             _bat.SetActive(true);
 
-            var lh = lhT.position;
-            var rh = rhT.position;
+            // 手ボーンの原点は手首＝そのまま結ぶとバットが手首の上を横切り「握れていない」絵になる。
+            // 中指付け根との補間で掌中心を推定し、握り線を拳の中へ通す
+            Vector3 Fist(Transform wrist, HumanBodyBones knuckle)
+            {
+                var k = _batter.Animator.GetBoneTransform(knuckle);
+                return k != null ? Vector3.Lerp(wrist.position, k.position, 0.65f) : wrist.position;
+            }
+            var lh = Fist(lhT, HumanBodyBones.LeftMiddleProximal);
+            var rh = Fist(rhT, HumanBodyBones.RightMiddleProximal);
+            // クリップ内時刻での区間判定は打撃クリップ限定（死球クリップは常に構え扱い＝バットは手元で立てたまま）
+            bool battingClip = _batter.Clip == _swingMissClip;
             // 片手判定を許すのはスイング区間だけ。自作打撃クリップは構えもスイングも同じ1本なので
             // クリップの同一性では区別できず、クリップ内時刻で見る（構えは BatterIdleEnd 以下）
-            bool swinging = _batter.Time >= BatterSwingStart;
+            bool swinging = battingClip && _batter.Time >= BatterSwingStart;
             _batOneHand = swinging && _batGoodValid && Vector3.Distance(lh, rh) > HandsApartThreshold;
             if (!_batOneHand)
             {
-                // 両手保持: 両手ボーンを結ぶ線に整列（§3.3の実測知見＝手ボーン軸は素体依存で使えない）
-                var axis = (rh - lh).normalized;
+                // 両手保持: 握り線（掌中心→掌中心）を基準に整列（§3.3の実測知見＝手ボーン軸は使えない）。
+                // 実測線が信用できるのはスイング中（握り線が振り面に沿う）だけ:
+                //   構え     = 合成軸（ヨー実測 × 仰角60°）で立てる（実測線は拳が横に開いて寝る）
+                //   振り出し = ±0.15sで実測軸へブレンド
+                //   振り抜き = 面通過+0.05〜0.25sで逆ヨー×仰角35°の巻き付き軸へブレンド
+                //             （実測線は投手方向≒カメラ軸を向き、棒が点に潰れて消えて見える）
+                var d = (rh - lh).normalized;
+                var horiz = new Vector3(d.x, 0f, d.z);
+                Vector3 axis;
+                if (horiz.sqrMagnitude < 1e-6f)
+                {
+                    axis = d;
+                }
+                else
+                {
+                    Vector3 Composed(Vector3 yawDir, float elevationDeg)
+                    {
+                        float el = elevationDeg * Mathf.Deg2Rad;
+                        return (yawDir.normalized * Mathf.Cos(el) + Vector3.up * Mathf.Sin(el)).normalized;
+                    }
+                    var stance = Composed(horiz, StanceBatElevationDeg);
+                    if (!battingClip || _batter.Time < BatterSwingStart - 0.15f)
+                    {
+                        axis = stance;
+                    }
+                    else
+                    {
+                        float inSwing = Mathf.InverseLerp(BatterSwingStart - 0.15f, BatterSwingStart + 0.15f, _batter.Time);
+                        float wrapped = Mathf.InverseLerp(SwingMissPlane + 0.05f, SwingMissPlane + 0.25f, _batter.Time);
+                        var wrap = Composed(-horiz, FollowBatElevationDeg);
+                        axis = Vector3.Slerp(Vector3.Slerp(stance, d, inSwing), wrap, wrapped).normalized;
+                    }
+                }
+                var grip = (lh + rh) * 0.5f;
                 _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
-                _bat.transform.position = lh + axis * (0.425f - 0.10f);
+                _bat.transform.position = grip + axis * (0.425f - GripBelowHalf);
                 // 片手期の追従用に「最後に両手で持てていた見た目」を毎回焼き直す。
                 // 「離れた瞬間に初回焼き付け」だと、クリップ切替直後は直前クリップ末尾の残骸姿勢を
                 // 拾ってゴミオフセットが固定される（構えでバットが地面に刺さる事故の真因）
@@ -676,6 +949,307 @@ namespace KokoSim.Unity.Match
             mitt.transform.localScale = Vector3.Scale(new Vector3(0.26f, 0.24f, 0.15f), inv);
             mitt.GetComponent<MeshRenderer>().sharedMaterial = FlatMaterial(new Color(0.45f, 0.27f, 0.15f));
             mitt.layer = layer;
+        }
+
+        // ---- 被り物・防具（design-18 §3.3。役割ごとに出し分け＝打者ヘルメット/守備帽子） --------
+
+        /// <summary>役割別の装備セット。高校野球のヘルメットは両耳フラップ付き＝帽子とシルエットで判別できる。</summary>
+        private enum GearKind { Cap, Helmet, CatcherGear, UmpireGear }
+
+        /// <summary>
+        /// 装備をボーンへ装着する。呼び出しは**初期ポーズ評価後**（コンストラクタ末尾のStepActor後）限定。
+        ///
+        /// 向きの決め方: ボーンのローカル軸もTポーズの正面も素体・クリップ依存で信用できない
+        /// （バットの実装知見＋2026-07-28実測: Tポーズ正面=yaw仮定で焼くと打者のつばが後頭部を向いた）。
+        /// そのため**初期ポーズで「視線ターゲット」（投手→本塁、他3者→マウンド）への水平方向を実測**し、
+        /// そのワールド姿勢をボーンの子へ焼き付ける。野球のポーズは構えで必ず相手を見るので、
+        /// 顔の向き＝視線方向が成り立つ。以後はボーン追従でお辞儀・しゃがみにも自然に付いてくる。
+        ///
+        /// 寸法はUBC頭部の実測（2026-07-28: 頭ボーン基準で幅0.18・奥行き0.22・頭頂+0.21）から。
+        /// コンテナはlossyScale逆数でワールドスケール1に戻してあるので、子パーツは実寸(m)で置く。
+        /// </summary>
+        private void AttachGear(Actor actor, GearKind kind, Vector3 gazeLocal, Color accent, int layer)
+        {
+            var head = actor.Animator.GetBoneTransform(HumanBodyBones.Head);
+            var dark = new Color(0.13f, 0.13f, 0.15f);
+            var target = _root.transform.TransformPoint(gazeLocal);
+            // 装着ボーンから視線ターゲットへの水平方向（つば・プロテクター正面。上下向きはボーン追従に任せる）
+            Quaternion GazeRot(Transform bone)
+            {
+                var d = target - bone.position;
+                d.y = 0f;
+                return Quaternion.LookRotation(d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward);
+            }
+            // 頭専用: 上方向をワールド上でなく頭蓋実測（SpawnActorのTポーズ計測）に合わせる。
+            // GazeRotのワールド上仮定は焼き付けポーズで頭が水平なとき（捕手・球審）しか成立せず、
+            // 頭が傾く姿勢で焼く投手（リリース）・打者（構え）は被り物が頭蓋に対して斜めに接着されて
+            // 「帽子が尖る／ヘルメットが後頭部へずれて髪に見える」実害が出た（2026-07-28 スクショ）
+            Quaternion SkullRot(Transform bone)
+            {
+                var up = bone.TransformDirection(actor.HeadUpLocal);
+                up = up.sqrMagnitude > 1e-6f ? up.normalized : Vector3.up;
+                // 前も素立ち実測（顔正面）を現ポーズへ順変換して使う。旧実装の
+                // 「視線ターゲットへの水平方向」は、ベイク姿勢で頭が傾いていると up と直交化した
+                // 枠がロールし、つばが顔を斜めに横切る「斜め被り」になった（2026-07-28 投手で実害）
+                var d = bone.TransformDirection(actor.HeadFwdLocal);
+                d = d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward;
+                var fwd = d - Vector3.Dot(d, up) * up;
+                fwd = fwd.sqrMagnitude > 1e-6f ? fwd.normalized : d;
+                return Quaternion.LookRotation(fwd, up);
+            }
+
+            if (head != null)
+            {
+                var c = GearContainer(head, "gear-head", SkullRot(head));
+                switch (kind)
+                {
+                    case GearKind.Cap:
+                        // 生成メッシュ装備（較正済み: クラウン中心=原点・つば+Z）。無ければ従来プリミティブ。
+                        // 位置決めの学び（2026-07-28監督2往復）: メッシュクラウンは深い（縁まで0.11）ので
+                        // 「拡大＋下げ」は顔まで飲み込む。正解は**眉上（縁y≈0.08）まで持ち上げ**、
+                        // 後頭部の露出はわずかな後ろ寄せだけで拾う
+                        if (DuelGearMeshes.Cap() != null)
+                        {
+                            GearMeshPart(c, DuelGearMeshes.Cap(), "cap-mesh",
+                                new Vector3(0f, 0.185f, -0.025f), Quaternion.identity, accent, layer);
+                        }
+                        else
+                        {
+                            // 実測頭寸に被せる: クラウンは頭頂(+0.21)を覆い、側頭±0.09を包む
+                            GearPart(c, PrimitiveType.Sphere, "cap-crown", new Vector3(0f, 0.155f, 0.01f),
+                                new Vector3(0.21f, 0.15f, 0.23f), accent, layer);
+                            GearPart(c, PrimitiveType.Cube, "cap-brim", new Vector3(0f, 0.125f, 0.145f),
+                                new Vector3(0.17f, 0.012f, 0.09f), accent, layer);
+                        }
+                        break;
+                    case GearKind.Helmet:
+                        // ヘルメットはAIメッシュ不採用（2026-07-28確定）: 生成殻は開口・付属タブの向きが
+                        // 制御できず、頭が開口を突き抜け＋タブが後ろ髪に見える「おかっぱ」事故になった
+                        // （helm-closeup-0.png）。マスク（FaceCage）と同じ結論で、殻＋つば＋両耳フラップの
+                        // **構造がある装備はプリミティブ構成**で作る。
+                        // 帽子より低く深く被る（額は眉まで覆い、顔だけ出す）。初版は帽子と同じ高さに置いて
+                        // 額が露出し「赤い髪」に見えた → 中心を下げ縦径を拡大
+                        GearPart(c, PrimitiveType.Sphere, "helmet-shell", new Vector3(0f, 0.13f, 0.02f),
+                            new Vector3(0.24f, 0.20f, 0.26f), accent, layer);
+                        GearPart(c, PrimitiveType.Cube, "helmet-brim", new Vector3(0f, 0.12f, 0.16f),
+                            new Vector3(0.17f, 0.012f, 0.07f), accent, layer);
+                        GearPart(c, PrimitiveType.Sphere, "helmet-ear-l", new Vector3(-0.11f, 0.05f, 0.02f),
+                            new Vector3(0.035f, 0.11f, 0.10f), accent, layer);
+                        GearPart(c, PrimitiveType.Sphere, "helmet-ear-r", new Vector3(0.11f, 0.05f, 0.02f),
+                            new Vector3(0.035f, 0.11f, 0.10f), accent, layer);
+                        break;
+                    case GearKind.CatcherGear:
+                        // ヘルメット殻（顔は覆わない・後頭部〜頭頂のみ）＋ケージバー。
+                        // AI生成の殻マスクは顔全体を塞ぎ「視線が遮られている」（2026-07-28監督指摘・
+                        // 実物写真参照）。隙間が命のケージは細バーのプリミティブが正解
+                        GearPart(c, PrimitiveType.Sphere, "cmask-shell", new Vector3(0f, 0.145f, -0.02f),
+                            new Vector3(0.23f, 0.18f, 0.22f), accent, layer);
+                        FaceCage(c, "cmask", accent, layer);
+                        break;
+                    case GearKind.UmpireGear:
+                        // 球審: 帽子型クラウン＋ケージバー（顔は見せる）
+                        GearPart(c, PrimitiveType.Sphere, "umask-crown", new Vector3(0f, 0.155f, -0.01f),
+                            new Vector3(0.21f, 0.15f, 0.21f), dark, layer);
+                        FaceCage(c, "umask", dark, layer);
+                        break;
+                }
+            }
+
+            if (kind == GearKind.CatcherGear || kind == GearKind.UmpireGear)
+            {
+                // 胸プロテクター（UpperChestはHumanoidマッピングで欠けることがある→Chest→Spineへ落ちる）
+                var chest = actor.Animator.GetBoneTransform(HumanBodyBones.UpperChest);
+                if (chest == null) chest = actor.Animator.GetBoneTransform(HumanBodyBones.Chest);
+                if (chest == null) chest = actor.Animator.GetBoneTransform(HumanBodyBones.Spine);
+                if (chest != null)
+                {
+                    var c = GearContainer(chest, "gear-chest", GazeRot(chest));
+                    bool catcherGear = kind == GearKind.CatcherGear;
+                    // 実物のプロテクターは横一列のパッド（ロール）が段々に積まれ、間に溝・上に肩当て・
+                    // 首元に切り欠きがある。箱1枚だと「板」に見える（2026-07-28 監督指摘「丸みと窪みが無い」）ため、
+                    // 横倒しカプセルを縦に積む＝Lambert陰影がロールの丸みと段間の溝を描く。
+                    // 行の意味: (y, z, 幅W, 管径D)。腹へ向けて幅を絞り、中段をわずかに前へ出して体に沿う凸を作る。
+                    // Capsuleの軸はローカルYなので z90°回転で横倒し、scale=(D, W/2, D)
+                    var rows = catcherGear
+                        ? new[]
+                        {
+                            new Vector4(0.065f, 0.100f, 0.30f, 0.085f),
+                            new Vector4(-0.015f, 0.105f, 0.30f, 0.085f),
+                            new Vector4(-0.090f, 0.100f, 0.26f, 0.080f),
+                            new Vector4(-0.155f, 0.090f, 0.22f, 0.075f),
+                        }
+                        : new[]   // 球審は胸だけの薄型3段
+                        {
+                            new Vector4(0.050f, 0.085f, 0.24f, 0.070f),
+                            new Vector4(-0.015f, 0.090f, 0.24f, 0.070f),
+                            new Vector4(-0.075f, 0.085f, 0.21f, 0.065f),
+                        };
+                    if (catcherGear && DuelGearMeshes.Chest() != null)
+                    {
+                        // 生成メッシュ（bpy製・較正済み: 縦0.44m・パッド面+Z）。首元まで上げて着せる。
+                        // 球審は薄型プリミティブ維持（服の下に着る前提のシルエット）
+                        GearMeshPart(c, DuelGearMeshes.Chest(), "chest-mesh",
+                            new Vector3(0f, 0.0f, 0.09f), Quaternion.identity, accent, layer);
+                    }
+                    else
+                    {
+                    for (int i = 0; i < rows.Length; i++)
+                        GearPart(c, PrimitiveType.Capsule, "chest-pad-" + i,
+                            new Vector3(0f, rows[i].x, rows[i].y),
+                            new Vector3(rows[i].w, rows[i].z * 0.5f, rows[i].w),
+                            accent, layer, new Vector3(0f, 0f, 90f));
+                    }
+                    // 肩当て: 肩の稜線の**上**に載せ、前後に跨がせる（前面だけに置くと「前掛け」に見える＝
+                    // 2026-07-28監督指摘「肩の上を通って背中でパチンとするもの」）。左右の間＝首元の切り欠き。
+                    // 位置は固定値でなく**肩ボーン（UpperArm頭）の実測**から: 固定値(±0.105)は内側すぎて
+                    // 「襟の飾り」に見えた（スクショ実害）。素体・ポーズが変わってもずれない。
+                    // メッシュ胸当ての時も必ず載せる＝「肩の上も通っている」実物構造（2026-07-28再指摘）
+                    var shoulderScale = catcherGear
+                        ? new Vector3(0.115f, 0.055f, 0.175f)
+                        : new Vector3(0.095f, 0.048f, 0.155f);
+                    foreach (var (armBone, side) in new[]
+                        { (HumanBodyBones.LeftUpperArm, "l"), (HumanBodyBones.RightUpperArm, "r") })
+                    {
+                        var arm = actor.Animator.GetBoneTransform(armBone);
+                        if (arm == null) continue;
+                        var lp = c.transform.InverseTransformPoint(arm.position);
+                        lp.y += 0.055f;                              // 肩ボーン頭の少し上＝稜線
+                        lp.x -= Mathf.Sign(lp.x) * 0.02f;            // 気持ち内側（腕の付け根に被せる）
+                        lp.z += 0.005f;
+                        GearPart(c, PrimitiveType.Sphere, "chest-shoulder-" + side,
+                            lp, shoulderScale, accent, layer);
+                    }
+                    // 背面ストラップ: 肩から背中へ降りる縦帯2本＋背中の横バンド（バックルで留まる装具の記号）。
+                    // 濃色の細帯にして「体の一部」ではなくベルトに読ませる
+                    GearPart(c, PrimitiveType.Capsule, "strap-back-l",
+                        new Vector3(-0.075f, 0.055f, -0.095f), new Vector3(0.030f, 0.095f, 0.030f), dark, layer);
+                    GearPart(c, PrimitiveType.Capsule, "strap-back-r",
+                        new Vector3(0.075f, 0.055f, -0.095f), new Vector3(0.030f, 0.095f, 0.030f), dark, layer);
+                    GearPart(c, PrimitiveType.Cube, "strap-back-band",
+                        new Vector3(0f, -0.035f, -0.100f), new Vector3(0.24f, 0.035f, 0.015f), dark, layer);
+                }
+            }
+
+            if (kind == GearKind.CatcherGear)
+            {
+                // レガース。箱1枚は「板」に見える（2026-07-28監督指摘）ため、実物の構造どおり
+                // 膝皿ドーム＋脛ロール3段＋足首ロールに分解する（胸プロテクターと同じ段積みの読み）。
+                // 配置は「膝（calfボーン頭）→足首（footボーン頭）」の実測軸に沿わせる＝
+                // しゃがみで脛が斜めでもロール列が脛から浮かない
+                var legs = new[]
+                {
+                    (HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot),
+                    (HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot),
+                };
+                foreach (var (calfBone, footBone) in legs)
+                {
+                    var calf = actor.Animator.GetBoneTransform(calfBone);
+                    if (calf == null) continue;
+                    var c = GearContainer(calf, "gear-leg", GazeRot(calf));
+                    var foot = actor.Animator.GetBoneTransform(footBone);
+                    // 膝→足首ベクトル（コンテナローカル）。footが無い素体はほぼ直下へフォールバック
+                    var shin = foot != null
+                        ? c.transform.InverseTransformPoint(foot.position)
+                        : new Vector3(0f, -0.42f, 0f);
+                    var fwd = new Vector3(0f, 0f, 0.065f);   // 脛の前面へのオフセット（コンテナ+Z=視線方向）
+                    var legMesh = DuelGearMeshes.LegGuard();
+                    if (legMesh != null)
+                    {
+                        // 生成メッシュ（bpy製・膝が+Y・較正済み）を膝→足首の実測軸に沿わせ、長さを合わせる
+                        float len = shin.magnitude > 0.05f ? shin.magnitude : 0.42f;
+                        float s = len * 1.05f / Mathf.Max(0.05f, legMesh.bounds.size.y);
+                        GearMeshPart(c, legMesh, "leg-mesh", shin * 0.42f + fwd,
+                            Quaternion.FromToRotation(Vector3.down, shin.normalized), accent, layer, s);
+                    }
+                    else
+                    {
+                    GearPart(c, PrimitiveType.Sphere, "leg-knee", shin * 0.04f + fwd + new Vector3(0f, 0f, 0.012f),
+                        new Vector3(0.115f, 0.100f, 0.075f), accent, layer);
+                    foreach (var t in new[] { 0.32f, 0.52f, 0.72f })
+                        GearPart(c, PrimitiveType.Capsule, "leg-shin-" + t,
+                            shin * t + fwd, new Vector3(0.055f, 0.055f, 0.055f), accent, layer,
+                            new Vector3(0f, 0f, 90f));
+                    GearPart(c, PrimitiveType.Capsule, "leg-ankle", shin * 0.90f + fwd * 0.9f,
+                        new Vector3(0.048f, 0.045f, 0.048f), accent, layer, new Vector3(0f, 0f, 90f));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 装備コンテナ: ボーンの子に置き、素体の正規化スケールを打ち消して（lossyScale逆数）
+        /// 実寸(m)でパーツを置ける空間を作る。ワールド姿勢はキャラ正面（yaw）に焼き付ける。
+        /// </summary>
+        private static GameObject GearContainer(Transform bone, string name, Quaternion worldRot)
+        {
+            var c = new GameObject(name);
+            c.transform.SetParent(bone, false);
+            var s = bone.lossyScale;
+            c.transform.localScale = new Vector3(1f / s.x, 1f / s.y, 1f / s.z);
+            c.transform.position = bone.position;
+            c.transform.rotation = worldRot;
+            return c;
+        }
+
+        private GameObject GearPart(GameObject container, PrimitiveType type, string name,
+            Vector3 localPos, Vector3 localScale, Color color, int layer, Vector3 localEuler = default)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            go.name = name;
+            Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.transform.SetParent(container.transform, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.Euler(localEuler);
+            go.transform.localScale = localScale;
+            go.GetComponent<MeshRenderer>().sharedMaterial = FlatMaterial(color);
+            go.layer = layer;
+            return go;
+        }
+
+        /// <summary>
+        /// 顔前ケージ（マスクの記号）。実物のマスクは顔を塞がず細いバーの隙間から視線が通る
+        /// （2026-07-28 監督指摘＋実物写真）。横バー4本＋左右レール＋額・顎パッドで
+        /// 「覆わずに守る」を作る。バーはピクセル化で格子の気配に落ち、肌色（顔）が残る。
+        /// </summary>
+        private void FaceCage(GameObject container, string prefix, Color pad, int layer)
+        {
+            var dark = new Color(0.13f, 0.13f, 0.15f);
+            GearPart(container, PrimitiveType.Cube, prefix + "-pad-brow", new Vector3(0f, 0.125f, 0.10f),
+                new Vector3(0.15f, 0.028f, 0.035f), pad, layer);
+            GearPart(container, PrimitiveType.Cube, prefix + "-pad-chin", new Vector3(0f, -0.065f, 0.095f),
+                new Vector3(0.11f, 0.030f, 0.035f), pad, layer);
+            // バーは平面グリッドでなく**顔の丸みに沿って左右へ回り込む**（2026-07-28監督指摘
+            // 「死角になってしまっている。実際は顔の形に合わせて丸みがある」）。
+            // 中央＋左右ウィングの3分割アークにすると、どの視線角でも必ずどこかの隙間が抜ける
+            foreach (var y in new[] { 0.085f, 0.04f, -0.005f, -0.05f })
+            {
+                GearPart(container, PrimitiveType.Cube, prefix + "-bar" + y, new Vector3(0f, y, 0.125f),
+                    new Vector3(0.10f, 0.010f, 0.010f), dark, layer);
+                GearPart(container, PrimitiveType.Cube, prefix + "-barL" + y, new Vector3(-0.072f, y, 0.103f),
+                    new Vector3(0.062f, 0.010f, 0.010f), dark, layer, new Vector3(0f, 42f, 0f));
+                GearPart(container, PrimitiveType.Cube, prefix + "-barR" + y, new Vector3(0.072f, y, 0.103f),
+                    new Vector3(0.062f, 0.010f, 0.010f), dark, layer, new Vector3(0f, -42f, 0f));
+            }
+            // 縦レールもアークの折れ目（頬の位置）へ後退させる
+            GearPart(container, PrimitiveType.Cube, prefix + "-rail-l", new Vector3(-0.092f, 0.02f, 0.082f),
+                new Vector3(0.010f, 0.19f, 0.010f), dark, layer);
+            GearPart(container, PrimitiveType.Cube, prefix + "-rail-r", new Vector3(0.092f, 0.02f, 0.082f),
+                new Vector3(0.010f, 0.19f, 0.010f), dark, layer);
+        }
+
+        /// <summary>較正済み装備メッシュ（DuelGearMeshes）をコンテナ実寸空間へ置く。scale は一様倍率。</summary>
+        private GameObject GearMeshPart(GameObject container, Mesh mesh, string name,
+            Vector3 localPos, Quaternion localRot, Color color, int layer, float scale = 1f)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(container.transform, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = localRot;
+            go.transform.localScale = Vector3.one * scale;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = FlatMaterial(color);
+            go.layer = layer;
+            return go;
         }
 
         private static void SetLayerRecursive(GameObject go, int layer)
@@ -713,10 +1287,36 @@ namespace KokoSim.Unity.Match
 
         // ---- アセットロード（エディタ限定・ビルド同梱は本実装時に決める） --------
 
+        /// <summary>【開発用】体型比較撮影向けに素体FBXを差し替える（null=既定のSuperhero Male）。
+        /// 素体を替える時は対応する着衣ベイク資産（UniformMeshOverrideForCapture）も揃えること＝
+        /// ベイクは bindposes/boneWeights を素体からコピーするため、素体と着衣メッシュは必ず同源で組。</summary>
+        internal static string BodyFbxOverrideForCapture;
+
         private static GameObject LoadBody()
         {
 #if UNITY_EDITOR
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BodyFbx);
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BodyFbxOverrideForCapture ?? BodyFbx);
+#else
+            return null;
+#endif
+        }
+
+        /// <summary>
+        /// 着衣メッシュ（DuelUniformBaker のベイク資産）。素体と同じくエディタ限定ロード。
+        /// 無ければ null＝素体のまま出す（警告のみ・対決ビューは止めない）。
+        /// </summary>
+        /// <summary>【開発用】比較シート撮影向けに着衣メッシュ資産を差し替える（null=既定のSlim0）。</summary>
+        internal static string UniformMeshOverrideForCapture;
+
+        private static Mesh LoadUniformMesh()
+        {
+#if UNITY_EDITOR
+            var path = UniformMeshOverrideForCapture ?? UniformMeshAsset;
+            var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (mesh == null)
+                Debug.LogWarning("[DuelStageRig] uniform mesh not baked (" + path
+                    + ") - run KokoSim.EditorTools.DuelUniformBaker.BakeAll()");
+            return mesh;
 #else
             return null;
 #endif
