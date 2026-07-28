@@ -4,6 +4,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Timeline.Playback;
@@ -516,8 +517,18 @@ public sealed class MatchProgression
         if (e.PitchLog is { Count: > 0 } pitchLog)
         {
             pitchSeq = new PitchSequence(
-                pitchLog.Select(p => new PitchToken(
-                    p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh)).ToList());
+                pitchLog.Select(p =>
+                {
+                    // ファウルの打球タイムライン（Issue #313）: 物理層（BattedBall）を持つファウルだけ、
+                    // 打った瞬間から着地までの短い再生（滞空/転がり）を添える。守備解決は経由しない
+                    // ＝守備陣・送球・判定は生成しない（ボールデッドの見せ場のみ・不変条件#2 乱数非消費）。
+                    PlaybackPlay? foulFlight = p.Kind == PitchKind.Foul && p.BattedBall is { } fb
+                        ? PlayTimelineAdapter.ToPlaybackPlay(TimelineBuilder.BuildFoulFlight(
+                            fb, _ctx.Aerodynamics, _ctx.Fielding, _ctx.Field,
+                            e.BaseFirstBefore, e.BaseSecondBefore, e.BaseThirdBefore))
+                        : null;
+                    return new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh, foulFlight);
+                }).ToList());
         }
         else
         {
