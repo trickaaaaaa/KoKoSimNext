@@ -54,6 +54,7 @@ public enum FielderTask
     Cutoff,     // 中継（カットマン）
     Backup,     // バックアップ
     Hold,       // 自位置で待機（明示）
+    Chase,      // 抜けた打球へ寄る/飛びつく（Issue #336②。処理はしない＝表示専用）
 }
 
 /// <summary>走者1人の塁間レッグ（t0→t1 で from→to）。</summary>

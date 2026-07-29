@@ -176,4 +176,56 @@ public sealed class FieldingPlayInvariantTests
             Assert.True(p.FieldedX is null, $"本塁打に回収点がある（{c}）");
         }
     }
+
+    // --- Issue #336②: 抜けた打球の「最も惜しかった内野手」（表示専用データ）の不変条件 ---
+
+    /// <summary>ClosestInfielderRole は ThroughInfield のときだけ、必ず座標とセットで立つ。</summary>
+    [Fact]
+    public void ClosestInfielderMiss_ExistsExactlyWhenThroughInfield()
+    {
+        foreach (var (p, c) in Sweep())
+        {
+            Assert.True(p.ThroughInfield == (p.ClosestInfielderRole is not null),
+                $"ClosestInfielderRole の有無が ThroughInfield と食い違う（{c}）");
+            Assert.True((p.ClosestApproachX is not null) == (p.ClosestInfielderRole is not null),
+                $"ClosestApproachX の有無が ClosestInfielderRole と食い違う（{c}）");
+            Assert.True((p.ClosestApproachZ is not null) == (p.ClosestInfielderRole is not null),
+                $"ClosestApproachZ の有無が ClosestInfielderRole と食い違う（{c}）");
+        }
+    }
+
+    /// <summary>最も惜しかった内野手は必ず内野手（投/一/二/三/遊）で、最接近点は内野の中。</summary>
+    [Fact]
+    public void ClosestInfielderMiss_IsAnInfielder_AndPointIsWithinInfield()
+    {
+        var infield = new HashSet<FieldPosition>
+        {
+            FieldPosition.Pitcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
+            FieldPosition.ThirdBase, FieldPosition.Shortstop,
+        };
+        var coeff = new FieldingCoefficients();
+        foreach (var (p, c) in Sweep())
+        {
+            if (p.ClosestInfielderRole is not { } role) continue;
+            Assert.Contains(role, infield);
+            var range = System.Math.Sqrt(
+                p.ClosestApproachX!.Value * p.ClosestApproachX.Value
+                + p.ClosestApproachZ!.Value * p.ClosestApproachZ.Value);
+            Assert.True(range <= coeff.InfieldDepthM + 1e-6, $"最接近点が内野の外（{range:F1}m, {c}）");
+        }
+    }
+
+    /// <summary>判定（Result・ThrowArriveSeconds等）は ClosestInfielderRole の有無に依存しない
+    /// （表示専用データなので判定側の分岐に一切登場しない、Issue #336②）。</summary>
+    [Fact]
+    public void ClosestInfielderMiss_NeverChangesJudgementFields()
+    {
+        foreach (var (p, c) in Sweep())
+        {
+            if (!p.ThroughInfield) continue;
+            // ThroughInfield 用の判定不変（既存条件）が、寄る演出データを足しても保たれている。
+            Assert.True(p.ThrowArriveSeconds is null, $"内野を抜けたのに一塁送球の勝負をしている（{c}）");
+            Assert.True(p.JudgementMarginSeconds is null, $"内野を抜けたのに一塁判定marginがある（{c}）");
+        }
+    }
 }

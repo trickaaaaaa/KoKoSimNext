@@ -81,6 +81,18 @@ public sealed record FieldingPlay
     public bool IrregularBounce { get; init; }
     /// <summary>バウンド/転がりで内野を抜けた打球か（外野へ二次展開した）。</summary>
     public bool ThroughInfield { get; init; }
+
+    // --- 抜けた打球の「寄る/飛びつく」表示専用データ（Issue #336②） ---
+
+    /// <summary>
+    /// 内野を抜けた打球（<see cref="ThroughInfield"/>=true）で最も惜しく打球ラインに迫った内野手。
+    /// タイムラインの「寄る／飛びつく」演出の入力（表示専用・判定不使用）。抜けていない打球や
+    /// 該当が無い経路（想定外）では null。
+    /// </summary>
+    public FieldPosition? ClosestInfielderRole { get; init; }
+    /// <summary>その内野手が打球ラインに最も近づいた点[m]（X=一塁側, Z=センター方向）。表示専用。</summary>
+    public double? ClosestApproachX { get; init; }
+    public double? ClosestApproachZ { get; init; }
 }
 
 /// <summary>
@@ -217,8 +229,19 @@ public static class FieldingResolver
                     : ExtraBaseResolver.RollFrom(
                         td.Position, path.DirectionAt(td.Seconds), path.HorizontalSpeedAt(td.Seconds),
                         td.Seconds, fenceDist, coeff);
-                return HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime)
+                var result = HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime)
                     with { ThroughInfield = true };
+                // 表示専用（Issue #336②）: 最も惜しく迫った内野手と最接近点。判定・帯には無関係。
+                if (FindClosestInfielderMiss(fielders, path, coeff) is { } miss)
+                {
+                    result = result with
+                    {
+                        ClosestInfielderRole = miss.Fielder.Position,
+                        ClosestApproachX = miss.Point.X,
+                        ClosestApproachZ = miss.Point.Z,
+                    };
+                }
+                return result;
             }
 
             // 内野が処理 → 一塁送球 vs 打者走者。処理野手・処理時刻・捕球点はバウンド経路を辿って
@@ -318,6 +341,42 @@ public static class FieldingResolver
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// 内野を抜けた打球（<see cref="InfielderCanCutOff"/>=false）について、最も打球ラインに迫った
+    /// 内野手とその最接近点を求める（Issue #336②・表示専用）。<see cref="InfielderCanCutOff"/> と
+    /// 同じ経路・同じ式（守備範囲半径込みの到達可否）を辿るだけの副産物で、判定・帯には一切使わない。
+    /// 乱数は消費しない（決定論）。誰も打球の高さ帯を通らない（想定外）場合のみ null。
+    /// </summary>
+    private static (Fielder Fielder, Vector3D Point)? FindClosestInfielderMiss(
+        IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
+    {
+        var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
+        var radius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
+        Fielder? best = null;
+        var bestPoint = default(Vector3D);
+        var bestShortfall = double.PositiveInfinity;
+        for (var t = path.HangTimeSeconds; ; t += step)
+        {
+            var p = path.PositionAt(t);
+            if (Math.Sqrt(p.X * p.X + p.Z * p.Z) > coeff.InfieldDepthM) break; // 内野を出た
+            if (path.HeightAt(t) > coeff.InfielderReachHeightM) continue;     // グラブが届かない高さ
+            foreach (var f in fielders)
+            {
+                if (!IsInfield(f)) continue;
+                var travel = Math.Max(0.0, (p - f.Location).Length - radius);
+                var reach = travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
+                var shortfall = reach - t; // 正=間に合わない。最小=最も惜しかった。
+                if (shortfall < bestShortfall)
+                {
+                    bestShortfall = shortfall;
+                    best = f;
+                    bestPoint = p;
+                }
+            }
+        }
+        return best is null ? null : (best, bestPoint);
     }
 
     /// <summary>
