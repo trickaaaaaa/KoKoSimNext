@@ -1267,13 +1267,14 @@ namespace KokoSim.Unity.Match
             k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
 
         // 四球成立の瞬間（4球目）は「ボール」ではなく「フォアボール」を表示する（issue #61）。
+        // 3ストライク目も同様に「ストライク」ではなく「三振」を表示する（issue #329）。
         private static string PitchJudgeJp(PitchToken pt)
         {
             switch (pt.Kind)
             {
                 case KokoSim.Engine.Match.AtBat.PitchKind.Ball: return pt.BallsAfter >= 4 ? "フォアボール" : "ボール";
-                case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return "ストライク";
-                case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return "ストライク";
+                case KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike: return pt.StrikesAfter >= 3 ? "三振" : "ストライク";
+                case KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike: return pt.StrikesAfter >= 3 ? "三振" : "ストライク";
                 case KokoSim.Engine.Match.AtBat.PitchKind.Foul: return "ファール";
                 case KokoSim.Engine.Match.AtBat.PitchKind.InPlay: return "";   // 打球再生と結果ラベルに任せる
                 case KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch: return "デッドボール";
