@@ -83,8 +83,9 @@ namespace KokoSim.Unity.Shell
         public LineupSpec Lineup { get; set; }
 
         /// <summary>
-        /// 試合開始フローの中継フラグ。試合日「はい」でスタメン設定画面へ遷移する際に true。ホーム復帰時に
-        /// これが立っていれば自校戦を消化する（スタメン画面OKで確定→ホームで試合実行）。キャンセルで false。
+        /// 試合開始フローの中継フラグ。試合日「はい」でスタメン設定画面へ遷移する際に true。対戦カード画面
+        /// （MatchPreview）の「試合開始」が <see cref="MatchStartFlow.Begin"/> でこれを消費して自校戦を始める
+        /// （issue #325: ホームは中継しない）。キャンセルで false。開始に失敗した場合（二重起動）は戻される。
         /// </summary>
         public bool AwaitingMatchStart { get; set; }
 

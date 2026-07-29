@@ -4,8 +4,10 @@ using UnityEngine.UIElements;
 namespace KokoSim.Unity.Shell
 {
     /// <summary>
-    /// ブースト画面（スタメン設定・結果）の下端に進捗ストリップ（<see cref="UiComponents.SimProgress"/>）を出し、
-    /// 背景の全国裏試合（<see cref="NationBackgroundSim"/>）の消化進捗を毎フレーム反映する（#208）。
+    /// ブースト画面（スタメン設定・結果・対戦カード）の下端に進捗ストリップ（<see cref="UiComponents.SimProgress"/>）を
+    /// 出し、背景の全国裏試合（<see cref="NationBackgroundSim"/>）の消化進捗を毎フレーム反映する（#208）。
+    /// 表示条件には <see cref="BackgroundGameOp"/>（BeginMatch・試合後処理）の実行中も含める（issue #325:
+    /// 対戦カード画面の「試合開始」でこの処理が走る間、進捗が見えず入力も無反応に見えていた）。
     ///
     /// 更新は UITK の scheduler（メインスレッドのパネル更新で回る）で行う。ブースト時の背景シムは確保を
     /// 刻んで（Thread.Sleep で1〜2フレームぶんメインへ譲る）走るため、GC の stop-the-world でメインが
@@ -35,7 +37,10 @@ namespace KokoSim.Unity.Shell
 
         private static void Tick(VisualElement strip)
         {
-            var running = NationBackgroundSim.Running;
+            // BackgroundGameOp（BeginMatch・試合後処理）には裏試合のような区画単位の分子/分母が無いため、
+            // 充填率は従来どおり NationBackgroundSim.Progress を使う（未実行時は1＝満タン表示）。
+            // ここで拡張するのは「出す/消す」の表示条件だけ（issue #325）。
+            var running = NationBackgroundSim.Running || BackgroundGameOp.Running;
             strip.style.display = running ? DisplayStyle.Flex : DisplayStyle.None;
             if (running) UiComponents.SetSimProgress(strip, NationBackgroundSim.Progress);
         }

@@ -111,3 +111,5 @@
     border-radius: var(--radius-panel);
 }
 .mp-cta:hover { background-color: var(--color-cta-hi); }
+/* 準備中（BeginMatch 等）は押せない見た目にする（issue #325・無言で無視しない）。 */
+.mp-cta:disabled { opacity: 0.35; }
