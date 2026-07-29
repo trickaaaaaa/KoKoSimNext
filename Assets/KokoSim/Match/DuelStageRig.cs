@@ -495,7 +495,7 @@ namespace KokoSim.Unity.Match
         private Transform _cChestMount;                 // 捕手の胸プロテクター（gear-chest直下）
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
-        private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _catchClip;
+        private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _catchClip, _umpireStrikeClip;
 
         private sealed class Actor
         {
@@ -606,6 +606,7 @@ namespace KokoSim.Unity.Match
             // 捕手の背後に自然に収まるようにする。
             _umpire = SpawnActor(body, umpClip, new Vector3(cal0.UmpireX, 0f, cal0.UmpireZ), 0f,
                 UniformPalette.Umpire, 0f, layer);
+            _umpire.IdleClip = umpClip;
 
             // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
             // 空振り/ミートとも自作打撃クリップの同じスイング区間を使う（収録が1本なので分岐を持てない）。
@@ -614,6 +615,8 @@ namespace KokoSim.Unity.Match
             _swingHitClip = batClip;
             _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
             _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
+            // 球審ストライクコール。Type01(3.33s)を暫定採用。比較録画の後に監督が Type01/02 を確定する（#333）
+            _umpireStrikeClip = LoadClip("AA_Baseball_Umpire_Crouch_Strike_Type01");
 
             _bat = SpawnBat(layer);
 
@@ -828,6 +831,8 @@ namespace KokoSim.Unity.Match
         private const float FollowSeconds = 1.5f;   // リリース後に見せるフォロースルーの長さ
         private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
         private float _cutClipTime;
+        private float _umpireCallCountdown = -1f;   // 球審ストライクコール発火まで（負=予約なし）
+        private float _umpireCallEndAt;             // コールクリップの打ち切り時刻（0=末尾まで）
 
         /// <summary>
         /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
@@ -840,9 +845,11 @@ namespace KokoSim.Unity.Match
             _cutCountdown = -1f;
             CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
             GroundFix(_pitcher);
-            // 打席頭は打者・捕手を待機へ戻す（前打席の一発物が残っていても仕切り直す）
+            // 打席頭は打者・捕手・球審を待機へ戻す（前打席の一発物が残っていても仕切り直す）
             if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
+            _umpireCallCountdown = -1f;
+            if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
         }
 
         // 結果分岐のアンカー（スイングはType02をRunClipSpeedProbeで実測 2026-07-27。値はクリップ内秒）:
@@ -857,6 +864,13 @@ namespace KokoSim.Unity.Match
         // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
         private const float SwingMissHoldSeconds = 0.8f;
         private const float CatchMoment = 0.4f;
+        // 球審ストライクコールの発火タイミング（#333）:
+        // ボール到達（BallFlightSeconds後）を見てから捕球確認までの遅延[秒]。
+        // コール発火 = BallFlightSeconds + UmpireCatchReactDelay 後にクリップ先頭から再生する。
+        // クリップ内の腕伸ばし瞬間:
+        //   RunClipSpeedProbe("AA_Baseball_Umpire_Crouch_Strike_Type01","RightHand",0.05f) で実測すること
+        //   （Editor不通のため未実測。クリップ差し替え時も再測定し、この定数と合わせて更新する）
+        private const float UmpireCatchReactDelay = 0.30f;
 
         /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
@@ -896,12 +910,24 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
-            ScheduleReactions(outcome);
+            ScheduleReactions(outcome, nextReleaseIn);
         }
 
-        /// <summary>打者・捕手の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。</summary>
-        private void ScheduleReactions(DuelPitchOutcome outcome)
+        /// <summary>打者・捕手・球審の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。</summary>
+        private void ScheduleReactions(DuelPitchOutcome outcome, float nextReleaseIn)
         {
+            // 球審: ストライク（見逃し・空振り）でコールを予約、それ以外は前球の予約をキャンセル（#333）
+            _umpireCallCountdown = -1f;
+            bool isStrike = outcome == DuelPitchOutcome.CalledStrike || outcome == DuelPitchOutcome.SwingMiss;
+            if (isStrike && _umpireStrikeClip != null)
+            {
+                _umpireCallCountdown = BallFlightSeconds + UmpireCatchReactDelay;
+                // 次のリリースまでにクリップが収まるよう打ち切り時刻を決める（最後の1球は0=末尾まで）
+                _umpireCallEndAt = nextReleaseIn > 0f
+                    ? Mathf.Max(0f, nextReleaseIn - (BallFlightSeconds + UmpireCatchReactDelay))
+                    : 0f;
+            }
+
             switch (outcome)
             {
                 case DuelPitchOutcome.SwingMiss:
@@ -964,6 +990,14 @@ namespace KokoSim.Unity.Match
                     CrossfadeActorTo(_pitcher, _cutClipTime, CrossfadeSeconds);
                     GroundFix(_pitcher);
                 }
+            }
+
+            // 球審ストライクコール予約（ボール到達後に発火）。量子化と独立にプレー時間で数える（#333）
+            if (_umpireCallCountdown >= 0f)
+            {
+                _umpireCallCountdown -= deltaTime;
+                if (_umpireCallCountdown < 0f)
+                    SetActorClip(_umpire, _umpireStrikeClip, 0f, _umpireCallEndAt);
             }
 
             _acc += deltaTime;
