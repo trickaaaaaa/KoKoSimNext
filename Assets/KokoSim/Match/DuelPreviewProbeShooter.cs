@@ -43,12 +43,13 @@ namespace KokoSim.Unity.Match
             _rig.EnsureSize(W, H);
             for (int i = 0; i < 8; i++) { _rig.Tick(1f / 60f); yield return null; }
 
-            Vector3 palm, glove, hips; Quaternion gloveRot;
-            _rig.PreviewProbeForCapture(out palm, out glove, out hips, out gloveRot);
+            Vector3 palm, glove, hips; Quaternion gloveRot; string handInGlove;
+            _rig.PreviewProbeForCapture(out palm, out glove, out hips, out gloveRot, out handInGlove);
             Debug.Log("[PrevProbe] 掌=" + palm.ToString("F3")
                 + " グラブ=" + glove.ToString("F3")
                 + " 腰=" + hips.ToString("F3")
-                + " 距離=" + Vector3.Distance(palm, glove).ToString("F3") + "m");
+                + " 距離=" + Vector3.Distance(palm, glove).ToString("F3") + "m"
+                + "\n[PrevProbe] グラブ座標系での手: " + handInGlove);
 
             // ベルトは正面がバックル・横が帯なので、腰は正面と横の2枚を撮る（片方だけだと
             // 「バックルはあるが帯が無い」のような欠けを見落とす）

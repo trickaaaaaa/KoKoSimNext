@@ -36,7 +36,9 @@ namespace KokoSim.Unity.Squad
             // 初期＝校IDからの自動割り当て（桜丘は白＋黒の縦縞）
             yield return Capture(doc, "i-teamset-0-initial");
 
-            // 縞を外して無地に（縞の有無の切替が効くか）
+            // 縞を外して無地に＋スパイクを白へ（行の並び: 0上/1ズボン/2アンダー/3ソックス/4帽子/
+            // 5スパイク/6縦縞/7縞色。行を足したら**この添字も直す**）
+            ctrl.StepForCapture(6, 1);
             ctrl.StepForCapture(5, 1);
             yield return null; yield return null;
             yield return Capture(doc, "i-teamset-1-plain");

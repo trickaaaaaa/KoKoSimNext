@@ -178,6 +178,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private readonly struct UniformPalette
         {
+            /// <summary>パレット表の「黒」#23242A。ベルト・既定のスパイクをこれに揃える。</summary>
+            private static readonly Color PaletteBlack = new(0x23 / 255f, 0x24 / 255f, 0x2A / 255f);
+
             public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, Belt;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
@@ -185,7 +188,8 @@ namespace KokoSim.Unity.Match
             public readonly float StripeFreqPerMeter;
 
             public UniformPalette(Color shirt, Color pants, Color undershirt, Color socks, Color cap,
-                bool stripeOn = false, Color stripeColor = default, float stripeFreqPerMeter = 0f)
+                bool stripeOn = false, Color stripeColor = default, float stripeFreqPerMeter = 0f,
+                Color? shoes = null)
             {
                 Shirt = shirt;
                 Pants = pants;
@@ -193,19 +197,20 @@ namespace KokoSim.Unity.Match
                 Socks = socks;
                 Cap = cap;
                 Skin = new Color(0.85f, 0.68f, 0.55f);
-                Shoes = new Color(0.15f, 0.15f, 0.16f);
-                // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。靴と同じ暗さだと腰で消えるので、
-                // 白ユニに対して**輪郭が立つ**ぶんだけ靴より濃くする
-                Belt = new Color(0.10f, 0.09f, 0.09f);
+                // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。値はパレット表の「黒」#23242A と
+                // 揃える＝画面で選べる黒と同じ黒になる。**わずかでも赤に寄せると濃い臙脂に見える**
+                // （ポスタライズが暖色側のバケットへ落とす。2026-07-29 実測）
+                Shoes = shoes ?? PaletteBlack;
+                Belt = PaletteBlack;
                 StripeOn = stripeOn;
                 StripeColor = stripeColor;
                 StripeFreqPerMeter = stripeFreqPerMeter;
             }
 
-            /// <summary>エンジンの確定配色（6領域＋縞）から作る。つばは帽子と1メッシュなので使わない。</summary>
+            /// <summary>エンジンの確定配色（7領域＋縞）から作る。つばは帽子と1メッシュなので使わない。</summary>
             public static UniformPalette From(KokoSim.Engine.Nation.TeamColors c) => new(
                 Rgb(c.Shirt), Rgb(c.Pants), Rgb(c.Undershirt), Rgb(c.Socks), Rgb(c.CapCrown),
-                c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter);
+                c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter, Rgb(c.Shoes));
 
             private static Color Rgb(KokoSim.Engine.Nation.RgbColor c)
                 => new(c.R / 255f, c.G / 255f, c.B / 255f);
@@ -970,6 +975,13 @@ namespace KokoSim.Unity.Match
             colors[(int)DuelUniformMeshBuilder.Region.Shoes] = pal.Shoes;
             colors[(int)DuelUniformMeshBuilder.Region.Cap] = pal.Cap;
             colors[(int)DuelUniformMeshBuilder.Region.Belt] = pal.Belt;
+            // **ガンマ→リニア変換を自分でやる**。プロジェクトはリニア色空間で、Properties に宣言した
+            // Color（_BaseColor・_StripeColor）は SetColor が自動変換してくれるが、_RegionColors は
+            // 配列＝Properties に宣言できず SetColorArray が素通しする。素通しすると sRGB値を
+            // リニア値として解釈するので**暗い色ほど持ち上がる**（黒 0.10 が画面上は中間グレー）。
+            // 縞色だけ自動変換される非対称もここで消える（2026-07-29 監督指摘「黒色が灰色に見える」）
+            if (QualitySettings.activeColorSpace == ColorSpace.Linear)
+                for (int i = 0; i < colors.Length; i++) colors[i] = colors[i].linear;
             mat.SetColorArray("_RegionColors", colors);
 
             mat.SetFloat("_StripeOn", pal.StripeOn ? 1f : 0f);
@@ -1366,8 +1378,14 @@ namespace KokoSim.Unity.Match
         private static readonly Vector3 GloveSize = new(0.23f, 0.26f, 0.10f);
         private static readonly Color LeatherColor = new(0.45f, 0.27f, 0.15f);
 
-        /// <summary>手からポケット面へ出す量[m]（コンテナ+Z＝掌の法線）。実物のグラブは掌の側へ張り出す。</summary>
-        private const float GloveForward = 0.025f;
+        /// <summary>
+        /// 手からポケット面へ出す量[m]（コンテナ+Z＝掌の法線）。実物のグラブは掌の側へ張り出す。
+        /// **手がポケットの空洞に入らないだけ出す**のが要点。生成メッシュの+Z面は開いたポケット＝
+        /// えぐれた空洞なので、寄せすぎると指がそこから前へ突き抜けて見える（2026-07-29 監督指摘）。
+        /// 実測（グラブ座標系）: 指先 z≈+0.035〜+0.046・手の甲 z≈-0.010。
+        /// 中心を +0.035 に置くと奥行0.125（±0.0625）の中へ手が丸ごと収まる。
+        /// </summary>
+        private const float GloveForward = 0.035f;
 
         /// <summary>
         /// 手の長さ（手首→指先）を中指付け根までの距離から見積もる倍率。
@@ -1410,16 +1428,29 @@ namespace KokoSim.Unity.Match
             gaze -= Vector3.Dot(gaze, up) * up;   // 縦軸と直交化
             gaze = gaze.sqrMagnitude > 1e-6f ? gaze.normalized : Vector3.forward;
 
+            // 掌の法線。軸は手のひらを横断する向きと縦軸の外積で得られるが、**符号は外積では決まらない**
+            // （左右で手系が入れ替わる）。符号は「指が丸まっていく側＝掌側」を実測して決める。
+            // 視線との内積で決めていた版は符号を取り違え、グラブが手の甲側に付いて指が丸見えだった
+            // （2026-07-29 実測: 指先が全部 z=-0.035〜-0.046 なのにグラブ中心は +0.050）
+            var tip = actor.Animator.GetBoneTransform(
+                left ? HumanBodyBones.LeftMiddleDistal : HumanBodyBones.RightMiddleDistal);
+            var curl = Vector3.zero;
+            if (tip != null && knuckle != null)
+            {
+                curl = tip.position - knuckle.position;
+                curl -= Vector3.Dot(curl, up) * up;
+            }
             var fwd = gaze;
             if (index != null && little != null)
             {
-                var across = index.position - little.position;
-                var n = Vector3.Cross(up, across);
+                var n = Vector3.Cross(up, index.position - little.position);
                 n -= Vector3.Dot(n, up) * up;
                 if (n.sqrMagnitude > 1e-8f)
                 {
                     n.Normalize();
-                    fwd = Vector3.Dot(n, gaze) < 0f ? -n : n;   // 掌が相手を向く側を正面に採る
+                    // 指の丸まりが十分あればそれで符号を決め、無ければ（指が真っ直ぐな素体）視線で代用する
+                    float sign = curl.magnitude > 0.01f ? Vector3.Dot(n, curl) : Vector3.Dot(n, gaze);
+                    fwd = sign < 0f ? -n : n;
                 }
             }
             var rot = Quaternion.LookRotation(fwd, up);
@@ -1861,10 +1892,11 @@ namespace KokoSim.Unity.Match
         /// 見つからない要素は Vector3.zero。
         /// </summary>
         internal void PreviewProbeForCapture(out Vector3 palm, out Vector3 glove, out Vector3 hips,
-            out Quaternion gloveRot)
+            out Quaternion gloveRot, out string handInGlove)
         {
             palm = glove = hips = Vector3.zero;
             gloveRot = Quaternion.identity;
+            handInGlove = "-";
             if (_pitcher == null || _pitcher.Animator == null) return;
             var hand = _pitcher.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
             var knuckle = _pitcher.Animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
@@ -1875,13 +1907,38 @@ namespace KokoSim.Unity.Match
                 palm = _root.transform.InverseTransformPoint(p);
             }
             if (hipBone != null) hips = _root.transform.InverseTransformPoint(hipBone.position);
+            Transform container = null, prop = null;
             foreach (var t in _pitcher.Go.GetComponentsInChildren<Transform>(true))
-                if (t.name == "prop-glove")
+            {
+                if (t.name == "gear-glove") container = t;
+                else if (t.name == "prop-glove") prop = t;
+            }
+            if (prop != null)
+            {
+                glove = _root.transform.InverseTransformPoint(prop.position);
+                gloveRot = Quaternion.Inverse(_root.transform.rotation) * prop.rotation;
+            }
+            // 手の各関節を**グラブの座標系**で見る（+Y=指の向き / +Z=掌の法線）。
+            // 斜めの絵では前後左右が分離できないので、はみ出しの向きはここで数値に出す
+            if (container != null && prop != null)
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append("グラブ中心=").Append(container.InverseTransformPoint(prop.position).ToString("F3"));
+                foreach (var (b, name) in new[]
                 {
-                    glove = _root.transform.InverseTransformPoint(t.position);
-                    gloveRot = Quaternion.Inverse(_root.transform.rotation) * t.rotation;
-                    break;
+                    (HumanBodyBones.LeftHand, "手首"),
+                    (HumanBodyBones.LeftMiddleProximal, "中指付根"),
+                    (HumanBodyBones.LeftMiddleDistal, "中指先"),
+                    (HumanBodyBones.LeftThumbDistal, "親指先"),
+                    (HumanBodyBones.LeftIndexDistal, "人差指先"),
+                })
+                {
+                    var t = _pitcher.Animator.GetBoneTransform(b);
+                    sb.Append(" ").Append(name).Append('=')
+                      .Append(t == null ? "なし" : container.InverseTransformPoint(t.position).ToString("F3"));
                 }
+                handInGlove = sb.ToString();
+            }
         }
 
         /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>

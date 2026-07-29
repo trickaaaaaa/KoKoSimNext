@@ -21,7 +21,7 @@ namespace KokoSim.Unity.Squad
     public sealed class TeamSettingController : MonoBehaviour
     {
         /// <summary>編集できる領域。順序はそのまま画面の行順。</summary>
-        private enum Slot { Shirt, Pants, Undershirt, Socks, Cap, StripeOn, StripeColor }
+        private enum Slot { Shirt, Pants, Undershirt, Socks, Cap, Shoes, StripeOn, StripeColor }
 
         private static readonly (Slot Slot, string Label, bool GroupTop)[] Rows =
         {
@@ -31,6 +31,8 @@ namespace KokoSim.Unity.Squad
             (Slot.Socks, "ソックス", false),
             // 帽子はクラウンとつばで1色。購入素体の帽子が1メッシュで塗り分けられないため（design-18 §3.5.1）
             (Slot.Cap, "帽子", false),
+            // スパイクだけは全見本でなく白・黒の二択（実物がその2色しかない）
+            (Slot.Shoes, "スパイク", false),
             (Slot.StripeOn, "縦縞", true),
             (Slot.StripeColor, "縞色", false),
         };
@@ -239,6 +241,7 @@ namespace KokoSim.Unity.Squad
                 case Slot.Undershirt: color = _draft.Undershirt; return true;
                 case Slot.Socks: color = _draft.Socks; return true;
                 case Slot.Cap: color = _draft.CapCrown; return true;
+                case Slot.Shoes: color = _draft.Shoes; return true;
                 case Slot.StripeColor when _draft.Stripe.On: color = _draft.Stripe.Color; return true;
                 default: color = default; return false;
             }
@@ -264,13 +267,17 @@ namespace KokoSim.Unity.Squad
             if (slot == Slot.StripeColor && !_draft.Stripe.On) return;   // 縞なしの間は送っても意味がない
 
             if (!TryColorOf(slot, out var current)) return;
-            var next = NextSwatch(current, delta);
+            // スパイクだけは見本一覧でなく専用の二択（白・黒）を回す
+            var next = slot == Slot.Shoes
+                ? Cycle(TeamColors.ShoeChoices, current, delta)
+                : Cycle(TeamColorProvider.Palette.Swatches, current, delta);
             _draft = slot switch
             {
                 Slot.Shirt => _draft with { Shirt = next },
                 Slot.Pants => _draft with { Pants = next },
                 Slot.Undershirt => _draft with { Undershirt = next },
                 Slot.Socks => _draft with { Socks = next },
+                Slot.Shoes => _draft with { Shoes = next },
                 // つばはクラウンと1メッシュなので必ず一緒に動かす（別々に持たせても絵に出ない）
                 Slot.Cap => _draft with { CapCrown = next, CapVisor = next },
                 Slot.StripeColor => _draft with { Stripe = _draft.Stripe with { Color = next } },
@@ -279,14 +286,13 @@ namespace KokoSim.Unity.Squad
             Render();
         }
 
-        private static RgbColor NextSwatch(RgbColor current, int delta)
+        private static RgbColor Cycle(IReadOnlyList<RgbColor> choices, RgbColor current, int delta)
         {
-            IReadOnlyList<RgbColor> sw = TeamColorProvider.Palette.Swatches;
-            if (sw.Count == 0) return current;
+            if (choices == null || choices.Count == 0) return current;
             int i = 0;
-            for (int k = 0; k < sw.Count; k++) if (sw[k].Equals(current)) { i = k; break; }
-            // 表に無い色（将来の上書き復元など）から送っても必ず一覧内へ入るよう剰余で回す
-            return sw[((i + delta) % sw.Count + sw.Count) % sw.Count];
+            for (int k = 0; k < choices.Count; k++) if (choices[k].Equals(current)) { i = k; break; }
+            // 一覧に無い色（将来の上書き復元など）から送っても必ず一覧内へ入るよう剰余で回す
+            return choices[((i + delta) % choices.Count + choices.Count) % choices.Count];
         }
 
 #if UNITY_EDITOR

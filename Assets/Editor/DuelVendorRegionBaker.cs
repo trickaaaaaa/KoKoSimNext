@@ -77,7 +77,13 @@ namespace KokoSim.EditorTools
 
             Directory.CreateDirectory(OutDir);
 
-            foreach (var r in prefab.GetComponentsInChildren<Renderer>(true))
+            // 袖の張り出し（FlareSleeves）は上腕ボーンの軸が要る。Animator.GetBoneTransform は
+            // 実体化したヒエラルキーでないと引けないので、ここだけ一時インスタンスを立てる。
+            // メッシュは共有アセットなので、読む先がプレハブでも実体でも同じものになる
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            var anim = inst.GetComponent<Animator>();
+
+            foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
             {
                 var mesh = MeshOf(r);
                 if (mesh == null) continue;
@@ -90,6 +96,7 @@ namespace KokoSim.EditorTools
                 if (r.name == SuitMeshName)
                 {
                     regionPerVertex = ClassifySuit(copy, suitTex, out note);
+                    note += " / " + FlareSleeves(copy, regionPerVertex, r as SkinnedMeshRenderer, anim);
                 }
                 else if (r.name == PantsMeshName)
                 {
@@ -125,6 +132,7 @@ namespace KokoSim.EditorTools
                 sb.AppendLine(r.name + ": " + note);
             }
 
+            Object.DestroyImmediate(inst);
             Object.DestroyImmediate(suitTex);
             Object.DestroyImmediate(pantsTex);
             AssetDatabase.SaveAssets();
@@ -209,6 +217,92 @@ namespace KokoSim.EditorTools
             note = "三角形 Pants=" + triPants + " Belt=" + triBelt
                  + " / 頂点の領域またぎ=" + conflicts + "（0なら島が完全に分離）";
             return outRegion;
+        }
+
+        /// <summary>袖口での半径倍率。実物のユニフォームの袖はアンダーシャツの腕より明らかに太い。</summary>
+        private const float SleeveFlare = 1.45f;
+
+        /// <summary>
+        /// ユニフォームの袖を張り出させる。購入素体の袖は**アンダーシャツの腕とほぼ同じ太さの筒**で、
+        /// 色を塗り分けただけでは「腕に色の境目が描いてある」ようにしか見えない
+        /// （2026-07-29 監督指摘「袖口は大きく、それが再現されていない」）。
+        ///
+        /// 袖はアンダーシャツの腕とは**別のシェル**（袖口は塞がっていて、腕の筒がその中を通っている）
+        /// なので、外へ広げても穴は開かない。肩から袖口へ向けて半径を <see cref="SleeveFlare"/> 倍まで
+        /// なめらかに太らせる。
+        ///
+        /// 腕の軸は**上腕ボーンのバインドポーズ**から取る。素体はAポーズで腕がX軸に平行でないため、
+        /// メッシュ座標から軸を推測すると胴の頂点まで巻き込む（2026-07-29 実測で確認）。
+        /// 法線は触らない: 非溶接メッシュを RecalculateNormals すると UV島の境目が全部ハードエッジになり
+        /// 体が面取りされて見える。半径方向の緩い拡大では法線の狂いはポスタライズ後に判別できない。
+        /// </summary>
+        private static string FlareSleeves(Mesh mesh, int[] region, SkinnedMeshRenderer smr, Animator anim)
+        {
+            if (smr == null || anim == null || !anim.isHuman) return "袖の張り出し=SKIP（Humanoidでない）";
+            var bw = mesh.boneWeights;
+            var bind = mesh.bindposes;
+            if (bw == null || bw.Length != mesh.vertexCount || bind == null || bind.Length == 0)
+                return "袖の張り出し=SKIP（スキン情報なし）";
+
+            var verts = mesh.vertices;
+            int moved = 0;
+            var arms = new[]
+            {
+                new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm },
+                new[] { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm },
+            };
+            foreach (var arm in arms)
+            {
+                int bi = BoneIndex(smr, anim, arm[0]);
+                int bj = BoneIndex(smr, anim, arm[1]);
+                if (bi < 0 || bj < 0) continue;
+                // bindpose は「メッシュ→ボーン」なので、逆行列でボーン原点をメッシュ空間へ戻す
+                var p0 = bind[bi].inverse.MultiplyPoint3x4(Vector3.zero);
+                var p1 = bind[bj].inverse.MultiplyPoint3x4(Vector3.zero);
+                float len = (p1 - p0).magnitude;
+                if (len < 1e-4f) continue;
+                var u = (p1 - p0) / len;
+
+                // 袖＝ユニ上の領域かつ支配ボーンが上腕。袖口＝その中で一番肘寄りの位置
+                float tMax = 0f;
+                for (int i = 0; i < verts.Length; i++)
+                    if (region[i] == (int)Region.Shirt && Dominant(bw[i]) == bi)
+                        tMax = Mathf.Max(tMax, Vector3.Dot(verts[i] - p0, u) / len);
+                if (tMax <= 0.05f) continue;
+
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    if (region[i] != (int)Region.Shirt || Dominant(bw[i]) != bi) continue;
+                    float t = Mathf.Clamp01(Vector3.Dot(verts[i] - p0, u) / len / tMax);
+                    float w = t * t * (3f - 2f * t);   // 肩=0・袖口=1 のなめらかな立ち上がり
+                    var d = verts[i] - p0;
+                    var along = u * Vector3.Dot(d, u);
+                    verts[i] = p0 + along + (d - along) * Mathf.Lerp(1f, SleeveFlare, w);
+                    moved++;
+                }
+            }
+
+            mesh.vertices = verts;
+            mesh.RecalculateBounds();
+            return "袖を張り出した頂点=" + moved + "（袖口 " + SleeveFlare.ToString("F2") + "倍）";
+        }
+
+        private static int BoneIndex(SkinnedMeshRenderer smr, Animator anim, HumanBodyBones human)
+        {
+            var t = anim.GetBoneTransform(human);
+            if (t == null) return -1;
+            var bones = smr.bones;
+            for (int i = 0; i < bones.Length; i++) if (bones[i] == t) return i;
+            return -1;
+        }
+
+        private static int Dominant(BoneWeight w)
+        {
+            int b = w.boneIndex0; float m = w.weight0;
+            if (w.weight1 > m) { b = w.boneIndex1; m = w.weight1; }
+            if (w.weight2 > m) { b = w.boneIndex2; m = w.weight2; }
+            if (w.weight3 > m) { b = w.boneIndex3; }
+            return b;
         }
 
         private static Mesh MeshOf(Renderer r)

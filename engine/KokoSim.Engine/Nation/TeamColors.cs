@@ -68,17 +68,33 @@ public sealed record TeamColorEntry(
 /// <summary>
 /// 描画へ渡す確定配色。パレット表から導出するほか、プレイヤーが領域ごとに上書きした結果もこの形で持つ
 /// （＝表に無い配色も表現できる。自校の色はプレイヤーが決める・2026-07-29 監督決定）。
-/// 肌・シューズは配色対象外（固定色）なので持たない。
+/// 肌・ベルトは配色対象外（固定色）なので持たない。
 /// </summary>
 public sealed record TeamColors(
     RgbColor Shirt, RgbColor Pants, RgbColor Undershirt, RgbColor Socks,
-    RgbColor CapCrown, RgbColor CapVisor, TeamStripe Stripe)
+    RgbColor CapCrown, RgbColor CapVisor, RgbColor Shoes, TeamStripe Stripe)
 {
-    /// <summary>パレット表1件 → 6領域。導出規則は data/team-colors.yaml の先頭コメントと対。</summary>
+    /// <summary>
+    /// スパイクの選択肢＝白・黒の二択（実物の高校野球はこの2色。2026-07-29 監督決定）。
+    /// 学校ごとの型ではないのでパレット表（team-colors.yaml の palettes）には持たせず、
+    /// 先頭を既定にしてプレイヤーの選択だけで上書きする。値は color_names に載っている
+    /// 「黒」「白」と**同じ16進**にしてある＝画面に色名がそのまま出る。
+    /// </summary>
+    public static readonly IReadOnlyList<RgbColor> ShoeChoices = new[]
+    {
+        new RgbColor(0x23, 0x24, 0x2A),   // 黒
+        new RgbColor(0xED, 0xEB, 0xE0),   // 白
+    };
+
+    /// <summary>スパイクの既定色（黒）。</summary>
+    public static RgbColor DefaultShoes => ShoeChoices[0];
+
+    /// <summary>パレット表1件 → 7領域。導出規則は data/team-colors.yaml の先頭コメントと対。</summary>
     public static TeamColors FromEntry(TeamColorEntry e) => new(
         Shirt: e.Base, Pants: e.Base,
         Undershirt: e.Team, Socks: e.Team,
         CapCrown: e.Team, CapVisor: e.Visor,
+        Shoes: DefaultShoes,
         Stripe: e.Stripe);
 }
 
