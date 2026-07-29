@@ -33,8 +33,9 @@ namespace KokoSim.Unity.Shell
 
         // タブに現れない従属画面（試合前スタメン設定など）。ナビ項目は持たないが Show 対象＋
         // 起動時 SetActive(false) 管理に含める。LineupSetting は大会の試合開始フローからのみ遷移する。
-        // MatchPreview は試合開始フロー（スタメンOK→対戦カード→試合開始）の中継画面。
-        // MatchLive は試合開始フロー（対戦カード→ホーム→ライブ観戦）からのみ遷移する実試合の2D俯瞰観戦画面。
+        // MatchPreview は試合開始フロー（スタメンOK→対戦カード→試合開始）の中継画面。「試合開始」はこの画面に
+        // 留まったまま準備し（issue #325）、完了で直接 MatchLive へ渡す（ホームは中継しない）。
+        // MatchLive は試合開始フロー（対戦カード→ライブ観戦）からのみ遷移する実試合の2D俯瞰観戦画面。
         // MatchResult はその出口（ライブ観戦の終局で自動遷移するボックススコア画面。閉じるとホームへ戻る）。
         // PlayerDetail はマスターディテール化（issue #131）で独立画面ではなくなった
         // （PlayerList と同一 GameObject・同一 UIDocument に同居）。

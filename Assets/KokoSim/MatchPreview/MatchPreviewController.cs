@@ -9,7 +9,8 @@ namespace KokoSim.Unity.MatchPreview
     /// 試合開始前（対戦カード）画面のコントローラ（issue #7・A案）。スタメン設定OKの直後に挟まり、
     /// 左＝自校／右＝相手校を同一構成で並べる（先攻後攻・総合ランク・6角形・スタメン一覧）。
     /// 戻る導線は持たない（スタメン決定後は試合をやるのみ）。主要操作は「試合開始」1つだけ（UI原則⑦）で、
-    /// 押すとホーム経由でライブ観戦（MatchLive）へ入る＝既存の試合開始フローに合流する。
+    /// 押すとこの画面に留まったまま <see cref="KokoSim.Unity.Shell.MatchStartFlow"/> が準備（BeginMatch 等）を
+    /// バックグラウンドで進め、完了後に直接ライブ観戦（MatchLive）へ入る（issue #325: ホームを中継させない）。
     /// 表示専用＝ここではエンジンを進めない（帯不変・決定論に影響なし）。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
@@ -18,6 +19,10 @@ namespace KokoSim.Unity.MatchPreview
         private MatchPreviewState _state;
         private VisualElement _root;
         private RadarChartView _leftRadar, _rightRadar;
+        private Button _start;
+
+        // 準備中の二重起動防止（「試合開始」の連打・BackgroundGameOp 完了前の再入をブロックする）。
+        private bool _starting;
 
         private const float RadiusFactor = 0.34f;
         private const float LabelOffset = 1.22f;
@@ -26,15 +31,24 @@ namespace KokoSim.Unity.MatchPreview
         {
             _state = new MatchPreviewState();
             _root = GetComponent<UIDocument>().rootVisualElement;
+            _starting = false;
 
-            var start = _root.Q<Button>("mp-start");
-            if (start != null) start.clicked += OnStart;
+            _start = _root.Q<Button>("mp-start");
+            if (_start != null) _start.clicked += OnStart;
 
             // レーダーは部品辞書の共通部品。軸の並び・塗り色はチーム総合力パネルと同一。
             _leftRadar = new RadarChartView(_root.Q<VisualElement>("mp-left-radar"), RadiusFactor, LabelOffset);
             _rightRadar = new RadarChartView(_root.Q<VisualElement>("mp-right-radar"), RadiusFactor, LabelOffset);
 
             Render();
+        }
+
+        // 画面を離れるときに登録を解除する（ScreenRouter は同じ GameObject を SetActive で付け外しするだけなので、
+        // 外さないと画面往復のたびに多重登録される）。
+        private void OnDisable()
+        {
+            if (_start != null) _start.clicked -= OnStart;
+            _start = null;
         }
 
         private void Render()
@@ -103,8 +117,20 @@ namespace KokoSim.Unity.MatchPreview
             if (l != null) l.text = text;
         }
 
-        // ホームへ戻すと AwaitingMatchStart を見て自校戦のライブ観戦が始まる（既存フローに合流）。
-        // クリック配信中に同期 Show するとUITKのイベント木が壊れるため遅延切替を使う。
-        private void OnStart() => ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+        // この画面に留まったまま準備（BeginMatch 等）を進める（issue #325）。完了は MatchStartFlow が
+        // ShowDeferred("MatchLive") で直接遷移するので、ここでは開始と入力ブロックだけを見る。
+        private void OnStart()
+        {
+            if (_starting) return;   // 連打ガード
+            _starting = true;
+            _start?.SetEnabled(false);   // 押せない見た目にする（無言で無視しない）
+
+            if (!MatchStartFlow.Begin())
+            {
+                // 他のバックグラウンド処理と衝突して開始できなかった（二重起動）。詰まないよう入力を戻す。
+                _starting = false;
+                _start?.SetEnabled(true);
+            }
+        }
     }
 }
