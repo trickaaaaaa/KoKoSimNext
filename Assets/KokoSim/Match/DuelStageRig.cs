@@ -25,6 +25,8 @@ namespace KokoSim.Unity.Match
     [System.Serializable]
     public struct DuelCalibration
     {
+        /// <summary>スキーマ版。旧版のJSON・シリアライズ値は新項目が0埋めで来るため、Upgradeで既定へ補完する。</summary>
+        public int Version;
         public float Dist;       // 注視点からの後退距離[m]（望遠圧縮の強さ。カメラz = マウンド + Dist）
         public float AimY;       // 注視点の高さ[m]
         public float AimZ;       // 注視点のz[m]（本塁=0・正=マウンド側）
@@ -34,9 +36,31 @@ namespace KokoSim.Unity.Match
         public Color Sky;        // カメラ背景色（夏空）
         public float Ambient;    // シェーダ _Ambient（環境光の下限）
         public Vector3 LightDir; // シェーダ _LightDir（ワールド・面へ向かう向き）
+        // 立ち位置[m]（ステージローカル。本塁=原点・+z=マウンド。yは接地系が持つため対象外）。
+        // 投手はプレート位置がルール寸法（18.44m）なので較正対象にしない
+        public float BatterX, BatterZ;
+        public float CatcherX, CatcherZ;
+        public float UmpireX, UmpireZ;
+        // 被り物の装着オフセット[m]（gear-headコンテナ＝実寸・頭蓋基準。x=左右/y=頭蓋上/z=顔前）
+        public Vector3 CapOffset;             // 投手の帽子
+        public Vector3 HelmetOffset;          // 打者のヘルメット
+        public Vector3 CatcherHelmetOffset;   // 捕手のヘルメット（殻）
+        public Vector3 CatcherMaskOffset;     // 捕手のマスク（ケージ）
+        // 胸プロテクター[m]（gear-chestコンテナ＝胸ボーン原点・+Z体前）。yは肩ボーン実測に載る補正ぶん
+        public Vector3 CatcherChestOffset;
+        /// <summary>
+        /// 打者ヘルメットの被り角[度]（x=前後の傾き/y=ヨー/z=左右の傾き）。
+        /// 回転の中心は**殻の中心**であって枠の原点（頭ボーン＝首の付け根）ではない。
+        /// 首で回すと角度を変えるたびにヘルメットが振り出されて位置まで動き、
+        /// 「向きだけ直す」ができないため（ApplyCalibration が中心を保つ補正を掛ける）。
+        /// </summary>
+        public Vector3 HelmetEuler;
+
+        private const int CurrentVersion = 5;
 
         public static DuelCalibration Default => new DuelCalibration
         {
+            Version = CurrentVersion,
             Dist = 60f,
             AimY = 0.8f,
             AimZ = 1f,
@@ -47,7 +71,49 @@ namespace KokoSim.Unity.Match
             Sky = new Color(0.55f, 0.78f, 0.90f),
             Ambient = 0.45f,
             LightDir = new Vector3(-0.35f, -0.85f, -0.4f),
+            BatterX = -0.9f, BatterZ = 0f,
+            CatcherX = 0f, CatcherZ = -1.0f,
+            UmpireX = 0.35f, UmpireZ = -2.0f,   // #291のスロット位置
+            CapOffset = Vector3.zero,
+            HelmetOffset = Vector3.zero,
+            CatcherHelmetOffset = Vector3.zero,
+            CatcherMaskOffset = Vector3.zero,
+            CatcherChestOffset = Vector3.zero,
+            HelmetEuler = Vector3.zero,
         };
+
+        /// <summary>
+        /// 旧版の値を現行スキーマへ補完する。0埋めのままだと打者が本塁上（x=0）に立つ等の
+        /// 壊れた絵になるため、読み込み・適用の入口で必ず通す。
+        ///
+        /// **版ごとに「その版で増えた項目だけ」を埋める**こと。全項目を一括で既定へ戻すと、
+        /// 版を上げるたびに調整済みのJSONが白紙に戻る（ツールでライブ調整→JSONへ書き出す運用なので
+        /// これは実害）。新項目を足すときは CurrentVersion を上げて、下に1ブロック足す。
+        /// </summary>
+        public static DuelCalibration Upgrade(DuelCalibration c)
+        {
+            if (c.Version >= CurrentVersion) return c;
+            var d = Default;
+            if (c.Version < 2)   // v2: 立ち位置と被り物オフセットを追加
+            {
+                c.BatterX = d.BatterX; c.BatterZ = d.BatterZ;
+                c.CatcherX = d.CatcherX; c.CatcherZ = d.CatcherZ;
+                c.UmpireX = d.UmpireX; c.UmpireZ = d.UmpireZ;
+                c.CapOffset = d.CapOffset;
+                c.HelmetOffset = d.HelmetOffset;
+            }
+            if (c.Version < 3)   // v3: 捕手のヘルメット・マスクを分離
+            {
+                c.CatcherHelmetOffset = d.CatcherHelmetOffset;
+                c.CatcherMaskOffset = d.CatcherMaskOffset;
+            }
+            if (c.Version < 4)   // v4: 胸プロテクターを生成メッシュへ差し替え
+                c.CatcherChestOffset = d.CatcherChestOffset;
+            if (c.Version < 5)   // v5: 打者ヘルメットの被り角
+                c.HelmetEuler = d.HelmetEuler;
+            c.Version = CurrentVersion;
+            return c;
+        }
     }
 
     /// <summary>
@@ -84,6 +150,22 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private const string UniformMeshAsset = "Assets/DuelSpike/Generated/Body_Uniform_Slim1.asset";
         private const string BodyMeshName = "SuperHero_Male";
+
+        /// <summary>
+        /// 購入素体（School Baseball Player 0001。design-18 §3.1 で再配布NG＝gitignore）。
+        /// 投手・打者・捕手に使う。無い環境（他端末・CI）では自動でU2素体へ落ちる＝対決ビューは止めない。
+        /// 球審だけはU2素体のまま残す（2026-07-29 決定）: 購入素体のシルエットは野球のユニフォームそのもので、
+        /// 紺に塗っても審判のスラックス・短つば帽にはならないため。素体2系統の併存を許容する。
+        /// </summary>
+        private const string VendorBodyFbx =
+            "Assets/DuelSpike/Vendor/SchoolBaseballPlayer0001/School_Baseball_Player_0001.fbx";
+
+        /// <summary>DuelVendorRegionBaker が焼いた領域IDつきメッシュ（UV1に領域ID）。</summary>
+        private const string VendorRegionMeshDir = "Assets/DuelSpike/Vendor/Generated/";
+        private const string VendorRegionMeshSuffix = "_Regions.asset";
+
+        /// <summary>購入素体の帽子（独立メッシュ）。打者はこれを消してヘルメットを付ける。</summary>
+        private const string VendorCapMeshName = "A_Players_0001_Cap_0001";
 
         /// <summary>
         /// 役割別の6領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[8] に流し込む）。
@@ -177,9 +259,12 @@ namespace KokoSim.Unity.Match
         // 生成した全マテリアル（HideAndDontSave はドメインリロードを跨いで残るため、Disposeで明示破棄する。
         // 従来も漏れていたが、領域色でマテリアル数が増えるのを機に修正）
         private readonly List<Material> _materials = new();
-        private Actor _pitcher, _batter, _catcher;
+        private Actor _pitcher, _batter, _catcher, _umpire;
         private float _acc;
         private float _fovBaseDeg = 2.9f;   // 16:9時の垂直FOV（ApplyCalibrationが上書き。既定=R-comp60）
+        private Transform _capMount, _helmetMount;   // 被り物の位置オフセット枠（gear-head直下・実寸[m]）
+        private Transform _cHelmetMount, _cMaskMount;   // 捕手のヘルメット・マスク（同上）
+        private Transform _cChestMount;                 // 捕手の胸プロテクター（gear-chest直下）
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
         private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _catchClip;
@@ -236,24 +321,40 @@ namespace KokoSim.Unity.Match
             _root.transform.position = StageOrigin;
             BuildGround(layer);
 
+            // 立ち位置・装備位置は絵作りパラメータ（DuelCalibration.Default が単一ソース。
+            // 球審の#291スロット位置の経緯コメントも Default 側の値に対応する）。
+            // スポーン位置から較正値で置く＝装備の視線ベイク（AttachGear）が較正後の位置で走る
+            var cal0 = DuelCalibration.Upgrade(CalibrationOverride ?? DuelCalibration.Default);
+
             // yawはクリップごとの素の向き実測（DuelMotionSpike.RunFacingProbe）から:
             // 投手クリップ（自作Rokoko）は素で+Z向き＝PitcherYaw、脇3クリップ（購入AA）も素で+Z向き
-            _pitcher = SpawnActor(body, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), PitcherYaw,
-                UniformPalette.Fielding, MoundHeight, layer);
+            // 投手・打者・捕手は購入素体（無い環境ではU2素体へ自動フォールバック）。球審だけはU2素体のまま。
+            var vendor = LoadVendorBody();
+            bool useVendor = vendor != null;
+            var playerBody = useVendor ? vendor : body;
+
+            _pitcher = SpawnActor(playerBody, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), PitcherYaw,
+                UniformPalette.Fielding, MoundHeight, layer, useVendor);
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
-            _batter = SpawnActor(body, batClip, new Vector3(-0.9f, 0f, 0f), 90f,
-                UniformPalette.Batting, 0f, layer);
+            _batter = SpawnActor(playerBody, batClip, new Vector3(cal0.BatterX, 0f, cal0.BatterZ), 90f,
+                UniformPalette.Batting, 0f, layer, useVendor);
+            // 購入素体は帽子を素で持っている。打者はヘルメットを被せるので、その帽子を落とす
+            if (useVendor) SetChildActive(_batter.Go, VendorCapMeshName, false);
             _batter.IdleClip = batClip;
             _batter.IdleEndAt = BatterIdleEnd;
             _batter.EndAt = BatterIdleEnd;   // 生成直後の初回ループでスイングまで流さない
-            _catcher = SpawnActor(body, catClip, new Vector3(0f, 0f, -1.0f), 0f,
-                UniformPalette.Fielding, 0f, layer);
+            _catcher = SpawnActor(playerBody, catClip, new Vector3(cal0.CatcherX, 0f, cal0.CatcherZ), 0f,
+                UniformPalette.Fielding, 0f, layer, useVendor);
+            // 捕手も素の帽子を落とす。日本の高校野球の捕手は「捕手用ヘルメット＋マスク」で、
+            // 帽子の上にマスクを重ねる形ではない（帽子を残すと頭が二重に膨らむ 2026-07-29 監督指摘）。
+            // ヘルメットとマスクは CatcherGear 側（殻＋ケージバー）が受け持つ
+            if (useVendor) SetChildActive(_catcher.Go, VendorCapMeshName, false);
             _catcher.IdleClip = catClip;
             // 球審は捕手の真後ろ・打者（x=-0.9側）から遠い肩越しに覗く「スロット」位置（#291）。
             // 旧値(-0.35,-1.7)は捕手とのz間隔0.7mしか無く、しゃがみ姿勢同士の胴回りでめり込んで見えていた。
             // z間隔を1.0mへ広げ、x offsetは打者と反対側（+x）へ倒して基準構図R-comp60から見て
             // 捕手の背後に自然に収まるようにする。
-            var umpire = SpawnActor(body, umpClip, new Vector3(0.35f, 0f, -2.0f), 0f,
+            _umpire = SpawnActor(body, umpClip, new Vector3(cal0.UmpireX, 0f, cal0.UmpireZ), 0f,
                 UniformPalette.Umpire, 0f, layer);
 
             // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
@@ -300,7 +401,9 @@ namespace KokoSim.Unity.Match
             // 顔が確実に本塁を向くリリース時刻の姿勢で焼き、初期姿勢へ巻き戻す
             var mound = new Vector3(0f, MoundHeight, MoundDistance);
             SeekActor(_pitcher, ReleaseTime);
-            AttachGear(_pitcher, GearKind.Cap, Vector3.zero, UniformPalette.Fielding.Undershirt, layer);
+            // 購入素体は帽子を素で持っている（頭ボーン直付けの剛体メッシュ）ので生成帽子は載せない＝二重帽子を避ける
+            if (!useVendor)
+                AttachGear(_pitcher, GearKind.Cap, Vector3.zero, UniformPalette.Fielding.Undershirt, layer);
             SeekActor(_pitcher, 0.001f);
             GroundFix(_pitcher);
             // ヘルメットはチーム色でなく暗紺: 実際の高校野球のヘルメットは黒/紺が大半で、
@@ -309,12 +412,12 @@ namespace KokoSim.Unity.Match
             // （2026-07-28監督指摘）。ポスタライズ6段で2段ぶん明るい紺にして輪郭を立てる
             AttachGear(_batter, GearKind.Helmet, mound, new Color(0.28f, 0.31f, 0.45f), layer);
             AttachGear(_catcher, GearKind.CatcherGear, mound, UniformPalette.Fielding.Undershirt, layer);
-            AttachGear(umpire, GearKind.UmpireGear, mound, new Color(0.13f, 0.13f, 0.15f), layer);
+            AttachGear(_umpire, GearKind.UmpireGear, mound, new Color(0.13f, 0.13f, 0.15f), layer);
 
-            // 絵作り一式（構図R-comp60・夏空・ライト）。数値の実体は DuelCalibration.Default に集約し、
-            // キャリブレーションツール（DuelCalibrationWindow）が上書き中ならその値で作る。
-            // 全マテリアル（装備分含む）が出揃った後に呼ぶ＝ライト系を漏れなく反映する
-            ApplyCalibration(CalibrationOverride ?? DuelCalibration.Default);
+            // 絵作り一式（構図R-comp60・夏空・ライト・被り物オフセット）。数値の実体は
+            // DuelCalibration.Default に集約し、キャリブレーションツール（DuelCalibrationWindow）が
+            // 上書き中ならその値で作る。全マテリアル・装備が出揃った後に呼ぶ＝漏れなく反映する
+            ApplyCalibration(cal0);
 
             Available = true;
             Live = this;
@@ -337,6 +440,7 @@ namespace KokoSim.Unity.Match
         public void ApplyCalibration(DuelCalibration cal)
         {
             if (_camera == null) return;
+            cal = DuelCalibration.Upgrade(cal);
             _fovBaseDeg = cal.FovDeg;
             _camera.backgroundColor = cal.Sky;
             float camZ = MoundDistance + cal.Dist;
@@ -353,6 +457,38 @@ namespace KokoSim.Unity.Match
                 m.SetFloat("_Ambient", cal.Ambient);
                 m.SetVector("_LightDir", cal.LightDir);
             }
+            // 立ち位置（x/zのみ・yは接地系）。装備の視線ベイクはスポーン時の位置のままなので、
+            // ライブ移動中はつば等の向きがわずかに古い＝焼き戻し後の rig 再生成で正しくベイクされる
+            SetActorXZ(_batter, cal.BatterX, cal.BatterZ);
+            SetActorXZ(_catcher, cal.CatcherX, cal.CatcherZ);
+            SetActorXZ(_umpire, cal.UmpireX, cal.UmpireZ);
+            if (_capMount != null) _capMount.localPosition = cal.CapOffset;
+            if (_helmetMount != null)
+            {
+                // 被り角は**殻の中心**を軸に回す。枠の原点（頭ボーン＝首の付け根）で回すと
+                // 角度を1度いじるたびにヘルメットが弧を描いて位置まで動き、
+                // 「位置は決まったので向きだけ直す」ができない。中心を保つぶんを位置で打ち消す
+                var helmetRot = Quaternion.Euler(cal.HelmetEuler);
+                _helmetMount.localRotation = helmetRot;
+                _helmetMount.localPosition =
+                    cal.HelmetOffset + HelmetPivot - helmetRot * HelmetPivot;
+            }
+            if (_cHelmetMount != null) _cHelmetMount.localPosition = cal.CatcherHelmetOffset;
+            if (_cMaskMount != null) _cMaskMount.localPosition = cal.CatcherMaskOffset;
+            if (_cChestMount != null) _cChestMount.localPosition = cal.CatcherChestOffset;
+        }
+
+        /// <summary>
+        /// 立ち位置のx/zだけ差し替える。現在位置とBasePosの両方へ同じ差分を足す＝
+        /// 巻き戻し（RewindActor）・待機ドリフト補正（StepActor）の基準ごと動かす。
+        /// </summary>
+        private static void SetActorXZ(Actor a, float x, float z)
+        {
+            if (a == null) return;
+            var delta = new Vector3(x - a.BasePos.x, 0f, z - a.BasePos.z);
+            if (delta.sqrMagnitude < 1e-10f) return;
+            a.BasePos += delta;
+            a.Go.transform.localPosition += delta;
         }
 
         // ── §7-2 アンカー同期（第1弾＝投手のみ） ──────────────────────────
@@ -646,20 +782,31 @@ namespace KokoSim.Unity.Match
         // ---- 素体 -------------------------------------------------------------
 
         private Actor SpawnActor(GameObject bodyPrefab, AnimationClip clip, Vector3 pos, float yawDeg,
-            UniformPalette pal, float groundY, int layer)
+            UniformPalette pal, float groundY, int layer, bool vendorBody = false)
         {
             var go = Object.Instantiate(bodyPrefab);
             go.name = "body-" + clip.name;
             go.transform.SetParent(_root.transform, false);
 
-            // 着衣メッシュ（U2）: 本体SMRのメッシュをベイク資産へ差し替え、目・眉は消す（顔なし方針。
-            // 従来は肌と同色マテリアルで偶然隠れていただけ＝領域色化で露出するため明示的に無効化）。
-            // bindposes/boneWeightsは原本のままなのでボーン配列・Animatorはそのまま効く
-            var uniformMesh = LoadUniformMesh();
-            foreach (var smr0 in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+            // 領域色で塗れる状態にする。素体2系統で作りが違う:
+            //   購入素体 … 帽子・上衣・ズボン等がもともと別メッシュ＝領域IDつきベイク資産へ差し替えるだけ
+            //   U2素体   … 素体1枚に着衣メッシュ（DuelUniformBaker のベイク資産）を被せ、目・眉は消す
+            //              （顔なし方針。従来は肌と同色マテリアルで偶然隠れていただけ＝領域色化で露出する）
+            // どちらも bindposes/boneWeights は原本のままなのでボーン配列・Animatorはそのまま効く
+            bool regionReady;
+            if (vendorBody)
             {
-                if (smr0.name == BodyMeshName && uniformMesh != null) smr0.sharedMesh = uniformMesh;
-                else if (smr0.name != BodyMeshName) smr0.gameObject.SetActive(false);
+                regionReady = ApplyVendorRegionMeshes(go);
+            }
+            else
+            {
+                var uniformMesh = LoadUniformMesh();
+                foreach (var smr0 in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+                {
+                    if (smr0.name == BodyMeshName && uniformMesh != null) smr0.sharedMesh = uniformMesh;
+                    else if (smr0.name != BodyMeshName) smr0.gameObject.SetActive(false);
+                }
+                regionReady = uniformMesh != null;
             }
 
             var rs = go.GetComponentsInChildren<Renderer>();
@@ -670,8 +817,8 @@ namespace KokoSim.Unity.Match
             go.transform.localPosition = pos;
             go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
 
-            // 着衣メッシュはUV1の領域IDで塗り分け、素体フォールバック時は肌色一色
-            var mat = uniformMesh != null ? RegionMaterial(pal) : FlatMaterial(pal.Skin);
+            // UV1の領域IDで塗り分け、領域資産が揃わない時だけ肌色一色へ落とす
+            var mat = regionReady ? RegionMaterial(pal) : FlatMaterial(pal.Skin);
             foreach (var r in rs) r.sharedMaterial = mat;
             foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
                 smr.updateWhenOffscreen = true;   // バウンズをバインド箱でなく実ポーズ追従に
@@ -703,9 +850,13 @@ namespace KokoSim.Unity.Match
             var headBone = animator.GetBoneTransform(HumanBodyBones.Head);
             actor.HeadUpLocal = headBone != null
                 ? headBone.InverseTransformDirection(Vector3.up) : Vector3.up;
-            // UBC素体のバインドポーズは顔がルート **-Z** 向き（+Zで測るとキャップが後ろ被りになる実測 2026-07-28）
+            // バインドポーズの顔向きは素体依存で符号が逆になる:
+            //   UBC素体   … 顔がルート **-Z** 向き（+Zで測るとキャップが後ろ被りになる実測 2026-07-28）
+            //   購入素体  … 顔がルート **+Z** 向き（2026-07-29 実測。正面レンダで確認）
+            // 間違えると被り物が180°回って後ろ被りになるだけで、エラーにはならず絵でしか気づけない
+            var faceFwd = vendorBody ? go.transform.forward : -go.transform.forward;
             actor.HeadFwdLocal = headBone != null
-                ? headBone.InverseTransformDirection(-go.transform.forward) : Vector3.forward;
+                ? headBone.InverseTransformDirection(faceFwd) : Vector3.forward;
 
             actor.Graph = PlayableGraph.Create("duel-" + clip.name);
             actor.Output = AnimationPlayableOutput.Create(actor.Graph, "out", animator);
@@ -956,6 +1107,17 @@ namespace KokoSim.Unity.Match
         /// <summary>役割別の装備セット。高校野球のヘルメットは両耳フラップ付き＝帽子とシルエットで判別できる。</summary>
         private enum GearKind { Cap, Helmet, CatcherGear, UmpireGear }
 
+        // 捕手の被り物の素の装着位置[m]（gear-headコンテナ＝頭ボーン原点・+Y頭蓋上・+Z顔前）。
+        // キャリブレーションの CatcherHelmetOffset / CatcherMaskOffset はこれに**加算**される
+        private static readonly Vector3 CatcherHelmetBase = new(0f, 0.125f, -0.015f);
+        private static readonly Vector3 CatcherMaskBase = new(0f, 0.090f, 0.075f);
+
+        /// <summary>胸プロテクターの装着位置[m]（gear-chestコンテナ＝胸ボーン原点・+Z体前）。</summary>
+        private static readonly Vector3 ChestMeshBase = new(0f, 0f, 0.085f);
+
+        /// <summary>打者ヘルメットの被り角の回転中心（殻 helmet-shell の中心。AttachGear の配置と一致させる）。</summary>
+        private static readonly Vector3 HelmetPivot = new(0f, 0.13f, 0.02f);
+
         /// <summary>
         /// 装備をボーンへ装着する。呼び出しは**初期ポーズ評価後**（コンストラクタ末尾のStepActor後）限定。
         ///
@@ -1001,6 +1163,16 @@ namespace KokoSim.Unity.Match
             if (head != null)
             {
                 var c = GearContainer(head, "gear-head", SkullRot(head));
+                // 帽子・ヘルメットは装着位置を較正できるようオフセット枠を1段挟む。コンテナは実寸空間なので
+                // 枠の localPosition がそのまま[m]（x=左右/y=頭蓋上/z=顔前）。ApplyCalibration が流し込む
+                var mount = c;
+                if (kind == GearKind.Cap || kind == GearKind.Helmet)
+                {
+                    mount = new GameObject("gear-offset");
+                    mount.transform.SetParent(c.transform, false);
+                    if (kind == GearKind.Cap) _capMount = mount.transform;
+                    else _helmetMount = mount.transform;
+                }
                 switch (kind)
                 {
                     case GearKind.Cap:
@@ -1010,15 +1182,15 @@ namespace KokoSim.Unity.Match
                         // 後頭部の露出はわずかな後ろ寄せだけで拾う
                         if (DuelGearMeshes.Cap() != null)
                         {
-                            GearMeshPart(c, DuelGearMeshes.Cap(), "cap-mesh",
+                            GearMeshPart(mount, DuelGearMeshes.Cap(), "cap-mesh",
                                 new Vector3(0f, 0.185f, -0.025f), Quaternion.identity, accent, layer);
                         }
                         else
                         {
                             // 実測頭寸に被せる: クラウンは頭頂(+0.21)を覆い、側頭±0.09を包む
-                            GearPart(c, PrimitiveType.Sphere, "cap-crown", new Vector3(0f, 0.155f, 0.01f),
+                            GearPart(mount, PrimitiveType.Sphere, "cap-crown", new Vector3(0f, 0.155f, 0.01f),
                                 new Vector3(0.21f, 0.15f, 0.23f), accent, layer);
-                            GearPart(c, PrimitiveType.Cube, "cap-brim", new Vector3(0f, 0.125f, 0.145f),
+                            GearPart(mount, PrimitiveType.Cube, "cap-brim", new Vector3(0f, 0.125f, 0.145f),
                                 new Vector3(0.17f, 0.012f, 0.09f), accent, layer);
                         }
                         break;
@@ -1029,22 +1201,43 @@ namespace KokoSim.Unity.Match
                         // **構造がある装備はプリミティブ構成**で作る。
                         // 帽子より低く深く被る（額は眉まで覆い、顔だけ出す）。初版は帽子と同じ高さに置いて
                         // 額が露出し「赤い髪」に見えた → 中心を下げ縦径を拡大
-                        GearPart(c, PrimitiveType.Sphere, "helmet-shell", new Vector3(0f, 0.13f, 0.02f),
+                        GearPart(mount, PrimitiveType.Sphere, "helmet-shell", new Vector3(0f, 0.13f, 0.02f),
                             new Vector3(0.24f, 0.20f, 0.26f), accent, layer);
-                        GearPart(c, PrimitiveType.Cube, "helmet-brim", new Vector3(0f, 0.12f, 0.16f),
+                        GearPart(mount, PrimitiveType.Cube, "helmet-brim", new Vector3(0f, 0.12f, 0.16f),
                             new Vector3(0.17f, 0.012f, 0.07f), accent, layer);
-                        GearPart(c, PrimitiveType.Sphere, "helmet-ear-l", new Vector3(-0.11f, 0.05f, 0.02f),
+                        GearPart(mount, PrimitiveType.Sphere, "helmet-ear-l", new Vector3(-0.11f, 0.05f, 0.02f),
                             new Vector3(0.035f, 0.11f, 0.10f), accent, layer);
-                        GearPart(c, PrimitiveType.Sphere, "helmet-ear-r", new Vector3(0.11f, 0.05f, 0.02f),
+                        GearPart(mount, PrimitiveType.Sphere, "helmet-ear-r", new Vector3(0.11f, 0.05f, 0.02f),
                             new Vector3(0.035f, 0.11f, 0.10f), accent, layer);
                         break;
                     case GearKind.CatcherGear:
-                        // ヘルメット殻（顔は覆わない・後頭部〜頭頂のみ）＋ケージバー。
-                        // AI生成の殻マスクは顔全体を塞ぎ「視線が遮られている」（2026-07-28監督指摘・
-                        // 実物写真参照）。隙間が命のケージは細バーのプリミティブが正解
-                        GearPart(c, PrimitiveType.Sphere, "cmask-shell", new Vector3(0f, 0.145f, -0.02f),
-                            new Vector3(0.23f, 0.18f, 0.22f), accent, layer);
-                        FaceCage(c, "cmask", accent, layer);
+                        // 日本の高校野球の捕手は米国式フルフェイスではなく「捕手用ヘルメット＋独立マスク」の
+                        // 2点構成（2026-07-28監督指摘＋実物写真）。生成メッシュはその2点をそのまま持つ。
+                        //
+                        // 2026-07-28 に一度「AI生成マスクは顔を塞ぐのでプリミティブのケージが正解」と結論したが、
+                        // これは**テキスト生成の結論**だった。実物写真を渡した画像生成（Meshy）では隙間の抜けた
+                        // ケージが出た（2026-07-29・私の見立てが外れた）ので、実メッシュへ差し替える。
+                        // ヘルメットは通気孔の穴でCollapseが頭打ちになるため voxel remesh 前処理が要る
+                        // （tools/aigear-decimate.py のコメント参照）。
+                        var cHelmet = DuelGearMeshes.CatcherHelmet();
+                        var cMask = DuelGearMeshes.CatcherMask();
+                        if (cHelmet != null && cMask != null)
+                        {
+                            _cHelmetMount = OffsetMount(c, "cmask-helm-offset");
+                            _cMaskMount = OffsetMount(c, "cmask-cage-offset");
+                            GearMeshPart(_cHelmetMount.gameObject, cHelmet, "cmask-helm",
+                                CatcherHelmetBase, Quaternion.identity, accent, layer);
+                            // ケージは黒（実物は金属の艶消し黒）。殻のチーム色と分けることで
+                            // 「被り物＋防具」の2点に読める
+                            GearMeshPart(_cMaskMount.gameObject, cMask, "cmask-cage",
+                                CatcherMaskBase, Quaternion.identity, dark, layer);
+                        }
+                        else
+                        {
+                            GearPart(c, PrimitiveType.Sphere, "cmask-shell", new Vector3(0f, 0.145f, -0.02f),
+                                new Vector3(0.23f, 0.18f, 0.22f), accent, layer);
+                            FaceCage(c, "cmask", accent, layer);
+                        }
                         break;
                     case GearKind.UmpireGear:
                         // 球審: 帽子型クラウン＋ケージバー（顔は見せる）
@@ -1084,12 +1277,31 @@ namespace KokoSim.Unity.Match
                             new Vector4(-0.015f, 0.090f, 0.24f, 0.070f),
                             new Vector4(-0.075f, 0.085f, 0.21f, 0.065f),
                         };
-                    if (catcherGear && DuelGearMeshes.Chest() != null)
+                    // 生成メッシュ（Meshy画像生成・較正済み: 縦0.44m・肩当て込み・パッド面+Z）。
+                    // 首元まで上げて着せる。球審は薄型プリミティブ維持（服の下に着る前提のシルエット）
+                    bool chestMesh = catcherGear && DuelGearMeshes.Chest() != null;
+                    if (chestMesh)
                     {
-                        // 生成メッシュ（bpy製・較正済み: 縦0.44m・パッド面+Z）。首元まで上げて着せる。
-                        // 球審は薄型プリミティブ維持（服の下に着る前提のシルエット）
-                        GearMeshPart(c, DuelGearMeshes.Chest(), "chest-mesh",
-                            new Vector3(0f, 0.0f, 0.09f), Quaternion.identity, accent, layer);
+                        // 高さは**肩ボーン（UpperArm頭）の実測**へメッシュ上端（肩当ての天面）を合わせる。
+                        // コンテナのボーンは UpperChest/Chest/Spine のどれに落ちるかが素体依存で、
+                        // 原点の高さが揃わない＝固定オフセットだと腰まで下がる（2026-07-29 実害）。
+                        // 旧実装が肩当てだけ肩ボーン実測で置いていたのと同じ理由
+                        var chestGear = DuelGearMeshes.Chest();
+                        float shoulderY = 0f; int shoulderN = 0;
+                        foreach (var armBone in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm })
+                        {
+                            var arm = actor.Animator.GetBoneTransform(armBone);
+                            if (arm == null) continue;
+                            shoulderY += c.transform.InverseTransformPoint(arm.position).y;
+                            shoulderN++;
+                        }
+                        float top = shoulderN > 0
+                            ? shoulderY / shoulderN + 0.045f    // 肩の稜線の少し上
+                            : chestGear.bounds.extents.y;       // 肩ボーンが無い素体は素の中心置き
+                        _cChestMount = OffsetMount(c, "chest-offset");
+                        GearMeshPart(_cChestMount.gameObject, chestGear, "chest-mesh",
+                            new Vector3(0f, top - chestGear.bounds.extents.y, ChestMeshBase.z),
+                            Quaternion.identity, accent, layer);
                     }
                     else
                     {
@@ -1103,7 +1315,12 @@ namespace KokoSim.Unity.Match
                     // 2026-07-28監督指摘「肩の上を通って背中でパチンとするもの」）。左右の間＝首元の切り欠き。
                     // 位置は固定値でなく**肩ボーン（UpperArm頭）の実測**から: 固定値(±0.105)は内側すぎて
                     // 「襟の飾り」に見えた（スクショ実害）。素体・ポーズが変わってもずれない。
-                    // メッシュ胸当ての時も必ず載せる＝「肩の上も通っている」実物構造（2026-07-28再指摘）
+                    //
+                    // ただし**生成メッシュの胸当ては肩当てを自前で持っている**ので、その時は載せない
+                    // （2026-07-29。旧bpy製は胴だけの板だったため別置きが必要だった）。二重に置くと
+                    // 肩が膨れる
+                    if (!chestMesh)
+                    {
                     var shoulderScale = catcherGear
                         ? new Vector3(0.115f, 0.055f, 0.175f)
                         : new Vector3(0.095f, 0.048f, 0.155f);
@@ -1118,6 +1335,7 @@ namespace KokoSim.Unity.Match
                         lp.z += 0.005f;
                         GearPart(c, PrimitiveType.Sphere, "chest-shoulder-" + side,
                             lp, shoulderScale, accent, layer);
+                    }
                     }
                     // 背面ストラップ: 肩から背中へ降りる縦帯2本＋背中の横バンド（バックルで留まる装具の記号）。
                     // 濃色の細帯にして「体の一部」ではなくベルトに読ませる
@@ -1174,6 +1392,14 @@ namespace KokoSim.Unity.Match
                     }
                 }
             }
+        }
+
+        /// <summary>装備の位置オフセット枠（gear-head直下・実寸[m]）。ApplyCalibration が localPosition を流し込む。</summary>
+        private static Transform OffsetMount(GameObject parent, string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform, false);
+            return go.transform;
         }
 
         /// <summary>
@@ -1298,6 +1524,64 @@ namespace KokoSim.Unity.Match
             return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BodyFbxOverrideForCapture ?? BodyFbx);
 #else
             return null;
+#endif
+        }
+
+        /// <summary>子孫から名前一致のRendererを引いて表示を切り替える（見つからなければ何もしない）。</summary>
+        private static void SetChildActive(GameObject root, string rendererName, bool active)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                if (r.name == rendererName) r.gameObject.SetActive(active);
+        }
+
+        /// <summary>
+        /// 購入素体。gitignore配下なので手元に無い環境がある＝null を正常系として扱い、
+        /// 呼び出し側でU2素体へ落とす（警告も出さない。無いのが異常ではない）。
+        /// </summary>
+        private static GameObject LoadVendorBody()
+        {
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(VendorBodyFbx);
+#else
+            return null;
+#endif
+        }
+
+        /// <summary>
+        /// 購入素体のメッシュを領域IDつき（DuelVendorRegionBaker のベイク資産）へ差し替える。
+        /// 眼球は消す（のっぺらぼう方針＝design-08。顔テクスチャは領域色で塗り潰されるので放っておいても
+        /// 顔は出ないが、眼球は別メッシュなので明示的に落とす）。
+        /// 1枚でも領域資産が欠けたら false＝呼び出し側は肌色一色のフォールバックへ倒す
+        /// （半分だけ領域色という中途半端な絵を出さない）。
+        /// </summary>
+        private static bool ApplyVendorRegionMeshes(GameObject go)
+        {
+#if UNITY_EDITOR
+            bool all = true;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.name.EndsWith("Eye_Ball_Geo"))
+                {
+                    r.gameObject.SetActive(false);
+                    continue;
+                }
+                var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
+                    VendorRegionMeshDir + r.name + VendorRegionMeshSuffix);
+                if (mesh == null) { all = false; continue; }
+                var smr = r as SkinnedMeshRenderer;
+                if (smr != null) smr.sharedMesh = mesh;
+                else
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf != null) mf.sharedMesh = mesh;
+                }
+            }
+            if (!all)
+                Debug.LogWarning("[DuelStageRig] vendor region meshes missing ("
+                    + VendorRegionMeshDir + ") - run KokoSim.EditorTools.DuelVendorRegionBaker.BakeAll()");
+            return all;
+#else
+            return false;
 #endif
         }
 

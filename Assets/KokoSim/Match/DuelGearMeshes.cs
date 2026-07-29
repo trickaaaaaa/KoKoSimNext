@@ -27,17 +27,36 @@ namespace KokoSim.Unity.Match
         /// <summary>打者ヘルメット。原点=殻中心、幅0.26m。</summary>
         public static Mesh Helmet() => Get("AIGear_Helmet0_lo", m => CanonicalizeShell(m, 0.26f));
 
-        /// <summary>捕手マスク。原点=殻中心、幅0.26m。</summary>
-        public static Mesh CatcherMask() => Get("AIGear_CatcherMask0_lo", m => CanonicalizeShell(m, 0.26f));
+        /// <summary>捕手マスク（ケージ）。原点=中心、幅0.25m、正面+Z・上+Y。</summary>
+        public static Mesh CatcherMask() => Get("AIGear_CatcherMask1_lo", m => CanonicalizeMeshy(m, 0.25f));
+
+        /// <summary>
+        /// 捕手ヘルメット（殻）。原点=中心、正面+Z・上+Y。
+        /// **非一様**フィット（幅0.205 / 高0.195 / 奥行0.265）＝生成メッシュの素の比率が
+        /// 0.174×0.260×0.159 で「頭より横に狭く前後に長い」ため、一様スケールではどう置いても
+        /// 頭に合わない（幅で合わせると奥行0.353の頭巾、奥行で合わせると幅0.164で頭がはみ出す）。
+        /// 15%程度の非一様は素の生成物の比率ズレの補正であり、ポスタライズ＋ピクセル化後は判別できない。
+        /// </summary>
+        public static Mesh CatcherHelmet() => Get("AIGear_CatcherHelmet0_lo",
+            m => CanonicalizeMeshy(m, new Vector3(0.205f, 0.195f, 0.265f)));
 
         /// <summary>球審マスク。原点=殻中心、幅0.26m。</summary>
         public static Mesh UmpMask() => Get("AIGear_UmpMask0_lo", m => CanonicalizeShell(m, 0.26f));
 
-        /// <summary>胸プロテクター（bpy製）。原点=中心、縦0.44m・肩当てが上・パッド面+Z。</summary>
-        public static Mesh Chest() => Get("AIGear_ChestProtectorP", CanonicalizeChest);
+        /// <summary>
+        /// 胸プロテクター。原点=中心、正面+Z・上+Y。非一様フィット（幅0.40 / 高0.44 / 奥行0.15）。
+        /// 生成物は肩当て・Yストラップ・パッドの段まで持つので、装着側の別置き肩当ては不要になる。
+        /// 素の奥行0.242は胸当てとしては厚すぎる（体から浮く）ため、奥行だけ強めに詰めて胸に沿わせる。
+        /// </summary>
+        public static Mesh Chest() => Get("AIGear_ChestProtector1_lo",
+            m => CanonicalizeMeshy(m, new Vector3(0.400f, 0.440f, 0.150f)));
 
-        /// <summary>レガース片脚（bpy製）。原点=中心、膝が上（+Y）・シェル開口が-Z（脛へ被せる）。</summary>
-        public static Mesh LegGuard() => Get("AIGear_LegGuardP", CanonicalizeLegGuard);
+        /// <summary>
+        /// レガース片脚。原点=中心、膝が上（+Y）・正面+Z。
+        /// 縦寸は装着側が脛の実測長へ合わせ直す（DuelStageRig）ので、ここでは素の比率を保つ目安値。
+        /// </summary>
+        public static Mesh LegGuard() => Get("AIGear_LegGuard1_lo",
+            m => CanonicalizeMeshy(m, new Vector3(0.150f, 0.470f, 0.110f)));
 
         // ---- ロード ------------------------------------------------------------
 
@@ -146,6 +165,44 @@ namespace KokoSim.Unity.Match
             mesh.RecalculateBounds();
         }
 
+        /// <summary>
+        /// Meshy（画像→3D）生成物の正位化。**生成姿勢は資産によらず「正面 -Y・上 +Z」で揃う**
+        /// （2026-07-29 実測: 捕手マスク・捕手ヘルメット・胸プロテクター・レガースの4点すべてを
+        /// 6面レンダして確認）。ここで装着正位（正面+Z・上+Y）へ回してから、横幅を目標へ合わせ、
+        /// 中心を原点へ置く。
+        ///
+        /// CanonicalizeShell が向きを「装着側の実測ヨーに任せる」設計なのは、寝た姿勢のままでは
+        /// 前後も上下も合わないため成立しない。生成物は必ずここを通す。
+        /// </summary>
+        private static void CanonicalizeMeshy(Mesh mesh, float targetWidth)
+        {
+            RotateToWearing(mesh);
+            var b = mesh.bounds;
+            float s = targetWidth / Mathf.Max(0.01f, b.size.x);
+            Apply(mesh, Matrix4x4.Scale(Vector3.one * s) * Matrix4x4.Translate(-b.center));
+        }
+
+        /// <summary>
+        /// 同上の非一様版（軸ごとに目標寸法を指定する）。生成物は素の比率が実物とずれることがあり
+        /// （捕手ヘルメットは頭より横に狭く前後に長い・胸プロテクターは厚すぎる）、一様スケールでは
+        /// どう置いても body に合わない。10〜40%の軸別補正はピクセル化後には判別できない。
+        /// </summary>
+        private static void CanonicalizeMeshy(Mesh mesh, Vector3 targetSize)
+        {
+            RotateToWearing(mesh);
+            var b = mesh.bounds;
+            var s = new Vector3(
+                targetSize.x / Mathf.Max(0.01f, b.size.x),
+                targetSize.y / Mathf.Max(0.01f, b.size.y),
+                targetSize.z / Mathf.Max(0.01f, b.size.z));
+            Apply(mesh, Matrix4x4.Scale(s) * Matrix4x4.Translate(-b.center));
+            mesh.RecalculateNormals();   // 非一様スケールでは法線が面へ直交しなくなるため取り直す
+        }
+
+        /// <summary>生成姿勢（正面-Y・上+Z）→ 装着正位（正面+Z・上+Y）。</summary>
+        private static void RotateToWearing(Mesh mesh) =>
+            Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(-90f, 0f, 0f)));
+
         private static void CanonicalizeShell(Mesh mesh, float targetWidth)
         {
             // 被り殻（ヘルメット・マスク）: 中心を原点へ、横幅を頭寸へ。向きは資産ごとの個体差が
@@ -155,31 +212,9 @@ namespace KokoSim.Unity.Match
             Apply(mesh, Matrix4x4.Scale(Vector3.one * s) * Matrix4x4.Translate(-b.center));
         }
 
-        private static void CanonicalizeChest(Mesh mesh)
-        {
-            // bpy出力はZ-up構築→FBX変換で軸が入れ替わる。実測で 最長軸→Y(縦)・最薄軸→Z(奥行) へ写像
-            AxisMap(mesh);
-            // 上下判定: 肩当てで上端の横幅が広い。下端の方が広ければ180°反転
-            var b = mesh.bounds;
-            float topW = BandWidthX(mesh, b.max.y - b.size.y * 0.15f, b.max.y);
-            float botW = BandWidthX(mesh, b.min.y, b.min.y + b.size.y * 0.15f);
-            if (botW > topW) Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(0f, 0f, 180f)));
-            Recenter(mesh);
-        }
-
-        private static void CanonicalizeLegGuard(Mesh mesh)
-        {
-            AxisMap(mesh);
-            // 上下判定: 膝皿（球）で上端の奥行きが厚い。下端の方が厚ければ反転
-            var b = mesh.bounds;
-            float topD = BandDepthZ(mesh, b.max.y - b.size.y * 0.20f, b.max.y);
-            float botD = BandDepthZ(mesh, b.min.y, b.min.y + b.size.y * 0.20f);
-            if (botD > topD) Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(180f, 0f, 0f)));
-            // 前後判定: シェルの質量は前面（凸側）に寄る。重心が-Z側なら180°ヨー
-            b = mesh.bounds;
-            if (Centroid(mesh).z < b.center.z) Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(0f, 180f, 0f)));
-            Recenter(mesh);
-        }
+        // 胸プロテクター・レガースの bpy 製メッシュ用にあった CanonicalizeChest / CanonicalizeLegGuard
+        // （軸の長短と重心から上下・前後を推測するヒューリスティック）は、両方を Meshy 生成物へ
+        // 差し替えた 2026-07-29 に削除した。生成物の姿勢は既知なので推測は要らない。
 
         // ---- 幾何ヘルパ --------------------------------------------------------
 
@@ -197,34 +232,6 @@ namespace KokoSim.Unity.Match
             mesh.RecalculateBounds();
         }
 
-        /// <summary>最長軸→Y・最薄軸→Z・残り→X の回転（行列式+1）を頂点へ焼く。</summary>
-        private static void AxisMap(Mesh mesh)
-        {
-            var size = mesh.bounds.size;
-            int longAxis = size.y >= size.x && size.y >= size.z ? 1 : (size.x >= size.z ? 0 : 2);
-            int thinAxis = size.y <= size.x && size.y <= size.z ? 1 : (size.x <= size.z ? 0 : 2);
-            if (thinAxis == longAxis) thinAxis = (longAxis + 1) % 3;
-            int midAxis = 3 - longAxis - thinAxis;
-            var m = Matrix4x4.zero;
-            m[1, longAxis] = 1f;   // 最長軸 → Y
-            m[2, thinAxis] = 1f;   // 最薄軸 → Z
-            m[0, midAxis] = 1f;    // 残り → X
-            m[3, 3] = 1f;
-            if (Vector3.Dot(Vector3.Cross(m.GetRow(0), m.GetRow(1)), m.GetRow(2)) < 0f)
-                m.SetRow(0, -m.GetRow(0));   // 鏡映にしない（法線が裏返る）
-            Apply(mesh, m);
-        }
-
-        private static void Recenter(Mesh mesh) => Apply(mesh, Matrix4x4.Translate(-mesh.bounds.center));
-
-        private static Vector3 Centroid(Mesh mesh)
-        {
-            var verts = mesh.vertices;
-            var sum = Vector3.zero;
-            for (int i = 0; i < verts.Length; i++) sum += verts[i];
-            return verts.Length > 0 ? sum / verts.Length : Vector3.zero;
-        }
-
         private static Vector3 BandCentroid(Mesh mesh, float yMin, float yMax)
         {
             var verts = mesh.vertices;
@@ -240,15 +247,6 @@ namespace KokoSim.Unity.Match
             float lo = float.MaxValue, hi = float.MinValue;
             for (int i = 0; i < verts.Length; i++)
                 if (verts[i].y >= yMin && verts[i].y <= yMax) { lo = Mathf.Min(lo, verts[i].x); hi = Mathf.Max(hi, verts[i].x); }
-            return hi > lo ? hi - lo : 0f;
-        }
-
-        private static float BandDepthZ(Mesh mesh, float yMin, float yMax)
-        {
-            var verts = mesh.vertices;
-            float lo = float.MaxValue, hi = float.MinValue;
-            for (int i = 0; i < verts.Length; i++)
-                if (verts[i].y >= yMin && verts[i].y <= yMax) { lo = Mathf.Min(lo, verts[i].z); hi = Mathf.Max(hi, verts[i].z); }
             return hi > lo ? hi - lo : 0f;
         }
     }

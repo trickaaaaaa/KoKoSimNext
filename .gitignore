@@ -28,6 +28,9 @@ Assets/DuelSpike/Vendor.meta
 
 # --- アート中間生成物（AI生成の高密度FBX。デシメート後の *_lo.fbx だけを Assets 側で追跡） ---
 art-src/
+# AI生成の入力参照画像と生の出力（他社製品の写真を含むため追跡しない。デシメート後だけを持つ）
+Assets/_AIGearRaw/
+Assets/_AIGearRaw.meta
 
 # --- Unity クラッシュ復旧シーン（自動生成の退避物） ---
 Assets/_Recovery/
