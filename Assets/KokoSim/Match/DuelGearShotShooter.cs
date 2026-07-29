@@ -19,6 +19,21 @@ namespace KokoSim.Unity.Match
         /// <summary>出力ファイル名（拡張子なし）。連続検証で上書きしないよう起動側が変える。</summary>
         public static string FileName = "i-duel-gear-0";
 
+        /// <summary>寄りカットの注視点[m]（本塁=原点・+z=マウンド）とFOV[度]。</summary>
+        private struct Zoom
+        {
+            public string Name; public float AimY, AimZ, FovDeg;
+            public Zoom(string n, float y, float z, float f) { Name = n; AimY = y; AimZ = z; FovDeg = f; }
+        }
+
+        private static readonly Zoom[] Zooms =
+        {
+            new Zoom("hands", 1.25f, 0.1f, 1.1f),      // 打者の手元（握り）
+            new Zoom("mitt", 0.75f, -1.0f, 1.1f),      // 捕手のミット（しゃがみなので低め）
+            // 投手のグラブ。狙いは目測でなく GloveDiagForCapture の実測値（y1.225 / z18.325）から
+            new Zoom("pitcher", 1.23f, 18.3f, 0.55f),
+        };
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
@@ -37,6 +52,25 @@ namespace KokoSim.Unity.Match
             ctrl.RestartCurrentPaForCapture();
             for (int i = 0; i < 24; i++) yield return null;   // 量子化2コマぶん進めて初期ポーズを安定させる
             yield return Capture(FileName);
+            if (DuelStageRig.Live != null)
+                Debug.Log("[GearShot] GLOVE\n" + DuelStageRig.Live.GloveDiagForCapture());
+
+            // 寄りの検証カット。本番RTは480×270なので、握り・装着のような手元の粗さは
+            // 通常構図では潰れて見えない。較正の上書きはPlay中の静的代入＝ドメインリロードを跨がないので、
+            // FileName と違って確実に効く。撮り終えたら必ず戻す（rigはoverrideを持ち続けるため）
+            var prev = DuelStageRig.CalibrationOverride;
+            foreach (var z in Zooms)
+            {
+                var cal = DuelCalibration.Default;
+                cal.AimY = z.AimY; cal.AimZ = z.AimZ; cal.FovDeg = z.FovDeg;
+                DuelStageRig.CalibrationOverride = cal;
+                if (DuelStageRig.Live != null) DuelStageRig.Live.ApplyCalibration(cal);
+                for (int i = 0; i < 24; i++) yield return null;
+                yield return Capture(FileName + "-" + z.Name);
+            }
+            DuelStageRig.CalibrationOverride = prev;
+            if (DuelStageRig.Live != null)
+                DuelStageRig.Live.ApplyCalibration(prev ?? DuelCalibration.Default);
             Debug.Log("[GearShot] DONE");
         }
 

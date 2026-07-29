@@ -52,6 +52,23 @@ namespace KokoSim.Unity.Match
             m => CanonicalizeMeshy(m, new Vector3(0.400f, 0.440f, 0.150f)));
 
         /// <summary>
+        /// 野手グラブ。原点=中心、指が上（+Y）・ポケット開口が+Z（＝装着側で相手を向く）。
+        /// 非一様フィット（幅0.245 / 高0.295 / 奥行0.115）＝生成物は写真どおりポケットが開いた状態で
+        /// 奥行0.185あり、そのままだと握った手より分厚い塊になる。
+        /// **捕手ミットは別物**（指の区切りが無く縁が厚い）なので、これは流用しない。
+        /// </summary>
+        public static Mesh Glove() => Get("AIGear_Glove1_lo",
+            m => CanonicalizeMeshy(m, new Vector3(0.245f, 0.295f, 0.115f)));
+
+        /// <summary>
+        /// 捕手ミット。原点=中心、ポケット開口が+Z。非一様フィット（幅0.30 / 高0.33 / 奥行0.145）。
+        /// 生成物は 0.330×0.324×0.317 のほぼ球で、実物の「丸くて薄い」比率と大きく違うため奥行を強く詰める。
+        /// **6,000tri と装備中で最も重い**が、これは削れないぶん（下の経緯）であって余裕ではない。
+        /// </summary>
+        public static Mesh Mitt() => Get("AIGear_Mitt1_lo",
+            m => CanonicalizeMeshy(m, new Vector3(0.300f, 0.330f, 0.145f)));
+
+        /// <summary>
         /// レガース片脚。原点=中心、膝が上（+Y）・正面+Z。
         /// 縦寸は装着側が脛の実測長へ合わせ直す（DuelStageRig）ので、ここでは素の比率を保つ目安値。
         /// </summary>

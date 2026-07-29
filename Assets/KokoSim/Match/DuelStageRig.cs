@@ -366,7 +366,6 @@ namespace KokoSim.Unity.Match
             _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
 
             _bat = SpawnBat(layer);
-            AttachMitt(_catcher, layer);
 
             Target = CreateRt(BaseWidth, BaseHeight);
 
@@ -413,6 +412,14 @@ namespace KokoSim.Unity.Match
             AttachGear(_batter, GearKind.Helmet, mound, new Color(0.28f, 0.31f, 0.45f), layer);
             AttachGear(_catcher, GearKind.CatcherGear, mound, UniformPalette.Fielding.Undershirt, layer);
             AttachGear(_umpire, GearKind.UmpireGear, mound, new Color(0.13f, 0.13f, 0.15f), layer);
+
+            // グラブ（被り物と同じく初期ポーズ評価後＝視線実測が要るため）。利き手でない側に着ける。
+            // 投手は 2026-07-29 まで**グラブを持っていなかった**（AttachMitt が捕手専用だった）
+            // 捕手ミットは野手グラブと別メッシュ（指の区切りが無く縁が厚い＝流用すると捕手に見えない）
+            AttachGlove(_catcher, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal,
+                mound, MittSize, layer, DuelGearMeshes.Mitt());
+            AttachGlove(_pitcher, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal,
+                Vector3.zero, GloveSize, layer, DuelGearMeshes.Glove());
 
             // 絵作り一式（構図R-comp60・夏空・ライト・被り物オフセット）。数値の実体は
             // DuelCalibration.Default に集約し、キャリブレーションツール（DuelCalibrationWindow）が
@@ -704,6 +711,8 @@ namespace KokoSim.Unity.Match
             _actors.Clear();
             foreach (var m in _materials) if (m != null) Object.DestroyImmediate(m);
             _materials.Clear();
+            foreach (var m in _meshes) if (m != null) Object.DestroyImmediate(m);
+            _meshes.Clear();
             if (_postMat != null)
             {
                 UnityEngine.Rendering.RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
@@ -971,17 +980,80 @@ namespace KokoSim.Unity.Match
 
         // ---- 小道具（§3.3。両手整列バット＋手ボーン子ミット） ------------------
 
+        /// <summary>
+        /// バットの断面（軸方向t=0がノブ端・1がバレル端／半径[m]）。実物84cm級の寸法。
+        /// 一様円柱だとグリップが直径5.5cmの寸胴になり、拳が回り込めず「握れていない」絵になる
+        /// （2026-07-29 寄り検証）。design-18 §3.3 の「先細り円柱」をこの断面で満たす。
+        /// </summary>
+        private static readonly Vector2[] BatProfile =
+        {
+            new(0.000f, 0.024f),   // ノブ端
+            new(0.025f, 0.025f),   // ノブ
+            new(0.045f, 0.016f),   // グリップ（実物のハンドルはø3.2cm前後）
+            new(0.450f, 0.017f),
+            new(0.620f, 0.027f),   // テーパー
+            new(0.800f, 0.033f),   // バレル
+            new(0.965f, 0.033f),
+            new(1.000f, 0.026f),   // 先端の丸め
+        };
+
+        private const float BatHalfLength = 0.425f;   // 全長0.85m。AlignBat の位置計算もこの値を使う
+        private const int BatSides = 8;               // ピクセル化後はシルエットだけなので8角で足りる
+
         private GameObject SpawnBat(int layer)
         {
-            var bat = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            bat.name = "prop-bat";
-            Object.DestroyImmediate(bat.GetComponent<Collider>());
+            var bat = new GameObject("prop-bat");
             bat.transform.SetParent(_root.transform, false);
-            bat.transform.localScale = new Vector3(0.055f, 0.425f, 0.055f);
-            bat.GetComponent<MeshRenderer>().sharedMaterial = FlatMaterial(new Color(0.78f, 0.62f, 0.42f));
+            var batMesh = BuildBatMesh();
+            _meshes.Add(batMesh);
+            bat.AddComponent<MeshFilter>().sharedMesh = batMesh;
+            bat.AddComponent<MeshRenderer>().sharedMaterial = FlatMaterial(new Color(0.78f, 0.62f, 0.42f));
             bat.layer = layer;
             return bat;
         }
+
+        /// <summary>BatProfile を軸まわりに回した実寸メッシュ（軸+Y・原点が中央・localScaleは1のまま使う）。</summary>
+        private static Mesh BuildBatMesh()
+        {
+            int rings = BatProfile.Length;
+            var verts = new Vector3[rings * BatSides];
+            var tris = new List<int>((rings - 1) * BatSides * 6 + (BatSides - 2) * 6);
+            for (int r = 0; r < rings; r++)
+            {
+                float y = Mathf.Lerp(-BatHalfLength, BatHalfLength, BatProfile[r].x);
+                float rad = BatProfile[r].y;
+                for (int s = 0; s < BatSides; s++)
+                {
+                    float a = s * Mathf.PI * 2f / BatSides;
+                    verts[r * BatSides + s] = new Vector3(Mathf.Cos(a) * rad, y, Mathf.Sin(a) * rad);
+                }
+            }
+            for (int r = 0; r < rings - 1; r++)
+                for (int s = 0; s < BatSides; s++)
+                {
+                    int s2 = (s + 1) % BatSides;
+                    int a = r * BatSides + s, b = r * BatSides + s2;
+                    int c = (r + 1) * BatSides + s, d = (r + 1) * BatSides + s2;
+                    tris.Add(a); tris.Add(c); tris.Add(b);
+                    tris.Add(b); tris.Add(c); tris.Add(d);
+                }
+            // 両端の蓋（扇状）。開いたままだと内側が抜けて見える
+            for (int s = 1; s < BatSides - 1; s++)
+            {
+                tris.Add(0); tris.Add(s); tris.Add(s + 1);
+                int top = (rings - 1) * BatSides;
+                tris.Add(top); tris.Add(top + s + 1); tris.Add(top + s);
+            }
+            var mesh = new Mesh { name = "prop-bat (generated)", hideFlags = HideFlags.HideAndDontSave };
+            mesh.vertices = verts;
+            mesh.triangles = tris.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>生成した使い捨てメッシュ（HideAndDontSave はドメインリロードを跨いで残るのでDisposeで明示破棄する）。</summary>
+        private readonly List<Mesh> _meshes = new();
 
         // 片手フォロースルー判定: 両手ボーン間隔がグリップ間隔を明確に超えたら上の手が離れたとみなす。
         // 素体UBCの両手ボーン間隔は「両手で握っていても」構えで~0.23mある（RunHandGapProbe実測）ため、
@@ -1071,7 +1143,7 @@ namespace KokoSim.Unity.Match
                 }
                 var grip = (lh + rh) * 0.5f;
                 _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
-                _bat.transform.position = grip + axis * (0.425f - GripBelowHalf);
+                _bat.transform.position = grip + axis * (BatHalfLength - GripBelowHalf);
                 // 片手期の追従用に「最後に両手で持てていた見た目」を毎回焼き直す。
                 // 「離れた瞬間に初回焼き付け」だと、クリップ切替直後は直前クリップ末尾の残骸姿勢を
                 // 拾ってゴミオフセットが固定される（構えでバットが地面に刺さる事故の真因）
@@ -1088,18 +1160,44 @@ namespace KokoSim.Unity.Match
             _bat.transform.rotation = lhT.rotation * _batLocalRot;
         }
 
-        private void AttachMitt(Actor catcher, int layer)
+        // グラブの寸法[m]（幅・高さ・厚み）と色。捕手ミットは丸く大きい、野手グラブはやや縦長で薄い。
+        // 真円だと「胸に貼った円盤」に見えるので、縦をわずかに勝たせて楕円にする（2026-07-29 寄り検証）
+        private static readonly Vector3 MittSize = new(0.25f, 0.27f, 0.12f);
+        private static readonly Vector3 GloveSize = new(0.23f, 0.26f, 0.10f);
+        private static readonly Color LeatherColor = new(0.45f, 0.27f, 0.15f);
+
+        /// <summary>掌中心からポケット面へ出す量[m]（コンテナ+Z＝視線方向）。実物のグラブは手より前に張り出す。</summary>
+        private const float GloveForward = 0.045f;
+
+        /// <summary>
+        /// グラブ・ミットを利き手でない側へ装着する。**呼び出しは初期ポーズ評価後**（AttachGearと同じ）。
+        ///
+        /// 位置: 手ボーンの原点は**手首**なので、そのまま子にすると球が手首に刺さって
+        /// 「腕の先に肉団子」になる。バットの握り線と同じ推定（手首→中指付け根 0.65 補間）で
+        /// 掌中心へ置く。
+        /// 向き: ボーン軸は素体依存で信用できない（バット・被り物と同じ教訓）。視線ターゲット
+        /// （捕手→マウンド／投手→本塁）への水平方向を実測して焼き、ポケット面（厚みの薄い軸=Z）が
+        /// 必ず相手を向くようにする。以後はボーン追従。
+        /// </summary>
+        private void AttachGlove(Actor actor, HumanBodyBones handBone, HumanBodyBones knuckleBone,
+            Vector3 gazeLocal, Vector3 size, int layer, Mesh mesh = null)
         {
-            var hand = catcher.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            if (actor == null || actor.Animator == null) return;
+            var hand = actor.Animator.GetBoneTransform(handBone);
             if (hand == null) return;
-            var mitt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            mitt.name = "prop-mitt";
-            Object.DestroyImmediate(mitt.GetComponent<Collider>());
-            mitt.transform.SetParent(hand, false);
-            var inv = new Vector3(1f / hand.lossyScale.x, 1f / hand.lossyScale.y, 1f / hand.lossyScale.z);
-            mitt.transform.localScale = Vector3.Scale(new Vector3(0.26f, 0.24f, 0.15f), inv);
-            mitt.GetComponent<MeshRenderer>().sharedMaterial = FlatMaterial(new Color(0.45f, 0.27f, 0.15f));
-            mitt.layer = layer;
+            var target = _root.transform.TransformPoint(gazeLocal);
+            var d = target - hand.position;
+            d.y = 0f;
+            var rot = Quaternion.LookRotation(d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward);
+            var c = GearContainer(hand, "gear-glove", rot);
+            var knuckle = actor.Animator.GetBoneTransform(knuckleBone);
+            var palm = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.65f) : hand.position;
+            var lp = c.transform.InverseTransformPoint(palm);
+            lp.z += GloveForward;   // 掌の上に重ねると手に飲まれる＝ポケットぶん前へ出す
+            if (mesh != null)
+                GearMeshPart(c, mesh, "prop-glove", lp, Quaternion.identity, LeatherColor, layer);
+            else
+                GearPart(c, PrimitiveType.Sphere, "prop-glove", lp, size, LeatherColor, layer);
         }
 
         // ---- 被り物・防具（design-18 §3.3。役割ごとに出し分け＝打者ヘルメット/守備帽子） --------
@@ -1486,6 +1584,38 @@ namespace KokoSim.Unity.Match
 
 #if UNITY_EDITOR
         // ---- 【開発用・エディタ限定】録画ハーネス（DuelViewRecorder）向け観測窓 ----
+
+        /// <summary>
+        /// グラブの装着結果を実測で返す（絵の目測でなく数値で確かめるため。2026-07-29 追加）。
+        /// 寄りカメラの狙いを外すと「付いていない」のか「見えていない」のか切り分けられないので、
+        /// 掌の位置とグラブ実体の位置を直接突き合わせる。
+        /// </summary>
+        internal string GloveDiagForCapture()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var (a, name) in new[] { (_catcher, "catcher"), (_pitcher, "pitcher") })
+            {
+                if (a == null || a.Animator == null) { sb.AppendLine(name + "\tno-actor"); continue; }
+                var hand = a.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+                var knuckle = a.Animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
+                Transform glove = null;
+                foreach (var t in a.Go.GetComponentsInChildren<Transform>(true))
+                    if (t.name == "prop-glove") { glove = t; break; }
+                if (hand == null || glove == null)
+                {
+                    sb.AppendLine(name + "\thand=" + (hand != null) + "\tglove=" + (glove != null) + "\t★欠落");
+                    continue;
+                }
+                var palm = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.65f) : hand.position;
+                var local = _root.transform.InverseTransformPoint(glove.position);
+                sb.AppendLine(name
+                    + "\t掌=" + _root.transform.InverseTransformPoint(palm).ToString("F3")
+                    + "\tグラブ=" + local.ToString("F3")
+                    + "\t掌からの距離=" + Vector3.Distance(palm, glove.position).ToString("F3") + "m"
+                    + "\t実寸=" + glove.lossyScale.ToString("F3"));
+            }
+            return sb.ToString();
+        }
 
         /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>
         internal string BatDiagForCapture()
