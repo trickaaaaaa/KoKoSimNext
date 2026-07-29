@@ -42,10 +42,16 @@ namespace KokoSim.Unity.Squad
         // 配色は最終的に対決ビューの絵で決まるので、見せるのは実物の方が正しい（2026-07-29 監督指摘）。
         // 3Dアセットが無い環境（購入素体・クリップ未導入）では組めないので、そのときだけ模式図へ落ちる。
 
-        /// <summary>打者を正面から見る構図。打者は (BatterX,0,BatterZ) に yaw90＝+X を向いて立つ。</summary>
-        private static readonly Vector3 PreviewCamPos = new(1.9f, 1.20f, 0.10f);
-        private static readonly Vector3 PreviewLookAt = new(-0.9f, 1.05f, 0f);
-        private const float PreviewFovDeg = 48f;   // 構えたバットの先まで入る画角（実測で決めた）
+        /// <summary>
+        /// 直立の投手を正面から見る構図。投手はマウンド (0, MoundHeight, 18.44) に
+        /// yaw236°（購入AAクリップは素で+Z向き）で立つので、その正面＝(-0.83, 0, -0.56) 方向へカメラを置く。
+        /// 数値は実測で詰めた（目測でカメラを置くと外す・グラブ検証と同じ教訓）。
+        /// </summary>
+        private static readonly Vector3 PreviewCamPos = new(-2.35f, 1.30f, 16.85f);
+        private static readonly Vector3 PreviewLookAt = new(0f, 1.10f, 18.44f);
+        // ApplyFov は 16:9 基準で正規化するので、この欄（およそ4:3）では実効画角が約1.33倍に広がる。
+        // 全身がちょうど収まる値を Play 中に振って決めた（17=首から下で見切れ／46=小さすぎ）
+        private const float PreviewFovDeg = 27f;
 
         private VisualElement _root;
         private VisualElement _rowHost;
@@ -101,6 +107,7 @@ namespace KokoSim.Unity.Squad
             _rig = new Match.DuelStageRig();
             if (_rig.Available)
             {
+                _rig.PosePreviewStanding();   // 投手だけ直立で残す（配色以外を画から追い出す）
                 _rig.FramePreview(PreviewCamPos, PreviewLookAt, PreviewFovDeg);
                 _rigView = new Match.DuelViewElement();
                 _rigView.BindRig(_rig);

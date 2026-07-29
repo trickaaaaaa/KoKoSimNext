@@ -787,6 +787,49 @@ namespace KokoSim.Unity.Match
 
         /// <summary>水平視野角を基準構図（垂直2.9°@16:9）で固定し、現RT縦横比から垂直FOVを逆算する。</summary>
         /// <summary>
+        /// 【プレビュー用】1人だけを直立で立たせる（チーム設定画面の配色確認）。
+        ///
+        /// 立たせるのは<b>投手</b>。打者はヘルメット（暗紺固定）で帽子が見えず、捕手は防具で
+        /// ユニが隠れるため、配色の対象（上・ズボン・アンダー・ソックス・帽子）が全部見えるのは投手だけ。
+        /// 他の3人とバットは消す＝配色以外の情報を画から追い出す。
+        /// クリップは購入パックの直立ループへ差し替える（投球モーションのままだと絵が動きすぎる）。
+        /// </summary>
+        /// <returns>直立クリップが無くて組めなければ false（呼び元はそのままの絵で続けてよい）。</returns>
+        public bool PosePreviewStanding()
+        {
+            if (!Available || _pitcher == null) return false;
+            var clip = LoadClip("AA_Baseball_Defender_Standing_Idle_Loop_Type01");
+            if (clip == null) return false;
+
+            if (_batter != null) _batter.Go.SetActive(false);
+            if (_catcher != null) _catcher.Go.SetActive(false);
+            if (_umpire != null) _umpire.Go.SetActive(false);
+            if (_bat != null) _bat.SetActive(false);
+
+            _pitcher.HoldAtEnd = false;   // 投球用の「投げ切って止まる」を解除してループさせる
+            _pitcher.EndAt = 0f;
+            _pitcher.IdleClip = clip;
+            _pitcher.IdleEndAt = 0f;
+            SwapClip(_pitcher, clip);
+            StepActor(_pitcher, 0.001f);
+            GroundFix(_pitcher);
+            return true;
+        }
+
+        /// <summary>再生中のクリップを差し替える（Playable を作り直す。SpawnActor の組み立てと同じ形）。</summary>
+        private static void SwapClip(Actor a, AnimationClip clip)
+        {
+            if (a == null || !a.Graph.IsValid()) return;
+            a.Clip = clip;
+            a.Time = 0f;
+            a.Holding = false;
+            a.HoldRemaining = 0f;
+            if (a.Playable.IsValid()) a.Playable.Destroy();
+            a.Playable = AnimationClipPlayable.Create(a.Graph, clip);
+            a.Output.SetSourcePlayable(a.Playable);
+        }
+
+        /// <summary>
         /// 【プレビュー用】カメラを任意の位置・注視点へ置く（ステージ原点ローカル・m）。
         ///
         /// <see cref="ApplyCalibration"/> のカメラは「マウンド後方から本塁を見る」構図に固定されていて
