@@ -18,7 +18,7 @@ namespace KokoSim.Unity.Match
         private const int Fps = 12;
         private const float TailSeconds = 6.0f;   // スイング後（走り出し→idle復帰→次球の見送りまで）を録る
         private const string Dir =
-            "/private/tmp/claude-501/-Users-seiya-oda-Unity-KoKoSimNext/4e65f085-1f67-41c0-a324-1b2239d557d7/scratchpad/duel-rec";
+            "/private/tmp/claude-501/-Users-seiya-oda-Unity-KoKoSimNext/f97ac8e2-6135-45cb-890e-2f7d45cde8f2/scratchpad/duel-rec";
 
         private IEnumerator Start()
         {
@@ -70,9 +70,10 @@ namespace KokoSim.Unity.Match
             // クロップ中心＝録画開始時（構え）の左手ボーン位置。以後固定（スイングの弧が入るよう幅広め）
             var handPx = rig.BatterScreenPxForCapture();
 
-            float dur = DuelStageRig.ReleaseTime + targetIdx * 4.5f + 0.45f + TailSeconds;
+            float dur = DuelStageRig.WindupSeconds + targetIdx * DuelStageRig.DefaultPitchInterval + 0.45f + TailSeconds;
             var frames = new List<Texture2D>();
-            var diag = new StringBuilder("frame\tt\tclip\tclipT\thandGap\toneHand\tbatActive\n");
+            var diag = new StringBuilder(
+                "frame\tt\tclip\tclipT\thandGap\toneHand\tbatActive\tpClipT\tpYaw\tpDx\tpDz\tpRootM\tpFade\n");
             float t = 0f;
             int shot = 0;
             while (t < dur)
@@ -101,7 +102,8 @@ namespace KokoSim.Unity.Match
                 RenderTexture.active = prev;
                 frames.Add(tex);
                 diag.Append(frames.Count - 1).Append('\t').Append(t.ToString("F2")).Append('\t')
-                    .Append(rig.BatDiagForCapture()).Append('\n');
+                    .Append(rig.BatDiagForCapture()).Append('\t')
+                    .Append(rig.PitcherDiagForCapture()).Append('\n');
                 shot = Mathf.FloorToInt(t * Fps) + 1;
             }
 

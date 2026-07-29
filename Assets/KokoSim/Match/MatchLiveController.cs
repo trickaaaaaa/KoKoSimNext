@@ -70,8 +70,8 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float noPlayHoldSeconds = 1.2f;
         [Tooltip("投球フェーズの1球あたり表示時間[秒]（×0.5/×2/×4速度に連動）。投球飛翔0.45秒より長くし、着弾後の一呼吸を確保する（issue #135）。")]
         [SerializeField] private float pitchIntervalSeconds = 1.0f;
-        [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。フル振りかぶり3.0秒＋フォロースルーが切り貼りなしで収まる長さにする。判定表示のタイミングは pitchIntervalSeconds のまま＝次の投球だけ遅れる。")]
-        [SerializeField] private float duelPitchIntervalSeconds = 4.5f;
+        [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。投球（セットポジション）1.3秒＋フォロースルー1.5秒が切り貼りなしで収まる長さにする。判定表示のタイミングは pitchIntervalSeconds のまま＝次の投球だけ遅れる。")]
+        [SerializeField] private float duelPitchIntervalSeconds = DuelStageRig.DefaultPitchInterval;
         [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
         [SerializeField] private float pitchCallHoldSeconds = 0.35f;
         [Tooltip("得点オーバーレイ（issue #60）の1点あたりの加算間隔[秒]（加点前の一時停止にも使う）。")]
@@ -801,8 +801,10 @@ namespace KokoSim.Unity.Match
             _pitchFirstPending = false;
             if (_inPitchPhase && DuelPacingActive)
             {
-                // 対決ビュー中は初球もワインドアップから: リリース時刻ぶん時計を巻き戻して待つ（design-18 §7-2）
-                _pitchClock = -DuelStageRig.ReleaseTime;
+                // 対決ビュー中は初球も動き出しから: 投球の実尺ぶん時計を巻き戻して待つ（design-18 §7-2）。
+                // セットポジション投球なのでクリップ先頭からではなく DeliveryStartTime から流れる＝
+                // 巻き戻すのは ReleaseTime ではなく WindupSeconds
+                _pitchClock = -DuelStageRig.WindupSeconds;
                 _pitchFirstPending = true;
                 _duelRig.OnPitchWindup();
             }

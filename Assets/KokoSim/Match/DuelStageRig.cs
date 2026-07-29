@@ -428,21 +428,29 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static readonly string[] ClipFbxSources =
         {
-            "Assets/Motions/Duel/Pitcher_Pitching_01.fbx",
+            // 自作Rokokoの投球クリップ（Pitcher_Pitching_01.fbx）は2026-07-29にセットポジション投球へ
+            // 差し替えたため供給元から外した。戻すときはこの行と PitcherClipName を一緒に戻す
             "Assets/Motions/Duel/Batter_Batting_01.fbx",
             "Assets/Animo/AA_Basic_Baseball_Movement_Animations_Package/Animations/AA_Basic_Baseball_Movement_Animations_Package.fbx",
         };
 
-        /// <summary>投手の投球クリップ名。自作Rokokoモーション（Assets/Motions/Duel）に置き換え済み。</summary>
-        public const string PitcherClipName = "Pitcher_Pitching_01";
+        /// <summary>
+        /// 投手の投球クリップ名。購入パック（AA）のセットポジション投球（design-18 §7-2）。
+        /// 自作Rokokoモーションは振りかぶり込みで尺が長く、走者の有無に関わらずセットから投げる方針
+        /// （時間短縮）に合わないため 2026-07-29 に差し替えた。
+        /// </summary>
+        public const string PitcherClipName = "AA_Baseball_Pitcher_Pitching_type01";
 
         /// <summary>
         /// 投手クリップを本塁向き（−Z）へ揃えるyaw[度]。
-        /// 収録モーキャップはセット姿勢の向きと実際に踏み込んで投げる方向が一致しない（本クリップは約68°ずれ）。
-        /// 見えるべきは「打者へ投げている」ことなので、`RunFacingProbe` のセット姿勢基準（180°）ではなく
-        /// `RunRootPathProbe` の踏み込みベクトル基準を採る（2026-07-27実測: t=3.5sの変位(1.23,-0.49)→+56〜68°）。
+        /// 収録モーキャップはセット姿勢の向きと実際に踏み込んで投げる方向が一致しない。
+        /// 見えるべきは「打者へ投げている」ことなので、`RunFacingProbe` のセット姿勢基準ではなく
+        /// `RunRootPathProbe` の踏み込みベクトル基準を採る。
+        /// 2026-07-29実測（AAクリップ・旧yaw236で計測）: t=3.5sの変位(0.73,-1.06)＝本塁方向から+34.6°ずれ
+        /// → 236+34.6≒270。素のクリップの踏み込みはほぼ純粋な−X（変位(-1.44,+0.02)）で、270°で−Zへ乗る。
+        /// このとき セット姿勢の胸法線は−X＝三塁側を向く（右投手のセットとして正しい）。
         /// </summary>
-        public const float PitcherYaw = 236f;
+        public const float PitcherYaw = 270f;
 
         /// <summary>
         /// 打者のクリップ名。自作Rokokoモーション（Assets/Motions/Duel）に置き換え済み。
@@ -497,6 +505,12 @@ namespace KokoSim.Unity.Match
             public AnimationClipPlayable Playable;
             public AnimationClip Clip;
             public float Time;
+            // クロスフェード（切り口の繋ぎ）。Output直下は常に Mixer で、in1=現行クリップ・in0=退場ポーズ。
+            // フェード中でないときは in0 未接続・in1 の重み1＝実質ミキサー無しと同じ絵になる
+            public AnimationMixerPlayable Mixer;
+            public AnimationClipPlayable FadeFrom;   // 退場側（Pauseして進めない＝ルートモーション寄与ゼロ）
+            public float FadeRemaining;
+            public float FadeDuration;
             public Vector3 BasePos;
             public Quaternion BaseRot;
             public float GroundY;
@@ -508,6 +522,8 @@ namespace KokoSim.Unity.Match
             public float IdleEndAt;                  // 待機ループの折り返し時刻（0=クリップ末尾）。
                                                      // 構えとスイングが同じクリップの打者は、ループのたびに張り直す必要がある
             public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
+            public float DefaultEndAt;               // 一発物の終了後に戻す EndAt（0=末尾まで）。
+                                                     // 投手は購入クリップ6.00sのうちフォロースルーまでで打ち切りたいので使う
             public float HoldSeconds;                // 末尾到達時、待機へ戻る前にそのポーズで止める秒数（0=即戻る）
             public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
             public Material RegionMat;               // 領域塗り分けマテリアル（攻守交代の塗り替え用。一色フォールバック時はnull）
@@ -567,6 +583,9 @@ namespace KokoSim.Unity.Match
             _pitcher = SpawnActor(playerBody, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), PitcherYaw,
                 _defenseColors, MoundHeight, layer, useVendor);
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
+            // 購入クリップは6.00sあり、リリース後もマウンドを降りて戻る所まで入っている。
+            // フォロースルーを見せ切ったところで打ち切ってセット姿勢へ戻す（DefaultEndAt は FinishOneShot が張り直す）
+            _pitcher.DefaultEndAt = _pitcher.EndAt = ReleaseTime + FollowSeconds;
             _batter = SpawnActor(playerBody, batClip, new Vector3(cal0.BatterX, 0f, cal0.BatterZ), cal0.BatterYawDeg,
                 _offenseColors, 0f, layer, useVendor);
             // 購入素体は帽子を素で持っている。打者はヘルメットを被せるので、その帽子を落とす
@@ -637,6 +656,11 @@ namespace KokoSim.Unity.Match
                 AttachGear(_pitcher, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer);
             SeekActor(_pitcher, 0.001f);
             GroundFix(_pitcher);
+            // 生成直後はセット姿勢で止めておく。止めないと Tick が勝手にクリップを頭から流し、
+            // 打席が始まる前に**振りかぶりつきの1球**を投げてしまう（＝カウントに乗らない幽霊投球。
+            // 差し替え前は全球が振りかぶりだったので紛れていたが、セット投球にしたら露見した 2026-07-30）
+            _pitcher.Time = 0f;
+            _pitcher.Holding = true;
             // ヘルメットはチーム色でなく暗紺: 実際の高校野球のヘルメットは黒/紺が大半で、
             // チーム色（えんじ等）だと肌の顔と並んで「髪」に見える（2026-07-28 スクショで実害）
             // ヘルメットの紺は壁(0.12,0.20,0.16)と同輝度だと頭が背景に溶けて「頭が無い」絵になる
@@ -770,26 +794,51 @@ namespace KokoSim.Unity.Match
         }
 
         // ── §7-2 アンカー同期（第1弾＝投手のみ） ──────────────────────────
-        // リリースのアンカー時刻は右手速度ピーク実測。自作Rokokoクリップ（4.27s）では
-        // RunClipSpeedProbe(0.05s刻み) の 3.05s＝13.7m/s がピーク（旧AAクリップは3.00s＝8.5m/s）。
-        // 収録の頭にあった静止1.2sはインポータのfirstFrame=36で落としてあり、その結果
-        // リリース時刻が旧クリップとほぼ同値に揃っている＝打席の間合いは据え置き。
+        // リリースのアンカー時刻は右手速度ピーク実測。AAクリップ（6.00s）は
+        // RunClipSpeedProbe(0.05s刻み) の 3.05s＝15.3m/s がピーク（2026-07-29実測）。
+        // 自作Rokokoクリップ（4.27s）も同じ3.05sだったため、差し替えでアンカーは動いていない。
         // 本実装ではAnimationEventの注釈付けに置き換える（design-18 §7-2）。
         // MatchLiveController が対決ビュー中の1球周期（duelPitchIntervalSeconds）の基準にも使う。
         public const float ReleaseTime = 3.05f;
-        private const float FollowSeconds = 1.2f;   // リリース後に見せるフォロースルーの長さ（クリップ末尾まで実測1.22s）
+
+        /// <summary>
+        /// セットポジション投球の切り口＝実際に再生を始めるクリップ内時刻[秒]。
+        ///
+        /// AAクリップは 0秒がセット姿勢（体90°横向き・両手へそ前1.16m）で、そこから 1.35秒かけて
+        /// 両手を頭上（1.86m）へ振り上げてから足を上げる。この振りかぶり区間は**足が1mmも動かない**ので、
+        /// 走者の有無に関わらずセットから投げる方針（時間短縮）のため丸ごと飛ばす。
+        ///
+        /// 1.35秒でなく1.75秒なのは、1.35秒だと手がまだ頭上（1.79m）にあり、繋ぎのブレンドで
+        /// 一度跳ね上がって見えるため（試合ビュー480×270換算で手の上がりが 38px → 11px に減る。
+        /// 2026-07-29 骨座標＋実カメラ投影で比較）。1.75秒は足上げの途中で、
+        /// セット姿勢からのポーズ差が最大関節50px＝12fps1コマ（中央値12px）を超えるので
+        /// <see cref="CrossfadeActorTo"/> で繋ぐ。
+        /// </summary>
+        public const float DeliveryStartTime = 1.75f;
+
+        /// <summary>動き出しからリリースまでの実尺[秒]。投球時計の巻き戻し量＝この値。</summary>
+        public const float WindupSeconds = ReleaseTime - DeliveryStartTime;   // 1.30s
+
+        /// <summary>対決ビュー中の既定リリース間隔[秒]。撮影ハーネスの逆算もこれを使う。</summary>
+        public const float DefaultPitchInterval = 2.8f;
+
+        /// <summary>切り口のクロスフェード長[秒]。12fps量子化で3コマぶん。</summary>
+        private const float CrossfadeSeconds = 0.25f;
+
+        private const float FollowSeconds = 1.5f;   // リリース後に見せるフォロースルーの長さ
         private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
         private float _cutClipTime;
 
         /// <summary>
-        /// 打席頭のワインドアップ入口。クリップ先頭（セット姿勢）から等速で再生を始める。
-        /// 呼び出し側が投球時計を −ReleaseTime から始めれば、時計0＝リリースにそのまま一致する。
+        /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
+        /// <see cref="DeliveryStartTime"/> へクロスフェードで入り、そこから等速で再生する。
+        /// 呼び出し側が投球時計を −WindupSeconds から始めれば、時計0＝リリースにそのまま一致する。
         /// </summary>
         public void OnPitchWindup()
         {
             if (!Available || _pitcher == null) return;
             _cutCountdown = -1f;
-            SeekActor(_pitcher, 0f);
+            CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
             GroundFix(_pitcher);
             // 打席頭は打者・捕手を待機へ戻す（前打席の一発物が残っていても仕切り直す）
             if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
@@ -820,11 +869,26 @@ namespace KokoSim.Unity.Match
         public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome)
         {
             if (!Available || _pitcher == null) return;
+            // リリースの再同期は**ポーズと向きだけ**合わせ、立ち位置は据え置く。
+            //
+            // `SeekActor` は BasePos へ巻き戻して60fpsで積分し直すが、実再生は12fpsコマ打ち。
+            // ルートモーションの移動量は**その時の向きの上で**足されるので、回りながら踏み込む投球では
+            // 刻み幅が違うと軌跡が食い違う。実測（2026-07-30 DuelRootMotionProbe・切り口1.75s→3.0s）:
+            //   60fps積分 dPos=(0.03,-0.75) / 12fps積分 dPos=(-0.31,-0.58) — **位置だけ0.38m飛ぶ**
+            //   yaw は両者 -107.4° で一致 — **向きは刻み幅に依存しない**
+            // ＝位置を戻すと「投げる瞬間に右へスライド」（監督指摘）。だから位置は据え置く。
+            // 逆に向きまで据え置くと、リリースが12fpsコマ境界のどこで来たかで最大1コマぶん
+            // （リリース近傍は1コマ20〜40°回る）取りこぼし、フォロースルーの向きが球ごとに
+            // 40°ばらつく（実測: 1球目 -107° / 2球目 -148°）。向きは Seek の値をそのまま使う。
+            var keepPos = _pitcher.Go.transform.localPosition;
             SeekActor(_pitcher, ReleaseTime);
+            _pitcher.Go.transform.localPosition = keepPos;
             GroundFix(_pitcher);
             if (nextReleaseIn > 0f)
             {
-                float preRoll = Mathf.Clamp(nextReleaseIn - FollowSeconds, 0.5f, ReleaseTime);
+                // 上限は WindupSeconds＝カットバック先が DeliveryStartTime より手前（＝振りかぶり区間）に
+                // 入らないようにする。間隔が足りないときだけ下限0.5まで削って間に合わせる
+                float preRoll = Mathf.Clamp(nextReleaseIn - FollowSeconds, 0.5f, WindupSeconds);
                 _cutCountdown = nextReleaseIn - preRoll;
                 _cutClipTime = ReleaseTime - preRoll;
             }
@@ -869,11 +933,13 @@ namespace KokoSim.Unity.Match
         private static void SetActorClip(Actor a, AnimationClip clip, float seekTo, float endAt)
         {
             if (a == null || clip == null) return;
+            CancelFade(a);
             if (a.Clip != clip)
             {
                 if (a.Playable.IsValid()) a.Playable.Destroy();
                 a.Playable = AnimationClipPlayable.Create(a.Graph, clip);
-                a.Output.SetSourcePlayable(a.Playable);
+                a.Mixer.ConnectInput(1, a.Playable, 0);
+                a.Mixer.SetInputWeight(1, 1f);
                 a.Clip = clip;
             }
             a.EndAt = endAt;
@@ -893,7 +959,9 @@ namespace KokoSim.Unity.Match
                 _cutCountdown -= deltaTime;
                 if (_cutCountdown < 0f)
                 {
-                    SeekActor(_pitcher, _cutClipTime);
+                    // フォロースルー姿勢から次球の投球開始位置へ戻る。ここも姿勢差が大きいので
+                    // 頭出しだけだと跳ぶ（差し替え前からのハードカット）。同じクロスフェードで繋ぐ
+                    CrossfadeActorTo(_pitcher, _cutClipTime, CrossfadeSeconds);
                     GroundFix(_pitcher);
                 }
             }
@@ -1110,6 +1178,7 @@ namespace KokoSim.Unity.Match
 
             _pitcher.HoldAtEnd = false;   // 投球用の「投げ切って止まる」を解除してループさせる
             _pitcher.EndAt = 0f;
+            _pitcher.DefaultEndAt = 0f;   // 投球クリップ用の打ち切りもここでは要らない（末尾までループさせる）
             _pitcher.IdleClip = clip;
             _pitcher.IdleEndAt = 0f;
             SwapClip(_pitcher, clip);
@@ -1122,13 +1191,15 @@ namespace KokoSim.Unity.Match
         private static void SwapClip(Actor a, AnimationClip clip)
         {
             if (a == null || !a.Graph.IsValid()) return;
+            CancelFade(a);
             a.Clip = clip;
             a.Time = 0f;
             a.Holding = false;
             a.HoldRemaining = 0f;
             if (a.Playable.IsValid()) a.Playable.Destroy();
             a.Playable = AnimationClipPlayable.Create(a.Graph, clip);
-            a.Output.SetSourcePlayable(a.Playable);
+            a.Mixer.ConnectInput(1, a.Playable, 0);
+            a.Mixer.SetInputWeight(1, 1f);
         }
 
         /// <summary>
@@ -1381,8 +1452,13 @@ namespace KokoSim.Unity.Match
 
             actor.Graph = PlayableGraph.Create("duel-" + clip.name);
             actor.Output = AnimationPlayableOutput.Create(actor.Graph, "out", animator);
+            // Output直下は常に2入力ミキサー。in1=現行クリップ（重み1）／in0=クロスフェードの退場ポーズ。
+            // フェードしていない間は in0 未接続なので、素で Playable を直結していた頃と同じ絵になる
+            actor.Mixer = AnimationMixerPlayable.Create(actor.Graph, 2);
             actor.Playable = AnimationClipPlayable.Create(actor.Graph, clip);
-            actor.Output.SetSourcePlayable(actor.Playable);
+            actor.Mixer.ConnectInput(1, actor.Playable, 0);
+            actor.Mixer.SetInputWeight(1, 1f);
+            actor.Output.SetSourcePlayable(actor.Mixer);
 
             _actors.Add(actor);
             return actor;
@@ -1395,6 +1471,7 @@ namespace KokoSim.Unity.Match
         private static void SeekActor(Actor a, float clipTime)
         {
             if (a == null) return;
+            CancelFade(a);
             a.Holding = false;
             RewindActor(a);
             float target = Mathf.Clamp(clipTime, 0f, a.Clip.length - 0.001f);
@@ -1402,6 +1479,68 @@ namespace KokoSim.Unity.Match
             float dt = target / steps;
             for (int i = 0; i < steps; i++) a.Graph.Evaluate(dt);
             a.Time = target;
+        }
+
+        /// <summary>
+        /// 現在のポーズを退場させながら clipTime へ繋ぐ（セット姿勢→投球の切り口用）。
+        ///
+        /// クリップ内部の緩急は触らない＝頭出し位置と短いクロスフェードだけで合わせる（design-18 §4.5の掟）。
+        ///
+        /// **フェード中は applyRootMotion を切る**。退場側は Pause してあるが、それで
+        /// 「ルートモーション寄与ゼロ」にはならない——ミキサーが transform へ流すのは
+        /// 両入力の**ルート姿勢を重みで混ぜた結果の差分**なので、重みが動いている間は
+        /// 退場側（フォロースルーのルート姿勢）へ引っぱられて巨大なデルタが注入される。
+        /// 実測（2026-07-30 DuelRootMotionProbe・切り口1.75s→3.0sを12fpsで再生）:
+        ///   フェード無し    dPos=(-0.31,-0.58) dYaw=-107.4°
+        ///   フェード有り    dPos=( 0.06,-0.02) dYaw=+124.0°  ← 231°ずれ・1コマ目だけで98°振れる
+        ///   フェード有り＋凍結 dPos=(-0.32,-0.57) dYaw=-108.8°
+        /// 凍結すると 0.25秒ぶんの前進（実測0.016m・1.4°）を捨てるが、切り口1.75〜2.0sは
+        /// 踏み込み前でほとんど動かないので実害は無い。縦は `GroundFix` が毎コマ直す。
+        ///
+        /// 手順の順序が重要: 退場させたい時刻を控える → 先に Seek（SeekActor は CancelFade を通るので、
+        /// 退場側を先に繋ぐと捨てられてしまう） → Seek 後に退場ポーズを作って重みを in0=1 へ倒す。
+        /// </summary>
+        private static void CrossfadeActorTo(Actor a, float clipTime, float seconds)
+        {
+            if (a == null || a.Go == null || !a.Graph.IsValid() || a.Clip == null) return;
+            float fromTime = Mathf.Clamp(a.Time, 0f, a.Clip.length - 0.001f);
+            SeekActor(a, clipTime);          // 退場側は未接続のまま＝Seek中の評価に混ざらない
+            if (seconds <= 0f) return;
+
+            a.FadeFrom = AnimationClipPlayable.Create(a.Graph, a.Clip);
+            a.FadeFrom.SetTime(fromTime);
+            a.FadeFrom.Pause();
+            a.Mixer.ConnectInput(0, a.FadeFrom, 0);
+            a.Mixer.SetInputWeight(0, 1f);
+            a.Mixer.SetInputWeight(1, 0f);
+            a.FadeDuration = seconds;
+            a.FadeRemaining = seconds;
+            a.Animator.applyRootMotion = false;   // ↑の理由。CancelFade で戻す
+        }
+
+        /// <summary>
+        /// フェードを畳んで in1 単独（重み1）へ戻す。退場側 Playable は破棄する。
+        /// ルートモーションを戻す前に、退場側を外した状態で Evaluate(0) して
+        /// アニメータ内部のルート基準を「混ざっていない素のポーズ」へ張り直す
+        /// （張り直さないと再開1コマ目に混合ポーズとの差分がゴミとして入る）。
+        /// </summary>
+        private static void CancelFade(Actor a)
+        {
+            if (a == null || !a.Graph.IsValid()) return;
+            a.FadeRemaining = 0f;
+            a.FadeDuration = 0f;
+            bool wasFading = a.FadeFrom.IsValid();
+            if (wasFading)
+            {
+                a.Mixer.DisconnectInput(0);
+                a.FadeFrom.Destroy();
+            }
+            if (a.Mixer.IsValid()) a.Mixer.SetInputWeight(1, 1f);
+            if (wasFading && a.Animator != null)
+            {
+                a.Graph.Evaluate(0f);
+                a.Animator.applyRootMotion = true;
+            }
         }
 
         /// <summary>
@@ -1454,6 +1593,16 @@ namespace KokoSim.Unity.Match
                 FinishOneShot(a);
                 return;
             }
+            // クロスフェードの重み送り（評価の直前に倒す）。12fpsで3コマしかないので smoothstep で角を取る
+            if (a.FadeRemaining > 0f)
+            {
+                a.FadeRemaining -= step;
+                float u = a.FadeDuration <= 0f ? 1f : Mathf.Clamp01(1f - a.FadeRemaining / a.FadeDuration);
+                float w = u * u * (3f - 2f * u);
+                a.Mixer.SetInputWeight(0, 1f - w);
+                a.Mixer.SetInputWeight(1, w);
+                if (a.FadeRemaining <= 0f) CancelFade(a);
+            }
             a.Graph.Evaluate(step);
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
@@ -1470,8 +1619,10 @@ namespace KokoSim.Unity.Match
         /// <summary>末尾（またはホールド終了）到達時の後始末: 待機ループへ戻す、または恒久停止（投手）。</summary>
         private void FinishOneShot(Actor a)
         {
+            // フェード中に末尾へ達しても畳んでから戻す（畳まないと applyRootMotion が切れたままになる）
+            CancelFade(a);
             a.Time = 0f;
-            a.EndAt = 0f;
+            a.EndAt = a.DefaultEndAt;   // 投手は購入クリップ6.00sの尻尾を毎回切り落とす（既定0=末尾まで）
             if (a.IdleClip != null && a.Clip != a.IdleClip)
             {
                 SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰
@@ -2260,6 +2411,23 @@ namespace KokoSim.Unity.Match
             bool batOn = _bat != null && _bat.activeSelf;
             return clip + "\t" + _batter.Time.ToString("F2") + "\t" + gap.ToString("F3")
                 + "\t" + _batOneHand + "\t" + batOn;
+        }
+
+        /// <summary>
+        /// 投手のルート状態をTSV1行で返す（clipT / 立ち向きのBaseRotからのずれ[度] / 立ち位置のBasePosからのずれ[m] /
+        /// applyRootMotion / フェード中）。ルートモーションの積分は絵では「向きが少し変」としか見えず
+        /// 目測で切り分けられないので、必ずこの実測で判定する（design-18 §7-2）。
+        /// </summary>
+        internal string PitcherDiagForCapture()
+        {
+            if (_pitcher == null || _pitcher.Go == null) return "0\t0\t0\t0\t-\t-";
+            var t = _pitcher.Go.transform;
+            float dYaw = Mathf.DeltaAngle(_pitcher.BaseRot.eulerAngles.y, t.localRotation.eulerAngles.y);
+            var d = t.localPosition - _pitcher.BasePos;
+            return _pitcher.Time.ToString("F2") + "\t" + dYaw.ToString("F1") + "\t"
+                + d.x.ToString("F3") + "\t" + d.z.ToString("F3") + "\t"
+                + (_pitcher.Animator != null && _pitcher.Animator.applyRootMotion) + "\t"
+                + (_pitcher.FadeRemaining > 0f);
         }
 
         /// <summary>打者の左手ボーンのRT上ピクセル座標（クロップ中心の決定用）。</summary>
