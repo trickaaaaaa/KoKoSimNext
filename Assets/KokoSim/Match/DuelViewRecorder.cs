@@ -70,7 +70,7 @@ namespace KokoSim.Unity.Match
             // クロップ中心＝録画開始時（構え）の左手ボーン位置。以後固定（スイングの弧が入るよう幅広め）
             var handPx = rig.BatterScreenPxForCapture();
 
-            float dur = DuelStageRig.ReleaseTime + targetIdx * 4.5f + 0.45f + TailSeconds;
+            float dur = DuelStageRig.WindupSeconds + targetIdx * DuelStageRig.DefaultPitchInterval + 0.45f + TailSeconds;
             var frames = new List<Texture2D>();
             var diag = new StringBuilder("frame\tt\tclip\tclipT\thandGap\toneHand\tbatActive\n");
             float t = 0f;

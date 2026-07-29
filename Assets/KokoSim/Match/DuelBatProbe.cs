@@ -45,7 +45,7 @@ namespace KokoSim.Unity.Match
             foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
                 if (go.name == "prop-bat" && go.scene.IsValid()) { bat = go; break; }
 
-            float swingAt = DuelStageRig.ReleaseTime + targetIdx * 4.5f + 0.45f;
+            float swingAt = DuelStageRig.WindupSeconds + targetIdx * DuelStageRig.DefaultPitchInterval + 0.45f;
             var sb = new StringBuilder();
             sb.Append("swingAt=").Append(swingAt.ToString("F2")).Append(" bat=").Append(bat != null).Append('\n');
             float t = 0f;
