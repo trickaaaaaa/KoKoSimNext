@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Timeline;            // JudgementKind（判定オーバーレイの種別）
 using KokoSim.Engine.Match.Timeline.Playback;
 using UnityEngine;
 using UnityEngine.UIElements;
