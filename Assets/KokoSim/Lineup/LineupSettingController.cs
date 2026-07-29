@@ -240,10 +240,8 @@ namespace KokoSim.Unity.Lineup
                 }
                 else
                 {
-                    var group = new Label(v.TabLabels[v.Tab]);
-                    group.AddToClassList("lu-cmp-group");
-                    rows.Add(group);
-                    // 比較ヘッダは出さない（issue #234）。意味のない「A」「B」の見出しは置かず、どちらの
+                    // タブ自体が「野手能力」「投手能力」を示しているため、表側の重複見出しは出さない（issue #326③）。
+                    // 比較ヘッダも出さない（issue #234）。意味のない「A」「B」の見出しは置かず、どちらの
                     // カラムかは真上に並ぶ比較カードの選手名＋カラムのアクセント色で判別する
                     // （メンバー設定画面と同じ形）。
                     foreach (var r in v.Rows2) rows.Add(CompareRowEl(r));
@@ -374,8 +372,9 @@ namespace KokoSim.Unity.Lineup
             }
             el.Add(meta);
             // カテゴリ別ランク（打撃力/走力/守備力/投手力）。総合ランク1チップの置換先＝#30 の決定。
+            // 2行固定＋小サイズ（issue #326①）: カード幅が狭く1行4組では中途半端に折り返すため。
             // 見た目はメンバー設定の比較カードと同一部品（UI原則⑤）。
-            el.Add(UiComponents.CategoryRankChips(card.Strength));
+            el.Add(UiComponents.CategoryRankChipsTwoRow(card.Strength, small: true));
 
             // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
             // 投手能力タブのときだけ出す（タブでゲート・投/野区分ではゲートしない, Issue #93/#293）。
@@ -398,6 +397,7 @@ namespace KokoSim.Unity.Lineup
                 Winner = r.Winner,
                 TextA = r.TextA, TextB = r.TextB,   // 球速の km/h テキスト（issue #94）
                 FillA = r.FillA, FillB = r.FillB,
+                GradeA = r.GradeA, GradeB = r.GradeB,   // ランク併記（issue #326②）
                 HideBar = r.HideBar,   // 弾道のタイプ表示（issue #219）
             });
 

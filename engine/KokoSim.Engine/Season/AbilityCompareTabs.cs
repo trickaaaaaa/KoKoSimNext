@@ -14,10 +14,10 @@ public enum CompareTab
 /// </summary>
 public static class AbilityCompareTabs
 {
-    /// <summary>野手能力タブの AbilityKind（打撃5＋走塁3＋守備4）。表示順を保持。</summary>
+    /// <summary>野手能力タブの AbilityKind（打撃5＋走塁3＋守備4）。表示順を保持（弾道を先頭, issue #326④）。</summary>
     public static readonly AbilityKind[] FielderAbilities =
     {
-        AbilityKind.Contact, AbilityKind.Power, AbilityKind.LaunchTendency, AbilityKind.Discipline,
+        AbilityKind.LaunchTendency, AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline,
         AbilityKind.Speed, AbilityKind.Bunt, AbilityKind.Steal, AbilityKind.Baserunning,
         AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.ArmStrength, AbilityKind.ThrowAccuracy,
     };

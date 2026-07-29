@@ -545,7 +545,7 @@ namespace KokoSim.Unity.Training
         // 効果のある能力だけバーが伸びる。走塁/盗塁/送球は練習メニュー経路が無いので一覧から除く。
         private static readonly AbilityKind[] GrowthDisplayOrder =
         {
-            AbilityKind.Contact, AbilityKind.Power, AbilityKind.LaunchTendency, AbilityKind.Discipline, AbilityKind.Bunt,
+            AbilityKind.LaunchTendency, AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline, AbilityKind.Bunt,
             AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.Fielding, AbilityKind.Catching,
             AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank,
         };

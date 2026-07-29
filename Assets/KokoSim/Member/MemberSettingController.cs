@@ -442,9 +442,7 @@ namespace KokoSim.Unity.Member
             }
             else
             {
-                var group = new Label(v.TabLabels[v.Tab]);
-                group.AddToClassList("ms-cmp-group");
-                rows.Add(group);
+                // タブ自体が「野手能力」「投手能力」を示しているため、表側の重複見出しは出さない（issue #326③）。
                 foreach (var r in v.Rows) rows.Add(CompareRowEl(r));
             }
 
@@ -540,7 +538,8 @@ namespace KokoSim.Unity.Member
                 meta.Add(cap);
             }
             el.Add(meta);
-            el.Add(UiComponents.CategoryRankChips(card.Strength));
+            // 2行固定＋小サイズ（issue #326①）: カード幅が狭く1行4組では中途半端に折り返すため。
+            el.Add(UiComponents.CategoryRankChipsTwoRow(card.Strength, small: true));
 
             // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
             // 投手能力タブのときだけ出す（タブでゲート・投/野区分ではゲートしない, Issue #93/#293）。
@@ -563,6 +562,7 @@ namespace KokoSim.Unity.Member
                 Winner = r.Winner,
                 TextA = r.TextA, TextB = r.TextB,   // 球速の km/h テキスト（issue #94）
                 FillA = r.FillA, FillB = r.FillB,
+                GradeA = r.GradeA, GradeB = r.GradeB,   // ランク併記（issue #326②）
                 HideBar = r.HideBar,   // 弾道のタイプ表示（issue #219）
             });
 

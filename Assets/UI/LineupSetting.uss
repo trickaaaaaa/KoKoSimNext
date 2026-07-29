@@ -168,7 +168,8 @@
     flex-shrink: 0;
     padding-left: var(--sp-3);
     padding-right: var(--sp-3);
-    padding-top: var(--sp-3);
+    /* padding-top は指定しない: .panel(KokoSimTheme.uss) の14pxとの二重掛けが上端の余白過多の
+       主因だった（issue #326⑥）。panel 側の値をそのまま使う。 */
     padding-bottom: var(--sp-3);
 }
 .lu-cmp-cards {

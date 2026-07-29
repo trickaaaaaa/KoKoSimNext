@@ -1016,6 +1016,12 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .pd2-pchip__velo .nu-num { font-size: var(--fs-label); color: var(--color-chalk); }
 .pd2-pchip__velo .nu-unit { font-size: var(--fs-cap); }
 
+/* compact 版（比較カード埋め込み・104px高の cmp-card__pitch, issue #326⑤）: 球種名を通常の19px→12pxへ、
+   ランクチップを apt-node と同じ20×22pxへ縮め、SeparateChips の押し分け余地を稼いで重なりを解消する。
+   選手詳細の大きい球種チャートは pd2-pchip--compact が付かないため従来サイズのまま。 */
+.pd2-pchip--compact .pd2-pchip__name { font-size: 12px; margin-right: 4px; }
+.pd2-pchip--compact .rank-chip { min-width: 20px; height: 22px; font-size: var(--fs-cap); padding-left: 3px; padding-right: 3px; }
+
 /* ═══════════════════════════════════════════════════════════════════════
    ミニマルスクロールバー（全画面共通・リファイン）
    OS標準の矢印付き太バーを廃止し、幅6px・角丸・つまみのみへ置換する。

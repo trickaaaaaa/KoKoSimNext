@@ -750,9 +750,9 @@ namespace KokoSim.Unity.Match
                 yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
                 yield break;
             }
+            yield return ("弾道", a?.LaunchTendency ?? -1, b?.LaunchTendency ?? -1);
             yield return ("ミート", a?.Contact ?? -1, b?.Contact ?? -1);
             yield return ("パワー", a?.Power ?? -1, b?.Power ?? -1);
-            yield return ("弾道", a?.LaunchTendency ?? -1, b?.LaunchTendency ?? -1);
             yield return ("選球眼", a?.Discipline ?? -1, b?.Discipline ?? -1);
             yield return ("走力", a?.Speed ?? -1, b?.Speed ?? -1);
             yield return ("肩", a?.ArmStrength ?? -1, b?.ArmStrength ?? -1);
