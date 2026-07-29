@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
@@ -887,6 +888,26 @@ namespace KokoSim.Unity.Match
             _ => "守備",
         };
 
+        // 対決ビュー→俯瞰の切替アンカー（issue #330）: 打球/ファウル飛球のタイムラインは必ず先頭に
+        // 投球セグメントを持つ（TimelineBuilder）。対決ビューは既にリリース〜ミート/ファウル接触を
+        // 演じ終えているので、俯瞰はその投球セグメントの終端（＝接触の瞬間）から再生する。
+        // タイムライン自身の T1 から取り、エンジンの ContactAt 定数は複製しない（単一ソース）。
+        // キャプションは実況キャプション列から接触直後の1件を拾う＝「ピッチャー、投げた」から
+        // 始まらず、打った/ファウルの実況から出る。
+        private static double ContactMomentOf(PlaybackPlay play)
+        {
+            if (play == null || play.Ball.Count == 0) return 0;
+            var head = play.Ball[0];
+            var isPitch = head is PitchSegment || (head is EndpointBallSegment eb && eb.Kind == BallSegmentKind.Pitch);
+            if (!isPitch) return 0;
+
+            var t = head.T1;
+            double? nextCaption = null;
+            foreach (var cap in play.Caps)
+                if (cap.T > t && (!nextCaption.HasValue || cap.T < nextCaption.Value)) nextCaption = cap.T;
+            return nextCaption ?? t;
+        }
+
         // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
         // 捕手からの返球は描画しない。打球になる最後の1球・ファウル打球データを持つ1球は、続く
         // タイムラインが同じ投球セグメントを先頭に持つので二重に描かず、静止表示のまま渡す
@@ -929,8 +950,12 @@ namespace KokoSim.Unity.Match
             _t = 0;
             if (_current.Play != null)
             {
+                var wasDuelOn = _duelOn;
                 SetDuelViewAuto(false);   // インプレー打球は打った瞬間から俯瞰で行方を見せる（issue #312）
                 _view.SetPlay(_current.Play);
+                // 対決ビューから来た場合は投球が二重に見えないよう接触の瞬間から再生する（issue #330）。
+                // 俯瞰固定（手動OFF）中は対決ビュー側で1球も見せていないので、従来どおり投球から流す。
+                if (wasDuelOn) _t = ContactMomentOf(_current.Play);
                 RenderReplayFrame();
             }
             else
@@ -1017,11 +1042,14 @@ namespace KokoSim.Unity.Match
                     {
                         // ファウルでも打球は飛ぶので、打った瞬間から俯瞰へ切り替えて行方を見せる（issue #313）。
                         // 復帰（対決ビューへ）は打球が地面へ着いてから＝次の1球のワインドアップに合わせる。
+                        var wasDuelOn = _duelOn;
                         SetDuelViewAuto(false);
                         _view.SetPlay(_pendingFoulFlight);
                         _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
                         _pitchBallVisible = true;
-                        _pitchClock = 0f;   // このタイムラインの頭から（投球セグメントの二重表示を避ける）
+                        // 対決ビューから来た場合は接触の瞬間から（投球セグメントの二重表示を避ける,
+                        // issue #330）。俯瞰固定中は対決ビュー側で見せていないので投球から流す。
+                        _pitchClock = wasDuelOn ? (float)ContactMomentOf(_pendingFoulFlight) : 0f;
                         _view.SetTime(_pitchClock);
                         _pendingFoulFlight = null;
                     }
