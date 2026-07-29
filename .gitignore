@@ -43,3 +43,8 @@ Assets/_Recovery.meta
 # --- Claude Code ローカル状態（settings.json と hooks は共有・これらは端末ローカル） ---
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# --- 検証用スクリーンショット（コミットしない・2026-07-29 監督指示） ---
+# 撮影ハーネス（*Shooter.cs）でいつでも撮り直せる作業成果物なので履歴に載せない。
+# main に既にあるぶんは追跡が残るが、新規は追加しない。
+screenshots/
