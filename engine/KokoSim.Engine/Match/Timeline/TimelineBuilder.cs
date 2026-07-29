@@ -110,16 +110,21 @@ public static class TimelineBuilder
             : play.IsFly ? "打ち上げた！" : "打球が転がる！";
         var captions = new List<TimelineCaption> { new(0.05, "ピッチャー、投げた"), new(ContactAt + 0.01, contactMsg) };
 
-        // 一塁送球（内野ゴロ）。
+        // 一塁送球（内野ゴロ）。到達時刻(T1)はエンジンの ThrowArriveSeconds のまま固定し、投げ始め(T0)を
+        // 「実距離÷肩」の飛行時間から逆算する（Issue #334）。捕球オーバーヘッド＋握り替えは、捕球点で
+        // ボールを保持する「間」として自然に吸収される（AddThrowChain と同じ形）。
         if (play.ThrowArriveSeconds is { } throwArrive && play.Result is BattedBallResult.Out or BattedBallResult.Single or BattedBallResult.Error)
         {
             if (!play.IsFly && play.RangeM <= 46.0)
             {
+                var firstBase = BasePoint(field, "first");
+                var arrive = ContactAt + throwArrive;
+                var flight = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
                 ball.Add(new BallSegment
                 {
                     Kind = BallSegmentKind.Throw,
-                    T0 = fieldedAt, T1 = ContactAt + throwArrive,
-                    From = fieldPoint, To = BasePoint(field, "first"),
+                    T0 = Math.Max(fieldedAt, arrive - flight), T1 = arrive,
+                    From = fieldPoint, To = firstBase,
                 });
             }
         }
@@ -649,15 +654,18 @@ public static class TimelineBuilder
         var first = BasePoint(field, "first");
 
         var arm = ThrowSpeedOf(play);                              // 処理野手の肩（Issue #301③）
-        var fieldedAt = existingThrow.T0;                            // 野手処理時刻（＝送球開始）
-        var secondArrive = fieldedAt + Distance(fieldPoint, second) / arm;
+        // 野手処理時刻は play から直接出す（Issue #334: 差し替え前の Throw の T0 はもう捕球時刻と
+        // 一致しない＝一塁向け送球の投げ始めに変わったので、existingThrow.T0 を流用できない）。
+        var fieldedAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
+        var releaseAt = fieldedAt + DpTransferSeconds;              // 処理点で握り替えてから投げ始める
+        var secondArrive = releaseAt + Distance(fieldPoint, second) / arm;
         var pivotAt = secondArrive + DpTransferSeconds;             // 二塁で握り替え
         // 一塁到達は打者到達へアンカー（＝際どく封殺）。ただし物理的な下限は割らない。
         var firstArrive = Math.Max(batterArriveAnchor, pivotAt + Distance(second, first) / arm);
 
         ball.Add(new BallSegment
         {
-            Kind = BallSegmentKind.Throw, T0 = fieldedAt, T1 = secondArrive,
+            Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = secondArrive,
             From = fieldPoint, To = second,
         });
         ball.Add(new BallSegment
