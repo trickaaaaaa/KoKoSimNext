@@ -1148,4 +1148,218 @@ public sealed class TimelineTests
         Assert.True(Near(throws[0].To, cutoffMove.To), "ボールの中継点が中継野手の立ち位置と一致しない");
         Assert.True(Near(throws[1].From, cutoffMove.To), "2本目送球の起点が中継野手の立ち位置と一致しない");
     }
+
+    // ═══ Issue #336: 三遊間/一二塁間を抜けるヒットで SS/3B(2B) が棒立ちにならないこと ═══
+
+    /// <summary>
+    /// 三遊間を抜けた単打。着地点(-6,20, RangeM≈21m)は旧ロジックが InfieldLeft と誤分類していた距離
+    /// （issue本文の実測と同型）。回収点(-33.6,53.8)は実際にレフトが処理する外野の深さ。
+    /// closestRole=null にすると「最も惜しかった内野手」情報なしの構成になる（対照実験用）。
+    /// </summary>
+    private static FieldingPlay ThroughInfieldLeftHit(FieldPosition? closestRole = FieldPosition.Shortstop)
+        => FieldingPlayFixtures.OutfieldHit(
+                FieldPosition.LeftField, landingX: -6.0, landingZ: 20.0, fieldedAtSeconds: 2.0,
+                fieldedX: -33.6, fieldedZ: 53.8, result: BattedBallResult.Single, throughInfield: true)
+            with
+            {
+                ClosestInfielderRole = closestRole,
+                ClosestApproachX = closestRole is null ? null : -18.0,
+                ClosestApproachZ = closestRole is null ? null : 38.0,
+            };
+
+    /// <summary>一二塁間を抜けた単打（左右対称、issue本文の「対称の症状」）。</summary>
+    private static FieldingPlay ThroughInfieldRightHit(FieldPosition? closestRole = FieldPosition.SecondBase)
+        => FieldingPlayFixtures.OutfieldHit(
+                FieldPosition.RightField, landingX: 6.0, landingZ: 20.0, fieldedAtSeconds: 2.0,
+                fieldedX: 33.6, fieldedZ: 53.8, result: BattedBallResult.Single, throughInfield: true)
+            with
+            {
+                ClosestInfielderRole = closestRole,
+                ClosestApproachX = closestRole is null ? null : 18.0,
+                ClosestApproachZ = closestRole is null ? null : 38.0,
+            };
+
+    /// <summary>深い三遊間の二塁打（中継しきい値60mを超える）。カットオフ検証専用。</summary>
+    private static FieldingPlay ThroughInfieldLeftHit_Deep()
+        => FieldingPlayFixtures.OutfieldHit(
+                FieldPosition.LeftField, landingX: -6.0, landingZ: 20.0, fieldedAtSeconds: 3.0,
+                fieldedX: -45.0, fieldedZ: 95.0, result: BattedBallResult.Double, throughInfield: true)
+            with
+            {
+                ClosestInfielderRole = FieldPosition.Shortstop,
+                ClosestApproachX = -18.0,
+                ClosestApproachZ = 38.0,
+            };
+
+    [Fact]
+    public void ThroughInfieldLeft_OldRangeBasedClassification_WouldHaveBeenInfield()
+    {
+        // 回帰の前提確認: 着地点距離(RangeM)だけで分類すると内野ゾーンに落ちる
+        // （＝これが直したい誤分類そのものであることをテスト自身が保証する）。
+        var play = ThroughInfieldLeftHit();
+        var oldZone = FormationTable.Classify(play.BearingDeg, play.RangeM);
+        Assert.Equal(BallZone.InfieldLeft, oldZone);
+    }
+
+    [Fact]
+    public void ThroughInfieldLeft_ClassifiesAsOutfieldZone_SsAndThirdBaseMove()
+    {
+        var field = new FieldGeometry();
+        var play = ThroughInfieldLeftHit();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        // 修正前は着地点距離で InfieldLeft に誤分類され、SS/3B が一歩も動かなかった（Issue #336①）。
+        // 回収点(fieldPoint)基準なら OutfieldLeft になり、両者に移動が生成される。
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.Shortstop);
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.ThirdBase);
+        Assert.Contains(tl.Moves, m => m.Task == FielderTask.Cutoff); // 中継役が実在する（#336③の前提）
+    }
+
+    [Fact]
+    public void ThroughInfieldRight_ClassifiesAsOutfieldZone_SecondBaseMoves()
+    {
+        var field = new FieldGeometry();
+        var play = ThroughInfieldRightHit();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        // 一二塁間の対称ケース（issue本文）。2B が棒立ちにならない。
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.SecondBase);
+    }
+
+    [Fact]
+    public void ThroughInfieldLeft_CutoffFielder_RelayPointMatchesOutfieldReturnThrow()
+    {
+        var field = new FieldGeometry();
+        var play = ThroughInfieldLeftHit_Deep();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var cutoffMove = baseTl.Moves.Where(m => m.Task == FielderTask.Cutoff).OrderBy(m => m.T0).First();
+        Assert.Equal(FieldPosition.Shortstop, cutoffMove.Role);
+
+        var tl = TimelineBuilder.AppendOutfieldReturnThrow(baseTl, play, field, "second", runnerArriveAnchor: 9.0);
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        Assert.Equal(2, throws.Count); // 外野→中継(SS)→二塁（#336③、#136の再発防止）
+        Assert.True(Near(throws[0].To, cutoffMove.To), "中継点が中継野手(SS)の立ち位置と一致しない");
+        Assert.True(Near(throws[1].From, cutoffMove.To), "2本目送球の起点が中継野手の立ち位置と一致しない");
+    }
+
+    [Fact]
+    public void ThroughInfieldLeft_ClosestInfielder_DivesTowardBall_ThenReturnsToDefaultPosition()
+    {
+        var field = new FieldGeometry();
+        var play = ThroughInfieldLeftHit(); // ClosestInfielderRole = Shortstop
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var ssMoves = tl.Moves.Where(m => m.Role == FieldPosition.Shortstop).OrderBy(m => m.T0).ToList();
+        Assert.True(ssMoves.Count >= 2, "SSに「寄る→戻る」の複数レッグが生成されていない");
+        Assert.Equal(FielderTask.Chase, ssMoves[0].Task); // 最初のレッグ=打球ラインへ寄る/飛びつく
+
+        // 時系列は単調増加（レッグの逆転はFielderAtの補間バグに直結する, Issue #336②）。
+        for (var i = 1; i < ssMoves.Count; i++)
+        {
+            Assert.True(ssMoves[i].T0 >= ssMoves[i - 1].T0, "SSのレッグが時系列で逆転している");
+        }
+
+        // 決着後は必ず定位置(FieldDiagramGeometry.MatchFielderPosition)へ戻り切る。
+        var (hx, hz) = FieldDiagramGeometry.MatchFielderPosition(FieldPosition.Shortstop);
+        Assert.True(Near(ssMoves[^1].To, new TimelinePoint(hx, hz)), "決着後に定位置へ戻り切っていない");
+    }
+
+    [Fact]
+    public void ThroughInfieldRight_ClosestInfielder_DivesTowardBall_ThenReturnsToDefaultPosition()
+    {
+        var field = new FieldGeometry();
+        var play = ThroughInfieldRightHit(); // ClosestInfielderRole = SecondBase
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var moves = tl.Moves.Where(m => m.Role == FieldPosition.SecondBase).OrderBy(m => m.T0).ToList();
+        Assert.True(moves.Count >= 2, "2Bに「寄る→戻る」の複数レッグが生成されていない");
+        Assert.Equal(FielderTask.Chase, moves[0].Task);
+        var (hx, hz) = FieldDiagramGeometry.MatchFielderPosition(FieldPosition.SecondBase);
+        Assert.True(Near(moves[^1].To, new TimelinePoint(hx, hz)), "決着後に定位置へ戻り切っていない");
+    }
+
+    [Fact]
+    public void ClosestInfielderDive_OnlyAffectsMoves_NotResultOrBallOrRunners()
+    {
+        var field = new FieldGeometry();
+        var withDive = ThroughInfieldLeftHit(closestRole: FieldPosition.Shortstop);
+        var withoutDive = ThroughInfieldLeftHit(closestRole: null);
+
+        var tlWith = TimelineBuilder.BuildBattedBall(
+            withDive, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(withDive));
+        var tlWithout = TimelineBuilder.BuildBattedBall(
+            withoutDive, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(withoutDive));
+
+        // 寄る/飛びつく演出の有無は Moves 以外へ波及しない（表示専用・判定/帯不変, Issue #336②）。
+        Assert.Equal(tlWith.Result, tlWithout.Result);
+        Assert.Equal(tlWith.ResolvedAt, tlWithout.ResolvedAt, 9);
+        Assert.Equal(tlWith.Ball.Count, tlWithout.Ball.Count);
+        for (var i = 0; i < tlWith.Ball.Count; i++)
+        {
+            Assert.Equal(tlWith.Ball[i].From, tlWithout.Ball[i].From);
+            Assert.Equal(tlWith.Ball[i].To, tlWithout.Ball[i].To);
+            Assert.Equal(tlWith.Ball[i].T0, tlWithout.Ball[i].T0, 9);
+            Assert.Equal(tlWith.Ball[i].T1, tlWithout.Ball[i].T1, 9);
+        }
+        Assert.Equal(tlWith.Runners.Count, tlWithout.Runners.Count);
+        for (var i = 0; i < tlWith.Runners.Count; i++)
+        {
+            Assert.Equal(tlWith.Runners[i].OutAtEnd, tlWithout.Runners[i].OutAtEnd);
+            Assert.Equal(tlWith.Runners[i].T1, tlWithout.Runners[i].T1, 9);
+        }
+        Assert.Equal(tlWith.Judgements.Count, tlWithout.Judgements.Count);
+
+        // Moves は実際に変わる（この演出が効いていることの確認）。
+        var ssCountWith = tlWith.Moves.Count(m => m.Role == FieldPosition.Shortstop);
+        var ssCountWithout = tlWithout.Moves.Count(m => m.Role == FieldPosition.Shortstop);
+        Assert.True(ssCountWith > ssCountWithout, "寄る演出を付けても SS の move 数が増えていない");
+    }
+
+    /// <summary>
+    /// 実際のエンジン出力（弾道積分→守備解決）で「旧ロジックなら内野ゾーンに誤分類されていたはずの
+    /// 抜けた打球」を探し、タイムラインが外野ゾーンの陣形（＝最も惜しかった内野手の移動込み）になる
+    /// ことを確認する（issue本文の実測と同じ手法）。
+    /// </summary>
+    [Fact]
+    public void ThroughInfieldHit_FromRealPhysics_GetsOutfieldFormation_AndClosestInfielderMoves()
+    {
+        var aero = new KokoSim.Engine.Match.Pitching.Aerodynamics();
+        var field = new FieldGeometry();
+        var coeff = new FieldingCoefficients { ErrorBaseProb = 0, IrregularBounceProb = 0 };
+        var found = false;
+        for (var exit = 30.0; exit <= 48.0 && !found; exit += 2.0)
+        for (var launch = -8.0; launch <= 8.0 && !found; launch += 2.0)
+        foreach (var bearing in new[] { -44.0, -32.0, -20.0, -12.0 })
+        {
+            if (found) break;
+            var play = FieldingResolver.ResolveDetailed(
+                new KokoSim.Engine.Match.Batting.BattedBall
+                {
+                    ExitVelocityMps = exit, LaunchAngleDeg = launch, BearingDeg = bearing,
+                },
+                field, aero, KokoSim.Engine.Players.BatterAttributes.LeagueAverage,
+                field.StandardAlignment(), coeff, new Xoshiro256Random(42));
+            if (!play.ThroughInfield || play.Result is not (BattedBallResult.Single or BattedBallResult.Double))
+                continue;
+
+            // 修正前の分類（着地点距離）が「内野扱い」だったケースだけを検証対象にする
+            // （元々外野扱いだったケースを拾って検証にならないことを防ぐ）。
+            var oldZone = FormationTable.Classify(play.BearingDeg, play.RangeM);
+            if (oldZone is not (BallZone.InfieldLeft or BallZone.InfieldRight or BallZone.Bunt)) continue;
+
+            var tl = TimelineBuilder.BuildBattedBall(
+                play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+            Assert.NotNull(play.ClosestInfielderRole);
+            Assert.Contains(tl.Moves, m => m.Role == play.ClosestInfielderRole);
+            found = true;
+        }
+        Assert.True(found, "内野ゾーンに誤分類されていた実データが見つからない（探索条件を見直すこと）");
+    }
 }

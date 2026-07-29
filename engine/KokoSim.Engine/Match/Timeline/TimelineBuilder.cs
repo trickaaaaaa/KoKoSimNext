@@ -168,8 +168,15 @@ public static class TimelineBuilder
             _ => fieldedAt,
         };
 
-        // 守備陣形（9人全員に役割を付与, CHANGELOG 33）。
-        var zone = FormationTable.Classify(play.BearingDeg, play.RangeM);
+        // 守備陣形（9人全員に役割を付与, CHANGELOG 33）。ゾーン分類は着地点距離(RangeM)ではなく
+        // 実際の回収点(fieldPoint)基準にする（Issue #336①）。ゴロは本塁寄りで着地して転がるため、
+        // 着地点距離だけでは内野を抜けた打球（ThroughInfield）が内野ゾーンのまま誤分類され、
+        // SS/3B(2B)が抜けた打球に一歩も反応しない棒立ちになっていた。方位角も回収点から取り直す
+        // （着地点と回収点で通り道が微妙にずれるイレギュラーバウンドがあるため一貫させる）。
+        // 内野で処理が完結する打球は回収点が着地点の延長上（同じ46m境界内）なので分類は変わらない。
+        var fieldRangeM = Math.Sqrt(fieldPoint.X * fieldPoint.X + fieldPoint.Z * fieldPoint.Z);
+        var fieldBearingDeg = Math.Atan2(fieldPoint.X, fieldPoint.Z) * 180.0 / Math.PI;
+        var zone = FormationTable.Classify(fieldBearingDeg, fieldRangeM);
         var rule = table.Lookup(zone, runnersOn);
         var returnTail = 0.0; // 定位置復帰レッグの最終時刻（余韻を延ばすため）
         if (rule is not null)
@@ -193,6 +200,9 @@ public static class TimelineBuilder
                 ? (zone == BallZone.Bunt ? FieldPosition.SecondBase : FieldPosition.Pitcher)
                 : FieldPosition.FirstBase;
             var firstBaseCovered = false;
+            // 内野を抜けた打球で最も惜しかった内野手（Issue #336②）。この1人だけ、通常の役割移動の前に
+            // 「打球ラインへ寄る/飛びつく」レッグを1本挟む。ThroughInfield でない打球では常に null。
+            var missRole = play.ThroughInfield ? play.ClosestInfielderRole : null;
 
             foreach (var a in rule.Assignments)
             {
@@ -213,17 +223,45 @@ public static class TimelineBuilder
                 if (fielder is null) continue;
 
                 var from = new TimelinePoint(fielder.Location.X, fielder.Location.Z);
+
+                // 寄る/飛びつくレッグ（Issue #336②・表示専用）: この野手が最も惜しかった内野手なら、
+                // 反応時間（実測 ReactionDelaySeconds）から打球の最接近点へ向かうレッグを先に積む。
+                // 変位は CapDisplacement で上限を掛け、実際には届かせない（捕れなかった打球のため）。
+                // 通常の役割移動(t0)はこのレッグの後ろへ押し出す＝時系列の逆転（後発レッグが先に
+                // 表示される描画バグ）を防ぐ。
+                TimelinePoint? diveEnd = null;
+                var diveT1 = 0.0;
+                if (!isBallFielder && missRole == a.Position)
+                {
+                    var rawTarget = new TimelinePoint(
+                        play.ClosestApproachX ?? from.X, play.ClosestApproachZ ?? from.Z);
+                    var diveTarget = CapDisplacement(from, rawTarget, DiveReachCapM);
+                    var diveDist = Distance(from, diveTarget);
+                    if (diveDist >= 0.5)
+                    {
+                        var diveSpeed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
+                        var diveT0 = ContactAt + fielder.Attributes.ReactionDelaySeconds;
+                        diveT1 = diveT0 + diveDist / diveSpeed;
+                        moves.Add(new FielderMove
+                        {
+                            Role = a.Position, T0 = diveT0, T1 = diveT1, To = diveTarget, Task = FielderTask.Chase,
+                        });
+                        diveEnd = diveTarget;
+                    }
+                }
+
                 // 実捕球者はゾーン役割を上書きしてボールへ（保持＝戻さない）。
                 var task = isBallFielder ? FielderTask.FieldBall : a.Task;
                 var to = isBallFielder ? fieldPoint : ResolveTarget(a, fieldPoint, field, from, fieldBallTarget);
                 if (isBallFielder) ballFielderMoved = true;
                 if (task == FielderTask.CoverBase && a.Target == "first") firstBaseCovered = true;
 
-                var dist = Distance(from, to);
+                var moveFrom = diveEnd ?? from;
+                var dist = Distance(moveFrom, to);
                 if (dist < 0.5) continue;
 
                 var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
-                var t0 = ContactAt + 0.35; // 反応
+                var t0 = diveEnd is not null ? Math.Max(ContactAt + 0.35, diveT1 + 0.1) : ContactAt + 0.35; // 反応
                 var t1 = t0 + dist / speed;
                 if (isBallFielder) (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
@@ -278,6 +316,39 @@ public static class TimelineBuilder
                         var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
                         var t0 = ContactAt + 0.35;
                         moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t0 + dist / speed, To = to, Task = FielderTask.CoverBase });
+                    }
+                }
+            }
+
+            // 寄る/飛びつくレッグの仕上げ（Issue #336②）: 最も惜しかった内野手は、ゾーン役割が
+            // CoverBase 等（自動の定位置復帰を持たない）でも、決着後は必ず定位置へ戻り切る。
+            // 既に Backup/Cutoff の自動復帰で定位置に着いている場合は距離0扱いで二重には積まない。
+            if (play.ThroughInfield && play.ClosestInfielderRole is { } missRoleFinal)
+            {
+                FielderMove? lastMove = null;
+                foreach (var m in moves)
+                {
+                    if (m.Role == missRoleFinal) lastMove = m;
+                }
+                if (lastMove is { } lm)
+                {
+                    var (hx, hz) = FieldDiagramGeometry.MatchFielderPosition(missRoleFinal);
+                    var homePost = new TimelinePoint(hx, hz);
+                    var backDist = Distance(lm.To, homePost);
+                    if (backDist >= 0.5)
+                    {
+                        var missFielder = Find(fielders, missRoleFinal);
+                        if (missFielder is not null)
+                        {
+                            var speed = Math.Max(4.0, missFielder.Attributes.SprintSpeedMps);
+                            var rt0 = Math.Max(resolvedAt, lm.T1) + 0.3;
+                            var rt1 = rt0 + backDist / speed;
+                            moves.Add(new FielderMove
+                            {
+                                Role = missRoleFinal, T0 = rt0, T1 = rt1, To = homePost, Task = FielderTask.Chase,
+                            });
+                            if (rt1 + 0.5 > returnTail) returnTail = rt1 + 0.5;
+                        }
                     }
                 }
             }
@@ -974,6 +1045,14 @@ public static class TimelineBuilder
 
     /// <summary>フェンス際の見送り余白[m]（フェンスへめり込ませない）。</summary>
     private const double FenceApproachMarginM = 1.0;
+
+    /// <summary>
+    /// 抜けた打球へ「寄る/飛びつく」演出の最大変位[m]（Issue #336②・表示専用）。
+    /// FieldingCoefficients.InfielderFieldingRadiusM の既定値(4.20)と同じ意味を持つ表示専用の複製
+    /// （判定側の実値とは意図的に分離する。OutfieldDepthM と同じ設計）。捕れない打球なので
+    /// 実際の打球位置までは届かせない。
+    /// </summary>
+    private const double DiveReachCapM = 4.2;
 
     /// <summary>
     /// 実捕球者がいない打球（本塁打・ファウル等, FielderRole=null）で FieldBall 役の移動先をフェンス
