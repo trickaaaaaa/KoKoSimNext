@@ -864,7 +864,19 @@ namespace KokoSim.Unity.Match
         public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome)
         {
             if (!Available || _pitcher == null) return;
+            // リリースの再同期は**ポーズだけ**合わせる。立ち位置・向きは動かさない。
+            //
+            // `SeekActor` は BasePos へ巻き戻して60fpsで積分し直すが、実再生は12fpsコマ打ちなので
+            // ルート回転の積分結果が食い違い、その差が踏み込み(約1.4m)ごと横に振れる。
+            // 実測（2026-07-29 Play）: クリップ内時刻は 3.00〜3.08 とほぼ合っているのに
+            // yawが12〜28°ずれ、**位置が0.37m飛ぶ**＝「投げる瞬間に右へスライド」に見える（監督指摘）。
+            // 立ち位置の再アンカー（＝踏み込んだ先からプレートへ戻す）はカットバック側で済んでいるので、
+            // ここで動かす必要はない。
+            var keepPos = _pitcher.Go.transform.localPosition;
+            var keepRot = _pitcher.Go.transform.localRotation;
             SeekActor(_pitcher, ReleaseTime);
+            _pitcher.Go.transform.localPosition = keepPos;
+            _pitcher.Go.transform.localRotation = keepRot;
             GroundFix(_pitcher);
             if (nextReleaseIn > 0f)
             {
@@ -1467,9 +1479,12 @@ namespace KokoSim.Unity.Match
         /// 現在のポーズを退場させながら clipTime へ繋ぐ（セット姿勢→投球の切り口用）。
         ///
         /// クリップ内部の緩急は触らない＝頭出し位置と短いクロスフェードだけで合わせる（design-18 §4.5の掟）。
-        /// 退場側は同じクリップの別Playableを現在時刻で Pause して持つので、ルートモーションのデルタ寄与は
-        /// ゼロ（＝フェード中の移動は入場側の重みぶんだけ遅れる）。切り口の1.75〜2.0sは踏み込み前で
-        /// 水平移動がほぼ無く、縦は GroundFix が毎コマ直すため実害は出ない。
+        ///
+        /// 退場側は Pause して進めないためルートモーションのデルタ寄与はゼロ＝フェード中の移動は
+        /// 入場側の重みぶんしか入らない（実測0.026m）。切り口の1.75〜2.0sは踏み込み前でほぼ動かず、
+        /// 縦は `GroundFix` が毎コマ直すので実害は出ない。
+        /// なお「投げる瞬間に横へ跳ぶ」の主因はこれではなく、12fps再生と60fpsシークのルート回転の
+        /// 積分差（実測0.37m）。対策は <see cref="OnPitchReleased"/> 側にある。
         ///
         /// 手順の順序が重要: 退場させたい時刻を控える → 先に Seek（SeekActor は CancelFade を通るので、
         /// 退場側を先に繋ぐと捨てられてしまう） → Seek 後に退場ポーズを作って重みを in0=1 へ倒す。
