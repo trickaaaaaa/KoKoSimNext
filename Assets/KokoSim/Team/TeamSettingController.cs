@@ -49,9 +49,11 @@ namespace KokoSim.Unity.Squad
         /// </summary>
         private static readonly Vector3 PreviewCamPos = new(-2.35f, 1.30f, 16.85f);
         private static readonly Vector3 PreviewLookAt = new(0f, 1.10f, 18.44f);
-        // ApplyFov は 16:9 基準で正規化するので、この欄（およそ4:3）では実効画角が約1.33倍に広がる。
-        // 全身がちょうど収まる値を Play 中に振って決めた（17=首から下で見切れ／46=小さすぎ）
-        private const float PreviewFovDeg = 27f;
+        /// <summary>
+        /// 画面の縦に収める実寸[m]。角度でなく寸法で渡す＝欄の縦横比が変わっても背丈が変わらない
+        /// （画角固定にすると横長の欄で頭と足が切れる。2026-07-29 実測）。1.75mの素体＋余白。
+        /// </summary>
+        private const float PreviewFrameHeightM = 1.95f;
 
         private VisualElement _root;
         private VisualElement _rowHost;
@@ -108,12 +110,11 @@ namespace KokoSim.Unity.Squad
             if (_rig.Available)
             {
                 _rig.PosePreviewStanding();   // 投手だけ直立で残す（配色以外を画から追い出す）
-                _rig.FramePreview(PreviewCamPos, PreviewLookAt, PreviewFovDeg);
+                _rig.FramePreview(PreviewCamPos, PreviewLookAt, PreviewFrameHeightM);
                 _rigView = new Match.DuelViewElement();
                 _rigView.BindRig(_rig);
                 host.Add(_rigView);
-                SetPreviewLabels("対決ビュー",
-                    "試合と同じ描画です。ここで見えたとおりに試合でも映ります。");
+                SetPreviewLabels("対決ビュー", "試合と同じ描画です。");
                 return;
             }
 

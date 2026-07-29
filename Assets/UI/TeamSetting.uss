@@ -1,28 +1,34 @@
 /* チーム設定 画面（設計書18 §3.5.1）。色・寸法は tokens.uss の変数のみ参照する。
    列幅はヘッダー(.ts-th--*)とデータ(.ts-cell--*)が同じ変数を見る＝横ずれの構造的対策。 */
 
+/* 行高・文字はデータ画面（32px・UI原則①）でなく**操作の的**として決めている。
+   ここは7行しかない設定画面で、一覧をスキャンする画面ではなく色を送って選ぶ画面だから
+   （2026-07-29 監督指示「文字大きく・枠も大きく・ボタンも大きくして選びやすく」）。 */
 :root {
-    --ts-col-name: 190px;    /* 領域名 */
-    --ts-col-val: 150px;     /* 色の名前 */
-    --ts-col-swatch: 76px;   /* 見本 */
-    --ts-row-h: 32px;        /* データ行高（UI原則①） */
+    --ts-col-name: 200px;    /* 領域名（最長「アンダーシャツ」7字） */
+    --ts-col-val: 170px;     /* 色の名前（最長「ワインレッド」6字。150pxだと見本欄に噛む） */
+    --ts-col-swatch: 110px;  /* 見本 */
+    --ts-col-pick: 130px;    /* 送りボタン。伸ばさず**固定**＝右に空列を作らない */
+    /* 操作行の高さ（ボタン40px＋上下の当たり）。7行＋縞の塊分けが1画面に収まる上限で、
+       これ以上大きくすると最終行（縞色）がカードからはみ出して切れる（2026-07-29 実測） */
+    --ts-row-h: 48px;
 }
 
 .ts-main {
     flex-grow: 1;
     min-height: 0;
-    padding-left: 24px;
-    padding-right: 24px;
+    padding-left: 16px;
+    padding-right: 16px;
     padding-bottom: 8px;
 }
 
-.ts-masthead { flex-shrink: 0; margin-bottom: var(--sp-3); }
+.ts-masthead { flex-shrink: 0; margin-bottom: var(--sp-2); }
 
 .ts-mastline {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    margin-top: var(--sp-2);
+    margin-top: var(--sp-1);
 }
 
 .ts-title { font-size: var(--fs-page); color: var(--color-chalk); }
@@ -33,17 +39,18 @@
     min-height: 0;
 }
 
+/* 左＝内容ぴったりの固定幅、右＝残り全部。逆（左が伸びる）だと選択欄の右に
+   何も置かない空列ができ、プレビューだけが痩せる（2026-07-29 監督指摘） */
 .card--rows {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
+    width: 648px;   /* 220+150+110+130 列 ＋ card__body の左右余白32 ＋ 枠 */
+    flex-shrink: 0;
     margin-right: 14px;
-    flex-shrink: 1;
 }
 
 .card--preview {
-    width: 360px;
-    flex-shrink: 0;
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
 }
 
 /* ── 表ヘッダー ───────────────────────────────────────────── */
@@ -69,7 +76,7 @@
 .ts-th--name { width: var(--ts-col-name); }
 .ts-th--val { width: var(--ts-col-val); }
 .ts-th--swatch { width: var(--ts-col-swatch); }
-.ts-th--pick { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.ts-th--pick { width: var(--ts-col-pick); }
 
 /* ── データ行 ─────────────────────────────────────────────── */
 
@@ -91,7 +98,7 @@
     margin: 0;
     padding: 0;
     flex-shrink: 0;
-    font-size: var(--fs-body);
+    font-size: var(--fs-page);
     color: var(--color-chalk);
 }
 
@@ -105,27 +112,26 @@
 }
 
 .ts-swatch {
-    width: 44px;
-    height: 18px;
+    width: 84px;
+    height: 30px;
     border-width: 1px;
     border-color: var(--color-line-focus);
 }
 
 .ts-pick {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
+    width: var(--ts-col-pick);
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
 }
 
 Button.ts-arrow {
-    width: 30px;
-    height: 24px;
+    width: 56px;
+    height: 40px;
     margin: 0;
-    margin-right: var(--sp-1);
+    margin-right: var(--sp-2);
     padding: 0;
-    font-size: var(--fs-label);
+    font-size: var(--fs-body);
     background-color: var(--color-panel-deep);
     color: var(--color-chalk);
     border-width: 1px;
@@ -140,6 +146,9 @@ Button.ts-arrow:hover { background-color: var(--color-panel-hover); }
 /* 背景は昼芝トーン。カード面（白）のままだと**白ユニが背景に消える**（実測: 白＋黒の学校で
    胴が見えず部品が浮いて見えた 2026-07-29）。高校野球のユニは白地が多数派なので、
    図の地は必ず選手より暗い色にする。 */
+/* 図は欄の実寸いっぱいに描く。選手の背丈は**枠の高さ**でしか変わらない（カメラは水平画角を
+   保つ実装）ので、横に広い欄では余った幅を球場の絵で埋める。縦横比を固定して中央寄せにすると
+   選手は同じ大きさのまま左右に緑の帯が出るだけだった（2026-07-29 実測） */
 .ts-preview {
     flex-grow: 1;
     min-height: 240px;

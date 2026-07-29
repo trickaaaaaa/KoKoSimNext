@@ -26,6 +26,8 @@ namespace KokoSim.EditorTools
             "Assets/DuelSpike/Vendor/SchoolBaseballPlayer0001/School_Baseball_Player_0001.fbx";
         private const string SuitTex =
             "Assets/DuelSpike/Vendor/SchoolBaseballPlayer0001/Texture/I_Players_0001_Suit_Co_0001.jpg";
+        private const string PantsTex =
+            "Assets/DuelSpike/Vendor/SchoolBaseballPlayer0001/Texture/I_Players_0001_Pants_Co_0001.jpg";
         private const string OutDir = "Assets/DuelSpike/Vendor/Generated";
 
         /// <summary>
@@ -35,13 +37,20 @@ namespace KokoSim.EditorTools
         private const float NavyLuma = 0.38f;
         private const float NavyBlueOverRed = 1.12f;
 
-        /// <summary>メッシュ名 → 領域（Suit だけは三角形単位で振り分けるのでここには載せない）。</summary>
+        /// <summary>
+        /// ベルト（Pants メッシュ内）判定のしきい値。Pants テクスチャは白地の中に
+        /// **ベルト革のUV島だけが濃茶**（輝度0.15前後）で描かれているので、暗いだけで足りる。
+        /// バックルの金属帯（輝度0.5前後）・ベルト通し（白）は拾わない。
+        /// </summary>
+        private const float BeltLuma = 0.35f;
+
+        /// <summary>メッシュ名 → 領域（Suit / Pants だけは三角形単位で振り分けるのでここには載せない）。</summary>
         private static readonly Dictionary<string, Region> WholeMeshRegion = new Dictionary<string, Region>
         {
-            { "A_Players_0001_Pants_0001", Region.Pants },
             { "A_Players_0001_Sox_001", Region.Socks },
             { "A_Players_0001_Shoes_0001", Region.Shoes },
-            { "A_Players_0001_Beltbuckle_0001", Region.Shoes },   // ベルトは固定暗色でよい
+            // バックルは帯と同じ領域＝ベルト1本として読ませる（高校球児のベルトは黒が多数派）
+            { "A_Players_0001_Beltbuckle_0001", Region.Belt },
             { "A_JM7M_AC_0001_Head_0001", Region.Skin },
             { "LeftEye_Ball_Geo", Region.Skin },
             { "RightEye_Ball_Geo", Region.Skin },
@@ -53,6 +62,7 @@ namespace KokoSim.EditorTools
         };
 
         private const string SuitMeshName = "A_Players_0001_Suit_0001";
+        private const string PantsMeshName = "A_Players_0001_Pants_0001";
 
         public static string BakeAll()
         {
@@ -62,6 +72,8 @@ namespace KokoSim.EditorTools
 
             var suitTex = LoadReadable(SuitTex);
             if (suitTex == null) return "FAILED: Suit テクスチャが読めない " + SuitTex;
+            var pantsTex = LoadReadable(PantsTex);
+            if (pantsTex == null) { Object.DestroyImmediate(suitTex); return "FAILED: Pants テクスチャが読めない " + PantsTex; }
 
             Directory.CreateDirectory(OutDir);
 
@@ -78,6 +90,10 @@ namespace KokoSim.EditorTools
                 if (r.name == SuitMeshName)
                 {
                     regionPerVertex = ClassifySuit(copy, suitTex, out note);
+                }
+                else if (r.name == PantsMeshName)
+                {
+                    regionPerVertex = ClassifyPants(copy, pantsTex, out note);
                 }
                 else
                 {
@@ -110,6 +126,7 @@ namespace KokoSim.EditorTools
             }
 
             Object.DestroyImmediate(suitTex);
+            Object.DestroyImmediate(pantsTex);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             return sb.ToString();
@@ -151,6 +168,45 @@ namespace KokoSim.EditorTools
             }
 
             note = "三角形 Shirt=" + triShirt + " Undershirt=" + triUnder
+                 + " / 頂点の領域またぎ=" + conflicts + "（0なら島が完全に分離）";
+            return outRegion;
+        }
+
+        /// <summary>
+        /// Pants を三角形単位で Pants / Belt に振り分ける。ベルトは**別メッシュではなく Pants の中の帯**で、
+        /// テクスチャ上は専用のUV島（濃茶の革）として描かれている。ここを塗り分けないと白ズボンの上に
+        /// 白いベルトが乗るだけになり、腰に何も無いように見える（2026-07-29 監督指摘）。
+        /// 判定・多数決は <see cref="ClassifySuit"/> と同じ流儀。
+        /// </summary>
+        private static int[] ClassifyPants(Mesh mesh, Texture2D tex, out string note)
+        {
+            var uv = mesh.uv;
+            var tris = mesh.triangles;
+            int vcount = mesh.vertexCount;
+
+            var votePants = new int[vcount];
+            var voteBelt = new int[vcount];
+            int triPants = 0, triBelt = 0;
+
+            for (int t = 0; t < tris.Length; t += 3)
+            {
+                int a = tris[t], b = tris[t + 1], c = tris[t + 2];
+                var mid = (uv[a] + uv[b] + uv[c]) / 3f;
+                var col = tex.GetPixelBilinear(mid.x, mid.y);
+                float luma = 0.2126f * col.r + 0.7152f * col.g + 0.0722f * col.b;
+                if (luma < BeltLuma) { triBelt++; voteBelt[a]++; voteBelt[b]++; voteBelt[c]++; }
+                else { triPants++; votePants[a]++; votePants[b]++; votePants[c]++; }
+            }
+
+            int conflicts = 0;
+            var outRegion = new int[vcount];
+            for (int i = 0; i < vcount; i++)
+            {
+                if (votePants[i] > 0 && voteBelt[i] > 0) conflicts++;
+                outRegion[i] = (voteBelt[i] > votePants[i]) ? (int)Region.Belt : (int)Region.Pants;
+            }
+
+            note = "三角形 Pants=" + triPants + " Belt=" + triBelt
                  + " / 頂点の領域またぎ=" + conflicts + "（0なら島が完全に分離）";
             return outRegion;
         }

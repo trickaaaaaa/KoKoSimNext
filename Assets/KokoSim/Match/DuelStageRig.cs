@@ -178,7 +178,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private readonly struct UniformPalette
         {
-            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap;
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, Belt;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
             /// <summary>縞の本数[本/m]。シェーダへはアクターのスケールを掛けて渡す（RegionMaterial）。</summary>
@@ -194,6 +194,9 @@ namespace KokoSim.Unity.Match
                 Cap = cap;
                 Skin = new Color(0.85f, 0.68f, 0.55f);
                 Shoes = new Color(0.15f, 0.15f, 0.16f);
+                // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。靴と同じ暗さだと腰で消えるので、
+                // 白ユニに対して**輪郭が立つ**ぶんだけ靴より濃くする
+                Belt = new Color(0.10f, 0.09f, 0.09f);
                 StripeOn = stripeOn;
                 StripeColor = stripeColor;
                 StripeFreqPerMeter = stripeFreqPerMeter;
@@ -744,9 +747,11 @@ namespace KokoSim.Unity.Match
             if (!Available) return;
             width = Mathf.Clamp(width, 160, 2048);
             height = Mathf.Clamp(height, 90, 2048);
-            // 縦横比クランプ: 4:3より縦長・2.4:1より横長にはしない（壁の高さ・構図の担保範囲）
+            // 縦横比クランプ: 4:3より縦長・2.4:1より横長にはしない（壁の高さ・構図の担保範囲）。
+            // ただし横の上限は**試合の構図を守るため**のものなので、FramePreview で構図を組み直した
+            // プレビューには効かせない（効かせると欄の右端に緑の帯が残る。2026-07-29 実測）
             height = Mathf.Min(height, Mathf.FloorToInt(width * 0.75f));
-            width = Mathf.Min(width, Mathf.FloorToInt(height * 2.4f));
+            width = Mathf.Min(width, Mathf.FloorToInt(height * (_previewFrameH > 0f ? 8f : 2.4f)));
             if (Target != null && Target.width == width && Target.height == height) return;
 
             if (_camera != null) _camera.targetTexture = null;
@@ -837,19 +842,36 @@ namespace KokoSim.Unity.Match
         /// チーム設定画面のために、構図だけを直接指定できる入口を分けてある。
         /// 対決ビュー本体はこれを呼ばない＝§7-1 の構図は不変。
         /// </summary>
-        public void FramePreview(Vector3 camLocalPos, Vector3 lookLocalPos, float fovDeg)
+        /// <param name="frameHeightM">
+        /// 注視点の距離で画面の縦に収めたい実寸[m]。角度でなく寸法で指定するのは、
+        /// 欄の縦横比が変わっても被写体の大きさを変えないため（カメラは水平画角を保つ実装なので、
+        /// 画角を固定すると横長の欄では上下が切れる）。
+        /// </param>
+        public void FramePreview(Vector3 camLocalPos, Vector3 lookLocalPos, float frameHeightM)
         {
             if (_camera == null) return;
             _camera.transform.localPosition = camLocalPos;
-            _camera.transform.LookAt(_root.transform.position + lookLocalPos);
-            _fovBaseDeg = fovDeg;
+            var look = _root.transform.position + lookLocalPos;
+            _camera.transform.LookAt(look);
+            _previewFrameH = frameHeightM;
+            _previewDist = Vector3.Distance(_camera.transform.position, look);
             ApplyFov();
         }
 
+        /// <summary>プレビュー枠（縦に収めたい実寸[m]と注視距離[m]）。0＝試合の構図＝FovDeg をそのまま使う。</summary>
+        private float _previewFrameH;
+        private float _previewDist;
+
         private void ApplyFov()
         {
-            float halfH = Mathf.Tan(_fovBaseDeg * 0.5f * Mathf.Deg2Rad) * (16f / 9f);
             float aspect = Target.width / (float)Target.height;
+            if (_previewFrameH > 0f && _previewDist > 0.01f)
+            {
+                // 収めたい高さ[m]→実効の垂直画角→16:9基準へ戻す（RTが変わるたびに引き直す）
+                float halfV = Mathf.Atan(_previewFrameH * 0.5f / _previewDist);
+                _fovBaseDeg = 2f * Mathf.Atan(Mathf.Tan(halfV) * aspect / (16f / 9f)) * Mathf.Rad2Deg;
+            }
+            float halfH = Mathf.Tan(_fovBaseDeg * 0.5f * Mathf.Deg2Rad) * (16f / 9f);
             _camera.fieldOfView = 2f * Mathf.Atan(halfH / aspect) * Mathf.Rad2Deg;
         }
 
@@ -947,7 +969,7 @@ namespace KokoSim.Unity.Match
             colors[(int)DuelUniformMeshBuilder.Region.Skin] = pal.Skin;
             colors[(int)DuelUniformMeshBuilder.Region.Shoes] = pal.Shoes;
             colors[(int)DuelUniformMeshBuilder.Region.Cap] = pal.Cap;
-            colors[7] = Color.magenta;   // 未使用領域＝出たらバグ（目で分かる色）
+            colors[(int)DuelUniformMeshBuilder.Region.Belt] = pal.Belt;
             mat.SetColorArray("_RegionColors", colors);
 
             mat.SetFloat("_StripeOn", pal.StripeOn ? 1f : 0f);
@@ -1091,6 +1113,10 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void StepActor(Actor a, float step)
         {
+            // Play停止・ドメインリロードは HideAndDontSave の素体を先に壊すので、Tick が
+            // 生き残っている間だけ例外が出る。呼び元（Update・撮影ハーネス）に後始末を強いるより
+            // ここで黙って降りる方が安全（2026-07-29 プレビュー撮影で実害）
+            if (a == null || a.Go == null) return;
             if (a.Holding) return;
             if (a.HoldRemaining > 0f)
             {
@@ -1340,18 +1366,29 @@ namespace KokoSim.Unity.Match
         private static readonly Vector3 GloveSize = new(0.23f, 0.26f, 0.10f);
         private static readonly Color LeatherColor = new(0.45f, 0.27f, 0.15f);
 
-        /// <summary>掌中心からポケット面へ出す量[m]（コンテナ+Z＝視線方向）。実物のグラブは手より前に張り出す。</summary>
-        private const float GloveForward = 0.045f;
+        /// <summary>手からポケット面へ出す量[m]（コンテナ+Z＝掌の法線）。実物のグラブは掌の側へ張り出す。</summary>
+        private const float GloveForward = 0.025f;
+
+        /// <summary>
+        /// 手の長さ（手首→指先）を中指付け根までの距離から見積もる倍率。
+        /// 指先ボーンは Humanoid 必須でないので、実測できる手首→中指付け根で代用する。
+        /// </summary>
+        private const float HandLengthFromKnuckle = 1.85f;
 
         /// <summary>
         /// グラブ・ミットを利き手でない側へ装着する。**呼び出しは初期ポーズ評価後**（AttachGearと同じ）。
         ///
         /// 位置: 手ボーンの原点は**手首**なので、そのまま子にすると球が手首に刺さって
-        /// 「腕の先に肉団子」になる。バットの握り線と同じ推定（手首→中指付け根 0.65 補間）で
-        /// 掌中心へ置く。
-        /// 向き: ボーン軸は素体依存で信用できない（バット・被り物と同じ教訓）。視線ターゲット
-        /// （捕手→マウンド／投手→本塁）への水平方向を実測して焼き、ポケット面（厚みの薄い軸=Z）が
-        /// 必ず相手を向くようにする。以後はボーン追従。
+        /// 「腕の先に肉団子」になる。手首→指先の中点（＝手の中心）へグラブの中心を合わせる。
+        /// 向き: ボーン軸は素体依存で信用できない（バット・被り物と同じ教訓）ので、**手の実測**で
+        /// 座標系を組む。縦軸=手首→中指付け根、正面=掌の法線（人差し指付け根→小指付け根 と縦軸の外積）。
+        /// 法線の符号だけは幾何では決まらないので、焼き付けポーズで掌が相手を向く事実を使って
+        /// 視線ターゲット方向との内積で選ぶ。
+        ///
+        /// **正面を視線方向そのものにしてはいけない**: グラブの薄い軸(Z=0.115m)が視線に固定されるので、
+        /// 掌が相手を向かないポーズ（立ち姿・投球前後）では手が薄い板を突き抜けて指が外へ出る
+        /// （2026-07-29 監督指摘「左手が少し見えてる」の真因）。掌の法線に張れば、どの姿勢でも
+        /// グラブの広い面（0.245×0.295m）が手のひらの面と重なる。
         /// </summary>
         private void AttachGlove(Actor actor, HumanBodyBones handBone, HumanBodyBones knuckleBone,
             Vector3 gazeLocal, Vector3 size, int layer, Mesh mesh = null)
@@ -1359,14 +1396,42 @@ namespace KokoSim.Unity.Match
             if (actor == null || actor.Animator == null) return;
             var hand = actor.Animator.GetBoneTransform(handBone);
             if (hand == null) return;
-            var target = _root.transform.TransformPoint(gazeLocal);
-            var d = target - hand.position;
-            d.y = 0f;
-            var rot = Quaternion.LookRotation(d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward);
-            var c = GearContainer(hand, "gear-glove", rot);
+            bool left = handBone == HumanBodyBones.LeftHand;
             var knuckle = actor.Animator.GetBoneTransform(knuckleBone);
-            var palm = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.65f) : hand.position;
-            var lp = c.transform.InverseTransformPoint(palm);
+            var index = actor.Animator.GetBoneTransform(
+                left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal);
+            var little = actor.Animator.GetBoneTransform(
+                left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal);
+
+            var up = knuckle != null ? knuckle.position - hand.position : hand.up;
+            up = up.sqrMagnitude > 1e-6f ? up.normalized : Vector3.up;
+            var target = _root.transform.TransformPoint(gazeLocal);
+            var gaze = target - hand.position;
+            gaze -= Vector3.Dot(gaze, up) * up;   // 縦軸と直交化
+            gaze = gaze.sqrMagnitude > 1e-6f ? gaze.normalized : Vector3.forward;
+
+            var fwd = gaze;
+            if (index != null && little != null)
+            {
+                var across = index.position - little.position;
+                var n = Vector3.Cross(up, across);
+                n -= Vector3.Dot(n, up) * up;
+                if (n.sqrMagnitude > 1e-8f)
+                {
+                    n.Normalize();
+                    fwd = Vector3.Dot(n, gaze) < 0f ? -n : n;   // 掌が相手を向く側を正面に採る
+                }
+            }
+            var rot = Quaternion.LookRotation(fwd, up);
+            var c = GearContainer(hand, "gear-glove", rot);
+            // コンテナ原点＝手首なので、手の中心（手首→指先の中点）へグラブの中心を置く＝手が
+            // 一番肉のある所に収まる。掌に合わせると手が踵側の薄い所へ寄って甲がはみ出す
+            // （2026-07-29 実測: 縦寸の1/3も上げると投球ポーズで手の甲が丸見えになった）
+            var lp = Vector3.zero;
+            if (knuckle != null)
+                lp.y = (knuckle.position - hand.position).magnitude * HandLengthFromKnuckle * 0.5f;
+            else
+                lp.y = (mesh != null ? mesh.bounds.size.y : size.y) * 0.25f;
             lp.z += GloveForward;   // 掌の上に重ねると手に飲まれる＝ポケットぶん前へ出す
             if (mesh != null)
                 GearMeshPart(c, mesh, "prop-glove", lp, Quaternion.identity, LeatherColor, layer);
@@ -1789,6 +1854,34 @@ namespace KokoSim.Unity.Match
                     + "\t実寸=" + glove.lossyScale.ToString("F3"));
             }
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// 【診断用】投手の掌・グラブ・腰のステージローカル座標を返す（寄りカットの狙いを実測で決める）。
+        /// 見つからない要素は Vector3.zero。
+        /// </summary>
+        internal void PreviewProbeForCapture(out Vector3 palm, out Vector3 glove, out Vector3 hips,
+            out Quaternion gloveRot)
+        {
+            palm = glove = hips = Vector3.zero;
+            gloveRot = Quaternion.identity;
+            if (_pitcher == null || _pitcher.Animator == null) return;
+            var hand = _pitcher.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var knuckle = _pitcher.Animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
+            var hipBone = _pitcher.Animator.GetBoneTransform(HumanBodyBones.Hips);
+            if (hand != null)
+            {
+                var p = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.65f) : hand.position;
+                palm = _root.transform.InverseTransformPoint(p);
+            }
+            if (hipBone != null) hips = _root.transform.InverseTransformPoint(hipBone.position);
+            foreach (var t in _pitcher.Go.GetComponentsInChildren<Transform>(true))
+                if (t.name == "prop-glove")
+                {
+                    glove = _root.transform.InverseTransformPoint(t.position);
+                    gloveRot = Quaternion.Inverse(_root.transform.rotation) * t.rotation;
+                    break;
+                }
         }
 
         /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>
