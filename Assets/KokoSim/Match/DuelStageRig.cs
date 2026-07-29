@@ -656,6 +656,11 @@ namespace KokoSim.Unity.Match
                 AttachGear(_pitcher, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer);
             SeekActor(_pitcher, 0.001f);
             GroundFix(_pitcher);
+            // 生成直後はセット姿勢で止めておく。止めないと Tick が勝手にクリップを頭から流し、
+            // 打席が始まる前に**振りかぶりつきの1球**を投げてしまう（＝カウントに乗らない幽霊投球。
+            // 差し替え前は全球が振りかぶりだったので紛れていたが、セット投球にしたら露見した 2026-07-30）
+            _pitcher.Time = 0f;
+            _pitcher.Holding = true;
             // ヘルメットはチーム色でなく暗紺: 実際の高校野球のヘルメットは黒/紺が大半で、
             // チーム色（えんじ等）だと肌の顔と並んで「髪」に見える（2026-07-28 スクショで実害）
             // ヘルメットの紺は壁(0.12,0.20,0.16)と同輝度だと頭が背景に溶けて「頭が無い」絵になる
@@ -864,19 +869,20 @@ namespace KokoSim.Unity.Match
         public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome)
         {
             if (!Available || _pitcher == null) return;
-            // リリースの再同期は**ポーズだけ**合わせる。立ち位置・向きは動かさない。
+            // リリースの再同期は**ポーズと向きだけ**合わせ、立ち位置は据え置く。
             //
-            // `SeekActor` は BasePos へ巻き戻して60fpsで積分し直すが、実再生は12fpsコマ打ちなので
-            // ルート回転の積分結果が食い違い、その差が踏み込み(約1.4m)ごと横に振れる。
-            // 実測（2026-07-29 Play）: クリップ内時刻は 3.00〜3.08 とほぼ合っているのに
-            // yawが12〜28°ずれ、**位置が0.37m飛ぶ**＝「投げる瞬間に右へスライド」に見える（監督指摘）。
-            // 立ち位置の再アンカー（＝踏み込んだ先からプレートへ戻す）はカットバック側で済んでいるので、
-            // ここで動かす必要はない。
+            // `SeekActor` は BasePos へ巻き戻して60fpsで積分し直すが、実再生は12fpsコマ打ち。
+            // ルートモーションの移動量は**その時の向きの上で**足されるので、回りながら踏み込む投球では
+            // 刻み幅が違うと軌跡が食い違う。実測（2026-07-30 DuelRootMotionProbe・切り口1.75s→3.0s）:
+            //   60fps積分 dPos=(0.03,-0.75) / 12fps積分 dPos=(-0.31,-0.58) — **位置だけ0.38m飛ぶ**
+            //   yaw は両者 -107.4° で一致 — **向きは刻み幅に依存しない**
+            // ＝位置を戻すと「投げる瞬間に右へスライド」（監督指摘）。だから位置は据え置く。
+            // 逆に向きまで据え置くと、リリースが12fpsコマ境界のどこで来たかで最大1コマぶん
+            // （リリース近傍は1コマ20〜40°回る）取りこぼし、フォロースルーの向きが球ごとに
+            // 40°ばらつく（実測: 1球目 -107° / 2球目 -148°）。向きは Seek の値をそのまま使う。
             var keepPos = _pitcher.Go.transform.localPosition;
-            var keepRot = _pitcher.Go.transform.localRotation;
             SeekActor(_pitcher, ReleaseTime);
             _pitcher.Go.transform.localPosition = keepPos;
-            _pitcher.Go.transform.localRotation = keepRot;
             GroundFix(_pitcher);
             if (nextReleaseIn > 0f)
             {
@@ -1480,11 +1486,16 @@ namespace KokoSim.Unity.Match
         ///
         /// クリップ内部の緩急は触らない＝頭出し位置と短いクロスフェードだけで合わせる（design-18 §4.5の掟）。
         ///
-        /// 退場側は Pause して進めないためルートモーションのデルタ寄与はゼロ＝フェード中の移動は
-        /// 入場側の重みぶんしか入らない（実測0.026m）。切り口の1.75〜2.0sは踏み込み前でほぼ動かず、
-        /// 縦は `GroundFix` が毎コマ直すので実害は出ない。
-        /// なお「投げる瞬間に横へ跳ぶ」の主因はこれではなく、12fps再生と60fpsシークのルート回転の
-        /// 積分差（実測0.37m）。対策は <see cref="OnPitchReleased"/> 側にある。
+        /// **フェード中は applyRootMotion を切る**。退場側は Pause してあるが、それで
+        /// 「ルートモーション寄与ゼロ」にはならない——ミキサーが transform へ流すのは
+        /// 両入力の**ルート姿勢を重みで混ぜた結果の差分**なので、重みが動いている間は
+        /// 退場側（フォロースルーのルート姿勢）へ引っぱられて巨大なデルタが注入される。
+        /// 実測（2026-07-30 DuelRootMotionProbe・切り口1.75s→3.0sを12fpsで再生）:
+        ///   フェード無し    dPos=(-0.31,-0.58) dYaw=-107.4°
+        ///   フェード有り    dPos=( 0.06,-0.02) dYaw=+124.0°  ← 231°ずれ・1コマ目だけで98°振れる
+        ///   フェード有り＋凍結 dPos=(-0.32,-0.57) dYaw=-108.8°
+        /// 凍結すると 0.25秒ぶんの前進（実測0.016m・1.4°）を捨てるが、切り口1.75〜2.0sは
+        /// 踏み込み前でほとんど動かないので実害は無い。縦は `GroundFix` が毎コマ直す。
         ///
         /// 手順の順序が重要: 退場させたい時刻を控える → 先に Seek（SeekActor は CancelFade を通るので、
         /// 退場側を先に繋ぐと捨てられてしまう） → Seek 後に退場ポーズを作って重みを in0=1 へ倒す。
@@ -1504,20 +1515,32 @@ namespace KokoSim.Unity.Match
             a.Mixer.SetInputWeight(1, 0f);
             a.FadeDuration = seconds;
             a.FadeRemaining = seconds;
+            a.Animator.applyRootMotion = false;   // ↑の理由。CancelFade で戻す
         }
 
-        /// <summary>フェードを畳んで in1 単独（重み1）へ戻す。退場側 Playable は破棄する。</summary>
+        /// <summary>
+        /// フェードを畳んで in1 単独（重み1）へ戻す。退場側 Playable は破棄する。
+        /// ルートモーションを戻す前に、退場側を外した状態で Evaluate(0) して
+        /// アニメータ内部のルート基準を「混ざっていない素のポーズ」へ張り直す
+        /// （張り直さないと再開1コマ目に混合ポーズとの差分がゴミとして入る）。
+        /// </summary>
         private static void CancelFade(Actor a)
         {
             if (a == null || !a.Graph.IsValid()) return;
             a.FadeRemaining = 0f;
             a.FadeDuration = 0f;
-            if (a.FadeFrom.IsValid())
+            bool wasFading = a.FadeFrom.IsValid();
+            if (wasFading)
             {
                 a.Mixer.DisconnectInput(0);
                 a.FadeFrom.Destroy();
             }
             if (a.Mixer.IsValid()) a.Mixer.SetInputWeight(1, 1f);
+            if (wasFading && a.Animator != null)
+            {
+                a.Graph.Evaluate(0f);
+                a.Animator.applyRootMotion = true;
+            }
         }
 
         /// <summary>
@@ -1596,6 +1619,8 @@ namespace KokoSim.Unity.Match
         /// <summary>末尾（またはホールド終了）到達時の後始末: 待機ループへ戻す、または恒久停止（投手）。</summary>
         private void FinishOneShot(Actor a)
         {
+            // フェード中に末尾へ達しても畳んでから戻す（畳まないと applyRootMotion が切れたままになる）
+            CancelFade(a);
             a.Time = 0f;
             a.EndAt = a.DefaultEndAt;   // 投手は購入クリップ6.00sの尻尾を毎回切り落とす（既定0=末尾まで）
             if (a.IdleClip != null && a.Clip != a.IdleClip)
@@ -2386,6 +2411,23 @@ namespace KokoSim.Unity.Match
             bool batOn = _bat != null && _bat.activeSelf;
             return clip + "\t" + _batter.Time.ToString("F2") + "\t" + gap.ToString("F3")
                 + "\t" + _batOneHand + "\t" + batOn;
+        }
+
+        /// <summary>
+        /// 投手のルート状態をTSV1行で返す（clipT / 立ち向きのBaseRotからのずれ[度] / 立ち位置のBasePosからのずれ[m] /
+        /// applyRootMotion / フェード中）。ルートモーションの積分は絵では「向きが少し変」としか見えず
+        /// 目測で切り分けられないので、必ずこの実測で判定する（design-18 §7-2）。
+        /// </summary>
+        internal string PitcherDiagForCapture()
+        {
+            if (_pitcher == null || _pitcher.Go == null) return "0\t0\t0\t0\t-\t-";
+            var t = _pitcher.Go.transform;
+            float dYaw = Mathf.DeltaAngle(_pitcher.BaseRot.eulerAngles.y, t.localRotation.eulerAngles.y);
+            var d = t.localPosition - _pitcher.BasePos;
+            return _pitcher.Time.ToString("F2") + "\t" + dYaw.ToString("F1") + "\t"
+                + d.x.ToString("F3") + "\t" + d.z.ToString("F3") + "\t"
+                + (_pitcher.Animator != null && _pitcher.Animator.applyRootMotion) + "\t"
+                + (_pitcher.FadeRemaining > 0f);
         }
 
         /// <summary>打者の左手ボーンのRT上ピクセル座標（クロップ中心の決定用）。</summary>
