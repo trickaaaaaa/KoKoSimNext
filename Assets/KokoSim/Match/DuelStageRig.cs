@@ -168,38 +168,113 @@ namespace KokoSim.Unity.Match
         private const string VendorCapMeshName = "A_Players_0001_Cap_0001";
 
         /// <summary>
-        /// 役割別の6領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[8] に流し込む）。
-        /// チームカラーの実データ配管（School側に色は未定義・MatchLiveSnapshotにSchoolIdも無い）が
-        /// できるまでの定数。将来は RankPalette と同型の TeamColorPalette（部品辞書）へ移す（CLAUDE.md）。
+        /// 役割別の領域配色（DuelUniformMeshBuilder.Region の並びで _RegionColors[8] に流し込む）。
+        /// 実データはエンジンの <see cref="KokoSim.Engine.Nation.TeamColors"/>（data/team-colors.yaml 由来）で、
+        /// ここは Unity の Color へ移した表現＋肌・シューズの固定色。
+        ///
+        /// <b>両校とも自校の配色で描く</b>（実物準拠・2026-07-29 監督決定）。旧実装は守備=白／打者=薄グレーの
+        /// 定数で「輪郭が重なっても見分く」ことを保証していたが、実データ化でその保証は無くなった
+        /// ＝紺同士の対戦では両者が似て見える。承知の上の仕様。
         /// </summary>
         private readonly struct UniformPalette
         {
-            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes;
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap;
+            public readonly bool StripeOn;
+            public readonly Color StripeColor;
+            /// <summary>縞の本数[本/m]。シェーダへはアクターのスケールを掛けて渡す（RegionMaterial）。</summary>
+            public readonly float StripeFreqPerMeter;
 
-            public UniformPalette(Color shirt, Color pants, Color undershirt, Color socks)
+            public UniformPalette(Color shirt, Color pants, Color undershirt, Color socks, Color cap,
+                bool stripeOn = false, Color stripeColor = default, float stripeFreqPerMeter = 0f)
             {
                 Shirt = shirt;
                 Pants = pants;
                 Undershirt = undershirt;
                 Socks = socks;
+                Cap = cap;
                 Skin = new Color(0.85f, 0.68f, 0.55f);
                 Shoes = new Color(0.15f, 0.15f, 0.16f);
+                StripeOn = stripeOn;
+                StripeColor = stripeColor;
+                StripeFreqPerMeter = stripeFreqPerMeter;
             }
 
-            /// <summary>守備側（投手・捕手）: 白ユニ＋紺のアンダー/ソックス。</summary>
-            public static UniformPalette Fielding => new(
+            /// <summary>エンジンの確定配色（6領域＋縞）から作る。つばは帽子と1メッシュなので使わない。</summary>
+            public static UniformPalette From(KokoSim.Engine.Nation.TeamColors c) => new(
+                Rgb(c.Shirt), Rgb(c.Pants), Rgb(c.Undershirt), Rgb(c.Socks), Rgb(c.CapCrown),
+                c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter);
+
+            private static Color Rgb(KokoSim.Engine.Nation.RgbColor c)
+                => new(c.R / 255f, c.G / 255f, c.B / 255f);
+
+            /// <summary>チーム色が届かない場面（スクショ・デモ・engine未接続）の既定＝白ユニ＋紺。</summary>
+            public static UniformPalette Default => new(
                 new Color(0.93f, 0.92f, 0.88f), new Color(0.93f, 0.92f, 0.88f),
-                new Color(0.16f, 0.20f, 0.38f), new Color(0.16f, 0.20f, 0.38f));
+                new Color(0.16f, 0.20f, 0.38f), new Color(0.16f, 0.20f, 0.38f),
+                new Color(0.16f, 0.20f, 0.38f));
 
-            /// <summary>攻撃側（打者）: ライトグレー＋えんじ。守備側と輪郭が重なっても見分くため色相を離す。</summary>
-            public static UniformPalette Batting => new(
-                new Color(0.80f, 0.79f, 0.75f), new Color(0.80f, 0.79f, 0.75f),
-                new Color(0.52f, 0.16f, 0.18f), new Color(0.52f, 0.16f, 0.18f));
-
-            /// <summary>球審: 紺シャツ＋グレースラックス（実物の球審装束）。</summary>
+            /// <summary>球審: 紺シャツ＋グレースラックス（実物の球審装束）。チーム色の対象外。</summary>
             public static UniformPalette Umpire => new(
                 new Color(0.14f, 0.16f, 0.22f), new Color(0.38f, 0.39f, 0.42f),
-                new Color(0.14f, 0.16f, 0.22f), new Color(0.14f, 0.16f, 0.22f));
+                new Color(0.14f, 0.16f, 0.22f), new Color(0.14f, 0.16f, 0.22f),
+                new Color(0.14f, 0.16f, 0.22f));
+        }
+
+        /// <summary>縦縞の線の太さ[m]（実物のピンストライプは間隔に依らず3mm前後の細線）。</summary>
+        private const float StripeLineWidthM = 0.0035f;
+
+        // 守備側（投手・捕手）と攻撃側（打者）の配色。役割は固定で、攻守交代で入れ替わるのは
+        // 「どちらの学校の色か」の方＝SetTeamColors で塗り替える（アクターは作り直さない）
+        private UniformPalette _defenseColors = UniformPalette.Default;
+        private UniformPalette _offenseColors = UniformPalette.Default;
+
+        /// <summary>
+        /// 生成前に一度だけ渡す初期配色（ステージ構築時に読む）。null なら既定（白＋紺）。
+        /// 構築後の変更は <see cref="SetTeamColors"/> を使う。
+        /// </summary>
+        public static (KokoSim.Engine.Nation.TeamColors Defense, KokoSim.Engine.Nation.TeamColors Offense)? InitialTeamColors { get; set; }
+
+        /// <summary>
+        /// 守備側・攻撃側の配色を差し替える（攻守交代のたびに呼ぶ）。素体とクリップは作り直さず
+        /// マテリアルだけ塗り替える＝進行中のポーズ・アンカー同期を壊さない。
+        /// </summary>
+        public void SetTeamColors(KokoSim.Engine.Nation.TeamColors defense, KokoSim.Engine.Nation.TeamColors offense)
+        {
+            if (defense == null || offense == null) return;
+            _defenseColors = UniformPalette.From(defense);
+            _offenseColors = UniformPalette.From(offense);
+
+            Repaint(_pitcher, _defenseColors);
+            Repaint(_catcher, _defenseColors);
+            Repaint(_batter, _offenseColors);   // 打者ヘルメットは暗紺固定＝チーム色の装備は無い
+        }
+
+        private static void Repaint(Actor a, UniformPalette pal)
+        {
+            if (a == null) return;
+            if (a.RegionMat != null) ApplyRegionColors(a.RegionMat, pal, a.BodyScale);
+            foreach (var m in a.TeamMats) if (m != null) m.SetColor("_BaseColor", pal.Cap);
+        }
+
+        /// <summary>
+        /// 装着直後に「チーム色で塗った装備」のマテリアルを拾っておく（攻守交代で塗り替える対象）。
+        /// 装備はプリミティブの寄せ集めで、同じ呼び出しの中に固定色（ケージの黒・パッド）も混ざるため、
+        /// <b>色の一致で選ぶ</b>。装着時点の accent と厳密に同じ Color を入れているので取りこぼさない。
+        /// </summary>
+        private static void CollectTeamMats(Actor a, Color accent)
+        {
+            if (a == null || a.Go == null) return;
+            foreach (var r in a.Go.GetComponentsInChildren<Renderer>(true))
+            {
+                var m = r.sharedMaterial;
+                // 装備は必ず FlatMaterial（自前シェーダ）なので、_UseRegions を持たないマテリアル
+                // （素体に残る URP Lit 等）は対象外。HasProperty で弾かないと毎フレーム警告が出る
+                if (m == null || !m.HasProperty("_BaseColor") || !m.HasProperty("_UseRegions")) continue;
+                // 素体の領域マテリアルは _BaseColor が白のダミー＝ここで拾ってはいけない
+                // （チーム色に白を選ばれた瞬間に素体まで塗り替え対象になる）。RegionMat 側で塗り替わる
+                if (m.GetFloat("_UseRegions") > 0.5f) continue;
+                if (m.GetColor("_BaseColor") == accent && !a.TeamMats.Contains(m)) a.TeamMats.Add(m);
+            }
         }
 
         /// <summary>
@@ -290,6 +365,9 @@ namespace KokoSim.Unity.Match
             public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
             public float HoldSeconds;                // 末尾到達時、待機へ戻る前にそのポーズで止める秒数（0=即戻る）
             public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
+            public Material RegionMat;               // 領域塗り分けマテリアル（攻守交代の塗り替え用。一色フォールバック時はnull）
+            public float BodyScale;                  // ワールドスケール（縞の刻みをオブジェクト空間へ換算するのに要る）
+            public readonly List<Material> TeamMats = new();  // チーム色で塗った装備のマテリアル（帽子・捕手ヘルメット殻）
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
         }
@@ -321,6 +399,14 @@ namespace KokoSim.Unity.Match
             _root.transform.position = StageOrigin;
             BuildGround(layer);
 
+            // チーム配色は素体を作る前に確定させる（SpawnActor がマテリアルを焼くため）。
+            // 未指定＝スクショ・デモ経路は既定（白＋紺）で立つ
+            if (InitialTeamColors is { } tc)
+            {
+                _defenseColors = UniformPalette.From(tc.Defense);
+                _offenseColors = UniformPalette.From(tc.Offense);
+            }
+
             // 立ち位置・装備位置は絵作りパラメータ（DuelCalibration.Default が単一ソース。
             // 球審の#291スロット位置の経緯コメントも Default 側の値に対応する）。
             // スポーン位置から較正値で置く＝装備の視線ベイク（AttachGear）が較正後の位置で走る
@@ -334,17 +420,17 @@ namespace KokoSim.Unity.Match
             var playerBody = useVendor ? vendor : body;
 
             _pitcher = SpawnActor(playerBody, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), PitcherYaw,
-                UniformPalette.Fielding, MoundHeight, layer, useVendor);
+                _defenseColors, MoundHeight, layer, useVendor);
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
             _batter = SpawnActor(playerBody, batClip, new Vector3(cal0.BatterX, 0f, cal0.BatterZ), 90f,
-                UniformPalette.Batting, 0f, layer, useVendor);
+                _offenseColors, 0f, layer, useVendor);
             // 購入素体は帽子を素で持っている。打者はヘルメットを被せるので、その帽子を落とす
             if (useVendor) SetChildActive(_batter.Go, VendorCapMeshName, false);
             _batter.IdleClip = batClip;
             _batter.IdleEndAt = BatterIdleEnd;
             _batter.EndAt = BatterIdleEnd;   // 生成直後の初回ループでスイングまで流さない
             _catcher = SpawnActor(playerBody, catClip, new Vector3(cal0.CatcherX, 0f, cal0.CatcherZ), 0f,
-                UniformPalette.Fielding, 0f, layer, useVendor);
+                _defenseColors, 0f, layer, useVendor);
             // 捕手も素の帽子を落とす。日本の高校野球の捕手は「捕手用ヘルメット＋マスク」で、
             // 帽子の上にマスクを重ねる形ではない（帽子を残すと頭が二重に膨らむ 2026-07-29 監督指摘）。
             // ヘルメットとマスクは CatcherGear 側（殻＋ケージバー）が受け持つ
@@ -402,7 +488,7 @@ namespace KokoSim.Unity.Match
             SeekActor(_pitcher, ReleaseTime);
             // 購入素体は帽子を素で持っている（頭ボーン直付けの剛体メッシュ）ので生成帽子は載せない＝二重帽子を避ける
             if (!useVendor)
-                AttachGear(_pitcher, GearKind.Cap, Vector3.zero, UniformPalette.Fielding.Undershirt, layer);
+                AttachGear(_pitcher, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer);
             SeekActor(_pitcher, 0.001f);
             GroundFix(_pitcher);
             // ヘルメットはチーム色でなく暗紺: 実際の高校野球のヘルメットは黒/紺が大半で、
@@ -410,8 +496,13 @@ namespace KokoSim.Unity.Match
             // ヘルメットの紺は壁(0.12,0.20,0.16)と同輝度だと頭が背景に溶けて「頭が無い」絵になる
             // （2026-07-28監督指摘）。ポスタライズ6段で2段ぶん明るい紺にして輪郭を立てる
             AttachGear(_batter, GearKind.Helmet, mound, new Color(0.28f, 0.31f, 0.45f), layer);
-            AttachGear(_catcher, GearKind.CatcherGear, mound, UniformPalette.Fielding.Undershirt, layer);
+            AttachGear(_catcher, GearKind.CatcherGear, mound, _defenseColors.Cap, layer);
             AttachGear(_umpire, GearKind.UmpireGear, mound, new Color(0.13f, 0.13f, 0.15f), layer);
+
+            // 攻守交代で塗り替える装備を拾っておく（投手の帽子＝U2経路のみ／捕手のヘルメット殻）。
+            // 購入素体の帽子は素体メッシュの領域なので、ここではなく RegionMat 側で替わる
+            CollectTeamMats(_pitcher, _defenseColors.Cap);
+            CollectTeamMats(_catcher, _defenseColors.Cap);
 
             // グラブ（被り物と同じく初期ポーズ評価後＝視線実測が要るため）。利き手でない側に着ける。
             // 投手は 2026-07-29 まで**グラブを持っていなかった**（AttachMitt が捕手専用だった）
@@ -770,11 +861,24 @@ namespace KokoSim.Unity.Match
             return mat;
         }
 
-        /// <summary>着衣メッシュの6領域塗り分けマテリアル（_RegionColors は Properties 宣言不可＝配列セット）。</summary>
+        /// <summary>着衣メッシュの領域塗り分けマテリアル（_RegionColors は Properties 宣言不可＝配列セット）。</summary>
         private Material RegionMaterial(UniformPalette pal)
         {
             var mat = FlatMaterial(Color.white);
             mat.SetFloat("_UseRegions", 1f);
+            ApplyRegionColors(mat, pal, 1f);
+            return mat;
+        }
+
+        /// <summary>
+        /// 領域色と縦縞をマテリアルへ流し込む（生成時と、攻守交代での塗り替え <see cref="SetTeamColors"/> の共通処理）。
+        /// </summary>
+        /// <param name="objectScale">
+        /// アクターのワールドスケール。縞はオブジェクト空間で刻む（ワールドで刻むと体が縞の中を滑る）ので、
+        /// データ側の「本/m」をオブジェクト空間の本数へ換算するのに要る。
+        /// </param>
+        private static void ApplyRegionColors(Material mat, UniformPalette pal, float objectScale)
+        {
             var colors = new Color[8];
             colors[(int)DuelUniformMeshBuilder.Region.Shirt] = pal.Shirt;
             colors[(int)DuelUniformMeshBuilder.Region.Pants] = pal.Pants;
@@ -782,10 +886,17 @@ namespace KokoSim.Unity.Match
             colors[(int)DuelUniformMeshBuilder.Region.Socks] = pal.Socks;
             colors[(int)DuelUniformMeshBuilder.Region.Skin] = pal.Skin;
             colors[(int)DuelUniformMeshBuilder.Region.Shoes] = pal.Shoes;
-            colors[6] = Color.magenta;   // 未使用領域＝出たらバグ（目で分かる色）
-            colors[7] = Color.magenta;
+            colors[(int)DuelUniformMeshBuilder.Region.Cap] = pal.Cap;
+            colors[7] = Color.magenta;   // 未使用領域＝出たらバグ（目で分かる色）
             mat.SetColorArray("_RegionColors", colors);
-            return mat;
+
+            mat.SetFloat("_StripeOn", pal.StripeOn ? 1f : 0f);
+            mat.SetColor("_StripeColor", pal.StripeColor);
+            mat.SetFloat("_StripeFreq", pal.StripeFreqPerMeter * objectScale);
+            // 線の太さは比率でなく**実寸**で決める（実物のピンストライプは間隔に関係なく3mm前後の細線。
+            // 比率固定にすると間隔を広げたとき線まで太くなり、縞でなく色帯になる）
+            mat.SetFloat("_StripeDuty",
+                Mathf.Clamp(StripeLineWidthM * pal.StripeFreqPerMeter, 0.02f, 0.5f));
         }
 
         // ---- 素体 -------------------------------------------------------------
@@ -828,6 +939,7 @@ namespace KokoSim.Unity.Match
 
             // UV1の領域IDで塗り分け、領域資産が揃わない時だけ肌色一色へ落とす
             var mat = regionReady ? RegionMaterial(pal) : FlatMaterial(pal.Skin);
+            if (regionReady) ApplyRegionColors(mat, pal, scale);   // 縞の刻みはスケール確定後でないと合わない
             foreach (var r in rs) r.sharedMaterial = mat;
             foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
                 smr.updateWhenOffscreen = true;   // バウンズをバインド箱でなく実ポーズ追従に
@@ -845,6 +957,8 @@ namespace KokoSim.Unity.Match
                 BasePos = go.transform.localPosition,
                 BaseRot = go.transform.localRotation,
                 GroundY = groundY,
+                RegionMat = regionReady ? mat : null,   // 攻守交代の塗り替え（SetTeamColors）用
+                BodyScale = scale,
             };
             var lf = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
             var rf = animator.GetBoneTransform(HumanBodyBones.RightFoot);

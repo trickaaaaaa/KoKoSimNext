@@ -38,12 +38,15 @@ public sealed record PlayerMatchOutcome(
 /// ライブ観戦する自校戦の受け渡し（<see cref="TournamentRunner.BeginNextPlayerMatch"/> の戻り）。
 /// UI は Progression を打席単位で進め、終局の GameResult を <see cref="TournamentRunner.CompleteNextPlayerMatch"/>
 /// へ戻して大会を継続する。OpponentName/RoundName は観戦画面のスコアボード表示用。
+/// OpponentId は <see cref="BracketMatch"/> の WinnerId/LoserId と同じ理由で持つ＝表示名だけでは学校を
+/// 同定できず、チームカラー（設計書18 §3.5.1）のように School.Id で引く表示情報が作れないため。
 /// </summary>
 public sealed record LivePlayerMatch(
     Match.Timeline.Playback.MatchProgression Progression,
     bool ManagerIsAway,
     string OpponentName,
-    string RoundName);
+    string RoundName,
+    int OpponentId);
 
 /// <summary>
 /// 大会概要の1試合行。ManagerInvolved で自校ハイライトを表現する。
@@ -538,7 +541,7 @@ public sealed class TournamentRunner
                 var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
                     MercyRuleEnabledFor(roundsRemaining), context);
-                var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName);
+                var handle = new LivePlayerMatch(live.Progression, live.ManagerIsAway, opp.Name, roundName, opp.Id);
                 _pending = new PendingLiveMatch(
                     cur, next, i, mgr, opp, roundName, roundsRemaining, live.ManagerIsAway, handle, matchDay);
                 return handle;

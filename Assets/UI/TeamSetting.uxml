@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- チーム設定 画面（設計書18 §3.5.1 チームカラー）。
+     案B「領域別」＝領域ごとに色を送って決める。自由度優先（2026-07-29 監督選定）。
+     左＝領域行（行高32px基準のデータ濃密）、右＝2D模式図プレビュー（即時反映）。
+     主要操作は下部の1つだけ（この配色にする）。
+     上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="TeamSetting.uss" />
+    <ui:VisualElement class="root ui-root">
+
+      <ui:Instance template="TopBar" />
+
+      <ui:VisualElement class="ts-main">
+
+        <ui:VisualElement class="ts-masthead">
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="チーム設定" />
+          </ui:VisualElement>
+          <ui:VisualElement class="ts-mastline">
+            <ui:Label name="ts-own" class="ts-title f-display" text="" />
+            <ui:Button name="ts-back" class="tool-btn ts-back" text="◀ 戻る" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="ts-body">
+
+          <ui:VisualElement class="card card--rows">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="ユニフォーム配色" />
+              <ui:Label name="ts-changed" class="card__hd-sub" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body card__body--fill">
+              <ui:VisualElement class="ts-thead">
+                <ui:Label class="ts-th ts-th--name" text="領域" />
+                <ui:Label class="ts-th ts-th--val" text="色" />
+                <ui:Label class="ts-th ts-th--swatch" text="見本" />
+                <ui:Label class="ts-th ts-th--pick" text="" />
+              </ui:VisualElement>
+              <ui:VisualElement name="ts-rows" class="ts-rows" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="card card--preview">
+            <ui:VisualElement class="card__hd card__hd--dirt">
+              <ui:Label class="card__hd-title" text="見え方" />
+              <ui:Label class="card__hd-sub" text="模式図" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body card__body--fill">
+              <ui:VisualElement name="ts-preview" class="ts-preview" />
+              <ui:Label class="ts-note" text="対決ビューではピクセル化されるため、細部の見え方は試合画面で確認してください。" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <ui:VisualElement class="tp-cta-wrap">
+          <ui:Button name="ts-apply" class="tp-cta" text="この配色にする" />
+        </ui:VisualElement>
+
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

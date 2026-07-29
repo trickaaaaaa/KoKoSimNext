@@ -38,6 +38,7 @@ namespace KokoSim.Unity.Match
             Socks = 3,       // ソックス（膝下〜足首）
             Skin = 4,        // 肌（頭・手・前腕先端）
             Shoes = 5,       // シューズ（固定暗色）
+            Cap = 6,         // 帽子（クラウン＋つば。購入素体の Cap メッシュ全体・2026-07-29）
         }
 
         /// <summary>
@@ -299,7 +300,9 @@ namespace KokoSim.Unity.Match
                     outVerts[dst] = cn.Pos + cn.Normal * cn.Thick;
                     outNormals[dst] = p.FlatShading ? faceN : cn.Normal;
                     outWeights[dst] = cn.Bw;
-                    outUv1[dst] = new Vector2(u, 0f);
+                    // UV1.y = バインドポーズの左右座標（縦縞の刻み座標）。スキニング後の頂点で刻むと
+                    // 縞が空間に固定され、体が縞の中を通り抜ける絵になる（DuelVendorRegionBaker と同じ理由）
+                    outUv1[dst] = new Vector2(u, outVerts[dst].x);
                     outTris[dst] = dst;
                 }
             }

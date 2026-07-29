@@ -45,8 +45,11 @@ namespace KokoSim.EditorTools
             { "A_JM7M_AC_0001_Head_0001", Region.Skin },
             { "LeftEye_Ball_Geo", Region.Skin },
             { "RightEye_Ball_Geo", Region.Skin },
-            // 帽子はアンダーと同色運用（DuelStageRig の AttachGear(Cap, ...Undershirt) に合わせる）
-            { "A_Players_0001_Cap_0001", Region.Undershirt },
+            // 帽子は独立領域（2026-07-29。チームカラーをプレイヤーが領域ごとに決めるため、
+            // アンダーと同色に固定していた従来運用をやめた）。
+            // **クラウンとつばは1メッシュなので塗り分けられない**＝帽子は1色。分けるにはこのメッシュを
+            // 幾何で二分する前処理が要る（つば＝クラウン下端より下かつ前方の頂点帯）。
+            { "A_Players_0001_Cap_0001", Region.Cap },
         };
 
         private const string SuitMeshName = "A_Players_0001_Suit_0001";
@@ -90,9 +93,14 @@ namespace KokoSim.EditorTools
                     note = "全体=" + reg;
                 }
 
+                // UV1.x = 領域ID、UV1.y = **バインドポーズの左右座標**（縦縞の刻み座標）。
+                // 縞をスキニング後の頂点位置で刻むと、生地に印刷された縞ではなく
+                // 「空間に固定された縞の中を体が通り抜ける」絵になる（2026-07-29 実害）。
+                // 静止座標をここで焼いておけば、体が曲がっても縞は生地に付いたまま伸び縮みする。
+                var rest = copy.vertices;
                 var uv1 = new Vector2[copy.vertexCount];
                 for (int i = 0; i < uv1.Length; i++)
-                    uv1[i] = new Vector2((regionPerVertex[i] + 0.5f) / 8f, 0f);
+                    uv1[i] = new Vector2((regionPerVertex[i] + 0.5f) / 8f, rest[i].x);
                 copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
 
                 var outPath = OutDir + "/" + r.name + "_Regions.asset";

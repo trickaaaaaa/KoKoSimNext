@@ -131,6 +131,10 @@ namespace KokoSim.Unity.Home
                         ManagerIsAway = live.ManagerIsAway,
                         AwayName = live.ManagerIsAway ? "桜丘" : live.OpponentName,
                         HomeName = live.ManagerIsAway ? live.OpponentName : "桜丘",
+                        AwayColors = TeamColorsOf(live.ManagerIsAway
+                            ? KokoSim.Unity.Shell.NationService.ManagerSchoolId : live.OpponentId),
+                        HomeColors = TeamColorsOf(live.ManagerIsAway
+                            ? live.OpponentId : KokoSim.Unity.Shell.NationService.ManagerSchoolId),
                         ManagerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi,
                         OnComplete = result =>
                         {
@@ -157,6 +161,13 @@ namespace KokoSim.Unity.Home
         /// 終局後の後処理は <see cref="KokoSim.Unity.Shell.GameSession.CompletePracticeMatch"/> ＝通算スコープへの
         /// 畳み込み・実戦成長・調子・怪我だけで、<b>大会の進行状態には触らない</b>。
         /// </summary>
+        /// <summary>
+        /// 校IDからユニフォーム配色を引く（設計書18 §3.5.1）。自校だけはプレイヤーの上書きが効く。
+        /// ID不明（-1）のときは null＝対決ビューが既定色で描く。
+        /// </summary>
+        private static KokoSim.Engine.Nation.TeamColors TeamColorsOf(int schoolId)
+            => schoolId < 0 ? null : KokoSim.Unity.Shell.TeamColorProvider.For(schoolId);
+
         private void StartLivePracticeMatch(KokoSim.Unity.Shell.ScreenRouter router)
         {
             var session = KokoSim.Unity.Shell.GameSession.Current;
@@ -180,12 +191,17 @@ namespace KokoSim.Unity.Home
 
             var live = outcome.Live;
             var ownName = KokoSim.Unity.Shell.NationService.ManagerSchoolName;
+            var opponentId = session.PracticeOpponent?.Id ?? -1;
             KokoSim.Unity.Match.MatchLiveController.Pending = new KokoSim.Unity.Match.MatchLiveController.LiveMatchRequest
             {
                 Progression = live.Progression,
                 ManagerIsAway = live.ManagerIsAway,
                 AwayName = live.ManagerIsAway ? ownName : opponentName,
                 HomeName = live.ManagerIsAway ? opponentName : ownName,
+                AwayColors = TeamColorsOf(live.ManagerIsAway
+                    ? KokoSim.Unity.Shell.NationService.ManagerSchoolId : opponentId),
+                HomeColors = TeamColorsOf(live.ManagerIsAway
+                    ? opponentId : KokoSim.Unity.Shell.NationService.ManagerSchoolId),
                 ManagerTacticalSense = KokoSim.Unity.Shell.ManagerService.TacticalSenseForAi,
                 RematchOnTie = false,   // 練習試合は引き分けで終わる（再試合はない）
                 OnComplete = result =>

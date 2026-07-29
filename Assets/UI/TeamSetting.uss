@@ -1,0 +1,160 @@
+/* チーム設定 画面（設計書18 §3.5.1）。色・寸法は tokens.uss の変数のみ参照する。
+   列幅はヘッダー(.ts-th--*)とデータ(.ts-cell--*)が同じ変数を見る＝横ずれの構造的対策。 */
+
+:root {
+    --ts-col-name: 190px;    /* 領域名 */
+    --ts-col-val: 150px;     /* 色の名前 */
+    --ts-col-swatch: 76px;   /* 見本 */
+    --ts-row-h: 32px;        /* データ行高（UI原則①） */
+}
+
+.ts-main {
+    flex-grow: 1;
+    min-height: 0;
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-bottom: 8px;
+}
+
+.ts-masthead { flex-shrink: 0; margin-bottom: var(--sp-3); }
+
+.ts-mastline {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--sp-2);
+}
+
+.ts-title { font-size: var(--fs-page); color: var(--color-chalk); }
+
+.ts-back { flex-shrink: 0; }
+
+.ts-body {
+    flex-direction: row;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.card--rows {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-right: 14px;
+    flex-shrink: 1;
+}
+
+.card--preview {
+    width: 360px;
+    flex-shrink: 0;
+}
+
+/* ── 表ヘッダー ───────────────────────────────────────────── */
+
+.ts-thead {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    height: 28px;
+    border-bottom-width: 2px;
+    border-bottom-color: var(--color-line);
+    margin-bottom: var(--sp-2);
+}
+
+.ts-th {
+    font-size: var(--fs-th);
+    color: var(--color-muted);
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.ts-th--name { width: var(--ts-col-name); }
+.ts-th--val { width: var(--ts-col-val); }
+.ts-th--swatch { width: var(--ts-col-swatch); }
+.ts-th--pick { flex-grow: 1; flex-basis: 0; min-width: 0; }
+
+/* ── データ行 ─────────────────────────────────────────────── */
+
+.ts-rows { flex-shrink: 0; }
+
+.ts-row {
+    flex-direction: row;
+    align-items: center;
+    height: var(--ts-row-h);
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--color-line-soft);
+}
+
+/* 縞の2行は配色本体と役割が違うので、上に間を空けて塊を分ける（線でなく余白で区切る＝UI原則④） */
+.ts-row--group { margin-top: var(--sp-3); }
+
+.ts-cell {
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+}
+
+.ts-cell--name { width: var(--ts-col-name); }
+.ts-cell--val { width: var(--ts-col-val); color: var(--color-muted); }
+
+.ts-cell--swatch {
+    width: var(--ts-col-swatch);
+    flex-direction: row;
+    align-items: center;
+}
+
+.ts-swatch {
+    width: 44px;
+    height: 18px;
+    border-width: 1px;
+    border-color: var(--color-line-focus);
+}
+
+.ts-pick {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+}
+
+Button.ts-arrow {
+    width: 30px;
+    height: 24px;
+    margin: 0;
+    margin-right: var(--sp-1);
+    padding: 0;
+    font-size: var(--fs-label);
+    background-color: var(--color-panel-deep);
+    color: var(--color-chalk);
+    border-width: 1px;
+    border-color: var(--color-line-focus);
+    border-radius: var(--radius-chip);
+}
+
+Button.ts-arrow:hover { background-color: var(--color-panel-hover); }
+
+/* ── プレビュー ───────────────────────────────────────────── */
+
+/* 背景は昼芝トーン。カード面（白）のままだと**白ユニが背景に消える**（実測: 白＋黒の学校で
+   胴が見えず部品が浮いて見えた 2026-07-29）。高校野球のユニは白地が多数派なので、
+   図の地は必ず選手より暗い色にする。 */
+.ts-preview {
+    flex-grow: 1;
+    min-height: 240px;
+    background-color: var(--field-grass-day);
+    border-width: 1px;
+    border-color: var(--color-line-focus);
+    margin-top: var(--sp-2);
+}
+
+.ts-note {
+    flex-shrink: 0;
+    margin-top: var(--sp-2);
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    white-space: normal;
+}
