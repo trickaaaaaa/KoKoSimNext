@@ -587,13 +587,25 @@ public static class BaserunningModel
 
         if (currentOuts + battersOwnOut + extraOuts >= 3) return (runs, extraOuts, homeOuts, batterSafeOnFc); // 本塁憤死で3アウト＝以降の進塁なし。
 
-        // 進塁打で走者が1つ進む（フォースは確定進塁・rng非消費。非フォースのみ従来の確率判定）。
-        if (r2 is not null && bases.Third is null && (r2Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
+        // 進塁打で二塁走者が三塁へ。フォースは確定進塁（rng非消費）。非フォース×ゴロ×一塁走者なし×
+        // 三塁空き（＝典型的な進塁打の1場面）は 18%固定テーブルでなく「捕球点→三塁の物理レース」で解く
+        // （Issue #318, 設計書12 §3.5）。守備は幾何（P_direct）で「一塁を取る/一塁を捨てて三塁へ直接投げる/
+        // 走者は自重」を選び、送り判定1段だけが本塁・三塁レースと同じ流儀で入る。それ以外（フォース・フライ・
+        // extraOuts>0・home無し）は従来テーブル（ProductiveOutAdvanceProb）へフォールバック（rng消費順も従来どおり）。
+        if (r2 is not null && bases.Third is null)
         {
-            mv?.Add(new RunnerMove(r2, 2, 3, false));
-            bases.Third = r2;
-            bases.Second = null;
-            r2 = null;
+            if (!r2Forced && extraOuts == 0 && home is { IsFly: false } adv)
+            {
+                ResolveGrounderAdvance(bases, batter, r2, adv, coeff, rng, mv, ref extraOuts, ref batterSafeOnFc);
+                r2 = null; // 進塁・憤死・自重のいずれでも二塁走者の帰趨はここで確定（自重時は bases.Second のまま）。
+            }
+            else if (r2Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
+            {
+                mv?.Add(new RunnerMove(r2, 2, 3, false));
+                bases.Third = r2;
+                bases.Second = null;
+                r2 = null;
+            }
         }
         if (r1 is not null && bases.Second is null && (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
         {
@@ -603,5 +615,80 @@ public static class BaserunningModel
         }
 
         return (runs, extraOuts, homeOuts, batterSafeOnFc);
+    }
+
+    /// <summary>
+    /// ゴロ凡打の非フォース進塁打（二塁→三塁, Issue #318, 設計書12 §3.5）を物理レースで解く。
+    /// 守備は幾何で決まる「捕球点→三塁の直接送球でどれだけ刺せそうか（P_direct）」だけで3分岐を純関数で選ぶ:
+    /// A) 走者自重（RNG非消費）／ B) 一塁を捨てて三塁へ直接送球（打者は野選で一塁生存, P_direct でレース）／
+    /// C) 一塁を取り（打者アウト）走者は一塁経由の転送とレース（P_relay）。方向性は係数でなく幾何から創発する
+    /// （三遊間ゴロは捕球点が三塁に近い＝P_direct 低＝自重／一二塁間ゴロは遠い＝P_direct 高＝無血進塁）。
+    /// 走者所要は本塁・三塁レースと同じ <see cref="HomePlayResolver"/> 経由（新しい走者の式を書かない）。
+    /// 呼び出し前提: 非フォースの二塁走者（⇒一塁は必ず空）・三塁は空き・extraOuts==0・ゴロ。
+    /// </summary>
+    private static void ResolveGrounderAdvance(
+        BaseState bases, Player batter, Player r2, HomePlayContext home,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
+        ref int extraOuts, ref bool batterSafeOnFc)
+    {
+        var advance = HomePlayResolver.AdvanceParams(home.Field, coeff);
+        var delay = coeff.GrounderAdvanceStartDelaySeconds;
+        // P_direct: 守備が捕球点から三塁へ直接投げた場合の走者到達確率（打球方向・深さは home.Situation から創発）。
+        var pDirect = HomePlayResolver.SuccessProbability(r2, 2, home.Situation, home.Field, coeff, advance, delay);
+        // 送り閾値（アウト数を取らない＝2アウト緩和なし。理由は HomeSendDecision.SendAdvanceThreshold のコメント）。
+        var t = HomeSendDecision.SendAdvanceThreshold(home.Aggression, home.Tactics);
+
+        // A) 自重。二塁残留（bases.Second は r2 のまま）。RNG非消費（本塁・三塁レースの流儀, 不変条件#2）。
+        if (pDirect < t) return;
+
+        if (pDirect <= coeff.AdvanceDirectThrowMaxRunnerSuccess)
+        {
+            // B) 守備は一塁を捨てて三塁へ直接送球。打者は野選で一塁生存（非フォースの r2 ⇒ 一塁は必ず空＝衝突しない）。
+            batterSafeOnFc = true;
+            bases.First = batter;
+            mv?.Add(new RunnerMove(batter, 0, 1, false));
+            var margin = HomePlayResolver.Margin(r2, 2, home.Situation, home.Field, coeff, advance, delay);
+            ResolveAdvanceRace(bases, r2, pDirect, margin, delay, coeff, rng, mv, ref extraOuts);
+            return;
+        }
+
+        // C) 守備は一塁を取る（打者アウト）。走者は一塁経由の転送とレース（P_relay）。
+        if (home.ThrowArriveSeconds is not { } arriveAtFirst)
+        {
+            // 一塁送球が無い経路（転送起点が組めない）＝無血進塁（RNG非消費・フォールバック）。
+            mv?.Add(new RunnerMove(r2, 2, 3, false) { ExtraStartDelaySeconds = delay });
+            bases.Third = r2;
+            bases.Second = null;
+            return;
+        }
+        // 一塁を起点にした擬似 situation: 送球起点=一塁ベース・起点時刻=一塁送球到達時刻・肩=中継速度。
+        // 一塁手の握り替えだけ AdvanceRelayTransferSeconds に差し替える（外野値と別。既存経路はビット一致）。
+        var relay = new HomePlaySituation(
+            home.Field.FirstBase, arriveAtFirst, coeff.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
+        var pRelay = HomePlayResolver.SuccessProbability(
+            r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
+        var relayMargin = HomePlayResolver.Margin(
+            r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
+        ResolveAdvanceRace(bases, r2, pRelay, relayMargin, delay, coeff, rng, mv, ref extraOuts);
+    }
+
+    /// <summary>進塁レースの決着（Issue #318）。セーフ=三塁到達／アウト=三塁での走塁死（extraOuts加算）。
+    /// CloseCall は本塁・三塁と同じ流儀（|margin| &lt; CloseCallMarginSeconds の純計算・RNG非消費）。</summary>
+    private static void ResolveAdvanceRace(
+        BaseState bases, Player r2, double successProb, double margin, double delay,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, ref int extraOuts)
+    {
+        var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
+        if (MathUtil.Chance(successProb, rng))
+        {
+            mv?.Add(new RunnerMove(r2, 2, 3, false) { CloseCall = closeCall, ExtraStartDelaySeconds = delay });
+            bases.Third = r2;
+        }
+        else
+        {
+            extraOuts++; // 三塁での走塁死
+            mv?.Add(new RunnerMove(r2, 2, 3, Out: true) { CloseCall = closeCall, ExtraStartDelaySeconds = delay });
+        }
+        bases.Second = null;
     }
 }

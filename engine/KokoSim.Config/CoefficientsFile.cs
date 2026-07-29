@@ -574,6 +574,13 @@ public static class CoefficientsLoader
         public double ThirdTagSeconds { get; set; } = D.ThirdTagSeconds;
         public double ThirdMarginScale { get; set; } = D.ThirdMarginScale;
         public double ThirdSuccessBias { get; set; } = D.ThirdSuccessBias;
+        // ゴロ凡打の進塁打レース（二塁→三塁, Issue #318）
+        public double GrounderAdvanceStartDelaySeconds { get; set; } = D.GrounderAdvanceStartDelaySeconds;
+        public double AdvanceTagSeconds { get; set; } = D.AdvanceTagSeconds;
+        public double AdvanceMarginScale { get; set; } = D.AdvanceMarginScale;
+        public double AdvanceSuccessBias { get; set; } = D.AdvanceSuccessBias;
+        public double AdvanceRelayTransferSeconds { get; set; } = D.AdvanceRelayTransferSeconds;
+        public double AdvanceDirectThrowMaxRunnerSuccess { get; set; } = D.AdvanceDirectThrowMaxRunnerSuccess;
         // 犠飛のタッチアップ（Issue #90）
         public double TagUpMarginScale { get; set; } = D.TagUpMarginScale;
         public double TagUpSuccessBias { get; set; } = D.TagUpSuccessBias;
@@ -670,6 +677,12 @@ public static class CoefficientsLoader
             ThirdTagSeconds = ThirdTagSeconds,
             ThirdMarginScale = ThirdMarginScale,
             ThirdSuccessBias = ThirdSuccessBias,
+            GrounderAdvanceStartDelaySeconds = GrounderAdvanceStartDelaySeconds,
+            AdvanceTagSeconds = AdvanceTagSeconds,
+            AdvanceMarginScale = AdvanceMarginScale,
+            AdvanceSuccessBias = AdvanceSuccessBias,
+            AdvanceRelayTransferSeconds = AdvanceRelayTransferSeconds,
+            AdvanceDirectThrowMaxRunnerSuccess = AdvanceDirectThrowMaxRunnerSuccess,
             TagUpMarginScale = TagUpMarginScale,
             TagUpSuccessBias = TagUpSuccessBias,
             CloseCallMarginSeconds = CloseCallMarginSeconds,
@@ -1273,6 +1286,9 @@ public static class CoefficientsLoader
         public double SendThirdMinSuccess { get; set; } = D.SendThirdMinSuccess;
         public double SendThirdTwoOutRelax { get; set; } = D.SendThirdTwoOutRelax;
         public double SendThirdAggressionSpan { get; set; } = D.SendThirdAggressionSpan;
+        // ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318。アウト数を取らない＝2アウト緩和なし）
+        public double SendAdvanceMinSuccess { get; set; } = D.SendAdvanceMinSuccess;
+        public double SendAdvanceAggressionSpan { get; set; } = D.SendAdvanceAggressionSpan;
         // 守備指示判断
         public double BuntShiftProb { get; set; } = D.BuntShiftProb;
         public int InfieldInFromInning { get; set; } = D.InfieldInFromInning;
@@ -1383,6 +1399,8 @@ public static class CoefficientsLoader
             SendThirdMinSuccess = SendThirdMinSuccess,
             SendThirdTwoOutRelax = SendThirdTwoOutRelax,
             SendThirdAggressionSpan = SendThirdAggressionSpan,
+            SendAdvanceMinSuccess = SendAdvanceMinSuccess,
+            SendAdvanceAggressionSpan = SendAdvanceAggressionSpan,
             BuntShiftProb = BuntShiftProb,
             InfieldInFromInning = InfieldInFromInning,
             InfieldInMaxLead = InfieldInMaxLead,

@@ -18,10 +18,14 @@ namespace KokoSim.Engine.Match.Game;
 /// ゴロ凡打の三塁走者判定へ反映する（深さの相互参照）。</param>
 /// <param name="IsFly">この打球がフライか。ゴロ(false)は G1 の守備深さ駆動の本塁レース、フライ(true)は
 /// 捕球時刻を起点とする犠飛タッチアップの物理レース（Issue #90, 設計書12 §3.5）へ分岐する。</param>
+/// <param name="ThrowArriveSeconds">一塁送球がベースに到達した時刻[s]（内野ゴロのみ・接触基準）。ゴロ凡打の
+/// 進塁打（二塁→三塁, Issue #318）の分岐C（守備が一塁を取ってから三塁へ転送する経路 P_relay）の起点。
+/// null＝一塁送球が無い経路（転送起点が組めない＝分岐Cは無血進塁へフォールバック）。</param>
 public readonly record struct HomePlayContext(
     FieldGeometry Field,
     HomePlaySituation Situation,
     TacticsCoefficients Tactics,
     double Aggression,
     DefenseDepth InfieldDepth,
-    bool IsFly);
+    bool IsFly,
+    double? ThrowArriveSeconds = null);

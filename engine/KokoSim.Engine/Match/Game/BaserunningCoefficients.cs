@@ -189,6 +189,25 @@ public sealed record BaserunningCoefficients
     /// Heavy 実測: 三塁憤死 0.219–0.239/試合＝#316 前（0.222–0.234）とほぼ同値に戻る。</summary>
     public double ThirdSuccessBias { get; init; } = 0.88;
 
+    // === ゴロ凡打の進塁打レース（二塁→三塁, Issue #318, 設計書12 §3.5）===
+    // ゴロ凡打×二塁走者あり×一塁走者なし×三塁空きの1場面（＝典型的な進塁打）を 18%固定テーブル
+    // （ProductiveOutAdvanceProb）から「捕球点→三塁の物理レース」へ置換する。守備は幾何（P_direct）で
+    // 「一塁を取る/一塁を捨てて三塁へ直接投げる/走者は自重」を選ぶ。走者の式は本塁・三塁と共有し新設しない。
+    /// <summary>ゴロを読んでから走り出す追加スタート遅延[s]（G1のゴロ本塁レース HomeGrounderStartDelaySeconds=1.55
+    /// より短い＝進塁は生還ほど慎重に見極めない）。</summary>
+    public double GrounderAdvanceStartDelaySeconds { get; init; } = 0.90;
+    /// <summary>進塁先（三塁）でのタッチ[s]（<see cref="ThirdTagSeconds"/> と同軸）。</summary>
+    public double AdvanceTagSeconds { get; init; } = 0.10;
+    /// <summary>進塁到達 margin→確率の logistic 幅[s]（三塁レースと同軸）。</summary>
+    public double AdvanceMarginScale { get; init; } = 0.45;
+    /// <summary>進塁到達確率バイアス[s]（校正項）。帯校正はこの1本だけで行う（Issue #318）。</summary>
+    public double AdvanceSuccessBias { get; init; } = 0.00;
+    /// <summary>一塁手の転送握り替え[s]（一塁を取ってから三塁へ転送する経路 P_relay 用。
+    /// <see cref="RelayTransferSeconds"/> と同軸）。</summary>
+    public double AdvanceRelayTransferSeconds { get; init; } = 0.55;
+    /// <summary>走者の三塁到達見込みがこれ以下なら守備は一塁を捨てて三塁へ直接送球する（分岐B/Cの境界）。</summary>
+    public double AdvanceDirectThrowMaxRunnerSuccess { get; init; } = 0.45;
+
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは走者の時計の起点が「捕球の瞬間」である点だけが本塁クロスプレーと異なる。走者は捕球時刻に
     // スタート（二次リードなし＝全塁間 27.4m を走る）、守備も同じ捕球時刻から送球する＝共通起点が捕球時刻。
