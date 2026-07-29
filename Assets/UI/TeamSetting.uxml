@@ -47,11 +47,11 @@
           <ui:VisualElement class="card card--preview">
             <ui:VisualElement class="card__hd card__hd--dirt">
               <ui:Label class="card__hd-title" text="見え方" />
-              <ui:Label class="card__hd-sub" text="模式図" />
+              <ui:Label name="ts-preview-kind" class="card__hd-sub" text="" />
             </ui:VisualElement>
             <ui:VisualElement class="card__body card__body--fill">
               <ui:VisualElement name="ts-preview" class="ts-preview" />
-              <ui:Label class="ts-note" text="対決ビューではピクセル化されるため、細部の見え方は試合画面で確認してください。" />
+              <ui:Label name="ts-note" class="ts-note" text="" />
             </ui:VisualElement>
           </ui:VisualElement>
 

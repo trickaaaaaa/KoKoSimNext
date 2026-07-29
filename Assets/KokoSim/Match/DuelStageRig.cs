@@ -786,6 +786,23 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>水平視野角を基準構図（垂直2.9°@16:9）で固定し、現RT縦横比から垂直FOVを逆算する。</summary>
+        /// <summary>
+        /// 【プレビュー用】カメラを任意の位置・注視点へ置く（ステージ原点ローカル・m）。
+        ///
+        /// <see cref="ApplyCalibration"/> のカメラは「マウンド後方から本塁を見る」構図に固定されていて
+        /// <b>横へ回れない</b>（YawDeg は x をずらすだけ）。打者を正面から見るような別構図が要る
+        /// チーム設定画面のために、構図だけを直接指定できる入口を分けてある。
+        /// 対決ビュー本体はこれを呼ばない＝§7-1 の構図は不変。
+        /// </summary>
+        public void FramePreview(Vector3 camLocalPos, Vector3 lookLocalPos, float fovDeg)
+        {
+            if (_camera == null) return;
+            _camera.transform.localPosition = camLocalPos;
+            _camera.transform.LookAt(_root.transform.position + lookLocalPos);
+            _fovBaseDeg = fovDeg;
+            ApplyFov();
+        }
+
         private void ApplyFov()
         {
             float halfH = Mathf.Tan(_fovBaseDeg * 0.5f * Mathf.Deg2Rad) * (16f / 9f);

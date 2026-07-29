@@ -38,9 +38,20 @@ namespace KokoSim.Unity.Squad
         /// <summary>縞の本数[本/m]。実物のピンストライプは間隔2.5cm＝40本/m（design-18 §3.5.3）。</summary>
         private const double StripeFreq = 40.0;
 
+        // ---- プレビュー（実物優先・模式図フォールバック） ----
+        // 配色は最終的に対決ビューの絵で決まるので、見せるのは実物の方が正しい（2026-07-29 監督指摘）。
+        // 3Dアセットが無い環境（購入素体・クリップ未導入）では組めないので、そのときだけ模式図へ落ちる。
+
+        /// <summary>打者を正面から見る構図。打者は (BatterX,0,BatterZ) に yaw90＝+X を向いて立つ。</summary>
+        private static readonly Vector3 PreviewCamPos = new(1.9f, 1.20f, 0.10f);
+        private static readonly Vector3 PreviewLookAt = new(-0.9f, 1.05f, 0f);
+        private const float PreviewFovDeg = 48f;   // 構えたバットの先まで入る画角（実測で決めた）
+
         private VisualElement _root;
         private VisualElement _rowHost;
-        private UniformPreviewElement _preview;
+        private UniformPreviewElement _preview;      // 模式図（フォールバック）
+        private Match.DuelStageRig _rig;             // 実物（優先）
+        private Match.DuelViewElement _rigView;
         private Label _changed;
 
         private TeamColors _draft;
@@ -52,14 +63,7 @@ namespace KokoSim.Unity.Squad
             _rowHost = _root.Q<VisualElement>("ts-rows");
             _changed = _root.Q<Label>("ts-changed");
 
-            var previewHost = _root.Q<VisualElement>("ts-preview");
-            if (previewHost != null)
-            {
-                _preview = new UniformPreviewElement();
-                _preview.style.flexGrow = 1f;
-                previewHost.Clear();
-                previewHost.Add(_preview);
-            }
+            BuildPreview(_root.Q<VisualElement>("ts-preview"));
 
             var own = _root.Q<Label>("ts-own");
             if (own != null) own.text = NationService.ManagerSchoolName;
@@ -82,6 +86,62 @@ namespace KokoSim.Unity.Squad
             Render();
         }
 
+        // ---- プレビュー ---------------------------------------------------------
+
+        /// <summary>
+        /// 実物（対決ビューと同じ <see cref="Match.DuelStageRig"/>）を組み、打者を正面から見る構図にする。
+        /// 組めなければ模式図へ落ちる。<b>rig は画面を離れるときに必ず捨てる</b>＝
+        /// HideAndDontSave の残骸がPlay終了・ドメインリロードを跨いで生き残るため。
+        /// </summary>
+        private void BuildPreview(VisualElement host)
+        {
+            if (host == null) return;
+            host.Clear();
+
+            _rig = new Match.DuelStageRig();
+            if (_rig.Available)
+            {
+                _rig.FramePreview(PreviewCamPos, PreviewLookAt, PreviewFovDeg);
+                _rigView = new Match.DuelViewElement();
+                _rigView.BindRig(_rig);
+                host.Add(_rigView);
+                SetPreviewLabels("対決ビュー",
+                    "試合と同じ描画です。ここで見えたとおりに試合でも映ります。");
+                return;
+            }
+
+            _rig.Dispose();
+            _rig = null;
+            Debug.Log("[チーム設定] 対決ビューの素体が使えないので模式図でプレビューする");
+            _preview = new UniformPreviewElement();
+            _preview.style.flexGrow = 1f;
+            host.Add(_preview);
+            SetPreviewLabels("模式図",
+                "3Dの素体が読み込めないため模式図で代用しています。試合では見え方が異なります。");
+        }
+
+        private void SetPreviewLabels(string kind, string note)
+        {
+            var k = _root?.Q<Label>("ts-preview-kind");
+            if (k != null) k.text = kind;
+            var n = _root?.Q<Label>("ts-note");
+            if (n != null) n.text = note;
+        }
+
+        private void OnDisable()
+        {
+            _rig?.Dispose();
+            _rig = null;
+            _rigView = null;
+            _preview = null;
+        }
+
+        /// <summary>実物プレビューはポーズを進める（止めるとTポーズ直後の硬い絵で固まる）。</summary>
+        private void Update()
+        {
+            if (_rig != null && _rig.Available) _rig.Tick(Time.deltaTime);
+        }
+
         // ---- 描画 --------------------------------------------------------------
 
         private void Render()
@@ -90,6 +150,8 @@ namespace KokoSim.Unity.Squad
             if (_rowHost == null || _draft == null) return;
             _rowHost.Clear();
             foreach (var r in Rows) _rowHost.Add(BuildRow(r.Slot, r.Label, r.GroupTop));
+            // 実物は守備側・攻撃側の両方へ同じ配色を流す（どの選手が映っても自校の色になる）
+            _rig?.SetTeamColors(_draft, _draft);
             _preview?.SetColors(_draft);
             if (_changed != null)
                 _changed.text = Equals(_draft, _applied) ? "" : "未確定の変更あり";
