@@ -382,7 +382,8 @@ public sealed class AtBatSession
                 {
                     timeline = Timeline.TimelineBuilder.BuildBattedBall(
                         play, ctx.Fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
-                        Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds);
+                        Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
+                        ctx.Fielding.CatchCloseCallMarginSeconds);
                 }
                 _result = new AtBatResult(pa, _pitchCount)
                 {

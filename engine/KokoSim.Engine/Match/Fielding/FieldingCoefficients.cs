@@ -77,6 +77,13 @@ public sealed record FieldingCoefficients
     /// <summary>一塁でのアウト判定の安全マージン[s]（守備側がこの秒数だけ余裕を持てばアウト）。</summary>
     public double ForceOutMarginSeconds { get; init; } = 0.0;
 
+    /// <summary>
+    /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。
+    /// |CatchMarginSeconds| がこれ未満の落球だけ、着地の瞬間に「フェア」を表示する。
+    /// <see cref="Game.BaserunningCoefficients.CloseCallMarginSeconds"/> と同型の表示専用しきい値。
+    /// </summary>
+    public double CatchCloseCallMarginSeconds { get; init; } = 0.15;
+
     // 失策モデル（issue #123, 2026-07-23）。既定値は data/coefficients.yaml と同値＝実ゲーム（Unity は
     // new GameContext() の既定を使う）とsim/テストで同じ守備力連動になるよう揃える。変更時は
     // determinism-baseline.txt の再生成が必要（DeterminismBaselineDump）。

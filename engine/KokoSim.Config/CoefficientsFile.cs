@@ -404,6 +404,7 @@ public static class CoefficientsLoader
         public double LeftBatterFirstStepBonusSeconds { get; set; } = D.LeftBatterFirstStepBonusSeconds;
         public double InfieldDepthM { get; set; } = D.InfieldDepthM;
         public double ForceOutMarginSeconds { get; set; } = D.ForceOutMarginSeconds;
+        public double CatchCloseCallMarginSeconds { get; set; } = D.CatchCloseCallMarginSeconds;
         public double ErrorBaseProb { get; set; } = D.ErrorBaseProb;
         public double ErrorCatchingSlope { get; set; } = D.ErrorCatchingSlope;
         public double ErrorCatchingSlopeStrong { get; set; } = D.ErrorCatchingSlopeStrong;
@@ -455,6 +456,7 @@ public static class CoefficientsLoader
             LeftBatterFirstStepBonusSeconds = LeftBatterFirstStepBonusSeconds,
             InfieldDepthM = InfieldDepthM,
             ForceOutMarginSeconds = ForceOutMarginSeconds,
+            CatchCloseCallMarginSeconds = CatchCloseCallMarginSeconds,
             ErrorBaseProb = ErrorBaseProb,
             ErrorCatchingSlope = ErrorCatchingSlope,
             ErrorCatchingSlopeStrong = ErrorCatchingSlopeStrong,

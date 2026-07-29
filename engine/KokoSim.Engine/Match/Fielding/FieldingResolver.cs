@@ -65,6 +65,12 @@ public sealed record FieldingPlay
     /// </summary>
     public double? JudgementMarginSeconds { get; init; }
 
+    /// <summary>
+    /// 空中捕球の余裕[s]（判定オーバーレイ「フェア」, Issue #328②）。CatchTimeBudget−到達所要
+    /// （正=捕球に余裕あり、負=間に合わず落球）。フライ/ライナーのみ非null（ゴロ・本塁打・ファウルはnull）。
+    /// </summary>
+    public double? CatchMarginSeconds { get; init; }
+
     // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
 
     /// <summary>
@@ -180,7 +186,9 @@ public static class FieldingResolver
         if (isFly)
         {
             var (catcher, reach) = NearestReach(fielders, landing);
-            if (reach <= CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff))
+            var catchBudget = CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff);
+            var catchMargin = catchBudget - reach; // 表示専用（Issue #328②）: 正=余裕あり、負=間に合わず
+            if (reach <= catchBudget)
             {
                 var result = MaybeError(fielders, landing, coeff, 0.0, rng, BattedBallResult.Out);
                 return Base(result) with
@@ -191,10 +199,12 @@ public static class FieldingResolver
                     FielderThrowSpeedMps = catcher.Attributes.ThrowSpeedMps,
                     FielderFielding = catcher.Attributes.Fielding,
                     FielderThrowAccuracy = catcher.Attributes.ThrowAccuracy,
+                    CatchMarginSeconds = catchMargin,
                 };
             }
             // 捕れないフライ → 安打。着地後の転がりと幾何・走力で塁打数を決める。
-            return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime) with { IsFly = true };
+            return Hit(Base, ground, landing, fenceDist, field, batter, fielders, coeff, runnerTime)
+                with { IsFly = true, CatchMarginSeconds = catchMargin };
         }
 
         // ゴロ/低いライナー。着地後のバウンド積分（Issue #63 (a)）をここで解く。

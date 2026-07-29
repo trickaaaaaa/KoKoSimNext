@@ -138,7 +138,7 @@ public readonly record struct PlaybackCaption(double T, string Text);
 /// 判定イベント1件（再生用, Issue #260）。<see cref="KokoSim.Engine.Match.Timeline.JudgementEvent"/>
 /// の再生側ミラー。走者レッグとは独立した確定時刻を持つ。
 /// </summary>
-public readonly record struct PlaybackJudgement(double T, bool IsOut, bool CloseCall, string Label);
+public readonly record struct PlaybackJudgement(double T, JudgementKind Kind, bool CloseCall, string Label);
 
 /// <summary>1プレーの再生データ（mock: PLAYS[i]）。</summary>
 public sealed record PlaybackPlay
@@ -230,22 +230,22 @@ public static class PlaybackEvaluator
     }
 
     /// <summary>
-    /// 時刻 t で表示すべき判定（Issue #59 の判定オーバーレイ）。確定時刻 T が
-    /// <c>[t - holdSeconds, t]</c> に入る判定のうち直近（最大 T）を返す。判定が無ければ null。
+    /// 時刻 t で表示すべき判定（Issue #59 の判定オーバーレイ、Issue #328②で「フェア」を追加）。
+    /// 確定時刻 T が <c>[t - holdSeconds, t]</c> に入る判定のうち直近（最大 T）を返す。判定が無ければ null。
     /// 判定イベント列（<see cref="PlaybackPlay.Judgements"/>）が単一ソース（Issue #260。
     /// 走者レッグの終端に紐づけない＝フライの捕球アウトは捕球の瞬間に出せる）。
     /// アウトは常時、セーフは <see cref="PlaybackJudgement.CloseCall"/>（際どい判定）だけを対象にする
     /// ＝出し分けは既にデータ側でゲート済み。描画専用の純関数で、判定/帯には一切関与しない。
     /// </summary>
-    public static (bool IsOut, double T1)? JudgementAt(PlaybackPlay play, double t, double holdSeconds)
+    public static (JudgementKind Kind, double T1)? JudgementAt(PlaybackPlay play, double t, double holdSeconds)
     {
         if (play is null) return null;
-        (bool IsOut, double T1)? best = null;
+        (JudgementKind Kind, double T1)? best = null;
         foreach (var j in play.Judgements)
         {
             if (j.T > t || j.T <= t - holdSeconds) continue;   // 表示窓 [T, T+hold) の外
             if (best.HasValue && j.T < best.Value.T1) continue; // 併殺等は直近の判定だけ出す
-            best = (j.IsOut, j.T);
+            best = (j.Kind, j.T);
         }
         return best;
     }

@@ -340,10 +340,16 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
-            var isOut = found.Value.IsOut;
-            _judgementLabel.text = isOut ? "アウト" : "セーフ";
-            _judgementLabel.EnableInClassList("pitch-call__judge--out", isOut);
-            _judgementLabel.EnableInClassList("pitch-call__judge--safe", !isOut);
+            var kind = found.Value.Kind;
+            _judgementLabel.text = kind switch
+            {
+                JudgementKind.Out => "アウト",
+                JudgementKind.Fair => "フェア",
+                _ => "セーフ",
+            };
+            _judgementLabel.EnableInClassList("pitch-call__judge--out", kind == JudgementKind.Out);
+            _judgementLabel.EnableInClassList("pitch-call__judge--safe", kind == JudgementKind.Safe);
+            _judgementLabel.EnableInClassList("pitch-call__judge--fair", kind == JudgementKind.Fair);
             _judgementHost.style.display = DisplayStyle.Flex;
             _judgementHost.BringToFront(); // 走者ラベルが後から追加されても常に最前面に出す。
         }

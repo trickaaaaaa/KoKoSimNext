@@ -52,6 +52,42 @@ public sealed class JudgementOverlayTests
         Assert.True(checkedSingle, "内野安打が走査範囲に無い（テスト条件を見直す必要）");
     }
 
+    // --- FieldingResolver: 飛球の捕球余裕(CatchMarginSeconds)は符号がOut/Errorと安打の帰結に一致する ---
+
+    [Fact]
+    public void FieldingResolver_Fly_CatchMargin_PresentIffFly_AndSignMatchesOutcome()
+    {
+        // 深さの異なるフライを幅広く走査し、捕球余裕の有無・符号が既存の判定（IsFly・Result）と
+        // 矛盾しないことを検証する（Issue #328②。Resolveのif文自体は不変）。
+        var coeff = new FieldingCoefficients { ErrorBaseProb = 0 };
+        var checkedCaught = false;
+        var checkedDropped = false;
+        for (var velo = 15.0; velo <= 45.0; velo += 0.5)
+        {
+            var ball = new BattedBall { ExitVelocityMps = velo, LaunchAngleDeg = 30, BearingDeg = 0 };
+            var play = FieldingResolver.ResolveDetailed(
+                ball, Field, Aero, BatterAttributes.LeagueAverage, Field.StandardAlignment(), coeff, new Xoshiro256Random(1));
+
+            if (!play.IsFly)
+            {
+                Assert.Null(play.CatchMarginSeconds); // ゴロ・本塁打・ファウルはmargin無し
+                continue;
+            }
+
+            Assert.NotNull(play.CatchMarginSeconds); // フライ/ライナーは必ずmarginを持つ
+            if (play.Result is BattedBallResult.Out or BattedBallResult.Error)
+            {
+                Assert.True(play.CatchMarginSeconds >= 0); checkedCaught = true;
+            }
+            else
+            {
+                Assert.True(play.CatchMarginSeconds < 0); checkedDropped = true;
+            }
+        }
+        Assert.True(checkedCaught, "捕球アウトが走査範囲に無い（テスト条件を見直す必要）");
+        Assert.True(checkedDropped, "落球（安打）が走査範囲に無い（テスト条件を見直す必要）");
+    }
+
     // --- TimelineBuilder.BuildBattedBall: CloseCall はしきい値駆動で、アウト表示自体には影響しない ---
 
     // margin は timing から導けるが、ここではしきい値ロジックだけを切り出して検査したいので明示で渡す。
@@ -132,23 +168,25 @@ public sealed class JudgementOverlayTests
             TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15);
 
         var j = Assert.Single(tl.Judgements);
-        Assert.True(j.IsOut);
+        Assert.Equal(JudgementKind.Out, j.Kind);
         Assert.Equal("打", j.Label);
         Assert.Equal(ContactAtSeconds + play.FieldedAtSeconds!.Value, j.T, 6);
         Assert.NotEqual(ContactAtSeconds + play.BatterToFirstSeconds, j.T, 6);
     }
 
     [Fact]
-    public void BuildBattedBall_GroundOut_JudgementFiresOnce_AtBatterArrival()
+    public void BuildBattedBall_GroundOut_JudgementFiresOnce_AtThrowArrival()
     {
+        // Issue #328①: 送球が塁に届いた瞬間にアウトが確定する（走者到達を待たない）。
         var play = InfieldOut(judgementMargin: -0.9);
         var tl = TimelineBuilder.BuildBattedBall(
             play, Field.StandardAlignment(), Field, null, runnersOn: false,
             TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15);
 
         var j = Assert.Single(tl.Judgements);
-        Assert.True(j.IsOut);
-        Assert.Equal(BatterLeg(tl).T1, j.T, 6); // 打者走者レッグの終端＝一塁到達で決着
+        Assert.Equal(JudgementKind.Out, j.Kind);
+        Assert.Equal(ContactAtSeconds + play.ThrowArriveSeconds!.Value, j.T, 6);
+        Assert.True(j.T < BatterLeg(tl).T1, "判定は走者到達より前のはず（走者は判定確定後も一塁まで走り切る）");
     }
 
     [Fact]
@@ -160,9 +198,56 @@ public sealed class JudgementOverlayTests
             TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15);
 
         var j = Assert.Single(tl.Judgements);
-        Assert.False(j.IsOut);
+        Assert.Equal(JudgementKind.Safe, j.Kind);
         Assert.True(j.CloseCall);
         Assert.Equal(BatterLeg(tl).T1, j.T, 6);
+    }
+
+    // --- 判定イベント「フェア」（Issue #328②）: 際どい落球だけ着地の瞬間に確定する ---
+
+    private static FieldingPlay DroppedFly(double catchMargin) => FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.CenterField, landingX: 0, landingZ: 90, fieldedAtSeconds: 3.6,
+            result: BattedBallResult.Single, hangTimeSeconds: 3.5, apexHeightM: 25.0, isFly: true)
+        with { CatchMarginSeconds = catchMargin };
+
+    [Fact]
+    public void BuildBattedBall_CloseDroppedFly_JudgementFiresAsFair_AtLandAt()
+    {
+        var play = DroppedFly(catchMargin: -0.05); // 僅かに追いつけず落球＝際どい
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15, closeFlyMarginSeconds: 0.15);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.Equal(JudgementKind.Fair, j.Kind);
+        Assert.Equal("打", j.Label);
+        Assert.Equal(ContactAtSeconds + play.HangTimeSeconds, j.T, 6); // 着地の瞬間(landAt)
+    }
+
+    [Fact]
+    public void BuildBattedBall_ClearlyMissedFly_NoJudgement_EvenWhenDropped()
+    {
+        var play = DroppedFly(catchMargin: -2.0); // 完全に抜けた当たり＝フェアは出さない
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15, closeFlyMarginSeconds: 0.15);
+
+        Assert.Empty(tl.Judgements);
+    }
+
+    [Fact]
+    public void BuildBattedBall_RoutineCatch_StaysOut_NeverFair()
+    {
+        // 捕球アウトにも margin は付くが、判定は常に「アウト」のまま（「フェア」は落球のみ）。
+        var play = FieldingPlayFixtures.CaughtFly(
+                FieldPosition.CenterField, landingZ: 90, hangTimeSeconds: 3.0, apexHeightM: 20)
+            with { CatchMarginSeconds = 0.05 };
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15, closeFlyMarginSeconds: 0.15);
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.Equal(JudgementKind.Out, j.Kind);
     }
 
     /// <summary>投球開始→接触までのリード[s]（TimelineBuilder の ContactAt と同値。private const のため複製）。</summary>

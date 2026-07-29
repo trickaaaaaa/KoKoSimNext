@@ -52,7 +52,7 @@ public static class PlayTimelineAdapter
         }
 
         var caps = t.Captions.Select(c => new PlaybackCaption(c.T, c.Text)).ToArray();
-        var judgements = t.Judgements.Select(j => new PlaybackJudgement(j.T, j.IsOut, j.CloseCall, j.Label)).ToArray();
+        var judgements = t.Judgements.Select(j => new PlaybackJudgement(j.T, j.Kind, j.CloseCall, j.Label)).ToArray();
 
         return new PlaybackPlay
         {
