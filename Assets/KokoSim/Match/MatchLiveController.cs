@@ -37,6 +37,13 @@ namespace KokoSim.Unity.Match
             public bool ManagerIsAway;
             public string AwayName;
             public string HomeName;
+            /// <summary>
+            /// 両校のユニフォーム配色（設計書18 §3.5.1）。対決ビューの塗り分けに使う表示専用データで、
+            /// 未設定なら既定（白＋紺）で描く。<b>両校とも自校の色を着る</b>ので、同系色同士の対戦では
+            /// 見分けが付きにくい（実物準拠・2026-07-29 監督決定）。
+            /// </summary>
+            public KokoSim.Engine.Nation.TeamColors AwayColors;
+            public KokoSim.Engine.Nation.TeamColors HomeColors;
             public int ManagerTacticalSense = 70;
             /// <summary>
             /// 勝者が要る文脈か（大会戦＝true）。結果画面で延長上限の引き分けを「引き分け（再試合）」と
@@ -76,6 +83,10 @@ namespace KokoSim.Unity.Match
 
         // ライブ観戦（大会フロー）モードの状態。デモ生成モードでは false / null。
         private bool _managerIsAway;
+        // 両校の配色（設計書18 §3.5.1）。攻守交代のたびに守備側/攻撃側へ割り当て直す（DuelStageRig.SetTeamColors）。
+        private KokoSim.Engine.Nation.TeamColors _awayColors;
+        private KokoSim.Engine.Nation.TeamColors _homeColors;
+        private bool? _duelColorsOffenseIsTop;   // 対決ビューへ最後に流した攻守（null=未適用）
         private System.Action<GameResult> _onComplete;
         private GameResult _finalResult;
         private Button _backHome;
@@ -385,6 +396,8 @@ namespace KokoSim.Unity.Match
                 _homeTeam = null;   // 実試合は進行体が保持（代打候補名の外部参照は使わない）
                 _awayDisp = req.AwayName ?? awayName;
                 _homeDisp = req.HomeName ?? homeName;
+                _awayColors = req.AwayColors;
+                _homeColors = req.HomeColors;
                 // 掲示板の校名はエンジンの観測データ（LiveLineScore.Name）から出るのでここでは埋めない。
                 SetColumnTitles();
                 return;
@@ -1306,9 +1319,25 @@ namespace KokoSim.Unity.Match
 
         // 試合開始の既定ビュー（issue #312）: 対決ビューから始める。DuelStageRig が使えない環境
         // （3Dアセット未導入・生成失敗）では従来どおり俯瞰にフォールバックする。
+        /// <summary>
+        /// 対決ビューを生成する唯一の入口。<b>配色は生成前に渡す</b>＝SpawnActor がマテリアルを焼くので、
+        /// 後から SetTeamColors するだけだと最初の数フレームが既定色（白＋紺）で映る。
+        /// </summary>
+        private DuelStageRig NewDuelRig()
+        {
+            var offenseIsTop = _prog?.Snapshot().OffenseIsTop ?? true;
+            DuelStageRig.InitialTeamColors = _awayColors != null && _homeColors != null
+                ? (offenseIsTop ? _homeColors : _awayColors, offenseIsTop ? _awayColors : _homeColors)
+                : ((KokoSim.Engine.Nation.TeamColors, KokoSim.Engine.Nation.TeamColors)?)null;
+            _duelColorsOffenseIsTop = _awayColors != null && _homeColors != null ? offenseIsTop : (bool?)null;
+            var rig = new DuelStageRig();
+            DuelStageRig.InitialTeamColors = null;   // 静的な受け渡し窓は使ったら必ず閉じる
+            return rig;
+        }
+
         private void InitDuelViewDefault()
         {
-            _duelRig ??= new DuelStageRig();
+            _duelRig ??= NewDuelRig();
             if (!_duelRig.Available) { _duelOn = false; return; }
             EnsureDuelImg();
             _duelOn = true;
@@ -1331,7 +1360,7 @@ namespace KokoSim.Unity.Match
         {
             if (!_duelOn)
             {
-                _duelRig ??= new DuelStageRig();
+                _duelRig ??= NewDuelRig();
                 if (!_duelRig.Available) return;
                 EnsureDuelImg();
             }
@@ -1346,7 +1375,7 @@ namespace KokoSim.Unity.Match
             if (_duelManualOff || _duelOn == on) return;
             if (on)
             {
-                _duelRig ??= new DuelStageRig();
+                _duelRig ??= NewDuelRig();
                 if (!_duelRig.Available) return;
                 EnsureDuelImg();
             }
@@ -1362,6 +1391,21 @@ namespace KokoSim.Unity.Match
 
         /// <summary>撮影ハーネス用: 対決ステージ（録画ハーネスがRTと診断値を直接読む）。</summary>
         internal DuelStageRig DuelRigForCapture => _duelRig;
+
+        /// <summary>
+        /// 撮影ハーネス用: 対決ステージを作り直す（着衣メッシュの差し替え比較=痩せ3段シート用。
+        /// DuelStageRig.UniformMeshOverrideForCapture を変えてから呼ぶ）。表示中なら新RTを結線し直す。
+        /// </summary>
+        internal void RebuildDuelRigForCapture()
+        {
+            _duelRig?.Dispose();
+            _duelRig = NewDuelRig();
+            if (_duelOn && _duelRig.Available && _duelImg != null)
+            {
+                _duelImg.Rig = _duelRig;
+                _duelImg.Bind(_duelRig.Target);
+            }
+        }
 
         /// <summary>撮影ハーネス用: 現在ロード中の打席の再生を頭からやり直す（対決ビューの狙い撃ち撮影用）。</summary>
         internal void RestartCurrentPaForCapture()
@@ -1441,6 +1485,23 @@ namespace KokoSim.Unity.Match
             BuildColumn(_leftLineup, _leftPitcher, own, mirror: false, highlightOrder: offenseIsOwn ? order : 0);
             BuildColumn(_rightLineup, _rightPitcher, opp, mirror: false, highlightOrder: offenseIsOwn ? 0 : order);
             RefreshHud(snap);
+            ApplyDuelTeamColors(snap.OffenseIsTop);
+        }
+
+        /// <summary>
+        /// 対決ビューの配色を攻守に合わせる。投手・捕手＝守備側の学校、打者＝攻撃側の学校。
+        /// 役割（誰が投げて誰が打つか）は固定で、攻守交代で入れ替わるのは<b>どちらの学校の色か</b>。
+        /// 塗り替えはマテリアルだけ（素体・クリップは作り直さない）ので進行中に呼んで良い。
+        /// </summary>
+        private void ApplyDuelTeamColors(bool offenseIsTop)
+        {
+            if (_duelRig == null || !_duelRig.Available) return;
+            if (_awayColors == null || _homeColors == null) return;
+            if (_duelColorsOffenseIsTop == offenseIsTop) return;   // 半回が変わった時だけ塗る
+            _duelColorsOffenseIsTop = offenseIsTop;
+            var offense = offenseIsTop ? _awayColors : _homeColors;
+            var defense = offenseIsTop ? _homeColors : _awayColors;
+            _duelRig.SetTeamColors(defense, offense);
         }
 
         private void BuildColumn(VisualElement lineupHost, VisualElement pitcherHost,

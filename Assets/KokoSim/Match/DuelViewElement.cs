@@ -30,6 +30,17 @@ namespace KokoSim.Unity.Match
             Snap();
         }
 
+        /// <summary>
+        /// リグを結線して表示する（適応リサイズ込み）。試合以外の用途（チーム設定のプレビュー等）が
+        /// <see cref="Rig"/> と <see cref="Bind"/> を別々に触らずに済むようにまとめてある。
+        /// </summary>
+        public void BindRig(DuelStageRig rig)
+        {
+            Rig = rig;
+            style.flexGrow = 1f;
+            Bind(rig != null ? rig.Target : null);
+        }
+
         private void OnParentGeometry(GeometryChangedEvent _) => Snap();
 
         internal void Snap()
