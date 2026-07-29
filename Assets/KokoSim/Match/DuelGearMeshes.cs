@@ -5,8 +5,9 @@ namespace KokoSim.Unity.Match
 {
     /// <summary>
     /// 装備メッシュ（Assets/DuelSpike/Generated/AIGear）のロードと「装着正位」への較正。
-    /// 出自はMeshy生成＋Blenderデシメート（tools/aigear-decimate.py）と bpy 手続きモデリング
-    /// （tools/aigear-plates.py）。素体・クリップと同じくロードはエディタ限定（AssetDatabase）＝
+    /// 出自はすべてMeshy生成＋Blenderデシメート（tools/aigear-decimate.py）。
+    /// bpy手続きモデリング（tools/aigear-plates.py）の板もの2点は、Meshy生成物へ差し替えて
+    /// 2026-07-29 に廃止した。素体・クリップと同じくロードはエディタ限定（AssetDatabase）＝
     /// ビルド同梱方法は本実装時に決める。ロード不可時は null を返し、呼び元はプリミティブ装備へ
     /// フォールバックする（DuelStageRig.AttachGear）。
     ///
@@ -24,9 +25,6 @@ namespace KokoSim.Unity.Match
         /// <summary>帽子。原点=クラウン中心、つば+Z前方・俯角25°、クラウン幅0.24m。</summary>
         public static Mesh Cap() => Get("AIGear_Cap1_lo", CanonicalizeCap);
 
-        /// <summary>打者ヘルメット。原点=殻中心、幅0.26m。</summary>
-        public static Mesh Helmet() => Get("AIGear_Helmet0_lo", m => CanonicalizeShell(m, 0.26f));
-
         /// <summary>捕手マスク（ケージ）。原点=中心、幅0.25m、正面+Z・上+Y。</summary>
         public static Mesh CatcherMask() => Get("AIGear_CatcherMask1_lo", m => CanonicalizeMeshy(m, 0.25f));
 
@@ -39,9 +37,6 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static Mesh CatcherHelmet() => Get("AIGear_CatcherHelmet0_lo",
             m => CanonicalizeMeshy(m, new Vector3(0.205f, 0.195f, 0.265f)));
-
-        /// <summary>球審マスク。原点=殻中心、幅0.26m。</summary>
-        public static Mesh UmpMask() => Get("AIGear_UmpMask0_lo", m => CanonicalizeShell(m, 0.26f));
 
         /// <summary>
         /// 胸プロテクター。原点=中心、正面+Z・上+Y。非一様フィット（幅0.40 / 高0.44 / 奥行0.15）。
@@ -220,18 +215,11 @@ namespace KokoSim.Unity.Match
         private static void RotateToWearing(Mesh mesh) =>
             Apply(mesh, Matrix4x4.Rotate(Quaternion.Euler(-90f, 0f, 0f)));
 
-        private static void CanonicalizeShell(Mesh mesh, float targetWidth)
-        {
-            // 被り殻（ヘルメット・マスク）: 中心を原点へ、横幅を頭寸へ。向きは資産ごとの個体差が
-            // 大きいため、装着側の実測ヨー（視線方向）に任せてここでは触らない
-            var b = mesh.bounds;
-            float s = targetWidth / Mathf.Max(0.01f, b.size.x);
-            Apply(mesh, Matrix4x4.Scale(Vector3.one * s) * Matrix4x4.Translate(-b.center));
-        }
-
-        // 胸プロテクター・レガースの bpy 製メッシュ用にあった CanonicalizeChest / CanonicalizeLegGuard
-        // （軸の長短と重心から上下・前後を推測するヒューリスティック）は、両方を Meshy 生成物へ
-        // 差し替えた 2026-07-29 に削除した。生成物の姿勢は既知なので推測は要らない。
+        // 削除済みの較正（いずれも 2026-07-29。生成物の姿勢は既知なので推測コードは要らない）:
+        //   CanonicalizeChest / CanonicalizeLegGuard — bpy製の板もの用。軸の長短と重心から上下・前後を
+        //     推測するヒューリスティックだった。両方を Meshy 生成物へ差し替えたので不要
+        //   CanonicalizeShell — 打者ヘルメット・球審マスクの生成殻用。どちらも生成物を採用せず
+        //     プリミティブ構成が正（§3.3.1）と確定したので、getter ごと削除した
 
         // ---- 幾何ヘルパ --------------------------------------------------------
 
