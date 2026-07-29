@@ -23,6 +23,8 @@ out/
 # --- 購入アセット（再配布NG・公開リポジトリに含めない。design-18 §3.1） ---
 Assets/Animo/
 Assets/Animo.meta
+Assets/DuelSpike/Vendor/
+Assets/DuelSpike/Vendor.meta
 
 # --- アート中間生成物（AI生成の高密度FBX。デシメート後の *_lo.fbx だけを Assets 側で追跡） ---
 art-src/
