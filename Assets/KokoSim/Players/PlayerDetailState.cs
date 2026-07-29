@@ -232,9 +232,9 @@ namespace KokoSim.Unity.Players
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Stamina, AbilityLabels.Jp(AbilityKind.Stamina)));
             v.PitcherAbilities.Add(Bar(p, AbilityKind.PitchRank, AbilityLabels.Jp(AbilityKind.PitchRank)));
 
+            v.FielderAbilities.Add(Bar(p, AbilityKind.LaunchTendency, "弾道"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Contact, "ミート"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Power, "パワー"));
-            v.FielderAbilities.Add(Bar(p, AbilityKind.LaunchTendency, "弾道"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Discipline, "選球眼"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Speed, "走力"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.ArmStrength, "肩"));

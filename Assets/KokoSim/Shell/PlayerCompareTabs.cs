@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
@@ -14,6 +15,9 @@ namespace KokoSim.Unity.Shell
         public bool HasA;
         public bool HasB;
         public int Winner;   // -1=A, 0=互角/該当なし, 1=B
+        // ランク併記（issue #326②）: Tiers.FromStrength(value) 一本化。弾道行（HideBar）は空のまま。
+        public string GradeA = "";
+        public string GradeB = "";
         // 物理量表示（issue #94）: 球速行だけ km/h テキスト＋Levelバー幅を持つ。null/負なら Level 生値表示。
         public string TextA;
         public string TextB;
@@ -107,6 +111,12 @@ namespace KokoSim.Unity.Shell
                     row.Winner = 0;
                     if (a != null) row.TextA = LaunchTendencyLabels.Jp(row.ValueA);
                     if (b != null) row.TextB = LaunchTendencyLabels.Jp(row.ValueB);
+                }
+                // ランク併記（issue #326②）: 弾道（タイプ軸・優劣なし）以外の全行にランクチップを出す。
+                if (!row.HideBar)
+                {
+                    if (a != null) row.GradeA = Tiers.FromStrength(row.ValueA).ToString();
+                    if (b != null) row.GradeB = Tiers.FromStrength(row.ValueB).ToString();
                 }
                 rows.Add(row);
             }

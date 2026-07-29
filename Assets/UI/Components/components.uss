@@ -65,6 +65,11 @@
     width: 58px; -unity-text-align: middle-right;
     font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-1);
 }
+/* 小サイズ版（比較カード埋め込み・幅約156px, issue #326①）: 1段4組の全幅版・練習計画のコンパクト版
+   （--compact＝1字ラベル）どちらより狭い場所に収める必要があるため、専用の縮小率を持つ。 */
+.cat-rank-rows--sm .cat-rank-rows__row { margin-top: 0; margin-bottom: 0; }
+.cat-rank-rows--sm .cat-rank-rows__label { width: 32px; font-size: 12px; margin-right: 2px; }
+.cat-rank-rows--sm .grade { min-width: 20px; height: 22px; font-size: 12px; padding: 1px 3px; margin-right: 2px; }
 /* コンパクト版（Issue #133・練習計画の行メタ枠）：1字ラベル「打走守投」＋小チップで横幅を詰める。 */
 .cat-rank-chips--compact .cat-rank-chips__label { margin-left: 2px; margin-right: 2px; }
 .cat-rank-chips--compact .grade {
@@ -736,6 +741,8 @@
    付け外しは UiComponents.SetCompareUnitColumn（画面側でクラス名を直書きしない, issue #246）。 */
 .cmp-rows--unit .cmp-row__val { width: var(--col-cmp-val-unit); }
 .cmp-row__val--win { color: var(--color-chalk); }
+/* ランク併記（issue #326②）: 22px幅の値セルの隣に小型チップを添える。track(バー)の残り幅から差し引く。 */
+.cmp-row__side .rank-chip { min-width: 22px; height: 20px; font-size: 11px; padding-left: 2px; padding-right: 2px; margin-left: 2px; margin-right: 4px; }
 /* タイプ軸表示（弾道など優劣のない値, issue #219）: 数値専用の固定22px幅/右揃え/14px高では
    和文ラベル（例「ややフライ型」）が収まらず隣接行と重なるため、バー(track)を消してラベルに
    側全体を明け渡す。幅・行高・寄せを別枠で緩める。 */
@@ -747,13 +754,15 @@
     flex-basis: 0;
     padding-left: var(--sp-3);
     padding-right: var(--sp-3);
-    padding-top: var(--sp-3);
+    /* 上端は panel(14px)/画面側コンテナと合わせて積み上がるため詰める（issue #326⑥）。
+       詰めた分は球種チャート（cmp-card__pitch）と比較表の可視領域に回る。 */
+    padding-top: var(--sp-2);
     padding-bottom: var(--sp-3);
 }
 .cmp-card__lab { font-size: 14px; color: var(--color-ink); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
 .cmp-card__lab--a { background-color: var(--cmp-a); }
 .cmp-card__lab--b { background-color: var(--cmp-b); }
-.cmp-card__name { font-size: var(--fs-body); color: var(--color-chalk); margin-top: var(--sp-2); }
+.cmp-card__name { font-size: var(--fs-body); color: var(--color-chalk); margin-top: var(--sp-1); }
 .cmp-card__meta { flex-direction: row; align-items: center; margin-top: 2px; }
 .cmp-card__hand { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-1); }
 .cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }

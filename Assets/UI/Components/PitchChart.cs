@@ -74,6 +74,9 @@ namespace KokoSim.Unity.Components
             {
                 var chip = new VisualElement();
                 chip.AddToClassList("pd2-pchip");
+                // compact 版（比較カード埋め込み, issue #326⑤）: 球種名・ランクチップを一段小さくして
+                // 104px高の器（cmp-card__pitch）でチップ同士・チップとボールの重なりを避ける。
+                if (_compact) chip.AddToClassList("pd2-pchip--compact");
                 chip.userData = pt;
                 var name = new Label(pt.Name); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
                 // ストレートのみ最速を添える（小型版は省スペースのため出さない）。
