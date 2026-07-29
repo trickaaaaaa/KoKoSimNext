@@ -79,6 +79,12 @@ public sealed record RunnerLeg
 public sealed record TimelineCaption(double T, string Text);
 
 /// <summary>
+/// 判定オーバーレイの種別（Issue #59でOut/Safeの2値、Issue #328②で「フェア」を追加）。
+/// Fair=野手が追いついていた際どい飛球が着地して生きた球になった瞬間（捕球アウトでもタッチプレーでもない）。
+/// </summary>
+public enum JudgementKind { Out, Safe, Fair }
+
+/// <summary>
 /// 判定イベント1件（判定オーバーレイ, Issue #260）。走者レッグの副産物（終端T1・OutAtEnd/CloseCall流用）
 /// にせず、確定時刻を持つ独立イベントとしてタイムラインへ積む。フライ・ライナーの捕球アウトは
 /// 走者レッグの終端（一塁到達）より前の捕球の瞬間に確定するため、レッグと切り離す必要がある。
@@ -87,10 +93,10 @@ public sealed record JudgementEvent
 {
     /// <summary>対象走者の識別（"打"=打者走者, "走1"等）。UI表示・デバッグ用。</summary>
     public required string Label { get; init; }
-    /// <summary>判定が確定した時刻[s]（フライ/ライナーは捕球の瞬間、塁上の勝負は決着レッグの終端）。</summary>
+    /// <summary>判定が確定した時刻[s]（フライ/ライナーは捕球の瞬間、フォースは送球到達、塁上の勝負は決着レッグの終端）。</summary>
     public required double T { get; init; }
-    /// <summary>true=アウト, false=セーフ。</summary>
-    public required bool IsOut { get; init; }
+    /// <summary>アウト/セーフ/フェアの種別。</summary>
+    public required JudgementKind Kind { get; init; }
     /// <summary>
     /// セーフ側は際どい判定のときだけ積む（アウトは常時表示するため使わない, Issue #59 の表示条件を維持）。
     /// </summary>

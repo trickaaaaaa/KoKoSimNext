@@ -541,9 +541,11 @@ public sealed class TimelineTests
             {
                 // ゴロ(Roll)かつ二塁封殺レッグ（走者・二塁到達・アウト）を持つ＝内野ゴロ併殺。
                 var hasRoll = tl!.Ball.Any(b => b.Kind == BallSegmentKind.Roll);
-                var forceAtSecond = tl.Runners.Any(
-                    l => l.Label.StartsWith("走") && l.OutAtEnd && Near(l.To, second));
-                if (!hasRoll || !forceAtSecond) continue;
+                // 判定時刻の差し替え（Issue #328①）でレッグが送球到達点で止まる（Toが二塁ちょうどで
+                // なくなりうる）ため、消えない From(=一塁) で検出する。
+                var forceLeg = tl.Runners.FirstOrDefault(
+                    l => l.Label.StartsWith("走") && l.OutAtEnd && Near(l.From, first));
+                if (!hasRoll || forceLeg is null) continue;
 
                 var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
                 Assert.Equal(2, throws.Count); // 併殺は 6-4-3 の2本送球に差し替わる
@@ -552,6 +554,11 @@ public sealed class TimelineTests
                 Assert.True(throws[0].T1 < throws[1].T1, "二塁より先に一塁へ到達している");
                 Assert.True(throws[1].T0 >= throws[0].T1 - 1e-6, "送球連鎖が不連続");
                 foreach (var b in tl.Ball) Assert.True(b.T1 <= tl.Duration + 1e-6);
+
+                // Issue #328①: 二塁封殺の判定時刻は走者到達ではなく1本目送球の到達（throws[0].T1）と一致する。
+                var forceJudgement = Assert.Single(tl.Judgements, j => j.Label == forceLeg.Label);
+                Assert.Equal(JudgementKind.Out, forceJudgement.Kind);
+                Assert.Equal(throws[0].T1, forceJudgement.T, 6);
                 found++;
                 break;
             }
@@ -574,7 +581,7 @@ public sealed class TimelineTests
             {
                 // 二塁封殺レッグを持たない＝非DP。内野ゴロの一塁送球は従来通り1本のまま。
                 var forceAtSecond = tl!.Runners.Any(
-                    l => l.Label.StartsWith("走") && l.OutAtEnd && Near(l.To, second));
+                    l => l.Label.StartsWith("走") && l.OutAtEnd && Near(l.From, first));
                 if (forceAtSecond) continue;
                 // 一塁への送球（内野ゴロ）だけを検査対象にする。外野安打の返球（二塁/三塁へ, #6）や
                 // バックホーム送球（本塁, Slice D）は別機構なので、一塁到達送球の本数で回帰を見る。

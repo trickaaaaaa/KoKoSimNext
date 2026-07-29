@@ -24,7 +24,10 @@ public sealed class PlaybackJudgementTests
     private const double Hold = 0.6;
 
     private static PlaybackJudgement J(double t, bool isOut, bool closeCall = false, string label = "打") =>
-        new(t, isOut, closeCall, label);
+        new(t, isOut ? JudgementKind.Out : JudgementKind.Safe, closeCall, label);
+
+    private static PlaybackJudgement JFair(double t, string label = "打") =>
+        new(t, JudgementKind.Fair, false, label);
 
     private static PlaybackPlay PlayWith(params PlaybackJudgement[] judgements) => new()
     {
@@ -39,8 +42,8 @@ public sealed class PlaybackJudgementTests
         var play = PlayWith(J(4.0, isOut: true));
 
         Assert.Null(PlaybackEvaluator.JudgementAt(play, 3.99, Hold));           // 判定前は出さない
-        Assert.True(PlaybackEvaluator.JudgementAt(play, 4.0, Hold)!.Value.IsOut);  // 確定の瞬間から
-        Assert.True(PlaybackEvaluator.JudgementAt(play, 4.59, Hold)!.Value.IsOut); // hold の直前まで
+        Assert.Equal(JudgementKind.Out, PlaybackEvaluator.JudgementAt(play, 4.0, Hold)!.Value.Kind);  // 確定の瞬間から
+        Assert.Equal(JudgementKind.Out, PlaybackEvaluator.JudgementAt(play, 4.59, Hold)!.Value.Kind); // hold の直前まで
         Assert.Null(PlaybackEvaluator.JudgementAt(play, 4.61, Hold));           // hold 経過で消える
     }
 
@@ -59,7 +62,18 @@ public sealed class PlaybackJudgementTests
         var play = PlayWith(J(4.0, isOut: false, closeCall: true));
         var j = PlaybackEvaluator.JudgementAt(play, 4.2, Hold);
         Assert.NotNull(j);
-        Assert.False(j!.Value.IsOut);   // 際どい判定＝セーフ表示
+        Assert.Equal(JudgementKind.Safe, j!.Value.Kind);   // 際どい判定＝セーフ表示
+        Assert.Equal(4.0, j.Value.T1, 6);
+    }
+
+    [Fact]
+    public void JudgementAt_ShowsFair_OnCloseDroppedFly()
+    {
+        // Issue #328②: 野手が追いついていた際どい飛球が落ちた瞬間は「フェア」を表示する。
+        var play = PlayWith(JFair(4.0));
+        var j = PlaybackEvaluator.JudgementAt(play, 4.2, Hold);
+        Assert.NotNull(j);
+        Assert.Equal(JudgementKind.Fair, j!.Value.Kind);
         Assert.Equal(4.0, j.Value.T1, 6);
     }
 
@@ -89,12 +103,12 @@ public sealed class PlaybackJudgementTests
     }
 
     /// <summary>
-    /// issue #236 症状A の回帰。内野ゴロの打者走者レッグは「送球到達＝アウト成立」より後に終わる
-    /// （＝アウトでも一塁まで走り切る）ため、再生を「結果確定＋最後の送球＋0.6秒」で早切りすると
-    /// 判定表示窓 [T1, T1+hold) の始点にすら届かず「アウト」が一度も出ない。
+    /// issue #236 症状A の回帰防止 → issue #328①でさらに強化: 内野ゴロのフォースアウトの判定時刻は
+    /// 送球到達（Throwセグメントの終端そのもの）になったため、早切り（結果確定＋最後のボール事象＋0.6秒）が
+    /// 判定表示窓の始点より前に来ることは構造的に無くなった（判定は必ずボール事象の内側で確定する）。
     /// </summary>
     [Fact]
-    public void GroundOut_JudgementComesAfterDeadOutEarlyCut()
+    public void GroundOut_JudgementNeverAfterDeadOutEarlyCut()
     {
         var tl = CollectGroundOut();
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
@@ -105,8 +119,8 @@ public sealed class PlaybackJudgementTests
         // 旧 PlayEndTime（早切り）＝ min(Dur, max(ResAt, ボール終端) + 0.6)。
         var lastEvent = play.Ball.Aggregate(play.ResAt, (m, s) => Math.Max(m, s.T1));
         var earlyCut = Math.Min(play.Dur, lastEvent + 0.6);
-        Assert.True(judged!.Value > earlyCut,
-            $"判定時刻 {judged.Value:F2}s が早切り {earlyCut:F2}s より前になっている（この回帰テストの前提が崩れた）");
+        Assert.True(judged!.Value <= earlyCut,
+            $"判定時刻 {judged.Value:F2}s が早切り {earlyCut:F2}s より後になっている（送球到達に同期しているはず, Issue #328①）");
 
         // 判定窓を含めた打ち切り時刻なら、窓の全体（T1〜T1+hold）が再生範囲に入る。
         var end = Math.Max(earlyCut, judged.Value + Hold);
@@ -116,9 +130,6 @@ public sealed class PlaybackJudgementTests
 
     // ── 実エンジン出力から内野ゴロ（アウト＋ゴロ軌道）のタイムラインを1つ採取する ──
     // 構成は PlayTimelineAdapterTests と同じ最小チーム＋固定シード（決定論）。
-    // 症状Aを実証できる打球＝「打者走者レッグの終端（判定時刻）が早切り（最後のボール事象+0.6）より後」に
-    // なる内野ゴロアウトを選ぶ（Issue #261 の処理点・時間軸再校正で送球到達が遅くなり、最初に見つかる
-    // アウトが際どい当たりだと判定時刻と早切りが拮抗して回帰の前提が崩れるため、明確に実証できる打球を採る）。
     private static PlayTimeline CollectGroundOut()
     {
         for (var seed = 1UL; seed <= 400; seed++)
@@ -133,17 +144,11 @@ public sealed class PlaybackJudgementTests
                 if (!tl.Ball.Any(b => b.Kind == BallSegmentKind.Roll)) continue;      // ゴロだけ
                 if (!tl.Ball.Any(b => b.Kind == BallSegmentKind.Throw)) continue;     // 一塁送球が絡む内野ゴロ
                 if (!tl.Runners.Any(x => x.OutAtEnd)) continue;
-
-                var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
-                var judged = PlaybackEvaluator.LastJudgementTime(play);
-                if (judged is null) continue;
-                var lastEvent = play.Ball.Aggregate(play.ResAt, (m, s) => Math.Max(m, s.T1));
-                var earlyCut = Math.Min(play.Dur, lastEvent + 0.6);
-                if (judged.Value > earlyCut) return tl; // 早切りが判定窓に届かない＝症状Aを実証できる打球
+                return tl;
             }
         }
 
-        throw new InvalidOperationException("症状Aを実証できる内野ゴロアウトのタイムラインが採取できなかった");
+        throw new InvalidOperationException("内野ゴロアウトのタイムラインが採取できなかった");
     }
 
     private static Player Pos(FieldPosition pos) => new()

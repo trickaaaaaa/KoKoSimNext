@@ -37,6 +37,8 @@ public static class TimelineBuilder
     /// formations=陣形ルール表（null なら既定表）。時刻は投球開始=0、接触=0.85s。
     /// closeCallMarginSeconds=判定オーバーレイ（Issue #59）の際どさしきい値[s]（既定は
     /// <see cref="BaserunningCoefficients.CloseCallMarginSeconds"/> の初期値と同値）。
+    /// closeFlyMarginSeconds=判定オーバーレイ「フェア」（Issue #328②）の際どさしきい値[s]（既定は
+    /// <see cref="FieldingCoefficients.CatchCloseCallMarginSeconds"/> の初期値と同値）。
     /// </summary>
     public static PlayTimeline BuildBattedBall(
         FieldingPlay play,
@@ -45,7 +47,8 @@ public static class TimelineBuilder
         FormationTable? formations,
         bool runnersOn,
         string resultText,
-        double closeCallMarginSeconds = 0.15)
+        double closeCallMarginSeconds = 0.15,
+        double closeFlyMarginSeconds = 0.15)
     {
         var table = formations ?? FormationTable.Default;
         var landing = new TimelinePoint(play.LandingX, play.LandingZ);
@@ -142,19 +145,28 @@ public static class TimelineBuilder
 
         // 判定イベント（Issue #260）: 走者レッグの終端に縛られない、確定時刻付きの独立イベント。
         // フライ・ライナー・ファウルフライの捕球アウトは捕球の瞬間（fieldedAt）に確定する。
-        // 内野ゴロの一塁フォースは打者走者レッグの終端（一塁到達＝判定が決まる瞬間）のまま。
+        // 内野ゴロの一塁フォースは送球到達の瞬間（＝フォース成立。走者到達を待たない, Issue #328①）。
         var judgements = new List<JudgementEvent>();
         if (play.IsFly && play.Result == BattedBallResult.Out)
         {
-            judgements.Add(new JudgementEvent { Label = "打", T = fieldedAt, IsOut = true });
+            judgements.Add(new JudgementEvent { Label = "打", T = fieldedAt, Kind = JudgementKind.Out });
         }
         else if (batterOut)
         {
-            judgements.Add(new JudgementEvent { Label = "打", T = batterArrive, IsOut = true });
+            // 送球が塁に届いた瞬間にアウトが確定する（defenseTime+margin≤runnerTime が保証されているため
+            // 常に batterArrive 以前＝走者は判定確定後も一塁まで走り切る絵のまま, Issue #328①）。
+            var forceOutAt = play.ThrowArriveSeconds is { } ta ? ContactAt + ta : batterArrive;
+            judgements.Add(new JudgementEvent { Label = "打", T = forceOutAt, Kind = JudgementKind.Out });
         }
         else if (batterCloseCall)
         {
-            judgements.Add(new JudgementEvent { Label = "打", T = batterArrive, IsOut = false, CloseCall = true });
+            judgements.Add(new JudgementEvent { Label = "打", T = batterArrive, Kind = JudgementKind.Safe, CloseCall = true });
+        }
+        else if (play.IsFly && play.CatchMarginSeconds is { } catchMargin && Math.Abs(catchMargin) < closeFlyMarginSeconds)
+        {
+            // 野手が追いついていた際どい飛球が落ちた瞬間に「フェア」を出す（Issue #328②）。
+            // 完全に抜けた当たり（|余裕|が閾値超）は対象外＝しきい値がそのままゲート。
+            judgements.Add(new JudgementEvent { Label = "打", T = landAt, Kind = JudgementKind.Fair });
         }
 
         // 結果確定時刻: アウト/送球到達/野手処理/着地のうちプレーを決めた時刻。
@@ -474,7 +486,7 @@ public static class TimelineBuilder
             // 積まない（表示条件は #59 のまま維持＝従来もセーフの盗塁は判定オーバーレイの対象外）。
             Judgements = safe
                 ? Array.Empty<JudgementEvent>()
-                : new[] { new JudgementEvent { Label = "走", T = runnerArrive, IsOut = true } },
+                : new[] { new JudgementEvent { Label = "走", T = runnerArrive, Kind = JudgementKind.Out } },
             Captions = new[]
             {
                 new TimelineCaption(0.05, "スタートを切った！"),
@@ -554,7 +566,12 @@ public static class TimelineBuilder
                 // セーフは際どい判定のときだけ積む（表示条件は #59 のまま維持）。
                 if (b + 1 == m.ToBase && (m.Out || m.CloseCall))
                 {
-                    judgements.Add(new JudgementEvent { Label = label, T = t1, IsOut = m.Out, CloseCall = m.CloseCall });
+                    judgements.Add(new JudgementEvent
+                    {
+                        Label = label, T = t1,
+                        Kind = m.Out ? JudgementKind.Out : JudgementKind.Safe,
+                        CloseCall = m.CloseCall,
+                    });
                 }
                 t = t1;
             }
@@ -745,8 +762,41 @@ public static class TimelineBuilder
             From = second, To = first,
         });
 
+        // 二塁封殺の判定時刻を走者到達ではなく実際の送球到達へ差し替える（Issue #328①）。
+        // 送球のほうが先に着くのが通常（DP成立の前提）なので、走者レッグもその時刻・位置で止め、
+        // 判定確定後に走者だけ塁上まで走り切る絵にしない（送球が後着の稀なケースは物理無矛盾の
+        // 保証が無いため、判定時刻だけ差し替えてレッグは弄らない）。
+        var runners = timeline.Runners;
+        var judgements = timeline.Judgements;
+        foreach (var leg in timeline.Runners)
+        {
+            if (!leg.OutAtEnd || leg.Label == "打" || Distance(leg.To, second) >= 0.5) continue;
+
+            if (secondArrive < leg.T1 - 1e-9)
+            {
+                var frac = leg.T1 > leg.T0 ? Math.Clamp((secondArrive - leg.T0) / (leg.T1 - leg.T0), 0.0, 1.0) : 0.0;
+                var stop = new TimelinePoint(
+                    leg.From.X + (leg.To.X - leg.From.X) * frac, leg.From.Z + (leg.To.Z - leg.From.Z) * frac);
+                var updatedRunners = new List<RunnerLeg>(runners.Count);
+                foreach (var r in runners)
+                    updatedRunners.Add(ReferenceEquals(r, leg) ? r with { T1 = Math.Max(leg.T0, secondArrive), To = stop } : r);
+                runners = updatedRunners;
+            }
+
+            var updatedJudgements = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+            {
+                updatedJudgements.Add(
+                    j.Label == leg.Label && j.Kind == JudgementKind.Out && Math.Abs(j.T - leg.T1) < 1e-9
+                        ? j with { T = secondArrive }
+                        : j);
+            }
+            judgements = updatedJudgements;
+            break;
+        }
+
         var duration = Math.Max(timeline.Duration, firstArrive + 1.0);
-        return timeline with { Ball = ball, Duration = duration };
+        return timeline with { Ball = ball, Duration = duration, Runners = runners, Judgements = judgements };
     }
 
     /// <summary>

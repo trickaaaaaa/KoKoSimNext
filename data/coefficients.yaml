@@ -118,6 +118,7 @@ fielding:
   left_batter_first_step_bonus_seconds: 0.13  # 左打者は一塁が近く速い（§4.1b）
   infield_depth_m: 46.0
   force_out_margin_seconds: 0.0
+  catch_close_call_margin_seconds: 0.15  # 判定オーバーレイ「フェア」（Issue #328②）: |捕球余裕|がこれ未満の落球だけ着地の瞬間に表示。表示専用・帯不変
   # 失策モデル（issue #123, 2026-07-23）: 平均守備(Catching50)で0.064＝両軍計≈2.4/試合（甲子園実測2.1〜2.7域）。
   # 守備力連動は非対称: 弱小側(50未満)は急傾斜(slope 0.0065)で弱小同士(C25)を両校計≈10失策へ、
   # 精鋭側(50超)は緩傾斜(slope_strong 0.001)で「守備を上げるほど失策が減る」勾配を残す（精鋭C90でも≈1/試合＝
