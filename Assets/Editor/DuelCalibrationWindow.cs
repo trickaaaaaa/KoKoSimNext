@@ -96,6 +96,12 @@ namespace KokoSim.EditorTools
             _cal.CatcherChestOffset.z = EditorGUILayout.Slider("胸当て(捕手) 前後Z", _cal.CatcherChestOffset.z, -0.15f, 0.15f);
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("打撃フォーム（収録モーキャップの破綻を骨へ当て直す）", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("　じっくり追い込むなら KokoSim → 打撃フォーム確認（試合に入らず単独で動く）", EditorStyles.miniLabel);
+            DuelFormGui.DrawBattingForm(ref _cal);
+            DuelFormGui.DrawSwingButtons(rigOn ? live : null);
+
+            EditorGUILayout.Space();
             EditorGUILayout.LabelField("空・ライト", EditorStyles.boldLabel);
             _cal.Sky = EditorGUILayout.ColorField("空色", _cal.Sky);
             _cal.Ambient = EditorGUILayout.Slider("環境光の下限", _cal.Ambient, 0f, 1f);

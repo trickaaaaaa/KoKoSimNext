@@ -56,7 +56,61 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public Vector3 HelmetEuler;
 
-        private const int CurrentVersion = 5;
+        // ---- 打撃フォームの実行時補正（design-18 §7-2。適用は DuelBatterPose）----
+        // 収録モーキャップの破綻（両手が23cm開く・手首が限界まで折れる・頭が下を向いて振れる・
+        // 前脚の膝が開く）を、リターゲット後の骨へ毎コマ当て直すためのつまみ。
+        // Blenderで焼くのをやめて実行時にしたのは、絵を見ながら追い込むため（往復3分→即時）。
+        public float BatterYawDeg;          // 打者の立ち向き[度]（足並びを投手線へ揃える。実測+33.8）
+        public float GripGapM;              // 両手首の間隔の目標[m]（実物の握り＝拳2つ分で0.09〜0.12）
+        public float GripReachGuard;        // 肩→手首を腕長のこの割合までに抑える（1.0=伸び切り＝肘ロック）
+        public float GripReachGuardSwing;   // スイング中の同上（接触では実際に腕が伸びる）
+        public float GripSwingFromSec, GripSwingToSec;   // 上を使う区間（クリップ内秒）
+        public float GripEndSec;            // 握りの補正を切る時刻（走り出し＝バットを放す）
+        // 握りは左右で別々に効かせる（収録の破綻が左右対称でないため。2026-07-29 実測で
+        // 手首の折れは左143°/右155°、拳の向きは65〜72°食い違う）。
+        // 無印＝左手（収録＝右打者の下の手・ノブ側）／Top＝右手（上の手・バレル側）。
+        // ミラー再生（左打者）では骨ごと入れ替わる＝上下の役も入れ替わることに注意。
+        public float GripPullBias;          // 寄せの配分（-1=左手を動かさない／+1=右手を動かさない）
+        public float GripElbowPoleDeg;      // 左手の肘の向き[度]。+で肘が回る
+        public float GripElbowPoleDegTop;   // 右手の肘の向き[度]
+        public float GripReachGuardTop;     // 右腕の伸び上限（無印は左腕）
+        public float GripReachGuardSwingTop;// 同 スイング中
+        public float GripWristFlexDeg;      // 左手首の目標の伸び[度]（180=まっすぐ）
+        public float GripWristFlexStrength; // 上を戻す強さ（0=収録のまま）
+        public float GripWristFlexDegTop;   // 右手首の目標の伸び[度]
+        public float GripWristFlexStrengthTop;
+        public float GripWristTwistDeg;     // 左手のひねり[度]（手の長軸まわり＝拳を動かさず掌だけ回る）
+        public float GripWristTwistDegTop;  // 右手のひねり[度]
+        public float GripWristSideDeg;      // 左手の横振り[度]（前腕軸まわり＝曲げ面の外へ拳が振れる）
+        public float GripWristSideDegTop;   // 右手の横振り[度]
+        // 掌がバットを向いていない（実測: 掌の法線と握り線の成す角が右12°＝掌が軸と平行）のは
+        // 手首でなく前腕のひねり（回内・回外）。手首だけで90°回すと関節が折れて見える
+        public float GripForearmRollDeg;    // 左前腕のひねり[度]（肘→手首軸まわり。手首の位置は動かない）
+        public float GripForearmRollDegTop; // 右前腕のひねり[度]
+        // 収録は指を撮っていない＝手が開いたままバットが通り抜ける（2026-07-29 絵で確認）。
+        // 指の曲げは残す価値のある収録データが無いので、静的な握り込みで閉じる
+        public float GripFingerCurl;        // 左手の指の握り込み（0=収録のまま／1=握り込む）
+        public float GripFingerCurlTop;     // 右手の指の握り込み
+        public float HeadYawOffsetDeg;      // 視線のヨー微調整[度]（0=投手をまっすぐ見る）
+        public float HeadElevDeg;           // 視線の仰角[度]（+=上向き）
+        public float HeadStrength;          // 固定の強さ（0=収録のまま／1=完全固定）
+        public float HeadNeckShare;         // 補正のうち首が受け持つ割合（残りが頭）
+        public float HeadUntilSec;          // ここまで見続ける（スイング後は収録のまま）
+        public float KneeDeg;               // 踏み込み脚を股関節→足首軸まわりに回す角[度]（体を残す）
+        public float KneeFromSec, KneeFullSec, KneeToSec;   // 効き始め／全開／戻し切り
+        // ---- バットの置き方（AlignBat）----
+        // 握りが直った今は「両手を結んだ線＝バットの軸」がそのまま使える。旧実装は両手が23cm開いて
+        // 拳が積み重ならない収録を前提に、ヨーだけ実測して仰角を決め打ちしていた（合成軸）。
+        // BatAxisFromGrip=1 で実測線、0 で旧来の合成軸。手が縦に積み重なると合成軸は水平成分が
+        // 消えてバットが真上を向くため（2026-07-29 実測 axis=(0,1,0)）、既定は実測線。
+        public float BatAxisFromGrip;   // 0=合成軸 / 1=握り線そのまま
+        public float BatGripBelowM;     // 握りの中点からノブ端までの距離[m]
+        public float BatLengthM;        // バット全長[m]（メッシュはlocalScaleで伸縮）
+        public float BatStanceElevDeg;  // 合成軸の構え仰角[度]（BatAxisFromGrip<1のときだけ効く）
+        public float BatFollowElevDeg;  // 合成軸の振り抜き仰角[度]（同上）
+        public float BatHandsApartM;    // これ以上手が離れたら片手追従へ移る[m]
+
+        private const int CurrentVersion = 8;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -71,15 +125,52 @@ namespace KokoSim.Unity.Match
             Sky = new Color(0.55f, 0.78f, 0.90f),
             Ambient = 0.45f,
             LightDir = new Vector3(-0.35f, -0.85f, -0.4f),
-            BatterX = -0.9f, BatterZ = 0f,
-            CatcherX = 0f, CatcherZ = -1.0f,
-            UmpireX = 0.35f, UmpireZ = -2.0f,   // #291のスロット位置
+            BatterX = -0.71f, BatterZ = 0.06f,
+            CatcherX = -0.02f, CatcherZ = -1.0f,
+            UmpireX = 0.18f, UmpireZ = -1.88f,   // #291のスロット位置から微調整
             CapOffset = Vector3.zero,
-            HelmetOffset = Vector3.zero,
+            HelmetOffset = new Vector3(-0.003f, -0.014f, -0.052f),
             CatcherHelmetOffset = Vector3.zero,
             CatcherMaskOffset = Vector3.zero,
             CatcherChestOffset = Vector3.zero,
             HelmetEuler = Vector3.zero,
+            // 打撃フォームの既定は 2026-07-29 に打撃フォーム確認窓で追い込んだ実測値
+            // （out/duel-calibration.json v8 からの焼き戻し。以降もツール→JSON→ここの順で更新する）
+            BatterYawDeg = 90f + 33.8f,
+            GripGapM = 0.10f,
+            GripReachGuard = 0.911f,
+            GripReachGuardSwing = 0.901f,
+            GripSwingFromSec = 2.75f, GripSwingToSec = 3.20f,
+            GripEndSec = 3.25f,
+            GripPullBias = 0f,
+            GripElbowPoleDeg = 0f,
+            GripElbowPoleDegTop = 21f,
+            GripReachGuardTop = 0.874f,
+            GripReachGuardSwingTop = 0.97f,
+            GripWristFlexDeg = 148.3f,
+            GripWristFlexStrength = 0.888f,
+            // 右手首は収録が155°（左ほど折れていない）＝曲げは触らない。指も右は開いたまま（未調整）
+            GripWristFlexDegTop = 165f,
+            GripWristFlexStrengthTop = 0f,
+            GripWristTwistDeg = 2f, GripWristTwistDegTop = 0f,
+            GripWristSideDeg = 12f, GripWristSideDegTop = -12f,
+            GripFingerCurl = 0.394f, GripFingerCurlTop = 0f,
+            GripForearmRollDeg = -7f, GripForearmRollDegTop = 7f,
+            HeadYawOffsetDeg = 0f,
+            HeadElevDeg = -3f,
+            HeadStrength = 0.913f,
+            HeadNeckShare = 0.413f,
+            HeadUntilSec = 3.4f,        // クリップ終端まで投手を見続ける
+            // 膝は**構えの間だけ**効かせている（0.14〜1.86秒）。スイング中は収録のまま＝
+            // 当初の「体を残す」とは別の使い方になっているので、直すならこの3つの秒を戻す
+            KneeDeg = -54f,
+            KneeFromSec = 3.4f, KneeFullSec = 0.14f, KneeToSec = 1.86f,
+            BatAxisFromGrip = 0.154f,
+            BatGripBelowM = 0.111f,
+            BatLengthM = 0.869f,
+            BatStanceElevDeg = 35.7f,
+            BatFollowElevDeg = 32.4f,
+            BatHandsApartM = 0.246f,
         };
 
         /// <summary>
@@ -111,6 +202,51 @@ namespace KokoSim.Unity.Match
                 c.CatcherChestOffset = d.CatcherChestOffset;
             if (c.Version < 5)   // v5: 打者ヘルメットの被り角
                 c.HelmetEuler = d.HelmetEuler;
+            if (c.Version < 6)   // v6: 打撃フォームの実行時補正（握り・頭・膝・立ち向き）
+            {
+                c.BatterYawDeg = d.BatterYawDeg;
+                c.GripGapM = d.GripGapM;
+                c.GripReachGuard = d.GripReachGuard;
+                c.GripReachGuardSwing = d.GripReachGuardSwing;
+                c.GripSwingFromSec = d.GripSwingFromSec; c.GripSwingToSec = d.GripSwingToSec;
+                c.GripEndSec = d.GripEndSec;
+                c.GripElbowPoleDeg = d.GripElbowPoleDeg;
+                c.GripElbowPoleDegTop = d.GripElbowPoleDegTop;
+                c.GripWristFlexDeg = d.GripWristFlexDeg;
+                c.GripWristFlexStrength = d.GripWristFlexStrength;
+                c.HeadYawOffsetDeg = d.HeadYawOffsetDeg;
+                c.HeadElevDeg = d.HeadElevDeg;
+                c.HeadStrength = d.HeadStrength;
+                c.HeadNeckShare = d.HeadNeckShare;
+                c.HeadUntilSec = d.HeadUntilSec;
+                c.KneeDeg = d.KneeDeg;
+                c.KneeFromSec = d.KneeFromSec; c.KneeFullSec = d.KneeFullSec; c.KneeToSec = d.KneeToSec;
+            }
+            if (c.Version < 7)   // v7: バットの置き方（握り線を直したので軸の採り方も変わる）
+            {
+                c.BatAxisFromGrip = d.BatAxisFromGrip;
+                c.BatGripBelowM = d.BatGripBelowM;
+                c.BatLengthM = d.BatLengthM;
+                c.BatStanceElevDeg = d.BatStanceElevDeg;
+                c.BatFollowElevDeg = d.BatFollowElevDeg;
+                c.BatHandsApartM = d.BatHandsApartM;
+            }
+            if (c.Version < 8)   // v8: 握りを左右別に（寄せの配分・腕の伸び上限・手首3軸）
+            {
+                c.GripPullBias = d.GripPullBias;
+                c.GripReachGuardTop = d.GripReachGuardTop;
+                c.GripReachGuardSwingTop = d.GripReachGuardSwingTop;
+                c.GripWristFlexDegTop = d.GripWristFlexDegTop;
+                c.GripWristFlexStrengthTop = d.GripWristFlexStrengthTop;
+                c.GripWristTwistDeg = d.GripWristTwistDeg;
+                c.GripWristTwistDegTop = d.GripWristTwistDegTop;
+                c.GripWristSideDeg = d.GripWristSideDeg;
+                c.GripWristSideDegTop = d.GripWristSideDegTop;
+                c.GripFingerCurl = d.GripFingerCurl;
+                c.GripFingerCurlTop = d.GripFingerCurlTop;
+                c.GripForearmRollDeg = d.GripForearmRollDeg;
+                c.GripForearmRollDegTop = d.GripForearmRollDegTop;
+            }
             c.Version = CurrentVersion;
             return c;
         }
@@ -343,6 +479,7 @@ namespace KokoSim.Unity.Match
         // 従来も漏れていたが、領域色でマテリアル数が増えるのを機に修正）
         private readonly List<Material> _materials = new();
         private Actor _pitcher, _batter, _catcher, _umpire;
+        private DuelCalibration _cal = DuelCalibration.Default;   // 実行時ポーズ補正が参照する現在値
         private float _acc;
         private float _fovBaseDeg = 2.9f;   // 16:9時の垂直FOV（ApplyCalibrationが上書き。既定=R-comp60）
         private Transform _capMount, _helmetMount;   // 被り物の位置オフセット枠（gear-head直下・実寸[m]）
@@ -430,7 +567,7 @@ namespace KokoSim.Unity.Match
             _pitcher = SpawnActor(playerBody, pitchClip, new Vector3(0f, MoundHeight, MoundDistance), PitcherYaw,
                 _defenseColors, MoundHeight, layer, useVendor);
             _pitcher.HoldAtEnd = true;   // 投手は投げ切ったらセット姿勢で次のアンカー同期を待つ（勝手にループしない）
-            _batter = SpawnActor(playerBody, batClip, new Vector3(cal0.BatterX, 0f, cal0.BatterZ), 90f,
+            _batter = SpawnActor(playerBody, batClip, new Vector3(cal0.BatterX, 0f, cal0.BatterZ), cal0.BatterYawDeg,
                 _offenseColors, 0f, layer, useVendor);
             // 購入素体は帽子を素で持っている。打者はヘルメットを被せるので、その帽子を落とす
             if (useVendor) SetChildActive(_batter.Go, VendorCapMeshName, false);
@@ -486,6 +623,7 @@ namespace KokoSim.Unity.Match
             // 初期ポーズを1回打っておく（トグル直後の素立ちTポーズを見せない）
             foreach (var a in _actors) StepActor(a, 0.001f);
             GroundFix(_pitcher);
+            FixBatterPose();
             AlignBat();
 
             // 装備（design-18 §3.3: 打者=ヘルメット/守備=帽子）。初期ポーズ評価後に
@@ -547,6 +685,7 @@ namespace KokoSim.Unity.Match
         {
             if (_camera == null) return;
             cal = DuelCalibration.Upgrade(cal);
+            _cal = cal;
             _fovBaseDeg = cal.FovDeg;
             _camera.backgroundColor = cal.Sky;
             float camZ = MoundDistance + cal.Dist;
@@ -566,6 +705,7 @@ namespace KokoSim.Unity.Match
             // 立ち位置（x/zのみ・yは接地系）。装備の視線ベイクはスポーン時の位置のままなので、
             // ライブ移動中はつば等の向きがわずかに古い＝焼き戻し後の rig 再生成で正しくベイクされる
             SetActorXZ(_batter, cal.BatterX, cal.BatterZ);
+            SetActorYaw(_batter, cal.BatterYawDeg);
             SetActorXZ(_catcher, cal.CatcherX, cal.CatcherZ);
             SetActorXZ(_umpire, cal.UmpireX, cal.UmpireZ);
             if (_capMount != null) _capMount.localPosition = cal.CapOffset;
@@ -582,6 +722,38 @@ namespace KokoSim.Unity.Match
             if (_cHelmetMount != null) _cHelmetMount.localPosition = cal.CatcherHelmetOffset;
             if (_cMaskMount != null) _cMaskMount.localPosition = cal.CatcherMaskOffset;
             if (_cChestMount != null) _cChestMount.localPosition = cal.CatcherChestOffset;
+        }
+
+        /// <summary>
+        /// 立ち向き[度]を差し替える。現在の回転とBaseRotの両方を置き換える＝
+        /// 巻き戻し・ループの基準ごと向きを変える（位置と同じ考え方）。
+        /// ルートモーションで回った分は次のループ先頭で基準へ戻る。
+        /// </summary>
+        private static void SetActorYaw(Actor a, float yawDeg)
+        {
+            if (a == null || a.Go == null) return;
+            var rot = Quaternion.Euler(0f, yawDeg, 0f);
+            var delta = rot * Quaternion.Inverse(a.BaseRot);
+            a.Go.transform.localRotation = delta * a.Go.transform.localRotation;
+            a.BaseRot = rot;
+        }
+
+        /// <summary>
+        /// 打撃フォームの実行時補正を当てる（design-18 §7-2・実装は <see cref="DuelBatterPose"/>）。
+        /// 呼ぶ順は「クリップ評価 → 接地 → ここ → バット整列」。バットは詰めた後の手から軸を採る。
+        /// </summary>
+        private void FixBatterPose()
+        {
+            if (_batter == null || _batter.Animator == null) return;
+            DuelBatterPose.HeadForwardLocal = _batter.HeadFwdLocal;
+            // 視線の狙点は投手の頭（居ない場合はマウンドの高さ1.6m）。実物の打者は投手を追うので、
+            // 固定方向でなく相手の位置から引く
+            Vector3 aim;
+            var pitcherHead = _pitcher != null && _pitcher.Animator != null
+                ? _pitcher.Animator.GetBoneTransform(HumanBodyBones.Head) : null;
+            if (pitcherHead != null) aim = pitcherHead.position;
+            else aim = _root.transform.position + new Vector3(0f, 1.6f, MoundDistance);
+            DuelBatterPose.Apply(_batter.Animator, _cal, _batter.Time, aim);
         }
 
         /// <summary>
@@ -738,6 +910,7 @@ namespace KokoSim.Unity.Match
             if (stepped)
             {
                 GroundFix(_pitcher);   // 投球ループはルートモーションでマウンドを降りるためコマ毎に接地
+                FixBatterPose();       // 収録の破綻を骨へ当て直す（バット整列より前＝詰めた手から軸を採る）
                 AlignBat();
             }
         }
@@ -747,11 +920,125 @@ namespace KokoSim.Unity.Match
         /// 縦横比はカラム追従だが、極端な縦長/横長は構図が壊れるためクランプする。
         /// 水平視野角は基準（16:9で垂直2.9°）固定＝縦に長い分は上下に描画範囲が広がるだけで構図は切れない。
         /// </summary>
+        // ---- 開発ツール（撮影ハーネス・打撃フォーム確認窓）用の入口 ----
+        // 実機の絵作りは常にこのrigを通す＝ツールと本番でポーズ・装備がずれない（design-18 §3.3の教訓）。
+
+        /// <summary>Edit modeで1枚描く。Play中はカメラが自動で回るので不要。</summary>
+        public void RenderNow()
+        {
+            // Edit modeの単発描画はスキンが**前のポーズのまま**焼かれる（骨は動いているのに絵が変わらない
+            // ＝つまみが1手遅れて見える。2026-07-29 実害: 指の握り込みが絵に出なかった）。
+            // 描画ごとにスキン行列を計算し直させる。Playのループ描画では起きないのでここだけで足りる
+            // RTが外から破棄されていたら作り直す（無いまま描くと絵が出ないだけで例外も出ない）
+            if (Available && Target == null) EnsureSize(_rtW, _rtH);
+            if (!_forcedSkinUpdate && _root != null)
+            {
+                var smrs = _root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                for (int i = 0; i < smrs.Length; i++) smrs[i].forceMatrixRecalculationPerRender = true;
+                _forcedSkinUpdate = true;
+            }
+            if (_camera != null) _camera.Render();
+        }
+
+        private bool _forcedSkinUpdate;
+
+        /// <summary>打者のAnimator（骨を実測するため）。</summary>
+        public Animator BatterAnimator => _batter != null ? _batter.Animator : null;
+
+        /// <summary>ステージ根（FramePreview はここのローカル座標で受ける）。</summary>
+        public Transform StageRoot => _root != null ? _root.transform : null;
+
+        /// <summary>打者のクリップ内時刻[秒]（構え0〜スイング〜走り出し）。</summary>
+        public float BatterClipTime => _batter != null ? _batter.Time : 0f;
+
+        /// <summary>打者のクリップ長[秒]。</summary>
+        public float BatterClipLength => _batter != null && _batter.Clip != null ? _batter.Clip.length : 0f;
+
+        /// <summary>打者を指定時刻へ頭出しする（フォーム確認窓のコマ送り・コマ戻し）。</summary>
+        public void SeekBatter(float clipTime)
+        {
+            if (_batter == null) return;
+            SeekActor(_batter, clipTime);
+            FixBatterPose();
+            AlignBat();
+        }
+
+        /// <summary>投手の頭（打者の視線の狙点）。</summary>
+        public Vector3 PitcherHeadPoint
+        {
+            get
+            {
+                var h = _pitcher != null && _pitcher.Animator != null
+                    ? _pitcher.Animator.GetBoneTransform(HumanBodyBones.Head) : null;
+                return h != null ? h.position
+                    : (_root != null ? _root.transform.position : Vector3.zero)
+                      + new Vector3(0f, 1.6f, MoundDistance);
+            }
+        }
+
+        /// <summary>
+        /// 打撃フォームの実測値（目測で判定しないため。design-18 §3.3）。
+        /// 手首間隔[m] / 左右の手首の曲げ[度]（180=まっすぐ）/ 拳の向きの左右差[度] /
+        /// 顔→投手のずれ[度] / 視線の仰角[度] / 前腕から見た左肘の向き[度]。
+        /// </summary>
+        public string BatterPoseDiag()
+        {
+            var a = BatterAnimator;
+            if (a == null || _batter == null) return "-";
+            var lh = a.GetBoneTransform(HumanBodyBones.LeftHand);
+            var rh = a.GetBoneTransform(HumanBodyBones.RightHand);
+            var ls = a.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var le = a.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+            var head = a.GetBoneTransform(HumanBodyBones.Head);
+            if (lh == null || rh == null || ls == null || le == null || head == null) return "-";
+            var face = head.TransformDirection(_batter.HeadFwdLocal);
+            var toP = PitcherHeadPoint - head.position;
+            var faceH = new Vector3(face.x, 0f, face.z).normalized;
+            var toPH = new Vector3(toP.x, 0f, toP.z).normalized;
+            var axis = (lh.position - ls.position).normalized;
+            var pole = Vector3.ProjectOnPlane(le.position - ls.position, axis).normalized;
+            var down = Vector3.ProjectOnPlane(Vector3.down, axis).normalized;
+            var lk = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
+            var rk = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            var re = a.GetBoneTransform(HumanBodyBones.RightLowerArm);
+            float lFlex = 0f, rFlex = 0f, knuckleGap = 0f, lPalm = 0f, rPalm = 0f;
+            if (lk != null && rk != null && re != null)
+            {
+                lFlex = 180f - Vector3.Angle(lh.position - le.position, lk.position - lh.position);
+                rFlex = 180f - Vector3.Angle(rh.position - re.position, rk.position - rh.position);
+                knuckleGap = Vector3.Angle(lk.position - lh.position, rk.position - rh.position);
+                // 掌の法線と握り線の成す角（90°=掌がバットを巻いている）。ひねりの効きはここでしか見えない
+                var grip = (lh.position - rh.position).normalized;
+                lPalm = PalmAngle(a, lh, lk, grip, HumanBodyBones.LeftIndexProximal,
+                    HumanBodyBones.LeftLittleProximal);
+                rPalm = PalmAngle(a, rh, rk, grip, HumanBodyBones.RightIndexProximal,
+                    HumanBodyBones.RightLittleProximal);
+            }
+            return string.Format(
+                "握り: 間隔 {0:F3}m ／ 手首 左{1:F0}° 右{2:F0}° ／ 拳差 {3:F0}° ／ 掌⊥線 左{4:F0}° 右{5:F0}°（90=巻けている）\n"
+                + "頭・腕: 顔→投手 {6:F1}° ／ 仰角 {7:F1}° ／ 左肘 {8:F0}°",
+                Vector3.Distance(lh.position, rh.position), lFlex, rFlex, knuckleGap, lPalm, rPalm,
+                Vector3.SignedAngle(faceH, toPH, Vector3.up),
+                Mathf.Asin(Mathf.Clamp(face.y, -1f, 1f)) * Mathf.Rad2Deg,
+                Vector3.SignedAngle(down, pole, axis));
+        }
+
+        private static float PalmAngle(Animator a, Transform hand, Transform knuckle, Vector3 grip,
+            HumanBodyBones index, HumanBodyBones little)
+        {
+            var ix = a.GetBoneTransform(index);
+            var li = a.GetBoneTransform(little);
+            if (ix == null || li == null) return 0f;
+            var n = Vector3.Cross(knuckle.position - hand.position, ix.position - li.position).normalized;
+            return n.sqrMagnitude < 0.5f ? 0f : Vector3.Angle(n, grip);
+        }
+
         public void EnsureSize(int width, int height)
         {
             if (!Available) return;
             width = Mathf.Clamp(width, 160, 2048);
             height = Mathf.Clamp(height, 90, 2048);
+            _rtW = width; _rtH = height;   // 破棄されたRTを作り直すときの寸法（下の RenderNow）
             // 縦横比クランプ: 4:3より縦長・2.4:1より横長にはしない（壁の高さ・構図の担保範囲）。
             // ただし横の上限は**試合の構図を守るため**のものなので、FramePreview で構図を組み直した
             // プレビューには効かせない（効かせると欄の右端に緑の帯が残る。2026-07-29 実測）
@@ -791,9 +1078,14 @@ namespace KokoSim.Unity.Match
         {
             var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             { name = "DuelStageLiveRT", filterMode = FilterMode.Point };
+            // ステージ本体（HideAndDontSave）はドメインリロードを跨いで生き残るのに、RTだけ既定だと
+            // 破棄されて**絵が消える**（rigは生きているので窓は組み直さず、原因が見えない。2026-07-29 実害）
+            rt.hideFlags = HideFlags.HideAndDontSave;
             rt.Create();
             return rt;
         }
+
+        private int _rtW = BaseWidth, _rtH = BaseHeight;
 
         /// <summary>水平視野角を基準構図（垂直2.9°@16:9）で固定し、現RT縦横比から垂直FOVを逆算する。</summary>
         /// <summary>
@@ -861,6 +1153,18 @@ namespace KokoSim.Unity.Match
             _previewFrameH = frameHeightM;
             _previewDist = Vector3.Distance(_camera.transform.position, look);
             ApplyFov();
+        }
+
+        /// <summary>
+        /// プレビュー枠を解除して試合の構図（FovDeg）へ戻す。
+        /// <see cref="FramePreview"/> で組んだ枠は画角を上書きしたまま残るので、
+        /// ApplyCalibration だけ呼んでも構図が戻らない（2026-07-29 実害: 望遠のはずが球場全景になる）。
+        /// </summary>
+        public void ClearPreviewFrame()
+        {
+            _previewFrameH = 0f;
+            _previewDist = 0f;
+            if (_camera != null) ApplyFov();
         }
 
         /// <summary>プレビュー枠（縦に収めたい実寸[m]と注視距離[m]）。0＝試合の構図＝FovDeg をそのまま使う。</summary>
@@ -1270,16 +1574,13 @@ namespace KokoSim.Unity.Match
         // 片手フォロースルー判定: 両手ボーン間隔がグリップ間隔を明確に超えたら上の手が離れたとみなす。
         // 素体UBCの両手ボーン間隔は「両手で握っていても」構えで~0.23mある（RunHandGapProbe実測）ため、
         // 判定はスイング系クリップに限定する（構え/見逃し/死球は常に両手整列＝素の見た目を信じる）
-        private const float HandsApartThreshold = 0.28f;
+        // 片手フォロースルー判定・仰角・ノブ出し量は DuelCalibration（BatHandsApartM /
+        // BatStanceElevDeg / BatFollowElevDeg / BatGripBelowM）へ移した。旧既定と経緯:
+        //   0.28m  … 両手で握っていても構えで手ボーン間隔が0.23mあった収録に対する閾値
+        //   仰角60°… 手→手の実測線が寝てバットが水平に見えた（監督指摘 2026-07-28）ための決め打ち
+        //   仰角35°… 振り切りで実測線がカメラ軸を向き、棒が点に潰れて消える絵への対処
+        // いずれも**両手が開いていた頃の補正**で、握りを直した今は実測線をそのまま使える（BatAxisFromGrip）
         private const float BatDropTime = BatterRunStart;   // 走り出し（実測3.25s）からバットを放った扱いで非表示
-        // 構えのバット仰角（水平から）。手→手の実測線はこの素体だと拳が積み重ならず横に開くため
-        // 構えでは軸が寝てバットが水平に見える（監督指摘 2026-07-28）→ ヨーだけ実測から拾い、仰角は立てる
-        private const float StanceBatElevationDeg = 60f;
-        // 振り抜き後の巻き付き仰角。振り切りポーズの手→手実測線はほぼ投手方向＝カメラ軸を向き、
-        // 円柱が数pxの点に潰れて「バットが消えた」絵になる（2026-07-28 プローブ実測）。
-        // 実物はバレルがリード肩越しに捕手側へ巻き付くので、逆ヨー×この仰角の合成軸で表す
-        private const float FollowBatElevationDeg = 35f;
-        private const float GripBelowHalf = 0.15f;   // グリップ中点からノブ端までの距離（実物: 拳2個+ノブ余り）
         private bool _batOneHand;       // いま片手追従中か（診断用）
         private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;
@@ -1317,7 +1618,7 @@ namespace KokoSim.Unity.Match
             // 片手判定を許すのはスイング区間だけ。自作打撃クリップは構えもスイングも同じ1本なので
             // クリップの同一性では区別できず、クリップ内時刻で見る（構えは BatterIdleEnd 以下）
             bool swinging = battingClip && _batter.Time >= BatterSwingStart;
-            _batOneHand = swinging && _batGoodValid && Vector3.Distance(lh, rh) > HandsApartThreshold;
+            _batOneHand = swinging && _batGoodValid && Vector3.Distance(lh, rh) > _cal.BatHandsApartM;
             if (!_batOneHand)
             {
                 // 両手保持: 握り線（掌中心→掌中心）を基準に整列（§3.3の実測知見＝手ボーン軸は使えない）。
@@ -1340,7 +1641,7 @@ namespace KokoSim.Unity.Match
                         float el = elevationDeg * Mathf.Deg2Rad;
                         return (yawDir.normalized * Mathf.Cos(el) + Vector3.up * Mathf.Sin(el)).normalized;
                     }
-                    var stance = Composed(horiz, StanceBatElevationDeg);
+                    var stance = Composed(horiz, _cal.BatStanceElevDeg);
                     if (!battingClip || _batter.Time < BatterSwingStart - 0.15f)
                     {
                         axis = stance;
@@ -1349,13 +1650,20 @@ namespace KokoSim.Unity.Match
                     {
                         float inSwing = Mathf.InverseLerp(BatterSwingStart - 0.15f, BatterSwingStart + 0.15f, _batter.Time);
                         float wrapped = Mathf.InverseLerp(SwingMissPlane + 0.05f, SwingMissPlane + 0.25f, _batter.Time);
-                        var wrap = Composed(-horiz, FollowBatElevationDeg);
+                        var wrap = Composed(-horiz, _cal.BatFollowElevDeg);
                         axis = Vector3.Slerp(Vector3.Slerp(stance, d, inSwing), wrap, wrapped).normalized;
                     }
+                    // 握りが直った今は実測線（ノブ側の手→バレル側の手）がそのままバット軸。
+                    // 合成軸は「両手が23cm開いて拳が積み重ならない」収録を前提にした補正なので、
+                    // 手を積み重ねた状態では水平成分が消えてバットが真上を向く（実測 axis=(0,1,0)）
+                    if (_cal.BatAxisFromGrip > 0f)
+                        axis = Vector3.Slerp(axis, d, Mathf.Clamp01(_cal.BatAxisFromGrip)).normalized;
                 }
                 var grip = (lh + rh) * 0.5f;
+                float halfLen = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
+                _bat.transform.localScale = new Vector3(1f, halfLen / BatHalfLength, 1f);
                 _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
-                _bat.transform.position = grip + axis * (BatHalfLength - GripBelowHalf);
+                _bat.transform.position = grip + axis * (halfLen - _cal.BatGripBelowM);
                 // 片手期の追従用に「最後に両手で持てていた見た目」を毎回焼き直す。
                 // 「離れた瞬間に初回焼き付け」だと、クリップ切替直後は直前クリップ末尾の残骸姿勢を
                 // 拾ってゴミオフセットが固定される（構えでバットが地面に刺さる事故の真因）
