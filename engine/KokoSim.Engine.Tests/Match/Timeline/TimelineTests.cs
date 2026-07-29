@@ -272,6 +272,34 @@ public sealed class TimelineTests
         Assert.True(throwSeg.T0 >= roll.T1 - 1e-6, "送球がロール終端より前に始まっている");
     }
 
+    // --- Issue #334: 一塁送球の画面上の速度が肩どおりになること（距離に依らない下駄が乗らないこと） ---
+
+    [Theory]
+    [InlineData(FieldPosition.Shortstop, -9.0, 30.0)]  // 三遊間の通常距離
+    [InlineData(FieldPosition.Pitcher, 0.0, 18.0)]     // 投手からのごく短い送球
+    [InlineData(FieldPosition.FirstBase, 15.0, 20.0)]  // 一塁手からの最短送球
+    public void Throw_DisplaySpeed_MatchesFielderArm_RegardlessOfDistance(
+        FieldPosition role, double fieldedX, double fieldedZ)
+    {
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.InfieldGrounder(role, fieldedX: fieldedX, fieldedZ: fieldedZ);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var throwSeg = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        var dist = System.Math.Sqrt(
+            System.Math.Pow(throwSeg.To.X - throwSeg.From.X, 2) + System.Math.Pow(throwSeg.To.Z - throwSeg.From.Z, 2));
+        var displaySpeed = dist / (throwSeg.T1 - throwSeg.T0);
+        // 画面上の速度＝処理野手の肩（従来は捕球オーバーヘッド＋握り替えの1.58秒が下駄として乗り、
+        // 距離が短いほど極端に遅く見えていた＝Issue #334）。
+        Assert.Equal(play.FielderThrowSpeedMps!.Value, displaySpeed, 3);
+
+        // 到達時刻(T1)は判定を決めたエンジンの値のまま（表示専用の修正で判定・帯には触れない）。
+        Assert.Equal(0.85 + play.ThrowArriveSeconds!.Value, throwSeg.T1, 6);
+        // 投げ始め(T0)は捕球より前には遡らない。
+        Assert.True(throwSeg.T0 >= 0.85 + play.FieldedAtSeconds!.Value - 1e-6, "捕球より前に投げ始めている");
+    }
+
     [Fact]
     public void FlyBall_StillUsesParabolaFlight()
     {
@@ -469,6 +497,28 @@ public sealed class TimelineTests
 
         // フライは併殺の送球連鎖対象外＝差し替えせず同一タイムラインを返す。
         Assert.Same(baseTl, tl);
+    }
+
+    [Fact]
+    public void DoublePlayThrows_FirstLeg_HoldsBeforeRelease_AndMatchesArm()
+    {
+        // Issue #334: 1本目（野手→二塁）が捕球と同時（握り替え0秒）にリリースされていた回帰の防止。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.Single(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
+
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        var fieldedAt = 0.85 + play.FieldedAtSeconds!.Value;
+        Assert.True(throws[0].T0 > fieldedAt + 1e-6, "処理と同時に投げてしまっている（握り替えが無い）");
+
+        var dist = System.Math.Sqrt(
+            System.Math.Pow(throws[0].To.X - throws[0].From.X, 2) + System.Math.Pow(throws[0].To.Z - throws[0].From.Z, 2));
+        var speed = dist / (throws[0].T1 - throws[0].T0);
+        Assert.Equal(play.FielderThrowSpeedMps!.Value, speed, 3); // 握り替えを挟んでも速度は肩どおり
     }
 
     // --- F1 Slice 3: GameEngine 結線（併殺で二塁→一塁の2連続送球が描かれる） ---
