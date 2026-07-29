@@ -23,6 +23,7 @@ namespace KokoSim.Unity.Shell
             ("nav-home", "HomeDashboard"),
             ("nav-players", "PlayerList"),
             ("nav-member", "MemberSetting"),
+            ("nav-team", "TeamSetting"),
             ("nav-training", "TrainingPlan"),
             ("nav-practice", "PracticeMatch"),
             ("nav-match", "MatchScreen"),
@@ -37,17 +38,16 @@ namespace KokoSim.Unity.Shell
         // MatchResult はその出口（ライブ観戦の終局で自動遷移するボックススコア画面。閉じるとホームへ戻る）。
         // PlayerDetail はマスターディテール化（issue #131）で独立画面ではなくなった
         // （PlayerList と同一 GameObject・同一 UIDocument に同居）。
-        // TeamSetting はユニフォーム配色（設計書18 §3.5.1）。ナビタブは持たず、メンバー設定から遷移する
-        // （「チームの見た目を決める場所」として背番号編集と同じ導線に置く）。
         private static readonly string[] ExtraScreens =
-            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TeamSetting" };
+            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult" };
 
         private const string DefaultScreen = "HomeDashboard";
 
         // ホーム以外で「今週を進める」を持つ画面。ここで引退週／大会開幕週に入ったら、主将指名モーダル／
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
-            { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "ManagerScreen" };
+            { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "ManagerScreen",
+              "TeamSetting" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>
         public static ScreenRouter Instance { get; private set; }

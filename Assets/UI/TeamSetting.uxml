@@ -23,7 +23,6 @@
           </ui:VisualElement>
           <ui:VisualElement class="ts-mastline">
             <ui:Label name="ts-own" class="ts-title f-display" text="" />
-            <ui:Button name="ts-back" class="tool-btn ts-back" text="◀ 戻る" />
           </ui:VisualElement>
         </ui:VisualElement>
 

@@ -22,7 +22,6 @@
                 <ui:VisualElement class="ms-head">
                     <ui:Label name="ms-hint" text="選手をクリックで選択（比較の左）→ 相手にカーソルを合わせて比較 → クリックで背番号を交換" class="ms-head__hint" />
                     <ui:VisualElement class="ms-head__spacer" />
-                    <ui:Button name="ms-team-setting" text="チーム設定" class="ms-auto-btn" />
                     <ui:Button name="ms-auto" text="能力順で自動割当" class="ms-auto-btn" />
                 </ui:VisualElement>
 

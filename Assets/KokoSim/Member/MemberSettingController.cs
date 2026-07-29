@@ -62,9 +62,6 @@ namespace KokoSim.Unity.Member
             }
 
             Click("ms-auto", () => { _state.AutoAssign(); Render(); });
-            // チーム設定（ユニフォーム配色, design-18 §3.5.1）。ナビタブを増やさず、
-            // 「チームの見た目を決める場所」としてここから開く
-            Click("ms-team-setting", () => Shell.ScreenRouter.Instance?.ShowDeferred("TeamSetting"));
 
             // 共通トップバーの「今週を進める」を配線（issue #134: 以前は未配線で死にボタンだった）。
             // ScreenRouter が SetActive で付け外しするだけなので、OnDisable で必ず外す（多重登録＝多重進週の防止）。

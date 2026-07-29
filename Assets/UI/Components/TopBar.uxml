@@ -46,6 +46,7 @@
         <ui:Label name="nav-home" class="nav__item" text="ホーム" />
         <ui:Label name="nav-players" class="nav__item" text="選手" />
         <ui:Label name="nav-member" class="nav__item" text="メンバー" />
+        <ui:Label name="nav-team" class="nav__item" text="チーム設定" />
         <ui:Label name="nav-training" class="nav__item" text="練習" />
         <ui:Label name="nav-practice" class="nav__item" text="練習試合" />
         <ui:Label name="nav-tournament" class="nav__item" text="大会・全国" />

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Nation;
+using KokoSim.Unity.Components;   // 部品辞書（RankChip）
 using KokoSim.Unity.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -64,8 +65,10 @@ namespace KokoSim.Unity.Squad
             if (own != null) own.text = NationService.ManagerSchoolName;
 
             _root.Q<Button>("ts-apply")?.RegisterCallback<ClickEvent>(_ => Apply());
-            _root.Q<Button>("ts-back")?.RegisterCallback<ClickEvent>(
-                _ => ScreenRouter.Instance?.ShowDeferred("MemberSetting"));
+
+            // 共通トップバーの「今週を進める」（他のタブ画面と同じ配線。引退週・開幕週はホームへ回送される）
+            var advance = _root.Q<Button>("advance");
+            if (advance != null) advance.clicked += () => WeekAdvance.FromSideScreen(Render);
 
             _applied = TeamColorProvider.ManagerColors;
             _draft = _applied;
@@ -83,12 +86,25 @@ namespace KokoSim.Unity.Squad
 
         private void Render()
         {
+            RenderTopBar();
             if (_rowHost == null || _draft == null) return;
             _rowHost.Clear();
             foreach (var r in Rows) _rowHost.Add(BuildRow(r.Slot, r.Label, r.GroupTop));
             _preview?.SetColors(_draft);
             if (_changed != null)
                 _changed.text = Equals(_draft, _applied) ? "" : "未確定の変更あり";
+        }
+
+        /// <summary>共通トップバーの動的値（週・メーター・自校の総合ランク）を埋める。他画面と同じ単一ソース。</summary>
+        private void RenderTopBar()
+        {
+            if (_root == null) return;
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
+            TopBarMeters.Fill(_root);
+            var rank = _root.Q<VisualElement>("team-rank");
+            if (rank == null) return;
+            rank.Clear();
+            rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Active)));
         }
 
         private VisualElement BuildRow(Slot slot, string label, bool groupTop)

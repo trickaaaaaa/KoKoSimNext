@@ -27,8 +27,6 @@
 
 .ts-title { font-size: var(--fs-page); color: var(--color-chalk); }
 
-.ts-back { flex-shrink: 0; }
-
 .ts-body {
     flex-direction: row;
     flex-grow: 1;
