@@ -158,6 +158,14 @@ namespace KokoSim.Unity.Match
         // 自作構えのバット軸の採り方（<see cref="BatAxisFromGrip"/> のクリップ別版）。自作収録は両手が
         // 23cm開いて実測線が寝るので、合成軸（BatStanceElevDeg）寄りの旧値0.154が既定
         public float IdleBatAxisFromGrip;
+        // ---- ストライクゾーンの重畳（2026-07-31 監督要望「うっすら表示できる？」）----
+        // 矩形の寸法は engine の StrikeZone（判定に使われている実物）から採る＝ここには持たない。
+        // 持つのは見た目だけ。ポスタライズの後に GL で引くので、薄いアルファがそのまま絵に出る
+        public float ZoneShow;        // 0=出さない / 1=出す
+        public Color ZoneColor;       // 線と面の色（アルファは下の2つが決める）
+        public float ZoneLineAlpha;   // 枠の濃さ
+        public float ZoneFillAlpha;   // 面の濃さ（0=枠だけ）
+        public float ZoneLineM;       // 枠の太さ[m]（実寸＝遠近でちゃんと細くなる）
         // ---- ボールの出所（issue #332・2026-07-30）----
         // ボールはリリースまで**投球する手の子**なので、位置は手ボーンローカルの微調整だけで足りる
         // （基準は design-18 §3.3.1 の掟どおり「手の中心＝手首→中指付け根の中点」）。
@@ -168,7 +176,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 14;
+        private const int CurrentVersion = 15;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -271,6 +279,12 @@ namespace KokoSim.Unity.Match
             // 旧値は「両手が23cm開いた収録」を前提にしていたが、いまは FixGrip が握りを10cmまで
             // 詰めてから軸を採るので、自作収録でも実測線が素直に使える
             IdleBatAxisFromGrip = 1f,
+            // ゾーンは既定で出す。色は壁（0.12,0.20,0.16）の上で沈まない白寄り
+            ZoneShow = 1f,
+            ZoneColor = new Color(0.95f, 0.96f, 1f),
+            ZoneLineAlpha = 0.22f,
+            ZoneFillAlpha = 0.05f,
+            ZoneLineM = 0.012f,
             // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
             BallInHandOffset = Vector3.zero,
             BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
@@ -379,6 +393,14 @@ namespace KokoSim.Unity.Match
                 c.IdleFromOwnClip = d.IdleFromOwnClip;
                 c.IdleYawDeg = d.IdleYawDeg;
                 c.IdleBatAxisFromGrip = d.IdleBatAxisFromGrip;
+            }
+            if (c.Version < 15)   // v15: ストライクゾーンの重畳
+            {
+                c.ZoneShow = d.ZoneShow;
+                c.ZoneColor = d.ZoneColor;
+                c.ZoneLineAlpha = d.ZoneLineAlpha;
+                c.ZoneFillAlpha = d.ZoneFillAlpha;
+                c.ZoneLineM = d.ZoneLineM;
             }
             c.Version = CurrentVersion;
             return c;
@@ -640,6 +662,7 @@ namespace KokoSim.Unity.Match
 
         private RenderTexture _colorRt;   // ポスト前のカメラ出力（ポスタライズ有効時のみ生成）
         private Material _postMat;
+        private Material _zoneMat;   // ストライクゾーン重畳（ポストの後に GL で引く）
         public bool Available { get; private set; }
 
         private GameObject _root;
@@ -1839,10 +1862,84 @@ namespace KokoSim.Unity.Match
             if (PosterizeLevels < 2f)
             {
                 Graphics.Blit(_colorRt, Target);
+                DrawStrikeZone();
                 return;
             }
             _postMat.SetFloat("_PosterLevels", PosterizeLevels);
             Graphics.Blit(_colorRt, Target, _postMat, 0);
+            DrawStrikeZone();   // ポスタライズの**後**。前に置くと薄さが量子化に潰される（下の説明）
+        }
+
+        /// <summary>
+        /// 判定に使われている実際のゾーン（<c>engine</c> の <see cref="KokoSim.Engine.Match.Field.StrikeZone"/>）。
+        /// 表示だけ別の寸法を持つと「絵が嘘をつく」ので、寸法はここから採って較正には持たない。
+        /// engine 側は全打者共通の固定矩形（打者ごとの身長差は入っていない）＝表示もそれに従う。
+        /// </summary>
+        private static readonly KokoSim.Engine.Match.Field.StrikeZone Zone = new();
+
+        /// <summary>
+        /// ストライクゾーンの枠（と、ごく薄い面）を本塁面 z=0 に重ねる。
+        ///
+        /// **ポスタライズの後に GL で直接引く**。ポスト前にシーン内の半透明として置くと、6段の量子化が
+        /// 「同じ段に丸められて消える」か「まるごと1段ずれてベタ板になる」かの二択になり、
+        /// 「うっすら」が絵として存在できない（2026-07-31）。ここなら薄いアルファがそのまま出る。
+        ///
+        /// 太さは画素でなく**実寸[m]**で持つ＝遠近でちゃんと細くなるし、RTの寸法を変えても比が崩れない
+        /// （3Dの構図は画角でなく実寸で指定する、と同じ理由。design-18 §3.5.1）。
+        /// </summary>
+        private void DrawStrikeZone()
+        {
+            if (_cal.ZoneShow < 0.5f || _root == null || _camera == null) return;
+            if (_zoneMat == null)
+            {
+                var sh = Shader.Find("KokoSim/DuelStageZone");
+                if (sh == null) return;
+                _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+            }
+
+            float hw = (float)Zone.HalfWidthM;
+            float bot = (float)Zone.BottomM;
+            float top = (float)Zone.TopM;
+            float t = Mathf.Clamp(_cal.ZoneLineM, 0.002f, Mathf.Min(hw, (top - bot) * 0.5f));
+            var tr = _root.transform;
+
+            // 色はリニア空間へ自分で落とす（掟: 配列・即時モードは自動変換が効かない）。アルファは変換しない
+            var baseCol = _cal.ZoneColor;
+            var line = baseCol.linear; line.a = Mathf.Clamp01(_cal.ZoneLineAlpha);
+            var fill = baseCol.linear; fill.a = Mathf.Clamp01(_cal.ZoneFillAlpha);
+
+            var prev = RenderTexture.active;
+            RenderTexture.active = Target;
+            GL.PushMatrix();
+            GL.LoadProjectionMatrix(GL.GetGPUProjectionMatrix(_camera.projectionMatrix, true));
+            GL.modelview = _camera.worldToCameraMatrix;
+            _zoneMat.SetPass(0);
+            GL.Begin(GL.QUADS);
+            if (fill.a > 0.001f)
+            {
+                GL.Color(fill);
+                ZoneQuad(tr, -hw, bot, hw, top);
+            }
+            if (line.a > 0.001f)
+            {
+                GL.Color(line);
+                ZoneQuad(tr, -hw, top - t, hw, top);   // 上
+                ZoneQuad(tr, -hw, bot, hw, bot + t);   // 下
+                ZoneQuad(tr, -hw, bot, -hw + t, top);  // 左（三塁側）
+                ZoneQuad(tr, hw - t, bot, hw, top);    // 右（一塁側）
+            }
+            GL.End();
+            GL.PopMatrix();
+            RenderTexture.active = prev;
+        }
+
+        /// <summary>本塁面（ステージローカル z=0）の矩形を1枚のQUADとして積む。</summary>
+        private static void ZoneQuad(Transform tr, float x0, float y0, float x1, float y1)
+        {
+            GL.Vertex(tr.TransformPoint(new Vector3(x0, y0, 0f)));
+            GL.Vertex(tr.TransformPoint(new Vector3(x1, y0, 0f)));
+            GL.Vertex(tr.TransformPoint(new Vector3(x1, y1, 0f)));
+            GL.Vertex(tr.TransformPoint(new Vector3(x0, y1, 0f)));
         }
 
         private static RenderTexture CreateRt(int width, int height)
@@ -1975,6 +2072,7 @@ namespace KokoSim.Unity.Match
                 UnityEngine.Rendering.RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
                 Object.DestroyImmediate(_postMat); _postMat = null;
             }
+            if (_zoneMat != null) { Object.DestroyImmediate(_zoneMat); _zoneMat = null; }
             if (_camera != null) _camera.targetTexture = null;
             if (_colorRt != null) { _colorRt.Release(); Object.DestroyImmediate(_colorRt); _colorRt = null; }
             if (Target != null) { Target.Release(); Object.DestroyImmediate(Target); Target = null; }

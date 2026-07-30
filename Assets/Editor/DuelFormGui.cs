@@ -32,6 +32,20 @@ namespace KokoSim.EditorTools
                         Mathf.Abs(cal.SwingLiftM)), EditorStyles.miniLabel);
             }
 
+            EditorGUILayout.LabelField("ストライクゾーン", EditorStyles.miniBoldLabel);
+            bool zone = EditorGUILayout.ToggleLeft("うっすら出す", cal.ZoneShow >= 0.5f);
+            cal.ZoneShow = zone ? 1f : 0f;
+            using (new EditorGUI.DisabledScope(!zone))
+            using (new EditorGUI.IndentLevelScope())
+            {
+                cal.ZoneLineAlpha = EditorGUILayout.Slider("枠の濃さ", cal.ZoneLineAlpha, 0f, 1f);
+                cal.ZoneFillAlpha = EditorGUILayout.Slider("面の濃さ", cal.ZoneFillAlpha, 0f, 0.5f);
+                cal.ZoneLineM = EditorGUILayout.Slider("枠の太さ [m]", cal.ZoneLineM, 0.002f, 0.05f);
+                cal.ZoneColor = EditorGUILayout.ColorField("色", cal.ZoneColor);
+                EditorGUILayout.LabelField(" ", "矩形の寸法は engine の判定値そのまま（表示では変えない）",
+                    EditorStyles.miniLabel);
+            }
+
             EditorGUILayout.LabelField("構え（待機ループ）", EditorStyles.miniBoldLabel);
             bool ownIdle = EditorGUILayout.ToggleLeft(
                 "構えだけ自作モーションを使う（スイングは差し替えない）", cal.IdleFromOwnClip >= 0.5f);
