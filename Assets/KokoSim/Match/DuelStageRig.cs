@@ -118,6 +118,15 @@ namespace KokoSim.Unity.Match
         public float HeadUntilSec;          // ここまで見続ける（スイング後は収録のまま）
         public float KneeDeg;               // 踏み込み脚を股関節→足首軸まわりに回す角[度]（体を残す）
         public float KneeFromSec, KneeFullSec, KneeToSec;   // 効き始め／全開／戻し切り
+        // ---- 体の開き（FixTorso・2026-07-30 監督指摘「開きを抑えたい」）----
+        // 胴を鉛直軸まわりに戻して「開かずに待つ」絵を作る。腰は回さない（脚ごと回って接地が滑るため）＝
+        // 背骨チェーン（Spine/Chest/UpperChest）へ配分する。1関節に寄せると素体の可動域で折れる。
+        public float TorsoCloseDeg;         // 胴を戻す角[度]（+/−で回る向きが変わる。0=無効）
+        public float TorsoFromSec, TorsoFullSec, TorsoToSec;   // 効き始め／全開／戻し切り（クリップ内秒）
+        // ---- 振りの速さ（2026-07-30 監督指摘「振りを早くしたい」）----
+        // クリップ内時刻の進み方を一様に変えるだけ＝緩急の比は保つ。ポーズは12fps量子化なので、
+        // 上げるほど1振りに使えるコマが減る（0.70sの振りは 1.0倍で約8コマ・1.5倍で約6コマ）
+        public float SwingSpeed;            // 1=収録のまま。スイング系の一発物にだけ掛かる
         // ---- バットの置き方（AlignBat）----
         // 握りが直った今は「両手を結んだ線＝バットの軸」がそのまま使える。旧実装は両手が23cm開いて
         // 拳が積み重ならない収録を前提に、ヨーだけ実測して仰角を決め打ちしていた（合成軸）。
@@ -139,7 +148,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 9;
+        private const int CurrentVersion = 10;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -199,6 +208,21 @@ namespace KokoSim.Unity.Match
             // 当初の「体を残す」とは別の使い方になっているので、直すならこの3つの秒を戻す
             KneeDeg = -54f,
             KneeFromSec = 3.4f, KneeFullSec = 0.14f, KneeToSec = 0.90f,   // 旧ToSec=1.86（構えの終わりに合わせる）
+            // 開きの抑えはスイング区間だけ（構えは収録のまま／フォローは開いてよい）。
+            // 全開を接触（1.30）に置くのは、開きが絵に出るのが「振り出し〜当たる瞬間」だから。
+            //
+            // 符号は推測でなく実測から（掟: 符号の取り違えは絵でしか気づけない）。
+            // RunRootPathProbe の胸向き実測（Batter_Mixamo_Strike_01）:
+            //   t=1.00 chest=(-0.90,+0.44)=-64° → t=1.25 (+0.06,-1.00)=+177° → t=1.50 (+1.00,-0.05)=+93°
+            // ＝スイング中の胸ヨーは**単調減少**（-64→-183→-267）。開き＝負の回転なので、
+            // 抑える補正は**正**。負を入れると開きを助長する
+            // 既定を控えめ（8°）にしてあるのは、いまバットが**手追従**だから。胴を閉じるとその分だけ
+            // 腕とバットが引き戻され、18°では接触の瞬間にバットが胸元へ畳まれて球に届かなくなる
+            // （2026-07-30 実測）。バットをコマごとの手動配置へ移したら、この上限は外れるので
+            // そこで本調整する
+            TorsoCloseDeg = 8f,
+            TorsoFromSec = 0.90f, TorsoFullSec = 1.30f, TorsoToSec = 1.70f,
+            SwingSpeed = 1f,   // 既定は収録のまま。上げ幅は絵で選ぶ（打撃フォーム確認窓のつまみ）
             // 旧0.154（＝ほぼ合成軸）。自作Rokokoは両手が開いて拳が積み重ならない収録だったので
             // 実測線が使えなかったが、Mixamoは元からバットを両手で握った収録なので実測線が素直に使える。
             // 0.154のままだと合成軸の仰角35.7°が頭の方向へ立ち上がり、構えでバットが顔を貫く（2026-07-30 絵で確認）
@@ -291,6 +315,14 @@ namespace KokoSim.Unity.Match
             {
                 c.BallInHandOffset = d.BallInHandOffset;
                 c.BallReleaseClipTime = d.BallReleaseClipTime;
+            }
+            if (c.Version < 10)   // v10: 体の開きの抑え（背骨チェーンへのヨー戻し）と振りの速さ
+            {
+                c.TorsoCloseDeg = d.TorsoCloseDeg;
+                c.TorsoFromSec = d.TorsoFromSec;
+                c.TorsoFullSec = d.TorsoFullSec;
+                c.TorsoToSec = d.TorsoToSec;
+                c.SwingSpeed = d.SwingSpeed;
             }
             c.Version = CurrentVersion;
             return c;
@@ -612,6 +644,11 @@ namespace KokoSim.Unity.Match
             public float EndAt;                      // 一発物の早期終了時刻（0=クリップ末尾まで）
             public float DefaultEndAt;               // 一発物の終了後に戻す EndAt（0=末尾まで）。
                                                      // 投手は購入クリップ6.00sのうちフォロースルーまでで打ち切りたいので使う
+            // 再生速度（1=収録のまま）。クリップ内時刻の進み方だけを一様に変える＝**緩急の比は保たれる**
+            // ので「内部緩急を改変しない」掟には触れない（禁止なのはキーの打ち直し）。
+            // 速度を入れたら**アンカーの逆算も実秒→クリップ秒へ換算し直す**こと（Speed倍する）。
+            // 忘れると面通過が球の到達からずれ、絵では「差し替えたら合わなくなった」としか見えない
+            public float Speed = 1f;
             public float HoldSeconds;                // 末尾到達時、待機へ戻る前にそのポーズで止める秒数（0=即戻る）
             public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
             public Material RegionMat;               // 領域塗り分けマテリアル（攻守交代の塗り替え用。一色フォールバック時はnull）
@@ -1126,15 +1163,15 @@ namespace KokoSim.Unity.Match
             {
                 case DuelPitchOutcome.SwingMiss:
                     // 空振り専用の収録が無いので同じスイングを使い、走り出し前で打ち切って構えへ戻す
-                    SetActorClip(_batter, _swingMissClip, SwingMissPlane - flight, BatterRunStart);
+                    SetSwing(_swingMissClip, SwingMissPlane, flight, BatterRunStart);
                     _batter.HoldSeconds = SwingMissHoldSeconds;   // 振り切りポーズでしばらく止めてから待機へ戻す
                     break;
                 case DuelPitchOutcome.FoulContact:
                     // 走り出し（実測3.25s）前でカットして打席へ戻る
-                    SetActorClip(_batter, _swingHitClip, SwingHitContact - flight, BatterRunStart);
+                    SetSwing(_swingHitClip, SwingHitContact, flight, BatterRunStart);
                     break;
                 case DuelPitchOutcome.InPlayContact:
-                    SetActorClip(_batter, _swingHitClip, SwingHitContact - flight, 0f);
+                    SetSwing(_swingHitClip, SwingHitContact, flight, 0f);
                     break;
                 // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
                 // 捕手の捕球は下の catcherCatches に含めたまま残す
@@ -1143,6 +1180,27 @@ namespace KokoSim.Unity.Match
                     break;
             }
             ScheduleCatch(catchIndex);
+        }
+
+        /// <summary>
+        /// 打者のスイングを「アンカーが球の到達に一致する」ように予約する（速度対応版）。
+        ///
+        /// 頭出しは<b>クリップ秒</b>、飛翔時間は<b>実秒</b>なので、再生速度を掛けたら
+        /// <c>anchorClipSec − flight × Speed</c> にしないと面通過が球からずれる。
+        /// 速度1では従来式（anchor − flight）と一致する。
+        ///
+        /// 頭出しが負になると <see cref="SetActorClip"/> の <c>Max(0,…)</c> で潰れ、**黙って**
+        /// リリース直後に振り始める（捕球アンカーで実際に踏んだ罠。design-18 §4.5-③）。
+        /// 現行値では起きない: 接触1.30s／飛翔0.42〜0.52s なので、潰れるのは速度 2.5倍超。
+        /// つまみの上限を2.0にしてあるのはこの余裕を確保するため。上限を上げるなら
+        /// 捕球と同じくカウントダウン開始（後ろへずらす予約）へ作り替えること。
+        /// </summary>
+        private void SetSwing(AnimationClip clip, float anchorClipSec, float flight, float endAt)
+        {
+            if (_batter == null || clip == null) return;
+            float k = Mathf.Max(0.1f, _cal.SwingSpeed);
+            SetActorClip(_batter, clip, anchorClipSec - flight * k, endAt);
+            _batter.Speed = k;   // SetActorClip の後（差し替えで持ち越さないため）
         }
 
         /// <summary>
@@ -2088,7 +2146,7 @@ namespace KokoSim.Unity.Match
                 FinishOneShot(a);
                 return;
             }
-            a.Time += step;
+            a.Time += step * a.Speed;
             float end = a.EndAt > 0f && a.EndAt < a.Clip.length ? a.EndAt : a.Clip.length;
             if (a.Time >= end)
             {
@@ -2131,6 +2189,7 @@ namespace KokoSim.Unity.Match
             CancelFade(a);
             a.Time = 0f;
             a.EndAt = a.DefaultEndAt;   // 投手は購入クリップ6.00sの尻尾を毎回切り落とす（既定0=末尾まで）
+            a.Speed = 1f;               // 一発物の速度指定は持ち越さない（待機は常に収録の速さ）
             if (a.IdleClip != null && a.Clip != a.IdleClip)
             {
                 SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰

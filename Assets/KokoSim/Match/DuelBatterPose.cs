@@ -26,6 +26,9 @@ namespace KokoSim.Unity.Match
         {
             if (anim == null) return;
             FixKnee(anim, cal, clipTime);
+            // 胴は頭・握りより先。背骨を回すと腕も頭も一緒に運ばれるので、後の2つが
+            // 「回した後の体」を基準に当たり直す必要がある（逆順だと視線と握りが胴のぶんずれる）
+            FixTorso(anim, cal, clipTime);
             FixHead(anim, cal, clipTime, aimPoint);
             FixGrip(anim, cal, clipTime);
         }
@@ -260,6 +263,49 @@ namespace KokoSim.Unity.Match
         /// （素体で符号が逆になるため。購入素体=+Z / UBC=-Z）。
         /// </summary>
         public static Vector3 HeadForwardLocal { get; set; } = Vector3.forward;
+
+        // ---------------------------------------------------------------- 胴（開き）
+
+        /// <summary>背骨チェーンの配分。合計1.0＝先端（肩）での戻し量が TorsoCloseDeg になる。</summary>
+        private static readonly (HumanBodyBones Bone, float Share)[] TorsoChain =
+        {
+            (HumanBodyBones.Spine, 0.40f),
+            (HumanBodyBones.Chest, 0.35f),
+            (HumanBodyBones.UpperChest, 0.25f),
+        };
+
+        /// <summary>
+        /// 体の開きを抑える（2026-07-30 監督指摘）。胴を**鉛直軸まわり**に戻して、
+        /// 振り出しから接触まで前側が開き切らないようにする。
+        ///
+        /// 腰（Hips）は回さない。腰から回すと脚ごと持って行かれて足裏が滑る＝接地が壊れるため、
+        /// 回すのは背骨チェーンだけにして、配分（<see cref="TorsoChain"/>）で1関節への集中を避ける。
+        /// 親を回すと子（腕・頭）も運ばれるので、合計が先端での戻し量になる＝各骨は share ぶんだけ回す。
+        ///
+        /// UpperChest は素体によって存在しない（Humanoid の任意ボーン）。無い場合は
+        /// その配分を残りへ回して合計角を保つ＝素体を替えても効き方が変わらない。
+        /// </summary>
+        private static void FixTorso(Animator anim, in DuelCalibration cal, float t)
+        {
+            float w = Ramp(t, cal.TorsoFromSec, cal.TorsoFullSec)
+                * (1f - Ramp(t, cal.TorsoFullSec, cal.TorsoToSec));
+            if (w <= 0.001f || Mathf.Abs(cal.TorsoCloseDeg) < 0.01f) return;
+
+            float present = 0f;
+            foreach (var (bone, share) in TorsoChain)
+                if (B(anim, bone) != null) present += share;
+            if (present <= 0.001f) return;
+
+            float total = cal.TorsoCloseDeg * w;
+            foreach (var (bone, share) in TorsoChain)
+            {
+                var tr = B(anim, bone);
+                if (tr == null) continue;
+                // 骨の位置を軸が通る＝チェーンが伸び縮みしない（回すだけ）
+                RotateAround(tr, tr.position,
+                    Quaternion.AngleAxis(total * (share / present), Vector3.up));
+            }
+        }
 
         // ---------------------------------------------------------------- 脚
 

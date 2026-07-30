@@ -57,6 +57,16 @@ namespace KokoSim.EditorTools
             cal.KneeFromSec = EditorGUILayout.Slider("効き始め [秒]", cal.KneeFromSec, 0f, 3.4f);
             cal.KneeFullSec = EditorGUILayout.Slider("全開 [秒]", cal.KneeFullSec, 0f, 3.4f);
             cal.KneeToSec = EditorGUILayout.Slider("戻し切り [秒]", cal.KneeToSec, 0f, 3.4f);
+
+            EditorGUILayout.LabelField("振りの速さ", EditorStyles.miniBoldLabel);
+            cal.SwingSpeed = EditorGUILayout.Slider("再生速度 [倍]", cal.SwingSpeed, 0.5f, 2f);
+            EditorGUILayout.LabelField(" ", "ポーズは12fps＝この倍率ぶんコマが減る", EditorStyles.miniLabel);
+
+            EditorGUILayout.LabelField("胴（開きを抑える）", EditorStyles.miniBoldLabel);
+            cal.TorsoCloseDeg = EditorGUILayout.Slider("胴を戻す [度]", cal.TorsoCloseDeg, -45f, 45f);
+            cal.TorsoFromSec = EditorGUILayout.Slider("効き始め [秒]", cal.TorsoFromSec, 0f, 3.4f);
+            cal.TorsoFullSec = EditorGUILayout.Slider("全開 [秒]", cal.TorsoFullSec, 0f, 3.4f);
+            cal.TorsoToSec = EditorGUILayout.Slider("戻し切り [秒]", cal.TorsoToSec, 0f, 3.4f);
         }
 
         /// <summary>片手ぶんのつまみ。左右で同じ並びを出す（片方だけ項目が増えると比べられなくなる）。</summary>
