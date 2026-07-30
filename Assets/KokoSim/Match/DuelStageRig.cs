@@ -263,10 +263,14 @@ namespace KokoSim.Unity.Match
             SwingLiftM = -0.018f,
             SwingPlaneTiltDeg = -63f,
             SwingPlaneBatOnly = 1f,   // 既定はバットだけ動かす（腕は収録のまま）
-            // 構えは既定では打撃クリップのまま。自作構えは絵を見て選ぶもの（打撃フォーム確認窓のトグル）
-            IdleFromOwnClip = 0f,
-            IdleYawDeg = 90f + 33.8f,      // 自作Rokokoの旧・立ち向き（Mixamoへ差し替える前の実測値）
-            IdleBatAxisFromGrip = 0.154f,  // 同上（自作収録は両手が開くので合成軸寄り）
+            // 構えは自作Rokoko（監督選定 2026-07-31・打撃フォーム確認窓で確認）。スイングはMixamoのまま。
+            IdleFromOwnClip = 1f,
+            // 旧・自作の立ち向きは 90+33.8=123.8 だったが、Mixamoのスイングと繋ぐぶん 119 へ寄せた
+            IdleYawDeg = 119f,
+            // 予想（合成軸寄りの旧値0.154）は外れで、実測線そのままが良かった。
+            // 旧値は「両手が23cm開いた収録」を前提にしていたが、いまは FixGrip が握りを10cmまで
+            // 詰めてから軸を採るので、自作収録でも実測線が素直に使える
+            IdleBatAxisFromGrip = 1f,
             // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
             BallInHandOffset = Vector3.zero,
             BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
