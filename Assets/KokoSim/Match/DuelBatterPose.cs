@@ -121,6 +121,27 @@ namespace KokoSim.Unity.Match
             // スイング中は許容を上げる（実物も接触では腕が伸びる。収録もこの辺りで手が飛ぶ）
             float sw = Mathf.Min(Ramp(t, cal.GripSwingFromSec - 0.10f, cal.GripSwingFromSec),
                                  1f - Ramp(t, cal.GripSwingToSec, cal.GripSwingToSec + 0.10f));
+
+            // スイング面の高さ・傾き（2026-07-30 監督指摘「足元のボールを打っているように見える」）。
+            // 収録の面が低いのを、クリップを触らずに**握りを動かして**持ち上げる。バット軸は
+            // AlignBat が動かした後の手から採り直すので、バットは自動でこの面に乗る＝
+            // バットを直接置く（DuelBatPath）必要が無く、腕はIKが自然に追いてくる。
+            // バット主のとき（bat.Valid）は行き先が既に決まっているので効かせない。
+            if (!bat.Valid && sw > 0.001f)
+            {
+                if (Mathf.Abs(cal.SwingPlaneTiltDeg) > 0.01f)
+                {
+                    // 傾ける軸は「握り線の水平成分に直交する水平線」＝面の中で持ち上がる
+                    Vector3 horiz = new Vector3(u.x, 0f, u.z);
+                    if (horiz.sqrMagnitude > 1e-6f)
+                    {
+                        Vector3 perp = Vector3.Cross(Vector3.up, horiz).normalized;
+                        u = (Quaternion.AngleAxis(cal.SwingPlaneTiltDeg * sw, perp) * u).normalized;
+                    }
+                }
+                anchor += Vector3.up * (cal.SwingLiftM * sw);
+            }
+
             float gl = Mathf.Lerp(cal.GripReachGuard, cal.GripReachGuardSwing, sw);
             float gr = Mathf.Lerp(cal.GripReachGuardTop, cal.GripReachGuardSwingTop, sw);
             Vector3 tl = ClampReach(lu, ll, lh, a, Vector3.Lerp(a, anchor + u * half, w), gl);

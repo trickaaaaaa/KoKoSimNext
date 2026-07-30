@@ -58,6 +58,11 @@ namespace KokoSim.EditorTools
             cal.KneeFullSec = EditorGUILayout.Slider("全開 [秒]", cal.KneeFullSec, 0f, 3.4f);
             cal.KneeToSec = EditorGUILayout.Slider("戻し切り [秒]", cal.KneeToSec, 0f, 3.4f);
 
+            EditorGUILayout.LabelField("スイング面（ど真ん中を打つ高さに）", EditorStyles.miniBoldLabel);
+            cal.SwingLiftM = EditorGUILayout.Slider("握りを持ち上げる [m]", cal.SwingLiftM, -0.20f, 0.40f);
+            cal.SwingPlaneTiltDeg = EditorGUILayout.Slider("面の傾き [度]", cal.SwingPlaneTiltDeg, -40f, 40f);
+            EditorGUILayout.LabelField(" ", "スイング中だけ効く。腕はIKが追いてくる", EditorStyles.miniLabel);
+
             EditorGUILayout.LabelField("振りの速さ", EditorStyles.miniBoldLabel);
             cal.SwingSpeed = EditorGUILayout.Slider("再生速度 [倍]", cal.SwingSpeed, 0.5f, 2f);
             EditorGUILayout.LabelField(" ", "ポーズは12fps＝この倍率ぶんコマが減る", EditorStyles.miniLabel);

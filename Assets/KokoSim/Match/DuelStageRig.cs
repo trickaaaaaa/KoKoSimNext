@@ -141,6 +141,13 @@ namespace KokoSim.Unity.Match
         // ---- バットをコマごとに置く（DuelBatPath・2026-07-30 監督指示）----
         // 0=従来の手追従 / 1=軌道テーブル。テーブルが無い（キー2本未満）ときは1でも手追従へ落ちる
         public float BatFromPath;
+
+        // ---- スイング面（2026-07-30 監督指摘「足元のボールを打っているように見える」）----
+        // 収録のスイングは面が低く、ど真ん中の球を打つ絵にならない。クリップは触らず、
+        // **スイング中だけ握りを持ち上げて傾ける**＝腕はIKが自然に追いてくる（手追従のまま効く）。
+        // 効く区間は握りの許容を上げるのと同じ窓（GripSwingFromSec〜GripSwingToSec）。
+        public float SwingLiftM;         // 握りの中点を持ち上げる量[m]（+で高い面）
+        public float SwingPlaneTiltDeg;  // 握り線の傾き[度]（+/−でバレル側が上下。符号は実測で決める）
         // ---- ボールの出所（issue #332・2026-07-30）----
         // ボールはリリースまで**投球する手の子**なので、位置は手ボーンローカルの微調整だけで足りる
         // （基準は design-18 §3.3.1 の掟どおり「手の中心＝手首→中指付け根の中点」）。
@@ -151,7 +158,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 11;
+        private const int CurrentVersion = 12;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -240,6 +247,8 @@ namespace KokoSim.Unity.Match
             BatHandsApartM = 0.246f,
             // 既定は0＝手追従のまま。テーブルを焼いて絵を確かめてから1へ上げる
             BatFromPath = 0f,
+            SwingLiftM = 0.08f,       // 検証中
+            SwingPlaneTiltDeg = 0f,   // 検証中
             // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
             BallInHandOffset = Vector3.zero,
             BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
@@ -335,6 +344,11 @@ namespace KokoSim.Unity.Match
             if (c.Version < 11)   // v11: バットをコマごとに置く（軌道テーブルへの切り替え）
             {
                 c.BatFromPath = d.BatFromPath;
+            }
+            if (c.Version < 12)   // v12: スイング面の高さ・傾き
+            {
+                c.SwingLiftM = d.SwingLiftM;
+                c.SwingPlaneTiltDeg = d.SwingPlaneTiltDeg;
             }
             c.Version = CurrentVersion;
             return c;
