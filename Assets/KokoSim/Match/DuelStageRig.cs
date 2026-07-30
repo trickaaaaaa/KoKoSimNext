@@ -148,6 +148,11 @@ namespace KokoSim.Unity.Match
         // 効く区間は握りの許容を上げるのと同じ窓（GripSwingFromSec〜GripSwingToSec）。
         public float SwingLiftM;         // 握りの中点を持ち上げる量[m]（+で高い面）
         public float SwingPlaneTiltDeg;  // 握り線の傾き[度]（+/−でバレル側が上下。符号は実測で決める）
+        // 上2つを**どちらへ掛けるか**の配分（2026-07-31 監督要望「腕追いかけずにバットだけ調整」）。
+        // 0=握りを動かして腕を追わせる（IKが追いてくる／手とバットは離れない）
+        // 1=バット単体を動かす（腕は収録のまま）。傾きは**握り点まわりの回転**なので手から離れないが、
+        //   持ち上げは平行移動＝その量だけバットが手から浮く（＝浮きが要らないなら傾きだけで作る）
+        public float SwingPlaneBatOnly;
         // ---- ボールの出所（issue #332・2026-07-30）----
         // ボールはリリースまで**投球する手の子**なので、位置は手ボーンローカルの微調整だけで足りる
         // （基準は design-18 §3.3.1 の掟どおり「手の中心＝手首→中指付け根の中点」）。
@@ -158,7 +163,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 12;
+        private const int CurrentVersion = 13;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -247,8 +252,11 @@ namespace KokoSim.Unity.Match
             BatHandsApartM = 0.246f,
             // 既定は0＝手追従のまま。テーブルを焼いて絵を確かめてから1へ上げる
             BatFromPath = 0f,
-            SwingLiftM = 0.08f,       // 検証中
+            // スイング面は監督が窓で追い込み中。0.08は腕追従だった頃の暫定値で承認前なので、
+            // バット単体モードへ切り替えるここで中立（無補正）へ戻す
+            SwingLiftM = 0f,          // 検証中
             SwingPlaneTiltDeg = 0f,   // 検証中
+            SwingPlaneBatOnly = 1f,   // 既定はバットだけ動かす（腕は収録のまま）
             // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
             BallInHandOffset = Vector3.zero,
             BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
@@ -349,6 +357,10 @@ namespace KokoSim.Unity.Match
             {
                 c.SwingLiftM = d.SwingLiftM;
                 c.SwingPlaneTiltDeg = d.SwingPlaneTiltDeg;
+            }
+            if (c.Version < 13)   // v13: スイング面を腕でなくバット単体へ掛ける配分
+            {
+                c.SwingPlaneBatOnly = d.SwingPlaneBatOnly;
             }
             c.Version = CurrentVersion;
             return c;
@@ -2525,6 +2537,27 @@ namespace KokoSim.Unity.Match
                         axis = Vector3.Slerp(axis, d, Mathf.Clamp01(_cal.BatAxisFromGrip)).normalized;
                 }
                 var grip = (lh + rh) * 0.5f;
+                // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。
+                // 傾きは握り点まわりの回転＝ノブは手に残るので離れない。持ち上げは平行移動なので
+                // その量だけバットが手から浮く（承知の上で使うつまみ）。掛ける窓は FixGrip と共有＝
+                // 別々に持つと腕とバットが違う時刻で動き出す
+                float batOnly = battingClip
+                    ? Mathf.Clamp01(_cal.SwingPlaneBatOnly) * DuelBatterPose.SwingWindow(_cal, _batter.Time)
+                    : 0f;
+                if (batOnly > 0.001f)
+                {
+                    if (Mathf.Abs(_cal.SwingPlaneTiltDeg) > 0.01f)
+                    {
+                        // axis はノブ→バレル。n=Cross(水平axis, up) まわりの正回転でバレル端が上がる
+                        var h2 = new Vector3(axis.x, 0f, axis.z);
+                        if (h2.sqrMagnitude > 1e-6f)
+                        {
+                            var n = Vector3.Cross(h2, Vector3.up).normalized;
+                            axis = (Quaternion.AngleAxis(_cal.SwingPlaneTiltDeg * batOnly, n) * axis).normalized;
+                        }
+                    }
+                    grip += Vector3.up * (_cal.SwingLiftM * batOnly);
+                }
                 float halfLen = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
                 _bat.transform.localScale = new Vector3(1f, halfLen / BatHalfLength, 1f);
                 _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);

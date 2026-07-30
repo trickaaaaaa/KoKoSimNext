@@ -71,6 +71,15 @@ namespace KokoSim.Unity.Match
             return Mathf.Clamp01((t - t0) / (t1 - t0));
         }
 
+        /// <summary>
+        /// スイング区間の効き（0〜1・前後10msで立ち上げ／落とし）。握りの許容とスイング面が使う。
+        /// **バット側（<see cref="DuelStageRig"/>.AlignBat）も同じ窓で掛けるので公開している**
+        /// ＝2箇所に書くと腕とバットが別の時刻で動き出して「バットだけ先に浮く」事故になる。
+        /// </summary>
+        public static float SwingWindow(in DuelCalibration cal, float t)
+            => Mathf.Min(Ramp(t, cal.GripSwingFromSec - 0.10f, cal.GripSwingFromSec),
+                         1f - Ramp(t, cal.GripSwingToSec, cal.GripSwingToSec + 0.10f));
+
         private static void TwoBoneIk(Transform root, Transform mid, Transform tip, Vector3 target,
             float poleDeg)
             => DuelIk.TwoBoneIk(root, mid, tip, target, poleDeg);
@@ -119,27 +128,34 @@ namespace KokoSim.Unity.Match
                 else if (bias > 0f) anchor = Vector3.Lerp(mid, b + u * half, bias);
             }
             // スイング中は許容を上げる（実物も接触では腕が伸びる。収録もこの辺りで手が飛ぶ）
-            float sw = Mathf.Min(Ramp(t, cal.GripSwingFromSec - 0.10f, cal.GripSwingFromSec),
-                                 1f - Ramp(t, cal.GripSwingToSec, cal.GripSwingToSec + 0.10f));
+            float sw = SwingWindow(cal, t);
 
             // スイング面の高さ・傾き（2026-07-30 監督指摘「足元のボールを打っているように見える」）。
             // 収録の面が低いのを、クリップを触らずに**握りを動かして**持ち上げる。バット軸は
             // AlignBat が動かした後の手から採り直すので、バットは自動でこの面に乗る＝
             // バットを直接置く（DuelBatPath）必要が無く、腕はIKが自然に追いてくる。
             // バット主のとき（bat.Valid）は行き先が既に決まっているので効かせない。
-            if (!bat.Valid && sw > 0.001f)
+            //
+            // SwingPlaneBatOnly ぶんは**ここでは効かせない**（腕を動かさない）。その分は AlignBat が
+            // バット単体へ掛ける＝手はクリップのまま・バットだけ面が変わる（2026-07-31 監督要望）。
+            float arm = sw * (1f - Mathf.Clamp01(cal.SwingPlaneBatOnly));
+            if (!bat.Valid && arm > 0.001f)
             {
                 if (Mathf.Abs(cal.SwingPlaneTiltDeg) > 0.01f)
                 {
-                    // 傾ける軸は「握り線の水平成分に直交する水平線」＝面の中で持ち上がる
-                    Vector3 horiz = new Vector3(u.x, 0f, u.z);
+                    // 傾ける軸は「バレル方向の水平成分に直交する水平線」＝面の中で持ち上がる。
+                    // 符号は幾何で決まる（実測不要）: n=Cross(水平バレル, up) まわりの正回転で
+                    // バレル端が**上がる**（Rodrigues: n×v=+up）。u はノブ側を向くので barrel=-u、
+                    // 回転は線形なので同じ R を u に掛ければよい
+                    Vector3 barrel = -u;
+                    Vector3 horiz = new Vector3(barrel.x, 0f, barrel.z);
                     if (horiz.sqrMagnitude > 1e-6f)
                     {
-                        Vector3 perp = Vector3.Cross(Vector3.up, horiz).normalized;
-                        u = (Quaternion.AngleAxis(cal.SwingPlaneTiltDeg * sw, perp) * u).normalized;
+                        Vector3 n = Vector3.Cross(horiz, Vector3.up).normalized;
+                        u = (Quaternion.AngleAxis(cal.SwingPlaneTiltDeg * arm, n) * u).normalized;
                     }
                 }
-                anchor += Vector3.up * (cal.SwingLiftM * sw);
+                anchor += Vector3.up * (cal.SwingLiftM * arm);
             }
 
             float gl = Mathf.Lerp(cal.GripReachGuard, cal.GripReachGuardSwing, sw);
