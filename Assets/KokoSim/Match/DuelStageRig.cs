@@ -531,6 +531,22 @@ namespace KokoSim.Unity.Match
             public readonly List<Material> TeamMats = new();  // チーム色で塗った装備のマテリアル（帽子・捕手ヘルメット殻）
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
+            public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+        }
+
+        /// <summary>
+        /// Humanoid Foot IK をミラー状態に同期する（ミラー中はOFF・非ミラーは既定どおりON）。
+        /// AnimationClipPlayable は既定で Foot IK 有効で、足ゴールを**ワールド空間の鏡映盲な回転数学**で
+        /// 解くため、負スケール祖先の下では両足が「鏡映されない側」のゴールへ引っ張られ、
+        /// 脚だけ頭の高さまで折り畳まれる（issue #337 受け入れ撮影で実害: ズボン・靴が胴に隠れて
+        /// 「腰から下が消えた」ように見える）。Playable は差し替えで作り直されるので、
+        /// 生成した直後にも必ず呼ぶこと。
+        /// </summary>
+        private static void SyncFootIk(Actor a)
+        {
+            if (a == null) return;
+            if (a.Playable.IsValid()) a.Playable.SetApplyFootIK(!a.Mirrored);
+            if (a.FadeFrom.IsValid()) a.FadeFrom.SetApplyFootIK(!a.Mirrored);
         }
 
         public DuelStageRig()
@@ -690,6 +706,11 @@ namespace KokoSim.Unity.Match
             // 上書き中ならその値で作る。全マテリアル・装備が出揃った後に呼ぶ＝漏れなく反映する
             ApplyCalibration(cal0);
 
+            // 左右ミラーの枠（issue #337）。装備の視線ベイクが済んだ後に挟む。恒等スケールの間は
+            // ワールド行列が変わらない＝右打者・右投手の絵は従来と一致（回帰の根拠）
+            _batterMirror = WrapInMirrorNode(_batter, "mirror-batter");
+            _pitcherMirror = WrapInMirrorNode(_pitcher, "mirror-pitcher");
+
             Available = true;
             Live = this;
         }
@@ -731,10 +752,12 @@ namespace KokoSim.Unity.Match
             }
             // 立ち位置（x/zのみ・yは接地系）。装備の視線ベイクはスポーン時の位置のままなので、
             // ライブ移動中はつば等の向きがわずかに古い＝焼き戻し後の rig 再生成で正しくベイクされる
+            // 打者は生の較正値のまま（左打者は鏡映親ノードが x を映す＝#337）。
+            // 捕手・球審は反転しない代わりに並びだけ打者と反対側へ寄せる（BatterSideSign）
             SetActorXZ(_batter, cal.BatterX, cal.BatterZ);
             SetActorYaw(_batter, cal.BatterYawDeg);
-            SetActorXZ(_catcher, cal.CatcherX, cal.CatcherZ);
-            SetActorXZ(_umpire, cal.UmpireX, cal.UmpireZ);
+            SetActorXZ(_catcher, cal.CatcherX * BatterSideSign, cal.CatcherZ);
+            SetActorXZ(_umpire, cal.UmpireX * BatterSideSign, cal.UmpireZ);
             if (_capMount != null) _capMount.localPosition = cal.CapOffset;
             if (_helmetMount != null)
             {
@@ -964,6 +987,7 @@ namespace KokoSim.Unity.Match
             {
                 if (a.Playable.IsValid()) a.Playable.Destroy();
                 a.Playable = AnimationClipPlayable.Create(a.Graph, clip);
+                SyncFootIk(a);
                 a.Mixer.ConnectInput(1, a.Playable, 0);
                 a.Mixer.SetInputWeight(1, 1f);
                 a.Clip = clip;
@@ -1232,6 +1256,7 @@ namespace KokoSim.Unity.Match
             a.HoldRemaining = 0f;
             if (a.Playable.IsValid()) a.Playable.Destroy();
             a.Playable = AnimationClipPlayable.Create(a.Graph, clip);
+            SyncFootIk(a);
             a.Mixer.ConnectInput(1, a.Playable, 0);
             a.Mixer.SetInputWeight(1, 1f);
         }
@@ -1490,6 +1515,7 @@ namespace KokoSim.Unity.Match
             // フェードしていない間は in0 未接続なので、素で Playable を直結していた頃と同じ絵になる
             actor.Mixer = AnimationMixerPlayable.Create(actor.Graph, 2);
             actor.Playable = AnimationClipPlayable.Create(actor.Graph, clip);
+            SyncFootIk(actor);
             actor.Mixer.ConnectInput(1, actor.Playable, 0);
             actor.Mixer.SetInputWeight(1, 1f);
             actor.Output.SetSourcePlayable(actor.Mixer);
@@ -1542,6 +1568,7 @@ namespace KokoSim.Unity.Match
             if (seconds <= 0f) return;
 
             a.FadeFrom = AnimationClipPlayable.Create(a.Graph, a.Clip);
+            SyncFootIk(a);
             a.FadeFrom.SetTime(fromTime);
             a.FadeFrom.Pause();
             a.Mixer.ConnectInput(0, a.FadeFrom, 0);
@@ -2353,6 +2380,93 @@ namespace KokoSim.Unity.Match
         /// 寄りカメラの狙いを外すと「付いていない」のか「見えていない」のか切り分けられないので、
         /// 掌の位置とグラブ実体の位置を直接突き合わせる。
         /// </summary>
+        // ── 左右ミラー（issue #337・design-18 §3.4）──────────────────────────
+        // 左打者・左投手は「x=0面（投球線を含む鉛直面）の鏡映親ノード」で作る。
+        // 素体GO自身の localScale.x=-1 は**回転より内側**で効くため、ヨー付きの素体では
+        // 左右でなく前後の鏡になる（投手ヨー270°でスパイク実測）。無回転の親を反転すると
+        // ワールドの左右鏡になり、立ち位置（BatterX -0.71→+0.71）・ヨー・骨・ボーン子の装備・
+        // グラブのメッシュまで一括で映る＝道具のアタッチ先ボーン反転（旧§3.4の注意書き）は不要。
+        // グラブは左手ボーンのまま視覚上は右手側へ移り、メッシュも鏡映＝左投手用の右手グラブになる。
+        // 捕手・球審は反転しない（実物の捕手ミットは常に左手）。並びだけ打者と反対側へ寄せる（§7-1）。
+        private Transform _batterMirror, _pitcherMirror;
+        private bool _batterLeft, _pitcherLeft;
+
+        /// <summary>現在の打者の側の符号（右打者=+1／左打者=-1）。捕手・球審の x オフセットに掛ける。</summary>
+        private float BatterSideSign => _batterLeft ? -1f : 1f;
+
+        /// <summary>
+        /// 鏡映親ノードを1枚挟む（生成時に両対象へ常設。恒等スケールの間は描画へ一切影響しない＝
+        /// 右打者・右投手の絵は従来とビット一致）。
+        /// </summary>
+        private Transform WrapInMirrorNode(Actor a, string name)
+        {
+            if (a == null) return null;
+            var node = new GameObject(name);
+            node.transform.SetParent(_root.transform, false);   // 恒等＝x=0面の鏡の枠
+            a.Go.transform.SetParent(node.transform, true);     // ローカル姿勢は数値そのまま
+            return node.transform;
+        }
+
+        /// <summary>
+        /// 打者・投手の左右を差し替える（打席開始・対決ビュー再表示時に MatchLive 側から呼ぶ）。
+        /// スイッチヒッターの「どちらの打席に立つか」は呼び出し側で解決して bool で渡す。
+        /// </summary>
+        public void SetHandedness(bool batterLeft, bool pitcherLeft)
+        {
+            if (!Available) return;
+            if (_batterMirror != null && _batterLeft != batterLeft)
+            {
+                _batterLeft = batterLeft;
+                ApplyMirror(_batterMirror, _batter, batterLeft);
+            }
+            if (_pitcherMirror != null && _pitcherLeft != pitcherLeft)
+            {
+                _pitcherLeft = pitcherLeft;
+                ApplyMirror(_pitcherMirror, _pitcher, pitcherLeft);
+            }
+            // 本塁組の並び（§7-1「本塁組の左右の並びは打者の左右打席で入れ替わる」）:
+            // 球審のスロットは常に打者と反対側の肩越し。捕手のわずかな寄りも合わせて映す
+            SetActorXZ(_catcher, _cal.CatcherX * BatterSideSign, _cal.CatcherZ);
+            SetActorXZ(_umpire, _cal.UmpireX * BatterSideSign, _cal.UmpireZ);
+        }
+
+        private static void ApplyMirror(Transform node, Actor a, bool on)
+        {
+            node.localScale = new Vector3(on ? -1f : 1f, 1f, 1f);
+            if (a == null) return;
+            // Humanoid Foot IK はミラー中OFF（SyncFootIk のコメント参照。両脚が頭の高さへ折り畳まれる）
+            a.Mirrored = on;
+            SyncFootIk(a);
+            // 負スケール祖先の下では SMR の自動バウンズが狂い、寄りのカメラで一部メッシュ（購入素体の
+            // ズボン等）がフラスタムカリングで消える（スパイク実測: 遠景は出るが近接で脚が消える）。
+            // ミラー中だけ固定バウンズへ切り替えてカリングを黙らせる。箱は「バインド箱の3倍」ではダメ:
+            // sharedMesh.bounds はメッシュ空間、localBounds はルートボーン空間で、空間を取り違えたまま
+            // 拡大しても置き場所がずれたまま＝打者のズボンだけカメラ錐台から外れて脚が消えた（受け入れ撮影で実害。
+            // 投手は偶々重なって描けるので気づけない）。ルートボーン（腰）から全身は高々2m弱なので、
+            // 原点±5mの巨大箱にして空間の取り違え自体を無効化する（対象は対決ビューの数体だけ＝カリング損は無視できる）
+            foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (on)
+                {
+                    smr.updateWhenOffscreen = false;
+                    smr.localBounds = new Bounds(Vector3.zero, Vector3.one * 10f);
+                }
+                else
+                {
+                    smr.updateWhenOffscreen = true;   // 非ミラーは従来どおり実ポーズ追従（SpawnActorの既定）
+                }
+            }
+            // 剛体メッシュ（帽子・靴・ソックス・グラブ等のボーン直付け）は負スケールで巻き順が裏返り、
+            // 閉じたメッシュは全面裏向き＝完全不可視になる（受け入れ撮影で実害: 左打者の靴・ソックスが消えた）。
+            // ミラー中のアクターだけ両面描画（_CullMode=0）へ切り替える。シェーダ側は SV_IsFrontFace で
+            // 裏面の法線を反転して陰影を保つ。マテリアルは全てアクター毎のインスタンス
+            // （FlatMaterial / RegionMaterial / GearPart）なので他アクターへは波及しない
+            foreach (var r in a.Go.GetComponentsInChildren<Renderer>(true))
+                foreach (var m in r.sharedMaterials)
+                    if (m != null && m.HasProperty("_CullMode"))
+                        m.SetFloat("_CullMode", on ? 0f : 2f);
+        }
+
         internal string GloveDiagForCapture()
         {
             var sb = new System.Text.StringBuilder();

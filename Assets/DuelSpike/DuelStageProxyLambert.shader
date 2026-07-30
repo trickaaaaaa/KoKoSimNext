@@ -30,12 +30,17 @@ Shader "KokoSim/DuelStageProxyLambert"
         _StripeColor ("Stripe Color", Color) = (0, 0, 0, 1)
         _StripeFreq ("Stripe Frequency (per object unit)", Float) = 0
         _StripeDuty ("Stripe Duty (line width ratio)", Range(0.02, 0.5)) = 0.2
+        // 左右ミラー対応（issue #337）: 負スケール祖先の下では剛体メッシュ（帽子・靴・ソックス等の
+        // ボーン直付け）の巻き順が裏返り、閉じたメッシュは全面裏向き＝完全不可視になる。
+        // ミラー中のアクターだけ 0 (Off) にして両面描画へ切り替える（既定 2 = Back ＝従来どおり）
+        _CullMode ("Cull Mode (2=Back, 0=Off)", Float) = 2
     }
     SubShader
     {
         Tags { "RenderType" = "Opaque" }
         Pass
         {
+            Cull [_CullMode]
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -89,8 +94,11 @@ Shader "KokoSim/DuelStageProxyLambert"
                 return saturate((Fb - Fa) / max(w, 1e-6));
             }
 
-            fixed4 frag(v2f i) : SV_Target
+            // vface: 裏面なら false。ミラー中（Cull Off）は裏返った巻き順の面が表に出るので、
+            // 法線も反転して陰影を正しい側から取る（反転しないと裏向き法線で常に暗く沈む）
+            fixed4 frag(v2f i, bool vface : SV_IsFrontFace) : SV_Target
             {
+                if (!vface) i.normal = -i.normal;
                 float3 baseCol = _BaseColor.rgb;
                 if (_UseRegions > 0.5)
                 {
