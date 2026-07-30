@@ -77,6 +77,22 @@ namespace KokoSim.Unity.Match
         /// 【開発用】打撃フォーム確認窓と同じ条件（Edit mode・球なし・クリップを直接送る）で、
         /// 指定したクリップ内時刻のバットを実測する。窓の「コマ ▶」で見えている絵と同じものを数値で出す。
         /// </summary>
+        /// <summary>【切り分け用】打者の立ち位置と接触の時刻を差し替えて掃く（負＝既定）。</summary>
+        public static string ProbeSeek(string csvTimes, float batterX, float anchor, float reach, int view)
+        {
+            var cal = DuelCalibration.Default;
+            if (batterX < 0f) cal.BatterX = batterX;
+            DuelStageRig.CalibrationOverride = cal;
+            DuelStageRig.SwingAnchorOverrideForCapture = anchor;
+            DuelStageRig.SweepReachOverrideForCapture = reach;
+            var s = ProbeSeek(csvTimes);
+            if (view >= 0) s += ShootSeek(csvTimes, view) + "\n";
+            DuelStageRig.CalibrationOverride = null;
+            DuelStageRig.SwingAnchorOverrideForCapture = -1f;
+            DuelStageRig.SweepReachOverrideForCapture = -1f;
+            return s;
+        }
+
         public static string ProbeSeek(string csvTimes)
         {
             var rig = new DuelStageRig();
@@ -95,10 +111,71 @@ namespace KokoSim.Unity.Match
                 float t;
                 if (!float.TryParse(part.Trim(), out t)) continue;
                 rig.SeekBatter(t);
-                sb.Append(rig.BatContactDiagForCapture()).Append('\n');
+                sb.Append(rig.BatContactDiagForCapture())
+                  .Append(" | ").Append(rig.BatDiagForCapture()).Append('\n');
             }
             rig.Dispose();
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// 【開発用】<see cref="ProbeSeek"/> と同じ条件のコマを**絵で**出す。窓の「真横から」と同じ
+        /// 狙い方（腰の高さを中心に、投手線と直交する向きから2.1m四方）＝監督が見ている絵と同じ。
+        /// </summary>
+        public static string ShootSeek(string csvTimes, int view)
+        {
+            Directory.CreateDirectory(Dir);
+            var rig = new DuelStageRig();
+            if (!rig.Available) return "rig が組めない";
+            rig.EnsureSize(960, 720);
+            for (int i = 0; i < 90; i++) rig.Tick(1f / 60f);
+            rig.OnPitchWindup();
+            for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
+            rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, RealBatted("フライ"));
+            int n = 0;
+            foreach (var part in csvTimes.Split(','))
+            {
+                float t;
+                if (!float.TryParse(part.Trim(), out t)) continue;
+                rig.SeekBatter(t);
+                Aim(rig, view);
+                rig.RenderNow();
+                Save(rig.Target, string.Format("seek-v{0}-{1:00}-c{2:F3}", view, n++, t));
+            }
+            rig.Dispose();
+            return "ok " + n + "枚";
+        }
+
+        /// <summary>打撃フォーム確認窓 <c>AimView</c> の複製（0=投手側 / 1=真横 / 2=反対の横）。</summary>
+        private static void Aim(DuelStageRig rig, int view)
+        {
+            var anim = rig.BatterAnimator;
+            var root = rig.StageRoot;
+            if (anim == null || root == null) return;
+            var hipsT = anim.GetBoneTransform(HumanBodyBones.Hips);
+            var hips = hipsT != null ? hipsT.position : root.position;
+            var center = hips + Vector3.up * 0.15f;
+            var toP = rig.PitcherHeadPoint - hips;
+            toP.y = 0f;
+            toP = toP.sqrMagnitude > 1e-6f ? toP.normalized : Vector3.forward;
+            var side = Vector3.Cross(Vector3.up, toP).normalized;
+            var dir = view == 1 ? side : view == 2 ? -side : toP;
+            const float radius = 3.2f, frameH = 2.1f;
+            var cam = center + dir * radius + Vector3.up * (frameH * 0.06f);
+            rig.FramePreview(root.InverseTransformPoint(cam), root.InverseTransformPoint(center), frameH);
+        }
+
+        private static void Save(RenderTexture rt, string name)
+        {
+            if (rt == null) return;
+            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            tex.Apply();
+            RenderTexture.active = prev;
+            File.WriteAllBytes(Path.Combine(Dir, name + ".png"), tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
         }
 
         private IEnumerator Start()

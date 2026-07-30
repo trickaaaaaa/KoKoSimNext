@@ -1448,6 +1448,9 @@ namespace KokoSim.Unity.Match
             if (_batter.Clip != clip) CrossfadeActorToClip(_batter, clip, seek, endAt, CrossfadeSeconds);
             else SetActorClip(_batter, clip, seek, endAt);
             _batter.Speed = k;   // SetActorClip の後（差し替えで持ち越さないため）
+#if UNITY_EDITOR
+            if (SwingAnchorOverrideForCapture > 0f) anchorClipSec = SwingAnchorOverrideForCapture;
+#endif
             _swingAnchorClip = anchorClipSec;   // バット軌道（SwingBatAxis）の終点＝接触の時刻
             _batWrapValid = false;
             // 頭出しは「基準位置へ戻して0→seekをルートモーション込みで積分し直す」ので、
@@ -2874,6 +2877,11 @@ namespace KokoSim.Unity.Match
         /// <summary>この球はバットに当たるか（ミート・ファウル）。空振りは当てない＝向けてはいけない。</summary>
         private bool _batAimsBall;
 
+#if UNITY_EDITOR
+        /// <summary>【実測プローブ用】接触のクリップ時刻を差し替える（負＝既定のまま）。</summary>
+        internal static float SwingAnchorOverrideForCapture = -1f;
+#endif
+
         /// <summary>
         /// 振り下ろしに使う長さを**ポーズのコマ数**で持つ（秒でなく）。収録の振り下ろしは 0.11 クリップ秒＝
         /// 12fpsで**ちょうど1コマ**しかないので、秒で窓を切ると「どのコマにいくつ乗るか」が飛翔時間ごとに
@@ -2885,6 +2893,35 @@ namespace KokoSim.Unity.Match
 
         /// <summary>振り抜きで振り下ろしと同じ面をさらに回す角度[度]。</summary>
         private const float BatWrapDeg = 120f;
+
+        /// <summary>
+        /// タメ（振り下ろしの途中で芯が捕手側へ寝る形）の仰角[度]。芯が握りより少し上に来る量。
+        /// トップ軸→打点軸を素直に Slerp すると**最短の弧**になり、芯が本塁の上を横切る
+        /// ＝バットが遠回りする（実測 2026-07-31: clip 0.87 で芯 x=+0.06 ＝本塁を越え、握りとほぼ同じ高さの
+        /// 水平な棒になる）。実物は一度後ろ（捕手側）へ寝てから走るので、その姿勢を制御点として挟む。
+        /// </summary>
+        private const float BatLagElevDeg = 12f;
+
+        /// <summary>
+        /// 手が打点へこれだけ寄ったら振り下ろしを始める[m]（握り→打点が 腕+この値 になった時点で0）。
+        /// 進みを**クリップ時刻でなく手の寄り**で測るための帯。収録の腕は接触の手前でほとんど動かない
+        /// （実測 clip 0.75→0.95 で握りの移動 0.10m）ので、時刻で回すと**手が止まったままバットだけ回る**
+        /// ＝「手の動きにバットがついてこない／遅れて出る」に見える（2026-07-31 監督指摘・横から）。
+        /// </summary>
+        /// 実測 2026-07-31（帯0.12 は接触の1コマ前でも 0.28 までしか進まず、残り全部が最後の1コマに
+        /// 集まって「バットが消えて現れる」）。0.20 なら 0→0.44→0.68→1 と3段になり、かつトップは
+        /// 手が動くまで動かない（コマ数の窓が先に0で抑える）。
+        private const float BatSweepReachM = 0.20f;
+
+#if UNITY_EDITOR
+        /// <summary>【実測プローブ用】上の帯の差し替え（負＝既定）。</summary>
+        internal static float SweepReachOverrideForCapture = -1f;
+#endif
+        private static float SweepReach =>
+#if UNITY_EDITOR
+            SweepReachOverrideForCapture > 0f ? SweepReachOverrideForCapture :
+#endif
+            BatSweepReachM;
 
         /// <summary>空振りで球の下を通す量[m]。0だと**真ん中の球を空振りしたとき当たったように見える**。</summary>
         private const float BatMissUnderM = 0.20f;
@@ -2921,10 +2958,6 @@ namespace KokoSim.Unity.Match
             if (t <= contact)
             {
                 // ② 振り下ろし。狙点は**判定に使われた実着弾位置**（design-18 §4.5-③の掟）
-                // 進みはコマ数で測る。0.5コマ寄せてあるので、接触の瞬間に映るコマは必ず 1.0 に届く
-                float frames = (contact - t) / frame;
-                float s = Smooth(Mathf.Clamp01((BatSweepFrames - (frames - 0.5f)) / BatSweepFrames));
-                if (s <= 0.001f) return _batHeldAxis;   // ① トップ保持
                 // 空振りは**判定面**（_ballFlight＝本塁上）の位置の下を通す。固定の高さで振ると
                 // 真ん中の球を空振りしたときバットが球に乗って「当たったのに空振り」に見える
                 var target = _ballT < 0f
@@ -2933,15 +2966,36 @@ namespace KokoSim.Unity.Match
                         ? BallPointAt(_ballArrival)
                         : BallPointAt(_ballFlight) + Vector3.down * BatMissUnderM;
                 var toTarget = _root.transform.TransformPoint(target) - grip;
-                var aim = toTarget.sqrMagnitude > 1e-6f ? toTarget.normalized : _batHeldAxis;
-                var swung = Vector3.Slerp(_batHeldAxis, aim, s).normalized;
+                float dist = toTarget.magnitude;
+                var aim = dist > 1e-3f ? toTarget / dist : _batHeldAxis;
+
+                // 進みは2つの小さい方で決める:
+                //   ・コマ数 … 接触の瞬間に映るコマが必ず1.0に届くことを保証する（0.5コマ寄せ）
+                //   ・手の寄り … 収録の腕が動き出すまでバットも動かない（＝手より先に回らない）
+                float frames = (contact - t) / frame;
+                float lever = BatLeverM();
+                float uTime = (BatSweepFrames - (frames - 0.5f)) / BatSweepFrames;
+                float reach = SweepReach;
+                float uHand = (lever + reach - dist) / reach;
+                float raw = Mathf.Min(uTime, uHand);
+                if (frames <= 0.5f) raw = 1f;   // 接触の瞬間に映るコマは必ず寄せ切る
+                float s = Smooth(Mathf.Clamp01(raw));
+                if (s <= 0.001f) return _batHeldAxis;   // ① トップ保持
+
+                // トップ→**タメ**→打点の3点で回す（最短の弧＝遠回りを避ける）。
+                // 制御点のタメを二重に置いた球面3次ベジエ（de Casteljau）＝端点は厳密に一致する
+                var lag = LagAxis(aim);
+                var b1 = Vector3.Slerp(Vector3.Slerp(_batHeldAxis, lag, s), lag, s);
+                var b2 = Vector3.Slerp(lag, Vector3.Slerp(lag, aim, s), s);
+                var swung = Vector3.Slerp(b1, b2, s).normalized;
                 if (s >= 0.999f && !_batWrapValid)
                 {
                     // 振り抜きは「同じ面をさらに回す」＝接触時の軸と面の法線を焼いておく。
                     // 巻き付き先を握り線（horiz）から作ると、フォロースルーで手が回るぶん
                     // 1コマで軸が180°飛ぶ（実測 clip 1.30→1.42 でバレルが +x から -x へ）
                     _batWrapFrom = swung;
-                    var n = Vector3.Cross(_batHeldAxis, aim);
+                    // 面はタメ→打点で取る（トップ→打点だと遠回りの面になり、振り抜きが逆へ回る）
+                    var n = Vector3.Cross(lag, aim);
                     _batWrapNormal = n.sqrMagnitude > 1e-6f ? n.normalized : Vector3.up;
                     _batWrapValid = true;
                 }
@@ -2952,6 +3006,29 @@ namespace KokoSim.Unity.Match
             if (!_batWrapValid) return _batHeldAxis;
             float w = Smooth(Mathf.InverseLerp(contact, contact + BatSweepFrames * frame, t));
             return (Quaternion.AngleAxis(BatWrapDeg * w, _batWrapNormal) * _batWrapFrom).normalized;
+        }
+
+        /// <summary>握り→芯の長さ[m]。バットの原点は握り点から軸方向へ寄せてあるので2段の和になる。</summary>
+        private float BatLeverM()
+        {
+            float half = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
+            return (half - _cal.BatGripBelowM) + (half - BatSweetInsetM);
+        }
+
+        /// <summary>
+        /// タメの軸（芯が捕手側へ寝て、握りより <see cref="BatLagElevDeg"/> だけ上）。
+        /// 水平成分は打点方向と直交する2つのうち**捕手側（-z）**を選ぶ＝左右打ちのどちらでも
+        /// 「体の後ろ」になる（打者の向きを見なくてよい）。
+        /// </summary>
+        private static Vector3 LagAxis(Vector3 aim)
+        {
+            var h = new Vector3(aim.x, 0f, aim.z);
+            if (h.sqrMagnitude < 1e-6f) return aim;
+            h.Normalize();
+            var lag = new Vector3(h.z, 0f, -h.x);
+            if (lag.z > 0f) lag = -lag;
+            float el = BatLagElevDeg * Mathf.Deg2Rad;
+            return (lag * Mathf.Cos(el) + Vector3.up * Mathf.Sin(el)).normalized;
         }
 
         /// <summary>握り点（両掌中心の中点・ワールド）。<see cref="AlignBat"/> と実測プローブの単一ソース。</summary>
