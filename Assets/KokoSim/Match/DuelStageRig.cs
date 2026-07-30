@@ -4073,6 +4073,12 @@ namespace KokoSim.Unity.Match
         }
 
 #if UNITY_EDITOR
+        /// <summary>【実測プローブ用】握り点（両掌中心の中点・ワールド）。</summary>
+        internal Vector3 BatGripWorldForCapture => BatGripWorld();
+
+        /// <summary>【実測プローブ用】打点（判定に使われた実着弾位置・ステージローカル）。</summary>
+        internal Vector3 ContactPointLocalForCapture => BallPointAt(_ballArrival);
+
         /// <summary>【実測プローブ用】バット軸（ノブ→バレル）をステージローカルで返す（非表示なら0）。</summary>
         internal Vector3 BatAxisLocalForCapture
             => (_bat == null || _root == null || !_bat.activeSelf) ? Vector3.zero

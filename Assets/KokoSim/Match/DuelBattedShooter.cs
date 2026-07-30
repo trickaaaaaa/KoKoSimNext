@@ -167,6 +167,73 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 【開発用】バット軸と**腕の線**の関係を実測する（2026-07-31 監督指摘「バットをこねている」
+        /// 「この段階ではまだバットは腕と並行であるべき」）。腕の線は手首の回転と違って**位置**から採るので
+        /// 収録の暴れを拾わない＝バットを何に従わせるべきかの判断材料になる。
+        /// 出力: バット軸 / 左肩→握り・左肘→握りとの角度[度]。
+        /// </summary>
+        public static string ProbeArm(float from, float to, bool miss = false, float batterX = 0f)
+        {
+            if (batterX < 0f)
+            {
+                var cal = DuelCalibration.Default;
+                cal.BatterX = batterX;
+                DuelStageRig.CalibrationOverride = cal;
+            }
+            var s = ProbeArmCore(from, to, miss);
+            DuelStageRig.CalibrationOverride = null;
+            return s;
+        }
+
+        private static string ProbeArmCore(float from, float to, bool miss)
+        {
+            var rig = new DuelStageRig();
+            if (!rig.Available) return "rig が組めない";
+            for (int i = 0; i < 90; i++) rig.Tick(1f / 60f);
+            rig.OnPitchWindup();
+            for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
+            if (miss) rig.OnPitchReleased(0f, DuelPitchOutcome.SwingMiss);
+            else rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, RealBatted("フライ"));
+            var anim = rig.BatterAnimator;
+            var root = rig.StageRoot;
+            var ls = anim.GetBoneTransform(HumanBodyBones.LeftShoulder) ?? anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var le = anim.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+            var rs = anim.GetBoneTransform(HumanBodyBones.RightShoulder) ?? anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            float step = Mathf.Max(0.1f, DuelCalibration.Default.SwingSpeed) / DuelStageRig.PoseFps;
+            var sb = new System.Text.StringBuilder();
+            for (float t = from; t <= to + 1e-4f; t += step)
+            {
+                rig.SeekBatter(t);
+                var ax = rig.BatAxisLocalForCapture;
+                var grip = root.InverseTransformPoint(rig.BatGripWorldForCapture);
+                System.Func<Transform, string> ang = b =>
+                {
+                    if (b == null || ax.sqrMagnitude < 1e-6f) return "-";
+                    var line = grip - root.InverseTransformPoint(b.position);
+                    return line.sqrMagnitude < 1e-6f ? "-" : Vector3.Angle(line, ax).ToString("F0");
+                };
+                // 腕の線がそのまま打点を向いている時刻があるか＝「腕と並行」と「球に届く」が
+                // 同時に満たせるかを見る（満たせるなら接触の時刻をそこへ動かせばよい）
+                var armLine = ls != null ? (grip - root.InverseTransformPoint(ls.position)).normalized : Vector3.zero;
+                var contact = rig.ContactPointLocalForCapture;
+                var toBall = contact - grip;
+                float dist = toBall.magnitude;
+                sb.Append("clip=").Append(t.ToString("F2"))
+                  .Append(" 軸=").Append(ax.ToString("F2"))
+                  .Append(" 左肩腕=").Append(ang(ls))
+                  .Append(" 左肘腕=").Append(ang(le))
+                  .Append(" 右肩腕=").Append(ang(rs))
+                  .Append(" 腕線=").Append(armLine.ToString("F2"))
+                  .Append(" 腕線⇔打点=").Append(armLine.sqrMagnitude < 1e-6f || dist < 1e-3f
+                      ? "-" : Vector3.Angle(armLine, toBall).ToString("F0"))
+                  .Append(" 握り→打点=").Append(dist.ToString("F3"))
+                  .Append('\n');
+            }
+            rig.Dispose();
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// 【開発用】<see cref="ProbeSeek"/> と同じ条件のコマを**絵で**出す。窓の「真横から」と同じ
         /// 狙い方（腰の高さを中心に、投手線と直交する向きから2.1m四方）＝監督が見ている絵と同じ。
         /// </summary>
