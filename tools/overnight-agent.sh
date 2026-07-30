@@ -248,6 +248,37 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
     fi
   fi
 
+  # Assets/ の C# を触ったら Unity コンパイル検査（issue #349）。
+  # ci.yml の発火条件は engine/ data/ global.json だけで Assets/ は入っていないため、
+  # Assets だけを触る PR は CI もローカルテストも走らない。加えて内側セッションの
+  # Unity 実機確認はブリッジ不応答時にスキップ可なので、無検査でマージされてしまう。
+  # 実際に PR #344 が using 漏れ（CS0103）のまま入り Unity が丸ごと落ちた。
+  # check-unity-compile.sh は Editor を起動せず約10秒で Assets 全体をコンパイルする。
+  # 終了コード 2（雛形 csproj が無い＝検査不能）はマージを止めない（環境要因で夜が全滅するのを避ける）。
+  local unity_paths
+  unity_paths="$(git -C "$wt" diff --name-only 'refs/remotes/origin/main...HEAD' 2>/dev/null | grep -E '^Assets/.*\.cs$' || true)"
+  if [ -n "$unity_paths" ]; then
+    local ucheck urc
+    ucheck="$(TEMPLATE_DIR="$REPO_DIR" DOTNET="$DOTNET" bash "$REPO_DIR/tools/check-unity-compile.sh" "$wt" 2>&1)"
+    urc=$?
+    printf '%s\n' "$ucheck" >>"$log"
+    if [ "$urc" = "1" ]; then
+      gh issue edit "$num" --add-label agent-failed >/dev/null 2>&1 || true
+      local firsterr; firsterr="$(printf '%s\n' "$ucheck" | grep -m1 'error CS' | sed 's/^ *//')"
+      gh pr comment "$branch" --body "自動ガード: Unity（Assets/）のコンパイルが通りません。マージを止めました。
+
+\`\`\`
+${ucheck}
+\`\`\`
+
+再現: \`bash tools/check-unity-compile.sh\`（Editor 不要・約10秒）" >/dev/null 2>&1 || true
+      note "- 🔴 #$num $title — Unity コンパイル検査が赤→agent-failed（${firsterr}）"
+      unlock "$REPO_LOCK"; return
+    elif [ "$urc" = "2" ]; then
+      note "- ⚠ #$num Unity コンパイル検査が実行できなかった（雛形 csproj 不在）。マージは続行"
+    fi
+  fi
+
   # マージ（main 未保護なので即マージ。Fixes 行で issue クローズ）。
   # gh の終了コードは信用しない: マージ成功後に --delete-branch だけ失敗すると非ゼロになり
   # 「マージ成功なのに🔴」と誤報するため、PR の実状態(MERGED)で判定する。
@@ -377,22 +408,46 @@ process_issue() { # $1=num $2=title
     note "- 🔴 #$num $title — stall 検知で kill（transcript が ${STALL_TIMEOUT}秒 無進捗＝ハング。${log}）[${dur}]"
   elif [ "$timed_out" = 1 ]; then
     note "- 🔴 #$num $title — タイムアウト（${ISSUE_TIMEOUT}秒。${log}）[${dur}]"
+  elif [ -d "$wt" ] && [ -n "$(git -C "$wt" log --oneline refs/remotes/origin/main..HEAD 2>/dev/null)" ]; then
+    note "- 🔴 #$num $title — 未完了（作業は下の退避で残す。${log}）[${dur}]"
   else
-    # PR 無し・未完了。未 push の作業があれば退避 draft PR にして失わない
-    if [ -d "$wt" ] && [ -n "$(git -C "$wt" log --oneline refs/remotes/origin/main..HEAD 2>/dev/null)" ]; then
-      lock "$REPO_LOCK"
-      if git -C "$wt" push -u origin "$branch" >/dev/null 2>&1; then
-        ( cd "$wt" && gh pr create --draft --head "$branch" \
-            --title "[退避] ${title}" \
-            --body "夜間エージェントが PR 作成前に終了したため作業を自動退避した draft PR。検証後に ready 化を。 Fixes #${num}" >/dev/null 2>&1 ) \
-          && note "- 💾 #$num 未 push の作業を draft PR に退避した（朝に検証を）[${dur}]"
-      else
-        note "- 🔴 #$num $title — 未完了・退避 push も失敗（${log}）[${dur}]"
-      fi
-      unlock "$REPO_LOCK"
-    else
-      note "- 🔴 #$num $title — 未完了（変更なし。${log}）[${dur}]"
+    note "- 🔴 #$num $title — 未完了（変更なし。${log}）[${dur}]"
+  fi
+
+  # ── 未 push の作業を失わないための退避（issue #348） ──
+  # この後の branch -D は**結果に関係なく無条件で走る**。以前は退避処理が最後の else 分岐の
+  # 中にしか無かったため、needs-human / agent-failed / stall / timeout で終わった場合は
+  # ローカルにコミットがあっても消えていた（#318 は実装完成・全緑のまま消滅し、
+  # git fsck の dangling commit から救出した）。分岐の外へ出して常に通す。
+  # マージ済みなら origin/main..HEAD が空になるのでこの条件で自然に除外される。
+  if [ -d "$wt" ] && [ -n "$(git -C "$wt" log --oneline refs/remotes/origin/main..HEAD 2>/dev/null)" ]; then
+    local why="PR 作成前に終了"
+    if echo "$labels" | grep -q needs-human; then why="判断待ち（needs-human）"
+    elif echo "$labels" | grep -q agent-failed; then why="実装失敗（agent-failed）"
+    elif [ "$stalled" = 1 ]; then why="stall 検知で kill"
+    elif [ "$timed_out" = 1 ]; then why="タイムアウト"
     fi
+    lock "$REPO_LOCK"
+    # 既に PR がある（マージ工程で弾かれた等）ならブランチを push し直すだけでよい。
+    local existing; existing="$(gh pr list --head "$branch" --state all --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
+    if [ -n "$existing" ]; then
+      git -C "$wt" push origin "$branch" >/dev/null 2>&1 \
+        && note "- 💾 #$num 作業は PR #${existing} に push 済みで保全（理由: ${why}）" \
+        || note "- 🔴 #$num $title — 既存 PR #${existing} への push に失敗（${log}）"
+    elif git -C "$wt" push -u origin "$branch" >/dev/null 2>&1; then
+      ( cd "$wt" && gh pr create --draft --head "$branch" \
+          --title "[退避] ${title}" \
+          --body "夜間エージェントの作業を自動退避した draft PR（理由: ${why}）。
+
+このブランチはローカルの後片付けで削除されるため、失わないよう push している。
+issue のコメント・PR の差分を見て、続行するか捨てるか判断を。続行するなら ready 化を。
+
+Refs #${num}" >/dev/null 2>&1 ) \
+        && note "- 💾 #$num 未 push の作業を draft PR に退避した（理由: ${why}・朝に検証を）"
+    else
+      note "- 🔴 #$num $title — 退避 push に失敗（${log}）"
+    fi
+    unlock "$REPO_LOCK"
   fi
 
   # 後片付け（worktree とローカルブランチ。リモートはマージ側に委ねる）

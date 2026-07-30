@@ -32,6 +32,13 @@
    - **どうしてもテストを緑にできない場合**: `gh issue edit __ISSUE__ --add-label agent-failed` を付け、issue に状況をコメントして終了する（PR を作らない）
    - **DLL をコミットしないこと**（重要・後述）
 4. **Unity 実機確認**（`Assets/` 配下を変更した場合のみ。engine のみの変更ならスキップ可）:
+   - **まず先に、Editor を使わないコンパイル検査を前面で回す（`Assets/**/*.cs` を触ったら必須）**:
+     `bash tools/check-unity-compile.sh` — Editor 不要・約10秒で Assets 全体（Assembly-CSharp と
+     Assembly-CSharp-Editor）をコンパイルする。**緑にならない限り PR を作らない**。
+     オーケストレータもマージ直前に同じ検査を回して赤なら agent-failed にするので、ここで通しておくこと。
+     `ci.yml` の発火条件は `engine/` `data/` `global.json` だけで **`Assets/` は CI に無い**（issue #349）＝
+     この検査だけが Assets のコンパイルを見る唯一のゲートである（PR #344 は using 漏れのまま main に入り
+     Unity が丸ごと落ちた）。下の目視確認がブリッジ不応答でスキップになっても、**この検査はスキップできない**。
    - 検証専用チェックアウト `/Users/seiya.oda/Unity/KoKoSimNext-verify` に自分のブランチを反映する:
      `git -C /Users/seiya.oda/Unity/KoKoSimNext-verify checkout --detach issue/__ISSUE__-agent`
      （同一リポジトリの worktree なので push 不要でローカルブランチをそのまま参照できる）
