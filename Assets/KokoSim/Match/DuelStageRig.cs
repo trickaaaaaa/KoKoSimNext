@@ -1322,9 +1322,27 @@ namespace KokoSim.Unity.Match
         // -0.71 では 0.382m しかなく芯が球を通り越す。design-18 §4.5-⑪
         private const float SwingMissPlane = 1.08f;
         private const float SwingHitContact = 1.17f;
+
+        /// <summary>
+        /// スイングを打ち切る時刻[クリップ秒]。**振り抜いた所で止める**（2026-07-31 監督判断
+        /// 「バットを戻す動作も消して欲しい／スイングして振り抜いた時点で止める」）。
+        ///
+        /// 収録はこの後、胴を巻き戻してバットを構えへ戻す。止め所は**胴の回りが最大になるコマ**＝
+        /// そこから先が「戻り」。実測（胸ヨー・ステージローカル）:
+        ///   1.40→−40° / 1.52→−64° / **1.63→−72°（最大）** / 1.75→−58° / 1.87→−30° / 2.10→+2°
+        /// バットの巻き付き（③）が終わるのは 打つ 1.52 / 空振り 1.43 なので、両方この後に収まる。
+        /// 旧値は <see cref="BatterRunStart"/>(2.60)＝走り出しの手前で、戻りが丸ごと映っていた。
+        /// </summary>
+        private const float SwingFinishSec = 1.63f;
         private const float HbpReact = 1.3f;
-        // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
-        private const float SwingMissHoldSeconds = 0.8f;
+        /// <summary>
+        /// 振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・投球間隔2.8sに余裕で収まる）。
+        /// **空振りだけでなく全スイングに要る**（2026-07-31）。<see cref="SwingFinishSec"/> で打ち切ると、
+        /// 据え置きが無い結果は打ち切った瞬間に待機へ戻る＝実測: インプレーは接触の 0.36秒後（t=0.90s）に
+        /// **構えへ復帰**していた。対決ビューはインプレーを t=1.0s まで映すので、
+        /// 「打った直後に構えている打者」が絵に出る。
+        /// </summary>
+        private const float SwingFinishHoldSeconds = 0.8f;
 
         /// <summary>
         /// 捕球クリップ1本ぶんのアンカー（実測 2026-07-30・0.01s刻み・ミット中心＝手首と中指付け根の中点）。
@@ -1471,19 +1489,22 @@ namespace KokoSim.Unity.Match
 
             switch (outcome)
             {
+                // どのスイングも**振り抜いた所で止めて据え置く**（design-18 §4.5-⑭）。
+                // 打ち切りだけで据え置きが無いと、打ち切った瞬間に待機へ戻る
                 case DuelPitchOutcome.SwingMiss:
-                    // 空振り専用の収録が無いので同じスイングを使い、走り出し前で打ち切って構えへ戻す
-                    SetSwing(_swingMissClip, SwingMissPlane, flight, BatterRunStart);
-                    _batter.HoldSeconds = SwingMissHoldSeconds;   // 振り切りポーズでしばらく止めてから待機へ戻す
+                    // 空振り専用の収録が無いので同じスイングを使う
+                    SetSwing(_swingMissClip, SwingMissPlane, flight, SwingFinishSec);
+                    _batter.HoldSeconds = SwingFinishHoldSeconds;
                     break;
                 // 当てる球は判定面でなく**捌く瞬間**（_ballArrival＝判定面の ContactAheadM 手前）で合わせる。
                 // flight を渡すと、前で捌くぶんバットが遅れて着く（0.30m/40m·s⁻¹ ≒ 8ms）
                 case DuelPitchOutcome.FoulContact:
-                    // 走り出し（実測3.25s）前でカットして打席へ戻る
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, BatterRunStart);
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec);
+                    _batter.HoldSeconds = SwingFinishHoldSeconds;
                     break;
                 case DuelPitchOutcome.InPlayContact:
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, 0f);
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec);
+                    _batter.HoldSeconds = SwingFinishHoldSeconds;
                     break;
                 // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
                 // 捕手の捕球は下の catcherCatches に含めたまま残す
@@ -2929,7 +2950,10 @@ namespace KokoSim.Unity.Match
         //   仰角60°… 手→手の実測線が寝てバットが水平に見えた（監督指摘 2026-07-28）ための決め打ち
         //   仰角35°… 振り切りで実測線がカメラ軸を向き、棒が点に潰れて消える絵への対処
         // いずれも**両手が開いていた頃の補正**で、握りを直した今は実測線をそのまま使える（BatAxisFromGrip）
-        private const float BatDropTime = BatterRunStart;   // 走り出し（実測3.25s）からバットを放った扱いで非表示
+        // 走り出しからバットを放った扱いで非表示。**2026-07-31 以降は発火しない**＝全スイングを
+        // SwingFinishSec(1.63) で打ち切るようにしたので、打者が走り出す所まで再生されなくなった。
+        // 走り出しを見せる作りに戻すときのために残してある（design-18 §4.5-⑭）
+        private const float BatDropTime = BatterRunStart;
         private bool _batOneHand;       // いま片手追従中か（診断用）
         private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;
