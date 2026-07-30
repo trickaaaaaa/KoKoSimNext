@@ -24,6 +24,7 @@ namespace KokoSim.Unity.Shell
             AbilityKind.Control => "制球",
             AbilityKind.Stamina => "スタミナ",
             AbilityKind.PitchRank => "キレ",   // 用語集どおり。旧「球種」表記は #94 で廃止。
+            AbilityKind.Stuff => "球威",       // ストレートホップの育成軸（issue #274新設・#327で一覧に追加）。
             AbilityKind.Bunt => "バント",
             AbilityKind.Steal => "盗塁",
             AbilityKind.Baserunning => "走塁",

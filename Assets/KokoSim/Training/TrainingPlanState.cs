@@ -547,7 +547,7 @@ namespace KokoSim.Unity.Training
         {
             AbilityKind.LaunchTendency, AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline, AbilityKind.Bunt,
             AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.Fielding, AbilityKind.Catching,
-            AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank,
+            AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank, AbilityKind.Stuff,
         };
 
         /// <summary>現在の設定（解決済み配分）での各能力の1週成長を、非破壊ドライランで算出（設計書02 §5.1）。
@@ -756,6 +756,7 @@ namespace KokoSim.Unity.Training
             AbilityKind.Control => "制",
             AbilityKind.Stamina => "ス",
             AbilityKind.PitchRank => "球",
+            AbilityKind.Stuff => "威",
             AbilityKind.Bunt => "犠",
             AbilityKind.Steal => "盗",
             AbilityKind.Baserunning => "塁",

@@ -525,7 +525,7 @@ namespace KokoSim.Unity.Training
 
         // ── 部品ファクトリ ─────────────────────────
         // 能力バー1行は部品辞書の AbilityRow に一本化（UI原則⑤）。
-        // showLevel=true で「今週の成長」ラベル（＋N / ％ / —）を右端に付す。バーは今週の伸び、
+        // showLevel=true で「今週の成長」ラベル（＋N / 空 / —）を右端に付す。バーは今週の伸び、
         // ランクチップは**現在の能力値**を表す（相対強調バーは Grade 空でチップ無し）。
         private static VisualElement AbilityBar(GainBar gb, bool showLevel)
         {
@@ -538,9 +538,11 @@ namespace KokoSim.Unity.Training
                 Grade = gb.Grade,
                 TypeLabel = gb.TypeLabel,
                 Dim = showLevel && !grows,   // 伸びない能力は淡色（一覧には常に出す）
+                // 右端は「＋N」（レベルアップ）と「—」（伸びない）だけ。伸びている途中は空にし、
+                // 進み具合はバーで読ませる（％表記は撤去・issue #327①）。
                 Note = showLevel
                     ? (gb.LevelsGained > 0 ? "＋" + gb.LevelsGained
-                        : grows ? Mathf.RoundToInt((float)gb.Progress * 100f) + "%" : "—")
+                        : grows ? "" : "—")
                     : "",
                 NoteMuted = !grows,
             });

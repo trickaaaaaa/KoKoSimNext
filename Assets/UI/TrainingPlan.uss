@@ -225,13 +225,16 @@
     padding-left: var(--sp-4); padding-right: var(--sp-4); padding-top: var(--sp-3); padding-bottom: var(--sp-3);
 }
 .tpm-col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: column; margin-right: 18px; }
-.tpm-col--growth { margin-right: 0; }
+.tpm-col--growth { margin-right: 0; min-height: 0; }
 .tpm-col__title { font-size: var(--fs-cap); color: var(--color-chalk); letter-spacing: 1px; flex-shrink: 0; margin-bottom: var(--sp-2); }
 .tpm-col__list { flex-direction: column; flex-shrink: 0; }
 /* 節見出し（野手練習/投手練習・Issue #133-⑥）。列見出しより一段淡い従属見出し。 */
 .tpm-menugroup { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: 3px; }
-/* 伸びる能力カラムは行間を詰めて13行を一望に収める。 */
+/* 伸びる能力カラムは行間を詰めて14行を一望に収める（狙いは1440×840で常時全行表示）。 */
 .tpm-col--growth .abil-row { margin-bottom: var(--sp-1); }
+/* 1440×840 未満のウィンドウでは詰めても入り切らないことがある。他2列は密度優先で現状維持のまま、
+   伸びる能力カラムだけスクロールを許容し、黙って行が切り落とされる事故を防ぐ（issue #327②-b）。 */
+.tpm-growth-scroll { flex-grow: 1; min-height: 0; }
 
 /* ── menu slot（issue #222①②③・攻撃メニューと守備ポジションで共用・行高32px基準） ── */
 .mslot {

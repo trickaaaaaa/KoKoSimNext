@@ -123,7 +123,9 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="tpm-col tpm-col--growth">
                         <ui:Label text="この設定で伸びる能力" class="tpm-col__title" />
-                        <ui:VisualElement name="tpm-growth" class="tpm-col__list" />
+                        <ui:ScrollView mode="Vertical" class="tpm-growth-scroll">
+                            <ui:VisualElement name="tpm-growth" class="tpm-col__list" />
+                        </ui:ScrollView>
                     </ui:VisualElement>
                 </ui:VisualElement>
 
