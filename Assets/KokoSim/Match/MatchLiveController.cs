@@ -778,6 +778,7 @@ namespace KokoSim.Unity.Match
         private void BeginPaReplay()
         {
             SetDuelViewAuto(true);   // 次打席の開始で対決ビューへ復帰（issue #312。手動OFF中は据え置き）
+            ApplyDuelHandedness();   // 打席確定＝この打席の左右で立たせ替える（継投後の投手の利き腕もここで追従。issue #337）
 
             // BSO 初期化: アウト＝打席前、塁ダイヤ＝打席前、カウント＝0-0。結果チップは投球フェーズ中は隠す。
             SetOuts(_current.OutsBefore);
@@ -1394,6 +1395,7 @@ namespace KokoSim.Unity.Match
                 _duelRig ??= NewDuelRig();
                 if (!_duelRig.Available) return;
                 EnsureDuelImg();
+                ApplyDuelHandedness();   // 打席の途中で開いても現打席の左右で立たせる（issue #337）
             }
             _duelOn = !_duelOn;
             _duelManualOff = !_duelOn;
@@ -1409,9 +1411,26 @@ namespace KokoSim.Unity.Match
                 _duelRig ??= NewDuelRig();
                 if (!_duelRig.Available) return;
                 EnsureDuelImg();
+                ApplyDuelHandedness();   // rig を作り直した直後は右/右に戻っているため（issue #337）
             }
             _duelOn = on;
             ApplyDuelViewState();
+        }
+
+        /// <summary>
+        /// 現打席の左右（打者の打席・投手の利き腕）を対決ビューへ流し込む（issue #337）。
+        /// 左右のデータは PlayLogEntry 由来で HUD（左打/左投バッジ）と同じ単一ソース＝絵と表示が食い違わない。
+        /// スイッチヒッターは対戦投手の逆に立つ（右投手→左打席／左投手→右打席）。
+        /// engine 側は Switch を Left 扱いのままなので、左投手との対戦では「絵は右打席／内部の引っ張りは
+        /// 左打者」と食い違うが、engine の追随は issue #337 のスコープ外（本文に明記あり）。
+        /// </summary>
+        private void ApplyDuelHandedness()
+        {
+            if (_duelRig == null || !_duelRig.Available || _current == null) return;
+            var pitcherLeft = _current.PitcherThrows == Handedness.Left;
+            var batterLeft = _current.BatterBats == Handedness.Left
+                || (_current.BatterBats == Handedness.Switch && !pitcherLeft);
+            _duelRig.SetHandedness(batterLeft, pitcherLeft);
         }
 
         /// <summary>撮影ハーネス用（エディタ限定運用）: 対決ビューのトグルを外から叩く。</summary>
