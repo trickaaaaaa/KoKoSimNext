@@ -87,6 +87,14 @@ public sealed record TacticsCoefficients
     /// <summary>aggression で閾値を動かす幅。</summary>
     public double SendThirdAggressionSpan { get; init; } = 0.45;
 
+    // ===== ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318, 設計書12 §3.5）=====
+    // 本塁・三塁と同型だが**アウト数を取らない**（2アウト緩和なし）。ゴロ凡打は currentOuts>=2 で
+    // ApplyInPlayOut が即 return するため、2アウト緩和の枝は死にコードになるため設けない。
+    /// <summary>中立采配で進塁（二塁→三塁）を狙う閾値（到達見込みがこの値以上で進塁を試みる）。</summary>
+    public double SendAdvanceMinSuccess { get; init; } = 0.35;
+    /// <summary>aggression(0=超慎重, 0.5=中立, 1=超積極) で閾値を動かす幅。</summary>
+    public double SendAdvanceAggressionSpan { get; init; } = 0.40;
+
     // ===== 守備指示判断 =====
     public double BuntShiftProb { get; init; } = 0.50;
     public int InfieldInFromInning { get; init; } = 8;

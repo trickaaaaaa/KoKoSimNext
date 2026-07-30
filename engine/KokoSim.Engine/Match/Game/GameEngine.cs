@@ -1066,8 +1066,10 @@ public static class GameEngine
                     fp.FielderFielding);
                 // aggression は中立固定（校風/ティア/采配の三層写像は残Q10）。
                 // 守備の内野深さ（G1）＝ゴロ凡打の三塁走者判定へ「前進で刺す/後退で献上」を反映。
+                // ThrowArriveSeconds（一塁送球到達時刻）はゴロ凡打の進塁打（Issue #318）分岐Cの転送起点。
                 homePlay = new HomePlayContext(
-                    ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly);
+                    ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
+                    fp.ThrowArriveSeconds);
             }
 
             // 打席前の塁状況＋アウト数を観測（塁ダイヤ／静止走者トークン用。追加記録のみ・判定不変, #3/#4）。

@@ -52,6 +52,11 @@ public static class HomePlayResolver
     public static BasePlayParams ThirdParams(FieldGeometry field, BaserunningCoefficients c)
         => new(3, field.ThirdBase, c.ThirdTagSeconds, c.ThirdSuccessBias, c.ThirdMarginScale);
 
+    /// <summary>ゴロ凡打の進塁打レース係数束（二塁→三塁, Issue #318）。送球先は三塁ベース、
+    /// タッチ/バイアス/幅は進塁固有（<see cref="ThirdParams"/> と同型・係数だけ分離）。</summary>
+    public static BasePlayParams AdvanceParams(FieldGeometry field, BaserunningCoefficients c)
+        => new(3, field.ThirdBase, c.AdvanceTagSeconds, c.AdvanceSuccessBias, c.AdvanceMarginScale);
+
     /// <summary>
     /// 塁上の走者の時計の文脈（Issue #316）。二次リードで前に出ており、走塁判断ぶんの反応遅延がある。
     /// 判定・表示ともこの文脈で <see cref="RunnerClock"/> を呼べば同じ時刻になる。
@@ -95,8 +100,12 @@ public static class HomePlayResolver
     /// <summary>
     /// 処理点→送球先ベースの送球経路と時刻を解く（中継しきい値・カットマン位置・肩・握り替えを一括）。
     /// <see cref="DefenseTimeSeconds"/> の算式そのもの（切り出しただけで数値は不変）。
+    /// <paramref name="transferSecondsOverride"/>＝処理野手の捕球→送球（握り替え）秒の差し替え（Issue #318）。
+    /// **null なら現行 <see cref="BaserunningCoefficients.OutfieldTransferSeconds"/> と完全恒等**（既存呼び出しは
+    /// 引数を足さずビット一致を保つ）。一塁を取ってから三塁へ転送する経路だけ AdvanceRelayTransferSeconds を渡す。
     /// </summary>
-    public static ThrowPath ResolveThrowPath(HomePlaySituation s, Vector3D targetPoint, BaserunningCoefficients c)
+    public static ThrowPath ResolveThrowPath(HomePlaySituation s, Vector3D targetPoint, BaserunningCoefficients c,
+        double? transferSecondsOverride = null)
     {
         // 処理点から送球先ベースまでの水平距離。
         var dx = s.BallFieldedPoint.X - targetPoint.X;
@@ -121,8 +130,10 @@ public static class HomePlayResolver
             throwTime = dist / s.OutfielderThrowSpeedMps; // 直接返球
         }
 
+        // 握り替え秒: null なら OutfieldTransferSeconds（既存経路とビット一致）。
+        var transferSeconds = transferSecondsOverride ?? c.OutfieldTransferSeconds;
         // 加算の順序は元の式のまま（左結合）＝浮動小数の結果までビット一致で保つ（帯不変）。
-        var release = s.BallFieldedAtSeconds + c.OutfieldTransferSeconds * transferFactor;
+        var release = s.BallFieldedAtSeconds + transferSeconds * transferFactor;
         var cutoff = hasRelay
             ? new Vector3D(
                 targetPoint.X + (s.BallFieldedPoint.X - targetPoint.X) * c.CutoffFractionFromHome,
@@ -132,9 +143,11 @@ public static class HomePlayResolver
         return new ThrowPath(hasRelay, cutoff, release, release + throwTime);
     }
 
-    /// <summary>目標塁へ送球が到達する所要時間[s]（外野処理＋中継/直接＋タッチ, 接触基準）。</summary>
-    public static double DefenseTimeSeconds(HomePlaySituation s, Vector3D targetPoint, double tagSeconds, BaserunningCoefficients c)
-        => ResolveThrowPath(s, targetPoint, c).ArriveAtSeconds + tagSeconds;
+    /// <summary>目標塁へ送球が到達する所要時間[s]（外野処理＋中継/直接＋タッチ, 接触基準）。
+    /// <paramref name="transferSecondsOverride"/> は握り替え秒の差し替え（Issue #318, null で恒等）。</summary>
+    public static double DefenseTimeSeconds(HomePlaySituation s, Vector3D targetPoint, double tagSeconds, BaserunningCoefficients c,
+        double? transferSecondsOverride = null)
+        => ResolveThrowPath(s, targetPoint, c, transferSecondsOverride).ArriveAtSeconds + tagSeconds;
 
     /// <summary>本塁への送球所要時間[s]（後方互換: 送球先=原点・タッチ=HomeTagSeconds）。</summary>
     public static double DefenseTimeSeconds(HomePlaySituation s, BaserunningCoefficients c)
@@ -143,11 +156,12 @@ public static class HomePlayResolver
     /// <summary>
     /// 到達判定のmargin[s]（守備所要−走者所要＋バイアス。判定オーバーレイ, Issue #59）。
     /// 0=判定境界、正=セーフ（到達）寄り、負=アウト（憤死）寄り。塁は <paramref name="p"/> で指定。
+    /// <paramref name="transferSecondsOverride"/> は守備の握り替え秒の差し替え（Issue #318, null で恒等）。
     /// </summary>
     public static double Margin(
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
-        in BasePlayParams p, double extraStartDelaySeconds = 0.0)
-        => DefenseTimeSeconds(s, p.TargetPoint, p.TagSeconds, c)
+        in BasePlayParams p, double extraStartDelaySeconds = 0.0, double? transferSecondsOverride = null)
+        => DefenseTimeSeconds(s, p.TargetPoint, p.TagSeconds, c, transferSecondsOverride)
            - RunnerTimeSeconds(runner, fromBase, p.TargetBase, field, c, extraStartDelaySeconds) + p.SuccessBias;
 
     /// <summary>本塁 margin[s]（後方互換: HomeParams 固定）。</summary>
@@ -156,12 +170,13 @@ public static class HomePlayResolver
         double extraStartDelaySeconds = 0.0)
         => Margin(runner, fromBase, s, field, c, HomeParams(c), extraStartDelaySeconds);
 
-    /// <summary>到達成功確率（走塁と同式の logistic）。塁は <paramref name="p"/> で指定。</summary>
+    /// <summary>到達成功確率（走塁と同式の logistic）。塁は <paramref name="p"/> で指定。
+    /// <paramref name="transferSecondsOverride"/> は守備の握り替え秒の差し替え（Issue #318, null で恒等）。</summary>
     public static double SuccessProbability(
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
-        in BasePlayParams p, double extraStartDelaySeconds = 0.0)
+        in BasePlayParams p, double extraStartDelaySeconds = 0.0, double? transferSecondsOverride = null)
     {
-        var margin = Margin(runner, fromBase, s, field, c, p, extraStartDelaySeconds);
+        var margin = Margin(runner, fromBase, s, field, c, p, extraStartDelaySeconds, transferSecondsOverride);
         return MathUtil.Clamp(MathUtil.Logistic(margin / p.MarginScale), 0.01, 0.99);
     }
 
