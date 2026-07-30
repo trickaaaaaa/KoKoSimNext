@@ -2033,6 +2033,15 @@ namespace KokoSim.Unity.Match
         /// クリップの頭出し（アンカー同期用）。ルートモーションはデルタ蓄積なので、
         /// スポーン姿勢へ戻してから0→目標時刻を60fps刻みで前進させる（スパイクのSample()と同じ方式）。
         /// </summary>
+        /// <summary>
+        /// 【撮影ハーネス・プローブ用】打者の (クリップ内時刻[秒], 再生速度[倍])。
+        /// 速度を入れると「絵が違う」だけでは頭出しのずれか速度そのものかを切り分けられないので、
+        /// 目測でなくこの実測窓で判定する。
+        /// </summary>
+        public Vector2 BatterClock => _batter == null
+            ? new Vector2(-1f, -1f)
+            : new Vector2(_batter.Time, _batter.Speed);
+
         private static void SeekActor(Actor a, float clipTime)
         {
             if (a == null) return;

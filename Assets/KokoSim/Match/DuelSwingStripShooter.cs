@@ -76,6 +76,9 @@ namespace KokoSim.Unity.Match
             {
                 float mark = FirstSec + f * StepSec;
                 while (t < mark) { _rig.Tick(1f / 60f); t += 1f / 60f; yield return null; }
+                var clock = _rig.BatterClock;
+                Debug.Log(string.Format("[SwingStrip] f={0:00} t={1:F2}s clip={2:F3}s speed={3:F2}",
+                    f, mark, clock.x, clock.y));
                 yield return Capture(string.Format("{0}-{1:00}-t{2:F2}",
                     UnityEditor.EditorPrefs.GetString(PrefixKey, "strip"), f, mark));
             }
