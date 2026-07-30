@@ -11,6 +11,10 @@ namespace KokoSim.Engine.Match.Timeline.Playback;
 /// 表示専用の付帯情報で、判定・帯には一切関与しない。
 /// <see cref="FoulFlight"/>（Issue #313）は物理層を持つファウル（<see cref="PitchRecord.BattedBall"/> 非null）
 /// だけが非null＝実記録がない合成列・物理を生成しないファウル（バント/スクイズ・FoulShare経路）は null のまま。
+/// <see cref="LocationX"/> / <see cref="LocationY"/> / <see cref="Trajectory"/>（Issue #332）も同様に
+/// 実1球記録だけが非null。コースは <see cref="PitchRecord.LocationX"/> の写しで、判定に使われた実着弾位置
+/// そのもの（合成列に架空のコースを作らせるのは禁止＝<see cref="PitchSequenceSynthesizer"/> のコメント参照）。
+/// <see cref="Trajectory"/> は観測専用のフル弾道で、<c>CaptureTimeline</c> の試合だけ非null。
 /// </summary>
 public readonly record struct PitchToken(
     PitchKind Kind,
@@ -18,7 +22,10 @@ public readonly record struct PitchToken(
     int StrikesAfter,
     Players.PitchType? PitchType = null,
     double? VelocityKmh = null,
-    PlaybackPlay? FoulFlight = null);
+    PlaybackPlay? FoulFlight = null,
+    double? LocationX = null,
+    double? LocationY = null,
+    Pitching.PitchTrajectory? Trajectory = null);
 
 /// <summary>1打席の投球列（中継風カウントの合成データ）。</summary>
 public sealed record PitchSequence(IReadOnlyList<PitchToken> Pitches)
