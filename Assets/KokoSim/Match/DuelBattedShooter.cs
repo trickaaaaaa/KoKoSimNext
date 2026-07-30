@@ -73,6 +73,34 @@ namespace KokoSim.Unity.Match
             new GameObject("~DuelBattedAuto").AddComponent<DuelBattedShooter>();
         }
 
+        /// <summary>
+        /// 【開発用】打撃フォーム確認窓と同じ条件（Edit mode・球なし・クリップを直接送る）で、
+        /// 指定したクリップ内時刻のバットを実測する。窓の「コマ ▶」で見えている絵と同じものを数値で出す。
+        /// </summary>
+        public static string ProbeSeek(string csvTimes)
+        {
+            var rig = new DuelStageRig();
+            if (!rig.Available) return "rig が組めない";
+            // 窓と同じ手順（「フライ」を押してから「コマ ▶」で送る）。押さずに送ると打者は構えループの
+            // ままで、クリップ内時刻を動かしてもポーズが変わらない＝窓の再現にならない
+            // 構えを十分に回してから振る。バットの向きは**構えループで焼く**ので、湧かせた直後に
+            // 振ると焼き付け元が落ち着く前のポーズになり、トップの軸そのものが別物になる
+            for (int i = 0; i < 90; i++) rig.Tick(1f / 60f);
+            rig.OnPitchWindup();
+            for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
+            rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, RealBatted("フライ"));
+            var sb = new System.Text.StringBuilder();
+            foreach (var part in csvTimes.Split(','))
+            {
+                float t;
+                if (!float.TryParse(part.Trim(), out t)) continue;
+                rig.SeekBatter(t);
+                sb.Append(rig.BatContactDiagForCapture()).Append('\n');
+            }
+            rig.Dispose();
+            return sb.ToString();
+        }
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
