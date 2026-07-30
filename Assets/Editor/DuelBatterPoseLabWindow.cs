@@ -273,7 +273,14 @@ namespace KokoSim.EditorTools
             EditorGUI.BeginChangeCheck();
             bool on = EditorGUILayout.ToggleLeft(
                 "バットを手で置く（切ると両手追従へ戻る）", _cal.BatFromPath >= 0.5f);
-            if (EditorGUI.EndChangeCheck()) { _cal.BatFromPath = on ? 1f : 0f; Push(); }
+            if (EditorGUI.EndChangeCheck())
+            {
+                _cal.BatFromPath = on ? 1f : 0f;
+                // 空のまま有効にすると「掴めるのに何も起きない」死に状態になる（キーが2本たまるまで
+                // 手追従へ落ちるため）。入れた瞬間に今の絵を焼いて、そこから編集を始められるようにする
+                if (on && (_path == null || !_path.HasKeys)) BakePath();
+                else Push();
+            }
 
             using (new EditorGUI.DisabledScope(!on))
             {
