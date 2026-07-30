@@ -277,8 +277,14 @@ namespace KokoSim.Unity.Match
             // 上を向く瞬間がある（2026-07-30 実測：14msの差で軸が飛ぶ）。そこを下げて振り面を
             // 「ど真ん中を叩く高さ」へ寝かせるのがこの値の意味＝**大きいのは軸の暴れを吸っているから**。
             // 持ち上げは−0.018mとほぼ0＝高さは傾きだけで作れている（平行移動はバットが手から浮くので）
-            SwingLiftM = -0.018f,
-            SwingPlaneTiltDeg = -63f,
+            // スイング面のつまみは 2026-07-31 に**0へ戻した**。−63°/−0.018m は「軸が握り線から採れていて
+            // ミート近傍で暴れる」のを打ち消す当て木で、横ずれを詰める代わりに高さを悪化させていた
+            // （どちらの値でもバットは球に当たっていなかった）。振り出し以降は手の中の向きを剛体で運ぶ
+            // ようにしたので当て木は不要＝入れると担いだバットが振り出しで下を向く。
+            // 実測（傾き−63°→0）: 振り出し(clip 0.90)のバット 下18°→**上46°**／1コマの飛び 47°→**16.5°**／
+            // 接触の芯→打点 0.107m→0.105m（当たりは変わらない）。つまみ自体は残してある
+            SwingLiftM = 0f,
+            SwingPlaneTiltDeg = 0f,
             SwingPlaneBatOnly = 1f,   // 既定はバットだけ動かす（腕は収録のまま）
             // 構えは自作Rokoko（監督選定 2026-07-31・打撃フォーム確認窓で確認）。スイングはMixamoのまま。
             IdleFromOwnClip = 1f,
@@ -2794,6 +2800,8 @@ namespace KokoSim.Unity.Match
         private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;
         private Quaternion _batLocalRot;
+        private bool _batHeldValid;       // 下の手の中でのバットの向きを構えで焼いてあるか
+        private Quaternion _batHeldRot;   // その向き（下の手ボーンのローカル）。振り出し後はこれを運ぶ
 
         /// <summary>
         /// 掌中心（ワールド）。手ボーンの原点は**手首**なので、そのまま結ぶとバットが手首の上を横切り
@@ -2907,6 +2915,25 @@ namespace KokoSim.Unity.Match
                     float axisFromGrip = BatterOnOwnIdle ? _cal.IdleBatAxisFromGrip : _cal.BatAxisFromGrip;
                     if (axisFromGrip > 0f)
                         axis = Vector3.Slerp(axis, d, Mathf.Clamp01(axisFromGrip)).normalized;
+                }
+
+                // ---- 振り出したら握り線から向きを採らない（2026-07-31 監督指摘）----
+                // 実測線の基線は両手の間隔＝`GripGapM` 0.10m しかないので、掌中心の推定が1cmずれると
+                // 軸が5.7°回る。実測で**振り出しの1コマ（12fps）で102°飛んでいた**
+                // （clip 0.79 で後ろ上24°＝担いだ形 → clip 0.90 でほぼ真下）。
+                //
+                // 代わりに「構えで焼いた**手の中でのバットの向き**」を剛体で運ぶ＝実際にバットを握って
+                // いるのと同じ関係で、向きは手ボーンの回転と同じだけ滑らかになる（暴れる差分を一切見ない）。
+                // 位置（握り点）は両掌の**中点**なので平均されていて暴れない＝そのまま使う。
+                // 片手フォロースルーで既に使っている「最後の見た目を焼いて手に追従させる」のと同じ流儀。
+                if (!swinging)
+                {
+                    _batHeldRot = Quaternion.Inverse(lhT.rotation) * Quaternion.FromToRotation(Vector3.up, axis);
+                    _batHeldValid = true;
+                }
+                else if (_batHeldValid)
+                {
+                    axis = ((lhT.rotation * _batHeldRot) * Vector3.up).normalized;
                 }
                 var grip = (lh + rh) * 0.5f;
                 // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。
