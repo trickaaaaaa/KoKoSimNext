@@ -14,6 +14,12 @@ namespace KokoSim.EditorTools
         public static void DrawBattingForm(ref DuelCalibration cal)
         {
             EditorGUILayout.LabelField("スイング面（ど真ん中を打つ高さに）", EditorStyles.miniBoldLabel);
+            // 2026-07-31: バットの軌道は「トップ軸→実際の打点」を回す幾何（SwingBatAxis）へ移した。
+            // 下の3つはその**後段**に掛かるので、回すと接触の瞬間に芯が打点から外れる（実測0で一致）。
+            EditorGUILayout.HelpBox(
+                "軌道は打点へ向けて自動で回る（トップ→打点→巻き付き）。下の3つは後段の上乗せなので、"
+                + "0以外にすると接触の瞬間に芯が球から外れる。既定は3つとも0。",
+                MessageType.None);
             // 符号は幾何で決まる（＋でバレル端が上がる。DuelStageRig.AlignBat の n=Cross(水平axis,up)）。
             // 上限は±90°＝バットを真上／真下まで倒せる（これ以上は意味が反転する）
             cal.SwingPlaneTiltDeg = EditorGUILayout.Slider("バットの傾き（＋バレルが上がる）",

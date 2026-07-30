@@ -2854,7 +2854,10 @@ namespace KokoSim.Unity.Match
         private Quaternion _batLocalRot;
         private bool _batHeldValid;           // バットの向きを構えで焼いてあるか
         private Vector3 _batHeldAxis;         // 構えでの向きそのもの。テイクバック中はここで止める
-        private float _swingAnchorClip;       // 予約したスイングの接触時刻[クリップ秒]（SwingBatAxis の終点）
+        // 予約したスイングの接触時刻[クリップ秒]（SwingBatAxis の終点）。既定を入れてあるのは
+        // 打撃フォーム確認窓のように **OnPitchReleased を通さずクリップを直接送る**使い方のため
+        // （0だとバットが構えの向きのまま固まり、軌道が一切出ない）
+        private float _swingAnchorClip = SwingHitContact;
 
         private static float Smooth(float u) => u * u * (3f - 2f * u);
 
