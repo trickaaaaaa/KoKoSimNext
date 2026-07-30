@@ -120,8 +120,12 @@ namespace KokoSim.EditorTools
             cal.KneeToSec = EditorGUILayout.Slider("戻し切り [秒]", cal.KneeToSec, 0f, 3.4f);
 
             EditorGUILayout.LabelField("振りの速さ", EditorStyles.miniBoldLabel);
-            cal.SwingSpeed = EditorGUILayout.Slider("再生速度 [倍]", cal.SwingSpeed, 0.5f, 2f);
-            EditorGUILayout.LabelField(" ", "ポーズは12fps＝この倍率ぶんコマが減る", EditorStyles.miniLabel);
+            cal.SwingSpeed = EditorGUILayout.Slider("再生速度 [倍]", cal.SwingSpeed, 0.5f, 3f);
+            // 振り出し(clip 0.90)→接触(1.12) は 0.22 クリップ秒。実物は 0.15〜0.20s なので 1.1〜1.5 が実寸相当
+            EditorGUILayout.LabelField(" ",
+                string.Format("振り出し→接触 {0:F3}秒（実物0.15〜0.20秒）／ポーズ12fpsで {1:F1}コマ",
+                    0.22f / Mathf.Max(0.1f, cal.SwingSpeed), 0.22f / Mathf.Max(0.1f, cal.SwingSpeed) * 12f),
+                EditorStyles.miniLabel);
 
             EditorGUILayout.LabelField("胴（開きを抑える）", EditorStyles.miniBoldLabel);
             cal.TorsoCloseDeg = EditorGUILayout.Slider("胴を戻す [度]", cal.TorsoCloseDeg, -45f, 45f);

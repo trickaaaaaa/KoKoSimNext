@@ -258,10 +258,16 @@ namespace KokoSim.Unity.Match
             // （2026-07-30 実測）。バットをコマごとの手動配置へ移したら、この上限は外れるので
             // そこで本調整する
             TorsoCloseDeg = 8f,
-            TorsoFromSec = 0.90f, TorsoFullSec = 1.30f, TorsoToSec = 1.70f,
+            // 全開は「接触の瞬間」に置く約束なので、ミートの実測値（1.30→1.12）に合わせて同じだけ前へ寄せた
+            TorsoFromSec = 0.72f, TorsoFullSec = 1.12f, TorsoToSec = 1.52f,
             // 監督選定（2026-07-30・4通りのコマ送り比較）: **開き8°＋速度1.4倍**。
             // 1.4倍のとき面通過（リリース+0.45s）のクリップ時刻は実測1.253s＝アンカー1.30sの
             // 1コマ以内（12fpsの刻みは0.117s）。振りは0.70s→0.50s＝1振りに使えるコマは8→6に減る
+            // 振り出し（clip 0.90）から接触（1.12）までは 0.22 クリップ秒＝実時間はこの倍率で割った値。
+            // 1.4 で 0.157s ＝ 実際のスイング（振り出し→接触 0.15〜0.20s）に入る。
+            // 「振りが遅い」（2026-07-31 監督指摘）の主因はこの倍率ではなく、**ポーズが倍率ぶん
+            // 進んでいなかったこと**（StepActor 参照）で、実効 1.0倍＝0.22s で振っていた。
+            // ここから上げると 12fps のポーズが2コマを切って振りがカクつく
             SwingSpeed = 1.4f,
             // 旧0.154（＝ほぼ合成軸）。自作Rokokoは両手が開いて拳が積み重ならない収録だったので
             // 実測線が使えなかったが、Mixamoは元からバットを両手で握った収録なので実測線が素直に使える。
@@ -1227,8 +1233,14 @@ namespace KokoSim.Unity.Match
         // 「速球はミットが閉じてから球が着く」ズレが球速差ぶん出る＝球の速さを絵で見せる目的と噛み合わない。
         // この定数は弾道が無い球（合成列・CaptureTimelines なしの試合）の既定値として残す。
         private const float BallFlightSeconds = 0.45f;
-        private const float SwingMissPlane = 1.30f;    // Mixamo打撃クリップ: 右手速度ピーク6.1m/s（2026-07-30実測。旧Rokoko=3.05）
-        private const float SwingHitContact = 1.30f;   // 同上。空振りとミートで収録が分かれていないため同値
+        // 面通過・ミートのクリップ内時刻。旧1.30は**右手の速度ピーク**（2026-07-30実測）で採った値だが、
+        // ①バットの芯は手より遅れて来る ②当時はポーズが speed 倍で進んでおらず遅れていた（下の
+        // StepActor の項）、の2つで実際の通過点とずれていた。ポーズを直したうえで**握りが本塁へ
+        // 最接近するクリップ時刻**を0.042刻みで掃いて採り直した（2026-07-31）:
+        //   clip 1.08→0.560m / 1.12→0.478m / 1.16→0.449m(最小) / 1.20→0.672m / 1.28→0.815m
+        // バットの腕（握り→芯）は0.608mなので、1.12 なら芯の0.13m手元側で捉える＝普通の当たり所。
+        private const float SwingMissPlane = 1.12f;
+        private const float SwingHitContact = 1.12f;   // 空振りとミートで収録が分かれていないため同値
         private const float HbpReact = 1.3f;
         // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
         private const float SwingMissHoldSeconds = 0.8f;
@@ -2661,7 +2673,13 @@ namespace KokoSim.Unity.Match
                 a.Mixer.SetInputWeight(1, w);
                 if (a.FadeRemaining <= 0f) CancelFade(a);
             }
-            a.Graph.Evaluate(step);
+            // **速度は Evaluate 側にも掛ける**。`a.Time` だけ speed 倍にして Evaluate を等速で回すと、
+            // 記録上のクリップ時刻だけが先行してポーズが置いていかれる（2026-07-31 実害）。
+            // SwingSpeed=2.0 で実測 0.42 クリップ秒ぶん遅れ、球の到達（0.45s）に対して接触ポーズが
+            // 0.18秒遅れて出る＝「振りが遅くて球と合っていない」。倍率を上げても、それまでは
+            // 「クリップを早く打ち切る」だけでポーズは常に1倍速だった。
+            // グラフはアクター別なので、他の役（Speed=1）の見え方は変わらない
+            a.Graph.Evaluate(step * a.Speed);
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
             // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない
@@ -2800,8 +2818,18 @@ namespace KokoSim.Unity.Match
         private bool _batGoodValid;     // _batLocal* が「両手で持てていた見た目」を保持しているか
         private Vector3 _batLocalPos;
         private Quaternion _batLocalRot;
-        private bool _batHeldValid;       // 下の手の中でのバットの向きを構えで焼いてあるか
-        private Quaternion _batHeldRot;   // その向き（下の手ボーンのローカル）。振り出し後はこれを運ぶ
+        private bool _batHeldValid;           // バットの向きを構えで焼いてあるか
+        private Quaternion _batHeldRot;       // 下の手ボーンのローカル。振り出し後はこれを運ぶ
+        private Vector3 _batHeldAxis;         // 構えでの向きそのもの。テイクバック中はここで止める
+
+        /// <summary>
+        /// 振り出しから「トップで止める→手に付いていく＋球へ向ける」へ渡す長さ[クリップ秒]。
+        /// 渡し終わり（clip 0.90+0.10=1.00）が接触（1.12）の 0.12 クリップ秒＝実時間0.086秒前になる。
+        /// **ポーズ1コマ（12fps=83ms）以上前に寄せ切る**という捕手ミットと同じ掟を満たす最小値。
+        /// </summary>
+        private const float BatTopReleaseSec = 0.10f;
+
+        private static float Smooth(float u) => u * u * (3f - 2f * u);
 
         /// <summary>
         /// 掌中心（ワールド）。手ボーンの原点は**手首**なので、そのまま結ぶとバットが手首の上を横切り
@@ -2831,6 +2859,10 @@ namespace KokoSim.Unity.Match
         {
             if (!_batAimsBall || _ballT < 0f || _batter == null) return axis;
             float w = DuelBatterPose.AimWeight(_ballT, _ballArrival);
+            // **振り出す前には効かせない**。球の時計だけで駆動すると、飛翔時間によっては
+            // テイクバック（実測 clip 0.73）から効き始め、止めたはずのバットが球へ向いて動く。
+            // トップを離れるのと同じ窓（BatTopReleaseSec）で立ち上げる＝渡しは1回だけになる
+            w *= Smooth(Mathf.InverseLerp(BatterSwingStart, BatterSwingStart + BatTopReleaseSec, _batter.Time));
             if (w <= 0.001f) return axis;
             var target = _root.transform.TransformPoint(BallPointAt(_ballArrival));
             var toBall = target - grip;
@@ -2917,23 +2949,41 @@ namespace KokoSim.Unity.Match
                         axis = Vector3.Slerp(axis, d, Mathf.Clamp01(axisFromGrip)).normalized;
                 }
 
-                // ---- 振り出したら握り線から向きを採らない（2026-07-31 監督指摘）----
+                // ---- 打撃クリップの間は握り線から向きを採らない（2026-07-31 監督指摘）----
                 // 実測線の基線は両手の間隔＝`GripGapM` 0.10m しかないので、掌中心の推定が1cmずれると
-                // 軸が5.7°回る。実測で**振り出しの1コマ（12fps）で102°飛んでいた**
-                // （clip 0.79 で後ろ上24°＝担いだ形 → clip 0.90 でほぼ真下）。
+                // 軸が5.7°回る。実測の実害は2箇所:
+                //   ・振り出し: 1コマ（12fps）で軸が102°飛ぶ（clip 0.79 担いだ形 → clip 0.90 ほぼ真下）
+                //   ・テイクバック: 手はほぼ動いていない（握りの移動0.15m）のに、バットだけ
+                //     clip 0.67→0.79 で**ヨー180°**回る（プレート側→反対側）＝「あちこち動く」の正体
                 //
-                // 代わりに「構えで焼いた**手の中でのバットの向き**」を剛体で運ぶ＝実際にバットを握って
-                // いるのと同じ関係で、向きは手ボーンの回転と同じだけ滑らかになる（暴れる差分を一切見ない）。
+                // 代わりに「**構えのループで焼いた**手の中でのバットの向き」を打撃クリップの間ずっと
+                // 剛体で運ぶ。実際にバットを握っているのと同じ関係＝**振っている最中に握り直さない**ので、
+                // バットは手ボーンの回転ぶんしか動かない（暴れる差分を一切見ない）。
+                // テイクバックは手が引かれるぶんだけ引けてトップが保たれる。
                 // 位置（握り点）は両掌の**中点**なので平均されていて暴れない＝そのまま使う。
                 // 片手フォロースルーで既に使っている「最後の見た目を焼いて手に追従させる」のと同じ流儀。
-                if (!swinging)
+                // テイクバックは**体に対して**バットを止める（＝トップの位置を保つ。監督要望
+                // 「構えから少し引くくらいでトップを保って欲しい」）。手に対して剛体にするだけでは、
+                // 収録の手首のコックにバットが付いていって1コマ39〜69°動く（2026-07-31 実測）。
+                // 体に固定すれば、テイクバック中のバットは**手が引かれるぶん平行移動するだけ**になる。
+                // 振り出し（BatterSwingStart）からは手に対する剛体へ短く渡す＝スイングは収録の手に従う。
+                // 止める先は**体の向きでもなく、焼いた向きそのもの**にする。体基準だと、
+                //   ①構え(119°)→スイング(93.8°)のヨー補間 ②ルートモーションの根の回転
+                // が乗ってテイクバックの前後で50〜61°動いた（clip 0.61→0.72 の間だけ0°だった。実測）。
+                // 向きを凍結すれば、テイクバック中のバットは**手が引かれるぶん平行移動するだけ**になる。
+                bool onIdleLoop = _batter.Clip == _batter.IdleClip;
+                if (onIdleLoop)
                 {
                     _batHeldRot = Quaternion.Inverse(lhT.rotation) * Quaternion.FromToRotation(Vector3.up, axis);
+                    _batHeldAxis = axis;
                     _batHeldValid = true;
                 }
-                else if (_batHeldValid)
+                else if (battingClip && _batHeldValid)
                 {
-                    axis = ((lhT.rotation * _batHeldRot) * Vector3.up).normalized;
+                    float toHand = Mathf.InverseLerp(BatterSwingStart, BatterSwingStart + BatTopReleaseSec,
+                        _batter.Time);
+                    var held = ((lhT.rotation * _batHeldRot) * Vector3.up).normalized;
+                    axis = Vector3.Slerp(_batHeldAxis, held, Smooth(toHand)).normalized;
                 }
                 var grip = (lh + rh) * 0.5f;
                 // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。

@@ -52,12 +52,16 @@ namespace KokoSim.Unity.Match
         private const string AlphaKey = "KokoSim.DuelBattedShooter.Alpha";
         /// <summary>スイング面のつまみ（傾き・持ち上げ・バット単体）を全部0にして掃く＝原因の切り分け用。</summary>
         private const string NoPlaneKey = "KokoSim.DuelBattedShooter.NoPlane";
+        /// <summary>再生速度の上書き。遅くするとポーズ（12fps）の刻みが細かくなり、クリップを細かく掃ける。</summary>
+        private const string SpeedKey = "KokoSim.DuelBattedShooter.Speed";
 
-        public static void Arm(float widthM = -1f, float alpha = -1f, bool noSwingPlane = false)
+        public static void Arm(float widthM = -1f, float alpha = -1f, bool noSwingPlane = false,
+            float swingSpeed = -1f)
         {
             UnityEditor.EditorPrefs.SetFloat(WidthKey, widthM);
             UnityEditor.EditorPrefs.SetFloat(AlphaKey, alpha);
             UnityEditor.EditorPrefs.SetBool(NoPlaneKey, noSwingPlane);
+            UnityEditor.EditorPrefs.SetFloat(SpeedKey, swingSpeed);
             UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
         }
 
@@ -77,15 +81,17 @@ namespace KokoSim.Unity.Match
             float w = UnityEditor.EditorPrefs.GetFloat(WidthKey, -1f);
             float a = UnityEditor.EditorPrefs.GetFloat(AlphaKey, -1f);
             bool noPlane = UnityEditor.EditorPrefs.GetBool(NoPlaneKey, false);
-            if (w > 0f || a > 0f || noPlane)
+            float sp = UnityEditor.EditorPrefs.GetFloat(SpeedKey, -1f);
+            if (w > 0f || a > 0f || noPlane || sp > 0f)
             {
                 var cal = DuelCalibration.Default;
                 if (w > 0f) cal.BattedTrailWidthM = w;
                 if (a > 0f) cal.BattedTrailAlpha = a;
+                if (sp > 0f) cal.SwingSpeed = sp;
                 if (noPlane) { cal.SwingPlaneTiltDeg = 0f; cal.SwingLiftM = 0f; cal.SwingPlaneBatOnly = 0f; }
                 DuelStageRig.CalibrationOverride = cal;
                 Debug.Log("[Batted] 太さ=" + cal.BattedTrailWidthM + "m 濃さ=" + cal.BattedTrailAlpha
-                    + " スイング面=" + (noPlane ? "切" : "既定"));
+                    + " 速度=" + cal.SwingSpeed + " スイング面=" + (noPlane ? "切" : "既定"));
             }
 
             _rig = new DuelStageRig();
