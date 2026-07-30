@@ -127,7 +127,8 @@ namespace KokoSim.Unity.Match
                 if (line == lastLine) continue;      // 12fps＝ポーズが変わった時だけ記録する
                 lastLine = line;
                 float rel = t - ContactSec;
-                sb.Append((rel >= 0 ? "+" : "")).Append(rel.ToString("F2")).Append('\t').Append(line).Append('\n');
+                sb.Append((rel >= 0 ? "+" : "")).Append(rel.ToString("F2")).Append('\t').Append(line)
+                  .Append("\n\t\t").Append(_rig.BatterRootDiagForCapture()).Append('\n');
                 int i0 = line.IndexOf("打点まで=");
                 if (i0 >= 0)
                 {
