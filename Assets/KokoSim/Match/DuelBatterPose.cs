@@ -19,36 +19,10 @@ namespace KokoSim.Unity.Match
     /// 収録は右打者（踏み込み＝左足・上の手＝右手）。左打者ミラー時は Side を反転させる想定で
     /// 左右を定数でなく引数に寄せてある。
     /// </summary>
-    /// <summary>
-    /// 握りの行き先。<see cref="DuelBatPath"/> でバットを先に置いたとき、手をそこへ引くために渡す。
-    /// 無効（既定）なら従来どおり**手から**握り線を作る＝バット主・手従の切り替えはこの1点。
-    /// </summary>
-    public readonly struct DuelBatTarget
-    {
-        public readonly bool Valid;
-        public readonly Vector3 GripCenter;   // 握りの中点（ワールド）
-        public readonly Vector3 GripAxis;     // バレル側の手→ノブ側の手（ワールド・正規化済み）
-
-        public DuelBatTarget(Vector3 gripCenter, Vector3 gripAxis)
-        {
-            Valid = true;
-            GripCenter = gripCenter;
-            GripAxis = gripAxis.sqrMagnitude < 1e-8f ? Vector3.up : gripAxis.normalized;
-        }
-    }
-
     public static class DuelBatterPose
     {
         /// <summary>補正の入口。clipTime はクリップ内秒（構え0〜スイング〜走り出し）。</summary>
         public static void Apply(Animator anim, in DuelCalibration cal, float clipTime, Vector3 aimPoint)
-            => Apply(anim, cal, clipTime, aimPoint, default);
-
-        /// <summary>
-        /// バットの行き先つき。<paramref name="bat"/> が有効なら握りはその位置・軸へ引かれる
-        /// （バット主・手が従）。無効なら従来どおり手から握り線を作る。
-        /// </summary>
-        public static void Apply(Animator anim, in DuelCalibration cal, float clipTime, Vector3 aimPoint,
-            in DuelBatTarget bat)
         {
             if (anim == null) return;
             FixKnee(anim, cal, clipTime);
@@ -56,7 +30,7 @@ namespace KokoSim.Unity.Match
             // 「回した後の体」を基準に当たり直す必要がある（逆順だと視線と握りが胴のぶんずれる）
             FixTorso(anim, cal, clipTime);
             FixHead(anim, cal, clipTime, aimPoint);
-            FixGrip(anim, cal, clipTime, bat);
+            FixGrip(anim, cal, clipTime);
         }
 
         // ---------------------------------------------------------------- 部品
@@ -92,7 +66,7 @@ namespace KokoSim.Unity.Match
 
         // ---------------------------------------------------------------- 握り
 
-        private static void FixGrip(Animator anim, in DuelCalibration cal, float t, in DuelBatTarget bat)
+        private static void FixGrip(Animator anim, in DuelCalibration cal, float t)
         {
             float w = 1f - Ramp(t, cal.GripEndSec - 0.15f, cal.GripEndSec);
             if (w <= 0f) return;
@@ -112,34 +86,22 @@ namespace KokoSim.Unity.Match
             Vector3 u = d.normalized;
             Vector3 mid = (a + b) * 0.5f;
             float half = cal.GripGapM * 0.5f;
-            Vector3 anchor;
-            if (bat.Valid)
-            {
-                // バット主・手が従。握り線も中点もバット側が決めるので、寄せの配分（GripPullBias）は
-                // 効かない＝「どちらの手を残すか」はバットを置いた時点で決まっている
-                u = bat.GripAxis;
-                anchor = bat.GripCenter;
-            }
-            else
-            {
-                float bias = Mathf.Clamp(cal.GripPullBias, -1f, 1f);
-                anchor = mid;   // 寄せた後の両手の中点
-                if (bias < 0f) anchor = Vector3.Lerp(mid, a - u * half, -bias);   // 左手が動かない
-                else if (bias > 0f) anchor = Vector3.Lerp(mid, b + u * half, bias);
-            }
+            float bias = Mathf.Clamp(cal.GripPullBias, -1f, 1f);
+            Vector3 anchor = mid;   // 寄せた後の両手の中点
+            if (bias < 0f) anchor = Vector3.Lerp(mid, a - u * half, -bias);   // 左手が動かない
+            else if (bias > 0f) anchor = Vector3.Lerp(mid, b + u * half, bias);
             // スイング中は許容を上げる（実物も接触では腕が伸びる。収録もこの辺りで手が飛ぶ）
             float sw = SwingWindow(cal, t);
 
             // スイング面の高さ・傾き（2026-07-30 監督指摘「足元のボールを打っているように見える」）。
             // 収録の面が低いのを、クリップを触らずに**握りを動かして**持ち上げる。バット軸は
             // AlignBat が動かした後の手から採り直すので、バットは自動でこの面に乗る＝
-            // バットを直接置く（DuelBatPath）必要が無く、腕はIKが自然に追いてくる。
-            // バット主のとき（bat.Valid）は行き先が既に決まっているので効かせない。
+            // 腕はIKが自然に追いてくる。
             //
             // SwingPlaneBatOnly ぶんは**ここでは効かせない**（腕を動かさない）。その分は AlignBat が
             // バット単体へ掛ける＝手はクリップのまま・バットだけ面が変わる（2026-07-31 監督要望）。
             float arm = sw * (1f - Mathf.Clamp01(cal.SwingPlaneBatOnly));
-            if (!bat.Valid && arm > 0.001f)
+            if (arm > 0.001f)
             {
                 if (Mathf.Abs(cal.SwingPlaneTiltDeg) > 0.01f)
                 {

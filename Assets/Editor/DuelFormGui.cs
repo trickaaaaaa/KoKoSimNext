@@ -14,34 +14,22 @@ namespace KokoSim.EditorTools
         public static void DrawBattingForm(ref DuelCalibration cal)
         {
             EditorGUILayout.LabelField("スイング面（ど真ん中を打つ高さに）", EditorStyles.miniBoldLabel);
-            // バットを手で置いている間は行き先が既に決まっていて、この2本は効かない。
-            // 動くのに何も起きないつまみは事故のもとなので、理由を出して灰色にする
-            bool batLed = cal.BatFromPath >= 0.5f;
-            if (batLed)
+            // 符号は幾何で決まる（＋でバレル端が上がる。DuelStageRig.AlignBat の n=Cross(水平axis,up)）。
+            // 上限は±90°＝バットを真上／真下まで倒せる（これ以上は意味が反転する）
+            cal.SwingPlaneTiltDeg = EditorGUILayout.Slider("バットの傾き（＋バレルが上がる）",
+                cal.SwingPlaneTiltDeg, -90f, 90f);
+            cal.SwingLiftM = EditorGUILayout.Slider("持ち上げる [m]", cal.SwingLiftM, -0.20f, 0.40f);
+            cal.SwingPlaneBatOnly = EditorGUILayout.Slider("バットだけ動かす（0=腕も追う）",
+                cal.SwingPlaneBatOnly, 0f, 1f);
+            EditorGUILayout.LabelField(" ",
+                "スイング中だけ効く。1=腕は収録のまま／傾きは握り点で回る＝手から離れない",
+                EditorStyles.miniLabel);
+            if (cal.SwingPlaneBatOnly > 0.5f && Mathf.Abs(cal.SwingLiftM) > 0.02f)
             {
-                EditorGUILayout.HelpBox(
-                    "「バットを手で置く」がONの間は効きません（バットの行き先が先に決まっているため）。"
-                    + "使うにはプレビュー下のチェックを外してください。", MessageType.Warning);
-            }
-            using (new EditorGUI.DisabledScope(batLed))
-            {
-                // 符号は幾何で決まる（＋でバレル端が上がる。DuelStageRig.AlignBat の n=Cross(水平axis,up)）。
-                // 上限は±90°＝バットを真上／真下まで倒せる（これ以上は意味が反転する）
-                cal.SwingPlaneTiltDeg = EditorGUILayout.Slider("バットの傾き（＋バレルが上がる）",
-                    cal.SwingPlaneTiltDeg, -90f, 90f);
-                cal.SwingLiftM = EditorGUILayout.Slider("持ち上げる [m]", cal.SwingLiftM, -0.20f, 0.40f);
-                cal.SwingPlaneBatOnly = EditorGUILayout.Slider("バットだけ動かす（0=腕も追う）",
-                    cal.SwingPlaneBatOnly, 0f, 1f);
+                // 平行移動なので、バットだけ動かす設定では必ずこのぶん手から浮く
                 EditorGUILayout.LabelField(" ",
-                    "スイング中だけ効く。1=腕は収録のまま／傾きは握り点で回る＝手から離れない",
-                    EditorStyles.miniLabel);
-                if (cal.SwingPlaneBatOnly > 0.5f && Mathf.Abs(cal.SwingLiftM) > 0.02f)
-                {
-                    // 平行移動なので、バットだけ動かす設定では必ずこのぶん手から浮く
-                    EditorGUILayout.LabelField(" ",
-                        string.Format("持ち上げはバットが手から{0:F2}m浮く（高さは傾きで作るのが安全）",
-                            Mathf.Abs(cal.SwingLiftM)), EditorStyles.miniLabel);
-                }
+                    string.Format("持ち上げはバットが手から{0:F2}m浮く（高さは傾きで作るのが安全）",
+                        Mathf.Abs(cal.SwingLiftM)), EditorStyles.miniLabel);
             }
 
             EditorGUILayout.LabelField("立ち向き", EditorStyles.miniBoldLabel);

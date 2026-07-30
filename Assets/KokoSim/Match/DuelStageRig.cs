@@ -138,10 +138,6 @@ namespace KokoSim.Unity.Match
         public float BatStanceElevDeg;  // 合成軸の構え仰角[度]（BatAxisFromGrip<1のときだけ効く）
         public float BatFollowElevDeg;  // 合成軸の振り抜き仰角[度]（同上）
         public float BatHandsApartM;    // これ以上手が離れたら片手追従へ移る[m]
-        // ---- バットをコマごとに置く（DuelBatPath・2026-07-30 監督指示）----
-        // 0=従来の手追従 / 1=軌道テーブル。テーブルが無い（キー2本未満）ときは1でも手追従へ落ちる
-        public float BatFromPath;
-
         // ---- スイング面（2026-07-30 監督指摘「足元のボールを打っているように見える」）----
         // 収録のスイングは面が低く、ど真ん中の球を打つ絵にならない。クリップは触らず、
         // **スイング中だけ握りを持ち上げて傾ける**＝腕はIKが自然に追いてくる（手追従のまま効く）。
@@ -250,8 +246,6 @@ namespace KokoSim.Unity.Match
             BatStanceElevDeg = 35.7f,
             BatFollowElevDeg = 32.4f,
             BatHandsApartM = 0.246f,
-            // 既定は0＝手追従のまま。テーブルを焼いて絵を確かめてから1へ上げる
-            BatFromPath = 0f,
             // 監督が打撃フォーム確認窓で追い込んだ値（2026-07-31・out/duel-calibration.json v13 から焼き戻し）。
             // −63°＝バレル端を63°下げる。収録の握り線は接触の前後で拳が縦に積み重なり、実測軸が
             // 上を向く瞬間がある（2026-07-30 実測：14msの差で軸が飛ぶ）。そこを下げて振り面を
@@ -352,10 +346,8 @@ namespace KokoSim.Unity.Match
                 c.TorsoToSec = d.TorsoToSec;
                 c.SwingSpeed = d.SwingSpeed;
             }
-            if (c.Version < 11)   // v11: バットをコマごとに置く（軌道テーブルへの切り替え）
-            {
-                c.BatFromPath = d.BatFromPath;
-            }
+            // v11（バットをコマごとに置く＝BatFromPath）は 2026-07-31 に廃止した。
+            // 版番号は詰めない＝古いJSONの Version 判定がずれるため、欠番として残す
             if (c.Version < 12)   // v12: スイング面の高さ・傾き
             {
                 c.SwingLiftM = d.SwingLiftM;
@@ -978,18 +970,7 @@ namespace KokoSim.Unity.Match
                 ? _pitcher.Animator.GetBoneTransform(HumanBodyBones.Head) : null;
             if (pitcherHead != null) aim = pitcherHead.position;
             else aim = _root.transform.position + new Vector3(0f, 1.6f, MoundDistance);
-            // バットを先に置く場合は、握りの行き先を渡して手をバットへ引く（バット主・手が従）。
-            // 置けないとき（テーブル未投入・範囲外）は既定の無効値＝従来どおり手から握り線を作る
-            var batTarget = default(DuelBatTarget);
-            if (TryGetBatPathPose(out var bPos, out var bRot))
-            {
-                float halfLen = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
-                Vector3 axis = bRot * Vector3.up;                       // ノブ→バレル
-                Vector3 grip = bPos - axis * (halfLen - _cal.BatGripBelowM);
-                // FixGrip の u は「バレル側の手→ノブ側の手」＝バット軸の逆向き
-                batTarget = new DuelBatTarget(grip, -axis);
-            }
-            DuelBatterPose.Apply(_batter.Animator, _cal, _batter.Time, aim, batTarget);
+            DuelBatterPose.Apply(_batter.Animator, _cal, _batter.Time, aim);
         }
 
         /// <summary>
@@ -2365,88 +2346,6 @@ namespace KokoSim.Unity.Match
         private Vector3 _batLocalPos;
         private Quaternion _batLocalRot;
 
-        /// <summary>
-        /// 軌道テーブルからバットのワールド姿勢を引く（打者ローカル→ワールド）。
-        /// テーブルが無い・切り替えが0・打者が居ないときは false＝呼び側は手追従へ落ちる。
-        /// </summary>
-        /// <summary>
-        /// 手追従で出したバット姿勢を軌道テーブルへ積む（<see cref="DuelBatPath.Recording"/> のときだけ）。
-        /// 出発点のテーブルを人手で作らず現物から焼くための入口＝焼いた直後は今と同じ絵になるので、
-        /// 「テーブル経路が正しいか」を絵で確かめてから編集に入れる。
-        ///
-        /// キーはクリップ内秒で持つ。ポーズは12fps量子化なので <c>_batter.Time</c> は
-        /// 1/12秒（速度倍率ぶん）ごとにしか動かず、毎フレーム呼んでも同時刻のキーは差し替えになる。
-        /// </summary>
-        private void RecordBatPose()
-        {
-            if (!DuelBatPath.Recording || _batter == null || _batter.Go == null || _bat == null) return;
-            DuelBatPath.Recorded ??= new DuelBatPath();
-            var tr = _batter.Go.transform;
-            DuelBatPath.Recorded.Set(
-                _batter.Time,
-                tr.InverseTransformPoint(_bat.transform.position),
-                (Quaternion.Inverse(tr.rotation) * _bat.transform.rotation).eulerAngles);
-        }
-
-        /// <summary>打者GOの Transform（軌道テーブルのローカル座標系の基準）。</summary>
-        public Transform BatterTransform => _batter != null && _batter.Go != null ? _batter.Go.transform : null;
-
-        /// <summary>いま描かれているバットのワールド姿勢（メッシュ原点＝バット中心）。</summary>
-        public bool TryGetBatWorld(out Vector3 pos, out Quaternion rot)
-        {
-            if (_bat == null) { pos = Vector3.zero; rot = Quaternion.identity; return false; }
-            pos = _bat.transform.position;
-            rot = _bat.transform.rotation;
-            return true;
-        }
-
-        /// <summary>
-        /// ワールド点 → プレビューRT上の正規化座標（0..1・左下原点）。カメラの後ろなら false。
-        /// 絵の上で道具を掴む編集（打撃フォーム確認窓）のための seam で、カメラはリグが持っている。
-        /// </summary>
-        public bool TryWorldToViewport(Vector3 world, out Vector2 vp)
-        {
-            vp = Vector2.zero;
-            if (_camera == null) return false;
-            var p = _camera.WorldToViewportPoint(world);
-            if (p.z <= 0f) return false;
-            vp = new Vector2(p.x, p.y);
-            return true;
-        }
-
-        /// <summary>
-        /// プレビューRT上の正規化座標 → 指定平面上のワールド点。
-        /// 平面はカメラ軸とほぼ平行だと解が飛ぶので、視線とのなす角が浅いときは false を返す
-        /// （＝掴んでも動かない。任意の大きさへ飛ぶより安全）。
-        /// </summary>
-        public bool ViewportToPlane(Vector2 vp, Vector3 planePoint, Vector3 planeNormal, out Vector3 world)
-        {
-            world = planePoint;
-            if (_camera == null) return false;
-            var ray = _camera.ViewportPointToRay(new Vector3(vp.x, vp.y, 0f));
-            float denom = Vector3.Dot(planeNormal.normalized, ray.direction);
-            if (Mathf.Abs(denom) < 0.08f) return false;   // 視線と平面が平行に近い
-            float d = Vector3.Dot(planeNormal.normalized, planePoint - ray.origin) / denom;
-            if (d <= 0f) return false;
-            world = ray.origin + ray.direction * d;
-            return true;
-        }
-
-        private bool TryGetBatPathPose(out Vector3 worldPos, out Quaternion worldRot)
-        {
-            worldPos = Vector3.zero;
-            worldRot = Quaternion.identity;
-            if (_batter == null || _batter.Go == null) return false;
-            if (_cal.BatFromPath < 0.5f) return false;
-            var path = DuelBatPath.Current;
-            if (path == null || !path.HasKeys) return false;
-            if (!path.Evaluate(_batter.Time, out var lp, out var lr)) return false;
-            var tr = _batter.Go.transform;
-            worldPos = tr.TransformPoint(lp);
-            worldRot = tr.rotation * lr;
-            return true;
-        }
-
         private void AlignBat()
         {
             if (_bat == null || _batter == null) return;
@@ -2464,25 +2363,6 @@ namespace KokoSim.Unity.Match
                 return;
             }
             _bat.SetActive(true);
-
-            // バット主: 軌道テーブルがあるならそこへ置いて終わり。手は FixBatterPose が既にここへ
-            // 引いてある（呼ぶ順は「ポーズ補正 → ここ」なので、同じ姿勢を二度作らないよう軸の合成は通さない）
-            if (TryGetBatPathPose(out var pathPos, out var pathRot))
-            {
-                float halfLenP = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
-                _bat.transform.localScale = new Vector3(1f, halfLenP / BatHalfLength, 1f);
-                _bat.transform.position = pathPos;
-                _bat.transform.rotation = pathRot;
-                // 片手期の追従用の焼き付けは続ける（テーブルを外した瞬間に地面へ刺さらないように）
-                var lhTp = _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
-                if (lhTp != null)
-                {
-                    _batLocalPos = lhTp.InverseTransformPoint(pathPos);
-                    _batLocalRot = Quaternion.Inverse(lhTp.rotation) * pathRot;
-                    _batGoodValid = true;
-                }
-                return;
-            }
 
             // 手ボーンの原点は手首＝そのまま結ぶとバットが手首の上を横切り「握れていない」絵になる。
             // 中指付け根との補間で掌中心を推定し、握り線を拳の中へ通す
@@ -2571,7 +2451,6 @@ namespace KokoSim.Unity.Match
                 _batLocalPos = lhT.InverseTransformPoint(_bat.transform.position);
                 _batLocalRot = Quaternion.Inverse(lhT.rotation) * _bat.transform.rotation;
                 _batGoodValid = true;
-                RecordBatPose();
                 return;
             }
 

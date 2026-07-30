@@ -27,22 +27,14 @@ namespace KokoSim.EditorTools
         private static readonly string[] ViewNames =
             { "投手側から", "真横から", "反対の横から", "手元の寄り", "頭の寄り", "試合の構図" };
 
-        private const string BatPathJson = "out/duel-bat-path.json";
-
-        // 掴む平面。バットは3次元なので、2次元の絵の上で動かすには「どの面で動かすか」が要る
-        private static readonly string[] PlaneNames = { "正面（左右×上下）", "真上（左右×前後）", "真横（前後×上下）" };
-
         [SerializeField] private DuelCalibration _cal = DuelCalibration.Default;
         [SerializeField] private int _view;
         [SerializeField] private float _speed = 1f;
-        [SerializeField] private int _plane;
 
         private DuelStageRig _rig;
         private Vector2 _scroll;
         private bool _playing;
         private double _lastUpdate;
-        private DuelBatPath _path = new DuelBatPath();
-        private int _drag;   // 0=掴んでいない / 1=中心（位置）/ 2=ノブ端（向き）
 
         [MenuItem("KokoSim/打撃フォーム確認")]
         private static void Open()
@@ -87,7 +79,6 @@ namespace KokoSim.EditorTools
             _rig = new DuelStageRig();
             if (!_rig.Available) { DisposeRig(); return; }
             _rig.EnsureSize(RtW, RtH);
-            DuelBatPath.Current = _path;   // static はドメインリロードで消える＝組むたびに入れ直す
             _rig.ApplyCalibration(_cal);
             _rig.Tick(0.001f);
             AimView();
@@ -141,7 +132,6 @@ namespace KokoSim.EditorTools
                 float h = rt != null ? w * rt.height / rt.width : w * 0.75f;
                 var r = GUILayoutUtility.GetRect(w, h, GUILayout.ExpandWidth(false));
                 if (rt != null) GUI.DrawTexture(r, rt, ScaleMode.ScaleToFit, false);
-                DrawBatOverlay(r);
 
                 EditorGUI.BeginChangeCheck();
                 _view = GUILayout.Toolbar(_view, ViewNames);
@@ -168,7 +158,6 @@ namespace KokoSim.EditorTools
                 float nt = EditorGUILayout.Slider("クリップ内 [秒]", t, 0f, len);
                 if (EditorGUI.EndChangeCheck()) { _playing = false; _rig.SeekBatter(nt); Redraw(); }
 
-                DrawBatPathBar();
 
                 // 区間の目安（実測アンカー。design-18 §7-2）
                 EditorGUILayout.LabelField(
@@ -267,204 +256,9 @@ namespace KokoSim.EditorTools
             }
         }
 
-        /// <summary>バットを手で置くための操作列（有効化・掴む平面・キーの打ち消し・焼き直し・保存）。</summary>
-        private void DrawBatPathBar()
-        {
-            EditorGUI.BeginChangeCheck();
-            bool on = EditorGUILayout.ToggleLeft(
-                "バットを手で置く（切ると両手追従へ戻る）", _cal.BatFromPath >= 0.5f);
-            if (EditorGUI.EndChangeCheck())
-            {
-                _cal.BatFromPath = on ? 1f : 0f;
-                // 空のまま有効にすると「掴めるのに何も起きない」死に状態になる（キーが2本たまるまで
-                // 手追従へ落ちるため）。入れた瞬間に今の絵を焼いて、そこから編集を始められるようにする
-                if (on && (_path == null || !_path.HasKeys)) BakePath();
-                else Push();
-            }
-
-            using (new EditorGUI.DisabledScope(!on))
-            {
-                _plane = GUILayout.Toolbar(_plane, PlaneNames);
-
-                float t = _rig.BatterClipTime;
-                bool hasKey = false;
-                if (_path?.Keys != null)
-                    foreach (var k in _path.Keys)
-                        if (Mathf.Abs(k.T - t) <= 0.02f) { hasKey = true; break; }
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    EditorGUILayout.LabelField(
-                        hasKey ? "◆ このコマにキーあり" : "このコマはキー無し（補間）",
-                        EditorStyles.miniLabel, GUILayout.Width(150f));
-                    if (GUILayout.Button("ここにキー", GUILayout.Width(80f)))
-                    {
-                        var tr = _rig.BatterTransform;
-                        if (tr != null && _rig.TryGetBatWorld(out var bp, out var br))
-                        {
-                            _path.Set(t, tr.InverseTransformPoint(bp),
-                                (Quaternion.Inverse(tr.rotation) * br).eulerAngles);
-                            Push();
-                        }
-                    }
-                    using (new EditorGUI.DisabledScope(!hasKey))
-                    {
-                        if (GUILayout.Button("消す", GUILayout.Width(50f))) { _path.Remove(t); Push(); }
-                    }
-                    if (GUILayout.Button("焼き直す", GUILayout.Width(70f))) BakePath();
-                    EditorGUILayout.LabelField(
-                        "キー " + (_path?.Keys?.Count ?? 0), EditorStyles.miniLabel, GUILayout.Width(50f));
-                }
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    if (GUILayout.Button("軌道をJSONへ", GUILayout.Width(110f)))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(BatPathJson));
-                        File.WriteAllText(BatPathJson, _path.ToJson());
-                        Debug.Log("[DuelPoseLab] wrote " + BatPathJson);
-                    }
-                    using (new EditorGUI.DisabledScope(!File.Exists(BatPathJson)))
-                    {
-                        if (GUILayout.Button("軌道を読込", GUILayout.Width(100f)))
-                        {
-                            var loaded = DuelBatPath.FromJson(File.ReadAllText(BatPathJson));
-                            if (loaded != null) { _path = loaded; Push(); }
-                        }
-                    }
-                    EditorGUILayout.LabelField(
-                        "中心＝位置 ／ 白い端＝向き。掴む面は上のトグルで選ぶ",
-                        EditorStyles.miniLabel);
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------- 絵の上でバットを掴む
-
-        /// <summary>ビューポート（0..1・左下原点）→ 窓のGUI座標（左上原点）。</summary>
-        private static Vector2 ToGui(Rect r, Vector2 vp)
-            => new Vector2(r.x + vp.x * r.width, r.y + (1f - vp.y) * r.height);
-
-        /// <summary>掴む平面の法線（ワールド）。打者ローカル軸から作る＝立ち向きを変えても意味が変わらない。</summary>
-        private Vector3 PlaneNormal()
-        {
-            var tr = _rig.BatterTransform;
-            if (tr == null) return Vector3.up;
-            switch (_plane)
-            {
-                case 1: return Vector3.up;        // 真上から見た面＝左右×前後
-                case 2: return tr.right;          // 真横から見た面＝前後×上下
-                default: return tr.forward;       // 正面から見た面＝左右×上下
-            }
-        }
-
-        /// <summary>
-        /// プレビューにバットの操作ハンドルを重ね、ドラッグでその**コマのキー**を書き換える。
-        ///
-        /// 中心＝位置／ノブ端＝向き。3次元を2次元で掴むので、動かす平面は上のトグルで選ぶ。
-        /// 視線と平面が平行に近いときはリグ側が拒否する（掴んでも動かない＝任意の大きさへ飛ばない）。
-        /// </summary>
-        private void DrawBatOverlay(Rect r)
-        {
-            if (_cal.BatFromPath < 0.5f) return;
-            var tr = _rig.BatterTransform;
-            if (tr == null || !_rig.TryGetBatWorld(out var center, out var rot)) return;
-
-            float halfLen = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
-            Vector3 axis = rot * Vector3.up;             // ノブ→バレル
-            Vector3 knob = center - axis * halfLen;
-            if (!_rig.TryWorldToViewport(center, out var vc)) return;
-            if (!_rig.TryWorldToViewport(knob, out var vk)) return;
-            Vector2 pc = ToGui(r, vc), pk = ToGui(r, vk);
-
-            Handles.BeginGUI();
-            Handles.color = new Color(0.96f, 0.78f, 0.29f, 0.9f);
-            Handles.DrawAAPolyLine(3f, pc, pk);
-            Handles.EndGUI();
-            EditorGUI.DrawRect(new Rect(pc.x - 5f, pc.y - 5f, 10f, 10f), new Color(0.96f, 0.78f, 0.29f));
-            EditorGUI.DrawRect(new Rect(pk.x - 4f, pk.y - 4f, 8f, 8f), Color.white);
-
-            var e = Event.current;
-            switch (e.type)
-            {
-                case EventType.MouseDown when r.Contains(e.mousePosition):
-                    if (Vector2.Distance(e.mousePosition, pk) <= 10f) _drag = 2;
-                    else if (Vector2.Distance(e.mousePosition, pc) <= 12f) _drag = 1;
-                    if (_drag != 0) { _playing = false; e.Use(); }
-                    break;
-
-                case EventType.MouseDrag when _drag != 0:
-                {
-                    var vp = new Vector2((e.mousePosition.x - r.x) / r.width,
-                                         1f - (e.mousePosition.y - r.y) / r.height);
-                    // 平面は**バット中心を通す**。中心を動かすときも向きを変えるときも同じ面で扱う
-                    if (_rig.ViewportToPlane(vp, center, PlaneNormal(), out var hit))
-                    {
-                        float t = _rig.BatterClipTime;
-                        if (_drag == 1)
-                        {
-                            _path.Set(t, tr.InverseTransformPoint(hit),
-                                (Quaternion.Inverse(tr.rotation) * rot).eulerAngles);
-                        }
-                        else
-                        {
-                            Vector3 na = center - hit;
-                            if (na.sqrMagnitude > 1e-6f)
-                            {
-                                var world = Quaternion.FromToRotation(Vector3.up, na.normalized);
-                                _path.Set(t, tr.InverseTransformPoint(center),
-                                    (Quaternion.Inverse(tr.rotation) * world).eulerAngles);
-                            }
-                        }
-                        Push();
-                    }
-                    e.Use();
-                    break;
-                }
-
-                case EventType.MouseUp when _drag != 0:
-                    _drag = 0;
-                    e.Use();
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// いまの手追従の結果を12fps刻みで焼いて出発点のテーブルにする。
-        /// 焼いた直後は今と同じ絵になる＝テーブル経路が正しいことを絵で確かめてから編集に入れる。
-        /// 焼くのは打ち切り点までで、その先（ほぼ静止の間延び）はキーを持たない。
-        /// </summary>
-        private void BakePath()
-        {
-            var tr = _rig.BatterTransform;
-            if (tr == null) return;
-            float keep = _cal.BatFromPath;
-            float keepT = _rig.BatterClipTime;
-            _cal.BatFromPath = 0f;               // 焼く間だけ手追従へ戻す（自分の出力を焼き直さない）
-            _rig.ApplyCalibration(_cal);
-
-            var baked = new DuelBatPath();
-            float end = Mathf.Min(_rig.BatterClipLength - 0.001f, 2.70f);
-            for (float t = 0f; t <= end; t += PoseStep)
-            {
-                _rig.SeekBatter(t);
-                if (!_rig.TryGetBatWorld(out var bp, out var br)) continue;
-                baked.Set(t, tr.InverseTransformPoint(bp),
-                    (Quaternion.Inverse(tr.rotation) * br).eulerAngles);
-            }
-
-            _path = baked;
-            _cal.BatFromPath = keep;
-            Push();
-            _rig.SeekBatter(keepT);
-            Redraw();
-            Debug.Log("[DuelPoseLab] 軌道を焼いた: keys=" + baked.Keys.Count);
-        }
-
         private void Push()
         {
             DuelStageRig.CalibrationOverride = _cal;
-            DuelBatPath.Current = _path;
             if (_rig == null) return;
             _rig.ApplyCalibration(_cal);   // カメラを試合構図へ戻すので、この後に狙い直す
             _rig.SeekBatter(_rig.BatterClipTime);   // 補正値を今のコマへ即座に反映

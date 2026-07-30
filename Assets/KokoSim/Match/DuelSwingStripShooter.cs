@@ -27,12 +27,6 @@ namespace KokoSim.Unity.Match
         /// <summary>出力名の頭。クリップを入れ替えて2本撮るとき起動側が EditorPrefs 経由で変える。</summary>
         private const string PrefixKey = "KokoSim.DuelSwingStripShooter.Prefix";
 
-        /// <summary>動作モード。""=そのまま撮る / "bake"=手追従の結果を焼く / "path"=焼いた軌道で撮る。</summary>
-        private const string ModeKey = "KokoSim.DuelSwingStripShooter.Mode";
-
-        /// <summary>焼いた軌道の置き場（out/ は成果物置き場でgitignore＝較正JSONと同じ扱い）。</summary>
-        public const string BatPathJson = "out/duel-bat-path.json";
-
         private const float StepSec = 0.05f;
         private const float FirstSec = 0.05f;
         private const int FrameCount = 16;   // 0.05〜0.80s（面通過=0.45s を中に含む）
@@ -41,12 +35,9 @@ namespace KokoSim.Unity.Match
 
         private const string SpawnFlag = "KokoSim.DuelSwingStripShooter.Spawn";
 
-        public static void Arm(string prefix) => Arm(prefix, "");
-
-        public static void Arm(string prefix, string mode)
+        public static void Arm(string prefix)
         {
             UnityEditor.EditorPrefs.SetString(PrefixKey, prefix);
-            UnityEditor.EditorPrefs.SetString(ModeKey, mode ?? "");
             UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
         }
 
@@ -63,30 +54,9 @@ namespace KokoSim.Unity.Match
             Application.runInBackground = true;
             Directory.CreateDirectory(Dir);
 
-            string mode = UnityEditor.EditorPrefs.GetString(ModeKey, "");
-            // 軌道テーブルは**リグを組む前**に載せる（Tick が始まった後だと最初の数コマだけ手追従になる）。
-            // static はPlay突入のドメインリロードで消えるので、Edit modeで代入しても届かない＝
-            // ここで毎回ファイルから読む（較正上書きが消える罠と同じ性質。2026-07-30 実害）
-            DuelBatPath.Recording = mode == "bake";
-            DuelBatPath.Recorded = mode == "bake" ? new DuelBatPath() : null;
-            DuelBatPath.Current = null;
-            if (mode == "path" && File.Exists(BatPathJson))
-            {
-                DuelBatPath.Current = DuelBatPath.FromJson(File.ReadAllText(BatPathJson));
-                Debug.Log("[SwingStrip] 軌道を読み込み: keys="
-                    + (DuelBatPath.Current == null ? 0 : DuelBatPath.Current.Keys.Count));
-            }
-
             _rig = new DuelStageRig();
             if (!_rig.Available) { Debug.LogError("[SwingStrip] rig が組めない"); yield break; }
             _rig.EnsureSize(W, H);
-            if (mode == "path")
-            {
-                // 較正の切り替えはリグへ直に流す（CalibrationOverride は Play 突入で消えるため）
-                var cal = DuelCalibration.Default;
-                cal.BatFromPath = 1f;
-                _rig.ApplyCalibration(cal);
-            }
             for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
 
             var bat = Find("body-" + DuelStageRig.BatterClipName);
@@ -111,15 +81,6 @@ namespace KokoSim.Unity.Match
                     f, mark, clock.x, clock.y));
                 yield return Capture(string.Format("{0}-{1:00}-t{2:F2}",
                     UnityEditor.EditorPrefs.GetString(PrefixKey, "strip"), f, mark));
-            }
-
-            if (mode == "bake" && DuelBatPath.Recorded != null && DuelBatPath.Recorded.Keys.Count > 0)
-            {
-                DuelBatPath.Recording = false;
-                Directory.CreateDirectory(Path.GetDirectoryName(BatPathJson));
-                File.WriteAllText(BatPathJson, DuelBatPath.Recorded.ToJson());
-                Debug.Log("[SwingStrip] 軌道を焼いた: keys=" + DuelBatPath.Recorded.Keys.Count
-                    + " → " + BatPathJson);
             }
 
             Debug.Log("[SwingStrip] DONE");
