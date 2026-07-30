@@ -527,7 +527,10 @@ public sealed class MatchProgression
                             fb, _ctx.Aerodynamics, _ctx.Fielding, _ctx.Field,
                             e.BaseFirstBefore, e.BaseSecondBefore, e.BaseThirdBefore))
                         : null;
-                    return new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh, foulFlight);
+                    // コース・弾道（Issue #332）: 対決ビューでボールを実コースへ飛ばすための観測データの写し。
+                    // 新規抽選はせず、判定に使われた実着弾位置と観測専用弾道をそのまま渡す（不変条件#2）
+                    return new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh,
+                        foulFlight, p.LocationX, p.LocationY, p.Trajectory);
                 }).ToList());
         }
         else

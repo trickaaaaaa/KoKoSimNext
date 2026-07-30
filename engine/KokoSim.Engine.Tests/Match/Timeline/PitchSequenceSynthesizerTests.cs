@@ -87,6 +87,7 @@ public class PitchSequenceSynthesizerTests
     /// <summary>
     /// 合成列は実際に投げられた球ではないため、球種・球速を持たない（null）。表示側はこれを
     /// 「球種・球速は出さない」として扱う＝架空の球速をでっち上げない契約。
+    /// コース・弾道（Issue #332）も同じ理由で null＝対決ビューは「コースを主張しない見た目用の直線」で飛ばす。
     /// </summary>
     [Fact]
     public void Synthesize_HasNoPitchTypeOrVelocity()
@@ -99,6 +100,9 @@ public class PitchSequenceSynthesizerTests
             {
                 Assert.Null(t.PitchType);
                 Assert.Null(t.VelocityKmh);
+                Assert.Null(t.LocationX);
+                Assert.Null(t.LocationY);
+                Assert.Null(t.Trajectory);
             });
         }
     }

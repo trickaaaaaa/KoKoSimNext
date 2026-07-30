@@ -204,6 +204,71 @@ public sealed class MatchProgressionTests
     }
 
     /// <summary>
+    /// Issue #332: コース（LocationX/Y）と観測弾道（Trajectory）が実1球記録のまま <see cref="PitchToken"/> へ載る。
+    /// 対決ビューがボールを実コースへ飛ばすための配管で、写しのみ＝新たな抽選をしない（不変条件#2）。
+    /// 弾道は <c>CaptureTimelines</c> の試合だけ積分される（統計シム・裏試合はゼロコストのまま）。
+    /// </summary>
+    [Fact]
+    public void Advance_SurfacesPitchLocationAndTrajectory()
+    {
+        const ulong seed = 5UL;
+        var batch = GameEngine.Play(Team("A", false), Team("H", false),
+            new GameContext { CaptureTimelines = true }, new Xoshiro256Random(seed));
+
+        var prog = new MatchProgression(Team("A", false), Team("H", false),
+            new GameContext { CaptureTimelines = true }, seed);
+        var index = 0;
+        var trajectoryCount = 0;
+        while (prog.Advance())
+        {
+            var entry = batch.Log[index];
+            var seq = prog.Current!.PitchSeq.Pitches;
+            Assert.NotNull(entry.PitchLog);
+            for (var i = 0; i < seq.Count; i++)
+            {
+                Assert.Equal(entry.PitchLog![i].LocationX, seq[i].LocationX);
+                Assert.Equal(entry.PitchLog[i].LocationY, seq[i].LocationY);
+                Assert.NotNull(seq[i].LocationX);
+                Assert.NotNull(seq[i].LocationY);
+                // 本塁面の実着弾位置。極端な暴投でも人が投げた球の範囲に収まる
+                Assert.InRange(seq[i].LocationX!.Value, -1.5, 1.5);
+                Assert.InRange(seq[i].LocationY!.Value, -0.5, 3.0);
+
+                // record の値等価で比べる（batch と prog は別インスタンスの試合＝参照は別だが決定論で同値）
+                Assert.Equal(entry.PitchLog[i].Trajectory, seq[i].Trajectory);
+                if (seq[i].Trajectory is { } tr)
+                {
+                    trajectoryCount++;
+                    Assert.InRange(tr.FlightTimeSeconds, 0.3, 0.8);
+                }
+            }
+            index++;
+        }
+        Assert.True(trajectoryCount > 0, "CaptureTimelines の試合なのに弾道が1つも載っていない");
+    }
+
+    /// <summary>
+    /// Issue #332: 弾道を積分しない試合（既定＝統計シム・裏試合）では Trajectory が null のまま。
+    /// コースは判定に使う値なので常に載る（弾道だけが CaptureTimelines 依存）。
+    /// </summary>
+    [Fact]
+    public void Advance_WithoutCaptureTimelines_LeavesTrajectoryNull()
+    {
+        var prog = new MatchProgression(Team("A", false), Team("H", false), new GameContext(), 5UL);
+        var pitches = 0;
+        while (prog.Advance())
+        {
+            foreach (var p in prog.Current!.PitchSeq.Pitches)
+            {
+                Assert.Null(p.Trajectory);
+                Assert.NotNull(p.LocationX);
+                pitches++;
+            }
+        }
+        Assert.True(pitches > 0);
+    }
+
+    /// <summary>
     /// 設計書15 Phase C-3: プレイヤーの手動1球指示（ITacticsBrainを経由しない）が、次に解決される打席の
     /// 最初の1球にだけ効く。ForceTake は積極的な打者でも必ずBall/CalledStrikeにする。
     /// </summary>

@@ -939,8 +939,24 @@ namespace KokoSim.Unity.Match
                     KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch => DuelPitchOutcome.HitByPitch,
                     _ => DuelPitchOutcome.Take,
                 };
-                _duelRig.OnPitchReleased(index < last ? duelPitchIntervalSeconds : -1f, outcome);
+                _duelRig.OnPitchReleased(index < last ? duelPitchIntervalSeconds : -1f, outcome, FlightOf(pt));
             }
+        }
+
+        /// <summary>
+        /// 1球のコース・弾道を対決ビューへ渡す形に写す（issue #332）。実データが揃っていない球は null
+        /// ＝合成列に架空のコースを主張させない（<c>PitchSequenceSynthesizer</c> の契約）。
+        /// 弾道は <c>CaptureTimelines</c> の試合だけ載るので、無い場合はコースだけ使い飛翔時間は既定へ落とす。
+        /// </summary>
+        private static DuelPitchFlight? FlightOf(KokoSim.Engine.Match.Timeline.Playback.PitchToken pt)
+        {
+            if (pt.LocationX is not { } x || pt.LocationY is not { } y) return null;
+            var tr = pt.Trajectory;
+            return new DuelPitchFlight(
+                (float)x, (float)y,
+                (float)(tr?.FlightTimeSeconds ?? 0.0),         // 0 は rig 側で既定（BallFlightSeconds）へ落ちる
+                (float)(tr?.InducedVerticalBreakM ?? 0.0),
+                (float)(tr?.InducedHorizontalBreakM ?? 0.0));
         }
 
         // 投球フェーズ終了→打球再生（Play あり）または結果保持（三振・四球）。
@@ -1469,6 +1485,9 @@ namespace KokoSim.Unity.Match
             if (_fieldHost != null) _fieldHost.style.display = _duelOn ? DisplayStyle.None : DisplayStyle.Flex;
             if (_duelHost != null) _duelHost.style.display = _duelOn ? DisplayStyle.Flex : DisplayStyle.None;
             _duelBtn?.EnableInClassList("chip-btn--on", _duelOn);
+            // 俯瞰へ渡すときは飛翔中の球を畳む（issue #332）。畳まないと、対決ビューを閉じた後も
+            // 次に開いた瞬間に古い球が本塁前に残って見える（#330 の「投球が二重に見える」と同種の事故）
+            if (!_duelOn) _duelRig?.HideBall();
         }
 
         private static void SetEnabled(Button b, bool on) { if (b != null) b.SetEnabled(on); }
