@@ -45,6 +45,31 @@ namespace KokoSim.Unity.Match
             return Mathf.Clamp01((t - t0) / (t1 - t0));
         }
 
+        /// <summary>ミートの何秒前からバットを球へ向け始めるか（12fpsで2コマ強。捕手のミットと同じ流儀）。</summary>
+        public const float AimLeadSeconds = 0.18f;
+
+        /// <summary>
+        /// ミートの何秒前に向け切るか。**1ポーズコマ（12fps=83ms）以上**にすること
+        /// （捕手のミットで実害が出た所と同じ。design-18 §4.5-③）。
+        /// </summary>
+        public const float AimSettleSeconds = 0.10f;
+
+        /// <summary>ミート後、何秒かけて収録の振り抜きへ戻すか。フォロースルーを殺さないよう短く。</summary>
+        public const float AimReleaseSeconds = 0.12f;
+
+        /// <summary>
+        /// バットを球へ向ける重み（台形）。<paramref name="meetAt"/> は**発射からのミート時刻**＝球の時計。
+        /// クリップ内時刻で駆動しないのは、クリップ差し替えのコマと12fpsの刻みで重みが飛ぶため。
+        /// </summary>
+        public static float AimWeight(float ballTime, float meetAt)
+        {
+            float settled = meetAt - AimSettleSeconds;
+            if (ballTime <= settled - AimLeadSeconds) return 0f;
+            if (ballTime < settled) return Mathf.InverseLerp(settled - AimLeadSeconds, settled, ballTime);
+            if (ballTime <= meetAt) return 1f;
+            return 1f - Mathf.InverseLerp(meetAt, meetAt + AimReleaseSeconds, ballTime);
+        }
+
         /// <summary>
         /// スイング区間の効き（0〜1・前後10msで立ち上げ／落とし）。握りの許容とスイング面が使う。
         /// **バット側（<see cref="DuelStageRig"/>.AlignBat）も同じ窓で掛けるので公開している**

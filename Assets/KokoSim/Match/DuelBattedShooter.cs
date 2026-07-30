@@ -25,8 +25,21 @@ namespace KokoSim.Unity.Match
         /// <summary>接触（＝球の到達）までの秒数。コースを渡さない球は既定の飛翔時間で飛ぶ。</summary>
         private const float ContactSec = 0.45f;
 
+        /// <summary>
+        /// 接触を0とした撮影時刻[秒]。**負＝接触より前**（スイングそのもの）。
+        /// 接触以降だけ撮ると「打球は見えるがスイングは1枚も写っていない」ことに気づけない
+        /// （2026-07-31 監督指摘）。ポーズは12fps＝1コマ0.083秒なので、その刻みより細かく採る。
+        /// </summary>
         private static readonly float[] Marks =
-            { 0.00f, 0.03f, 0.06f, 0.10f, 0.15f, 0.20f, 0.28f, 0.40f, 0.55f };
+        {
+            -0.40f, -0.33f, -0.25f, -0.17f, -0.08f, 0.00f,
+            0.08f, 0.17f, 0.25f, 0.33f, 0.42f, 0.50f,
+        };
+
+        /// <summary>絵を撮らずに実測だけ採る刻み[秒]（12fpsのポーズ更新＝0.083sより細かくても増えない）。</summary>
+        private const float ProbeStep = 1f / 60f;
+        private const float ProbeFrom = -0.45f;
+        private const float ProbeTo = 0.60f;
 
         private DuelStageRig _rig;
 
@@ -37,11 +50,14 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private const string WidthKey = "KokoSim.DuelBattedShooter.WidthM";
         private const string AlphaKey = "KokoSim.DuelBattedShooter.Alpha";
+        /// <summary>スイング面のつまみ（傾き・持ち上げ・バット単体）を全部0にして掃く＝原因の切り分け用。</summary>
+        private const string NoPlaneKey = "KokoSim.DuelBattedShooter.NoPlane";
 
-        public static void Arm(float widthM = -1f, float alpha = -1f)
+        public static void Arm(float widthM = -1f, float alpha = -1f, bool noSwingPlane = false)
         {
             UnityEditor.EditorPrefs.SetFloat(WidthKey, widthM);
             UnityEditor.EditorPrefs.SetFloat(AlphaKey, alpha);
+            UnityEditor.EditorPrefs.SetBool(NoPlaneKey, noSwingPlane);
             UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
         }
 
@@ -60,13 +76,16 @@ namespace KokoSim.Unity.Match
 
             float w = UnityEditor.EditorPrefs.GetFloat(WidthKey, -1f);
             float a = UnityEditor.EditorPrefs.GetFloat(AlphaKey, -1f);
-            if (w > 0f || a > 0f)
+            bool noPlane = UnityEditor.EditorPrefs.GetBool(NoPlaneKey, false);
+            if (w > 0f || a > 0f || noPlane)
             {
                 var cal = DuelCalibration.Default;
                 if (w > 0f) cal.BattedTrailWidthM = w;
                 if (a > 0f) cal.BattedTrailAlpha = a;
+                if (noPlane) { cal.SwingPlaneTiltDeg = 0f; cal.SwingLiftM = 0f; cal.SwingPlaneBatOnly = 0f; }
                 DuelStageRig.CalibrationOverride = cal;
-                Debug.Log("[Batted] 太さ=" + cal.BattedTrailWidthM + "m 濃さ=" + cal.BattedTrailAlpha);
+                Debug.Log("[Batted] 太さ=" + cal.BattedTrailWidthM + "m 濃さ=" + cal.BattedTrailAlpha
+                    + " スイング面=" + (noPlane ? "切" : "既定"));
             }
 
             _rig = new DuelStageRig();
@@ -74,9 +93,48 @@ namespace KokoSim.Unity.Match
             _rig.EnsureSize(W, H);
             for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
 
+            yield return Probe(RealBatted("フライ"));
             yield return Shoot("fly", RealBatted("フライ"));
             yield return Shoot("grd", RealBatted("ゴロ"));
             Debug.Log("[Batted] DONE");
+        }
+
+        /// <summary>
+        /// 絵を撮らずに「バットの芯が打点へ最接近するのは接触の何秒後か」を掃く。
+        /// アンカーがずれていても絵では「当たったように見えない」としか分からないので数値で出す。
+        /// </summary>
+        private IEnumerator Probe(KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment seg)
+        {
+            if (seg == null) yield break;
+            _rig.OnPitchWindup();
+            for (int i = 0; i < 4; i++) { _rig.Tick(1f / 60f); yield return null; }
+            _rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, seg);
+
+            float t = 0f, best = 999f, bestAt = 0f;
+            var sb = new System.Text.StringBuilder("[Batted] 掃引 接触からの秒\tclipT\t芯→打点[m]\n");
+            string lastLine = null;
+            while (t < ContactSec + ProbeTo)
+            {
+                _rig.Tick(ProbeStep); t += ProbeStep;
+                if (t < ContactSec + ProbeFrom) continue;
+                var line = _rig.BatContactDiagForCapture();
+                if (line == lastLine) continue;      // 12fps＝ポーズが変わった時だけ記録する
+                lastLine = line;
+                float rel = t - ContactSec;
+                sb.Append((rel >= 0 ? "+" : "")).Append(rel.ToString("F2")).Append('\t').Append(line).Append('\n');
+                int i0 = line.IndexOf("打点まで=");
+                if (i0 >= 0)
+                {
+                    float d;
+                    if (float.TryParse(line.Substring(i0 + 5, 5), out d) && d < best) { best = d; bestAt = rel; }
+                }
+                yield return null;
+            }
+            sb.Append("最接近 ").Append(best.ToString("F3")).Append("m @ 接触")
+              .Append(bestAt >= 0 ? "+" : "").Append(bestAt.ToString("F2")).Append("s");
+            Debug.Log(sb.ToString());
+            _rig.HideBall();
+            for (int i = 0; i < 40; i++) { _rig.Tick(1f / 60f); yield return null; }
         }
 
         private IEnumerator Shoot(string prefix,
@@ -93,9 +151,9 @@ namespace KokoSim.Unity.Match
             {
                 float mark = ContactSec + Marks[f];
                 while (t < mark) { _rig.Tick(1f / 60f); t += 1f / 60f; yield return null; }
-                Debug.Log(string.Format("[Batted] {0} f={1:00} t={2:F2} {3}",
-                    prefix, f, Marks[f], _rig.BattedDiagForCapture()));
-                yield return Capture(string.Format("batted-{0}-{1:00}-t{2:F2}", prefix, f, Marks[f]));
+                Debug.Log(string.Format("[Batted] {0} f={1:00} t={2:+0.00;-0.00} clip={3} {4}",
+                    prefix, f, Marks[f], _rig.BatterClock.ToString("F2"), _rig.BattedDiagForCapture()));
+                yield return Capture(string.Format("batted-{0}-{1:00}-t{2:+0.00;-0.00}", prefix, f, Marks[f]));
             }
             _rig.HideBall();
             for (int i = 0; i < 30; i++) { _rig.Tick(1f / 60f); yield return null; }

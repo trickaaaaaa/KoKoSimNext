@@ -1354,6 +1354,9 @@ namespace KokoSim.Unity.Match
             int catchIndex)
         {
             // 球審: ストライク（見逃し・空振り）でコールを予約、それ以外は前球の予約をキャンセル（#333）
+            // バットを球へ向けるのは当たる球だけ。空振りで向けると「当たっているのに空振り」になる
+            _batAimsBall = outcome == DuelPitchOutcome.InPlayContact
+                || outcome == DuelPitchOutcome.FoulContact;
             _umpireCallCountdown = -1f;
             bool isStrike = outcome == DuelPitchOutcome.CalledStrike || outcome == DuelPitchOutcome.SwingMiss;
             if (isStrike && _umpireStrikeClip != null)
@@ -2792,6 +2795,51 @@ namespace KokoSim.Unity.Match
         private Vector3 _batLocalPos;
         private Quaternion _batLocalRot;
 
+        /// <summary>
+        /// 掌中心（ワールド）。手ボーンの原点は**手首**なので、そのまま結ぶとバットが手首の上を横切り
+        /// 「握れていない」絵になる（design-18 §3.3.1）。中指付け根との補間で掌の中へ通す。
+        /// </summary>
+        private Vector3 Fist(Transform wrist, HumanBodyBones knuckle)
+        {
+            var k = _batter.Animator.GetBoneTransform(knuckle);
+            return k != null ? Vector3.Lerp(wrist.position, k.position, 0.65f) : wrist.position;
+        }
+
+        /// <summary>この球はバットに当たるか（ミート・ファウル）。空振りは当てない＝向けてはいけない。</summary>
+        private bool _batAimsBall;
+
+        /// <summary>
+        /// ミートの前後だけバットを**実際の打点**へ向ける（2026-07-31）。捕手のミットIK（§4.5-③）と同型で、
+        /// 狙点は判定に使われた実着弾位置＝コース（高め/低め/内外角）に絵が自動で追従する。
+        ///
+        /// 動かすのは**握り点まわりの向きだけ**＝バットは手から離れない（平行移動しないので浮かない）。
+        /// これで足りるのは実測で分かった: ミートの瞬間、握りから打点までは 0.503m で、
+        /// 握りから芯までの 0.608m より**短い**＝手はもう届く所にあり、軸だけが 120.6° ずれていた。
+        /// 腕を動かす必要は無い（腕を0.5m引っぱると12fpsの2コマではゴムに見える）。
+        ///
+        /// 重みは球の時計で駆動し、当てたい瞬間の1コマ以上前に1へ寄せ切る（12fps＝83msの掟）。
+        /// </summary>
+        private Vector3 AimBatAtBall(Vector3 grip, Vector3 axis)
+        {
+            if (!_batAimsBall || _ballT < 0f || _batter == null) return axis;
+            float w = DuelBatterPose.AimWeight(_ballT, _ballArrival);
+            if (w <= 0.001f) return axis;
+            var target = _root.transform.TransformPoint(BallPointAt(_ballArrival));
+            var toBall = target - grip;
+            if (toBall.sqrMagnitude < 1e-6f) return axis;
+            return Vector3.Slerp(axis, toBall.normalized, Mathf.Clamp01(w)).normalized;
+        }
+
+        /// <summary>握り点（両掌中心の中点・ワールド）。<see cref="AlignBat"/> と実測プローブの単一ソース。</summary>
+        private Vector3 BatGripWorld()
+        {
+            var lhT = _batter?.Animator != null ? _batter.Animator.GetBoneTransform(HumanBodyBones.LeftHand) : null;
+            var rhT = _batter?.Animator != null ? _batter.Animator.GetBoneTransform(HumanBodyBones.RightHand) : null;
+            if (lhT == null || rhT == null) return Vector3.zero;
+            return (Fist(lhT, HumanBodyBones.LeftMiddleProximal)
+                  + Fist(rhT, HumanBodyBones.RightMiddleProximal)) * 0.5f;
+        }
+
         private void AlignBat()
         {
             if (_bat == null || _batter == null) return;
@@ -2810,13 +2858,6 @@ namespace KokoSim.Unity.Match
             }
             _bat.SetActive(true);
 
-            // 手ボーンの原点は手首＝そのまま結ぶとバットが手首の上を横切り「握れていない」絵になる。
-            // 中指付け根との補間で掌中心を推定し、握り線を拳の中へ通す
-            Vector3 Fist(Transform wrist, HumanBodyBones knuckle)
-            {
-                var k = _batter.Animator.GetBoneTransform(knuckle);
-                return k != null ? Vector3.Lerp(wrist.position, k.position, 0.65f) : wrist.position;
-            }
             var lh = Fist(lhT, HumanBodyBones.LeftMiddleProximal);
             var rh = Fist(rhT, HumanBodyBones.RightMiddleProximal);
             // クリップ内時刻での区間判定は打撃クリップ限定（死球クリップは常に構え扱い＝バットは手元で立てたまま）
@@ -2889,6 +2930,7 @@ namespace KokoSim.Unity.Match
                     }
                     grip += Vector3.up * (_cal.SwingLiftM * batOnly);
                 }
+                axis = AimBatAtBall(grip, axis);
                 float halfLen = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
                 _bat.transform.localScale = new Vector3(1f, halfLen / BatHalfLength, 1f);
                 _bat.transform.rotation = Quaternion.FromToRotation(Vector3.up, axis);
@@ -3659,6 +3701,41 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>
+        /// <summary>芯（バレル端から手元側へこれだけ入った所）[m]。実物のスイートスポットの位置。</summary>
+        private const float BatSweetInsetM = 0.15f;
+
+        /// <summary>
+        /// 「バットが球に当たって見えるか」の実測（2026-07-31 監督指摘「スイングしてるとこがあまり見えない」）。
+        /// アンカー <see cref="SwingHitContact"/> は**右手の速度ピーク**で採ってあるが、バットはしなって
+        /// 芯が手より遅れて来るので、両者は一致しない可能性がある。絵では「当たったように見えない」としか
+        /// 分からないので、芯と打点・芯と球の距離を数値で出して当たり判定の瞬間を特定する。
+        /// </summary>
+        internal string BatContactDiagForCapture()
+        {
+            if (_bat == null || _batter == null || _root == null) return "bat=なし";
+            if (!_bat.activeSelf) return "bat=非表示 clip=" + _batter.Time.ToString("F2");
+            var tr = _root.transform;
+            var axis = (_bat.transform.rotation * Vector3.up).normalized;
+            float half = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
+            var sweet = tr.InverseTransformPoint(_bat.transform.position + axis * (half - BatSweetInsetM));
+            var contact = BallPointAt(_ballArrival);
+            // 握り（掌中心の中点）と、そこから芯までの腕の長さ。再校正を掃引でなく幾何で解くのに要る＝
+            // 「握りから打点までの距離」が「握りから芯までの長さ」を超えていたら、
+            // バットを回すだけでは**原理的に届かない**（手を動かすしかない）ことがこの2つで分かる
+            var grip = tr.InverseTransformPoint(BatGripWorld());
+            float lever = Vector3.Distance(grip, sweet);
+            string toBall = "-";
+            if (_ball != null && _ball.activeSelf)
+                toBall = Vector3.Distance(sweet, tr.InverseTransformPoint(_ball.transform.position)).ToString("F3");
+            return "clip=" + _batter.Time.ToString("F2")
+                + " 芯=" + sweet.ToString("F2")
+                + " 握り=" + grip.ToString("F2")
+                + " 腕=" + lever.ToString("F3")
+                + " 握り→打点=" + Vector3.Distance(grip, contact).ToString("F3")
+                + " 打点まで=" + Vector3.Distance(sweet, contact).ToString("F3") + "m"
+                + " 球まで=" + toBall + "m";
+        }
+
         internal string BatDiagForCapture()
         {
             if (_batter == null || _batter.Animator == null) return "-\t0\t-1\tFalse\tFalse";
