@@ -185,7 +185,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 17;
+        private const int CurrentVersion = 18;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -258,8 +258,8 @@ namespace KokoSim.Unity.Match
             // （2026-07-30 実測）。バットをコマごとの手動配置へ移したら、この上限は外れるので
             // そこで本調整する
             TorsoCloseDeg = 8f,
-            // 全開は「接触の瞬間」に置く約束なので、ミートの実測値（1.30→1.12→1.00）に合わせて同じだけ前へ寄せた
-            TorsoFromSec = 0.60f, TorsoFullSec = 1.00f, TorsoToSec = 1.40f,
+            // 全開は「接触の瞬間」に置く約束なので、ミートの実測値（1.30→1.12→1.00→1.05）に追従させる
+            TorsoFromSec = 0.65f, TorsoFullSec = 1.05f, TorsoToSec = 1.45f,
             // 監督選定（2026-07-30・4通りのコマ送り比較）: **開き8°＋速度1.4倍**。
             // 1.4倍のとき面通過（リリース+0.45s）のクリップ時刻は実測1.253s＝アンカー1.30sの
             // 1コマ以内（12fpsの刻みは0.117s）。振りは0.70s→0.50s＝1振りに使えるコマは8→6に減る
@@ -445,6 +445,13 @@ namespace KokoSim.Unity.Match
                 // 新項目ではないが、胴の開きの窓は「全開＝接触の瞬間」という約束でアンカーに
                 // ぶら下がっている。アンカーが動いた版では調整済みJSONの値も一緒に動かさないと、
                 // 全開が接触の1コマ後に来て「開き切る前に当たる」絵になる
+                c.TorsoFromSec = d.TorsoFromSec;
+                c.TorsoFullSec = d.TorsoFullSec;
+                c.TorsoToSec = d.TorsoToSec;
+            }
+            if (c.Version < 18)   // v18: 打つ球を判定面より前で捌く（接触1.00→1.05）
+            {
+                // v17と同じ理由＝胴の開きの窓はアンカーにぶら下がっている
                 c.TorsoFromSec = d.TorsoFromSec;
                 c.TorsoFullSec = d.TorsoFullSec;
                 c.TorsoToSec = d.TorsoToSec;
@@ -1242,6 +1249,25 @@ namespace KokoSim.Unity.Match
         // 「速球はミットが閉じてから球が着く」ズレが球速差ぶん出る＝球の速さを絵で見せる目的と噛み合わない。
         // この定数は弾道が無い球（合成列・CaptureTimelines なしの試合）の既定値として残す。
         private const float BallFlightSeconds = 0.45f;
+
+        /// <summary>
+        /// 打つ球を**判定面より何m投手側で捌くか**（2026-07-31 監督判断）。
+        ///
+        /// 実物の接触は本塁の上でなく 0.3〜0.6m 前で起きる。判定面（z=0）で当てていたときは、握りが
+        /// 接触時に z=-0.24＝本塁より捕手側にあるため、握り→打点のベクトルに投手方向成分がほとんど
+        /// 残らず（横0.52 に対し前0.24＝25°）、絵は「上から本塁を叩いている」ようにしか読めなかった。
+        ///
+        /// **1つの定数から3つ（①投球の描画が終わる点 ②打球の開始点 ③バットの狙点）を出す**のが要点。
+        /// 3つとも <see cref="_ballArrival"/> 経由で決まるので、ここを動かすだけで揃って動く
+        /// （別々に持つと必ずずれる）。判定そのものは判定面のままなので**帯は動かない**。
+        /// 見逃し・空振り・死球は従来どおり判定面〜ミットまで飛ぶ。
+        ///
+        /// **⚠ 量は真横の絵だけで決めない**。画面の横軸は ±x で、投手方向 ±z は試合の構図
+        /// （センターからの望遠）では**奥行き＝潰れる軸**。前へ出すほど真横では長く、試合の構図では
+        /// 短く見える。実測（バットの見かけの長さ／実長）:
+        ///   0m → 真横53% / 構図93%　　0.25m → 71% / 75%　　0.40m → 78% / 65%
+        /// </summary>
+        private const float ContactAheadM = 0.30f;
         // 面通過・ミートのクリップ内時刻。旧1.30は**右手の速度ピーク**（2026-07-30実測）で採った値だが、
         // ①バットの芯は手より遅れて来る ②当時はポーズが speed 倍で進んでおらず遅れていた（下の
         // StepActor の項）、の2つで実際の通過点とずれていた。ポーズを直したうえで**握りが本塁へ
@@ -1254,8 +1280,13 @@ namespace KokoSim.Unity.Match
         // 握りの本塁からの距離を採り直すと（2026-07-31 第2弾。腕＝握り→芯は0.605m）:
         //   clip 0.84→0.668m / 0.96→**0.595m** / 1.07→0.428m(近すぎ) / 1.19→0.885m
         // 腕とほぼ一致する 0.96 が正しい接触＝ポーズ1コマぶん手前。頭出しの都合で 1.00 を採る。
+        // 空振りは判定面（本塁の上）を通すので 1.00 のまま。**当てる球だけ**は判定面より
+        // ContactAheadM=0.30m 投手側で捌くので、握りが腕の長さ（0.605m）になる時刻がその分だけ
+        // 後ろへ動く（2026-07-31 実測。握り→打点 0.95→0.770 / 1.00→0.718 / **1.05→0.598** / 1.10→0.387）。
+        // 副次的に、腕が実際に動く区間（1コマあたり0.25m。前は0.04〜0.11m）に接触が入る＝
+        // 「手にバットがついてこない」も一緒に解ける
         private const float SwingMissPlane = 1.00f;
-        private const float SwingHitContact = 1.00f;   // 空振りとミートで収録が分かれていないため同値
+        private const float SwingHitContact = 1.05f;
         private const float HbpReact = 1.3f;
         // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
         private const float SwingMissHoldSeconds = 0.8f;
@@ -1362,7 +1393,9 @@ namespace KokoSim.Unity.Match
             GroundFix(_pitcher);
             // 捕球するクリップを先に決める（球をどこまで運ぶか＝捕球面がクリップごとに違う）
             int catchIndex = SelectCatchAnchor(outcome, pitch);
-            float flight = LaunchBall(pitch, catchIndex);
+            bool meetsBat = outcome == DuelPitchOutcome.InPlayContact
+                || outcome == DuelPitchOutcome.FoulContact;
+            float flight = LaunchBall(pitch, catchIndex, meetsBat);
 
             SeekActor(_pitcher, ReleaseTime);
             _pitcher.Go.transform.localPosition = keepPos;
@@ -1408,12 +1441,14 @@ namespace KokoSim.Unity.Match
                     SetSwing(_swingMissClip, SwingMissPlane, flight, BatterRunStart);
                     _batter.HoldSeconds = SwingMissHoldSeconds;   // 振り切りポーズでしばらく止めてから待機へ戻す
                     break;
+                // 当てる球は判定面でなく**捌く瞬間**（_ballArrival＝判定面の ContactAheadM 手前）で合わせる。
+                // flight を渡すと、前で捌くぶんバットが遅れて着く（0.30m/40m·s⁻¹ ≒ 8ms）
                 case DuelPitchOutcome.FoulContact:
                     // 走り出し（実測3.25s）前でカットして打席へ戻る
-                    SetSwing(_swingHitClip, SwingHitContact, flight, BatterRunStart);
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, BatterRunStart);
                     break;
                 case DuelPitchOutcome.InPlayContact:
-                    SetSwing(_swingHitClip, SwingHitContact, flight, 0f);
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, 0f);
                     break;
                 // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
                 // 捕手の捕球は下の catcherCatches に含めたまま残す
@@ -1559,7 +1594,7 @@ namespace KokoSim.Unity.Match
         /// 曲がりは engine の純関数 <c>PitchFlightPath</c> が持つ＝Unity側で弾道を積分し直さない
         /// （不変条件#1「物理層の変換式は一箇所」）。
         /// </summary>
-        private float LaunchBall(DuelPitchFlight? pitch, int catchIndex)
+        private float LaunchBall(DuelPitchFlight? pitch, int catchIndex, bool meetsBat)
         {
             float flight = pitch?.FlightSeconds ?? BallFlightSeconds;
             if (flight <= 0f) flight = BallFlightSeconds;
@@ -1591,6 +1626,14 @@ namespace KokoSim.Unity.Match
                 float planeZ = _catcher.Go.transform.localPosition.z + CatchAnchors[catchIndex].Mitt.z;
                 arrival = (float)KokoSim.Engine.Match.Timeline.Playback.PitchFlightPath.SecondsToDepth(ReleaseVector(), flight, planeZ);
                 if (arrival < flight) arrival = flight;   // 捕球面が本塁より前（較正の異常値）なら延長しない
+            }
+            else if (meetsBat && ContactAheadM > 0f)
+            {
+                // 打つ球は**判定面より前で捌く**（下の ContactAheadM の項）。球は投手側(+z)から来るので
+                // 前で当てる＝判定面より**手前の時刻**で止める。捕球面の延長と同じ式（深さ→時刻）を使う
+                float t = (float)KokoSim.Engine.Match.Timeline.Playback.PitchFlightPath.SecondsToDepth(
+                    ReleaseVector(), flight, ContactAheadM);
+                if (t > 0f && t < flight) arrival = t;
             }
             _ballArrival = arrival;
             _ballCatchPoint = BallPointAt(arrival);
@@ -2908,10 +2951,11 @@ namespace KokoSim.Unity.Match
         /// （実測 clip 0.75→0.95 で握りの移動 0.10m）ので、時刻で回すと**手が止まったままバットだけ回る**
         /// ＝「手の動きにバットがついてこない／遅れて出る」に見える（2026-07-31 監督指摘・横から）。
         /// </summary>
-        /// 実測 2026-07-31（帯0.12 は接触の1コマ前でも 0.28 までしか進まず、残り全部が最後の1コマに
-        /// 集まって「バットが消えて現れる」）。0.20 なら 0→0.44→0.68→1 と3段になり、かつトップは
-        /// 手が動くまで動かない（コマ数の窓が先に0で抑える）。
-        private const float BatSweepReachM = 0.20f;
+        /// **帯の幅は手の速さに合わせて実測で決める**。接触を判定面の前へ出した（ContactAheadM）ことで
+        /// 接触が腕の全速区間に入り、握りは1コマで 0.20m 進むようになった＝旧値 0.20 では帯を1コマで
+        /// 通り抜けて s が 0.11→1 に飛ぶ（2026-07-31 実測）。0.35 で 0.10→0.58→1 の3段になる。
+        /// 経緯: 0.12（1コマに集中）→ 0.20（接触1.00のとき3段）→ 0.35（接触1.05）。
+        private const float BatSweepReachM = 0.35f;
 
 #if UNITY_EDITOR
         /// <summary>【実測プローブ用】上の帯の差し替え（負＝既定）。</summary>
