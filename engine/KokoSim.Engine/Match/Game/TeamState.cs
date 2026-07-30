@@ -23,6 +23,7 @@ public sealed class TeamState
     private bool _usesDh;
     private int _dhSlot;
     private int _pitcherSlot;
+    private readonly Player _starter;           // 先発投手（実体化後の実インスタンス）。ボックススコアの基準。
 
     public TeamState(Team team)
     {
@@ -34,12 +35,24 @@ public sealed class TeamState
         _dhSlot = team.DhSlot;
         _pitcherSlot = team.PitcherSlot;
         // DH制（設計書09 §6）: 投手は打順外＝StartingPitcher から供給。
-        CurrentPitcher = team.UsesDh
+        var starter = team.UsesDh
             ? team.StartingPitcher ?? throw new ArgumentException("DH制では StartingPitcher が必須です。", nameof(team))
             : team.BattingOrder[team.PitcherSlot];
+        // 先発が野手（本職でない）なら潜在投手能力を実能力として確定する（issue #209 Phase B / #352）。
+        // 「投」枠に野手を置く編成は正（#93: 内部の投/野区分でゲートしない）で、禁じるのは実体化を経ずに
+        // PitchingFatigue の LeagueAverage へ落ちること。本職投手は Pitching が非nullなので恒等＝帯不変。
+        CurrentPitcher = _starter = Materialize(starter);
+        if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;   // 実体化で別インスタンスになるので打順側も揃える
         PitchesThrown = 0;
         Runs = 0;
     }
+
+    /// <summary>
+    /// マウンドに上がる選手の潜在投手能力を実能力へ確定する（<see cref="ChangePitcherTo"/>・
+    /// <see cref="PromoteFielderToMound"/> と同型。issue #209 Phase B）。本職投手（Pitching 非null）は恒等。
+    /// </summary>
+    private static Player Materialize(Player p)
+        => p.Pitching is null && p.LatentPitching is { } latent ? p with { Pitching = latent } : p;
 
     private readonly List<int> _inningRuns = new();
 
@@ -189,7 +202,8 @@ public sealed class TeamState
         var starters = new HashSet<Player>();
         for (var i = 0; i < 9; i++)
         {
-            var p = _team.BattingOrder[i];
+            // 投手枠は実体化後のインスタンス（成績の帰属キー）で引く。実体化が恒等なら _team.BattingOrder[i] と同一。
+            var p = !_team.UsesDh && i == _team.PitcherSlot ? _starter : _team.BattingOrder[i];
             starters.Add(p);
             var a = _bat.TryGetValue(p, out var acc) ? acc : new BatAccum();
             // DHスロットは守備に就かない＝表示だけ FieldPosition.DesignatedHitter（内部の本来守備位置は
@@ -233,7 +247,7 @@ public sealed class TeamState
                 : null;
             lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns));
         }
-        Add(_team.UsesDh ? _team.StartingPitcher! : _team.BattingOrder[_team.PitcherSlot]);
+        Add(_starter);
         foreach (var p in _team.Bullpen) Add(p);
         // 在フィールドから昇格した野手・ベンチ出身の投手（issue #209 Phase C）は Team.Bullpen に居ないので
         // 上の2経路では拾えない。実際に投げた投手（_pit に成績がある）で未計上の者を登板順（挿入順）に追加する。
