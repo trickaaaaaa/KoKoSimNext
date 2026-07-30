@@ -2961,8 +2961,17 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private const float BatSweepFrames = 2f;
 
-        /// <summary>振り抜きで振り下ろしと同じ面をさらに回す角度[度]。</summary>
-        private const float BatWrapDeg = 120f;
+        /// <summary>
+        /// 振り抜きで振り下ろしと同じ面をさらに回す角度[度]と、そのコマ数。
+        ///
+        /// 120°/2コマ（v19以前）だと、バットは本塁側(+x)から投手側(+z)へ**方位で103°**回ったところで
+        /// 止まり、フォロースルーが途中で固まる（2026-07-31 監督指摘「フォロースルーだからバットが逆だね／
+        /// 頭の横まで振りぬく」）。実物は接触の後も背中側(-x)を通って捕手側(-z)＝**頭の横**まで回る。
+        /// 面の法線がバット軸と直交していないぶん方位の進みは指定角より小さい（実測 120°指定で103°）。
+        /// 時間も実物に合わせる: 接触から振り切りまでは実時間で 0.2〜0.3秒＝再生1.4倍で 2.4〜3.6コマ。
+        /// </summary>
+        private const float BatWrapDeg = 250f;
+        private const float BatWrapFrames = 3f;
 
         /// <summary>
         /// タメ（振り下ろしの途中で芯が捕手側へ寝る形）の仰角[度]。芯が握りより少し上に来る量。
@@ -3046,7 +3055,12 @@ namespace KokoSim.Unity.Match
             var aim = dist > 1e-3f ? toTarget / dist : _batHeldAxis;
             var lag = LagAxis(aim);
 
-            if (t <= contact)
+            // 接触の**前後**半コマは②に含める（＝映るコマのうち接触に一番近い1枚を必ず打点へ乗せる）。
+            // `t <= contact` だけだと、ポーズの12fps格子が接触の直後に落ちた結果では③に入り、
+            // 巻き付きの起点が**1コマ前の狙い**（＝手がまだ手前に居たときの向き）になる。
+            // 実測 2026-07-31: 格子が 1.0567/1.1733 に落ちる位相で、起点が 1.17 の狙い(1.00,-0.06,-0.03)
+            // でなく 1.05 の狙い(0.82,-0.11,0.56)＝**33°ずれた**まま振り抜きが始まっていた。
+            if (t <= contact + 0.5f * frame)
             {
                 // ② 振り下ろし。
                 // 進みは2つの小さい方で決める:
@@ -3090,7 +3104,7 @@ namespace KokoSim.Unity.Match
                 _batWrapNormal = n1.sqrMagnitude > 1e-6f ? n1.normalized : Vector3.up;
                 _batWrapValid = true;
             }
-            float wrapEnd = contact + BatSweepFrames * frame;
+            float wrapEnd = contact + BatWrapFrames * frame;
             if (t < wrapEnd || restFrame == null)
             {
                 float w = Smooth(Mathf.InverseLerp(contact, wrapEnd, t));
