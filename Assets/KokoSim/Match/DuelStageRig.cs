@@ -185,7 +185,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 18;
+        private const int CurrentVersion = 19;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -200,7 +200,10 @@ namespace KokoSim.Unity.Match
             Sky = new Color(0.55f, 0.78f, 0.90f),
             Ambient = 0.45f,
             LightDir = new Vector3(-0.35f, -0.85f, -0.4f),
-            BatterX = -0.71f, BatterZ = 0.06f,
+            // 立ち位置は**絵の好みでなく幾何で決まる**（v19）。接触の瞬間に「握り→打点＝腕の長さ(0.605m)」
+            // でないと、芯を球に乗せるためにバットが前腕へ折り返る＝こねた形になる。
+            // 実測（接触1.17）: -0.71→0.382m / **-0.96→0.631m** / -1.16→0.826m（design-18 §4.5-⑪）
+            BatterX = -0.96f, BatterZ = 0.06f,
             CatcherX = -0.02f, CatcherZ = -1.0f,
             UmpireX = 0.18f, UmpireZ = -1.88f,   // #291のスロット位置から微調整
             CapOffset = Vector3.zero,
@@ -259,7 +262,7 @@ namespace KokoSim.Unity.Match
             // そこで本調整する
             TorsoCloseDeg = 8f,
             // 全開は「接触の瞬間」に置く約束なので、ミートの実測値（1.30→1.12→1.00→1.05）に追従させる
-            TorsoFromSec = 0.65f, TorsoFullSec = 1.05f, TorsoToSec = 1.45f,
+            TorsoFromSec = 0.77f, TorsoFullSec = 1.17f, TorsoToSec = 1.57f,   // 全開＝接触（v19で+0.12）
             // 監督選定（2026-07-30・4通りのコマ送り比較）: **開き8°＋速度1.4倍**。
             // 1.4倍のとき面通過（リリース+0.45s）のクリップ時刻は実測1.253s＝アンカー1.30sの
             // 1コマ以内（12fpsの刻みは0.117s）。振りは0.70s→0.50s＝1振りに使えるコマは8→6に減る
@@ -452,6 +455,15 @@ namespace KokoSim.Unity.Match
             if (c.Version < 18)   // v18: 打つ球を判定面より前で捌く（接触1.00→1.05）
             {
                 // v17と同じ理由＝胴の開きの窓はアンカーにぶら下がっている
+                c.TorsoFromSec = d.TorsoFromSec;
+                c.TorsoFullSec = d.TorsoFullSec;
+                c.TorsoToSec = d.TorsoToSec;
+            }
+            if (c.Version < 19)   // v19: 接触を腕が届く時刻へ（1.05→1.17）＋立ち位置を幾何で解いた
+            {
+                // 立ち位置は絵の好みでなく「接触で握り→打点＝腕の長さ」から決まる値になった＝
+                // 調整済みJSONの値を残すと、こねた形（バットが前腕へ折り返る）が残る
+                c.BatterX = d.BatterX;
                 c.TorsoFromSec = d.TorsoFromSec;
                 c.TorsoFullSec = d.TorsoFullSec;
                 c.TorsoToSec = d.TorsoToSec;
@@ -1285,8 +1297,22 @@ namespace KokoSim.Unity.Match
         // 後ろへ動く（2026-07-31 実測。握り→打点 0.95→0.770 / 1.00→0.718 / **1.05→0.598** / 1.10→0.387）。
         // 副次的に、腕が実際に動く区間（1コマあたり0.25m。前は0.04〜0.11m）に接触が入る＝
         // 「手にバットがついてこない」も一緒に解ける
-        private const float SwingMissPlane = 1.00f;
-        private const float SwingHitContact = 1.05f;
+        //
+        // **v19 で採り直した（2026-07-31 第5弾）。** 上の 1.00/1.05 は「握り→打点＝腕の長さ」だけで
+        // 決めていて、**握りが打点の手前どこに居るか**を見ていなかった。実測すると 1.05 の握りは
+        // z=-0.11＝打点(z=+0.30)より 0.41m **捕手側**で、球は前方斜めにある。そこで芯を球に乗せると
+        // バットは前腕に対して**129°＝折り返った形**になる＝監督指摘「バットをこねている」。
+        //
+        // 正しい採り方は**握りが狙点と同じ深さ（z）に来る時刻**。そこでは球が握りの真横にあり、
+        // バットは腕の延長として素直に出る。実測（BatterX=-0.96）:
+        //   clip 1.05 → 握り z=-0.11・球向き(0.81,-0.11,0.57)・前腕⇔球 116°
+        //   clip 1.17 → 握り z=+0.32・球向き(**1.00,-0.05,-0.04**)・前腕⇔球 **46°**
+        // 打つ球は判定面より ContactAheadM=0.30m 前（z=+0.30）なので 1.17、
+        // 空振りは判定面（z=0）なので、握りの速さ（3.7 m/クリップ秒）で 0.30m ぶん手前の 1.08。
+        // 立ち位置 BatterX も同時に解く必要がある（この時刻の握り→打点が腕の長さ 0.605m になる値）＝
+        // -0.71 では 0.382m しかなく芯が球を通り越す。design-18 §4.5-⑪
+        private const float SwingMissPlane = 1.08f;
+        private const float SwingHitContact = 1.17f;
         private const float HbpReact = 1.3f;
         // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
         private const float SwingMissHoldSeconds = 0.8f;
@@ -2955,8 +2981,11 @@ namespace KokoSim.Unity.Match
         /// **帯の幅は手の速さに合わせて実測で決める**。接触を判定面の前へ出した（ContactAheadM）ことで
         /// 接触が腕の全速区間に入り、握りは1コマで 0.20m 進むようになった＝旧値 0.20 では帯を1コマで
         /// 通り抜けて s が 0.11→1 に飛ぶ（2026-07-31 実測）。0.35 で 0.10→0.58→1 の3段になる。
-        /// 経緯: 0.12（1コマに集中）→ 0.20（接触1.00のとき3段）→ 0.35（接触1.05）。
-        private const float BatSweepReachM = 0.35f;
+        /// 経緯: 0.12（1コマに集中）→ 0.20（接触1.00のとき3段）→ 0.35（接触1.05）→ **0.55（接触1.17・v19）**。
+        /// 0.55 は「手の寄りでなくコマ数が効き始める値」＝ここから先は広げても絵が変わらない
+        /// （実測の芯の高さ: 0.35→1.63/1.51/0.93/0.81、**0.55→1.63/1.41/0.91/0.81**、0.75→0.55と同一）。
+        /// この帯は駆動そのものでなく「手より先に回らない」ための安全弁なので、効かなくなる所まで広げてよい。
+        private const float BatSweepReachM = 0.55f;
 
 #if UNITY_EDITOR
         /// <summary>【実測プローブ用】上の帯の差し替え（負＝既定）。</summary>

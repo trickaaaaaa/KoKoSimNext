@@ -206,6 +206,8 @@ namespace KokoSim.Unity.Match
                 rig.SeekBatter(t);
                 var ax = rig.BatAxisLocalForCapture;
                 var grip = root.InverseTransformPoint(rig.BatGripWorldForCapture);
+                System.Func<Vector3, Vector3, string> ang2 = (u, v) =>
+                    u.sqrMagnitude < 1e-6f || v.sqrMagnitude < 1e-6f ? "-" : Vector3.Angle(u, v).ToString("F0");
                 System.Func<Transform, string> ang = b =>
                 {
                     if (b == null || ax.sqrMagnitude < 1e-6f) return "-";
@@ -218,15 +220,18 @@ namespace KokoSim.Unity.Match
                 var contact = rig.ContactPointLocalForCapture;
                 var toBall = contact - grip;
                 float dist = toBall.magnitude;
+                var fore = le != null ? (grip - root.InverseTransformPoint(le.position)).normalized : Vector3.zero;
                 sb.Append("clip=").Append(t.ToString("F2"))
                   .Append(" 軸=").Append(ax.ToString("F2"))
-                  .Append(" 左肩腕=").Append(ang(ls))
-                  .Append(" 左肘腕=").Append(ang(le))
-                  .Append(" 右肩腕=").Append(ang(rs))
-                  .Append(" 腕線=").Append(armLine.ToString("F2"))
-                  .Append(" 腕線⇔打点=").Append(armLine.sqrMagnitude < 1e-6f || dist < 1e-3f
-                      ? "-" : Vector3.Angle(armLine, toBall).ToString("F0"))
-                  .Append(" 握り→打点=").Append(dist.ToString("F3"))
+                  .Append(" 前腕=").Append(fore.ToString("F2"))
+                  .Append(" 肩腕=").Append(armLine.ToString("F2"))
+                  .Append(" 握り=").Append(grip.ToString("F2"))
+                  .Append(" 打点=").Append(contact.ToString("F2"))
+                  .Append(" 球向き=").Append((dist > 1e-3f ? toBall / dist : Vector3.zero).ToString("F2"))
+                  .Append(" 距離=").Append(dist.ToString("F3"))
+                  .Append(" 前腕⇔球=").Append(ang2(fore, toBall))
+                  .Append(" 肩腕⇔球=").Append(ang2(armLine, toBall))
+                  .Append(" 前腕⇔軸=").Append(ang(le))
                   .Append('\n');
             }
             rig.Dispose();
@@ -263,12 +268,19 @@ namespace KokoSim.Unity.Match
             return "ok " + n + "枚";
         }
 
-        /// <summary>打撃フォーム確認窓 <c>AimView</c> の複製（0=投手側 / 1=真横 / 2=反対の横）。</summary>
+        /// <summary>打撃フォーム確認窓 <c>AimView</c> の複製（0=投手側 / 1=真横 / 2=反対の横 / 5=試合の構図）。</summary>
         private static void Aim(DuelStageRig rig, int view)
         {
             var anim = rig.BatterAnimator;
             var root = rig.StageRoot;
             if (anim == null || root == null) return;
+            if (view == 5)
+            {
+                // プレビュー枠（縦に収めたい実寸）を解除しないと画角が残り、望遠のはずが全景になる
+                rig.ClearPreviewFrame();
+                rig.ApplyCalibration(DuelStageRig.CalibrationOverride ?? DuelCalibration.Default);
+                return;
+            }
             var hipsT = anim.GetBoneTransform(HumanBodyBones.Hips);
             var hips = hipsT != null ? hipsT.position : root.position;
             var center = hips + Vector3.up * 0.15f;
