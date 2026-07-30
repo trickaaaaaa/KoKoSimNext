@@ -2359,6 +2359,50 @@ namespace KokoSim.Unity.Match
                 (Quaternion.Inverse(tr.rotation) * _bat.transform.rotation).eulerAngles);
         }
 
+        /// <summary>打者GOの Transform（軌道テーブルのローカル座標系の基準）。</summary>
+        public Transform BatterTransform => _batter != null && _batter.Go != null ? _batter.Go.transform : null;
+
+        /// <summary>いま描かれているバットのワールド姿勢（メッシュ原点＝バット中心）。</summary>
+        public bool TryGetBatWorld(out Vector3 pos, out Quaternion rot)
+        {
+            if (_bat == null) { pos = Vector3.zero; rot = Quaternion.identity; return false; }
+            pos = _bat.transform.position;
+            rot = _bat.transform.rotation;
+            return true;
+        }
+
+        /// <summary>
+        /// ワールド点 → プレビューRT上の正規化座標（0..1・左下原点）。カメラの後ろなら false。
+        /// 絵の上で道具を掴む編集（打撃フォーム確認窓）のための seam で、カメラはリグが持っている。
+        /// </summary>
+        public bool TryWorldToViewport(Vector3 world, out Vector2 vp)
+        {
+            vp = Vector2.zero;
+            if (_camera == null) return false;
+            var p = _camera.WorldToViewportPoint(world);
+            if (p.z <= 0f) return false;
+            vp = new Vector2(p.x, p.y);
+            return true;
+        }
+
+        /// <summary>
+        /// プレビューRT上の正規化座標 → 指定平面上のワールド点。
+        /// 平面はカメラ軸とほぼ平行だと解が飛ぶので、視線とのなす角が浅いときは false を返す
+        /// （＝掴んでも動かない。任意の大きさへ飛ぶより安全）。
+        /// </summary>
+        public bool ViewportToPlane(Vector2 vp, Vector3 planePoint, Vector3 planeNormal, out Vector3 world)
+        {
+            world = planePoint;
+            if (_camera == null) return false;
+            var ray = _camera.ViewportPointToRay(new Vector3(vp.x, vp.y, 0f));
+            float denom = Vector3.Dot(planeNormal.normalized, ray.direction);
+            if (Mathf.Abs(denom) < 0.08f) return false;   // 視線と平面が平行に近い
+            float d = Vector3.Dot(planeNormal.normalized, planePoint - ray.origin) / denom;
+            if (d <= 0f) return false;
+            world = ray.origin + ray.direction * d;
+            return true;
+        }
+
         private bool TryGetBatPathPose(out Vector3 worldPos, out Quaternion worldRot)
         {
             worldPos = Vector3.zero;
