@@ -72,4 +72,64 @@ public static class PitchFlightPath
 
         return new Vector3D(x, y, z);
     }
+
+    /// <summary>
+    /// 判定面（本塁 z=0）より奥へも運ぶ版（Issue #337 系の捕球表現）。捕手のミットは本塁の
+    /// 0.5〜0.8m 後ろにあるので、判定面で止めると球はミットの手前で消える。
+    ///
+    /// 判定面より奥は**判定面での速度でまっすぐ進む**（接線延長）。<see cref="At"/> の式をそのまま
+    /// t&gt;T へ伸ばしてはいけない: 逸れの項 <c>t·(T−t)</c> は t&gt;T で符号が反転し、球が急に
+    /// 跳ね上がる。延長は 0.6m＝15ms 程度なので、その間の重力ぶんの落ち（0.001m）は無視する。
+    /// </summary>
+    public static Vector3D AtOrBeyond(
+        Vector3D release,
+        double plateX,
+        double plateY,
+        double flightSeconds,
+        double inducedVerticalBreakM,
+        double inducedHorizontalBreakM,
+        double t)
+    {
+        if (flightSeconds <= 0) return new Vector3D(plateX, plateY, 0);
+        if (t <= flightSeconds)
+            return At(release, plateX, plateY, flightSeconds, inducedVerticalBreakM, inducedHorizontalBreakM, t);
+
+        var v = VelocityAtPlate(release, plateX, plateY, flightSeconds,
+            inducedVerticalBreakM, inducedHorizontalBreakM);
+        var over = t - flightSeconds;
+        return new Vector3D(plateX + v.X * over, plateY + v.Y * over, v.Z * over);
+    }
+
+    /// <summary>
+    /// 判定面を通過する瞬間の速度[m/s]（接線延長の向き）。<see cref="At"/> を t で微分した値＝
+    /// 弦の傾き ± 逸れの傾き。逸れの微分は <c>T−2t</c> なので、t=T では符号が反転して
+    /// 「重力ぶん下向き・ホップぶん上向き」に効く。
+    /// </summary>
+    public static Vector3D VelocityAtPlate(
+        Vector3D release,
+        double plateX,
+        double plateY,
+        double flightSeconds,
+        double inducedVerticalBreakM,
+        double inducedHorizontalBreakM)
+    {
+        if (flightSeconds <= 0) return new Vector3D(0, 0, 0);
+        var vx = (plateX - release.X) / flightSeconds + inducedHorizontalBreakM / flightSeconds;
+        var vy = (plateY - release.Y) / flightSeconds
+                 - GravityMps2 / 2.0 * flightSeconds
+                 + inducedVerticalBreakM / flightSeconds;
+        var vz = -release.Z / flightSeconds;
+        return new Vector3D(vx, vy, vz);
+    }
+
+    /// <summary>
+    /// 本塁からの距離 <paramref name="depthZ"/>[m]（捕手側は負）に球が達する時刻[s]。
+    /// z は時刻に対して線形（弦の z 成分・逸れは z を持たない）＝延長区間でも同じ傾きなので
+    /// 判定面の前後どちらでも一発で解ける。
+    /// </summary>
+    public static double SecondsToDepth(Vector3D release, double flightSeconds, double depthZ)
+    {
+        if (flightSeconds <= 0 || release.Z == 0) return flightSeconds;
+        return flightSeconds * (1.0 - depthZ / release.Z);
+    }
 }

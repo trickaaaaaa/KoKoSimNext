@@ -145,6 +145,87 @@ public sealed class PitchFlightPathTests
         Assert.Equal(0.0, p.Z, 9);
     }
 
+    /// <summary>判定面までは延長版も同じ値（分岐で式が変わっていない）。</summary>
+    [Fact]
+    public void AtOrBeyond_BeforePlate_MatchesAt()
+    {
+        for (var i = 0; i <= 6; i++)
+        {
+            var t = Flight * i / 6.0;
+            var plain = PitchFlightPath.At(Release, 0.1, 0.7, Flight, 0.3, 0.05, t);
+            var beyond = PitchFlightPath.AtOrBeyond(Release, 0.1, 0.7, Flight, 0.3, 0.05, t);
+            Assert.Equal(plain.X, beyond.X, 12);
+            Assert.Equal(plain.Y, beyond.Y, 12);
+            Assert.Equal(plain.Z, beyond.Z, 12);
+        }
+    }
+
+    /// <summary>
+    /// 延長は**接線**＝判定面の速度でまっすぐ。等間隔の時刻で等間隔に進み、判定面の通過点は動かない。
+    /// <see cref="PitchFlightPath.At"/> の式を t&gt;T へ伸ばすと逸れの項の符号が反転して跳ね上がる。
+    /// </summary>
+    [Fact]
+    public void AtOrBeyond_ExtendsAlongTangent()
+    {
+        var plate = PitchFlightPath.AtOrBeyond(Release, 0.12, 0.85, Flight, 0.3, 0.0, Flight);
+        Assert.Equal(0.12, plate.X, 9);
+        Assert.Equal(0.85, plate.Y, 9);
+        Assert.Equal(0.0, plate.Z, 9);
+
+        var v = PitchFlightPath.VelocityAtPlate(Release, 0.12, 0.85, Flight, 0.3, 0.0);
+        for (var i = 1; i <= 3; i++)
+        {
+            var over = 0.005 * i;
+            var p = PitchFlightPath.AtOrBeyond(Release, 0.12, 0.85, Flight, 0.3, 0.0, Flight + over);
+            Assert.Equal(0.12 + v.X * over, p.X, 9);
+            Assert.Equal(0.85 + v.Y * over, p.Y, 9);
+            Assert.Equal(v.Z * over, p.Z, 9);
+        }
+    }
+
+    /// <summary>判定面の速度は数値微分と一致すること（延長の向きが式の微分そのものである保証）。</summary>
+    [Fact]
+    public void VelocityAtPlate_MatchesNumericDerivative()
+    {
+        const double h = 1e-6;
+        var a = PitchFlightPath.At(Release, 0.12, 0.85, Flight, 0.3, 0.08, Flight - h);
+        var b = PitchFlightPath.At(Release, 0.12, 0.85, Flight, 0.3, 0.08, Flight);
+        var v = PitchFlightPath.VelocityAtPlate(Release, 0.12, 0.85, Flight, 0.3, 0.08);
+        Assert.Equal((b.X - a.X) / h, v.X, 3);
+        Assert.Equal((b.Y - a.Y) / h, v.Y, 3);
+        Assert.Equal((b.Z - a.Z) / h, v.Z, 3);
+    }
+
+    /// <summary>球はまだ落ちながらミットへ入る（延長区間で上向きに転じない）。</summary>
+    [Fact]
+    public void Extension_KeepsDescending_ForRealisticHop()
+    {
+        foreach (var ivb in new[] { 0.0, 0.3, 0.6 })
+        {
+            var v = PitchFlightPath.VelocityAtPlate(Release, 0.0, 0.8, Flight, ivb, 0.0);
+            Assert.True(v.Y < 0, $"IVB={ivb} で判定面通過時に上昇している");
+            Assert.True(v.Z < 0, "捕手側（z負）へ進んでいない");
+        }
+    }
+
+    /// <summary>捕球面（本塁の 0.6m 後ろ）到達時刻は判定面のわずか後＝15ms級。</summary>
+    [Fact]
+    public void SecondsToDepth_ReachesCatchPlane_JustAfterPlate()
+    {
+        var t = PitchFlightPath.SecondsToDepth(Release, Flight, -0.6);
+        Assert.InRange(t - Flight, 0.010, 0.020);
+
+        var p = PitchFlightPath.AtOrBeyond(Release, 0.1, 0.7, Flight, 0.3, 0.0, t);
+        Assert.Equal(-0.6, p.Z, 9);
+    }
+
+    /// <summary>判定面（z=0）の到達時刻は飛翔時間そのもの。</summary>
+    [Fact]
+    public void SecondsToDepth_AtPlate_EqualsFlightTime()
+    {
+        Assert.Equal(Flight, PitchFlightPath.SecondsToDepth(Release, Flight, 0.0), 12);
+    }
+
     /// <summary>
     /// 実弾道（<see cref="PitchSimulator"/>）の飛翔時間と噛み合うこと。パスは弾道を再積分せず
     /// 端点＋観測量だけで組むが、飛翔時間は実測値をそのまま使う＝球の速さが物理と一致する。

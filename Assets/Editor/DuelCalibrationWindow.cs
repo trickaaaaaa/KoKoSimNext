@@ -119,6 +119,8 @@ namespace KokoSim.EditorTools
             }
             // 実測をそのまま出す＝絵を撮らずに数値を0へ寄せられる（狙い外しと配管ミスは絵では区別できない）
             EditorGUILayout.LabelField(rigOn ? live.BallDiagForCapture() : "rig未接続", EditorStyles.miniLabel);
+            // 捕球（5方向クリップの選択＋ミットIK）の実測。ずれ≦0.12m（ミット半径）が受け入れ
+            EditorGUILayout.LabelField(rigOn ? live.CatchDiagForCapture() : "", EditorStyles.miniLabel);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("空・ライト", EditorStyles.boldLabel);

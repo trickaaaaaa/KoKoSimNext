@@ -532,7 +532,10 @@ namespace KokoSim.Unity.Match
         private Transform _cChestMount;                 // 捕手の胸プロテクター（gear-chest直下）
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
-        private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _catchClip, _umpireStrikeClip;
+        private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _umpireStrikeClip;
+
+        // 捕球クリップ（5方向）。CatchAnchors と同じ並び。取れなかったものはnull＝選択から外れる
+        private AnimationClip[] _catchClips;
 
         // ボール（issue #332・design-18 §4.5-②「ボールとカメラはフルレート維持」）。
         //
@@ -553,6 +556,14 @@ namespace KokoSim.Unity.Match
         private float _ballFlight;         // この球の飛翔時間[s]
         private float _ballIvb, _ballIhb;  // 誘発縦/横変化[m]（弾道なしは0＝素の垂れだけ）
         private float _ballT = -1f;        // 発射からの経過[s]。負=飛んでいない
+
+        // 捕球（③ミットの中）。判定面（z=0）で止めると球はミットの0.6m手前で消える（実測 2026-07-30）＝
+        // 捕られる球は捕球面まで接線で延長し、着いたらミット（左手ボーン）の子へ移して一緒に引かれる
+        private float _ballArrival;         // 発射から捕球面に達するまで[s]（捕られない球は飛翔時間そのまま）
+        private Vector3 _ballCatchPoint;    // 捕球面での球の位置（ステージローカル）＝ミットIKの狙点
+        private bool _ballWillBeCaught;     // この球は捕手が捕るか
+        private bool _ballInMitt;           // ミットの子になっているか
+        private float _ballInMittRemaining; // ミットの中で残す秒数
 
         private sealed class Actor
         {
@@ -687,7 +698,8 @@ namespace KokoSim.Unity.Match
             _swingMissClip = batClip;
             _swingHitClip = batClip;
             _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
-            _catchClip = LoadClip("AA_Baseball_Catcher_Catching_C");
+            _catchClips = new AnimationClip[CatchAnchors.Length];
+            for (int i = 0; i < CatchAnchors.Length; i++) _catchClips[i] = LoadClip(CatchAnchors[i].Clip);
             // 球審ストライクコール。Type01(3.33s)を暫定採用。比較録画の後に監督が Type01/02 を確定する（#333）
             _umpireStrikeClip = LoadClip("AA_Baseball_Umpire_Crouch_Strike_Type01");
 
@@ -921,6 +933,8 @@ namespace KokoSim.Unity.Match
         private float _cutClipTime;
         private float _umpireCallCountdown = -1f;   // 球審ストライクコール発火まで（負=予約なし）
         private float _umpireCallEndAt;             // コールクリップの打ち切り時刻（0=末尾まで）
+        private float _catchCountdown = -1f;        // 捕球クリップ開始まで（負=予約なし）
+        private int _catchIndex = -1;               // 今の球で使う捕球クリップ（CatchAnchors の添字。負=捕らない）
 
         /// <summary>
         /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
@@ -937,6 +951,8 @@ namespace KokoSim.Unity.Match
             if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
             _umpireCallCountdown = -1f;
+            _catchCountdown = -1f;
+            _catchIndex = -1;
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
             HoldBallInHand();   // 振りかぶりから球を手に持たせる（issue #332）
         }
@@ -958,7 +974,46 @@ namespace KokoSim.Unity.Match
         private const float HbpReact = 1.3f;
         // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
         private const float SwingMissHoldSeconds = 0.8f;
-        private const float CatchMoment = 0.4f;
+
+        /// <summary>
+        /// 捕球クリップ1本ぶんのアンカー（実測 2026-07-30・0.01s刻み・ミット中心＝手首と中指付け根の中点）。
+        ///
+        /// <see cref="Mitt"/> は**捕手の立ち位置からの相対**（素体ローカル・yaw0・+z=投手側）。
+        /// ステージ座標を直に持つと <c>CatcherX/CatcherZ</c> を動かした瞬間に表が腐るため。
+        ///
+        /// <see cref="Moment"/> は「球がミットに当たる瞬間」のクリップ内秒。定義がクリップで2種あるので
+        /// 一律の式では出せず、実測から個別に決めている:
+        ///  ・中央(C) はミットを構えた姿勢から始まり、当たった衝撃で引かれる＝**引き始め**（0.06s。
+        ///    ここを球到達に合わせると引きが球のせいに見える。旧実装の0.4sは引き終わって静止した後）
+        ///  ・上下左右(U/D/L/R) はミットを的へ運ぶ＝**運び終わり**（速度が落ちる点）
+        /// </summary>
+        private readonly struct CatchAnchor
+        {
+            public readonly string Clip;
+            public readonly Vector3 Mitt;
+            public readonly float Moment;
+            public CatchAnchor(string clip, Vector3 mitt, float moment)
+            {
+                Clip = clip; Mitt = mitt; Moment = moment;
+            }
+        }
+
+        // 先頭が中央（既定・同点時に勝つ側）。CatchSelectionBias はこれ以外へ課す下駄
+        private static readonly CatchAnchor[] CatchAnchors =
+        {
+            new("AA_Baseball_Catcher_Catching_C", new Vector3(-0.081f, 0.633f, 0.400f), 0.06f),
+            new("AA_Baseball_Catcher_Catching_U", new Vector3(-0.071f, 0.918f, 0.498f), 0.21f),
+            new("AA_Baseball_Catcher_Catching_D", new Vector3(-0.036f, 0.320f, 0.185f), 0.20f),
+            new("AA_Baseball_Catcher_Catching_L", new Vector3(-0.263f, 0.662f, 0.495f), 0.17f),
+            new("AA_Baseball_Catcher_Catching_R", new Vector3(0.195f, 0.638f, 0.407f), 0.19f),
+        };
+
+        /// <summary>
+        /// 中央以外を選ぶための下駄[m]。ゾーン中央付近ではCとU/Dの距離が数cm差で並ぶため、
+        /// これが無いとコースのわずかな違いでミットが上下に飛ぶ（見た目が落ち着かない）。
+        /// 「はっきり外れたコースだけ方向クリップへ移る」ようにする閾値で、実測の並びから 0.08 と置いた。
+        /// </summary>
+        private const float CatchSelectionBias = 0.08f;
         // 球審ストライクコールの発火タイミング（#333）:
         // ボール到達（BallFlightSeconds後）を見てから捕球確認までの遅延[秒]。
         // コール発火 = BallFlightSeconds + UmpireCatchReactDelay 後にクリップ先頭から再生する。
@@ -1009,7 +1064,9 @@ namespace KokoSim.Unity.Match
             SeekActor(_pitcher, _cal.BallReleaseClipTime);
             _pitcher.Go.transform.localPosition = keepPos;
             GroundFix(_pitcher);
-            float flight = LaunchBall(pitch);
+            // 捕球するクリップを先に決める（球をどこまで運ぶか＝捕球面がクリップごとに違う）
+            int catchIndex = SelectCatchAnchor(outcome, pitch);
+            float flight = LaunchBall(pitch, catchIndex);
 
             SeekActor(_pitcher, ReleaseTime);
             _pitcher.Go.transform.localPosition = keepPos;
@@ -1026,11 +1083,12 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
-            ScheduleReactions(outcome, nextReleaseIn, flight);
+            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex);
         }
 
         /// <summary>打者・捕手・球審の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。</summary>
-        private void ScheduleReactions(DuelPitchOutcome outcome, float nextReleaseIn, float flight)
+        private void ScheduleReactions(DuelPitchOutcome outcome, float nextReleaseIn, float flight,
+            int catchIndex)
         {
             // 球審: ストライク（見逃し・空振り）でコールを予約、それ以外は前球の予約をキャンセル（#333）
             _umpireCallCountdown = -1f;
@@ -1064,11 +1122,56 @@ namespace KokoSim.Unity.Match
                     SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
                     break;
             }
+            ScheduleCatch(catchIndex);
+        }
+
+        /// <summary>
+        /// 捕球クリップを「捕球の瞬間が球の到達に一致する」ように予約する（issue #332 の第2弾）。
+        ///
+        /// 旧実装は <c>SetActorClip(..., CatchMoment - flight, ...)</c> の頭出しだけだった。頭出しは
+        /// **クリップを前へ飛ばす**ことしかできないので、捕球の瞬間（実測0.06〜0.21s）より飛翔時間
+        /// （0.42〜0.52s）が長い＝常に負になり <c>Max(0,…)</c> で0へ潰れ、リリース直後に捕っていた
+        /// （球到達の0.36s前。2026-07-30 監督指摘）。足りないのは「後ろへずらす」＝開始の予約なので、
+        /// 球審コール（<see cref="_umpireCallCountdown"/>）と同じ作法でカウントダウンを持つ。
+        /// </summary>
+        private void ScheduleCatch(int catchIndex)
+        {
+            _catchCountdown = -1f;
+            _catchIndex = catchIndex;
+            if (catchIndex < 0) return;
+            var clip = _catchClips[catchIndex];
+            float start = _ballArrival - CatchAnchors[catchIndex].Moment;
+            if (start > 0f) _catchCountdown = start;
+            else SetActorClip(_catcher, clip, -start, 0f);   // 捕球が遅いクリップは頭出しで詰める
+        }
+
+        /// <summary>
+        /// コースに一番近い捕球クリップの添字（無ければ-1＝捕手は待機のまま）。
+        /// 距離は本塁面の左右・高さで測る（奥行きの差は延長15ms＝2cm未満なので効かない）。
+        /// 乱数を引かない純粋な選択＝同じコースなら常に同じクリップ（決定論）。
+        /// </summary>
+        private int SelectCatchAnchor(DuelPitchOutcome outcome, DuelPitchFlight? pitch)
+        {
             bool catcherCatches = outcome == DuelPitchOutcome.Take
                 || outcome == DuelPitchOutcome.CalledStrike
                 || outcome == DuelPitchOutcome.SwingMiss;
-            if (catcherCatches)
-                SetActorClip(_catcher, _catchClip, Mathf.Max(0f, CatchMoment - flight), 0f);
+            if (!catcherCatches || _catcher == null || _catchClips == null) return -1;
+
+            float px = pitch?.PlateX ?? 0f;
+            float py = pitch?.PlateY ?? DefaultPlateY;
+            float catcherX = _catcher.Go.transform.localPosition.x;
+            int best = -1;
+            float bestCost = float.MaxValue;
+            for (int i = 0; i < CatchAnchors.Length; i++)
+            {
+                if (_catchClips[i] == null) continue;
+                var m = CatchAnchors[i].Mitt;
+                float dx = px - (catcherX + m.x);
+                float dy = py - m.y;
+                float cost = Mathf.Sqrt(dx * dx + dy * dy) + (i == 0 ? 0f : CatchSelectionBias);
+                if (cost < bestCost) { bestCost = cost; best = i; }
+            }
+            return best;
         }
 
         /// <summary>
@@ -1090,6 +1193,7 @@ namespace KokoSim.Unity.Match
             _ballHand = hand;
             _ballHeldLocal = hand.InverseTransformPoint(centerWorld) + _cal.BallInHandOffset;
             _ballHeld = true;
+            _ballInMitt = false;   // 前球がミットの中に残っていても投手の手へ戻す
             _ballT = -1f;
             _ball.transform.SetParent(hand, false);
             _ball.transform.localPosition = _ballHeldLocal;
@@ -1108,7 +1212,7 @@ namespace KokoSim.Unity.Match
         /// 曲がりは engine の純関数 <c>PitchFlightPath</c> が持つ＝Unity側で弾道を積分し直さない
         /// （不変条件#1「物理層の変換式は一箇所」）。
         /// </summary>
-        private float LaunchBall(DuelPitchFlight? pitch)
+        private float LaunchBall(DuelPitchFlight? pitch, int catchIndex)
         {
             float flight = pitch?.FlightSeconds ?? BallFlightSeconds;
             if (flight <= 0f) flight = BallFlightSeconds;
@@ -1124,10 +1228,38 @@ namespace KokoSim.Unity.Match
             _ballFlight = flight;
             _ballT = 0f;
             _ballHeld = false;
+            _ballInMitt = false;
+            _ballInMittRemaining = 0f;
+
+            // 捕られる球は判定面（z=0）で止めず、選んだクリップの捕球面まで接線で延長する。
+            // 捕球面は「そのクリップのミットの奥行き」＝ミットが待っている所まで運ぶ（実測0.19〜0.50m前）
+            _ballWillBeCaught = catchIndex >= 0;
+            float arrival = flight;
+            if (_ballWillBeCaught)
+            {
+                float planeZ = _catcher.Go.transform.localPosition.z + CatchAnchors[catchIndex].Mitt.z;
+                arrival = (float)KokoSim.Engine.Match.Timeline.Playback.PitchFlightPath.SecondsToDepth(ReleaseVector(), flight, planeZ);
+                if (arrival < flight) arrival = flight;   // 捕球面が本塁より前（較正の異常値）なら延長しない
+            }
+            _ballArrival = arrival;
+            _ballCatchPoint = BallPointAt(arrival);
+
             _ball.transform.SetParent(_root.transform, false);   // 手から離す＝以後フルレートで飛ぶ
             _ball.SetActive(true);
             UpdateBall(0f);
             return flight;
+        }
+
+        /// <summary>この球のリリース点（engineのVector3Dへ）。</summary>
+        private KokoSim.Engine.Core.Vector3D ReleaseVector()
+            => new(_ballRelease.x, _ballRelease.y, _ballRelease.z);
+
+        /// <summary>飛翔中の球の位置（ステージローカル）。判定面より奥は接線で延長する。</summary>
+        private Vector3 BallPointAt(float t)
+        {
+            var p = KokoSim.Engine.Match.Timeline.Playback.PitchFlightPath.AtOrBeyond(ReleaseVector(),
+                _ballPlate.x, _ballPlate.y, _ballFlight, _ballIvb, _ballIhb, t);
+            return new Vector3((float)p.X, (float)p.Y, (float)p.Z);
         }
 
         /// <summary>コースの無い球を運ぶ先の高さ[m]（ストライクゾーンの中央 = (0.50+1.05)/2）。</summary>
@@ -1151,27 +1283,62 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 飛翔中の球を進める。**フルレート**（12fps量子化の対象外。design-18 §4.5-②）。
-        /// 到達したら消す＝捕手のミット・バットとの重なりを絵で見せた直後に畳む。
         /// 手に貼り付いている間は何もしない（位置は親の手が運ぶ）。
+        ///
+        /// 捕られる球は捕球面（＝ミットの奥行き）まで運んだところで**ミットの子**へ移す。以後は球が
+        /// ミットの吸収動作と一緒に引かれる＝12fpsのポーズと全レートの球のずれもここで閉じる。
+        /// 捕られない球（打球・死球）は従来どおり判定面の少し先で畳む。
         /// </summary>
         private void UpdateBall(float deltaTime)
         {
             if (_ball == null || _ballHeld || _ballT < 0f) return;
             _ballT += deltaTime;
-            if (_ballT > _ballFlight + BallLingerSeconds)
+
+            if (_ballInMitt)
+            {
+                _ballInMittRemaining -= deltaTime;
+                if (_ballInMittRemaining <= 0f)
+                {
+                    _ballT = -1f;
+                    _ballInMitt = false;
+                    _ball.transform.SetParent(_root.transform, true);
+                    _ball.SetActive(false);
+                }
+                return;
+            }
+
+            if (_ballT >= _ballArrival && _ballWillBeCaught && TryPutBallInMitt()) return;
+
+            if (_ballT > _ballArrival + BallLingerSeconds)
             {
                 _ballT = -1f;
                 _ball.SetActive(false);
                 return;
             }
-            var p = KokoSim.Engine.Match.Timeline.Playback.PitchFlightPath.At(
-                new KokoSim.Engine.Core.Vector3D(_ballRelease.x, _ballRelease.y, _ballRelease.z),
-                _ballPlate.x, _ballPlate.y, _ballFlight, _ballIvb, _ballIhb, _ballT);
-            _ball.transform.localPosition = new Vector3((float)p.X, (float)p.Y, (float)p.Z);
+            _ball.transform.localPosition = BallPointAt(_ballT);
+        }
+
+        /// <summary>
+        /// 球をミット（捕手の左手ボーン）の子へ移す。位置は**捕球面での実位置のまま**焼き付ける
+        /// （ミット中心へ寄せ直さない＝IKでミットを球へ寄せてあるので、そのままで噛み合う）。
+        /// </summary>
+        private bool TryPutBallInMitt()
+        {
+            var hand = _catcher != null && _catcher.Animator != null
+                ? _catcher.Animator.GetBoneTransform(HumanBodyBones.LeftHand) : null;
+            if (hand == null) return false;
+            _ball.transform.localPosition = _ballCatchPoint;
+            _ball.transform.SetParent(hand, true);
+            _ballInMitt = true;
+            _ballInMittRemaining = BallInMittSeconds;
+            return true;
         }
 
         /// <summary>到達後も球を置いておく秒数。捕球・ミートの瞬間を1コマ以上（12fps=83ms）見せるため。</summary>
         private const float BallLingerSeconds = 0.10f;
+
+        /// <summary>捕った球をミットの中に見せておく秒数（吸収動作を見せ切る長さ）。</summary>
+        private const float BallInMittSeconds = 0.45f;
 
         /// <summary>
         /// 【開発ツール用】投手を**発射する瞬間の姿勢で静止**させ、球を手に持たせる（issue #332 の出所合わせ）。
@@ -1195,6 +1362,7 @@ namespace KokoSim.Unity.Match
         {
             _ballT = -1f;
             _ballHeld = false;
+            _ballInMitt = false;
             if (_ball != null)
             {
                 _ball.transform.SetParent(_root.transform, false);
@@ -1248,6 +1416,18 @@ namespace KokoSim.Unity.Match
                     SetActorClip(_umpire, _umpireStrikeClip, 0f, _umpireCallEndAt);
             }
 
+            // 捕球クリップの開始予約（球到達に捕球の瞬間を合わせる。issue #332 第2弾）。
+            // 球審コールと同じくプレー時間で数える＝12fpsの量子化に丸められない
+            if (_catchCountdown >= 0f)
+            {
+                _catchCountdown -= deltaTime;
+                if (_catchCountdown < 0f && _catchIndex >= 0)
+                {
+                    SetActorClip(_catcher, _catchClips[_catchIndex], 0f, 0f);
+                    FixCatcherPose();   // 差し替え直後のポーズにも当てる（この同じフレームで球が着くことがある）
+                }
+            }
+
             // ボールはフルレート（design-18 §4.5-②「球筋の読みやすさはゲーム性なので量子化しない」）。
             // キャラのコマ打ちループより前に進める＝同フレームのポーズと球位置が同じ時刻を指す
             UpdateBall(deltaTime);
@@ -1266,7 +1446,26 @@ namespace KokoSim.Unity.Match
                 GroundFix(_pitcher);   // 投球ループはルートモーションでマウンドを降りるためコマ毎に接地
                 FixBatterPose();       // 収録の破綻を骨へ当て直す（バット整列より前＝詰めた手から軸を採る）
                 AlignBat();
+                FixCatcherPose();      // ミットを実着弾点へ寄せる（5方向クリップの残差を吸収）
             }
+        }
+
+        /// <summary>
+        /// 捕球の瞬間の前後だけミットを球へ寄せる（design-18 §4.5「端数合わせは短時間IK」）。
+        /// 狙点は**発射時に確定した捕球面での球位置**＝毎コマ球を追いかけない。ポーズは12fpsなので
+        /// 球の現在位置を追うと1コマ（83ms＝球は3m進む）ぶん手前を掴もうとしてぶれる。
+        ///
+        /// 呼ぶのは**捕手のポーズを評価した直後だけ**（ポーズコマの更新後・クリップ差し替え直後）。
+        /// 重み&lt;1のときは今の手の位置からの補間なので、同じポーズに二度当てると寄りすぎる。
+        /// </summary>
+        private void FixCatcherPose()
+        {
+            if (_catcher == null || _catcher.Animator == null) return;
+            if (_catchIndex < 0 || _ballT < 0f) return;
+            float w = DuelCatcherPose.Weight(_ballT, _ballArrival);
+            if (w <= 0f) return;
+            DuelCatcherPose.ReachMitt(_catcher.Animator,
+                _root.transform.TransformPoint(_ballCatchPoint), w);
         }
 
         /// <summary>
@@ -2721,18 +2920,54 @@ namespace KokoSim.Unity.Match
                     + " 球の高さ=" + _root.transform.InverseTransformPoint(_ball.transform.position).y.ToString("F3") + "m";
             }
             if (_ballT < 0f) return "ball=停止";
-            var p = _ball.transform.localPosition;
+            var p = _root.transform.InverseTransformPoint(_ball.transform.position);
             string mitt = "-", head = "-";
-            var mittT = _catcher != null && _catcher.Animator != null
-                ? _catcher.Animator.GetBoneTransform(HumanBodyBones.LeftHand) : null;
-            if (mittT != null)
-                mitt = Vector3.Distance(_root.transform.InverseTransformPoint(mittT.position), p).ToString("F3");
+            if (_catcher != null && _catcher.Animator != null)
+                mitt = Vector3.Distance(
+                    _root.transform.InverseTransformPoint(DuelCatcherPose.MittCenter(_catcher.Animator)),
+                    p).ToString("F3");
             var headT = _batter != null && _batter.Animator != null
                 ? _batter.Animator.GetBoneTransform(HumanBodyBones.Head) : null;
             if (headT != null)
                 head = Vector3.Distance(_root.transform.InverseTransformPoint(headT.position), p).ToString("F3");
-            return "ball pos=" + p.ToString("F3") + " t=" + _ballT.ToString("F3") + "/" + _ballFlight.ToString("F3")
-                + " ミットまで=" + mitt + "m 打者頭まで=" + head + "m";
+            return "ball pos=" + p.ToString("F3") + " t=" + _ballT.ToString("F3")
+                + " 判定面=" + _ballFlight.ToString("F3") + " 捕球面=" + _ballArrival.ToString("F3")
+                + (_ballInMitt ? " [ミットの中]" : "")
+                + " ミット中心まで=" + mitt + "m 打者頭まで=" + head + "m";
+        }
+
+        /// <summary>
+        /// 【開発ツール用】球心とミット中心の距離[m]。球が飛んでいない間は負。
+        /// ハーネスが毎フレーム走査して**最接近**を採るため（コマ撮りの5枚では捕球の瞬間を跨ぐ）。
+        /// </summary>
+        public float BallToMittMeters()
+        {
+            if (_ball == null || !_ball.activeSelf || _ballHeld || _ballT < 0f) return -1f;
+            if (_catcher == null || _catcher.Animator == null) return -1f;
+            return Vector3.Distance(_ball.transform.position, DuelCatcherPose.MittCenter(_catcher.Animator));
+        }
+
+        /// <summary>
+        /// 【開発ツール用】捕球の実測（issue #332 第2弾）。選んだクリップ・捕球の瞬間・ミットIKの重み・
+        /// ミット中心と狙点のずれを返す。**目測で判定しない**ための単一ソース（受け入れはずれ≦0.12m
+        /// ＝ミットの半径）。キャリブレーション窓が毎フレーム表示する。
+        /// </summary>
+        public string CatchDiagForCapture()
+        {
+            if (_catchIndex < 0) return "捕球=なし（この球は捕手が捕らない分岐）";
+            var a = CatchAnchors[_catchIndex];
+            string name = a.Clip.Replace("AA_Baseball_Catcher_Catching_", "");
+            if (_catcher == null || _catcher.Animator == null) return "捕球=" + name + "（捕手なし）";
+            bool running = _catchClips != null && _catcher.Clip == _catchClips[_catchIndex];
+            float w = _ballT >= 0f ? DuelCatcherPose.Weight(_ballT, _ballArrival) : 0f;
+            var center = _root.transform.InverseTransformPoint(DuelCatcherPose.MittCenter(_catcher.Animator));
+            return "捕球=" + name + " 捕球の瞬間=" + a.Moment.ToString("F2") + "s"
+                + " クリップ=" + (running ? _catcher.Time.ToString("F2") + "s" : "待機")
+                + (_catchCountdown >= 0f ? " 開始まで=" + _catchCountdown.ToString("F2") + "s" : "")
+                + " IK重み=" + w.ToString("F2")
+                + " ミット中心=" + center.ToString("F3")
+                + " 狙点=" + _ballCatchPoint.ToString("F3")
+                + " ずれ=" + Vector3.Distance(center, _ballCatchPoint).ToString("F3") + "m";
         }
 
         internal string GloveDiagForCapture()
