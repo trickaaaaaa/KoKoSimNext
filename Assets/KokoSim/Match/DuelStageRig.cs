@@ -185,7 +185,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 19;
+        private const int CurrentVersion = 20;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -243,7 +243,12 @@ namespace KokoSim.Unity.Match
             HeadElevDeg = -3f,
             HeadStrength = 0.913f,
             HeadNeckShare = 0.413f,
-            HeadUntilSec = 1.70f,       // 旧3.4（クリップ終端まで）。フォロー中は収録の頭の動きに任せる
+            // クリップ終端まで投手を見続ける（v20で 1.70→3.4 へ戻した）。収録の頭は振り抜きの後に
+            // **捕手の方を振り向く**動きを持っており（実測: 視線を離した 1.40 以降に頭ヨーが
+            // 1°→−23°→+32°→67°→…→105° と回り切る）、監督判断でこれは要らない。
+            // クリップを短く切っても消えない＝インプレーは clip 1.96 まで映るのに振り向きは 1.75 から
+            // 始まるので、**視線を当て続ける**のが唯一の消し方（design-18 §4.5-⑬）
+            HeadUntilSec = 3.4f,
             // 膝は**構えの間だけ**効かせている（0.14〜0.90秒）。スイング中は収録のまま＝
             // 当初の「体を残す」とは別の使い方になっているので、直すならこの3つの秒を戻す
             KneeDeg = -54f,
@@ -467,6 +472,10 @@ namespace KokoSim.Unity.Match
                 c.TorsoFromSec = d.TorsoFromSec;
                 c.TorsoFullSec = d.TorsoFullSec;
                 c.TorsoToSec = d.TorsoToSec;
+            }
+            if (c.Version < 20)   // v20: 振り抜き後の「捕手を振り向く」収録動作を消す
+            {
+                c.HeadUntilSec = d.HeadUntilSec;
             }
             c.Version = CurrentVersion;
             return c;

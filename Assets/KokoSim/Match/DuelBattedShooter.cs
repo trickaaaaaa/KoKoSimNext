@@ -167,6 +167,53 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 【開発用】首の振りを実測する（2026-07-31 監督指摘「最後の方にキャッチャーの方を見る動作」）。
+        /// 顔の向きは素体ごとにボーンの軸が違う（UBC=-Z／購入素体=+Z）ので**絶対の向きは信用しない**。
+        /// 代わりに**胸に対する頭のヨー差**を出す＝軸の取り違えは定数オフセットになるだけで、
+        /// 「どのコマから振り始めたか」は変わらない。
+        /// </summary>
+        public static string ProbeHead(float from, float to, bool miss = false)
+        {
+            var rig = new DuelStageRig();
+            if (!rig.Available) return "rig が組めない";
+            for (int i = 0; i < 90; i++) rig.Tick(1f / 60f);
+            rig.OnPitchWindup();
+            for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
+            if (miss) rig.OnPitchReleased(0f, DuelPitchOutcome.SwingMiss);
+            else rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, RealBatted("フライ"));
+            var anim = rig.BatterAnimator;
+            var root = rig.StageRoot;
+            var head = anim.GetBoneTransform(HumanBodyBones.Head);
+            var chest = anim.GetBoneTransform(HumanBodyBones.Chest) ?? anim.GetBoneTransform(HumanBodyBones.UpperChest);
+            if (head == null || chest == null) return "頭か胸の骨が無い";
+            float step = Mathf.Max(0.1f, DuelCalibration.Default.SwingSpeed) / DuelStageRig.PoseFps;
+            var sb = new System.Text.StringBuilder();
+            float prev = 0f;
+            bool first = true;
+            for (float t = from; t <= to + 1e-4f; t += step)
+            {
+                rig.SeekBatter(t);
+                System.Func<Transform, float> yaw = b =>
+                {
+                    var f = root.InverseTransformDirection(b.forward);
+                    return Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
+                };
+                float hy = yaw(head), cy = yaw(chest);
+                float d = Mathf.DeltaAngle(cy, hy);
+                sb.Append("clip=").Append(t.ToString("F2"))
+                  .Append(" 頭ヨー=").Append(hy.ToString("F0"))
+                  .Append(" 胸ヨー=").Append(cy.ToString("F0"))
+                  .Append(" 頭−胸=").Append(d.ToString("F0"))
+                  .Append(" 前コマ差=").Append(first ? "-" : Mathf.DeltaAngle(prev, d).ToString("F0"))
+                  .Append('\n');
+                prev = d;
+                first = false;
+            }
+            rig.Dispose();
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// 【開発用】バット軸と**腕の線**の関係を実測する（2026-07-31 監督指摘「バットをこねている」
         /// 「この段階ではまだバットは腕と並行であるべき」）。腕の線は手首の回転と違って**位置**から採るので
         /// 収録の暴れを拾わない＝バットを何に従わせるべきかの判断材料になる。
