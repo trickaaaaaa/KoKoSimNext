@@ -32,7 +32,21 @@ namespace KokoSim.EditorTools
                         Mathf.Abs(cal.SwingLiftM)), EditorStyles.miniLabel);
             }
 
-            EditorGUILayout.LabelField("立ち向き", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("構え（待機ループ）", EditorStyles.miniBoldLabel);
+            bool ownIdle = EditorGUILayout.ToggleLeft(
+                "構えだけ自作モーションを使う（スイングは差し替えない）", cal.IdleFromOwnClip >= 0.5f);
+            cal.IdleFromOwnClip = ownIdle ? 1f : 0f;
+            using (new EditorGUI.DisabledScope(!ownIdle))
+            using (new EditorGUI.IndentLevelScope())
+            {
+                cal.IdleYawDeg = EditorGUILayout.Slider("構えのヨー [度]", cal.IdleYawDeg, 0f, 180f);
+                cal.IdleBatAxisFromGrip = EditorGUILayout.Slider("構えのバット軸を握り線から採る",
+                    cal.IdleBatAxisFromGrip, 0f, 1f);
+                EditorGUILayout.LabelField(" ", "素の向きが約30°違うので立ち向きはクリップ別に持つ",
+                    EditorStyles.miniLabel);
+            }
+
+            EditorGUILayout.LabelField("立ち向き（スイング）", EditorStyles.miniBoldLabel);
             cal.BatterYawDeg = EditorGUILayout.Slider("ヨー [度]", cal.BatterYawDeg, 0f, 180f);
 
             EditorGUILayout.LabelField("握り（両手にかかる）", EditorStyles.miniBoldLabel);

@@ -149,6 +149,15 @@ namespace KokoSim.Unity.Match
         // 1=バット単体を動かす（腕は収録のまま）。傾きは**握り点まわりの回転**なので手から離れないが、
         //   持ち上げは平行移動＝その量だけバットが手から浮く（＝浮きが要らないなら傾きだけで作る）
         public float SwingPlaneBatOnly;
+        // ---- 構えだけ別クリップ（2026-07-31 監督要望「構えだけ元の自作モーションにもできる？」）----
+        // 0=待機も打撃クリップ（Mixamo）の構え区間 / 1=自作Rokoko（Batter_Batting_01）の構え区間。
+        // スイングは常に打撃クリップ＝**構えとスイングでクリップが分かれる**ので切り口はクロスフェードで繋ぐ。
+        public float IdleFromOwnClip;
+        // 自作構えのときの立ち向き[度]。素の向きが約30°違う（RunFacingProbe 実測 chest 52°/82°）ため別に持つ
+        public float IdleYawDeg;
+        // 自作構えのバット軸の採り方（<see cref="BatAxisFromGrip"/> のクリップ別版）。自作収録は両手が
+        // 23cm開いて実測線が寝るので、合成軸（BatStanceElevDeg）寄りの旧値0.154が既定
+        public float IdleBatAxisFromGrip;
         // ---- ボールの出所（issue #332・2026-07-30）----
         // ボールはリリースまで**投球する手の子**なので、位置は手ボーンローカルの微調整だけで足りる
         // （基準は design-18 §3.3.1 の掟どおり「手の中心＝手首→中指付け根の中点」）。
@@ -159,7 +168,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 13;
+        private const int CurrentVersion = 14;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -254,6 +263,10 @@ namespace KokoSim.Unity.Match
             SwingLiftM = -0.018f,
             SwingPlaneTiltDeg = -63f,
             SwingPlaneBatOnly = 1f,   // 既定はバットだけ動かす（腕は収録のまま）
+            // 構えは既定では打撃クリップのまま。自作構えは絵を見て選ぶもの（打撃フォーム確認窓のトグル）
+            IdleFromOwnClip = 0f,
+            IdleYawDeg = 90f + 33.8f,      // 自作Rokokoの旧・立ち向き（Mixamoへ差し替える前の実測値）
+            IdleBatAxisFromGrip = 0.154f,  // 同上（自作収録は両手が開くので合成軸寄り）
             // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
             BallInHandOffset = Vector3.zero,
             BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
@@ -356,6 +369,12 @@ namespace KokoSim.Unity.Match
             if (c.Version < 13)   // v13: スイング面を腕でなくバット単体へ掛ける配分
             {
                 c.SwingPlaneBatOnly = d.SwingPlaneBatOnly;
+            }
+            if (c.Version < 14)   // v14: 構えだけ自作クリップへ差し替える
+            {
+                c.IdleFromOwnClip = d.IdleFromOwnClip;
+                c.IdleYawDeg = d.IdleYawDeg;
+                c.IdleBatAxisFromGrip = d.IdleBatAxisFromGrip;
             }
             c.Version = CurrentVersion;
             return c;
@@ -583,6 +602,24 @@ namespace KokoSim.Unity.Match
         // 待機は構え区間だけをループさせ、スイングは頭出しで呼ぶ。
         //
         // 旧・自作Rokoko（Batter_Batting_01）の値: IdleEnd=1.70 / SwingStart=2.80 / RunStart=3.25
+        /// <summary>
+        /// 自作Rokoko収録の打撃クリップ。2026-07-30 に打撃はMixamoへ差し替えたが、
+        /// **構えだけこちらを使える**ようにしてある（<see cref="DuelCalibration.IdleFromOwnClip"/>）。
+        /// Mixamo FBX は再配布NGでgitignoreなので、クローン直後の環境ではこちらが打撃クリップの代替にもなる。
+        /// </summary>
+        public const string BatterOwnIdleClipName = "Batter_Batting_01";
+
+        /// <summary>自作クリップの構え区間の折り返し[秒]（差し替え前の BatterIdleEnd）。</summary>
+        private const float BatterOwnIdleEnd = 1.70f;
+
+        /// <summary>
+        /// 自作構えを使うときにポーズ補正を評価するクリップ内秒。
+        /// 補正の窓（膝・胴・握り）はMixamoの時刻表なので、自作クリップの時刻をそのまま渡すと
+        /// 窓の境目が待機ループの途中に現れる（膝が抜ける・胴が回り出す）。構えは静止した1ポーズなので
+        /// Mixamoの構えの真ん中で固定評価する＝「いまの構えと同じ補正」がそのまま乗る。
+        /// </summary>
+        private const float OwnIdlePoseRefSec = 0.50f;
+
         private const float BatterIdleEnd = 0.85f;     // 待機ループの折り返し（ここから先を待機中に見せない）
         private const float BatterSwingStart = 0.90f;  // ここから先が「振っている」区間（バット片手判定の許可域）
         private const float BatterRunStart = 2.60f;    // フォローの収まり。ファール・空振りはここで打ち切って構えへ戻す
@@ -618,6 +655,7 @@ namespace KokoSim.Unity.Match
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
         private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _umpireStrikeClip;
+        private AnimationClip _batterOwnIdle;   // 自作Rokokoの打撃クリップ（構えだけ使う。無い環境ならnull）
 
         // 捕球クリップ（5方向）。CatchAnchors と同じ並び。取れなかったものはnull＝選択から外れる
         private AnimationClip[] _catchClips;
@@ -712,7 +750,16 @@ namespace KokoSim.Unity.Match
             int layer = LayerMask.NameToLayer(LayerName);
             var body = LoadBody();
             var pitchClip = LoadClip(PitcherClipName);
+            _batterOwnIdle = LoadClip(BatterOwnIdleClipName);
+            // Mixamo FBX は再配布NGでgitignore＝クローン直後の環境には無い。黙って null のまま組むと
+            // 打者だけ素立ちのTポーズになるので、自作クリップへ落とす（アンカーは合わないが絵は出る）
             var batClip = LoadClip(BatterClipName);
+            if (batClip == null)
+            {
+                batClip = _batterOwnIdle;
+                Debug.LogWarning("[DuelStage] 打撃クリップ " + BatterClipName
+                    + " が無いので自作 " + BatterOwnIdleClipName + " で代用する（アンカーは未調整）");
+            }
             var catClip = LoadClip("AA_Baseball_Catcher_Idle");
             var umpClip = LoadClip("AA_Baseball_Umpire_Crouch_Idle");
             if (layer < 0 || body == null || pitchClip == null || batClip == null || catClip == null || umpClip == null)
@@ -920,7 +967,8 @@ namespace KokoSim.Unity.Match
             // 打者は生の較正値のまま（左打者は鏡映親ノードが x を映す＝#337）。
             // 捕手・球審は反転しない代わりに並びだけ打者と反対側へ寄せる（BatterSideSign）
             SetActorXZ(_batter, cal.BatterX, cal.BatterZ);
-            SetActorYaw(_batter, cal.BatterYawDeg);
+            ApplyBatterIdleClip(cal);   // 立ち向きは待機クリップで変わるので、差し替えを先に済ませる
+            SyncBatterYaw();
             SetActorXZ(_catcher, cal.CatcherX * BatterSideSign, cal.CatcherZ);
             SetActorXZ(_umpire, cal.UmpireX * BatterSideSign, cal.UmpireZ);
             if (_capMount != null) _capMount.localPosition = cal.CapOffset;
@@ -955,6 +1003,50 @@ namespace KokoSim.Unity.Match
             a.BaseRot = rot;
         }
 
+        /// <summary>いま待機として自作クリップ（構えだけ差し替え）が流れているか。</summary>
+        private bool BatterOnOwnIdle =>
+            _batter != null && _batterOwnIdle != null && _batter.Clip == _batterOwnIdle
+            && _batterOwnIdle != _swingMissClip;
+
+        /// <summary>
+        /// 待機（構え）に使うクリップを較正から選び直す。既定は打撃クリップの構え区間。
+        /// <see cref="DuelCalibration.IdleFromOwnClip"/> が立っているときだけ自作Rokokoの構え区間にする。
+        /// 待機中でなければ差し替えは <see cref="FinishOneShot"/> の復帰時に効く（振っている最中に足元が飛ばない）。
+        /// </summary>
+        private void ApplyBatterIdleClip(in DuelCalibration cal)
+        {
+            if (_batter == null || _swingMissClip == null) return;
+            bool own = cal.IdleFromOwnClip >= 0.5f && _batterOwnIdle != null
+                && _batterOwnIdle != _swingMissClip;
+            var want = own ? _batterOwnIdle : _swingMissClip;
+            float endAt = own ? BatterOwnIdleEnd : BatterIdleEnd;
+            if (_batter.IdleClip == want && Mathf.Approximately(_batter.IdleEndAt, endAt)) return;
+            bool wasIdling = _batter.Clip == _batter.IdleClip;
+            _batter.IdleClip = want;
+            _batter.IdleEndAt = endAt;
+            if (!wasIdling) return;
+            SetActorClip(_batter, want, 0f, endAt);
+            GroundFix(_batter);   // クリップごとに根の高さが違う＝差し替えると足が浮く／沈む
+        }
+
+        /// <summary>
+        /// 打者の立ち向きを「いま流れているクリップ」に合わせる。素の向きが約30°違う
+        /// （RunFacingProbe 実測 chest: Mixamo 52° / 自作 82°）ので、構えを差し替えると向きも替える必要がある。
+        /// クロスフェード中はその重みで補間する＝体だけ1コマで30°回る絵にしない。
+        /// </summary>
+        private void SyncBatterYaw()
+        {
+            if (_batter == null) return;
+            float own = BatterOnOwnIdle ? 1f : 0f;
+            if (_batter.FadeFrom.IsValid() && _batter.FadeDuration > 0f)
+            {
+                float u = Mathf.Clamp01(1f - _batter.FadeRemaining / _batter.FadeDuration);
+                float w = u * u * (3f - 2f * u);   // StepActor の重み送りと同じ smoothstep
+                own = Mathf.Lerp(1f - own, own, w);
+            }
+            SetActorYaw(_batter, Mathf.Lerp(_cal.BatterYawDeg, _cal.IdleYawDeg, own));
+        }
+
         /// <summary>
         /// 打撃フォームの実行時補正を当てる（design-18 §7-2・実装は <see cref="DuelBatterPose"/>）。
         /// 呼ぶ順は「クリップ評価 → 接地 → ここ → バット整列」。バットは詰めた後の手から軸を採る。
@@ -962,6 +1054,9 @@ namespace KokoSim.Unity.Match
         private void FixBatterPose()
         {
             if (_batter == null || _batter.Animator == null) return;
+            // 向きは補正より先（骨のワールド位置が動く＝視線の狙いが変わる）。
+            // 構えを差し替えていないときは触らない＝従来の絵と1ビットも変えない
+            if (_cal.IdleFromOwnClip >= 0.5f) SyncBatterYaw();
             DuelBatterPose.HeadForwardLocal = _batter.HeadFwdLocal;
             // 視線の狙点は投手の頭（居ない場合はマウンドの高さ1.6m）。実物の打者は投手を追うので、
             // 固定方向でなく相手の位置から引く
@@ -970,7 +1065,10 @@ namespace KokoSim.Unity.Match
                 ? _pitcher.Animator.GetBoneTransform(HumanBodyBones.Head) : null;
             if (pitcherHead != null) aim = pitcherHead.position;
             else aim = _root.transform.position + new Vector3(0f, 1.6f, MoundDistance);
-            DuelBatterPose.Apply(_batter.Animator, _cal, _batter.Time, aim);
+            // 補正の窓（膝・胴・握り）はMixamoの時刻表。自作構えのときは別クリップの時刻が来るので
+            // 構えを代表する固定秒で評価する（そのまま渡すと窓の境目が待機ループの途中に出る）
+            float poseT = BatterOnOwnIdle ? OwnIdlePoseRefSec : _batter.Time;
+            DuelBatterPose.Apply(_batter.Animator, _cal, poseT, aim);
         }
 
         /// <summary>
@@ -1232,7 +1330,12 @@ namespace KokoSim.Unity.Match
         {
             if (_batter == null || clip == null) return;
             float k = Mathf.Max(0.1f, _cal.SwingSpeed);
-            SetActorClip(_batter, clip, anchorClipSec - flight * k, endAt);
+            float seek = anchorClipSec - flight * k;
+            // 構えを別クリップにしていると、ここが**クリップの切り口**になる（構え→スイング）。
+            // 頭出しだけだと姿勢が飛ぶので投手のカットバックと同じクロスフェードで繋ぐ。
+            // 同じクリップのとき（既定）は従来どおり頭出しだけ＝絵は1ビットも変わらない
+            if (_batter.Clip != clip) CrossfadeActorToClip(_batter, clip, seek, endAt, CrossfadeSeconds);
+            else SetActorClip(_batter, clip, seek, endAt);
             _batter.Speed = k;   // SetActorClip の後（差し替えで持ち越さないため）
         }
 
@@ -2107,6 +2210,35 @@ namespace KokoSim.Unity.Match
         /// 手順の順序が重要: 退場させたい時刻を控える → 先に Seek（SeekActor は CancelFade を通るので、
         /// 退場側を先に繋ぐと捨てられてしまう） → Seek 後に退場ポーズを作って重みを in0=1 へ倒す。
         /// </summary>
+        /// <summary>
+        /// **別クリップへ**差し替えながら現在の姿勢を退場させる（構え→スイングの切り口）。
+        /// <see cref="CrossfadeActorTo"/> は同じクリップ内の飛びを繋ぐもので、クリップ自体が変わる
+        /// ケースには使えない（退場側の Playable は差し替え前のクリップから作る必要がある）。
+        ///
+        /// 順序が要点: <see cref="SetActorClip"/> は頭で <see cref="CancelFade"/> を呼ぶので、
+        /// **差し替えを済ませてから**退場側を繋ぐ。AnimationClip 自体は参照が生きているので後から使える。
+        /// </summary>
+        private static void CrossfadeActorToClip(Actor a, AnimationClip clip, float seekTo, float endAt,
+            float seconds)
+        {
+            if (a == null || clip == null || a.Go == null || !a.Graph.IsValid()) return;
+            var fromClip = a.Clip;
+            float fromTime = fromClip == null ? 0f : Mathf.Clamp(a.Time, 0f, fromClip.length - 0.001f);
+            SetActorClip(a, clip, seekTo, endAt);
+            if (seconds <= 0f || fromClip == null || fromClip == clip) return;
+
+            a.FadeFrom = AnimationClipPlayable.Create(a.Graph, fromClip);
+            SyncFootIk(a);
+            a.FadeFrom.SetTime(fromTime);
+            a.FadeFrom.Pause();
+            a.Mixer.ConnectInput(0, a.FadeFrom, 0);
+            a.Mixer.SetInputWeight(0, 1f);
+            a.Mixer.SetInputWeight(1, 0f);
+            a.FadeDuration = seconds;
+            a.FadeRemaining = seconds;
+            a.Animator.applyRootMotion = false;   // 混合ルート姿勢の差分が乗る（掟。CancelFadeで戻す）
+        }
+
         private static void CrossfadeActorTo(Actor a, float clipTime, float seconds)
         {
             if (a == null || a.Go == null || !a.Graph.IsValid() || a.Clip == null) return;
@@ -2234,7 +2366,12 @@ namespace KokoSim.Unity.Match
             a.Speed = 1f;               // 一発物の速度指定は持ち越さない（待機は常に収録の速さ）
             if (a.IdleClip != null && a.Clip != a.IdleClip)
             {
-                SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰
+                // 打者の構えを別クリップにしていると、フォロー→構えもクリップの切り口になる。
+                // 同じクリップ内の巻き戻し（既定）はこの分岐に入らないので絵は変わらない
+                if (a == _batter && a.IdleClip == _batterOwnIdle)
+                    CrossfadeActorToClip(a, a.IdleClip, 0f, a.IdleEndAt, CrossfadeSeconds);
+                else
+                    SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰
                 return;
             }
             RewindActor(a);
@@ -2416,8 +2553,10 @@ namespace KokoSim.Unity.Match
                     // 握りが直った今は実測線（ノブ側の手→バレル側の手）がそのままバット軸。
                     // 合成軸は「両手が23cm開いて拳が積み重ならない」収録を前提にした補正なので、
                     // 手を積み重ねた状態では水平成分が消えてバットが真上を向く（実測 axis=(0,1,0)）
-                    if (_cal.BatAxisFromGrip > 0f)
-                        axis = Vector3.Slerp(axis, d, Mathf.Clamp01(_cal.BatAxisFromGrip)).normalized;
+                    // 自作構えは両手が23cm開いて実測線が寝る＝クリップ別の値を使う
+                    float axisFromGrip = BatterOnOwnIdle ? _cal.IdleBatAxisFromGrip : _cal.BatAxisFromGrip;
+                    if (axisFromGrip > 0f)
+                        axis = Vector3.Slerp(axis, d, Mathf.Clamp01(axisFromGrip)).normalized;
                 }
                 var grip = (lh + rh) * 0.5f;
                 // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。
