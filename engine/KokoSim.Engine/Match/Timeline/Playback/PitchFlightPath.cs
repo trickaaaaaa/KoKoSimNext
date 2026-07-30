@@ -13,11 +13,22 @@ namespace KokoSim.Engine.Match.Timeline.Playback;
 ///  - 表示側（Unity）で積分をやり直すと物理が二箇所になる（不変条件#1「変換式は一箇所」）。
 ///    ここは engine 側の純関数1つに閉じ、Unity は毎フレーム呼ぶだけにする
 ///
-/// 逸れの式: 一定加速度 a のもとで始点・終点を固定すると、弦からの逸れは <c>(a/2)·t·(T−t)</c>。
-/// 終点自由なら変位は <c>(a/2)·T²</c> なので、観測量（終点での変位＝誘発変化量 IVB）から
-/// <c>a = 2·IVB/T²</c> と読み替えられる。重力（−g）と誘発変化を足して
-/// <c>dy(t) = (IVB/T² − g/2)·t·(T−t)</c>。T=0.45s・IVB=0 なら中点で約25cm垂れ、
-/// ホップがあるぶん垂れが減る＝実際の投球の見え方と同じになる。
+/// 逸れの式（符号に注意。2026-07-30 に反転修正）: 上向き正の一定加速度 a のもとで始点・終点を固定すると、
+/// 弦からの逸れは <c>−(a/2)·t·(T−t)</c>。**加速度と逆向きに膨らむ**のが要点で、直感に反するが
+/// 端点を固定しているためこうなる（上向きの力が強いほど、同じ到達点を通るには初速の上向き成分が
+/// 小さくて済む＝軌道は弦に寄る）。
+///
+/// これを重力（a=−g）とマグヌス（a=+2·IVB/T²。誘発変化量 IVB は終点自由での変位なので
+/// <c>(a/2)·T² = IVB</c> から読み替える）に当てると
+/// <c>dy(t) = (g/2 − IVB/T²)·t·(T−t)</c>。
+///
+/// つまり球は**弦より上**を通る（重力で落ちる球は初速を上向きに打ち出すので上に凸）。
+/// T=0.45s・IVB=0 で中点は弦より約25cm上、ホップがあるぶん弦に寄って平坦になる＝
+/// 「ホップするストレートは落ちない」の正しい表現。
+///
+/// ⚠ 符号を逆にすると（弦より下へ膨らませると）**あらゆる球が前半で急降下し後半で水平〜上昇する**＝
+/// 全球がホップして見える（2026-07-30 実害・監督指摘）。落差の推移で切り分ける:
+/// 正しい式は落差が広がっていき（重力で加速）、逆符号だと落差が縮んでいく。
 /// </summary>
 public static class PitchFlightPath
 {
@@ -52,11 +63,12 @@ public static class PitchFlightPath
         var y = release.Y + (plateY - release.Y) * u;
         var z = release.Z * (1.0 - u);
 
-        // 弦からの逸れ。中間だけを膨らませるので端点は動かない
+        // 弦からの逸れ。中間だけを膨らませるので端点は動かない。
+        // 符号は「加速度と逆向きに膨らむ」＝重力(下向き)なら弦より上、マグヌス(上向き)なら弦へ寄る
         var bow = clamped * (flightSeconds - clamped);
         var t2 = flightSeconds * flightSeconds;
-        y += (inducedVerticalBreakM / t2 - GravityMps2 / 2.0) * bow;
-        x += inducedHorizontalBreakM / t2 * bow;
+        y += (GravityMps2 / 2.0 - inducedVerticalBreakM / t2) * bow;
+        x -= inducedHorizontalBreakM / t2 * bow;
 
         return new Vector3D(x, y, z);
     }

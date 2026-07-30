@@ -102,9 +102,10 @@ namespace KokoSim.Unity.Match
             Debug.Log("[i332] " + tag + " after t=" + t.ToString("F3") + " " + _rig.BallDiagForCapture());
         }
 
-        // 投手の斜め後ろ＝球がリリースの手から出ているかを見る（寄りの絵は対象の近くから撮る）
+        // 真横（一塁側）から投手と本塁を1枚に収める＝弾道の形（垂れ方）が読める。
+        // 縦収め11mなら16:9で横19.6m写るのでマウンド(z=18.44)〜本塁(z=0)が入る
         private static readonly (Vector3 cam, Vector3 look, float h) Side =
-            (new Vector3(2.8f, 2.0f, 21.0f), new Vector3(0.1f, 1.1f, 17.0f), 3.0f);
+            (new Vector3(13f, 2.5f, 9.2f), new Vector3(0f, 1.2f, 9.2f), 11f);
         // 本塁の後方やや一塁側（球審の胴を避ける）＝コースの左右・高さが読める
         private static readonly (Vector3 cam, Vector3 look, float h) BehindPlate =
             (new Vector3(1.6f, 1.5f, -3.4f), new Vector3(0f, 1.0f, 2.0f), 3.0f);
