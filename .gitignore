@@ -26,6 +26,12 @@ Assets/Animo.meta
 Assets/DuelSpike/Vendor/
 Assets/DuelSpike/Vendor.meta
 
+# --- Mixamo モーション（Adobe 素材。作品への使用は自由だが素材単体の再配布はNG） ---
+# Assets/Motions/ 直下は自作収録＝追跡するが、このサブフォルダだけ外す。
+# インポート既定（DuelMotionImportDefaults）は Assets/Motions/ 配下なら効くので置き場所は変えない。
+Assets/Motions/Mixamo/
+Assets/Motions/Mixamo.meta
+
 # --- アート中間生成物（AI生成の高密度FBX。デシメート後の *_lo.fbx だけを Assets 側で追跡） ---
 art-src/
 # AI生成の入力参照画像と生の出力（他社製品の写真を含むため追跡しない。デシメート後だけを持つ）

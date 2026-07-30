@@ -6,6 +6,10 @@ Mixamo プロファイルで FBX エクスポートしたもの。自作物な�
 - **`Assets/Animo/` との違い**: あちらは購入パック（AA Basic Baseball 等）で**再配布NG＝gitignore**。
   こちらは自作なので追跡する。両方を跨いだクリップの名前引きは
   `DuelStageRig.ClipFbxSources`（先勝ち＝自作が優先）に一本化してある。
+- **`Duel/` 直下だけが自作**。`Mixamo/` は Adobe Mixamo から落としたもので、作品への使用は自由だが
+  **素材単体の再配布はNG＝gitignore**（`Assets/Animo/` と同じ扱い）。インポート既定は
+  `Assets/Motions/` 配下で効くのでサブフォルダに置いたままでよい。手元に無い環境では
+  `LoadClip` が null を返すので、`BatterClipName` が Mixamo を指している間はその環境で打者が立たない。
 - **インポート設定はコードで固定**: `Assets/Editor/DuelMotionImportDefaults.cs`（AssetPostprocessor）が
   初回インポート時だけ Humanoid / Create From This Model / 圧縮オフ / クリップ名＝ファイル名を当てる。
   以後の微調整は Inspector が勝つ（`importSettingsMissing` 判定）。

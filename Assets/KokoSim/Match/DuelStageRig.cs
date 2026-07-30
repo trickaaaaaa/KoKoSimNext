@@ -165,12 +165,17 @@ namespace KokoSim.Unity.Match
             HelmetEuler = Vector3.zero,
             // 打撃フォームの既定は 2026-07-29 に打撃フォーム確認窓で追い込んだ実測値
             // （out/duel-calibration.json v8 からの焼き戻し。以降もツール→JSON→ここの順で更新する）
-            BatterYawDeg = 90f + 33.8f,
+            //
+            // 2026-07-30 Mixamo「Baseball Strike」への差し替えに伴い、**クリップ内秒に依存する項目だけ**を
+            // 新クリップの実測タイムライン（構え〜0.85 / スイング0.90-1.60（接触1.30）/ フォロー〜2.60）へ
+            // 張り替えた。角度・長さ系（手首の折れ・指の握り込み・バット寸法）は旧クリップの破綻に
+            // 合わせて追い込んだ値がそのまま残っている＝**新クリップでは要再調整**（打撃フォーム確認窓）。
+            BatterYawDeg = 90f + 3.8f,   // 旧90+33.8。RunFacingProbeのchest実測差(52°-82°=-30°)ぶん戻した
             GripGapM = 0.10f,
             GripReachGuard = 0.911f,
             GripReachGuardSwing = 0.901f,
-            GripSwingFromSec = 2.75f, GripSwingToSec = 3.20f,
-            GripEndSec = 3.25f,
+            GripSwingFromSec = 0.85f, GripSwingToSec = 1.55f,   // 旧2.75/3.20（スイング区間に合わせる）
+            GripEndSec = 2.60f,                                  // 旧3.25。走り出しが無いので打ち切り点まで握らせる
             GripPullBias = 0f,
             GripElbowPoleDeg = 0f,
             GripElbowPoleDegTop = 21f,
@@ -189,12 +194,15 @@ namespace KokoSim.Unity.Match
             HeadElevDeg = -3f,
             HeadStrength = 0.913f,
             HeadNeckShare = 0.413f,
-            HeadUntilSec = 3.4f,        // クリップ終端まで投手を見続ける
-            // 膝は**構えの間だけ**効かせている（0.14〜1.86秒）。スイング中は収録のまま＝
+            HeadUntilSec = 1.70f,       // 旧3.4（クリップ終端まで）。フォロー中は収録の頭の動きに任せる
+            // 膝は**構えの間だけ**効かせている（0.14〜0.90秒）。スイング中は収録のまま＝
             // 当初の「体を残す」とは別の使い方になっているので、直すならこの3つの秒を戻す
             KneeDeg = -54f,
-            KneeFromSec = 3.4f, KneeFullSec = 0.14f, KneeToSec = 1.86f,
-            BatAxisFromGrip = 0.154f,
+            KneeFromSec = 3.4f, KneeFullSec = 0.14f, KneeToSec = 0.90f,   // 旧ToSec=1.86（構えの終わりに合わせる）
+            // 旧0.154（＝ほぼ合成軸）。自作Rokokoは両手が開いて拳が積み重ならない収録だったので
+            // 実測線が使えなかったが、Mixamoは元からバットを両手で握った収録なので実測線が素直に使える。
+            // 0.154のままだと合成軸の仰角35.7°が頭の方向へ立ち上がり、構えでバットが顔を貫く（2026-07-30 絵で確認）
+            BatAxisFromGrip = 1f,
             BatGripBelowM = 0.111f,
             BatLengthM = 0.869f,
             BatStanceElevDeg = 35.7f,
@@ -465,6 +473,8 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static readonly string[] ClipFbxSources =
         {
+            // Mixamo「Baseball Strike」（Adobe素材＝gitignore。自作収録の代替候補として検証中）
+            "Assets/Motions/Mixamo/Batter_Mixamo_Strike_01.fbx",
             // 自作Rokokoの投球クリップ（Pitcher_Pitching_01.fbx）は2026-07-29にセットポジション投球へ
             // 差し替えたため供給元から外した。戻すときはこの行と PitcherClipName を一緒に戻す
             "Assets/Motions/Duel/Batter_Batting_01.fbx",
@@ -490,18 +500,28 @@ namespace KokoSim.Unity.Match
         public const float PitcherYaw = 270f;
 
         /// <summary>
-        /// 打者のクリップ名。自作Rokokoモーション（Assets/Motions/Duel）に置き換え済み。
-        /// **構え→スイング→走り出しが1本**に入っているため、待機と一発物で同じクリップを区間違いで使う。
-        /// 素の向きはAA打者クリップと同じ+Z（RunFacingProbe実測 chest=82°/hips=103°→ yaw 90 のまま）。
+        /// 打者のクリップ名。Mixamo「Baseball Strike」の絵が馴染むかの検証中（2026-07-30）。
+        /// **構え→スイング→フォローが1本**に入っているため、待機と一発物で同じクリップを区間違いで使う。
+        /// 素の向きは RunFacingProbe 実測 chest=52°/hips=69°（自作Rokokoは82°/103°）＝約30°ぶん
+        /// 開いた構えなので、<see cref="DuelCalibration.BatterYawDeg"/> をその差ぶん戻してある。
+        ///
+        /// 戻すときは、この定数と下の3つのアンカー・SwingMissPlane/SwingHitContact・
+        /// ClipFbxSources の Mixamo 行・DuelCalibration.Default の打撃フォーム秒（Grip*/Head*/Knee*）を
+        /// まとめて自作Rokoko値へ戻す。旧値はいずれも各行のコメントに残してある。
         /// </summary>
-        public const string BatterClipName = "Batter_Batting_01";
+        public const string BatterClipName = "Batter_Mixamo_Strike_01";
 
-        // 打者クリップ内の実測アンカー（RunClipSpeedProbe 0.05s刻み・右手速度 2026-07-27）:
-        // 0.0-1.7s=構え（ほぼ静止） / 1.7-2.8s=予備動作 / 2.85-3.15s=スイング（ピーク10.0m/s @3.05s） /
-        // 3.25s-=走り出し。待機は構え区間だけをループさせ、スイングは頭出しで呼ぶ。
-        private const float BatterIdleEnd = 1.70f;     // 待機ループの折り返し（ここから先を待機中に見せない）
-        private const float BatterSwingStart = 2.80f;  // ここから先が「振っている」区間（バット片手判定の許可域）
-        private const float BatterRunStart = 3.25f;    // 走り出し。ファール・空振りはここで打ち切って構えへ戻す
+        // 打者クリップ内の実測アンカー（RunClipSpeedProbe 0.05s刻み・右手速度 2026-07-30・len=6.93s）:
+        // 0.0-0.85s=構え（0.5m/s前後で静止） / 0.90-1.60s=スイング（ピーク6.1m/s @1.30s） /
+        // 1.60-2.60s=フォロー〜戻し / 2.60-6.30s=**ほぼ静止の間延び（使わない）** / 6.30s-=小さな動き。
+        // 走り出しは収録に無い（RunRootPathProbe: 全域で移動±0.25m以内＝その場で振るだけ）。
+        // 待機は構え区間だけをループさせ、スイングは頭出しで呼ぶ。
+        //
+        // 旧・自作Rokoko（Batter_Batting_01）の値: IdleEnd=1.70 / SwingStart=2.80 / RunStart=3.25
+        private const float BatterIdleEnd = 0.85f;     // 待機ループの折り返し（ここから先を待機中に見せない）
+        private const float BatterSwingStart = 0.90f;  // ここから先が「振っている」区間（バット片手判定の許可域）
+        private const float BatterRunStart = 2.60f;    // フォローの収まり。ファール・空振りはここで打ち切って構えへ戻す
+                                                       // （走り出しが無いので「間延びの手前」の意味になる）
 
         public RenderTexture Target { get; private set; }
 
@@ -969,8 +989,8 @@ namespace KokoSim.Unity.Match
         // 「速球はミットが閉じてから球が着く」ズレが球速差ぶん出る＝球の速さを絵で見せる目的と噛み合わない。
         // この定数は弾道が無い球（合成列・CaptureTimelines なしの試合）の既定値として残す。
         private const float BallFlightSeconds = 0.45f;
-        private const float SwingMissPlane = 3.05f;    // 自作打撃クリップ: 右手速度ピーク10.0m/s（2026-07-27実測）
-        private const float SwingHitContact = 3.05f;   // 同上。空振りとミートで収録が分かれていないため同値
+        private const float SwingMissPlane = 1.30f;    // Mixamo打撃クリップ: 右手速度ピーク6.1m/s（2026-07-30実測。旧Rokoko=3.05）
+        private const float SwingHitContact = 1.30f;   // 同上。空振りとミートで収録が分かれていないため同値
         private const float HbpReact = 1.3f;
         // 空振り後、振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・duelPitchIntervalSeconds=4.5sに余裕で収まる）
         private const float SwingMissHoldSeconds = 0.8f;
