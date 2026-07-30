@@ -119,10 +119,58 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 【開発用】振り抜き〜惰性のバット軸を実測する。出力はポーズ1コマごとの軸（ステージローカル）と、
+        /// 前のコマからの回転角[度]（バット軸・左手・胸）。
+        ///
+        /// **接触より前から順に掃くこと**。<c>SwingBatAxis</c> は接触のコマで巻き付きの起点を焼くので、
+        /// いきなり接触より後へ頭出しすると起点が焼かれず**構えの軸がそのまま**返る。返り値は
+        /// 「ワールドに固定されたバット」と見分けがつかない（どちらもコマ間で軸が完全一致する）ので、
+        /// 掃き始めを間違えると原因を取り違える（2026-07-31）。
+        /// </summary>
+        public static string ProbeFollow(float from, float to, bool miss = false)
+        {
+            var rig = new DuelStageRig();
+            if (!rig.Available) return "rig が組めない";
+            for (int i = 0; i < 90; i++) rig.Tick(1f / 60f);
+            rig.OnPitchWindup();
+            for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
+            // 空振りは接触の時刻（SwingMissPlane）も EndAt も違う＝惰性区間が最も長く映る結果
+            if (miss) rig.OnPitchReleased(0f, DuelPitchOutcome.SwingMiss);
+            else rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, RealBatted("フライ"));
+            var anim = rig.BatterAnimator;
+            var lh = anim != null ? anim.GetBoneTransform(HumanBodyBones.LeftHand) : null;
+            var ch = anim != null ? anim.GetBoneTransform(HumanBodyBones.Chest) : null;
+            // ポーズ1コマ[クリップ秒]。再生速度ぶん伸びる（Actor.Speed が Time と Evaluate の両方に掛かる）
+            float step = Mathf.Max(0.1f, DuelCalibration.Default.SwingSpeed) / DuelStageRig.PoseFps;
+            var sb = new System.Text.StringBuilder();
+            var prevAxis = Vector3.zero;
+            Quaternion prevLh = Quaternion.identity, prevCh = Quaternion.identity;
+            bool first = true;
+            for (float t = from; t <= to + 1e-4f; t += step)
+            {
+                rig.SeekBatter(t);
+                var ax = rig.BatAxisLocalForCapture;
+                bool gap = first || prevAxis.sqrMagnitude < 1e-6f || ax.sqrMagnitude < 1e-6f;
+                sb.Append("clip=").Append(t.ToString("F2"))
+                  .Append(" 軸=").Append(ax.ToString("F2"))
+                  .Append(" Δ軸=").Append(gap ? "-" : Vector3.Angle(prevAxis, ax).ToString("F1"))
+                  .Append(" Δ左手=").Append(first || lh == null ? "-" : Quaternion.Angle(prevLh, lh.rotation).ToString("F1"))
+                  .Append(" Δ胸=").Append(first || ch == null ? "-" : Quaternion.Angle(prevCh, ch.rotation).ToString("F1"))
+                  .Append('\n');
+                prevAxis = ax;
+                if (lh != null) prevLh = lh.rotation;
+                if (ch != null) prevCh = ch.rotation;
+                first = false;
+            }
+            rig.Dispose();
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// 【開発用】<see cref="ProbeSeek"/> と同じ条件のコマを**絵で**出す。窓の「真横から」と同じ
         /// 狙い方（腰の高さを中心に、投手線と直交する向きから2.1m四方）＝監督が見ている絵と同じ。
         /// </summary>
-        public static string ShootSeek(string csvTimes, int view)
+        public static string ShootSeek(string csvTimes, int view, bool miss = false)
         {
             Directory.CreateDirectory(Dir);
             var rig = new DuelStageRig();
@@ -131,7 +179,9 @@ namespace KokoSim.Unity.Match
             for (int i = 0; i < 90; i++) rig.Tick(1f / 60f);
             rig.OnPitchWindup();
             for (int i = 0; i < 6; i++) rig.Tick(1f / 60f);
-            rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, RealBatted("フライ"));
+            if (miss) rig.OnPitchReleased(0f, DuelPitchOutcome.SwingMiss);
+            else rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, RealBatted("フライ"));
+            string tag = miss ? "m" : "h";
             int n = 0;
             foreach (var part in csvTimes.Split(','))
             {
@@ -140,7 +190,7 @@ namespace KokoSim.Unity.Match
                 rig.SeekBatter(t);
                 Aim(rig, view);
                 rig.RenderNow();
-                Save(rig.Target, string.Format("seek-v{0}-{1:00}-c{2:F3}", view, n++, t));
+                Save(rig.Target, string.Format("seek-{0}{1}-{2:00}-c{3:F3}", tag, view, n++, t));
             }
             rig.Dispose();
             return "ok " + n + "枚";

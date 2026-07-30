@@ -483,7 +483,7 @@ namespace KokoSim.Unity.Match
         private const float MoundDistance = 18.44f;
         private const float MoundHeight = 0.254f;
         private const float TargetHeight = 1.75f;
-        private const float PoseFps = 12f;   // §4.2 確定（2026-07-26 監督判定）
+        internal const float PoseFps = 12f;   // §4.2 確定（2026-07-26 監督判定）
         private static readonly Vector3 StageOrigin = new(0f, -500f, 0f);
 
         private const string BodyFbx = "Assets/DuelSpike/UBC/SuperheroMale.fbx";
@@ -1488,6 +1488,7 @@ namespace KokoSim.Unity.Match
 #endif
             _swingAnchorClip = anchorClipSec;   // バット軌道（SwingBatAxis）の終点＝接触の時刻
             _batWrapValid = false;
+            _batRestValid = false;
             // 頭出しは「基準位置へ戻して0→seekをルートモーション込みで積分し直す」ので、
             // **クリップ頭からseekまでの水平移動がそのまま位置の差分として乗る**。待機ループ側は
             // 毎コマ x/z を基準位置へ戻している（StepActor）ので、振り始めた瞬間に打者がその差分ぶん
@@ -2975,44 +2976,50 @@ namespace KokoSim.Unity.Match
 
         private bool _batWrapValid;      // 接触時の軸と面の法線を焼いてあるか（振り抜きの起点）
         private Vector3 _batWrapFrom, _batWrapNormal;
+        private bool _batRestValid;      // 巻き付き終わりの姿勢を体の中へ焼いてあるか（④の起点）
+        private Vector3 _batRestLocalAxis;   // その姿勢の軸（胸ローカル）
 
         /// <summary>
         /// 打撃クリップ中のバットの向きを**自分で描く**（2026-07-31 監督指摘「バットの軌道がおかしい」）。
         ///
         /// 収録の手の回転はバット軸の情報を持っていない（実測: トップ→接触で 上向き0.69→真上0.99→
         /// 0.87→0.74→**接触の瞬間は捕手向き0.18**）。道具を持たない前提の振りなので当然で、
-        /// これに追従させる限り軌道にはならない。よって3区間を幾何で描く:
+        /// これに追従させる限り軌道にはならない。よって幾何で描く（当てにいく①〜③まで）:
         ///   ① トップ保持 … 構えで焼いた軸のまま（テイクバック。手が引かれるぶん平行移動するだけ）
         ///   ② 振り下ろし … トップ軸→打点へ向けた軸を Slerp。**大円＝1つの面内の回転**なので
         ///                   これがそのままスイング面になり、芯は単調に落ちる
         ///   ③ 振り抜き   … 接触時の軸から巻き付き軸（逆ヨー×仰角）へ回し続ける
+        ///   ④ 惰性       … 巻き付きの後は手の中で剛体（①〜③はワールドの向きなので、
+        ///                   式が定数になった瞬間バットが空間に釘付けになる）
         ///
         /// ②の終点を「実際の打点」に取るので、コース（高め/低め/内外角）に絵が自動で追従し、
         /// 接触の瞬間だけ別途IKで当てにいく必要が無くなる（旧 AimBatAtBall を吸収）。
         /// 空振りは打点でなく<see cref="BatMissSweepHeightM"/>の高さの本塁上を通す＝高め/低めの球は
         /// 自然に振り下／振り上げになる。
         /// </summary>
-        private Vector3 SwingBatAxis(Vector3 grip)
+        private Vector3 SwingBatAxis(Vector3 grip, Transform restFrame)
         {
             float t = _batter.Time;
             float contact = _swingAnchorClip;
             if (contact <= 0f) return _batHeldAxis;
             float frame = Mathf.Max(0.001f, _batter.Speed / PoseFps);   // ポーズ1コマ[クリップ秒]
 
+            // 狙点は**判定に使われた実着弾位置**（design-18 §4.5-③の掟）。
+            // 空振りは**判定面**（_ballFlight＝本塁上）の位置の下を通す。固定の高さで振ると
+            // 真ん中の球を空振りしたときバットが球に乗って「当たったのに空振り」に見える
+            var target = _ballT < 0f
+                ? new Vector3(0f, BatMissSweepHeightM, 0f)
+                : _batAimsBall
+                    ? BallPointAt(_ballArrival)
+                    : BallPointAt(_ballFlight) + Vector3.down * BatMissUnderM;
+            var toTarget = _root.transform.TransformPoint(target) - grip;
+            float dist = toTarget.magnitude;
+            var aim = dist > 1e-3f ? toTarget / dist : _batHeldAxis;
+            var lag = LagAxis(aim);
+
             if (t <= contact)
             {
-                // ② 振り下ろし。狙点は**判定に使われた実着弾位置**（design-18 §4.5-③の掟）
-                // 空振りは**判定面**（_ballFlight＝本塁上）の位置の下を通す。固定の高さで振ると
-                // 真ん中の球を空振りしたときバットが球に乗って「当たったのに空振り」に見える
-                var target = _ballT < 0f
-                    ? new Vector3(0f, BatMissSweepHeightM, 0f)
-                    : _batAimsBall
-                        ? BallPointAt(_ballArrival)
-                        : BallPointAt(_ballFlight) + Vector3.down * BatMissUnderM;
-                var toTarget = _root.transform.TransformPoint(target) - grip;
-                float dist = toTarget.magnitude;
-                var aim = dist > 1e-3f ? toTarget / dist : _batHeldAxis;
-
+                // ② 振り下ろし。
                 // 進みは2つの小さい方で決める:
                 //   ・コマ数 … 接触の瞬間に映るコマが必ず1.0に届くことを保証する（0.5コマ寄せ）
                 //   ・手の寄り … 収録の腕が動き出すまでバットも動かない（＝手より先に回らない）
@@ -3024,32 +3031,80 @@ namespace KokoSim.Unity.Match
                 float raw = Mathf.Min(uTime, uHand);
                 if (frames <= 0.5f) raw = 1f;   // 接触の瞬間に映るコマは必ず寄せ切る
                 float s = Smooth(Mathf.Clamp01(raw));
+                // 振り抜き（③）の起点＝**接触の軸と面**を毎コマ焼き直しておく。
+                // s が 1 に届いたコマでだけ焼く実装だと、**焼き損ねる結果がある**:
+                // ポーズは12fpsの格子なので、接触の直前半コマに格子が乗るかは
+                // 「頭出し位置と接触時刻の位相」次第で、乗らなければ ③ が起点を持たないまま
+                // 構えの軸を返し続ける。実測 2026-07-31（空振り・接触1.00）: clip 1.03 以降
+                // 軸が (-0.14,0.79,-0.60) に固まって最後まで1度も動かない＝監督が見た「固まったバット」。
+                // 起点は s に依らず幾何で決まる（s=1 の3次ベジエは厳密に aim）ので毎コマ焼いて構わない。
+                _batWrapFrom = aim;
+                // 面はタメ→打点で取る（トップ→打点だと遠回りの面になり、振り抜きが逆へ回る）
+                var n0 = Vector3.Cross(lag, aim);
+                _batWrapNormal = n0.sqrMagnitude > 1e-6f ? n0.normalized : Vector3.up;
+                _batWrapValid = true;
                 if (s <= 0.001f) return _batHeldAxis;   // ① トップ保持
 
                 // トップ→**タメ**→打点の3点で回す（最短の弧＝遠回りを避ける）。
                 // 制御点のタメを二重に置いた球面3次ベジエ（de Casteljau）＝端点は厳密に一致する
-                var lag = LagAxis(aim);
                 var b1 = Vector3.Slerp(Vector3.Slerp(_batHeldAxis, lag, s), lag, s);
                 var b2 = Vector3.Slerp(lag, Vector3.Slerp(lag, aim, s), s);
-                var swung = Vector3.Slerp(b1, b2, s).normalized;
-                if (s >= 0.999f && !_batWrapValid)
-                {
-                    // 振り抜きは「同じ面をさらに回す」＝接触時の軸と面の法線を焼いておく。
-                    // 巻き付き先を握り線（horiz）から作ると、フォロースルーで手が回るぶん
-                    // 1コマで軸が180°飛ぶ（実測 clip 1.30→1.42 でバレルが +x から -x へ）
-                    _batWrapFrom = swung;
-                    // 面はタメ→打点で取る（トップ→打点だと遠回りの面になり、振り抜きが逆へ回る）
-                    var n = Vector3.Cross(lag, aim);
-                    _batWrapNormal = n.sqrMagnitude > 1e-6f ? n.normalized : Vector3.up;
-                    _batWrapValid = true;
-                }
-                return swung;
+                return Vector3.Slerp(b1, b2, s).normalized;
             }
 
-            // ③ 振り抜き。接触時の軸を同じ面内でさらに回し続ける（起点も面も焼いてあるので暴れない）
-            if (!_batWrapValid) return _batHeldAxis;
-            float w = Smooth(Mathf.InverseLerp(contact, contact + BatSweepFrames * frame, t));
-            return (Quaternion.AngleAxis(BatWrapDeg * w, _batWrapNormal) * _batWrapFrom).normalized;
+            // ③ 振り抜き。接触時の軸を同じ面内でさらに回し続ける（起点も面も焼いてあるので暴れない）。
+            // ②のコマが1枚も無かったとき（頭出しが接触より後 等）だけ、ここで今の握りから焼く
+            if (!_batWrapValid)
+            {
+                _batWrapFrom = aim;
+                var n1 = Vector3.Cross(lag, aim);
+                _batWrapNormal = n1.sqrMagnitude > 1e-6f ? n1.normalized : Vector3.up;
+                _batWrapValid = true;
+            }
+            float wrapEnd = contact + BatSweepFrames * frame;
+            if (t < wrapEnd || restFrame == null)
+            {
+                float w = Smooth(Mathf.InverseLerp(contact, wrapEnd, t));
+                var ax = (Quaternion.AngleAxis(BatWrapDeg * w, _batWrapNormal) * _batWrapFrom).normalized;
+                // 巻き付きの間ずっと胸の中での向きを焼き直しておく＝④への受け渡しが連続になる
+                if (restFrame != null)
+                {
+                    _batRestLocalAxis = restFrame.InverseTransformDirection(ax);
+                    _batRestValid = true;
+                }
+                return ax;
+            }
+
+            // ④ 巻き付きの後は「**体**の中で剛体」へ渡す（2026-07-31 監督指摘の続き）。
+            // ①〜③はどれも**ワールドの向き**を組み立てているので、巻き付きが終わった時点で
+            // 式が定数になり、以後バットの向きがワールドに釘付けになる。位置は握りに追従するので、
+            // 体が回って走り出しても**バットだけ空間に固定されたまま平行移動する**（実測 2026-07-31:
+            // clip 1.30/1.60/1.90/2.20/2.50 で 芯−握り がビット一致 (-0.09,0.48,-0.37)）。
+            // 対決ビューで実際に映るのは 空振り=1.28〜2.60（0.94秒）／インプレー=1.28〜約1.84 なので、
+            // どの結果でも必ず目に入る区間。
+            //
+            // 焼き先は**手ではなく胸**。惰性区間だけは収録の手に預けてよさそうに見えるが、実測すると
+            // フォロースルーの左手は1コマ（12fps）で **175°→138°→79°** 回っており（前腕の回内。
+            // 道具を持たない前提の振りなので当然）、バットがそれを拾うと clip 1.38〜1.85 で
+            // **真下（y=-0.74〜-0.90）＝自分の足元**を向く。監督が見た症状そのもの。
+            // 同じ区間の胸は 46°→26°→9°→11° と桁が違い、これは振り切りで体が回り続けるぶん＝
+            // 実物のフォロースルー（バットが背中側に留まったまま体が回る）と同じ動き。
+            // ①〜③で収録の手の回転を使わなかったのと同じ理由が、惰性区間にもそのまま効く。
+            if (!_batRestValid) return (Quaternion.AngleAxis(BatWrapDeg, _batWrapNormal) * _batWrapFrom).normalized;
+            return restFrame.TransformDirection(_batRestLocalAxis).normalized;
+        }
+
+        /// <summary>
+        /// 惰性区間（SwingBatAxis ④）でバットの向きを預ける骨。胸→無ければ上胸→腰の順。
+        /// 素体によっては Chest が無い（オプション骨）ので必ず落とし先を用意する。
+        /// </summary>
+        private Transform RestFrameBone()
+        {
+            var a = _batter != null ? _batter.Animator : null;
+            if (a == null) return null;
+            return a.GetBoneTransform(HumanBodyBones.Chest)
+                ?? a.GetBoneTransform(HumanBodyBones.UpperChest)
+                ?? a.GetBoneTransform(HumanBodyBones.Hips);
         }
 
         /// <summary>握り→芯の長さ[m]。バットの原点は握り点から軸方向へ寄せてあるので2段の和になる。</summary>
@@ -3187,9 +3242,10 @@ namespace KokoSim.Unity.Match
                     _batHeldAxis = axis;
                     _batHeldValid = true;
                     _batWrapValid = false;   // 次のスイングへ巻き付きの起点を持ち越さない
+                    _batRestValid = false;
                 }
                 var grip = (lh + rh) * 0.5f;
-                if (!onIdleLoop && battingClip && _batHeldValid) axis = SwingBatAxis(grip);
+                if (!onIdleLoop && battingClip && _batHeldValid) axis = SwingBatAxis(grip, RestFrameBone());
                 // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。
                 // 傾きは握り点まわりの回転＝ノブは手に残るので離れない。持ち上げは平行移動なので
                 // その量だけバットが手から浮く（承知の上で使うつまみ）。掛ける窓は FixGrip と共有＝
@@ -4015,6 +4071,13 @@ namespace KokoSim.Unity.Match
                 + " 打点まで=" + Vector3.Distance(sweet, contact).ToString("F3") + "m"
                 + " 球まで=" + toBall + "m";
         }
+
+#if UNITY_EDITOR
+        /// <summary>【実測プローブ用】バット軸（ノブ→バレル）をステージローカルで返す（非表示なら0）。</summary>
+        internal Vector3 BatAxisLocalForCapture
+            => (_bat == null || _root == null || !_bat.activeSelf) ? Vector3.zero
+             : _root.transform.InverseTransformDirection((_bat.transform.rotation * Vector3.up).normalized);
+#endif
 
         internal string BatDiagForCapture()
         {
