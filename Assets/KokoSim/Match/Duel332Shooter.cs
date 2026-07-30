@@ -51,6 +51,8 @@ namespace KokoSim.Unity.Match
         private IEnumerator Pitch(string tag, float plateX, float plateY, float flight, float ivb,
             DuelPitchOutcome outcome)
         {
+            // 実機と同じ流れ: 構え（ここで球が手に入る）→振りかぶりを実時間で進める→発射
+            yield return Windup(tag);
             var f = new DuelPitchFlight(plateX, plateY, flight, ivb, 0f);
             _rig.OnPitchReleased(-1f, outcome, f);
             Debug.Log("[i332] === " + tag + " plate=(" + plateX.ToString("F2") + "," + plateY.ToString("F2")
@@ -58,8 +60,26 @@ namespace KokoSim.Unity.Match
             yield return Frames(tag, flight);
         }
 
+        /// <summary>構え→振りかぶりを実時間で進める。球が手に入っている様子も1枚残す（issue #332）。</summary>
+        private IEnumerator Windup(string tag)
+        {
+            _rig.OnPitchWindup();
+            float t = 0f;
+            while (t < DuelStageRig.WindupSeconds * 0.55f)
+            {
+                _rig.Tick(1f / 60f); t += 1f / 60f; yield return null;
+            }
+            Debug.Log("[i332] " + tag + " 振りかぶり中 " + _rig.BallDiagForCapture());
+            yield return Shot(tag + "-hold", Side);
+            while (t < DuelStageRig.WindupSeconds)
+            {
+                _rig.Tick(1f / 60f); t += 1f / 60f; yield return null;
+            }
+        }
+
         private IEnumerator PitchNoData(string tag)
         {
+            yield return Windup(tag);
             _rig.OnPitchReleased(-1f, DuelPitchOutcome.Take, null);
             Debug.Log("[i332] === " + tag + " (コースなし＝合成列) ===");
             yield return Frames(tag, 0.45f);

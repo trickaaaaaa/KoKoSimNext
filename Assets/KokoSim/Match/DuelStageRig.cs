@@ -129,8 +129,17 @@ namespace KokoSim.Unity.Match
         public float BatStanceElevDeg;  // 合成軸の構え仰角[度]（BatAxisFromGrip<1のときだけ効く）
         public float BatFollowElevDeg;  // 合成軸の振り抜き仰角[度]（同上）
         public float BatHandsApartM;    // これ以上手が離れたら片手追従へ移る[m]
+        // ---- ボールの出所（issue #332・2026-07-30）----
+        // ボールはリリースまで**投球する手の子**なので、位置は手ボーンローカルの微調整だけで足りる
+        // （基準は design-18 §3.3.1 の掟どおり「手の中心＝手首→中指付け根の中点」）。
+        public Vector3 BallInHandOffset;   // 手の中心からのオフセット[m]（手ボーンローカル）
+        // 発射する瞬間のクリップ内秒。**アンカーの ReleaseTime(3.05) とは別物**: 3.05 は捕球・ミート・
+        // コールの逆算基準として調整済み（#331/#335）だが、投球クリップの手はそこでは既に振り下ろし後で
+        // 高さ1.0mまで落ちている。手の速度ピーク（＝実際に球が離れる瞬間）は実測 clipT=2.95〜3.00 で
+        // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
+        public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 8;
+        private const int CurrentVersion = 9;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -191,6 +200,9 @@ namespace KokoSim.Unity.Match
             BatStanceElevDeg = 35.7f,
             BatFollowElevDeg = 32.4f,
             BatHandsApartM = 0.246f,
+            // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
+            BallInHandOffset = Vector3.zero,
+            BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
         };
 
         /// <summary>
@@ -266,6 +278,11 @@ namespace KokoSim.Unity.Match
                 c.GripFingerCurlTop = d.GripFingerCurlTop;
                 c.GripForearmRollDeg = d.GripForearmRollDeg;
                 c.GripForearmRollDegTop = d.GripForearmRollDegTop;
+            }
+            if (c.Version < 9)   // v9: ボールの出所（手の中の位置・発射する瞬間のクリップ時刻）
+            {
+                c.BallInHandOffset = d.BallInHandOffset;
+                c.BallReleaseClipTime = d.BallReleaseClipTime;
             }
             c.Version = CurrentVersion;
             return c;
@@ -517,14 +534,25 @@ namespace KokoSim.Unity.Match
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
         private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _catchClip, _umpireStrikeClip;
 
-        // 飛翔中のボール（issue #332・design-18 §4.5-②「ボールとカメラはフルレート維持」）。
-        // キャラのポーズは12fpsコマ打ちだが、この球だけは Tick の毎フレームで進める
+        // ボール（issue #332・design-18 §4.5-②「ボールとカメラはフルレート維持」）。
+        //
+        // 状態は2つ:
+        //  ①**手に貼り付け**（振りかぶり〜発射）= 投球する手ボーンの子。手がどこへ動いても球は手の中
+        //  ②**飛翔**（発射〜到達）= ステージの子。Tick の毎フレームで進める（12fps量子化の対象外）
+        // ①にしているのは、リリース点を毎回実測して置く方式だと出所が合わなかったため（2026-07-30）:
+        //   ・アンカーの ReleaseTime(3.05) は手が既に振り下ろされた後（高さ1.0m・実測）で腰から球が出た
+        //   ・SeekActor は「ポーズだけ合わせ位置は据え置く」（#335）ので、リリース瞬間だけ手のz座標が
+        //     0.55m前へワープし、次の12fpsコマで戻る＝置いた点と絵の手が食い違う
+        // 手の子にすれば、どちらも構造的に起きない（グラブ・バットと同じ実績パターン）
         private GameObject _ball;
-        private Vector3 _ballRelease;      // リリース点（ステージローカル）
+        private Transform _ballHand;       // 貼り付け先（投球する手ボーン）。null=まだ解決していない
+        private Vector3 _ballHeldLocal;    // 手ボーンローカルでの球の位置（手の中心＋つまみ）
+        private bool _ballHeld;            // 手に貼り付いているか
+        private Vector3 _ballRelease;      // 発射点（ステージローカル・飛翔の弦の始点）
         private Vector2 _ballPlate;        // 本塁面の実着弾位置（x=左右, y=高さ）
         private float _ballFlight;         // この球の飛翔時間[s]
         private float _ballIvb, _ballIhb;  // 誘発縦/横変化[m]（弾道なしは0＝素の垂れだけ）
-        private float _ballT = -1f;        // リリースからの経過[s]。負=飛んでいない
+        private float _ballT = -1f;        // 発射からの経過[s]。負=飛んでいない
 
         private sealed class Actor
         {
@@ -807,6 +835,8 @@ namespace KokoSim.Unity.Match
             if (_cHelmetMount != null) _cHelmetMount.localPosition = cal.CatcherHelmetOffset;
             if (_cMaskMount != null) _cMaskMount.localPosition = cal.CatcherMaskOffset;
             if (_cChestMount != null) _cChestMount.localPosition = cal.CatcherChestOffset;
+            // 手の中の球はスライダを動かした瞬間に動かす（貼り付け中だけ＝飛翔中は触らない）
+            if (_ballHeld) HoldBallInHand();
         }
 
         /// <summary>
@@ -908,6 +938,7 @@ namespace KokoSim.Unity.Match
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
             _umpireCallCountdown = -1f;
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
+            HoldBallInHand();   // 振りかぶりから球を手に持たせる（issue #332）
         }
 
         // 結果分岐のアンカー（スイングはType02をRunClipSpeedProbeで実測 2026-07-27。値はクリップ内秒）:
@@ -966,6 +997,20 @@ namespace KokoSim.Unity.Match
             // （リリース近傍は1コマ20〜40°回る）取りこぼし、フォロースルーの向きが球ごとに
             // 40°ばらつく（実測: 1球目 -107° / 2球目 -148°）。向きは Seek の値をそのまま使う。
             var keepPos = _pitcher.Go.transform.localPosition;
+            // 先に**発射時刻**の姿勢へ送って球の出所を採る（アンカーの ReleaseTime では手が振り下ろされた後）。
+            // Seek は BasePos から積分し直す決定論なので、続けてアンカー時刻へ送り直せば姿勢は同じに揃う。
+            //
+            // 帰結として、発射直後のコマは「球=発射時刻(2.97)の手の位置／投手=アンカー時刻(3.05)の姿勢」＝
+            // 80ms ぶん投手のポーズが先行する。これは承知の上でこうしている:
+            //   ・発射点をアンカー時刻の手にすると腰の高さ（実測1.00m）から球が出て「下手投げ」に見える
+            //   ・アンカーの ReleaseTime 自体は捕球・ミート・コールの逆算基準として調整済み（#331/#335）で動かせない
+            //   ・80ms は12fpsコマ打ちの1コマ弱＝投手のポーズはどちらにしても振り下ろし後になる
+            // 好みの追い込みは BallReleaseClipTime のつまみ（キャリブレーション窓）で行う
+            SeekActor(_pitcher, _cal.BallReleaseClipTime);
+            _pitcher.Go.transform.localPosition = keepPos;
+            GroundFix(_pitcher);
+            float flight = LaunchBall(pitch);
+
             SeekActor(_pitcher, ReleaseTime);
             _pitcher.Go.transform.localPosition = keepPos;
             GroundFix(_pitcher);
@@ -981,9 +1026,6 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
-            // ボールを放つ（issue #332）。リリース点は投手クリップをリリース時刻へ送った**後**の
-            // 投球側の手＝この瞬間の実測位置。ミラー中も骨のワールド位置は鏡映済みなので符号操作は不要
-            float flight = LaunchBall(pitch);
             ScheduleReactions(outcome, nextReleaseIn, flight);
         }
 
@@ -1030,7 +1072,36 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// ボールを放ち、この球の飛翔時間[s]を返す（アンカー逆算に使う。issue #332）。
+        /// ボールを投球する手へ貼り付ける（振りかぶり中は手の中にある）。<see cref="OnPitchWindup"/> から呼ぶ。
+        ///
+        /// 位置は design-18 §3.3.1 の掟どおり**手の中心＝手首→中指付け根の中点**を基準にし、
+        /// 較正のオフセット（<see cref="DuelCalibration.BallInHandOffset"/>）を手ボーンローカルで足す。
+        /// 手ボーンローカルで持つので、以後は手がどう動いても球は手の中に留まる。
+        /// </summary>
+        private void HoldBallInHand()
+        {
+            if (_ball == null || _pitcher == null || _pitcher.Animator == null) return;
+            var hand = _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            if (hand == null) return;
+            var tip = _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            // 手の中心（ワールド）→ 手ボーンローカル。指の付け根方向はボーンローカルでは動かないので
+            // 1回求めれば以後のポーズでも手の中を指し続ける
+            var centerWorld = tip != null ? Vector3.Lerp(hand.position, tip.position, 0.5f) : hand.position;
+            _ballHand = hand;
+            _ballHeldLocal = hand.InverseTransformPoint(centerWorld) + _cal.BallInHandOffset;
+            _ballHeld = true;
+            _ballT = -1f;
+            _ball.transform.SetParent(hand, false);
+            _ball.transform.localPosition = _ballHeldLocal;
+            _ball.SetActive(true);
+        }
+
+        /// <summary>
+        /// ボールを手から放ち、この球の飛翔時間[s]を返す（アンカー逆算に使う。issue #332）。
+        ///
+        /// 発射点は**発射する瞬間のクリップ時刻**（<see cref="DuelCalibration.BallReleaseClipTime"/>＝手の
+        /// 速度ピーク実測）における手の中の球位置。アンカーの <see cref="ReleaseTime"/> で採ると
+        /// 手が既に振り下ろされていて腰から球が出る（2026-07-30 実測）。
         ///
         /// 到達点は**判定に使われた実着弾位置**（<c>PitchRecord.LocationX/Y</c> の写し）。engine の場と
         /// 対決ビューのステージは左右の符号が同じ（+x=一塁側=左打者側）なのでそのまま使う。
@@ -1052,6 +1123,8 @@ namespace KokoSim.Unity.Match
             _ballIhb = pitch?.InducedHorizontalBreakM ?? 0f;
             _ballFlight = flight;
             _ballT = 0f;
+            _ballHeld = false;
+            _ball.transform.SetParent(_root.transform, false);   // 手から離す＝以後フルレートで飛ぶ
             _ball.SetActive(true);
             UpdateBall(0f);
             return flight;
@@ -1061,27 +1134,29 @@ namespace KokoSim.Unity.Match
         private const float DefaultPlateY = 0.775f;
 
         /// <summary>
-        /// リリース点（ステージローカル）。投球側の手ボーンの実測位置を使う。
-        /// 手ボーン＝手首なので、指先側へ少し出した位置がボールの離れる点に近い。
+        /// 発射点（ステージローカル）＝発射する瞬間のクリップ時刻における「手の中の球」の位置。
+        /// 投手を一時的にその時刻へ送って実測し、呼び元がアンカー時刻へ送り直す前提。
+        /// 手が取れない場合だけ一般的なリリース高へ落とす。
         /// </summary>
         private Vector3 ReleasePointLocal()
         {
-            var fallback = new Vector3(0f, 1.85f, MoundDistance - 1.7f);   // 手が取れない時: 一般的なリリース高＋エクステンション
-            if (_pitcher == null || _pitcher.Animator == null) return fallback;
-            var hand = _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            var fallback = new Vector3(0f, 1.85f, MoundDistance - 1.7f);
+            if (_pitcher == null || _pitcher.Animator == null || _ball == null) return fallback;
+            var hand = _ballHand ?? _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightHand);
             if (hand == null) return fallback;
-            var tip = _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
-            var world = tip != null ? Vector3.LerpUnclamped(hand.position, tip.position, 1.5f) : hand.position;
+            // 貼り付け中ならその球の実位置がそのまま発射点（手の中から出る＝出所が構造的に一致）
+            var world = _ballHeld ? _ball.transform.position : hand.TransformPoint(_ballHeldLocal);
             return _root.transform.InverseTransformPoint(world);
         }
 
         /// <summary>
         /// 飛翔中の球を進める。**フルレート**（12fps量子化の対象外。design-18 §4.5-②）。
         /// 到達したら消す＝捕手のミット・バットとの重なりを絵で見せた直後に畳む。
+        /// 手に貼り付いている間は何もしない（位置は親の手が運ぶ）。
         /// </summary>
         private void UpdateBall(float deltaTime)
         {
-            if (_ball == null || _ballT < 0f) return;
+            if (_ball == null || _ballHeld || _ballT < 0f) return;
             _ballT += deltaTime;
             if (_ballT > _ballFlight + BallLingerSeconds)
             {
@@ -1098,11 +1173,33 @@ namespace KokoSim.Unity.Match
         /// <summary>到達後も球を置いておく秒数。捕球・ミートの瞬間を1コマ以上（12fps=83ms）見せるため。</summary>
         private const float BallLingerSeconds = 0.10f;
 
+        /// <summary>
+        /// 【開発ツール用】投手を**発射する瞬間の姿勢で静止**させ、球を手に持たせる（issue #332 の出所合わせ）。
+        /// 動いている絵で位置を合わせるのは無理なので、止めた状態で <see cref="BallDiagForCapture"/> の
+        /// 数値を見ながらスライダを回す＝スクショ往復が要らない。
+        /// </summary>
+        public void PoseAtBallRelease()
+        {
+            if (!Available || _pitcher == null) return;
+            CancelFade(_pitcher);
+            _cutCountdown = -1f;
+            _umpireCallCountdown = -1f;
+            SeekActor(_pitcher, _cal.BallReleaseClipTime);
+            GroundFix(_pitcher);
+            _pitcher.Holding = true;   // Tick で進めない（StepActor が Holding で降りる）
+            HoldBallInHand();
+        }
+
         /// <summary>飛翔を打ち切って球を隠す（俯瞰へ切り替わる時＝盤面側が球を描くので二重に見えない。#330）。</summary>
         public void HideBall()
         {
             _ballT = -1f;
-            if (_ball != null) _ball.SetActive(false);
+            _ballHeld = false;
+            if (_ball != null)
+            {
+                _ball.transform.SetParent(_root.transform, false);
+                _ball.SetActive(false);
+            }
         }
 
         /// <summary>一発物クリップへ差し替えて頭出しする（終了後は Actor.IdleClip へ自動復帰）。</summary>
@@ -2602,11 +2699,28 @@ namespace KokoSim.Unity.Match
         /// 飛翔中の球の実測（issue #332）。絵ではカメラの狙い外しと配管ミス（符号違い・単位違い）が
         /// 区別できないので、位置と捕手ミット・打者の頭との距離を数値で残す。
         /// </summary>
-        internal string BallDiagForCapture()
+        /// <summary>
+        /// 【開発ツール用】ボールの実測。キャリブレーション窓が毎フレーム表示する＝スライダを動かしながら
+        /// 数値を0へ寄せられる（絵を撮らずに合わせる）。Editorアセンブリから呼ぶので public。
+        /// </summary>
+        public string BallDiagForCapture()
         {
             if (_ball == null) return "ball=なし";
-            if (_ballT < 0f || !_ball.activeSelf)
-                return "ball=非表示 (t=" + _ballT.ToString("F3") + ")";
+            if (!_ball.activeSelf) return "ball=非表示";
+            // 貼り付け中は「投球する手の中心からのずれ」が知りたい値（これを0に寄せる）
+            if (_ballHeld)
+            {
+                var hand = _ballHand;
+                var tip = _pitcher != null && _pitcher.Animator != null
+                    ? _pitcher.Animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal) : null;
+                if (hand == null) return "ball=手に貼り付け（手ボーン未解決）";
+                var center = tip != null ? Vector3.Lerp(hand.position, tip.position, 0.5f) : hand.position;
+                return "ball=手に貼り付け 手の中心からのずれ="
+                    + Vector3.Distance(_ball.transform.position, center).ToString("F4") + "m"
+                    + " 手首から=" + Vector3.Distance(_ball.transform.position, hand.position).ToString("F4") + "m"
+                    + " 球の高さ=" + _root.transform.InverseTransformPoint(_ball.transform.position).y.ToString("F3") + "m";
+            }
+            if (_ballT < 0f) return "ball=停止";
             var p = _ball.transform.localPosition;
             string mitt = "-", head = "-";
             var mittT = _catcher != null && _catcher.Animator != null

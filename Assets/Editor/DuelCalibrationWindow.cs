@@ -102,6 +102,25 @@ namespace KokoSim.EditorTools
             DuelFormGui.DrawSwingButtons(rigOn ? live : null);
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("ボールの出所（issue #332）", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "　球はリリースまで投球する手の子＝出所は構造的に一致する。ここは手の中の微調整だけ",
+                EditorStyles.miniLabel);
+            // 発射時刻は「手の速度ピーク」＝実測2.95〜3.00（高さ1.52m）。アンカーのReleaseTime(3.05)とは別物で、
+            // 3.05は手が振り下ろされた後（高さ1.00m）＝そこから出すと腰から球が出る
+            _cal.BallReleaseClipTime = EditorGUILayout.Slider(
+                "発射する瞬間 [クリップ秒]", _cal.BallReleaseClipTime, 2.70f, 3.20f);
+            _cal.BallInHandOffset.x = EditorGUILayout.Slider("手の中 左右X", _cal.BallInHandOffset.x, -0.10f, 0.10f);
+            _cal.BallInHandOffset.y = EditorGUILayout.Slider("手の中 上下Y", _cal.BallInHandOffset.y, -0.10f, 0.10f);
+            _cal.BallInHandOffset.z = EditorGUILayout.Slider("手の中 前後Z", _cal.BallInHandOffset.z, -0.10f, 0.10f);
+            using (new EditorGUI.DisabledScope(!rigOn))
+            {
+                if (GUILayout.Button("発射の瞬間で静止（この姿勢で合わせる）")) live.PoseAtBallRelease();
+            }
+            // 実測をそのまま出す＝絵を撮らずに数値を0へ寄せられる（狙い外しと配管ミスは絵では区別できない）
+            EditorGUILayout.LabelField(rigOn ? live.BallDiagForCapture() : "rig未接続", EditorStyles.miniLabel);
+
+            EditorGUILayout.Space();
             EditorGUILayout.LabelField("空・ライト", EditorStyles.boldLabel);
             _cal.Sky = EditorGUILayout.ColorField("空色", _cal.Sky);
             _cal.Ambient = EditorGUILayout.Slider("環境光の下限", _cal.Ambient, 0f, 1f);
