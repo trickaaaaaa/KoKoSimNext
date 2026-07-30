@@ -1,0 +1,157 @@
+#if UNITY_EDITOR
+using System.Collections;
+using System.IO;
+using UnityEngine;
+
+namespace KokoSim.Unity.Match
+{
+    /// <summary>
+    /// 【開発用・エディタ限定】接触後の打球（＝俯瞰へ渡るまでの一瞬）を**試合の構図のまま**コマ送りで撮る。
+    ///
+    /// 見たいのは「フライかな？ゴロかな？」が読めるかどうかなので、カメラは確定構図（R-comp60）のまま。
+    /// 寄りや真横で撮ると実際にプレイヤーが見る絵と違う結論になる（design-18 §7-1 / DuelSwingStripShooter と同じ理由）。
+    ///
+    /// 打球は engine の <c>PlaybackSamples</c>（俯瞰モックの実データ）から採る＝自作の弾道で追い込まない。
+    /// 出力: screenshots/batted-{fly|grd}-{通し番号}-t{接触からの秒}.png
+    /// </summary>
+    public sealed class DuelBattedShooter : MonoBehaviour
+    {
+        private const string Dir = "screenshots";
+        private const int W = 1440;
+        private const int H = 810;   // 16:9＝確定構図の縦横比
+
+        private const string SpawnFlag = "KokoSim.DuelBattedShooter.Spawn";
+
+        /// <summary>接触（＝球の到達）までの秒数。コースを渡さない球は既定の飛翔時間で飛ぶ。</summary>
+        private const float ContactSec = 0.45f;
+
+        private static readonly float[] Marks =
+            { 0.00f, 0.03f, 0.06f, 0.10f, 0.15f, 0.20f, 0.28f, 0.40f, 0.55f };
+
+        private DuelStageRig _rig;
+
+        /// <summary>
+        /// 太さ・濃さの比較用。<see cref="DuelStageRig.CalibrationOverride"/> は static なので
+        /// **Play入りのドメインリロードで消える**（0.09と0.045で絵が完全に同一になり気づいた。2026-07-31）。
+        /// リロードを跨ぐ EditorPrefs で渡す。負なら既定のまま。
+        /// </summary>
+        private const string WidthKey = "KokoSim.DuelBattedShooter.WidthM";
+        private const string AlphaKey = "KokoSim.DuelBattedShooter.Alpha";
+
+        public static void Arm(float widthM = -1f, float alpha = -1f)
+        {
+            UnityEditor.EditorPrefs.SetFloat(WidthKey, widthM);
+            UnityEditor.EditorPrefs.SetFloat(AlphaKey, alpha);
+            UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void AutoSpawn()
+        {
+            if (!UnityEditor.EditorPrefs.GetBool(SpawnFlag, false)) return;
+            UnityEditor.EditorPrefs.SetBool(SpawnFlag, false);
+            new GameObject("~DuelBattedAuto").AddComponent<DuelBattedShooter>();
+        }
+
+        private IEnumerator Start()
+        {
+            Application.runInBackground = true;
+            Directory.CreateDirectory(Dir);
+
+            float w = UnityEditor.EditorPrefs.GetFloat(WidthKey, -1f);
+            float a = UnityEditor.EditorPrefs.GetFloat(AlphaKey, -1f);
+            if (w > 0f || a > 0f)
+            {
+                var cal = DuelCalibration.Default;
+                if (w > 0f) cal.BattedTrailWidthM = w;
+                if (a > 0f) cal.BattedTrailAlpha = a;
+                DuelStageRig.CalibrationOverride = cal;
+                Debug.Log("[Batted] 太さ=" + cal.BattedTrailWidthM + "m 濃さ=" + cal.BattedTrailAlpha);
+            }
+
+            _rig = new DuelStageRig();
+            if (!_rig.Available) { Debug.LogError("[Batted] rig が組めない"); yield break; }
+            _rig.EnsureSize(W, H);
+            for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
+
+            yield return Shoot("fly", RealBatted("フライ"));
+            yield return Shoot("grd", RealBatted("ゴロ"));
+            Debug.Log("[Batted] DONE");
+        }
+
+        private IEnumerator Shoot(string prefix,
+            KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment seg)
+        {
+            if (seg == null) { Debug.LogError("[Batted] 打球が見つからない: " + prefix); yield break; }
+
+            _rig.OnPitchWindup();
+            for (int i = 0; i < 4; i++) { _rig.Tick(1f / 60f); yield return null; }
+            _rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, seg);
+
+            float t = 0f;
+            for (int f = 0; f < Marks.Length; f++)
+            {
+                float mark = ContactSec + Marks[f];
+                while (t < mark) { _rig.Tick(1f / 60f); t += 1f / 60f; yield return null; }
+                Debug.Log(string.Format("[Batted] {0} f={1:00} t={2:F2} {3}",
+                    prefix, f, Marks[f], _rig.BattedDiagForCapture()));
+                yield return Capture(string.Format("batted-{0}-{1:00}-t{2:F2}", prefix, f, Marks[f]));
+            }
+            _rig.HideBall();
+            for (int i = 0; i < 30; i++) { _rig.Tick(1f / 60f); yield return null; }
+        }
+
+        /// <summary>
+        /// **実試合を1つ回して**その打球セグメントを採る。<c>PlaybackSamples</c>（俯瞰モックの見本）は
+        /// ArcSegment/RollSegment で、実データの <c>EndpointBallSegment</c> とは高さプロファイルが違う
+        /// （見本は打点1.0mから始まり、実データは h(0)=0 から4A·u(1−u)で立ち上がる）。
+        /// 打点合わせの補正はまさにその差を吸収する所なので、見本で確かめると本番を確かめたことにならない。
+        /// </summary>
+        private static KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment RealBatted(string resultContains)
+        {
+            var rng = new KokoSim.Engine.Core.Xoshiro256Random(20260731UL);
+            var away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(58, "撮影A", rng);
+            var home = KokoSim.Engine.Nation.StrengthTeamFactory.Create(58, "撮影B",
+                new KokoSim.Engine.Core.Xoshiro256Random(20260731UL ^ 0xABCDUL));
+            var ctx = new KokoSim.Engine.Match.Game.GameContext { CaptureTimelines = true };
+            var prog = new KokoSim.Engine.Match.Timeline.Playback.MatchProgression(away, home, ctx, 20260731UL);
+            int guard = 0;
+            while (guard++ < 400 && prog.Advance())
+            {
+                var pa = prog.Current;
+                var play = pa?.Play;
+                if (play == null || play.Result == null || !play.Result.Contains(resultContains)) continue;
+                foreach (var s in play.Ball)
+                {
+                    if (s is KokoSim.Engine.Match.Timeline.Playback.PitchSegment) continue;
+                    if (s is KokoSim.Engine.Match.Timeline.Playback.EndpointBallSegment eb
+                        && eb.Kind == KokoSim.Engine.Match.Timeline.BallSegmentKind.Pitch) continue;
+                    Debug.Log("[Batted] 採用: " + play.Result + " 種別="
+                        + (s as KokoSim.Engine.Match.Timeline.Playback.EndpointBallSegment)?.Kind
+                        + " 長さ=" + (s.T1 - s.T0).ToString("F2") + "s");
+                    return s;
+                }
+            }
+            return null;
+        }
+
+        private void OnDisable()
+        {
+            if (_rig != null) { _rig.Dispose(); _rig = null; }
+        }
+
+        private IEnumerator Capture(string name)
+        {
+            yield return new WaitForEndOfFrame();
+            var tex = new Texture2D(W, H, TextureFormat.RGBA32, false);
+            var prev = RenderTexture.active;
+            RenderTexture.active = _rig.Target;
+            tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+            tex.Apply();
+            RenderTexture.active = prev;
+            File.WriteAllBytes(Path.Combine(Dir, name + ".png"), tex.EncodeToPNG());
+            Destroy(tex);
+        }
+    }
+}
+#endif

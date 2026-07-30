@@ -895,7 +895,12 @@ namespace KokoSim.Unity.Match
         // タイムライン自身の T1 から取り、エンジンの ContactAt 定数は複製しない（単一ソース）。
         // キャプションは実況キャプション列から接触直後の1件を拾う＝「ピッチャー、投げた」から
         // 始まらず、打った/ファウルの実況から出る。
-        private static double ContactMomentOf(PlaybackPlay play)
+        /// <param name="shownSeconds">
+        /// 対決ビューが接触後に打球を見せていた秒数（見せていなければ負）。俯瞰はその**続き**から
+        /// 始める＝同じ0.5秒を二度描かない。キャプションは <c>CaptionAt</c> が「t以前の最後の1件」を
+        /// 拾うので、飛ばした先でも「打った」の実況から出る（2026-07-31）。
+        /// </param>
+        private static double ContactMomentOf(PlaybackPlay play, double shownSeconds = -1)
         {
             if (play == null || play.Ball.Count == 0) return 0;
             var head = play.Ball[0];
@@ -906,7 +911,8 @@ namespace KokoSim.Unity.Match
             double? nextCaption = null;
             foreach (var cap in play.Caps)
                 if (cap.T > t && (!nextCaption.HasValue || cap.T < nextCaption.Value)) nextCaption = cap.T;
-            return nextCaption ?? t;
+            var start = nextCaption ?? t;
+            return shownSeconds > 0 ? System.Math.Max(start, t + shownSeconds) : start;
         }
 
         // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
@@ -939,7 +945,8 @@ namespace KokoSim.Unity.Match
                     KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch => DuelPitchOutcome.HitByPitch,
                     _ => DuelPitchOutcome.Take,
                 };
-                _duelRig.OnPitchReleased(index < last ? duelPitchIntervalSeconds : -1f, outcome, FlightOf(pt));
+                _duelRig.OnPitchReleased(index < last ? duelPitchIntervalSeconds : -1f, outcome,
+                    FlightOf(pt), BattedOf(pt, index == last));
             }
         }
 
@@ -959,6 +966,31 @@ namespace KokoSim.Unity.Match
                 (float)(tr?.InducedHorizontalBreakM ?? 0.0));
         }
 
+        /// <summary>
+        /// この1球の打球を対決ビューへ渡す（2026-07-31）。渡すのは**俯瞰がこの後すぐ描くのと同じ
+        /// セグメント**＝行き先が2つの絵で食い違わない（打球の物理は engine が単一ソース）。
+        /// インプレー（打席を終わらせる最後の1球）とファウル打球の両方が対象。
+        /// </summary>
+        private KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment BattedOf(
+            KokoSim.Engine.Match.Timeline.Playback.PitchToken pt, bool isLast)
+        {
+            var play = pt.Kind switch
+            {
+                KokoSim.Engine.Match.AtBat.PitchKind.Foul => pt.FoulFlight,
+                KokoSim.Engine.Match.AtBat.PitchKind.InPlay => isLast ? _current.Play : null,
+                _ => null,
+            };
+            if (play == null) return null;
+            // 打球タイムラインの先頭は必ず投球セグメント（TimelineBuilder）。その次が打球
+            foreach (var s in play.Ball)
+            {
+                if (s is PitchSegment) continue;
+                if (s is EndpointBallSegment eb && eb.Kind == BallSegmentKind.Pitch) continue;
+                return s;
+            }
+            return null;
+        }
+
         // 投球フェーズ終了→打球再生（Play あり）または結果保持（三振・四球）。
         private void EnterBattedBallOrHold()
         {
@@ -968,11 +1000,14 @@ namespace KokoSim.Unity.Match
             if (_current.Play != null)
             {
                 var wasDuelOn = _duelOn;
+                // 対決ビューが打球を見せていた秒数は SetDuelViewAuto(false)→HideBall で消えるので先に採る
+                var shown = wasDuelOn ? (_duelRig?.BattedElapsedSeconds ?? -1f) : -1f;
                 SetDuelViewAuto(false);   // インプレー打球は打った瞬間から俯瞰で行方を見せる（issue #312）
                 _view.SetPlay(_current.Play);
                 // 対決ビューから来た場合は投球が二重に見えないよう接触の瞬間から再生する（issue #330）。
+                // さらに対決ビューで打球を見せたぶんは飛ばす（同じ0.5秒を二度描かない。2026-07-31）。
                 // 俯瞰固定（手動OFF）中は対決ビュー側で1球も見せていないので、従来どおり投球から流す。
-                if (wasDuelOn) _t = ContactMomentOf(_current.Play);
+                if (wasDuelOn) _t = ContactMomentOf(_current.Play, shown);
                 RenderReplayFrame();
             }
             else
@@ -1060,13 +1095,15 @@ namespace KokoSim.Unity.Match
                         // ファウルでも打球は飛ぶので、打った瞬間から俯瞰へ切り替えて行方を見せる（issue #313）。
                         // 復帰（対決ビューへ）は打球が地面へ着いてから＝次の1球のワインドアップに合わせる。
                         var wasDuelOn = _duelOn;
+                        var shownFoul = wasDuelOn ? (_duelRig?.BattedElapsedSeconds ?? -1f) : -1f;
                         SetDuelViewAuto(false);
                         _view.SetPlay(_pendingFoulFlight);
                         _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
                         _pitchBallVisible = true;
                         // 対決ビューから来た場合は接触の瞬間から（投球セグメントの二重表示を避ける,
-                        // issue #330）。俯瞰固定中は対決ビュー側で見せていないので投球から流す。
-                        _pitchClock = wasDuelOn ? (float)ContactMomentOf(_pendingFoulFlight) : 0f;
+                        // issue #330）＋対決ビューで見せた打球のぶんは飛ばす。
+                        // 俯瞰固定中は対決ビュー側で見せていないので投球から流す。
+                        _pitchClock = wasDuelOn ? (float)ContactMomentOf(_pendingFoulFlight, shownFoul) : 0f;
                         _view.SetTime(_pitchClock);
                         _pendingFoulFlight = null;
                     }

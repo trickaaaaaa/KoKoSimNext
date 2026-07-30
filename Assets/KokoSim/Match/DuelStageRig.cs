@@ -166,6 +166,15 @@ namespace KokoSim.Unity.Match
         public float ZoneLineAlpha;   // 枠の濃さ
         public float ZoneFillAlpha;   // 面の濃さ（0=枠だけ）
         public float ZoneLineM;       // 枠の太さ[m]（実寸＝遠近でちゃんと細くなる）
+        // ---- 打球の行方を一瞬だけ見せる（2026-07-31 監督要望「フライかな？ゴロかな？」）----
+        // 確定構図（FOV 2.9°）は本塁のところで幅7.0m×高5.3mしかなく、打球は0.10〜0.22秒で枠外へ抜ける
+        // （実測: センターフライ0.13s / ライナー0.22s / ゴロ0.21s）。球だけだと3〜13コマで消えて何も読めない
+        // ので、残像の線で「打ち出しの角度と速さ」を残す。画角には触らない（C案採用）
+        public float BattedShow;          // 0=出さない / 1=出す
+        public float BattedTrailSeconds;  // 尾の長さ[秒]（球が抜けた後もこの秒数だけ線が残る）
+        public float BattedTrailWidthM;   // 頭の太さ[m]（実寸＝遠近で細くなる。尾へ向けて0まで絞る）
+        public Color BattedTrailColor;    // 線の色
+        public float BattedTrailAlpha;    // 頭の濃さ（尾へ向けて0まで抜く）
         // ---- ボールの出所（issue #332・2026-07-30）----
         // ボールはリリースまで**投球する手の子**なので、位置は手ボーンローカルの微調整だけで足りる
         // （基準は design-18 §3.3.1 の掟どおり「手の中心＝手首→中指付け根の中点」）。
@@ -176,7 +185,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 15;
+        private const int CurrentVersion = 16;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -285,6 +294,15 @@ namespace KokoSim.Unity.Match
             ZoneLineAlpha = 0.22f,
             ZoneFillAlpha = 0.05f,
             ZoneLineM = 0.012f,
+            BattedShow = 1f,
+            // 尾は「接触から俯瞰へ渡るまで」（接触=リリース+0.45s / 切替=+1.0s＝約0.55s）の中で
+            // 消え切る長さにする。長すぎると切り替わる瞬間まで線が残って俯瞰へのカットが濁る
+            BattedTrailSeconds = 0.28f,
+            // 太さは球（直径0.073m）より**細く**する。0.09mだと絵の上で帯になり、打者の体に貼った
+            // 板のように見える（2026-07-31 実測比較）。0.045m＝本塁のところで約10px＝ぶれの線に見える
+            BattedTrailWidthM = 0.045f,
+            BattedTrailColor = Color.white,
+            BattedTrailAlpha = 0.45f,
             // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
             BallInHandOffset = Vector3.zero,
             BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
@@ -401,6 +419,14 @@ namespace KokoSim.Unity.Match
                 c.ZoneLineAlpha = d.ZoneLineAlpha;
                 c.ZoneFillAlpha = d.ZoneFillAlpha;
                 c.ZoneLineM = d.ZoneLineM;
+            }
+            if (c.Version < 16)   // v16: 打球の行方（残像の線）
+            {
+                c.BattedShow = d.BattedShow;
+                c.BattedTrailSeconds = d.BattedTrailSeconds;
+                c.BattedTrailWidthM = d.BattedTrailWidthM;
+                c.BattedTrailColor = d.BattedTrailColor;
+                c.BattedTrailAlpha = d.BattedTrailAlpha;
             }
             c.Version = CurrentVersion;
             return c;
@@ -714,6 +740,17 @@ namespace KokoSim.Unity.Match
         private bool _ballWillBeCaught;     // この球は捕手が捕るか
         private bool _ballInMitt;           // ミットの子になっているか
         private float _ballInMittRemaining; // ミットの中で残す秒数
+
+        // ---- 打球（接触後の一瞬。2026-07-31）----
+        // 軌道は engine の打球セグメントをそのまま評価する＝この後すぐ俯瞰が描くのと**同じ単一ソース**。
+        // Unity側で打球を積分し直すと、対決ビューと俯瞰で行き先が食い違う（投球の掟と同じ理由）
+        private KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment _pendingBatted;   // 次のリリースで仕込む
+        private KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment _batted;
+        private float _battedT = -1f;        // 接触からの経過[s]。負=打球になっていない
+        private float _battedDur;            // セグメントの長さ[s]（超えたら位置を止める）
+        private Vector3 _battedOffset;       // 接触点 − セグメント始点（下の LaunchFadeSeconds で解消）
+        private float _battedFade;           // 上を解消するまでの秒数＝打点からの自由落下時間
+        private readonly List<Vector4> _trail = new();   // 残像（xyz=ステージローカル / w=打球時計[s]）
 
         private sealed class Actor
         {
@@ -1253,8 +1290,19 @@ namespace KokoSim.Unity.Match
         /// 弾道を積分しない試合）のときはコースを主張せず、本塁中央へ見た目用の球を飛ばす。
         /// </summary>
         public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch)
+            => OnPitchReleased(nextReleaseIn, outcome, pitch, null);
+
+        /// <summary>
+        /// 打球つきのリリース（2026-07-31）。<paramref name="batted"/> は engine の打球セグメント
+        /// （<c>PlaybackPlay.Ball</c> の投球以外の先頭＝この後すぐ俯瞰が描く物そのもの）。渡すと接触の
+        /// 瞬間に球がそのセグメントへ乗り換え、俯瞰へ切り替わるまでの一瞬だけ行方が見える。
+        /// null（＝打球にならない球・打球データを持たない試合）なら従来どおり判定面の先で球を畳む。
+        /// </summary>
+        public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch,
+            KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted)
         {
             if (!Available || _pitcher == null) return;
+            _pendingBatted = batted;
             // リリースの再同期は**ポーズと向きだけ**合わせ、立ち位置は据え置く。
             //
             // `SeekActor` は BasePos へ巻き戻して60fpsで積分し直すが、実再生は12fpsコマ打ち。
@@ -1471,6 +1519,10 @@ namespace KokoSim.Unity.Match
             _ballHeld = false;
             _ballInMitt = false;
             _ballInMittRemaining = 0f;
+            _batted = _pendingBatted;   // 仕込むだけ＝接触（＝球の到達）まで乗り換えない
+            _pendingBatted = null;
+            _battedT = -1f;
+            _trail.Clear();
 
             // 捕られる球は判定面（z=0）で止めず、選んだクリップの捕球面まで接線で延長する。
             // 捕球面は「そのクリップのミットの奥行き」＝ミットが待っている所まで運ぶ（実測0.19〜0.50m前）
@@ -1532,7 +1584,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void UpdateBall(float deltaTime)
         {
-            if (_ball == null || _ballHeld || _ballT < 0f) return;
+            if (_ball == null) return;
+            if (_battedT >= 0f) { UpdateBattedBall(deltaTime); return; }
+            if (_ballHeld || _ballT < 0f) return;
             _ballT += deltaTime;
 
             if (_ballInMitt)
@@ -1549,6 +1603,14 @@ namespace KokoSim.Unity.Match
             }
 
             if (_ballT >= _ballArrival && _ballWillBeCaught && TryPutBallInMitt()) return;
+
+            // 接触＝球が判定面に着いた瞬間（打者のスイングはこの時刻にアンカーしてある）。
+            // ここで engine の打球セグメントへ乗り換える＝球を消さずにそのまま飛んでいく
+            if (_ballT >= _ballArrival && !_ballWillBeCaught && _batted != null)
+            {
+                BeginBattedBall(_ballT - _ballArrival);
+                return;
+            }
 
             if (_ballT > _ballArrival + BallLingerSeconds)
             {
@@ -1575,6 +1637,69 @@ namespace KokoSim.Unity.Match
             return true;
         }
 
+        /// <summary>
+        /// 球を打球セグメントへ乗り換える（＝接触の瞬間）。<paramref name="overshoot"/> は接触を跨いだ
+        /// このフレームぶんの端数[s]で、打球時計をそこから始める＝時間が飛ばず球も跳ばない。
+        ///
+        /// 打点（＝球が判定面に着いた位置）と、engine のセグメント始点（本塁=原点・高さ0）は食い違う。
+        /// セグメント側は俯瞰の平面図用に「高さは種別ごとのプロファイル」で作られていて、滞空も
+        /// ゴロも h(0)=0＝地面から始まるためで、そのまま乗せると球がバットから足元へ飛ぶ。
+        /// 差は**打点からの自由落下**で解消する（左右・前後は同じ時間で線形に寄せる）:
+        ///   ・ゴロは打点から落ちて地面を這う＝これがそのまま「バットから出て弾む」絵になる
+        ///   ・フライは4秒の弧に0.8mが0.4秒だけ乗るだけ＝落下点も滞空時間も engine のまま動かない
+        /// </summary>
+        private void BeginBattedBall(float overshoot)
+        {
+            _battedDur = (float)(_batted.T1 - _batted.T0);
+            var head = _batted.At(0.0);
+            var contact = BallPointAt(_ballArrival);
+            _battedOffset = new Vector3(
+                contact.x - (float)head.X, contact.y - (float)head.H, contact.z - (float)head.Y);
+            // 打点から地面までの自由落下時間。左右のずれ（±0.4m程度）もこの時間で解消する
+            _battedFade = Mathf.Sqrt(2f * Mathf.Max(0.05f, Mathf.Abs(_battedOffset.y)) / 9.8f);
+            _battedT = 0f;
+            _trail.Clear();
+            _ball.SetActive(true);
+            UpdateBattedBall(Mathf.Max(0f, overshoot));
+        }
+
+        /// <summary>打球を進める（フルレート）。俯瞰へ渡るまでの一瞬しか出ないので、寿命は保険だけ。</summary>
+        private void UpdateBattedBall(float deltaTime)
+        {
+            _battedT += deltaTime;
+            if (_battedT > BattedMaxSeconds) { HideBall(); return; }
+            var p = BattedPointAt(_battedT);
+            _ball.transform.localPosition = p;
+            _trail.Add(new Vector4(p.x, p.y, p.z, _battedT));
+            // 尾より古い点は捨てる（末尾の1点だけは残す＝線が根元で途切れない）
+            float cut = _battedT - Mathf.Max(0.02f, _cal.BattedTrailSeconds);
+            int drop = 0;
+            while (drop + 1 < _trail.Count && _trail[drop + 1].w < cut) drop++;
+            if (drop > 0) _trail.RemoveRange(0, drop);
+        }
+
+        /// <summary>打球の位置（ステージローカル）。engine のセグメント＋打点合わせの補正。</summary>
+        private Vector3 BattedPointAt(float t)
+        {
+            var b = _batted.At(Mathf.Clamp(t, 0f, _battedDur));
+            float k = _battedFade > 0f ? Mathf.Max(0f, 1f - t / _battedFade) : 0f;   // 左右・前後は線形に解消
+            // 高さは**足さずに、高い方を採る**。engine のプロファイルは h(0)=0 から始まる（滞空も
+            // ゴロも同じ）ので、足すとゴロが自由落下と最初のバウンドの合計で 0.78→1.05m へ**上がって**
+            // しまう（2026-07-31 実測）。max なら「打点から落ちる → プロファイルが追い越したらそちらへ
+            // 乗る」となり、ゴロは落ちて弾み、フライは2コマで弧に乗る。落下点も滞空時間も engine のまま。
+            float h = (float)b.H;
+            float y = _battedOffset.y > 0f
+                ? Mathf.Max(h, _battedOffset.y - 4.9f * t * t)   // 打点から落ちる／追い越されたら弧へ乗る
+                : h + _battedOffset.y * k;                       // 既に打点の高さから始まる見本用
+            return new Vector3(
+                (float)b.X + _battedOffset.x * k,
+                y,
+                (float)b.Y + _battedOffset.z * k);
+        }
+
+        /// <summary>打球を出しておく上限[秒]。俯瞰への切替（接触+約0.55s）で普通はその前に畳まれる。</summary>
+        private const float BattedMaxSeconds = 1.5f;
+
         /// <summary>到達後も球を置いておく秒数。捕球・ミートの瞬間を1コマ以上（12fps=83ms）見せるため。</summary>
         private const float BallLingerSeconds = 0.10f;
 
@@ -1598,12 +1723,21 @@ namespace KokoSim.Unity.Match
             HoldBallInHand();
         }
 
+        /// <summary>
+        /// 打球を見せ始めてからの経過[秒]（打球でなければ負）。俯瞰は**この続きから**再生する
+        /// ＝対決ビューで見せたぶんを盤面がもう一度なぞらない（#330「投球が二重に見える」と同種）。
+        /// </summary>
+        public float BattedElapsedSeconds => _battedT;
+
         /// <summary>飛翔を打ち切って球を隠す（俯瞰へ切り替わる時＝盤面側が球を描くので二重に見えない。#330）。</summary>
         public void HideBall()
         {
             _ballT = -1f;
             _ballHeld = false;
             _ballInMitt = false;
+            _battedT = -1f;
+            _batted = null;
+            _trail.Clear();
             if (_ball != null)
             {
                 _ball.transform.SetParent(_root.transform, false);
@@ -1863,11 +1997,13 @@ namespace KokoSim.Unity.Match
             {
                 Graphics.Blit(_colorRt, Target);
                 DrawStrikeZone();
+                DrawBattedTrail();
                 return;
             }
             _postMat.SetFloat("_PosterLevels", PosterizeLevels);
             Graphics.Blit(_colorRt, Target, _postMat, 0);
             DrawStrikeZone();   // ポスタライズの**後**。前に置くと薄さが量子化に潰される（下の説明）
+            DrawBattedTrail();
         }
 
         /// <summary>
@@ -1911,7 +2047,11 @@ namespace KokoSim.Unity.Match
             var prev = RenderTexture.active;
             RenderTexture.active = Target;
             GL.PushMatrix();
-            GL.LoadProjectionMatrix(GL.GetGPUProjectionMatrix(_camera.projectionMatrix, true));
+            // 射影は**カメラの物をそのまま**渡す。GL.LoadProjectionMatrix が platform 変換を内部で
+            // 掛けるので、GL.GetGPUProjectionMatrix を通すと二重変換になり上下が反転する。
+            // ゾーンは画面の縦中央（注視点の高さ＝0.8m）に居るため反転しても4px程度しか動かず絵で
+            // 気づけない＝打球の残像を足して初めて露見した（2026-07-31）
+            GL.LoadProjectionMatrix(_camera.projectionMatrix);
             GL.modelview = _camera.worldToCameraMatrix;
             _zoneMat.SetPass(0);
             GL.Begin(GL.QUADS);
@@ -1927,6 +2067,73 @@ namespace KokoSim.Unity.Match
                 ZoneQuad(tr, -hw, bot, hw, bot + t);   // 下
                 ZoneQuad(tr, -hw, bot, -hw + t, top);  // 左（三塁側）
                 ZoneQuad(tr, hw - t, bot, hw, top);    // 右（一塁側）
+            }
+            GL.End();
+            GL.PopMatrix();
+            RenderTexture.active = prev;
+        }
+
+        /// <summary>
+        /// 打球の残像。ゾーンと同じくポスタライズの後に GL で引く。
+        ///
+        /// **線は世界の中に置く**（画面に貼らない）＝カメラから遠い所は細く、手前へ来るほど太い。
+        /// だから球が枠の外へ抜けても、根元（打点のあたり）の線は枠に残って消えていく＝
+        /// 「上へ急な線＝フライ／低く横へ＝ゴロ・ライナー」が3〜6コマでも読める。
+        ///
+        /// GL.LINES は太さを持てない（1画素固定＝遠近が出ず、望遠では点線に割れる）ので、
+        /// 隣り合う点のあいだをカメラの方を向いた四角形で埋める。頭が太く濃く、尾へ向けて0まで絞る。
+        /// </summary>
+        private void DrawBattedTrail()
+        {
+            if (_cal.BattedShow < 0.5f || _battedT < 0f || _trail.Count < 2) return;
+            if (_root == null || _camera == null) return;
+            if (_zoneMat == null)
+            {
+                var sh = Shader.Find("KokoSim/DuelStageZone");
+                if (sh == null) return;
+                _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+            }
+
+            float span = Mathf.Max(0.02f, _cal.BattedTrailSeconds);
+            float halfW = Mathf.Max(0.001f, _cal.BattedTrailWidthM) * 0.5f;
+            // 色はリニア空間へ自分で落とす（掟: 即時モードは自動変換が効かない）。アルファは変換しない
+            var baseCol = _cal.BattedTrailColor.linear;
+            float headA = Mathf.Clamp01(_cal.BattedTrailAlpha);
+            var tr = _root.transform;
+            var eye = _camera.transform.position;
+
+            var prev = RenderTexture.active;
+            RenderTexture.active = Target;
+            GL.PushMatrix();
+            // 射影は**カメラの物をそのまま**渡す。GL.LoadProjectionMatrix が platform 変換を内部で
+            // 掛けるので、GL.GetGPUProjectionMatrix を通すと二重変換になり上下が反転する。
+            // ゾーンは画面の縦中央（注視点の高さ＝0.8m）に居るため反転しても4px程度しか動かず絵で
+            // 気づけない＝打球の残像を足して初めて露見した（2026-07-31）
+            GL.LoadProjectionMatrix(_camera.projectionMatrix);
+            GL.modelview = _camera.worldToCameraMatrix;
+            _zoneMat.SetPass(0);
+            GL.Begin(GL.QUADS);
+            for (int i = 0; i + 1 < _trail.Count; i++)
+            {
+                var a = tr.TransformPoint(new Vector3(_trail[i].x, _trail[i].y, _trail[i].z));
+                var b = tr.TransformPoint(new Vector3(_trail[i + 1].x, _trail[i + 1].y, _trail[i + 1].z));
+                var dir = b - a;
+                if (dir.sqrMagnitude < 1e-10f) continue;
+                // 視線と線分の両方に直交する向き＝どの角度から見ても同じ太さに見える
+                var side = Vector3.Cross(dir, a - eye);
+                if (side.sqrMagnitude < 1e-10f) continue;
+                side = side.normalized;
+
+                float ua = Mathf.Clamp01(1f - (_battedT - _trail[i].w) / span);       // 0=尾 / 1=頭
+                float ub = Mathf.Clamp01(1f - (_battedT - _trail[i + 1].w) / span);
+                var ca = baseCol; ca.a = headA * ua * ua;   // 濃さは二乗で落とす＝尾が長く伸びて見える
+                var cb = baseCol; cb.a = headA * ub * ub;
+                var sa = side * (halfW * ua);
+                var sb = side * (halfW * ub);
+                GL.Color(ca); GL.Vertex(a - sa);
+                GL.Color(ca); GL.Vertex(a + sa);
+                GL.Color(cb); GL.Vertex(b + sb);
+                GL.Color(cb); GL.Vertex(b - sb);
             }
             GL.End();
             GL.PopMatrix();
@@ -3285,6 +3492,23 @@ namespace KokoSim.Unity.Match
         /// 【開発ツール用】ボールの実測。キャリブレーション窓が毎フレーム表示する＝スライダを動かしながら
         /// 数値を0へ寄せられる（絵を撮らずに合わせる）。Editorアセンブリから呼ぶので public。
         /// </summary>
+        /// <summary>
+        /// 打球の実測（2026-07-31）。「枠から出た」のか「そもそも出ていない」のかは絵では区別できない
+        /// （どちらも球が写らない）ので、打球時計・位置・**ビューポート座標**・残像の点数を数値で残す。
+        /// </summary>
+        public string BattedDiagForCapture()
+        {
+            if (_battedT < 0f) return "batted=なし";
+            var local = BattedPointAt(_battedT);
+            var vp = _camera.WorldToViewportPoint(_root.transform.TransformPoint(local));
+            bool inFrame = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
+            return "batted t=" + _battedT.ToString("F3") + "s"
+                + " 位置=" + local.ToString("F2")
+                + " 画面=(" + vp.x.ToString("F3") + "," + vp.y.ToString("F3") + ")"
+                + (inFrame ? " 枠内" : " 枠外")
+                + " 残像=" + _trail.Count + "点";
+        }
+
         public string BallDiagForCapture()
         {
             if (_ball == null) return "ball=なし";

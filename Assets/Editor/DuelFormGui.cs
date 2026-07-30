@@ -32,6 +32,20 @@ namespace KokoSim.EditorTools
                         Mathf.Abs(cal.SwingLiftM)), EditorStyles.miniLabel);
             }
 
+            EditorGUILayout.LabelField("打球の行方（接触〜俯瞰へ渡るまでの一瞬）", EditorStyles.miniBoldLabel);
+            bool batted = EditorGUILayout.ToggleLeft("残像の線を出す", cal.BattedShow >= 0.5f);
+            cal.BattedShow = batted ? 1f : 0f;
+            using (new EditorGUI.DisabledScope(!batted))
+            using (new EditorGUI.IndentLevelScope())
+            {
+                cal.BattedTrailSeconds = EditorGUILayout.Slider("尾の長さ [秒]", cal.BattedTrailSeconds, 0.05f, 0.60f);
+                cal.BattedTrailWidthM = EditorGUILayout.Slider("太さ [m]", cal.BattedTrailWidthM, 0.01f, 0.40f);
+                cal.BattedTrailAlpha = EditorGUILayout.Slider("濃さ", cal.BattedTrailAlpha, 0f, 1f);
+                cal.BattedTrailColor = EditorGUILayout.ColorField("色", cal.BattedTrailColor);
+                EditorGUILayout.LabelField(" ", "球は0.10〜0.22秒で枠外へ抜ける。線が残るぶんだけ角度が読める",
+                    EditorStyles.miniLabel);
+            }
+
             EditorGUILayout.LabelField("ストライクゾーン", EditorStyles.miniBoldLabel);
             bool zone = EditorGUILayout.ToggleLeft("うっすら出す", cal.ZoneShow >= 0.5f);
             cal.ZoneShow = zone ? 1f : 0f;
@@ -148,12 +162,32 @@ namespace KokoSim.EditorTools
                     rig.OnPitchWindup();
                     rig.OnPitchReleased(0f, DuelPitchOutcome.SwingMiss);
                 }
-                if (GUILayout.Button("打つ"))
+                if (GUILayout.Button("フライ"))
                 {
                     rig.OnPitchWindup();
-                    rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact);
+                    rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, SampleBatted("センターフライ"));
+                }
+                if (GUILayout.Button("ゴロ"))
+                {
+                    rig.OnPitchWindup();
+                    rig.OnPitchReleased(0f, DuelPitchOutcome.InPlayContact, null, SampleBatted("ゴロ"));
                 }
             }
+        }
+
+        /// <summary>
+        /// つまみを回しながら打球を確かめるための見本（engine の <c>PlaybackSamples</c> ＝俯瞰のモック
+        /// 再生に使っている実データ）。ここで自前の弾道を作ると、絵を追い込む相手が本番と別物になる。
+        /// </summary>
+        private static KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment SampleBatted(string nameContains)
+        {
+            foreach (var play in KokoSim.Engine.Match.Timeline.Playback.PlaybackSamples.All)
+            {
+                if (play.Name == null || !play.Name.Contains(nameContains)) continue;
+                foreach (var s in play.Ball)
+                    if (!(s is KokoSim.Engine.Match.Timeline.Playback.PitchSegment)) return s;
+            }
+            return null;
         }
     }
 }
