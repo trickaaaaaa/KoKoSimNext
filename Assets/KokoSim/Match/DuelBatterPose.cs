@@ -26,6 +26,9 @@ namespace KokoSim.Unity.Match
         {
             if (anim == null) return;
             FixKnee(anim, cal, clipTime);
+            // 胴は頭・握りより先。背骨を回すと腕も頭も一緒に運ばれるので、後の2つが
+            // 「回した後の体」を基準に当たり直す必要がある（逆順だと視線と握りが胴のぶんずれる）
+            FixTorso(anim, cal, clipTime);
             FixHead(anim, cal, clipTime, aimPoint);
             FixGrip(anim, cal, clipTime);
         }
@@ -41,6 +44,40 @@ namespace KokoSim.Unity.Match
             if (t1 <= t0) return t >= t1 ? 1f : 0f;
             return Mathf.Clamp01((t - t0) / (t1 - t0));
         }
+
+        /// <summary>ミートの何秒前からバットを球へ向け始めるか（12fpsで2コマ強。捕手のミットと同じ流儀）。</summary>
+        public const float AimLeadSeconds = 0.18f;
+
+        /// <summary>
+        /// ミートの何秒前に向け切るか。**1ポーズコマ（12fps=83ms）以上**にすること
+        /// （捕手のミットで実害が出た所と同じ。design-18 §4.5-③）。
+        /// </summary>
+        public const float AimSettleSeconds = 0.10f;
+
+        /// <summary>ミート後、何秒かけて収録の振り抜きへ戻すか。フォロースルーを殺さないよう短く。</summary>
+        public const float AimReleaseSeconds = 0.12f;
+
+        /// <summary>
+        /// バットを球へ向ける重み（台形）。<paramref name="meetAt"/> は**発射からのミート時刻**＝球の時計。
+        /// クリップ内時刻で駆動しないのは、クリップ差し替えのコマと12fpsの刻みで重みが飛ぶため。
+        /// </summary>
+        public static float AimWeight(float ballTime, float meetAt)
+        {
+            float settled = meetAt - AimSettleSeconds;
+            if (ballTime <= settled - AimLeadSeconds) return 0f;
+            if (ballTime < settled) return Mathf.InverseLerp(settled - AimLeadSeconds, settled, ballTime);
+            if (ballTime <= meetAt) return 1f;
+            return 1f - Mathf.InverseLerp(meetAt, meetAt + AimReleaseSeconds, ballTime);
+        }
+
+        /// <summary>
+        /// スイング区間の効き（0〜1・前後10msで立ち上げ／落とし）。握りの許容とスイング面が使う。
+        /// **バット側（<see cref="DuelStageRig"/>.AlignBat）も同じ窓で掛けるので公開している**
+        /// ＝2箇所に書くと腕とバットが別の時刻で動き出して「バットだけ先に浮く」事故になる。
+        /// </summary>
+        public static float SwingWindow(in DuelCalibration cal, float t)
+            => Mathf.Min(Ramp(t, cal.GripSwingFromSec - 0.10f, cal.GripSwingFromSec),
+                         1f - Ramp(t, cal.GripSwingToSec, cal.GripSwingToSec + 0.10f));
 
         private static void TwoBoneIk(Transform root, Transform mid, Transform tip, Vector3 target,
             float poleDeg)
@@ -79,8 +116,35 @@ namespace KokoSim.Unity.Match
             if (bias < 0f) anchor = Vector3.Lerp(mid, a - u * half, -bias);   // 左手が動かない
             else if (bias > 0f) anchor = Vector3.Lerp(mid, b + u * half, bias);
             // スイング中は許容を上げる（実物も接触では腕が伸びる。収録もこの辺りで手が飛ぶ）
-            float sw = Mathf.Min(Ramp(t, cal.GripSwingFromSec - 0.10f, cal.GripSwingFromSec),
-                                 1f - Ramp(t, cal.GripSwingToSec, cal.GripSwingToSec + 0.10f));
+            float sw = SwingWindow(cal, t);
+
+            // スイング面の高さ・傾き（2026-07-30 監督指摘「足元のボールを打っているように見える」）。
+            // 収録の面が低いのを、クリップを触らずに**握りを動かして**持ち上げる。バット軸は
+            // AlignBat が動かした後の手から採り直すので、バットは自動でこの面に乗る＝
+            // 腕はIKが自然に追いてくる。
+            //
+            // SwingPlaneBatOnly ぶんは**ここでは効かせない**（腕を動かさない）。その分は AlignBat が
+            // バット単体へ掛ける＝手はクリップのまま・バットだけ面が変わる（2026-07-31 監督要望）。
+            float arm = sw * (1f - Mathf.Clamp01(cal.SwingPlaneBatOnly));
+            if (arm > 0.001f)
+            {
+                if (Mathf.Abs(cal.SwingPlaneTiltDeg) > 0.01f)
+                {
+                    // 傾ける軸は「バレル方向の水平成分に直交する水平線」＝面の中で持ち上がる。
+                    // 符号は幾何で決まる（実測不要）: n=Cross(水平バレル, up) まわりの正回転で
+                    // バレル端が**上がる**（Rodrigues: n×v=+up）。u はノブ側を向くので barrel=-u、
+                    // 回転は線形なので同じ R を u に掛ければよい
+                    Vector3 barrel = -u;
+                    Vector3 horiz = new Vector3(barrel.x, 0f, barrel.z);
+                    if (horiz.sqrMagnitude > 1e-6f)
+                    {
+                        Vector3 n = Vector3.Cross(horiz, Vector3.up).normalized;
+                        u = (Quaternion.AngleAxis(cal.SwingPlaneTiltDeg * arm, n) * u).normalized;
+                    }
+                }
+                anchor += Vector3.up * (cal.SwingLiftM * arm);
+            }
+
             float gl = Mathf.Lerp(cal.GripReachGuard, cal.GripReachGuardSwing, sw);
             float gr = Mathf.Lerp(cal.GripReachGuardTop, cal.GripReachGuardSwingTop, sw);
             Vector3 tl = ClampReach(lu, ll, lh, a, Vector3.Lerp(a, anchor + u * half, w), gl);
@@ -260,6 +324,49 @@ namespace KokoSim.Unity.Match
         /// （素体で符号が逆になるため。購入素体=+Z / UBC=-Z）。
         /// </summary>
         public static Vector3 HeadForwardLocal { get; set; } = Vector3.forward;
+
+        // ---------------------------------------------------------------- 胴（開き）
+
+        /// <summary>背骨チェーンの配分。合計1.0＝先端（肩）での戻し量が TorsoCloseDeg になる。</summary>
+        private static readonly (HumanBodyBones Bone, float Share)[] TorsoChain =
+        {
+            (HumanBodyBones.Spine, 0.40f),
+            (HumanBodyBones.Chest, 0.35f),
+            (HumanBodyBones.UpperChest, 0.25f),
+        };
+
+        /// <summary>
+        /// 体の開きを抑える（2026-07-30 監督指摘）。胴を**鉛直軸まわり**に戻して、
+        /// 振り出しから接触まで前側が開き切らないようにする。
+        ///
+        /// 腰（Hips）は回さない。腰から回すと脚ごと持って行かれて足裏が滑る＝接地が壊れるため、
+        /// 回すのは背骨チェーンだけにして、配分（<see cref="TorsoChain"/>）で1関節への集中を避ける。
+        /// 親を回すと子（腕・頭）も運ばれるので、合計が先端での戻し量になる＝各骨は share ぶんだけ回す。
+        ///
+        /// UpperChest は素体によって存在しない（Humanoid の任意ボーン）。無い場合は
+        /// その配分を残りへ回して合計角を保つ＝素体を替えても効き方が変わらない。
+        /// </summary>
+        private static void FixTorso(Animator anim, in DuelCalibration cal, float t)
+        {
+            float w = Ramp(t, cal.TorsoFromSec, cal.TorsoFullSec)
+                * (1f - Ramp(t, cal.TorsoFullSec, cal.TorsoToSec));
+            if (w <= 0.001f || Mathf.Abs(cal.TorsoCloseDeg) < 0.01f) return;
+
+            float present = 0f;
+            foreach (var (bone, share) in TorsoChain)
+                if (B(anim, bone) != null) present += share;
+            if (present <= 0.001f) return;
+
+            float total = cal.TorsoCloseDeg * w;
+            foreach (var (bone, share) in TorsoChain)
+            {
+                var tr = B(anim, bone);
+                if (tr == null) continue;
+                // 骨の位置を軸が通る＝チェーンが伸び縮みしない（回すだけ）
+                RotateAround(tr, tr.position,
+                    Quaternion.AngleAxis(total * (share / present), Vector3.up));
+            }
+        }
 
         // ---------------------------------------------------------------- 脚
 

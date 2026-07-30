@@ -158,6 +158,7 @@ namespace KokoSim.EditorTools
                 float nt = EditorGUILayout.Slider("クリップ内 [秒]", t, 0f, len);
                 if (EditorGUI.EndChangeCheck()) { _playing = false; _rig.SeekBatter(nt); Redraw(); }
 
+
                 // 区間の目安（実測アンカー。design-18 §7-2）
                 EditorGUILayout.LabelField(
                     "構え 0.00–1.70 ／ 予備動作 –2.80 ／ スイング –3.15（面通過3.05）／ 走り出し 3.25–",

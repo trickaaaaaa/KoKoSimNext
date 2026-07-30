@@ -56,8 +56,10 @@ namespace KokoSim.Unity.Match
             _rig.EnsureSize(W, H);
             for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
 
-            var bat = Find("body-Batter_Batting_01");
-            var pit = Find("body-Pitcher_Pitching_01");
+            // 素体GOの名前はクリップ名から作られる（SpawnActor）。クリップ差し替えで名前が変わるので
+            // 定数から引く＝「打者/投手が見つからない」で空振りしない
+            var bat = Find("body-" + DuelStageRig.BatterClipName);
+            var pit = Find("body-" + DuelStageRig.PitcherClipName);
             var root = Find("~DuelStageLive");
             if (bat == null || pit == null || root == null)
             {
