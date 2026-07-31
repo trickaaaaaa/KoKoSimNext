@@ -1220,6 +1220,8 @@
     color: var(--color-chalk);
 }
 .mup-pitches__lab { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
+/* 同じ行に置いた防御率・奪三振との切れ目（線を引かずに余白で分ける）。 */
+.mup-pitches__lab--gap { margin-left: var(--sp-4); }
 /* 白カードに載せ替えたのでアンバー（--color-lamp）は文字に使えない（白地で沈む）。
    注意→警告の意味はそのままに、白地で読める橙・赤へ振る。 */
 .mup-pitches--warn { color: var(--cond-bad); }          /* 80球超＝注意 */
@@ -1753,6 +1755,10 @@
    自作要素が自分の幾何を持つのは BaseballFieldElement / Match2DPlaybackElement と同じ作法。 */
 .tcards { flex-shrink: 0; align-items: center; }
 .tcards__inner { position: relative; height: 100%; }
+/* 当たり判定の層。カードの上に透明な短冊を敷き、ポインタの出入りと押下はここだけで拾う
+   （カードは重なり順を入れ替える＝木から外れるので、判定を持たせるとクリックが成立しない）。 */
+.tcards__hits { position: absolute; left: 0; top: 0; bottom: 0; }
+.tcards__hit { position: absolute; top: 0; bottom: 0; }
 
 .tcard {
     position: absolute;
@@ -1770,21 +1776,21 @@
     transform-origin: 50% 100%;   /* 下端を軸に上へ伸び上がる（帯の高さを変えずに大きく見せる） */
 }
 /* 持ち上がるのはカーソルが乗った1枚だけ。最前面化は C# の BringToFront が行う（USS に z-index は無い）。 */
-.tcard--hot { translate: 0 -14px; scale: 1.22; }
+.tcard--hot { translate: 0 -12px; scale: 1.22; }
 
 /* 上2/3＝将来ここへ絵を入れる場所。いまは Icon の1文字を淡く敷いて枠だと分かるようにする。 */
 .tcard__art {
     flex-grow: 1;
     background-color: var(--sf-inset);
 }
+/* 絵の面いっぱいに置いて上下中央（級数はカード寸法から C# が決めるので、余白を数値で持たない）。 */
 .tcard__ghost {
     position: absolute;
     left: 0;
-    top: 50%;
+    top: 0; bottom: 0;
     color: var(--ink);
     opacity: 0.14;
     -unity-text-align: middle-center;
-    margin-top: -34px;
 }
 /* 下1/3＝名前。左の帯（隣に隠れない幅）の中央へ置く＝カード全幅で中央揃えにすると隣の下に潜る。 */
 .tcard__cap {

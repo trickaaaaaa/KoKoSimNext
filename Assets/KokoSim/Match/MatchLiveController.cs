@@ -1876,19 +1876,18 @@ namespace KokoSim.Unity.Match
             if (def.Grade > 0) line1.Add(MakeLabel(def.Grade + "年", "mup-grade"));
             block.Add(line1);
 
+            // 2行目＝通算防御率・本日の奪三振・球数。球数は独立行にすると縦4行になって嵩むので
+            // 同じ「今日の投球」の並びへ寄せた（2026-07-31 ユーザー判断）。
             var line2 = MakeRow("mup-line");
             line2.Add(MakeLabel("防 " + MatchLiveStatsProvider.Era(_statsProvider.CareerPitching(_current.PitcherSourceId))
                                     + "　奪三振 " + def.StrikeOuts, "mup-career"));
-            block.Add(line2);
-
-            var line3 = MakeRow("mup-line");
-            line3.Add(MakeLabel("球数", "mup-pitches__lab"));
+            line2.Add(MakeLabel("球数", "mup-pitches__lab", "mup-pitches__lab--gap"));
             var pc = MakeLabel(def.Pitches.ToString(), "mup-pitches", "f-num");
             if (def.Pitches > 100) pc.AddToClassList("mup-pitches--alert");
             else if (def.Pitches > 80) pc.AddToClassList("mup-pitches--warn");
-            line3.Add(pc);
-            line3.Add(MakeLabel("球", "mup-pitches__lab"));
-            block.Add(line3);
+            line2.Add(pc);
+            line2.Add(MakeLabel("球", "mup-pitches__lab"));
+            block.Add(line2);
 
             block.Add(BuildStaminaBar(def.StaminaRemaining));
             return block;

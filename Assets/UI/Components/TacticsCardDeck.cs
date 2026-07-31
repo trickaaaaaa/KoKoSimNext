@@ -17,17 +17,22 @@ namespace KokoSim.Unity.Components
     /// カードは将来 <see cref="SignPad.SignDef.Icon"/> の位置に絵を入れる前提で大きめに取る。
     /// 名前も絵も「隣のカードに隠れない左の帯」の中央へ置く＝カード全幅で中央揃えにすると
     /// 隣の下に潜って読めない（トランプの隅の数字と同じ考え方）。
+    ///
+    /// <b>当たり判定はカード自身が持たない</b>。カードは重なり順を入れ替える（＝木から外して付け直す）ので、
+    /// そこにポインタの出入りを持たせると、押している最中に対象が木から消えてクリックが成立しない。
+    /// 判定は「並びが一生変わらない透明な短冊」(<c>_hits</c>) に持たせ、カードは表示専用にする。
+    /// 選択は Click ではなく PointerDown で採る（押した時点で確定＝合成イベントに依存しない）。
     /// </summary>
     public sealed class TacticsCardDeck : VisualElement
     {
         // カードの箱の寸法はこの部品が持つ（BaseballFieldElement / Match2DPlaybackElement と同じく、
         // 座標を自分で計算する自作要素は自分の幾何を持つ）。components.uss 側は色と枠だけを担当する。
         /// <summary>カード1枚の幅。将来ここへ絵を入れる前提で大きめに取る。</summary>
-        public const float CardWidth = 132f;
+        public const float CardWidth = 106f;
         /// <summary>カード1枚の高さ（絵：名前 ≒ 2:1）。</summary>
-        public const float CardHeight = 180f;
+        public const float CardHeight = 144f;
         /// <summary>隣のカードに覆われる幅。CardWidth − Overlap が「隠れない左の帯」になる。</summary>
-        public const float Overlap = 44f;
+        public const float Overlap = 30f;
 
         private const float Step = CardWidth - Overlap;
 
@@ -35,11 +40,13 @@ namespace KokoSim.Unity.Components
         private static readonly float[] CapRatioByLen = { 0.34f, 0.34f, 0.30f, 0.24f, 0.19f, 0.155f, 0.135f };
 
         private readonly VisualElement _inner;
+        private readonly VisualElement _hits;
         private IReadOnlyList<SignPad.SignDef> _defs = Array.Empty<SignPad.SignDef>();
         // グループ→選択中の非既定カードId（既定選択はエントリなし＝無点灯）。フェーズ切替でも保持する。
         private readonly Dictionary<string, string> _selected = new();
         private readonly List<VisualElement> _cards = new();      // 表示順（＝重なり順）
         private readonly Dictionary<string, VisualElement> _byId = new();
+        private int _hotIndex = -1;
         private bool _offense;
         private bool _built;
 
@@ -50,6 +57,10 @@ namespace KokoSim.Unity.Components
             _inner = new VisualElement { pickingMode = PickingMode.Ignore };
             _inner.AddToClassList("tcards__inner");
             Add(_inner);
+            // 当たり判定の層。カードより後ろの兄弟＝常に手前で拾う。中身の短冊は並べ替えない。
+            _hits = new VisualElement { pickingMode = PickingMode.Ignore };
+            _hits.AddToClassList("tcards__hits");
+            Add(_hits);
         }
 
         /// <summary>指示の定義一式を差し替える。</summary>
@@ -90,7 +101,9 @@ namespace KokoSim.Unity.Components
         public void SetHotForCapture(string id)
         {
             ClearHot();
-            if (id != null && _byId.TryGetValue(id, out var card)) SetHot(card);
+            if (id == null || !_byId.TryGetValue(id, out var card)) return;
+            var index = _cards.IndexOf(card);
+            if (index >= 0) SetHot(index);
         }
 
         private SignPad.SignDef FindDef(string id)
@@ -103,8 +116,10 @@ namespace KokoSim.Unity.Components
         {
             _built = true;
             _inner.Clear();
+            _hits.Clear();
             _cards.Clear();
             _byId.Clear();
+            _hotIndex = -1;
 
             foreach (var def in _defs)
             {
@@ -113,14 +128,40 @@ namespace KokoSim.Unity.Components
                 _cards.Add(card);
                 _byId[def.Id] = card;
                 _inner.Add(card);
+                _hits.Add(BuildHit(def, _cards.Count - 1));
             }
             Layout();
             RefreshHighlights();
         }
 
+        // 当たり判定の短冊。位置はカードと同じだが、こちらは並べ替えないので
+        // 押している最中に木から外れることがない（＝クリックが必ず成立する）。
+        private VisualElement BuildHit(SignPad.SignDef def, int index)
+        {
+            var hit = new VisualElement { pickingMode = PickingMode.Position };
+            hit.AddToClassList("tcards__hit");
+            hit.RegisterCallback<PointerEnterEvent>(_ =>
+            {
+                ClearHot();
+                if (!IsOff(index)) SetHot(index);
+            });
+            hit.RegisterCallback<PointerLeaveEvent>(_ => ClearHot());
+            // 押した時点で確定（Click は down/up の対と合成に依存するので使わない）。
+            hit.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                if (IsOff(index)) return;
+                Select(def.Id);
+                evt.StopPropagation();
+            });
+            return hit;
+        }
+
+        private bool IsOff(int index) =>
+            index < 0 || index >= _cards.Count || _cards[index].ClassListContains("tcard--off");
+
         private VisualElement BuildCard(SignPad.SignDef def)
         {
-            var card = new VisualElement { pickingMode = PickingMode.Position };
+            var card = new VisualElement { pickingMode = PickingMode.Ignore };   // 判定は _hits が持つ
             card.AddToClassList("tcard");
             if (def.IsDefault) card.AddToClassList("tcard--default");
             var enabled = def.EnabledIf?.Invoke() ?? true;
@@ -141,28 +182,17 @@ namespace KokoSim.Unity.Components
             name.AddToClassList("tcard__name");
             cap.Add(name);
             card.Add(cap);
-
-            card.RegisterCallback<PointerEnterEvent>(_ =>
-            {
-                if (card.ClassListContains("tcard--off")) return;
-                ClearHot();
-                SetHot(card);
-            });
-            card.RegisterCallback<PointerLeaveEvent>(_ => ClearHot());
-            card.RegisterCallback<ClickEvent>(_ =>
-            {
-                if (card.ClassListContains("tcard--off")) return;
-                Select(def.Id);
-            });
             return card;
         }
 
         // カードは絶対配置で Step ずつずらして敷く。重なり順を変えても位置が動かないので、
-        // 最前面化（BringToFront）と復帰（Add で末尾へ送り直す）を絵のずれ無しで行える。
+        // 最前面化（BringToFront）と復帰（元の添字へ Insert）を絵のずれ無しで行える。
         private void Layout()
         {
             style.height = CardHeight;
-            _inner.style.width = _cards.Count > 0 ? Step * (_cards.Count - 1) + CardWidth : 0f;
+            var width = _cards.Count > 0 ? Step * (_cards.Count - 1) + CardWidth : 0f;
+            _inner.style.width = width;
+            _hits.style.width = width;
 
             for (var i = 0; i < _cards.Count; i++)
             {
@@ -170,6 +200,11 @@ namespace KokoSim.Unity.Components
                 card.style.left = i * Step;
                 card.style.width = CardWidth;
                 card.style.height = CardHeight;
+
+                // 短冊は「見えている帯」の幅。最後の1枚だけ何にも覆われないので全幅を取る。
+                var hit = _hits[i];
+                hit.style.left = i * Step;
+                hit.style.width = i == _cards.Count - 1 ? CardWidth : Step;
 
                 // 絵も名前も「隣に隠れない左の帯」の中央へ。帯の幅＝Step。
                 var ghost = card.Q<Label>(className: "tcard__ghost");
@@ -188,17 +223,22 @@ namespace KokoSim.Unity.Components
             }
         }
 
-        private void SetHot(VisualElement card)
+        private void SetHot(int index)
         {
+            var card = _cards[index];
             card.AddToClassList("tcard--hot");
             card.BringToFront();   // 拡大したカードが隣に隠れないよう最前面へ
+            _hotIndex = index;
         }
 
         private void ClearHot()
         {
-            foreach (var c in _cards) c.RemoveFromClassList("tcard--hot");
-            // 重なり順を定義順へ戻す（絶対配置なので Add で送り直しても位置は動かない）。
-            foreach (var c in _cards) _inner.Add(c);
+            if (_hotIndex < 0 || _hotIndex >= _cards.Count) return;
+            var card = _cards[_hotIndex];
+            card.RemoveFromClassList("tcard--hot");
+            // 重なり順を定義順へ戻す（絶対配置なので入れ直しても位置は動かない）。
+            _inner.Insert(_hotIndex, card);
+            _hotIndex = -1;
         }
 
         private void RefreshHighlights()
