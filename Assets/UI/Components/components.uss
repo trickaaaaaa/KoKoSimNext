@@ -1672,6 +1672,51 @@
 .lsc-base--third { top: 15px; left: 0; }
 .lsc-base.is-on { background-color: var(--color-lamp); }
 
+/* ═══ InningBreak：攻守交代のイニング間画面（試合画面改修）══════════════════════════
+   3アウトで攻守が入れ替わったら、次の打席を始める前に数秒だけ盤面へ被せる暗幕。
+   上部から撤去したラインスコアを大写しにして「いま何回で何点差か」をここで受け取ってもらう。
+   既存の一過性オーバーレイ（pitch-call / score-call / sub-call）と同じ作法＝既定非表示＋自前の寿命。
+   ラインスコアは拡大せず、部品そのままの寸法で中央に置く（scale で拡大すると罫が半端に太る）。 */
+.inning-break {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    /* ほぼ不透明。プロジェクトはリニア色空間で、暗色のアルファ合成は見た目の減光が数値よりずっと弱い
+       （0.78 で実測55%減にしかならない）。「画面が切り替わった」と読ませたいので 0.94 まで上げる。 */
+    background-color: rgba(10, 15, 12, 0.94);
+}
+.inning-break__caption {
+    font-size: var(--fs-callout);
+    color: var(--sb-ink-1);
+    margin-bottom: var(--sp-4);
+    letter-spacing: 4px;
+}
+.inning-break__hint {
+    font-size: var(--fs-label);
+    color: var(--sb-ink-2);
+    margin-top: var(--sp-4);
+    letter-spacing: 3px;
+}
+/* 回間にカウントは無意味なので、イニング間のラインスコアでは右袖ごと畳む。
+   上部常設だった頃の下マージンも、中央に置く今は不要。 */
+.inning-break .lsc-count { display: none; }
+.inning-break .lsc { margin-bottom: 0; padding: var(--sp-2) var(--sp-4); }
+
+/* 大写し。ドットは16の整数倍サイズ限定なので 32→48 に上げ、マスと行高もそれに合わせて広げる
+   （scale で引き伸ばすと罫が半端に太るので、寸法そのものを差し替える）。 */
+.inning-break .lsc-row { height: var(--lsc-row-h-big); }
+.inning-break .lsc-row--head { height: var(--lsc-head-h-big); }
+.inning-break .lsc-cell { width: var(--lsc-cell-w-big); font-size: var(--fs-dot-48); }
+.inning-break .lsc-cell--total { width: var(--lsc-total-w-big); }
+.inning-break .lsc-cell--name { width: var(--lsc-name-w-big); font-size: 30px; }
+.inning-break .lsc-cell--inning { width: var(--lsc-name-w-big); font-size: var(--fs-dot-32); }
+.inning-break .lsc-row--head .lsc-cell { font-size: var(--fs-dot-32); }
+/* 延長でマスが増えたら大写しをやめて通常寸法へ戻す（潰して収めない）。 */
+.inning-break .lsc--dense .lsc-cell { width: var(--lsc-cell-w); font-size: var(--fs-dot-32); }
+.inning-break .lsc--dense .lsc-row { height: var(--sb-cell-h); }
+
 /* ═══ ScoreBug：盤面左上の常時表示バグ（試合画面改修・器は Components/ScoreBug.uxml）═══════
    野球中継のアレ。打席の演出中も切らさずカウント・塁・両校の得点を出しっぱなしにする。
    面は掲示板の黒（--sb-face）＋インク枠＝design-19 の黒島語彙で、盤面の絵の上でも沈まない。

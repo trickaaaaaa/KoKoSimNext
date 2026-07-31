@@ -21,11 +21,9 @@
             <!-- 中央列: スコアボード＋盤面＋実況 -->
             <ui:VisualElement class="mlive-col mlive-col--center">
 
-                <!-- 甲子園式ラインスコア（設計書16 §4-2）。旧スコアバー＋BSO帯の2段をこれ1枚で置き換える。
-                     回別得点は LineScorePanel.Fill が、B/S/O ランプと塁ダイヤは MatchLiveController が
-                     1球ごとに lsc-b1 / lsc-base-1 等の name をトグルして駆動する。 -->
-                <ui:Instance template="LineScorePanel" />
-
+                <!-- 上部の常設ラインスコアは撤去した（盤面を縦に使い切るため）。回別得点は
+                     攻守交代のイニング間画面（下の inning-break）へ移し、点差・カウント・塁は
+                     盤面左上の ScoreBug が常時受け持つ。 -->
                 <ui:VisualElement class="mlive-field-wrap">
                     <ui:VisualElement name="field-host" class="mlive-field" />
                     <!-- 対決ビュー（設計書18 A案）。盤面と差し替えで表示する3D RTのホスト。
@@ -58,6 +56,15 @@
                             <ui:Label name="sub-call-tag" class="sub-call__tag f-body" text="投手交代" />
                             <ui:Label name="sub-call-text" class="sub-call__text f-body" text="" />
                         </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- イニング間のスコア画面。3アウトで攻守が入れ替わったら、次の打席を始める前に
+                         数秒だけ挟んで回別得点を大写しにする（クリックで即スキップ）。
+                         上部から撤去したラインスコアはここが唯一の置き場所になる。 -->
+                    <ui:VisualElement name="inning-break" class="inning-break">
+                        <ui:Label name="ib-caption" class="inning-break__caption f-display" text="" />
+                        <ui:Instance template="LineScorePanel" />
+                        <ui:Label class="inning-break__hint f-body" text="クリックで続ける" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 

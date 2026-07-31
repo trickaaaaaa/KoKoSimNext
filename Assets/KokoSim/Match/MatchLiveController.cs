@@ -206,6 +206,15 @@ namespace KokoSim.Unity.Match
         private bool _subCallOn;
         private int _subLogCount;   // 既に取り込んだ継投ログ件数（_prog.PitchingChanges との差分検知）
 
+        // イニング間のスコア画面（試合画面改修）。攻守が入れ替わった瞬間、次の打席の再生を保留して
+        // ラインスコアを大写しにする。寿命は他のオーバーレイと同じく Update() の専用クロックだが、
+        // これだけは「進行を止めて待つ」点が違う（_paused と同じく Update 冒頭で抜ける）。
+        [SerializeField] private float inningBreakHoldSeconds = 4f;
+        private VisualElement _inningBreak;
+        private Label _ibCaption;
+        private float _inningBreakClock;
+        private bool _inningBreakOn;
+
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
@@ -289,6 +298,10 @@ namespace KokoSim.Unity.Match
             _subCallTag = _root.Q<Label>("sub-call-tag");
             _subCallText = _root.Q<Label>("sub-call-text");
 
+            _inningBreak = _root.Q<VisualElement>("inning-break");
+            _ibCaption = _root.Q<Label>("ib-caption");
+            _inningBreak?.RegisterCallback<PointerDownEvent>(OnInningBreakDown);
+
             ResetPerMatchVisuals();
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied);
             _subPanel.Bind();
@@ -318,6 +331,7 @@ namespace KokoSim.Unity.Match
             if (_pmSub != null) _pmSub.clicked -= OnOpenSubstitution;
             if (_pmSkip != null) _pmSkip.clicked -= OnSkip;
             _pauseModal?.UnregisterCallback<PointerDownEvent>(OnPauseScrimDown);
+            _inningBreak?.UnregisterCallback<PointerDownEvent>(OnInningBreakDown);
             _root?.UnregisterCallback<PointerDownEvent>(OnRootPointerDown);
             _subPanel?.Close();
             if (_backHome != null) _backHome.clicked -= OnBackHome;
@@ -356,6 +370,8 @@ namespace KokoSim.Unity.Match
             _scoreCallOn = false;
             _subCallClock = 0f;
             _subCallOn = false;
+            _inningBreakClock = 0f;
+            _inningBreakOn = false;
             _subLogCount = 0;
             _pitchBattingChoice = null;
             _pitchPolicyChoice = null;
@@ -373,6 +389,7 @@ namespace KokoSim.Unity.Match
             _capHistHost?.Clear();
             _signPad?.ClearSelection();
             SetVisible(_pauseModal, false);   // 前試合の中断ポップアップを持ち越さない
+            SetVisible(_inningBreak, false);  // 前試合のイニング間画面を持ち越さない
             _lineScorePosted = false;
             SetCount(0, 0);
             SetOuts(0);
@@ -489,7 +506,7 @@ namespace KokoSim.Unity.Match
         // 載せる。中断中（タイム）・終局・スクショ時・別解決の実行中は起こさない。
         private void AutoAdvanceNext()
         {
-            if (_gameOver || _paused || CaptureMode) return;
+            if (_gameOver || _paused || _inningBreakOn || CaptureMode) return;
             if (_prog == null || BackgroundGameOp.Running) return;
             if (_subPanel != null && _subPanel.IsOpen) return;   // 交代モーダルを開いている間は待つ
             _replaying = false;
@@ -526,6 +543,7 @@ namespace KokoSim.Unity.Match
                 if (v is Button) return true;
                 if (v.ClassListContains("signpad")) return true;
                 if (v.ClassListContains("modal-scrim")) return true;
+                if (v.ClassListContains("inning-break")) return true;   // クリック＝スキップ。中断は開かない
             }
             return false;
         }
@@ -762,6 +780,7 @@ namespace KokoSim.Unity.Match
             }
             ResetPitchTacticsChoice();
 
+            var prev = _current;   // 上書き前の打席。攻守が入れ替わったかの判定に使う
             _current = _prog.Current;
             _t = 0;
             UpdateScoreboard(_current, resolved: false);
@@ -770,7 +789,14 @@ namespace KokoSim.Unity.Match
             // 指示パネルの攻守出し分け（issue #289）。指示は「次に解決される打席」に効くので、
             // 表示中打席（_current）の表裏ではなくエンジンの現在境界（＝次打席の攻守）で切り替える。
             _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
-            BeginPaReplay();
+
+            // 半回が変わったらイニング間画面を挟む（次打席の再生はここでは始めない）。
+            // エンジンに半回終了のイベントは無いので、確定した打席の回・表裏の変化で見る。
+            if (!CaptureMode && prev != null
+                && (prev.IsTop != _current.IsTop || prev.Inning != _current.Inning))
+                BeginInningBreak(prev);
+            else
+                BeginPaReplay();
 
             DrainSubstitutionEvents();   // 直前の Advance 中に起きた継投をポップアップ＋実況履歴へ（issue #209 表現）
             UpdateControlState();
@@ -814,6 +840,52 @@ namespace KokoSim.Unity.Match
             }
             else if (_inPitchPhase) BeginPitchBall(0);   // 1球目の投球軌道を盤面へ（#5）
             else EnterBattedBallOrHold();                // 投球列が空でも先へ進む
+        }
+
+        // ── イニング間のスコア画面（試合画面改修）──
+        // 攻守が入れ替わった瞬間に挟む。次打席の再生は EndInningBreak まで保留する。
+        // ここは「Advance が返った後・再生を始める前」の窓なので、背景解決も再生も走っていない
+        // ＝二重進行は構造的に起きない（AutoAdvanceNext は FinishPaView からしか来ない）。
+        private void BeginInningBreak(LivePlateAppearance prev)
+        {
+            if (_inningBreak == null) { BeginPaReplay(); return; }
+
+            HidePitchCall();
+            HideScoreCall();   // 得点直後の攻守交代でテロップが暗幕に重ならないよう先に畳む
+
+            // スコアバグは新しい半回の頭へ戻す（0-0・無死・走者なし）。
+            SetCount(0, 0);
+            SetOuts(0);
+            SetBases(false, false, false);
+
+            if (_ibCaption != null)
+                _ibCaption.text = prev.Inning + "回" + (prev.IsTop ? "表" : "裏") + " 終了";
+            // 大写しにするラインスコアは「次の回」を指した状態で掲げる（_current は次打席）。
+            PostLineScore(_current.Inning, _current.IsTop, finished: false);
+
+            _replaying = false;
+            _inningBreakOn = true;
+            _inningBreakClock = 0f;
+            SetVisible(_inningBreak, true);
+        }
+
+        // 自動で明ける（倍速中は表示時間も一緒に縮む）／クリックで即明ける、の共通出口。
+        private void EndInningBreak()
+        {
+            if (!_inningBreakOn) return;
+            _inningBreakOn = false;
+            _inningBreakClock = 0f;
+            SetVisible(_inningBreak, false);
+            BeginPaReplay();   // 保留していた次打席の再生をここで始める
+        }
+
+        // 暗幕クリック＝スキップ。StopPropagation で中断ポップアップと二重反応させない
+        //（保険として IsPauseExempt にも inning-break を入れてある）。
+        private void OnInningBreakDown(PointerDownEvent evt)
+        {
+            if (!_inningBreakOn) return;
+            EndInningBreak();
+            evt.StopPropagation();
         }
 
         // ── 交代ポップアップ（issue #209 表現）──
@@ -1047,6 +1119,16 @@ namespace KokoSim.Unity.Match
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
+
+            // イニング間はここで抜ける＝再生系を動かさない。倍速を掛けた時計で数えるので、
+            // ×4速なら表示時間も1/4になる（速度設定と間合いが食い違わない）。
+            // タイム中断中はこの手前で return しているので、クロックも一緒に凍る。
+            if (_inningBreakOn)
+            {
+                _inningBreakClock += Time.deltaTime * _speed;
+                if (_inningBreakClock >= inningBreakHoldSeconds) EndInningBreak();
+                return;
+            }
 
             // 判定オーバーレイは自前の寿命で消す（打球再生へ移った直後の1球分もそのまま見せる）。
             if (_pitchCallOn)
@@ -1952,6 +2034,28 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: ライブ観戦の「ホームへ戻る」を実行する（終局後のみ有効）。</summary>
         public void BackHomeForCapture() => OnBackHome();
+
+        /// <summary>
+        /// スクショ用: イニング間のスコア画面を強制的に出す。
+        /// CaptureMode では実進行が半回をまたいでも自動では出さない（撮影を暗幕で潰さないため）ので、
+        /// 撮りたいときだけこれで開く。<see cref="HideInningBreakForCapture"/> で閉じる。
+        /// </summary>
+        public void ShowInningBreakForCapture()
+        {
+            if (_inningBreak == null || _current == null) return;
+            if (_ibCaption != null)
+            {
+                // 直前に終わった半回＝いまの打席のひとつ前。表裏を反転して見出しにする。
+                var inning = _current.IsTop ? _current.Inning - 1 : _current.Inning;
+                if (inning < 1) inning = 1;
+                _ibCaption.text = inning + "回" + (_current.IsTop ? "裏" : "表") + " 終了";
+            }
+            PostLineScore(_current.Inning, _current.IsTop, finished: false);
+            SetVisible(_inningBreak, true);
+        }
+
+        /// <summary>スクショ用: イニング間のスコア画面を閉じる。</summary>
+        public void HideInningBreakForCapture() => SetVisible(_inningBreak, false);
 
         /// <summary>スクショ用: 「ホームへ戻る」ボタンが表示中か（終局＋ライブ観戦モードで true）。</summary>
         public bool BackHomeVisible => _backHome != null && _backHome.style.display.value == DisplayStyle.Flex;

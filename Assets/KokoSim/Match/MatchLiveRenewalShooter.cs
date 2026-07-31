@@ -47,6 +47,11 @@ namespace KokoSim.Unity.Match
             yield return AdvanceUntil(ctrl, pa => !pa.IsTop, 40);
             yield return Capture(ctrl, "03-bottom-half");
 
+            // 攻守交代のイニング間画面（CaptureMode では自動で出ないので強制表示）。
+            ctrl.ShowInningBreakForCapture();
+            yield return Capture(ctrl, "03b-inning-break");
+            ctrl.HideInningBreakForCapture();
+
             // 終盤。
             yield return AdvanceUntil(ctrl, pa => pa.Inning >= 8, 200);
             yield return Capture(ctrl, "04-late");
@@ -72,6 +77,11 @@ namespace KokoSim.Unity.Match
             ctrl.FreezeCurrentAtResult();
             yield return null;
             yield return new WaitForEndOfFrame();
+            yield return null;
+            // 対決ビューのステージを明示的に描き直す。パネルを撮影用RTへ差し替えている間は
+            // ステージカメラの通常描画とタイミングが噛み合わず、素体が真っ黒（ライト無し）で
+            // 焼ける回がある（実機は正常なのに絵だけ黒い＝スクショ経路だけの症状）。
+            ctrl.DuelRigForCapture?.RenderNow();
             yield return null;
 
             var ps = ctrl.GetComponent<UIDocument>().panelSettings;
