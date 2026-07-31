@@ -120,7 +120,14 @@ namespace KokoSim.Unity.Match
                     Vector3.zero, GloveSize, layer, DuelGearMeshes.Glove());
 
                 _fieldCast[pos] = a;
+                _fieldIdleClip[pos] = clip;
             }
+
+            // 投手・捕手も打球中は守備陣の一員として動く（engine の Moves に入る）。
+            // 待機は対決用のクリップ（投球・捕手の構え）ではなく守備の待機を使い、
+            // プレーが終わったら EndFieldPlay が対決の状態ごと戻す
+            _fieldIdleClip[FieldPosition.Pitcher] = outfieldClip;
+            _fieldIdleClip[FieldPosition.Catcher] = infieldClip;
 
             SetFieldCastVisible(_fieldCastVisible);
         }
@@ -153,18 +160,239 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 野手を stage-local の (x,z) へ置き、本塁を向かせる。
+        /// 野手を stage-local の (x,z) へ置く。yaw を渡さなければ本塁を向く。
         /// 縦は <see cref="GroundFix"/> が骨の実測で解く（クリップごとに根の高さが違うため）。
         /// </summary>
-        private void PlaceFielder(Actor a, float x, float z)
+        private void PlaceFielder(Actor a, float x, float z, float? yawDeg = null)
         {
             if (a == null || a.Go == null) return;
             var lp = a.Go.transform.localPosition;
             a.Go.transform.localPosition = new Vector3(x, lp.y, z);
-            a.Go.transform.localRotation = Quaternion.Euler(0f, YawFacingHome(x, z), 0f);
+            a.Go.transform.localRotation = Quaternion.Euler(0f, yawDeg ?? YawFacingHome(x, z), 0f);
             a.BasePos = a.Go.transform.localPosition;
             a.BaseRot = a.Go.transform.localRotation;
+            a.GroundY = FieldGroundY(x, z);   // マウンドの上だけ持ち上がる（投手が降りたら地面へ）
             GroundFix(a);
+        }
+
+        /// <summary>
+        /// その地点の接地高[m]。マウンドの上だけ <see cref="MoundHeight"/> で、縁で地面へ落ちる。
+        ///
+        /// 投手の <c>GroundY</c> は生成時にマウンド高で焼かれている。動かすようになると
+        /// **マウンドを降りても 25cm 浮いたまま**になる（枠10mの構図で14px＝はっきり見える）。
+        /// 位置で決まる量なので毎コマ引き直す＝「特定のコマでだけ」の分岐にしない（design-18 §4.5-⑩）。
+        /// </summary>
+        private static float FieldGroundY(float x, float z)
+        {
+            float r = Mathf.Sqrt(x * x + (z - MoundDistance) * (z - MoundDistance));
+            return MoundHeight * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(2.0f, 2.7f, r)));
+        }
+
+        // ---- 走る（F4） ---------------------------------------------------------
+        //
+        // engine は位置しか返さない（`FielderAt` は easeIO で塁間を補間するだけ）。
+        // Unity 側の仕事は「その位置へ置く」ことではなく「**その位置の動き方に足を合わせる**」こと。
+        // 合わせないと、空中を滑るか、足だけ空回りする。
+
+        /// <summary>
+        /// 走行クリップの実測値（<c>out/duel-stage/locomotion.tsv</c>・
+        /// <c>DuelMotionSpike.RunLocomotionProbe</c>）。**目分量の値を置かない**。
+        /// </summary>
+        private readonly struct LocoClip
+        {
+            /// <summary>クリップ名。</summary>
+            public readonly string Name;
+            /// <summary>1ループの前進量 ÷ 尺 [m/s]。<c>Speed = v_engine / VClip</c> の分母。</summary>
+            public readonly float VClip;
+            /// <summary>
+            /// クリップのローカル座標での**進行方向**[度]（+Z を 0 とする）。
+            ///
+            /// ⚠ **体の向きではない**。モーキャップは収録中に横へ流れており、実測では
+            /// 走りループが −9.6°、全力が −12.9° ずれている。体の向きを速度ベクトルへ合わせると
+            /// **全員がその角度ぶんカニ歩きする**（絵では「なんとなく斜め」としか見えない）。
+            /// 合わせるのは進行方向のほう。
+            /// </summary>
+            public readonly float MoveDirDeg;
+
+            public LocoClip(string name, float vClip, float moveDirDeg)
+            {
+                Name = name; VClip = vClip; MoveDirDeg = moveDirDeg;
+            }
+        }
+
+        /// <summary>速さの段。遅い順（同じ誤差なら遅い段を採る＝走らせすぎない）。</summary>
+        private static readonly LocoClip[] LocoLadder =
+        {
+            new LocoClip("AA_Baseball_Defender_Movement_Walk_F_Loop", 0.73f, -4.5f),
+            new LocoClip("AA_Baseball_Defender_Movement_Run_Loop", 4.28f, -9.6f),
+            new LocoClip("AA_Baseball_Defender_Movement_Sprint_Loop", 5.11f, -12.9f),
+        };
+
+        /// <summary>再生速度の許容幅。外れると足の運びが目に見えて嘘になる。</summary>
+        private const float LocoSpeedMin = 0.6f, LocoSpeedMax = 1.45f;
+
+        /// <summary>これ未満は待機（走らせない）[m/s]。easeIO の出入りで毎回0を通るので要る。</summary>
+        private const float FielderIdleSpeedMps = 0.35f;
+
+        /// <summary>向き変えの上限[度/秒]。無いと1コマで振り向いてコマ落ちに見える。</summary>
+        private const float FielderYawRateDegPerSec = 540f;
+
+        /// <summary>速度を採る中央差分の刻み[秒]。</summary>
+        private const float LocoSampleDt = 1f / 60f;
+
+        /// <summary>立ち位置の不連続を吸収する時間[秒]（下の <see cref="FielderMotion.Entry"/>）。</summary>
+        private const float EntryFadeSeconds = 0.3f;
+
+        private struct FielderMotion
+        {
+            /// <summary>いま流している段（-1=待機）。</summary>
+            public int Ladder;
+            /// <summary>いまの yaw[度]（レート制限の積分値）。</summary>
+            public float Yaw;
+            public bool Started;
+            /// <summary>
+            /// プレー開始時の「実際の立ち位置 − engine の言う立ち位置」[m]。
+            ///
+            /// 対決ステージの投手 z=18.44・捕手 z=−1.0 に対し engine の定位置は 17.4／−2.2 で、
+            /// **構造的に 1.347m／1.200m ずれている**（F2 実測）。差をそのまま無視すると
+            /// 打球の瞬間に2人だけワープする。0.3秒かけて 0 へ落として吸収する。
+            /// </summary>
+            public Vector2 Entry;
+        }
+
+        private readonly Dictionary<FieldPosition, FielderMotion> _loco = new();
+
+        /// <summary>走行中に <c>IdleClip</c> を差し替えるので、本来の待機クリップを控えておく。</summary>
+        private readonly Dictionary<FieldPosition, AnimationClip> _fieldIdleClip = new();
+
+        /// <summary>守備の9人（engine が動かす対象）。</summary>
+        private static readonly FieldPosition[] AllFieldPositions =
+        {
+            FieldPosition.Pitcher, FieldPosition.Catcher, FieldPosition.FirstBase,
+            FieldPosition.SecondBase, FieldPosition.ThirdBase, FieldPosition.Shortstop,
+            FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
+        };
+
+        /// <summary>
+        /// 時刻 t の野手1人を「engine の位置」へ置き、その動きに足と向きを合わせる。
+        /// </summary>
+        /// <param name="dt">前回の <c>SetFieldTime</c> からの経過[秒]（向き変えのレート制限に使う）。</param>
+        private void StepFielderMotion(FieldPosition pos, Actor a, float t, float dt)
+        {
+            if (a == null || a.Go == null) return;
+            FielderMotion st;
+            if (!_loco.TryGetValue(pos, out st)) st = new FielderMotion { Ladder = -1 };
+            float prevYaw = st.Yaw;
+            bool hadYaw = st.Started;
+
+            var cur = PlaybackEvaluator.FielderAt(_fieldPlay, pos, t);
+
+            // 速度は中央差分。engine は位置しか返さないので、速さも向きもここで採るしかない
+            float ta = Mathf.Max(0f, t - LocoSampleDt);
+            float tb = t + LocoSampleDt;
+            var pa = PlaybackEvaluator.FielderAt(_fieldPlay, pos, ta);
+            var pb = PlaybackEvaluator.FielderAt(_fieldPlay, pos, tb);
+            float span = Mathf.Max(1e-4f, tb - ta);
+            float vx = (float)(pb.Pos.X - pa.Pos.X) / span;
+            float vz = (float)(pb.Pos.Y - pa.Pos.Y) / span;
+            float speed = Mathf.Sqrt(vx * vx + vz * vz);
+
+            // 段を選ぶ。クランプ後にどれだけ嘘が残るかで比べる（比なので対数で見る）
+            int want = -1;
+            float mul = 1f;
+            if (speed >= FielderIdleSpeedMps)
+            {
+                float best = float.MaxValue;
+                for (int i = 0; i < LocoLadder.Length; i++)
+                {
+                    float m = Mathf.Clamp(speed / LocoLadder[i].VClip, LocoSpeedMin, LocoSpeedMax);
+                    float err = Mathf.Abs(Mathf.Log(speed / (LocoLadder[i].VClip * m)));
+                    if (err < best - 1e-4f) { best = err; want = i; mul = m; }
+                }
+                // 足と地面の食い違い。1.0=一致 / >1=地面のほうが速い（前へ滑る）/
+                // <1=足のほうが速い（後ろへ滑る＝ムーンウォーク）。**絵で見えるのはこの比**であって
+                // 「クランプに当たったコマ数」ではない（当たっても比が1に近ければ見えない）
+                if (dt > 0f)
+                {
+                    _locoMoveFrames++;
+                    float ratio = speed / Mathf.Max(0.01f, LocoLadder[want].VClip * mul);
+                    _locoSlipMax = Mathf.Max(_locoSlipMax, ratio);
+                    _locoSlipMin = Mathf.Min(_locoSlipMin, ratio);
+                    if (ratio > 1.15f || ratio < 0.87f) _locoClampFrames++;
+                }
+            }
+
+            // 向き。走っている間は**進行方向**をエンジンの速度ベクトルへ合わせる（体の向きではない）
+            float targetYaw = want < 0
+                ? YawFacingHome((float)cur.Pos.X, (float)cur.Pos.Y)
+                : Mathf.Atan2(vx, vz) * Mathf.Rad2Deg - LocoLadder[want].MoveDirDeg;
+            st.Yaw = st.Started
+                ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
+                : targetYaw;
+            st.Started = true;
+
+            // クリップの差し替え。**位相を保って移る**（0へ戻すと足が跳ぶ）
+            if (want != st.Ladder)
+            {
+                var clip = want < 0 ? IdleClipFor(pos) : LoadClip(LocoLadder[want].Name);
+                if (clip != null && clip != a.Clip)
+                {
+                    float phase = a.Clip != null && a.Clip.length > 0.01f
+                        ? Mathf.Repeat(a.Time / a.Clip.length, 1f) : 0f;
+                    SetActorClip(a, clip, phase * clip.length, 0f);
+                    a.IdleClip = clip;   // ループさせる（FinishOneShot がここへ戻る）
+                    a.IdleEndAt = 0f;
+                }
+                st.Ladder = want;
+            }
+            // ⚠ Speed は SetActorClip では戻らない。毎コマ入れ直す（差し替えの前後で持ち越さない）
+            a.Speed = want < 0 ? 1f : mul;
+
+            // 立ち位置の不連続を 0 へ落としながら engine の位置へ置く
+            float fade = EntryFadeSeconds <= 0f ? 0f
+                : Mathf.Clamp01(1f - (t - _fieldT0) / EntryFadeSeconds);
+            PlaceFielder(a, (float)cur.Pos.X + st.Entry.x * fade,
+                (float)cur.Pos.Y + st.Entry.y * fade, st.Yaw);
+
+            // 受け入れの実測。**どちらも絵では読めない**（位置のずれは「野手が立っている」だけ、
+            // 向きの飛びは1コマなので静止画に残らない）ので、通しながら最悪値を溜める
+            if (dt > 0f && t > _fieldT0 + EntryFadeSeconds)
+            {
+                var lp = a.Go.transform.localPosition;
+                _locoMaxPosErr = Mathf.Max(_locoMaxPosErr,
+                    new Vector2(lp.x - (float)cur.Pos.X, lp.z - (float)cur.Pos.Y).magnitude);
+            }
+            if (dt > 0f && hadYaw)
+                _locoMaxYawStep = Mathf.Max(_locoMaxYawStep, Mathf.Abs(Mathf.DeltaAngle(prevYaw, st.Yaw)));
+            _locoMaxSpeed = Mathf.Max(_locoMaxSpeed, speed);
+
+            _loco[pos] = st;
+        }
+
+        private float _locoMaxPosErr, _locoMaxYawStep, _locoMaxSpeed;
+        private int _locoMoveFrames, _locoClampFrames;
+        private float _locoSlipMax, _locoSlipMin;
+
+        /// <summary>
+        /// 【撮影ハーネス用】走りの受け入れ実測（プレー開始からの最悪値）。
+        ///
+        /// <c>posErr</c> は「engine の言う位置」と実際に置いた位置の差＝**写しているだけなので 0.000 のはず**。
+        /// 0 でなければ位置を engine 以外の何かが動かしている（＝不変条件#1 違反）。
+        /// <c>yawStep</c> は1コマの向き変化＝レート制限が効いているかどうか。
+        /// <c>vMax</c> は engine が野手に要求する最大の速さ＝段の選び方が妥当かの根拠。
+        /// **どれも絵からは読めない**（立っている人と、1コマだけ飛んだ向き）。
+        /// </summary>
+        public string FielderRunDiagForCapture() => string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "posErrMax={0:F3}m\tyawStepMax={1:F1}deg\tvMax={2:F2}m/s\tslip={3:F2}〜{4:F2}\t目立つ={5}/{6}コマ",
+            _locoMaxPosErr, _locoMaxYawStep, _locoMaxSpeed,
+            _locoSlipMin > 1e6f ? 1f : _locoSlipMin, _locoSlipMax, _locoClampFrames, _locoMoveFrames);
+
+        /// <summary>その役の本来の待機クリップ（走行中は <c>IdleClip</c> が差し替わっているため別に持つ）。</summary>
+        private AnimationClip IdleClipFor(FieldPosition pos)
+        {
+            AnimationClip c;
+            return _fieldIdleClip.TryGetValue(pos, out c) ? c : null;
         }
 
         // ---- 球場の面（内野の土・刈り分け・フェンス。S2/S3・監督決定 2026-08-01） -----
@@ -542,6 +770,22 @@ namespace KokoSim.Unity.Match
 
         private PlaybackPlay _fieldPlay;
         private float _fieldT;
+        private float _fieldT0;
+
+        /// <summary>
+        /// 打球プレー中だけ差し替える投手・捕手の状態。対決の状態機械（セット姿勢で待つ・
+        /// フォロースルーで打ち切る等）をそのまま踏むと戻せなくなるので、丸ごと控えて戻す。
+        /// </summary>
+        private struct DuelActorSnapshot
+        {
+            public AnimationClip Clip, IdleClip;
+            public float Time, Speed, EndAt, DefaultEndAt, IdleEndAt, GroundY;
+            public bool HoldAtEnd, Holding, Valid;
+            public Vector3 BasePos;
+            public Quaternion BaseRot;
+        }
+
+        private DuelActorSnapshot _pitcherSnap, _catcherSnap;
 
         /// <summary>打球プレーを再生中か（守備カメラが効いているか）。</summary>
         public bool FieldPlayActive => _fieldPlay != null;
@@ -556,8 +800,32 @@ namespace KokoSim.Unity.Match
             EnsureFieldCast();
             SetFieldCastVisible(true);
             _fieldPlay = play;
+            _fieldT0 = t0;
+            _pitcherSnap = Snapshot(_pitcher);
+            _catcherSnap = Snapshot(_catcher);
+
+            // 立ち位置の不連続を控える。engine の言う定位置と実際の立ち位置の差を
+            // **プレーの頭で1回だけ**採り、0.3秒かけて 0 へ落とす（投手1.347m・捕手1.200m）
+            _loco.Clear();
+            _locoMaxPosErr = _locoMaxYawStep = _locoMaxSpeed = 0f;
+            _locoMoveFrames = _locoClampFrames = 0;
+            _locoSlipMax = 0f; _locoSlipMin = float.MaxValue;
+            foreach (var pos in AllFieldPositions)
+            {
+                var a = FielderActor(pos);
+                if (a == null || a.Go == null) continue;
+                var want = PlaybackEvaluator.FielderAt(play, pos, t0);
+                var lp = a.Go.transform.localPosition;
+                _loco[pos] = new FielderMotion
+                {
+                    Ladder = -1,
+                    Entry = new Vector2(lp.x - (float)want.Pos.X, lp.z - (float)want.Pos.Y),
+                };
+            }
+
             BuildFieldCameraPlan(play);
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
+            _fieldT = t0;
             SetFieldTime(t0);
         }
 
@@ -567,10 +835,54 @@ namespace KokoSim.Unity.Match
             _fieldPlay = null;
             _fieldPlan = null;
             _fieldStationCuts.Clear();
+            _loco.Clear();
+            // 走行クリップのまま伏せると、次の打席の頭で走っている投手が出る
+            Restore(_pitcher, _pitcherSnap);
+            Restore(_catcher, _catcherSnap);
+            foreach (var kv in _fieldCast)
+            {
+                var idle = IdleClipFor(kv.Key);
+                if (idle == null || kv.Value == null) continue;
+                SetActorClip(kv.Value, idle, 0f, 0f);
+                kv.Value.IdleClip = idle;
+                kv.Value.Speed = 1f;
+            }
+            PlaceFieldCastAtDefault();
             SetFieldCastVisible(false);
             HideBall();
             ClearPreviewFrame();
             ApplyCalibration(_cal);   // ⚠ 画角だけでなくカメラの位置・向きも戻す（ClearPreviewFrame は画角のみ）
+        }
+
+        private static DuelActorSnapshot Snapshot(Actor a)
+        {
+            if (a == null || a.Go == null) return default;
+            return new DuelActorSnapshot
+            {
+                Valid = true,
+                Clip = a.Clip, IdleClip = a.IdleClip, Time = a.Time, Speed = a.Speed,
+                EndAt = a.EndAt, DefaultEndAt = a.DefaultEndAt, IdleEndAt = a.IdleEndAt,
+                GroundY = a.GroundY, HoldAtEnd = a.HoldAtEnd, Holding = a.Holding,
+                BasePos = a.Go.transform.localPosition, BaseRot = a.Go.transform.localRotation,
+            };
+        }
+
+        private void Restore(Actor a, DuelActorSnapshot s)
+        {
+            if (a == null || a.Go == null || !s.Valid) return;
+            a.Go.transform.localPosition = s.BasePos;
+            a.Go.transform.localRotation = s.BaseRot;
+            a.BasePos = s.BasePos;
+            a.BaseRot = s.BaseRot;
+            a.GroundY = s.GroundY;
+            a.IdleClip = s.IdleClip;
+            a.IdleEndAt = s.IdleEndAt;
+            a.DefaultEndAt = s.DefaultEndAt;
+            if (s.Clip != null) SetActorClip(a, s.Clip, s.Time, s.EndAt);
+            a.Speed = s.Speed;          // ⚠ SetActorClip の後（差し替えで戻らない）
+            a.HoldAtEnd = s.HoldAtEnd;
+            a.Holding = s.Holding;
+            GroundFix(a);
         }
 
         /// <summary>
@@ -580,14 +892,12 @@ namespace KokoSim.Unity.Match
         public void SetFieldTime(float t)
         {
             if (_fieldPlay == null) return;
+            float dt = t - _fieldT;
             _fieldT = t;
 
-            // 野手・走者の位置（F3 時点では移動クリップが無いので位置だけ＝滑って見える。走りは F4）
-            foreach (var kv in _fieldCast)
-            {
-                var p = PlaybackEvaluator.FielderAt(_fieldPlay, kv.Key, t);
-                PlaceFielder(kv.Value, (float)p.Pos.X, (float)p.Pos.Y);
-            }
+            // 守備9人（投手・捕手を含む）。位置は engine の真値、足と向きは Unity が合わせる
+            foreach (var pos in AllFieldPositions)
+                StepFielderMotion(pos, FielderActor(pos), t, dt);
 
             // ボール
             var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
@@ -648,24 +958,36 @@ namespace KokoSim.Unity.Match
         public string FielderDiagForCapture()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("pos\tengineX\tengineZ\tactualX\tactualZ\tdiffM\tpx\tclip\tyaw");
-            foreach (FieldPosition pos in System.Enum.GetValues(typeof(FieldPosition)))
+            sb.AppendLine("pos\tengineX\tengineZ\tactualX\tactualZ\tdiffM\tv_mps\tspeedMul\tpx\tclip\tyaw");
+            foreach (var pos in AllFieldPositions)
             {
-                if (pos == FieldPosition.DesignatedHitter) continue;
                 var a = FielderActor(pos);
-                PlaybackVec home;
-                if (!PlaybackEvaluator.DefaultPositions.TryGetValue(pos, out home)) continue;
+                // 再生中は「その時刻に engine が言う位置」、それ以外は定位置と比べる
+                PlaybackVec want;
+                float v = 0f;
+                if (_fieldPlay != null)
+                {
+                    want = PlaybackEvaluator.FielderAt(_fieldPlay, pos, _fieldT).Pos;
+                    float ta = Mathf.Max(0f, _fieldT - LocoSampleDt), tb = _fieldT + LocoSampleDt;
+                    var pa = PlaybackEvaluator.FielderAt(_fieldPlay, pos, ta).Pos;
+                    var pb = PlaybackEvaluator.FielderAt(_fieldPlay, pos, tb).Pos;
+                    v = new Vector2((float)(pb.X - pa.X), (float)(pb.Y - pa.Y)).magnitude
+                        / Mathf.Max(1e-4f, tb - ta);
+                }
+                else if (!PlaybackEvaluator.DefaultPositions.TryGetValue(pos, out want)) continue;
+
                 if (a == null || a.Go == null)
                 {
-                    sb.AppendLine(pos + "\t" + home.X.ToString("F2") + "\t" + home.Y.ToString("F2") + "\t(未生成)");
+                    sb.AppendLine(pos + "\t" + want.X.ToString("F2") + "\t" + want.Y.ToString("F2") + "\t(未生成)");
                     continue;
                 }
                 var lp = a.Go.transform.localPosition;
-                float dx = lp.x - (float)home.X, dz = lp.z - (float)home.Y;
+                float dx = lp.x - (float)want.X, dz = lp.z - (float)want.Y;
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F3}\t{6}\t{7}\t{8:F1}",
-                    pos, home.X, home.Y, lp.x, lp.z, Mathf.Sqrt(dx * dx + dz * dz),
-                    ScreenHeightPx(a), a.Clip != null ? a.Clip.name : "(null)",
+                    "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F3}\t{6:F2}\t{7:F2}\t{8}\t{9}\t{10:F1}",
+                    pos, want.X, want.Y, lp.x, lp.z, Mathf.Sqrt(dx * dx + dz * dz), v, a.Speed,
+                    ScreenHeightPx(a),
+                    a.Clip != null ? a.Clip.name.Replace("AA_Baseball_Defender_Movement_", "") : "(null)",
                     a.Go.transform.localEulerAngles.y));
             }
             return sb.ToString();

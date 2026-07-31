@@ -1418,6 +1418,111 @@ namespace KokoSim.EditorTools
             }
         }
 
+        /// <summary>
+        /// 走行・移動クリップの**前進量**実測（打球処理の3D化 F4）。速度合わせの単一ソース。
+        ///
+        /// engine の <c>FielderAt</c> は位置しか返さないので、Unity 側は
+        /// <c>Speed = v_engine / v_clip</c> で足の回転を合わせる（合わせないと空中を滑るか
+        /// 足が空回りする）。その <c>v_clip</c> は**クリップごとに実測するしかない**
+        /// （尺は catalog に出ているが、1ループで何m進むかは出ていない）。
+        ///
+        /// あわせて **進む向きと体の向きの角度差**を出す。ルートモーションの進行方向は
+        /// クリップの素の向きと一致しない（後退・横走りは体が別の方向を向いたまま進む）ので、
+        /// 「engine の速度ベクトルへ体を向ける」だけだと後退クリップが逆向きに走る。
+        ///
+        /// ⚠ ルートモーションが**演技の本質**であるクリップ（ダイブ・スライディング・走り込み捕球）は
+        /// 速度合わせの対象ではない。ここで測る変位は「開始位置を到達点から逆算する」ために使う。
+        /// </summary>
+        public static string RunLocomotionProbe()
+        {
+            // 走行ループ（速度合わせに使う）／踏み出し／ルートモーションが演技のもの／走塁
+            var names = new[]
+            {
+                "Defender_Movement_Run_Loop", "Defender_Movement_Run_Back_Loop",
+                "Defender_Movement_Run_L90_Loop", "Defender_Movement_Run_R90_Loop",
+                "Defender_Movement_Sprint_Loop", "Defender_Movement_Sprint_L90_Loop",
+                "Defender_Movement_Sprint_R90_Loop",
+                "Defender_Movement_Walk_F_Loop", "Defender_Movement_Walk_B_Loop",
+                "Defender_Movement_Walk_L_Loop", "Defender_Movement_Walk_R_Loop",
+                "Defender_Movement_Shuffle_L", "Defender_Movement_Shuffle_R",
+                "Defender_Movement_Crouch_To_Run_Type01", "Defender_Movement_Crouch_To_Run_Type02",
+                "Defender_Movement_Crouch_To_Run_Back", "Defender_Movement_Crouch_To_Run_L90",
+                "Defender_Movement_Crouch_To_Run_R90",
+                "Defender_Movement_Sprint_Diving_Catch", "Defender_Movement_Sprint_Sliding_Catch",
+                "Defender_Movement_Run_To_Catching_Type01", "Defender_Movement_Run_To_Catching_Type02",
+                "Defender_Movement_Run_Back_To_Catching", "Defender_Movement_Run_Back_To_Jumping_Catch",
+                "Defender_Movement_Run_L90_To_Catching_Type01", "Defender_Movement_Run_R90_To_Catching_Type01",
+                "Defender_Movement_Shuffle_L_Catching", "Defender_Movement_Shuffle_R_Catching",
+                "Offense_Crouch_To_Running", "Offense_Base_Running", "Offense_Running_To_Base",
+                "Offense_Base_Walking", "Offense_Back_To_Base",
+                "Offense_Base_Sliding_Type01_Succ", "Offense_Base_Sliding_Type01_Fail",
+            };
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\tdx\tdz\tdist\tv_clip\tchestX\tchestZ\tmoveVsChest");
+                foreach (var shortName in names)
+                {
+                    var name = "AA_Baseball_" + shortName;
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    // 素の向き（入りの構え）。途中で振り向く芝居があるので頭で測る
+                    var b0 = SpawnBody(root, "loco0", Vector3.zero, 0f, Color.white);
+                    Sample(b0, clip, 0.05f);
+                    var anim0 = b0.GetComponentInChildren<Animator>();
+                    var ra = anim0.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                    var la = anim0.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                    var chest = Vector3.Cross(ra - la, Vector3.up);
+                    chest.y = 0f; chest.Normalize();
+                    var p0 = b0.transform.position;
+                    Object.DestroyImmediate(b0);
+
+                    // 終端まで積分した先の位置（同じ体を進めるとサンプルが累積するので必ず取り直す）
+                    var b1 = SpawnBody(root, "loco1", Vector3.zero, 0f, Color.white);
+                    Sample(b1, clip, 1f);
+                    var p1 = b1.transform.position;
+                    Object.DestroyImmediate(b1);
+
+                    var d = new Vector3(p1.x - p0.x, 0f, p1.z - p0.z);
+                    float dist = d.magnitude;
+                    // 「体の向きに対して」どちらへ進むか。0°=前進 / 180°=後退 / ±90°=横
+                    float moveVsChest = dist > 0.01f
+                        ? Vector3.SignedAngle(chest, d.normalized, Vector3.up) : 0f;
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F2}\t{6:F2}\t{7:F2}\t{8:F0}",
+                        shortName, clip.length, d.x, d.z, dist,
+                        clip.length > 0.01f ? dist / clip.length : 0f,
+                        chest.x, chest.z, moveVsChest));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/locomotion.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] locomotion probe -> out/duel-stage/locomotion.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F4 走行クリップを実測する")]
+        private static void RunLocomotionProbeMenu() => RunLocomotionProbe();
+
         private static AnimationClip FindClip(string clipName)
         {
             // 供給元は本番リグと同じ入口（自作Assets/Motions → 購入Assets/Animoの順）で引く。

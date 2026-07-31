@@ -507,7 +507,9 @@ namespace KokoSim.Unity.Match
         private const float MoundDistance = 18.44f;
         private const float MoundHeight = 0.254f;
         private const float TargetHeight = 1.75f;
-        internal const float PoseFps = 12f;   // §4.2 確定（2026-07-26 監督判定）
+        // §4.2 確定（2026-07-26 監督判定）。撮影ハーネスは**この刻みで通す**必要がある
+        // （飛び石で進めるとレート制限も足の運びも測ったことにならない）ので public
+        public const float PoseFps = 12f;
         private static readonly Vector3 StageOrigin = new(0f, -500f, 0f);
 
         private const string BodyFbx = "Assets/DuelSpike/UBC/SuperheroMale.fbx";

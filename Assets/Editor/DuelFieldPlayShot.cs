@@ -49,6 +49,9 @@ namespace KokoSim.UnityEditorTools
             log.AppendLine("play\tmaxZoom\tmarginM\tt\tballX\tballZ\tballH\tframeH_m\taimY\taimPx\tballPx\tballU\tballV\tstationY");
             var plans = new StringBuilder();
             plans.AppendLine("play\tstationPlan");
+            var fielders = new StringBuilder();
+            var accept = new StringBuilder();
+            accept.AppendLine("play\tacceptance");
 
             foreach (var idx in PlayIndices)
             {
@@ -69,16 +72,28 @@ namespace KokoSim.UnityEditorTools
                     // カットは1コマの絵に写らない＝いつ何回切れるかは実測でしか採れない
                     plans.AppendLine(Label(idx) + "\t" + rig.FieldStationPlanForCapture());
 
+                    // **実ゲームと同じ刻みで通す**（撮る時刻だけ飛び石で進めない）。
+                    // 向きのレート制限も足の運びもコマ間の履歴で決まるので、0.4秒ずつ飛ばすと
+                    // 「レート制限が効いているか」を測ったことにならない
                     var frames = new List<Texture2D>();
-                    float step = ((float)play.Dur - contact) / (Frames - 1);
-                    for (int n = 0; n < Frames; n++)
+                    float shotStep = ((float)play.Dur - contact) / (Frames - 1);
+                    float poseStep = 1f / DuelStageRig.PoseFps;
+                    int shot = 0;
+                    for (float t = contact; shot < Frames; t += poseStep)
                     {
-                        float t = contact + n * step;
+                        if (t > contact) rig.Tick(poseStep);
                         rig.SetFieldTime(t);
+                        if (t + 1e-4f < contact + shot * shotStep) continue;
                         rig.RenderNow();
                         frames.Add(Grab(rig.Target));
                         log.AppendLine(rig.FieldFrameDiagForCapture(t));
+                        fielders.AppendLine("# " + Label(idx) + " t="
+                            + t.ToString("F2", CultureInfo.InvariantCulture));
+                        fielders.Append(rig.FielderDiagForCapture());
+                        shot++;
                     }
+
+                    accept.AppendLine(Label(idx) + "\t" + rig.FielderRunDiagForCapture());
 
                     // 名前は日本語なのでファイル名に使えない。添字＋ラベルで一意にする
                     WriteSheet(frames, Label(idx));
@@ -92,6 +107,8 @@ namespace KokoSim.UnityEditorTools
 
             File.WriteAllText(Path.Combine(Dir, "fieldplay.tsv"), log.ToString());
             File.WriteAllText(Path.Combine(Dir, "stations.tsv"), plans.ToString());
+            File.WriteAllText(Path.Combine(Dir, "fielders.tsv"), fielders.ToString());
+            File.WriteAllText(Path.Combine(Dir, "acceptance.tsv"), accept.ToString());
             Debug.Log("[F3Shot] DONE -> " + Dir);
         }
 
