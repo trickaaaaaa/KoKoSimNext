@@ -55,10 +55,12 @@ public sealed class PitcherIdentityTests
         var ace = team.BattingOrder[team.PitcherSlot];
 
         // 当季の調子variance（Q21, 2026-07-22 解決）で並べ替えが非恒等になる状況を作る。
+        // 投手が調子ソートで動くのは打撃型エース（野手平均以上）だけになった（issue #360）ので、
+        // エースの打撃も引き上げて「投手が9番から動く」再現条件を維持する。
         var withCondition = team.BattingOrder
             .Select((p, i) => i switch
             {
-                8 => p with { Condition = Condition.Excellent },   // 絶好調のエースは上位打順へ動く
+                8 => p with { Condition = Condition.Excellent, Contact = 90, Power = 90 },   // 絶好調の打撃型エースは上位打順へ動く
                 3 => p with { Condition = Condition.Terrible },    // 絶不調の野手が9番へ落ちる
                 _ => p,
             }).ToList();

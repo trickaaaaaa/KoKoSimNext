@@ -152,6 +152,46 @@ public sealed class SubstitutionTacticsTests
         Assert.Equal(order.Select(p => p.Name), result.Select(p => p.Name));
     }
 
+    [Fact]
+    public void ComposeBattingOrder_WeakPitcherInExcellentForm_StaysPinned_FieldersStillReorder()
+    {
+        // 投手の枠は打力で決める（issue #360）: 非力な投手（野手平均未満）は絶好調でも席を動かず、
+        // 野手だけが調子で並べ替わる。変更前は投手が調子だけで1番へ跳んでいた。
+        var brain = new StandardTacticsBrain();
+        var order = new List<Player>
+        {
+            P("1番", contact: 50) with { Position = FieldPosition.Catcher },
+            P("2番絶不調", contact: 50) with { Position = FieldPosition.FirstBase, Condition = Condition.Terrible },
+            P("3番", contact: 50) with { Position = FieldPosition.SecondBase },
+            P("4番", contact: 50) with { Position = FieldPosition.ThirdBase },
+            P("投手", contact: 10) with { Position = FieldPosition.Pitcher, Condition = Condition.Excellent },
+        };
+
+        var result = brain.ComposeBattingOrder(order);
+
+        Assert.Equal("投手", result[^1].Name);                       // 絶好調でも9番（末尾の席）のまま
+        Assert.Equal("2番絶不調", result[^2].Name);                  // 野手は従来どおり調子で下がる
+        Assert.Equal(new[] { "1番", "3番", "4番" }, result.Take(3).Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ComposeBattingOrder_BattingTypeAce_MovesWithFormLikeFielders()
+    {
+        // 打撃型エース（野手平均以上, LineupOrderer.BatsWithFielders）は野手と同じ土俵＝
+        // 絶好調なら従来どおり調子ソートで前へ出る。
+        var brain = new StandardTacticsBrain();
+        var order = new List<Player>
+        {
+            P("1番", contact: 50) with { Position = FieldPosition.Catcher },
+            P("2番", contact: 50) with { Position = FieldPosition.FirstBase },
+            P("エース", contact: 80) with { Position = FieldPosition.Pitcher, Condition = Condition.Excellent },
+        };
+
+        var result = brain.ComposeBattingOrder(order);
+
+        Assert.Equal("エース", result[0].Name);
+    }
+
     // ===== オーダー編成: AiTacticsBrain（③豪腕依存は据え置き・①戦術眼で気づく確率が変わる） =====
 
     private static List<Player> MixedConditionOrder()
