@@ -73,7 +73,9 @@ namespace KokoSim.Unity.Match
             ctrl.SelectPitchBattingForCapture(null);
 
             // 走者が出た場面＝バント/盗塁/エンドランが選べるようになる絵。
-            yield return AdvanceUntil(ctrl, pa => !pa.IsTop && pa.BaseFirstAfter, 60);
+            // カードの可否は「いま止まっている采配窓の塁」で引く（設計書15 §8。旧: 次の打席を先読みした
+            // BaseFirstAfter）。一括経路の窓はこの打席の投球中の局面なので、打席開始時の塁で探す。
+            yield return AdvanceUntil(ctrl, pa => !pa.IsTop && pa.BaseFirstBefore, 60);
             ctrl.SetTacticsHotForCapture("batting-squeeze");
             yield return Capture(ctrl, "04d-card-offense-runner-on");
             ctrl.SetTacticsHotForCapture(null);
