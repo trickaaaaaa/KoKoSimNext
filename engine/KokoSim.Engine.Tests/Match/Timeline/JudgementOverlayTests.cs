@@ -321,4 +321,57 @@ public sealed class JudgementOverlayTests
         }
         Assert.True(found > 0, "本塁への移動が一度も記録されていない");
     }
+
+    // --- 本塁打の判定オーバーレイ＋飛距離（issue #354） ---
+
+    [Fact]
+    public void BuildBattedBall_HomeRun_EmitsSingleHomeRunJudgement_AtLandingTime()
+    {
+        var play = FieldingPlayFixtures.HomeRun();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var j = Assert.Single(tl.Judgements);
+        Assert.Equal(JudgementKind.HomeRun, j.Kind);
+        // 着地の瞬間＝結果確定時刻（本塁打の resolvedAt と同じ）に出す。
+        Assert.Equal(tl.ResolvedAt, j.T, 6);
+    }
+
+    [Fact]
+    public void BuildBattedBall_HomeRun_JudgementCarriesRangeM_AsDistance()
+    {
+        var play = FieldingPlayFixtures.HomeRun();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        // 載せる飛距離は判定に使った着地までの水平距離そのもの（表示専用・新たな計算をしない）。
+        var j = Assert.Single(tl.Judgements);
+        Assert.Equal(play.RangeM, j.DistanceM!.Value, 6);
+    }
+
+    [Fact]
+    public void PlaybackAdapter_HomeRun_DistanceReachesJudgementAt()
+    {
+        var play = FieldingPlayFixtures.HomeRun();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+        var pb = PlayTimelineAdapter.ToPlaybackPlay(tl);
+
+        var found = PlaybackEvaluator.JudgementAt(pb, tl.ResolvedAt, holdSeconds: 0.6);
+        Assert.NotNull(found);
+        Assert.Equal(JudgementKind.HomeRun, found!.Value.Kind);
+        Assert.Equal(play.RangeM, found.Value.DistanceM!.Value, 6);
+    }
+
+    [Fact]
+    public void BuildBattedBall_NonHomeRun_JudgementHasNoDistance()
+    {
+        // 既存の判定（アウト/セーフ/フェア）は飛距離を持たない＝描画側で詳細行が出ない。
+        var play = InfieldOut(judgementMargin: -0.5);
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, Field.StandardAlignment(), Field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(play), closeCallMarginSeconds: 0.15);
+
+        Assert.All(tl.Judgements, j => Assert.Null(j.DistanceM));
+    }
 }
