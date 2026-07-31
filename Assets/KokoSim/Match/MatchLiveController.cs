@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Pitching;   // PitcherGear（とばしていけ）
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
@@ -144,8 +145,16 @@ namespace KokoSim.Unity.Match
         // （エンジン側の「1球指示は消費後クリア」と表示を一致させる＝実は1球限りだと分かる）。
         // 攻撃中は打撃指示だけ・守備中は配球指示だけを出す（SetPhase）。定義は BuildSignPad に集約。
         private TacticsCardDeck _signPad;   // 采配指示の手札（旧 SignPad の置き換え。API は同型）
+        // ①勝負の1手＝次の打席へ押し込んで自動解除される選択。
         private PitchBattingOverride? _pitchBattingChoice;
-        private PitchPolicy? _pitchPolicyChoice;
+        private OffensiveSign? _signChoice;
+        private StartType? _stealChoice;
+        // ②方針＝押した瞬間にエンジンへ入り、解除するまで残る選択（表示の点灯もそのまま）。
+        private BattingApproach _approach = BattingApproach.Normal;
+        private PitchPolicy? _defPolicy;
+        private PitcherGear? _defGear;
+        private DefenseDepth? _defInfield;
+        private DefenseDepth? _defOutfield;
         private MatchLiveStatsProvider _statsProvider;
         private string _awayDisp = "先攻", _homeDisp = "後攻";
         // 勝者が要る文脈か（大会戦=true／練習試合=false, issue #269）。結果画面の引き分け表記に渡す。
@@ -383,7 +392,14 @@ namespace KokoSim.Unity.Match
             _inningBreakOn = false;
             _subLogCount = 0;
             _pitchBattingChoice = null;
-            _pitchPolicyChoice = null;
+            _signChoice = null;
+            _stealChoice = null;
+            // 方針カードは試合をまたがない（前の試合の前進守備が次の試合に残らないよう明示的に戻す）。
+            _approach = BattingApproach.Normal;
+            _defPolicy = null;
+            _defGear = null;
+            _defInfield = null;
+            _defOutfield = null;
             _capHist.Clear();
             _speedButtons.Clear();
             _speedHandlers.Clear();
@@ -732,43 +748,111 @@ namespace KokoSim.Unity.Match
         }
 
         // ── 1球采配ショートカット（設計書15 Phase C-3） ──
-        // 指示パネルの定義（issue #289。定義配列駆動＝種類を増やすときはここへ1件足すだけ）。
-        // エンジンのプレイヤー窓口は現状 SetPitchBattingOverride / SetPitchDefenseOverride の2本だけ。
-        // バント・盗塁・守備陣形などの窓口が増えたら、対応する SignDef を足して OnSelect を配線する
-        //（アイコン化は SignDef.Icon を指定するだけ。パネル側のレイアウト変更は不要）。
+        // 采配カードの定義（定義配列駆動＝種類を増やすときはここへ1件足すだけ）。
+        //
+        // 寿命が2種類ある（2026-07-31 ユーザー判断）。
+        //  ①勝負の1手（バント/スクイズ/盗塁/エンドラン/積極的に/待て）＝次に解決される打席へ1回だけ効き、
+        //    消費したら自動で消灯する。選択はいったん choice フィールドへ溜め、Advance の直前に押し込む。
+        //  ②方針（打撃姿勢4種・守備6種）＝解除するまで続く。押した瞬間にエンジンへ入れっぱなしにし、
+        //    もう一度押すと解除（トグル）。既定カード「任せ/通常」は置かない。
+        // 群（Group）が違うカードは同時に点く（例: 前進守備＋コントロール重視＋とばしていけ）。
         private void WirePitchTactics()
         {
             _signPad?.SetDefs(new[]
             {
-                // Icon はカードの絵の位置に敷く1文字（将来ここへ実際の絵が入る）。
-                new SignPad.SignDef { Id = "batting-swing", Label = "強攻", Icon = "打", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceSwing },
+                // ── 攻撃: 打ち方（1手）──  Icon はカードの絵の位置に敷く1文字（将来ここへ実際の絵が入る）。
+                new SignPad.SignDef { Id = "batting-swing", Label = "積極的に", Icon = "打", Offense = true, Group = "batting",
+                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceSwing,
+                    OnClear = () => _pitchBattingChoice = null },
                 new SignPad.SignDef { Id = "batting-take", Label = "待て", Icon = "待", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceTake },
-                new SignPad.SignDef { Id = "batting-auto", Label = "任せ", Icon = "任", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", IsDefault = true, OnSelect = () => _pitchBattingChoice = null },
-                new SignPad.SignDef { Id = "policy-break", Label = "変化球", Icon = "変", Offense = false, Group = "policy",
-                    GroupLabel = "配球", OnSelect = () => _pitchPolicyChoice = PitchPolicy.BreakingHeavy },
-                new SignPad.SignDef { Id = "policy-zone", Label = "ゾーン", Icon = "域", Offense = false, Group = "policy",
-                    GroupLabel = "配球", OnSelect = () => _pitchPolicyChoice = PitchPolicy.ControlFirst },
-                new SignPad.SignDef { Id = "policy-auto", Label = "通常", Icon = "常", Offense = false, Group = "policy",
-                    GroupLabel = "配球", IsDefault = true, OnSelect = () => _pitchPolicyChoice = null },
+                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceTake,
+                    OnClear = () => _pitchBattingChoice = null },
+                // ── 攻撃: 仕掛け（1手・走者が要る）──
+                new SignPad.SignDef { Id = "batting-bunt", Label = "バント", Icon = "犠", Offense = true, Group = "batting",
+                    GroupLabel = "打撃", EnabledIf = () => RunnerOnAnyBase,
+                    OnSelect = () => _pitchBattingChoice = PitchBattingOverride.Bunt,
+                    OnClear = () => _pitchBattingChoice = null },
+                new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Offense = true, Group = "batting",
+                    GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
+                    OnSelect = () => _pitchBattingChoice = PitchBattingOverride.Squeeze,
+                    OnClear = () => _pitchBattingChoice = null },
+                new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Offense = true, Group = "batting",
+                    GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst,
+                    OnSelect = () => _signChoice = OffensiveSign.HitAndRun,
+                    OnClear = () => _signChoice = null },
+                new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Offense = true, Group = "run",
+                    GroupLabel = "走塁", EnabledIf = () => RunnerOnFirst,
+                    OnSelect = () => _stealChoice = StartType.Gamble,
+                    OnClear = () => _stealChoice = null },
+                // ── 攻撃: 構え（方針・解除するまで続く）──
+                new SignPad.SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Offense = true, Group = "approach",
+                    GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.WorkCount),
+                    OnClear = () => PushApproach(BattingApproach.Normal) },
+                new SignPad.SignDef { Id = "app-ground", Label = "転がせ", Icon = "転", Offense = true, Group = "approach",
+                    GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.GroundBall),
+                    OnClear = () => PushApproach(BattingApproach.Normal) },
+                new SignPad.SignDef { Id = "app-slug", Label = "長打狙い", Icon = "長", Offense = true, Group = "approach",
+                    GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.Slug),
+                    OnClear = () => PushApproach(BattingApproach.Normal) },
+                new SignPad.SignDef { Id = "app-put", Label = "当てに行け", Icon = "当", Offense = true, Group = "approach",
+                    GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.PutInPlay),
+                    OnClear = () => PushApproach(BattingApproach.Normal) },
+
+                // ── 守備（すべて方針・解除するまで続く）──
+                new SignPad.SignDef { Id = "def-infield-in", Label = "前進守備", Icon = "前", Offense = false, Group = "infield",
+                    GroupLabel = "陣形", OnSelect = () => PushDefInfield(DefenseDepth.In), OnClear = () => PushDefInfield(null) },
+                new SignPad.SignDef { Id = "def-outfield-deep", Label = "長打警戒", Icon = "深", Offense = false, Group = "outfield",
+                    GroupLabel = "陣形", OnSelect = () => PushDefOutfield(DefenseDepth.Deep), OnClear = () => PushDefOutfield(null) },
+                new SignPad.SignDef { Id = "policy-fast", Label = "直球中心", Icon = "直", Offense = false, Group = "policy",
+                    GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.FastballHeavy), OnClear = () => PushDefPolicy(null) },
+                new SignPad.SignDef { Id = "policy-break", Label = "変化球中心", Icon = "変", Offense = false, Group = "policy",
+                    GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.BreakingHeavy), OnClear = () => PushDefPolicy(null) },
+                new SignPad.SignDef { Id = "policy-zone", Label = "コントロール重視", Icon = "制", Offense = false, Group = "policy",
+                    GroupLabel = "配球", OnSelect = () => PushDefPolicy(PitchPolicy.ControlFirst), OnClear = () => PushDefPolicy(null) },
+                new SignPad.SignDef { Id = "gear-push", Label = "とばしていけ", Icon = "飛", Offense = false, Group = "gear",
+                    GroupLabel = "ギア", OnSelect = () => PushDefGear(PitcherGear.Push), OnClear = () => PushDefGear(null) },
             });
         }
 
-        // 次に Advance() する打席の最初の1球へ、現在の選択を予約する（無指示=null なら従来と完全一致）。
+        // 「選べるか」の局面条件。指示は**次に解決される打席**に効くので、表示中の打席の結果（After）の塁を見る。
+        private bool RunnerOnFirst => _current is { BaseFirstAfter: true };
+        private bool RunnerOnThird => _current is { BaseThirdAfter: true };
+        private bool RunnerOnAnyBase =>
+            _current is { BaseFirstAfter: true } or { BaseSecondAfter: true } or { BaseThirdAfter: true };
+
+        // ② 方針カード: 押した瞬間にエンジンへ入れて、解除するまでそのままにする。
+        private void PushApproach(BattingApproach approach)
+        {
+            _approach = approach;
+            _prog?.SetBattingApproach(_managerIsAway, approach);
+        }
+
+        // 守備の常時方針は4項目まとめて1本の窓口へ渡すので、各カードは自分の項目だけ差し替えて押し直す。
+        // null を渡す＝その項目の解除（委任采配の判断に戻る）。
+        private void PushDefPolicy(PitchPolicy? v) { _defPolicy = v; PushDefense(); }
+        private void PushDefGear(PitcherGear? v) { _defGear = v; PushDefense(); }
+        private void PushDefInfield(DefenseDepth? v) { _defInfield = v; PushDefense(); }
+        private void PushDefOutfield(DefenseDepth? v) { _defOutfield = v; PushDefense(); }
+
+        private void PushDefense()
+            => _prog?.SetStandingDefense(_managerIsAway, _defPolicy, _defGear, _defInfield, _defOutfield);
+
+        // 次に Advance() する打席へ、①の「1手」だけを予約する（無指示=null なら従来と完全一致）。
+        // ②の方針は押した時点で入っているのでここでは触らない。
         private void PushPitchTacticsChoice()
         {
             _prog.SetPitchBattingOverride(_managerIsAway, _pitchBattingChoice);
-            _prog.SetPitchDefenseOverride(!_managerIsAway, _pitchPolicyChoice, null);
+            _prog.SetOffensiveSign(_managerIsAway, _signChoice);
+            _prog.SetStealAttempt(_managerIsAway, _stealChoice);
         }
 
-        // 1球指示は消費後に自動解除（Q12-3: 次球は方針に復帰）。表示もそれに合わせて既定(無点灯)へ戻す。
+        // ①の1手は消費後に自動解除（Q12-3: 次球は方針に復帰）。②の方針カードは点けたまま残す。
         private void ResetPitchTacticsChoice()
         {
             _pitchBattingChoice = null;
-            _pitchPolicyChoice = null;
-            _signPad?.ClearSelection();
+            _signChoice = null;
+            _stealChoice = null;
+            _signPad?.ClearSelection("batting", "run");
         }
 
         // 同期版（スクショ用 AdvanceForCapture 専用。issue #160 以降の対話操作は AutoAdvanceNext の
@@ -799,6 +883,8 @@ namespace KokoSim.Unity.Match
             // 指示パネルの攻守出し分け（issue #289）。指示は「次に解決される打席」に効くので、
             // 表示中打席（_current）の表裏ではなくエンジンの現在境界（＝次打席の攻守）で切り替える。
             _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
+            // 走者の有無でバント/盗塁/エンドラン/スクイズの可否が変わる＝打席が確定するたび引き直す。
+            _signPad?.RefreshEnabled();
 
             // 半回が変わったらイニング間画面を挟む（次打席の再生はここでは始めない）。
             // エンジンに半回終了のイベントは無いので、確定した打席の回・表裏の変化で見る。
@@ -2043,22 +2129,27 @@ namespace KokoSim.Unity.Match
             {
                 PitchBattingOverride.ForceSwing => "batting-swing",
                 PitchBattingOverride.ForceTake => "batting-take",
-                _ => "batting-auto",
+                PitchBattingOverride.Bunt => "batting-bunt",
+                PitchBattingOverride.Squeeze => "batting-squeeze",
+                _ => null,
             };
-            _signPad?.Select(id);   // OnSelect 経由で choice も入る（クリックと同経路。直接代入は保険）
+            // 既定カード（任せ）は廃止＝解除は「点いているカードをもう一度押す」。null 指定は消灯だけ行う。
+            if (id == null) _signPad?.ClearSelection("batting");
+            else _signPad?.Select(id);   // OnSelect 経由で choice も入る（クリックと同経路。直接代入は保険）
         }
 
-        /// <summary>スクショ用: 指示パネル（SignPad）をクリックしたのと同じ状態にする（配球側）。</summary>
+        /// <summary>スクショ用: 采配カードをクリックしたのと同じ状態にする（配球側）。null で解除。</summary>
         public void SelectPitchDefenseForCapture(PitchPolicy? v)
         {
-            _pitchPolicyChoice = v;
             var id = v switch
             {
+                PitchPolicy.FastballHeavy => "policy-fast",
                 PitchPolicy.BreakingHeavy => "policy-break",
                 PitchPolicy.ControlFirst => "policy-zone",
-                _ => "policy-auto",
+                _ => null,
             };
-            _signPad?.Select(id);
+            if (id == null) { PushDefPolicy(null); _signPad?.ClearSelection("policy"); }
+            else _signPad?.Select(id);
         }
 
         /// <summary>スクショ用: 采配カードをホバー拡大の状態にする（実際のカーソルは要らない）。null で解除。</summary>

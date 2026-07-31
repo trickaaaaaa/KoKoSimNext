@@ -56,23 +56,32 @@ namespace KokoSim.Unity.Match
             yield return AdvanceUntil(ctrl, pa => pa.Inning >= 6, 200);
             yield return Capture(ctrl, "03c-batter-pa-line");
 
-            // 終盤（球数が閾値超で色が変わる・スタミナが減る）。
-            yield return AdvanceUntil(ctrl, pa => pa.Inning >= 8, 200);
-            yield return Capture(ctrl, "04-late");
-
-            // 采配カード（守備中＝配球の3枚）。カーソル無しでホバー拡大の状態を焼く。
-            ctrl.SetTacticsHotForCapture("policy-break");
+            // 采配カード（守備中＝6枚）。方針カードは点けたまま残るので、複数群の同時点灯も1枚に入れる。
+            ctrl.SelectPitchDefenseForCapture(KokoSim.Engine.Match.Tactics.PitchPolicy.ControlFirst);
+            ctrl.SetTacticsHotForCapture("def-infield-in");
             yield return Capture(ctrl, "04b-card-hover-defense");
             ctrl.SetTacticsHotForCapture(null);
+            ctrl.SelectPitchDefenseForCapture(null);
 
-            // 攻撃中（自校＝home なので裏）へ進めて打撃の3枚を撮る。
-            // 選択（青）＋ホバー拡大＋既定（白紙）の3状態が1枚に入るようにする。
+            // 攻撃中（自校＝home なので裏）へ進めて打撃の10枚を撮る。
+            // 選択（青）＋ホバー拡大＋走者なしで選べないカード（灰）が1枚に入るようにする。
             yield return AdvanceUntil(ctrl, pa => !pa.IsTop, 40);
             ctrl.SelectPitchBattingForCapture(KokoSim.Engine.Match.Tactics.PitchBattingOverride.ForceSwing);
-            ctrl.SetTacticsHotForCapture("batting-take");
+            ctrl.SetTacticsHotForCapture("app-slug");
             yield return Capture(ctrl, "04c-card-offense-selected-hover");
             ctrl.SetTacticsHotForCapture(null);
             ctrl.SelectPitchBattingForCapture(null);
+
+            // 走者が出た場面＝バント/盗塁/エンドランが選べるようになる絵。
+            yield return AdvanceUntil(ctrl, pa => !pa.IsTop && pa.BaseFirstAfter, 60);
+            ctrl.SetTacticsHotForCapture("batting-squeeze");
+            yield return Capture(ctrl, "04d-card-offense-runner-on");
+            ctrl.SetTacticsHotForCapture(null);
+
+            // 終盤（球数が閾値超で色が変わる・スタミナが減る）。カード群より後ろに置く＝カードの絵を
+            // 撮り終える前に試合が終わらないようにする（終局後は打席が無く走者ありの絵が撮れない）。
+            yield return AdvanceUntil(ctrl, pa => pa.Inning >= 8, 200);
+            yield return Capture(ctrl, "04-late");
 
             var guard = 0;
             while (guard++ < 400 && ctrl.AdvanceForCapture()) { }

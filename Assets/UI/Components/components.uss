@@ -1792,9 +1792,9 @@
     opacity: 0.14;
     -unity-text-align: middle-center;
 }
-/* 下1/3＝名前。左の帯（隣に隠れない幅）の中央へ置く＝カード全幅で中央揃えにすると隣の下に潜る。 */
+/* 下段＝名前。左の帯（隣に隠れない幅）の中央へ置く＝カード全幅で中央揃えにすると隣の下に潜る。
+   段の高さと級数は TacticsCardDeck.cs が決める（長い名前は2行に割るので、幅と高さの両方で効く）。 */
 .tcard__cap {
-    height: 32%;
     flex-shrink: 0;
     border-top-width: var(--nb-border);
     border-top-color: var(--ink);

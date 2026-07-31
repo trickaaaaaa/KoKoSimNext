@@ -36,8 +36,26 @@ namespace KokoSim.Unity.Components
 
         private const float Step = CardWidth - Overlap;
 
-        /// <summary>カード名の級数は文字数で決める（左の帯に収まる比率。モックで詰めた値）。</summary>
+        /// <summary>名前の段（カード下部）の高さ比。絵の面は残り。</summary>
+        private const float CapHeightRatio = 0.38f;
+
+        /// <summary>行送りの見込み（級数に対する1行の実高）。実測 1.3 前後なので余裕をみて 1.45 で割る。</summary>
+        private const float LineHeightFactor = 1.45f;
+
+        /// <summary>この字数からは名前を2行に割る（「コントロール重視」を1行に収めると読めない級数になる）。</summary>
+        private const int WrapFromLength = 4;
+
+        /// <summary>カード名の級数は<b>1行あたりの</b>文字数で決める（左の帯に収まる比率。モックで詰めた値）。</summary>
         private static readonly float[] CapRatioByLen = { 0.34f, 0.34f, 0.30f, 0.24f, 0.19f, 0.155f, 0.135f };
+
+        /// <summary>長い名前を2行に割る（自動折り返しに任せず、割る位置を自分で決めて級数を確定させる）。</summary>
+        private static string WrapLabel(string label)
+        {
+            var s = label ?? "";
+            if (s.Length < WrapFromLength) return s;
+            var head = (s.Length + 1) / 2;
+            return s.Substring(0, head) + "\n" + s.Substring(head);
+        }
 
         private readonly VisualElement _inner;
         private readonly VisualElement _hits;
@@ -79,22 +97,62 @@ namespace KokoSim.Unity.Components
             Rebuild();
         }
 
-        /// <summary>プログラム選択（クリックと同じ経路で OnSelect も呼ぶ）。</summary>
+        /// <summary>
+        /// プログラム選択（クリックと同じ経路で OnSelect も呼ぶ）。<b>点いているカードをもう一度選ぶと消える</b>
+        /// ＝トグル。「解除するまで続く方針」のカードを、既定カード（任せ/通常）を別に置かずに消せるようにするため。
+        /// </summary>
         public void Select(string id)
         {
             var def = FindDef(id);
             if (def == null) return;
-            if (def.IsDefault) _selected.Remove(def.Group);
-            else _selected[def.Group] = def.Id;
+            if (def.IsDefault)
+            {
+                _selected.Remove(def.Group);
+            }
+            else if (_selected.TryGetValue(def.Group, out var cur) && cur == def.Id)
+            {
+                _selected.Remove(def.Group);
+                def.OnClear?.Invoke();
+                RefreshHighlights();
+                return;
+            }
+            else
+            {
+                // 同グループの別カードから移るときは、前のカードの解除も通す（方針の後始末）。
+                if (cur != null && FindDef(cur) is { } prev) prev.OnClear?.Invoke();
+                _selected[def.Group] = def.Id;
+            }
             def.OnSelect?.Invoke();
             RefreshHighlights();
         }
 
-        /// <summary>全グループを既定（無点灯）へ戻す。OnSelect は呼ばない（1球消費後の自動解除用）。</summary>
+        /// <summary>全グループを消灯へ戻す。OnSelect/OnClear は呼ばない（1球消費後の自動解除用）。</summary>
         public void ClearSelection()
         {
             _selected.Clear();
             RefreshHighlights();
+        }
+
+        /// <summary>指定グループだけ消灯へ戻す（使い切りの指示だけを消し、常時方針は点けたまま残す）。</summary>
+        public void ClearSelection(params string[] groups)
+        {
+            if (groups == null) return;
+            foreach (var g in groups) _selected.Remove(g);
+            RefreshHighlights();
+        }
+
+        /// <summary>
+        /// 「いま選べるか」（<see cref="SignPad.SignDef.EnabledIf"/>）を評価し直す。走者の有無で
+        /// バント/盗塁の可否が変わるので、打席が確定するたびに呼ぶ。選択状態は保持する。
+        /// </summary>
+        public void RefreshEnabled()
+        {
+            foreach (var pair in _byId)
+            {
+                var def = FindDef(pair.Key);
+                var on = def?.EnabledIf?.Invoke() ?? true;
+                pair.Value.EnableInClassList("tcard--off", !on);
+            }
         }
 
         /// <summary>スクショ用: 指定カードをホバー拡大の状態にする（実際のカーソルは要らない）。</summary>
@@ -178,7 +236,7 @@ namespace KokoSim.Unity.Components
             // 下＝名前。左の帯（隣に隠れない幅）の中央へ置く。
             var cap = new VisualElement { pickingMode = PickingMode.Ignore };
             cap.AddToClassList("tcard__cap");
-            var name = new Label(def.Label ?? "") { pickingMode = PickingMode.Ignore };
+            var name = new Label(WrapLabel(def.Label)) { pickingMode = PickingMode.Ignore };
             name.AddToClassList("tcard__name");
             cap.Add(name);
             card.Add(cap);
@@ -213,12 +271,22 @@ namespace KokoSim.Unity.Components
                     ghost.style.width = Step;
                     ghost.style.fontSize = Mathf.Round(Step * 0.62f);
                 }
+                var cap = card.Q(className: "tcard__cap");
+                var capHeight = CardHeight * CapHeightRatio;
+                if (cap != null) cap.style.height = capHeight;
+
                 var name = card.Q<Label>(className: "tcard__name");
                 if (name != null)
                 {
                     name.style.width = Step;
-                    var len = Mathf.Clamp(name.text?.Length ?? 1, 1, CapRatioByLen.Length - 1);
-                    name.style.fontSize = Mathf.Round(Step * CapRatioByLen[len]);
+                    // 級数は幅（1行の字数）と高さ（行数）の両方で決める。どちらか片方だけだと、
+                    // 2行にした長い名前が段からはみ出すか、短い名前が不揃いに小さくなる。
+                    var rows = (name.text ?? "").Split('\n');
+                    var perLine = 1;
+                    foreach (var row in rows) perLine = Mathf.Max(perLine, row.Length);
+                    var byWidth = Step * CapRatioByLen[Mathf.Clamp(perLine, 1, CapRatioByLen.Length - 1)];
+                    var byHeight = capHeight / (rows.Length * LineHeightFactor);
+                    name.style.fontSize = Mathf.Round(Mathf.Min(byWidth, byHeight));
                 }
             }
         }
