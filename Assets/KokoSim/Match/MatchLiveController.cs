@@ -736,6 +736,10 @@ namespace KokoSim.Unity.Match
                 _current = null;
                 _lineScorePosted = false;   // 掲示板は次のプレーが確定した瞬間に掲げ直す
                 SetDuelViewAuto(true);   // 次打席の開始で対決ビューへ復帰（issue #312。手動OFF中は据え置き）
+                // 開けたら**その場で**仕切り直す。窓の間（paHeadDwellSeconds）を挟むようになったので、
+                // 前打席の振りが凍ったまま残っていると新しい打者が球も無しに振り抜く
+                // （2026-08-01「幽霊空振り」。DuelStageRig.ResetForNewPlateAppearance の項）。
+                _duelRig?.ResetForNewPlateAppearance();
                 if (_result != null) _result.style.display = DisplayStyle.None;
             }
 
@@ -1123,6 +1127,8 @@ namespace KokoSim.Unity.Match
             _t = 0;
             _lineScorePosted = false;
             SetDuelViewAuto(true);   // 打席の開始で対決ビューへ復帰（issue #312。手動OFF中は据え置き）
+            // 1球も投げない打席（敬遠）はこの後 OnPitchWindup を通らないので、ここでも仕切り直す。
+            _duelRig?.ResetForNewPlateAppearance();
             ApplyDuelHandedness();
             RefreshPanel();
             _signPad?.SetPhase(_current.IsTop == _managerIsAway);

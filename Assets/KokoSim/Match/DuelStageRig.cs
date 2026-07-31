@@ -1263,7 +1263,25 @@ namespace KokoSim.Unity.Match
             _cutCountdown = -1f;
             CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
             GroundFix(_pitcher);
-            // 打席頭は打者・捕手・球審を待機へ戻す（前打席の一発物が残っていても仕切り直す）
+            ResetForNewPlateAppearance();
+        }
+
+        /// <summary>
+        /// 打席の頭で打者・捕手・球審を待機へ戻し、球を投手の手へ戻す（前打席の一発物が残っていても仕切り直す）。
+        ///
+        /// **対決ビューを開ける側は、開けると同時にこれを呼ぶこと。**一発物クリップが進むのは
+        /// <see cref="Tick"/> の中だけで、その Tick は対決ビューが映っている間しか回らない＝
+        /// 打球再生で俯瞰へ逃がしている間、打者は**振っている途中のコマで凍る**。次の打席の頭で
+        /// 対決ビューへ戻した瞬間にその続きが再生され、**新しい打者が球も無いのに振る**
+        /// （2026-08-01 監督指摘「打席の最初に謎の幽霊空振りが入る」）。
+        ///
+        /// 1球進行（設計書15 §8）へ移すまでは、対決ビューを開けるコマと <see cref="OnPitchWindup"/> が
+        /// 同じフレームだったので凍った残りは1コマも映らなかった＝**移行で初めて絵に出た**。
+        /// 采配窓の間（`paHeadDwellSeconds`）が挟まる今は、開けた側が明示的に仕切り直す必要がある。
+        /// </summary>
+        public void ResetForNewPlateAppearance()
+        {
+            if (!Available) return;
             if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
             _umpireCallCountdown = -1f;

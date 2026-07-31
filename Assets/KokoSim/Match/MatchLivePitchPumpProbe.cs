@@ -56,6 +56,12 @@ namespace KokoSim.Unity.Match
             var fDeck = t.GetField("_signPad", Bf);
             var fAway = t.GetField("_managerIsAway", Bf);
             var fDuelOn = t.GetField("_duelOn", Bf);
+            var fRig = t.GetField("_duelRig", Bf);
+            var rt = typeof(DuelStageRig);
+            var fBatter = rt.GetField("_batter", Bf);
+            var at2 = rt.GetNestedType("Actor", BindingFlags.NonPublic);
+            var fActorClip = at2.GetField("Clip");
+            var fActorIdle = at2.GetField("IdleClip");
             var fOffense = typeof(KokoSim.Unity.Components.TacticsCardDeck)
                 .GetField("_offense", BindingFlags.NonPublic | BindingFlags.Instance);
             var managerIsAway = (bool)fAway.GetValue(ctrl);
@@ -68,6 +74,7 @@ namespace KokoSim.Unity.Match
             var phaseMismatch = 0;   // カード列と映している半回の食い違い
             var headWithoutBatter = 0;
             var duelOffAtHead = 0;
+            var ghostSwingAtHead = 0;   // 打席の頭なのに打者が待機以外のクリップ（＝前打席の振りの残り）
             LiveAtBat prevAtBat = null;
             var prevQueue = 0;
             var prevBreak = false;
@@ -96,6 +103,21 @@ namespace KokoSim.Unity.Match
                             duelOffAtHead++;
                             Debug.LogError($"[PumpProbe] 打席の頭なのに俯瞰のまま {at.Inning}回" +
                                            $"{(at.IsTop ? "表" : "裏")} {at.BatterOrder}番 {at.BatterName}");
+                        }
+                        // 打席の頭は打者が待機ポーズであること。前打席の振りが凍ったまま残っていると、
+                        // 対決ビューへ戻した瞬間に**球も無いのに振り抜く**（2026-08-01「幽霊空振り」）。
+                        var rig = fRig.GetValue(ctrl);
+                        var batter = rig == null ? null : fBatter.GetValue(rig);
+                        if (batter != null)
+                        {
+                            var cur = fActorClip.GetValue(batter) as AnimationClip;
+                            var idle = fActorIdle.GetValue(batter) as AnimationClip;
+                            if (cur != null && idle != null && cur != idle)
+                            {
+                                ghostSwingAtHead++;
+                                Debug.LogError($"[PumpProbe] 打席の頭で打者が待機でない clip='{cur.name}' " +
+                                               $"{at.Inning}回{(at.IsTop ? "表" : "裏")} {at.BatterName}");
+                            }
                         }
                         // 打席の頭＝この時点で打者が分かっていなければならない（サインを出せない）。
                         if (string.IsNullOrEmpty(at.BatterName) || at.Balls != 0 || at.Strikes != 0)
@@ -142,7 +164,7 @@ namespace KokoSim.Unity.Match
             Debug.Log($"[PumpProbe] 結果 t={clock:F1}s 終局={ctrl.IsGameOver} " +
                       $"采配窓={windows}（うち打席の頭={heads}） 描いた球={pitches} イニング間={breaks} " +
                       $"カード食い違い={phaseMismatch} 頭の窓の破損={headWithoutBatter} " +
-                      $"頭で俯瞰のまま={duelOffAtHead} 停止={stallReported}");
+                      $"頭で俯瞰のまま={duelOffAtHead} 頭で幽霊スイング={ghostSwingAtHead} 停止={stallReported}");
         }
 
         /// <summary>
