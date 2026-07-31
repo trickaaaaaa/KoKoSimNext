@@ -27,6 +27,10 @@ public sealed record LineupCoefficients
 
     // --- DH使用判断: 投手の打撃総合が野手平均よりこれ以上低ければDHを使う ---
     public double DhPitcherBattingGap { get; init; } = 15.0;
+
+    // --- 投手の打順（issue #360）: 打撃総合が「野手平均＋この差分」以上の打撃型エースだけ
+    //     野手と同じ土俵で並べる（未満は9番固定）。既定0.0=野手平均以上でだけ上位打順に入る ---
+    public double PitcherBattingOrderGap { get; init; } = 0.0;
 }
 
 /// <summary>
@@ -94,6 +98,20 @@ public static class LineupOrderer
     }
 
     /// <summary>
+    /// 投手が野手と同じ土俵で打順に入るか（issue #360）。打撃総合が「野手平均＋
+    /// <see cref="LineupCoefficients.PitcherBattingOrderGap"/>」以上の打撃型エースだけが対象で、
+    /// それ以外は9番固定。裏試合（<see cref="Compose"/>）と自校戦の調子並べ替え
+    /// （<c>StandardTacticsBrain.ComposeBattingOrder</c>）が同じこの規則を通ることで、
+    /// 2経路で投手の扱いが食い違わない（issue #360 の本題）。
+    /// </summary>
+    public static bool BatsWithFielders(Player pitcher, IReadOnlyList<Player> fielders, LineupCoefficients c)
+    {
+        if (fielders.Count == 0) return false;
+        var teamAvg = fielders.Average(p => BattingScore(p, c));
+        return BattingScore(pitcher, c) - teamAvg >= c.PitcherBattingOrderGap;
+    }
+
+    /// <summary>
     /// 生成済みチーム（8野手＋投手9番, <see cref="StrengthTeamFactory"/> 出力）へ能力ベースの打順編成と
     /// DH使用判断を適用する。渡された rng を一切使わない決定論関数（不変条件#2）。
     /// <paramref name="modernRules"/>/<paramref name="calendarYear"/> が両方揃ったときだけDHを検討する
@@ -111,6 +129,11 @@ public static class LineupOrderer
 
         if (!useDh)
         {
+            // 打撃型エース（野手平均以上, issue #360）は野手と同じ土俵で役割別に並べる＝「エースで4番」が
+            // 成立する。投手枠は並べ替え後の位置から参照で引き直す（Team.WithBattingOrder, issue #352）。
+            if (BatsWithFielders(pitcher, fielders, c))
+                return team.WithBattingOrder(Arrange(team.BattingOrder, c));
+
             var arrangedFielders = Arrange(fielders, c);
             var order = arrangedFielders.Append(pitcher).ToList();
             return team with { BattingOrder = order };

@@ -23,11 +23,12 @@ public static class EnemyAiFactory
         TacticsCoefficients? tactics = null,
         BaserunningCoefficients? baserunning = null,
         EnemyAiCoefficients? aiCoeff = null,
-        Players.FormCoefficients? form = null)
+        Players.FormCoefficients? form = null,
+        LineupCoefficients? lineup = null)
     {
         var ai = aiCoeff ?? new EnemyAiCoefficients();
         var withTraits = ManagerTraitEffects.ApplyTactics(tactics ?? new TacticsCoefficients(), school.ManagerTraits, ai);
-        return new AiTacticsBrain(ProfileFor(school), withTraits, baserunning, ai, form);
+        return new AiTacticsBrain(ProfileFor(school), withTraits, baserunning, ai, form, lineup);
     }
 }
 

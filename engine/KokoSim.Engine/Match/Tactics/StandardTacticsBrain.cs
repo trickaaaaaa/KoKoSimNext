@@ -17,13 +17,15 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     private readonly TacticsCoefficients _c;
     private readonly BaserunningCoefficients _br;
     private readonly FormCoefficients _form;
+    private readonly Nation.LineupCoefficients _lineup;
 
     public StandardTacticsBrain(TacticsCoefficients? coefficients = null, BaserunningCoefficients? baserunning = null,
-        FormCoefficients? form = null)
+        FormCoefficients? form = null, Nation.LineupCoefficients? lineup = null)
     {
         _c = coefficients ?? new TacticsCoefficients();
         _br = baserunning ?? new BaserunningCoefficients();
         _form = form ?? new FormCoefficients();
+        _lineup = lineup ?? new Nation.LineupCoefficients();
     }
 
     public OffensiveSign CallOffense(in TacticsSituation s, IRandomSource rng)
@@ -256,9 +258,33 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     /// 並び順を安定ソートする＝同条件内は元の並びを保ち、絶不調の打者だけが下がる。能力ベースの
     /// オーダー最適化（校風の好み・左右のバランス等）は本Issueの対象外（設計書11 §4の未実装分）。
     /// 選手交代と同型で RNG は使わない（決定論）。
+    /// 投手の枠は打力で決める（issue #360）: 打撃総合が野手平均に届かない投手は席（通常9番）を固定し、
+    /// 調子ソートの対象から外す＝非力な投手が絶好調だけで1番を打たない。打撃型エース
+    /// （<see cref="Nation.LineupOrderer.BatsWithFielders"/>＝裏試合の編成と同じ単一規則）は野手と
+    /// 同じ土俵で調子の微調整を受ける。DH使用時は投手が打順に居ないので全員が従来どおり対象。
     /// </summary>
     public IReadOnlyList<Player> ComposeBattingOrder(IReadOnlyList<Player> order)
-        => order.OrderByDescending(p => FormModel.Step(p.Condition)).ToList();
+    {
+        var pitcherIdx = -1;
+        for (var i = 0; i < order.Count; i++)
+        {
+            if (order[i].Position == Field.FieldPosition.Pitcher) { pitcherIdx = i; break; }
+        }
+
+        if (pitcherIdx >= 0)
+        {
+            var pitcher = order[pitcherIdx];
+            var fielders = order.Where((_, i) => i != pitcherIdx).ToList();
+            if (!Nation.LineupOrderer.BatsWithFielders(pitcher, fielders, _lineup))
+            {
+                var sorted = fielders.OrderByDescending(p => FormModel.Step(p.Condition)).ToList();
+                sorted.Insert(pitcherIdx, pitcher);
+                return sorted;
+            }
+        }
+
+        return order.OrderByDescending(p => FormModel.Step(p.Condition)).ToList();
+    }
 
     /// <summary>代走: 終盤に1点を取りにいく場面、鈍足の走者を明確に速い控えへ替える（得点に近い走者を優先）。</summary>
     public (Player Runner, Player Sub)? CallPinchRun(in SubstitutionSituation s, IRandomSource rng)

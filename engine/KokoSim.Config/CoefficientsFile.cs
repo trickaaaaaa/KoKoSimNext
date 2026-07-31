@@ -1768,6 +1768,7 @@ public static class CoefficientsLoader
         public double LineupOverallContactWeight { get; set; } = LD.OverallContactWeight;
         public double LineupOverallPowerWeight { get; set; } = LD.OverallPowerWeight;
         public double LineupDhPitcherBattingGap { get; set; } = LD.DhPitcherBattingGap;
+        public double LineupPitcherBattingOrderGap { get; set; } = LD.PitcherBattingOrderGap;
 
         private static readonly PitcherArchetypeCoefficients AD = new();
         private static readonly LineupCoefficients LD = new();
@@ -1802,6 +1803,7 @@ public static class CoefficientsLoader
                 OverallContactWeight = LineupOverallContactWeight,
                 OverallPowerWeight = LineupOverallPowerWeight,
                 DhPitcherBattingGap = LineupDhPitcherBattingGap,
+                PitcherBattingOrderGap = LineupPitcherBattingOrderGap,
             },
             IntakeMean = IntakeMean,
             IntakeSd = IntakeSd,

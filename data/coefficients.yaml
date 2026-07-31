@@ -1052,6 +1052,9 @@ roster:
   lineup_overall_power_weight: 0.5
   # DH使用判断: 投手の打撃総合（ミート＋パワー）が野手平均よりこれ以上低ければDHを使う。
   lineup_dh_pitcher_batting_gap: 15.0
+  # 投手の打順（issue #360）: 打撃総合が「野手平均＋この差分」以上の打撃型エースだけ野手と同じ
+  # 土俵で並べる（未満は9番固定）。0.0=野手平均以上でだけ上位打順に入る。
+  lineup_pitcher_batting_order_gap: 0.0
 
 # ===== AI校の永続ロスター（設計書 OPEN-QUESTIONS Q19/Q20 · #80/#82）=====
 # 他校の選手個人が入学〜引退の3年間在籍し節目成長する（使い捨て生成を廃止）。怪物（Phenom）も同居。

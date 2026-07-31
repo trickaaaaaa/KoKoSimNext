@@ -22,13 +22,14 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
         TacticsCoefficients? baseCoeff = null,
         BaserunningCoefficients? baserunning = null,
         EnemyAiCoefficients? aiCoeff = null,
-        Players.FormCoefficients? form = null)
+        Players.FormCoefficients? form = null,
+        Nation.LineupCoefficients? lineup = null)
     {
         _profile = profile;
         _ai = aiCoeff ?? new EnemyAiCoefficients();
         // ③ 校風で采配係数を偏らせ、その係数で共通の基準采配を構成する。
         var styled = ApplyStyle(baseCoeff ?? new TacticsCoefficients(), profile.Style, _ai);
-        _inner = new StandardTacticsBrain(styled, baserunning, form);
+        _inner = new StandardTacticsBrain(styled, baserunning, form, lineup);
         // ① 采配能力→最適解選択率。
         _optimalProb = MathUtil.Clamp(
             _ai.OptimalBase + profile.TacticalSense * _ai.OptimalPerSense, _ai.OptimalFloor, _ai.OptimalCap);

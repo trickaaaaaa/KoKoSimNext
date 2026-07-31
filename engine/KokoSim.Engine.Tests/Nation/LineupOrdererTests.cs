@@ -155,6 +155,34 @@ public sealed class LineupOrdererTests
         Assert.False(LineupOrderer.ShouldUseDh(pitcher, fielders, C));
     }
 
+    // ===== BatsWithFielders: 投手が野手と同じ土俵で打順に入るか（issue #360） =====
+
+    [Fact]
+    public void BatsWithFielders_PitcherAboveFielderAverage_ReturnsTrue()
+    {
+        var fielders = Enumerable.Range(0, 8).Select(i => P($"野手{i}", contact: 55, power: 55)).ToList();
+        var pitcher = Pitcher("打撃型エース", contact: 60, power: 60);
+        Assert.True(LineupOrderer.BatsWithFielders(pitcher, fielders, C));
+    }
+
+    [Fact]
+    public void BatsWithFielders_PitcherBelowFielderAverage_ReturnsFalse()
+    {
+        var fielders = Enumerable.Range(0, 8).Select(i => P($"野手{i}", contact: 55, power: 55)).ToList();
+        var pitcher = Pitcher("非力投手", contact: 50, power: 50); // 野手平均55を下回る
+        Assert.False(LineupOrderer.BatsWithFielders(pitcher, fielders, C));
+    }
+
+    [Fact]
+    public void BatsWithFielders_GapCoefficient_RaisesTheBar()
+    {
+        // 係数を上げると「平均より少し上」では足りなくなる（バランス調整はYAMLで, 不変条件#4）。
+        var fielders = Enumerable.Range(0, 8).Select(i => P($"野手{i}", contact: 55, power: 55)).ToList();
+        var pitcher = Pitcher("平均超え", contact: 60, power: 60); // 平均+5
+        var strict = new LineupCoefficients { PitcherBattingOrderGap = 10.0 };
+        Assert.False(LineupOrderer.BatsWithFielders(pitcher, fielders, strict));
+    }
+
     // ===== Compose: Team全体への適用（DhSlot・StartingPitcher・Benchの整合） =====
 
     private static Team BuildTeam(Player pitcher, IReadOnlyList<Player> fielders, IReadOnlyList<Player> bench)
@@ -218,6 +246,40 @@ public sealed class LineupOrdererTests
         var result = LineupOrderer.Compose(team, C, new ModernRules(), calendarYear: 2026);
 
         Assert.False(result.UsesDh);
+        // 打撃型エースは9番固定でなく野手と同じ土俵（issue #360）。投手枠は並びに追従する（issue #352）。
+        Assert.Same(pitcher, result.BattingOrder[result.PitcherSlot]);
+    }
+
+    // ===== 投手の打順は打力で決める（issue #360） =====
+
+    [Fact]
+    public void Compose_BattingTypeAce_TakesCleanupSlot_PitcherSlotFollows()
+    {
+        // 野手全員より打撃総合が高いエース → 最強打者の枠＝4番（index 3）に入る（「エースで4番」）。
+        // 出塁系・小技は低くして1番・2番の役割に取られないようにする（4番の枠取りだけを見る）。
+        var fielders = Enumerable.Range(0, 8).Select(i => P($"野手{i}", contact: 55, power: 55)).ToList();
+        var pitcher = Pitcher("打撃型エース", contact: 70, power: 70)
+            with { Discipline = 20, Speed = 20, Bunt = 10 };
+        var team = BuildTeam(pitcher, fielders, new List<Player>());
+
+        var result = LineupOrderer.Compose(team, C, modernRules: null, calendarYear: null);
+
+        Assert.Same(pitcher, result.BattingOrder[3]);
+        Assert.Equal(3, result.PitcherSlot);
+        Assert.Equal(9, result.BattingOrder.Count);
+    }
+
+    [Fact]
+    public void Compose_WeakHittingPitcher_StaysAtNinth()
+    {
+        // 野手平均に届かない投手は従来どおり9番（issue #360 の既定側）。
+        var fielders = Enumerable.Range(0, 8).Select(i => P($"野手{i}", contact: 55, power: 55)).ToList();
+        var pitcher = Pitcher("非力投手", contact: 30, power: 30);
+        var team = BuildTeam(pitcher, fielders, new List<Player>());
+
+        var result = LineupOrderer.Compose(team, C, modernRules: null, calendarYear: null);
+
         Assert.Same(pitcher, result.BattingOrder[8]);
+        Assert.Equal(8, result.PitcherSlot);
     }
 }
