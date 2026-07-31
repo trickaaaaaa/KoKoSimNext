@@ -2561,9 +2561,36 @@ namespace KokoSim.Unity.Match
 
         // ---- ステージ ---------------------------------------------------------
 
+        // ---- 球場の最小追加（S1・打球処理の3D化 F1） ----------------------------
+        // 監督決定は「球場は今のまま（最低限）」。ここで足すのは**動きの検証に必要な最小限**だけ:
+        //   ① 地面の広さ … 従来は 100m四方・中心z=+9 ＝ z=59m で尽きる。両翼95m・中堅118mの打球が
+        //      板の外（背景色）へ抜けて行方が追えない
+        //   ② 塁とファウルライン … 無いと「一塁へ送球した」の一塁が画面に存在しない
+        // 内野の土・外野フェンス・スタンドは**やらない**（決定どおり）。
+        //
+        // 対決構図（R-comp60）への非侵襲は幾何で保証してある:
+        //   ・地面の拡張ぶん（z<-41）はバックネット書き割り（z=-16・34×8m）の裏＝画面に出ない
+        //   ・対決構図で地面が見えるのは z∈[-52,+12] のごく細い帯。塁は最も近い本塁側でも
+        //     一塁(19.4,19.4)＝帯の外、二塁(0,38.8)も外
+        //   ・ファウルラインは**本塁の土円（半径3.5m）の外から**引くので帯に入らない
+        // ＝ F1 の受け入れは「対決構図の画素差分 0」。破れたらこの前提のどれかが崩れている。
+
+        /// <summary>
+        /// ファウルラインを引き始める本塁からの距離[m]。
+        /// 実物は本塁から引くが、**対決構図（R-comp60）の右下隅に一塁側の線が食い込む**
+        /// （5m 始まりで実測63画素・緑地に白＝はっきり見える異物。2026-08-01 A/B画素差分で検出）。
+        /// 対決ビューは監督の指示外なので、線は構図の外＝本塁から 8m の所から引く。
+        /// 代償は守備カメラで本塁まわり8mだけ線が無いこと（全長95mに対して小さい）。
+        /// </summary>
+        private const float FoulLineFromM = 8f;
+        /// <summary>ファウルラインの長さ[m]（両翼＝ファウルポールまで）。</summary>
+        private const float FoulLineToM = 95f;
+
         private void BuildGround(int layer)
         {
-            Primitive(PrimitiveType.Plane, "ground", new Vector3(0f, 0f, 9f), new Vector3(10f, 1f, 10f),
+            // 中堅118m・両翼95mを板の上に収める（旧: scale10・中心z=9 ＝ z∈[-41,59]）。
+            // Plane はスケール1で10m四方なので 26 ＝ 260m四方。中心z=+60 で z∈[-70,+190]・x∈[-130,+130]
+            Primitive(PrimitiveType.Plane, "ground", new Vector3(0f, 0f, 60f), new Vector3(26f, 1f, 26f),
                 new Color(0.30f, 0.55f, 0.30f), layer);
             Primitive(PrimitiveType.Cylinder, "dirt-home", new Vector3(0f, 0.005f, 0f), new Vector3(7f, 0.005f, 7f),
                 new Color(0.63f, 0.47f, 0.33f), layer);
@@ -2579,14 +2606,52 @@ namespace KokoSim.Unity.Match
             // 本実装のスタジアム背景（スタンド/ネット）に置き換わるまでの仮（2026-07-26 構図リフレームD採用時）
             Primitive(PrimitiveType.Cube, "backstop-wall", new Vector3(0f, 4f, -16f), new Vector3(34f, 8f, 0.5f),
                 new Color(0.12f, 0.20f, 0.16f), layer);
+
+            BuildBasesAndFoulLines(layer);
         }
 
-        private GameObject Primitive(PrimitiveType type, string name, Vector3 localPos, Vector3 localScale, Color color, int layer)
+        /// <summary>
+        /// 塁3枚とファウルライン2本（S1）。座標は engine の共通ソース
+        /// <see cref="KokoSim.Engine.Match.Field.FieldDiagramGeometry"/> から採る＝**Unity 側に塁の表を複製しない**
+        /// （2D俯瞰・メンバー画面と同じ地理を使う。ずれると「3Dでは一塁に見えるが2Dでは違う所」になる）。
+        /// engine は (X=一塁側, Y=センター) の2Dなので、ステージの (x, 0, z=Y) へ写す（+x=一塁側は共通・変換不要）。
+        /// </summary>
+        private void BuildBasesAndFoulLines(int layer)
+        {
+            var white = new Color(0.88f, 0.88f, 0.84f);
+
+            // 塁は一辺0.38m。実物の塁は辺がファウルライン（＝45°）に沿うので yaw=45°
+            AddBase("base-first", KokoSim.Engine.Match.Field.FieldDiagramGeometry.First, white, layer);
+            AddBase("base-second", KokoSim.Engine.Match.Field.FieldDiagramGeometry.Second, white, layer);
+            AddBase("base-third", KokoSim.Engine.Match.Field.FieldDiagramGeometry.Third, white, layer);
+
+            // ファウルライン。Cube の長軸は +z なので、yaw=±45° で (±1,0,1)/√2 方向へ倒す。
+            // 本塁からの距離 FoulLineFromM〜FoulLineToM を線分の実長として置く（本塁の土円の中は引かない）
+            float mid = (FoulLineFromM + FoulLineToM) * 0.5f;
+            float len = FoulLineToM - FoulLineFromM;
+            float d = mid / Mathf.Sqrt(2f);   // 45°方向に距離 mid 進んだ点の x・z 成分
+            Primitive(PrimitiveType.Cube, "foul-line-right", new Vector3(d, 0.010f, d),
+                new Vector3(0.12f, 0.02f, len), white, layer, 45f);
+            Primitive(PrimitiveType.Cube, "foul-line-left", new Vector3(-d, 0.010f, d),
+                new Vector3(0.12f, 0.02f, len), white, layer, -45f);
+        }
+
+        private void AddBase(string name, (double X, double Y) p, Color color, int layer)
+        {
+            Primitive(PrimitiveType.Cube, name, new Vector3((float)p.X, 0.012f, (float)p.Y),
+                new Vector3(0.38f, 0.02f, 0.38f), color, layer, 45f);
+        }
+
+        /// <param name="yawDeg">Y軸まわりの回転[度]。既定0＝無回転（従来の呼び出しは全部これ）。
+        /// ファウルライン・塁のように45°の菱形へ載せる部品で使う。</param>
+        private GameObject Primitive(PrimitiveType type, string name, Vector3 localPos, Vector3 localScale, Color color,
+            int layer, float yawDeg = 0f)
         {
             var go = GameObject.CreatePrimitive(type);
             go.name = name;
             go.transform.SetParent(_root.transform, false);
             go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
             go.transform.localScale = localScale;
             Object.DestroyImmediate(go.GetComponent<Collider>());
             go.GetComponent<MeshRenderer>().sharedMaterial = FlatMaterial(color);
