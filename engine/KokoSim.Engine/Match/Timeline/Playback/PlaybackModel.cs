@@ -231,9 +231,17 @@ public static class PlaybackEvaluator
     }
 
     /// <summary>時刻 t の走者位置（hideAt 経過後は null＝非表示）。mock: runnerAt。</summary>
-    public static PlaybackVec? RunnerAt(PlaybackRunner r, double t)
+    /// <param name="respectHideAt">
+    /// <see cref="PlaybackRunner.HideAt"/> を効かせるか（既定 true＝従来どおり）。
+    ///
+    /// <c>HideAt</c> は**2D俯瞰の都合**で、アウトになった走者の丸トークンを盤面から消すためにある。
+    /// 3Dの守備ビューでそのまま使うと**選手が空中で消える**（Issue F7）ので、3D側は false を渡して
+    /// 位置だけを引き、アウトの表現は演技（スライディング失敗・タッチアウト）で見せる。
+    /// 補間そのものはここが単一ソースのまま＝2Dと3Dで走者の居場所がずれない。
+    /// </param>
+    public static PlaybackVec? RunnerAt(PlaybackRunner r, double t, bool respectHideAt = true)
     {
-        if (r.HideAt.HasValue && t > r.HideAt.Value) return null;
+        if (respectHideAt && r.HideAt.HasValue && t > r.HideAt.Value) return null;
         PlaybackVec? pos = null;
         foreach (var s in r.Segs)
         {

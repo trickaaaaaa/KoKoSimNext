@@ -1750,6 +1750,124 @@ namespace KokoSim.EditorTools
         [UnityEditor.MenuItem("KokoSim/Duel/F6 送球クリップを実測する")]
         private static void RunThrowProbeMenu() => RunThrowProbe();
 
+        /// <summary>
+        /// 走者の**塁に着く瞬間**を実測する（打球処理の3D化 F7）。
+        ///
+        /// 走行ループと違って到達・スライディングは「前へ進んで、止まる」演技なので、
+        /// 判定材料は**前進が止まる時刻**。engine の走者レッグの終端（T1）へこの瞬間を合わせる。
+        ///
+        /// ⚠ 尺で決め打たない。<c>Running_To_Base</c> は 6.43s あるが前進はごく短く、
+        /// 残りは立ち止まってからの芝居（design-18 §4.5-⑬「収録の要らない芝居は尺でなく補正窓で消す」）。
+        ///
+        /// 出す量:
+        ///   tArr/fwdMax … 前進が最大に達した時刻[s]と前進量[m]（＝塁に着く瞬間の候補）
+        ///   tLow/hipLow … 腰が最も低くなった時刻[s]と高さ[m]（スライディングかどうかが割れる）
+        ///   vHead       … 前進が始まってから止まるまでの平均速度[m/s]（走り込みの速さ）
+        /// </summary>
+        public static string RunRunnerArriveProbe()
+        {
+            var names = new[]
+            {
+                "Offense_Running_To_Base", "Offense_Base_Running_To_Walking",
+                "Offense_Base_Sliding_Type01_Succ", "Offense_Base_Sliding_Type01_Fail",
+                "Offense_Base_Sliding_Type02_Succ", "Offense_Base_Sliding_Type02_Fail",
+                "Offense_Back_To_Base", "Offense_Crouch_To_Running",
+            };
+            const float dt = 0.02f;
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\ttTouch\treachX\treachZ\treachY\tlimb\ttLow\thipLow");
+                // このコマは塁に触れる高さか（足でも手でも、塁は地面にある）
+                const float TouchGroundM = 0.35f;
+                var limbs = new[]
+                {
+                    HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot,
+                    HumanBodyBones.LeftHand, HumanBodyBones.RightHand,
+                };
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    // ⚠ 前進量は**腰では測れない**。Sample はルートモーションを載せないので
+                    //    腰と根の差は体の中の傾きしか出ず、実測で 0.08〜0.18m しか動かなかった。
+                    //    塁に届くのは足か手なので、その**最も前へ出た点**を採る（F5 のグラブと同じ考え方）
+                    var reach = new Vector3[n + 1];
+                    var limb = new HumanBodyBones[n + 1];
+                    var hip = new float[n + 1];
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "run", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var hips = anim.GetBoneTransform(HumanBodyBones.Hips).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        float floor = Mathf.Min(lf.y, rf.y);
+                        var best = new Vector3(0f, 0f, float.MinValue);
+                        var bestLimb = HumanBodyBones.LeftFoot;
+                        foreach (var b in limbs)
+                        {
+                            var tr = anim.GetBoneTransform(b);
+                            if (tr == null) continue;
+                            // ⚠ 高さで絞らないと**走っている途中の振り上げた手**を拾う（実測で
+                            //    Sliding_Type01_Succ が 0.22s・手の高さ 0.958m ＝ まだ走っている所を
+                            //    「塁に触った」と誤判定した）。塁に触るのは地面の高さの出来事
+                            if (tr.position.y - floor > TouchGroundM) continue;
+                            var p = body.transform.InverseTransformPoint(tr.position);
+                            if (p.z > best.z) { best = new Vector3(p.x, tr.position.y - floor, p.z); bestLimb = b; }
+                        }
+                        if (best.z <= float.MinValue * 0.5f) best = new Vector3(0f, 0f, -99f);
+                        reach[i] = best;
+                        limb[i] = bestLimb;
+                        hip[i] = hips.y - floor;
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iTouch = 0, iLow = 0;
+                    float reachMax = float.MinValue, hipLow = float.MaxValue;
+                    for (int i = 0; i <= n; i++)
+                    {
+                        if (reach[i].z > reachMax) { reachMax = reach[i].z; iTouch = i; }
+                        if (hip[i] < hipLow) { hipLow = hip[i]; iLow = i; }
+                    }
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F2}\t{3:F3}\t{4:F3}\t{5:F3}\t{6}\t{7:F2}\t{8:F3}",
+                        shortName, clip.length, iTouch * dt,
+                        reach[iTouch].x, reach[iTouch].z, reach[iTouch].y, limb[iTouch],
+                        iLow * dt, hipLow));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/runner.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] runner arrive probe -> out/duel-stage/runner.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F7 走者の到達クリップを実測する")]
+        private static void RunRunnerArriveProbeMenu() => RunRunnerArriveProbe();
+
         private static AnimationClip FindClip(string clipName)
         {
             // 供給元は本番リグと同じ入口（自作Assets/Motions → 購入Assets/Animoの順）で引く。

@@ -130,6 +130,7 @@ namespace KokoSim.Unity.Match
             _fieldIdleClip[FieldPosition.Pitcher] = outfieldClip;
             _fieldIdleClip[FieldPosition.Catcher] = infieldClip;
 
+            EnsureRunnerCast(bodyPrefab, useVendor, layer);
             SetFieldCastVisible(_fieldCastVisible);
         }
 
@@ -1181,6 +1182,355 @@ namespace KokoSim.Unity.Match
             return sb.ToString();
         }
 
+        // ---- 走者（F7） ---------------------------------------------------------
+        //
+        // 守備と同じ「位置は engine・芝居は Unity」。違いは2つだけ:
+        //   ・走者は engine の <c>RunnerAt</c> が**線形補間**（野手の easeIO と違って速度が一定）
+        //   ・塁に着いたら止まる＝到達の演技が要る（走り抜け／スライディング成功／失敗）
+
+        /// <summary>同時に出せる走者の上限（三塁まで＋打者走者）。</summary>
+        private const int MaxRunners = 4;
+
+        /// <summary>
+        /// 走者の走行クリップ。歩き・走りは攻撃側の収録、全力だけ守備側の収録を借りる。
+        ///
+        /// ⚠ 借りるのは**実測がそう言っている**から。engine のモックは本塁→一塁に 6.5〜9.1 m/s を
+        /// 要求するが、攻撃側の走りループは 3.98 m/s しか無く、倍率が 1.64〜2.29 ＝ F4 で決めた
+        /// 上限 1.45 を大きく超える（足が目に見えて空回りする）。全力ループ 5.11 m/s なら 1.28〜1.79 で、
+        /// 少なくとも段の中では一番マシになる。素体もリグも同じで、全力疾走に攻守の区別は無い。
+        /// </summary>
+        private static readonly LocoClip[] RunnerLadder =
+        {
+            new LocoClip("AA_Baseball_Offense_Base_Walking", 1.14f, -1f),
+            new LocoClip("AA_Baseball_Offense_Base_Running", 3.98f, -17f),
+            new LocoClip("AA_Baseball_Defender_Movement_Sprint_Loop", 5.11f, -12.9f),
+        };
+
+        /// <summary>走者の待機（塁上でのリード）。</summary>
+        private const string RunnerIdleClipName = "AA_Baseball_Offense_Crouch_Idle_Loop_Type01";
+
+        /// <summary>
+        /// 塁に着く演技1本ぶんのアンカー（実測 2026-08-01・<c>DuelMotionSpike.RunRunnerArriveProbe</c>／
+        /// <c>out/duel-stage/runner.tsv</c>）。<see cref="Touch"/> は engine の走者レッグの終端（T1）へ合わせる瞬間。
+        ///
+        /// ⚠ **その瞬間の定義はクリップごとに違う**（捕球で2種・守備の走り込みで3種あったのと同じ）。
+        ///   走り抜け・スライディング成功 … 地面の高さの手足が最も前へ出た時刻（＝塁を踏む/触る）
+        ///   スライディング失敗           … 腰が最も低くなった時刻（＝滑り込みの接地）。
+        ///     この収録は「触る」のが 2.06s と遅く、それはタッチされた後に塁へ手を伸ばし直す芝居で、
+        ///     そこを T1 に合わせると滑り込みが1.5秒も早く終わってしまう
+        /// ⚠ Type02 は採らない。前置きが長く（触るまで 1.34s・腰が沈むまで 4.30s）、走者レッグより
+        ///   長い頭出しが要る場面が出る。Type01 は 0.58〜0.62s で収まる。
+        /// </summary>
+        private readonly struct RunnerArriveAnchor
+        {
+            public readonly string Clip;
+            public readonly float Touch;
+            /// <summary>その瞬間に塁へ触れている手足の**アクターローカル**水平位置（右/前[m]）。</summary>
+            public readonly float TouchX, TouchZ;
+
+            public RunnerArriveAnchor(string clip, float touch, float touchX, float touchZ)
+            {
+                Clip = clip; Touch = touch; TouchX = touchX; TouchZ = touchZ;
+            }
+        }
+
+        private static readonly RunnerArriveAnchor ArriveRunThrough =
+            new("AA_Baseball_Offense_Running_To_Base", 0.68f, 0.405f, 0.582f);
+        private static readonly RunnerArriveAnchor ArriveSlideSafe =
+            new("AA_Baseball_Offense_Base_Sliding_Type01_Succ", 0.62f, 0.602f, 0.447f);
+        private static readonly RunnerArriveAnchor ArriveSlideOut =
+            new("AA_Baseball_Offense_Base_Sliding_Type01_Fail", 0.58f, -0.003f, 0.530f);
+
+        /// <summary>到達の演技を見せる長さ[s]（アンカーから先）。</summary>
+        private const float ArriveFollowSeconds = 1.10f;
+
+        /// <summary>到達後の据え置き[s]（打ち切りには必ず据え置きを添える＝design-18 §4.5-⑭）。</summary>
+        private const float ArriveHoldSeconds = 0.40f;
+
+        private readonly List<Actor> _runnerCast = new();
+
+        private struct RunnerMotion
+        {
+            public int Ladder;
+            public float Yaw;
+            public bool Started;
+            /// <summary>到達クリップを流し終える時刻（この間は走りの段も向きも触らない）。</summary>
+            public float ArriveUntil;
+            public bool ArriveFired;
+        }
+
+        private readonly List<RunnerMotion> _runnerMotion = new();
+        private float _runnerMaxPosErr, _runnerMaxSpeed;
+        private float _runnerSlipMax, _runnerSlipMin;
+        private float _runnerHeadMin;
+
+        /// <summary>走者プールを生成する（2回目以降は何もしない）。装備は帽子だけ＝グラブは持たせない。</summary>
+        private void EnsureRunnerCast(GameObject bodyPrefab, bool useVendor, int layer)
+        {
+            if (_runnerCast.Count > 0 || bodyPrefab == null) return;
+            var idle = LoadClip(RunnerIdleClipName);
+            if (idle == null)
+            {
+                Debug.LogWarning("[DuelStage] 走者の待機クリップが無いので走者を組まない");
+                return;
+            }
+            for (int i = 0; i < MaxRunners; i++)
+            {
+                var a = SpawnActor(bodyPrefab, idle, Vector3.zero, 0f,
+                    _offenseColors, 0f, layer, useVendor, rootMotion: false, tightBounds: true);
+                a.Go.name = "runner-" + i;
+                a.IdleClip = idle;
+                StepActor(a, 0.001f);
+                GroundFix(a);
+                if (!useVendor) AttachGear(a, GearKind.Cap, Vector3.zero, _offenseColors.Cap, layer);
+                CollectTeamMats(a, _offenseColors.Cap);
+                a.Go.SetActive(false);
+                a.Enabled = false;
+                _runnerCast.Add(a);
+            }
+        }
+
+        /// <summary>そのプレーに出る走者だけ有効にする（出ない枠はポーズ評価ごと止める）。</summary>
+        private void SetRunnerCastForPlay(PlaybackPlay play)
+        {
+            _runnerMotion.Clear();
+            int n = play?.Runners?.Count ?? 0;
+            for (int i = 0; i < _runnerCast.Count; i++)
+            {
+                bool on = i < n;
+                var a = _runnerCast[i];
+                if (a?.Go == null) continue;
+                a.Go.SetActive(on);
+                a.Enabled = on;
+                if (on) { a.Speed = 1f; a.HoldSeconds = 0f; }
+            }
+            for (int i = 0; i < n; i++) _runnerMotion.Add(new RunnerMotion { Ladder = -1, Yaw = 0f });
+        }
+
+        /// <summary>
+        /// 時刻 t の走者位置（stage-local の x,z）。engine の補間が単一ソース。
+        ///
+        /// ⚠ <c>HideAt</c> は効かせない。あれは2D俯瞰が「アウトになった丸トークンを盤面から消す」ための
+        /// 都合で、3Dでそのまま使うと**選手が空中で消える**。アウトは演技（滑り込み失敗）で見せる。
+        /// レッグが始まる前は最初のレッグの起点に立たせる（engine は null を返す＝2Dでは描かない区間）。
+        /// </summary>
+        private static bool RunnerXZ(PlaybackRunner r, float t, out Vector2 xz)
+        {
+            var p = PlaybackEvaluator.RunnerAt(r, t, respectHideAt: false);
+            if (p.HasValue) { xz = new Vector2((float)p.Value.X, (float)p.Value.Y); return true; }
+            if (r?.Segs != null && r.Segs.Count > 0)
+            {
+                var f = r.Segs[0].From;
+                xz = new Vector2((float)f.X, (float)f.Y);
+                return true;
+            }
+            xz = Vector2.zero;
+            return false;
+        }
+
+        /// <summary>この走者が最後に止まる時刻と、その塁でどうなったか。</summary>
+        private static bool RunnerFinal(PlaybackRunner r, out float t1, out bool outAtEnd, out bool closeCall)
+        {
+            t1 = 0f; outAtEnd = false; closeCall = false;
+            if (r?.Segs == null || r.Segs.Count == 0) return false;
+            var last = r.Segs[r.Segs.Count - 1];
+            // 塁上で動かないレッグ（待機）は到達ではない
+            if (new Vector2((float)(last.To.X - last.From.X), (float)(last.To.Y - last.From.Y)).sqrMagnitude < 0.25f)
+                return false;
+            t1 = (float)last.T1;
+            outAtEnd = last.OutAtEnd;
+            closeCall = last.CloseCall;
+            return true;
+        }
+
+        /// <summary>到達の演技を選ぶ**純関数**（乱数を引かない）。</summary>
+        private static RunnerArriveAnchor SelectArrive(bool outAtEnd, bool closeCall)
+            => outAtEnd ? ArriveSlideOut : closeCall ? ArriveSlideSafe : ArriveRunThrough;
+
+        /// <summary>走者1人を時刻 t へ進める（守備の <see cref="StepFielderMotion"/> と同じ作り）。</summary>
+        private void StepRunnerMotion(int idx, float t, float dt)
+        {
+            if (idx >= _runnerCast.Count || idx >= _runnerMotion.Count) return;
+            var a = _runnerCast[idx];
+            var r = _fieldPlay.Runners[idx];
+            if (a == null || a.Go == null || !a.Enabled) return;
+            var st = _runnerMotion[idx];
+
+            Vector2 cur;
+            if (!RunnerXZ(r, t, out cur)) return;
+
+            // 到達の予定。**絶対時刻で判定する**（途中の時刻から再生しても同じ絵）
+            float t1;
+            bool outAtEnd, closeCall;
+            if (!st.ArriveFired && RunnerFinal(r, out t1, out outAtEnd, out closeCall))
+            {
+                var an = SelectArrive(outAtEnd, closeCall);
+                float tStart = t1 - an.Touch;
+                if (t >= tStart)
+                {
+                    var clip = LoadClip(an.Clip);
+                    if (clip != null)
+                    {
+                        // 頭出し。**負になってはいけない**（負＝塁に触る芝居が着く前に終わっている）
+                        _runnerHeadMin = Mathf.Min(_runnerHeadMin, t - tStart);
+                        SetActorClip(a, clip, t - tStart, an.Touch + ArriveFollowSeconds);
+                        a.Speed = 1f;
+                        a.HoldSeconds = ArriveHoldSeconds;
+                        st.Ladder = int.MinValue;
+                        st.ArriveUntil = t1 + ArriveFollowSeconds + ArriveHoldSeconds;
+                        // 塁へ触れる手足が塁の方を向くように体を回す（F5 のグラブ・F6 の手と同型）
+                        var th = new Vector2(an.TouchX, an.TouchZ);
+                        var to = new Vector2((float)r.Segs[r.Segs.Count - 1].To.X,
+                            (float)r.Segs[r.Segs.Count - 1].To.Y);
+                        var from = new Vector2((float)r.Segs[r.Segs.Count - 1].From.X,
+                            (float)r.Segs[r.Segs.Count - 1].From.Y);
+                        var dir = to - from;
+                        if (dir.sqrMagnitude > 1e-6f && th.magnitude > 0.05f)
+                            st.Yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg
+                                     - Mathf.Atan2(th.x, th.y) * Mathf.Rad2Deg;
+                        st.Started = true;
+                    }
+                    st.ArriveFired = true;
+                }
+            }
+
+            if (t < st.ArriveUntil)
+            {
+                // 到達の芝居の間は位置だけ engine の真値へ置き続ける
+                PlaceRunner(a, cur.x, cur.y, st.Yaw);
+                _runnerMotion[idx] = st;
+                return;
+            }
+
+            // 速度は中央差分（engine は位置しか返さない）
+            Vector2 pa, pb;
+            float ta = Mathf.Max(0f, t - LocoSampleDt), tb = t + LocoSampleDt;
+            if (!RunnerXZ(r, ta, out pa) || !RunnerXZ(r, tb, out pb)) { _runnerMotion[idx] = st; return; }
+            var v = (pb - pa) / Mathf.Max(1e-4f, tb - ta);
+            float speed = v.magnitude;
+
+            int want = -1;
+            float mul = 1f;
+            if (speed >= FielderIdleSpeedMps)
+            {
+                float best = float.MaxValue;
+                for (int i = 0; i < RunnerLadder.Length; i++)
+                {
+                    float m = Mathf.Clamp(speed / RunnerLadder[i].VClip, LocoSpeedMin, LocoSpeedMax);
+                    float err = Mathf.Abs(Mathf.Log(speed / (RunnerLadder[i].VClip * m)));
+                    if (err < best - 1e-4f) { best = err; want = i; mul = m; }
+                }
+                if (dt > 0f)
+                {
+                    float ratio = speed / Mathf.Max(0.01f, RunnerLadder[want].VClip * mul);
+                    _runnerSlipMax = Mathf.Max(_runnerSlipMax, ratio);
+                    _runnerSlipMin = Mathf.Min(_runnerSlipMin, ratio);
+                }
+            }
+
+            float targetYaw = want < 0
+                ? st.Yaw
+                : Mathf.Atan2(v.x, v.y) * Mathf.Rad2Deg - RunnerLadder[want].MoveDirDeg;
+            st.Yaw = st.Started
+                ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
+                : targetYaw;
+            st.Started = true;
+
+            if (want != st.Ladder)
+            {
+                var clip = want < 0 ? LoadClip(RunnerIdleClipName) : LoadClip(RunnerLadder[want].Name);
+                if (clip != null && clip != a.Clip)
+                {
+                    float phase = a.Clip != null && a.Clip.length > 0.01f
+                        ? Mathf.Repeat(a.Time / a.Clip.length, 1f) : 0f;
+                    SetActorClip(a, clip, phase * clip.length, 0f);
+                    a.IdleClip = clip;
+                    a.IdleEndAt = 0f;
+                }
+                st.Ladder = want;
+            }
+            a.Speed = want < 0 ? 1f : mul;   // ⚠ SetActorClip では戻らない（毎コマ入れ直す）
+
+            PlaceRunner(a, cur.x, cur.y, st.Yaw);
+
+            if (dt > 0f)
+            {
+                var lp = a.Go.transform.localPosition;
+                _runnerMaxPosErr = Mathf.Max(_runnerMaxPosErr,
+                    new Vector2(lp.x - cur.x, lp.z - cur.y).magnitude);
+            }
+            _runnerMaxSpeed = Mathf.Max(_runnerMaxSpeed, speed);
+            _runnerMotion[idx] = st;
+        }
+
+        /// <summary>走者を置く（守備の <see cref="PlaceFielder"/> と同じ。接地はマウンド以外は平ら）。</summary>
+        private void PlaceRunner(Actor a, float x, float z, float yawDeg)
+        {
+            if (a == null || a.Go == null) return;
+            var lp = a.Go.transform.localPosition;
+            a.Go.transform.localPosition = new Vector3(x, lp.y, z);
+            a.Go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
+            a.BasePos = a.Go.transform.localPosition;
+            a.BaseRot = a.Go.transform.localRotation;
+            a.GroundY = FieldGroundY(x, z);
+            GroundFix(a);
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】走者の受け入れ実測。
+        ///
+        /// <c>posErr</c> は engine の言う位置との差＝写しているだけなので 0.000 のはず。
+        /// <c>着塁ずれ</c> は<b>レッグの終端時刻ちょうど</b>での「走者の位置 → その塁」の差。
+        /// ⚠ ここを「最後に描いたコマ」で測ってはいけない。ポーズは12fpsなので最後のコマは
+        /// 終端の最大83ms手前＝6.6m/s なら 0.55m 残っており、**サンプリングの粗さを
+        /// 誤差として読んでしまう**（2026-08-01 実測でそう出た）。
+        /// <c>頭出し</c> は到達クリップの頭をどれだけ捨てたか＝**負になってはいけない**。
+        /// <c>slip</c> は足と地面の食い違い（1.0=一致 / &gt;1=前へ滑る）。
+        /// </summary>
+        public string RunnerDiagForCapture()
+        {
+            float arriveErr = 0f;
+            if (_fieldPlay?.Runners != null)
+            {
+                foreach (var r in _fieldPlay.Runners)
+                {
+                    float t1;
+                    bool o, c;
+                    if (!RunnerFinal(r, out t1, out o, out c)) continue;
+                    Vector2 at;
+                    if (!RunnerXZ(r, t1, out at)) continue;
+                    var to = r.Segs[r.Segs.Count - 1].To;
+                    arriveErr = Mathf.Max(arriveErr,
+                        new Vector2(at.x - (float)to.X, at.y - (float)to.Y).magnitude);
+                }
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "走者={0}人\tposErrMax={1:F3}m\t着塁ずれ={2:F3}m\t頭出しの最小={3:F2}s\tvMax={4:F2}m/s\tslip={5:F2}〜{6:F2}",
+                _runnerMotion.Count, _runnerMaxPosErr, arriveErr,
+                _runnerHeadMin > 1e6f ? 0f : _runnerHeadMin, _runnerMaxSpeed,
+                _runnerSlipMin > 1e6f ? 1f : _runnerSlipMin, _runnerSlipMax));
+            sb.AppendLine("走者\tt1\t結果\tclip\tHideAt");
+            if (_fieldPlay?.Runners != null)
+            {
+                for (int i = 0; i < _fieldPlay.Runners.Count; i++)
+                {
+                    var r = _fieldPlay.Runners[i];
+                    float t1;
+                    bool o, c;
+                    if (!RunnerFinal(r, out t1, out o, out c)) { sb.AppendLine(r.Label + "\t(移動なし)"); continue; }
+                    var an = SelectArrive(o, c);
+                    sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2}\t{3}\t{4}", r.Label, t1,
+                        o ? "アウト" : c ? "際どいセーフ" : "セーフ",
+                        an.Clip.Replace("AA_Baseball_Offense_", ""),
+                        r.HideAt.HasValue ? r.HideAt.Value.ToString("F2") : "—"));
+                }
+            }
+            return sb.ToString();
+        }
+
         /// <summary>その役の本来の待機クリップ（走行中は <c>IdleClip</c> が差し替わっているため別に持つ）。</summary>
         private AnimationClip IdleClipFor(FieldPosition pos)
         {
@@ -1618,6 +1968,14 @@ namespace KokoSim.Unity.Match
                 };
             }
 
+            // 打者は走者としてやり直す。打席の較正（バット・左打者のミラー親）を引きずったまま
+            // 走らせるより、右利き前提の走者プールへバトンタッチするほうが安全（設計の既定路線）
+            if (_batter?.Go != null) _batter.Go.SetActive(false);
+            SetRunnerCastForPlay(play);
+            _runnerMaxPosErr = _runnerMaxSpeed = 0f;
+            _runnerHeadMin = float.MaxValue;
+            _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
+
             BuildFieldCatchPlan(play);
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             BuildFieldCameraPlan(play);
@@ -1635,6 +1993,14 @@ namespace KokoSim.Unity.Match
             _loco.Clear();
             _catchEvents.Clear();
             _throwEvents.Clear();
+            _runnerMotion.Clear();
+            foreach (var a in _runnerCast)
+            {
+                if (a?.Go == null) continue;
+                a.Go.SetActive(false);
+                a.Enabled = false;
+            }
+            if (_batter?.Go != null) _batter.Go.SetActive(true);
             // 走行クリップのまま伏せると、次の打席の頭で走っている投手が出る
             Restore(_pitcher, _pitcherSnap);
             Restore(_catcher, _catcherSnap);
@@ -1702,6 +2068,9 @@ namespace KokoSim.Unity.Match
             // 守備9人（投手・捕手を含む）。位置は engine の真値、足と向きは Unity が合わせる
             foreach (var pos in AllFieldPositions)
                 StepFielderMotion(pos, FielderActor(pos), t, dt);
+
+            // 走者（そのプレーに出る人数だけ）
+            for (int i = 0; i < _runnerMotion.Count; i++) StepRunnerMotion(i, t, dt);
 
             // グラブを球へ寄せるのは**ポーズが進んだ回だけ**。毎フレーム当てると、同じポーズに
             // 二度当たって寄りすぎる（重み<1 は今の手の位置からの補間だから。design-18 §4.5-③）

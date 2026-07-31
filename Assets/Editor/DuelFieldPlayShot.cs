@@ -38,8 +38,11 @@ namespace KokoSim.UnityEditorTools
         /// </summary>
         private const int Frames = 12;
 
-        /// <summary>ゴロ・フライ・長打の3本（PlaybackSamples の添字）。</summary>
-        private static readonly int[] PlayIndices = { 2, 1, 5 };
+        /// <summary>
+        /// ゴロ・フライ・長打・併殺の4本（PlaybackSamples の添字）。
+        /// 併殺（⑤ 6-4-3）は走者2人・送球2本・二塁まわりの取り違えが起きる場面＝seam E1 の主戦場。
+        /// </summary>
+        private static readonly int[] PlayIndices = { 2, 1, 5, 4 };
 
         [UnityEditor.MenuItem("KokoSim/Duel/F3 守備カメラで打球を撮る")]
         public static void Run()
@@ -54,6 +57,7 @@ namespace KokoSim.UnityEditorTools
             accept.AppendLine("play\tacceptance");
             var catches = new StringBuilder();
             var throws = new StringBuilder();
+            var runners = new StringBuilder();
 
             foreach (var idx in PlayIndices)
             {
@@ -100,6 +104,8 @@ namespace KokoSim.UnityEditorTools
                     catches.Append(rig.FieldCatchDiagForCapture());
                     throws.AppendLine("# " + Label(idx));
                     throws.Append(rig.FieldThrowDiagForCapture());
+                    runners.AppendLine("# " + Label(idx));
+                    runners.Append(rig.RunnerDiagForCapture());
 
                     // 名前は日本語なのでファイル名に使えない。添字＋ラベルで一意にする
                     WriteSheet(frames, Label(idx));
@@ -117,6 +123,7 @@ namespace KokoSim.UnityEditorTools
             File.WriteAllText(Path.Combine(Dir, "acceptance.tsv"), accept.ToString());
             File.WriteAllText(Path.Combine(Dir, "catches.tsv"), catches.ToString());
             File.WriteAllText(Path.Combine(Dir, "throws.tsv"), throws.ToString());
+            File.WriteAllText(Path.Combine(Dir, "runners.tsv"), runners.ToString());
             Debug.Log("[F3Shot] DONE -> " + Dir);
         }
 
@@ -187,6 +194,7 @@ namespace KokoSim.UnityEditorTools
                 case 1: return "fly";     // ② センターフライ
                 case 2: return "grd";     // ③ ショートゴロ 6-3
                 case 5: return "xbh";     // ⑥ 右中間破る長打→中継バックホーム
+                case 4: return "dp";      // ⑤ 6-4-3 ダブルプレー
                 default: return "p" + idx;
             }
         }
