@@ -494,7 +494,10 @@ namespace KokoSim.Unity.Match
     /// 表示内容は当面のループ芝居（投手=投球ループ／打者・捕手・審判=待機）。エンジンのpitch進行との
     /// 同期は §7-2 アンカー同期の実装時に接続する。
     /// </summary>
-    public sealed class DuelStageRig : System.IDisposable
+    // 守備・走塁の3D化（打球処理の3D一本化）で足す分は DuelStageRig.Field.cs に置く。
+    // 型を切り出さず partial にするのは、nested な Actor も _root 等の private も
+    // アクセス変更なしで新ファイルから使えるため＝較正の巣（本ファイル）への diff を最小にする。
+    public sealed partial class DuelStageRig : System.IDisposable
     {
         /// <summary>基準ドット密度（16:9・全画面時の確定解像度）。実RTはカラム実寸から適応する（EnsureSize）。</summary>
         public const int BaseWidth = 480;
@@ -841,6 +844,29 @@ namespace KokoSim.Unity.Match
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
             public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+
+            // ---- 守備・走塁のN体化で足した分（既定値は現行4体の挙動と同じ＝絵は不変） ----
+
+            /// <summary>
+            /// 待機ループ中だけ水平位置を <see cref="BasePos"/> へ毎コマ戻す（収録の水平ドリフト対策・#291）。
+            /// 打者だけ true。旧実装は StepActor 内の `a == _batter` identity 判定だったが、
+            /// 守備・走者を同じ StepActor で回すためフラグへ移した。
+            /// </summary>
+            public bool RebaseXZWhileIdle;
+
+            /// <summary>false の間は StepActor が何もしない（打席中の野手など・Tick ごと飛ばす）。</summary>
+            public bool Enabled = true;
+
+            /// <summary>
+            /// ポーズ更新の最小間隔[秒]。0＝ポーズ量子化（12fps）のコマごとに毎回進める＝現行の挙動。
+            /// 遠い外野手のように数pxでしか映らない役を間引くための逃げ道。
+            /// ⚠ **アクターごとの固定間隔**であること。「特定のコマでだけ」の分岐にすると
+            /// 12fps格子に乗るかが位相次第になり、乗らない結果だけ黙って壊れる（design-18 §4.5-⑩）。
+            /// </summary>
+            public float PoseInterval;
+
+            /// <summary>PoseInterval の積み残し[秒]。</summary>
+            public float PoseAccum;
         }
 
         /// <summary>
@@ -927,6 +953,7 @@ namespace KokoSim.Unity.Match
             _batter.IdleClip = batClip;
             _batter.IdleEndAt = BatterIdleEnd;
             _batter.EndAt = BatterIdleEnd;   // 生成直後の初回ループでスイングまで流さない
+            _batter.RebaseXZWhileIdle = true;   // 構え区間の水平ドリフトを毎コマ戻す（#291。旧: StepActor の identity 判定）
             _catcher = SpawnActor(playerBody, catClip, new Vector3(cal0.CatcherX, 0f, cal0.CatcherZ), 0f,
                 _defenseColors, 0f, layer, useVendor);
             // 捕手も素の帽子を落とす。日本の高校野球の捕手は「捕手用ヘルメット＋マスク」で、
@@ -2623,8 +2650,21 @@ namespace KokoSim.Unity.Match
 
         // ---- 素体 -------------------------------------------------------------
 
+        /// <param name="rootMotion">
+        /// クリップのルートモーションを transform へ効かせるか。既定 true＝対決4体の現行挙動
+        /// （AAクリップは踏み込み・降下をルートモーションで持つので捨てると宙に浮く）。
+        /// 守備・走者は位置を engine のタイムラインで置く＝走行ループでは false（その場走り）にし、
+        /// ダイビング・スライディング・走り込み捕球の区間だけ true に戻す。
+        /// </param>
+        /// <param name="tightBounds">
+        /// true にすると <c>updateWhenOffscreen</c> を切って固定バウンズで描く。
+        /// 既定 false＝実ポーズ追従（現行）。実ポーズ追従は**毎フレーム（60fps）フルスキニングして
+        /// バウンズを引き直す**ので、体数が増えるとこれが最大のコストになる。
+        /// 箱は ApplyMirror と同じ ±5m の巨大箱（ローカル・素体の足元原点基準）。
+        /// </param>
         private Actor SpawnActor(GameObject bodyPrefab, AnimationClip clip, Vector3 pos, float yawDeg,
-            UniformPalette pal, float groundY, int layer, bool vendorBody = false)
+            UniformPalette pal, float groundY, int layer, bool vendorBody = false,
+            bool rootMotion = true, bool tightBounds = false)
         {
             var go = Object.Instantiate(bodyPrefab);
             go.name = "body-" + clip.name;
@@ -2664,11 +2704,23 @@ namespace KokoSim.Unity.Match
             if (regionReady) ApplyRegionColors(mat, pal, scale);   // 縞の刻みはスケール確定後でないと合わない
             foreach (var r in rs) r.sharedMaterial = mat;
             foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
-                smr.updateWhenOffscreen = true;   // バウンズをバインド箱でなく実ポーズ追従に
+            {
+                if (tightBounds)
+                {
+                    // 固定バウンズ（ApplyMirror と同じ±5m巨大箱＝空間の取り違えを無効化する箱）。
+                    // updateWhenOffscreen を切るのは毎フレームのフルスキニングを止めるため
+                    smr.updateWhenOffscreen = false;
+                    smr.localBounds = new Bounds(Vector3.zero, Vector3.one * 10f);
+                }
+                else
+                {
+                    smr.updateWhenOffscreen = true;   // バウンズをバインド箱でなく実ポーズ追従に
+                }
+            }
             SetLayerRecursive(go, layer);
 
             var animator = go.GetComponentInChildren<Animator>();
-            animator.applyRootMotion = true;      // AAクリップは踏み込み・降下をルートモーションで持つ
+            animator.applyRootMotion = rootMotion; // AAクリップは踏み込み・降下をルートモーションで持つ
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             var actor = new Actor
@@ -2865,6 +2917,16 @@ namespace KokoSim.Unity.Match
             // 生き残っている間だけ例外が出る。呼び元（Update・撮影ハーネス）に後始末を強いるより
             // ここで黙って降りる方が安全（2026-07-29 プレビュー撮影で実害）
             if (a == null || a.Go == null) return;
+            if (!a.Enabled) return;   // 打席中の野手など＝ポーズを進めない（N体化の間引き）
+            // 役ごとの固定間隔で間引く（0=毎コマ＝現行）。溜めた分は次の更新へ持ち越して丸ごと進める＝
+            // クリップ内時刻は実時間とずれない（コマ数だけが減る）
+            if (a.PoseInterval > 0f)
+            {
+                a.PoseAccum += step;
+                if (a.PoseAccum < a.PoseInterval) return;
+                step = a.PoseAccum;
+                a.PoseAccum = 0f;
+            }
             if (a.Holding) return;
             if (a.HoldRemaining > 0f)
             {
@@ -2905,8 +2967,10 @@ namespace KokoSim.Unity.Match
             a.Graph.Evaluate(step * a.Speed);
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
-            // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない
-            if (a == _batter && a.Clip == a.IdleClip && a.EndAt == a.IdleEndAt)
+            // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない。
+            // ※ 条件は `a == _batter` の identity 判定だった。守備・走者のN体化で StepActor が
+            //   4体以外も回すようになるため、役割ではなく**アクター自身のフラグ**へ移した（絵は不変）
+            if (a.RebaseXZWhileIdle && a.Clip == a.IdleClip && a.EndAt == a.IdleEndAt)
             {
                 var lp = a.Go.transform.localPosition;
                 lp.x = a.BasePos.x;
