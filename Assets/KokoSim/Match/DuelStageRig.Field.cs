@@ -350,17 +350,40 @@ namespace KokoSim.Unity.Match
         // （対決カメラは z=+78.44 から −z を向くので外野が背後にあり、パンでは届かない）。
 
         /// <summary>
-        /// 守備カメラの据え位置（stage-local[m]）。本塁後方の高所。
+        /// 守備カメラの据え位置（stage-local[m]）。本塁後方に**2台**据える（監督決定 2026-08-01・案D）。
+        ///
+        /// 高さは絵に直結する。低いほど視線が寝て選手を横から見る＝立体が出るが、
+        /// 遠くの被写体では背後のフェンス（3.2m）と暗幕（7m）が画面の半分を埋める
+        /// （寄った枠は縦10m級なので、90m先へ向けると縦の画角は6.6°しかない）。
+        /// 高くすると外野の背景に芝と空が入る代わりに、内野が見下ろしになる。
+        /// **足して2で割れない**ので内野用と外野用に分け、被写体の深さで切り替える。
         ///
         /// ⚠ z は **> −16**（バックネット書き割り z=−16・34×8m より手前）。
         /// 奥へ引くと壁が画面下半分を黒く塞ぐ（2026-08-01 実害）。
-        ///
-        /// ⚠ **高さが効く**。低いと視線が地面とほぼ平行になり、「縦に収めたい実寸」を詰めても
-        /// 画面の大半が遠景の芝で埋まって被写体が埋もれる（枠の高さは視線に直交して測るのに、
-        /// 地面は視線とほぼ平行だから＝frameH 25.9m の枠が奥行き100m超の地面を映す）。
-        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
         /// </summary>
-        public static Vector3 FieldStation = new(0f, 24f, -14f);
+        public static Vector3 FieldStationInfield = new(0f, 10f, -14f);
+
+        /// <inheritdoc cref="FieldStationInfield"/>
+        public static Vector3 FieldStationOutfield = new(0f, 24f, -14f);
+
+        /// <summary>
+        /// 外野の据え位置へ切り替える被写体の深さ[m]（本塁からの距離）。
+        /// 二塁が 38.8m なので、内野のプレーが全部おさまる外側に置く。
+        /// </summary>
+        private const float StationSwitchDepthM = 45f;
+
+        /// <summary>
+        /// 切り替え判定の先読み[s]。**今どこかでなく、これからどこへ行くか**で決める。
+        /// これが無いと外野フライで「打球が45mを通過した瞬間」に切れる＝飛んでいる最中のカットになる。
+        /// 先読みしておけば打った直後（対決→守備のカットと同時）に外野側で始まるので、
+        /// 実質カットが増えない。
+        /// </summary>
+        private const float StationLeadSeconds = 1.2f;
+
+        /// <summary>最小滞在[s]。これより短い切り替えは前の据え位置を延長して潰す（チカチカ防止）。</summary>
+        private const float StationMinDwellSeconds = 0.8f;
+
+        private const float StationSampleStepSeconds = 0.05f;
 
         /// <summary>注視点の高さの下限[m]。地面でなく腰の高さに取ると、寄ったときに人が下に切れない。</summary>
         private const float FieldAimYMin = 1.0f;
@@ -377,7 +400,7 @@ namespace KokoSim.Unity.Match
         /// 外野フライで FitBox が求めるズームは実測5.75で上限に頭打ちされていた（engine テストで固定）。
         /// **絵で決める値**なので、比較撮影のために差し替えられるようにしてある。
         /// </summary>
-        public static float FieldMaxZoom = 6f;
+        public static float FieldMaxZoom = 40f;
 
         /// <summary>
         /// 被写体まわりに残す余白[m]。**寄りの深さを決めているのは実はこちら**で、<see cref="FieldMaxZoom"/> ではない。
@@ -387,7 +410,7 @@ namespace KokoSim.Unity.Match
         /// 既定の 6.0m では frameH の下限が 12m（＝上限 12.9 倍）で、これより上に MaxZoom を上げても
         /// 1mm も寄らない。**絵で決める値**なので比較撮影のために差し替えられるようにしてある。
         /// </summary>
-        public static float FieldMarginM = (float)CameraFraming.Default.MarginM;
+        public static float FieldMarginM = 2f;
 
         /// <summary>
         /// 送球区間で球を追うか。2D俯瞰の既定は「始点と終点を両方収める」＝送球の距離ぶん必ず引くので、
@@ -435,7 +458,76 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 時刻 t の視野を守備カメラへ流す。位置は据え置きで、向き（LookAt）と画角だけが動く。
+        /// 据え位置の切り替え計画。<c>(切り替わる時刻, 外野側か)</c> の列で、先頭は必ず T=0。
+        /// **再生前に一度だけ組む**（毎フレームの判定にしない）＝どの時刻から再生を始めても
+        /// 同じ絵になり、閾値付近で往復してもチカチカしない。
+        /// </summary>
+        private readonly System.Collections.Generic.List<(float T, bool Outfield)> _fieldStationCuts
+            = new System.Collections.Generic.List<(float, bool)>();
+
+        /// <param name="t0">
+        /// 守備カメラが映り始める時刻（＝対決ビューから切り替わる打球の瞬間）。
+        /// **これより前は判定に入れない**。打球が出るのは t≈0.5s なので、0 から数えると
+        /// 「カットした直後に0.4秒だけ内野カメラが挟まってすぐ外野へ飛ぶ」＝チラつきになる。
+        /// </param>
+        private void BuildFieldStationPlan(PlaybackPlay play, float t0)
+        {
+            _fieldStationCuts.Clear();
+            if (play == null || _fieldPlan == null || _fieldPlan.Count == 0) return;
+
+            // 決着（ResAt）までで決め、そのあとは据え置く。全景へ戻る区間まで判定に入れると
+            // 「引きの中心は常に外野寄り（WideCy=69m）」なので、内野のプレーが終わるたびに
+            // 最後の最後で外野側へ切り替わる＝要らないカットが1回増える。
+            float end = (float)System.Math.Min(play.Dur, 120.0);
+            if (double.IsFinite(play.ResAt)) end = Mathf.Min(end, (float)play.ResAt);
+            float start = Mathf.Clamp(t0, 0f, end);
+            if (end <= start) { _fieldStationCuts.Add((start, false)); return; }
+
+            var runs = new System.Collections.Generic.List<(float T0, float T1, bool O)>();
+            bool cur = false;
+            float runStart = start;
+            bool started = false;
+            for (float t = start; ; t += StationSampleStepSeconds)
+            {
+                if (t > end) t = end;
+                float lead = Mathf.Min(t + StationLeadSeconds, end);
+                bool o = CameraEvaluator.ViewportAt(_fieldPlan, lead).Cy > StationSwitchDepthM;
+                if (!started) { cur = o; runStart = t; started = true; }
+                else if (o != cur) { runs.Add((runStart, t, cur)); cur = o; runStart = t; }
+                if (t >= end) break;
+            }
+            runs.Add((runStart, end, cur));
+
+            // 先頭の短い区間は**次のほうへ譲る**（後ろの短い区間は前を延長して潰すのと逆向き）。
+            // 頭だけは「前」が無いので、同じ扱いにすると必ず1コマぶんのチラつきが残る。
+            int i0 = 0;
+            while (i0 + 1 < runs.Count && runs[i0].T1 - runs[i0].T0 < StationMinDwellSeconds) i0++;
+
+            for (int i = i0; i < runs.Count; i++)
+            {
+                var r = runs[i];
+                if (_fieldStationCuts.Count == 0) { _fieldStationCuts.Add((start, r.O)); continue; }
+                if (r.T1 - r.T0 < StationMinDwellSeconds) continue;   // 短すぎ＝前を延長
+                if (r.O == _fieldStationCuts[_fieldStationCuts.Count - 1].Outfield) continue;
+                _fieldStationCuts.Add((r.T0, r.O));
+            }
+        }
+
+        /// <summary>時刻 t に使う据え位置。</summary>
+        private Vector3 FieldStationAt(float t)
+        {
+            bool outfield = false;
+            for (int i = 0; i < _fieldStationCuts.Count; i++)
+            {
+                if (_fieldStationCuts[i].T > t) break;
+                outfield = _fieldStationCuts[i].Outfield;
+            }
+            return outfield ? FieldStationOutfield : FieldStationInfield;
+        }
+
+        /// <summary>
+        /// 時刻 t の視野を守備カメラへ流す。据え位置は切り替え計画から採り、
+        /// 同じ据え位置でいる間は**位置が動かない**（向きと画角だけが動く＝中継の三脚と同じ）。
         /// </summary>
         private void ApplyFieldCamera(float t)
         {
@@ -443,7 +535,7 @@ namespace KokoSim.Unity.Match
             Vector3 aim;
             float frameH;
             ComputeFieldFrame(t, out aim, out frameH);
-            FramePreview(FieldStation, aim, frameH);
+            FramePreview(FieldStationAt(t), aim, frameH);
         }
 
         // ---- 打球プレーの再生 ---------------------------------------------------
@@ -465,6 +557,7 @@ namespace KokoSim.Unity.Match
             SetFieldCastVisible(true);
             _fieldPlay = play;
             BuildFieldCameraPlan(play);
+            BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
             SetFieldTime(t0);
         }
 
@@ -473,6 +566,7 @@ namespace KokoSim.Unity.Match
         {
             _fieldPlay = null;
             _fieldPlan = null;
+            _fieldStationCuts.Clear();
             SetFieldCastVisible(false);
             HideBall();
             ClearPreviewFrame();
@@ -604,12 +698,31 @@ namespace KokoSim.Unity.Match
             }
 
             return string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "{0}\t{1:F1}\t{2:F1}\t{3:F2}\t{4}\t{5}\t{6}\t{7:F1}\t{8:F1}\t{9}\t{10}\t{11:F2}\t{12:F2}",
+                "{0}\t{1:F1}\t{2:F1}\t{3:F2}\t{4}\t{5}\t{6}\t{7:F1}\t{8:F1}\t{9}\t{10}\t{11:F2}\t{12:F2}\t{13:F0}",
                 _fieldPlay != null ? _fieldPlay.Name : "(none)", FieldMaxZoom, FieldMarginM, t,
                 ball.HasValue ? ball.Value.X.ToString("F1") : "-",
                 ball.HasValue ? ball.Value.Y.ToString("F1") : "-",
                 ball.HasValue ? ball.Value.H.ToString("F1") : "-",
-                frameH, aim.y, aimPx, BallScreenPx(), bu, bv);
+                frameH, aim.y, aimPx, BallScreenPx(), bu, bv, FieldStationAt(t).y);
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】据え位置の切り替え計画を1行で返す（例 <c>"0.00:内野 3.05:外野"</c>）。
+        ///
+        /// **カットは1コマの絵では見えない**（切り替わった後の絵しか残らない）ので、
+        /// 「何回・いつ切れるか」は必ずこの実測で採る。要らないカットが増えていないかの唯一の窓。
+        /// </summary>
+        public string FieldStationPlanForCapture()
+        {
+            if (_fieldStationCuts.Count == 0) return "(none)";
+            var sb = new StringBuilder();
+            for (int i = 0; i < _fieldStationCuts.Count; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                sb.Append(_fieldStationCuts[i].T.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+                sb.Append(_fieldStationCuts[i].Outfield ? ":外野" : ":内野");
+            }
+            return sb.ToString();
         }
 
         /// <summary>スケール補正後の球が画面上で何pxか（補正が効いているかの裏取り）。</summary>

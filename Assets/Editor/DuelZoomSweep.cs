@@ -11,7 +11,7 @@ namespace KokoSim.UnityEditorTools
     /// <summary>
     /// 【開発用・エディタ限定】守備カメラの**寄りの深さ**を振って比べる（F3）。
     ///
-    /// 高さ（<see cref="DuelStageRig.FieldStation"/>）を振っても被写体が小さいままだったので、
+    /// 高さ（据え位置）を振っても被写体が小さいままだったので、
     /// 今度は枠の詰め方そのものを振る。寄りを止めているのは <c>MaxZoom</c> ではなく
     /// <c>MarginM</c>（箱に 2×Margin を足してからズームを決めるので frameH の下限が 2×Margin）。
     /// **両方を組にして段にする**＝どちらか片方だけ振っても頭打ちで絵が変わらない。
@@ -54,7 +54,8 @@ namespace KokoSim.UnityEditorTools
             var log = new StringBuilder();
             log.AppendLine("shot\tplay\tmaxZoom\tmarginM\tt\tballX\tballZ\tballH\tframeH_m\taimY\taimPx\tballPx\tballU\tballV");
 
-            var savedStation = DuelStageRig.FieldStation;
+            var savedIn = DuelStageRig.FieldStationInfield;
+            var savedOut = DuelStageRig.FieldStationOutfield;
             var savedZoom = DuelStageRig.FieldMaxZoom;
             var savedMargin = DuelStageRig.FieldMarginM;
             var savedFollow = DuelStageRig.FieldThrowFollowsBall;
@@ -74,7 +75,7 @@ namespace KokoSim.UnityEditorTools
                         var tk = Tiers[TrackTierIndex];
 
                         // ① 決着の瞬間を、寄りの段ぶん撮る（送球フレームは2Dのまま＝余白だけの効きを見る）
-                        DuelStageRig.FieldStation = new Vector3(0f, StationHigh, StationZ);
+                        PinStation(new Vector3(0f, StationHigh, StationZ));
                         foreach (var (key, mz, mg) in Tiers)
                             Shot(rig, log, play, res, mz, mg, false, label + "-" + key);
 
@@ -85,13 +86,13 @@ namespace KokoSim.UnityEditorTools
                         //    低いと外野の絵は書き割り（フェンス外の暗幕）に食われる）
                         foreach (var h in StationHeights)
                         {
-                            DuelStageRig.FieldStation = new Vector3(0f, h, StationZ);
+                            PinStation(new Vector3(0f, h, StationZ));
                             Shot(rig, log, play, res, tk.MaxZoom, tk.Margin, true,
                                 label + "-s" + h.ToString("0", CultureInfo.InvariantCulture));
                         }
 
                         // ④ 追随の連番（寄った枠で球を追い続けられるか）
-                        DuelStageRig.FieldStation = new Vector3(0f, StationHigh, StationZ);
+                        PinStation(new Vector3(0f, StationHigh, StationZ));
                         for (int i = 0; i < TrackFrames; i++)
                         {
                             float t = Mathf.Lerp(res * 0.2f, res, i / (float)(TrackFrames - 1));
@@ -104,7 +105,8 @@ namespace KokoSim.UnityEditorTools
             }
             finally
             {
-                DuelStageRig.FieldStation = savedStation;
+                DuelStageRig.FieldStationInfield = savedIn;
+                DuelStageRig.FieldStationOutfield = savedOut;
                 DuelStageRig.FieldMaxZoom = savedZoom;
                 DuelStageRig.FieldMarginM = savedMargin;
                 DuelStageRig.FieldThrowFollowsBall = savedFollow;
@@ -112,6 +114,13 @@ namespace KokoSim.UnityEditorTools
 
             File.WriteAllText(Path.Combine(Dir, "zoom.tsv"), log.ToString());
             Debug.Log("[Zoom] DONE -> " + Dir);
+        }
+
+        /// <summary>比較のあいだは2台の据え位置を同じ点に釘付けにする（1台として扱う）。</summary>
+        private static void PinStation(Vector3 p)
+        {
+            DuelStageRig.FieldStationInfield = p;
+            DuelStageRig.FieldStationOutfield = p;
         }
 
         private static void Shot(DuelStageRig rig, StringBuilder log, PlaybackPlay play,

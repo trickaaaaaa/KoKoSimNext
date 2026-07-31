@@ -38,8 +38,6 @@ namespace KokoSim.UnityEditorTools
         /// </summary>
         private const int Frames = 12;
 
-        private static readonly float[] ZoomCaps = { 3.4f, 6f, 8f };
-
         /// <summary>ゴロ・フライ・長打の3本（PlaybackSamples の添字）。</summary>
         private static readonly int[] PlayIndices = { 2, 1, 5 };
 
@@ -48,51 +46,68 @@ namespace KokoSim.UnityEditorTools
         {
             Directory.CreateDirectory(Dir);
             var log = new StringBuilder();
-            log.AppendLine("play\tzoomCap\tt\tballX\tballY\tballH\tframeH_m\taimPx\tballPx");
+            log.AppendLine("play\tmaxZoom\tmarginM\tt\tballX\tballZ\tballH\tframeH_m\taimY\taimPx\tballPx\tballU\tballV\tstationY");
+            var plans = new StringBuilder();
+            plans.AppendLine("play\tstationPlan");
 
             foreach (var idx in PlayIndices)
             {
                 var play = PlaybackSamples.All[idx];
-                foreach (var cap in ZoomCaps)
+                var rig = new DuelStageRig();
+                try
                 {
-                    DuelStageRig.FieldMaxZoom = cap;
-                    var rig = new DuelStageRig();
-                    try
+                    if (!rig.Available)
                     {
-                        if (!rig.Available)
-                        {
-                            Debug.LogError("[F3Shot] DuelStageRig が組めない（素体/クリップ未導入）");
-                            return;
-                        }
-                        rig.EnsureSize(W, H);
-                        rig.BeginFieldPlay(play, 0f);
-
-                        var frames = new List<Texture2D>();
-                        float step = (float)play.Dur / (Frames - 1);
-                        for (int n = 0; n < Frames; n++)
-                        {
-                            float t = n * step;
-                            rig.SetFieldTime(t);
-                            rig.RenderNow();
-                            frames.Add(Grab(rig.Target));
-                            log.AppendLine(rig.FieldFrameDiagForCapture(t));
-                        }
-
-                        // 名前は日本語なのでファイル名に使えない。添字＋ラベルで一意にする
-                        string slug = Label(idx) + "-z" + cap.ToString("0.#", CultureInfo.InvariantCulture);
-                        WriteSheet(frames, slug);
-                        foreach (var f in frames) Object.DestroyImmediate(f);
+                        Debug.LogError("[F3Shot] DuelStageRig が組めない（素体/クリップ未導入）");
+                        return;
                     }
-                    finally
+                    rig.EnsureSize(W, H);
+                    // 実ゲームと同じく**打球の瞬間から**始める。0 から始めると据え位置の切り替え計画が
+                    // 「まだ対決ビューが映している区間」まで数えてしまい、実際には出ないカットが混ざる。
+                    float contact = ContactOf(play);
+                    rig.BeginFieldPlay(play, contact);
+                    // カットは1コマの絵に写らない＝いつ何回切れるかは実測でしか採れない
+                    plans.AppendLine(Label(idx) + "\t" + rig.FieldStationPlanForCapture());
+
+                    var frames = new List<Texture2D>();
+                    float step = ((float)play.Dur - contact) / (Frames - 1);
+                    for (int n = 0; n < Frames; n++)
                     {
-                        rig.Dispose();
+                        float t = contact + n * step;
+                        rig.SetFieldTime(t);
+                        rig.RenderNow();
+                        frames.Add(Grab(rig.Target));
+                        log.AppendLine(rig.FieldFrameDiagForCapture(t));
                     }
+
+                    // 名前は日本語なのでファイル名に使えない。添字＋ラベルで一意にする
+                    WriteSheet(frames, Label(idx));
+                    foreach (var f in frames) Object.DestroyImmediate(f);
+                }
+                finally
+                {
+                    rig.Dispose();
                 }
             }
 
-            DuelStageRig.FieldMaxZoom = 6f;
             File.WriteAllText(Path.Combine(Dir, "fieldplay.tsv"), log.ToString());
+            File.WriteAllText(Path.Combine(Dir, "stations.tsv"), plans.ToString());
             Debug.Log("[F3Shot] DONE -> " + Dir);
+        }
+
+        /// <summary>
+        /// 打球の瞬間＝先頭の投球セグメントの終わり。
+        /// <c>MatchLiveController.ContactMomentOf</c>（private）の第1分岐と同じ定義
+        /// （実況キャプション送りと「対決で見せたぶん」の調整は撮影では要らない）。
+        /// </summary>
+        private static float ContactOf(PlaybackPlay play)
+        {
+            if (play == null || play.Ball.Count == 0) return 0f;
+            var head = play.Ball[0];
+            bool isPitch = head is PitchSegment
+                || (head is EndpointBallSegment eb
+                    && eb.Kind == KokoSim.Engine.Match.Timeline.BallSegmentKind.Pitch);
+            return isPitch ? (float)head.T1 : 0f;
         }
 
         private static Texture2D Grab(RenderTexture rt)
