@@ -1224,7 +1224,16 @@ namespace KokoSim.Unity.Match
         /// <summary>動き出しからリリースまでの実尺[秒]。投球時計の巻き戻し量＝この値。</summary>
         public const float WindupSeconds = ReleaseTime - DeliveryStartTime;   // 1.30s
 
-        /// <summary>対決ビュー中の既定リリース間隔[秒]。撮影ハーネスの逆算もこれを使う。</summary>
+        /// <summary>
+        /// 対決ビュー中の既定リリース間隔[秒]。撮影ハーネスの逆算もこれを使う。
+        ///
+        /// 2.8（2026-07-31 監督確定・issue #353）。2.4/2.8/3.2 秒を同じ打席・同じ乱数で撮り比べたうえで
+        /// 据え置きを選んだ＝**暫定値ではない**（#333 が暫定値のまま閉じた再発防止）。
+        /// 3本とも球審のコールは次の投球より前に終わる（コール〜構え戻りは間隔に依らず約2.05秒で一定）ので、
+        /// 差は戻ってから次の投球までの間だけ: 2.4s→0.38s / 2.8s→0.74s / 3.2s→1.17s。
+        /// 変えるときは <see cref="UmpireCallSettleSeconds"/>（2.55秒）＋コール開始の待ち（約0.05秒）が
+        /// 収まるかを確認すること。収まらない間隔では戻りが途中で切れる。
+        /// </summary>
         public const float DefaultPitchInterval = 2.8f;
 
         /// <summary>切り口のクロスフェード長[秒]。12fps量子化で3コマぶん。</summary>
