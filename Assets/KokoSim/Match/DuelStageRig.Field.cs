@@ -1531,6 +1531,44 @@ namespace KokoSim.Unity.Match
             return sb.ToString();
         }
 
+        // ---- ビルド同梱のための名前表（F8） --------------------------------------
+
+        /// <summary>
+        /// このリグが使うクリップ名を全部返す。**名前の単一ソースはコード側の表のまま**で、
+        /// ビルド同梱の索引（<see cref="DuelAssetCatalog"/>）はここを読んで自動で埋める。
+        ///
+        /// ⚠ クリップを使う所を足したら**必ずここへ足す**。足し忘れは
+        /// エディタでは AssetDatabase が拾ってしまうので絵に出ず、**Player ビルドでだけ**
+        /// そのクリップが消える（＝手元では絶対に気づけない類の壊れ方）。
+        /// </summary>
+        public static System.Collections.Generic.IEnumerable<string> RequiredClipNames()
+        {
+            // 対決4体
+            yield return PitcherClipName;
+            yield return BatterClipName;
+            yield return BatterOwnIdleClipName;
+            yield return CatcherIdleClipName;
+            yield return UmpireIdleClipName;
+            yield return UmpireStrikeClipName;
+            yield return BatterHbpClipName;
+            foreach (var c in CatchAnchors) yield return c.Clip;
+
+            // 守備（F2・F4・F5・F6）
+            yield return InfielderIdleClipName;
+            yield return OutfielderIdleClipName;
+            foreach (var l in LocoLadder) yield return l.Name;
+            foreach (var a in FieldCatchAnchors) yield return a.Clip;
+            foreach (var a in FieldThrowAnchors) yield return a.Clip;
+            yield return CatcherThrowAnchor.Clip;
+
+            // 走者（F7）
+            yield return RunnerIdleClipName;
+            foreach (var l in RunnerLadder) yield return l.Name;
+            yield return ArriveRunThrough.Clip;
+            yield return ArriveSlideSafe.Clip;
+            yield return ArriveSlideOut.Clip;
+        }
+
         /// <summary>その役の本来の待機クリップ（走行中は <c>IdleClip</c> が差し替わっているため別に持つ）。</summary>
         private AnimationClip IdleClipFor(FieldPosition pos)
         {

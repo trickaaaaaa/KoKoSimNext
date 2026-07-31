@@ -535,6 +535,16 @@ namespace KokoSim.Unity.Match
         private const string VendorRegionMeshDir = "Assets/DuelSpike/Vendor/Generated/";
         private const string VendorRegionMeshSuffix = "_Regions.asset";
 
+        // ビルド同梱の索引を焼く側（DuelAssetCatalogBaker）から見るための読み取り口。
+        // パスの単一ソースは上の const のまま＝ベイカ側にパスを書き写さない
+        // ⚠ internal ではダメ（Assembly-CSharp と Assembly-CSharp-Editor は別アセンブリ＝見えない。
+        //    PoseFps で一度踏んだのと同じ。CS0117 になる）
+        public static string BodyFbxPath => BodyFbx;
+        public static string VendorBodyFbxPath => VendorBodyFbx;
+        public static string UniformMeshAssetPath => UniformMeshAsset;
+        public static string VendorRegionMeshDirPath => VendorRegionMeshDir;
+        public static string VendorRegionMeshSuffixPath => VendorRegionMeshSuffix;
+
         /// <summary>購入素体の帽子（独立メッシュ）。打者はこれを消してヘルメットを付ける。</summary>
         private const string VendorCapMeshName = "A_Players_0001_Cap_0001";
 
@@ -677,6 +687,13 @@ namespace KokoSim.Unity.Match
         /// （時間短縮）に合わないため 2026-07-29 に差し替えた。
         /// </summary>
         public const string PitcherClipName = "AA_Baseball_Pitcher_Pitching_type01";
+
+        // 対決4体が使うクリップ名。ここに直書きせず定数にしてあるのは、ビルド同梱の索引
+        // （DuelAssetCatalog）を**コード側の名前表から自動で埋める**ため（F8）。
+        public const string CatcherIdleClipName = "AA_Baseball_Catcher_Idle";
+        public const string UmpireIdleClipName = "AA_Baseball_Umpire_Crouch_Idle";
+        public const string UmpireStrikeClipName = "AA_Baseball_Umpire_Crouch_Strike_Type01";
+        public const string BatterHbpClipName = "AA_Baseball_Batter_Hit_ByPitch_Type01";
 
         /// <summary>
         /// 投手クリップを本塁向き（−Z）へ揃えるyaw[度]。
@@ -902,8 +919,8 @@ namespace KokoSim.Unity.Match
                 Debug.LogWarning("[DuelStage] 打撃クリップ " + BatterClipName
                     + " が無いので自作 " + BatterOwnIdleClipName + " で代用する（アンカーは未調整）");
             }
-            var catClip = LoadClip("AA_Baseball_Catcher_Idle");
-            var umpClip = LoadClip("AA_Baseball_Umpire_Crouch_Idle");
+            var catClip = LoadClip(CatcherIdleClipName);
+            var umpClip = LoadClip(UmpireIdleClipName);
             if (layer < 0 || body == null || pitchClip == null || batClip == null || catClip == null || umpClip == null)
             {
                 Debug.LogWarning("[DuelStageRig] assets unavailable (layer/body/clips) - duel view disabled");
@@ -977,12 +994,12 @@ namespace KokoSim.Unity.Match
             // 差は打ち切り位置だけ＝空振り・ファールは走り出し前で構えへ戻す（ScheduleReactions）
             _swingMissClip = batClip;
             _swingHitClip = batClip;
-            _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
+            _hbpClip = LoadClip(BatterHbpClipName);
             _catchClips = new AnimationClip[CatchAnchors.Length];
             for (int i = 0; i < CatchAnchors.Length; i++) _catchClips[i] = LoadClip(CatchAnchors[i].Clip);
             // 球審ストライクコール。Type01(3.33s)を**確定採用**（2026-07-31 監督判断・#353 の録画で確認）。
             // Type02(4.67s)は突き出しが2.05s・戻り終わりが3.4sで、リリース間隔2.8sに収まらないため不採用。
-            _umpireStrikeClip = LoadClip("AA_Baseball_Umpire_Crouch_Strike_Type01");
+            _umpireStrikeClip = LoadClip(UmpireStrikeClipName);
 
             _bat = SpawnBat(layer);
 
@@ -2453,7 +2470,7 @@ namespace KokoSim.Unity.Match
         public bool PosePreviewStanding()
         {
             if (!Available || _pitcher == null) return false;
-            var clip = LoadClip("AA_Baseball_Defender_Standing_Idle_Loop_Type01");
+            var clip = LoadClip(OutfielderIdleClipName);
             if (clip == null) return false;
 
             if (_batter != null) _batter.Go.SetActive(false);
@@ -3406,6 +3423,10 @@ namespace KokoSim.Unity.Match
                 ?? a.GetBoneTransform(HumanBodyBones.Hips);
         }
 
+        /// <summary>芯（バレル端から手元側へこれだけ入った所）[m]。実物のスイートスポットの位置。
+        /// ⚠ ここは**製品コード**（AlignBat が使う）。実測窓の中に置くと Player ビルドで落ちる。</summary>
+        private const float BatSweetInsetM = 0.15f;
+
         /// <summary>握り→芯の長さ[m]。バットの原点は握り点から軸方向へ寄せてあるので2段の和になる。</summary>
         private float BatLeverM()
         {
@@ -4066,15 +4087,11 @@ namespace KokoSim.Unity.Match
             foreach (Transform child in go.transform) SetLayerRecursive(child.gameObject, layer);
         }
 
-#if UNITY_EDITOR
-        // ---- 【開発用・エディタ限定】録画ハーネス（DuelViewRecorder）向け観測窓 ----
-
-        /// <summary>
-        /// グラブの装着結果を実測で返す（絵の目測でなく数値で確かめるため。2026-07-29 追加）。
-        /// 寄りカメラの狙いを外すと「付いていない」のか「見えていない」のか切り分けられないので、
-        /// 掌の位置とグラブ実体の位置を直接突き合わせる。
-        /// </summary>
-        // ── 左右ミラー（issue #337・design-18 §3.4）──────────────────────────
+        // ---- 左右ミラー（issue #337・design-18 §3.4）--------------------------------
+        // ⚠ **エディタ限定にしない**。左打者・左投手はゲームの中身であって開発用の観測窓ではない。
+        //    2026-08-01 の最初の Player ビルドで、この一式が録画ハーネスの #if UNITY_EDITOR の
+        //    中に紛れていて `_batterMirror` が未定義＝ビルドが通らないことが分かった
+        //    （エディタでは常に定義済みなので tools/check-unity-compile.sh でも出ない）。
         // 左打者・左投手は「x=0面（投球線を含む鉛直面）の鏡映親ノード」で作る。
         // 素体GO自身の localScale.x=-1 は**回転より内側**で効くため、ヨー付きの素体では
         // 左右でなく前後の鏡になる（投手ヨー270°でスパイク実測）。無回転の親を反転すると
@@ -4164,6 +4181,14 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 飛翔中の球の実測（issue #332）。絵ではカメラの狙い外しと配管ミス（符号違い・単位違い）が
         /// 区別できないので、位置と捕手ミット・打者の頭との距離を数値で残す。
+        /// </summary>
+#if UNITY_EDITOR
+        // ---- 【開発用・エディタ限定】録画ハーネス（DuelViewRecorder）向け観測窓 ----
+
+        /// <summary>
+        /// グラブの装着結果を実測で返す（絵の目測でなく数値で確かめるため。2026-07-29 追加）。
+        /// 寄りカメラの狙いを外すと「付いていない」のか「見えていない」のか切り分けられないので、
+        /// 掌の位置とグラブ実体の位置を直接突き合わせる。
         /// </summary>
         /// <summary>
         /// 【開発ツール用】ボールの実測。キャリブレーション窓が毎フレーム表示する＝スライダを動かしながら
@@ -4336,9 +4361,6 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>
-        /// <summary>芯（バレル端から手元側へこれだけ入った所）[m]。実物のスイートスポットの位置。</summary>
-        private const float BatSweetInsetM = 0.15f;
-
         /// <summary>
         /// 「バットが球に当たって見えるか」の実測（2026-07-31 監督指摘「スイングしてるとこがあまり見えない」）。
         /// アンカー <see cref="SwingHitContact"/> は**右手の速度ピーク**で採ってあるが、バットはしなって
@@ -4472,7 +4494,36 @@ namespace KokoSim.Unity.Match
         }
 #endif
 
-        // ---- アセットロード（エディタ限定・ビルド同梱は本実装時に決める） --------
+        // ---- アセットロード ------------------------------------------------------
+        //
+        // 二段構え（F8）:
+        //   エディタ … 従来どおり AssetDatabase を先に見る。**索引のベイク忘れで手元が止まらない**ように
+        //              するのが目的で、コード側の名前表を足した直後でも絵は出る
+        //   ビルド   … AssetDatabase が無いので索引（DuelAssetCatalog）だけ。索引も無ければ
+        //              Available=false へ落ちる＝購入資産が無い環境の従来挙動と同じ
+        // 索引の中身の鮮度は DuelAssetCatalogBaker の検証メニューが見る。
+
+        /// <summary>
+        /// 【開発用】AssetDatabase を使わず**索引だけ**で組む（＝Player ビルドと同じ経路）。
+        /// エディタのロードは AssetDatabase を先に見るので、索引が壊れていても手元では絵が出る。
+        /// ビルドを作らずにビルド経路を確かめるための唯一の入口。
+        /// </summary>
+        public static bool ForceCatalogOnly;
+
+        private static DuelAssetCatalog _catalog;
+        private static bool _catalogTried;
+
+        /// <summary>ビルド同梱の索引（無ければ null）。Resources から1回だけ引く。</summary>
+        internal static DuelAssetCatalog Catalog
+        {
+            get
+            {
+                if (_catalogTried) return _catalog;
+                _catalogTried = true;
+                _catalog = Resources.Load<DuelAssetCatalog>(DuelAssetCatalog.ResourceName);
+                return _catalog;
+            }
+        }
 
         /// <summary>【開発用】体型比較撮影向けに素体FBXを差し替える（null=既定のSuperhero Male）。
         /// 素体を替える時は対応する着衣ベイク資産（UniformMeshOverrideForCapture）も揃えること＝
@@ -4482,10 +4533,15 @@ namespace KokoSim.Unity.Match
         private static GameObject LoadBody()
         {
 #if UNITY_EDITOR
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BodyFbxOverrideForCapture ?? BodyFbx);
-#else
-            return null;
+            if (!ForceCatalogOnly)
+            {
+                var fromDb = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                    BodyFbxOverrideForCapture ?? BodyFbx);
+                if (fromDb != null) return fromDb;
+            }
 #endif
+            var cat = Catalog;
+            return cat != null ? cat.FallbackBody : null;
         }
 
         /// <summary>子孫から名前一致のRendererを引いて表示を切り替える（見つからなければ何もしない）。</summary>
@@ -4502,10 +4558,14 @@ namespace KokoSim.Unity.Match
         private static GameObject LoadVendorBody()
         {
 #if UNITY_EDITOR
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(VendorBodyFbx);
-#else
-            return null;
+            if (!ForceCatalogOnly)
+            {
+                var fromDb = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(VendorBodyFbx);
+                if (fromDb != null) return fromDb;
+            }
 #endif
+            var cat = Catalog;
+            return cat != null ? cat.VendorBody : null;
         }
 
         /// <summary>
@@ -4526,8 +4586,9 @@ namespace KokoSim.Unity.Match
                     r.gameObject.SetActive(false);
                     continue;
                 }
-                var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
+                var mesh = ForceCatalogOnly ? null : UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
                     VendorRegionMeshDir + r.name + VendorRegionMeshSuffix);
+                if (mesh == null && Catalog != null) mesh = Catalog.FindRegionMesh(r.name);
                 if (mesh == null) { all = false; continue; }
                 var smr = r as SkinnedMeshRenderer;
                 if (smr != null) smr.sharedMesh = mesh;
@@ -4542,7 +4603,24 @@ namespace KokoSim.Unity.Match
                     + VendorRegionMeshDir + ") - run KokoSim.EditorTools.DuelVendorRegionBaker.BakeAll()");
             return all;
 #else
-            return false;
+            // ビルドでは索引だけ（AssetDatabase が無い）。1枚でも欠けたら肌色一色へ倒す
+            var cat = Catalog;
+            if (cat == null) return false;
+            bool ok = true;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.name.EndsWith("Eye_Ball_Geo")) { r.gameObject.SetActive(false); continue; }
+                var mesh = cat.FindRegionMesh(r.name);
+                if (mesh == null) { ok = false; continue; }
+                var smr = r as SkinnedMeshRenderer;
+                if (smr != null) smr.sharedMesh = mesh;
+                else
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf != null) mf.sharedMesh = mesh;
+                }
+            }
+            return ok;
 #endif
         }
 
@@ -4556,15 +4634,17 @@ namespace KokoSim.Unity.Match
         private static Mesh LoadUniformMesh()
         {
 #if UNITY_EDITOR
-            var path = UniformMeshOverrideForCapture ?? UniformMeshAsset;
-            var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(path);
-            if (mesh == null)
+            if (!ForceCatalogOnly)
+            {
+                var path = UniformMeshOverrideForCapture ?? UniformMeshAsset;
+                var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(path);
+                if (mesh != null) return mesh;
                 Debug.LogWarning("[DuelStageRig] uniform mesh not baked (" + path
                     + ") - run KokoSim.EditorTools.DuelUniformBaker.BakeAll()");
-            return mesh;
-#else
-            return null;
+            }
 #endif
+            var cat = Catalog;
+            return cat != null ? cat.UniformMesh : null;
         }
 
         /// <summary>
@@ -4574,16 +4654,20 @@ namespace KokoSim.Unity.Match
         public static AnimationClip LoadClip(string clipName)
         {
 #if UNITY_EDITOR
-            foreach (var fbx in ClipFbxSources)
+            if (!ForceCatalogOnly)
             {
-                foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(fbx))
+                foreach (var fbx in ClipFbxSources)
                 {
-                    var c = a as AnimationClip;
-                    if (c != null && c.name == clipName) return c;
+                    foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(fbx))
+                    {
+                        var c = a as AnimationClip;
+                        if (c != null && c.name == clipName) return c;
+                    }
                 }
             }
 #endif
-            return null;
+            var cat = Catalog;
+            return cat != null ? cat.FindClip(clipName) : null;
         }
     }
 }
