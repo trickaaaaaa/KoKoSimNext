@@ -6,7 +6,7 @@ using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
-using KokoSim.Unity.Components;   // 部品辞書（LineScorePanel）
+using KokoSim.Unity.Components;   // 部品辞書（LineScorePanel / ScoreBug）
 using KokoSim.Unity.Shell;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -162,7 +162,9 @@ namespace KokoSim.Unity.Match
         private bool _pendingAdvanceResult;   // BackgroundGameOp 経由の Advance() 結果の受け渡し（issue #160）
 
         // 中継風カウント（BSO）＋塁ダイヤ（#4）。投球フェーズで B/S を1球ずつ点灯させる。
-        private VisualElement[] _ballDots, _strikeDots, _outDots, _bases;
+        // カウントは ScoreBug の数字マス（ランプではない）。塁は ScoreBug の菱形。
+        private Label _sbugBalls, _sbugStrikes, _sbugOuts;
+        private VisualElement[] _bases;
         private int _pitchIdx;
         private float _pitchClock;
         private bool _inPitchPhase;   // 投球フェーズ（B/S点灯）中か。false なら打球フェーズ/静止。
@@ -266,11 +268,11 @@ namespace KokoSim.Unity.Match
             ApplyDuelViewState();
             WirePitchTactics();
 
-            // B/S/O ランプと塁ダイヤは LineScorePanel（部品辞書）の右袖。1球ごとに動くのでここから直接トグルする。
-            _ballDots = new[] { _root.Q<VisualElement>("lsc-b1"), _root.Q<VisualElement>("lsc-b2"), _root.Q<VisualElement>("lsc-b3") };
-            _strikeDots = new[] { _root.Q<VisualElement>("lsc-s1"), _root.Q<VisualElement>("lsc-s2") };
-            _outDots = new[] { _root.Q<VisualElement>("lsc-o1"), _root.Q<VisualElement>("lsc-o2") };
-            _bases = new[] { _root.Q<VisualElement>("lsc-base-1"), _root.Q<VisualElement>("lsc-base-2"), _root.Q<VisualElement>("lsc-base-3") };
+            // B/S/O と塁ダイヤは ScoreBug（部品辞書）の中。1球ごとに動くのでここから直接駆動する。
+            _sbugBalls = _root.Q<Label>("sbug-balls");
+            _sbugStrikes = _root.Q<Label>("sbug-strikes");
+            _sbugOuts = _root.Q<Label>("sbug-outs");
+            _bases = new[] { _root.Q<VisualElement>("sbug-base-1"), _root.Q<VisualElement>("sbug-base-2"), _root.Q<VisualElement>("sbug-base-3") };
 
             _pitchCall = _root.Q<VisualElement>("pitch-call");
             _pitchCallJudge = _root.Q<Label>("pitch-call-judge");
@@ -1205,23 +1207,24 @@ namespace KokoSim.Unity.Match
             if (_prog == null) return;
             var snap = _prog.Snapshot();
             LineScorePanel.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            ScoreBug.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
         }
 
         // ── 中継風カウント（BSO）＋塁ダイヤ ──
-        private static void SetDots(VisualElement[] dots, int n)
-        {
-            if (dots == null) return;
-            for (var i = 0; i < dots.Length; i++)
-                dots[i]?.EnableInClassList("is-on", i < n);
-        }
-
+        // ScoreBug の左袖はランプではなく数字なので、点灯トグルではなく数字を差し替える。
+        // 表示は必ず掲示板の範囲へ丸める: 四球の最終球は BallsAfter=4、三振の最終球は StrikesAfter=3 で
+        // 渡ってくるが、実物の掲示板に 4 ボールは出ない（打席が終わって 0-0 に戻る）。
+        // ランプ時代は玉数が足りず自然に頭打ちだったので、数字にした今は明示的に丸める。
         private void SetCount(int balls, int strikes)
         {
-            SetDots(_ballDots, balls);
-            SetDots(_strikeDots, strikes);
+            if (_sbugBalls != null) _sbugBalls.text = Mathf.Clamp(balls, 0, 3).ToString();
+            if (_sbugStrikes != null) _sbugStrikes.text = Mathf.Clamp(strikes, 0, 2).ToString();
         }
 
-        private void SetOuts(int outs) => SetDots(_outDots, outs);
+        private void SetOuts(int outs)
+        {
+            if (_sbugOuts != null) _sbugOuts.text = Mathf.Clamp(outs, 0, 2).ToString();
+        }
 
         // ── 1球ごとの判定オーバーレイ（issue #6） ──
         // 判定（ストライク/ボール/ファール…）を盤面上に大きく出し、実1球記録がある打席では球速・球種を併記する。
@@ -1987,6 +1990,9 @@ namespace KokoSim.Unity.Match
             }
             SetOuts(_current.OutsBefore);
             SetBases(_current.BaseFirstAfter, _current.BaseSecondAfter, _current.BaseThirdAfter);
+            // 掲示（ラインスコア＋ScoreBug）も結果時点へ。Play なしの打席は下で早期 return するので、
+            // ここで掲げないと三振・四球で終わった打席のスクショだけ回と得点が前のまま写る。
+            UpdateScoreboard(_current, resolved: true);
 
             // Play なし（三振・四球）は結果時点の塁状況で守備陣＋走者を静止表示（EnterBattedBallOrHold と同じ後状態）。
             if (_current.Play == null)

@@ -43,6 +43,10 @@
 .mlive-lineup { flex-direction: column; flex-shrink: 0; }
 .mlive-pitcher-host { flex-shrink: 0; }
 
+/* カウントと塁は盤面左上の ScoreBug へ移したので、上部ラインスコアの右袖は畳む。
+   パネル本体（回別得点）はイニング間画面へ移すまで上部に残す。 */
+.lsc-count { display: none; }
+
 /* ── 中央: 盤面ラッパ（列内を使い切る・HUDを絶対配置で重畳） ── */
 .mlive-field-wrap {
     position: relative;

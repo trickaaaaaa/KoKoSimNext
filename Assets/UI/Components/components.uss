@@ -1672,6 +1672,136 @@
 .lsc-base--third { top: 15px; left: 0; }
 .lsc-base.is-on { background-color: var(--color-lamp); }
 
+/* ═══ ScoreBug：盤面左上の常時表示バグ（試合画面改修・器は Components/ScoreBug.uxml）═══════
+   野球中継のアレ。打席の演出中も切らさずカウント・塁・両校の得点を出しっぱなしにする。
+   面は掲示板の黒（--sb-face）＋インク枠＝design-19 の黒島語彙で、盤面の絵の上でも沈まない。
+
+   左袖＝縦の B/S/O。ランプ（点の並び）ではなく**数字**で出す（2026-07-31 ユーザー判断）。
+   ラベル列は黒面、数字列は明地に反転させて「カウントだけ別の板」に見せる。
+   右＝回表示と塁ダイヤを重ねた段＋チーム2行。塁は埋まっている塁だけ描く（空塁は描かない）。
+   アンバーは「走者」と「攻撃中の印」だけ＝盤面ビューの状態コード（UI原則②の但し書き）。 */
+.sbug {
+    position: absolute;
+    top: var(--sp-3);
+    left: var(--sp-3);
+    flex-direction: row;
+    background-color: var(--sb-face);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    flex-shrink: 0;
+}
+
+/* ── 左袖：縦の B/S/O ────────────────────────────────────────────── */
+.sbug-count { flex-direction: row; flex-shrink: 0; }
+.sbug-count__keys { width: var(--sbug-key-w); flex-shrink: 0; }
+.sbug-count__vals { width: var(--sbug-val-w); flex-shrink: 0; background-color: var(--sb-ink-1); }
+.sbug-count__key {
+    height: var(--sbug-row-h);
+    font-size: var(--sbug-fs-key);
+    color: var(--sb-ink-1);
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+}
+.sbug-count__val {
+    height: var(--sbug-row-h);
+    font-size: var(--sbug-fs-val);
+    color: var(--ink);            /* 明地の上なのでインク */
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    border-top-width: var(--border-w);
+    border-top-color: var(--sbug-val-line);
+}
+/* USS に nth-child は無いので、先頭マスだけ修飾子で上罫を消す。 */
+.sbug-count__val--first { border-top-width: 0; }
+
+/* ── 右：回＋塁ダイヤ／チーム2行 ──────────────────────────────── */
+.sbug-main {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: var(--sbug-main-w);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+}
+.sbug-top {
+    height: var(--sbug-top-h);
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* 塁ダイヤ。段いっぱいに広げた透明な枠の中央へ菱形を置き、回表示をその上に重ねる。 */
+.sbug-dia {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+/* 潰す層。USS の変形は scale→rotate の順に効くため、回す層と分けないと平たい菱形にならない。 */
+/* 回表示の地色が中央band を隠すので、菱形は文字より十分横長にして左右の稜が残るようにする。 */
+.sbug-dia__box { width: 54px; height: 54px; scale: 1.8 0.72; flex-shrink: 0; }
+.sbug-dia__in {
+    width: 100%;
+    height: 100%;
+    rotate: 45deg;
+    border-width: var(--border-w);
+    border-color: var(--sb-ink-2);
+}
+/* 塁は占有＝アンバー＝2D俯瞰の走者色と一致。空いている塁は描かない（中継の作法）。 */
+.sbug-base { position: absolute; width: 14px; height: 14px; display: none; }
+.sbug-base.is-on { display: flex; background-color: var(--color-lamp); }
+.sbug-base--second { top: -7px; left: -7px; }
+.sbug-base--first { top: -7px; right: -7px; }
+.sbug-base--third { bottom: -7px; left: -7px; }
+
+/* 回表示は菱形の上。地色を敷いて罫を文字の下で抜く（USS に文字の縁取りは無い）。 */
+.sbug-inning {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--sb-face);
+    padding-left: var(--sp-1);
+    padding-right: var(--sp-1);
+}
+.sbug-inning__num { font-size: var(--fs-num-lg); color: var(--sb-ink-1); margin: 0; padding: 0; }
+.sbug-inning__half {
+    font-size: var(--fs-cap);
+    color: var(--sb-ink-1);
+    margin: 0 0 0 1px;
+    padding: 0;
+}
+
+.sbug-team { flex-direction: row; align-items: center; height: var(--sbug-team-h); flex-shrink: 0; }
+/* 攻撃中の印。校名の左に立てる細いアンバーの棒（矢印記号はSDFに無い字が混ざるため使わない）。 */
+.sbug-team__mark { width: 5px; height: 20px; flex-shrink: 0; }
+.sbug-team--batting .sbug-team__mark { background-color: var(--color-lamp); }
+.sbug-team__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--sbug-fs-name);
+    color: var(--sb-ink-1);
+    margin: 0 0 0 var(--sp-2);
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sbug-team__runs {
+    min-width: 30px;
+    font-size: var(--sbug-fs-runs);
+    color: var(--sb-ink-1);
+    -unity-text-align: middle-right;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+}
+
 /* ═══ VerticalName：縦書き選手名（甲子園両翼式）══════════════════════════
    設計書16 §9-2 の試作用。UI Toolkit に縦書き（writing-mode）は無いので、
    1文字＝1 Label のスタックで組む自作部品にする。掲示板の両翼と同じく

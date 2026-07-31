@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Template name="LineScorePanel" src="Components/LineScorePanel.uxml" />
+    <ui:Template name="ScoreBug" src="Components/ScoreBug.uxml" />
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
@@ -30,6 +31,9 @@
                     <!-- 対決ビュー（設計書18 A案）。盤面と差し替えで表示する3D RTのホスト。
                          中身の DuelViewElement は MatchLiveController が生成し整数倍サイズへスナップする。 -->
                     <ui:VisualElement name="duel-host" class="mlive-duel" />
+                    <!-- 中継風の常時表示バグ。盤面の左上に出しっぱなしにして、打席の演出中も
+                         カウント・塁・両校の得点を切らさない。俯瞰と対決ビューのどちらでも同じ位置に残る。 -->
+                    <ui:Instance template="ScoreBug" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
                     <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい） -->
                     <ui:VisualElement name="pitch-call" class="pitch-call">

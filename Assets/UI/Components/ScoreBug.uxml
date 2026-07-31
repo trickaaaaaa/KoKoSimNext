@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ScoreBug（部品辞書 / 試合画面改修）。野球中継の常時表示バグ。
+     盤面（対決ビュー・2D俯瞰のどちらでも）の左上に出しっぱなしにして、
+     カウント・塁・両校の得点を打席の演出中も切らさず見せる。
+
+     左袖＝縦のB/S/O。**ランプ（点の並び）ではなく数字**で出す（2026-07-31 ユーザー判断）。
+     右＝回表示と塁ダイヤ（重ねる）＋両校の得点。塁は埋まっている塁だけ描く（中継の作法）。
+
+     置くのは器だけ。回・校名・得点は ScoreBug.Fill が、カウントと塁は
+     MatchLiveController が sbug-balls / sbug-base-1 等の name を1球ごとに駆動する。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="sbug-root" class="sbug">
+
+        <ui:VisualElement class="sbug-count">
+            <ui:VisualElement class="sbug-count__keys">
+                <ui:Label class="sbug-count__key f-num-bd" text="B" />
+                <ui:Label class="sbug-count__key f-num-bd" text="S" />
+                <ui:Label class="sbug-count__key f-num-bd" text="O" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sbug-count__vals">
+                <ui:Label name="sbug-balls" class="sbug-count__val sbug-count__val--first f-num-bd" text="0" />
+                <ui:Label name="sbug-strikes" class="sbug-count__val f-num-bd" text="0" />
+                <ui:Label name="sbug-outs" class="sbug-count__val f-num-bd" text="0" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="sbug-main">
+            <ui:VisualElement class="sbug-top">
+                <!-- 平たい菱形。USS の変形は scale→rotate の順に効くので、1要素に両方書くと
+                     「傾いた長方形」になる。潰す層(box)と回す層(in)を分けて初めて左右に平たい菱形になる。 -->
+                <ui:VisualElement class="sbug-dia">
+                    <ui:VisualElement class="sbug-dia__box">
+                        <ui:VisualElement class="sbug-dia__in">
+                            <ui:VisualElement name="sbug-base-2" class="sbug-base sbug-base--second" />
+                            <ui:VisualElement name="sbug-base-1" class="sbug-base sbug-base--first" />
+                            <ui:VisualElement name="sbug-base-3" class="sbug-base sbug-base--third" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <!-- 回表示は菱形の上に重ねる。地色を敷いて菱形の罫を文字の下で抜く（USSに縁取りは無い）。
+                     Oswald は欧文専用なので数字と「回表」は Label を分ける（書体3役ルール）。 -->
+                <ui:VisualElement class="sbug-inning">
+                    <ui:Label name="sbug-inning-num" class="sbug-inning__num f-num-bd" text="1" />
+                    <ui:Label name="sbug-inning-half" class="sbug-inning__half f-body-bd" text="回表" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="sbug-away" class="sbug-team">
+                <ui:VisualElement class="sbug-team__mark" />
+                <ui:Label name="sbug-away-name" class="sbug-team__name f-display" text="" />
+                <ui:Label name="sbug-away-runs" class="sbug-team__runs f-num-bd" text="0" />
+            </ui:VisualElement>
+            <ui:VisualElement name="sbug-home" class="sbug-team">
+                <ui:VisualElement class="sbug-team__mark" />
+                <ui:Label name="sbug-home-name" class="sbug-team__name f-display" text="" />
+                <ui:Label name="sbug-home-runs" class="sbug-team__runs f-num-bd" text="0" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>
