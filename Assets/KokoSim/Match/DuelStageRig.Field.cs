@@ -167,6 +167,166 @@ namespace KokoSim.Unity.Match
             GroundFix(a);
         }
 
+        // ---- 守備カメラ ---------------------------------------------------------
+        //
+        // **既存の打球追随カメラ（engine CameraPlanBuilder・issue #119）をそのまま使う。**
+        // あれが返す `CameraViewport(Cx, Cy, ZoomMult)` は「フィールド上の注視点とズーム」なので、
+        // 3Dでは注視点 (Cx, AimY, Cy)・縦に収めたい実寸 155.2/ZoomMult へそのまま写る。
+        // 演出の判断（投球区間は固定フレーム／送球は始終点を収める／打球は0.6秒先読みで追う／
+        // 決着に絡む走塁レッグはボールと目標塁の中点／ResAt+0.9sで全景へ戻す）と
+        // レート制限（ズーム2.0/s・パン45m/s＝酔い防止）が丸ごと効く。
+        //
+        // **カメラは平行移動しない**＝中継の三脚カメラと同じくパン・チルト・ズームだけ。
+        // 視差が出ないので酔わず、station の切り替えは対決構図→守備カメラの1回だけで済む
+        // （対決カメラは z=+78.44 から −z を向くので外野が背後にあり、パンでは届かない）。
+
+        /// <summary>
+        /// 守備カメラの据え位置（stage-local[m]）。本塁後方の高所。
+        ///
+        /// ⚠ z は **> −16**（バックネット書き割り z=−16・34×8m より手前）。
+        /// 奥へ引くと壁が画面下半分を黒く塞ぐ（2026-08-01 実害）。
+        ///
+        /// ⚠ **高さが効く**。低いと視線が地面とほぼ平行になり、「縦に収めたい実寸」を詰めても
+        /// 画面の大半が遠景の芝で埋まって被写体が埋もれる（枠の高さは視線に直交して測るのに、
+        /// 地面は視線とほぼ平行だから＝frameH 25.9m の枠が奥行き100m超の地面を映す）。
+        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// </summary>
+        public static Vector3 FieldStation = new(0f, 24f, -14f);
+
+        /// <summary>注視点の高さ[m]。地面でなく腰の高さに取ると、寄ったときに人が下に切れない。</summary>
+        private const float FieldAimY = 1.0f;
+
+        /// <summary>
+        /// ZoomMult=1（全景）で縦に収まる実寸[m]。engine 側のデザインキャンバス
+        /// （DesignH=520 / S=3.35 px/m）と同じ定義＝2Dの全景と同じ広さから始まる。
+        /// **この3定数は engine の CameraPlanBuilder と同期している**（片方だけ変えない）。
+        /// </summary>
+        private const float FieldWideHeightM = 520f / 3.35f;   // ≒155.2
+
+        /// <summary>
+        /// 守備カメラの寄りの深さ。2D俯瞰の既定（MaxZoom=3.4＝縦45.6m）では野手が十数pxにしかならない。
+        /// 外野フライで FitBox が求めるズームは実測5.75で上限に頭打ちされていた（engine テストで固定）。
+        /// **絵で決める値**なので、比較撮影のために差し替えられるようにしてある。
+        /// </summary>
+        public static float FieldMaxZoom = 6f;
+
+        private System.Collections.Generic.IReadOnlyList<CameraKeyframe> _fieldPlan;
+
+        /// <summary>engine の追随カメラのプランを、この rig の守備カメラ用に組む。</summary>
+        private void BuildFieldCameraPlan(PlaybackPlay play)
+        {
+            _fieldPlan = play == null ? null : CameraPlanBuilder.Build(play,
+                new CameraFraming(FieldMaxZoom, CameraFraming.Default.MarginM, CameraFraming.Default.PitchZoom));
+        }
+
+        /// <summary>
+        /// 時刻 t の視野を守備カメラへ流す。位置は据え置きで、向き（LookAt）と画角だけが動く。
+        /// </summary>
+        private void ApplyFieldCamera(float t)
+        {
+            if (_fieldPlan == null || _fieldPlan.Count == 0) return;
+            var vp = CameraEvaluator.ViewportAt(_fieldPlan, t);
+            float zoom = (float)System.Math.Max(vp.ZoomMult, 0.01);
+            FramePreview(FieldStation,
+                new Vector3((float)vp.Cx, FieldAimY, (float)vp.Cy),
+                FieldWideHeightM / zoom);
+        }
+
+        // ---- 打球プレーの再生 ---------------------------------------------------
+
+        private PlaybackPlay _fieldPlay;
+        private float _fieldT;
+
+        /// <summary>打球プレーを再生中か（守備カメラが効いているか）。</summary>
+        public bool FieldPlayActive => _fieldPlay != null;
+
+        /// <summary>
+        /// 打球プレーの再生を始める。<paramref name="t0"/> は対決ビューで既に見せたぶんの続き
+        /// （<c>MatchLiveController.ContactMomentOf</c> と同じ時計）。
+        /// </summary>
+        public void BeginFieldPlay(PlaybackPlay play, float t0)
+        {
+            if (!Available || play == null) return;
+            EnsureFieldCast();
+            SetFieldCastVisible(true);
+            _fieldPlay = play;
+            BuildFieldCameraPlan(play);
+            SetFieldTime(t0);
+        }
+
+        /// <summary>打球プレーの再生をやめ、対決ビューの構図へ戻す。</summary>
+        public void EndFieldPlay()
+        {
+            _fieldPlay = null;
+            _fieldPlan = null;
+            SetFieldCastVisible(false);
+            HideBall();
+            ClearPreviewFrame();
+            ApplyCalibration(_cal);   // ⚠ 画角だけでなくカメラの位置・向きも戻す（ClearPreviewFrame は画角のみ）
+        }
+
+        /// <summary>
+        /// 時刻 t のフレームを作る。**ボール・カメラはフルレート**（ポーズだけが12fps量子化＝design-18 §4.5-②）。
+        /// 位置は engine の評価値を写すだけで、Unity 側で軌道を積分し直さない（不変条件#1）。
+        /// </summary>
+        public void SetFieldTime(float t)
+        {
+            if (_fieldPlay == null) return;
+            _fieldT = t;
+
+            // 野手・走者の位置（F3 時点では移動クリップが無いので位置だけ＝滑って見える。走りは F4）
+            foreach (var kv in _fieldCast)
+            {
+                var p = PlaybackEvaluator.FielderAt(_fieldPlay, kv.Key, t);
+                PlaceFielder(kv.Value, (float)p.Pos.X, (float)p.Pos.Y);
+            }
+
+            // ボール
+            var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
+            if (_ball != null)
+            {
+                if (ball.HasValue)
+                {
+                    _ball.transform.SetParent(_root.transform, false);
+                    _ball.transform.localPosition =
+                        new Vector3((float)ball.Value.X, (float)ball.Value.H, (float)ball.Value.Y);
+                    _ball.SetActive(true);
+                }
+                else
+                {
+                    _ball.SetActive(false);
+                }
+            }
+
+            ApplyFieldCamera(t);
+            if (_ball != null && _ball.activeSelf) ApplyBallReadability();
+        }
+
+        /// <summary>
+        /// 球が画面上で最低 <see cref="BallMinScreenPx"/> になるまで**見かけの大きさだけ**上げる
+        /// （監督決定 2026-08-01）。硬式球7.4cmは縦24mの構図で0.8px＝実質見えない。
+        /// **位置・軌道は engine の真値のまま**で、触るのはスケールだけ＝当たり所も帯も動かない。
+        /// 寄った構図では 1.0 に戻る（近いところで膨らませない）。
+        /// </summary>
+        private void ApplyBallReadability()
+        {
+            if (_camera == null || _ball == null) return;
+            var p = _ball.transform.position;
+            var a = _camera.WorldToScreenPoint(p);
+            var b = _camera.WorldToScreenPoint(p + _camera.transform.up * BallRealDiameterM);
+            if (a.z <= 0f) return;
+            float px = Mathf.Abs(b.y - a.y);
+            float k = px > 0.001f ? Mathf.Max(1f, BallMinScreenPx / px) : 1f;
+            _ball.transform.localScale = Vector3.one * (BallRealDiameterM * Mathf.Min(k, BallMaxScaleGain));
+        }
+
+        /// <summary>硬式球の実寸[m]。</summary>
+        private const float BallRealDiameterM = 0.074f;
+        /// <summary>画面上で保証する球の直径[px]。読める下限として監督が採った値。</summary>
+        private const float BallMinScreenPx = 3f;
+        /// <summary>見かけ倍率の上限（引きの絵で球が人より大きくならないための歯止め）。</summary>
+        private const float BallMaxScaleGain = 12f;
+
         // ---- 実測窓（撮影ハーネス用） -------------------------------------------
 
         /// <summary>
@@ -201,6 +361,43 @@ namespace KokoSim.Unity.Match
                     a.Go.transform.localEulerAngles.y));
             }
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】打球プレー1コマの実測を1行のTSVで返す。
+        /// 「打球の行方が読めるか」は絵で見るが、**なぜ読めないのか**（枠が広すぎる／球が小さすぎる／
+        /// 追えていない）は絵では切り分けられないので、枠の実寸と画面pxを並べて出す。
+        /// </summary>
+        public string FieldFrameDiagForCapture(float t)
+        {
+            var ball = _fieldPlay == null ? null : PlaybackEvaluator.BallAt(_fieldPlay, t);
+            float frameH = -1f;
+            if (_fieldPlan != null && _fieldPlan.Count > 0)
+                frameH = FieldWideHeightM / (float)System.Math.Max(CameraEvaluator.ViewportAt(_fieldPlan, t).ZoomMult, 0.01);
+
+            // **注視点にいる人**の大きさ＝この構図の読みやすさそのもの。
+            // 特定の役（中堅手など）で測ると、その役がプレーに絡まない時に意味のない数になる。
+            int aimPx = frameH > 0.01f && Target != null
+                ? Mathf.RoundToInt(TargetHeight / frameH * Target.height) : -1;
+
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "{0}\t{1:F1}\t{2:F2}\t{3}\t{4}\t{5}\t{6:F1}\t{7}\t{8}",
+                _fieldPlay != null ? _fieldPlay.Name : "(none)", FieldMaxZoom, t,
+                ball.HasValue ? ball.Value.X.ToString("F1") : "-",
+                ball.HasValue ? ball.Value.Y.ToString("F1") : "-",
+                ball.HasValue ? ball.Value.H.ToString("F1") : "-",
+                frameH, aimPx, BallScreenPx());
+        }
+
+        /// <summary>スケール補正後の球が画面上で何pxか（補正が効いているかの裏取り）。</summary>
+        private int BallScreenPx()
+        {
+            if (_camera == null || _ball == null || !_ball.activeSelf) return -1;
+            var p = _ball.transform.position;
+            var a = _camera.WorldToScreenPoint(p);
+            var b = _camera.WorldToScreenPoint(p + _camera.transform.up * _ball.transform.localScale.y);
+            if (a.z <= 0f) return -1;
+            return Mathf.RoundToInt(Mathf.Abs(b.y - a.y));
         }
 
         /// <summary>
