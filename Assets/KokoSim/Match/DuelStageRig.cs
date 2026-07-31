@@ -2592,8 +2592,9 @@ namespace KokoSim.Unity.Match
             // Plane はスケール1で10m四方なので 26 ＝ 260m四方。中心z=+60 で z∈[-70,+190]・x∈[-130,+130]
             Primitive(PrimitiveType.Plane, "ground", new Vector3(0f, 0f, 60f), new Vector3(26f, 1f, 26f),
                 new Color(0.30f, 0.55f, 0.30f), layer);
-            Primitive(PrimitiveType.Cylinder, "dirt-home", new Vector3(0f, 0.005f, 0f), new Vector3(7f, 0.005f, 7f),
-                new Color(0.63f, 0.47f, 0.33f), layer);
+            // フェア芝・刈り分け・内野ダート・ウォーニングトラック・フェンス（S2/S3）。
+            // 本塁の土円もここで引き直すので、旧 dirt-home（半径3.5mの円柱）は畳んだ
+            BuildFieldSurface(layer);
             Primitive(PrimitiveType.Cylinder, "mound", new Vector3(0f, MoundHeight * 0.5f, MoundDistance),
                 new Vector3(5.4f, MoundHeight * 0.5f, 5.4f), new Color(0.63f, 0.47f, 0.33f), layer);
             Primitive(PrimitiveType.Cube, "home-plate", new Vector3(0f, 0.012f, 0f), new Vector3(0.43f, 0.02f, 0.43f),

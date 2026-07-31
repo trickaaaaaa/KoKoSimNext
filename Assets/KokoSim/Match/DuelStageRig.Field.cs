@@ -167,6 +167,175 @@ namespace KokoSim.Unity.Match
             GroundFix(a);
         }
 
+        // ---- 球場の面（内野の土・刈り分け・フェンス。S2/S3・監督決定 2026-08-01） -----
+        //
+        // 一様な芝だけだと、寄った守備カメラの絵が「緑の虚無に立つ人」になり、
+        // 大きさの基準も向きも読めない（F3 の撮影で判明）。2D俯瞰が描いている
+        // フェア芝／刈り込みストライプ／内野ダート／ウォーニングトラック／フェンス弧を
+        // **同じ幾何・同じ色**で3Dへ起こす（Match2DPlaybackElement.DrawField と対応）。
+        // 弧の式は engine の FieldDiagramGeometry が単一ソース＝2Dと3Dで形がずれない。
+
+        private const float FenceWingM = 95f;    // 両翼（2D の _wingM と同値）
+        private const float FenceCenterM = 118f; // 中堅（同 _centerM）
+        private const float FenceHeightM = 3.2f;
+        private const float WarningTrackM = 3.5f;
+        private const float HomeCircleM = 4.3f;
+        private const float FoulQuarterRad = Mathf.PI / 4f;   // フェア領域は ±45°
+
+        // 高さの積み順（本塁プレート0.012・打席0.011 より下に収める）
+        private const float YFair = 0.002f;
+        private const float YStripe = 0.003f;
+        private const float YWarning = 0.004f;
+        private const float YDirt = 0.005f;
+        private const float YHomeCircle = 0.006f;
+
+        // ⚠ **2D俯瞰のパレットをそのまま持ち込めない**（2026-08-01 実測）。
+        // 対決ビューはポスタライズ6段のポストを通すので、出力は 38/84/128/171/214 付近の段に丸められる。
+        //   ・2Dの clay 0xA26E44 は緑が1段落ちて (171,84,84)＝**ピンク**に見える
+        //     （マウンドの既存色 (0.63,0.47,0.33) は (171,128,84) の正しい茶）
+        //   ・2Dの芝 0x4F7C3B と刈り込み 0x578646 は**同じ段に丸められて縞が完全に消える**
+        //     （明暗どちらも実測 (84,128,38)）
+        // ＝色は「2Dと同じ見た目」でなく「**段に乗る**」ことを基準に選ぶ。幾何だけ2Dと共有する。
+
+        /// <summary>内野ダート・ウォーニングトラック。マウンドの既存色と同値＝段に乗る茶。</summary>
+        private static readonly Color ClayColor = new(0.63f, 0.47f, 0.33f);
+        /// <summary>フェア芝（刈り込みの暗側）。素の地面より1段暗い緑。</summary>
+        private static readonly Color FairTurfColor = new(0.30f, 0.50f, 0.24f);
+        /// <summary>刈り込みの明側。緑を1段上へ跨がせないと縞が消える。</summary>
+        private static readonly Color StripeTurfColor = new(0.36f, 0.64f, 0.30f);
+        /// <summary>外野フェンス。</summary>
+        private static readonly Color FenceColor = new(0.14f, 0.26f, 0.18f);
+        /// <summary>フェンスの外側を塞ぐ暗インク壁（バックネット書き割りと同じ思想）。</summary>
+        private static readonly Color BackdropColor = new(0.12f, 0.20f, 0.16f);
+
+        /// <summary>本塁からの距離[m]（方位角θ・+Z=センターから+X側が正）。2Dの FencePoint と同式。</summary>
+        private static float FenceR(float th) =>
+            (float)FieldDiagramGeometry.FenceRadius(th, FenceWingM, FenceCenterM);
+
+        /// <summary>
+        /// 球場の面を組む。<c>BuildGround</c> の後（＝地面プレーンの上）に重ねる。
+        /// </summary>
+        private void BuildFieldSurface(int layer)
+        {
+            // ② フェア芝（本塁→フェンス弧の扇）
+            AddFan("turf-fair", th => FenceR(th), YFair, FairTurfColor, layer);
+
+            // ④ 放射ストライプ（刈り込み）。±45°を8ウェッジに割り、奇数番だけ明側で重ね塗り
+            for (int w = 1; w < 8; w += 2)
+            {
+                float t0 = -FoulQuarterRad + FoulQuarterRad * 2f * w / 8f;
+                float t1 = -FoulQuarterRad + FoulQuarterRad * 2f * (w + 1) / 8f;
+                AddFan("turf-stripe-" + w, th => FenceR(th), YStripe, StripeTurfColor, layer, t0, t1, 8);
+            }
+
+            // ウォーニングトラック（フェンス手前の土帯）
+            AddBand("warning-track", th => FenceR(th) - WarningTrackM, th => FenceR(th),
+                YWarning, ClayColor, layer);
+
+            // ⑤ 内野ダート扇（甲子園様式＝内野は全面ダート）。境界弧はマウンド中心のグラスライン
+            AddFan("infield-dirt", th => (float)FieldDiagramGeometry.InfieldDirtRadius(th),
+                YDirt, ClayColor, layer);
+
+            // 本塁の土円（既存の dirt-home より一回り大きい2D基準の半径へ）
+            AddFan("home-circle", _ => HomeCircleM, YHomeCircle, ClayColor, layer,
+                -Mathf.PI, Mathf.PI, 48);
+
+            // 外野フェンス（弧に沿った垂直の帯）＋その外側の暗インク壁（世界の果てを塞ぐ）
+            AddWall("fence", th => FenceR(th), 0f, FenceHeightM, FenceColor, layer);
+            // 壁は「フェンスの向こうを塞ぐ」だけの書き割り。高すぎると画面上端を黒く占領する
+            AddWall("fence-backdrop", th => FenceR(th) + 3f, 0f, 7f, BackdropColor, layer);
+        }
+
+        private delegate float RadiusAt(float thetaRad);
+
+        /// <summary>本塁を中心とした扇（θ範囲・半径関数）の平らなメッシュ。</summary>
+        private void AddFan(string name, RadiusAt r, float y, Color color, int layer,
+            float th0 = -FoulQuarterRad, float th1 = FoulQuarterRad, int seg = 48)
+        {
+            var verts = new Vector3[seg + 2];
+            var tris = new int[seg * 3];
+            verts[0] = Vector3.zero;
+            for (int i = 0; i <= seg; i++)
+            {
+                float th = Mathf.Lerp(th0, th1, i / (float)seg);
+                float rad = r(th);
+                verts[i + 1] = new Vector3(rad * Mathf.Sin(th), 0f, rad * Mathf.Cos(th));
+            }
+            for (int i = 0; i < seg; i++)
+            {
+                tris[i * 3] = 0; tris[i * 3 + 1] = i + 1; tris[i * 3 + 2] = i + 2;
+            }
+            AddSurface(name, verts, tris, y, color, layer);
+        }
+
+        /// <summary>2つの半径関数に挟まれた帯（ウォーニングトラック等）。</summary>
+        private void AddBand(string name, RadiusAt rIn, RadiusAt rOut, float y, Color color, int layer,
+            float th0 = -FoulQuarterRad, float th1 = FoulQuarterRad, int seg = 48)
+        {
+            var verts = new Vector3[(seg + 1) * 2];
+            var tris = new int[seg * 6];
+            for (int i = 0; i <= seg; i++)
+            {
+                float th = Mathf.Lerp(th0, th1, i / (float)seg);
+                float s = Mathf.Sin(th), c = Mathf.Cos(th);
+                verts[i * 2] = new Vector3(rIn(th) * s, 0f, rIn(th) * c);
+                verts[i * 2 + 1] = new Vector3(rOut(th) * s, 0f, rOut(th) * c);
+            }
+            for (int i = 0; i < seg; i++)
+            {
+                int b = i * 2, t = i * 6;
+                tris[t] = b; tris[t + 1] = b + 1; tris[t + 2] = b + 3;
+                tris[t + 3] = b; tris[t + 4] = b + 3; tris[t + 5] = b + 2;
+            }
+            AddSurface(name, verts, tris, y, color, layer);
+        }
+
+        /// <summary>弧に沿った垂直の帯（フェンス・背景壁）。内側から見えるよう両面で作る。</summary>
+        private void AddWall(string name, RadiusAt r, float y0, float y1, Color color, int layer,
+            float th0 = -FoulQuarterRad - 0.12f, float th1 = FoulQuarterRad + 0.12f, int seg = 48)
+        {
+            var verts = new Vector3[(seg + 1) * 2];
+            var tris = new int[seg * 12];   // 表裏の2枚
+            for (int i = 0; i <= seg; i++)
+            {
+                float th = Mathf.Lerp(th0, th1, i / (float)seg);
+                float rad = r(th);
+                float s = Mathf.Sin(th), c = Mathf.Cos(th);
+                verts[i * 2] = new Vector3(rad * s, y0, rad * c);
+                verts[i * 2 + 1] = new Vector3(rad * s, y1, rad * c);
+            }
+            for (int i = 0; i < seg; i++)
+            {
+                int b = i * 2, t = i * 12;
+                tris[t] = b; tris[t + 1] = b + 1; tris[t + 2] = b + 3;
+                tris[t + 3] = b; tris[t + 4] = b + 3; tris[t + 5] = b + 2;
+                // 裏面（巻き順を逆に）。片面だとカメラ側から抜けて見える
+                tris[t + 6] = b; tris[t + 7] = b + 3; tris[t + 8] = b + 1;
+                tris[t + 9] = b; tris[t + 10] = b + 2; tris[t + 11] = b + 3;
+            }
+            AddSurface(name, verts, tris, 0f, color, layer);
+        }
+
+        private void AddSurface(string name, Vector3[] verts, int[] tris, float y, Color color, int layer)
+        {
+            var mesh = new Mesh { name = name };
+            // ⚠ RecalculateNormals は呼ばない（design-18 の掟）。平面なので法線は一定＝上向きで足りる
+            mesh.vertices = verts;
+            mesh.triangles = tris;
+            var normals = new Vector3[verts.Length];
+            for (int i = 0; i < normals.Length; i++) normals[i] = Vector3.up;
+            mesh.normals = normals;
+            mesh.RecalculateBounds();
+            _meshes.Add(mesh);
+
+            var go = new GameObject(name);
+            go.transform.SetParent(_root.transform, false);
+            go.transform.localPosition = new Vector3(0f, y, 0f);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = FlatMaterial(color);
+            go.layer = layer;
+        }
+
         // ---- 守備カメラ ---------------------------------------------------------
         //
         // **既存の打球追随カメラ（engine CameraPlanBuilder・issue #119）をそのまま使う。**
