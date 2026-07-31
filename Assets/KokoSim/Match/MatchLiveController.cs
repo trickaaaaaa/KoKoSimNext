@@ -841,9 +841,13 @@ namespace KokoSim.Unity.Match
         // ②の方針は押した時点で入っているのでここでは触らない。
         private void PushPitchTacticsChoice()
         {
-            _prog.SetPitchBattingOverride(_managerIsAway, _pitchBattingChoice);
-            _prog.SetOffensiveSign(_managerIsAway, _signChoice);
-            _prog.SetStealAttempt(_managerIsAway, _stealChoice);
+            // 自校が攻撃していない打席へは攻撃の1手を渡さない。カード列は「映している打席」に合わせて
+            // 出しているので、半回の最後の打席を見ながら選んだ1手は、押し込む時点ではもう相手の攻撃に
+            // なっている。そのまま渡すと自校の予約として残り、**次の回の自校の初球で不意に発動する**。
+            var offense = _prog.IsTeamOnOffense(_managerIsAway);
+            _prog.SetPitchBattingOverride(_managerIsAway, offense ? _pitchBattingChoice : null);
+            _prog.SetOffensiveSign(_managerIsAway, offense ? _signChoice : null);
+            _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null);
         }
 
         // ①の1手は消費後に自動解除（Q12-3: 次球は方針に復帰）。②の方針カードは点けたまま残す。
@@ -880,9 +884,15 @@ namespace KokoSim.Unity.Match
             UpdateScoreboard(_current, resolved: false);
             SetText("batter", _current.BatterName);
             RefreshPanel();   // 打席確定＝今日の成績・現打者ハイライト・マッチアップHUD を更新
-            // 指示パネルの攻守出し分け（issue #289）。指示は「次に解決される打席」に効くので、
-            // 表示中打席（_current）の表裏ではなくエンジンの現在境界（＝次打席の攻守）で切り替える。
-            _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
+            // 采配カードの攻守出し分け。**いま映している打席**（_current）の側で切り替える。
+            //
+            // 以前はエンジンの現在境界（＝次に解決される打席の攻守）で切り替えていた。指示は次の打席に効く
+            // のだから理屈は通るのだが、3アウト目の打席が確定した時点でエンジンは既に次の半回へ進んでいる
+            // ため、その打席を再生しているあいだずっとカードだけが裏返って見えた（実測: 90打席中17回、
+            // すべて半回の最後の打席）。守備カードが6枚とも「解除するまで続く方針」になり、1打席先回りして
+            // 出す利点が無くなったので、画面と合わせる方を採る。取りこぼす1手は
+            // PushPitchTacticsChoice のガードで捨てる（相手の攻撃へ自校の打撃指示が漏れないように）。
+            _signPad?.SetPhase(_current.IsTop == _managerIsAway);
             // 走者の有無でバント/盗塁/エンドラン/スクイズの可否が変わる＝打席が確定するたび引き直す。
             _signPad?.RefreshEnabled();
 
