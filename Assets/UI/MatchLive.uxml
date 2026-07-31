@@ -68,6 +68,10 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
+                <!-- 采配指示の手札（試合画面改修）。盤面の直下・中央寄せ。中身の TacticsCardDeck は
+                     MatchLiveController が生成する（カードの寸法は部品が持つ）。 -->
+                <ui:VisualElement name="tactics-host" class="tcards-host" />
+
                 <!-- 残置した常時操作（issue #289 で操作列を縮小）: 速度・カメラ演出・対決ビューだけ。
                      1球指示は盤面内・投手HUD直下の SignPad へ、タイム・選手交代・スキップは
                      「盤面クリック→中断ポップアップ」(pause-modal) へ集約した。実況帯（履歴・実況バー）は

@@ -143,7 +143,7 @@ namespace KokoSim.Unity.Match
         // プレイヤーの手動指示。次に解決される打席の最初の1球にだけ効き、Advance() のたび自動で選択解除する
         // （エンジン側の「1球指示は消費後クリア」と表示を一致させる＝実は1球限りだと分かる）。
         // 攻撃中は打撃指示だけ・守備中は配球指示だけを出す（SetPhase）。定義は BuildSignPad に集約。
-        private SignPad _signPad;
+        private TacticsCardDeck _signPad;   // 采配指示の手札（旧 SignPad の置き換え。API は同型）
         private PitchBattingOverride? _pitchBattingChoice;
         private PitchPolicy? _pitchPolicyChoice;
         private MatchLiveStatsProvider _statsProvider;
@@ -236,7 +236,7 @@ namespace KokoSim.Unity.Match
             _leftPitcher = _root.Q<VisualElement>("left-pitcher");
             _rightPitcher = _root.Q<VisualElement>("right-pitcher");
             _hudHost = _root.Q<VisualElement>("hud-host");
-            BuildHudCorners();   // 左下=投手HUD＋指示パネルの常設スタック／右下=打者HUD（issue #289）
+            BuildHudCorners();   // 右上=打者HUD／右下=投手HUD の常設コーナー
             _capHistHost = _root.Q<VisualElement>("caption-history");
             _leftTeam = _root.Q<Label>("left-team");
             _rightTeam = _root.Q<Label>("right-team");
@@ -275,6 +275,15 @@ namespace KokoSim.Unity.Match
             if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
             InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
             ApplyDuelViewState();
+
+            // 采配の手札は盤面の外（列の下）。打席をまたいで作り直さないのでここで1度だけ生成する。
+            var tacticsHost = _root.Q<VisualElement>("tactics-host");
+            if (tacticsHost != null)
+            {
+                tacticsHost.Clear();
+                _signPad = new TacticsCardDeck();
+                tacticsHost.Add(_signPad);
+            }
             WirePitchTactics();
 
             // B/S/O と塁ダイヤは ScoreBug（部品辞書）の中。1球ごとに動くのでここから直接駆動する。
@@ -541,7 +550,7 @@ namespace KokoSim.Unity.Match
             for (var v = e; v != null; v = v.parent)
             {
                 if (v is Button) return true;
-                if (v.ClassListContains("signpad")) return true;
+                if (v.ClassListContains("tcards")) return true;   // 采配の手札。押した指示と中断が二重反応しない
                 if (v.ClassListContains("modal-scrim")) return true;
                 if (v.ClassListContains("inning-break")) return true;   // クリック＝スキップ。中断は開かない
             }
@@ -731,17 +740,18 @@ namespace KokoSim.Unity.Match
         {
             _signPad?.SetDefs(new[]
             {
-                new SignPad.SignDef { Id = "batting-swing", Label = "強攻", Offense = true, Group = "batting",
+                // Icon はカードの絵の位置に敷く1文字（将来ここへ実際の絵が入る）。
+                new SignPad.SignDef { Id = "batting-swing", Label = "強攻", Icon = "打", Offense = true, Group = "batting",
                     GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceSwing },
-                new SignPad.SignDef { Id = "batting-take", Label = "待て", Offense = true, Group = "batting",
+                new SignPad.SignDef { Id = "batting-take", Label = "待て", Icon = "待", Offense = true, Group = "batting",
                     GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceTake },
-                new SignPad.SignDef { Id = "batting-auto", Label = "任せ", Offense = true, Group = "batting",
+                new SignPad.SignDef { Id = "batting-auto", Label = "任せ", Icon = "任", Offense = true, Group = "batting",
                     GroupLabel = "打撃", IsDefault = true, OnSelect = () => _pitchBattingChoice = null },
-                new SignPad.SignDef { Id = "policy-break", Label = "変化球", Offense = false, Group = "policy",
+                new SignPad.SignDef { Id = "policy-break", Label = "変化球", Icon = "変", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => _pitchPolicyChoice = PitchPolicy.BreakingHeavy },
-                new SignPad.SignDef { Id = "policy-zone", Label = "ゾーン", Offense = false, Group = "policy",
+                new SignPad.SignDef { Id = "policy-zone", Label = "ゾーン", Icon = "域", Offense = false, Group = "policy",
                     GroupLabel = "配球", OnSelect = () => _pitchPolicyChoice = PitchPolicy.ControlFirst },
-                new SignPad.SignDef { Id = "policy-auto", Label = "通常", Offense = false, Group = "policy",
+                new SignPad.SignDef { Id = "policy-auto", Label = "通常", Icon = "常", Offense = false, Group = "policy",
                     GroupLabel = "配球", IsDefault = true, OnSelect = () => _pitchPolicyChoice = null },
             });
         }
@@ -1800,22 +1810,14 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        // ── マッチアップHUD＋指示パネル（盤面上に画面座標固定・左下=投手HUD+指示/右下=打者HUD） ──
+        // ── マッチアップHUD（盤面上に画面座標固定・右上=打者/右下=投手） ──
         // コーナーは OnEnable で常設し（BuildHudCorners）、打席ごとに HUD スロットの中身だけを
-        // 入れ替える。SignPad を作り直さないのは選択状態と攻守フェーズを打席をまたいで保持するため
-        //（issue #289。左下は「上=投手HUD／下=指示パネル」の縦積み・下端アンカーはコーナーが取る）。
+        // 入れ替える。采配の手札（TacticsCardDeck）は盤面の外＝列の下に置き、作り直さない
+        //（選択状態と攻守フェーズを打席をまたいで保持するため。issue #289 からの引き継ぎ）。
         private void BuildHudCorners()
         {
             if (_hudHost == null) return;
             _hudHost.Clear();
-
-            // 指示パネルは左下に残す（P5 で盤面下の戦術カードへ置き換える）。
-            var left = new VisualElement { pickingMode = PickingMode.Ignore };
-            left.AddToClassList("mhud-corner");
-            left.AddToClassList("mhud-corner--left");
-            _signPad = new SignPad();
-            left.Add(_signPad);
-            _hudHost.Add(left);
 
             // 投手は右下。
             var bottomRight = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -2059,6 +2061,9 @@ namespace KokoSim.Unity.Match
             };
             _signPad?.Select(id);
         }
+
+        /// <summary>スクショ用: 采配カードをホバー拡大の状態にする（実際のカーソルは要らない）。null で解除。</summary>
+        public void SetTacticsHotForCapture(string id) => _signPad?.SetHotForCapture(id);
 
         /// <summary>スクショ用: クリック中断ポップアップを強制表示する（クリックと同経路）。</summary>
         public void OpenPauseMenuForCapture() => OpenPauseMenu();

@@ -60,6 +60,17 @@ namespace KokoSim.Unity.Match
             yield return AdvanceUntil(ctrl, pa => pa.Inning >= 8, 200);
             yield return Capture(ctrl, "04-late");
 
+            // 采配カード（守備中＝配球の3枚）。カーソル無しでホバー拡大の状態を焼く。
+            ctrl.SetTacticsHotForCapture("policy-break");
+            yield return Capture(ctrl, "04b-card-hover-defense");
+            ctrl.SetTacticsHotForCapture(null);
+
+            // 攻撃中（自校＝home なので裏）へ進めて打撃の3枚を撮る。
+            yield return AdvanceUntil(ctrl, pa => !pa.IsTop, 40);
+            ctrl.SetTacticsHotForCapture("batting-swing");
+            yield return Capture(ctrl, "04c-card-hover-offense");
+            ctrl.SetTacticsHotForCapture(null);
+
             var guard = 0;
             while (guard++ < 400 && ctrl.AdvanceForCapture()) { }
             yield return Capture(ctrl, "05-final");

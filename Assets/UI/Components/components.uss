@@ -1256,6 +1256,8 @@
    設計書15 Phase C-3 の常駐1行帯の後継。攻撃中は打撃、守備中は配球だけを出し、既定（任せ/通常）は無点灯。
    盤面overlayなので半透明パネルは mhud-panel と同じ inline rgba idiom。選択色は旧セグ選択と同じ --sky を踏襲。
    タイルは flex-wrap で段組み＝定義が増えたら下へ折り返す（gap非対応のため間隔は margin で作る）。 */
+/* 2026-07-31: 試合画面の1球指示は TacticsCardDeck（.tcard*）へ置き換えた。SignPad は
+   部品辞書の登録として残す（ComponentGallery 用・他画面で使うときの器）。 */
 .signpad {
     background-color: rgba(24, 33, 28, 0.85);
     border-radius: var(--radius-panel);
@@ -1742,6 +1744,77 @@
 .lsc-base--first { top: 15px; left: 30px; }
 .lsc-base--third { top: 15px; left: 0; }
 .lsc-base.is-on { background-color: var(--color-lamp); }
+
+/* ═══ TacticsCardDeck：采配指示の手札（試合画面改修・C#は Components/TacticsCardDeck.cs）═══════
+   盤面の直下に、重なり合ったカードとして采配指示を並べる。カーソルが乗った1枚だけが持ち上がり、
+   最前面へ出る（両隣を中間拡大する Dock 風は採らない＝2026-07-31 ユーザー判断）。
+
+   カードの箱の寸法（幅・高さ・重なり）は TacticsCardDeck.cs が持つ。ここは色と枠だけ。
+   自作要素が自分の幾何を持つのは BaseballFieldElement / Match2DPlaybackElement と同じ作法。 */
+.tcards { flex-shrink: 0; align-items: center; }
+.tcards__inner { position: relative; height: 100%; }
+
+.tcard {
+    position: absolute;
+    bottom: 0;
+    background-color: var(--sf-card);
+    border-width: var(--nb-border);
+    /* 左は隣のカードに重なる辺。太くして「上に乗っている」継ぎ目を作る（USS に box-shadow は無い）。 */
+    border-left-width: var(--nb-shadow-card);
+    border-right-width: var(--nb-shadow);
+    border-bottom-width: var(--nb-shadow);
+    border-color: var(--ink);
+    transition-property: translate, scale;
+    transition-duration: 0.12s;
+    transition-timing-function: ease-out;
+    transform-origin: 50% 100%;   /* 下端を軸に上へ伸び上がる（帯の高さを変えずに大きく見せる） */
+}
+/* 持ち上がるのはカーソルが乗った1枚だけ。最前面化は C# の BringToFront が行う（USS に z-index は無い）。 */
+.tcard--hot { translate: 0 -14px; scale: 1.22; }
+
+/* 上2/3＝将来ここへ絵を入れる場所。いまは Icon の1文字を淡く敷いて枠だと分かるようにする。 */
+.tcard__art {
+    flex-grow: 1;
+    background-color: var(--sf-inset);
+}
+.tcard__ghost {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    color: var(--ink);
+    opacity: 0.14;
+    -unity-text-align: middle-center;
+    margin-top: -34px;
+}
+/* 下1/3＝名前。左の帯（隣に隠れない幅）の中央へ置く＝カード全幅で中央揃えにすると隣の下に潜る。 */
+.tcard__cap {
+    height: 32%;
+    flex-shrink: 0;
+    border-top-width: var(--nb-border);
+    border-top-color: var(--ink);
+    background-color: var(--sf-card);
+}
+.tcard__name {
+    position: absolute;
+    left: 0;
+    top: 0; bottom: 0;
+    color: var(--tx-1);
+    -unity-text-align: middle-center;
+}
+
+/* 選択中＝操作系の青（旧 SignPad の選択色を踏襲）。 */
+.tcard--on { border-color: var(--sky); }
+.tcard--on .tcard__cap { background-color: var(--sky); border-top-color: var(--sky); }
+.tcard--on .tcard__name { color: var(--sf-card); }
+/* 既定（任せ/通常）＝指示なし。面を地に落として「選ばれていない状態」を表す。 */
+.tcard--default { background-color: var(--sf-base); }
+.tcard--default .tcard__art { background-color: var(--sf-base); }
+.tcard--default .tcard__cap { background-color: var(--sf-base); }
+.tcard--default .tcard__name { color: var(--tx-2); }
+/* いまの局面で選べないカード（走者なしの盗塁など）。拡大もクリックもしない。 */
+.tcard--off .tcard__art { background-color: var(--sf-inset); opacity: 0.4; }
+.tcard--off .tcard__cap { background-color: var(--sf-inset); }
+.tcard--off .tcard__name { color: var(--tx-3); }
 
 /* ═══ InningBreak：攻守交代のイニング間画面（試合画面改修）══════════════════════════
    3アウトで攻守が入れ替わったら、次の打席を始める前に数秒だけ盤面へ被せる暗幕。
