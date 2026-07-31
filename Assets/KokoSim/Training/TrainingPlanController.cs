@@ -24,6 +24,7 @@ namespace KokoSim.Unity.Training
         private VisualElement _modal;
         private VisualElement _copyModal;
         private bool _modalOpen;
+        private bool _abilityTab;   // モーダルのタブ（false=配分／true=能力, issue #327③）
         private bool _copyOpen;     // 複製ピッカー（コピー元を選ぶ, Issue #133-⑤）
         private int _copyTarget;    // コピー先の選手索引
 
@@ -67,6 +68,9 @@ namespace KokoSim.Unity.Training
             Click("sel-prev", () => { _state.StepSelected(-1); Render(); _modal?.Focus(); });
             Click("sel-next", () => { _state.StepSelected(+1); Render(); _modal?.Focus(); });
             Click("modal-revert", () => { _state.RevertSelected(); Toast("配分を元に戻しました"); Render(); });
+            // 配分⇄能力タブ（issue #327③）。前後選手送りはタブを保ったまま選手だけ替わる。
+            Click("tab-alloc", () => { _abilityTab = false; Render(); });
+            Click("tab-abil", () => { _abilityTab = true; Render(); });
             Click("modal-close", CloseModal);
             Click("modal-done", CloseModal);
             Click("copy-close", CloseCopyPicker);
@@ -91,6 +95,7 @@ namespace KokoSim.Unity.Training
         {
             _state.SelectPlayer(index);
             _modalOpen = true;
+            _abilityTab = false;   // 開き直しは常に配分タブから（モーダルの主目的は練習設定）
             Render();
             _modal?.BringToFront();
             _modal?.Focus();
@@ -283,8 +288,6 @@ namespace KokoSim.Unity.Training
             var delToggle = _root.Q<VisualElement>("delegate-toggle");
             if (delToggle != null) delToggle.EnableInClassList("switch--on", v.DelegateOn);
             SetText("delegate-state", v.DelegateStateLabel);
-            var lockHint = _root.Q<Label>("menu-lock-hint");
-            if (lockHint != null) lockHint.style.display = v.DelegateOn ? DisplayStyle.Flex : DisplayStyle.None;
 
             // 前後選手（issue #222⑥）：一覧の端では押せない（見た目でも分かる）。
             var prevBtn = _root.Q<Button>("sel-prev");
@@ -292,10 +295,22 @@ namespace KokoSim.Unity.Training
             var nextBtn = _root.Q<Button>("sel-next");
             if (nextBtn != null) nextBtn.SetEnabled(v.SelHasNext);
 
+            // 配分⇄能力タブ（issue #327③）。本体はタブで差し替え、プリセット帯の配分専用部品
+            // （チップ列・委任ロック・残りバジェット）は能力タブでは隠す。
+            var allocTab = !_abilityTab;
+            _root.Q<Button>("tab-alloc")?.EnableInClassList("tpm-tab--on", allocTab);
+            _root.Q<Button>("tab-abil")?.EnableInClassList("tpm-tab--on", _abilityTab);
+            ShowIf("tpm-body-alloc", allocTab);
+            ShowIf("tpm-body-abil", _abilityTab);
+            ShowIf("tpm-presets", allocTab);
+            ShowIf("tpm-budget", allocTab);
+            ShowIf("menu-lock-hint", v.DelegateOn && allocTab);
+
             BuildPresetOptions(v);
             BuildMenuList(v);
             BuildDefenseGrid(v);
             BuildGrowth(v);
+            BuildAbilityColumns(v);
 
             // 週バジェット残り＋バー（残り0分は強調して「なぜ増えないか」を視界内で分かるようにする, issue #222③）
             SetText("sel-remain", "残り " + v.SelectedRemaining + " / " + v.Budget + "分");
@@ -310,6 +325,45 @@ namespace KokoSim.Unity.Training
 
             BuildTemplates(v);
         }
+
+        private void ShowIf(string name, bool on)
+        {
+            var el = _root.Q<VisualElement>(name);
+            if (el != null) el.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        // 能力タブ（issue #327③・案A）: 投手能力｜守備適性｜野手能力の3カラム。行は部品辞書の
+        // AbilityRow コンパクト行（伸びる能力一覧と同じ行高32px・UI原則①⑤）。
+        private void BuildAbilityColumns(TrainingPlanView v)
+        {
+            if (!_abilityTab) return;
+            FillAbilityList("tpm-abil-pitcher", v.SelPitcherAbilities);
+            FillAbilityList("tpm-abil-defense", v.SelDefenseAptitudes);
+            FillAbilityList("tpm-abil-fielder", v.SelFielderAbilities);
+        }
+
+        private void FillAbilityList(string hostName, System.Collections.Generic.List<AbilityRowInfo> rows)
+        {
+            var host = _root.Q<VisualElement>(hostName);
+            if (host == null) return;
+            host.Clear();
+            foreach (var a in rows) host.Add(AbilityValueRow(a));
+        }
+
+        // 能力タブの1行。値・ランクは現在能力（作りは選手詳細 PlayerDetailController.BuildAbil と同型）。
+        // 弾道は優劣のないタイプ軸なのでバー・数値を出さない（issue #219）。
+        private static VisualElement AbilityValueRow(AbilityRowInfo a)
+            => UiComponents.AbilityRow(new AbilityRowData
+            {
+                Icon = a.Icon,
+                Label = a.Jp,
+                Value = string.IsNullOrEmpty(a.ValueText) ? a.Value.ToString() : a.ValueText,
+                Pct = a.Value / 100f,
+                Grade = a.Grade,
+                TypeLabel = a.TypeLabel,
+                HideBar = !string.IsNullOrEmpty(a.TypeLabel),
+                Size = AbilityRowSize.Compact,
+            });
 
         // プリセット帯（issue #222④）：横1行のチップ列。説明はツールチップで持たせ、
         // カード内の「伸びる能力」5本バーは廃止（右カラムの実効ドライランが同じ役割を実データで担う）。
@@ -537,6 +591,9 @@ namespace KokoSim.Unity.Training
                 Pct = (float)gb.Progress,
                 Grade = gb.Grade,
                 TypeLabel = gb.TypeLabel,
+                // 行高32px固定のコンパクト行（issue #327②-b）。1440×840 で14行が
+                // スクロールなしで一望できる密度（14×32+13×2=474px ≤ 欄477px）。
+                Size = AbilityRowSize.Compact,
                 Dim = showLevel && !grows,   // 伸びない能力は淡色（一覧には常に出す）
                 // 右端は「＋N」（レベルアップ）と「—」（伸びない）だけ。伸びている途中は空にし、
                 // 進み具合はバーで読ませる（％表記は撤去・issue #327①）。

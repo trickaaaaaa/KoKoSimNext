@@ -98,12 +98,18 @@
                     <ui:Button name="modal-close" text="✕" class="tpm-close" />
                 </ui:VisualElement>
 
-                <!-- プリセット帯：横1行のチップ列＋残りバジェット（常時視界内・issue #222③④） -->
+                <!-- プリセット帯：タブ（配分⇄能力・issue #327③）＋チップ列＋残りバジェット（issue #222③④）。
+                     タブをこの帯の左端に置くのは縦の帯を増やさないため（伸びる能力14行=474pxで
+                     縦は満杯。帯を1本足すと1440×840で見切れが再発する） -->
                 <ui:VisualElement class="tpm-preset-strip">
+                    <ui:VisualElement class="tpm-tabs">
+                        <ui:Button name="tab-alloc" text="配分" class="tpm-tab" />
+                        <ui:Button name="tab-abil" text="能力" class="tpm-tab" />
+                    </ui:VisualElement>
                     <ui:VisualElement name="tpm-presets" class="tpm-preset-row" />
                     <ui:Label name="menu-lock-hint" text="委任中ロック" class="tp-ed-section__lock" />
                     <ui:VisualElement class="tp-ed-head__spacer" />
-                    <ui:VisualElement class="tpm-budget">
+                    <ui:VisualElement name="tpm-budget" class="tpm-budget">
                         <ui:Label name="sel-remain" text="残り 30 / 300分" class="tp-ed-bar__remain" />
                         <ui:VisualElement class="stat-bar stat-bar--tall">
                             <ui:VisualElement name="sel-budget-fill" class="stat-bar__fill" />
@@ -111,8 +117,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- 本体：3カラム（野手/投手練習｜守備｜伸びる能力）。21+13行がスクロールなしで一望できる。 -->
-                <ui:VisualElement class="tpm-body3">
+                <!-- 本体（配分タブ）：3カラム（野手/投手練習｜守備｜伸びる能力）。スクロールなしで一望できる。 -->
+                <ui:VisualElement name="tpm-body-alloc" class="tpm-body3">
                     <ui:VisualElement class="tpm-col">
                         <ui:Label text="野手・投手練習" class="tpm-col__title" />
                         <ui:VisualElement name="tpm-menus" class="tpm-col__list" />
@@ -126,6 +132,23 @@
                         <ui:ScrollView mode="Vertical" class="tpm-growth-scroll">
                             <ui:VisualElement name="tpm-growth" class="tpm-col__list" />
                         </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 本体（能力タブ・issue #327③ 案A）：3カラム骨格を維持して中身だけ現在能力に差し替え。
+                     行は部品辞書 AbilityRow のコンパクト行。表示は Controller がタブ状態で切り替える -->
+                <ui:VisualElement name="tpm-body-abil" class="tpm-body3" style="display: none;">
+                    <ui:VisualElement class="tpm-col">
+                        <ui:Label text="投手能力" class="tpm-col__title" />
+                        <ui:VisualElement name="tpm-abil-pitcher" class="tpm-col__list" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="tpm-col">
+                        <ui:Label text="守備適性" class="tpm-col__title" />
+                        <ui:VisualElement name="tpm-abil-defense" class="tpm-col__list" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="tpm-col tpm-col--last">
+                        <ui:Label text="野手能力" class="tpm-col__title" />
+                        <ui:VisualElement name="tpm-abil-fielder" class="tpm-col__list" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 

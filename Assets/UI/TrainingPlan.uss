@@ -197,6 +197,22 @@
 }
 .tpm-close:hover { border-color: var(--color-warn); color: var(--color-warn); }
 
+/* ── タブ（配分⇄能力・issue #327③）：プリセット帯の左端に置く＝縦の帯を増やさない
+   （伸びる能力14行=474pxで縦は満杯。帯を足すと1440×840で②-bの見切れが再発する）。
+   見た目はメンバー設定の比較タブ（.ms-tab）と同型のセグメント切替を、モーダルのNBスキン
+   （--sf-card地＋--color-line枠＋選択=--sky。.tpm-preset-chip と同じ配色系）で組む。 */
+.tpm-tabs { flex-direction: row; flex-shrink: 0; margin-right: var(--sp-4); }
+.tpm-tab {
+    width: 92px; height: 34px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-label); color: var(--color-muted);
+    background-color: var(--sf-card);
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: 0;
+    margin: 0 2px 0 0; padding: 0;
+}
+.tpm-tab:hover { color: var(--color-chalk); }
+.tpm-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+
 /* ── プリセット帯：横1行のチップ列＋残りバジェット（常時視界内・issue #222③④） ── */
 .tpm-preset-strip {
     flex-shrink: 0;
@@ -226,12 +242,13 @@
 }
 .tpm-col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: column; margin-right: 18px; }
 .tpm-col--growth { margin-right: 0; min-height: 0; }
+.tpm-col--last { margin-right: 0; }   /* 能力タブの右端カラム（issue #327③） */
 .tpm-col__title { font-size: var(--fs-cap); color: var(--color-chalk); letter-spacing: 1px; flex-shrink: 0; margin-bottom: var(--sp-2); }
 .tpm-col__list { flex-direction: column; flex-shrink: 0; }
 /* 節見出し（野手練習/投手練習・Issue #133-⑥）。列見出しより一段淡い従属見出し。 */
 .tpm-menugroup { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: 3px; }
-/* 伸びる能力カラムは行間を詰めて14行を一望に収める（狙いは1440×840で常時全行表示）。 */
-.tpm-col--growth .abil-row { margin-bottom: var(--sp-1); }
+/* 伸びる能力カラムは部品辞書のコンパクト行（.abil-row--compact＝行高32px固定・間隔2px）で
+   14行を一望に収める（1440×840で 14×32+13×2=474px ≤ 欄477px・issue #327②-b）。 */
 /* 1440×840 未満のウィンドウでは詰めても入り切らないことがある。他2列は密度優先で現状維持のまま、
    伸びる能力カラムだけスクロールを許容し、黙って行が切り落とされる事故を防ぐ（issue #327②-b）。 */
 .tpm-growth-scroll { flex-grow: 1; min-height: 0; }
