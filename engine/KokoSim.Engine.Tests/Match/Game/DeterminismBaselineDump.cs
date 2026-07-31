@@ -4,8 +4,9 @@ using Xunit.Abstractions;
 namespace KokoSim.Engine.Tests.Match.Game;
 
 /// <summary>
-/// 決定論ベースラインのダンプ（一時ツール）。現行エンジンの全カード×全シードのダイジェストを出力する。
-/// これを凍結して EngineDeterminismGateTests のベースラインにする。ゲート整備後は削除してよい。
+/// 決定論ベースラインの再生成ツール（恒久保持）。現行エンジンの全カード×全シードのダイジェストを出力する。
+/// エンジン挙動を意図して変えたときに Skip を外して実行し、出力を determinism-baseline.txt へ貼り直して凍結する
+/// （EngineDeterminismGateTests と DebugTraceTests の照合先）。
 /// 実行: dotnet test --filter "FullyQualifiedName~DeterminismBaselineDump" --logger "console;verbosity=detailed"
 /// </summary>
 public sealed class DeterminismBaselineDump

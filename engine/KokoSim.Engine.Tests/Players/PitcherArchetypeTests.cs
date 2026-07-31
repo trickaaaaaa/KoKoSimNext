@@ -37,24 +37,38 @@ public sealed class PitcherArchetypeTests
         };
     }
 
-    /// <summary>型のオフセットを載せた投手の1試合あたり失点と奪三振率を実測する。</summary>
+    /// <summary>
+    /// 型のオフセットを載せた投手の1試合あたり失点と奪三振率を実測する。
+    /// 決定論を保った並列化（GameSimulation.Run と同じ作法。issue #361）: 試合ごとの乱数シードは
+    /// 添字から確定、チーム生成は試合ローカル、集計は整数部分和（可換・結合的）→
+    /// スレッド数・実行順に依らず逐次実行と同一の値になる（不変条件#2）。
+    /// </summary>
     private static (double RunsAllowed, double StrikeoutRate) MeasureArchetype(
         PitcherArchetype a, GameContext ctx, int games, int defenseLevel = 55, int baseLv = 68)
     {
         var c = new PitcherArchetypeCoefficients();
         var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(a, c);
         int L(double x) => (int)MathUtil.Clamp(System.Math.Round(x), 10, 99);
-        var mine = FixedTeam(L(baseLv + dv), L(baseLv + dc), L(baseLv + ds), L(baseLv + dr), "自", defenseLevel);
-        var foe = FixedTeam(baseLv, baseLv, baseLv, baseLv, "敵");
 
-        double runs = 0, k = 0, bf = 0;
-        for (var i = 0; i < games; i++)
-        {
-            var r = GameEngine.Play(foe, mine, ctx, new Xoshiro256Random((ulong)(i * 7919 + 13)));
-            runs += r.AwayRuns;
-            foreach (var line in r.HomePitching) { k += line.StrikeOuts; bf += line.BattersFaced; }
-        }
-        return (runs / games, k / System.Math.Max(1, bf));
+        long runs = 0, k = 0, bf = 0;
+        System.Threading.Tasks.Parallel.For(0, games,
+            () => (Runs: 0L, K: 0L, Bf: 0L),
+            (i, _, local) =>
+            {
+                var mine = FixedTeam(L(baseLv + dv), L(baseLv + dc), L(baseLv + ds), L(baseLv + dr), "自", defenseLevel);
+                var foe = FixedTeam(baseLv, baseLv, baseLv, baseLv, "敵");
+                var r = GameEngine.Play(foe, mine, ctx, new Xoshiro256Random((ulong)(i * 7919 + 13)));
+                local.Runs += r.AwayRuns;
+                foreach (var line in r.HomePitching) { local.K += line.StrikeOuts; local.Bf += line.BattersFaced; }
+                return local;
+            },
+            local =>
+            {
+                System.Threading.Interlocked.Add(ref runs, local.Runs);
+                System.Threading.Interlocked.Add(ref k, local.K);
+                System.Threading.Interlocked.Add(ref bf, local.Bf);
+            });
+        return ((double)runs / games, (double)k / System.Math.Max(1, bf));
     }
 
     // ===== 変換式（不変条件#1: 表示層→物理層は一箇所集約） =====

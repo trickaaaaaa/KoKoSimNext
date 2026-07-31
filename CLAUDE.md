@@ -208,15 +208,21 @@ docs/design/                  # 設計書01〜07
 ## コマンド
 
 ```bash
-dotnet test engine/ --filter "Category!=Heavy"        # 日常ループ（約10秒）
-dotnet test engine/ -c Release --filter "Category=Heavy"   # 統計回帰（約15秒。要 Release ビルド）
-dotnet test engine/                                   # 全テスト実行（Debugだと統計回帰が数分）
+dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ（約30秒）
+dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約2分）
+dotnet test engine/ -c Release                               # 全テスト実行
 dotnet run --project engine/KokoSim.Balance -- \
   simulate --games 10000 --seed 42 --report out/report.md   # 一括シミュレーション＋統計レポート
 ```
 
+- テストは必ず `-c Release` で回す（issue #361）。フルゲームシムは Debug だと約17倍遅く、日常ループが5分超になる。
+  CI（fast/heavy）も `tools/sync-engine-dll.sh` も Release ビルド＝Debug で回す場面はない。
+  engine に `#if DEBUG` / `Debug.Assert` は無いので検証内容も変わらない
 - 統計回帰（`[Trait("Category","Heavy")]`）はバランス係数・確率モデルの変更時とコミット前に必ず回す（不変条件#5）
-- 統計シム（GameSimulation/AtBatSimulation）は決定論保存で並列化済み（事前Fork＋整数部分和）。同シード同結果は維持される
+- **数百試合以上のフルゲームループを回す統計テストは Heavy に置く**（fast 側の膨張防止。issue #361）。
+  CI の rest シャードが自動で拾う（網羅性は tools/check-heavy-shards.sh が検証）
+- 統計シム（GameSimulation/AtBatSimulation）は決定論保存で並列化済み（事前Fork＋整数部分和）。同シード同結果は維持される。
+  テスト内で数百試合を逐次 for で回す場合も同じ作法（シード事前確定＋試合ローカルのチーム生成＋整数部分和）で並列化する
 
 ## コーディング規約
 

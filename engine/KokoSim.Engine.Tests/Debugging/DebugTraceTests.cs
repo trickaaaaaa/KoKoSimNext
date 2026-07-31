@@ -71,7 +71,10 @@ public sealed class DebugTraceTests
     // ===== 中核テスト: 観測は結果を変えない =====
 
     /// <summary>
-    /// 決定論ゲートと同じ全カード×多シードで、CaptureTrace on/off の digest が完全一致すること。
+    /// 決定論ゲートと同じ全カード×多シードで、CaptureTrace on の digest が凍結ベースライン
+    /// （＝off の digest。EngineDeterminismGateTests が照合済み）と完全一致すること。
+    /// off 側を毎回再計算せずベースライン参照にして半減（issue #361）。エンジン挙動を変えると
+    /// 決定論ゲートと同時に赤になり、ベースライン再生成（DeterminismBaselineDump）で両方直る。
     /// 1シードでも不一致なら本設計は no-go（設計書17 §9 F1 DoD）。
     /// </summary>
     [Theory]
@@ -81,9 +84,11 @@ public sealed class DebugTraceTests
     [InlineData("pitch-tactics")]
     public void CaptureTrace_DoesNotChangeGameResultDigest(string card)
     {
+        var baseline = DeterminismBaseline.Load();
         foreach (var seed in DeterminismCards.Seeds())
         {
-            var off = GameResultDigest.Sha256Of(DeterminismCards.Run(card, seed));
+            Assert.True(baseline.TryGetValue($"{card} {seed}", out var off),
+                $"ベースライン欠落: {card} {seed}");
             var on = GameResultDigest.Sha256Of(RunTraced(card, seed, new RecordingTraceSink()));
             Assert.Equal(off, on);
         }
