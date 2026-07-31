@@ -52,6 +52,7 @@ namespace KokoSim.UnityEditorTools
             var fielders = new StringBuilder();
             var accept = new StringBuilder();
             accept.AppendLine("play\tacceptance");
+            var catches = new StringBuilder();
 
             foreach (var idx in PlayIndices)
             {
@@ -94,6 +95,8 @@ namespace KokoSim.UnityEditorTools
                     }
 
                     accept.AppendLine(Label(idx) + "\t" + rig.FielderRunDiagForCapture());
+                    catches.AppendLine("# " + Label(idx));
+                    catches.Append(rig.FieldCatchDiagForCapture());
 
                     // 名前は日本語なのでファイル名に使えない。添字＋ラベルで一意にする
                     WriteSheet(frames, Label(idx));
@@ -109,6 +112,7 @@ namespace KokoSim.UnityEditorTools
             File.WriteAllText(Path.Combine(Dir, "stations.tsv"), plans.ToString());
             File.WriteAllText(Path.Combine(Dir, "fielders.tsv"), fielders.ToString());
             File.WriteAllText(Path.Combine(Dir, "acceptance.tsv"), accept.ToString());
+            File.WriteAllText(Path.Combine(Dir, "catches.tsv"), catches.ToString());
             Debug.Log("[F3Shot] DONE -> " + Dir);
         }
 

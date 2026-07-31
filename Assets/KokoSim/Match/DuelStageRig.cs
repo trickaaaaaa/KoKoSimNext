@@ -755,6 +755,7 @@ namespace KokoSim.Unity.Match
         private Actor _pitcher, _batter, _catcher, _umpire;
         private DuelCalibration _cal = DuelCalibration.Default;   // 実行時ポーズ補正が参照する現在値
         private float _acc;
+        private int _poseGen;
         private float _fovBaseDeg = 2.9f;   // 16:9時の垂直FOV（ApplyCalibrationが上書き。既定=R-comp60）
         private Transform _capMount, _helmetMount;   // 被り物の位置オフセット枠（gear-head直下・実寸[m]）
         private Transform _cHelmetMount, _cMaskMount;   // 捕手のヘルメット・マスク（同上）
@@ -2088,6 +2089,10 @@ namespace KokoSim.Unity.Match
                 _acc -= step;
                 foreach (var a in _actors) StepActor(a, step);
                 stepped = true;
+                // ポーズが進んだ回数。**ポーズ補正IKは「進んだ回だけ」当てる**必要があり
+                // （重み<1は今の位置からの補間＝二度当てると寄りすぎる）、呼び出し側が
+                // 進んだかどうかを知る唯一の手がかりになる（守備の捕球IK＝F5）
+                _poseGen++;
             }
             if (stepped)
             {

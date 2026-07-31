@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
 using UnityEngine;
 
@@ -258,6 +259,12 @@ namespace KokoSim.Unity.Match
             /// 打球の瞬間に2人だけワープする。0.3秒かけて 0 へ落として吸収する。
             /// </summary>
             public Vector2 Entry;
+
+            /// <summary>捕球クリップを流し終える時刻（プレーの時計）。この間は走りの段が触らない。</summary>
+            public float CatchUntil;
+
+            /// <summary>いま結び付いている捕球予定の添字（-1=無し）。グラブIKの狙点を引くのに使う。</summary>
+            public int CatchEvent;
         }
 
         private readonly Dictionary<FieldPosition, FielderMotion> _loco = new();
@@ -286,6 +293,20 @@ namespace KokoSim.Unity.Match
             bool hadYaw = st.Started;
 
             var cur = PlaybackEvaluator.FielderAt(_fieldPlay, pos, t);
+
+            // 捕球クリップを流している間は、走りの段も向きも触らない（クリップの芝居を奪わない）。
+            // 位置だけは engine の真値へ置き続ける＝捕球点と体がずれない
+            if (t < st.CatchUntil)
+            {
+                PlaceFielder(a, (float)cur.Pos.X, (float)cur.Pos.Y, st.Yaw);
+                _loco[pos] = st;
+                return;
+            }
+            if (st.CatchEvent >= 0 && t >= st.CatchUntil)
+            {
+                st.CatchEvent = -1;
+                st.Ladder = -1;   // 走り／待機の管理へ戻す
+            }
 
             // 速度は中央差分。engine は位置しか返さないので、速さも向きもここで採るしかない
             float ta = Mathf.Max(0f, t - LocoSampleDt);
@@ -387,6 +408,375 @@ namespace KokoSim.Unity.Match
             "posErrMax={0:F3}m\tyawStepMax={1:F1}deg\tvMax={2:F2}m/s\tslip={3:F2}〜{4:F2}\t目立つ={5}/{6}コマ",
             _locoMaxPosErr, _locoMaxYawStep, _locoMaxSpeed,
             _locoSlipMin > 1e6f ? 1f : _locoSlipMin, _locoSlipMax, _locoClampFrames, _locoMoveFrames);
+
+        // ---- 捕る（F5） ---------------------------------------------------------
+        //
+        // 捕手で動いている三点セット（アンカー表＋開始の逆算＋短時間IK）をそのまま野手へ広げる。
+        // 新しい発明はしない。違うのは**選択の軸**だけで、捕手はコース（着弾点）、野手は
+        // 球の高さと近づき方で選ぶ。
+
+        /// <summary>近づき方。クリップの収録がこの6通りに分かれている。</summary>
+        private enum CatchApproach { Still, Forward, Back, Left, Right }
+
+        /// <summary>
+        /// 野手の捕球クリップ1本ぶんのアンカー（実測 2026-08-01・0.02s刻み・
+        /// <c>DuelMotionSpike.RunFielderCatchProbe</c>／<c>out/duel-stage/fieldcatch.tsv</c>）。
+        ///
+        /// <see cref="Moment"/> は「構えからグラブが最も動いた瞬間」＝運び終わり／伸び切り。
+        /// ⚠ **腰→グラブの距離では測れない**。腕を下ろした構えも前へ伸ばした捕球姿勢も同じ 0.56m で、
+        /// 方向が変わるだけで距離が変わらない（初回の実測で <c>Catching_TypeF</c> を
+        /// 「最初から伸び切っている」と誤判定した）。構えからの**移動量**で採る。
+        ///
+        /// <see cref="GloveY"/> は捕球の瞬間のグラブの**足元からの高さ**[m]。立ち位置にも yaw にも
+        /// 依らないので、球の高さと直接突き合わせられる＝選択の主軸になる。
+        /// </summary>
+        private readonly struct FieldCatchAnchor
+        {
+            public readonly string Clip;
+            public readonly float Moment;
+            public readonly float GloveY;
+            /// <summary>
+            /// 捕球の瞬間のグラブの**水平位置**（腰基準・右/前[m]）。体をどちらへ向ければ
+            /// グラブが球の来る方を向くかを出すのに使う。
+            /// </summary>
+            public readonly float GloveX, GloveZ;
+            public readonly CatchApproach Approach;
+
+            public FieldCatchAnchor(string clip, float moment, float gloveY,
+                float gloveX, float gloveZ, CatchApproach approach)
+            {
+                Clip = clip; Moment = moment; GloveY = gloveY;
+                GloveX = gloveX; GloveZ = gloveZ; Approach = approach;
+            }
+        }
+
+        /// <summary>
+        /// 捕球クリップ表。<c>gy</c> の実測がそのまま高さの帯になっている
+        /// （低め 0.20〜0.30 ／ 胸 1.07〜1.26 ／ 頭上 1.50〜1.74）。
+        /// </summary>
+        private static readonly FieldCatchAnchor[] FieldCatchAnchors =
+        {
+            // その場で捕る（低め→頭上まで帯を埋める。捕手と同じで**高さの主軸**はここ）
+            new("AA_Baseball_Defender_Catching_TypeF", 0.66f, 0.247f, 0.009f, 0.395f, CatchApproach.Still),
+            new("AA_Baseball_Defender_1st_baseman_Catching", 0.40f, 1.070f, -0.427f, 0.721f, CatchApproach.Still),
+            new("AA_Baseball_Defender_3rd_baseman_Catching", 0.46f, 1.088f, -0.689f, 0.343f, CatchApproach.Still),
+            new("AA_Baseball_Defender_Catching_TypeR", 0.44f, 1.225f, -0.398f, 0.729f, CatchApproach.Still),
+            new("AA_Baseball_Defender_Catching_TypeL", 0.48f, 1.262f, -0.703f, 0.405f, CatchApproach.Still),
+            new("AA_Baseball_Defender_Catching_Jumping_Catch", 1.08f, 1.665f, 0.035f, 0.150f, CatchApproach.Still),
+            new("AA_Baseball_Defender_Catching_TypeU", 1.00f, 1.738f, -0.148f, 0.048f, CatchApproach.Still),
+            // 前へ走り込む
+            new("AA_Baseball_Defender_Movement_Run_To_Catching_Type02", 0.78f, 0.258f, -0.020f, 0.360f, CatchApproach.Forward),
+            new("AA_Baseball_Defender_Movement_Run_To_Catching_Type01", 0.72f, 1.548f, -0.207f, 0.071f, CatchApproach.Forward),
+            // 後ろへ下がる（低い球で下がる収録は無いので1本）
+            new("AA_Baseball_Defender_Movement_Run_Back_To_Catching", 1.04f, 1.495f, -0.080f, 0.344f, CatchApproach.Back),
+            // 左右
+            new("AA_Baseball_Defender_Movement_Shuffle_L_Catching", 0.38f, 0.254f, -0.294f, 0.455f, CatchApproach.Left),
+            new("AA_Baseball_Defender_Movement_Run_L90_To_Catching_Type01", 0.70f, 1.594f, -0.226f, 0.204f, CatchApproach.Left),
+            new("AA_Baseball_Defender_Movement_Shuffle_R_Catching", 0.86f, 0.195f, -0.392f, 0.486f, CatchApproach.Right),
+            new("AA_Baseball_Defender_Movement_Run_R90_To_Catching_Type01", 0.80f, 1.501f, -0.374f, 0.282f, CatchApproach.Right),
+        };
+
+        /// <summary>
+        /// 近づき方を切り替える速さ[m/s]。これ未満は「その場」。
+        /// <see cref="FielderIdleSpeedMps"/> と別に持つのは、走りの段の切替と捕球クリップの選択が
+        /// **同じ閾値である必要はない**ため（歩き程度で近づくならその場の捕球で足りる）。
+        /// </summary>
+        private const float CatchApproachSpeedMps = 1.2f;
+
+        // 捕手の <c>CatchSelectionBias</c>（帯の境目でクリップが上下に飛ぶのを止める下駄）に当たるものは
+        // ここには要らない。捕手は毎球コースから選び直すが、野手の選択は**再生前に1回だけ**なので
+        // 揺れようがない。予定表にした副作用として、この種のチャタリングが構造的に消えている。
+
+        /// <summary>捕った形を見せる据え置き[s]（打ち切りには必ず据え置きを添える＝design-18 §4.5-⑭）。</summary>
+        private const float CatchHoldSeconds = 0.35f;
+
+        /// <summary>
+        /// 捕球クリップを選ぶ**純関数**（乱数を引かない＝同じプレーは常に同じ絵）。
+        /// 主軸は球の高さ、副軸は近づき方。残差はグラブIKが詰めるので、ここは「系統が合っていれば良い」。
+        /// </summary>
+        private static int SelectFieldCatch(float ballHeightM, CatchApproach approach)
+        {
+            int best = -1;
+            float bestErr = float.MaxValue;
+            for (int i = 0; i < FieldCatchAnchors.Length; i++)
+            {
+                var c = FieldCatchAnchors[i];
+                // 近づき方が合わないものは高さが近くても選ばない（合う収録が無ければ後で「その場」へ落とす）
+                if (c.Approach != approach) continue;
+                float err = Mathf.Abs(c.GloveY - ballHeightM);
+                if (err < bestErr) { bestErr = err; best = i; }
+            }
+            if (best >= 0) return best;
+
+            // その近づき方の収録が無い（＝後ろへ下がる低い球など）。その場の系統から高さで選ぶ
+            for (int i = 0; i < FieldCatchAnchors.Length; i++)
+            {
+                if (FieldCatchAnchors[i].Approach != CatchApproach.Still) continue;
+                float err = Mathf.Abs(FieldCatchAnchors[i].GloveY - ballHeightM);
+                if (err < bestErr) { bestErr = err; best = i; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// 捕球の予定。**再生前に全部組む**（毎コマ「いま捕るか」を判定しない）＝
+        /// どの時刻から再生を始めても同じ絵になり、12fpsの位相で漏れることもない（design-18 §4.5-⑩）。
+        /// </summary>
+        private struct FieldCatchEvent
+        {
+            public FieldPosition Pos;
+            public float TCatch;      // 球が着く時刻（プレーの時計）
+            public float TStart;      // クリップを始める時刻＝TCatch − Moment（負なら頭を捨てて始める）
+            public int Anchor;
+            public Vector3 Point;     // 捕球点（**予定時に1回だけ確定**。毎コマ球を追わない）
+            public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
+            public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
+            public float PulledM;     // 捕球点を engine の終点から手前へ寄せた量[m]（表示だけの嘘の大きさ）
+            public bool Fired;
+        }
+
+        private readonly List<FieldCatchEvent> _catchEvents = new();
+
+        /// <summary>捕球点と実際のグラブの差の最悪値（受け入れの実測）。</summary>
+        private float _catchGloveErrMax;
+        private int _catchCount;
+
+        /// <summary>
+        /// このプレーの捕球を全部洗い出して予定表にする。
+        ///
+        /// engine には「誰が捕るか」が無い（送球の投げ手・受け手は seam E1 で足す予定）ので、
+        /// **滞空・転がり・バウンドの終点に一番近い野手**を捕り手とみなす。打球の終点は
+        /// 必ず誰かが処理する点なので、この推定は打球については素直に当たる
+        /// （取り違えが起きるのは同時刻に複数人が近い送球＝併殺で、そこは E1 を入れてから）。
+        /// </summary>
+        private void BuildFieldCatchPlan(PlaybackPlay play)
+        {
+            _catchEvents.Clear();
+            _catchGloveErrMax = 0f;
+            _catchCount = 0;
+            if (play == null || play.Ball == null) return;
+
+            foreach (var seg in play.Ball)
+            {
+                // engine 実出力（EndpointBallSegment＋Kind）と、2D俯瞰の忠実移植モデル
+                // （ArcSegment/RollSegment の固定4型）の両方を拾う（#258 と同じ二重対応）
+                var eb = seg as EndpointBallSegment;
+                if (eb != null)
+                {
+                    if (eb.Kind != BallSegmentKind.Flight && eb.Kind != BallSegmentKind.Roll
+                        && eb.Kind != BallSegmentKind.Bounce) continue;
+                }
+                else if (!(seg is ArcSegment) && !(seg is RollSegment)) continue;
+
+                float tc = (float)seg.T1;
+                var end = seg.At(seg.T1 - seg.T0);
+
+                // 終点に一番近い野手。誰も居なければ（フェンス際・本塁打）捕球ではない
+                FieldPosition who = FieldPosition.Pitcher;
+                float bestD = float.MaxValue;
+                foreach (var pos in AllFieldPositions)
+                {
+                    var p = PlaybackEvaluator.FielderAt(play, pos, tc).Pos;
+                    float d = new Vector2((float)(p.X - end.X), (float)(p.Y - end.Y)).magnitude;
+                    if (d < bestD) { bestD = d; who = pos; }
+                }
+                if (bestD > CatchOwnerRadiusM) continue;
+
+                // 近づき方は**クリップが始まる少し前**の速度で決める（捕る瞬間は easeIO で0に落ちている）
+                var app = ApproachAt(play, who, tc - 0.4f, end);
+                float h = CatchHeightFor(eb != null ? eb.Kind
+                    : (seg is RollSegment ? BallSegmentKind.Roll : BallSegmentKind.Flight));
+                int anchor = SelectFieldCatch(h, app);
+                if (anchor < 0) continue;
+
+                // 次のセグメントが始まるまでは球を捕球点に留める（engine の保持位置は高さ0のため）
+                float holdUntil = (float)play.Dur;
+                foreach (var nxt in play.Ball)
+                    if (nxt.T0 >= seg.T1 - 1e-4 && nxt.T0 < holdUntil) holdUntil = (float)nxt.T0;
+
+                // 捕球点を**グラブの届く距離まで**引き寄せる。腕は肩から0.55mしかないので、
+                // 野手と球が離れている場面（モックの実測で 0.51m）では IK が伸び切っても届かず、
+                // 「グラブの横で球が止まる」絵になる。寄せる量は engine の終点との差だけで、
+                // 水平の嘘は最大でも「離れていた距離 − グラブの届く距離」に収まる
+                // （打点を投手側へ ContactAheadM だけ出す既存の作法と同型。判定面は動かさない）。
+                var an = FieldCatchAnchors[anchor];
+                float reach = new Vector2(an.GloveX, an.GloveZ).magnitude;
+                var fp = PlaybackEvaluator.FielderAt(play, who, tc).Pos;
+                var gap = new Vector2((float)(end.X - fp.X), (float)(end.Y - fp.Y));
+                var pt = new Vector3((float)end.X, h, (float)end.Y);
+                float pulled = 0f;
+                if (gap.magnitude > reach && reach > 0.01f)
+                {
+                    var g2 = new Vector2((float)fp.X, (float)fp.Y) + gap.normalized * reach;
+                    pulled = (new Vector2(pt.x, pt.z) - g2).magnitude;
+                    pt = new Vector3(g2.x, h, g2.y);
+                }
+
+                _catchEvents.Add(new FieldCatchEvent
+                {
+                    Pos = who,
+                    TCatch = tc,
+                    TStart = tc - FieldCatchAnchors[anchor].Moment,
+                    Anchor = anchor,
+                    Point = pt,
+                    HoldUntil = holdUntil,
+                    FielderGapM = bestD,
+                    PulledM = pulled,
+                });
+            }
+        }
+
+        /// <summary>終点からこれ以上離れていたら「誰も捕っていない」[m]。</summary>
+        private const float CatchOwnerRadiusM = 2.5f;
+
+        /// <summary>
+        /// 捕球の高さ[m]。**engine のタイムラインは「その球がどの高さで捕られたか」を持たない**。
+        ///
+        /// 実測（2026-08-01）:
+        ///   実出力（<c>EndpointBallSegment</c>）の滞空は <c>apex·4u(1−u)</c> ＝ **端点で必ず 0** ＝
+        ///     フライを地面で捕ることになる
+        ///   モック（<c>PlaybackSamples</c>）の <c>ArcSegment</c> は authored な tEnd で切るので
+        ///     逆に **3.02m** で終わる＝身長1.75mでは跳んでも届かない
+        /// どちらも「捕球の高さ」ではない。2D俯瞰は高さを描かないので表に出ていなかった。
+        ///
+        /// 3Dでは**種別から決める**。ここが <b>球の描画位置・グラブIKの狙点・捕球クリップの選択</b> の
+        /// 3つを出す唯一の値になる（別々に持つとずれる＝design-18 §4.5-⑨ と同じ掟）。
+        /// 水平（XZ）は engine の真値のまま。動かすのは高さだけ。
+        /// </summary>
+        private static float CatchHeightFor(BallSegmentKind kind)
+        {
+            switch (kind)
+            {
+                case BallSegmentKind.Roll: return 0.25f;    // ゴロを捕る＝低い構え
+                case BallSegmentKind.Bounce: return 0.85f;  // 弾んだ球＝腰
+                default: return 1.40f;                      // 滞空を捕る＝胸から顔の高さ
+            }
+        }
+
+        /// <summary>捕球点へ球を寄せ始める時間[s]（捕球の手前）。</summary>
+        private const float CatchBallBlendSeconds = 0.30f;
+
+        /// <summary>時刻 t での近づき方（球へ向かって走っているか・横か・後ろか）。</summary>
+        private static CatchApproach ApproachAt(PlaybackPlay play, FieldPosition pos, float t, PlaybackBall end)
+        {
+            float ta = Mathf.Max(0f, t - LocoSampleDt), tb = t + LocoSampleDt;
+            var pa = PlaybackEvaluator.FielderAt(play, pos, ta).Pos;
+            var pb = PlaybackEvaluator.FielderAt(play, pos, tb).Pos;
+            var v = new Vector2((float)(pb.X - pa.X), (float)(pb.Y - pa.Y)) / Mathf.Max(1e-4f, tb - ta);
+            if (v.magnitude < CatchApproachSpeedMps) return CatchApproach.Still;
+
+            var here = PlaybackEvaluator.FielderAt(play, pos, t).Pos;
+            var toBall = new Vector2((float)(end.X - here.X), (float)(end.Y - here.Y));
+            if (toBall.sqrMagnitude < 1e-6f) return CatchApproach.Still;
+            float ang = Vector2.SignedAngle(v.normalized, toBall.normalized);
+            if (Mathf.Abs(ang) < 45f) return CatchApproach.Forward;
+            if (Mathf.Abs(ang) > 135f) return CatchApproach.Back;
+            // Vector2.SignedAngle は反時計回りが正。フィールドの (x,z) では正＝球が左手側
+            return ang > 0f ? CatchApproach.Left : CatchApproach.Right;
+        }
+
+        /// <summary>
+        /// 予定の時刻が来た捕球クリップを流す。**絶対時刻で判定する**（カウントダウンを持たない）＝
+        /// 途中の時刻から再生を始めても同じ絵になる。頭出しは <c>t − TStart</c> ぶん。
+        /// </summary>
+        private void FireDueCatches(float t)
+        {
+            for (int i = 0; i < _catchEvents.Count; i++)
+            {
+                var e = _catchEvents[i];
+                if (e.Fired || t < e.TStart) continue;
+                var a = FielderActor(e.Pos);
+                var clip = LoadClip(FieldCatchAnchors[e.Anchor].Clip);
+                if (a != null && clip != null)
+                {
+                    // ⚠ 頭出しは Max(0,…) で潰さない。TStart が未来なら**まだ来ていない**ので
+                    //    上の t < TStart で降りており、ここへ来る時点で t − TStart ≥ 0 が保証されている
+                    SetActorClip(a, clip, t - e.TStart, 0f);
+                    a.Speed = 1f;                       // 走りの倍率を持ち越さない
+                    a.HoldSeconds = CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
+                    FielderMotion st;
+                    if (_loco.TryGetValue(e.Pos, out st))
+                    {
+                        st.Ladder = int.MinValue;       // 走りの段の管理から外す（クリップを奪わせない）
+                        st.CatchUntil = e.TCatch + CatchHoldSeconds;
+                        st.CatchEvent = i;
+                        // **グラブが球の来る方を向くように体を回す**。走る向きを速度ベクトルへ
+                        // 合わせたのと同じ考え方で、今度は合わせる対象がグラブになる。
+                        // これが無いと、腕（肩から0.55m）では届かない所へ球があるまま IK が伸び切る
+                        // （実測: 野手と球が 0.51m 離れた場面で残差 0.48m）。
+                        // 真上で捕る系は水平のオフセットが小さく向きが決まらないので触らない
+                        var an = FieldCatchAnchors[e.Anchor];
+                        var gh = new Vector2(an.GloveX, an.GloveZ);
+                        if (gh.magnitude > 0.15f)
+                        {
+                            var here = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, e.TCatch).Pos;
+                            var toBall = new Vector2(e.Point.x - (float)here.X, e.Point.z - (float)here.Y);
+                            if (toBall.sqrMagnitude > 1e-6f)
+                                st.Yaw = Mathf.Atan2(toBall.x, toBall.y) * Mathf.Rad2Deg
+                                         - Mathf.Atan2(gh.x, gh.y) * Mathf.Rad2Deg;
+                        }
+                        _loco[e.Pos] = st;
+                        PlaceFielder(a, (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.X,
+                            (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.Y, st.Yaw);
+                    }
+                }
+                e.Fired = true;
+                _catchEvents[i] = e;
+            }
+        }
+
+        /// <summary>
+        /// 捕球の前後だけグラブを球へ寄せる（捕手の <c>FixCatcherPose</c> と同型）。
+        ///
+        /// ⚠ **ポーズを評価した直後だけ**当てる。重み&lt;1 は「今の手の位置からの補間」なので、
+        /// 同じポーズに二度当てると寄りすぎる。12fps のコマが進んだ回だけ呼ぶこと。
+        /// ⚠ 狙点は予定時に確定した1点で、毎コマ球を追わない（12fpsで球は1コマ3m進む）。
+        /// </summary>
+        private void FixFielderCatchPose(float t)
+        {
+            foreach (var kv in _loco)
+            {
+                var st = kv.Value;
+                if (st.CatchEvent < 0 || st.CatchEvent >= _catchEvents.Count) continue;
+                var e = _catchEvents[st.CatchEvent];
+                float w = DuelCatcherPose.Weight(t, e.TCatch);
+                if (w <= 0f) continue;
+                var a = FielderActor(kv.Key);
+                if (a == null || a.Animator == null) continue;
+                DuelCatcherPose.ReachMitt(a.Animator, _root.transform.TransformPoint(e.Point), w);
+
+                // ⚠ 測るのは**ミット中心**（手首→中指付け根の中点）。手ボーンの原点は手首なので、
+                //    そこで測ると常にミットの厚みぶん外れた値が出る（捕手の受け入れと同じ単一ソース）
+                // 計測は**捕球の直前のコマだけ**。捕球の後は重みが release で落ちていく途中なので、
+                // その区間を混ぜると「IK が外れていく過程」を受け入れ値として拾ってしまう
+                if (t <= e.TCatch + 1e-4f && t > e.TCatch - 1f / PoseFps)
+                {
+                    float d = Vector3.Distance(DuelCatcherPose.MittCenter(a.Animator),
+                        _root.transform.TransformPoint(e.Point));
+                    _catchGloveErrMax = Mathf.Max(_catchGloveErrMax, d);
+                    _catchCount++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】捕球の受け入れ実測。グラブ（手ボーン）と捕球点の距離。
+        /// 捕手の実績は 0.007〜0.039m。**絵ではカメラの狙い外しと区別できない**ので実測で採る。
+        /// </summary>
+        public string FieldCatchDiagForCapture()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("捕球予定=" + _catchEvents.Count + "件\tグラブ→球の最悪="
+                + _catchGloveErrMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
+                + "m\t計測コマ=" + _catchCount);
+            sb.AppendLine("pos\ttCatch\ttStart\tcatchH\t野手との距離\t寄せた量\tclip");
+            foreach (var e in _catchEvents)
+                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F2}\t{6}", e.Pos, e.TCatch, e.TStart,
+                    e.Point.y, e.FielderGapM, e.PulledM,
+                    FieldCatchAnchors[e.Anchor].Clip.Replace("AA_Baseball_Defender_", "")));
+            return sb.ToString();
+        }
 
         /// <summary>その役の本来の待機クリップ（走行中は <c>IdleClip</c> が差し替わっているため別に持つ）。</summary>
         private AnimationClip IdleClipFor(FieldPosition pos)
@@ -771,6 +1161,7 @@ namespace KokoSim.Unity.Match
         private PlaybackPlay _fieldPlay;
         private float _fieldT;
         private float _fieldT0;
+        private int _fieldPoseGen = -1;
 
         /// <summary>
         /// 打球プレー中だけ差し替える投手・捕手の状態。対決の状態機械（セット姿勢で待つ・
@@ -819,10 +1210,12 @@ namespace KokoSim.Unity.Match
                 _loco[pos] = new FielderMotion
                 {
                     Ladder = -1,
+                    CatchEvent = -1,
                     Entry = new Vector2(lp.x - (float)want.Pos.X, lp.z - (float)want.Pos.Y),
                 };
             }
 
+            BuildFieldCatchPlan(play);
             BuildFieldCameraPlan(play);
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
             _fieldT = t0;
@@ -836,6 +1229,7 @@ namespace KokoSim.Unity.Match
             _fieldPlan = null;
             _fieldStationCuts.Clear();
             _loco.Clear();
+            _catchEvents.Clear();
             // 走行クリップのまま伏せると、次の打席の頭で走っている投手が出る
             Restore(_pitcher, _pitcherSnap);
             Restore(_catcher, _catcherSnap);
@@ -895,9 +1289,20 @@ namespace KokoSim.Unity.Match
             float dt = t - _fieldT;
             _fieldT = t;
 
+            // 捕球の予定は**位置を置く前**に発火させる（クリップ差し替えは頭出しで位置を動かすため）
+            FireDueCatches(t);
+
             // 守備9人（投手・捕手を含む）。位置は engine の真値、足と向きは Unity が合わせる
             foreach (var pos in AllFieldPositions)
                 StepFielderMotion(pos, FielderActor(pos), t, dt);
+
+            // グラブを球へ寄せるのは**ポーズが進んだ回だけ**。毎フレーム当てると、同じポーズに
+            // 二度当たって寄りすぎる（重み<1 は今の手の位置からの補間だから。design-18 §4.5-③）
+            if (_poseGen != _fieldPoseGen)
+            {
+                _fieldPoseGen = _poseGen;
+                FixFielderCatchPose(t);
+            }
 
             // ボール
             var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
@@ -906,8 +1311,8 @@ namespace KokoSim.Unity.Match
                 if (ball.HasValue)
                 {
                     _ball.transform.SetParent(_root.transform, false);
-                    _ball.transform.localPosition =
-                        new Vector3((float)ball.Value.X, (float)ball.Value.H, (float)ball.Value.Y);
+                    _ball.transform.localPosition = BlendToCatchPoint(
+                        new Vector3((float)ball.Value.X, (float)ball.Value.H, (float)ball.Value.Y), t);
                     _ball.SetActive(true);
                 }
                 else
@@ -918,6 +1323,28 @@ namespace KokoSim.Unity.Match
 
             ApplyFieldCamera(t);
             if (_ball != null && _ball.activeSelf) ApplyBallReadability();
+        }
+
+        /// <summary>
+        /// 捕球の直前から保持の終わりまで、球を**捕球点**へ寄せる。
+        ///
+        /// グラブの狙点と球の描画位置が別々だと、寄せたグラブの横で球が地面へ落ちる
+        /// （engine の滞空は端点で高さ0へ戻るため）。**同じ1つの値から出す**のが掟
+        /// （design-18 §4.5-⑨ の「投球の終わり・打球の始まり・バットの狙点」と同型）。
+        /// 動かすのは**高さだけ**で、水平は engine の真値のまま＝判定にも帯にも触れない。
+        /// </summary>
+        private Vector3 BlendToCatchPoint(Vector3 enginePos, float t)
+        {
+            for (int i = 0; i < _catchEvents.Count; i++)
+            {
+                var e = _catchEvents[i];
+                if (t > e.HoldUntil) continue;
+                if (t >= e.TCatch) return e.Point;                     // 捕ってから次の区間まではグラブの中
+                if (t < e.TCatch - CatchBallBlendSeconds) continue;
+                float u = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
+                return Vector3.Lerp(enginePos, e.Point, u * u * (3f - 2f * u));
+            }
+            return enginePos;
         }
 
         /// <summary>

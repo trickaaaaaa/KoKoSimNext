@@ -1523,6 +1523,123 @@ namespace KokoSim.EditorTools
         [UnityEditor.MenuItem("KokoSim/Duel/F4 走行クリップを実測する")]
         private static void RunLocomotionProbeMenu() => RunLocomotionProbe();
 
+        /// <summary>
+        /// 野手の捕球クリップの**捕球の瞬間**と**グラブの位置**を実測する（打球処理の3D化 F5）。
+        ///
+        /// 捕手で確立した三点セット（アンカー表＋開始予約＋短時間IK）を野手へ広げるための表を焼く。
+        /// ⚠ **捕球の瞬間の定義はクリップごとに違う**（design-18 §4.5-③）。捕手ですら2種あった:
+        ///   ・構えて待つクリップ ＝ 球が当たった衝撃で引かれる＝**引き始め**
+        ///   ・ミットを運ぶクリップ ＝ 的へ運び終わって速度が落ちる点＝**運び終わり**
+        /// 野手はこれに**伸び切り**（ダイブ・ジャンプ）が加わる。一律の式で出すと
+        /// 「捕ってから球が着く」が起きるので、判定材料を全部出して1本ずつ決める。
+        ///
+        /// 判定材料は**構えからグラブがどれだけ動いたか**（disp）で採る。
+        /// ⚠ 「腰→グラブの距離」で測ってはいけない: 腕を下ろした構えも前へ伸ばした捕球姿勢も
+        /// 同じ 0.56m になり、区別がつかない（2026-08-01 実測で <c>Catching_TypeF</c> が
+        /// 「最初から最大＝構えて待つ系」と誤判定された）。方向が変わるだけで距離は変わらない。
+        ///
+        /// 出す量:
+        ///   dispMax/tDisp … 構えからの移動量の最大とその時刻（＝運び終わり／伸び切り＝捕球の候補）
+        ///   tPeak         … グラブの速さのピーク（引き始め系なら捕球はこの直後）
+        ///   gy            … その瞬間のグラブの**足元からの高さ**[m]。選択の主軸（球の高さと突き合わせる）
+        ///   gx/gz         … 同じ瞬間の横/前（腰基準・体の向きを軸に取る）
+        /// </summary>
+        public static string RunFielderCatchProbe()
+        {
+            var names = new[]
+            {
+                // 構えて待つ系（その場で捕る）
+                "Defender_Catching_TypeF", "Defender_Catching_TypeL",
+                "Defender_Catching_TypeR", "Defender_Catching_TypeU",
+                "Defender_1st_baseman_Catching", "Defender_3rd_baseman_Catching",
+                "Defender_Catched_Type01", "Defender_Catched_Type02",
+                "Defender_Catched_Type03", "Defender_Catched_Type04",
+                // 運ぶ系（走り込み・横っ跳び）
+                "Defender_Movement_Run_To_Catching_Type01", "Defender_Movement_Run_To_Catching_Type02",
+                "Defender_Movement_Run_Back_To_Catching",
+                "Defender_Movement_Run_L90_To_Catching_Type01", "Defender_Movement_Run_L90_To_Catching_Type02",
+                "Defender_Movement_Run_R90_To_Catching_Type01", "Defender_Movement_Run_R90_To_Catching_Type02",
+                "Defender_Movement_Shuffle_L_Catching", "Defender_Movement_Shuffle_R_Catching",
+                // 伸び切り系
+                "Defender_Catching_Jumping_Catch", "Defender_Movement_Run_Back_To_Jumping_Catch",
+                "Defender_Movement_Sprint_Diving_Catch", "Defender_Movement_Sprint_Sliding_Catch",
+            };
+            const float dt = 0.02f;
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\tdispMax\ttDisp\ttPeak\tvPeak\tgy\tgx\tgz");
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    var loc = new Vector3[n + 1];   // 腰基準（右/上/前）
+                    var footY = new float[n + 1];   // 足元の高さ（グラブの対地高を出すため）
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "catch", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var hips = anim.GetBoneTransform(HumanBodyBones.Hips).position;
+                        var glove = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                        var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                        var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        var fwd = Vector3.Cross(ra - la, Vector3.up); fwd.y = 0f; fwd.Normalize();
+                        var right = Vector3.Cross(Vector3.up, fwd);
+                        var d = glove - hips;
+                        // 体の向きを軸に取り直す＝**その場の yaw に依らない表**になる
+                        loc[i] = new Vector3(Vector3.Dot(d, right), d.y, Vector3.Dot(d, fwd));
+                        footY[i] = glove.y - Mathf.Min(lf.y, rf.y);
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iDisp = 0, iPeak = 0;
+                    float dispMax = 0f, vPeak = 0f;
+                    for (int i = 1; i <= n; i++)
+                    {
+                        float disp = (loc[i] - loc[0]).magnitude;
+                        if (disp > dispMax) { dispMax = disp; iDisp = i; }
+                        float v = (loc[i] - loc[i - 1]).magnitude / dt;
+                        if (v > vPeak) { vPeak = v; iPeak = i; }
+                    }
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F3}\t{7:F3}\t{8:F3}",
+                        shortName, clip.length, dispMax, iDisp * dt, iPeak * dt, vPeak,
+                        footY[iDisp], loc[iDisp].x, loc[iDisp].z));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/fieldcatch.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] fielder catch probe -> out/duel-stage/fieldcatch.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F5 野手の捕球クリップを実測する")]
+        private static void RunFielderCatchProbeMenu() => RunFielderCatchProbe();
+
         private static AnimationClip FindClip(string clipName)
         {
             // 供給元は本番リグと同じ入口（自作Assets/Motions → 購入Assets/Animoの順）で引く。
