@@ -46,10 +46,38 @@ namespace KokoSim.UnityEditorTools
                 Directory.CreateDirectory(Dir);
                 rig.EnsureSize(W, H);
 
+                // ⚠ 撮影順は「対決構図 → 全景」の一方通行にする。
+                //   ClearPreviewFrame() が戻すのは**画角だけ**で、FramePreview が動かした
+                //   カメラの位置・向きは戻らない（全景の位置から望遠で撮る絵になり、
+                //   duel-defense が画面の56%も違った。2026-08-01 実害）。
+                //   対決構図へ戻す公開APIが無いので、対決の絵は全部先に撮り切る。
+
                 rig.RenderNow();
                 Write(rig.Target, "duel");
 
+                // ---- F2: 守備9人 ----
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                rig.EnsureFieldCast();
+                sw.Stop();
+                rig.SetFieldCastVisible(true);
+                rig.PlaceFieldCastAtDefault();
+
+                // 対決構図のまま撮る＝望遠2.9°では野手はフレーム外のはず（打席中に伏せる根拠の裏取り）
+                rig.RenderNow();
+                Write(rig.Target, "duel-defense");
+
+                // ---- 全景（ここから先はカメラが戻らない） ----
                 rig.FramePreview(WideCam, WideAim, WideFrameHeightM);
+                rig.RenderNow();
+                Write(rig.Target, "wide-defense");
+
+                // 実測は全景カメラで採る（px列は「この構図で人が何pxか」＝絵の判断に直結する数）
+                var diag = rig.FielderDiagForCapture();
+                File.WriteAllText(Path.Combine(Dir, "fielder-diag.tsv"), diag);
+                Debug.Log("[F1Shot] 守備7人のスポーン " + sw.ElapsedMilliseconds + "ms / px は全景("
+                    + WideFrameHeightM + "m)での実測\n" + diag);
+
+                rig.SetFieldCastVisible(false);
                 rig.RenderNow();
                 Write(rig.Target, "wide");
 

@@ -1354,6 +1354,70 @@ namespace KokoSim.EditorTools
             body.transform.position += new Vector3(0f, (groundY + ankle) - footY, 0f);
         }
 
+        /// <summary>
+        /// 守備・走塁クリップの**素の胸の向き**実測（打球処理の3D化 F2〜）。
+        ///
+        /// <see cref="RunFacingProbe"/> は対決4体むけに「狙いの向き」を job ごとに固定して
+        /// 必要yawを直接返すが、野手は**立ち位置ごとに向く先が違う**（全員が本塁を向く＝
+        /// 一塁手と左翼手では世界向きが90°違う）。そこで狙いを取らず**素の向きだけ**を返し、
+        /// 使う側が `yaw = SignedAngle(素の向き, その野手の向くべき向き)` で組む。
+        ///
+        /// ⚠ 素の向きはクリップごとに違う（投手だけローカル−X、他は+Z等）。新クリップを足したら
+        /// 必ずここへ1行足して実測してから yaw を決める（design-18 §7-3 の掟）。
+        /// ⚠ 途中で向きが変わる芝居（捕逸・送球）は**入りの構えで測る**＝normTime は小さく取る。
+        /// </summary>
+        public static string RunFielderFacingProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var clips = new[]
+                {
+                    "AA_Baseball_Defender_Standing_Idle_Loop_Type01",
+                    "AA_Baseball_Defender_Crouch_Idle_Loop_Type01",
+                    "AA_Baseball_Offense_Crouch_Idle_Loop_Type01",
+                };
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tchestX\tchestZ\thipsX\thipsZ\tyawTo-Z\tlen");
+                foreach (var name in clips)
+                {
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(name + "\t(クリップが無い)"); continue; }
+                    var body = SpawnBody(root, "probe-" + name, Vector3.zero, 0f, Color.white);
+                    Sample(body, clip, 0.10f);   // 入りの構えで測る
+                    var anim = body.GetComponentInChildren<Animator>();
+                    var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                    var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                    var facing = Vector3.Cross(ra - la, Vector3.up);
+                    facing.y = 0f; facing.Normalize();
+                    var hips = anim.GetBoneTransform(HumanBodyBones.Hips).rotation * Vector3.forward;
+                    hips.y = 0f; hips.Normalize();
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F3}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F1}\t{6:F2}",
+                        name, facing.x, facing.z, hips.x, hips.z,
+                        Vector3.SignedAngle(facing, new Vector3(0f, 0f, -1f), Vector3.up), clip.length));
+                    Object.DestroyImmediate(body);
+                }
+                Debug.Log("[DuelMotionSpike] fielder facing probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
         private static AnimationClip FindClip(string clipName)
         {
             // 供給元は本番リグと同じ入口（自作Assets/Motions → 購入Assets/Animoの順）で引く。
