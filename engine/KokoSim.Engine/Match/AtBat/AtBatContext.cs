@@ -35,6 +35,13 @@ public sealed record AtBatContext
     public bool TakeFirstPitch { get; init; }
 
     /// <summary>
+    /// 打撃姿勢「待球策」（<see cref="Tactics.BattingApproach.WorkCount"/>）のスイング頻度倍率。
+    /// 既定 1.0 は恒等。<see cref="Batting.BatterDecision"/> の確率にだけ掛かり、乱数の消費順は変えない
+    /// （<c>Chance</c> は確率値によらず必ず1回引く）＝1.0 のあいだ結果はビット単位で従来どおり。
+    /// </summary>
+    public double SwingProbabilityFactor { get; init; } = 1.0;
+
+    /// <summary>
     /// 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 真なら最初の <see cref="AtBat.AtBatSession.ThrowNextPitch"/>
     /// で投球ループ自体をスキップし、投球数0・RNG非消費のまま四球確定する（2026年ベースライン＝常時申告制）。
     /// </summary>

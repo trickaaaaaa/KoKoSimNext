@@ -39,12 +39,14 @@ namespace KokoSim.Unity.Shell
             TournamentMatchContext? context = null)
         {
             // Resolve と同一の teams＋同一Fork＋同一 mercyRuleEnabled+context で組む（相手＝校ID固定生成, rng.Fork(2)=試合）。
-            // 唯一の差は CaptureTimelines=true（観戦用タイムライン）。これは RNG 中立なので、
-            // 全打席を進めた結果は Resolve のボックススコアと一致する＝観戦しても大会結果は変わらない。
+            // 唯一の差は観測ゲート（CaptureTimelines=観戦用タイムライン／CapturePitches=1球進行の供給口,
+            // 設計書15 §8）。いずれも RNG 中立なので、全打席を進めた結果は Resolve のボックススコアと
+            // 一致する＝観戦しても大会結果は変わらない。
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var ctx = Rules.ApplyTo(
-                new GameContext { CaptureTimelines = true, MercyRuleEnabled = mercyRuleEnabled }, CalendarYear());
+                new GameContext { CaptureTimelines = true, CapturePitches = true, MercyRuleEnabled = mercyRuleEnabled },
+                CalendarYear());
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
             // 大会フローの実試合にもデバッグHUDの観測を差し込む（設計書17 §5/§12.4, #95）。HUDが閉じていれば
             // AttachTo は恒等（Enabled==false→ctxをそのまま返す）＝観戦の有無で大会結果が変わらない契約

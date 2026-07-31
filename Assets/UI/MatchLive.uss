@@ -43,6 +43,14 @@
 .mlive-lineup { flex-direction: column; flex-shrink: 0; }
 .mlive-pitcher-host { flex-shrink: 0; }
 
+/* 采配カードの帯。盤面の直下に置き、ホバーで持ち上がったカードは盤面側へはみ出してよい
+   （盤面より後ろの兄弟なので上に描かれる）。高さは中身の TacticsCardDeck が決める。 */
+.tcards-host {
+    flex-shrink: 0;
+    align-items: center;
+    margin-bottom: var(--sp-1);
+}
+
 /* ── 中央: 盤面ラッパ（列内を使い切る・HUDを絶対配置で重畳） ── */
 .mlive-field-wrap {
     position: relative;
@@ -71,7 +79,7 @@
 }
 
 /* 下部スタック（1球指示帯・実況履歴・実況バー・伝令残数）は issue #289 で撤去済み。
-   1球指示は盤面内の SignPad（components.uss の .signpad*）へ、タイム系操作は pause-modal へ移した。
+   1球指示は盤面直下の采配カード（components.uss の .tcard*）へ、タイム系操作は pause-modal へ移した。
    実況ログはロジックのみ存続（MatchLiveController._capHist）＝描画スタイルは持たない。 */
 
 /* ── クリック中断ポップアップ（issue #289・案P1） ──

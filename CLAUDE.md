@@ -252,6 +252,7 @@ dotnet run --project engine/KokoSim.Balance -- \
 | 強さティア | Tier (G..S) | 学校属性 |
 | プレッシャー指数 | PressureIndex | 設計書02 §3。PressureModel が算出 |
 | 攻撃サイン | OffensiveSign | 強攻/待て/バント/スクイズ/盗塁/エンドラン/バスター（設計書09 §1） |
+| 打撃姿勢 | BattingApproach | 待球策/転がせ/長打狙い/当てに行け。サインと違い**解除するまで続く構え**。効果は実効能力の倍率とスイング頻度の倍率だけ（設計書09 §1.1） |
 | 守備指示 / 配球方針 | DefensiveTactics / PitchPolicy | 陣形は初期守備位置へ反映（設計書09 §2） |
 | 采配の入口 | ITacticsBrain | プレイヤー・委任・敵AI共通（設計書09/11） |
 | 伝令 | Timeout (Offense/Defense) | 攻守各3回・延長は毎回+1（設計書09 §3） |

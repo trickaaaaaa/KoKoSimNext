@@ -118,6 +118,25 @@ public sealed class MatchProgressionTests
         Assert.True(result.AwayRuns >= 0 && result.HomeRuns >= 0);
     }
 
+    // (PlayLog seam) 確定済み打席の記録が Advance のたびに1件ずつ増え、確定打席数と常に一致する。
+    // 打者HUD「本日の打撃成績」の略記列は UI がこの読み取り専用 seam から引く（観測専用・帯不変）。
+    [Fact]
+    public void PlayLog_CountMatchesConfirmedPlateAppearances()
+    {
+        var prog = new MatchProgression(Team("A", true), Team("H", true), new GameContext(), 7UL);
+        Assert.Empty(prog.PlayLog);
+
+        var confirmed = 0;
+        for (var i = 0; i < 10 && prog.Advance(); i++)
+        {
+            confirmed++;
+            Assert.Equal(confirmed, prog.PlayLog.Count);
+            // 末尾のエントリは今表示中の打席と同一（結果が一致）。
+            Assert.Equal(prog.Current!.Result, prog.PlayLog[^1].Result);
+        }
+        Assert.Equal(10, confirmed); // 試合序盤の10打席は必ず存在する
+    }
+
     // (代打) 7回に代打→以降の打席にその代打が現れる（采配がエンジンに届く）。
     [Fact]
     public void PinchHitInSeventh_AppearsInSubsequentPlateAppearances()

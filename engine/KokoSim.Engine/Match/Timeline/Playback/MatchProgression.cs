@@ -457,6 +457,52 @@ public sealed class MatchProgression
             Policy: policy, Gear: gear, PitchIndex: PendingPitchIndex));
     }
 
+    /// <summary>
+    /// 采配カード（2026-07-31）: 打撃姿勢を設定する。<b>解除するまで続く</b>（打席頭で毎回効く）。
+    /// offenseIsAway=指示の対象（攻撃側）が先攻(away)か。<see cref="BattingApproach.Normal"/> で解除。
+    /// 乱数を1発も消費しないので、同シード＋同操作なら結果が再現する。
+    /// </summary>
+    public void SetBattingApproach(bool offenseIsAway, BattingApproach approach)
+    {
+        _p.OffenseOf(offenseIsAway).SetBattingApproach(approach);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.BattingApproach, offenseIsAway, BenchIndex: 0,
+            Approach: approach, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>
+    /// 采配カード（2026-07-31）: 守備の常時方針（配球・ギア・内野/外野の深さ）。<b>解除するまで続く</b>。
+    /// teamIsAway=指示する側（守備側）が先攻か。null の項目は委任采配（brain）の判断のまま。
+    /// </summary>
+    public void SetStandingDefense(bool teamIsAway, PitchPolicy? policy, Pitching.PitcherGear? gear,
+        DefenseDepth? infield, DefenseDepth? outfield)
+    {
+        _p.OffenseOf(teamIsAway).SetStandingDefense(policy, gear, infield, outfield);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.StandingDefense, !teamIsAway, BenchIndex: 0,
+            Policy: policy, Gear: gear, Infield: infield, Outfield: outfield, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>
+    /// 采配カード（2026-07-31）: 次に解決される打席の攻撃サイン（エンドラン等）を予約する。<b>1打席限り</b>。
+    /// null=解除。委任采配（brain）の判断より優先する。
+    /// </summary>
+    public void SetOffensiveSign(bool offenseIsAway, OffensiveSign? sign)
+    {
+        _p.OffenseOf(offenseIsAway).SetPendingOffensiveSign(sign);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.OffensiveSign, offenseIsAway, BenchIndex: 0,
+            Sign: sign, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>
+    /// 采配カード（2026-07-31）: 次の1球で盗塁を試みる。<b>1球限り</b>。start=null で解除。
+    /// 走者がいなければエンジン側の在塁判定で自然に不発になる（指示自体は無害）。
+    /// </summary>
+    public void SetStealAttempt(bool offenseIsAway, StartType? start, StealTarget target = StealTarget.Second)
+    {
+        _p.OffenseOf(offenseIsAway).SetPendingSteal(start, target);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.StealAttempt, offenseIsAway, BenchIndex: 0,
+            Start: start, StealTarget: target, PitchIndex: PendingPitchIndex));
+    }
+
     /// <summary>次の打席を1つ解決して <see cref="Current"/> に載せる。試合終了なら false。</summary>
     public bool Advance()
     {
@@ -507,6 +553,23 @@ public sealed class MatchProgression
         return AdvancePitchResult.PlateAppearance;
     }
 
+    /// <summary>
+    /// 直前に投げ終えた1球（<see cref="GameContext.CapturePitches"/> が真のときだけ非null）。
+    ///
+    /// <para>采配窓は各投球の<b>手前</b>にあるので、<see cref="AdvancePitch"/> が
+    /// <see cref="AdvancePitchResult.Pitch"/> を返した時点で「1つ前の球」が投げ終わっている＝ここに載る。
+    /// 打席の頭（まだ1球も投げていない窓）では前の打席の球が残るので、そこは <see cref="CurrentAtBat"/> を見る
+    /// （<see cref="LiveAtBat.PitchNumberInPa"/> が1なら打席の頭）。</para>
+    /// </summary>
+    public LivePitch? LastPitch => _p.LastPitch;
+
+    /// <summary>
+    /// いま止まっている采配窓の局面＝<b>これから投げる1球</b>（<see cref="GameContext.CapturePitches"/> が
+    /// 真のときだけ非null）。打席の頭でも埋まるので、UI は1球目を投げる前に打者を出してサインを受け付けられる。
+    /// <see cref="AdvancePitch"/> が <see cref="AdvancePitchResult.Pitch"/> を返した直後に読む。
+    /// </summary>
+    public LiveAtBat? CurrentAtBat => _p.LiveAtBat;
+
     private void ConfirmPlateAppearance(GameStep step)
     {
         var e = _p.Log[step.LogIndex];
@@ -516,22 +579,10 @@ public sealed class MatchProgression
         PitchSequence pitchSeq;
         if (e.PitchLog is { Count: > 0 } pitchLog)
         {
+            // 変換は PitchTokenFactory の1本に集約（1球ごとの供給 LivePitch と同じ経路＝描き方が食い違わない）。
             pitchSeq = new PitchSequence(
-                pitchLog.Select(p =>
-                {
-                    // ファウルの打球タイムライン（Issue #313）: 物理層（BattedBall）を持つファウルだけ、
-                    // 打った瞬間から着地までの短い再生（滞空/転がり）を添える。守備解決は経由しない
-                    // ＝守備陣・送球・判定は生成しない（ボールデッドの見せ場のみ・不変条件#2 乱数非消費）。
-                    PlaybackPlay? foulFlight = p.Kind == PitchKind.Foul && p.BattedBall is { } fb
-                        ? PlayTimelineAdapter.ToPlaybackPlay(TimelineBuilder.BuildFoulFlight(
-                            fb, _ctx.Aerodynamics, _ctx.Fielding, _ctx.Field,
-                            e.BaseFirstBefore, e.BaseSecondBefore, e.BaseThirdBefore))
-                        : null;
-                    // コース・弾道（Issue #332）: 対決ビューでボールを実コースへ飛ばすための観測データの写し。
-                    // 新規抽選はせず、判定に使われた実着弾位置と観測専用弾道をそのまま渡す（不変条件#2）
-                    return new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh,
-                        foulFlight, p.LocationX, p.LocationY, p.Trajectory);
-                }).ToList());
+                pitchLog.Select(p => PitchTokenFactory.From(
+                    p, _ctx, e.BaseFirstBefore, e.BaseSecondBefore, e.BaseThirdBefore)).ToList());
         }
         else
         {
@@ -587,6 +638,9 @@ public sealed class MatchProgression
         return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
             _p.Away.LiveLine(), _p.Home.LiveLine());
     }
+
+    /// <summary>確定済み打席のプレー記録（観測専用・読み取りのみ）。本日成績の略記列は UI がここから引く。</summary>
+    public IReadOnlyList<PlayLogEntry> PlayLog => _p.Log;
 
     /// <summary>継投ログ（issue #209 表現。継投・投野交代・野手登板）。交代パネルの表示に使う。観測専用。</summary>
     public System.Collections.Generic.IReadOnlyList<PitchingChangeEvent> PitchingChanges => _p.PitchingChanges;

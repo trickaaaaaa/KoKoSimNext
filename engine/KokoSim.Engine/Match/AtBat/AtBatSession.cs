@@ -318,10 +318,12 @@ public sealed class AtBatSession
         // CaptureTrace が偽なら1回も呼ばない＝既定パスはゼロコスト。
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
-                inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting)
+                inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting,
+                ctx.SwingProbabilityFactor)
             : 0.0;
         if (!forcedSwing && (forcedTake
-            || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng)))
+            || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng,
+                ctx.SwingProbabilityFactor)))
         {
             if (inZone)
             {

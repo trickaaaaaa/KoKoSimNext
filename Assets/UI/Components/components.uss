@@ -1147,6 +1147,67 @@
 }
 .mup-hand { font-size: var(--fs-cap); color: var(--color-muted); flex-shrink: 0; }
 .mup-career { font-size: var(--fs-label); color: var(--color-muted); white-space: nowrap; }
+
+/* 1行目の肩書き（放送と同じ「4番 三塁 [5] 名前 2年」の並び）。
+   左右打/左右投は対決ビューの絵で分かるので出さない（2026-07-31 ユーザー判断で .mup-hand は不使用に）。 */
+.mup-order { font-size: var(--fs-num-lg); color: var(--tx-1); flex-shrink: 0; }
+.mup-order__unit { font-size: var(--fs-cap); color: var(--tx-2); flex-shrink: 0; margin-right: var(--sp-2); }
+.mup-pos { font-size: var(--fs-cap); color: var(--tx-2); flex-shrink: 0; margin-right: var(--sp-2); }
+.mup-grade { font-size: var(--fs-cap); color: var(--tx-2); flex-shrink: 0; margin-left: var(--sp-2); }
+/* 登板順（先発 / N番手）。継投したことが一目で分かるよう、リリーフだけ地を沈める。 */
+.mup-role {
+    font-size: var(--fs-cap);
+    color: var(--tx-1);
+    flex-shrink: 0;
+    margin-right: var(--sp-2);
+    padding: 1px var(--sp-2);
+    border-width: var(--border-w);
+    border-color: var(--tx-3);
+}
+.mup-role--relief { border-color: var(--ink); background-color: var(--sf-inset); }
+
+/* 本日の打撃成績（スコアブック略記のチップ列）。出塁した打席だけ点灯させる。 */
+.mup-pa-row { flex-wrap: wrap; }
+.mup-pa__lab { font-size: var(--fs-cap); color: var(--tx-3); margin-right: var(--sp-2); flex-shrink: 0; }
+.mup-pa {
+    font-size: var(--fs-cap);
+    color: var(--tx-2);
+    background-color: var(--sf-inset);
+    border-width: var(--border-w);
+    border-color: var(--divider);
+    padding: 1px var(--sp-2);
+    margin-right: var(--sp-1);
+    flex-shrink: 0;
+}
+.mup-pa--on { background-color: var(--color-lamp); border-color: var(--ink); color: var(--color-ink); }
+
+/* スタミナ残量のバー（継投の目安）。残量で色を落とす＝盤面ビューの状態コード。 */
+.stam { align-items: center; margin-top: var(--sp-1); }
+.stam__lab { font-size: var(--fs-cap); color: var(--tx-3); margin-right: var(--sp-2); flex-shrink: 0; }
+.stam__track {
+    width: 150px;
+    height: 13px;
+    flex-shrink: 0;
+    background-color: var(--sf-inset);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+}
+.stam__fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background-color: var(--color-good);
+}
+.stam__fill--mid { background-color: var(--color-lamp); }
+.stam__fill--low { background-color: var(--color-warn); }
+.stam__tick { position: absolute; top: 0; bottom: 0; width: 1px; background-color: var(--divider); }
+.stam__pct {
+    font-size: var(--fs-cap);
+    color: var(--tx-2);
+    margin-left: var(--sp-2);
+    width: 42px;
+    -unity-text-align: middle-right;
+    flex-shrink: 0;
+}
 .mup-today {
     font-size: var(--fs-body);
     color: var(--color-chalk);
@@ -1159,8 +1220,12 @@
     color: var(--color-chalk);
 }
 .mup-pitches__lab { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
-.mup-pitches--warn { color: var(--color-lamp); }        /* 80球超 */
-.mup-pitches--alert { color: var(--color-warn); }       /* 100球超 */
+/* 同じ行に置いた防御率・奪三振との切れ目（線を引かずに余白で分ける）。 */
+.mup-pitches__lab--gap { margin-left: var(--sp-4); }
+/* 白カードに載せ替えたのでアンバー（--color-lamp）は文字に使えない（白地で沈む）。
+   注意→警告の意味はそのままに、白地で読める橙・赤へ振る。 */
+.mup-pitches--warn { color: var(--cond-bad); }          /* 80球超＝注意 */
+.mup-pitches--alert { color: var(--color-warn); }       /* 100球超＝警告 */
 .mup-cond { margin-left: var(--sp-2); }
 
 /* MatchupHud：盤面ホスト上の画面座標固定オーバーレイ。下端アンカー・左下=投手/右下=打者（左右固定）。 */
@@ -1170,22 +1235,31 @@
 }
 .mhud-corner {
     position: absolute;
-    bottom: 10px;
-    max-width: 42%;
+    max-width: 46%;
 }
-.mhud-corner--left { left: 10px; }
-.mhud-corner--right { right: 10px; }
-/* 半透明パネルで盤面から浮かせる（フェンス/ライン視認を妨げない）。盤面overlay＝inline rgba idiom（field-chip 同様）。 */
+.mhud-corner--left { left: 10px; bottom: 10px; }
+.mhud-corner--right { right: 10px; bottom: 10px; }
+/* 打者は右上＝盤面の打者に近い側（2026-07-31）。 */
+.mhud-corner--topright { right: 10px; top: 10px; }
+/* 昼NB（design-19）の白カード。暗色半透明は盤面の絵の上で沈んで読めなかったので、
+   白面＋インク枠＋ベタ影の不透明カードに載せ替えた（右下の太枠でベタ影を作る＝USSに box-shadow は無い）。 */
 .mhud-panel {
-    background-color: rgba(24, 33, 28, 0.85);
+    background-color: var(--sf-card);
     border-radius: var(--radius-panel);
-    padding: var(--sp-2);
+    border-top-width: var(--nb-border-card);
+    border-left-width: var(--nb-border-card);
+    border-right-width: var(--nb-card-edge);
+    border-bottom-width: var(--nb-card-edge);
+    border-color: var(--ink);
+    padding: var(--sp-2) var(--sp-3);
 }
 
 /* SignPad：指示パネル（issue #289。試合盤面・投手HUD直下の采配指示タイル。SignPad.cs が生成）。
    設計書15 Phase C-3 の常駐1行帯の後継。攻撃中は打撃、守備中は配球だけを出し、既定（任せ/通常）は無点灯。
    盤面overlayなので半透明パネルは mhud-panel と同じ inline rgba idiom。選択色は旧セグ選択と同じ --sky を踏襲。
    タイルは flex-wrap で段組み＝定義が増えたら下へ折り返す（gap非対応のため間隔は margin で作る）。 */
+/* 2026-07-31: 試合画面の1球指示は TacticsCardDeck（.tcard*）へ置き換えた。SignPad は
+   部品辞書の登録として残す（ComponentGallery 用・他画面で使うときの器）。 */
 .signpad {
     background-color: rgba(24, 33, 28, 0.85);
     border-radius: var(--radius-panel);
@@ -1325,7 +1399,8 @@
    アンバー（野手系だけ点灯・通常継投は無彩の面）。本文は暗い盤面の上なので掲示板と同じ --sb-ink-1（明色）。 */
 .sub-call {
     position: absolute;
-    left: 0; right: 0; top: 9%;
+    /* 打者HUDを右上へ移したので、天井近くに出すと必ず重なる。得点テロップ（20%）より下へ逃がす。 */
+    left: 0; right: 0; top: 30%;
     flex-direction: row;
     align-items: center;
     justify-content: center;
@@ -1671,6 +1746,256 @@
 .lsc-base--first { top: 15px; left: 30px; }
 .lsc-base--third { top: 15px; left: 0; }
 .lsc-base.is-on { background-color: var(--color-lamp); }
+
+/* ═══ TacticsCardDeck：采配指示の手札（試合画面改修・C#は Components/TacticsCardDeck.cs）═══════
+   盤面の直下に、重なり合ったカードとして采配指示を並べる。カーソルが乗った1枚だけが持ち上がり、
+   最前面へ出る（両隣を中間拡大する Dock 風は採らない＝2026-07-31 ユーザー判断）。
+
+   カードの箱の寸法（幅・高さ・重なり）は TacticsCardDeck.cs が持つ。ここは色と枠だけ。
+   自作要素が自分の幾何を持つのは BaseballFieldElement / Match2DPlaybackElement と同じ作法。 */
+.tcards { flex-shrink: 0; align-items: center; }
+.tcards__inner { position: relative; height: 100%; }
+/* 当たり判定の層。カードの上に透明な短冊を敷き、ポインタの出入りと押下はここだけで拾う
+   （カードは重なり順を入れ替える＝木から外れるので、判定を持たせるとクリックが成立しない）。 */
+.tcards__hits { position: absolute; left: 0; top: 0; bottom: 0; }
+.tcards__hit { position: absolute; top: 0; bottom: 0; }
+
+.tcard {
+    position: absolute;
+    bottom: 0;
+    background-color: var(--sf-card);
+    border-width: var(--nb-border);
+    /* 左は隣のカードに重なる辺。太くして「上に乗っている」継ぎ目を作る（USS に box-shadow は無い）。 */
+    border-left-width: var(--nb-shadow-card);
+    border-right-width: var(--nb-shadow);
+    border-bottom-width: var(--nb-shadow);
+    border-color: var(--ink);
+    transition-property: translate, scale;
+    transition-duration: 0.12s;
+    transition-timing-function: ease-out;
+    transform-origin: 50% 100%;   /* 下端を軸に上へ伸び上がる（帯の高さを変えずに大きく見せる） */
+}
+/* 持ち上がるのはカーソルが乗った1枚だけ。最前面化は C# の BringToFront が行う（USS に z-index は無い）。 */
+.tcard--hot { translate: 0 -12px; scale: 1.22; }
+
+/* 上2/3＝将来ここへ絵を入れる場所。いまは Icon の1文字を淡く敷いて枠だと分かるようにする。 */
+.tcard__art {
+    flex-grow: 1;
+    background-color: var(--sf-inset);
+}
+/* 絵の面いっぱいに置いて上下中央（級数はカード寸法から C# が決めるので、余白を数値で持たない）。 */
+.tcard__ghost {
+    position: absolute;
+    left: 0;
+    top: 0; bottom: 0;
+    color: var(--ink);
+    opacity: 0.14;
+    -unity-text-align: middle-center;
+}
+/* 下段＝名前。左の帯（隣に隠れない幅）の中央へ置く＝カード全幅で中央揃えにすると隣の下に潜る。
+   段の高さと級数は TacticsCardDeck.cs が決める（長い名前は2行に割るので、幅と高さの両方で効く）。 */
+.tcard__cap {
+    flex-shrink: 0;
+    border-top-width: var(--nb-border);
+    border-top-color: var(--ink);
+    background-color: var(--sf-card);
+}
+.tcard__name {
+    position: absolute;
+    left: 0;
+    top: 0; bottom: 0;
+    color: var(--tx-1);
+    -unity-text-align: middle-center;
+}
+
+/* 選択中＝操作系の青（旧 SignPad の選択色を踏襲）。 */
+.tcard--on { border-color: var(--sky); }
+.tcard--on .tcard__cap { background-color: var(--sky); border-top-color: var(--sky); }
+.tcard--on .tcard__name { color: var(--sf-card); }
+/* 既定（任せ/通常）＝指示なし。絵の面だけ真っ白にして「白紙のカード」に見せる
+   （USS に破線ボーダーは無いので、地の明度差で「中身が無い」を出す）。 */
+.tcard--default .tcard__art { background-color: var(--sf-card); }
+.tcard--default .tcard__ghost { opacity: 0.07; }
+.tcard--default .tcard__name { color: var(--tx-2); }
+/* いまの局面で選べないカード（走者なしの盗塁など）。拡大もクリックもしない。 */
+.tcard--off .tcard__art { background-color: var(--sf-inset); opacity: 0.4; }
+.tcard--off .tcard__cap { background-color: var(--sf-inset); }
+.tcard--off .tcard__name { color: var(--tx-3); }
+
+/* ═══ InningBreak：攻守交代のイニング間画面（試合画面改修）══════════════════════════
+   3アウトで攻守が入れ替わったら、次の打席を始める前に数秒だけ盤面へ被せる暗幕。
+   上部から撤去したラインスコアを大写しにして「いま何回で何点差か」をここで受け取ってもらう。
+   既存の一過性オーバーレイ（pitch-call / score-call / sub-call）と同じ作法＝既定非表示＋自前の寿命。
+   ラインスコアは拡大せず、部品そのままの寸法で中央に置く（scale で拡大すると罫が半端に太る）。 */
+.inning-break {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    /* ほぼ不透明。プロジェクトはリニア色空間で、暗色のアルファ合成は見た目の減光が数値よりずっと弱い
+       （0.78 で実測55%減にしかならない）。「画面が切り替わった」と読ませたいので 0.94 まで上げる。 */
+    background-color: rgba(10, 15, 12, 0.94);
+}
+.inning-break__caption {
+    font-size: var(--fs-callout);
+    color: var(--sb-ink-1);
+    margin-bottom: var(--sp-4);
+    letter-spacing: 4px;
+}
+.inning-break__hint {
+    font-size: var(--fs-label);
+    color: var(--sb-ink-2);
+    margin-top: var(--sp-4);
+    letter-spacing: 3px;
+}
+/* 回間にカウントは無意味なので、イニング間のラインスコアでは右袖ごと畳む。
+   上部常設だった頃の下マージンも、中央に置く今は不要。 */
+.inning-break .lsc-count { display: none; }
+.inning-break .lsc { margin-bottom: 0; padding: var(--sp-2) var(--sp-4); }
+
+/* 大写し。ドットは16の整数倍サイズ限定なので 32→48 に上げ、マスと行高もそれに合わせて広げる
+   （scale で引き伸ばすと罫が半端に太るので、寸法そのものを差し替える）。 */
+.inning-break .lsc-row { height: var(--lsc-row-h-big); }
+.inning-break .lsc-row--head { height: var(--lsc-head-h-big); }
+.inning-break .lsc-cell { width: var(--lsc-cell-w-big); font-size: var(--fs-dot-48); }
+.inning-break .lsc-cell--total { width: var(--lsc-total-w-big); }
+.inning-break .lsc-cell--name { width: var(--lsc-name-w-big); font-size: 30px; }
+.inning-break .lsc-cell--inning { width: var(--lsc-name-w-big); font-size: var(--fs-dot-32); }
+.inning-break .lsc-row--head .lsc-cell { font-size: var(--fs-dot-32); }
+/* 延長でマスが増えたら大写しをやめて通常寸法へ戻す（潰して収めない）。 */
+.inning-break .lsc--dense .lsc-cell { width: var(--lsc-cell-w); font-size: var(--fs-dot-32); }
+.inning-break .lsc--dense .lsc-row { height: var(--sb-cell-h); }
+
+/* ═══ ScoreBug：盤面左上の常時表示バグ（試合画面改修・器は Components/ScoreBug.uxml）═══════
+   野球中継のアレ。打席の演出中も切らさずカウント・塁・両校の得点を出しっぱなしにする。
+   面は掲示板の黒（--sb-face）＋インク枠＝design-19 の黒島語彙で、盤面の絵の上でも沈まない。
+
+   左袖＝縦の B/S/O。ランプ（点の並び）ではなく**数字**で出す（2026-07-31 ユーザー判断）。
+   ラベル列は黒面、数字列は明地に反転させて「カウントだけ別の板」に見せる。
+   右＝回表示と塁ダイヤを重ねた段＋チーム2行。塁は埋まっている塁だけ描く（空塁は描かない）。
+   アンバーは「走者」と「攻撃中の印」だけ＝盤面ビューの状態コード（UI原則②の但し書き）。 */
+.sbug {
+    position: absolute;
+    top: var(--sp-3);
+    left: var(--sp-3);
+    flex-direction: row;
+    background-color: var(--sb-face);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    flex-shrink: 0;
+}
+
+/* ── 左袖：縦の B/S/O ────────────────────────────────────────────── */
+.sbug-count { flex-direction: row; flex-shrink: 0; }
+.sbug-count__keys { width: var(--sbug-key-w); flex-shrink: 0; }
+.sbug-count__vals { width: var(--sbug-val-w); flex-shrink: 0; background-color: var(--sb-ink-1); }
+.sbug-count__key {
+    height: var(--sbug-row-h);
+    font-size: var(--sbug-fs-key);
+    color: var(--sb-ink-1);
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+}
+.sbug-count__val {
+    height: var(--sbug-row-h);
+    font-size: var(--sbug-fs-val);
+    color: var(--ink);            /* 明地の上なのでインク */
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    border-top-width: var(--border-w);
+    border-top-color: var(--sbug-val-line);
+}
+/* USS に nth-child は無いので、先頭マスだけ修飾子で上罫を消す。 */
+.sbug-count__val--first { border-top-width: 0; }
+
+/* ── 右：回＋塁ダイヤ／チーム2行 ──────────────────────────────── */
+.sbug-main {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: var(--sbug-main-w);
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+}
+.sbug-top {
+    height: var(--sbug-top-h);
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* 塁ダイヤ。段いっぱいに広げた透明な枠の中央へ菱形を置き、回表示をその上に重ねる。 */
+.sbug-dia {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+/* 潰す層。USS の変形は scale→rotate の順に効くため、回す層と分けないと平たい菱形にならない。 */
+/* 回表示の地色が中央band を隠すので、菱形は文字より十分横長にして左右の稜が残るようにする。 */
+.sbug-dia__box { width: 54px; height: 54px; scale: 1.8 0.72; flex-shrink: 0; }
+.sbug-dia__in {
+    width: 100%;
+    height: 100%;
+    rotate: 45deg;
+    border-width: var(--border-w);
+    border-color: var(--sb-ink-2);
+}
+/* 塁は占有＝アンバー＝2D俯瞰の走者色と一致。空いている塁は描かない（中継の作法）。 */
+.sbug-base { position: absolute; width: 14px; height: 14px; display: none; }
+.sbug-base.is-on { display: flex; background-color: var(--color-lamp); }
+.sbug-base--second { top: -7px; left: -7px; }
+.sbug-base--first { top: -7px; right: -7px; }
+.sbug-base--third { bottom: -7px; left: -7px; }
+
+/* 回表示は菱形の上。地色を敷いて罫を文字の下で抜く（USS に文字の縁取りは無い）。 */
+.sbug-inning {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--sb-face);
+    padding-left: var(--sp-1);
+    padding-right: var(--sp-1);
+}
+.sbug-inning__num { font-size: var(--fs-num-lg); color: var(--sb-ink-1); margin: 0; padding: 0; }
+.sbug-inning__half {
+    font-size: var(--fs-cap);
+    color: var(--sb-ink-1);
+    margin: 0 0 0 1px;
+    padding: 0;
+}
+
+.sbug-team { flex-direction: row; align-items: center; height: var(--sbug-team-h); flex-shrink: 0; }
+/* 攻撃中の印。校名の左に立てる細いアンバーの棒（矢印記号はSDFに無い字が混ざるため使わない）。 */
+.sbug-team__mark { width: 5px; height: 20px; flex-shrink: 0; }
+.sbug-team--batting .sbug-team__mark { background-color: var(--color-lamp); }
+.sbug-team__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--sbug-fs-name);
+    color: var(--sb-ink-1);
+    margin: 0 0 0 var(--sp-2);
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sbug-team__runs {
+    min-width: 30px;
+    font-size: var(--sbug-fs-runs);
+    color: var(--sb-ink-1);
+    -unity-text-align: middle-right;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+}
 
 /* ═══ VerticalName：縦書き選手名（甲子園両翼式）══════════════════════════
    設計書16 §9-2 の試作用。UI Toolkit に縦書き（writing-mode）は無いので、

@@ -32,6 +32,11 @@ namespace KokoSim.Unity.Components
             /// <summary>有効条件（null=常に有効）。走者・カウント等の局面条件を将来ここへ。</summary>
             public Func<bool> EnabledIf;
             public Action OnSelect;
+            /// <summary>
+            /// 選択を解いたときに呼ぶ（<see cref="TacticsCardDeck"/> のトグル用。null=解除操作なし）。
+            /// 「解除するまで続く方針」のカードは、既定タイルを別に置く代わりに同じカードをもう一度押して消す。
+            /// </summary>
+            public Action OnClear;
         }
 
         private readonly Label _phaseLabel;

@@ -517,6 +517,12 @@ public static class GameEngine
                 }
             }
 
+            // プレイヤーの采配指示（2026-07-31）: brain の判断より常に優先する。brain 呼び出しの**後**に
+            // 置くのが肝で、こうすると brain 側のRNG消費が指示の有無で変わらない＝同シードの乱数順が保たれる。
+            // 未設定ならフィールド読み取りだけでRNGを1発も引かない（＝AI駆動のシム・統計帯は完全に不変）。
+            defTactics = defense.ApplyStandingDefense(defTactics);
+            if (offense.ConsumePendingOffensiveSign() is { } manualSign) sign = manualSign;
+
             // 敬遠（design-14 P1-3・§2.5-a）: 決まっていれば攻撃側のサイン（バント/スクイズ等）は
             // 一切発動しない（打席解決全体が無条件四球に置き換わるため）。CallOffense 自体の
             // RNG消費は温存し、その後続処理だけを打たない＝統一ステッパ化後も従来の乱数順と一致させる。
@@ -609,6 +615,10 @@ public static class GameEngine
                 batterAttrs = batterAttrs with { Power = ClampAbility(batterAttrs.Power * batter.ChanceHitFactor) };
             }
 
+            // 打撃姿勢（2026-07-31）: サインの上に重ねる「構え」。既定 Normal は恒等なので、
+            // 指示していない試合はここを通っても実効能力が1も動かない。
+            batterAttrs = BattingApproachModel.Apply(batterAttrs, offense.BattingApproach, ctx.Tactics);
+
             // 打順消費（設計書15 Phase D-2e）: 打席が実際に確定した時点まで遅らせる（下の squeezeAbandoned/
             // stealEndedHalf ガード直後）。ここでは進めない＝Peekのみでこの打者を握ったまま投球ループへ入る。
 
@@ -622,7 +632,8 @@ public static class GameEngine
                 + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
             var abCtx = ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                 gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
-                skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk);
+                skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
+                swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics));
 
             // 通常打席の投球ループ（設計書15 §2.1）: AtBatSession を1球ずつ回し、各投球の前に采配窓を yield する。
             // 一括 ResolveDetailed と実装・RNG消費が完全一致（yield は乱数非消費）＝バッチ Play と対話進行は同一結果。
@@ -643,6 +654,36 @@ public static class GameEngine
             var stealEndedHalf = false;
             while (!session.IsComplete)
             {
+                // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。
+                // **打席の頭（まだ1球も投げていない窓）でも埋まる**のが肝で、これが無いとUIは1球目を
+                // 投げるまで打者を知れず、打席の頭でサインを受け付けられない。乱数は消費しない。
+                if (ctx.CapturePitches)
+                    p.LiveAtBat = new Timeline.Playback.LiveAtBat
+                    {
+                        Inning = inning,
+                        IsTop = isTop,
+                        AwayScore = p.Away.Runs,
+                        HomeScore = p.Home.Runs,
+                        Outs = outs,
+                        BaseFirst = bases.First is not null,
+                        BaseSecond = bases.Second is not null,
+                        BaseThird = bases.Third is not null,
+                        Balls = session.Balls,
+                        Strikes = session.Strikes,
+                        PitchNumberInPa = session.PitchCount + 1,
+                        BatterOrder = batterOrder,
+                        BatterName = batter.Name,
+                        BatterSourceId = batter.SourceId,
+                        BatterBats = batter.Bats,
+                        BatterPosition = batter.Position,
+                        BatterNumber = batter.UniformNumber,
+                        BatterConditionValue = batter.ConditionValue,
+                        PitcherName = currentPitcher.Name,
+                        PitcherSourceId = currentPitcher.SourceId,
+                        PitcherThrows = currentPitcher.Throws,
+                        PitcherNumber = currentPitcher.UniformNumber,
+                        PitcherConditionValue = currentPitcher.ConditionValue,
+                    };
                 yield return Pitch();
 
                 // 観測（設計書17 §4）: この球の乱数消費を測るため、采配窓を抜けた直後の値を控える。
@@ -696,6 +737,13 @@ public static class GameEngine
                     stealAttempt = d?.StealAttempt;
                     stealTarget = d?.StealTarget ?? StealTarget.Second;
                     traceCandidates = d?.Explanation; // 観測専用（設計書17 §5 P4）。判断には使わない。
+                }
+                // 手動の盗塁指示（2026-07-31）: brain より優先。**盗塁の解決より前**で消費しないと
+                // その球には間に合わない（打撃の手動指示は解決順の都合で下の別ブロックのまま）。
+                if (offense.ConsumePendingSteal() is { } manualSteal)
+                {
+                    stealAttempt = manualSteal.Start;
+                    stealTarget = manualSteal.Target;
                 }
                 if (defense.Tactics is IPitchTacticsBrain defensePitchBrain)
                 {
@@ -876,6 +924,26 @@ public static class GameEngine
 
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride);
 
+                // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
+                // 打席が確定する前に1球ずつ絵にするための供給口で、MatchProgression.AdvancePitch と対で使う。
+                // 既に解決済みの値の写しだけ＝乱数を1回も追加消費しない（EmitPitchTrace と同じ位置・同じ流儀）。
+                if (ctx.CapturePitches && session.PitchLog.Count > 0)
+                {
+                    var rec = session.PitchLog[session.PitchLog.Count - 1];
+                    p.LastPitch = new Timeline.Playback.LivePitch
+                    {
+                        Pitch = Timeline.Playback.PitchTokenFactory.From(rec, ctx,
+                            bases.First is not null, bases.Second is not null, bases.Third is not null),
+                        EndsPlateAppearance = pitchRes.EndsPlateAppearance,
+                        // 塁・アウトはこの球を投げ終えた時点の実状態（盗塁・牽制死で打席途中に動く）。
+                        Outs = outs,
+                        BaseFirst = bases.First is not null,
+                        BaseSecond = bases.Second is not null,
+                        BaseThird = bases.Third is not null,
+                        PitchNumberInPa = session.PitchCount,
+                    };
+                }
+
                 // 1球の観測レコードを完成させて流す（設計書17 §4.1）。打席解決層が埋めた意図・実着弾・打者判断へ、
                 // 試合層しか知らない局面・状態・采配・RNG消費を足す。乱数は1回も追加消費しない。
                 void EmitPitchTrace()
@@ -985,7 +1053,8 @@ public static class GameEngine
                 else if (buntOutcome == BuntResult.InfieldHit) AdvanceOnBunt(bases, batter);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
-                    batterOrder: batterOrder, pitchLog: res.PitchLog);
+                    batterOrder: batterOrder, pitchLog: res.PitchLog,
+                    isSacBunt: buntOutcome == BuntResult.SacrificeSuccess);
                 outs += buntOuts;
                 MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
@@ -1022,7 +1091,8 @@ public static class GameEngine
                 if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
-                    batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns);
+                    batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns,
+                    isSacBunt: sq.Bunt == BuntResult.SacrificeSuccess);
                 outs += sqOuts;
                 MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
@@ -1301,7 +1371,8 @@ public static class GameEngine
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
-                batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa);
+                batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
+                play: res.Play);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -1335,7 +1406,9 @@ public static class GameEngine
         Player? errorFielder = null,
         Match.Field.FieldPosition errorRole = default,
         bool isSacFly = false,
-        int unearnedRuns = 0)
+        int unearnedRuns = 0,
+        Match.Fielding.FieldingPlay? play = null,
+        bool isSacBunt = false)
     {
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
@@ -1358,7 +1431,10 @@ public static class GameEngine
             pitcher.SourceId, pitcher.Name, pitcher.Throws,
             batter.UniformNumber, pitcher.UniformNumber,
             pitchLog,
-            batter.ConditionValue, pitcher.ConditionValue));
+            batter.ConditionValue, pitcher.ConditionValue,
+            // 打球観測（本日成績の略記列用）: 既に確定した FieldingPlay の値を写すだけ＝判定・乱数順・digest不変。
+            play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
+            outsThisPa, isSacFly, isSacBunt));
     }
 
     /// <summary>バント処理時の進塁: 一・二塁走者が1つ進む（三塁走者は自重）。batter 非null なら打者一塁へ。</summary>
@@ -1622,6 +1698,18 @@ public sealed class GameProgress
     public List<MatchInjuryEvent> Injuries { get; } = new();
     /// <summary>継投のログ（issue #209 表現。継投・投野交代・野手登板の各1件）。観測専用＝試合結果・決定論には影響しない。</summary>
     public List<PitchingChangeEvent> PitchingChanges { get; } = new();
+
+    /// <summary>
+    /// 直前に投げた1球の観測（設計書15 Phase D-1 のUI採用）。<see cref="GameContext.CapturePitches"/> が
+    /// 真のときだけ毎球書き換わる。観測専用＝読み書きとも乱数を消費せず、結果・digest・統計帯に影響しない。
+    /// </summary>
+    public Timeline.Playback.LivePitch? LastPitch { get; set; }
+
+    /// <summary>
+    /// これから投げる1球の局面（設計書15 Phase D-1 のUI採用）。采配窓ごと＝各投球の手前で書き換わり、
+    /// <b>打席の頭でも埋まる</b>。<see cref="GameContext.CapturePitches"/> が真のときだけ。観測専用。
+    /// </summary>
+    public Timeline.Playback.LiveAtBat? LiveAtBat { get; set; }
 
     /// <summary>
     /// 守備側 <paramref name="defense"/> の直近の継投（<see cref="TeamState.LastPitchingChange"/>）を、
