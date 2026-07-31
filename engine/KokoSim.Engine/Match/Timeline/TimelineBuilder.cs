@@ -147,7 +147,16 @@ public static class TimelineBuilder
         // フライ・ライナー・ファウルフライの捕球アウトは捕球の瞬間（fieldedAt）に確定する。
         // 内野ゴロの一塁フォースは送球到達の瞬間（＝フォース成立。走者到達を待たない, Issue #328①）。
         var judgements = new List<JudgementEvent>();
-        if (play.IsFly && play.Result == BattedBallResult.Out)
+        if (play.Result == BattedBallResult.HomeRun)
+        {
+            // 柵越えは着地の瞬間に確定（＝resolvedAt と同じ landAt）。飛距離は判定に使った
+            // 着地までの水平距離をそのまま観測データとして載せる（表示専用・Issue #354）。
+            judgements.Add(new JudgementEvent
+            {
+                Label = "打", T = landAt, Kind = JudgementKind.HomeRun, DistanceM = play.RangeM,
+            });
+        }
+        else if (play.IsFly && play.Result == BattedBallResult.Out)
         {
             judgements.Add(new JudgementEvent { Label = "打", T = fieldedAt, Kind = JudgementKind.Out });
         }

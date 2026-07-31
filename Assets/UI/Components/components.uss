@@ -1265,6 +1265,9 @@
 /* フェア＝際どい飛球が落ちた瞬間の表示（issue #328②）。良し悪しではない中立の判定コールなので
    strikeと同じアンバー（--color-lamp）を流用する。 */
 .pitch-call__judge--fair { color: var(--color-lamp); }
+/* ホームラン＝柵越えの着地の瞬間（issue #354）。盤面ビューの色は状態コードなので、
+   打者側の最良の結果＝良好色（--color-good。セーフと同系）を使う。下段に飛距離を添える。 */
+.pitch-call__judge--homerun { color: var(--color-good); }
 /* 球種・球速（実1球記録がある打席のみ。合成投球列では出さない）。文字色は判定と同じ理由で --sb-ink-1。 */
 .pitch-call__detail {
     font-size: var(--fs-body);

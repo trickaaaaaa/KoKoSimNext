@@ -79,10 +79,11 @@ public sealed record RunnerLeg
 public sealed record TimelineCaption(double T, string Text);
 
 /// <summary>
-/// 判定オーバーレイの種別（Issue #59でOut/Safeの2値、Issue #328②で「フェア」を追加）。
+/// 判定オーバーレイの種別（Issue #59でOut/Safeの2値、Issue #328②で「フェア」、Issue #354で「ホームラン」を追加）。
 /// Fair=野手が追いついていた際どい飛球が着地して生きた球になった瞬間（捕球アウトでもタッチプレーでもない）。
+/// HomeRun=柵越えの着地の瞬間（飛距離を <see cref="JudgementEvent.DistanceM"/> に併記する）。
 /// </summary>
-public enum JudgementKind { Out, Safe, Fair }
+public enum JudgementKind { Out, Safe, Fair, HomeRun }
 
 /// <summary>
 /// 判定イベント1件（判定オーバーレイ, Issue #260）。走者レッグの副産物（終端T1・OutAtEnd/CloseCall流用）
@@ -101,6 +102,11 @@ public sealed record JudgementEvent
     /// セーフ側は際どい判定のときだけ積む（アウトは常時表示するため使わない, Issue #59 の表示条件を維持）。
     /// </summary>
     public bool CloseCall { get; init; }
+    /// <summary>
+    /// 表示専用の飛距離[m]（Issue #354・本塁打のみ）。判定に使った着地までの水平距離
+    /// （<c>FieldingPlay.RangeM</c>）をそのまま観測データとして運ぶ＝乱数を引かない（帯不変）。
+    /// </summary>
+    public double? DistanceM { get; init; }
 }
 
 /// <summary>

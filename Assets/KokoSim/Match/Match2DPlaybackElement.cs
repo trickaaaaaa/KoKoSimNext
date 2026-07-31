@@ -144,6 +144,8 @@ namespace KokoSim.Unity.Match
         public const double JudgementHoldRealSeconds = 0.6;
         private VisualElement _judgementHost;
         private Label _judgementLabel;
+        // 判定の下段（本塁打の飛距離。1球判定の球種・球速行と同じ器 .pitch-call__detail を流用, issue #354）。
+        private Label _judgementDetail;
 
         /// <summary>
         /// 再生倍速（コントローラが毎フレーム同期する）。表示窓はプレー時間軸で数えるため、
@@ -189,6 +191,10 @@ namespace KokoSim.Unity.Match
             _judgementLabel = new Label { pickingMode = PickingMode.Ignore };
             _judgementLabel.AddToClassList("pitch-call__judge");
             _judgementHost.Add(_judgementLabel);
+            _judgementDetail = new Label { pickingMode = PickingMode.Ignore };
+            _judgementDetail.AddToClassList("pitch-call__detail");
+            _judgementDetail.style.display = DisplayStyle.None;
+            _judgementHost.Add(_judgementDetail);
             Add(_judgementHost);
         }
 
@@ -346,11 +352,22 @@ namespace KokoSim.Unity.Match
             {
                 JudgementKind.Out => "アウト",
                 JudgementKind.Fair => "フェア",
+                JudgementKind.HomeRun => "ホームラン",
                 _ => "セーフ",
             };
             _judgementLabel.EnableInClassList("pitch-call__judge--out", kind == JudgementKind.Out);
             _judgementLabel.EnableInClassList("pitch-call__judge--safe", kind == JudgementKind.Safe);
             _judgementLabel.EnableInClassList("pitch-call__judge--fair", kind == JudgementKind.Fair);
+            _judgementLabel.EnableInClassList("pitch-call__judge--homerun", kind == JudgementKind.HomeRun);
+
+            // 下段の飛距離（本塁打のみ。engine が判定に使った着地距離をそのまま出す, issue #354）。
+            // 数字＋和文の混植は Oswald が和文グリフを持たないため避け、単位まで含めて1枚の
+            // 和文ラベルで出す（1球判定の球種・球速行と同じ扱い。設計書16の書体3役ルール）。
+            var distance = found.Value.DistanceM;
+            var showDistance = kind == JudgementKind.HomeRun && distance.HasValue;
+            _judgementDetail.text = showDistance ? "推定飛距離 " + Mathf.RoundToInt((float)distance.Value) + "m" : "";
+            _judgementDetail.style.display = showDistance ? DisplayStyle.Flex : DisplayStyle.None;
+
             _judgementHost.style.display = DisplayStyle.Flex;
             _judgementHost.BringToFront(); // 走者ラベルが後から追加されても常に最前面に出す。
         }
