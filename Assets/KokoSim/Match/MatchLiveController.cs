@@ -1809,21 +1809,29 @@ namespace KokoSim.Unity.Match
             if (_hudHost == null) return;
             _hudHost.Clear();
 
+            // 指示パネルは左下に残す（P5 で盤面下の戦術カードへ置き換える）。
             var left = new VisualElement { pickingMode = PickingMode.Ignore };
             left.AddToClassList("mhud-corner");
             left.AddToClassList("mhud-corner--left");
-            _hudPitcherSlot = new VisualElement { pickingMode = PickingMode.Ignore };
-            left.Add(_hudPitcherSlot);
             _signPad = new SignPad();
             left.Add(_signPad);
             _hudHost.Add(left);
 
-            var right = new VisualElement { pickingMode = PickingMode.Ignore };
-            right.AddToClassList("mhud-corner");
-            right.AddToClassList("mhud-corner--right");
+            // 投手は右下。
+            var bottomRight = new VisualElement { pickingMode = PickingMode.Ignore };
+            bottomRight.AddToClassList("mhud-corner");
+            bottomRight.AddToClassList("mhud-corner--right");
+            _hudPitcherSlot = new VisualElement { pickingMode = PickingMode.Ignore };
+            bottomRight.Add(_hudPitcherSlot);
+            _hudHost.Add(bottomRight);
+
+            // 打者は右上＝盤面の打者に近い側へ寄せる（投手は右下に残す）。
+            var topRight = new VisualElement { pickingMode = PickingMode.Ignore };
+            topRight.AddToClassList("mhud-corner");
+            topRight.AddToClassList("mhud-corner--topright");
             _hudBatterSlot = new VisualElement { pickingMode = PickingMode.Ignore };
-            right.Add(_hudBatterSlot);
-            _hudHost.Add(right);
+            topRight.Add(_hudBatterSlot);
+            _hudHost.Add(topRight);
         }
 
         private void RefreshHud(MatchLiveSnapshot snap)
@@ -1856,10 +1864,14 @@ namespace KokoSim.Unity.Match
             block.AddToClassList("mup-block");
             block.AddToClassList("mup-block--pitcher");
 
+            // 1行目＝登板順・背番号・名前・学年（左右投は3Dの絵で分かるので出さない）。
             var line1 = MakeRow("mup-line");
+            var relief = MakeLabel(MatchLiveStatsProvider.ReliefLabel(def.ReliefOrder), "mup-role");
+            if (def.ReliefOrder > 1) relief.AddToClassList("mup-role--relief");
+            line1.Add(relief);
             line1.Add(MakeLabel(NumText(_current.PitcherNumber), "num-badge", "num-badge--sm", "f-num"));
             line1.Add(MakeLabel(_current.PitcherName, "mup-name"));
-            line1.Add(MakeLabel(MatchLiveStatsProvider.ThrowsLabel(_current.PitcherThrows), "mup-hand"));
+            if (def.Grade > 0) line1.Add(MakeLabel(def.Grade + "年", "mup-grade"));
             block.Add(line1);
 
             var line2 = MakeRow("mup-line");
@@ -1875,7 +1887,38 @@ namespace KokoSim.Unity.Match
             line3.Add(pc);
             line3.Add(MakeLabel("球", "mup-pitches__lab"));
             block.Add(line3);
+
+            block.Add(BuildStaminaBar(def.StaminaRemaining));
             return block;
+        }
+
+        // スタミナ残量のバー（継投の目安）。球数の数字だけでなく形でも「そろそろ」を出す。
+        // 色は残量で落とす: 6割超=良好 / 3〜6割=注意 / 3割未満=警告（盤面ビューの状態コード）。
+        private static VisualElement BuildStaminaBar(double remaining)
+        {
+            var row = MakeRow("mup-line", "stam");
+            row.Add(MakeLabel("スタミナ", "stam__lab"));
+
+            var track = new VisualElement { pickingMode = PickingMode.Ignore };
+            track.AddToClassList("stam__track");
+            var fill = new VisualElement { pickingMode = PickingMode.Ignore };
+            fill.AddToClassList("stam__fill");
+            var pct = remaining < 0.0 ? 0.0 : remaining > 1.0 ? 1.0 : remaining;
+            fill.style.width = new Length((float)(pct * 100.0), LengthUnit.Percent);
+            if (pct < 0.3) fill.AddToClassList("stam__fill--low");
+            else if (pct < 0.6) fill.AddToClassList("stam__fill--mid");
+            track.Add(fill);
+            // 目盛は3等分（残り2/3・1/3の位置）。色の変わり目と同じ場所に置いて読み替えを不要にする。
+            foreach (var at in new[] { 33.333f, 66.667f })
+            {
+                var tick = new VisualElement { pickingMode = PickingMode.Ignore };
+                tick.AddToClassList("stam__tick");
+                tick.style.left = new Length(at, LengthUnit.Percent);
+                track.Add(tick);
+            }
+            row.Add(track);
+            row.Add(MakeLabel(Mathf.RoundToInt((float)(pct * 100.0)) + "%", "stam__pct", "f-num"));
+            return row;
         }
 
         private VisualElement BuildHudBatter(LiveBatterSlot batterToday)
@@ -1884,10 +1927,15 @@ namespace KokoSim.Unity.Match
             block.AddToClassList("mup-block");
             block.AddToClassList("mup-block--batter");
 
+            // 1行目＝放送と同じ並び「4番 三塁 [5] 中村 陽介 2年 (調子)」。左右打は3Dの絵で分かるので出さない。
             var line1 = MakeRow("mup-line");
+            line1.Add(MakeLabel(_current.BatterOrder.ToString(), "mup-order", "f-num"));
+            line1.Add(MakeLabel("番", "mup-order__unit"));
+            var pos = MatchLiveStatsProvider.PosJp(batterToday?.Position ?? _current.BatterPosition);
+            if (pos.Length > 0) line1.Add(MakeLabel(pos, "mup-pos"));
             line1.Add(MakeLabel(NumText(_current.BatterNumber), "num-badge", "num-badge--sm", "f-num"));
             line1.Add(MakeLabel(_current.BatterName, "mup-name"));
-            line1.Add(MakeLabel(MatchLiveStatsProvider.BatsLabel(_current.BatterBats), "mup-hand"));
+            if (batterToday is { Grade: > 0 }) line1.Add(MakeLabel(batterToday.Grade + "年", "mup-grade"));
             var face = new ConditionFace();
             face.AddToClassList("mup-cond");
             face.Set(_statsProvider.ConditionOf(
@@ -1898,19 +1946,42 @@ namespace KokoSim.Unity.Match
             var b = _statsProvider.CareerBatting(_current.BatterSourceId);
             var career = b == null
                 ? "通算 —"
-                : MatchLiveStatsProvider.Avg(b) + " / " + b.HomeRuns + "本 / " + b.Rbi + "点 / —盗";
+                : MatchLiveStatsProvider.Avg(b) + " / " + b.HomeRuns + "本 / " + b.Rbi + "点";
             var line2 = MakeRow("mup-line");
             line2.Add(MakeLabel(career, "mup-career"));
             block.Add(line2);
 
-            var line3 = MakeRow("mup-line");
-            line3.Add(MakeLabel("今日", "mup-today__lab"));
-            var t = batterToday != null
-                ? MatchLiveStatsProvider.TodayLine(batterToday.AtBats, batterToday.Hits, batterToday.Rbi)
-                : "0-0";
-            line3.Add(MakeLabel(t, "mup-today"));
-            block.Add(line3);
+            var pa = BuildTodayPlateAppearances();
+            if (pa != null) block.Add(pa);
             return block;
+        }
+
+        /// <summary>
+        /// 本日の打撃成績（この打者がここまでに終えた打席の略記を並べる）。
+        /// 出塁した打席だけ点灯させる。<b>いま解決中の打席（＝ログ末尾）は必ず外す</b>——
+        /// 入れると、まだ盤面で再生していない結果を先に見せてしまう。
+        /// </summary>
+        private VisualElement BuildTodayPlateAppearances()
+        {
+            var log = _prog?.PlayLog;
+            if (log == null || log.Count <= 1 || _current == null) return null;
+
+            var row = MakeRow("mup-line", "mup-pa-row");
+            row.Add(MakeLabel("打席", "mup-pa__lab"));
+            var any = false;
+            for (var i = 0; i < log.Count - 1; i++)   // 末尾＝表示中の打席なので必ず除外
+            {
+                var e = log[i];
+                // 同じ打者の打席だけ拾う。代打で打順枠の中身が入れ替わるので名前まで見る
+                // （BoxScoreGrid.Build が使うキーと同じ組み合わせ）。
+                if (e.IsTop != _current.IsTop || e.BatterOrder != _current.BatterOrder
+                    || e.BatterName != _current.BatterName) continue;
+                var chip = MakeLabel(MatchLiveStatsProvider.ScorebookAbbr(e), "mup-pa");
+                if (MatchLiveStatsProvider.Reached(e.Result)) chip.AddToClassList("mup-pa--on");
+                row.Add(chip);
+                any = true;
+            }
+            return any ? row : null;
         }
 
         // ── 実況履歴（プレー確定ごとに直近3件を薄く積む省スペース型） ──
@@ -1940,10 +2011,10 @@ namespace KokoSim.Unity.Match
             return l;
         }
 
-        private static VisualElement MakeRow(string cls)
+        private static VisualElement MakeRow(params string[] classes)
         {
             var v = new VisualElement { pickingMode = PickingMode.Ignore };
-            v.AddToClassList(cls);
+            foreach (var c in classes) v.AddToClassList(c);
             return v;
         }
 

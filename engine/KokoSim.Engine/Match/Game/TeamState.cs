@@ -272,7 +272,7 @@ public sealed class TeamState
             var displayPos = _usesDh && i == _dhSlot ? FieldPosition.DesignatedHitter : p.Position;
             slots.Add(new LiveBatterSlot(
                 i + 1, p.SourceId, p.UniformNumber, p.Name, displayPos, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, _replacedAtSlot[i], p.ConditionValue, p.Grade));
         }
         return slots;
     }
@@ -296,7 +296,8 @@ public sealed class TeamState
         var a = _pit.TryGetValue(p, out var acc) ? acc : null;
         return new LivePitcherToday(
             p.SourceId, p.UniformNumber, p.Name, p.Throws,
-            a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue);
+            a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
+            p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches));
     }
 
     /// <summary>ライブ観戦の野手控え（未出場の交代候補）。打順は持たないので Order=0。観測データ。</summary>
@@ -308,7 +309,7 @@ public sealed class TeamState
             var a = _bat.TryGetValue(p, out var acc) ? acc : null;
             list.Add(new LiveBatterSlot(
                 0, p.SourceId, p.UniformNumber, p.Name, p.Position, p.Bats,
-                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue));
+                a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue, p.Grade));
         }
         return list;
     }
@@ -322,7 +323,8 @@ public sealed class TeamState
             var a = _pit.TryGetValue(p, out var acc) ? acc : null;
             list.Add(new LivePitcherToday(
                 p.SourceId, p.UniformNumber, p.Name, p.Throws,
-                a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue));
+                a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
+                p.Grade, PitcherChanges + 2, 1.0));
         }
         return list;
     }
@@ -505,6 +507,18 @@ public sealed class TeamState
 
     /// <summary>ギア重み込みの実効消費球数（設計書02 §1.1e-f）。疲労判定はこちらを使う。</summary>
     public double FatiguePitches { get; private set; }
+
+    /// <summary>
+    /// スタミナ残量（1=満タン、0=目安投球数を使い切った）。継投の目安として見せるための観測値で、
+    /// 実際の継投判定は <see cref="PitchingFatigue.ShouldRelieve"/>（マージン・ハードキャップ込み）が行う。
+    /// </summary>
+    private static double StaminaRemainingOf(Player pitcher, double fatiguePitches)
+    {
+        var stamina = (pitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
+        if (stamina <= 0) return 0.0;
+        var remaining = 1.0 - fatiguePitches / stamina;
+        return remaining < 0.0 ? 0.0 : remaining > 1.0 ? 1.0 : remaining;
+    }
 
     /// <summary>球数を加算。staminaWeight はギア「飛ばす/流す」の消耗倍率（既定1.0＝Normal）。</summary>
     public void AddPitches(int pitches, double staminaWeight = 1.0)

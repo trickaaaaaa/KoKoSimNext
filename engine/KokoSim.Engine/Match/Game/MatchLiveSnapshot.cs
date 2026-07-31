@@ -20,9 +20,11 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="ReplacedName">このスロットで直近に退いた選手名（交代表示用。無交代なら null）。</param>
 /// <param name="ConditionValue">調子の真値（連続値・両校とも）。相手校の観測誤認は Shell 側の
 /// <see cref="Players.FormModel.Observe"/> が計算する（設計書02 §3.3, issue #47）。</param>
+/// <param name="Grade">学年（1-3）。両校とも <see cref="Player.Grade"/> から引ける（相手校も生成時に採番済み）。</param>
 public sealed record LiveBatterSlot(
     int Order, int? SourceId, int Number, string Name, FieldPosition Position, Handedness Bats,
-    int AtBats, int Hits, int Rbi, string? ReplacedName, double ConditionValue = 0.0);
+    int AtBats, int Hits, int Rbi, string? ReplacedName, double ConditionValue = 0.0,
+    int Grade = 0);
 
 /// <summary>ライブ観戦の現投手の今日の成績。通算防御率は Shell 側で <see cref="SourceId"/> から join する。</summary>
 /// <param name="SourceId">選手ID（自校のみ。相手校は null）。</param>
@@ -34,9 +36,17 @@ public sealed record LiveBatterSlot(
 /// <param name="Runs">今日の失点（RA。自責点は未追跡）。</param>
 /// <param name="StrikeOuts">今日の奪三振。</param>
 /// <param name="ConditionValue">調子の真値（連続値・両校とも。相手校の観測誤認は Shell 側, issue #47）。</param>
+/// <param name="Grade">学年（1-3）。</param>
+/// <param name="ReliefOrder">登板順（1=先発、2=2番手…）。チームの継投回数+1。</param>
+/// <param name="StaminaRemaining">
+/// スタミナ残量（1=満タン、0=目安投球数を使い切った）。実効消費球数（ギア重み込み）を
+/// その投手の目安投球数で割った残り。継投の目安として表示するための観測値で、
+/// 実際の継投判定（<see cref="PitchingFatigue.ShouldRelieve"/>）はマージンとハードキャップも見る。
+/// </param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,
-    int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0);
+    int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0,
+    int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0);
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。

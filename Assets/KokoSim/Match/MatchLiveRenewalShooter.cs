@@ -52,7 +52,11 @@ namespace KokoSim.Unity.Match
             yield return Capture(ctrl, "03b-inning-break");
             ctrl.HideInningBreakForCapture();
 
-            // 終盤。
+            // 打席の略記が3件以上たまった打者を探す（本日の打撃成績の並びを撮る）。
+            yield return AdvanceUntil(ctrl, pa => pa.Inning >= 6, 200);
+            yield return Capture(ctrl, "03c-batter-pa-line");
+
+            // 終盤（球数が閾値超で色が変わる・スタミナが減る）。
             yield return AdvanceUntil(ctrl, pa => pa.Inning >= 8, 200);
             yield return Capture(ctrl, "04-late");
 

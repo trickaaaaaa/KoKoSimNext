@@ -1,5 +1,8 @@
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Stats;
 using KokoSim.Unity.Shell;
@@ -85,8 +88,76 @@ namespace KokoSim.Unity.Match
             _ => "—",
         };
 
+        /// <summary>守備位置の2文字表記（HUDは横に余裕があるので1文字略記より読みやすい方を使う）。</summary>
+        public static string PosJp(FieldPosition pos) => pos switch
+        {
+            FieldPosition.Pitcher => "投手",
+            FieldPosition.Catcher => "捕手",
+            FieldPosition.FirstBase => "一塁",
+            FieldPosition.SecondBase => "二塁",
+            FieldPosition.ThirdBase => "三塁",
+            FieldPosition.Shortstop => "遊撃",
+            FieldPosition.LeftField => "左翼",
+            FieldPosition.CenterField => "中堅",
+            FieldPosition.RightField => "右翼",
+            FieldPosition.DesignatedHitter => "指名",
+            _ => "",
+        };
+
+        /// <summary>登板順の表記（1=先発、2以降は「N番手」）。</summary>
+        public static string ReliefLabel(int reliefOrder) => reliefOrder <= 1 ? "先発" : reliefOrder + "番手";
+
         public static string ThrowsLabel(Handedness h) => HandednessLabels.Throws(h);
         public static string BatsLabel(Handedness h) => HandednessLabels.Bats(h);
+
+        // ── 本日の打撃成績（スコアブック略記） ────────────────────────────────
+        // 「遊ゴ」「中飛」「右安」「左２」のように守備位置1文字＋結果1文字で書く。
+        // 打球の種類・処理野手・方向はエンジンの観測データ（PlayLogEntry の追加フィールド）から引く。
+        // 打席単位で持っていない情報（野選・振り逃げ・敬遠）は結果種別どおりに丸める。
+
+        /// <summary>1打席の結果をスコアブック略記へ。</summary>
+        public static string ScorebookAbbr(PlayLogEntry e)
+        {
+            switch (e.Result)
+            {
+                case PlateAppearanceResult.Strikeout: return "三振";
+                case PlateAppearanceResult.Walk: return "四球";
+                case PlateAppearanceResult.HitByPitch: return "死球";
+                case PlateAppearanceResult.HomeRun:
+                    // 本塁打は柵越え＝処理野手が居ないので、方向は打球の角度から出す。
+                    return e.BattedBearingDeg is double deg ? DirectionAbbr(deg) + "本" : "本塁打";
+            }
+
+            var pos = e.FieldedBy is FieldPosition p ? PosAbbr(p) : null;
+
+            switch (e.Result)
+            {
+                case PlateAppearanceResult.Single: return pos is null ? "安打" : pos + "安";
+                case PlateAppearanceResult.Double: return pos is null ? "二塁打" : pos + "２";
+                case PlateAppearanceResult.Triple: return pos is null ? "三塁打" : pos + "３";
+                case PlateAppearanceResult.ReachedOnError: return pos is null ? "失策" : pos + "失";
+            }
+
+            // 以降はインプレーのアウト。犠打・犠飛は打球の種類より先に見る（記録の優先順）。
+            if (e.IsSacFly) return "犠飛";
+            if (e.IsSacBunt) return "犠打";
+            if (pos is null) return "凡退";
+            if (e.OutsThisPa >= 2) return pos + "併";
+            if (e.BattedClass == BattedBallClass.Liner) return pos + "直";
+            if (e.BattedIsFly) return pos + "飛";
+            return pos + "ゴ";
+        }
+
+        /// <summary>打球方向の1文字（左 / 中 / 右）。0=センター、正=一塁側。</summary>
+        public static string DirectionAbbr(double bearingDeg) =>
+            bearingDeg < -15.0 ? "左" : bearingDeg > 15.0 ? "右" : "中";
+
+        /// <summary>その打席で打者が出塁したか（略記チップの点灯判定）。</summary>
+        public static bool Reached(PlateAppearanceResult r) =>
+            r is PlateAppearanceResult.Single or PlateAppearanceResult.Double
+                or PlateAppearanceResult.Triple or PlateAppearanceResult.HomeRun
+                or PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch
+                or PlateAppearanceResult.ReachedOnError;
 
         /// <summary>打率表記（.342／通算なしは「—」）。</summary>
         public static string Avg(BattingStatLine? b) => b is null ? "—" : FormatAvg(b.Average);
