@@ -558,11 +558,17 @@ public sealed class MatchProgression
     ///
     /// <para>采配窓は各投球の<b>手前</b>にあるので、<see cref="AdvancePitch"/> が
     /// <see cref="AdvancePitchResult.Pitch"/> を返した時点で「1つ前の球」が投げ終わっている＝ここに載る。
-    /// 呼び出し側はこれを1球ぶんの絵として再生し、次の <see cref="AdvancePitch"/> の直前に指示を予約する。
-    /// 打席の頭（まだ1球も投げていない窓）と、この打席で1球も投げない敬遠では前の球が残るので、
-    /// <see cref="LivePitch.PitchNumberInPa"/> で打席内の位置を見分ける。</para>
+    /// 打席の頭（まだ1球も投げていない窓）では前の打席の球が残るので、そこは <see cref="CurrentAtBat"/> を見る
+    /// （<see cref="LiveAtBat.PitchNumberInPa"/> が1なら打席の頭）。</para>
     /// </summary>
     public LivePitch? LastPitch => _p.LastPitch;
+
+    /// <summary>
+    /// いま止まっている采配窓の局面＝<b>これから投げる1球</b>（<see cref="GameContext.CapturePitches"/> が
+    /// 真のときだけ非null）。打席の頭でも埋まるので、UI は1球目を投げる前に打者を出してサインを受け付けられる。
+    /// <see cref="AdvancePitch"/> が <see cref="AdvancePitchResult.Pitch"/> を返した直後に読む。
+    /// </summary>
+    public LiveAtBat? CurrentAtBat => _p.LiveAtBat;
 
     private void ConfirmPlateAppearance(GameStep step)
     {

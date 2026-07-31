@@ -654,6 +654,36 @@ public static class GameEngine
             var stealEndedHalf = false;
             while (!session.IsComplete)
             {
+                // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。
+                // **打席の頭（まだ1球も投げていない窓）でも埋まる**のが肝で、これが無いとUIは1球目を
+                // 投げるまで打者を知れず、打席の頭でサインを受け付けられない。乱数は消費しない。
+                if (ctx.CapturePitches)
+                    p.LiveAtBat = new Timeline.Playback.LiveAtBat
+                    {
+                        Inning = inning,
+                        IsTop = isTop,
+                        AwayScore = p.Away.Runs,
+                        HomeScore = p.Home.Runs,
+                        Outs = outs,
+                        BaseFirst = bases.First is not null,
+                        BaseSecond = bases.Second is not null,
+                        BaseThird = bases.Third is not null,
+                        Balls = session.Balls,
+                        Strikes = session.Strikes,
+                        PitchNumberInPa = session.PitchCount + 1,
+                        BatterOrder = batterOrder,
+                        BatterName = batter.Name,
+                        BatterSourceId = batter.SourceId,
+                        BatterBats = batter.Bats,
+                        BatterPosition = batter.Position,
+                        BatterNumber = batter.UniformNumber,
+                        BatterConditionValue = batter.ConditionValue,
+                        PitcherName = currentPitcher.Name,
+                        PitcherSourceId = currentPitcher.SourceId,
+                        PitcherThrows = currentPitcher.Throws,
+                        PitcherNumber = currentPitcher.UniformNumber,
+                        PitcherConditionValue = currentPitcher.ConditionValue,
+                    };
                 yield return Pitch();
 
                 // 観測（設計書17 §4）: この球の乱数消費を測るため、采配窓を抜けた直後の値を控える。
@@ -902,30 +932,14 @@ public static class GameEngine
                     var rec = session.PitchLog[session.PitchLog.Count - 1];
                     p.LastPitch = new Timeline.Playback.LivePitch
                     {
-                        Inning = inning,
-                        IsTop = isTop,
-                        AwayScore = p.Away.Runs,
-                        HomeScore = p.Home.Runs,
-                        Outs = outs,
-                        // 塁はこの球の時点の実状態（盗塁で打席途中に動く）。ファウルの打球再生にもこれを載せる。
-                        BaseFirst = bases.First is not null,
-                        BaseSecond = bases.Second is not null,
-                        BaseThird = bases.Third is not null,
-                        BatterOrder = batterOrder,
-                        BatterName = batter.Name,
-                        BatterSourceId = batter.SourceId,
-                        BatterBats = batter.Bats,
-                        BatterPosition = batter.Position,
-                        BatterNumber = batter.UniformNumber,
-                        BatterConditionValue = batter.ConditionValue,
-                        PitcherName = currentPitcher.Name,
-                        PitcherSourceId = currentPitcher.SourceId,
-                        PitcherThrows = currentPitcher.Throws,
-                        PitcherNumber = currentPitcher.UniformNumber,
-                        PitcherConditionValue = currentPitcher.ConditionValue,
                         Pitch = Timeline.Playback.PitchTokenFactory.From(rec, ctx,
                             bases.First is not null, bases.Second is not null, bases.Third is not null),
                         EndsPlateAppearance = pitchRes.EndsPlateAppearance,
+                        // 塁・アウトはこの球を投げ終えた時点の実状態（盗塁・牽制死で打席途中に動く）。
+                        Outs = outs,
+                        BaseFirst = bases.First is not null,
+                        BaseSecond = bases.Second is not null,
+                        BaseThird = bases.Third is not null,
                         PitchNumberInPa = session.PitchCount,
                     };
                 }
@@ -1690,6 +1704,12 @@ public sealed class GameProgress
     /// 真のときだけ毎球書き換わる。観測専用＝読み書きとも乱数を消費せず、結果・digest・統計帯に影響しない。
     /// </summary>
     public Timeline.Playback.LivePitch? LastPitch { get; set; }
+
+    /// <summary>
+    /// これから投げる1球の局面（設計書15 Phase D-1 のUI採用）。采配窓ごと＝各投球の手前で書き換わり、
+    /// <b>打席の頭でも埋まる</b>。<see cref="GameContext.CapturePitches"/> が真のときだけ。観測専用。
+    /// </summary>
+    public Timeline.Playback.LiveAtBat? LiveAtBat { get; set; }
 
     /// <summary>
     /// 守備側 <paramref name="defense"/> の直近の継投（<see cref="TeamState.LastPitchingChange"/>）を、

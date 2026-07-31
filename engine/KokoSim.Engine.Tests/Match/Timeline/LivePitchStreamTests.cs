@@ -105,7 +105,7 @@ public sealed class LivePitchStreamTests
         Assert.True(comparedPitches > 60, $"突き合わせた球数が少なすぎる（{comparedPitches}）");
     }
 
-    /// <summary>1球ごとの観測は、その球の時点の局面（回・表裏・アウト・カウント）を正しく載せている。</summary>
+    /// <summary>1球ごとの観測は、その球を投げ終えた時点の状態（アウト・塁・カウント）を正しく載せている。</summary>
     [Fact]
     public void LivePitch_CarriesTheSituationOfThatPitch()
     {
@@ -125,13 +125,60 @@ public sealed class LivePitchStreamTests
             Assert.InRange(last.Outs, 0, 2);
             Assert.InRange(last.Pitch.BallsAfter, 0, 4);
             Assert.InRange(last.Pitch.StrikesAfter, 0, 3);
-            Assert.InRange(last.BatterOrder, 1, 9);
-            Assert.False(string.IsNullOrEmpty(last.BatterName));
-            Assert.False(string.IsNullOrEmpty(last.PitcherName));
             Assert.True(last.PitchNumberInPa >= 1);
             checkedPitches++;
         }
         Assert.True(checkedPitches > 100, $"検査した球が少なすぎる（{checkedPitches}）");
+    }
+
+    /// <summary>
+    /// <b>打席の頭の窓でも局面が埋まっている</b>——1球目を投げる前に打者・投手・塁・アウトが分かる。
+    /// これが無いとUIは打席の頭でサイン（バント・盗塁・エンドラン）を受け付けられない
+    /// （投げ終えた球しか観測が無いと、1球目までは前の打席の情報しか手に入らないため）。
+    /// </summary>
+    [Fact]
+    public void EveryTacticsWindow_IncludingTheHeadOfThePa_CarriesTheMatchup()
+    {
+        var prog = new MatchProgression(Team("A"), Team("H"),
+            new GameContext { CapturePitches = true }, 42UL);
+
+        var heads = 0;
+        var windows = 0;
+        while (true)
+        {
+            var r = prog.AdvancePitch();
+            if (r == AdvancePitchResult.Finished) break;
+            if (r != AdvancePitchResult.Pitch) continue;
+
+            var at = prog.CurrentAtBat;
+            Assert.NotNull(at);
+            windows++;
+            Assert.InRange(at!.Outs, 0, 2);
+            Assert.InRange(at.BatterOrder, 1, 9);
+            Assert.False(string.IsNullOrEmpty(at.BatterName));
+            Assert.False(string.IsNullOrEmpty(at.PitcherName));
+            Assert.InRange(at.Balls, 0, 3);
+            Assert.InRange(at.Strikes, 0, 2);
+            Assert.True(at.PitchNumberInPa >= 1);
+
+            if (at.PitchNumberInPa != 1) continue;
+            // 打席の頭＝まだ1球も投げていない。カウントは必ず0-0。
+            heads++;
+            Assert.Equal(0, at.Balls);
+            Assert.Equal(0, at.Strikes);
+        }
+
+        Assert.True(windows > 100, $"采配窓が少なすぎる（{windows}）");
+        Assert.True(heads > 30, $"打席の頭の窓が少なすぎる（{heads}）");
+    }
+
+    /// <summary>ゲートが閉じていれば窓の局面も載らない（統計シムのゼロコスト）。</summary>
+    [Fact]
+    public void CapturePitches_Off_LeavesCurrentAtBatNull()
+    {
+        var prog = new MatchProgression(Team("A"), Team("H"), new GameContext(), 42UL);
+        while (prog.AdvancePitch() != AdvancePitchResult.Finished)
+            Assert.Null(prog.CurrentAtBat);
     }
 
     private static Team Team(string name)
