@@ -894,6 +894,42 @@ public static class GameEngine
 
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride);
 
+                // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
+                // 打席が確定する前に1球ずつ絵にするための供給口で、MatchProgression.AdvancePitch と対で使う。
+                // 既に解決済みの値の写しだけ＝乱数を1回も追加消費しない（EmitPitchTrace と同じ位置・同じ流儀）。
+                if (ctx.CapturePitches && session.PitchLog.Count > 0)
+                {
+                    var rec = session.PitchLog[session.PitchLog.Count - 1];
+                    p.LastPitch = new Timeline.Playback.LivePitch
+                    {
+                        Inning = inning,
+                        IsTop = isTop,
+                        AwayScore = p.Away.Runs,
+                        HomeScore = p.Home.Runs,
+                        Outs = outs,
+                        // 塁はこの球の時点の実状態（盗塁で打席途中に動く）。ファウルの打球再生にもこれを載せる。
+                        BaseFirst = bases.First is not null,
+                        BaseSecond = bases.Second is not null,
+                        BaseThird = bases.Third is not null,
+                        BatterOrder = batterOrder,
+                        BatterName = batter.Name,
+                        BatterSourceId = batter.SourceId,
+                        BatterBats = batter.Bats,
+                        BatterPosition = batter.Position,
+                        BatterNumber = batter.UniformNumber,
+                        BatterConditionValue = batter.ConditionValue,
+                        PitcherName = currentPitcher.Name,
+                        PitcherSourceId = currentPitcher.SourceId,
+                        PitcherThrows = currentPitcher.Throws,
+                        PitcherNumber = currentPitcher.UniformNumber,
+                        PitcherConditionValue = currentPitcher.ConditionValue,
+                        Pitch = Timeline.Playback.PitchTokenFactory.From(rec, ctx,
+                            bases.First is not null, bases.Second is not null, bases.Third is not null),
+                        EndsPlateAppearance = pitchRes.EndsPlateAppearance,
+                        PitchNumberInPa = session.PitchCount,
+                    };
+                }
+
                 // 1球の観測レコードを完成させて流す（設計書17 §4.1）。打席解決層が埋めた意図・実着弾・打者判断へ、
                 // 試合層しか知らない局面・状態・采配・RNG消費を足す。乱数は1回も追加消費しない。
                 void EmitPitchTrace()
@@ -1648,6 +1684,12 @@ public sealed class GameProgress
     public List<MatchInjuryEvent> Injuries { get; } = new();
     /// <summary>継投のログ（issue #209 表現。継投・投野交代・野手登板の各1件）。観測専用＝試合結果・決定論には影響しない。</summary>
     public List<PitchingChangeEvent> PitchingChanges { get; } = new();
+
+    /// <summary>
+    /// 直前に投げた1球の観測（設計書15 Phase D-1 のUI採用）。<see cref="GameContext.CapturePitches"/> が
+    /// 真のときだけ毎球書き換わる。観測専用＝読み書きとも乱数を消費せず、結果・digest・統計帯に影響しない。
+    /// </summary>
+    public Timeline.Playback.LivePitch? LastPitch { get; set; }
 
     /// <summary>
     /// 守備側 <paramref name="defense"/> の直近の継投（<see cref="TeamState.LastPitchingChange"/>）を、

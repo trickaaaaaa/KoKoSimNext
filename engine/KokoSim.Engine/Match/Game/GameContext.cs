@@ -85,6 +85,16 @@ public sealed record GameContext
     /// </summary>
     public bool CaptureTimelines { get; init; }
 
+    /// <summary>
+    /// 1球ぶんの観測（設計書15 Phase D-1 のUI採用）。投げ終えた球と、その時点の局面・対戦を
+    /// <see cref="GameProgress.LastPitch"/> へ書き出す。<b>打席が確定する前に</b>1球ずつ絵にするための供給口で、
+    /// <see cref="Timeline.Playback.MatchProgression.AdvancePitch"/> と対で使う。
+    ///
+    /// <para>既定オフ＝統計シム・裏試合はゼロコスト。書き出しは既に解決済みの値の写しだけで、
+    /// 乱数を1回も追加消費しない＝結果・digest・統計帯は不変（<see cref="CaptureTimelines"/> と同型のゲート）。</para>
+    /// </summary>
+    public bool CapturePitches { get; init; }
+
     /// <summary>守備陣形ルール表（CHANGELOG 33, data/defensive-formations.yaml から注入。null=既定表）。</summary>
     public Match.Timeline.FormationTable? Formations { get; init; }
 

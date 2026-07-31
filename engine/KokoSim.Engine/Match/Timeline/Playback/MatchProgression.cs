@@ -553,6 +553,17 @@ public sealed class MatchProgression
         return AdvancePitchResult.PlateAppearance;
     }
 
+    /// <summary>
+    /// 直前に投げ終えた1球（<see cref="GameContext.CapturePitches"/> が真のときだけ非null）。
+    ///
+    /// <para>采配窓は各投球の<b>手前</b>にあるので、<see cref="AdvancePitch"/> が
+    /// <see cref="AdvancePitchResult.Pitch"/> を返した時点で「1つ前の球」が投げ終わっている＝ここに載る。
+    /// 呼び出し側はこれを1球ぶんの絵として再生し、次の <see cref="AdvancePitch"/> の直前に指示を予約する。
+    /// 打席の頭（まだ1球も投げていない窓）と、この打席で1球も投げない敬遠では前の球が残るので、
+    /// <see cref="LivePitch.PitchNumberInPa"/> で打席内の位置を見分ける。</para>
+    /// </summary>
+    public LivePitch? LastPitch => _p.LastPitch;
+
     private void ConfirmPlateAppearance(GameStep step)
     {
         var e = _p.Log[step.LogIndex];
@@ -562,22 +573,10 @@ public sealed class MatchProgression
         PitchSequence pitchSeq;
         if (e.PitchLog is { Count: > 0 } pitchLog)
         {
+            // 変換は PitchTokenFactory の1本に集約（1球ごとの供給 LivePitch と同じ経路＝描き方が食い違わない）。
             pitchSeq = new PitchSequence(
-                pitchLog.Select(p =>
-                {
-                    // ファウルの打球タイムライン（Issue #313）: 物理層（BattedBall）を持つファウルだけ、
-                    // 打った瞬間から着地までの短い再生（滞空/転がり）を添える。守備解決は経由しない
-                    // ＝守備陣・送球・判定は生成しない（ボールデッドの見せ場のみ・不変条件#2 乱数非消費）。
-                    PlaybackPlay? foulFlight = p.Kind == PitchKind.Foul && p.BattedBall is { } fb
-                        ? PlayTimelineAdapter.ToPlaybackPlay(TimelineBuilder.BuildFoulFlight(
-                            fb, _ctx.Aerodynamics, _ctx.Fielding, _ctx.Field,
-                            e.BaseFirstBefore, e.BaseSecondBefore, e.BaseThirdBefore))
-                        : null;
-                    // コース・弾道（Issue #332）: 対決ビューでボールを実コースへ飛ばすための観測データの写し。
-                    // 新規抽選はせず、判定に使われた実着弾位置と観測専用弾道をそのまま渡す（不変条件#2）
-                    return new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh,
-                        foulFlight, p.LocationX, p.LocationY, p.Trajectory);
-                }).ToList());
+                pitchLog.Select(p => PitchTokenFactory.From(
+                    p, _ctx, e.BaseFirstBefore, e.BaseSecondBefore, e.BaseThirdBefore)).ToList());
         }
         else
         {
