@@ -66,10 +66,13 @@ namespace KokoSim.Unity.Match
             ctrl.SetTacticsHotForCapture(null);
 
             // 攻撃中（自校＝home なので裏）へ進めて打撃の3枚を撮る。
+            // 選択（青）＋ホバー拡大＋既定（白紙）の3状態が1枚に入るようにする。
             yield return AdvanceUntil(ctrl, pa => !pa.IsTop, 40);
-            ctrl.SetTacticsHotForCapture("batting-swing");
-            yield return Capture(ctrl, "04c-card-hover-offense");
+            ctrl.SelectPitchBattingForCapture(KokoSim.Engine.Match.Tactics.PitchBattingOverride.ForceSwing);
+            ctrl.SetTacticsHotForCapture("batting-take");
+            yield return Capture(ctrl, "04c-card-offense-selected-hover");
             ctrl.SetTacticsHotForCapture(null);
+            ctrl.SelectPitchBattingForCapture(null);
 
             var guard = 0;
             while (guard++ < 400 && ctrl.AdvanceForCapture()) { }

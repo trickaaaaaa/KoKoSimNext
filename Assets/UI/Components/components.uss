@@ -1806,10 +1806,10 @@
 .tcard--on { border-color: var(--sky); }
 .tcard--on .tcard__cap { background-color: var(--sky); border-top-color: var(--sky); }
 .tcard--on .tcard__name { color: var(--sf-card); }
-/* 既定（任せ/通常）＝指示なし。面を地に落として「選ばれていない状態」を表す。 */
-.tcard--default { background-color: var(--sf-base); }
-.tcard--default .tcard__art { background-color: var(--sf-base); }
-.tcard--default .tcard__cap { background-color: var(--sf-base); }
+/* 既定（任せ/通常）＝指示なし。絵の面だけ真っ白にして「白紙のカード」に見せる
+   （USS に破線ボーダーは無いので、地の明度差で「中身が無い」を出す）。 */
+.tcard--default .tcard__art { background-color: var(--sf-card); }
+.tcard--default .tcard__ghost { opacity: 0.07; }
 .tcard--default .tcard__name { color: var(--tx-2); }
 /* いまの局面で選べないカード（走者なしの盗塁など）。拡大もクリックもしない。 */
 .tcard--off .tcard__art { background-color: var(--sf-inset); opacity: 0.4; }
