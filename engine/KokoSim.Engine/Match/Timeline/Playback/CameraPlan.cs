@@ -71,7 +71,10 @@ public static class CameraPlanBuilder
     public const double LookaheadSeconds = 0.6;         // 「現在のボール位置＋0.6秒先」
     private const double SampleStepSeconds = 0.08;      // キーフレーム間隔（十分密＝easeIO区間はほぼ線形）
     private const double LeadSeconds = 0.25;            // 先取りサンプリング（事前計画ゆえの遅れ対策）
-    private const double ReturnToWideDelaySeconds = 0.9; // ResAt から全景へ戻すまでの間
+    // ResAt から全景へ戻すまでの間。3Dの守備ビューは全景へ戻さず**この時刻の枠のまま止める**
+    // （2Dは全景に全部入るので戻して問題ないが、寄った3Dでは「用のないところを見ている1.5秒」になる）
+    // ので、戻し始める時刻を単一ソースとして公開する。
+    public const double ReturnToWideDelaySeconds = 0.9;
     private const double WideSettleBufferSeconds = 3.0;  // 全景へのレート制限付き復帰が収束するまでの生成余白（実再生は play.Dur までしか参照しないため無害）
     private const double MaxPlanSeconds = 120.0;         // キーフレーム生成の上限（#208 暴走・OOM 防止。1プレーは現実に数秒）
 

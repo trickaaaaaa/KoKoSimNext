@@ -38,6 +38,13 @@
                         <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" />
                         <ui:Label name="pitch-call-detail" class="pitch-call__detail" text="" />
                     </ui:VisualElement>
+                    <!-- 打球・走塁プレーの判定（アウト/セーフ/フェア/ホームラン）。以前は俯瞰の描画部品が
+                         内側に持っていたが、守備を3Dへ一本化すると盤面ごと隠れて判定が出なくなるため、
+                         俯瞰と3Dの両方にかかるこの層へ出した。中身を書くのは Match2DPlaybackElement のまま。 -->
+                    <ui:VisualElement name="judgement-call" class="pitch-call">
+                        <ui:Label name="judgement-judge" class="pitch-call__judge" text="" />
+                        <ui:Label name="judgement-detail" class="pitch-call__detail" text="" />
+                    </ui:VisualElement>
                     <!-- 得点時の大型スコア（issue #60）。自校－相手校固定・加点前→1点ずつ加算→加点後で自動的に消える。 -->
                     <ui:VisualElement name="score-call" class="score-call">
                         <ui:VisualElement class="score-call__panel">
@@ -86,7 +93,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="md-group">
                         <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />
-                        <ui:Button name="duel-view" class="chip-btn" text="対決ビュー" />
+                        <ui:Button name="duel-view" class="chip-btn" text="2D俯瞰（デバッグ）" />
                         <ui:Button name="back-home" class="chip-btn md-replay" text="ホームへ戻る ▶" style="display: none;" />
                     </ui:VisualElement>
                 </ui:VisualElement>

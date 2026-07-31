@@ -1935,16 +1935,44 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 全景へ戻し始める時刻（＝決着＋<c>ReturnToWideDelaySeconds</c>）と、プランの終端時刻。
+        ///
+        /// <b>何を直しているか</b>: プランはこの時刻から全景（<c>WideCy</c>=69m・縦155m）へ戻り始めるが、
+        /// ズーム変化率の上限のせいで戻り切るのに約1.5秒かかる。2Dの俯瞰は全景に盤面が全部入るので
+        /// 途中も絵として成立するが、寄っている3Dでは**球も決着の場所も枠の外**＝
+        /// 「用のないところを見ている1.5秒」になる（F3 の申し送り）。
+        ///
+        /// <b>直し方は「据え置き」ではなく「カット」</b>。一度は据え置きで実装したが、実測で
+        /// **走者が残るプレー2.7秒・本塁打9.5秒**のあいだ止まった枠がフェンス際を映し続けると分かった
+        /// （凡打は決着+0.9秒でプレー自体が終わるので据え置きに入らず、短いプレーだけ見ていると気づけない）。
+        /// 戻り先そのものは正しい＝**流れるのをやめて一気に切り替える**。中継のカットと同じで、
+        /// 全景では走者が塁を回っているのが見える（F9 以前に俯瞰で見せていたものと同じ）。
+        ///
+        /// ⚠ 寄りのピークは決着の0.6秒後（同じくズーム変化率の上限）なので、決着ちょうどで切ると
+        /// 一番寄った絵を捨てることになる。切るのは戻し始める瞬間で、そこまでは追わせる。
+        /// </summary>
+        private float _fieldCamCutT = float.PositiveInfinity;
+        private float _fieldPlanEndT;
+
+        /// <summary>
+        /// カメラが使う時刻。全景へ戻し始める瞬間から先は**プランの終端**（＝レート制限が収束した後の
+        /// 全景そのもの）を引く＝流れずに切り替わる。**実測の窓もこれを通す**。
+        /// 素の t で測ると数値だけ滑らかに動き、カットになっているのか流れているのか区別できない。
+        /// </summary>
+        private float FieldCamTime(float t) => t < _fieldCamCutT ? t : _fieldPlanEndT;
+
+        /// <summary>
         /// 時刻 t の視野を守備カメラへ流す。据え位置は切り替え計画から採り、
         /// 同じ据え位置でいる間は**位置が動かない**（向きと画角だけが動く＝中継の三脚と同じ）。
         /// </summary>
         private void ApplyFieldCamera(float t)
         {
             if (_fieldPlan == null || _fieldPlan.Count == 0) return;
+            float ct = FieldCamTime(t);
             Vector3 aim;
             float frameH;
-            ComputeFieldFrame(t, out aim, out frameH);
-            FramePreview(FieldStationAt(t), aim, frameH);
+            ComputeFieldFrame(ct, out aim, out frameH);
+            FramePreview(FieldStationAt(ct), aim, frameH);
         }
 
         // ---- 打球プレーの再生 ---------------------------------------------------
@@ -2018,13 +2046,25 @@ namespace KokoSim.Unity.Match
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             BuildFieldCameraPlan(play);
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
+            _fieldCamCutT = double.IsFinite(play.ResAt)
+                ? (float)(play.ResAt + CameraPlanBuilder.ReturnToWideDelaySeconds)
+                : float.PositiveInfinity;
+            // プランの終端はレート制限の収束余白（WideSettleBufferSeconds）ぶん後ろにあり、
+            // そこを引けば「戻り切った全景」がそのまま出る＝Unity側で全景の値を持ち直さない
+            _fieldPlanEndT = _fieldPlan != null && _fieldPlan.Count > 0
+                ? (float)_fieldPlan[_fieldPlan.Count - 1].T : 0f;
             _fieldT = t0;
             SetFieldTime(t0);
         }
 
-        /// <summary>打球プレーの再生をやめ、対決ビューの構図へ戻す。</summary>
+        /// <summary>
+        /// 打球プレーの再生をやめ、対決ビューの構図へ戻す。
+        /// ⚠ 走っていないときに呼んでも何もしない＝**投手・捕手を古い控えで上書きしない**
+        /// （二度呼ぶと前のプレーの途中姿勢へ巻き戻る）。
+        /// </summary>
         public void EndFieldPlay()
         {
+            if (_fieldPlay == null) return;
             _fieldPlay = null;
             _fieldPlan = null;
             _fieldStationCuts.Clear();
@@ -2244,7 +2284,9 @@ namespace KokoSim.Unity.Match
             var ball = _fieldPlay == null ? null : PlaybackEvaluator.BallAt(_fieldPlay, t);
             float frameH = -1f;
             var aim = Vector3.zero;
-            if (_fieldPlan != null && _fieldPlan.Count > 0) ComputeFieldFrame(t, out aim, out frameH);
+            // ⚠ 球は素の t、枠は**据え置き後の時刻**で採る（＝画面に出ている枠そのもの）。
+            float ct = FieldCamTime(t);
+            if (_fieldPlan != null && _fieldPlan.Count > 0) ComputeFieldFrame(ct, out aim, out frameH);
 
             // **注視点にいる人**の大きさ＝この構図の読みやすさそのもの。
             // 特定の役（中堅手など）で測ると、その役がプレーに絡まない時に意味のない数になる。
