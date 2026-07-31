@@ -99,7 +99,11 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
     }
 
     public static EndpointBallSegment From(BallSegment s)
-        => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM);
+        => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM)
+        {
+            // 送球の投げ手／受け手（Issue E1）。座標と違って**推定できない**値なので素通しする
+            FromRole = s.FromRole, ToRole = s.ToRole, ToBase = s.ToBase,
+        };
 
     public override PlaybackBall At(double tt)
     {

@@ -28,6 +28,20 @@ public readonly record struct PlaybackBall(double X, double Y, double H);
 public abstract record PlaybackBallSegment(double T0, double T1)
 {
     public abstract PlaybackBall At(double tt);
+
+    /// <summary>
+    /// 送球の投げ手（Issue E1。<see cref="BallSegment.FromRole"/> の写し。無ければ null）。
+    /// 3D守備ビューが「誰が投げるモーションをするか」を決めるのに使う表示専用の値で、
+    /// 2D俯瞰は読まない。モックの <see cref="ThrowSegment"/> は持たない＝Unity 側は
+    /// null のとき従来どおり最近傍の野手へ落とす。
+    /// </summary>
+    public FieldPosition? FromRole { get; init; }
+
+    /// <summary>送球の受け手（同上）。中継のカットマンもここに入る。</summary>
+    public FieldPosition? ToRole { get; init; }
+
+    /// <summary>受け先の塁名（"first"/"second"/"third"/"home"）。塁でなければ null。</summary>
+    public string? ToBase { get; init; }
 }
 
 /// <summary>投球（マウンド→本塁）。mock: pitchSeg。</summary>

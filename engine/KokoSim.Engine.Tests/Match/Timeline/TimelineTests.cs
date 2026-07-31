@@ -456,6 +456,76 @@ public sealed class TimelineTests
     }
 
     [Fact]
+    public void DoublePlayThrows_CarryThrowerAndReceiverRoles()
+    {
+        // Issue E1: 3D守備ビューは「誰が投げるモーションをするか」を決める必要がある。座標だけの
+        // 最近傍マッチは、二塁の周りに遊撃手・二塁手・走者が同時に居る併殺で取り違える。
+        var field = new FieldGeometry();
+        var play = GrounderOut();   // 遊撃手が処理＝6-4-3
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.Single(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
+
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        Assert.Equal(2, throws.Count);
+        // 1本目: 遊撃手 → 二塁カバー（陣形が実際に二塁へ動かした野手と同一人物）。
+        Assert.Equal(FieldPosition.Shortstop, throws[0].FromRole);
+        Assert.Equal("second", throws[0].ToBase);
+        var pivot = throws[0].ToRole;
+        Assert.NotNull(pivot);
+        Assert.Contains(tl.Moves, m => m.Role == pivot && m.Task == FielderTask.CoverBase);
+        // 2本目: その中継役 → 一塁。**投げ手が1本目の受け手と同一**であることが要（併殺の肝）。
+        Assert.Equal(pivot, throws[1].FromRole);
+        Assert.Equal(FieldPosition.FirstBase, throws[1].ToRole);
+        Assert.Equal("first", throws[1].ToBase);
+    }
+
+    [Fact]
+    public void InfieldGrounderThrow_CarriesFielderAndFirstBaseCoverer()
+    {
+        // 一塁送球（併殺でない通常のゴロ）。受け手は「一塁カバーに実際に入る野手」＝
+        // 遊撃ゴロなら一塁手そのもの。ファーストが捕った場合は投手が入る（Issue #257 の動的割当）。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var throw1 = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(FieldPosition.Shortstop, throw1.FromRole);
+        Assert.Equal(FieldPosition.FirstBase, throw1.ToRole);
+        Assert.Equal("first", throw1.ToBase);
+
+        var byFirst = FieldingPlayFixtures.InfieldGrounder(
+            FieldPosition.FirstBase, landingX: 12.0, landingZ: 20.0);
+        var tl2 = TimelineBuilder.BuildBattedBall(
+            byFirst, field.StandardAlignment(), field, null, runnersOn: false,
+            TimelineBuilder.DescribeResult(byFirst));
+        var throw2 = tl2.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(FieldPosition.FirstBase, throw2.FromRole);
+        Assert.Equal(FieldPosition.Pitcher, throw2.ToRole);
+    }
+
+    [Fact]
+    public void Roles_ArePresentOnlyOnThrows()
+    {
+        // 表示専用の付加情報なので、送球以外（投球・滞空・転がり）には付けない＝
+        // Unity 側が「役が入っている＝送球」と読めるようにしておく。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var tl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        foreach (var seg in tl.Ball.Where(b => b.Kind != BallSegmentKind.Throw))
+        {
+            Assert.Null(seg.FromRole);
+            Assert.Null(seg.ToRole);
+            Assert.Null(seg.ToBase);
+        }
+    }
+
+    [Fact]
     public void DoublePlayThrows_TimesAreContinuousAndMonotonic()
     {
         var field = new FieldGeometry();

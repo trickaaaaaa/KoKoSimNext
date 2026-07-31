@@ -33,6 +33,22 @@ public sealed record BallSegment
     public required TimelinePoint To { get; init; }
     /// <summary>滞空セグメントの頂点高さ[m]（Flight のみ意味を持つ。UIの放物線演出用）。</summary>
     public double ApexHeightM { get; init; }
+
+    /// <summary>
+    /// この送球を投げた野手（<see cref="BallSegmentKind.Throw"/> のみ。表示専用・Issue E1）。
+    ///
+    /// 3Dの守備ビューは「誰が投げるモーションをするか」を決める必要があるが、座標だけでは
+    /// **併殺の二塁→一塁のように同時刻に複数人が近い場面で取り違える**（最近傍マッチの限界）。
+    /// 取り違えは「投げていない野手が投げる」という形で絵に出るのに、**原因は絵からは切り分けられない**。
+    /// 生成側は既に知っている値なので、新規計算ゼロで書き足すだけ。
+    /// </summary>
+    public FieldPosition? FromRole { get; init; }
+
+    /// <summary>この送球を受ける野手（同上）。中継のカットマンもここに入る。</summary>
+    public FieldPosition? ToRole { get; init; }
+
+    /// <summary>受け先の塁名（"first"/"second"/"third"/"home"）。中継地点など塁でなければ null。</summary>
+    public string? ToBase { get; init; }
 }
 
 /// <summary>野手1人の移動（守備陣形ルール表から自動付与, CHANGELOG 33）。</summary>

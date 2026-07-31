@@ -1595,17 +1595,14 @@ namespace KokoSim.EditorTools
                         var body = SpawnBody(root, "catch", Vector3.zero, 0f, Color.white);
                         Sample(body, clip, sec / clip.length);
                         var anim = body.GetComponentInChildren<Animator>();
-                        var hips = anim.GetBoneTransform(HumanBodyBones.Hips).position;
                         var glove = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
-                        var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
-                        var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
                         var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
                         var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
-                        var fwd = Vector3.Cross(ra - la, Vector3.up); fwd.y = 0f; fwd.Normalize();
-                        var right = Vector3.Cross(Vector3.up, fwd);
-                        var d = glove - hips;
-                        // 体の向きを軸に取り直す＝**その場の yaw に依らない表**になる
-                        loc[i] = new Vector3(Vector3.Dot(d, right), d.y, Vector3.Dot(d, fwd));
+                        // ⚠ 軸は**アクターのローカル**（＝立ち位置と yaw を与える座標系）で採る。
+                        // 肩の線から作った解剖学的な前後左右で採ると、収録が捕球までに体を回している分だけ
+                        // ずれ、その表で yaw を決めると「グラブが球の方を向いていない」形になる
+                        // （2026-08-01 実測: 残差 0.026m → 0.165m。**絵ではカメラの狙い外しと区別できない**）
+                        loc[i] = body.transform.InverseTransformPoint(glove);
                         footY[i] = glove.y - Mathf.Min(lf.y, rf.y);
                         Object.DestroyImmediate(body);
                     }
@@ -1639,6 +1636,119 @@ namespace KokoSim.EditorTools
 
         [UnityEditor.MenuItem("KokoSim/Duel/F5 野手の捕球クリップを実測する")]
         private static void RunFielderCatchProbeMenu() => RunFielderCatchProbe();
+
+        /// <summary>
+        /// 送球クリップの**リリースの瞬間**と**手の位置**を実測する（打球処理の3D化 F6）。
+        ///
+        /// リリースの定義は投手と同じ **利き手（右手）の速さのピーク**に揃える
+        /// （<c>DuelCalibration.BallReleaseClipTime</c>＝2.97 は「手の速度ピーク実測 2.95〜3.00」で採った値）。
+        /// 定義を役ごとに変えると、同じ「投げる」なのに球の出所が役ごとにずれる。
+        ///
+        /// ⚠ 捕球と違って **腕は振り抜いた後も速い**（フォロースルー）。ピークが1つとは限らないので、
+        /// 手が最も高い／最も前に出た時刻も併記して1本ずつ目で決める材料にする。
+        ///
+        /// 出す量:
+        ///   tPeak/vPeak … 右手の速さのピークとその時刻（＝リリースの第一候補）
+        ///   hy          … その瞬間の手の**足元からの高さ**[m]（球の出所の高さ＝engine の 1.7 と比べる）
+        ///   hx/hz       … 同じ瞬間の横/前（腰基準・体の向きを軸に取る）
+        ///   tFwd/fwdMax … 手が最も前に出た時刻と量[m]（ピークが振り抜き側に出たときの切り分け用）
+        ///   tHigh/hiMax … 手が最も高くなった時刻と高さ[m]（同上）
+        /// </summary>
+        public static string RunThrowProbe()
+        {
+            var names = new[]
+            {
+                // 野手の送球（内野→塁・外野→中継）
+                "Defender_Pass_the_ball_type01", "Defender_Pass_the_ball_type02",
+                "Defender_Pass_the_ball_type03",
+                // 捕球から続けて投げる収録があるか（尺が長い4本）を同じ物差しで確かめる
+                "Defender_Catched_Type01", "Defender_Catched_Type02",
+                "Defender_Catched_Type03", "Defender_Catched_Type04",
+                // 捕手（盗塁の二塁送球・投手への返球）
+                "Catcher_Throwing", "Catcher_To_Pitcher",
+            };
+            const float dt = 0.02f;
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\ttPeak\tvPeak\thy\thx\thz\tdirDeg\televDeg\ttFwd\tfwdMax\ttHigh\thiMax");
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    var loc = new Vector3[n + 1];   // 腰基準（右/上/前）
+                    var footY = new float[n + 1];   // 手の対地高
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "throw", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var hand = anim.GetBoneTransform(HumanBodyBones.RightHand).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        // 軸は**アクターのローカル**（捕球プローブと同じ理由。yaw を決める座標系に揃える）
+                        loc[i] = body.transform.InverseTransformPoint(hand);
+                        footY[i] = hand.y - Mathf.Min(lf.y, rf.y);
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iPeak = 0, iFwd = 0, iHigh = 0;
+                    float vPeak = 0f, fwdMax = float.MinValue, hiMax = float.MinValue;
+                    for (int i = 0; i <= n; i++)
+                    {
+                        if (i > 0)
+                        {
+                            float v = (loc[i] - loc[i - 1]).magnitude / dt;
+                            if (v > vPeak) { vPeak = v; iPeak = i; }
+                        }
+                        if (loc[i].z > fwdMax) { fwdMax = loc[i].z; iFwd = i; }
+                        if (footY[i] > hiMax) { hiMax = footY[i]; iHigh = i; }
+                    }
+
+                    // 球が出ていく向き＝**リリースの瞬間の手の速度**（体の向きではない）。
+                    // 収録は横手投げも含むので「体の正面へ飛ぶ」と決め打つと、投げる相手と
+                    // 球の行き先が食い違う。走行クリップの MoveDirDeg と同じ考え方で実測する
+                    var rel = iPeak > 0 ? (loc[iPeak] - loc[iPeak - 1]) / dt : Vector3.forward;
+                    var relH = new Vector2(rel.x, rel.z);
+                    float dirDeg = relH.sqrMagnitude > 1e-6f
+                        ? Mathf.Atan2(relH.x, relH.y) * Mathf.Rad2Deg : 0f;
+                    float elevDeg = Mathf.Atan2(rel.y, Mathf.Max(1e-4f, relH.magnitude)) * Mathf.Rad2Deg;
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F2}\t{3:F1}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F1}\t{8:F1}\t{9:F2}\t{10:F3}\t{11:F2}\t{12:F3}",
+                        shortName, clip.length, iPeak * dt, vPeak,
+                        footY[iPeak], loc[iPeak].x, loc[iPeak].z, dirDeg, elevDeg,
+                        iFwd * dt, fwdMax, iHigh * dt, hiMax));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/throw.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] throw probe -> out/duel-stage/throw.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F6 送球クリップを実測する")]
+        private static void RunThrowProbeMenu() => RunThrowProbe();
 
         private static AnimationClip FindClip(string clipName)
         {

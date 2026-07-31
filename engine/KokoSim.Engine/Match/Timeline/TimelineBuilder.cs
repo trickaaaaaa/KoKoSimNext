@@ -57,6 +57,25 @@ public static class TimelineBuilder
         // 静止し、野手の居場所ともズレていた。
         var fieldPoint = FieldPointOf(play);
 
+        // 守備陣形（9人全員に役割を付与, CHANGELOG 33）。ゾーン分類は着地点距離(RangeM)ではなく
+        // 実際の回収点(fieldPoint)基準にする（Issue #336①）。ゴロは本塁寄りで着地して転がるため、
+        // 着地点距離だけでは内野を抜けた打球（ThroughInfield）が内野ゾーンのまま誤分類され、
+        // SS/3B(2B)が抜けた打球に一歩も反応しない棒立ちになっていた。方位角も回収点から取り直す
+        // （着地点と回収点で通り道が微妙にずれるイレギュラーバウンドがあるため一貫させる）。
+        // 内野で処理が完結する打球は回収点が着地点の延長上（同じ46m境界内）なので分類は変わらない。
+        // ⚠ ここで先に出すのは、**一塁送球の受け手（Issue E1）を送球を積む時点で知る**ため
+        // （送球の生成はこの下、陣形ループはさらに後ろ）。値は fieldPoint だけで決まる。
+        var fieldRangeM = Math.Sqrt(fieldPoint.X * fieldPoint.X + fieldPoint.Z * fieldPoint.Z);
+        var fieldBearingDeg = Math.Atan2(fieldPoint.X, fieldPoint.Z) * 180.0 / Math.PI;
+        var zone = FormationTable.Classify(fieldBearingDeg, fieldRangeM);
+        // 一塁カバーは実捕球者から動的に決める（Issue #257）。静的表のゾーン別担当は初期値止まりで
+        // 誰が実際に捕ったかを見ていない（例: Bunt/InfieldRight ではファースト以外が捕るとファーストは
+        // FieldBall 降格で役割を失い棒立ちになる）。表引き結果の一塁カバーだけ、このマッピングで上書きする
+        // （YAML 側の表は初期値として温存。ゾーン×捕球者の全組み合わせを展開しない）。
+        var firstBaseCoverer = play.FielderRole == FieldPosition.FirstBase
+            ? (zone == BallZone.Bunt ? FieldPosition.SecondBase : FieldPosition.Pitcher)
+            : FieldPosition.FirstBase;
+
         var ball = new List<BallSegment>
         {
             new()
@@ -128,6 +147,7 @@ public static class TimelineBuilder
                     Kind = BallSegmentKind.Throw,
                     T0 = Math.Max(fieldedAt, arrive - flight), T1 = arrive,
                     From = fieldPoint, To = firstBase,
+                    FromRole = play.FielderRole, ToRole = firstBaseCoverer, ToBase = "first",
                 });
             }
         }
@@ -189,15 +209,6 @@ public static class TimelineBuilder
             _ => fieldedAt,
         };
 
-        // 守備陣形（9人全員に役割を付与, CHANGELOG 33）。ゾーン分類は着地点距離(RangeM)ではなく
-        // 実際の回収点(fieldPoint)基準にする（Issue #336①）。ゴロは本塁寄りで着地して転がるため、
-        // 着地点距離だけでは内野を抜けた打球（ThroughInfield）が内野ゾーンのまま誤分類され、
-        // SS/3B(2B)が抜けた打球に一歩も反応しない棒立ちになっていた。方位角も回収点から取り直す
-        // （着地点と回収点で通り道が微妙にずれるイレギュラーバウンドがあるため一貫させる）。
-        // 内野で処理が完結する打球は回収点が着地点の延長上（同じ46m境界内）なので分類は変わらない。
-        var fieldRangeM = Math.Sqrt(fieldPoint.X * fieldPoint.X + fieldPoint.Z * fieldPoint.Z);
-        var fieldBearingDeg = Math.Atan2(fieldPoint.X, fieldPoint.Z) * 180.0 / Math.PI;
-        var zone = FormationTable.Classify(fieldBearingDeg, fieldRangeM);
         var rule = table.Lookup(zone, runnersOn);
         var returnTail = 0.0; // 定位置復帰レッグの最終時刻（余韻を延ばすため）
         if (rule is not null)
@@ -213,13 +224,6 @@ public static class TimelineBuilder
             // ボールそのものの描画（Flight/Roll セグメント）は着地点(landing)のまま＝柵越えの絵は保つ。
             var fieldBallTarget = ballFielder is null ? ClampToFence(landing, field, play.BearingDeg) : landing;
 
-            // 一塁カバーは実捕球者から動的に決める（Issue #257）。静的表のゾーン別担当は初期値止まりで
-            // 誰が実際に捕ったかを見ていない（例: Bunt/InfieldRight ではファースト以外が捕るとファーストは
-            // FieldBall 降格で役割を失い棒立ちになる）。表引き結果の一塁カバーだけ、このマッピングで上書きする
-            // （YAML 側の表は初期値として温存。ゾーン×捕球者の全組み合わせを展開しない）。
-            var firstBaseCoverer = ballFielder == FieldPosition.FirstBase
-                ? (zone == BallZone.Bunt ? FieldPosition.SecondBase : FieldPosition.Pitcher)
-                : FieldPosition.FirstBase;
             var firstBaseCovered = false;
             // 内野を抜けた打球で最も惜しかった内野手（Issue #336②）。この1人だけ、通常の役割移動の前に
             // 「打球ラインへ寄る/飛びつく」レッグを1本挟む。ThroughInfield でない打球では常に null。
@@ -480,7 +484,12 @@ public static class TimelineBuilder
             Ball = new[]
             {
                 new BallSegment { Kind = BallSegmentKind.Pitch, T0 = pitchStart, T1 = pitchArrive, From = Mound, To = Home },
-                new BallSegment { Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = Home, To = second },
+                // 受け手は下の Moves で二塁カバーに入る遊撃手と同一（Issue E1・単一ソース）
+                new BallSegment
+                {
+                    Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = Home, To = second,
+                    FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Shortstop, ToBase = "second",
+                },
             },
             Moves = new[]
             {
@@ -698,7 +707,9 @@ public static class TimelineBuilder
     /// </summary>
     private static void AddThrowChain(
         List<BallSegment> ball, TimelinePoint from, TimelinePoint target, TimelinePoint? cutoff,
-        double releaseAt, double arriveAt, double leg1Seconds, double leg2Seconds)
+        double releaseAt, double arriveAt, double leg1Seconds, double leg2Seconds,
+        FieldPosition? fromRole = null, FieldPosition? cutoffRole = null,
+        FieldPosition? toRole = null, string? toBase = null)
     {
         if (cutoff is { } cut)
         {
@@ -706,11 +717,13 @@ public static class TimelineBuilder
             {
                 Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = releaseAt + leg1Seconds,
                 From = from, To = cut,
+                FromRole = fromRole, ToRole = cutoffRole,   // 中継地点は塁ではないので ToBase は付けない
             });
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Throw, T0 = arriveAt - leg2Seconds, T1 = arriveAt,
                 From = cut, To = target,
+                FromRole = cutoffRole, ToRole = toRole, ToBase = toBase,
             });
             return;
         }
@@ -718,7 +731,35 @@ public static class TimelineBuilder
         {
             Kind = BallSegmentKind.Throw, T0 = arriveAt - leg1Seconds, T1 = arriveAt,
             From = from, To = target,
+            FromRole = fromRole, ToRole = toRole, ToBase = toBase,
         });
+    }
+
+    /// <summary>
+    /// タイムラインに既に置かれている中継(カットオフ)野手の**役**（<see cref="FielderTask.Cutoff"/>）。
+    /// 座標側の <see cref="FindCutoffFielderPoint"/> と同じ割当を見る＝位置と役が食い違わない（Issue E1）。
+    /// </summary>
+    private static FieldPosition? FindCutoffFielderRole(PlayTimeline timeline)
+    {
+        foreach (var m in timeline.Moves)
+        {
+            if (m.Task == FielderTask.Cutoff) return m.Role;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// その地点の塁カバーに入る野手の役（Issue E1）。陣形が実際に積んだ <see cref="FielderTask.CoverBase"/>
+    /// の割当を単一ソースにし、割当が無い（既にその場に居て移動が発生しない）ときだけ
+    /// <paramref name="fallback"/> の定位置担当へ落とす。
+    /// </summary>
+    private static FieldPosition CoverRoleAt(PlayTimeline timeline, TimelinePoint at, FieldPosition fallback)
+    {
+        foreach (var m in timeline.Moves)
+        {
+            if (m.Task == FielderTask.CoverBase && Distance(m.To, at) < 1.0) return m.Role;
+        }
+        return fallback;
     }
 
     /// <summary>
@@ -760,15 +801,21 @@ public static class TimelineBuilder
         // 一塁到達は打者到達へアンカー（＝際どく封殺）。ただし物理的な下限は割らない。
         var firstArrive = Math.Max(batterArriveAnchor, pivotAt + Distance(second, first) / arm);
 
+        // 送球の投げ手／受け手（Issue E1）。**併殺はここが最近傍マッチの壊れる場所**＝
+        // 二塁の周りに遊撃手・二塁手・走者が同時に居るので、座標だけでは中継役を取り違える。
+        var pivotRole = CoverRoleAt(timeline, second, FieldPosition.SecondBase);
+        var firstRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
         ball.Add(new BallSegment
         {
             Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = secondArrive,
             From = fieldPoint, To = second,
+            FromRole = play.FielderRole, ToRole = pivotRole, ToBase = "second",
         });
         ball.Add(new BallSegment
         {
             Kind = BallSegmentKind.Throw, T0 = pivotAt, T1 = firstArrive,
             From = second, To = first,
+            FromRole = pivotRole, ToRole = firstRole, ToBase = "first",
         });
 
         // 二塁封殺の判定時刻を走者到達ではなく実際の送球到達へ差し替える（Issue #328①）。
@@ -866,7 +913,9 @@ public static class TimelineBuilder
             physicalArrive, releaseAt + leg1 + leg2, homeArriveAnchor, runnerOut);
 
         var ball = new List<BallSegment>(timeline.Ball);
-        AddThrowChain(ball, fieldPoint, Home, cutoff, releaseAt, homeArrive, leg1, leg2);
+        AddThrowChain(ball, fieldPoint, Home, cutoff, releaseAt, homeArrive, leg1, leg2,
+            play.FielderRole, FindCutoffFielderRole(timeline),
+            CoverRoleAt(timeline, Home, FieldPosition.Catcher), "home");
 
         var captions = new List<TimelineCaption>(timeline.Captions)
         {
@@ -922,11 +971,25 @@ public static class TimelineBuilder
             physicalArrive, readyAt + leg1 + leg2, runnerArriveAnchor, runnerOut: false);
 
         var ball = new List<BallSegment>(timeline.Ball);
-        AddThrowChain(ball, fieldPoint, target, cutoff, readyAt, arrive, leg1, leg2);
+        AddThrowChain(ball, fieldPoint, target, cutoff, readyAt, arrive, leg1, leg2,
+            play.FielderRole, FindCutoffFielderRole(timeline),
+            CoverRoleAt(timeline, target, DefaultBaseGuard(leadBaseName)), leadBaseName);
 
         var duration = Math.Max(timeline.Duration, arrive + 1.0);
         return timeline with { Ball = ball, Duration = duration };
     }
+
+    /// <summary>
+    /// 陣形が誰もカバーに付けなかったときの塁の既定の持ち主（Issue E1 のフォールバック）。
+    /// 二塁だけは遊撃／二塁の両方が入り得るが、陣形表の既定（<see cref="DefensiveFormation"/>）に合わせる。
+    /// </summary>
+    private static FieldPosition DefaultBaseGuard(string baseName) => baseName switch
+    {
+        "first" => FieldPosition.FirstBase,
+        "second" => FieldPosition.Shortstop,
+        "third" => FieldPosition.ThirdBase,
+        _ => FieldPosition.Catcher,
+    };
 
     /// <summary>
     /// 表示上の中継しきい値[m]（これ超で中継、以下は直接返球）。
