@@ -15,12 +15,18 @@ public static class BatterDecision
     /// 「大外れの球が変化量だけで釣れる」という不自然を防ぐ（ゾーン内は距離=0で常に無効）。
     /// テストから直接呼べるよう <see cref="DecideSwing"/> と分離。
     /// </summary>
+    /// <param name="swingFactor">
+    /// 打撃姿勢（<see cref="Tactics.BattingApproach.WorkCount"/>＝待球策）によるスイング頻度の倍率。
+    /// 既定 1.0 は恒等＝従来と1ビットも変わらない。能力ではなく「振りにいく頻度」だけを動かす軸なので、
+    /// 打者属性ではなく打席コンテキスト側から渡す。
+    /// </param>
     public static double SwingProbability(
         bool inZone,
         double distanceOutsideM,
         double breakMagnitudeM,
         BatterAttributes batter,
-        BattingCoefficients coeff)
+        BattingCoefficients coeff,
+        double swingFactor = 1.0)
     {
         double p;
         if (inZone)
@@ -36,16 +42,18 @@ public static class BatterDecision
                 - coeff.ChaseDistanceSlope * distanceOutsideM;
         }
 
-        return MathUtil.Clamp(p, 0.02, 0.98);
+        return MathUtil.Clamp(p * swingFactor, 0.02, 0.98);
     }
 
-    /// <summary>スイングするか。</summary>
+    /// <summary>スイングするか。<paramref name="swingFactor"/> の意味は <see cref="SwingProbability"/> を参照。</summary>
     public static bool DecideSwing(
         bool inZone,
         double distanceOutsideM,
         double breakMagnitudeM,
         BatterAttributes batter,
         BattingCoefficients coeff,
-        IRandomSource rng)
-        => MathUtil.Chance(SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff), rng);
+        IRandomSource rng,
+        double swingFactor = 1.0)
+        => MathUtil.Chance(
+            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor), rng);
 }

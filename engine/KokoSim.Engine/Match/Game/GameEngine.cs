@@ -517,6 +517,12 @@ public static class GameEngine
                 }
             }
 
+            // プレイヤーの采配指示（2026-07-31）: brain の判断より常に優先する。brain 呼び出しの**後**に
+            // 置くのが肝で、こうすると brain 側のRNG消費が指示の有無で変わらない＝同シードの乱数順が保たれる。
+            // 未設定ならフィールド読み取りだけでRNGを1発も引かない（＝AI駆動のシム・統計帯は完全に不変）。
+            defTactics = defense.ApplyStandingDefense(defTactics);
+            if (offense.ConsumePendingOffensiveSign() is { } manualSign) sign = manualSign;
+
             // 敬遠（design-14 P1-3・§2.5-a）: 決まっていれば攻撃側のサイン（バント/スクイズ等）は
             // 一切発動しない（打席解決全体が無条件四球に置き換わるため）。CallOffense 自体の
             // RNG消費は温存し、その後続処理だけを打たない＝統一ステッパ化後も従来の乱数順と一致させる。
@@ -609,6 +615,10 @@ public static class GameEngine
                 batterAttrs = batterAttrs with { Power = ClampAbility(batterAttrs.Power * batter.ChanceHitFactor) };
             }
 
+            // 打撃姿勢（2026-07-31）: サインの上に重ねる「構え」。既定 Normal は恒等なので、
+            // 指示していない試合はここを通っても実効能力が1も動かない。
+            batterAttrs = BattingApproachModel.Apply(batterAttrs, offense.BattingApproach, ctx.Tactics);
+
             // 打順消費（設計書15 Phase D-2e）: 打席が実際に確定した時点まで遅らせる（下の squeezeAbandoned/
             // stealEndedHalf ガード直後）。ここでは進めない＝Peekのみでこの打者を握ったまま投球ループへ入る。
 
@@ -622,7 +632,8 @@ public static class GameEngine
                 + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
             var abCtx = ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                 gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
-                skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk);
+                skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
+                swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics));
 
             // 通常打席の投球ループ（設計書15 §2.1）: AtBatSession を1球ずつ回し、各投球の前に采配窓を yield する。
             // 一括 ResolveDetailed と実装・RNG消費が完全一致（yield は乱数非消費）＝バッチ Play と対話進行は同一結果。
@@ -696,6 +707,13 @@ public static class GameEngine
                     stealAttempt = d?.StealAttempt;
                     stealTarget = d?.StealTarget ?? StealTarget.Second;
                     traceCandidates = d?.Explanation; // 観測専用（設計書17 §5 P4）。判断には使わない。
+                }
+                // 手動の盗塁指示（2026-07-31）: brain より優先。**盗塁の解決より前**で消費しないと
+                // その球には間に合わない（打撃の手動指示は解決順の都合で下の別ブロックのまま）。
+                if (offense.ConsumePendingSteal() is { } manualSteal)
+                {
+                    stealAttempt = manualSteal.Start;
+                    stealTarget = manualSteal.Target;
                 }
                 if (defense.Tactics is IPitchTacticsBrain defensePitchBrain)
                 {

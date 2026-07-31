@@ -520,6 +520,16 @@ tactics:
   hit_and_run_power_penalty: 0.15
   hit_and_run_launch_penalty: 0.20
   hit_and_run_caught_penalty: 0.15
+  # 打撃姿勢（采配カード。プレイヤーが選んだ打席にだけ載る＝AI駆動のシムは不変）
+  work_count_swing_factor: 0.82    # 待球策: スイング頻度の倍率（<1で球数を投げさせる）
+  ground_ball_launch_penalty: 0.30 # 転がせ
+  ground_ball_contact_boost: 0.05
+  ground_ball_power_penalty: 0.10
+  slug_power_boost: 0.12           # 長打狙い
+  slug_launch_boost: 0.20
+  slug_contact_penalty: 0.12
+  put_in_play_contact_boost: 0.14  # 当てに行け
+  put_in_play_power_penalty: 0.18
   buster_vs_shift_bonus: 0.08
   buster_penalty: 0.05
   squeeze_read_base: 0.08          # ウエスト（バッテリー察知）

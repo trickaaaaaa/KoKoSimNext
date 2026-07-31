@@ -107,7 +107,7 @@ public sealed record GameContext
     public AtBatContext ToAtBatContext(IReadOnlyList<Fielder> fielders, bool runnersOn = false,
         PitcherGear gear = PitcherGear.Normal, Tactics.PitchDirective? directive = null,
         bool takeFirstPitch = false, SkillPlayMods? skills = null, int catcherLead = 50,
-        bool intentionalWalk = false) => new()
+        bool intentionalWalk = false, double swingProbabilityFactor = 1.0) => new()
     {
         Aerodynamics = Aerodynamics,
         Mound = Mound,
@@ -120,6 +120,7 @@ public sealed record GameContext
         Gear = gear,
         Directive = directive,
         TakeFirstPitch = takeFirstPitch,
+        SwingProbabilityFactor = swingProbabilityFactor,
         CatcherLead = catcherLead,
         Skills = skills ?? SkillPlayMods.None,
         CaptureTimeline = CaptureTimelines,

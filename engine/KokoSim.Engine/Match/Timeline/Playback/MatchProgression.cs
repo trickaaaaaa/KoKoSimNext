@@ -457,6 +457,52 @@ public sealed class MatchProgression
             Policy: policy, Gear: gear, PitchIndex: PendingPitchIndex));
     }
 
+    /// <summary>
+    /// 采配カード（2026-07-31）: 打撃姿勢を設定する。<b>解除するまで続く</b>（打席頭で毎回効く）。
+    /// offenseIsAway=指示の対象（攻撃側）が先攻(away)か。<see cref="BattingApproach.Normal"/> で解除。
+    /// 乱数を1発も消費しないので、同シード＋同操作なら結果が再現する。
+    /// </summary>
+    public void SetBattingApproach(bool offenseIsAway, BattingApproach approach)
+    {
+        _p.OffenseOf(offenseIsAway).SetBattingApproach(approach);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.BattingApproach, offenseIsAway, BenchIndex: 0,
+            Approach: approach, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>
+    /// 采配カード（2026-07-31）: 守備の常時方針（配球・ギア・内野/外野の深さ）。<b>解除するまで続く</b>。
+    /// teamIsAway=指示する側（守備側）が先攻か。null の項目は委任采配（brain）の判断のまま。
+    /// </summary>
+    public void SetStandingDefense(bool teamIsAway, PitchPolicy? policy, Pitching.PitcherGear? gear,
+        DefenseDepth? infield, DefenseDepth? outfield)
+    {
+        _p.OffenseOf(teamIsAway).SetStandingDefense(policy, gear, infield, outfield);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.StandingDefense, !teamIsAway, BenchIndex: 0,
+            Policy: policy, Gear: gear, Infield: infield, Outfield: outfield, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>
+    /// 采配カード（2026-07-31）: 次に解決される打席の攻撃サイン（エンドラン等）を予約する。<b>1打席限り</b>。
+    /// null=解除。委任采配（brain）の判断より優先する。
+    /// </summary>
+    public void SetOffensiveSign(bool offenseIsAway, OffensiveSign? sign)
+    {
+        _p.OffenseOf(offenseIsAway).SetPendingOffensiveSign(sign);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.OffensiveSign, offenseIsAway, BenchIndex: 0,
+            Sign: sign, PitchIndex: PendingPitchIndex));
+    }
+
+    /// <summary>
+    /// 采配カード（2026-07-31）: 次の1球で盗塁を試みる。<b>1球限り</b>。start=null で解除。
+    /// 走者がいなければエンジン側の在塁判定で自然に不発になる（指示自体は無害）。
+    /// </summary>
+    public void SetStealAttempt(bool offenseIsAway, StartType? start, StealTarget target = StealTarget.Second)
+    {
+        _p.OffenseOf(offenseIsAway).SetPendingSteal(start, target);
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.StealAttempt, offenseIsAway, BenchIndex: 0,
+            Start: start, StealTarget: target, PitchIndex: PendingPitchIndex));
+    }
+
     /// <summary>次の打席を1つ解決して <see cref="Current"/> に載せる。試合終了なら false。</summary>
     public bool Advance()
     {

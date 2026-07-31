@@ -155,6 +155,23 @@ public sealed record TacticsCoefficients
     /// <summary>エンドラン空振り時: 走者憤死判定に載せる成功率ペナルティ（打者と同時スタートの分の減額）。</summary>
     public double HitAndRunCaughtPenalty { get; init; } = 0.15;
 
+    // ===== 打撃姿勢（2026-07-31・采配カードの拡充。BattingApproach）=====
+    // プレイヤーが選んだ打席にだけ載る（既定 Normal は恒等）＝AI駆動のシム・統計帯は不変。
+    // エンドラン（上）と同じく実効能力への倍率で表し、確率へ直接触らない（不変条件#1）。
+    /// <summary>待球策: スイング確率の倍率（＜1＝見送りが増え、球数を投げさせる）。</summary>
+    public double WorkCountSwingFactor { get; init; } = 0.82;
+    /// <summary>転がせ: ゴロ狙い（弾道↓・ミート↑・パワー↓）。</summary>
+    public double GroundBallLaunchPenalty { get; init; } = 0.30;
+    public double GroundBallContactBoost { get; init; } = 0.05;
+    public double GroundBallPowerPenalty { get; init; } = 0.10;
+    /// <summary>長打狙い: 上げて飛ばす（パワー↑・弾道↑・ミート↓）。</summary>
+    public double SlugPowerBoost { get; init; } = 0.12;
+    public double SlugLaunchBoost { get; init; } = 0.20;
+    public double SlugContactPenalty { get; init; } = 0.12;
+    /// <summary>当てに行け: 三振を避けて前へ飛ばす（ミート↑・パワー↓）。</summary>
+    public double PutInPlayContactBoost { get; init; } = 0.14;
+    public double PutInPlayPowerPenalty { get; init; } = 0.18;
+
     /// <summary>バスター: シフト時は穴が空く（補正↑）、通常時は準備不足（補正↓）。</summary>
     public double BusterVsShiftBonus { get; init; } = 0.08;
     public double BusterPenalty { get; init; } = 0.05;

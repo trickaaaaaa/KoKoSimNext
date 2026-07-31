@@ -1327,6 +1327,16 @@ public static class CoefficientsLoader
         public double HitAndRunPowerPenalty { get; set; } = D.HitAndRunPowerPenalty;
         public double HitAndRunLaunchPenalty { get; set; } = D.HitAndRunLaunchPenalty;
         public double HitAndRunCaughtPenalty { get; set; } = D.HitAndRunCaughtPenalty;
+        // 打撃姿勢（采配カードの拡充）
+        public double WorkCountSwingFactor { get; set; } = D.WorkCountSwingFactor;
+        public double GroundBallLaunchPenalty { get; set; } = D.GroundBallLaunchPenalty;
+        public double GroundBallContactBoost { get; set; } = D.GroundBallContactBoost;
+        public double GroundBallPowerPenalty { get; set; } = D.GroundBallPowerPenalty;
+        public double SlugPowerBoost { get; set; } = D.SlugPowerBoost;
+        public double SlugLaunchBoost { get; set; } = D.SlugLaunchBoost;
+        public double SlugContactPenalty { get; set; } = D.SlugContactPenalty;
+        public double PutInPlayContactBoost { get; set; } = D.PutInPlayContactBoost;
+        public double PutInPlayPowerPenalty { get; set; } = D.PutInPlayPowerPenalty;
         public double BusterVsShiftBonus { get; set; } = D.BusterVsShiftBonus;
         public double BusterPenalty { get; set; } = D.BusterPenalty;
         public double SqueezeReadBase { get; set; } = D.SqueezeReadBase;
@@ -1434,6 +1444,15 @@ public static class CoefficientsLoader
             HitAndRunPowerPenalty = HitAndRunPowerPenalty,
             HitAndRunLaunchPenalty = HitAndRunLaunchPenalty,
             HitAndRunCaughtPenalty = HitAndRunCaughtPenalty,
+            WorkCountSwingFactor = WorkCountSwingFactor,
+            GroundBallLaunchPenalty = GroundBallLaunchPenalty,
+            GroundBallContactBoost = GroundBallContactBoost,
+            GroundBallPowerPenalty = GroundBallPowerPenalty,
+            SlugPowerBoost = SlugPowerBoost,
+            SlugLaunchBoost = SlugLaunchBoost,
+            SlugContactPenalty = SlugContactPenalty,
+            PutInPlayContactBoost = PutInPlayContactBoost,
+            PutInPlayPowerPenalty = PutInPlayPowerPenalty,
             BusterVsShiftBonus = BusterVsShiftBonus,
             BusterPenalty = BusterPenalty,
             SqueezeReadBase = SqueezeReadBase,

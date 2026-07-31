@@ -392,6 +392,82 @@ public sealed class TeamState
         return v;
     }
 
+    // ===== プレイヤーの采配指示（2026-07-31・采配カードの拡充）=====
+    // 寿命が2種類ある。①「解除するまで続く方針」＝打席頭で毎回読むだけ（消費しない） ②「その場の1手」＝
+    // 読んだら消える。エンジンの既存モデル（守備指示＝常時設定 / 1球指示＝使い捨て）にそのまま重ねている。
+    // どれも未設定なら読み取りだけでRNGを1発も引かない＝バッチ実行と完全一致（統計帯・digest不変）。
+
+    /// <summary>打撃姿勢（解除するまで継続）。既定 Normal＝従来と完全一致。</summary>
+    public BattingApproach BattingApproach { get; private set; } = BattingApproach.Normal;
+
+    /// <summary>打撃姿勢を設定する（<see cref="BattingApproach.Normal"/> で解除）。</summary>
+    public void SetBattingApproach(BattingApproach v) => BattingApproach = v;
+
+    private PitchPolicy? _standingPolicy;
+    private Pitching.PitcherGear? _standingGear;
+    private DefenseDepth? _standingInfield;
+    private DefenseDepth? _standingOutfield;
+
+    /// <summary>守備の常時方針（配球・ギア・内野/外野の深さ）。null の項目は brain の判断のまま。</summary>
+    public void SetStandingDefense(PitchPolicy? policy, Pitching.PitcherGear? gear,
+        DefenseDepth? infield, DefenseDepth? outfield)
+    {
+        _standingPolicy = policy;
+        _standingGear = gear;
+        _standingInfield = infield;
+        _standingOutfield = outfield;
+    }
+
+    /// <summary>
+    /// brain が返した守備指示へ常時方針を上書きする（打席頭。指定のある項目だけ差し替える）。
+    /// 敬遠・バントシフトは brain の判断をそのまま通す＝プレイヤーの方針カードとは別の軸。
+    /// </summary>
+    public DefensiveTactics ApplyStandingDefense(DefensiveTactics d)
+    {
+        if (_standingPolicy is null && _standingGear is null
+            && _standingInfield is null && _standingOutfield is null) return d;
+        return d with
+        {
+            Policy = _standingPolicy ?? d.Policy,
+            Gear = _standingGear ?? d.Gear,
+            Infield = _standingInfield ?? d.Infield,
+            Outfield = _standingOutfield ?? d.Outfield,
+        };
+    }
+
+    private OffensiveSign? _pendingOffensiveSign;
+
+    /// <summary>次の打席の攻撃サインを予約する（エンドラン等）。null=解除。1打席限り。</summary>
+    public void SetPendingOffensiveSign(OffensiveSign? v) => _pendingOffensiveSign = v;
+
+    /// <summary>予約された攻撃サインを読み出して消費する（1打席限り）。</summary>
+    public OffensiveSign? ConsumePendingOffensiveSign()
+    {
+        var v = _pendingOffensiveSign;
+        _pendingOffensiveSign = null;
+        return v;
+    }
+
+    private StartType? _pendingSteal;
+    private StealTarget _pendingStealTarget = StealTarget.Second;
+
+    /// <summary>次の1球で盗塁を試みる（<paramref name="start"/> null=解除）。</summary>
+    public void SetPendingSteal(StartType? start, StealTarget target)
+    {
+        _pendingSteal = start;
+        _pendingStealTarget = target;
+    }
+
+    /// <summary>予約された盗塁を読み出して消費する（1球限り）。</summary>
+    public (StartType Start, StealTarget Target)? ConsumePendingSteal()
+    {
+        if (_pendingSteal is not { } start) return null;
+        var target = _pendingStealTarget;
+        _pendingSteal = null;
+        _pendingStealTarget = StealTarget.Second;
+        return (start, target);
+    }
+
     /// <summary>伝令の残回数（攻守各3回, §3）。延長は1イニングごとに1回追加。</summary>
     public int OffenseTimeoutsLeft { get; private set; } = 3;
     public int DefenseTimeoutsLeft { get; private set; } = 3;
