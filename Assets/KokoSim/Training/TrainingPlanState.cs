@@ -44,6 +44,19 @@ namespace KokoSim.Unity.Training
         public string TypeLabel = "";
     }
 
+    /// <summary>能力タブの1行（issue #327③・案A）。現在能力の値とランク。作りは選手詳細
+    /// （PlayerDetailState）と同じ＝ランクは Tiers.FromStrength、弾道は優劣のないタイプ軸（issue #219）、
+    /// 球速の表示値だけ km/h 表記（issue #94。バー割合・ランクは内部値のまま）。</summary>
+    public sealed class AbilityRowInfo
+    {
+        public string Jp = "";
+        public string Icon = "";       // 漢字1文字アイコン（SDF収録字）
+        public int Value;              // 内部値 0..100（バー割合・ランクの元）
+        public string Grade = "";      // ランク S〜G（空＝チップ無し）
+        public string TypeLabel = "";  // 弾道のタイプ軸ラベル（非空ならランクの代わりに表示）
+        public string ValueText = "";  // 表示値の上書き（球速のkm/h）。空なら Value をそのまま表示
+    }
+
     /// <summary>プリセット選択肢（プリセット帯の1チップ。説明はツールチップで持つ, issue #222④）。</summary>
     public sealed class PresetOption
     {
@@ -122,6 +135,10 @@ namespace KokoSim.Unity.Training
         public List<DefenseSlot> DefenseSlots = new List<DefenseSlot>(); // 守備適性割当口（9ポジション）
         public List<PresetOption> PresetOptions = new List<PresetOption>(); // 統合モーダルのプリセット一覧
         public List<GainBar> SelectedGrowth = new List<GainBar>();    // この設定で伸びる能力（現在設定の伸びバー）
+        // 能力タブ（issue #327③・案A: 投手能力｜守備適性｜野手能力の3カラム）
+        public List<AbilityRowInfo> SelPitcherAbilities = new List<AbilityRowInfo>();
+        public List<AbilityRowInfo> SelDefenseAptitudes = new List<AbilityRowInfo>();
+        public List<AbilityRowInfo> SelFielderAbilities = new List<AbilityRowInfo>();
         public List<string> Templates = new List<string>();          // 保存済み週テンプレ名
         public List<PlayerTrainRow> CopyRows = new List<PlayerTrainRow>(); // 複製ピッカー用の全部員（フィルタ非適用・学年順, Issue #133-⑤）
 
@@ -539,6 +556,45 @@ namespace KokoSim.Unity.Training
 
             // 現在設定の伸びバー（この設定で伸びる能力・実効ドライラン）。
             view.SelectedGrowth.AddRange(BuildGrowthBars(_selected));
+
+            // 能力タブ（issue #327③・案A）: 現在能力を投手｜守備適性｜野手の3カラムで提示。
+            foreach (var k in PitcherAbilityOrder) view.SelPitcherAbilities.Add(AbilityInfoOf(sel, k));
+            foreach (var k in FielderAbilityOrder) view.SelFielderAbilities.Add(AbilityInfoOf(sel, k));
+            foreach (var (pos, _) in DefenseMenus)
+                view.SelDefenseAptitudes.Add(new AbilityRowInfo
+                {
+                    Jp = PositionFullJp(pos),
+                    Icon = PositionJp(pos),
+                    Value = sel.Aptitude(pos),
+                    Grade = Tiers.FromStrength(sel.Aptitude(pos)).ToString(),
+                });
+        }
+
+        // 能力タブの表示順（issue #327③）。投手は伸びる能力一覧と同順（球威まで含む・CLAUDE.md用語集順）、
+        // 野手は選手詳細（PlayerDetailState）と同順。
+        private static readonly AbilityKind[] PitcherAbilityOrder =
+        {
+            AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank, AbilityKind.Stuff,
+        };
+        private static readonly AbilityKind[] FielderAbilityOrder =
+        {
+            AbilityKind.LaunchTendency, AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline,
+            AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.Fielding, AbilityKind.Catching,
+        };
+
+        /// <summary>能力タブの1行（選手詳細と同じ作り: ランク=Tiers.FromStrength・弾道=タイプ軸・
+        /// 球速の表示値=km/h。変換はエンジンの公開APIに一本化しUI側で式を再実装しない（issue #94）。</summary>
+        private static AbilityRowInfo AbilityInfoOf(DevelopingPlayer p, AbilityKind k)
+        {
+            var v = p.Level(k);
+            var info = new AbilityRowInfo { Jp = AbilityJp(k), Icon = AbilityIcon(k), Value = v };
+            if (k == AbilityKind.LaunchTendency)
+                info.TypeLabel = KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(v);
+            else
+                info.Grade = Tiers.FromStrength(v).ToString();
+            if (k == AbilityKind.Velocity)
+                info.ValueText = ((int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(v))).ToString();
+            return info;
         }
 
         // 「この設定で伸びる能力」に常時並べる能力（打撃→走守→投手の全能力）。伸びない能力も出し、
@@ -683,6 +739,21 @@ namespace KokoSim.Unity.Training
             FieldPosition.LeftField => "左",
             FieldPosition.CenterField => "中",
             FieldPosition.RightField => "右",
+            _ => "?",
+        };
+
+        /// <summary>能力タブの守備適性行の名前（2字。1字の PositionJp はアイコンに使う, issue #327③）。</summary>
+        private static string PositionFullJp(FieldPosition pos) => pos switch
+        {
+            FieldPosition.Pitcher => "投手",
+            FieldPosition.Catcher => "捕手",
+            FieldPosition.FirstBase => "一塁",
+            FieldPosition.SecondBase => "二塁",
+            FieldPosition.ThirdBase => "三塁",
+            FieldPosition.Shortstop => "遊撃",
+            FieldPosition.LeftField => "左翼",
+            FieldPosition.CenterField => "中堅",
+            FieldPosition.RightField => "右翼",
             _ => "?",
         };
 

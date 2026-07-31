@@ -312,6 +312,22 @@
 }
 .abil-row__note--muted { color: var(--color-muted); -unity-font-style: normal; }
 
+/* コンパクト（行高32px固定・issue #327②-b）：「この設定で伸びる能力」など14行級の一覧を
+   1カラムに一望で収める用。通常行が実測47pxへ膨らむ正体は (a) 19px指定でもフォントのライン高で
+   テキスト実高が37pxになる (b) .unity-label 既定マージン（上4/下2px）の2つで、どちらもUSS宣言外。
+   テキスト系の子へ高さ32pxを明示してフォント都合から行高を切り離す＝行高はチップと同じ32pxに固定され、
+   フォント側の変更で行高が動かなくなる。副題（.abil-row__sub）を持つ行には使わない（2行分の高さが要る）。 */
+.abil-row--compact { margin-bottom: 2px; }
+.abil-row--compact .abil-row__icon,
+.abil-row--compact .rank-chip,
+.abil-row--compact .type-chip,
+.abil-row--compact .abil-row__label,
+.abil-row--compact .abil-row__value,
+.abil-row--compact .abil-row__note { margin-top: 0; margin-bottom: 0; }
+.abil-row--compact .abil-row__label { height: 32px; -unity-text-align: middle-left; }
+.abil-row--compact .abil-row__value,
+.abil-row--compact .abil-row__note { height: 32px; }
+
 /* 大（チーム総合力パネル）：指標名を太く、数値を大きく、バーを太くする */
 .abil-row--lg .abil-row__name { width: 182px; }
 /* 内訳subは名前列の中で折り返す。既定の nowrap だと長い内訳（投手力の「球種（エース偏重）」等）が

@@ -9,8 +9,9 @@ namespace KokoSim.Unity.Components
     /// <summary>ランクチップの大きさ（通常 / 大 / 特大）。</summary>
     public enum RankChipSize { Normal, Large, XLarge }
 
-    /// <summary>能力バー行の大きさ。Normal＝選手詳細・練習計画、Large＝チーム総合力パネル。</summary>
-    public enum AbilityRowSize { Normal, Large }
+    /// <summary>能力バー行の大きさ。Normal＝選手詳細、Large＝チーム総合力パネル、
+    /// Compact＝行高32px固定（練習計画モーダルの14行級一覧・issue #327②-b）。</summary>
+    public enum AbilityRowSize { Normal, Large, Compact }
 
     /// <summary>
     /// 能力バー行1本ぶんの入力（UI原則③「ランクは必ずカラーチップ＋文字併記」）。
@@ -434,6 +435,7 @@ namespace KokoSim.Unity.Components
             var row = new VisualElement();
             row.AddToClassList("abil-row");
             if (d.Size == AbilityRowSize.Large) row.AddToClassList("abil-row--lg");
+            if (d.Size == AbilityRowSize.Compact) row.AddToClassList("abil-row--compact");
             if (d.Dim) row.AddToClassList("abil-row--dim");
             if (d.Divided) row.AddToClassList("abil-row--divided");
 
