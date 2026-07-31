@@ -950,7 +950,8 @@ namespace KokoSim.Unity.Match
             _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
             _catchClips = new AnimationClip[CatchAnchors.Length];
             for (int i = 0; i < CatchAnchors.Length; i++) _catchClips[i] = LoadClip(CatchAnchors[i].Clip);
-            // 球審ストライクコール。Type01(3.33s)を暫定採用。比較録画の後に監督が Type01/02 を確定する（#333）
+            // 球審ストライクコール。Type01(3.33s)を**確定採用**（2026-07-31 監督判断・#353 の録画で確認）。
+            // Type02(4.67s)は突き出しが2.05s・戻り終わりが3.4sで、リリース間隔2.8sに収まらないため不採用。
             _umpireStrikeClip = LoadClip("AA_Baseball_Umpire_Crouch_Strike_Type01");
 
             _bat = SpawnBat(layer);
@@ -1223,7 +1224,16 @@ namespace KokoSim.Unity.Match
         /// <summary>動き出しからリリースまでの実尺[秒]。投球時計の巻き戻し量＝この値。</summary>
         public const float WindupSeconds = ReleaseTime - DeliveryStartTime;   // 1.30s
 
-        /// <summary>対決ビュー中の既定リリース間隔[秒]。撮影ハーネスの逆算もこれを使う。</summary>
+        /// <summary>
+        /// 対決ビュー中の既定リリース間隔[秒]。撮影ハーネスの逆算もこれを使う。
+        ///
+        /// 2.8（2026-07-31 監督確定・issue #353）。2.4/2.8/3.2 秒を同じ打席・同じ乱数で撮り比べたうえで
+        /// 据え置きを選んだ＝**暫定値ではない**（#333 が暫定値のまま閉じた再発防止）。
+        /// 3本とも球審のコールは次の投球より前に終わる（コール〜構え戻りは間隔に依らず約2.05秒で一定）ので、
+        /// 差は戻ってから次の投球までの間だけ: 2.4s→0.38s / 2.8s→0.74s / 3.2s→1.17s。
+        /// 変えるときは <see cref="UmpireCallSettleSeconds"/>（2.55秒）＋コール開始の待ち（約0.05秒）が
+        /// 収まるかを確認すること。収まらない間隔では戻りが途中で切れる。
+        /// </summary>
         public const float DefaultPitchInterval = 2.8f;
 
         /// <summary>切り口のクロスフェード長[秒]。12fps量子化で3コマぶん。</summary>
@@ -1232,7 +1242,8 @@ namespace KokoSim.Unity.Match
         private const float FollowSeconds = 1.5f;   // リリース後に見せるフォロースルーの長さ
         private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
         private float _cutClipTime;
-        private float _umpireCallCountdown = -1f;   // 球審ストライクコール発火まで（負=予約なし）
+        private float _umpireCallCountdown = -1f;   // 球審ストライクコール開始まで（負=予約なし）
+        private float _umpireCallStartAt;           // コールクリップの頭出し位置（アンカー逆算）
         private float _umpireCallEndAt;             // コールクリップの打ち切り時刻（0=末尾まで）
         private float _catchCountdown = -1f;        // 捕球クリップ開始まで（負=予約なし）
         private int _catchIndex = -1;               // 今の球で使う捕球クリップ（CatchAnchors の添字。負=捕らない）
@@ -1383,13 +1394,38 @@ namespace KokoSim.Unity.Match
         /// 「はっきり外れたコースだけ方向クリップへ移る」ようにする閾値で、実測の並びから 0.08 と置いた。
         /// </summary>
         private const float CatchSelectionBias = 0.08f;
-        // 球審ストライクコールの発火タイミング（#333）:
-        // ボール到達（BallFlightSeconds後）を見てから捕球確認までの遅延[秒]。
-        // コール発火 = BallFlightSeconds + UmpireCatchReactDelay 後にクリップ先頭から再生する。
-        // クリップ内の腕伸ばし瞬間:
-        //   RunClipSpeedProbe("AA_Baseball_Umpire_Crouch_Strike_Type01","RightHand",0.05f) で実測すること
-        //   （Editor不通のため未実測。クリップ差し替え時も再測定し、この定数と合わせて更新する）
-        private const float UmpireCatchReactDelay = 0.30f;
+        // 球審ストライクコールのアンカー同期（#333の積み残し／#353）。
+        //
+        // 他の役者と同じ方式＝「クリップ内の実測アンカーが、球の時計上の狙った瞬間に一致する」よう
+        // 再生開始を逆算する。クリップ内部の緩急は改変しない（design-18 §4.5 / §7-2）。
+        //
+        // RunClipSpeedProbe("AA_Baseball_Umpire_Crouch_Strike_Type01","RightHand",0.05f) の実測
+        // （2026-07-31・len=3.33s。右手速度[m/s]）:
+        //   0.00→0.0 …… 0.60→2.7 0.70→1.0 0.80→**3.0(ピーク)** 0.85→1.6 0.90→0.2
+        //   0.90〜1.65 ≈ 0.1（腕を出したまま静止＝コールを見せている区間）
+        //   1.70〜2.50 で戻り（2.25→2.4がピーク）／2.55以降 ≈ 0.1（しゃがみへ収まって静止）
+        // ＝このクリップは「突き出す(0〜0.85) → 見せる(0.85〜1.65) → 戻る(1.65〜2.55)」の3区間。
+        // アンカーは突き出しが終わる 0.85s（＝腕が伸び切る瞬間＝コールの絵）。
+        // 戻りまで含めた実尺は2.55sで、末尾0.8sは静止＝間隔2.8sでも切らずに収まる。
+        //
+        // ⚠ 差し替え時は必ず測り直す。コールの瞬間の定義はクリップごとに違う（design-18 §4.5-③）:
+        // Type02(len=4.67s) は同じプローブで 2.00s に鋭いピーク（3.9m/s）＝突き出しが2.05s、
+        // 戻り終わりが3.4s で、間隔2.8sには収まらない（採用するなら間合いの側を変える必要がある）。
+        private const float UmpireCallAnchorSeconds = 0.85f;
+
+        /// <summary>
+        /// 戻り終わり＝しゃがみ姿勢へ収まるクリップ内時刻[秒]（実測 2.55s。以降は末尾まで静止）。
+        /// 「コールが途中で切れて構えへ戻らない」を避ける打ち切り可否の基準に使う。
+        /// </summary>
+        private const float UmpireCallSettleSeconds = 2.55f;
+
+        /// <summary>
+        /// 捕球からコール（腕が伸び切る瞬間）までの間[秒]。球審は捕手のミットに収まったのを見てから
+        /// 判定を出すので、必ず正の値＝捕球より後に手が出る。
+        /// 0.30（2026-07-31 監督確定・比較録画のうえで「もっと早く」）。0.45 でも間合いは成立するが、
+        /// テンポのいい判定を採る。
+        /// </summary>
+        private const float UmpireCallDelaySeconds = 0.30f;
 
         /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
@@ -1480,11 +1516,22 @@ namespace KokoSim.Unity.Match
             bool isStrike = outcome == DuelPitchOutcome.CalledStrike || outcome == DuelPitchOutcome.SwingMiss;
             if (isStrike && _umpireStrikeClip != null)
             {
-                _umpireCallCountdown = flight + UmpireCatchReactDelay;
-                // 次のリリースまでにクリップが収まるよう打ち切り時刻を決める（最後の1球は0=末尾まで）
-                _umpireCallEndAt = nextReleaseIn > 0f
-                    ? Mathf.Max(0f, nextReleaseIn - (flight + UmpireCatchReactDelay))
-                    : 0f;
+                // アンカー同期: コール（腕が伸び切る瞬間 = UmpireCallAnchorSeconds）が
+                // 「捕球 + UmpireCallDelaySeconds」に一致するよう再生開始を逆算する。
+                // lead>0 ＝ クリップ頭出しでは早すぎる → 開始そのものを lead 秒待つ（負を潰して
+                // Mathf.Max(0,…) にすると常にリリース直後に腕が出る＝design-18 §4.5-③ の罠）。
+                // lead<0 ＝ アンカーが遅すぎる → クリップ内 −lead 秒から始めて頭を捨てる。
+                float moment = flight + UmpireCallDelaySeconds;
+                float lead = moment - UmpireCallAnchorSeconds;
+                _umpireCallCountdown = Mathf.Max(0f, lead);
+                _umpireCallStartAt = Mathf.Max(0f, -lead);
+                // 打ち切りは「戻り終わり(UmpireCallSettleSeconds)まで再生できないとき」だけ。
+                // 間隔2.8sなら 0.05s 待って開始しても戻りまで 2.60s で収まる＝切らずに済む（実測）。
+                // 切る場合も腕を出す前で切れないよう、次のリリース直前まで目一杯回す。
+                float playable = nextReleaseIn > 0f ? nextReleaseIn - _umpireCallCountdown : float.MaxValue;
+                _umpireCallEndAt = playable >= UmpireCallSettleSeconds - _umpireCallStartAt
+                    ? 0f                                                   // 末尾まで（尻尾は静止＝絵は変わらない）
+                    : _umpireCallStartAt + Mathf.Max(0f, playable);
             }
 
             switch (outcome)
@@ -1946,7 +1993,7 @@ namespace KokoSim.Unity.Match
             {
                 _umpireCallCountdown -= deltaTime;
                 if (_umpireCallCountdown < 0f)
-                    SetActorClip(_umpire, _umpireStrikeClip, 0f, _umpireCallEndAt);
+                    SetActorClip(_umpire, _umpireStrikeClip, _umpireCallStartAt, _umpireCallEndAt);
             }
 
             // 捕球クリップの開始予約（球到達に捕球の瞬間を合わせる。issue #332 第2弾）。
@@ -4212,6 +4259,30 @@ namespace KokoSim.Unity.Match
                 + d.x.ToString("F3") + "\t" + d.z.ToString("F3") + "\t"
                 + (_pitcher.Animator != null && _pitcher.Animator.applyRootMotion) + "\t"
                 + (_pitcher.FadeRemaining > 0f);
+        }
+
+        /// <summary>
+        /// 球審の実測ログ（issue #353）。クリップ名・クリップ内時刻・右手の高さ[m]。
+        /// 「捕球の後に腕が出ているか」は絵の目測でなくこの列で判定する
+        /// （コールの腕伸ばしはクリップ内 <see cref="UmpireCallAnchorSeconds"/>）。
+        /// </summary>
+        internal string UmpireDiagForCapture()
+        {
+            if (_umpire == null || _umpire.Animator == null) return "-\t0\t0";
+            var rh = _umpire.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            float y = rh != null ? rh.position.y - _umpire.Go.transform.position.y : -1f;
+            string clip = _umpire.Clip != null ? _umpire.Clip.name : "-";
+            return clip + "\t" + _umpire.Time.ToString("F2") + "\t" + y.ToString("F3");
+        }
+
+        /// <summary>球審の右手ボーンのRT上ピクセル座標（球審中心クロップの決定用。issue #353）。</summary>
+        internal Vector2 UmpireScreenPxForCapture()
+        {
+            if (_camera == null || _umpire == null || _umpire.Animator == null) return new Vector2(-1f, -1f);
+            var rh = _umpire.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            var p = rh != null ? rh.position : _umpire.Go.transform.position + Vector3.up;
+            var sp = _camera.WorldToScreenPoint(p);
+            return new Vector2(sp.x, sp.y);
         }
 
         /// <summary>打者の左手ボーンのRT上ピクセル座標（クロップ中心の決定用）。</summary>

@@ -26,6 +26,7 @@ internal static class CommandLine
             "simulate-nation" => RunSimulateNation(args[1..]),
             "simulate-manager" => RunSimulateManager(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
+            "infield-timing" => RunInfieldTiming(args[1..]),
             "trace" => RunTrace(args[1..]),
             "trace-diff" => RunTraceDiff(args[1..]),
             _ => Fail($"未知のコマンド: {args[0]}"),
@@ -254,6 +255,7 @@ internal static class CommandLine
         string? coefficientsPath = null;
         string? stadiumId = null;
         var useTacticsBrain = false;
+        var applyWeather = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -277,12 +279,16 @@ internal static class CommandLine
                 case "--tactics":
                     useTacticsBrain = true;
                     break;
+                case "--weather":
+                    // 夏場の気温モデル（issue #120）。夏場帯（games_10k_summer）の実測に使う。
+                    applyWeather = true;
+                    break;
                 default:
                     return Fail($"未知のオプション: {args[i]}");
             }
         }
 
-        var stats = GameSimulation.Run(games, seed, coefficientsPath, ResolveStadium(stadiumId), useTacticsBrain);
+        var stats = GameSimulation.Run(games, seed, coefficientsPath, ResolveStadium(stadiumId), useTacticsBrain, applyWeather);
         var text = GameSimulation.Report(stats, seed);
         Console.Write(text);
         WriteReport(reportPath, text);
@@ -296,6 +302,46 @@ internal static class CommandLine
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         File.WriteAllText(reportPath, text);
         Console.WriteLine($"レポートを出力しました: {reportPath}");
+    }
+
+    /// <summary>
+    /// 内野ゴロの判定margin分布を実測する（issue #358）。帯に内野安打の指標が無いため、
+    /// 守備の所要時間に関わる係数を動かす前後の比較はこのコマンドで行う。
+    /// </summary>
+    private static int RunInfieldTiming(string[] args)
+    {
+        var atBats = 40000;
+        var seed = 42UL;
+        string? coefficientsPath = null;
+        string? stadiumId = null;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--at-bats":
+                case "--games":
+                    atBats = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
+                    break;
+                case "--seed":
+                    seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture);
+                    break;
+                case "--coefficients":
+                    coefficientsPath = RequireValue(args, ref i);
+                    break;
+                case "--stadium":
+                    stadiumId = RequireValue(args, ref i);
+                    break;
+                default:
+                    return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+
+        var timing = AtBatSimulation.RunInfieldTiming(atBats, seed, coefficientsPath, ResolveStadium(stadiumId));
+        Console.WriteLine($"# 内野ゴロの判定margin（seed {seed}・{atBats}打席）");
+        Console.WriteLine();
+        Console.Write(timing.ToMarkdown());
+        return 0;
     }
 
     private static int RunSimulate(string[] args)

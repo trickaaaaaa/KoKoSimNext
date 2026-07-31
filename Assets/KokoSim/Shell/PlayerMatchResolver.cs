@@ -103,19 +103,11 @@ namespace KokoSim.Unity.Shell
             var brain = EnemyAiFactory.BrainFor(opponent);
             var orderRng = AiRosterFactory.CohortSeed(opponent.Id, yearIndex).Fork(0x0BDE_0000UL);
             var reordered = brain.ComposeBattingOrder(team.BattingOrder, orderRng);
-            // DhSlot は並べ替え前のインデックス基準なので、DH使用時は同一参照を辿って引き直す
-            // （調子の並べ替えは常に恒等だが、将来 Q21 が解決して相手校にも調子差が付いたときの保険）。
-            var dhSlot = team.UsesDh ? IndexOfReference(reordered, team.BattingOrder[team.DhSlot]) : team.DhSlot;
-            return team with { BattingOrder = reordered, DhSlot = dhSlot, Tactics = brain };
-        }
-
-        private static int IndexOfReference(IReadOnlyList<Player> list, Player target)
-        {
-            for (var i = 0; i < list.Count; i++)
-            {
-                if (ReferenceEquals(list[i], target)) return i;
-            }
-            return -1;
+            // 投手枠・DH枠は並べ替え前のインデックス基準なので、engine の単一入口
+            // （Team.WithBattingOrder＝同一参照から引き直す純関数）へ通す。Q21 の解決（2026-07-22）で
+            // 相手校にも当季の調子差が付き、この並べ替えは日常的に非恒等になった＝投手枠を引き直さないと
+            // 9番へ落ちた野手が登板扱いになる（issue #352）。
+            return team.WithBattingOrder(reordered) with { Tactics = brain };
         }
 
         /// <summary>

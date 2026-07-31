@@ -50,4 +50,35 @@ public sealed record Team
 
     /// <summary>DH制か。</summary>
     public bool UsesDh => DhSlot >= 0;
+
+    /// <summary>
+    /// 打順だけを差し替えた新しいチームを返す。投手枠・DH枠は<b>差し替え後の並びから参照で引き直す</b>
+    /// （<see cref="Season.DefenseAssignment.SlotOf"/> と同じ「配列から引き直す」思想。issue #352）。
+    /// 打順の並べ替え（<c>ITacticsBrain.ComposeBattingOrder</c> 等）は必ずこの入口を通す＝
+    /// 「投を別の打順へ動かしたのに <see cref="PitcherSlot"/> が古いまま＝別の野手が登板扱いになる」
+    /// ズレが起きない形にする。
+    /// <paramref name="reordered"/> は <see cref="BattingOrder"/> の順列（同じ Player 参照の並べ替え）であること。
+    /// 枠の選手を見つけられなければ黙って -1 にせず例外＝投手を同定できないまま試合を始めさせない。
+    /// </summary>
+    public Team WithBattingOrder(IReadOnlyList<Player> reordered)
+    {
+        if (reordered is null) throw new ArgumentNullException(nameof(reordered));
+        if (reordered.Count != BattingOrder.Count)
+            throw new ArgumentException("打順の差し替えは同じ人数の順列である必要があります。", nameof(reordered));
+
+        // DH制では投手は打順外（StartingPitcher）＝PitcherSlot は打順を指していないので引き直さない。
+        var pitcherSlot = UsesDh ? PitcherSlot : SlotAfter(PitcherSlot, nameof(PitcherSlot));
+        var dhSlot = UsesDh ? SlotAfter(DhSlot, nameof(DhSlot)) : DhSlot;
+        return this with { BattingOrder = reordered, PitcherSlot = pitcherSlot, DhSlot = dhSlot };
+
+        int SlotAfter(int slot, string label)
+        {
+            if (slot < 0 || slot >= BattingOrder.Count) return slot;   // 未設定（-1）・範囲外はそのまま
+            var occupant = BattingOrder[slot];
+            for (var i = 0; i < reordered.Count; i++)
+                if (ReferenceEquals(reordered[i], occupant)) return i;
+            throw new ArgumentException(
+                $"{label} の選手が差し替え後の打順に居ません（順列ではありません）。", nameof(reordered));
+        }
+    }
 }
