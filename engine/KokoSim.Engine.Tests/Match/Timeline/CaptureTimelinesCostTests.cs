@@ -13,9 +13,9 @@ namespace KokoSim.Engine.Tests.Match.Timeline;
 /// <summary>
 /// タイムライン記録（CaptureTimelines）のコスト計測と「観戦する試合だけON」の設計保証。
 ///
-/// 設計の要（設計者Claude指示）: 全国4000校の裏試合（AI校同士）は <see cref="Nation.AggregateMatch"/> の
-/// 強さベース高速抽象シムで決着し、<see cref="GameEngine.Play"/>・<see cref="GameContext"/> を**一切通らない**。
-/// よってタイムライン記録は構造的にゼロ。GameEngine を通るのは監督自身の一戦だけで、そこでのみ ON にする。
+/// 設計の要: タイムライン記録はオプトインで既定 OFF。全国の裏試合は 2026-07-22 のフルシム化（issue #43）で
+/// <see cref="GameEngine.Play"/> を通るようになったが、既定コンテキストのまま＝非記録で走るので
+/// タイムライン記録のコストは裏試合に乗らない。ON にするのは観戦する試合（監督自身の一戦の観測経路）だけ。
 /// 本テストは (1) 既定 OFF の保証、(2) 大量シム経路（既定コンテキスト）が非記録であることの保証、
 /// (3) ON/OFF のコスト差の実測（ITestOutputHelper に報告）を行う。
 /// </summary>

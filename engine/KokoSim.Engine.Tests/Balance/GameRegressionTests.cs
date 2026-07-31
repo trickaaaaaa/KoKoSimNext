@@ -12,16 +12,32 @@ namespace KokoSim.Engine.Tests.Balance;
 [Trait("Category", "Heavy")] // 数千試合の統計回帰。日常ループでは --filter "Category!=Heavy" で除外
 public sealed class GameRegressionTests
 {
+    /// <summary>
+    /// 帯検証用シムのメモ化（issue #361）。SummerWeatherGames_* の平時ベースラインは
+    /// Games_StayWithinTargetBands と同一の GameSimulation.Run(2000, seed) で、素通しだと
+    /// シードごとに2000試合を二重計算していた。GameSimulation.Run は純関数（同引数同結果）なので
+    /// 帯検証はここを通して共有する。決定論の検証テスト（*_IsDeterministic /
+    /// WeatherOff_MatchesLegacyBaseline_Exactly）は「2回実行して一致」を見る本体なので通さない。
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        (int Games, ulong Seed, bool Weather), System.Lazy<GameSimulation.Stats>> BandRuns = new();
+
+    private static GameSimulation.Stats CachedRun(int games, ulong seed, bool applyWeather = false)
+    {
+        var coeffPath = BalanceRegressionTests.FindDataFile("coefficients.yaml");
+        return BandRuns.GetOrAdd((games, seed, applyWeather), key => new System.Lazy<GameSimulation.Stats>(
+            () => GameSimulation.Run(key.Games, key.Seed, coeffPath, applyWeather: key.Weather))).Value;
+    }
+
     [Theory]
     [InlineData(42UL)]
     [InlineData(2024UL)]
     public void Games_StayWithinTargetBands(ulong seed)
     {
-        var coeffPath = BalanceRegressionTests.FindDataFile("coefficients.yaml");
         var targets = BalanceTargetsLoader.LoadGameFromFile(
             BalanceRegressionTests.FindDataFile("balance-targets.yaml"));
 
-        var s = GameSimulation.Run(2000, seed, coeffPath);
+        var s = CachedRun(2000, seed);
 
         Assert.True(targets.RunsPerTeam.Contains(s.AverageRunsPerTeam),
             $"得点/チーム {s.AverageRunsPerTeam:F2} が帯外");
@@ -98,12 +114,11 @@ public sealed class GameRegressionTests
     [InlineData(2024UL)]
     public void SummerWeatherGames_StayWithinTargetBands(ulong seed)
     {
-        var coeffPath = BalanceRegressionTests.FindDataFile("coefficients.yaml");
         var targetsPath = BalanceRegressionTests.FindDataFile("balance-targets.yaml");
         var summerTargets = BalanceTargetsLoader.LoadGameSummerFromFile(targetsPath);
 
-        var baseline = GameSimulation.Run(2000, seed, coeffPath);                    // 天候オフ＝平時
-        var summer = GameSimulation.Run(2000, seed, coeffPath, applyWeather: true);   // 天候オン＝夏場
+        var baseline = CachedRun(2000, seed);                       // 天候オフ＝平時（Games_StayWithinTargetBands と共有）
+        var summer = CachedRun(2000, seed, applyWeather: true);     // 天候オン＝夏場
 
         // (2) 夏場は点が動きやすい（空気密度低下で打球が伸び、暑さで終盤の投手が早く落ちる）。
         Assert.True(summer.AverageRunsPerTeam >= baseline.AverageRunsPerTeam,

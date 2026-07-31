@@ -658,22 +658,31 @@ public sealed class TacticsTests
         // 無死一・二塁スタートの直接効果＝延長イニングの得点率が跳ね上がることを検証する。
         double ExtraRunRate(GameContext ctx)
         {
-            var runs = 0;
-            var halves = 0;
             // 標本数: 延長にもつれる試合だけを数えるので、80試合では延長イニングが十数個しか集まらず
             // 揺れで逆転しうる（issue #262 の得点環境変更で顕在化）。300試合まで増やして安定させる。
-            for (ulong s = 0; s < 300; s++)
-            {
-                var r = GameEngine.Play(TeamOf("A"), TeamOf("H"), ctx, new Xoshiro256Random(s));
-                foreach (var line in new[] { r.AwayLineScore, r.HomeLineScore })
+            // 決定論を保った並列化（GameSimulation.Run と同じ作法。issue #361）: シードは添字から確定、
+            // チーム生成は試合ローカル、集計は整数部分和 → 逐次実行と同一の値になる（不変条件#2）。
+            long runs = 0, halves = 0;
+            System.Threading.Tasks.Parallel.For(0, 300,
+                () => (Runs: 0L, Halves: 0L),
+                (s, _, local) =>
                 {
-                    for (var i = 9; i < line.Count; i++)
+                    var r = GameEngine.Play(TeamOf("A"), TeamOf("H"), ctx, new Xoshiro256Random((ulong)s));
+                    foreach (var line in new[] { r.AwayLineScore, r.HomeLineScore })
                     {
-                        runs += line[i];
-                        halves++;
+                        for (var i = 9; i < line.Count; i++)
+                        {
+                            local.Runs += line[i];
+                            local.Halves++;
+                        }
                     }
-                }
-            }
+                    return local;
+                },
+                local =>
+                {
+                    System.Threading.Interlocked.Add(ref runs, local.Runs);
+                    System.Threading.Interlocked.Add(ref halves, local.Halves);
+                });
             Assert.True(halves > 0, "延長にもつれる試合が1つもない（テスト前提が崩れている）");
             return (double)runs / halves;
         }
