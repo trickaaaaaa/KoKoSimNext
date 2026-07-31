@@ -265,6 +265,146 @@ public static class AtBatSimulation
     }
 
     /// <summary>
+    /// 内野ゴロの「間に合うか」の分布（issue #358 の診断・回帰）。守備所要（捕球→握り替え→送球）と
+    /// 打者走者の一塁到達を秒で突き合わせた結果を、判定margin（<see cref="FieldingPlay.JudgementMarginSeconds"/>）
+    /// のヒストグラムで見る。帯（balance-targets.yaml）に内野安打の指標が無いため、係数を動かす前後の
+    /// 比較はこのプローブで行う（#261 が守備位置分布を実測したのと同じやり方）。
+    /// </summary>
+    public sealed record InfieldTiming
+    {
+        /// <summary>判定margin[s]のビン幅。</summary>
+        public const double BinWidthSeconds = 0.1;
+        /// <summary>ビン数（−1.0秒未満／−1.0〜+1.0を0.1刻み／+1.0秒以上 の 22）。</summary>
+        public const int BinCount = 22;
+        /// <summary>ビン下限[s]（先頭・末尾は外れ値バケット）。</summary>
+        public static double BinLowSeconds(int index) => -1.0 + (index - 1) * BinWidthSeconds;
+
+        /// <summary>内野手が処理した内野ゴロの総数（内野を抜けた打球は含まない）。</summary>
+        public int Grounders { get; init; }
+        /// <summary>そのうちアウト。</summary>
+        public int Outs { get; init; }
+        /// <summary>そのうち内野安打（送球が間に合わなかった）。</summary>
+        public int InfieldHits { get; init; }
+        /// <summary>そのうち失策（送球は間に合ったが弾いた/逸れた）。</summary>
+        public int Errors { get; init; }
+        /// <summary>集計した打席数（打席あたりの率の分母）。</summary>
+        public int PlateAppearances { get; init; }
+        /// <summary>判定margin[s]のヒストグラム（正＝セーフ寄り）。</summary>
+        public required int[] MarginBins { get; init; }
+        /// <summary>捕球時刻の合計[s]（平均の算出用。ミリ秒を整数化して積む）。</summary>
+        public int FieldTimeMsSum { get; init; }
+        /// <summary>送球到達時刻の合計[s]（＝守備所要）。</summary>
+        public int DefenseTimeMsSum { get; init; }
+        /// <summary>打者走者の一塁到達時刻の合計[s]。</summary>
+        public int RunnerTimeMsSum { get; init; }
+
+        /// <summary>内野ゴロに占める内野安打の割合。</summary>
+        public double InfieldHitShare => Grounders > 0 ? (double)InfieldHits / Grounders : 0;
+        /// <summary>内野ゴロに占めるアウトの割合。</summary>
+        public double OutShare => Grounders > 0 ? (double)Outs / Grounders : 0;
+        /// <summary>打席あたりの内野安打率。</summary>
+        public double InfieldHitPerPa => PlateAppearances > 0 ? (double)InfieldHits / PlateAppearances : 0;
+        public double MeanFieldSeconds => Grounders > 0 ? FieldTimeMsSum / 1000.0 / Grounders : 0;
+        public double MeanDefenseSeconds => Grounders > 0 ? DefenseTimeMsSum / 1000.0 / Grounders : 0;
+        public double MeanRunnerSeconds => Grounders > 0 ? RunnerTimeMsSum / 1000.0 / Grounders : 0;
+
+        /// <summary>判定margin の分位点[s]（ビン下限での近似）。</summary>
+        public double MarginQuantile(double q)
+        {
+            if (Grounders <= 0) return 0;
+            var target = q * Grounders;
+            var acc = 0;
+            for (var i = 0; i < BinCount; i++)
+            {
+                acc += MarginBins[i];
+                if (acc >= target) return BinLowSeconds(i);
+            }
+            return BinLowSeconds(BinCount - 1);
+        }
+
+        public string ToMarkdown()
+        {
+            var sb = new StringBuilder();
+            var c = CultureInfo.InvariantCulture;
+            sb.AppendLine(c, $"内野ゴロ {Grounders}（打席 {PlateAppearances}）: "
+                             + $"アウト {OutShare:P1} / 内野安打 {InfieldHitShare:P1} / 失策 {(Grounders > 0 ? (double)Errors / Grounders : 0):P1}");
+            sb.AppendLine(c, $"打席あたり内野安打 {InfieldHitPerPa:P2}");
+            sb.AppendLine(c, $"平均: 捕球 {MeanFieldSeconds:F3}s → 送球到達 {MeanDefenseSeconds:F3}s / 走者 {MeanRunnerSeconds:F3}s");
+            sb.AppendLine(c, $"判定margin 分位点[s]: p10 {MarginQuantile(0.10):F2} / p25 {MarginQuantile(0.25):F2} / "
+                             + $"p50 {MarginQuantile(0.50):F2} / p75 {MarginQuantile(0.75):F2} / p90 {MarginQuantile(0.90):F2}");
+            sb.AppendLine();
+            sb.AppendLine("| 判定margin[s] | 件数 | 割合 |");
+            sb.AppendLine("|---|---|---|");
+            for (var i = 0; i < BinCount; i++)
+            {
+                var label = i == 0 ? "〜−1.0"
+                    : i == BinCount - 1 ? "+1.0〜"
+                    : $"{BinLowSeconds(i):+0.0;−0.0;0.0}〜{BinLowSeconds(i) + BinWidthSeconds:+0.0;−0.0;0.0}";
+                var share = Grounders > 0 ? (double)MarginBins[i] / Grounders : 0;
+                sb.AppendLine(c, $"| {label} | {MarginBins[i]} | {share:P1} |");
+            }
+            return sb.ToString();
+        }
+    }
+
+    /// <summary>
+    /// 内野ゴロの判定margin分布を集計する（issue #358）。乱数消費順・結果は <see cref="Run"/> と同じ経路。
+    /// </summary>
+    public static InfieldTiming RunInfieldTiming(
+        int atBats, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null)
+    {
+        var ctx = BuildContext(coefficientsPath, field);
+        var root = new Xoshiro256Random(seed);
+        var forks = new IRandomSource[atBats];
+        for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
+
+        // レイアウト: [0..B)=marginビン, [B]=内野ゴロ数, [B+1]=アウト, [B+2]=内野安打, [B+3]=失策,
+        //             [B+4]=捕球時刻計[ms], [B+5]=守備所要計[ms], [B+6]=走者所要計[ms]
+        const int B = InfieldTiming.BinCount;
+        var width = B + 7;
+        var total = new int[width];
+        Parallel.For(0, atBats,
+            () => new int[width],
+            (i, _, local) =>
+            {
+                var rng = forks[i];
+                var batter = SampleBatter(rng);
+                var pitcher = SamplePitcher(rng);
+                var detailed = AtBatResolver.ResolveDetailed(batter, pitcher, ctx, rng);
+                if (detailed.Play is not { Class: BattedBallClass.Grounder or BattedBallClass.Bouncer } play) return local;
+                if (play.ThroughInfield || play.JudgementMarginSeconds is not { } margin) return local;
+
+                var bin = (int)Math.Floor((margin + 1.0) / InfieldTiming.BinWidthSeconds) + 1;
+                local[Math.Clamp(bin, 0, B - 1)]++;
+                local[B]++;
+                switch (play.Result)
+                {
+                    case BattedBallResult.Out: local[B + 1]++; break;
+                    case BattedBallResult.Single: local[B + 2]++; break;
+                    case BattedBallResult.Error: local[B + 3]++; break;
+                }
+                local[B + 4] += (int)Math.Round((play.FieldedAtSeconds ?? 0) * 1000);
+                local[B + 5] += (int)Math.Round((play.ThrowArriveSeconds ?? 0) * 1000);
+                local[B + 6] += (int)Math.Round(play.BatterToFirstSeconds * 1000);
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < width; k++) total[k] += local[k]; } });
+
+        return new InfieldTiming
+        {
+            MarginBins = total[0..B],
+            Grounders = total[B],
+            Outs = total[B + 1],
+            InfieldHits = total[B + 2],
+            Errors = total[B + 3],
+            FieldTimeMsSum = total[B + 4],
+            DefenseTimeMsSum = total[B + 5],
+            RunnerTimeMsSum = total[B + 6],
+            PlateAppearances = atBats,
+        };
+    }
+
+    /// <summary>
     /// 打球方向の分布と外野の捕球者分布（issue #262 の診断・回帰）。方位角は10°刻み9ビン（−45〜45°）。
     /// 母集団サンプリング・決定論並列は本体 <see cref="Run"/> と同一。
     /// </summary>

@@ -52,14 +52,16 @@ public sealed record FieldingCoefficients
     public double ThrowTransferFactorMin { get; init; } = 0.70;
 
     /// <summary>
-    /// 内野ゴロ処理の実戦オーバーヘッド[s]（設計書02 §4.1b の時間軸校正）。捕球姿勢づくり・ステップ・
-    /// 打球が野手へ転がる時間を集約した項。走者を実戦タイム（本塁→一塁≈4.2s）へ合わせても
-    /// 内野安打率が現実的に保たれるよう、守備側も同じ秒軸へ引き上げる。
-    /// Issue #261で0.30→0.88へ再校正: 処理点を着地点から実捕球点（打球が転がり込む内野手の間合い）へ移した結果、
-    /// 内野ゴロの処理が確実になりゴロアウトが増え（＝内野安打が減り）、二遊間ゴロで併殺も増えて得点環境が下がった。
-    /// この項で内野安打率・BABIP・得点/試合・夏場得点帯をすべて従来の許容帯へ戻す。data/coefficients.yaml と同値。
+    /// 内野ゴロ処理のオーバーヘッド[s]（設計書02 §4.1b の時間軸校正）。捕球姿勢づくり・ステップ。
+    /// <see cref="ThrowTransferSeconds"/> と足したものが「捕ってから離すまで」＝守備50で 0.80s
+    /// （守備90で0.69s／守備20で0.88s）。実際の内野手の 0.6〜0.9秒に合わせてある。
+    /// issue #358 で 0.88→0.10 へ引き戻した。0.88 は #261 の得点環境の戻しを「内野手の処理時間」という
+    /// 物理量に載せた値で、握り替え0.70と合わせて<b>捕球点で1.58秒ボールを持つ</b>＝実際の約2倍だった
+    /// （判定だけでなく2D俯瞰の絵にもそのまま出ていた）。得点環境の戻しは
+    /// <see cref="ForceOutMarginSeconds"/>（判定側の余裕）へ移し、物理層は現実の秒に戻す。
+    /// data/coefficients.yaml と同値。
     /// </summary>
-    public double InfieldPlayOverheadSeconds { get; init; } = 0.88;
+    public double InfieldPlayOverheadSeconds { get; init; } = 0.10;
 
     /// <summary>
     /// 打者走者の実戦オフセット[s]（設計書02 §4.1b）。反応＋スイング後の走り出し＋静止からの加速不足を含む。
@@ -74,8 +76,17 @@ public sealed record FieldingCoefficients
     /// <summary>内野が処理できる打球の最大到達距離[m]（これを越えて転がると内野を抜ける）。</summary>
     public double InfieldDepthM { get; init; } = 46.0;
 
-    /// <summary>一塁でのアウト判定の安全マージン[s]（守備側がこの秒数だけ余裕を持てばアウト）。</summary>
-    public double ForceOutMarginSeconds { get; init; } = 0.0;
+    /// <summary>
+    /// 一塁でのアウト判定の安全マージン[s]（守備側がこの秒数だけ余裕を持てばアウト）。
+    /// issue #358 で 0.0→0.60。<see cref="InfieldPlayOverheadSeconds"/> の水増しをやめた分の
+    /// 得点環境をここへ移した項＝<b>物理層（＝タイムラインの絵）は現実の秒のまま、内野安打の頻度だけを
+    /// 判定側で校正する</b>。0.0 のままだと内野安打が内野ゴロの1.5%へ潰れる（実測。実際は6〜7%規模）。
+    /// 実体は①シムに無い内野安打の源（握り替えのもたつき・弾き・守備位置の揺らぎ＝守備所要の分散が0）と
+    /// ②捕球点が実戦より本塁寄り＝送球距離が短いぶんの残差。①を分散として物理層へ入れられれば
+    /// その分だけ小さくできる（将来の増分）。値は打率・BABIP帯から逆算した 0.60
+    /// （0.55 だと AVG が帯下限 .240 に張り付く）。data/coefficients.yaml と同値。
+    /// </summary>
+    public double ForceOutMarginSeconds { get; init; } = 0.60;
 
     /// <summary>
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。

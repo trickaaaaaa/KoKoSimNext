@@ -54,3 +54,6 @@ Assets/_Recovery.meta
 # 撮影ハーネス（*Shooter.cs）でいつでも撮り直せる作業成果物なので履歴に載せない。
 # main に既にあるぶんは追跡が残るが、新規は追加しない。
 screenshots/
+
+# テスト実行の成果物（dotnet test --logger trx）
+TestResults/
