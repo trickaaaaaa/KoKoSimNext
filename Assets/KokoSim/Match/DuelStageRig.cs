@@ -1227,14 +1227,18 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 対決ビュー中の既定リリース間隔[秒]。撮影ハーネスの逆算もこれを使う。
         ///
-        /// 2.8（2026-07-31 監督確定・issue #353）。2.4/2.8/3.2 秒を同じ打席・同じ乱数で撮り比べたうえで
-        /// 据え置きを選んだ＝**暫定値ではない**（#333 が暫定値のまま閉じた再発防止）。
+        /// 3.2（2026-08-01 監督指摘「むしろもう少し間を開けていいかも」）。1球ずつ采配窓で止まる進行
+        /// （設計書15 §8）へ移して球間が「見るだけの間」から「決める間」に変わったため、2026-07-31 に
+        /// 2.4/2.8/3.2 を撮り比べて選んだ 2.8 から**同じ比較の中の1段上**へ移した。
         /// 3本とも球審のコールは次の投球より前に終わる（コール〜構え戻りは間隔に依らず約2.05秒で一定）ので、
-        /// 差は戻ってから次の投球までの間だけ: 2.4s→0.38s / 2.8s→0.74s / 3.2s→1.17s。
+        /// 差は戻ってから次の投球までの間だけ: 2.4s→0.38s / 2.8s→0.74s / **3.2s→1.17s**。
         /// 変えるときは <see cref="UmpireCallSettleSeconds"/>（2.55秒）＋コール開始の待ち（約0.05秒）が
         /// 収まるかを確認すること。収まらない間隔では戻りが途中で切れる。
+        ///
+        /// ⚠ シーンの MatchLive は <c>duelPitchIntervalSeconds</c> を直列化して持つ＝**ここだけ変えても
+        /// 実機は変わらない**（SampleScene.unity 側も一緒に変える）。
         /// </summary>
-        public const float DefaultPitchInterval = 2.8f;
+        public const float DefaultPitchInterval = 3.2f;
 
         /// <summary>切り口のクロスフェード長[秒]。12fps量子化で3コマぶん。</summary>
         private const float CrossfadeSeconds = 0.25f;
@@ -1428,6 +1432,19 @@ namespace KokoSim.Unity.Match
         private const float UmpireCallDelaySeconds = 0.30f;
 
         /// <summary>
+        /// この球の判定を画面へ出してよい時刻[秒]（リリース起点）。<see cref="OnPitchReleased"/> の後だけ
+        /// 意味を持つ。捕られる球は球審がコールする瞬間（ミットに収まる時刻＋<see cref="UmpireCallDelaySeconds"/>）、
+        /// 打つ球・死球は当たった瞬間。
+        ///
+        /// UI（MatchLive）は長らく盤面（2D俯瞰）の投球尺 0.45 秒固定でテロップを出していた。対決ビューの球は
+        /// **実速度**で飛ぶ（実測 飛翔 0.52〜0.59 秒・捕球面 0.54〜0.60 秒）ので、固定値のままだと
+        /// **捕る前に「ストライク」が出る**（2026-08-01 実測: 捕られた17球すべて捕球前・平均 0.113 秒早い。
+        /// 監督指摘「捕球するより前に出ている気がする」）。issue #332 で打者・捕手・球審は実飛翔時間へ
+        /// 移したが、UI のテロップだけが取り残されていた＝同じ罠の最後の1箇所。
+        /// </summary>
+        public float CallMomentSeconds { get; private set; } = BallFlightSeconds;
+
+        /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
         /// 投手クリップをリリース時刻へスナップし、次の1球があれば（nextReleaseIn=リリース間隔）
         /// フォロースルーを FollowSeconds 見せてから次の振りかぶり位置へ切り替える予約を入れる。
@@ -1485,6 +1502,10 @@ namespace KokoSim.Unity.Match
             bool meetsBat = outcome == DuelPitchOutcome.InPlayContact
                 || outcome == DuelPitchOutcome.FoulContact;
             float flight = LaunchBall(pitch, catchIndex, meetsBat);
+            // 捕られる球は球審のコールに、打つ球・死球は当たった瞬間に判定テロップを合わせる（下の項）。
+            CallMomentSeconds = _ball == null ? flight
+                : catchIndex >= 0 ? _ballArrival + UmpireCallDelaySeconds
+                : _ballArrival;
 
             SeekActor(_pitcher, ReleaseTime);
             _pitcher.Go.transform.localPosition = keepPos;

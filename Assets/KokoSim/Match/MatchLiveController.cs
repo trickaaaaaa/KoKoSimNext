@@ -70,11 +70,11 @@ namespace KokoSim.Unity.Match
         [SerializeField] private string homeName = "桜丘";
         [Tooltip("タイムラインを持たない打席（三振・四球）の表示時間[秒]。")]
         [SerializeField] private float noPlayHoldSeconds = 1.2f;
-        [Tooltip("投球フェーズの1球あたり表示時間[秒]（×0.5/×2/×4速度に連動）。投球飛翔0.45秒より長くし、着弾後の一呼吸を確保する（issue #135）。")]
+        [Tooltip("俯瞰（2D）で1球を見せる時間[秒]（×0.5/×2/×4速度に連動）。盤面の投球飛翔0.45秒より長くし、着弾後の一呼吸を確保する（issue #135）。対決ビュー中の判定時刻はこの値ではなく球審のコール（DuelStageRig.CallMomentSeconds）で決まる。")]
         [SerializeField] private float pitchIntervalSeconds = 1.0f;
         [Tooltip("打席の頭に置く采配の間[秒]（設計書15 §8.3-①）。打者を見てサインを出す間合い。倍速で一緒に縮む。")]
-        [SerializeField] private float paHeadDwellSeconds = 0.6f;
-        [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。投球（セットポジション）1.3秒＋フォロースルー1.5秒が切り貼りなしで収まる長さにする。判定表示のタイミングは pitchIntervalSeconds のまま＝次の投球だけ遅れる。")]
+        [SerializeField] private float paHeadDwellSeconds = 1.0f;
+        [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。投球（セットポジション）1.3秒＋フォロースルー1.5秒が切り貼りなしで収まる長さにする。判定表示のタイミングは球審のコールに従うので、この値は次の投球までの間だけを決める。")]
         [SerializeField] private float duelPitchIntervalSeconds = DuelStageRig.DefaultPitchInterval;
         [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
         [SerializeField] private float pitchCallHoldSeconds = 0.35f;
@@ -226,10 +226,13 @@ namespace KokoSim.Unity.Match
         private bool _pitchBallVisible;   // 投球フェーズで今の1球の投球軌道を流しているか（#5）。
         private bool _pitchCallDone;      // 今の1球の判定表示＋カウント更新を済ませたか（対決ビュー中は次リリースと分離）。
         private bool _pitchFirstPending;  // 対決ビューの初球ワインドアップ待ち（時計が0に達したらBeginPitchBall(0)）。
+        // 今の1球の判定を出す時刻[秒]（リリース起点）。BeginPitchBall で1球ごとに確定する＝
+        // 対決ビューは球ごとに飛翔時間が違うので定数では合わない（DuelStageRig.CallMomentSeconds の項）。
+        private float _pitchCallAt;
         // ファウル打球の俯瞰表示（issue #313）。非nullの間＝今の1球がファウル打球の再生中で、値＝着地まで
         // 保持すべき最短表示秒（次の1球へ切り替える interval をこの秒数まで延ばす）。
         private float? _foulFlightHoldSeconds;
-        // BeginPitchBall が仕込んだ「この1球のファウル打球タイムライン」。pitchIntervalSeconds 到達時に
+        // BeginPitchBall が仕込んだ「この1球のファウル打球タイムライン」。判定を出す時刻（_pitchCallAt）に
         // Update() 側で表示へ差し替える（投球セグメントの二重表示を避けるため, issue #313）。
         private PlaybackPlay _pendingFoulFlight;
 
@@ -438,6 +441,7 @@ namespace KokoSim.Unity.Match
             _speed = 1f;
             _pitchIdx = 0;
             _pitchClock = 0f;
+            _pitchCallAt = pitchIntervalSeconds;
             _inPitchPhase = false;
             _pitchBallVisible = false;
             _pitchCallClock = 0f;
@@ -1321,7 +1325,7 @@ namespace KokoSim.Unity.Match
         // 投球フェーズ: index 球目の投球軌道（マウンド→本塁）を盤面へ流す（#5）。
         // 捕手からの返球は描画しない。打球になる最後の1球・ファウル打球データを持つ1球は、続く
         // タイムラインが同じ投球セグメントを先頭に持つので二重に描かず、静止表示のまま渡す
-        // （ファウルは pitchIntervalSeconds 到達時に Update() 側で差し替える, issue #313）。
+        // （ファウルは判定を出す時刻に Update() 側で差し替える, issue #313）。
         private void BeginPitchBall(int index)
         {
             var q = _paQueue[index];
@@ -1352,6 +1356,11 @@ namespace KokoSim.Unity.Match
                 _duelRig.OnPitchReleased(isLast ? -1f : duelPitchIntervalSeconds, outcome,
                     FlightOf(pt), BattedOf(pt, isLast));
             }
+
+            // この1球の判定を出す時刻。俯瞰は盤面の投球尺（0.45秒固定）に合わせた pitchIntervalSeconds だが、
+            // 対決ビューの球は実速度で飛ぶので**球ごとに違う**＝球審のコールに合わせる。定数のままだと
+            // 捕る前に「ストライク」が出る（2026-08-01 実測・DuelStageRig.CallMomentSeconds の項）。
+            _pitchCallAt = DuelPacingActive ? _duelRig.CallMomentSeconds : pitchIntervalSeconds;
         }
 
         /// <summary>
@@ -1510,9 +1519,9 @@ namespace KokoSim.Unity.Match
                 }
                 // 1球ぶんの投球軌道（またはファウル打球の再生）を毎フレーム進める。
                 if (_pitchBallVisible) _view.SetTime(_pitchClock);
-                // 判定＋カウント更新はリリース+pitchIntervalSeconds（従来タイミング）。
+                // 判定＋カウント更新はリリース+_pitchCallAt（俯瞰=盤面の投球尺／対決ビュー=球審のコール）。
                 // 次のリリースだけ対決ビュー中は duelPitchIntervalSeconds まで遅らせ、フル振りかぶりを収める。
-                if (!_pitchCallDone && _pitchClock >= pitchIntervalSeconds)
+                if (!_pitchCallDone && _pitchClock >= _pitchCallAt)
                 {
                     _pitchCallDone = true;
                     var q = _paQueue[_pitchIdx];
