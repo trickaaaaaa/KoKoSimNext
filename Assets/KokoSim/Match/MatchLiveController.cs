@@ -1496,6 +1496,15 @@ namespace KokoSim.Unity.Match
         internal DuelStageRig DuelRigForCapture => _duelRig;
 
         /// <summary>
+        /// 撮影ハーネス用: 対決ビュー中のリリース間隔を差し替える（間合いの比較録画用。issue #353）。
+        /// SerializeField の既定を変えずに1回の録画だけ別の間合いで回すための入口。
+        /// </summary>
+        internal void SetDuelPitchIntervalForCapture(float seconds)
+        {
+            if (seconds > 0f) duelPitchIntervalSeconds = seconds;
+        }
+
+        /// <summary>
         /// 撮影ハーネス用: 対決ステージを作り直す（着衣メッシュの差し替え比較=痩せ3段シート用。
         /// DuelStageRig.UniformMeshOverrideForCapture を変えてから呼ぶ）。表示中なら新RTを結線し直す。
         /// </summary>

@@ -27,6 +27,12 @@ namespace KokoSim.Unity.Match
         public static string OutDir =
             "/private/tmp/claude-501/-Users-seiya-oda-Unity-KoKoSimNext/1048af54-b6a3-474d-9aca-a1be741e7898/scratchpad/umpire-rec";
 
+        /// <summary>
+        /// リリース間隔[秒]の上書き（0=既定 <see cref="DuelStageRig.DefaultPitchInterval"/>）。間合いの比較録画用。
+        /// Play中にこの static へ入れてから component を足すこと（Play入りを跨ぐと初期化子へ戻る）。
+        /// </summary>
+        public static float IntervalOverride = 0f;
+
         private IEnumerator Start()
         {
             Application.runInBackground = true;
@@ -69,21 +75,22 @@ namespace KokoSim.Unity.Match
             var router = KokoSim.Unity.Shell.ScreenRouter.Instance;
             if (router != null) router.enabled = false;
 
+            if (IntervalOverride > 0f) ctrl.SetDuelPitchIntervalForCapture(IntervalOverride);
             ctrl.RestartCurrentPaForCapture();
             yield return null;
             yield return new WaitForEndOfFrame();
 
             var umpPx = rig.UmpireScreenPxForCapture();
 
+            float interval = IntervalOverride > 0f ? IntervalOverride : DuelStageRig.DefaultPitchInterval;
             int pitchCount = kinds.Count;
-            float dur = DuelStageRig.WindupSeconds
-                + (pitchCount - 1) * DuelStageRig.DefaultPitchInterval + 0.45f + TailSeconds;
+            float dur = DuelStageRig.WindupSeconds + (pitchCount - 1) * interval + 0.45f + TailSeconds;
             var frames = new List<Texture2D>();
             var diag = new StringBuilder("# 球数=" + pitchCount + " 種別=" + string.Join(",", kinds) + "\n");
-            diag.Append("# リリース時刻[s]:");
+            diag.Append("# 間隔=").Append(interval.ToString("F2")).Append("s リリース時刻[s]:");
             for (int i = 0; i < pitchCount; i++)
                 diag.Append(' ').Append(i).Append('=')
-                    .Append((DuelStageRig.WindupSeconds + i * DuelStageRig.DefaultPitchInterval).ToString("F2"));
+                    .Append((DuelStageRig.WindupSeconds + i * interval).ToString("F2"));
             diag.Append('\n');
             diag.Append("frame\tt\tumpClip\tumpClipT\tumpHandY\tpClipT\tpYaw\tpDx\tpDz\tpRootM\tpFade\n");
 

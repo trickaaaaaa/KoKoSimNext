@@ -950,7 +950,8 @@ namespace KokoSim.Unity.Match
             _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
             _catchClips = new AnimationClip[CatchAnchors.Length];
             for (int i = 0; i < CatchAnchors.Length; i++) _catchClips[i] = LoadClip(CatchAnchors[i].Clip);
-            // 球審ストライクコール。Type01(3.33s)を暫定採用。比較録画の後に監督が Type01/02 を確定する（#333）
+            // 球審ストライクコール。Type01(3.33s)を**確定採用**（2026-07-31 監督判断・#353 の録画で確認）。
+            // Type02(4.67s)は突き出しが2.05s・戻り終わりが3.4sで、リリース間隔2.8sに収まらないため不採用。
             _umpireStrikeClip = LoadClip("AA_Baseball_Umpire_Crouch_Strike_Type01");
 
             _bat = SpawnBat(layer);
@@ -1412,8 +1413,10 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 捕球からコール（腕が伸び切る瞬間）までの間[秒]。球審は捕手のミットに収まったのを見てから
         /// 判定を出すので、必ず正の値＝捕球より後に手が出る。
+        /// 0.30（2026-07-31 監督確定・比較録画のうえで「もっと早く」）。0.45 でも間合いは成立するが、
+        /// テンポのいい判定を採る。
         /// </summary>
-        private const float UmpireCallDelaySeconds = 0.45f;
+        private const float UmpireCallDelaySeconds = 0.30f;
 
         /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
