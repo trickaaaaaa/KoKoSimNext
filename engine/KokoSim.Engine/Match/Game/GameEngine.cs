@@ -985,7 +985,8 @@ public static class GameEngine
                 else if (buntOutcome == BuntResult.InfieldHit) AdvanceOnBunt(bases, batter);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
-                    batterOrder: batterOrder, pitchLog: res.PitchLog);
+                    batterOrder: batterOrder, pitchLog: res.PitchLog,
+                    isSacBunt: buntOutcome == BuntResult.SacrificeSuccess);
                 outs += buntOuts;
                 MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
@@ -1022,7 +1023,8 @@ public static class GameEngine
                 if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
-                    batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns);
+                    batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns,
+                    isSacBunt: sq.Bunt == BuntResult.SacrificeSuccess);
                 outs += sqOuts;
                 MaybeChangePitcher(p, defense, offense, ctx, rng, inning, isTop, log.Count, runsThisHalf, outs);
                 if (walkoff?.Invoke() == true)
@@ -1301,7 +1303,8 @@ public static class GameEngine
             FinishPlateAppearance(offense, defense, currentPitcher, batter,
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
-                batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa);
+                batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
+                play: res.Play);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
 
@@ -1335,7 +1338,9 @@ public static class GameEngine
         Player? errorFielder = null,
         Match.Field.FieldPosition errorRole = default,
         bool isSacFly = false,
-        int unearnedRuns = 0)
+        int unearnedRuns = 0,
+        Match.Fielding.FieldingPlay? play = null,
+        bool isSacBunt = false)
     {
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
@@ -1358,7 +1363,10 @@ public static class GameEngine
             pitcher.SourceId, pitcher.Name, pitcher.Throws,
             batter.UniformNumber, pitcher.UniformNumber,
             pitchLog,
-            batter.ConditionValue, pitcher.ConditionValue));
+            batter.ConditionValue, pitcher.ConditionValue,
+            // 打球観測（本日成績の略記列用）: 既に確定した FieldingPlay の値を写すだけ＝判定・乱数順・digest不変。
+            play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
+            outsThisPa, isSacFly, isSacBunt));
     }
 
     /// <summary>バント処理時の進塁: 一・二塁走者が1つ進む（三塁走者は自重）。batter 非null なら打者一塁へ。</summary>

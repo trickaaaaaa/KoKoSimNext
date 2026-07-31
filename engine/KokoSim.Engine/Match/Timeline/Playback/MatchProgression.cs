@@ -588,6 +588,9 @@ public sealed class MatchProgression
             _p.Away.LiveLine(), _p.Home.LiveLine());
     }
 
+    /// <summary>確定済み打席のプレー記録（観測専用・読み取りのみ）。本日成績の略記列は UI がここから引く。</summary>
+    public IReadOnlyList<PlayLogEntry> PlayLog => _p.Log;
+
     /// <summary>継投ログ（issue #209 表現。継投・投野交代・野手登板）。交代パネルの表示に使う。観測専用。</summary>
     public System.Collections.Generic.IReadOnlyList<PitchingChangeEvent> PitchingChanges => _p.PitchingChanges;
 

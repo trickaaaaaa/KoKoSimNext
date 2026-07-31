@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Players;
 
@@ -34,10 +35,20 @@ namespace KokoSim.Engine.Match.Game;
 /// 経路（バント/スクイズ等）は null（統一は Phase D）。</param>
 /// <param name="BatterConditionValue">打者の調子の真値（連続値・両校とも。相手校の観測誤認は Shell 側で計算, issue #47）。</param>
 /// <param name="PitcherConditionValue">対戦投手の調子の真値（連続値・両校とも）。</param>
+/// <param name="FieldedBy">打球を処理した野手の守備位置（<see cref="Fielding.FieldingPlay.FielderRole"/> の写し。
+/// 三振/四球/死球/本塁打/バント経路は null）。本日成績の略記（右安・二ゴ等）の守備位置部に使う。</param>
+/// <param name="BattedIsFly">空中捕球か（<see cref="Fielding.FieldingPlay.IsFly"/> の写し。Play が無い経路は false）。</param>
+/// <param name="BattedClass">打球の4分類（ゴロ/バウンド/ライナー/フライ。<see cref="Fielding.FieldingPlay.Class"/> の写し）。</param>
+/// <param name="BattedBearingDeg">打球方向[度]（<see cref="Fielding.FieldingPlay.BearingDeg"/> の写し。本塁打の左/中/右の導出用）。</param>
+/// <param name="OutsThisPa">この打席で増えたアウト数（併殺の検出用）。</param>
+/// <param name="IsSacFly">犠飛か（issue #68 のフライ捕球＋タッチアップ生還判定の写し）。</param>
+/// <param name="IsSacBunt">送りバント/スクイズ成功か（<see cref="BuntResult.SacrificeSuccess"/>）。</param>
 /// <remarks>
 /// Timeline 以降の追加フィールドはすべて「観測データ」で試合結果に影響しない（判定・乱数順は不変）。
 /// うち PitchLog は決定論ゲート GameResultDigest のハッシュ対象（設計書15 §3.2, Phase Bで再ベースライン済み。
 /// Trajectory は含めない）。それ以外のフィールドはハッシュ対象外＝足しても SHA 不変。
+/// FieldedBy 以降の打球観測フィールド（本日成績の略記列用）もこの規約に沿う＝既に確定した値を写すだけで、
+/// ハッシュ対象外・判定/乱数順に一切影響しない。
 /// </remarks>
 public sealed record PlayLogEntry(
     int Inning, bool IsTop, string BatterName, PlateAppearanceResult Result, int RunsScored,
@@ -51,4 +62,11 @@ public sealed record PlayLogEntry(
     int? PitcherSourceId = null, string? PitcherName = null, Handedness PitcherThrows = Handedness.Right,
     int BatterNumber = 0, int PitcherNumber = 0,
     IReadOnlyList<PitchRecord>? PitchLog = null,
-    double BatterConditionValue = 0.0, double PitcherConditionValue = 0.0);
+    double BatterConditionValue = 0.0, double PitcherConditionValue = 0.0,
+    FieldPosition? FieldedBy = null,
+    bool BattedIsFly = false,
+    BattedBallClass? BattedClass = null,
+    double? BattedBearingDeg = null,
+    int OutsThisPa = 0,
+    bool IsSacFly = false,
+    bool IsSacBunt = false);
