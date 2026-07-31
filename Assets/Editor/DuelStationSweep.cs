@@ -37,7 +37,7 @@ namespace KokoSim.UnityEditorTools
         {
             Directory.CreateDirectory(Dir);
             var log = new StringBuilder();
-            log.AppendLine("play\theightM\tt\tframeH_m\taimPx\tballPx");
+            log.AppendLine("heightM\tplay\tmaxZoom\tmarginM\tt\tballX\tballZ\tballH\tframeH_m\taimY\taimPx\tballPx\tballU\tballV");
 
             var savedStation = DuelStageRig.FieldStation;
             var savedZoom = DuelStageRig.FieldMaxZoom;

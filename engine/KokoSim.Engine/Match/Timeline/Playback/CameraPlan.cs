@@ -28,9 +28,21 @@ public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMu
 /// 外野フライで <c>FitBox</c> が求めるズームは実測5.75で、**上限に頭打ちされている**。
 /// </summary>
 /// <param name="MaxZoom">ズーム倍率の上限（1=全景）。大きいほど深く寄る。</param>
-/// <param name="MarginM">被写体まわりに残す余白[m]。</param>
+/// <param name="MarginM">
+/// 被写体まわりに残す余白[m]。**寄りの深さを実際に決めているのはこちら**で、<paramref name="MaxZoom"/> ではない。
+/// <c>FitBox</c> は箱に 2×Margin を足してからズームを決めるので、箱が点まで縮んでも
+/// frameH は 2×Margin より小さくならない（既定 6.0m なら上限 12.9倍で頭打ち）。
+/// </param>
 /// <param name="PitchZoom">投球区間の固定フレームのズーム倍率。</param>
-public readonly record struct CameraFraming(double MaxZoom, double MarginM, double PitchZoom)
+/// <param name="ThrowFollowsBall">
+/// 送球区間の枠の取り方。<c>false</c>（既定・2D俯瞰）＝**始点と終点を両方収める**。
+/// 小さな盤面で送球の向きを読ませる作法だが、寄りたい3Dでは「6-3 なら遊撃〜一塁の30mを必ず枠に入れる」
+/// ＝どれだけ Margin を詰めても寄れない、という形で効く（実測: 決着の瞬間が frameH 20〜56m ＝
+/// そのプレーで最も引いた絵になる）。<c>true</c> なら打球中と同じく**球を先読みで追う**＝
+/// 送球が届くにつれ枠が締まり、受け手の捕球で最も寄る（中継カメラの作法）。
+/// </param>
+public readonly record struct CameraFraming(
+    double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false)
 {
     /// <summary>2D俯瞰の既定（Issue #119 で決めた現行値）。渡さなければこれが使われる。</summary>
     public static readonly CameraFraming Default = new(3.4, 6.0, 2.4);
@@ -167,7 +179,8 @@ public static class CameraPlanBuilder
             return FitBox(new PlaybackVec(0, 0), new PlaybackVec(FieldDiagramGeometry.Mound.X, FieldDiagramGeometry.Mound.Y), fr, fr.PitchZoom);
 
         // 送球区間は始点・終点を収めるフレーム。同じく両モデルを拾う（#258）。
-        if (IsKind(covering, BallSegmentKind.Throw))
+        // ThrowFollowsBall なら下の「ボールを追う」へ落とす＝送球も打球と同じ扱いになる。
+        if (!fr.ThrowFollowsBall && IsKind(covering, BallSegmentKind.Throw))
         {
             var from = covering!.At(0);
             var to = covering.At(covering.T1 - covering.T0);

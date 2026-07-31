@@ -206,6 +206,41 @@ public sealed class CameraPlanBuilderTests
         }
     }
 
+    /// <summary>
+    /// 送球区間の枠の取り方（<see cref="CameraFraming.ThrowFollowsBall"/>）。
+    /// 既定＝始終点を両方収める＝**送球の距離ぶん必ず引く**。3Dの守備カメラはこれを切って球を追う。
+    /// 6-3（遊撃→一塁の約30m）で差が出ることを固定する。
+    /// </summary>
+    [Fact]
+    public void Build_WithThrowFollowsBall_ZoomsTighterDuringTheThrow()
+    {
+        var play = PlaybackSamples.All[2]; // ③ ショートゴロ 6-3
+        var seg = play.Ball.First(s =>
+            s is ThrowSegment
+            || (s is EndpointBallSegment e && e.Kind == Engine.Match.Timeline.BallSegmentKind.Throw));
+
+        var framing = new CameraFraming(MaxZoom: 40.0, MarginM: 2.0, PitchZoom: 2.4);
+        var spanPlan = CameraPlanBuilder.Build(play, framing);
+        var followPlan = CameraPlanBuilder.Build(play, framing with { ThrowFollowsBall = true });
+
+        static double MaxZoomIn(System.Collections.Generic.IReadOnlyList<CameraKeyframe> plan, double t0, double t1)
+            => plan.Where(k => k.T >= t0 && k.T <= t1).Max(k => k.ZoomMult);
+
+        // 送球中〜到達直後（受け手が捕るところまで）で比べる。
+        var spanMax = MaxZoomIn(spanPlan, seg.T0, seg.T1 + 0.3);
+        var followMax = MaxZoomIn(followPlan, seg.T0, seg.T1 + 0.3);
+
+        Assert.True(followMax > spanMax + 0.5,
+            $"球を追ってもズームが伸びていない: span={spanMax:F2} follow={followMax:F2}");
+        // 上限とレート制限は共通の仕組みなので、切り替えても効いたまま。
+        Assert.True(followMax <= framing.MaxZoom + 1e-6, $"上限を超えている: {followMax:F2}");
+    }
+
+    /// <summary>既定（2D俯瞰）は <c>ThrowFollowsBall=false</c> ＝従来の始終点フレームのまま。</summary>
+    [Fact]
+    public void Default_DoesNotFollowBallDuringThrow()
+        => Assert.False(CameraFraming.Default.ThrowFollowsBall);
+
     // 視野に入っているかを、engine 側の設計キャンバス基準（DesignW/H=760/520・S=3.35）で近似判定する。
     // 実際の描画は Unity 側の Scale(k) をそのまま掛けるだけなので、この基準がそのままスクリーン上の視野になる。
     private static void AssertWithinViewport(CameraViewport vp, double x, double y, double t, string label)

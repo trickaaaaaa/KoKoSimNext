@@ -362,8 +362,8 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static Vector3 FieldStation = new(0f, 24f, -14f);
 
-        /// <summary>注視点の高さ[m]。地面でなく腰の高さに取ると、寄ったときに人が下に切れない。</summary>
-        private const float FieldAimY = 1.0f;
+        /// <summary>注視点の高さの下限[m]。地面でなく腰の高さに取ると、寄ったときに人が下に切れない。</summary>
+        private const float FieldAimYMin = 1.0f;
 
         /// <summary>
         /// ZoomMult=1（全景）で縦に収まる実寸[m]。engine 側のデザインキャンバス
@@ -379,13 +379,59 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static float FieldMaxZoom = 6f;
 
+        /// <summary>
+        /// 被写体まわりに残す余白[m]。**寄りの深さを決めているのは実はこちら**で、<see cref="FieldMaxZoom"/> ではない。
+        ///
+        /// <c>FitBox</c> は箱の縦横に 2×Margin を足してからズームを決めるので、箱が点まで縮んでも
+        /// <c>zoom ≤ 155.2/(2×Margin)</c> ＝ **frameH は 2×Margin より小さくならない**。
+        /// 既定の 6.0m では frameH の下限が 12m（＝上限 12.9 倍）で、これより上に MaxZoom を上げても
+        /// 1mm も寄らない。**絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// </summary>
+        public static float FieldMarginM = (float)CameraFraming.Default.MarginM;
+
+        /// <summary>
+        /// 送球区間で球を追うか。2D俯瞰の既定は「始点と終点を両方収める」＝送球の距離ぶん必ず引くので、
+        /// 6-3 の一塁到達や中継バックホームという**そのプレーで一番見たい瞬間が一番引いた絵になる**
+        /// （実測 frameH 20m / 56m）。3Dでは中継カメラと同じく球を追う側にする。
+        /// </summary>
+        public static bool FieldThrowFollowsBall = true;
+
         private System.Collections.Generic.IReadOnlyList<CameraKeyframe> _fieldPlan;
 
         /// <summary>engine の追随カメラのプランを、この rig の守備カメラ用に組む。</summary>
         private void BuildFieldCameraPlan(PlaybackPlay play)
         {
             _fieldPlan = play == null ? null : CameraPlanBuilder.Build(play,
-                new CameraFraming(FieldMaxZoom, CameraFraming.Default.MarginM, CameraFraming.Default.PitchZoom));
+                new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
+                    FieldThrowFollowsBall));
+        }
+
+        /// <summary>
+        /// 時刻 t の構図（注視点と縦に収める実寸）を求める。
+        ///
+        /// 水平（<c>Cx,Cy</c>）とズームは engine の追随カメラのプランそのもの。**高さだけは 2D の俯瞰に
+        /// 存在しない＝プランが持っていない**ので、ここで足す。無いと寄った瞬間にフライが画面の上へ抜ける
+        /// （枠 19m の構図に対し打球の頂点は 30m 級＝1枠ぶん以上うわを通る）。
+        /// 足し方はプランと同型＝**同じ箱（今の球と先読み先の球）を縦にも取る**だけで、
+        /// 新しい演出判断を持ち込まない。球が無い区間（保持中・全景復帰後）は下限の腰の高さに落ちる。
+        /// </summary>
+        private void ComputeFieldFrame(float t, out Vector3 aim, out float frameH)
+        {
+            var vp = CameraEvaluator.ViewportAt(_fieldPlan, t);
+            float zoom = (float)System.Math.Max(vp.ZoomMult, 0.01);
+            frameH = FieldWideHeightM / zoom;
+
+            float aimY = FieldAimYMin;
+            var b0 = PlaybackEvaluator.BallAt(_fieldPlay, t);
+            if (b0.HasValue)
+            {
+                var b1 = PlaybackEvaluator.BallAt(_fieldPlay, t + (float)CameraPlanBuilder.LookaheadSeconds);
+                float h0 = (float)b0.Value.H;
+                float h1 = b1.HasValue ? (float)b1.Value.H : h0;
+                aimY = Mathf.Max(FieldAimYMin, (h0 + h1) * 0.5f);
+                frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + FieldMarginM * 2f);
+            }
+            aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
         }
 
         /// <summary>
@@ -394,11 +440,10 @@ namespace KokoSim.Unity.Match
         private void ApplyFieldCamera(float t)
         {
             if (_fieldPlan == null || _fieldPlan.Count == 0) return;
-            var vp = CameraEvaluator.ViewportAt(_fieldPlan, t);
-            float zoom = (float)System.Math.Max(vp.ZoomMult, 0.01);
-            FramePreview(FieldStation,
-                new Vector3((float)vp.Cx, FieldAimY, (float)vp.Cy),
-                FieldWideHeightM / zoom);
+            Vector3 aim;
+            float frameH;
+            ComputeFieldFrame(t, out aim, out frameH);
+            FramePreview(FieldStation, aim, frameH);
         }
 
         // ---- 打球プレーの再生 ---------------------------------------------------
@@ -541,21 +586,30 @@ namespace KokoSim.Unity.Match
         {
             var ball = _fieldPlay == null ? null : PlaybackEvaluator.BallAt(_fieldPlay, t);
             float frameH = -1f;
-            if (_fieldPlan != null && _fieldPlan.Count > 0)
-                frameH = FieldWideHeightM / (float)System.Math.Max(CameraEvaluator.ViewportAt(_fieldPlan, t).ZoomMult, 0.01);
+            var aim = Vector3.zero;
+            if (_fieldPlan != null && _fieldPlan.Count > 0) ComputeFieldFrame(t, out aim, out frameH);
 
             // **注視点にいる人**の大きさ＝この構図の読みやすさそのもの。
             // 特定の役（中堅手など）で測ると、その役がプレーに絡まない時に意味のない数になる。
             int aimPx = frameH > 0.01f && Target != null
                 ? Mathf.RoundToInt(TargetHeight / frameH * Target.height) : -1;
 
+            // 球が枠の中か（0〜1で画面内）。**寄るほど「枠の外に置き去り」が起きる**が、
+            // 絵では「球が写っていない」としか見えず、追えていないのか小さすぎるのかを切り分けられない。
+            float bu = -1f, bv = -1f;
+            if (_camera != null && _ball != null && _ball.activeSelf && Target != null)
+            {
+                var sp = _camera.WorldToScreenPoint(_ball.transform.position);
+                if (sp.z > 0f) { bu = sp.x / Target.width; bv = sp.y / Target.height; }
+            }
+
             return string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "{0}\t{1:F1}\t{2:F2}\t{3}\t{4}\t{5}\t{6:F1}\t{7}\t{8}",
-                _fieldPlay != null ? _fieldPlay.Name : "(none)", FieldMaxZoom, t,
+                "{0}\t{1:F1}\t{2:F1}\t{3:F2}\t{4}\t{5}\t{6}\t{7:F1}\t{8:F1}\t{9}\t{10}\t{11:F2}\t{12:F2}",
+                _fieldPlay != null ? _fieldPlay.Name : "(none)", FieldMaxZoom, FieldMarginM, t,
                 ball.HasValue ? ball.Value.X.ToString("F1") : "-",
                 ball.HasValue ? ball.Value.Y.ToString("F1") : "-",
                 ball.HasValue ? ball.Value.H.ToString("F1") : "-",
-                frameH, aimPx, BallScreenPx());
+                frameH, aim.y, aimPx, BallScreenPx(), bu, bv);
         }
 
         /// <summary>スケール補正後の球が画面上で何pxか（補正が効いているかの裏取り）。</summary>
