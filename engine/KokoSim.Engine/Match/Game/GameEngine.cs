@@ -25,6 +25,8 @@ public sealed record GameResult
     public int HomePlayOuts { get; init; }
     /// <summary>単打の一塁→三塁レースで三塁憤死した走者の総数（両軍計。Issue #89, 設計書12 §3.5。統計参考値）。</summary>
     public int ThirdPlayOuts { get; init; }
+    /// <summary>併殺打の総数（両軍計。GIDP＝二塁封殺＋打者一塁アウト, Issue #369。統計参考値）。</summary>
+    public int DoublePlayCount { get; init; }
 
     // ===== design-14 第1段（P1）新プレー発生数（両軍計。統計参考値） =====
     public int FieldersChoiceCount { get; init; }
@@ -293,6 +295,7 @@ public static class GameEngine
             HomeSubstitutions = home.Substitutions,
             HomePlayOuts = away.HomePlayOuts + home.HomePlayOuts,
             ThirdPlayOuts = away.ThirdPlayOuts + home.ThirdPlayOuts,
+            DoublePlayCount = away.DoublePlayCount + home.DoublePlayCount,
             FieldersChoiceCount = away.FieldersChoiceCount + home.FieldersChoiceCount,
             DroppedThirdStrikeCount = away.DroppedThirdStrikeCount + home.DroppedThirdStrikeCount,
             ErrorExtraAdvanceCount = away.ErrorExtraAdvanceCount + home.ErrorExtraAdvanceCount,
@@ -1137,9 +1140,14 @@ public static class GameEngine
                 // aggression は中立固定（校風/ティア/采配の三層写像は残Q10）。
                 // 守備の内野深さ（G1）＝ゴロ凡打の三塁走者判定へ「前進で刺す/後退で献上」を反映。
                 // ThrowArriveSeconds（一塁送球到達時刻）はゴロ凡打の進塁打（Issue #318）分岐Cの転送起点。
+                // BatterToFirstSeconds（打者走者の一塁到達）は併殺の転送レース（Issue #369）の二段目。
+                // 「併殺の名手」（design-10）: 二塁経由の転送が速い＝守備側の遊撃手/二塁手が持つとき転送時間を短縮。
+                var dpPivotBonus = (defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.Skills.Has(Skill.DoublePlayArtist) == true
+                                    || defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.Skills.Has(Skill.DoublePlayArtist) == true)
+                    ? ctx.Skills.DoublePlayArtistBonus : 0.0;
                 homePlay = new HomePlayContext(
                     ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
-                    fp.ThrowArriveSeconds);
+                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus);
             }
 
             // 打席前の塁状況＋アウト数を観測（塁ダイヤ／静止走者トークン用。追加記録のみ・判定不変, #3/#4）。
@@ -1335,6 +1343,15 @@ public static class GameEngine
             offense.HomePlayOuts += homeOuts; // 本塁クロスプレー憤死（F2外野＋G1内野ゴロ, 統計参考値）
             offense.ThirdPlayOuts += thirdOuts; // 単打の一塁→三塁レース憤死（Issue #89, 統計参考値）
             if (batterSafeOnFc) offense.FieldersChoiceCount++; // 野選（FC, design-14 P1-1。統計参考値）
+            // 併殺打（GIDP, Issue #369）: 二塁封殺（1→2 Out）成立かつ打者一塁アウト（野選でない）の内野ゴロ。
+            // AppendDoublePlayThrows の描画条件（hasForceAtSecond && !batterSafeOnFc）と同一＝件数と絵が一致する。
+            if (!batterSafeOnFc && res.Play is { IsFly: false })
+            {
+                foreach (var m in runnerMoves)
+                {
+                    if (m.Out && m.FromBase == 1 && m.ToBase == 2) { offense.DoublePlayCount++; break; }
+                }
+            }
 
             // 打席解決後の塁状況（塁ダイヤを結果へ更新, #4）。outs はこの後 outsThisPa を加算する前の値。
             var postFirst = bases.First is not null;

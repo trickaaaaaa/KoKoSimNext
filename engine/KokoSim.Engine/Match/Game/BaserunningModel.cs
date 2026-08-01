@@ -438,8 +438,17 @@ public static class BaserunningModel
         var extraOuts = 0;
         var homeOuts = 0;
         var batterSafeOnFc = false;
-        // 併殺（1塁走者あり）。
-        if (r1 is not null && MathUtil.Chance(
+        // 併殺・野選（内野ゴロ×一塁走者, Issue #369）: 実試合経路（home!=null・ゴロ・打者の一塁到達時刻あり）は
+        // 13%固定テーブルでなく「捕球点→二塁の封殺（P_force2）／二塁→一塁の転送」の二段の物理レースで解く
+        // （#318 のゴロ進塁打と同じ流儀）。それ以外（home無し・フライ・打者一塁到達時刻なし＝単体テスト/
+        // 純テーブル経路）は従来テーブル（DoublePlayProb / FieldersChoiceProb）へフォールバックし乱数消費順も保存する。
+        if (r1 is not null && home is { IsFly: false, BatterToFirstSeconds: not null } dp)
+        {
+            (extraOuts, batterSafeOnFc) = ResolveDoublePlay(bases, batter, r1, dp, coeff, rng, mv);
+            if (extraOuts > 0) r1 = null; // 二塁封殺成立＝一塁走者は塁上に残らない（分岐Aは extraOuts==0 で r1 温存）
+        }
+        // 併殺（1塁走者あり, 従来テーブル）。
+        else if (r1 is not null && MathUtil.Chance(
                 MathUtil.Clamp(coeff.DoublePlayProb - coeff.SpeedSlope * (r1.Speed - 50), 0.02, 0.5), rng))
         {
             extraOuts = 1;
@@ -690,5 +699,71 @@ public static class BaserunningModel
             mv?.Add(new RunnerMove(r2, 2, 3, Out: true) { CloseCall = closeCall, ExtraStartDelaySeconds = delay });
         }
         bases.Second = null;
+    }
+
+    /// <summary>
+    /// 併殺・野選を「捕球点→二塁の封殺（P_force2）」と「二塁→一塁の転送」の二段レースで解く
+    /// （Issue #369, 設計書12 §2）。#318 の <see cref="ResolveGrounderAdvance"/> と同型で、守備は幾何だけで
+    /// 3分岐を純関数で選ぶ:
+    /// A) 一塁のみ（打者を一塁でアウト・一塁走者はフォースで二塁へ）＝呼び出し側の battersOwnOut に委ねて何もしない。
+    ///    2条件のいずれかで選ぶ（どちらも RNG非消費）: A-1 二塁封殺自体が間に合わない（一塁走者の二塁到達見込み
+    ///    &gt; DoublePlayForceMaxRunnerSuccess＝俊足走者/深い右方向ゴロ）／ A-2 併殺の見込みが薄い（転送で打者を
+    ///    刺せる確率 &lt; DoublePlayAttemptMinRelaySuccess＝快足打者/深いゴロ＝ルーティンなゴロ凡打）／
+    /// B) 二塁は封殺できるが転送が打者に僅かに間に合わない → 野選（二塁封殺＋打者一塁生存, RNG1消費）／
+    /// C) 二塁も一塁も取れる → 併殺（RNG1消費）。
+    /// 走者所要は本塁・三塁レースと同じ <see cref="HomePlayResolver"/> 経由（新しい走者の式を書かない, 不変条件#1/#2）。
+    /// 二塁封殺成立時（B/C）は bases.First と mv を本メソッドが確定させる。分岐Aは一切変更せず返す。
+    /// 呼び出し前提: 一塁走者あり・ゴロ・home.BatterToFirstSeconds 非null。
+    /// </summary>
+    /// <returns>(追加アウト数, 打者が野選で一塁生存したか)。</returns>
+    private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlay(
+        BaseState bases, Player batter, Player r1, HomePlayContext home,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+    {
+        var force = HomePlayResolver.SecondForceParams(home.Field, coeff);
+        var delay = coeff.DoublePlayR1StartDelaySeconds;
+        // 一塁走者の二塁到達見込み（P_r1_safe）。捕球点→二塁の直接送球（幾何）と一塁走者の脚（走力＋走塁判断）から創発。
+        var pR1Safe = HomePlayResolver.SuccessProbability(r1, 1, home.Situation, home.Field, coeff, force, delay);
+
+        // A-1) 二塁封殺自体が間に合わない（俊足走者/深い右方向ゴロ等）＝守備は封殺を諦め一塁を取る。RNG非消費。
+        if (pR1Safe > coeff.DoublePlayForceMaxRunnerSuccess) return (0, false);
+
+        // 二段目の見積り: 二塁ベース経由の転送（ピボット）で打者を一塁で刺せるか（P_relay_out）。二塁への送球到達
+        // 時刻を起点に、二塁手/遊撃手の転送握り替え（DoublePlayPivotTransferSeconds − 名手短縮）で一塁へ転送する。
+        // 打者走者の一塁到達は守備解決の正典値（home.BatterToFirstSeconds）＝出塁/凡打を決めたのと同じ時計。
+        var arriveAtSecond = HomePlayResolver
+            .ResolveThrowPath(home.Situation, home.Field.SecondBase, coeff).ArriveAtSeconds;
+        var pivotTransfer = Math.Max(0.0, coeff.DoublePlayPivotTransferSeconds - home.DoublePlayPivotBonusSeconds);
+        var pivot = new HomePlaySituation(
+            home.Field.SecondBase, arriveAtSecond, coeff.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
+        var relayToFirst = HomePlayResolver
+            .ResolveThrowPath(pivot, home.Field.FirstBase, coeff, transferSecondsOverride: pivotTransfer)
+            .ArriveAtSeconds + coeff.SecondForceTagSeconds;
+        // margin = 守備所要 − 打者所要（正＝打者がベースに先着＝生存＝野選）。
+        var batterMargin = relayToFirst - home.BatterToFirstSeconds!.Value + coeff.DoublePlayRelayBias;
+        var pBatterSafe = MathUtil.Clamp(
+            MathUtil.Logistic(batterMargin / coeff.DoublePlayRelayMarginScale), 0.01, 0.99);
+
+        // A-2) 併殺の見込みが薄い（打者を刺せる確率 P_relay_out が閾値未満）＝守備は二塁へ投げず「確実な一塁アウト」を取る。
+        //    ＝ルーティンなゴロ凡打（打者一塁アウト＋一塁走者は二塁へ進塁）。快足打者や深いゴロはここへ落ちる。RNG非消費。
+        //    これにより野選（下の B）は「併殺を狙った末に転送が僅かに間に合わなかった残差」に限られる（現実の稀な頻度）。
+        if (1.0 - pBatterSafe < coeff.DoublePlayAttemptMinRelaySuccess) return (0, false);
+
+        // 二塁封殺は成立（一塁走者アウト）。#318 と同様に一段目のアウトは幾何で確定させ、際どさは表示のみ（RNG非消費）。
+        var forceMargin = HomePlayResolver.Margin(r1, 1, home.Situation, home.Field, coeff, force, delay);
+        var forceClose = Math.Abs(forceMargin) < coeff.CloseCallMarginSeconds;
+        mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { CloseCall = forceClose }); // 二塁封殺
+        bases.First = null;
+
+        if (MathUtil.Chance(pBatterSafe, rng))
+        {
+            // B) 野選: 併殺を狙ったが打者が転送を上回って一塁生存（一塁は封殺した一塁走者が空けた＝衝突しない）。
+            bases.First = batter;
+            mv?.Add(new RunnerMove(batter, 0, 1, false));
+            return (1, true);
+        }
+        // C) 併殺: 打者も一塁でアウト（打者アウトは呼び出し側の battersOwnOut=1 が計上、
+        //    2本目送球の絵は GameEngine の AppendDoublePlayThrows が二塁封殺 RunnerMove から差し替える）。
+        return (1, false);
     }
 }

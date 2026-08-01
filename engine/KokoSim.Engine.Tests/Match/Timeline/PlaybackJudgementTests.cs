@@ -143,7 +143,11 @@ public sealed class PlaybackJudgementTests
                 var tl = e.Timeline;
                 if (!tl.Ball.Any(b => b.Kind == BallSegmentKind.Roll)) continue;      // ゴロだけ
                 if (!tl.Ball.Any(b => b.Kind == BallSegmentKind.Throw)) continue;     // 一塁送球が絡む内野ゴロ
-                if (!tl.Runners.Any(x => x.OutAtEnd)) continue;
+                // 単純な内野ゴロ（打者走者を一塁で封殺）だけを採る。併殺（一塁走者を二塁で封殺＝Issue #369）は
+                // 2本目送球（二塁→一塁の転送）が判定窓の後ろへ伸びる別ケースで、この「早切り vs 一塁フォースアウトの
+                // 判定窓」不変条件の対象外（2D再生の併殺演出は AppendDoublePlayThrows 側で別途担保）。
+                if (!tl.Runners.Any(x => x.OutAtEnd && x.Label == "打")) continue;
+                if (tl.Runners.Any(x => x.OutAtEnd && x.Label != "打")) continue;
                 return tl;
             }
         }

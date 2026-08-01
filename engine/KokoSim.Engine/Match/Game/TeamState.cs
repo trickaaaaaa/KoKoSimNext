@@ -77,6 +77,8 @@ public sealed class TeamState
     public int HomePlayOuts { get; set; }
     /// <summary>単打の一塁→三塁レースで三塁憤死した自軍走者の数（Issue #89, 設計書12 §3.5。統計参考値）。</summary>
     public int ThirdPlayOuts { get; set; }
+    /// <summary>この攻撃で併殺打（二塁封殺＋打者一塁アウト）を打った数（GIDP, Issue #369。統計参考値）。</summary>
+    public int DoublePlayCount { get; set; }
 
     // ===== design-14 第1段（P1）新プレー発生数（統計参考値。試合結果には影響しない） =====
     public int FieldersChoiceCount { get; set; }

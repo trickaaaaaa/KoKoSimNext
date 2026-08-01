@@ -53,6 +53,9 @@ public sealed class GameRegressionTests
         // 三塁憤死/試合の参考帯（単打の一塁→三塁レース, Issue #89）。広め＝warn 相当。
         Assert.True(targets.ThirdPlayOutsPerGame.Contains(s.AverageThirdPlayOutsPerGame),
             $"三塁憤死/試合 {s.AverageThirdPlayOutsPerGame:F3} が参考帯外");
+        // 併殺打/試合（GIDP, Issue #369）: 物理レース化後の帯。
+        Assert.True(targets.DoublePlayPerGame.Contains(s.DoublePlaysPerGame),
+            $"併殺打/試合 {s.DoublePlaysPerGame:F3} が参考帯外");
         // 失策数/試合（両軍計）の目標帯（issue #123: 甲子園実測≈2.1〜2.7）。
         Assert.True(targets.ErrorsPerGame.Contains(s.ErrorsPerGame),
             $"失策数/試合 {s.ErrorsPerGame:F2} が帯外");

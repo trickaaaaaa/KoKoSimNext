@@ -208,6 +208,44 @@ public sealed record BaserunningCoefficients
     /// <summary>走者の三塁到達見込みがこれ以下なら守備は一塁を捨てて三塁へ直接送球する（分岐B/Cの境界）。</summary>
     public double AdvanceDirectThrowMaxRunnerSuccess { get; init; } = 0.45;
 
+    // === 併殺の物理レース（内野ゴロ×一塁走者, Issue #369, 設計書12 §2）===
+    // 13%固定テーブル（DoublePlayProb）を二段の秒勝負へ置換する: ①捕球点→二塁の封殺が間に合うか（P_force2）
+    // ②二塁→一塁の転送（ピボット）が間に合うか。守備は幾何で3分岐を純関数で選ぶ:
+    // A) 二塁封殺が間に合わない（一塁走者が二塁へ到達しそう）→ 一塁を取る（打者アウト＝従来のフォールバック）／
+    // B) 二塁は取れるが転送が間に合わない → 野選（二塁封殺＋打者一塁生存）／ C) 二塁も一塁も取れる → 併殺。
+    // 走者所要は本塁・三塁レースと同じ HomePlayResolver 経由（新しい走者の式は書かない, 不変条件#1）。
+    // 方向性・深さは係数でなく幾何から創発する（二遊間の浅いゴロは二塁が近い＝封殺容易＋転送短＝併殺／
+    // 三遊間の深いゴロや一塁側のゴロは二塁が遠い＝封殺困難＝一塁のみ／快足打者は転送を上回る＝野選）。
+    /// <summary>一塁走者がゴロを読んでから二塁へ走り出す追加スタート遅延[s]（RunnerContext の反応に上乗せ。
+    /// フォース走者は打球を見てから走るぶん、盗塁のような好スタートは切れない）。</summary>
+    public double DoublePlayR1StartDelaySeconds { get; init; } = 0.30;
+    /// <summary>二塁封殺のタッチ/捕球[s]（<see cref="ThirdTagSeconds"/> と同軸）。</summary>
+    public double SecondForceTagSeconds { get; init; } = 0.10;
+    /// <summary>二塁封殺 margin→到達確率の logistic 幅[s]（三塁・進塁レースと同軸＝打球の深さ・肩を効かせる）。</summary>
+    public double SecondForceMarginScale { get; init; } = 0.45;
+    /// <summary>二塁封殺 到達確率バイアス[s]（校正項。一塁走者物理の保守性を吸収する）。</summary>
+    public double SecondForceSuccessBias { get; init; } = 0.00;
+    /// <summary>一塁走者の二塁到達見込み（P_r1_safe）がこれを超えたら守備は封殺自体が不可＝一塁を取る（分岐A）。
+    /// 内野ゴロの二塁封殺は短い送球で走者(≈3.5s)に先着するのが通常＝この分岐Aは俊足走者/深い右方向ゴロ等の稀ケース。
+    /// <see cref="AdvanceDirectThrowMaxRunnerSuccess"/> と同型の「守備が幾何で送球先を選ぶ」境界。</summary>
+    public double DoublePlayForceMaxRunnerSuccess { get; init; } = 0.60;
+    /// <summary>二塁封殺は間に合うが、二塁→一塁の転送で打者を刺せる見込み（P_relay_out）がこれ未満なら
+    /// 守備は併殺を狙わず「確実な一塁アウト」を取る（分岐A＝打者一塁アウト＋一塁走者は二塁へ）。
+    /// ＝ルーティンなゴロ凡打（進塁打）と併殺狙いを分ける境界。高いほど併殺を狙わず一塁のみが増える。
+    /// これにより野選（二塁封殺＋打者生存）は「併殺を狙った末に転送が僅かに間に合わなかった残差」に限られ、
+    /// 現実の稀な発生頻度に収まる（守備はそもそも刺せない相手には二塁へ投げない）。</summary>
+    public double DoublePlayAttemptMinRelaySuccess { get; init; } = 0.80;
+    /// <summary>二塁ベース経由の転送（ピボット）握り替え[s]。一塁手の中継 <see cref="RelayTransferSeconds"/> とは別値
+    /// （捕って踏み替えて投げ返す連携動作＝中継より長い。#318 が外野値と分けたのと同じ扱い）。
+    /// 「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）はこの時間を短縮する
+    /// ＝確率への加算でなく時間の短縮（Skill.cs:39「二塁経由の送球が速い」通りの効き方, Issue #369）。</summary>
+    public double DoublePlayPivotTransferSeconds { get; init; } = 0.90;
+    /// <summary>二塁→一塁の転送送球 margin→打者生存（野選）確率の logistic 幅[s]（一塁の際どい封殺＝狭め）。</summary>
+    public double DoublePlayRelayMarginScale { get; init; } = 0.20;
+    /// <summary>二塁→一塁の転送送球の校正項[s]（打者生存＝野選頻度を現実値へ寄せる。正で打者生存＝野選寄り）。
+    /// 併殺打/試合と得点環境を Heavy 実測で校正するノブ（#318 の AdvanceSuccessBias と同役）。</summary>
+    public double DoublePlayRelayBias { get; init; } = 0.00;
+
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは走者の時計の起点が「捕球の瞬間」である点だけが本塁クロスプレーと異なる。走者は捕球時刻に
     // スタート（二次リードなし＝全塁間 27.4m を走る）、守備も同じ捕球時刻から送球する＝共通起点が捕球時刻。
