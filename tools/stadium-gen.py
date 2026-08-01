@@ -131,11 +131,20 @@ def r_grass(t):
 
 
 def r_edge(t):
-    """boundary of the playing surface for any theta (fence, then foul fence, then backstop)"""
+    """boundary of the playing surface for any theta (fence, then foul fence, then backstop)
+
+    ⚠ 塁線から FOUL_W 外側の「直線の壁」までの距離は FOUL_W/sin(phi) だが、この式は
+    **phi > 90°（本塁の真横より後ろ）で再び増える**。そのまま使うと境界が 160°で20m →
+    180°で25.5m と広がり、**本塁の真後ろに V 字の角**ができる（2026-08-01 監督指摘
+    「対決ビューで角ついてる」）。BACK_R が 30m だった頃は円弧が勝っていて出ていなかった。
+    直線の壁は本塁の横までで、真後ろは半径 BACK_R の円弧＝phi が 90° を越えたら円弧へ切り替える。
+    """
     at = abs(t)
     if at <= P.FOUL_DEG * D2R:
         return r_fence(t)
     phi = at - P.FOUL_DEG * D2R
+    if phi >= math.pi / 2.0:
+        return P.BACK_R
     return max(P.BACK_R, min(r_fence(P.FOUL_DEG * D2R), P.FOUL_W / math.sin(phi)))
 
 
@@ -235,8 +244,20 @@ def nrm(v):
     return (v[0] / L, v[1] / L, v[2] / L)
 
 
+def mid_angle(t0, t1):
+    """2つの方位[rad]の中心。**端点の平均で採ってはいけない。**
+
+    ボウルは 45°→315° を一本で回すので、角度を (-180,180] へ畳むと 180° をまたぐ列だけ
+    端点が +180 と -180 に割れ、平均が**真裏（≒0°）**に飛ぶ。参照法線が逆を向いて、
+    その列だけ巻き順と陰影が裏返る＝本塁の真後ろ 2.5° に「角」が立つ
+    （2026-08-01 監督指摘。対決カメラがちょうどそこを見ている）。最短差で採れば畳み方に依存しない。
+    """
+    d = math.atan2(math.sin(t1 - t0), math.cos(t1 - t0))
+    return t0 + d / 2.0
+
+
 def inward(t0, t1):
-    tm = (t0 + t1) / 2.0
+    tm = mid_angle(t0, t1)
     return (-math.sin(tm), 0.0, -math.cos(tm))
 
 
@@ -478,7 +499,7 @@ def steps(M, cols, rows):
         M.grp(g, "conc_mid")
         M.quad(pol(rw0, t0, 3.0), pol(rw1, t1, 3.0), pol(rw1, t1, yw), pol(rw0, t0, yw), out)
         if i % 6 == 0:
-            tm = (t0 + t1) / 2.0
+            tm = mid_angle(t0, t1)
             M.grp(g, "conc_light")
             M.box((rw0 + 0.25) * math.sin(tm), 0.0, (rw0 + 0.25) * math.cos(tm),
                   1.2, yw, 0.6, -tm)
