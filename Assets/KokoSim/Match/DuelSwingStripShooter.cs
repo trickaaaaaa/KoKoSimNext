@@ -28,7 +28,8 @@ namespace KokoSim.Unity.Match
     {
         private const string Dir = "screenshots";
         private const int W = 960;
-        private const int H = 540;   // 16:9（基準480×270の2倍）＝確定構図の縦横比
+        private const int H = 540;   // 16:9（基準480×270の2倍）＝確定構図の縦横比。
+                                     // フォームを寄って判定したい回だけ 1920×1080 へ上げる（構図は画角固定なので変わらない）
 
         /// <summary>出力名の頭。クリップを入れ替えて2本撮るとき起動側が EditorPrefs 経由で変える。</summary>
         private const string PrefixKey = "KokoSim.DuelSwingStripShooter.Prefix";
@@ -85,12 +86,15 @@ namespace KokoSim.Unity.Match
             string runs = UnityEditor.EditorPrefs.GetString(RunsKey, "1.4|miss|R");
             foreach (var spec in runs.Split(','))
             {
+                // 速さ|結果|左右[|胴の戻し[度]|立ち向きのオフセット[度]]。後ろ2つは省略可（既定＝較正のまま）
                 var parts = spec.Trim().Split('|');
                 if (parts.Length < 3) continue;
-                float k = float.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+                float k = Num(parts[0], 1.4f);
                 string outName = parts[1];
                 bool left = parts[2].Trim().ToUpperInvariant() == "L";
-                yield return ShootRun(prefix, anim, k, outName, left);
+                float torso = parts.Length > 3 ? Num(parts[3], float.NaN) : float.NaN;
+                float yaw = parts.Length > 4 ? Num(parts[4], 0f) : 0f;
+                yield return ShootRun(prefix, anim, k, outName, left, torso, yaw);
             }
 
             DuelStageRig.CalibrationOverride = null;
@@ -107,17 +111,29 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        private IEnumerator ShootRun(string prefix, Animator anim, float k, string outName, bool left)
+        private static float Num(string s, float fallback)
+        {
+            float v;
+            return float.TryParse(s.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out v) ? v : fallback;
+        }
+
+        private IEnumerator ShootRun(string prefix, Animator anim, float k, string outName, bool left,
+            float torsoCloseDeg, float yawOffsetDeg)
         {
             var cal = DuelCalibration.Upgrade(DuelCalibration.Default);
             cal.SwingSpeed = k;
+            // 開き（2026-08-01）の比較用。NaN=較正のまま／立ち向きは**加算**なので0で無効
+            if (!float.IsNaN(torsoCloseDeg)) cal.TorsoCloseDeg = torsoCloseDeg;
+            cal.BatterYawDeg += yawOffsetDeg;
             DuelStageRig.CalibrationOverride = cal;
             _rig.ApplyCalibration(cal);
             _rig.SetHandedness(left, false);
             _rig.ResetForNewPlateAppearance();
             for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
 
-            string run = string.Format("k{0:F1}-{1}-{2}", k, outName, left ? "L" : "R");
+            string run = string.Format("k{0:F1}-{1}-{2}-t{3}-y{4}", k, outName, left ? "L" : "R",
+                float.IsNaN(torsoCloseDeg) ? "def" : torsoCloseDeg.ToString("F0"), yawOffsetDeg.ToString("F0"));
             _rig.OnPitchWindup();
             for (int i = 0; i < 4; i++) { _rig.Tick(1f / 60f); yield return null; }
             _rig.OnPitchReleased(0f, OutcomeOf(outName));
