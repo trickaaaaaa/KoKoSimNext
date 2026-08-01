@@ -24,6 +24,51 @@ public static class TimelineBuilder
     private static readonly TimelinePoint Home = new(0, 0);
     private static readonly TimelinePoint Mound = new(0, 18.44);
 
+    /// <summary>
+    /// このプレーの守備開始位置（<see cref="PlayTimeline.FielderStarts"/>）。判定が距離・時間を出したのと
+    /// **同じ座標**を再生層へ渡す（表示専用・乱数不使用）。
+    /// </summary>
+    private static IReadOnlyDictionary<FieldPosition, TimelinePoint> StartsOf(IReadOnlyList<Fielder> fielders)
+    {
+        var d = new Dictionary<FieldPosition, TimelinePoint>(fielders.Count);
+        foreach (var f in fielders) d[f.Position] = new TimelinePoint(f.Location.X, f.Location.Z);
+        return d;
+    }
+
+    /// <summary>守備陣を受け取らない経路（ファウル・盗塁）用の標準配置。</summary>
+    private static IReadOnlyDictionary<FieldPosition, TimelinePoint> StandardStarts()
+    {
+        var d = new Dictionary<FieldPosition, TimelinePoint>(9);
+        foreach (var pos in new[]
+                 {
+                     FieldPosition.Pitcher, FieldPosition.Catcher, FieldPosition.FirstBase,
+                     FieldPosition.SecondBase, FieldPosition.ThirdBase, FieldPosition.Shortstop,
+                     FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
+                 })
+        {
+            var (x, z) = FieldGeometry.StandardPosition(pos);
+            d[pos] = new TimelinePoint(x, z);
+        }
+        return d;
+    }
+
+    /// <summary>
+    /// 塁 <paramref name="fromBase"/> から次塁へ <paramref name="leadM"/> [m] 出たリード位置。
+    /// 走者の時計（<see cref="RunnerClock.SegmentSeconds"/>）が距離から引いているのと同じ量を絵にも乗せる。
+    /// </summary>
+    private static TimelinePoint LeadPoint(FieldGeometry field, int fromBase, double leadM)
+    {
+        if (leadM <= 0) return BasePoint(field, BaseName(fromBase));
+        var a = BasePoint(field, BaseName(fromBase));
+        var b = fromBase + 1 >= 4 ? Home : BasePoint(field, BaseName(fromBase + 1));
+        var dx = b.X - a.X;
+        var dz = b.Z - a.Z;
+        var len = Math.Sqrt(dx * dx + dz * dz);
+        if (len <= 1e-9) return a;
+        var u = Math.Min(1.0, leadM / len);
+        return new TimelinePoint(a.X + dx * u, a.Z + dz * u);
+    }
+
     private static TimelinePoint BasePoint(FieldGeometry field, string name) => name switch
     {
         "first" => new TimelinePoint(field.FirstBase.X, field.FirstBase.Z),
@@ -292,11 +337,12 @@ public static class TimelineBuilder
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
 
                 // バックアップ/中継で持ち場を離れた野手は、決着後に定位置へ戻る（"寄ったまま"を防ぐ, #2）。
-                // 定位置は再生器の基準 DefaultPositions と同一ソース（FieldDiagramGeometry.MatchFielderPosition）。
+                // ⚠ 戻り先は**出発した場所**（＝判定が距離を測った FieldGeometry の守備位置）。以前は
+                // FieldDiagramGeometry.MatchFielderPosition（モック由来の表）へ戻しており、出発と帰着が
+                // 別の表＝戻りレッグの長さが最大10m嘘になっていた。
                 if (task is FielderTask.Backup or FielderTask.Cutoff)
                 {
-                    var (hx, hz) = FieldDiagramGeometry.MatchFielderPosition(a.Position);
-                    var homePost = new TimelinePoint(hx, hz);
+                    var homePost = from;
                     var backDist = Distance(to, homePost);
                     if (backDist >= 0.5)
                     {
@@ -357,12 +403,14 @@ public static class TimelineBuilder
                 }
                 if (lastMove is { } lm)
                 {
-                    var (hx, hz) = FieldDiagramGeometry.MatchFielderPosition(missRoleFinal);
-                    var homePost = new TimelinePoint(hx, hz);
+                    var missFielder = Find(fielders, missRoleFinal);
+                    // 戻り先は出発した場所（判定が距離を測ったのと同じ守備位置）。上の Backup/Cutoff と同じ理由。
+                    var homePost = missFielder is null
+                        ? lm.To
+                        : new TimelinePoint(missFielder.Location.X, missFielder.Location.Z);
                     var backDist = Distance(lm.To, homePost);
                     if (backDist >= 0.5)
                     {
-                        var missFielder = Find(fielders, missRoleFinal);
                         if (missFielder is not null)
                         {
                             var speed = Math.Max(4.0, missFielder.Attributes.SprintSpeedMps);
@@ -392,6 +440,7 @@ public static class TimelineBuilder
             Duration = duration,
             Result = resultText,
             ResolvedAt = resolvedAt,
+            FielderStarts = StartsOf(fielders),
             Ball = ball,
             Moves = moves,
             Runners = runners,
@@ -452,6 +501,7 @@ public static class TimelineBuilder
             Duration = duration,
             Result = "ファウル",
             ResolvedAt = landAt,
+            FielderStarts = StandardStarts(),
             Ball = segments,
             Runners = runners,
             Captions = new[] { new TimelineCaption(ContactAt + 0.01, "ファウル！") },
@@ -481,6 +531,7 @@ public static class TimelineBuilder
             Duration = resolvedAt + 1.2,
             Result = safe ? "盗塁成功" : "盗塁死",
             ResolvedAt = resolvedAt,
+            FielderStarts = StandardStarts(),
             Ball = new[]
             {
                 new BallSegment { Kind = BallSegmentKind.Pitch, T0 = pitchStart, T1 = pitchArrive, From = Mound, To = Home },
@@ -550,11 +601,19 @@ public static class TimelineBuilder
 
             if (fromBox && m.ToBase <= 1) continue;            // 打者の一塁までは既定レッグ
 
+            // 二次リード（<see cref="RunnerContext.LeadDistanceM"/>）。時計は塁間からリードぶんを**引いた**
+            // 距離で回っているので、絵でも次塁側へ出しておかないと「引いた距離ぶんの時間で満距離を走る」
+            // ことになる（実測: 塁間27.43mを2.87秒＝9.56 m/s。リードを描くと 8.34 m/s＝脚力×1.15 ちょうど）。
+            // 引くのは移動全体で1回（RunnerClock が出発塁からの累積で引くのと同じ）＝最初のレッグだけ。
+            var lead = fromBox ? 0.0 : Math.Max(0.0, ctx.LeadDistanceM);
+
             // 塁上の走者は移動開始まで元の塁に立たせる（待機レッグ）。打者走者は本塁の既定レッグがあるため対象外。
+            // 投球の間にリードを取るので、待機レッグの終端はリード位置にする。
             if (m.FromBase >= 1 && m.ToBase > m.FromBase && t > 0)
             {
                 var stand = BasePoint(field, BaseName(m.FromBase));
-                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t, From = stand, To = stand, OutAtEnd = false });
+                var leadPt = LeadPoint(field, m.FromBase, lead);
+                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t, From = stand, To = leadPt, OutAtEnd = false });
             }
 
             for (var b = startBase; b < m.ToBase; b++)
@@ -574,7 +633,10 @@ public static class TimelineBuilder
                     Label = label,
                     T0 = t,
                     T1 = t1,
-                    From = BasePoint(field, from),
+                    // 最初のレッグだけリード位置から（2本目以降は塁を踏んで出るので満距離）
+                    From = b == startBase && lead > 0
+                        ? LeadPoint(field, b, lead)
+                        : BasePoint(field, from),
                     To = b + 1 >= 4 ? Home : BasePoint(field, to),
                     OutAtEnd = m.Out && b + 1 == m.ToBase,
                     // 判定オーバーレイ（Issue #59）: CloseCall は決着レッグ（この移動の最終区間）にだけ乗せる。
@@ -636,15 +698,20 @@ public static class TimelineBuilder
                 // AppendRunnerLegs の「塁上から」文脈とまったく同じ扱いにする。
                 var ctx = HomePlayResolver.RunnerContextOf(runner, baserunning);
                 var t0 = ContactAt + ctx.StartDelaySeconds;
-                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = pt, OutAtEnd = false });
+                // 二次リードは AppendRunnerLegs と同じ扱い（時計が塁間から引いている距離を絵にも乗せる）。
+                var leadPt = LeadPoint(field, b, Math.Max(0.0, ctx.LeadDistanceM));
+                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = leadPt, OutAtEnd = false });
                 if (catchAt > t0)
                 {
                     var speed = runner.ToFielder().SprintSpeedMps;
                     var perBase = RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field) - ctx.StartDelaySeconds;
                     var frac = Math.Clamp((catchAt - t0) / perBase, 0.0, 1.0);
                     var next = BasePoint(field, nextName);
-                    var stop = new TimelinePoint(pt.X + (next.X - pt.X) * frac, pt.Z + (next.Z - pt.Z) * frac);
-                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = catchAt, From = pt, To = stop, OutAtEnd = false });
+                    // 進むのは「リード位置から次塁まで」＝時計が持っている距離。塁からの満距離で刻むと
+                    // リードぶんだけ速く走ることになる。
+                    var stop = new TimelinePoint(
+                        leadPt.X + (next.X - leadPt.X) * frac, leadPt.Z + (next.Z - leadPt.Z) * frac);
+                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = catchAt, From = leadPt, To = stop, OutAtEnd = false });
                 }
                 return;
             }

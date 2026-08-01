@@ -165,6 +165,11 @@ public sealed record PlaybackPlay
     public required IReadOnlyList<PlaybackBallSegment> Ball { get; init; }
     public IReadOnlyDictionary<FieldPosition, IReadOnlyList<PlaybackMove>> Moves { get; init; }
         = new Dictionary<FieldPosition, IReadOnlyList<PlaybackMove>>();
+    /// <summary>
+    /// 野手の出発点（<see cref="KokoSim.Engine.Match.Timeline.PlayTimeline.FielderStarts"/> の写し）。
+    /// null＝モック（<see cref="PlaybackSamples"/>）なので <see cref="PlaybackEvaluator.DefaultPositions"/> に落ちる。
+    /// </summary>
+    public IReadOnlyDictionary<FieldPosition, PlaybackVec>? Starts { get; init; }
     public IReadOnlyList<PlaybackRunner> Runners { get; init; } = Array.Empty<PlaybackRunner>();
     public IReadOnlyList<PlaybackCaption> Caps { get; init; } = Array.Empty<PlaybackCaption>();
     /// <summary>判定イベント列（Issue #260）。<see cref="PlaybackEvaluator.JudgementAt"/> の単一ソース。</summary>
@@ -177,7 +182,13 @@ public sealed record PlaybackPlay
 /// </summary>
 public static class PlaybackEvaluator
 {
-    /// <summary>野手9人の初期守備位置[m]。地理は共通ソース <see cref="FieldDiagramGeometry.MatchFielderPosition"/>（mock DEF）。</summary>
+    /// <summary>
+    /// 野手9人の初期守備位置[m]（mock DEF の写経）。
+    /// ⚠ **実試合の再生でこれを使わない**。engine の守備解決は <see cref="FieldGeometry"/> の守備位置から
+    /// 距離と時間を出しており、この表とは最大10m（中堅 92 対 82）ずれている＝出発点にすると
+    /// レッグの長さが嘘になる。実出力は <see cref="PlaybackPlay.Starts"/> を持つのでそちらが使われる。
+    /// ここが効くのは <see cref="PlaybackSamples"/>（モック）だけ。
+    /// </summary>
     public static readonly IReadOnlyDictionary<FieldPosition, PlaybackVec> DefaultPositions = BuildDefaults();
 
     private static IReadOnlyDictionary<FieldPosition, PlaybackVec> BuildDefaults()
@@ -199,6 +210,31 @@ public static class PlaybackEvaluator
     /// <summary>mock: easeIO。smoothstep（区間外はクランプ）。</summary>
     public static double EaseIO(double u) => u < 0 ? 0 : u > 1 ? 1 : u * u * (3 - 2 * u);
 
+    /// <summary>
+    /// 野手移動の加減速ランプが区間長に占める割合（台形速度プロファイルの肩）。
+    /// ピーク速度は平均の 1/(1−a) 倍＝<c>a=0.15</c> で 1.176 倍。
+    /// </summary>
+    public const double MoveRampFraction = 0.15;
+
+    /// <summary>
+    /// 野手移動の進み方（台形速度プロファイル。両端 <see cref="MoveRampFraction"/> で加速/減速し、
+    /// 中間は等速）。<see cref="EaseIO"/>（smoothstep）は**ピーク速度が平均の1.5倍**になり、
+    /// レッグの平均が既にスプリント速度（engine が距離÷脚力で尺を決めている）なので、
+    /// 完璧なレッグでもピークが 10.88 m/s＝39km/h になっていた。端点の時刻・位置は不変
+    /// ＝判定とは無関係で、中間の進み方だけを実速へ寄せる。
+    /// </summary>
+    public static double MoveEase(double u)
+    {
+        if (u <= 0) return 0;
+        if (u >= 1) return 1;
+        const double a = MoveRampFraction;
+        var v = 1.0 / (1.0 - a);                       // 巡航速度（正規化）
+        if (u < a) return v * u * u / (2 * a);         // 加速
+        if (u <= 1 - a) return v * (a / 2 + (u - a));  // 等速
+        var w = 1 - u;
+        return 1 - v * w * w / (2 * a);                // 減速
+    }
+
     /// <summary>時刻 t のボール位置。未投球なら直前の保持位置、セグメント間は最後の位置で保持。mock: ballAt。</summary>
     public static PlaybackBall? BallAt(PlaybackPlay play, double t)
     {
@@ -215,14 +251,15 @@ public static class PlaybackEvaluator
     /// <summary>時刻 t の野手位置と、移動中フラグ（黄枠ハイライト用）。mock: fielderAt。</summary>
     public static (PlaybackVec Pos, bool Moving) FielderAt(PlaybackPlay play, FieldPosition key, double t)
     {
-        var pos = DefaultPositions[key];
+        // 出発点はこのプレーの守備配置（＝判定が距離と時間を出した座標）。持っていないのはモックだけ。
+        var pos = play.Starts is { } starts && starts.TryGetValue(key, out var s) ? s : DefaultPositions[key];
         var moving = false;
         if (play.Moves != null && play.Moves.TryGetValue(key, out var segs))
         {
             foreach (var m in segs)
             {
                 if (t <= m.T0) break;
-                var u = EaseIO((t - m.T0) / (m.T1 - m.T0));
+                var u = MoveEase((t - m.T0) / (m.T1 - m.T0));
                 pos = new PlaybackVec(pos.X + (m.To.X - pos.X) * u, pos.Y + (m.To.Y - pos.Y) * u);
                 if (t < m.T1) moving = true;
             }

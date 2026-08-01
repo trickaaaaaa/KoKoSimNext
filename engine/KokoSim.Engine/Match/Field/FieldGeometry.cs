@@ -77,6 +77,21 @@ public sealed record FieldGeometry
         (FieldPosition.RightField, new Vector3D(37.6, 0, 70.6)),
     };
 
+    /// <summary>
+    /// 標準守備位置の座標（能力に依らない静的な地理）。**守備解決が距離と時間を出しているのはこの表**なので、
+    /// 再生（絵）の出発点もここへ揃える（<see cref="Timeline.PlayTimeline.FielderStarts"/>）。
+    /// 表示用の <see cref="FieldDiagramGeometry.MatchFielderPosition"/> はHTMLモックの DEF 配列の写経で、
+    /// この表とは最大10m（中堅）ずれている＝混ぜて使わない。
+    /// </summary>
+    public static (double X, double Z) StandardPosition(FieldPosition p)
+    {
+        foreach (var (pos, loc) in Positions)
+        {
+            if (pos == p) return (loc.X, loc.Z);
+        }
+        return (0.0, 0.0);
+    }
+
     /// <summary>標準守備配置（全員 league-average, もしくは指定能力）。</summary>
     public IReadOnlyList<Fielder> StandardAlignment(FielderAttributes? attributes = null)
     {

@@ -596,6 +596,24 @@ public sealed class TimelineTests
     private static bool Near(TimelinePoint a, TimelinePoint b) =>
         System.Math.Abs(a.X - b.X) < 0.5 && System.Math.Abs(a.Z - b.Z) < 0.5;
 
+    /// <summary>
+    /// 一塁走者の封殺レッグ（＝二塁でのフォースアウト。あれば）。走者は投球の間に二次リードを取るので
+    /// **レッグの From は一塁ちょうどではない**（リード距離ぶん次塁側）。一塁からリードの範囲内で
+    /// 始まっているかで見分ける。
+    /// </summary>
+    private static RunnerLeg? ForceOutFromFirst(PlayTimeline tl, TimelinePoint first)
+    {
+        var reach = new BaserunningCoefficients().HomeLeadDistanceM + 0.5;
+        foreach (var leg in tl.Runners)
+        {
+            if (!leg.Label.StartsWith("走") || !leg.OutAtEnd) continue;
+            var dx = leg.From.X - first.X;
+            var dz = leg.From.Z - first.Z;
+            if (System.Math.Sqrt(dx * dx + dz * dz) <= reach) return leg;
+        }
+        return null;
+    }
+
     [Fact]
     public void DoublePlay_InGame_DrawsSecondThenFirstThrowChain()
     {
@@ -613,8 +631,7 @@ public sealed class TimelineTests
                 var hasRoll = tl!.Ball.Any(b => b.Kind == BallSegmentKind.Roll);
                 // 判定時刻の差し替え（Issue #328①）でレッグが送球到達点で止まる（Toが二塁ちょうどで
                 // なくなりうる）ため、消えない From(=一塁) で検出する。
-                var forceLeg = tl.Runners.FirstOrDefault(
-                    l => l.Label.StartsWith("走") && l.OutAtEnd && Near(l.From, first));
+                var forceLeg = ForceOutFromFirst(tl, first);
                 if (!hasRoll || forceLeg is null) continue;
 
                 var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
@@ -650,9 +667,7 @@ public sealed class TimelineTests
             foreach (var tl in r.Log.Select(e => e.Timeline).Where(t => t is not null)!)
             {
                 // 二塁封殺レッグを持たない＝非DP。内野ゴロの一塁送球は従来通り1本のまま。
-                var forceAtSecond = tl!.Runners.Any(
-                    l => l.Label.StartsWith("走") && l.OutAtEnd && Near(l.From, first));
-                if (forceAtSecond) continue;
+                if (ForceOutFromFirst(tl!, first) is not null) continue;
                 // 一塁への送球（内野ゴロ）だけを検査対象にする。外野安打の返球（二塁/三塁へ, #6）や
                 // バックホーム送球（本塁, Slice D）は別機構なので、一塁到達送球の本数で回帰を見る。
                 var throwsToFirst = tl.Ball.Count(b => b.Kind == BallSegmentKind.Throw && Near(b.To, first));
@@ -1341,8 +1356,9 @@ public sealed class TimelineTests
             Assert.True(ssMoves[i].T0 >= ssMoves[i - 1].T0, "SSのレッグが時系列で逆転している");
         }
 
-        // 決着後は必ず定位置(FieldDiagramGeometry.MatchFielderPosition)へ戻り切る。
-        var (hx, hz) = FieldDiagramGeometry.MatchFielderPosition(FieldPosition.Shortstop);
+        // 決着後は必ず**出発した場所**（＝判定が距離を測った FieldGeometry の守備位置）へ戻り切る。
+        // 戻り先を表示用の別表にすると、出発と帰着が別座標＝戻りレッグの長さが嘘になる。
+        var (hx, hz) = FieldGeometry.StandardPosition(FieldPosition.Shortstop);
         Assert.True(Near(ssMoves[^1].To, new TimelinePoint(hx, hz)), "決着後に定位置へ戻り切っていない");
     }
 
@@ -1357,7 +1373,7 @@ public sealed class TimelineTests
         var moves = tl.Moves.Where(m => m.Role == FieldPosition.SecondBase).OrderBy(m => m.T0).ToList();
         Assert.True(moves.Count >= 2, "2Bに「寄る→戻る」の複数レッグが生成されていない");
         Assert.Equal(FielderTask.Chase, moves[0].Task);
-        var (hx, hz) = FieldDiagramGeometry.MatchFielderPosition(FieldPosition.SecondBase);
+        var (hx, hz) = FieldGeometry.StandardPosition(FieldPosition.SecondBase);
         Assert.True(Near(moves[^1].To, new TimelinePoint(hx, hz)), "決着後に定位置へ戻り切っていない");
     }
 

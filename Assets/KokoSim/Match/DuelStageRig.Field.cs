@@ -98,8 +98,7 @@ namespace KokoSim.Unity.Match
 
             foreach (var pos in AddedFieldPositions)
             {
-                PlaybackVec home;
-                if (!PlaybackEvaluator.DefaultPositions.TryGetValue(pos, out home)) continue;
+                var home = FieldHomeSpot(pos);
                 float x = (float)home.X, z = (float)home.Y;   // engine の +Y=センター → stage の +z
                 var clip = IsOutfield(pos) ? outfieldClip : infieldClip;
 
@@ -150,13 +149,23 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        /// <summary>守備7人を定位置（engine の <c>DefaultPositions</c>）へ戻す。</summary>
+        /// <summary>
+        /// 守備の定位置（<see cref="FieldGeometry.StandardPosition"/>）。再生中の <c>Starts</c> と同じ表で、
+        /// **判定が距離と時間を出しているのがこれ**。<c>PlaybackEvaluator.DefaultPositions</c> は
+        /// HTMLモックの DEF 配列の写経で最大10m（中堅）ずれる＝実試合の配置に使わない。
+        /// </summary>
+        private static PlaybackVec FieldHomeSpot(FieldPosition pos)
+        {
+            var (x, z) = FieldGeometry.StandardPosition(pos);
+            return new PlaybackVec(x, z);
+        }
+
+        /// <summary>守備7人を定位置へ戻す。</summary>
         public void PlaceFieldCastAtDefault()
         {
             foreach (var kv in _fieldCast)
             {
-                PlaybackVec home;
-                if (!PlaybackEvaluator.DefaultPositions.TryGetValue(kv.Key, out home)) continue;
+                var home = FieldHomeSpot(kv.Key);
                 PlaceFielder(kv.Value, (float)home.X, (float)home.Y);
             }
         }
@@ -2264,7 +2273,7 @@ namespace KokoSim.Unity.Match
                     v = new Vector2((float)(pb.X - pa.X), (float)(pb.Y - pa.Y)).magnitude
                         / Mathf.Max(1e-4f, tb - ta);
                 }
-                else if (!PlaybackEvaluator.DefaultPositions.TryGetValue(pos, out want)) continue;
+                else want = FieldHomeSpot(pos);
 
                 if (a == null || a.Go == null)
                 {

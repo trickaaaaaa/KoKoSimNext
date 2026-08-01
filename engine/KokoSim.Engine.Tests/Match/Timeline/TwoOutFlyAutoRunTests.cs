@@ -53,10 +53,13 @@ public sealed class TwoOutFlyAutoRunTests
         var play = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var r = Assert.Single(play.Runners, x => x.Label == "走一");
 
-        // 接触直前（投球中）はまだ一塁に立っている。
+        // 投球開始時は一塁の上。接触までに二次リード（3.5m）ぶんだけ前へ出る＝**塁は離れない**。
+        // リードを描かないと、時計が「塁間からリードを引いた距離」で回っているぶん、走るレッグが
+        // 満距離を短い時間で刻む（＝脚力を超えた速さになる）。
+        Assert.True(DistanceFromFirst(PlaybackEvaluator.RunnerAt(r, 0.0)!.Value) < 0.01, "投球開始時に一塁に居ない");
         var beforeContact = PlaybackEvaluator.RunnerAt(r, 0.5);
         Assert.NotNull(beforeContact);
-        Assert.True(DistanceFromFirst(beforeContact!.Value) < 0.01, "接触前なのに動いている");
+        Assert.InRange(DistanceFromFirst(beforeContact!.Value), 0.0, Baserunning.HomeLeadDistanceM + 1e-6);
 
         // 捕球時刻（0.85 + 3.0 = 3.85s）には一塁から動き出している。
         var catchAt = 0.85 + 3.0;

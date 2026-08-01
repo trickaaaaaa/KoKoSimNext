@@ -249,8 +249,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 守備の絡まないプレー（三振・四球）や打席間でも盤面を空にしないための静止表示。
-        /// Play を持たなくても 9 野手を定位置（<see cref="PlaybackEvaluator.DefaultPositions"/>）に、
-        /// 占有塁に走者を置く。守備陣・走者を永続表示するために使う。
+        /// Play を持たなくても 9 野手を定位置（<see cref="FieldGeometry.StandardPosition"/>＝**判定が
+        /// 距離と時間を出しているのと同じ表**）に、占有塁に走者を置く。守備陣・走者を永続表示するために使う。
+        /// ⚠ <c>PlaybackEvaluator.DefaultPositions</c> はモック（HTML の DEF 配列）由来で最大10mずれる。
         /// </summary>
         public void SetResting(bool first, bool second, bool third)
         {
@@ -264,8 +265,8 @@ namespace KokoSim.Unity.Match
 
             foreach (var (pos, _) in FielderOrder)
             {
-                var d = PlaybackEvaluator.DefaultPositions[pos];
-                _fielders.Add((new Vector2((float)d.X, (float)d.Y), false));
+                var (dx, dz) = FieldGeometry.StandardPosition(pos);
+                _fielders.Add((new Vector2((float)dx, (float)dz), false));
             }
             if (first) _runners.Add(("走", First));
             if (second) _runners.Add(("走", Second));

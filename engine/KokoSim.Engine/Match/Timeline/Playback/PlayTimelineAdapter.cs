@@ -63,6 +63,8 @@ public static class PlayTimelineAdapter
             ResAt = t.ResolvedAt,
             Ball = ball,
             Moves = moves,
+            // 出発点（判定が距離を測った守備配置）。座標と違って推定できないので素通しする
+            Starts = t.FielderStarts?.ToDictionary(kv => kv.Key, kv => Vec(kv.Value)),
             Runners = runners,
             Caps = caps,
             Judgements = judgements,

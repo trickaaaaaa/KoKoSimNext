@@ -139,6 +139,17 @@ public sealed record PlayTimeline
     /// <summary>結果が確定する時刻（スコア反映・演出の切れ目）。</summary>
     public required double ResolvedAt { get; init; }
 
+    /// <summary>
+    /// このプレー開始時の守備位置（表示専用・Issue「野手の脚力」）。
+    ///
+    /// 再生層は既定でこれを野手の出発点にする。渡さない（null）と <c>PlaybackEvaluator.DefaultPositions</c>
+    /// ＝モック由来の表に落ちるが、**判定はここ（<see cref="Fielder.Location"/>＝<see cref="FieldGeometry"/>）
+    /// から距離と時間を出している**ので、2つの表がずれているぶんだけレッグの長さが嘘になる
+    /// （実測: 中堅10m・内野5.4m ずれ → ピーク速度が最大 156 m/s、レッグの58.5%が人の脚力超え）。
+    /// 誰が・どこから・いつ着くかは既に決まっている値の写しで、新規計算も乱数消費もゼロ。
+    /// </summary>
+    public IReadOnlyDictionary<FieldPosition, TimelinePoint>? FielderStarts { get; init; }
+
     public IReadOnlyList<BallSegment> Ball { get; init; } = System.Array.Empty<BallSegment>();
     public IReadOnlyList<FielderMove> Moves { get; init; } = System.Array.Empty<FielderMove>();
     public IReadOnlyList<RunnerLeg> Runners { get; init; } = System.Array.Empty<RunnerLeg>();
