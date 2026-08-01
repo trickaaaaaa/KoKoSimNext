@@ -21,6 +21,13 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="ThrowArriveSeconds">一塁送球がベースに到達した時刻[s]（内野ゴロのみ・接触基準）。ゴロ凡打の
 /// 進塁打（二塁→三塁, Issue #318）の分岐C（守備が一塁を取ってから三塁へ転送する経路 P_relay）の起点。
 /// null＝一塁送球が無い経路（転送起点が組めない＝分岐Cは無血進塁へフォールバック）。</param>
+/// <param name="BatterToFirstSeconds">打者走者の一塁到達時刻[s]（内野ゴロのみ・接触基準）。守備解決が
+/// 出塁/凡打を決めたのと同じ正典値（<see cref="Fielding.FieldingPlay.BatterToFirstSeconds"/>）。併殺の二段目＝
+/// 二塁→一塁の転送送球 vs 打者走者の秒勝負（Issue #369）に使う。null＝内野ゴロでない/幾何が組めない経路
+/// ＝物理レースは組めず従来の確率テーブル（<see cref="BaserunningCoefficients.DoublePlayProb"/>）へフォールバック。</param>
+/// <param name="DoublePlayPivotBonusSeconds">「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）
+/// による二塁経由の転送握り替えの短縮量[s]（時間の短縮＝確率でなく, Issue #369）。守備側の遊撃手/二塁手が
+/// スキルを持つとき正値。既定0＝短縮なし（帯不変）。</param>
 public readonly record struct HomePlayContext(
     FieldGeometry Field,
     HomePlaySituation Situation,
@@ -28,4 +35,6 @@ public readonly record struct HomePlayContext(
     double Aggression,
     DefenseDepth InfieldDepth,
     bool IsFly,
-    double? ThrowArriveSeconds = null);
+    double? ThrowArriveSeconds = null,
+    double? BatterToFirstSeconds = null,
+    double DoublePlayPivotBonusSeconds = 0.0);

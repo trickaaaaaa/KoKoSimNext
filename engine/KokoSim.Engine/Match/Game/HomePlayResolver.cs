@@ -57,6 +57,11 @@ public static class HomePlayResolver
     public static BasePlayParams AdvanceParams(FieldGeometry field, BaserunningCoefficients c)
         => new(3, field.ThirdBase, c.AdvanceTagSeconds, c.AdvanceSuccessBias, c.AdvanceMarginScale);
 
+    /// <summary>二塁封殺レースの係数束（併殺の一段目＝一塁走者を二塁で封殺, Issue #369）。送球先は二塁ベース、
+    /// タッチ/バイアス/幅は封殺固有（<see cref="ThirdParams"/> と同型・係数だけ分離）。TargetBase=2。</summary>
+    public static BasePlayParams SecondForceParams(FieldGeometry field, BaserunningCoefficients c)
+        => new(2, field.SecondBase, c.SecondForceTagSeconds, c.SecondForceSuccessBias, c.SecondForceMarginScale);
+
     /// <summary>
     /// 塁上の走者の時計の文脈（Issue #316）。二次リードで前に出ており、走塁判断ぶんの反応遅延がある。
     /// 判定・表示ともこの文脈で <see cref="RunnerClock"/> を呼べば同じ時刻になる。
