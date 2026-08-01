@@ -95,9 +95,11 @@ namespace KokoSim.UnityEditorTools
             }
 
             // ---- 塁・投手板（走者の到達点と投手の立ち位置） ----
-            bad += CheckSpot(sb, asset, "base_first", FieldDiagramGeometry.First);
+            // 一塁・三塁は中心を見ない。engine の座標は**塁線と塁間線の交点＝塁の外側の辺**で、
+            // 中心はそこから半辺ぶんフェア側に寄る（実物も90フィートは塁の外角まで）
+            bad += CheckCornerBase(sb, asset, "base_first", +1.0, FieldDiagramGeometry.First);
+            bad += CheckCornerBase(sb, asset, "base_third", -1.0, FieldDiagramGeometry.Third);
             bad += CheckSpot(sb, asset, "base_second", FieldDiagramGeometry.Second);
-            bad += CheckSpot(sb, asset, "base_third", FieldDiagramGeometry.Third);
             var p = FieldGeometry.StandardPosition(FieldPosition.Pitcher);
             bad += CheckSpot(sb, asset, "pitcher_rubber", (p.X, p.Z));
 
@@ -122,6 +124,41 @@ namespace KokoSim.UnityEditorTools
 
             if (bad == 0) Debug.Log(sb.ToString());
             else Debug.LogError(sb.ToString() + $"\n{bad} 件ずれている。tools/stadium-gen.py の寸法と engine の値を突き合わせること");
+        }
+
+        /// <summary>
+        /// 一塁・三塁の置き方を見る。中心の一致ではなく、次の3つ:
+        ///   ①塁の全部がフェア地域にある（塁線をまたがない） ②外側の辺が塁線に乗っている
+        ///   ③塁線に沿った位置が engine の座標と一致する
+        /// 中心で照合すると「塁線に半分はみ出した正しくない置き方」が合格してしまう。
+        /// </summary>
+        /// <param name="sx">一塁側なら +1、三塁側なら −1。塁線方向 u=(sx,1)/√2・フェア側法線 n=(−sx,1)/√2</param>
+        private static int CheckCornerBase(StringBuilder sb, DuelStadiumMesh a, string group,
+            double sx, (double X, double Y) want)
+        {
+            var pts = Points(a, group, _ => true);
+            if (pts.Count == 0) { sb.AppendLine($"  {group} の部位が無い"); return 1; }
+
+            var q = System.Math.Sqrt(2.0) / 2.0;
+            double ux = sx * q, uz = q;        // 塁線方向
+            double nx = -sx * q, nz = q;       // フェア側
+            double minN = double.MaxValue, sumU = 0.0;
+            foreach (var v in pts)
+            {
+                var dn = v.x * nx + v.z * nz;
+                if (dn < minN) minN = dn;
+                sumU += v.x * ux + v.z * uz;
+            }
+            var alongU = sumU / pts.Count;
+            var wantU = want.X * ux + want.Y * uz;
+
+            var fair = minN >= -TolM;                       // またいでいない
+            var onLine = System.Math.Abs(minN) <= TolM;     // 外側の辺が線に乗っている
+            var along = System.Math.Abs(alongU - wantU) <= TolM;
+            var ok = fair && onLine && along;
+            sb.AppendLine($"  {group,-16} 塁線からの最小 {minN,6:F3} m（要 0・負ならファウル側へはみ出し）"
+                          + $"／線に沿った位置 {alongU,7:F3} m（engine {wantU:F3}）" + (ok ? "" : "  ← ずれている"));
+            return ok ? 0 : 1;
         }
 
         private static int CheckSpot(StringBuilder sb, DuelStadiumMesh a, string group, (double X, double Y) want)

@@ -30,7 +30,7 @@ PARAMS = dict(
     #   r(theta) = R_CORNER + (R_CENTER - R_CORNER) * cos(2 theta)
     FENCE_H=3.2,          # outfield fence height
     BASE_XY=19.4,         # 1B (BASE_XY,0,BASE_XY), 2B (0,0,2*BASE_XY), 3B (-BASE_XY,0,BASE_XY)
-    BASE_SZ=0.38,
+    BASE_SZ=0.56,        # 実寸は15インチ=0.381m。伏角14.5°の守備カメラで読めないので誇張（監督決定 2026-08-01）
     BASE_TH=0.08,
     MOUND_Z=18.44,        # mound center / rubber z
     MOUND_H=0.254,        # rubber + mound apex height
@@ -346,11 +346,20 @@ def build_infield(M):
     M.grp("pitcher_rubber", "white")
     M.box(0.0, P.MOUND_H, P.MOUND_Z, 0.61, 0.06, 0.30)
 
-    for g, x, z in (("base_first", P.BASE_XY, P.BASE_XY),
-                    ("base_second", 0.0, 2 * P.BASE_XY),
-                    ("base_third", -P.BASE_XY, P.BASE_XY)):
+    # 一塁・三塁は**塁の全部がフェア地域**に入る（塁線は塁の外側の辺に沿って走る）。
+    # engine の塁の座標 (±19.4, 19.4) は塁線と塁間線の**交点＝塁の外側の辺**であって中心ではない
+    # （実物も90フィートは塁の外角までを測る）。中心を交点へ置くと塁の半分がファウル地域へ
+    # はみ出す（2026-08-01 監督指摘）。塁線方向 u=(sx,1)/√2 に対しフェア側の法線 n=(-sx,1)/√2 へ
+    # 半辺ぶん寄せると、外側の辺がちょうど塁線に乗る。
+    h = P.BASE_SZ / 2.0
+    q = math.sqrt(2.0) / 2.0
+    for g, sx in (("base_first", 1.0), ("base_third", -1.0)):
         M.grp(g, "white")
-        M.box(x, 0.0, z, P.BASE_SZ, P.BASE_TH, P.BASE_SZ, 45.0 * D2R)
+        M.box(sx * P.BASE_XY - sx * q * h, 0.0, P.BASE_XY + q * h,
+              P.BASE_SZ, P.BASE_TH, P.BASE_SZ, 45.0 * D2R)
+    # 二塁は塁線に絡まないので交点そのものが中心（実物も二塁だけ塁の中心が交点）
+    M.grp("base_second", "white")
+    M.box(0.0, 0.0, 2 * P.BASE_XY, P.BASE_SZ, P.BASE_TH, P.BASE_SZ, 45.0 * D2R)
 
     y, h = P.MARK_Y, P.PLATE / 2.0
     M.grp("home_plate", "white")
