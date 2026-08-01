@@ -56,6 +56,26 @@ public static class TimelineBuilder
     /// 塁 <paramref name="fromBase"/> から次塁へ <paramref name="leadM"/> [m] 出たリード位置。
     /// 走者の時計（<see cref="RunnerClock.SegmentSeconds"/>）が距離から引いているのと同じ量を絵にも乗せる。
     /// </summary>
+    /// <summary>
+    /// 処理野手が実際に体を運ぶ地点（表示専用）。走れる距離 <paramref name="runnableM"/> で届かないぶんは
+    /// 守備範囲 <paramref name="reachM"/>（飛びつき・伸ばした腕）が埋める、として手前で止める。
+    ///
+    /// 守備解決は「半径 <c>InfielderFieldingRadiusM</c> ぶんは届く」で捕れるかを決めているので、
+    /// **体を打球の位置まで運ぶ必要がない**。運ばせると、詰まったレッグ（<see cref="ArriveByFieldedAt"/>）で
+    /// 体が脚力を超えて動く（実測: 4.5m を 0.12秒＝37 m/s）。埋めてよいのは半径までで、それを超える
+    /// ぶんは従来どおり打球の位置まで運ぶ（＝嘘を半径で頭打ちにする）。
+    /// </summary>
+    private static TimelinePoint StopWithinReach(
+        TimelinePoint from, TimelinePoint to, double runnableM, double reachM)
+    {
+        var dist = Distance(from, to);
+        var shortfall = dist - Math.Max(0.0, runnableM);
+        if (shortfall <= 0.0 || dist <= 1e-9) return to;
+        var pull = Math.Min(shortfall, Math.Max(0.0, reachM));
+        var u = (dist - pull) / dist;
+        return new TimelinePoint(from.X + (to.X - from.X) * u, from.Z + (to.Z - from.Z) * u);
+    }
+
     private static TimelinePoint LeadPoint(FieldGeometry field, int fromBase, double leadM)
     {
         if (leadM <= 0) return BasePoint(field, BaseName(fromBase));
@@ -84,6 +104,9 @@ public static class TimelineBuilder
     /// <see cref="BaserunningCoefficients.CloseCallMarginSeconds"/> の初期値と同値）。
     /// closeFlyMarginSeconds=判定オーバーレイ「フェア」（Issue #328②）の際どさしきい値[s]（既定は
     /// <see cref="FieldingCoefficients.CatchCloseCallMarginSeconds"/> の初期値と同値）。
+    /// fielderReachM=野手の守備範囲[m]（既定は <see cref="FieldingCoefficients.InfielderFieldingRadiusM"/>
+    /// の初期値と同値）。**表示専用**: 守備解決は「半径ぶんは飛びついて届く」で判定しているので、
+    /// 体を打球の位置まで運ぶ必要がない。この余白ぶん処理レッグを短くしないと、体が脚力を超えて動く。
     /// </summary>
     public static PlayTimeline BuildBattedBall(
         FieldingPlay play,
@@ -93,7 +116,8 @@ public static class TimelineBuilder
         bool runnersOn,
         string resultText,
         double closeCallMarginSeconds = 0.15,
-        double closeFlyMarginSeconds = 0.15)
+        double closeFlyMarginSeconds = 0.15,
+        double fielderReachM = 4.20)
     {
         var table = formations ?? FormationTable.Default;
         var landing = new TimelinePoint(play.LandingX, play.LandingZ);
@@ -333,7 +357,11 @@ public static class TimelineBuilder
                 var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
                 var t0 = diveEnd is not null ? Math.Max(ContactAt + 0.35, diveT1 + 0.1) : ContactAt + 0.35; // 反応
                 var t1 = t0 + dist / speed;
-                if (isBallFielder) (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
+                if (isBallFielder)
+                {
+                    (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
+                    to = StopWithinReach(moveFrom, to, speed * (t1 - t0), fielderReachM);
+                }
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
 
                 // バックアップ/中継で持ち場を離れた野手は、決着後に定位置へ戻る（"寄ったまま"を防ぐ, #2）。
@@ -366,7 +394,8 @@ public static class TimelineBuilder
                     {
                         var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
                         var (t0, t1) = ArriveByFieldedAt(ContactAt + 0.35, ContactAt + 0.35 + dist / speed, fieldedAt);
-                        moves.Add(new FielderMove { Role = bfr, T0 = t0, T1 = t1, To = fieldPoint, Task = FielderTask.FieldBall });
+                        var stop = StopWithinReach(from, fieldPoint, speed * (t1 - t0), fielderReachM);
+                        moves.Add(new FielderMove { Role = bfr, T0 = t0, T1 = t1, To = stop, Task = FielderTask.FieldBall });
                     }
                 }
             }
@@ -435,6 +464,12 @@ public static class TimelineBuilder
         captions.Add(new TimelineCaption(resolvedAt, resultText));
 
         var duration = Math.Max(Math.Max(resolvedAt, batterArrive) + 1.2, returnTail); // 余韻＋復帰
+        // 回収がいちばん遅いことがある（打球が野手から離れて転がり、追いついたのが決着より後）。
+        // ボール区間を尺の外に置くと再生が途中で切れる＝必ず覆う。
+        foreach (var b in ball)
+        {
+            if (b.T1 + 0.6 > duration) duration = b.T1 + 0.6;
+        }
         return new PlayTimeline
         {
             Duration = duration,

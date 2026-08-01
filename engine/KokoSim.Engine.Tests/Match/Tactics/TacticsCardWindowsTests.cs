@@ -98,10 +98,21 @@ public sealed class TacticsCardWindowsTests
             prog.SetStandingDefense(false, PitchPolicy.ControlFirst, null, null, null)));
         Assert.NotEqual(BaselineSha(), ShaWith(prog =>
             prog.SetStandingDefense(false, null, KokoSim.Engine.Match.Pitching.PitcherGear.Push, null, null)));
-        Assert.NotEqual(BaselineSha(), ShaWith(prog =>
-            prog.SetStandingDefense(false, null, null, DefenseDepth.In, null)));
-        Assert.NotEqual(BaselineSha(), ShaWith(prog =>
-            prog.SetStandingDefense(false, null, null, null, DefenseDepth.Deep)));
+        // 陣形（守備位置をずらす）は**単一シードで判定しない**。指示は幾何にしか触らないので、
+        // その試合にたまたま境目のプレーが1つも無ければ結果は同一になる（実測: 内野前進は 40シード中
+        // 34〜35 で結果が変わる＝配線は生きているのに、特定の1シードだけ恒等になりうる）。
+        AssertChangesSomeGame("内野前進", prog => prog.SetStandingDefense(false, null, null, DefenseDepth.In, null));
+        AssertChangesSomeGame("外野深め", prog => prog.SetStandingDefense(false, null, null, null, DefenseDepth.Deep));
+    }
+
+    /// <summary>複数シードのうち1つでも結果が変われば「指示がエンジンへ届いている」。</summary>
+    private static void AssertChangesSomeGame(string what, System.Action<MatchProgression> setup)
+    {
+        foreach (var seed in new ulong[] { Seed, 1, 2, 3, 4 })
+        {
+            if (ShaWith(setup, seed) != ShaWith(null, seed)) return;
+        }
+        Assert.Fail($"{what} が5シードのどれでも結果を変えない＝窓口がエンジンへ届いていない");
     }
 
     /// <summary>全項目 null＝「指示なし」なので、一度も呼んでいない試合と一致する。</summary>
@@ -217,9 +228,9 @@ public sealed class TacticsCardWindowsTests
 
     private static string BaselineSha() => ShaWith(null);
 
-    private static string ShaWith(System.Action<MatchProgression>? setup)
+    private static string ShaWith(System.Action<MatchProgression>? setup, ulong seed = Seed)
     {
-        var prog = NewGame();
+        var prog = NewGame(seed);
         // 打席が始まる前に指示しておく（「試合開始時から解除するまで続く」の最短形）。
         setup?.Invoke(prog);
         while (prog.Advance()) { }
