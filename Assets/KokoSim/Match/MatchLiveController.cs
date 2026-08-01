@@ -1618,22 +1618,39 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        // 再生を打ち切る時刻。アウトで走者も得点も無く「次のプレイに発展しようがない」場合は、
-        // 決着＋最後の送球直後で切って次打席へ（野手が定位置へ戻る余韻を長々見せない）。
+        /// <summary>再生を打ち切ってから次打席へ移るまでの余韻[秒]。</summary>
+        private const double PlayTailSeconds = 0.6;
+
+        /// <summary>
+        /// 再生を打ち切る時刻。**「まだ見るものがある」最後の瞬間＋余韻**で切る。
+        ///
+        /// <b>なぜ engine の <c>Dur</c> をそのまま使わないか</b>: タイムラインの長さは
+        /// <c>max(決着, 打者走者の一塁到達) + 1.2</c> と<b>野手が定位置へ戻り終わる時刻</b>の大きいほうで、
+        /// 長打では後者が勝つ。本塁打は柵越えの後、フェンス際まで行った野手が定位置へ戻るまでを
+        /// 尺に含むので **決着から 9.5 秒**あり、その間に起きるのは野手の復帰だけ（打者走者は
+        /// 「ダイヤモンド一周の簡略で一塁まで」なので塁上で止まっている）。
+        /// 2Dの俯瞰では盤面が収束していく画として読めたが、3Dの守備カメラは全景（縦155m）へ引くので
+        /// **4pxの点が数個ゆっくり動くだけの9.5秒**になる（監督決定 2026-08-01・打球処理の3D化 ②）。
+        ///
+        /// 以前はこの早切りを「アウトで走者も得点も無い」場合だけに掛けていた（deadOut）。
+        /// 走者レッグを見るようにしたので場合分けは要らなくなり、長打にも同じ規則が効く。
+        /// </summary>
         private double PlayEndTime()
         {
             var play = _current.Play;
-            var noRunnersAfter = !_current.BaseFirstAfter && !_current.BaseSecondAfter && !_current.BaseThirdAfter;
-            var deadOut = _current.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.InPlayOut
-                          && _current.RunsScored == 0 && noRunnersAfter;
 
-            var end = play.Dur;
-            if (deadOut)
-            {
-                var lastEvent = play.ResAt;
-                foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-                end = System.Math.Min(play.Dur, lastEvent + 0.6);
-            }
+            // 「まだ見るもの」＝決着／球が動き終わる／**実際に動く**走者レッグの終わり。
+            // ⚠ 動かない走者のレッグを数えないこと。塁上で止まる走者は AppendHeldRunners が
+            // T1=Duration で張るので、除かないと必ず Dur に戻って1秒も縮まらない。
+            var lastEvent = play.ResAt;
+            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
+            foreach (var r in play.Runners)
+                foreach (var s in r.Segs)
+                {
+                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
+                    if (s.T1 > lastEvent) lastEvent = s.T1;
+                }
+            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
 
             // 判定オーバーレイ（#59）の表示窓 [T1, T1+hold) を必ず含める（issue #236 症状A）。
             // 内野ゴロの打者走者は「送球到達＝アウト成立」より後に一塁へ着く（T1＞ResAt）ので、
@@ -1641,6 +1658,14 @@ namespace KokoSim.Unity.Match
             // Dur を超えた時刻を評価しても最終フレームを保持するだけ）。
             var judged = PlaybackEvaluator.LastJudgementTime(play);
             if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+
+            // ⚠ 得点テロップ（#60）の寿命も含める。FinishPaView が HideScoreCall するので、
+            // 含めないと**加算の途中でテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
+            // 掲げ始めるのは決着の瞬間（UpdateScoreboard）で、時計は _t と同じ（倍速も同じ掛かり方）。
+            if (_current.RunsScored > 0)
+                end = System.Math.Max(end, play.ResAt
+                    + scoreCallStepSeconds * _current.RunsScored + scoreCallFinalHoldSeconds);
+
             return end;
         }
 

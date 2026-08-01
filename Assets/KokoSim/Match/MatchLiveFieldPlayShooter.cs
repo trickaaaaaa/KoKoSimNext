@@ -88,6 +88,7 @@ namespace KokoSim.Unity.Match
             //（どちらも「投げている」ようにしか見えず、静止画1枚では正常なフォームの途中と区別できない）
             // ので、クリップ内時刻ごとの「立ち向きのずれ／立ち位置のずれ」を前後で突き合わせる。
             // 一致すれば delivery は同一＝戻せている（design-18 §7-2 の作法）。
+            var legs = new StringBuilder();
             var pitcherLog = new StringBuilder("いつ\tclipT\tΔ向き[度]\tΔx\tΔz\trootMotion\tフェード中\n");
             int pitcherPhase = 0;   // 0=1本目の打球より前 / 1=1本目の直後 / 2=採り終わり
             int pitcherFrames = 0;
@@ -126,6 +127,24 @@ namespace KokoSim.Unity.Match
                     inPlay = true;
                     playNo++;
                     var play = _ctrl.CurrentPa?.Play;
+                    // 「尺を決めているのは何か」を1本ずつ書き出す。尾が縮まないとき、
+                    // 球なのか走者なのか野手の復帰（Dur）なのかは**結果からは絶対に分からない**
+                    if (play != null)
+                    {
+                        legs.Append("── ").Append(playNo).Append(' ').Append(play.Result)
+                            .Append("  Dur=").Append(play.Dur.ToString("F2"))
+                            .Append("  ResAt=").Append(play.ResAt.ToString("F2")).Append('\n');
+                        foreach (var s in play.Ball)
+                            legs.Append("  球\t").Append(s.T0.ToString("F2")).Append('\t')
+                                .Append(s.T1.ToString("F2")).Append('\n');
+                        foreach (var r in play.Runners)
+                            foreach (var s in r.Segs)
+                                legs.Append("  走 ").Append(r.Label).Append('\t')
+                                    .Append(s.T0.ToString("F2")).Append('\t').Append(s.T1.ToString("F2"))
+                                    .Append('\t')
+                                    .Append(s.From.X == s.To.X && s.From.Y == s.To.Y ? "静止" : "動く")
+                                    .Append('\n');
+                    }
                     cutT = _ctrl.PlayClockForCapture;
                     resAt = play?.ResAt ?? 0;
                     holdT = resAt + CameraPlanBuilder.ReturnToWideDelaySeconds;
@@ -230,6 +249,7 @@ namespace KokoSim.Unity.Match
             File.WriteAllText(Path.Combine(OutDir, "frames.tsv"), frames.ToString());
             File.WriteAllText(Path.Combine(OutDir, "restore.tsv"), restoreLog.ToString());
             File.WriteAllText(Path.Combine(OutDir, "pitcher.tsv"), pitcherLog.ToString());
+            File.WriteAllText(Path.Combine(OutDir, "legs.txt"), legs.ToString());
             Debug.Log("[F9] DONE 打球=" + playNo + "本 判定の取りこぼし=" + missing
                 + "件 戻し漏れ=" + restoreBad + "件 gameOver=" + _ctrl.IsGameOver
                 + "\n" + plays + "\n" + restoreLog);
