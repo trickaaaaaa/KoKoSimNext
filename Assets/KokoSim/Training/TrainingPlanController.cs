@@ -361,7 +361,9 @@ namespace KokoSim.Unity.Training
                 Pct = a.Value / 100f,
                 Grade = a.Grade,
                 TypeLabel = a.TypeLabel,
-                HideBar = !string.IsNullOrEmpty(a.TypeLabel),
+                // スタミナ＝目安投球数（issue #356）はバー無し数値行（弾道のタイプ軸と同じくバーを隠す）。
+                HideBar = a.HideBar || !string.IsNullOrEmpty(a.TypeLabel),
+                Unit = a.Unit,
                 Size = AbilityRowSize.Compact,
             });
 

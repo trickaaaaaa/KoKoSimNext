@@ -54,7 +54,10 @@ namespace KokoSim.Unity.Training
         public int Value;              // 内部値 0..100（バー割合・ランクの元）
         public string Grade = "";      // ランク S〜G（空＝チップ無し）
         public string TypeLabel = "";  // 弾道のタイプ軸ラベル（非空ならランクの代わりに表示）
-        public string ValueText = "";  // 表示値の上書き（球速のkm/h）。空なら Value をそのまま表示
+        public string ValueText = "";  // 表示値の上書き（球速のkm/h・スタミナの目安投球数）。空なら Value をそのまま表示
+        // スタミナ＝目安投球数（issue #356）: 上限なし＝バーを出さず数値＋和文単位で見せる。
+        public bool HideBar;           // true: バーもランクチップも出さない
+        public string Unit = "";       // 非空かつ HideBar のとき ValueText をこの単位付きで表示（例「135球」）
     }
 
     /// <summary>プリセット選択肢（プリセット帯の1チップ。説明はツールチップで持つ, issue #222④）。</summary>
@@ -590,6 +593,13 @@ namespace KokoSim.Unity.Training
             var info = new AbilityRowInfo { Jp = AbilityJp(k), Icon = AbilityIcon(k), Value = v };
             if (k == AbilityKind.LaunchTendency)
                 info.TypeLabel = KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(v);
+            else if (k == AbilityKind.Stamina)
+            {
+                // スタミナは上限なし（issue #356）＝バーを出さず目安投球数を数値表示（球速のkm/hと同型）。
+                info.HideBar = true;
+                info.Unit = "球";
+                info.ValueText = ((int)System.Math.Round(PitcherAttributes.StaminaPitchesFromLevel(v))).ToString();
+            }
             else
                 info.Grade = Tiers.FromStrength(v).ToString();
             if (k == AbilityKind.Velocity)

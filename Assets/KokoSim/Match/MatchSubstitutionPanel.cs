@@ -463,6 +463,9 @@ namespace KokoSim.Unity.Match
             {
                 if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Velocity))
                     _cmpRows.Add(CompareRowEl(label, x, y, KmhText(outgoing), KmhText(incoming)));
+                else if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Stamina))
+                    // スタミナは上限なし（issue #356）＝バーを出さず目安投球数を数値表示（球速のkm/hと同型）。
+                    _cmpRows.Add(CompareRowEl(label, x, y, StaminaText(outgoing), StaminaText(incoming), hideBar: true, unit: "球"));
                 else if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
                     _cmpRows.Add(CompareRowEl(label, x, y, TypeText(x), TypeText(y), hideBar: true));
                 else
@@ -764,10 +767,14 @@ namespace KokoSim.Unity.Match
         private static int Velocity(Player p)
             => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromVelocityKmh(p.Pitching.MaxVelocityKmh);
 
+        // スタミナ＝目安投球数（issue #356）。上限がないので 0〜100 スケールに畳まず、そのまま目安投球数を返す。
         private static int Stamina(Player p)
-            => p?.Pitching == null ? -1 : UnityEngine.Mathf.Clamp(UnityEngine.Mathf.RoundToInt((float)p.Pitching.StaminaPitches * 100f / 160f), 0, 100);
+            => p?.Pitching == null ? -1 : (int)System.Math.Round(p.Pitching.StaminaPitches);
 
-        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false)
+        private static string StaminaText(Player p)
+            => p?.Pitching == null ? null : ((int)System.Math.Round(p.Pitching.StaminaPitches)).ToString();
+
+        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false, string unit = null)
             => UiComponents.CompareRow(new CompareRowData
             {
                 Label = label,
@@ -777,6 +784,7 @@ namespace KokoSim.Unity.Match
                 TextA = a >= 0 ? textA : null,
                 TextB = b >= 0 ? textB : null,
                 HideBar = hideBar,
+                Unit = unit,
             });
 
         private static string KmhText(Player p)

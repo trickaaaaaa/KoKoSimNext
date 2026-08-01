@@ -41,7 +41,7 @@ public sealed record LiveBatterSlot(
 /// <param name="StaminaRemaining">
 /// スタミナ残量（1=満タン、0=目安投球数を使い切った）。実効消費球数（ギア重み込み）を
 /// その投手の目安投球数で割った残り。継投の目安として表示するための観測値で、
-/// 実際の継投判定（<see cref="PitchingFatigue.ShouldRelieve"/>）はマージンとハードキャップも見る。
+/// 実際の継投判定（<see cref="PitchingFatigue.ShouldRelieve"/>）は目安投球数＋マージンで見る（ハードキャップ撤廃, issue #356）。
 /// </param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,

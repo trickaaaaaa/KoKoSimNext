@@ -71,6 +71,38 @@ public sealed class PitchModelTests
         Assert.Equal(135.0, PitcherAttributes.StaminaPitchesFromLevel(100), 6);
     }
 
+    [Fact]
+    public void LevelFromStaminaPitches_ExtrapolatesAbove100_NoUpperCap()
+    {
+        // issue #356: スタミナは上限なし。目安投球数180球は Lv100 で頭打ちにならず Lv150 相当を返す
+        // （逆変換 (180-45)/0.9 = 150）。従来の Lv100=135球 は不変（下限・傾きはそのまま）。
+        Assert.Equal(100, PitcherAttributes.LevelFromStaminaPitches(135.0));
+        Assert.Equal(150, PitcherAttributes.LevelFromStaminaPitches(180.0));
+        // 目安投球数が伸びるほど等級も単調に増える（ReliefScore/PitcherScore で他能力と土俵を揃える）。
+        Assert.True(PitcherAttributes.LevelFromStaminaPitches(200.0)
+                    > PitcherAttributes.LevelFromStaminaPitches(160.0));
+    }
+
+    [Fact]
+    public void HighStaminaPitcher_NotRelievedByPitchCountAlone_ButFatigueStillDegrades()
+    {
+        // issue #356: ハードキャップ（旧130球）撤廃。目安投球数160球の鉄腕は旧仕様なら130球で強制降板だが、
+        // 撤廃後は「球数だけ」を理由には降板しない＝目安＋margin(25) まで投げる。疲労の能力低下は従来どおり掛かる。
+        var c = new FatigueCoefficients();
+        var ace = new Player { Pitching = new PitcherAttributes { StaminaPitches = 160.0, MaxVelocityKmh = 145.0, Control = 60 } };
+
+        // 旧ハードキャップ130を大きく超える145球でも、目安160＋margin25=185未満なので降板しない。
+        Assert.False(PitchingFatigue.ShouldRelieve(ace, 145.0, c));
+
+        // 目安160を超える175球では球速天井・制球が落ちる（能力低下は健在＝諸刃）。
+        var tired = PitchingFatigue.Effective(ace, 175.0, c);
+        Assert.True(tired.MaxVelocityKmh < 145.0, "目安超過で球速が落ちていない");
+        Assert.True(tired.Control < 60, "目安超過で制球が落ちていない");
+
+        // 目安＋margin を超えれば（球数の絶対値とは無関係に）降板する。
+        Assert.True(PitchingFatigue.ShouldRelieve(ace, 185.0, c));
+    }
+
     // --- ギア「飛ばす/流す」（§1.1f） ---
 
     [Fact]

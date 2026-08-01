@@ -33,6 +33,9 @@ namespace KokoSim.Unity.Components
         // --- タイプ軸表示（issue #219）: 弾道など優劣のない軸はランクチップの代わりにこの中立ラベルを出す ---
         public string TypeLabel = "";    // 非空ならランクチップの代わりにこのラベルを表示（Grade は無視）
         public bool HideBar;             // true: バー＋数値を出さずアイコン/名前/タイプラベルだけにする
+        // --- 上限のない量の数値表示（issue #356）: スタミナ＝目安投球数など 0..100 バーに載らない量は
+        //     バーを出さず「数字＋和文単位」を右端に出す（HideBar と併用。数字は Oswald・単位はサンセリフ＝NumUnit）。 ---
+        public string Unit = "";         // 非空かつ HideBar のとき Value をこの単位付き数値（例「135球」）で右端表示
     }
 
     /// <summary>
@@ -60,6 +63,9 @@ namespace KokoSim.Unity.Components
         // --- タイプ軸表示（issue #219）: 弾道など優劣のない軸はバーを出さずラベルのみにする。
         //     Winner も呼び出し側で 0 にして優劣ハイライトを出さないこと。 ---
         public bool HideBar;
+        // --- 上限のない量の数値表示（issue #356）: スタミナ＝目安投球数は 0..100 バーに載らないので
+        //     HideBar でバーを消し、TextA/TextB の数値にこの和文単位を NumUnit で添える（例「135球」）。 ---
+        public string Unit;
     }
 
     /// <summary>
@@ -481,6 +487,12 @@ namespace KokoSim.Unity.Components
                     row.Add(val);
                 }
             }
+            else if (!string.IsNullOrEmpty(d.Value) && !string.IsNullOrEmpty(d.Unit))
+            {
+                // バーの無い数値行（スタミナ＝目安投球数など上限のない量, issue #356）。右端に数字＋和文単位を出す。
+                // 数字は Oswald（f-num）・単位はサンセリフに Label を分ける（NumUnit・書体3役ルール）。
+                row.Add(NumUnit(d.Value, d.Unit, false, "abil-row__numunit"));
+            }
 
             if (!string.IsNullOrEmpty(d.Note))
             {
@@ -575,8 +587,8 @@ namespace KokoSim.Unity.Components
             lab.AddToClassList("cmp-row__lab");
             row.Add(lab);
 
-            row.Add(CompareSide("a", d.HasA, d.ValueA, d.TextA, d.FillA, d.Winner == -1, d.GradeA, d.HideBar));
-            row.Add(CompareSide("b", d.HasB, d.ValueB, d.TextB, d.FillB, d.Winner == 1, d.GradeB, d.HideBar));
+            row.Add(CompareSide("a", d.HasA, d.ValueA, d.TextA, d.FillA, d.Winner == -1, d.GradeA, d.HideBar, d.Unit));
+            row.Add(CompareSide("b", d.HasB, d.ValueB, d.TextB, d.FillB, d.Winner == 1, d.GradeB, d.HideBar, d.Unit));
             return row;
         }
 
@@ -640,11 +652,20 @@ namespace KokoSim.Unity.Components
         // text: 値ラベルの上書き（null＝value.ToString()）。fill: バー幅[0-100]（負＝value を流用）。
         // 表示テキストとバー幅を分離し、球速など物理量は「テキスト=km/h・バー=Level(0-100)」で出せるようにする（issue #94）。
         // grade: ランクチップ併記（issue #326②）。空文字ならチップを出さない。
-        private static VisualElement CompareSide(string side, bool has, int value, string text, int fill, bool win, string grade, bool hideBar = false)
+        private static VisualElement CompareSide(string side, bool has, int value, string text, int fill, bool win, string grade, bool hideBar = false, string unit = null)
         {
             var el = new VisualElement();
             el.AddToClassList("cmp-row__side");
             el.AddToClassList("cmp-row__side--" + side);
+
+            if (has && hideBar && !string.IsNullOrEmpty(unit) && !string.IsNullOrEmpty(text))
+            {
+                // 上限のない量（スタミナ＝目安投球数, issue #356）: 数字＋和文単位を分割して出す
+                // （数字は Oswald・単位はサンセリフ＝NumUnit・書体3役ルール）。バーは出さない。
+                var nu = NumUnit(text, unit, false, "cmp-row__val cmp-row__numunit");
+                el.Add(nu);
+                return el;
+            }
 
             var val = new Label(has ? (text ?? value.ToString()) : "—");
             val.AddToClassList("cmp-row__val");

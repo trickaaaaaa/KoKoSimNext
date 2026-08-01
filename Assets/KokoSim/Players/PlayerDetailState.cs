@@ -22,6 +22,9 @@ namespace KokoSim.Unity.Players
         public float Pct;
         // 弾道など優劣のないタイプ軸（issue #219）: 非空ならバー＋ランクチップの代わりにこのラベルを表示する
         public string TypeLabel = "";
+        // スタミナ＝目安投球数（issue #356）: 上限がないので 0〜100 バーを出さず「数値＋和文単位」で見せる。
+        public bool HideBar;      // true: バーもランクチップも出さない
+        public string Unit = "";  // 非空かつ HideBar のとき Value をこの単位付きで表示（例「135球」）
     }
 
     /// <summary>隠しパラメータ1項（未判明なら Known=false で「？」）。</summary>
@@ -229,7 +232,8 @@ namespace KokoSim.Unity.Players
             velocity.Value = v.TopVelocityKmh;
             v.PitcherAbilities.Add(velocity);
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Control, AbilityLabels.Jp(AbilityKind.Control)));
-            v.PitcherAbilities.Add(Bar(p, AbilityKind.Stamina, AbilityLabels.Jp(AbilityKind.Stamina)));
+            // スタミナは上限なし（issue #356）＝バーを出さず目安投球数を数値表示（設計書02 §1.1e・km/h と同型）。
+            v.PitcherAbilities.Add(StaminaRow(p, AbilityLabels.Jp(AbilityKind.Stamina)));
             v.PitcherAbilities.Add(Bar(p, AbilityKind.PitchRank, AbilityLabels.Jp(AbilityKind.PitchRank)));
 
             v.FielderAbilities.Add(Bar(p, AbilityKind.LaunchTendency, "弾道"));
@@ -310,6 +314,15 @@ namespace KokoSim.Unity.Players
                 Grade = Tiers.FromStrength(v).ToString(),
                 Pct = System.Math.Max(0f, System.Math.Min(1f, v / 100f)),
             };
+        }
+
+        /// <summary>スタミナ行（issue #356）。上限がないので 0〜100 バーは出さず「目安投球数」を数値表示する
+        /// （設計書02 §1.1e。Level→球数の変換はエンジンの公開APIに一本化＝UI側で式を持たない, 球速のkm/hと同型）。</summary>
+        private static AbilityBar StaminaRow(DevelopingPlayer p, string label)
+        {
+            var pitches = (int)System.Math.Round(
+                PitcherAttributes.StaminaPitchesFromLevel(p.Level(AbilityKind.Stamina)));
+            return new AbilityBar { Label = label, Value = pitches, Grade = "", HideBar = true, Unit = "球" };
         }
 
         // カテゴリ別ランク（0〜100 スケール）を 0〜1 のレーダー軸へ正規化する（Issue #93）。

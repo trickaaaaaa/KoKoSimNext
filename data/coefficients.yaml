@@ -290,7 +290,8 @@ fatigue:
   velocity_drop_per_over_pitch: 0.05
   control_drop_per_over_pitch: 0.12
   relieve_pitch_margin: 25.0
-  hard_cap_pitches: 130.0
+  # hard_cap_pitches はハードキャップ撤廃（issue #356）で撤去。降板は目安投球数＋relieve_pitch_margin と
+  # 疲労による能力低下だけで決まる。スタミナ自体も上限なし（伸ばした分だけ長く投げられる）。
 
 # --- 試合ごとの天候（気温）モデル（Issue #120 / OPEN-QUESTIONS Q22, design-05 大会単位の味付け） ---
 # 気温を物理層（空気密度ρ・投手消耗）だけに効かせて「夏場は点が動きやすい」を創発させる（不変条件#1）。
@@ -616,8 +617,7 @@ enemy_ai:
   run_and_gun_steal_factor: 1.6              # 2) 盗塁・エンドラン好き
   run_and_gun_hit_and_run_factor: 1.8
   run_and_gun_steal_min_success_relax: 0.06
-  ace_overuse_relieve_margin_factor: 1.6     # 3) エース酷使（継投を引っ張る＝諸刃）
-  ace_overuse_hard_cap_add: 15.0
+  ace_overuse_relieve_margin_factor: 1.6     # 3) エース酷使（継投を引っ張る＝諸刃。ハードキャップ撤廃で margin だけで表現, issue #356）
   quick_hook_relieve_margin_factor: 0.45     # 4) 継投早め
   quick_hook_defensive_sub_inning_earlier: 1
   aggressive_pinch_hit_inning_earlier: 2     # 5) 代打積極

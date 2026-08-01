@@ -103,8 +103,7 @@ public sealed class ManagerTraitEffectsTests
         var baseF = new FatigueCoefficients();
         var f = ManagerTraitEffects.FatigueOverride(baseF, new[] { ManagerTrait.AceOveruse }, Ai);
         Assert.NotNull(f);
-        Assert.True(f!.RelievePitchMargin > baseF.RelievePitchMargin);   // エースを引っ張る
-        Assert.True(f.HardCapPitches > baseF.HardCapPitches);
+        Assert.True(f!.RelievePitchMargin > baseF.RelievePitchMargin);   // エースを引っ張る（margin だけで表現, issue #356）
         // 疲労の減衰カーブは物理として不変＝諸刃（引っ張ると被打率上昇）が既存モデルで自然に出る。
         Assert.Equal(baseF.VelocityDropPerOverPitch, f.VelocityDropPerOverPitch);
         Assert.Equal(baseF.ControlDropPerOverPitch, f.ControlDropPerOverPitch);

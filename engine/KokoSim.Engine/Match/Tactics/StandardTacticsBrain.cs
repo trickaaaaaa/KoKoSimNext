@@ -327,7 +327,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
 
     /// <summary>
     /// 継投（設計書11 §4, issue #209）。基準采配は従来の疲労球数トリガーそのまま＝engine が事前計算した
-    /// <see cref="PitchingChangeSituation.FatigueTriggered"/>（疲労margin/ハードキャップ）または週間球数制限で
+    /// <see cref="PitchingChangeSituation.FatigueTriggered"/>（目安投球数＋疲労margin。ハードキャップ撤廃, issue #356）または週間球数制限で
     /// 替える。RNG は使わない（決定論・恒等）。人選は engine 側の bullpen 先頭のまま（横断ランキングは Phase B）。
     /// </summary>
     public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)

@@ -145,7 +145,7 @@ public readonly record struct PitchingChangeSituation(
     int DefenseScoreDiff,        // 守備側視点の得失点差（正=リード）
     int RunsAllowedThisInning,   // 当該半イニングの失点（崩れ検知）
     bool PitcherRattled,         // 連続出塁による動揺（設計書09）
-    bool FatigueTriggered,       // PitchingFatigue.ShouldRelieve の結果（疲労margin/ハードキャップ）
+    bool FatigueTriggered,       // PitchingFatigue.ShouldRelieve の結果（目安投球数＋疲労margin。ハードキャップ撤廃, issue #356）
     bool AtWeeklyLimit,          // 週間球数制限に到達
     double FatiguePitches,       // ギア重み込みの実効消費球数
     double StaminaTarget,        // 現投手の目安投球数（StaminaPitches）

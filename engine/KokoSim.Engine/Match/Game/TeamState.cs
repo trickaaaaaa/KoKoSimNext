@@ -586,7 +586,7 @@ public sealed class TeamState
 
     /// <summary>
     /// スタミナ残量（1=満タン、0=目安投球数を使い切った）。継投の目安として見せるための観測値で、
-    /// 実際の継投判定は <see cref="PitchingFatigue.ShouldRelieve"/>（マージン・ハードキャップ込み）が行う。
+    /// 実際の継投判定は <see cref="PitchingFatigue.ShouldRelieve"/>（目安投球数＋マージン。ハードキャップ撤廃, issue #356）が行う。
     /// </summary>
     private static double StaminaRemainingOf(Player pitcher, double fatiguePitches)
     {
