@@ -97,6 +97,8 @@ namespace KokoSim.Unity.Member
 
         // カテゴリ別ランク算出係数（チーム総合力パネル等と同一・単一ソース、Issue #140）。
         private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
+        // 実効守備力（Fielding×適性補正）の係数（単一ソース、issue #371）。
+        private static readonly Engine.Match.Fielding.FieldingCoefficients FieldingCoeffDefault = FieldingCoeff.Default;
 
         private readonly IReadOnlyList<DevelopingPlayer> _roster;
         // 統合モデル：_picked＝クリックで選択中の選手（比較の左）。_hovered＝カーソルを合わせた選手（比較の右）。
@@ -241,8 +243,9 @@ namespace KokoSim.Unity.Member
             v.HasAptB = b != null;
             for (var i = 0; i < SlotPosition.Length; i++)
             {
-                if (a != null) v.AptA.Add(Tiers.FromStrength(a.Aptitude(SlotPosition[i])).ToString());
-                if (b != null) v.AptB.Add(Tiers.FromStrength(b.Aptitude(SlotPosition[i])).ToString());
+                // 判断画面は実効守備力ランク一本（issue #371）＝ Fielding×適性補正。生の適性ランクは出さない。
+                if (a != null) v.AptA.Add(Tiers.FromStrength(EffectiveFielding.Rank(a, SlotPosition[i], FieldingCoeffDefault)).ToString());
+                if (b != null) v.AptB.Add(Tiers.FromStrength(EffectiveFielding.Rank(b, SlotPosition[i], FieldingCoeffDefault)).ToString());
             }
         }
 
@@ -271,7 +274,7 @@ namespace KokoSim.Unity.Member
             return -1;
         }
 
-        // 背番号1〜9のランク：投=投手ランク（投手能力平均）、他=その守備位置の適性ランク。
+        // 背番号1〜9のランク：投=投手ランク（投手能力平均）、他=その守備位置の実効守備力ランク（issue #371）。
         private static string SlotRank(DevelopingPlayer p, int number)
         {
             if (number == 1)
@@ -280,7 +283,7 @@ namespace KokoSim.Unity.Member
                 foreach (var k in AbilityKinds.Pitching) sum += p.Level(k);
                 return Tiers.FromStrength(sum / AbilityKinds.Pitching.Length).ToString();
             }
-            return Tiers.FromStrength(p.Aptitude(SlotPosition[number - 1])).ToString();
+            return Tiers.FromStrength(EffectiveFielding.Rank(p, SlotPosition[number - 1], FieldingCoeffDefault)).ToString();
         }
     }
 }

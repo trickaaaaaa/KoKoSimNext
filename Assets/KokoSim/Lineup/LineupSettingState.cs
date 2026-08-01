@@ -112,6 +112,8 @@ namespace KokoSim.Unity.Lineup
 
         // カテゴリ別ランク（比較カード）の合成係数。メンバー設定・選手一覧と同一の単一ソース。
         private static readonly TeamStrengthCoefficients Coeff = TeamStrengthCoeff.Default;
+        // 実効守備力（Fielding×適性補正）の係数（単一ソース、issue #371）。
+        private static readonly Engine.Match.Fielding.FieldingCoefficients FieldingCoeffDefault = FieldingCoeff.Default;
 
         // 守備位置→漢字。DHは指名打者の「指」（enum由来・issue #70）。
         private static readonly Dictionary<FieldPosition, string> PosKanji = new()
@@ -593,8 +595,9 @@ namespace KokoSim.Unity.Lineup
             v.HasAptB = b != null;
             for (var i = 0; i < AptOrder.Length; i++)
             {
-                if (a != null) v.AptA.Add(Tiers.FromStrength(a.Aptitude(AptOrder[i])).ToString());
-                if (b != null) v.AptB.Add(Tiers.FromStrength(b.Aptitude(AptOrder[i])).ToString());
+                // 判断画面は実効守備力ランク一本（issue #371）＝ Fielding×適性補正。生の適性ランクは出さない。
+                if (a != null) v.AptA.Add(Tiers.FromStrength(EffectiveFielding.Rank(a, AptOrder[i], FieldingCoeffDefault)).ToString());
+                if (b != null) v.AptB.Add(Tiers.FromStrength(EffectiveFielding.Rank(b, AptOrder[i], FieldingCoeffDefault)).ToString());
             }
         }
 
