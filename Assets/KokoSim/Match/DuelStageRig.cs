@@ -2704,6 +2704,13 @@ namespace KokoSim.Unity.Match
 
         private void BuildGround(int layer)
         {
+            // 焼いた球場メッシュがあればそれ一本（形の単一ソースは tools/stadium-gen.py）。
+            // 芝・内野ダート・ウォーニングトラック・フェンス・塁・ファウルライン・マウンド・本塁プレート・
+            // 打席・バックネット・スタンド・スコアボード・照明塔まで全部そちらに入っている。
+            // ⚠ 下の手続き生成は**焼き忘れ用のフォールバック**として残してあるだけ。寸法を直すときは
+            //   両方に手を入れない＝ tools/stadium-gen.py を直して焼き直す（二重ソースを作らない）。
+            if (BuildStadiumMesh(layer)) return;
+
             // 中堅118m・両翼95mを板の上に収める（旧: scale10・中心z=9 ＝ z∈[-41,59]）。
             // Plane はスケール1で10m四方なので 26 ＝ 260m四方。中心z=+60 で z∈[-70,+190]・x∈[-130,+130]
             Primitive(PrimitiveType.Plane, "ground", new Vector3(0f, 0f, 60f), new Vector3(26f, 1f, 26f),
