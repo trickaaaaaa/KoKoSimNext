@@ -56,9 +56,13 @@ public sealed record PitcherAttributes
     /// <summary>育成レイヤのスタミナLevel(1〜100)→目安投球数の変換（表示層→内部の一箇所集約）。</summary>
     public static double StaminaPitchesFromLevel(int level) => 45.0 + level * 0.9;
 
-    /// <summary>目安投球数→スタミナLevel の逆変換（投手総合の合成で他能力と土俵を揃える用）。</summary>
+    /// <summary>
+    /// 目安投球数→スタミナLevel の逆変換（投手総合の合成で他能力と土俵を揃える用）。
+    /// スタミナは上限なし（issue #356）＝上側をクランプしない。目安投球数150球以上の投手は
+    /// Lv100で頭打ちにならず素直に外挿する（Lv100=135球 / Lv150=180球）。下限のみ1で丸める。
+    /// </summary>
     public static int LevelFromStaminaPitches(double pitches)
-        => (int)Math.Round(Math.Clamp((pitches - 45.0) / 0.9, 1, 100));
+        => (int)Math.Round(Math.Max(1.0, (pitches - 45.0) / 0.9));
 
     // --- 球速Level → 最高球速[km/h]（表示層→物理層の一箇所集約・不変条件#1） ---
     // 旧式 120 + Lv*0.45 は Lv50→142.5km/h と高校野球として速すぎ、かつ Lv80以上が上限155に張り付いて

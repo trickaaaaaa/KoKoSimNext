@@ -280,6 +280,9 @@ public static class RosterTeamBuilder
         var injF = InjuryModel.PerformanceFactor(dp.Injury, injuryCoeff ?? new InjuryCoefficients());
         if (dp.SlumpWeeks > 0) injF *= new GrowthEventCoefficients().SlumpPerformanceFactor;
         int L(AbilityKind k) => (int)MathUtil.Clamp(Math.Round(dp.Level(k) * injF), 1, 100);
+        // スタミナは上限なし（issue #356）＝Lv100超の育成投手を試合用へ落とすとき100で頭打ちにしない。
+        // 目安投球数（StaminaPitches）へは下でこの値を StaminaPitchesFromLevel に通す。
+        int LStamina() => (int)Math.Max(1, Math.Round(dp.Level(AbilityKind.Stamina) * injF));
 
         // 守備位置適性→実効守備力（設計書01 §1.1）。出場ポジションの適性で Fielding を補正（基準50で×1.0）。
         var aptF = (fieldingCoeff ?? new FieldingCoefficients()).AptitudeFactor(dp.Aptitude(pos));
@@ -295,8 +298,8 @@ public static class RosterTeamBuilder
             // 球速Level→km/h は PitcherAttributes に一箇所集約（不変条件#1）。相手校生成と同一の式。
             MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(L(AbilityKind.Velocity)),
             Control = L(AbilityKind.Control),
-            // スタミナ＝目安投球数（設計書02 §1.1e）。Level→球数の変換は一箇所に集約。
-            StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(L(AbilityKind.Stamina)),
+            // スタミナ＝目安投球数（設計書02 §1.1e）。Level→球数の変換は一箇所に集約。上限なし（issue #356）。
+            StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(LStamina()),
             PitchRank = pitchRank,
             Repertoire = BuildRepertoire(dp, pitchRank, stuffLevel),
         };

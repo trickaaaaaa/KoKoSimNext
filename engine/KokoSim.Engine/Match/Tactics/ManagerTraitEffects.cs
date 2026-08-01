@@ -94,17 +94,11 @@ public static class ManagerTraitEffects
         var quick = traits.Contains(ManagerTrait.QuickHook);
         if (!overuse && !quick) return null;
 
+        // ハードキャップ撤廃（issue #356）に伴い、エース酷使は RelievePitchMargin 側だけで表現する
+        // （margin を伸ばす＝より引っ張る）。旧 AceOveruseHardCapAdd は不要になり撤去。
         var margin = baseFatigue.RelievePitchMargin;
-        var hardCap = baseFatigue.HardCapPitches;
-        if (overuse)
-        {
-            margin *= ai.AceOveruseRelieveMarginFactor;
-            hardCap += ai.AceOveruseHardCapAdd;
-        }
-        if (quick)
-        {
-            margin *= ai.QuickHookRelieveMarginFactor;
-        }
-        return baseFatigue with { RelievePitchMargin = margin, HardCapPitches = hardCap };
+        if (overuse) margin *= ai.AceOveruseRelieveMarginFactor;
+        if (quick) margin *= ai.QuickHookRelieveMarginFactor;
+        return baseFatigue with { RelievePitchMargin = margin };
     }
 }

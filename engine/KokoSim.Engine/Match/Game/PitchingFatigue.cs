@@ -12,7 +12,8 @@ public sealed record FatigueCoefficients
     public double VelocityDropPerOverPitch { get; init; } = 0.05;   // km/h
     public double ControlDropPerOverPitch { get; init; } = 0.12;    // 能力ポイント
     public double RelievePitchMargin { get; init; } = 25.0;          // 目安を何球超えたら継投
-    public double HardCapPitches { get; init; } = 130.0;
+    // ハードキャップ（旧 HardCapPitches=130）は撤廃（issue #356・2026-07-30 監督判定）。降板は目安投球数からの
+    // 相対マージン（RelievePitchMargin）と疲労による能力低下（Effective の球速天井・制球低下）だけで決まる。
 }
 
 /// <summary>
@@ -41,11 +42,10 @@ public static class PitchingFatigue
         };
     }
 
-    /// <summary>継投すべきか（実効消費球数ベース）。</summary>
+    /// <summary>継投すべきか（実効消費球数ベース）。目安投球数＋マージンだけで判断（ハードキャップ撤廃, issue #356）。</summary>
     public static bool ShouldRelieve(Player pitcher, double fatiguePitches, FatigueCoefficients c)
     {
         var basep = pitcher.Pitching ?? PitcherAttributes.LeagueAverage;
-        return fatiguePitches >= basep.StaminaPitches + c.RelievePitchMargin
-               || fatiguePitches >= c.HardCapPitches;
+        return fatiguePitches >= basep.StaminaPitches + c.RelievePitchMargin;
     }
 }

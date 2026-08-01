@@ -302,6 +302,15 @@
     color: var(--color-chalk);
 }
 .abil-row__fill { height: 100%; border-radius: 0; }
+/* 上限のない量の数値表示（スタミナ＝目安投球数, issue #356）。バーの無い行で数字＋和文単位（NumUnit）を
+   右端＝値列の位置へ寄せる。数字は Oswald（.nu-num=f-num）・単位はサンセリフ（.nu-unit）。 */
+.abil-row__numunit {
+    margin-left: auto;      /* バーが無いぶん右端へ寄せて他行の値列と縦に揃える */
+    flex-shrink: 0;
+    justify-content: flex-end;
+    align-items: baseline;
+}
+.abil-row__numunit .nu-num { font-size: var(--fs-num); color: var(--color-chalk); }
 .abil-row__note {
     width: 40px;
     flex-shrink: 0;
@@ -765,6 +774,10 @@
 .cmp-row--type .cmp-row__side { height: auto; }
 .cmp-row--type .cmp-row__val { width: auto; flex-grow: 1; -unity-text-align: middle-left; color: var(--color-chalk); }
 .cmp-row--type .cmp-row__track { display: none; }
+/* 上限のない量（スタミナ＝目安投球数, issue #356）: 比較行でも数字＋和文単位を分割（NumUnit）。
+   数字は Oswald（.nu-num=f-num）。cmp-row--type と併用しバーは出さない。 */
+.cmp-row__numunit { flex-direction: row; align-items: baseline; }
+.cmp-row__numunit .nu-num { font-size: var(--fs-cap); color: var(--color-chalk); }
 .cmp-card {
     flex-grow: 1;
     flex-basis: 0;

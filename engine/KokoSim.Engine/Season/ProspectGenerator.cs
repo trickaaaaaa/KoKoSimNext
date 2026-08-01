@@ -370,7 +370,8 @@ public static class ProspectGenerator
             var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(archetype, c.Archetypes);
             veloLevel = Lv(veloLevel + dv);
             SetWithCap(p, AbilityKind.Control, Lv(p.Level(AbilityKind.Control) + dc), c, growth, rng);
-            SetWithCap(p, AbilityKind.Stamina, Lv(p.Level(AbilityKind.Stamina) + ds), c, growth, rng);
+            // スタミナは上限なし（issue #356）＝軟投派等の正オフセットを100で頭打ちにしない。
+            SetWithCap(p, AbilityKind.Stamina, LvStamina(p.Level(AbilityKind.Stamina) + ds), c, growth, rng);
             SetWithCap(p, AbilityKind.PitchRank, Lv(p.Level(AbilityKind.PitchRank) + dr), c, growth, rng);
         }
         SetWithCap(p, AbilityKind.Velocity, veloLevel, c, growth, rng);
@@ -484,7 +485,12 @@ public static class ProspectGenerator
         if (p.IsProdigy) gapFactor = Math.Max(1.0, gapFactor);
         var gap = rng.NextGaussian(c.CapGapMean * gapFactor, c.CapGapSd * gapFactor)
                   + (growth == GrowthType.Late ? c.LateCapBonus : 0);
-        var cap = (int)MathUtil.Clamp(Math.Round(level + gap), level + 2, 99);
+        // スタミナだけ才能上限の天井（99）を外す（issue #356）＝伸ばした分だけ長く投げられる。
+        // 乱数消費列は不変（NextGaussian は上で共通に引き済み）＝クランプ上限の差し替えだけ（不変条件#2）。
+        var rounded = Math.Round(level + gap);
+        var cap = k == AbilityKind.Stamina
+            ? (int)Math.Max(level + 2, rounded)
+            : (int)MathUtil.Clamp(rounded, level + 2, 99);
         p.SetLevel(k, level);
         p.SetCap(k, cap);
     }
@@ -518,6 +524,9 @@ public static class ProspectGenerator
 
     /// <summary>球質タイプのオフセットを載せたレベルを能力域へ丸める。</summary>
     private static int Lv(double level) => (int)MathUtil.Clamp(Math.Round(level), 1, 100);
+
+    /// <summary>スタミナ専用の丸め（issue #356）＝上限なし（下限1のみ）。他能力の Lv とは別経路。</summary>
+    private static int LvStamina(double level) => (int)Math.Max(1, Math.Round(level));
 
     /// <summary>線形補間（Issue #174: 投手寄せ重み w による能力中心の連続補間）。</summary>
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;

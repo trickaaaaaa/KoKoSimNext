@@ -68,9 +68,9 @@ public sealed record EnemyAiCoefficients
     public double RunAndGunStealFactor { get; init; } = 1.6;
     public double RunAndGunHitAndRunFactor { get; init; } = 1.8;
     public double RunAndGunStealMinSuccessRelax { get; init; } = 0.06;
-    // 3) エース酷使: 継投しきい値を引き上げ（諸刃＝疲労で被打率上昇）
+    // 3) エース酷使: 継投しきい値（RelievePitchMargin）を引き上げ＝より引っ張る（諸刃＝疲労で被打率上昇）。
+    //    旧 AceOveruseHardCapAdd はハードキャップ撤廃（issue #356）に伴い撤去。
     public double AceOveruseRelieveMarginFactor { get; init; } = 1.6;
-    public double AceOveruseHardCapAdd { get; init; } = 15.0;   // ハードキャップ(球)を緩める
     // 4) 継投早め: しきい値を大きく下げ＋守備固めを早める
     public double QuickHookRelieveMarginFactor { get; init; } = 0.45;
     public int QuickHookDefensiveSubInningEarlier { get; init; } = 1;

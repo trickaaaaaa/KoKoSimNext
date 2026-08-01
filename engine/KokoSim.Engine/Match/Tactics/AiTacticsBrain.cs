@@ -241,7 +241,7 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     /// </summary>
     public PitchingChangeDecision? CallPitchingChange(in PitchingChangeSituation s, IRandomSource rng)
     {
-        // 基本トリガー（疲労margin/ハードキャップ/週間球数）は無条件に尊重（決定論・RNG不使用）。
+        // 基本トリガー（疲労margin/週間球数）は無条件に尊重（決定論・RNG不使用。ハードキャップは撤廃, issue #356）。
         // 人選だけ横断ランキングに載せ替える（issue #209 Phase B。RNG非依存＝決定論）。
         if (_inner.CallPitchingChange(s, rng) is { } basic)
         {

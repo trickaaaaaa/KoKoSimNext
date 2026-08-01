@@ -713,14 +713,13 @@ public static class CoefficientsLoader
         public double VelocityDropPerOverPitch { get; set; } = D.VelocityDropPerOverPitch;
         public double ControlDropPerOverPitch { get; set; } = D.ControlDropPerOverPitch;
         public double RelievePitchMargin { get; set; } = D.RelievePitchMargin;
-        public double HardCapPitches { get; set; } = D.HardCapPitches;
+        // HardCapPitches はハードキャップ撤廃（issue #356）で撤去。
 
         public FatigueCoefficients ToModel() => new()
         {
             VelocityDropPerOverPitch = VelocityDropPerOverPitch,
             ControlDropPerOverPitch = ControlDropPerOverPitch,
             RelievePitchMargin = RelievePitchMargin,
-            HardCapPitches = HardCapPitches,
         };
     }
 
@@ -1535,7 +1534,7 @@ public static class CoefficientsLoader
         public double RunAndGunHitAndRunFactor { get; set; } = D.RunAndGunHitAndRunFactor;
         public double RunAndGunStealMinSuccessRelax { get; set; } = D.RunAndGunStealMinSuccessRelax;
         public double AceOveruseRelieveMarginFactor { get; set; } = D.AceOveruseRelieveMarginFactor;
-        public double AceOveruseHardCapAdd { get; set; } = D.AceOveruseHardCapAdd;
+        // AceOveruseHardCapAdd はハードキャップ撤廃（issue #356）で撤去。
         public double QuickHookRelieveMarginFactor { get; set; } = D.QuickHookRelieveMarginFactor;
         public int QuickHookDefensiveSubInningEarlier { get; set; } = D.QuickHookDefensiveSubInningEarlier;
         public int AggressivePinchHitInningEarlier { get; set; } = D.AggressivePinchHitInningEarlier;
@@ -1635,7 +1634,6 @@ public static class CoefficientsLoader
             RunAndGunHitAndRunFactor = RunAndGunHitAndRunFactor,
             RunAndGunStealMinSuccessRelax = RunAndGunStealMinSuccessRelax,
             AceOveruseRelieveMarginFactor = AceOveruseRelieveMarginFactor,
-            AceOveruseHardCapAdd = AceOveruseHardCapAdd,
             QuickHookRelieveMarginFactor = QuickHookRelieveMarginFactor,
             QuickHookDefensiveSubInningEarlier = QuickHookDefensiveSubInningEarlier,
             AggressivePinchHitInningEarlier = AggressivePinchHitInningEarlier,
