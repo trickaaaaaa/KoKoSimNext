@@ -45,6 +45,9 @@ namespace KokoSim.Unity.Shell
             var list = new List<(string, Func<DevelopingPlayer, int>)>();
             foreach (var k in AbilityCompareTabs.FielderAbilities)
             {
+                // 守備（Fielding地力）は守備適性ダイヤが実効守備力ランクで9ポジション分を出す（issue #371）。
+                // 生の地力行を並べると同じ選手の同じ元データが二重表示になるため、この表からは外す。
+                if (k == AbilityKind.Fielding) continue;
                 var kind = k;   // ラムダのキャプチャ用ローカルコピー
                 list.Add((AbilityLabels.Jp(kind), p => p.Level(kind)));
             }

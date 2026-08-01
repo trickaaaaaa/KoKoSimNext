@@ -115,9 +115,8 @@ public static class RosterTeamBuilder
         {
             weight[i] = new double[n];
             if (i >= m) continue; // 実選手が足りない行は重み0＝どこに置いても総和に影響しない
-            var fieldingLevel = fielders[i].Level(AbilityKind.Fielding);
             for (var j = 0; j < n; j++)
-                weight[i][j] = fieldingLevel * coeff.AptitudeFactor(fielders[i].Aptitude(FieldSlots[j]));
+                weight[i][j] = EffectiveFielding.Raw(fielders[i], FieldSlots[j], coeff);
         }
 
         var used = new bool[n];
@@ -284,9 +283,9 @@ public static class RosterTeamBuilder
         // 目安投球数（StaminaPitches）へは下でこの値を StaminaPitchesFromLevel に通す。
         int LStamina() => (int)Math.Max(1, Math.Round(dp.Level(AbilityKind.Stamina) * injF));
 
-        // 守備位置適性→実効守備力（設計書01 §1.1）。出場ポジションの適性で Fielding を補正（基準50で×1.0）。
-        var aptF = (fieldingCoeff ?? new FieldingCoefficients()).AptitudeFactor(dp.Aptitude(pos));
-        int Field() => (int)MathUtil.Clamp(Math.Round(dp.Level(AbilityKind.Fielding) * injF * aptF), 1, 100);
+        // 守備位置適性→実効守備力（設計書01 §1.1）。式は EffectiveFielding に集約（issue #371）。
+        var fCoeff = fieldingCoeff ?? new FieldingCoefficients();
+        int Field() => (int)MathUtil.Clamp(Math.Round(EffectiveFielding.Raw(dp, pos, fCoeff) * injF), 1, 100);
 
         // 育成レイヤは全選手が投手5種レベル（球速/制球/スタミナ/キレ/球威）を隠し持つ。投手はこれを Pitching に、
         // 野手は LatentPitching に投影する（issue #209 Phase B。二刀流スター＝隠し投手力の高い野手を再現）。
