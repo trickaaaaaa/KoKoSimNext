@@ -291,6 +291,14 @@ namespace KokoSim.Unity.Match
             host?.Add(_view);
             _fieldHost = host;
 
+            // 判定（アウト/セーフ/フェア/ホームラン）の器は盤面の外＝俯瞰と3Dの両方にかかる層へ。
+            // 中身を書くのは Match2DPlaybackElement のまま（表示窓・文言・色クラスの単一ソース）。
+            var judgeHost = _root.Q<VisualElement>("judgement-call");
+            var judgeLabel = _root.Q<Label>("judgement-judge");
+            var judgeDetail = _root.Q<Label>("judgement-detail");
+            if (judgeHost != null && judgeLabel != null && judgeDetail != null)
+                _view.SetJudgementHost(judgeHost, judgeLabel, judgeDetail);
+
             _leftLineup = _root.Q<VisualElement>("left-lineup");
             _rightLineup = _root.Q<VisualElement>("right-lineup");
             _leftPitcher = _root.Q<VisualElement>("left-pitcher");
@@ -923,6 +931,8 @@ namespace KokoSim.Unity.Match
         // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら試合結果画面へ渡す。
         private void EndGame(GameResult result)
         {
+            EndFieldPlay();   // 打球の途中で終局しても守備陣・走者を場に置き去りにしない
+            _view.HideJudgement();
             _gameOver = true;
             _stage = LiveStage.Over;
             _inPitchPhase = false;
@@ -1427,14 +1437,16 @@ namespace KokoSim.Unity.Match
             if (_current.Play != null)
             {
                 var wasDuelOn = _duelOn;
-                // 対決ビューが打球を見せていた秒数は SetDuelViewAuto(false)→HideBall で消えるので先に採る
+                // 対決ビューが打球を見せていた秒数は BeginFieldPlay→打球表示の畳みで消えるので先に採る
                 var shown = wasDuelOn ? (_duelRig?.BattedElapsedSeconds ?? -1f) : -1f;
-                SetDuelViewAuto(false);   // インプレー打球は打った瞬間から俯瞰で行方を見せる（issue #312）
                 _view.SetPlay(_current.Play);
                 // 対決ビューから来た場合は投球が二重に見えないよう接触の瞬間から再生する（issue #330）。
                 // さらに対決ビューで打球を見せたぶんは飛ばす（同じ0.5秒を二度描かない。2026-07-31）。
                 // 俯瞰固定（手動OFF）中は対決ビュー側で1球も見せていないので、従来どおり投球から流す。
                 if (wasDuelOn) _t = ContactMomentOf(_current.Play, shown);
+                // 打球は3Dの守備ビューで見せる（打球処理の3D化 F9）。俯瞰は同じ時計で並走させたままにして、
+                // トグルを叩いた瞬間に同じ場面へ切り替わるようにする（＝2Dはデバッグ用の別窓であって、別経路ではない）。
+                BeginFieldPlay((float)_t);
                 RenderReplayFrame();
             }
             else
@@ -1450,6 +1462,8 @@ namespace KokoSim.Unity.Match
         // 打席の再生が終わった: 塁ダイヤを結果へ更新してから、中断中でなければ次の采配窓を開けに行く。
         private void FinishPaView()
         {
+            EndFieldPlay();   // 守備陣・走者を伏せて対決の構図へ戻す（＝次打席への唯一のカット）
+            _view.HideJudgement();   // 器は盤面の外＝ビュー切替では消えない（打ち切りに据え置きを添えるのと同型）
             HidePitchCall();
             HideScoreCall();
             SetBases(_current.BaseFirstAfter, _current.BaseSecondAfter, _current.BaseThirdAfter);
@@ -1470,7 +1484,8 @@ namespace KokoSim.Unity.Match
             _view.PlaybackSpeed = _speed;
 
             // 対決ビューはポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
-            if (!_paused && _duelOn) _duelRig?.Tick(Time.deltaTime * _speed);
+            // 打球プレー中は俯瞰を出していても回す＝トグルで切り替えた瞬間に3Dが止まっていない（F9）。
+            if (!_paused && (_duelOn || FieldPlayActive)) _duelRig?.Tick(Time.deltaTime * _speed);
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
@@ -1548,16 +1563,19 @@ namespace KokoSim.Unity.Match
                     }
                     if (_pendingFoulFlight != null)
                     {
-                        // ファウルでも打球は飛ぶので、打った瞬間から俯瞰へ切り替えて行方を見せる（issue #313）。
-                        // 復帰（対決ビューへ）は打球が地面へ着いてから＝次の1球のワインドアップに合わせる。
+                        // ファウルは**守備が一切解決されない**（BuildFoulFlight は打者走者も野手の動きも
+                        // 送球も作らない）＝守備ビューへ切り替える意味がない。打球の行方は対決ビュー側の
+                        // 打球表示が接触からそのまま見せている（issue #313 の目的はこれで満たされる）。
+                        // F9 以前はここで俯瞰へ切り替えていた。今は**構図を動かさず**、俯瞰（デバッグ）は
+                        // 同じ時計で並走させるだけ。
                         var wasDuelOn = _duelOn;
                         var shownFoul = wasDuelOn ? (_duelRig?.BattedElapsedSeconds ?? -1f) : -1f;
-                        SetDuelViewAuto(false);
                         _view.SetPlay(_pendingFoulFlight);
                         _foulFlightHoldSeconds = (float)_pendingFoulFlight.Dur;
                         _pitchBallVisible = true;
                         // 対決ビューから来た場合は接触の瞬間から（投球セグメントの二重表示を避ける,
-                        // issue #330）＋対決ビューで見せた打球のぶんは飛ばす。
+                        // issue #330）＋対決ビューで見せた打球のぶんは飛ばす＝**対決ビューが今出している
+                        // 位置に俯瞰を合わせる**（両者は同じ実時間で進むので以降もずれない）。
                         // 俯瞰固定中は対決ビュー側で見せていないので投球から流す。
                         _pitchClock = wasDuelOn ? (float)ContactMomentOf(_pendingFoulFlight, shownFoul) : 0f;
                         _view.SetTime(_pitchClock);
@@ -1570,11 +1588,9 @@ namespace KokoSim.Unity.Match
                     if (_foulFlightHoldSeconds is { } hold) interval = Mathf.Max(interval, hold);
                     if (_pitchClock < interval) return;
 
-                    if (_foulFlightHoldSeconds.HasValue)
-                    {
-                        _foulFlightHoldSeconds = null;
-                        SetDuelViewAuto(true);   // ファウル打球が地面へ着いたら対決ビューへ復帰（issue #313）
-                    }
+                    // ファウルは対決の構図から離れないので、着地しても戻す先が無い（F9 以前はここで
+                    // 対決ビューへ復帰させていた）。間合いの延長ぶんを畳むだけ。
+                    _foulFlightHoldSeconds = null;
                     _windowCarry = _pitchClock - interval;   // 端数は次の間合いへ持ち越す
                     if (_windowCarry < 0f) _windowCarry = 0f;
                     _pitchCallDone = false;
@@ -1602,22 +1618,39 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        // 再生を打ち切る時刻。アウトで走者も得点も無く「次のプレイに発展しようがない」場合は、
-        // 決着＋最後の送球直後で切って次打席へ（野手が定位置へ戻る余韻を長々見せない）。
+        /// <summary>再生を打ち切ってから次打席へ移るまでの余韻[秒]。</summary>
+        private const double PlayTailSeconds = 0.6;
+
+        /// <summary>
+        /// 再生を打ち切る時刻。**「まだ見るものがある」最後の瞬間＋余韻**で切る。
+        ///
+        /// <b>なぜ engine の <c>Dur</c> をそのまま使わないか</b>: タイムラインの長さは
+        /// <c>max(決着, 打者走者の一塁到達) + 1.2</c> と<b>野手が定位置へ戻り終わる時刻</b>の大きいほうで、
+        /// 長打では後者が勝つ。本塁打は柵越えの後、フェンス際まで行った野手が定位置へ戻るまでを
+        /// 尺に含むので **決着から 9.5 秒**あり、その間に起きるのは野手の復帰だけ（打者走者は
+        /// 「ダイヤモンド一周の簡略で一塁まで」なので塁上で止まっている）。
+        /// 2Dの俯瞰では盤面が収束していく画として読めたが、3Dの守備カメラは全景（縦155m）へ引くので
+        /// **4pxの点が数個ゆっくり動くだけの9.5秒**になる（監督決定 2026-08-01・打球処理の3D化 ②）。
+        ///
+        /// 以前はこの早切りを「アウトで走者も得点も無い」場合だけに掛けていた（deadOut）。
+        /// 走者レッグを見るようにしたので場合分けは要らなくなり、長打にも同じ規則が効く。
+        /// </summary>
         private double PlayEndTime()
         {
             var play = _current.Play;
-            var noRunnersAfter = !_current.BaseFirstAfter && !_current.BaseSecondAfter && !_current.BaseThirdAfter;
-            var deadOut = _current.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.InPlayOut
-                          && _current.RunsScored == 0 && noRunnersAfter;
 
-            var end = play.Dur;
-            if (deadOut)
-            {
-                var lastEvent = play.ResAt;
-                foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-                end = System.Math.Min(play.Dur, lastEvent + 0.6);
-            }
+            // 「まだ見るもの」＝決着／球が動き終わる／**実際に動く**走者レッグの終わり。
+            // ⚠ 動かない走者のレッグを数えないこと。塁上で止まる走者は AppendHeldRunners が
+            // T1=Duration で張るので、除かないと必ず Dur に戻って1秒も縮まらない。
+            var lastEvent = play.ResAt;
+            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
+            foreach (var r in play.Runners)
+                foreach (var s in r.Segs)
+                {
+                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
+                    if (s.T1 > lastEvent) lastEvent = s.T1;
+                }
+            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
 
             // 判定オーバーレイ（#59）の表示窓 [T1, T1+hold) を必ず含める（issue #236 症状A）。
             // 内野ゴロの打者走者は「送球到達＝アウト成立」より後に一塁へ着く（T1＞ResAt）ので、
@@ -1625,6 +1658,14 @@ namespace KokoSim.Unity.Match
             // Dur を超えた時刻を評価しても最終フレームを保持するだけ）。
             var judged = PlaybackEvaluator.LastJudgementTime(play);
             if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+
+            // ⚠ 得点テロップ（#60）の寿命も含める。FinishPaView が HideScoreCall するので、
+            // 含めないと**加算の途中でテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
+            // 掲げ始めるのは決着の瞬間（UpdateScoreboard）で、時計は _t と同じ（倍速も同じ掛かり方）。
+            if (_current.RunsScored > 0)
+                end = System.Math.Max(end, play.ResAt
+                    + scoreCallStepSeconds * _current.RunsScored + scoreCallFinalHoldSeconds);
+
             return end;
         }
 
@@ -1635,6 +1676,9 @@ namespace KokoSim.Unity.Match
         {
             var play = _current.Play;
             _view.SetTime(_t);
+            // 3Dの守備ビューは同じ時計で並走させる（位置の真値は engine 側の同じ評価器＝両者の絵は
+            // 原理的に一致する。不変条件#1）。俯瞰を出していても回すのは Tick と同じ理由。
+            if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(play, _t);
             var resolved = _t >= play.ResAt;
             if (_result != null)
@@ -1919,6 +1963,25 @@ namespace KokoSim.Unity.Match
             ApplyDuelViewState();
         }
 
+        // ── 打球プレーの3D再生（打球処理の3D化 F9） ──
+        // 表示のON/OFF（＝俯瞰トグル）とは独立に動かす。3Dは常に走らせ、俯瞰も同じ時計で並走させる＝
+        // トグルは「どちらを画面に出すか」だけを決める。途中で切り替えても場面が飛ばない。
+        // Rig が使えない環境（3Dアセット未導入）では何も起きず、従来どおり俯瞰だけが残る。
+
+        /// <summary>3Dの守備ビューが打球プレーを再生中か。</summary>
+        private bool FieldPlayActive => _duelRig != null && _duelRig.Available && _duelRig.FieldPlayActive;
+
+        private void BeginFieldPlay(float t0)
+        {
+            if (_duelRig == null || !_duelRig.Available || _current?.Play == null) return;
+            _duelRig.BeginFieldPlay(_current.Play, t0);
+        }
+
+        private void EndFieldPlay()
+        {
+            if (FieldPlayActive) _duelRig.EndFieldPlay();
+        }
+
         // 打席進行に連動した自動切替（次打席開始→対決 / インプレー打球→俯瞰）。手動OFF中は何もしない。
         private void SetDuelViewAuto(bool on)
         {
@@ -1944,6 +2007,11 @@ namespace KokoSim.Unity.Match
         private void ApplyDuelHandedness()
         {
             if (_duelRig == null || !_duelRig.Available) return;
+            // ⚠ 打球プレー中は触らない。SetHandedness は捕手・球審を打席の定位置へ置き直し、投手の
+            // ミラー親を裏返す＝**守備として走っている最中の投手・捕手を打席の較正へ引き戻す**。
+            // 打球の途中で俯瞰トグルを叩いたときだけ通る道で、絵にしか出ない（F9）。
+            // 左右は次の打席の頭（OpenWindow / BeginPa）で必ず当て直すので、飛ばして困らない。
+            if (FieldPlayActive) return;
             // 1球進行では采配窓の対戦（＝いまの打者・投手）が単一ソース。一括経路では確定打席から引く。
             Handedness bats, throws;
             if (_atBat is { } at) { bats = at.BatterBats; throws = at.PitcherThrows; }
@@ -1998,7 +2066,8 @@ namespace KokoSim.Unity.Match
         {
             if (_fieldHost != null) _fieldHost.style.display = _duelOn ? DisplayStyle.None : DisplayStyle.Flex;
             if (_duelHost != null) _duelHost.style.display = _duelOn ? DisplayStyle.Flex : DisplayStyle.None;
-            _duelBtn?.EnableInClassList("chip-btn--on", _duelOn);
+            // トグルの意味は「2D俯瞰（デバッグ）を出すか」＝3Dが既定なので点灯は反転（F9）。
+            _duelBtn?.EnableInClassList("chip-btn--on", !_duelOn);
             // 俯瞰へ渡すときは飛翔中の球を畳む（issue #332）。畳まないと、対決ビューを閉じた後も
             // 次に開いた瞬間に古い球が本塁前に残って見える（#330 の「投球が二重に見える」と同種の事故）
             if (!_duelOn) _duelRig?.HideBall();
@@ -2443,6 +2512,26 @@ namespace KokoSim.Unity.Match
         public MatchProgression Progression => _prog;
         public LivePlateAppearance CurrentPa => _current;
         public bool IsGameOver => _gameOver;
+
+        // ── 打球プレーの3D再生を外から覗く窓（打球処理の3D化 F9 の受け入れ用） ──
+        /// <summary>打球再生の時計[秒]。俯瞰・3D・判定オーバーレイを同時に駆動している唯一の値。</summary>
+        public double PlayClockForCapture => _t;
+
+        /// <summary>3Dの守備ビューが走っているか。</summary>
+        public bool FieldPlayActiveForCapture => FieldPlayActive;
+
+        /// <summary>
+        /// 判定オーバーレイが**画面に出ているか**。
+        /// ⚠ 「<c>JudgementAt</c> が値を返すか」ではなく<b>要素の表示状態</b>を見ること。
+        /// F9 で壊れ得るのは探索ではなく<b>器の置き場所</b>（盤面の中に置いたままだと3Dでは隠れる）で、
+        /// 純関数の側を見ても壊れていることが分からない。
+        /// </summary>
+        public bool JudgementVisibleForCapture =>
+            _root?.Q<VisualElement>("judgement-call")?.resolvedStyle.display == DisplayStyle.Flex;
+
+        /// <summary>判定オーバーレイの文言（出ていなければ空）。</summary>
+        public string JudgementTextForCapture =>
+            JudgementVisibleForCapture ? (_root?.Q<Label>("judgement-judge")?.text ?? "") : "";
 
         /// <summary>スクショ用: 1球采配ショートカットをクリックしたのと同じ状態にする（打撃側）。</summary>
         public void SelectPitchBattingForCapture(PitchBattingOverride? v)

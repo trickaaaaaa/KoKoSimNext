@@ -19,6 +19,35 @@ namespace KokoSim.Engine.Match.Timeline.Playback;
 /// <summary>カメラ視野（field-space中心[m]・ズーム倍率）。</summary>
 public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMult);
 
+/// <summary>
+/// フレーミングの詰め方（ビューごとに変える3つ）。演出の判断（何を追うか・いつ全景へ戻すか）や
+/// レート制限（酔い防止）は共有し、**どれだけ寄るか**だけを差し替えるための束。
+///
+/// 3Dの守備カメラは2Dの俯瞰より深く寄る必要がある: <see cref="CameraFraming.Default"/> の
+/// <c>MaxZoom=3.4</c> は縦45.6mに相当し、身長1.75mの野手が480×270のRTで十数pxにしかならない。
+/// 外野フライで <c>FitBox</c> が求めるズームは実測5.75で、**上限に頭打ちされている**。
+/// </summary>
+/// <param name="MaxZoom">ズーム倍率の上限（1=全景）。大きいほど深く寄る。</param>
+/// <param name="MarginM">
+/// 被写体まわりに残す余白[m]。**寄りの深さを実際に決めているのはこちら**で、<paramref name="MaxZoom"/> ではない。
+/// <c>FitBox</c> は箱に 2×Margin を足してからズームを決めるので、箱が点まで縮んでも
+/// frameH は 2×Margin より小さくならない（既定 6.0m なら上限 12.9倍で頭打ち）。
+/// </param>
+/// <param name="PitchZoom">投球区間の固定フレームのズーム倍率。</param>
+/// <param name="ThrowFollowsBall">
+/// 送球区間の枠の取り方。<c>false</c>（既定・2D俯瞰）＝**始点と終点を両方収める**。
+/// 小さな盤面で送球の向きを読ませる作法だが、寄りたい3Dでは「6-3 なら遊撃〜一塁の30mを必ず枠に入れる」
+/// ＝どれだけ Margin を詰めても寄れない、という形で効く（実測: 決着の瞬間が frameH 20〜56m ＝
+/// そのプレーで最も引いた絵になる）。<c>true</c> なら打球中と同じく**球を先読みで追う**＝
+/// 送球が届くにつれ枠が締まり、受け手の捕球で最も寄る（中継カメラの作法）。
+/// </param>
+public readonly record struct CameraFraming(
+    double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false)
+{
+    /// <summary>2D俯瞰の既定（Issue #119 で決めた現行値）。渡さなければこれが使われる。</summary>
+    public static readonly CameraFraming Default = new(3.4, 6.0, 2.4);
+}
+
 /// <summary>カメラプランのキーフレーム1点。区間は easeIO で補間する（<see cref="PlaybackEvaluator.EaseIO"/> と同じ形）。</summary>
 public readonly record struct CameraKeyframe(double T, double Cx, double Cy, double ZoomMult);
 
@@ -38,21 +67,28 @@ public static class CameraPlanBuilder
     public const double WideZoom = 1.0;
 
     // 数値は完了条件（酔わない・被写体を捉え続ける）を満たすための実装判断値。要調整ならここを直す。
-    private const double MaxZoom = 3.4;
-    private const double MarginM = 6.0;                 // 被写体まわりの余白
-    private const double PitchZoom = 2.4;               // 投手ー打者フレーミング（「内野の縦半分程度」の近似値）
+    // MaxZoom / MarginM / PitchZoom は CameraFraming でビューごとに差し替えられる（既定は下の値）。
     public const double LookaheadSeconds = 0.6;         // 「現在のボール位置＋0.6秒先」
     private const double SampleStepSeconds = 0.08;      // キーフレーム間隔（十分密＝easeIO区間はほぼ線形）
     private const double LeadSeconds = 0.25;            // 先取りサンプリング（事前計画ゆえの遅れ対策）
-    private const double ReturnToWideDelaySeconds = 0.9; // ResAt から全景へ戻すまでの間
+    // ResAt から全景へ戻すまでの間。3Dの守備ビューは全景へ戻さず**この時刻の枠のまま止める**
+    // （2Dは全景に全部入るので戻して問題ないが、寄った3Dでは「用のないところを見ている1.5秒」になる）
+    // ので、戻し始める時刻を単一ソースとして公開する。
+    public const double ReturnToWideDelaySeconds = 0.9;
     private const double WideSettleBufferSeconds = 3.0;  // 全景へのレート制限付き復帰が収束するまでの生成余白（実再生は play.Dur までしか参照しないため無害）
     private const double MaxPlanSeconds = 120.0;         // キーフレーム生成の上限（#208 暴走・OOM 防止。1プレーは現実に数秒）
 
     public const double ZoomRateCapPerSecond = 2.0;  // ズーム変化は毎秒2倍以内
     public const double PanSpeedCapMPerSecond = 45.0; // パン速度上限（実測球速に追従しつつ急旋回を避ける値）
 
-    public static IReadOnlyList<CameraKeyframe> Build(PlaybackPlay play)
+    /// <param name="framing">
+    /// 寄りの深さ。省略＝<see cref="CameraFraming.Default"/>＝2D俯瞰の現行値で、
+    /// **渡さなければ出力は1キーフレームも変わらない**（既存の呼び出しとゴールデンは無傷）。
+    /// 3Dの守備カメラは <c>MaxZoom</c> を上げた別セットを渡す。
+    /// </param>
+    public static IReadOnlyList<CameraKeyframe> Build(PlaybackPlay play, CameraFraming? framing = null)
     {
+        var fr = framing ?? CameraFraming.Default;
         // ResAt は「結果チップを出さない」プレー（投球のみ＝PitchPlaybackFactory）で +∞ になる。そのまま
         // end に混ぜると end=∞ となり、下のサンプリングループ（clampedT>=end で停止）が永久に止まらず
         // キーフレームを確保し続けて OOM する（#208 の真因）。非有限な ResAt は「無し」として無視する。
@@ -67,7 +103,7 @@ public static class CameraPlanBuilder
         var first = true;
         foreach (var clampedT in SampleTimes(play, end))
         {
-            var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end));
+            var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end), fr);
             if (first)
             {
                 cx = raw.Cx; cy = raw.Cy; zoom = raw.ZoomMult;
@@ -133,7 +169,7 @@ public static class CameraPlanBuilder
     /// 投球区間の終盤（接触の LeadSeconds 秒前）で先取りが接触後の区間へ食い込み、打つ前からパンが
     /// 始まってしまう（Issue #258）。固定フレーム区間中かどうかは常に actualT で判定する。
     /// </summary>
-    private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT)
+    private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT, CameraFraming fr)
     {
         if (leadT >= play.ResAt + ReturnToWideDelaySeconds) return Wide();
 
@@ -143,14 +179,15 @@ public static class CameraPlanBuilder
         // （EndpointBallSegment＋Kind=Pitch。#258）の両方を拾う。
         if (IsKind(covering, BallSegmentKind.Pitch)
             || (covering is null && IsKind(nextUpcoming, BallSegmentKind.Pitch)))
-            return FitBox(new PlaybackVec(0, 0), new PlaybackVec(FieldDiagramGeometry.Mound.X, FieldDiagramGeometry.Mound.Y), PitchZoom);
+            return FitBox(new PlaybackVec(0, 0), new PlaybackVec(FieldDiagramGeometry.Mound.X, FieldDiagramGeometry.Mound.Y), fr, fr.PitchZoom);
 
         // 送球区間は始点・終点を収めるフレーム。同じく両モデルを拾う（#258）。
-        if (IsKind(covering, BallSegmentKind.Throw))
+        // ThrowFollowsBall なら下の「ボールを追う」へ落とす＝送球も打球と同じ扱いになる。
+        if (!fr.ThrowFollowsBall && IsKind(covering, BallSegmentKind.Throw))
         {
             var from = covering!.At(0);
             var to = covering.At(covering.T1 - covering.T0);
-            return FitBox(new PlaybackVec(from.X, from.Y), new PlaybackVec(to.X, to.Y));
+            return FitBox(new PlaybackVec(from.X, from.Y), new PlaybackVec(to.X, to.Y), fr);
         }
 
         // 打球（滞空/転がり）中、またはボール保持中の狭間 ＝ ボールを追う。
@@ -160,7 +197,7 @@ public static class CameraPlanBuilder
         {
             var ballNow = PlaybackEvaluator.BallAt(play, leadT);
             var ballPos = ballNow.HasValue ? new PlaybackVec(ballNow.Value.X, ballNow.Value.Y) : critical.To;
-            return FitBox(ballPos, critical.To);
+            return FitBox(ballPos, critical.To, fr);
         }
 
         var cur = PlaybackEvaluator.BallAt(play, leadT);
@@ -168,7 +205,7 @@ public static class CameraPlanBuilder
         var curV = new PlaybackVec(cur.Value.X, cur.Value.Y);
         var ahead = PlaybackEvaluator.BallAt(play, leadT + LookaheadSeconds);
         var aheadV = ahead.HasValue ? new PlaybackVec(ahead.Value.X, ahead.Value.Y) : curV;
-        return FitBox(curV, aheadV);
+        return FitBox(curV, aheadV, fr);
     }
 
     /// <summary>
@@ -205,16 +242,16 @@ public static class CameraPlanBuilder
 
     private static CameraViewport Wide() => new(WideCx, WideCy, WideZoom);
 
-    private static CameraViewport FitBox(PlaybackVec a, PlaybackVec b, double? fixedZoom = null)
+    private static CameraViewport FitBox(PlaybackVec a, PlaybackVec b, CameraFraming fr, double? fixedZoom = null)
     {
         var cx = (a.X + b.X) / 2.0;
         var cy = (a.Y + b.Y) / 2.0;
-        if (fixedZoom.HasValue) return new CameraViewport(cx, cy, Math.Clamp(fixedZoom.Value, WideZoom, MaxZoom));
+        if (fixedZoom.HasValue) return new CameraViewport(cx, cy, Math.Clamp(fixedZoom.Value, WideZoom, fr.MaxZoom));
 
-        var w = Math.Abs(a.X - b.X) + MarginM * 2.0;
-        var h = Math.Abs(a.Y - b.Y) + MarginM * 2.0;
+        var w = Math.Abs(a.X - b.X) + fr.MarginM * 2.0;
+        var h = Math.Abs(a.Y - b.Y) + fr.MarginM * 2.0;
         var zoom = Math.Min(DesignWidthM / w, DesignHeightM / h);
-        return new CameraViewport(cx, cy, Math.Clamp(zoom, WideZoom, MaxZoom));
+        return new CameraViewport(cx, cy, Math.Clamp(zoom, WideZoom, fr.MaxZoom));
     }
 }
 

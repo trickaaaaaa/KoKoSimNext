@@ -1354,6 +1354,520 @@ namespace KokoSim.EditorTools
             body.transform.position += new Vector3(0f, (groundY + ankle) - footY, 0f);
         }
 
+        /// <summary>
+        /// 守備・走塁クリップの**素の胸の向き**実測（打球処理の3D化 F2〜）。
+        ///
+        /// <see cref="RunFacingProbe"/> は対決4体むけに「狙いの向き」を job ごとに固定して
+        /// 必要yawを直接返すが、野手は**立ち位置ごとに向く先が違う**（全員が本塁を向く＝
+        /// 一塁手と左翼手では世界向きが90°違う）。そこで狙いを取らず**素の向きだけ**を返し、
+        /// 使う側が `yaw = SignedAngle(素の向き, その野手の向くべき向き)` で組む。
+        ///
+        /// ⚠ 素の向きはクリップごとに違う（投手だけローカル−X、他は+Z等）。新クリップを足したら
+        /// 必ずここへ1行足して実測してから yaw を決める（design-18 §7-3 の掟）。
+        /// ⚠ 途中で向きが変わる芝居（捕逸・送球）は**入りの構えで測る**＝normTime は小さく取る。
+        /// </summary>
+        public static string RunFielderFacingProbe()
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var clips = new[]
+                {
+                    "AA_Baseball_Defender_Standing_Idle_Loop_Type01",
+                    "AA_Baseball_Defender_Crouch_Idle_Loop_Type01",
+                    "AA_Baseball_Offense_Crouch_Idle_Loop_Type01",
+                };
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tchestX\tchestZ\thipsX\thipsZ\tyawTo-Z\tlen");
+                foreach (var name in clips)
+                {
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(name + "\t(クリップが無い)"); continue; }
+                    var body = SpawnBody(root, "probe-" + name, Vector3.zero, 0f, Color.white);
+                    Sample(body, clip, 0.10f);   // 入りの構えで測る
+                    var anim = body.GetComponentInChildren<Animator>();
+                    var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                    var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                    var facing = Vector3.Cross(ra - la, Vector3.up);
+                    facing.y = 0f; facing.Normalize();
+                    var hips = anim.GetBoneTransform(HumanBodyBones.Hips).rotation * Vector3.forward;
+                    hips.y = 0f; hips.Normalize();
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F3}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F1}\t{6:F2}",
+                        name, facing.x, facing.z, hips.x, hips.z,
+                        Vector3.SignedAngle(facing, new Vector3(0f, 0f, -1f), Vector3.up), clip.length));
+                    Object.DestroyImmediate(body);
+                }
+                Debug.Log("[DuelMotionSpike] fielder facing probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
+        /// 走行・移動クリップの**前進量**実測（打球処理の3D化 F4）。速度合わせの単一ソース。
+        ///
+        /// engine の <c>FielderAt</c> は位置しか返さないので、Unity 側は
+        /// <c>Speed = v_engine / v_clip</c> で足の回転を合わせる（合わせないと空中を滑るか
+        /// 足が空回りする）。その <c>v_clip</c> は**クリップごとに実測するしかない**
+        /// （尺は catalog に出ているが、1ループで何m進むかは出ていない）。
+        ///
+        /// あわせて **進む向きと体の向きの角度差**を出す。ルートモーションの進行方向は
+        /// クリップの素の向きと一致しない（後退・横走りは体が別の方向を向いたまま進む）ので、
+        /// 「engine の速度ベクトルへ体を向ける」だけだと後退クリップが逆向きに走る。
+        ///
+        /// ⚠ ルートモーションが**演技の本質**であるクリップ（ダイブ・スライディング・走り込み捕球）は
+        /// 速度合わせの対象ではない。ここで測る変位は「開始位置を到達点から逆算する」ために使う。
+        /// </summary>
+        public static string RunLocomotionProbe()
+        {
+            // 走行ループ（速度合わせに使う）／踏み出し／ルートモーションが演技のもの／走塁
+            var names = new[]
+            {
+                "Defender_Movement_Run_Loop", "Defender_Movement_Run_Back_Loop",
+                "Defender_Movement_Run_L90_Loop", "Defender_Movement_Run_R90_Loop",
+                "Defender_Movement_Sprint_Loop", "Defender_Movement_Sprint_L90_Loop",
+                "Defender_Movement_Sprint_R90_Loop",
+                "Defender_Movement_Walk_F_Loop", "Defender_Movement_Walk_B_Loop",
+                "Defender_Movement_Walk_L_Loop", "Defender_Movement_Walk_R_Loop",
+                "Defender_Movement_Shuffle_L", "Defender_Movement_Shuffle_R",
+                "Defender_Movement_Crouch_To_Run_Type01", "Defender_Movement_Crouch_To_Run_Type02",
+                "Defender_Movement_Crouch_To_Run_Back", "Defender_Movement_Crouch_To_Run_L90",
+                "Defender_Movement_Crouch_To_Run_R90",
+                "Defender_Movement_Sprint_Diving_Catch", "Defender_Movement_Sprint_Sliding_Catch",
+                "Defender_Movement_Run_To_Catching_Type01", "Defender_Movement_Run_To_Catching_Type02",
+                "Defender_Movement_Run_Back_To_Catching", "Defender_Movement_Run_Back_To_Jumping_Catch",
+                "Defender_Movement_Run_L90_To_Catching_Type01", "Defender_Movement_Run_R90_To_Catching_Type01",
+                "Defender_Movement_Shuffle_L_Catching", "Defender_Movement_Shuffle_R_Catching",
+                "Offense_Crouch_To_Running", "Offense_Base_Running", "Offense_Running_To_Base",
+                "Offense_Base_Walking", "Offense_Back_To_Base",
+                "Offense_Base_Sliding_Type01_Succ", "Offense_Base_Sliding_Type01_Fail",
+            };
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\tdx\tdz\tdist\tv_clip\tchestX\tchestZ\tmoveVsChest");
+                foreach (var shortName in names)
+                {
+                    var name = "AA_Baseball_" + shortName;
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    // 素の向き（入りの構え）。途中で振り向く芝居があるので頭で測る
+                    var b0 = SpawnBody(root, "loco0", Vector3.zero, 0f, Color.white);
+                    Sample(b0, clip, 0.05f);
+                    var anim0 = b0.GetComponentInChildren<Animator>();
+                    var ra = anim0.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                    var la = anim0.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                    var chest = Vector3.Cross(ra - la, Vector3.up);
+                    chest.y = 0f; chest.Normalize();
+                    var p0 = b0.transform.position;
+                    Object.DestroyImmediate(b0);
+
+                    // 終端まで積分した先の位置（同じ体を進めるとサンプルが累積するので必ず取り直す）
+                    var b1 = SpawnBody(root, "loco1", Vector3.zero, 0f, Color.white);
+                    Sample(b1, clip, 1f);
+                    var p1 = b1.transform.position;
+                    Object.DestroyImmediate(b1);
+
+                    var d = new Vector3(p1.x - p0.x, 0f, p1.z - p0.z);
+                    float dist = d.magnitude;
+                    // 「体の向きに対して」どちらへ進むか。0°=前進 / 180°=後退 / ±90°=横
+                    float moveVsChest = dist > 0.01f
+                        ? Vector3.SignedAngle(chest, d.normalized, Vector3.up) : 0f;
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F2}\t{6:F2}\t{7:F2}\t{8:F0}",
+                        shortName, clip.length, d.x, d.z, dist,
+                        clip.length > 0.01f ? dist / clip.length : 0f,
+                        chest.x, chest.z, moveVsChest));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/locomotion.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] locomotion probe -> out/duel-stage/locomotion.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F4 走行クリップを実測する")]
+        private static void RunLocomotionProbeMenu() => RunLocomotionProbe();
+
+        /// <summary>
+        /// 野手の捕球クリップの**捕球の瞬間**と**グラブの位置**を実測する（打球処理の3D化 F5）。
+        ///
+        /// 捕手で確立した三点セット（アンカー表＋開始予約＋短時間IK）を野手へ広げるための表を焼く。
+        /// ⚠ **捕球の瞬間の定義はクリップごとに違う**（design-18 §4.5-③）。捕手ですら2種あった:
+        ///   ・構えて待つクリップ ＝ 球が当たった衝撃で引かれる＝**引き始め**
+        ///   ・ミットを運ぶクリップ ＝ 的へ運び終わって速度が落ちる点＝**運び終わり**
+        /// 野手はこれに**伸び切り**（ダイブ・ジャンプ）が加わる。一律の式で出すと
+        /// 「捕ってから球が着く」が起きるので、判定材料を全部出して1本ずつ決める。
+        ///
+        /// 判定材料は**構えからグラブがどれだけ動いたか**（disp）で採る。
+        /// ⚠ 「腰→グラブの距離」で測ってはいけない: 腕を下ろした構えも前へ伸ばした捕球姿勢も
+        /// 同じ 0.56m になり、区別がつかない（2026-08-01 実測で <c>Catching_TypeF</c> が
+        /// 「最初から最大＝構えて待つ系」と誤判定された）。方向が変わるだけで距離は変わらない。
+        ///
+        /// 出す量:
+        ///   dispMax/tDisp … 構えからの移動量の最大とその時刻（＝運び終わり／伸び切り＝捕球の候補）
+        ///   tPeak         … グラブの速さのピーク（引き始め系なら捕球はこの直後）
+        ///   gy            … その瞬間のグラブの**足元からの高さ**[m]。選択の主軸（球の高さと突き合わせる）
+        ///   gx/gz         … 同じ瞬間の横/前（腰基準・体の向きを軸に取る）
+        /// </summary>
+        public static string RunFielderCatchProbe()
+        {
+            var names = new[]
+            {
+                // 構えて待つ系（その場で捕る）
+                "Defender_Catching_TypeF", "Defender_Catching_TypeL",
+                "Defender_Catching_TypeR", "Defender_Catching_TypeU",
+                "Defender_1st_baseman_Catching", "Defender_3rd_baseman_Catching",
+                "Defender_Catched_Type01", "Defender_Catched_Type02",
+                "Defender_Catched_Type03", "Defender_Catched_Type04",
+                // 運ぶ系（走り込み・横っ跳び）
+                "Defender_Movement_Run_To_Catching_Type01", "Defender_Movement_Run_To_Catching_Type02",
+                "Defender_Movement_Run_Back_To_Catching",
+                "Defender_Movement_Run_L90_To_Catching_Type01", "Defender_Movement_Run_L90_To_Catching_Type02",
+                "Defender_Movement_Run_R90_To_Catching_Type01", "Defender_Movement_Run_R90_To_Catching_Type02",
+                "Defender_Movement_Shuffle_L_Catching", "Defender_Movement_Shuffle_R_Catching",
+                // 伸び切り系
+                "Defender_Catching_Jumping_Catch", "Defender_Movement_Run_Back_To_Jumping_Catch",
+                "Defender_Movement_Sprint_Diving_Catch", "Defender_Movement_Sprint_Sliding_Catch",
+            };
+            const float dt = 0.02f;
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\tdispMax\ttDisp\ttPeak\tvPeak\tgy\tgx\tgz");
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    var loc = new Vector3[n + 1];   // 腰基準（右/上/前）
+                    var footY = new float[n + 1];   // 足元の高さ（グラブの対地高を出すため）
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "catch", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var glove = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        // ⚠ 軸は**アクターのローカル**（＝立ち位置と yaw を与える座標系）で採る。
+                        // 肩の線から作った解剖学的な前後左右で採ると、収録が捕球までに体を回している分だけ
+                        // ずれ、その表で yaw を決めると「グラブが球の方を向いていない」形になる
+                        // （2026-08-01 実測: 残差 0.026m → 0.165m。**絵ではカメラの狙い外しと区別できない**）
+                        loc[i] = body.transform.InverseTransformPoint(glove);
+                        footY[i] = glove.y - Mathf.Min(lf.y, rf.y);
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iDisp = 0, iPeak = 0;
+                    float dispMax = 0f, vPeak = 0f;
+                    for (int i = 1; i <= n; i++)
+                    {
+                        float disp = (loc[i] - loc[0]).magnitude;
+                        if (disp > dispMax) { dispMax = disp; iDisp = i; }
+                        float v = (loc[i] - loc[i - 1]).magnitude / dt;
+                        if (v > vPeak) { vPeak = v; iPeak = i; }
+                    }
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F3}\t{7:F3}\t{8:F3}",
+                        shortName, clip.length, dispMax, iDisp * dt, iPeak * dt, vPeak,
+                        footY[iDisp], loc[iDisp].x, loc[iDisp].z));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/fieldcatch.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] fielder catch probe -> out/duel-stage/fieldcatch.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F5 野手の捕球クリップを実測する")]
+        private static void RunFielderCatchProbeMenu() => RunFielderCatchProbe();
+
+        /// <summary>
+        /// 送球クリップの**リリースの瞬間**と**手の位置**を実測する（打球処理の3D化 F6）。
+        ///
+        /// リリースの定義は投手と同じ **利き手（右手）の速さのピーク**に揃える
+        /// （<c>DuelCalibration.BallReleaseClipTime</c>＝2.97 は「手の速度ピーク実測 2.95〜3.00」で採った値）。
+        /// 定義を役ごとに変えると、同じ「投げる」なのに球の出所が役ごとにずれる。
+        ///
+        /// ⚠ 捕球と違って **腕は振り抜いた後も速い**（フォロースルー）。ピークが1つとは限らないので、
+        /// 手が最も高い／最も前に出た時刻も併記して1本ずつ目で決める材料にする。
+        ///
+        /// 出す量:
+        ///   tPeak/vPeak … 右手の速さのピークとその時刻（＝リリースの第一候補）
+        ///   hy          … その瞬間の手の**足元からの高さ**[m]（球の出所の高さ＝engine の 1.7 と比べる）
+        ///   hx/hz       … 同じ瞬間の横/前（腰基準・体の向きを軸に取る）
+        ///   tFwd/fwdMax … 手が最も前に出た時刻と量[m]（ピークが振り抜き側に出たときの切り分け用）
+        ///   tHigh/hiMax … 手が最も高くなった時刻と高さ[m]（同上）
+        /// </summary>
+        public static string RunThrowProbe()
+        {
+            var names = new[]
+            {
+                // 野手の送球（内野→塁・外野→中継）
+                "Defender_Pass_the_ball_type01", "Defender_Pass_the_ball_type02",
+                "Defender_Pass_the_ball_type03",
+                // 捕球から続けて投げる収録があるか（尺が長い4本）を同じ物差しで確かめる
+                "Defender_Catched_Type01", "Defender_Catched_Type02",
+                "Defender_Catched_Type03", "Defender_Catched_Type04",
+                // 捕手（盗塁の二塁送球・投手への返球）
+                "Catcher_Throwing", "Catcher_To_Pitcher",
+            };
+            const float dt = 0.02f;
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\ttPeak\tvPeak\thy\thx\thz\tdirDeg\televDeg\ttFwd\tfwdMax\ttHigh\thiMax");
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    var loc = new Vector3[n + 1];   // 腰基準（右/上/前）
+                    var footY = new float[n + 1];   // 手の対地高
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "throw", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var hand = anim.GetBoneTransform(HumanBodyBones.RightHand).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        // 軸は**アクターのローカル**（捕球プローブと同じ理由。yaw を決める座標系に揃える）
+                        loc[i] = body.transform.InverseTransformPoint(hand);
+                        footY[i] = hand.y - Mathf.Min(lf.y, rf.y);
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iPeak = 0, iFwd = 0, iHigh = 0;
+                    float vPeak = 0f, fwdMax = float.MinValue, hiMax = float.MinValue;
+                    for (int i = 0; i <= n; i++)
+                    {
+                        if (i > 0)
+                        {
+                            float v = (loc[i] - loc[i - 1]).magnitude / dt;
+                            if (v > vPeak) { vPeak = v; iPeak = i; }
+                        }
+                        if (loc[i].z > fwdMax) { fwdMax = loc[i].z; iFwd = i; }
+                        if (footY[i] > hiMax) { hiMax = footY[i]; iHigh = i; }
+                    }
+
+                    // 球が出ていく向き＝**リリースの瞬間の手の速度**（体の向きではない）。
+                    // 収録は横手投げも含むので「体の正面へ飛ぶ」と決め打つと、投げる相手と
+                    // 球の行き先が食い違う。走行クリップの MoveDirDeg と同じ考え方で実測する
+                    var rel = iPeak > 0 ? (loc[iPeak] - loc[iPeak - 1]) / dt : Vector3.forward;
+                    var relH = new Vector2(rel.x, rel.z);
+                    float dirDeg = relH.sqrMagnitude > 1e-6f
+                        ? Mathf.Atan2(relH.x, relH.y) * Mathf.Rad2Deg : 0f;
+                    float elevDeg = Mathf.Atan2(rel.y, Mathf.Max(1e-4f, relH.magnitude)) * Mathf.Rad2Deg;
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F2}\t{3:F1}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F1}\t{8:F1}\t{9:F2}\t{10:F3}\t{11:F2}\t{12:F3}",
+                        shortName, clip.length, iPeak * dt, vPeak,
+                        footY[iPeak], loc[iPeak].x, loc[iPeak].z, dirDeg, elevDeg,
+                        iFwd * dt, fwdMax, iHigh * dt, hiMax));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/throw.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] throw probe -> out/duel-stage/throw.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F6 送球クリップを実測する")]
+        private static void RunThrowProbeMenu() => RunThrowProbe();
+
+        /// <summary>
+        /// 走者の**塁に着く瞬間**を実測する（打球処理の3D化 F7）。
+        ///
+        /// 走行ループと違って到達・スライディングは「前へ進んで、止まる」演技なので、
+        /// 判定材料は**前進が止まる時刻**。engine の走者レッグの終端（T1）へこの瞬間を合わせる。
+        ///
+        /// ⚠ 尺で決め打たない。<c>Running_To_Base</c> は 6.43s あるが前進はごく短く、
+        /// 残りは立ち止まってからの芝居（design-18 §4.5-⑬「収録の要らない芝居は尺でなく補正窓で消す」）。
+        ///
+        /// 出す量:
+        ///   tArr/fwdMax … 前進が最大に達した時刻[s]と前進量[m]（＝塁に着く瞬間の候補）
+        ///   tLow/hipLow … 腰が最も低くなった時刻[s]と高さ[m]（スライディングかどうかが割れる）
+        ///   vHead       … 前進が始まってから止まるまでの平均速度[m/s]（走り込みの速さ）
+        /// </summary>
+        public static string RunRunnerArriveProbe()
+        {
+            var names = new[]
+            {
+                "Offense_Running_To_Base", "Offense_Base_Running_To_Walking",
+                "Offense_Base_Sliding_Type01_Succ", "Offense_Base_Sliding_Type01_Fail",
+                "Offense_Base_Sliding_Type02_Succ", "Offense_Base_Sliding_Type02_Fail",
+                "Offense_Back_To_Base", "Offense_Crouch_To_Running",
+            };
+            const float dt = 0.02f;
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\ttTouch\treachX\treachZ\treachY\tlimb\ttLow\thipLow");
+                // このコマは塁に触れる高さか（足でも手でも、塁は地面にある）
+                const float TouchGroundM = 0.35f;
+                var limbs = new[]
+                {
+                    HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot,
+                    HumanBodyBones.LeftHand, HumanBodyBones.RightHand,
+                };
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    // ⚠ 前進量は**腰では測れない**。Sample はルートモーションを載せないので
+                    //    腰と根の差は体の中の傾きしか出ず、実測で 0.08〜0.18m しか動かなかった。
+                    //    塁に届くのは足か手なので、その**最も前へ出た点**を採る（F5 のグラブと同じ考え方）
+                    var reach = new Vector3[n + 1];
+                    var limb = new HumanBodyBones[n + 1];
+                    var hip = new float[n + 1];
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "run", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var hips = anim.GetBoneTransform(HumanBodyBones.Hips).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        float floor = Mathf.Min(lf.y, rf.y);
+                        var best = new Vector3(0f, 0f, float.MinValue);
+                        var bestLimb = HumanBodyBones.LeftFoot;
+                        foreach (var b in limbs)
+                        {
+                            var tr = anim.GetBoneTransform(b);
+                            if (tr == null) continue;
+                            // ⚠ 高さで絞らないと**走っている途中の振り上げた手**を拾う（実測で
+                            //    Sliding_Type01_Succ が 0.22s・手の高さ 0.958m ＝ まだ走っている所を
+                            //    「塁に触った」と誤判定した）。塁に触るのは地面の高さの出来事
+                            if (tr.position.y - floor > TouchGroundM) continue;
+                            var p = body.transform.InverseTransformPoint(tr.position);
+                            if (p.z > best.z) { best = new Vector3(p.x, tr.position.y - floor, p.z); bestLimb = b; }
+                        }
+                        if (best.z <= float.MinValue * 0.5f) best = new Vector3(0f, 0f, -99f);
+                        reach[i] = best;
+                        limb[i] = bestLimb;
+                        hip[i] = hips.y - floor;
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iTouch = 0, iLow = 0;
+                    float reachMax = float.MinValue, hipLow = float.MaxValue;
+                    for (int i = 0; i <= n; i++)
+                    {
+                        if (reach[i].z > reachMax) { reachMax = reach[i].z; iTouch = i; }
+                        if (hip[i] < hipLow) { hipLow = hip[i]; iLow = i; }
+                    }
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F2}\t{3:F3}\t{4:F3}\t{5:F3}\t{6}\t{7:F2}\t{8:F3}",
+                        shortName, clip.length, iTouch * dt,
+                        reach[iTouch].x, reach[iTouch].z, reach[iTouch].y, limb[iTouch],
+                        iLow * dt, hipLow));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/runner.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] runner arrive probe -> out/duel-stage/runner.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F7 走者の到達クリップを実測する")]
+        private static void RunRunnerArriveProbeMenu() => RunRunnerArriveProbe();
+
         private static AnimationClip FindClip(string clipName)
         {
             // 供給元は本番リグと同じ入口（自作Assets/Motions → 購入Assets/Animoの順）で引く。

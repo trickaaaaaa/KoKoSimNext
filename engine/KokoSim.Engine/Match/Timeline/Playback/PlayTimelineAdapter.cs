@@ -63,6 +63,8 @@ public static class PlayTimelineAdapter
             ResAt = t.ResolvedAt,
             Ball = ball,
             Moves = moves,
+            // 出発点（判定が距離を測った守備配置）。座標と違って推定できないので素通しする
+            Starts = t.FielderStarts?.ToDictionary(kv => kv.Key, kv => Vec(kv.Value)),
             Runners = runners,
             Caps = caps,
             Judgements = judgements,
@@ -99,7 +101,11 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
     }
 
     public static EndpointBallSegment From(BallSegment s)
-        => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM);
+        => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM)
+        {
+            // 送球の投げ手／受け手（Issue E1）。座標と違って**推定できない**値なので素通しする
+            FromRole = s.FromRole, ToRole = s.ToRole, ToBase = s.ToBase,
+        };
 
     public override PlaybackBall At(double tt)
     {

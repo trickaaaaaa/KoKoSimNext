@@ -160,10 +160,19 @@ public sealed class RunnerLegMatchesVerdictTests
         var mine = tl.Runners.Where(r => r.Label == "走1").OrderBy(r => r.T0).ToList();
         var standing = mine[0];
         Assert.Equal(0.0, standing.T0, 9);
-        Assert.Equal(standing.To.X, standing.From.X, 9);   // 0長＝その場で待つ
+        // 先頭のレッグは元の塁から始まる（＝接触前に盤面から消えない, #25）。終端は二次リード位置
+        // （時計が塁間からリードぶんを引いているので、絵でも出しておく）。
+        Assert.Equal(Field.FirstBase.X, standing.From.X, 9);
+        Assert.Equal(Field.FirstBase.Z, standing.From.Z, 9);
+        var leadM = System.Math.Sqrt(
+            System.Math.Pow(standing.To.X - standing.From.X, 2)
+            + System.Math.Pow(standing.To.Z - standing.From.Z, 2));
+        Assert.Equal(Baserunning.HomeLeadDistanceM, leadM, 6);
         for (var i = 1; i < mine.Count; i++)
         {
             Assert.Equal(mine[i - 1].T1, mine[i].T0, 9);   // 隙間も重なりも無い
+            Assert.Equal(mine[i - 1].To.X, mine[i].From.X, 9); // 位置も繋がる（ワープしない）
+            Assert.Equal(mine[i - 1].To.Z, mine[i].From.Z, 9);
         }
     }
 }

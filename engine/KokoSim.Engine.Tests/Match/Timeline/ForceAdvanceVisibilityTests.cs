@@ -59,7 +59,14 @@ public sealed class ForceAdvanceVisibilityTests
         var runner = Assert.Single(play.Runners, r => r.Label == "走1");
 
         AssertNear(Vec(Field.FirstBase), PlaybackEvaluator.RunnerAt(runner, 0.0), "投球中(t=0)の一塁走者");
-        AssertNear(Vec(Field.FirstBase), PlaybackEvaluator.RunnerAt(runner, 0.5), "接触前(t=0.5)の一塁走者");
+        // 接触前は塁を離れない（＝盤面から消えない, #25）。ただし投球の間に二次リードを取るので
+        // 一塁ちょうどではなく、リード距離（3.5m）の内側に居る。
+        var at05 = PlaybackEvaluator.RunnerAt(runner, 0.5);
+        Assert.True(at05.HasValue, "接触前(t=0.5)に一塁走者が居ない");
+        var offBase = System.Math.Sqrt(
+            System.Math.Pow(at05!.Value.X - Field.FirstBase.X, 2)
+            + System.Math.Pow(at05.Value.Y - Field.FirstBase.Z, 2));
+        Assert.InRange(offBase, 0.0, Baserunning.HomeLeadDistanceM + 1e-6);
         AssertNear(Vec(Field.SecondBase), PlaybackEvaluator.RunnerAt(runner, play.Dur), "終了時の一塁走者");
 
         // 静止トークン（走一）とは二重に描かない。

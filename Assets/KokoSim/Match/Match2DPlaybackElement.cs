@@ -146,6 +146,8 @@ namespace KokoSim.Unity.Match
         private Label _judgementLabel;
         // 判定の下段（本塁打の飛距離。1球判定の球種・球速行と同じ器 .pitch-call__detail を流用, issue #354）。
         private Label _judgementDetail;
+        // 器が自前か（＝この要素の子か）。外へ出した後は前面化を自分でやらない（打球3D化 F9）。
+        private bool _judgementOwned = true;
 
         /// <summary>
         /// 再生倍速（コントローラが毎フレーム同期する）。表示窓はプレー時間軸で数えるため、
@@ -247,8 +249,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 守備の絡まないプレー（三振・四球）や打席間でも盤面を空にしないための静止表示。
-        /// Play を持たなくても 9 野手を定位置（<see cref="PlaybackEvaluator.DefaultPositions"/>）に、
-        /// 占有塁に走者を置く。守備陣・走者を永続表示するために使う。
+        /// Play を持たなくても 9 野手を定位置（<see cref="FieldGeometry.StandardPosition"/>＝**判定が
+        /// 距離と時間を出しているのと同じ表**）に、占有塁に走者を置く。守備陣・走者を永続表示するために使う。
+        /// ⚠ <c>PlaybackEvaluator.DefaultPositions</c> はモック（HTML の DEF 配列）由来で最大10mずれる。
         /// </summary>
         public void SetResting(bool first, bool second, bool third)
         {
@@ -262,8 +265,8 @@ namespace KokoSim.Unity.Match
 
             foreach (var (pos, _) in FielderOrder)
             {
-                var d = PlaybackEvaluator.DefaultPositions[pos];
-                _fielders.Add((new Vector2((float)d.X, (float)d.Y), false));
+                var (dx, dz) = FieldGeometry.StandardPosition(pos);
+                _fielders.Add((new Vector2((float)dx, (float)dz), false));
             }
             if (first) _runners.Add(("走", First));
             if (second) _runners.Add(("走", Second));
@@ -369,7 +372,43 @@ namespace KokoSim.Unity.Match
             _judgementDetail.style.display = showDistance ? DisplayStyle.Flex : DisplayStyle.None;
 
             _judgementHost.style.display = DisplayStyle.Flex;
-            _judgementHost.BringToFront(); // 走者ラベルが後から追加されても常に最前面に出す。
+            // 走者ラベルが後から追加されても常に最前面に出す（自前の器のときだけ。外へ出した器の
+            // 重なり順はその画面の UXML が決める＝ここで持ち上げると score-call の上へ出てしまう）。
+            if (_judgementOwned) _judgementHost.BringToFront();
+        }
+
+        /// <summary>
+        /// 判定オーバーレイの器を**この要素の外**へ移す（打球処理の3D化 F9）。
+        ///
+        /// <b>なぜ要るか</b>: 判定（アウト／セーフ／フェア／ホームラン）を描いているのはここだけなので、
+        /// 3Dの守備ビューへ一本化すると<b>アウトが一度も出ない試合</b>になる。かといって判定の探索
+        /// （<see cref="PlaybackEvaluator.JudgementAt"/> の呼び方・表示窓・文言・色クラス）を2つ持つと
+        /// 二重管理になる＝<b>計算と文言はここに残したまま、器だけ</b>ビューをまたぐ層へ差し替える。
+        ///
+        /// 呼ばない画面（試合詳細の2D再生）は自前の器のままで、挙動は1ビットも変わらない。
+        /// </summary>
+        /// <summary>
+        /// 判定オーバーレイを畳む。
+        ///
+        /// ⚠ 器を外へ出すと**盤面ごと隠れることで消えていた経路が無くなる**。以前は打席が終われば
+        /// 俯瞰そのものが対決ビューへ差し替わって一緒に消えていたが、外の層はビュー切替で隠れない＝
+        /// 中断・スキップ・終局のような「再生を最後まで流さない出口」では明示的に畳む必要がある。
+        /// （通常の終わり方では表示窓を過ぎた時刻で <see cref="SetTime"/> が自分で畳む）
+        /// </summary>
+        public void HideJudgement()
+        {
+            if (_judgementHost != null) _judgementHost.style.display = DisplayStyle.None;
+        }
+
+        public void SetJudgementHost(VisualElement host, Label judge, Label detail)
+        {
+            if (host == null || judge == null || detail == null) return;
+            if (_judgementOwned && _judgementHost != null) Remove(_judgementHost);
+            _judgementOwned = false;
+            _judgementHost = host;
+            _judgementLabel = judge;
+            _judgementDetail = detail;
+            _judgementHost.style.display = DisplayStyle.None;
         }
 
         // ── 射影（mock: px(p)=[CX+p.x*S, OY-p.y*S] を要素サイズへ uniform 拡縮・レターボックス） ──

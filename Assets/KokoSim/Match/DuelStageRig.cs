@@ -494,7 +494,10 @@ namespace KokoSim.Unity.Match
     /// 表示内容は当面のループ芝居（投手=投球ループ／打者・捕手・審判=待機）。エンジンのpitch進行との
     /// 同期は §7-2 アンカー同期の実装時に接続する。
     /// </summary>
-    public sealed class DuelStageRig : System.IDisposable
+    // 守備・走塁の3D化（打球処理の3D一本化）で足す分は DuelStageRig.Field.cs に置く。
+    // 型を切り出さず partial にするのは、nested な Actor も _root 等の private も
+    // アクセス変更なしで新ファイルから使えるため＝較正の巣（本ファイル）への diff を最小にする。
+    public sealed partial class DuelStageRig : System.IDisposable
     {
         /// <summary>基準ドット密度（16:9・全画面時の確定解像度）。実RTはカラム実寸から適応する（EnsureSize）。</summary>
         public const int BaseWidth = 480;
@@ -504,7 +507,9 @@ namespace KokoSim.Unity.Match
         private const float MoundDistance = 18.44f;
         private const float MoundHeight = 0.254f;
         private const float TargetHeight = 1.75f;
-        internal const float PoseFps = 12f;   // §4.2 確定（2026-07-26 監督判定）
+        // §4.2 確定（2026-07-26 監督判定）。撮影ハーネスは**この刻みで通す**必要がある
+        // （飛び石で進めるとレート制限も足の運びも測ったことにならない）ので public
+        public const float PoseFps = 12f;
         private static readonly Vector3 StageOrigin = new(0f, -500f, 0f);
 
         private const string BodyFbx = "Assets/DuelSpike/UBC/SuperheroMale.fbx";
@@ -529,6 +534,16 @@ namespace KokoSim.Unity.Match
         /// <summary>DuelVendorRegionBaker が焼いた領域IDつきメッシュ（UV1に領域ID）。</summary>
         private const string VendorRegionMeshDir = "Assets/DuelSpike/Vendor/Generated/";
         private const string VendorRegionMeshSuffix = "_Regions.asset";
+
+        // ビルド同梱の索引を焼く側（DuelAssetCatalogBaker）から見るための読み取り口。
+        // パスの単一ソースは上の const のまま＝ベイカ側にパスを書き写さない
+        // ⚠ internal ではダメ（Assembly-CSharp と Assembly-CSharp-Editor は別アセンブリ＝見えない。
+        //    PoseFps で一度踏んだのと同じ。CS0117 になる）
+        public static string BodyFbxPath => BodyFbx;
+        public static string VendorBodyFbxPath => VendorBodyFbx;
+        public static string UniformMeshAssetPath => UniformMeshAsset;
+        public static string VendorRegionMeshDirPath => VendorRegionMeshDir;
+        public static string VendorRegionMeshSuffixPath => VendorRegionMeshSuffix;
 
         /// <summary>購入素体の帽子（独立メッシュ）。打者はこれを消してヘルメットを付ける。</summary>
         private const string VendorCapMeshName = "A_Players_0001_Cap_0001";
@@ -673,6 +688,13 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public const string PitcherClipName = "AA_Baseball_Pitcher_Pitching_type01";
 
+        // 対決4体が使うクリップ名。ここに直書きせず定数にしてあるのは、ビルド同梱の索引
+        // （DuelAssetCatalog）を**コード側の名前表から自動で埋める**ため（F8）。
+        public const string CatcherIdleClipName = "AA_Baseball_Catcher_Idle";
+        public const string UmpireIdleClipName = "AA_Baseball_Umpire_Crouch_Idle";
+        public const string UmpireStrikeClipName = "AA_Baseball_Umpire_Crouch_Strike_Type01";
+        public const string BatterHbpClipName = "AA_Baseball_Batter_Hit_ByPitch_Type01";
+
         /// <summary>
         /// 投手クリップを本塁向き（−Z）へ揃えるyaw[度]。
         /// 収録モーキャップはセット姿勢の向きと実際に踏み込んで投げる方向が一致しない。
@@ -750,6 +772,7 @@ namespace KokoSim.Unity.Match
         private Actor _pitcher, _batter, _catcher, _umpire;
         private DuelCalibration _cal = DuelCalibration.Default;   // 実行時ポーズ補正が参照する現在値
         private float _acc;
+        private int _poseGen;
         private float _fovBaseDeg = 2.9f;   // 16:9時の垂直FOV（ApplyCalibrationが上書き。既定=R-comp60）
         private Transform _capMount, _helmetMount;   // 被り物の位置オフセット枠（gear-head直下・実寸[m]）
         private Transform _cHelmetMount, _cMaskMount;   // 捕手のヘルメット・マスク（同上）
@@ -841,6 +864,29 @@ namespace KokoSim.Unity.Match
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
             public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+
+            // ---- 守備・走塁のN体化で足した分（既定値は現行4体の挙動と同じ＝絵は不変） ----
+
+            /// <summary>
+            /// 待機ループ中だけ水平位置を <see cref="BasePos"/> へ毎コマ戻す（収録の水平ドリフト対策・#291）。
+            /// 打者だけ true。旧実装は StepActor 内の `a == _batter` identity 判定だったが、
+            /// 守備・走者を同じ StepActor で回すためフラグへ移した。
+            /// </summary>
+            public bool RebaseXZWhileIdle;
+
+            /// <summary>false の間は StepActor が何もしない（打席中の野手など・Tick ごと飛ばす）。</summary>
+            public bool Enabled = true;
+
+            /// <summary>
+            /// ポーズ更新の最小間隔[秒]。0＝ポーズ量子化（12fps）のコマごとに毎回進める＝現行の挙動。
+            /// 遠い外野手のように数pxでしか映らない役を間引くための逃げ道。
+            /// ⚠ **アクターごとの固定間隔**であること。「特定のコマでだけ」の分岐にすると
+            /// 12fps格子に乗るかが位相次第になり、乗らない結果だけ黙って壊れる（design-18 §4.5-⑩）。
+            /// </summary>
+            public float PoseInterval;
+
+            /// <summary>PoseInterval の積み残し[秒]。</summary>
+            public float PoseAccum;
         }
 
         /// <summary>
@@ -873,8 +919,8 @@ namespace KokoSim.Unity.Match
                 Debug.LogWarning("[DuelStage] 打撃クリップ " + BatterClipName
                     + " が無いので自作 " + BatterOwnIdleClipName + " で代用する（アンカーは未調整）");
             }
-            var catClip = LoadClip("AA_Baseball_Catcher_Idle");
-            var umpClip = LoadClip("AA_Baseball_Umpire_Crouch_Idle");
+            var catClip = LoadClip(CatcherIdleClipName);
+            var umpClip = LoadClip(UmpireIdleClipName);
             if (layer < 0 || body == null || pitchClip == null || batClip == null || catClip == null || umpClip == null)
             {
                 Debug.LogWarning("[DuelStageRig] assets unavailable (layer/body/clips) - duel view disabled");
@@ -927,6 +973,7 @@ namespace KokoSim.Unity.Match
             _batter.IdleClip = batClip;
             _batter.IdleEndAt = BatterIdleEnd;
             _batter.EndAt = BatterIdleEnd;   // 生成直後の初回ループでスイングまで流さない
+            _batter.RebaseXZWhileIdle = true;   // 構え区間の水平ドリフトを毎コマ戻す（#291。旧: StepActor の identity 判定）
             _catcher = SpawnActor(playerBody, catClip, new Vector3(cal0.CatcherX, 0f, cal0.CatcherZ), 0f,
                 _defenseColors, 0f, layer, useVendor);
             // 捕手も素の帽子を落とす。日本の高校野球の捕手は「捕手用ヘルメット＋マスク」で、
@@ -947,12 +994,12 @@ namespace KokoSim.Unity.Match
             // 差は打ち切り位置だけ＝空振り・ファールは走り出し前で構えへ戻す（ScheduleReactions）
             _swingMissClip = batClip;
             _swingHitClip = batClip;
-            _hbpClip = LoadClip("AA_Baseball_Batter_Hit_ByPitch_Type01");
+            _hbpClip = LoadClip(BatterHbpClipName);
             _catchClips = new AnimationClip[CatchAnchors.Length];
             for (int i = 0; i < CatchAnchors.Length; i++) _catchClips[i] = LoadClip(CatchAnchors[i].Clip);
             // 球審ストライクコール。Type01(3.33s)を**確定採用**（2026-07-31 監督判断・#353 の録画で確認）。
             // Type02(4.67s)は突き出しが2.05s・戻り終わりが3.4sで、リリース間隔2.8sに収まらないため不採用。
-            _umpireStrikeClip = LoadClip("AA_Baseball_Umpire_Crouch_Strike_Type01");
+            _umpireStrikeClip = LoadClip(UmpireStrikeClipName);
 
             _bat = SpawnBat(layer);
 
@@ -1985,6 +2032,11 @@ namespace KokoSim.Unity.Match
             if (_ball != null)
             {
                 _ball.transform.SetParent(_root.transform, false);
+                // ⚠ 見かけ倍率（守備ビューの可読性補正・最大12倍＝直径89cm）を必ず落とす。
+                // 引きの絵ほど倍率が上がるので、**プレーの最後は常に最大**で終わる。落とさないと
+                // 次の打席の対決ビューで**バランスボール大の球を投げ始める**（2026-08-01 実害）。
+                // 隠す所を単一の出口にしてここで戻す＝補正を掛ける側（毎コマ）と対にする。
+                _ball.transform.localScale = Vector3.one * BallRealDiameterM;
                 _ball.SetActive(false);
             }
         }
@@ -2059,6 +2111,10 @@ namespace KokoSim.Unity.Match
                 _acc -= step;
                 foreach (var a in _actors) StepActor(a, step);
                 stepped = true;
+                // ポーズが進んだ回数。**ポーズ補正IKは「進んだ回だけ」当てる**必要があり
+                // （重み<1は今の位置からの補間＝二度当てると寄りすぎる）、呼び出し側が
+                // 進んだかどうかを知る唯一の手がかりになる（守備の捕球IK＝F5）
+                _poseGen++;
             }
             if (stepped)
             {
@@ -2419,7 +2475,7 @@ namespace KokoSim.Unity.Match
         public bool PosePreviewStanding()
         {
             if (!Available || _pitcher == null) return false;
-            var clip = LoadClip("AA_Baseball_Defender_Standing_Idle_Loop_Type01");
+            var clip = LoadClip(OutfielderIdleClipName);
             if (clip == null) return false;
 
             if (_batter != null) _batter.Go.SetActive(false);
@@ -2534,12 +2590,40 @@ namespace KokoSim.Unity.Match
 
         // ---- ステージ ---------------------------------------------------------
 
+        // ---- 球場の最小追加（S1・打球処理の3D化 F1） ----------------------------
+        // 監督決定は「球場は今のまま（最低限）」。ここで足すのは**動きの検証に必要な最小限**だけ:
+        //   ① 地面の広さ … 従来は 100m四方・中心z=+9 ＝ z=59m で尽きる。両翼95m・中堅118mの打球が
+        //      板の外（背景色）へ抜けて行方が追えない
+        //   ② 塁とファウルライン … 無いと「一塁へ送球した」の一塁が画面に存在しない
+        // 内野の土・外野フェンス・スタンドは**やらない**（決定どおり）。
+        //
+        // 対決構図（R-comp60）への非侵襲は幾何で保証してある:
+        //   ・地面の拡張ぶん（z<-41）はバックネット書き割り（z=-16・34×8m）の裏＝画面に出ない
+        //   ・対決構図で地面が見えるのは z∈[-52,+12] のごく細い帯。塁は最も近い本塁側でも
+        //     一塁(19.4,19.4)＝帯の外、二塁(0,38.8)も外
+        //   ・ファウルラインは**本塁の土円（半径3.5m）の外から**引くので帯に入らない
+        // ＝ F1 の受け入れは「対決構図の画素差分 0」。破れたらこの前提のどれかが崩れている。
+
+        /// <summary>
+        /// ファウルラインを引き始める本塁からの距離[m]。
+        /// 実物は本塁から引くが、**対決構図（R-comp60）の右下隅に一塁側の線が食い込む**
+        /// （5m 始まりで実測63画素・緑地に白＝はっきり見える異物。2026-08-01 A/B画素差分で検出）。
+        /// 対決ビューは監督の指示外なので、線は構図の外＝本塁から 8m の所から引く。
+        /// 代償は守備カメラで本塁まわり8mだけ線が無いこと（全長95mに対して小さい）。
+        /// </summary>
+        private const float FoulLineFromM = 8f;
+        /// <summary>ファウルラインの長さ[m]（両翼＝ファウルポールまで）。</summary>
+        private const float FoulLineToM = 95f;
+
         private void BuildGround(int layer)
         {
-            Primitive(PrimitiveType.Plane, "ground", new Vector3(0f, 0f, 9f), new Vector3(10f, 1f, 10f),
+            // 中堅118m・両翼95mを板の上に収める（旧: scale10・中心z=9 ＝ z∈[-41,59]）。
+            // Plane はスケール1で10m四方なので 26 ＝ 260m四方。中心z=+60 で z∈[-70,+190]・x∈[-130,+130]
+            Primitive(PrimitiveType.Plane, "ground", new Vector3(0f, 0f, 60f), new Vector3(26f, 1f, 26f),
                 new Color(0.30f, 0.55f, 0.30f), layer);
-            Primitive(PrimitiveType.Cylinder, "dirt-home", new Vector3(0f, 0.005f, 0f), new Vector3(7f, 0.005f, 7f),
-                new Color(0.63f, 0.47f, 0.33f), layer);
+            // フェア芝・刈り分け・内野ダート・ウォーニングトラック・フェンス（S2/S3）。
+            // 本塁の土円もここで引き直すので、旧 dirt-home（半径3.5mの円柱）は畳んだ
+            BuildFieldSurface(layer);
             Primitive(PrimitiveType.Cylinder, "mound", new Vector3(0f, MoundHeight * 0.5f, MoundDistance),
                 new Vector3(5.4f, MoundHeight * 0.5f, 5.4f), new Color(0.63f, 0.47f, 0.33f), layer);
             Primitive(PrimitiveType.Cube, "home-plate", new Vector3(0f, 0.012f, 0f), new Vector3(0.43f, 0.02f, 0.43f),
@@ -2552,14 +2636,52 @@ namespace KokoSim.Unity.Match
             // 本実装のスタジアム背景（スタンド/ネット）に置き換わるまでの仮（2026-07-26 構図リフレームD採用時）
             Primitive(PrimitiveType.Cube, "backstop-wall", new Vector3(0f, 4f, -16f), new Vector3(34f, 8f, 0.5f),
                 new Color(0.12f, 0.20f, 0.16f), layer);
+
+            BuildBasesAndFoulLines(layer);
         }
 
-        private GameObject Primitive(PrimitiveType type, string name, Vector3 localPos, Vector3 localScale, Color color, int layer)
+        /// <summary>
+        /// 塁3枚とファウルライン2本（S1）。座標は engine の共通ソース
+        /// <see cref="KokoSim.Engine.Match.Field.FieldDiagramGeometry"/> から採る＝**Unity 側に塁の表を複製しない**
+        /// （2D俯瞰・メンバー画面と同じ地理を使う。ずれると「3Dでは一塁に見えるが2Dでは違う所」になる）。
+        /// engine は (X=一塁側, Y=センター) の2Dなので、ステージの (x, 0, z=Y) へ写す（+x=一塁側は共通・変換不要）。
+        /// </summary>
+        private void BuildBasesAndFoulLines(int layer)
+        {
+            var white = new Color(0.88f, 0.88f, 0.84f);
+
+            // 塁は一辺0.38m。実物の塁は辺がファウルライン（＝45°）に沿うので yaw=45°
+            AddBase("base-first", KokoSim.Engine.Match.Field.FieldDiagramGeometry.First, white, layer);
+            AddBase("base-second", KokoSim.Engine.Match.Field.FieldDiagramGeometry.Second, white, layer);
+            AddBase("base-third", KokoSim.Engine.Match.Field.FieldDiagramGeometry.Third, white, layer);
+
+            // ファウルライン。Cube の長軸は +z なので、yaw=±45° で (±1,0,1)/√2 方向へ倒す。
+            // 本塁からの距離 FoulLineFromM〜FoulLineToM を線分の実長として置く（本塁の土円の中は引かない）
+            float mid = (FoulLineFromM + FoulLineToM) * 0.5f;
+            float len = FoulLineToM - FoulLineFromM;
+            float d = mid / Mathf.Sqrt(2f);   // 45°方向に距離 mid 進んだ点の x・z 成分
+            Primitive(PrimitiveType.Cube, "foul-line-right", new Vector3(d, 0.010f, d),
+                new Vector3(0.12f, 0.02f, len), white, layer, 45f);
+            Primitive(PrimitiveType.Cube, "foul-line-left", new Vector3(-d, 0.010f, d),
+                new Vector3(0.12f, 0.02f, len), white, layer, -45f);
+        }
+
+        private void AddBase(string name, (double X, double Y) p, Color color, int layer)
+        {
+            Primitive(PrimitiveType.Cube, name, new Vector3((float)p.X, 0.012f, (float)p.Y),
+                new Vector3(0.38f, 0.02f, 0.38f), color, layer, 45f);
+        }
+
+        /// <param name="yawDeg">Y軸まわりの回転[度]。既定0＝無回転（従来の呼び出しは全部これ）。
+        /// ファウルライン・塁のように45°の菱形へ載せる部品で使う。</param>
+        private GameObject Primitive(PrimitiveType type, string name, Vector3 localPos, Vector3 localScale, Color color,
+            int layer, float yawDeg = 0f)
         {
             var go = GameObject.CreatePrimitive(type);
             go.name = name;
             go.transform.SetParent(_root.transform, false);
             go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
             go.transform.localScale = localScale;
             Object.DestroyImmediate(go.GetComponent<Collider>());
             go.GetComponent<MeshRenderer>().sharedMaterial = FlatMaterial(color);
@@ -2623,8 +2745,21 @@ namespace KokoSim.Unity.Match
 
         // ---- 素体 -------------------------------------------------------------
 
+        /// <param name="rootMotion">
+        /// クリップのルートモーションを transform へ効かせるか。既定 true＝対決4体の現行挙動
+        /// （AAクリップは踏み込み・降下をルートモーションで持つので捨てると宙に浮く）。
+        /// 守備・走者は位置を engine のタイムラインで置く＝走行ループでは false（その場走り）にし、
+        /// ダイビング・スライディング・走り込み捕球の区間だけ true に戻す。
+        /// </param>
+        /// <param name="tightBounds">
+        /// true にすると <c>updateWhenOffscreen</c> を切って固定バウンズで描く。
+        /// 既定 false＝実ポーズ追従（現行）。実ポーズ追従は**毎フレーム（60fps）フルスキニングして
+        /// バウンズを引き直す**ので、体数が増えるとこれが最大のコストになる。
+        /// 箱は ApplyMirror と同じ ±5m の巨大箱（ローカル・素体の足元原点基準）。
+        /// </param>
         private Actor SpawnActor(GameObject bodyPrefab, AnimationClip clip, Vector3 pos, float yawDeg,
-            UniformPalette pal, float groundY, int layer, bool vendorBody = false)
+            UniformPalette pal, float groundY, int layer, bool vendorBody = false,
+            bool rootMotion = true, bool tightBounds = false)
         {
             var go = Object.Instantiate(bodyPrefab);
             go.name = "body-" + clip.name;
@@ -2664,11 +2799,23 @@ namespace KokoSim.Unity.Match
             if (regionReady) ApplyRegionColors(mat, pal, scale);   // 縞の刻みはスケール確定後でないと合わない
             foreach (var r in rs) r.sharedMaterial = mat;
             foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
-                smr.updateWhenOffscreen = true;   // バウンズをバインド箱でなく実ポーズ追従に
+            {
+                if (tightBounds)
+                {
+                    // 固定バウンズ（ApplyMirror と同じ±5m巨大箱＝空間の取り違えを無効化する箱）。
+                    // updateWhenOffscreen を切るのは毎フレームのフルスキニングを止めるため
+                    smr.updateWhenOffscreen = false;
+                    smr.localBounds = new Bounds(Vector3.zero, Vector3.one * 10f);
+                }
+                else
+                {
+                    smr.updateWhenOffscreen = true;   // バウンズをバインド箱でなく実ポーズ追従に
+                }
+            }
             SetLayerRecursive(go, layer);
 
             var animator = go.GetComponentInChildren<Animator>();
-            animator.applyRootMotion = true;      // AAクリップは踏み込み・降下をルートモーションで持つ
+            animator.applyRootMotion = rootMotion; // AAクリップは踏み込み・降下をルートモーションで持つ
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             var actor = new Actor
@@ -2865,6 +3012,16 @@ namespace KokoSim.Unity.Match
             // 生き残っている間だけ例外が出る。呼び元（Update・撮影ハーネス）に後始末を強いるより
             // ここで黙って降りる方が安全（2026-07-29 プレビュー撮影で実害）
             if (a == null || a.Go == null) return;
+            if (!a.Enabled) return;   // 打席中の野手など＝ポーズを進めない（N体化の間引き）
+            // 役ごとの固定間隔で間引く（0=毎コマ＝現行）。溜めた分は次の更新へ持ち越して丸ごと進める＝
+            // クリップ内時刻は実時間とずれない（コマ数だけが減る）
+            if (a.PoseInterval > 0f)
+            {
+                a.PoseAccum += step;
+                if (a.PoseAccum < a.PoseInterval) return;
+                step = a.PoseAccum;
+                a.PoseAccum = 0f;
+            }
             if (a.Holding) return;
             if (a.HoldRemaining > 0f)
             {
@@ -2905,8 +3062,10 @@ namespace KokoSim.Unity.Match
             a.Graph.Evaluate(step * a.Speed);
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
-            // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない
-            if (a == _batter && a.Clip == a.IdleClip && a.EndAt == a.IdleEndAt)
+            // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない。
+            // ※ 条件は `a == _batter` の identity 判定だった。守備・走者のN体化で StepActor が
+            //   4体以外も回すようになるため、役割ではなく**アクター自身のフラグ**へ移した（絵は不変）
+            if (a.RebaseXZWhileIdle && a.Clip == a.IdleClip && a.EndAt == a.IdleEndAt)
             {
                 var lp = a.Go.transform.localPosition;
                 lp.x = a.BasePos.x;
@@ -3268,6 +3427,10 @@ namespace KokoSim.Unity.Match
                 ?? a.GetBoneTransform(HumanBodyBones.UpperChest)
                 ?? a.GetBoneTransform(HumanBodyBones.Hips);
         }
+
+        /// <summary>芯（バレル端から手元側へこれだけ入った所）[m]。実物のスイートスポットの位置。
+        /// ⚠ ここは**製品コード**（AlignBat が使う）。実測窓の中に置くと Player ビルドで落ちる。</summary>
+        private const float BatSweetInsetM = 0.15f;
 
         /// <summary>握り→芯の長さ[m]。バットの原点は握り点から軸方向へ寄せてあるので2段の和になる。</summary>
         private float BatLeverM()
@@ -3929,15 +4092,11 @@ namespace KokoSim.Unity.Match
             foreach (Transform child in go.transform) SetLayerRecursive(child.gameObject, layer);
         }
 
-#if UNITY_EDITOR
-        // ---- 【開発用・エディタ限定】録画ハーネス（DuelViewRecorder）向け観測窓 ----
-
-        /// <summary>
-        /// グラブの装着結果を実測で返す（絵の目測でなく数値で確かめるため。2026-07-29 追加）。
-        /// 寄りカメラの狙いを外すと「付いていない」のか「見えていない」のか切り分けられないので、
-        /// 掌の位置とグラブ実体の位置を直接突き合わせる。
-        /// </summary>
-        // ── 左右ミラー（issue #337・design-18 §3.4）──────────────────────────
+        // ---- 左右ミラー（issue #337・design-18 §3.4）--------------------------------
+        // ⚠ **エディタ限定にしない**。左打者・左投手はゲームの中身であって開発用の観測窓ではない。
+        //    2026-08-01 の最初の Player ビルドで、この一式が録画ハーネスの #if UNITY_EDITOR の
+        //    中に紛れていて `_batterMirror` が未定義＝ビルドが通らないことが分かった
+        //    （エディタでは常に定義済みなので tools/check-unity-compile.sh でも出ない）。
         // 左打者・左投手は「x=0面（投球線を含む鉛直面）の鏡映親ノード」で作る。
         // 素体GO自身の localScale.x=-1 は**回転より内側**で効くため、ヨー付きの素体では
         // 左右でなく前後の鏡になる（投手ヨー270°でスパイク実測）。無回転の親を反転すると
@@ -4027,6 +4186,14 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 飛翔中の球の実測（issue #332）。絵ではカメラの狙い外しと配管ミス（符号違い・単位違い）が
         /// 区別できないので、位置と捕手ミット・打者の頭との距離を数値で残す。
+        /// </summary>
+#if UNITY_EDITOR
+        // ---- 【開発用・エディタ限定】録画ハーネス（DuelViewRecorder）向け観測窓 ----
+
+        /// <summary>
+        /// グラブの装着結果を実測で返す（絵の目測でなく数値で確かめるため。2026-07-29 追加）。
+        /// 寄りカメラの狙いを外すと「付いていない」のか「見えていない」のか切り分けられないので、
+        /// 掌の位置とグラブ実体の位置を直接突き合わせる。
         /// </summary>
         /// <summary>
         /// 【開発ツール用】ボールの実測。キャリブレーション窓が毎フレーム表示する＝スライダを動かしながら
@@ -4199,9 +4366,6 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>バット追従の内部状態をTSV1行で返す（clip / clipT / 両手間隔 / 片手フラグ / バット表示）。</summary>
-        /// <summary>芯（バレル端から手元側へこれだけ入った所）[m]。実物のスイートスポットの位置。</summary>
-        private const float BatSweetInsetM = 0.15f;
-
         /// <summary>
         /// 「バットが球に当たって見えるか」の実測（2026-07-31 監督指摘「スイングしてるとこがあまり見えない」）。
         /// アンカー <see cref="SwingHitContact"/> は**右手の速度ピーク**で採ってあるが、バットはしなって
@@ -4335,7 +4499,36 @@ namespace KokoSim.Unity.Match
         }
 #endif
 
-        // ---- アセットロード（エディタ限定・ビルド同梱は本実装時に決める） --------
+        // ---- アセットロード ------------------------------------------------------
+        //
+        // 二段構え（F8）:
+        //   エディタ … 従来どおり AssetDatabase を先に見る。**索引のベイク忘れで手元が止まらない**ように
+        //              するのが目的で、コード側の名前表を足した直後でも絵は出る
+        //   ビルド   … AssetDatabase が無いので索引（DuelAssetCatalog）だけ。索引も無ければ
+        //              Available=false へ落ちる＝購入資産が無い環境の従来挙動と同じ
+        // 索引の中身の鮮度は DuelAssetCatalogBaker の検証メニューが見る。
+
+        /// <summary>
+        /// 【開発用】AssetDatabase を使わず**索引だけ**で組む（＝Player ビルドと同じ経路）。
+        /// エディタのロードは AssetDatabase を先に見るので、索引が壊れていても手元では絵が出る。
+        /// ビルドを作らずにビルド経路を確かめるための唯一の入口。
+        /// </summary>
+        public static bool ForceCatalogOnly;
+
+        private static DuelAssetCatalog _catalog;
+        private static bool _catalogTried;
+
+        /// <summary>ビルド同梱の索引（無ければ null）。Resources から1回だけ引く。</summary>
+        internal static DuelAssetCatalog Catalog
+        {
+            get
+            {
+                if (_catalogTried) return _catalog;
+                _catalogTried = true;
+                _catalog = Resources.Load<DuelAssetCatalog>(DuelAssetCatalog.ResourceName);
+                return _catalog;
+            }
+        }
 
         /// <summary>【開発用】体型比較撮影向けに素体FBXを差し替える（null=既定のSuperhero Male）。
         /// 素体を替える時は対応する着衣ベイク資産（UniformMeshOverrideForCapture）も揃えること＝
@@ -4345,10 +4538,15 @@ namespace KokoSim.Unity.Match
         private static GameObject LoadBody()
         {
 #if UNITY_EDITOR
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BodyFbxOverrideForCapture ?? BodyFbx);
-#else
-            return null;
+            if (!ForceCatalogOnly)
+            {
+                var fromDb = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                    BodyFbxOverrideForCapture ?? BodyFbx);
+                if (fromDb != null) return fromDb;
+            }
 #endif
+            var cat = Catalog;
+            return cat != null ? cat.FallbackBody : null;
         }
 
         /// <summary>子孫から名前一致のRendererを引いて表示を切り替える（見つからなければ何もしない）。</summary>
@@ -4365,10 +4563,14 @@ namespace KokoSim.Unity.Match
         private static GameObject LoadVendorBody()
         {
 #if UNITY_EDITOR
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(VendorBodyFbx);
-#else
-            return null;
+            if (!ForceCatalogOnly)
+            {
+                var fromDb = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(VendorBodyFbx);
+                if (fromDb != null) return fromDb;
+            }
 #endif
+            var cat = Catalog;
+            return cat != null ? cat.VendorBody : null;
         }
 
         /// <summary>
@@ -4389,8 +4591,9 @@ namespace KokoSim.Unity.Match
                     r.gameObject.SetActive(false);
                     continue;
                 }
-                var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
+                var mesh = ForceCatalogOnly ? null : UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
                     VendorRegionMeshDir + r.name + VendorRegionMeshSuffix);
+                if (mesh == null && Catalog != null) mesh = Catalog.FindRegionMesh(r.name);
                 if (mesh == null) { all = false; continue; }
                 var smr = r as SkinnedMeshRenderer;
                 if (smr != null) smr.sharedMesh = mesh;
@@ -4405,7 +4608,24 @@ namespace KokoSim.Unity.Match
                     + VendorRegionMeshDir + ") - run KokoSim.EditorTools.DuelVendorRegionBaker.BakeAll()");
             return all;
 #else
-            return false;
+            // ビルドでは索引だけ（AssetDatabase が無い）。1枚でも欠けたら肌色一色へ倒す
+            var cat = Catalog;
+            if (cat == null) return false;
+            bool ok = true;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.name.EndsWith("Eye_Ball_Geo")) { r.gameObject.SetActive(false); continue; }
+                var mesh = cat.FindRegionMesh(r.name);
+                if (mesh == null) { ok = false; continue; }
+                var smr = r as SkinnedMeshRenderer;
+                if (smr != null) smr.sharedMesh = mesh;
+                else
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf != null) mf.sharedMesh = mesh;
+                }
+            }
+            return ok;
 #endif
         }
 
@@ -4419,15 +4639,17 @@ namespace KokoSim.Unity.Match
         private static Mesh LoadUniformMesh()
         {
 #if UNITY_EDITOR
-            var path = UniformMeshOverrideForCapture ?? UniformMeshAsset;
-            var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(path);
-            if (mesh == null)
+            if (!ForceCatalogOnly)
+            {
+                var path = UniformMeshOverrideForCapture ?? UniformMeshAsset;
+                var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(path);
+                if (mesh != null) return mesh;
                 Debug.LogWarning("[DuelStageRig] uniform mesh not baked (" + path
                     + ") - run KokoSim.EditorTools.DuelUniformBaker.BakeAll()");
-            return mesh;
-#else
-            return null;
+            }
 #endif
+            var cat = Catalog;
+            return cat != null ? cat.UniformMesh : null;
         }
 
         /// <summary>
@@ -4437,16 +4659,20 @@ namespace KokoSim.Unity.Match
         public static AnimationClip LoadClip(string clipName)
         {
 #if UNITY_EDITOR
-            foreach (var fbx in ClipFbxSources)
+            if (!ForceCatalogOnly)
             {
-                foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(fbx))
+                foreach (var fbx in ClipFbxSources)
                 {
-                    var c = a as AnimationClip;
-                    if (c != null && c.name == clipName) return c;
+                    foreach (var a in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(fbx))
+                    {
+                        var c = a as AnimationClip;
+                        if (c != null && c.name == clipName) return c;
+                    }
                 }
             }
 #endif
-            return null;
+            var cat = Catalog;
+            return cat != null ? cat.FindClip(clipName) : null;
         }
     }
 }

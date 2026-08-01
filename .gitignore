@@ -57,3 +57,9 @@ screenshots/
 
 # テスト実行の成果物（dotnet test --logger trx）
 TestResults/
+
+# 対決／守備ビューのビルド同梱索引（F8）。購入素体・購入クリップの GUID 参照を含む＝
+# 実質的な再配布経路になるので履歴に載せない。焼き直しは
+# メニュー「KokoSim/Duel/F8 ビルド同梱の索引を焼く」で作れる
+Assets/KokoSim/Resources/
+Assets/KokoSim/Resources.meta

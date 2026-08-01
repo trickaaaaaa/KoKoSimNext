@@ -421,12 +421,17 @@ public static class FieldingResolver
         }
         var n = infield.Count;
         var gloveTime = new double[n];      // 実捕球できる最初のボール時刻（∞=最後まで間に合わない）
+        var cutTime = new double[n];        // 守備範囲(半径)込みで触れる最初の時刻＝InfielderCanCutOff と同式
+        var cutPoint = new Vector3D[n];     // その触れる点
         var zoneDist = new double[n];       // 守備位置への最接近距離
         var zoneBallTime = new double[n];   // その最接近点を打球が通る時刻
         var zonePoint = new Vector3D[n];    // その最接近点
+        var cutRadius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
         for (var k = 0; k < n; k++)
         {
             gloveTime[k] = double.PositiveInfinity;
+            cutTime[k] = double.PositiveInfinity;
+            cutPoint[k] = path.Landing;
             zoneDist[k] = double.MaxValue;
             zoneBallTime[k] = path.HangTimeSeconds;
             zonePoint[k] = path.Landing;
@@ -443,7 +448,19 @@ public static class FieldingResolver
                 var f = infield[k];
                 var dist = (p - f.Location).Length;
                 if (dist < zoneDist[k]) { zoneDist[k] = dist; zoneBallTime[k] = tt; zonePoint[k] = p; }
-                if (aboveGlove || !double.IsPositiveInfinity(gloveTime[k])) continue;
+                if (aboveGlove) continue;
+                if (double.IsPositiveInfinity(cutTime[k]))
+                {
+                    // 頭上抜け判定（InfielderCanCutOff）と**同じ式**。あちらが「抜けていない」と言った
+                    // 打球は、必ずここで誰かが触れる時刻・点を持つ＝2つの判定が食い違わない。
+                    var travel = Math.Max(0.0, dist - cutRadius);
+                    if (travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds <= tt)
+                    {
+                        cutTime[k] = tt;
+                        cutPoint[k] = p;
+                    }
+                }
+                if (!double.IsPositiveInfinity(gloveTime[k])) continue;
                 var reach = dist / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
                 if (f.Position == FieldPosition.Pitcher) reach += coeff.PitcherFieldingReactionPenaltySeconds;
                 if (reach <= tt) gloveTime[k] = tt; // この点・時刻で実捕球できる
@@ -459,6 +476,20 @@ public static class FieldingResolver
         }
         if (best < 0)
         {
+            // 実距離では誰も捕れない。**まず頭上抜け判定と同じ式（守備範囲の半径込み＝突っ込む/飛びつく）
+            // で触れる野手を採る。** ここを飛ばすと、「抜けていない」と判定された打球なのに
+            // 処理野手が居ないことになり、下のゾーン最寄りが打球を内野の外まで追いかける
+            // ——BouncePath は内野専用モデル（自由転がりは v²/2a で最大180m）なので、
+            // 長い時刻で引くと適用範囲の外へ外挿する（実測: 捕球点が本塁から193m）。
+            var bestCut = double.PositiveInfinity;
+            for (var k = 0; k < n; k++)
+            {
+                if (cutTime[k] < bestCut) { bestCut = cutTime[k]; best = k; }
+            }
+            if (best >= 0) return (infield[best], cutTime[best], cutPoint[best]);
+
+            // 誰も触れない＝内野内で失速して死ぬ緩いゴロ（打球は内野の中で止まっている）。
+            // 最も近くを通った内野手が拾いに行く（内野安打寄り）。
             var bestZone = double.MaxValue;
             for (var k = 0; k < n; k++)
             {
@@ -474,10 +505,31 @@ public static class FieldingResolver
 
         var chosen = infield[best];
         var reachToZone = ReachTime(chosen, zonePoint[best]);
-        var time = Math.Max(zoneBallTime[best], reachToZone);
-        var point = time > zoneBallTime[best] ? path.PositionAt(time) : zonePoint[best];
-        return (chosen, time, point);
+        // 打球到達に間に合う＝自分の間合いで待って捕る。
+        if (reachToZone <= zoneBallTime[best]) return (chosen, zoneBallTime[best], zonePoint[best]);
+
+        // 間に合わない＝追いかける。**1回の代入では解けない**: 「自分が最接近点へ着く時刻の打球位置」は
+        // そのぶん先へ転がっているので、そこへはまだ届いていない。以前はここで1回だけ代入しており、
+        // 野手が到底走れない距離を「走ったこと」にしていた（実測: マウンドの投手が 31m を 0.89秒＝
+        // 35 m/s。処理時刻 FieldedAtSeconds はアウト/セーフ判定に入るので、守備に甘い側の誤差だった）。
+        // ここへ来るのは緩いゴロだけ（強い打球は上の cutTime で内野内に決着している）ので、
+        // 打球は内野の中で止まる＝この反復は単調増加で必ず収束する（実測の遅れは最大 0.023秒）。
+        var time = reachToZone;
+        for (var i = 0; i < CatchUpIterations; i++)
+        {
+            var next = ReachTime(chosen, path.PositionAt(time));
+            if (next <= time + CatchUpToleranceSeconds) break;
+            time = next;
+        }
+        return (chosen, time, path.PositionAt(time));
     }
+
+
+    /// <summary>追いかけ捕球の反復上限（打球が止まれば数回で収まる。無限ループの保険）。</summary>
+    private const int CatchUpIterations = 24;
+
+    /// <summary>追いかけ捕球の収束判定[s]。</summary>
+    private const double CatchUpToleranceSeconds = 0.005;
 
     private static bool IsInfield(Fielder f)
         => f.Position is FieldPosition.FirstBase or FieldPosition.SecondBase

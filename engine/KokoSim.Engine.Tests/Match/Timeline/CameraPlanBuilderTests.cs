@@ -137,6 +137,110 @@ public sealed class CameraPlanBuilderTests
         AssertWithinViewport(vp, 19.6, 19.6, midT, "throw destination");
     }
 
+    // ---- フレーミングの差し替え（打球処理の3D化 F3） -------------------------
+    //
+    // 3Dの守備カメラは2Dの俯瞰より深く寄る必要があるので、寄りの深さだけを CameraFraming で
+    // 差し替えられるようにした。演出の判断（何を追うか）とレート制限は共有したまま。
+
+    /// <summary>
+    /// framing を渡さない呼び出しは**1キーフレームも変わらない**。
+    /// 既存の2D俯瞰の絵とゴールデンを守る担保で、ここが割れたら 3D 用の変更が2Dへ漏れている。
+    /// </summary>
+    [Fact]
+    public void Build_WithoutFraming_IsIdenticalToDefaultFraming()
+    {
+        foreach (var play in PlaybackSamples.All)
+        {
+            var implicitPlan = CameraPlanBuilder.Build(play);
+            var explicitPlan = CameraPlanBuilder.Build(play, CameraFraming.Default);
+
+            Assert.Equal(implicitPlan.Count, explicitPlan.Count);
+            for (var i = 0; i < implicitPlan.Count; i++)
+                Assert.Equal(implicitPlan[i], explicitPlan[i]);
+        }
+    }
+
+    /// <summary>
+    /// ズーム上限を上げると、上限で頭打ちになっていた区間が <c>FitBox</c> の要求値まで寄る。
+    /// 外野への打球（③ センターフライ）は現行 MaxZoom=3.4 に張り付いており、
+    /// 3Dではここが「野手が十数pxにしかならない」の原因になっていた。
+    /// </summary>
+    [Fact]
+    public void Build_WithHigherMaxZoom_ZoomsPastTheDefaultCap()
+    {
+        var play = PlaybackSamples.All.First(p => p.Name.Contains("フライ"));
+
+        var tight = new CameraFraming(MaxZoom: 8.0, MarginM: CameraFraming.Default.MarginM,
+            PitchZoom: CameraFraming.Default.PitchZoom);
+        var basePlan = CameraPlanBuilder.Build(play);
+        var tightPlan = CameraPlanBuilder.Build(play, tight);
+
+        var baseMax = basePlan.Max(k => k.ZoomMult);
+        var tightMax = tightPlan.Max(k => k.ZoomMult);
+
+        // 既定は上限に張り付いている（＝要求はもっと上だった）
+        Assert.Equal(CameraFraming.Default.MaxZoom, baseMax, 3);
+        // 上限を上げると、その上限までの間で実際に深く寄る
+        Assert.True(tightMax > baseMax + 0.5,
+            $"上限を上げてもズームが伸びていない: base={baseMax:F2} tight={tightMax:F2}");
+        Assert.True(tightMax <= tight.MaxZoom + 1e-6, $"新しい上限を超えている: {tightMax:F2}");
+    }
+
+    /// <summary>
+    /// 上限を上げても**レート制限は効いたまま**（酔い防止は寄りの深さと独立）。
+    /// </summary>
+    [Fact]
+    public void Build_WithHigherMaxZoom_StillRespectsZoomRateCap()
+    {
+        var play = PlaybackSamples.All.First(p => p.Name.Contains("フライ"));
+        var plan = CameraPlanBuilder.Build(play, new CameraFraming(8.0, 6.0, 2.4));
+
+        for (var i = 1; i < plan.Count; i++)
+        {
+            var dt = plan[i].T - plan[i - 1].T;
+            if (dt <= 0) continue;
+            var ratio = plan[i].ZoomMult / plan[i - 1].ZoomMult;
+            var cap = Math.Pow(CameraPlanBuilder.ZoomRateCapPerSecond, dt);
+            Assert.True(ratio <= cap + 1e-9 && ratio >= 1.0 / cap - 1e-9,
+                $"t={plan[i].T:F2} でズーム変化率が上限を超えた: ratio={ratio:F4} cap={cap:F4}");
+        }
+    }
+
+    /// <summary>
+    /// 送球区間の枠の取り方（<see cref="CameraFraming.ThrowFollowsBall"/>）。
+    /// 既定＝始終点を両方収める＝**送球の距離ぶん必ず引く**。3Dの守備カメラはこれを切って球を追う。
+    /// 6-3（遊撃→一塁の約30m）で差が出ることを固定する。
+    /// </summary>
+    [Fact]
+    public void Build_WithThrowFollowsBall_ZoomsTighterDuringTheThrow()
+    {
+        var play = PlaybackSamples.All[2]; // ③ ショートゴロ 6-3
+        var seg = play.Ball.First(s =>
+            s is ThrowSegment
+            || (s is EndpointBallSegment e && e.Kind == Engine.Match.Timeline.BallSegmentKind.Throw));
+
+        var framing = new CameraFraming(MaxZoom: 40.0, MarginM: 2.0, PitchZoom: 2.4);
+        var spanPlan = CameraPlanBuilder.Build(play, framing);
+        var followPlan = CameraPlanBuilder.Build(play, framing with { ThrowFollowsBall = true });
+
+        static double MaxZoomIn(System.Collections.Generic.IReadOnlyList<CameraKeyframe> plan, double t0, double t1)
+            => plan.Where(k => k.T >= t0 && k.T <= t1).Max(k => k.ZoomMult);
+
+        // 送球中〜到達直後（受け手が捕るところまで）で比べる。
+        var spanMax = MaxZoomIn(spanPlan, seg.T0, seg.T1 + 0.3);
+        var followMax = MaxZoomIn(followPlan, seg.T0, seg.T1 + 0.3);
+
+        Assert.True(followMax > spanMax + 0.5,
+            $"球を追ってもズームが伸びていない: span={spanMax:F2} follow={followMax:F2}");
+        // 上限とレート制限は共通の仕組みなので、切り替えても効いたまま。
+        Assert.True(followMax <= framing.MaxZoom + 1e-6, $"上限を超えている: {followMax:F2}");
+    }
+
+    /// <summary>既定（2D俯瞰）は <c>ThrowFollowsBall=false</c> ＝従来の始終点フレームのまま。</summary>
+    [Fact]
+    public void Default_DoesNotFollowBallDuringThrow()
+        => Assert.False(CameraFraming.Default.ThrowFollowsBall);
+
     // 視野に入っているかを、engine 側の設計キャンバス基準（DesignW/H=760/520・S=3.35）で近似判定する。
     // 実際の描画は Unity 側の Scale(k) をそのまま掛けるだけなので、この基準がそのままスクリーン上の視野になる。
     private static void AssertWithinViewport(CameraViewport vp, double x, double y, double t, string label)
