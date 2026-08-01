@@ -186,17 +186,27 @@ namespace KokoSim.Unity.Match
             GroundFix(a);
         }
 
+        /// <summary>投手板まわりの平坦部の半径[m]。マウンドの断面はここまで水平。</summary>
+        private const float MoundFlatM = 0.9f;
+        /// <summary>マウンドが地面に接する半径[m]。18フィート＝**直径**なので半径は2.74m。</summary>
+        private const float MoundBaseM = 2.74f;
+
         /// <summary>
         /// その地点の接地高[m]。マウンドの上だけ <see cref="MoundHeight"/> で、縁で地面へ落ちる。
         ///
         /// 投手の <c>GroundY</c> は生成時にマウンド高で焼かれている。動かすようになると
         /// **マウンドを降りても 25cm 浮いたまま**になる（枠10mの構図で14px＝はっきり見える）。
         /// 位置で決まる量なので毎コマ引き直す＝「特定のコマでだけ」の分岐にしない（design-18 §4.5-⑩）。
+        ///
+        /// ⚠ **この式は球場メッシュのマウンドの断面と同じ形でなければならない**
+        /// （<c>tools/stadium-gen.py</c> の <c>mound_y()</c>）。別の形を持つと投手が斜面に浮くか
+        /// めり込む。旧値（平坦部2.0m・接地2.7m）は残り0.7mで25cm落ちる＝20°の崖で、
+        /// 25cm しかない起伏が「もっこりした皿」に見えていた（2026-08-01 監督指摘）。
         /// </summary>
         private static float FieldGroundY(float x, float z)
         {
             float r = Mathf.Sqrt(x * x + (z - MoundDistance) * (z - MoundDistance));
-            return MoundHeight * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(2.0f, 2.7f, r)));
+            return MoundHeight * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(MoundFlatM, MoundBaseM, r)));
         }
 
         // ---- 走る（F4） ---------------------------------------------------------
@@ -1599,6 +1609,59 @@ namespace KokoSim.Unity.Match
         private const float WarningTrackM = 3.5f;
         private const float HomeCircleM = 4.3f;
         private const float FoulQuarterRad = Mathf.PI / 4f;   // フェア領域は ±45°
+
+        /// <summary>球場メッシュが無くて旧球場へ落ちた警告は1回だけ（試合ごとに出すと埋もれる）。</summary>
+        private static bool _stadiumFallbackWarned;
+
+        /// <summary>
+        /// 焼いた球場メッシュ（<see cref="DuelStadiumMesh"/>）で球場を組む。無ければ false を返し、
+        /// 呼び出し側が下の手続き生成へ落ちる＝**資産を焼いていない環境でも絵は出る**
+        /// （購入資産と違ってこれは生成物なので普段は必ず在るが、焼き忘れで手元が止まらないように）。
+        ///
+        /// メッシュは資産の一部なので <c>_meshes</c> へ入れない（入れると Dispose で
+        /// **プロジェクトの資産を壊す**）。マテリアルだけは実行時生成なので従来どおり登録する。
+        /// </summary>
+        private bool BuildStadiumMesh(int layer)
+        {
+            var asset = Resources.Load<DuelStadiumMesh>(DuelStadiumMesh.ResourceName);
+            if (asset == null || asset.Parts == null || asset.Parts.Length == 0)
+            {
+                // ⚠ 黙って落ちない。焼いた資産は Resources ごと gitignore なので、**clone 直後や
+                //   焼き忘れでは必ずここを通る**。旧球場（手続き生成）は形も色も別物だが、
+                //   絵を見ても「そういう球場」に見えるだけで気づけない
+                if (!_stadiumFallbackWarned)
+                {
+                    _stadiumFallbackWarned = true;
+                    Debug.LogWarning("球場メッシュが無いので手続き生成の旧球場へ落ちた。"
+                                     + "メニュー「KokoSim/Duel/球場メッシュを焼く」で焼くこと");
+                }
+                return false;
+            }
+
+            // 色は17種しか無いのにサブメッシュは60超あるので、色で使い回す（毎回 new すると材質が60個できる）
+            var byColor = new Dictionary<Color, Material>();
+            foreach (var part in asset.Parts)
+            {
+                if (part == null || part.Mesh == null) continue;
+                var go = new GameObject(part.Name);
+                go.transform.SetParent(_root.transform, false);
+                go.layer = layer;
+                go.AddComponent<MeshFilter>().sharedMesh = part.Mesh;
+                var mats = new Material[part.Mesh.subMeshCount];
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var c = i < part.Colors.Length ? part.Colors[i] : Color.magenta;
+                    if (!byColor.TryGetValue(c, out var mat))
+                    {
+                        mat = FlatMaterial(c);
+                        byColor[c] = mat;
+                    }
+                    mats[i] = mat;
+                }
+                go.AddComponent<MeshRenderer>().sharedMaterials = mats;
+            }
+            return true;
+        }
 
         // 高さの積み順（本塁プレート0.012・打席0.011 より下に収める）
         private const float YFair = 0.002f;

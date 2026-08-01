@@ -1,0 +1,41 @@
+# stadium materials (Kd only)
+newmtl turf_dark
+Kd 0.3020 0.5020 0.2392
+newmtl turf_light
+Kd 0.3608 0.6392 0.3020
+newmtl dirt
+Kd 0.6314 0.4706 0.3294
+newmtl fence
+Kd 0.3137 0.4706 0.3137
+newmtl fence_dark
+Kd 0.3843 0.5569 0.3843
+newmtl conc_light
+Kd 0.8392 0.8392 0.8392
+newmtl conc_mid
+Kd 0.6706 0.6706 0.6706
+newmtl conc_dark
+Kd 0.5020 0.5020 0.5020
+newmtl board
+Kd 0.1490 0.1490 0.1490
+newmtl white
+Kd 0.8392 0.8392 0.8392
+newmtl seat_red
+Kd 0.6706 0.3294 0.1490
+newmtl seat_blue
+Kd 0.1490 0.3294 0.5020
+newmtl yellow
+Kd 0.8392 0.6706 0.1490
+newmtl wood
+Kd 0.6314 0.4706 0.3294
+newmtl leaf_dark
+Kd 0.2902 0.4471 0.2902
+newmtl leaf_light
+Kd 0.3608 0.6392 0.3020
+newmtl screen
+Kd 0.2824 0.4314 0.2824
+newmtl steel
+Kd 0.3608 0.3608 0.3608
+newmtl roof
+Kd 0.6039 0.6039 0.6039
+newmtl berm
+Kd 0.2667 0.4667 0.2157
