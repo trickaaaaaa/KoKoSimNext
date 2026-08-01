@@ -581,6 +581,16 @@ public static class CoefficientsLoader
         public double AdvanceSuccessBias { get; set; } = D.AdvanceSuccessBias;
         public double AdvanceRelayTransferSeconds { get; set; } = D.AdvanceRelayTransferSeconds;
         public double AdvanceDirectThrowMaxRunnerSuccess { get; set; } = D.AdvanceDirectThrowMaxRunnerSuccess;
+        // 併殺の物理レース（内野ゴロ×一塁走者, Issue #369）
+        public double DoublePlayR1StartDelaySeconds { get; set; } = D.DoublePlayR1StartDelaySeconds;
+        public double SecondForceTagSeconds { get; set; } = D.SecondForceTagSeconds;
+        public double SecondForceMarginScale { get; set; } = D.SecondForceMarginScale;
+        public double SecondForceSuccessBias { get; set; } = D.SecondForceSuccessBias;
+        public double DoublePlayForceMaxRunnerSuccess { get; set; } = D.DoublePlayForceMaxRunnerSuccess;
+        public double DoublePlayAttemptMinRelaySuccess { get; set; } = D.DoublePlayAttemptMinRelaySuccess;
+        public double DoublePlayPivotTransferSeconds { get; set; } = D.DoublePlayPivotTransferSeconds;
+        public double DoublePlayRelayMarginScale { get; set; } = D.DoublePlayRelayMarginScale;
+        public double DoublePlayRelayBias { get; set; } = D.DoublePlayRelayBias;
         // 犠飛のタッチアップ（Issue #90）
         public double TagUpMarginScale { get; set; } = D.TagUpMarginScale;
         public double TagUpSuccessBias { get; set; } = D.TagUpSuccessBias;
@@ -683,6 +693,15 @@ public static class CoefficientsLoader
             AdvanceSuccessBias = AdvanceSuccessBias,
             AdvanceRelayTransferSeconds = AdvanceRelayTransferSeconds,
             AdvanceDirectThrowMaxRunnerSuccess = AdvanceDirectThrowMaxRunnerSuccess,
+            DoublePlayR1StartDelaySeconds = DoublePlayR1StartDelaySeconds,
+            SecondForceTagSeconds = SecondForceTagSeconds,
+            SecondForceMarginScale = SecondForceMarginScale,
+            SecondForceSuccessBias = SecondForceSuccessBias,
+            DoublePlayForceMaxRunnerSuccess = DoublePlayForceMaxRunnerSuccess,
+            DoublePlayAttemptMinRelaySuccess = DoublePlayAttemptMinRelaySuccess,
+            DoublePlayPivotTransferSeconds = DoublePlayPivotTransferSeconds,
+            DoublePlayRelayMarginScale = DoublePlayRelayMarginScale,
+            DoublePlayRelayBias = DoublePlayRelayBias,
             TagUpMarginScale = TagUpMarginScale,
             TagUpSuccessBias = TagUpSuccessBias,
             CloseCallMarginSeconds = CloseCallMarginSeconds,
