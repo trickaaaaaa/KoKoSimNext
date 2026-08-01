@@ -2032,6 +2032,11 @@ namespace KokoSim.Unity.Match
             if (_ball != null)
             {
                 _ball.transform.SetParent(_root.transform, false);
+                // ⚠ 見かけ倍率（守備ビューの可読性補正・最大12倍＝直径89cm）を必ず落とす。
+                // 引きの絵ほど倍率が上がるので、**プレーの最後は常に最大**で終わる。落とさないと
+                // 次の打席の対決ビューで**バランスボール大の球を投げ始める**（2026-08-01 実害）。
+                // 隠す所を単一の出口にしてここで戻す＝補正を掛ける側（毎コマ）と対にする。
+                _ball.transform.localScale = Vector3.one * BallRealDiameterM;
                 _ball.SetActive(false);
             }
         }

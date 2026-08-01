@@ -1991,6 +1991,13 @@ namespace KokoSim.Unity.Match
             public AnimationClip Clip, IdleClip;
             public float Time, Speed, EndAt, DefaultEndAt, IdleEndAt, GroundY;
             public bool HoldAtEnd, Holding, Valid;
+            /// <summary>
+            /// **立ち位置の基準**（<c>Actor.BasePos/BaseRot</c>）であって、控えた瞬間の transform ではない。
+            /// 打球が出るのはリリースの約0.9秒後＝投手はフォロースルーの途中で、transform は
+            /// ルートモーションぶん前へ出て回っている。そこを基準として戻すと、次の打席以降
+            /// <c>RewindActor</c> が毎回その「振り終わりの向き」へ戻す＝**投手が変な向きで投げ始める**
+            /// （2026-08-01 実害。F9 で初めて実際の打席の中を通って出た）。
+            /// </summary>
             public Vector3 BasePos;
             public Quaternion BaseRot;
         }
@@ -2106,7 +2113,9 @@ namespace KokoSim.Unity.Match
                 Clip = a.Clip, IdleClip = a.IdleClip, Time = a.Time, Speed = a.Speed,
                 EndAt = a.EndAt, DefaultEndAt = a.DefaultEndAt, IdleEndAt = a.IdleEndAt,
                 GroundY = a.GroundY, HoldAtEnd = a.HoldAtEnd, Holding = a.Holding,
-                BasePos = a.Go.transform.localPosition, BaseRot = a.Go.transform.localRotation,
+                // ⚠ transform ではなく基準を控える（上の項。フォロースルーの途中の姿勢を
+                // 「立ち位置」として焼くと投手の向きが恒久的に狂う）
+                BasePos = a.BasePos, BaseRot = a.BaseRot,
             };
         }
 
@@ -2309,6 +2318,32 @@ namespace KokoSim.Unity.Match
                 ball.HasValue ? ball.Value.Y.ToString("F1") : "-",
                 ball.HasValue ? ball.Value.H.ToString("F1") : "-",
                 frameH, aim.y, aimPx, BallScreenPx(), bu, bv, FieldStationAt(t).y);
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】<b>打球プレーから戻したあとの状態</b>を1行で返す。
+        ///
+        /// <b>なぜ要るか</b>: 守備ビューは対決ビューの持ち物（投手・捕手の立ち位置と向き、球の見かけ倍率、
+        /// 打者の在／不在）を一時的に借りて書き換える。借りっぱなしの取りこぼしは
+        /// **次の打席になって初めて絵に出る**うえ、「投手が変な向き」「球がやたら大きい」という
+        /// 症状からは原因の箇所を切り分けられない（2026-08-01 に実際に2件出た）。
+        /// プレーの前後でこの1行が**完全に一致する**ことを受け入れ条件にすれば、
+        /// 新しい借り物が増えても同じ窓で捕まる。
+        /// </summary>
+        public string DuelRestoreDiagForCapture()
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            // ⚠ 横位置は**打者の側で割って**出す。捕手・球審は左右打席で寄る側が入れ替わる
+            //（`CatcherX * BatterSideSign`）ので、生の x で比べると**左打者の打席が毎回「ずれ」に見える**
+            // ＝本当の戻し漏れが埋もれる（実測で ±0.02 の往復として出た）。左右に依らない量で比べる。
+            float side = BatterSideSign;
+            System.Func<Actor, string> one = a =>
+                a == null || a.Go == null ? "-"
+                : string.Format(ci, "{0:F2},{1:F2}/{2:F1}", a.BasePos.x * side, a.BasePos.z, a.BaseRot.eulerAngles.y);
+            return string.Format(ci, "投={0}\t捕={1}\t球={2:F3}\t打者={3}",
+                one(_pitcher), one(_catcher),
+                _ball != null ? _ball.transform.localScale.x : -1f,
+                _batter != null && _batter.Go != null && _batter.Go.activeSelf ? "在" : "不在");
         }
 
         /// <summary>

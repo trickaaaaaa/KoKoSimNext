@@ -73,6 +73,25 @@ namespace KokoSim.Unity.Match
                 + "\t枠@カット前\t枠@カット後\t枠@最終\t据え位置\n");
             var frames = new StringBuilder("play\tt\t球x\t球y\t球h\t枠[m]\t注視y\t人px\t球px\tbu\tbv\t据えy\t判定\n");
 
+            // 打球の前後で借り物（投手・捕手の立ち位置と向き／球の見かけ倍率／打者の在不在）が
+            // 戻っているか。**プレーが終わって次の打席が始まってから**でないと絵に出ない類なので、
+            // 1本目の前の状態を基準に取り、以降ずっと同じ行であることを確かめる。
+            string restoreBase = rig != null ? rig.DuelRestoreDiagForCapture() : "-";
+            var restoreLog = new StringBuilder("基準\t" + restoreBase + "\n");
+            int restoreBad = 0;
+
+            // 打球の**次の打席**を1枚だけ撮る。戻し漏れは数値（上）で捕まえるが、監督が見つけたのは
+            // 絵なので絵でも残す（「投手が変な向きででかい球を投げる」の再発検知）。
+            int nextPaCountdown = -1;
+
+            // 投球そのものが打球の前後で変わっていないか。**絵では切り分けられない**
+            //（どちらも「投げている」ようにしか見えず、静止画1枚では正常なフォームの途中と区別できない）
+            // ので、クリップ内時刻ごとの「立ち向きのずれ／立ち位置のずれ」を前後で突き合わせる。
+            // 一致すれば delivery は同一＝戻せている（design-18 §7-2 の作法）。
+            var pitcherLog = new StringBuilder("いつ\tclipT\tΔ向き[度]\tΔx\tΔz\trootMotion\tフェード中\n");
+            int pitcherPhase = 0;   // 0=1本目の打球より前 / 1=1本目の直後 / 2=採り終わり
+            int pitcherFrames = 0;
+
             int playNo = 0;
             bool inPlay = false;
             double cutT = 0, resAt = 0, holdT = 0, endT = 0;
@@ -88,6 +107,18 @@ namespace KokoSim.Unity.Match
             {
                 yield return null;
                 bool active = _ctrl.FieldPlayActiveForCapture;
+
+                if (nextPaCountdown > 0 && --nextPaCountdown == 0)
+                    yield return Shoot(string.Format("p{0}-e-next-pa", playNo));
+
+                // 打球の外＝投球中だけ採る。前後それぞれ同じコマ数で打ち切る
+                if (rig != null && !active && pitcherPhase < 2 && pitcherFrames < 260)
+                {
+                    pitcherFrames++;
+                    pitcherLog.Append(pitcherPhase == 0 ? "前" : "後").Append('\t')
+                              .Append(rig.PitcherDiagForCapture()).Append('\n');
+                    if (pitcherPhase == 1 && pitcherFrames >= 260) pitcherPhase = 2;
+                }
 
                 // ── プレーの頭 ─────────────────────────────────────────────
                 if (active && !inPlay)
@@ -167,6 +198,18 @@ namespace KokoSim.Unity.Match
                 if (!active && inPlay)
                 {
                     inPlay = false;
+                    // ⚠ 借り物が戻ったかはこの瞬間に採る（次の打席が始まると投球の状態機械が
+                    // 上書きしてしまい、戻し漏れなのか正常な進行なのか区別できなくなる）
+                    var now = rig != null ? rig.DuelRestoreDiagForCapture() : "-";
+                    if (now != restoreBase) restoreBad++;
+                    restoreLog.Append(playNo).Append('\t').Append(now)
+                              .Append(now == restoreBase ? "\t一致" : "\t★ずれ").Append('\n');
+
+                    // 次の打席の投球へ入る頃合い（固定dt 1/30 なので約2.3秒後）
+                    if (playNo <= ShotPlays) nextPaCountdown = 70;
+                    // 1本目の打球を跨いだところで「後」の採取へ切り替える（コマ数は前と揃える）
+                    if (pitcherPhase == 0) { pitcherPhase = 1; pitcherFrames = 0; }
+
                     bool expected = expect.HasValue;
                     if (expected && !sawJudge) missing++;
                     plays.Append(playNo).Append('\t').Append(result).Append('\t')
@@ -185,8 +228,11 @@ namespace KokoSim.Unity.Match
 
             File.WriteAllText(Path.Combine(OutDir, "plays.tsv"), plays.ToString());
             File.WriteAllText(Path.Combine(OutDir, "frames.tsv"), frames.ToString());
+            File.WriteAllText(Path.Combine(OutDir, "restore.tsv"), restoreLog.ToString());
+            File.WriteAllText(Path.Combine(OutDir, "pitcher.tsv"), pitcherLog.ToString());
             Debug.Log("[F9] DONE 打球=" + playNo + "本 判定の取りこぼし=" + missing
-                + "件 gameOver=" + _ctrl.IsGameOver + "\n" + plays);
+                + "件 戻し漏れ=" + restoreBad + "件 gameOver=" + _ctrl.IsGameOver
+                + "\n" + plays + "\n" + restoreLog);
             Time.captureDeltaTime = 0f;
         }
 
