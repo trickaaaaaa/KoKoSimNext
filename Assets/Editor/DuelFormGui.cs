@@ -127,7 +127,10 @@ namespace KokoSim.EditorTools
 
             EditorGUILayout.LabelField("振りの速さ", EditorStyles.miniBoldLabel);
             cal.SwingSpeed = EditorGUILayout.Slider("再生速度 [倍]", cal.SwingSpeed, 0.5f, 3f);
-            // 振り出し(clip 0.90)→接触(1.12) は 0.22 クリップ秒。実物は 0.15〜0.20s なので 1.1〜1.5 が実寸相当
+            // 振り出し(clip 0.90)→接触(1.12) は 0.22 クリップ秒。実物は 0.15〜0.20s なので 1.1〜1.5 が実寸相当。
+            // ただし**実寸に合わせるだけでは絵として遅い**（監督確定 2026-08-01: 1.4/1.7/2.0 を撮り比べて 2.0）。
+            // つまみは全域（0.5〜3.0）安全＝2.4倍を超えて頭出しが負になっても、SetSwing が
+            // カウントダウン開始へ切り替えるので面通過は球からずれない（issue #368）
             EditorGUILayout.LabelField(" ",
                 string.Format("振り出し→接触 {0:F3}秒（実物0.15〜0.20秒）／ポーズ12fpsで {1:F1}コマ",
                     0.22f / Mathf.Max(0.1f, cal.SwingSpeed), 0.22f / Mathf.Max(0.1f, cal.SwingSpeed) * 12f),

@@ -64,8 +64,16 @@ namespace KokoSim.EditorTools
         private const string SuitMeshName = "A_Players_0001_Suit_0001";
         private const string PantsMeshName = "A_Players_0001_Pants_0001";
 
-        public static string BakeAll()
+        public static string BakeAll() => BakeAll(SleeveFlare);
+
+        /// <summary>
+        /// 袖の張り出し倍率を指定してベイクする（issue #368-② の切り分け用）。
+        /// 「袖が目立つ」のが袖メッシュのせいか腕の向きのせいかは、<c>1.0</c>（＝張り出しなし）で
+        /// 焼いた絵と並べれば1枚で判る。**確認が済んだら必ず既定へ焼き直すこと**。
+        /// </summary>
+        public static string BakeAll(float sleeveFlare)
         {
+            _flare = sleeveFlare;
             var sb = new System.Text.StringBuilder();
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Fbx);
             if (prefab == null) return "FAILED: FBX が見つからない " + Fbx;
@@ -222,6 +230,9 @@ namespace KokoSim.EditorTools
         /// <summary>袖口での半径倍率。実物のユニフォームの袖はアンダーシャツの腕より明らかに太い。</summary>
         private const float SleeveFlare = 1.45f;
 
+        /// <summary>この回のベイクで使う倍率（既定は <see cref="SleeveFlare"/>）。切り分け用に差し替える。</summary>
+        private static float _flare = SleeveFlare;
+
         /// <summary>
         /// ユニフォームの袖を張り出させる。購入素体の袖は**アンダーシャツの腕とほぼ同じ太さの筒**で、
         /// 色を塗り分けただけでは「腕に色の境目が描いてある」ようにしか見えない
@@ -277,14 +288,14 @@ namespace KokoSim.EditorTools
                     float w = t * t * (3f - 2f * t);   // 肩=0・袖口=1 のなめらかな立ち上がり
                     var d = verts[i] - p0;
                     var along = u * Vector3.Dot(d, u);
-                    verts[i] = p0 + along + (d - along) * Mathf.Lerp(1f, SleeveFlare, w);
+                    verts[i] = p0 + along + (d - along) * Mathf.Lerp(1f, _flare, w);
                     moved++;
                 }
             }
 
             mesh.vertices = verts;
             mesh.RecalculateBounds();
-            return "袖を張り出した頂点=" + moved + "（袖口 " + SleeveFlare.ToString("F2") + "倍）";
+            return "袖を張り出した頂点=" + moved + "（袖口 " + _flare.ToString("F2") + "倍）";
         }
 
         private static int BoneIndex(SkinnedMeshRenderer smr, Animator anim, HumanBodyBones human)

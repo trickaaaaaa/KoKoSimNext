@@ -125,7 +125,9 @@ namespace KokoSim.Unity.Match
         public float TorsoFromSec, TorsoFullSec, TorsoToSec;   // 効き始め／全開／戻し切り（クリップ内秒）
         // ---- 振りの速さ（2026-07-30 監督指摘「振りを早くしたい」）----
         // クリップ内時刻の進み方を一様に変えるだけ＝緩急の比は保つ。ポーズは12fps量子化なので、
-        // 上げるほど1振りに使えるコマが減る（0.70sの振りは 1.0倍で約8コマ・1.5倍で約6コマ）
+        // 上げるほど1振りに使えるコマが減る（0.70sの振りは 1.0倍で約8コマ・1.5倍で約6コマ）。
+        // 頭出しが負になる速度でも面通過は球からずれない（SetSwing のカウントダウン開始）＝
+        // つまみの全域 0.5〜3.0 が安全（issue #368）
         public float SwingSpeed;            // 1=収録のまま。スイング系の一発物にだけ掛かる
         // ---- バットの置き方（AlignBat）----
         // 握りが直った今は「両手を結んだ線＝バットの軸」がそのまま使える。旧実装は両手が23cm開いて
@@ -185,7 +187,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 20;
+        private const int CurrentVersion = 21;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -275,8 +277,14 @@ namespace KokoSim.Unity.Match
             // 1.4 で 0.157s ＝ 実際のスイング（振り出し→接触 0.15〜0.20s）に入る。
             // 「振りが遅い」（2026-07-31 監督指摘）の主因はこの倍率ではなく、**ポーズが倍率ぶん
             // 進んでいなかったこと**（StepActor 参照）で、実効 1.0倍＝0.22s で振っていた。
-            // ここから上げると 12fps のポーズが2コマを切って振りがカクつく
-            SwingSpeed = 1.4f,
+            //
+            // **2.0（2026-08-01 監督確定・issue #368）。** 1.4 を選んだのは「振り終わりの腕が
+            // 据え置き中も回り続ける」不具合が残っていた頃の比較なので、腕を直した絵で
+            // 1.4/1.7/2.0 を撮り直して選び直した（実時間再生で比較）。実測:
+            //   1.4 → 0.157s・1.9コマ ／ 1.7 → 0.129s・1.6コマ ／ **2.0 → 0.110s・1.3コマ**
+            // 実物のスイング（振り出し→接触 0.15〜0.20s）より速いが、**実寸に合わせるだけでは
+            // 絵として遅い**というのが監督判断。12fps のポーズが2コマを切るのは承知の上
+            SwingSpeed = 2.0f,
             // 旧0.154（＝ほぼ合成軸）。自作Rokokoは両手が開いて拳が積み重ならない収録だったので
             // 実測線が使えなかったが、Mixamoは元からバットを両手で握った収録なので実測線が素直に使える。
             // 0.154のままだと合成軸の仰角35.7°が頭の方向へ立ち上がり、構えでバットが顔を貫く（2026-07-30 絵で確認）
@@ -476,6 +484,13 @@ namespace KokoSim.Unity.Match
             if (c.Version < 20)   // v20: 振り抜き後の「捕手を振り向く」収録動作を消す
             {
                 c.HeadUntilSec = d.HeadUntilSec;
+            }
+            if (c.Version < 21)   // v21: 振りの速さ 1.4→2.0（issue #368・監督確定）
+            {
+                // 新項目ではないが、1.4 は「振り終わりの腕が据え置き中も回り続ける」不具合が
+                // 残っていた頃の比較で選んだ値。腕を直した絵で 1.4/1.7/2.0 を撮り直して
+                // 選び直したので、調整済みJSONも一緒に動かす（残すと古い判断の値が生き続ける）
+                c.SwingSpeed = d.SwingSpeed;
             }
             c.Version = CurrentVersion;
             return c;
@@ -864,6 +879,21 @@ namespace KokoSim.Unity.Match
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
             public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+
+            /// <summary>
+            /// 直前の <see cref="StepActor"/> でこの体のポーズを**書き直したか**。
+            ///
+            /// ポーズ補正（<see cref="FixBatterPose"/> / <see cref="FixCatcherPose"/>）は骨への
+            /// **相対**回転なので、同じポーズへ二度当てると寄りすぎる（design-18 §4.5-③）。
+            /// 据え置き（<see cref="HoldRemaining"/>）・恒久停止（<see cref="Holding"/>）・
+            /// 間引き（<see cref="PoseInterval"/>）はどれも <c>Graph.Evaluate</c> を呼ばずに抜けるので、
+            /// 「コマが進んだ＝補正して良い」ではない。実測 2026-08-01（issue #368・空振り・速度1.4）:
+            /// クリップが 1.733 で止まっている据え置き 0.8秒の間、右前腕が
+            /// (0.33,-0.73,0.60)→(-0.06,-0.80,0.60)→(-0.45,-0.65,0.61)→(-0.72,-0.32,0.62)→(-0.79,0.12,0.60)
+            /// と**1コマ28°で回り続けていた**＝振り切って止めたはずのフィニッシュで腕だけが回る。
+            /// このポーズは画面に最も長く映る（監督指摘「振り終わりの腕がおかしい」）。
+            /// </summary>
+            public bool PoseAdvanced;
 
             // ---- 守備・走塁のN体化で足した分（既定値は現行4体の挙動と同じ＝絵は不変） ----
 
@@ -1298,6 +1328,11 @@ namespace KokoSim.Unity.Match
         private float _umpireCallEndAt;             // コールクリップの打ち切り時刻（0=末尾まで）
         private float _catchCountdown = -1f;        // 捕球クリップ開始まで（負=予約なし）
         private int _catchIndex = -1;               // 今の球で使う捕球クリップ（CatchAnchors の添字。負=捕らない）
+        private float _swingCountdown = -1f;        // スイング開始まで（負=予約なし。SetSwing 参照）
+        private AnimationClip _swingPendingClip;    // 予約中のスイングクリップ
+        private float _swingPendingAnchor;          // 予約中の接触アンカー[クリップ秒]
+        private float _swingPendingEndAt;           // 予約中の打ち切り[クリップ秒]
+        private float _swingPendingHold;            // 予約中の据え置き[秒]（SwingFinishHoldSeconds）
 
         /// <summary>
         /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
@@ -1329,11 +1364,21 @@ namespace KokoSim.Unity.Match
         public void ResetForNewPlateAppearance()
         {
             if (!Available) return;
-            if (_batter != null && _batter.IdleClip != null) SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
+            if (_batter != null && _batter.IdleClip != null)
+            {
+                SetActorClip(_batter, _batter.IdleClip, 0f, _batter.IdleEndAt);
+                // スイングの倍率を持ち越さない。**SetActorClip では戻らない**（守備・走塁が毎コマ
+                // 入れ直す前提でそう作ってある）ので、仕切り直す側が明示的に戻す。戻さないと
+                // 振っている途中で打席が終わった次の打者が、構えを SwingSpeed 倍で刻む
+                // （実測 2026-08-01: 前の打席の 2.6倍が待機ループに残った）。
+                // 振り切って待機へ戻る通常経路は FinishOneShot が戻すのでここは来ない
+                _batter.Speed = 1f;
+            }
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
             _umpireCallCountdown = -1f;
             _catchCountdown = -1f;
             _catchIndex = -1;
+            _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
             HoldBallInHand();   // 振りかぶりから球を手に持たせる（issue #332）
         }
@@ -1599,6 +1644,7 @@ namespace KokoSim.Unity.Match
             _batAimsBall = outcome == DuelPitchOutcome.InPlayContact
                 || outcome == DuelPitchOutcome.FoulContact;
             _umpireCallCountdown = -1f;
+            _swingCountdown = -1f;   // 振らない結果は前球のスイング予約を持ち越さない
             bool isStrike = outcome == DuelPitchOutcome.CalledStrike || outcome == DuelPitchOutcome.SwingMiss;
             if (isStrike && _umpireStrikeClip != null)
             {
@@ -1626,18 +1672,15 @@ namespace KokoSim.Unity.Match
                 // 打ち切りだけで据え置きが無いと、打ち切った瞬間に待機へ戻る
                 case DuelPitchOutcome.SwingMiss:
                     // 空振り専用の収録が無いので同じスイングを使う
-                    SetSwing(_swingMissClip, SwingMissPlane, flight, SwingFinishSec);
-                    _batter.HoldSeconds = SwingFinishHoldSeconds;
+                    SetSwing(_swingMissClip, SwingMissPlane, flight, SwingFinishSec, SwingFinishHoldSeconds);
                     break;
                 // 当てる球は判定面でなく**捌く瞬間**（_ballArrival＝判定面の ContactAheadM 手前）で合わせる。
                 // flight を渡すと、前で捌くぶんバットが遅れて着く（0.30m/40m·s⁻¹ ≒ 8ms）
                 case DuelPitchOutcome.FoulContact:
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec);
-                    _batter.HoldSeconds = SwingFinishHoldSeconds;
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec, SwingFinishHoldSeconds);
                     break;
                 case DuelPitchOutcome.InPlayContact:
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec);
-                    _batter.HoldSeconds = SwingFinishHoldSeconds;
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec, SwingFinishHoldSeconds);
                     break;
                 // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
                 // 捕手の捕球は下の catcherCatches に含めたまま残す
@@ -1655,23 +1698,52 @@ namespace KokoSim.Unity.Match
         /// <c>anchorClipSec − flight × Speed</c> にしないと面通過が球からずれる。
         /// 速度1では従来式（anchor − flight）と一致する。
         ///
-        /// 頭出しが負になると <see cref="SetActorClip"/> の <c>Max(0,…)</c> で潰れ、**黙って**
-        /// リリース直後に振り始める（捕球アンカーで実際に踏んだ罠。design-18 §4.5-③）。
-        /// 現行値では起きない: 接触1.30s／飛翔0.42〜0.52s なので、潰れるのは速度 2.5倍超。
-        /// つまみの上限を2.0にしてあるのはこの余裕を確保するため。上限を上げるなら
-        /// 捕球と同じくカウントダウン開始（後ろへずらす予約）へ作り替えること。
+        /// 頭出しは**クリップを前へ飛ばす**ことしかできないので、速度を上げると
+        /// <c>anchor − flight × k</c> はいずれ負になる（実測の境目＝空振り 1.08/0.52≒2.08倍・
+        /// 打つ 1.17/0.52≒2.25倍）。そのまま <see cref="SetActorClip"/> へ渡すと <c>Max(0,…)</c> で
+        /// 潰れ、**黙って**リリース直後に振り始める（捕球アンカーで実際に踏んだ罠。design-18 §4.5-③）。
+        /// つまみは 0.5〜3.0 まで回るので、旧実装の「上限2.0で余裕を作る」は**実装と食い違っていた**
+        /// （issue #368）。足りないのは「後ろへずらす」なので、捕球・球審コールと同じ
+        /// **カウントダウン開始**（<see cref="_swingCountdown"/>）へ作り替えてある＝
+        /// クリップ頭（構え）から始めて、アンカーが球に一致するまで開始そのものを待つ。
+        /// これでつまみの全域が安全になり、速度を上げても面通過は球からずれない。
         /// </summary>
-        private void SetSwing(AnimationClip clip, float anchorClipSec, float flight, float endAt)
+        private void SetSwing(AnimationClip clip, float anchorClipSec, float flight, float endAt, float hold)
         {
             if (_batter == null || clip == null) return;
             float k = Mathf.Max(0.1f, _cal.SwingSpeed);
             float seek = anchorClipSec - flight * k;
+            _swingCountdown = -1f;
+            if (seek < 0f)
+            {
+                // 頭出しでは間に合わない＝クリップ頭から回しても球より早くアンカーへ着く。
+                // 開始を `flight − anchor/k` だけ待つ（クリップ内の緩急は触らない＝design-18 の掟）
+                _swingPendingClip = clip;
+                _swingPendingAnchor = anchorClipSec;
+                _swingPendingEndAt = endAt;
+                _swingPendingHold = hold;
+                _swingCountdown = flight - anchorClipSec / k;
+                return;
+            }
+            StartSwing(clip, anchorClipSec, seek, endAt, k, hold);
+        }
+
+        /// <summary>
+        /// 予約したスイングを実際に始める（<see cref="SetSwing"/> の即時分岐と予約の発火で共有）。
+        /// 据え置き（<paramref name="hold"/>）は必ずここで張る＝<see cref="SetActorClip"/> が
+        /// 差し替えのたびに <c>HoldSeconds</c> を0へ落とすので、呼び元で先に張ると予約側で消える。
+        /// </summary>
+        private void StartSwing(AnimationClip clip, float anchorClipSec, float seek, float endAt, float k,
+            float hold)
+        {
+            if (_batter == null || clip == null) return;
             // 構えを別クリップにしていると、ここが**クリップの切り口**になる（構え→スイング）。
             // 頭出しだけだと姿勢が飛ぶので投手のカットバックと同じクロスフェードで繋ぐ。
             // 同じクリップのとき（既定）は従来どおり頭出しだけ＝絵は1ビットも変わらない
             if (_batter.Clip != clip) CrossfadeActorToClip(_batter, clip, seek, endAt, CrossfadeSeconds);
             else SetActorClip(_batter, clip, seek, endAt);
             _batter.Speed = k;   // SetActorClip の後（差し替えで持ち越さないため）
+            _batter.HoldSeconds = hold;   // 同上（SetActorClip が保留中の据え置きを打ち消す）
 #if UNITY_EDITOR
             if (SwingAnchorOverrideForCapture > 0f) anchorClipSec = SwingAnchorOverrideForCapture;
 #endif
@@ -2087,6 +2159,16 @@ namespace KokoSim.Unity.Match
                     SetActorClip(_umpire, _umpireStrikeClip, _umpireCallStartAt, _umpireCallEndAt);
             }
 
+            // スイングの開始予約（頭出しでは間に合わない速い再生用。issue #368）。
+            // 捕球・コールと同じくプレー時間で数える＝12fpsの量子化に丸められない
+            if (_swingCountdown >= 0f)
+            {
+                _swingCountdown -= deltaTime;
+                if (_swingCountdown < 0f && _swingPendingClip != null)
+                    StartSwing(_swingPendingClip, _swingPendingAnchor, 0f, _swingPendingEndAt,
+                        Mathf.Max(0.1f, _cal.SwingSpeed), _swingPendingHold);
+            }
+
             // 捕球クリップの開始予約（球到達に捕球の瞬間を合わせる。issue #332 第2弾）。
             // 球審コールと同じくプレー時間で数える＝12fpsの量子化に丸められない
             if (_catchCountdown >= 0f)
@@ -2119,9 +2201,14 @@ namespace KokoSim.Unity.Match
             if (stepped)
             {
                 GroundFix(_pitcher);   // 投球ループはルートモーションでマウンドを降りるためコマ毎に接地
-                FixBatterPose();       // 収録の破綻を骨へ当て直す（バット整列より前＝詰めた手から軸を採る）
-                AlignBat();
-                FixCatcherPose();      // ミットを実着弾点へ寄せる（5方向クリップの残差を吸収）
+                // ポーズ補正は**そのコマでポーズを書き直した体にだけ**当てる（Actor.PoseAdvanced）。
+                // 「コマが進んだ」と「ポーズを書き直した」は別物で、据え置き・恒久停止・間引きは
+                // 進んでも書き直さない＝相対回転の補正が同じポーズへ積み上がる（issue #368 実害）
+                if (_batter != null && _batter.PoseAdvanced)
+                    FixBatterPose();   // 収録の破綻を骨へ当て直す（バット整列より前＝詰めた手から軸を採る）
+                AlignBat();            // バットは骨から毎コマ組み直す純関数＝二度当てが無いので常に呼ぶ
+                if (_catcher != null && _catcher.PoseAdvanced)
+                    FixCatcherPose();  // ミットを実着弾点へ寄せる（5方向クリップの残差を吸収）
             }
         }
 
@@ -2878,6 +2965,13 @@ namespace KokoSim.Unity.Match
             ? new Vector2(-1f, -1f)
             : new Vector2(_batter.Time, _batter.Speed);
 
+        /// <summary>
+        /// 【撮影ハーネス・プローブ用】打者がいま振り切りポーズで据え置き中か。
+        /// クリップ内時刻は12fps量子化で毎フレーム止まって見えるので、「時刻が動かない」では
+        /// 据え置きを判定できない（実測窓を外して据え置きでない所を撮る事故になる）。
+        /// </summary>
+        public bool BatterHolding => _batter != null && _batter.HoldRemaining > 0f;
+
         private static void SeekActor(Actor a, float clipTime)
         {
             if (a == null) return;
@@ -2889,6 +2983,7 @@ namespace KokoSim.Unity.Match
             float dt = target / steps;
             for (int i = 0; i < steps; i++) a.Graph.Evaluate(dt);
             a.Time = target;
+            a.PoseAdvanced = true;   // 頭出しもポーズを書き直す＝補正を当て直す回
         }
 
         /// <summary>
@@ -2997,6 +3092,7 @@ namespace KokoSim.Unity.Match
             a.Playable.SetTime(0);
             a.Graph.Evaluate(0f);
             a.Animator.applyRootMotion = rm;
+            a.PoseAdvanced = true;   // 巻き戻しもポーズを書き直す＝補正を当て直す回
         }
 
         /// <summary>
@@ -3012,6 +3108,7 @@ namespace KokoSim.Unity.Match
             // 生き残っている間だけ例外が出る。呼び元（Update・撮影ハーネス）に後始末を強いるより
             // ここで黙って降りる方が安全（2026-07-29 プレビュー撮影で実害）
             if (a == null || a.Go == null) return;
+            a.PoseAdvanced = false;   // ポーズを書き直した経路だけが true を立てる（補正の二度当て防止）
             if (!a.Enabled) return;   // 打席中の野手など＝ポーズを進めない（N体化の間引き）
             // 役ごとの固定間隔で間引く（0=毎コマ＝現行）。溜めた分は次の更新へ持ち越して丸ごと進める＝
             // クリップ内時刻は実時間とずれない（コマ数だけが減る）
@@ -3060,6 +3157,7 @@ namespace KokoSim.Unity.Match
             // 「クリップを早く打ち切る」だけでポーズは常に1倍速だった。
             // グラフはアクター別なので、他の役（Speed=1）の見え方は変わらない
             a.Graph.Evaluate(step * a.Speed);
+            a.PoseAdvanced = true;
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
             // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない。
