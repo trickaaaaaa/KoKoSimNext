@@ -177,6 +177,20 @@ namespace KokoSim.Unity.Match
         public float BattedTrailWidthM;   // 頭の太さ[m]（実寸＝遠近で細くなる。尾へ向けて0まで絞る）
         public Color BattedTrailColor;    // 線の色
         public float BattedTrailAlpha;    // 頭の濃さ（尾へ向けて0まで抜く）
+        // ---- バットの軌跡（2026-08-01・スイングが12fpsで描けない件への対処）----
+        // ポーズは12fpsなので、スイングのピーク区間は**隣り合う2枚の絵の間で手が175°回る**
+        // （実測 2026-08-01）。これは「カクカク」ではなく回転方向が判別できない領域＝バットが
+        // 1〜2コマ消えて見える。SwingSpeed を上げるとサンプル数が減ってさらに悪化する（100→124°/コマ）。
+        // 手描きアニメが速い動きを12fpsで見せる流儀（ブレ絵＋動線）に倣い、コマ間をバットが掃いた
+        // 面と先端の軌跡で埋める。ポーズのレートは変えない（design-18 §4.5-② の掟はそのまま）。
+        public float BatTrailShow;          // 0=出さない / 1=出す
+        public float BatTrailSeconds;       // 尾の長さ[秒]
+        public Color BatTrailColor;         // 面・線に共通の色
+        public float BatTrailFillAlpha;     // 掃いた面の濃さ（頭。尾へ向けて0まで抜く）
+        public float BatTrailEdgeAlpha;     // 先端の線の濃さ（同上）
+        public float BatTrailEdgeWidthM;    // 先端の線の太さ[m]（実寸＝遠近で細くなる）
+        public float BatTrailMinDegPerFrame; // これ未満しか回っていないコマは積まない（構え・据え置きを自動で外す）
+        public float BatTrailArcStepDeg;    // 弧の分割粒度[度]（バットは剛体なので中間姿勢は幾何で復元できる）
         // ---- ボールの出所（issue #332・2026-07-30）----
         // ボールはリリースまで**投球する手の子**なので、位置は手ボーンローカルの微調整だけで足りる
         // （基準は design-18 §3.3.1 の掟どおり「手の中心＝手首→中指付け根の中点」）。
@@ -187,7 +201,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 21;
+        private const int CurrentVersion = 23;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -221,7 +235,22 @@ namespace KokoSim.Unity.Match
             // 新クリップの実測タイムライン（構え〜0.85 / スイング0.90-1.60（接触1.30）/ フォロー〜2.60）へ
             // 張り替えた。角度・長さ系（手首の折れ・指の握り込み・バット寸法）は旧クリップの破綻に
             // 合わせて追い込んだ値がそのまま残っている＝**新クリップでは要再調整**（打撃フォーム確認窓）。
-            BatterYawDeg = 90f + 3.8f,   // 旧90+33.8。RunFacingProbeのchest実測差(52°-82°=-30°)ぶん戻した
+            // 旧90+33.8 → 90+3.8（RunFacingProbeのchest実測差 52°-82°=-30° ぶん戻した）→ +45 を上乗せ。
+            //
+            // 2026-08-01（監督決定）: 収録のスイングは接触の瞬間に腰・胸が三塁側へ回り切っていて
+            // （実測 腰-4°/胸-2°＝真正面を通り越している）、引っ張ってファールにしかならない形に見えた。
+            // **立ち向きを閉じると足・腰・胸がまとめて閉じる**のがポイントで、既存の TorsoCloseDeg は
+            // 背骨しか回さない（腰から回すと脚ごと持って行かれて足裏が滑るため意図的にそうしてある）ので、
+            // 8→55°まで振っても前足と腰は1度も動かないことを実測で確認している。
+            //
+            // 構えは自作クリップ側の IdleYawDeg(119°) が担当するので**この値を変えても構えは動かない**
+            // ＝スイング区間だけが閉じる（SyncBatterYaw が両者をクロスフェードの重みで繋ぐ）。
+            // なお 138.8 は IdleYawDeg より約20°閉じた側なので、振り出しで体が順方向へ回り込む。
+            //
+            // 角度は +0/+25/+30/+35/+40/+45 を並べて選定。接触時の「握り線とバット軸のずれ」
+            // （大きいほど手首をこねる。design-18 §4.5-⑪）は +0:26° / +25:6° / +45:30° と谷を描き、
+            // 数字だけなら +21〜25° が底だが、絵は +45 が良いという判断。
+            BatterYawDeg = 90f + 3.8f + 45f,
             GripGapM = 0.10f,
             GripReachGuard = 0.911f,
             GripReachGuardSwing = 0.901f,
@@ -331,6 +360,17 @@ namespace KokoSim.Unity.Match
             BattedTrailWidthM = 0.045f,
             BattedTrailColor = Color.white,
             BattedTrailAlpha = 0.45f,
+            BatTrailShow = 1f,
+            // 尾は「1ポーズコマ（12fps＝83ms）を2〜3枚ぶん繋ぐ」長さ。長くすると振り切った後まで
+            // 扇が残って円盤に見えるので、コマ間を埋める最小限に留める
+            BatTrailSeconds = 0.20f,
+            // 打球残像と同じ白寄り。バット色（tan）だと壁の上で沈み、体に貼った板に見える
+            BatTrailColor = Color.white,
+            BatTrailFillAlpha = 0.20f,   // 面は薄く（濃いと扇が円盤になる）
+            BatTrailEdgeAlpha = 0.50f,   // 先端の線は濃く＝軌道の形はこっちで読ませる
+            BatTrailEdgeWidthM = 0.035f, // 打球残像(0.045)より細い＝バットの方が近くて太く映るため
+            BatTrailMinDegPerFrame = 25f,
+            BatTrailArcStepDeg = 15f,    // 175°なら12分割。剛体なので追加のポーズ評価は要らない
             // 手の中心からのオフセットは0＝掟どおり「手首→中指付け根の中点」そのまま（実測で追い込む）
             BallInHandOffset = Vector3.zero,
             BallReleaseClipTime = 2.97f,   // 手の速度ピーク実測 2.95〜3.00（18.6m/s・高さ1.52m）の中間
@@ -491,6 +531,23 @@ namespace KokoSim.Unity.Match
                 // 残っていた頃の比較で選んだ値。腕を直した絵で 1.4/1.7/2.0 を撮り直して
                 // 選び直したので、調整済みJSONも一緒に動かす（残すと古い判断の値が生き続ける）
                 c.SwingSpeed = d.SwingSpeed;
+            }
+            if (c.Version < 22)   // v22: バットの軌跡（12fpsのコマ間を面＋先端の線で埋める）
+            {
+                c.BatTrailShow = d.BatTrailShow;
+                c.BatTrailSeconds = d.BatTrailSeconds;
+                c.BatTrailColor = d.BatTrailColor;
+                c.BatTrailFillAlpha = d.BatTrailFillAlpha;
+                c.BatTrailEdgeAlpha = d.BatTrailEdgeAlpha;
+                c.BatTrailEdgeWidthM = d.BatTrailEdgeWidthM;
+                c.BatTrailMinDegPerFrame = d.BatTrailMinDegPerFrame;
+                c.BatTrailArcStepDeg = d.BatTrailArcStepDeg;
+            }
+            if (c.Version < 23)   // v23: 立ち向きを45°閉じる（開き切りの是正・監督決定）
+            {
+                // 新項目ではないが、調整済みJSONの値を残すと「接触で腰も胸も三塁側を向き切っている」
+                // 旧フォームがそのまま生き続ける。角度は絵を並べて選び直したので一緒に動かす
+                c.BatterYawDeg = d.BatterYawDeg;
             }
             c.Version = CurrentVersion;
             return c;
@@ -838,6 +895,15 @@ namespace KokoSim.Unity.Match
         private Vector3 _battedOffset;       // 接触点 − セグメント始点（下の LaunchFadeSeconds で解消）
         private float _battedFade;           // 上を解消するまでの秒数＝打点からの自由落下時間
         private readonly List<Vector4> _trail = new();   // 残像（xyz=ステージローカル / w=打球時計[s]）
+
+        // ---- バットの軌跡（2026-08-01）----
+        // 打球の残像（上）は「点の軌跡＝線」だが、バットは棒なので**掃いた面**が要る＝両端を持つ。
+        // 座標系と w の使い方は _trail に揃える（xyz=ステージローカル / w=時計[s]）。
+        private readonly List<Vector4> _batTrailKnob = new();   // ノブ端
+        private readonly List<Vector4> _batTrailTip = new();    // バレル先端
+        private float _batTrailT;                               // ステージの連続時計[s]（打席をまたいでも巻き戻さない）
+        private Vector3 _batTrailLastAxis;                      // 前サンプルのバット軸（角速度ゲート用）
+        private bool _batTrailHasLast;
 
         private sealed class Actor
         {
@@ -1379,6 +1445,7 @@ namespace KokoSim.Unity.Match
             _catchCountdown = -1f;
             _catchIndex = -1;
             _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
+            ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
             HoldBallInHand();   // 振りかぶりから球を手に持たせる（issue #332）
         }
@@ -2209,7 +2276,80 @@ namespace KokoSim.Unity.Match
                 AlignBat();            // バットは骨から毎コマ組み直す純関数＝二度当てが無いので常に呼ぶ
                 if (_catcher != null && _catcher.PoseAdvanced)
                     FixCatcherPose();  // ミットを実着弾点へ寄せる（5方向クリップの残差を吸収）
+                SampleBatTrail();      // AlignBat の**後**＝組み上がったバットの端点を採る
             }
+        }
+
+        /// <summary>
+        /// バットの端点をポーズ1コマぶん積む（<see cref="DrawBatTrail"/> の入力）。
+        ///
+        /// 積むのは<b>ポーズが進んだコマだけ</b>＝呼び出しは Tick の stepped ブロック1箇所に限る。
+        /// フルレートで積むと同じ姿勢が何十個も入り、尾の秒数が「絵の枚数」でなく「フレーム数」で
+        /// 決まってしまう（描画側の弧の刻みも二重に掛かる）。
+        ///
+        /// 出す・出さないは<b>角速度で決める</b>＝時刻の窓を作らない。12fpsの格子が狙った時刻に
+        /// 乗るかは頭出しの位相次第で、乗らない結果だけ黙って壊れる（design-18 §4.5-⑩。
+        /// 実測: 振り抜きの起点を時刻で焼く実装は空振りだけ一度も焼かれなかった）。
+        /// 角度で見れば構えも据え置きも自動的に閾値を割るので、窓が要らない。
+        /// </summary>
+        private void SampleBatTrail()
+        {
+            _batTrailT += 1f / PoseFps;
+            if (_bat == null || !_bat.activeSelf || _root == null)
+            {
+                // バットが消える区間（インプレーの走り出し＝BatDropTime）では**積むのを止めるだけ**。
+                // 履歴は消さない＝手放した後も尾が残って消えていくのが自然（寿命では捨てる。
+                // 捨てないと不可視の四角形を積み続ける）。
+                // なお既定値では**この経路で絵は変わらない**: BatDropTime はクリップ2.60秒で、
+                // 最後に積まれるコマ（振り抜き＝クリップ1.5前後）から実時間0.5秒以上あるのに対し
+                // 尾は0.20秒しかないので、バットが消える頃には尾は消え切っている。
+                // 効いてくるのは BatTrailSeconds を大きく伸ばしたときだけ
+                _batTrailHasLast = false;
+                TrimBatTrail();
+                return;
+            }
+
+            var tr = _root.transform;
+            var axis = (_bat.transform.rotation * Vector3.up).normalized;
+            float half = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
+            var center = _bat.transform.position;
+
+            // 前サンプルからの回転が小さいコマは積まない（構え・据え置き）。
+            // 「積まない」だけで履歴は保つので、振り終わりの尾はそのまま寿命で消えていく
+            if (_batTrailHasLast
+                && Vector3.Angle(_batTrailLastAxis, axis) < Mathf.Max(0f, _cal.BatTrailMinDegPerFrame))
+            {
+                TrimBatTrail();
+                return;
+            }
+            _batTrailLastAxis = axis;
+            _batTrailHasLast = true;
+
+            // ステージローカルで持つ（_trail と同じ。ステージは y=-500 へ退避しているので世界座標では持てない）
+            var knob = tr.InverseTransformPoint(center - axis * half);
+            var tip = tr.InverseTransformPoint(center + axis * half);
+            _batTrailKnob.Add(new Vector4(knob.x, knob.y, knob.z, _batTrailT));
+            _batTrailTip.Add(new Vector4(tip.x, tip.y, tip.z, _batTrailT));
+            TrimBatTrail();
+        }
+
+        /// <summary>寿命を過ぎたサンプルを捨てる（両端は必ず同数・同時刻で動かす）。</summary>
+        private void TrimBatTrail()
+        {
+            float cut = _batTrailT - Mathf.Max(0.02f, _cal.BatTrailSeconds);
+            int drop = 0;
+            while (drop < _batTrailKnob.Count && _batTrailKnob[drop].w < cut) drop++;
+            if (drop <= 0) return;
+            _batTrailKnob.RemoveRange(0, drop);
+            _batTrailTip.RemoveRange(0, drop);
+        }
+
+        /// <summary>バットの軌跡を捨てる（打席の仕切り直し）。</summary>
+        private void ClearBatTrail()
+        {
+            _batTrailKnob.Clear();
+            _batTrailTip.Clear();
+            _batTrailHasLast = false;
         }
 
         /// <summary>
@@ -2384,12 +2524,14 @@ namespace KokoSim.Unity.Match
             {
                 Graphics.Blit(_colorRt, Target);
                 DrawStrikeZone();
+                DrawBatTrail();
                 DrawBattedTrail();
                 return;
             }
             _postMat.SetFloat("_PosterLevels", PosterizeLevels);
             Graphics.Blit(_colorRt, Target, _postMat, 0);
             DrawStrikeZone();   // ポスタライズの**後**。前に置くと薄さが量子化に潰される（下の説明）
+            DrawBatTrail();     // 打球の残像より**先**＝接触の瞬間は打球の線を上に出したい
             DrawBattedTrail();
         }
 
@@ -2526,6 +2668,123 @@ namespace KokoSim.Unity.Match
             GL.PopMatrix();
             RenderTexture.active = prev;
         }
+
+        /// <summary>
+        /// バットの軌跡。ゾーン・打球残像と同じくポスタライズの後に GL で引く。
+        ///
+        /// <b>なぜ要るか</b>: ポーズは12fpsで、スイングのピーク区間は隣り合う2枚の絵の間で手が
+        /// 175°回る（2026-08-01 実測）。これは「カクカク」ではなく回転方向が判別できない領域
+        /// （ワゴンホイール効果）で、実際バットが1〜2コマ消えて見える。SwingSpeed を上げても
+        /// サンプル数が減るだけで悪化する（100→124°/コマ）。手描きアニメが速い動きを12fpsで
+        /// 見せる流儀（ブレ絵＋動線）に倣い、<b>コマ間をバットが掃いた面と先端の線で埋める</b>。
+        ///
+        /// <b>弧の再構成</b>: サンプル間を1枚の四角形で結ぶと、175°の区間では扇が粗すぎて
+        /// 「円盤」に見える。バットは<b>剛体の棒</b>なので、中間姿勢は骨を評価し直さずに
+        /// 幾何だけで復元できる（軸を Slerp・握り点を Lerp）＝体は12fpsのまま、掃いた面だけが
+        /// 滑らかな弧になる。追加のポーズ評価はゼロ。
+        ///
+        /// 面と線で役割を分ける: <b>面＝速さ</b>（薄く。濃いと円盤に見える）／
+        /// <b>先端の線＝軌道の形</b>（濃く。太さは実寸[m]＝遠近で細くなる）。
+        /// </summary>
+        private void DrawBatTrail()
+        {
+            if (_cal.BatTrailShow < 0.5f || _batTrailKnob.Count < 2) return;
+            if (_root == null || _camera == null) return;
+            if (_zoneMat == null)
+            {
+                var sh = Shader.Find("KokoSim/DuelStageZone");
+                if (sh == null) return;
+                _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+            }
+
+            float span = Mathf.Max(0.02f, _cal.BatTrailSeconds);
+            float arcStep = Mathf.Clamp(_cal.BatTrailArcStepDeg, 1f, 90f);
+            // 色はリニア空間へ自分で落とす（掟: 即時モードは自動変換が効かない）。アルファは変換しない
+            var baseCol = _cal.BatTrailColor.linear;
+            float fillA = Mathf.Clamp01(_cal.BatTrailFillAlpha);
+            float edgeA = Mathf.Clamp01(_cal.BatTrailEdgeAlpha);
+            float edgeHalf = Mathf.Max(0.001f, _cal.BatTrailEdgeWidthM) * 0.5f;
+            var tr = _root.transform;
+            var eye = _camera.transform.position;
+
+            var prev = RenderTexture.active;
+            RenderTexture.active = Target;
+            GL.PushMatrix();
+            // 射影は**カメラの物をそのまま**渡す（GL.GetGPUProjectionMatrix を通すと二重変換で上下反転。
+            // DrawStrikeZone の項に経緯）
+            GL.LoadProjectionMatrix(_camera.projectionMatrix);
+            GL.modelview = _camera.worldToCameraMatrix;
+            _zoneMat.SetPass(0);
+
+            GL.Begin(GL.QUADS);
+            for (int i = 0; i + 1 < _batTrailKnob.Count; i++)
+            {
+                var k0 = tr.TransformPoint(V3(_batTrailKnob[i]));
+                var t0 = tr.TransformPoint(V3(_batTrailTip[i]));
+                var k1 = tr.TransformPoint(V3(_batTrailKnob[i + 1]));
+                var t1 = tr.TransformPoint(V3(_batTrailTip[i + 1]));
+                float u0 = Mathf.Clamp01(1f - (_batTrailT - _batTrailKnob[i].w) / span);       // 0=尾 / 1=頭
+                float u1 = Mathf.Clamp01(1f - (_batTrailT - _batTrailKnob[i + 1].w) / span);
+
+                // ---- 剛体としての中間姿勢を復元して弧を滑らかにする ----
+                var a0 = (t0 - k0).normalized;
+                var a1 = (t1 - k1).normalized;
+                float sweep = Vector3.Angle(a0, a1);
+                int sub = Mathf.Clamp(Mathf.CeilToInt(sweep / arcStep), 1, 64);
+                float half0 = (t0 - k0).magnitude * 0.5f;
+                float half1 = (t1 - k1).magnitude * 0.5f;
+                var c0 = (k0 + t0) * 0.5f;
+                var c1 = (k1 + t1) * 0.5f;
+
+                var pk = k0; var pt = t0; float pu = u0;
+                for (int s = 1; s <= sub; s++)
+                {
+                    float f = (float)s / sub;
+                    var ax = Vector3.Slerp(a0, a1, f);
+                    var ct = Vector3.Lerp(c0, c1, f);
+                    float hl = Mathf.Lerp(half0, half1, f);
+                    var nk = ct - ax * hl;
+                    var nt = ct + ax * hl;
+                    float nu = Mathf.Lerp(u0, u1, f);
+
+                    // 面は「棒が通った四角形」＝ノブ端と先端をそれぞれ繋ぐ
+                    var ca = baseCol; ca.a = fillA * pu * pu;   // 濃さは二乗で落とす＝尾が長く伸びて見える
+                    var cb = baseCol; cb.a = fillA * nu * nu;
+                    GL.Color(ca); GL.Vertex(pk);
+                    GL.Color(ca); GL.Vertex(pt);
+                    GL.Color(cb); GL.Vertex(nt);
+                    GL.Color(cb); GL.Vertex(nk);
+
+                    // 先端の線は打球残像と同じカメラ向きリボン（GL.LINES は1画素固定で望遠では点線に割れる）
+                    if (edgeA > 0.001f)
+                    {
+                        var dir = nt - pt;
+                        if (dir.sqrMagnitude > 1e-10f)
+                        {
+                            var side = Vector3.Cross(dir, pt - eye);
+                            if (side.sqrMagnitude > 1e-10f)
+                            {
+                                side = side.normalized;
+                                var ea = baseCol; ea.a = edgeA * pu * pu;
+                                var eb = baseCol; eb.a = edgeA * nu * nu;
+                                var sa = side * (edgeHalf * pu);
+                                var sb = side * (edgeHalf * nu);
+                                GL.Color(ea); GL.Vertex(pt - sa);
+                                GL.Color(ea); GL.Vertex(pt + sa);
+                                GL.Color(eb); GL.Vertex(nt + sb);
+                                GL.Color(eb); GL.Vertex(nt - sb);
+                            }
+                        }
+                    }
+                    pk = nk; pt = nt; pu = nu;
+                }
+            }
+            GL.End();
+            GL.PopMatrix();
+            RenderTexture.active = prev;
+        }
+
+        private static Vector3 V3(Vector4 v) => new Vector3(v.x, v.y, v.z);
 
         /// <summary>本塁面（ステージローカル z=0）の矩形を1枚のQUADとして積む。</summary>
         private static void ZoneQuad(Transform tr, float x0, float y0, float x1, float y1)
@@ -3134,15 +3393,30 @@ namespace KokoSim.Unity.Match
                 FinishOneShot(a);
                 return;
             }
+            float before = a.Time;
             a.Time += step * a.Speed;
             float end = a.EndAt > 0f && a.EndAt < a.Clip.length ? a.EndAt : a.Clip.length;
             if (a.Time >= end)
             {
                 if (a.HoldSeconds > 0f)
                 {
+                    // 据え置くポーズは**打ち切り時刻ちょうど**を評価して焼く。行き過ぎたぶんを
+                    // 戻さずに前のコマで固めると、止め所に12fpsの格子が乗るかが頭出しの位相次第になり、
+                    // 乗らない速度でだけ手前のコマで固まる（design-18 §4.5-⑩ の「格子に乗るかは位相次第で、
+                    // 乗らない結果だけ黙って壊れる」そのもの）。
+                    // 実害 2026-08-01: SwingFinishSec=1.63 に対し、SwingSpeed=1.4 は 1.617 で止まる（狙いどおり）
+                    // のに 2.0 は格子が 1.513→1.680 と跨ぐため 1.513 で固まり、胴の回りが8°足りず
+                    // バットが巻き付き切らない位置で停止した（＝振り終わりが中途半端に見えた）。
+                    float rest = end - before;
+                    if (rest > 1e-4f)
+                    {
+                        a.Graph.Evaluate(rest);
+                        a.PoseAdvanced = true;
+                    }
+                    a.Time = end;
                     a.HoldRemaining = a.HoldSeconds;
                     a.HoldSeconds = 0f;
-                    return;   // 振り切りポーズのまま据え置き（Graph.Evaluateしない＝ポーズが進まない）
+                    return;   // 以降はこのポーズのまま据え置き（Evaluateしない＝ポーズが進まない）
                 }
                 FinishOneShot(a);
                 return;

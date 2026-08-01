@@ -38,6 +38,33 @@ namespace KokoSim.EditorTools
                         Mathf.Abs(cal.SwingLiftM)), EditorStyles.miniLabel);
             }
 
+            EditorGUILayout.LabelField("バットの軌跡（12fpsのコマ間を埋める）", EditorStyles.miniBoldLabel);
+            bool batTrail = EditorGUILayout.ToggleLeft("残像を出す", cal.BatTrailShow >= 0.5f);
+            cal.BatTrailShow = batTrail ? 1f : 0f;
+            using (new EditorGUI.DisabledScope(!batTrail))
+            using (new EditorGUI.IndentLevelScope())
+            {
+                EditorGUILayout.HelpBox(
+                    "スイングのピーク区間は1コマで手が175°回る（12fps＝83ms間隔）。絵と絵の間が飛びすぎて"
+                    + "バットが消えて見えるので、掃いた面と先端の軌跡でコマ間を埋める。"
+                    + "面＝速さ／先端の線＝軌道の形。",
+                    MessageType.None);
+                cal.BatTrailSeconds = EditorGUILayout.Slider("尾の長さ [秒]", cal.BatTrailSeconds, 0.05f, 0.50f);
+                cal.BatTrailFillAlpha = EditorGUILayout.Slider("面の濃さ", cal.BatTrailFillAlpha, 0f, 1f);
+                cal.BatTrailEdgeAlpha = EditorGUILayout.Slider("先端の線の濃さ", cal.BatTrailEdgeAlpha, 0f, 1f);
+                cal.BatTrailEdgeWidthM = EditorGUILayout.Slider("先端の線の太さ [m]",
+                    cal.BatTrailEdgeWidthM, 0.005f, 0.20f);
+                cal.BatTrailColor = EditorGUILayout.ColorField("色", cal.BatTrailColor);
+                cal.BatTrailMinDegPerFrame = EditorGUILayout.Slider("出し始める回転 [度/コマ]",
+                    cal.BatTrailMinDegPerFrame, 0f, 90f);
+                EditorGUILayout.LabelField(" ", "これ未満のコマは積まない＝構えと据え置きでは自動的に消える",
+                    EditorStyles.miniLabel);
+                cal.BatTrailArcStepDeg = EditorGUILayout.Slider("弧の刻み [度]",
+                    cal.BatTrailArcStepDeg, 3f, 45f);
+                EditorGUILayout.LabelField(" ", "細かいほど扇が滑らか（バットは剛体なので中間は幾何で復元＝負荷は描画だけ）",
+                    EditorStyles.miniLabel);
+            }
+
             EditorGUILayout.LabelField("打球の行方（接触〜俯瞰へ渡るまでの一瞬）", EditorStyles.miniBoldLabel);
             bool batted = EditorGUILayout.ToggleLeft("残像の線を出す", cal.BattedShow >= 0.5f);
             cal.BattedShow = batted ? 1f : 0f;
