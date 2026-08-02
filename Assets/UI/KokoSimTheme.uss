@@ -552,13 +552,15 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     padding: var(--sp-3) var(--sp-3); margin-bottom: var(--sp-2);
 }
 .tp-pcard__top { flex-direction: row; align-items: center; margin-bottom: var(--sp-2); }
-/* 背番号バッジ：投手＝アンバー／野手＝グリーン（モックの視覚言語）。 */
+/* 背番号バッジ：中立の小片面（issue #379）。旧「投手＝アンバー／野手＝グリーン」は廃止した。
+   塗り分けの実体は選手の属性ではなく「その校の看板が投手か打線か」で、投打の別は成績行
+   （防御率 vs 打率）と守備位置ラベルで既に読める。対抗校ぶん4〜6枚並ぶのでアンバーの
+   撒き過ぎでもあった（UI原則②＝アクセントは1画面3箇所まで）。 */
 .tp-pcard__no {
     width: 32px; height: 32px; border-radius: var(--radius-card); flex-shrink: 0;
-    background-color: var(--color-lamp); color: var(--color-ink);
+    background-color: var(--color-panel-deep); color: var(--color-chalk);
     font-size: var(--fs-num); -unity-text-align: middle-center;
 }
-.tp-pcard__no--field { background-color: var(--color-good); }
 .tp-pcard__nm { font-size: var(--fs-body); color: var(--tx-1); margin-left: var(--sp-2); }
 .tp-pcard__sub { font-size: var(--fs-cap); color: var(--tx-2); margin-left: var(--sp-2); }
 .tp-pcard__stat { font-size: var(--fs-label); color: var(--ink); margin-bottom: var(--sp-1); white-space: normal; }

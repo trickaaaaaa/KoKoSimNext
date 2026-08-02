@@ -647,7 +647,6 @@ namespace KokoSim.Unity.Tournament
             var no = new Label(n.Number);
             no.AddToClassList("tp-pcard__no");
             no.AddToClassList("f-num");   // 背番号は純数値＝コンデンス体（決定2-B）
-            if (!n.IsPitcher) no.AddToClassList("tp-pcard__no--field");   // 野手＝グリーン
             top.Add(no);
             var nm = new Label(n.Name);
             nm.AddToClassList("tp-pcard__nm");
