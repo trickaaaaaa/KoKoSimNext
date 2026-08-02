@@ -2394,10 +2394,12 @@ namespace KokoSim.Unity.Match
                     // 守備ビューの残像はここで一本化する（issue #398 ①）。対決ビュー側の打球ステッパ
                     // （UpdateBattedBall）は _fieldPlay が立つと呼ばれなくなるので、二重に積む心配はない
                     PushTrailPoint(p, t, FieldBattedTrailSeconds);
+                    UpdateBallShadow(p.x, p.z);
                 }
                 else
                 {
                     _ball.SetActive(false);
+                    if (_ballShadow != null) _ballShadow.SetActive(false);
                     // 球が消えた（捕球・失投等）後も尾は自然に消えるよう時計だけ進める。進めないと
                     // 尾の最後の点が刈られず、次にこの残像枠を使うプレーまで宙に浮いたまま残る
                     if (_trail.Count > 0) TrimTrail(t, FieldBattedTrailSeconds);
@@ -2472,6 +2474,26 @@ namespace KokoSim.Unity.Match
         private const float BallMinScreenPx = 3f;
         /// <summary>見かけ倍率の上限（引きの絵で球が人より大きくならないための歯止め）。</summary>
         private const float BallMaxScaleGain = 12f;
+
+        /// <summary>
+        /// 打球の影を球のXZ位置へ追従させる（守備ビュー限定・issue #401①・監督決定2026-08-03）。
+        /// <see cref="ApplyBallReadability"/> の可読性スケールは掛けない＝影は常に実寸のまま地面に張り付き、
+        /// 球だけが遠いほど拡大される。この「影に対して球がどれだけ浮いているか」が高さの手がかりになる
+        /// （②可読性スケール自体の見直しは別issueで判断・同時変更しない）。
+        /// </summary>
+        private void UpdateBallShadow(float x, float z)
+        {
+            if (_ballShadow == null) return;
+            _ballShadow.transform.localPosition = new Vector3(x, FieldGroundY(x, z) + BallShadowGroundOffsetM, z);
+            _ballShadow.SetActive(true);
+        }
+
+        /// <summary>影の厚み[m]。薄い球を地面へ半分埋めて「楕円プリミティブ（ブロブ影）」の見た目にする。</summary>
+        private const float BallShadowThicknessM = 0.01f;
+        /// <summary>影を地面から持ち上げる高さ[m]。塁・打席と同じ z-fighting 回避の作法。</summary>
+        private const float BallShadowGroundOffsetM = 0.006f;
+        /// <summary>影の色。芝・土のどちらの上でも沈んで見えるよう暗くほぼ無彩色にする。</summary>
+        private static readonly Color BallShadowColor = new Color(0.05f, 0.07f, 0.05f);
 
         // ---- 実測窓（撮影ハーネス用） -------------------------------------------
 
