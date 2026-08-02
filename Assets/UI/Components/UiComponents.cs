@@ -574,8 +574,8 @@ namespace KokoSim.Unity.Components
             => rowsHost?.EnableInClassList("cmp-rows--unit", on);
 
         /// <summary>
-        /// 2選手比較の1行（項目名｜A: 値＋バー｜B: 値＋バー）。
-        /// A/B のバーはどちらも同じ左起点から右へ同一スケールで伸びるので、長さの差がそのまま優劣になる。
+        /// 2選手比較の1行（項目名｜A: 値＋ランクチップ｜B: 値＋ランクチップ）。
+        /// 横バーは撤去済み（issue #405）。数値とランクチップの併記だけで優劣を読む。
         /// </summary>
         public static VisualElement CompareRow(CompareRowData d)
         {
@@ -649,8 +649,8 @@ namespace KokoSim.Unity.Components
             return col;
         }
 
-        // text: 値ラベルの上書き（null＝value.ToString()）。fill: バー幅[0-100]（負＝value を流用）。
-        // 表示テキストとバー幅を分離し、球速など物理量は「テキスト=km/h・バー=Level(0-100)」で出せるようにする（issue #94）。
+        // text: 値ラベルの上書き（null＝value.ToString()）。fill は横バー撤去（issue #405）で未使用だが、
+        // CompareRowData.FillA/FillB（球速など物理量の呼び出し元, issue #94）は残すため引数は残す。
         // grade: ランクチップ併記（issue #326②）。空文字ならチップを出さない。
         private static VisualElement CompareSide(string side, bool has, int value, string text, int fill, bool win, string grade, bool hideBar = false, string unit = null)
         {
@@ -676,17 +676,6 @@ namespace KokoSim.Unity.Components
 
             if (has && !hideBar && !string.IsNullOrEmpty(grade)) el.Add(RankChip(grade));
 
-            var track = new VisualElement();
-            track.AddToClassList("cmp-row__track");
-            if (has && !hideBar)
-            {
-                var bar = new VisualElement();
-                bar.AddToClassList("cmp-row__bar");
-                bar.AddToClassList("cmp-row__bar--" + side);
-                bar.style.width = Length.Percent(Mathf.Clamp(fill >= 0 ? fill : value, 0, 100));
-                track.Add(bar);
-            }
-            el.Add(track);
             return el;
         }
     }
