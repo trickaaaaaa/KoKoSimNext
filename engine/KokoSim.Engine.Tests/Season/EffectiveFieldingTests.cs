@@ -87,7 +87,7 @@ public sealed class EffectiveFieldingTests
         var p = PlayerWith(fielding: 73, aptitude: 82);
         var expected = EffectiveFielding.Rank(p, FieldPosition.ThirdBase, Coeff);
 
-        var player = RosterTeamBuilder.ToPlayer(p, FieldPosition.ThirdBase, asPitcher: false, fieldingCoeff: Coeff);
+        var player = RosterTeamBuilder.ToPlayer(p, FieldPosition.ThirdBase, fieldingCoeff: Coeff);
 
         Assert.Equal(expected, player.Fielding);
     }

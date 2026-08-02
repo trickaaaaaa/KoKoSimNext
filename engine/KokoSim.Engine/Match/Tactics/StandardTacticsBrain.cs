@@ -60,7 +60,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         }
 
         // 待て: 制球難の投手から四球・球数を狙う。
-        if ((s.Pitcher.Pitching?.Control ?? 50) <= _c.TakeMaxControl && rng.NextDouble() < _c.TakeProb)
+        if (s.Pitcher.Pitching.Control <= _c.TakeMaxControl && rng.NextDouble() < _c.TakeProb)
         {
             return OffensiveSign.Take;
         }
@@ -91,7 +91,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             : DefenseDepth.Normal;
 
         // 配球方針: 低め徹底（強打者/三塁走者）＞コントロール重視（制球難）＞おまかせ。
-        var control = s.Pitcher.Pitching?.Control ?? 50;
+        var control = s.Pitcher.Pitching.Control;
         var policy = s.Batter.Power >= _c.KeepLowMinPower || (s.OnThird is not null && s.Outs < 2)
             ? PitchPolicy.KeepLow
             : control <= _c.ControlFirstMaxControl ? PitchPolicy.ControlFirst

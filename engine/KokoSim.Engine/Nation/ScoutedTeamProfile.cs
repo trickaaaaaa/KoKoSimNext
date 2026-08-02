@@ -39,9 +39,11 @@ public static class ScoutedTeamProfile
             Mental = p.Mental,
             Leadership = p.Leadership,
         };
-        // 投影済み Player は守備位置適性を失っているので、逆投影では既知の役割（投手能力の有無）から
+        // 投影済み Player は守備位置適性を失っているので、逆投影では既知の配置（投手として置かれているか）から
         // 導出がその役割を返すよう適性を置き直す（#377: 役割を選手に持たせない）。
-        PitcherRoleResolver.SeedAptitudeForRole(dp, p.Pitching is not null);
+        // 材料は #381 で「投手能力の有無」から「配置」へ移した。生成経路では両者は常に同値だが、
+        // 全選手が投手能力を持つようになった以上、能力の有無は役割を語らない（#366）。
+        PitcherRoleResolver.SeedAptitudeForRole(dp, p.Position == Match.Field.FieldPosition.Pitcher);
         dp.SetLevel(AbilityKind.Contact, p.Contact);
         dp.SetLevel(AbilityKind.Power, p.Power);
         dp.SetLevel(AbilityKind.LaunchTendency, p.LaunchTendency);
@@ -55,13 +57,14 @@ public static class ScoutedTeamProfile
         dp.SetLevel(AbilityKind.Steal, p.Steal);
         dp.SetLevel(AbilityKind.Baserunning, p.Baserunning);
 
-        if (p.Pitching is { } a)
-        {
-            dp.SetLevel(AbilityKind.Velocity, PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh));
-            dp.SetLevel(AbilityKind.Control, a.Control);
-            dp.SetLevel(AbilityKind.Stamina, PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches));
-            dp.SetLevel(AbilityKind.PitchRank, a.PitchRank);
-        }
+        // 投手レベルは全選手ぶん戻す（#381）。6指標の投手力・選手層は上で置いた適性で投手を選び分けるので、
+        // 投手として置かれていない選手の投手レベルが入っても <see cref="TeamStrengthProfile"/> の出力は動かない
+        // （野手側の AverageLevel は打撃系の中核能力しか見ない）。
+        var a = p.Pitching;
+        dp.SetLevel(AbilityKind.Velocity, PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh));
+        dp.SetLevel(AbilityKind.Control, a.Control);
+        dp.SetLevel(AbilityKind.Stamina, PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches));
+        dp.SetLevel(AbilityKind.PitchRank, a.PitchRank);
         return dp;
     }
 }

@@ -296,32 +296,37 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
     }
 
     /// <summary>
-    /// 横断ランキングによる継投人選（issue #209 Phase B, 設計書11 §4）。ブルペン投手・ベンチ（野手含む）を
-    /// 実能力値（<see cref="Players.PitcherAttributes.ReliefScore"/>）で比較して最良を返す（RNG不使用＝決定論）。
-    /// D2: 野手はブルペン最上位を1点でも上回った時だけ登板させる（＝同点はブルペン投手優先）。ブルペン投手が
-    /// 居なければ最良の野手を返す（緊急登板）。候補が無ければ null（engine 既定＝bullpen 先頭にフォールバック）。
+    /// 横断ランキングによる継投人選（issue #209 Phase B, 設計書11 §4）。控え全員を実能力値
+    /// （<see cref="Players.PitcherAttributes.ReliefScore"/>）で比較して最良を返す（RNG不使用＝決定論）。
+    ///
+    /// 同点のときだけ「投手として置かれている控え」を優先する（オーナー判断 2026-08-02: 現状維持）。
+    /// 判定の材料は選手の属性ではなく<b>配置</b>（<see cref="FieldPosition.Pitcher"/>）＝#366 §④ が
+    /// 抹殺対象外とした軸で、旧 <c>c.Pitching is not null</c> と生成経路上つねに同値
+    /// （<c>StrengthTeamFactory.onMound</c> も <c>RosterTeamBuilder.asPitcher</c> も守備位置と連動していた）。
+    /// <see cref="Players.PitcherAttributes.ReliefScore"/> は整数和なので同点は実際に起きる
+    /// （実測: 校力35で最大3.63%・校力50以上では0%）。
+    /// 候補が無ければ null（engine 既定＝控えの先頭にフォールバック）。
     /// </summary>
     private static Players.Player? PickReliever(in PitchingChangeSituation s)
     {
-        Players.Player? bestPitcher = null; var bestPitcherScore = double.NegativeInfinity;
-        Players.Player? bestFielder = null; var bestFielderScore = double.NegativeInfinity;
+        Players.Player? bestPlaced = null; var bestPlacedScore = double.NegativeInfinity;
+        Players.Player? bestOther = null; var bestOtherScore = double.NegativeInfinity;
         foreach (var c in s.ReliefCandidates)
         {
-            // 評価は投げられる能力（本職＝Pitching／野手＝LatentPitching）。どちらも無い候補はランク不能で除外。
-            if (c.ReliefPitching is not { } rp) continue;
-            var score = rp.ReliefScore();
-            if (c.Pitching is not null) // 本職投手
+            // 全選手が投手能力を持つ（#381）＝ランク不能で除外される候補はもう無い。
+            var score = c.Pitching.ReliefScore();
+            if (c.Position == Field.FieldPosition.Pitcher)
             {
-                if (score > bestPitcherScore) { bestPitcherScore = score; bestPitcher = c; }
+                if (score > bestPlacedScore) { bestPlacedScore = score; bestPlaced = c; }
             }
-            else // 潜在能力で登板する野手
+            else
             {
-                if (score > bestFielderScore) { bestFielderScore = score; bestFielder = c; }
+                if (score > bestOtherScore) { bestOtherScore = score; bestOther = c; }
             }
         }
-        if (bestPitcher is null) return bestFielder;                     // ブルペン投手ゼロ→野手（緊急登板）
-        if (bestFielder is not null && bestFielderScore > bestPitcherScore) return bestFielder; // D2: 上回れば野手
-        return bestPitcher;
+        if (bestPlaced is null) return bestOther;                        // 投手枠の控えゼロ→守備の誰かが上がる
+        if (bestOther is not null && bestOtherScore > bestPlacedScore) return bestOther;  // 上回れば配置外から
+        return bestPlaced;
     }
 
     /// <summary>

@@ -89,7 +89,7 @@ public sealed class InjuryAndEventsTests
         dp.SetLevel(AbilityKind.Speed, 60);
         dp.Injury = InjurySeverity.Severe;
 
-        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.CenterField, asPitcher: false);
+        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.CenterField);
         Assert.Equal(InjurySeverity.Severe, player.Injury); // 常に可視（采配判断用）
         Assert.Equal(42, player.Contact); // 60 × 0.70
         Assert.Equal(42, player.Speed);
@@ -168,7 +168,7 @@ public sealed class InjuryAndEventsTests
 
         // 投影で一時的な能力ダウン、期間経過で解ける。
         low.SetLevel(AbilityKind.Contact, 60);
-        var during = RosterTeamBuilder.ToPlayer(low, FieldPosition.LeftField, asPitcher: false);
+        var during = RosterTeamBuilder.ToPlayer(low, FieldPosition.LeftField);
         Assert.True(during.Contact < 60);
     }
 

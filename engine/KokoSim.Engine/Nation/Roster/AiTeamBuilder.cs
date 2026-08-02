@@ -129,7 +129,6 @@ public static class AiTeamBuilder
     private static double PitcherScore(AiPlayer p)
     {
         var a = p.Snapshot.Pitching;
-        if (a is null) return 0;
         return PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh) + a.Control + a.PitchRank
             + PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches);
     }

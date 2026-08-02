@@ -25,7 +25,7 @@ public sealed class TeamState
     private bool _usesDh;
     private int _dhSlot;
     private int _pitcherSlot;
-    private readonly Player _starter;           // 先発投手（実体化後の実インスタンス）。ボックススコアの基準。
+    private readonly Player _starter;           // 先発投手。ボックススコアの基準。
 
     public TeamState(Team team)
     {
@@ -39,21 +39,12 @@ public sealed class TeamState
         var starter = team.UsesDh
             ? team.StartingPitcher ?? throw new ArgumentException("DH制では StartingPitcher が必須です。", nameof(team))
             : team.BattingOrder[team.PitcherSlot];
-        // 先発が野手（本職でない）なら潜在投手能力を実能力として確定する（issue #209 Phase B / #352）。
-        // 「投」枠に野手を置く編成は正（#93: 内部の投/野区分でゲートしない）で、禁じるのは実体化を経ずに
-        // PitchingFatigue の LeagueAverage へ落ちること。本職投手は Pitching が非nullなので恒等＝帯不変。
-        CurrentPitcher = _starter = Materialize(starter);
-        if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;   // 実体化で別インスタンスになるので打順側も揃える
+        // 「投」枠に誰を置いても、その選手自身の投手能力で投げる（#93 / #381）。全選手が
+        // PitcherAttributes を持つので、先発が普段マウンドに立たない選手でも実体化は要らない。
+        CurrentPitcher = _starter = starter;
         PitchesThrown = 0;
         Runs = 0;
     }
-
-    /// <summary>
-    /// マウンドに上がる選手の潜在投手能力を実能力へ確定する（<see cref="ChangePitcherTo"/>・
-    /// <see cref="PromoteFielderToMound"/> と同型。issue #209 Phase B）。本職投手（Pitching 非null）は恒等。
-    /// </summary>
-    private static Player Materialize(Player p)
-        => p.Pitching is null && p.LatentPitching is { } latent ? p with { Pitching = latent } : p;
 
     private readonly List<int> _inningRuns = new();
 
@@ -598,7 +589,7 @@ public sealed class TeamState
     /// </summary>
     private static double StaminaRemainingOf(Player pitcher, double fatiguePitches)
     {
-        var stamina = (pitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
+        var stamina = pitcher.Pitching.StaminaPitches;
         if (stamina <= 0) return 0.0;
         var remaining = 1.0 - fatiguePitches / stamina;
         return remaining < 0.0 ? 0.0 : remaining > 1.0 ? 1.0 : remaining;
@@ -658,9 +649,8 @@ public sealed class TeamState
         var outgoing = CurrentPitcher;
         // 実況上の区別は「控えから出たか／守備に就いていた者が回ったか」。ここは常に控えからの登板。
         _retired.Add(outgoing);
-        // 野手が緊急登板するとき、潜在投手能力を実能力として確定する（issue #209 Phase B）。
-        // これでリーグ平均でなく本人の（肩由来／隠しの）能力で投げる。本職投手は Pitching が正なので恒等。
-        CurrentPitcher = Materialize(sub);
+        // 誰が上がっても本人の投手能力で投げる（#381。旧実装はここで潜在能力を詰め替えていた）。
+        CurrentPitcher = sub;
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
         if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;
         // 球数・疲労は選手単位（issue #235）。退場した投手は戻れないので従来と同じ見え方になる。
@@ -740,10 +730,9 @@ public sealed class TeamState
     {
         var retiringPitcher = CurrentPitcher;
         var vacated = fielder.Position;   // 野手が空ける守備位置
-        // 野手をマウンドへ: 潜在投手能力を実能力（Pitching）として確定（ChangePitcherTo と同型）。守備位置は投手へ。
-        var mound = fielder.Pitching is null && fielder.LatentPitching is { } latent
-            ? fielder with { Pitching = latent, Position = FieldPosition.Pitcher }
-            : fielder with { Position = FieldPosition.Pitcher };
+        // マウンドへ動かすのは守備位置だけ（issue #381）。投手能力は全選手が最初から持っているので、
+        // 登板の瞬間に詰め替える工程（旧 Materialize）は要らない＝詰め替え漏れという失敗の形が消える。
+        var mound = fielder with { Position = FieldPosition.Pitcher };
 
         // ②判定: 空き守備を旧投手より明確に上手く守れるベンチ野手が居るか（打力で基準を補正）。
         var benchFielder = BestReserveDefender();
@@ -804,9 +793,7 @@ public sealed class TeamState
     {
         var retiringPitcher = CurrentPitcher;   // DHでは打順外＝必ず退場
         var vacated = fielder.Position;         // 野手が空ける守備位置
-        var mound = fielder.Pitching is null && fielder.LatentPitching is { } latent
-            ? fielder with { Pitching = latent, Position = FieldPosition.Pitcher }
-            : fielder with { Position = FieldPosition.Pitcher };
+        var mound = fielder with { Position = FieldPosition.Pitcher };
         var dh = _lineup[_dhSlot];              // 元DH（守備に就いていない・打順スロット _dhSlot）
 
         // ②判定: 空き守備を元DHより明確に上手く守れるベンチ野手が居るか（元DHの打力で基準を補正＝好打者DHは残す）。
@@ -964,10 +951,7 @@ public sealed class TeamState
 
         var oldPitcher = CurrentPitcher;
         var displaced = _lineup[fSlot];
-        // 野手が登板するときは潜在投手能力を実能力として確定する（ChangePitcherTo と同型・issue #209 Phase B）。
-        var mound = reliever.Pitching is null && reliever.LatentPitching is { } latent
-            ? reliever with { Pitching = latent, Position = FieldPosition.Pitcher }
-            : reliever with { Position = FieldPosition.Pitcher };
+        var mound = reliever with { Position = FieldPosition.Pitcher };
 
         _retired.Add(displaced);
         _replacedAtSlot[fSlot] = displaced.Name;

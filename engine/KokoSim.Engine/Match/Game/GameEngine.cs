@@ -560,7 +560,7 @@ public static class GameEngine
             var playMods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
 
             // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
-            var pitcherFatigueOver = defense.FatiguePitches > (currentPitcher.Pitching?.StaminaPitches ?? 90.0);
+            var pitcherFatigueOver = defense.FatiguePitches > currentPitcher.Pitching.StaminaPitches;
             pitcher = PressureModel.ApplyPitcher(pitcher, PressureModel.Multiplier(
                 currentPitcher.Mental, pressureIdx, ctx.Pressure,
                 defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
@@ -1044,7 +1044,7 @@ public static class GameEngine
 
             // 投球過多（設計書03 §3.5）: スタミナ目安を大きく超えて投げ続けた投手の肩肘。
             if (defense.FatiguePitches
-                > (currentPitcher.Pitching?.StaminaPitches ?? 90.0) + ctx.MatchInjury.OveruseOverPitches)
+                > currentPitcher.Pitching.StaminaPitches + ctx.MatchInjury.OveruseOverPitches)
             {
                 Hurt(MatchInjuryModel.Roll(
                     InjuryScene.Overuse, ctx.MatchInjury.OveruseProb, currentPitcher, defense.Name,
@@ -1503,7 +1503,7 @@ public static class GameEngine
         var changed = false;
         if (defense.Tactics is { } brain)
         {
-            var staminaTarget = (defense.CurrentPitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
+            var staminaTarget = defense.CurrentPitcher.Pitching.StaminaPitches;
             // 継投人選の候補＝ブルペン＋ベンチ＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
             // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
             var candidates = defense.ReliefRankingCandidates;

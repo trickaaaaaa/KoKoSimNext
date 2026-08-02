@@ -98,22 +98,20 @@ public sealed record Player
     /// </summary>
     public double InjuryResistance { get; init; } = 50.0;
 
-    /// <summary>投手能力（投手のみ非null）。</summary>
-    public PitcherAttributes? Pitching { get; init; }
-
     /// <summary>
-    /// 潜在投手能力（issue #209 Phase B）。野手が緊急登板したときの投手能力の見積り。
-    /// 投/野の区別（#93）を壊さないため <see cref="Pitching"/> は野手では null のままにし、
-    /// 継投人選の評価・実登板時の能力確定にはこの別アクセサを使う。自校は隠しの真の投手レベルから、
-    /// AI校は運動能力から独立Forkで推定して詰める（本来の投手は Pitching が正なので通常 null）。
+    /// 投手能力。**全選手が必ず持つ**（issue #381 / #366）。投手として置かれていない選手は
+    /// 「投げ慣れていないぶん低い」だけで、能力そのものは欠けていない＝<c>Pitching is null</c> で
+    /// 役割を判定しない。誰がマウンドに立つかは配置（<see cref="Position"/>／<c>Team.PitcherSlot</c>）が決める。
+    ///
+    /// 旧実装は投手だけ本値・野手だけ <c>LatentPitching</c> という二重管理で、緊急登板のたびに
+    /// 実体化（旧 <c>TeamState.Materialize</c>）で詰め替えていた。詰め替えを忘れた経路は
+    /// 黙ってリーグ平均で投げる（＝本人の能力が消える）ので、持たせ方を1本にして構造的に断つ。
+    ///
+    /// 既定値は <see cref="PitcherAttributes.LeagueAverage"/>（＝旧コードの <c>?? LeagueAverage</c>
+    /// フォールバックと同値）。実際の生成経路（<c>RosterTeamBuilder</c>／<c>StrengthTeamFactory</c>）は
+    /// 必ず本人の能力を詰めるので、既定値が試合に出るのはテスト素体だけ。
     /// </summary>
-    public PitcherAttributes? LatentPitching { get; init; }
-
-    /// <summary>
-    /// 継投人選・実登板で使う「投げられる能力」。本来の投手は <see cref="Pitching"/>、
-    /// 野手は <see cref="LatentPitching"/>。どちらも無ければ null（＝評価不能・登板不可扱い）。
-    /// </summary>
-    public PitcherAttributes? ReliefPitching => Pitching ?? LatentPitching;
+    public PitcherAttributes Pitching { get; init; } = new();
 
     public BatterAttributes ToBatter() => new()
     {

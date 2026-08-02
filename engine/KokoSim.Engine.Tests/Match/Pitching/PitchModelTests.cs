@@ -231,7 +231,7 @@ public sealed class PitchModelTests
         dp.SetCap(AbilityKind.Stuff, 99); // cap >= level が必要（SetWithCap の代わり）
         dp.LearnedPitches.Add(new LearnedPitch(PitchType.Slider, PowerOffset: 5, SharpnessOffset: -10));
 
-        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Pitcher, asPitcher: true);
+        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Pitcher);
         var rep = player.Pitching!.EffectiveRepertoire;
         Assert.Equal(2, rep.Count);
         Assert.Equal(PitchType.Fastball, rep[0].Type);

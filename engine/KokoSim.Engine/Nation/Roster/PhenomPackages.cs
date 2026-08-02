@@ -105,8 +105,9 @@ public static class PhenomPackages
             Fielding = Hi(p.Fielding),
             Discipline = Hi(p.Discipline),
         };
-        if (p.Pitching is not { } a) return result;
-
+        // 全選手が投手能力を持つ（#381）＝総合型は投手能力にも必ず乗る。旧実装は「投手能力を持つなら」の
+        // 条件付きで、実質「マウンドに置かれた選手だけ」だった＝総合型の野手怪物は投げる能力が伸びなかった。
+        var a = p.Pitching;
         var velLevel = System.Math.Max(PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh),
             rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
         var staLevel = System.Math.Max(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches),
@@ -126,7 +127,7 @@ public static class PhenomPackages
     private static Player WithPitcher(Player p, PhenomCoefficients c, IRandomSource rng,
         bool mainVelocity, bool mainControl, bool supportPitchRank, bool supportStamina)
     {
-        if (p.Pitching is not { } a) return p;   // 投手系怪物は投手にのみ適用（保険）
+        var a = p.Pitching;
         var velLevel = PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh);
         var staLevel = PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches);
         if (mainVelocity) velLevel = System.Math.Max(velLevel, rng.NextInt(c.MainMin, c.MainMax + 1));

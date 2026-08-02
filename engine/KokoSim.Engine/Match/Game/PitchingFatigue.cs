@@ -29,7 +29,7 @@ public static class PitchingFatigue
     /// <summary>消耗を反映した実効投手能力（球速天井・制球を減衰）。fatiguePitches はギア重み込みの実効消費球数。</summary>
     public static PitcherAttributes Effective(Player pitcher, double fatiguePitches, FatigueCoefficients c)
     {
-        var basep = pitcher.Pitching ?? PitcherAttributes.LeagueAverage;
+        var basep = pitcher.Pitching;
         var over = fatiguePitches - basep.StaminaPitches;
         if (over <= 0) return basep;
 
@@ -45,7 +45,7 @@ public static class PitchingFatigue
     /// <summary>継投すべきか（実効消費球数ベース）。目安投球数＋マージンだけで判断（ハードキャップ撤廃, issue #356）。</summary>
     public static bool ShouldRelieve(Player pitcher, double fatiguePitches, FatigueCoefficients c)
     {
-        var basep = pitcher.Pitching ?? PitcherAttributes.LeagueAverage;
+        var basep = pitcher.Pitching;
         return fatiguePitches >= basep.StaminaPitches + c.RelievePitchMargin;
     }
 }

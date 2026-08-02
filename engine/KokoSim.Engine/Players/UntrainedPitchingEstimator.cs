@@ -3,16 +3,18 @@ using KokoSim.Engine.Core;
 namespace KokoSim.Engine.Players;
 
 /// <summary>
-/// 野手の潜在投手能力の推定（issue #209 Phase B）。AI校の野手は隠しの投手レベルを持たない
-/// （自校＝<see cref="Season.RosterTeamBuilder"/> は育成レイヤの真の投手4種レベルを投影できるが、
-/// AI校＝<see cref="Nation.StrengthTeamFactory"/> の野手には材料が無い）。そこで運動能力（肩）から
-/// 緊急登板時の投手能力を見積もる。制球・スタミナ・キレは「投げ慣れていない」前提で保守的に低く置く。
+/// 投手として置かれていない選手の投手能力の推定（issue #209 Phase B／#381 で改称）。
+/// 全選手が <see cref="PitcherAttributes"/> を持つ（#366「投手は配置であって属性ではない」）ので、
+/// マウンド外の選手にも本人の能力を詰める必要がある。自校＝<see cref="Season.RosterTeamBuilder"/> は
+/// 育成レイヤの真の投手レベルをそのまま投影できるが、AI校＝<see cref="Nation.StrengthTeamFactory"/> の
+/// 非マウンド選手には材料が無いので、運動能力（肩）から見積もる。制球・スタミナ・キレは
+/// 「投げ慣れていない」前提で保守的に低く置く＝低いだけで、欠けてはいない。
 /// </summary>
 /// <remarks>
 /// 決定論・帯不変: 呼び出し側は必ず Fork したストリームを渡す（主RNGの消費列を変えない）。
 /// この能力は継投人選の評価と実登板時のみ参照され、通常の打席解決には一切流れない。
 /// </remarks>
-public static class LatentPitchingEstimator
+public static class UntrainedPitchingEstimator
 {
     // 肩の何割が球速レベルへ乗るか。強肩の野手ほど速い球を投げられる（が本職投手ほどではない）。
     private const double ArmToVelocityFactor = 0.75;

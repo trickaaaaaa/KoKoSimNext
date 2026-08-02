@@ -49,7 +49,7 @@ public sealed class PitcherIdentityTests
     [Fact]
     public void ConditionReorderedOpponent_MoundIsTheAce_NotTheNinthBatter()
     {
-        // 相手校を校ID＋年度から生成（投手は9番・野手は LatentPitching のみ＝実戦と同じ材料）。
+        // 相手校を校ID＋年度から生成（投手は9番・全員が投手能力を持つ＝実戦と同じ材料）。
         var team = StrengthTeamFactory.ForSchool(
             new School { Id = 3, Name = "大磯総合", PrefectureId = 0, Strength = 70 }, yearIndex: 1);
         var ace = team.BattingOrder[team.PitcherSlot];
@@ -73,7 +73,7 @@ public sealed class PitcherIdentityTests
         // 回帰の再現条件: エースは9番から動き、代わりに野手が9番に居る。
         Assert.NotEqual(8, composed.PitcherSlot);
         Assert.NotEqual(FieldPosition.Pitcher, composed.BattingOrder[8].Position);
-        Assert.Null(composed.BattingOrder[8].Pitching);            // ＝旧実装でマウンドに立っていた選手
+        // 9番はもう投手枠ではない（＝旧実装でマウンドに立っていた打順）。投手能力の有無では測らない（#381）。
 
         // 投手枠は「投」の選手を指し続ける。
         Assert.Equal(FieldPosition.Pitcher, composed.BattingOrder[composed.PitcherSlot].Position);
@@ -82,7 +82,6 @@ public sealed class PitcherIdentityTests
         var state = new TeamState(composed);
         Assert.Equal(ace.Name, state.CurrentPitcher.Name);
         Assert.Equal(FieldPosition.Pitcher, state.CurrentPitcher.Position);
-        Assert.NotNull(state.CurrentPitcher.Pitching);             // リーグ平均へ落ちない
         Assert.Equal(ace.Pitching, state.CurrentPitcher.Pitching);
     }
 
@@ -135,13 +134,13 @@ public sealed class PitcherIdentityTests
     // ===== 実体化（#209 Phase B）: マウンドに立つ選手は必ず本人の能力で投げる =====
 
     [Fact]
-    public void FielderAtPitcherSlot_MaterializesLatentPitching_NotLeagueAverage()
+    public void FielderAtPitcherSlot_PitchesWithOwnAbility_NotLeagueAverage()
     {
-        // 「投」枠に野手を置く編成自体は正（issue #93: 内部の投/野区分でゲートしない）。
-        // 禁じるのは実体化を経ずに PitchingFatigue の LeagueAverage へ落ちること。
+        // 「投」枠に普段マウンドに立たない選手を置く編成自体は正（issue #93: 内部の投/野区分でゲートしない）。
+        // 禁じるのは本人の能力でなく PitchingFatigue の LeagueAverage で投げてしまうこと。
         var latent = PitcherAttributes.LeagueAverage with { Control = 33, MaxVelocityKmh = 121 };
         var order = Positions.Select((p, i) => p == FieldPosition.Pitcher
-            ? At(FieldPosition.CenterField, "野手登板") with { LatentPitching = latent }
+            ? At(FieldPosition.CenterField, "野手登板") with { Pitching = latent }
             : At(p, $"{p}先発")).ToList();
         var team = new Team { Name = "野手登板校", BattingOrder = order, PitcherSlot = 8 };
 

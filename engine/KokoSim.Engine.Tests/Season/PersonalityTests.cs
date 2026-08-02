@@ -153,7 +153,7 @@ public sealed class PersonalityTests
     public void Projection_BakesChanceHitAndBuntScalars()
     {
         var dp = new DevelopingPlayer { Personality = Personality.MoodMaker };
-        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.LeftField, asPitcher: false,
+        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.LeftField,
             personalityCoeff: PC);
         var prof = PC.Profile(Personality.MoodMaker);
         Assert.Equal(Personality.MoodMaker, player.Personality);
@@ -166,7 +166,7 @@ public sealed class PersonalityTests
     public void Projection_NullPersonality_IsNeutral()
     {
         var dp = new DevelopingPlayer(); // Personality=Normal 既定
-        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.CenterField, asPitcher: false);
+        var player = RosterTeamBuilder.ToPlayer(dp, FieldPosition.CenterField);
         Assert.Equal(Personality.Normal, player.Personality);
         Assert.Equal(0.0, player.BuntSuccessBonus, 9);
         Assert.Equal(1.0, player.ChanceHitFactor, 9);

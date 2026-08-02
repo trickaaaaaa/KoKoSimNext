@@ -65,9 +65,9 @@ public sealed class EnemyLineupCompositionTests
 
         var team = dhSchool.Team;
         Assert.Equal(9, team.BattingOrder.Count);
-        Assert.All(team.BattingOrder, p => Assert.Null(p.Pitching));
+        Assert.All(team.BattingOrder, p => Assert.NotEqual(FieldPosition.Pitcher, p.Position));
         Assert.NotNull(team.StartingPitcher);
-        Assert.NotNull(team.StartingPitcher!.Pitching);
+        Assert.Equal(FieldPosition.Pitcher, team.StartingPitcher!.Position);
         Assert.Equal(-1, team.PitcherSlot);
         Assert.InRange(team.DhSlot, 0, 8);
 

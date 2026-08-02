@@ -44,7 +44,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         {
             P(FieldPosition.Catcher, n + "捕"), P(FieldPosition.FirstBase, n + "一"),
             P(FieldPosition.SecondBase, n + "二"), P(FieldPosition.ThirdBase, n + "三"),
-            P(FieldPosition.Shortstop, n + "遊") with { LatentPitching = Latent }, P(FieldPosition.LeftField, n + "左"),
+            P(FieldPosition.Shortstop, n + "遊") with { Pitching = Latent }, P(FieldPosition.LeftField, n + "左"),
             P(FieldPosition.CenterField, n + "中"), P(FieldPosition.RightField, n + "右"),
             Rp(n + "先発P"),
         },
@@ -60,7 +60,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         {
             P(FieldPosition.Catcher, n + "捕"), P(FieldPosition.FirstBase, n + "一"),
             P(FieldPosition.SecondBase, n + "二"), P(FieldPosition.ThirdBase, n + "三"),
-            P(FieldPosition.Shortstop, n + "遊") with { LatentPitching = Latent }, P(FieldPosition.LeftField, n + "左"),
+            P(FieldPosition.Shortstop, n + "遊") with { Pitching = Latent }, P(FieldPosition.LeftField, n + "左"),
             P(FieldPosition.CenterField, n + "中"), P(FieldPosition.RightField, n + "右"),
             P(FieldPosition.DesignatedHitter, n + "DH"),
         },

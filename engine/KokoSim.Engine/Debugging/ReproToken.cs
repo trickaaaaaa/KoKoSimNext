@@ -128,12 +128,11 @@ public readonly record struct ReproToken(
           .Append(p.Speed.ToString(c)).Append(',').Append(p.ArmStrength.ToString(c)).Append(',')
           .Append(p.Fielding.ToString(c)).Append(',').Append(p.Catching.ToString(c)).Append(',')
           .Append(p.Mental.ToString(c)).Append('|');
-        if (p.Pitching is { } pit)
-        {
-            sb.Append(pit.MaxVelocityKmh.ToString("F1", c)).Append(',')
-              .Append(pit.Control.ToString(c)).Append(',')
-              .Append(pit.StaminaPitches.ToString("F0", c));
-        }
-        sb.Append('\n');
+        // 投手能力は全選手が持つ（#381）＝有無で分岐しない。旧トークンは野手の欄が空だったので指紋は変わる。
+        var pit = p.Pitching;
+        sb.Append(pit.MaxVelocityKmh.ToString("F1", c)).Append(',')
+          .Append(pit.Control.ToString(c)).Append(',')
+          .Append(pit.StaminaPitches.ToString("F0", c))
+          .Append('\n');
     }
 }

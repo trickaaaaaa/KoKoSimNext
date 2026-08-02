@@ -230,7 +230,7 @@ public sealed class LineupOrdererTests
         Assert.Same(pitcher, result.StartingPitcher);
         Assert.Equal(-1, result.PitcherSlot);
         Assert.Equal(9, result.BattingOrder.Count);
-        Assert.All(result.BattingOrder, p => Assert.Null(p.Pitching));           // 打順に投手がいない
+        Assert.All(result.BattingOrder, p => Assert.NotEqual(FieldPosition.Pitcher, p.Position)); // 打順に投手がいない
         Assert.Same(bestBench, result.BattingOrder[result.DhSlot]);              // 最強控えが繰り上げ
         Assert.DoesNotContain(bestBench, result.Reserves);                         // ベンチから抜ける
         Assert.Single(result.Reserves);

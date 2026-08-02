@@ -28,7 +28,9 @@ public sealed class ReliefBackfillTests
         };
 
     private static Player Field(string name, FieldPosition pos, PitcherAttributes? latent = null)
-        => new() { Name = name, Position = pos, LatentPitching = latent };
+        => latent is null
+            ? new Player { Name = name, Position = pos }
+            : new Player { Name = name, Position = pos, Pitching = latent };
 
     private static Player Arm(string name, PitcherAttributes a)
         => new() { Name = name, Position = FieldPosition.Pitcher, Pitching = a };

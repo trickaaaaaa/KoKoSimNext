@@ -141,9 +141,9 @@ public sealed class PlayerModelExpansionTests
         dp.SetAptitude(FieldPosition.Shortstop, 90);   // 本職（高適性）
         dp.SetAptitude(FieldPosition.LeftField, 30);   // 慣れないポジ（低適性）
 
-        var atSs = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Shortstop, asPitcher: false);
-        var atLf = RosterTeamBuilder.ToPlayer(dp, FieldPosition.LeftField, asPitcher: false);
-        var atNeutral = RosterTeamBuilder.ToPlayer(dp, FieldPosition.CenterField, asPitcher: false); // 適性50=×1.0
+        var atSs = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Shortstop);
+        var atLf = RosterTeamBuilder.ToPlayer(dp, FieldPosition.LeftField);
+        var atNeutral = RosterTeamBuilder.ToPlayer(dp, FieldPosition.CenterField); // 適性50=×1.0
 
         Assert.True(atSs.Fielding > atNeutral.Fielding);  // 高適性ポジは実効守備力↑
         Assert.True(atLf.Fielding < atNeutral.Fielding);  // 低適性ポジは↓
