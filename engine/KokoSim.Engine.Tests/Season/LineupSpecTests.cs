@@ -16,11 +16,15 @@ public sealed class LineupSpecTests
 {
     // 既定でベンチ入り（背番号あり）。ベンチ外を作るときだけ number: 0 を渡す。
     private static DevelopingPlayer Dp(int id, string name, bool pitcher = false, bool captain = false, int number = -1)
-        => new()
+    {
+        var p = new DevelopingPlayer
         {
-            Id = id, Name = name, IsPitcher = pitcher, IsCaptain = captain,
+            Id = id, Name = name, IsCaptain = captain,
             UniformNumber = number >= 0 ? number : Math.Clamp(id, 1, UniformNumberAssigner.BenchSize),
         };
+        PitcherRoleResolver.SeedAptitudeForRole(p, pitcher);
+        return p;
+    }
 
     // 非DH: 8守備＋投手9番。守備位置を一意網羅。
     private static readonly FieldPosition[] EightFieldPos =

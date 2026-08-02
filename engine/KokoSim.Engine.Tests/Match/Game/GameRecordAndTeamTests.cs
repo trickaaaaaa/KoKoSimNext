@@ -57,7 +57,8 @@ public sealed class GameRecordAndTeamTests
 
     private static List<DevelopingPlayer> RosterWithCatcherAptitudeCases()
     {
-        var pitcher = new DevelopingPlayer { Name = "投手", IsPitcher = true };
+        var pitcher = new DevelopingPlayer { Name = "投手" };
+        PitcherRoleResolver.SeedAptitudeForRole(pitcher, true);
         foreach (var k in AbilityKinds.All) { pitcher.SetLevel(k, 60); pitcher.SetCap(k, 99); }
 
         return new List<DevelopingPlayer>

@@ -11,7 +11,11 @@ namespace KokoSim.Engine.Season;
 /// </summary>
 public static class AptitudeRoller
 {
-    /// <summary>全9守備位置（enum順）。</summary>
+    /// <summary>
+    /// 全9守備位置（enum順）。<see cref="FieldPosition.DesignatedHitter"/> は打順枠であって守備位置では
+    /// ないので**含めない**＝適性もロールしない。適性配列を添字で素朴に走査すると未ロールの DH（既定50）を
+    /// 拾ってしまうので、適性を横断する処理は必ずこの配列を通すこと（#377）。
+    /// </summary>
     public static readonly FieldPosition[] AllPositions =
     {
         FieldPosition.Pitcher, FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase,

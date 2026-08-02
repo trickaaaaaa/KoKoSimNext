@@ -18,7 +18,8 @@ public sealed class IndividualCoachingTests
     {
         var c = coefficients ?? new TrainingCoefficients();
         var stages = new GrowthStageTable();
-        var p = new DevelopingPlayer { IsPitcher = true, IndividualCoaching = nominated };
+        var p = new DevelopingPlayer { IndividualCoaching = nominated };
+        PitcherRoleResolver.SeedAptitudeForRole(p, true);
         p.SetLevel(ability, start);
         p.SetCap(ability, 99);
         for (var i = 0; i < weeks; i++)
@@ -46,9 +47,11 @@ public sealed class IndividualCoachingTests
         var stages = new GrowthStageTable();
         var coaching = new CoachingProfile { Pitching = 90 };
 
-        var legacy = new DevelopingPlayer { IsPitcher = true };
+        var legacy = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(legacy, true);
         legacy.SetLevel(AbilityKind.Velocity, 30); legacy.SetCap(AbilityKind.Velocity, 99);
-        var notNominated = new DevelopingPlayer { IsPitcher = true, IndividualCoaching = false };
+        var notNominated = new DevelopingPlayer { IndividualCoaching = false };
+        PitcherRoleResolver.SeedAptitudeForRole(notNominated, true);
         notNominated.SetLevel(AbilityKind.Velocity, 30); notNominated.SetCap(AbilityKind.Velocity, 99);
 
         for (var i = 0; i < 150; i++)
@@ -98,9 +101,11 @@ public sealed class IndividualCoachingTests
         var stages = new GrowthStageTable();
         var ace = new CoachingProfile { Batting = 90 };
 
-        var notNominated = new DevelopingPlayer { IsPitcher = false };
+        var notNominated = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(notNominated, false);
         notNominated.SetLevel(AbilityKind.Discipline, 30); notNominated.SetCap(AbilityKind.Discipline, 99);
-        var nominated = new DevelopingPlayer { IsPitcher = false, IndividualCoaching = true };
+        var nominated = new DevelopingPlayer { IndividualCoaching = true };
+        PitcherRoleResolver.SeedAptitudeForRole(nominated, false);
         nominated.SetLevel(AbilityKind.Discipline, 30); nominated.SetCap(AbilityKind.Discipline, 99);
 
         for (var i = 0; i < 150; i++)
@@ -122,9 +127,11 @@ public sealed class IndividualCoachingTests
         var ace = new CoachingProfile { Pitching = 90 };
         var alloc = new[] { new MenuAllocation(TrainingMenu.VelocityTraining, c.ReferenceWeekMinutes) };
 
-        var notNominated = new DevelopingPlayer { IsPitcher = true };
+        var notNominated = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(notNominated, true);
         notNominated.SetLevel(AbilityKind.Velocity, 30); notNominated.SetCap(AbilityKind.Velocity, 99);
-        var nominated = new DevelopingPlayer { IsPitcher = true, IndividualCoaching = true };
+        var nominated = new DevelopingPlayer { IndividualCoaching = true };
+        PitcherRoleResolver.SeedAptitudeForRole(nominated, true);
         nominated.SetLevel(AbilityKind.Velocity, 30); nominated.SetCap(AbilityKind.Velocity, 99);
 
         for (var i = 0; i < 150; i++)

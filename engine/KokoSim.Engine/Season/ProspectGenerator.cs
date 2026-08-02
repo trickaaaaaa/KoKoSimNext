@@ -9,16 +9,17 @@ namespace KokoSim.Engine.Season;
 /// <summary>新入生生成の係数（設計書04 §2.1・設計書01 §1.1b-c）。名声→総合力→凸凹配分。</summary>
 public sealed record RosterCoefficients
 {
+    /// <summary>
+    /// C# 既定値の共有インスタンス。係数を注入できない場所（<see cref="DevelopingPlayer.IsPitcher"/> の
+    /// 暫定実装）から参照する。YAML 側と値が食い違うと導出が二重定義になるので、
+    /// data/coefficients.yaml の roster: 節と既定値は必ず揃えること。
+    /// </summary>
+    public static readonly RosterCoefficients Default = new();
+
     public double IntakeMean { get; init; } = 10.0;
     public double IntakeSd { get; init; } = 1.5;
     public int IntakeMin { get; init; } = 8;
     public int IntakeMax { get; init; } = 13;
-    /// <summary>
-    /// 旧: 生成時に投手を決め打つ確率（Issue #174 で廃止）。投手役は投手適性からの創発に置換したため
-    /// 生成では未使用。互換のため残置（他コードが参照する場合のドキュメント値）。
-    /// </summary>
-    public double PitcherShare { get; init; } = 0.30;
-
     // --- 投手適性→投手能力の創発（Issue #174: 生成時決め打ち廃止） ---
     /// <summary>
     /// 投手寄せ判定のバイアス（Issue #174）。投手適性に加算してから最良守備位置適性と比較する。
@@ -214,7 +215,47 @@ public static class ProspectGenerator
         var list = new List<DevelopingPlayer>(count);
         for (var i = 0; i < count; i++)
             list.Add(Create(year, i, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));
+        EnsurePitcherSupply(list, c);
         return list;
+    }
+
+    /// <summary>
+    /// 投手供給の下限（#377）。投手として読める選手が1人も居ないコホートに、投手適性が最も惜しい1人を
+    /// 判定境界のすぐ上まで引き上げて必ず1人立たせる。AI校側の
+    /// <see cref="Nation.Roster.PersistentRosterCoefficients.PitcherCountFloor"/> と同じ役目。
+    ///
+    /// 供給バイアスを保っても投手適性者0人のコホートは実測2.12%出るので、判定だけでは
+    /// 「投手適性者0人の学校が出ない」を満たせない。乱数を使わない決定論操作（不変条件#2）。
+    ///
+    /// 能力は既に配分済みなので、底上げされた投手は投手能力が低いままになる＝
+    /// 「その年は投手が居ない」という苦作がそのまま絵に出る（能力まで底上げしない）。
+    /// </summary>
+    private static void EnsurePitcherSupply(List<DevelopingPlayer> cohort, RosterCoefficients c)
+    {
+        if (cohort.Count == 0) return;
+        foreach (var p in cohort)
+            if (p.IsPitcher) return;
+
+        // 判定の余裕（投手適性＋バイアス−最良守備適性）が最大＝最も惜しい1人。同点は先頭優先で決定論。
+        DevelopingPlayer? best = null;
+        var bestMargin = double.NegativeInfinity;
+        var bestField = 0;
+        foreach (var p in cohort)
+        {
+            var field = 0;
+            foreach (var pos in AllPositions)
+                if (pos != FieldPosition.Pitcher) field = Math.Max(field, p.Aptitude(pos));
+            var margin = p.Aptitude(FieldPosition.Pitcher) + c.PitcherAptitudeBias - field;
+            if (margin <= bestMargin) continue;
+            best = p;
+            bestMargin = margin;
+            bestField = field;
+        }
+        if (best == null) return;
+
+        // 判定は apt + bias > bestField。ちょうど跨ぐ最小値まで引き上げる（能力には触れない）。
+        var lifted = (int)Math.Ceiling(bestField - c.PitcherAptitudeBias) + 1;
+        best.SetAptitude(FieldPosition.Pitcher, (int)MathUtil.Clamp(lifted, 1, 99));
     }
 
     /// <summary>「苗字　名前」から下の名前だけを取り出す（区切りが無ければ全体を名前とみなす）。</summary>
@@ -313,16 +354,19 @@ public static class ProspectGenerator
         AssignAptitudes(p, c, rng.Fork(AptitudeStreamId(year, index)));
 
         // 投手役は投手適性から創発（旧 PitcherShare コイン投げ廃止, Issue #174）。
-        // 役割判定は供給バイアス込み（実プレイに必要な投手率へ寄せる）で決め、明示ロールとして持たせる。
+        // 役割判定は供給バイアス込み（実プレイに必要な投手率へ寄せる）で決める。
         // 一方 w（能力の連続補間の重み）は素の適性差から作る＝明確な野手は w≈0 で打撃が total を保つ
         // （バイアスを w に混ぜると全野手の打撃が下がり帯が大きくずれるため分離）。
-        var (naturalPitcher, w) = ResolvePitcherRole(p, c);
-        p.IsPitcher = naturalPitcher;
+        // #377: 判定結果を選手へ書き戻さない（IsPitcher は適性からの導出＝同じ式が2箇所に増えない）。
+        // w＝能力の配分に使う重み（バイアス無し）、wRole＝「投手としてどれだけ読めるか」（バイアス込み・
+        // 判定境界で 0.5）。持ち物は wRole、能力の配分は w と使い分ける（PitcherRoleResolver 参照）。
+        var (naturalPitcher, w, wRole) = ResolvePitcherRole(p, c);
 
-        // 隠し「投手経歴」は野手のみ（適性確定後に判定, 設計書01 §1.1b）。主ストリームで1ドロー。
-        p.HasPitcherBackground = !naturalPitcher && rng.NextDouble() < c.PitcherBackgroundProb;
-        // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。投手判定は創発ロール。
-        p.Skills = SkillGenerator.Generate(naturalPitcher, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff);
+        // 隠し「投手経歴」（設計書01 §1.1b）。#377: 役割の二択でなく連続量で薄める＝投手として読める選手ほど
+        // 「経歴持ちの野手」にならない。主ストリームで常に1ドロー（分岐で消費数が変わらない）。
+        p.HasPitcherBackground = rng.NextDouble() < c.PitcherBackgroundProb * (1.0 - wRole);
+        // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。プールの出し分けも連続量。
+        p.Skills = SkillGenerator.Generate(wRole, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff);
 
         // --- Stage 1: 運動能力ベースライン（名声独立） ---
         foreach (var k in Physical)
@@ -361,36 +405,40 @@ public static class ProspectGenerator
         var veloLevel = (int)MathUtil.Clamp(
             Math.Round(arm * c.VelocityArmWeight + pitcherSense * c.VelocitySenseWeight), 1, 100);
 
-        // 球質タイプ（設計書01 §1.1b「技巧派投手」）: 投手にのみ付与＝創発の投手判定で分岐。
-        // 投手総合はほぼ変えず球速・制球・スタミナ・キレの配分だけ振り替える。専用Forkストリームで抽選。
-        if (naturalPitcher)
+        // 球質タイプ（設計書01 §1.1b「技巧派投手」）: #377 で役割分岐を廃し、**全員に抽選して
+        // オフセットを wRole で薄める**（投手として読めない選手ほど振れ幅が小さい）。投手総合はほぼ変えず
+        // 球速・制球・スタミナ・キレの配分だけ振り替える。専用Forkストリームで抽選＝主RNG非消費。
+        // 反映は AdjustLevel（才能上限を引き直さない）＝**役割によって主RNGの消費数が変わらない**。
         {
             var archetype = PitcherArchetypes.Sample(
                 rng.Fork(ArchetypeStreamId(year, index)), c.Archetypes);
             var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(archetype, c.Archetypes);
-            veloLevel = Lv(veloLevel + dv);
-            SetWithCap(p, AbilityKind.Control, Lv(p.Level(AbilityKind.Control) + dc), c, growth, rng);
+            // オフセットで専門外フロア（「できない」を作らない, Stage2 の pitchingFloor）を割らせない。
+            // 旧実装は投手だけが通る道で floor が SpecialtyFloor(14) と高く問題にならなかったが、
+            // 全員が通るようになると野手の制球が OffSpecialtyFloor(8) を割る（実測3件/1635）。
+            int Adjusted(AbilityKind k, double delta) => Math.Max(pitchingFloor, Lv(p.Level(k) + delta));
+            veloLevel = Lv(veloLevel + dv * wRole);
+            AdjustLevel(p, AbilityKind.Control, Adjusted(AbilityKind.Control, dc * wRole));
             // スタミナは上限なし（issue #356）＝軟投派等の正オフセットを100で頭打ちにしない。
-            SetWithCap(p, AbilityKind.Stamina, LvStamina(p.Level(AbilityKind.Stamina) + ds), c, growth, rng);
-            SetWithCap(p, AbilityKind.PitchRank, Lv(p.Level(AbilityKind.PitchRank) + dr), c, growth, rng);
+            AdjustLevel(p, AbilityKind.Stamina,
+                Math.Max(pitchingFloor, LvStamina(p.Level(AbilityKind.Stamina) + ds * wRole)));
+            AdjustLevel(p, AbilityKind.PitchRank, Adjusted(AbilityKind.PitchRank, dr * wRole));
         }
         SetWithCap(p, AbilityKind.Velocity, veloLevel, c, growth, rng);
 
         // 球威（Issue #274）: ストレートのホップ成分を担う育成軸。球速練習の主効果に接続。
         // 本流 rng を1ビットも消費しないよう専用 Fork ストリームから引く（CoreTwelve列の後方互換を保つ）。
-        // 投手は球速と相関（強腕＝球に力が伝わりやすい）し ±ばらつきを持つ。野手はやや低め。
+        // #377: 二択を廃止。もともと真側が w 補間で、w=0 では偽側と一致するので分岐を畳むだけで連続になる。
         {
             var stuffRng = rng.Fork(StuffStreamId(year, index));
-            var stuffBase = naturalPitcher
-                ? Lerp(total * c.NonPitcherSenseFactor, veloLevel + c.PitcherSenseBonus * 0.3, w)
-                : total * c.NonPitcherSenseFactor;
+            var stuffBase = Lerp(total * c.NonPitcherSenseFactor, veloLevel + c.PitcherSenseBonus * 0.3, w);
             var stuffLevel = (int)MathUtil.Clamp(Math.Round(stuffBase + stuffRng.NextGaussian(0, 8)), 5, 95);
             SetWithCap(p, AbilityKind.Stuff, stuffLevel, c, growth, stuffRng);
         }
 
         // 変化球レパートリー（設計書02 §2.2）。ストレートは必修（含めない）。
         // 投手: 1〜3球種／野手: 0〜1（投手経歴持ちは1〜2に上振れ）。判定は創発ロール。
-        LearnPitches(p, naturalPitcher, c, rng);
+        LearnPitches(p, wRole, c, rng);
 
         return p;
     }
@@ -401,23 +449,26 @@ public static class ProspectGenerator
         PitchType.Fork, PitchType.Changeup, PitchType.Shuuto, PitchType.Sinker,
     };
 
-    private static void LearnPitches(DevelopingPlayer p, bool isPitcher, RosterCoefficients c, IRandomSource rng)
+    /// <summary>
+    /// 変化球レパートリーの習得（#377: 役割の三分岐を連続量へ）。3回の抽選を**必ず**引くので
+    /// 主RNGの消費数が役割に依存しない（旧実装は分岐ごとに消費数が違った）。
+    ///
+    /// 重みは「投手としてどれだけ読めるか」（<see cref="PitcherRoleResolver.RoleWeight"/>＝バイアス込み・
+    /// 判定境界で 0.5）を使う。能力配分の w（バイアス無し）を使うと、判定を通った投手でも重みが
+    /// 0.2〜0.3 に沈み、変化球を1本も持たない投手が15%出る（実測）。持ち物は役割寄りの量で決める。
+    ///
+    /// 1本目は「野手水準（経歴持ちは必ず）↔ 必ず1本」の補間、2本目は「経歴持ちの上振れ↔投手水準」、
+    /// 3本目は投手水準に比例。wRole→0 は従来の野手（0〜1本）、wRole→1 は従来の投手（1〜3本）と一致する。
+    /// </summary>
+    private static void LearnPitches(DevelopingPlayer p, double wRole, RosterCoefficients c, IRandomSource rng)
     {
-        int count;
-        if (isPitcher)
-        {
-            count = 1;
-            if (rng.NextDouble() < c.PitcherSecondPitchProb) count++;
-            if (rng.NextDouble() < c.PitcherThirdPitchProb) count++;
-        }
-        else if (p.HasPitcherBackground)
-        {
-            count = 1 + (rng.NextDouble() < c.BackgroundFielderExtraProb ? 1 : 0);
-        }
-        else
-        {
-            count = rng.NextDouble() < c.FielderBreakingProb ? 1 : 0;
-        }
+        var firstProb = Lerp(p.HasPitcherBackground ? 1.0 : c.FielderBreakingProb, 1.0, wRole);
+        var secondProb = Lerp(p.HasPitcherBackground ? c.BackgroundFielderExtraProb : 0.0,
+            c.PitcherSecondPitchProb, wRole);
+        var count = 0;
+        if (rng.NextDouble() < firstProb) count++;
+        if (rng.NextDouble() < secondProb) count++;
+        if (rng.NextDouble() < c.PitcherThirdPitchProb * wRole) count++;
 
         // 重複しない球種を選ぶ（順序依存を避けるため先頭から確率抽選でなくインデックス抽選）。
         var pool = new List<PitchType>(BreakingTypes);
@@ -453,13 +504,9 @@ public static class ProspectGenerator
         }
     }
 
-    // 全9守備位置（適性付与の反復用, enum順）。
-    private static readonly FieldPosition[] AllPositions =
-    {
-        FieldPosition.Pitcher, FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
-        FieldPosition.ThirdBase, FieldPosition.Shortstop, FieldPosition.LeftField,
-        FieldPosition.CenterField, FieldPosition.RightField,
-    };
+    // 全9守備位置（適性付与の反復用, enum順）。DH を含めないため AptitudeRoller の定義を共有する
+    // （複製するとどちらかに DH が混ざったとき絵にも例外にも出ずに投手判定だけが壊れる, #377）。
+    private static FieldPosition[] AllPositions => AptitudeRoller.AllPositions;
 
     /// <summary>
     /// 守備位置適性を創発的に付与（設計書01 §1.1）。本職は事前に決めない。
@@ -475,6 +522,17 @@ public static class ProspectGenerator
     }
 
     /// <summary>現在値を設定し、才能上限＝現在値＋gap（凸凹・晩成補正）を振る。</summary>
+    /// <summary>
+    /// 既に確定した能力の現在値だけを置き直す（才能上限を引き直さない＝**乱数を消費しない**, #377）。
+    /// 球質タイプのオフセット反映に使う。cap は「現在値＋2」を下回らないよう最小限だけ押し上げる
+    /// （上限の抽選をやり直すと、役割ごとに主RNGの消費数が変わって決定論が役割依存になる）。
+    /// </summary>
+    private static void AdjustLevel(DevelopingPlayer p, AbilityKind k, int level)
+    {
+        p.SetLevel(k, level);
+        if (p.Cap(k) < level + 2) p.SetCap(k, level + 2);
+    }
+
     private static void SetWithCap(DevelopingPlayer p, AbilityKind k, int level,
         RosterCoefficients c, GrowthType growth, IRandomSource rng)
     {
@@ -537,15 +595,17 @@ public static class ProspectGenerator
     /// w: 素の適性差 (投手適性 − 最良守備適性) をスパンでロジスティック squash（バイアス非混入）。
     ///    明確な野手は w≈0 で打撃が total を保ち、明確な投手は w≈1 で投手能力が total になる。
     /// </summary>
-    private static (bool NaturalPitcher, double Weight) ResolvePitcherRole(DevelopingPlayer p, RosterCoefficients c)
+    private static (bool NaturalPitcher, double Weight, double RoleWeight) ResolvePitcherRole(
+        DevelopingPlayer p, RosterCoefficients c)
     {
         var aptPitcher = p.Aptitude(FieldPosition.Pitcher);
         var bestField = 0;
         foreach (var pos in AllPositions)
             if (pos != FieldPosition.Pitcher) bestField = Math.Max(bestField, p.Aptitude(pos));
-        var naturalPitcher = aptPitcher + c.PitcherAptitudeBias > bestField;
-        var w = 1.0 / (1.0 + Math.Exp(-(aptPitcher - bestField) / c.PitcherAptitudeWeightSpan));
-        return (naturalPitcher, w);
+        // 判定・重みとも式は PitcherRoleResolver にしか無い（#377: 判定のコピーを作らない）。
+        return (PitcherRoleResolver.IsNaturalPitcher(aptPitcher, bestField, c),
+                PitcherRoleResolver.PitcherWeight(aptPitcher, bestField, c),
+                PitcherRoleResolver.RoleWeight(aptPitcher, bestField, c));
     }
 
     private static GrowthType SampleGrowthType(IRandomSource rng)

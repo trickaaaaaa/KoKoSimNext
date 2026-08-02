@@ -14,14 +14,18 @@ namespace KokoSim.Engine.Tests.Season;
 public sealed class CaptainSelectorTests
 {
     private static DevelopingPlayer Guy(string name, int grade, int leadership, int mental,
-        bool pitcher = false, int level = 40) => new()
+        bool pitcher = false, int level = 40)
     {
-        Name = name,
-        Grade = grade,
-        Leadership = leadership,
-        Mental = mental,
-        IsPitcher = pitcher,
-    };
+        var p = new DevelopingPlayer
+        {
+            Name = name,
+            Grade = grade,
+            Leadership = leadership,
+            Mental = mental,
+        };
+        PitcherRoleResolver.SeedAptitudeForRole(p, pitcher);
+        return p;
+    }
 
     private static DevelopingPlayer Regular(string name, int grade, int leadership, int mental, int contactLevel)
     {

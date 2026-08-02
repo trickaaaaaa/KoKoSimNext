@@ -51,7 +51,6 @@ public sealed class DevelopingPlayerCloneTests
         p.InjuryWeeksRemaining = 2;
         p.SlumpWeeks = 1;
         p.HasYips = true;
-        p.IsPitcher = true; // 明示指名（HasExplicitRole=true になる経路）
 
         foreach (var k in AbilityKinds.All)
         {
@@ -65,6 +64,8 @@ public sealed class DevelopingPlayerCloneTests
             p.SetAptitudeCap(pos, 95 - (int)pos % 3);
             p.AddAptitudeExp(pos, 2.0 * (int)pos + 1);
         }
+        // 投手役は適性からの導出（#377）。境界に乗らないよう意図を明示して置く。
+        PitcherRoleResolver.SeedAptitudeForRole(p, true);
 
         return p;
     }
@@ -108,7 +109,6 @@ public sealed class DevelopingPlayerCloneTests
         Assert.Equal(original.InjuryResistance, clone.InjuryResistance);
         Assert.Equal(original.SlumpWeeks, clone.SlumpWeeks);
         Assert.Equal(original.HasYips, clone.HasYips);
-        Assert.Equal(original.HasExplicitRole, clone.HasExplicitRole);
         Assert.Equal(original.IsPitcher, clone.IsPitcher);
         Assert.Equal(original.Plan, clone.Plan);
         Assert.True(original.Skills.Has(Skill.Grinder) == clone.Skills.Has(Skill.Grinder));
@@ -149,15 +149,22 @@ public sealed class DevelopingPlayerCloneTests
         Assert.True(original.Skills.IsHidden(Skill.Monster));
     }
 
-    [Fact]
-    public void Clone_PreservesImplicitRole_WhenNotExplicitlySet()
+    /// <summary>
+    /// 投手役は選手が覚えている状態でなく守備位置適性からの導出（#377）。複製で適性が写れば
+    /// 役割も一致する＝役割そのものを複製する経路は無くてよい。
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Clone_PreservesDerivedRole_ThroughAptitudes(bool pitcher)
     {
         var original = new DevelopingPlayer();
-        Assert.False(original.HasExplicitRole);
+        PitcherRoleResolver.SeedAptitudeForRole(original, pitcher);
+        Assert.Equal(pitcher, original.IsPitcher);
 
         var clone = original.Clone();
 
-        Assert.False(clone.HasExplicitRole);
-        Assert.Equal(original.IsPitcher, clone.IsPitcher);
+        Assert.Equal(pitcher, clone.IsPitcher);
+        Assert.Equal(original.Aptitude(FieldPosition.Pitcher), clone.Aptitude(FieldPosition.Pitcher));
     }
 }

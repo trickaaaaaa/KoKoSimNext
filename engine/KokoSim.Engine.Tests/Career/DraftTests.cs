@@ -28,13 +28,15 @@ public sealed class DraftTests
     private static DevelopingPlayer Batter(int id, int grade, int level, int cap, string name = "打者")
     {
         var p = new DevelopingPlayer { Id = id, Name = name, Grade = grade };
+        PitcherRoleResolver.SeedAptitudeForRole(p, false);
         foreach (var k in BatterKinds) { p.SetLevel(k, level); p.SetCap(k, cap); }
         return p;
     }
 
     private static DevelopingPlayer Pitcher(int id, int grade, int level, int cap, string name = "投手")
     {
-        var p = new DevelopingPlayer { Id = id, Name = name, Grade = grade, IsPitcher = true };
+        var p = new DevelopingPlayer { Id = id, Name = name, Grade = grade };
+        PitcherRoleResolver.SeedAptitudeForRole(p, true);
         foreach (var k in PitcherKinds) { p.SetLevel(k, level); p.SetCap(k, cap); }
         return p;
     }

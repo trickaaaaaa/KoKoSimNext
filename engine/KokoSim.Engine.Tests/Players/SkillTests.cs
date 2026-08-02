@@ -244,9 +244,9 @@ public sealed class SkillTests
         {
             var p = new DevelopingPlayer
             {
-                IsPitcher = false,
                 Skills = skill is { } s ? new SkillSet(new[] { s }) : SkillSet.Empty,
             };
+            PitcherRoleResolver.SeedAptitudeForRole(p, false);
             p.SetLevel(AbilityKind.Contact, 30);
             p.SetCap(AbilityKind.Contact, 99);
             var stages = new GrowthStageTable();
