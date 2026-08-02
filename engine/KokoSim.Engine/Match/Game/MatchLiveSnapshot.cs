@@ -42,11 +42,18 @@ public sealed record LiveBatterSlot(
 /// スタミナ残量（1=満タン、0=目安投球数を使い切った）。実効消費球数（ギア重み込み）を
 /// その投手の目安投球数で割った残り。継投の目安として表示するための観測値で、
 /// 実際の継投判定（<see cref="PitchingFatigue.ShouldRelieve"/>）は目安投球数＋マージンで見る（ハードキャップ撤廃, issue #356）。
+/// 打席途中は <see cref="PendingPitches"/> をギア倍率抜き（1.0）で加えた近似値（issue #397）。
+/// </param>
+/// <param name="PendingPitches">
+/// 進行中の打席で既にこの投手が投げた球数（未確定＝<see cref="Pitches"/> にはまだ載っていない）。
+/// 打席が確定すると engine 集計（<see cref="Pitches"/>）へ吸収されるので UI 側で足し込む
+/// （<see cref="LiveLineScore.PendingRuns"/> と同型, issue #397）。守備側の現投手だけに乗り、
+/// 攻撃側チームの現投手（今は投げていない）は常に0。
 /// </param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,
     int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0,
-    int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0);
+    int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0, int PendingPitches = 0);
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。

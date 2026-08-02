@@ -283,15 +283,20 @@ public sealed class TeamState
         return new LiveLineScore(Name, _inningRuns.ToList(), Runs - recorded, Runs, Hits, Errors);
     }
 
-    /// <summary>ライブ観戦の現投手の今日の成績（球数/投球回/失点/奪三振）。観測データ。</summary>
-    public LivePitcherToday LivePitcherLine()
+    /// <summary>
+    /// ライブ観戦の現投手の今日の成績（球数/投球回/失点/奪三振）。観測データ。
+    /// <paramref name="pendingPitches"/>＝進行中の打席で既に投げた球数（未確定・issue #397）。
+    /// スタミナ残量にも同じ値をギア倍率抜き（1.0）の近似で加える（打席確定時に正値へ収束）。
+    /// </summary>
+    public LivePitcherToday LivePitcherLine(int pendingPitches = 0)
     {
         var p = CurrentPitcher;
         var a = _pit.TryGetValue(p, out var acc) ? acc : null;
         return new LivePitcherToday(
             p.SourceId, p.UniformNumber, p.Name, p.Throws,
             a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
-            p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches));
+            p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches + pendingPitches),
+            pendingPitches);
     }
 
     /// <summary>ライブ観戦の控え（未出場の交代候補・背番号順）。打順は持たないので Order=0。観測データ。</summary>
