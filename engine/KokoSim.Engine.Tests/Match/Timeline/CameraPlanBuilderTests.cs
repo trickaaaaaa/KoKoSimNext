@@ -55,6 +55,55 @@ public sealed class CameraPlanBuilderTests
         Assert.Equal(CameraPlanBuilder.WideCy, last.Cy, 3);
     }
 
+    // ---- issue #406②: 全景復帰は ResAt でなく lastEvent（球が動き終わる／実際に動く走者レッグの
+    // 終わり）基準 -----------------------------------------------------------------------------
+
+    [Fact]
+    public void LastEventTime_IgnoresStationaryRunnerLegs_ButCountsMovingLegsAndBallSegments()
+    {
+        var stay = new PlaybackVec(1, 1);
+        var play = new PlaybackPlay
+        {
+            Name = "t", Dur = 10, Result = "x", ResAt = 2.0,
+            Ball = new PlaybackBallSegment[] { new ThrowSegment(0.5, new PlaybackVec(0, 0), new PlaybackVec(0, 10), 20) },
+            Runners = new[]
+            {
+                // 塁上で止まる走者（T1=9.0 が最大でも数えない＝AppendHeldRunners 相当）。
+                new PlaybackRunner { Label = "待", Segs = new[] { new PlaybackRun(4.0, 9.0, stay, stay) } },
+                // 動かない同一座標のレッグ。
+                new PlaybackRunner { Label = "打", Segs = new[] { new PlaybackRun(0.0, 5.0, stay, stay) } },
+                // 実際に動くレッグ（決着後まで続く＝犠飛のタッチアップ〜生還に相当）。
+                new PlaybackRunner { Label = "走", Segs = new[] { new PlaybackRun(0.5, 3.5, new PlaybackVec(0, 0), new PlaybackVec(0, 27.43)) } },
+            },
+        };
+
+        Assert.Equal(3.5, CameraPlanBuilder.LastEventTime(play), 6);
+    }
+
+    [Fact]
+    public void Build_DelaysReturnToWide_WhenBallStillMovingPastResAt_ForSacFlyLikeThrow()
+    {
+        // 犠飛型の最小合成プレー: 決着(ResAt=捕球)は3.0sだが、バックホーム送球は5.0sまで続く。
+        // 旧実装は play.ResAt+0.9=3.9s で無条件に全景へ戻していた＝タッチアップ〜生還の送球が
+        // 見えない（issue #406②）。lastEvent（球が動き終わる時刻）基準なら、送球が終わるまで寄り続ける。
+        var play = new PlaybackPlay
+        {
+            Name = "sac-fly-like", Dur = 6.0, Result = "F  犠飛", ResAt = 3.0,
+            Ball = new PlaybackBallSegment[] { new ThrowSegment(3.0, new PlaybackVec(0, 90), new PlaybackVec(0, 0), 45) },
+        };
+
+        var plan = CameraPlanBuilder.Build(play);
+
+        // 旧実装の戻し時刻（ResAt+0.9=3.9s）でも送球はまだ飛んでいる＝寄ったままのはず。
+        var duringThrow = CameraEvaluator.ViewportAt(plan, play.ResAt + CameraPlanBuilder.ReturnToWideDelaySeconds + 0.1);
+        Assert.True(duringThrow.ZoomMult > CameraPlanBuilder.WideZoom,
+            $"送球中なのに全景へ戻っている: zoom={duringThrow.ZoomMult:F2}");
+
+        // 送球が終わってから戻し遅延ぶん経てば、ちゃんと全景へ戻る（延長し続けない＝長打での過延長防止）。
+        var afterThrow = CameraEvaluator.ViewportAt(plan, 5.0 + CameraPlanBuilder.ReturnToWideDelaySeconds + 2.5);
+        Assert.Equal(CameraPlanBuilder.WideZoom, afterThrow.ZoomMult, 3);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

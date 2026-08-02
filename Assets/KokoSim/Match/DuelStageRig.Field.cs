@@ -2233,12 +2233,46 @@ namespace KokoSim.Unity.Match
         public bool FieldPlayActive => _fieldPlay != null;
 
         /// <summary>
+        /// 3Dの守備ビュー用に、決着後の定位置復帰レッグ（Backup/Cutoff の戻り・寄った内野手の戻り
+        /// [Issue #336②]）を取り除いた <see cref="PlaybackPlay"/> を作る（issue #406①）。
+        ///
+        /// このレッグは TimelineBuilder が <c>Math.Max(resolvedAt, ...) + 0.3</c> でしか積まない
+        /// ＝<c>T0 &gt;= play.ResAt</c> であることが唯一かつ確実な見分け方（<see cref="FielderTask"/> は
+        /// <see cref="PlaybackMove"/> に運ばれておらず、ここでは読めない）。プレーは既に決まっているのに
+        /// 野手が定位置へ歩いて戻るだけの絵を待たされる（テンポが悪い）のが症状で、直し方は
+        /// 「エンジンのタイムラインからは消さない」こと＝2D俯瞰（デバッグ）はこのレッグを見せ続ける
+        /// （"寄ったまま"を防ぐ元の目的は2Dでは今も有効。issue #406 の申し送り）。<see cref="EndFieldPlay"/>
+        /// が <c>PlaceFieldCastAtDefault</c> で全員を定位置へ置き直すので、歩いて戻る絵を1コマも
+        /// 描かなくても次の打席の配置は狂わない。
+        /// </summary>
+        private static PlaybackPlay StripPostResolutionReturnMoves(PlaybackPlay play)
+        {
+            if (play.Moves == null || play.Moves.Count == 0) return play;
+            var resAt = play.ResAt;
+            var filtered = new Dictionary<FieldPosition, IReadOnlyList<PlaybackMove>>();
+            var changed = false;
+            foreach (var kv in play.Moves)
+            {
+                var segs = kv.Value;
+                var kept = new List<PlaybackMove>(segs.Count);
+                foreach (var m in segs)
+                {
+                    if (m.T0 >= resAt) { changed = true; continue; }
+                    kept.Add(m);
+                }
+                if (kept.Count > 0) filtered[kv.Key] = kept;
+            }
+            return changed ? play with { Moves = filtered } : play;
+        }
+
+        /// <summary>
         /// 打球プレーの再生を始める。<paramref name="t0"/> は対決ビューで既に見せたぶんの続き
         /// （<c>MatchLiveController.ContactMomentOf</c> と同じ時計）。
         /// </summary>
         public void BeginFieldPlay(PlaybackPlay play, float t0)
         {
             if (!Available || play == null) return;
+            play = StripPostResolutionReturnMoves(play);
             EnsureFieldCast();
             SetFieldCastVisible(true);
             _fieldPlay = play;
@@ -2278,8 +2312,12 @@ namespace KokoSim.Unity.Match
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             BuildFieldCameraPlan(play);
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
-            _fieldCamCutT = double.IsFinite(play.ResAt)
-                ? (float)(play.ResAt + CameraPlanBuilder.ReturnToWideDelaySeconds)
+            // 全景へ戻し始める時刻は engine のプラン（BuildFieldCameraPlan＝CameraPlanBuilder.Build）と
+            // 同じ CameraPlanBuilder.LastEventTime を単一ソースにする（issue #406②。片方だけ ResAt の
+            // ままだとプランと実カットがずれる）。
+            var lastEvent = CameraPlanBuilder.LastEventTime(play);
+            _fieldCamCutT = double.IsFinite(lastEvent)
+                ? (float)(lastEvent + CameraPlanBuilder.ReturnToWideDelaySeconds)
                 : float.PositiveInfinity;
             // プランの終端はレート制限の収束余白（WideSettleBufferSeconds）ぶん後ろにあり、
             // そこを引けば「戻り切った全景」がそのまま出る＝Unity側で全景の値を持ち直さない
