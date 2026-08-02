@@ -35,6 +35,18 @@ TEMPLATE_DIR="${TEMPLATE_DIR:-$SELF_ROOT}"
 [ -x "$DOTNET" ] || { echo "dotnet が見つかりません: $DOTNET" >&2; exit 2; }
 TARGET="$(cd "$TARGET" 2>/dev/null && pwd)" || { echo "対象ディレクトリがありません: ${1:-}" >&2; exit 2; }
 
+# git worktree には雛形が無い（*.csproj は .gitignore 済み＝Unity で開いたメイン作業樹にしか無い）。
+# pre-push フックは worktree の中から TEMPLATE_DIR 無しで呼ぶため、ここで救わないと
+# worktree からの push が常に「検査不能」で止まる（issue #416 で夜間ランのマージ・退避 push が全滅）。
+# 雛形が見つからないときはメイン作業樹（git common dir の親）へフォールバックする。
+if [ ! -f "$TEMPLATE_DIR/Assembly-CSharp.csproj" ]; then
+  main_wt="$(dirname "$(git -C "$TARGET" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" 2>/dev/null || true)"
+  case "$main_wt" in /*) ;; *) main_wt="";; esac   # git 失敗時に dirname が "." を返すのを弾く
+  if [ -n "$main_wt" ] && [ -f "$main_wt/Assembly-CSharp.csproj" ]; then
+    TEMPLATE_DIR="$main_wt"
+  fi
+fi
+
 rc=0
 # 3パス目 "Assembly-CSharp-Player" は Assembly-CSharp を **UNITY_EDITOR 抜き**で通す
 # （issue: 打球処理3D化 F8）。エディタ定義付きでしか通していないと、製品コードが
