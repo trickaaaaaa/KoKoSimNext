@@ -116,7 +116,7 @@ public readonly record struct TacticsSituation(
 /// <summary>
 /// 選手交代の判断に渡す状況（設計書09 §6）。ScoreDiff は判断するチーム視点の得失点差（正=リード）。
 /// 攻撃側=代打（UpcomingBatter）/代走（塁上走者）、守備側=守備固め（Lineup から選ぶ）。
-/// Lineup は現在の打順9人、Bench は起用できる控え（いずれも交代反映済み）。
+/// Lineup は現在の打順9人、Reserves は起用できる控え1本（いずれも交代反映済み）。
 /// </summary>
 public readonly record struct SubstitutionSituation(
     int Inning,
@@ -129,7 +129,7 @@ public readonly record struct SubstitutionSituation(
     Player UpcomingBatter,
     bool UpcomingBatterIsPitcher,
     IReadOnlyList<Player> Lineup,
-    IReadOnlyList<Player> Bench);
+    IReadOnlyList<Player> Reserves);
 
 /// <summary>
 /// 継投判断に渡す状況（issue #209, 設計書11 §4）。守備側（＝投げている側）視点で組む。

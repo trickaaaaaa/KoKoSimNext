@@ -40,7 +40,7 @@ public sealed class PitcherIdentityTests
             Name = "テスト校",
             BattingOrder = order,
             PitcherSlot = 8,
-            Bullpen = bullpen?.ToList() ?? new List<Player>(),
+            Reserves = bullpen?.ToList() ?? new List<Player>(),
         };
     }
 

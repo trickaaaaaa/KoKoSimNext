@@ -47,7 +47,7 @@ public sealed class EnemyAiInjectionTests
         var bench = Enumerable.Range(0, 6)
             .Select(_ => new Player { Position = FieldPosition.LeftField, Contact = 88, Power = 60, Speed = 85, Fielding = 85 })
             .ToList();
-        return new Team { Name = "テスト校", BattingOrder = order, PitcherSlot = 8, Bench = bench, Tactics = tactics };
+        return new Team { Name = "テスト校", BattingOrder = order, PitcherSlot = 8, Reserves = bench, Tactics = tactics };
     }
 
     [Fact]

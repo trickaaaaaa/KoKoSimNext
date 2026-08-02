@@ -46,7 +46,7 @@ public sealed class PlayTimelineAdapterTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[] { Pos(FieldPosition.Pitcher) with { Name = name + "R", Pitching = PitcherAttributes.LeagueAverage } },
+            Reserves = new[] { Pos(FieldPosition.Pitcher) with { Name = name + "R", Pitching = PitcherAttributes.LeagueAverage } },
         };
     }
 

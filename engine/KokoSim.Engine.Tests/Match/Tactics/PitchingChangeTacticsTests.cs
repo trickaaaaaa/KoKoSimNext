@@ -368,7 +368,7 @@ public sealed class PitchingChangeTacticsTests
         var team = new Team
         {
             Name = "T", BattingOrder = order, PitcherSlot = 8,
-            Bullpen = System.Array.Empty<Player>(), Bench = new[] { superFielder },
+            Reserves = new[] { superFielder },
         };
         var st = new TeamState(team);
 

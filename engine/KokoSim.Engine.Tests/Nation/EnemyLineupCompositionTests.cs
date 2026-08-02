@@ -71,7 +71,7 @@ public sealed class EnemyLineupCompositionTests
         Assert.Equal(-1, team.PitcherSlot);
         Assert.InRange(team.DhSlot, 0, 8);
 
-        var all = team.BattingOrder.Concat(team.Bullpen).Concat(team.Bench).Append(team.StartingPitcher).ToList();
+        var all = team.BattingOrder.Concat(team.Reserves).Append(team.StartingPitcher).ToList();
         Assert.Equal(20, all.Count);
         Assert.Equal(20, all.Select(p => p!.UniformNumber).Distinct().Count());
     }

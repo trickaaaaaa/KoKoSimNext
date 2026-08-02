@@ -23,10 +23,9 @@ public static class ScoutedTeamProfile
     /// </summary>
     public static IReadOnlyList<DevelopingPlayer> ToRoster(Team team)
     {
-        var roster = new List<DevelopingPlayer>(team.BattingOrder.Count + team.Bullpen.Count + team.Bench.Count);
+        var roster = new List<DevelopingPlayer>(team.BattingOrder.Count + team.Reserves.Count);
         foreach (var p in team.BattingOrder) roster.Add(ToDeveloping(p));
-        foreach (var p in team.Bullpen) roster.Add(ToDeveloping(p));
-        foreach (var p in team.Bench) roster.Add(ToDeveloping(p));
+        foreach (var p in team.Reserves) roster.Add(ToDeveloping(p));
         if (team.StartingPitcher is { } sp) roster.Add(ToDeveloping(sp));
         return roster;
     }

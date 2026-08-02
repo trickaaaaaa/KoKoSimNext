@@ -45,7 +45,7 @@ public sealed record GameSaveState(ulong Seed, int ConfirmedPlateAppearances)
 /// </param>
 /// <param name="BenchIndex">
 /// 交代で「入る」選手の添字。<see cref="GameDecisionKind.PinchHit"/>/<see cref="GameDecisionKind.PinchRun"/>/
-/// <see cref="GameDecisionKind.DefensiveSub"/> は野手控え（TeamState.Bench）の添字、
+/// <see cref="GameDecisionKind.DefensiveSub"/> は野手控え（TeamState.Reserves）の添字、
 /// <see cref="GameDecisionKind.ChangePitcher"/> は投手交代候補（TeamState.AvailablePitcherCandidates＝
 /// ブルペン＋野手控え, issue #137）の添字。
 /// </param>

@@ -92,7 +92,8 @@ public static class RosterTeamBuilder
 
         return new Team
         {
-            Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen,
+            Name = name, BattingOrder = order, PitcherSlot = 8,
+            Reserves = TeamReserves.Merge(bullpen, Array.Empty<Player>()),
             Tactics = tactics, Captain = captainPlayer,
         };
     }
@@ -169,11 +170,10 @@ public static class RosterTeamBuilder
         if (!spec.UsesDh && (spec.PitcherSlot < 0 || spec.PitcherSlot > 8))
             throw new ArgumentException("PitcherSlot は 0〜8 の範囲です。", nameof(spec));
 
-        // spec が参照する全 DevelopingPlayer（打順＋先発＋ブルペン＋ベンチ）。
+        // spec が参照する全 DevelopingPlayer（打順＋先発＋控え）。
         var referenced = spec.BattingOrder.Select(s => s.Player)
             .Concat(spec.StartingPitcher != null ? new[] { spec.StartingPitcher } : Array.Empty<DevelopingPlayer>())
-            .Concat(spec.Bullpen ?? Array.Empty<DevelopingPlayer>())
-            .Concat(spec.Bench ?? Array.Empty<DevelopingPlayer>())
+            .Concat(spec.Reserves ?? Array.Empty<DevelopingPlayer>())
             .ToList();
 
         // ベンチ入り検証（設計書06 §3.3b: 背番号1〜20＝ベンチ入り・0＝ベンチ外）。
@@ -223,16 +223,11 @@ public static class RosterTeamBuilder
         if (covered.Count != 9)
             throw new ArgumentException("守備位置が9ポジションを一意に網羅していません。", nameof(spec));
 
+        // 控えは1本の名簿（issue #381）。守備位置は「投手として置くか否か」を適性から導出して付ける
+        // （#366: 属性ではなく配置。継投の既定指名・当日の出来のサンプリングがこの配置を見る）。
         var bullpen = new List<Player>();
-        foreach (var dp in spec.Bullpen ?? Array.Empty<DevelopingPlayer>())
-        {
-            var pl = Project(dp, FieldPosition.Pitcher, asPitcher: true);
-            bullpen.Add(pl);
-            TrackCaptain(dp, pl);
-        }
-
         var bench = new List<Player>();
-        foreach (var dp in spec.Bench ?? Array.Empty<DevelopingPlayer>())
+        foreach (var dp in spec.Reserves ?? Array.Empty<DevelopingPlayer>())
         {
             var leansPitcher = PitcherRoleResolver.LeansPitcher(dp);
             var pl = Project(dp, leansPitcher ? FieldPosition.Pitcher : FieldPosition.CenterField,
@@ -253,8 +248,7 @@ public static class RosterTeamBuilder
             PitcherSlot = spec.PitcherSlot,
             DhSlot = spec.DhSlot,
             StartingPitcher = startingPitcher,
-            Bullpen = bullpen,
-            Bench = bench,
+            Reserves = TeamReserves.Merge(bullpen, bench),
             Tactics = spec.Tactics,
             Captain = captainPlayer,
         };

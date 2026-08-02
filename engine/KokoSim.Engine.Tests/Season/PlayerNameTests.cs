@@ -84,7 +84,7 @@ public sealed class PlayerNameTests
         {
             var team = StrengthTeamFactory.Create(55, "テスト高校",
                 StrengthTeamFactory.SeedFor(schoolId, 1));
-            var given = team.BattingOrder.Concat(team.Bullpen).Concat(team.Bench)
+            var given = team.BattingOrder.Concat(team.Reserves)
                 .Select(p => GivenOf(p.Name)).ToList();
             Assert.True(given.Count >= 20, $"ベンチ入り {given.Count} 人（20人未満）");
             var dup = given.GroupBy(g => g).Where(g => g.Count() > 1).Select(g => g.Key).ToList();

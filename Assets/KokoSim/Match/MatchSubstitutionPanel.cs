@@ -270,8 +270,8 @@ namespace KokoSim.Unity.Match
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _offInIndex = idx; Render(); });
                 _inRows.Add(row);
             }
-            foreach (var p in _opt.UsedBench) _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
-            if (_opt.Bench.Count == 0 && _opt.UsedBench.Count == 0)
+            foreach (var p in _opt.UsedReserves) _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
+            if (_opt.Bench.Count == 0 && _opt.UsedReserves.Count == 0)
             {
                 var empty = new Label("控えが登録されていない。");
                 empty.AddToClassList("cmp-card__empty");
@@ -330,9 +330,9 @@ namespace KokoSim.Unity.Match
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickCandidate(idx); Render(); });
                 _inRows.Add(row);
             }
-            foreach (var p in _opt.UsedBullpen.Concat(_opt.UsedBench))
+            foreach (var p in _opt.UsedReserves.Concat(_opt.UsedReserves))
                 _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
-            if (_cands.Count == 0 && !_opt.UsedBullpen.Any() && !_opt.UsedBench.Any())
+            if (_cands.Count == 0 && !_opt.UsedReserves.Any() && !_opt.UsedReserves.Any())
             {
                 var empty = new Label("控えが登録されていない。");
                 empty.AddToClassList("cmp-card__empty");

@@ -187,7 +187,7 @@ public static class TournamentPreviewBuilder
     {
         // DHスロットの選手は本来守備位置ではなく「指」を表示する（enum由来・issue #70）。
         var dhPlayer = team.UsesDh ? team.BattingOrder[team.DhSlot] : null;
-        var members = team.BattingOrder.Concat(team.Bullpen).Concat(team.Bench)
+        var members = team.BattingOrder.Concat(team.Reserves)
             .OrderBy(p => p.UniformNumber)
             .Select(p => new RosterMember(
                 p.UniformNumber, p.Name,

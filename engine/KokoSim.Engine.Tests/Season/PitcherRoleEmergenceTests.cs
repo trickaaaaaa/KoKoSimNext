@@ -164,7 +164,7 @@ public sealed class PitcherRoleEmergenceTests
             .ToList();
 
         double Bat(Player p) => (p.Contact + p.Power) / 2.0;
-        var pitchers = teams.SelectMany(t => t.BattingOrder.Concat(t.Bullpen))
+        var pitchers = teams.SelectMany(t => t.BattingOrder.Concat(t.Reserves))
             .Where(p => p.Pitching is not null).Select(Bat).ToList();
         var fielderAvg = teams.SelectMany(t => t.BattingOrder).Where(p => p.Pitching is null).Average(Bat);
 

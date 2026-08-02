@@ -41,12 +41,11 @@ public sealed class MatchProgressionSubstitutionTests
             Rp(n + "先発P"),
         },
         PitcherSlot = 8,
-        Bullpen = new[] { Rp(n + "二番手"), Rp(n + "三番手"), Rp(n + "四番手") },
-        Bench = new[]
+        Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Rp(n + "二番手"), Rp(n + "三番手"), Rp(n + "四番手") }, new[]
         {
             P(FieldPosition.FirstBase, n + "控1"), P(FieldPosition.SecondBase, n + "控2"),
             P(FieldPosition.LeftField, n + "控3"),
-        },
+        }),
     };
 
     /// <summary>DH制のチーム（打順9人＝野手8＋DH、投手は打順外）。</summary>
@@ -63,8 +62,7 @@ public sealed class MatchProgressionSubstitutionTests
         },
         DhSlot = 8,
         StartingPitcher = Rp(n + "先発P"),
-        Bullpen = new[] { Rp(n + "二番手") },
-        Bench = new[] { P(FieldPosition.FirstBase, n + "控1") },
+        Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Rp(n + "二番手") }, new[] { P(FieldPosition.FirstBase, n + "控1") }),
     };
 
     private static MatchProgression NewProg(ulong seed)
@@ -123,7 +121,7 @@ public sealed class MatchProgressionSubstitutionTests
     public void SubstitutionOptions_ExhaustedBench_ReportsReason()
     {
         var prog = new MatchProgression(
-            Team("A") with { Bench = System.Array.Empty<Player>(), Bullpen = System.Array.Empty<Player>() },
+            Team("A") with { Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(System.Array.Empty<Player>(), System.Array.Empty<Player>() )},
             Team("H"), new GameContext(), 5UL);
         prog.Advance();
 
@@ -140,14 +138,14 @@ public sealed class MatchProgressionSubstitutionTests
         var prog = NewProg(3UL);
         prog.Advance();
         var opt = prog.SubstitutionOptions(teamIsAway: true);
-        var sub = opt.Bench[0];
+        var sub = opt.Reserves[0];
         var slot = opt.UpcomingBatterSlot;
 
         Assert.True(prog.PinchHit(teamIsAway: true, sub));
 
         var after = prog.SubstitutionOptions(teamIsAway: true);
         Assert.Equal(sub.Name, after.Lineup[slot].Name);
-        Assert.DoesNotContain(after.Bench, p => p.Name == sub.Name);
+        Assert.DoesNotContain(after.Reserves, p => p.Name == sub.Name);
     }
 
     [Fact]
@@ -158,7 +156,7 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.NotNull(opt);
 
         var choice = opt!.Runners[0];
-        var sub = opt.Bench[0];
+        var sub = opt.Reserves[0];
         Assert.True(prog.PinchRun(teamIsAway: true, choice.BaseIndex, sub));
 
         var after = prog.SubstitutionOptions(teamIsAway: true);
@@ -166,7 +164,7 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.Contains(after.Lineup, p => p.Name == sub.Name);
         Assert.DoesNotContain(after.Lineup, p => p.Name == choice.Runner.Name);
         Assert.Contains(after.Runners, r => r.BaseIndex == choice.BaseIndex && r.Runner.Name == sub.Name);
-        Assert.DoesNotContain(after.Bench, p => p.Name == sub.Name);
+        Assert.DoesNotContain(after.Reserves, p => p.Name == sub.Name);
     }
 
     [Fact]
@@ -176,33 +174,33 @@ public sealed class MatchProgressionSubstitutionTests
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
 
-        var third = opt!.Bullpen[2];   // 先頭ではなく3人目を指名する（TryChangePitcher との違い）
+        var third = opt!.Reserves[2];   // 先頭ではなく3人目を指名する（TryChangePitcher との違い）
         Assert.True(prog.ChangePitcher(teamIsAway: false, third));
 
         var after = prog.SubstitutionOptions(teamIsAway: false);
         Assert.Equal(third.Name, after.CurrentPitcher.Name);
-        Assert.DoesNotContain(after.Bullpen, p => p.Name == third.Name);
-        Assert.Contains(after.Bullpen, p => p.Name == opt.Bullpen[0].Name);   // 飛ばした投手はまだ使える
+        Assert.DoesNotContain(after.Reserves, p => p.Name == third.Name);
+        Assert.Contains(after.Reserves, p => p.Name == opt.Reserves[0].Name);   // 飛ばした投手はまだ使える
     }
 
     [Fact]
-    public void ChangePitcher_CanDesignateAFielderFromTheBench_NotOnlyTheBullpen()
+    public void ChangePitcher_CanDesignateAnyReserve_NotOnlyThosePlacedAsPitcher()
     {
-        // issue #137: 投手交代の候補はブルペン（3人）だけでなくベンチ（野手含む）にも及ぶ。
+        // issue #137/#381: 投手交代の候補は控え名簿の全員（投手枠に置かれていない者も含む）。
         var prog = NewProg(13UL);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
 
-        Assert.Equal(opt!.Bullpen.Count + opt.Bench.Count, opt.PitcherCandidates.Count);
-        var fielder = opt.Bench[0];
+        Assert.Equal(opt!.Reserves.Count, opt.PitcherCandidates.Count);
+        var fielder = opt.Reserves.First(p => p.Position != KokoSim.Engine.Match.Field.FieldPosition.Pitcher);
         Assert.Contains(opt.PitcherCandidates, p => p.Name == fielder.Name);
 
         Assert.True(prog.ChangePitcher(teamIsAway: false, fielder));
 
         var after = prog.SubstitutionOptions(teamIsAway: false);
         Assert.Equal(fielder.Name, after.CurrentPitcher.Name);
-        Assert.DoesNotContain(after.Bench, p => p.Name == fielder.Name);   // ベンチから消費
-        Assert.Equal(opt.Bullpen.Count, after.Bullpen.Count);              // ブルペンは手つかず
+        Assert.DoesNotContain(after.Reserves, p => p.Name == fielder.Name);   // ベンチから消費
+        Assert.Equal(opt.Reserves.Count, after.Reserves.Count);              // ブルペンは手つかず
     }
 
     [Fact]
@@ -213,7 +211,7 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.NotNull(opt);
 
         var outgoing = opt!.Lineup.First(p => p.Position == FieldPosition.Shortstop);
-        var sub = opt.Bench[0];
+        var sub = opt.Reserves[0];
         Assert.True(prog.DefensiveSub(teamIsAway: false, outgoing, sub));
 
         var after = prog.SubstitutionOptions(teamIsAway: false);
@@ -266,7 +264,7 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.NotNull(opt);
 
         var outgoing = opt!.Lineup.First(p => p.Position == FieldPosition.CenterField);
-        var sub = opt.Bench[0];
+        var sub = opt.Reserves[0];
         Assert.True(prog.DefensiveSub(teamIsAway: false, outgoing, sub));
 
         // 退場した選手を控えとして指定しても false（そもそも控えに居ない）。
@@ -277,15 +275,15 @@ public sealed class MatchProgressionSubstitutionTests
 
         // 降板した投手も再登板できない。
         var starter = prog.SubstitutionOptions(teamIsAway: false).CurrentPitcher;
-        var reliever = prog.SubstitutionOptions(teamIsAway: false).Bullpen[0];
+        var reliever = prog.SubstitutionOptions(teamIsAway: false).Reserves[0];
         Assert.True(prog.ChangePitcher(teamIsAway: false, reliever));
         Assert.False(prog.ChangePitcher(teamIsAway: false, starter));
 
         // 使い切った控え・登板済みの投手は UI のグレーアウト用に別枠で出る（選択肢からは外れている）。
         var after = prog.SubstitutionOptions(teamIsAway: false);
-        Assert.Contains(after.UsedBench, p => p.Name == sub.Name);
-        Assert.DoesNotContain(after.Bench, p => p.Name == sub.Name);
-        Assert.Contains(after.UsedBullpen, p => p.Name == reliever.Name);
+        Assert.Contains(after.UsedReserves, p => p.Name == sub.Name);
+        Assert.DoesNotContain(after.Reserves, p => p.Name == sub.Name);
+        Assert.Contains(after.UsedReserves, p => p.Name == reliever.Name);
     }
 
     // ===== 4. 決定論（同シード＋同交代操作／Save-Load 往復） =====
@@ -303,15 +301,15 @@ public sealed class MatchProgressionSubstitutionTests
         {
             var off = prog.SubstitutionOptions(teamIsAway: true);
             if (!pinchRunDone && off.CanPinchRun && prog.ConfirmedPlateAppearances > 5)
-                pinchRunDone = prog.PinchRun(true, off.Runners[0].BaseIndex, off.Bench[0]);
+                pinchRunDone = prog.PinchRun(true, off.Runners[0].BaseIndex, off.Reserves[0]);
             else if (!pinchHitDone && pinchRunDone && off.CanPinchHit)
-                pinchHitDone = prog.PinchHit(true, off.Bench[0]);
+                pinchHitDone = prog.PinchHit(true, off.Reserves[0]);
 
             var def = prog.SubstitutionOptions(teamIsAway: false);
             if (!pitcherDone && def.CanChangePitcher && prog.ConfirmedPlateAppearances > 12)
-                pitcherDone = prog.ChangePitcher(false, def.Bullpen[1]);
+                pitcherDone = prog.ChangePitcher(false, def.Reserves[1]);
             else if (!defSubDone && pitcherDone && def.CanDefensiveSub)
-                defSubDone = prog.DefensiveSub(false, def.Lineup[0], def.Bench[0]);
+                defSubDone = prog.DefensiveSub(false, def.Lineup[0], def.Reserves[0]);
         }
 
         Assert.True(pinchRunDone && pinchHitDone && pitcherDone && defSubDone,
@@ -341,10 +339,10 @@ public sealed class MatchProgressionSubstitutionTests
         while (prog.ConfirmedPlateAppearances < 30 && prog.Advance())
         {
             var off = prog.SubstitutionOptions(teamIsAway: true);
-            if (applied == 0 && off.CanPinchRun && prog.PinchRun(true, off.Runners[0].BaseIndex, off.Bench[0])) applied++;
+            if (applied == 0 && off.CanPinchRun && prog.PinchRun(true, off.Runners[0].BaseIndex, off.Reserves[0])) applied++;
             var def = prog.SubstitutionOptions(teamIsAway: false);
-            if (applied == 1 && def.CanChangePitcher && prog.ChangePitcher(false, def.Bullpen[1])) applied++;
-            if (applied == 2 && def.CanDefensiveSub && prog.DefensiveSub(false, def.Lineup[0], def.Bench[0])) applied++;
+            if (applied == 1 && def.CanChangePitcher && prog.ChangePitcher(false, def.Reserves[1])) applied++;
+            if (applied == 2 && def.CanDefensiveSub && prog.DefensiveSub(false, def.Lineup[0], def.Reserves[0])) applied++;
         }
         Assert.Equal(3, applied);
 
@@ -374,8 +372,8 @@ public sealed class MatchProgressionSubstitutionTests
         while (!applied && prog.Advance())
         {
             var def = prog.SubstitutionOptions(teamIsAway: false);
-            if (def.CanChangePitcher && def.Bench.Count > 0)
-                applied = prog.ChangePitcher(false, def.Bench[0]);
+            if (def.CanChangePitcher && def.Reserves.Count > 0)
+                applied = prog.ChangePitcher(false, def.Reserves[0]);
         }
         Assert.True(applied, "シナリオがベンチからの投手指名を実際に行使していない（テストの前提が崩れている）");
 
@@ -416,7 +414,7 @@ public sealed class MatchProgressionSubstitutionTests
         var prog = NewProg(3UL);
         prog.Advance();
         var opt = prog.SubstitutionOptions(teamIsAway: true);
-        var sub = opt.Bench[0];
+        var sub = opt.Reserves[0];
         var starter = opt.Lineup[opt.UpcomingBatterSlot];
         Assert.True(prog.PinchHit(teamIsAway: true, sub));
 
@@ -434,7 +432,7 @@ public sealed class MatchProgressionSubstitutionTests
         var prog = NewProg(13UL);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
-        var reliever = opt!.Bullpen[1];
+        var reliever = opt!.Reserves[1];
         Assert.True(prog.ChangePitcher(teamIsAway: false, reliever));
 
         var result = prog.FinishRemaining();

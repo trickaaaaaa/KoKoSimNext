@@ -129,17 +129,15 @@ public static class DeterminismCards
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[]
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[]
             {
                 Pos(FieldPosition.Pitcher) with { Name = name + "R1", Pitching = PitcherAttributes.LeagueAverage },
                 Pos(FieldPosition.Pitcher) with { Name = name + "R2", Pitching = PitcherAttributes.LeagueAverage },
-            },
-            // 交代パスを踏ませるための控え（代打/代走/守備固め）。
-            Bench = new[]
+            }, new[]
             {
                 Pos(FieldPosition.FirstBase) with { Name = name + "PH", Contact = 55 },
                 Pos(FieldPosition.SecondBase) with { Name = name + "PR", Speed = 70 },
-            },
+            }),
         };
     }
 }

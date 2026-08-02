@@ -112,8 +112,9 @@ public readonly record struct ReproToken(
         sb.Append("team|").Append(t.Name).Append('|').Append(t.PitcherSlot).Append('|').Append(t.DhSlot).Append('\n');
         foreach (var p in t.BattingOrder) AppendPlayer(sb, "o", p);
         if (t.StartingPitcher is { } sp) AppendPlayer(sb, "sp", sp);
-        foreach (var p in t.Bullpen) AppendPlayer(sb, "bp", p);
-        foreach (var p in t.Bench) AppendPlayer(sb, "bn", p);
+        // 控えは1本の名簿（issue #381）。旧 "bp"/"bn" の2タグを "rs" へ統合したので、
+        // 本変更をまたぐ再現トークンは指紋不一致になる＝警告して再生しない（設計書17 §3.3 の想定どおり）。
+        foreach (var p in t.Reserves) AppendPlayer(sb, "rs", p);
     }
 
     private static void AppendPlayer(StringBuilder sb, string tag, Player p)

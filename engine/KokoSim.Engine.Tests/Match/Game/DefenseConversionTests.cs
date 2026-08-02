@@ -40,8 +40,7 @@ public sealed class DefenseConversionTests
             Name = "テスト校",
             BattingOrder = order,
             PitcherSlot = PitcherSlot,
-            Bullpen = bullpen?.ToList() ?? new List<Player>(),
-            Bench = bench?.ToList() ?? new List<Player>(),
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(bullpen?.ToList() ?? new List<Player>(), bench?.ToList() ?? new List<Player>()),
         };
     }
 
@@ -56,8 +55,7 @@ public sealed class DefenseConversionTests
             BattingOrder = order,
             DhSlot = 8,
             StartingPitcher = Rp("先発P"),
-            Bullpen = bullpen?.ToList() ?? new List<Player>(),
-            Bench = new List<Player>(),
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(bullpen?.ToList() ?? new List<Player>(), new List<Player>()),
         };
     }
 
@@ -204,7 +202,7 @@ public sealed class DefenseConversionTests
         Assert.False(state.ConvertPitcherAndRelieve(FieldPosition.Pitcher, relief));
         Assert.False(state.ConvertPitcherAndRelieve(FieldPosition.DesignatedHitter, relief));
         Assert.Equal(0, state.PitcherChanges);
-        Assert.Contains(relief, state.AvailableBullpen);   // 候補は消費されない
+        Assert.Contains(relief, state.AvailableReserves);   // 候補は消費されない
     }
 
     // ===== ④ スティント疲労は選手単位（コンバートを挟んでも回復しない） =====
@@ -238,7 +236,7 @@ public sealed class DefenseConversionTests
         var state = new TeamState(MakeTeam(bullpen: new[] { Rp("二番手"), Rp("三番手") }));
         state.AddPitches(90);
 
-        Assert.True(state.ChangePitcherTo(state.AvailableBullpen[0]));
+        Assert.True(state.ChangePitcherTo(state.AvailableReserves[0]));
         Assert.Equal(0, state.PitchesThrown);
         Assert.Equal(0.0, state.FatiguePitches);
     }

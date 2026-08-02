@@ -45,10 +45,9 @@ public sealed class MatchLiveSnapshotTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[] { Pos(FieldPosition.Pitcher, name + "R", Sid(10)) with { Pitching = PitcherAttributes.LeagueAverage } },
-            Bench = withBench
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Pos(FieldPosition.Pitcher, name + "R", Sid(10)) with { Pitching = PitcherAttributes.LeagueAverage } }, withBench
                 ? new[] { Pos(FieldPosition.FirstBase, PinchHitterName, withSourceIds ? 777 : null) with { Contact = 60 } }
-                : System.Array.Empty<Player>(),
+                : System.Array.Empty<Player>()),
         };
     }
 
@@ -87,8 +86,8 @@ public sealed class MatchLiveSnapshotTests
         Assert.Equal(FieldPosition.Catcher, snap.Home.Lineup[0].Position);
 
         // 控え（野手＝代打候補・投手＝ブルペン）も露出する。
-        Assert.Contains(snap.Home.Bench, s => s.Name == PinchHitterName);
-        Assert.NotEmpty(snap.Home.Bullpen);
+        Assert.Contains(snap.Home.Reserves, s => s.Name == PinchHitterName);
+        Assert.NotEmpty(snap.Home.Reserves);
     }
 
     // 今日の打数・安打がエンジン集計から引ける（UI再計算なし）。現ラインナップ9人＝ボックススコアの部分集合で、
@@ -174,7 +173,11 @@ public sealed class MatchLiveSnapshotTests
         // 代打前: 該当打順スロットの元選手名を控えておく。
         var before = prog.Snapshot();
 
-        Assert.True(prog.PinchHitUpcoming(offenseIsAway: false, benchIndex: 0), "代打を送れなかった");
+        // 控えは1本の名簿（issue #381）＝添字は名簿順。代打要員の位置を名前で引いてから指名する
+        // （0番は投手枠に置かれた控えなので、旧「ベンチの0番」とは別人になる）。
+        var reserveIdx = prog.SubstitutionOptions(teamIsAway: false)!.Reserves
+            .Select((p, i) => (p, i)).First(x => x.p.Name == PinchHitterName).i;
+        Assert.True(prog.PinchHitUpcoming(offenseIsAway: false, benchIndex: reserveIdx), "代打を送れなかった");
 
         // 代打が実際に打席に立つまで進める。
         var appeared = false;

@@ -49,8 +49,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
             Rp(n + "先発P"),
         },
         PitcherSlot = 8,
-        Bullpen = new[] { Rp(n + "二番手"), Rp(n + "三番手") },
-        Bench = new[] { P(FieldPosition.FirstBase, n + "控1"), P(FieldPosition.LeftField, n + "控2") },
+        Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Rp(n + "二番手"), Rp(n + "三番手") }, new[] { P(FieldPosition.FirstBase, n + "控1"), P(FieldPosition.LeftField, n + "控2") }),
     };
 
     /// <summary>DH制チーム（打順9人＝野手8＋DH、投手は打順外）。遊撃手に潜在投手能力。</summary>
@@ -67,8 +66,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         },
         DhSlot = 8,
         StartingPitcher = Rp(n + "先発P"),
-        Bullpen = new[] { Rp(n + "二番手") },
-        Bench = new[] { P(FieldPosition.FirstBase, n + "控1") },
+        Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Rp(n + "二番手") }, new[] { P(FieldPosition.FirstBase, n + "控1") }),
     };
 
     private static MatchProgression NewProg(ulong seed)
@@ -124,7 +122,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         var prog = NewProg(13UL);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
-        var reliever = opt!.Bullpen[1];   // 先頭固定ではないことも兼ねる
+        var reliever = opt!.Reserves[1];   // 先頭固定ではないことも兼ねる
         var old = opt.CurrentPitcher;
 
         Assert.True(prog.Relieve(teamIsAway: false, reliever));
@@ -140,7 +138,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         var prog = NewDhProg(13UL);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
-        var reliever = opt!.Bullpen[0];
+        var reliever = opt!.Reserves[0];
 
         Assert.True(prog.Relieve(teamIsAway: false, reliever));
 
@@ -258,14 +256,14 @@ public sealed class MatchProgressionUnifiedDefenseTests
         Assert.NotNull(opt);
         var slot = opt!.Lineup.ToList().FindIndex(p => p.Position == FieldPosition.CenterField);
         var incumbent = opt.Lineup[slot];
-        var sub = opt.Bench[0];
+        var sub = opt.Reserves[0];
 
         Assert.True(prog.DefenseAssign(teamIsAway: false, slot, sub));
 
         var after = prog.SubstitutionOptions(teamIsAway: false);
         Assert.Contains(after.Lineup, p => p.Name == sub.Name && p.Position == FieldPosition.CenterField);
         Assert.DoesNotContain(after.Lineup, p => p.Name == incumbent.Name);   // 就いていた選手は退場
-        Assert.DoesNotContain(after.Bench, p => p.Name == sub.Name);          // 控えから消費
+        Assert.DoesNotContain(after.Reserves, p => p.Name == sub.Name);          // 控えから消費
     }
 
     [Fact]
@@ -276,7 +274,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         Assert.NotNull(opt);
         var slot = opt!.Lineup.ToList().FindIndex(p => p.Position == FieldPosition.FirstBase);
         var incumbent = opt.Lineup[slot];
-        var sub = opt.Bench[0];
+        var sub = opt.Reserves[0];
 
         Assert.True(prog.DefenseAssign(teamIsAway: false, slot, sub));
 
@@ -306,10 +304,10 @@ public sealed class MatchProgressionUnifiedDefenseTests
                 var ss = def.Lineup.FirstOrDefault(p => p.Position == FieldPosition.Shortstop);
                 if (ss is not null) relieved = prog.Relieve(false, ss);   // 在フィールド野手→投
             }
-            else if (relieved && !assigned && def.Bench.Count > 0)
+            else if (relieved && !assigned && def.Reserves.Count > 0)
             {
                 var slot = def.Lineup.ToList().FindIndex(p => p.Position == FieldPosition.RightField);
-                if (slot >= 0) assigned = prog.DefenseAssign(false, slot, def.Bench[0]);   // ベンチ→守備位置
+                if (slot >= 0) assigned = prog.DefenseAssign(false, slot, def.Reserves[0]);   // ベンチ→守備位置
             }
         }
         Assert.True(relieved && assigned, "シナリオが継投・守備割当を実際に行使していない（テストの前提が崩れている）");
@@ -343,10 +341,10 @@ public sealed class MatchProgressionUnifiedDefenseTests
                 var ss = def.Lineup.FirstOrDefault(p => p.Position == FieldPosition.Shortstop);
                 if (ss is not null) relieved = prog.Relieve(false, ss);
             }
-            else if (relieved && !assigned && def.Bench.Count > 0)
+            else if (relieved && !assigned && def.Reserves.Count > 0)
             {
                 var slot = def.Lineup.ToList().FindIndex(p => p.Position == FieldPosition.RightField);
-                if (slot >= 0) assigned = prog.DefenseAssign(false, slot, def.Bench[0]);
+                if (slot >= 0) assigned = prog.DefenseAssign(false, slot, def.Reserves[0]);
             }
         }
         Assert.True(relieved && assigned);
@@ -403,7 +401,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         Assert.NotNull(opt);
 
         // ブルペン継投（対決ビューで確定した「控え投手の投入」に相当）。
-        var reliever = opt!.Bullpen[0];
+        var reliever = opt!.Reserves[0];
         Assert.True(prog.Relieve(teamIsAway: false, reliever));
         Assert.Equal(reliever.Name, prog.SubstitutionOptions(teamIsAway: false).CurrentPitcher.Name);
 
@@ -445,7 +443,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         var prog = NewProg(seed);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
-        Assert.True(prog.Relieve(teamIsAway: false, opt!.Bullpen[0]));
+        Assert.True(prog.Relieve(teamIsAway: false, opt!.Reserves[0]));
 
         var result = prog.FinishRemaining();
         Assert.True(prog.IsFinished);

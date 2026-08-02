@@ -432,7 +432,7 @@ public sealed class TacticsTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = bullpen ?? System.Array.Empty<Player>(), Captain = captain,
+            Reserves = bullpen ?? System.Array.Empty<Player>(), Captain = captain,
         };
     }
 
@@ -523,7 +523,7 @@ public sealed class TacticsTests
 
         // ベンチ（ブルペン在籍）は大きく減衰。
         var benchTeam = TeamOf("B", bullpen: new[] { captain with { Pitching = PitcherAttributes.LeagueAverage } });
-        var benchCaptain = benchTeam.Bullpen[0];
+        var benchCaptain = benchTeam.Reserves[0];
         var bench = new TeamState(benchTeam with { Captain = benchCaptain });
         Assert.Equal(expected * C.CaptainBenchFactor, bench.CaptainMitigation(C), 9);
 
@@ -628,7 +628,7 @@ public sealed class TacticsTests
         {
             Name = name, BattingOrder = order, DhSlot = 8,
             StartingPitcher = Pitcher(name: name + "SP"),
-            Bullpen = new[] { Pitcher(name: name + "RP") },
+            Reserves = new[] { Pitcher(name: name + "RP") },
         };
     }
 

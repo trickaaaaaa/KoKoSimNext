@@ -119,7 +119,11 @@ public static class StrengthTeamFactory
             ApplyPromoter(order, bench, rng.Fork(0x9C55_0000UL), rc.Lineup, ai, form ?? new FormCoefficients());
         }
 
-        var team = new Team { Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen, Bench = bench };
+        var team = new Team
+        {
+            Name = name, BattingOrder = order, PitcherSlot = 8,
+            Reserves = TeamReserves.Merge(bullpen, bench),
+        };
         // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。既に確定した能力ロールだけを材料にする決定論変換
         // （rng は使わない）＝展望（TournamentPreview）と実戦（Shell）が同じここを通り自動で一致する。
         var composed = LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);

@@ -39,8 +39,7 @@ public sealed class MatchProgressionConversionTests
             Rp(n + "先発P"),
         },
         PitcherSlot = 8,
-        Bullpen = new[] { Rp(n + "二番手"), Rp(n + "三番手") },
-        Bench = new[] { P(FieldPosition.FirstBase, n + "控1"), P(FieldPosition.LeftField, n + "控2") },
+        Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Rp(n + "二番手"), Rp(n + "三番手") }, new[] { P(FieldPosition.FirstBase, n + "控1"), P(FieldPosition.LeftField, n + "控2") }),
     };
 
     private static MatchProgression NewProg(ulong seed)
@@ -82,7 +81,7 @@ public sealed class MatchProgressionConversionTests
     {
         // 交代回数を消費しない操作なので、控えが尽きていても守備位置は動かせる（issue #235 方針①）。
         var prog = new MatchProgression(
-            Team("A"), Team("H") with { Bench = System.Array.Empty<Player>(), Bullpen = System.Array.Empty<Player>() },
+            Team("A"), Team("H") with { Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(System.Array.Empty<Player>(), System.Array.Empty<Player>() )},
             new GameContext(), 5UL);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
@@ -118,7 +117,7 @@ public sealed class MatchProgressionConversionTests
         Assert.NotNull(opt);
         var starter = opt!.CurrentPitcher.Name;
 
-        Assert.True(prog.ConvertPitcherAndRelieve(false, FieldPosition.LeftField, opt.Bullpen[0]));
+        Assert.True(prog.ConvertPitcherAndRelieve(false, FieldPosition.LeftField, opt.Reserves[0]));
 
         var after = prog.SubstitutionOptions(teamIsAway: false);
         Assert.Equal("H二番手", after.CurrentPitcher.Name);
@@ -143,8 +142,8 @@ public sealed class MatchProgressionConversionTests
                 var def = prog.SubstitutionOptions(teamIsAway: false);
                 if (def.IsOffense) continue;
                 if (applied == 0 && prog.SwapDefensivePositions(false, 0, 4)) applied++;
-                else if (applied == 1 && def.Bullpen.Count > 0
-                         && prog.ConvertPitcherAndRelieve(false, FieldPosition.CenterField, def.Bullpen[0])) applied++;
+                else if (applied == 1 && def.Reserves.Count > 0
+                         && prog.ConvertPitcherAndRelieve(false, FieldPosition.CenterField, def.Reserves[0])) applied++;
             }
             Assert.Equal(2, applied);
             return GameResultDigest.Sha256Of(prog.FinishRemaining());
@@ -165,8 +164,8 @@ public sealed class MatchProgressionConversionTests
             var def = prog.SubstitutionOptions(teamIsAway: false);
             if (def.IsOffense) continue;
             if (applied == 0 && prog.SwapDefensivePositions(false, 0, 4)) applied++;
-            else if (applied == 1 && def.Bullpen.Count > 0
-                     && prog.ConvertPitcherAndRelieve(false, FieldPosition.CenterField, def.Bullpen[0])) applied++;
+            else if (applied == 1 && def.Reserves.Count > 0
+                     && prog.ConvertPitcherAndRelieve(false, FieldPosition.CenterField, def.Reserves[0])) applied++;
         }
         Assert.Equal(2, applied);
 

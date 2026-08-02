@@ -245,7 +245,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
         var upcomingContact = EffectiveContact(s.UpcomingBatter);
         if (upcomingContact > _c.PinchHitContactCeiling) return null;
 
-        var best = BestBy(s.Bench, EffectiveContact);
+        var best = BestBy(s.Reserves, EffectiveContact);
         if (best is null || EffectiveContact(best) < upcomingContact + _c.PinchHitImprovement) return null;
         return best;
     }
@@ -297,7 +297,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             .FirstOrDefault(r => r is not null && r.Speed <= _c.PinchRunSpeedCeiling);
         if (runner is null) return null;
 
-        var fastest = BestBy(s.Bench, p => p.Speed);
+        var fastest = BestBy(s.Reserves, p => p.Speed);
         if (fastest is null || fastest.Speed < runner.Speed + _c.PinchRunImprovement) return null;
         return (runner, fastest);
     }
@@ -313,7 +313,7 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             .OrderBy(p => p.Fielding).FirstOrDefault();
         if (weakest is null) return null;
 
-        var best = BestBy(s.Bench, p => p.Fielding);
+        var best = BestBy(s.Reserves, p => p.Fielding);
         if (best is null || best.Fielding < weakest.Fielding + _c.DefensiveSubImprovement) return null;
         return (weakest, best);
     }

@@ -50,11 +50,12 @@ public sealed record LivePitcherToday(
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。
-/// <see cref="Bench"/>=未出場の野手控え、<see cref="Bullpen"/>=未登板の控え投手（いずれも交代候補）。
+/// <see cref="Reserves"/>=未出場の控え（1本の名簿・交代候補）、
+/// <see cref="ReservePitchers"/>=そのうち投手として置かれている者（継投の見通し表示用, issue #381）。
 /// </summary>
 public sealed record LiveTeamSnapshot(
     IReadOnlyList<LiveBatterSlot> Lineup, LivePitcherToday Pitcher,
-    IReadOnlyList<LiveBatterSlot> Bench, IReadOnlyList<LivePitcherToday> Bullpen);
+    IReadOnlyList<LiveBatterSlot> Reserves, IReadOnlyList<LivePitcherToday> ReservePitchers);
 
 /// <summary>
 /// ライブ観戦のラインスコア1チーム分（回別得点＋R/H/E）。設計書16 §4-2 の LineScorePanel が引く観測データ。

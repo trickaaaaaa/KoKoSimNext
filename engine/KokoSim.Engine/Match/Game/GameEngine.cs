@@ -329,7 +329,7 @@ public static class GameEngine
     private static TacticsTally TallyOf(TeamState t)
         => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes);
 
-    /// <summary>両チーム全選手（打順＋ブルペン）の当日の出来をサンプリング（順序固定＝決定論）。</summary>
+    /// <summary>打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。</summary>
     private static Dictionary<Player, double> SampleDayForms(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng)
     {
@@ -346,7 +346,12 @@ public static class GameEngine
             {
                 map[team.StartingPitcher] = Sample(team.StartingPitcher);
             }
-            foreach (var p in team.Bullpen) map[p] = Sample(p);
+            // 控えは1本の名簿になったが（issue #381）、**サンプリングする集合は変えない**＝
+            // 投手として置かれた控えだけを名簿順に引く。旧 Team.Bullpen と同じ選手・同じ順序なので
+            // 乱数消費が1語も動かない（帯・決定論baseline 不変）。控え野手にも当日の出来を配るのは
+            // 消費が増える別の変更なので、やるなら帯の張り直しを伴う独立した issue にする。
+            foreach (var p in team.Reserves)
+                if (p.Position == Field.FieldPosition.Pitcher) map[p] = Sample(p);
         }
         return map;
     }
@@ -1577,7 +1582,7 @@ public static class GameEngine
     private static void MaybeDefensiveSub(
         TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng, int inning, BaseState bases)
     {
-        if (defense.Tactics is null || defense.Bench.Count == 0) return;
+        if (defense.Tactics is null || defense.Reserves.Count == 0) return;
         var sit = SubSituationFor(defense, offense, ctx, inning, outs: 0, bases);
         if (defense.Tactics.CallDefensiveSub(sit, rng) is { } d)
         {
@@ -1621,7 +1626,7 @@ public static class GameEngine
     private static void MaybeOffenseSubs(
         TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int inning, int outs, BaseState bases)
     {
-        if (offense.Tactics is null || offense.Bench.Count == 0) return;
+        if (offense.Tactics is null || offense.Reserves.Count == 0) return;
 
         // 代走: 塁上の鈍足走者を速い控えへ。塁の参照も差し替える。
         if (offense.Tactics.CallPinchRun(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
@@ -1634,7 +1639,7 @@ public static class GameEngine
         }
 
         // 代打: 次打者を厚い控えへ（投手枠はStandard側で除外）。
-        if (offense.Bench.Count > 0
+        if (offense.Reserves.Count > 0
             && offense.Tactics.CallPinchHit(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
             is { } sub)
         {
@@ -1651,7 +1656,7 @@ public static class GameEngine
         return new SubstitutionSituation(
             inning, ctx.RegulationInnings, outs, team.Runs - opponent.Runs,
             bases.First, bases.Second, bases.Third, upcoming, upcomingIsPitcher,
-            team.CurrentLineup, team.Bench);
+            team.CurrentLineup, team.Reserves);
     }
 
     /// <summary>当日の出来を引く（途中出場等で未登録なら0=平常）。</summary>

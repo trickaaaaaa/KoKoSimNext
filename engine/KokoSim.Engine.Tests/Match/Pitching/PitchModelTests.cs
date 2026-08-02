@@ -133,7 +133,7 @@ public sealed class PitchModelTests
                 .Append(new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage })
                 .ToList(),
             PitcherSlot = 8,
-            Bullpen = System.Array.Empty<Player>(),
+            Reserves = System.Array.Empty<Player>(),
         };
         var s = new TeamState(team);
         s.AddPitches(10, staminaWeight: 1.6); // 飛ばしていけ

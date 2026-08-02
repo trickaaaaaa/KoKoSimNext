@@ -47,8 +47,7 @@ public sealed class ReliefBackfillTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[] { Arm(name + "中継ぎ", bullpenAttr) },
-            Bench = new[] { Field(name + "控", FieldPosition.FirstBase) },
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Arm(name + "中継ぎ", bullpenAttr) }, new[] { Field(name + "控", FieldPosition.FirstBase) }),
         };
     }
 
@@ -87,8 +86,7 @@ public sealed class ReliefBackfillTests
         {
             Name = "D", BattingOrder = order, DhSlot = 8,
             StartingPitcher = Arm("D先発", PitcherAttributes.LeagueAverage),
-            Bullpen = new[] { Arm("D中継ぎ", bullpenAttr) },
-            Bench = new[] { new Player { Name = "守備職人", Position = FieldPosition.Shortstop, Fielding = benchFielding } },
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Arm("D中継ぎ", bullpenAttr) }, new[] { new Player { Name = "守備職人", Position = FieldPosition.Shortstop, Fielding = benchFielding } }),
         };
     }
 
@@ -126,7 +124,7 @@ public sealed class ReliefBackfillTests
         Assert.True(st.IsRetired(oldPitcher));                    // DHでは旧投手は打順外＝退場
         Assert.False(st.IsRetired(dh));                           // 好打の元DHは残す（②に倒さない）
         Assert.Equal("DH", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name); // 元DHが空いた遊撃を守る
-        Assert.Single(st.Bench);                                  // ベンチ非消費
+        Assert.Equal(2, st.Reserves.Count);                          // 控え非消費（中継ぎ＋守備職人が残る）
         Assert.Equal(9, st.DefensiveAlignment(new FieldGeometry()).Count);      // 守備穴なし
         Assert.Equal(1, st.PitcherChanges);
         Assert.Equal(PitchingChangeKind.FielderReliefWithBackfill, st.LastPitchingChange!.Value.Kind);
@@ -152,7 +150,7 @@ public sealed class ReliefBackfillTests
         Assert.True(st.IsRetired(oldPitcher));                    // 旧投手は退場
         Assert.True(st.IsRetired(dh));                            // 弱打の元DHも退場（②）
         Assert.Equal("守備職人", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name); // ベンチ野手が空き守備へ
-        Assert.Empty(st.Bench);                                   // ベンチ消費
+        Assert.Single(st.Reserves);                                  // 控えを1人消費（中継ぎだけ残る）
         Assert.Equal(9, st.DefensiveAlignment(new FieldGeometry()).Count);
         Assert.Equal(1, st.PitcherChanges);
         Assert.Equal(1, st.Substitutions);
@@ -164,14 +162,14 @@ public sealed class ReliefBackfillTests
     {
         var st = new TeamState(DhTeam(Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
         var oldPitcher = st.CurrentPitcher;
-        var reliever = st.AvailableBullpen[0];
+        var reliever = st.AvailableReserves[0];
 
         Assert.True(st.RelieveWith(reliever));
 
         Assert.True(st.UsesDh);                                   // ブルペン継投ではDHは維持（野手を上げていない）
         Assert.Equal(reliever.Name, st.CurrentPitcher.Name);
         Assert.True(st.IsRetired(oldPitcher));
-        Assert.Equal(PitchingChangeKind.BullpenRelief, st.LastPitchingChange!.Value.Kind);
+        Assert.Equal(PitchingChangeKind.ReserveRelief, st.LastPitchingChange!.Value.Kind);
         Assert.Equal(1, st.PitcherChanges);
     }
 
@@ -211,8 +209,8 @@ public sealed class ReliefBackfillTests
             Assert.NotNull(st.PlayerAtPosition(pos));
         }
 
-        // ベンチ非消費・選手交代カウンタは増えない・投手交代として1回計上。
-        Assert.Single(st.Bench);
+        // 控え非消費・選手交代カウンタは増えない・投手交代として1回計上。
+        Assert.Equal(2, st.Reserves.Count);
         Assert.Equal(0, st.Substitutions);
         Assert.Equal(1, st.PitcherChanges);
     }
@@ -222,7 +220,7 @@ public sealed class ReliefBackfillTests
     {
         var st = new TeamState(NonDhTeam("T", Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
         var oldPitcher = st.CurrentPitcher;
-        var reliever = st.AvailableBullpen[0];
+        var reliever = st.AvailableReserves[0];
 
         Assert.True(st.RelieveWith(reliever));
 
@@ -253,8 +251,7 @@ public sealed class ReliefBackfillTests
         var team = new Team
         {
             Name = "T", BattingOrder = order, PitcherSlot = 8,
-            Bullpen = System.Array.Empty<Player>(),
-            Bench = new[] { new Player { Name = "守備職人", Position = FieldPosition.Shortstop, Fielding = benchFielding } },
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(System.Array.Empty<Player>(), new[] { new Player { Name = "守備職人", Position = FieldPosition.Shortstop, Fielding = benchFielding } }),
         };
         var st = new TeamState(team);
         return (st, st.CurrentLineup.First(p => p.Name == "遊"), st.CurrentPitcher);
@@ -269,7 +266,7 @@ public sealed class ReliefBackfillTests
         Assert.True(st.RelieveWith(ss));
         Assert.Equal("遊", st.CurrentPitcher.Name);                 // 野手がマウンドへ
         Assert.True(st.IsRetired(oldPitcher));                      // 打力の弱い旧投手は退場（②）
-        Assert.Empty(st.Bench);                                     // ベンチ野手を消費
+        Assert.Empty(st.Reserves);                                     // ベンチ野手を消費
         Assert.Equal("守備職人", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name); // ベンチ野手が空き守備を埋める
         Assert.Equal(9, st.DefensiveAlignment(new FieldGeometry()).Count);           // 守備穴なし
         Assert.Equal(1, st.PitcherChanges);
@@ -285,7 +282,7 @@ public sealed class ReliefBackfillTests
         Assert.True(st.RelieveWith(ss));
         Assert.Equal("遊", st.CurrentPitcher.Name);
         Assert.False(st.IsRetired(oldPitcher));                     // 打力の強い旧投手は残す（②に倒さない）
-        Assert.Single(st.Bench);                                    // ベンチ非消費
+        Assert.Single(st.Reserves);                                    // ベンチ非消費
         Assert.Equal("先発", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name); // 旧投手が空き守備へ回る（①）
         Assert.Equal(0, st.Substitutions);
         Assert.Equal(1, st.PitcherChanges);
@@ -301,7 +298,7 @@ public sealed class ReliefBackfillTests
         var ss = st.CurrentLineup.First(p => p.Name == "遊");
         st.RelieveWith(ss); // 投野交代で遊撃手がマウンドへ
 
-        // 昇格した野手が実際に投げる（1打者三振）。Team.Bullpen に居ないので旧実装では投手行が欠落した。
+        // 昇格した野手が実際に投げる（1打者三振）。Team.Reserves に居ないので旧実装では投手行が欠落した。
         st.RecordPitching(st.CurrentPitcher, PlateAppearanceResult.Strikeout, runs: 0, outs: 1, pitches: 4);
 
         var lines = st.BuildPitchingLines();
@@ -354,9 +351,9 @@ public sealed class ReliefBackfillTests
     {
         // ブルペン投手を指名する通常継投は BullpenRelief として記録される（プレイヤー采配経路と同じ ChangePitcherTo）。
         var st = new TeamState(NonDhTeam("T", Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
-        Assert.True(st.ChangePitcherTo(st.AvailableBullpen[0]));
+        Assert.True(st.ChangePitcherTo(st.AvailableReserves[0]));
         Assert.NotNull(st.LastPitchingChange);
-        Assert.Equal(PitchingChangeKind.BullpenRelief, st.LastPitchingChange!.Value.Kind);
+        Assert.Equal(PitchingChangeKind.ReserveRelief, st.LastPitchingChange!.Value.Kind);
         Assert.Equal("T中継ぎ", st.LastPitchingChange!.Value.InPitcherName);
     }
 

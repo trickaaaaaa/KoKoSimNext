@@ -3,7 +3,7 @@ using KokoSim.Engine.Players;
 namespace KokoSim.Engine.Match.Game;
 
 /// <summary>
-/// チーム編成（不変ロースター）。打順9人（うち1人が投手スロット）と控え投手（ブルペン）。
+/// チーム編成（不変ロースター）。打順9人（うち1人が投手スロット）と控え（1本の名簿）。
 /// 試合中の可変状態は <see cref="TeamState"/> が持つ。
 /// </summary>
 public sealed record Team
@@ -16,11 +16,18 @@ public sealed record Team
     /// <summary>打順のうち投手が入るスロット番号（0〜8, 慣例で8＝9番）。DH制（DhSlot≧0）では使わない。</summary>
     public int PitcherSlot { get; init; } = 8;
 
-    /// <summary>控え投手。先発が疲労したら順に登板。</summary>
-    public IReadOnlyList<Player> Bullpen { get; init; } = Array.Empty<Player>();
-
-    /// <summary>野手の控え（設計書09 §6, 代打・代走・守備交代の供給元）。空＝交代なし（従来挙動と一致）。</summary>
-    public IReadOnlyList<Player> Bench { get; init; } = Array.Empty<Player>();
+    /// <summary>
+    /// 控え（打順外の全員。継投・代打・代走・守備交代の共通の供給元）。空＝交代なし（従来挙動と一致）。
+    ///
+    /// **投手控えと野手控えに二分しない**（issue #381）。二分は「投手か否か」という選手の属性を前提にした
+    /// 構造で、#366「投手は配置であって属性ではない」と衝突する。継投は投手能力の高い者から選べばよく、
+    /// 実際 <c>ITacticsBrain</c> の人選は元々この名簿全体を横断して能力で比較している。
+    ///
+    /// 並びは<b>背番号順＝プレイヤーが決めた優先度</b>（issue #270）。継投の既定指名（
+    /// <see cref="TeamState.TryChangePitcher"/>）はこの並びで最初に見つかる「投手として置かれた控え」
+    /// （<c>Position == FieldPosition.Pitcher</c>）を採る＝旧ブルペン先頭と同じ選手になる。
+    /// </summary>
+    public IReadOnlyList<Player> Reserves { get; init; } = Array.Empty<Player>();
 
     /// <summary>
     /// 監督采配（設計書09）。null=無指示（従来挙動と完全一致）。

@@ -10,7 +10,7 @@ namespace KokoSim.Engine.Match.Game;
 /// （<see cref="GameReplay"/>）が**同じ関数**を通ることで、「同シード＋同交代操作 → 同結果」が構造的に保証される。
 ///
 /// ここでの添字はすべて「その時点の可変状態」に対するもの:
-/// 控え野手＝<see cref="TeamState.Bench"/>、投手交代の候補＝<see cref="TeamState.AvailablePitcherCandidates"/>
+/// 控え野手＝<see cref="TeamState.Reserves"/>、投手交代の候補＝<see cref="TeamState.AvailablePitcherCandidates"/>
 /// （ブルペン＋野手控え）、打順スロット＝0-8、塁＝0(一塁)/1(二塁)/2(三塁)。
 /// 乱数は一切消費しない（交代は決定的操作）。
 /// </summary>
@@ -121,7 +121,7 @@ internal static class SubstitutionCommands
 
     private static bool TryBench(TeamState team, int benchIndex, out Players.Player sub)
     {
-        var bench = team.Bench;
+        var bench = team.Reserves;
         if (benchIndex < 0 || benchIndex >= bench.Count) { sub = null!; return false; }
         sub = bench[benchIndex];
         return true;

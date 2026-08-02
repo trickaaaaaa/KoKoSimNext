@@ -5,11 +5,13 @@ namespace KokoSim.Engine.Match.Game;
 /// <summary>継投の種別（issue #209 表現・交代ログ）。表示テキストの出し分けに使う。</summary>
 public enum PitchingChangeKind
 {
-    /// <summary>通常継投（投手→投手・旧投手退場）。</summary>
-    BullpenRelief,
-
-    /// <summary>ベンチ野手が投手として登板（旧投手退場・backfillなし）。</summary>
-    FielderToMound,
+    /// <summary>
+    /// 控えからの継投（旧投手退場・backfillなし）。issue #381 で旧 <c>BullpenRelief</c>（投手→投手）と
+    /// 旧 <c>FielderToMound</c>（ベンチ野手→マウンド）を統合した。控えを投手/野手に二分するのをやめた以上、
+    /// 実況上の区別は「控えから出たか／守備に就いていた者が回ったか（＝守備に穴が開くか）」であって、
+    /// 出てきた控えが本職かどうかではない。
+    /// </summary>
+    ReserveRelief,
 
     /// <summary>投野交代（在フィールド野手→マウンド・旧投手は空いた守備位置へ・両者残留）。</summary>
     TwoWaySwap,

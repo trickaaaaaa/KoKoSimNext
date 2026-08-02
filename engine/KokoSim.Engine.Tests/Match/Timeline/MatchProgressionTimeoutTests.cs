@@ -36,7 +36,7 @@ public sealed class MatchProgressionTimeoutTests
             Rp(n + "先発P"),
         },
         PitcherSlot = 8,
-        Bullpen = new[] { Rp(n + "二番手") },
+        Reserves = new[] { Rp(n + "二番手") },
     };
 
     private static MatchProgression NewProg(ulong seed)

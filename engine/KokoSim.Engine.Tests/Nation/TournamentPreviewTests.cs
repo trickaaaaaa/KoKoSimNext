@@ -146,7 +146,7 @@ public sealed class TournamentPreviewTests
         return new Team
         {
             Name = "強打学園", BattingOrder = order, DhSlot = 8, StartingPitcher = pitcher,
-            Bullpen = new List<Player> { pitcher },
+            Reserves = new List<Player> { pitcher },
         };
     }
 
@@ -180,7 +180,7 @@ public sealed class TournamentPreviewTests
             var school = field.First(s => s.Name == roster.SchoolName);
             // 実戦で組まれる相手チーム（PlayerMatchResolver と同じ入口）。
             var actual = StrengthTeamFactory.ForSchool(school, year);
-            var actualMembers = actual.BattingOrder.Concat(actual.Bullpen).Concat(actual.Bench)
+            var actualMembers = actual.BattingOrder.Concat(actual.Reserves)
                 .Select(x => (x.Name, x.UniformNumber)).OrderBy(x => x.UniformNumber).ToList();
 
             Assert.Equal(actualMembers, roster.Members.Select(m => (m.Name, m.UniformNumber)).ToList());
@@ -191,7 +191,7 @@ public sealed class TournamentPreviewTests
         {
             var school = field.First(s => s.Name == n.SchoolName);
             var actual = StrengthTeamFactory.ForSchool(school, year);
-            Assert.Contains(actual.BattingOrder.Concat(actual.Bullpen).Concat(actual.Bench),
+            Assert.Contains(actual.BattingOrder.Concat(actual.Reserves),
                 x => x.Name == n.Name && x.UniformNumber == n.UniformNumber);
         }
     }

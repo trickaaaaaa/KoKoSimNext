@@ -124,7 +124,7 @@ public static class LineupOrderer
         var pitcher = team.BattingOrder[8];
 
         var useDh = modernRules is not null && calendarYear is not null
-            && modernRules.DhEnabled(calendarYear.Value) && team.Bench.Count > 0
+            && modernRules.DhEnabled(calendarYear.Value) && DhCandidates(team).Count > 0
             && ShouldUseDh(pitcher, fielders, c);
 
         if (!useDh)
@@ -139,12 +139,12 @@ public static class LineupOrderer
             return team with { BattingOrder = order };
         }
 
-        // ベンチから最強打者を繰り上げ、打順から抜けた投手は StartingPitcher へ（設計書09 §6）。
-        var dhBatter = team.Bench.OrderByDescending(p => BattingScore(p, c)).First();
+        // 控えから最強打者を繰り上げ、打順から抜けた投手は StartingPitcher へ（設計書09 §6）。
+        var dhBatter = DhCandidates(team).OrderByDescending(p => BattingScore(p, c)).First();
         var hitters = fielders.Append(dhBatter).ToList();
         var arranged = Arrange(hitters, c);
         var dhSlot = IndexOfReference(arranged, dhBatter);
-        var bench = team.Bench.Where(p => !ReferenceEquals(p, dhBatter)).ToList();
+        var reserves = team.Reserves.Where(p => !ReferenceEquals(p, dhBatter)).ToList();
 
         return team with
         {
@@ -152,9 +152,18 @@ public static class LineupOrderer
             DhSlot = dhSlot,
             StartingPitcher = pitcher,
             PitcherSlot = -1,
-            Bench = bench,
+            Reserves = reserves,
         };
     }
+
+    /// <summary>
+    /// DH に繰り上げる候補＝控えのうち<b>投手枠に置かれていない者</b>（issue #381）。
+    /// 控えは1本の名簿になったが、ここで候補を広げると「打てる控え投手がDHに入る」編成が新たに生まれ
+    /// 打線が変わる＝帯が動く。本 issue は構造の後片付けなので候補集合は旧 Team.Reserves と同一に保つ。
+    /// 広げるなら帯の張り直しを伴う独立した判断にする。
+    /// </summary>
+    private static IReadOnlyList<Player> DhCandidates(Team team)
+        => team.Reserves.Where(p => p.Position != Match.Field.FieldPosition.Pitcher).ToList();
 
     private static int IndexOfReference(IReadOnlyList<Player> list, Player target)
     {

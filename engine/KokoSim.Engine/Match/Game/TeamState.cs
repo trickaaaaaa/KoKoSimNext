@@ -12,12 +12,14 @@ namespace KokoSim.Engine.Match.Game;
 public sealed class TeamState
 {
     private readonly Team _team;
-    private readonly List<Player> _bullpen;   // 未登板の控え投手（先頭＝登板順の既定。指名継投で任意位置を抜く）
     private int _battingIndex;
 
     // ===== 可変ラインナップ（設計書09 §6, 選手交代）。無交代なら初期＝_team.BattingOrder と一致。 =====
     private readonly Player[] _lineup;          // 打順9スロットの現在の選手
-    private readonly List<Player> _bench;       // 野手控え（代打・代走・守備交代の供給元）
+    // 控え（打順外の全員）。継投・代打・代走・守備交代の共通の供給元＝投手控えと野手控えに分けない
+    // （issue #381。二分は「投手か否か」という属性を前提にした構造で #366 と衝突する）。
+    // 並びは背番号順＝プレイヤーが決めた優先度（issue #270）。使った選手はここから抜く。
+    private readonly List<Player> _reserves;
     private readonly HashSet<Player> _retired = new(); // 退場者（高校野球=リエントリー禁止で再出場不可）
     private readonly string?[] _replacedAtSlot = new string?[9]; // 各スロットで直近に退いた選手名（ライブ観戦の交代表示・観測用）
     private bool _usesDh;
@@ -28,9 +30,8 @@ public sealed class TeamState
     public TeamState(Team team)
     {
         _team = team;
-        _bullpen = new List<Player>(team.Bullpen);
         _lineup = team.BattingOrder.ToArray();
-        _bench = new List<Player>(team.Bench);
+        _reserves = new List<Player>(team.Reserves);
         _usesDh = team.UsesDh;
         _dhSlot = team.DhSlot;
         _pitcherSlot = team.PitcherSlot;
@@ -250,10 +251,10 @@ public sealed class TeamState
             lines.Add(new PitchingLine(p.Name, a.Outs, a.BF, a.H, a.Runs, a.SO, a.BB, a.Pitches, p.SourceId, a.HB, p.UniformNumber, a.HRA, byPitch, a.EarnedRuns));
         }
         Add(_starter);
-        foreach (var p in _team.Bullpen) Add(p);
-        // 在フィールドから昇格した野手・ベンチ出身の投手（issue #209 Phase C）は Team.Bullpen に居ないので
-        // 上の2経路では拾えない。実際に投げた投手（_pit に成績がある）で未計上の者を登板順（挿入順）に追加する。
-        // 先発・ブルペンは既に seen なのでスキップされ、通常試合の投手行は不変（＝決定論digestも不変）。
+        foreach (var p in _team.Reserves) Add(p);
+        // 在フィールドから昇格した野手（issue #209 Phase C）は Team.Reserves に居ないので上の2経路では
+        // 拾えない。実際に投げた投手（_pit に成績がある）で未計上の者を登板順（挿入順）に追加する。
+        // 先発・控えは既に seen なのでスキップされ、通常試合の投手行は不変（＝決定論digestも不変）。
         foreach (var p in _pit.Keys) Add(p);
         return lines;
     }
@@ -302,11 +303,11 @@ public sealed class TeamState
             p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches));
     }
 
-    /// <summary>ライブ観戦の野手控え（未出場の交代候補）。打順は持たないので Order=0。観測データ。</summary>
-    public IReadOnlyList<LiveBatterSlot> LiveBench()
+    /// <summary>ライブ観戦の控え（未出場の交代候補・背番号順）。打順は持たないので Order=0。観測データ。</summary>
+    public IReadOnlyList<LiveBatterSlot> LiveReserves()
     {
-        var list = new List<LiveBatterSlot>(_bench.Count);
-        foreach (var p in _bench)
+        var list = new List<LiveBatterSlot>(_reserves.Count);
+        foreach (var p in _reserves)
         {
             var a = _bat.TryGetValue(p, out var acc) ? acc : null;
             list.Add(new LiveBatterSlot(
@@ -316,12 +317,17 @@ public sealed class TeamState
         return list;
     }
 
-    /// <summary>ライブ観戦の控え投手（未登板のブルペン）。観測データ。</summary>
-    public IReadOnlyList<LivePitcherToday> LiveBullpen()
+    /// <summary>
+    /// ライブ観戦の「投げられる控え」（未登板・名簿順）。観測データ。
+    /// 控えは1本なので、ここでは投手として置かれている控え（Position==Pitcher）だけを拾う＝
+    /// 継投の見通しを出すための絞り込みであって、登板できる範囲を狭めるものではない（#93）。
+    /// </summary>
+    public IReadOnlyList<LivePitcherToday> LiveReservePitchers()
     {
-        var list = new List<LivePitcherToday>(_bullpen.Count);
-        foreach (var p in _bullpen)   // 登板順で列挙
+        var list = new List<LivePitcherToday>();
+        foreach (var p in _reserves)
         {
+            if (p.Position != FieldPosition.Pitcher) continue;
             var a = _pit.TryGetValue(p, out var acc) ? acc : null;
             list.Add(new LivePitcherToday(
                 p.SourceId, p.UniformNumber, p.Name, p.Throws,
@@ -627,27 +633,34 @@ public sealed class TeamState
     /// <summary>現投手が球数上限に達したか（達したら次打者は投げられない＝継投必須）。</summary>
     public bool CurrentPitcherAtWeeklyLimit() => WeeklyPitchesFor(CurrentPitcher) >= _weeklyPitchLimit;
 
-    /// <summary>控え投手が残っていれば継投する（ブルペン先頭＝登板順の指名ラッパ）。動揺はリセット。</summary>
+    /// <summary>
+    /// 控えが残っていれば継投する（既定の指名ラッパ）。動揺はリセット。
+    /// 採るのは<b>名簿順（背番号順）で最初の「投手として置かれた控え」</b>＝旧ブルペン先頭と同じ選手。
+    /// 投手枠の控えが尽きたら名簿先頭の控えが緊急登板する（#93: 内部の投/野区分でゲートしない）。
+    /// </summary>
     public bool TryChangePitcher()
-        => _bullpen.Count > 0 && ChangePitcherTo(_bullpen[0]);
+    {
+        if (_reserves.Count == 0) return false;
+        foreach (var p in _reserves)
+            if (p.Position == FieldPosition.Pitcher) return ChangePitcherTo(p);
+        return ChangePitcherTo(_reserves[0]);
+    }
 
     /// <summary>
-    /// ブルペン中の任意の投手を指名して継投する（設計書09 §6・プレイヤー采配の継投）。
-    /// ブルペンに sub が居なければ false（＝既に登板済み／退場済みは指名できない＝リエントリー禁止）。
+    /// 控えの任意の選手を指名して継投する（設計書09 §6・プレイヤー采配の継投）。
+    /// 控えに sub が居なければ false（＝既に登板済み／退場済みは指名できない＝リエントリー禁止）。
     /// 動揺はリセット（新しい投手は落ち着いて入る）。
     /// </summary>
     public bool ChangePitcherTo(Player sub)
     {
-        if (!_bullpen.Remove(sub) && !_bench.Remove(sub)) return false;
+        if (!_reserves.Remove(sub)) return false;
         // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
         var outgoing = CurrentPitcher;
-        var wasFielder = sub.Pitching is null;   // 野手（本職でない）＝ベンチ野手登板
+        // 実況上の区別は「控えから出たか／守備に就いていた者が回ったか」。ここは常に控えからの登板。
         _retired.Add(outgoing);
         // 野手が緊急登板するとき、潜在投手能力を実能力として確定する（issue #209 Phase B）。
         // これでリーグ平均でなく本人の（肩由来／隠しの）能力で投げる。本職投手は Pitching が正なので恒等。
-        CurrentPitcher = wasFielder && sub.LatentPitching is { } latent
-            ? sub with { Pitching = latent }
-            : sub;
+        CurrentPitcher = Materialize(sub);
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
         if (!_usesDh) _lineup[_pitcherSlot] = CurrentPitcher;
         // 球数・疲労は選手単位（issue #235）。退場した投手は戻れないので従来と同じ見え方になる。
@@ -655,7 +668,7 @@ public sealed class TeamState
         LoadStintOf(CurrentPitcher);
         PitcherChanges++;
         LastPitchingChange = new PitchingChangeOutcome(
-            wasFielder ? PitchingChangeKind.FielderToMound : PitchingChangeKind.BullpenRelief,
+            PitchingChangeKind.ReserveRelief,
             outgoing.Name, outgoing.UniformNumber, outgoing.SourceId,
             CurrentPitcher.Name, CurrentPitcher.UniformNumber, CurrentPitcher.SourceId,
             null, null, 0, null);
@@ -663,14 +676,14 @@ public sealed class TeamState
         return true;
     }
 
-    /// <summary>まだ登板していない控え投手（登板順＝Team.Bullpen の並び）。交代UIの指名候補。</summary>
-    public IReadOnlyList<Player> AvailableBullpen => _bullpen;
+    /// <summary>まだ使っていない控え（名簿順＝背番号順）。交代UIの指名候補。</summary>
+    public IReadOnlyList<Player> AvailableReserves => _reserves;
 
     /// <summary>
-    /// 投手交代で指名できる全候補（ブルペン＋野手控え。issue #137: 野手も投手として登板できる）。
+    /// 投手交代で指名できる全候補＝控え全員（issue #137: 誰でも投手として登板できる）。
     /// 添字は <see cref="ChangePitcherTo"/> 呼び出しの Player 引数解決に使う（SubstitutionCommands/GameReplay 共通）。
     /// </summary>
-    public IReadOnlyList<Player> AvailablePitcherCandidates => _bullpen.Concat(_bench).ToList();
+    public IReadOnlyList<Player> AvailablePitcherCandidates => _reserves;
 
     /// <summary>
     /// 継投人選のランキング候補（issue #209 Phase C）。ブルペン＋ベンチ（Phase B）に加え、
@@ -685,9 +698,8 @@ public sealed class TeamState
     {
         get
         {
-            var list = new List<Player>(_bullpen.Count + _bench.Count + 8);
-            list.AddRange(_bullpen);
-            list.AddRange(_bench);
+            var list = new List<Player>(_reserves.Count + 8);
+            list.AddRange(_reserves);
             // 在フィールドの守備野手を横断候補に含める。非DHは現投手スロットを、DHはDHスロット（守備に就かない）を除く。
             // DHでは投手は打順外＝_lineup に居ないので、DHスロットを除けば残り8人がそのまま守備8人になる。
             var skip = _usesDh ? _dhSlot : _pitcherSlot;
@@ -734,7 +746,7 @@ public sealed class TeamState
             : fielder with { Position = FieldPosition.Pitcher };
 
         // ②判定: 空き守備を旧投手より明確に上手く守れるベンチ野手が居るか（打力で基準を補正）。
-        var benchFielder = BestBenchDefender();
+        var benchFielder = BestReserveDefender();
         if (benchFielder is not null)
         {
             var battingDelta = (retiringPitcher.Contact + retiringPitcher.Power) / 2.0 - backfill.LeagueAverageBatting;
@@ -742,7 +754,7 @@ public sealed class TeamState
             if (benchFielder.Fielding - retiringPitcher.Fielding >= requiredMargin)
             {
                 // ②: 旧投手は退場（リエントリー禁止）。ベンチ野手が旧投手の打順スロットへ入り、空いた守備位置を守る。
-                _bench.Remove(benchFielder);
+                _reserves.Remove(benchFielder);
                 _retired.Add(retiringPitcher);
                 _replacedAtSlot[_pitcherSlot] = retiringPitcher.Name;
                 _lineup[_pitcherSlot] = benchFielder with { Position = vacated };
@@ -798,7 +810,7 @@ public sealed class TeamState
         var dh = _lineup[_dhSlot];              // 元DH（守備に就いていない・打順スロット _dhSlot）
 
         // ②判定: 空き守備を元DHより明確に上手く守れるベンチ野手が居るか（元DHの打力で基準を補正＝好打者DHは残す）。
-        var benchFielder = BestBenchDefender();
+        var benchFielder = BestReserveDefender();
         var useBench = false;
         if (benchFielder is not null)
         {
@@ -817,7 +829,7 @@ public sealed class TeamState
         if (useBench)
         {
             // ②: ベンチ野手が空き守備へ・元DHの打順スロットへ入る。元DHは退場（リエントリー禁止）。
-            _bench.Remove(benchFielder!);
+            _reserves.Remove(benchFielder!);
             _retired.Add(dh);
             _replacedAtSlot[_dhSlot] = dh.Name;
             _lineup[_dhSlot] = benchFielder! with { Position = vacated };
@@ -844,11 +856,11 @@ public sealed class TeamState
         return true;
     }
 
-    /// <summary>ベンチで最も守備値が高い野手（空き守備位置の backfill 候補。居なければ null）。決定論・同値は先頭優先。</summary>
-    private Player? BestBenchDefender()
+    /// <summary>控えで最も守備値が高い選手（空き守備位置の backfill 候補。居なければ null）。決定論・同値は先頭優先。</summary>
+    private Player? BestReserveDefender()
     {
         Player? best = null;
-        foreach (var p in _bench)
+        foreach (var p in _reserves)
         {
             if (best is null || p.Fielding > best.Fielding) best = p;
         }
@@ -858,24 +870,21 @@ public sealed class TeamState
     // ===== 選手交代（設計書09 §6）。高校野球ルール＝リエントリー禁止（退いた選手は再出場できない）。 =====
     /// <summary>現在の打順9人（交代反映済み）。UI・テスト・采配判断用。</summary>
     public IReadOnlyList<Player> CurrentLineup => _lineup;
-    /// <summary>野手控え（まだ使っていない交代要員）。</summary>
-    public IReadOnlyList<Player> Bench => _bench;
+    /// <summary>控え（まだ使っていない交代要員・名簿順）。</summary>
+    public IReadOnlyList<Player> Reserves => _reserves;
     /// <summary>この試合で行われた選手交代の回数（投手交代は含まない）。</summary>
     public int Substitutions { get; private set; }
     /// <summary>DH制が生きているか（DH解除後は false）。</summary>
     public bool UsesDh => _usesDh;
 
     /// <summary>控えにこの選手が残っているか（交代可否の判定）。</summary>
-    public bool IsAvailable(Player sub) => _bench.Contains(sub);
+    public bool IsAvailable(Player sub) => _reserves.Contains(sub);
 
     /// <summary>この試合で退場済みか（リエントリー禁止＝再出場できない）。交代UIのグレーアウト判定に使う。</summary>
     public bool IsRetired(Player p) => _retired.Contains(p);
 
-    /// <summary>試合開始時の野手控え（交代UIが「使い切った控え」をグレーアウト表示するための原本）。</summary>
-    public IReadOnlyList<Player> RosterBench => _team.Bench;
-
-    /// <summary>試合開始時のブルペン（同上・登板済みをグレーアウト表示するための原本）。</summary>
-    public IReadOnlyList<Player> RosterBullpen => _team.Bullpen;
+    /// <summary>試合開始時の控え（交代UIが「使い切った控え」をグレーアウト表示するための原本）。</summary>
+    public IReadOnlyList<Player> RosterReserves => _team.Reserves;
 
     /// <summary>投手が入っている打順スロット（0始まり。DH制では「投手が入る予定の」スロット＝DH解除で確定）。</summary>
     public int PitcherSlot => _pitcherSlot;
@@ -951,7 +960,7 @@ public sealed class TeamState
         if (to is FieldPosition.Pitcher or FieldPosition.DesignatedHitter) return false;
         var fSlot = SlotFieldingAt(to);
         if (fSlot < 0) return false;
-        if (!_bullpen.Remove(reliever) && !_bench.Remove(reliever)) return false;
+        if (!_reserves.Remove(reliever)) return false;
 
         var oldPitcher = CurrentPitcher;
         var displaced = _lineup[fSlot];
@@ -1050,9 +1059,8 @@ public sealed class TeamState
     /// </summary>
     private bool SubstituteAtSlot(int slot, Player sub)
     {
-        // 控えは野手（_bench）／投手（_bullpen）で分けない＝どちらのプールからでも起用できる（#93 / issue #256）。
-        // 既存経路（代打・代走・守備交代）は _bench から渡すので _bench.Remove が先に成立し挙動は不変。
-        if (!_bench.Remove(sub) && !_bullpen.Remove(sub)) return false;
+        // 控えは1本の名簿＝代打・代走・守備交代も継投も同じプールから起用する（#93 / issue #256 / #381）。
+        if (!_reserves.Remove(sub)) return false;
         var outgoing = _lineup[slot];
         _lineup[slot] = sub with { Position = outgoing.Position };
         _retired.Add(outgoing);

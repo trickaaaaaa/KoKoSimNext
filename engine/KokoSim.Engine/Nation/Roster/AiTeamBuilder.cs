@@ -120,8 +120,7 @@ public static class AiTeamBuilder
             Name = school.Name,
             BattingOrder = order,
             PitcherSlot = 8,
-            Bullpen = bullpen,
-            Bench = bench,
+            Reserves = Match.Game.TeamReserves.Merge(bullpen, bench),
         };
         return LineupOrderer.Compose(team, deps.Roster.Lineup, modernRules, calendarYear);
     }

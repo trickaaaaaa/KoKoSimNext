@@ -229,10 +229,8 @@ public sealed class MatchProgression
             UsesDh = team.UsesDh,
             DhSlot = team.DhSlot,
             Runners = runners,
-            Bench = team.Bench,
-            Bullpen = team.AvailableBullpen,
-            UsedBench = Unavailable(team.RosterBench, team.Bench),
-            UsedBullpen = Unavailable(team.RosterBullpen, team.AvailableBullpen),
+            Reserves = team.AvailableReserves,
+            UsedReserves = Unavailable(team.RosterReserves, team.AvailableReserves),
             ReliefCandidates = team.ReliefRankingCandidates,
         };
     }
@@ -240,14 +238,14 @@ public sealed class MatchProgression
     /// <summary>代打: 次打者を控え sub に代える。控えに sub が居なければ false。</summary>
     public bool PinchHit(bool teamIsAway, Player sub)
     {
-        var idx = IndexOf(_p.OffenseOf(teamIsAway).Bench, sub);
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).Reserves, sub);
         return idx >= 0 && PinchHitUpcoming(teamIsAway, idx);
     }
 
     /// <summary>代走: baseIndex（0=一塁,1=二塁,2=三塁）の走者を控え sub に代える。塁の参照も差し替わる。</summary>
     public bool PinchRun(bool teamIsAway, int baseIndex, Player sub)
     {
-        var idx = IndexOf(_p.OffenseOf(teamIsAway).Bench, sub);
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).Reserves, sub);
         if (idx < 0 || !SubstitutionCommands.PinchRun(_p, teamIsAway, baseIndex, idx)) return false;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PinchRun, teamIsAway, idx,
             TargetIndex: baseIndex));
@@ -294,7 +292,7 @@ public sealed class MatchProgression
     {
         var team = _p.OffenseOf(teamIsAway);
         var slot = IndexOf(team.CurrentLineup, outgoing);
-        var idx = IndexOf(team.Bench, sub);
+        var idx = IndexOf(team.Reserves, sub);
         if (slot < 0 || idx < 0 || !SubstitutionCommands.DefensiveSub(_p, teamIsAway, slot, idx)) return false;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.DefensiveSub, teamIsAway, idx,
             TargetIndex: slot));
@@ -632,9 +630,9 @@ public sealed class MatchProgression
     public MatchLiveSnapshot Snapshot()
     {
         var away = new LiveTeamSnapshot(_p.Away.LiveLineup(), _p.Away.LivePitcherLine(),
-            _p.Away.LiveBench(), _p.Away.LiveBullpen());
+            _p.Away.LiveReserves(), _p.Away.LiveReservePitchers());
         var home = new LiveTeamSnapshot(_p.Home.LiveLineup(), _p.Home.LivePitcherLine(),
-            _p.Home.LiveBench(), _p.Home.LiveBullpen());
+            _p.Home.LiveReserves(), _p.Home.LiveReservePitchers());
         return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
             _p.Away.LiveLine(), _p.Home.LiveLine());
     }

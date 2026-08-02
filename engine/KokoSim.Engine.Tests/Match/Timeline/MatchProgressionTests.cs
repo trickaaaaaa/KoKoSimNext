@@ -38,10 +38,9 @@ public sealed class MatchProgressionTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[] { Pos(FieldPosition.Pitcher) with { Name = name + "R", Pitching = PitcherAttributes.LeagueAverage } },
-            Bench = withBench
+            Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(new[] { Pos(FieldPosition.Pitcher) with { Name = name + "R", Pitching = PitcherAttributes.LeagueAverage } }, withBench
                 ? new[] { Pos(FieldPosition.FirstBase, PinchHitterName) with { Contact = 60 } }
-                : System.Array.Empty<Player>(),
+                : System.Array.Empty<Player>()),
         };
     }
 
