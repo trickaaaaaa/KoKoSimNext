@@ -89,9 +89,9 @@ public static class TeamStrengthProfile
     public static TeamStrength Compute(IReadOnlyList<DevelopingPlayer> roster, TeamStrengthCoefficients c)
     {
         // 野手＝非投手を総合力（AverageLevel）降順。投手＝投手合成の降順。
-        var fielders = roster.Where(p => !p.IsPitcher)
+        var fielders = roster.Where(p => !PitcherRoleResolver.LeansPitcher(p))
             .OrderByDescending(p => p.AverageLevel()).ToList();
-        var pitchers = roster.Where(p => p.IsPitcher)
+        var pitchers = roster.Where(p => PitcherRoleResolver.LeansPitcher(p))
             .OrderByDescending(p => PitcherComposite(p, c)).ToList();
 
         var regulars = fielders.Take(c.LineupSize).ToList();

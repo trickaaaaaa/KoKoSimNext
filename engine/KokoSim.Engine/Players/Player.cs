@@ -68,8 +68,6 @@ public sealed record Player
     /// <summary>性格④の得点圏強攻での長打質(Power)倍率（目立ちたがり>1/自己犠牲<1）。既定1.0＝無補正。</summary>
     public double ChanceHitFactor { get; init; } = 1.0;
 
-    /// <summary>隠し属性「投手経歴」（設計書01 §1.1b）。持つ野手は変化球保有数・質が上振れ。</summary>
-    public bool HasPitcherBackground { get; init; }
 
     /// <summary>特殊能力（設計書10）。有無フラグ制。可視/隠しを内包。既定は空（従来挙動と一致）。</summary>
     public SkillSet Skills { get; init; } = SkillSet.Empty;

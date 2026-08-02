@@ -31,10 +31,27 @@ public static class NotabilityModel
         return Clamp(n, 0, 100);
     }
 
-    /// <summary>能力合成スコア（0〜100）。現在値と隠し上限を <see cref="DraftCoefficients.CeilingBlend"/> でブレンド。</summary>
+    /// <summary>
+    /// 能力合成スコア（0〜100）。現在値と隠し上限を <see cref="DraftCoefficients.CeilingBlend"/> でブレンド。
+    ///
+    /// #366b: 選手の役割フラグで加重表を選ばず、**投手評価と打者評価の高い方**を採る。
+    /// 役割はスカウトが判定するのであって選手が持つ属性ではない（設計書20 §2.1 改訂）。
+    /// 投打とも強い個体は高い側で評価される＝二刀流が正しく注目される。
+    /// </summary>
     public static double AbilityScore(DevelopingPlayer player, DraftCoefficients c)
+        => Math.Max(AbilityScoreWith(player, PitcherWeights, c), AbilityScoreWith(player, BatterWeights, c));
+
+    /// <summary>投手軸としての能力合成スコア（0〜100）。表示・比較用に個別で引けるようにしてある。</summary>
+    public static double PitcherAbilityScore(DevelopingPlayer player, DraftCoefficients c)
+        => AbilityScoreWith(player, PitcherWeights, c);
+
+    /// <summary>打者軸としての能力合成スコア（0〜100）。</summary>
+    public static double BatterAbilityScore(DevelopingPlayer player, DraftCoefficients c)
+        => AbilityScoreWith(player, BatterWeights, c);
+
+    private static double AbilityScoreWith(
+        DevelopingPlayer player, (AbilityKind Kind, double Weight)[] weights, DraftCoefficients c)
     {
-        var weights = player.IsPitcher ? PitcherWeights : BatterWeights;
         var cur = 0.0;
         var cap = 0.0;
         foreach (var (kind, w) in weights)
@@ -46,32 +63,47 @@ public static class NotabilityModel
         return Clamp((1 - blend) * cur + blend * cap, 0, 100);
     }
 
-    /// <summary>実績スコア（0〜100）。出場サンプルが少ないほど中立50へ収縮する。</summary>
+    /// <summary>
+    /// 実績スコア（0〜100）。出場サンプルが少ないほど中立50へ収縮する。
+    ///
+    /// #366b: 役割で見る成績を決めず、**出場のあった軸**で評価する（両方あれば高い方）。
+    /// 単純な max を採ると、出場が無い側の中立50が悪い成績を隠して全員が50以上に持ち上がるため、
+    /// サンプルの有無で先に振り分けてから比べる。
+    /// </summary>
     public static double PerformanceScore(DevelopingPlayer player, PlayerStats? stats, DraftCoefficients c)
     {
         if (stats is null) return 50.0;
+        var pitching = PitchingPerformance(stats, c);
+        var batting = BattingPerformance(stats, c);
+        if (pitching is null && batting is null) return 50.0;
+        if (pitching is null) return batting!.Value;
+        if (batting is null) return pitching.Value;
+        return Math.Max(pitching.Value, batting.Value);
+    }
 
-        if (player.IsPitcher)
-        {
-            var p = stats.Pitching;
-            if (p.BattersFaced <= 0) return 50.0;
-            var raw = 50.0
-                + (c.PitcherEraBase - p.Era) * c.PitcherEraScale
-                + (p.KPer9 - c.PitcherK9Base) * c.PitcherK9Scale;
-            var shrink = Clamp((double)p.BattersFaced / Math.Max(1, c.PitcherMinBattersFaced), 0, 1);
-            return Clamp(50.0 * (1 - shrink) + raw * shrink, 0, 100);
-        }
-        else
-        {
-            var b = stats.Batting;
-            if (b.PlateAppearances <= 0) return 50.0;
-            var hrPerGame = b.Games > 0 ? (double)b.HomeRuns / b.Games : 0.0;
-            var raw = 50.0
-                + (b.Ops - c.BatterOpsBase) * c.BatterOpsScale
-                + hrPerGame * c.BatterHrPerGameScale;
-            var shrink = Clamp((double)b.PlateAppearances / Math.Max(1, c.BatterMinPlateAppearances), 0, 1);
-            return Clamp(50.0 * (1 - shrink) + raw * shrink, 0, 100);
-        }
+    /// <summary>投手成績からの実績スコア。登板が無ければ null（評価対象外）。</summary>
+    private static double? PitchingPerformance(PlayerStats stats, DraftCoefficients c)
+    {
+        var p = stats.Pitching;
+        if (p.BattersFaced <= 0) return null;
+        var raw = 50.0
+            + (c.PitcherEraBase - p.Era) * c.PitcherEraScale
+            + (p.KPer9 - c.PitcherK9Base) * c.PitcherK9Scale;
+        var shrink = Clamp((double)p.BattersFaced / Math.Max(1, c.PitcherMinBattersFaced), 0, 1);
+        return Clamp(50.0 * (1 - shrink) + raw * shrink, 0, 100);
+    }
+
+    /// <summary>打撃成績からの実績スコア。打席が無ければ null（評価対象外）。</summary>
+    private static double? BattingPerformance(PlayerStats stats, DraftCoefficients c)
+    {
+        var b = stats.Batting;
+        if (b.PlateAppearances <= 0) return null;
+        var hrPerGame = b.Games > 0 ? (double)b.HomeRuns / b.Games : 0.0;
+        var raw = 50.0
+            + (b.Ops - c.BatterOpsBase) * c.BatterOpsScale
+            + hrPerGame * c.BatterHrPerGameScale;
+        var shrink = Clamp((double)b.PlateAppearances / Math.Max(1, c.BatterMinPlateAppearances), 0, 1);
+        return Clamp(50.0 * (1 - shrink) + raw * shrink, 0, 100);
     }
 
     /// <summary>注目度→予想指名順位バンド（設計書20 §3.1）。</summary>

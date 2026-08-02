@@ -198,28 +198,26 @@ public sealed class PitchModelTests
         for (var s = 0; s < 200; s++)
             all.AddRange(ProspectGenerator.Intake(1, c, new Xoshiro256Random((ulong)(7000 + s))));
 
-        var pitchers = all.Where(p => p.IsPitcher).ToList();
-        var normalFielders = all.Where(p => !p.IsPitcher && !p.HasPitcherBackground).ToList();
+        var pitchers = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).ToList();
+        var fielders = all.Where(p => !PitcherRoleResolver.LeansPitcher(p)).ToList();
 
         // #377: 役割ゲートを撤去したので「投手は必ず1本以上」の断崖は無い。本数は投手適性の連続量で決まる。
         Assert.All(all, p => Assert.InRange(p.LearnedPitches.Count, 0, 3));
 
         // 投手として読める選手ほど多く持つ（境目で跳ねずに増える）。
         Assert.True(pitchers.Average(p => p.LearnedPitches.Count) >
-                    normalFielders.Average(p => p.LearnedPitches.Count) + 0.5,
+                    fielders.Average(p => p.LearnedPitches.Count) + 0.5,
             "投手の変化球本数が野手を明確に上回っていない");
         // 断崖は無いが、変化球を1本も持たない投手は例外的（＝適性が判定境界すれすれの個体）に留まる。
         var noBreaking = pitchers.Count(p => p.LearnedPitches.Count == 0) / (double)pitchers.Count;
         Assert.True(noBreaking < 0.10, $"変化球ゼロの投手が多すぎる: {noBreaking:P1}");
 
-        // 経歴持ち野手は変化球が多め（平均で上回る）。
-        var bg = all.Where(p => !p.IsPitcher && p.HasPitcherBackground).ToList();
-        if (bg.Count > 5)
-        {
-            Assert.True(bg.Average(p => p.LearnedPitches.Count) >
-                        normalFielders.Average(p => p.LearnedPitches.Count),
-                "投手経歴の変化球上振れが出ていない");
-        }
+        // 投手適性が高い野手ほど変化球を持ちやすい（旧「投手経歴」フラグの代わりに連続量が担う, #366b）。
+        var apt = fielders.OrderByDescending(p => p.Aptitude(FieldPosition.Pitcher)).ToList();
+        var topQuartile = apt.Take(apt.Count / 4).Average(p => p.LearnedPitches.Count);
+        var bottomQuartile = apt.Skip(apt.Count * 3 / 4).Average(p => p.LearnedPitches.Count);
+        Assert.True(topQuartile > bottomQuartile,
+            $"投手適性の高い野手が変化球を持ちやすくなっていない（上位{topQuartile:F2} vs 下位{bottomQuartile:F2}）");
     }
 
     [Fact]

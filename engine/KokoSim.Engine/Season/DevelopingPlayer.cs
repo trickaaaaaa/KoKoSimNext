@@ -38,39 +38,12 @@ public sealed class DevelopingPlayer
     public string Name { get; init; } = "部員";
     public int Grade { get; set; } = 1;             // 学年 1〜3
 
-    /// <summary>
-    /// 投手として起用するか（設計書01 §1.1・Issue #174「投手も創発」／#366a で読み取り専用化）。
-    /// 選手は「自分は投手だ」という状態を持たない＝守備位置適性からその都度導出する。判定式は
-    /// <see cref="PitcherRoleResolver"/> にしか無い（明示指名 <c>_pitcherRole</c> は #377 で廃止）。
-    ///
-    /// 係数は <see cref="RosterCoefficients.Default"/> を使う暫定実装。YAML（pitcher_aptitude_bias）も
-    /// C# 既定も同値なので挙動は変わらないが、係数注入の穴であることに変わりはない。
-    /// このプロパティ自体が #366b（#378）で消え、呼び出し側が実係数を渡す形になった時点で解消する。
-    /// </summary>
-    public bool IsPitcher => PitcherRoleResolver.IsNaturalPitcher(
-        _aptitude[(int)FieldPosition.Pitcher], BestFieldAptitude(), RosterCoefficients.Default);
-
-    /// <summary>
-    /// 投手を除く8守備位置中の最良適性（投手適性との比較対象, Issue #174）。
-    /// 走査は <see cref="AptitudeRoller.AllPositions"/>＝**実在する9守備位置だけ**にする。
-    /// <see cref="FieldPosition"/> には打順枠の <see cref="FieldPosition.DesignatedHitter"/> が含まれるが
-    /// これは守備位置ではなく適性もロールされない（既定50のまま）。配列添字で素朴に回すと
-    /// その50が最良守備適性の下限として効き、投手適性50未満の選手が誰も投手になれなくなる。
-    /// </summary>
-    private int BestFieldAptitude()
-    {
-        var best = int.MinValue;
-        foreach (var pos in AptitudeRoller.AllPositions)
-            if (pos != FieldPosition.Pitcher) best = Math.Max(best, _aptitude[(int)pos]);
-        return best;
-    }
+    // 投手役はここには無い（#366b）。選手は「自分は投手だ」という状態を持たない＝必要な場所が
+    // 守備位置適性から導出する（PitcherRoleResolver.LeansPitcher）。投手は配置であって属性ではない。
 
     /// <summary>投打の利き（設計書01 §1.1c）。生成分布は 2B で実装、既定は右。</summary>
     public Handedness Throws { get; init; } = Handedness.Right;
     public Handedness Bats { get; init; } = Handedness.Right;
-
-    /// <summary>隠し属性「投手経歴」（設計書01 §1.1b）。野手の変化球上振れの素。生成時に適性確定後に設定（Issue #174）。</summary>
-    public bool HasPitcherBackground { get; set; }
 
     /// <summary>
     /// 習得済み変化球（ストレートは必修のため含めない, 設計書02 §2.2）。
@@ -143,7 +116,7 @@ public sealed class DevelopingPlayer
     public double BattingGrowth { get; set; } = 1.0;
     public double DefenseGrowth { get; set; } = 1.0;
 
-    /// <summary>練習計画（設計書03 §3.1）。null = お任せ（IsPitcher で自動選択）。UIから設定・コピー。</summary>
+    /// <summary>練習計画（設計書03 §3.1）。null = お任せ（投手適性からの導出で自動選択）。UIから設定・コピー。</summary>
     public TrainingPlan? Plan { get; set; }
 
     /// <summary>個別指導3枠に指名中か（設計書06 §3.3・Issue #126）。true の週は主効果expへ分野別指導力
@@ -205,10 +178,13 @@ public sealed class DevelopingPlayer
         AbilityKind.ArmStrength, AbilityKind.Fielding, AbilityKind.Catching,
     };
 
-    /// <summary>中核能力の平均レベル。育成曲線の観測に使う。</summary>
+    /// <summary>
+    /// 中核能力の平均レベル。育成曲線の観測に使う。どの能力群を中核とみなすかは
+    /// 守備位置適性からの導出で決める（#366b: 選手が役割を覚えていない）。
+    /// </summary>
     public double AverageLevel()
     {
-        var kinds = IsPitcher ? AbilityKinds.Pitching : BatterCore;
+        var kinds = PitcherRoleResolver.LeansPitcher(this) ? AbilityKinds.Pitching : BatterCore;
         var sum = 0.0;
         foreach (var k in kinds) sum += _level[(int)k];
         return sum / kinds.Length;
@@ -228,7 +204,6 @@ public sealed class DevelopingPlayer
             Grade = Grade,
             Throws = Throws,
             Bats = Bats,
-            HasPitcherBackground = HasPitcherBackground,
             GrowthType = GrowthType,
             PersonalityFactor = PersonalityFactor,
             IsProdigy = IsProdigy,

@@ -19,8 +19,12 @@ public sealed class AiPlayer
     /// <summary>入学時に確定した守備位置（投手含む）。代替わりでも本人の守備位置は不変。</summary>
     public FieldPosition Position { get; }
 
-    /// <summary>投手か。</summary>
-    public bool IsPitcher => Position == FieldPosition.Pitcher;
+    /// <summary>
+    /// 投手枠に置かれているか（#366b）。選手の属性ではなく<see cref="Position"/>＝**在籍上の配置**の問い合わせ。
+    /// #366 §④ のとおり配置は抹殺対象外だが、旧名 <c>IsPitcher</c> は属性に読めるので改名した。
+    /// 永続ロスターの配置そのものを選抜で決め直すのは #384。
+    /// </summary>
+    public bool AssignedToMound => Position == FieldPosition.Pitcher;
 
     /// <summary>怪物種別（隠しフラグ, Q20）。生成時に確定し不変。</summary>
     public PhenomType Phenom { get; }

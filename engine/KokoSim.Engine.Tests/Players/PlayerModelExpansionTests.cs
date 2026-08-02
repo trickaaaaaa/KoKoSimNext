@@ -129,16 +129,7 @@ public sealed class PlayerModelExpansionTests
         Assert.Equal(50, p.Aptitude(FieldPosition.Pitcher)); // 他ポジは不変
     }
 
-    // --- 投手経歴フラグ（設計書01 §1.1b） ---
-
-    [Fact]
-    public void PitcherBackground_FlagCarriesToPlayer()
-    {
-        var dp = new DevelopingPlayer { HasPitcherBackground = true };
-        Assert.True(dp.HasPitcherBackground);
-        var p = RosterTeamBuilder.ToPlayer(dp, FieldPosition.RightField, asPitcher: false);
-        Assert.True(p.HasPitcherBackground);
-    }
+    // 投手経歴フラグは #366b で概念ごと廃止（変化球上振れは投手適性の連続配分に溶かした）。
 
     // --- 守備位置適性→実効守備力（設計書01 §1.1） ---
 

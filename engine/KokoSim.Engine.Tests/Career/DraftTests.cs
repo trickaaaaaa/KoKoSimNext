@@ -134,7 +134,7 @@ public sealed class DraftTests
         var c = new DraftCoefficients();
         var ace = Pitcher(3, 3, level: 85, cap: 92, name: "エース");
         var e = DraftEngine.Evaluate(ace, PitchingStats(3, outs: 90, bf: 90, hits: 40, runs: 5, k: 100), c);
-        Assert.True(e.IsPitcher);
+        Assert.True(e.EvaluatedAsPitcher);
         Assert.True(e.Band.IsCandidate());
     }
 

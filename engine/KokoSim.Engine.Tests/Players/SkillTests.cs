@@ -296,7 +296,7 @@ public sealed class SkillTests
                      b.Select(p => p.Skills.Visible.Count + p.Skills.Hidden.Count));
         // 投影で選手にスキルが引き継がれる。
         var dp = a.First();
-        var player = RosterTeamBuilder.ToPlayer(dp, dp.IsPitcher ? FieldPosition.Pitcher : FieldPosition.CenterField, dp.IsPitcher);
+        var player = RosterTeamBuilder.ToPlayer(dp, PitcherRoleResolver.LeansPitcher(dp) ? FieldPosition.Pitcher : FieldPosition.CenterField, PitcherRoleResolver.LeansPitcher(dp));
         Assert.Equal(dp.Skills.Visible.OrderBy(s => s), player.Skills.Visible.OrderBy(s => s));
     }
 

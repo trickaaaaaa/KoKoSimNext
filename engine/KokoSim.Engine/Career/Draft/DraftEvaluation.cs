@@ -49,14 +49,17 @@ public static class DraftRankBands
 /// <param name="PlayerId">育成選手ID（<see cref="Season.DevelopingPlayer.Id"/>）。</param>
 /// <param name="Name">表示名（フィード文言用）。</param>
 /// <param name="Grade">学年（1〜3）。</param>
-/// <param name="IsPitcher">投手評価か（役割別加重の分岐）。</param>
+/// <param name="EvaluatedAsPitcher">
+/// スカウトが投手として見たか（#366b）。選手が持つ役割属性ではなく**この評価がどちらの軸で付いたか**の記録。
+/// 投手軸の能力合成が打者軸を上回った選手が true になる（設計書20 §2.1 改訂）。
+/// </param>
 /// <param name="Notability">注目度スコア（0〜100）。</param>
 /// <param name="Band">予想指名順位バンド。</param>
 public sealed record DraftEvaluation(
     int PlayerId,
     string Name,
     int Grade,
-    bool IsPitcher,
+    bool EvaluatedAsPitcher,
     double Notability,
     DraftRankBand Band);
 

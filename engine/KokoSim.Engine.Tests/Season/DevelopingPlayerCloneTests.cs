@@ -26,7 +26,6 @@ public sealed class DevelopingPlayerCloneTests
         };
         p.Id = 123;
         p.Grade = 2;
-        p.HasPitcherBackground = true;
         p.LearnedPitches.Add(new LearnedPitch(PitchType.Slider, 5, -3));
         p.LearnedPitches.Add(new LearnedPitch(PitchType.Fork, -2, 8));
         p.Mental = 61;
@@ -82,7 +81,6 @@ public sealed class DevelopingPlayerCloneTests
         Assert.Equal(original.Grade, clone.Grade);
         Assert.Equal(original.Throws, clone.Throws);
         Assert.Equal(original.Bats, clone.Bats);
-        Assert.Equal(original.HasPitcherBackground, clone.HasPitcherBackground);
         Assert.Equal(original.GrowthType, clone.GrowthType);
         Assert.Equal(original.PersonalityFactor, clone.PersonalityFactor);
         Assert.Equal(original.IsProdigy, clone.IsProdigy);
@@ -109,7 +107,7 @@ public sealed class DevelopingPlayerCloneTests
         Assert.Equal(original.InjuryResistance, clone.InjuryResistance);
         Assert.Equal(original.SlumpWeeks, clone.SlumpWeeks);
         Assert.Equal(original.HasYips, clone.HasYips);
-        Assert.Equal(original.IsPitcher, clone.IsPitcher);
+        Assert.Equal(PitcherRoleResolver.LeansPitcher(original), PitcherRoleResolver.LeansPitcher(clone));
         Assert.Equal(original.Plan, clone.Plan);
         Assert.True(original.Skills.Has(Skill.Grinder) == clone.Skills.Has(Skill.Grinder));
         Assert.True(original.Skills.IsHidden(Skill.Monster) == clone.Skills.IsHidden(Skill.Monster));
@@ -160,11 +158,11 @@ public sealed class DevelopingPlayerCloneTests
     {
         var original = new DevelopingPlayer();
         PitcherRoleResolver.SeedAptitudeForRole(original, pitcher);
-        Assert.Equal(pitcher, original.IsPitcher);
+        Assert.Equal(pitcher, PitcherRoleResolver.LeansPitcher(original));
 
         var clone = original.Clone();
 
-        Assert.Equal(pitcher, clone.IsPitcher);
+        Assert.Equal(pitcher, PitcherRoleResolver.LeansPitcher(clone));
         Assert.Equal(original.Aptitude(FieldPosition.Pitcher), clone.Aptitude(FieldPosition.Pitcher));
     }
 }

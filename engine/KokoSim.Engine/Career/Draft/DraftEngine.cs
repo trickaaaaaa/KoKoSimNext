@@ -30,7 +30,7 @@ public static class DraftEngine
             var stats = p.Id != 0 ? statsById(p.Id) : null;
             var n = NotabilityModel.Compute(p, stats, c);
             list.Add(new DraftEvaluation(
-                p.Id, p.Name, p.Grade, p.IsPitcher, n, NotabilityModel.BandOf(n, c)));
+                p.Id, p.Name, p.Grade, EvaluatedAsPitcher(p, c), n, NotabilityModel.BandOf(n, c)));
         }
         return list;
     }
@@ -39,8 +39,16 @@ public static class DraftEngine
     public static DraftEvaluation Evaluate(DevelopingPlayer player, PlayerStats? stats, DraftCoefficients c)
     {
         var n = NotabilityModel.Compute(player, stats, c);
-        return new DraftEvaluation(player.Id, player.Name, player.Grade, player.IsPitcher, n, NotabilityModel.BandOf(n, c));
+        return new DraftEvaluation(player.Id, player.Name, player.Grade, EvaluatedAsPitcher(player, c),
+            n, NotabilityModel.BandOf(n, c));
     }
+
+    /// <summary>
+    /// スカウトがこの選手を投手として見るか（#366b）。選手の役割フラグではなく、能力合成の
+    /// 投手軸が打者軸を上回るかで決まる＝評価する側の判断（設計書20 §2.1 改訂）。
+    /// </summary>
+    private static bool EvaluatedAsPitcher(DevelopingPlayer p, DraftCoefficients c)
+        => NotabilityModel.PitcherAbilityScore(p, c) >= NotabilityModel.BatterAbilityScore(p, c);
 
     /// <summary>
     /// 10月最終週の指名確定（設計書20 §3.2）。対象は「3年生（Grade>=3）」かつ「候補（Band!=None）」のみ。

@@ -10,8 +10,8 @@ namespace KokoSim.Engine.Season;
 public sealed record RosterCoefficients
 {
     /// <summary>
-    /// C# 既定値の共有インスタンス。係数を注入できない場所（<see cref="DevelopingPlayer.IsPitcher"/> の
-    /// 暫定実装）から参照する。YAML 側と値が食い違うと導出が二重定義になるので、
+    /// C# 既定値の共有インスタンス。係数を注入できない場所（<see cref="PitcherRoleResolver.LeansPitcher(DevelopingPlayer)"/>
+    /// など）から参照する。YAML 側と値が食い違うと導出が二重定義になるので、
     /// data/coefficients.yaml の roster: 節と既定値は必ず揃えること。
     /// </summary>
     public static readonly RosterCoefficients Default = new();
@@ -234,7 +234,7 @@ public static class ProspectGenerator
     {
         if (cohort.Count == 0) return;
         foreach (var p in cohort)
-            if (p.IsPitcher) return;
+            if (PitcherRoleResolver.LeansPitcher(p, c)) return;
 
         // 判定の余裕（投手適性＋バイアス−最良守備適性）が最大＝最も惜しい1人。同点は先頭優先で決定論。
         DevelopingPlayer? best = null;
@@ -357,14 +357,13 @@ public static class ProspectGenerator
         // 役割判定は供給バイアス込み（実プレイに必要な投手率へ寄せる）で決める。
         // 一方 w（能力の連続補間の重み）は素の適性差から作る＝明確な野手は w≈0 で打撃が total を保つ
         // （バイアスを w に混ぜると全野手の打撃が下がり帯が大きくずれるため分離）。
-        // #377: 判定結果を選手へ書き戻さない（IsPitcher は適性からの導出＝同じ式が2箇所に増えない）。
+        // #377: 判定結果を選手へ書き戻さない（役割は適性からの導出＝同じ式が2箇所に増えない）。
         // w＝能力の配分に使う重み（バイアス無し）、wRole＝「投手としてどれだけ読めるか」（バイアス込み・
         // 判定境界で 0.5）。持ち物は wRole、能力の配分は w と使い分ける（PitcherRoleResolver 参照）。
         var (naturalPitcher, w, wRole) = ResolvePitcherRole(p, c);
 
-        // 隠し「投手経歴」（設計書01 §1.1b）。#377: 役割の二択でなく連続量で薄める＝投手として読める選手ほど
-        // 「経歴持ちの野手」にならない。主ストリームで常に1ドロー（分岐で消費数が変わらない）。
-        p.HasPitcherBackground = rng.NextDouble() < c.PitcherBackgroundProb * (1.0 - wRole);
+        // 「投手経歴」（旧 設計書01 §1.1b）は #366b で概念ごと廃止。野手の変化球上振れは
+        // 投手適性からの連続配分（LearnPitches の wRole）に溶けているので、免罪符のフラグは要らない。
         // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。プールの出し分けも連続量。
         p.Skills = SkillGenerator.Generate(wRole, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff);
 
@@ -462,9 +461,8 @@ public static class ProspectGenerator
     /// </summary>
     private static void LearnPitches(DevelopingPlayer p, double wRole, RosterCoefficients c, IRandomSource rng)
     {
-        var firstProb = Lerp(p.HasPitcherBackground ? 1.0 : c.FielderBreakingProb, 1.0, wRole);
-        var secondProb = Lerp(p.HasPitcherBackground ? c.BackgroundFielderExtraProb : 0.0,
-            c.PitcherSecondPitchProb, wRole);
+        var firstProb = Lerp(c.FielderBreakingProb, 1.0, wRole);
+        var secondProb = c.PitcherSecondPitchProb * wRole;
         var count = 0;
         if (rng.NextDouble() < firstProb) count++;
         if (rng.NextDouble() < secondProb) count++;

@@ -32,7 +32,7 @@ public sealed class PitcherRoleEmergenceTests
     // --- 判定が1箇所にしかない（#377 の本丸） ---
 
     /// <summary>
-    /// <see cref="DevelopingPlayer.IsPitcher"/> は <see cref="PitcherRoleResolver"/> の判定と常に一致する。
+    /// <see cref="PitcherRoleResolver.LeansPitcher(DevelopingPlayer)"/> は <see cref="PitcherRoleResolver"/> の判定と常に一致する。
     /// 判定のコピーが再び生えたら（特に供給バイアスを落とした素の比較に戻ったら）ここが落ちる。
     /// </summary>
     [Fact]
@@ -47,12 +47,12 @@ public sealed class PitcherRoleEmergenceTests
             var p = new DevelopingPlayer();
             foreach (var pos in AptitudeRoller.AllPositions) p.SetAptitude(pos, apt[(int)pos]);
 
-            Assert.Equal(PitcherRoleResolver.IsNaturalPitcher(apt, C), p.IsPitcher);
+            Assert.Equal(PitcherRoleResolver.IsNaturalPitcher(apt, C), PitcherRoleResolver.LeansPitcher(p));
 
             // 供給バイアスが効いた個体（素の比較なら野手・バイアス込みなら投手）を数える。
             var pitcherApt = apt[(int)FieldPosition.Pitcher];
             var bestField = AptitudeRoller.BestField(apt);
-            if (pitcherApt <= bestField && p.IsPitcher) biasMattered++;
+            if (pitcherApt <= bestField && PitcherRoleResolver.LeansPitcher(p)) biasMattered++;
         }
 
         // バイアス無しの判定に戻っていたら 0 になる（実測では全体の15%強がこの帯にいる）。
@@ -66,15 +66,15 @@ public sealed class PitcherRoleEmergenceTests
     {
         var p = new DevelopingPlayer();
         PitcherRoleResolver.SeedAptitudeForRole(p, true);
-        Assert.True(p.IsPitcher);
+        Assert.True(PitcherRoleResolver.LeansPitcher(p));
 
         PitcherRoleResolver.SeedAptitudeForRole(p, false);
-        Assert.False(p.IsPitcher);
+        Assert.False(PitcherRoleResolver.LeansPitcher(p));
 
         // 守備適性が上がれば（本人の投手適性はそのままでも）投手ではなくなる。
         PitcherRoleResolver.SeedAptitudeForRole(p, true);
         p.SetAptitude(FieldPosition.Shortstop, 99);
-        Assert.False(p.IsPitcher);
+        Assert.False(PitcherRoleResolver.LeansPitcher(p));
     }
 
     // --- 投手供給 ---
@@ -86,7 +86,7 @@ public sealed class PitcherRoleEmergenceTests
         for (var s = 0; s < 4000; s++)
         {
             var cohort = ProspectGenerator.Intake(1, C, new Xoshiro256Random((ulong)(200000 + s)));
-            Assert.True(cohort.Any(p => p.IsPitcher), $"seed {s} のコホートに投手が居ない");
+            Assert.True(cohort.Any(p => PitcherRoleResolver.LeansPitcher(p)), $"seed {s} のコホートに投手が居ない");
         }
     }
 
@@ -95,7 +95,7 @@ public sealed class PitcherRoleEmergenceTests
     public void PitcherSupply_StaysInBand()
     {
         var all = Cohorts(2000);
-        var share = all.Count(p => p.IsPitcher) / (double)all.Count;
+        var share = all.Count(p => PitcherRoleResolver.LeansPitcher(p)) / (double)all.Count;
         Assert.InRange(share, 0.25, 0.40);
     }
 
@@ -109,8 +109,8 @@ public sealed class PitcherRoleEmergenceTests
     public void PitcherBatting_IsContinuous_NotACliff()
     {
         var all = Cohorts(1500);
-        var pitchers = all.Where(p => p.IsPitcher).Select(BattingLevel).ToList();
-        var fielders = all.Where(p => !p.IsPitcher).Select(BattingLevel).ToList();
+        var pitchers = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).Select(BattingLevel).ToList();
+        var fielders = all.Where(p => !PitcherRoleResolver.LeansPitcher(p)).Select(BattingLevel).ToList();
 
         var pitcherSd = Math.Sqrt(pitchers.Sum(v => Math.Pow(v - pitchers.Average(), 2)) / pitchers.Count);
         Assert.True(pitcherSd > 5.0, $"投手の打撃分布が狭すぎる（崖の疑い）: sd={pitcherSd:F2}");
@@ -126,9 +126,9 @@ public sealed class PitcherRoleEmergenceTests
     public void SomePitchers_OutHit_TheAverageFielder()
     {
         var all = Cohorts(1500);
-        var fielderAvg = all.Where(p => !p.IsPitcher).Average(BattingLevel);
-        var share = all.Where(p => p.IsPitcher).Count(p => BattingLevel(p) > fielderAvg)
-                    / (double)all.Count(p => p.IsPitcher);
+        var fielderAvg = all.Where(p => !PitcherRoleResolver.LeansPitcher(p)).Average(BattingLevel);
+        var share = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).Count(p => BattingLevel(p) > fielderAvg)
+                    / (double)all.Count(p => PitcherRoleResolver.LeansPitcher(p));
         Assert.True(share > 0.02, $"野手平均を超える投手が出ていない: {share:P1}");
     }
 
@@ -137,7 +137,7 @@ public sealed class PitcherRoleEmergenceTests
     public void TwoWayPlayers_ExistStructurally()
     {
         var all = Cohorts(1500);
-        var pitchers = all.Where(p => p.IsPitcher).ToList();
+        var pitchers = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).ToList();
 
         double Pitching(DevelopingPlayer p)
             => (p.Level(AbilityKind.Velocity) + p.Level(AbilityKind.Control) + p.Level(AbilityKind.PitchRank)) / 3.0;
