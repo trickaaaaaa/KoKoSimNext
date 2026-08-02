@@ -703,7 +703,14 @@
 .pool-chip--picked { border-color: var(--sky); opacity: 1; }
 .pool-chip--picked:hover { border-color: var(--sky); }
 .pool-chip__body { margin-left: var(--sp-2); margin-right: var(--sp-2); }
-.pool-chip__name { font-size: var(--fs-label); color: var(--color-chalk); }
+.pool-chip__name {
+    min-width: 0;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .pool-chip__meta { flex-direction: row; align-items: center; margin-top: 1px; }
 .cmp-btn {
     width: 22px; height: 22px;
