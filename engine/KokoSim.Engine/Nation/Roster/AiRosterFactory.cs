@@ -39,37 +39,40 @@ public static class AiRosterFactory
         var center = RecruitCenter(school, pc);
 
         var usedGiven = new HashSet<string>();
-        var players = new List<(AiPlayer Ai, bool OnMound)>();
+        var players = new List<AiPlayer>();
         var profileSalt = 0x51E1_0000UL;
         var salt = 0x50A1_0000UL;
         var archSalt = 0x7B25_0000UL;
         var nameSalt = 0x4E27_0000UL;
+        var rc = deps.Roster;
 
-        // 野手8人（守備位置1人ずつ）。
-        foreach (var pos in FieldSlots)
+        // コホートは「守備8枠＋投手プール」ではなく**同じ生成器を通した N 人**（issue #384）。
+        // 一人ひとり守備位置適性をロールし、そこから投手寄せ重み w（打撃の連続補間）と
+        // 「投手として育っているか」を導く。誰がどこを守るかは AiTeamBuilder が毎回選抜する
+        // ＝選手は配置を持たない（#366）。適性ロールは Fork＝主RNGの消費列を乱さない。
+        for (var i = 0; i < pc.CohortSize; i++)
         {
-            var name = PlayerNameGenerator.Generate(deps.NameVocab, rng.Fork(nameSalt++), usedGiven);
-            var pr = StrengthTeamFactory.Profile(deps.Roster, rng, ref profileSalt, starter: true);
-            var snap = StrengthTeamFactory.PositionPlayer(pos, center, rng, deps.Personality, salt++, name)
-                with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
-            var ai = new AiPlayer(nextPlayerId++, enrollmentYearIndex, pos, PhenomType.None, 1, snap);
-            players.Add((ai, false));
-        }
+            var aptitudes = AptitudeRoller.Roll(rc, rng.Fork(AptitudeSalt + (ulong)i));
+            var pitcherApt = aptitudes[(int)FieldPosition.Pitcher];
+            var bestField = AptitudeRoller.BestField(aptitudes);
+            // 判定も重みも PitcherRoleResolver に集約された式を使う（自校と同じ係数・同じ分布）。
+            // 旧実装は AI校だけ PitcherEmergenceBias=15 という別の下駄を履いていたが、これは
+            // 「候補6人プールから選ぶ」構造の歪みを補うためのもので、全員が適性を持つ今は要らない。
+            var leansPitcher = PitcherRoleResolver.IsNaturalPitcher(pitcherApt, bestField, rc);
+            var weight = PitcherRoleResolver.PitcherWeight(pitcherApt, bestField, rc);
 
-        // 投手（Issue #177: 役割固定のN人から投手適性プールの創発へ）。適性プールを独立Forkでロールし
-        // （主RNGの消費列は乱さない）、投手適性の高い順に選ぶ。実人数は「適性クリア人数」だが
-        // floor人を割ったら適性上位から底上げする＝0人化を構造的に防ぐ（下限保証）。
-        var pitcherOrder = ResolvePitcherPool(pc, deps.Roster, rng);
-        for (var i = 0; i < pitcherOrder.Count; i++)
-        {
             var name = PlayerNameGenerator.Generate(deps.NameVocab, rng.Fork(nameSalt++), usedGiven);
-            var pr = StrengthTeamFactory.Profile(deps.Roster, rng, ref profileSalt, starter: i == 0);
-            // 打撃は投手寄せ重み w の連続量（#377）。w が中間の投手ほど打力を保つ＝「エースで4番」が出る。
-            var snap = StrengthTeamFactory.Pitcher(name, center, pitcherOrder[i].Weight, rng, deps.Personality,
-                    salt++, deps.Roster.Archetypes, archSalt++, deps.Roster)
-                with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
-            var ai = new AiPlayer(nextPlayerId++, enrollmentYearIndex, FieldPosition.Pitcher, PhenomType.None, 1, snap);
-            players.Add((ai, true));
+            var pr = StrengthTeamFactory.Profile(rc, rng, ref profileSalt, starter: i == 0);
+            // 打撃は w の連続量（#377）。投手として育っている者だけが投手能力を主RNGから引き、
+            // それ以外は肩からの推定で埋まる（#381）＝「全員が投手能力を持つが、投げ慣れた者が上」。
+            var snap = leansPitcher
+                ? StrengthTeamFactory.Pitcher(name, center, weight, rng, deps.Personality,
+                        salt++, rc.Archetypes, archSalt++, rc)
+                    with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats }
+                : StrengthTeamFactory.PositionPlayer(
+                        BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name)
+                    with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
+            players.Add(new AiPlayer(nextPlayerId++, enrollmentYearIndex, aptitudes, PhenomType.None, 1, snap));
         }
 
         // 怪物ロール（学校×年ごと・全4000校一様, Q20 §2）。種別に合う1名へパッケージ適用。
@@ -77,20 +80,21 @@ public static class AiRosterFactory
         var phenomType = PhenomPackages.Roll(pc.Phenom, phenomRng);
         if (phenomType != PhenomType.None)
         {
-            var idx = PickPhenomMember(players, phenomType, phenomRng);
+            var idx = PickPhenomMember(players, phenomType, phenomRng, rc);
             if (idx >= 0)
             {
-                var (ai, isP) = players[idx];
+                var ai = players[idx];
                 var grown = PhenomPackages.Apply(ai.Snapshot, phenomType, pc.Phenom, phenomRng);
-                players[idx] = (new AiPlayer(ai.Id, ai.EnrollmentYearIndex, ai.Position, phenomType, 1, grown), isP);
+                players[idx] = new AiPlayer(
+                    ai.Id, ai.EnrollmentYearIndex, ai.Aptitudes.ToArray(), phenomType, 1, grown);
             }
         }
 
         // SourceId（成績帰属キー）を確定した Id で焼き込む。
-        foreach (var (ai, _) in players)
+        foreach (var ai in players)
             ai.Snapshot = ai.Snapshot with { SourceId = ai.Id };
 
-        return players.Select(p => p.Ai).ToList();
+        return players;
     }
 
     /// <summary>
@@ -122,51 +126,50 @@ public static class AiRosterFactory
         return roster;
     }
 
+    /// <summary>コホートの適性ロール用 Fork ソルト（他ストリームと別の上位ビット）。</summary>
+    private const ulong AptitudeSalt = 0x6F3A_0000UL;
+
+    /// <summary>
+    /// 適性が最も高い守備位置（投手を除く8つ）。生成時の <see cref="Player.Position"/> の置き場所と
+    /// 怪物の系統判定に使う。<see cref="Player.Position"/> は配置なので <see cref="AiTeamBuilder"/> が
+    /// 選抜時に上書きする＝ここで置くのは「まだ選抜を通っていない状態の見た目」でしかない。
+    /// </summary>
+    internal static FieldPosition BestFieldPosition(IReadOnlyList<int> aptitudes)
+    {
+        var best = FieldPosition.CenterField;
+        var bestValue = int.MinValue;
+        foreach (var pos in AptitudeRoller.AllPositions)
+        {
+            if (pos == FieldPosition.Pitcher) continue;
+            if (aptitudes[(int)pos] <= bestValue) continue;
+            bestValue = aptitudes[(int)pos];
+            best = pos;
+        }
+        return best;
+    }
+
     /// <summary>新入生の能力中心（未熟スタート＝Strength − FreshmanGap ＋ 名声上振れ）。</summary>
     internal static double RecruitCenter(School school, PersistentRosterCoefficients c)
         => MathUtil.Clamp(school.Strength - c.FreshmanGap + (school.Fame - 50.0) * c.FameRecruitWeight, 10.0, 95.0);
 
     /// <summary>
-    /// 投手創発（Issue #177）: 適性プール（<see cref="PersistentRosterCoefficients.PitcherPoolSize"/> 人）を
-    /// 独立Forkでロールし、「投手適性＋バイアス &gt; 最良守備適性」をクリアした人数を実投手数とする。
-    /// floor人を割ったら適性上位から底上げして満たす＝0人化を構造的に防ぐ。戻り値は投手適性の高い順
-    /// （先頭＝エース格。呼び出し側で starter フラグに使う）。適性ロールは主RNGを消費しない。
+    /// 怪物種別に合うコホート成員を選ぶ（投手系→投手向き・鉄砲肩→捕外向き・打撃系→野手向き）。見つからねば −1。
+    /// 判定の材料は配置でなく**適性**（issue #384）。旧実装は生成時に固定した Position を見ていたが、
+    /// 選手が配置を持たなくなったので「その守備位置が最良適性か」で読み替える。
     /// </summary>
-    private static List<(int Index, double Weight)> ResolvePitcherPool(
-        PersistentRosterCoefficients pc, RosterCoefficients rc, IRandomSource rng)
-    {
-        var poolSize = Math.Max(pc.PitcherPoolSize, pc.PitcherCountFloor);
-        var scored = new List<(int Index, double Score, bool Clears, double Weight)>(poolSize);
-        for (var i = 0; i < poolSize; i++)
-        {
-            var apt = AptitudeRoller.Roll(rc, rng.Fork(PitcherAptitudeSalt + (ulong)i));
-            var pitcherApt = apt[(int)FieldPosition.Pitcher];
-            var bestField = AptitudeRoller.BestField(apt);
-            var score = pitcherApt + pc.PitcherEmergenceBias - bestField;
-            // 投手寄せ重み w（#377）: 単一生成器へ渡して打撃を連続量にする。判定と違いバイアスは混ぜない。
-            scored.Add((i, score, score > 0, PitcherRoleResolver.PitcherWeight(pitcherApt, bestField, rc)));
-        }
-        // 適性の高い順（同点は index 昇順）＝先頭ほどエース格。
-        scored = scored.OrderByDescending(s => s.Score).ThenBy(s => s.Index).ToList();
-
-        var count = Math.Max(pc.PitcherCountFloor, scored.Count(s => s.Clears));
-        count = Math.Min(count, poolSize);
-        return scored.Take(count).Select(s => (s.Index, s.Weight)).ToList();
-    }
-
-    /// <summary>投手創発（Issue #177）の適性ロール用 Fork ソルト（他ストリームと別の上位ビット）。</summary>
-    private const ulong PitcherAptitudeSalt = 0x6F3A_0000UL;
-
-    /// <summary>怪物種別に合うコホート成員を選ぶ（投手系→投手・鉄砲肩→捕手・打撃系→野手）。見つからねば −1。</summary>
     private static int PickPhenomMember(
-        List<(AiPlayer Ai, bool OnMound)> players, PhenomType type, IRandomSource rng)
+        List<AiPlayer> players, PhenomType type, IRandomSource rng, RosterCoefficients rc)
     {
-        bool Match((AiPlayer Ai, bool OnMound) p) => type switch
+        bool LeansPitcher(AiPlayer p) => PitcherRoleResolver.IsNaturalPitcher(
+            p.Aptitude(FieldPosition.Pitcher), AptitudeRoller.BestField(p.Aptitudes), rc);
+
+        bool Match(AiPlayer p) => type switch
         {
-            PhenomType.Ace or PhenomType.Finesse => p.Ai.AssignedToMound,
-            PhenomType.StrongArm => p.Ai.Position is FieldPosition.Catcher or FieldPosition.LeftField
+            PhenomType.Ace or PhenomType.Finesse => LeansPitcher(p),
+            PhenomType.StrongArm => !LeansPitcher(p) && BestFieldPosition(p.Aptitudes)
+                is FieldPosition.Catcher or FieldPosition.LeftField
                 or FieldPosition.CenterField or FieldPosition.RightField,
-            PhenomType.Slugger or PhenomType.Speedster => !p.Ai.AssignedToMound,
+            PhenomType.Slugger or PhenomType.Speedster => !LeansPitcher(p),
             PhenomType.AllRound => true,
             _ => false,
         };

@@ -7,22 +7,18 @@ namespace KokoSim.Engine.Nation.Roster;
 public sealed record PersistentRosterCoefficients
 {
     /// <summary>
-    /// 投手創発（Issue #177）: コホートごとに投手適性をロールする候補プールの人数。この中から
-    /// 適性の高い順に投手が選ばれる（野手8人とは独立＝守備位置の充足を崩さない）。
-    /// 実人数はここから創発するので「狙い値」は持たない（#377 で pitchers_per_cohort を削除）。
+    /// 1学年（新入生コホート）の人数（issue #384）。旧「野手8人＋投手プール」の固定編成を廃し、
+    /// 同じ生成器を通した N 人にした。誰がどこを守るかは <see cref="AiTeamBuilder"/> が毎回選抜する。
+    ///
+    /// 既定11は旧編成の実測（8人＋創発した投手 約2.9人＝10.9人/学年）に合わせた値。ベンチ入り20人制
+    /// （先発9＋控え野手8＋控え投手3）は3学年で 33人 ＞ 20 なので満たせる。3年引退直後（2学年＝22人）でも
+    /// 守備8枠を割当てるだけの人数が残る。
     /// </summary>
-    public int PitcherPoolSize { get; init; } = 6;
+    public int CohortSize { get; init; } = 11;
 
     /// <summary>
-    /// 投手創発（Issue #177）: 投手適性側に加算してから最良守備位置適性と比較するバイアス。
-    /// 「適性クリア」（投手適性＋これ &gt; 最良守備適性）の人数が実際の投手人数になる
-    /// （供給率を狙い値へ寄せる。帯校正で決める）。
-    /// </summary>
-    public double PitcherEmergenceBias { get; init; } = 15.0;
-
-    /// <summary>
-    /// 投手創発（Issue #177）: コホートあたりの投手人数の下限。適性クリアがこれを下回っても、
-    /// 適性プール内で投手適性の高い順にこの人数まで昇格させる＝投手0人化を構造的に防ぐ。
+    /// 投手（マウンド適性の高い者）の下限人数（issue #177 → #384）。適性で誰も投手に寄らないコホートでも
+    /// 投手能力の最良者をマウンドへ立てる＝投手0人化を構造的に防ぐ。判定は <see cref="AiTeamBuilder"/> 側。
     /// </summary>
     public int PitcherCountFloor { get; init; } = 1;
 

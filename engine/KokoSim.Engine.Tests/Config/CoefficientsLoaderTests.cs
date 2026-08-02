@@ -85,7 +85,7 @@ public sealed class CoefficientsLoaderTests
         const string yaml = """
             version: 1
             persistent_roster:
-              pitcher_pool_size: 7
+              cohort_size: 13
               freshman_gap: 9.5
               phenom_spike_rate_per_school_year: 0.002
               phenom_main_min: 88
@@ -94,7 +94,7 @@ public sealed class CoefficientsLoaderTests
 
         var bundle = CoefficientsLoader.Parse(yaml);
 
-        Assert.Equal(7, bundle.PersistentRoster.PitcherPoolSize);
+        Assert.Equal(13, bundle.PersistentRoster.CohortSize);
         Assert.Equal(9.5, bundle.PersistentRoster.FreshmanGap, 6);
         Assert.Equal(0.002, bundle.PersistentRoster.Phenom.SpikeRatePerSchoolYear, 6);
         Assert.Equal(88, bundle.PersistentRoster.Phenom.MainMin);
