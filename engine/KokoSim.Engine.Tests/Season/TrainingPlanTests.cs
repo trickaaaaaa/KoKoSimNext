@@ -14,7 +14,8 @@ public sealed class TrainingPlanTests
 
     private static DevelopingPlayer NewBatter()
     {
-        var p = new DevelopingPlayer { IsPitcher = false };
+        var p = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(p, false);
         foreach (var k in new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline,
                                   AbilityKind.Stamina, AbilityKind.Fielding })
         {
@@ -171,7 +172,8 @@ public sealed class TrainingPlanTests
 
     private static DevelopingPlayer HighCapBatter()
     {
-        var p = new DevelopingPlayer { IsPitcher = false };
+        var p = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(p, false);
         foreach (var k in AbilityKinds.All)
         {
             p.SetLevel(k, 30);

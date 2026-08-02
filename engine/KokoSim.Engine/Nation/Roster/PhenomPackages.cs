@@ -86,28 +86,17 @@ public static class PhenomPackages
         };
     }
 
-    /// <summary>総合型（S級）: 投手なら投手能力群を、野手なら打撃＋守備の主要能力を高帯へ。</summary>
+    /// <summary>
+    /// 総合型（S級）: 打撃＋守備の主要能力を高帯へ引き上げ、投手能力を持つならそれも同時に引き上げる。
+    ///
+    /// #377: 旧実装は「投手なら投手能力群だけ／野手なら打撃だけ」の役割分岐で、投手の総合型怪物は
+    /// 打力がまったく上がらなかった＝**二刀流怪物が構造的に存在できなかった**。総合型は能力軸への
+    /// 上乗せであって役割の選択ではないので、持っている軸すべてに乗せる。
+    /// </summary>
     private static Player ApplyAllRound(Player p, PhenomCoefficients c, IRandomSource rng)
     {
         int Hi(int cur) => System.Math.Max(cur, rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
-        if (p.Pitching is { } a)
-        {
-            var velLevel = System.Math.Max(PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh),
-                rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
-            var staLevel = System.Math.Max(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches),
-                rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
-            return p with
-            {
-                Pitching = a with
-                {
-                    MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velLevel),
-                    Control = Hi(a.Control),
-                    PitchRank = Hi(a.PitchRank),
-                    StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staLevel),
-                },
-            };
-        }
-        return p with
+        var result = p with
         {
             Contact = Hi(p.Contact),
             Power = Hi(p.Power),
@@ -115,6 +104,22 @@ public static class PhenomPackages
             ArmStrength = Hi(p.ArmStrength),
             Fielding = Hi(p.Fielding),
             Discipline = Hi(p.Discipline),
+        };
+        if (p.Pitching is not { } a) return result;
+
+        var velLevel = System.Math.Max(PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh),
+            rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
+        var staLevel = System.Math.Max(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches),
+            rng.NextInt(c.AllRoundMin, c.AllRoundMax + 1));
+        return result with
+        {
+            Pitching = a with
+            {
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velLevel),
+                Control = Hi(a.Control),
+                PitchRank = Hi(a.PitchRank),
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staLevel),
+            },
         };
     }
 

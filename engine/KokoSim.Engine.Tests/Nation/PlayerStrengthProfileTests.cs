@@ -14,7 +14,8 @@ public sealed class PlayerStrengthProfileTests
 
     private static DevelopingPlayer Make(int level, bool pitcher)
     {
-        var p = new DevelopingPlayer { IsPitcher = pitcher };
+        var p = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(p, pitcher);
         foreach (var k in AbilityKinds.All) p.SetLevel(k, level);
         return p;
     }
@@ -58,7 +59,8 @@ public sealed class PlayerStrengthProfileTests
     [Fact]
     public void Pitching_WeightsVelocityMost()
     {
-        var p = new DevelopingPlayer { IsPitcher = true };
+        var p = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(p, true);
         p.SetLevel(AbilityKind.Velocity, 90);
         p.SetLevel(AbilityKind.Control, 40);
         p.SetLevel(AbilityKind.Stamina, 40);

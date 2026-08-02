@@ -76,21 +76,26 @@ public static class StrengthTeamFactory
             order.Add(PositionPlayer(pos, strength, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven))
                 with { UniformNumber = PositionNumber(pos), Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
+        // 投手枠に置く4人の「投手寄せ重み」をエース格から順に引く（#377・Fork＝主RNG非消費）。
+        // 打撃はこの w の連続量で決まる＝役割ごとの −20 の崖は無い。
+        var pitcherW = PitcherWeights(rc, rng, 0x7C77_0000UL);
+
         var acePr = Profile(rc, rng, ref profileSalt, starter: true);
-        order.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength, rng, pc, salt++, ac, archSalt++)
+        order.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc)
             with { UniformNumber = 1, Throws = acePr.Throws, Bats = acePr.Bats, Grade = acePr.Grade });
 
         var bullpen = new List<Player>();
+        var wIndex = 1;
         foreach (var (number, drop) in new[] { (18, 4.0), (19, 2.0) })
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
-            bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - drop, rng, pc, salt++, ac, archSalt++)
+            bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc)
                 with { UniformNumber = number, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
         // 背番号20（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
         var relief20 = rng.Fork(0x9A20_0000UL);
         var pr20 = Profile(rc, rng, ref profileSalt, starter: false);
-        bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - 6, relief20, pc, salt++, ac, archSalt++)
+        bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - 6, pitcherW[wIndex], relief20, pc, salt++, ac, archSalt++, rc)
             with { UniformNumber = 20, Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade });
 
         // 控え（全員生成・ベンチ入りメンバとして背番号10〜を採番）。能力・氏名とも Fork ストリーム由来＝
@@ -233,24 +238,105 @@ public static class StrengthTeamFactory
     private static int Grade(int pitchRank, IRandomSource rng)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(pitchRank, 8)), 1, 100);
 
-    internal static Player PositionPlayer(FieldPosition pos, double strength, IRandomSource rng,
-        PersonalityCoefficients pc, ulong salt, string playerName)
+    /// <summary>潜在投手能力の Fork salt（性格 salt と衝突しない別ストリーム。issue #209 Phase B）。</summary>
+    private const ulong LatentPitchingSalt = 0x7A17_0000_0000_0000UL;
+
+    /// <summary>投手寄せ重み w を引くときの候補プール人数（<see cref="PersistentRosterCoefficients.PitcherPoolSize"/> と同値）。</summary>
+    private const int PitcherWeightPoolSize = 6;
+
+    /// <summary>
+    /// 投手枠に置く選手たちの「投手寄せ重み」をエース格から順に返す（#377）。
+    /// 適性プールを独立Fork（主RNG非消費）でロールし、判定スコア（投手適性＋バイアス−最良守備適性）の
+    /// 高い順に並べる＝<see cref="Nation.Roster.AiRosterFactory"/> の投手プールと同じ意味づけにする。
+    /// 使い捨て生成（<see cref="Create"/>）は投手枠の人数が固定なので、選抜でなく順位で重みだけを取る。
+    /// </summary>
+    internal static double[] PitcherWeights(RosterCoefficients rc, IRandomSource rng, ulong salt)
     {
+        var scored = new (double Score, double Weight)[PitcherWeightPoolSize];
+        for (var i = 0; i < PitcherWeightPoolSize; i++)
+        {
+            var apt = AptitudeRoller.Roll(rc, rng.Fork(salt + (ulong)i));
+            var pitcherApt = apt[(int)FieldPosition.Pitcher];
+            var bestField = AptitudeRoller.BestField(apt);
+            scored[i] = (pitcherApt + rc.PitcherAptitudeBias - bestField,
+                         PitcherRoleResolver.PitcherWeight(pitcherApt, bestField, rc));
+        }
+        return scored.OrderByDescending(s => s.Score).Select(s => s.Weight).ToArray();
+    }
+
+    /// <summary>
+    /// 単一生成器（#377）。役割で生成器を分けない＝**打撃は投手寄せ重み w の連続量**で決まり、
+    /// 「投手はミート/パワーが strength−20 固定」という崖は無い。自校
+    /// <see cref="Season.ProspectGenerator"/> の「total＋適性 w の連続補間」と同型。
+    ///
+    /// <paramref name="pitcherWeight"/>=0 は「明確な野手」＝打撃中心が strength そのもの（従来の
+    /// <c>PositionPlayer</c> と完全一致）。投手枠に置く選手は <see cref="PitcherWeights"/> の値を渡す。
+    /// w が中間の投手ほど打撃を保つ＝「エースで4番」が構造的に出る。
+    ///
+    /// 投手能力（制球/スタミナ/キレ/球速）を引くかは**配置**で決める（#366 §④: 配置は属性ではない）。
+    /// 全選手が PitcherAttributes を持つ形にするのは #366b（#378）の担当。ここで分けているのは
+    /// 乱数消費列を野手側で1ビットも変えないため＝この issue の帯の動きを投手側だけに閉じ込める。
+    /// </summary>
+    internal static Player CreatePlayer(string playerName, FieldPosition pos, double strength, double pitcherWeight,
+        IRandomSource rng, PersonalityCoefficients pc, ulong salt,
+        PitcherArchetypeCoefficients ac, ulong archetypeSalt, RosterCoefficients rc)
+    {
+        var onMound = pos == FieldPosition.Pitcher;
+        // 打撃中心: 本業(strength) ↔ 専門外(strength×OffSpecialtyFactor) を w で補間。
+        var battingCenter = strength + (strength * rc.OffSpecialtyFactor - strength) * pitcherWeight;
+
         // Ability() の呼び出し順を従来どおり保ち、乱数消費列を不変にする（決定論の後方互換, 2A）。
-        var contact = Ability(strength, rng);
-        var power = Ability(strength, rng);
+        var contact = Ability(battingCenter, rng);
+        var power = Ability(battingCenter, rng);
         var launch = Ability(50, rng);
         var discipline = Ability(strength, rng);
         var speed = Ability(strength, rng);
         var arm = Ability(strength, rng);
         var fielding = Ability(strength, rng);
         var catching = Ability(strength, rng);
+
+        PitcherAttributes? pitching = null;
+        if (onMound)
+        {
+            var control = Ability(strength, rng);
+            var staminaLevel = Ability(strength, rng);
+            var pitchRank = Ability(strength, rng);
+            // 球速も他能力と同じく個体差を持つ（旧実装は強さの決定関数で、同じ強さの学校のエースが全員同じ球速＝
+            // AI校に技巧派が存在できなかった）。自校（RosterTeamBuilder）と同じ「球速Level→km/h」の形に揃える。
+            var velocityLevel = Ability(strength, rng);
+
+            // 球質タイプで配分を振り替える（総合はほぼ不変・Fork＝主RNG非消費）。
+            var archetype = PitcherArchetypes.Sample(rng.Fork(archetypeSalt), ac);
+            var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(archetype, ac);
+            velocityLevel = Lv(velocityLevel + dv);
+            control = Lv(control + dc);
+            staminaLevel = Lv(staminaLevel + ds);
+            pitchRank = Lv(pitchRank + dr);
+
+            pitching = new PitcherAttributes
+            {
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velocityLevel),
+                Archetype = archetype,
+                Control = control,
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staminaLevel),
+                PitchRank = pitchRank,
+                // 集計用の簡易レパートリー: ストレート＋変化球2種（ランクは PitchRank 近傍）。
+                Repertoire = new[]
+                {
+                    PitchSlot.FastballOf(pitchRank),
+                    new PitchSlot { Type = PitchType.Slider, Power = Grade(pitchRank, rng), Sharpness = Grade(pitchRank, rng) },
+                    new PitchSlot { Type = PitchType.Fork, Power = Grade(pitchRank, rng), Sharpness = Grade(pitchRank, rng) },
+                },
+            };
+        }
+
         // 性格（Fork＝親状態非消費）: 上の能力ロール列に影響しない。
         var personality = pc.Sample(rng.Fork(salt));
         var pp = pc.Profile(personality);
-        // 潜在投手能力（issue #209 Phase B）: AI校野手は隠し投手レベルを持たないので肩から推定する。
+        // 潜在投手能力（issue #209 Phase B）: 投手能力を持たない選手は肩から推定する。
         // 専用 Fork（性格の salt と別ストリーム）＝主RNG非消費で帯・決定論不変。緊急登板の人選/実登板でのみ参照。
-        var latentPitching = LatentPitchingEstimator.Estimate(arm, rng.Fork(salt ^ LatentPitchingSalt));
+        var latentPitching = onMound ? null : LatentPitchingEstimator.Estimate(arm, rng.Fork(salt ^ LatentPitchingSalt));
+
         return new Player
         {
             Name = playerName,
@@ -268,6 +354,7 @@ public static class StrengthTeamFactory
             Bunt = (int)MathUtil.Clamp(strength, 10, 99),
             Steal = speed,
             Baserunning = speed,
+            Pitching = pitching,
             Personality = personality,
             BuntSuccessBonus = pp.BuntSuccessBonus,
             ChanceHitFactor = pp.ChanceHitFactor,
@@ -275,73 +362,15 @@ public static class StrengthTeamFactory
         };
     }
 
-    /// <summary>潜在投手能力の Fork salt（性格 salt と衝突しない別ストリーム。issue #209 Phase B）。</summary>
-    private const ulong LatentPitchingSalt = 0x7A17_0000_0000_0000UL;
+    /// <summary>守備位置の選手（単一生成器の w=0 呼び出し＝明確な野手）。</summary>
+    internal static Player PositionPlayer(FieldPosition pos, double strength, IRandomSource rng,
+        PersonalityCoefficients pc, ulong salt, string playerName)
+        => CreatePlayer(playerName, pos, strength, pitcherWeight: 0.0, rng, pc, salt,
+            new PitcherArchetypeCoefficients(), 0UL, new RosterCoefficients());
 
-    internal static Player Pitcher(string name, double strength, IRandomSource rng,
-        PersonalityCoefficients pc, ulong salt, PitcherArchetypeCoefficients ac, ulong archetypeSalt)
-    {
-        var contact = Ability(strength - 20, rng);
-        var power = Ability(strength - 20, rng);
-        var launch = Ability(50, rng);
-        var discipline = Ability(strength, rng);
-        var speed = Ability(strength, rng);
-        var arm = Ability(strength, rng);
-        var fielding = Ability(strength, rng);
-        var catching = Ability(strength, rng);
-        var control = Ability(strength, rng);
-        var staminaLevel = Ability(strength, rng);
-        var pitchRank = Ability(strength, rng);
-        // 球速も他能力と同じく個体差を持つ（旧実装は強さの決定関数で、同じ強さの学校のエースが全員同じ球速＝
-        // AI校に技巧派が存在できなかった）。自校（RosterTeamBuilder）と同じ「球速Level→km/h」の形に揃える。
-        var velocityLevel = Ability(strength, rng);
-
-        // 球質タイプで配分を振り替える（総合はほぼ不変・Fork＝主RNG非消費）。
-        var archetype = PitcherArchetypes.Sample(rng.Fork(archetypeSalt), ac);
-        var (dv, dc, ds, dr) = PitcherArchetypes.Offsets(archetype, ac);
-        velocityLevel = Lv(velocityLevel + dv);
-        control = Lv(control + dc);
-        staminaLevel = Lv(staminaLevel + ds);
-        pitchRank = Lv(pitchRank + dr);
-
-        var pitching = new PitcherAttributes
-        {
-            MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(velocityLevel),
-            Archetype = archetype,
-            Control = control,
-            StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(staminaLevel),
-            PitchRank = pitchRank,
-            // 集計用の簡易レパートリー: ストレート＋変化球2種（ランクは PitchRank 近傍）。
-            Repertoire = new[]
-            {
-                PitchSlot.FastballOf(pitchRank),
-                new PitchSlot { Type = PitchType.Slider, Power = Grade(pitchRank, rng), Sharpness = Grade(pitchRank, rng) },
-                new PitchSlot { Type = PitchType.Fork, Power = Grade(pitchRank, rng), Sharpness = Grade(pitchRank, rng) },
-            },
-        };
-        // 性格（Fork＝親状態非消費）: 上の能力ロール列に影響しない。
-        var personality = pc.Sample(rng.Fork(salt));
-        var pp = pc.Profile(personality);
-        return new Player
-        {
-            Name = name,
-            Position = FieldPosition.Pitcher,
-            Contact = contact,
-            Power = power,
-            LaunchTendency = launch,
-            Discipline = discipline,
-            Speed = speed,
-            ArmStrength = arm,
-            ThrowAccuracy = arm,
-            Fielding = fielding,
-            Catching = catching,
-            Bunt = (int)MathUtil.Clamp(strength, 10, 99),
-            Steal = speed,
-            Baserunning = speed,
-            Pitching = pitching,
-            Personality = personality,
-            BuntSuccessBonus = pp.BuntSuccessBonus,
-            ChanceHitFactor = pp.ChanceHitFactor,
-        };
-    }
+    /// <summary>投手枠の選手（単一生成器へ投手寄せ重みを渡す）。</summary>
+    internal static Player Pitcher(string name, double strength, double pitcherWeight, IRandomSource rng,
+        PersonalityCoefficients pc, ulong salt, PitcherArchetypeCoefficients ac, ulong archetypeSalt,
+        RosterCoefficients rc)
+        => CreatePlayer(name, FieldPosition.Pitcher, strength, pitcherWeight, rng, pc, salt, ac, archetypeSalt, rc);
 }

@@ -201,8 +201,16 @@ public sealed class PitchModelTests
         var pitchers = all.Where(p => p.IsPitcher).ToList();
         var normalFielders = all.Where(p => !p.IsPitcher && !p.HasPitcherBackground).ToList();
 
-        Assert.All(pitchers, p => Assert.InRange(p.LearnedPitches.Count, 1, 3));
-        Assert.All(normalFielders, p => Assert.InRange(p.LearnedPitches.Count, 0, 1));
+        // #377: 役割ゲートを撤去したので「投手は必ず1本以上」の断崖は無い。本数は投手適性の連続量で決まる。
+        Assert.All(all, p => Assert.InRange(p.LearnedPitches.Count, 0, 3));
+
+        // 投手として読める選手ほど多く持つ（境目で跳ねずに増える）。
+        Assert.True(pitchers.Average(p => p.LearnedPitches.Count) >
+                    normalFielders.Average(p => p.LearnedPitches.Count) + 0.5,
+            "投手の変化球本数が野手を明確に上回っていない");
+        // 断崖は無いが、変化球を1本も持たない投手は例外的（＝適性が判定境界すれすれの個体）に留まる。
+        var noBreaking = pitchers.Count(p => p.LearnedPitches.Count == 0) / (double)pitchers.Count;
+        Assert.True(noBreaking < 0.10, $"変化球ゼロの投手が多すぎる: {noBreaking:P1}");
 
         // 経歴持ち野手は変化球が多め（平均で上回る）。
         var bg = all.Where(p => !p.IsPitcher && p.HasPitcherBackground).ToList();
@@ -217,7 +225,8 @@ public sealed class PitchModelTests
     [Fact]
     public void Projection_BuildsRepertoire_FastballPlusLearned()
     {
-        var dp = new DevelopingPlayer { IsPitcher = true };
+        var dp = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(dp, true);
         dp.SetLevel(AbilityKind.PitchRank, 60);
         // Issue #274: ストレートの有効軸はPower←Stuff。Stuffを明示設定しないとLevel=0のまま。
         dp.SetLevel(AbilityKind.Stuff, 60);

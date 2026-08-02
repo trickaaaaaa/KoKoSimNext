@@ -64,7 +64,9 @@ public static class AiRosterFactory
         {
             var name = PlayerNameGenerator.Generate(deps.NameVocab, rng.Fork(nameSalt++), usedGiven);
             var pr = StrengthTeamFactory.Profile(deps.Roster, rng, ref profileSalt, starter: i == 0);
-            var snap = StrengthTeamFactory.Pitcher(name, center, rng, deps.Personality, salt++, deps.Roster.Archetypes, archSalt++)
+            // 打撃は投手寄せ重み w の連続量（#377）。w が中間の投手ほど打力を保つ＝「エースで4番」が出る。
+            var snap = StrengthTeamFactory.Pitcher(name, center, pitcherOrder[i].Weight, rng, deps.Personality,
+                    salt++, deps.Roster.Archetypes, archSalt++, deps.Roster)
                 with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
             var ai = new AiPlayer(nextPlayerId++, enrollmentYearIndex, FieldPosition.Pitcher, PhenomType.None, 1, snap);
             players.Add((ai, true));
@@ -130,24 +132,26 @@ public static class AiRosterFactory
     /// floor人を割ったら適性上位から底上げして満たす＝0人化を構造的に防ぐ。戻り値は投手適性の高い順
     /// （先頭＝エース格。呼び出し側で starter フラグに使う）。適性ロールは主RNGを消費しない。
     /// </summary>
-    private static List<int> ResolvePitcherPool(PersistentRosterCoefficients pc, RosterCoefficients rc, IRandomSource rng)
+    private static List<(int Index, double Weight)> ResolvePitcherPool(
+        PersistentRosterCoefficients pc, RosterCoefficients rc, IRandomSource rng)
     {
         var poolSize = Math.Max(pc.PitcherPoolSize, pc.PitcherCountFloor);
-        var scored = new List<(int Index, double Score, bool Clears)>(poolSize);
+        var scored = new List<(int Index, double Score, bool Clears, double Weight)>(poolSize);
         for (var i = 0; i < poolSize; i++)
         {
             var apt = AptitudeRoller.Roll(rc, rng.Fork(PitcherAptitudeSalt + (ulong)i));
             var pitcherApt = apt[(int)FieldPosition.Pitcher];
             var bestField = AptitudeRoller.BestField(apt);
             var score = pitcherApt + pc.PitcherEmergenceBias - bestField;
-            scored.Add((i, score, score > 0));
+            // 投手寄せ重み w（#377）: 単一生成器へ渡して打撃を連続量にする。判定と違いバイアスは混ぜない。
+            scored.Add((i, score, score > 0, PitcherRoleResolver.PitcherWeight(pitcherApt, bestField, rc)));
         }
         // 適性の高い順（同点は index 昇順）＝先頭ほどエース格。
         scored = scored.OrderByDescending(s => s.Score).ThenBy(s => s.Index).ToList();
 
         var count = Math.Max(pc.PitcherCountFloor, scored.Count(s => s.Clears));
         count = Math.Min(count, poolSize);
-        return scored.Take(count).Select(s => s.Index).ToList();
+        return scored.Take(count).Select(s => (s.Index, s.Weight)).ToList();
     }
 
     /// <summary>投手創発（Issue #177）の適性ロール用 Fork ソルト（他ストリームと別の上位ビット）。</summary>

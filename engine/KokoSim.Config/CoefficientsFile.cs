@@ -1712,7 +1712,6 @@ public static class CoefficientsLoader
         public double IntakeSd { get; set; } = D.IntakeSd;
         public int IntakeMin { get; set; } = D.IntakeMin;
         public int IntakeMax { get; set; } = D.IntakeMax;
-        public double PitcherShare { get; set; } = D.PitcherShare;
         public double PitcherAptitudeBias { get; set; } = D.PitcherAptitudeBias;
         public double PitcherAptitudeWeightSpan { get; set; } = D.PitcherAptitudeWeightSpan;
         // 総合力（名声由来）
@@ -1845,7 +1844,6 @@ public static class CoefficientsLoader
             IntakeSd = IntakeSd,
             IntakeMin = IntakeMin,
             IntakeMax = IntakeMax,
-            PitcherShare = PitcherShare,
             PitcherAptitudeBias = PitcherAptitudeBias,
             PitcherAptitudeWeightSpan = PitcherAptitudeWeightSpan,
             TalentCenterDefault = TalentCenterDefault,
@@ -1906,7 +1904,6 @@ public static class CoefficientsLoader
     {
         private static readonly PersistentRosterCoefficients D = new();
         private static readonly PhenomCoefficients PD = new();
-        public int PitchersPerCohort { get; set; } = D.PitchersPerCohort;
         public int PitcherPoolSize { get; set; } = D.PitcherPoolSize;
         public double PitcherEmergenceBias { get; set; } = D.PitcherEmergenceBias;
         public int PitcherCountFloor { get; set; } = D.PitcherCountFloor;
@@ -1936,7 +1933,6 @@ public static class CoefficientsLoader
 
         public PersistentRosterCoefficients ToModel() => new()
         {
-            PitchersPerCohort = PitchersPerCohort,
             PitcherPoolSize = PitcherPoolSize,
             PitcherEmergenceBias = PitcherEmergenceBias,
             PitcherCountFloor = PitcherCountFloor,

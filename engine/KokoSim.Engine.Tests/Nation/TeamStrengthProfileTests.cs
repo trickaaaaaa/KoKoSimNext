@@ -22,7 +22,8 @@ public sealed class TeamStrengthProfileTests
 
     private static DevelopingPlayer Make(int level, int mental, bool pitcher)
     {
-        var p = new DevelopingPlayer { IsPitcher = pitcher, Mental = mental };
+        var p = new DevelopingPlayer { Mental = mental };
+        PitcherRoleResolver.SeedAptitudeForRole(p, pitcher);
         foreach (var k in AbilityKinds.All) p.SetLevel(k, level);
         return p;
     }

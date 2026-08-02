@@ -23,7 +23,8 @@ public sealed class CoachingAndFacilityTests
 {
     private static DevelopingPlayer MakePitcher(int velocityLevel = 46, int cap = 99)
     {
-        var p = new DevelopingPlayer { IsPitcher = true };
+        var p = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(p, true);
         p.SetLevel(AbilityKind.Velocity, velocityLevel);
         p.SetCap(AbilityKind.Velocity, cap);
         return p;
@@ -34,7 +35,8 @@ public sealed class CoachingAndFacilityTests
     {
         var c = new TrainingCoefficients();
         var stages = new GrowthStageTable();
-        var p = new DevelopingPlayer { IsPitcher = true };
+        var p = new DevelopingPlayer();
+        PitcherRoleResolver.SeedAptitudeForRole(p, true);
         p.SetLevel(ability, start);
         p.SetCap(ability, 99);
         for (var i = 0; i < weeks; i++)
@@ -89,9 +91,11 @@ public sealed class CoachingAndFacilityTests
                      (AbilityKind.Fielding, TrainingMenu.Defense),
                  })
         {
-            var legacy = new DevelopingPlayer { IsPitcher = true };
+            var legacy = new DevelopingPlayer();
+            PitcherRoleResolver.SeedAptitudeForRole(legacy, true);
             legacy.SetLevel(ability, 30); legacy.SetCap(ability, 99);
-            var withNull = new DevelopingPlayer { IsPitcher = true };
+            var withNull = new DevelopingPlayer();
+            PitcherRoleResolver.SeedAptitudeForRole(withNull, true);
             withNull.SetLevel(ability, 30); withNull.SetCap(ability, 99);
             for (var i = 0; i < 150; i++)
             {
@@ -119,9 +123,11 @@ public sealed class CoachingAndFacilityTests
                      (AbilityKind.Speed, TrainingMenu.BaseRunning),
                  })
         {
-            var a = new DevelopingPlayer { IsPitcher = true };
+            var a = new DevelopingPlayer();
+            PitcherRoleResolver.SeedAptitudeForRole(a, true);
             a.SetLevel(ability, 30); a.SetCap(ability, 99);
-            var b = new DevelopingPlayer { IsPitcher = true };
+            var b = new DevelopingPlayer();
+            PitcherRoleResolver.SeedAptitudeForRole(b, true);
             b.SetLevel(ability, 30); b.SetCap(ability, 99);
             for (var i = 0; i < 150; i++)
             {

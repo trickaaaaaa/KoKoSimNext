@@ -964,7 +964,6 @@ roster:
   intake_sd: 1.5
   intake_min: 8
   intake_max: 13
-  pitcher_share: 0.30              # 旧: 生成時の投手決め打ち率（#174で廃止・生成では未使用）
   # 投手適性→投手能力の創発（#174）: 生成時決め打ちを廃し投手も適性から創発させる。
   pitcher_aptitude_bias: 8.0       # 投手適性への供給バイアス（創発投手率を狙い値へ。帯校正で決める）
   pitcher_aptitude_weight_span: 6.0 # 投手寄せ重みwのロジスティック幅（小=二極化/大=なだらか）
@@ -1084,7 +1083,6 @@ roster:
 # 他校の選手個人が入学〜引退の3年間在籍し節目成長する（使い捨て生成を廃止）。怪物（Phenom）も同居。
 # バランス調整はこのセクションで行う（不変条件#4）。
 persistent_roster:
-  pitchers_per_cohort: 3        # 各学年の投手数の狙い値（Issue #177: 決め打ちでなく創発の目標値）
   # 投手創発（Issue #177）: 適性プール(pitcher_pool_size人)から投手適性の高い順に選ぶ。
   # 「適性+bias > 最良守備適性」の人数が実人数（豊作/苦作の年ができる）。floor人を割ったら昇格で底上げ。
   pitcher_pool_size: 6           # コホートごとの投手適性プール人数

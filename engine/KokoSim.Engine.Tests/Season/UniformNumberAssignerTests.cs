@@ -15,7 +15,8 @@ public sealed class UniformNumberAssignerTests
     // 中核能力を一律 level で埋めた選手（AverageLevel を制御して順位を作る）。
     private static DevelopingPlayer Guy(string name, int level, bool pitcher = false)
     {
-        var p = new DevelopingPlayer { Name = name, IsPitcher = pitcher };
+        var p = new DevelopingPlayer { Name = name };
+        PitcherRoleResolver.SeedAptitudeForRole(p, pitcher);
         foreach (var k in AbilityKinds.All) { p.SetCap(k, 99); p.SetLevel(k, level); }
         return p;
     }

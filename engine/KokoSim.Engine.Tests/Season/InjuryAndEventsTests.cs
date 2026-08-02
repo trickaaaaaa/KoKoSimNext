@@ -16,10 +16,13 @@ public sealed class InjuryAndEventsTests
 {
     private static readonly InjuryCoefficients Inj = new();
 
-    private static DevelopingPlayer Guy(double resistance = 50) => new()
+    private static DevelopingPlayer Guy(double resistance = 50)
     {
-        InjuryResistance = resistance,
-    };
+        var p = new DevelopingPlayer { InjuryResistance = resistance };
+        // 投手役は適性からの導出（#377）。既定の適性一律では投手になるので、野手として明示する。
+        PitcherRoleResolver.SeedAptitudeForRole(p, false);
+        return p;
+    }
 
     // ===== 怪我（§3.5） =====
 
