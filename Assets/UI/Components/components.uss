@@ -727,10 +727,11 @@
 .cmp-btn--a-on { background-color: var(--cmp-a); color: var(--color-ink); border-color: var(--cmp-a); }
 .cmp-btn--b-on { background-color: var(--cmp-b); color: var(--color-ink); border-color: var(--cmp-b); }
 
-/* ── CompareBar：2選手の能力対比（A/B 2カラム並置・どちらも左起点で右へ伸びる） ──
-   項目名を左に固定し、右にAカラム／Bカラムを横並びにする。カラム内は 値 → トラック の順で、
-   バーは必ず同じ左起点から右へ伸ばす（旧レイアウトの線対称＝蝶形は起点が逆で優劣を読めなかった）。
-   行高14pxは維持（UI原則①）。どちらのカラムかは色（--cmp-a/--cmp-b）とヘッダ見出しの併記で示す。 */
+/* ── CompareRow：2選手の能力対比（A/B 2カラム並置） ──
+   項目名を左に固定し、右にAカラム／Bカラムを横並びにする。横バーは撤去済み（issue #405・監督決定）。
+   数値＋ランクチップの併記だけで優劣を読む＝バーが占めていた横幅を文字サイズと余白に回した。
+   カラムは値の分だけの幅（flex-shrink:0）に縮め、AB間の余白で区切る。どちらのカラムかは
+   色（--cmp-a/--cmp-b）とヘッダ見出しの併記で示す。 */
 .cmp-head {
     flex-direction: row;
     align-items: center;
@@ -739,9 +740,9 @@
     border-bottom-width: var(--border-w);
     border-bottom-color: var(--color-line);
 }
-.cmp-head__spacer { width: 56px; flex-shrink: 0; }
-.cmp-head__col { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; }
-.cmp-head__col--b { margin-left: var(--sp-2); }
+.cmp-head__spacer { width: 76px; flex-shrink: 0; }
+.cmp-head__col { flex-shrink: 0; flex-direction: row; align-items: center; }
+.cmp-head__col--b { margin-left: var(--sp-3); }
 .cmp-head__lab {
     font-size: 14px;
     color: var(--color-ink);
@@ -752,42 +753,37 @@
 }
 .cmp-head__lab--a { background-color: var(--cmp-a); }
 .cmp-head__lab--b { background-color: var(--cmp-b); }
-.cmp-row { flex-direction: row; align-items: center; margin-top: 2px; margin-bottom: 2px; }
-/* ラベル幅は**和文4文字**（「スタミナ」＝投手能力表で最長）が入る実測値。--fs-cap は 17px で
-   3文字が 50.12pt（issue #388 の実測）＝1文字あたり約16.7pt なので、4文字に 68px 要る。
-   旧 56px では「スタミナ」が値へ食い込んでいた（flex-shrink:0 かつ省略も無いのではみ出す）。 */
-.cmp-row__lab { width: 68px; flex-shrink: 0; -unity-text-align: middle-left; font-size: var(--fs-cap); color: var(--color-muted); }
-.cmp-row__side { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; height: 14px; }
-.cmp-row__side--b { margin-left: var(--sp-2); }
-.cmp-row__track { flex-grow: 1; flex-basis: 0; min-width: 0; height: 8px; background-color: var(--color-panel-deep); border-radius: 0; }
-.cmp-row__bar { height: 100%; border-radius: 0; }
-.cmp-row__bar--a { background-color: var(--cmp-a); }
-.cmp-row__bar--b { background-color: var(--cmp-b); }
+.cmp-row { flex-direction: row; align-items: center; margin-top: 1px; margin-bottom: 1px; }
+/* ラベル幅は**和文4文字**（「スタミナ」＝投手能力表で最長）が入る実測値。文字サイズを
+   --fs-cap(17px)→--fs-label(19px) へ拡大した分（横バー撤去, issue #405）、幅も比例して
+   68px→76px に広げた（旧: 3文字50.12pt/--fs-cap の実測比＝issue #388）。 */
+.cmp-row__lab { width: 76px; flex-shrink: 0; -unity-text-align: middle-left; font-size: var(--fs-label); color: var(--color-muted); }
+.cmp-row__side { flex-shrink: 0; flex-direction: row; align-items: center; height: 20px; }
+.cmp-row__side--b { margin-left: var(--sp-3); }
 .cmp-row__val {
     width: var(--col-cmp-val);
     flex-shrink: 0;
-    font-size: var(--fs-cap);
+    font-size: var(--fs-label);
     color: var(--color-muted);
     -unity-text-align: middle-right;
     margin-right: var(--sp-1);
 }
 /* 単位つきの物理量（「131km/h」＝最大7文字, issue #94）を含む表は、値セルを**表ごと**広げる。
-   行単位で広げるとその行だけバーの起点がずれて桁が揃わなくなる（UI原則③）。
+   行単位で広げるとその行だけ数値の右端がずれて桁が揃わなくなる（UI原則③）。
    付け外しは UiComponents.SetCompareUnitColumn（画面側でクラス名を直書きしない, issue #246）。 */
 .cmp-rows--unit .cmp-row__val { width: var(--col-cmp-val-unit); }
 .cmp-row__val--win { color: var(--color-chalk); }
-/* ランク併記（issue #326②）: 22px幅の値セルの隣に小型チップを添える。track(バー)の残り幅から差し引く。 */
-.cmp-row__side .rank-chip { min-width: 22px; height: 20px; font-size: 11px; padding-left: 2px; padding-right: 2px; margin-left: 2px; margin-right: 4px; }
-/* タイプ軸表示（弾道など優劣のない値, issue #219）: 数値専用の固定22px幅/右揃え/14px高では
-   和文ラベル（例「ややフライ型」）が収まらず隣接行と重なるため、バー(track)を消してラベルに
-   側全体を明け渡す。幅・行高・寄せを別枠で緩める。 */
-.cmp-row--type .cmp-row__side { height: auto; }
+/* ランク併記（issue #326②）: 値セルの隣に小型チップを添える。フォントサイズはトークン化
+   （旧11px直書きを是正, issue #405）。チップ文字は不可視画像差し替えなので実寸には影響しない。 */
+.cmp-row__side .rank-chip { min-width: 22px; height: 20px; font-size: var(--fs-cap); padding-left: 2px; padding-right: 2px; margin-left: 2px; margin-right: 4px; }
+/* タイプ軸表示（弾道など優劣のない値, issue #219）: 数値専用の固定幅/右揃え/固定行高では
+   和文ラベル（例「ややフライ型」）が収まらず隣接行と重なるため、側全体を明け渡す。 */
+.cmp-row--type .cmp-row__side { height: auto; flex-grow: 1; }
 .cmp-row--type .cmp-row__val { width: auto; flex-grow: 1; -unity-text-align: middle-left; color: var(--color-chalk); }
-.cmp-row--type .cmp-row__track { display: none; }
 /* 上限のない量（スタミナ＝目安投球数, issue #356）: 比較行でも数字＋和文単位を分割（NumUnit）。
-   数字は Oswald（.nu-num=f-num）。cmp-row--type と併用しバーは出さない。 */
+   数字は Oswald（.nu-num=f-num）。cmp-row--type と併用。 */
 .cmp-row__numunit { flex-direction: row; align-items: baseline; }
-.cmp-row__numunit .nu-num { font-size: var(--fs-cap); color: var(--color-chalk); }
+.cmp-row__numunit .nu-num { font-size: var(--fs-label); color: var(--color-chalk); }
 .cmp-card {
     flex-grow: 1;
     flex-basis: 0;
