@@ -197,8 +197,17 @@ public static class TimelineBuilder
         double resolvedAt;
         var moves = new List<FielderMove>();
         var runners = new List<RunnerLeg>();
+        // 打球種別ごとの実況（Issue #401③）: engine の4分類(BattedBallClass)をそのまま文言に写す。
+        // 新しい判定は作らない。null（ファウル等・未分類）は既定の Grounder 文言にフォールバック
+        // （Class 未判定は地を這う Roll 扱いと同じ既定, Issue #315）。本塁打は分類より優先。
         var contactMsg = play.Result == BattedBallResult.HomeRun ? "打った——伸びていく！"
-            : play.IsFly ? "打ち上げた！" : "打球が転がる！";
+            : play.Class switch
+            {
+                BattedBallClass.Liner => "痛烈なライナー！",
+                BattedBallClass.Fly => "高々と上がった！",
+                BattedBallClass.Bouncer => "大きく弾んだ！",
+                _ => "打球が転がる！",
+            };
         var captions = new List<TimelineCaption> { new(0.05, "ピッチャー、投げた"), new(ContactAt + 0.01, contactMsg) };
 
         // 一塁送球（内野ゴロ）。到達時刻(T1)はエンジンの ThrowArriveSeconds のまま固定し、投げ始め(T0)を
