@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Assets/ の C# を触った push を、Unity のコンパイル検査（Editor 不要・約10秒）で止める。
+#
+# なぜ要るか（issue #349）: CI 側の Unity 検査は Unity ライセンスの Secret が要り、未設定の間は
+# スキップされる。その間、人間が出す PR には自動ゲートが一切かからない
+# （実例: PR #390 で交代パネルの「出場済」行が二重に描かれるバグが engine CI を緑のまま通過した）。
+#
+# 導入: bash tools/install-git-hooks.sh
+# 一時的に外す: git push --no-verify
+set -u
+
+repo="$(git rev-parse --show-toplevel)"
+changed="$(git diff --name-only origin/main...HEAD 2>/dev/null | grep -E '^Assets/.*\.cs$' || true)"
+[ -z "$changed" ] && exit 0
+
+echo "[pre-push] Assets/ の C# に差分があります。Unity コンパイル検査を実行します…"
+out="$(bash "$repo/tools/check-unity-compile.sh" "$repo" 2>&1)"; rc=$?
+case "$rc" in
+  0) echo "[pre-push] ✅ Unity コンパイル検査 緑"; exit 0 ;;
+  2) echo "$out"
+     echo "[pre-push] ⚠ 検査不能（雛形 csproj 不在）。Unity で一度プロジェクトを開いてください。"
+     echo "[pre-push] 検査できないので push は止めます（--no-verify で回避可）"; exit 1 ;;
+  *) echo "$out"; echo "[pre-push] 🔴 Unity コンパイルが通りません。push を止めました。"; exit 1 ;;
+esac

@@ -1,0 +1,105 @@
+name: unity-ci
+
+# Unity 側（Assets/）のコンパイル検査（issue #349）。
+#
+# なぜ要るか: engine-ci（ci.yml）の発火条件は engine/ data/ global.json だけで、Assets/ 配下の C# は
+# どの自動ゲートでもコンパイルされない。実際に PR #344 が using 漏れ（CS0103）のまま main に入り、
+# Unity が丸ごとコンパイル不能な状態が約12時間放置された。
+#
+# 夜間エージェント（tools/overnight-agent.sh）は既に tools/check-unity-compile.sh でこれを塞いでいるが、
+# **人間が出す PR は無検査**のまま残っていた（PR #390 の交代パネル二重表示バグが実例）。
+# ローカルのスクリプトは Unity が生成した csproj（参照319件の大半がローカルの Unity インストールと
+# Library/ を指す。どちらも gitignore）を雛形にするため CI ランナーでは動かない。ゆえに CI 側は
+# Unity 本体を持ってくる game-ci を使う。
+#
+# ライセンス: Personal でも Activation が要る。**Secret 未設定の間はスキップして緑にする**
+# （赤にすると全 PR がブロックされて開発が止まるため）。設定手順は license ジョブの Step Summary に出る。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Assets/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - ".github/workflows/unity-ci.yml"
+  pull_request:
+    paths:
+      - "Assets/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - ".github/workflows/unity-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: unity-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Secret の有無を先に見る。secrets は job の if: で直接参照できないので env へ写してから判定する。
+  license:
+    name: license check
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.probe.outputs.configured }}
+    steps:
+      - id: probe
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; }; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Unity ライセンスの Secret を検出しました。コンパイル検査を実行します。"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Unity コンパイル検査はスキップされました"
+              echo ""
+              echo "リポジトリに Unity ライセンスの Secret が未設定です。次のどちらかを入れると有効になります。"
+              echo ""
+              echo "- **Personal**: \`UNITY_EMAIL\` / \`UNITY_PASSWORD\` / \`UNITY_LICENSE\`"
+              echo "  (\`UNITY_LICENSE\` は game-ci の activation ワークフローで取得した .ulf の中身)"
+              echo "- **Plus / Pro**: \`UNITY_EMAIL\` / \`UNITY_PASSWORD\` / \`UNITY_SERIAL\`"
+              echo ""
+              echo "設定するまでは Assets/ の変更が無検査で main に入り得ます (issue #349)。"
+              echo "当座は \`bash tools/check-unity-compile.sh\` (Editor 不要・約10秒) を手元で回してください。"
+              echo "\`bash tools/install-git-hooks.sh\` を一度実行すると pre-push で自動化されます。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  compile:
+    name: compile (Assets)
+    needs: license
+    if: needs.license.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Library/ のキャッシュ（無いと毎回インポートで10分以上かかる）。
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-
+
+      # engine の DLL は Assets/Plugins にコミット済みなので、ここでは engine をビルドしない
+      # （Assets/ のコンパイルに必要なのは配置済み DLL だけ＝sync-engine-dll.sh の結果が入っている）。
+
+      # EditMode で走らせるのが目的ではなく、**Assets 全体がコンパイルできること**を見るのが目的。
+      # コンパイルエラーがあれば Unity が非ゼロで終わるのでジョブが赤になる。
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          unityVersion: 6000.3.9f1
+          testMode: EditMode
+          checkName: Unity compile (EditMode)
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
