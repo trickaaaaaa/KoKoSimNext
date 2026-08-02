@@ -292,31 +292,42 @@ namespace KokoSim.Unity.Lineup
             name.AddToClassList("lu-stat-name");
             wrap.Add(name);
 
-            var cols = new VisualElement();
-            cols.AddToClassList("stat-cols");
-            for (var i = 0; i < card.Stats.Count; i++)
+            // 成績表（issue #388）: ラベルは左に1列だけ、スコープ（通算/公式戦/今大会）を横に並べる。
+            var table = new VisualElement();
+            table.AddToClassList("stat-table");
+
+            // 見出し行（左上は空＝ラベル列の頭）。
+            var head = new VisualElement();
+            head.AddToClassList("stat-table__row");
+            head.AddToClassList("stat-table__row--head");
+            var corner = new Label(string.Empty);
+            corner.AddToClassList("stat-table__lab");
+            head.Add(corner);
+            foreach (var scope in card.Stats.Scopes)
             {
-                var col = new VisualElement();
-                col.AddToClassList("stat-col");
-                col.AddToClassList(i == 0 ? "stat-col--a" : "stat-col--b");
-                var t = new Label(card.Stats[i].Title);
-                t.AddToClassList("stat-col__title");
-                col.Add(t);
-                foreach (var it in card.Stats[i].Items)
-                {
-                    var sr = new VisualElement();
-                    sr.AddToClassList("stat-row");
-                    var lab = new Label(it.Label);
-                    lab.AddToClassList("stat-row__lab");
-                    var val = new Label(it.Value);
-                    val.AddToClassList("stat-row__val");
-                    sr.Add(lab);
-                    sr.Add(val);
-                    col.Add(sr);
-                }
-                cols.Add(col);
+                var sc = new Label(scope);
+                sc.AddToClassList("stat-table__scope");
+                head.Add(sc);
             }
-            wrap.Add(cols);
+            table.Add(head);
+
+            foreach (var row in card.Stats.Rows)
+            {
+                var tr = new VisualElement();
+                tr.AddToClassList("stat-table__row");
+                var lab = new Label(row.Label);
+                lab.AddToClassList("stat-table__lab");
+                tr.Add(lab);
+                foreach (var value in row.Values)
+                {
+                    var val = new Label(value);
+                    val.AddToClassList("stat-table__val");
+                    tr.Add(val);
+                }
+                table.Add(tr);
+            }
+
+            wrap.Add(table);
             return wrap;
         }
 

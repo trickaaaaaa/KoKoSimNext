@@ -47,18 +47,28 @@ namespace KokoSim.Unity.Lineup
         public string Injury = "";
     }
 
-    /// <summary>成績1項目（ラベル＋値）。値未接続は "—"。</summary>
-    public sealed class StatItemView
+    /// <summary>
+    /// 成績表の1行＝指標ラベル＋スコープごとの値（issue #388）。<see cref="Values"/> の並びは
+    /// <see cref="StatTableView.Scopes"/> と同順。値未接続は "—"。
+    /// </summary>
+    public sealed class StatRowView
     {
         public string Label = "";
-        public string Value = "—";
+        public List<string> Values = new List<string>();
     }
 
-    /// <summary>成績1スコープ（通算 or 今大会）の列。</summary>
-    public sealed class StatColumnView
+    /// <summary>
+    /// 成績表（issue #388）。ラベルを左に1列だけ置き、スコープ（通算/公式戦/今大会）を横に並べる。
+    ///
+    /// 旧構造は「スコープごとの箱」で、各箱がラベルを繰り返し持っていた。3列化した時点で
+    /// 1列の内寸が98pt しか無くなり、3文字ラベル(50pt)＋値(最大55pt) が収まらず文字が重なっていた。
+    /// ラベルを1本にすると値へ約96pt 使えるので接触が構造的に起きない上、同じ指標のスコープ間比較が
+    /// 横一行で読める＝3列にした目的そのものが果たせる。
+    /// </summary>
+    public sealed class StatTableView
     {
-        public string Title = "";
-        public List<StatItemView> Items = new List<StatItemView>();
+        public List<string> Scopes = new List<string>();
+        public List<StatRowView> Rows = new List<StatRowView>();
     }
 
     /// <summary>比較カード（A/B）＝選手ヘッダ＋成績2列。</summary>
@@ -70,7 +80,7 @@ namespace KokoSim.Unity.Lineup
         /// <summary>カテゴリ別ランク（打撃力/走力/守備力/投手力）。選手個人の総合ランクは廃止（Issue #30/#270）。</summary>
         public PlayerStrength Strength = new PlayerStrength(0, 0, 0, 0);
         public bool IsCaptain;
-        public List<StatColumnView> Stats = new List<StatColumnView>();  // [通算, 今大会]
+        public StatTableView Stats = new StatTableView();
         // 持ち球のミニ球種変化チャート用データ（issue #94 案C）。未習得選手はストレート1球のみ。
         public List<PitchChartDatum> Pitches = new List<PitchChartDatum>();
     }
@@ -622,73 +632,108 @@ namespace KokoSim.Unity.Lineup
             };
         }
 
-        // 成績3列（通算／公式戦通算／今大会）。GameSession.Stats を選手IDで引く。未接続は "—"。
+        // 成績表（通算／公式戦通算／今大会）。GameSession.Stats を選手IDで引く。未接続は "—"。
         // 「通算」は練習試合を含む全試合、「公式戦」は大会の試合だけ（練習試合は入らない）。
-        private static List<StatColumnView> BuildStats(DevelopingPlayer p)
+        private static StatTableView BuildStats(DevelopingPlayer p)
         {
             var stats = GameSession.Current.Stats;
-            return new List<StatColumnView>
+            var scopes = new[]
             {
-                Column("通算", stats.Career.Get(p.Id)),
-                Column("公式戦", stats.Official.Get(p.Id)),
-                Column("今大会", stats.CurrentTournament.Get(p.Id)),
+                ("通算", stats.Career.Get(p.Id)),
+                ("公式戦", stats.Official.Get(p.Id)),
+                ("今大会", stats.CurrentTournament.Get(p.Id)),
             };
+
+            // **どの指標を並べるかは通算（最も広いスコープ）で1度だけ決める**（issue #388）。
+            // 旧構造はスコープごとに決めていたが、表にすると列で行が食い違う
+            // （例: 通算では投げたが今大会は投げていない選手で、列ごとに別の指標が並ぶ）。
+            var table = new StatTableView { Scopes = scopes.Select(x => x.Item1).ToList() };
+            foreach (var metric in MetricsFor(scopes[0].Item2))
+            {
+                table.Rows.Add(new StatRowView
+                {
+                    Label = metric.Label,
+                    Values = scopes.Select(x => metric.Value(x.Item2)).ToList(),
+                });
+            }
+            return table;
+        }
+
+        /// <summary>成績表の1指標（ラベルと、スコープの成績から値を引く関数）。</summary>
+        private sealed class StatMetric
+        {
+            public string Label = "";
+            public System.Func<PlayerStats, string> Value = _ => "—";
         }
 
         // 載せる指標は**出場実績**で決める（導出役割で切り替えない, #366/#379）。役割で切ると
         // 「打率.350の投手」「防御率1.42の野手」の片側が消える。判定は選手詳細
         // （PlayerDetailState.BuildScope）と同じ条件で揃える。
         //
-        // 行数は投打どちらでも**必ず4**。成績は3列で1列の内寸が98pt しかなく（実測）、3文字ラベルが
-        // 50pt を食うので投打8行を積むと値がラベルへ重なる。ここは一覧の走り読み用で、全指標は
-        // 選手詳細が持つ＝二刀流は各2つの代表指標に絞る（UI-BUILD-METHOD「潰して収めるのは不正解、
-        // 減らすか横に展開する」）。
-        private static StatColumnView Column(string title, PlayerStats s)
+        // 行数は投打どちらでも4に保つ。表形式にして横幅の制約は消えた（#388）が、比較パネルの
+        // **縦**は2枚のカードで分け合うので、ここは一覧の走り読み用に絞ったまま置く
+        // ＝全指標は選手詳細が持つ。二刀流は投打の代表指標を2つずつ。
+        private static List<StatMetric> MetricsFor(PlayerStats career)
         {
-            var col = new StatColumnView { Title = title };
-            var pit = s?.Pitching;
-            var bat = s?.Batting;
+            var pit = career?.Pitching;
+            var bat = career?.Batting;
             var hasPitching = pit != null && (pit.Games > 0 || pit.BattersFaced > 0);
             var hasBatting = bat != null && (bat.Games > 0 || bat.PlateAppearances > 0);
 
             if (hasPitching && hasBatting)
             {
-                // 二刀流：投打から2つずつ。値の短い指標を選ぶ（「勝敗 0勝2敗」「投球回 12 2/3」は
-                // 値だけで約55pt あり、ラベルと並ぶと 98pt に収まらない）。
-                col.Items.Add(Era(pit));
-                col.Items.Add(StrikeOuts(pit));
-                col.Items.Add(Average(bat));
-                col.Items.Add(HomeRuns(bat));
+                return new List<StatMetric>
+                {
+                    EraMetric(), StrikeOutsMetric(), AverageMetric(), HomeRunsMetric(),
+                };
             }
-            else if (hasPitching)
+            if (hasPitching)
             {
-                col.Items.Add(Era(pit));
-                col.Items.Add(new StatItemView { Label = "勝敗", Value = pit.Games > 0 ? pit.Wins + "勝" + pit.Losses + "敗" : "—" });
-                col.Items.Add(StrikeOuts(pit));
-                col.Items.Add(new StatItemView { Label = "投球回", Value = pit.Outs > 0 ? pit.InningsText : "—" });
+                return new List<StatMetric>
+                {
+                    EraMetric(),
+                    new StatMetric { Label = "勝敗", Value = s => s?.Pitching is { Games: > 0 } q
+                        ? q.Wins + "勝" + q.Losses + "敗" : "—" },
+                    StrikeOutsMetric(),
+                    new StatMetric { Label = "投球回", Value = s => s?.Pitching is { Outs: > 0 } q
+                        ? q.InningsText : "—" },
+                };
             }
-            else
+            // 打撃実績のみ、および**どちらの実績も無い**とき（＝全項目「—」で枠を保つ）。
+            return new List<StatMetric>
             {
-                // 打撃実績のみ、および**どちらの実績も無い**とき（＝全項目「—」で枠を保つ）。
-                col.Items.Add(Average(bat));
-                col.Items.Add(HomeRuns(bat));
-                col.Items.Add(new StatItemView { Label = "打点", Value = bat != null && bat.Games > 0 ? bat.Rbi.ToString() : "—" });
-                col.Items.Add(new StatItemView { Label = "出塁率", Value = bat != null && (bat.AtBats + bat.Walks) > 0 ? bat.Obp.ToString(".000") : "—" });
-            }
-            return col;
+                AverageMetric(), HomeRunsMetric(),
+                new StatMetric { Label = "打点", Value = s => s?.Batting is { Games: > 0 } b
+                    ? b.Rbi.ToString() : "—" },
+                new StatMetric { Label = "出塁率", Value = s => s?.Batting is { } b && (b.AtBats + b.Walks) > 0
+                    ? b.Obp.ToString(".000") : "—" },
+            };
         }
 
-        private static StatItemView Era(PitchingStatLine p)
-            => new StatItemView { Label = "防御率", Value = p != null && p.Outs > 0 ? p.Era.ToString("0.00") : "—" };
+        // 指標の定義（ラベルと値の書式）。表の全スコープで同じ関数を通す＝書式が列でぶれない。
+        private static StatMetric EraMetric() => new StatMetric
+        {
+            Label = "防御率",
+            Value = s => s?.Pitching is { Outs: > 0 } p ? p.Era.ToString("0.00") : "—",
+        };
 
-        private static StatItemView StrikeOuts(PitchingStatLine p)
-            => new StatItemView { Label = "奪三振", Value = p != null && p.Games > 0 ? p.StrikeOuts.ToString() : "—" };
+        private static StatMetric StrikeOutsMetric() => new StatMetric
+        {
+            Label = "奪三振",
+            Value = s => s?.Pitching is { Games: > 0 } p ? p.StrikeOuts.ToString() : "—",
+        };
 
-        private static StatItemView Average(BattingStatLine b)
-            => new StatItemView { Label = "打率", Value = b != null && b.AtBats > 0 ? b.Average.ToString(".000") : "—" };
+        private static StatMetric AverageMetric() => new StatMetric
+        {
+            Label = "打率",
+            Value = s => s?.Batting is { AtBats: > 0 } b ? b.Average.ToString(".000") : "—",
+        };
 
-        private static StatItemView HomeRuns(BattingStatLine b)
-            => new StatItemView { Label = "本塁打", Value = b != null && b.Games > 0 ? b.HomeRuns.ToString() : "—" };
+        private static StatMetric HomeRunsMetric() => new StatMetric
+        {
+            Label = "本塁打",
+            Value = s => s?.Batting is { Games: > 0 } b ? b.HomeRuns.ToString() : "—",
+        };
 
         // 打順行の簡易成績（通算のみ・全員打撃成績＝投手も打率/本/点）。データ無しは「-」。
         private static string CareerBatLine(DevelopingPlayer p)

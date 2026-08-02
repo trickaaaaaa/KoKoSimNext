@@ -246,13 +246,17 @@ public static class StrengthTeamFactory
     // 旧 LatentPitchingSalt（#381 で改称）。値を変えると全AI校の非マウンド選手の投手能力が変わるので触らない。
     private const ulong UntrainedPitchingSalt = 0x7A17_0000_0000_0000UL;
 
-    /// <summary>投手寄せ重み w を引くときの候補プール人数（<see cref="PersistentRosterCoefficients.PitcherPoolSize"/> と同値）。</summary>
+    /// <summary>
+    /// 投手寄せ重み w を引くときの候補プール人数。使い捨て生成（<see cref="Create"/>）専用で、
+    /// 永続ロスター側は #384 で「コホート全員が適性を持ち選抜で配置が決まる」形になったため対応物は無い
+    /// （旧 <c>PersistentRosterCoefficients.PitcherPoolSize</c> は同issueで削除）。
+    /// </summary>
     private const int PitcherWeightPoolSize = 6;
 
     /// <summary>
     /// 投手枠に置く選手たちの「投手寄せ重み」をエース格から順に返す（#377）。
     /// 適性プールを独立Fork（主RNG非消費）でロールし、判定スコア（投手適性＋バイアス−最良守備適性）の
-    /// 高い順に並べる＝<see cref="Nation.Roster.AiRosterFactory"/> の投手プールと同じ意味づけにする。
+    /// 高い順に並べる。
     /// 使い捨て生成（<see cref="Create"/>）は投手枠の人数が固定なので、選抜でなく順位で重みだけを取る。
     /// </summary>
     internal static double[] PitcherWeights(RosterCoefficients rc, IRandomSource rng, ulong salt)
