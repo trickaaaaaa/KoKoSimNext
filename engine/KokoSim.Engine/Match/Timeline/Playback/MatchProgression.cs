@@ -252,7 +252,7 @@ public sealed class MatchProgression
         return true;
     }
 
-    /// <summary>投手交代: ブルペンまたは野手控えの sub を指名して継投する（先頭固定ではない。issue #137）。</summary>
+    /// <summary>投手交代: 控えの sub を指名して継投する（先頭固定ではない。issue #137）。</summary>
     public bool ChangePitcher(bool teamIsAway, Player sub)
     {
         var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, sub);
@@ -263,9 +263,9 @@ public sealed class MatchProgression
 
     /// <summary>
     /// 継投（issue #256 統合守備割当）。継投候補（<see cref="SubstitutionOptions.ReliefCandidates"/>＝
-    /// ブルペン＋ベンチ＋在フィールドの守備野手）から sub を指名してマウンドへ上げる。在フィールド野手なら
+    /// 控え全員＋在フィールドの守備野手）から sub を指名してマウンドへ上げる。在フィールド野手なら
     /// 投野交代で守備穴を backfill する（<see cref="TeamState.RelieveWith"/>）。プレイヤーとAIが同じ候補集合・
-    /// 同じルータ・同じ backfill 係数を通る。ブルペン／ベンチ指名は <see cref="ChangePitcher"/> と同じ結果になる。
+    /// 同じルータ・同じ backfill 係数を通る。控えの指名は <see cref="ChangePitcher"/> と同じ結果になる。
     /// </summary>
     public bool Relieve(bool teamIsAway, Player sub)
     {
@@ -276,7 +276,7 @@ public sealed class MatchProgression
     }
 
     /// <summary>
-    /// 守備割当（issue #256 統合守備割当）。控え（ブルペン／ベンチ）の sub を守備スロット slot に就かせる
+    /// 守備割当（issue #256 統合守備割当）。控えの sub を守備スロット slot に就かせる
     /// （守備固め／守備割当）。就いていた選手は退場する。役割（投/野）で候補を分けない（#93）。
     /// </summary>
     public bool DefenseAssign(bool teamIsAway, int slot, Player sub)
@@ -313,7 +313,7 @@ public sealed class MatchProgression
     }
 
     /// <summary>
-    /// コンバート継投（issue #235）。現投手を守備位置 at へ回し、reliever（ブルペンまたは野手控え）を
+    /// コンバート継投（issue #235）。現投手を守備位置 at へ回し、reliever（控えの誰か）を
     /// 登板させる。at を守っていた野手が退場する。元投手は残留＝打席に立ち続け、後で再登板もできる。
     /// </summary>
     public bool ConvertPitcherAndRelieve(bool teamIsAway, Field.FieldPosition at, Player reliever)

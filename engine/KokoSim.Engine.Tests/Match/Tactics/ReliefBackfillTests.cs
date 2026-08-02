@@ -35,7 +35,7 @@ public sealed class ReliefBackfillTests
     private static Player Arm(string name, PitcherAttributes a)
         => new() { Name = name, Position = FieldPosition.Pitcher, Pitching = a };
 
-    /// <summary>非DHチーム。遊撃手(遊)に潜在投手能力を持たせ、ブルペンは1枚。</summary>
+    /// <summary>非DHチーム。遊撃手(遊)に投げられる能力を持たせ、投手枠の控えは1枚。</summary>
     private static Team NonDhTeam(string name, PitcherAttributes? ssLatent, PitcherAttributes bullpenAttr)
     {
         var order = new List<Player>
@@ -61,14 +61,14 @@ public sealed class ReliefBackfillTests
         var st = new TeamState(NonDhTeam("T", Attr(80, 60, 45, 55), Attr(30, 30, 30, 30)));
         var cands = st.ReliefRankingCandidates;
 
-        // ブルペン1 + ベンチ1 + 在フィールド野手8（現投手を除く打順9-1）= 10。
+        // 投手枠の控え1 + それ以外の控え1 + 在フィールド野手8（現投手を除く打順9-1）= 10。
         Assert.Equal(10, cands.Count);
         Assert.Contains(cands, p => p.Name == "遊");
         // 現投手（先発）は候補に含めない。
         Assert.DoesNotContain(cands, p => p.Name == "T先発");
     }
 
-    /// <summary>DHチーム。遊撃(遊)に潜在投手能力・DHに打力/守備・ベンチ守備職人・ブルペン1枚を指定できる。</summary>
+    /// <summary>DHチーム。遊撃(遊)に投げられる能力・DHに打力/守備・ベンチ守備職人・投手枠の控え1枚を指定できる。</summary>
     private static Team DhTeam(PitcherAttributes ssLatent, PitcherAttributes bullpenAttr,
         int dhContact = 50, int dhPower = 50, int dhFielding = 50, int benchFielding = 50)
     {
@@ -98,7 +98,7 @@ public sealed class ReliefBackfillTests
         var st = new TeamState(DhTeam(Attr(80, 60, 45, 55), Attr(30, 30, 30, 30)));
         var cands = st.ReliefRankingCandidates;
 
-        // DHでも在フィールド野手8（DH除く打順9-1）を横断候補に含める＝ブルペン1 + ベンチ1 + 8 = 10。
+        // DHでも在フィールド野手8（DH除く打順9-1）を横断候補に含める＝投手枠の控え1 + それ以外の控え1 + 8 = 10。
         Assert.Equal(10, cands.Count);
         Assert.Contains(cands, p => p.Name == "遊");
         // DHは守備に就かない＝候補に含めない。投手は打順外なので _lineup に居ない。
@@ -160,7 +160,7 @@ public sealed class ReliefBackfillTests
     }
 
     [Fact]
-    public void Dh_RelieveWithBullpen_UsesNormalChange_KeepsDh()
+    public void Dh_RelieveWithReservePitcher_UsesNormalChange_KeepsDh()
     {
         var st = new TeamState(DhTeam(Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
         var oldPitcher = st.CurrentPitcher;
@@ -168,7 +168,7 @@ public sealed class ReliefBackfillTests
 
         Assert.True(st.RelieveWith(reliever));
 
-        Assert.True(st.UsesDh);                                   // ブルペン継投ではDHは維持（野手を上げていない）
+        Assert.True(st.UsesDh);                                   // 投手枠の控えからの継投ではDHは維持（守備の選手を上げていない）
         Assert.Equal(reliever.Name, st.CurrentPitcher.Name);
         Assert.True(st.IsRetired(oldPitcher));
         Assert.Equal(PitchingChangeKind.ReserveRelief, st.LastPitchingChange!.Value.Kind);
@@ -218,7 +218,7 @@ public sealed class ReliefBackfillTests
     }
 
     [Fact]
-    public void RelieveWith_BullpenPitcher_UsesNormalChange_RetiresOldPitcher()
+    public void RelieveWith_ReservePitcher_UsesNormalChange_RetiresOldPitcher()
     {
         var st = new TeamState(NonDhTeam("T", Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
         var oldPitcher = st.CurrentPitcher;
@@ -226,7 +226,7 @@ public sealed class ReliefBackfillTests
 
         Assert.True(st.RelieveWith(reliever));
 
-        // ブルペン投手は従来交代＝旧投手は退場（リエントリー禁止）、投野交代ではない。
+        // 投手枠の控えは従来交代＝旧投手は退場（リエントリー禁止）、投野交代ではない。
         Assert.Equal(reliever.Name, st.CurrentPitcher.Name);
         Assert.True(st.IsRetired(oldPitcher));
         Assert.Equal(1, st.PitcherChanges);
@@ -234,7 +234,7 @@ public sealed class ReliefBackfillTests
 
     // ===== backfill path ②（旧投手退場＋ベンチ野手で補充。issue #209 Phase C path②） =====
 
-    /// <summary>非DHチーム: 遊撃に潜在投手能力、ブルペン無し、旧投手の打力/守備とベンチ野手の守備を指定。</summary>
+    /// <summary>非DHチーム: 遊撃に投げられる能力、投手枠の控え無し、旧投手の打力/守備とベンチ野手の守備を指定。</summary>
     private static (TeamState St, Player Ss, Player OldPitcher) SetupOnFieldPromotion(
         int pitcherContact, int pitcherPower, int pitcherFielding, int benchFielding)
     {
@@ -345,13 +345,13 @@ public sealed class ReliefBackfillTests
                 }
             }
         }
-        Assert.True(sawFielderRelief, "強力な遊撃×弱ブルペンで投野交代/野手登板が少なくとも1回は記録されるはず");
+        Assert.True(sawFielderRelief, "強力な遊撃×弱い投手枠の控えで投野交代/守備からの登板が少なくとも1回は記録されるはず");
     }
 
     [Fact]
-    public void PitchingChangeLog_RecordsBullpenRelief_ForNormalRelief()
+    public void PitchingChangeLog_RecordsReserveRelief_ForNormalRelief()
     {
-        // ブルペン投手を指名する通常継投は BullpenRelief として記録される（プレイヤー采配経路と同じ ChangePitcherTo）。
+        // 投手枠の控えを指名する通常継投は ReserveRelief として記録される（プレイヤー采配経路と同じ ChangePitcherTo）。
         var st = new TeamState(NonDhTeam("T", Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
         Assert.True(st.ChangePitcherTo(st.AvailableReserves[0]));
         Assert.NotNull(st.LastPitchingChange);
@@ -366,7 +366,7 @@ public sealed class ReliefBackfillTests
         {
             BlowupReliefMinTier = 0, RattledReliefMinTier = 0, CloseLateReliefMinTier = 0, BlowupRunsInInning = 1,
         };
-        // 遊撃に強力な潜在投手能力、ブルペンは弱い1枚＝AI は緊急時に遊撃をマウンドへ上げうる。
+        // 遊撃に強力な投手能力、投手枠の控えは弱い1枚＝AI は緊急時に遊撃をマウンドへ上げうる。
         Team Make(string n) => NonDhTeam(n, Attr(92, 80, 60, 82), Attr(25, 25, 25, 25)) with
         {
             Tactics = new AiTacticsBrain(new AiProfile(90, 6, SchoolStyle.DefensiveMinded), aiCoeff: coeff),

@@ -119,7 +119,7 @@ public sealed class LineupSpecTests
     }
 
     [Fact]
-    public void BuildFromLineup_BenchOutOnBenchOrBullpen_Throws()
+    public void BuildFromLineup_BenchOutOnReserves_Throws()
     {
         var order = StandardOrder(out _);
         Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(

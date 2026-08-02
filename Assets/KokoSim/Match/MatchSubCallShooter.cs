@@ -45,15 +45,15 @@ namespace KokoSim.Unity.Match
             // （実プレーは打席終了時にdrainするので起きない、シューター固有の副作用の回避）。
             ctrl.FreezeCurrentAtResult();
 
-            // ① 通常継投（投手→投手）。タグ「投手交代」・アンバー無し。
+            // ① 通常継投（控えからの登板）。タグ「投手交代」・アンバー無し。
             ctrl.ForceSubCallForCapture(new PitchingChangeEvent(
                 Inning: 3, IsTopHalf: false, DefenseIsAway: false,
                 Change: new PitchingChangeOutcome(
-                    PitchingChangeKind.BullpenRelief,
+                    PitchingChangeKind.ReserveRelief,
                     OutPitcherName: "遠藤", OutPitcherNumber: 1, OutPitcherSourceId: null,
                     InPitcherName: "本間", InPitcherNumber: 11, InPitcherSourceId: null,
                     BackfillPosition: null, BackfillName: null, BackfillNumber: 0, BackfillSourceId: null)));
-            yield return Capture(ctrl, "01-bullpen-relief");
+            yield return Capture(ctrl, "01-reserve-relief");
 
             // ② 投野交代（在フィールド野手→マウンド・旧投手は空き守備へ）。タグ「投野交代」・アンバー点灯。
             ctrl.ForceSubCallForCapture(new PitchingChangeEvent(

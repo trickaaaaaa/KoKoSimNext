@@ -28,7 +28,7 @@ public sealed class MatchProgressionSubstitutionTests
 
     private static Player Rp(string name) => P(FieldPosition.Pitcher, name) with { Pitching = PitcherAttributes.LeagueAverage };
 
-    /// <summary>非DH制のチーム（控え3人・ブルペン3人）。交代の供給元を厚めに用意する。</summary>
+    /// <summary>非DH制のチーム（控え6人＝投手枠3人を含む）。交代の供給元を厚めに用意する。</summary>
     private static Team Team(string n) => new()
     {
         Name = n,
@@ -168,7 +168,7 @@ public sealed class MatchProgressionSubstitutionTests
     }
 
     [Fact]
-    public void ChangePitcher_DesignatesAnyBullpenPitcher()
+    public void ChangePitcher_DesignatesAnyReservePitcher()
     {
         var prog = NewProg(13UL);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
@@ -200,7 +200,7 @@ public sealed class MatchProgressionSubstitutionTests
         var after = prog.SubstitutionOptions(teamIsAway: false);
         Assert.Equal(fielder.Name, after.CurrentPitcher.Name);
         Assert.DoesNotContain(after.Reserves, p => p.Name == fielder.Name);   // ベンチから消費
-        Assert.Equal(opt.Reserves.Count, after.Reserves.Count);              // ブルペンは手つかず
+        Assert.Equal(opt.Reserves.Count, after.Reserves.Count);              // 控えは手つかず
     }
 
     [Fact]
@@ -365,8 +365,8 @@ public sealed class MatchProgressionSubstitutionTests
     [InlineData(31UL)]
     public void SaveLoadRoundTrip_WithBenchPitcherChange_ProducesTheSameResult(ulong seed)
     {
-        // issue #137: 投手交代候補（ブルペン＋ベンチ）の添字がセーブへそのまま乗るため、
-        // ベンチ側（添字がブルペンより後ろ）を指名したケースも Save/Load 往復で一致すること。
+        // issue #137: 投手交代候補（控え全員）の添字がセーブへそのまま乗るため、
+        // 名簿の後ろ側を指名したケースも Save/Load 往復で一致すること。
         var prog = NewProg(seed);
         var applied = false;
         while (!applied && prog.Advance())

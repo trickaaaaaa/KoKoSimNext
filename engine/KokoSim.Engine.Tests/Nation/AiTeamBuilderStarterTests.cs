@@ -82,7 +82,7 @@ public sealed class AiTeamBuilderStarterTests
     }
 
     /// <summary>issue #191: 永続ロスター（3学年）は20人を大きく超えるため、打ち切りが無いと背番号21以降が
-    /// ベンチ/ブルペンに混入する。ベンチ入り20人制（背番号1〜20）に収まることを検証する。</summary>
+    /// 控えに混入する。ベンチ入り20人制（背番号1〜20）に収まることを検証する。</summary>
     [Fact]
     public void Build_CapsRosterAtTwentyUniformNumbers()
     {

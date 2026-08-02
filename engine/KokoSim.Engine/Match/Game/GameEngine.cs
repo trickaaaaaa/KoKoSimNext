@@ -347,7 +347,7 @@ public static class GameEngine
                 map[team.StartingPitcher] = Sample(team.StartingPitcher);
             }
             // 控えは1本の名簿になったが（issue #381）、**サンプリングする集合は変えない**＝
-            // 投手として置かれた控えだけを名簿順に引く。旧 Team.Bullpen と同じ選手・同じ順序なので
+            // 投手として置かれた控えだけを名簿順に引く。控えを二分していた頃と同じ選手・同じ順序なので
             // 乱数消費が1語も動かない（帯・決定論baseline 不変）。控え野手にも当日の出来を配るのは
             // 消費が増える別の変更なので、やるなら帯の張り直しを伴う独立した issue にする。
             foreach (var p in team.Reserves)
@@ -1504,7 +1504,7 @@ public static class GameEngine
         if (defense.Tactics is { } brain)
         {
             var staminaTarget = defense.CurrentPitcher.Pitching.StaminaPitches;
-            // 継投人選の候補＝ブルペン＋ベンチ＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
+            // 継投人選の候補＝控え全員＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
             // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
             var candidates = defense.ReliefRankingCandidates;
             var sit = new PitchingChangeSituation(
@@ -1519,7 +1519,7 @@ public static class GameEngine
             {
                 // ConvertTo 指定はコンバート継投＝元投手をその守備位置へ回して Reliever を登板（issue #255）。
                 // Reliever 指定だけならその投手を指名（横断ランキング）。在フィールド野手なら投野交代で backfill。
-                // どちらも null は engine 既定＝ブルペン先頭（StandardTacticsBrain／無指示は常に null＝
+                // どちらも null は engine 既定＝名簿順で最初の投手枠の控え（StandardTacticsBrain／無指示は常に null＝
                 // 従来挙動と1ビットも変わらない＝帯不変）。
                 changed = decision switch
                 {

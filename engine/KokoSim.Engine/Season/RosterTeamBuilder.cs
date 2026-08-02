@@ -26,7 +26,7 @@ public static class RosterTeamBuilder
     };
 
     /// <summary>
-    /// ロスターから打順9人（8守備＋投手9番）＋ブルペン2枚のチームを組む。
+    /// ロスターから打順9人（8守備＋投手9番）＋控えの投手2枚のチームを組む。
     /// tactics に采配ブレイン（プレイヤー手動・委任・敵AI ＝ 設計書09/11 の共通 ITacticsBrain）を渡すと
     /// フル采配の試合になる。null（既定）＝無指示で従来の挙動。集計モデル（StrengthTeamFactory）は常に null 維持。
     /// </summary>
@@ -176,7 +176,7 @@ public static class RosterTeamBuilder
             .ToList();
 
         // ベンチ入り検証（設計書06 §3.3b: 背番号1〜20＝ベンチ入り・0＝ベンチ外）。
-        // 出場登録（スタメン／先発／ブルペン／ベンチ）はベンチ入り選手のみ。UIが防ぐが安全網としてここで弾く。
+        // 出場登録（スタメン／先発／控え）はベンチ入り選手のみ。UIが防ぐが安全網としてここで弾く。
         var benchOut = referenced.Where(p => p.UniformNumber < 1).Select(p => p.Name).Distinct().ToList();
         if (benchOut.Count > 0)
             throw new ArgumentException(

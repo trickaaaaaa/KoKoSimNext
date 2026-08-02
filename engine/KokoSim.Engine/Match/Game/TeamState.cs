@@ -227,7 +227,7 @@ public sealed class TeamState
         return lines;
     }
 
-    /// <summary>登板順の投手成績（先発→登板したブルペン）。</summary>
+    /// <summary>登板順の投手成績（先発→登板した控え）。</summary>
     public IReadOnlyList<PitchingLine> BuildPitchingLines()
     {
         var lines = new List<PitchingLine>();
@@ -626,7 +626,7 @@ public sealed class TeamState
 
     /// <summary>
     /// 控えが残っていれば継投する（既定の指名ラッパ）。動揺はリセット。
-    /// 採るのは<b>名簿順（背番号順）で最初の「投手として置かれた控え」</b>＝旧ブルペン先頭と同じ選手。
+    /// 採るのは<b>名簿順（背番号順）で最初の「投手として置かれた控え」</b>＝控えを二分していた頃の先頭と同じ選手。
     /// 投手枠の控えが尽きたら名簿先頭の控えが緊急登板する（#93: 内部の投/野区分でゲートしない）。
     /// </summary>
     public bool TryChangePitcher()
@@ -676,7 +676,7 @@ public sealed class TeamState
     public IReadOnlyList<Player> AvailablePitcherCandidates => _reserves;
 
     /// <summary>
-    /// 継投人選のランキング候補（issue #209 Phase C）。ブルペン＋ベンチ（Phase B）に加え、
+    /// 継投人選のランキング候補（issue #209 Phase C）。控え全員（Phase B）に加え、
     /// <b>在フィールドのレギュラー野手</b>（現投手を除く打順の守備者）を含める。緊急登板で二刀流の主力を
     /// マウンドへ上げられるようにする。在フィールド野手を引くと守備に穴が開くため、実登板は
     /// <see cref="RelieveWith"/>→<see cref="PromoteFielderToMound"/> が投野交代で backfill する。
@@ -703,7 +703,7 @@ public sealed class TeamState
 
     /// <summary>
     /// 指名された投手で継投する（issue #209 Phase C の交代ルータ）。sub が在フィールドのレギュラー野手なら
-    /// 投野交代（<see cref="PromoteFielderToMound"/>）で backfill し、ブルペン／ベンチなら従来の
+    /// 投野交代（<see cref="PromoteFielderToMound"/>）で backfill し、控えからなら従来の
     /// <see cref="ChangePitcherTo"/>。参照一致で「今守備に就いている sub」を特定する。
     /// <paramref name="backfill"/> は在フィールド野手登板時の ①/② 判定係数（null＝既定）。
     /// </summary>
@@ -925,7 +925,7 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// 守備割当（issue #256 統合守備割当）。控え（ブルペン／ベンチ）の <paramref name="sub"/> を守備スロット
+    /// 守備割当（issue #256 統合守備割当）。控えの <paramref name="sub"/> を守備スロット
     /// <paramref name="slot"/> に就かせる（守備固め／守備割当）。就いていた選手は退場する（リエントリー禁止）。
     /// 就く守備位置は slot の現守備位置を継承する。投手スロット・DHスロットは対象外＝登板の変更は
     /// <see cref="RelieveWith"/>、DH解除は <see cref="ReleaseDh"/> を使う。役割（投/野）で候補を分けない（#93）。
@@ -935,7 +935,7 @@ public sealed class TeamState
 
     /// <summary>
     /// コンバート継投（issue #235 方針②）: 現投手を守備位置 <paramref name="to"/> へ回し、控え投手
-    /// <paramref name="reliever"/>（ブルペンまたは野手控え）を登板させる。<paramref name="to"/> を守っていた野手は
+    /// <paramref name="reliever"/>（控えの誰か）を登板させる。<paramref name="to"/> を守っていた野手は
     /// 退場し、その打順スロットが空く。
     /// 非DH＝元投手は自分の打順スロットに残ったまま守備位置だけ移り、新投手が空いたスロットへ入る。
     /// DH制＝元投手は打順外だったので、空いた打順スロットを引き継いで守備に就く（DHは維持・新投手は打順外）。

@@ -14,7 +14,7 @@ namespace KokoSim.Unity.Lineup
 {
     /// <summary>
     /// 【開発用・エディタ限定】issue #270 後追い（内部の並び順を用途別のキーへ置換）の受け入れ。
-    /// 控え一覧・ブルペン/ベンチ・メンバー設定プール・個別指導枠の並びを実データで書き出しつつ、
+    /// 控え一覧・控え名簿・メンバー設定プール・個別指導枠の並びを実データで書き出しつつ、
     /// 該当画面のスクショを撮る。使い捨て。
     /// </summary>
     public sealed class Issue270OrderShooter : MonoBehaviour
@@ -70,10 +70,8 @@ namespace KokoSim.Unity.Lineup
             var spec = state.ToLineupSpec();
 
             var sb = new StringBuilder();
-            sb.AppendLine("[i270b] ブルペン＝継投順（期待＝背番号昇順）");
-            foreach (var p in spec.Bullpen) sb.AppendLine("  " + Line(p));
-            sb.AppendLine("[i270b] ベンチ＝代打順（期待＝背番号昇順）");
-            foreach (var p in spec.Bench) sb.AppendLine("  " + Line(p));
+            sb.AppendLine("[i270b] 控え＝継投順かつ代打順（1本の名簿・期待＝背番号昇順）");
+            foreach (var p in spec.Reserves ?? new List<DevelopingPlayer>()) sb.AppendLine("  " + Line(p));
 
             sb.AppendLine("[i270b] メンバー設定プール＝ベンチ外（期待＝打撃力降順）");
             // 画面が実際に出す並び（MemberSettingState.BuildView の Pool）をそのまま読む。

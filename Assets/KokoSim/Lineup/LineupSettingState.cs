@@ -147,7 +147,7 @@ namespace KokoSim.Unity.Lineup
         private readonly PlayerStrength[] _strength;
 
         // 出場登録できる選手＝ベンチ入り（背番号1〜20。設計書06 §3.3b）のロスターindex。
-        // スタメン・控え・ブルペンはすべてこの集合からしか選べない（ベンチ外は候補に出さない）。
+        // スタメン・控えはすべてこの集合からしか選べない（ベンチ外は候補に出さない）。
         private readonly List<int> _eligible;
         private readonly bool _shortage;   // ベンチ入りが9人未満＝打順を組めない（確定を塞ぐ）
 
@@ -237,16 +237,16 @@ namespace KokoSim.Unity.Lineup
         // ＝投手力が一番高い者が立つ。順位付けは Strength(i).Pitching＝カテゴリ別ランクと同じ単一ソース。
         private int FallbackPitcher() => ByPitching().First(i => !InOrder(i));
 
-        // 候補列挙は常にベンチ入りのみ（自動シード・控え一覧・ToLineupSpec のベンチ/ブルペンが全部これを通る）。
+        // 候補列挙は常にベンチ入りのみ（自動シード・控え一覧・ToLineupSpec の控えが全部これを通る）。
         // 並べ替えキーは枠の用途に合わせる（issue #270／#30 で「選手個人の総合ランク」は廃止済み）。
-        // 打順・ベンチ＝打撃力、ブルペン・投手枠＝投手力。指標はカテゴリ別ランクと同じ単一ソース。
+        // 打順・控え＝打撃力、投手枠＝投手力。指標はカテゴリ別ランクと同じ単一ソース。
         private IEnumerable<int> ByBatting() =>
             _eligible.OrderByDescending(i => Strength(i).Batting);
 
         private IEnumerable<int> ByPitching() =>
             _eligible.OrderByDescending(i => Strength(i).Pitching);
 
-        // 控え（ブルペン・ベンチ・控え一覧の表示）は背番号順。プレイヤーがメンバー設定で振った番号が
+        // 控え（名簿・控え一覧の表示）は背番号順。プレイヤーがメンバー設定で振った番号が
         // そのまま控えの優先度＝継投順・代打順になる（オーナー決定 2026-07-26, issue #270）。
         // ベンチ入り9人未満の異常編成では背番号なし（0）が混じるので末尾へ送る。
         private IEnumerable<int> ByUniformNumber() =>
@@ -452,16 +452,14 @@ namespace KokoSim.Unity.Lineup
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);
             if (_usesDh && _spIdx >= 0) used.Add(_spIdx);
 
-            // 控え：打順外の投手＝ブルペン、野手＝ベンチ。並びがそのまま継投順・代打順になる。
+            // 控えは打順外の全員を1本の名簿にする（issue #381）。継投も代打も代走も守備固めも同じ名簿から出る。
             // 順番は背番号順（オーナー決定 2026-07-26, issue #270）＝控えの優先度は
             // メンバー設定で背番号を振った時点でプレイヤーが決めている。控え一覧の表示もこれと同じ順。
-            var bullpen = new List<DevelopingPlayer>();
-            var bench = new List<DevelopingPlayer>();
+            var reserves = new List<DevelopingPlayer>();
             foreach (var i in ByUniformNumber())
             {
                 if (used.Contains(i)) continue;
-                if (PitcherRoleResolver.LeansPitcher(_roster[i])) bullpen.Add(_roster[i]);
-                else bench.Add(_roster[i]);
+                reserves.Add(_roster[i]);
             }
 
             return new LineupSpec(
@@ -469,8 +467,7 @@ namespace KokoSim.Unity.Lineup
                 PitcherSlot: _usesDh ? 8 : _pitcherSlot,
                 DhSlot: _usesDh ? _dhSlot : -1,
                 StartingPitcher: _usesDh && _spIdx >= 0 ? _roster[_spIdx] : null,
-                Bullpen: bullpen,
-                Bench: bench,
+                Reserves: reserves,
                 Name: "桜丘");
         }
 
@@ -547,7 +544,7 @@ namespace KokoSim.Unity.Lineup
                 v.StartingPitcherPicked = _pickKind == PickKind.StartingPitcher;
             }
 
-            // 控え（打順外・背番号順）。ToLineupSpec が積むブルペン/ベンチと同じ順なので、
+            // 控え（打順外・背番号順）。ToLineupSpec が積む控え名簿と同じ順なので、
             // この一覧の上から順に継投・代打で出る（表示と実際が食い違わない, issue #270）。
             var used = new HashSet<int>();
             for (var i = 0; i < 9; i++) used.Add(_idx[i]);

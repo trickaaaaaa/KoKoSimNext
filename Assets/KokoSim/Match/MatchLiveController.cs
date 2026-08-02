@@ -529,8 +529,12 @@ namespace KokoSim.Unity.Match
             var away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(58, awayName, awayRng);
             // デモの自校（home＝左列）は実部員（RosterService）から組み、背番号・調子・通算の join を実機同様に見せる。
             var home = RosterTeamBuilder.Build(RosterService.Active, homeName);
-            // RosterTeamBuilder.Build は控えを設定しないため、代打采配のデモ用に控えを付与する。
-            home = home with { Bench = BuildBench() };
+            // RosterTeamBuilder.Build が積む控え（投手枠2枚）へ、代打采配のデモ用の控えを足す。
+            // 控えは1本の名簿なので上書きせず Merge する（上書きすると継投先が消える。issue #381）。
+            home = home with
+            {
+                Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(home.Reserves, BuildBench()),
+            };
             _homeTeam = home;
             _awayDisp = awayName;
             _homeDisp = homeName;
@@ -555,6 +559,7 @@ namespace KokoSim.Unity.Match
         }
 
         // 代打采配デモ用の控え（識別しやすい名前）。本番は登録メンバー（設計書06 §3.3b）から供給する。
+        // 背番号16/17＝RosterTeamBuilder が積む控え投手と重ならない番号（Merge の並びが安定する）。
         private static IReadOnlyList<KokoSim.Engine.Players.Player> BuildBench()
         {
             KokoSim.Engine.Players.Player Ph(string name, KokoSim.Engine.Match.Field.FieldPosition pos, int number, int contact) =>
@@ -1263,8 +1268,10 @@ namespace KokoSim.Unity.Match
             HidePitchCall();
             HideScoreCall();
             var kind = e.Change.Kind;
-            var isFielder = kind != KokoSim.Engine.Match.Game.PitchingChangeKind.BullpenRelief;
-            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.BullpenRelief ? "投手交代"
+            // 実況の区別は「控えから出たか／守備に就いていた者が回ったか（＝守備に穴が開くか）」（issue #381）。
+            // 出てきた控えが投手枠かどうかでは分けない＝控えからの登板はすべて「投手交代」。
+            var isFielder = kind != KokoSim.Engine.Match.Game.PitchingChangeKind.ReserveRelief;
+            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.ReserveRelief ? "投手交代"
                 : kind == KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap ? "投野交代" : "野手登板";
             _subCallTag.EnableInClassList("sub-call__tag--fielder", isFielder);   // 野手系だけアンバー点灯（一過性強調）
             _subCallText.text = SubEventText(e);
@@ -1291,9 +1298,8 @@ namespace KokoSim.Unity.Match
                     return half + " " + c.InPitcherName + " が登板／" + c.OutPitcherName + " は" + PosJp(c.BackfillPosition) + "へ";
                 case KokoSim.Engine.Match.Game.PitchingChangeKind.FielderReliefWithBackfill:
                     return half + " " + c.InPitcherName + " が登板／" + PosJp(c.BackfillPosition) + "は" + c.BackfillName;
-                case KokoSim.Engine.Match.Game.PitchingChangeKind.FielderToMound:
-                    return half + " " + c.InPitcherName + " が登板（" + c.OutPitcherName + " → 退く）";
                 default:
+                    // 控えからの登板（ReserveRelief）。守備に穴が開かないので交代の形だけを出す（issue #381）。
                     return half + " " + c.OutPitcherName + " → " + c.InPitcherName;
             }
         }
@@ -2172,11 +2178,18 @@ namespace KokoSim.Unity.Match
             {
                 pitcherHost.Clear();
                 pitcherHost.Add(BuildPitcherRow(team.Pitcher, mirror));
-                // 控え（ベンチ入り＝背番号ありのメンバのみ。ベンチ外は出さない）。野手控え＋ブルペンを
-                // 背番号の昇順で1リストに並べる（種別で分けず、上から番号順）。
+                // 控え（ベンチ入り＝背番号ありのメンバのみ。ベンチ外は出さない）。控えは1本の名簿なので
+                // そのまま背番号の昇順で並べる（issue #381）。投手として置かれている控えだけ行の作りを
+                // 投手行に替える＝並びは分けず、見せる数字だけ役割に合わせる。
                 var benchRows = new List<(int Number, VisualElement Row)>();
-                foreach (var b in team.Bench) if (b.Number > 0) benchRows.Add((b.Number, BuildBenchRow(b, mirror)));
-                foreach (var bp in team.Bullpen) if (bp.Number > 0) benchRows.Add((bp.Number, BuildBenchPitcherRow(bp, mirror)));
+                foreach (var b in team.Reserves)
+                {
+                    if (b.Number <= 0) continue;
+                    var asPitcher = FindReservePitcher(team, b.Number);
+                    benchRows.Add((b.Number, asPitcher is null
+                        ? BuildBenchRow(b, mirror)
+                        : BuildBenchPitcherRow(asPitcher, mirror)));
+                }
                 if (benchRows.Count > 0)
                 {
                     benchRows.Sort((a, c) => a.Number.CompareTo(c.Number));
@@ -2210,6 +2223,17 @@ namespace KokoSim.Unity.Match
             face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
+        }
+
+        /// <summary>
+        /// その控えが投手として置かれているか（issue #381）。控えは1本の名簿で、
+        /// <c>ReservePitchers</c> はそのうち投手枠の者を投手行の材料つきで別に持つ観測データ。
+        /// 突き合わせは背番号（ベンチ入りは1〜20で一意）。置かれていなければ null。
+        /// </summary>
+        private static LivePitcherToday FindReservePitcher(LiveTeamSnapshot team, int number)
+        {
+            foreach (var p in team.ReservePitchers) if (p.Number == number) return p;
+            return null;
         }
 
         // 控え1行（背番号・名前フル・調子）。守備位置は出さない。代打・代走・守備固めの候補。
@@ -2627,7 +2651,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 自校の控え先頭（代打候補）の名前。</summary>
         public string HomeBenchZeroName =>
-            _homeTeam != null && _homeTeam.Bench.Count > 0 ? _homeTeam.Bench[0].Name : "";
+            _homeTeam != null && _homeTeam.Reserves.Count > 0 ? _homeTeam.Reserves[0].Name : "";
 
         /// <summary>スクショ用: ライブ観戦の「ホームへ戻る」を実行する（終局後のみ有効）。</summary>
         public void BackHomeForCapture() => OnBackHome();

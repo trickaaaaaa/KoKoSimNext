@@ -6,7 +6,7 @@ namespace KokoSim.Engine.Match.Game;
 public enum PitchingChangeKind
 {
     /// <summary>
-    /// 控えからの継投（旧投手退場・backfillなし）。issue #381 で旧 <c>BullpenRelief</c>（投手→投手）と
+    /// 控えからの継投（旧投手退場・backfillなし）。issue #381 で旧「投手控えからの継投」と
     /// 旧 <c>FielderToMound</c>（ベンチ野手→マウンド）を統合した。控えを投手/野手に二分するのをやめた以上、
     /// 実況上の区別は「控えから出たか／守備に就いていた者が回ったか（＝守備に穴が開くか）」であって、
     /// 出てきた控えが本職かどうかではない。

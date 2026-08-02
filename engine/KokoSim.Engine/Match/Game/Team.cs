@@ -25,7 +25,7 @@ public sealed record Team
     ///
     /// 並びは<b>背番号順＝プレイヤーが決めた優先度</b>（issue #270）。継投の既定指名（
     /// <see cref="TeamState.TryChangePitcher"/>）はこの並びで最初に見つかる「投手として置かれた控え」
-    /// （<c>Position == FieldPosition.Pitcher</c>）を採る＝旧ブルペン先頭と同じ選手になる。
+    /// （<c>Position == FieldPosition.Pitcher</c>）を採る＝控えを二分していた頃の投手控え先頭と同じ選手になる。
     /// </summary>
     public IReadOnlyList<Player> Reserves { get; init; } = Array.Empty<Player>();
 

@@ -521,7 +521,7 @@ public sealed class TacticsTests
         var expected = 64.0 * C.CaptainMitigationPerPower;
         Assert.Equal(expected, onField.CaptainMitigation(C), 9);
 
-        // ベンチ（ブルペン在籍）は大きく減衰。
+        // ベンチ在籍は大きく減衰。
         var benchTeam = TeamOf("B", bullpen: new[] { captain with { Pitching = PitcherAttributes.LeagueAverage } });
         var benchCaptain = benchTeam.Reserves[0];
         var bench = new TeamState(benchTeam with { Captain = benchCaptain });

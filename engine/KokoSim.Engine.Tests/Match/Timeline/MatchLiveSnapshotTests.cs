@@ -85,7 +85,7 @@ public sealed class MatchLiveSnapshotTests
         Assert.Equal("H1", snap.Home.Lineup[0].Name);
         Assert.Equal(FieldPosition.Catcher, snap.Home.Lineup[0].Position);
 
-        // 控え（野手＝代打候補・投手＝ブルペン）も露出する。
+        // 控え（代打候補にも継投候補にもなる1本の名簿）も露出する。
         Assert.Contains(snap.Home.Reserves, s => s.Name == PinchHitterName);
         Assert.NotEmpty(snap.Home.Reserves);
     }

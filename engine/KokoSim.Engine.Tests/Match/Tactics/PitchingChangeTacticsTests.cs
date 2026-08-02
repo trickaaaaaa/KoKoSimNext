@@ -238,7 +238,7 @@ public sealed class PitchingChangeTacticsTests
             Sit(fatigueTriggered: true, candidates: candidates), new Xoshiro256Random(1))!.Value.Reliever;
 
     [Fact]
-    public void Ai_PicksHighestScoringBullpen_NotFirst()
+    public void Ai_PicksHighestScoringReservePitcher_NotFirst()
     {
         var weak = Reliever("R1", Attr(velLevel: 30, control: 30, staminaLevel: 30, pitchRank: 30));
         var strong = Reliever("R2", Attr(velLevel: 75, control: 75, staminaLevel: 70, pitchRank: 72));
@@ -249,19 +249,19 @@ public sealed class PitchingChangeTacticsTests
     }
 
     [Fact]
-    public void Ai_PicksFielder_WhenLatentOutranksBullpen()
+    public void Ai_PicksFielder_WhenAbilityOutranksReservePitchers()
     {
         var weakPitcher = Reliever("R1", Attr(velLevel: 30, control: 30, staminaLevel: 30, pitchRank: 30));
-        // 強肩の野手（潜在能力がブルペン最上位を上回る）。
+        // 強肩の野手（投手枠の控えの最上位を上回る）。
         var acePosition = FielderWithLatent("SS", Attr(velLevel: 78, control: 60, staminaLevel: 45, pitchRank: 55));
         var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
 
-        // D2: ブルペン最上位を1点でも上回る野手は登板させる。
+        // D2: 投手枠の控えの最上位を1点でも上回るなら守備の選手を登板させる。
         Assert.Equal("SS", PickedReliever(ai, weakPitcher, acePosition)!.Name);
     }
 
     [Fact]
-    public void Ai_PrefersBullpenPitcher_OnScoreTie()
+    public void Ai_PrefersPlacedPitcher_OnScoreTie()
     {
         var attr = Attr(velLevel: 60, control: 55, staminaLevel: 50, pitchRank: 58);
         var pitcher = Reliever("R1", attr);
@@ -273,19 +273,19 @@ public sealed class PitchingChangeTacticsTests
     }
 
     [Fact]
-    public void Ai_FallsBackToFielder_WhenNoBullpenPitcher()
+    public void Ai_FallsBackToFielder_WhenNoReservePitcher()
     {
         var fielder = FielderWithLatent("SS", Attr(velLevel: 40, control: 30, staminaLevel: 25, pitchRank: 28));
         var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
 
-        // ブルペン投手ゼロ（野手のみ）＝緊急登板で野手を選ぶ。
+        // 投手枠の控えゼロ＝緊急登板で守備の選手を選ぶ。
         Assert.Equal("SS", PickedReliever(ai, fielder)!.Name);
     }
 
     [Fact]
     public void Standard_LeavesRelieverNull_EvenWithStrongFielderCandidate()
     {
-        // Standard／無指示は人選しない＝Reliever=null（engine 既定＝ブルペン先頭）。帯不変の担保。
+        // Standard／無指示は人選しない＝Reliever=null（engine 既定＝名簿順で最初の投手枠の控え）。帯不変の担保。
         var strongFielder = FielderWithLatent("SS", Attr(velLevel: 90, control: 80, staminaLevel: 70, pitchRank: 80));
         var std = new StandardTacticsBrain();
         var decision = std.CallPitchingChange(

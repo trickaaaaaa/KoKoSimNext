@@ -5,7 +5,7 @@ using KokoSim.Engine.Players;
 namespace KokoSim.Engine.Match.Game;
 
 /// <summary>
-/// 控え名簿の組み立て（issue #381）。旧 <c>Team.Bullpen</c>／<c>Team.Bench</c> の2本を
+/// 控え名簿の組み立て（issue #381）。投手控えと野手控えに分かれていた2本を
 /// <see cref="Team.Reserves"/> 1本へ畳むときの並びをここに集約する。
 ///
 /// 並びは<b>背番号順＝プレイヤーが決めた優先度</b>（issue #270）。継投の既定指名・当日の出来の

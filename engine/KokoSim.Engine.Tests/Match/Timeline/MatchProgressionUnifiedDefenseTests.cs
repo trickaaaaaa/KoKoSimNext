@@ -86,7 +86,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         return null;
     }
 
-    // ===== 1. 継投候補集合がAIと同一（ブルペン＋ベンチ＋在フィールド野手） =====
+    // ===== 1. 継投候補集合がAIと同一（控え全員＋在フィールド野手） =====
 
     [Fact]
     public void ReliefCandidates_MatchAiSet_IncludeOnFieldFielders_NonDh()
@@ -95,7 +95,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
 
-        // ブルペン2 + ベンチ2 + 在フィールド野手8（現投手を除く打順9-1）= 12。
+        // 投手枠の控え2 + それ以外の控え2 + 在フィールド野手8（現投手を除く打順9-1）= 12。
         Assert.Equal(12, opt!.ReliefCandidates.Count);
         Assert.Contains(opt.ReliefCandidates, p => p.Name == "H遊");   // 在フィールド野手が候補に入る
         Assert.DoesNotContain(opt.ReliefCandidates, p => p.Name == opt.CurrentPitcher.Name); // 現投手は除外
@@ -108,7 +108,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
 
-        // DHでも在フィールド野手8（DH除く打順9-1）を含める＝ブルペン1 + ベンチ1 + 8 = 10。
+        // DHでも在フィールド野手8（DH除く打順9-1）を含める＝投手枠の控え1 + それ以外の控え1 + 8 = 10。
         Assert.Equal(10, opt!.ReliefCandidates.Count);
         Assert.Contains(opt.ReliefCandidates, p => p.Name == "H遊");
         Assert.DoesNotContain(opt.ReliefCandidates, p => p.Name == "HDH");  // DHは守備に就かない＝除外
@@ -144,7 +144,7 @@ public sealed class MatchProgressionUnifiedDefenseTests
 
         var after = prog.SubstitutionOptions(teamIsAway: false);
         Assert.Equal(reliever.Name, after.CurrentPitcher.Name);
-        Assert.True(after.UsesDh);   // ブルペン継投ではDHは維持（野手を上げていない）
+        Assert.True(after.UsesDh);   // 投手枠の控えからの継投ではDHは維持（守備の選手を上げていない）
     }
 
     // ===== 3. 在フィールド野手→投（投野交代・空き守備を backfill） =====
@@ -394,13 +394,13 @@ public sealed class MatchProgressionUnifiedDefenseTests
     [InlineData(13UL)]
     [InlineData(31UL)]
     [InlineData(44UL)]
-    public void Advance_AfterBullpenRelief_ReturnsPlateAppearancesInFiniteSteps(ulong seed)
+    public void Advance_AfterReserveRelief_ReturnsPlateAppearancesInFiniteSteps(ulong seed)
     {
         var prog = NewProg(seed);
         var opt = AdvanceUntilDefense(prog, teamIsAway: false);
         Assert.NotNull(opt);
 
-        // ブルペン継投（対決ビューで確定した「控え投手の投入」に相当）。
+        // 投手枠の控えからの継投（対決ビューの「控え投手の投入」に相当）。
         var reliever = opt!.Reserves[0];
         Assert.True(prog.Relieve(teamIsAway: false, reliever));
         Assert.Equal(reliever.Name, prog.SubstitutionOptions(teamIsAway: false).CurrentPitcher.Name);
