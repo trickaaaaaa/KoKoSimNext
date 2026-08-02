@@ -579,6 +579,14 @@ namespace KokoSim.Unity.Match
         private int _catchCount;
 
         /// <summary>
+        /// 捕球後・保持中（IKの重みが落ちた後の素の吸収動作も含む）のグラブ→捕球点の差の最悪値。
+        /// 球はこの間ミット中心をそのまま描く（<see cref="CatchGloveNow"/>）ので、これが大きいほど
+        /// 「球が野手から離れて見える」量そのもの（issue #399 ①）。
+        /// </summary>
+        private float _catchHoldDriftMax;
+        private int _catchHoldCount;
+
+        /// <summary>
         /// このプレーの捕球を全部洗い出して予定表にする。
         ///
         /// 打球（滞空・転がり・バウンド）は engine に「誰が捕るか」が無いので**終点に一番近い野手**を
@@ -592,6 +600,8 @@ namespace KokoSim.Unity.Match
             _catchEvents.Clear();
             _catchGloveErrMax = _catchWristErrMax = _catchMittErrMax = 0f;
             _catchCount = 0;
+            _catchHoldDriftMax = 0f;
+            _catchHoldCount = 0;
             if (play == null || play.Ball == null) return;
 
             foreach (var seg in play.Ball)
@@ -838,11 +848,11 @@ namespace KokoSim.Unity.Match
                 var st = kv.Value;
                 if (st.CatchEvent < 0 || st.CatchEvent >= _catchEvents.Count) continue;
                 var e = _catchEvents[st.CatchEvent];
-                float w = DuelCatcherPose.Weight(t, e.TCatch);
-                if (w <= 0f) continue;
                 var a = FielderActor(kv.Key);
                 if (a == null || a.Animator == null) continue;
-                DuelCatcherPose.ReachMitt(a.Animator, _root.transform.TransformPoint(e.Point), w);
+
+                float w = DuelCatcherPose.Weight(t, e.TCatch);
+                if (w > 0f) DuelCatcherPose.ReachMitt(a.Animator, _root.transform.TransformPoint(e.Point), w);
 
                 // ⚠ 測るのは**ミット中心**（手首→中指付け根の中点）。手ボーンの原点は手首なので、
                 //    そこで測ると常にミットの厚みぶん外れた値が出る（捕手の受け入れと同じ単一ソース）
@@ -866,6 +876,17 @@ namespace KokoSim.Unity.Match
                     }
                     _catchCount++;
                 }
+                // 捕球後・保持中（IKの重みが release で落ちきった後も含む）。ボールは今やこの
+                // ミット中心をそのまま描く（design-18 §4.5-③・issue #399 ①）ので、ここが捕球点から
+                // 離れるほど「素の吸収動作でグラブ＝球が離れて見える」量そのもの。捕球直前の実測
+                // （0.025m級）とは別枠で最悪値を持つ＝「捕球の一瞬だけ緑」を防ぐ
+                else if (t > e.TCatch + 1e-4f && t <= e.TCatch + CatchHoldSeconds)
+                {
+                    var target = _root.transform.TransformPoint(e.Point);
+                    float d = Vector3.Distance(DuelCatcherPose.MittCenter(a.Animator), target);
+                    _catchHoldDriftMax = Mathf.Max(_catchHoldDriftMax, d);
+                    _catchHoldCount++;
+                }
             }
         }
 
@@ -883,6 +904,10 @@ namespace KokoSim.Unity.Match
                 + "m ミット厚="
                 + _catchMittErrMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
                 + "m\t計測コマ=" + _catchCount);
+            sb.AppendLine("保持中（捕球後〜" + CatchHoldSeconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                + "s）のグラブ→捕球点の最悪="
+                + _catchHoldDriftMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
+                + "m\t計測コマ=" + _catchHoldCount);
             sb.AppendLine("pos\ttCatch\ttStart\tcatchH\t野手との距離\t手前へ\tclip");
             foreach (var e in _catchEvents)
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
@@ -977,6 +1002,7 @@ namespace KokoSim.Unity.Match
             public float TFire;            // 実際に流し始める時刻（捕るより前には投げられない）
             public FieldThrowAnchor Anchor;
             public float Yaw;              // 投げる体の向き[度]
+            public float AimErrDeg;        // 体の向きと「野手→的」の方角の差[度]（実測用。0が正しい）
             public Vector3 SegStart;       // engine の送球区間の始点（stage-local）
             public Vector3 SegEnd;         // 同・終点（横ずれの実測に使う）
             public Vector3 HandAtRelease;  // 球が手を離れる点（幾何解。保持中は実測の手で上書き）
@@ -1005,6 +1031,7 @@ namespace KokoSim.Unity.Match
             _throwWindupMin = float.MaxValue;
             _throwHeadMin = float.MaxValue;
             _throwLateralMax = 0f;
+            _throwAimErrMax = 0f;
             if (play == null || play.Ball == null) return;
 
             foreach (var seg in play.Ball)
@@ -1022,14 +1049,21 @@ namespace KokoSim.Unity.Match
                 float dist = new Vector2((float)(to.X - from.X), (float)(to.Y - from.Y)).magnitude;
                 var an = SelectFieldThrow(who, dist);
 
-                // 体の向き＝**リリースの手が的を向く**ように回す。F5 でグラブを球へ向けたのと同型で、
-                // こうすると球は的への直線上から出ていく（＝出た瞬間に折れない）
+                // 体の向き＝**的を向ける**。F5（グラブを球へ向ける）とは意味が違う: グラブは球の
+                // 位置に居なければならないのに対し、送球は球が的へ飛んでいけばよく、手が的への
+                // 直線上に居る必要はない。以前は「リリースの手が的を向く」よう体ごとオフセット
+                // していたが（an.HandX/HandZ ぶん引く式）、収録ごとの手の水平位置（0.12〜0.36m）
+                // がそのまま体の向きのずれ（実測10〜42°）になっていた（issue #399 ③）。
+                // 手のオフセットで生じる横ずれは ThrowHandoffSeconds の寄せで吸収する（下）
                 var fp = PlaybackEvaluator.FielderAt(play, who, tr).Pos;
                 var toTarget = new Vector2((float)(to.X - fp.X), (float)(to.Y - fp.Y));
                 float yaw = toTarget.sqrMagnitude > 1e-6f
                     ? Mathf.Atan2(toTarget.x, toTarget.y) * Mathf.Rad2Deg
-                      - Mathf.Atan2(an.HandX, an.HandZ) * Mathf.Rad2Deg
                     : YawFacingHome((float)fp.X, (float)fp.Y);
+                float aimErrDeg = toTarget.sqrMagnitude > 1e-6f
+                    ? Mathf.Abs(Mathf.DeltaAngle(yaw, Mathf.Atan2(toTarget.x, toTarget.y) * Mathf.Rad2Deg))
+                    : 0f;
+                _throwAimErrMax = Mathf.Max(_throwAimErrMax, aimErrDeg);
 
                 // 球が手を離れる点の**幾何解**（どの時刻から再生を始めても同じ値）。
                 // 保持中は実測の手で上書きするが、途中から再生した場合はこれが使われる
@@ -1048,6 +1082,7 @@ namespace KokoSim.Unity.Match
                     From = who,
                     To = seg.ToRole ?? NearestFielder(play, (float)seg.T1, to.X, to.Y),
                     TRelease = tr, TStart = tStart, TFire = tFire, Anchor = an, Yaw = yaw,
+                    AimErrDeg = aimErrDeg,
                     SegStart = new Vector3((float)from.X, (float)from.H, (float)from.Y),
                     SegEnd = new Vector3((float)to.X, (float)to.H, (float)to.Y),
                     HandAtRelease = hand, DistM = dist,
@@ -1171,7 +1206,7 @@ namespace KokoSim.Unity.Match
             return _root.transform.InverseTransformPoint(w);
         }
 
-        private float _throwWindupMin, _throwHeadMin, _throwLateralMax;
+        private float _throwWindupMin, _throwHeadMin, _throwLateralMax, _throwAimErrMax;
 
         /// <summary>
         /// 【撮影ハーネス用】送球の受け入れ実測。
@@ -1181,6 +1216,8 @@ namespace KokoSim.Unity.Match
         /// <c>見せる振り</c> は投げ始めてから球が出ていくまで[s]＝0 だとクリップが一瞬で飛ぶ。
         /// <c>横ずれ</c> は球が手を離れた点と engine の送球線の**横方向**の差[m]＝
         /// 「投げた向きと球の飛ぶ向きが折れて見える量」。体の向きを的へ合わせているので 0 に近いはず。
+        /// <c>向きの差</c> は体の向きと「野手→的」の方角の差[度]（issue #399 ③）。体は的そのものを
+        /// 向けているので 0 のはず＝横ずれと違い ThrowHandoffSeconds で吸収する対象ではない。
         /// **どれも絵では読めない**（どれも「野手が投げている」だけ）。
         /// </summary>
         public string FieldThrowDiagForCapture()
@@ -1191,12 +1228,14 @@ namespace KokoSim.Unity.Match
                 + "s\t見せる振りの最小="
                 + (_throwWindupMin > 1e6f ? 0f : _throwWindupMin).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
                 + "s\t横ずれの最悪="
-                + _throwLateralMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) + "m");
-            sb.AppendLine("from\tto\ttRelease\ttStart\ttFire\tdistM\thandY\tclip");
+                + _throwLateralMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
+                + "m\t向きの差の最悪="
+                + _throwAimErrMax.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°");
+            sb.AppendLine("from\tto\ttRelease\ttStart\ttFire\tdistM\thandY\taimErrDeg\tclip");
             foreach (var e in _throwEvents)
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "{0}\t{1}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F2}\t{7}",
-                    e.From, e.To, e.TRelease, e.TStart, e.TFire, e.DistM, e.HandAtRelease.y,
+                    "{0}\t{1}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F2}\t{7:F1}\t{8}",
+                    e.From, e.To, e.TRelease, e.TStart, e.TFire, e.DistM, e.HandAtRelease.y, e.AimErrDeg,
                     e.Anchor.Clip.Replace("AA_Baseball_Defender_", "").Replace("AA_Baseball_", "")));
             return sb.ToString();
         }
@@ -2266,7 +2305,8 @@ namespace KokoSim.Unity.Match
         /// グラブの狙点と球の描画位置が別々だと、寄せたグラブの横で球が地面へ落ちる
         /// （engine の滞空は端点で高さ0へ戻るため）。**同じ1つの値から出す**のが掟
         /// （design-18 §4.5-⑨ の「投球の終わり・打球の始まり・バットの狙点」と同型）。
-        /// 動かすのは**高さだけ**で、水平は engine の真値のまま＝判定にも帯にも触れない。
+        /// 水平は engine の真値のまま＝判定にも帯にも触れない（動かすのは高さと、捕球後の
+        /// 保持中だけ**描かれているグラブへの追従**）。
         /// </summary>
         private Vector3 BlendToCatchPoint(Vector3 enginePos, float t)
         {
@@ -2274,12 +2314,29 @@ namespace KokoSim.Unity.Match
             {
                 var e = _catchEvents[i];
                 if (t > e.HoldUntil) continue;
-                if (t >= e.TCatch) return e.Point;                     // 捕ってから次の区間まではグラブの中
+                if (t >= e.TCatch) return CatchGloveNow(e);            // 捕ってから次の区間まではグラブに追従
                 if (t < e.TCatch - CatchBallBlendSeconds) continue;
                 float u = Mathf.InverseLerp(e.TCatch - CatchBallBlendSeconds, e.TCatch, t);
                 return Vector3.Lerp(enginePos, e.Point, u * u * (3f - 2f * u));
             }
             return enginePos;
+        }
+
+        /// <summary>
+        /// 捕球後・保持中の球の位置（stage-local）＝**描かれているグラブ（ミット中心）**。
+        /// 送球の保持区間で既に「描かれている手」を使っている <see cref="ThrowHandNow"/> と同型
+        /// （捕手の <c>TryPutBallInMitt</c>＝球をミットの子にするのと同じ意図。design-18 §4.5-③）。
+        /// これが無いと、捕球後は空間固定の <see cref="FieldCatchEvent.Point"/> に球が置き去りになり、
+        /// 待機へ戻っていくグラブから球だけが微妙にずれて見える（issue #399 ①）。
+        /// アニメータが無い（未生成・破棄済み等）ときだけ、確定済みの捕球点へフォールバックする。
+        /// </summary>
+        private Vector3 CatchGloveNow(FieldCatchEvent e)
+        {
+            var a = FielderActor(e.Pos);
+            if (a == null || a.Animator == null) return e.Point;
+            var hand = a.Animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            if (hand == null) return e.Point;
+            return _root.transform.InverseTransformPoint(DuelCatcherPose.MittCenter(a.Animator));
         }
 
         /// <summary>
