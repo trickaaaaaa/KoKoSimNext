@@ -1369,7 +1369,11 @@ namespace KokoSim.Unity.Match
         /// 時刻 t の走者位置（stage-local の x,z）。engine の補間が単一ソース。
         ///
         /// ⚠ <c>HideAt</c> は効かせない。あれは2D俯瞰が「アウトになった丸トークンを盤面から消す」ための
-        /// 都合で、3Dでそのまま使うと**選手が空中で消える**。アウトは演技（滑り込み失敗）で見せる。
+        /// 都合で、3Dでそのまま使うと**選手が空中で消える**。アウトかどうかは判定オーバーレイ
+        /// （Issue #328）だけで伝える＝到達の演技（駆け抜け/スライディング）はアウト/セーフを問わず
+        /// 際どさ（closeCall）だけで選ぶ（Issue #417。旧「アウトは滑り込み失敗の演技で見せる」設計は
+        /// オーナー未指示のため廃止）。一塁到達だけは際どさに関係なく常に駆け抜け
+        /// （オーバーランは失格にならないルール）。
         /// レッグが始まる前は最初のレッグの起点に立たせる（engine は null を返す＝2Dでは描かない区間）。
         /// </summary>
         private static bool RunnerXZ(PlaybackRunner r, float t, out Vector2 xz)
@@ -1401,9 +1405,26 @@ namespace KokoSim.Unity.Match
             return true;
         }
 
-        /// <summary>到達の演技を選ぶ**純関数**（乱数を引かない）。</summary>
-        private static RunnerArriveAnchor SelectArrive(bool outAtEnd, bool closeCall)
-            => outAtEnd ? ArriveSlideOut : closeCall ? ArriveSlideSafe : ArriveRunThrough;
+        /// <summary>
+        /// 打者走者（本塁→一塁）が一塁に留まるレッグか。一塁到達はアウト/セーフ/際どさに関わらず
+        /// 常に駆け抜け（オーバーランは失格にならないルール）。長打で二塁以降へ続くレッグは
+        /// 最終レッグの終点が一塁でなくなるため対象外＝最終レッグの終点だけで判定する（Issue #417）。
+        /// </summary>
+        private static bool IsBatterArrivingAtFirst(PlaybackRunner r)
+        {
+            if (r?.Label != "打" || r.Segs == null || r.Segs.Count == 0) return false;
+            var to = r.Segs[r.Segs.Count - 1].To;
+            var dx = (float)(to.X - FieldDiagramGeometry.First.X);
+            var dz = (float)(to.Y - FieldDiagramGeometry.First.Y);
+            return dx * dx + dz * dz < 4f; // 2m以内＝丸め誤差を吸収しつつ二塁・三塁とは混同しない
+        }
+
+        /// <summary>
+        /// 到達の演技を選ぶ**純関数**（乱数を引かない）。アウトかどうかは演技を変えない＝
+        /// アウトは判定オーバーレイ（Issue #328）で読ませる（Issue #417）。
+        /// </summary>
+        private static RunnerArriveAnchor SelectArrive(bool firstBaseArrival, bool closeCall)
+            => !firstBaseArrival && closeCall ? ArriveSlideSafe : ArriveRunThrough;
 
         /// <summary>走者1人を時刻 t へ進める（守備の <see cref="StepFielderMotion"/> と同じ作り）。</summary>
         private void StepRunnerMotion(int idx, float t, float dt)
@@ -1419,10 +1440,10 @@ namespace KokoSim.Unity.Match
 
             // 到達の予定。**絶対時刻で判定する**（途中の時刻から再生しても同じ絵）
             float t1;
-            bool outAtEnd, closeCall;
-            if (!st.ArriveFired && RunnerFinal(r, out t1, out outAtEnd, out closeCall))
+            bool closeCall;
+            if (!st.ArriveFired && RunnerFinal(r, out t1, out _, out closeCall))
             {
-                var an = SelectArrive(outAtEnd, closeCall);
+                var an = SelectArrive(IsBatterArrivingAtFirst(r), closeCall);
                 float tStart = t1 - an.Touch;
                 if (t >= tStart)
                 {
@@ -1578,7 +1599,7 @@ namespace KokoSim.Unity.Match
                     float t1;
                     bool o, c;
                     if (!RunnerFinal(r, out t1, out o, out c)) { sb.AppendLine(r.Label + "\t(移動なし)"); continue; }
-                    var an = SelectArrive(o, c);
+                    var an = SelectArrive(IsBatterArrivingAtFirst(r), c);
                     sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                         "{0}\t{1:F2}\t{2}\t{3}\t{4}", r.Label, t1,
                         o ? "アウト" : c ? "際どいセーフ" : "セーフ",
