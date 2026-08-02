@@ -195,6 +195,13 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
     unlock "$REPO_LOCK"; return
   fi
 
+  # rebase 前に未コミットの変更を捨てる（issue #416）。セッションは規約どおり生成物
+  # （DLL / StreamingAssets 複製）を未コミットで残すが、dirty tree のままだと rebase が
+  # 「unstaged changes」で拒否され、下の分岐が本物のコンフリクトと誤判定して PR を
+  # クローズしてしまう（2026-08-03 の夜間ランで #396/#397 が誤クローズされた実害）。
+  # セッションの成果は push 済みコミットが全てなので、ここで捨ててよい。
+  git -C "$wt" reset --hard -q HEAD >/dev/null 2>&1 || true
+
   # 最新 main の上へ rebase（cut 後に他 PR が landed していても巻き戻しを混ぜない）
   if ! git -C "$wt" rebase refs/remotes/origin/main >/dev/null 2>&1; then
     git -C "$wt" rebase --abort >/dev/null 2>&1 || true
@@ -205,10 +212,11 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
   fi
 
   # 生成物（DLL / StreamingAssets 複製）は PR に含めない。main 版へ戻してコミットに残さない。
-  git -C "$wt" checkout refs/remotes/origin/main -- \
-    Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml >/dev/null 2>&1 || true
-  if ! git -C "$wt" diff --quiet -- Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml 2>/dev/null; then
-    git -C "$wt" add Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml >/dev/null 2>&1 || true
+  # team-colors.yaml も sync-engine-dll.sh が複製する生成物（school-names と同型。issue #416）。
+  local gen_files="Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml Assets/StreamingAssets/KokoSim/team-colors.yaml"
+  git -C "$wt" checkout refs/remotes/origin/main -- $gen_files >/dev/null 2>&1 || true
+  if ! git -C "$wt" diff --quiet -- $gen_files 2>/dev/null; then
+    git -C "$wt" add $gen_files >/dev/null 2>&1 || true
     git -C "$wt" commit -q -m "chore: drop generated DLL from PR（マージ後に自動同期する）" >/dev/null 2>&1 || true
   fi
 
@@ -236,7 +244,7 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
   local ci_paths
   ci_paths="$(git -C "$wt" diff --name-only 'refs/remotes/origin/main...HEAD' 2>/dev/null | grep -E '^(engine/|data/|global\.json$)' || true)"
   if [ -n "$ci_paths" ]; then
-    if ! ( cd "$wt" && "$DOTNET" test engine/ --filter "Category!=Heavy" ) >>"$log" 2>&1; then
+    if ! ( cd "$wt" && "$DOTNET" test engine/ -c Release --filter "Category!=Heavy" ) >>"$log" 2>&1; then
       gh issue edit "$num" --add-label agent-failed >/dev/null 2>&1 || true
       note "- 🔴 #$num $title — rebase 後の non-Heavy 再テストが赤→agent-failed（ログ: ${log}）"
       unlock "$REPO_LOCK"; return
