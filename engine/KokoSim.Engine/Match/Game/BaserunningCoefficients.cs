@@ -19,8 +19,8 @@ public sealed record BaserunningCoefficients
     /// <summary>1塁走者あり・&lt;2アウトの凡打で併殺になる基準確率（走力で減少）。</summary>
     public double DoublePlayProb { get; init; } = 0.13;
     /// <summary>1塁走者あり・&lt;2アウトの凡打でDP不成立時に野選（FC）となる基準確率
-    /// （打者走力で上昇。design-14 P1-1）。既定0＝機能オフ、乱数消費順・結果とも従来と完全一致。</summary>
-    public double FieldersChoiceProb { get; init; } = 0.0;
+    /// （打者走力で上昇。design-14 P1-1）。issue #402で 0.0→0.06 に正値化＝実ゲームで野選が発火（YAML校正値と一致）。</summary>
+    public double FieldersChoiceProb { get; init; } = 0.06;
     /// <summary>失策出塁（ReachedOnError）時、全走者＋打者に追加1進塁が発生する基準確率（design-14 P1-6）。
     /// issue #169で 0.0→0.20 に正値化＝実ゲームで失策連鎖が発火（YAML sim値と一致）。base のゲート下で rng は1回のまま。</summary>
     public double ErrorExtraAdvanceProb { get; init; } = 0.20;
@@ -28,8 +28,8 @@ public sealed record BaserunningCoefficients
     /// (送球者 ThrowAccuracy − 50)×この値。issue #169で 0.0→0.003 に正値化＝「送球が不正確な野手の失策ほど連鎖しやすい」（YAML sim値と一致）。</summary>
     public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.003;
     /// <summary>一塁空き or 2アウトの三振で振り逃げが成立する基準確率（design-14 P1-2）。
-    /// 既定0＝機能オフ、乱数消費順・結果とも従来と完全一致。</summary>
-    public double DropThirdStrikeReachProb { get; init; } = 0.0;
+    /// issue #402で 0.0→0.001 に正値化＝実ゲームで振り逃げが発火（YAML校正値と一致）。</summary>
+    public double DropThirdStrikeReachProb { get; init; } = 0.001;
     /// <summary>捕手Catching(-50)あたりの振り逃げ成立確率の減少幅。</summary>
     public double DropThirdStrikeCatchingSlope { get; init; } = 0.002;
 
@@ -37,13 +37,14 @@ public sealed record BaserunningCoefficients
     // 走者がいる各投球（実際にキャッチャーへ到達/通過した球のみ＝ファウル・インプレーは対象外）で、
     // バッテリーミスにより全走者が1つ進塁（三塁走者は生還）する。暴投=投手責/パスボール=捕手責と
     // 意味は分けるが、記録は当面「合算1カウント」で簡略化する（design-14の割り切り）。
-    // 既定0＝機能オフ、走者無しの打席・Foul/InPlayの投球では分岐自体に入らずrng消費ゼロ。
+    // issue #402で 0.0→YAML校正値に正値化＝実ゲームで暴投・パスボールが発火。
+    // 走者無しの打席・Foul/InPlayの投球では分岐自体に入らずrng消費ゼロ。
     /// <summary>暴投の基準確率（投手責）。</summary>
-    public double WildPitchProb { get; init; } = 0.0;
+    public double WildPitchProb { get; init; } = 0.0012;
     /// <summary>投手Control(-50)あたりの暴投確率の減少幅。</summary>
     public double WildPitchControlSlope { get; init; } = 0.0006;
     /// <summary>パスボールの基準確率（捕手責）。</summary>
-    public double PassedBallProb { get; init; } = 0.0;
+    public double PassedBallProb { get; init; } = 0.0008;
     /// <summary>捕手Catching(-50)あたりのパスボール確率の減少幅。</summary>
     public double PassedBallCatchingSlope { get; init; } = 0.0006;
 
@@ -83,11 +84,11 @@ public sealed record BaserunningCoefficients
     public double StealHomeSuccessBias { get; init; } = -0.7;
     /// <summary>一・三塁で二盗を仕掛けた際、三塁走者も同時にスタートして本塁を狙う基準確率（design-14 P1-4）。
     /// 投げた塁（二塁）だけがアウト対象という原則から、成立時の三塁走者は無条件生還。
-    /// 既定0＝機能オフ、単独二盗と乱数消費順・結果とも完全一致。</summary>
-    public double DoubleStealThirdBreakProb { get; init; } = 0.0;
+    /// issue #402で 0.0→0.4 に正値化＝実ゲームで一・三塁重盗が発火（YAML校正値と一致）。</summary>
+    public double DoubleStealThirdBreakProb { get; init; } = 0.4;
     /// <summary>牽制アウト（design-14 P1-5）の基準確率。走者の盗塁パラメータ(Steal)が高いほどリードが大きく上昇、
-    /// 投手のMental（牽制の鋭さの代理指標）が高いほど下降。既定0＝機能オフ、乱数消費順・結果とも従来と完全一致。</summary>
-    public double PickoffBaseProb { get; init; } = 0.0;
+    /// 投手のMental（牽制の鋭さの代理指標）が高いほど下降。issue #402で 0.0→0.05 に正値化＝実ゲームで牽制アウトが発火（YAML校正値と一致）。</summary>
+    public double PickoffBaseProb { get; init; } = 0.05;
     /// <summary>走者Steal(-50)あたりの牽制アウト確率の上昇幅。</summary>
     public double PickoffRunnerLeadSlope { get; init; } = 0.0015;
     /// <summary>投手Mental(-50)あたりの牽制アウト確率の減少幅。</summary>

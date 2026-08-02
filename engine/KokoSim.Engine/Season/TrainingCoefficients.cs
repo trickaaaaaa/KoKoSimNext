@@ -38,10 +38,21 @@ public sealed record TrainingCoefficients
 
     /// <summary>
     /// 施設レベル→(係数, 週練習時間) 対応表（Issue #115・設計書03 §4）。index=施設レベル。
-    /// 空（既定）なら <see cref="FacilityCoef"/> / <see cref="DefaultBudgetMinutes"/> をそのまま使い従来一致。
-    /// SeasonContext.FacilityLevel で選択し、レベル0はここでも現状値に据える。
+    /// 既定は data/coefficients.yaml training.facility_tiers と一致（Lv0-4, issue #402）。Lv0＝現状値(1.0/300)で
+    /// SeasonContext.FacilityLevel=0（既定）のとき従来と1ビット一致する。多軸施設は <see cref="FacilityCatalog"/> が担い、
+    /// この単一軸表は <c>SeasonEngine.FacilityLevel &gt; 0</c> かつ多軸未注入のときのフォールバックとして効く。
     /// </summary>
-    public IReadOnlyList<FacilityTier> FacilityTiers { get; init; } = Array.Empty<FacilityTier>();
+    public IReadOnlyList<FacilityTier> FacilityTiers { get; init; } = DefaultFacilityTiers();
+
+    /// <summary>data/coefficients.yaml training.facility_tiers と一致する既定表（Lv0-4, issue #402）。</summary>
+    private static IReadOnlyList<FacilityTier> DefaultFacilityTiers() => new FacilityTier[]
+    {
+        new() { Coef = 1.00, BudgetMinutes = 300 }, // Lv0 施設なし（現状・従来一致）
+        new() { Coef = 1.35, BudgetMinutes = 400 }, // Lv1
+        new() { Coef = 1.70, BudgetMinutes = 500 }, // Lv2
+        new() { Coef = 2.05, BudgetMinutes = 600 }, // Lv3
+        new() { Coef = 2.40, BudgetMinutes = 700 }, // Lv4 フル施設
+    };
 
     /// <summary>レベルアップ必要exp = LevelUpBase × LevelUpGrowth^v（設計書02: 100 × 1.05^v）。</summary>
     public double LevelUpBase { get; init; } = 100.0;
@@ -56,9 +67,9 @@ public sealed record TrainingCoefficients
     /// <summary>
     /// 守備位置適性の必要exp倍率（&lt;1.0で速く伸びる, 守備適性 未決1・2026-07-22）。
     /// 能力レベルの必要exp（LevelUpBase×LevelUpGrowth^v）にこれを乗じて適性専用に緩める。
-    /// 既定1.0＝後方互換（従来は能力と同曲線を共用していた）。
+    /// 既定は data/coefficients.yaml training.aptitude_required_exp_factor と一致（issue #402）。
     /// </summary>
-    public double AptitudeRequiredExpFactor { get; init; } = 1.0;
+    public double AptitudeRequiredExpFactor { get; init; } = 0.6;
 
     /// <summary>合宿の経験値倍率（設計書04 §4: 夏×2.0 / 冬×2.5）。</summary>
     public double SummerCampMult { get; init; } = 2.0;

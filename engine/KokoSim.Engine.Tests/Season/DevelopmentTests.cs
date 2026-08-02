@@ -264,7 +264,7 @@ public sealed class DevelopmentTests
         // 緩め係数（必要exp×0.6）の方が同じ週数で適性が高くなる。
         Assert.True(eased.Aptitude(FieldPosition.Shortstop) > baseline.Aptitude(FieldPosition.Shortstop),
             $"eased={eased.Aptitude(FieldPosition.Shortstop)} vs baseline={baseline.Aptitude(FieldPosition.Shortstop)}");
-        // 既定係数1.0は従来挙動（能力と同曲線を共用）を保つ回帰。
-        Assert.Equal(1.0, new TrainingCoefficients().AptitudeRequiredExpFactor);
+        // 既定は issue #402 で data/coefficients.yaml training.aptitude_required_exp_factor（0.6）へ揃えた。
+        Assert.Equal(0.6, new TrainingCoefficients().AptitudeRequiredExpFactor);
     }
 }

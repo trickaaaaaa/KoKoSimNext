@@ -635,7 +635,9 @@ public sealed class TimelineTests
                 if (!hasRoll || forceLeg is null) continue;
 
                 var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
-                Assert.Equal(2, throws.Count); // 併殺は 6-4-3 の2本送球に差し替わる
+                // 野選（FC, issue #402 で既定有効化）も一塁始点の封殺レッグを持つが送球は1本。
+                // 併殺（6-4-3の2本送球）だけを拾うため、2本でない候補は次を探す。
+                if (throws.Count != 2) continue;
                 Assert.True(Near(throws[0].To, second), "1本目が二塁到達でない");
                 Assert.True(Near(throws[1].From, second) && Near(throws[1].To, first), "2本目が二塁→一塁でない");
                 Assert.True(throws[0].T1 < throws[1].T1, "二塁より先に一塁へ到達している");

@@ -128,14 +128,15 @@ public sealed record RosterCoefficients
     /// 足(Speed) の才能上限gap圧縮係数（Issue #114）。素質固定能力は「伸びる速さ」だけでなく「天井」も近い
     /// ＝両方きつく。gap（mean/sd）にこれを乗じる。既定1.0で従来と一致（能力別 gap 係数の第一号）。
     /// 逸材（IsProdigy）はこの圧縮を免除し規格外の俊足になりうる（<see cref="CapGapFactor"/> で分岐）。
+    /// 既定は data/coefficients.yaml roster.speed_cap_gap_factor と一致（issue #402）。
     /// </summary>
-    public double SpeedCapGapFactor { get; init; } = 1.0;
+    public double SpeedCapGapFactor { get; init; } = 0.4;
 
     /// <summary>
     /// 逸材（隠しフラグ, Issue #114 / Q20）の生成時出現率。素質固定能力の cap 圧縮・trainability 減衰を免除する。
-    /// 既定0.0＝逸材なし（従来と完全一致）。出現率は data 駆動。
+    /// 既定は data/coefficients.yaml roster.prodigy_prob と一致（issue #402で 0.0→0.02＝実ゲームでも逸材が出現）。
     /// </summary>
-    public double ProdigyProb { get; init; } = 0.0;
+    public double ProdigyProb { get; init; } = 0.02;
 
     /// <summary>能力別の才能上限gap圧縮係数（Issue #114）。素質固定能力（足）のみ&lt;1.0、他は1.0。</summary>
     public double CapGapFactor(AbilityKind k) => k == AbilityKind.Speed ? SpeedCapGapFactor : 1.0;
@@ -313,8 +314,8 @@ public static class ProspectGenerator
         leadership = (int)MathUtil.Clamp(leadership + profile.LeadershipMeanOffset, 1, 99);
 
         // 逸材（隠しフラグ, Issue #114 / Q20）: 専用Forkストリームで低確率ロール＝既存の能力ロール列を1ビットも
-        // 乱さない（不変条件#2）。ProdigyProb=0（既定）なら常に false。SetWithCap（足のcap圧縮免除）と
-        // ApplyExp（trainability減衰免除）が p.IsProdigy を参照する。
+        // 乱さない（不変条件#2）。ProdigyProb=0 なら常に false（既定は 0.02＝YAML と一致, issue #402）。
+        // SetWithCap（足のcap圧縮免除）と ApplyExp（trainability減衰免除）が p.IsProdigy を参照する。
         var isProdigy = rng.Fork(ProdigyStreamId(year, index)).NextDouble() < c.ProdigyProb;
 
         var p = new DevelopingPlayer

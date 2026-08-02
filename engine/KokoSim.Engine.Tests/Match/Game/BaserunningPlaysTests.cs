@@ -183,29 +183,31 @@ public sealed class BaserunningPlaysTests
     }
 
     [Fact]
-    public void FieldersChoice_Disabled_ByDefault_SkipsRngDrawEntirely()
+    public void FieldersChoice_Disabled_SkipsRngDrawEntirely()
     {
         // DP判定を確実に外し(1発目0.99)、続く「1塁→2塁の進塁打」判定にも1個消費させる(2発目)。
-        // FC分岐が既定オフのまま割り込んで3個目を消費しないことを確認する
-        // （MathUtil.Chance は確率0でも rng.NextDouble() を消費するため、
-        //  else-ifのガード漏れがあると即座に3回目の消費が発生し検出できる）。
+        // FC分岐がオフ(prob=0)のまま割り込んで3個目を消費しないことを確認する（既定は issue #402 で
+        // 正値化されたため、ここは明示的に 0 を指定する。MathUtil.Chance は確率0でも rng.NextDouble() を
+        // 消費するため、else-ifのガード漏れがあると即座に3回目の消費が発生し検出できる）。
+        var off = C with { FieldersChoiceProb = 0 };
         var bases = new BaseState { First = new Player { Speed = 50 } };
         var counting = new CountingRandom(new SequenceRandom(0.99, 0.99));
         var (_, _, _, batterSafeOnFc, _, _) = BaserunningModel.ApplyDetailed(
-            bases, PlateAppearanceResult.InPlayOut, new Player { Speed = 50 }, 0, C, counting);
+            bases, PlateAppearanceResult.InPlayOut, new Player { Speed = 50 }, 0, off, counting);
         Assert.False(batterSafeOnFc);
         Assert.Equal(2, counting.DoubleCalls); // DP判定1回＋1塁→2塁の進塁打判定1回。FCの3回目は無い
     }
 
     [Fact]
-    public void FieldersChoice_Disabled_ByDefault_BatterNeverSafe()
+    public void FieldersChoice_Disabled_BatterNeverSafe()
     {
+        var off = C with { FieldersChoiceProb = 0 }; // 既定は issue #402 で正値化＝明示的に 0 を指定
         for (ulong seed = 0; seed < 500; seed++)
         {
-            var batter = new Player { Speed = 90 }; // 走力を振っても既定オフでは影響しないことを確認
+            var batter = new Player { Speed = 90 }; // 走力を振っても無効時は影響しないことを確認
             var bases = new BaseState { First = new Player { Speed = 90 } };
             var (_, _, _, batterSafeOnFc, _, _) = BaserunningModel.ApplyDetailed(
-                bases, PlateAppearanceResult.InPlayOut, batter, 0, C, new Xoshiro256Random(seed));
+                bases, PlateAppearanceResult.InPlayOut, batter, 0, off, new Xoshiro256Random(seed));
             Assert.False(batterSafeOnFc);
             Assert.NotSame(batter, bases.First);
         }
@@ -436,10 +438,10 @@ public sealed class BaserunningPlaysTests
     }
 
     [Fact]
-    public void DropThirdStrike_Disabled_ByDefault_DoesNotChangeGame()
+    public void DropThirdStrike_Disabled_DoesNotChangeGame()
     {
-        var off = new GameContext();
-        Assert.Equal(0.0, off.Baserunning.DropThirdStrikeReachProb);
+        // 既定は issue #402 で正値化されたため、無効ゲートは明示的に 0 を指定して検証する。
+        var off = new GameContext { Baserunning = C with { DropThirdStrikeReachProb = 0.0 } };
         var a = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(42));
         var b = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(42));
         Assert.Equal(a.AwayRuns, b.AwayRuns); // 決定論維持
@@ -464,14 +466,15 @@ public sealed class BaserunningPlaysTests
     // --- 牽制アウト／離塁刺殺（design-14 P1-5）: 既定オフでは rng 消費ゼロ・常に不発 ---
 
     [Fact]
-    public void Pickoff_Disabled_ByDefault_NeverFires()
+    public void Pickoff_Disabled_NeverFires()
     {
-        Assert.Equal(0.0, C.PickoffBaseProb);
+        // 既定は issue #402 で正値化されたため、無効ゲートは明示的に 0 を指定して検証する。
+        var off = C with { PickoffBaseProb = 0.0 };
         for (ulong seed = 0; seed < 300; seed++)
         {
             var runner = new Player { Steal = 95 };
             var pitcher = new Player { Mental = 5 };
-            Assert.False(PickoffResolver.Resolve(runner, pitcher, C, new Xoshiro256Random(seed)));
+            Assert.False(PickoffResolver.Resolve(runner, pitcher, off, new Xoshiro256Random(seed)));
         }
     }
 
@@ -498,7 +501,7 @@ public sealed class BaserunningPlaysTests
     public void Pickoff_Enabled_ChangesOutcomesForStealHeavyTeams()
     {
         Team Brainy(string name) => FastTeam(name) with { Tactics = new StandardTacticsBrain(new TacticsCoefficients()) };
-        var off = new GameContext();
+        var off = new GameContext { Baserunning = C with { PickoffBaseProb = 0.0 } }; // 既定は #402 で正値化＝明示的に0で対比
         var on = new GameContext { Baserunning = C with { PickoffBaseProb = 0.08 } };
         var differs = false;
         for (ulong s = 0; s < 40 && !differs; s++)
@@ -513,9 +516,11 @@ public sealed class BaserunningPlaysTests
     // --- 一・三塁の重盗（design-14 P1-4）: 既定オフでは単独二盗と完全一致 ---
 
     [Fact]
-    public void DoubleStealThirdBreak_Disabled_ByDefault()
+    public void DoubleStealThirdBreak_EnabledByDefault_MatchesCalibratedYaml()
     {
-        Assert.Equal(0.0, new GameContext().Baserunning.DoubleStealThirdBreakProb);
+        // issue #402: 実ゲーム既定を data/coefficients.yaml の校正値へ揃えた（以前は 0＝機能オフ）。
+        // 全係数の一致は CoefficientsDefaultsConsistencyTests が保証する。ここは重盗が既定で有効なことの回帰ピン。
+        Assert.Equal(0.4, new GameContext().Baserunning.DoubleStealThirdBreakProb);
     }
 
     [Fact]
@@ -635,13 +640,13 @@ public sealed class BaserunningPlaysTests
     }
 
     [Fact]
-    public void WildPitch_Disabled_ByDefault_NeverFires()
+    public void WildPitch_Disabled_NeverFires()
     {
-        Assert.Equal(0.0, C.WildPitchProb);
-        Assert.Equal(0.0, C.PassedBallProb);
+        // 既定は issue #402 で正値化されたため、無効ゲートは明示的に 0 を指定して検証する。
+        var off = new GameContext { Baserunning = C with { WildPitchProb = 0.0, PassedBallProb = 0.0 } };
         for (ulong seed = 0; seed < 30; seed++)
         {
-            var r = GameEngine.Play(FastTeam("A"), FastTeam("H"), new GameContext(), new Xoshiro256Random(seed));
+            var r = GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(seed));
             Assert.Equal(0, r.WildPitchCount);
         }
     }

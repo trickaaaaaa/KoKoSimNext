@@ -25,17 +25,17 @@ public sealed record BattingCoefficients
     /// 誘発変化合成量[m]（設計書15 Phase E-3）あたりのスイング確率補正。単一係数を符号だけ反転して対称に効く
     /// （ゾーン外+＝釣られる、ゾーン内−＝見誤って見送る）。「見え方と実軌道のズレ」の代理指標。
     /// </summary>
-    public double ChaseBreakSlope { get; init; } = 0.15;
+    public double ChaseBreakSlope { get; init; } = 0.02;
     /// <summary>
     /// ゾーン外距離[m]（設計書15 Phase E-3, <see cref="KokoSim.Engine.Match.Field.StrikeZone.DistanceOutsideM"/>）
     /// あたりのスイング確率減衰。ChaseBreakSlope の一定加算が「大外れでも変化量だけで釣れる」不自然を作らないための
     /// ガード（ゾーン内は距離=0で常に無効）。
     /// </summary>
-    public double ChaseDistanceSlope { get; init; } = 0.6;
+    public double ChaseDistanceSlope { get; init; } = 0.15;
 
     // --- コンタクト（空振り/ファウル/フェア） ---
     /// <summary>空振り率のロジスティック基準（球威=打者互角時の空振り対数オッズ）。</summary>
-    public double WhiffIntercept { get; init; } = -1.68;
+    public double WhiffIntercept { get; init; } = -2.40;
     /// <summary>ミートが空振りを下げる強さ。</summary>
     public double WhiffContactSlope { get; init; } = 0.030;
     /// <summary>ゾーン外スイング時の空振り加算（対数オッズ）。</summary>

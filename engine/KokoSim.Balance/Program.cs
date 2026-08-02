@@ -352,11 +352,15 @@ internal static class CommandLine
         string? coefficientsPath = null;
         string? stadiumId = null;
         var histogram = false;
+        var byPitcherRank = false;
 
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
+                case "--by-pitcher-rank":
+                    byPitcherRank = true;
+                    break;
                 case "--histogram":
                     histogram = true;
                     break;
@@ -381,8 +385,15 @@ internal static class CommandLine
             }
         }
 
-        var stats = AtBatSimulation.Run(atBats, seed, coefficientsPath, ResolveStadium(stadiumId), histogram);
+        var stadium = ResolveStadium(stadiumId);
+        var stats = AtBatSimulation.Run(atBats, seed, coefficientsPath, stadium, histogram);
         var text = AtBatSimulation.Report(stats, seed);
+        if (byPitcherRank)
+        {
+            // issue #402 検証: 投手ランク別の三振率（E・F投手の奪三振是正の確認）。
+            var byRank = AtBatSimulation.RunByPitcherRank(atBats, seed, coefficientsPath, stadium);
+            text += "\n" + AtBatSimulation.ReportByPitcherRank(byRank, seed);
+        }
         Console.Write(text);
 
         if (reportPath is not null)

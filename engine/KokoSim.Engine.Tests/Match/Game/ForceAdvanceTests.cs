@@ -36,7 +36,9 @@ public sealed class ForceAdvanceTests
     [Fact]
     public void Grounder_ForcedFirstRunner_NeverStrandedAtFirst()
     {
-        // 1死1塁の内野ゴロ: 一塁走者はフォース＝併殺で死ぬか二塁へ進むかの二択。一塁残留は存在しない。
+        // 1死1塁の内野ゴロ: 一塁走者はフォース＝併殺で死ぬか二塁へ進むかの二択。元の一塁走者が一塁に残る結末は無い。
+        // （野選が既定有効になった issue #402 以降、打者走者が一塁へ生き残ることはある＝一塁が空とは限らないが、
+        //  それは打者であって元の一塁走者 r1 ではない。ここで守るべき不変条件は「r1 が一塁に残らない」。）
         var rng = new Xoshiro256Random(11);
         var advanced = 0;
         for (var i = 0; i < 2000; i++)
@@ -45,7 +47,7 @@ public sealed class ForceAdvanceTests
             var bases = new BaseState { First = r1 };
             BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.InPlayOut, new Player(), 1, C, rng, collectMoves: false, Grounder());
-            Assert.Null(bases.First); // 一塁に残る結末は無い
+            Assert.False(ReferenceEquals(bases.First, r1)); // 元の一塁走者が一塁に残る結末は無い
             if (ReferenceEquals(bases.Second, r1)) advanced++;
         }
         Assert.True(advanced > 0, "二塁への確定進塁が一度も観測されない");
