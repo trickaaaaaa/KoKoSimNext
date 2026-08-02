@@ -15,6 +15,8 @@ namespace KokoSim.Engine.Match.Timeline.Playback;
 /// 実1球記録だけが非null。コースは <see cref="PitchRecord.LocationX"/> の写しで、判定に使われた実着弾位置
 /// そのもの（合成列に架空のコースを作らせるのは禁止＝<see cref="PitchSequenceSynthesizer"/> のコメント参照）。
 /// <see cref="Trajectory"/> は観測専用のフル弾道で、<c>CaptureTimeline</c> の試合だけ非null。
+/// <see cref="AimX"/> / <see cref="AimY"/>（Issue #396）は <see cref="PitchRecord.AimX"/> / <see cref="PitchRecord.AimY"/>
+/// の写し（狙い位置）。合成列・実記録がない球は同様に null＝架空の狙いを作らせない。
 /// </summary>
 public readonly record struct PitchToken(
     PitchKind Kind,
@@ -25,6 +27,8 @@ public readonly record struct PitchToken(
     PlaybackPlay? FoulFlight = null,
     double? LocationX = null,
     double? LocationY = null,
+    double? AimX = null,
+    double? AimY = null,
     Pitching.PitchTrajectory? Trajectory = null);
 
 /// <summary>1打席の投球列（中継風カウントの合成データ）。</summary>

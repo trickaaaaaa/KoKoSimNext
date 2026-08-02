@@ -19,17 +19,24 @@ namespace KokoSim.Unity.Match
     /// <summary>
     /// 1球の飛翔（issue #332）。<see cref="PitchToken"/> の観測データ（実着弾位置＋観測弾道）の写しで、
     /// 実データが無い球（合成列・弾道を積分しない試合）はそもそもこの構造体を作らない＝null を渡す。
+    /// <see cref="AimX"/>/<see cref="AimY"/>（issue #396）は狙い位置。捕手は投球前からこの狙いを知っているため、
+    /// 投球前の構え（クリップ選択・立ち位置）はこちらを使ってよい。<see cref="PlateX"/>/<see cref="PlateY"/>
+    /// （コントロール散布込みの実着弾位置）はリリース後（残差の体寄せ）にしか使わない。
     /// </summary>
     public readonly struct DuelPitchFlight
     {
         public readonly float PlateX, PlateY;                            // 本塁面の実着弾位置[m]（+x=一塁側）
+        public readonly float AimX, AimY;                                 // 狙い位置[m]（投球前に判明済み）
         public readonly float FlightSeconds;                             // 飛翔時間[s]
         public readonly float InducedVerticalBreakM, InducedHorizontalBreakM;   // 誘発変化[m]
 
-        public DuelPitchFlight(float plateX, float plateY, float flightSeconds, float ivb, float ihb)
+        public DuelPitchFlight(float plateX, float plateY, float aimX, float aimY,
+            float flightSeconds, float ivb, float ihb)
         {
             PlateX = plateX;
             PlateY = plateY;
+            AimX = aimX;
+            AimY = aimY;
             FlightSeconds = flightSeconds;
             InducedVerticalBreakM = ivb;
             InducedHorizontalBreakM = ihb;
@@ -1440,6 +1447,10 @@ namespace KokoSim.Unity.Match
                 // 振り切って待機へ戻る通常経路は FinishOneShot が戻すのでここは来ない
                 _batter.Speed = 1f;
             }
+            // 前の打席最後の投球の狙い寄り・残差の体寄せ（issue #396 ①②）を引きずらない＝
+            // 較正の固定位置へ戻してから待機クリップへ（順序が逆だと RewindActor が古い BasePos へ戻す）
+            SetActorXZ(_catcher, CatcherBaseX, _cal.CatcherZ);
+            _catcherResidual = Vector2.zero;
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
             _umpireCallCountdown = -1f;
             _catchCountdown = -1f;
@@ -1683,6 +1694,10 @@ namespace KokoSim.Unity.Match
             GroundFix(_pitcher);
             // 捕球するクリップを先に決める（球をどこまで運ぶか＝捕球面がクリップごとに違う）
             int catchIndex = SelectCatchAnchor(outcome, pitch);
+            // 捕手の構えを狙い位置へ（issue #396 ①）。狙いは投球前から捕手が知っている情報なので
+            // ここ（リリース＝ボールが手を離れる直前）で使ってよい。実着弾位置との差（残差＝コントロール
+            // 誤差そのもの）は FixCatcherPose がリリース後の体寄せとして別に吸収する（②）。
+            StanceCatcherToAim(pitch);
             bool meetsBat = outcome == DuelPitchOutcome.InPlayContact
                 || outcome == DuelPitchOutcome.FoulContact;
             float flight = LaunchBall(pitch, catchIndex, meetsBat);
@@ -1867,6 +1882,13 @@ namespace KokoSim.Unity.Match
         /// コースに一番近い捕球クリップの添字（無ければ-1＝捕手は待機のまま）。
         /// 距離は本塁面の左右・高さで測る（奥行きの差は延長15ms＝2cm未満なので効かない）。
         /// 乱数を引かない純粋な選択＝同じコースなら常に同じクリップ（決定論）。
+        ///
+        /// 基準は<b>狙い位置</b>（<see cref="DuelPitchFlight.AimX"/>/<see cref="DuelPitchFlight.AimY"/>。
+        /// issue #396）＝捕手は投球前からその狙いを知っているので、構え（クリップ選択）に使ってよい。
+        /// 実着弾位置は使わない（投球前に実着弾へ寄せると「捕手が未来を知っている」ことになり、
+        /// リリース後の残差の体寄せ（<see cref="FixCatcherPose"/>）の効果を自分で潰す）。
+        /// 基準のx（<see cref="CatcherBaseX"/>）も較正の固定値を使う——<see cref="StanceCatcherToAim"/> で
+        /// 立ち位置を狙いへ寄せた後の位置を読むと、寄せた分だけ狙いの符号が相殺されクリップが動かなくなる。
         /// </summary>
         private int SelectCatchAnchor(DuelPitchOutcome outcome, DuelPitchFlight? pitch)
         {
@@ -1875,9 +1897,9 @@ namespace KokoSim.Unity.Match
                 || outcome == DuelPitchOutcome.SwingMiss;
             if (!catcherCatches || _catcher == null || _catchClips == null) return -1;
 
-            float px = pitch?.PlateX ?? 0f;
-            float py = pitch?.PlateY ?? DefaultPlateY;
-            float catcherX = _catcher.Go.transform.localPosition.x;
+            float px = pitch?.AimX ?? 0f;
+            float py = pitch?.AimY ?? DefaultPlateY;
+            float catcherX = CatcherBaseX;
             int best = -1;
             float bestCost = float.MaxValue;
             for (int i = 0; i < CatchAnchors.Length; i++)
@@ -1891,6 +1913,28 @@ namespace KokoSim.Unity.Match
             }
             return best;
         }
+
+        /// <summary>
+        /// 横の立ち位置を狙いへ寄せる（issue #396 ①）。<see cref="SelectCatchAnchor"/> がクリップ（高さ＋
+        /// 大きな左右のずれ）を狙いへ合わせるのに対し、こちらは捕手の体そのものの左右の寄りを狙いへ足す
+        /// （実際の捕手も的をつけるとき軽く体ごと寄る）。常に較正の固定値（<see cref="CatcherBaseX"/>）を
+        /// 基準にした絶対位置へ置く＝前の球の寄りを引きずらない。
+        ///
+        /// あわせてこの球の残差（実着弾−狙い＝コントロール誤差そのもの）を控えておく。<see cref="FixCatcherPose"/>
+        /// がリリース後だけこれを体の寄せとして反映する（②）。狙いの無い球（合成列）は寄せも残差もゼロ
+        /// ＝従来どおり中央固定のまま。
+        /// </summary>
+        private void StanceCatcherToAim(DuelPitchFlight? pitch)
+        {
+            float aimX = pitch?.AimX ?? 0f;
+            _catcherResidual = pitch.HasValue
+                ? new Vector2(pitch.Value.PlateX - pitch.Value.AimX, pitch.Value.PlateY - pitch.Value.AimY)
+                : Vector2.zero;
+            SetActorXZ(_catcher, CatcherBaseX + aimX, _cal.CatcherZ);
+        }
+
+        /// <summary>この球の残差（実着弾−狙い）[m]。x=左右, y=高さ。<see cref="StanceCatcherToAim"/> が控える。</summary>
+        private Vector2 _catcherResidual;
 
         /// <summary>
         /// ボールを投球する手へ貼り付ける（振りかぶり中は手の中にある）。<see cref="OnPitchWindup"/> から呼ぶ。
@@ -2371,11 +2415,52 @@ namespace KokoSim.Unity.Match
         {
             if (_catcher == null || _catcher.Animator == null) return;
             if (_catchIndex < 0 || _ballT < 0f) return;
+            ApplyCatcherResidualShift();
             float w = DuelCatcherPose.Weight(_ballT, _ballArrival);
             if (w <= 0f) return;
             DuelCatcherPose.ReachMitt(_catcher.Animator,
                 _root.transform.TransformPoint(_ballCatchPoint), w);
         }
+
+        /// <summary>
+        /// リリース後、残差（実着弾−狙い＝コントロール誤差そのもの）ぶん捕手の体を寄せる（issue #396 ②）。
+        /// 腕＋胴のIK（<see cref="DuelCatcherPose.ReachMitt"/>。しゃがんだ肩から腕0.55m＋胴14°）だけでは
+        /// ゾーンの外へ届かないため、体そのものを先に寄せておく＝実物の横っ跳び・伸び上がり。
+        ///
+        /// 駆動は<b>球の時計</b>（<see cref="_ballT"/>。リリースからの経過秒＝フルレート・単調）で、
+        /// クリップ内時刻では駆動しない（design-18 §4.5-③の掟。捕球クリップの差し替えコマに
+        /// 引っかかると重みが飛ぶ）。毎回<see cref="Actor.BasePos"/>からの絶対オフセットとして焼き直す
+        /// ＝クリップ差し替え直後（<see cref="RewindActor"/>が位置をBasePosへ戻した直後）に呼ばれても
+        /// 正しく乗る。捕球クリップは「立ち位置＋固定のミット相対位置」で実測してある
+        /// （<see cref="CatchAnchors"/>）＝ルートモーションはそもそも無視できる前提のクリップなので、
+        /// 絶対オフセットで焼いても収録の動きを消さない。
+        /// </summary>
+        private void ApplyCatcherResidualShift()
+        {
+            float w = CatcherShiftWeight(_ballT, _ballArrival);
+            var offset = new Vector3(_catcherResidual.x, _catcherResidual.y, 0f) * w;
+            _catcher.Go.transform.localPosition = _catcher.BasePos + offset;
+        }
+
+        /// <summary>
+        /// 残差の体寄せの台形重み。<paramref name="ballTime"/> はリリースからの経過秒（0起点）、
+        /// <paramref name="settleAt"/> は球がミット面へ届く時刻（<see cref="_ballArrival"/>）。
+        /// リリースから<see cref="CatcherShiftLeadSeconds"/>かけて寄り切り、球が着くまで保持し、
+        /// 着いてから<see cref="CatcherShiftReturnSeconds"/>かけて狙いの構え（残差ゼロ）へ戻る。
+        /// </summary>
+        private static float CatcherShiftWeight(float ballTime, float settleAt)
+        {
+            if (ballTime <= 0f) return 0f;
+            if (ballTime < CatcherShiftLeadSeconds) return Mathf.InverseLerp(0f, CatcherShiftLeadSeconds, ballTime);
+            if (ballTime <= settleAt) return 1f;
+            return 1f - Mathf.InverseLerp(settleAt, settleAt + CatcherShiftReturnSeconds, ballTime);
+        }
+
+        /// <summary>残差の体寄せがフルに乗るまでの時間[s]（issue #396 ②「リリース後0.2〜0.3秒かけて」）。</summary>
+        private const float CatcherShiftLeadSeconds = 0.25f;
+
+        /// <summary>球が着いてから狙いの構え（基準位置）へ戻るまでの時間[s]。</summary>
+        private const float CatcherShiftReturnSeconds = 0.20f;
 
         /// <summary>
         /// RTをカラム実寸由来のサイズへ張り替える（DuelViewElementから）。同寸なら何もしない。
@@ -4538,6 +4623,12 @@ namespace KokoSim.Unity.Match
 
         /// <summary>現在の打者の側の符号（右打者=+1／左打者=-1）。捕手・球審の x オフセットに掛ける。</summary>
         private float BatterSideSign => _batterLeft ? -1f : 1f;
+
+        /// <summary>
+        /// 捕手の較正上の基準x（issue #396 前の唯一の値）。<see cref="StanceCatcherToAim"/> が
+        /// 投球ごとに立ち位置を動かすため、以後は「今どこにいるか」ではなく常にこの固定値を基準にする。
+        /// </summary>
+        private float CatcherBaseX => _cal.CatcherX * BatterSideSign;
 
         /// <summary>
         /// 鏡映親ノードを1枚挟む（生成時に両対象へ常設。恒等スケールの間は描画へ一切影響しない＝
