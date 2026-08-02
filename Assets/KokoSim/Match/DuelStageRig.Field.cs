@@ -1933,6 +1933,21 @@ namespace KokoSim.Unity.Match
         public static float FieldMarginM = 2f;
 
         /// <summary>
+        /// 守備ビューの打球残像・尾の長さ[秒]（issue #398 ①）。対決ビュー向けの値
+        /// （<see cref="DuelCalibration.BattedTrailSeconds"/>＝0.28s）は「接触から俯瞰へ渡るまで
+        /// （旧・約0.55s）で消え切る」前提で詰めた長さで、いまの引きの構図（frameH 29〜65m）では
+        /// 短すぎて「点」に近い。**絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// </summary>
+        public static float FieldBattedTrailSeconds = 0.45f;
+
+        /// <summary>
+        /// 守備ビューの打球残像・頭の太さ[m]（issue #398 ①）。対決ビュー向けの 0.045m は本塁付近の
+        /// 寄った構図で約10pxになるよう詰めた値で、frameH 29m 級の構図では1px未満（実質見えない）。
+        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// </summary>
+        public static float FieldBattedTrailWidthM = 0.35f;
+
+        /// <summary>
         /// 送球区間で球を追うか。2D俯瞰の既定は「始点と終点を両方収める」＝送球の距離ぶん必ず引くので、
         /// 6-3 の一塁到達や中継バックホームという**そのプレーで一番見たい瞬間が一番引いた絵になる**
         /// （実測 frameH 20m / 56m）。3Dでは中継カメラと同じく球を追う側にする。
@@ -2284,14 +2299,20 @@ namespace KokoSim.Unity.Match
             {
                 if (ball.HasValue)
                 {
+                    var p = FieldBallPoint(new Vector3((float)ball.Value.X, (float)ball.Value.H, (float)ball.Value.Y), t);
                     _ball.transform.SetParent(_root.transform, false);
-                    _ball.transform.localPosition = FieldBallPoint(
-                        new Vector3((float)ball.Value.X, (float)ball.Value.H, (float)ball.Value.Y), t);
+                    _ball.transform.localPosition = p;
                     _ball.SetActive(true);
+                    // 守備ビューの残像はここで一本化する（issue #398 ①）。対決ビュー側の打球ステッパ
+                    // （UpdateBattedBall）は _fieldPlay が立つと呼ばれなくなるので、二重に積む心配はない
+                    PushTrailPoint(p, t, FieldBattedTrailSeconds);
                 }
                 else
                 {
                     _ball.SetActive(false);
+                    // 球が消えた（捕球・失投等）後も尾は自然に消えるよう時計だけ進める。進めないと
+                    // 尾の最後の点が刈られず、次にこの残像枠を使うプレーまで宙に浮いたまま残る
+                    if (_trail.Count > 0) TrimTrail(t, FieldBattedTrailSeconds);
                 }
             }
 
