@@ -1768,7 +1768,6 @@ public static class CoefficientsLoader
         public double PitcherSecondPitchProb { get; set; } = D.PitcherSecondPitchProb;
         public double PitcherThirdPitchProb { get; set; } = D.PitcherThirdPitchProb;
         public double FielderBreakingProb { get; set; } = D.FielderBreakingProb;
-        public double BackgroundFielderExtraProb { get; set; } = D.BackgroundFielderExtraProb;
         public double PitchOffsetSd { get; set; } = D.PitchOffsetSd;
         // 守備位置適性の初期分布（設計書01 §1.1, 創発モデル）
         public double AptitudeBaseMean { get; set; } = D.AptitudeBaseMean;
@@ -1889,7 +1888,6 @@ public static class CoefficientsLoader
             PitcherSecondPitchProb = PitcherSecondPitchProb,
             PitcherThirdPitchProb = PitcherThirdPitchProb,
             FielderBreakingProb = FielderBreakingProb,
-            BackgroundFielderExtraProb = BackgroundFielderExtraProb,
             PitchOffsetSd = PitchOffsetSd,
             AptitudeBaseMean = AptitudeBaseMean,
             AptitudeBaseSd = AptitudeBaseSd,
