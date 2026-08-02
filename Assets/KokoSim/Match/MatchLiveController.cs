@@ -2619,6 +2619,9 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: いま止まっている采配窓の局面（回・表裏・カウント・塁）。無ければ null。</summary>
         public LiveAtBat CurrentAtBatForCapture => _atBat;
 
+        /// <summary>スクショ用: 現在のライブ観戦スナップショット（HUD/スタメン列の数値の元, issue #397）。</summary>
+        public MatchLiveSnapshot SnapshotForCapture() => _prog?.Snapshot();
+
         /// <summary>スクショ用: 次の打席を1つ解決してロードする（Update 非依存）。試合終了なら false。</summary>
         public bool AdvanceForCapture()
         {
