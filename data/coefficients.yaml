@@ -1025,11 +1025,10 @@ roster:
   prodigy_prob: 0.02
   # 隠し属性「投手経歴」（野手の変化球上振れの素, §1.1b）
   pitcher_background_prob: 0.06
-  # 変化球レパートリー（設計書02 §2.2）: 投手1〜3球種／野手0〜1（経歴持ちは上振れ）🟡
+  # 変化球レパートリー（設計書02 §2.2）: 投手適性の連続量(RoleWeight)で本数が決まる 🟡
   pitcher_second_pitch_prob: 0.75
   pitcher_third_pitch_prob: 0.30
   fielder_breaking_prob: 0.35
-  background_fielder_extra_prob: 0.60
   pitch_offset_sd: 8.0
   # 守備位置適性の初期分布（設計書01 §1.1, 創発モデル）: 本職は事前に決めず結果として定まる
   aptitude_base_mean: 50.0         # 守備地力の全体水準（高い個体は全ポジ器用になりうる）

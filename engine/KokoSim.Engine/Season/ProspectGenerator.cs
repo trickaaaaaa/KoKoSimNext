@@ -143,11 +143,10 @@ public sealed record RosterCoefficients
     // --- 隠し属性「投手経歴」（設計書01 §1.1b）: 野手の変化球上振れの素 ---
     public double PitcherBackgroundProb { get; init; } = 0.06;
 
-    // --- 変化球レパートリー（設計書02 §2.2）: 投手1〜3球種／野手0〜1（経歴持ちは上振れ） ---
+    // --- 変化球レパートリー（設計書02 §2.2）: 本数は投手適性の連続量(RoleWeight)で決まる ---
     public double PitcherSecondPitchProb { get; init; } = 0.75;
     public double PitcherThirdPitchProb { get; init; } = 0.30;
     public double FielderBreakingProb { get; init; } = 0.35;
-    public double BackgroundFielderExtraProb { get; init; } = 0.60;
     /// <summary>球種ランクのオフセットσ（PitchRankレベル基準の個体差）。</summary>
     public double PitchOffsetSd { get; init; } = 8.0;
 

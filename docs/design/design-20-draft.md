@@ -29,7 +29,8 @@
 ただし issue の要請「**表示能力値を直接使わず**、成績集計と隠しポテンシャルの扱いを定義」に従い、
 表示能力の丸写しを避けるため、
 
-1. 能力は**役割別の合成値**（打者/投手で異なる加重）にする。単一の表示能力を直挿ししない。
+1. 能力は**軸別の合成値**（打者/投手で異なる加重）にする。単一の表示能力を直挿ししない。
+   どちらの軸で見るかは選手の属性ではなくスカウトの見立てなので、両方で合成して高い方を採る（§2.2）。
 2. 能力合成に**隠し上限（才能キャップ `DevelopingPlayer.Cap`）を混ぜる**＝プロは「伸びしろ・天井」を見る。
 3. 実績（`Stats`集計）を対等に加重する。
 
@@ -41,7 +42,7 @@ Notability = clamp( wAbility · AbilityScore + wPerf · PerfScore , 0 , 100 )
 
 - 既定 `wAbility = wPerf = 0.5`（`data/draft.yaml` で調整）。
 
-**AbilityScore（0〜100）** ＝ 役割別合成（現在値と隠し上限のブレンド）:
+**AbilityScore（0〜100）** ＝ 投手評価と打者評価の**高い方**（現在値と隠し上限のブレンド）:
 
 ```
 cur = Σ wk · Level(k)            # 役割別の能力加重
@@ -52,7 +53,10 @@ AbilityScore = (1 - ceilW) · cur + ceilW · cap     # 既定 ceilW = 0.35
 - 打者加重（合計1.0）: Contact .25 / Power .25 / Speed .15 / Fielding .15 / ArmStrength .10 / Catching .10
 - 投手加重（合計1.0）: Velocity .40 / Control .25 / Stamina .15 / PitchRank .20
   （＝用語集 PitcherComposite と同一。球速単独で決まらない）
-- 役割は `DevelopingPlayer.IsPitcher` で分岐。
+- **両方の加重で合成し、高い方を採る**（2026-08-02 改訂・issue #366 / #378）。
+  旧仕様は `DevelopingPlayer.IsPitcher` で加重表を選んでいたが、**役割はスカウトが見立てるもので
+  選手が持つ属性ではない**（設計書01 §1.1a）。二刀流は投打の良い方で評価される。
+  どちらの軸で付いた評価かは `DraftEvaluation.EvaluatedAsPitcher` に記録する（表示用）
 
 **PerfScore（0〜100）** ＝ 実績（`PlayerStatStore.Official.Get(Id)` の累積）。サンプル数で中立50へ収縮:
 
@@ -66,6 +70,10 @@ PerfScore = clamp( 50·(1 - shrink) + raw·shrink , 0 , 100 )
 - `opsBase=0.700 opsScale=45 hrScale=6`（打者）／`eraBase=3.50 eraScale=6 k9Base=7 k9Scale=2`（投手）。
 - 出場がない選手（`Stats` 未登録）は PerfScore=50（中立）＝能力だけで評価される。
 - サンプル収縮で「1打席の固め打ち」が過大評価されない（打者 `minSample=40`打席／投手 `minSample=60`打者）。
+- **投打の合わせ方は AbilityScore と違い単純な max にしない**（2026-08-02・issue #378）。
+  出場が無い側は中立50を返すので、素朴に max を採ると**悪い成績が中立50に隠れて全員が50以上へ
+  持ち上がる**（防御率9点台の投手が、打席ゼロなので50を貰って浮く）。先にサンプルの有無で振り分け、
+  **両方あれば高い方／片方だけならその軸／どちらも無ければ50**とする。
 
 いずれも `data/draft.yaml` 駆動（不変条件#4）。C# 既定（`DraftCoefficients`）が Unity 実プレイの真値、
 YAML は sim/テスト調整用（既存の sim-vs-unity 係数分割に倣う）。
@@ -125,7 +133,9 @@ round = バンド→代表順位（FirstRound→1, UpperRound→2, MiddleRound�
 ## 6. ドラフト画面（③・IA。着手前にワイヤー3案を提示）
 
 - **候補選手一覧**（在校の候補＝1〜3年）: 名前（明朝）・学年・ポジション・注目度バンド（RankChip 相当の色チップ）・
-  予想順位文言・主要成績（打者OPS/HR、投手ERA/K）。数字は Oswald 右揃え（書体3役）。
+  予想順位文言・主要成績。数字は Oswald 右揃え（書体3役）。
+  主要成績は**出場実績で選ぶ**（登板があれば ERA/K、打席があれば OPS/HR、二刀流は両方）＝
+  役割で切り替えない（設計書01 §1.1a、#379 でスタメン画面に入れたのと同じ作法）。
 - **指名実績**（過年度の指名確定＝教え子がプロへ）: 年・名前・round・（将来）球団。キャリアの勲章として残す。
 - 部品は RankChip / StatBar3 等の部品辞書内で構成（UI原則⑤）。新規見た目が要るなら部品辞書に追加してから。
 
