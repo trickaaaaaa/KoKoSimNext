@@ -223,6 +223,11 @@ dotnet run --project engine/KokoSim.Balance -- \
   CI の rest シャードが自動で拾う（網羅性は tools/check-heavy-shards.sh が検証）
 - 統計シム（GameSimulation/AtBatSimulation）は決定論保存で並列化済み（事前Fork＋整数部分和）。同シード同結果は維持される。
   テスト内で数百試合を逐次 for で回す場合も同じ作法（シード事前確定＋試合ローカルのチーム生成＋整数部分和）で並列化する
+- **`Assets/` の C# を触ったら `bash tools/check-unity-compile.sh`（Editor 不要・約10秒）を必ず回す**（issue #349）。
+  engine の CI は `engine/ data/ global.json` にしか発火せず、**Assets だけを触る変更は engine テストが
+  全部緑でも壊れたまま main に入る**（実例: PR #344 の CS0103 で Unity が12時間コンパイル不能／
+  PR #390 の交代パネル二重表示）。`bash tools/install-git-hooks.sh` を一度実行すると pre-push で自動化される。
+  CI 側（`.github/workflows/unity-ci.yml`）は Unity ライセンスの Secret が入るまでスキップされる
 
 ## コーディング規約
 

@@ -275,7 +275,17 @@ ${ucheck}
       note "- 🔴 #$num $title — Unity コンパイル検査が赤→agent-failed（${firsterr}）"
       unlock "$REPO_LOCK"; return
     elif [ "$urc" = "2" ]; then
-      note "- ⚠ #$num Unity コンパイル検査が実行できなかった（雛形 csproj 不在）。マージは続行"
+      # 検査不能（雛形 csproj 不在）は**マージを止める**（issue #349）。
+      # 以前は「環境要因で夜が全滅するのを避ける」ため続行していたが、それだと Assets を触る PR が
+      # 黙って無検査で main に入る＝この issue で塞ぎたかった穴がそのまま残る。雛形は検証用 Editor が
+      # 一度開いていれば必ずあるので、無いこと自体が環境の異常＝人が見るべき状態。
+      gh issue edit "$num" --add-label needs-human >/dev/null 2>&1 || true
+      gh pr comment "$branch" --body "自動ガード: Unity（Assets/）のコンパイル検査を実行できませんでした（雛形 csproj 不在）。マージを止めました。
+
+Assets/ を触る変更を無検査で main へ入れないための停止です。検証用 Unity で一度プロジェクトを開くと
+Assembly-CSharp.csproj が生成され、\\`bash tools/check-unity-compile.sh\\` が通るようになります。" >/dev/null 2>&1 || true
+      note "- 🟡 #$num $title — Unity コンパイル検査が実行不能（雛形 csproj 不在）→needs-human"
+      unlock "$REPO_LOCK"; return
     fi
   fi
 
