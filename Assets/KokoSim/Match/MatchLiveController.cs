@@ -1395,6 +1395,8 @@ namespace KokoSim.Unity.Match
         /// 1球のコース・弾道を対決ビューへ渡す形に写す（issue #332）。実データが揃っていない球は null
         /// ＝合成列に架空のコースを主張させない（<c>PitchSequenceSynthesizer</c> の契約）。
         /// 弾道は <c>CaptureTimelines</c> の試合だけ載るので、無い場合はコースだけ使い飛翔時間は既定へ落とす。
+        /// 狙い位置（issue #396）は実着弾位置と同じ球にしか載らない（同じ <c>PitchRecord</c> 由来で必ず対）
+        /// ため、欠けていた場合だけ実着弾位置へ落とす（=旧挙動と同じ「狙い＝実着弾」の縮退）。
         /// </summary>
         private static DuelPitchFlight? FlightOf(KokoSim.Engine.Match.Timeline.Playback.PitchToken pt)
         {
@@ -1402,6 +1404,7 @@ namespace KokoSim.Unity.Match
             var tr = pt.Trajectory;
             return new DuelPitchFlight(
                 (float)x, (float)y,
+                (float)(pt.AimX ?? x), (float)(pt.AimY ?? y),
                 (float)(tr?.FlightTimeSeconds ?? 0.0),         // 0 は rig 側で既定（BallFlightSeconds）へ落ちる
                 (float)(tr?.InducedVerticalBreakM ?? 0.0),
                 (float)(tr?.InducedHorizontalBreakM ?? 0.0));

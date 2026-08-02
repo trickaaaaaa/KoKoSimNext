@@ -63,8 +63,9 @@ namespace KokoSim.Unity.Match
             DuelPitchOutcome outcome)
         {
             // 実機と同じ流れ: 構え（ここで球が手に入る）→振りかぶりを実時間で進める→発射
+            // 狙い=実着弾（issue #396前と同じ・残差ゼロ）＝このハーネスの元の目的（#332 コース＋捕球IK）は不変
             yield return Windup(tag);
-            var f = new DuelPitchFlight(plateX, plateY, flight, ivb, 0f);
+            var f = new DuelPitchFlight(plateX, plateY, plateX, plateY, flight, ivb, 0f);
             _rig.OnPitchReleased(-1f, outcome, f);
             Debug.Log("[i332] === " + tag + " plate=(" + plateX.ToString("F2") + "," + plateY.ToString("F2")
                 + ") flight=" + flight.ToString("F2") + " ivb=" + ivb.ToString("F2") + " / "

@@ -263,6 +263,82 @@ public sealed class PitchRecordTests
             $"BattedBall はあるのに方位角がファウル域外 (BearingDeg={b.BearingDeg})"));
     }
 
+    // --- 狙い位置（AimX/AimY）観測（Issue #396: 対決ビューの捕手構え） ---
+
+    /// <summary>
+    /// <see cref="PitchRecord.AimX"/>/<see cref="AimY"/> は <see cref="Pitching.PitchPlan.AimX"/>/<see cref="AimY"/>
+    /// の写しで、<see cref="PitchRecord.LocationX"/>/<see cref="LocationY"/>（コントロール散布込みの実着弾位置）とは
+    /// 別物。散布が実際に効いている（狙いと実着弾が食い違う球が現れる）ことを固定し、AimX/AimY が誤って
+    /// LocationX/LocationY のコピーになっていないことを検出する。
+    /// </summary>
+    [Fact]
+    public void AimXY_ObservationData_DiffersFromActualLocation_WhenControlScatterApplies()
+    {
+        var ctx = new AtBatContext { Fielders = Field.StandardAlignment() };
+        var checkedRecords = 0;
+        var scatteredRecords = 0;
+
+        foreach (var (_, batter, pitcher) in Matchups())
+        {
+            for (ulong seed = 1; seed <= 80; seed++)
+            {
+                var session = AtBatSession.Begin(batter, pitcher, ctx);
+                var rng = new Xoshiro256Random(seed);
+                while (!session.IsComplete) session.ThrowNextPitch(rng);
+
+                foreach (var rec in session.Result.PitchLog!)
+                {
+                    Assert.True(double.IsFinite(rec.AimX), "AimX が有限値でない");
+                    Assert.True(double.IsFinite(rec.AimY), "AimY が有限値でない");
+                    checkedRecords++;
+                    if (System.Math.Abs(rec.AimX - rec.LocationX) > 0.001
+                        || System.Math.Abs(rec.AimY - rec.LocationY) > 0.001)
+                        scatteredRecords++;
+                }
+            }
+        }
+
+        Assert.True(checkedRecords > 300, $"検証件数が少ない（{checkedRecords}）");
+        Assert.True(scatteredRecords > 0, "AimX/AimY が常に実着弾位置と一致している（散布が効いていない）");
+    }
+
+    /// <summary>
+    /// <see cref="Timeline.Playback.PitchTokenFactory.From"/> は AimX/AimY をそのまま写す（新規抽選なし）。
+    /// </summary>
+    [Fact]
+    public void PitchTokenFactory_CopiesAimXY_FromPitchRecord()
+    {
+        var rec = new PitchRecord(
+            PitchKind.Ball, 1, 0, KokoSim.Engine.Players.PitchType.Fastball,
+            LocationX: 0.20, LocationY: 0.90, VelocityKmh: 145.0,
+            AimX: 0.05, AimY: 0.80);
+
+        var token = KokoSim.Engine.Match.Timeline.Playback.PitchTokenFactory.From(
+            rec, new KokoSim.Engine.Match.Game.GameContext(),
+            runnerOnFirst: false, runnerOnSecond: false, runnerOnThird: false);
+
+        Assert.Equal(rec.AimX, token.AimX);
+        Assert.Equal(rec.AimY, token.AimY);
+    }
+
+    /// <summary>
+    /// 合成列（<see cref="Timeline.Playback.PitchSequenceSynthesizer"/>）は実データを持たないため、
+    /// AimX/AimY も LocationX/LocationY と同様に null のまま（架空の狙いを主張しない）。
+    /// </summary>
+    [Fact]
+    public void SynthesizedPitchToken_HasNullAimXY()
+    {
+        var seq = KokoSim.Engine.Match.Timeline.Playback.PitchSequenceSynthesizer.Synthesize(
+            PlateAppearanceResult.Strikeout, pitchCount: 4, seed: 12345);
+
+        Assert.NotEmpty(seq.Pitches);
+        Assert.All(seq.Pitches, t =>
+        {
+            Assert.Null(t.AimX);
+            Assert.Null(t.AimY);
+        });
+    }
+
     /// <summary>バント試行のファウルは打球データを持たない（BuntResolver は物理層を生成しないため）。</summary>
     [Fact]
     public void BuntFoul_NeverHasBattedBall()

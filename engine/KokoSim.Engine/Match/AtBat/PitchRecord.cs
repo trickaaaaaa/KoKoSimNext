@@ -20,6 +20,10 @@ public enum PitchKind
 /// 「当たったが物理を生成しない」経路（<see cref="Batting.ContactModel.Resolve"/> の <c>(Foul, null)</c>）や
 /// バント/スクイズのファウルは、そもそも解決済みの値が存在しないため null のまま（観測データは
 /// 「既に解決済みの値の写し」のみ＝ここで新たに生成しない）。
+/// <see cref="AimX"/>/<see cref="AimY"/>（Issue #396）は <see cref="Pitching.PitchPlan.AimX"/>/
+/// <see cref="Pitching.PitchPlan.AimY"/> の写し（狙い位置。捕手が投球前から知っている値）。
+/// <see cref="LocationX"/>/<see cref="LocationY"/>（コントロール散布込みの実着弾位置）とは別物で、
+/// 判定・帯には一切関与しない表示専用の付帯情報。
 /// </summary>
 public readonly record struct PitchRecord(
     PitchKind Kind,
@@ -29,5 +33,7 @@ public readonly record struct PitchRecord(
     double LocationX,
     double LocationY,
     double VelocityKmh,
+    double AimX,
+    double AimY,
     Pitching.PitchTrajectory? Trajectory = null,
     Batting.BattedBall? BattedBall = null);
