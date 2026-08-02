@@ -56,8 +56,8 @@ public static class AptitudeRoller
         return result;
     }
 
-    /// <summary>投手を除く8守備位置中の最良適性（投手適性との比較に使う, Issue #174/#177）。</summary>
-    public static int BestField(int[] apt)
+    /// <summary>投手を除く8守備位置中の最良適性（投手適性との比較に使う, Issue #174/#177/#384）。</summary>
+    public static int BestField(System.Collections.Generic.IReadOnlyList<int> apt)
     {
         var best = int.MinValue;
         foreach (var pos in AllPositions)

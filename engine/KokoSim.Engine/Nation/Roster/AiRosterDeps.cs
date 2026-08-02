@@ -31,4 +31,10 @@ public sealed record AiRosterDeps
 
     /// <summary>敵AI係数（校風・ティア。<see cref="AiTeamBuilder"/> のエース温存判断で使う, issue #42）。</summary>
     public EnemyAiCoefficients EnemyAi { get; init; } = new();
+
+    /// <summary>
+    /// 守備係数（<see cref="AiTeamBuilder"/> の守備位置割当で実効守備力＝地力×適性補正を出すのに使う, issue #384）。
+    /// 自校（<c>RosterTeamBuilder</c>）と同じ <see cref="Season.EffectiveFielding"/> を通す＝割当の物差しが一致する。
+    /// </summary>
+    public Match.Fielding.FieldingCoefficients Fielding { get; init; } = new();
 }

@@ -14,7 +14,14 @@ public static class EffectiveFielding
 {
     /// <summary>丸め・クランプ前の生値＝ Fielding × AptitudeFactor(適性)。</summary>
     public static double Raw(DevelopingPlayer player, FieldPosition position, FieldingCoefficients coeff)
-        => player.Level(AbilityKind.Fielding) * coeff.AptitudeFactor(player.Aptitude(position));
+        => Raw(player.Level(AbilityKind.Fielding), player.Aptitude(position), coeff);
+
+    /// <summary>
+    /// 素の守備力と適性から直接引く形（issue #384）。AI校は <see cref="DevelopingPlayer"/> を持たず
+    /// 投影済みの能力＋適性配列で割当を解くので、式を写さずここを共有する（不変条件#1: 変換式は一箇所）。
+    /// </summary>
+    public static double Raw(int fieldingLevel, int aptitude, FieldingCoefficients coeff)
+        => fieldingLevel * coeff.AptitudeFactor(aptitude);
 
     /// <summary>実効守備力（1〜100、四捨五入）。適性50（中庸）で地力の Fielding と一致する。</summary>
     public static int Rank(DevelopingPlayer player, FieldPosition position, FieldingCoefficients coeff)
