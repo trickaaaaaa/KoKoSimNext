@@ -1521,11 +1521,18 @@ namespace KokoSim.Unity.Match
         ///
         /// 収録はこの後、胴を巻き戻してバットを構えへ戻す。止め所は**胴の回りが最大になるコマ**＝
         /// そこから先が「戻り」。実測（胸ヨー・ステージローカル）:
-        ///   1.40→−40° / 1.52→−64° / **1.63→−72°（最大）** / 1.75→−58° / 1.87→−30° / 2.10→+2°
+        ///   1.40→−40° / 1.52→−64° / 1.63→−72°（最大） / 1.75→−58° / 1.87→−30° / 2.10→+2°
         /// バットの巻き付き（③）が終わるのは 打つ 1.52 / 空振り 1.43 なので、両方この後に収まる。
         /// 旧値は <see cref="BatterRunStart"/>(2.60)＝走り出しの手前で、戻りが丸ごと映っていた。
+        ///
+        /// **1.433 へ変更（2026-08-02 監督判断「止め所が遅い」）。** 1.63 は手が低く前に残ったまま
+        /// 「捻り切って固まった」形になっていた。Mixamo サイトのプレビュー指定コマ43/208（30fps）を
+        /// クリップ秒へ換算した値。3案の実測比較（据え置き0.30秒後・右打者・インプレー）:
+        ///   1.63→胸ヨー−54.0°・右手1.21m・接触→静止0.23秒／1.52→−46.5°・1.28m・0.18秒／
+        ///   **1.433→−31.7°・1.33m・0.13秒（採用）**。手が頭の横まで上がりバットが顔の上へ抜ける
+        ///   ＝「振り抜いた形」で止まる。issue #395
         /// </summary>
-        private const float SwingFinishSec = 1.63f;
+        private const float SwingFinishSec = 1.433f;
         private const float HbpReact = 1.3f;
         /// <summary>
         /// 振り切りポーズで据え置く秒数（#291。目安0.6〜1.0sの中間・投球間隔2.8sに余裕で収まる）。
@@ -1739,15 +1746,15 @@ namespace KokoSim.Unity.Match
                 // 打ち切りだけで据え置きが無いと、打ち切った瞬間に待機へ戻る
                 case DuelPitchOutcome.SwingMiss:
                     // 空振り専用の収録が無いので同じスイングを使う
-                    SetSwing(_swingMissClip, SwingMissPlane, flight, SwingFinishSec, SwingFinishHoldSeconds);
+                    SetSwing(_swingMissClip, SwingMissPlane, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 // 当てる球は判定面でなく**捌く瞬間**（_ballArrival＝判定面の ContactAheadM 手前）で合わせる。
                 // flight を渡すと、前で捌くぶんバットが遅れて着く（0.30m/40m·s⁻¹ ≒ 8ms）
                 case DuelPitchOutcome.FoulContact:
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec, SwingFinishHoldSeconds);
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 case DuelPitchOutcome.InPlayContact:
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, SwingFinishSec, SwingFinishHoldSeconds);
+                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
                 // 捕手の捕球は下の catcherCatches に含めたまま残す
@@ -2884,11 +2891,20 @@ namespace KokoSim.Unity.Match
         /// プレビュー枠を解除して試合の構図（FovDeg）へ戻す。
         /// <see cref="FramePreview"/> で組んだ枠は画角を上書きしたまま残るので、
         /// ApplyCalibration だけ呼んでも構図が戻らない（2026-07-29 実害: 望遠のはずが球場全景になる）。
+        ///
+        /// **`_fovBaseDeg` 自体の復元が必要（2026-08-02・issue #395）。** <see cref="ApplyFov"/> は
+        /// 寄り枠がある間 `_fovBaseDeg` を寄り枠から計算し直して上書きする。旧実装は `_previewFrameH`
+        /// を0にするだけで `_fovBaseDeg` を戻さないため、上書きされた広角（実測 約31°）がそのまま
+        /// 残っていた（試合の構図は望遠 FovDeg=2.9° なので画角だけ10倍広い＝全景になる）。さらに
+        /// <see cref="ApplyCalibration"/> は `_fovBaseDeg = cal.FovDeg` を入れた直後に ApplyFov を呼ぶため、
+        /// 寄り枠が残っている状態で先に ApplyCalibration を呼ぶと入れた値がその場で潰される＝呼ぶ順で
+        /// 結果が変わっていた。ここで較正値から復元すれば、呼び出し側の順序に依らなくなる。
         /// </summary>
         public void ClearPreviewFrame()
         {
             _previewFrameH = 0f;
             _previewDist = 0f;
+            _fovBaseDeg = _cal.FovDeg;
             if (_camera != null) ApplyFov();
         }
 
@@ -3626,9 +3642,38 @@ namespace KokoSim.Unity.Match
         /// 頭の横まで振りぬく」）。実物は接触の後も背中側(-x)を通って捕手側(-z)＝**頭の横**まで回る。
         /// 面の法線がバット軸と直交していないぶん方位の進みは指定角より小さい（実測 120°指定で103°）。
         /// 時間も実物に合わせる: 接触から振り切りまでは実時間で 0.2〜0.3秒＝再生1.4倍で 2.4〜3.6コマ。
+        ///
+        /// **3→1.6 へ変更（2026-08-02。<see cref="SwingFinishSec"/> の 1.433 化に合わせる）。**
+        /// 250°を1.6コマで回すので1コマあたり156°（旧83°）＝振り抜きのバットは今より飛んで見えるが、
+        /// 実時間0.13秒の区間なので採用可と判断済み。issue #395
         /// </summary>
         private const float BatWrapDeg = 250f;
-        private const float BatWrapFrames = 3f;
+        private const float BatWrapFrames = 1.6f;
+
+#if UNITY_EDITOR
+        /// <summary>【実測プローブ用】<see cref="SwingFinishSec"/> を差し替える（負＝既定のまま）。</summary>
+        internal static float SwingFinishOverrideForCapture = -1f;
+        /// <summary>【実測プローブ用】<see cref="BatWrapFrames"/> を差し替える（負＝既定のまま）。</summary>
+        internal static float BatWrapFramesOverrideForCapture = -1f;
+#endif
+
+        private static float EffectiveSwingFinishSec()
+        {
+            float v = SwingFinishSec;
+#if UNITY_EDITOR
+            if (SwingFinishOverrideForCapture > 0f) v = SwingFinishOverrideForCapture;
+#endif
+            return v;
+        }
+
+        private static float EffectiveBatWrapFrames()
+        {
+            float v = BatWrapFrames;
+#if UNITY_EDITOR
+            if (BatWrapFramesOverrideForCapture > 0f) v = BatWrapFramesOverrideForCapture;
+#endif
+            return v;
+        }
 
         /// <summary>
         /// タメ（振り下ろしの途中で芯が捕手側へ寝る形）の仰角[度]。芯が握りより少し上に来る量。
@@ -3765,14 +3810,7 @@ namespace KokoSim.Unity.Match
             if (t < wrapEnd || restFrame == null)
             {
                 float w = Smooth(Mathf.InverseLerp(contact, wrapEnd, t));
-                var ax = (Quaternion.AngleAxis(BatWrapDeg * w, _batWrapNormal) * _batWrapFrom).normalized;
-                // 巻き付きの間ずっと胸の中での向きを焼き直しておく＝④への受け渡しが連続になる
-                if (restFrame != null)
-                {
-                    _batRestLocalAxis = restFrame.InverseTransformDirection(ax);
-                    _batRestValid = true;
-                }
-                return ax;
+                return (Quaternion.AngleAxis(BatWrapDeg * w, _batWrapNormal) * _batWrapFrom).normalized;
             }
 
             // ④ 巻き付きの後は「**体**の中で剛体」へ渡す（2026-07-31 監督指摘の続き）。
@@ -3790,7 +3828,19 @@ namespace KokoSim.Unity.Match
             // 同じ区間の胸は 46°→26°→9°→11° と桁が違い、これは振り切りで体が回り続けるぶん＝
             // 実物のフォロースルー（バットが背中側に留まったまま体が回る）と同じ動き。
             // ①〜③で収録の手の回転を使わなかったのと同じ理由が、惰性区間にもそのまま効く。
-            if (!_batRestValid) return (Quaternion.AngleAxis(BatWrapDeg, _batWrapNormal) * _batWrapFrom).normalized;
+            //
+            // **④へ入る最初のコマで「巻き終わり（w=1）」の向きを焼く（2026-08-02・issue #395）。**
+            // 旧実装は③の最中に毎コマ _batRestLocalAxis を焼き直しており、④はその「最後に評価した
+            // コマ」の中途半端な角度（w<1）をそのまま返していた。ポーズは12fpsの格子なので、
+            // 巻き付き（wrapEnd）が打ち切り（SwingFinishSec）より前に終わる結果（例: 空振り）では、
+            // ③最後のサンプルが wrapEnd に届く前のコマになり、④へ渡ったバットが途中の向きのまま
+            // 凍っていた。正しい受け渡しは w=1 の完成形を④の最初のコマで一度だけ焼くこと。
+            if (!_batRestValid)
+            {
+                var wrapEndAxis = (Quaternion.AngleAxis(BatWrapDeg, _batWrapNormal) * _batWrapFrom).normalized;
+                _batRestLocalAxis = restFrame.InverseTransformDirection(wrapEndAxis);
+                _batRestValid = true;
+            }
             return restFrame.TransformDirection(_batRestLocalAxis).normalized;
         }
 
