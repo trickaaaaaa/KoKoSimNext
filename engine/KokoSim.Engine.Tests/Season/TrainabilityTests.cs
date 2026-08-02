@@ -39,25 +39,34 @@ public sealed class TrainabilityTests
     [Fact]
     public void Trainability_Above1_GrowsFaster_Below1_GrowsSlower()
     {
-        var baseline = new TrainingCoefficients();
-        var fast = new TrainingCoefficients { Trainability = new TrainabilityCoefficients { Fielding = 1.5 } };
-        var slow = new TrainingCoefficients { Trainability = new TrainabilityCoefficients { Speed = 0.4 } };
+        // GainByApplyExp は単一能力しか鍛えないので、その能力だけ 1.0 に据えた中立係数と対比する
+        // （既定 Trainability は issue #402 で YAML 校正値になり全1.0ではないため）。
+        var neutralFielding = new TrainingCoefficients { Trainability = new TrainabilityCoefficients { Fielding = 1.0 } };
+        var fastFielding = new TrainingCoefficients { Trainability = new TrainabilityCoefficients { Fielding = 1.5 } };
+        var neutralSpeed = new TrainingCoefficients { Trainability = new TrainabilityCoefficients { Speed = 1.0 } };
+        var slowSpeed = new TrainingCoefficients { Trainability = new TrainabilityCoefficients { Speed = 0.4 } };
 
-        Assert.True(GainByApplyExp(AbilityKind.Fielding, fast, prodigy: false)
-                    > GainByApplyExp(AbilityKind.Fielding, baseline, prodigy: false),
+        Assert.True(GainByApplyExp(AbilityKind.Fielding, fastFielding, prodigy: false)
+                    > GainByApplyExp(AbilityKind.Fielding, neutralFielding, prodigy: false),
             "trainability>1 で速く伸びていない");
-        Assert.True(GainByApplyExp(AbilityKind.Speed, slow, prodigy: false)
-                    < GainByApplyExp(AbilityKind.Speed, baseline, prodigy: false),
+        Assert.True(GainByApplyExp(AbilityKind.Speed, slowSpeed, prodigy: false)
+                    < GainByApplyExp(AbilityKind.Speed, neutralSpeed, prodigy: false),
             "trainability<1 で遅く伸びていない");
     }
 
-    // --- 既定1.0は従来と完全一致（不変条件#2） ---
+    // --- 既定は YAML 校正値と一致（issue #402） ---
 
     [Fact]
-    public void Trainability_DefaultIsAllOne()
+    public void Trainability_DefaultMatchesCalibratedYaml()
     {
+        // 既定は issue #402 で data/coefficients.yaml training.trainability の校正値へ揃えた（以前は全1.0）。
+        // 全項目の一致は CoefficientsDefaultsConsistencyTests が保証する。ここは代表値の回帰ピン。
         var t = new TrainabilityCoefficients();
-        foreach (var k in AbilityKinds.All) Assert.Equal(1.0, t.For(k));
+        Assert.Equal(0.4, t.Speed);      // 足＝素質固定
+        Assert.Equal(1.25, t.Fielding);  // 技術系は伸びやすい
+        Assert.Equal(1.20, t.Control);
+        Assert.Equal(1.0, t.Velocity);   // 球速は環境倍率が担う＝1.0固定
+        Assert.Equal(1.0, t.Power);
     }
 
     [Fact]
@@ -89,11 +98,13 @@ public sealed class TrainabilityTests
 
         var normalGain = GainByApplyExp(AbilityKind.Speed, c, prodigy: false);
         var prodigyGain = GainByApplyExp(AbilityKind.Speed, c, prodigy: true);
-        var baselineGain = GainByApplyExp(AbilityKind.Speed, new TrainingCoefficients(), prodigy: false);
+        // 逸材の足は trainability=1.0 相当（減衰免除）。中立(足を明示的に1.0)と厳密一致で確認する
+        // （既定 Trainability.Speed は #402 で 0.4 になったため、明示的に 1.0 を基準に置く）。
+        var neutralGain = GainByApplyExp(AbilityKind.Speed,
+            new TrainingCoefficients { Trainability = new TrainabilityCoefficients { Speed = 1.0 } }, prodigy: false);
 
         Assert.True(prodigyGain > normalGain, "逸材が素質固定の減衰を免除されていない");
-        // 逸材の足は trainability=1.0 相当（減衰なし＝規格外の俊足）。
-        Assert.Equal(baselineGain, prodigyGain);
+        Assert.Equal(neutralGain, prodigyGain);
     }
 
     [Fact]
@@ -166,17 +177,20 @@ public sealed class TrainabilityTests
     // --- 決定論: 既定係数（ProdigyProb=0・factor=1.0）で逸材は出ず従来と一致 ---
 
     [Fact]
-    public void DefaultCoefficients_ProduceNoProdigies()
+    public void ExplicitZeroProdigyProb_ProducesNoProdigies()
     {
-        Assert.All(Cohort(new RosterCoefficients()), p => Assert.False(p.IsProdigy));
+        // 既定は issue #402 で 0.02 になった（逸材が既定で出現）。無効ゲートは明示的に 0 を指定して検証する。
+        Assert.All(Cohort(new RosterCoefficients { ProdigyProb = 0.0 }), p => Assert.False(p.IsProdigy));
     }
 
     [Fact]
     public void ProdigyRoll_DoesNotPerturbAbilityRollSequence()
     {
         // 逸材ロールは独立Forkストリーム＝ProdigyProb を変えても既存の能力・cap 列は1ビットも変わらない。
-        var none = new RosterCoefficients { ProdigyProb = 0.0 };
-        var some = new RosterCoefficients { ProdigyProb = 0.5 };
+        // 足の cap 圧縮を無効化(1.0)して比較する（既定 SpeedCapGapFactor は #402 で 0.4 になり、逸材免除で
+        // 足の cap だけは変わりうるため。ここで見たいのは能力ロール列の不撹乱）。
+        var none = new RosterCoefficients { ProdigyProb = 0.0, SpeedCapGapFactor = 1.0 };
+        var some = new RosterCoefficients { ProdigyProb = 0.5, SpeedCapGapFactor = 1.0 };
         var a = ProspectGenerator.Intake(1, none, new Xoshiro256Random(7));
         var b = ProspectGenerator.Intake(1, some, new Xoshiro256Random(7));
         Assert.Equal(a.Count, b.Count);
@@ -210,8 +224,10 @@ public sealed class TrainabilityTests
             return p.Level(ability);
         }
 
-        // trainability を打ち消した基準（全1.0）で同条件を測り、係数の効きを対比する。
-        var baseC = c with { Trainability = new TrainabilityCoefficients() };
+        // trainability を打ち消した基準（対比する能力を明示的に 1.0）で同条件を測り、係数の効きを対比する。
+        // 既定 TrainabilityCoefficients は issue #402 で YAML 校正値（Speed=0.4 等）になった＝もはや全1.0ではないため、
+        // 素質補正なしの基準は測る3能力（足・守備・球速）を明示的に 1.0 へ置いて作る。
+        var baseC = c with { Trainability = new TrainabilityCoefficients { Speed = 1.0, Fielding = 1.0, Velocity = 1.0 } };
         int FullTrainBaseline(AbilityKind ability, TrainingMenu menu)
         {
             var p = MakePlayer(ability, 32, 99);

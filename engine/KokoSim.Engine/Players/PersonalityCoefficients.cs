@@ -68,12 +68,14 @@ public sealed record PersonalityCoefficients
     }
 
     /// <summary>
-    /// 既定プロファイル表（8タイプ＋中立）。重み総和8.5。各軸の重み付き平均は中立近傍:
+    /// 既定プロファイル表（8タイプ）。data/coefficients.yaml personalities.profiles と一致（issue #402: 実ゲームと
+    /// sim の係数を揃え CoefficientsDefaultsConsistencyTests で乖離を止める）。YAML は中立(Normal)を列挙しない＝
+    /// <see cref="Profile"/> が <see cref="Neutral"/> へフォールバックし、<see cref="Sample"/> は SpawnWeight&gt;0 のみ
+    /// 抽選するので、Normal を明示しなくても挙動は完全に同じ。重み総和8.5。各軸の重み付き平均は中立近傍:
     /// SelfGrowth≈1.005 / Coaching≈1.009 / Bunt≈+0.009 / ChanceHit≈+0.013 / LeadershipOffset≈+0.8。
     /// </summary>
     private static IReadOnlyList<PersonalityProfile> DefaultProfiles() => new PersonalityProfile[]
     {
-        new() { Type = Personality.Normal, SpawnWeight = 0.0 },
         //                                        w     ②Coach ③Grow  ④Bunt  ④Chance ①Lead
         new() { Type = Personality.HotBlood,     SpawnWeight = 1.0, CoachingReceptivity = 1.00, SelfGrowthFactor = 1.08, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.99, LeadershipMeanOffset =  14 },
         new() { Type = Personality.Hardworker,   SpawnWeight = 1.4, CoachingReceptivity = 1.06, SelfGrowthFactor = 1.10, BuntSuccessBonus =  0.05, ChanceHitFactor = 0.99, LeadershipMeanOffset =   4 },

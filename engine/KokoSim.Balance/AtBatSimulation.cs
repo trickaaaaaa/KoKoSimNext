@@ -5,6 +5,7 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Fielding;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 
 namespace KokoSim.Balance;
@@ -196,6 +197,96 @@ public static class AtBatSimulation
             InPlayOuts = total[10],
             HitByPitches = total[11],
         };
+    }
+
+    /// <summary>
+    /// 投手ランク（投手総合＝球速.40/制球.25/スタミナ.15/キレ.20 の等級 G〜S）別の三振率・被打率。
+    /// issue #402 の監督観測「E・F投手でも三振を取りすぎる」の是正確認用。母集団サンプリング・決定論並列は
+    /// 本体 <see cref="Run"/> と同一（同シードで同じ投手・打者を引く）。
+    /// </summary>
+    public sealed record PitcherRankStats
+    {
+        /// <summary>添字＝(int)Tier（G=0..S=7）。</summary>
+        public required int[] PlateAppearances { get; init; }
+        public required int[] AtBats { get; init; }
+        public required int[] Hits { get; init; }
+        public required int[] Strikeouts { get; init; }
+
+        public double StrikeoutRate(Tier t) =>
+            PlateAppearances[(int)t] > 0 ? (double)Strikeouts[(int)t] / PlateAppearances[(int)t] : 0;
+        public double Average(Tier t) => AtBats[(int)t] > 0 ? (double)Hits[(int)t] / AtBats[(int)t] : 0;
+    }
+
+    /// <summary>サンプル投手の総合等級（投手総合＝TeamStrengthCoefficients の重みで G〜S に量子化）。</summary>
+    private static Tier PitcherTierOf(PitcherAttributes p, TeamStrengthCoefficients c)
+    {
+        var velLevel = PitcherAttributes.LevelFromVelocityKmh(p.MaxVelocityKmh);
+        var staminaLevel = PitcherAttributes.LevelFromStaminaPitches(p.StaminaPitches);
+        var wsum = c.VelocityWeight + c.ControlWeight + c.StaminaWeight + c.PitchRankWeight;
+        var score = (velLevel * c.VelocityWeight + p.Control * c.ControlWeight
+                     + staminaLevel * c.StaminaWeight + p.PitchRank * c.PitchRankWeight) / wsum;
+        return Tiers.FromStrength(score);
+    }
+
+    /// <summary>投手ランク別の三振率・被打率を集計する（issue #402）。乱数消費順・結果は <see cref="Run"/> と同じ経路。</summary>
+    public static PitcherRankStats RunByPitcherRank(
+        int atBats, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null)
+    {
+        var ctx = BuildContext(coefficientsPath, field);
+        var tsc = new TeamStrengthCoefficients();
+        var root = new Xoshiro256Random(seed);
+        var forks = new IRandomSource[atBats];
+        for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
+
+        const int TierCount = 8;  // G..S
+        const int Counters = 4;   // pa, ab, h, so
+        var width = TierCount * Counters;
+        var total = new int[width];
+        Parallel.For(0, atBats,
+            () => new int[width],
+            (i, _, local) =>
+            {
+                var rng = forks[i];
+                var batter = SampleBatter(rng);
+                var pitcher = SamplePitcher(rng);
+                var b = (int)PitcherTierOf(pitcher, tsc) * Counters;
+                var r = AtBatResolver.ResolveDetailed(batter, pitcher, ctx, rng).Result;
+                local[b]++;                          // PA
+                if (r.IsAtBat()) local[b + 1]++;     // AB
+                if (r.IsHit()) local[b + 2]++;       // H
+                if (r == PlateAppearanceResult.Strikeout) local[b + 3]++;
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < width; k++) total[k] += local[k]; } });
+
+        var pa = new int[TierCount]; var ab = new int[TierCount]; var h = new int[TierCount]; var so = new int[TierCount];
+        for (var t = 0; t < TierCount; t++)
+        {
+            pa[t] = total[t * Counters];
+            ab[t] = total[t * Counters + 1];
+            h[t] = total[t * Counters + 2];
+            so[t] = total[t * Counters + 3];
+        }
+        return new PitcherRankStats { PlateAppearances = pa, AtBats = ab, Hits = h, Strikeouts = so };
+    }
+
+    /// <summary>投手ランク別 三振率・被打率のMarkDownレポート（issue #402 検証出力）。</summary>
+    public static string ReportByPitcherRank(PitcherRankStats s, ulong seed)
+    {
+        var sb = new StringBuilder();
+        var c = CultureInfo.InvariantCulture;
+        sb.AppendLine("## 投手ランク別 三振率・被打率（issue #402 検証: E・F投手の奪三振是正）");
+        sb.AppendLine();
+        sb.AppendLine(c, $"投手総合＝球速.40/制球.25/スタミナ.15/キレ.20 の等級（G〜S）で層別（シード {seed}）。");
+        sb.AppendLine();
+        sb.AppendLine("| 投手ランク | 打席(PA) | 三振率 K% | 被打率 AVG |");
+        sb.AppendLine("|---|---:|---:|---:|");
+        foreach (var t in new[] { Tier.S, Tier.A, Tier.B, Tier.C, Tier.D, Tier.E, Tier.F, Tier.G })
+        {
+            if (s.PlateAppearances[(int)t] == 0) continue;
+            sb.AppendLine(c, $"| {t} | {s.PlateAppearances[(int)t]} | {s.StrikeoutRate(t):P1} | {s.Average(t):F3} |");
+        }
+        return sb.ToString();
     }
 
     /// <summary>

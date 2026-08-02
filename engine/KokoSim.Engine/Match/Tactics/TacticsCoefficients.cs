@@ -111,14 +111,14 @@ public sealed record TacticsCoefficients
 
     // ===== 敬遠（design-14 P1-3） =====
     /// <summary>一塁空き・得点圏でこの打者パワー以上なら敬遠を考え始める。</summary>
-    public int IntentionalWalkMinPower { get; init; } = 78;
+    public int IntentionalWalkMinPower { get; init; } = 70;
     /// <summary>敬遠を考え始めるイニング（終盤限定）。</summary>
-    public int IntentionalWalkFromInning { get; init; } = 7;
+    public int IntentionalWalkFromInning { get; init; } = 6;
     /// <summary>この点差以内（僅差）でのみ敬遠を考える。</summary>
-    public int IntentionalWalkMaxDiffAbs { get; init; } = 2;
-    /// <summary>好条件成立時に実際に敬遠へ踏み切る確率。既定0＝機能オフ（rng.NextDouble()自体を呼ばない
-    /// ガード付きなので、Brainつきの試合でも従来の乱数消費順・結果と完全一致する）。</summary>
-    public double IntentionalWalkProb { get; init; } = 0.0;
+    public int IntentionalWalkMaxDiffAbs { get; init; } = 3;
+    /// <summary>好条件成立時に実際に敬遠へ踏み切る確率。issue #402で 0.0→0.6 に正値化＝実ゲームで敬遠が発火
+    /// （YAML校正値と一致。0の間は rng.NextDouble() 自体を呼ばないガード付きで乱数消費順は不変だった）。</summary>
+    public double IntentionalWalkProb { get; init; } = 0.6;
 
     // ===== 伝令判断（設計書09 §3） =====
     public int DefenseTimeoutMinPressure { get; init; } = 3;

@@ -126,9 +126,12 @@ public sealed class TacticsCardWindowsTests
     [Fact]
     public void SetOffensiveSign_ChangesTheGame()
     {
-        Assert.NotEqual(
-            ShaFromRunnerOnFirst(null),
-            ShaFromRunnerOnFirst((prog, isTop) => prog.SetOffensiveSign(isTop, OffensiveSign.HitAndRun)));
+        // 特定シードでは強攻策が結果を変えないこともある（RNG列に依存）。複数シードで一度でも変われば十分。
+        var differs = false;
+        for (ulong s = 1; s <= 40 && !differs; s++)
+            differs = ShaFromRunnerOnFirst(null, s)
+                != ShaFromRunnerOnFirst((prog, isTop) => prog.SetOffensiveSign(isTop, OffensiveSign.HitAndRun), s);
+        Assert.True(differs, "強攻策(エンドラン)を出しても試合結果が一切変わらない");
     }
 
     /// <summary>盗塁指示は次の1球で試みられる（走者がいなければ在塁判定で自然に不発＝指示自体は無害）。</summary>
@@ -141,9 +144,9 @@ public sealed class TacticsCardWindowsTests
     }
 
     /// <summary>一塁に走者が出た打席まで進め、そこで指示してから最後まで流した試合の digest。</summary>
-    private static string ShaFromRunnerOnFirst(System.Action<MatchProgression, bool>? setup)
+    private static string ShaFromRunnerOnFirst(System.Action<MatchProgression, bool>? setup, ulong seed = Seed)
     {
-        var prog = NewGame();
+        var prog = NewGame(seed);
         for (var i = 0; i < 200 && prog.Advance(); i++)
         {
             if (prog.Current!.BaseFirstAfter) break;

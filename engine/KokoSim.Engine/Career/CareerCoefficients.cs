@@ -51,13 +51,14 @@ public sealed record CareerCoefficients
     public double AnnualBudgetBase { get; init; } = 80.0;
     public double BudgetPerTrust { get; init; } = 0.8;
 
-    // --- 年間固定支出（Issue #128, 万円）。既定0で従来一致（不変条件#2）。data/coefficients.yaml が正典 ---
-    /// <summary>夏合宿の費用[万円]（設計書04 §4）。0で従来一致。</summary>
-    public double SummerCampCost { get; init; }
-    /// <summary>冬合宿の費用[万円]（設計書04 §4）。0で従来一致。</summary>
-    public double WinterCampCost { get; init; }
-    /// <summary>スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。0で従来一致。</summary>
-    public double ScoutCost { get; init; }
+    // --- 年間固定支出（Issue #128, 万円）。既定は data/coefficients.yaml career.* と一致（issue #402）。
+    // 以前は0で「実ゲームでは合宿・スカウトが無料」だった＝校正済み費用が sim にしか効いていなかった。 ---
+    /// <summary>夏合宿の費用[万円]（設計書04 §4）。</summary>
+    public double SummerCampCost { get; init; } = 20.0;
+    /// <summary>冬合宿の費用[万円]（設計書04 §4）。</summary>
+    public double WinterCampCost { get; init; } = 25.0;
+    /// <summary>スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。</summary>
+    public double ScoutCost { get; init; } = 15.0;
 
     // --- 赴任校（教員監督は弱小校に飛ばされがち） ---
     public double NewSchoolStrengthMean { get; init; } = 34.0;

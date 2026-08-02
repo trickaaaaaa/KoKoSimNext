@@ -140,29 +140,33 @@ public sealed class MatchProgressionTests
     [Fact]
     public void PinchHitInSeventh_AppearsInSubsequentPlateAppearances()
     {
-        // シードは「7回に到達し、その後に代打の打順が回ってくる」局面を選んだもの
-        // （Issue #24 で塁打数決定が変わり 42→43、Issue #169 で送球エラー2段階化でrng消費が変わり 43→1 に更新）。
-        var prog = new MatchProgression(Team("A", true), Team("H", true),
-            new GameContext { CaptureTimelines = true }, 1UL);
-
-        // 7回に到達するまで手動で進める。
-        while (prog.Advance() && prog.Current!.Inning < 7) { }
-        Assert.False(prog.IsFinished, "7回到達前に試合が終わった（別シードを使う）");
-
-        // 自校（後攻 home）に代打を送る（采配窓）。
-        Assert.True(prog.PinchHitUpcoming(offenseIsAway: false, benchIndex: 0), "代打を送れなかった");
-
-        // 以降の打席に代打ヒーローが現れることを確認。
-        var appeared = false;
-        while (prog.Advance())
+        // 「7回に到達し、代打を送れて、その後に代打の打順が回ってくる」局面はRNG列に依存する
+        // （Issue #24/#169 で過去にシードを更新してきた。issue #402 で係数既定が動きRNG列が再度変わったため、
+        //  固定シードをやめて条件を満たすシードを探索する）。
+        for (ulong seed = 1; seed <= 200; seed++)
         {
-            if (prog.Current!.BatterName == PinchHitterName) { appeared = true; break; }
-        }
-        Assert.True(appeared, "代打が以降の打席に反映されていない");
+            var prog = new MatchProgression(Team("A", true), Team("H", true),
+                new GameContext { CaptureTimelines = true }, seed);
 
-        // 保存状態に代打決定が記録されている（中断保存で再現可能）。
-        var save = prog.Save();
-        Assert.Contains(save.Decisions, d => d.Kind == GameDecisionKind.PinchHit && !d.OffenseIsAway);
+            // 7回に到達するまで手動で進める。到達前に終わったシードは飛ばす。
+            while (prog.Advance() && prog.Current!.Inning < 7) { }
+            if (prog.IsFinished) continue;
+
+            // 自校（後攻 home）に代打を送る（采配窓）。送れないシードは飛ばす。
+            if (!prog.PinchHitUpcoming(offenseIsAway: false, benchIndex: 0)) continue;
+
+            // 以降の打席に代打ヒーローが現れることを確認。
+            var appeared = false;
+            while (prog.Advance())
+                if (prog.Current!.BatterName == PinchHitterName) { appeared = true; break; }
+            if (!appeared) continue;
+
+            // 保存状態に代打決定が記録されている（中断保存で再現可能）。
+            var save = prog.Save();
+            Assert.Contains(save.Decisions, d => d.Kind == GameDecisionKind.PinchHit && !d.OffenseIsAway);
+            return; // 条件を満たすシードで検証完了
+        }
+        Assert.Fail("7回到達→代打→以降の打席に代打が登場するシードが 1..200 で見つからなかった");
     }
 
     // 代打の采配決定は、保存→復元でも再現される（決定を積んだ状態が一致）。

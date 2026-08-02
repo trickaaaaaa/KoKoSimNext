@@ -75,8 +75,10 @@ public sealed class ManagerTraitEffectsTests
     public void Cautious_EnablesIntentionalWalk()
     {
         var b = new TacticsCoefficients();
-        Assert.Equal(0.0, b.IntentionalWalkProb);   // 既定は無効
         var t = ManagerTraitEffects.ApplyTactics(b, new[] { ManagerTrait.Cautious }, Ai);
+        // 既定でも敬遠は有効（issue #402: YAML 校正値へ揃えた）。Cautious はそれを積極化する＝
+        // 発火確率を下げず（Math.Max）、敬遠を考え始めるパワー閾値を緩める。
+        Assert.True(t.IntentionalWalkProb >= b.IntentionalWalkProb);
         Assert.True(t.IntentionalWalkProb > 0.0);
         Assert.True(t.IntentionalWalkMinPower < b.IntentionalWalkMinPower);
     }
