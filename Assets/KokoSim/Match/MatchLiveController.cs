@@ -2276,7 +2276,8 @@ namespace KokoSim.Unity.Match
             if (mirror) row.AddToClassList("mlineup-pitcher--mirror");
             row.Add(MakeLabel("投", "mlineup-pitcher__tag"));
             row.Add(MakeLabel(p.Name, "mlineup-pitcher__name"));
-            row.Add(MakeLabel(p.Pitches + "球", "mlineup-pitcher__stat"));
+            // 確定球数＋進行中の打席ぶん（issue #397。LiveLineScore.PendingRuns と同型）。
+            row.Add(MakeLabel((p.Pitches + p.PendingPitches) + "球", "mlineup-pitcher__stat"));
             row.Add(MakeLabel(InningsText(p.Outs) + "回", "mlineup-pitcher__stat"));
             row.Add(MakeLabel("失" + p.Runs, "mlineup-pitcher__stat"));
             return row;
@@ -2385,10 +2386,12 @@ namespace KokoSim.Unity.Match
             var line2 = MakeRow("mup-line");
             line2.Add(MakeLabel("防 " + MatchLiveStatsProvider.Era(_statsProvider.CareerPitching(m.PitcherSourceId))
                                     + "　奪三振 " + def.StrikeOuts, "mup-career"));
+            // 確定球数＋進行中の打席ぶん（issue #397）。据え置きを解消し1球ごとに動かす。
+            var totalPitches = def.Pitches + def.PendingPitches;
             line2.Add(MakeLabel("球数", "mup-pitches__lab", "mup-pitches__lab--gap"));
-            var pc = MakeLabel(def.Pitches.ToString(), "mup-pitches", "f-num");
-            if (def.Pitches > 100) pc.AddToClassList("mup-pitches--alert");
-            else if (def.Pitches > 80) pc.AddToClassList("mup-pitches--warn");
+            var pc = MakeLabel(totalPitches.ToString(), "mup-pitches", "f-num");
+            if (totalPitches > 100) pc.AddToClassList("mup-pitches--alert");
+            else if (totalPitches > 80) pc.AddToClassList("mup-pitches--warn");
             line2.Add(pc);
             line2.Add(MakeLabel("球", "mup-pitches__lab"));
             block.Add(line2);
@@ -2615,6 +2618,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: いま止まっている采配窓の局面（回・表裏・カウント・塁）。無ければ null。</summary>
         public LiveAtBat CurrentAtBatForCapture => _atBat;
+
+        /// <summary>スクショ用: 現在のライブ観戦スナップショット（HUD/スタメン列の数値の元, issue #397）。</summary>
+        public MatchLiveSnapshot SnapshotForCapture() => _prog?.Snapshot();
 
         /// <summary>スクショ用: 次の打席を1つ解決してロードする（Update 非依存）。試合終了なら false。</summary>
         public bool AdvanceForCapture()

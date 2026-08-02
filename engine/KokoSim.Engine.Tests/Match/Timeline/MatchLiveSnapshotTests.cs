@@ -246,4 +246,132 @@ public sealed class MatchLiveSnapshotTests
 
         Assert.True(checkedMidGame > 20, $"試合中の検証回数が少なすぎる: {checkedMidGame}");
     }
+
+    // ===== issue #397: 対決ビューの球数が打者交代までまとめて据え置かれる問題の受け入れ =====
+    // engine の球数集計（TeamState.AddPitches）は打席確定時にまとめて加算されるので、対決ビューは
+    // MatchLiveSnapshot が持つ「進行中の打席で既に投げた球数」（LivePitcherToday.PendingPitches）を
+    // 別枠で足し込んで連続に見せる（LiveLineScore の InningRuns/PendingRuns と同型）。
+
+    // 1球ごとの采配窓を進めるたびに、守備側投手の PendingPitches が「これから投げる球の1つ前まで」
+    // （PitchNumberInPa-1）と厳密に一致する＝据え置きが解消され1球ずつ増える。
+    [Fact]
+    public void Snapshot_PendingPitches_IncreasesPitchByPitch_WithinPa()
+    {
+        var prog = new MatchProgression(Team("A", withSourceIds: false, withBench: true),
+            Team("H", withSourceIds: true, withBench: true),
+            new GameContext { CaptureTimelines = true, CapturePitches = true }, 43UL);
+
+        var windows = 0;
+        var sawPendingIncrease = false;
+        while (true)
+        {
+            var r = prog.AdvancePitch();
+            if (r == AdvancePitchResult.Finished) break;
+            if (r != AdvancePitchResult.Pitch) continue; // 打席確定の瞬間は別テストで検証する
+
+            var atBat = prog.CurrentAtBat!;
+            var snap = prog.Snapshot();
+            var defender = atBat.IsTop ? snap.Home.Pitcher : snap.Away.Pitcher;
+            var attacker = atBat.IsTop ? snap.Away.Pitcher : snap.Home.Pitcher;
+
+            // 攻撃側チームの現投手は今投げていない＝進行中ぶんは常に0。
+            Assert.Equal(0, attacker.PendingPitches);
+            Assert.Equal(atBat.PitchNumberInPa - 1, defender.PendingPitches);
+            if (defender.PendingPitches > 0) sawPendingIncrease = true;
+
+            windows++;
+        }
+
+        Assert.True(windows > 100, $"検査した窓が少なすぎる（{windows}）");
+        Assert.True(sawPendingIncrease, "進行中の球数が一度も増えなかった（1球で終わる打席ばかりの可能性）");
+    }
+
+    // 打席が確定した瞬間、進行中ぶん（PendingPitches）は0へ戻り、確定球数（Pitches）は
+    // 「確定前の球数＋直前まで見えていた進行中ぶん＋最後の1球」に一致する＝二重計上も取りこぼしも無い。
+    // 打席の直後に継投が挟まった場合は新投手の確定球数が0から始まることも併せて確認する。
+    [Fact]
+    public void Snapshot_PendingPitches_ResolveIntoConfirmedPitches_OnPaConfirm_NoDoubleCounting()
+    {
+        var prog = new MatchProgression(Team("A", withSourceIds: false, withBench: true),
+            Team("H", withSourceIds: true, withBench: true),
+            new GameContext { CaptureTimelines = true, CapturePitches = true }, 43UL);
+
+        var checkedSamePitcher = 0;
+        var checkedReliefReset = 0;
+        var havePendingSample = false;
+        var lastPendingBeforeConfirm = 0;
+        var lastConfirmedPitches = 0;
+        var lastDefenseWasHome = false;
+        var lastPitcherName = "";
+
+        while (true)
+        {
+            var r = prog.AdvancePitch();
+            if (r == AdvancePitchResult.Finished) break;
+
+            if (r == AdvancePitchResult.Pitch)
+            {
+                var atBat = prog.CurrentAtBat!;
+                var snap = prog.Snapshot();
+                var defender = atBat.IsTop ? snap.Home.Pitcher : snap.Away.Pitcher;
+                lastPendingBeforeConfirm = defender.PendingPitches;
+                lastConfirmedPitches = defender.Pitches;
+                lastDefenseWasHome = atBat.IsTop;
+                lastPitcherName = defender.Name;
+                havePendingSample = true;
+                continue;
+            }
+
+            // AdvancePitchResult.PlateAppearance: 直前の窓で見ていた守備側の投手について検証する。
+            if (havePendingSample)
+            {
+                var confirmedSnap = prog.Snapshot();
+                var confirmedDefender = lastDefenseWasHome ? confirmedSnap.Home.Pitcher : confirmedSnap.Away.Pitcher;
+                Assert.Equal(0, confirmedDefender.PendingPitches);
+
+                if (confirmedDefender.Name == lastPitcherName)
+                {
+                    Assert.Equal(lastConfirmedPitches + lastPendingBeforeConfirm + 1, confirmedDefender.Pitches);
+                    checkedSamePitcher++;
+                }
+                else
+                {
+                    // 打席確定の直後に継投＝新投手の確定球数は0から（旧投手の進行中ぶんは引き継がない）。
+                    Assert.Equal(0, confirmedDefender.Pitches);
+                    checkedReliefReset++;
+                }
+            }
+            havePendingSample = false;
+        }
+
+        Assert.True(checkedSamePitcher > 20, $"検査した打席確定（継投なし）が少なすぎる（{checkedSamePitcher}）");
+    }
+
+    // 打席境界で投手交代を指名すると、新投手は次の1球目の窓から進行中ぶり・確定球数とも0で始まる
+    // （旧投手の球数を引き継がない）。
+    [Fact]
+    public void Snapshot_PendingPitches_StartsAtZero_ForNewPitcherAfterChange()
+    {
+        var prog = new MatchProgression(Team("A", withSourceIds: false, withBench: true),
+            Team("H", withSourceIds: true, withBench: true),
+            new GameContext { CaptureTimelines = true, CapturePitches = true }, 43UL);
+
+        SubstitutionOptions? opt = null;
+        while (prog.Advance())
+        {
+            opt = prog.SubstitutionOptions(teamIsAway: false);
+            if (opt.CanChangePitcher) break;
+        }
+        Assert.NotNull(opt);
+        Assert.True(opt!.CanChangePitcher, "継投候補が見つからない（シード調整が必要）");
+        var reliever = opt.Reserves.First(p => p.Position == FieldPosition.Pitcher);
+        Assert.True(prog.ChangePitcher(teamIsAway: false, reliever));
+
+        var r = prog.AdvancePitch();
+        Assert.Equal(AdvancePitchResult.Pitch, r);
+        var snap = prog.Snapshot();
+        Assert.Equal(reliever.Name, snap.Home.Pitcher.Name);
+        Assert.Equal(0, snap.Home.Pitcher.PendingPitches);
+        Assert.Equal(0, snap.Home.Pitcher.Pitches);
+    }
 }

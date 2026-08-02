@@ -626,12 +626,24 @@ public sealed class MatchProgression
     /// ライブ観戦のスナップショット（両チームの現ラインナップ＋現投手の今日の成績・現在の攻撃側/打者）。
     /// 3カラムのスタメン列とマッチアップHUDの今日成績を、UI再計算せずここから引く（不変条件: 数値はエンジン集計から）。
     /// <see cref="Advance"/> 後に呼ぶ（<see cref="Current"/> の攻撃側/打順を反映）。観測データ＝試合結果に影響しない。
+    ///
+    /// <para>球数（issue #397）: engine の球数集計（<see cref="TeamState.AddPitches"/>）は打席が確定した時に
+    /// まとめて加算されるため、<see cref="AdvancePitch"/> で1球ごとに呼んでも据え置きに見える。ここでは
+    /// <see cref="PendingPitchIndex"/>（進行中の打席で既に投げた球数・打席確定時に0へリセット済み＝二重計上なし）を
+    /// 守備側の <see cref="LivePitcherToday"/> にだけ乗せる。攻撃側チームの現投手は今投げていないので常に0。
+    /// 守備側の判定は <see cref="GameProgress.LiveAtBat"/>（<see cref="GameContext.CapturePitches"/> が真の時だけ
+    /// 存在＝采配窓ごとに最新化される）から取る。存在しなければ判定不能として両チームとも0にする。</para>
     /// </summary>
     public MatchLiveSnapshot Snapshot()
     {
-        var away = new LiveTeamSnapshot(_p.Away.LiveLineup(), _p.Away.LivePitcherLine(),
+        var liveAtBat = _p.LiveAtBat;
+        var awayIsDefending = liveAtBat is not null && !liveAtBat.IsTop;
+        var homeIsDefending = liveAtBat is not null && liveAtBat.IsTop;
+        var away = new LiveTeamSnapshot(_p.Away.LiveLineup(),
+            _p.Away.LivePitcherLine(awayIsDefending ? PendingPitchIndex : 0),
             _p.Away.LiveReserves(), _p.Away.LiveReservePitchers());
-        var home = new LiveTeamSnapshot(_p.Home.LiveLineup(), _p.Home.LivePitcherLine(),
+        var home = new LiveTeamSnapshot(_p.Home.LiveLineup(),
+            _p.Home.LivePitcherLine(homeIsDefending ? PendingPitchIndex : 0),
             _p.Home.LiveReserves(), _p.Home.LiveReservePitchers());
         return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
             _p.Away.LiveLine(), _p.Home.LiveLine());
