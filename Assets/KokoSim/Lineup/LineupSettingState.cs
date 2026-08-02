@@ -42,7 +42,6 @@ namespace KokoSim.Unity.Lineup
         public int UniformNumber;         // 背番号（メンバー設定で割当。0＝未割当）
         public string Name = "";
         public string GradeLabel = "";
-        public bool IsPitcher;
         public bool IsPicked;
         /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空（設計書03 §3.5）。</summary>
         public string Injury = "";
@@ -183,12 +182,25 @@ namespace KokoSim.Unity.Lineup
         // 打順は打撃能力（ミート＋パワー）順に並べ替える＝強打者を中軸へ（背番号順のままだと弱打者が中軸に来て点が入らない）。
         private void SeedFromUniformNumbers()
         {
+            // 埋める前に打順を空にする。既定の 0 のままだと InOrder(0) が真になり、穴埋めが
+            // roster[0] を絶対に選べない（かつ前回シードの DH が残る）。
+            Array.Fill(_idx, -1);
+            _usesDh = false;
+            _dhSlot = -1;
+            _pitcherSlot = 8;
+
+            // 9番＝投手（背番号1）。**打順より先に押さえる**＝穴埋めが役割で候補を絞らなくなったので
+            // （#379）、先に打順を埋めると投手力上位が野手枠に吸われて投手枠へ2番手が回る。
+            var pit = IndexOfUniform(1);
+            _idx[8] = pit >= 0 ? pit : FallbackPitcher();
+            _pos[8] = FieldPosition.Pitcher;
+
             // 8野手を背番号2〜9で拾い、守備位置を付ける。
             var fielders = new List<(int Idx, FieldPosition Pos)>(8);
             for (var i = 0; i < 8; i++)
             {
                 var idx = IndexOfUniform(i + 2);
-                if (idx < 0) idx = FallbackFielder(i);
+                if (idx < 0) idx = FallbackFielder(fielders);
                 fielders.Add((idx, FielderPositions[i]));
             }
             // 打撃力（ミート＋パワー）降順に並べ、強打者を 3→4→2→5→1→6→7→8 番の順に配置（典型的な強打順）。
@@ -199,13 +211,6 @@ namespace KokoSim.Unity.Lineup
                 _idx[slotFor[k]] = fielders[k].Idx;
                 _pos[slotFor[k]] = fielders[k].Pos;
             }
-            // 9番＝投手（背番号1）。
-            var pit = IndexOfUniform(1);
-            _idx[8] = pit >= 0 ? pit : FallbackPitcher();
-            _pos[8] = FieldPosition.Pitcher;
-            _usesDh = false;
-            _dhSlot = -1;
-            _pitcherSlot = 8;
         }
 
         // 打撃力の簡易指標（打順並べ替え用）。ミート＋パワー。
@@ -218,21 +223,19 @@ namespace KokoSim.Unity.Lineup
             return -1;
         }
 
-        private int FallbackFielder(int slot)
+        // 未割当時：まだ打順に居ない選手を打撃力順で拾う（打順に入れる枠なので打てる順）。
+        // 役割では絞らない＝打てる投手はそのまま打順に入る（#366「投手は配置であって属性ではない」/#379）。
+        // picked は同じシード内で確保済みの枠（_idx へはまだ書いていないので InOrder では拾えない）。
+        private int FallbackFielder(List<(int Idx, FieldPosition Pos)> picked)
         {
-            // 未割当時：まだ打順に居ない野手を打撃力順で拾う（打順に入れる枠なので打てる順）。
             foreach (var i in ByBatting())
-                if (!PitcherRoleResolver.LeansPitcher(_roster[i]) && !InOrder(i)) return i;
+                if (!InOrder(i) && !picked.Any(x => x.Idx == i)) return i;
             return ByBatting().First(i => !InOrder(i));
         }
 
-        private int FallbackPitcher()
-        {
-            // 投手枠は投手力順（打撃力で選ぶと投げられない選手が9番に来る）。
-            foreach (var i in ByPitching())
-                if (PitcherRoleResolver.LeansPitcher(_roster[i]) && !InOrder(i)) return i;
-            return ByPitching().First(i => !InOrder(i));
-        }
+        // 投手枠は投手力順（打撃力で選ぶと投げられない選手が9番に来る）。ここも役割では絞らない
+        // ＝投手力が一番高い者が立つ。順位付けは Strength(i).Pitching＝カテゴリ別ランクと同じ単一ソース。
+        private int FallbackPitcher() => ByPitching().First(i => !InOrder(i));
 
         // 候補列挙は常にベンチ入りのみ（自動シード・控え一覧・ToLineupSpec のベンチ/ブルペンが全部これを通る）。
         // 並べ替えキーは枠の用途に合わせる（issue #270／#30 で「選手個人の総合ランク」は廃止済み）。
@@ -413,10 +416,12 @@ namespace KokoSim.Unity.Lineup
             ClearPick();
         }
 
+        // DH に据える打者＝打順に居ない中で最も打てる者。役割では絞らない（#379）＝控え投手でも
+        // 打力が一番なら DH に入る。登板中の投手は既に打順（投手枠）に居るので InOrder が弾く。
         private int BestBenchHitter()
         {
             foreach (var i in ByBatting())
-                if (!PitcherRoleResolver.LeansPitcher(_roster[i]) && !InOrder(i)) return i;
+                if (!InOrder(i)) return i;
             return -1;
         }
 
@@ -557,7 +562,6 @@ namespace KokoSim.Unity.Lineup
                     UniformNumber = p.UniformNumber,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
-                    IsPitcher = PitcherRoleResolver.LeansPitcher(p),
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
                     Injury = InjuryChipText(p),
                 });
@@ -628,26 +632,33 @@ namespace KokoSim.Unity.Lineup
             var stats = GameSession.Current.Stats;
             return new List<StatColumnView>
             {
-                Column("通算", stats.Career.Get(p.Id), PitcherRoleResolver.LeansPitcher(p)),
-                Column("公式戦", stats.Official.Get(p.Id), PitcherRoleResolver.LeansPitcher(p)),
-                Column("今大会", stats.CurrentTournament.Get(p.Id), PitcherRoleResolver.LeansPitcher(p)),
+                Column("通算", stats.Career.Get(p.Id)),
+                Column("公式戦", stats.Official.Get(p.Id)),
+                Column("今大会", stats.CurrentTournament.Get(p.Id)),
             };
         }
 
-        private static StatColumnView Column(string title, PlayerStats s, bool pitcher)
+        // 載せる指標は**出場実績**で決める（導出役割で切り替えない, #366/#379）。登板があれば投手成績、
+        // 打席があれば打撃成績、二刀流は両方積む。役割で切ると「打率.350の投手」「防御率1.42の野手」の
+        // 片側が消える。判定は選手詳細（PlayerDetailState.BuildScope）と同じ条件で揃える。
+        // どちらの実績も無いときは打撃4項目を「—」で置く＝列が空になって枠が潰れないようにする。
+        private static StatColumnView Column(string title, PlayerStats s)
         {
             var col = new StatColumnView { Title = title };
-            if (pitcher)
+            var pit = s?.Pitching;
+            var bat = s?.Batting;
+            var hasPitching = pit != null && (pit.Games > 0 || pit.BattersFaced > 0);
+            var hasBatting = bat != null && (bat.Games > 0 || bat.PlateAppearances > 0);
+
+            if (hasPitching)
             {
-                var pit = s?.Pitching;
-                col.Items.Add(new StatItemView { Label = "防御率", Value = pit != null && pit.Outs > 0 ? pit.Era.ToString("0.00") : "—" });
-                col.Items.Add(new StatItemView { Label = "勝敗", Value = pit != null && pit.Games > 0 ? pit.Wins + "勝" + pit.Losses + "敗" : "—" });
-                col.Items.Add(new StatItemView { Label = "奪三振", Value = pit != null && pit.Games > 0 ? pit.StrikeOuts.ToString() : "—" });
-                col.Items.Add(new StatItemView { Label = "投球回", Value = pit != null && pit.Outs > 0 ? pit.InningsText : "—" });
+                col.Items.Add(new StatItemView { Label = "防御率", Value = pit.Outs > 0 ? pit.Era.ToString("0.00") : "—" });
+                col.Items.Add(new StatItemView { Label = "勝敗", Value = pit.Games > 0 ? pit.Wins + "勝" + pit.Losses + "敗" : "—" });
+                col.Items.Add(new StatItemView { Label = "奪三振", Value = pit.Games > 0 ? pit.StrikeOuts.ToString() : "—" });
+                col.Items.Add(new StatItemView { Label = "投球回", Value = pit.Outs > 0 ? pit.InningsText : "—" });
             }
-            else
+            if (hasBatting || !hasPitching)
             {
-                var bat = s?.Batting;
                 col.Items.Add(new StatItemView { Label = "打率", Value = bat != null && bat.AtBats > 0 ? bat.Average.ToString(".000") : "—" });
                 col.Items.Add(new StatItemView { Label = "本塁打", Value = bat != null && bat.Games > 0 ? bat.HomeRuns.ToString() : "—" });
                 col.Items.Add(new StatItemView { Label = "打点", Value = bat != null && bat.Games > 0 ? bat.Rbi.ToString() : "—" });

@@ -20,10 +20,14 @@ public sealed record PreviewContender(
 /// 注目選手1人（設計書06 §3.5b「注目選手ピックアップ」）。
 /// 氏名・背番号・学年・投打・最速球速は<b>実際の対戦相手ラインナップと同一の真値</b>
 /// （StrengthTeamFactory.ForSchool 由来）。StatLine の成績値だけは能力から導いた読み物用の見込み値。
+///
+/// <paramref name="PitcherLed"/> は<b>選手の属性ではなく校の看板の別</b>＝この校を投手力で採ったか
+/// 打力で採ったか（<see cref="PickNotable"/> の選出理由）。旧名 <c>IsPitcher</c> は選手が投手か否かに
+/// 読めるので改名した（#366「投手は配置であって属性ではない」／issue #379）。
 /// </summary>
 public sealed record NotablePlayer(
     string SchoolName, int UniformNumber, string Name, int Grade, string PositionLabel,
-    string HandednessLabel, bool IsPitcher, string StatLine, string Blurb);
+    string HandednessLabel, bool PitcherLed, string StatLine, string Blurb);
 
 /// <summary>登録メンバー1人（背番号・氏名・守備位置・学年・投打まで。詳細指標は出さない＝設計§3.5b）。</summary>
 public sealed record RosterMember(
@@ -174,7 +178,7 @@ public static class TournamentPreviewBuilder
             Grade: p.Grade,
             PositionLabel: PositionLabel(p.Position),
             HandednessLabel: Players.HandednessLabels.Combined(p.Throws, p.Bats),
-            IsPitcher: pitcherLed,
+            PitcherLed: pitcherLed,
             StatLine: pitcherLed ? PitcherStatLine(p) : BatterStatLine(p),
             Blurb: pitcherLed ? PitcherBlurb(p) : BatterBlurb(p));
     }

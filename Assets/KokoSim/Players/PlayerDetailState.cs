@@ -104,7 +104,6 @@ namespace KokoSim.Unity.Players
         /// <summary>指名できない理由（できるときは空）。ボタン非活性時に添える。</summary>
         public string DesignateReason = "";
         public int TopVelocityKmh;
-        public bool IsPitcher;
         public string OverallGrade = "D";
         public int OverallValue;
 

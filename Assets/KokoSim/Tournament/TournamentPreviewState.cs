@@ -29,8 +29,7 @@ namespace KokoSim.Unity.Tournament
 
         public sealed class NotableRow
         {
-            public string Number;       // 背番号（丸バッジ）
-            public bool IsPitcher;      // バッジ色分け（投手=アンバー / 野手=グリーン）
+            public string Number;       // 背番号（丸バッジ・中立色。投打で塗り分けない, issue #379）
             public string Name;
             public string Sub;          // 校名・学年・投打・守備位置
             public string StatLine;     // 最速/防御率 or 打率/本塁打（合成の見込み値）
@@ -152,7 +151,6 @@ namespace KokoSim.Unity.Tournament
                 v.Notables.Add(new NotableRow
                 {
                     Number = n.UniformNumber.ToString(),
-                    IsPitcher = n.IsPitcher,
                     Name = n.Name,
                     Sub = n.SchoolName + "・" + n.Grade + "年・" + n.HandednessLabel + "・" + n.PositionLabel,
                     StatLine = n.StatLine,

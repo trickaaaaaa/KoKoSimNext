@@ -87,7 +87,7 @@ public sealed class TournamentPreviewTests
             Assert.Contains(n.SchoolName, p.Contenders.Select(c => c.Name));
         }
         // 投手が選ばれた校では最速表記が出る（モックの「最速148km/h」相当）。
-        foreach (var n in p.NotablePlayers.Where(x => x.IsPitcher))
+        foreach (var n in p.NotablePlayers.Where(x => x.PitcherLed))
             Assert.Contains("最速", n.StatLine);
     }
 
@@ -99,7 +99,7 @@ public sealed class TournamentPreviewTests
         var ace = p.NotablePlayers.FirstOrDefault(n => n.SchoolName == "豪腕商業");
 
         Assert.NotNull(ace);
-        Assert.True(ace!.IsPitcher);
+        Assert.True(ace!.PitcherLed);
         Assert.Equal(1, ace.UniformNumber);
         Assert.Equal("投", ace.PositionLabel);
     }
