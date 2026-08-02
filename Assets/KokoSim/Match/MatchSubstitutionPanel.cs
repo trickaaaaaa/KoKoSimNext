@@ -330,9 +330,10 @@ namespace KokoSim.Unity.Match
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickCandidate(idx); Render(); });
                 _inRows.Add(row);
             }
-            foreach (var p in _opt.UsedReserves.Concat(_opt.UsedReserves))
+            // 出場済みは1本の名簿から一度だけ出す（旧 UsedBullpen＋UsedBench の連結を畳んだ。issue #381）。
+            foreach (var p in _opt.UsedReserves)
                 _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
-            if (_cands.Count == 0 && !_opt.UsedReserves.Any() && !_opt.UsedReserves.Any())
+            if (_cands.Count == 0 && !_opt.UsedReserves.Any())
             {
                 var empty = new Label("控えが登録されていない。");
                 empty.AddToClassList("cmp-card__empty");
