@@ -98,6 +98,27 @@ public static class TimelineBuilder
     };
 
     /// <summary>
+    /// 一塁のフォースプレーでカバー野手が立つ位置をベース中心から送球元（実捕球点）側へ
+    /// 寄せるオフセット量[m]（Issue #419）。ベースをまたいだ絵ではなく、踵をベース縁に付けて
+    /// 体を送球方向へ伸ばした実際の一塁手の姿勢にする。表示専用（走者判定は送球到達時刻ベースの
+    /// まま・帯不変）で、二塁・三塁・本塁のカバーには適用しない。
+    /// </summary>
+    private const double FirstBaseCoverOffsetM = 0.4;
+
+    /// <summary>一塁カバー野手の立ち位置＝ベース中心から <paramref name="throwFrom"/>（送球元）へ
+    /// <see cref="FirstBaseCoverOffsetM"/> だけ寄せた点。送球元がベース上に重なる（距離0）縮退時は
+    /// ベース中心のまま返す。</summary>
+    private static TimelinePoint FirstBaseCoverPoint(FieldGeometry field, TimelinePoint throwFrom)
+    {
+        var basePt = BasePoint(field, "first");
+        var dx = throwFrom.X - basePt.X;
+        var dz = throwFrom.Z - basePt.Z;
+        var len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 1e-6) return basePt;
+        return new TimelinePoint(basePt.X + dx / len * FirstBaseCoverOffsetM, basePt.Z + dz / len * FirstBaseCoverOffsetM);
+    }
+
+    /// <summary>
     /// 打球プレーのタイムラインを構築。play=守備解決の詳細、fielders=現守備陣、
     /// formations=陣形ルール表（null なら既定表）。時刻は投球開始=0、接触=0.85s。
     /// closeCallMarginSeconds=判定オーバーレイ（Issue #59）の際どさしきい値[s]（既定は
@@ -418,7 +439,7 @@ public static class TimelineBuilder
                 if (coverer is not null)
                 {
                     var from = new TimelinePoint(coverer.Location.X, coverer.Location.Z);
-                    var to = BasePoint(field, "first");
+                    var to = FirstBaseCoverPoint(field, fieldPoint);
                     var dist = Distance(from, to);
                     if (dist >= 0.5)
                     {
@@ -1233,7 +1254,8 @@ public static class TimelineBuilder
             case FielderTask.FieldBall:
                 return fieldBallTarget;
             case FielderTask.CoverBase:
-                return BasePoint(field, a.Target);
+                // 一塁のみ、送球元（ball＝実捕球点）側へ寄せる。またぐ絵を防ぐ（Issue #419）。
+                return a.Target == "first" ? FirstBaseCoverPoint(field, ball) : BasePoint(field, a.Target);
             case FielderTask.Cutoff:
             {
                 // 中継: 打球と送球先の中間点に立つ。
