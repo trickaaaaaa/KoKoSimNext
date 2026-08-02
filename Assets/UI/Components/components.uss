@@ -746,7 +746,10 @@
 .cmp-head__lab--a { background-color: var(--cmp-a); }
 .cmp-head__lab--b { background-color: var(--cmp-b); }
 .cmp-row { flex-direction: row; align-items: center; margin-top: 2px; margin-bottom: 2px; }
-.cmp-row__lab { width: 56px; flex-shrink: 0; -unity-text-align: middle-left; font-size: var(--fs-cap); color: var(--color-muted); }
+/* ラベル幅は**和文4文字**（「スタミナ」＝投手能力表で最長）が入る実測値。--fs-cap は 17px で
+   3文字が 50.12pt（issue #388 の実測）＝1文字あたり約16.7pt なので、4文字に 68px 要る。
+   旧 56px では「スタミナ」が値へ食い込んでいた（flex-shrink:0 かつ省略も無いのではみ出す）。 */
+.cmp-row__lab { width: 68px; flex-shrink: 0; -unity-text-align: middle-left; font-size: var(--fs-cap); color: var(--color-muted); }
 .cmp-row__side { flex-grow: 1; flex-basis: 0; min-width: 0; flex-direction: row; align-items: center; height: 14px; }
 .cmp-row__side--b { margin-left: var(--sp-2); }
 .cmp-row__track { flex-grow: 1; flex-basis: 0; min-width: 0; height: 8px; background-color: var(--color-panel-deep); border-radius: 0; }
@@ -906,23 +909,40 @@
 .sp-pill__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-2); }
 
 /* ── StatBlock：成績2列（通算/今大会）。数値は右揃え・桁揃え（UI原則③） ── */
-.stat-cols { flex-direction: row; }
-.stat-col {
+/* ── StatTable：比較カードの成績表（issue #388） ──
+   ラベルを左に1列だけ置き、スコープ（通算/公式戦/今大会）を横に並べる表。
+   旧 .stat-col（スコープごとの箱がラベルを繰り返し持つ形）は、3列化した時点で1列の内寸が
+   98pt しか無くなり 3文字ラベル(50pt)＋値(最大55pt) が収まらず文字が重なっていた。
+   ラベルを1本にすることで値へ幅を明け渡し、接触を構造的に無くしている。
+   数値は列ごとに右揃え＝桁が縦に揃う（UI原則③）。 */
+.stat-table { }
+.stat-table__row { flex-direction: row; align-items: center; height: 22px; }
+.stat-table__row--head { height: 18px; }
+/* ラベル列: 3文字ラベル（防御率/奪三振/本塁打/出塁率/投球回）の必要幅 50.12pt を実測で確保する。
+   潰さない＝flex-shrink を効かせない（UI-BUILD-METHOD「潰して収めるのは常に不正解」）。 */
+.stat-table__lab {
+    width: 52px;
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+}
+.stat-table__scope {
     flex-grow: 1;
     flex-basis: 0;
-    background-color: var(--color-panel);
-    border-radius: var(--radius-chip);
-    padding-left: var(--sp-2);
-    padding-right: var(--sp-2);
-    padding-top: var(--sp-1);
-    padding-bottom: var(--sp-2);
+    min-width: 0;
+    -unity-text-align: middle-right;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    letter-spacing: 1px;
 }
-.stat-col--a { margin-right: 4px; }
-.stat-col--b { margin-left: 4px; }
-.stat-col__title { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-bottom: 2px; }
-.stat-row { flex-direction: row; align-items: center; height: 22px; }
-.stat-row__lab { flex-grow: 1; flex-basis: 0; font-size: var(--fs-cap); color: var(--color-muted); }
-.stat-row__val { width: 64px; -unity-text-align: middle-right; font-size: var(--fs-label); color: var(--color-chalk); }
+.stat-table__val {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    -unity-text-align: middle-right;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+}
 
 /* ── AptField：守備適性ダイヤ（比較パネル内・2選手の位置別適性を盤面表示） ── */
 .apt-pair { flex-direction: row; }
