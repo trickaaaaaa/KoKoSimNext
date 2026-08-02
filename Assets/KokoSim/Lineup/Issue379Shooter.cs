@@ -56,7 +56,9 @@ namespace KokoSim.Unity.Lineup
 
             // ── ② スタメン設定：比較カードの成績列 ──
             // 自校の試合を数試合こなして成績を作る。非DHなので投手は打席にも立つ＝投打の両方が溜まる。
-            for (var i = 0; i < 40 && !GameSession.Current.Runner.Finished; i++)
+            // InTournament を先に見る＝自校が敗退すると ExitTournamentIfFinished が Runner を畳んで
+            // null にするので、Runner.Finished を直に見ると NRE で落ちる。
+            for (var i = 0; i < 40 && GameSession.Current.InTournament && !GameSession.Current.Runner.Finished; i++)
             {
                 if (GameSession.Current.ReachedMatchDay) { GameSession.Current.PlayMatch(); GameSession.Current.ConsumeResult(); }
                 else GameSession.Current.AdvanceDay();
@@ -68,20 +70,47 @@ namespace KokoSim.Unity.Lineup
             yield return Focus("LineupSetting", r => lineup = r);
             if (lineup == null) { Debug.LogError("[i379] LineupSetting が見つからない"); yield break; }
 
-            // 左＝先発投手（打順9番＝投打の両方が出る想定）、右＝野手（打撃のみ）。
-            Select(lineup, picked: PitcherRow(lineup), hovered: 0, tab: 0);
+            // 左＝投打の両方に出場実績がある選手（＝二刀流の見え方）、右＝打撃だけの野手。
+            Select(lineup, picked: TwoWayRow(lineup), hovered: 0, tab: 0);
             yield return Capture(lineup, "02-lineup-stats");
+
+            // 成績列（#lu-cmp-stats）は比較カードの下端にあり既定の画角に入らない。そこまで送ってから撮る。
+            var root = lineup.GetComponent<UIDocument>().rootVisualElement;
+            var statHost = root.Q<VisualElement>("lu-cmp-stats");
+            if (statHost != null)
+            {
+                for (var e = statHost.parent; e != null; e = e.parent)
+                    if (e is ScrollView sv) { sv.ScrollTo(statHost); break; }
+                yield return null; yield return null;
+                yield return Capture(lineup, "03-lineup-stats-scrolled");
+            }
+            else Debug.LogError("[i379] lu-cmp-stats が見つからない");
 
             Debug.Log("[i379] DONE");
         }
 
-        // 打順9番（投手枠）に居る選手の名簿添字。取れなければ 0。
-        private static int PitcherRow(MonoBehaviour ctrl)
+        // 投打の両方に出場実績がある選手（対戦打者数が最大）の名簿添字。取れなければ 0。
+        // 打順9番＝投手枠で採ると、背番号1の選手と実際に投げた選手が別人のときに外す。
+        private static int TwoWayRow(MonoBehaviour ctrl)
         {
-            var state = ctrl.GetType().GetField("_state", Priv)?.GetValue(ctrl) as LineupSettingState;
-            if (state == null) return 0;
-            var idx = state.GetType().GetField("_idx", Priv)?.GetValue(state) as int[];
-            return idx != null && idx.Length == 9 ? idx[8] : 0;
+            var state = ctrl.GetType().GetField("_state", Priv)?.GetValue(ctrl);
+            var roster = state?.GetType().GetField("_roster", Priv)?.GetValue(state)
+                as IReadOnlyList<KokoSim.Engine.Season.DevelopingPlayer>;
+            if (roster == null) return 0;
+
+            var book = GameSession.Current.Stats.Career;
+            var best = -1;
+            var bestBf = 0;
+            for (var i = 0; i < roster.Count; i++)
+            {
+                var s = book.Get(roster[i].Id);
+                if (s == null || s.Batting.PlateAppearances == 0) continue;
+                if (s.Pitching.BattersFaced <= bestBf) continue;
+                bestBf = s.Pitching.BattersFaced;
+                best = i;
+            }
+            Debug.Log("[i379] 二刀流の対象 row=" + best + " 対戦打者=" + bestBf);
+            return best >= 0 ? best : 0;
         }
 
         // 比較の左右（picked=左, hovered=右）とタブを差し込んで再描画する。

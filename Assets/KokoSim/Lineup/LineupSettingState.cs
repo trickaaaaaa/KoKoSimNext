@@ -638,10 +638,14 @@ namespace KokoSim.Unity.Lineup
             };
         }
 
-        // 載せる指標は**出場実績**で決める（導出役割で切り替えない, #366/#379）。登板があれば投手成績、
-        // 打席があれば打撃成績、二刀流は両方積む。役割で切ると「打率.350の投手」「防御率1.42の野手」の
-        // 片側が消える。判定は選手詳細（PlayerDetailState.BuildScope）と同じ条件で揃える。
-        // どちらの実績も無いときは打撃4項目を「—」で置く＝列が空になって枠が潰れないようにする。
+        // 載せる指標は**出場実績**で決める（導出役割で切り替えない, #366/#379）。役割で切ると
+        // 「打率.350の投手」「防御率1.42の野手」の片側が消える。判定は選手詳細
+        // （PlayerDetailState.BuildScope）と同じ条件で揃える。
+        //
+        // 行数は投打どちらでも**必ず4**。成績は3列で1列の内寸が98pt しかなく（実測）、3文字ラベルが
+        // 50pt を食うので投打8行を積むと値がラベルへ重なる。ここは一覧の走り読み用で、全指標は
+        // 選手詳細が持つ＝二刀流は各2つの代表指標に絞る（UI-BUILD-METHOD「潰して収めるのは不正解、
+        // 減らすか横に展開する」）。
         private static StatColumnView Column(string title, PlayerStats s)
         {
             var col = new StatColumnView { Title = title };
@@ -650,22 +654,44 @@ namespace KokoSim.Unity.Lineup
             var hasPitching = pit != null && (pit.Games > 0 || pit.BattersFaced > 0);
             var hasBatting = bat != null && (bat.Games > 0 || bat.PlateAppearances > 0);
 
-            if (hasPitching)
+            if (hasPitching && hasBatting)
             {
-                col.Items.Add(new StatItemView { Label = "防御率", Value = pit.Outs > 0 ? pit.Era.ToString("0.00") : "—" });
+                // 二刀流：投打から2つずつ。値の短い指標を選ぶ（「勝敗 0勝2敗」「投球回 12 2/3」は
+                // 値だけで約55pt あり、ラベルと並ぶと 98pt に収まらない）。
+                col.Items.Add(Era(pit));
+                col.Items.Add(StrikeOuts(pit));
+                col.Items.Add(Average(bat));
+                col.Items.Add(HomeRuns(bat));
+            }
+            else if (hasPitching)
+            {
+                col.Items.Add(Era(pit));
                 col.Items.Add(new StatItemView { Label = "勝敗", Value = pit.Games > 0 ? pit.Wins + "勝" + pit.Losses + "敗" : "—" });
-                col.Items.Add(new StatItemView { Label = "奪三振", Value = pit.Games > 0 ? pit.StrikeOuts.ToString() : "—" });
+                col.Items.Add(StrikeOuts(pit));
                 col.Items.Add(new StatItemView { Label = "投球回", Value = pit.Outs > 0 ? pit.InningsText : "—" });
             }
-            if (hasBatting || !hasPitching)
+            else
             {
-                col.Items.Add(new StatItemView { Label = "打率", Value = bat != null && bat.AtBats > 0 ? bat.Average.ToString(".000") : "—" });
-                col.Items.Add(new StatItemView { Label = "本塁打", Value = bat != null && bat.Games > 0 ? bat.HomeRuns.ToString() : "—" });
+                // 打撃実績のみ、および**どちらの実績も無い**とき（＝全項目「—」で枠を保つ）。
+                col.Items.Add(Average(bat));
+                col.Items.Add(HomeRuns(bat));
                 col.Items.Add(new StatItemView { Label = "打点", Value = bat != null && bat.Games > 0 ? bat.Rbi.ToString() : "—" });
                 col.Items.Add(new StatItemView { Label = "出塁率", Value = bat != null && (bat.AtBats + bat.Walks) > 0 ? bat.Obp.ToString(".000") : "—" });
             }
             return col;
         }
+
+        private static StatItemView Era(PitchingStatLine p)
+            => new StatItemView { Label = "防御率", Value = p != null && p.Outs > 0 ? p.Era.ToString("0.00") : "—" };
+
+        private static StatItemView StrikeOuts(PitchingStatLine p)
+            => new StatItemView { Label = "奪三振", Value = p != null && p.Games > 0 ? p.StrikeOuts.ToString() : "—" };
+
+        private static StatItemView Average(BattingStatLine b)
+            => new StatItemView { Label = "打率", Value = b != null && b.AtBats > 0 ? b.Average.ToString(".000") : "—" };
+
+        private static StatItemView HomeRuns(BattingStatLine b)
+            => new StatItemView { Label = "本塁打", Value = b != null && b.Games > 0 ? b.HomeRuns.ToString() : "—" };
 
         // 打順行の簡易成績（通算のみ・全員打撃成績＝投手も打率/本/点）。データ無しは「-」。
         private static string CareerBatLine(DevelopingPlayer p)
