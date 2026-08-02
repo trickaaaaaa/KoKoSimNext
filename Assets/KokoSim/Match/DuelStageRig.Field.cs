@@ -1909,6 +1909,15 @@ namespace KokoSim.Unity.Match
         private const float FieldAimYMin = 1.0f;
 
         /// <summary>
+        /// 注視点（高さ）の追従速度上限[m/s]（issue #399②-2）。①（頂点・着地点基準）でセグメント中の
+        /// 目標は一定になるが、セグメントの変わり目（接触→滞空／着地・捕球→保持）では目標が段差で変わる。
+        /// ここへ即座に飛ぶと段差そのものが目に付くので、Mathf.MoveTowards で寄せる。
+        /// 全景へ戻す「カット」（<see cref="_fieldCamCutT"/>）は対象外＝そこは既存どおり一気に切り替える。
+        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// </summary>
+        public static float FieldAimYSpeedCapMPerSecond = 20f;
+
+        /// <summary>
         /// ZoomMult=1（全景）で縦に収まる実寸[m]。engine 側のデザインキャンバス
         /// （DesignH=520 / S=3.35 px/m）と同じ定義＝2Dの全景と同じ広さから始まる。
         /// **この3定数は engine の CameraPlanBuilder と同期している**（片方だけ変えない）。
@@ -1965,13 +1974,20 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 時刻 t の構図（注視点と縦に収める実寸）を求める。
+        /// 時刻 t の構図（注視点と縦に収める実寸）を求める。**速度上限をかける前の生の目標値**
+        /// （issue #399②-2の速度上限は <see cref="ApplyFieldCamera"/> 側の状態で別途かける）。
         ///
         /// 水平（<c>Cx,Cy</c>）とズームは engine の追随カメラのプランそのもの。**高さだけは 2D の俯瞰に
         /// 存在しない＝プランが持っていない**ので、ここで足す。無いと寄った瞬間にフライが画面の上へ抜ける
         /// （枠 19m の構図に対し打球の頂点は 30m 級＝1枠ぶん以上うわを通る）。
-        /// 足し方はプランと同型＝**同じ箱（今の球と先読み先の球）を縦にも取る**だけで、
-        /// 新しい演出判断を持ち込まない。球が無い区間（保持中・全景復帰後）は下限の腰の高さに落ちる。
+        ///
+        /// 滞空中（<see cref="BallSegmentKind.Flight"/>）は**現在高度を追わない**（issue #399②-1）。
+        /// 現在高度＋0.6秒先読みで決めると、上昇中はほぼ同じ高さへ貼り付き続けて上昇が絵から消える
+        /// （ライナーに見える症状の主因）。代わりに**そのセグメントの頂点・着地点（0とApexHeightM）を
+        /// 両端とする箱**を取る＝engine 側 FitBox の縦版で、セグメント中は枠が一定のまま
+        /// 球がその中で弧を描いて見える。頂点は <c>apex·4u(1−u)</c>（u=0.5で最大）の性質から
+        /// セグメント中央の値をそのまま読むだけで求まる（式を Unity 側で持ち直さない）。
+        /// それ以外の区間（保持中・ゴロ・送球等）は従来どおり現在＋先読みの箱に落ちる。
         /// </summary>
         private void ComputeFieldFrame(float t, out Vector3 aim, out float frameH)
         {
@@ -1980,16 +1996,38 @@ namespace KokoSim.Unity.Match
             frameH = FieldWideHeightM / zoom;
 
             float aimY = FieldAimYMin;
-            var b0 = PlaybackEvaluator.BallAt(_fieldPlay, t);
-            if (b0.HasValue)
+            var flight = FieldFlightSegmentAt(t);
+            if (flight != null)
             {
-                var b1 = PlaybackEvaluator.BallAt(_fieldPlay, t + (float)CameraPlanBuilder.LookaheadSeconds);
-                float h0 = (float)b0.Value.H;
-                float h1 = b1.HasValue ? (float)b1.Value.H : h0;
-                aimY = Mathf.Max(FieldAimYMin, (h0 + h1) * 0.5f);
-                frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + FieldMarginM * 2f);
+                float apex = Mathf.Max(0f, (float)flight.At((flight.T1 - flight.T0) * 0.5).H);
+                aimY = Mathf.Max(FieldAimYMin, apex * 0.5f);
+                frameH = Mathf.Max(frameH, apex + FieldMarginM * 2f);
+            }
+            else
+            {
+                var b0 = PlaybackEvaluator.BallAt(_fieldPlay, t);
+                if (b0.HasValue)
+                {
+                    var b1 = PlaybackEvaluator.BallAt(_fieldPlay, t + (float)CameraPlanBuilder.LookaheadSeconds);
+                    float h0 = (float)b0.Value.H;
+                    float h1 = b1.HasValue ? (float)b1.Value.H : h0;
+                    aimY = Mathf.Max(FieldAimYMin, (h0 + h1) * 0.5f);
+                    frameH = Mathf.Max(frameH, Mathf.Abs(h0 - h1) + FieldMarginM * 2f);
+                }
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
+        }
+
+        /// <summary>時刻 t を覆う滞空セグメント（外野フライ等）。無ければ null（issue #399②-1）。</summary>
+        private EndpointBallSegment FieldFlightSegmentAt(float t)
+        {
+            if (_fieldPlay == null) return null;
+            foreach (var s in _fieldPlay.Ball)
+            {
+                if (t < s.T0) return null;
+                if (t <= s.T1) return s is EndpointBallSegment { Kind: BallSegmentKind.Flight } eb ? eb : null;
+            }
+            return null;
         }
 
         /// <summary>
@@ -2028,7 +2066,12 @@ namespace KokoSim.Unity.Match
                 float lead = Mathf.Min(t + StationLeadSeconds, end);
                 bool o = CameraEvaluator.ViewportAt(_fieldPlan, lead).Cy > StationSwitchDepthM;
                 if (!started) { cur = o; runStart = t; started = true; }
-                else if (o != cur) { runs.Add((runStart, t, cur)); cur = o; runStart = t; }
+                else if (o != cur)
+                {
+                    float cutT = SnapStationCutOutsideFlight(play, t, start, end);
+                    runs.Add((runStart, cutT, cur));
+                    cur = o; runStart = cutT;
+                }
                 if (t >= end) break;
             }
             runs.Add((runStart, end, cur));
@@ -2046,6 +2089,27 @@ namespace KokoSim.Unity.Match
                 if (r.O == _fieldStationCuts[_fieldStationCuts.Count - 1].Outfield) continue;
                 _fieldStationCuts.Add((r.T0, r.O));
             }
+        }
+
+        /// <summary>
+        /// 据え位置カットの時刻を、滞空セグメント（外野フライ等）の外へ寄せる（issue #399②-3）。
+        /// セグメントの途中で切ると、球がまだ弧を描いている最中にカメラの角度（内野／外野の据え位置）が
+        /// 変わり、上昇／下降の連続性が絵から切れる。①（頂点・着地点基準）で枠自体は段差なしになった
+        /// あとも、視点そのものが変わる据え位置カットは残る問題なので別立てで直す。
+        /// 元の切り替え時刻に近いほう（頂点より前＝セグメント開始／着地の後＝セグメント終了）へ寄せ、
+        /// ずれを最小にする。
+        /// </summary>
+        private static float SnapStationCutOutsideFlight(PlaybackPlay play, float t, float start, float end)
+        {
+            foreach (var s in play.Ball)
+            {
+                if (!(s is EndpointBallSegment { Kind: BallSegmentKind.Flight })) continue;
+                if (t <= s.T0 || t >= s.T1) continue;   // セグメントの外＝そのまま
+                float toStart = t - (float)s.T0, toEnd = (float)s.T1 - t;
+                float snapped = toStart <= toEnd ? (float)s.T0 : (float)s.T1;
+                return Mathf.Clamp(snapped, start, end);
+            }
+            return t;
         }
 
         /// <summary>時刻 t に使う据え位置。</summary>
@@ -2088,17 +2152,31 @@ namespace KokoSim.Unity.Match
         private float FieldCamTime(float t) => t < _fieldCamCutT ? t : _fieldPlanEndT;
 
         /// <summary>
+        /// 注視点の高さの**表示値**（速度上限を通した後。issue #399②-2）。<see cref="FieldFrameDiagForCapture"/>
+        /// はこれを読む＝実測が「画面に出ている枠そのもの」になる（<see cref="ComputeFieldFrame"/> は生の目標値）。
+        /// </summary>
+        private float _fieldAimY = FieldAimYMin;
+
+        /// <summary>
         /// 時刻 t の視野を守備カメラへ流す。据え位置は切り替え計画から採り、
         /// 同じ据え位置でいる間は**位置が動かない**（向きと画角だけが動く＝中継の三脚と同じ）。
         /// </summary>
-        private void ApplyFieldCamera(float t)
+        /// <param name="dt">前フレームからの経過秒（注視点の高さの速度上限に使う）。</param>
+        private void ApplyFieldCamera(float t, float dt)
         {
             if (_fieldPlan == null || _fieldPlan.Count == 0) return;
             float ct = FieldCamTime(t);
-            Vector3 aim;
+            Vector3 target;
             float frameH;
-            ComputeFieldFrame(ct, out aim, out frameH);
-            FramePreview(FieldStationAt(ct), aim, frameH);
+            ComputeFieldFrame(ct, out target, out frameH);
+
+            // 全景への「カット」は水平・ズームと同じく一気に切り替える（据え置きにしない・上の申し送り）。
+            // それ以外は段差へ即座に飛ばず、速度上限つきで寄せる（急上昇中は追いつかせない＝issue #399②-2）。
+            _fieldAimY = t >= _fieldCamCutT
+                ? target.y
+                : Mathf.MoveTowards(_fieldAimY, target.y, FieldAimYSpeedCapMPerSecond * Mathf.Max(dt, 0f));
+
+            FramePreview(FieldStationAt(ct), new Vector3(target.x, _fieldAimY, target.z), frameH);
         }
 
         // ---- 打球プレーの再生 ---------------------------------------------------
@@ -2186,6 +2264,16 @@ namespace KokoSim.Unity.Match
             // そこを引けば「戻り切った全景」がそのまま出る＝Unity側で全景の値を持ち直さない
             _fieldPlanEndT = _fieldPlan != null && _fieldPlan.Count > 0
                 ? (float)_fieldPlan[_fieldPlan.Count - 1].T : 0f;
+
+            // 前のプレーの高さを引きずらない＝プレーの頭は速度上限を経由せず目標へ直接合わせる
+            // （速度上限が効くのは次フレーム以降の段差だけ。issue #399②-2）
+            if (_fieldPlan != null && _fieldPlan.Count > 0)
+            {
+                ComputeFieldFrame(FieldCamTime(t0), out var aim0, out _);
+                _fieldAimY = aim0.y;
+            }
+            else _fieldAimY = FieldAimYMin;
+
             _fieldT = t0;
             SetFieldTime(t0);
         }
@@ -2316,7 +2404,7 @@ namespace KokoSim.Unity.Match
                 }
             }
 
-            ApplyFieldCamera(t);
+            ApplyFieldCamera(t, dt);
             if (_ball != null && _ball.activeSelf) ApplyBallReadability();
         }
 
@@ -2445,7 +2533,13 @@ namespace KokoSim.Unity.Match
             var aim = Vector3.zero;
             // ⚠ 球は素の t、枠は**据え置き後の時刻**で採る（＝画面に出ている枠そのもの）。
             float ct = FieldCamTime(t);
-            if (_fieldPlan != null && _fieldPlan.Count > 0) ComputeFieldFrame(ct, out aim, out frameH);
+            if (_fieldPlan != null && _fieldPlan.Count > 0)
+            {
+                ComputeFieldFrame(ct, out aim, out frameH);
+                // 注視点の高さは速度上限を通した表示値に差し替える（生の目標値のままだと
+                // 実測がカメラの実際の動きとずれる。issue #399②-2）
+                aim.y = _fieldAimY;
+            }
 
             // **注視点にいる人**の大きさ＝この構図の読みやすさそのもの。
             // 特定の役（中堅手など）で測ると、その役がプレーに絡まない時に意味のない数になる。
