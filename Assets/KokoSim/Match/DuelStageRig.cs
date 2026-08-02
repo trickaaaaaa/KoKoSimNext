@@ -875,6 +875,7 @@ namespace KokoSim.Unity.Match
         //     0.55m前へワープし、次の12fpsコマで戻る＝置いた点と絵の手が食い違う
         // 手の子にすれば、どちらも構造的に起きない（グラブ・バットと同じ実績パターン）
         private GameObject _ball;
+        private GameObject _ballShadow;    // 打球の影（地面の楕円プリミティブ・実寸。issue #401①）。守備ビューでのみ追従させる
         private Transform _ballHand;       // 貼り付け先（投球する手ボーン）。null=まだ解決していない
         private Vector3 _ballHeldLocal;    // 手ボーンローカルでの球の位置（手の中心＋つまみ）
         private bool _ballHeld;            // 手に貼り付いているか
@@ -1120,6 +1121,14 @@ namespace KokoSim.Unity.Match
             _ball = Primitive(PrimitiveType.Sphere, "prop-ball", Vector3.zero,
                 Vector3.one * 0.074f, new Color(0.95f, 0.95f, 0.92f), layer);
             _ball.SetActive(false);
+
+            // 打球の影（issue #401①・監督決定2026-08-03）。地面に張り付く楕円プリミティブ（ブロブ影・実寸）。
+            // 芝の上の影が高さの唯一の手がかり＝球を潰した薄い球で作る（塁・打席と同じ「地面から数mm浮かせる」
+            // 作法で z-fighting を避ける）。守備ビューでのみ球のXZに追従させる（SetFieldTime）
+            _ballShadow = Primitive(PrimitiveType.Sphere, "prop-ball-shadow", Vector3.zero,
+                new Vector3(BallRealDiameterM, BallShadowThicknessM, BallRealDiameterM),
+                BallShadowColor, layer);
+            _ballShadow.SetActive(false);
 
             Target = CreateRt(BaseWidth, BaseHeight);
 
@@ -2276,6 +2285,7 @@ namespace KokoSim.Unity.Match
                 _ball.transform.localScale = Vector3.one * BallRealDiameterM;
                 _ball.SetActive(false);
             }
+            if (_ballShadow != null) _ballShadow.SetActive(false);
         }
 
         /// <summary>一発物クリップへ差し替えて頭出しする（終了後は Actor.IdleClip へ自動復帰）。</summary>
