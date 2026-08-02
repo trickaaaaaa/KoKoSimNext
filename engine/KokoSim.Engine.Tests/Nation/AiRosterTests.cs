@@ -148,11 +148,11 @@ public sealed class AiRosterTests
         var team = AiTeamBuilder.Build(roster, school, 1, deps);
         Assert.Equal(9, team.BattingOrder.Count);
 
-        var total = team.BattingOrder.Count + team.Bullpen.Count + team.Bench.Count;
+        var total = team.BattingOrder.Count + team.Reserves.Count + team.Reserves.Count;
         Assert.True(total >= 20, $"ベンチ入り20人が成立しない (total={total})");
 
         // 守備固めが全ポジション成立（先発＋控えで8守備位置を網羅）。
-        var covered = team.BattingOrder.Concat(team.Bench).Select(p => p.Position).ToHashSet();
+        var covered = team.BattingOrder.Concat(team.Reserves).Select(p => p.Position).ToHashSet();
         foreach (var pos in new[] { FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
             FieldPosition.ThirdBase, FieldPosition.Shortstop, FieldPosition.LeftField,
             FieldPosition.CenterField, FieldPosition.RightField })

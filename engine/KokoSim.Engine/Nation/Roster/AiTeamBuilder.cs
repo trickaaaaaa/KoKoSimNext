@@ -11,7 +11,7 @@ namespace KokoSim.Engine.Nation.Roster;
 
 /// <summary>
 /// 永続ロスター（<see cref="AiSchoolRoster"/>）から試合可能な <see cref="Team"/> を組む（ベンチ20人選抜）。
-/// 守備位置ごとに最良の在校生を先発へ、残りを控え・ブルペンへ。打順編成は既存 <see cref="LineupOrderer.Compose"/>
+/// 守備位置ごとに最良の在校生を先発へ、残りを控えへ。打順編成は既存 <see cref="LineupOrderer.Compose"/>
 /// をそのまま通す＝展望（TournamentPreview）と実戦が同じここを通り自動で一致する（不変条件#2・rng不使用の決定論変換）。
 /// 各 <see cref="Player.SourceId"/> は生成時の校内選手ID＝全校横断の成績帰属キー。
 /// </summary>
@@ -27,7 +27,7 @@ public static class AiTeamBuilder
     // ベンチ入り20人制（背番号1〜20）: 先発9（野手8＋エース1）＋控え野手8（10〜17）＋控え投手3（18〜20）＝20。
     // StrengthTeamFactory と同じ背番号規則（design-06 §3.3b）。
     private const int BenchFielderSlots = 8;
-    private const int BullpenSlots = 3;
+    private const int ReservePitcherSlots = 3;
 
     /// <summary>
     /// ロスターから Team を構成する。<paramref name="modernRules"/>/<paramref name="calendarYear"/> は
@@ -96,7 +96,7 @@ public static class AiTeamBuilder
         var trueAce = pitchers.FirstOrDefault();
         var snappedAce = trueAce is not null ? Snap(trueAce, AceRestSelector.AceUniformNumber) : null;
         var pnum = 18;
-        var relief = pitchers.Skip(1).Take(BullpenSlots).Select(p => Snap(p, pnum++)).ToList();
+        var relief = pitchers.Skip(1).Take(ReservePitcherSlots).Select(p => Snap(p, pnum++)).ToList();
 
         // 温存判断（issue #42）。相手・残ラウンド・エースの消耗（#41台帳）・校風から次点投手を先発させるか決める。
         var starter = snappedAce;
@@ -120,8 +120,7 @@ public static class AiTeamBuilder
             Name = school.Name,
             BattingOrder = order,
             PitcherSlot = 8,
-            Bullpen = bullpen,
-            Bench = bench,
+            Reserves = Match.Game.TeamReserves.Merge(bullpen, bench),
         };
         return LineupOrderer.Compose(team, deps.Roster.Lineup, modernRules, calendarYear);
     }
@@ -130,7 +129,6 @@ public static class AiTeamBuilder
     private static double PitcherScore(AiPlayer p)
     {
         var a = p.Snapshot.Pitching;
-        if (a is null) return 0;
         return PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh) + a.Control + a.PitchRank
             + PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches);
     }

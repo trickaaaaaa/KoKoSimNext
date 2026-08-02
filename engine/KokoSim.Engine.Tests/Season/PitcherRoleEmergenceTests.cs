@@ -164,9 +164,11 @@ public sealed class PitcherRoleEmergenceTests
             .ToList();
 
         double Bat(Player p) => (p.Contact + p.Power) / 2.0;
-        var pitchers = teams.SelectMany(t => t.BattingOrder.Concat(t.Bullpen))
-            .Where(p => p.Pitching is not null).Select(Bat).ToList();
-        var fielderAvg = teams.SelectMany(t => t.BattingOrder).Where(p => p.Pitching is null).Average(Bat);
+        // 投手か否かは配置で測る（#381: 投手能力は全選手が持つので有無では分けられない）。
+        var pitchers = teams.SelectMany(t => t.BattingOrder.Concat(t.Reserves))
+            .Where(p => p.Position == FieldPosition.Pitcher).Select(Bat).ToList();
+        var fielderAvg = teams.SelectMany(t => t.BattingOrder)
+            .Where(p => p.Position != FieldPosition.Pitcher).Average(Bat);
 
         var share = pitchers.Count(v => v > fielderAvg) / (double)pitchers.Count;
         Assert.True(share > 0.01, $"AI校で野手平均を超える投手が出ていない: {share:P1}");
@@ -184,7 +186,8 @@ public sealed class PitcherRoleEmergenceTests
         var teams = Enumerable.Range(1, 200)
             .Select(i => StrengthTeamFactory.Create(55.0, "校", new Xoshiro256Random((ulong)i), pc, rosterCoeff: C))
             .ToList();
-        var fielders = teams.SelectMany(t => t.BattingOrder).Where(p => p.Pitching is null).ToList();
+        var fielders = teams.SelectMany(t => t.BattingOrder)
+            .Where(p => p.Position != FieldPosition.Pitcher).ToList();
 
         // strength=55 中心・σ=6 の Ability ロールなので、平均は 55 近傍に収まる。
         Assert.InRange(fielders.Average(p => (p.Contact + p.Power) / 2.0), 53.0, 57.0);

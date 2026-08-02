@@ -19,7 +19,7 @@ public sealed class PitcherArchetypeTests
         => new() { Id = id, Name = "テスト校", PrefectureId = 0, Strength = strength };
 
     private static IEnumerable<Player> PitchersOf(Team t)
-        => t.BattingOrder.Concat(t.Bullpen).Where(p => p.Pitching is not null);
+        => t.BattingOrder.Concat(t.Reserves).Where(p => p.Position == FieldPosition.Pitcher);
 
     /// <summary>
     /// 実戦計測は本番と同じ data/coefficients.yaml で回す（C#既定値は YAML と乖離しており、
@@ -282,7 +282,7 @@ public sealed class PitcherArchetypeTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[] { pitcher with { Name = name + "R1" }, pitcher with { Name = name + "R2" } },
+            Reserves = new[] { pitcher with { Name = name + "R1" }, pitcher with { Name = name + "R2" } },
         };
     }
 

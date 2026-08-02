@@ -10,8 +10,8 @@ namespace KokoSim.Engine.Match.Game;
 /// （<see cref="GameReplay"/>）が**同じ関数**を通ることで、「同シード＋同交代操作 → 同結果」が構造的に保証される。
 ///
 /// ここでの添字はすべて「その時点の可変状態」に対するもの:
-/// 控え野手＝<see cref="TeamState.Bench"/>、投手交代の候補＝<see cref="TeamState.AvailablePitcherCandidates"/>
-/// （ブルペン＋野手控え）、打順スロット＝0-8、塁＝0(一塁)/1(二塁)/2(三塁)。
+/// 控え野手＝<see cref="TeamState.Reserves"/>、投手交代の候補＝<see cref="TeamState.AvailablePitcherCandidates"/>
+/// （控え全員）、打順スロット＝0-8、塁＝0(一塁)/1(二塁)/2(三塁)。
 /// 乱数は一切消費しない（交代は決定的操作）。
 /// </summary>
 internal static class SubstitutionCommands
@@ -39,7 +39,7 @@ internal static class SubstitutionCommands
     }
 
     /// <summary>
-    /// 投手交代候補（ブルペン＋野手控え, <see cref="TeamState.AvailablePitcherCandidates"/>）から指名して継投する
+    /// 投手交代候補（控え全員, <see cref="TeamState.AvailablePitcherCandidates"/>）から指名して継投する
     /// （teamIsAway=交代するチーム＝守備側が先攻か。issue #137: 野手も投手として登板できる）。
     /// </summary>
     public static bool ChangePitcher(GameProgress p, bool teamIsAway, int candidateIndex)
@@ -90,9 +90,9 @@ internal static class SubstitutionCommands
     }
 
     /// <summary>
-    /// 継投（issue #256 統合守備割当）。継投候補（<see cref="TeamState.ReliefRankingCandidates"/>＝ブルペン＋ベンチ＋
+    /// 継投（issue #256 統合守備割当）。継投候補（<see cref="TeamState.ReliefRankingCandidates"/>＝控え全員＋
     /// 在フィールドの守備野手）の candidateIndex を指名してマウンドへ上げる。在フィールド野手なら
-    /// <see cref="TeamState.RelieveWith"/> が投野交代で守備穴を backfill し、ブルペン／ベンチなら通常継投。
+    /// <see cref="TeamState.RelieveWith"/> が投野交代で守備穴を backfill し、控えからなら通常継投。
     /// AIの継投（<see cref="GameEngine"/>）と同一の候補集合・同一ルータ・同一 backfill 係数（<c>p.Ctx.ReliefBackfill</c>）。
     /// </summary>
     public static bool Relieve(GameProgress p, bool teamIsAway, int candidateIndex)
@@ -107,7 +107,7 @@ internal static class SubstitutionCommands
     }
 
     /// <summary>
-    /// 守備割当（issue #256 統合守備割当）。控え候補（<see cref="TeamState.AvailablePitcherCandidates"/>＝ブルペン＋ベンチ）の
+    /// 守備割当（issue #256 統合守備割当）。控え候補（<see cref="TeamState.AvailablePitcherCandidates"/>＝控え全員）の
     /// candidateIndex を守備スロット slot に就かせる。就いていた選手は退場する（守備固め／守備割当）。
     /// 役割（投/野）で候補を分けない（#93）。就く守備位置は slot の守備位置を継承する。
     /// </summary>
@@ -121,7 +121,7 @@ internal static class SubstitutionCommands
 
     private static bool TryBench(TeamState team, int benchIndex, out Players.Player sub)
     {
-        var bench = team.Bench;
+        var bench = team.Reserves;
         if (benchIndex < 0 || benchIndex >= bench.Count) { sub = null!; return false; }
         sub = bench[benchIndex];
         return true;

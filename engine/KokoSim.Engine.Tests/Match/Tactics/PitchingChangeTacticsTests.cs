@@ -40,8 +40,9 @@ public sealed class PitchingChangeTacticsTests
     private static Player Reliever(string name, PitcherAttributes attr)
         => new() { Name = name, Position = FieldPosition.Pitcher, Pitching = attr };
 
+    /// <summary>投手として置かれていない控え（投手能力は全選手が持つ＝#381）。</summary>
     private static Player FielderWithLatent(string name, PitcherAttributes latent)
-        => new() { Name = name, Position = FieldPosition.FirstBase, LatentPitching = latent };
+        => new() { Name = name, Position = FieldPosition.FirstBase, Pitching = latent };
 
     /// <summary>異なるシードの独立rngで n 回問い合わせ、継投が返った回数を数える（①能力値ミスの分布を見る）。</summary>
     private static int CountFires(ITacticsBrain brain, PitchingChangeSituation s, int n = 300)
@@ -237,7 +238,7 @@ public sealed class PitchingChangeTacticsTests
             Sit(fatigueTriggered: true, candidates: candidates), new Xoshiro256Random(1))!.Value.Reliever;
 
     [Fact]
-    public void Ai_PicksHighestScoringBullpen_NotFirst()
+    public void Ai_PicksHighestScoringReservePitcher_NotFirst()
     {
         var weak = Reliever("R1", Attr(velLevel: 30, control: 30, staminaLevel: 30, pitchRank: 30));
         var strong = Reliever("R2", Attr(velLevel: 75, control: 75, staminaLevel: 70, pitchRank: 72));
@@ -248,19 +249,19 @@ public sealed class PitchingChangeTacticsTests
     }
 
     [Fact]
-    public void Ai_PicksFielder_WhenLatentOutranksBullpen()
+    public void Ai_PicksFielder_WhenAbilityOutranksReservePitchers()
     {
         var weakPitcher = Reliever("R1", Attr(velLevel: 30, control: 30, staminaLevel: 30, pitchRank: 30));
-        // 強肩の野手（潜在能力がブルペン最上位を上回る）。
+        // 強肩の野手（投手枠の控えの最上位を上回る）。
         var acePosition = FielderWithLatent("SS", Attr(velLevel: 78, control: 60, staminaLevel: 45, pitchRank: 55));
         var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
 
-        // D2: ブルペン最上位を1点でも上回る野手は登板させる。
+        // D2: 投手枠の控えの最上位を1点でも上回るなら守備の選手を登板させる。
         Assert.Equal("SS", PickedReliever(ai, weakPitcher, acePosition)!.Name);
     }
 
     [Fact]
-    public void Ai_PrefersBullpenPitcher_OnScoreTie()
+    public void Ai_PrefersPlacedPitcher_OnScoreTie()
     {
         var attr = Attr(velLevel: 60, control: 55, staminaLevel: 50, pitchRank: 58);
         var pitcher = Reliever("R1", attr);
@@ -272,19 +273,19 @@ public sealed class PitchingChangeTacticsTests
     }
 
     [Fact]
-    public void Ai_FallsBackToFielder_WhenNoBullpenPitcher()
+    public void Ai_FallsBackToFielder_WhenNoReservePitcher()
     {
         var fielder = FielderWithLatent("SS", Attr(velLevel: 40, control: 30, staminaLevel: 25, pitchRank: 28));
         var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
 
-        // ブルペン投手ゼロ（野手のみ）＝緊急登板で野手を選ぶ。
+        // 投手枠の控えゼロ＝緊急登板で守備の選手を選ぶ。
         Assert.Equal("SS", PickedReliever(ai, fielder)!.Name);
     }
 
     [Fact]
     public void Standard_LeavesRelieverNull_EvenWithStrongFielderCandidate()
     {
-        // Standard／無指示は人選しない＝Reliever=null（engine 既定＝ブルペン先頭）。帯不変の担保。
+        // Standard／無指示は人選しない＝Reliever=null（engine 既定＝名簿順で最初の投手枠の控え）。帯不変の担保。
         var strongFielder = FielderWithLatent("SS", Attr(velLevel: 90, control: 80, staminaLevel: 70, pitchRank: 80));
         var std = new StandardTacticsBrain();
         var decision = std.CallPitchingChange(
@@ -294,10 +295,10 @@ public sealed class PitchingChangeTacticsTests
         Assert.Null(decision!.Value.Reliever);
     }
 
-    // ===== Phase B: 潜在投手能力の材料化 =====
+    // ===== 全選手が投手能力を持つ（issue #381 / #366。旧「潜在投手能力の材料化」） =====
 
     [Fact]
-    public void Roster_ProjectsLatentPitchingForFielder_FromTrueLevels()
+    public void Roster_ProjectsPitching_ForEveryone_FromTrueLevels()
     {
         var dp = new DevelopingPlayer();
         dp.SetLevel(AbilityKind.Velocity, 80);
@@ -305,36 +306,34 @@ public sealed class PitchingChangeTacticsTests
         dp.SetLevel(AbilityKind.Stamina, 60);
         dp.SetLevel(AbilityKind.PitchRank, 70);
 
-        // 野手として投影: Pitching は null のまま（#93 投/野区別）だが、隠しの真の投手レベルを LatentPitching に材料化。
-        var fielder = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Shortstop, asPitcher: false);
-        Assert.Null(fielder.Pitching);
-        Assert.NotNull(fielder.LatentPitching);
-        Assert.Equal(PitcherAttributes.VelocityKmhFromLevel(80), fielder.LatentPitching!.MaxVelocityKmh, 3);
-        Assert.Equal(75, fielder.LatentPitching!.Control);
+        // 投手として置くかに関わらず、隠しの真の投手レベルがそのまま投手能力になる（#381）。
+        // 旧実装は野手だけ LatentPitching という別の口へ入れていたが、材料も値も同一だった。
+        var fielder = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Shortstop);
+        Assert.Equal(PitcherAttributes.VelocityKmhFromLevel(80), fielder.Pitching.MaxVelocityKmh, 3);
+        Assert.Equal(75, fielder.Pitching.Control);
 
-        // 投手として投影: Pitching が正、LatentPitching は null（本来の投手）。
-        var pitcher = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Pitcher, asPitcher: true);
-        Assert.NotNull(pitcher.Pitching);
-        Assert.Null(pitcher.LatentPitching);
+        // 配置が変わっても能力は変わらない＝「投手か否か」で能力を作り分けない。
+        var pitcher = RosterTeamBuilder.ToPlayer(dp, FieldPosition.Pitcher);
+        Assert.Equal(fielder.Pitching.MaxVelocityKmh, pitcher.Pitching.MaxVelocityKmh, 3);
+        Assert.Equal(fielder.Pitching.Control, pitcher.Pitching.Control);
     }
 
     [Fact]
-    public void StrengthFactory_PositionPlayer_HasLatentPitching_AndIsDeterministic()
+    public void StrengthFactory_PositionPlayer_HasPitching_AndIsDeterministic()
     {
         var pc = new PersonalityCoefficients();
         var a = StrengthTeamFactory.PositionPlayer(FieldPosition.CenterField, 60, new Xoshiro256Random(123), pc, 0xABCUL, "手");
         var b = StrengthTeamFactory.PositionPlayer(FieldPosition.CenterField, 60, new Xoshiro256Random(123), pc, 0xABCUL, "手");
 
-        // AI校野手も投手能力は null（区別維持）だが、潜在能力は材料化される。
-        Assert.Null(a.Pitching);
-        Assert.NotNull(a.LatentPitching);
-        // 同シード同salt＝同じ潜在能力（決定論）。
-        Assert.Equal(a.LatentPitching!.MaxVelocityKmh, b.LatentPitching!.MaxVelocityKmh);
-        Assert.Equal(a.LatentPitching!.Control, b.LatentPitching!.Control);
+        // AI校のマウンド外の選手も投手能力を持つ（肩からの推定＝低いだけで欠けてはいない）。
+        Assert.True(a.Pitching.Control < PitcherAttributes.LeagueAverage.Control);   // 投げ慣れていない前提
+        // 同シード同salt＝同じ能力（決定論）。
+        Assert.Equal(a.Pitching.MaxVelocityKmh, b.Pitching.MaxVelocityKmh);
+        Assert.Equal(a.Pitching.Control, b.Pitching.Control);
     }
 
     [Fact]
-    public void StrengthFactory_LatentPitchingFork_DoesNotConsumeMainRng()
+    public void StrengthFactory_UntrainedPitchingFork_DoesNotConsumeMainRng()
     {
         var pc = new PersonalityCoefficients();
         var rng1 = new Xoshiro256Random(99);
@@ -342,7 +341,7 @@ public sealed class PitchingChangeTacticsTests
         var afterFactory = rng1.CaptureState();
 
         // PositionPlayer が主ストリームで引くのは能力8ドロー（contact/power/launch(50)/discipline/speed/arm/fielding/catching）
-        // だけ。性格・潜在投手能力はどちらも Fork＝主RNG非消費なので、能力8ドローだけ再現すれば状態は一致する。
+        // だけ。性格・マウンド外の投手能力はどちらも Fork＝主RNG非消費なので、能力8ドローだけ再現すれば状態は一致する。
         var rng2 = new Xoshiro256Random(99);
         foreach (var center in new[] { 60.0, 60, 50, 60, 60, 60, 60, 60 }) rng2.NextGaussian(center, 6);
         var afterAbilitiesOnly = rng2.CaptureState();
@@ -350,10 +349,10 @@ public sealed class PitchingChangeTacticsTests
         Assert.Equal(afterAbilitiesOnly, afterFactory);
     }
 
-    // ===== Phase B: 実登板で潜在能力が実能力（Pitching）として確定する =====
+    // ===== 誰が登板しても本人の投手能力で投げる（issue #209 Phase B → #381） =====
 
     [Fact]
-    public void ChangePitcherTo_Fielder_MaterializesLatentPitchingOnMound()
+    public void ChangePitcherTo_Fielder_PitchesWithOwnAbility()
     {
         Player F(string n, FieldPosition pos) => new() { Name = n, Position = pos };
         var order = new System.Collections.Generic.List<Player>
@@ -368,14 +367,35 @@ public sealed class PitchingChangeTacticsTests
         var team = new Team
         {
             Name = "T", BattingOrder = order, PitcherSlot = 8,
-            Bullpen = System.Array.Empty<Player>(), Bench = new[] { superFielder },
+            Reserves = new[] { superFielder },
         };
         var st = new TeamState(team);
 
         Assert.True(st.ChangePitcherTo(superFielder));
-        // 野手が登板したら、リーグ平均でなく本人の潜在能力で投げる（Pitching が確定）。
-        Assert.NotNull(st.CurrentPitcher.Pitching);
-        Assert.Equal(strongLatent.MaxVelocityKmh, st.CurrentPitcher.Pitching!.MaxVelocityKmh, 3);
-        Assert.NotEqual(PitcherAttributes.LeagueAverage.MaxVelocityKmh, st.CurrentPitcher.Pitching!.MaxVelocityKmh);
+        // 投手として置かれていない控えが登板しても、リーグ平均でなく本人の能力で投げる。
+        Assert.Equal(strongLatent.MaxVelocityKmh, st.CurrentPitcher.Pitching.MaxVelocityKmh, 3);
+        Assert.NotEqual(PitcherAttributes.LeagueAverage.MaxVelocityKmh, st.CurrentPitcher.Pitching.MaxVelocityKmh);
+        // 能力の詰め替え（旧 Materialize）が無くなったので、控えのインスタンスがそのままマウンドに立つ。
+        Assert.Same(superFielder, st.CurrentPitcher);
+    }
+
+    /// <summary>
+    /// 同点の継投優先は<b>配置</b>で決まる（#381 / オーナー判断 2026-08-02「現状維持＝同点は本職投手」）。
+    /// 投手能力は全選手が持つので「能力を持っているか」では表現できない＝守備位置が投手枠かで判定する。
+    /// </summary>
+    [Fact]
+    public void PickReliever_Tie_PrefersThePlayerPlacedAsPitcher()
+    {
+        var same = Attr(velLevel: 60, control: 50, staminaLevel: 40, pitchRank: 50);
+        var placed = Reliever("投手枠の控え", same);
+        var unplaced = FielderWithLatent("守備の控え", same);   // 同一能力＝ReliefScore が同点
+        var ai = new AiTacticsBrain(new AiProfile(60, 5, SchoolStyle.Standard));
+
+        // 名簿では配置外が先。それでも投手枠の控えが選ばれる＝並び順でなく配置で決まっている。
+        Assert.Equal("投手枠の控え", PickedReliever(ai, unplaced, placed)!.Name);
+
+        // 1点でも上回れば配置外が選ばれる（優先はあくまで同点時のタイブレークであって、能力順の上書きではない）。
+        var better = FielderWithLatent("守備の控え強", Attr(velLevel: 61, control: 50, staminaLevel: 40, pitchRank: 50));
+        Assert.Equal("守備の控え強", PickedReliever(ai, better, placed)!.Name);
     }
 }

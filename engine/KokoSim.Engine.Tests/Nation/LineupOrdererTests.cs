@@ -186,7 +186,7 @@ public sealed class LineupOrdererTests
     // ===== Compose: Team全体への適用（DhSlot・StartingPitcher・Benchの整合） =====
 
     private static Team BuildTeam(Player pitcher, IReadOnlyList<Player> fielders, IReadOnlyList<Player> bench)
-        => new() { Name = "テスト校", BattingOrder = fielders.Append(pitcher).ToList(), PitcherSlot = 8, Bench = bench };
+        => new() { Name = "テスト校", BattingOrder = fielders.Append(pitcher).ToList(), PitcherSlot = 8, Reserves = bench };
 
     [Fact]
     public void Compose_WithoutModernRules_NeverUsesDh_PitcherStaysAtSlot8()
@@ -230,10 +230,10 @@ public sealed class LineupOrdererTests
         Assert.Same(pitcher, result.StartingPitcher);
         Assert.Equal(-1, result.PitcherSlot);
         Assert.Equal(9, result.BattingOrder.Count);
-        Assert.All(result.BattingOrder, p => Assert.Null(p.Pitching));           // 打順に投手がいない
+        Assert.All(result.BattingOrder, p => Assert.NotEqual(FieldPosition.Pitcher, p.Position)); // 打順に投手がいない
         Assert.Same(bestBench, result.BattingOrder[result.DhSlot]);              // 最強控えが繰り上げ
-        Assert.DoesNotContain(bestBench, result.Bench);                         // ベンチから抜ける
-        Assert.Single(result.Bench);
+        Assert.DoesNotContain(bestBench, result.Reserves);                         // ベンチから抜ける
+        Assert.Single(result.Reserves);
     }
 
     [Fact]

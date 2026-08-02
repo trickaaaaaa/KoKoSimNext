@@ -329,7 +329,7 @@ public static class GameEngine
     private static TacticsTally TallyOf(TeamState t)
         => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes);
 
-    /// <summary>両チーム全選手（打順＋ブルペン）の当日の出来をサンプリング（順序固定＝決定論）。</summary>
+    /// <summary>打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。</summary>
     private static Dictionary<Player, double> SampleDayForms(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng)
     {
@@ -346,7 +346,12 @@ public static class GameEngine
             {
                 map[team.StartingPitcher] = Sample(team.StartingPitcher);
             }
-            foreach (var p in team.Bullpen) map[p] = Sample(p);
+            // 控えは1本の名簿になったが（issue #381）、**サンプリングする集合は変えない**＝
+            // 投手として置かれた控えだけを名簿順に引く。控えを二分していた頃と同じ選手・同じ順序なので
+            // 乱数消費が1語も動かない（帯・決定論baseline 不変）。控え野手にも当日の出来を配るのは
+            // 消費が増える別の変更なので、やるなら帯の張り直しを伴う独立した issue にする。
+            foreach (var p in team.Reserves)
+                if (p.Position == Field.FieldPosition.Pitcher) map[p] = Sample(p);
         }
         return map;
     }
@@ -555,7 +560,7 @@ public static class GameEngine
             var playMods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
 
             // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
-            var pitcherFatigueOver = defense.FatiguePitches > (currentPitcher.Pitching?.StaminaPitches ?? 90.0);
+            var pitcherFatigueOver = defense.FatiguePitches > currentPitcher.Pitching.StaminaPitches;
             pitcher = PressureModel.ApplyPitcher(pitcher, PressureModel.Multiplier(
                 currentPitcher.Mental, pressureIdx, ctx.Pressure,
                 defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
@@ -1039,7 +1044,7 @@ public static class GameEngine
 
             // 投球過多（設計書03 §3.5）: スタミナ目安を大きく超えて投げ続けた投手の肩肘。
             if (defense.FatiguePitches
-                > (currentPitcher.Pitching?.StaminaPitches ?? 90.0) + ctx.MatchInjury.OveruseOverPitches)
+                > currentPitcher.Pitching.StaminaPitches + ctx.MatchInjury.OveruseOverPitches)
             {
                 Hurt(MatchInjuryModel.Roll(
                     InjuryScene.Overuse, ctx.MatchInjury.OveruseProb, currentPitcher, defense.Name,
@@ -1498,8 +1503,8 @@ public static class GameEngine
         var changed = false;
         if (defense.Tactics is { } brain)
         {
-            var staminaTarget = (defense.CurrentPitcher.Pitching ?? PitcherAttributes.LeagueAverage).StaminaPitches;
-            // 継投人選の候補＝ブルペン＋ベンチ＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
+            var staminaTarget = defense.CurrentPitcher.Pitching.StaminaPitches;
+            // 継投人選の候補＝控え全員＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
             // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
             var candidates = defense.ReliefRankingCandidates;
             var sit = new PitchingChangeSituation(
@@ -1514,7 +1519,7 @@ public static class GameEngine
             {
                 // ConvertTo 指定はコンバート継投＝元投手をその守備位置へ回して Reliever を登板（issue #255）。
                 // Reliever 指定だけならその投手を指名（横断ランキング）。在フィールド野手なら投野交代で backfill。
-                // どちらも null は engine 既定＝ブルペン先頭（StandardTacticsBrain／無指示は常に null＝
+                // どちらも null は engine 既定＝名簿順で最初の投手枠の控え（StandardTacticsBrain／無指示は常に null＝
                 // 従来挙動と1ビットも変わらない＝帯不変）。
                 changed = decision switch
                 {
@@ -1577,7 +1582,7 @@ public static class GameEngine
     private static void MaybeDefensiveSub(
         TeamState defense, TeamState offense, GameContext ctx, IRandomSource rng, int inning, BaseState bases)
     {
-        if (defense.Tactics is null || defense.Bench.Count == 0) return;
+        if (defense.Tactics is null || defense.Reserves.Count == 0) return;
         var sit = SubSituationFor(defense, offense, ctx, inning, outs: 0, bases);
         if (defense.Tactics.CallDefensiveSub(sit, rng) is { } d)
         {
@@ -1621,7 +1626,7 @@ public static class GameEngine
     private static void MaybeOffenseSubs(
         TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int inning, int outs, BaseState bases)
     {
-        if (offense.Tactics is null || offense.Bench.Count == 0) return;
+        if (offense.Tactics is null || offense.Reserves.Count == 0) return;
 
         // 代走: 塁上の鈍足走者を速い控えへ。塁の参照も差し替える。
         if (offense.Tactics.CallPinchRun(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
@@ -1634,7 +1639,7 @@ public static class GameEngine
         }
 
         // 代打: 次打者を厚い控えへ（投手枠はStandard側で除外）。
-        if (offense.Bench.Count > 0
+        if (offense.Reserves.Count > 0
             && offense.Tactics.CallPinchHit(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
             is { } sub)
         {
@@ -1651,7 +1656,7 @@ public static class GameEngine
         return new SubstitutionSituation(
             inning, ctx.RegulationInnings, outs, team.Runs - opponent.Runs,
             bases.First, bases.Second, bases.Third, upcoming, upcomingIsPitcher,
-            team.CurrentLineup, team.Bench);
+            team.CurrentLineup, team.Reserves);
     }
 
     /// <summary>当日の出来を引く（途中出場等で未登録なら0=平常）。</summary>

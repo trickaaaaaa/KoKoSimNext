@@ -215,7 +215,7 @@ public sealed class GameEngineTests
             Name = name,
             BattingOrder = order,
             PitcherSlot = 8,
-            Bullpen = new[] { Pitcher(name + "R1"), Pitcher(name + "R2") },
+            Reserves = new[] { Pitcher(name + "R1"), Pitcher(name + "R2") },
         };
     }
 
@@ -253,7 +253,7 @@ public sealed class GameEngineTests
             Name = name,
             BattingOrder = order,
             PitcherSlot = 8,
-            Bullpen = new[] { WeakPitcher(name + "R1"), WeakPitcher(name + "R2") },
+            Reserves = new[] { WeakPitcher(name + "R1"), WeakPitcher(name + "R2") },
         };
     }
 }

@@ -20,7 +20,7 @@ public sealed class SchoolTeamIdentityTests
         => new() { Id = id, Name = name, PrefectureId = 13, Strength = strength };
 
     private static IEnumerable<Player> All(Team t)
-        => t.BattingOrder.Concat(t.Bullpen).Concat(t.Bench);
+        => t.BattingOrder.Concat(t.Reserves);
 
     [Fact]
     public void ForSchool_IsDeterministic_ForSameSchoolAndYear()
@@ -112,7 +112,7 @@ public sealed class SchoolTeamIdentityTests
     {
         var teams = Enumerable.Range(1, 80).Select(id => StrengthTeamFactory.ForSchool(Sch(id), yearIndex: 1)).ToList();
         var starterAvg = teams.SelectMany(t => t.BattingOrder).Average(p => p.Grade);
-        var benchAvg = teams.SelectMany(t => t.Bench).Average(p => p.Grade);
+        var benchAvg = teams.SelectMany(t => t.Reserves).Average(p => p.Grade);
 
         // 先発は上級生寄り、控えは下級生寄り。
         Assert.True(starterAvg > benchAvg, $"先発{starterAvg:F2} > 控え{benchAvg:F2} を期待");

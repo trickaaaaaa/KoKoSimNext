@@ -45,9 +45,9 @@ public sealed record GameSaveState(ulong Seed, int ConfirmedPlateAppearances)
 /// </param>
 /// <param name="BenchIndex">
 /// 交代で「入る」選手の添字。<see cref="GameDecisionKind.PinchHit"/>/<see cref="GameDecisionKind.PinchRun"/>/
-/// <see cref="GameDecisionKind.DefensiveSub"/> は野手控え（TeamState.Bench）の添字、
+/// <see cref="GameDecisionKind.DefensiveSub"/> は野手控え（TeamState.Reserves）の添字、
 /// <see cref="GameDecisionKind.ChangePitcher"/> は投手交代候補（TeamState.AvailablePitcherCandidates＝
-/// ブルペン＋野手控え, issue #137）の添字。
+/// 控え全員, issue #137）の添字。
 /// </param>
 /// <param name="TargetIndex">
 /// 交代で「退く」側の指定。<see cref="GameDecisionKind.PinchRun"/> は塁の添字（0=一塁,1=二塁,2=三塁）、
@@ -94,13 +94,13 @@ public enum GameDecisionKind
     ConvertRelief,
     /// <summary>
     /// 継投（issue #256 統合守備割当）。OffenseIsAway=**守備側**が先攻か。BenchIndex=継投候補
-    /// （TeamState.ReliefRankingCandidates＝ブルペン＋ベンチ＋在フィールド野手）の添字。在フィールド野手なら投野交代で
+    /// （TeamState.ReliefRankingCandidates＝控え全員＋在フィールド野手）の添字。在フィールド野手なら投野交代で
     /// 守備穴を backfill する。AIの継投（GameEngine）と同一の候補集合・同一ルータ（RelieveWith）を通る。
     /// </summary>
     Relieve,
     /// <summary>
     /// 守備割当（issue #256 統合守備割当）。OffenseIsAway=**守備側**が先攻か。TargetIndex=就かせる守備スロット（打順0-8）、
-    /// BenchIndex=控え候補（TeamState.AvailablePitcherCandidates＝ブルペン＋ベンチ）の添字。就いていた選手は退場する
+    /// BenchIndex=控え候補（TeamState.AvailablePitcherCandidates＝控え全員）の添字。就いていた選手は退場する
     /// （守備固め／守備割当）。役割（投/野）で候補を分けない（#93）。
     /// </summary>
     DefenseAssign,

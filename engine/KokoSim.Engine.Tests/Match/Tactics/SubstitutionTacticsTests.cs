@@ -307,7 +307,7 @@ public sealed class SubstitutionTacticsTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bench = bench, Tactics = brain,
+            Reserves = bench, Tactics = brain,
         };
     }
 

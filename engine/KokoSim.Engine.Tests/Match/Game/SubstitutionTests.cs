@@ -33,7 +33,7 @@ public sealed class SubstitutionTests
             Name = "テスト校",
             BattingOrder = order,
             PitcherSlot = 8,
-            Bench = bench?.ToList() ?? new List<Player>(),
+            Reserves = bench?.ToList() ?? new List<Player>(),
         };
     }
 
@@ -53,7 +53,7 @@ public sealed class SubstitutionTests
         Assert.Equal(FieldPosition.Catcher, state.PeekBatter().Position);
         Assert.Equal("代打マン", state.NextBatter().Name);           // 実際に代打が打席へ
         Assert.Equal(1, state.Substitutions);
-        Assert.DoesNotContain(sub, state.Bench);                    // 控えから消費
+        Assert.DoesNotContain(sub, state.Reserves);                    // 控えから消費
         Assert.False(state.IsAvailable(sub));
     }
 
@@ -130,7 +130,7 @@ public sealed class SubstitutionTests
             BattingOrder = order,
             DhSlot = 8,
             StartingPitcher = At(FieldPosition.Pitcher, "先発P") with { Pitching = PitcherAttributes.LeagueAverage },
-            Bench = bench?.ToList() ?? new List<Player>(),
+            Reserves = bench?.ToList() ?? new List<Player>(),
         };
     }
 
@@ -213,52 +213,52 @@ public sealed class SubstitutionTests
     private static Player Rp(string name)
         => At(FieldPosition.Pitcher, name) with { Pitching = PitcherAttributes.LeagueAverage };
 
-    private static Team MakeTeamWithBullpen(params string[] bullpen)
+    private static Team MakeTeamWithReservePitchers(params string[] bullpen)
     {
         var t = MakeTeam();
-        return t with { Bullpen = bullpen.Select(Rp).ToList() };
+        return t with { Reserves = bullpen.Select(Rp).ToList() };
     }
 
     [Fact]
-    public void ChangePitcherTo_DesignatesAnyBullpenPitcher_NotOnlyTheHead()
+    public void ChangePitcherTo_DesignatesAnyReservePitcher_NotOnlyTheHead()
     {
-        var state = new TeamState(MakeTeamWithBullpen("第2", "第3", "第4"));
-        var third = state.AvailableBullpen[2];
+        var state = new TeamState(MakeTeamWithReservePitchers("第2", "第3", "第4"));
+        var third = state.AvailableReserves[2];
 
         Assert.True(state.ChangePitcherTo(third));
 
         Assert.Equal("第4", state.CurrentPitcher.Name);
         Assert.Equal(1, state.PitcherChanges);
-        // 指名した投手だけがブルペンから消え、飛ばした投手はまだ登板できる。
-        Assert.Equal(new[] { "第2", "第3" }, state.AvailableBullpen.Select(p => p.Name));
+        // 指名した投手だけが控えから消え、飛ばした投手はまだ登板できる。
+        Assert.Equal(new[] { "第2", "第3" }, state.AvailableReserves.Select(p => p.Name));
         // 非DH制なので打順の投手スロットも入れ替わる。
         Assert.Equal("第4", state.CurrentLineup[8].Name);
     }
 
     [Fact]
-    public void TryChangePitcher_StillTakesTheHeadOfTheBullpen()
+    public void TryChangePitcher_StillTakesTheHeadOfTheReserves()
     {
-        var state = new TeamState(MakeTeamWithBullpen("第2", "第3"));
+        var state = new TeamState(MakeTeamWithReservePitchers("第2", "第3"));
 
         Assert.True(state.TryChangePitcher());
 
         Assert.Equal("第2", state.CurrentPitcher.Name);
-        Assert.Equal(new[] { "第3" }, state.AvailableBullpen.Select(p => p.Name));
+        Assert.Equal(new[] { "第3" }, state.AvailableReserves.Select(p => p.Name));
     }
 
     [Fact]
     public void ChangePitcherTo_RetiredPitcherCannotReturn()
     {
-        var state = new TeamState(MakeTeamWithBullpen("第2"));
+        var state = new TeamState(MakeTeamWithReservePitchers("第2"));
         var starter = state.CurrentPitcher;
-        var reliever = state.AvailableBullpen[0];
+        var reliever = state.AvailableReserves[0];
 
         Assert.True(state.ChangePitcherTo(reliever));
 
         Assert.True(state.IsRetired(starter));                 // 降板した先発は再登板不可
         Assert.False(state.ChangePitcherTo(starter));           // リエントリー禁止
         Assert.False(state.ChangePitcherTo(state.CurrentPitcher)); // 登板中の投手も指名できない
-        Assert.Empty(state.AvailableBullpen);
+        Assert.Empty(state.AvailableReserves);
         Assert.False(state.TryChangePitcher());
     }
 
@@ -267,7 +267,8 @@ public sealed class SubstitutionTests
     {
         // 打順を投手スロット（8番）まで進めてから代打を送る＝非DH制の「投手に代打」。
         var sub = At(FieldPosition.FirstBase, "代打", contact: 90);
-        var team = MakeTeamWithBullpen("第2") with { Bench = new[] { sub } };
+        var withBp = MakeTeamWithReservePitchers("第2");
+        var team = withBp with { Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(withBp.Reserves, new[] { sub }) };
         var state = new TeamState(team);
         for (var i = 0; i < 8; i++) state.NextBatter();
         var starter = state.CurrentPitcher;
@@ -286,14 +287,14 @@ public sealed class SubstitutionTests
     [Fact]
     public void Dh_ReleaseThenChangePitcher_NewPitcherBatsInTheFormerDhSlot_AndDhNeverReturns()
     {
-        var team = MakeDhTeam() with { Bullpen = new[] { Rp("第2") } };
+        var team = MakeDhTeam() with { Reserves = new[] { Rp("第2") } };
         var state = new TeamState(team);
 
         Assert.True(state.ReleaseDh());
         Assert.False(state.UsesDh);
         Assert.False(state.ReleaseDh());   // 不可逆＝そのゲーム中DHは復活しない
 
-        Assert.True(state.ChangePitcherTo(state.AvailableBullpen[0]));
+        Assert.True(state.ChangePitcherTo(state.AvailableReserves[0]));
         // DH解除後は投手が打順内（元DHスロット）。継投で打者としても入れ替わる。
         Assert.Equal(8, state.PitcherSlot);
         Assert.Equal("第2", state.CurrentLineup[8].Name);
@@ -304,11 +305,11 @@ public sealed class SubstitutionTests
     [Fact]
     public void Dh_ChangePitcherWhileDhAlive_DoesNotTouchTheBattingOrder()
     {
-        var team = MakeDhTeam() with { Bullpen = new[] { Rp("第2") } };
+        var team = MakeDhTeam() with { Reserves = new[] { Rp("第2") } };
         var state = new TeamState(team);
         var before = state.CurrentLineup.ToList();
 
-        Assert.True(state.ChangePitcherTo(state.AvailableBullpen[0]));
+        Assert.True(state.ChangePitcherTo(state.AvailableReserves[0]));
 
         Assert.True(state.UsesDh);                  // DH制は継投では消えない
         Assert.Equal(before, state.CurrentLineup);  // 投手は打順外なのでラインナップ不変
@@ -318,20 +319,21 @@ public sealed class SubstitutionTests
     // ===== 投手交代でベンチ（野手）を指名できる（issue #137） =====
 
     [Fact]
-    public void AvailablePitcherCandidates_CombinesBullpenAndBench()
+    public void AvailablePitcherCandidates_AreTheWholeReserveRoster()
     {
         var fielder = At(FieldPosition.CenterField, "野手控え");
-        var team = MakeTeamWithBullpen("第2", "第3") with { Bench = new[] { fielder } };
+        var withBp = MakeTeamWithReservePitchers("第2", "第3");
+        var team = withBp with { Reserves = KokoSim.Engine.Match.Game.TeamReserves.Merge(withBp.Reserves, new[] { fielder }) };
         var state = new TeamState(team);
 
         Assert.Equal(new[] { "第2", "第3", "野手控え" }, state.AvailablePitcherCandidates.Select(p => p.Name));
     }
 
     [Fact]
-    public void ChangePitcherTo_CanDesignateAFielderFromTheBench_NotOnlyTheBullpen()
+    public void ChangePitcherTo_CanDesignateAnyReserve_NotOnlyThosePlacedAsPitcher()
     {
         var fielder = At(FieldPosition.CenterField, "野手控え");
-        var team = MakeTeam(new[] { fielder }); // ブルペンは空。ベンチの野手だけが控え。
+        var team = MakeTeam(new[] { fielder }); // 投手枠の控えは空。守備の控えだけが居る。
         var state = new TeamState(team);
         var starter = state.CurrentPitcher;
 
@@ -339,7 +341,7 @@ public sealed class SubstitutionTests
 
         Assert.Equal("野手控え", state.CurrentPitcher.Name);
         Assert.True(state.IsRetired(starter));
-        Assert.DoesNotContain(fielder, state.Bench);            // ベンチから消費
+        Assert.DoesNotContain(fielder, state.Reserves);            // ベンチから消費
         Assert.Equal("野手控え", state.CurrentLineup[8].Name);  // 非DH制なので投手スロットも入れ替わる
     }
 }

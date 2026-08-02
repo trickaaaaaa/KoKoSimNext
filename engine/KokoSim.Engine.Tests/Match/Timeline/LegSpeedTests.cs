@@ -49,7 +49,7 @@ public sealed class LegSpeedTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[]
+            Reserves = new[]
             {
                 Pos(FieldPosition.Pitcher, speed) with { Name = name + "R", Pitching = PitcherAttributes.LeagueAverage },
             },

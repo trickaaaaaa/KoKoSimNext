@@ -397,7 +397,7 @@ public static class GameSimulation
             GeneratePitcher(rng, name + "抑え"),
         };
 
-        return new Team { Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen };
+        return new Team { Name = name, BattingOrder = order, PitcherSlot = 8, Reserves = bullpen };
     }
 
     public static string Report(Stats s, ulong seed)

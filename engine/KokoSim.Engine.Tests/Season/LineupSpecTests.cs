@@ -119,13 +119,13 @@ public sealed class LineupSpecTests
     }
 
     [Fact]
-    public void BuildFromLineup_BenchOutOnBenchOrBullpen_Throws()
+    public void BuildFromLineup_BenchOutOnReserves_Throws()
     {
         var order = StandardOrder(out _);
         Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(
-            new LineupSpec(order, Bench: new List<DevelopingPlayer> { Dp(31, "控え外", number: 0) })));
+            new LineupSpec(order, Reserves: new List<DevelopingPlayer> { Dp(31, "控え外", number: 0) })));
         Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(
-            new LineupSpec(order, Bullpen: new List<DevelopingPlayer> { Dp(32, "投手外", pitcher: true, number: 0) })));
+            new LineupSpec(order, Reserves: new List<DevelopingPlayer> { Dp(32, "投手外", pitcher: true, number: 0) })));
     }
 
     [Fact]
@@ -150,10 +150,8 @@ public sealed class LineupSpecTests
         var order = StandardOrder(out _);
         var team = RosterTeamBuilder.BuildFromLineup(new LineupSpec(
             order,
-            Bullpen: new List<DevelopingPlayer> { Dp(11, "控え投手", pitcher: true) },
-            Bench: new List<DevelopingPlayer> { Dp(12, "控え野手") }));
-        Assert.Single(team.Bullpen);
-        Assert.Single(team.Bench);
+            Reserves: new List<DevelopingPlayer> { Dp(11, "控え投手", pitcher: true), Dp(12, "控え野手") }));
+        Assert.Equal(2, team.Reserves.Count);   // 控えは1本の名簿（投手・野手を分けない, issue #381）
     }
 
     [Fact]

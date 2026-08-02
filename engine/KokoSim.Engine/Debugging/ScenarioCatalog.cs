@@ -192,15 +192,17 @@ public static class ScenarioBuilder
         if (t.UsesDh) return t;
         var pitcher = t.BattingOrder[t.PitcherSlot];
         var order = new List<Player>(t.BattingOrder);
-        // 投手スロットは控え野手（無ければ打順先頭の複製）で埋め、そこをDH枠にする。
-        var dh = t.Bench.Count > 0 ? t.Bench[0] : order[0] with { Name = order[0].Name + "(DH)" };
+        // 投手スロットは控え（投手枠に置かれていない者を優先。無ければ打順先頭の複製）で埋め、そこをDH枠にする。
+        var reserves = new List<Player>(t.Reserves);
+        var dhIndex = reserves.FindIndex(p => p.Position != Match.Field.FieldPosition.Pitcher);
+        if (dhIndex < 0 && reserves.Count > 0) dhIndex = 0;
+        var dh = dhIndex >= 0 ? reserves[dhIndex] : order[0] with { Name = order[0].Name + "(DH)" };
         order[t.PitcherSlot] = dh;
-        var bench = new List<Player>(t.Bench);
-        if (bench.Count > 0) bench.RemoveAt(0);
+        if (dhIndex >= 0) reserves.RemoveAt(dhIndex);
         return t with
         {
             BattingOrder = order,
-            Bench = bench,
+            Reserves = reserves,
             DhSlot = t.PitcherSlot,
             StartingPitcher = pitcher,
         };

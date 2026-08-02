@@ -26,7 +26,7 @@ public static class RosterTeamBuilder
     };
 
     /// <summary>
-    /// ロスターから打順9人（8守備＋投手9番）＋ブルペン2枚のチームを組む。
+    /// ロスターから打順9人（8守備＋投手9番）＋控えの投手2枚のチームを組む。
     /// tactics に采配ブレイン（プレイヤー手動・委任・敵AI ＝ 設計書09/11 の共通 ITacticsBrain）を渡すと
     /// フル采配の試合になる。null（既定）＝無指示で従来の挙動。集計モデル（StrengthTeamFactory）は常に null 維持。
     /// </summary>
@@ -65,19 +65,19 @@ public static class RosterTeamBuilder
         {
             var dp = i < fielders.Count ? fielders[i] : (starter ?? all.FirstOrDefault());
             var pos = FieldSlots[assignment[i]];
-            var pl = ToPlayer(dp, pos, asPitcher: false);
+            var pl = ToPlayer(dp, pos);
             order.Add(pl);
             TrackCaptain(dp, pl);
         }
         var starterDp = starter ?? all.FirstOrDefault();
-        var starterPlayer = ToPlayer(starterDp, FieldPosition.Pitcher, asPitcher: true);
+        var starterPlayer = ToPlayer(starterDp, FieldPosition.Pitcher);
         order.Add(starterPlayer);
         TrackCaptain(starterDp, starterPlayer);
 
         var bullpen = new List<Player>(2);
         foreach (var p in pitchers.Skip(1).Take(2))
         {
-            var pl = ToPlayer(p, FieldPosition.Pitcher, asPitcher: true);
+            var pl = ToPlayer(p, FieldPosition.Pitcher);
             bullpen.Add(pl);
             TrackCaptain(p, pl);
         }
@@ -86,13 +86,13 @@ public static class RosterTeamBuilder
         if (captainDp != null && captainPlayer == null)
         {
             captainPlayer = ToPlayer(captainDp,
-                PitcherRoleResolver.LeansPitcher(captainDp) ? FieldPosition.Pitcher : FieldPosition.CenterField,
-                asPitcher: PitcherRoleResolver.LeansPitcher(captainDp));
+                PitcherRoleResolver.LeansPitcher(captainDp) ? FieldPosition.Pitcher : FieldPosition.CenterField);
         }
 
         return new Team
         {
-            Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen,
+            Name = name, BattingOrder = order, PitcherSlot = 8,
+            Reserves = TeamReserves.Merge(bullpen, Array.Empty<Player>()),
             Tactics = tactics, Captain = captainPlayer,
         };
     }
@@ -169,15 +169,14 @@ public static class RosterTeamBuilder
         if (!spec.UsesDh && (spec.PitcherSlot < 0 || spec.PitcherSlot > 8))
             throw new ArgumentException("PitcherSlot は 0〜8 の範囲です。", nameof(spec));
 
-        // spec が参照する全 DevelopingPlayer（打順＋先発＋ブルペン＋ベンチ）。
+        // spec が参照する全 DevelopingPlayer（打順＋先発＋控え）。
         var referenced = spec.BattingOrder.Select(s => s.Player)
             .Concat(spec.StartingPitcher != null ? new[] { spec.StartingPitcher } : Array.Empty<DevelopingPlayer>())
-            .Concat(spec.Bullpen ?? Array.Empty<DevelopingPlayer>())
-            .Concat(spec.Bench ?? Array.Empty<DevelopingPlayer>())
+            .Concat(spec.Reserves ?? Array.Empty<DevelopingPlayer>())
             .ToList();
 
         // ベンチ入り検証（設計書06 §3.3b: 背番号1〜20＝ベンチ入り・0＝ベンチ外）。
-        // 出場登録（スタメン／先発／ブルペン／ベンチ）はベンチ入り選手のみ。UIが防ぐが安全網としてここで弾く。
+        // 出場登録（スタメン／先発／控え）はベンチ入り選手のみ。UIが防ぐが安全網としてここで弾く。
         var benchOut = referenced.Where(p => p.UniformNumber < 1).Select(p => p.Name).Distinct().ToList();
         if (benchOut.Count > 0)
             throw new ArgumentException(
@@ -191,16 +190,16 @@ public static class RosterTeamBuilder
             if (captainDp != null && ReferenceEquals(dp, captainDp)) captainPlayer = pl;
         }
 
-        Player Project(DevelopingPlayer dp, FieldPosition pos, bool asPitcher)
-            => ToPlayer(dp, pos, asPitcher, injuryCoeff, fieldingCoeff, personalityCoeff);
+        Player Project(DevelopingPlayer dp, FieldPosition pos)
+            => ToPlayer(dp, pos, injuryCoeff, fieldingCoeff, personalityCoeff);
 
         var order = new List<Player>(9);
         for (var i = 0; i < 9; i++)
         {
             var slot = spec.BattingOrder[i];
-            var asPitcher = !spec.UsesDh && i == spec.PitcherSlot;
-            var pos = asPitcher ? FieldPosition.Pitcher : slot.Position; // DHスロットの守備位置は表示用（守備には就かない）
-            var pl = Project(slot.Player, pos, asPitcher);
+            // DHスロットの守備位置は表示用（守備には就かない）。
+            var pos = !spec.UsesDh && i == spec.PitcherSlot ? FieldPosition.Pitcher : slot.Position;
+            var pl = Project(slot.Player, pos);
             order.Add(pl);
             TrackCaptain(slot.Player, pl);
         }
@@ -208,7 +207,7 @@ public static class RosterTeamBuilder
         Player? startingPitcher = null;
         if (spec.UsesDh)
         {
-            startingPitcher = Project(spec.StartingPitcher!, FieldPosition.Pitcher, asPitcher: true);
+            startingPitcher = Project(spec.StartingPitcher!, FieldPosition.Pitcher);
             TrackCaptain(spec.StartingPitcher, startingPitcher);
         }
 
@@ -223,20 +222,14 @@ public static class RosterTeamBuilder
         if (covered.Count != 9)
             throw new ArgumentException("守備位置が9ポジションを一意に網羅していません。", nameof(spec));
 
+        // 控えは1本の名簿（issue #381）。守備位置は「投手として置くか否か」を適性から導出して付ける
+        // （#366: 属性ではなく配置。継投の既定指名・当日の出来のサンプリングがこの配置を見る）。
         var bullpen = new List<Player>();
-        foreach (var dp in spec.Bullpen ?? Array.Empty<DevelopingPlayer>())
-        {
-            var pl = Project(dp, FieldPosition.Pitcher, asPitcher: true);
-            bullpen.Add(pl);
-            TrackCaptain(dp, pl);
-        }
-
         var bench = new List<Player>();
-        foreach (var dp in spec.Bench ?? Array.Empty<DevelopingPlayer>())
+        foreach (var dp in spec.Reserves ?? Array.Empty<DevelopingPlayer>())
         {
-            var leansPitcher = PitcherRoleResolver.LeansPitcher(dp);
-            var pl = Project(dp, leansPitcher ? FieldPosition.Pitcher : FieldPosition.CenterField,
-                asPitcher: leansPitcher);
+            var pl = Project(dp, PitcherRoleResolver.LeansPitcher(dp)
+                ? FieldPosition.Pitcher : FieldPosition.CenterField);
             bench.Add(pl);
             TrackCaptain(dp, pl);
         }
@@ -244,7 +237,7 @@ public static class RosterTeamBuilder
         // 主将がベンチ外/未出場なら単独投影（統率力のベンチ緩和を効かせるため）。
         if (captainDp != null && captainPlayer == null)
             captainPlayer = Project(captainDp,
-                PitcherRoleResolver.LeansPitcher(captainDp) ? FieldPosition.Pitcher : FieldPosition.CenterField, PitcherRoleResolver.LeansPitcher(captainDp));
+                PitcherRoleResolver.LeansPitcher(captainDp) ? FieldPosition.Pitcher : FieldPosition.CenterField);
 
         return new Team
         {
@@ -253,8 +246,7 @@ public static class RosterTeamBuilder
             PitcherSlot = spec.PitcherSlot,
             DhSlot = spec.DhSlot,
             StartingPitcher = startingPitcher,
-            Bullpen = bullpen,
-            Bench = bench,
+            Reserves = TeamReserves.Merge(bullpen, bench),
             Tactics = spec.Tactics,
             Captain = captainPlayer,
         };
@@ -264,13 +256,15 @@ public static class RosterTeamBuilder
     /// 育成選手→試合用 Player 投影。野手能力は直写像、投手能力は PitcherAttributes へ。
     /// 怪我中は段階に応じた一律係数で能力ダウン（設計書03 §3.5「痛みを押しての出場」）。
     /// </summary>
-    public static Player ToPlayer(DevelopingPlayer? dp, FieldPosition pos, bool asPitcher,
+    public static Player ToPlayer(DevelopingPlayer? dp, FieldPosition pos,
         InjuryCoefficients? injuryCoeff = null, FieldingCoefficients? fieldingCoeff = null,
         Players.PersonalityCoefficients? personalityCoeff = null)
     {
+        // 旧 asPitcher 引数は撤去した（issue #381）。投手として置くかは <paramref name="pos"/> が既に表しており、
+        // 呼び出し側が両方を渡す形は「配置と役割がずれた選手」を作れてしまう＝#366 と衝突する。
         if (dp == null)
         {
-            return new Player { Name = "選手", Position = pos, Pitching = asPitcher ? new PitcherAttributes() : null };
+            return new Player { Name = "選手", Position = pos };
         }
 
         // 性格④（設計書01 §1.1）: タイプ→試合効果スカラーを投影時に解決し Player へ焼き込む（ホットパスでのテーブル引き回し回避）。
@@ -289,9 +283,9 @@ public static class RosterTeamBuilder
         var fCoeff = fieldingCoeff ?? new FieldingCoefficients();
         int Field() => (int)MathUtil.Clamp(Math.Round(EffectiveFielding.Raw(dp, pos, fCoeff) * injF), 1, 100);
 
-        // 育成レイヤは全選手が投手5種レベル（球速/制球/スタミナ/キレ/球威）を隠し持つ。投手はこれを Pitching に、
-        // 野手は LatentPitching に投影する（issue #209 Phase B。二刀流スター＝隠し投手力の高い野手を再現）。
-        // 材料は同一なので新規乱数は引かない＝決定論・帯不変。
+        // 育成レイヤは全選手が投手5種レベル（球速/制球/スタミナ/キレ/球威）を隠し持つ。それを配置に関係なく
+        // そのまま Pitching へ投影する（issue #209 Phase B → #381。二刀流スター＝隠し投手力の高い選手を再現）。
+        // 新規乱数は引かない＝決定論・帯不変。
         var pitchRank = L(AbilityKind.PitchRank);
         var stuffLevel = L(AbilityKind.Stuff);
         var builtPitching = new PitcherAttributes
@@ -304,8 +298,8 @@ public static class RosterTeamBuilder
             PitchRank = pitchRank,
             Repertoire = BuildRepertoire(dp, pitchRank, stuffLevel),
         };
-        var pitching = asPitcher ? builtPitching : null;
-        var latentPitching = asPitcher ? null : builtPitching;
+        // 投手として置くかで能力を作り分けない（issue #381）。材料は同じ隠しレベルなので、旧実装の
+        // 「投手＝Pitching／野手＝LatentPitching」はどちらも同じ builtPitching を詰めていた＝値は完全に同一。
 
         return new Player
         {
@@ -339,8 +333,7 @@ public static class RosterTeamBuilder
             ConditionValue = dp.ConditionValue,
             Injury = dp.Injury,
             InjuryResistance = dp.InjuryResistance, // 試合中の受傷判定用（観測系。物理層には流れない）
-            Pitching = pitching,
-            LatentPitching = latentPitching, // 野手の緊急登板用の潜在投手能力（#209 Phase B。投手は null）
+            Pitching = builtPitching,
         };
     }
 

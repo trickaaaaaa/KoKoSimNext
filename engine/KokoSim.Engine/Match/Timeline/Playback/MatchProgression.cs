@@ -229,10 +229,8 @@ public sealed class MatchProgression
             UsesDh = team.UsesDh,
             DhSlot = team.DhSlot,
             Runners = runners,
-            Bench = team.Bench,
-            Bullpen = team.AvailableBullpen,
-            UsedBench = Unavailable(team.RosterBench, team.Bench),
-            UsedBullpen = Unavailable(team.RosterBullpen, team.AvailableBullpen),
+            Reserves = team.AvailableReserves,
+            UsedReserves = Unavailable(team.RosterReserves, team.AvailableReserves),
             ReliefCandidates = team.ReliefRankingCandidates,
         };
     }
@@ -240,21 +238,21 @@ public sealed class MatchProgression
     /// <summary>代打: 次打者を控え sub に代える。控えに sub が居なければ false。</summary>
     public bool PinchHit(bool teamIsAway, Player sub)
     {
-        var idx = IndexOf(_p.OffenseOf(teamIsAway).Bench, sub);
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).Reserves, sub);
         return idx >= 0 && PinchHitUpcoming(teamIsAway, idx);
     }
 
     /// <summary>代走: baseIndex（0=一塁,1=二塁,2=三塁）の走者を控え sub に代える。塁の参照も差し替わる。</summary>
     public bool PinchRun(bool teamIsAway, int baseIndex, Player sub)
     {
-        var idx = IndexOf(_p.OffenseOf(teamIsAway).Bench, sub);
+        var idx = IndexOf(_p.OffenseOf(teamIsAway).Reserves, sub);
         if (idx < 0 || !SubstitutionCommands.PinchRun(_p, teamIsAway, baseIndex, idx)) return false;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PinchRun, teamIsAway, idx,
             TargetIndex: baseIndex));
         return true;
     }
 
-    /// <summary>投手交代: ブルペンまたは野手控えの sub を指名して継投する（先頭固定ではない。issue #137）。</summary>
+    /// <summary>投手交代: 控えの sub を指名して継投する（先頭固定ではない。issue #137）。</summary>
     public bool ChangePitcher(bool teamIsAway, Player sub)
     {
         var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, sub);
@@ -265,9 +263,9 @@ public sealed class MatchProgression
 
     /// <summary>
     /// 継投（issue #256 統合守備割当）。継投候補（<see cref="SubstitutionOptions.ReliefCandidates"/>＝
-    /// ブルペン＋ベンチ＋在フィールドの守備野手）から sub を指名してマウンドへ上げる。在フィールド野手なら
+    /// 控え全員＋在フィールドの守備野手）から sub を指名してマウンドへ上げる。在フィールド野手なら
     /// 投野交代で守備穴を backfill する（<see cref="TeamState.RelieveWith"/>）。プレイヤーとAIが同じ候補集合・
-    /// 同じルータ・同じ backfill 係数を通る。ブルペン／ベンチ指名は <see cref="ChangePitcher"/> と同じ結果になる。
+    /// 同じルータ・同じ backfill 係数を通る。控えの指名は <see cref="ChangePitcher"/> と同じ結果になる。
     /// </summary>
     public bool Relieve(bool teamIsAway, Player sub)
     {
@@ -278,7 +276,7 @@ public sealed class MatchProgression
     }
 
     /// <summary>
-    /// 守備割当（issue #256 統合守備割当）。控え（ブルペン／ベンチ）の sub を守備スロット slot に就かせる
+    /// 守備割当（issue #256 統合守備割当）。控えの sub を守備スロット slot に就かせる
     /// （守備固め／守備割当）。就いていた選手は退場する。役割（投/野）で候補を分けない（#93）。
     /// </summary>
     public bool DefenseAssign(bool teamIsAway, int slot, Player sub)
@@ -294,7 +292,7 @@ public sealed class MatchProgression
     {
         var team = _p.OffenseOf(teamIsAway);
         var slot = IndexOf(team.CurrentLineup, outgoing);
-        var idx = IndexOf(team.Bench, sub);
+        var idx = IndexOf(team.Reserves, sub);
         if (slot < 0 || idx < 0 || !SubstitutionCommands.DefensiveSub(_p, teamIsAway, slot, idx)) return false;
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.DefensiveSub, teamIsAway, idx,
             TargetIndex: slot));
@@ -315,7 +313,7 @@ public sealed class MatchProgression
     }
 
     /// <summary>
-    /// コンバート継投（issue #235）。現投手を守備位置 at へ回し、reliever（ブルペンまたは野手控え）を
+    /// コンバート継投（issue #235）。現投手を守備位置 at へ回し、reliever（控えの誰か）を
     /// 登板させる。at を守っていた野手が退場する。元投手は残留＝打席に立ち続け、後で再登板もできる。
     /// </summary>
     public bool ConvertPitcherAndRelieve(bool teamIsAway, Field.FieldPosition at, Player reliever)
@@ -632,9 +630,9 @@ public sealed class MatchProgression
     public MatchLiveSnapshot Snapshot()
     {
         var away = new LiveTeamSnapshot(_p.Away.LiveLineup(), _p.Away.LivePitcherLine(),
-            _p.Away.LiveBench(), _p.Away.LiveBullpen());
+            _p.Away.LiveReserves(), _p.Away.LiveReservePitchers());
         var home = new LiveTeamSnapshot(_p.Home.LiveLineup(), _p.Home.LivePitcherLine(),
-            _p.Home.LiveBench(), _p.Home.LiveBullpen());
+            _p.Home.LiveReserves(), _p.Home.LiveReservePitchers());
         return new MatchLiveSnapshot(away, home, Current?.IsTop ?? true, Current?.BatterOrder ?? 0,
             _p.Away.LiveLine(), _p.Home.LiveLine());
     }

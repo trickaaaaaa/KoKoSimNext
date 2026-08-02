@@ -17,8 +17,7 @@ public sealed record LineupSpec(
     int PitcherSlot = 8,
     int DhSlot = -1,
     DevelopingPlayer? StartingPitcher = null,
-    IReadOnlyList<DevelopingPlayer>? Bullpen = null,
-    IReadOnlyList<DevelopingPlayer>? Bench = null,
+    IReadOnlyList<DevelopingPlayer>? Reserves = null,
     string Name = "自校",
     ITacticsBrain? Tactics = null)
 {

@@ -49,7 +49,7 @@ namespace KokoSim.Unity.Match
 
         // ── 守備中（割当2ペイン）の選択 ──
         private readonly List<DefenseSlot> _slots = new();  // 割当枠（投・捕…右・指）
-        private List<Player> _cands = new();                // 控え一覧（ブルペン＋ベンチ・背番号順）
+        private List<Player> _cands = new();                // 控え一覧（1本の名簿・背番号順）
         private int _pickedSlot = -1;    // 主選択の割当枠
         private int _pickedSlot2 = -1;   // 対の割当枠（枠→枠）
         private int _defInIndex = -1;    // 控え一覧の添字（枠→控え）
@@ -157,7 +157,7 @@ namespace KokoSim.Unity.Match
             FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
         };
 
-        /// <summary>守備割当10枠（投→捕…右→指）と控え一覧（ブルペン＋ベンチ・背番号順）を組む。</summary>
+        /// <summary>守備割当10枠（投→捕…右→指）と控え一覧（1本の名簿・背番号順）を組む。</summary>
         private void BuildDefenseModel()
         {
             _slots.Clear();
@@ -176,8 +176,8 @@ namespace KokoSim.Unity.Match
             if (_opt.UsesDh && _opt.DhSlot >= 0 && _opt.DhSlot < _opt.Lineup.Count)
                 _slots.Add(new DefenseSlot(FieldPosition.DesignatedHitter, _opt.Lineup[_opt.DhSlot], _opt.DhSlot, SlotRole.Dh));
 
-            // 控えは役割で分けない＝ブルペン＋ベンチをフラットに背番号順（#93）。
-            _cands = _opt.Bullpen.Concat(_opt.Bench).OrderBy(p => p.UniformNumber == 0 ? int.MaxValue : p.UniformNumber)
+            // 控えは役割で分けない（#93 / #381: engine 側も1本の名簿）。念のため背番号順に揃える。
+            _cands = _opt.Reserves.OrderBy(p => p.UniformNumber == 0 ? int.MaxValue : p.UniformNumber)
                 .ThenBy(p => p.Name).ToList();
         }
 
@@ -263,15 +263,15 @@ namespace KokoSim.Unity.Match
             if (_inRows == null) return;
             _inRows.Clear();
             if (_insCap != null) _insCap.text = "控え";
-            for (var i = 0; i < _opt.Bench.Count; i++)
+            for (var i = 0; i < _opt.Reserves.Count; i++)
             {
                 var idx = i;
-                var row = BenchRow(_opt.Bench[i], dim: false, picked: _offInIndex == i, note: "");
+                var row = BenchRow(_opt.Reserves[i], dim: false, picked: _offInIndex == i, note: "");
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _offInIndex = idx; Render(); });
                 _inRows.Add(row);
             }
-            foreach (var p in _opt.UsedBench) _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
-            if (_opt.Bench.Count == 0 && _opt.UsedBench.Count == 0)
+            foreach (var p in _opt.UsedReserves) _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
+            if (_opt.Reserves.Count == 0 && _opt.UsedReserves.Count == 0)
             {
                 var empty = new Label("控えが登録されていない。");
                 empty.AddToClassList("cmp-card__empty");
@@ -330,9 +330,10 @@ namespace KokoSim.Unity.Match
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickCandidate(idx); Render(); });
                 _inRows.Add(row);
             }
-            foreach (var p in _opt.UsedBullpen.Concat(_opt.UsedBench))
+            // 出場済みは1本の名簿から一度だけ出す（旧 UsedBullpen＋UsedBench の連結を畳んだ。issue #381）。
+            foreach (var p in _opt.UsedReserves)
                 _inRows.Add(BenchRow(p, dim: true, picked: false, note: "出場済"));
-            if (_cands.Count == 0 && !_opt.UsedBullpen.Any() && !_opt.UsedBench.Any())
+            if (_cands.Count == 0 && !_opt.UsedReserves.Any())
             {
                 var empty = new Label("控えが登録されていない。");
                 empty.AddToClassList("cmp-card__empty");
@@ -480,7 +481,7 @@ namespace KokoSim.Unity.Match
                 var outP = _offKind == SubstitutionKind.PinchHit
                     ? (_opt.UpcomingBatterSlot >= 0 ? _opt.Lineup[_opt.UpcomingBatterSlot] : null)
                     : RunnerAt(_baseIndex);
-                var inP = _offInIndex >= 0 && _offInIndex < _opt.Bench.Count ? _opt.Bench[_offInIndex] : null;
+                var inP = _offInIndex >= 0 && _offInIndex < _opt.Reserves.Count ? _opt.Reserves[_offInIndex] : null;
                 return (outP, inP, false, "退く", "入る");
             }
 
@@ -531,13 +532,13 @@ namespace KokoSim.Unity.Match
             {
                 if (_offKind == SubstitutionKind.PinchHit)
                 {
-                    if (_opt.Bench.Count == 0) return (false, "控えの野手が残っていない。", true);
+                    if (_opt.Reserves.Count == 0) return (false, "控えが残っていない。", true);
                     return _offInIndex >= 0
                         ? (true, "代打を送る。退いた選手は再出場できない。", false)
                         : (false, "控えから代打を選ぶ。", false);
                 }
                 if (_opt.Runners.Count == 0) return (false, "塁上に走者がいない。", true);
-                if (_opt.Bench.Count == 0) return (false, "控えの野手が残っていない。", true);
+                if (_opt.Reserves.Count == 0) return (false, "控えが残っていない。", true);
                 if (_baseIndex < 0) return (false, "代走に出す走者を選ぶ。", false);
                 return _offInIndex >= 0
                     ? (true, "代走を送る。退いた選手は再出場できない。", false)
@@ -587,10 +588,10 @@ namespace KokoSim.Unity.Match
             bool ok;
             if (_opt.IsOffense)
             {
-                if (_offInIndex < 0 || _offInIndex >= _opt.Bench.Count) return;
+                if (_offInIndex < 0 || _offInIndex >= _opt.Reserves.Count) return;
                 ok = _offKind == SubstitutionKind.PinchRun
-                    ? _baseIndex >= 0 && _prog.PinchRun(_teamIsAway, _baseIndex, _opt.Bench[_offInIndex])
-                    : _prog.PinchHit(_teamIsAway, _opt.Bench[_offInIndex]);
+                    ? _baseIndex >= 0 && _prog.PinchRun(_teamIsAway, _baseIndex, _opt.Reserves[_offInIndex])
+                    : _prog.PinchHit(_teamIsAway, _opt.Reserves[_offInIndex]);
             }
             else
             {

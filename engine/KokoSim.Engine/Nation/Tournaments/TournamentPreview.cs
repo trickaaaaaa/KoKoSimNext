@@ -187,7 +187,7 @@ public static class TournamentPreviewBuilder
     {
         // DHスロットの選手は本来守備位置ではなく「指」を表示する（enum由来・issue #70）。
         var dhPlayer = team.UsesDh ? team.BattingOrder[team.DhSlot] : null;
-        var members = team.BattingOrder.Concat(team.Bullpen).Concat(team.Bench)
+        var members = team.BattingOrder.Concat(team.Reserves)
             .OrderBy(p => p.UniformNumber)
             .Select(p => new RosterMember(
                 p.UniformNumber, p.Name,
@@ -218,14 +218,14 @@ public static class TournamentPreviewBuilder
     /// <summary>球質タイプ。生成時に確定した型があればそれを使い、無ければ能力から推定する。</summary>
     private static Players.PitcherArchetype ArchetypeOf(Players.Player p)
     {
-        var a = p.Pitching!;
+        var a = p.Pitching;
         return a.Archetype ?? Players.PitcherArchetypes.Infer(
             Players.PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh), a.Control, a.PitchRank);
     }
 
     private static string PitcherStatLine(Players.Player p)
     {
-        var a = p.Pitching!;
+        var a = p.Pitching;
         var skill = (a.Control + a.PitchRank) / 2.0;
         // 上位校のエースが防御率1点台に収まる傾斜（県大会の実感に合わせる）。skill85→約0.9 / 70→約2.4 / 50→4.4。
         var era = System.Math.Round(MathUtil.Clamp(4.40 - (skill - 50) * 0.10, 0.35, 6.50), 2);

@@ -116,7 +116,7 @@ public readonly record struct TacticsSituation(
 /// <summary>
 /// 選手交代の判断に渡す状況（設計書09 §6）。ScoreDiff は判断するチーム視点の得失点差（正=リード）。
 /// 攻撃側=代打（UpcomingBatter）/代走（塁上走者）、守備側=守備固め（Lineup から選ぶ）。
-/// Lineup は現在の打順9人、Bench は起用できる控え（いずれも交代反映済み）。
+/// Lineup は現在の打順9人、Reserves は起用できる控え1本（いずれも交代反映済み）。
 /// </summary>
 public readonly record struct SubstitutionSituation(
     int Inning,
@@ -129,7 +129,7 @@ public readonly record struct SubstitutionSituation(
     Player UpcomingBatter,
     bool UpcomingBatterIsPitcher,
     IReadOnlyList<Player> Lineup,
-    IReadOnlyList<Player> Bench);
+    IReadOnlyList<Player> Reserves);
 
 /// <summary>
 /// 継投判断に渡す状況（issue #209, 設計書11 §4）。守備側（＝投げている側）視点で組む。
@@ -151,7 +151,7 @@ public readonly record struct PitchingChangeSituation(
     double StaminaTarget,        // 現投手の目安投球数（StaminaPitches）
     double RelieveMargin,        // 継投しきい値の余白（FatigueCoefficients.RelievePitchMargin）
     bool ReliefAvailable,        // 交代できる控え投手がいるか
-    IReadOnlyList<Player> ReliefCandidates,  // 継投人選の候補（ブルペン＋ベンチ。issue #209 Phase B）
+    IReadOnlyList<Player> ReliefCandidates,  // 継投人選の候補（控え全員。issue #209 Phase B / #381）
     // --- コンバート継投（issue #255 B-1, 設計書09 §6.2）の判断に使う。既定 null＝従来の呼び出しと同じ ---
     Player? CurrentPitcher = null,               // 現投手（守備へ回す候補。打力を見る）
     IReadOnlyList<Player>? DefenseLineup = null, // 打順スロット順の現ラインナップ（Position つき）
@@ -184,7 +184,7 @@ public enum PitchingChangeReason
 
 /// <summary>
 /// 継投判断の結果（issue #209）。null=続投。<see cref="Reliever"/> が非null なら engine はその投手を指名して
-/// 交代する（横断ランキング人選＝Phase B）。null なら engine 既定＝ブルペン先頭で交代する
+/// 交代する（横断ランキング人選＝Phase B）。null なら engine 既定＝名簿順で最初の投手枠の控えで交代する
 /// （<see cref="StandardTacticsBrain"/>／無指示は常に null を返す＝従来挙動と1ビットも変わらない＝帯不変）。
 /// </summary>
 /// <para>

@@ -309,7 +309,7 @@ public sealed class FormModelTests
         return new Team
         {
             Name = name, BattingOrder = order, PitcherSlot = 8,
-            Bullpen = new[] { Pos(FieldPosition.Pitcher, c) with { Name = name + "R", Pitching = PitcherAttributes.LeagueAverage } },
+            Reserves = new[] { Pos(FieldPosition.Pitcher, c) with { Name = name + "R", Pitching = PitcherAttributes.LeagueAverage } },
         };
     }
 }

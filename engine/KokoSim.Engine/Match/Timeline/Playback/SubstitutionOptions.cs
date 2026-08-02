@@ -48,38 +48,35 @@ public sealed class SubstitutionOptions
     /// <summary>代走に出せる塁上の走者（半イニングが終わっていれば空）。</summary>
     public required IReadOnlyList<RunnerChoice> Runners { get; init; }
 
-    /// <summary>使える野手控え（退場済みは含まない＝リエントリー禁止）。</summary>
-    public required IReadOnlyList<Player> Bench { get; init; }
+    /// <summary>
+    /// 使える控え（退場済み・登板済みは含まない＝リエントリー禁止）。名簿順＝背番号順。
+    /// 投手控えと野手控えに分けない（issue #381）＝代打・代走・守備交代・継投すべてこの1本から選ぶ。
+    /// </summary>
+    public required IReadOnlyList<Player> Reserves { get; init; }
 
-    /// <summary>まだ登板していない控え投手（登板済み・退場済みは含まない）。</summary>
-    public required IReadOnlyList<Player> Bullpen { get; init; }
-
-    /// <summary>もう使えない控え野手（出場済み＝リエントリー禁止）。UIはグレーアウトして選ばせない。</summary>
-    public required IReadOnlyList<Player> UsedBench { get; init; }
-
-    /// <summary>もう使えない控え投手（登板済み）。UIはグレーアウトして選ばせない。</summary>
-    public required IReadOnlyList<Player> UsedBullpen { get; init; }
+    /// <summary>もう使えない控え（出場済み・登板済み）。UIはグレーアウトして選ばせない。</summary>
+    public required IReadOnlyList<Player> UsedReserves { get; init; }
 
     /// <summary>
-    /// 継投で指名できる全候補（ブルペン＋ベンチ＋在フィールドの守備野手。issue #256）。AIの継投（GameEngine）と
+    /// 継投で指名できる全候補（控え＋在フィールドの守備野手。issue #256）。AIの継投（GameEngine）と
     /// 同一集合＝プレイヤーもAIと同じ人選ができる。<see cref="MatchProgression.Relieve"/> の Player 引数はこの中から選ぶ
     /// （在フィールド野手を指名すると投野交代で守備穴を backfill する）。
     /// </summary>
     public required IReadOnlyList<Player> ReliefCandidates { get; init; }
 
     /// <summary>
-    /// 投手交代で指名できる全候補（ブルペン＋野手控え。issue #137: 野手も投手として登板できる）。
+    /// 投手交代で指名できる全候補＝控え全員（issue #137: 誰でも投手として登板できる）。
     /// <see cref="MatchProgression.ChangePitcher"/> の Player 引数はこの一覧の中から選ぶ。
     /// </summary>
-    public IReadOnlyList<Player> PitcherCandidates => Bullpen.Concat(Bench).ToList();
+    public IReadOnlyList<Player> PitcherCandidates => Reserves;
 
-    /// <summary>もう指名できない投手交代候補（登板済みブルペン＋出場済み控え）。</summary>
-    public IReadOnlyList<Player> UsedPitcherCandidates => UsedBullpen.Concat(UsedBench).ToList();
+    /// <summary>もう指名できない投手交代候補＝使い切った控え。</summary>
+    public IReadOnlyList<Player> UsedPitcherCandidates => UsedReserves;
 
-    public bool CanPinchHit => !IsFinished && IsOffense && Bench.Count > 0;
-    public bool CanPinchRun => !IsFinished && IsOffense && Bench.Count > 0 && Runners.Count > 0;
+    public bool CanPinchHit => !IsFinished && IsOffense && Reserves.Count > 0;
+    public bool CanPinchRun => !IsFinished && IsOffense && Reserves.Count > 0 && Runners.Count > 0;
     public bool CanChangePitcher => !IsFinished && !IsOffense && PitcherCandidates.Count > 0;
-    public bool CanDefensiveSub => !IsFinished && !IsOffense && Bench.Count > 0;
+    public bool CanDefensiveSub => !IsFinished && !IsOffense && Reserves.Count > 0;
     public bool CanReleaseDh => !IsFinished && !IsOffense && UsesDh;
 
     /// <summary>
@@ -129,14 +126,14 @@ public sealed class SubstitutionOptions
         {
             case SubstitutionKind.PinchHit:
                 if (!IsOffense) return "守備中は代打を送れない。";
-                return Bench.Count == 0 ? "控えの野手が残っていない。" : null;
+                return Reserves.Count == 0 ? "控えの野手が残っていない。" : null;
             case SubstitutionKind.PinchRun:
                 if (!IsOffense) return "守備中は代走を送れない。";
                 if (Runners.Count == 0) return "塁上に走者がいない。";
-                return Bench.Count == 0 ? "控えの野手が残っていない。" : null;
+                return Reserves.Count == 0 ? "控えの野手が残っていない。" : null;
             case SubstitutionKind.DefensiveSub:
                 if (IsOffense) return "攻撃中は守備交代できない。";
-                return Bench.Count == 0 ? "控えの野手が残っていない。" : null;
+                return Reserves.Count == 0 ? "控えの野手が残っていない。" : null;
             default:
                 return null;
         }

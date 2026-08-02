@@ -134,21 +134,22 @@ public static class AiRosterCycle
             Baserunning = Up(b.Baserunning),
             Lead = Up(b.Lead),
         };
-        if (b.Pitching is { } a)
+        // 投手能力も全選手ぶん伸ばす（#381）。旧実装は「投手能力を持つなら」＝マウンドに置かれた選手だけで、
+        // 野手の投手能力は入学時のまま据え置かれていた（3年生が1年生と同じ肩で緊急登板する）。
+        // 6指標（<see cref="ScoutedTeamProfile"/>）は投手として置かれた選手しか投手力に数えないので、
+        // 逆算配分（<see cref="SettleToTarget"/>）のターゲット尺度は動かない＝校の総合力は不変。
+        var a = b.Pitching;
+        var vl = Up(PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh));
+        var sl = Up(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches));
+        return r with
         {
-            var vl = Up(PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh));
-            var sl = Up(PitcherAttributes.LevelFromStaminaPitches(a.StaminaPitches));
-            r = r with
+            Pitching = a with
             {
-                Pitching = a with
-                {
-                    MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(vl),
-                    Control = Up(a.Control),
-                    PitchRank = Up(a.PitchRank),
-                    StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(sl),
-                },
-            };
-        }
-        return r;
+                MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(vl),
+                Control = Up(a.Control),
+                PitchRank = Up(a.PitchRank),
+                StaminaPitches = PitcherAttributes.StaminaPitchesFromLevel(sl),
+            },
+        };
     }
 }

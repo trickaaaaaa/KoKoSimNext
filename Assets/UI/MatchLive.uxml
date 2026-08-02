@@ -152,7 +152,7 @@
                         </ui:ScrollView>
                     </ui:VisualElement>
 
-                    <!-- 中：入る選手（控え／ブルペン／DHの行き先） -->
+                    <!-- 中：入る選手（控え／DHの行き先） -->
                     <ui:VisualElement class="msub-ins">
                         <ui:Label name="msub-ins-cap" text="入る選手" class="msub-section" />
                         <ui:ScrollView mode="Vertical" class="msub-scroll">

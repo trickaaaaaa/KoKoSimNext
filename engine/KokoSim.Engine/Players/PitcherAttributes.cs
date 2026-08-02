@@ -87,7 +87,7 @@ public sealed record PitcherAttributes
 
     /// <summary>
     /// 継投人選のランキングスコア（issue #209 Phase B）。球速・制球・キレ・スタミナを等級（Level）に
-    /// 揃えた素点和。AiTeamBuilder.PitcherScore と同一の合成で、ブルペン投手と野手の潜在能力を
+    /// 揃えた素点和。AiTeamBuilder.PitcherScore と同一の合成で、控え全員の投手能力を
     /// 同じ土俵で比較する（球速単独で決まらない＝用語集 PitcherComposite の趣旨）。
     /// </summary>
     public double ReliefScore()

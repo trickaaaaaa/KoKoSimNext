@@ -119,7 +119,11 @@ public static class StrengthTeamFactory
             ApplyPromoter(order, bench, rng.Fork(0x9C55_0000UL), rc.Lineup, ai, form ?? new FormCoefficients());
         }
 
-        var team = new Team { Name = name, BattingOrder = order, PitcherSlot = 8, Bullpen = bullpen, Bench = bench };
+        var team = new Team
+        {
+            Name = name, BattingOrder = order, PitcherSlot = 8,
+            Reserves = TeamReserves.Merge(bullpen, bench),
+        };
         // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。既に確定した能力ロールだけを材料にする決定論変換
         // （rng は使わない）＝展望（TournamentPreview）と実戦（Shell）が同じここを通り自動で一致する。
         var composed = LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);
@@ -239,7 +243,8 @@ public static class StrengthTeamFactory
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(pitchRank, 8)), 1, 100);
 
     /// <summary>潜在投手能力の Fork salt（性格 salt と衝突しない別ストリーム。issue #209 Phase B）。</summary>
-    private const ulong LatentPitchingSalt = 0x7A17_0000_0000_0000UL;
+    // 旧 LatentPitchingSalt（#381 で改称）。値を変えると全AI校の非マウンド選手の投手能力が変わるので触らない。
+    private const ulong UntrainedPitchingSalt = 0x7A17_0000_0000_0000UL;
 
     /// <summary>投手寄せ重み w を引くときの候補プール人数（<see cref="PersistentRosterCoefficients.PitcherPoolSize"/> と同値）。</summary>
     private const int PitcherWeightPoolSize = 6;
@@ -333,9 +338,10 @@ public static class StrengthTeamFactory
         // 性格（Fork＝親状態非消費）: 上の能力ロール列に影響しない。
         var personality = pc.Sample(rng.Fork(salt));
         var pp = pc.Profile(personality);
-        // 潜在投手能力（issue #209 Phase B）: 投手能力を持たない選手は肩から推定する。
-        // 専用 Fork（性格の salt と別ストリーム）＝主RNG非消費で帯・決定論不変。緊急登板の人選/実登板でのみ参照。
-        var latentPitching = onMound ? null : LatentPitchingEstimator.Estimate(arm, rng.Fork(salt ^ LatentPitchingSalt));
+        // 投手能力は全選手が持つ（issue #209 Phase B → #381）。マウンドに置かない選手は主RNGから
+        // 投手4能力を引かず、肩から推定して埋める。専用 Fork（性格の salt と別ストリーム）＝主RNG非消費。
+        // 呼ぶ位置も条件も旧 LatentPitching と同じなので、生成される値・乱数消費列ともに完全に同一。
+        pitching ??= UntrainedPitchingEstimator.Estimate(arm, rng.Fork(salt ^ UntrainedPitchingSalt));
 
         return new Player
         {
@@ -358,7 +364,6 @@ public static class StrengthTeamFactory
             Personality = personality,
             BuntSuccessBonus = pp.BuntSuccessBonus,
             ChanceHitFactor = pp.ChanceHitFactor,
-            LatentPitching = latentPitching,
         };
     }
 
