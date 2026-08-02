@@ -222,7 +222,7 @@ namespace KokoSim.Unity.Lineup
         {
             // 未割当時：まだ打順に居ない野手を打撃力順で拾う（打順に入れる枠なので打てる順）。
             foreach (var i in ByBatting())
-                if (!_roster[i].IsPitcher && !InOrder(i)) return i;
+                if (!PitcherRoleResolver.LeansPitcher(_roster[i]) && !InOrder(i)) return i;
             return ByBatting().First(i => !InOrder(i));
         }
 
@@ -230,7 +230,7 @@ namespace KokoSim.Unity.Lineup
         {
             // 投手枠は投手力順（打撃力で選ぶと投げられない選手が9番に来る）。
             foreach (var i in ByPitching())
-                if (_roster[i].IsPitcher && !InOrder(i)) return i;
+                if (PitcherRoleResolver.LeansPitcher(_roster[i]) && !InOrder(i)) return i;
             return ByPitching().First(i => !InOrder(i));
         }
 
@@ -416,7 +416,7 @@ namespace KokoSim.Unity.Lineup
         private int BestBenchHitter()
         {
             foreach (var i in ByBatting())
-                if (!_roster[i].IsPitcher && !InOrder(i)) return i;
+                if (!PitcherRoleResolver.LeansPitcher(_roster[i]) && !InOrder(i)) return i;
             return -1;
         }
 
@@ -455,7 +455,7 @@ namespace KokoSim.Unity.Lineup
             foreach (var i in ByUniformNumber())
             {
                 if (used.Contains(i)) continue;
-                if (_roster[i].IsPitcher) bullpen.Add(_roster[i]);
+                if (PitcherRoleResolver.LeansPitcher(_roster[i])) bullpen.Add(_roster[i]);
                 else bench.Add(_roster[i]);
             }
 
@@ -557,7 +557,7 @@ namespace KokoSim.Unity.Lineup
                     UniformNumber = p.UniformNumber,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
-                    IsPitcher = p.IsPitcher,
+                    IsPitcher = PitcherRoleResolver.LeansPitcher(p),
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
                     Injury = InjuryChipText(p),
                 });
@@ -628,9 +628,9 @@ namespace KokoSim.Unity.Lineup
             var stats = GameSession.Current.Stats;
             return new List<StatColumnView>
             {
-                Column("通算", stats.Career.Get(p.Id), p.IsPitcher),
-                Column("公式戦", stats.Official.Get(p.Id), p.IsPitcher),
-                Column("今大会", stats.CurrentTournament.Get(p.Id), p.IsPitcher),
+                Column("通算", stats.Career.Get(p.Id), PitcherRoleResolver.LeansPitcher(p)),
+                Column("公式戦", stats.Official.Get(p.Id), PitcherRoleResolver.LeansPitcher(p)),
+                Column("今大会", stats.CurrentTournament.Get(p.Id), PitcherRoleResolver.LeansPitcher(p)),
             };
         }
 

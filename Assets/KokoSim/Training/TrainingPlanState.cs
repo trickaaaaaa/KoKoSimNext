@@ -238,7 +238,7 @@ namespace KokoSim.Unity.Training
             _plans = new TrainingPlan[_roster.Count];
             _delegated = new bool[_roster.Count];
             for (var i = 0; i < _roster.Count; i++)
-                _plans[i] = TrainingPlan.Auto(_roster[i].IsPitcher);
+                _plans[i] = TrainingPlan.Auto(PitcherRoleResolver.LeansPitcher(_roster[i]));
             // 背番号は DevelopingPlayer.UniformNumber（メンバー設定画面で編集）を単一ソースとして読む。
             // 現在週は GameClock（全画面共有）。既定はシーズン頭（週0＝4月）。冬合宿を見るには週送りする。
         }
@@ -359,7 +359,7 @@ namespace KokoSim.Unity.Training
             if (_delegated[index])
                 _plans[index] = new TrainingPlan
                 {
-                    Preset = _roster[index].IsPitcher ? TrainingPreset.PitcherAuto : TrainingPreset.Balanced,
+                    Preset = PitcherRoleResolver.LeansPitcher(_roster[index]) ? TrainingPreset.PitcherAuto : TrainingPreset.Balanced,
                 };
         }
 
@@ -710,7 +710,7 @@ namespace KokoSim.Unity.Training
         }
 
         private IReadOnlyList<MenuAllocation> ResolvedAllocations(int index)
-            => TrainingPresets.Resolve(_plans[index], _roster[index].IsPitcher, Budget);
+            => TrainingPresets.Resolve(_plans[index], PitcherRoleResolver.LeansPitcher(_roster[index]), Budget);
 
         /// <summary>背番号の表示テキスト（ベンチ外は「—」）。単一ソースは DevelopingPlayer.UniformNumber。</summary>
         private string NumTextAt(int index)

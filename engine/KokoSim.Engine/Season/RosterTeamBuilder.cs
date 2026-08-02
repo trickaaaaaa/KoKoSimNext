@@ -35,13 +35,13 @@ public static class RosterTeamBuilder
     {
         var all = roster.OrderByDescending(p => p.AverageLevel()).ToList();
 
-        var pitchers = all.Where(p => p.IsPitcher).ToList();
+        var pitchers = all.Where(p => PitcherRoleResolver.LeansPitcher(p)).ToList();
         if (pitchers.Count == 0 && all.Count > 0) pitchers.Add(all[0]); // 投手不在なら最良を先発に
 
         var starter = pitchers.Count > 0 ? pitchers[0] : null;
 
         // 野手候補: 投手(先発)以外を能力順。不足時は残り選手で補完。
-        var fielders = all.Where(p => !p.IsPitcher && !ReferenceEquals(p, starter)).ToList();
+        var fielders = all.Where(p => !PitcherRoleResolver.LeansPitcher(p) && !ReferenceEquals(p, starter)).ToList();
         foreach (var p in all)
         {
             if (fielders.Count >= 8) break;
@@ -86,8 +86,8 @@ public static class RosterTeamBuilder
         if (captainDp != null && captainPlayer == null)
         {
             captainPlayer = ToPlayer(captainDp,
-                captainDp.IsPitcher ? FieldPosition.Pitcher : FieldPosition.CenterField,
-                asPitcher: captainDp.IsPitcher);
+                PitcherRoleResolver.LeansPitcher(captainDp) ? FieldPosition.Pitcher : FieldPosition.CenterField,
+                asPitcher: PitcherRoleResolver.LeansPitcher(captainDp));
         }
 
         return new Team
@@ -234,7 +234,9 @@ public static class RosterTeamBuilder
         var bench = new List<Player>();
         foreach (var dp in spec.Bench ?? Array.Empty<DevelopingPlayer>())
         {
-            var pl = Project(dp, dp.IsPitcher ? FieldPosition.Pitcher : FieldPosition.CenterField, asPitcher: dp.IsPitcher);
+            var leansPitcher = PitcherRoleResolver.LeansPitcher(dp);
+            var pl = Project(dp, leansPitcher ? FieldPosition.Pitcher : FieldPosition.CenterField,
+                asPitcher: leansPitcher);
             bench.Add(pl);
             TrackCaptain(dp, pl);
         }
@@ -242,7 +244,7 @@ public static class RosterTeamBuilder
         // 主将がベンチ外/未出場なら単独投影（統率力のベンチ緩和を効かせるため）。
         if (captainDp != null && captainPlayer == null)
             captainPlayer = Project(captainDp,
-                captainDp.IsPitcher ? FieldPosition.Pitcher : FieldPosition.CenterField, captainDp.IsPitcher);
+                PitcherRoleResolver.LeansPitcher(captainDp) ? FieldPosition.Pitcher : FieldPosition.CenterField, PitcherRoleResolver.LeansPitcher(captainDp));
 
         return new Team
         {
@@ -333,7 +335,6 @@ public static class RosterTeamBuilder
             ChanceHitFactor = pProfile.ChanceHitFactor,
             Lead = dp.Lead,               // 捕手リード（設計書01 §2①）。怪我係数の対象外
             Skills = dp.Skills,           // スキルはフラグなので怪我係数の対象外
-            HasPitcherBackground = dp.HasPitcherBackground,
             Condition = FormModel.Quantize(dp.ConditionValue),
             ConditionValue = dp.ConditionValue,
             Injury = dp.Injury,

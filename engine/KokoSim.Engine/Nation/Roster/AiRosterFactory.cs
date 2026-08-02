@@ -39,7 +39,7 @@ public static class AiRosterFactory
         var center = RecruitCenter(school, pc);
 
         var usedGiven = new HashSet<string>();
-        var players = new List<(AiPlayer Ai, bool IsPitcher)>();
+        var players = new List<(AiPlayer Ai, bool OnMound)>();
         var profileSalt = 0x51E1_0000UL;
         var salt = 0x50A1_0000UL;
         var archSalt = 0x7B25_0000UL;
@@ -159,14 +159,14 @@ public static class AiRosterFactory
 
     /// <summary>怪物種別に合うコホート成員を選ぶ（投手系→投手・鉄砲肩→捕手・打撃系→野手）。見つからねば −1。</summary>
     private static int PickPhenomMember(
-        List<(AiPlayer Ai, bool IsPitcher)> players, PhenomType type, IRandomSource rng)
+        List<(AiPlayer Ai, bool OnMound)> players, PhenomType type, IRandomSource rng)
     {
-        bool Match((AiPlayer Ai, bool IsPitcher) p) => type switch
+        bool Match((AiPlayer Ai, bool OnMound) p) => type switch
         {
-            PhenomType.Ace or PhenomType.Finesse => p.IsPitcher,
+            PhenomType.Ace or PhenomType.Finesse => p.Ai.AssignedToMound,
             PhenomType.StrongArm => p.Ai.Position is FieldPosition.Catcher or FieldPosition.LeftField
                 or FieldPosition.CenterField or FieldPosition.RightField,
-            PhenomType.Slugger or PhenomType.Speedster => !p.IsPitcher,
+            PhenomType.Slugger or PhenomType.Speedster => !p.Ai.AssignedToMound,
             PhenomType.AllRound => true,
             _ => false,
         };

@@ -123,7 +123,7 @@ namespace KokoSim.Unity.Lineup
         {
             var s = Str(p);
             return string.Format("{0,-10} 背{1,-3} 投手={2} 打撃力={3:0.0} 投手力={4:0.0}",
-                p.Name, p.UniformNumber, p.IsPitcher ? "○" : "－", s.Batting, s.Pitching);
+                p.Name, p.UniformNumber, PitcherRoleResolver.LeansPitcher(p) ? "○" : "－", s.Batting, s.Pitching);
         }
 
         private static void Select(MonoBehaviour ctrl, int picked, int hovered, int tab)

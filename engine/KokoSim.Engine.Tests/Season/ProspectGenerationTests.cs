@@ -149,10 +149,10 @@ public sealed class ProspectGenerationTests
         var pop = Cohort(C.TalentCenterDefault);
 
         // 投手の打撃（ミート）も、野手の投球関連も壊滅ゼロにはならない。
-        Assert.All(pop.Where(p => p.IsPitcher), p =>
+        Assert.All(pop.Where(p => PitcherRoleResolver.LeansPitcher(p)), p =>
             Assert.True(p.Level(AbilityKind.Contact) >= C.OffSpecialtyFloor,
                 $"投手のミートがフロア割れ: {p.Level(AbilityKind.Contact)}"));
-        Assert.All(pop.Where(p => !p.IsPitcher), p =>
+        Assert.All(pop.Where(p => !PitcherRoleResolver.LeansPitcher(p)), p =>
             Assert.True(p.Level(AbilityKind.Control) >= C.OffSpecialtyFloor,
                 $"野手のコントロールがフロア割れ: {p.Level(AbilityKind.Control)}"));
     }
@@ -163,7 +163,7 @@ public sealed class ProspectGenerationTests
     public void SkillAllocation_IsUneven_NotUniform()
     {
         var pop = Cohort(C.TalentCenterDefault);
-        var batters = pop.Where(p => !p.IsPitcher).ToList();
+        var batters = pop.Where(p => !PitcherRoleResolver.LeansPitcher(p)).ToList();
 
         AbilityKind[] skills =
         {
@@ -189,21 +189,13 @@ public sealed class ProspectGenerationTests
     public void PitcherVelocity_ScalesWithTalent_TwoTier()
     {
         double VeloMean(double talent) =>
-            Cohort(talent).Where(p => p.IsPitcher).Average(p => p.Level(AbilityKind.Velocity));
+            Cohort(talent).Where(p => PitcherRoleResolver.LeansPitcher(p)).Average(p => p.Level(AbilityKind.Velocity));
 
         // 強豪（高総合力）の投手球速levelは一般校より高い（投手センス連動）。
         Assert.True(VeloMean(70.0) > VeloMean(25.0) + 8.0, "球速が総合力で二層化していない");
     }
 
-    // --- 投手経歴フラグ（設計書01 §1.1b）: 稀に存在、支配的でない ---
-
-    [Fact]
-    public void PitcherBackground_IsRare_ButPresent()
-    {
-        var batters = Cohort(C.TalentCenterDefault).Where(p => !p.IsPitcher).ToList();
-        var ratio = batters.Count(p => p.HasPitcherBackground) / (double)batters.Count;
-        Assert.InRange(ratio, 0.01, 0.15); // 稀少（数%）だがゼロではない
-    }
+    // 投手経歴フラグは #366b で概念ごと廃止（変化球の上振れは投手適性の連続配分が担う）。
 
     // --- 伸びしろは分野別にばらつく（現在値と独立） ---
 
@@ -348,8 +340,8 @@ public sealed class ProspectGenerationTests
     {
         // 投手役は投手適性から創発する＝役割投手の投手適性は野手より明確に高い（コイン投げではない）。
         var pop = Cohort(C.TalentCenterDefault);
-        var pitchers = pop.Where(p => p.IsPitcher).ToList();
-        var fielders = pop.Where(p => !p.IsPitcher).ToList();
+        var pitchers = pop.Where(p => PitcherRoleResolver.LeansPitcher(p)).ToList();
+        var fielders = pop.Where(p => !PitcherRoleResolver.LeansPitcher(p)).ToList();
         Assert.NotEmpty(pitchers);
 
         var pitcherApt = pitchers.Average(p => p.Aptitude(FieldPosition.Pitcher));
@@ -370,7 +362,7 @@ public sealed class ProspectGenerationTests
         for (var s = 0; s < 400; s++)
         {
             var cohort = ProspectGenerator.Intake(1, C, new Xoshiro256Random((ulong)(5000 + s)));
-            counts.Add(cohort.Count(p => p.IsPitcher));
+            counts.Add(cohort.Count(p => PitcherRoleResolver.LeansPitcher(p)));
         }
         Assert.True(counts.Distinct().Count() >= 4, "投手数が世代でばらつかない（固定供給になっている）");
         Assert.True(counts.Min() <= 1, "投手が枯渇する『苦肉の年』が一度も起きない＝供給が固定的すぎる");
@@ -382,7 +374,7 @@ public sealed class ProspectGenerationTests
     {
         // 決定（校連動は入れない・Issue #174）: 投手供給率は校の強さ（talentCenter）に連動しない。
         double Rate(double center) =>
-            Cohort(center).Count(p => p.IsPitcher) / (double)Cohort(center).Count;
+            Cohort(center).Count(p => PitcherRoleResolver.LeansPitcher(p)) / (double)Cohort(center).Count;
         var weak = Rate(20.0);   // 弱小校相当
         var strong = Rate(70.0); // 強豪校相当
         Assert.True(Math.Abs(weak - strong) < 0.05,
@@ -434,7 +426,7 @@ public sealed class ProspectGenerationTests
         // 投手は球速(Velocity)と球威(Stuff)に正の相関がある（設計の意図: 速い球＝力が伝わる）。
         // 相関係数ではなく、高Velocity群の平均Stuffが低Velocity群より大きいことを確認する。
         var pop = Cohort(C.TalentCenterDefault);
-        var pitchers = pop.Where(p => p.IsPitcher).ToList();
+        var pitchers = pop.Where(p => PitcherRoleResolver.LeansPitcher(p)).ToList();
         if (pitchers.Count < 10) return; // 投手が少ない場合はスキップ（統計的意味なし）
 
         var medianVelo = pitchers.Select(p => p.Level(AbilityKind.Velocity)).OrderBy(v => v)

@@ -45,8 +45,8 @@ public static class AiTeamBuilder
     internal static Team BuildFrom(IReadOnlyList<AiPlayer> active, School school, int yearIndex, AiRosterDeps deps,
         ModernRules? modernRules = null, int? calendarYear = null, AceRestContext? aceRest = null)
     {
-        var pitchers = active.Where(p => p.IsPitcher).OrderByDescending(PitcherScore).ToList();
-        var fielders = active.Where(p => !p.IsPitcher).ToList();
+        var pitchers = active.Where(p => p.AssignedToMound).OrderByDescending(PitcherScore).ToList();
+        var fielders = active.Where(p => !p.AssignedToMound).ToList();
 
         // 相手校の当季調子variance（Q21・2026-07-22）。(校ID, 年度, 選手ID) の決定論シードから
         // 自校と同じ定常分布 N(0, σ_stationary²) で抽選し、Player.Condition/ConditionValue へ焼く。

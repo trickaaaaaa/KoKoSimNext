@@ -57,6 +57,35 @@ public static class PitcherRoleResolver
                                  / c.PitcherAptitudeWeightSpan));
 
     /// <summary>
+    /// この選手を投手として扱うか（#366b）。守備位置適性からの導出であって、選手が覚えている状態ではない。
+    /// 旧 <c>DevelopingPlayer.IsPitcher</c> の置き換えで、育成のお任せ配分・チーム編成の投手/野手分割など
+    /// 「真偽1つで足りる消費側」はここを呼ぶ。
+    ///
+    /// 係数は <see cref="RosterCoefficients.Default"/>（YAML と C# 既定が同値なので挙動は同一）。
+    /// 係数を持っている呼び出し側は <see cref="IsNaturalPitcher(int,int,RosterCoefficients)"/> を直接使うこと。
+    /// </summary>
+    public static bool LeansPitcher(DevelopingPlayer p) => LeansPitcher(p, RosterCoefficients.Default);
+
+    /// <inheritdoc cref="LeansPitcher(DevelopingPlayer)"/>
+    public static bool LeansPitcher(DevelopingPlayer p, RosterCoefficients c)
+        => IsNaturalPitcher(p.Aptitude(FieldPosition.Pitcher), BestFieldAptitude(p), c);
+
+    /// <summary>
+    /// 投手を除く8守備位置中の最良適性（投手適性との比較対象, Issue #174）。
+    /// 走査は <see cref="AptitudeRoller.AllPositions"/>＝**実在する9守備位置だけ**にする。
+    /// <see cref="FieldPosition"/> には打順枠の <see cref="FieldPosition.DesignatedHitter"/> が含まれるが
+    /// これは守備位置ではなく適性もロールされない（既定50のまま）。適性配列を添字で素朴に回すと
+    /// その50が最良守備適性の下限として効き、投手適性50未満の選手が誰も投手になれなくなる。
+    /// </summary>
+    public static int BestFieldAptitude(DevelopingPlayer p)
+    {
+        var best = int.MinValue;
+        foreach (var pos in AptitudeRoller.AllPositions)
+            if (pos != FieldPosition.Pitcher) best = Math.Max(best, p.Aptitude(pos));
+        return best;
+    }
+
+    /// <summary>
     /// 導出が指定の役割を返すよう投手適性だけを置き直す（#377）。**役割が既知で適性が無い経路専用**＝
     /// 試合層 <c>Player</c> からの逆投影（<see cref="Nation.ScoutedTeamProfile"/>）とテスト素体でだけ使う。
     /// 実選手の適性は <see cref="AptitudeRoller"/> が振るので、生成経路からは呼ばないこと。

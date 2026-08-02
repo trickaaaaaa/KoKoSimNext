@@ -76,7 +76,7 @@ public sealed class AiRosterTests
         var roster = AiRosterFactory.Bootstrap(school, 1, deps);
 
         // 入学年度=1（＝今年の新入生, Grade1）を1人追跡。
-        var freshman = roster.Players.First(p => p.EnrollmentYearIndex == 1 && !p.IsPitcher);
+        var freshman = roster.Players.First(p => p.EnrollmentYearIndex == 1 && !p.AssignedToMound);
         var id = freshman.Id;
         var contactY1 = freshman.Snapshot.Contact;
 

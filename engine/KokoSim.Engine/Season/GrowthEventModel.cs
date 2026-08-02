@@ -76,7 +76,7 @@ public static class GrowthEventModel
             if (p.HasYips && MathUtil.Chance(c.YipsOvercomeWeeklyProb, rng))
             {
                 p.HasYips = false;
-                var k = p.IsPitcher ? AbilityKind.Control : AbilityKind.ThrowAccuracy;
+                var k = PitcherRoleResolver.LeansPitcher(p) ? AbilityKind.Control : AbilityKind.ThrowAccuracy;
                 Raise(p, k, c.YipsAbilityDrop); // 落ちた分を取り返す
                 notices.Add(new GrowthNotice(p, GrowthEventType.YipsOvercome, k));
                 continue;
@@ -120,7 +120,7 @@ public static class GrowthEventModel
         List<GrowthNotice> notices)
     {
         if (!MathUtil.Chance(c.BreakthroughWeeklyProb, rng)) return false;
-        var kinds = p.IsPitcher ? AbilityKinds.Pitching : AbilityKinds.Batting;
+        var kinds = PitcherRoleResolver.LeansPitcher(p) ? AbilityKinds.Pitching : AbilityKinds.Batting;
         var k = kinds[rng.NextInt(0, kinds.Length)];
         Raise(p, k, c.BreakthroughGain);
         notices.Add(new GrowthNotice(p, GrowthEventType.Breakthrough, k));
@@ -167,7 +167,7 @@ public static class GrowthEventModel
         if (!MathUtil.Chance(c.YipsWeeklyProb, rng)) return;
 
         p.HasYips = true;
-        var k = p.IsPitcher ? AbilityKind.Control : AbilityKind.ThrowAccuracy;
+        var k = PitcherRoleResolver.LeansPitcher(p) ? AbilityKind.Control : AbilityKind.ThrowAccuracy;
         p.SetLevel(k, Math.Max(1, p.Level(k) - c.YipsAbilityDrop));
         notices.Add(new GrowthNotice(p, GrowthEventType.Yips, k));
     }
@@ -181,9 +181,9 @@ public static class GrowthEventModel
 
     private static (double Multiplier, AbilityKind[] Kinds) BestGrowthDomain(DevelopingPlayer p)
     {
-        if (p.IsPitcher || p.PitchingGrowth >= p.BattingGrowth && p.PitchingGrowth >= p.DefenseGrowth)
+        if (PitcherRoleResolver.LeansPitcher(p) || p.PitchingGrowth >= p.BattingGrowth && p.PitchingGrowth >= p.DefenseGrowth)
         {
-            if (p.IsPitcher) return (p.PitchingGrowth, AbilityKinds.Pitching);
+            if (PitcherRoleResolver.LeansPitcher(p)) return (p.PitchingGrowth, AbilityKinds.Pitching);
         }
         return p.BattingGrowth >= p.DefenseGrowth
             ? (p.BattingGrowth, new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline })
@@ -199,7 +199,7 @@ public static class GrowthEventModel
             foreach (var k in kinds) sum += p.Cap(k) - p.Level(k);
             return sum / kinds.Length;
         }
-        if (p.IsPitcher && Gap(AbilityKinds.Pitching) <= proximity) return "pitching";
+        if (PitcherRoleResolver.LeansPitcher(p) && Gap(AbilityKinds.Pitching) <= proximity) return "pitching";
         if (Gap(new[] { AbilityKind.Contact, AbilityKind.Power, AbilityKind.Discipline }) <= proximity) return "batting";
         if (Gap(new[] { AbilityKind.Fielding, AbilityKind.Catching, AbilityKind.ThrowAccuracy }) <= proximity) return "defense";
         return null;
