@@ -901,7 +901,16 @@ namespace KokoSim.Unity.Match
         private float _battedDur;            // セグメントの長さ[s]（超えたら位置を止める）
         private Vector3 _battedOffset;       // 接触点 − セグメント始点（下の LaunchFadeSeconds で解消）
         private float _battedFade;           // 上を解消するまでの秒数＝打点からの自由落下時間
-        private readonly List<Vector4> _trail = new();   // 残像（xyz=ステージローカル / w=打球時計[s]）
+        private readonly List<Vector4> _trail = new();   // 残像（xyz=ステージローカル / w=残像時計[s]）
+        /// <summary>
+        /// 残像の「現在時刻」（<see cref="DrawBattedTrail"/> のフェード計算の基準）。対決ビューは
+        /// <see cref="_battedT"/>（接触からの経過）、守備ビューはプレー内の絶対時計をそのまま使う
+        /// （issue #398 ①）。フェード計算は差分（now - 各点のw）しか見ないので、基準が変わった
+        /// 瞬間（対決→守備の引き継ぎ）は古い基準の点が「もう古い」扱いで一括で刈られるだけ＝
+        /// 数フレームぶん短く見えるが実害はない（切り替わり自体が構図のカットと重なるため絵に出ない）。
+        /// 残像が無ければ負。
+        /// </summary>
+        private float _trailNow = -1f;
 
         // ---- バットの軌跡（2026-08-01）----
         // 打球の残像（上）は「点の軌跡＝線」だが、バットは棒なので**掃いた面**が要る＝両端を持つ。
@@ -1996,6 +2005,7 @@ namespace KokoSim.Unity.Match
             _pendingBatted = null;
             _battedT = -1f;
             _trail.Clear();
+            _trailNow = -1f;
 
             // 捕られる球は判定面（z=0）で止めず、選んだクリップの捕球面まで接線で延長する。
             // 捕球面は「そのクリップのミットの奥行き」＝ミットが待っている所まで運ぶ（実測0.19〜0.50m前）
@@ -2066,7 +2076,14 @@ namespace KokoSim.Unity.Match
         private void UpdateBall(float deltaTime)
         {
             if (_ball == null) return;
-            if (_battedT >= 0f) { UpdateBattedBall(deltaTime); return; }
+            if (_battedT >= 0f)
+            {
+                // 守備ビューへ渡った後（_fieldPlay != null）は SetFieldTime が球の位置・残像を
+                // 一本化して持つ（issue #398 ①）。ここは対決ビュー側の近似（_battedOffset のブレンド）
+                // なので、渡った後も回し続けると同じ点が二重に積まれる／わずかにずれた点が混ざる
+                if (_fieldPlay == null) UpdateBattedBall(deltaTime);
+                return;
+            }
             if (_ballHeld || _ballT < 0f) return;
             _ballT += deltaTime;
 
@@ -2144,16 +2161,39 @@ namespace KokoSim.Unity.Match
             UpdateBattedBall(Mathf.Max(0f, overshoot));
         }
 
-        /// <summary>打球を進める（フルレート）。俯瞰へ渡るまでの一瞬しか出ないので、寿命は保険だけ。</summary>
+        /// <summary>
+        /// 打球を進める（フルレート）。守備ビューへ渡る（<see cref="_fieldPlay"/> が立つ）と
+        /// <see cref="UpdateBall"/> 側でこの関数自体が呼ばれなくなる＝寿命は「渡るまでの保険」のまま
+        /// （issue #398 ①。渡った後の追跡・残像は <see cref="SetFieldTime"/> に一本化）。
+        /// </summary>
         private void UpdateBattedBall(float deltaTime)
         {
             _battedT += deltaTime;
             if (_battedT > BattedMaxSeconds) { HideBall(); return; }
             var p = BattedPointAt(_battedT);
             _ball.transform.localPosition = p;
-            _trail.Add(new Vector4(p.x, p.y, p.z, _battedT));
-            // 尾より古い点は捨てる（末尾の1点だけは残す＝線が根元で途切れない）
-            float cut = _battedT - Mathf.Max(0.02f, _cal.BattedTrailSeconds);
+            PushTrailPoint(p, _battedT, _cal.BattedTrailSeconds);
+        }
+
+        /// <summary>
+        /// 打球の残像に1点積み、尾（<paramref name="trailSeconds"/> より前）を刈る（issue #398 ①）。
+        /// <paramref name="now"/> は残像内で共通の時計（対決ビュー＝<see cref="_battedT"/> ／
+        /// 守備ビュー＝プレー内の絶対時計）。<see cref="_trailNow"/> のコメントの通り、基準が
+        /// 途中で変わっても差分計算だけなので壊れない。
+        /// </summary>
+        private void PushTrailPoint(Vector3 stageLocalPos, float now, float trailSeconds)
+        {
+            _trail.Add(new Vector4(stageLocalPos.x, stageLocalPos.y, stageLocalPos.z, now));
+            TrimTrail(now, trailSeconds);
+        }
+
+        /// <summary>尾より古い点を捨てる（末尾の1点だけは残す＝線が根元で途切れない）。新しい点を積まない
+        /// フレームでも呼べば、<paramref name="now"/> を進めるだけで残像が自然に消えていく
+        /// （<see cref="_trailNow"/> もここで更新するので、描画側のフェード計算は常にこの時計を追う）。</summary>
+        private void TrimTrail(float now, float trailSeconds)
+        {
+            _trailNow = now;
+            float cut = now - Mathf.Max(0.02f, trailSeconds);
             int drop = 0;
             while (drop + 1 < _trail.Count && _trail[drop + 1].w < cut) drop++;
             if (drop > 0) _trail.RemoveRange(0, drop);
@@ -2178,7 +2218,13 @@ namespace KokoSim.Unity.Match
                 (float)b.Y + _battedOffset.z * k);
         }
 
-        /// <summary>打球を出しておく上限[秒]。俯瞰への切替（接触+約0.55s）で普通はその前に畳まれる。</summary>
+        /// <summary>
+        /// 対決ビュー側で打球を追跡しておく上限[秒]（保険）。F9 以前は「俯瞰への切替（接触+約0.55s）」
+        /// でこれより先に畳まれていたが、現在は <c>CallMomentSeconds = _ballArrival</c>（接触の瞬間）で
+        /// 守備ビューへ切り替わるため、通常は1フレームも経たずに <see cref="_fieldPlay"/> が立ち
+        /// <see cref="UpdateBall"/> がこちらを呼ばなくなる（issue #398・付随不整合の是正）。
+        /// この上限が効くのは、守備ビューへ渡らない異常系（rig 不可・Play なし等）だけ。
+        /// </summary>
         private const float BattedMaxSeconds = 1.5f;
 
         /// <summary>到達後も球を置いておく秒数。捕球・ミートの瞬間を1コマ以上（12fps=83ms）見せるため。</summary>
@@ -2219,6 +2265,7 @@ namespace KokoSim.Unity.Match
             _battedT = -1f;
             _batted = null;
             _trail.Clear();
+            _trailNow = -1f;
             if (_ball != null)
             {
                 _ball.transform.SetParent(_root.transform, false);
@@ -2706,7 +2753,7 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void DrawBattedTrail()
         {
-            if (_cal.BattedShow < 0.5f || _battedT < 0f || _trail.Count < 2) return;
+            if (_cal.BattedShow < 0.5f || _trailNow < 0f || _trail.Count < 2) return;
             if (_root == null || _camera == null) return;
             if (_zoneMat == null)
             {
@@ -2715,8 +2762,12 @@ namespace KokoSim.Unity.Match
                 _zoneMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
             }
 
-            float span = Mathf.Max(0.02f, _cal.BattedTrailSeconds);
-            float halfW = Mathf.Max(0.001f, _cal.BattedTrailWidthM) * 0.5f;
+            // 守備ビュー（引きの構図）は対決ビューより数十倍広い実寸を映すので、対決ビュー向けに
+            // 詰めた尾の長さ・太さ（0.28s/0.045m＝本塁付近で約10px）のままだと1px未満の点になる
+            // （issue #398 ①）。フィールド専用の値へ差し替える（FieldMaxZoom 等と同じ「絵で決める」枠）
+            bool inField = _fieldPlay != null;
+            float span = Mathf.Max(0.02f, inField ? FieldBattedTrailSeconds : _cal.BattedTrailSeconds);
+            float halfW = Mathf.Max(0.001f, inField ? FieldBattedTrailWidthM : _cal.BattedTrailWidthM) * 0.5f;
             // 色はリニア空間へ自分で落とす（掟: 即時モードは自動変換が効かない）。アルファは変換しない
             var baseCol = _cal.BattedTrailColor.linear;
             float headA = Mathf.Clamp01(_cal.BattedTrailAlpha);
@@ -2745,8 +2796,8 @@ namespace KokoSim.Unity.Match
                 if (side.sqrMagnitude < 1e-10f) continue;
                 side = side.normalized;
 
-                float ua = Mathf.Clamp01(1f - (_battedT - _trail[i].w) / span);       // 0=尾 / 1=頭
-                float ub = Mathf.Clamp01(1f - (_battedT - _trail[i + 1].w) / span);
+                float ua = Mathf.Clamp01(1f - (_trailNow - _trail[i].w) / span);       // 0=尾 / 1=頭
+                float ub = Mathf.Clamp01(1f - (_trailNow - _trail[i + 1].w) / span);
                 var ca = baseCol; ca.a = headA * ua * ua;   // 濃さは二乗で落とす＝尾が長く伸びて見える
                 var cb = baseCol; cb.a = headA * ub * ub;
                 var sa = side * (halfW * ua);
