@@ -66,18 +66,39 @@ public sealed class PitchModelTests
     [Fact]
     public void StaminaLevelConversion_MapsToPitchCount()
     {
-        // Level 50 → 90球 / Level 100 → 135球（変換は一箇所に集約）。
-        Assert.Equal(90.0, PitcherAttributes.StaminaPitchesFromLevel(50), 6);
-        Assert.Equal(135.0, PitcherAttributes.StaminaPitchesFromLevel(100), 6);
+        // issue #408: 切片63・傾き0.75。Level 50 → 100.5球（D帯＝既定値）/ Level 100 → 138球（変換は一箇所に集約）。
+        Assert.Equal(100.5, PitcherAttributes.StaminaPitchesFromLevel(50), 6);
+        Assert.Equal(138.0, PitcherAttributes.StaminaPitchesFromLevel(100), 6);
+        // 既定の StaminaPitches は Lv50 の目安投球数（D帯）と一致する。
+        Assert.Equal(PitcherAttributes.StaminaPitchesFromLevel(50), new PitcherAttributes().StaminaPitches, 6);
+    }
+
+    [Fact]
+    public void StaminaConversion_SatisfiesIssue408Bands()
+    {
+        // issue #408 完了条件: クランプ下限(Lv10)≥70球 / 生成平均(Lv45)∈[95,100] / クランプ上限(Lv92)∈[120,140]。
+        Assert.True(PitcherAttributes.StaminaPitchesFromLevel(10) >= 70.0,
+            $"下限 Lv10 = {PitcherAttributes.StaminaPitchesFromLevel(10)}球 は 70球以上であること");
+        var mean = PitcherAttributes.StaminaPitchesFromLevel(45);
+        Assert.InRange(mean, 95.0, 100.0);
+        var top = PitcherAttributes.StaminaPitchesFromLevel(92);
+        Assert.InRange(top, 120.0, 140.0);
+    }
+
+    [Fact]
+    public void StaminaConversion_RoundTrips_ForwardThenInverse()
+    {
+        // 順変換→逆変換が全等級で元のLevelに戻る（切片・傾きを別々に持つとずれる, issue #408）。
+        for (var lv = 1; lv <= 100; lv++)
+            Assert.Equal(lv, PitcherAttributes.LevelFromStaminaPitches(PitcherAttributes.StaminaPitchesFromLevel(lv)));
     }
 
     [Fact]
     public void LevelFromStaminaPitches_ExtrapolatesAbove100_NoUpperCap()
     {
-        // issue #356: スタミナは上限なし。目安投球数180球は Lv100 で頭打ちにならず Lv150 相当を返す
-        // （逆変換 (180-45)/0.9 = 150）。従来の Lv100=135球 は不変（下限・傾きはそのまま）。
-        Assert.Equal(100, PitcherAttributes.LevelFromStaminaPitches(135.0));
-        Assert.Equal(150, PitcherAttributes.LevelFromStaminaPitches(180.0));
+        // issue #356/#408: スタミナは上限なし。Lv100=138球で頭打ちにならず外挿する（逆変換 (138-63)/0.75 = 100）。
+        Assert.Equal(100, PitcherAttributes.LevelFromStaminaPitches(138.0));
+        Assert.Equal(150, PitcherAttributes.LevelFromStaminaPitches(63.0 + 150 * 0.75));
         // 目安投球数が伸びるほど等級も単調に増える（ReliefScore/PitcherScore で他能力と土俵を揃える）。
         Assert.True(PitcherAttributes.LevelFromStaminaPitches(200.0)
                     > PitcherAttributes.LevelFromStaminaPitches(160.0));

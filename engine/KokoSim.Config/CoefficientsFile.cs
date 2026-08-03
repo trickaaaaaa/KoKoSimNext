@@ -1731,6 +1731,9 @@ public static class CoefficientsLoader
         // 運動能力ベースライン（名声独立）
         public double PhysicalMean { get; set; } = D.PhysicalMean;
         public double PhysicalSd { get; set; } = D.PhysicalSd;
+        // スタミナLevel→目安投球数の変換（issue #408）
+        public double StaminaPitchesIntercept { get; set; } = D.StaminaPitchesIntercept;
+        public double StaminaPitchesPerLevel { get; set; } = D.StaminaPitchesPerLevel;
         // 精神力・統率傾向（設計書02 §3 / 09 §8）
         public double MentalMean { get; set; } = D.MentalMean;
         public double MentalSd { get; set; } = D.MentalSd;
@@ -1858,6 +1861,8 @@ public static class CoefficientsLoader
             OffSpecialtyFloor = OffSpecialtyFloor,
             PhysicalMean = PhysicalMean,
             PhysicalSd = PhysicalSd,
+            StaminaPitchesIntercept = StaminaPitchesIntercept,
+            StaminaPitchesPerLevel = StaminaPitchesPerLevel,
             MentalMean = MentalMean,
             MentalSd = MentalSd,
             LeadershipMean = LeadershipMean,

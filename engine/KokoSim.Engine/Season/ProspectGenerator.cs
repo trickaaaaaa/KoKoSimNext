@@ -81,6 +81,15 @@ public sealed record RosterCoefficients
     public double PhysicalSd { get; init; } = 12.0;
 
     /// <summary>
+    /// スタミナLevel→目安投球数の変換（切片・傾き, 設計書02 §1.1e / issue #408）。既定は
+    /// <see cref="Players.PitcherAttributes.StaminaPitchesIntercept"/> / <c>StaminaPitchesPerLevel</c> と
+    /// 同一定数を参照する（順変換・逆変換・生成が同じ値で動く一箇所集約）。data/coefficients.yaml の
+    /// roster.stamina_pitches_intercept / _per_level と一致（不変条件#4・一致テスト #402）。
+    /// </summary>
+    public double StaminaPitchesIntercept { get; init; } = Players.PitcherAttributes.StaminaPitchesIntercept;
+    public double StaminaPitchesPerLevel { get; init; } = Players.PitcherAttributes.StaminaPitchesPerLevel;
+
+    /// <summary>
     /// 精神力・統率傾向の分布（設計書02 §3 / 09 §8。才能・身体と独立に振る）。
     /// 実戦成長ループ接続（Q8・2026-07-20）に伴い、精神力は「新入生は未熟（中心46）→3年間の実戦で開花」へ
     /// 初期分布を低めに振り直した（設計書02 §5.3a の時間アーク）。

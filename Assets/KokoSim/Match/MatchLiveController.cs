@@ -2390,8 +2390,11 @@ namespace KokoSim.Unity.Match
             var totalPitches = def.Pitches + def.PendingPitches;
             line2.Add(MakeLabel("球数", "mup-pitches__lab", "mup-pitches__lab--gap"));
             var pc = MakeLabel(totalPitches.ToString(), "mup-pitches", "f-num");
-            if (totalPitches > 100) pc.AddToClassList("mup-pitches--alert");
-            else if (totalPitches > 80) pc.AddToClassList("mup-pitches--warn");
+            // 警告色は絶対球数でなく「目安投球数に対する残量」で出す（issue #408）。生成スタミナの水準を
+            // 上げて平均球数が100前後になったため、絶対 80/100 だと健康な先発が常時 alert になる。スタミナバー
+            // （BuildStaminaBar）と同じ残量帯（<0.6=注意 / <0.3=警告）で数字も落とし、数字とバーの色を一致させる。
+            if (def.StaminaRemaining < 0.3) pc.AddToClassList("mup-pitches--alert");
+            else if (def.StaminaRemaining < 0.6) pc.AddToClassList("mup-pitches--warn");
             line2.Add(pc);
             line2.Add(MakeLabel("球", "mup-pitches__lab"));
             block.Add(line2);
