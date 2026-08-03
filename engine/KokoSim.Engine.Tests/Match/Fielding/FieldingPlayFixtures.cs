@@ -93,7 +93,7 @@ internal static class FieldingPlayFixtures
         BattedBallClass ballClass = BattedBallClass.Grounder,
         double bounceApexHeightM = 0.3, int bounceCount = 2, bool irregularBounce = false,
         double throwSpeedMps = 34.0, int fielding = 50, int throwAccuracy = 50,
-        double? judgementMarginSeconds = null)
+        double? judgementMarginSeconds = null, bool unassistedPutout = false)
         => Base(result, landingX ?? fieldedX, landingZ ?? fieldedZ,
                 hangTimeSeconds, apexHeightM, batterToFirstSeconds, ballClass)
             with
@@ -106,6 +106,7 @@ internal static class FieldingPlayFixtures
                 FielderRole = fielderRole,
                 FieldedAtSeconds = fieldedAtSeconds,
                 ThrowArriveSeconds = throwArriveSeconds,
+                UnassistedPutout = unassistedPutout,
                 FielderThrowSpeedMps = throwSpeedMps,
                 FielderFielding = fielding,
                 FielderThrowAccuracy = throwAccuracy,
