@@ -89,10 +89,13 @@ public static class CameraPlanBuilder
     public static IReadOnlyList<CameraKeyframe> Build(PlaybackPlay play, CameraFraming? framing = null)
     {
         var fr = framing ?? CameraFraming.Default;
-        // ResAt は「結果チップを出さない」プレー（投球のみ＝PitchPlaybackFactory）で +∞ になる。そのまま
-        // end に混ぜると end=∞ となり、下のサンプリングループ（clampedT>=end で停止）が永久に止まらず
-        // キーフレームを確保し続けて OOM する（#208 の真因）。非有限な ResAt は「無し」として無視する。
-        var resEnd = double.IsFinite(play.ResAt) ? play.ResAt + ReturnToWideDelaySeconds : 0.0;
+        // 「まだ見るものがある」最後の瞬間（決着／球が動き終わる／実際に動く走者レッグの終わり）を
+        // 全景復帰の起点にする（issue #406②）。ResAt は「打球が処理された時刻」でしかなく、犠飛の
+        // タッチアップ〜生還のように決着後にプレーの本番が続く場合はそこで戻すと早すぎる。
+        // ResAt が +∞（結果チップを出さない投球のみのプレー＝PitchPlaybackFactory）なら
+        // LastEventTime も +∞ のまま＝下の IsFinite ガードは無傷（#208 の OOM 対策を維持）。
+        var lastEvent = LastEventTime(play);
+        var resEnd = double.IsFinite(lastEvent) ? lastEvent + ReturnToWideDelaySeconds : 0.0;
         var dur = double.IsFinite(play.Dur) ? play.Dur : 0.0;
         // 1プレーの再生は現実的に数秒。異常に長い（or 非有限）継続時間でもキーフレーム暴走で OOM しないよう上限を設ける。
         var end = Math.Min(Math.Max(dur, resEnd) + WideSettleBufferSeconds, MaxPlanSeconds);
@@ -103,7 +106,7 @@ public static class CameraPlanBuilder
         var first = true;
         foreach (var clampedT in SampleTimes(play, end))
         {
-            var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end), fr);
+            var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end), fr, lastEvent);
             if (first)
             {
                 cx = raw.Cx; cy = raw.Cy; zoom = raw.ZoomMult;
@@ -143,6 +146,29 @@ public static class CameraPlanBuilder
         return times;
     }
 
+    /// <summary>
+    /// 「まだ見るものがある」最後の瞬間: 決着(<see cref="PlaybackPlay.ResAt"/>)・球が動き終わる時刻・
+    /// 実際に動く走者レッグの終わりのうち最大値（issue #406②。MatchLiveController.PlayEndTime と
+    /// 同じ作法で、全景へ戻す時刻の単一ソースにする＝engine のプラン（このメソッド経由）と3D側の
+    /// カメラカットの両方がここを見る。片方だけ直すとプランと実カットがずれる）。
+    ///
+    /// 決着後だけに起きる野手の定位置復帰（Backup/Cutoff の戻り等）は <see cref="PlaybackPlay.Moves"/>
+    /// を見ないこの式には自然と入らない＝含めると①「投手が帰る絵」を待つあいだ全景復帰が遅れて再発する。
+    /// </summary>
+    public static double LastEventTime(PlaybackPlay play)
+    {
+        var lastEvent = play.ResAt;
+        foreach (var seg in play.Ball)
+            if (seg.T1 > lastEvent) lastEvent = seg.T1;
+        foreach (var runner in play.Runners)
+            foreach (var seg in runner.Segs)
+            {
+                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue; // その場に居るだけ
+                if (seg.T1 > lastEvent) lastEvent = seg.T1;
+            }
+        return lastEvent;
+    }
+
     private static double ClampZoomRate(double prev, double target, double dt)
     {
         var maxRatio = Math.Pow(ZoomRateCapPerSecond, dt);
@@ -169,9 +195,9 @@ public static class CameraPlanBuilder
     /// 投球区間の終盤（接触の LeadSeconds 秒前）で先取りが接触後の区間へ食い込み、打つ前からパンが
     /// 始まってしまう（Issue #258）。固定フレーム区間中かどうかは常に actualT で判定する。
     /// </summary>
-    private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT, CameraFraming fr)
+    private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT, CameraFraming fr, double lastEvent)
     {
-        if (leadT >= play.ResAt + ReturnToWideDelaySeconds) return Wide();
+        if (leadT >= lastEvent + ReturnToWideDelaySeconds) return Wide();
 
         var (covering, nextUpcoming) = FindSegmentAt(play, actualT);
 
