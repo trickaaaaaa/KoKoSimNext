@@ -15,6 +15,22 @@ public sealed record StrikeZone
 
     public double CenterY => (TopM + BottomM) / 2.0;
 
+    public double HalfHeightM => (TopM - BottomM) / 2.0;
+
+    /// <summary>
+    /// ゾーン内の「縁への近さ」（無次元 [0,1]、issue #403）。中心=0・縁上=1。
+    /// 横 |x|/HalfWidth と縦 |y−CenterY|/HalfHeight の大きい方＝最も近い縁への近さ。
+    /// 「隅のいい球は見逃されやすい」をゾーン内スイング率の減衰（<see cref="Batting.BattingCoefficients.ZoneEdgeSwingPenalty"/>）
+    /// に渡すための入力。ゾーン外の座標では1で頭打ち（呼び出し側はゾーン内でのみ使う想定）。
+    /// </summary>
+    public double EdgeProximity(double x, double y)
+    {
+        var px = System.Math.Abs(x) / HalfWidthM;
+        var py = System.Math.Abs(y - CenterY) / HalfHeightM;
+        var p = System.Math.Max(px, py);
+        return p > 1.0 ? 1.0 : p;
+    }
+
     /// <summary>
     /// ゾーン外への距離[m]（設計書15 Phase E-3）。ゾーン内なら0、外なら矩形の最近傍点までのユークリッド距離。
     /// 「ゾーンから遠いほど振らない」という既存の想定を、弾道由来のチェイス補正が上書きしないためのガード入力。

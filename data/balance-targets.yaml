@@ -7,8 +7,11 @@ version: 0
 
 # --- Phase 1: 打席解決（プレースホルダの目標帯） ---
 atbat_10k:
-  batting_average: { min: 0.240, max: 0.290 }   # 打率
-  strikeout_rate:  { min: 0.150, max: 0.220 }   # 三振率
+  # issue #403（2026-08-04）: zone_edge_swing_penalty=0.02（隅は見逃されやすい）導入で見逃しKが増える分、
+  # strikeout_rate 天井 0.220→0.230・batting_average 床 0.240→0.235 へ再校正（オーナー承認済み）。
+  # 実測（10000打席×seed 42/7/2024）: K% 21.7〜22.7 / AVG 0.238〜0.251。games 帯は現状のまま緑。
+  batting_average: { min: 0.235, max: 0.290 }   # 打率
+  strikeout_rate:  { min: 0.150, max: 0.230 }   # 三振率
   walk_rate:       { min: 0.060, max: 0.100 }   # 四球率
   home_run_rate:   { min: 0.020, max: 0.040 }   # 本塁打率
   # --- 長打の量と配分（Issue #24, 2026-07-21校正）: 塁打数を距離しきい値ではなく
