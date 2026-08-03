@@ -2,9 +2,14 @@
 # 夜間 Issue 自動消化エージェント（並列ワーカー版）
 #
 # open な issue を複数ワーカーで並列に解決する。1 issue = 1 プロセス（毎回まっさらなコンテキスト）。
-# セッション（claude -p）の責務は「実装→テスト緑→（UIなら）実機確認→push→PR作成」まで。
+# セッション（claude -p）の責務は「実装→テスト緑→WIPコミット→（UIなら）実機確認→push→PR作成」まで。
 # **CI 待ち・rebase・マージ・DLL 同期はこのスクリプトが単一ロックで直列に行う**（内側セッションの
 # 「CI待ちで消滅」「Monitor待ちで消滅」を構造的に根絶する）。
+# **未コミットのまま消滅したセッションへの構造的保険（issue #433）**: 実機確認待ち（Play モード・
+# スクショ完了待ち）は内側セッションが最も消滅しやすい区間で、テンプレは手順4でその前の WIP
+# コミットを必須化したが、モデルの従順さに完全には依存できない。process_issue はセッション終了後、
+# PR 未作成なら auto_wip_commit() で worktree の未コミット変更（DLL 等の生成物を除く）を
+# 自動で [WIP] コミットしてから、下の退避ネット（#348）に渡す。
 #
 # 並列モデル:
 #   - ISSUE_WORKERS 本のワーカーが issue を並列に実装する（既定 3）。
@@ -63,6 +68,8 @@ RUN_START="$(date +%s)"
 LOG_DIR="$REPO_DIR/out/overnight/$STAMP"
 PROMPT_TEMPLATE="$REPO_DIR/tools/overnight-prompt.template.md"
 DOTNET="/usr/local/share/dotnet/dotnet"
+# 生成物（DLL / StreamingAssets 複製）。PR にも WIP 自動退避にも含めない（マージ工程が main 版へ戻す）。
+GEN_FILES="Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml Assets/StreamingAssets/KokoSim/team-colors.yaml"
 
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 MODEL="${OVERNIGHT_MODEL:-claude-sonnet-5}"          # 既定は Sonnet。model:opus ラベルで昇格
@@ -230,10 +237,9 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
 
   # 生成物（DLL / StreamingAssets 複製）は PR に含めない。main 版へ戻してコミットに残さない。
   # team-colors.yaml も sync-engine-dll.sh が複製する生成物（school-names と同型。issue #416）。
-  local gen_files="Assets/Plugins/KokoSim/KokoSim.Engine.dll Assets/StreamingAssets/KokoSim/school-names.yaml Assets/StreamingAssets/KokoSim/team-colors.yaml"
-  git -C "$wt" checkout refs/remotes/origin/main -- $gen_files >/dev/null 2>&1 || true
-  if ! git -C "$wt" diff --quiet -- $gen_files 2>/dev/null; then
-    git -C "$wt" add $gen_files >/dev/null 2>&1 || true
+  git -C "$wt" checkout refs/remotes/origin/main -- $GEN_FILES >/dev/null 2>&1 || true
+  if ! git -C "$wt" diff --quiet -- $GEN_FILES 2>/dev/null; then
+    git -C "$wt" add $GEN_FILES >/dev/null 2>&1 || true
     git -C "$wt" commit -q -m "chore: drop generated DLL from PR（マージ後に自動同期する）" >/dev/null 2>&1 || true
   fi
 
@@ -327,6 +333,25 @@ Assembly-CSharp.csproj が生成され、\\`bash tools/check-unity-compile.sh\\`
     note "- 🔴 #$num $title — squash マージに失敗（ログ: ${log}・朝に確認を）"
   fi
   unlock "$REPO_LOCK"
+}
+
+# 未コミットの変更を退避直前に自動で WIP コミットする（issue #433）。実機確認待ち（Play モード・
+# スクショ完了待ち）は内側セッションが最も消滅しやすい区間で、そこで未コミットのまま消えると
+# 退避ネット（#348・下の「未 push の作業を失わないための退避」）はコミット済みしか救えず
+# worktree ごと全損する（実例: #393、45分の実装が跡形もなく消えた）。gen_files（DLL /
+# StreamingAssets 複製）は対象から除外する（main 版への差し戻しはマージ工程の仕事で、
+# ここで巻き込むと退避 PR に生成物が混ざる）。PR が既にある場合は呼ばない
+# （merge_sequence が別途 reset --hard するため）。
+auto_wip_commit() { # $1=wt $2=log $3=num
+  local wt="$1" log="$2" num="$3" f
+  [ -d "$wt" ] || return
+  local excludes=()
+  for f in $GEN_FILES; do excludes+=(":(exclude)$f"); done
+  [ -z "$(git -C "$wt" status --porcelain -- . "${excludes[@]}" 2>/dev/null)" ] && return
+  git -C "$wt" add -A -- . "${excludes[@]}" >>"$log" 2>&1
+  if git -C "$wt" commit -q -m "$(printf '[WIP] auto-evacuate uncommitted changes at session end\n\nCo-Authored-By: Claude <noreply@anthropic.com>')" >>"$log" 2>&1; then
+    note "- 💾 #$num 未コミットの変更を自動 WIP コミットした（下の退避へ）"
+  fi
 }
 
 # ── 1 issue の処理（ワーカー内から呼ばれる。並列で複数走る） ──
@@ -429,6 +454,10 @@ process_issue() { # $1=num $2=title
   state="$(gh issue view "$num" --json state --jq .state 2>/dev/null)"
   labels="$(gh issue view "$num" --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null)"
   pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)"
+
+  # PR 未作成のまま終了 → 残った未コミット変更を退避直前に自動 WIP コミット（issue #433）。
+  # PR がある場合は merge_sequence が別途 reset --hard するのでここでは触らない。
+  [ -z "$pr" ] && auto_wip_commit "$wt" "$log" "$num"
 
   if echo "$labels" | grep -q needs-human; then
     note "- 🟡 #$num $title — ユーザー判断待ち（issue のコメント参照）[${dur}]"
