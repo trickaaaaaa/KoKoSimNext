@@ -138,7 +138,8 @@ public static class TimelineBuilder
         string resultText,
         double closeCallMarginSeconds = 0.15,
         double closeFlyMarginSeconds = 0.15,
-        double fielderReachM = 4.20)
+        double fielderReachM = 4.20,
+        Player? batter = null)
     {
         var table = formations ?? FormationTable.Default;
         var landing = new TimelinePoint(play.LandingX, play.LandingZ);
@@ -280,6 +281,7 @@ public static class TimelineBuilder
         {
             Label = "打", T0 = ContactAt + 0.10, T1 = batterArrive,
             From = Home, To = BasePoint(field, "first"), OutAtEnd = batterOut, CloseCall = batterCloseCall,
+            Runner = batter,
         });
 
         // 判定イベント（Issue #260）: 走者レッグの終端に縛られない、確定時刻付きの独立イベント。
@@ -729,7 +731,7 @@ public static class TimelineBuilder
             {
                 var stand = BasePoint(field, BaseName(m.FromBase));
                 var leadPt = LeadPoint(field, m.FromBase, lead);
-                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t, From = stand, To = leadPt, OutAtEnd = false });
+                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t, From = stand, To = leadPt, OutAtEnd = false, Runner = m.Runner });
             }
 
             for (var b = startBase; b < m.ToBase; b++)
@@ -757,6 +759,7 @@ public static class TimelineBuilder
                     OutAtEnd = m.Out && b + 1 == m.ToBase,
                     // 判定オーバーレイ（Issue #59）: CloseCall は決着レッグ（この移動の最終区間）にだけ乗せる。
                     CloseCall = m.CloseCall && b + 1 == m.ToBase,
+                    Runner = m.Runner,
                 });
                 // 判定イベント（Issue #260）: 走塁死・本塁クロスプレー等は決着レッグの終端で確定。
                 // セーフは際どい判定のときだけ積む（表示条件は #59 のまま維持）。
@@ -816,7 +819,7 @@ public static class TimelineBuilder
                 var t0 = ContactAt + ctx.StartDelaySeconds;
                 // 二次リードは AppendRunnerLegs と同じ扱い（時計が塁間から引いている距離を絵にも乗せる）。
                 var leadPt = LeadPoint(field, b, Math.Max(0.0, ctx.LeadDistanceM));
-                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = leadPt, OutAtEnd = false });
+                legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = leadPt, OutAtEnd = false, Runner = runner });
                 if (catchAt > t0)
                 {
                     var speed = runner.ToFielder().SprintSpeedMps;
@@ -827,11 +830,11 @@ public static class TimelineBuilder
                     // リードぶんだけ速く走ることになる。
                     var stop = new TimelinePoint(
                         leadPt.X + (next.X - leadPt.X) * frac, leadPt.Z + (next.Z - leadPt.Z) * frac);
-                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = catchAt, From = leadPt, To = stop, OutAtEnd = false });
+                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = catchAt, From = leadPt, To = stop, OutAtEnd = false, Runner = runner });
                 }
                 return;
             }
-            legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = timeline.Duration, From = pt, To = pt, OutAtEnd = false });
+            legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = timeline.Duration, From = pt, To = pt, OutAtEnd = false, Runner = runner });
         }
         AddHeld(1, first, firstPlayer, "first", "second", "走一");
         AddHeld(2, second, secondPlayer, "second", "third", "走二");

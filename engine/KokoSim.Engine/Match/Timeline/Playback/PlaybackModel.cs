@@ -143,6 +143,8 @@ public sealed record PlaybackRunner
     public string Label { get; init; } = "打";
     public required IReadOnlyList<PlaybackRun> Segs { get; init; }
     public double? HideAt { get; init; }
+    /// <summary>この走者の本人（対決ビューの頭上フルネームラベル用, issue #393）。不明なら null。</summary>
+    public DuelPlayerIdentity? Identity { get; init; }
 }
 
 /// <summary>時刻付き実況キャプション。mock: caps[i] = [t, text]。</summary>

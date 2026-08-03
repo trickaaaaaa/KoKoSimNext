@@ -1389,6 +1389,28 @@
     margin-top: var(--sp-1);
 }
 
+/* DuelFieldLabel：対決ビューの打球処理中（守備の引き）に出す頭上フルネームラベル（issue #393）。
+   実況テロップ風＝半透明黒地＋白文字（2026-08-03 監督決定③）。PitchCallと同じ器・idiomを流用する。
+   人名は書体3役ルールにより明朝（.f-display と併用、design-16）。画面空間の固定サイズで置くため
+   width/height は指定せず呼び出し側が座標だけ動かす（寄っても引いても同じ大きさ＝実況中継のCG寄り）。
+   盤面ビューなので色は状態コードの対象外（CLAUDE.md「適用範囲の例外（試合盤面）」）。 */
+.duel-field-label {
+    position: absolute;
+    background-color: rgba(14, 26, 19, 0.82);
+    border-radius: var(--radius-chip);
+    padding: var(--sp-1) var(--sp-2);
+    color: var(--sb-ink-1);
+    font-size: var(--fs-cap);
+    -unity-text-align: middle-center;
+    white-space: nowrap;
+    translate: -50% -100%;
+}
+/* 走者だけアンバー縁（2D俯瞰の走者=アンバーと視覚言語を統一。守備側は無地, 2026-08-03 監督決定①）。 */
+.duel-field-label--runner {
+    border-width: 2px;
+    border-color: var(--color-lamp);
+}
+
 /* ScoreCall：得点時の大型スコアオーバーレイ（issue #60）。半透明パネル・既定非表示は
    PitchCall（#6）と同じ盤面overlay idiomを踏襲。並びは自校－相手校固定（先攻/後攻に依存しない）。
    校名は設計書16のシグネチャ規則「校名は常に太明朝」（.f-display、LineScorePanelと同じ扱い）、

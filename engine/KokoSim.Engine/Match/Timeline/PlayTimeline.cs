@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Timeline;
 
@@ -89,6 +90,12 @@ public sealed record RunnerLeg
     /// アウトは常に表示するため使わない。セーフのみ、この値が true のときだけ表示する。
     /// </summary>
     public bool CloseCall { get; init; }
+    /// <summary>
+    /// この走者の本人（対決ビューの頭上フルネームラベル用, issue #393）。表示専用＝判定・乱数順には使わない。
+    /// 同じ Label を持つレッグ群は同一人物なので同じ参照を持つ想定（<see cref="Playback.PlayTimelineAdapter"/> が
+    /// Label でグルーピングする際、先頭レッグのこの値をそのまま使う）。既定 null（構築元が選手を渡さない経路）。
+    /// </summary>
+    public Player? Runner { get; init; }
 }
 
 /// <summary>時刻付きキャプション（実況テキストのフック。文言はUI層が整形してもよい）。</summary>

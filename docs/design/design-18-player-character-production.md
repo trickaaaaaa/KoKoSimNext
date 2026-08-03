@@ -491,6 +491,44 @@
 
 ---
 
+### 3.6 選手の識別表示（背番号＋頭上ラベル、issue #393）
+
+打席中（対決の寄り）は背中に背番号、打球処理中（守備の引き）は頭上にフルネームという二段構え
+（design-06/16, 実測根拠は issue #393 本文）。監督決定（2026-08-03）: 守備は無地・走者だけアンバー縁、
+重なりは間引き（打球/送球経路の関与者を優先）、地色は半透明黒地＋白文字。
+
+**選手の同一性**: `DuelPlayerIdentity(Name, Number)` / `DuelFieldIdentity`
+（`engine/.../Match/Timeline/Playback/DuelIdentity.cs`）が守備位置→選手の対応を持つ純関数
+（`DuelFieldIdentity.Build(TeamState)`、`MatchProgression.CurrentDefenseIdentity` 経由）。
+走者の同一性は打球タイムライン自体に運ばせる＝`RunnerLeg.Runner`（`TimelineBuilder` の各構築点で
+本人 `Player` を積む）→ `PlayTimelineAdapter` がラベルでグルーピングする際に `PlaybackRunner.Identity`
+へ写す。ラベル文字列（"打"/"走1"/"走一"…）で走者の身元を逆引きしない＝構築時に直接紐付けるほうが
+（走者の順序規則がラベルの命名規則と必ずしも一致しないため）確実。
+
+**背番号デカール**: UV1 は領域ID/縞座標で満杯（`DuelStageProxyLambert`）のため、ユニフォームへは
+載せず**別メッシュ**（薄板の透過デカール）を胸/背骨ボーンへ `GearContainer` 方式で装着する
+（`DuelStageRig.BackNumber.cs`）。数字は購入フォントでなくランタイム生成の5x7ドットマトリクス
+（白地＋濃色の縁取り。ユニフォームの地色の濃淡どちらでも読める）。専用シェーダ
+`KokoSim/DuelStageDecalUnlit`（`Assets/DuelSpike/`）は `DuelStageProxyLambert` と同じ `_CullMode`
+プロパティを持たせてあるので、`DuelStageRig` の左右ミラー時両面描画スイープに無改修で相乗りする。
+打球プレー開始時（`BeginFieldPlay`）に3人分とも剥がす＝守備中は無地（投手・捕手は同じ Actor を
+守備でも使い回すため明示的に剥がす。打者は Go.SetActive(false) で道連れに消える）。
+
+**頭上フルネームラベル**: RT に焼くと文字がドット荒れる（design-18 §4.5 と同じ理由）ため、
+UI Toolkit 側（`DuelViewElement`＝`_duelImg` の子）に重ねる。`DuelStageRig.CurrentFieldLabels` が
+ワールド座標→ビューポート正規化座標への射影と優先順位付け（走者は常時最優先、守備側は
+現在のボールセグメントの投げ手/受け手→移動中→ボールとの距離、の順）だけを担い、UI Toolkit の
+レイアウト・書体・色は `MatchLiveController`（部品辞書 `.duel-field-label` / `.duel-field-label--runner`,
+`Assets/UI/Components/components.uss`）の責務。人名は書体3役ルールにより明朝（`.f-display`）。
+
+**既知の限界**: 頭上ラベルは既存の固定オーバーレイ（マッチアップHUD等）より Z 順で下＝
+まれにHUDと重なる画面上端付近では隠れる。走者の同一性は「打席前の塁状況を snapshot する」方式ではなく
+`RunnerLeg.Runner` に**その打球を実際に走っている本人**を直結する方式にしたため、同一打席内の
+盗塁で塁上が動いた後に打球が出ても取り違えない（`BaserunningModel.ApplyDetailed` が返す
+`RunnerMove.Runner` をそのまま `AppendRunnerLegs`/`AppendHeldRunners` が運ぶ）。
+
+---
+
 ## 4. ピクセル化シェーダ
 
 ### 4.1 二段構え（確定）
