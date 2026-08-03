@@ -42,12 +42,15 @@ public static class PlayTimelineAdapter
             double? hideAt = null;
             foreach (var leg in legs)
                 if (leg.OutAtEnd) hideAt = leg.T1;   // 憤死/封殺の瞬間に消える（mock hideAt と同意味）
+            // 頭上フルネームラベル用の本人（issue #393）。同じ Label のレッグ群は同一人物のはず＝先頭のを使う。
+            var runnerIdentity = DuelPlayerIdentity.Of(legs.Find(l => l.Runner is not null)?.Runner);
             runners.Add(new PlaybackRunner
             {
                 Label = grp.Key,
                 Segs = legs.Select(l => new PlaybackRun(l.T0, l.T1, Vec(l.From), Vec(l.To))
                     { OutAtEnd = l.OutAtEnd, CloseCall = l.CloseCall }).ToArray(),
                 HideAt = hideAt,
+                Identity = runnerIdentity,
             });
         }
 

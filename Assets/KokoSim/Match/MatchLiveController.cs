@@ -129,6 +129,12 @@ namespace KokoSim.Unity.Match
         private DuelStageRig _duelRig;
         private DuelViewElement _duelImg;
         private VisualElement _duelHost, _fieldHost;
+        // 打球処理中の頭上フルネームラベル（issue #393）。_duelImg の子＝RTの表示矩形とローカル座標が
+        // 一致する（DuelViewElement.Snap が RT の整数倍スケール表示に合わせて自身の箱を作る）ので、
+        // ビューポート正規化座標をそのまま _duelImg の実寸へ掛けるだけで済む。
+        private VisualElement _duelLabelHost;
+        private readonly List<Label> _duelFieldLabelPool = new();
+        private const int MaxDuelFieldLabels = 6;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
         private readonly List<Button> _speedButtons = new();
@@ -1495,6 +1501,7 @@ namespace KokoSim.Unity.Match
             // 対決ビューはポーズを12fps量子化で進める（タイム中断中は盤面と同様に凍結）。
             // 打球プレー中は俯瞰を出していても回す＝トグルで切り替えた瞬間に3Dが止まっていない（F9）。
             if (!_paused && (_duelOn || FieldPlayActive)) _duelRig?.Tick(Time.deltaTime * _speed);
+            RefreshDuelFieldLabels();   // 頭上フルネームラベル（issue #393）。ポーズ中も現在位置のまま表示を保つ
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
@@ -1954,6 +1961,16 @@ namespace KokoSim.Unity.Match
             }
             _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
             _duelImg.Bind(_duelRig.Target);
+            if (_duelLabelHost == null)
+            {
+                // _duelImg（Image）の子にする＝RTの表示矩形をそのままローカル座標系として使える
+                // （DuelViewElement.Snap が自身の箱をRTの整数倍スケールぴったりに作るため）。
+                _duelLabelHost = new VisualElement { pickingMode = PickingMode.Ignore };
+                _duelLabelHost.style.position = Position.Absolute;
+                _duelLabelHost.style.left = 0; _duelLabelHost.style.top = 0;
+                _duelLabelHost.style.right = 0; _duelLabelHost.style.bottom = 0;
+                _duelImg.Add(_duelLabelHost);
+            }
         }
 
         // 対決ビューの手動トグル。アセット未導入環境では何もしない（警告ログのみ）。手動でOFFにした試合中は
@@ -1983,12 +2000,60 @@ namespace KokoSim.Unity.Match
         private void BeginFieldPlay(float t0)
         {
             if (_duelRig == null || !_duelRig.Available || _current?.Play == null) return;
+            // 頭上フルネームラベル用（issue #393）: 守備位置→選手をプレー開始時点で固定する
+            // （交代・投手交代で変わるため、この打球プレーの間はこの対応で通す）。
+            if (_prog != null) _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
             _duelRig.BeginFieldPlay(_current.Play, t0);
         }
 
         private void EndFieldPlay()
         {
             if (FieldPlayActive) _duelRig.EndFieldPlay();
+        }
+
+        /// <summary>
+        /// 頭上フルネームラベルの張り替え（issue #393）。打球プレー中だけ、画面内の野手・走者の
+        /// 頭上に氏名チップを置く。打席中（対決の寄り）は出さない＝寄りの絵は背番号の担当。
+        /// プールを使い回し、余った枠は隠すだけ（毎フレーム Add/Remove しない）。
+        /// </summary>
+        private void RefreshDuelFieldLabels()
+        {
+            if (_duelLabelHost == null) return;
+            if (!FieldPlayActive)
+            {
+                foreach (var l in _duelFieldLabelPool) l.style.display = DisplayStyle.None;
+                return;
+            }
+            var labels = _duelRig.CurrentFieldLabels(MaxDuelFieldLabels);
+            var w = _duelImg.resolvedStyle.width;
+            var h = _duelImg.resolvedStyle.height;
+            if (float.IsNaN(w) || float.IsNaN(h) || w <= 0f || h <= 0f) return;   // レイアウト未確定の初回フレーム
+
+            for (var i = 0; i < labels.Count; i++)
+            {
+                var lbl = DuelFieldLabelSlot(i);
+                var l = labels[i];
+                lbl.text = l.Name;
+                lbl.EnableInClassList("duel-field-label--runner", l.IsRunner);
+                lbl.style.display = DisplayStyle.Flex;
+                lbl.style.left = l.Viewport01.x * w;
+                lbl.style.top = (1f - l.Viewport01.y) * h;
+            }
+            for (var i = labels.Count; i < _duelFieldLabelPool.Count; i++)
+                _duelFieldLabelPool[i].style.display = DisplayStyle.None;
+        }
+
+        private Label DuelFieldLabelSlot(int index)
+        {
+            while (_duelFieldLabelPool.Count <= index)
+            {
+                var l = new Label { pickingMode = PickingMode.Ignore };
+                l.AddToClassList("duel-field-label");
+                l.AddToClassList("f-display");   // 人名は明朝（書体3役ルール, design-16）
+                _duelLabelHost.Add(l);
+                _duelFieldLabelPool.Add(l);
+            }
+            return _duelFieldLabelPool[index];
         }
 
         // 打席進行に連動した自動切替（次打席開始→対決 / インプレー打球→俯瞰）。手動OFF中は何もしない。
@@ -2023,12 +2088,27 @@ namespace KokoSim.Unity.Match
             if (FieldPlayActive) return;
             // 1球進行では采配窓の対戦（＝いまの打者・投手）が単一ソース。一括経路では確定打席から引く。
             Handedness bats, throws;
-            if (_atBat is { } at) { bats = at.BatterBats; throws = at.PitcherThrows; }
-            else if (_current != null) { bats = _current.BatterBats; throws = _current.PitcherThrows; }
+            int batterNumber, pitcherNumber;
+            bool isTop;
+            if (_atBat is { } at)
+            {
+                bats = at.BatterBats; throws = at.PitcherThrows;
+                batterNumber = at.BatterNumber; pitcherNumber = at.PitcherNumber; isTop = at.IsTop;
+            }
+            else if (_current != null)
+            {
+                bats = _current.BatterBats; throws = _current.PitcherThrows;
+                batterNumber = _current.BatterNumber; pitcherNumber = _current.PitcherNumber; isTop = _current.IsTop;
+            }
             else return;
             var pitcherLeft = throws == Handedness.Left;
             var batterLeft = bats == Handedness.Left || (bats == Handedness.Switch && !pitcherLeft);
             _duelRig.SetHandedness(batterLeft, pitcherLeft);
+            // 背番号デカール（issue #393）: 投手・打者は采配窓/確定打席の単一ソースからそのまま、
+            // 捕手だけは打順に出ないので守備側の現在の守備位置対応（交代反映済み）から引く。
+            var catcherNumber = _prog?.CurrentDefenseIdentity(isTop).Defense
+                .TryGetValue(FieldPosition.Catcher, out var catcherId) == true ? catcherId.Number : (int?)null;
+            _duelRig.SetBackNumbers(pitcherNumber, catcherNumber, batterNumber);
         }
 
         /// <summary>撮影ハーネス用（エディタ限定運用）: 対決ビューのトグルを外から叩く。</summary>

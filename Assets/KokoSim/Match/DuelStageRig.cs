@@ -3082,6 +3082,9 @@ namespace KokoSim.Unity.Match
             _materials.Clear();
             foreach (var m in _meshes) if (m != null) Object.DestroyImmediate(m);
             _meshes.Clear();
+            foreach (var t in _numberTexturesOwned) if (t != null) Object.DestroyImmediate(t);
+            _numberTexturesOwned.Clear();
+            _numberTextures.Clear();
             if (_postMat != null)
             {
                 UnityEngine.Rendering.RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;

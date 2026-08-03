@@ -649,6 +649,14 @@ public sealed class MatchProgression
             _p.Away.LiveLine(), _p.Home.LiveLine());
     }
 
+    /// <summary>
+    /// 対決ビューの背番号デカール・頭上フルネームラベル用（issue #393）。守備側チームの現在の守備位置→選手。
+    /// <paramref name="offenseIsTop"/> は現在の攻撃側が先攻(表)なら true（守備側はその逆）。呼び出し側が
+    /// 打球プレー開始のたびに呼び直す前提＝観測専用・試合結果に影響しない。
+    /// </summary>
+    public DuelFieldIdentity CurrentDefenseIdentity(bool offenseIsTop)
+        => DuelFieldIdentity.Build(_p.OffenseOf(!offenseIsTop));
+
     /// <summary>確定済み打席のプレー記録（観測専用・読み取りのみ）。本日成績の略記列は UI がここから引く。</summary>
     public IReadOnlyList<PlayLogEntry> PlayLog => _p.Log;
 
