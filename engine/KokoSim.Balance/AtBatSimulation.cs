@@ -690,8 +690,8 @@ public static class AtBatSimulation
         sb.AppendLine();
         sb.AppendLine("| 指標 | 値 | 目標帯 |");
         sb.AppendLine("|---|---|---|");
-        sb.AppendLine(c, $"| 打率 AVG | {s.Average:F3} | .240–.290 |");
-        sb.AppendLine(c, $"| 三振率 K% | {s.StrikeoutRate:P1} | 15.0–22.0% |");
+        sb.AppendLine(c, $"| 打率 AVG | {s.Average:F3} | .235–.290 |");
+        sb.AppendLine(c, $"| 三振率 K% | {s.StrikeoutRate:P1} | 15.0–23.0% |");
         sb.AppendLine(c, $"| 四球率 BB% | {s.WalkRate:P1} | 6.0–10.0% |");
         sb.AppendLine(c, $"| 死球率 HBP% | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率 HR% | {s.HomeRunRate:P2} | 2.0–4.0% |");

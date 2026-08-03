@@ -314,16 +314,18 @@ public sealed class AtBatSession
             || (battingOverride is null && !forcedTake && pitchIndex == 0 && ctx.Skills.FirstPitchSwingProb > 0.0
                 && MathUtil.Chance(ctx.Skills.FirstPitchSwingProb, rng));
         var distanceOutsideM = ctx.StrikeZone.DistanceOutsideM(loc.X, loc.Y);
+        // ゾーン内の縁への近さ（issue #403）。隅のいい球ほど見逃されやすい。ゾーン外は0＝チェイス側は距離減衰が担う。
+        var zoneEdgeProximity = inZone ? ctx.StrikeZone.EdgeProximity(loc.X, loc.Y) : 0.0;
         // 観測用のスイング確率（設計書17 §4.1）。DecideSwing が内部で使うのと同じ純関数で、乱数を消費しない。
         // CaptureTrace が偽なら1回も呼ばない＝既定パスはゼロコスト。
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
                 inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting,
-                ctx.SwingProbabilityFactor)
+                ctx.SwingProbabilityFactor, zoneEdgeProximity)
             : 0.0;
         if (!forcedSwing && (forcedTake
             || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng,
-                ctx.SwingProbabilityFactor)))
+                ctx.SwingProbabilityFactor, zoneEdgeProximity)))
         {
             if (inZone)
             {

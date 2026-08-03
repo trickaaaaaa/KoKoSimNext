@@ -13,6 +13,8 @@ public static class BatterDecision
     /// ゾーン外は+（釣られやすくなる）、ゾーン内は−（見誤って見送りやすくなる）。ゾーン外側は追加で
     /// <see cref="BattingCoefficients.ChaseDistanceSlope"/> によるゾーンからの距離減衰を必ず掛け、
     /// 「大外れの球が変化量だけで釣れる」という不自然を防ぐ（ゾーン内は距離=0で常に無効）。
+    /// ゾーン内側は追加で <see cref="BattingCoefficients.ZoneEdgeSwingPenalty"/> による縁への近さの減衰を掛け、
+    /// 「隅のいい球は見逃されやすい」を表現する（issue #403。中心=恒等・縁上で係数ぶん見送る）。
     /// テストから直接呼べるよう <see cref="DecideSwing"/> と分離。
     /// </summary>
     /// <param name="swingFactor">
@@ -20,19 +22,26 @@ public static class BatterDecision
     /// 既定 1.0 は恒等＝従来と1ビットも変わらない。能力ではなく「振りにいく頻度」だけを動かす軸なので、
     /// 打者属性ではなく打席コンテキスト側から渡す。
     /// </param>
+    /// <param name="zoneEdgeProximity">
+    /// ゾーン内の縁への近さ（<see cref="Field.StrikeZone.EdgeProximity"/>、無次元 [0,1]、issue #403）。
+    /// ゾーン内でのみ <see cref="BattingCoefficients.ZoneEdgeSwingPenalty"/> を掛けて「隅は見逃されやすい」を表現。
+    /// 既定 0.0（＝中心）は恒等。ゾーン外では未使用（チェイス側は距離減衰が同役を担う）。
+    /// </param>
     public static double SwingProbability(
         bool inZone,
         double distanceOutsideM,
         double breakMagnitudeM,
         BatterAttributes batter,
         BattingCoefficients coeff,
-        double swingFactor = 1.0)
+        double swingFactor = 1.0,
+        double zoneEdgeProximity = 0.0)
     {
         double p;
         if (inZone)
         {
             p = coeff.ZoneSwingBase + (batter.Discipline - 50) * coeff.ZoneSwingDisciplineSlope
-                - coeff.ChaseBreakSlope * breakMagnitudeM;
+                - coeff.ChaseBreakSlope * breakMagnitudeM
+                - coeff.ZoneEdgeSwingPenalty * zoneEdgeProximity;
         }
         else
         {
@@ -45,7 +54,7 @@ public static class BatterDecision
         return MathUtil.Clamp(p * swingFactor, 0.02, 0.98);
     }
 
-    /// <summary>スイングするか。<paramref name="swingFactor"/> の意味は <see cref="SwingProbability"/> を参照。</summary>
+    /// <summary>スイングするか。<paramref name="swingFactor"/>・<paramref name="zoneEdgeProximity"/> の意味は <see cref="SwingProbability"/> を参照。</summary>
     public static bool DecideSwing(
         bool inZone,
         double distanceOutsideM,
@@ -53,7 +62,8 @@ public static class BatterDecision
         BatterAttributes batter,
         BattingCoefficients coeff,
         IRandomSource rng,
-        double swingFactor = 1.0)
+        double swingFactor = 1.0,
+        double zoneEdgeProximity = 0.0)
         => MathUtil.Chance(
-            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor), rng);
+            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor, zoneEdgeProximity), rng);
 }

@@ -32,6 +32,12 @@ public sealed record BattingCoefficients
     /// ガード（ゾーン内は距離=0で常に無効）。
     /// </summary>
     public double ChaseDistanceSlope { get; init; } = 0.15;
+    /// <summary>
+    /// ゾーン内の縁への近さ（<see cref="KokoSim.Engine.Match.Field.StrikeZone.EdgeProximity"/>、無次元 [0,1]）
+    /// あたりのスイング確率減衰（issue #403 案B）。中心=恒等・縁上でこの値ぶん見送る＝「隅のいい球は見逃されやすい」。
+    /// 投手は隅を狙うため小さな値でも見逃しKが強く増える（0.02 で atbat_10k の K% 帯上限を 0.230 へ再校正済み）。
+    /// </summary>
+    public double ZoneEdgeSwingPenalty { get; init; } = 0.02;
 
     // --- コンタクト（空振り/ファウル/フェア） ---
     /// <summary>空振り率のロジスティック基準（球威=打者互角時の空振り対数オッズ）。</summary>

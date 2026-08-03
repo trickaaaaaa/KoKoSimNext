@@ -178,6 +178,8 @@ public interface IPitchTacticsBrain {
 
 **これで設計書15の全フェーズ（A/B/C/D/E）が完結した。** 1球単位の試合進行・打席内采配・弾道由来の swing/contact 判定まで、当初計画（§6）の全 DoD を満たして着地。
 
+**Phase E-3 追補（2026-08-04, issue #403 案B）**: ゾーン内スイング率に**縁への近さの減衰**を追加。`StrikeZone.EdgeProximity(x,y)`（無次元 [0,1]、中心=0・縁上=1、横 `|x|/HalfWidth` と縦 `|y−CenterY|/HalfHeight` の大きい方）を新設し、ゾーン内のみ `p_swing −= zone_edge_swing_penalty × edgeProximity` を掛ける（係数1本・新規RNGなし・決定論構造は不変）。「隅のいい球は見逃されやすい」の表現で、球種の読み機構（案C）は不採用。**投手は隅を狙うためゾーン内の球はもともと縁に寄っており**、penalty 0.02 でも見逃しKが約 +0.6〜0.8pt 増える＝`atbat_10k` 帯を再校正（`strikeout_rate` 天井 0.220→0.230／`batting_average` 床 0.240→0.235。実測は issue #403）。games 帯は Brain の追い込まれ矯正で三振率が低く天井に余裕があり現状のまま緑。ゾーン外は不変（チェイス側は `ChaseDistanceSlope` の距離減衰が同役）。
+
 ---
 
 ## 7. リスクと対策（要約）

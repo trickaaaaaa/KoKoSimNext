@@ -310,6 +310,7 @@ public static class CoefficientsLoader
         public double ZoneSwingDisciplineSlope { get; set; } = D.ZoneSwingDisciplineSlope;
         public double ChaseBreakSlope { get; set; } = D.ChaseBreakSlope;
         public double ChaseDistanceSlope { get; set; } = D.ChaseDistanceSlope;
+        public double ZoneEdgeSwingPenalty { get; set; } = D.ZoneEdgeSwingPenalty;
         public double WhiffIntercept { get; set; } = D.WhiffIntercept;
         public double WhiffContactSlope { get; set; } = D.WhiffContactSlope;
         public double WhiffOutOfZonePenalty { get; set; } = D.WhiffOutOfZonePenalty;
@@ -355,6 +356,7 @@ public static class CoefficientsLoader
             ZoneSwingDisciplineSlope = ZoneSwingDisciplineSlope,
             ChaseBreakSlope = ChaseBreakSlope,
             ChaseDistanceSlope = ChaseDistanceSlope,
+            ZoneEdgeSwingPenalty = ZoneEdgeSwingPenalty,
             WhiffIntercept = WhiffIntercept,
             WhiffContactSlope = WhiffContactSlope,
             WhiffOutOfZonePenalty = WhiffOutOfZonePenalty,

@@ -63,6 +63,10 @@ batting:
   # 誘発変化合成量[m]（設計書15 Phase E-3）: ゾーン外+/ゾーン内−の対称係数（見え方と実軌道のズレの代理指標）
   chase_break_slope: 0.02
   chase_distance_slope: 0.15    # ゾーン外距離あたりのチェイス減衰（大外れが変化量だけで釣れる不自然を防ぐガード）
+  # ゾーン内の縁への近さ（StrikeZone.EdgeProximity, 中心0〜縁上1）あたりのスイング率減衰（issue #403 案B）。
+  # 「隅のいい球は見逃されやすい」。投手は隅を狙うため 0.02 でも見逃しKが増える＝atbat_10k 帯を再校正済み
+  # （strikeout_rate 天井 0.220→0.230 / batting_average 床 0.240→0.235。実測は issue #403 のコメント参照）。
+  zone_edge_swing_penalty: 0.02
   whiff_intercept: -2.40         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正）
   whiff_contact_slope: 0.030     # ミート→空振り減
   whiff_out_of_zone_penalty: 0.85

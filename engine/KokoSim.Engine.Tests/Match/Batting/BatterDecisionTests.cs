@@ -85,4 +85,37 @@ public sealed class BatterDecisionTests
 
         Assert.Equal(atZero, atNonZero, 9);
     }
+
+    [Fact]
+    public void SwingProbability_InZone_DecreasesLinearlyWithEdgeProximity()
+    {
+        // 「隅のいい球は見逃されやすい」（issue #403）: 縁への近さに対して線形に p_swing が下がる。
+        var center = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, Coeff, zoneEdgeProximity: 0.0);
+        var half = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, Coeff, zoneEdgeProximity: 0.5);
+        var edge = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, Coeff, zoneEdgeProximity: 1.0);
+
+        Assert.True(edge < half && half < center, "縁に近いほどスイング率が下がるはず");
+        Assert.Equal(Coeff.ZoneEdgeSwingPenalty, center - edge, 9);          // 縁上で係数ぶんちょうど見送る
+        Assert.Equal(Coeff.ZoneEdgeSwingPenalty * 0.5, center - half, 9);    // 線形
+    }
+
+    [Fact]
+    public void SwingProbability_EdgeProximityDefault_IsIdentity()
+    {
+        // 既定 0.0（＝中心）は従来と1ビットも変わらない（引数を渡さない既存テスト・呼び出しの互換保証）。
+        var withoutArg = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, Coeff);
+        var explicitZero = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, Coeff, zoneEdgeProximity: 0.0);
+
+        Assert.Equal(withoutArg, explicitZero, 9);
+    }
+
+    [Fact]
+    public void SwingProbability_OutOfZone_EdgeProximityHasNoEffect()
+    {
+        // ゾーン外では縁減衰は掛からない（チェイス側は ChaseDistanceSlope の距離減衰が同役を担う）。
+        var atZero = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, Coeff, zoneEdgeProximity: 0.0);
+        var atOne = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, Coeff, zoneEdgeProximity: 1.0);
+
+        Assert.Equal(atZero, atOne, 9);
+    }
 }
