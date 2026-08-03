@@ -2381,11 +2381,15 @@ namespace KokoSim.Unity.Match
             if (def.Grade > 0) line1.Add(MakeLabel(def.Grade + "年", "mup-grade"));
             block.Add(line1);
 
-            // 2行目＝通算防御率・本日の奪三振・球数。球数は独立行にすると縦4行になって嵩むので
-            // 同じ「今日の投球」の並びへ寄せた（2026-07-31 ユーザー判断）。
+            // 2行目＝通算防御率・本日の奪三振・与四死球・球数。球数は独立行にすると縦4行になって嵩むので
+            // 同じ「今日の投球」の並びへ寄せた（2026-07-31 ユーザー判断）。奪三振と与四死球は対で見て
+            // 初めて「今日の出来」になるので隣接させる（issue #407）。数字だけ Oswald（.f-num）へ分離
+            // （書体3役ルール・設計書16 §2。防御率/奪三振は既存の混植のまま＝範囲外の改修はしない）。
             var line2 = MakeRow("mup-line");
             line2.Add(MakeLabel("防 " + MatchLiveStatsProvider.Era(_statsProvider.CareerPitching(m.PitcherSourceId))
                                     + "　奪三振 " + def.StrikeOuts, "mup-career"));
+            line2.Add(MakeLabel("与四死球", "mup-pitches__lab", "mup-pitches__lab--gap"));
+            line2.Add(MakeLabel((def.Walks + def.HitByPitch).ToString(), "mup-career", "f-num"));
             // 確定球数＋進行中の打席ぶん（issue #397）。据え置きを解消し1球ごとに動かす。
             var totalPitches = def.Pitches + def.PendingPitches;
             line2.Add(MakeLabel("球数", "mup-pitches__lab", "mup-pitches__lab--gap"));
