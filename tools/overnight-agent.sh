@@ -177,6 +177,23 @@ sync_dll_to_main() {
   unlock "$REPO_LOCK"
 }
 
+# push 直前に呼ぶ: ディスクの engine DLL だけ「このブランチの engine/ 変更」で再ビルドする
+# （コミットはしない。issue #432）。merge_sequence は push 前に gen_files（DLL 等）を main 版へ
+# checkout・commit するため、そのままだと disk 上の DLL が旧版に固定される。Assets の C# がこの
+# ブランチで新設した engine API を使っていると、pre-push フックの check-unity-compile.sh が
+# 「新 API を使う Assets コード × 旧 DLL」でコンパイルして誤って赤くなる（横断 PR だけ必ず push
+# 拒否される原因）。退避 push（PR未作成のまま終了したセッションの保全 push）も同じ穴があるため
+# 同じ前処理を通す。
+refresh_engine_dll_on_disk() { # $1=worktree $2=log
+  local wt="$1" log="$2"
+  if "$DOTNET" build "$wt/engine/KokoSim.Engine/KokoSim.Engine.csproj" -c Release >>"$log" 2>&1; then
+    cp "$wt/engine/KokoSim.Engine/bin/Release/netstandard2.1/KokoSim.Engine.dll" \
+       "$wt/Assets/Plugins/KokoSim/KokoSim.Engine.dll" 2>>"$log" || true
+  else
+    echo "⚠ push 前の DLL 再ビルドに失敗（${wt}）。旧 DLL のまま push を試行する" >>"$log"
+  fi
+}
+
 # ── マージ工程（ロック内で直列）: rebase→禁止物除去→ガード→ローカル再テスト→squash マージ ──
 # 返り値ではなく note で結果を残す。呼び出しは PR が存在するときのみ。
 merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
@@ -233,9 +250,10 @@ merge_sequence() { # $1=num $2=title $3=wt $4=branch $5=log
     unlock "$REPO_LOCK"; return
   fi
 
-  # rebase 後のブランチを更新
-  if ! git -C "$wt" push --force-with-lease -q origin "$branch" 2>/dev/null; then
-    note "- 🔴 #$num $title — rebase 後の push に失敗（マージ見送り）"
+  # rebase 後のブランチを更新（push 前にディスク DLL を再ビルドして pre-push フックの誤検知を防ぐ）
+  refresh_engine_dll_on_disk "$wt" "$log"
+  if ! git -C "$wt" push --force-with-lease -q origin "$branch" >>"$log" 2>&1; then
+    note "- 🔴 #$num $title — rebase 後の push に失敗（マージ見送り。ログ: ${log}）"
     unlock "$REPO_LOCK"; return
   fi
 
@@ -446,13 +464,17 @@ process_issue() { # $1=num $2=title
     elif [ "$timed_out" = 1 ]; then why="タイムアウト"
     fi
     lock "$REPO_LOCK"
+    # push 前にディスク DLL を再ビルドして pre-push フックの誤検知を防ぐ（issue #432。
+    # merge_sequence 同様、このブランチが engine と Assets を両方触っていると旧 DLL のまま
+    # 検査が走り push が拒否されるため、退避 push でも同じ前処理を通す）。
+    refresh_engine_dll_on_disk "$wt" "$log"
     # 既に PR がある（マージ工程で弾かれた等）ならブランチを push し直すだけでよい。
     local existing; existing="$(gh pr list --head "$branch" --state all --limit 1 --json number --jq '.[0].number' 2>/dev/null)"
     if [ -n "$existing" ]; then
-      git -C "$wt" push origin "$branch" >/dev/null 2>&1 \
+      git -C "$wt" push origin "$branch" >>"$log" 2>&1 \
         && note "- 💾 #$num 作業は PR #${existing} に push 済みで保全（理由: ${why}）" \
         || note "- 🔴 #$num $title — 既存 PR #${existing} への push に失敗（${log}）"
-    elif git -C "$wt" push -u origin "$branch" >/dev/null 2>&1; then
+    elif git -C "$wt" push -u origin "$branch" >>"$log" 2>&1; then
       ( cd "$wt" && gh pr create --draft --head "$branch" \
           --title "[退避] ${title}" \
           --body "夜間エージェントの作業を自動退避した draft PR（理由: ${why}）。
