@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Timeline.Playback;
@@ -373,5 +374,62 @@ public sealed class MatchLiveSnapshotTests
         Assert.Equal(reliever.Name, snap.Home.Pitcher.Name);
         Assert.Equal(0, snap.Home.Pitcher.PendingPitches);
         Assert.Equal(0, snap.Home.Pitcher.Pitches);
+    }
+
+    // ===== issue #407: 対決ビューの投手HUDに与四死球を出す（LivePitcherToday.Walks/HitByPitch）=====
+    // 与四球と与死球は別カウントで持つ（表示側で合算する。記録としては正しい形にしておく＝issue本文の要求）。
+
+    // 四球で+1・死球で+1・両方混ざっても取り違えずに合算が合う。他の結果（三振等）は加算しない。
+    [Fact]
+    public void LivePitcherLine_WalksAndHitByPitch_AccumulateSeparately_AndIgnoreOtherResults()
+    {
+        var team = Team("A", withSourceIds: false, withBench: false);
+        var state = new TeamState(team);
+        var pitcher = state.CurrentPitcher;
+
+        state.RecordPitching(pitcher, PlateAppearanceResult.Walk, runs: 0, outs: 0, pitches: 5);
+        state.RecordPitching(pitcher, PlateAppearanceResult.HitByPitch, runs: 0, outs: 0, pitches: 1);
+        state.RecordPitching(pitcher, PlateAppearanceResult.Walk, runs: 0, outs: 0, pitches: 6);
+        state.RecordPitching(pitcher, PlateAppearanceResult.Strikeout, runs: 0, outs: 1, pitches: 3);
+
+        var line = state.LivePitcherLine();
+        Assert.Equal(2, line.Walks);
+        Assert.Equal(1, line.HitByPitch);
+        Assert.Equal(3, line.Walks + line.HitByPitch); // 表示側の合算値（与四死球）
+    }
+
+    // 継投で退いた控え投手（LiveReservePitchers）も同じ形で今日の与四死球を持つ。
+    [Fact]
+    public void LiveReservePitchers_CarriesWalksAndHitByPitch_ForPitcherWhoAlreadyAppeared()
+    {
+        var team = Team("A", withSourceIds: false, withBench: false);
+        var state = new TeamState(team);
+        var reservePitcher = team.Reserves.Single(p => p.Position == FieldPosition.Pitcher);
+
+        state.RecordPitching(reservePitcher, PlateAppearanceResult.HitByPitch, runs: 0, outs: 0, pitches: 1);
+        state.RecordPitching(reservePitcher, PlateAppearanceResult.HitByPitch, runs: 0, outs: 0, pitches: 1);
+        state.RecordPitching(reservePitcher, PlateAppearanceResult.Walk, runs: 0, outs: 0, pitches: 4);
+
+        var line = state.LiveReservePitchers().Single(p => p.Name == reservePitcher.Name);
+        Assert.Equal(1, line.Walks);
+        Assert.Equal(2, line.HitByPitch);
+    }
+
+    // フルゲーム完走後、現投手（継投なしなら先発＝スナップショットの現投手）の与四死球がボックススコア
+    // （PitchingLine.Walks/HitBatters）と一致する（不変条件: 数値はエンジン集計から引く）。
+    [Fact]
+    public void Snapshot_PitcherWalksAndHitByPitch_MatchBoxScore_WhenNoPitchingChange()
+    {
+        var prog = NewProg();
+        while (prog.Advance()) { }
+        var result = prog.BuildResult();
+        var final = prog.Snapshot();
+
+        if (result.PitcherChanges == 0 && result.HomePitching.Count == 1)
+        {
+            var box = result.HomePitching[0];
+            Assert.Equal(box.Walks, final.Home.Pitcher.Walks);
+            Assert.Equal(box.HitBatters, final.Home.Pitcher.HitByPitch);
+        }
     }
 }

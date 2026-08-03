@@ -50,10 +50,13 @@ public sealed record LiveBatterSlot(
 /// （<see cref="LiveLineScore.PendingRuns"/> と同型, issue #397）。守備側の現投手だけに乗り、
 /// 攻撃側チームの現投手（今は投げていない）は常に0。
 /// </param>
+/// <param name="Walks">今日の与四球（issue #407）。</param>
+/// <param name="HitByPitch">今日の与死球（issue #407）。表示では与四球と合算して「与四死球」として出す。</param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,
     int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0,
-    int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0, int PendingPitches = 0);
+    int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0, int PendingPitches = 0,
+    int Walks = 0, int HitByPitch = 0);
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。

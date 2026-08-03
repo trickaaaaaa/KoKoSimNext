@@ -296,7 +296,7 @@ public sealed class TeamState
             p.SourceId, p.UniformNumber, p.Name, p.Throws,
             a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
             p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches + pendingPitches),
-            pendingPitches);
+            pendingPitches, a?.BB ?? 0, a?.HB ?? 0);
     }
 
     /// <summary>ライブ観戦の控え（未出場の交代候補・背番号順）。打順は持たないので Order=0。観測データ。</summary>
@@ -328,7 +328,7 @@ public sealed class TeamState
             list.Add(new LivePitcherToday(
                 p.SourceId, p.UniformNumber, p.Name, p.Throws,
                 a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
-                p.Grade, PitcherChanges + 2, 1.0));
+                p.Grade, PitcherChanges + 2, 1.0, Walks: a?.BB ?? 0, HitByPitch: a?.HB ?? 0));
         }
         return list;
     }
