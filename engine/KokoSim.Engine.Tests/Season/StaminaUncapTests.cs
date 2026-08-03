@@ -63,11 +63,11 @@ public sealed class StaminaUncapTests
             $"スタミナが Lv100 を超えて伸びていない: Lv{p.Level(AbilityKind.Stamina)}");
         Assert.True(p.Level(AbilityKind.Stamina) <= 120, "才能上限（120）を超えて伸びてはならない");
 
-        // 試合用 Player へ投影すると目安投球数が135球（Lv100相当）を超える（issue #356 ②）。
+        // 試合用 Player へ投影すると目安投球数が138球（Lv100相当・issue #408で切片63/傾き0.75へ更新）を超える（issue #356 ②）。
         var player = RosterTeamBuilder.ToPlayer(p, FieldPosition.Pitcher);
         Assert.NotNull(player.Pitching);
-        Assert.True(player.Pitching!.StaminaPitches > 135.0,
-            $"目安投球数が135球を超えていない: {player.Pitching.StaminaPitches:F1}球");
+        Assert.True(player.Pitching!.StaminaPitches > 138.0,
+            $"目安投球数が138球を超えていない: {player.Pitching.StaminaPitches:F1}球");
     }
 
     [Fact]

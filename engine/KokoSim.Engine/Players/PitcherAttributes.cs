@@ -25,8 +25,9 @@ public sealed record PitcherAttributes
     /// <summary>
     /// スタミナ＝目安投球数（§1.1e）。本来の力を保てる球数。他能力と独立に生成・管理。
     /// 内部の消耗カーブ（残量減→球速天井・制球低下）は PitchingFatigue が駆動する。
+    /// 既定は「各50＝D帯」の目安投球数（<see cref="StaminaPitchesFromLevel"/>(50)＝100.5球, issue #408）。
     /// </summary>
-    public double StaminaPitches { get; init; } = 90.0;
+    public double StaminaPitches { get; init; } = 100.5;
 
     /// <summary>
     /// 球種総合の素質（1〜100, 育成レイヤ）。レパートリー各球のランクの土台。
@@ -53,16 +54,29 @@ public sealed record PitcherAttributes
     public IReadOnlyList<PitchSlot> EffectiveRepertoire
         => Repertoire is { Count: > 0 } r ? r : new[] { PitchSlot.FastballOf(PitchRank) };
 
+    // --- スタミナLevel → 目安投球数（表示層→物理層の一箇所集約・不変条件#1 / issue #408） ---
+    // 旧式 45.0 + Lv*0.9 は生成分布（Clamp(N(45,12),10,92)）の下限が Lv10→54球・約7.6%が70球未満で、
+    // #356 の上限撤廃後もオーナー要望「低くても70〜80球・平均95〜100球」を満たしていなかった。
+    // 下の式は Lv10→70.5 / Lv45→96.75（生成平均）/ Lv50→100.5（D帯）/ Lv92→132（完投上限域）。
+    // 傾きを 0.9→0.75 に寝かせて下限を持ち上げつつ上限が高校野球の完投域(120〜140)を外れないよう解いた。
+    // 定数は data/coefficients.yaml roster.stamina_pitches_intercept / _per_level と一致（issue #402/#408）。
+    // <see cref="Season.RosterCoefficients.StaminaPitchesIntercept"/> が既定として同じ定数を参照し、
+    // 一致テスト（CoefficientsDefaultsConsistencyTests）が YAML との乖離を固定する。
+    public const double StaminaPitchesIntercept = 63.0;
+    public const double StaminaPitchesPerLevel = 0.75;
+
     /// <summary>育成レイヤのスタミナLevel(1〜100)→目安投球数の変換（表示層→内部の一箇所集約）。</summary>
-    public static double StaminaPitchesFromLevel(int level) => 45.0 + level * 0.9;
+    public static double StaminaPitchesFromLevel(int level)
+        => StaminaPitchesIntercept + level * StaminaPitchesPerLevel;
 
     /// <summary>
     /// 目安投球数→スタミナLevel の逆変換（投手総合の合成で他能力と土俵を揃える用）。
-    /// スタミナは上限なし（issue #356）＝上側をクランプしない。目安投球数150球以上の投手は
-    /// Lv100で頭打ちにならず素直に外挿する（Lv100=135球 / Lv150=180球）。下限のみ1で丸める。
+    /// 順変換と同じ定数から出す（別々に持つと必ずずれる, issue #408）。
+    /// スタミナは上限なし（issue #356）＝上側をクランプしない。目安投球数の大きい投手は
+    /// Lv100で頭打ちにならず素直に外挿する（Lv100=138球 / 逆変換 (138-63)/0.75=100）。下限のみ1で丸める。
     /// </summary>
     public static int LevelFromStaminaPitches(double pitches)
-        => (int)Math.Round(Math.Max(1.0, (pitches - 45.0) / 0.9));
+        => (int)Math.Round(Math.Max(1.0, (pitches - StaminaPitchesIntercept) / StaminaPitchesPerLevel));
 
     // --- 球速Level → 最高球速[km/h]（表示層→物理層の一箇所集約・不変条件#1） ---
     // 旧式 120 + Lv*0.45 は Lv50→142.5km/h と高校野球として速すぎ、かつ Lv80以上が上限155に張り付いて
@@ -82,7 +96,7 @@ public sealed record PitcherAttributes
         return (int)Math.Round(Math.Clamp(lv, 1, 100));
     }
 
-    /// <summary>リーグ平均的な投手（球速132km/h, 各50 = D帯, 目安90球）。</summary>
+    /// <summary>リーグ平均的な投手（球速132km/h, 各50 = D帯, 目安100.5球 = Lv50, issue #408）。</summary>
     public static PitcherAttributes LeagueAverage => new();
 
     /// <summary>
