@@ -162,8 +162,12 @@ public static class TimelineBuilder
         // 誰が実際に捕ったかを見ていない（例: Bunt/InfieldRight ではファースト以外が捕るとファーストは
         // FieldBall 降格で役割を失い棒立ちになる）。表引き結果の一塁カバーだけ、このマッピングで上書きする
         // （YAML 側の表は初期値として温存。ゾーン×捕球者の全組み合わせを展開しない）。
+        // アンアシスト刺殺（3U, Issue #400）: 一塁手が自分でベースを踏むと判定が決めたなら、カバー担当は
+        // 一塁手自身＝投手（や二塁手）のカバーを生成しない。それ以外は従来どおり（ファースト処理なら投手カバー、
+        // バントのみ二塁手）。判定は engine が済ませており、ここは結果を写すだけ（乱数不使用）。
         var firstBaseCoverer = play.FielderRole == FieldPosition.FirstBase
-            ? (zone == BallZone.Bunt ? FieldPosition.SecondBase : FieldPosition.Pitcher)
+            ? (play.UnassistedPutout ? FieldPosition.FirstBase
+                : zone == BallZone.Bunt ? FieldPosition.SecondBase : FieldPosition.Pitcher)
             : FieldPosition.FirstBase;
 
         var ball = new List<BallSegment>
@@ -240,14 +244,30 @@ public static class TimelineBuilder
             {
                 var firstBase = BasePoint(field, "first");
                 var arrive = ContactAt + throwArrive;
-                var flight = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
-                ball.Add(new BallSegment
+                if (play.UnassistedPutout)
                 {
-                    Kind = BallSegmentKind.Throw,
-                    T0 = Math.Max(fieldedAt, arrive - flight), T1 = arrive,
-                    From = fieldPoint, To = firstBase,
-                    FromRole = play.FielderRole, ToRole = firstBaseCoverer, ToBase = "first",
-                });
+                    // アンアシスト（3U, Issue #400）: 送球せず一塁手がボールをグラブに収めたまま運ぶ。
+                    // Carry セグメント（保持しての移動）で表現し、山なりの Throw は積まない。到達(T1)は判定を
+                    // 決めた刺殺時刻のまま＝一塁手のカバー移動レッグ（下の注入）と同時にベースへ着く。
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Carry,
+                        T0 = fieldedAt, T1 = arrive,
+                        From = fieldPoint, To = firstBase,
+                        FromRole = play.FielderRole, ToRole = firstBaseCoverer, ToBase = "first",
+                    });
+                }
+                else
+                {
+                    var flight = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Throw,
+                        T0 = Math.Max(fieldedAt, arrive - flight), T1 = arrive,
+                        From = fieldPoint, To = firstBase,
+                        FromRole = play.FielderRole, ToRole = firstBaseCoverer, ToBase = "first",
+                    });
+                }
             }
         }
 
@@ -324,6 +344,11 @@ public static class TimelineBuilder
             var fieldBallTarget = ballFielder is null ? ClampToFence(landing, field, play.BearingDeg) : landing;
 
             var firstBaseCovered = false;
+            // アンアシスト（3U, Issue #400）で一塁手がボールを捕った実位置（FieldBall レッグの終端）。
+            // その後の「捕球点→ベースへ運ぶ」カバーレッグの出発点にする。守備範囲(reach)で届いた捕球は体が
+            // 捕球点まで来ていない（StopWithinReach で手前に止まる）ので、ここを起点にしないと運びレッグが
+            // 実距離を過小評価して脚力を超える（LegSpeedTests）。既定は捕球点＝体が捕球点まで来た場合。
+            var firstBaseFieldEnd = fieldPoint;
             // 内野を抜けた打球で最も惜しかった内野手（Issue #336②）。この1人だけ、通常の役割移動の前に
             // 「打球ラインへ寄る/飛びつく」レッグを1本挟む。ThroughInfield でない打球では常に null。
             var missRole = play.ThroughInfield ? play.ClosestInfielderRole : null;
@@ -391,6 +416,7 @@ public static class TimelineBuilder
                 {
                     (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
                     to = StopWithinReach(moveFrom, to, speed * (t1 - t0), fielderReachM);
+                    if (a.Position == FieldPosition.FirstBase) firstBaseFieldEnd = to; // アンアシスト運びの起点（#400）
                 }
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
 
@@ -425,15 +451,40 @@ public static class TimelineBuilder
                         var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
                         var (t0, t1) = ArriveByFieldedAt(ContactAt + 0.35, ContactAt + 0.35 + dist / speed, fieldedAt);
                         var stop = StopWithinReach(from, fieldPoint, speed * (t1 - t0), fielderReachM);
+                        if (bfr == FieldPosition.FirstBase) firstBaseFieldEnd = stop; // アンアシスト運びの起点（#400）
                         moves.Add(new FielderMove { Role = bfr, T0 = t0, T1 = t1, To = stop, Task = FielderTask.FieldBall });
                     }
                 }
             }
 
+            // アンアシスト刺殺（3U, Issue #400）: 一塁手が捕球点から自分でベースへ運んで踏む移動レッグを積む。
+            // 出発は捕球した実位置(firstBaseFieldEnd)、到達は判定に使った刺殺時刻(ThrowArriveSeconds)へ合わせる
+            // （ボールの Carry セグメントと同時にベースへ着く）。投手カバーは firstBaseCoverer=一塁手自身なので
+            // 上のループで押し出し済み＝生成されない。体が刺殺時刻までに走り切れない残り（ベースへ踏み込む脚）は
+            // reach ぶんで詰める（StopWithinReach。他の運びレッグと同型で脚力を超えさせない, LegSpeedTests）。
+            if (play.UnassistedPutout && play.FielderRole == FieldPosition.FirstBase)
+            {
+                var firstBaseman = Find(fielders, FieldPosition.FirstBase);
+                if (firstBaseman is not null && play.ThrowArriveSeconds is { } putoutArrive)
+                {
+                    var basePt = BasePoint(field, "first");
+                    var t0 = fieldedAt;
+                    var t1 = Math.Max(t0 + 0.05, ContactAt + putoutArrive);
+                    var speed = Math.Max(4.0, firstBaseman.Attributes.SprintSpeedMps);
+                    var to = StopWithinReach(firstBaseFieldEnd, basePt, speed * (t1 - t0), fielderReachM);
+                    if (Distance(firstBaseFieldEnd, to) >= 0.5)
+                    {
+                        moves.Add(new FielderMove
+                        {
+                            Role = FieldPosition.FirstBase, T0 = t0, T1 = t1, To = to, Task = FielderTask.CoverBase,
+                        });
+                    }
+                }
+            }
             // 一塁カバーが表に無かった（実捕球者に押し出された）→動的な担当を注入する（Issue #257）。
             // 例: Bunt/InfieldRight でファースト以外が捕った場合、静的表のファーストの行は FieldBall
             // （＝実捕球者でなければ丸ごと降格）なので、このままでは誰も一塁に入らない。
-            if (!firstBaseCovered)
+            else if (!firstBaseCovered)
             {
                 var coverer = Find(fielders, firstBaseCoverer);
                 if (coverer is not null)

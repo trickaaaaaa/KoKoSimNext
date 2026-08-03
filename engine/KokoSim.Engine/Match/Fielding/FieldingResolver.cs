@@ -48,8 +48,17 @@ public sealed record FieldingPlay
     public FieldPosition? FielderRole { get; init; }
     /// <summary>野手が打球に到達（捕球/処理）した時刻[s]。</summary>
     public double? FieldedAtSeconds { get; init; }
-    /// <summary>一塁送球が到達した時刻[s]（内野ゴロのみ）。</summary>
+    /// <summary>一塁送球が到達した時刻[s]（内野ゴロのみ）。<see cref="UnassistedPutout"/> のときは
+    /// 送球ではなく「一塁手がベースを踏んで刺殺が成立した時刻」を表す。</summary>
     public double? ThrowArriveSeconds { get; init; }
+    /// <summary>
+    /// アンアシスト刺殺（3U, Issue #400）。処理野手が一塁手で、送球するより自分でベースを踏むほうが
+    /// 速いと物理層の時間比較（握り替え0.70sを払う送球 vs 捕球点→ベースを走り込む自重）で決まったとき true。
+    /// このとき <see cref="ThrowArriveSeconds"/> は走り込みの到達時刻＝刺殺成立時刻を表し、表示層は送球
+    /// セグメントも投手カバーも生成しない。処理野手が一塁手の内野ゴロ以外では常に false（不変条件#1: 判定は
+    /// 表示能力値でなく物理層の時間比較で決める）。
+    /// </summary>
+    public bool UnassistedPutout { get; init; }
     /// <summary>打者走者の一塁到達時刻[s]。</summary>
     public required double BatterToFirstSeconds { get; init; }
     public bool IsFly { get; init; }
@@ -269,8 +278,24 @@ public static class FieldingResolver
             // 握り替え（トランスファー）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
             var transfer = coeff.ThrowTransferSeconds
                            * infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin);
-            var defenseTime = fieldTime + coeff.InfieldPlayOverheadSeconds
-                              + transfer + throwDist / infielder.Attributes.ThrowSpeedMps;
+            var throwTime = fieldTime + coeff.InfieldPlayOverheadSeconds
+                            + transfer + throwDist / infielder.Attributes.ThrowSpeedMps;
+            // アンアシスト刺殺（3U, Issue #400）: 処理野手が一塁手なら、投手カバーへ送球する以外に「自分で
+            // ベースを踏む」選択肢を持つ。捕球点がベース至近なら握り替え0.70sを払わずに済むぶん自重で踏むほうが
+            // 速い＝実際の 3U が発生する。所要は握り替え・送球を除いた「捕球点→一塁ベースを走り込む」時間で、
+            // 送球所要と物理層の秒だけで比較して速いほうを採る（不変条件#1: 表示能力値から確率を引かない）。
+            var unassistedPutout = false;
+            var defenseTime = throwTime;
+            if (infielder.Position == FieldPosition.FirstBase)
+            {
+                var carryTime = fieldTime + coeff.InfieldPlayOverheadSeconds
+                                + throwDist / infielder.Attributes.SprintSpeedMps;
+                if (carryTime < throwTime)
+                {
+                    unassistedPutout = true;
+                    defenseTime = carryTime;
+                }
+            }
             // 判定margin（Issue #59）: 0=判定境界（=defenseTime+ForceOutMargin と runnerTime が拮抗）、
             // 正=セーフ寄り、負=アウト寄り。表示専用（判定・帯には影響しない）。
             var judgementMargin = defenseTime - runnerTime + coeff.ForceOutMarginSeconds;
@@ -289,6 +314,7 @@ public static class FieldingResolver
                     FielderRole = infielder.Position,
                     FieldedAtSeconds = fieldTime,
                     ThrowArriveSeconds = defenseTime,
+                    UnassistedPutout = unassistedPutout,
                     FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
                     FielderFielding = infielder.Attributes.Fielding,
                     FielderThrowAccuracy = infielder.Attributes.ThrowAccuracy,
@@ -303,6 +329,7 @@ public static class FieldingResolver
                 FielderRole = infielder.Position,
                 FieldedAtSeconds = fieldTime,
                 ThrowArriveSeconds = defenseTime,
+                UnassistedPutout = unassistedPutout,
                 FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
                 FielderFielding = infielder.Attributes.Fielding,
                 FielderThrowAccuracy = infielder.Attributes.ThrowAccuracy,
