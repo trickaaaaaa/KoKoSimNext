@@ -48,6 +48,13 @@ public sealed class ErrorPlayTimelineTests
         var j = Assert.Single(tl.Judgements);
         Assert.Equal(JudgementKind.Error, j.Kind);
         Assert.Equal(fieldedAt, j.T, 6);
+
+        // ① こぼした本人（処理野手）が弾いた球を追いかけて拾い直す（issue #439 追記）
+        var chase = Assert.Single(tl.Moves, m => m.Task == FielderTask.Chase);
+        Assert.Equal(FieldPosition.SecondBase, chase.Role);
+        Assert.Equal(fieldedAt + 0.35, chase.T0, 6);
+        Assert.Equal(0.0, Dist(chase.To, deflect.To), 3);       // 行き先＝球が止まる点
+        Assert.True(chase.T1 >= deflect.T1, "球が止まる前に拾い終わっている");
     }
 
     // 悪送球: 送球は描くが一塁に正着しない（ToBase 無し・受け手無し・終点はベースの先）。
@@ -72,6 +79,13 @@ public sealed class ErrorPlayTimelineTests
         var j = Assert.Single(tl.Judgements);
         Assert.Equal(JudgementKind.Error, j.Kind);
         Assert.Equal(ContactAt + 3.0, j.T, 6);
+
+        // ① 逸れた球は一塁カバー（処理が二塁手なので一塁手）が振り返って追いかける（issue #439 追記）
+        var chase = Assert.Single(tl.Moves, m => m.Task == FielderTask.Chase);
+        Assert.Equal(FieldPosition.FirstBase, chase.Role);
+        Assert.Equal(ContactAt + 3.0 + 0.35, chase.T0, 6);      // 届くはずだった時刻＋反応
+        Assert.Equal(0.0, Dist(chase.To, thrown.To), 3);        // 行き先＝球が止まる点
+        Assert.True(chase.T1 >= thrown.T1, "球が止まる前に拾い終わっている");
     }
 
     // 落球（フライの捕球エラー）: 判定「エラー」が捕球を試みた瞬間に出る。

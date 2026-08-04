@@ -239,6 +239,11 @@ public static class TimelineBuilder
         // 一塁送球（内野ゴロ）。到達時刻(T1)はエンジンの ThrowArriveSeconds のまま固定し、投げ始め(T0)を
         // 「実距離÷肩」の飛行時間から逆算する（Issue #334）。捕球オーバーヘッド＋握り替えは、捕球点で
         // ボールを保持する「間」として自然に吸収される（AddThrowChain と同じ形）。
+        // エラーでこぼれた/逸れた球の行き先（Rest）と死ぬ時刻・追いかける野手は、後段の
+        // 追いかけレッグ注入（issue #439 ①）が読む。
+        TimelinePoint? errorBallRest = null;
+        var errorBallDeadAt = 0.0;
+        FieldPosition? errorChaser = null;
         if (play.ThrowArriveSeconds is { } throwArrive && play.Result is BattedBallResult.Out or BattedBallResult.Single or BattedBallResult.Error)
         {
             if (!play.IsFly && play.RangeM <= 46.0)
@@ -255,24 +260,36 @@ public static class TimelineBuilder
                     var over = Overshoot(fieldPoint, firstBase, ErrantThrowOvershootM);
                     var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
                     var t0 = Math.Max(fieldedAt, arrive - flightToFirst);
+                    var deadAt = t0 + LegSeconds(Distance(fieldPoint, over), ThrowSpeedOf(play));
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Throw,
-                        T0 = t0, T1 = t0 + LegSeconds(Distance(fieldPoint, over), ThrowSpeedOf(play)),
+                        T0 = t0, T1 = deadAt,
                         From = fieldPoint, To = over,
                         FromRole = play.FielderRole,
                     });
+                    // 逸れた球は一塁カバーが振り返って拾いに行く（①）
+                    errorBallRest = over;
+                    errorBallDeadAt = deadAt;
+                    errorChaser = firstBaseCoverer;
                 }
                 else if (play.Result == BattedBallResult.Error)
                 {
                     // 捕球エラー（お手玉。issue #439）: 送球は存在しない。打球の進行方向へ数m弾く絵。
                     // アンアシスト中の悪送球（実質起こらない縁ケース）もここへ落とす＝刺殺の絵は描かない。
+                    // FromRole は「弾いた野手」＝頭上のびっくりマーク（3D）が対象を特定するのに使う。
+                    var rest = Overshoot(Home, fieldPoint, ErrorDeflectM);
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Roll,
                         T0 = fieldedAt, T1 = fieldedAt + ErrorDeflectSeconds,
-                        From = fieldPoint, To = Overshoot(Home, fieldPoint, ErrorDeflectM),
+                        From = fieldPoint, To = rest,
+                        FromRole = play.FielderRole,
                     });
+                    // こぼした本人が拾い直しに行く（①）
+                    errorBallRest = rest;
+                    errorBallDeadAt = fieldedAt + ErrorDeflectSeconds;
+                    errorChaser = play.FielderRole;
                 }
                 else if (play.UnassistedPutout)
                 {
@@ -575,6 +592,32 @@ public static class TimelineBuilder
                         }
                     }
                 }
+            }
+        }
+
+        // エラーでこぼれた/逸れた球は野手が追いかけて拾いに行く（issue #439 ①）。
+        // 捕球エラー＝弾いた本人が拾い直す／悪送球＝一塁カバーが振り返って追う。
+        // 表示専用の定点計算のみ（乱数不使用）。3D側はエラープレーの決着後レッグを剥がさない
+        // （StripPostResolutionReturnMoves の例外）ことで、このレッグが絵に出る。
+        if (errorBallRest is { } chaseTo && errorChaser is { } chaserRole)
+        {
+            var chaser = Find(fielders, chaserRole);
+            if (chaser is not null)
+            {
+                // 出発点はその時点の持ち場（捕球エラー＝処理点／悪送球＝一塁カバー位置）で距離を見積もる。
+                var chaseFrom = play.ErrorKind == FieldingErrorKind.Throw
+                    ? FirstBaseCoverPoint(field, fieldPoint)
+                    : fieldPoint;
+                var speed = Math.Max(4.0, chaser.Attributes.SprintSpeedMps);
+                var t0 = (play.ErrorKind == FieldingErrorKind.Throw ? ContactAt + (play.ThrowArriveSeconds ?? 0.0) : fieldedAt)
+                         + ErrorChaseReactionSeconds;
+                // 球が止まる前に着かない（先回りして待つ絵にしない）
+                var t1 = Math.Max(t0 + Distance(chaseFrom, chaseTo) / speed, errorBallDeadAt);
+                moves.Add(new FielderMove
+                {
+                    Role = chaserRole, T0 = t0, T1 = t1, To = chaseTo, Task = FielderTask.Chase,
+                });
+                if (t1 + 0.5 > returnTail) returnTail = t1 + 0.5;
             }
         }
 
@@ -1236,6 +1279,9 @@ public static class TimelineBuilder
     /// <summary>捕球エラーで弾いたボールが転がる距離[m]と時間[s]（issue #439。表示専用）。</summary>
     private const double ErrorDeflectM = 3.0;
     private const double ErrorDeflectSeconds = 0.8;
+
+    /// <summary>エラーに気づいて追いかけ始めるまでの反応[s]（issue #439 ①。表示専用）。</summary>
+    private const double ErrorChaseReactionSeconds = 0.35;
 
     /// <summary>
     /// <paramref name="from"/>→<paramref name="through"/> の延長線上、<paramref name="through"/> から

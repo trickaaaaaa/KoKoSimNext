@@ -94,15 +94,52 @@ namespace KokoSim.Unity.Match
                 fDuelOn.SetValue(ctrl, true);
                 mApplyView.Invoke(ctrl, null);
 
-                var ok = telop == "エラー" && !throwToFirst;
+                // 3D: びっくりマーク（②）＋追いかけ（①）。リグを直駆動して撮る。
+                var mark3dOn = false;
+                var rig = ctrl.DuelRigForCapture;
+                if (rig != null && rig.Available)
+                {
+                    rig.BeginFieldPlay(play, 0f);
+                    rig.SetFieldTime((float)errT + 0.3f);
+                    yield return null;
+                    var markGo = GameObject.Find("ErrorMark");
+                    mark3dOn = markGo != null && markGo.activeInHierarchy;
+                    rig.RenderNow();
+                    yield return CaptureRig(rig, kindName + "-mark3d");
+                    rig.SetFieldTime((float)errT + 1.4f);
+                    yield return null;
+                    rig.RenderNow();
+                    yield return CaptureRig(rig, kindName + "-chase3d");
+                    rig.EndFieldPlay();
+                }
+
+                var ok = telop == "エラー" && !throwToFirst && mark3dOn;
                 Debug.Log($"[Err439] {kindName} {(ok ? "OK" : "NG")} 「{play.Result}」 判定T={errT:F2} " +
-                          $"テロップ=「{telop}」 一塁正着送球={throwToFirst}(Carry={hasCarry}) 球=[{segs.ToString().Trim()}]");
+                          $"テロップ=「{telop}」 一塁正着送球={throwToFirst}(Carry={hasCarry}) " +
+                          $"マーク表示={mark3dOn} 球=[{segs.ToString().Trim()}]");
                 if (kindName == "catch") doneCatch = true; else doneThrow = true;
             }
 
             if (!doneCatch) Debug.LogWarning("[Err439] 捕球エラーのプレーが出なかった（再実行で引き直し）");
             if (!doneThrow) Debug.LogWarning("[Err439] 悪送球のプレーが出なかった（再実行で引き直し）");
             Debug.Log("[Err439] DONE → " + Dir);
+        }
+
+        /// <summary>リグのRT（3Dビュー）をそのまま保存する（CatcherClampShooter と同じ作法）。</summary>
+        private IEnumerator CaptureRig(DuelStageRig rig, string file)
+        {
+            yield return new WaitForEndOfFrame();
+            if (rig.Target == null) yield break;
+            var w = rig.Target.width;
+            var h = rig.Target.height;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var prev = RenderTexture.active;
+            RenderTexture.active = rig.Target;
+            tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+            tex.Apply();
+            RenderTexture.active = prev;
+            File.WriteAllBytes(Path.Combine(Dir, file + ".png"), tex.EncodeToPNG());
+            Destroy(tex);
         }
 
         private IEnumerator Capture(MatchLiveController ctrl, string file)
