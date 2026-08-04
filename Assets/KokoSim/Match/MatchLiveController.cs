@@ -268,6 +268,18 @@ namespace KokoSim.Unity.Match
         private Label _subCallTag, _subCallText;
         private float _subCallClock;
         private bool _subCallOn;
+
+        // 試合開始/終了テロップ「プレイボール」「ゲームセット」（issue #442）。器は判定テロップ
+        // （judgement-call。#59/#354）を流用し、新規の見た目部品は作らない。寿命は PitchCall と同じ
+        // 「Update() の専用クロック」方式だが、判定オーバーレイ（#236）と同じく実時間で数える
+        // （倍速でも見え方を一定にする）。表示専用＝engine には触らない。
+        [SerializeField] private float gameTelopHoldSeconds = (float)Match2DPlaybackElement.JudgementHoldRealSeconds;
+        private VisualElement _gameTelopHost;
+        private Label _gameTelopLabel, _gameTelopDetail;
+        private float _gameTelopClock;
+        private bool _gameTelopOn;
+        // 終局後「ゲームセット」を掲げる予約。得点テロップ（#60）の演出が済むのを Update 側で待つ。
+        private bool _gameSetPending;
         private int _subLogCount;   // 既に取り込んだ継投ログ件数（_prog.PitchingChanges との差分検知）
 
         // イニング間のスコア画面（試合画面改修）。攻守が入れ替わった瞬間、次の打席の再生を保留して
@@ -304,6 +316,11 @@ namespace KokoSim.Unity.Match
             var judgeDetail = _root.Q<Label>("judgement-detail");
             if (judgeHost != null && judgeLabel != null && judgeDetail != null)
                 _view.SetJudgementHost(judgeHost, judgeLabel, judgeDetail);
+            // 試合開始/終了テロップ（issue #442）も同じ器へ載せる（掲げるのは「最初のプレーの前」と
+            // 「終局後」だけ＝プレー時刻の純関数で描く Match2DPlaybackElement と時間帯が重ならない）。
+            _gameTelopHost = judgeHost;
+            _gameTelopLabel = judgeLabel;
+            _gameTelopDetail = judgeDetail;
 
             _leftLineup = _root.Q<VisualElement>("left-lineup");
             _rightLineup = _root.Q<VisualElement>("right-lineup");
@@ -402,7 +419,14 @@ namespace KokoSim.Unity.Match
 
             // 自動連続進行（issue #173）: 打席頭で止めず終局まで流す。スクショ時（CaptureMode）は開始せず、
             // シューターの AdvanceForCapture で従来どおり1打席ずつ手動駆動する。
-            if (!CaptureMode) StartAutoRun();
+            // 「プレイボール」テロップ（issue #442）は試合の入り口＝ここにしか無いので、最初のプレーの
+            // 前に一度だけ出る（攻守交代・2打席目以降では出ない）。初打席は采配窓の間を挟むので、
+            // プレー再生に上書きされる前にテロップの寿命が尽きる。スクショ時は ShowGameTelopForCapture で出す。
+            if (!CaptureMode)
+            {
+                ShowGameTelop("プレイボール");
+                StartAutoRun();
+            }
         }
 
         // 画面を離れるときにハンドラを外す（OnEnable が毎回登録するため、外さないと往復のたび多重登録になり
@@ -464,6 +488,9 @@ namespace KokoSim.Unity.Match
             _scoreCallOn = false;
             _subCallClock = 0f;
             _subCallOn = false;
+            _gameTelopClock = 0f;
+            _gameTelopOn = false;
+            _gameSetPending = false;
             _inningBreakClock = 0f;
             _inningBreakOn = false;
             _subLogCount = 0;
@@ -955,6 +982,16 @@ namespace KokoSim.Unity.Match
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }
             if (_caption != null) _caption.text = "試合終了。";
             UpdateControlState();
+            // 「ゲームセット」テロップ（issue #442）: 掲げるのは Update 側＝得点テロップ（#60）の
+            // 演出が済んでから（サヨナラ等の得点絡みの決着で重ねない）。結果画面への受け渡しも
+            // テロップを見せ切ってから（FinishGameEndHandOff）。9回決着・サヨナラ・委任（OnSkip）の
+            // どの終了経路もここを通るので、経路ごとの分岐は持たない。
+            _gameSetPending = true;
+        }
+
+        // 終局処理の後半＝結果画面への受け渡し。「ゲームセット」を見せ切ってから呼ぶ（issue #442）。
+        private void FinishGameEndHandOff()
+        {
             if (!HandOffToResultScreen()) SetBackHomeVisible(_onComplete != null);
         }
 
@@ -1530,6 +1567,26 @@ namespace KokoSim.Unity.Match
                 _subCallClock += Time.deltaTime * _speed;
                 if (_subCallClock >= subCallHoldSeconds) HideSubCall();
             }
+            // 試合開始/終了テロップ（issue #442）。判定オーバーレイ（#236）と同じく実時間で数える
+            // ＝倍速でも見え方を一定にする。「ゲームセット」は得点テロップの演出が済んでから掲げる。
+            if (_gameSetPending && !_scoreCallOn)
+            {
+                _gameSetPending = false;
+                ShowGameTelop("ゲームセット");
+                // 器が見つからない画面でも結果画面への受け渡しだけは必ず行う（遷移を人質にしない）。
+                if (!_gameTelopOn) FinishGameEndHandOff();
+            }
+            if (_gameTelopOn)
+            {
+                _gameTelopClock += Time.deltaTime;
+                if (_gameTelopClock >= gameTelopHoldSeconds)
+                {
+                    // プレー再生が器を先取りしていたら畳まない（判定の表示中に消さない）。フラグだけ下ろす。
+                    if (_stage == LiveStage.Pitch || _stage == LiveStage.Play) { _gameTelopOn = false; _gameTelopClock = 0f; }
+                    else HideGameTelop();
+                    if (_gameOver) FinishGameEndHandOff();
+                }
+            }
 
             // 采配窓: 打者を映したまま指示を待つ。打席の頭だけ短い間を置き（設計書15 §8.3-①）、
             // 打席の途中は球間そのものが窓なので待たずに次の1球へ抜ける。倍速で間も一緒に縮む。
@@ -1840,6 +1897,39 @@ namespace KokoSim.Unity.Match
             _scoreCallRunsRemaining = 0;
             if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None;
         }
+
+        // ── 試合開始/終了テロップ「プレイボール」「ゲームセット」（issue #442） ──
+        // 器は判定テロップ（judgement-call）を流用する。中身は普段 Match2DPlaybackElement が
+        // プレー時刻の純関数で描く＝プレー再生が始まると自然に上書き・消灯される側なので、
+        // 掲げるのは「最初のプレーの前」と「終局後」だけに限る（時間帯が重ならない）。
+        private void ShowGameTelop(string text)
+        {
+            if (_gameTelopHost == null || _gameTelopLabel == null) return;
+            _gameTelopLabel.text = text;
+            // 直前の判定の色クラスを引き継がない（素の書体・色で出す）。
+            _gameTelopLabel.EnableInClassList("pitch-call__judge--out", false);
+            _gameTelopLabel.EnableInClassList("pitch-call__judge--safe", false);
+            _gameTelopLabel.EnableInClassList("pitch-call__judge--fair", false);
+            _gameTelopLabel.EnableInClassList("pitch-call__judge--homerun", false);
+            if (_gameTelopDetail != null)
+            {
+                _gameTelopDetail.text = "";
+                _gameTelopDetail.style.display = DisplayStyle.None;
+            }
+            _gameTelopHost.style.display = DisplayStyle.Flex;
+            _gameTelopClock = 0f;
+            _gameTelopOn = true;
+        }
+
+        private void HideGameTelop()
+        {
+            _gameTelopOn = false;
+            _gameTelopClock = 0f;
+            if (_gameTelopHost != null) _gameTelopHost.style.display = DisplayStyle.None;
+        }
+
+        /// <summary>スクショ用: 試合開始/終了テロップを強制表示する（寿命管理は通常と同じ）。</summary>
+        public void ShowGameTelopForCapture(bool gameSet) => ShowGameTelop(gameSet ? "ゲームセット" : "プレイボール");
 
         private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>
             k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
