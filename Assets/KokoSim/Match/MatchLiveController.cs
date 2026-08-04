@@ -2634,9 +2634,10 @@ namespace KokoSim.Unity.Match
             // 同じ「今日の投球」の並びへ寄せた（2026-07-31 ユーザー判断）。奪三振と与四死球は対で見て
             // 初めて「今日の出来」になるので隣接させる（issue #407）。数字だけ Oswald（.f-num）へ分離
             // （書体3役ルール・設計書16 §2。防御率/奪三振は既存の混植のまま＝範囲外の改修はしない）。
+            // 防御率は通算＋本日の合算（issue #449。通算なしは本日分のみ、登板なしかつ本日アウト0のみ「—」）。
+            var era = MatchLiveStatsProvider.LiveEra(_statsProvider.CareerPitching(m.PitcherSourceId), def.EarnedRuns, def.Outs);
             var line2 = MakeRow("mup-line");
-            line2.Add(MakeLabel("防 " + MatchLiveStatsProvider.Era(_statsProvider.CareerPitching(m.PitcherSourceId))
-                                    + "　奪三振 " + def.StrikeOuts, "mup-career"));
+            line2.Add(MakeLabel("防 " + era + "　奪三振 " + def.StrikeOuts, "mup-career"));
             line2.Add(MakeLabel("与四死球", "mup-pitches__lab", "mup-pitches__lab--gap"));
             line2.Add(MakeLabel((def.Walks + def.HitByPitch).ToString(), "mup-career", "f-num"));
             // 確定球数＋進行中の打席ぶん（issue #397）。据え置きを解消し1球ごとに動かす。
@@ -2706,10 +2707,13 @@ namespace KokoSim.Unity.Match
             line1.Add(face);
             block.Add(line1);
 
+            // 打率は通算＋本日の合算（issue #449。通算なしは本日分のみ、通算なしかつ本日打数0のみ「—」）。
+            // 本塁打・打点は通算のみ（issue範囲外・据え置き）。
             var b = _statsProvider.CareerBatting(m.BatterSourceId);
+            var avg = MatchLiveStatsProvider.LiveAvg(b, batterToday?.AtBats ?? 0, batterToday?.Hits ?? 0);
             var career = b == null
-                ? "通算 —"
-                : MatchLiveStatsProvider.Avg(b) + " / " + b.HomeRuns + "本 / " + b.Rbi + "点";
+                ? avg
+                : avg + " / " + b.HomeRuns + "本 / " + b.Rbi + "点";
             var line2 = MakeRow("mup-line");
             line2.Add(MakeLabel(career, "mup-career"));
             block.Add(line2);

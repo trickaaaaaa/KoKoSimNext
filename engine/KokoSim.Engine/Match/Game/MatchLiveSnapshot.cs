@@ -33,7 +33,7 @@ public sealed record LiveBatterSlot(
 /// <param name="Throws">左右投。</param>
 /// <param name="Pitches">今日の球数。</param>
 /// <param name="Outs">今日のアウト数（投球回＝Outs/3）。</param>
-/// <param name="Runs">今日の失点（RA。自責点は未追跡）。</param>
+/// <param name="Runs">今日の失点（RA。自責点は <see cref="EarnedRuns"/> 参照, issue #449）。</param>
 /// <param name="StrikeOuts">今日の奪三振。</param>
 /// <param name="ConditionValue">調子の真値（連続値・両校とも。相手校の観測誤認は Shell 側, issue #47）。</param>
 /// <param name="Grade">学年（1-3）。</param>
@@ -52,11 +52,12 @@ public sealed record LiveBatterSlot(
 /// </param>
 /// <param name="Walks">今日の与四球（issue #407）。</param>
 /// <param name="HitByPitch">今日の与死球（issue #407）。表示では与四球と合算して「与四死球」として出す。</param>
+/// <param name="EarnedRuns">今日の自責点（issue #449。ライブ防御率＝通算＋本日の合算に使う）。</param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,
     int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0,
     int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0, int PendingPitches = 0,
-    int Walks = 0, int HitByPitch = 0);
+    int Walks = 0, int HitByPitch = 0, int EarnedRuns = 0);
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。
