@@ -432,4 +432,56 @@ public sealed class MatchLiveSnapshotTests
             Assert.Equal(box.HitBatters, final.Home.Pitcher.HitByPitch);
         }
     }
+
+    // ===== issue #449: 対決ビューHUDの防御率ライブ更新（LivePitcherToday.EarnedRuns）=====
+    // TeamState の個人成績集計（_pit accumulator）は issue #69 から自責点を追跡済み。ここでは
+    // ライブ観戦スナップショットへ正しく配管されることだけを確認する（失点=Runsと自責点=EarnedRunsを
+    // 取り違えない・失策絡みの失点は自責から除外される）。
+
+    // 失策絡みの失点（unearnedRuns）は Runs には入るが EarnedRuns からは除外される。
+    [Fact]
+    public void LivePitcherLine_EarnedRuns_ExcludesUnearnedRuns_FromRecordPitching()
+    {
+        var team = Team("A", withSourceIds: false, withBench: false);
+        var state = new TeamState(team);
+        var pitcher = state.CurrentPitcher;
+
+        state.RecordPitching(pitcher, PlateAppearanceResult.Single, runs: 2, outs: 0, pitches: 4, unearnedRuns: 1);
+        state.RecordPitching(pitcher, PlateAppearanceResult.Strikeout, runs: 0, outs: 1, pitches: 3);
+
+        var line = state.LivePitcherLine();
+        Assert.Equal(2, line.Runs);
+        Assert.Equal(1, line.EarnedRuns); // 2失点のうち1つは失策絡み＝自責から除外
+    }
+
+    // 継投で退いた控え投手（LiveReservePitchers）も同じ形で今日の自責点を持つ。
+    [Fact]
+    public void LiveReservePitchers_CarriesEarnedRuns_ForPitcherWhoAlreadyAppeared()
+    {
+        var team = Team("A", withSourceIds: false, withBench: false);
+        var state = new TeamState(team);
+        var reservePitcher = team.Reserves.Single(p => p.Position == FieldPosition.Pitcher);
+
+        state.RecordPitching(reservePitcher, PlateAppearanceResult.HomeRun, runs: 1, outs: 0, pitches: 1);
+
+        var line = state.LiveReservePitchers().Single(p => p.Name == reservePitcher.Name);
+        Assert.Equal(1, line.EarnedRuns);
+    }
+
+    // フルゲーム完走後、現投手の今日の自責点がボックススコア（PitchingLine.EarnedRuns）と一致する
+    // （不変条件: 数値はエンジン集計から引く）。
+    [Fact]
+    public void Snapshot_PitcherEarnedRuns_MatchBoxScore_WhenNoPitchingChange()
+    {
+        var prog = NewProg();
+        while (prog.Advance()) { }
+        var result = prog.BuildResult();
+        var final = prog.Snapshot();
+
+        if (result.PitcherChanges == 0 && result.HomePitching.Count == 1)
+        {
+            var box = result.HomePitching[0];
+            Assert.Equal(box.EarnedRuns, final.Home.Pitcher.EarnedRuns);
+        }
+    }
 }

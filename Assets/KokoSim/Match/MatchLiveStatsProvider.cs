@@ -166,6 +166,30 @@ namespace KokoSim.Unity.Match
         /// <summary>防御率表記（2.14／登板なしは「—」）。</summary>
         public static string Era(PitchingStatLine? p) => p is null ? "—" : p.Era.ToString("0.00");
 
+        /// <summary>
+        /// 対決ビューHUD用のライブ打率（通算＋本日の合算, issue #449）。
+        /// 表示値＝(通算安打＋本日安打)÷(通算打数＋本日打数)。通算が無い選手（未出場・相手校）は本日分のみで
+        /// 計算する（第1打席凡退→.000／安打→1.000）。通算なし かつ 本日打数0 のみ「—」。
+        /// </summary>
+        public static string LiveAvg(BattingStatLine? career, int todayAtBats, int todayHits)
+        {
+            var atBats = (career?.AtBats ?? 0) + todayAtBats;
+            var hits = (career?.Hits ?? 0) + todayHits;
+            return atBats > 0 ? FormatAvg((double)hits / atBats) : "—";
+        }
+
+        /// <summary>
+        /// 対決ビューHUD用のライブ防御率（通算＋本日の合算, issue #449）。
+        /// 表示値＝(通算自責＋本日自責)×27÷(通算アウト＋本日アウト)。通算が無い投手は本日分のみ。
+        /// 登板なし かつ 本日アウト0 は「—」。
+        /// </summary>
+        public static string LiveEra(PitchingStatLine? career, int todayEarnedRuns, int todayOuts)
+        {
+            var outs = (career?.Outs ?? 0) + todayOuts;
+            var earnedRuns = (career?.EarnedRuns ?? 0) + todayEarnedRuns;
+            return outs > 0 ? (earnedRuns * 27.0 / outs).ToString("0.00") : "—";
+        }
+
         /// <summary>今日の成績（例 2-1、打点があれば 2-1 ①）。</summary>
         public static string TodayLine(int atBats, int hits, int rbi)
         {
