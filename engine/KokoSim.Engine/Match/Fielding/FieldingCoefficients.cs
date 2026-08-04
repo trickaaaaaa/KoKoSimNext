@@ -177,8 +177,15 @@ public sealed record FieldingCoefficients
     /// <summary>「バウンド」に分類する最大バウンド頂点[m]（これ未満は「ゴロ」）。</summary>
     public double BouncerApexThresholdM { get; init; } = 1.20;
 
-    /// <summary>「ライナー」に分類する頂点÷水平到達距離の上限（これ以下は低い弾道＝ライナー）。</summary>
-    public double LinerApexRangeRatio { get; init; } = 0.10;
+    /// <summary>
+    /// 「ライナー」に分類する頂点÷水平到達距離の上限（これ以下は低い弾道＝ライナー）。issue #451 で 0.10→0.15。
+    /// 旧0.10では「60m飛んで頂点7〜10mの平たい球」が「フライ」を名乗り、絵（高く上がるフライ弧）と形（弾丸ライナー）が
+    /// 食い違っていた（外野フライ頂点 p50=16m＝実物20〜35mの下端未満）。この分類は表示・実況（TimelineBuilder の
+    /// 「痛烈なライナー！」/「高々と上がった！」）専用で、捕球可否・送球判定は <see cref="FlyApexThresholdM"/>（apex≥2.5m）で
+    /// 別に決まる＝**帯不変**（BABIP・本塁打率・得点は動かない）。0.15 で外野フライ（range≥70m）の頂点 p50 が
+    /// 実物オーダー（20m台・seed42/7/2024 で 20.6〜20.9m）に入り、平たい弾道はライナーとして表示される。
+    /// </summary>
+    public double LinerApexRangeRatio { get; init; } = 0.15;
 
     /// <summary>内野手がグラブを出して捕れる高さの上限[m]（跳んで届く範囲を含む）。これを越える弾みは頭上を抜ける。</summary>
     public double InfielderReachHeightM { get; init; } = 2.20;

@@ -616,6 +616,161 @@ public static class AtBatSimulation
         };
     }
 
+    /// <summary>
+    /// 打球の頂点(ApexHeightM)・滞空(HangTimeSeconds)・到達距離(RangeM)・4分類(Class)の分布（issue #451）。
+    /// 「フライがフライっぽく見えない＝エンジンが出す頂点が実物より低い」を before/after で比較するための診断。
+    /// 距離帯（内野&lt;40 / 中間40-70 / 外野≥70）別に、フライ打球の頂点・滞空を分位点で見る。
+    /// 母集団サンプリング・決定論並列・解決経路（<see cref="AtBatResolver.ResolveDetailed"/>）は本体 <see cref="Run"/> と同一
+    /// （＝同シードで <c>simulate</c> と同じ打者・投手・打球を引く）。帯（balance-targets.yaml）に頂点の指標は無いため、
+    /// 打角・空力を動かす前後の比較はこのプローブで行う（#261/#358 が守備分布を実測したのと同じやり方）。
+    /// </summary>
+    public sealed record ApexProfile
+    {
+        /// <summary>頂点[m] のヒストグラム: ビン幅とビン数（0〜50m、最終ビンは 49.75m 以上を集約）。</summary>
+        public const double ApexBinWidthM = 0.25;
+        public const int ApexBinCount = 200;
+        /// <summary>滞空[s] のヒストグラム: ビン幅とビン数（0〜10s）。</summary>
+        public const double HangBinWidthSeconds = 0.05;
+        public const int HangBinCount = 200;
+
+        /// <summary>距離帯の数（内野&lt;40 / 中間40-70 / 外野≥70）。</summary>
+        public const int BandCount = 3;
+        public static readonly string[] BandNames = { "内野 (range<40m)", "中間 (40-70m)", "外野 (range≥70m)" };
+        /// <summary>到達距離[m]→距離帯の添字（0=内野, 1=中間, 2=外野）。</summary>
+        public static int BandOf(double rangeM) => rangeM < 40.0 ? 0 : rangeM < 70.0 ? 1 : 2;
+
+        /// <summary>4分類の件数（添字＝(int)BattedBallClass: Grounder/Bouncer/Liner/Fly）。</summary>
+        public required int[] ClassCounts { get; init; }
+        /// <summary>フライの距離帯ごとの頂点ヒストグラム [band][bin]。</summary>
+        public required int[][] ApexBinsByBand { get; init; }
+        /// <summary>フライの距離帯ごとの滞空ヒストグラム [band][bin]。</summary>
+        public required int[][] HangBinsByBand { get; init; }
+        /// <summary>集計した打席数（分母）。</summary>
+        public int PlateAppearances { get; init; }
+
+        public int FlyCount(int band) => Sum(ApexBinsByBand[band]);
+        public int FlyTotal { get { var n = 0; for (var b = 0; b < BandCount; b++) n += FlyCount(b); return n; } }
+
+        private static int Sum(int[] a) { var s = 0; foreach (var v in a) s += v; return s; }
+
+        /// <summary>ヒストグラムの分位点[単位]（ビン内を線形補間）。</summary>
+        private static double Quantile(int[] hist, double binWidth, double q)
+        {
+            var n = Sum(hist);
+            if (n == 0) return 0;
+            var target = q * n;
+            var acc = 0;
+            for (var i = 0; i < hist.Length; i++)
+            {
+                var prev = acc;
+                acc += hist[i];
+                if (acc >= target)
+                {
+                    var frac = hist[i] > 0 ? (target - prev) / hist[i] : 0.0;
+                    return (i + frac) * binWidth;
+                }
+            }
+            return hist.Length * binWidth;
+        }
+
+        /// <summary>距離帯（-1=フライ全体）の頂点[m]分位点。</summary>
+        public double ApexQuantile(int band, double q) => Quantile(BandOrTotalApex(band), ApexBinWidthM, q);
+        /// <summary>距離帯（-1=フライ全体）の滞空[s]分位点。</summary>
+        public double HangQuantile(int band, double q) => Quantile(BandOrTotalHang(band), HangBinWidthSeconds, q);
+
+        private int[] BandOrTotalApex(int band) => band >= 0 ? ApexBinsByBand[band] : SumBands(ApexBinsByBand);
+        private int[] BandOrTotalHang(int band) => band >= 0 ? HangBinsByBand[band] : SumBands(HangBinsByBand);
+        private static int[] SumBands(int[][] byBand)
+        {
+            var total = new int[byBand[0].Length];
+            foreach (var band in byBand)
+                for (var i = 0; i < total.Length; i++) total[i] += band[i];
+            return total;
+        }
+
+        public string ToMarkdown()
+        {
+            var sb = new StringBuilder();
+            var c = CultureInfo.InvariantCulture;
+            var fly = ClassCounts[(int)BattedBallClass.Fly];
+            var liner = ClassCounts[(int)BattedBallClass.Liner];
+            var grounder = ClassCounts[(int)BattedBallClass.Grounder];
+            var bouncer = ClassCounts[(int)BattedBallClass.Bouncer];
+            sb.AppendLine(c, $"打球分類: フライ={fly} ライナー={liner} ゴロ={grounder} バウンド={bouncer}（打席 {PlateAppearances}）");
+            sb.AppendLine();
+            sb.AppendLine("| 区分 | n | 頂点p25[m] | 頂点p50[m] | 頂点p75[m] | 頂点p90[m] | 滞空p50[s] |");
+            sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|");
+            void Row(string name, int band)
+            {
+                var n = band >= 0 ? FlyCount(band) : FlyTotal;
+                sb.AppendLine(c, $"| {name} | {n} | {ApexQuantile(band, 0.25):F1} | {ApexQuantile(band, 0.50):F1} | "
+                                 + $"{ApexQuantile(band, 0.75):F1} | {ApexQuantile(band, 0.90):F1} | {HangQuantile(band, 0.50):F2} |");
+            }
+            Row("フライ全体", -1);
+            for (var b = 0; b < BandCount; b++) Row(BandNames[b], b);
+            return sb.ToString();
+        }
+    }
+
+    /// <summary>
+    /// 打球の頂点/滞空/分類の分布を集計する（issue #451）。乱数消費順・結果は <see cref="Run"/> と同じ経路。
+    /// </summary>
+    public static ApexProfile RunApexProfile(
+        int atBats, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null)
+    {
+        var ctx = BuildContext(coefficientsPath, field);
+        var root = new Xoshiro256Random(seed);
+        var forks = new IRandomSource[atBats];
+        for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
+
+        // レイアウト: [0..4)=4分類件数 / 各距離帯 b で [4 + b*Stride .. ) に 頂点ヒスト(A) + 滞空ヒスト(H)。
+        const int Classes = 4;
+        const int A = ApexProfile.ApexBinCount;
+        const int H = ApexProfile.HangBinCount;
+        const int Stride = A + H;
+        var width = Classes + ApexProfile.BandCount * Stride;
+        var total = new int[width];
+        Parallel.For(0, atBats,
+            () => new int[width],
+            (i, _, local) =>
+            {
+                var rng = forks[i];
+                var batter = SampleBatter(rng);
+                var pitcher = SamplePitcher(rng);
+                var detailed = AtBatResolver.ResolveDetailed(batter, pitcher, ctx, rng);
+                if (detailed.Play is not { } play || play.Result == BattedBallResult.Foul || play.Class is not { } cls)
+                    return local;
+
+                local[(int)cls]++;
+                if (cls != BattedBallClass.Fly) return local;
+
+                var band = ApexProfile.BandOf(play.RangeM);
+                var baseIdx = Classes + band * Stride;
+                var apexBin = (int)Math.Clamp(play.ApexHeightM / ApexProfile.ApexBinWidthM, 0, A - 1);
+                var hangBin = (int)Math.Clamp(play.HangTimeSeconds / ApexProfile.HangBinWidthSeconds, 0, H - 1);
+                local[baseIdx + apexBin]++;
+                local[baseIdx + A + hangBin]++;
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < width; k++) total[k] += local[k]; } });
+
+        var apexByBand = new int[ApexProfile.BandCount][];
+        var hangByBand = new int[ApexProfile.BandCount][];
+        for (var b = 0; b < ApexProfile.BandCount; b++)
+        {
+            var baseIdx = Classes + b * Stride;
+            apexByBand[b] = total[baseIdx..(baseIdx + A)];
+            hangByBand[b] = total[(baseIdx + A)..(baseIdx + A + H)];
+        }
+        return new ApexProfile
+        {
+            ClassCounts = total[0..Classes],
+            ApexBinsByBand = apexByBand,
+            HangBinsByBand = hangByBand,
+            PlateAppearances = atBats,
+        };
+    }
+
     private static int SampleAbility(IRandomSource rng, double mean = 50, double sd = 12, int min = 20, int max = 88)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(mean, sd)), min, max);
 

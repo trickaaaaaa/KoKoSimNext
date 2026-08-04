@@ -158,7 +158,10 @@ fielding:
   bounce_rolling_retention: 0.7143  # 1接地で保持する水平速度の下限比（滑り→転がり遷移。球の 5/7）
   bounce_min_launch_mps: 0.60       # これ未満の鉛直初速は転がり扱い（弾み列の打ち切り）
   bouncer_apex_threshold_m: 1.20    # 4分類: 最大バウンド頂点がこれ以上なら「バウンド」、未満は「ゴロ」
-  liner_apex_range_ratio: 0.10      # 4分類: 頂点÷水平到達距離がこれ以下なら「ライナー」、超なら「フライ」
+  # 4分類: 頂点÷水平到達距離がこれ以下なら「ライナー」、超なら「フライ」。issue #451 で 0.10→0.15。
+  # 表示・実況専用（捕球/送球判定は fly_apex_threshold_m で別に決まる）＝帯不変。0.15 で「平たい弾丸ライナー」が
+  # ライナー表示になり、外野フライ(range≥70m)の頂点 p50 が実物オーダー(20m台)に入る（issue #451。C#既定と両面）。
+  liner_apex_range_ratio: 0.15
   infielder_reach_height_m: 2.20    # 内野手が届く高さ上限（これを越える弾みは頭上を抜ける）
   infielder_fielding_radius_m: 4.20 # 内野手の横の守備範囲（グラブ＋ダイブ）。これを抜ける強い打球だけ外野へ
   chopper_wait_factor: 0.55         # 高バウンド（チョッパー）で野手が待たされる時間の係数（内野安打に効く）
