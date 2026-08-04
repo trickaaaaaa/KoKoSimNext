@@ -260,6 +260,15 @@ namespace KokoSim.Unity.Match
         private bool _scoreCallOn;
         private int _scoreCallOwnScore, _scoreCallOppScore, _scoreCallRunsRemaining;
         private bool _scoreCallOwnScoring;
+        private bool _scoreCallPlayDriven;   // true=加算はプレー時計（本塁到達）駆動（issue #438）。false=旧・等間隔（キャプチャ用）
+
+        // ── 表示同期（issue #438）: 結果テキスト・ラインスコア・大型スコアの表示時刻（プレー時計）──
+        // 時刻の計算は engine の純関数 PlaybackDisplaySync が単一ソース。プレー開始時に前計算する。
+        private double _resultShowAt;                // 結果テキスト＝打者がセーフで生きる結果は到達レッグT1
+        private double _lineScorePostAt;             // ラインスコア掲示＝最後の生還走者の本塁到達後
+        private System.Collections.Generic.IReadOnlyList<double> _runScoreShowAt
+            = System.Array.Empty<double>();          // 大型スコア+1の時刻（各走者の本塁到達T1・昇順）
+        private int _runScoreShown;                  // 発火済みの本数
 
         // 交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板が起きた瞬間に数秒だけ盤面へ浮かせる。
         // PitchCall/ScoreCall と同じ「Update() の専用クロックで寿命管理」方式。表示専用。
@@ -1492,6 +1501,7 @@ namespace KokoSim.Unity.Match
                 // 対決ビューが打球を見せていた秒数は BeginFieldPlay→打球表示の畳みで消えるので先に採る
                 var shown = wasDuelOn ? (_duelRig?.BattedElapsedSeconds ?? -1f) : -1f;
                 _view.SetPlay(_current.Play);
+                PrepareDisplayTimings(_current);   // 表示同期の時刻を前計算（issue #438）
                 // 対決ビューから来た場合は投球が二重に見えないよう接触の瞬間から再生する（issue #330）。
                 // さらに対決ビューで打球を見せたぶんは飛ばす（同じ0.5秒を二度描かない。2026-07-31）。
                 // 俯瞰固定（手動OFF）中は対決ビュー側で1球も見せていないので、従来どおり投球から流す。
@@ -1734,10 +1744,14 @@ namespace KokoSim.Unity.Match
 
             // ⚠ 得点テロップ（#60）の寿命も含める。FinishPaView が HideScoreCall するので、
             // 含めないと**加算の途中でテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
-            // 掲げ始めるのは決着の瞬間（UpdateScoreboard）で、時計は _t と同じ（倍速も同じ掛かり方）。
-            if (_current.RunsScored > 0)
-                end = System.Math.Max(end, play.ResAt
-                    + scoreCallStepSeconds * _current.RunsScored + scoreCallFinalHoldSeconds);
+            // 加算は各走者の本塁到達（issue #438）なので、最後の到達＋最終ホールドまで見せ切る。
+            // ⚠ 非有限は無視（#208 の教訓: ResAt=+∞ のプレーで end=∞ になると再生が終わらない）。
+            if (_runScoreShowAt.Count > 0 && double.IsFinite(_runScoreShowAt[_runScoreShowAt.Count - 1]))
+                end = System.Math.Max(end, _runScoreShowAt[_runScoreShowAt.Count - 1] + scoreCallFinalHoldSeconds);
+
+            // 結果テキスト（issue #438: 打者セーフは到達で出す）も一呼吸見せてから切る。
+            if (double.IsFinite(_resultShowAt))
+                end = System.Math.Max(end, _resultShowAt + PlayTailSeconds);
 
             return end;
         }
@@ -1753,25 +1767,79 @@ namespace KokoSim.Unity.Match
             // 原理的に一致する。不変条件#1）。俯瞰を出していても回すのは Tick と同じ理由。
             if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(play, _t);
-            var resolved = _t >= play.ResAt;
+
+            // 結果テキスト（issue #438）: 内部の決着（ResAt）でなく表示用の時刻で出す＝
+            // 打者がセーフで生きる結果は到達の絵と同時。アウト・柵越えは従来どおり確定の瞬間。
             if (_result != null)
             {
                 _result.text = play.Result;
-                _result.style.display = resolved ? DisplayStyle.Flex : DisplayStyle.None;
+                _result.style.display = _t >= _resultShowAt ? DisplayStyle.Flex : DisplayStyle.None;
             }
-            UpdateScoreboard(_current, resolved);
+
+            // ラインスコア（issue #438）: 最後の生還走者が本塁に帰ってから掲げる（得点の先出しをしない）。
+            if (_t >= _lineScorePostAt)
+            {
+                if (!_lineScorePosted)
+                {
+                    _lineScorePosted = true;
+                    PostLineScore(_current.Inning, _current.IsTop, finished: false);
+                }
+            }
+            else
+            {
+                _lineScorePosted = false;   // 巻き戻し（キャプチャのシーク）は掲示前へ戻す＝旧 resolved=false と同型
+            }
+
+            // 大型スコア（issue #438）: 各走者の本塁到達（プレー時計）で1点ずつ。器は到達の1拍前に
+            // 加点前スコアで開く（#60 の「前スコア→加算」の演出順は保つ）。
+            if (_runScoreShowAt.Count > 0 && _runScoreShown < _runScoreShowAt.Count)
+            {
+                if (!_scoreCallOn && _runScoreShown == 0 && _t >= _runScoreShowAt[0] - scoreCallStepSeconds)
+                    BeginScoreCall(_current, playDriven: true);
+                while (_scoreCallOn && _scoreCallPlayDriven
+                       && _runScoreShown < _runScoreShowAt.Count && _t >= _runScoreShowAt[_runScoreShown])
+                {
+                    StepScoreCallOnce();
+                    _scoreCallClock = 0f;   // 最後の+1から最終ホールドを数え直す
+                    _runScoreShown++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 表示同期の時刻（issue #438）を前計算する。計算は engine の純関数
+        /// <see cref="PlaybackDisplaySync"/> が単一ソース（テストもそちら）。
+        /// </summary>
+        private void PrepareDisplayTimings(LivePlateAppearance item)
+        {
+            _runScoreShown = 0;
+            var play = item?.Play;
+            if (play == null)
+            {
+                _resultShowAt = 0;
+                _lineScorePostAt = 0;
+                _runScoreShowAt = System.Array.Empty<double>();
+                return;
+            }
+            _resultShowAt = PlaybackDisplaySync.ResultShowTime(play);
+            _runScoreShowAt = PlaybackDisplaySync.RunScoreTimes(play, item.RunsScored, scoreCallStepSeconds);
+            _lineScorePostAt = _runScoreShowAt.Count > 0
+                ? System.Math.Max(_resultShowAt, _runScoreShowAt[_runScoreShowAt.Count - 1])
+                : _resultShowAt;
         }
 
         // ── ラインスコア（LineScorePanel。設計書16 §4-2） ──
         // 数値はすべてエンジンの観測データ（MatchLiveSnapshot.AwayLine/HomeLine）から引き、UI側で得点を組み立てない。
-        // resolved=false（打席の演出中）は掲示せず、確定した瞬間に1回だけ掲げる＝実物の掲示板と同じ運用。
+        // 通常再生の掲示は RenderReplayFrame が表示同期の時刻（issue #438）で行う。ここは
+        // **キャプチャ専用**（FreezeCurrentAtResult）＝結果時点へ一気に飛ぶので即時に掲げ、
+        // 得点コールも旧・等間隔（実時間）で回す。
         private void UpdateScoreboard(LivePlateAppearance item, bool resolved)
         {
             if (!resolved) { _lineScorePosted = false; return; }
             if (_lineScorePosted) return;
             _lineScorePosted = true;
             PostLineScore(item.Inning, item.IsTop, finished: false);
-            if (item.RunsScored > 0) BeginScoreCall(item);
+            if (item.RunsScored > 0) BeginScoreCall(item, playDriven: false);
         }
 
         private void UpdateScoreboardFinal(GameResult r)
@@ -1844,10 +1912,11 @@ namespace KokoSim.Unity.Match
 
         // ── 得点時の大型スコアオーバーレイ（issue #60） ──
         // 並びは自校－相手校固定（先攻/後攻に依存しない）。加点前スコアを表示してから、得点数ぶん
-        // 1点ずつ加算する演出を挟み、最終スコアで一呼吸おいて自動的に消える。加算タイミングは各走者の
-        // 本塁生還時刻ではなく「判定確定後に等間隔で連続再生」（PlaybackRunに生還/アウトの意味フラグが
-        // 無く走者ごとの生還検知には新規実装が要るため、描画専用スコープで低リスクな方を選んだ）。
-        private void BeginScoreCall(LivePlateAppearance item)
+        // 1点ずつ加算する演出を挟み、最終スコアで一呼吸おいて自動的に消える。
+        // 加算タイミング（issue #438）: 通常再生は**各走者の本塁到達**（プレー時計・RenderReplayFrame が
+        // PlaybackDisplaySync.RunScoreTimes で駆動）。キャプチャ（結果時点へ一気に飛ぶ）だけ
+        // 旧・等間隔（実時間）で回す＝playDriven で切り替える。
+        private void BeginScoreCall(LivePlateAppearance item, bool playDriven)
         {
             if (_scoreCall == null || _scoreCallOwnNum == null || _scoreCallOppNum == null) return;
 
@@ -1860,6 +1929,7 @@ namespace KokoSim.Unity.Match
             _scoreCallRunsRemaining = item.RunsScored;
             _scoreCallClock = 0f;
             _scoreCallOn = true;
+            _scoreCallPlayDriven = playDriven;
 
             if (_scoreCallOwnName != null) _scoreCallOwnName.text = ownIsAway ? _awayDisp : _homeDisp;
             if (_scoreCallOppName != null) _scoreCallOppName.text = ownIsAway ? _homeDisp : _awayDisp;
@@ -1867,16 +1937,25 @@ namespace KokoSim.Unity.Match
             _scoreCall.style.display = DisplayStyle.Flex;
         }
 
+        /// <summary>+1を1回ぶん進める（表示だけ。加算時刻の判断は呼び元が持つ）。</summary>
+        private void StepScoreCallOnce()
+        {
+            if (_scoreCallOwnScoring) _scoreCallOwnScore++; else _scoreCallOppScore++;
+            _scoreCallRunsRemaining--;
+            RefreshScoreCallLabels();
+        }
+
         private void AdvanceScoreCall(float dt)
         {
             _scoreCallClock += dt;
             if (_scoreCallRunsRemaining > 0)
             {
+                // プレー時計駆動（issue #438）: 加算は RenderReplayFrame が本塁到達で行う。
+                // ここで実時間の等間隔を回すと二重加算になる。
+                if (_scoreCallPlayDriven) return;
                 if (_scoreCallClock < scoreCallStepSeconds) return;
                 _scoreCallClock -= scoreCallStepSeconds;
-                if (_scoreCallOwnScoring) _scoreCallOwnScore++; else _scoreCallOppScore++;
-                _scoreCallRunsRemaining--;
-                RefreshScoreCallLabels();
+                StepScoreCallOnce();
             }
             else if (_scoreCallClock >= scoreCallFinalHoldSeconds)
             {
@@ -2910,8 +2989,11 @@ namespace KokoSim.Unity.Match
                 return;
             }
             _view.SetPlay(_current.Play);
-            for (var s = 0.0; s < _current.Play.ResAt + 0.4; s += 0.03) _view.SetTime(s);
-            _t = _current.Play.ResAt + 0.4;
+            PrepareDisplayTimings(_current);
+            // 「結果時点」＝表示同期後は結果テキストが出る時刻（打者セーフは到達）まで進める（issue #438）。
+            var freezeAt = System.Math.Max(_current.Play.ResAt, _resultShowAt) + 0.4;
+            for (var s = 0.0; s < freezeAt; s += 0.03) _view.SetTime(s);
+            _t = freezeAt;
             RenderReplayFrame();
         }
     }
