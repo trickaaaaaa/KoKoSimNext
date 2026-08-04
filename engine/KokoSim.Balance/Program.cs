@@ -353,6 +353,7 @@ internal static class CommandLine
         string? stadiumId = null;
         var histogram = false;
         var byPitcherRank = false;
+        var apex = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -363,6 +364,10 @@ internal static class CommandLine
                     break;
                 case "--histogram":
                     histogram = true;
+                    break;
+                case "--apex":
+                    // issue #451: 打球の頂点/滞空/4分類の分布診断（フライがフライっぽく見えないの before/after）。
+                    apex = true;
                     break;
                 case "--at-bats":
                 case "--games":
@@ -393,6 +398,12 @@ internal static class CommandLine
             // issue #402 検証: 投手ランク別の三振率（E・F投手の奪三振是正の確認）。
             var byRank = AtBatSimulation.RunByPitcherRank(atBats, seed, coefficientsPath, stadium);
             text += "\n" + AtBatSimulation.ReportByPitcherRank(byRank, seed);
+        }
+        if (apex)
+        {
+            // issue #451 検証: 打球の頂点/滞空/4分類の分布（外野フライ p50 が実物オーダー20m台に入るかの確認）。
+            var profile = AtBatSimulation.RunApexProfile(atBats, seed, coefficientsPath, stadium);
+            text += "\n## 打球の頂点/滞空 分布（issue #451 診断）\n\n" + profile.ToMarkdown();
         }
         Console.Write(text);
 
@@ -446,7 +457,7 @@ internal static class CommandLine
         Console.WriteLine("KokoSim.Balance — ヘッドレスシミュレーションCLI");
         Console.WriteLine();
         Console.WriteLine("使い方:");
-        Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram]");
+        Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram] [--apex]");
         Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--tactics]");
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
