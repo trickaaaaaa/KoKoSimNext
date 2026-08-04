@@ -6,12 +6,14 @@ using UnityEngine;
 namespace KokoSim.Unity.Match
 {
     /// <summary>
-    /// 【開発用・エディタ限定】残差の体寄せの下方向クランプ（issue #440）の受け入れ実測。
-    /// リグを直駆動して低め外れ・高め外れ・横外れの3球（見送り＝捕手が捕る分岐）を流し、
-    /// ・捕手ルートの BasePos からのオフセット最小y（期待: 低めでも 0 以上＝地面へ沈まない）
-    /// ・上・左右の体寄せの最大量（期待: 従来どおり残差ぶん寄る）
-    /// ・捕球の瞬間の CatchDiag（ミットが実着弾点を掴めているか。受け入れ ずれ≦0.12m）
-    /// をコンソールへ出す。絵は低め外れの捕球の瞬間を撮る。使い捨て。
+    /// 【開発用・エディタ限定】残差の体寄せの受け入れ実測。使い捨て。
+    /// リグを直駆動して低め外れ・高め外れ・横外れの3球（見送り＝捕手が捕る分岐）を流す。
+    /// ・下方向クランプ（issue #440）: ルートオフセット最小y ≧ 0（地面へ沈まない）・
+    ///   上/左右の体寄せは従来どおり・捕球の瞬間のミットずれ ≦ 0.12m
+    /// ・捕球後の戻り（監督報告 2026-08-04「定位置へ瞬間移動＝全身フレーミング」）:
+    ///   球がミットの中にある間はルートが動かない（ミット中最大step≈0）・
+    ///   球が消えてから1コマ最大stepが小さく（旧: 0.2s戻り＝大外れで0.19m/コマ級）・
+    ///   最終的に基準位置へ戻り切る（最終|off|≈0）
     /// </summary>
     public sealed class CatcherClampShooter : MonoBehaviour
     {
@@ -32,9 +34,9 @@ namespace KokoSim.Unity.Match
             for (int i = 0; i < 12; i++) { _rig.Tick(1f / 60f); yield return null; }
 
             // 狙い(0, 0.55) からの外れ。残差＝実着弾−狙い。飛翔0.45sは140km/h級の実測相当。
-            yield return RunCase("low", new DuelPitchFlight(0f, 0.15f, 0f, 0.55f, 0.45f, 0.4f, 0f), shoot: true);
+            yield return RunCase("low", new DuelPitchFlight(0f, 0.15f, 0f, 0.55f, 0.45f, 0.4f, 0f), shoot: false);
             yield return RunCase("high", new DuelPitchFlight(0f, 0.95f, 0f, 0.55f, 0.45f, 0.4f, 0f), shoot: false);
-            yield return RunCase("side", new DuelPitchFlight(0.45f, 0.55f, 0f, 0.55f, 0.45f, 0.4f, 0f), shoot: false);
+            yield return RunCase("side", new DuelPitchFlight(0.45f, 0.55f, 0f, 0.55f, 0.45f, 0.4f, 0f), shoot: true);
 
             Debug.Log("[Clamp440] DONE → " + Dir);
         }
@@ -52,13 +54,29 @@ namespace KokoSim.Unity.Match
             // ミットと狙点のずれは「捕球の瞬間（IK重み=1）」で最小になる＝1サンプルの決め打ちでなく
             // 窓内の最小値で受け入れ判定する（w=0.70 の戻り際を測って NG と誤読しない）。
             float minDev = float.MaxValue;
-            bool shotDone = false;
+            // 瞬間移動の検出: 1描画フレームあたりのルート移動量[m]。ポーズは12fpsなので動く時は
+            // 1ポーズコマぶんがまとめて出る＝最大stepが「1コマで飛ぶ距離」。
+            const float inMitt = 0.45f;   // DuelStageRig.BallInMittSeconds（private のため写し）
+            float maxStepInMitt = 0f, maxStepAfter = 0f, offAtHide = -1f;
+            var prevOff = _rig.CatcherRootOffsetForCapture();
+            bool shotCatch = false, shotHold = false, shotReturn = false;
             float t = 0f;
-            while (t < pitch.FlightSeconds + 1.2f)
+            while (t < pitch.FlightSeconds + inMitt + 1.2f)
             {
                 _rig.Tick(1f / 60f); t += 1f / 60f;
                 yield return null;
                 var off = _rig.CatcherRootOffsetForCapture();
+                float rootStep = (off - prevOff).magnitude;
+                prevOff = off;
+                if (t >= pitch.FlightSeconds && t < pitch.FlightSeconds + inMitt)
+                {
+                    if (rootStep > maxStepInMitt) maxStepInMitt = rootStep;
+                }
+                else if (t >= pitch.FlightSeconds + inMitt)
+                {
+                    if (offAtHide < 0f) offAtHide = off.magnitude;
+                    if (rootStep > maxStepAfter) maxStepAfter = rootStep;
+                }
                 if (off.y < minY) minY = off.y;
                 if (off.y > maxY) maxY = off.y;
                 if (Mathf.Abs(off.x) > maxAbsX) maxAbsX = Mathf.Abs(off.x);
@@ -69,16 +87,29 @@ namespace KokoSim.Unity.Match
                     float dev = float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                     if (dev < minDev) minDev = dev;
                 }
-                // 捕球の瞬間の絵。
-                if (shoot && !shotDone && t >= pitch.FlightSeconds)
+                // 絵: 捕球の瞬間 / 球が消える直前（体はまだ寄ったまま＝据え置きの証拠）/ 戻りの途中。
+                if (shoot && !shotCatch && t >= pitch.FlightSeconds)
                 {
-                    shotDone = true;
+                    shotCatch = true;
                     yield return Capture(name + "-catch");
+                }
+                if (shoot && !shotHold && t >= pitch.FlightSeconds + inMitt - 0.05f)
+                {
+                    shotHold = true;
+                    yield return Capture(name + "-hold");
+                }
+                if (shoot && !shotReturn && t >= pitch.FlightSeconds + inMitt + 0.22f)
+                {
+                    shotReturn = true;
+                    yield return Capture(name + "-return");
                 }
             }
 
+            var fin = _rig.CatcherRootOffsetForCapture();
             Debug.Log($"[Clamp440] {name}: 体寄せ最小y={minY:F3} 最大y={maxY:F3} 最大|x|={maxAbsX:F3} " +
-                      $"最小ずれ={(minDev == float.MaxValue ? -1f : minDev):F3}m");
+                      $"最小ずれ={(minDev == float.MaxValue ? -1f : minDev):F3}m " +
+                      $"ミット中最大step={maxStepInMitt:F3} 戻り最大step={maxStepAfter:F3} " +
+                      $"球消滅時|off|={offAtHide:F3} 最終|off|={fin.magnitude:F3}");
         }
 
         private IEnumerator Capture(string name)
