@@ -41,6 +41,15 @@ namespace KokoSim.Unity.Match
         private const float TorsoAssistMaxDeg = 14f;
 
         /// <summary>
+        /// 目標が**下方向**のときの胴アシスト上限[度]（issue #440）。下方向の残差はルートの沈み込みで
+        /// 吸収していたが、体ごと地面へめり込むためクランプした＝代わりに「ミットを落とす・
+        /// 覆いかぶせる」を胴で作る。実際の捕手も低い球へは前へ深くかがむ（伸び上がり・横と違い、
+        /// 下へ倒すのは体勢として自然で深く取れる）。上限は低め外れ実測（狙い0.55→着弾0.15の
+        /// −0.4m級）でミットずれが受け入れ0.12m以内へ入る値。
+        /// </summary>
+        private const float TorsoAssistDownMaxDeg = 45f;
+
+        /// <summary>
         /// 台形の重み。<paramref name="catchAt"/> は**発射からの捕球時刻**（球の時計）。
         /// クリップ内時刻で駆動しないのは、捕球クリップの差し替えコマと12fpsの刻みに引っかかると
         /// 重みが飛ぶため（球の時計はフルレートで単調）。
@@ -99,7 +108,11 @@ namespace KokoSim.Unity.Match
             // 肩を「足りない分だけ」目標へ寄せた位置を作り、そこへ胸を回す（長さは回転で保たれる）
             var wanted = shoulder + toGoal.normalized * shortfall * weight;
             var q = Quaternion.FromToRotation(arm, wanted - pivot);
-            q = Quaternion.RotateTowards(Quaternion.identity, q, TorsoAssistMaxDeg * weight);
+            // 上限は目標の向きで変える（issue #440）: 下向きほど深く倒せる（かがみ込み）。
+            // 上・横は従来の控えめな上限のまま（座ったまま反る不自然さを避ける）。
+            float downness = Mathf.Clamp01(-toGoal.normalized.y);
+            float maxDeg = Mathf.Lerp(TorsoAssistMaxDeg, TorsoAssistDownMaxDeg, downness);
+            q = Quaternion.RotateTowards(Quaternion.identity, q, maxDeg * weight);
             DuelIk.RotateAround(chest, pivot, q);
         }
 

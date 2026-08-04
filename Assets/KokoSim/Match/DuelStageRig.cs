@@ -2537,6 +2537,13 @@ namespace KokoSim.Unity.Match
         {
             float w = CatcherShiftWeight(_ballT, _ballArrival);
             var offset = new Vector3(_catcherResidual.x, _catcherResidual.y, 0f) * w;
+            // 下向きの残差ではルートを沈めない（issue #440）。狙いより低く外れた球（残差y<0）を
+            // そのまま平行移動すると捕手の体ごと地面の下へめり込む（σ=(30−0.22×Control)cm なので
+            // 制球の悪い投手では0.2〜0.3m級）。実物の捕手は低い球へは深くしゃがみ・ミットを
+            // 落とすだけ＝下はクランプし、捕球クリップ選択（SelectCatchAnchor）とミットIK
+            // （DuelCatcherPose.ReachMitt が実着弾点を掴む）に任せる。
+            // 上（伸び上がり）と左右（横っ跳び）の体寄せは従来どおり。
+            if (offset.y < 0f) offset.y = 0f;
             _catcher.Go.transform.localPosition = _catcher.BasePos + offset;
         }
 
@@ -4892,6 +4899,15 @@ namespace KokoSim.Unity.Match
         /// ミット中心と狙点のずれを返す。**目測で判定しない**ための単一ソース（受け入れはずれ≦0.12m
         /// ＝ミットの半径）。キャリブレーション窓が毎フレーム表示する。
         /// </summary>
+#if UNITY_EDITOR
+        /// <summary>【実測プローブ用】捕手ルートの BasePos からのオフセット（ステージローカル）。
+        /// 残差の体寄せ（issue #396②/#440）の実測に使う。y&lt;0＝地面へ沈んでいる。</summary>
+        public Vector3 CatcherRootOffsetForCapture()
+            => _catcher == null || _catcher.Go == null
+                ? Vector3.zero
+                : _catcher.Go.transform.localPosition - _catcher.BasePos;
+#endif
+
         public string CatchDiagForCapture()
         {
             if (_catchIndex < 0) return "捕球=なし（この球は捕手が捕らない分岐）";
