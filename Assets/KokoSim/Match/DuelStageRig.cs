@@ -1969,6 +1969,14 @@ namespace KokoSim.Unity.Match
         private Vector2 _catcherResidual;
 
         /// <summary>
+        /// 残差の体寄せ専用の時計（リリースからの経過[s]。負=止まっている）。<see cref="_ballT"/> と同じ
+        /// 刻みだが、球がミットの中で消えた後（<see cref="_ballT"/>=-1）も体の戻りが終わるまで生き続ける。
+        /// 球の時計で駆動すると、捕球の瞬間から戻りが始まり**捕った球ごと体が中央へスライドする**
+        /// （全身でフレーミングしているように見える）うえ、球の消滅と同時に駆動が死んで戻りが打ち切られる。
+        /// </summary>
+        private float _catcherShiftT = -1f;
+
+        /// <summary>
         /// ボールを投球する手へ貼り付ける（振りかぶり中は手の中にある）。<see cref="OnPitchWindup"/> から呼ぶ。
         ///
         /// 位置は design-18 §3.3.1 の掟どおり**手の中心＝手首→中指付け根の中点**を基準にし、
@@ -1989,6 +1997,7 @@ namespace KokoSim.Unity.Match
             _ballHeld = true;
             _ballInMitt = false;   // 前球がミットの中に残っていても投手の手へ戻す
             _ballT = -1f;
+            _catcherShiftT = -1f;   // 前球の体寄せの戻り残りを持ち越さない（次の球の構えが基準）
             _ball.transform.SetParent(hand, false);
             _ball.transform.localPosition = _ballHeldLocal;
             _ball.SetActive(true);
@@ -2021,6 +2030,7 @@ namespace KokoSim.Unity.Match
             _ballIhb = pitch?.InducedHorizontalBreakM ?? 0f;
             _ballFlight = flight;
             _ballT = 0f;
+            _catcherShiftT = 0f;   // 体寄せの時計も同時に始める（戻りは球より長生き）
             _ballHeld = false;
             _ballInMitt = false;
             _ballInMittRemaining = 0f;
@@ -2283,6 +2293,7 @@ namespace KokoSim.Unity.Match
         public void HideBall()
         {
             _ballT = -1f;
+            _catcherShiftT = -1f;   // 俯瞰へ渡る＝対決ビューの芝居は打ち切り（体寄せの戻りも止める）
             _ballHeld = false;
             _ballInMitt = false;
             _battedT = -1f;
@@ -2373,6 +2384,17 @@ namespace KokoSim.Unity.Match
             // ボールはフルレート（design-18 §4.5-②「球筋の読みやすさはゲーム性なので量子化しない」）。
             // キャラのコマ打ちループより前に進める＝同フレームのポーズと球位置が同じ時刻を指す
             UpdateBall(deltaTime);
+
+            // 残差の体寄せの時計（球の時計と別。捕球後の戻りは球がミットの中で消えた後まで続く）。
+            // 戻り切ったら止める＝以後 ApplyCatcherResidualShift は書かない（従来の「球死後は素のまま」へ復帰）。
+            // 猶予0.2sは「重み0の最終書き込みを最低1ポーズコマ確実に通す」ため（12fps=83ms×2＋余裕。
+            // 端数で打ち切ると最後の書き込みが重み残りのまま止まり、止め際に数cmの段が出る）
+            if (_catcherShiftT >= 0f)
+            {
+                _catcherShiftT += deltaTime;
+                if (_catcherShiftT > _ballArrival + CatcherShiftHoldSeconds + CatcherShiftReturnSeconds + 0.2f)
+                    _catcherShiftT = -1f;
+            }
 
             _acc += deltaTime;
             float step = 1f / PoseFps;
@@ -2512,8 +2534,11 @@ namespace KokoSim.Unity.Match
         private void FixCatcherPose()
         {
             if (_catcher == null || _catcher.Animator == null) return;
-            if (_catchIndex < 0 || _ballT < 0f) return;
+            if (_catchIndex < 0) return;
+            // 体寄せは専用の時計（_catcherShiftT）で駆動＝球がミットの中で消えた後も戻り切るまで焼き直す。
+            // ミットIK（下）は球の時計のまま＝球が生きている間だけ実着弾点を掴む
             ApplyCatcherResidualShift();
+            if (_ballT < 0f) return;
             float w = DuelCatcherPose.Weight(_ballT, _ballArrival);
             if (w <= 0f) return;
             DuelCatcherPose.ReachMitt(_catcher.Animator,
@@ -2525,7 +2550,8 @@ namespace KokoSim.Unity.Match
         /// 腕＋胴のIK（<see cref="DuelCatcherPose.ReachMitt"/>。しゃがんだ肩から腕0.55m＋胴14°）だけでは
         /// ゾーンの外へ届かないため、体そのものを先に寄せておく＝実物の横っ跳び・伸び上がり。
         ///
-        /// 駆動は<b>球の時計</b>（<see cref="_ballT"/>。リリースからの経過秒＝フルレート・単調）で、
+        /// 駆動は<b>専用の時計</b>（<see cref="_catcherShiftT"/>。リリースからの経過秒＝フルレート・単調。
+        /// 球の時計 <see cref="_ballT"/> はミットの中で消えると-1になり、捕球後の戻りを駆動できない）で、
         /// クリップ内時刻では駆動しない（design-18 §4.5-③の掟。捕球クリップの差し替えコマに
         /// 引っかかると重みが飛ぶ）。毎回<see cref="Actor.BasePos"/>からの絶対オフセットとして焼き直す
         /// ＝クリップ差し替え直後（<see cref="RewindActor"/>が位置をBasePosへ戻した直後）に呼ばれても
@@ -2535,7 +2561,8 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void ApplyCatcherResidualShift()
         {
-            float w = CatcherShiftWeight(_ballT, _ballArrival);
+            if (_catcherShiftT < 0f) return;   // 時計が止まっている＝寄せも戻りも完了（素の位置のまま触らない）
+            float w = CatcherShiftWeight(_catcherShiftT, _ballArrival);
             var offset = new Vector3(_catcherResidual.x, _catcherResidual.y, 0f) * w;
             // 下向きの残差ではルートを沈めない（issue #440）。狙いより低く外れた球（残差y<0）を
             // そのまま平行移動すると捕手の体ごと地面の下へめり込む（σ=(30−0.22×Control)cm なので
@@ -2548,24 +2575,37 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 残差の体寄せの台形重み。<paramref name="ballTime"/> はリリースからの経過秒（0起点）、
-        /// <paramref name="settleAt"/> は球がミット面へ届く時刻（<see cref="_ballArrival"/>）。
-        /// リリースから<see cref="CatcherShiftLeadSeconds"/>かけて寄り切り、球が着くまで保持し、
-        /// 着いてから<see cref="CatcherShiftReturnSeconds"/>かけて狙いの構え（残差ゼロ）へ戻る。
+        /// 残差の体寄せの台形重み。<paramref name="ballTime"/> はリリースからの経過秒（0起点。
+        /// <see cref="_catcherShiftT"/>＝球より長生きする専用の時計）、<paramref name="settleAt"/> は
+        /// 球がミット面へ届く時刻（<see cref="_ballArrival"/>）。
+        /// リリースから<see cref="CatcherShiftLeadSeconds"/>かけて寄り切り、**球がミットの中に
+        /// ある間（捕球後<see cref="CatcherShiftHoldSeconds"/>）は動かず据え置き**、球が消えてから
+        /// <see cref="CatcherShiftReturnSeconds"/>かけて狙いの構え（残差ゼロ）へ戻る。
+        /// 捕球の瞬間から戻すと、ミットの子になった球ごと体が中央へスライドして
+        /// 「全身でフレーミング」に見える（監督報告 2026-08-04。大外れほど瞬間移動に見える）。
         /// </summary>
         private static float CatcherShiftWeight(float ballTime, float settleAt)
         {
             if (ballTime <= 0f) return 0f;
             if (ballTime < CatcherShiftLeadSeconds) return Mathf.InverseLerp(0f, CatcherShiftLeadSeconds, ballTime);
-            if (ballTime <= settleAt) return 1f;
-            return 1f - Mathf.InverseLerp(settleAt, settleAt + CatcherShiftReturnSeconds, ballTime);
+            float holdUntil = settleAt + CatcherShiftHoldSeconds;
+            if (ballTime <= holdUntil) return 1f;
+            return 1f - Mathf.InverseLerp(holdUntil, holdUntil + CatcherShiftReturnSeconds, ballTime);
         }
 
         /// <summary>残差の体寄せがフルに乗るまでの時間[s]（issue #396 ②「リリース後0.2〜0.3秒かけて」）。</summary>
         private const float CatcherShiftLeadSeconds = 0.25f;
 
-        /// <summary>球が着いてから狙いの構え（基準位置）へ戻るまでの時間[s]。</summary>
-        private const float CatcherShiftReturnSeconds = 0.20f;
+        /// <summary>
+        /// 捕球後、体寄せを据え置く時間[s]。球がミットの中に見えている時間（<see cref="BallInMittSeconds"/>）
+        /// と同じ値に縛る＝球が見えている間に体が動くと、ミットの子の球ごと中央へ引き戻す
+        /// 「全身フレーミング」になる。片方だけ変えない。
+        /// </summary>
+        private const float CatcherShiftHoldSeconds = BallInMittSeconds;
+
+        /// <summary>球が消えてから狙いの構え（基準位置）へ戻るまでの時間[s]。12fpsで5〜6コマ＝
+        /// 捕った所からすっと構え直す速さ。短くすると大外れの球で瞬間移動に見える（監督報告 2026-08-04）。</summary>
+        private const float CatcherShiftReturnSeconds = 0.45f;
 
         /// <summary>
         /// RTをカラム実寸由来のサイズへ張り替える（DuelViewElementから）。同寸なら何もしない。
