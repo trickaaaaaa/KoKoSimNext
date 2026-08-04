@@ -95,15 +95,16 @@ namespace KokoSim.Unity.Components
                     text = line.InningRuns[i].ToString();
                     lit = line.InningRuns[i] > 0;
                 }
-                else if (i == done && battingNow)
+                else if (i == done && battingNow && line.PendingRuns > 0)
                 {
-                    // 進行中の半回。まだ確定していないので InningRuns には無い。
+                    // 進行中の半回（InningRuns 未確定）。実物の掲示板と同じく
+                    // 得点が入るまでは空欄で、入った時点で途中経過を点灯させる（issue #450）。
                     text = line.PendingRuns.ToString();
-                    lit = line.PendingRuns > 0;
+                    lit = true;
                 }
                 else
                 {
-                    text = "";   // まだ来ていない回は空マス
+                    text = "";   // まだ来ていない回・無得点で進行中の回は空マス
                 }
 
                 var cell = Cell(text, "lsc-cell");
