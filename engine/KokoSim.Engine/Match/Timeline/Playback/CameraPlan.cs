@@ -75,6 +75,9 @@ public static class CameraPlanBuilder
     // （2Dは全景に全部入るので戻して問題ないが、寄った3Dでは「用のないところを見ている1.5秒」になる）
     // ので、戻し始める時刻を単一ソースとして公開する。
     public const double ReturnToWideDelaySeconds = 0.9;
+    // 死んだ球（全ボールセグメント終了後）を見せておく余韻（issue #441。着弾のテロップ #354 を読む間）。
+    // これを過ぎたら走者レッグの残り（lastEvent）を待たずに全景へ戻す。
+    public const double DeadBallLingerSeconds = 1.0;
     private const double WideSettleBufferSeconds = 3.0;  // 全景へのレート制限付き復帰が収束するまでの生成余白（実再生は play.Dur までしか参照しないため無害）
     private const double MaxPlanSeconds = 120.0;         // キーフレーム生成の上限（#208 暴走・OOM 防止。1プレーは現実に数秒）
 
@@ -99,6 +102,7 @@ public static class CameraPlanBuilder
         var dur = double.IsFinite(play.Dur) ? play.Dur : 0.0;
         // 1プレーの再生は現実的に数秒。異常に長い（or 非有限）継続時間でもキーフレーム暴走で OOM しないよう上限を設ける。
         var end = Math.Min(Math.Max(dur, resEnd) + WideSettleBufferSeconds, MaxPlanSeconds);
+        var wideStart = WideStartTime(play);
         var kfs = new List<CameraKeyframe>();
 
         double cx = WideCx, cy = WideCy, zoom = WideZoom;
@@ -106,7 +110,7 @@ public static class CameraPlanBuilder
         var first = true;
         foreach (var clampedT in SampleTimes(play, end))
         {
-            var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end), fr, lastEvent);
+            var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end), fr, wideStart);
             if (first)
             {
                 cx = raw.Cx; cy = raw.Cy; zoom = raw.ZoomMult;
@@ -169,6 +173,30 @@ public static class CameraPlanBuilder
         return lastEvent;
     }
 
+    /// <summary>
+    /// 全景へ戻し始める時刻（issue #406②/#441 の単一ソース。engine のプランと3D側のカット時刻の
+    /// 両方がここを見る＝片方だけ変えるとプランと実カットがずれる）。
+    /// 通常は lastEvent + <see cref="ReturnToWideDelaySeconds"/>。死んだ球（全ボールセグメント終了後）に
+    /// 走者レッグだけが残るプレー（本塁打の一周など）では、着弾のテロップ（#354）を読む余韻
+    /// （<see cref="DeadBallLingerSeconds"/>）明けへ前倒しする（issue #441: 着弾点のアップが生還まで
+    /// 続きフリーズに見えた）。ResAt=+∞（投球のみのプレー）は従来どおり戻さない。
+    /// </summary>
+    public static double WideStartTime(PlaybackPlay play)
+    {
+        var lastEvent = LastEventTime(play);
+        if (!double.IsFinite(lastEvent)) return double.PositiveInfinity;
+        return Math.Min(lastEvent + ReturnToWideDelaySeconds, LastBallEndTime(play) + DeadBallLingerSeconds);
+    }
+
+    /// <summary>全ボールセグメントが終わる時刻（セグメントが無ければ 0）。死んだ球の判定（issue #441）用。</summary>
+    private static double LastBallEndTime(PlaybackPlay play)
+    {
+        var last = 0.0;
+        foreach (var seg in play.Ball)
+            if (seg.T1 > last) last = seg.T1;
+        return last;
+    }
+
     private static double ClampZoomRate(double prev, double target, double dt)
     {
         var maxRatio = Math.Pow(ZoomRateCapPerSecond, dt);
@@ -195,9 +223,9 @@ public static class CameraPlanBuilder
     /// 投球区間の終盤（接触の LeadSeconds 秒前）で先取りが接触後の区間へ食い込み、打つ前からパンが
     /// 始まってしまう（Issue #258）。固定フレーム区間中かどうかは常に actualT で判定する。
     /// </summary>
-    private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT, CameraFraming fr, double lastEvent)
+    private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT, CameraFraming fr, double wideStart)
     {
-        if (leadT >= lastEvent + ReturnToWideDelaySeconds) return Wide();
+        if (leadT >= wideStart) return Wide();
 
         var (covering, nextUpcoming) = FindSegmentAt(play, actualT);
 
