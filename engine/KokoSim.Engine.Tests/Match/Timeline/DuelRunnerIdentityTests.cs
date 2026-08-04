@@ -33,7 +33,8 @@ public sealed class DuelRunnerIdentityTests
             play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play),
             batter: batter);
 
-        var batterLeg = Assert.Single(tl.Runners, r => r.Label == "打");
+        // 内野ゴロは主到達レッグの後ろにオーバーラン(issue #443)レッグが続くため先頭を見る。
+        var batterLeg = tl.Runners.First(r => r.Label == "打");
         Assert.Same(batter, batterLeg.Runner);
 
         var playback = PlayTimelineAdapter.ToPlaybackPlay(tl);
@@ -50,7 +51,7 @@ public sealed class DuelRunnerIdentityTests
         var tl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
 
-        var batterLeg = Assert.Single(tl.Runners, r => r.Label == "打");
+        var batterLeg = tl.Runners.First(r => r.Label == "打");
         Assert.Null(batterLeg.Runner);
 
         var playback = PlayTimelineAdapter.ToPlaybackPlay(tl);

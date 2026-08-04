@@ -330,6 +330,33 @@ public static class TimelineBuilder
             Runner = batter,
         });
 
+        // 一塁駆け抜け（オーバーラン, issue #443・監督決定2026-08-04）: 内野ゴロで一塁へ向かう打者走者は
+        // 塁上で即停止させず、塁の数m先まで走り抜けてから減速して止まる。アウト/セーフを問わず常に
+        // このレッグを足す（オーバーランは失格にならないルール＝#417 と同じ前提）。表示専用の追加レッグ
+        // ＝判定・帯には無関係（不変条件#2。乱数不使用）。
+        // 外野安打/フライは対象外: 打者が一塁を回って進塁する場合は AppendRunnerLegs が続きのレッグを
+        // 同じ Label "打" で足す（FindBatterArrive がこのレッグより先に積んだ本レッグの T1 を拾う）ので、
+        // 続きのレッグの From（一塁）・T0（到達時刻）がこのレッグと一致し、時刻が重なる区間は
+        // リストの後ろ（続きのレッグ）が RunnerAt の上書きで自然に勝つ＝無害だが、対象外にして
+        // 余計なレッグを増やさない。
+        if (!play.IsFly && !IsOutfieldHit(play))
+        {
+            var firstBase = BasePoint(field, "first");
+            var approachSeconds = Math.Max(0.05, batterArrive - (ContactAt + 0.10));
+            var approachSpeed = Distance(Home, firstBase) / approachSeconds;
+            var overrunSeconds = Math.Max(0.3, 2.0 * FirstBaseOverrunDistanceM / Math.Max(1.0, approachSpeed));
+            runners.Add(new RunnerLeg
+            {
+                Label = "打", T0 = batterArrive, T1 = batterArrive + overrunSeconds,
+                From = firstBase, To = Overshoot(Home, firstBase, FirstBaseOverrunDistanceM),
+                // 判定は既に確定済み（真の到達＝上のレッグの T1）なので、ここでは常に false。
+                // 2D俯瞰の hideAt は OutAtEnd=true のレッグの T1 を拾う（PlayTimelineAdapter）ため、
+                // true にすると「アウト後もしばらく走り続けてから消える」絵に変わってしまう。
+                OutAtEnd = false, CloseCall = false,
+                Runner = batter,
+            });
+        }
+
         // 判定イベント（Issue #260）: 走者レッグの終端に縛られない、確定時刻付きの独立イベント。
         // フライ・ライナー・ファウルフライの捕球アウトは捕球の瞬間（fieldedAt）に確定する。
         // 内野ゴロの一塁フォースは送球到達の瞬間（＝フォース成立。走者到達を待たない, Issue #328①）。
@@ -1281,6 +1308,9 @@ public static class TimelineBuilder
         var dz = a.Z - b.Z;
         return Math.Sqrt(dx * dx + dz * dz);
     }
+
+    /// <summary>一塁駆け抜け（オーバーラン）で塁の先まで走り抜ける距離[m]（issue #443。表示専用）。</summary>
+    private const double FirstBaseOverrunDistanceM = 3.5;
 
     /// <summary>悪送球が一塁を逸れて抜ける距離[m]（issue #439。表示専用）。</summary>
     private const double ErrantThrowOvershootM = 6.0;

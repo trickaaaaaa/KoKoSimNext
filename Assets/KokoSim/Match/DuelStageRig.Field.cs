@@ -1299,6 +1299,28 @@ namespace KokoSim.Unity.Match
         private static readonly RunnerArriveAnchor ArriveSlideOut =
             new("AA_Baseball_Offense_Base_Sliding_Type01_Fail", 0.58f, -0.003f, 0.530f);
 
+        /// <summary>
+        /// 一塁駆け抜け（オーバーラン, issue #443・監督決定2026-08-04）の減速クリップ。
+        /// バッグ通過はスプリントループのまま走り抜け、通過の瞬間にこのクリップへ切り替える
+        /// （通過前には切り替えない）。全長2.67sのうちほぼ全編（<see cref="OverrunDecelEndsAt"/>＝2.58s）が
+        /// 走り→歩きへ落ちる減速＝「駆け抜け専用」の収録は無くパック内でこれ1本だけが該当する
+        /// （実測 2026-08-01・DuelMotionSpike.RunRunnerArriveProbe／out/duel-stage/runner.tsv）。
+        /// </summary>
+        private const string OverrunClipName = "AA_Baseball_Offense_Base_Running_To_Walking";
+
+        /// <summary>
+        /// <see cref="OverrunClipName"/> のクリップ内で減速がほぼ終わる時刻[s]（実測、上記コメントと同じ出典）。
+        /// engine のオーバーランレッグの終端（＝停止点）へこの瞬間を再生倍率で合わせる
+        /// （design-18 §4.5-③「瞬間の定義はクリップごとに違う」の一例）。
+        /// </summary>
+        private const float OverrunDecelEndsAt = 2.58f;
+
+        /// <summary>
+        /// <see cref="OverrunClipName"/> の向き補正[deg]（<see cref="LocoClip.MoveDirDeg"/> と同義＝収録の
+        /// 正面と実際の進行方向のずれ）。絵で確認して調整する値（design-18 §3.2.1と同型の罠）。
+        /// </summary>
+        private const float OverrunMoveDirDeg = 0f;
+
         /// <summary>到達の演技を見せる長さ[s]（アンカーから先）。</summary>
         private const float ArriveFollowSeconds = 1.10f;
 
@@ -1409,6 +1431,10 @@ namespace KokoSim.Unity.Match
         /// 打者走者（本塁→一塁）が一塁に留まるレッグか。一塁到達はアウト/セーフ/際どさに関わらず
         /// 常に駆け抜け（オーバーランは失格にならないルール）。長打で二塁以降へ続くレッグは
         /// 最終レッグの終点が一塁でなくなるため対象外＝最終レッグの終点だけで判定する（Issue #417）。
+        ///
+        /// ⚠ 半径5m: 一塁駆け抜け（オーバーラン, issue #443）の engine レッグは一塁の数m先（3.5m）で
+        /// 止まる＝最終レッグの終点はもう一塁ちょうどではない。二塁・三塁までは27m以上あるので
+        /// 5mまで広げても混同しない。
         /// </summary>
         private static bool IsBatterArrivingAtFirst(PlaybackRunner r)
         {
@@ -1416,15 +1442,17 @@ namespace KokoSim.Unity.Match
             var to = r.Segs[r.Segs.Count - 1].To;
             var dx = (float)(to.X - FieldDiagramGeometry.First.X);
             var dz = (float)(to.Y - FieldDiagramGeometry.First.Y);
-            return dx * dx + dz * dz < 4f; // 2m以内＝丸め誤差を吸収しつつ二塁・三塁とは混同しない
+            return dx * dx + dz * dz < 25f; // 5m以内
         }
 
         /// <summary>
-        /// 到達の演技を選ぶ**純関数**（乱数を引かない）。アウトかどうかは演技を変えない＝
-        /// アウトは判定オーバーレイ（Issue #328）で読ませる（Issue #417）。
+        /// 一塁以外の到達演技を選ぶ**純関数**（乱数を引かない）。アウトかどうかは演技を変えない＝
+        /// アウトは判定オーバーレイ（Issue #328）で読ませる（Issue #417）。一塁到達は
+        /// <see cref="IsBatterArrivingAtFirst"/> で先に分岐し、常にオーバーラン（issue #443）を使う＝
+        /// ここへは来ない。
         /// </summary>
-        private static RunnerArriveAnchor SelectArrive(bool firstBaseArrival, bool closeCall)
-            => !firstBaseArrival && closeCall ? ArriveSlideSafe : ArriveRunThrough;
+        private static RunnerArriveAnchor SelectArrive(bool closeCall)
+            => closeCall ? ArriveSlideSafe : ArriveRunThrough;
 
         /// <summary>走者1人を時刻 t へ進める（守備の <see cref="StepFielderMotion"/> と同じ作り）。</summary>
         private void StepRunnerMotion(int idx, float t, float dt)
@@ -1441,40 +1469,84 @@ namespace KokoSim.Unity.Match
             // 到達の予定。**絶対時刻で判定する**（途中の時刻から再生しても同じ絵）
             float t1;
             bool closeCall;
+            bool firstBaseArrival = IsBatterArrivingAtFirst(r);
             if (!st.ArriveFired && RunnerFinal(r, out t1, out _, out closeCall))
             {
-                var an = SelectArrive(IsBatterArrivingAtFirst(r), closeCall);
-                float tStart = t1 - an.Touch;
-                if (t >= tStart)
+                if (firstBaseArrival)
                 {
-                    var clip = LoadClip(an.Clip);
-                    if (clip != null)
+                    // 一塁駆け抜け（オーバーラン, issue #443）: バッグ通過（＝オーバーランレッグの起点）で
+                    // 減速クリップへ切り替える（通過前には切り替えない）。クリップの減速が終わる時刻
+                    // （OverrunDecelEndsAt）を、engine のオーバーランレッグの終端（t1＝停止点）へ
+                    // 再生倍率で合わせる（速度の受け渡しは再生倍率で吸収する方式＝監督決定の選択肢①）。
+                    var last = r.Segs[r.Segs.Count - 1];
+                    float tStart = (float)last.T0;
+                    if (t >= tStart)
                     {
-                        // 頭出し。**負になってはいけない**（負＝塁に触る芝居が着く前に終わっている）
-                        _runnerHeadMin = Mathf.Min(_runnerHeadMin, t - tStart);
-                        SetActorClip(a, clip, t - tStart, an.Touch + ArriveFollowSeconds);
-                        a.Speed = 1f;
-                        a.HoldSeconds = ArriveHoldSeconds;
-                        st.Ladder = int.MinValue;
-                        st.ArriveUntil = t1 + ArriveFollowSeconds + ArriveHoldSeconds;
-                        // 塁へ触れる手足が塁の方を向くように体を回す（F5 のグラブ・F6 の手と同型）
-                        var th = new Vector2(an.TouchX, an.TouchZ);
-                        var to = new Vector2((float)r.Segs[r.Segs.Count - 1].To.X,
-                            (float)r.Segs[r.Segs.Count - 1].To.Y);
-                        var from = new Vector2((float)r.Segs[r.Segs.Count - 1].From.X,
-                            (float)r.Segs[r.Segs.Count - 1].From.Y);
-                        var dir = to - from;
-                        if (dir.sqrMagnitude > 1e-6f && th.magnitude > 0.05f)
-                            st.Yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg
-                                     - Mathf.Atan2(th.x, th.y) * Mathf.Rad2Deg;
-                        st.Started = true;
+                        var clip = LoadClip(OverrunClipName);
+                        if (clip != null)
+                        {
+                            float legDur = Mathf.Max(0.05f, t1 - tStart);
+                            float rate = Mathf.Clamp(OverrunDecelEndsAt / legDur, 0.5f, 4f);
+                            // 頭出し。**負になってはいけない**（負＝バッグを通過する前にクリップが動き出している）
+                            _runnerHeadMin = Mathf.Min(_runnerHeadMin, t - tStart);
+                            SetActorClip(a, clip, (t - tStart) * rate, 0f);
+                            a.Speed = rate;
+                            a.HoldSeconds = ArriveHoldSeconds;
+                            st.Ladder = int.MinValue;
+                            st.ArriveUntil = tStart + clip.length / rate + ArriveHoldSeconds;
+                            // 向きはここでスナップしない（issue #443③）。直進レッグなので現状維持で足り、
+                            // 下の据え置き区間で MoveTowardsAngle により毎コマ寄せる。
+                            st.Started = true;
+                        }
+                        st.ArriveFired = true;
                     }
-                    st.ArriveFired = true;
+                }
+                else
+                {
+                    var an = SelectArrive(closeCall);
+                    float tStart = t1 - an.Touch;
+                    if (t >= tStart)
+                    {
+                        var clip = LoadClip(an.Clip);
+                        if (clip != null)
+                        {
+                            // 頭出し。**負になってはいけない**（負＝塁に触る芝居が着く前に終わっている）
+                            _runnerHeadMin = Mathf.Min(_runnerHeadMin, t - tStart);
+                            SetActorClip(a, clip, t - tStart, an.Touch + ArriveFollowSeconds);
+                            a.Speed = 1f;
+                            a.HoldSeconds = ArriveHoldSeconds;
+                            st.Ladder = int.MinValue;
+                            st.ArriveUntil = t1 + ArriveFollowSeconds + ArriveHoldSeconds;
+                            // 塁へ触れる手足が塁の方を向くように体を回す（F5 のグラブ・F6 の手と同型）
+                            var th = new Vector2(an.TouchX, an.TouchZ);
+                            var to = new Vector2((float)r.Segs[r.Segs.Count - 1].To.X,
+                                (float)r.Segs[r.Segs.Count - 1].To.Y);
+                            var from = new Vector2((float)r.Segs[r.Segs.Count - 1].From.X,
+                                (float)r.Segs[r.Segs.Count - 1].From.Y);
+                            var dir = to - from;
+                            if (dir.sqrMagnitude > 1e-6f && th.magnitude > 0.05f)
+                                st.Yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg
+                                         - Mathf.Atan2(th.x, th.y) * Mathf.Rad2Deg;
+                            st.Started = true;
+                        }
+                        st.ArriveFired = true;
+                    }
                 }
             }
 
             if (t < st.ArriveUntil)
             {
+                if (firstBaseArrival && st.ArriveFired)
+                {
+                    // オーバーラン中は直進レッグの方向へ毎コマ寄せる（issue #443③。ハードスナップしない）。
+                    var last = r.Segs[r.Segs.Count - 1];
+                    var dir = new Vector2((float)(last.To.X - last.From.X), (float)(last.To.Y - last.From.Y));
+                    if (dir.sqrMagnitude > 1e-6f)
+                    {
+                        var overrunTargetYaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg - OverrunMoveDirDeg;
+                        st.Yaw = Mathf.MoveTowardsAngle(st.Yaw, overrunTargetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt));
+                    }
+                }
                 // 到達の芝居の間は位置だけ engine の真値へ置き続ける
                 PlaceRunner(a, cur.x, cur.y, st.Yaw);
                 _runnerMotion[idx] = st;
@@ -1599,11 +1671,11 @@ namespace KokoSim.Unity.Match
                     float t1;
                     bool o, c;
                     if (!RunnerFinal(r, out t1, out o, out c)) { sb.AppendLine(r.Label + "\t(移動なし)"); continue; }
-                    var an = SelectArrive(IsBatterArrivingAtFirst(r), c);
+                    var clipName = IsBatterArrivingAtFirst(r) ? OverrunClipName : SelectArrive(c).Clip;
                     sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                         "{0}\t{1:F2}\t{2}\t{3}\t{4}", r.Label, t1,
                         o ? "アウト" : c ? "際どいセーフ" : "セーフ",
-                        an.Clip.Replace("AA_Baseball_Offense_", ""),
+                        clipName.Replace("AA_Baseball_Offense_", ""),
                         r.HideAt.HasValue ? r.HideAt.Value.ToString("F2") : "—"));
                 }
             }
@@ -1646,6 +1718,7 @@ namespace KokoSim.Unity.Match
             yield return ArriveRunThrough.Clip;
             yield return ArriveSlideSafe.Clip;
             yield return ArriveSlideOut.Clip;
+            yield return OverrunClipName; // 一塁駆け抜け（issue #443）
         }
 
         /// <summary>その役の本来の待機クリップ（走行中は <c>IdleClip</c> が差し替わっているため別に持つ）。</summary>

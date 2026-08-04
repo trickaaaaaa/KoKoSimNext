@@ -101,7 +101,9 @@ public sealed class JudgementOverlayTests
             FieldPosition.Shortstop, throwArriveSeconds: 3.0,
             judgementMarginSeconds: judgementMargin);
 
-    private static RunnerLeg BatterLeg(PlayTimeline tl) => tl.Runners.Single(r => r.Label == "打");
+    // 一塁駆け抜け（issue #443）で内野ゴロには主到達レッグの後ろにオーバーランレッグが続くため、
+    // 判定にまつわるプロパティ（OutAtEnd/CloseCall/T1）は先頭＝主到達レッグから読む。
+    private static RunnerLeg BatterLeg(PlayTimeline tl) => tl.Runners.First(r => r.Label == "打");
 
     [Fact]
     public void BuildBattedBall_CloseInfieldHit_IsCloseCall_WhenMarginBelowThreshold()
@@ -265,7 +267,8 @@ public sealed class JudgementOverlayTests
 
         var playback = PlayTimelineAdapter.ToPlaybackPlay(tl);
         var runner = Assert.Single(playback.Runners, r => r.Label == "打");
-        var seg = Assert.Single(runner.Segs);
+        // 内野ゴロは主到達レッグの後ろにオーバーラン(issue #443)のセグが続くため先頭を見る。
+        var seg = runner.Segs[0];
         Assert.False(seg.OutAtEnd);
         Assert.True(seg.CloseCall);
     }
