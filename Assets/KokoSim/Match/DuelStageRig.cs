@@ -921,6 +921,18 @@ namespace KokoSim.Unity.Match
         private float _batTrailT;                               // ステージの連続時計[s]（打席をまたいでも巻き戻さない）
         private Vector3 _batTrailLastAxis;                      // 前サンプルのバット軸（角速度ゲート用）
         private bool _batTrailHasLast;
+        // スイング区間の武装フラグ（issue #444）。StartSwing で立ち、FinishOneShot（待機復帰）と
+        // 打席の仕切り直しで下りる。角速度ゲートだけだと「構えへ戻る速い動き」も軌跡になるため、
+        // 打ちにいく振りの間だけ積む（判定は SampleBatTrail の毎コマ状態比較＝1コマ副作用にしない）
+        private bool _batTrailSwing;
+#if UNITY_EDITOR
+        /// <summary>【実測プローブ用】武装ゲートで実際に積んだサンプル数（累計）。</summary>
+        public int BatTrailSampledForCapture { get; private set; }
+        /// <summary>【実測プローブ用】角速度は閾値超（旧実装なら積んでいた）だが武装外で抑止した数（累計）。</summary>
+        public int BatTrailSuppressedForCapture { get; private set; }
+        /// <summary>【実測プローブ用】カウンタを0へ戻す。</summary>
+        public void ResetBatTrailCountersForCapture() { BatTrailSampledForCapture = 0; BatTrailSuppressedForCapture = 0; }
+#endif
 
         private sealed class Actor
         {
@@ -1465,6 +1477,7 @@ namespace KokoSim.Unity.Match
                 // 振り切って待機へ戻る通常経路は FinishOneShot が戻すのでここは来ない
                 _batter.Speed = 1f;
             }
+            _batTrailSwing = false;   // 打席の仕切り直し＝バット軌跡の武装も持ち越さない（issue #444）
             // 前の打席最後の投球の狙い寄り・残差の体寄せ（issue #396 ①②）を引きずらない＝
             // 較正の固定位置へ戻してから待機クリップへ（順序が逆だと RewindActor が古い BasePos へ戻す）
             SetActorXZ(_catcher, CatcherBaseX, _cal.CatcherZ);
@@ -1856,6 +1869,7 @@ namespace KokoSim.Unity.Match
 #endif
             _swingAnchorClip = anchorClipSec;   // バット軌道（SwingBatAxis）の終点＝接触の時刻
             _batWrapValid = false;
+            _batTrailSwing = true;   // バット軌跡の武装（issue #444）。解除は FinishOneShot／打席の仕切り直し
             _batRestValid = false;
             // 頭出しは「基準位置へ戻して0→seekをルートモーション込みで積分し直す」ので、
             // **クリップ頭からseekまでの水平移動がそのまま位置の差分として乗る**。待機ループ側は
@@ -2422,6 +2436,30 @@ namespace KokoSim.Unity.Match
             float half = Mathf.Max(0.1f, _cal.BatLengthM) * 0.5f;
             var center = _bat.transform.position;
 
+            // スイング区間の武装/解除（issue #444）。角速度ゲートは構え・据え置きを除外するだけで、
+            // **構えへ戻る速い動き**もバットが速く回るため区別できない。武装（_batTrailSwing）は
+            // StartSwing で立ち、判定は毎コマ「クリップ時刻が振り抜きの打ち切り（Actor.EndAt＝
+            // EffectiveSwingFinishSec、#415/#395 と同じ時刻源）より前か」の状態比較で行う
+            // （「進みが届いたコマで一度だけ」型の1コマ副作用にしない＝design-18 §4.5-⑩。
+            // 打ち切り後の据え置きは Time==EndAt で止まるので < が自然に外す）。
+            // 武装外でも履歴は消さない＝振り終わりの尾は寿命で自然に消える（角速度スキップと同じ作法）。
+            bool armed = _batTrailSwing && _batter != null
+                && _batter.Time < (_batter.EndAt > 0f ? _batter.EndAt : float.MaxValue);
+            if (!armed)
+            {
+#if UNITY_EDITOR
+                // 旧実装（角速度ゲートのみ）なら積んでいたコマ＝ゲートが実際に効いた証拠を数える。
+                if (_batTrailHasLast
+                    && Vector3.Angle(_batTrailLastAxis, axis) >= Mathf.Max(0f, _cal.BatTrailMinDegPerFrame))
+                    BatTrailSuppressedForCapture++;
+#endif
+                // 軸は追従させておく（再武装した最初のコマの角速度判定を直前コマ比で行うため）
+                _batTrailLastAxis = axis;
+                _batTrailHasLast = true;
+                TrimBatTrail();
+                return;
+            }
+
             // 前サンプルからの回転が小さいコマは積まない（構え・据え置き）。
             // 「積まない」だけで履歴は保つので、振り終わりの尾はそのまま寿命で消えていく
             if (_batTrailHasLast
@@ -2432,6 +2470,9 @@ namespace KokoSim.Unity.Match
             }
             _batTrailLastAxis = axis;
             _batTrailHasLast = true;
+#if UNITY_EDITOR
+            BatTrailSampledForCapture++;
+#endif
 
             // ステージローカルで持つ（_trail と同じ。ステージは y=-500 へ退避しているので世界座標では持てない）
             var knob = tr.InverseTransformPoint(center - axis * half);
@@ -3620,6 +3661,10 @@ namespace KokoSim.Unity.Match
         {
             // フェード中に末尾へ達しても畳んでから戻す（畳まないと applyRootMotion が切れたままになる）
             CancelFade(a);
+            // 打者の一発物（スイング）が待機へ戻る＝バット軌跡の武装を解除（issue #444）。
+            // 構えとスイングが同じクリップ（既定）では復帰後の Time/EndAt が待機区間の値になり、
+            // クリップ時刻の比較だけでは戻り動作を区別できないため、ここで明示的に下ろす
+            if (a == _batter) _batTrailSwing = false;
             a.Time = 0f;
             a.EndAt = a.DefaultEndAt;   // 投手は購入クリップ6.00sの尻尾を毎回切り落とす（既定0=末尾まで）
             a.Speed = 1f;               // 一発物の速度指定は持ち越さない（待機は常に収録の速さ）
