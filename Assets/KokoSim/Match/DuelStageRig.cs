@@ -962,6 +962,7 @@ namespace KokoSim.Unity.Match
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
             public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+            public bool VendorBody;                  // 購入素体か（false=U2素体）。背中の厚みが違うので背番号デカールの奥行きを分ける（issue #453）
 
             /// <summary>
             /// 直前の <see cref="StepActor"/> でこの体のポーズを**書き直したか**。
@@ -2552,6 +2553,14 @@ namespace KokoSim.Unity.Match
         /// <summary>ステージ根（FramePreview はここのローカル座標で受ける）。</summary>
         public Transform StageRoot => _root != null ? _root.transform : null;
 
+        /// <summary>撮影ハーネス用: ステージのカメラ。凍結中（Tick停止＝CameraPlanが動かない間）だけ
+        /// 位置を動かして寄りを撮ってよい（解除すれば次のTickでCameraPlanが当て直す）。</summary>
+        internal Camera CameraForCapture => _camera;
+
+        /// <summary>撮影ハーネス用: 球審の素体GO。捕手の背中の寄りは球審が画角を塞ぐので、
+        /// 撮る間だけ非表示にする（撮り終わったら必ず戻す）。</summary>
+        internal GameObject UmpireGoForCapture => _umpire != null ? _umpire.Go : null;
+
         /// <summary>打者のクリップ内時刻[秒]（構え0〜スイング〜走り出し）。</summary>
         public float BatterClipTime => _batter != null ? _batter.Time : 0f;
 
@@ -3346,6 +3355,7 @@ namespace KokoSim.Unity.Match
                 GroundY = groundY,
                 RegionMat = regionReady ? mat : null,   // 攻守交代の塗り替え（SetTeamColors）用
                 BodyScale = scale,
+                VendorBody = vendorBody,
             };
             var lf = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
             var rf = animator.GetBoneTransform(HumanBodyBones.RightFoot);
@@ -5141,11 +5151,18 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 【開発用】購入素体があっても U2 素体へ落とす（背番号デカール等の「両素体で絵を確認」用。
+        /// issue #453: U2 だけで校正した値が購入素体で埋まる事故の再発防止に、逆方向も撮って確かめる）。
+        /// </summary>
+        internal static bool ForceU2BodyForCapture;
+
+        /// <summary>
         /// 購入素体。gitignore配下なので手元に無い環境がある＝null を正常系として扱い、
         /// 呼び出し側でU2素体へ落とす（警告も出さない。無いのが異常ではない）。
         /// </summary>
         private static GameObject LoadVendorBody()
         {
+            if (ForceU2BodyForCapture) return null;
 #if UNITY_EDITOR
             if (!ForceCatalogOnly)
             {
