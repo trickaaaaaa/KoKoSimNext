@@ -1038,6 +1038,34 @@ namespace KokoSim.Unity.Match
             if (a.FadeFrom.IsValid()) a.FadeFrom.SetApplyFootIK(!a.Mirrored);
         }
 
+        /// <summary>
+        /// ルートモーションを伴う Graph.Evaluate（Foot IK と同根の鏡映盲対策・issue #447）。
+        /// Unity 組み込みのルートモーション適用は、deltaPosition（ワールド空間）を localPosition へ
+        /// 積むときに**祖先の負スケール（鏡映）を無視する**らしく、ミラー中も非ミラーと同じ符号の x が
+        /// 積まれ続ける。ポーズ（各ボーン）は鏡映親ノードのスケールで正しく鏡映されるのに、ルート自体の
+        /// 横移動だけ鏡映されない＝体が接地とずれて横へ滑りながら投げる絵になる（左投手のみ発症・
+        /// 恒等スケールの右投手は無関係）。ここで適用前後の localPosition.x 差分を読み直し、
+        /// 鏡映面（x=0）で反転して当て直す。回転（`localRotation *= deltaRotation`）は祖先スケールに
+        /// 一切依存しない純粋なクォータニオン合成で、鏡映後の見え方は描画時に祖先スケールが正しく
+        /// 効くため触らない（回転だけ直すと今度は回転が二重に鏡映されて壊れる）。
+        /// 非ミラー（a.Mirrored=false）は分岐なしで従来の Evaluate 呼び出しと完全に同じ経路＝
+        /// 右投手の絵はビット一致のまま。
+        /// </summary>
+        private static void EvaluateWithMirrorFix(Actor a, float dt)
+        {
+            if (a == null || !a.Graph.IsValid()) return;
+            if (!a.Mirrored || a.Animator == null || !a.Animator.applyRootMotion)
+            {
+                a.Graph.Evaluate(dt);
+                return;
+            }
+            float xBefore = a.Go.transform.localPosition.x;
+            a.Graph.Evaluate(dt);
+            var pos = a.Go.transform.localPosition;
+            pos.x = 2f * xBefore - pos.x;   // 観測した x デルタを反転して当て直す
+            a.Go.transform.localPosition = pos;
+        }
+
         public DuelStageRig()
         {
             int layer = LayerMask.NameToLayer(LayerName);
@@ -3534,7 +3562,7 @@ namespace KokoSim.Unity.Match
             float target = Mathf.Clamp(clipTime, 0f, a.Clip.length - 0.001f);
             int steps = Mathf.Max(1, Mathf.CeilToInt(target * 60f));
             float dt = target / steps;
-            for (int i = 0; i < steps; i++) a.Graph.Evaluate(dt);
+            for (int i = 0; i < steps; i++) EvaluateWithMirrorFix(a, dt);
             a.Time = target;
             a.PoseAdvanced = true;   // 頭出しもポーズを書き直す＝補正を当て直す回
         }
@@ -3697,7 +3725,7 @@ namespace KokoSim.Unity.Match
                     float rest = end - before;
                     if (rest > 1e-4f)
                     {
-                        a.Graph.Evaluate(rest);
+                        EvaluateWithMirrorFix(a, rest);
                         a.PoseAdvanced = true;
                     }
                     a.Time = end;
@@ -3724,7 +3752,7 @@ namespace KokoSim.Unity.Match
             // 0.18秒遅れて出る＝「振りが遅くて球と合っていない」。倍率を上げても、それまでは
             // 「クリップを早く打ち切る」だけでポーズは常に1倍速だった。
             // グラフはアクター別なので、他の役（Speed=1）の見え方は変わらない
-            a.Graph.Evaluate(step * a.Speed);
+            EvaluateWithMirrorFix(a, step * a.Speed);
             a.PoseAdvanced = true;
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
