@@ -245,7 +245,36 @@ public static class TimelineBuilder
             {
                 var firstBase = BasePoint(field, "first");
                 var arrive = ContactAt + throwArrive;
-                if (play.UnassistedPutout)
+                if (play.Result == BattedBallResult.Error
+                    && play.ErrorKind == FieldingErrorKind.Throw && !play.UnassistedPutout)
+                {
+                    // 悪送球（issue #439）: 一塁へ向かうが逸れて外へ抜ける。投げ始めは通常送球と同じ逆算、
+                    // 一塁の脇を「届くはずだった時刻」ごろに通過し、少し先へ抜けて死ぬ。
+                    // ⚠ 一塁に正着する絵（ToBase="first"・受け手あり）にしない＝「完璧な送球が先着したのに
+                    // 出塁」という矛盾がこの issue の症状そのもの。受け手なし（ToRole=null）で誰も捕らない。
+                    var over = Overshoot(fieldPoint, firstBase, ErrantThrowOvershootM);
+                    var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
+                    var t0 = Math.Max(fieldedAt, arrive - flightToFirst);
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Throw,
+                        T0 = t0, T1 = t0 + LegSeconds(Distance(fieldPoint, over), ThrowSpeedOf(play)),
+                        From = fieldPoint, To = over,
+                        FromRole = play.FielderRole,
+                    });
+                }
+                else if (play.Result == BattedBallResult.Error)
+                {
+                    // 捕球エラー（お手玉。issue #439）: 送球は存在しない。打球の進行方向へ数m弾く絵。
+                    // アンアシスト中の悪送球（実質起こらない縁ケース）もここへ落とす＝刺殺の絵は描かない。
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Roll,
+                        T0 = fieldedAt, T1 = fieldedAt + ErrorDeflectSeconds,
+                        From = fieldPoint, To = Overshoot(Home, fieldPoint, ErrorDeflectM),
+                    });
+                }
+                else if (play.UnassistedPutout)
                 {
                     // アンアシスト（3U, Issue #400）: 送球せず一塁手がボールをグラブに収めたまま運ぶ。
                     // Carry セグメント（保持しての移動）で表現し、山なりの Throw は積まない。到達(T1)は判定を
@@ -307,6 +336,16 @@ public static class TimelineBuilder
             // 常に batterArrive 以前＝走者は判定確定後も一塁まで走り切る絵のまま, Issue #328①）。
             var forceOutAt = play.ThrowArriveSeconds is { } ta ? ContactAt + ta : batterArrive;
             judgements.Add(new JudgementEvent { Label = "打", T = forceOutAt, Kind = JudgementKind.Out });
+        }
+        else if (play.Result == BattedBallResult.Error)
+        {
+            // 失策出塁（issue #439）: エラー確定の瞬間に「エラー」を必ず1枚出す。
+            // 捕球エラー＝処理点で弾いた時刻／悪送球＝送球が一塁に届くはずだった時刻。
+            // セーフと違い際どさ条件を課さない＝「アウトの絵に見えるのに黙って出塁」を防ぐのが目的。
+            var errAt = play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
+                ? ContactAt + et
+                : fieldedAt;
+            judgements.Add(new JudgementEvent { Label = "打", T = errAt, Kind = JudgementKind.Error });
         }
         else if (batterCloseCall)
         {
@@ -1189,6 +1228,27 @@ public static class TimelineBuilder
         var dx = a.X - b.X;
         var dz = a.Z - b.Z;
         return Math.Sqrt(dx * dx + dz * dz);
+    }
+
+    /// <summary>悪送球が一塁を逸れて抜ける距離[m]（issue #439。表示専用）。</summary>
+    private const double ErrantThrowOvershootM = 6.0;
+
+    /// <summary>捕球エラーで弾いたボールが転がる距離[m]と時間[s]（issue #439。表示専用）。</summary>
+    private const double ErrorDeflectM = 3.0;
+    private const double ErrorDeflectSeconds = 0.8;
+
+    /// <summary>
+    /// <paramref name="from"/>→<paramref name="through"/> の延長線上、<paramref name="through"/> から
+    /// さらに <paramref name="extraM"/> 進んだ点（issue #439: 弾く絵・逸れる絵の終点）。
+    /// 決定論の定点計算のみ＝乱数不使用。2点が同一なら方向が無いので through を返す。
+    /// </summary>
+    private static TimelinePoint Overshoot(TimelinePoint from, TimelinePoint through, double extraM)
+    {
+        var dx = through.X - from.X;
+        var dz = through.Z - from.Z;
+        var len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 1e-6) return through;
+        return new TimelinePoint(through.X + dx / len * extraM, through.Z + dz / len * extraM);
     }
 
     /// <summary>この打球が外野扱いの安打か（着地が外野／バウンドで内野を抜けた, Issue #63）。表示専用。</summary>
