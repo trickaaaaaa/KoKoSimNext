@@ -44,9 +44,9 @@ namespace KokoSim.Unity.Match
             WireSpeedControls();
 
             var replay = _root.Q<Button>("replay");
-            if (replay != null) replay.clicked += () => Start(_play);
+            if (replay != null) replay.clicked += () => StartPlay(_play);
 
-            Start(_plays[0]);
+            StartPlay(_plays[0]);
         }
 
         // プレー選択ボタン（mock: PLAYS ボタン群）。選択でハイライト＋再生開始。
@@ -62,7 +62,7 @@ namespace KokoSim.Unity.Match
                 var play = _plays[i];
                 var b = new Button { text = play.Name };
                 b.AddToClassList("chip-btn");
-                b.clicked += () => Start(play);
+                b.clicked += () => StartPlay(play);
                 list.Add(b);
                 _playButtons.Add(b);
             }
@@ -89,7 +89,7 @@ namespace KokoSim.Unity.Match
         }
 
         // mock: start(p)。t=0 から再生し直す。
-        private void Start(PlaybackPlay p)
+        private void StartPlay(PlaybackPlay p)
         {
             _play = p;
             _t = 0;
