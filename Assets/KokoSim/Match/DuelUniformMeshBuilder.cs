@@ -132,6 +132,33 @@ namespace KokoSim.Unity.Match
             return p;
         }
 
+        /// <summary>
+        /// 球審の恰幅（issue #445。恰幅3案の比較シートから StoutC＝強を監督選定・2026-08-05）。
+        /// Slim1（選手既定）基準で胴を1超へ太らせ、肩は1未満のまま＝逆三角形（筋肉質）でなく
+        /// 樽型（恰幅）に寄せる。実物の球審はシャツの下に胸当てを着込むため胴だけ厚いのが正。
+        ///
+        /// 下半身はスラックス（監督指摘「タイツみたいになっている」）: 野球パンツの
+        /// ブラウジング（膝下の膨らみ→ストッキング境界で絞る）をやめ、裾を足首まで下ろした
+        /// 直筒にする。ズボン厚とゆとりも少し足してドレープを出す。
+        /// </summary>
+        public static Params Stout()
+        {
+            var p = Slim1();
+            p.SlimTorso = 1.20f;
+            p.SlimShoulder = 0.94f;
+            p.SlimUpperArm = 0.90f;
+            p.SlimForearm = 0.88f;
+            p.SlimThigh = 1.03f;
+            p.SlimCalf = 0.95f;
+            p.SlimNeck = 1.03f;
+            // スラックス化: 裾は足首（calf t=0.92）まで・膝下の膨らみ無し・厚みは太もも→裾ほぼ一定
+            p.StockingStart = 0.92f;
+            p.BlousonThick = 0f;
+            p.PantsThick = 0.022f;
+            p.ThighSlack = 0.014f;
+            return p;
+        }
+
         /// <summary>痩せ強（標準的な高校生の細さ）。</summary>
         public static Params Slim2()
         {

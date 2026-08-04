@@ -599,6 +599,13 @@ namespace KokoSim.Unity.Match
         /// 無ければ素体のまま出す（着衣は表示品質の話であり対決ビュー自体は止めない）。
         /// </summary>
         private const string UniformMeshAsset = "Assets/DuelSpike/Generated/Body_Uniform_Slim1.asset";
+
+        /// <summary>
+        /// 球審専用の着衣メッシュ（恰幅Stout＝比較シート3案からStoutC選定＋スラックス脚。
+        /// issue #445・2026-08-05 監督選定）。選手側の Slim1 は不変。
+        /// 無ければ選手と同じ Slim1 へ落ちる（体型が痩せるだけで対決ビューは止めない）。
+        /// </summary>
+        private const string UmpireMeshAsset = "Assets/DuelSpike/Generated/Body_Uniform_Stout.asset";
         private const string BodyMeshName = "SuperHero_Male";
 
         /// <summary>
@@ -621,6 +628,7 @@ namespace KokoSim.Unity.Match
         public static string BodyFbxPath => BodyFbx;
         public static string VendorBodyFbxPath => VendorBodyFbx;
         public static string UniformMeshAssetPath => UniformMeshAsset;
+        public static string UmpireMeshAssetPath => UmpireMeshAsset;
         public static string VendorRegionMeshDirPath => VendorRegionMeshDir;
         public static string VendorRegionMeshSuffixPath => VendorRegionMeshSuffix;
 
@@ -681,9 +689,14 @@ namespace KokoSim.Unity.Match
                 new Color(0.16f, 0.20f, 0.38f), new Color(0.16f, 0.20f, 0.38f),
                 new Color(0.16f, 0.20f, 0.38f));
 
-            /// <summary>球審: 紺シャツ＋グレースラックス（実物の球審装束）。チーム色の対象外。</summary>
+            /// <summary>
+            /// 球審: 薄いブルーのシャツ＋黒スラックス（実物の球審装束。issue #445）。チーム色の対象外。
+            /// シャツは候補3色の比較シートから B2 を監督選定（2026-08-05）。スラックスはパレット表の
+            /// 黒 #23242A＝わずかでも赤に寄せるとポスタライズで臙脂に落ちる（この struct 冒頭の掟）。
+            /// 帽子・アンダー・ソックスは現行の濃紺のまま（issue の指定どおり）。
+            /// </summary>
             public static UniformPalette Umpire => new(
-                new Color(0.14f, 0.16f, 0.22f), new Color(0.38f, 0.39f, 0.42f),
+                new Color(0.50f, 0.65f, 0.77f), PaletteBlack,
                 new Color(0.14f, 0.16f, 0.22f), new Color(0.14f, 0.16f, 0.22f),
                 new Color(0.14f, 0.16f, 0.22f));
         }
@@ -1149,7 +1162,7 @@ namespace KokoSim.Unity.Match
             // z間隔を1.0mへ広げ、x offsetは打者と反対側（+x）へ倒して基準構図R-comp60から見て
             // 捕手の背後に自然に収まるようにする。
             _umpire = SpawnActor(body, umpClip, new Vector3(cal0.UmpireX, 0f, cal0.UmpireZ), 0f,
-                UniformPalette.Umpire, 0f, layer);
+                UniformPalette.Umpire, 0f, layer, umpireBody: true);
             _umpire.IdleClip = umpClip;
 
             // 結果分岐の一発物（§7-2第2弾）。素の向きは打者系/捕手系とも+Z（RunFacingProbe実測の規約どおり）。
@@ -1230,7 +1243,11 @@ namespace KokoSim.Unity.Match
             // （2026-07-28監督指摘）。ポスタライズ6段で2段ぶん明るい紺にして輪郭を立てる
             AttachGear(_batter, GearKind.Helmet, mound, new Color(0.28f, 0.31f, 0.45f), layer);
             AttachGear(_catcher, GearKind.CatcherGear, mound, _defenseColors.Cap, layer);
-            AttachGear(_umpire, GearKind.UmpireGear, mound, new Color(0.13f, 0.13f, 0.15f), layer);
+            // accent=シャツ色: 球審の胸プロテクター（薄型3段＋肩当て）は「服の下に着る」前提の
+            // シルエットなので、シャツから突き出た部分がシャツの膨らみに読めるようシャツ色へ追随させる。
+            // 旧固定色 (0.13,0.13,0.15) は紺シャツ時代の値＝薄いブルーのシャツだと黒い塊が腹に浮いた
+            // （issue #445 の候補出しで実測）。マスクと背面ストラップは AttachGear 内の dark 固定のまま
+            AttachGear(_umpire, GearKind.UmpireGear, mound, UniformPalette.Umpire.Shirt, layer);
 
             // 攻守交代で塗り替える装備を拾っておく（投手の帽子＝U2経路のみ／捕手のヘルメット殻）。
             // 購入素体の帽子は素体メッシュの領域なので、ここではなく RegionMat 側で替わる
@@ -3446,9 +3463,13 @@ namespace KokoSim.Unity.Match
         /// バウンズを引き直す**ので、体数が増えるとこれが最大のコストになる。
         /// 箱は ApplyMirror と同じ ±5m の巨大箱（ローカル・素体の足元原点基準）。
         /// </param>
+        /// <param name="umpireBody">
+        /// true で球審専用の着衣メッシュ（恰幅Stout＋スラックス。<see cref="UmpireMeshAsset"/>）を使う。
+        /// U2素体のときだけ意味を持つ（vendorBody とは排他）。
+        /// </param>
         private Actor SpawnActor(GameObject bodyPrefab, AnimationClip clip, Vector3 pos, float yawDeg,
             UniformPalette pal, float groundY, int layer, bool vendorBody = false,
-            bool rootMotion = true, bool tightBounds = false)
+            bool rootMotion = true, bool tightBounds = false, bool umpireBody = false)
         {
             var go = Object.Instantiate(bodyPrefab);
             go.name = "body-" + clip.name;
@@ -3466,7 +3487,7 @@ namespace KokoSim.Unity.Match
             }
             else
             {
-                var uniformMesh = LoadUniformMesh();
+                var uniformMesh = umpireBody ? LoadUmpireMesh() : LoadUniformMesh();
                 foreach (var smr0 in go.GetComponentsInChildren<SkinnedMeshRenderer>())
                 {
                     if (smr0.name == BodyMeshName && uniformMesh != null) smr0.sharedMesh = uniformMesh;
@@ -5434,6 +5455,28 @@ namespace KokoSim.Unity.Match
 #endif
             var cat = Catalog;
             return cat != null ? cat.UniformMesh : null;
+        }
+
+        /// <summary>
+        /// 球審専用の着衣メッシュ（恰幅Stout）。読み方は <see cref="LoadUniformMesh"/> と同型で、
+        /// 無いときだけ選手用（Slim1）へ落として痩せた球審のまま出す（対決ビューは止めない）。
+        /// </summary>
+        private static Mesh LoadUmpireMesh()
+        {
+#if UNITY_EDITOR
+            if (!ForceCatalogOnly)
+            {
+                var mesh = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(
+                    UniformMeshOverrideForCapture ?? UmpireMeshAsset);
+                if (mesh != null) return mesh;
+                Debug.LogWarning("[DuelStageRig] umpire mesh not baked (" + UmpireMeshAsset
+                    + ") - run KokoSim.EditorTools.DuelUniformBaker.BakeAll()");
+                return LoadUniformMesh();
+            }
+#endif
+            var cat = Catalog;
+            if (cat != null && cat.UmpireUniformMesh != null) return cat.UmpireUniformMesh;
+            return LoadUniformMesh();
         }
 
         /// <summary>
