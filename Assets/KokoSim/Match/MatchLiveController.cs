@@ -1958,6 +1958,13 @@ namespace KokoSim.Unity.Match
             {
                 _duelImg = new DuelViewElement();
                 _duelHost?.Add(_duelImg);
+                // _duelImg を作り直したら旧ラベルホストは**孤児**（旧Imgの子のまま panel の外）。
+                // 参照だけ生き残ると下の null ガードが再装着を飛ばし、以後 RefreshDuelFieldLabels が
+                // panel の外の孤児へ書き続けて**実機で頭上ラベルが一枚も出ない**
+                // （issue #454 実測: OnEnable の _duelHost.Clear() 後、host.panel=null・プールには
+                // 正しい氏名6件・絵はゼロ。夜間検証は enable 1回きりの環境で通ってしまった）。
+                _duelLabelHost = null;
+                _duelFieldLabelPool.Clear();
             }
             _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
             _duelImg.Bind(_duelRig.Target);
@@ -2088,27 +2095,18 @@ namespace KokoSim.Unity.Match
             if (FieldPlayActive) return;
             // 1球進行では采配窓の対戦（＝いまの打者・投手）が単一ソース。一括経路では確定打席から引く。
             Handedness bats, throws;
-            int batterNumber, pitcherNumber;
-            bool isTop;
             if (_atBat is { } at)
             {
                 bats = at.BatterBats; throws = at.PitcherThrows;
-                batterNumber = at.BatterNumber; pitcherNumber = at.PitcherNumber; isTop = at.IsTop;
             }
             else if (_current != null)
             {
                 bats = _current.BatterBats; throws = _current.PitcherThrows;
-                batterNumber = _current.BatterNumber; pitcherNumber = _current.PitcherNumber; isTop = _current.IsTop;
             }
             else return;
             var pitcherLeft = throws == Handedness.Left;
             var batterLeft = bats == Handedness.Left || (bats == Handedness.Switch && !pitcherLeft);
             _duelRig.SetHandedness(batterLeft, pitcherLeft);
-            // 背番号デカール（issue #393）: 投手・打者は采配窓/確定打席の単一ソースからそのまま、
-            // 捕手だけは打順に出ないので守備側の現在の守備位置対応（交代反映済み）から引く。
-            var catcherNumber = _prog?.CurrentDefenseIdentity(isTop).Defense
-                .TryGetValue(FieldPosition.Catcher, out var catcherId) == true ? catcherId.Number : (int?)null;
-            _duelRig.SetBackNumbers(pitcherNumber, catcherNumber, batterNumber);
         }
 
         /// <summary>撮影ハーネス用（エディタ限定運用）: 対決ビューのトグルを外から叩く。</summary>

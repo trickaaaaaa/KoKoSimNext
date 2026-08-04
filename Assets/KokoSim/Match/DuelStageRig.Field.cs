@@ -2275,9 +2275,6 @@ namespace KokoSim.Unity.Match
             play = StripPostResolutionReturnMoves(play);
             EnsureFieldCast();
             SetFieldCastVisible(true);
-            // 守備中は背番号を焼かない（issue #393）。投手・捕手は同じ Actor を守備でも使い回すため、
-            // 明示的に剥がす（打者は直後に Go.SetActive(false) されるので子のデカールも道連れで消える）。
-            ClearBackNumbers();
             _fieldPlay = play;
             _fieldT0 = t0;
             _pitcherSnap = Snapshot(_pitcher);
