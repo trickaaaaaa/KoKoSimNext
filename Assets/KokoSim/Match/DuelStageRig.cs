@@ -2546,9 +2546,11 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// リリース後、残差（実着弾−狙い＝コントロール誤差そのもの）ぶん捕手の体を寄せる（issue #396 ②）。
-        /// 腕＋胴のIK（<see cref="DuelCatcherPose.ReachMitt"/>。しゃがんだ肩から腕0.55m＋胴14°）だけでは
-        /// ゾーンの外へ届かないため、体そのものを先に寄せておく＝実物の横っ跳び・伸び上がり。
+        /// リリース後、残差（実着弾−狙い＝コントロール誤差そのもの）の<b>左右成分だけ</b>捕手の体を
+        /// 寄せる（issue #396 ②）。腕＋胴のIK（<see cref="DuelCatcherPose.ReachMitt"/>）だけでは
+        /// 大きな横外れへ届かないため、体そのものを先に寄せておく＝実物の横っ跳び。
+        /// 高さはルートで動かさない（#440/#466。脚IKが無いリグでYを平行移動すると
+        /// めり込み・宙浮きになる）＝クリップ選択＋ミットIK＋胴アシスト側で吸収する。
         ///
         /// 駆動は<b>専用の時計</b>（<see cref="_catcherShiftT"/>。リリースからの経過秒＝フルレート・単調。
         /// 球の時計 <see cref="_ballT"/> はミットの中で消えると-1になり、捕球後の戻りを駆動できない）で、
@@ -2563,14 +2565,15 @@ namespace KokoSim.Unity.Match
         {
             if (_catcherShiftT < 0f) return;   // 時計が止まっている＝寄せも戻りも完了（素の位置のまま触らない）
             float w = CatcherShiftWeight(_catcherShiftT, _ballArrival);
-            var offset = new Vector3(_catcherResidual.x, _catcherResidual.y, 0f) * w;
-            // 下向きの残差ではルートを沈めない（issue #440）。狙いより低く外れた球（残差y<0）を
-            // そのまま平行移動すると捕手の体ごと地面の下へめり込む（σ=(30−0.22×Control)cm なので
-            // 制球の悪い投手では0.2〜0.3m級）。実物の捕手は低い球へは深くしゃがみ・ミットを
-            // 落とすだけ＝下はクランプし、捕球クリップ選択（SelectCatchAnchor）とミットIK
-            // （DuelCatcherPose.ReachMitt が実着弾点を掴む）に任せる。
-            // 上（伸び上がり）と左右（横っ跳び）の体寄せは従来どおり。
-            if (offset.y < 0f) offset.y = 0f;
+            // 高さの残差はルートで吸収しない（issue #440 / #466）。残差はσ=(30−0.22×Control)cm＝
+            // 制球の悪い投手では0.2〜0.4m級で、そのままYの平行移動にすると
+            //   下外れ → 体ごと地面へめり込む（#440）／上外れ → 足ごと宙に浮く（#466。
+            //   #464 が捕球後の据え置きを入れてから約1秒静止で見えるようになった）。
+            // 実物の捕手は脚で沈む・伸びるが、このリグに脚IKは無い＝高さは捕球クリップ選択
+            // （SelectCatchAnchor）とミットIK（DuelCatcherPose.ReachMitt。胴アシストは下方向だけ45°）に
+            // 全部任せ、ルートの体寄せは左右（横っ跳び）専用にする。上クランプで高めのミットずれは
+            // 0.020m（CatcherClampShooter 実測 2026-08-04）＝腕＋胴14°で届く。伸び上がりの上乗せは不要。
+            var offset = new Vector3(_catcherResidual.x * w, 0f, 0f);
             _catcher.Go.transform.localPosition = _catcher.BasePos + offset;
         }
 
