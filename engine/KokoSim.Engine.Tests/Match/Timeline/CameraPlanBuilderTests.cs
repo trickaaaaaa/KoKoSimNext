@@ -104,6 +104,52 @@ public sealed class CameraPlanBuilderTests
         Assert.Equal(CameraPlanBuilder.WideZoom, afterThrow.ZoomMult, 3);
     }
 
+    // ---- issue #441: 死んだ球（全ボールセグメント終了後）のアップを続けない ------------------------
+
+    [Fact]
+    public void Build_ReturnsToWide_AfterBallDies_WhileRunnerStillCircling()
+    {
+        // 本塁打型の最小合成プレー: 打球は約3.1sで柵外に着弾して終わり、打者走者の一周は15.0sまで続く。
+        // 旧実装は lastEvent（走者レッグ込み＝一周の終端）+0.9s まで「保持位置＝着弾点への最大ズーム」を
+        // 目標にし続けた＝生還まで誰も居ない着弾点のアップが続きフリーズに見える（issue #441）。
+        var landing = new PlaybackVec(30, 100);
+        var play = new PlaybackPlay
+        {
+            Name = "hr-like", Dur = 16.0, Result = "本塁打", ResAt = 3.0,
+            Ball = new PlaybackBallSegment[] { new ThrowSegment(0.5, new PlaybackVec(0, 0), landing, 40) },
+            Runners = new[]
+            {
+                new PlaybackRunner
+                {
+                    Label = "打",
+                    Segs = new[] { new PlaybackRun(0.6, 15.0, new PlaybackVec(0, 0), new PlaybackVec(0, 27.43)) },
+                },
+            },
+        };
+        var ballEnd = play.Ball[0].T1;
+        Assert.True(CameraPlanBuilder.LastEventTime(play) >= 15.0);   // 前提: 走者レッグが lastEvent を引っ張る
+        // 全景開始（プランと3Dカットの単一ソース）は着弾＋余韻へ前倒しされる。
+        Assert.Equal(ballEnd + CameraPlanBuilder.DeadBallLingerSeconds, CameraPlanBuilder.WideStartTime(play), 6);
+
+        var plan = CameraPlanBuilder.Build(play);
+
+        // 着弾直後の余韻（テロップを読む間）はまだ全景に戻り切っていない＝即切り替えない。
+        var linger = CameraEvaluator.ViewportAt(plan, ballEnd + CameraPlanBuilder.DeadBallLingerSeconds * 0.5);
+        Assert.True(
+            linger.ZoomMult > CameraPlanBuilder.WideZoom || Math.Abs(linger.Cy - CameraPlanBuilder.WideCy) > 1.0,
+            $"余韻なしで即全景へ戻っている: zoom={linger.ZoomMult:F2} cy={linger.Cy:F1}");
+
+        // 走者がまだ回っている中間時刻では、着弾点へのアップでなく全景に戻り切っている
+        // （余韻＋レート制限の収束を見込み、着弾+5秒以降を見る）。
+        foreach (var t in new[] { ballEnd + 5.0, 10.0, 14.0 })
+        {
+            var v = CameraEvaluator.ViewportAt(plan, t);
+            Assert.Equal(CameraPlanBuilder.WideZoom, v.ZoomMult, 3);
+            Assert.Equal(CameraPlanBuilder.WideCx, v.Cx, 3);
+            Assert.Equal(CameraPlanBuilder.WideCy, v.Cy, 3);
+        }
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

@@ -2313,12 +2313,12 @@ namespace KokoSim.Unity.Match
             BuildFieldCameraPlan(play);
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
             // 全景へ戻し始める時刻は engine のプラン（BuildFieldCameraPlan＝CameraPlanBuilder.Build）と
-            // 同じ CameraPlanBuilder.LastEventTime を単一ソースにする（issue #406②。片方だけ ResAt の
-            // ままだとプランと実カットがずれる）。
-            var lastEvent = CameraPlanBuilder.LastEventTime(play);
-            _fieldCamCutT = double.IsFinite(lastEvent)
-                ? (float)(lastEvent + CameraPlanBuilder.ReturnToWideDelaySeconds)
-                : float.PositiveInfinity;
+            // 同じ CameraPlanBuilder.WideStartTime を単一ソースにする（issue #406②/#441。片方だけ
+            // 変えるとプランと実カットがずれる）。死んだ球に走者レッグだけが残るプレー（本塁打の一周）
+            // では着弾＋余韻へ前倒しされる＝カットも同じ瞬間に跳ぶので、プランの「全景への移動走行」
+            // （3Dでは用のないところを見ている travel）は実カットに乗らない。
+            var wideStart = CameraPlanBuilder.WideStartTime(play);
+            _fieldCamCutT = double.IsFinite(wideStart) ? (float)wideStart : float.PositiveInfinity;
             // プランの終端はレート制限の収束余白（WideSettleBufferSeconds）ぶん後ろにあり、
             // そこを引けば「戻り切った全景」がそのまま出る＝Unity側で全景の値を持ち直さない
             _fieldPlanEndT = _fieldPlan != null && _fieldPlan.Count > 0
