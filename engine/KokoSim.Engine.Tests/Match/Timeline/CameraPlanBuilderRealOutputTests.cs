@@ -106,6 +106,37 @@ public sealed class CameraPlanBuilderRealOutputTests
         AssertWithinViewport(vp, to.X, to.Y);
     }
 
+    // ---- issue #448①: 送球開始前（球は野手の手の中）にカメラが受け手側へ先行しない --------------
+
+    /// <summary>
+    /// 3D守備ビューの設定（<c>ThrowFollowsBall=true</c>）では、内野ゴロの一塁封殺は打者走者レッグが
+    /// 接触直後から OutAtEnd=true で有効なので、critical（差し迫った走塁）分岐が野手の保持区間にも
+    /// 及んでしまう。この分岐も leadT でボール位置を引いていたため、送球区間の未来位置を先取りして
+    /// カメラがリリース前から一塁へ動き出していた（実測で確認・修正対象）。
+    /// 捕球〜送球開始の間は視野中心が野手の保持位置に留まり、一塁側へにじり寄らないことを固定する。
+    /// </summary>
+    [Fact]
+    public void Build_PinsToFielder_WhileBallHeldBeforeThrow_WithThrowFollowsBall()
+    {
+        var (_, groundOut) = CollectSamples();
+        var play = PlayTimelineAdapter.ToPlaybackPlay(groundOut);
+        var throwSeg = play.Ball.First(b => b is EndpointBallSegment eb && eb.Kind == BallSegmentKind.Throw);
+
+        var framing = new CameraFraming(40.0, 2.0, CameraFraming.Default.PitchZoom, ThrowFollowsBall: true);
+        var plan = CameraPlanBuilder.Build(play, framing);
+
+        // 送球開始のキーフレーム（T0）そのものは既に送球区間のフレーミングへ切り替わる（意図どおり）ので、
+        // その一つ手前＝保持中最後のキーフレームで判定する（レート制限の収束余地を見込む）。
+        var heldKf = plan.Last(k => k.T < throwSeg.T0 - 1e-9);
+        Assert.True(!play.Ball.Any(b => b.T0 <= heldKf.T && heldKf.T <= b.T1),
+            "判定に使うキーフレームがどのボールセグメントにも覆われていない（＝保持中）こと");
+        var held = PlaybackEvaluator.BallAt(play, heldKf.T);
+        Assert.True(held.HasValue);
+
+        Assert.Equal(held!.Value.X, heldKf.Cx, 1);
+        Assert.Equal(held.Value.Y, heldKf.Cy, 1);
+    }
+
     private static void AssertWithinViewport(CameraViewport vp, double x, double y)
     {
         const double designWidthM = 760.0 / 3.35;

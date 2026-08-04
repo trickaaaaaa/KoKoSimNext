@@ -134,18 +134,34 @@ public static class CameraPlanBuilder
     /// ボールセグメントの境界時刻（投球→打球等の切り替わり）も必ず打つ。等間隔サンプリングだけだと
     /// 区間の変わり目が2キーフレームの間（easeIO補間区間）に埋もれ、実際の切り替わりより早く
     /// 視野が動き出してしまう（Issue #258: 投球中に打つ前からカメラが動く症状の残存要因）。
+    ///
+    /// 等間隔グリッドの累積誤差とセグメント境界の実数値は、同じ時刻を指していてもビット単位では
+    /// 一致しないことがある（例: 0.08*45 と literal 3.60）。<c>SortedSet&lt;double&gt;</c> はビット等価
+    /// でしか重複を除けないため、ほぼ同時刻の2キーフレームが極小の dt（浮動小数の丸め誤差オーダー）で
+    /// 並んでしまう。<see cref="ClampPan"/> の「dist&lt;1e-9 なら素通し」救済と噛み合うと、
+    /// 直前キーフレームがまだ収束し切っていない残差がこの極小 dt に対して「速度上限超過」に見える
+    /// （issue #448 回帰）。実時間として意味のある間隔だけを残す。
     /// </summary>
     private static IEnumerable<double> SampleTimes(PlaybackPlay play, double end)
     {
-        var times = new SortedSet<double>();
+        const double MinGapSeconds = 1e-6; // 浮動小数の丸め誤差より十分大きく、演出上は無視できる間隔
+
+        var raw = new SortedSet<double>();
         for (var t = 0.0; t < end; t += SampleStepSeconds)
-            times.Add(t);
-        times.Add(end);
+            raw.Add(t);
+        raw.Add(end);
 
         foreach (var seg in play.Ball)
         {
-            if (seg.T0 > 0 && seg.T0 < end) times.Add(seg.T0);
-            if (seg.T1 > 0 && seg.T1 < end) times.Add(seg.T1);
+            if (seg.T0 > 0 && seg.T0 < end) raw.Add(seg.T0);
+            if (seg.T1 > 0 && seg.T1 < end) raw.Add(seg.T1);
+        }
+
+        var times = new List<double>(raw.Count);
+        foreach (var t in raw)
+        {
+            if (times.Count > 0 && t - times[^1] < MinGapSeconds) continue;
+            times.Add(t);
         }
         return times;
     }
@@ -242,6 +258,22 @@ public static class CameraPlanBuilder
             var from = covering!.At(0);
             var to = covering.At(covering.T1 - covering.T0);
             return FitBox(new PlaybackVec(from.X, from.Y), new PlaybackVec(to.X, to.Y), fr);
+        }
+
+        // 前セグメント終了〜送球開始（球は野手の手の中）は、目標を保持位置に留める。
+        // leadT で判定すると、実際にはまだ投げていないのに送球区間の未来位置（一塁寄り）を
+        // 先取りしてしまう（投球区間の #258 と同型のガード。issue #448①）。この分岐は
+        // 下の critical（差し迫った走塁）より先に判定する＝力の入る封殺の打者走者レッグは
+        // 接触直後からずっと OutAtEnd=true で有効なので、先に判定しないと critical 側の
+        // ballNow=BallAt(leadT) が同じ理由で一塁側へ先取りしてしまう（実測で確認済み）。
+        if (covering is null && IsKind(nextUpcoming, BallSegmentKind.Throw))
+        {
+            var held = PlaybackEvaluator.BallAt(play, actualT);
+            if (held.HasValue)
+            {
+                var heldV = new PlaybackVec(held.Value.X, held.Value.Y);
+                return FitBox(heldV, heldV, fr);
+            }
         }
 
         // 打球（滞空/転がり）中、またはボール保持中の狭間 ＝ ボールを追う。

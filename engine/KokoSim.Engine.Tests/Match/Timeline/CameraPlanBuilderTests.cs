@@ -336,6 +336,49 @@ public sealed class CameraPlanBuilderTests
     public void Default_DoesNotFollowBallDuringThrow()
         => Assert.False(CameraFraming.Default.ThrowFollowsBall);
 
+    // ---- issue #448①: 送球開始前（球は野手の手の中）にカメラが受け手側へ先行しない --------------
+
+    /// <summary>
+    /// ③ ショートゴロ 6-3。ゴロの捕球（Roll終端 T1=2.18）〜送球開始（Throw T0=2.55）の間は
+    /// 球が野手の手の中にある。旧実装は leadT(+0.25s)/lookahead(+0.6s) でボール位置を先取りしていたため、
+    /// この保持中の後半で既に送球経路上（一塁寄り）の未来位置を目標にしてしまっていた。
+    /// 保持中は視野中心が捕球位置（ショートの位置）に留まることを固定する。
+    /// </summary>
+    [Fact]
+    public void Build_PinsToFielder_WhileBallHeldBeforeThrow()
+    {
+        var play = PlaybackSamples.All[2]; // ③ ショートゴロ 6-3
+        var rollSeg = play.Ball[1];
+        var throwSeg = play.Ball[2];
+        Assert.True(throwSeg.T0 - rollSeg.T1 > 0.1, "保持中の間が短すぎて検証にならない");
+
+        var fieldedAt = rollSeg.At(rollSeg.T1 - rollSeg.T0);
+        var plan = CameraPlanBuilder.Build(play);
+
+        // 送球開始のキーフレーム（T0）そのものは既に送球区間のフレーミングへ切り替わる（意図どおり）ので、
+        // その一つ手前＝保持中最後のキーフレームで判定する（レート制限の収束余地を見込む）。
+        var heldKf = plan.Last(k => k.T < throwSeg.T0 - 1e-9);
+        Assert.Equal(fieldedAt.X, heldKf.Cx, 1);
+        Assert.Equal(fieldedAt.Y, heldKf.Cy, 1);
+    }
+
+    /// <summary>同じガードが <c>ThrowFollowsBall=true</c>（3D守備ビュー）でも効くことを固定する。</summary>
+    [Fact]
+    public void Build_PinsToFielder_WhileBallHeldBeforeThrow_WithThrowFollowsBall()
+    {
+        var play = PlaybackSamples.All[2]; // ③ ショートゴロ 6-3
+        var rollSeg = play.Ball[1];
+        var throwSeg = play.Ball[2];
+
+        var fieldedAt = rollSeg.At(rollSeg.T1 - rollSeg.T0);
+        var framing = new CameraFraming(40.0, 2.0, CameraFraming.Default.PitchZoom, ThrowFollowsBall: true);
+        var plan = CameraPlanBuilder.Build(play, framing);
+
+        var heldKf = plan.Last(k => k.T < throwSeg.T0 - 1e-9);
+        Assert.Equal(fieldedAt.X, heldKf.Cx, 1);
+        Assert.Equal(fieldedAt.Y, heldKf.Cy, 1);
+    }
+
     // 視野に入っているかを、engine 側の設計キャンバス基準（DesignW/H=760/520・S=3.35）で近似判定する。
     // 実際の描画は Unity 側の Scale(k) をそのまま掛けるだけなので、この基準がそのままスクリーン上の視野になる。
     private static void AssertWithinViewport(CameraViewport vp, double x, double y, double t, string label)
