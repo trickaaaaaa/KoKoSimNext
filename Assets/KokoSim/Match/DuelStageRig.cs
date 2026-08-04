@@ -999,6 +999,15 @@ namespace KokoSim.Unity.Match
             /// </summary>
             public bool RebaseXZWhileIdle;
 
+            /// <summary>
+            /// スイング再生中（頭出し後〜待機へ戻るまで）、水平位置の**x成分だけ**毎コマ
+            /// <see cref="BasePos"/> へ戻す（収録ルートモーションの横ドリフト対策・issue #446）。
+            /// 打者だけ true。z（投手方向の踏み込み）は戻さない＝踏み込みの見た目は残す。
+            /// 頭出し直後の一括リセットは <see cref="RebaseActorXZ"/>（x/z両方・一度きり）が受け持ち、
+            /// 以降の毎コマぶんはこちらが引き継ぐ。
+            /// </summary>
+            public bool RebaseXWhileSwinging;
+
             /// <summary>false の間は StepActor が何もしない（打席中の野手など・Tick ごと飛ばす）。</summary>
             public bool Enabled = true;
 
@@ -1099,6 +1108,7 @@ namespace KokoSim.Unity.Match
             _batter.IdleEndAt = BatterIdleEnd;
             _batter.EndAt = BatterIdleEnd;   // 生成直後の初回ループでスイングまで流さない
             _batter.RebaseXZWhileIdle = true;   // 構え区間の水平ドリフトを毎コマ戻す（#291。旧: StepActor の identity 判定）
+            _batter.RebaseXWhileSwinging = true;   // スイング区間はx（横）だけ毎コマ戻す（#446）
             _catcher = SpawnActor(playerBody, catClip, new Vector3(cal0.CatcherX, 0f, cal0.CatcherZ), 0f,
                 _defenseColors, 0f, layer, useVendor);
             // 捕手も素の帽子を落とす。日本の高校野球の捕手は「捕手用ヘルメット＋マスク」で、
@@ -1875,8 +1885,10 @@ namespace KokoSim.Unity.Match
             // **クリップ頭からseekまでの水平移動がそのまま位置の差分として乗る**。待機ループ側は
             // 毎コマ x/z を基準位置へ戻している（StepActor）ので、振り始めた瞬間に打者がその差分ぶん
             // ワープする。実測 2026-07-31: seek=0.47 で (-0.173, -0.204)＝**0.17m 三塁側へ・0.20m 奥へ**、
-            // 画面では「スイングと同時に右へ一歩ずれる」（監督指摘）。踏み込みそのものは seek 以降の
-            // ルートモーションで出るので、頭出し地点の水平だけ基準へ戻せば踏み込みは残る
+            // 画面では「スイングと同時に右へ一歩ずれる」（監督指摘）。ここで戻すのは**この瞬間だけ**の
+            // 頭出しワープぶん。seek 以降、毎コマ乗り続ける横（x）ドリフトは StepActor 側の
+            // RebaseXWhileSwinging が引き継いで戻す（issue #446）。z（投手方向の踏み込み）は
+            // どちらの機構も触らないのでそのまま残る
             RebaseActorXZ(_batter);
         }
 
@@ -3716,7 +3728,7 @@ namespace KokoSim.Unity.Match
             a.PoseAdvanced = true;
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
-            // 基準位置のx/zへ毎コマ戻す。スイング区間（EndAt!=IdleEndAt）は踏み込みの見た目を残すため触らない。
+            // 基準位置のx/zへ毎コマ戻す。
             // ※ 条件は `a == _batter` の identity 判定だった。守備・走者のN体化で StepActor が
             //   4体以外も回すようになるため、役割ではなく**アクター自身のフラグ**へ移した（絵は不変）
             if (a.RebaseXZWhileIdle && a.Clip == a.IdleClip && a.EndAt == a.IdleEndAt)
@@ -3724,6 +3736,16 @@ namespace KokoSim.Unity.Match
                 var lp = a.Go.transform.localPosition;
                 lp.x = a.BasePos.x;
                 lp.z = a.BasePos.z;
+                a.Go.transform.localPosition = lp;
+            }
+            // スイング区間（EndAt!=IdleEndAt）も同じクリップに横のルートモーションが乗っており、
+            // 頭出し直後（RebaseActorXZ）で一度戻すだけでは以降が素通しでスイングと同時に右へ
+            // ステップして見える（issue #446）。z（投手方向の踏み込み）は残したいので、こちらは
+            // x だけ毎コマ基準へ戻す（z は触らない）
+            else if (a.RebaseXWhileSwinging && a.Clip == a.IdleClip && a.EndAt != a.IdleEndAt)
+            {
+                var lp = a.Go.transform.localPosition;
+                lp.x = a.BasePos.x;
                 a.Go.transform.localPosition = lp;
             }
         }
