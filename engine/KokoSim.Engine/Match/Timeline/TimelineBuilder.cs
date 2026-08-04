@@ -239,13 +239,59 @@ public static class TimelineBuilder
         // 一塁送球（内野ゴロ）。到達時刻(T1)はエンジンの ThrowArriveSeconds のまま固定し、投げ始め(T0)を
         // 「実距離÷肩」の飛行時間から逆算する（Issue #334）。捕球オーバーヘッド＋握り替えは、捕球点で
         // ボールを保持する「間」として自然に吸収される（AddThrowChain と同じ形）。
+        // エラーでこぼれた/逸れた球の行き先（Rest）と死ぬ時刻・追いかける野手は、後段の
+        // 追いかけレッグ注入（issue #439 ①）が読む。
+        TimelinePoint? errorBallRest = null;
+        var errorBallDeadAt = 0.0;
+        FieldPosition? errorChaser = null;
         if (play.ThrowArriveSeconds is { } throwArrive && play.Result is BattedBallResult.Out or BattedBallResult.Single or BattedBallResult.Error)
         {
             if (!play.IsFly && play.RangeM <= 46.0)
             {
                 var firstBase = BasePoint(field, "first");
                 var arrive = ContactAt + throwArrive;
-                if (play.UnassistedPutout)
+                if (play.Result == BattedBallResult.Error
+                    && play.ErrorKind == FieldingErrorKind.Throw && !play.UnassistedPutout)
+                {
+                    // 悪送球（issue #439）: 一塁へ向かうが逸れて外へ抜ける。投げ始めは通常送球と同じ逆算、
+                    // 一塁の脇を「届くはずだった時刻」ごろに通過し、少し先へ抜けて死ぬ。
+                    // ⚠ 一塁に正着する絵（ToBase="first"・受け手あり）にしない＝「完璧な送球が先着したのに
+                    // 出塁」という矛盾がこの issue の症状そのもの。受け手なし（ToRole=null）で誰も捕らない。
+                    var over = Overshoot(fieldPoint, firstBase, ErrantThrowOvershootM);
+                    var flightToFirst = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
+                    var t0 = Math.Max(fieldedAt, arrive - flightToFirst);
+                    var deadAt = t0 + LegSeconds(Distance(fieldPoint, over), ThrowSpeedOf(play));
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Throw,
+                        T0 = t0, T1 = deadAt,
+                        From = fieldPoint, To = over,
+                        FromRole = play.FielderRole,
+                    });
+                    // 逸れた球は一塁カバーが振り返って拾いに行く（①）
+                    errorBallRest = over;
+                    errorBallDeadAt = deadAt;
+                    errorChaser = firstBaseCoverer;
+                }
+                else if (play.Result == BattedBallResult.Error)
+                {
+                    // 捕球エラー（お手玉。issue #439）: 送球は存在しない。打球の進行方向へ数m弾く絵。
+                    // アンアシスト中の悪送球（実質起こらない縁ケース）もここへ落とす＝刺殺の絵は描かない。
+                    // FromRole は「弾いた野手」＝頭上のびっくりマーク（3D）が対象を特定するのに使う。
+                    var rest = Overshoot(Home, fieldPoint, ErrorDeflectM);
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Roll,
+                        T0 = fieldedAt, T1 = fieldedAt + ErrorDeflectSeconds,
+                        From = fieldPoint, To = rest,
+                        FromRole = play.FielderRole,
+                    });
+                    // こぼした本人が拾い直しに行く（①）
+                    errorBallRest = rest;
+                    errorBallDeadAt = fieldedAt + ErrorDeflectSeconds;
+                    errorChaser = play.FielderRole;
+                }
+                else if (play.UnassistedPutout)
                 {
                     // アンアシスト（3U, Issue #400）: 送球せず一塁手がボールをグラブに収めたまま運ぶ。
                     // Carry セグメント（保持しての移動）で表現し、山なりの Throw は積まない。到達(T1)は判定を
@@ -307,6 +353,16 @@ public static class TimelineBuilder
             // 常に batterArrive 以前＝走者は判定確定後も一塁まで走り切る絵のまま, Issue #328①）。
             var forceOutAt = play.ThrowArriveSeconds is { } ta ? ContactAt + ta : batterArrive;
             judgements.Add(new JudgementEvent { Label = "打", T = forceOutAt, Kind = JudgementKind.Out });
+        }
+        else if (play.Result == BattedBallResult.Error)
+        {
+            // 失策出塁（issue #439）: エラー確定の瞬間に「エラー」を必ず1枚出す。
+            // 捕球エラー＝処理点で弾いた時刻／悪送球＝送球が一塁に届くはずだった時刻。
+            // セーフと違い際どさ条件を課さない＝「アウトの絵に見えるのに黙って出塁」を防ぐのが目的。
+            var errAt = play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
+                ? ContactAt + et
+                : fieldedAt;
+            judgements.Add(new JudgementEvent { Label = "打", T = errAt, Kind = JudgementKind.Error });
         }
         else if (batterCloseCall)
         {
@@ -536,6 +592,41 @@ public static class TimelineBuilder
                         }
                     }
                 }
+            }
+        }
+
+        // エラーでこぼれた/逸れた球は野手が追いかけて拾いに行く（issue #439 ①）。
+        // 捕球エラー＝弾いた本人が拾い直す／悪送球＝一塁カバーが振り返って追う。
+        // 表示専用の定点計算のみ（乱数不使用）。3D側はエラープレーの決着後レッグを剥がさない
+        // （StripPostResolutionReturnMoves の例外）ことで、このレッグが絵に出る。
+        if (errorBallRest is { } chaseTo && errorChaser is { } chaserRole)
+        {
+            var chaser = Find(fielders, chaserRole);
+            if (chaser is not null)
+            {
+                var speed = Math.Max(4.0, chaser.Attributes.SprintSpeedMps);
+                var t0 = (play.ErrorKind == FieldingErrorKind.Throw ? ContactAt + (play.ThrowArriveSeconds ?? 0.0) : fieldedAt)
+                         + ErrorChaseReactionSeconds;
+                // ⚠ 自分の直前のレッグ（一塁カバーへの走り込み等）が終わってから追いかけ始め、
+                // 出発点はそのレッグの行き先＝**実際に立っている位置**から距離を出す。
+                // 走行中に重ねたり出発点を推測すると2本の移動が合成され、表示速度が人間の脚力を超える
+                // （CI実測: 投手が一塁カバーの途中から追いかけて 19.9 m/s／一塁手のアンアシスト系で
+                // 出発点の推測がずれて 22.3 m/s。LegSpeedTests が検出）
+                var chaseFrom = new TimelinePoint(chaser.Location.X, chaser.Location.Z);
+                var lastT1 = double.MinValue;
+                foreach (var m in moves)
+                {
+                    if (m.Role != chaserRole) continue;
+                    if (m.T1 > t0) t0 = m.T1;
+                    if (m.T1 > lastT1) { lastT1 = m.T1; chaseFrom = m.To; }
+                }
+                // 球が止まる前に着かない（先回りして待つ絵にしない）
+                var t1 = Math.Max(t0 + Distance(chaseFrom, chaseTo) / speed, errorBallDeadAt);
+                moves.Add(new FielderMove
+                {
+                    Role = chaserRole, T0 = t0, T1 = t1, To = chaseTo, Task = FielderTask.Chase,
+                });
+                if (t1 + 0.5 > returnTail) returnTail = t1 + 0.5;
             }
         }
 
@@ -1189,6 +1280,30 @@ public static class TimelineBuilder
         var dx = a.X - b.X;
         var dz = a.Z - b.Z;
         return Math.Sqrt(dx * dx + dz * dz);
+    }
+
+    /// <summary>悪送球が一塁を逸れて抜ける距離[m]（issue #439。表示専用）。</summary>
+    private const double ErrantThrowOvershootM = 6.0;
+
+    /// <summary>捕球エラーで弾いたボールが転がる距離[m]と時間[s]（issue #439。表示専用）。</summary>
+    private const double ErrorDeflectM = 3.0;
+    private const double ErrorDeflectSeconds = 0.8;
+
+    /// <summary>エラーに気づいて追いかけ始めるまでの反応[s]（issue #439 ①。表示専用）。</summary>
+    private const double ErrorChaseReactionSeconds = 0.35;
+
+    /// <summary>
+    /// <paramref name="from"/>→<paramref name="through"/> の延長線上、<paramref name="through"/> から
+    /// さらに <paramref name="extraM"/> 進んだ点（issue #439: 弾く絵・逸れる絵の終点）。
+    /// 決定論の定点計算のみ＝乱数不使用。2点が同一なら方向が無いので through を返す。
+    /// </summary>
+    private static TimelinePoint Overshoot(TimelinePoint from, TimelinePoint through, double extraM)
+    {
+        var dx = through.X - from.X;
+        var dz = through.Z - from.Z;
+        var len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 1e-6) return through;
+        return new TimelinePoint(through.X + dx / len * extraM, through.Z + dz / len * extraM);
     }
 
     /// <summary>この打球が外野扱いの安打か（着地が外野／バウンドで内野を抜けた, Issue #63）。表示専用。</summary>

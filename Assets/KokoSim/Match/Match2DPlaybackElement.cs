@@ -356,10 +356,13 @@ namespace KokoSim.Unity.Match
                 JudgementKind.Out => "アウト",
                 JudgementKind.Fair => "フェア",
                 JudgementKind.HomeRun => "ホームラン",
+                JudgementKind.Error => "エラー",
                 _ => "セーフ",
             };
             _judgementLabel.EnableInClassList("pitch-call__judge--out", kind == JudgementKind.Out);
-            _judgementLabel.EnableInClassList("pitch-call__judge--safe", kind == JudgementKind.Safe);
+            // エラーは「走者が生きた」側なのでセーフと同じ色系を流用する（issue #439。新規クラスを作らない）
+            _judgementLabel.EnableInClassList("pitch-call__judge--safe",
+                kind == JudgementKind.Safe || kind == JudgementKind.Error);
             _judgementLabel.EnableInClassList("pitch-call__judge--fair", kind == JudgementKind.Fair);
             _judgementLabel.EnableInClassList("pitch-call__judge--homerun", kind == JudgementKind.HomeRun);
 

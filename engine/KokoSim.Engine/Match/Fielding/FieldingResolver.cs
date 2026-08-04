@@ -19,6 +19,12 @@ public enum BattedBallResult
 }
 
 /// <summary>
+/// 失策の種類（issue #439）。Catch=捕球エラー（お手玉・落球）／Throw=悪送球。
+/// 表示層が「弾く絵」か「逸れる絵」かを選ぶための観測データで、判定・帯には関与しない。
+/// </summary>
+public enum FieldingErrorKind { Catch, Throw }
+
+/// <summary>
 /// 守備解決の詳細（結果＋幾何・時間情報, CHANGELOG 32）。
 /// 判定に使った着地点・滞空・捕球/送球時刻を捨てずに保持し、タイムライン出力の素材にする。
 /// 時刻はすべて「接触（打った瞬間）＝0秒」基準。
@@ -79,6 +85,12 @@ public sealed record FieldingPlay
     /// （正=捕球に余裕あり、負=間に合わず落球）。フライ/ライナーのみ非null（ゴロ・本塁打・ファウルはnull）。
     /// </summary>
     public double? CatchMarginSeconds { get; init; }
+
+    /// <summary>
+    /// 失策の種類（issue #439）。<see cref="Result"/>==Error のときだけ非null。
+    /// 引いたロールの結果を記録するだけ＝新規RNGなし（不変条件#2）。
+    /// </summary>
+    public FieldingErrorKind? ErrorKind { get; init; }
 
     // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
 
@@ -209,6 +221,8 @@ public static class FieldingResolver
                     FielderFielding = catcher.Attributes.Fielding,
                     FielderThrowAccuracy = catcher.Attributes.ThrowAccuracy,
                     CatchMarginSeconds = catchMargin,
+                    // 空中捕球のエラーは常に捕球エラー（落球）。ロール結果の記録だけ＝新規RNGなし（issue #439）
+                    ErrorKind = result == BattedBallResult.Error ? FieldingErrorKind.Catch : null,
                 };
             }
             // 捕れないフライ → 安打。着地後の転がりと幾何・走力で塁打数を決める。
@@ -306,7 +320,7 @@ public static class FieldingResolver
             {
                 // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
-                var result = MaybeInfieldError(fielders, catchPoint, infielder, coeff, rng, errorBonus);
+                var (result, errorKind) = MaybeInfieldError(fielders, catchPoint, infielder, coeff, rng, errorBonus);
                 return GroundBase(result) with
                 {
                     FieldedX = catchPoint.X,
@@ -319,6 +333,7 @@ public static class FieldingResolver
                     FielderFielding = infielder.Attributes.Fielding,
                     FielderThrowAccuracy = infielder.Attributes.ThrowAccuracy,
                     JudgementMarginSeconds = judgementMargin,
+                    ErrorKind = errorKind,
                 };
             }
             // 間に合わず内野安打（失策ロールは引かない＝main の校正モデルを保つ）。
@@ -646,21 +661,22 @@ public static class FieldingResolver
     /// 捕球ロールのみ（現行と乱数消費順・結果とも完全一致, 決定論不変）。extraProb はイレギュラーバウンドを
     /// 捕球ロールへ加算する（Issue #63・既定0で恒等）。
     /// </summary>
-    private static BattedBallResult MaybeInfieldError(
+    private static (BattedBallResult Result, FieldingErrorKind? ErrorKind) MaybeInfieldError(
         IReadOnlyList<Fielder> fielders, Vector3D landing, Fielder infielder,
         FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0)
     {
-        if (CatchErrorOccurs(fielders, landing, coeff, rng, extraProb)) return BattedBallResult.Error;
+        if (CatchErrorOccurs(fielders, landing, coeff, rng, extraProb))
+            return (BattedBallResult.Error, FieldingErrorKind.Catch);
         if (coeff.ThrowErrorBaseProb > 0.0)
         {
             // 送球精度が高いほど悪送球が減る。クランプは捕球エラーと共通の min/max を流用。
             var errProb = coeff.ThrowErrorBaseProb - (infielder.Attributes.ThrowAccuracy - 50) * coeff.ThrowErrorAccuracySlope;
             if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
             {
-                return BattedBallResult.Error;
+                return (BattedBallResult.Error, FieldingErrorKind.Throw);
             }
         }
-        return BattedBallResult.Out;
+        return (BattedBallResult.Out, null);
     }
 
     private static double ReachTime(Fielder f, Vector3D target)

@@ -2248,6 +2248,12 @@ namespace KokoSim.Unity.Match
         private static PlaybackPlay StripPostResolutionReturnMoves(PlaybackPlay play)
         {
             if (play.Moves == null || play.Moves.Count == 0) return play;
+            // エラー出塁（issue #439）は決着（ResAt=処理時刻）の後もプレーが続く＝こぼれ球・逸れた球を
+            // 追いかけて拾うレッグ（T0 >= ResAt）が本編なので剥がさない。「決着後レッグ＝退屈な定位置復帰」
+            // の前提はエラーでは成り立たない
+            if (play.Judgements != null)
+                foreach (var j in play.Judgements)
+                    if (j.Kind == JudgementKind.Error) return play;
             var resAt = play.ResAt;
             var filtered = new Dictionary<FieldPosition, IReadOnlyList<PlaybackMove>>();
             var changed = false;
@@ -2310,6 +2316,7 @@ namespace KokoSim.Unity.Match
 
             BuildFieldCatchPlan(play);
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
+            PlanErrorMark(play);               // びっくりマーク（issue #439 ②）
             BuildFieldCameraPlan(play);
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
             // 全景へ戻し始める時刻は engine のプラン（BuildFieldCameraPlan＝CameraPlanBuilder.Build）と
@@ -2352,6 +2359,10 @@ namespace KokoSim.Unity.Match
             _catchEvents.Clear();
             _throwEvents.Clear();
             _runnerMotion.Clear();
+            // びっくりマーク（issue #439 ②）はプレー打ち切りでも必ず消す（器は使い回す）
+            if (_errorMark != null) _errorMark.SetActive(false);
+            _errorMarkRole = null;
+            _errorMarkAt = float.PositiveInfinity;
             foreach (var a in _runnerCast)
             {
                 if (a?.Go == null) continue;
@@ -2466,7 +2477,106 @@ namespace KokoSim.Unity.Match
             }
 
             ApplyFieldCamera(t, dt);
+            // びっくりマーク（issue #439 ②）はカメラを動かした後＝このフレームの視点へ正対させる
+            UpdateErrorMark(t);
             if (_ball != null && _ball.activeSelf) ApplyBallReadability();
+        }
+
+        // ── エラーのびっくりマーク（issue #439 ②）──
+        // エラーした野手の頭上に「！」を出す。文字グリフに頼らず棒＋点の2箱で組む
+        // （のっぺらぼう抽象方針 design-08 と同じ流儀）。表示はプレー時刻の純関数
+        // （[エラー確定, +1.5s] の窓）で、位置・正対はフルレート追従＝ポーズ量子化の対象にしない
+        // （ボール・カメラと同じ側。design-18 §4.5-②）。
+        private GameObject _errorMark;
+        private FieldPosition? _errorMarkRole;
+        private float _errorMarkAt = float.PositiveInfinity;
+        private const float ErrorMarkSeconds = 1.5f;
+        private const float ErrorMarkAboveHeadM = 0.35f;
+        /// <summary>マークの見た目の全高[m]（可読性スケールの基準。棒0.75+点=原点〜0.75）。</summary>
+        private const float ErrorMarkHeightM = 0.75f;
+        /// <summary>画面上で保証するマークの高さ[px]（球の BallMinScreenPx と同じ考え方の下限）。</summary>
+        private const float ErrorMarkMinScreenPx = 28f;
+        /// <summary>見かけ倍率の上限（全景で巨大な棒にならないための歯止め）。</summary>
+        private const float ErrorMarkMaxScaleGain = 6f;
+
+        /// <summary>このプレーのエラー確定時刻と「エラーした野手」を控える（BeginFieldPlay から）。</summary>
+        private void PlanErrorMark(PlaybackPlay play)
+        {
+            _errorMarkRole = null;
+            _errorMarkAt = float.PositiveInfinity;
+            if (play?.Judgements == null) return;
+            foreach (var j in play.Judgements)
+                if (j.Kind == JudgementKind.Error) _errorMarkAt = (float)j.T;
+            if (float.IsPositiveInfinity(_errorMarkAt) || play.Ball == null) return;
+            // 「誰がエラーしたか」は TimelineBuilder が球側に載せる: 弾きロール（T0=エラー時刻）の
+            // FromRole＝こぼした本人／受け手なし悪送球（Throw かつ ToBase なし）の FromRole＝投げた本人
+            foreach (var s in play.Ball)
+            {
+                var eb = s as EndpointBallSegment;
+                if (eb == null || !eb.FromRole.HasValue) continue;
+                if ((eb.Kind == BallSegmentKind.Roll && Mathf.Abs((float)eb.T0 - _errorMarkAt) < 0.05f)
+                    || (eb.Kind == BallSegmentKind.Throw && eb.ToBase == null))
+                {
+                    _errorMarkRole = eb.FromRole;
+                }
+            }
+            if (_errorMarkRole == null) _errorMarkAt = float.PositiveInfinity;
+        }
+
+        private void UpdateErrorMark(float t)
+        {
+            var on = _errorMarkRole.HasValue && t >= _errorMarkAt && t <= _errorMarkAt + ErrorMarkSeconds;
+            if (!on)
+            {
+                if (_errorMark != null && _errorMark.activeSelf) _errorMark.SetActive(false);
+                return;
+            }
+            var a = FielderActor(_errorMarkRole.Value);
+            if (a?.Go == null) return;
+            EnsureErrorMark(a.Go.layer);
+            var head = a.Animator != null ? a.Animator.GetBoneTransform(HumanBodyBones.Head) : null;
+            var basePos = head != null ? head.position : a.Go.transform.position + Vector3.up * 1.7f;
+            _errorMark.transform.position = basePos + Vector3.up * ErrorMarkAboveHeadM;
+            if (_camera != null)
+            {
+                var fwd = _errorMark.transform.position - _camera.transform.position;
+                if (fwd.sqrMagnitude > 1e-6f) _errorMark.transform.rotation = Quaternion.LookRotation(fwd);
+
+                // 引きの構図でも読めるよう最低画面高を保証（球の可読性補正 ApplyBallReadability と同じ流儀
+                // ＝位置は真値のまま・見かけの大きさだけ）。マークは原点から上側だけへ伸びる構成なので、
+                // 拡大しても頭へ食い込まない
+                var sa = _camera.WorldToScreenPoint(_errorMark.transform.position);
+                var sb = _camera.WorldToScreenPoint(_errorMark.transform.position + _camera.transform.up * ErrorMarkHeightM);
+                var scale = 1f;
+                if (sa.z > 0f)
+                {
+                    var px = Mathf.Abs(sb.y - sa.y);
+                    if (px > 0.001f) scale = Mathf.Min(Mathf.Max(1f, ErrorMarkMinScreenPx / px), ErrorMarkMaxScaleGain);
+                }
+                _errorMark.transform.localScale = Vector3.one * scale;
+            }
+            if (!_errorMark.activeSelf) _errorMark.SetActive(true);
+        }
+
+        private void EnsureErrorMark(int layer)
+        {
+            if (_errorMark != null) return;
+            _errorMark = new GameObject("ErrorMark");
+            _errorMark.transform.SetParent(_root.transform, false);
+            _errorMark.layer = layer;
+            // アンバーは tokens.uss --accent と同値（盤面ビューの色は状態コード＝注目。UI原則の適用範囲例外）。
+            // FlatMaterial(_BaseColor)は宣言済みプロパティ＝SetColorのガンマ→リニアは自動で正しい
+            // 原点（頭上のアンカー）から**上側だけ**へ伸びる配置＝可読性スケールで拡大しても頭へ食い込まない
+            var amber = (Color)new Color32(0xF5, 0xC6, 0x4A, 0xFF);
+            var bar = Primitive(PrimitiveType.Cube, "ErrorMarkBar",
+                Vector3.zero, new Vector3(0.16f, 0.45f, 0.05f), amber, layer);
+            bar.transform.SetParent(_errorMark.transform, false);
+            bar.transform.localPosition = new Vector3(0f, 0.525f, 0f);
+            var dot = Primitive(PrimitiveType.Cube, "ErrorMarkDot",
+                Vector3.zero, new Vector3(0.16f, 0.14f, 0.05f), amber, layer);
+            dot.transform.SetParent(_errorMark.transform, false);
+            dot.transform.localPosition = new Vector3(0f, 0.15f, 0f);
+            _errorMark.SetActive(false);
         }
 
         /// <summary>
