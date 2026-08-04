@@ -604,13 +604,22 @@ public static class TimelineBuilder
             var chaser = Find(fielders, chaserRole);
             if (chaser is not null)
             {
-                // 出発点はその時点の持ち場（捕球エラー＝処理点／悪送球＝一塁カバー位置）で距離を見積もる。
-                var chaseFrom = play.ErrorKind == FieldingErrorKind.Throw
-                    ? FirstBaseCoverPoint(field, fieldPoint)
-                    : fieldPoint;
                 var speed = Math.Max(4.0, chaser.Attributes.SprintSpeedMps);
                 var t0 = (play.ErrorKind == FieldingErrorKind.Throw ? ContactAt + (play.ThrowArriveSeconds ?? 0.0) : fieldedAt)
                          + ErrorChaseReactionSeconds;
+                // ⚠ 自分の直前のレッグ（一塁カバーへの走り込み等）が終わってから追いかけ始め、
+                // 出発点はそのレッグの行き先＝**実際に立っている位置**から距離を出す。
+                // 走行中に重ねたり出発点を推測すると2本の移動が合成され、表示速度が人間の脚力を超える
+                // （CI実測: 投手が一塁カバーの途中から追いかけて 19.9 m/s／一塁手のアンアシスト系で
+                // 出発点の推測がずれて 22.3 m/s。LegSpeedTests が検出）
+                var chaseFrom = new TimelinePoint(chaser.Location.X, chaser.Location.Z);
+                var lastT1 = double.MinValue;
+                foreach (var m in moves)
+                {
+                    if (m.Role != chaserRole) continue;
+                    if (m.T1 > t0) t0 = m.T1;
+                    if (m.T1 > lastT1) { lastT1 = m.T1; chaseFrom = m.To; }
+                }
                 // 球が止まる前に着かない（先回りして待つ絵にしない）
                 var t1 = Math.Max(t0 + Distance(chaseFrom, chaseTo) / speed, errorBallDeadAt);
                 moves.Add(new FielderMove
