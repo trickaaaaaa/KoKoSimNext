@@ -1479,24 +1479,29 @@ namespace KokoSim.Unity.Match
         /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
         /// <see cref="DeliveryStartTime"/> へクロスフェードで入り、そこから等速で再生する。
         /// 呼び出し側が投球時計を −WindupSeconds から始めれば、時計0＝リリースにそのまま一致する。
+        /// 実体は <see cref="ResetForNewPlateAppearance"/> に一本化（投手も含めた仕切り直し）＋
+        /// 采配窓中の静止（下記）解除だけをここで足す。
         /// </summary>
         public void OnPitchWindup()
         {
             if (!Available || _pitcher == null) return;
-            _cutCountdown = -1f;
-            CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
-            GroundFix(_pitcher);
             ResetForNewPlateAppearance();
+            _pitcher.Speed = 1f;   // 采配窓の静止を解いて等速再生を始める
         }
 
         /// <summary>
-        /// 打席の頭で打者・捕手・球審を待機へ戻し、球を投手の手へ戻す（前打席の一発物が残っていても仕切り直す）。
+        /// 打席の頭で打者・捕手・球審・投手を待機へ戻し、球を投手の手へ戻す（前打席の一発物が残っていても仕切り直す）。
         ///
         /// **対決ビューを開ける側は、開けると同時にこれを呼ぶこと。**一発物クリップが進むのは
         /// <see cref="Tick"/> の中だけで、その Tick は対決ビューが映っている間しか回らない＝
         /// 打球再生で俯瞰へ逃がしている間、打者は**振っている途中のコマで凍る**。次の打席の頭で
         /// 対決ビューへ戻した瞬間にその続きが再生され、**新しい打者が球も無いのに振る**
         /// （2026-08-01 監督指摘「打席の最初に謎の幽霊空振りが入る」）。
+        ///
+        /// 投手も同型。3D守備ビューへ逃がしている間はフォロースルーの途中のコマで凍り、対決ビューへ
+        /// 復帰した瞬間に Tick が再開してその続き（投げ終わりの残像）が再生される
+        /// （2026-08-05 監督報告。issue #468）。ここで <see cref="OnPitchWindup"/> と同じ行き先
+        /// （<see cref="DeliveryStartTime"/>）へクロスフェードで寄せて仕切り直す。
         ///
         /// 1球進行（設計書15 §8）へ移すまでは、対決ビューを開けるコマと <see cref="OnPitchWindup"/> が
         /// 同じフレームだったので凍った残りは1コマも映らなかった＝**移行で初めて絵に出た**。
@@ -1527,6 +1532,22 @@ namespace KokoSim.Unity.Match
             _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
             ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
+            if (_pitcher != null)
+            {
+                // 投手は打者・捕手・球審と違って「待機クリップ」が無い（1本のクリップを
+                // 振りかぶり〜フォロースルーまで頭出し無しで使い回す）ので、SetActorClip の
+                // 頭出しでは跳ぶ・向きが飛ぶ（design-18 §4.5-③）。OnPitchWindup と同じ行き先へ
+                // クロスフェードで寄せる。カットバック予約（_cutCountdown）が残っていると寄せた
+                // 直後に別クリップ内時刻へまた跳ぶので、寄せる前に破棄する
+                _cutCountdown = -1f;
+                CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
+                GroundFix(_pitcher);
+                // クロスフェードは実時間（Tick は対決ビューが映っている間ずっと回る）で進むので、
+                // 進めたままだと采配窓の間（paHeadDwellSeconds）に投球動作が先走って見える。
+                // OnPitchWindup が実際の投球開始でここを1へ戻すまで進めない＝止まって見えるのが
+                // 意図どおり（完了条件「セット姿勢または静止した待機」）
+                _pitcher.Speed = 0f;
+            }
             HoldBallInHand();   // 振りかぶりから球を手に持たせる（issue #332）
         }
 
