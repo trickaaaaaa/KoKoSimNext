@@ -622,12 +622,15 @@ MonoBehaviour:
   homeName: "\u685C\u4E18"
   noPlayHoldSeconds: 1.2
   pitchIntervalSeconds: 0.45
+  paHeadDwellSeconds: 1
   duelPitchIntervalSeconds: 3.2
-  pitchCallHoldSeconds: 0.35
+  pitchCallHoldSeconds: 0.85
   scoreCallStepSeconds: 0.5
   scoreCallFinalHoldSeconds: 1.1
   managerTacticalSense: 70
   subCallHoldSeconds: 2.6
+  gameTelopHoldSeconds: 0.6
+  inningBreakHoldSeconds: 4
 --- !u!114 &624382328
 MonoBehaviour:
   m_ObjectHideFlags: 0

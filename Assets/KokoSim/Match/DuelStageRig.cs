@@ -1907,7 +1907,16 @@ namespace KokoSim.Unity.Match
             var clip = _catchClips[catchIndex];
             float start = _ballArrival - CatchAnchors[catchIndex].Moment;
             if (start > 0f) _catchCountdown = start;
-            else SetActorClip(_catcher, clip, -start, 0f);   // 捕球が遅いクリップは頭出しで詰める
+            else
+            {
+                // 捕球が遅いクリップは頭出しで詰める。捕球の瞬間（クリップ内 Moment）で打ち切り＋
+                // 据え置き＝捕った形のまま判定表示が消えるまで静止する（監督指示 2026-08-05。
+                // 収録の吸収・立ち上がりは据え置きに置き換わるが、実物の捕手も判定の間は
+                // ミットを止めて見せる＝フレーミング）。HoldSeconds は SetActorClip の後に張る
+                //（差し替えが保留中のホールド予約を打ち消すため。打者のスイングと同じ作法）
+                SetActorClip(_catcher, clip, -start, CatchAnchors[catchIndex].Moment);
+                _catcher.HoldSeconds = CatcherLingerSeconds;
+            }
         }
 
         /// <summary>
@@ -2164,7 +2173,7 @@ namespace KokoSim.Unity.Match
             _ball.transform.localPosition = _ballCatchPoint;
             _ball.transform.SetParent(hand, true);
             _ballInMitt = true;
-            _ballInMittRemaining = BallInMittSeconds;
+            _ballInMittRemaining = CatcherLingerSeconds;   // 判定表示が消えるまでミットの中に見せる
             return true;
         }
 
@@ -2263,8 +2272,6 @@ namespace KokoSim.Unity.Match
         /// <summary>到達後も球を置いておく秒数。捕球・ミートの瞬間を1コマ以上（12fps=83ms）見せるため。</summary>
         private const float BallLingerSeconds = 0.10f;
 
-        /// <summary>捕った球をミットの中に見せておく秒数（吸収動作を見せ切る長さ）。</summary>
-        private const float BallInMittSeconds = 0.45f;
 
         /// <summary>
         /// 【開発ツール用】投手を**発射する瞬間の姿勢で静止**させ、球を手に持たせる（issue #332 の出所合わせ）。
@@ -2376,7 +2383,10 @@ namespace KokoSim.Unity.Match
                 _catchCountdown -= deltaTime;
                 if (_catchCountdown < 0f && _catchIndex >= 0)
                 {
-                    SetActorClip(_catcher, _catchClips[_catchIndex], 0f, 0f);
+                    // 捕球の瞬間（クリップ内 Moment）で打ち切り＋据え置き＝捕った形のまま
+                    // 判定表示が消えるまで静止（ScheduleCatch の else 側と同じ作法。片方だけ変えない）
+                    SetActorClip(_catcher, _catchClips[_catchIndex], 0f, CatchAnchors[_catchIndex].Moment);
+                    _catcher.HoldSeconds = CatcherLingerSeconds;
                     FixCatcherPose();   // 差し替え直後のポーズにも当てる（この同じフレームで球が着くことがある）
                 }
             }
@@ -2392,7 +2402,7 @@ namespace KokoSim.Unity.Match
             if (_catcherShiftT >= 0f)
             {
                 _catcherShiftT += deltaTime;
-                if (_catcherShiftT > _ballArrival + CatcherShiftHoldSeconds + CatcherShiftReturnSeconds + 0.2f)
+                if (_catcherShiftT > _ballArrival + CatcherLingerSeconds + CatcherShiftReturnSeconds + 0.2f)
                     _catcherShiftT = -1f;
             }
 
@@ -2546,9 +2556,11 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// リリース後、残差（実着弾−狙い＝コントロール誤差そのもの）ぶん捕手の体を寄せる（issue #396 ②）。
-        /// 腕＋胴のIK（<see cref="DuelCatcherPose.ReachMitt"/>。しゃがんだ肩から腕0.55m＋胴14°）だけでは
-        /// ゾーンの外へ届かないため、体そのものを先に寄せておく＝実物の横っ跳び・伸び上がり。
+        /// リリース後、残差（実着弾−狙い＝コントロール誤差そのもの）の<b>左右成分だけ</b>捕手の体を
+        /// 寄せる（issue #396 ②）。腕＋胴のIK（<see cref="DuelCatcherPose.ReachMitt"/>）だけでは
+        /// 大きな横外れへ届かないため、体そのものを先に寄せておく＝実物の横っ跳び。
+        /// 高さはルートで動かさない（#440/#466。脚IKが無いリグでYを平行移動すると
+        /// めり込み・宙浮きになる）＝クリップ選択＋ミットIK＋胴アシスト側で吸収する。
         ///
         /// 駆動は<b>専用の時計</b>（<see cref="_catcherShiftT"/>。リリースからの経過秒＝フルレート・単調。
         /// 球の時計 <see cref="_ballT"/> はミットの中で消えると-1になり、捕球後の戻りを駆動できない）で、
@@ -2562,33 +2574,34 @@ namespace KokoSim.Unity.Match
         private void ApplyCatcherResidualShift()
         {
             if (_catcherShiftT < 0f) return;   // 時計が止まっている＝寄せも戻りも完了（素の位置のまま触らない）
-            float w = CatcherShiftWeight(_catcherShiftT, _ballArrival);
-            var offset = new Vector3(_catcherResidual.x, _catcherResidual.y, 0f) * w;
-            // 下向きの残差ではルートを沈めない（issue #440）。狙いより低く外れた球（残差y<0）を
-            // そのまま平行移動すると捕手の体ごと地面の下へめり込む（σ=(30−0.22×Control)cm なので
-            // 制球の悪い投手では0.2〜0.3m級）。実物の捕手は低い球へは深くしゃがみ・ミットを
-            // 落とすだけ＝下はクランプし、捕球クリップ選択（SelectCatchAnchor）とミットIK
-            // （DuelCatcherPose.ReachMitt が実着弾点を掴む）に任せる。
-            // 上（伸び上がり）と左右（横っ跳び）の体寄せは従来どおり。
-            if (offset.y < 0f) offset.y = 0f;
+            float w = CatcherShiftWeight(_catcherShiftT, _ballArrival, CatcherLingerSeconds);
+            // 高さの残差はルートで吸収しない（issue #440 / #466）。残差はσ=(30−0.22×Control)cm＝
+            // 制球の悪い投手では0.2〜0.4m級で、そのままYの平行移動にすると
+            //   下外れ → 体ごと地面へめり込む（#440）／上外れ → 足ごと宙に浮く（#466。
+            //   #464 が捕球後の据え置きを入れてから約1秒静止で見えるようになった）。
+            // 実物の捕手は脚で沈む・伸びるが、このリグに脚IKは無い＝高さは捕球クリップ選択
+            // （SelectCatchAnchor）とミットIK（DuelCatcherPose.ReachMitt。胴アシストは下方向だけ45°）に
+            // 全部任せ、ルートの体寄せは左右（横っ跳び）専用にする。上クランプで高めのミットずれは
+            // 0.020m（CatcherClampShooter 実測 2026-08-04）＝腕＋胴14°で届く。伸び上がりの上乗せは不要。
+            var offset = new Vector3(_catcherResidual.x * w, 0f, 0f);
             _catcher.Go.transform.localPosition = _catcher.BasePos + offset;
         }
 
         /// <summary>
         /// 残差の体寄せの台形重み。<paramref name="ballTime"/> はリリースからの経過秒（0起点。
         /// <see cref="_catcherShiftT"/>＝球より長生きする専用の時計）、<paramref name="settleAt"/> は
-        /// 球がミット面へ届く時刻（<see cref="_ballArrival"/>）。
-        /// リリースから<see cref="CatcherShiftLeadSeconds"/>かけて寄り切り、**球がミットの中に
-        /// ある間（捕球後<see cref="CatcherShiftHoldSeconds"/>）は動かず据え置き**、球が消えてから
-        /// <see cref="CatcherShiftReturnSeconds"/>かけて狙いの構え（残差ゼロ）へ戻る。
+        /// 球がミット面へ届く時刻（<see cref="_ballArrival"/>）、<paramref name="holdSeconds"/> は
+        /// 捕球後の据え置き窓（<see cref="CatcherLingerSeconds"/>＝判定表示が消えるまで）。
+        /// リリースから<see cref="CatcherShiftLeadSeconds"/>かけて寄り切り、**据え置き窓の間は動かず**、
+        /// 判定表示が消えてから<see cref="CatcherShiftReturnSeconds"/>かけて狙いの構え（残差ゼロ）へ戻る。
         /// 捕球の瞬間から戻すと、ミットの子になった球ごと体が中央へスライドして
         /// 「全身でフレーミング」に見える（監督報告 2026-08-04。大外れほど瞬間移動に見える）。
         /// </summary>
-        private static float CatcherShiftWeight(float ballTime, float settleAt)
+        private static float CatcherShiftWeight(float ballTime, float settleAt, float holdSeconds)
         {
             if (ballTime <= 0f) return 0f;
             if (ballTime < CatcherShiftLeadSeconds) return Mathf.InverseLerp(0f, CatcherShiftLeadSeconds, ballTime);
-            float holdUntil = settleAt + CatcherShiftHoldSeconds;
+            float holdUntil = settleAt + holdSeconds;
             if (ballTime <= holdUntil) return 1f;
             return 1f - Mathf.InverseLerp(holdUntil, holdUntil + CatcherShiftReturnSeconds, ballTime);
         }
@@ -2597,11 +2610,23 @@ namespace KokoSim.Unity.Match
         private const float CatcherShiftLeadSeconds = 0.25f;
 
         /// <summary>
-        /// 捕球後、体寄せを据え置く時間[s]。球がミットの中に見えている時間（<see cref="BallInMittSeconds"/>）
-        /// と同じ値に縛る＝球が見えている間に体が動くと、ミットの子の球ごと中央へ引き戻す
-        /// 「全身フレーミング」になる。片方だけ変えない。
+        /// 1球ごとの判定オーバーレイ（ストライク/ボール等）の表示時間[s]。正典は MatchLiveController の
+        /// <c>pitchCallHoldSeconds</c>（直列化）で、<c>NewDuelRig</c> が生成時にここへ流し込む＝
+        /// この既定値は撮影ハーネス・キャリブレーション等、リグを単体で組む場面のフォールバック。
+        /// 表示の長さと捕手の据え置き（<see cref="CatcherLingerSeconds"/>）を同じ値から出すための入口
+        /// なので、コントローラ側だけ・ここだけを変えない。
         /// </summary>
-        private const float CatcherShiftHoldSeconds = BallInMittSeconds;
+        public float PitchCallHoldSeconds { get; set; } = 0.85f;
+
+        /// <summary>
+        /// 捕球からの捕手の据え置き窓[s]＝判定表示が消えるまで（コールの間 <see cref="UmpireCallDelaySeconds"/>
+        /// ＋表示 <see cref="PitchCallHoldSeconds"/>）。この間、捕手は捕った形のまま動かない
+        /// （捕球クリップの据え置き＋体寄せの据え置き）し、球もミットの中に見せ続ける（監督指示 2026-08-05
+        /// 「判定表示が消えるまで捕球位置から動かない」）。3つを同じ窓に縛るのは #464 の教訓＝
+        /// 球が見えている間に体が動くと、ミットの子の球ごと中央へ引き戻す「全身フレーミング」になる。
+        /// 片方だけ変えない。
+        /// </summary>
+        private float CatcherLingerSeconds => UmpireCallDelaySeconds + PitchCallHoldSeconds;
 
         /// <summary>球が消えてから狙いの構え（基準位置）へ戻るまでの時間[s]。12fpsで5〜6コマ＝
         /// 捕った所からすっと構え直す速さ。短くすると大外れの球で瞬間移動に見える（監督報告 2026-08-04）。</summary>
@@ -3718,8 +3743,10 @@ namespace KokoSim.Unity.Match
             if (a.IdleClip != null && a.Clip != a.IdleClip)
             {
                 // 打者の構えを別クリップにしていると、フォロー→構えもクリップの切り口になる。
-                // 同じクリップ内の巻き戻し（既定）はこの分岐に入らないので絵は変わらない
-                if (a == _batter && a.IdleClip == _batterOwnIdle)
+                // 同じクリップ内の巻き戻し（既定）はこの分岐に入らないので絵は変わらない。
+                // 捕手は捕球ポーズで据え置いた後にここへ来る＝止めた姿勢と待機（構え）の頭が
+                // 離れているので、ハードカットだと跳ぶ。構え直しもクロスフェードで作る
+                if ((a == _batter && a.IdleClip == _batterOwnIdle) || a == _catcher)
                     CrossfadeActorToClip(a, a.IdleClip, 0f, a.IdleEndAt, CrossfadeSeconds);
                 else
                     SetActorClip(a, a.IdleClip, 0f, a.IdleEndAt);   // 一発物（結果分岐）→待機ループへ復帰
@@ -4946,6 +4973,10 @@ namespace KokoSim.Unity.Match
             => _catcher == null || _catcher.Go == null
                 ? Vector3.zero
                 : _catcher.Go.transform.localPosition - _catcher.BasePos;
+
+        /// <summary>【実測プローブ用】捕球からの据え置き窓[s]（<see cref="CatcherLingerSeconds"/>）。
+        /// CatcherClampShooter が測定窓を組むのに使う（私有 const の写しを持たせない）。</summary>
+        public float CatcherLingerSecondsForCapture => CatcherLingerSeconds;
 #endif
 
         public string CatchDiagForCapture()

@@ -76,8 +76,8 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float paHeadDwellSeconds = 1.0f;
         [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。投球（セットポジション）1.3秒＋フォロースルー1.5秒が切り貼りなしで収まる長さにする。判定表示のタイミングは球審のコールに従うので、この値は次の投球までの間だけを決める。")]
         [SerializeField] private float duelPitchIntervalSeconds = DuelStageRig.DefaultPitchInterval;
-        [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。")]
-        [SerializeField] private float pitchCallHoldSeconds = 0.35f;
+        [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。0.85=監督確定 2026-08-05（0.35は短い）。対決ビューの捕手はこの表示が消えるまで捕球位置で静止する（NewDuelRig が rig へ流し込む）。")]
+        [SerializeField] private float pitchCallHoldSeconds = 0.85f;
         [Tooltip("得点オーバーレイ（issue #60）の1点あたりの加算間隔[秒]（加点前の一時停止にも使う）。")]
         [SerializeField] private float scoreCallStepSeconds = 0.5f;
         [Tooltip("得点オーバーレイが最終スコアに達してから消えるまでの表示時間[秒]。")]
@@ -2110,6 +2110,8 @@ namespace KokoSim.Unity.Match
             _duelColorsOffenseIsTop = _awayColors != null && _homeColors != null ? offenseIsTop : (bool?)null;
             var rig = new DuelStageRig();
             DuelStageRig.InitialTeamColors = null;   // 静的な受け渡し窓は使ったら必ず閉じる
+            // 判定表示の長さを流し込む＝捕手の据え置き（捕球位置で静止する窓）が表示と同じ時刻に終わる
+            rig.PitchCallHoldSeconds = pitchCallHoldSeconds;
             return rig;
         }
 
