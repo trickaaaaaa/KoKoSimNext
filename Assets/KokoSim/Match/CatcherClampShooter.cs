@@ -11,10 +11,10 @@ namespace KokoSim.Unity.Match
     /// ・高さクランプ（issue #440/#466）: ルートオフセットの最小y ≧ 0（地面へ沈まない）かつ
     ///   最大y ≈ 0（宙に浮かない）。左右の体寄せ（横っ跳び）は従来どおり・
     ///   捕球の瞬間のミットずれ ≦ 0.12m（高さはクリップ選択＋ミットIK＋胴アシストで回収）
-    /// ・捕球後の戻り（監督報告 2026-08-04「定位置へ瞬間移動＝全身フレーミング」）:
-    ///   球がミットの中にある間はルートが動かない（ミット中最大step≈0）・
-    ///   球が消えてから1コマ最大stepが小さく（旧: 0.2s戻り＝大外れで0.19m/コマ級）・
-    ///   最終的に基準位置へ戻り切る（最終|off|≈0）
+    /// ・捕球後の据え置き（監督指示 2026-08-05「判定表示が消えるまで捕球位置から動かない」）:
+    ///   据え置き窓（rig.CatcherLingerSecondsForCapture＝コール0.30s＋判定表示）の間は
+    ///   ルートが動かない（ミット中最大step≈0）・窓明けの1コマ最大stepが小さく
+    ///   （瞬間移動しない）・最終的に基準位置へ戻り切る（最終|off|≈0）
     /// </summary>
     public sealed class CatcherClampShooter : MonoBehaviour
     {
@@ -58,7 +58,7 @@ namespace KokoSim.Unity.Match
             float minDev = float.MaxValue;
             // 瞬間移動の検出: 1描画フレームあたりのルート移動量[m]。ポーズは12fpsなので動く時は
             // 1ポーズコマぶんがまとめて出る＝最大stepが「1コマで飛ぶ距離」。
-            const float inMitt = 0.45f;   // DuelStageRig.BallInMittSeconds（private のため写し）
+            float inMitt = _rig.CatcherLingerSecondsForCapture;   // 据え置き窓＝判定表示が消えるまで
             float maxStepInMitt = 0f, maxStepAfter = 0f, offAtHide = -1f;
             var prevOff = _rig.CatcherRootOffsetForCapture();
             bool shotCatch = false, shotHold = false, shotReturn = false;
