@@ -467,11 +467,26 @@ namespace KokoSim.Unity.Match
             public readonly float GloveX, GloveZ;
             public readonly CatchApproach Approach;
 
+            /// <summary>
+            /// 捕球後、<see cref="Moment"/> からどれだけ先まで再生してから打ち切るか[s]。
+            /// 負なら打ち切らずクリップの自然な末尾まで再生する（既定・従来どおり）。
+            ///
+            /// <see cref="Moment"/> は <c>TStart = TCatch − Moment</c>（下の予定表 <c>FireDueCatches</c>）
+            /// で球の実到達時刻に同期させてある＝クリップのローカル時刻が Moment に達した瞬間が
+            /// 「捕った形」そのもの。一塁手・三塁手の受け（購入収録）はここから先、ランナーへ
+            /// タッチしにいくような芝居へ続く（issue #448②）。<c>CatchHoldSeconds</c> の据え置きが
+            /// 見せたいのは「捕った形」であって芝居の続きではないので、この2本だけ Moment＝0秒
+            /// （追加の猶予なし）で打ち切る（design-18 §4.5-⑬⑭。打ち切りには必ず据え置きを添える＝
+            /// <c>FireDueCatches</c> が続けて張る <c>CatchHoldSeconds</c> がそれ）。
+            /// </summary>
+            public readonly float PostCatchFollowSeconds;
+
             public FieldCatchAnchor(string clip, float moment, float gloveY,
-                float gloveX, float gloveZ, CatchApproach approach)
+                float gloveX, float gloveZ, CatchApproach approach, float postCatchFollowSeconds = -1f)
             {
                 Clip = clip; Moment = moment; GloveY = gloveY;
                 GloveX = gloveX; GloveZ = gloveZ; Approach = approach;
+                PostCatchFollowSeconds = postCatchFollowSeconds;
             }
         }
 
@@ -483,8 +498,8 @@ namespace KokoSim.Unity.Match
         {
             // その場で捕る（低め→頭上まで帯を埋める。捕手と同じで**高さの主軸**はここ）
             new("AA_Baseball_Defender_Catching_TypeF", 0.64f, 0.227f, -0.104f, 0.207f, CatchApproach.Still),
-            new("AA_Baseball_Defender_1st_baseman_Catching", 0.40f, 1.070f, -0.119f, 0.756f, CatchApproach.Still),
-            new("AA_Baseball_Defender_3rd_baseman_Catching", 0.46f, 1.088f, -0.691f, 0.336f, CatchApproach.Still),
+            new("AA_Baseball_Defender_1st_baseman_Catching", 0.40f, 1.070f, -0.119f, 0.756f, CatchApproach.Still, postCatchFollowSeconds: 0f),
+            new("AA_Baseball_Defender_3rd_baseman_Catching", 0.46f, 1.088f, -0.691f, 0.336f, CatchApproach.Still, postCatchFollowSeconds: 0f),
             new("AA_Baseball_Defender_Catching_TypeR", 0.42f, 1.235f, -0.010f, 0.766f, CatchApproach.Still),
             new("AA_Baseball_Defender_Catching_TypeL", 0.48f, 1.262f, -0.666f, 0.416f, CatchApproach.Still),
             new("AA_Baseball_Defender_Catching_Jumping_Catch", 1.08f, 1.665f, -0.064f, 0.203f, CatchApproach.Still),
@@ -792,12 +807,15 @@ namespace KokoSim.Unity.Match
                 var e = _catchEvents[i];
                 if (e.Fired || t < e.TStart) continue;
                 var a = FielderActor(e.Pos);
-                var clip = LoadClip(FieldCatchAnchors[e.Anchor].Clip);
+                var anchor = FieldCatchAnchors[e.Anchor];
+                var clip = LoadClip(anchor.Clip);
                 if (a != null && clip != null)
                 {
                     // ⚠ 頭出しは Max(0,…) で潰さない。TStart が未来なら**まだ来ていない**ので
                     //    上の t < TStart で降りており、ここへ来る時点で t − TStart ≥ 0 が保証されている
-                    SetActorClip(a, clip, t - e.TStart, 0f);
+                    var endAt = anchor.PostCatchFollowSeconds >= 0f
+                        ? anchor.Moment + anchor.PostCatchFollowSeconds : 0f;
+                    SetActorClip(a, clip, t - e.TStart, endAt);
                     a.Speed = 1f;                       // 走りの倍率を持ち越さない
                     a.HoldSeconds = CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
                     FielderMotion st;
@@ -814,8 +832,7 @@ namespace KokoSim.Unity.Match
                         //    走り込み捕球（グラブが体の真下＝オフセット 0.112m）が丸ごと外れ、
                         //    狙点だけ「野手→球」の向きに置かれてグラブは走った向きのまま＝残差 0.094m。
                         //    引き寄せた狙点はグラブの居場所そのものなので、**向きを合わせて初めて一致する**
-                        var an = FieldCatchAnchors[e.Anchor];
-                        var gh = new Vector2(an.GloveX, an.GloveZ);
+                        var gh = new Vector2(anchor.GloveX, anchor.GloveZ);
                         if (gh.magnitude > 0.05f)
                         {
                             var here = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, e.TCatch).Pos;
