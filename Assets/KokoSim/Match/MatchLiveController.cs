@@ -1958,6 +1958,13 @@ namespace KokoSim.Unity.Match
             {
                 _duelImg = new DuelViewElement();
                 _duelHost?.Add(_duelImg);
+                // _duelImg を作り直したら旧ラベルホストは**孤児**（旧Imgの子のまま panel の外）。
+                // 参照だけ生き残ると下の null ガードが再装着を飛ばし、以後 RefreshDuelFieldLabels が
+                // panel の外の孤児へ書き続けて**実機で頭上ラベルが一枚も出ない**
+                // （issue #454 実測: OnEnable の _duelHost.Clear() 後、host.panel=null・プールには
+                // 正しい氏名6件・絵はゼロ。夜間検証は enable 1回きりの環境で通ってしまった）。
+                _duelLabelHost = null;
+                _duelFieldLabelPool.Clear();
             }
             _duelImg.Rig = _duelRig;   // カラム実寸に合わせたRT適応リサイズの結線
             _duelImg.Bind(_duelRig.Target);
