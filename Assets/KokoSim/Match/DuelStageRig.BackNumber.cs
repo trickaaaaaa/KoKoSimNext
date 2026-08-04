@@ -28,20 +28,23 @@ namespace KokoSim.Unity.Match
         // 素体別×役別に持つ（issue #453: U2 だけで校正した一律 0.105 は購入素体では背中の内側＝
         // Zテストで1画素も描かれない。夜間 worktree には購入素体が無く、検証がサイレントに U2 で通った。
         // さらに実測すると U2 でも打席頭のセット/構えポーズでは 0.105 は3役とも内側だった）。
-        // 値は BackNumberDiagForCapture の実測（打席頭の既定ポーズ・体正面軸コンテナでの数字域の
-        // 背面最深[m]。2026-08-04）＋約1.5cmのクリアランス:
-        //   購入素体: 投手0.105 / 捕手0.193(上衣。尻は0.270で数字域下端に入る) / 打者0.113(上衣。尻0.173)
-        //   U2素体:   投手0.111 / 捕手0.273(単一メッシュ=尻込み) / 打者0.175(単一メッシュ=尻込み)
-        // 捕手・打者は前傾で尻が上衣より深いが、尻まで避けると浮きすぎるので**上衣基準**とし、
-        // 水平真後ろから見た数字下端の欠けは許容する（そもそも既定構図で捕手の背は映らない）。
-        // U2 は単一メッシュで上衣だけ分離できないぶんを絵で確認して購入素体より少し厚めに置く。
-        private const float NumberBackPitcherVendorM = 0.120f;
-        private const float NumberBackCatcherVendorM = 0.205f;
-        private const float NumberBackBatterVendorM = 0.130f;
-        private const float NumberBackPitcherU2M = 0.125f;
-        private const float NumberBackCatcherU2M = 0.205f;
-        private const float NumberBackBatterU2M = 0.140f;
-        private const float NumberHeightOffsetM = -0.06f;   // 胸ボーン原点からの高さ（実測で首元寄りだったため下げる）
+        // 値は BackNumberDiagForCapture の実測（打席頭の既定ポーズ・体正面軸コンテナ・肩線基準の
+        // **白布全面**の背面最深[m]。2026-08-04）＋1.3〜1.5cmのクリアランス。白布ゼッケンは
+        // 布の隅が欠けても目立つので、数字域でなく布footprint内の最深（ベルト・腰の張り出し込み）を避ける:
+        //   購入素体: 投手0.110 / 捕手0.206 / 打者0.139
+        //   U2素体:   投手0.116 / 捕手0.221 / 打者0.152
+        private const float NumberBackPitcherVendorM = 0.125f;
+        private const float NumberBackCatcherVendorM = 0.220f;
+        private const float NumberBackBatterVendorM = 0.155f;
+        private const float NumberBackPitcherU2M = 0.130f;
+        private const float NumberBackCatcherU2M = 0.235f;
+        private const float NumberBackBatterU2M = 0.165f;
+        // 高さは**肩線（左右上腕ジョイントの中点）からの下げ幅**で決める。胸ボーン原点からの
+        // オフセットだと素体のボーン割り当て（UpperChest の有無で1段下の骨に落ちる）次第で
+        // 腰の高さまで沈む（監督指摘 2026-08-04「腰あたりに見えていて変」）。実物のゼッケンは
+        // 肩甲骨の間＝肩線の少し下。値はスクショで確認して確定する。
+        private const float NumberBelowShoulderM = 0.11f;
+        private const float NumberHeightOffsetM = -0.06f;   // 肩線が取れない素体向けのフォールバック（胸ボーン原点から）
 
         /// <summary>
         /// 打席中の背番号デカールを張り替える。3人とも毎回作り直す（人数が少ないので使い回さず、
@@ -104,7 +107,14 @@ namespace KokoSim.Unity.Match
             var go = new GameObject("back-number-" + n);
             go.transform.SetParent(container.transform, false);
             var backOffset = actor.VendorBody ? vendorOffsetM : u2OffsetM;
-            go.transform.localPosition = new Vector3(0f, NumberHeightOffsetM, -backOffset);
+            // 高さは肩線の実測から（NumberBelowShoulderM の項。肩が取れない素体だけ胸ボーン基準）
+            var height = NumberHeightOffsetM;
+            if (lUp != null && rUp != null)
+            {
+                var midShoulder = (lUp.position + rUp.position) * 0.5f;
+                height = container.transform.InverseTransformPoint(midShoulder).y - NumberBelowShoulderM;
+            }
+            go.transform.localPosition = new Vector3(0f, height, -backOffset);
             // コンテナの-Z（背面）から見て正しく読める向きへ180反転（面を視線に固定しない＝体に貼ったまま）。
             go.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             go.transform.localScale = Vector3.one;
@@ -128,7 +138,11 @@ namespace KokoSim.Unity.Match
                 new Vector3(-hw, -hh, 0f), new Vector3(hw, -hh, 0f),
                 new Vector3(hw, hh, 0f), new Vector3(-hw, hh, 0f),
             };
-            mesh.uv = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1) };
+            // UVは**左右反転**して張る。デカールは180°ヨーで背面へ向けるため、素直に張ると
+            // テクスチャのu軸が「真後ろから見た左右」と逆＝**鏡文字**になる（#434の実装当初からの事故。
+            // 5px数字は鏡でも数字に見える形が多く、対称な「8」やクロップの小ささで発覚しなかった。
+            // 監督のゼッケン化指示で白布に黒数字が大きく出て初めて読めた=絵でしか気づけない）。
+            mesh.uv = new[] { new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1) };
             mesh.normals = new[] { Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward };
             mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
             mesh.RecalculateBounds();
@@ -165,20 +179,25 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 数字テクスチャを都度生成する純関数寄りのヘルパ（Unity依存の Texture2D のみ純関数から外れる）。
-        /// 白地の数字＋濃色の縁取り（背景は透明）＝ユニフォームの地色が薄くても濃くても読める
-        /// （実況テロップと同じ発想でコントラストを縁取りに持たせる, design-16）。
+        /// **白地の四角（ゼッケン）に黒数字**（監督指示 2026-08-04。高校野球の背番号は白い布地に
+        /// 濃色の数字＝地を不透明の白にすればユニフォームの地色に依らず読める）。
+        /// 布地の四角は桁数に依らず同寸（2桁分の固定キャンバスに数字を中央寄せ）＝
+        /// 地が見える意匠になったので、桁数でクワッドへの引き伸ばし率が変わると布地の形が変わってしまう。
+        /// 黒はパレット表の #23242A（純黒はポスタライズで濃臙脂に落ちる。design-18 §3.5.1）。
         /// </summary>
         private static Texture2D BuildNumberTexture(int number)
         {
             number = Mathf.Clamp(number, 0, 99);
             var digits = number >= 10 ? new[] { number / 10, number % 10 } : new[] { number };
-            int texW = TexMarginX * 2 + GlyphW * digits.Length + GlyphGap * (digits.Length - 1);
+            int texW = TexMarginX * 2 + GlyphW * 2 + GlyphGap;   // 常に2桁分の固定寸
             int texH = TexMarginY * 2 + GlyphH;
+            int totalGlyphW = GlyphW * digits.Length + GlyphGap * (digits.Length - 1);
+            int startX = (texW - totalGlyphW) / 2;
 
             var on = new bool[texW, texH];
             for (var d = 0; d < digits.Length; d++)
             {
-                var x0 = TexMarginX + d * (GlyphW + GlyphGap);
+                var x0 = startX + d * (GlyphW + GlyphGap);
                 var glyph = DigitGlyphs5X7[digits[d]];
                 for (var row = 0; row < GlyphH; row++)
                 for (var col = 0; col < GlyphW; col++)
@@ -190,15 +209,12 @@ namespace KokoSim.Unity.Match
             }
 
             var pixels = new Color32[texW * texH];
-            var fg = new Color32(255, 255, 255, 255);
-            var outline = new Color32(26, 26, 26, 255);
-            var clear = new Color32(0, 0, 0, 0);
+            var fg = new Color32(0x23, 0x24, 0x2A, 255);   // パレット表の黒
+            var cloth = new Color32(255, 255, 255, 255);   // ゼッケンの白布
             for (var y = 0; y < texH; y++)
             for (var x = 0; x < texW; x++)
             {
-                pixels[y * texW + x] = on[x, y] ? fg
-                    : HasForegroundNeighbor(on, x, y, texW, texH) ? outline
-                    : clear;
+                pixels[y * texW + x] = on[x, y] ? fg : cloth;
             }
 
             var tex = new Texture2D(texW, texH, TextureFormat.RGBA32, mipChain: false, linear: false)
@@ -210,19 +226,6 @@ namespace KokoSim.Unity.Match
             tex.SetPixels32(pixels);
             tex.Apply(false, true);
             return tex;
-        }
-
-        private static bool HasForegroundNeighbor(bool[,] on, int x, int y, int w, int h)
-        {
-            for (var dy = -1; dy <= 1; dy++)
-            for (var dx = -1; dx <= 1; dx++)
-            {
-                if (dx == 0 && dy == 0) continue;
-                var nx = x + dx;
-                var ny = y + dy;
-                if (nx >= 0 && nx < w && ny >= 0 && ny < h && on[nx, ny]) return true;
-            }
-            return false;
         }
 
         // ── 撮影ハーネス用（issue #453）。実機配線そのままで奥行きを実測する ──
@@ -255,20 +258,25 @@ namespace KokoSim.Unity.Match
         internal string BackNumberDiagForCapture()
         {
             var sb = new System.Text.StringBuilder();
-            const float digitHalfW = 0.06f;    // 2桁グリフ＋縁取りの実幅（12px/15px × 0.16m ≒ 0.128m）の約半分
-            const float digitHalfH = 0.045f;   // グリフ高＋縁取り（9px/9px × 0.11m）の約半分。少し内側で測る
+            // 白布ゼッケン化（監督指示）で布全面が見える意匠になったので、足跡は布寸法の少し内側で測る
+            // （クワッド全面ぴったりだと腕・尻など別部位の外れ値を拾う=2026-08-04実測）。
+            const float clothHalfW = 0.07f;
+            const float clothHalfH = 0.05f;
             foreach (var (a, name) in new[] { (_pitcher, "pitcher"), (_catcher, "catcher"), (_batter, "batter") })
             {
                 var container = BackNumberContainerForCapture(name);
-                if (a?.Animator == null || container == null)
+                var quad = container != null && container.childCount > 0 ? container.GetChild(0) : null;
+                if (a?.Animator == null || quad == null)
                 {
                     sb.AppendLine(name + "\tno-actor-or-container");
                     continue;
                 }
-                var quad = container.childCount > 0 ? container.GetChild(0) : null;
+                // バンド中心は実際に張ったクワッド位置（高さは肩線基準で役ごとに動く）
+                var quadY = quad.localPosition.y;
                 sb.Append(name)
                     .Append("\t素体=").Append(a.VendorBody ? "購入" : "U2")
-                    .Append("\tデカール奥行き=").Append(quad != null ? (-quad.localPosition.z).ToString("F3") + "m" : "-");
+                    .Append("\tデカール奥行き=").Append((-quad.localPosition.z).ToString("F3")).Append("m")
+                    .Append("\t高さ=").Append(quadY.ToString("F3")).Append("m");
                 float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
                 var baked = new Mesh();
                 foreach (var smr in a.Go.GetComponentsInChildren<SkinnedMeshRenderer>())
@@ -286,8 +294,8 @@ namespace KokoSim.Unity.Match
                         if (w.y > maxY) maxY = w.y;
                         var lp = container.InverseTransformPoint(w);
                         if (lp.z >= 0f) continue;                          // 体の前面側は対象外
-                        if (Mathf.Abs(lp.x) > digitHalfW) continue;
-                        if (Mathf.Abs(lp.y - NumberHeightOffsetM) > digitHalfH) continue;
+                        if (Mathf.Abs(lp.x) > clothHalfW) continue;
+                        if (Mathf.Abs(lp.y - quadY) > clothHalfH) continue;
                         hit++;
                         if (-lp.z > maxDepth) maxDepth = -lp.z;
                     }

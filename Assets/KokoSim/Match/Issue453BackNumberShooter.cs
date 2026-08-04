@@ -95,8 +95,13 @@ namespace KokoSim.Unity.Match
             }, 240f);
             if (!_condHeld) { Debug.LogWarning($"[Issue453] {prefix}: デカールが立たなかった"); yield break; }
 
+            // 既定構図のフル画面を**先に**撮る。寄りの後に回すと、寄りで動かしたカメラを
+            // CameraPlan が当て直す前に CaptureFrame の凍結が入り、望遠FOV×寄り位置のまま
+            // 「巨大な数字だけの絵」が焼かれる（run6〜8 実害）。
+            yield return CaptureFrame(ctrl, prefix + "-00-default", "既定構図");
+
             // 実測と寄りは**同じ凍結の中**で撮る（凍結を跨ぐと4倍速で投球モーションへ進み、
-            // 実測したポーズと絵のポーズが食い違う=3回目の実行で実害）。既定構図のフル画面は最後。
+            // 実測したポーズと絵のポーズが食い違う=3回目の実行で実害）。
             var rig2 = ctrl.DuelRigForCapture;
             ctrl.FreezeLiveForCapture(true);
             Debug.Log($"[Issue453] {prefix} 実測\n" + rig2.BackNumberDiagForCapture());
@@ -125,7 +130,6 @@ namespace KokoSim.Unity.Match
             }
             if (cam0 != null) cam0.fieldOfView = prevFov;
             ctrl.FreezeLiveForCapture(false);   // 解除＝次のTickでCameraPlanが構図を当て直す
-            yield return CaptureFrame(ctrl, prefix + "-00-default", "既定構図");
         }
 
         // 直前の WaitFor が条件を満たして抜けたか。
