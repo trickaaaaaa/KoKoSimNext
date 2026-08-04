@@ -58,7 +58,7 @@ public static class PlayTimelineAdapter
         var judgements = t.Judgements
             .Select(j => new PlaybackJudgement(j.T, j.Kind, j.CloseCall, j.Label, j.DistanceM)).ToArray();
 
-        return new PlaybackPlay
+        var play = new PlaybackPlay
         {
             Name = t.Result,
             Dur = t.Duration,
@@ -72,6 +72,28 @@ public static class PlayTimelineAdapter
             Caps = caps,
             Judgements = judgements,
         };
+
+        // 結果キャプション（TimelineBuilder が「決着時刻・結果テキスト」で積む実況の最終行）を
+        // 表示解決時刻へ動かす（issue #438）: 打者がセーフで生きる結果は到達の絵より先に
+        // 「レフト前ヒット」等を出さない。時刻の計算は PlaybackDisplaySync が単一ソース。
+        // 対象は「T=決着 かつ 本文=結果テキスト」の行だけ＝中間実況（○○が捕った 等）は動かさない。
+        var showAt = PlaybackDisplaySync.ResultShowTime(play);
+        if (showAt > t.ResolvedAt)
+        {
+            play = play with
+            {
+                // ⚠ 時刻順の安定ソートを掛け直す。CaptionAt は**リスト順**で上書きするので、
+                // 結果行だけ後ろの時刻へ動かすと、リスト上それより後ろの追記実況
+                // （本塁クロスの「還った！」等）が最終表示に勝ち続けてしまう。
+                Caps = caps.Select(c =>
+                        Math.Abs(c.T - t.ResolvedAt) < 1e-9 && c.Text == t.Result
+                            ? new PlaybackCaption(showAt, c.Text)
+                            : c)
+                    .OrderBy(c => c.T)
+                    .ToArray(),
+            };
+        }
+        return play;
     }
 
     /// <summary>TimelinePoint(X, Z=センター) → PlaybackVec(X, Y=センター)。同一平面の直写し。</summary>
