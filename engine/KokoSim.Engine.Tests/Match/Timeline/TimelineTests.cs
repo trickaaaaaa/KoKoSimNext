@@ -435,7 +435,9 @@ public sealed class TimelineTests
             play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
         // 差し替え前は「野手→一塁」1本だけ。
         Assert.Single(baseTl.Ball, b => b.Kind == BallSegmentKind.Throw);
-        var batterArrive = baseTl.Runners.Single(r => r.Label == "打").T1;
+        // 内野ゴロは主到達レッグの後ろにオーバーラン(issue #443)レッグが続くため先頭(=真の到達)を見る。
+        // GameEngine の本番コードも同じ形（先頭一致で打ち切り）でこの時刻を拾う。
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
 
         var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
 
@@ -464,7 +466,9 @@ public sealed class TimelineTests
         var play = GrounderOut();   // 遊撃手が処理＝6-4-3
         var baseTl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
-        var batterArrive = baseTl.Runners.Single(r => r.Label == "打").T1;
+        // 内野ゴロは主到達レッグの後ろにオーバーラン(issue #443)レッグが続くため先頭(=真の到達)を見る。
+        // GameEngine の本番コードも同じ形（先頭一致で打ち切り）でこの時刻を拾う。
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
 
         var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
 
@@ -532,7 +536,9 @@ public sealed class TimelineTests
         var play = GrounderOut();
         var baseTl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
-        var batterArrive = baseTl.Runners.Single(r => r.Label == "打").T1;
+        // 内野ゴロは主到達レッグの後ろにオーバーラン(issue #443)レッグが続くため先頭(=真の到達)を見る。
+        // GameEngine の本番コードも同じ形（先頭一致で打ち切り）でこの時刻を拾う。
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
 
         var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
 
@@ -577,7 +583,9 @@ public sealed class TimelineTests
         var play = GrounderOut();
         var baseTl = TimelineBuilder.BuildBattedBall(
             play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
-        var batterArrive = baseTl.Runners.Single(r => r.Label == "打").T1;
+        // 内野ゴロは主到達レッグの後ろにオーバーラン(issue #443)レッグが続くため先頭(=真の到達)を見る。
+        // GameEngine の本番コードも同じ形（先頭一致で打ち切り）でこの時刻を拾う。
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
 
         var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
 
