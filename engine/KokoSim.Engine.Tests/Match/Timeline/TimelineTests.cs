@@ -1121,6 +1121,136 @@ public sealed class TimelineTests
         Assert.DoesNotContain(method!.GetParameters(), p => typeof(IRandomSource).IsAssignableFrom(p.ParameterType));
     }
 
+    // --- バント・スクイズタイムライン（issue #490） ---
+
+    [Fact]
+    public void BuntTimeline_PopOut_CatcherCatchesNoThrow_BatterJudgedOut()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.PopOut,
+            null, null, null, null, null, null, c, field);
+
+        Assert.Contains(tl.Ball, b => b.Kind == BallSegmentKind.Flight);
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.Catcher && m.Task == FielderTask.FieldBall);
+        Assert.Contains(tl.Judgements, j => j.Kind == JudgementKind.Out);
+        Assert.Empty(tl.Runners);
+        Assert.True(tl.ResolvedAt <= tl.Duration);
+    }
+
+    [Fact]
+    public void BuntTimeline_SacrificeSuccess_BatterOutAtFirst_ThrowNeverArrivesAfterBatter()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 90, Bunt = 50 }; // 快足でも結果はアウト確定＝矛盾ガード
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.SacrificeSuccess,
+            null, null, null, null, null, null, c, field);
+
+        var leg = Assert.Single(tl.Runners);
+        Assert.Equal("打", leg.Label);
+        Assert.True(leg.OutAtEnd);
+        Assert.True(Near(leg.To, new TimelinePoint(field.FirstBase.X, field.FirstBase.Z)));
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(FieldPosition.Pitcher, throwSeg.FromRole);
+        Assert.Equal(FieldPosition.FirstBase, throwSeg.ToRole);
+        Assert.True(throwSeg.T1 <= leg.T1, "犠打成功なのに送球が打者より後に一塁へ着いている");
+        Assert.Contains(tl.Judgements, j => j.Kind == JudgementKind.Out);
+    }
+
+    [Fact]
+    public void BuntTimeline_InfieldHit_BatterSafeAtFirst_ThrowNeverArrivesBeforeBatter()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 10, Bunt = 90 }; // 鈍足でも結果はセーフ確定＝矛盾ガード
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.InfieldHit,
+            null, null, null, null, null, null, c, field);
+
+        var leg = Assert.Single(tl.Runners);
+        Assert.False(leg.OutAtEnd);
+        Assert.True(Near(leg.To, new TimelinePoint(field.FirstBase.X, field.FirstBase.Z)));
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.True(throwSeg.T1 >= leg.T1, "内野安打なのに送球が打者より先に一塁へ着いている");
+        // セーフは際どさ未評価のため判定オーバーレイは積まない（他Buildと同じ表示条件, Issue #59）。
+        Assert.Empty(tl.Judgements);
+    }
+
+    [Fact]
+    public void BuntTimeline_RunnerReferenceChanged_AddsAdvanceLeg()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+        var onFirst = Runner("R1");
+
+        // preFirst≠postFirst（一塁が空になった、または打者に置き換わった）＝一塁走者は二塁へ進んだとみなす。
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.SacrificeSuccess,
+            onFirst, null, null, null, null, null, c, field);
+
+        var leg = tl.Runners.Single(r => r.Label == "走1");
+        Assert.Same(onFirst, leg.Runner);
+        Assert.True(Near(leg.To, new TimelinePoint(field.SecondBase.X, field.SecondBase.Z)));
+    }
+
+    [Fact]
+    public void BuntTimeline_RunnerReferenceUnchanged_NoAdvanceLeg()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+        var onSecond = Runner("R2");
+
+        // preSecond と postSecond が同一参照＝動いていない（PopOutで釘付けの想定）。
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.PopOut,
+            null, onSecond, null, null, onSecond, null, c, field);
+
+        Assert.DoesNotContain(tl.Runners, r => r.Label == "走2");
+    }
+
+    [Fact]
+    public void BuntTimeline_ThirdRunnerScores_WhenReferenceChanged_SqueezeStyle()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var fielders = field.StandardAlignment();
+        var batter = new Player { Name = "打者", Speed = 50, Bunt = 50 };
+        var onThird = Runner("R3");
+
+        var tl = TimelineBuilder.BuildBunt(
+            batter, fielders, BuntResult.InfieldHit,
+            null, null, onThird, null, null, null, c, field, isSqueeze: true);
+
+        var leg = tl.Runners.Single(r => r.Label == "走3");
+        Assert.Same(onThird, leg.Runner);
+        Assert.True(Near(leg.To, new TimelinePoint(0, 0)), "三塁走者が生還していない");
+        Assert.Contains(tl.Captions, cap => cap.T == leg.T1);
+    }
+
+    [Fact]
+    public void BuntTimeline_ConsumesNoRandomSource()
+    {
+        // BuildBunt は IRandomSource を一切受け取らない（シグネチャで乱数不使用を固定する）。
+        var method = typeof(TimelineBuilder).GetMethod(nameof(TimelineBuilder.BuildBunt));
+        Assert.NotNull(method);
+        Assert.DoesNotContain(method!.GetParameters(), p => typeof(IRandomSource).IsAssignableFrom(p.ParameterType));
+    }
+
     // --- #6 外野安打の返球: 送球が走者を追い越さない（三塁打で送球が先着しない） ---
     [Fact]
     public void OutfieldReturnThrow_ArrivesJustAfterRunner_NotBefore()

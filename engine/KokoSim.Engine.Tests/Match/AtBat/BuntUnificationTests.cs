@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
@@ -163,5 +164,27 @@ public sealed class BuntUnificationTests
             totalSacs += r.HomeTactics.SacrificeBunts;
         }
         Assert.True(totalSacs > 0, "常時送りバント指示なのに一度も犠打が記録されなかった（配線切れの疑い）");
+    }
+
+    /// <summary>
+    /// issue #490: CaptureTimelines オンで常時送りバント指示のチームを回すと、バント打席の
+    /// PlayLogEntry に Timeline が乗る（GameEngine→TimelineBuilder.BuildBunt の配線が生きている）。
+    /// </summary>
+    [Fact]
+    public void AlwaysSacBunt_WithCaptureTimelines_RecordsBuntTimeline()
+    {
+        PlayLogEntry? found = null;
+        for (ulong seed = 1; seed <= 30 && found is null; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var home = TeamOf("H", new AlwaysSacBuntBrain());
+            var away = TeamOf("A");
+            var r = GameEngine.Play(away, home, new GameContext { CaptureTimelines = true }, rng);
+            found = r.Log.FirstOrDefault(e =>
+                e.PitchLog is { Count: > 0 } pl
+                && pl[^1].Sign is PitchBattingOverride.Bunt or PitchBattingOverride.SafetyBunt);
+        }
+        Assert.NotNull(found);
+        Assert.NotNull(found!.Timeline);
     }
 }

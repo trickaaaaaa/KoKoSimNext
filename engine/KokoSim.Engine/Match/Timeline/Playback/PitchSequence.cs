@@ -17,6 +17,9 @@ namespace KokoSim.Engine.Match.Timeline.Playback;
 /// <see cref="Trajectory"/> は観測専用のフル弾道で、<c>CaptureTimeline</c> の試合だけ非null。
 /// <see cref="AimX"/> / <see cref="AimY"/>（Issue #396）は <see cref="PitchRecord.AimX"/> / <see cref="PitchRecord.AimY"/>
 /// の写し（狙い位置）。合成列・実記録がない球は同様に null＝架空の狙いを作らせない。
+/// <see cref="BattingSign"/>（issue #490）はこの球に出ていた打者への1球指示（バント/セーフティバント/
+/// スクイズ）。表示専用＝判定・帯には無関係。対決ビューが打者のバント構えを出すためだけの観測データで、
+/// 合成列（実記録がない球）は null のまま。
 /// </summary>
 public readonly record struct PitchToken(
     PitchKind Kind,
@@ -29,7 +32,8 @@ public readonly record struct PitchToken(
     double? LocationY = null,
     double? AimX = null,
     double? AimY = null,
-    Pitching.PitchTrajectory? Trajectory = null);
+    Pitching.PitchTrajectory? Trajectory = null,
+    Tactics.PitchBattingOverride? BattingSign = null);
 
 /// <summary>1打席の投球列（中継風カウントの合成データ）。</summary>
 public sealed record PitchSequence(IReadOnlyList<PitchToken> Pitches)
