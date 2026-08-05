@@ -654,6 +654,9 @@ namespace KokoSim.Unity.Match
             /// <summary>パレット表の「黒」#23242A。ベルト・既定のスパイクをこれに揃える。</summary>
             private static readonly Color PaletteBlack = new(0x23 / 255f, 0x24 / 255f, 0x2A / 255f);
 
+            /// <summary>肌の固定色（全役割共通）。</summary>
+            private static readonly Color SkinTone = new(0.85f, 0.68f, 0.55f);
+
             public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, Belt;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
@@ -669,7 +672,7 @@ namespace KokoSim.Unity.Match
                 Undershirt = undershirt;
                 Socks = socks;
                 Cap = cap;
-                Skin = new Color(0.85f, 0.68f, 0.55f);
+                Skin = SkinTone;
                 // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。値はパレット表の「黒」#23242A と
                 // 揃える＝画面で選べる黒と同じ黒になる。**わずかでも赤に寄せると濃い臙脂に見える**
                 // （ポスタライズが暖色側のバケットへ落とす。2026-07-29 実測）
@@ -698,11 +701,13 @@ namespace KokoSim.Unity.Match
             /// 球審: 薄いブルーのシャツ＋黒スラックス（実物の球審装束。issue #445）。チーム色の対象外。
             /// シャツは候補3色の比較シートから B2 を監督選定（2026-08-05）。スラックスはパレット表の
             /// 黒 #23242A＝わずかでも赤に寄せるとポスタライズで臙脂に落ちる（この struct 冒頭の掟）。
-            /// 帽子・アンダー・ソックスは現行の濃紺のまま（issue の指定どおり）。
+            /// アンダーシャツは未着用（2026-08-05 監督指示）＝Stout メッシュから領域自体が消えているが、
+            /// 古い焼き資産へフォールバックした環境でも腕が素肌に見えるよう配色も肌色にしておく。
+            /// 帽子・ソックスは現行の濃紺のまま。
             /// </summary>
             public static UniformPalette Umpire => new(
                 new Color(0.50f, 0.65f, 0.77f), PaletteBlack,
-                new Color(0.14f, 0.16f, 0.22f), new Color(0.14f, 0.16f, 0.22f),
+                SkinTone, new Color(0.14f, 0.16f, 0.22f),
                 new Color(0.14f, 0.16f, 0.22f));
         }
 

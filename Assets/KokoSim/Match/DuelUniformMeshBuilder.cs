@@ -12,7 +12,9 @@ namespace KokoSim.Unity.Match
     ///
     /// 処理順:
     ///   ① 頂点ごとに支配ボーン（最大重み）とセグメント軸位置 t を求め、領域
-    ///      （ユニ上/ズボン/アンダーシャツ/ソックス/肌/シューズ）を分類。バインドポーズ空間なのでポーズ非依存
+    ///      （ユニ上/ズボン/アンダーシャツ/ソックス/肌/シューズ）を分類。バインドポーズ空間なのでポーズ非依存。
+    ///      腰（シャツ/ベルト/ズボン）だけは支配ボーンでなく腰軸（pelvis→spine_01）のイソラインで決める
+    ///      ＝ウェイト塗りなりのジグザグを消し、直線のベルトラインにする（2026-08-05）
     ///   ② 痩せ — ボーン軸に垂直な成分を領域別係数でスケール。頂点の4ボーン重みで係数をブレンドするため
     ///      関節で滑らかに繋がる。ボーン位置は動かさない＝肘・手の軌道が変わらず、モーションの読みが不変
     ///   ③ 膨張 — ボーン＋t から厚みを決め法線方向に加算。厚みは境界近傍で滑らかに補間する
@@ -55,6 +57,14 @@ namespace KokoSim.Unity.Match
             public float StockingStart;   // calf: これ以遠がソックス、手前はズボンの裾（ブラウジング）
             public float CollarEnd;       // neck: これ以下がアンダーシャツ（クルーネック）、以遠は肌
 
+            // ── 腰（シャツ/ベルト/ズボン境界。t は腰軸＝pelvis頭→spine_01頭 上の位置）──
+            // 腰だけは支配ボーンの切り替わり（pelvis⇔spine_01）でなく腰軸イソラインで決める。
+            // 支配ボーンはスキンウェイト塗りなりに三角形単位で入り乱れており、多数決に任せると
+            // 裾がギザギザになる（2026-08-05 監督指摘。袖口の旧多数決と同じ症状）
+            public float BeltStart;       // これ以下がズボン
+            public float BeltEnd;         // これ以下がベルト帯、以遠がシャツ（裾＝タックイン）
+            public float BeltRidge;       // ベルトの盛り上がり[m]（ズボン腰厚への加算）
+
             // ── 布の厚み（法線方向・m）──
             public float ShirtThick;      // 胴のユニ
             public float SleeveThick;     // 半袖（ゆとりが出るぶん胴より厚め）
@@ -74,6 +84,9 @@ namespace KokoSim.Unity.Match
             public float SlimThigh;       // thigh
             public float SlimCalf;        // calf
             public float SlimNeck;        // neck_01
+
+            public bool NoUndershirt;     // true=アンダーシャツ未着用（球審）。半袖から先・首を肌へ分類する。
+                                          // 厚みは UndershirtThick=0 と併用して素肌にする
 
             public bool FlatShading;      // true=面法線（比較用）。既定は原本のスムーズ法線を保持
 
@@ -96,6 +109,11 @@ namespace KokoSim.Unity.Match
                 UndershirtEnd = 0.85f,
                 StockingStart = 0.35f,
                 CollarEnd = 0.50f,
+                // 腰軸長は実測0.128m（U2素体）＝帯幅0.32t≒実寸4cm。支配ボーンの入り乱れ帯
+                // t∈[1.07,1.11]（実測）を帯の中に完全に含める
+                BeltStart = 0.93f,
+                BeltEnd = 1.25f,
+                BeltRidge = 0.004f,
                 ShirtThick = 0.015f,
                 SleeveThick = 0.016f,
                 UndershirtThick = 0.004f,
@@ -140,6 +158,9 @@ namespace KokoSim.Unity.Match
         /// 下半身はスラックス（監督指摘「タイツみたいになっている」）: 野球パンツの
         /// ブラウジング（膝下の膨らみ→ストッキング境界で絞る）をやめ、裾を足首まで下ろした
         /// 直筒にする。ズボン厚とゆとりも少し足してドレープを出す。
+        ///
+        /// 2026-08-05 監督指示: アンダーシャツ未着用（半袖から先は素肌・首のクルーネックも無し）＋
+        /// スラックスを太めに（ワイドフィット。厚み+1cm・腿のゆとりも増）。
         /// </summary>
         public static Params Stout()
         {
@@ -154,8 +175,11 @@ namespace KokoSim.Unity.Match
             // スラックス化: 裾は足首（calf t=0.92）まで・膝下の膨らみ無し・厚みは太もも→裾ほぼ一定
             p.StockingStart = 0.92f;
             p.BlousonThick = 0f;
-            p.PantsThick = 0.022f;
-            p.ThighSlack = 0.014f;
+            p.PantsThick = 0.032f;
+            p.ThighSlack = 0.018f;
+            // アンダーシャツ未着用
+            p.NoUndershirt = true;
+            p.UndershirtThick = 0f;
             return p;
         }
 
@@ -204,6 +228,7 @@ namespace KokoSim.Unity.Match
             public BoneWeight Bw;
             public float Thick;      // 境界ブレンド済みの厚み
             public float T;          // 支配ボーンのセグメント軸位置
+            public float WaistT;     // 腰軸（pelvis→spine_01）上の位置。腰の3領域分けに使う
         }
 
         /// <summary>
@@ -245,6 +270,12 @@ namespace KokoSim.Unity.Match
                 }
             }
 
+            // 腰軸（pelvis→spine_01）。腰の3領域分け（ズボン/ベルト/シャツ）は支配ボーンでなく
+            // この軸上のイソラインで決める（Params の BeltStart/BeltEnd コメント参照）
+            int pelvisIdx;
+            bool hasWaist = nameToIndex.TryGetValue("pelvis", out pelvisIdx)
+                && axes[pelvisIdx] != Vector3.zero;
+
             // ── ①②③ 溶接状態のまま、頂点ごとに支配ボーン・t・痩せ位置・厚みを計算 ──
             int n = verts.Length;
             var dom = new int[n];
@@ -254,6 +285,7 @@ namespace KokoSim.Unity.Match
                 var w = weights[i];
                 dom[i] = DominantBone(w);
                 float t = AxisT(verts[i], dom[i], heads, axes, lens);
+                float waistT = hasWaist ? AxisT(verts[i], pelvisIdx, heads, axes, lens) : 0f;
 
                 var v = verts[i];
                 var disp = Vector3.zero;
@@ -267,8 +299,9 @@ namespace KokoSim.Unity.Match
                     Pos = v + disp,
                     Normal = normals[i],
                     Bw = w,
-                    Thick = Thickness(norms[dom[i]], t, p),
+                    Thick = Thickness(norms[dom[i]], t, waistT, p),
                     T = t,
+                    WaistT = waistT,
                 };
             }
 
@@ -279,10 +312,36 @@ namespace KokoSim.Unity.Match
             // ── ④ 三角形化: 境界を跨ぐ三角形はイソラインで分割、それ以外は多数決 ──
             var outCorners = new List<Corner>(tris.Length + tris.Length / 4);
             var outRegions = new List<Region>(tris.Length / 3 + tris.Length / 12);
+            var waistSub1 = new List<Corner>(9);
+            var waistSub2 = new List<Corner>(15);
             int triCount = tris.Length / 3;
             for (int t3 = 0; t3 < triCount; t3++)
             {
                 int i0 = tris[t3 * 3], i1 = tris[t3 * 3 + 1], i2 = tris[t3 * 3 + 2];
+
+                // 腰（pelvis/spine_01 支配の三角形）は腰軸イソラインで3領域へ。
+                // BeltStart→BeltEnd の順に分割し、サブ三角形は重心の WaistT で振り分ける
+                if (hasWaist && IsWaistBone(norms[dom[i0]]) && IsWaistBone(norms[dom[i1]])
+                    && IsWaistBone(norms[dom[i2]]))
+                {
+                    waistSub1.Clear(); waistSub2.Clear();
+                    SplitWaistTriangle(corner[i0], corner[i1], corner[i2], p.BeltStart, waistSub1);
+                    for (int s = 0; s < waistSub1.Count; s += 3)
+                        SplitWaistTriangle(waistSub1[s], waistSub1[s + 1], waistSub1[s + 2],
+                            p.BeltEnd, waistSub2);
+                    for (int s = 0; s < waistSub2.Count; s += 3)
+                    {
+                        outCorners.Add(waistSub2[s]);
+                        outCorners.Add(waistSub2[s + 1]);
+                        outCorners.Add(waistSub2[s + 2]);
+                        float mid = (waistSub2[s].WaistT + waistSub2[s + 1].WaistT
+                            + waistSub2[s + 2].WaistT) / 3f;
+                        outRegions.Add(mid <= p.BeltStart ? Region.Pants
+                            : mid <= p.BeltEnd ? Region.Belt : Region.Shirt);
+                    }
+                    continue;
+                }
+
                 float threshold;
                 // 3頂点が同一支配ボーンで、そのボーンに境界があり、t が跨いでいる → イソライン分割
                 if (dom[i0] == dom[i1] && dom[i1] == dom[i2]
@@ -439,8 +498,9 @@ namespace KokoSim.Unity.Match
                 case "spine_02":
                 case "spine_03":
                 case "clavicle": return 1f;
-                case "upperarm": return t <= p.SleeveEnd ? 0.6f : 0.15f;
-                case "lowerarm": return t <= p.UndershirtEnd ? 0.15f : 0f;
+                // アンダーシャツ未着用なら袖から先は素肌＝均さない
+                case "upperarm": return t <= p.SleeveEnd ? 0.6f : (p.NoUndershirt ? 0f : 0.15f);
+                case "lowerarm": return !p.NoUndershirt && t <= p.UndershirtEnd ? 0.15f : 0f;
                 default: return 0f;
             }
         }
@@ -487,6 +547,56 @@ namespace KokoSim.Unity.Match
                 Bw = u < 0.5f ? from.Bw : to.Bw,
                 Thick = Mathf.Lerp(from.Thick, to.Thick, u),
                 T = threshold,
+                WaistT = Mathf.Lerp(from.WaistT, to.WaistT, u),
+            };
+        }
+
+        /// <summary>腰の3領域分けの対象ボーンか（支配ボーンがこの2つの三角形だけ腰イソラインを通す）。</summary>
+        private static bool IsWaistBone(string bone)
+        {
+            return bone == "pelvis" || bone == "spine_01";
+        }
+
+        /// <summary>
+        /// 腰イソライン（WaistT=threshold）で三角形を分割してサブ三角形を積む（領域はまだ振らない）。
+        /// 跨いでいなければそのまま1枚積む。分割の作法は <see cref="SplitTriangle"/> と同じ
+        /// （孤立1頂点＋対岸2頂点 → 1+2枚・巻き順保存・交点は辺上の線形補間）。
+        /// </summary>
+        private static void SplitWaistTriangle(Corner c0, Corner c1, Corner c2, float threshold,
+            List<Corner> outTris)
+        {
+            bool s0 = c0.WaistT > threshold, s1 = c1.WaistT > threshold, s2 = c2.WaistT > threshold;
+            if (s0 == s1 && s1 == s2)
+            {
+                outTris.Add(c0); outTris.Add(c1); outTris.Add(c2);
+                return;
+            }
+            var cs = new[] { c0, c1, c2 };
+            var side = new[] { s0, s1, s2 };
+            int lone = side[0] == side[1] ? 2 : (side[0] == side[2] ? 1 : 0);
+            int a = (lone + 1) % 3, b = (lone + 2) % 3;
+
+            var iA = LerpWaist(cs[lone], cs[a], threshold);
+            var iB = LerpWaist(cs[lone], cs[b], threshold);
+
+            outTris.Add(cs[lone]); outTris.Add(iA); outTris.Add(iB);
+            outTris.Add(iA); outTris.Add(cs[a]); outTris.Add(cs[b]);
+            outTris.Add(iA); outTris.Add(cs[b]); outTris.Add(iB);
+        }
+
+        private static Corner LerpWaist(Corner from, Corner to, float threshold)
+        {
+            float denom = to.WaistT - from.WaistT;
+            float u = Mathf.Abs(denom) < 1e-6f ? 0.5f
+                : Mathf.Clamp((threshold - from.WaistT) / denom, 0.001f, 0.999f);
+            return new Corner
+            {
+                Pos = Vector3.Lerp(from.Pos, to.Pos, u),
+                Normal = Vector3.Slerp(from.Normal, to.Normal, u),
+                Bw = u < 0.5f ? from.Bw : to.Bw,
+                Thick = Mathf.Lerp(from.Thick, to.Thick, u),
+                T = Mathf.Lerp(from.T, to.T, u),
+                WaistT = threshold,
             };
         }
 
@@ -549,11 +659,12 @@ namespace KokoSim.Unity.Match
                 case "clavicle":
                     return Region.Shirt;
                 case "upperarm":
-                    return t <= p.SleeveEnd ? Region.Shirt : Region.Undershirt;
+                    return t <= p.SleeveEnd ? Region.Shirt
+                        : p.NoUndershirt ? Region.Skin : Region.Undershirt;
                 case "lowerarm":
-                    return t <= p.UndershirtEnd ? Region.Undershirt : Region.Skin;
+                    return t > p.UndershirtEnd || p.NoUndershirt ? Region.Skin : Region.Undershirt;
                 case "neck_01":
-                    return t <= p.CollarEnd ? Region.Undershirt : Region.Skin;
+                    return t > p.CollarEnd || p.NoUndershirt ? Region.Skin : Region.Undershirt;
                 case "pelvis":
                 case "thigh":
                     return Region.Pants;
@@ -571,12 +682,13 @@ namespace KokoSim.Unity.Match
         /// ③膨張の厚み。ボーン種と t だけで決まる（領域には依存しない）。
         /// 境界±ThickBand で両側の厚みへ滑らかにブレンド＝分割しても亀裂が開かない。
         /// ズボンの膝下はブラウジング（膨らみ→ソックス境界で絞り）。
+        /// 腰（pelvis/spine_01）だけは腰軸 waistT で「ズボン腰→ベルト盛り→シャツ」へブレンドする
+        /// ＝旧実装の支配ボーン切り替わりの厚み段差（裾のフリンジの幾何側の正体）も同時に消える。
         /// </summary>
-        private static float Thickness(string bone, float t, Params p)
+        private static float Thickness(string bone, float t, float waistT, Params p)
         {
             switch (bone)
             {
-                case "spine_01":
                 case "spine_02":
                 case "spine_03":
                 case "clavicle":
@@ -588,7 +700,12 @@ namespace KokoSim.Unity.Match
                 case "neck_01":
                     return BlendAt(t, p.CollarEnd, p.UndershirtThick, 0f);
                 case "pelvis":
-                    return p.PantsThick + p.ThighSlack * 0.8f;   // 尻回りもだぶつかせる
+                case "spine_01":
+                {
+                    float waistPants = p.PantsThick + p.ThighSlack * 0.8f;   // 尻回りもだぶつかせる
+                    float band = BlendAt(waistT, p.BeltStart, waistPants, waistPants + p.BeltRidge);
+                    return BlendAt(waistT, p.BeltEnd, band, p.ShirtThick);
+                }
                 case "thigh":
                 {
                     // 腰〜腿上部で最大のゆとり→膝へ向けて6割絞る（実物のズボンのドレープ。
