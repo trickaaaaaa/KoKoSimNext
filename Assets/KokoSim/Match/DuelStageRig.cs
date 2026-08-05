@@ -2070,11 +2070,20 @@ namespace KokoSim.Unity.Match
         private float _catcherShiftT = -1f;
 
         /// <summary>
+        /// 持ち球を手の中心から掌側へ沈める量[m]。手の中心に置くと球（直径0.074）が手の甲側にも
+        /// 半分はみ出し、センターカメラ（投手の背中越し）から「指の上に球が乗っている」ように見える
+        /// （2026-08-05 監督指摘）。球半径弱ぶん掌側へ沈めると、甲と指が球のカメラ側を隠し
+        /// 「握っている」絵になる。掌の向きは素体依存なので実測で採る（<see cref="PalmDirWorld"/>）。
+        /// </summary>
+        private const float BallPalmSinkM = 0.032f;
+
+        /// <summary>
         /// ボールを投球する手へ貼り付ける（振りかぶり中は手の中にある）。<see cref="OnPitchWindup"/> から呼ぶ。
         ///
-        /// 位置は design-18 §3.3.1 の掟どおり**手の中心＝手首→中指付け根の中点**を基準にし、
-        /// 較正のオフセット（<see cref="DuelCalibration.BallInHandOffset"/>）を手ボーンローカルで足す。
-        /// 手ボーンローカルで持つので、以後は手がどう動いても球は手の中に留まる。
+        /// 位置は design-18 §3.3.1 の掟どおり**手の中心＝手首→中指付け根の中点**を基準にし、そこから
+        /// 掌側へ <see cref="BallPalmSinkM"/> 沈め、較正のオフセット
+        /// （<see cref="DuelCalibration.BallInHandOffset"/>）を手ボーンローカルで足す。
+        /// 手ボーンローカルで持つので、以後は手がどう動いても球は手の中（掌側）に留まる。
         /// </summary>
         private void HoldBallInHand()
         {
@@ -2086,7 +2095,8 @@ namespace KokoSim.Unity.Match
             // 1回求めれば以後のポーズでも手の中を指し続ける
             var centerWorld = tip != null ? Vector3.Lerp(hand.position, tip.position, 0.5f) : hand.position;
             _ballHand = hand;
-            _ballHeldLocal = hand.InverseTransformPoint(centerWorld) + _cal.BallInHandOffset;
+            _ballHeldLocal = hand.InverseTransformPoint(centerWorld) + _cal.BallInHandOffset
+                + hand.InverseTransformDirection(PalmDirWorld(_pitcher.Animator, hand, tip)) * BallPalmSinkM;
             _ballHeld = true;
             _ballInMitt = false;   // 前球がミットの中に残っていても投手の手へ戻す
             _ballT = -1f;
@@ -2094,6 +2104,32 @@ namespace KokoSim.Unity.Match
             _ball.transform.SetParent(hand, false);
             _ball.transform.localPosition = _ballHeldLocal;
             _ball.SetActive(true);
+        }
+
+        /// <summary>
+        /// 右手の掌の法線（ワールド・掌が向く側）。<see cref="AttachGlove"/> と同じ実測で組む:
+        /// 縦軸=手首→中指付け根、横=人差し指付け根→小指付け根、**符号は指の丸まり側**（外積では
+        /// 決まらず、視線で決めると取り違える＝グラブが甲側に付いた2026-07-29の教訓）。
+        /// 左投手は鏡映親ノード下だが、丸まりも実測なので符号はそのまま正しい。
+        /// 指ボーンが無い・丸まりが弱く符号が決められない素体では zero を返す（呼び出し側は沈め無し）。
+        /// </summary>
+        private static Vector3 PalmDirWorld(Animator a, Transform hand, Transform knuckle)
+        {
+            var index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal);
+            var little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal);
+            var tip = a.GetBoneTransform(HumanBodyBones.RightMiddleDistal);
+            if (hand == null || knuckle == null || index == null || little == null || tip == null)
+                return Vector3.zero;
+            var up = knuckle.position - hand.position;
+            up = up.sqrMagnitude > 1e-6f ? up.normalized : Vector3.up;
+            var n = Vector3.Cross(up, index.position - little.position);
+            n -= Vector3.Dot(n, up) * up;
+            if (n.sqrMagnitude < 1e-8f) return Vector3.zero;
+            n.Normalize();
+            var curl = tip.position - knuckle.position;
+            curl -= Vector3.Dot(curl, up) * up;
+            if (curl.magnitude < 0.01f) return Vector3.zero;
+            return Vector3.Dot(n, curl) < 0f ? -n : n;
         }
 
         /// <summary>
