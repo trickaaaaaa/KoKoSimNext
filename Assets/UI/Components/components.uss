@@ -2073,8 +2073,12 @@
 .sbug-lamprow { flex-direction: row; align-items: center; flex-shrink: 0; }
 /* USS に nth-child は無いので、2行目以降だけ修飾子で行間を付ける。 */
 .sbug-lamprow--next { margin-top: var(--lamp-row-gap); }
+/* ラベルはランプより大きいので、**高さをランプ径に固定して行の高さを決めさせない**
+   （決めさせるとランプの縦の間隔が仕様の行間5pxより広がり、格子が崩れる）。
+   はみ出したぶんは行間へ出るだけ（UI Toolkit の overflow 既定は visible）。 */
 .sbug-lamprow__key {
     width: var(--lamp-key-w);   /* 固定幅＝3行の左端を揃える */
+    height: var(--lamp-d);
     flex-shrink: 0;
     font-size: var(--lamp-fs-key);
     letter-spacing: var(--lamp-ls-key);

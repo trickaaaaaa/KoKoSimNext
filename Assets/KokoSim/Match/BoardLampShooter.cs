@@ -98,6 +98,20 @@ namespace KokoSim.Unity.Match
             }
             foreach (var g in glows) g.style.opacity = StyleKeyword.Null;
 
+            // ── B/S/O ラベルの大きさ比較（行はランプ径に固定なので格子は動かないはず） ──
+            var keys = ctrl.GetComponent<UIDocument>().rootVisualElement
+                .Query<Label>(className: "sbug-lamprow__key").ToList();
+            foreach (var fs in new[] { 14, 18, 22 })
+            {
+                yield return Capture(ctrl, "30-key-" + fs, () =>
+                {
+                    ctrl.HidePitchCallForCapture();
+                    ctrl.SetCountForCapture(3, 2, 2);
+                    foreach (var k in keys) k.style.fontSize = fs;
+                });
+            }
+            foreach (var k in keys) k.style.fontSize = StyleKeyword.Null;
+
             Debug.Log("[Lamp479] DONE → " + Dir);
         }
 
