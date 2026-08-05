@@ -15,8 +15,14 @@ namespace KokoSim.Unity.Match
     ///
     /// <para><b>攻撃中</b>は代打／代走のタブ（従来どおり）。<b>守備中</b>は issue #256 で
     /// 旧4タブ（投手交代／守備交代／守備位置／DH解除）を廃し、スタメン設定（#233）と同じ
-    /// <b>割当2ペイン</b>に統合した：左＝守備の割当10枠（投・捕・一・二・三・遊・左・中・右・指）、
+    /// <b>割当2ペイン</b>に統合した：左＝打順表（守備の割当10枠）、
     /// 中＝控え一覧（役割で分けずフラット・背番号順・出場済みは灰。#93）、右＝能力比較。</para>
+    ///
+    /// <para>issue #452（パワプロ方式）: 左の並びは<b>打順順</b>（1〜9番。DH制の投手＝打順外は末尾に「—」）。
+    /// 操作が決まった時点で該当行を「旧 → 新」の<b>即時プレビュー</b>に切り替え、行の✕で選び直せる
+    /// （保留は常に1件・フッター文は補助）。能力比較は選択中の枠の役割に追随し、開いた直後の
+    /// 投枠プリセレクトは廃止（守備交代で野手能力が見えない体験の解消）。継投の最短手
+    /// 「控えを1クリック→確定」は <see cref="ClickCandidate"/> の投枠フォールバックが引き続き担う。</para>
     ///
     /// <para>操作は「誰を・どこへ」の一手に統一し、結果を導出する：
     /// 枠→枠＝入替（可逆・在フィールド同士）／枠(投)↔在フィールド野手＝投野交代／枠(指)↔守備位置＝DH解除／
@@ -118,6 +124,36 @@ namespace KokoSim.Unity.Match
             Render();
         }
 
+        /// <summary>スクショ用: 守備の割当枠を守備位置で選ぶ（クリックと同じ経路）。issue #452 のプレビュー撮影用。</summary>
+        public void PickSlotForCapture(FieldPosition pos)
+        {
+            if (!_open || _opt == null || _opt.IsOffense) return;
+            var i = _slots.FindIndex(s => s.Pos == pos);
+            if (i < 0) return;
+            ClickSlot(i);
+            Render();
+        }
+
+        /// <summary>スクショ用: 控え一覧の n 番目を選ぶ（守備＝割当・攻撃＝代打/代走の控え）。</summary>
+        public void PickCandidateForCapture(int index)
+        {
+            if (!_open || _opt == null) return;
+            if (_opt.IsOffense)
+            {
+                if (index >= 0 && index < _opt.Reserves.Count) { _offInIndex = index; Render(); }
+                return;
+            }
+            if (index >= 0 && index < _cands.Count) { ClickCandidate(index); Render(); }
+        }
+
+        /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者）。</summary>
+        public void PickRunnerForCapture(int baseIndex)
+        {
+            if (!_open || _opt == null || !_opt.IsOffense || _opt.Runners.Count == 0) return;
+            _baseIndex = baseIndex >= 0 ? baseIndex : _opt.Runners[0].BaseIndex;
+            Render();
+        }
+
         private void ResetSelection()
         {
             _baseIndex = -1;
@@ -130,8 +166,9 @@ namespace KokoSim.Unity.Match
             if (_opt != null && !_opt.IsOffense)
             {
                 BuildDefenseModel();
-                // 継投は最頻操作。開いたら [投] 枠をプリセレクトして「控えを1クリック→確定」で済ませる（issue #256）。
-                _pickedSlot = _slots.FindIndex(s => s.Role == SlotRole.Pitcher);
+                // 投枠のプリセレクトは廃止（issue #452 指摘4。開いた直後に投球比較しか出ず、守備交代で
+                // 野手能力が見えない体験の主因だった）。継投の最短手「控えを1クリック→確定」は
+                // ClickCandidate の「枠未選択なら投枠へ」フォールバックが引き続き成立させる。
             }
         }
 
@@ -157,7 +194,10 @@ namespace KokoSim.Unity.Match
             FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
         };
 
-        /// <summary>守備割当10枠（投→捕…右→指）と控え一覧（1本の名簿・背番号順）を組む。</summary>
+        /// <summary>
+        /// 守備割当10枠と控え一覧（1本の名簿・背番号順）を組む。並びは<b>打順順</b>（1〜9番。
+        /// DH制の投手＝打順外は末尾。issue #452 指摘1）。
+        /// </summary>
         private void BuildDefenseModel()
         {
             _slots.Clear();
@@ -176,10 +216,16 @@ namespace KokoSim.Unity.Match
             if (_opt.UsesDh && _opt.DhSlot >= 0 && _opt.DhSlot < _opt.Lineup.Count)
                 _slots.Add(new DefenseSlot(FieldPosition.DesignatedHitter, _opt.Lineup[_opt.DhSlot], _opt.DhSlot, SlotRole.Dh));
 
+            // 打順順に並べ替える（パワプロ方式・issue #452）。打順外（DH制の投手）だけ末尾＝"—"。
+            _slots.Sort((x, y) => OrderKey(x).CompareTo(OrderKey(y)));
+
             // 控えは役割で分けない（#93 / #381: engine 側も1本の名簿）。念のため背番号順に揃える。
             _cands = _opt.Reserves.OrderBy(p => p.UniformNumber == 0 ? int.MaxValue : p.UniformNumber)
                 .ThenBy(p => p.Name).ToList();
         }
+
+        /// <summary>打順順ソートの鍵。打順外（DH制の投手＝LineupSlot -1）は末尾へ。</summary>
+        private static int OrderKey(DefenseSlot s) => s.LineupSlot >= 0 ? s.LineupSlot : int.MaxValue;
 
         private int LineupSlotOf(FieldPosition pos)
         {
@@ -230,6 +276,8 @@ namespace KokoSim.Unity.Match
             _outRows.Clear();
             if (_outsCap != null) _outsCap.text = _offKind == SubstitutionKind.PinchRun ? "退く走者" : "退く選手";
 
+            // 控えを選んだ時点で、該当行を「旧 → 新」の即時プレビューへ切り替える（issue #452 指摘2）。
+            var inName = _offInIndex >= 0 && _offInIndex < _opt.Reserves.Count ? NameOf(_opt.Reserves[_offInIndex]) : null;
             for (var i = 0; i < _opt.Lineup.Count; i++)
             {
                 var p = _opt.Lineup[i];
@@ -237,16 +285,18 @@ namespace KokoSim.Unity.Match
                 var tag = "";
                 var selectable = false;
                 var picked = false;
+                string preview = null;
                 if (_offKind == SubstitutionKind.PinchHit)
                 {
-                    if (i == _opt.UpcomingBatterSlot) { tag = "次打者"; picked = true; }
+                    if (i == _opt.UpcomingBatterSlot) { tag = "次打者"; picked = true; preview = inName; }
                 }
                 else
                 {
                     var b = BaseOf(p);
-                    if (b >= 0) { selectable = true; tag = BaseName(b); picked = _baseIndex == b; }
+                    if (b >= 0) { selectable = true; tag = BaseName(b); picked = _baseIndex == b; if (picked) preview = inName; }
                 }
-                var row = LineupRow(i + 1, p, PosJp(p.Position), selectable, picked, tag, chipActive: false);
+                var row = LineupRow(i + 1, p, PosJp(p.Position), selectable, picked, tag, chipActive: false,
+                    previewTo: preview, onCancel: preview == null ? null : CancelOffensePick);
                 if (selectable)
                     row.RegisterCallback<ClickEvent>(e =>
                     {
@@ -285,18 +335,75 @@ namespace KokoSim.Unity.Match
         {
             if (_outRows == null) return;
             _outRows.Clear();
-            if (_outsCap != null) _outsCap.text = "守備の割当";
+            if (_outsCap != null) _outsCap.text = "打順表";
 
+            // 操作が決まった行は「旧 → 新」の即時プレビューに切り替える（issue #452 指摘2・3）。
+            var op = ResolveDef();
             for (var i = 0; i < _slots.Count; i++)
             {
                 var s = _slots[i];
                 var slotIdx = i;
                 var picked = i == _pickedSlot || i == _pickedSlot2;
                 var order = s.LineupSlot >= 0 ? s.LineupSlot + 1 : 0;   // DHの投手は打順外＝"—"
-                var row = LineupRow(order, s.Player, PosJp(s.Pos), selectable: true, picked, tag: "", chipActive: true);
+                var preview = DefPreviewText(op, i);
+                var row = LineupRow(order, s.Player, PosJp(s.Pos), selectable: true, picked, tag: "", chipActive: true,
+                    previewTo: preview, onCancel: preview == null ? null : CancelDefenseOp);
                 row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); ClickSlot(slotIdx); Render(); });
                 _outRows.Add(row);
             }
+        }
+
+        /// <summary>
+        /// この枠に出す「→ 後の姿」のプレビュー文字列（無い枠は null。issue #452 指摘2）。
+        /// 入る選手名／移る守備位置／退場・自動補充を、確定前の見込みとして行内に出す。
+        /// </summary>
+        private string DefPreviewText(in DefOp op, int slotIdx)
+        {
+            var s = _slots[slotIdx];
+            switch (op.Kind)
+            {
+                case DefKind.Relieve:
+                    return s.Role == SlotRole.Pitcher ? NameOf(op.Incoming) : null;
+                case DefKind.Convert:
+                    if (s.Role == SlotRole.Pitcher) return NameOf(op.Incoming);
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return NameOf(_opt.CurrentPitcher);
+                    return null;
+                case DefKind.PromoteFielder:
+                    if (s.Role == SlotRole.Pitcher) return NameOf(op.Incoming);
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return "自動補充";
+                    return null;
+                case DefKind.FielderSwap:
+                    if (slotIdx == _pickedSlot) return PosJp(_slots[_pickedSlot2].Pos) + "へ";
+                    if (slotIdx == _pickedSlot2) return PosJp(_slots[_pickedSlot].Pos) + "へ";
+                    return null;
+                case DefKind.Assign:
+                    return slotIdx == _pickedSlot ? NameOf(op.Incoming) : null;
+                case DefKind.DhToPos:
+                    if (s.Role == SlotRole.Dh) return PosJp(op.Pos) + "へ";
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return "退場";
+                    return null;
+                case DefKind.DhWithdraw:
+                    return s.Role == SlotRole.Dh ? "退場" : null;
+                default:
+                    return null;   // None / Invalid はプレビュー無し
+            }
+        }
+
+        /// <summary>行の✕＝保留中の操作の取り消し（保留は常に1件）。主選択の枠は残して選び直せる。</summary>
+        private void CancelDefenseOp()
+        {
+            _pickedSlot2 = -1;
+            _defInIndex = -1;
+            _convertTo = null;
+            _dhWithdraw = false;
+            Render();
+        }
+
+        /// <summary>行の✕（攻撃側）＝選んだ控えの取り消し。</summary>
+        private void CancelOffensePick()
+        {
+            _offInIndex = -1;
+            Render();
         }
 
         /// <summary>
@@ -367,11 +474,14 @@ namespace KokoSim.Unity.Match
             retire.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = null; Render(); });
             _inRows.Add(retire);
 
-            foreach (var s in _slots.Where(s => s.Role == SlotRole.Fielder))
+            // 行き先の列挙は守備位置順のまま（_slots は打順順になったので位置順で引き直す。issue #452）。
+            foreach (var pos in FielderOrder)
             {
-                var pos = s.Pos;
-                var row = ChoiceRow(PosJp(pos) + "へ回す（" + NameOf(s.Player) + " が退場）", _convertTo == pos);
-                row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = pos; Render(); });
+                var s = _slots.FirstOrDefault(t => t.Role == SlotRole.Fielder && t.Pos == pos);
+                if (s.Player == null) continue;
+                var to = pos;
+                var row = ChoiceRow(PosJp(to) + "へ回す（" + NameOf(s.Player) + " が退場）", _convertTo == to);
+                row.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _convertTo = to; Render(); });
                 _inRows.Add(row);
             }
         }
@@ -450,8 +560,9 @@ namespace KokoSim.Unity.Match
         private void BuildCompare()
         {
             var (outgoing, incoming, pitcherView, capA, capB) = CompareSubjects();
-            FillCard("msub-cmp-a", outgoing, capA);
-            FillCard("msub-cmp-b", incoming, capB);
+            // 空カードには「次に何を選べばよいか」を出す（開いた直後の空状態の道標。issue #452 指摘4）。
+            FillCard("msub-cmp-a", outgoing, EmptyCardTextA());
+            FillCard("msub-cmp-b", incoming, EmptyCardTextB());
 
             if (_cmpRows == null) return;
             _cmpRows.Clear();
@@ -472,6 +583,20 @@ namespace KokoSim.Unity.Match
                 else
                     _cmpRows.Add(CompareRowEl(label, x, y));
             }
+        }
+
+        /// <summary>左カード（退く側）の空状態文言。何も選んでいないとき次の一手を指す。</summary>
+        private string EmptyCardTextA()
+        {
+            if (_opt.IsOffense) return _offKind == SubstitutionKind.PinchRun ? "走者を選ぶ" : "次打者なし";
+            return "枠を選ぶ";
+        }
+
+        /// <summary>右カード（入る側）の空状態文言。</summary>
+        private string EmptyCardTextB()
+        {
+            if (_opt.IsOffense) return "控えを選ぶ";
+            return Picked(_pickedSlot) == null ? "—" : "控えか枠を選ぶ";
         }
 
         private (Player Out, Player In, bool PitcherView, string CapA, string CapB) CompareSubjects()
@@ -644,8 +769,14 @@ namespace KokoSim.Unity.Match
 
         private static string BaseName(int i) => i == 0 ? "一塁" : i == 1 ? "二塁" : "三塁";
 
-        /// <summary>打順行（スタメン設定と同じ lineup-row 部品）。chipActive=true で守備位置チップを操作対象として活かす。</summary>
-        private VisualElement LineupRow(int order, Player p, string posText, bool selectable, bool picked, string tag, bool chipActive)
+        /// <summary>
+        /// 打順行（スタメン設定と同じ lineup-row 部品）。chipActive=true で守備位置チップを操作対象として活かす。
+        /// previewTo を渡すと「旧名 → previewTo」の即時プレビュー行になり（issue #452 指摘2）、
+        /// onCancel があれば行末に ✕（保留中の操作の選び直し）を出す。プレビュー中は投打の付帯情報を
+        /// 省く（比較は右カードが担う）。
+        /// </summary>
+        private VisualElement LineupRow(int order, Player p, string posText, bool selectable, bool picked, string tag, bool chipActive,
+            string previewTo = null, System.Action onCancel = null)
         {
             var row = new VisualElement();
             row.AddToClassList("lineup-row");
@@ -674,11 +805,33 @@ namespace KokoSim.Unity.Match
 
             var name = new Label(NameOf(p));
             name.AddToClassList("lineup-row__name");
+            if (previewTo != null) name.AddToClassList("lineup-row__name--out");
             row.Add(name);
 
-            var info = new Label(HandLabel(p));
-            info.AddToClassList("lineup-row__info");
-            row.Add(info);
+            if (previewTo != null)
+            {
+                var arrow = new Label("→");
+                arrow.AddToClassList("lineup-row__arrow");
+                row.Add(arrow);
+                var incoming = new Label(previewTo);
+                incoming.AddToClassList("lineup-row__incoming");
+                incoming.AddToClassList("f-body-bd");
+                row.Add(incoming);
+            }
+            else
+            {
+                var info = new Label(HandLabel(p));
+                info.AddToClassList("lineup-row__info");
+                row.Add(info);
+            }
+
+            if (onCancel != null)
+            {
+                var x = new Button(() => onCancel()) { text = "✕" };
+                x.AddToClassList("lineup-row__x");
+                x.RegisterCallback<ClickEvent>(e => e.StopPropagation());   // 行クリック（枠選択）に化けさせない
+                row.Add(x);
+            }
 
             return row;
         }

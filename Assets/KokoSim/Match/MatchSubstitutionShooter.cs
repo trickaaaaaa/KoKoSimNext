@@ -35,10 +35,21 @@ namespace KokoSim.Unity.Match
             ctrl.AdvanceForCapture();
             yield return Capture(ctrl, "sub-0-controls");
 
-            // ② 守備中（自校=後攻なので初回は守備）。守備の割当2ペイン（タブ無し・[投]枠プリセレクト, issue #256）。
+            // ② 守備中（自校=後攻なので初回は守備）。打順表（打順順・プリセレクト無し＝空状態の道標, issue #452）。
             for (var i = 0; i < 40 && ctrl.ManagerOnOffenseForCapture; i++) ctrl.AdvanceForCapture();
             ctrl.OpenSubstitutionForCapture();
             yield return Capture(ctrl, "sub-1-defense-assign");
+
+            // ②b 継投プレビュー（控え1クリック→投枠の行が「旧 → 新」＋✕・比較は投球ビュー, issue #452）。
+            ctrl.PickSubstitutionCandidateForCapture(0);
+            yield return Capture(ctrl, "sub-2-defense-relief-preview");
+
+            // ②c 守備固めプレビュー（野手枠→控え。野手能力の比較が出ることの確認＝指摘4, issue #452）。
+            ctrl.CloseSubstitutionForCapture();
+            ctrl.OpenSubstitutionForCapture();
+            ctrl.PickSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition.LeftField);
+            ctrl.PickSubstitutionCandidateForCapture(1);
+            yield return Capture(ctrl, "sub-3-defense-assign-preview");
             ctrl.CloseSubstitutionForCapture();
 
             // ③ 攻撃中（代打）。自校の攻撃になるまで進める。
@@ -46,12 +57,19 @@ namespace KokoSim.Unity.Match
             ctrl.OpenSubstitutionForCapture();
             yield return Capture(ctrl, "sub-4-offense-pinchhit");
 
-            // ⑥ 代走（塁上に走者がいる打席境界まで進めてから）。
+            // ③b 代打プレビュー（次打者の行が「旧 → 新」＋✕, issue #452）。
+            ctrl.PickSubstitutionCandidateForCapture(0);
+            yield return Capture(ctrl, "sub-4b-offense-pinchhit-preview");
+
+            // ⑥ 代走（塁上に走者がいる打席境界まで進めてから）。走者＋控えを選んだプレビューまで撮る。
             ctrl.CloseSubstitutionForCapture();
             for (var i = 0; i < 80 && !ctrl.ManagerCanPinchRunForCapture; i++) ctrl.AdvanceForCapture();
             ctrl.OpenSubstitutionForCapture();
             ctrl.SelectSubstitutionKindForCapture(1);
             yield return Capture(ctrl, "sub-5-offense-pinchrun");
+            ctrl.PickSubstitutionRunnerForCapture(-1);
+            ctrl.PickSubstitutionCandidateForCapture(0);
+            yield return Capture(ctrl, "sub-5b-offense-pinchrun-preview");
 
             Debug.Log("[SubShooter] DONE");
         }
