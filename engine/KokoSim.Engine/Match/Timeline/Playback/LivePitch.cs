@@ -100,6 +100,16 @@ public sealed record LivePitch
     /// <see cref="GameContext.CaptureTimelines"/> が真のときだけ非null（統計シム・裏試合はゼロコスト）。
     /// </summary>
     public PlaybackPlay? BatteryMissPlay { get; init; }
+
+    /// <summary>
+    /// この球で起きた振り逃げ（第3ストライク不捕球, design-14 P1-2, issue #488）の再生データ。
+    /// <see cref="BatteryMissPlay"/> と同様「この球の前」ではなく「この球そのものの結果」として起きる。
+    /// 三振が確定した直後（イニング後処理の前）にしか判定しないため、盗塁・牽制・暴投/捕逸のいずれよりも
+    /// 後に解決する＝再生も最後に連結する。<see cref="TimelineBuilder.BuildDropThirdStrike"/> の出力を
+    /// <see cref="PlayTimelineAdapter.ToPlaybackPlay"/> で変換した純関数の写し＝乱数消費ゼロ・帯不変。
+    /// <see cref="GameContext.CaptureTimelines"/> が真のときだけ非null（統計シム・裏試合はゼロコスト）。
+    /// </summary>
+    public PlaybackPlay? DropThirdStrikePlay { get; init; }
 }
 
 /// <summary>
