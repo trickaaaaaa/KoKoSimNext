@@ -728,6 +728,63 @@ public sealed class BaserunningPlaysTests
         }
     }
 
+    /// <summary>
+    /// issue #488: 振り逃げが成立した球の <see cref="LivePitch.DropThirdStrikePlay"/> に再生データが載る
+    /// （CaptureTimelines+CapturePitches のとき）。打席途中の振り逃げを絵にする唯一の運び口。
+    /// </summary>
+    [Fact]
+    public void DropThirdStrikePlay_IsAttachedToTheLivePitchOfTheStrikeoutPitch()
+    {
+        var on = new GameContext
+        {
+            Baserunning = C with { DropThirdStrikeReachProb = 0.9, DropThirdStrikeCatchingSlope = 0.0 },
+            CaptureTimelines = true, CapturePitches = true,
+        };
+        var captured = 0;
+        for (ulong seed = 1; seed <= 30 && captured == 0; seed++)
+        {
+            var prog = new MatchProgression(FastTeam("A"), FastTeam("H"), on, seed);
+            LivePitch? prev = null;
+            while (true)
+            {
+                var r = prog.AdvancePitch();
+                if (r == AdvancePitchResult.Finished) break;
+                var last = prog.LastPitch;
+                if (last == null || ReferenceEquals(last, prev)) continue;
+                prev = last;
+                if (last.DropThirdStrikePlay is not { } play) continue;
+                captured++;
+                // 振り逃げの再生データとして最小限の構造が揃っている（純関数の写し＝乱数消費ゼロ）。
+                Assert.Equal("振り逃げ", play.Result);
+                Assert.NotEmpty(play.Ball);
+                Assert.NotEmpty(play.Runners);
+            }
+        }
+        Assert.True(captured > 0, "振り逃げ成立率を積極化しても DropThirdStrikePlay が一度も載らなかった（配線切れの疑い）");
+    }
+
+    /// <summary>観測ゲート（CaptureTimelines）を閉じれば DropThirdStrikePlay は決して載らない＝統計シム・裏試合はゼロコスト。</summary>
+    [Fact]
+    public void DropThirdStrikePlay_NeverAttachedWhenCaptureTimelinesOff()
+    {
+        var on = new GameContext
+        {
+            Baserunning = C with { DropThirdStrikeReachProb = 0.9, DropThirdStrikeCatchingSlope = 0.0 },
+            CapturePitches = true, // CaptureTimelines は既定オフ
+        };
+        var prog = new MatchProgression(FastTeam("A"), FastTeam("H"), on, 1UL);
+        LivePitch? prev = null;
+        while (true)
+        {
+            var r = prog.AdvancePitch();
+            if (r == AdvancePitchResult.Finished) break;
+            var last = prog.LastPitch;
+            if (last == null || ReferenceEquals(last, prev)) continue;
+            prev = last;
+            Assert.Null(last.DropThirdStrikePlay);
+        }
+    }
+
     // --- StealResolver の target 一般化（design-14 P1-4）: target 省略時は従来と完全一致 ---
 
     [Fact]
