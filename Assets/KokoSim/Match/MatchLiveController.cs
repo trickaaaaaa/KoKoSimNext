@@ -73,9 +73,9 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float noPlayHoldSeconds = 1.2f;
         [Tooltip("俯瞰（2D）で1球を見せる時間[秒]（×0.5/×2/×4速度に連動）。盤面の投球飛翔0.45秒より長くし、着弾後の一呼吸を確保する（issue #135）。対決ビュー中の判定時刻はこの値ではなく球審のコール（DuelStageRig.CallMomentSeconds）で決まる。")]
         [SerializeField] private float pitchIntervalSeconds = 1.0f;
-        [Tooltip("打席の頭に置く采配の間[秒]（設計書15 §8.3-①）。打者を見てサインを出す間合い。倍速で一緒に縮む。")]
-        [SerializeField] private float paHeadDwellSeconds = 1.0f;
-        [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。投球（セットポジション）1.3秒＋フォロースルー1.5秒が切り貼りなしで収まる長さにする。判定表示のタイミングは球審のコールに従うので、この値は次の投球までの間だけを決める。")]
+        [Tooltip("打席の頭に置く采配の間[秒]（設計書15 §8.3-①）。打者を見てサインを出す間合い。倍速で一緒に縮む。1.0だと采配カードの受付が短すぎたため1.8へ延長（issue #493）。")]
+        [SerializeField] private float paHeadDwellSeconds = 1.8f;
+        [Tooltip("対決ビュー表示中のリリース間隔[秒]（design-18 §7-2）。投球（セットポジション）1.3秒＋フォロースルー1.5秒が切り貼りなしで収まる長さにする。判定表示のタイミングは球審のコールに従うので、この値は次の投球までの間だけを決める。3.2だと采配カードの受付締切（次球の投手モーション開始＝この値−1.30秒）が短すぎたため3.6へ延長（issue #493）。")]
         [SerializeField] private float duelPitchIntervalSeconds = DuelStageRig.DefaultPitchInterval;
         [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。0.85=監督確定 2026-08-05（0.35は短い）。対決ビューの捕手はこの表示が消えるまで捕球位置で静止する（NewDuelRig が rig へ流し込む）。")]
         [SerializeField] private float pitchCallHoldSeconds = 0.85f;
@@ -879,6 +879,18 @@ namespace KokoSim.Unity.Match
             RefreshPanel();                                       // HUD（打者・投手・球数）とスタメン列
             _signPad?.SetPhase(_atBat.IsTop == _managerIsAway);   // 攻撃中は打撃指示だけ／守備中は配球指示だけ
             _signPad?.RefreshEnabled();                           // 走者の有無でバント/盗塁の可否が変わる
+        }
+
+        /// <summary>
+        /// 采配カードの受付ゲート（issue #493）。実際にエンジンへ指示が反映される締切（<see cref="ThrowFromWindow"/>
+        /// が読む瞬間）は変えない——対決ビューで<b>次の1球の投手モーションが始まった</b>ら、見た目にも
+        /// 押せなくする。俯瞰（デバッグ2D）は振りかぶりが無いので対象外＝常時受付のまま（球間そのものが窓）。
+        /// 采配窓（打席の頭の間・打席途中の球間）は常に開け直す＝投球フェーズを抜けた瞬間に自動で戻る。
+        /// </summary>
+        private void UpdateTacticsAcceptance()
+        {
+            var accepting = !(_inPitchPhase && DuelPacingActive && (_duelRig?.HasCutToNextWindup ?? false));
+            _signPad?.SetAcceptingInput(accepting);
         }
 
         // ── クリック中断（issue #289） ──
@@ -1985,6 +1997,7 @@ namespace KokoSim.Unity.Match
             if (!_paused && (_duelOn || FieldPlayActive)) _duelRig?.Tick(Time.deltaTime * _speed);
             RefreshDuelFieldLabels();   // 頭上フルネームラベル（issue #393）。ポーズ中も現在位置のまま表示を保つ
             RefreshHudVisibility();     // 打球プレー中はマッチアップHUDを引っ込める（下の説明を参照）
+            UpdateTacticsAcceptance();  // 采配カードの受付ゲート（issue #493）。投手が次球の振りかぶりへ入ったら締め切る
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
@@ -3627,6 +3640,12 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: いま采配窓で止まっているか（打席の途中＝球間を含む）。</summary>
         public bool AtWindowForCapture => _stage == LiveStage.Window;
+
+        /// <summary>診断用: 采配カードが受付中か（issue #493）。false＝投手が次球の振りかぶりへ入り締め切っている。</summary>
+        public bool TacticsAcceptingInputForCapture => _signPad?.IsAcceptingInputForCapture ?? true;
+
+        /// <summary>診断用: 対決ビューの投手が次球の振りかぶりへ既に切り替わったか（issue #493）。</summary>
+        public bool DuelHasCutToNextWindupForCapture => _duelRig?.HasCutToNextWindup ?? false;
 
         /// <summary>スクショ用: いま止まっている采配窓の局面（回・表裏・カウント・塁）。無ければ null。</summary>
         public LiveAtBat CurrentAtBatForCapture => _atBat;

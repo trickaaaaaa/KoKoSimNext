@@ -67,6 +67,9 @@ namespace KokoSim.Unity.Components
         private int _hotIndex = -1;
         private bool _offense;
         private bool _built;
+        // 全カードへ掛ける全体ゲート（投手がモーションに入ったら締め切る。issue #493）。
+        // 個々の EnabledIf とは OR で効かせる＝どちらか片方でも不可なら tcard--off。
+        private bool _accepting = true;
 
         public TacticsCardDeck()
         {
@@ -150,10 +153,26 @@ namespace KokoSim.Unity.Components
             foreach (var pair in _byId)
             {
                 var def = FindDef(pair.Key);
-                var on = def?.EnabledIf?.Invoke() ?? true;
+                var on = (def?.EnabledIf?.Invoke() ?? true) && _accepting;
                 pair.Value.EnableInClassList("tcard--off", !on);
             }
         }
+
+        /// <summary>
+        /// 全カードへ掛ける全体ゲート（投手がモーションに入るまでで受付を締め切る。issue #493）。
+        /// false の間は <see cref="RefreshEnabled"/> の可否と OR で全カードが tcard--off になり、
+        /// 当たり判定（<see cref="IsOff"/> 経由）も止まる。締切前に押した選択自体は消灯しない
+        /// （選び直しを止めるだけで、選んだ結果を取り消さない）。
+        /// </summary>
+        public void SetAcceptingInput(bool accepting)
+        {
+            if (_accepting == accepting) return;
+            _accepting = accepting;
+            RefreshEnabled();
+        }
+
+        /// <summary>診断/スクショ用: 全体ゲートが受付中か（issue #493）。</summary>
+        public bool IsAcceptingInputForCapture => _accepting;
 
         /// <summary>スクショ用: 指定カードをホバー拡大の状態にする（実際のカーソルは要らない）。</summary>
         public void SetHotForCapture(string id)
@@ -222,7 +241,7 @@ namespace KokoSim.Unity.Components
             var card = new VisualElement { pickingMode = PickingMode.Ignore };   // 判定は _hits が持つ
             card.AddToClassList("tcard");
             if (def.IsDefault) card.AddToClassList("tcard--default");
-            var enabled = def.EnabledIf?.Invoke() ?? true;
+            var enabled = (def.EnabledIf?.Invoke() ?? true) && _accepting;
             if (!enabled) card.AddToClassList("tcard--off");
 
             // 上＝将来ここに絵を入れる場所。いまは Icon の1文字を淡く敷いて「絵の枠」だと分かるようにする。
