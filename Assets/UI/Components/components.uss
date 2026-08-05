@@ -2104,7 +2104,12 @@
 .sbug-lamp--o.is-on { background-color: var(--lamp-o); }
 /* グロー（box-shadow 0 0 9px <同色> 相当）。これが無いと電光掲示板ではなくただの色付きの丸になる。
    テクスチャは本体13pxの外側だけに出るドーナツなので、本体の上に重ねても中心を隠さない
-   ＝本体とグローの2要素で済む（内側を焼くと本体を覆ってしまう）。色は点灯色でティントする。 */
+   ＝本体とグローの2要素で済む（内側を焼くと本体を覆ってしまう）。色は点灯色でティントする。
+
+   ⚠ テクスチャの断面は「本体と同じ円板をガウスぼかししたもの」でなければならない。
+   box-shadow のぼかしは**元の形をぼかす**ので、縁のαは 1.0 ではなく 0.35 程度から始まる。
+   これを「縁で1.0から外へ減衰」で作ると全半径で約3倍明るくなり、13pxのランプに対して
+   halo が勝って滲んで見える（2026-08-05 実測・監督指摘）。生成は tools/gen-lamp-sprites.py。 */
 .sbug-lamp__glow {
     position: absolute;
     left: var(--lamp-glow-off);
@@ -2117,7 +2122,7 @@
     transition-duration: 120ms;
     transition-timing-function: linear;
 }
-.sbug-lamp.is-on .sbug-lamp__glow { opacity: 1; }
+.sbug-lamp.is-on .sbug-lamp__glow { opacity: var(--lamp-glow-a); }
 .sbug-lamp--b .sbug-lamp__glow { -unity-background-image-tint-color: var(--lamp-b); }
 .sbug-lamp--s .sbug-lamp__glow { -unity-background-image-tint-color: var(--lamp-s); }
 .sbug-lamp--o .sbug-lamp__glow { -unity-background-image-tint-color: var(--lamp-o); }

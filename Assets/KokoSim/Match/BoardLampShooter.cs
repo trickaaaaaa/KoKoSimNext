@@ -83,6 +83,21 @@ namespace KokoSim.Unity.Match
             yield return LampShot(ctrl, "11-lamps-1-1-1", 1, 1, 1);
             yield return LampShot(ctrl, "12-lamps-3-2-2", 3, 2, 2);
 
+            // ── グローの強さ比較（--lamp-glow-a をどこに置くかを絵で選ぶため） ──
+            var glows = ctrl.GetComponent<UIDocument>().rootVisualElement
+                .Query<VisualElement>(className: "sbug-lamp__glow").ToList();
+            foreach (var a in new[] { 1.0f, 0.7f, 0.45f })
+            {
+                var pct = Mathf.RoundToInt(a * 100f);
+                yield return Capture(ctrl, "20-glow-" + pct, () =>
+                {
+                    ctrl.HidePitchCallForCapture();
+                    ctrl.SetCountForCapture(3, 2, 2);
+                    foreach (var g in glows) g.style.opacity = a;
+                });
+            }
+            foreach (var g in glows) g.style.opacity = StyleKeyword.Null;
+
             Debug.Log("[Lamp479] DONE → " + Dir);
         }
 
