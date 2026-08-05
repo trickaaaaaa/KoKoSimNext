@@ -1053,6 +1053,74 @@ public sealed class TimelineTests
         Assert.DoesNotContain(method!.GetParameters(), p => typeof(IRandomSource).IsAssignableFrom(p.ParameterType));
     }
 
+    // --- 振り逃げタイムライン（design-14 P1-2, issue #488） ---
+
+    [Fact]
+    public void DropThirdStrikeTimeline_BatterReachesFirstSafely()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var batter = new Player { Name = "打者", Speed = 60 };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 };
+
+        var tl = TimelineBuilder.BuildDropThirdStrike(batter, catcher, c, field);
+
+        var leg = Assert.Single(tl.Runners);
+        Assert.Equal("打", leg.Label);
+        Assert.Same(batter, leg.Runner);
+        Assert.False(leg.OutAtEnd);
+        Assert.True(Near(leg.To, new TimelinePoint(field.FirstBase.X, field.FirstBase.Z)), "打者走者の到達先が一塁でない");
+        // セーフは際どさを未評価のため判定オーバーレイは積まない（盗塁・牽制と同じ表示条件, Issue #59）。
+        Assert.Empty(tl.Judgements);
+        Assert.True(tl.ResolvedAt <= tl.Duration);
+    }
+
+    [Fact]
+    public void DropThirdStrikeTimeline_HasCatcherFieldBallAndThrowToFirst()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var batter = new Player { Name = "打者", Speed = 60 };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 };
+
+        var tl = TimelineBuilder.BuildDropThirdStrike(batter, catcher, c, field);
+
+        Assert.Equal(2, tl.Ball.Count);
+        Assert.Equal(BallSegmentKind.Roll, tl.Ball[0].Kind);
+        var throwSeg = tl.Ball[1];
+        Assert.Equal(BallSegmentKind.Throw, throwSeg.Kind);
+        Assert.Equal(FieldPosition.Catcher, throwSeg.FromRole);
+        Assert.Equal(FieldPosition.FirstBase, throwSeg.ToRole);
+        Assert.Equal("first", throwSeg.ToBase);
+        Assert.True(Near(throwSeg.To, new TimelinePoint(field.FirstBase.X, field.FirstBase.Z)), "送球先が一塁でない");
+
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.Catcher && m.Task == FielderTask.FieldBall);
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.FirstBase && m.Task == FielderTask.CoverBase);
+    }
+
+    [Fact]
+    public void DropThirdStrikeTimeline_ThrowNeverArrivesBeforeRunner_EvenWithSlowBatterStrongArmCatcher()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var batter = new Player { Name = "鈍足打者", Speed = 20 }; // 出塁は確定済み＝矛盾ガードで絵を守る
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 95, Fielding = 95 };
+
+        var tl = TimelineBuilder.BuildDropThirdStrike(batter, catcher, c, field);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        var leg = Assert.Single(tl.Runners);
+        Assert.True(leg.T1 <= throwSeg.T1, "セーフなのに走者が送球より後に一塁へ着いている");
+    }
+
+    [Fact]
+    public void DropThirdStrikeTimeline_ConsumesNoRandomSource()
+    {
+        // BuildDropThirdStrike は IRandomSource を一切受け取らない（シグネチャで乱数不使用を固定する）。
+        var method = typeof(TimelineBuilder).GetMethod(nameof(TimelineBuilder.BuildDropThirdStrike));
+        Assert.NotNull(method);
+        Assert.DoesNotContain(method!.GetParameters(), p => typeof(IRandomSource).IsAssignableFrom(p.ParameterType));
+    }
+
     // --- #6 外野安打の返球: 送球が走者を追い越さない（三塁打で送球が先着しない） ---
     [Fact]
     public void OutfieldReturnThrow_ArrivesJustAfterRunner_NotBefore()

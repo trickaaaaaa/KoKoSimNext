@@ -1479,6 +1479,15 @@ public static class GameEngine
                     droppedThirdStrikeReached = true;
                     bases.First = batter;
                     offense.DroppedThirdStrikeCount++;
+                    // 再生データ（issue #488）: この球は三振確定後の後処理として判定されるため p.LastPitch を
+                    // 既に構築済み（この打席の最終球＝CapturePitches ブロックで既に控えている）＝with で追加する。
+                    // 乱数を追加消費しない（BuildDropThirdStrike は純関数）。
+                    if (ctx.CaptureTimelines && p.LastPitch is { } lpForDropThirdStrike)
+                        p.LastPitch = lpForDropThirdStrike with
+                        {
+                            DropThirdStrikePlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                                Timeline.TimelineBuilder.BuildDropThirdStrike(batter, defense.Catcher, paBaserunning, ctx.Field)),
+                        };
                 }
             }
 

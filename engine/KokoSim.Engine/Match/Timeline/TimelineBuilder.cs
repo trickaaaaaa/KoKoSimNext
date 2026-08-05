@@ -30,6 +30,22 @@ public static class TimelineBuilder
     private const double BatteryMissRollSeconds = 0.55;
     /// <summary>暴投・捕逸: ボールが転がって止まる位置＝本塁からバックネット側（-Z）へこの距離[m]（演出用の固定値）。</summary>
     private const double BatteryMissBackstopM = 6.0;
+    /// <summary>振り逃げ（issue #488）: 捕手が三振球を落としてから動き出すまでの反応[s]（演出用の固定値。
+    /// <see cref="BaserunningCoefficients.DropThirdStrikeReachProb"/> は成否のみの単純なベルヌーイ試行で、
+    /// 暴投・牽制と同じく距離・速度を持たないため、絵の秒はここで新規に組む）。</summary>
+    private const double DropThirdStrikeReactionSeconds = 0.12;
+    /// <summary>振り逃げ: 落球が転がって止まるまでの所要秒（暴投の後逸より短い＝本塁付近で収まる）。</summary>
+    private const double DropThirdStrikeRollSeconds = 0.30;
+    /// <summary>振り逃げ: 落球が転がって止まる位置＝本塁からバックネット側（-Z）へこの距離[m]
+    /// （暴投の <see cref="BatteryMissBackstopM"/> より短い＝三振球はバックネットまで飛ばない）。</summary>
+    private const double DropThirdStrikeMissDistanceM = 2.2;
+    /// <summary>振り逃げ: 打者走者の反応[s]（打球の"打"レッグ(0.10, <see cref="BuildBattedBall"/>)より一拍長い
+    /// ＝振り逃げに気づいてから走り出すぶん）。</summary>
+    private const double DropThirdStrikeBatterReactionSeconds = 0.15;
+    /// <summary>振り逃げ: 送球到達を走者到達より先に見せないための最小マージン[s]（出塁は呼び出し元で
+    /// 確定済み＝矛盾ガード。design-14は「捕り損ねたが刺した」場合を区別しないため、このビルダーは
+    /// 常に出塁の絵になる）。</summary>
+    private const double DropThirdStrikeThrowGuardSeconds = 0.15;
 
     private static readonly TimelinePoint Home = new(0, 0);
     private static readonly TimelinePoint Mound = new(0, 18.44);
@@ -1039,6 +1055,92 @@ public static class TimelineBuilder
             Moves = moves.ToArray(),
             Runners = runners.ToArray(),
             Captions = captions.ToArray(),
+        };
+    }
+
+    /// <summary>振り逃げ（第3ストライク不捕球, design-14 P1-2, issue #488）のタイムライン。乱数不使用——成否
+    /// （<see cref="BaserunningCoefficients.DropThirdStrikeReachProb"/> によるベルヌーイ試行）は呼び出し元で
+    /// 既に確定済み。design-14 の割り切りにより engine は「捕手が完全捕球」と「落球したが送球で刺した」を
+    /// 区別しない（成否は「出塁したか」の二択）ため、<b>このビルダーは打者が出塁した場合にだけ呼ばれる</b>
+    /// ＝常に出塁の絵になる。
+    ///
+    /// <para><see cref="BuildPickoff"/>/<see cref="BuildBatteryMiss"/> と同様、時間の勝負を持たない判定
+    /// なので、絵の秒（落球の転がり・捕手の反応/送球・打者走者の一塁到達）は新規に組む。出塁が確定済みの
+    /// ため、送球到達は走者到達より先に見えないよう詰める（矛盾ガード。<see cref="GuardAgainstVerdict"/>
+    /// と同じ「物理優先＋矛盾ガード」の考え方）。</para></summary>
+    public static PlayTimeline BuildDropThirdStrike(
+        Player batter, Player catcher, BaserunningCoefficients c, FieldGeometry field)
+    {
+        var firstPt = BasePoint(field, "first");
+        var missPt = new TimelinePoint(0, -DropThirdStrikeMissDistanceM);
+
+        var ball = new List<BallSegment>
+        {
+            new() { Kind = BallSegmentKind.Roll, T0 = 0.0, T1 = DropThirdStrikeRollSeconds, From = Home, To = missPt },
+        };
+
+        // 捕手が追って拾う（issue #487 の暴投・捕逸と同じ組み立て。落球位置が近いぶん往復は短い）。
+        var catcherArrive = DropThirdStrikeReactionSeconds
+            + Distance(Home, missPt) / catcher.ToFielder().SprintSpeedMps;
+        var pickupAt = Math.Max(DropThirdStrikeRollSeconds, catcherArrive);
+        var moves = new List<FielderMove>
+        {
+            new()
+            {
+                Role = FieldPosition.Catcher, T0 = DropThirdStrikeReactionSeconds, T1 = pickupAt, To = missPt,
+                Task = FielderTask.FieldBall,
+            },
+        };
+
+        var throwStart = pickupAt
+            + c.PopTransferSeconds * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var throwFlight = Distance(missPt, firstPt) / catcher.ToFielder().ThrowSpeedMps;
+        var batterArrive = DropThirdStrikeBatterReactionSeconds
+            + Distance(Home, firstPt) / batter.ToFielder().SprintSpeedMps;
+
+        // 出塁は確定済み＝送球が走者を追い越して見える絵にしない（矛盾ガード）。
+        var throwArrive = Math.Max(throwStart + throwFlight, batterArrive + DropThirdStrikeThrowGuardSeconds);
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Throw, T0 = throwArrive - throwFlight, T1 = throwArrive,
+            From = missPt, To = firstPt, FromRole = FieldPosition.Catcher, ToRole = FieldPosition.FirstBase,
+            ToBase = "first",
+        });
+
+        // 一塁カバー（BuildPickoff と同じ約束＝ベース付近に既に立っている想定の短い移動）。
+        moves.Add(new FielderMove
+        {
+            Role = FieldPosition.FirstBase, T0 = 0.0, T1 = Math.Max(0.3, throwArrive - 0.15), To = firstPt,
+            Task = FielderTask.CoverBase,
+        });
+
+        var runners = new[]
+        {
+            new RunnerLeg
+            {
+                Label = "打", T0 = 0.0, T1 = batterArrive, From = Home, To = firstPt, OutAtEnd = false,
+                Runner = batter,
+            },
+        };
+
+        // セーフは際どさを未評価のため判定オーバーレイは積まない（盗塁・牽制と同じ表示条件, Issue #59）。
+        var resolvedAt = Math.Max(batterArrive, throwArrive);
+        var captions = new[]
+        {
+            new TimelineCaption(0.0, "振り逃げ——キャッチャーが弾いた！"),
+            new TimelineCaption(resolvedAt, "セーフ！ 振り逃げで出塁"),
+        };
+
+        return new PlayTimeline
+        {
+            Duration = resolvedAt + 1.0,
+            Result = "振り逃げ",
+            ResolvedAt = resolvedAt,
+            FielderStarts = StandardStarts(),
+            Ball = ball.ToArray(),
+            Moves = moves.ToArray(),
+            Runners = runners,
+            Captions = captions,
         };
     }
 
