@@ -258,7 +258,7 @@ public sealed class AtBatSession
             && loc.Y >= ctx.Pitching.HbpBodyBottomM && loc.Y <= ctx.Pitching.HbpBodyTopM
             && !MathUtil.Chance(ctx.Pitching.HbpDodgeProb, rng))
         {
-            RecordPitch(PitchKind.HitByPitch, plan, loc, inZone);
+            RecordPitch(PitchKind.HitByPitch, plan, loc, inZone, sign: battingOverride);
             return Finish(PlateAppearanceResult.HitByPitch);
         }
 
@@ -276,24 +276,24 @@ public sealed class AtBatSession
             {
                 case BuntResult.MissedBunt:
                     _strikes++;
-                    RecordPitch(PitchKind.SwingingStrike, plan, loc, inZone, swung: true);
+                    RecordPitch(PitchKind.SwingingStrike, plan, loc, inZone, swung: true, sign: battingOverride);
                     return Continue();
 
                 case BuntResult.Foul:
                     _strikes++;
-                    RecordPitch(PitchKind.Foul, plan, loc, inZone, swung: true);
+                    RecordPitch(PitchKind.Foul, plan, loc, inZone, swung: true, sign: battingOverride);
                     return Continue();
 
                 case BuntResult.PopOut:
-                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true);
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
                     return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
 
                 case BuntResult.SacrificeSuccess:
-                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true);
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
                     return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
 
                 case BuntResult.InfieldHit:
-                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true);
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
                     return FinishBunt(PlateAppearanceResult.Single, bunt);
             }
         }
@@ -321,7 +321,7 @@ public sealed class AtBatSession
                 // ウエストを読まれた（守備がピッチアウトで対抗）: 打者はバントを試みられずボール、
                 // 飛び出した三塁走者が挟殺される。打席は確定せず、以降は強攻へフォールバックする。
                 _balls++;
-                RecordPitch(PitchKind.Ball, plan, loc, inZone);
+                RecordPitch(PitchKind.Ball, plan, loc, inZone, sign: battingOverride);
                 return new PitchResolution(EndsPlateAppearance: false, SqueezeRunnerCaughtAtThird: true);
             }
 
@@ -331,7 +331,7 @@ public sealed class AtBatSession
                 BuntResult.Foul => PitchKind.Foul,
                 _ => PitchKind.InPlay, // PopOut / SacrificeSuccess / InfieldHit
             };
-            RecordPitch(kind, plan, loc, inZone, swung: true);
+            RecordPitch(kind, plan, loc, inZone, swung: true, sign: battingOverride);
             var sqResult = sq.Bunt == BuntResult.InfieldHit ? PlateAppearanceResult.Single : PlateAppearanceResult.InPlayOut;
             return FinishSqueeze(sqResult, sq);
         }
@@ -444,15 +444,19 @@ public sealed class AtBatSession
     /// <param name="swingProbability">この球のスイング確率（純関数・観測専用。判定に使った値そのもの）。</param>
     /// <param name="swung">打者が振ったか（バント/スクイズの試行もスイング扱い）。</param>
     /// <param name="ball">コンタクトした打球（InPlay/Foul でなければ null）。</param>
+    /// <param name="sign">この球に出ていた打者への1球指示（issue #490）。<see cref="ThrowNextPitch"/> の
+    /// battingOverride の写しをそのまま渡す＝表示専用の観測データ（<see cref="PitchRecord.Sign"/>）。</param>
     private void RecordPitch(
         PitchKind kind, PitchPlan plan, ControlScatter.Location loc,
-        bool inZone, double swingProbability = 0.0, bool swung = false, Batting.BattedBall? ball = null)
+        bool inZone, double swingProbability = 0.0, bool swung = false, Batting.BattedBall? ball = null,
+        Tactics.PitchBattingOverride? sign = null)
     {
         // 弾道積分は毎球RK4×2本(スピンあり/なし)とコストが高いため、Timeline同様CaptureTimeline時のみ
         // （観戦する試合だけ）計算する。既定（統計シム・裏試合）はゼロコスト（設計書15 §4「Phase Bの作業」）。
         var trajectory = _ctx.CaptureTimeline ? ComputeTrajectory(plan) : null;
         _pitchLog.Add(new PitchRecord(
-            kind, _balls, _strikes, plan.Type, loc.X, loc.Y, plan.VelocityKmh, plan.AimX, plan.AimY, trajectory, ball));
+            kind, _balls, _strikes, plan.Type, loc.X, loc.Y, plan.VelocityKmh, plan.AimX, plan.AimY, trajectory, ball,
+            sign));
 
         if (_pitchTraces is null) return;
         var f = _lastPitchFeatures ?? default;

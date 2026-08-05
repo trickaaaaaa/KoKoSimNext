@@ -796,6 +796,12 @@ namespace KokoSim.Unity.Match
         public const string UmpireIdleClipName = "AA_Baseball_Umpire_Crouch_Idle";
         public const string UmpireStrikeClipName = "AA_Baseball_Umpire_Crouch_Strike_Type01";
         public const string BatterHbpClipName = "AA_Baseball_Batter_Hit_ByPitch_Type01";
+        // バント構え（issue #490）。購入パック（AA）に既存の4クリップ。無い環境では黙って通常の
+        // 打撃クリップへフォールバックする（他の一発物クリップと同じ「無いものはnull」流儀）。
+        public const string BatterIdleToBuntClipName = "AA_Baseball_Batter_Idle_To_Bunt";
+        public const string BatterBuntLoopClipName = "AA_Baseball_Batter_Bunt_Loop";
+        public const string BatterBuntHitClipName = "AA_Baseball_Batter_Bunt_Hitting";
+        public const string BatterBuntMissClipName = "AA_Baseball_Batter_Bunt_Miss";
 
         /// <summary>
         /// 投手クリップを本塁向き（−Z）へ揃えるyaw[度]。
@@ -883,6 +889,9 @@ namespace KokoSim.Unity.Match
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
         private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _umpireStrikeClip;
+        // バント構え一式（issue #490）。無い環境ではすべてnull＝バント指示が出ても通常の打撃構えのまま
+        // （他の一発物クリップと同じ「無いものは待機のまま」流儀）。
+        private AnimationClip _buntIdleToStanceClip, _buntLoopClip, _buntHitClip, _buntMissClip;
         private AnimationClip _batterOwnIdle;   // 自作Rokokoの打撃クリップ（構えだけ使う。無い環境ならnull）
 
         // 捕球クリップ（5方向）。CatchAnchors と同じ並び。取れなかったものはnull＝選択から外れる
@@ -1182,6 +1191,12 @@ namespace KokoSim.Unity.Match
             _swingMissClip = batClip;
             _swingHitClip = batClip;
             _hbpClip = LoadClip(BatterHbpClipName);
+            // バント構え一式（issue #490）。購入パックに無い環境では全てnullのまま＝バント指示が出ても
+            // 通常の打撃構え・スイングで代用する（他の一発物と同じ「無いものは待機のまま」流儀）。
+            _buntIdleToStanceClip = LoadClip(BatterIdleToBuntClipName);
+            _buntLoopClip = LoadClip(BatterBuntLoopClipName);
+            _buntHitClip = LoadClip(BatterBuntHitClipName);
+            _buntMissClip = LoadClip(BatterBuntMissClipName);
             _catchClips = new AnimationClip[CatchAnchors.Length];
             for (int i = 0; i < CatchAnchors.Length; i++) _catchClips[i] = LoadClip(CatchAnchors[i].Clip);
             // 球審ストライクコール。Type01(3.33s)を**確定採用**（2026-07-31 監督判断・#353 の録画で確認）。
@@ -1387,6 +1402,37 @@ namespace KokoSim.Unity.Match
             if (!wasIdling) return;
             SetActorClip(_batter, want, 0f, endAt);
             GroundFix(_batter);   // クリップごとに根の高さが違う＝差し替えると足が浮く／沈む
+        }
+
+        /// <summary>いまバント構えの待機（<see cref="_buntLoopClip"/>）を出しているか。</summary>
+        private bool _batterBunting;
+
+        /// <summary>
+        /// 打者をバント構えへ切り替える/戻す（issue #490）。この球にバント/セーフティバント/スクイズの
+        /// 指示が出ているかを、リリース直前に毎球渡す（<see cref="ApplyBatterIdleClip"/> と同じ「待機中で
+        /// なければ FinishOneShot の復帰時に効く」流儀＝振っている最中に構えが割り込んで壊れない）。
+        /// バント構えクリップが無い環境（購入パック未取得）では常に無視して通常の打撃構えのまま。
+        /// </summary>
+        private void SetBatterBunting(bool bunting)
+        {
+            if (_batter == null) return;
+            if (bunting && _buntLoopClip == null) bunting = false;
+            if (bunting == _batterBunting) return;
+            _batterBunting = bunting;
+            if (!bunting)
+            {
+                ApplyBatterIdleClip(_cal);   // 通常の構え（較正の own/購入クリップ選択）へ戻す
+                return;
+            }
+            bool wasIdling = _batter.Clip == _batter.IdleClip;
+            _batter.IdleClip = _buntLoopClip;
+            _batter.IdleEndAt = 0f;   // ループそのまま（末尾まで）
+            if (!wasIdling) return;   // 一発物（前球のスイング据え置き等）の最中は復帰時に切り替わる
+            if (_buntIdleToStanceClip != null)
+                CrossfadeActorToClip(_batter, _buntIdleToStanceClip, 0f, 0f, CrossfadeSeconds);
+            else
+                CrossfadeActorToClip(_batter, _buntLoopClip, 0f, 0f, CrossfadeSeconds);
+            GroundFix(_batter);
         }
 
         /// <summary>
@@ -1657,6 +1703,15 @@ namespace KokoSim.Unity.Match
         private const float SwingHitContact = 1.17f;
 
         /// <summary>
+        /// バント（issue #490）の面通過・当てのクリップ内時刻。<see cref="SwingMissPlane"/>/
+        /// <see cref="SwingHitContact"/> と同じ役割だが、まだ <c>DuelMotionSpike.RunClipSpeedProbe</c> で
+        /// 実測していない**初期値**（クリップの尺・緩急が不明なため中間あたりを仮置き）。
+        /// design-18 §4.5-③の掟どおり、購入クリップを取り込み次第 実測して値を更新すること。
+        /// </summary>
+        private const float BuntMissPlane = 0.50f;
+        private const float BuntHitContact = 0.55f;
+
+        /// <summary>
         /// スイングを打ち切る時刻[クリップ秒]。**振り抜いた所で止める**（2026-07-31 監督判断
         /// 「バットを戻す動作も消して欲しい／スイングして振り抜いた時点で止める」）。
         ///
@@ -1800,8 +1855,18 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch,
             KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted)
+            => OnPitchReleased(nextReleaseIn, outcome, pitch, batted, isBuntAttempt: false);
+
+        /// <summary>
+        /// バント/セーフティバント/スクイズの指示つきのリリース（issue #490）。<paramref name="isBuntAttempt"/>
+        /// が真なら、打者の構え・接触/空振りの一発物をバント用クリップへ差し替える（無ければ通常の
+        /// 打撃クリップのまま＝他の一発物と同じ「無いものは待機のまま」流儀）。
+        /// </summary>
+        public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch,
+            KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted, bool isBuntAttempt)
         {
             if (!Available || _pitcher == null) return;
+            SetBatterBunting(isBuntAttempt);
             _pendingBatted = batted;
             // リリースの再同期は**ポーズと向きだけ**合わせ、立ち位置は据え置く。
             //
@@ -1857,12 +1922,14 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
-            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex);
+            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isBuntAttempt);
         }
 
-        /// <summary>打者・捕手・球審の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。</summary>
+        /// <summary>打者・捕手・球審の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。
+        /// <paramref name="isBuntAttempt"/>（issue #490）が真なら、当てる/空振りの一発物をバント用
+        /// クリップへ差し替える（無ければ通常の打撃クリップのまま）。</summary>
         private void ScheduleReactions(DuelPitchOutcome outcome, float nextReleaseIn, float flight,
-            int catchIndex)
+            int catchIndex, bool isBuntAttempt = false)
         {
             // 球審: ストライク（見逃し・空振り）でコールを予約、それ以外は前球の予約をキャンセル（#333）
             // バットを球へ向けるのは当たる球だけ。空振りで向けると「当たっているのに空振り」になる
@@ -1888,23 +1955,32 @@ namespace KokoSim.Unity.Match
                     : Mathf.Max(0f, playable);
             }
 
+            // バント/セーフティバント/スクイズの指示が出ていて、かつバント用クリップが揃っている球だけ
+            // 一発物をバント用へ差し替える（issue #490）。無い環境では通常の打撃クリップのまま（フォールバック）。
+            bool useBunt = isBuntAttempt && _buntHitClip != null && _buntMissClip != null;
+            var missClip = useBunt ? _buntMissClip : _swingMissClip;
+            var missAnchor = useBunt ? BuntMissPlane : SwingMissPlane;
+            var hitClip = useBunt ? _buntHitClip : _swingHitClip;
+            var hitAnchor = useBunt ? BuntHitContact : SwingHitContact;
+
             switch (outcome)
             {
                 // どのスイングも**振り抜いた所で止めて据え置く**（design-18 §4.5-⑭）。
                 // 打ち切りだけで据え置きが無いと、打ち切った瞬間に待機へ戻る
                 case DuelPitchOutcome.SwingMiss:
-                    // 空振り専用の収録が無いので同じスイングを使う
-                    SetSwing(_swingMissClip, SwingMissPlane, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    // 空振り専用の収録が無いので同じスイングを使う（バントは Bunt_Miss を使う）
+                    SetSwing(missClip, missAnchor, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 // 当てる球は判定面でなく**捌く瞬間**（_ballArrival＝判定面の ContactAheadM 手前）で合わせる。
                 // flight を渡すと、前で捌くぶんバットが遅れて着く（0.30m/40m·s⁻¹ ≒ 8ms）
                 case DuelPitchOutcome.FoulContact:
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    SetSwing(hitClip, hitAnchor, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 case DuelPitchOutcome.InPlayContact:
-                    SetSwing(_swingHitClip, SwingHitContact, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    SetSwing(hitClip, hitAnchor, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
                 // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
+                // バントの見送り（Sign=Bunt・Kind=Ball等でoutcome=Take）も同様＝バント構えのまま何もしない。
                 // 捕手の捕球は下の catcherCatches に含めたまま残す
                 case DuelPitchOutcome.HitByPitch:
                     SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);

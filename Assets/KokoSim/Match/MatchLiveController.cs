@@ -1505,8 +1505,13 @@ namespace KokoSim.Unity.Match
                     KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch => DuelPitchOutcome.HitByPitch,
                     _ => DuelPitchOutcome.Take,
                 };
+                // バント/セーフティバント/スクイズの指示が出ている球（issue #490）: 打者の構え・
+                // 接触/空振りをバント用クリップへ差し替える（表示専用＝判定には無関係）。
+                var isBuntAttempt = pt.BattingSign is KokoSim.Engine.Match.Tactics.PitchBattingOverride.Bunt
+                    or KokoSim.Engine.Match.Tactics.PitchBattingOverride.SafetyBunt
+                    or KokoSim.Engine.Match.Tactics.PitchBattingOverride.Squeeze;
                 _duelRig.OnPitchReleased(isLast ? -1f : duelPitchIntervalSeconds, outcome,
-                    FlightOf(pt), BattedOf(pt, isLast));
+                    FlightOf(pt), BattedOf(pt, isLast), isBuntAttempt);
             }
 
             // この1球の判定を出す時刻。俯瞰は盤面の投球尺（0.45秒固定）に合わせた pitchIntervalSeconds だが、

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
@@ -221,5 +222,26 @@ public sealed class SqueezeUnificationTests
             totalSqueezes += r.HomeTactics.Squeezes;
         }
         Assert.True(totalSqueezes > 0, "常時スクイズ指示なのに一度も企図が記録されなかった（配線切れの疑い）");
+    }
+
+    /// <summary>
+    /// issue #490: CaptureTimelines オンで常時スクイズ指示のチームを回すと、決着したスクイズ打席の
+    /// PlayLogEntry に Timeline が乗る（GameEngine→TimelineBuilder.BuildBunt(isSqueeze:true) の配線が生きている）。
+    /// </summary>
+    [Fact]
+    public void AlwaysSqueeze_WithCaptureTimelines_RecordsSqueezeTimeline()
+    {
+        PlayLogEntry? found = null;
+        for (ulong seed = 1; seed <= 30 && found is null; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var home = TeamOf("H", new AlwaysSqueezeBrain());
+            var away = TeamOf("A");
+            var r = GameEngine.Play(away, home, new GameContext { CaptureTimelines = true }, rng);
+            found = r.Log.FirstOrDefault(e =>
+                e.PitchLog is { Count: > 0 } pl && pl[^1].Sign == PitchBattingOverride.Squeeze);
+        }
+        Assert.NotNull(found);
+        Assert.NotNull(found!.Timeline);
     }
 }

@@ -1758,6 +1758,10 @@ namespace KokoSim.Unity.Match
             yield return UmpireIdleClipName;
             yield return UmpireStrikeClipName;
             yield return BatterHbpClipName;
+            yield return BatterIdleToBuntClipName;   // バント構え一式（issue #490）
+            yield return BatterBuntLoopClipName;
+            yield return BatterBuntHitClipName;
+            yield return BatterBuntMissClipName;
             foreach (var c in CatchAnchors) yield return c.Clip;
 
             // 守備（F2・F4・F5・F6）

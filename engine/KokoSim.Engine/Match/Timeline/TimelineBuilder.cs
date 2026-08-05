@@ -46,6 +46,23 @@ public static class TimelineBuilder
     /// 確定済み＝矛盾ガード。design-14は「捕り損ねたが刺した」場合を区別しないため、このビルダーは
     /// 常に出塁の絵になる）。</summary>
     private const double DropThirdStrikeThrowGuardSeconds = 0.15;
+    /// <summary>バント（issue #490）: 処理点＝本塁からマウンド方向へこの距離[m]（コメバッカー想定の演出用固定値）。
+    /// <see cref="BuntResolver"/>/<see cref="SqueezeResolver"/> は転がる方向を持たないため、投手が処理する
+    /// 単純化した絵にする（design-18 §4.5-③/⑨: 秒は判定と同一の分解で組み、絵のために別秒を発明しない —
+    /// ただし方向はどのみち判定に無いので、ここだけは演出用に決め打つ）。</summary>
+    private const double BuntFieldPointM = 6.0;
+    /// <summary>バント: 小フライ(PopOut)の落下点＝本塁からマウンド方向へこの距離[m]（グラウンドゴロより手前）。</summary>
+    private const double BuntPopPointM = 3.0;
+    /// <summary>バント: 小フライの頂点高さ[m]（演出用の固定値）。</summary>
+    private const double BuntPopApexM = 3.0;
+    /// <summary>バント: 小フライの滞空[s]（演出用の固定値。<see cref="BuntResolver"/> は成否のみのベルヌーイ試行で
+    /// 距離・時間を持たないため、絵の秒はここで新規に組む）。</summary>
+    private const double BuntPopHangSeconds = 0.55;
+    /// <summary>バント: 守備所要（<see cref="BaserunningCoefficients.BuntFieldThrowBaseSeconds"/> 由来）のうち、
+    /// 捕球（処理点到達）に割く比率。残りを送球区間に割く（内訳を持たないため均等に近い比率で分ける演出用の固定値）。</summary>
+    private const double BuntFieldShareOfDefenseTime = 0.55;
+    /// <summary>バント: 結果と矛盾しないための到達順の最小マージン[s]（矛盾ガード。他ビルダーと同じ作法）。</summary>
+    private const double BuntThrowGuardSeconds = 0.15;
 
     private static readonly TimelinePoint Home = new(0, 0);
     private static readonly TimelinePoint Mound = new(0, 18.44);
@@ -1145,6 +1162,138 @@ public static class TimelineBuilder
             Moves = moves.ToArray(),
             Runners = runners,
             Captions = captions,
+        };
+    }
+
+    /// <summary>バント・スクイズのタイムライン（design-14・issue #490）。乱数不使用——判定
+    /// （<see cref="BuntResolver"/>/<see cref="SqueezeResolver"/>）は呼び出し元で既に確定済みの結果
+    /// <paramref name="result"/> を渡すだけで、ここでは新たな抽選をしない。
+    ///
+    /// <para><see cref="BuildPickoff"/>/<see cref="BuildBatteryMiss"/> と同様「時間の勝負」を持たない
+    /// 判定（成否のみのベルヌーイ試行）なので、絵の秒（転がり・処理・送球）は新規に組む。ただし
+    /// 内野安打/犠打の境目は <see cref="BuntResolver.InfieldHitProbability"/> と同じ内訳
+    /// （<see cref="BaserunningCoefficients.BuntBaseDistanceM"/> 等）を再利用し、絵のためだけの別秒は
+    /// 発明しない（design-18 §4.5-③/⑨）。転がる方向は判定に無い（BuntResolver は持たない）ため、
+    /// 常に投手が前進して処理するコメバッカーとして単純化する。</para>
+    ///
+    /// <para>走者の進塁は、呼び出し元が <see cref="GameEngine.AdvanceOnBunt"/> 前後で控えた塁ごとの
+    /// 走者参照を突き合わせて判定する（<paramref name="preFirst"/> と <paramref name="postFirst"/> の参照が
+    /// 変わっていれば「その走者が動いた」）。バントは一・二塁走者のみ1つ進む・三塁走者は自重（design-14）だが、
+    /// スクイズは三塁走者が生還する（<paramref name="preThird"/>≠<paramref name="postThird"/>）ため、
+    /// 同じ突き合わせ方でバント・スクイズ両方を1つの関数でまかなえる。</para></summary>
+    /// <param name="isSqueeze">実況キャプションの文言だけを変える（表示専用）。</param>
+    public static PlayTimeline BuildBunt(
+        Player batter, IReadOnlyList<Fielder> fielders, BuntResult result,
+        Player? preFirst, Player? preSecond, Player? preThird,
+        Player? postFirst, Player? postSecond, Player? postThird,
+        BaserunningCoefficients c, FieldGeometry field, bool isSqueeze = false)
+    {
+        var firstPt = BasePoint(field, "first");
+        var ball = new List<BallSegment>
+        {
+            new() { Kind = BallSegmentKind.Pitch, T0 = ContactAt - PitchDuration, T1 = ContactAt, From = Mound, To = Home },
+        };
+        var moves = new List<FielderMove>();
+        var runners = new List<RunnerLeg>();
+        var judgements = new List<JudgementEvent>();
+        var captions = new List<TimelineCaption> { new(ContactAt + 0.01, isSqueeze ? "スクイズ——バント！" : "バント——") };
+
+        double resolvedAt;
+        string resultText;
+
+        if (result == BuntResult.PopOut)
+        {
+            var popPt = new TimelinePoint(0, BuntPopPointM);
+            var catchAt = ContactAt + BuntPopHangSeconds;
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Flight, T0 = ContactAt, T1 = catchAt, From = Home, To = popPt,
+                ApexHeightM = BuntPopApexM,
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.Catcher, T0 = ContactAt, T1 = catchAt, To = popPt, Task = FielderTask.FieldBall,
+            });
+            resolvedAt = catchAt;
+            resultText = "小フライ";
+            captions.Add(new TimelineCaption(catchAt, "小フライ——バントアウト"));
+            judgements.Add(new JudgementEvent { Label = "打", T = catchAt, Kind = JudgementKind.Out });
+        }
+        else
+        {
+            var fieldPt = new TimelinePoint(0, BuntFieldPointM);
+            // BuntResolver.InfieldHitProbability と同じ内訳（安全側でセーフティではなく犠打の構え遅延を使う。
+            // 呼び出し元は safety フラグを保持していないため、既定として犠打側で揃える＝絵の近似）。
+            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
+                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var battingTime = c.BuntBaseDistanceM / batter.ToBatter().SpeedToFirstMps()
+                + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
+            var defenseTime = c.BuntFieldThrowBaseSeconds + (batter.Bunt - 50) * c.BuntPlacementSlope;
+
+            var fieldAt = ContactAt + defenseTime * BuntFieldShareOfDefenseTime;
+            var throwArriveRaw = ContactAt + defenseTime;
+            var batterArrive = ContactAt + battingTime;
+            var safe = result == BuntResult.InfieldHit;
+            // 矛盾ガード（BuildDropThirdStrikeと同じ考え方）: 確定済みの結果と食い違う到達順にしない。
+            var throwArrive = safe
+                ? Math.Max(throwArriveRaw, batterArrive + BuntThrowGuardSeconds)
+                : Math.Max(fieldAt + 0.05, Math.Min(throwArriveRaw, batterArrive - BuntThrowGuardSeconds));
+
+            ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = firstPt,
+                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.FirstBase, ToBase = "first",
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.FirstBase, T0 = 0.0, T1 = Math.Max(0.3, throwArrive - 0.15),
+                To = FirstBaseCoverPoint(field, fieldPt), Task = FielderTask.CoverBase,
+            });
+
+            runners.Add(new RunnerLeg
+            {
+                Label = "打", T0 = ContactAt, T1 = batterArrive, From = Home, To = firstPt,
+                OutAtEnd = !safe, Force = true, Runner = batter,
+            });
+            resolvedAt = Math.Max(batterArrive, throwArrive);
+            resultText = result == BuntResult.SacrificeSuccess ? "犠打成功" : "内野安打";
+            captions.Add(new TimelineCaption(resolvedAt, safe ? "セーフ！ 内野安打" : "アウト——一塁で刺した"));
+            // セーフは際どさ未評価のため判定オーバーレイは積まない（盗塁・牽制と同じ表示条件, Issue #59）。
+            if (!safe) judgements.Add(new JudgementEvent { Label = "打", T = resolvedAt, Kind = JudgementKind.Out });
+        }
+
+        // 塁上の走者（バントは一・二塁のみ1つ進む・三塁は自重、スクイズは三塁が生還）。呼び出し元が
+        // AdvanceOnBunt 前後で控えた参照の食い違いで「動いたか」を判定する＝ここでは進塁規則を再実装しない。
+        void AddAdvance(Player? pre, Player? post, int fromBase, int toBase, string label)
+        {
+            if (pre is null || ReferenceEquals(post, pre)) return;
+            var from = BasePoint(field, BaseName(fromBase));
+            var to = toBase >= 4 ? Home : BasePoint(field, BaseName(toBase));
+            var t1 = ContactAt + HomePlayResolver.RunnerTimeSeconds(pre, fromBase, toBase, field, c);
+            runners.Add(new RunnerLeg { Label = label, T0 = ContactAt, T1 = t1, From = from, To = to, OutAtEnd = false, Runner = pre });
+            resolvedAt = Math.Max(resolvedAt, t1);
+            if (toBase >= 4) captions.Add(new TimelineCaption(t1, "生還！"));
+        }
+        AddAdvance(preFirst, postFirst, 1, 2, "走1");
+        AddAdvance(preSecond, postSecond, 2, 3, "走2");
+        AddAdvance(preThird, postThird, 3, 4, "走3");
+
+        return new PlayTimeline
+        {
+            Duration = resolvedAt + 1.0,
+            Result = resultText,
+            ResolvedAt = resolvedAt,
+            FielderStarts = StartsOf(fielders),
+            Ball = ball,
+            Moves = moves,
+            Runners = runners,
+            Captions = captions,
+            Judgements = judgements,
         };
     }
 

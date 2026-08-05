@@ -24,6 +24,9 @@ public enum PitchKind
 /// <see cref="Pitching.PitchPlan.AimY"/> の写し（狙い位置。捕手が投球前から知っている値）。
 /// <see cref="LocationX"/>/<see cref="LocationY"/>（コントロール散布込みの実着弾位置）とは別物で、
 /// 判定・帯には一切関与しない表示専用の付帯情報。
+/// <see cref="Sign"/>（issue #490）はこの球に出ていた打者への1球指示（<see cref="Tactics.PitchBattingOverride"/>
+/// の写し）。バント/セーフティバント/スクイズの構えを対決ビューに出すための表示専用データで、
+/// 判定・帯には一切関与しない（バント/スクイズ判定自体は従来どおり <see cref="AtBatSession"/> 内で完結）。
 /// </summary>
 public readonly record struct PitchRecord(
     PitchKind Kind,
@@ -36,4 +39,5 @@ public readonly record struct PitchRecord(
     double AimX,
     double AimY,
     Pitching.PitchTrajectory? Trajectory = null,
-    Batting.BattedBall? BattedBall = null);
+    Batting.BattedBall? BattedBall = null,
+    Tactics.PitchBattingOverride? Sign = null);

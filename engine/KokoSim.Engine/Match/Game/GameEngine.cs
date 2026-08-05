@@ -1195,10 +1195,25 @@ public static class GameEngine
             {
                 offense.RecordSacrificeBunt(buntOutcome == BuntResult.SacrificeSuccess);
                 var buntOuts = buntOutcome is BuntResult.PopOut or BuntResult.SacrificeSuccess ? 1 : 0;
+                // タイムライン用に進塁前の走者を控える（AdvanceOnBunt は bases を直接書き換えるため、
+                // 呼び出し後には「誰が動いたか」が取れない。issue #490）。
+                var buntPreFirst = bases.First;
+                var buntPreSecond = bases.Second;
+                var buntPreThird = bases.Third;
                 if (buntOutcome == BuntResult.SacrificeSuccess) AdvanceOnBunt(bases, batter: null);
                 else if (buntOutcome == BuntResult.InfieldHit) AdvanceOnBunt(bases, batter);
+                // バント打球のタイムライン（issue #490）: 判定（BuntResolver）はそのまま、結果から逆算した絵。
+                // CaptureTimelines のときだけ組む＝統計シム・裏試合はゼロコスト・乱数消費ゼロ（他Buildと同作法）。
+                var buntTimeline = ctx.CaptureTimelines
+                    ? Timeline.TimelineBuilder.BuildBunt(
+                        batter, fielders, buntOutcome,
+                        buntPreFirst, buntPreSecond, buntPreThird,
+                        bases.First, bases.Second, bases.Third,
+                        paBaserunning, ctx.Field)
+                    : null;
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
+                    timeline: buntTimeline,
                     batterOrder: batterOrder, pitchLog: res.PitchLog,
                     isSacBunt: buntOutcome == BuntResult.SacrificeSuccess);
                 outs += buntOuts;
@@ -1222,6 +1237,10 @@ public static class GameEngine
             {
                 var sqScorer = bases.Third; // スクイズで生還するのは三塁走者（issue #77 得点帰属。null化の前に捕捉）
                 var sqOuts = sq.BatterOut ? 1 : 0;
+                // タイムライン用に進塁前の走者を控える（issue #490。バントと同じ理由）。
+                var sqPreFirst = bases.First;
+                var sqPreSecond = bases.Second;
+                var sqPreThird = bases.Third;
                 if (sq.Bunt is BuntResult.SacrificeSuccess or BuntResult.InfieldHit)
                 {
                     bases.Third = null; // 三塁走者は生還済み（sq.Runs=1）
@@ -1235,8 +1254,18 @@ public static class GameEngine
                 // その1点は自責対象外のまま引き継ぐ。
                 var sqUnearnedRuns = sq.Runs > 0 && sqScorer is not null && unearnedRunners.Contains(sqScorer) ? sq.Runs : 0;
                 if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
+                // スクイズのタイムライン（issue #490）: バントと同じビルダーを使い回す（三塁走者の生還は
+                // pre/post の突き合わせで自然に描かれる）。
+                var sqTimeline = ctx.CaptureTimelines
+                    ? Timeline.TimelineBuilder.BuildBunt(
+                        batter, fielders, sq.Bunt,
+                        sqPreFirst, sqPreSecond, sqPreThird,
+                        bases.First, bases.Second, bases.Third,
+                        paBaserunning, ctx.Field, isSqueeze: true)
+                    : null;
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
+                    timeline: sqTimeline,
                     batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns,
                     isSacBunt: sq.Bunt == BuntResult.SacrificeSuccess);
                 outs += sqOuts;

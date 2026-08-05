@@ -132,7 +132,8 @@ public static class PitchTokenFactory
         // コース・弾道（Issue #332）: 判定に使われた実着弾位置と観測専用弾道をそのまま渡す（新規抽選なし）。
         // 狙い位置（Issue #396）: PitchPlan.AimX/AimY の写し。捕手は投球前からこの狙いを知っているため
         // 対決ビューの投球前の構えに使ってよい（実着弾位置は引き続きリリース後にしか使わせない）。
+        // サイン（issue #490）: PitchRecord.Sign の写し。バント/スクイズの構えを対決ビューに出すための表示専用。
         return new PitchToken(p.Kind, p.BallsAfter, p.StrikesAfter, p.PitchType, p.VelocityKmh,
-            foulFlight, p.LocationX, p.LocationY, p.AimX, p.AimY, p.Trajectory);
+            foulFlight, p.LocationX, p.LocationY, p.AimX, p.AimY, p.Trajectory, p.Sign);
     }
 }
