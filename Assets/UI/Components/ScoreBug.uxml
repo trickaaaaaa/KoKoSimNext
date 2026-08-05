@@ -3,26 +3,38 @@
      盤面（対決ビュー・2D俯瞰のどちらでも）の左上に出しっぱなしにして、
      カウント・塁・両校の得点を打席の演出中も切らさず見せる。
 
-     左袖＝縦のB/S/O。**ランプ（点の並び）ではなく数字**で出す（2026-07-31 ユーザー判断）。
+     左袖＝縦のB/S/O。**点灯ランプ**（B=3 / S=2 / O=2）で出す。
+       ・2026-07-31 の判断では「ランプではなく数字」だったが、2026-08-05 に
+         参照モック docs/design/mock-pitch-view.html の電光掲示板方式へ再改定（issue #479）。
+       ・寸法は参照の実測値そのまま。島(71x49px)は右ブロック(120px)に対し上下中央＝案A。
      右＝回表示と塁ダイヤ（重ねる）＋両校の得点。塁は埋まっている塁だけ描く（中継の作法）。
 
      置くのは器だけ。回・校名・得点は ScoreBug.Fill が、カウントと塁は
-     MatchLiveController が sbug-balls / sbug-base-1 等の name を1球ごとに駆動する。 -->
+     MatchLiveController が sbug-lamp-b0 / sbug-base-1 等の name を1球ごとに駆動する。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:VisualElement name="sbug-root" class="sbug">
 
-        <ui:VisualElement class="sbug-count">
-            <ui:VisualElement class="sbug-count__keys">
-                <ui:Label class="sbug-count__key f-num-bd" text="B" />
-                <ui:Label class="sbug-count__key f-num-bd" text="S" />
-                <ui:Label class="sbug-count__key f-num-bd" text="O" />
+        <!-- 各ランプは本体1枚＋グロー1枚の2要素。グローは本体の外側だけに出るドーナツなので
+             子として重ねても中心を隠さない。点灯/消灯は MatchLiveController が is-on を付け外しする。 -->
+        <ui:VisualElement class="sbug-lamps">
+            <ui:VisualElement class="sbug-lamprow">
+                <ui:Label class="sbug-lamprow__key f-body-bd" text="B" />
+                <ui:VisualElement name="sbug-lamp-b0" class="sbug-lamp sbug-lamp--b"><ui:VisualElement class="sbug-lamp__glow" /></ui:VisualElement>
+                <ui:VisualElement name="sbug-lamp-b1" class="sbug-lamp sbug-lamp--b"><ui:VisualElement class="sbug-lamp__glow" /></ui:VisualElement>
+                <ui:VisualElement name="sbug-lamp-b2" class="sbug-lamp sbug-lamp--b"><ui:VisualElement class="sbug-lamp__glow" /></ui:VisualElement>
             </ui:VisualElement>
-            <ui:VisualElement class="sbug-count__vals">
-                <ui:Label name="sbug-balls" class="sbug-count__val sbug-count__val--first f-num-bd" text="0" />
-                <ui:Label name="sbug-strikes" class="sbug-count__val f-num-bd" text="0" />
-                <ui:Label name="sbug-outs" class="sbug-count__val f-num-bd" text="0" />
+            <ui:VisualElement class="sbug-lamprow sbug-lamprow--next">
+                <ui:Label class="sbug-lamprow__key f-body-bd" text="S" />
+                <ui:VisualElement name="sbug-lamp-s0" class="sbug-lamp sbug-lamp--s"><ui:VisualElement class="sbug-lamp__glow" /></ui:VisualElement>
+                <ui:VisualElement name="sbug-lamp-s1" class="sbug-lamp sbug-lamp--s"><ui:VisualElement class="sbug-lamp__glow" /></ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="sbug-lamprow sbug-lamprow--next">
+                <ui:Label class="sbug-lamprow__key f-body-bd" text="O" />
+                <ui:VisualElement name="sbug-lamp-o0" class="sbug-lamp sbug-lamp--o"><ui:VisualElement class="sbug-lamp__glow" /></ui:VisualElement>
+                <ui:VisualElement name="sbug-lamp-o1" class="sbug-lamp sbug-lamp--o"><ui:VisualElement class="sbug-lamp__glow" /></ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
+        <ui:VisualElement class="sbug-sep" />
 
         <ui:VisualElement class="sbug-main">
             <ui:VisualElement class="sbug-top">

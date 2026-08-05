@@ -33,16 +33,30 @@
                          カウント・塁・両校の得点を切らさない。俯瞰と対決ビューのどちらでも同じ位置に残る。 -->
                     <ui:Instance template="ScoreBug" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
-                    <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい） -->
+                    <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい）。
+                         judge は影用の複製を先に置いて背面に敷く（USS の text_shadow は1要素1つしか
+                         持てないので、ぼかし影は面のラベル・硬い影はこの複製が担う。issue #479）。
+                         下段は球種と球速を別ラベルに割る（数字は Oswald・和文はサンセリフ＝書体3役ルール）。 -->
                     <ui:VisualElement name="pitch-call" class="pitch-call">
-                        <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" />
-                        <ui:Label name="pitch-call-detail" class="pitch-call__detail" text="" />
+                        <ui:VisualElement class="pitch-call__stack">
+                            <ui:Label name="pitch-call-judge-sh" class="pitch-call__judge pitch-call__judge--shadow" text="" />
+                            <ui:Label name="pitch-call-judge" class="pitch-call__judge" text="" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="pitch-call-detail" class="pitch-call__readout">
+                            <ui:Label name="pitch-call-note" class="pitch-call__note f-body" text="" />
+                            <ui:Label name="pitch-call-ptype" class="pitch-call__ptype f-body-bd" text="" />
+                            <ui:Label name="pitch-call-speed" class="pitch-call__speed f-num-bd" text="" />
+                            <ui:Label name="pitch-call-unit" class="pitch-call__unit f-body" text="km/h" />
+                        </ui:VisualElement>
                     </ui:VisualElement>
                     <!-- 打球・走塁プレーの判定（アウト/セーフ/フェア/ホームラン）。以前は俯瞰の描画部品が
                          内側に持っていたが、守備を3Dへ一本化すると盤面ごと隠れて判定が出なくなるため、
                          俯瞰と3Dの両方にかかるこの層へ出した。中身を書くのは Match2DPlaybackElement のまま。 -->
                     <ui:VisualElement name="judgement-call" class="pitch-call">
-                        <ui:Label name="judgement-judge" class="pitch-call__judge" text="" />
+                        <ui:VisualElement class="pitch-call__stack">
+                            <ui:Label name="judgement-judge-sh" class="pitch-call__judge pitch-call__judge--shadow" text="" />
+                            <ui:Label name="judgement-judge" class="pitch-call__judge" text="" />
+                        </ui:VisualElement>
                         <ui:Label name="judgement-detail" class="pitch-call__detail" text="" />
                     </ui:VisualElement>
                     <!-- 得点時の大型スコア（issue #60）。自校－相手校固定・加点前→1点ずつ加算→加点後で自動的に消える。 -->

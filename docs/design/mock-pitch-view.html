@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>投打対決ビュー — three.js プロトタイプ</title>
+<style>
+  :root{
+    --board:#0d2b1b;
+    --board-edge:#061a10;
+    --lamp-off:#173d28;
+    --amber:#ffae1a;
+    --amber-dim:#7a4f06;
+    --green:#3ddc6b;
+    --red:#ff4b3e;
+    --ink:#dff3e4;
+    --ink-dim:#6f9a7f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#05070a}
+  body{
+    font-family:"Helvetica Neue",Arial,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  canvas{display:block;position:fixed;inset:0}
+
+  /* ---- scoreboard ---- */
+  #board{
+    position:fixed;top:0;left:0;right:0;
+    padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
+    background:linear-gradient(180deg,var(--board) 0%,var(--board-edge) 100%);
+    border-bottom:2px solid #000;
+    box-shadow:0 6px 24px rgba(0,0,0,.6);
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .lampset{display:flex;flex-direction:column;gap:5px}
+  .lamprow{display:flex;align-items:center;gap:6px}
+  .lamprow b{
+    font-size:11px;letter-spacing:.12em;width:14px;color:var(--ink-dim);
+    font-weight:700;
+  }
+  .lamp{
+    width:13px;height:13px;border-radius:50%;
+    background:var(--lamp-off);
+    box-shadow:inset 0 0 3px rgba(0,0,0,.8);
+    transition:background .12s, box-shadow .12s;
+  }
+  .lamp.on-b{background:var(--green);box-shadow:0 0 9px var(--green)}
+  .lamp.on-s{background:var(--amber);box-shadow:0 0 9px var(--amber)}
+  .lamp.on-o{background:var(--red);box-shadow:0 0 9px var(--red)}
+
+  #readout{
+    flex:1;min-width:150px;
+    font-family:"DS-Digital",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  #ptype{font-size:15px;letter-spacing:.08em;color:var(--amber);text-shadow:0 0 10px var(--amber-dim)}
+  #speed{font-size:30px;line-height:1.05;letter-spacing:.02em}
+  #speed small{font-size:12px;color:var(--ink-dim);letter-spacing:.1em;margin-left:3px}
+  #break{font-size:11px;color:var(--ink-dim);letter-spacing:.04em;margin-top:2px}
+
+  #verdict{
+    position:fixed;left:0;right:0;top:38%;
+    text-align:center;pointer-events:none;
+    font-size:clamp(30px,10vw,64px);font-weight:900;letter-spacing:.14em;
+    color:#fff;text-shadow:0 0 26px rgba(0,0,0,.9),0 3px 0 rgba(0,0,0,.5);
+    opacity:0;transform:scale(.84);
+    transition:opacity .16s ease-out, transform .16s cubic-bezier(.2,1.6,.4,1);
+  }
+  #verdict.show{opacity:1;transform:scale(1)}
+  #verdict.strike{color:var(--amber)}
+  #verdict.ball{color:var(--green)}
+  #verdict.hit{color:#5ec8ff}
+
+  /* ---- controls ---- */
+  #panel{
+    position:fixed;left:0;right:0;bottom:0;
+    padding:10px 10px calc(env(safe-area-inset-bottom) + 10px);
+    background:linear-gradient(0deg,rgba(4,10,7,.96),rgba(4,10,7,.55));
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .row{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .row::-webkit-scrollbar{display:none}
+  button{
+    flex:0 0 auto;font:inherit;font-size:13px;color:var(--ink);
+    background:#12261a;border:1px solid #24523a;border-radius:3px;
+    padding:9px 12px;letter-spacing:.04em;cursor:pointer;white-space:nowrap;
+    transition:background .1s,border-color .1s;
+  }
+  button:hover{background:#1a3626}
+  button:active{background:#24523a}
+  button.sel{background:var(--amber);border-color:var(--amber);color:#1a1000;font-weight:700}
+  button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  #swing{
+    width:100%;padding:15px;font-size:16px;font-weight:800;letter-spacing:.3em;
+    background:#5a1410;border-color:#a5301f;color:#ffd9d2;
+  }
+  #swing:active{background:#a5301f}
+  .hint{font-size:10px;color:var(--ink-dim);letter-spacing:.05em;text-align:center}
+  @media (prefers-reduced-motion: reduce){
+    #verdict{transition:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="board">
+  <div class="lampset">
+    <div class="lamprow"><b>B</b><span class="lamp" data-b="0"></span><span class="lamp" data-b="1"></span><span class="lamp" data-b="2"></span></div>
+    <div class="lamprow"><b>S</b><span class="lamp" data-s="0"></span><span class="lamp" data-s="1"></span></div>
+    <div class="lamprow"><b>O</b><span class="lamp" data-o="0"></span><span class="lamp" data-o="1"></span></div>
+  </div>
+  <div id="readout">
+    <div id="ptype">READY</div>
+    <div id="speed">---<small>km/h</small></div>
+    <div id="break">変化量 —</div>
+  </div>
+</div>
+
+<div id="verdict"></div>
+
+<div id="panel">
+  <div class="row" id="pitches"></div>
+  <div class="row">
+    <button data-cam="catcher" class="sel">捕手後方</button>
+    <button data-cam="pitcher">投手後方</button>
+    <button data-cam="side">一塁側</button>
+    <button data-cam="high">守備俯瞰</button>
+    <button id="trail">軌跡を残す：OFF</button>
+    <button id="tempo">再生速度：60%</button>
+  </div>
+  <button id="swing">スイング</button>
+  <p class="hint">球種を押すと投球。スペース／画面タップでスイング。ドラッグで視点回転。</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+"use strict";
+
+// ============================================================
+//  定数 — 実寸（メートル）
+// ============================================================
+const MOUND_Z   = -18.44;   // 投手板
+const RELEASE   = new THREE.Vector3(0.32, 1.92, -16.55); // 右投手のリリース点
+const ZONE = { halfW: 0.216, bot: 0.52, top: 1.06 };     // ストライクゾーン
+
+// 球種定義：break は本塁到達時点の変化量(m)、t^2 で効かせるので終盤に大きく曲がる
+const PITCHES = [
+  { key:'straight', name:'ストレート',   vmin:137, vmax:142, bx: 0.00, by: 0.10, col:0xffffff },
+  { key:'slider',   name:'スライダー',   vmin:127, vmax:132, bx:-0.38, by:-0.16, col:0xffe08a },
+  { key:'curve',    name:'カーブ',       vmin:110, vmax:118, bx:-0.26, by:-0.58, col:0x8ad0ff },
+  { key:'fork',     name:'フォーク',     vmin:125, vmax:130, bx: 0.02, by:-0.62, col:0xc79bff },
+  { key:'shoot',    name:'シュート',     vmin:132, vmax:137, bx: 0.31, by:-0.12, col:0xff9a8a },
+  { key:'change',   name:'チェンジアップ',vmin:117, vmax:124, bx: 0.16, by:-0.36, col:0x9dffc0 },
+];
+
+// ============================================================
+//  シーン
+// ============================================================
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070d12);
+scene.fog = new THREE.Fog(0x070d12, 45, 130);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
+
+// ---- ライト（ナイター想定）----
+scene.add(new THREE.HemisphereLight(0x88aacc, 0x1b2a1c, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.95);
+key.position.set(-14, 26, -6);
+key.castShadow = true;
+key.shadow.mapSize.set(1024,1024);
+key.shadow.camera.left = -26; key.shadow.camera.right = 26;
+key.shadow.camera.top = 12;  key.shadow.camera.bottom = -30;
+key.shadow.camera.far = 70;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xaaccff, 0.35);
+fill.position.set(16, 20, 8);
+scene.add(fill);
+
+const M = (c, opts={}) => new THREE.MeshLambertMaterial(Object.assign({color:c}, opts));
+
+// ---- グラウンド ----
+const turf = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), M(0x1f4c2a));
+turf.rotation.x = -Math.PI/2;
+turf.receiveShadow = true;
+scene.add(turf);
+
+// 内野土（本塁〜二塁を覆う扇）
+const dirt = new THREE.Mesh(new THREE.CircleGeometry(29, 48, Math.PI*0.25, Math.PI*0.5), M(0x6b4a32));
+dirt.rotation.x = -Math.PI/2;
+dirt.rotation.z = Math.PI; // 外野方向(-z)へ開く
+dirt.position.y = 0.012;
+dirt.receiveShadow = true;
+scene.add(dirt);
+
+// マウンド
+const mound = new THREE.Mesh(new THREE.CylinderGeometry(2.75, 3.1, 0.26, 32), M(0x7a5539));
+mound.position.set(0, 0.10, MOUND_Z);
+mound.receiveShadow = true; mound.castShadow = true;
+scene.add(mound);
+const rubber = new THREE.Mesh(new THREE.BoxGeometry(0.61, 0.04, 0.15), M(0xf2f2f2));
+rubber.position.set(0, 0.245, MOUND_Z);
+scene.add(rubber);
+
+// 本塁ベース（五角形）
+const plateShape = new THREE.Shape();
+plateShape.moveTo(-0.216, 0.216); plateShape.lineTo(0.216, 0.216);
+plateShape.lineTo(0.216, -0.03);  plateShape.lineTo(0, -0.246);
+plateShape.lineTo(-0.216, -0.03); plateShape.closePath();
+const plate = new THREE.Mesh(new THREE.ShapeGeometry(plateShape), M(0xf5f5f5));
+plate.rotation.x = -Math.PI/2; plate.position.y = 0.02;
+scene.add(plate);
+
+// 打席ライン
+const chalk = M(0xdfe6e0);
+[-1.0, 1.0].forEach(sx => {
+  const box = new THREE.Group();
+  [[0,-0.05,1.83,0.06],[0,1.79,1.83,0.06],[0.61*Math.sign(sx),0.87,0.06,1.83]].forEach(()=>{});
+  const w = 1.22, h = 1.83;
+  const mk = (x,z,sw,sh) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), chalk);
+    m.rotation.x = -Math.PI/2; m.position.set(x, 0.016, z); box.add(m);
+  };
+  mk(sx*1.0, 0, 0.05, h); mk(sx*1.0 + sx*w/2*0, 0, 0.05, h);
+  mk(sx*(1.0+w/2), -h/2, w, 0.05);
+  mk(sx*(1.0+w/2),  h/2, w, 0.05);
+  mk(sx*(1.0+w),    0,   0.05, h);
+  scene.add(box);
+});
+
+// ファウルライン
+[[-1],[1]].forEach(([s]) => {
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 100), chalk);
+  g.rotation.x = -Math.PI/2; g.rotation.z = s*Math.PI/4;
+  g.position.set(s*35.4, 0.015, -35.4);
+  scene.add(g);
+});
+
+// ストライクゾーン枠
+const zoneGeo = new THREE.BoxGeometry(ZONE.halfW*2, ZONE.top-ZONE.bot, 0.02);
+const zone = new THREE.LineSegments(
+  new THREE.EdgesGeometry(zoneGeo),
+  new THREE.LineBasicMaterial({color:0xffae1a, transparent:true, opacity:0.55})
+);
+zone.position.set(0, (ZONE.top+ZONE.bot)/2, 0);
+scene.add(zone);
+
+// ============================================================
+//  選手モデル — 顔なし・抽象デフォルメ（設計方針どおり）
+// ============================================================
+function limb(r, len, mat){
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r*0.82, len, 8), mat);
+  m.position.y = -len/2; m.castShadow = true;
+  g.add(m); return g;
+}
+function makePlayer(uniCol, capCol){
+  const uni = M(uniCol), skin = M(0xe8b98f), cap = M(capCol);
+  const g = new THREE.Group();
+  const hip = 0.92;
+  [-0.13, 0.13].forEach(x => { const l = limb(0.095, hip, uni); l.position.set(x, hip, 0); g.add(l); });
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.245, 0.60, 12), uni);
+  torso.position.y = hip + 0.30; torso.castShadow = true; g.add(torso);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.09,8), skin);
+  neck.position.y = hip + 0.64; g.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.125, 16, 12), skin);
+  head.position.y = hip + 0.78; head.castShadow = true; g.add(head);   // 顔は描かない
+  const capM = new THREE.Mesh(new THREE.SphereGeometry(0.132,16,10,0,Math.PI*2,0,Math.PI*0.55), cap);
+  capM.position.y = hip + 0.79; g.add(capM);
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.018,12,1,false,0,Math.PI), cap);
+  brim.position.set(0, hip+0.80, 0.09); g.add(brim);
+  const armL = limb(0.072, 0.62, uni); armL.position.set(-0.245, hip+0.55, 0);
+  const armR = limb(0.072, 0.62, uni); armR.position.set( 0.245, hip+0.55, 0);
+  g.add(armL, armR);
+  g.userData = {armL, armR, torso, shoulderY: hip+0.55};
+  return g;
+}
+
+// 投手（ビジター：グレー）
+const pitcher = makePlayer(0xb9bec4, 0x2a3550);
+pitcher.position.set(0.15, 0.24, MOUND_Z + 0.05);
+pitcher.rotation.y = Math.PI;          // 本塁向き
+scene.add(pitcher);
+
+// 打者（ホーム：白×紺）右打者 → 三塁側 = -x
+const batter = makePlayer(0xf2f2ef, 0x1d2b4a);
+batter.position.set(-0.88, 0, 0.05);
+batter.rotation.y = Math.PI/2 + 0.35;
+scene.add(batter);
+const batPivot = new THREE.Group();
+batPivot.position.set(0, 1.28, 0);
+const bat = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.045, 0.86, 8), M(0xa9723d));
+bat.rotation.z = Math.PI/2; bat.position.x = 0.43; bat.castShadow = true;
+batPivot.add(bat); batter.add(batPivot);
+batPivot.rotation.y = 2.25;
+
+// 捕手（しゃがみ）
+const catcher = makePlayer(0xf2f2ef, 0x1d2b4a);
+catcher.position.set(0, 0, 1.15);
+catcher.scale.y = 0.72;
+catcher.rotation.y = Math.PI;
+scene.add(catcher);
+
+// 審判
+const ump = makePlayer(0x2e3238, 0x14161a);
+ump.position.set(0, 0, 2.0); ump.scale.y = 0.86; ump.rotation.y = Math.PI;
+scene.add(ump);
+
+// 野手9人（俯瞰ビュー用の定位置）
+const FIELDERS = [
+  [ -4.2, -26.0], [  5.6, -25.4],           // 二遊間
+  [ -12.0, -20.5], [ 12.6, -20.0],          // 三塁・一塁
+  [ -22.0, -60.0], [ 0.0, -70.0], [ 23.0, -60.0], // 外野
+];
+FIELDERS.forEach(([x,z]) => {
+  const f = makePlayer(0xb9bec4, 0x2a3550);
+  f.position.set(x, 0, z); f.rotation.y = Math.PI;
+  scene.add(f);
+});
+
+// ============================================================
+//  ボール
+// ============================================================
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.0365, 16, 12), M(0xffffff, {emissive:0x333333}));
+ball.castShadow = true; ball.visible = false;
+scene.add(ball);
+
+const TRAIL_MAX = 220;
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_MAX*3), 3));
+const trailMat = new THREE.LineBasicMaterial({color:0xffffff, transparent:true, opacity:0.85});
+const trail = new THREE.Line(trailGeo, trailMat);
+trail.frustumCulled = false;
+scene.add(trail);
+let trailPts = [];
+const ghosts = [];   // 「軌跡を残す」で積む過去の軌道
+
+// ============================================================
+//  カメラ
+// ============================================================
+const CAMS = {
+  catcher: { pos:new THREE.Vector3(0.15, 2.25, 4.6),  tgt:new THREE.Vector3(0, 1.35, -8) },
+  pitcher: { pos:new THREE.Vector3(0.4, 2.5, -22.5),  tgt:new THREE.Vector3(0, 1.1, -2) },
+  side:    { pos:new THREE.Vector3(11.5, 2.6, -5.5),  tgt:new THREE.Vector3(-0.4, 1.2, -8) },
+  high:    { pos:new THREE.Vector3(0, 34, 24),        tgt:new THREE.Vector3(0, 0, -32) },
+};
+let camTarget = CAMS.catcher.tgt.clone();
+let orbit = {r:0, theta:0, phi:0};
+function applyCam(k){
+  const c = CAMS[k];
+  camTarget.copy(c.tgt);
+  const d = c.pos.clone().sub(c.tgt);
+  orbit.r = d.length();
+  orbit.theta = Math.atan2(d.x, d.z);
+  orbit.phi = Math.acos(THREE.MathUtils.clamp(d.y / orbit.r, -1, 1));
+  updateCam();
+}
+function updateCam(){
+  const sp = Math.sin(orbit.phi), cp = Math.cos(orbit.phi);
+  camera.position.set(
+    camTarget.x + orbit.r * sp * Math.sin(orbit.theta),
+    camTarget.y + orbit.r * cp,
+    camTarget.z + orbit.r * sp * Math.cos(orbit.theta)
+  );
+  camera.lookAt(camTarget);
+}
+applyCam('catcher');
+
+// ドラッグで視点回転
+let drag = null;
+canvas.addEventListener('pointerdown', e => { drag = {x:e.clientX, y:e.clientY}; });
+addEventListener('pointerup', () => { drag = null; });
+addEventListener('pointermove', e => {
+  if(!drag) return;
+  orbit.theta -= (e.clientX - drag.x) * 0.006;
+  orbit.phi = THREE.MathUtils.clamp(orbit.phi - (e.clientY - drag.y) * 0.005, 0.12, Math.PI*0.52);
+  drag = {x:e.clientX, y:e.clientY};
+  updateCam();
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  orbit.r = THREE.MathUtils.clamp(orbit.r * (1 + Math.sign(e.deltaY)*0.09), 2.5, 90);
+  updateCam();
+}, {passive:false});
+
+// ============================================================
+//  ゲーム状態
+// ============================================================
+const S = { balls:0, strikes:0, outs:0 };
+let phase = 'idle';       // idle | windup | flight | result
+let t0 = 0;               // フェーズ開始時刻
+let pitch = null;         // 現在の投球データ
+let swingAt = null;       // スイング入力時刻（flight開始からの秒）
+let tempo = 0.60;         // 再生速度
+let keepTrail = false;
+
+const $ = s => document.querySelector(s);
+const el = { ptype:$('#ptype'), speed:$('#speed'), brk:$('#break'), verdict:$('#verdict') };
+
+function paintCount(){
+  document.querySelectorAll('[data-b]').forEach((n,i)=>n.classList.toggle('on-b', i < S.balls));
+  document.querySelectorAll('[data-s]').forEach((n,i)=>n.classList.toggle('on-s', i < S.strikes));
+  document.querySelectorAll('[data-o]').forEach((n,i)=>n.classList.toggle('on-o', i < S.outs));
+}
+paintCount();
+
+function say(text, cls){
+  el.verdict.textContent = text;
+  el.verdict.className = 'show ' + (cls||'');
+  clearTimeout(say._t);
+  say._t = setTimeout(()=>{ el.verdict.className = ''; }, 1400);
+}
+
+// ---- 投球生成 ----
+function throwPitch(def){
+  if(phase !== 'idle') return;
+
+  // 球速は毎球ばらつく（最速はカタログ上限、常時は少し下）
+  const top = def.vmax;
+  const kmh = +(top - Math.pow(Math.random(), 0.7) * (top - def.vmin)).toFixed(1);
+
+  // 狙い（ゾーン中心±ばらつき＝制球）
+  const sigma = 0.14;
+  const aim = new THREE.Vector3(
+    THREE.MathUtils.clamp((Math.random()-0.5)*0.42 + gauss()*sigma, -0.55, 0.55),
+    THREE.MathUtils.clamp(0.80 + (Math.random()-0.5)*0.34 + gauss()*sigma, 0.25, 1.45),
+    0
+  );
+  // 変化量にも個体差
+  const bx = def.bx * (0.85 + Math.random()*0.3);
+  const by = def.by * (0.85 + Math.random()*0.3);
+
+  const dist = RELEASE.distanceTo(aim);
+  const flight = dist / (kmh/3.6);
+
+  pitch = {def, kmh, aim, bx, by, flight};
+  swingAt = null;
+  trailPts = [];
+  ball.material.color.setHex(def.col);
+  trailMat.color.setHex(def.col);
+
+  el.ptype.textContent = def.name;
+  el.speed.innerHTML = '---<small>km/h</small>';
+  el.brk.textContent = '変化量 —';
+
+  phase = 'windup'; t0 = clock.getElapsedTime();
+}
+function gauss(){
+  let u=0,v=0; while(!u) u=Math.random(); while(!v) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+// 飛行中の位置：直線補間 + 変化量を t^2 で（終盤に曲がる）
+function ballAt(u){
+  const p = new THREE.Vector3().lerpVectors(RELEASE, pitch.aim, u);
+  p.x += pitch.bx * u * u;
+  p.y += pitch.by * u * u;
+  return p;
+}
+
+// ---- 判定 ----
+function judge(){
+  const end = ballAt(1);
+  const inZone = Math.abs(end.x) <= ZONE.halfW && end.y >= ZONE.bot && end.y <= ZONE.top;
+
+  el.speed.innerHTML = pitch.kmh.toFixed(1) + '<small>km/h</small>';
+  el.brk.textContent = `変化量 横 ${(pitch.bx*100).toFixed(0)}cm / 縦 ${(pitch.by*100).toFixed(0)}cm`;
+
+  if(swingAt === null){
+    if(inZone){ addStrike('見逃し'); } else { addBall(); }
+    return;
+  }
+  // タイミング誤差（秒・実時間換算）
+  const err = (swingAt - pitch.flight) / tempo;
+  const ae = Math.abs(err);
+  const reachable = Math.abs(end.x) < 0.62 && end.y > 0.30 && end.y < 1.45;
+
+  if(!reachable || ae > 0.115){ addStrike('空振り'); return; }
+  if(ae > 0.055){ foul(); return; }
+
+  // ミートした
+  hit(ae, end);
+}
+function addStrike(label){
+  S.strikes++;
+  if(S.strikes >= 3){ S.strikes = 0; S.balls = 0; S.outs = (S.outs+1)%3; say(label+' 三振','strike'); }
+  else say(label,'strike');
+  paintCount();
+}
+function addBall(){
+  S.balls++;
+  if(S.balls >= 4){ S.balls = 0; S.strikes = 0; say('フォアボール','ball'); }
+  else say('ボール','ball');
+  paintCount();
+}
+function foul(){
+  // 2ストライク後はカウント維持（設計どおり無限に粘れる）
+  if(S.strikes < 2) S.strikes++;
+  paintCount();
+  say('ファウル','strike');
+}
+function hit(ae, end){
+  const quality = 1 - ae/0.055;
+  const label = quality > 0.72 ? '会心の当たり' : quality > 0.35 ? 'ヒット性' : '弱い当たり';
+  say(label,'hit');
+  // 打球を飛ばす
+  const dir = new THREE.Vector3(THREE.MathUtils.clamp(-end.x*2.4 + gauss()*0.5, -1, 1), 0.42 + quality*0.5, -1).normalize();
+  hitBall = { p: end.clone(), v: dir.multiplyScalar(22 + quality*22), t: 0 };
+}
+let hitBall = null;
+
+// ============================================================
+//  ループ
+// ============================================================
+const clock = new THREE.Clock();
+const WINDUP = 0.85;
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now = clock.getElapsedTime();
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if(phase === 'windup'){
+    const w = Math.min((now - t0) / WINDUP, 1);
+    // 腕：後方から前方へ振り抜く（後半で一気に）
+    const s = w < 0.62 ? (w/0.62)*0.62 : 0.62 + Math.pow((w-0.62)/0.38, 2.2)*0.38;
+    pitcher.userData.armR.rotation.x = THREE.MathUtils.lerp(0.15, -2.75, Math.min(s*1.6,1)) + Math.max(0, s-0.62)*7.2;
+    pitcher.userData.torso.rotation.x = -0.18 * Math.sin(w*Math.PI);
+    if(w >= 1){ phase = 'flight'; t0 = now; ball.visible = true; }
+  }
+  else if(phase === 'flight'){
+    const u = Math.min((now - t0) * tempo / pitch.flight, 1);
+    const p = ballAt(u);
+    ball.position.copy(p);
+    trailPts.push(p.clone());
+    if(trailPts.length > TRAIL_MAX) trailPts.shift();
+    writeTrail(trail, trailPts);
+
+    // 打者スイングモーション
+    if(swingAt !== null){
+      const sw = Math.min((now - t0 - swingAt/tempo) / 0.13, 1);
+      batPivot.rotation.y = THREE.MathUtils.lerp(2.25, -1.15, ease(sw));
+    }
+    if(u >= 1){
+      judge();
+      phase = 'result'; t0 = now;
+      if(keepTrail) freezeTrail();
+    }
+  }
+  else if(phase === 'result'){
+    if(swingAt !== null && (now - t0) > 0.35){
+      batPivot.rotation.y += (2.25 - batPivot.rotation.y) * dt * 4.5;
+    }
+    if(hitBall){
+      hitBall.v.y -= 9.8 * dt;
+      hitBall.p.addScaledVector(hitBall.v, dt);
+      ball.position.copy(hitBall.p);
+      if(hitBall.p.y < 0.04){ hitBall = null; }
+    }
+    if(now - t0 > 1.7){
+      phase = 'idle';
+      ball.visible = false; hitBall = null;
+      trailPts = []; writeTrail(trail, trailPts);
+      batPivot.rotation.y = 2.25;
+      pitcher.userData.armR.rotation.x = 0.15;
+      pitcher.userData.torso.rotation.x = 0;
+      el.ptype.textContent = 'READY';
+    }
+  }
+  renderer.render(scene, camera);
+}
+const ease = t => 1 - Math.pow(1-t, 3);
+
+function writeTrail(line, pts){
+  const arr = line.geometry.attributes.position.array;
+  for(let i=0;i<TRAIL_MAX;i++){
+    const p = pts[Math.min(i, pts.length-1)] || RELEASE;
+    arr[i*3] = p.x; arr[i*3+1] = p.y; arr[i*3+2] = p.z;
+  }
+  line.geometry.attributes.position.needsUpdate = true;
+  line.geometry.setDrawRange(0, Math.max(pts.length, 0));
+}
+function freezeTrail(){
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(trailPts.length*3), 3));
+  const arr = g.attributes.position.array;
+  trailPts.forEach((p,i)=>{ arr[i*3]=p.x; arr[i*3+1]=p.y; arr[i*3+2]=p.z; });
+  const l = new THREE.Line(g, new THREE.LineBasicMaterial({color:pitch.def.col, transparent:true, opacity:0.42}));
+  l.frustumCulled = false;
+  scene.add(l); ghosts.push(l);
+  while(ghosts.length > 12){ const old = ghosts.shift(); scene.remove(old); old.geometry.dispose(); }
+}
+
+// ============================================================
+//  入力
+// ============================================================
+const pitchRow = document.getElementById('pitches');
+PITCHES.forEach(def => {
+  const b = document.createElement('button');
+  b.textContent = def.name;
+  b.onclick = () => throwPitch(def);
+  pitchRow.appendChild(b);
+});
+
+function doSwing(){
+  if(phase !== 'flight' || swingAt !== null) return;
+  swingAt = (clock.getElapsedTime() - t0) * tempo;
+}
+document.getElementById('swing').onclick = doSwing;
+addEventListener('keydown', e => {
+  if(e.code === 'Space'){ e.preventDefault(); doSwing(); }
+});
+canvas.addEventListener('pointerdown', () => { if(phase==='flight') doSwing(); });
+
+document.querySelectorAll('[data-cam]').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('[data-cam]').forEach(n=>n.classList.remove('sel'));
+    b.classList.add('sel');
+    applyCam(b.dataset.cam);
+  };
+});
+document.getElementById('trail').onclick = e => {
+  keepTrail = !keepTrail;
+  e.target.textContent = '軌跡を残す：' + (keepTrail ? 'ON' : 'OFF');
+  e.target.classList.toggle('sel', keepTrail);
+  if(!keepTrail){ ghosts.forEach(g=>{scene.remove(g); g.geometry.dispose();}); ghosts.length = 0; }
+};
+const TEMPOS = [0.60, 0.35, 1.0];
+let ti = 0;
+document.getElementById('tempo').onclick = e => {
+  ti = (ti+1) % TEMPOS.length;
+  tempo = TEMPOS[ti];
+  e.target.textContent = '再生速度：' + Math.round(tempo*100) + '%';
+};
+
+function resize(){
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+tick();
+})();
+</script>
+</body>
+</html>

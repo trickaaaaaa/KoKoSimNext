@@ -1383,44 +1383,119 @@
    既存UIと重なってよい短命表示のため、盤面ホスト上に絶対配置し既定は非表示。 */
 .pitch-call {
     position: absolute;
-    left: 0; right: 0; top: 20%;
+    left: 0; right: 0; top: 38%;
     align-items: center;
     display: none;
 }
-/* 判定テキスト。緑の盤面上でも読めるよう半透明パネルで浮かせる（mhud-panel と同じ idiom）。
-   文字は掲示板と同じ「黒面上の常時明色」＝--sb-ink-1。デーゲームNBスキン移行で --color-chalk が
-   暗インクへ反転したため、ここで chalk を参照すると暗地に暗文字＝読めなくなる（issue #236 症状B）。
-   パネルは design-19 §8「掲示板島は黒維持」に従って暗いまま据え置く。 */
+/* 判定テキスト（issue #479 で参照モック docs/design/mock-pitch-view.html の実測値へ改定）。
+   旧実装は半透明パネルで浮かせていたが、パネルをやめて**影2重**で地から起こす＝
+   ① ぼかし影 0 0 26px rgba(0,0,0,.9) ② 硬い影 0 3px 0 rgba(0,0,0,.5)。
+   USS の text-shadow は1要素1つしか持てないので、①はここ、②は同じ文字を3px下へ置いた
+   複製ラベル（--shadow）で出す。影を省略すると明るい昼芝に文字が埋もれる。
+   字送り（font-size / letter-spacing）は「画面幅の10%・30〜64pxクランプ」なので USS では書けず、
+   MatchLiveController.ApplyCallTextMetrics が実幅から算出して両ラベルへ入れる。 */
 .pitch-call__judge {
-    font-size: var(--fs-callout);
     -unity-text-align: middle-center;
-    letter-spacing: 2px;
-    color: var(--sb-ink-1);
-    background-color: rgba(14, 26, 19, 0.82);
-    border-radius: var(--radius-panel);
-    padding: var(--sp-1) var(--sp-4);
+    color: var(--sb-call-ink);
+    margin: 0;
+    padding: 0;
 }
-.pitch-call__judge--strike { color: var(--color-lamp); }
-.pitch-call__judge--ball { color: var(--color-good); }
+.pitch-call__judge--strike { color: var(--sb-call-strike); }
+.pitch-call__judge--ball { color: var(--sb-call-ball); }
 /* 打球・走塁プレーの判定オーバーレイ（issue #59）。PitchCallと同じ器・idiomを流用する。
-   アウト＝警告色（常時表示）、セーフ＝良好色（際どい判定の時だけ表示、呼び出し側が出し分ける）。 */
-.pitch-call__judge--out { color: var(--color-warn); }
-.pitch-call__judge--safe { color: var(--color-good); }
+   アウト＝盤面の赤（ランプのアウトと同じ）、セーフ＝ボール系の緑。盤面ビューの色は状態コードで、
+   データ画面のアクセント本数制限の対象外（CLAUDE.md「適用範囲の例外（試合盤面）」）。 */
+.pitch-call__judge--out { color: var(--sb-call-out); }
+.pitch-call__judge--safe { color: var(--sb-call-ball); }
 /* フェア＝際どい飛球が落ちた瞬間の表示（issue #328②）。良し悪しではない中立の判定コールなので
-   strikeと同じアンバー（--color-lamp）を流用する。 */
-.pitch-call__judge--fair { color: var(--color-lamp); }
-/* ホームラン＝柵越えの着地の瞬間（issue #354）。盤面ビューの色は状態コードなので、
-   打者側の最良の結果＝良好色（--color-good。セーフと同系）を使う。下段に飛距離を添える。 */
-.pitch-call__judge--homerun { color: var(--color-good); }
-/* 球種・球速（実1球記録がある打席のみ。合成投球列では出さない）。文字色は判定と同じ理由で --sb-ink-1。 */
+   strikeと同じアンバーを流用する。 */
+.pitch-call__judge--fair { color: var(--sb-call-strike); }
+/* ホームラン＝柵越えの着地の瞬間（issue #354）。打者側の最良の結果＝ボール系と同じ緑。 */
+.pitch-call__judge--homerun { color: var(--sb-call-ball); }
+/* 硬い影（②）の実体。色クラス（--out 等）と同じ詳細度だと並び順に勝敗が依存するので、
+   2クラス連結で詳細度を1段上げて必ず黒が勝つようにする。 */
+.pitch-call__judge.pitch-call__judge--shadow {
+    position: absolute;
+    left: 0; right: 0; top: 3px;
+    color: rgba(0, 0, 0, 0.5);
+}
+/* 影の複製が実寸を持つと器の幅が狂うので、面のラベルだけが箱を決める（影は絶対配置）。 */
+.pitch-call__stack { align-items: center; }
+
+/* 出現/消失（参照モック: 出現160ms・opacity 0→1・scale .84→1 をオーバーシュートさせる）。
+   USS に任意の cubic-bezier は無いので ease-out-back（進捗が約110%まで行き過ぎて戻る）で代用する
+   ＝参照の cubic-bezier(.2,1.6,.4,1) と同じピーク。**ここだけ他のUIと違うカーブ**にするのが要点で、
+   盤面で判定表示だけが跳ねることで視線が集まる。
+   既定を「見えている状態」にしてあるのは、display だけを操作する消費者（Match2DPlaybackElement の
+   自前経路など）が is-enter を知らなくても**必ず見える**ようにするため。逆にすると判定が無言で消える。 */
+.pitch-call__stack,
+.pitch-call__readout {
+    opacity: 1;
+    scale: 1 1;
+    transition-property: opacity, scale;
+    transition-duration: 160ms, 160ms;
+    transition-timing-function: ease-out, ease-out-back;
+}
+.pitch-call.is-enter .pitch-call__stack,
+.pitch-call.is-enter .pitch-call__readout {
+    opacity: 0;
+    scale: 0.84 0.84;
+}
+
+/* 下段の補足（判定オーバーレイを器ごと流用する側＝本塁打の飛距離など。単一ラベル）。
+   参照モックの計器表示と同じく黒い盤面の地に載せる（下の readout の項を参照）。 */
 .pitch-call__detail {
     font-size: var(--fs-body);
     -unity-text-align: middle-center;
     color: var(--sb-ink-1);
-    background-color: rgba(14, 26, 19, 0.82);
-    border-radius: var(--radius-chip);
-    padding: var(--sp-1) var(--sp-2);
-    margin-top: var(--sp-1);
+    background-color: var(--sb-face);
+    border-bottom-width: var(--nb-border);
+    border-bottom-color: var(--ink);
+    padding: var(--sp-1) var(--sp-3);
+    margin-top: var(--sp-2);
+}
+
+/* 球種・球速の計器表示（参照モックの readout。実1球記録がある打席だけ出す）。
+   桁が動かないことが計器らしさの正体なので数字は Oswald（.f-num-bd）で、和文との混植を避けて
+   ラベルを割る（書体3役ルール）。align-items: baseline は USS 非対応なので flex-end で代用する。
+
+   ⚠ 地を敷くのは飾りではない。参照モックではこの計器は**盤面（黒いスコアボード）の中**にあり、
+   11px の補助情報が #6F9A7F で読めるのは地が黒いから。昼芝（#4F7C3B）へ直接置くと同じ数値でも
+   完全に沈んで読めない（2026-08-05 実測）。指定の文字サイズ・色を守るために、参照と同じ
+   「黒い盤面の上」という前提のほうを持ってくる。地の色は design-19 §8「掲示板島は黒維持」に従う。 */
+.pitch-call__readout {
+    flex-direction: row;
+    align-items: flex-end;
+    background-color: var(--sb-face);
+    border-bottom-width: var(--nb-border);
+    border-bottom-color: var(--ink);
+    padding: var(--sp-1) var(--sp-3);
+    margin-top: var(--sp-2);
+}
+.pitch-call__note {
+    font-size: var(--fs-readout-note);
+    color: var(--sb-call-detail-ink);
+    margin: 0 var(--sp-2) 0 0;
+    padding: 0;
+}
+.pitch-call__ptype {
+    font-size: var(--fs-readout-type);
+    letter-spacing: 1px;
+    color: var(--sb-call-strike);
+    margin: 0 var(--sp-2) 0 0;
+    padding: 0;
+}
+.pitch-call__speed {
+    font-size: var(--fs-readout-speed);
+    color: var(--sb-ink-1);
+    margin: 0;
+    padding: 0;
+}
+.pitch-call__unit {
+    font-size: var(--fs-readout-unit);
+    color: var(--sb-call-detail-ink);
+    margin: 0 0 0 3px;
+    padding: 0;
 }
 
 /* DuelFieldLabel：対決ビューの打球処理中（守備の引き）に出す頭上フルネームラベル（issue #393）。
@@ -1984,32 +2059,84 @@
     flex-shrink: 0;
 }
 
-/* ── 左袖：縦の B/S/O ────────────────────────────────────────────── */
-.sbug-count { flex-direction: row; flex-shrink: 0; }
-.sbug-count__keys { width: var(--sbug-key-w); flex-shrink: 0; }
-.sbug-count__vals { width: var(--sbug-val-w); flex-shrink: 0; background-color: var(--sb-ink-1); }
-.sbug-count__key {
-    height: var(--sbug-row-h);
-    font-size: var(--sbug-fs-key);
-    color: var(--sb-ink-1);
-    -unity-text-align: middle-center;
+/* ── 左袖：縦の B/S/O ランプ（issue #479。2026-07-31 の数字方式から再改定） ──────────
+   寸法は参照モック docs/design/mock-pitch-view.html の実測値そのまま（径13 / 間隔6 / 行間5 /
+   ラベル幅14）。島は 71×49px にしかならないので、右ブロック（56+32+32=120px）に対して
+   上下中央へ置き、余る71pxは均等に捨てる＝案A（2026-08-05 監督選択）。
+   USS に gap は無いのでランプ側の margin-left で間隔を作る（ラベル→1個目の6pxも同じ margin が担う）。 */
+.sbug-lamps {
+    justify-content: center;   /* 余りを上下へ等分＝案A */
     flex-shrink: 0;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+}
+.sbug-lamprow { flex-direction: row; align-items: center; flex-shrink: 0; }
+/* USS に nth-child は無いので、2行目以降だけ修飾子で行間を付ける。 */
+.sbug-lamprow--next { margin-top: var(--lamp-row-gap); }
+/* ラベルはランプより大きいので、**高さをランプ径に固定して行の高さを決めさせない**
+   （決めさせるとランプの縦の間隔が仕様の行間5pxより広がり、格子が崩れる）。
+   はみ出したぶんは行間へ出るだけ（UI Toolkit の overflow 既定は visible）。 */
+.sbug-lamprow__key {
+    width: var(--lamp-key-w);   /* 固定幅＝3行の左端を揃える */
+    height: var(--lamp-d);
+    flex-shrink: 0;
+    font-size: var(--lamp-fs-key);
+    letter-spacing: var(--lamp-ls-key);
+    color: var(--lamp-key-ink);
+    -unity-text-align: middle-left;
     margin: 0;
     padding: 0;
 }
-.sbug-count__val {
-    height: var(--sbug-row-h);
-    font-size: var(--sbug-fs-val);
-    color: var(--ink);            /* 明地の上なのでインク */
-    -unity-text-align: middle-center;
+/* ランプ本体。消灯の凹み（inset 0 0 3px rgba(0,0,0,.8)）は USS に inset shadow が無いので、
+   縁が最も暗く内へ抜ける黒のテクスチャを background-image として地色の上へ重ねて出す。
+   点灯時は凹みを外す（光っているLEDは凹んで見えない）。 */
+.sbug-lamp {
+    width: var(--lamp-d);
+    height: var(--lamp-d);
+    border-radius: 50%;
     flex-shrink: 0;
-    margin: 0;
-    padding: 0;
-    border-top-width: var(--border-w);
-    border-top-color: var(--sbug-val-line);
+    margin-left: var(--lamp-gap);
+    background-color: var(--lamp-off);
+    background-image: url("project:///Assets/UI/Images/board/lamp-inset.png");
+    transition-property: background-color;
+    transition-duration: 120ms;
+    transition-timing-function: linear;
 }
-/* USS に nth-child は無いので、先頭マスだけ修飾子で上罫を消す。 */
-.sbug-count__val--first { border-top-width: 0; }
+.sbug-lamp.is-on { background-image: none; }
+.sbug-lamp--b.is-on { background-color: var(--lamp-b); }
+.sbug-lamp--s.is-on { background-color: var(--lamp-s); }
+.sbug-lamp--o.is-on { background-color: var(--lamp-o); }
+/* グロー（box-shadow 0 0 9px <同色> 相当）。これが無いと電光掲示板ではなくただの色付きの丸になる。
+   テクスチャは本体13pxの外側だけに出るドーナツなので、本体の上に重ねても中心を隠さない
+   ＝本体とグローの2要素で済む（内側を焼くと本体を覆ってしまう）。色は点灯色でティントする。
+
+   ⚠ テクスチャの断面は「本体と同じ円板をガウスぼかししたもの」でなければならない。
+   box-shadow のぼかしは**元の形をぼかす**ので、縁のαは 1.0 ではなく 0.35 程度から始まる。
+   これを「縁で1.0から外へ減衰」で作ると全半径で約3倍明るくなり、13pxのランプに対して
+   halo が勝って滲んで見える（2026-08-05 実測・監督指摘）。生成は tools/gen-lamp-sprites.py。 */
+.sbug-lamp__glow {
+    position: absolute;
+    left: var(--lamp-glow-off);
+    top: var(--lamp-glow-off);
+    width: var(--lamp-glow-d);
+    height: var(--lamp-glow-d);
+    background-image: url("project:///Assets/UI/Images/board/lamp-glow.png");
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 120ms;
+    transition-timing-function: linear;
+}
+.sbug-lamp.is-on .sbug-lamp__glow { opacity: var(--lamp-glow-a); }
+.sbug-lamp--b .sbug-lamp__glow { -unity-background-image-tint-color: var(--lamp-b); }
+.sbug-lamp--s .sbug-lamp__glow { -unity-background-image-tint-color: var(--lamp-s); }
+.sbug-lamp--o .sbug-lamp__glow { -unity-background-image-tint-color: var(--lamp-o); }
+/* 左袖と右ブロックの境。旧実装では数字列の明地が境目も兼ねていたが、ランプ化で黒同士が
+   突き合わせになるため、黒島専用の淡い分割線を1本だけ引く（UI原則④）。 */
+.sbug-sep {
+    width: var(--border-w);
+    flex-shrink: 0;
+    background-color: var(--sb-board-line);
+}
 
 /* ── 右：回＋塁ダイヤ／チーム2行 ──────────────────────────────── */
 .sbug-main {
