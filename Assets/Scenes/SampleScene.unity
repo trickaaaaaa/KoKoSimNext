@@ -629,7 +629,7 @@ MonoBehaviour:
   scoreCallFinalHoldSeconds: 1.1
   managerTacticalSense: 70
   subCallHoldSeconds: 2.6
-  gameTelopHoldSeconds: 0.6
+  gameTelopHoldSeconds: 2.1
   inningBreakHoldSeconds: 4
 --- !u!114 &624382328
 MonoBehaviour:

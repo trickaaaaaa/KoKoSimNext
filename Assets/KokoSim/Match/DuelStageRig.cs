@@ -1478,8 +1478,10 @@ namespace KokoSim.Unity.Match
         /// 2.4/2.8/3.2 を撮り比べて選んだ 2.8 から**同じ比較の中の1段上**へ移した。
         /// 3本とも球審のコールは次の投球より前に終わる（コール〜構え戻りは間隔に依らず約2.05秒で一定）ので、
         /// 差は戻ってから次の投球までの間だけ: 2.4s→0.38s / 2.8s→0.74s / **3.2s→1.17s**。
-        /// 変えるときは <see cref="UmpireCallSettleSeconds"/>（2.55秒）＋コール開始の待ち（約0.05秒）が
-        /// 収まるかを確認すること。収まらない間隔では戻りが途中で切れる。
+        /// 変えるときは <see cref="UmpireCallSettleSeconds"/>（2.55秒）＋コール開始の待ち
+        /// （捕球+反応＝飛翔0.55s+0.10s≒0.65秒。2026-08-05にコール開始を捕球後へ移した）が
+        /// 収まるかを確認すること。3.2sで丁度＝軟投は戻り終わり直前の静止区間だけ切れる（絵には出ない）。
+        /// 収まらない間隔では戻りが途中で切れる。
         ///
         /// ⚠ シーンの MatchLive は <c>duelPitchIntervalSeconds</c> を直列化して持つ＝**ここだけ変えても
         /// 実機は変わらない**（SampleScene.unity 側も一緒に変える）。
@@ -1507,13 +1509,17 @@ namespace KokoSim.Unity.Match
         /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
         /// <see cref="DeliveryStartTime"/> へクロスフェードで入り、そこから等速で再生する。
         /// 呼び出し側が投球時計を −WindupSeconds から始めれば、時計0＝リリースにそのまま一致する。
-        /// 実体は <see cref="ResetForNewPlateAppearance"/> に一本化（投手も含めた仕切り直し）＋
-        /// 采配窓中の静止（下記）解除だけをここで足す。
+        /// 仕切り直しは <see cref="ResetForNewPlateAppearance"/> に一本化（投手はセット姿勢で静止）し、
+        /// 振りかぶりの切り口へ入る＋静止解除をここで足す。
         /// </summary>
         public void OnPitchWindup()
         {
             if (!Available || _pitcher == null) return;
             ResetForNewPlateAppearance();
+            // 采配窓の間はセット姿勢（クリップ0秒）で静止している（ResetForNewPlateAppearance）ので、
+            // ここで振りかぶりの切り口へ入って等速再生を始める＝時計 −WindupSeconds と一致する。
+            CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
+            GroundFix(_pitcher);
             _pitcher.Speed = 1f;   // 采配窓の静止を解いて等速再生を始める
         }
 
@@ -1528,8 +1534,8 @@ namespace KokoSim.Unity.Match
         ///
         /// 投手も同型。3D守備ビューへ逃がしている間はフォロースルーの途中のコマで凍り、対決ビューへ
         /// 復帰した瞬間に Tick が再開してその続き（投げ終わりの残像）が再生される
-        /// （2026-08-05 監督報告。issue #468）。ここで <see cref="OnPitchWindup"/> と同じ行き先
-        /// （<see cref="DeliveryStartTime"/>）へクロスフェードで寄せて仕切り直す。
+        /// （2026-08-05 監督報告。issue #468）。ここでセット姿勢（クリップ0秒）へクロスフェードで
+        /// 寄せて仕切り直す（振りかぶりの切り口へは <see cref="OnPitchWindup"/> が投球開始時に入る）。
         ///
         /// 1球進行（設計書15 §8）へ移すまでは、対決ビューを開けるコマと <see cref="OnPitchWindup"/> が
         /// 同じフレームだったので凍った残りは1コマも映らなかった＝**移行で初めて絵に出た**。
@@ -1564,11 +1570,17 @@ namespace KokoSim.Unity.Match
             {
                 // 投手は打者・捕手・球審と違って「待機クリップ」が無い（1本のクリップを
                 // 振りかぶり〜フォロースルーまで頭出し無しで使い回す）ので、SetActorClip の
-                // 頭出しでは跳ぶ・向きが飛ぶ（design-18 §4.5-③）。OnPitchWindup と同じ行き先へ
-                // クロスフェードで寄せる。カットバック予約（_cutCountdown）が残っていると寄せた
-                // 直後に別クリップ内時刻へまた跳ぶので、寄せる前に破棄する
+                // 頭出しでは跳ぶ・向きが飛ぶ（design-18 §4.5-③）。クロスフェードで寄せる。
+                // カットバック予約（_cutCountdown）が残っていると寄せた
+                // 直後に別クリップ内時刻へまた跳ぶので、寄せる前に破棄する。
+                //
+                // 行き先は**セット姿勢（クリップ0秒）**。旧実装は DeliveryStartTime（1.75s＝足上げの
+                // 途中）で凍らせていたため、守備ビューから戻った采配窓の間じゅう「投げかけのポーズ」で
+                // 静止して見えた（2026-08-05 監督指摘「投手がモーションに入ってしまっている。
+                // すこしセットポジションで静止しといて」）。振りかぶりの切り口へは OnPitchWindup が
+                // 投球開始の瞬間に改めて入る＝リリースの時計（−WindupSeconds 起点）は変わらない
                 _cutCountdown = -1f;
-                CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
+                CrossfadeActorTo(_pitcher, 0f, CrossfadeSeconds);
                 GroundFix(_pitcher);
                 // クロスフェードは実時間（Tick は対決ビューが映っている間ずっと回る）で進むので、
                 // 進めたままだと采配窓の間（paHeadDwellSeconds）に投球動作が先走って見える。
@@ -1737,16 +1749,21 @@ namespace KokoSim.Unity.Match
         private const float UmpireCallSettleSeconds = 2.55f;
 
         /// <summary>
-        /// 捕球からコール（腕が伸び切る瞬間）までの間[秒]。球審は捕手のミットに収まったのを見てから
-        /// 判定を出すので、必ず正の値＝捕球より後に手が出る。
-        /// 0.30（2026-07-31 監督確定・比較録画のうえで「もっと早く」）。0.45 でも間合いは成立するが、
-        /// テンポのいい判定を採る。
+        /// 捕球を見てからコールの**動作を始める**までの反応[秒]。
+        ///
+        /// 旧実装はコールの瞬間（アンカー0.85s）を「捕球+0.30s」へ合わせる逆算で、クリップ開始が
+        /// 捕球より前＝実質リリース直後に来て、突き出しの助走が球の飛翔中に見えていた
+        /// （2026-08-05 監督指摘「ちゃんとボールがミットにおさまってからジャッジして」）。
+        /// 今はクリップ開始そのものを「捕球 + この値」に置く（頭出し無し）。クリップ内部の緩急は
+        /// 改変しない掟（design-18 §7-2）ゆえ、コール（腕が伸び切る瞬間）は
+        /// 捕球 + 反応 + <see cref="UmpireCallAnchorSeconds"/> に着地する＝判定テロップもそこに揃える。
         /// </summary>
-        private const float UmpireCallDelaySeconds = 0.30f;
+        private const float UmpireCallReactSeconds = 0.10f;
 
         /// <summary>
         /// この球の判定を画面へ出してよい時刻[秒]（リリース起点）。<see cref="OnPitchReleased"/> の後だけ
-        /// 意味を持つ。捕られる球は球審がコールする瞬間（ミットに収まる時刻＋<see cref="UmpireCallDelaySeconds"/>）、
+        /// 意味を持つ。捕られる球は球審がコールする瞬間（ミットに収まる時刻＋<see cref="UmpireCallReactSeconds"/>
+        /// ＋<see cref="UmpireCallAnchorSeconds"/>）、
         /// 打つ球・死球は当たった瞬間。
         ///
         /// UI（MatchLive）は長らく盤面（2D俯瞰）の投球尺 0.45 秒固定でテロップを出していた。対決ビューの球は
@@ -1819,9 +1836,10 @@ namespace KokoSim.Unity.Match
             bool meetsBat = outcome == DuelPitchOutcome.InPlayContact
                 || outcome == DuelPitchOutcome.FoulContact;
             float flight = LaunchBall(pitch, catchIndex, meetsBat);
-            // 捕られる球は球審のコールに、打つ球・死球は当たった瞬間に判定テロップを合わせる（下の項）。
+            // 捕られる球は球審のコール（＝捕球後に動き出した腕が伸び切る瞬間）に、
+            // 打つ球・死球は当たった瞬間に判定テロップを合わせる（下の項）。
             CallMomentSeconds = _ball == null ? flight
-                : catchIndex >= 0 ? _ballArrival + UmpireCallDelaySeconds
+                : catchIndex >= 0 ? _ballArrival + UmpireCallReactSeconds + UmpireCallAnchorSeconds
                 : _ballArrival;
 
             SeekActor(_pitcher, ReleaseTime);
@@ -1855,22 +1873,19 @@ namespace KokoSim.Unity.Match
             bool isStrike = outcome == DuelPitchOutcome.CalledStrike || outcome == DuelPitchOutcome.SwingMiss;
             if (isStrike && _umpireStrikeClip != null)
             {
-                // アンカー同期: コール（腕が伸び切る瞬間 = UmpireCallAnchorSeconds）が
-                // 「捕球 + UmpireCallDelaySeconds」に一致するよう再生開始を逆算する。
-                // lead>0 ＝ クリップ頭出しでは早すぎる → 開始そのものを lead 秒待つ（負を潰して
-                // Mathf.Max(0,…) にすると常にリリース直後に腕が出る＝design-18 §4.5-③ の罠）。
-                // lead<0 ＝ アンカーが遅すぎる → クリップ内 −lead 秒から始めて頭を捨てる。
-                float moment = flight + UmpireCallDelaySeconds;
-                float lead = moment - UmpireCallAnchorSeconds;
-                _umpireCallCountdown = Mathf.Max(0f, lead);
-                _umpireCallStartAt = Mathf.Max(0f, -lead);
+                // 開始同期: クリップ開始（突き出しの助走の頭）を「捕球 + 反応」に置く＝
+                // ミットに収まる前に球審が動き出さない（UmpireCallReactSeconds の項）。
+                // 頭出しはしない（頭こそがジャッジの動作なので捨てる区間が無い）。
+                _umpireCallCountdown = flight + UmpireCallReactSeconds;
+                _umpireCallStartAt = 0f;
                 // 打ち切りは「戻り終わり(UmpireCallSettleSeconds)まで再生できないとき」だけ。
-                // 間隔2.8sなら 0.05s 待って開始しても戻りまで 2.60s で収まる＝切らずに済む（実測）。
+                // 間隔3.2s・飛翔0.55sなら開始0.65sで戻りまで2.55sが丁度収まる。軟投（飛翔0.60s）は
+                // 0.05s 欠けるが、切られるのは戻り終わり直前（速度≈0.2m/s）＝絵には出ない。
                 // 切る場合も腕を出す前で切れないよう、次のリリース直前まで目一杯回す。
                 float playable = nextReleaseIn > 0f ? nextReleaseIn - _umpireCallCountdown : float.MaxValue;
-                _umpireCallEndAt = playable >= UmpireCallSettleSeconds - _umpireCallStartAt
+                _umpireCallEndAt = playable >= UmpireCallSettleSeconds
                     ? 0f                                                   // 末尾まで（尻尾は静止＝絵は変わらない）
-                    : _umpireCallStartAt + Mathf.Max(0f, playable);
+                    : Mathf.Max(0f, playable);
             }
 
             switch (outcome)
@@ -2744,14 +2759,15 @@ namespace KokoSim.Unity.Match
         public float PitchCallHoldSeconds { get; set; } = 0.85f;
 
         /// <summary>
-        /// 捕球からの捕手の据え置き窓[s]＝判定表示が消えるまで（コールの間 <see cref="UmpireCallDelaySeconds"/>
-        /// ＋表示 <see cref="PitchCallHoldSeconds"/>）。この間、捕手は捕った形のまま動かない
+        /// 捕球からの捕手の据え置き窓[s]＝判定表示が消えるまで（コールの間 <see cref="UmpireCallReactSeconds"/>
+        /// ＋<see cref="UmpireCallAnchorSeconds"/>＋表示 <see cref="PitchCallHoldSeconds"/>）。この間、捕手は捕った形のまま動かない
         /// （捕球クリップの据え置き＋体寄せの据え置き）し、球もミットの中に見せ続ける（監督指示 2026-08-05
         /// 「判定表示が消えるまで捕球位置から動かない」）。3つを同じ窓に縛るのは #464 の教訓＝
         /// 球が見えている間に体が動くと、ミットの子の球ごと中央へ引き戻す「全身フレーミング」になる。
         /// 片方だけ変えない。
         /// </summary>
-        private float CatcherLingerSeconds => UmpireCallDelaySeconds + PitchCallHoldSeconds;
+        private float CatcherLingerSeconds
+            => UmpireCallReactSeconds + UmpireCallAnchorSeconds + PitchCallHoldSeconds;
 
         /// <summary>球が消えてから狙いの構え（基準位置）へ戻るまでの時間[s]。12fpsで5〜6コマ＝
         /// 捕った所からすっと構え直す速さ。短くすると大外れの球で瞬間移動に見える（監督報告 2026-08-04）。</summary>

@@ -282,7 +282,9 @@ namespace KokoSim.Unity.Match
         // （judgement-call。#59/#354）を流用し、新規の見た目部品は作らない。寿命は PitchCall と同じ
         // 「Update() の専用クロック」方式だが、判定オーバーレイ（#236）と同じく実時間で数える
         // （倍速でも見え方を一定にする）。表示専用＝engine には触らない。
-        [SerializeField] private float gameTelopHoldSeconds = (float)Match2DPlaybackElement.JudgementHoldRealSeconds;
+        // 判定テロップ（0.6s）より +1.5s 長く掲げる（2026-08-05 監督指示「プレイボールの表示をもっと長く」。
+        // ゲームセットも同じ器＝同じ長さになる）。⚠ シーンの MatchLive が直列化値を持つ＝両方変える。
+        [SerializeField] private float gameTelopHoldSeconds = (float)Match2DPlaybackElement.JudgementHoldRealSeconds + 1.5f;
         private VisualElement _gameTelopHost;
         private Label _gameTelopLabel, _gameTelopDetail;
         private float _gameTelopClock;
@@ -429,8 +431,9 @@ namespace KokoSim.Unity.Match
             // 自動連続進行（issue #173）: 打席頭で止めず終局まで流す。スクショ時（CaptureMode）は開始せず、
             // シューターの AdvanceForCapture で従来どおり1打席ずつ手動駆動する。
             // 「プレイボール」テロップ（issue #442）は試合の入り口＝ここにしか無いので、最初のプレーの
-            // 前に一度だけ出る（攻守交代・2打席目以降では出ない）。初打席は采配窓の間を挟むので、
-            // プレー再生に上書きされる前にテロップの寿命が尽きる。スクショ時は ShowGameTelopForCapture で出す。
+            // 前に一度だけ出る（攻守交代・2打席目以降では出ない）。初打席の采配窓は表示中カウントを
+            // 止めて待つ（Update の Window 分岐）＝寿命が必ず窓の中で尽きてから初球が始まる。
+            // スクショ時は ShowGameTelopForCapture で出す。
             if (!CaptureMode)
             {
                 ShowGameTelop("プレイボール");
@@ -1602,6 +1605,11 @@ namespace KokoSim.Unity.Match
             // 打席の途中は球間そのものが窓なので待たずに次の1球へ抜ける。倍速で間も一緒に縮む。
             if (_stage == LiveStage.Window)
             {
+                // 「プレイボール」（issue #442）が掲がっている間は初球を投げさせない＝テロップの寿命が
+                // 必ず窓の中で尽きてから投球が始まる。器は判定テロップと共用なので、投球フェーズへ
+                // 入ってから寿命が切れると「畳めず次の判定表示まで残留する」（寿命を2.1sへ延ばした
+                // 2026-08-05 に顕在化する並び。従来は寿命0.6s＜窓1.0sで構造的に起きなかった）
+                if (_gameTelopOn) return;
                 _windowClock += Time.deltaTime * _speed;
                 if (_windowClock < _windowHold) return;
                 _windowCarry = _windowClock - _windowHold;
