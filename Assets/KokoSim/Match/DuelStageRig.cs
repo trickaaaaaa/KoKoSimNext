@@ -1523,16 +1523,21 @@ namespace KokoSim.Unity.Match
         /// （設計書15 §8）へ移して球間が「見るだけの間」から「決める間」に変わったため、2026-07-31 に
         /// 2.4/2.8/3.2 を撮り比べて選んだ 2.8 から**同じ比較の中の1段上**へ移した。
         /// 3本とも球審のコールは次の投球より前に終わる（コール〜構え戻りは間隔に依らず約2.05秒で一定）ので、
-        /// 差は戻ってから次の投球までの間だけ: 2.4s→0.38s / 2.8s→0.74s / **3.2s→1.17s**。
+        /// 差は戻ってから次の投球までの間だけ: 2.4s→0.38s / 2.8s→0.74s / 3.2s→1.17s。
         /// 変えるときは <see cref="UmpireCallSettleSeconds"/>（2.55秒）＋コール開始の待ち
         /// （捕球+反応＝飛翔0.55s+0.10s≒0.65秒。2026-08-05にコール開始を捕球後へ移した）が
-        /// 収まるかを確認すること。3.2sで丁度＝軟投は戻り終わり直前の静止区間だけ切れる（絵には出ない）。
-        /// 収まらない間隔では戻りが途中で切れる。
+        /// 収まるかを確認すること。収まらない間隔では戻りが途中で切れる。
+        ///
+        /// 3.6（issue #493）。采配カードの受付締切を「次球の投手モーション開始」へ前倒ししたところ、
+        /// 3.2sだと締切（リリース+1.90s）までの受付が短すぎたため、締切をリリース+2.30sまで伸ばす側で
+        /// 延ばした（<see cref="OnPitchReleased(float,DuelPitchOutcome)"/> の preRoll は WindupSeconds＝1.30s
+        /// で頭打ちなので、間隔を伸ばすと締切だけが後ろへ延びる＝フォロースルー〜次の振りかぶりの見た目は
+        /// 変わらない）。3.2sで丁度だった球審コールの戻り終わりは 0.40s の余裕に変わる＝収まる方向のみの変更。
         ///
         /// ⚠ シーンの MatchLive は <c>duelPitchIntervalSeconds</c> を直列化して持つ＝**ここだけ変えても
         /// 実機は変わらない**（SampleScene.unity 側も一緒に変える）。
         /// </summary>
-        public const float DefaultPitchInterval = 3.2f;
+        public const float DefaultPitchInterval = 3.6f;
 
         /// <summary>切り口のクロスフェード長[秒]。12fps量子化で3コマぶん。</summary>
         private const float CrossfadeSeconds = 0.25f;
@@ -1540,6 +1545,14 @@ namespace KokoSim.Unity.Match
         private const float FollowSeconds = 1.5f;   // リリース後に見せるフォロースルーの長さ
         private float _cutCountdown = -1f;   // 次のカットバックまでの残り（プレー時間秒）。負=予約なし
         private float _cutClipTime;
+
+        /// <summary>
+        /// 次のリリースへ向けた振りかぶりへ既に切り替わったか。<see cref="OnPitchReleased"/> が
+        /// カットバックを予約した直後は false、実際に <see cref="Tick"/> で切り替わった瞬間に true になる。
+        /// 次の <see cref="OnPitchReleased"/>（新しい予約）または <see cref="ResetForNewPlateAppearance"/> で
+        /// false へ戻る。采配カードの受付締切判定に使う（issue #493）。
+        /// </summary>
+        public bool HasCutToNextWindup { get; private set; }
         private float _umpireCallCountdown = -1f;   // 球審ストライクコール開始まで（負=予約なし）
         private float _umpireCallStartAt;           // コールクリップの頭出し位置（アンカー逆算）
         private float _umpireCallEndAt;             // コールクリップの打ち切り時刻（0=末尾まで）
@@ -1626,6 +1639,7 @@ namespace KokoSim.Unity.Match
                 // すこしセットポジションで静止しといて」）。振りかぶりの切り口へは OnPitchWindup が
                 // 投球開始の瞬間に改めて入る＝リリースの時計（−WindupSeconds 起点）は変わらない
                 _cutCountdown = -1f;
+                HasCutToNextWindup = false;
                 CrossfadeActorTo(_pitcher, 0f, CrossfadeSeconds);
                 GroundFix(_pitcher);
                 // クロスフェードは実時間（Tick は対決ビューが映っている間ずっと回る）で進むので、
@@ -1910,6 +1924,7 @@ namespace KokoSim.Unity.Match
             SeekActor(_pitcher, ReleaseTime);
             _pitcher.Go.transform.localPosition = keepPos;
             GroundFix(_pitcher);
+            HasCutToNextWindup = false;   // 新しいリリースぶんの予約＝まだ切り替わっていない
             if (nextReleaseIn > 0f)
             {
                 // 上限は WindupSeconds＝カットバック先が DeliveryStartTime より手前（＝振りかぶり区間）に
@@ -2590,6 +2605,7 @@ namespace KokoSim.Unity.Match
                     // 頭出しだけだと跳ぶ（差し替え前からのハードカット）。同じクロスフェードで繋ぐ
                     CrossfadeActorTo(_pitcher, _cutClipTime, CrossfadeSeconds);
                     GroundFix(_pitcher);
+                    HasCutToNextWindup = true;   // 次の1球の振りかぶりへ入った＝采配カードの受付締切
                 }
             }
 
