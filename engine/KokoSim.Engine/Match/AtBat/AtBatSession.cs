@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Batting;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Pitching;
@@ -175,11 +176,35 @@ public sealed class AtBatSession
     /// </param>
     /// <param name="pitchOverride">この球だけの配球ウェイト上書き。null=打席頭の方針（<see cref="AtBatContext.Directive"/>）。</param>
     /// <param name="gearOverride">この球だけの投手ギア上書き。null=打席頭の方針（<see cref="AtBatContext.Gear"/>）。</param>
+    /// <param name="batterOverride">
+    /// この球だけの実効打者能力（issue #492: 打撃姿勢・エンドランを毎球評価する）。null=打席頭に <see cref="Begin"/>
+    /// へ渡した能力＝従来と完全一致。値が変わっても乱数消費順は不変（DecideSwing/ContactModel は確率値に
+    /// よらず必ず引く）＝無指示なら1ビットも変わらない。
+    /// </param>
+    /// <param name="swingFactorOverride">
+    /// この球だけのスイング頻度倍率（issue #492: 待球策を毎球評価）。null=打席頭の <see cref="AtBatContext.SwingProbabilityFactor"/>。
+    /// </param>
+    /// <param name="fieldersOverride">
+    /// この球だけの守備配置（issue #492: 陣形＝前進守備/長打警戒を毎球評価）。null=打席頭の <see cref="AtBatContext.Fielders"/>。
+    /// 打球解決（<see cref="FieldingResolver.ResolveDetailed"/>）とタイムライン生成が読む野手配列を差し替える。
+    /// </param>
+    /// <param name="thirdRunnerOverride">
+    /// スクイズ（issue #492 C）でこの球の三塁走者を毎球取り直す。null=打席頭スナップショット（<see cref="Begin"/> の
+    /// thirdBaseRunner）。打席途中に三塁へ来た走者でスクイズしても例外を投げない。
+    /// </param>
+    /// <param name="squeezeWasteOverride">
+    /// スクイズのウエストを読まれる確率をこの球の局面で取り直す（issue #492 C）。null=打席頭スナップショット。
+    /// </param>
     public PitchResolution ThrowNextPitch(
         IRandomSource rng,
         Tactics.PitchBattingOverride? battingOverride = null,
         Tactics.PitchDirective? pitchOverride = null,
-        PitcherGear? gearOverride = null)
+        PitcherGear? gearOverride = null,
+        BatterAttributes? batterOverride = null,
+        double? swingFactorOverride = null,
+        IReadOnlyList<Fielder>? fieldersOverride = null,
+        Player? thirdRunnerOverride = null,
+        double? squeezeWasteOverride = null)
     {
         if (_result is not null)
             throw new System.InvalidOperationException("打席は既に確定しています。ThrowNextPitch は呼べません。");
@@ -202,7 +227,9 @@ public sealed class AtBatSession
         }
 
         var ctx = _ctx;
-        var batter = _batter;
+        var batter = batterOverride ?? _batter;
+        var swingFactor = swingFactorOverride ?? ctx.SwingProbabilityFactor;
+        var fielders = fieldersOverride ?? ctx.Fielders;
         var pitcher = _pitcher;
         var batting = _batting;
 
@@ -279,11 +306,15 @@ public sealed class AtBatSession
             if (_batterPlayer is null)
                 throw new System.InvalidOperationException(
                     "スクイズ指示を受けましたが AtBatSession.Begin に batterPlayer が渡されていません。");
-            if (_thirdBaseRunner is null)
+            // issue #492 C: 三塁走者は毎球取り直す（thirdRunnerOverride）。打席途中に三塁へ来た走者でも例外を
+            // 投げない。上書きが無ければ打席頭スナップショット（_thirdBaseRunner）を使う＝brain スクイズは従来不変。
+            var thirdRunner = thirdRunnerOverride ?? _thirdBaseRunner;
+            if (thirdRunner is null)
                 throw new System.InvalidOperationException(
-                    "スクイズ指示を受けましたが AtBatSession.Begin に thirdBaseRunner が渡されていません。");
+                    "スクイズ指示を受けましたが三塁走者が渡されていません（AtBatSession.Begin の thirdBaseRunner も thirdRunnerOverride も null）。");
+            var wasteProb = squeezeWasteOverride ?? _squeezeWasteProbability;
             var sq = SqueezeResolver.Resolve(
-                _batterPlayer, _thirdBaseRunner, pitcher, _squeezeWasteProbability, ctx.Baserunning, rng);
+                _batterPlayer, thirdRunner, pitcher, wasteProb, ctx.Baserunning, rng);
 
             if (!sq.BatterOut && sq.Runs == 0 && sq.RunnerOut)
             {
@@ -321,11 +352,11 @@ public sealed class AtBatSession
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
                 inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting,
-                ctx.SwingProbabilityFactor, zoneEdgeProximity)
+                swingFactor, zoneEdgeProximity)
             : 0.0;
         if (!forcedSwing && (forcedTake
             || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng,
-                ctx.SwingProbabilityFactor, zoneEdgeProximity)))
+                swingFactor, zoneEdgeProximity)))
         {
             if (inZone)
             {
@@ -361,7 +392,7 @@ public sealed class AtBatSession
             case ContactOutcome.InPlay:
                 // ⑥ 守備解決（詳細版: 判定・乱数順は従来と同一。幾何・時刻を保持しタイムラインへ）
                 var play = FieldingResolver.ResolveDetailed(
-                    ball!, ctx.Field, ctx.Aerodynamics, batter, ctx.Fielders, ctx.Fielding, rng);
+                    ball!, ctx.Field, ctx.Aerodynamics, batter, fielders, ctx.Fielding, rng);
                 if (play.Result == BattedBallResult.Foul)
                 {
                     if (_strikes < 2) _strikes++;
@@ -385,7 +416,7 @@ public sealed class AtBatSession
                 if (ctx.CaptureTimeline)
                 {
                     timeline = Timeline.TimelineBuilder.BuildBattedBall(
-                        play, ctx.Fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
+                        play, fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
                         Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
                         ctx.Fielding.CatchCloseCallMarginSeconds, ctx.Fielding.InfielderFieldingRadiusM,
                         _batterPlayer);

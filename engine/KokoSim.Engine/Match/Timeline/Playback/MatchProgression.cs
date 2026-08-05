@@ -445,14 +445,16 @@ public sealed class MatchProgression
     }
 
     /// <summary>
-    /// 1球采配（設計書15 Phase C-3）: 次の1球への配球方針/ギア上書きを予約する。
-    /// offenseIsAway=攻撃側が先攻(away)か（守備側はその逆側に適用）。両方nullで指示解除。1球限り。
+    /// 1球采配（設計書15 Phase C-3・issue #492 で陣形も収容）: 次の1球への守備上書き（配球方針/ギア/内野・外野の
+    /// 深さ）を予約する。offenseIsAway=攻撃側が先攻(away)か（守備側はその逆側に適用）。全項目nullで指示解除。1球限り。
+    /// 「解除するまで続く」方針カード（配球/ギア/陣形）は、UI が采配窓ごとに現在の選択で再予約して寿命を維持する。
     /// </summary>
-    public void SetPitchDefenseOverride(bool offenseIsAway, PitchPolicy? policy, Pitching.PitcherGear? gear)
+    public void SetPitchDefenseOverride(bool offenseIsAway, PitchPolicy? policy, Pitching.PitcherGear? gear,
+        DefenseDepth? infield = null, DefenseDepth? outfield = null)
     {
-        _p.OffenseOf(!offenseIsAway).SetPendingPitchDefenseOverride(policy, gear);
+        _p.OffenseOf(!offenseIsAway).SetPendingPitchDefenseOverride(policy, gear, infield, outfield);
         _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PitchDefenseOverride, offenseIsAway, BenchIndex: 0,
-            Policy: policy, Gear: gear, PitchIndex: PendingPitchIndex));
+            Policy: policy, Gear: gear, Infield: infield, Outfield: outfield, PitchIndex: PendingPitchIndex));
     }
 
     /// <summary>

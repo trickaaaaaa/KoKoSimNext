@@ -232,7 +232,7 @@ public static class GameReplay
                     p.OffenseOf(d.OffenseIsAway).SetPendingPitchBattingOverride(d.Batting);
                     break;
                 case GameDecisionKind.PitchDefenseOverride:
-                    p.OffenseOf(!d.OffenseIsAway).SetPendingPitchDefenseOverride(d.Policy, d.Gear);
+                    p.OffenseOf(!d.OffenseIsAway).SetPendingPitchDefenseOverride(d.Policy, d.Gear, d.Infield, d.Outfield);
                     break;
                 case GameDecisionKind.BattingApproach:
                     p.OffenseOf(d.OffenseIsAway).SetBattingApproach(d.Approach ?? Tactics.BattingApproach.Normal);

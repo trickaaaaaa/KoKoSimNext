@@ -529,7 +529,10 @@ public static class GameEngine
             // 置くのが肝で、こうすると brain 側のRNG消費が指示の有無で変わらない＝同シードの乱数順が保たれる。
             // 未設定ならフィールド読み取りだけでRNGを1発も引かない（＝AI駆動のシム・統計帯は完全に不変）。
             defTactics = defense.ApplyStandingDefense(defTactics);
-            if (offense.ConsumePendingOffensiveSign() is { } manualSign) sign = manualSign;
+            // 手動の攻撃サイン（エンドラン）は打席頭でなく**采配窓（各投球の直前）で消費する**（issue #492 B）。
+            // 旧来はここで消費していたが、UI の采配窓はエンジンがこの地点を通り過ぎた後に開くため、いま見ている
+            // 打席には構造上効かなかった。sign（brain の判断）は従来どおり打席頭で確定し、手動エンドランだけを
+            // 下の投球ループで毎球評価する（無指示ならフィールド読み取りのみ＝RNG非消費・帯不変）。
 
             // 敬遠（design-14 P1-3・§2.5-a）: 決まっていれば攻撃側のサイン（バント/スクイズ等）は
             // 一切発動しない（打席解決全体が無条件四球に置き換わるため）。CallOffense 自体の
@@ -568,6 +571,10 @@ public static class GameEngine
             batterAttrs = PressureModel.ApplyBatter(batterAttrs, PressureModel.Multiplier(
                 batter.Mental, pressureIdx, ctx.Pressure,
                 offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
+            // ここまで（調子・スキル・プレッシャー）が打席内で不変な実効打者能力の土台。以降のサイン補正
+            // （エンドラン/バスター/得点圏）と打撃姿勢は毎球評価しうる（issue #492）ので、土台を控えておき
+            // 球ごとに BatterFor(...) で組み直す。無指示なら毎球の値は打席頭の値とビット単位で一致する。
+            var batterBase = batterAttrs;
 
             // --- バントサイン（設計書02 §4.3・設計書15 Phase D-2b）: AtBatSession の投球ループへ統一。
             // 2ストライクに達するまで毎球バント試行を上書きし、決着しなければ実カウントを保ったまま
@@ -583,55 +590,70 @@ public static class GameEngine
             // 結果判定は従来通り SqueezeResolver のまま（ここでは前倒しでウエスト確率だけ計算する）。
             var squeezeSign = sign == OffensiveSign.Squeeze && bases.Third is not null ? sign : (OffensiveSign?)null;
             var squeezeThirdRunner = bases.Third;
-            var squeezeWaste = squeezeSign is null ? 0.0 : MathUtil.Clamp(
+            // ウエストを読まれる確率（設計書02 §4.4）。現在の局面（捕手・アウト・点差）から都度求める純関数。
+            // 打席頭の brain スクイズは頭の値で1回だけ計算（＝従来と完全一致）、手動スクイズ（issue #492 C）は
+            // 打席途中に押されうるので下の投球ループで球ごとに取り直す。
+            double SqueezeWasteNow() => MathUtil.Clamp(
                 ctx.Tactics.SqueezeReadBase
                 + (defense.Catcher.Fielding - 50) * ctx.Tactics.SqueezeReadPerLead
                 + (outs == 1 && Math.Abs(offense.Runs - defense.Runs) <= 1
                     ? ctx.Tactics.SqueezeReadObviousBonus : 0.0),
                 0.0, 0.60);
+            var squeezeWaste = squeezeSign is null ? 0.0 : SqueezeWasteNow();
             if (squeezeSign is not null)
             {
                 offense.RecordSqueeze(); // 試行の記録は結果に関わらず一度だけ（旧: SqueezeResolver呼び出し直後と同じ扱い）。
                 sign = OffensiveSign.Swing;
             }
 
-            // --- エンドラン/バスター: 打撃を補正係数で調整（設計書09 §1。パイプライン不変） ---
-            var hitAndRun = sign == OffensiveSign.HitAndRun && bases.First is not null;
-            // 一塁走者のスタート種別（設計書12 §4, Q10決定）: エンドランは接触と同時に飛び出すコンタクト始動。
-            // 空振りは既存のキャッチャー捕殺判定(下)、打球が空中で捕られればライナー併殺(G2)の対象になる。
-            var r1Start = hitAndRun ? StartType.Contact : StartType.Normal;
-            if (hitAndRun)
+            // --- エンドラン/バスター/得点圏の打撃補正（設計書09 §1。パイプライン不変） ---
+            // brain のエンドラン判断は従来どおり打席頭で確定（＝打席全体に効く既定）。手動エンドラン（issue #492 B）は
+            // 投球ループで毎球評価し、エンドランが効いた球だけ BatterFor(..., endrun:true) で補正する。
+            var brainHitAndRun = sign == OffensiveSign.HitAndRun && bases.First is not null;
+            // バスター/得点圏補正の適用可否は打席頭で確定（塁状況スナップショット）＝AI駆動のシムは従来と完全一致。
+            var busterApplies = sign == OffensiveSign.Buster;
+            var busterFactor = defTactics.BuntShift
+                ? 1.0 + ctx.Tactics.BusterVsShiftBonus   // シフトの穴を突く
+                : 1.0 - ctx.Tactics.BusterPenalty;       // 準備不足
+            var chanceApplies = sign == OffensiveSign.Swing
+                && (bases.Second is not null || bases.Third is not null)
+                && batter.ChanceHitFactor != 1.0;
+
+            // 実効打者能力を「この球のサイン状態（エンドランの有無）＋打撃姿勢」で組み立てる純関数（issue #492）。
+            // 打席頭の既定は BatterFor(打席頭の姿勢, brainHitAndRun) で、旧来のインライン計算とビット単位で一致する
+            // （順序: エンドラン→バスター→得点圏→姿勢）。毎球これを呼び直すが、状態が変わらなければ同じ値になる。
+            BatterAttributes BatterFor(BattingApproach approach, bool endrun)
             {
-                batterAttrs = batterAttrs with
-                {
-                    Contact = ClampAbility(batterAttrs.Contact * (1.0 + ctx.Tactics.HitAndRunContactBoost)),
-                    Power = ClampAbility(batterAttrs.Power * (1.0 - ctx.Tactics.HitAndRunPowerPenalty)),
-                    LaunchTendency = ClampAbility(batterAttrs.LaunchTendency * (1.0 - ctx.Tactics.HitAndRunLaunchPenalty)),
-                };
-            }
-            else if (sign == OffensiveSign.Buster)
-            {
-                var f = defTactics.BuntShift
-                    ? 1.0 + ctx.Tactics.BusterVsShiftBonus   // シフトの穴を突く
-                    : 1.0 - ctx.Tactics.BusterPenalty;       // 準備不足
-                batterAttrs = batterAttrs with { Contact = ClampAbility(batterAttrs.Contact * f) };
-            }
-            else if (sign == OffensiveSign.Swing && (bases.Second is not null || bases.Third is not null)
-                     && batter.ChanceHitFactor != 1.0)
-            {
-                // 性格④（設計書01 §1.1）: 得点圏の強攻。目立ちたがりは長打質(Power)上振れ、自己犠牲はやや堅実。
-                batterAttrs = batterAttrs with { Power = ClampAbility(batterAttrs.Power * batter.ChanceHitFactor) };
+                var b = batterBase;
+                if (endrun)
+                    b = b with
+                    {
+                        Contact = ClampAbility(b.Contact * (1.0 + ctx.Tactics.HitAndRunContactBoost)),
+                        Power = ClampAbility(b.Power * (1.0 - ctx.Tactics.HitAndRunPowerPenalty)),
+                        LaunchTendency = ClampAbility(b.LaunchTendency * (1.0 - ctx.Tactics.HitAndRunLaunchPenalty)),
+                    };
+                else if (busterApplies)
+                    b = b with { Contact = ClampAbility(b.Contact * busterFactor) };
+                else if (chanceApplies)
+                    // 性格④（設計書01 §1.1）: 得点圏の強攻。目立ちたがりは長打質(Power)上振れ、自己犠牲はやや堅実。
+                    b = b with { Power = ClampAbility(b.Power * batter.ChanceHitFactor) };
+                return BattingApproachModel.Apply(b, approach, ctx.Tactics);
             }
 
-            // 打撃姿勢（2026-07-31）: サインの上に重ねる「構え」。既定 Normal は恒等なので、
-            // 指示していない試合はここを通っても実効能力が1も動かない。
-            batterAttrs = BattingApproachModel.Apply(batterAttrs, offense.BattingApproach, ctx.Tactics);
+            // 打席頭の既定（=1球目に効く値）。以降は投球ループが毎球 BatterFor を呼び直す。
+            batterAttrs = BatterFor(offense.BattingApproach, brainHitAndRun);
+            // 一塁走者のスタート種別（設計書12 §4, Q10決定）: エンドランは接触と同時に飛び出すコンタクト始動。
+            // 投球ループが「その球でエンドランが効いたか」で毎球更新し、打席確定時（打球解決）に最後の値を使う。
+            var r1Start = brainHitAndRun ? StartType.Contact : StartType.Normal;
+            var endrunOnLastPitch = brainHitAndRun; // 空振り三振でのスタート走者の憤死判定（下）に使う
 
             // 打順消費（設計書15 Phase D-2e）: 打席が実際に確定した時点まで遅らせる（下の squeezeAbandoned/
             // stealEndedHalf ガード直後）。ここでは進めない＝Peekのみでこの打者を握ったまま投球ループへ入る。
 
-            // 守備指示→初期守備位置（陣形の効果は幾何＝物理から出る, §2.1）。
-            var fielders = AlignmentTactics.Adjust(defense.DefensiveAlignment(ctx.Field), defTactics, ctx.Tactics);
+            // 守備指示→初期守備位置（陣形の効果は幾何＝物理から出る, §2.1）。基準配置を控えておき、陣形を
+            // 1球単位で上書き（issue #492）するときはこの基準から組み直す。
+            var baseAlignment = defense.DefensiveAlignment(ctx.Field);
+            var fielders = AlignmentTactics.Adjust(baseAlignment, defTactics, ctx.Tactics);
             var directive = defTactics.Policy == PitchPolicy.Auto
                 ? (PitchDirective?)null
                 : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
@@ -922,7 +944,7 @@ public static class GameEngine
                 // 予約されていれば brain の判断より常に優先する（「1球指示は方針を単純上書き」の指示元が
                 // brain でも手動でも同じ扱い）。予約なし（未セット）ならフィールド読み取りのみでRNG非消費。
                 if (offense.ConsumePendingPitchBattingOverride() is { } manualBatting) battingOverride = manualBatting;
-                var (manualPolicy, manualGear) = defense.ConsumePendingPitchDefenseOverride();
+                var (manualPolicy, manualGear, manualInfield, manualOutfield) = defense.ConsumePendingPitchDefenseOverride();
                 if (manualPolicy is { } mp)
                 {
                     pitchOverride = ctx.Tactics.DirectiveFor(mp, batter.Bats);
@@ -930,7 +952,49 @@ public static class GameEngine
                 }
                 if (manualGear is { } mg) gearOverride = mg;
 
-                var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride);
+                // 手動の攻撃サイン（エンドラン）を毎球評価（issue #492 B）。無指示ならフィールド読み取りのみ
+                // ＝RNG非消費。brain のエンドラン（brainHitAndRun）は打席全体に効く既定として温存し、手動は
+                // 「押した次の1球」に効く（bases.First があるときだけ＝走者不在なら自然に無効）。
+                var manualEndrun = offense.ConsumePendingOffensiveSign() == OffensiveSign.HitAndRun;
+                var endrunThisPitch = brainHitAndRun || (manualEndrun && bases.First is not null);
+                endrunOnLastPitch = endrunThisPitch;
+                r1Start = endrunThisPitch ? StartType.Contact : StartType.Normal;
+
+                // 実効打者能力とスイング頻度をこの球の状態（姿勢＋エンドラン）で組み直す（issue #492）。
+                // 無指示なら打席頭の値とビット単位で一致（BatterFor は同じ純関数・DecideSwing/ContactModel は
+                // 確率値によらず必ず引く）＝AI駆動のシム・統計帯は不変。
+                var batterAttrsPitch = BatterFor(offense.BattingApproach, endrunThisPitch);
+                var swingFactorPitch = BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics);
+
+                // 陣形（前進守備/長打警戒）を毎球評価（issue #492）: 深さ上書きがあればこの球だけ野手配列を
+                // 基準配置から組み直す。上書きなしなら打席頭の fielders を使う（＝従来と完全一致）。
+                IReadOnlyList<Field.Fielder>? fieldersOverride = null;
+                if (manualInfield is not null || manualOutfield is not null)
+                {
+                    var dt = defTactics with
+                    {
+                        Infield = manualInfield ?? defTactics.Infield,
+                        Outfield = manualOutfield ?? defTactics.Outfield,
+                    };
+                    fieldersOverride = AlignmentTactics.Adjust(baseAlignment, dt, ctx.Tactics);
+                }
+
+                // スクイズの三塁走者を毎球取り直す（issue #492 C）。手動スクイズ（brain の squeezeSign 経由でない）は
+                // 打席途中に押されうるので、この球の三塁走者と外し確率を渡す＝打席頭スナップショットの null に
+                // よる例外を起こさない。brain スクイズ（squeezeSign 非null）は打席頭の値のまま＝従来と完全一致。
+                Player? sqThirdOverride = null;
+                double? sqWasteOverride = null;
+                if (battingOverride == PitchBattingOverride.Squeeze && squeezeSign is null)
+                {
+                    sqThirdOverride = bases.Third;
+                    sqWasteOverride = SqueezeWasteNow();
+                    offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
+                }
+
+                var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,
+                    batterOverride: batterAttrsPitch, swingFactorOverride: swingFactorPitch,
+                    fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
+                    squeezeWasteOverride: sqWasteOverride);
 
                 // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
                 // 打席が確定する前に1球ずつ絵にするための供給口で、MatchProgression.AdvancePitch と対で使う。
@@ -1113,9 +1177,11 @@ public static class GameEngine
                 continue;
             }
 
-            // エンドランの空振り: スタートを切った一塁走者が憤死の危機（§1）。
+            // エンドランの空振り: スタートを切った一塁走者が憤死の危機（§1）。エンドランが効いたのが
+            // 打席を終わらせた最後の球か（endrunOnLastPitch）で判定する（issue #492: brain は打席全体・手動は
+            // その球だけに効くので、三振を喫した球でスタートを切っていたかを見る）。
             var extraOutsFromSign = 0;
-            if (hitAndRun && bases.First is not null && res.Result == PlateAppearanceResult.Strikeout)
+            if (endrunOnLastPitch && bases.First is not null && res.Result == PlateAppearanceResult.Strikeout)
             {
                 var stealSafeProb = StealResolver.SuccessProbability(bases.First, defense.Catcher, paBaserunning)
                         - ctx.Tactics.HitAndRunCaughtPenalty;
