@@ -36,6 +36,9 @@ namespace KokoSim.Unity.Match
         [Tooltip("U2素体に被せる着衣メッシュ（DuelUniformBaker のベイク資産）")]
         public Mesh UniformMesh;
 
+        /// <summary>球審専用の着衣メッシュ（恰幅Stout＋スラックス。issue #445）。</summary>
+        public Mesh UmpireUniformMesh;
+
         [Tooltip("購入素体の領域IDつきメッシュ。Renderer名と並び順で対応する")]
         public string[] RegionNames = new string[0];
         public Mesh[] RegionMeshes = new Mesh[0];

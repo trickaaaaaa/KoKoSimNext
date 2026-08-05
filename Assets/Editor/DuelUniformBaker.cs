@@ -12,7 +12,8 @@ namespace KokoSim.EditorTools
     /// （既存ハーネス DuelStageComposer.RunAll 等と同じ流儀・Edit mode 完結・シーン非汚染）。
     /// 素体は CC0（UBC）なので生成物はコミット可。
     ///
-    /// 痩せ3段（Slim0=現状 / Slim1=中 / Slim2=強）を常に全部焼く＝比較シートと本番が同じ資産を見る。
+    /// 痩せ3段（Slim0=現状 / Slim1=中 / Slim2=強）＋球審の恰幅（Stout）を常に全部焼く
+    /// ＝比較シートと本番が同じ資産を見る。
     /// </summary>
     public static class DuelUniformBaker
     {
@@ -20,13 +21,14 @@ namespace KokoSim.EditorTools
         private const string BodyMeshName = "SuperHero_Male";
         private const string OutDir = "Assets/DuelSpike/Generated";
 
-        /// <summary>3段全部を焼いて結果サマリを返す。</summary>
+        /// <summary>全部（選手3段＋球審）を焼いて結果サマリを返す。</summary>
         public static string BakeAll()
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine(Bake("Body_Uniform_Slim0", KokoSim.Unity.Match.DuelUniformMeshBuilder.Slim0()));
             sb.AppendLine(Bake("Body_Uniform_Slim1", KokoSim.Unity.Match.DuelUniformMeshBuilder.Slim1()));
             sb.AppendLine(Bake("Body_Uniform_Slim2", KokoSim.Unity.Match.DuelUniformMeshBuilder.Slim2()));
+            sb.AppendLine(Bake("Body_Uniform_Stout", KokoSim.Unity.Match.DuelUniformMeshBuilder.Stout()));
             AssetDatabase.SaveAssets();
             return sb.ToString();
         }

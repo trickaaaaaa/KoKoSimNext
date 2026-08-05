@@ -37,6 +37,7 @@ namespace KokoSim.UnityEditorTools
             cat.VendorBody = LoadOrNote<GameObject>(DuelStageRig.VendorBodyFbxPath, missing, "購入素体");
             cat.FallbackBody = LoadOrNote<GameObject>(DuelStageRig.BodyFbxPath, missing, "U2素体");
             cat.UniformMesh = LoadOrNote<Mesh>(DuelStageRig.UniformMeshAssetPath, missing, "着衣メッシュ");
+            cat.UmpireUniformMesh = LoadOrNote<Mesh>(DuelStageRig.UmpireMeshAssetPath, missing, "球審着衣メッシュ");
 
             // 領域IDつきメッシュ。**素体の Renderer を並べて引く**＝名前表を別に持たない
             var regionNames = new List<string>();
@@ -103,6 +104,7 @@ namespace KokoSim.UnityEditorTools
             if (cat.VendorBody == null) missing.Add("購入素体");
             if (cat.FallbackBody == null) missing.Add("U2素体");
             if (cat.UniformMesh == null) missing.Add("着衣メッシュ");
+            if (cat.UmpireUniformMesh == null) missing.Add("球審着衣メッシュ");
             foreach (var name in DuelStageRig.RequiredClipNames().Distinct())
                 if (cat.FindClip(name) == null) missing.Add("クリップ " + name);
             if (cat.VendorBody != null)
@@ -133,7 +135,8 @@ namespace KokoSim.UnityEditorTools
             var sb = new StringBuilder();
             sb.AppendLine("素体: 購入=" + (cat.VendorBody != null ? cat.VendorBody.name : "—")
                 + " / U2=" + (cat.FallbackBody != null ? cat.FallbackBody.name : "—")
-                + " / 着衣=" + (cat.UniformMesh != null ? cat.UniformMesh.name : "—"));
+                + " / 着衣=" + (cat.UniformMesh != null ? cat.UniformMesh.name : "—")
+                + " / 球審着衣=" + (cat.UmpireUniformMesh != null ? cat.UmpireUniformMesh.name : "—"));
             sb.AppendLine("領域メッシュ: " + cat.RegionNames.Length + "枚");
             sb.AppendLine("クリップ: " + cat.ClipNames.Length + "本 / 要求"
                 + DuelStageRig.RequiredClipNames().Distinct().Count() + "本");
