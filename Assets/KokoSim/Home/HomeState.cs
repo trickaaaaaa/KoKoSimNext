@@ -97,7 +97,6 @@ namespace KokoSim.Unity.Home
     {
         private readonly IRandomSource _rng;
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
-        private readonly GrowthStageTable _stages = new GrowthStageTable();
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
         private readonly InjuryCoefficients _injury = new InjuryCoefficients();
         private readonly SkillCoefficients _skills = new SkillCoefficients();
@@ -144,20 +143,20 @@ namespace KokoSim.Unity.Home
             });
         }
 
-        /// <summary>1週ぶんの練習を適用する。extraMult は大会モード時の効果低下（&lt;1.0）に使う。</summary>
+        /// <summary>1週ぶんの練習を適用する。extraMult は大会モード時の効果低下（&lt;1.0）に使う。
+        /// 選手ごとの練習計画（<see cref="DevelopingPlayer.Plan"/>・null=お任せ）＋監督の分野別指導力・
+        /// 性格・体質スキル・施設連動 budget を通す単一ソース <see cref="TrainingWeek.Apply"/> へ委譲する
+        /// （issue #484: 固定7周期メニューの一律適用を廃止し、練習計画画面のプレビューと同じ入力・同じAPIへ束ねる）。</summary>
         private void RunPracticeWeek(double extraMult)
         {
             var week = KokoSim.Unity.Shell.GameClock.Week;
-            var menu = WeekMenus[week % WeekMenus.Length];
-            var campMult = _calendar.CampMultiplier(week, _training) * extraMult;
             var newItems = new List<FeedItem>();
 
             foreach (var p in Roster)
             {
-                if (!_calendar.CanTrain(p.Grade, week)) continue;
-                var stage = _calendar.StageIndex(p.Grade, week);
+                if (!KokoSim.Unity.Shell.TrainingWeek.CanTrain(p.Grade, week)) continue;
                 var before = Snapshot(p);
-                DevelopmentModel.TrainWeek(p, menu, stage, campMult, _stages, _training);
+                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult);
                 foreach (var k in AbilityKinds.All)
                 {
                     var gained = p.Level(k) - before[k];
@@ -467,12 +466,6 @@ namespace KokoSim.Unity.Home
         }
 
         // ===== 表示用の変換 =====
-
-        private static readonly TrainingMenu[] WeekMenus =
-        {
-            TrainingMenu.Batting, TrainingMenu.Defense, TrainingMenu.Pitching,
-            TrainingMenu.Strength, TrainingMenu.BaseRunning, TrainingMenu.Running, TrainingMenu.Rest,
-        };
 
         private static Dictionary<AbilityKind, int> Snapshot(DevelopingPlayer p)
         {

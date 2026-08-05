@@ -205,7 +205,6 @@ namespace KokoSim.Unity.Training
         };
 
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
-        private readonly GrowthStageTable _stages = new GrowthStageTable();
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
 
         /// <summary>週テンプレ1件（名前＋配分のスナップショット, issue #222⑤）。呼出で他選手へ適用する。</summary>
@@ -215,12 +214,16 @@ namespace KokoSim.Unity.Training
             public TrainingPlan Plan;
         }
 
-        private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用（全画面共有の RosterService.Active）
-        private readonly TrainingPlan[] _plans;          // 選手索引→練習計画
-        private readonly bool[] _delegated;              // 選手索引→委任フラグ（UI状態）
+        // 練習計画の単一ソースは engine の DevelopingPlayer.Plan（共有ロスター本体）へ移した（issue #484）。
+        // 以前は画面ローカルの _plans[] を並行して持っており、①週送りの実適用が固定7周期メニューだけを見て
+        // この配分を無視していた ②画面を離れて戻ると _plans が既定に戻る、の2重の乖離があった。
+        // Plan は共有ロスターに載るので画面往復で保持され、週送り（TrainingWeek.Apply）と同じソースを読む。
+        private readonly IReadOnlyList<DevelopingPlayer> _roster; // 表示用＋計画の単一ソース（RosterService.Active）
+        private readonly bool[] _delegated;              // 選手索引→委任フラグ（UI状態・issue #484 要判断: 恒久化は保留）
         private readonly List<SavedTemplate> _templates = new List<SavedTemplate>(); // 週テンプレ（UI状態）
         private int _selected;
         // モーダルを開いた（＝選手を選択した）時点の配分スナップショット。「元に戻す」の復元先（issue #222⑥）。
+        // null＝お任せ（DevelopingPlayer.Plan の未設定）も復元できるよう nullable で持つ。
         private TrainingPlan _revertPlan;
         private int _revertIndex = -1;
         // 現在週は全画面共有の GameClock を単一ソースとする（週送りで変化。合宿バナー・成長段階に反映）。
@@ -228,26 +231,33 @@ namespace KokoSim.Unity.Training
         private int _yearFilter;
         private int _benchFilter;   // 0=全員, 1=ベンチ入り, 2=ベンチ外（Issue #133-④）
 
-        public int Budget => _training.DefaultBudgetMinutes;
+        // 練習時間 budget は施設連動（Issue #128）。週送りの実適用と同じ単一ソースを読む（issue #484）。
+        public int Budget => KokoSim.Unity.Shell.TrainingWeek.Budget;
         public int SelectedIndex => _selected;
 
         public TrainingPlanState()
         {
             // 全画面で共有する単一ソースのロスター（背番号はメンバー設定画面と一致, RosterService）。
+            // 練習計画は DevelopingPlayer.Plan（null=お任せ）が単一ソース＝ここで別配列に初期化しない。
             _roster = RosterService.Active;
-            _plans = new TrainingPlan[_roster.Count];
             _delegated = new bool[_roster.Count];
-            for (var i = 0; i < _roster.Count; i++)
-                _plans[i] = TrainingPlan.Auto(PitcherRoleResolver.LeansPitcher(_roster[i]));
             // 背番号は DevelopingPlayer.UniformNumber（メンバー設定画面で編集）を単一ソースとして読む。
             // 現在週は GameClock（全画面共有）。既定はシーズン頭（週0＝4月）。冬合宿を見るには週送りする。
         }
 
+        /// <summary>選手の練習計画（単一ソースは <see cref="DevelopingPlayer.Plan"/>）。
+        /// null=お任せは投手適性から自動選択して返す＝週送りの <see cref="KokoSim.Unity.Shell.TrainingWeek"/> と同じ既定。</summary>
+        private TrainingPlan PlanOf(int index)
+            => _roster[index].Plan ?? TrainingPlan.Auto(PitcherRoleResolver.LeansPitcher(_roster[index]));
+
+        /// <summary>選手の練習計画を書き込む（単一ソース <see cref="DevelopingPlayer.Plan"/>。共有ロスターなので画面往復で保持される）。</summary>
+        private void SetPlan(int index, TrainingPlan plan) => _roster[index].Plan = plan;
+
         public void SelectPlayer(int index)
         {
-            if (index < 0 || index >= _plans.Length) return;
+            if (index < 0 || index >= _roster.Count) return;
             _selected = index;
-            _revertPlan = _plans[index];
+            _revertPlan = _roster[index].Plan;   // 生の Plan（null=お任せ）を復元先に取る
             _revertIndex = index;
         }
 
@@ -275,7 +285,7 @@ namespace KokoSim.Unity.Training
         public void RevertSelected()
         {
             if (_revertIndex != _selected || _delegated[_selected]) return;
-            _plans[_selected] = _revertPlan;
+            _roster[_selected].Plan = _revertPlan;   // null=お任せへも戻せる
         }
 
         /// <summary>週送り（合宿・成長段階のプレビューが連動）。</summary>
@@ -291,10 +301,10 @@ namespace KokoSim.Unity.Training
         /// Custom は現在の解決済み配分を引き継いで手動編集の起点にする。</summary>
         public void SetPreset(int index, TrainingPreset preset)
         {
-            if (index < 0 || index >= _plans.Length || _delegated[index]) return;
-            _plans[index] = preset == TrainingPreset.Custom
+            if (index < 0 || index >= _roster.Count || _delegated[index]) return;
+            SetPlan(index, preset == TrainingPreset.Custom
                 ? new TrainingPlan { Preset = TrainingPreset.Custom, Allocations = CustomSnapshot(index) }
-                : new TrainingPlan { Preset = preset };
+                : new TrainingPlan { Preset = preset });
         }
 
         /// <summary>現在の解決済み配分を Custom 編集の起点として写す。休養は budget を占有させず「残り」として扱う
@@ -310,16 +320,16 @@ namespace KokoSim.Unity.Training
         /// <summary>他選手から練習計画をコピー。immutable なのでコピー元は無傷。</summary>
         public void CopyPlanFrom(int target, int source)
         {
-            if (target < 0 || target >= _plans.Length || source < 0 || source >= _plans.Length) return;
+            if (target < 0 || target >= _roster.Count || source < 0 || source >= _roster.Count) return;
             if (_delegated[target]) return;
-            _plans[target] = _plans[source];
+            SetPlan(target, PlanOf(source));   // お任せのコピーは既定プリセットを実体化して写す（従来と同挙動）
         }
 
         /// <summary>Custom編集: 指定メニューの分を増減（±ボタン・長押しリピート用）。プリセットは Custom へ切替。
         /// budget 超過は加算をクランプ（issue #222③・無音クランプ自体は据え置きだが、UI側で上限0を可視化する）。</summary>
         public void AdjustMinutes(int index, TrainingMenu menu, int deltaSteps)
         {
-            if (index < 0 || index >= _plans.Length || _delegated[index]) return;
+            if (index < 0 || index >= _roster.Count || _delegated[index]) return;
             var slots = new Dictionary<TrainingMenu, int>();
             foreach (var a in CustomSnapshot(index)) slots[a.Menu] = a.Minutes;
             slots.TryGetValue(menu, out var cur);
@@ -330,7 +340,7 @@ namespace KokoSim.Unity.Training
         /// 10分単位へスナップし、他メニュー合計＋budget でクランプする。</summary>
         public void SetMinutes(int index, TrainingMenu menu, int minutesAbs)
         {
-            if (index < 0 || index >= _plans.Length || _delegated[index]) return;
+            if (index < 0 || index >= _roster.Count || _delegated[index]) return;
             var slots = new Dictionary<TrainingMenu, int>();
             foreach (var a in CustomSnapshot(index)) slots[a.Menu] = a.Minutes;
             var snapped = (System.Math.Max(0, minutesAbs) / MinuteStep) * MinuteStep;
@@ -348,19 +358,19 @@ namespace KokoSim.Unity.Training
 
             var alloc = new List<MenuAllocation>();
             foreach (var kv in slots) if (kv.Value > 0) alloc.Add(new MenuAllocation(kv.Key, kv.Value));
-            _plans[index] = _plans[index] with { Preset = TrainingPreset.Custom, Allocations = alloc };
+            SetPlan(index, PlanOf(index) with { Preset = TrainingPreset.Custom, Allocations = alloc });
         }
 
         /// <summary>委任トグル（UI状態）。委任中は編成ロック＋バランス型に委ねる。</summary>
         public void ToggleDelegate(int index)
         {
-            if (index < 0 || index >= _plans.Length) return;
+            if (index < 0 || index >= _roster.Count) return;
             _delegated[index] = !_delegated[index];
             if (_delegated[index])
-                _plans[index] = new TrainingPlan
+                SetPlan(index, new TrainingPlan
                 {
                     Preset = PitcherRoleResolver.LeansPitcher(_roster[index]) ? TrainingPreset.PitcherAuto : TrainingPreset.Balanced,
-                };
+                });
         }
 
         public bool IsDelegated(int index) => index >= 0 && index < _delegated.Length && _delegated[index];
@@ -390,9 +400,9 @@ namespace KokoSim.Unity.Training
         /// <summary>週テンプレの呼出（issue #222⑤）: 保存済み配分を選手へ適用する。委任中は無効。</summary>
         public void ApplyTemplate(int index, string name)
         {
-            if (index < 0 || index >= _plans.Length || _delegated[index]) return;
+            if (index < 0 || index >= _roster.Count || _delegated[index]) return;
             foreach (var t in _templates)
-                if (t.Name == name) { _plans[index] = t.Plan; return; }
+                if (t.Name == name) { SetPlan(index, t.Plan); return; }
         }
 
         public void RemoveTemplate(string name) => _templates.RemoveAll(t => t.Name == name);
@@ -443,7 +453,7 @@ namespace KokoSim.Unity.Training
                 GradeLabel = src.Grade + "年",
                 HandLabel = HandednessLabels.Combined(src.Throws, src.Bats),
                 Strength = PlayerStrengthProfile.Compute(src, Coeff),
-                PresetJp = _delegated[i] ? "委任" : PresetJp(_plans[i].Preset),
+                PresetJp = _delegated[i] ? "委任" : PresetJp(PlanOf(i).Preset),
                 FocusSummary = _delegated[i] ? "コーチ一任" : FocusSummary(ResolvedAllocations(i)),
                 Chips = AllocationChips(i),
                 Selected = i == _selected,
@@ -543,11 +553,11 @@ namespace KokoSim.Unity.Training
 
             view.SelectedTotal = total;
             view.SelectedRemaining = Budget - total;
-            view.SelectedIsCustom = _plans[_selected].Preset == TrainingPreset.Custom;
+            view.SelectedIsCustom = PlanOf(_selected).Preset == TrainingPreset.Custom;
             view.AtBudgetLimit = view.SelectedRemaining <= 0;
 
             // プリセット選択肢（チップ＋ツールチップの説明）。
-            var cur = _plans[_selected].Preset;
+            var cur = PlanOf(_selected).Preset;
             foreach (var p in SelectablePresets)
                 view.PresetOptions.Add(new PresetOption
                 {
@@ -621,24 +631,17 @@ namespace KokoSim.Unity.Training
         private List<GainBar> BuildGrowthBars(int index)
         {
             var bars = new List<GainBar>();
-            var alloc = ResolvedAllocations(index);
 
-            var p = _roster[index].Clone();   // 実選手の複製で非破壊ドライラン（Issue #223・捨てるインスタンス）
-            // 個別指導3枠（Issue #126）: このプレビュー用インスタンスへ指名状態を写す（実選手側は
-            // ToggleNominate が書き込み済み）。監督の分野別指導力（#115）も注入し、追加倍率を可視化する。
-            p.IndividualCoaching = IsNominated(index);
-            var coaching = CoachingProfile.FromManager(KokoSim.Unity.Shell.ManagerService.Manager);
+            // 実選手の複製で非破壊ドライラン（Issue #223・捨てるインスタンス）。Clone は Plan・IndividualCoaching を
+            // 引き継ぐので、週送りの実適用（TrainingWeek.Apply）と同じ入力・同じエンジンAPIから伸びが出る
+            // ＝プレビューバーと実際の伸びが一致する（issue #484）。監督の分野別指導力（#115）・性格・体質
+            // スキル・施設連動 budget は全て TrainingWeek.Apply の中で通す。
+            var p = _roster[index].Clone();
             var beforeProg = new Dictionary<AbilityKind, double>();
             var beforeLv = new Dictionary<AbilityKind, int>();
             foreach (var k in GrowthDisplayOrder) { beforeProg[k] = LevelProgress(p, k); beforeLv[k] = p.Level(k); }
 
-            if (_calendar.CanTrain(p.Grade, _week))
-            {
-                var camp = _calendar.CampMultiplier(_week, _training);
-                var stage = _calendar.StageIndex(p.Grade, _week);
-                DevelopmentModel.TrainWeekPlan(p, alloc, _training.ReferenceWeekMinutes, stage, camp, _stages, _training,
-                    coaching: coaching);
-            }
+            KokoSim.Unity.Shell.TrainingWeek.Apply(p, _week);   // 練習不可週は内部で何もしない（バーは全て0）
 
             foreach (var k in GrowthDisplayOrder)
             {
@@ -710,7 +713,7 @@ namespace KokoSim.Unity.Training
         }
 
         private IReadOnlyList<MenuAllocation> ResolvedAllocations(int index)
-            => TrainingPresets.Resolve(_plans[index], PitcherRoleResolver.LeansPitcher(_roster[index]), Budget);
+            => TrainingPresets.Resolve(PlanOf(index), PitcherRoleResolver.LeansPitcher(_roster[index]), Budget);
 
         /// <summary>背番号の表示テキスト（ベンチ外は「—」）。単一ソースは DevelopingPlayer.UniformNumber。</summary>
         private string NumTextAt(int index)
