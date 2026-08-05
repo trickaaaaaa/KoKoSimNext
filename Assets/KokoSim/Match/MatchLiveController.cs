@@ -1157,18 +1157,30 @@ namespace KokoSim.Unity.Match
             _prog?.SetBattingApproach(_managerIsAway, approach);
         }
 
-        // 守備の常時方針は4項目まとめて1本の窓口へ渡すので、各カードは自分の項目だけ差し替えて押し直す。
-        // null を渡す＝その項目の解除（委任采配の判断に戻る）。
+        // 守備の方針（配球/ギア/陣形）は4項目まとめて1本の窓口へ渡すので、各カードは自分の項目だけ差し替えて押し直す。
+        // null を渡す＝その項目の解除（委任采配の判断に戻る）。issue #492 で「打席頭で凍結」から「1球の口」へ移した。
         private void PushDefPolicy(PitchPolicy? v) { _defPolicy = v; PushDefense(); }
         private void PushDefGear(PitcherGear? v) { _defGear = v; PushDefense(); }
         private void PushDefInfield(DefenseDepth? v) { _defInfield = v; PushDefense(); }
         private void PushDefOutfield(DefenseDepth? v) { _defOutfield = v; PushDefense(); }
 
+        // 守備方針を1球の口へ即予約する（issue #492）。押した次の1球から効き、以降は PushPitchTacticsChoice が
+        // 采配窓ごとに再予約して「解除するまで続く」寿命を維持する。自校が守備側の窓でだけ載せる
+        //（攻撃中に押しても相手の守備には入れない）。SetPitchDefenseOverride は「攻撃側」を引数に取り、守備＝その逆へ載る。
         private void PushDefense()
-            => _prog?.SetStandingDefense(_managerIsAway, _defPolicy, _defGear, _defInfield, _defOutfield);
+        {
+            if (_prog == null || ManagerIsOnOffense()) return;   // 攻撃中は相手守備＝brain のまま触らない
+            var offenseSide = _atBat != null ? _atBat.IsTop : !_managerIsAway;
+            _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield);
+        }
 
-        // これから投げる1球へ、①の「1手」だけを予約する（無指示=null なら従来と完全一致）。
-        // ②の方針は押した時点で入っているのでここでは触らない。
+        // いま止まっている窓（または一括経路）で自校が攻撃側か。
+        private bool ManagerIsOnOffense()
+            => _atBat != null ? _atBat.IsTop == _managerIsAway : _prog.IsTeamOnOffense(_managerIsAway);
+
+        // これから投げる1球へ、①攻撃の「1手」と②守備方針（配球/ギア/陣形）を予約する。
+        // 攻撃の1手は無指示=null なら従来と完全一致。守備方針は「解除するまで続く」ので、自校が守備の窓では
+        // 現在の選択を毎窓ここで再予約して寿命を保つ（issue #492: 1球の口は消費後に自動でnullへ戻るため）。
         private void PushPitchTacticsChoice()
         {
             // 自校が攻撃していない球へは攻撃の1手を渡さない。渡すと自校の予約として残り、
@@ -1179,6 +1191,12 @@ namespace KokoSim.Unity.Match
             _prog.SetPitchBattingOverride(_managerIsAway, offense ? _pitchBattingChoice : null);
             _prog.SetOffensiveSign(_managerIsAway, offense ? _signChoice : null);
             _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null);
+            // 守備方針の再予約（自校が守備の窓のみ）。攻撃中は相手守備＝brain のまま触らない。
+            if (!offense)
+            {
+                var offenseSide = _atBat != null ? _atBat.IsTop : !_managerIsAway;
+                _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield);
+            }
         }
 
         // ①の1手は消費後に自動解除（Q12-3: 次球は方針に復帰）。②の方針カードは点けたまま残す。

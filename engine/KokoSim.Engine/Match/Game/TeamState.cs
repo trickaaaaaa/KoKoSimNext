@@ -369,15 +369,23 @@ public sealed class TeamState
     private PitchBattingOverride? _pendingPitchBattingOverride;
     private PitchPolicy? _pendingPitchPolicy;
     private Pitching.PitcherGear? _pendingPitchGear;
+    private DefenseDepth? _pendingPitchInfield;
+    private DefenseDepth? _pendingPitchOutfield;
 
     /// <summary>次の1球への打撃指示（強攻/待て）を予約する。null=指示解除。</summary>
     public void SetPendingPitchBattingOverride(PitchBattingOverride? v) => _pendingPitchBattingOverride = v;
 
-    /// <summary>次の1球への配球方針/ギア上書きを予約する。両方null=指示解除。</summary>
-    public void SetPendingPitchDefenseOverride(PitchPolicy? policy, Pitching.PitcherGear? gear)
+    /// <summary>
+    /// 次の1球への守備上書き（配球方針/ギア/内野・外野の深さ）を予約する（issue #492: 陣形も1球単位へ）。
+    /// 全項目null=指示解除。「解除するまで続く」寿命は呼び出し側（UI）が采配窓ごとに再予約して維持する。
+    /// </summary>
+    public void SetPendingPitchDefenseOverride(
+        PitchPolicy? policy, Pitching.PitcherGear? gear, DefenseDepth? infield = null, DefenseDepth? outfield = null)
     {
         _pendingPitchPolicy = policy;
         _pendingPitchGear = gear;
+        _pendingPitchInfield = infield;
+        _pendingPitchOutfield = outfield;
     }
 
     /// <summary>予約された打撃指示を読み出して消費する（1球限り＝次球は自動でnullに戻る）。</summary>
@@ -388,12 +396,15 @@ public sealed class TeamState
         return v;
     }
 
-    /// <summary>予約された配球指示を読み出して消費する（1球限り）。</summary>
-    public (PitchPolicy? Policy, Pitching.PitcherGear? Gear) ConsumePendingPitchDefenseOverride()
+    /// <summary>予約された守備上書き（配球/ギア/陣形）を読み出して消費する（1球限り）。</summary>
+    public (PitchPolicy? Policy, Pitching.PitcherGear? Gear, DefenseDepth? Infield, DefenseDepth? Outfield)
+        ConsumePendingPitchDefenseOverride()
     {
-        var v = (_pendingPitchPolicy, _pendingPitchGear);
+        var v = (_pendingPitchPolicy, _pendingPitchGear, _pendingPitchInfield, _pendingPitchOutfield);
         _pendingPitchPolicy = null;
         _pendingPitchGear = null;
+        _pendingPitchInfield = null;
+        _pendingPitchOutfield = null;
         return v;
     }
 

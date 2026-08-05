@@ -142,6 +142,37 @@ public sealed class SqueezeUnificationTests
         Assert.Null(session.Result.Squeeze);
     }
 
+    // ── issue #492 C: スクイズの三塁走者を打席頭でスナップショットせず毎球取り直す ──
+
+    /// <summary>
+    /// 打席頭スナップショット（Begin の thirdBaseRunner）が null でも、スクイズを投げる球で thirdRunnerOverride を
+    /// 渡せば例外を投げずに解決する（打席途中＝三盗・暴投等で三塁へ来た走者の再現・issue #492 C）。
+    /// </summary>
+    [Fact]
+    public void Squeeze_ThirdRunnerRefetchedPerPitch_NoException()
+    {
+        var rng = new Xoshiro256Random(7);
+        var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: Bunter, thirdBaseRunner: null);
+        var res = session.ThrowNextPitch(rng, PitchBattingOverride.Squeeze,
+            thirdRunnerOverride: ThirdRunner, squeezeWasteOverride: 0.0);
+        // 例外を投げないことが本題。1球で決着（EndsPlateAppearance）か三塁走者挟殺（送りバント不成立）のどちらか。
+        Assert.True(res.EndsPlateAppearance || res.SqueezeRunnerCaughtAtThird);
+    }
+
+    /// <summary>
+    /// 三塁走者がどこにも無い（Begin スナップショットも override も null）スクイズは従来どおり弾く
+    /// ＝本当に走者不在のプログラマエラーはガードで検出する（issue #492 C の「例外を投げない」は
+    /// 走者がいる場合の話で、居ないのに投げたら従来どおり例外）。
+    /// </summary>
+    [Fact]
+    public void Squeeze_NoThirdRunnerAnywhere_StillThrows()
+    {
+        var rng = new Xoshiro256Random(7);
+        var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: Bunter, thirdBaseRunner: null);
+        Assert.Throws<System.InvalidOperationException>(
+            () => session.ThrowNextPitch(rng, PitchBattingOverride.Squeeze));
+    }
+
     // ── GameEngine レベル（実試合での統合。bases.Third の消去バグ修正込みの回帰確認） ──
 
     private static Player Pos(FieldPosition pos, int bunt = 50, int speed = 50) => new()
