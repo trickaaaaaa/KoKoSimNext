@@ -252,6 +252,12 @@ namespace KokoSim.Unity.Match
         private float _battedHoldClock;
         private const float BattedHoldSafetyCapSeconds = 1.5f;
 
+        // 打席途中の盗塁の再生（issue #485）。非nullの間＝盗塁プレー（走者が走る→捕手が投げる→塁で判定）を
+        // 守備ビューで見せている最中。打球の据え置きと違い、終わったら打席の続きへ戻す（＝次打席へは進めない）。
+        // 再生は打球（_current.Play）と同じ経路（DuelStageRig.BeginFieldPlay＋Match2DPlaybackElement）を通す。
+        private PlaybackPlay _stealPlay;
+        private double _stealEndAt;
+
         // 対決ビューの1球ペーシング（フル振りかぶり再生）を使うか（design-18 §7-2）。
         private bool DuelPacingActive => _duelOn && _duelRig != null && _duelRig.Available;
 
@@ -510,6 +516,7 @@ namespace KokoSim.Unity.Match
             _shownAnyHalf = false;
             _paQueue.Clear();
             _paConfirmed = false;
+            _stealPlay = null;   // 打席途中の盗塁再生（issue #485）は試合をまたがない
             _windowClock = _windowHold = _windowCarry = 0f;
             _displayedLogCount = 0;
             _prog = null;
@@ -1587,6 +1594,90 @@ namespace KokoSim.Unity.Match
             AdvanceToNextWindow();   // タイム中断中・スクショ時は内部で待つ（起こさない）
         }
 
+        // ── 打席途中の盗塁の3D再生（issue #485） ──
+        // 打球の EnterBattedBallOrHold と同型（守備ビューを開いて再生し、終わったら対決構図へ戻す）だが、
+        // 盗塁は打席を終わらせないので、終端では FinishPaView（次打席へ）ではなく打席の続きへ戻す。
+        // ここが牽制（#486）・暴投/捕逸（#487）・振り逃げ（#488）が乗る「打席途中プレーの再生経路」の土台。
+
+        /// <summary>盗塁プレーを守備ビューで再生し始める。走者・捕手送球・判定は engine の <see cref="PlaybackPlay"/>
+        /// （<c>BuildSteal</c> の出力）が単一ソース＝打球と同じ経路で描く。</summary>
+        private void EnterStealPlay(PlaybackPlay steal)
+        {
+            _inPitchPhase = false;
+            _pitchBallVisible = false;
+            _stage = LiveStage.Play;
+            _windowCarry = 0f;
+            _stealPlay = steal;
+            _t = 0;
+            _stealEndAt = StealPlayEndTime(steal);
+            _view.SetPlay(steal);
+            // 3Dの守備ビュー（打球と同じ経路。BeginFieldPlay は rig 未導入なら内部で何もしない）。
+            if (_duelRig != null && _duelRig.Available)
+            {
+                // 守備側の頭上ラベル用の同定。盗塁は打席途中なので _current は同じ半回の直前の打席
+                // （走者が居る＝必ず先行打席がある）＝その IsTop で守備チームを引く。
+                if (_prog != null && _current != null)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                _duelRig.BeginFieldPlay(steal, 0f);
+            }
+            RenderStealFrame();
+        }
+
+        /// <summary>盗塁再生の1フレーム（打球の <see cref="RenderReplayFrame"/> の最小版。結果テキスト・
+        /// ラインスコア・得点テロップは打席の産物なので触らない＝盤面の実況キャプションだけ進める）。</summary>
+        private void RenderStealFrame()
+        {
+            if (_stealPlay == null) return;
+            _view.SetTime(_t);
+            if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
+            if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_stealPlay, _t);
+        }
+
+        /// <summary>盗塁再生の打ち切り時刻。<see cref="PlayEndTime"/> と同じ規則（動く走者レッグ・球・判定の
+        /// 最後＋余韻）だが、打席の表示同期（結果テキスト・得点）は無いので盗塁プレー単体から出す。</summary>
+        private double StealPlayEndTime(PlaybackPlay play)
+        {
+            var lastEvent = play.ResAt;
+            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
+            foreach (var r in play.Runners)
+                foreach (var s in r.Segs)
+                {
+                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけの走者は数えない
+                    if (s.T1 > lastEvent) lastEvent = s.T1;
+                }
+            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
+            var judged = PlaybackEvaluator.LastJudgementTime(play);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            return end;
+        }
+
+        /// <summary>盗塁再生が終わった: 対決構図へ戻し、盗塁が動かした塁・アウトを反映してから打席の続きへ。</summary>
+        private void FinishStealView()
+        {
+            EndFieldPlay();          // 守備陣・走者を伏せて対決の構図へ戻す（＝打席への唯一のカット）
+            _view.HideJudgement();
+            _stealPlay = null;
+            // 盗塁が動かした塁・アウトはここで反映＝走者が走り着いてから盤面のダイヤ・アウトを動かす
+            // （先に動かすと走る前に着いて見える）。1球観測が無い経路（合成投球列）には盗塁は載らない。
+            var q = _paQueue[_pitchIdx];
+            if (q.Live != null)
+            {
+                SetOuts(q.Live.Outs);
+                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+            }
+            // 打席の続きへ（打球の FinishPaView と違い次打席へは進めない）。この球が打席を終わらせていれば
+            // 続けて打球再生／結果保持へ入る（盗塁のあと同じ球で三振・四球・インプレーが起きる稀な複合）。
+            _foulFlightHoldSeconds = null;
+            _windowCarry = 0f;
+            _pitchCallDone = false;
+            _inPitchPhase = false;
+            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
+            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
+            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
+            _stage = LiveStage.Idle;
+            AdvanceToNextWindow();
+        }
+
         private void Update()
         {
             // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
@@ -1703,14 +1794,22 @@ namespace KokoSim.Unity.Match
                     var q = _paQueue[_pitchIdx];
                     var pt = q.Token;
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
+                    ShowPitchCall(pt);
+                    // 打席途中の盗塁（issue #485）: この球の前に盗塁が解決していれば、守備ビューで
+                    // 「走者が走る→捕手が投げる→塁で判定」を見せてから塁・アウトを動かす（先に動かすと
+                    // 走る前に着いて見える）。再生が終わったら打席の続きへ戻る（次打席へは進めない）。
+                    if (q.Live?.StealPlay is { } stealPlay)
+                    {
+                        EnterStealPlay(stealPlay);
+                        return;
+                    }
                     // 1球ごとの観測があるときは、その球を投げ終えた実状態でアウト・塁も動かす
-                    //（打席途中の盗塁・牽制死がその場で絵に出る。合成投球列には無いので触らない）。
+                    //（打席途中の牽制死等がその場で絵に出る。合成投球列には無いので触らない）。
                     if (q.Live != null)
                     {
                         SetOuts(q.Live.Outs);
                         SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
                     }
-                    ShowPitchCall(pt);
                     if (IsTerminalPitch(_pitchIdx))
                     {
                         // インプレー打球は対決構図のまま球がビューポートから出るまで据え置く
@@ -1771,6 +1870,14 @@ namespace KokoSim.Unity.Match
             }
 
             _t += Time.deltaTime * _speed;
+            // 打席途中の盗塁の再生（issue #485）: 打球（_current.Play）とは別プレーなので専用に回し、
+            // 終わったら FinishPaView（次打席へ）ではなく打席の続きへ戻す（FinishStealView）。
+            if (_stealPlay != null)
+            {
+                RenderStealFrame();
+                if (_t > _stealEndAt + 0.3) FinishStealView();
+                return;
+            }
             if (_current.Play != null)
             {
                 RenderReplayFrame();

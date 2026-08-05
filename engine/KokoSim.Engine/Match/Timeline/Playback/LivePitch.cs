@@ -71,6 +71,15 @@ public sealed record LivePitch
 
     /// <summary>打席内で何球目だったか（1始まり）。</summary>
     public int PitchNumberInPa { get; init; }
+
+    /// <summary>
+    /// この球の前に起きた盗塁（二盗/三盗/本盗/重盗）の再生データ（issue #485）。盗塁企図が解決した球にだけ載る。
+    /// 打球の <see cref="LiveAtBat"/>→<see cref="MatchProgression"/>.Current.Play（打席確定）と違い、盗塁は
+    /// 打席途中で起きるためこの1球観測（LivePitch）が唯一の運び口。<see cref="TimelineBuilder.BuildSteal"/> の
+    /// 出力を <see cref="PlayTimelineAdapter.ToPlaybackPlay"/> で変換した純関数の写し＝乱数消費ゼロ・帯不変。
+    /// <see cref="GameContext.CaptureTimelines"/> が真のときだけ非null（統計シム・裏試合はゼロコスト）。
+    /// </summary>
+    public PlaybackPlay? StealPlay { get; init; }
 }
 
 /// <summary>

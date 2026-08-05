@@ -1015,8 +1015,9 @@ namespace KokoSim.Unity.Match
             public FieldPosition From;
             public FieldPosition To;
             public float TRelease;         // 球が手を離れる時刻（＝engine の Throw の T0）
-            public float TStart;           // クリップの頭＝TRelease − Release（**負でも潰さない**）
+            public float TStart;           // クリップの頭を置く時刻（Rate 込みで head=(t−TStart)*Rate）
             public float TFire;            // 実際に流し始める時刻（捕るより前には投げられない）
+            public float Rate;             // 再生倍率（捕手の握り替え圧縮 issue #485。既定1＝収録の緩急のまま）
             public FieldThrowAnchor Anchor;
             public float Yaw;              // 投げる体の向き[度]
             public float AimErrDeg;        // 体の向きと「野手→的」の方角の差[度]（実測用。0が正しい）
@@ -1093,12 +1094,31 @@ namespace KokoSim.Unity.Match
                 //    頭出し量を増やして（クリップの頭を捨てて）リリースの時刻を守る。
                 //    ここで tStart 自体を持ち上げると球が手を離れる時刻がずれる
                 float tFire = Mathf.Max(tStart, CatchTimeOf(who, tr));
+                float rate = 1f;
+
+                // 捕手の握り替え圧縮（監督決定 2026-08-05・issue #485）: 収録のリリースは捕球から 1.16s だが、
+                // 盗塁の握り替えは 0.60〜0.88s しかない。頭を切って入ると「しゃがんで捕った姿勢から立ち上がり
+                // 途中へ瞬間的に飛ぶ」。1.16s の芝居を実際のポップ秒へ一様に圧縮する（#443 一塁駆け抜けと同型・
+                // 一様倍率なので緩急の比は保つ＝design-18「内部緩急の改変禁止」に抵触しない）。捕手の「捕球」は
+                // 投球の到達（盗塁は捕球イベントが無い）か、打球処理の捕球（バント等）。窓が収録より短い時だけ詰める。
+                if (who == FieldPosition.Catcher)
+                {
+                    float catchAt = CatchTimeOf(who, tr);
+                    if (catchAt <= 0f) catchAt = PitchArriveOf(play);   // 盗塁の二塁送球＝投球を受けて投げる
+                    float window = tr - catchAt;
+                    if (catchAt > 0f && window > 1e-3f && window < an.Release)
+                    {
+                        rate = Mathf.Clamp(an.Release / window, 1f, 4f);   // 約1.3〜1.9倍速
+                        tStart = catchAt;                                  // クリップの頭（捕った姿勢）を捕球の瞬間へ
+                        tFire = catchAt;
+                    }
+                }
 
                 _throwEvents.Add(new FieldThrowEvent
                 {
                     From = who,
                     To = seg.ToRole ?? NearestFielder(play, (float)seg.T1, to.X, to.Y),
-                    TRelease = tr, TStart = tStart, TFire = tFire, Anchor = an, Yaw = yaw,
+                    TRelease = tr, TStart = tStart, TFire = tFire, Rate = rate, Anchor = an, Yaw = yaw,
                     AimErrDeg = aimErrDeg,
                     SegStart = new Vector3((float)from.X, (float)from.H, (float)from.Y),
                     SegEnd = new Vector3((float)to.X, (float)to.H, (float)to.Y),
@@ -1130,6 +1150,20 @@ namespace KokoSim.Unity.Match
             return t;
         }
 
+        /// <summary>投球が捕手へ着く時刻＝投球セグメントの終端（無ければ 0）。捕手の握り替え圧縮
+        /// （盗塁の二塁送球）で「捕球の瞬間」として使う＝捕球イベントが無い経路の代替（issue #485）。</summary>
+        private static float PitchArriveOf(PlaybackPlay play)
+        {
+            float t = 0f;
+            if (play?.Ball == null) return t;
+            foreach (var seg in play.Ball)
+            {
+                bool isPitch = seg is EndpointBallSegment eb ? eb.Kind == BallSegmentKind.Pitch : seg is PitchSegment;
+                if (isPitch && (float)seg.T1 > t) t = (float)seg.T1;
+            }
+            return t;
+        }
+
         /// <summary>
         /// 予定の時刻が来た送球クリップを流す。捕球と同じく**絶対時刻で判定する**
         /// （カウントダウンを持たない＝途中の時刻から再生を始めても同じ絵になる）。
@@ -1144,10 +1178,11 @@ namespace KokoSim.Unity.Match
                 var clip = LoadClip(e.Anchor.Clip);
                 if (a != null && clip != null)
                 {
-                    // 頭出し。TFire ≥ TStart は上の予定で保証済み＝ここで Max(0,…) を挟まない
-                    float head = t - e.TStart;
+                    // 頭出し。TFire ≥ TStart は上の予定で保証済み＝ここで Max(0,…) を挟まない。
+                    // Rate は捕手の握り替え圧縮（issue #485。非捕手・窓が足りる捕手は 1＝従来と恒等）。
+                    float head = (t - e.TStart) * e.Rate;
                     SetActorClip(a, clip, head, e.Anchor.Release + ThrowFollowSeconds);
-                    a.Speed = 1f;                        // 走りの倍率を持ち越さない
+                    a.Speed = e.Rate;                    // 走りの倍率を持ち越さない（捕手だけ握り替え圧縮の倍率）
                     a.HoldSeconds = ThrowHoldSeconds;    // 投げ終わりの形を見せてから待機へ戻る
                     FielderMotion st;
                     if (_loco.TryGetValue(e.From, out st))

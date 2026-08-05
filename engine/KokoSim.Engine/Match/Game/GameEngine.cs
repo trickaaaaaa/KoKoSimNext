@@ -797,6 +797,11 @@ public static class GameEngine
                     stealAttempt ??= StartType.Normal;
                 }
 
+                // 盗塁の再生データ（issue #485）: 盗塁企図が「実際の走塁勝負」で解決した球にだけ載る観測。
+                // CaptureTimelines が真のときだけ組む＝統計シム・裏試合はゼロコスト・乱数消費ゼロ（BuildBattedBall と同作法）。
+                // 牽制死（PickoffResolver 成立）は別issue（#486）の絵なのでここでは組まない。
+                Timeline.Playback.PlaybackPlay? stealPlay = null;
+
                 // 盗塁/牽制/重盗（設計書02 §4.2・設計書09 §1・design-14 P1-4/P1-5・設計書15 Phase D-2d）:
                 // カウントは消費せず（実球はこの後も通常どおり投げる）、この球の前に走者だけが動く。
                 // PickoffResolver→StealReadModel.RollPitchout→StealResolver→重盗ロールの呼び出し順は
@@ -816,6 +821,10 @@ public static class GameEngine
                     }
                     else
                     {
+                        // 走塁勝負に入る一塁走者と、重盗で本塁生還する三塁走者（成立時のみ）を絵のために控える
+                        // （下で bases.First は二塁移動 or アウトで、bases.Third は生還で null になる）。表示専用。
+                        var secondStealer = bases.First!;
+                        Player? doubleScorer = null;
                         // G3: 守備の読み → ピッチアウト（設計書09 §1, 12 §5）。捕手リード＋投手センス vs 意外性で
                         // 読み切れば捕手が優位に立ち刺されやすい。始動種別は采配（G3b）＝ギャンブルは好ジャンプだが
                         // 意表ゆえ読まれにくい一方、読まれると最も無防備。
@@ -859,9 +868,20 @@ public static class GameEngine
                             offense.DoubleStealThirdBreakCount++;
                             offense.Runs += 1;
                             runsThisHalf += 1;
-                            if (bases.Third is { } dsScorer) offense.RecordRun(dsScorer); // 得点帰属（issue #77）
+                            if (bases.Third is { } dsScorer)
+                            {
+                                offense.RecordRun(dsScorer); // 得点帰属（issue #77）
+                                doubleScorer = dsScorer;     // 重盗の絵（issue #485）
+                            }
                             bases.Third = null;
                         }
+
+                        // 再生データ（issue #485）: 二盗の走塁勝負＋（成立時）重盗の三塁走者生還を絵にする。
+                        if (ctx.CaptureTimelines)
+                            stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                                Timeline.TimelineBuilder.BuildSteal(
+                                    secondStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
+                                    paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer));
 
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -879,6 +899,7 @@ public static class GameEngine
                     }
                     else
                     {
+                        var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
                         var safe = StealResolver.Resolve(
@@ -894,6 +915,12 @@ public static class GameEngine
                         }
                         if (safe) { bases.Third = bases.Second; } else { outs++; }
                         bases.Second = null;
+                        // 再生データ（issue #485）: 三盗の走塁勝負を絵にする（送球先＝三塁・受け手＝三塁手）。
+                        if (ctx.CaptureTimelines)
+                            stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                                Timeline.TimelineBuilder.BuildSteal(
+                                    thirdStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
+                                    ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart));
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }
@@ -912,6 +939,7 @@ public static class GameEngine
                     }
                     else
                     {
+                        var homeStealer = bases.Third!; // 本盗の走者（下で bases.Third は生還 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Third, defense.Catcher, currentPitcher, homeStart, ctx.Baserunning, rng);
                         var safe = StealResolver.Resolve(
@@ -936,6 +964,12 @@ public static class GameEngine
                             outs++;
                         }
                         bases.Third = null;
+                        // 再生データ（issue #485）: 本盗は捕手からの送球区間そのものが無い（投球が送球を兼ねる）。
+                        if (ctx.CaptureTimelines)
+                            stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                                Timeline.TimelineBuilder.BuildSteal(
+                                    homeStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
+                                    ctx.Baserunning, ctx.Field, StealTarget.Home, pitchout, homeStart));
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }
@@ -1013,6 +1047,9 @@ public static class GameEngine
                         BaseSecond = bases.Second is not null,
                         BaseThird = bases.Third is not null,
                         PitchNumberInPa = session.PitchCount,
+                        // この球の前に盗塁が解決していれば、その再生データを載せる（issue #485）。
+                        // 打席途中の盗塁はこの1球観測が唯一の運び口（打球は Current.Play が運ぶ）。
+                        StealPlay = stealPlay,
                     };
                 }
 

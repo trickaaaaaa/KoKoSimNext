@@ -784,6 +784,107 @@ public sealed class TimelineTests
         }
     }
 
+    // --- 盗塁の送球区間バグ修正（issue #485）: 送球の速さは肩（ThrowSpeed）だけで決まる。
+    //     旧実装は投げ始めに生の PopTransferSeconds を使い、到達時刻は守備係数込みだったため、
+    //     差が全部「球の速さ」に化け、守備90の捕手だと肩と無関係に球が速く飛んでいた。 ---
+    [Fact]
+    public void StealTimeline_ThrowSpeedReflectsArmNotCatcherFielding()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 80, Steal = 75 };
+        var quickCatcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 90 };
+        var slowCatcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 30 };
+
+        BallSegment Throw(Player catcher) => TimelineBuilder
+            .BuildSteal(runner, catcher, StealResult.Safe, c, field)
+            .Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+
+        // 送球区間の長さ（＝球の速さ）は肩だけで決まる＝同じ肩なら守備が違っても不変。
+        var expected = c.CatchThrowDistanceM / quickCatcher.ToFielder().ThrowSpeedMps;
+        var quick = Throw(quickCatcher);
+        var slow = Throw(slowCatcher);
+        Assert.Equal(expected, quick.T1 - quick.T0, 6);
+        Assert.Equal(expected, slow.T1 - slow.T0, 6);
+        // 守備の差は「投げ始め（握り替え）」に出る＝守備90の捕手の方が早く投げ始める。
+        Assert.True(quick.T0 < slow.T0, $"守備90の捕手が守備30より早く投げ始めていない（{quick.T0:F3} vs {slow.T0:F3}）");
+    }
+
+    // --- 本盗（issue #485）: 投球が送球を兼ねる＝捕手からの送球区間そのものが無い。 ---
+    [Fact]
+    public void StealTimeline_HomeSteal_HasNoThrowSegment_RunnerThirdToHome()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 85, Steal = 80 };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60 };
+
+        var tl = TimelineBuilder.BuildSteal(runner, catcher, StealResult.Safe, c, field, StealTarget.Home);
+        Assert.DoesNotContain(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        Assert.Contains(tl.Ball, b => b.Kind == BallSegmentKind.Pitch);
+        var leg = Assert.Single(tl.Runners);
+        Assert.True(Near(leg.From, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)), "本盗の走者が三塁発でない");
+        Assert.True(System.Math.Abs(leg.To.X) < 0.5 && System.Math.Abs(leg.To.Z) < 0.5, "本盗の走者が本塁着でない");
+    }
+
+    // --- 三盗（issue #485）: 送球先＝三塁・受け手＝三塁手・送球距離は三塁までで決まる。 ---
+    [Fact]
+    public void StealTimeline_ThirdSteal_ThrowsToThirdBaseWithShorterDistance()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 85, Steal = 80 };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60 };
+
+        var tl = TimelineBuilder.BuildSteal(runner, catcher, StealResult.Safe, c, field, StealTarget.Third);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal("third", throwSeg.ToBase);
+        Assert.Equal(FieldPosition.ThirdBase, throwSeg.ToRole);
+        Assert.True(Near(throwSeg.To, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)), "送球先が三塁でない");
+        Assert.Equal(c.CatchThrowToThirdDistanceM / catcher.ToFielder().ThrowSpeedMps, throwSeg.T1 - throwSeg.T0, 6);
+        var leg = Assert.Single(tl.Runners);
+        Assert.True(Near(leg.From, new TimelinePoint(field.SecondBase.X, field.SecondBase.Z)), "三盗の走者が二塁発でない");
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.ThirdBase && m.Task == FielderTask.CoverBase);
+    }
+
+    // --- 一・三塁の重盗（issue #485）: 二盗の送球中に三塁走者が本塁へ生還する別レッグを足す。 ---
+    [Fact]
+    public void StealTimeline_DoubleSteal_AddsScoringRunnerLegToHome()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Name = "R2", Speed = 85, Steal = 80 };
+        var scorer = new Player { Name = "R3", Speed = 80, Steal = 70 };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60 };
+
+        var tl = TimelineBuilder.BuildSteal(
+            runner, catcher, StealResult.Safe, c, field, StealTarget.Second, doubleStealScorer: scorer);
+        Assert.Equal(2, tl.Runners.Count); // 二盗の走者＋重盗で生還する三塁走者
+        var scoringLeg = tl.Runners.Single(r => r.Label == "重盗");
+        Assert.False(scoringLeg.OutAtEnd);
+        Assert.True(System.Math.Abs(scoringLeg.To.X) < 0.5 && System.Math.Abs(scoringLeg.To.Z) < 0.5, "重盗の走者が本塁へ生還していない");
+        Assert.Same(scorer, scoringLeg.Runner);
+    }
+
+    // --- ピッチアウト（issue #485）: 読み切りは握り替えを早める＝投げ始めが早い。だが肩は不変＝送球区間長は同じ。 ---
+    [Fact]
+    public void StealTimeline_Pitchout_ReleasesEarlier_KeepsThrowSpeed()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 80, Steal = 75 };
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 50 };
+
+        BallSegment Throw(bool pitchout) => TimelineBuilder
+            .BuildSteal(runner, catcher, StealResult.CaughtStealing, c, field, StealTarget.Second, pitchout)
+            .Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+
+        var normal = Throw(false);
+        var pitchout = Throw(true);
+        Assert.True(pitchout.T0 < normal.T0, "ピッチアウトで投げ始めが早まっていない");
+        Assert.Equal(normal.T1 - normal.T0, pitchout.T1 - pitchout.T0, 6);
+    }
+
     // --- #6 外野安打の返球: 送球が走者を追い越さない（三塁打で送球が先着しない） ---
     [Fact]
     public void OutfieldReturnThrow_ArrivesJustAfterRunner_NotBefore()
