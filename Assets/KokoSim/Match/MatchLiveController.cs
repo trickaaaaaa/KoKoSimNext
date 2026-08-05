@@ -258,6 +258,13 @@ namespace KokoSim.Unity.Match
         private PlaybackPlay _stealPlay;
         private double _stealEndAt;
 
+        // 打席途中の牽制の再生（issue #486）。盗塁と同型だが、判定結果（アウト/セーフ）に関わらず
+        // 牽制球が投じられた球は必ず再生する（分岐させない、2026-08-05 issue決定）。同じ球に
+        // 盗塁も解決していれば（牽制セーフの直後に走塁勝負が続く場合）、終わったら盗塁の再生へ連結する
+        // （FinishPickoffView）。再生経路は盗塁と共有（EnterStealPlay と同型）。
+        private PlaybackPlay _pickoffPlay;
+        private double _pickoffEndAt;
+
         // 対決ビューの1球ペーシング（フル振りかぶり再生）を使うか（design-18 §7-2）。
         private bool DuelPacingActive => _duelOn && _duelRig != null && _duelRig.Available;
 
@@ -517,6 +524,7 @@ namespace KokoSim.Unity.Match
             _paQueue.Clear();
             _paConfirmed = false;
             _stealPlay = null;   // 打席途中の盗塁再生（issue #485）は試合をまたがない
+            _pickoffPlay = null; // 打席途中の牽制再生（issue #486）も同様
             _windowClock = _windowHold = _windowCarry = 0f;
             _displayedLogCount = 0;
             _prog = null;
@@ -1678,6 +1686,87 @@ namespace KokoSim.Unity.Match
             AdvanceToNextWindow();
         }
 
+        // ── 打席途中の牽制の3D再生（issue #486） ──
+        // EnterStealPlay 系（issue #485）と同型。判定結果（アウト/セーフ）に関わらず、牽制球が
+        // 投じられた球は必ずこの経路で再生する（分岐させない・独自の間引きをしない、2026-08-05 issue決定）。
+
+        /// <summary>牽制プレーを守備ビューで再生し始める。投手の送球・走者の帰塁・判定は engine の
+        /// <see cref="PlaybackPlay"/>（<c>BuildPickoff</c> の出力）が単一ソース＝盗塁・打球と同じ経路で描く。</summary>
+        private void EnterPickoffPlay(PlaybackPlay pickoff)
+        {
+            _inPitchPhase = false;
+            _pitchBallVisible = false;
+            _stage = LiveStage.Play;
+            _windowCarry = 0f;
+            _pickoffPlay = pickoff;
+            _t = 0;
+            _pickoffEndAt = PickoffPlayEndTime(pickoff);
+            _view.SetPlay(pickoff);
+            if (_duelRig != null && _duelRig.Available)
+            {
+                if (_prog != null && _current != null)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                _duelRig.BeginFieldPlay(pickoff, 0f);
+            }
+            RenderPickoffFrame();
+        }
+
+        /// <summary>牽制再生の1フレーム（<see cref="RenderStealFrame"/> と同型）。</summary>
+        private void RenderPickoffFrame()
+        {
+            if (_pickoffPlay == null) return;
+            _view.SetTime(_t);
+            if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
+            if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_pickoffPlay, _t);
+        }
+
+        /// <summary>牽制再生の打ち切り時刻（<see cref="StealPlayEndTime"/> と同じ規則）。</summary>
+        private double PickoffPlayEndTime(PlaybackPlay play)
+        {
+            var lastEvent = play.ResAt;
+            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
+            foreach (var r in play.Runners)
+                foreach (var s in r.Segs)
+                {
+                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;
+                    if (s.T1 > lastEvent) lastEvent = s.T1;
+                }
+            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
+            var judged = PlaybackEvaluator.LastJudgementTime(play);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            return end;
+        }
+
+        /// <summary>牽制再生が終わった: 対決構図へ戻す。同じ球で盗塁企図の勝負に続いていれば
+        /// （牽制セーフの直後）盤面を動かす前に盗塁の再生へ連結する（先に塁を動かすと二重に見える）。
+        /// 続きが無ければ盗塁と同じ手順で塁・アウトを反映して打席の続きへ戻る。</summary>
+        private void FinishPickoffView()
+        {
+            EndFieldPlay();
+            _view.HideJudgement();
+            _pickoffPlay = null;
+            var q = _paQueue[_pitchIdx];
+            if (q.Live?.StealPlay is { } stealPlay)
+            {
+                EnterStealPlay(stealPlay);
+                return;
+            }
+            if (q.Live != null)
+            {
+                SetOuts(q.Live.Outs);
+                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+            }
+            _foulFlightHoldSeconds = null;
+            _windowCarry = 0f;
+            _pitchCallDone = false;
+            _inPitchPhase = false;
+            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
+            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
+            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
+            _stage = LiveStage.Idle;
+            AdvanceToNextWindow();
+        }
+
         private void Update()
         {
             // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
@@ -1795,6 +1884,15 @@ namespace KokoSim.Unity.Match
                     var pt = q.Token;
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
                     ShowPitchCall(pt);
+                    // 打席途中の牽制（issue #486）: この球の前に牽制球が投じられていれば、判定結果
+                    // （アウト/セーフ）に関わらず守備ビューで再生する（分岐させない）。盗塁より先に
+                    // 解決する事象なので盗塁より先にチェックする（同じ球に両方載ることがある＝牽制セーフの
+                    // 直後に走塁勝負が続く場合。その連結は FinishPickoffView が担う）。
+                    if (q.Live?.PickoffPlay is { } pickoffPlay)
+                    {
+                        EnterPickoffPlay(pickoffPlay);
+                        return;
+                    }
                     // 打席途中の盗塁（issue #485）: この球の前に盗塁が解決していれば、守備ビューで
                     // 「走者が走る→捕手が投げる→塁で判定」を見せてから塁・アウトを動かす（先に動かすと
                     // 走る前に着いて見える）。再生が終わったら打席の続きへ戻る（次打席へは進めない）。
@@ -1870,6 +1968,13 @@ namespace KokoSim.Unity.Match
             }
 
             _t += Time.deltaTime * _speed;
+            // 打席途中の牽制の再生（issue #486）: 盗塁より先に解決する事象なので盗塁より先にチェックする。
+            if (_pickoffPlay != null)
+            {
+                RenderPickoffFrame();
+                if (_t > _pickoffEndAt + 0.3) FinishPickoffView();
+                return;
+            }
             // 打席途中の盗塁の再生（issue #485）: 打球（_current.Play）とは別プレーなので専用に回し、
             // 終わったら FinishPaView（次打席へ）ではなく打席の続きへ戻す（FinishStealView）。
             if (_stealPlay != null)

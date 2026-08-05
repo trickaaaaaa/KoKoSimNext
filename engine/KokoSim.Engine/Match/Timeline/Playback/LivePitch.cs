@@ -80,6 +80,17 @@ public sealed record LivePitch
     /// <see cref="GameContext.CaptureTimelines"/> が真のときだけ非null（統計シム・裏試合はゼロコスト）。
     /// </summary>
     public PlaybackPlay? StealPlay { get; init; }
+
+    /// <summary>
+    /// この球の前に起きた牽制（アウト/セーフいずれも, issue #486）の再生データ。盗塁企図の裏で
+    /// <see cref="Game.PickoffResolver.Resolve"/> が発火した球にだけ載る（判定結果に関わらず載る＝
+    /// アウト/セーフで再生の有無を分岐させない、2026-08-05 issue決定）。<see cref="StealPlay"/> と同じ球に
+    /// 同時に載ることがある（牽制がセーフだった直後、同じ球で盗塁企図の勝負に入るため）——再生側は
+    /// <see cref="PickoffPlay"/>→<see cref="StealPlay"/> の順で連結して再生する。
+    /// <see cref="TimelineBuilder.BuildPickoff"/> の出力を <see cref="PlayTimelineAdapter.ToPlaybackPlay"/> で
+    /// 変換した純関数の写し＝乱数消費ゼロ・帯不変。<see cref="GameContext.CaptureTimelines"/> が真のときだけ非null。
+    /// </summary>
+    public PlaybackPlay? PickoffPlay { get; init; }
 }
 
 /// <summary>

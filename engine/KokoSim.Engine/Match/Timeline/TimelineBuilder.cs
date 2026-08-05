@@ -20,6 +20,9 @@ public static class TimelineBuilder
     private const double PitchDuration = 0.45;
     /// <summary>投球開始→接触までのリード[s]。</summary>
     private const double ContactAt = 0.85;
+    /// <summary>牽制球のリリース→走者が帰塁を始めるまでの反応[s]（演出用の固定値）。
+    /// <see cref="PickoffResolver"/> は時間の勝負を持たない単発のベルヌーイ試行なので流用元が無い。</summary>
+    private const double PickoffReactionSeconds = 0.05;
 
     private static readonly TimelinePoint Home = new(0, 0);
     private static readonly TimelinePoint Mound = new(0, 18.44);
@@ -856,6 +859,90 @@ public static class TimelineBuilder
             // 積まない（表示条件は #59 のまま維持＝従来もセーフの盗塁は判定オーバーレイの対象外）。
             Judgements = judgements.ToArray(),
             Captions = captions.ToArray(),
+        };
+    }
+
+    /// <summary>牽制球のタイムライン（design-14 P1-5, issue #486）。乱数不使用——判定
+    /// （<see cref="PickoffResolver.Resolve"/>）は呼び出し元で既に確定済みの結果 <paramref name="pickedOff"/> を
+    /// 渡すだけで、ここでは新たな抽選をしない。
+    ///
+    /// <para><see cref="PickoffResolver"/> は <see cref="StealResolver"/> と違って「時間の勝負」を持たない
+    /// 単発のベルヌーイ試行（走者のリード・投手のセンスは確率にしか効かず、送球や帰塁の所要秒を一切持たない）。
+    /// そのため絵の秒（送球の飛翔時間・走者の帰塁時間）は投手の肩・走者の脚力から新規に組み、
+    /// タッチの前後関係だけを確定済みの <paramref name="pickedOff"/> と矛盾しないよう
+    /// <see cref="BaserunningCoefficients.TagSeconds"/>（盗塁と共通）で寄せる。</para>
+    ///
+    /// <para>判定結果に関わらず、牽制球が投じられた球は必ず呼び出す（2026-08-05 issue決定）。
+    /// アウト/セーフで呼び出しの有無を分岐させない・独自の間引きをしない＝呼び出し元の責務。</para></summary>
+    /// <param name="baseName">牽制の対象塁＝走者が現在占有している塁（"first"/"second"/"third"）。</param>
+    public static PlayTimeline BuildPickoff(
+        Player runner, Player pitcher, string baseName, bool pickedOff, BaserunningCoefficients c, FieldGeometry field)
+    {
+        var basePt = BasePoint(field, baseName);
+        var baseIndex = baseName switch { "second" => 2, "third" => 3, _ => 1 };
+        var receiver = baseName switch
+        {
+            "second" => FieldPosition.Shortstop, // 二塁カバーは遊撃手（BuildSteal の二盗送球と同じ約束）
+            "third" => FieldPosition.ThirdBase,
+            _ => FieldPosition.FirstBase,
+        };
+        var baseLabel = baseName switch { "second" => "二塁", "third" => "三塁", _ => "一塁" };
+
+        // 走者のリード位置（次塁方向へ HomeLeadDistanceM ぶん）。本塁クロスプレーの二次リードと同じ量を流用。
+        var leadPt = LeadPoint(field, baseIndex, c.HomeLeadDistanceM);
+
+        var throwT1 = Distance(Mound, basePt) / pitcher.ToFielder().ThrowSpeedMps;
+        var naturalReturn = PickoffReactionSeconds + Distance(leadPt, basePt) / runner.ToFielder().SprintSpeedMps;
+        var runnerT1 = pickedOff
+            ? Math.Max(naturalReturn, throwT1 + c.TagSeconds)
+            : Math.Min(naturalReturn, Math.Max(PickoffReactionSeconds + 0.05, throwT1 - c.TagSeconds));
+        var resolvedAt = Math.Max(throwT1, runnerT1);
+
+        var ball = new[]
+        {
+            new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = 0.0, T1 = throwT1, From = Mound, To = basePt,
+                FromRole = FieldPosition.Pitcher, ToRole = receiver, ToBase = baseName,
+            },
+        };
+        var moves = new[]
+        {
+            new FielderMove
+            {
+                Role = receiver, T0 = 0.0, T1 = Math.Max(0.3, throwT1 - 0.15), To = basePt, Task = FielderTask.CoverBase,
+            },
+        };
+        var runners = new[]
+        {
+            new RunnerLeg
+            {
+                Label = "走", T0 = PickoffReactionSeconds, T1 = runnerT1, From = leadPt, To = basePt,
+                OutAtEnd = pickedOff, Runner = runner,
+            },
+        };
+        // 判定イベント（Issue #260の表示条件を踏襲）: アウトは常時表示。セーフは際どさを未評価のため
+        // 積まない（盗塁と同じ扱い＝BuildSteal 参照）。
+        var judgements = pickedOff
+            ? new[] { new JudgementEvent { Label = "走", T = runnerT1, Kind = JudgementKind.Out } }
+            : System.Array.Empty<JudgementEvent>();
+        var captions = new[]
+        {
+            new TimelineCaption(0.0, $"牽制——{baseLabel}へ！"),
+            new TimelineCaption(resolvedAt, pickedOff ? "アウト！ 牽制死" : "セーフ！ 帰塁"),
+        };
+
+        return new PlayTimeline
+        {
+            Duration = resolvedAt + 1.0,
+            Result = pickedOff ? "牽制死" : "牽制",
+            ResolvedAt = resolvedAt,
+            FielderStarts = StandardStarts(),
+            Ball = ball,
+            Moves = moves,
+            Runners = runners,
+            Judgements = judgements,
+            Captions = captions,
         };
     }
 
