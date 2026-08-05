@@ -24,6 +24,15 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     /// 既定0＝追加遅延なし（ヒットでの進塁・フォース進塁・進塁打）。
     /// </summary>
     public double ExtraStartDelaySeconds { get; init; }
+
+    /// <summary>
+    /// タイムライン表示専用（issue #489）: この移動の到達がフォース（塁を踏むだけでアウト。
+    /// タッチの芝居を出さない）か、タッチプレー（野手が走者へタッチしにいく）かの区別。
+    /// 判定・帯には無関係＝乱数を消費せず、確定済みの Out と組み合わせて表示側が演技を選ぶだけ。
+    /// 既定 false（タッチ）。フォースは「打者走者の一塁」「二塁封殺（併殺・野選）」
+    /// 「満塁ゴロの本塁封殺」の3種のみ true にする（design-18 §4.5, issue #489）。
+    /// </summary>
+    public bool Force { get; init; }
 }
 
 /// <summary>
@@ -452,7 +461,7 @@ public static class BaserunningModel
                 MathUtil.Clamp(coeff.DoublePlayProb - coeff.SpeedSlope * (r1.Speed - 50), 0.02, 0.5), rng))
         {
             extraOuts = 1;
-            mv?.Add(new RunnerMove(r1, 1, 2, Out: true)); // 二塁封殺
+            mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { Force = true }); // 二塁封殺
             bases.First = null;
             r1 = null;
         }
@@ -464,7 +473,7 @@ public static class BaserunningModel
         {
             extraOuts = 1;
             batterSafeOnFc = true;
-            mv?.Add(new RunnerMove(r1, 1, 2, Out: true)); // 二塁封殺（野選、打者は生存）
+            mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { Force = true }); // 二塁封殺（野選、打者は生存）
             bases.First = batter;
             mv?.Add(new RunnerMove(batter, 0, 1, false));
             r1 = null;
@@ -514,7 +523,8 @@ public static class BaserunningModel
                 else
                 {
                     extraOuts++; homeOuts++; // 本塁封殺（フォースアウト）
-                    mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay });
+                    mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
+                        { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay, Force = true });
                 }
                 bases.Third = null;
                 r3 = null;
@@ -752,7 +762,7 @@ public static class BaserunningModel
         // 二塁封殺は成立（一塁走者アウト）。#318 と同様に一段目のアウトは幾何で確定させ、際どさは表示のみ（RNG非消費）。
         var forceMargin = HomePlayResolver.Margin(r1, 1, home.Situation, home.Field, coeff, force, delay);
         var forceClose = Math.Abs(forceMargin) < coeff.CloseCallMarginSeconds;
-        mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { CloseCall = forceClose }); // 二塁封殺
+        mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { CloseCall = forceClose, Force = true }); // 二塁封殺
         bases.First = null;
 
         if (MathUtil.Chance(pBatterSafe, rng))

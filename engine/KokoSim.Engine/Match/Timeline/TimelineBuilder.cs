@@ -353,6 +353,8 @@ public static class TimelineBuilder
         {
             Label = "打", T0 = ContactAt + 0.10, T1 = batterArrive,
             From = Home, To = BasePoint(field, "first"), OutAtEnd = batterOut, CloseCall = batterCloseCall,
+            // 打者走者の一塁は常にフォース（issue #489）: 一塁手は塁を踏むだけで良く、タッチの芝居は出さない。
+            Force = true,
             Runner = batter,
         });
 
@@ -846,6 +848,7 @@ public static class TimelineBuilder
 
         var runners = new List<RunnerLeg>
         {
+            // 盗塁死は常にタッチプレー（Force既定false, issue #489）。フォース概念自体が無い。
             new() { Label = "走", T0 = 0.0, T1 = runnerArrive, From = fromPt, To = toPt, OutAtEnd = !safe, Runner = runner },
         };
         var judgements = safe
@@ -941,6 +944,7 @@ public static class TimelineBuilder
             new RunnerLeg
             {
                 Label = "走", T0 = PickoffReactionSeconds, T1 = runnerT1, From = leadPt, To = basePt,
+                // 牽制死は常にタッチプレー（Force既定false, issue #489）。盗塁死と同じくフォース概念が無い。
                 OutAtEnd = pickedOff, Runner = runner,
             },
         };
@@ -1220,6 +1224,8 @@ public static class TimelineBuilder
                     OutAtEnd = m.Out && b + 1 == m.ToBase,
                     // 判定オーバーレイ（Issue #59）: CloseCall は決着レッグ（この移動の最終区間）にだけ乗せる。
                     CloseCall = m.CloseCall && b + 1 == m.ToBase,
+                    // 表示専用（issue #489）: フォース/タッチの区別も決着レッグにだけ乗せる（同じ流儀）。
+                    Force = m.Force && b + 1 == m.ToBase,
                     Runner = m.Runner,
                 });
                 // 判定イベント（Issue #260）: 走塁死・本塁クロスプレー等は決着レッグの終端で確定。

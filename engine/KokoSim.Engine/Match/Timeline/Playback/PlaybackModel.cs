@@ -135,6 +135,11 @@ public sealed record PlaybackRun(double T0, double T1, PlaybackVec From, Playbac
     public bool OutAtEnd { get; init; }
     /// <summary>このレッグの終端が守備との際どい判定だったか（セーフ側のみ表示に使う, Issue #59）。</summary>
     public bool CloseCall { get; init; }
+    /// <summary>
+    /// 表示専用（issue #489）: <see cref="OutAtEnd"/> の到達がフォース（塁を踏むだけ）かタッチプレー
+    /// （野手が走者へタッチしにいく）かの区別。<see cref="RunnerLeg.Force"/> をそのまま運ぶ。
+    /// </summary>
+    public bool Force { get; init; }
 }
 
 /// <summary>走者（複数レッグ＋任意の消滅時刻 hideAt＋表示ラベル）。mock: runners[i]。</summary>

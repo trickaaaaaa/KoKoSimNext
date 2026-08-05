@@ -91,6 +91,13 @@ public sealed record RunnerLeg
     /// </summary>
     public bool CloseCall { get; init; }
     /// <summary>
+    /// 表示専用（issue #489）: このレッグの終端がフォース（塁を踏むだけ。タッチの芝居を出さない）か、
+    /// タッチプレー（野手が走者へタッチしにいく）かの区別。<see cref="OutAtEnd"/> が false（セーフ）の
+    /// レッグでは意味を持たない。判定・帯には無関係＝<see cref="KokoSim.Engine.Match.Game.RunnerMove.Force"/>
+    /// をそのまま運ぶ。
+    /// </summary>
+    public bool Force { get; init; }
+    /// <summary>
     /// この走者の本人（対決ビューの頭上フルネームラベル用, issue #393）。表示専用＝判定・乱数順には使わない。
     /// 同じ Label を持つレッグ群は同一人物なので同じ参照を持つ想定（<see cref="Playback.PlayTimelineAdapter"/> が
     /// Label でグルーピングする際、先頭レッグのこの値をそのまま使う）。既定 null（構築元が選手を渡さない経路）。
