@@ -223,8 +223,9 @@ namespace KokoSim.Unity.Match
         }
 
         // 中継風カウント（BSO）＋塁ダイヤ（#4）。投球フェーズで B/S を1球ずつ点灯させる。
-        // カウントは ScoreBug の数字マス（ランプではない）。塁は ScoreBug の菱形。
-        private Label _sbugBalls, _sbugStrikes, _sbugOuts;
+        // カウントは ScoreBug の点灯ランプ（B=3 / S=2 / O=2。issue #479 で数字マスから再改定）。
+        // 配列の長さがそのまま上限＝実物の掲示板と同じで 4 ボール目・3 ストライク目は点かない。
+        private VisualElement[] _lampsB, _lampsS, _lampsO;
         private VisualElement[] _bases;
         private int _pitchIdx;
         private float _pitchClock;
@@ -248,9 +249,16 @@ namespace KokoSim.Unity.Match
         // 1球ごとの判定オーバーレイ（issue #6）。判定＋球速球種を盤面上に大きく短時間だけ出す。
         // 球速・球種は実1球記録がある打席だけ（合成投球列は null＝出さない）。表示専用。
         private VisualElement _pitchCall;
-        private Label _pitchCallJudge, _pitchCallDetail;
+        private Label _pitchCallJudge, _pitchCallJudgeShadow;
+        private VisualElement _pitchCallDetail;
+        private Label _pitchCallNote, _pitchCallPitchType, _pitchCallSpeed, _pitchCallUnit;
         private float _pitchCallClock;
         private bool _pitchCallOn;
+        // 出現/消失の演出（issue #479）。USS の transition は display の切替をまたいで走らないので、
+        // 「表示にしてから次フレームで is-enter を外す」で出現を、「is-enter を戻してから畳む」で消失を出す。
+        // pitchCallHoldSeconds はこの出現・消失を含めた**総寿命**として扱う＝対決ビューの捕手据え置き
+        // （DuelStageRig.PitchCallHoldSeconds に直列化）と1バイトも食い違わせない。
+        private const float CallFadeSeconds = 0.16f;
 
         // 得点時の大型スコアオーバーレイ（issue #60）。加点前スコア→1点ずつの加算アニメ→加点後スコアを
         // 自前クロックで演出する（PitchCallと同じ「Update()の専用クロックで寿命管理」方式）。表示専用。
@@ -286,7 +294,7 @@ namespace KokoSim.Unity.Match
         // ゲームセットも同じ器＝同じ長さになる）。⚠ シーンの MatchLive が直列化値を持つ＝両方変える。
         [SerializeField] private float gameTelopHoldSeconds = (float)Match2DPlaybackElement.JudgementHoldRealSeconds + 1.5f;
         private VisualElement _gameTelopHost;
-        private Label _gameTelopLabel, _gameTelopDetail;
+        private Label _gameTelopLabel, _gameTelopLabelShadow, _gameTelopDetail;
         private float _gameTelopClock;
         private bool _gameTelopOn;
         // 終局後「ゲームセット」を掲げる予約。得点テロップ（#60）の演出が済むのを Update 側で待つ。
@@ -324,14 +332,18 @@ namespace KokoSim.Unity.Match
             // 中身を書くのは Match2DPlaybackElement のまま（表示窓・文言・色クラスの単一ソース）。
             var judgeHost = _root.Q<VisualElement>("judgement-call");
             var judgeLabel = _root.Q<Label>("judgement-judge");
+            var judgeShadow = _root.Q<Label>("judgement-judge-sh");
             var judgeDetail = _root.Q<Label>("judgement-detail");
             if (judgeHost != null && judgeLabel != null && judgeDetail != null)
-                _view.SetJudgementHost(judgeHost, judgeLabel, judgeDetail);
+                _view.SetJudgementHost(judgeHost, judgeLabel, judgeShadow, judgeDetail);
             // 試合開始/終了テロップ（issue #442）も同じ器へ載せる（掲げるのは「最初のプレーの前」と
             // 「終局後」だけ＝プレー時刻の純関数で描く Match2DPlaybackElement と時間帯が重ならない）。
             _gameTelopHost = judgeHost;
             _gameTelopLabel = judgeLabel;
+            _gameTelopLabelShadow = judgeShadow;
             _gameTelopDetail = judgeDetail;
+            // 判定テキストの字送りは盤面の実幅から出す（USS に vw / clamp が無い。issue #479）。
+            RegisterCallTextMetrics(judgeHost, judgeLabel, judgeShadow);
 
             _leftLineup = _root.Q<VisualElement>("left-lineup");
             _rightLineup = _root.Q<VisualElement>("right-lineup");
@@ -389,14 +401,20 @@ namespace KokoSim.Unity.Match
             WirePitchTactics();
 
             // B/S/O と塁ダイヤは ScoreBug（部品辞書）の中。1球ごとに動くのでここから直接駆動する。
-            _sbugBalls = _root.Q<Label>("sbug-balls");
-            _sbugStrikes = _root.Q<Label>("sbug-strikes");
-            _sbugOuts = _root.Q<Label>("sbug-outs");
+            _lampsB = new[] { _root.Q<VisualElement>("sbug-lamp-b0"), _root.Q<VisualElement>("sbug-lamp-b1"), _root.Q<VisualElement>("sbug-lamp-b2") };
+            _lampsS = new[] { _root.Q<VisualElement>("sbug-lamp-s0"), _root.Q<VisualElement>("sbug-lamp-s1") };
+            _lampsO = new[] { _root.Q<VisualElement>("sbug-lamp-o0"), _root.Q<VisualElement>("sbug-lamp-o1") };
             _bases = new[] { _root.Q<VisualElement>("sbug-base-1"), _root.Q<VisualElement>("sbug-base-2"), _root.Q<VisualElement>("sbug-base-3") };
 
             _pitchCall = _root.Q<VisualElement>("pitch-call");
             _pitchCallJudge = _root.Q<Label>("pitch-call-judge");
-            _pitchCallDetail = _root.Q<Label>("pitch-call-detail");
+            _pitchCallJudgeShadow = _root.Q<Label>("pitch-call-judge-sh");
+            _pitchCallDetail = _root.Q<VisualElement>("pitch-call-detail");
+            _pitchCallNote = _root.Q<Label>("pitch-call-note");
+            _pitchCallPitchType = _root.Q<Label>("pitch-call-ptype");
+            _pitchCallSpeed = _root.Q<Label>("pitch-call-speed");
+            _pitchCallUnit = _root.Q<Label>("pitch-call-unit");
+            RegisterCallTextMetrics(_pitchCall, _pitchCallJudge, _pitchCallJudgeShadow);
 
             _scoreCall = _root.Q<VisualElement>("score-call");
             _scoreCallOwnName = _root.Q<Label>("score-call-own-name");
@@ -1567,9 +1585,13 @@ namespace KokoSim.Unity.Match
             }
 
             // 判定オーバーレイは自前の寿命で消す（打球再生へ移った直後の1球分もそのまま見せる）。
+            // pitchCallHoldSeconds は出現・消失を含めた総寿命なので、畳む 0.16 秒前に is-enter を戻して
+            // 縮みながら消えるところまでを窓の中で終わらせる（対決ビューの捕手据え置きと窓を揃えるため）。
             if (_pitchCallOn)
             {
                 _pitchCallClock += Time.deltaTime * _speed;
+                if (_pitchCallClock >= pitchCallHoldSeconds - CallFadeSeconds)
+                    _pitchCall?.AddToClassList("is-enter");
                 if (_pitchCallClock >= pitchCallHoldSeconds) HidePitchCall();
             }
             // 得点オーバーレイも自前の寿命で加算演出→消去まで進める（issue #60）。
@@ -1865,19 +1887,34 @@ namespace KokoSim.Unity.Match
         }
 
         // ── 中継風カウント（BSO）＋塁ダイヤ ──
-        // ScoreBug の左袖はランプではなく数字なので、点灯トグルではなく数字を差し替える。
-        // 表示は必ず掲示板の範囲へ丸める: 四球の最終球は BallsAfter=4、三振の最終球は StrikesAfter=3 で
-        // 渡ってくるが、実物の掲示板に 4 ボールは出ない（打席が終わって 0-0 に戻る）。
-        // ランプ時代は玉数が足りず自然に頭打ちだったので、数字にした今は明示的に丸める。
+        // ScoreBug の左袖は点灯ランプ（issue #479）。玉数が上限を兼ねる＝四球の最終球は BallsAfter=4、
+        // 三振の最終球は StrikesAfter=3 で渡ってくるが、玉が3個/2個しか無いので自然に頭打ちになる
+        // （実物の掲示板に 4 ボールは出ない。打席が終わって 0-0 に戻る）。数字方式のときだけ必要だった
+        // 明示的な Clamp はここでは不要。
         private void SetCount(int balls, int strikes)
         {
-            if (_sbugBalls != null) _sbugBalls.text = Mathf.Clamp(balls, 0, 3).ToString();
-            if (_sbugStrikes != null) _sbugStrikes.text = Mathf.Clamp(strikes, 0, 2).ToString();
+            SetLampRow(_lampsB, balls);
+            SetLampRow(_lampsS, strikes);
         }
 
-        private void SetOuts(int outs)
+        private void SetOuts(int outs) => SetLampRow(_lampsO, outs);
+
+        /// <summary>1行ぶんのランプを左から <paramref name="lit"/> 個だけ点ける（グローは USS が追従する）。</summary>
+        private static void SetLampRow(VisualElement[] lamps, int lit)
         {
-            if (_sbugOuts != null) _sbugOuts.text = Mathf.Clamp(outs, 0, 2).ToString();
+            if (lamps == null) return;
+            for (var i = 0; i < lamps.Length; i++) lamps[i]?.EnableInClassList("is-on", i < lit);
+        }
+
+        /// <summary>
+        /// 判定テキストの字送りを器の実幅に追従させる（issue #479）。「盤面幅の10%・30〜64pxクランプ」は
+        /// USS では書けない（vw も clamp も無い）ので、実幅が決まる/変わるたびに入れ直す。
+        /// </summary>
+        private static void RegisterCallTextMetrics(VisualElement host, Label face, Label shadow)
+        {
+            if (host == null || face == null) return;
+            host.RegisterCallback<GeometryChangedEvent>(_ =>
+                UiComponents.ApplyCallTextMetrics(host.resolvedStyle.width, face, shadow));
         }
 
         // ── 1球ごとの判定オーバーレイ（issue #6） ──
@@ -1891,22 +1928,33 @@ namespace KokoSim.Unity.Match
             if (_pitchCall == null || _pitchCallJudge == null) return;
 
             var judge = PitchJudgeJp(pt);
-            _pitchCallJudge.text = judge;
-            _pitchCallJudge.style.display = judge.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
-            _pitchCallJudge.EnableInClassList("pitch-call__judge--strike", IsStrikeCall(pt.Kind));
+            UiComponents.SetCallText(_pitchCallJudge, _pitchCallJudgeShadow, judge);
+            var judgeDisplay = judge.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            _pitchCallJudge.style.display = judgeDisplay;
+            if (_pitchCallJudgeShadow != null) _pitchCallJudgeShadow.style.display = judgeDisplay;
+            // 色は「ストライク系＝見逃し/空振り/ファール/三振」でひとまとまり（参照モックの色分け）。
+            // IsStrikeCall はカウント上のストライク判定なのでファールを含まない＝ここで足す。
+            _pitchCallJudge.EnableInClassList("pitch-call__judge--strike",
+                IsStrikeCall(pt.Kind) || pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Foul);
             _pitchCallJudge.EnableInClassList("pitch-call__judge--ball", pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.Ball);
 
-            var detail = "";
+            // 計器表示（球種・球速）。実1球記録がある打席だけ値が入る＝合成投球列では丸ごと畳む。
+            var note = PitchNoteJp(pt);
+            var ptype = pt.PitchType.HasValue ? PitchJp(pt.PitchType.Value) : "";
+            var speed = pt.VelocityKmh.HasValue ? Mathf.RoundToInt((float)pt.VelocityKmh.Value).ToString() : "";
+            SetOptionalLabel(_pitchCallNote, note);
+            SetOptionalLabel(_pitchCallPitchType, ptype);
+            SetOptionalLabel(_pitchCallSpeed, speed);
+            // 単位は球速があるときだけ（"km/h" が単独で浮かないように）。
+            if (_pitchCallUnit != null)
+                _pitchCallUnit.style.display = speed.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            var hasReadout = note.Length > 0 || ptype.Length > 0 || speed.Length > 0;
             if (_pitchCallDetail != null)
-            {
-                detail = PitchDetailText(pt);
-                _pitchCallDetail.text = detail;
-                _pitchCallDetail.style.display = detail.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
-            }
+                _pitchCallDetail.style.display = hasReadout ? DisplayStyle.Flex : DisplayStyle.None;
 
-            if (judge.Length == 0 && detail.Length == 0) { HidePitchCall(); return; }
+            if (judge.Length == 0 && !hasReadout) { HidePitchCall(); return; }
 
-            _pitchCall.style.display = DisplayStyle.Flex;
+            ShowCallHost(_pitchCall);
             _pitchCallOn = true;
             _pitchCallClock = 0f;
         }
@@ -1915,7 +1963,45 @@ namespace KokoSim.Unity.Match
         {
             _pitchCallOn = false;
             _pitchCallClock = 0f;
-            if (_pitchCall != null) _pitchCall.style.display = DisplayStyle.None;
+            if (_pitchCall != null)
+            {
+                _pitchCall.RemoveFromClassList("is-enter");
+                _pitchCall.style.display = DisplayStyle.None;
+            }
+        }
+
+        /// <summary>
+        /// 判定オーバーレイを跳ねさせながら出す（issue #479）。USS の transition は「前のフレームで
+        /// 解決済みのスタイル」との差分で走るので、is-enter を外すのは**スタイル解決を1回挟んだ後**で
+        /// なければならない。
+        ///
+        /// ⚠ <c>ExecuteLater(0)</c> 1回では足りない（2026-08-05 に A/B で実測）。スケジューラは
+        /// そのフレームのスタイル解決より前に回るため、付けて外すのが同じ解決パスに入り、
+        /// **開始値 0.84 が一度も記録されない＝跳ねずにいきなり出る**。二段にすると確実に次フレームへ送れる
+        /// （ミリ秒の決め打ちを避けるのはパネルのフレームレートに依存させないため）。
+        ///
+        /// ⚠ 効いているかは**静止画では絶対に判定できない**。跳ねてもいなくても「出た後」の絵は同一なので、
+        /// 立ち上がりを毎フレーム実測して確かめる（BoardLampShooter の anim ログ。二段での実測は
+        /// 33ms→scale 0.93 / 66ms→1.006 の山 / 117ms→1.0、単段では全フレーム 1.0 で平坦）。
+        /// ログを <c>Vector3.ToString()</c> で出すと小数2桁に丸められて山（1.006）が「1.00」に化けるので、
+        /// **必ず成分（scale.value.x）で見る**。
+        /// </summary>
+        private static void ShowCallHost(VisualElement host)
+        {
+            if (host == null) return;
+            host.AddToClassList("is-enter");
+            host.style.display = DisplayStyle.Flex;
+            host.schedule.Execute(() =>
+                host.schedule.Execute(() => host.RemoveFromClassList("is-enter")).ExecuteLater(0)
+            ).ExecuteLater(0);
+        }
+
+        /// <summary>空文字なら畳む（空ラベルが margin だけ残して並びをずらすのを防ぐ）。</summary>
+        private static void SetOptionalLabel(Label label, string text)
+        {
+            if (label == null) return;
+            label.text = text;
+            label.style.display = text.Length == 0 ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         // ── 得点時の大型スコアオーバーレイ（issue #60） ──
@@ -1992,7 +2078,7 @@ namespace KokoSim.Unity.Match
         private void ShowGameTelop(string text)
         {
             if (_gameTelopHost == null || _gameTelopLabel == null) return;
-            _gameTelopLabel.text = text;
+            UiComponents.SetCallText(_gameTelopLabel, _gameTelopLabelShadow, text);
             // 直前の判定の色クラスを引き継がない（素の書体・色で出す）。
             _gameTelopLabel.EnableInClassList("pitch-call__judge--out", false);
             _gameTelopLabel.EnableInClassList("pitch-call__judge--safe", false);
@@ -2003,7 +2089,7 @@ namespace KokoSim.Unity.Match
                 _gameTelopDetail.text = "";
                 _gameTelopDetail.style.display = DisplayStyle.None;
             }
-            _gameTelopHost.style.display = DisplayStyle.Flex;
+            ShowCallHost(_gameTelopHost);
             _gameTelopClock = 0f;
             _gameTelopOn = true;
         }
@@ -2017,6 +2103,26 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 試合開始/終了テロップを強制表示する（寿命管理は通常と同じ）。</summary>
         public void ShowGameTelopForCapture(bool gameSet) => ShowGameTelop(gameSet ? "ゲームセット" : "プレイボール");
+
+        /// <summary>
+        /// スクショ用: 任意の1球で判定オーバーレイを出す（issue #479 の受け入れ）。
+        /// 文言・色・計器表示の分岐を撮影側に持たせないため、**本番と同じ ShowPitchCall を通す**。
+        /// </summary>
+        public void ShowPitchCallForCapture(PitchToken pt)
+        {
+            ShowPitchCall(pt);
+            SetCount(pt.BallsAfter, pt.StrikesAfter);
+        }
+
+        /// <summary>スクショ用: 判定オーバーレイを畳む（ランプだけを撮るとき）。</summary>
+        public void HidePitchCallForCapture() => HidePitchCall();
+
+        /// <summary>スクショ用: BSOランプを任意のカウントで点ける（issue #479 の受け入れ）。</summary>
+        public void SetCountForCapture(int balls, int strikes, int outs)
+        {
+            SetCount(balls, strikes);
+            SetOuts(outs);
+        }
 
         private static bool IsStrikeCall(KokoSim.Engine.Match.AtBat.PitchKind k) =>
             k == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike || k == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
@@ -2037,19 +2143,12 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        // 判定の内訳（見逃し/空振り）＋球種＋球速。球種・球速は実1球記録がある打席だけ出す。
-        private static string PitchDetailText(PitchToken pt)
+        // 判定の内訳（見逃し/空振り）＝計器表示の左端に添える補助情報。
+        // 球種・球速は数字と和文を混植しないよう別ラベルへ分けたので、ここでは組み立てない（issue #479）。
+        private static string PitchNoteJp(PitchToken pt)
         {
-            var note = pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike ? "見逃し"
+            return pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike ? "見逃し"
                 : pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike ? "空振り" : "";
-            var pitch = pt.PitchType.HasValue ? PitchJp(pt.PitchType.Value) : "";
-            var velo = pt.VelocityKmh.HasValue
-                ? Mathf.RoundToInt((float)pt.VelocityKmh.Value).ToString() + "km/h" : "";
-
-            var s = note;
-            if (pitch.Length > 0) s = s.Length > 0 ? s + "　" + pitch : pitch;
-            if (velo.Length > 0) s = s.Length > 0 ? s + " " + velo : velo;
-            return s;
         }
 
         private static string PitchJp(PitchType t)

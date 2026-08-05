@@ -12,7 +12,7 @@ namespace KokoSim.Unity.Components
     /// （<see cref="LiveLineScore"/>）から引き、UI側で得点を組み立てない。
     ///
     /// カウント（B/S/O）と塁は1球ごとに動くので、画面コントローラが
-    /// <c>sbug-balls</c> / <c>sbug-base-1</c> 等の name を直接駆動する（この部品は器と見た目だけを持つ）。
+    /// <c>sbug-lamp-b0</c> / <c>sbug-base-1</c> 等の name を直接駆動する（この部品は器と見た目だけを持つ）。
     /// </summary>
     public static class ScoreBug
     {

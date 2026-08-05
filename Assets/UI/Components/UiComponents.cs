@@ -381,6 +381,77 @@ namespace KokoSim.Unity.Components
             return head;
         }
 
+        // ===== CallText（盤面の判定オーバーレイの大型テキスト）=====
+
+        /// <summary>
+        /// 判定テキスト（PitchCall / JudgementCall）の字送り。参照モック
+        /// docs/design/mock-pitch-view.html の実測値で、USS では表現できないぶんだけをここに置く。
+        /// <list type="bullet">
+        /// <item>大きさ＝盤面幅の10%を 30〜64px でクランプ（USS に vw も clamp も無い）</item>
+        /// <item>字間＝0.14em（USS の letter-spacing は px 指定なので font-size 依存で計算する）</item>
+        /// </list>
+        /// </summary>
+        public const float CallFontWidthRatio = 0.10f;
+        public const float CallFontMinPx = 30f;
+        public const float CallFontMaxPx = 64f;
+        public const float CallLetterSpacingEm = 0.14f;
+
+        /// <summary>
+        /// ぼかし影の半径（字の大きさに対する比）。
+        ///
+        /// ⚠ 参照モックの CSS は 64px の字に <c>0 0 26px</c> を当てているが、**この数値をそのまま
+        /// UI Toolkit へ持ってくると影が絵に出ない**（2026-08-05 実測）。CSS の box/text-shadow の
+        /// ぼかし半径と UI Toolkit の <see cref="TextShadow.blurRadius"/> は減衰の定義が違い、26 では
+        /// 拡散しきって1画素あたりの濃さが視認限界を下回る。実測では 8px 前後で CSS の 26px と
+        /// 同じ「地から起きて見える」濃さになったので、**見た目の重さで合わせて比で持つ**
+        /// （字が縮む狭い盤面でも影の相対的な濃さが変わらない）。数値を参照へ戻すときは必ず絵で確かめること。
+        /// </summary>
+        public const float CallShadowBlurEm = 0.125f;
+        private static readonly Color CallShadowColor = new Color(0f, 0f, 0f, 0.9f);
+
+        /// <summary>
+        /// 判定テキストの面（<paramref name="face"/>）と硬い影の複製（<paramref name="shadow"/>）へ
+        /// 同じ文字を書く。USS の text-shadow は1要素1つしか持てないので、ぼかし影は面が、
+        /// 硬い影（0 3px 0）はこの複製が担う＝**必ず対で書く**（片方だけ書くと影が前の判定のまま残る）。
+        /// </summary>
+        public static void SetCallText(Label face, Label shadow, string text)
+        {
+            if (face != null) face.text = text;
+            if (shadow != null) shadow.text = text;
+        }
+
+        /// <summary>
+        /// 判定テキストの大きさと字間を器の実幅から算出して面と影へ入れる。
+        /// 影は面と1pxでも違うと輪郭がぶれるので、**必ず同じ値**を両方へ入れる。
+        /// </summary>
+        public static void ApplyCallTextMetrics(float hostWidth, Label face, Label shadow)
+        {
+            if (hostWidth <= 0f || float.IsNaN(hostWidth)) return;
+            var size = Mathf.Clamp(hostWidth * CallFontWidthRatio, CallFontMinPx, CallFontMaxPx);
+            var spacing = size * CallLetterSpacingEm;
+            foreach (var l in new[] { face, shadow })
+            {
+                if (l == null) continue;
+                l.style.fontSize = size;
+                l.style.letterSpacing = spacing;
+            }
+            // ぼかし影（①）は面だけ。影の複製（②硬い影）に重ねると輪郭が二重に濁る。
+            if (face != null)
+                face.style.textShadow = new TextShadow
+                {
+                    offset = Vector2.zero,
+                    blurRadius = size * CallShadowBlurEm,
+                    color = CallShadowColor,
+                };
+            if (shadow != null)
+                shadow.style.textShadow = new TextShadow
+                {
+                    offset = Vector2.zero,
+                    blurRadius = 0f,
+                    color = Color.clear,
+                };
+        }
+
         // ===== NumUnit（数字＋和文単位の混植セル）=====
 
         /// <summary>

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Timeline;            // JudgementKind（判定オーバーレイの種別）
 using KokoSim.Engine.Match.Timeline.Playback;
+using KokoSim.Unity.Components;                 // UiComponents.SetCallText（判定テキストの面＋影を対で書く）
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -144,10 +145,16 @@ namespace KokoSim.Unity.Match
         public const double JudgementHoldRealSeconds = 0.6;
         private VisualElement _judgementHost;
         private Label _judgementLabel;
+        // 判定テキストの硬い影（0 3px 0）を担う複製ラベル（issue #479）。USS の text-shadow は1要素1つ
+        // しか持てないので、ぼかし影は面のラベル・硬い影はこれが出す。面と対で書かないと影だけ前の判定が残る。
+        private Label _judgementLabelShadow;
         // 判定の下段（本塁打の飛距離。1球判定の球種・球速行と同じ器 .pitch-call__detail を流用, issue #354）。
         private Label _judgementDetail;
         // 器が自前か（＝この要素の子か）。外へ出した後は前面化を自分でやらない（打球3D化 F9）。
         private bool _judgementOwned = true;
+        // 直前フレームで判定が出ていたか。出ていない→出た の**変わり目でだけ**跳ねの演出を仕込む
+        // （UpdateJudgement は毎フレーム呼ばれるので、毎回仕込むと出っぱなしで一度も跳ねない）。
+        private bool _judgementShown;
 
         /// <summary>
         /// 再生倍速（コントローラが毎フレーム同期する）。表示窓はプレー時間軸で数えるため、
@@ -190,9 +197,18 @@ namespace KokoSim.Unity.Match
 
             _judgementHost = new VisualElement { pickingMode = PickingMode.Ignore };
             _judgementHost.AddToClassList("pitch-call");
+            // 影の複製→面 の順に積む（先に置いた方が背面）。器（stack）は面のラベルだけが幅を決め、
+            // 影は絶対配置で3px下に敷かれる（issue #479）。
+            var stack = new VisualElement { pickingMode = PickingMode.Ignore };
+            stack.AddToClassList("pitch-call__stack");
+            _judgementLabelShadow = new Label { pickingMode = PickingMode.Ignore };
+            _judgementLabelShadow.AddToClassList("pitch-call__judge");
+            _judgementLabelShadow.AddToClassList("pitch-call__judge--shadow");
+            stack.Add(_judgementLabelShadow);
             _judgementLabel = new Label { pickingMode = PickingMode.Ignore };
             _judgementLabel.AddToClassList("pitch-call__judge");
-            _judgementHost.Add(_judgementLabel);
+            stack.Add(_judgementLabel);
+            _judgementHost.Add(stack);
             _judgementDetail = new Label { pickingMode = PickingMode.Ignore };
             _judgementDetail.AddToClassList("pitch-call__detail");
             _judgementDetail.style.display = DisplayStyle.None;
@@ -347,18 +363,20 @@ namespace KokoSim.Unity.Match
             if (!found.HasValue)
             {
                 _judgementHost.style.display = DisplayStyle.None;
+                _judgementHost.RemoveFromClassList("is-enter");
+                _judgementShown = false;
                 return;
             }
 
             var kind = found.Value.Kind;
-            _judgementLabel.text = kind switch
+            UiComponents.SetCallText(_judgementLabel, _judgementLabelShadow, kind switch
             {
                 JudgementKind.Out => "アウト",
                 JudgementKind.Fair => "フェア",
                 JudgementKind.HomeRun => "ホームラン",
                 JudgementKind.Error => "エラー",
                 _ => "セーフ",
-            };
+            });
             _judgementLabel.EnableInClassList("pitch-call__judge--out", kind == JudgementKind.Out);
             // エラーは「走者が生きた」側なのでセーフと同じ色系を流用する（issue #439。新規クラスを作らない）
             _judgementLabel.EnableInClassList("pitch-call__judge--safe",
@@ -374,6 +392,19 @@ namespace KokoSim.Unity.Match
             _judgementDetail.text = showDistance ? "推定飛距離 " + Mathf.RoundToInt((float)distance.Value) + "m" : "";
             _judgementDetail.style.display = showDistance ? DisplayStyle.Flex : DisplayStyle.None;
 
+            // 出ていない→出た の変わり目でだけ跳ねを仕込む（issue #479）。毎フレーム仕込むと
+            // is-enter が付きっぱなしで opacity 0 のまま＝判定が一度も見えなくなる。
+            if (!_judgementShown)
+            {
+                _judgementShown = true;
+                // 外すのは必ず二段スケジュール後（1回の ExecuteLater ではスタイル解決を挟めず跳ねない。
+                // 実測の経緯は MatchLiveController.ShowCallHost の項）。
+                var host = _judgementHost;
+                host.AddToClassList("is-enter");
+                host.schedule.Execute(() =>
+                    host.schedule.Execute(() => host.RemoveFromClassList("is-enter")).ExecuteLater(0)
+                ).ExecuteLater(0);
+            }
             _judgementHost.style.display = DisplayStyle.Flex;
             // 走者ラベルが後から追加されても常に最前面に出す（自前の器のときだけ。外へ出した器の
             // 重なり順はその画面の UXML が決める＝ここで持ち上げると score-call の上へ出てしまう）。
@@ -403,15 +434,17 @@ namespace KokoSim.Unity.Match
             if (_judgementHost != null) _judgementHost.style.display = DisplayStyle.None;
         }
 
-        public void SetJudgementHost(VisualElement host, Label judge, Label detail)
+        public void SetJudgementHost(VisualElement host, Label judge, Label judgeShadow, Label detail)
         {
             if (host == null || judge == null || detail == null) return;
             if (_judgementOwned && _judgementHost != null) Remove(_judgementHost);
             _judgementOwned = false;
             _judgementHost = host;
             _judgementLabel = judge;
+            _judgementLabelShadow = judgeShadow;   // 影は無くても動く（面だけになる＝ぼかし影のみ）
             _judgementDetail = detail;
             _judgementHost.style.display = DisplayStyle.None;
+            _judgementShown = false;
         }
 
         // ── 射影（mock: px(p)=[CX+p.x*S, OY-p.y*S] を要素サイズへ uniform 拡縮・レターボックス） ──
