@@ -83,11 +83,14 @@ namespace KokoSim.Unity.Match
                 fDuelOn.SetValue(ctrl, false);
                 mApplyView.Invoke(ctrl, null);
 
-                ctrl.SeekForCapture(errT + 0.15);
+                // エラーの表示は物理時刻からワンテンポ遅れる（PlaybackEvaluator.ErrorDisplayDelaySeconds）
+                // ＝シークも表示起点に合わせる
+                var dispT = errT + PlaybackEvaluator.ErrorDisplayDelaySeconds;
+                ctrl.SeekForCapture(dispT + 0.15);
                 yield return null;
                 var telop = ctrl.JudgementTextForCapture;
                 yield return Capture(ctrl, kindName + "-telop");
-                ctrl.SeekForCapture(errT + 0.55);
+                ctrl.SeekForCapture(dispT + 0.55);
                 yield return null;
                 yield return Capture(ctrl, kindName + "-after");
 
@@ -100,13 +103,13 @@ namespace KokoSim.Unity.Match
                 if (rig != null && rig.Available)
                 {
                     rig.BeginFieldPlay(play, 0f);
-                    rig.SetFieldTime((float)errT + 0.3f);
+                    rig.SetFieldTime((float)dispT + 0.3f);
                     yield return null;
                     var markGo = GameObject.Find("ErrorMark");
                     mark3dOn = markGo != null && markGo.activeInHierarchy;
                     rig.RenderNow();
                     yield return CaptureRig(rig, kindName + "-mark3d");
-                    rig.SetFieldTime((float)errT + 1.4f);
+                    rig.SetFieldTime((float)dispT + 1.4f);
                     yield return null;
                     rig.RenderNow();
                     yield return CaptureRig(rig, kindName + "-chase3d");

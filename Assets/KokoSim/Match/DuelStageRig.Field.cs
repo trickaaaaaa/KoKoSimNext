@@ -2127,7 +2127,39 @@ namespace KokoSim.Unity.Match
                 }
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
+
+            // びっくりマーク表示中は**据えた固定枠**へ切り替える（2026-08-05 監督報告2件:
+            // 「マークが出てない」＝球だけ追うプランが野手を画角外へ置き去り（レフトで実測0/7画角内）、
+            // 「カメラが見づらい・切り替えが早い」＝窓の間も球追いパンが続き静止する瞬間が無い
+            // （実測: 回転9→35°/s・画角30→51°/sと加速し続ける）。
+            // 固定枠は PlanErrorMark が先に計算した「野手＋エラー時の球＋転がり先の球」を収める箱
+            // （<see cref="_errorCamAim"/>/<see cref="_errorCamFrameH"/>）。窓の間これに据えると
+            // 球が枠の中で転がり、誰が何をこぼしたかが読める。出入りは台形ブレンドでなじませる。
+            // 内野エラーは球と野手が近く枠がほぼ変わらない＝実質不変。
+            if (_errorMarkRole.HasValue && !float.IsPositiveInfinity(_errorMarkAt) && _errorCamFrameH > 0f
+                && t <= _errorMarkAt + ErrorMarkSeconds + 1e-4f)   // 全景カット後の ct=プラン終端 を弾く
+            {
+                float w = Mathf.Clamp01((t - _errorMarkAt) / ErrorMarkCamBlendSeconds);
+                // 窓明けに全景カット（BeginFieldPlay が窓の終わりへ遅らせたもの）が控えているなら、
+                // 据えたまま切る。イーズアウトで球追いへ戻してから切ると「戻す→即カット」の無駄な
+                // 動きが1拍増えるだけ（実測: 窓終端で画角2333°/sのカットの直前に0.35sのパンが挟まる）
+                bool cutAtEnd = Mathf.Abs(_fieldCamCutT - (_errorMarkAt + ErrorMarkSeconds)) < 0.01f;
+                if (!cutAtEnd)
+                    w = Mathf.Min(w, Mathf.Clamp01((_errorMarkAt + ErrorMarkSeconds - t) / ErrorMarkCamBlendSeconds));
+                if (w > 0f)
+                {
+                    aim = Vector3.Lerp(aim, _errorCamAim, w);
+                    frameH = Mathf.Lerp(frameH, _errorCamFrameH, w);
+                }
+            }
         }
+
+        /// <summary>マーク窓の出入りでカメラ枠をなじませる秒数（急なパン・ズームにしない）。</summary>
+        private const float ErrorMarkCamBlendSeconds = 0.35f;
+
+        /// <summary>マーク窓の据え枠（注視点と縦寸）。<see cref="PlanErrorMark"/> が前計算する。0=無効。</summary>
+        private Vector3 _errorCamAim;
+        private float _errorCamFrameH;
 
         /// <summary>時刻 t を覆う滞空セグメント（外野フライ等）。無ければ null（issue #399②-1）。</summary>
         private EndpointBallSegment FieldFlightSegmentAt(float t)
@@ -2200,6 +2232,21 @@ namespace KokoSim.Unity.Match
                 if (r.O == _fieldStationCuts[_fieldStationCuts.Count - 1].Outfield) continue;
                 _fieldStationCuts.Add((r.T0, r.O));
             }
+
+            // 据え位置カットもびっくりマークの窓の中で切らない（全景カットと同じ理由＝
+            // マークを見せている1.5秒の間に視点そのものを変えない。窓の終わりへ寄せる）。
+            // ⚠ 呼び出し順は BeginFieldPlay で PlanErrorMark → 本メソッドの順（_errorMarkAt が要る）
+            if (_errorMarkRole.HasValue && !float.IsPositiveInfinity(_errorMarkAt))
+            {
+                for (int i = 0; i < _fieldStationCuts.Count; i++)
+                {
+                    if (_fieldStationCuts[i].T > _errorMarkAt - ErrorMarkCamBlendSeconds
+                        && _fieldStationCuts[i].T < _errorMarkAt + ErrorMarkSeconds)
+                    {
+                        _fieldStationCuts[i] = (_errorMarkAt + ErrorMarkSeconds, _fieldStationCuts[i].Outfield);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -2269,10 +2316,30 @@ namespace KokoSim.Unity.Match
         private float _fieldAimY = FieldAimYMin;
 
         /// <summary>
+        /// パン（注視点の水平）の速度上限[m/s]。**絵で決める値**。中継の速いパン（送球の
+        /// 振り向き等）は許し、プラン由来のスパイクだけ削る。実測（2026-08-05）: 飛翔中のパンは
+        /// 5〜50°/s 級で穏やか＝これは安全弁で、忙しさの主犯はズーム側。
+        /// </summary>
+        public static float FieldPanSpeedCapMPerSecond = 35f;
+
+        /// <summary>
+        /// ズーム（縦に収める実寸）の速度上限[m/s]。**絵で決める値**。監督報告（2026-08-05
+        /// 「外野フライでもカメラが忙しい」「球追いズームを緩めて」）を受けて追加。
+        /// 実測: 飛翔中に画角20〜130°/sの鋸歯が1.5秒続き、捕球後の寄りは1秒で16m級（27m/s）
+        /// 詰めていた。12m/sに絞ると鋸歯は消え、寄りは8割まで入った所で全景カットに渡る。
+        /// </summary>
+        public static float FieldZoomSpeedCapMPerSecond = 12f;
+
+        /// <summary>ズーム表示値（速度上限を通した後）。0未満＝未初期化（プレー頭で目標へ直接合わせる）。</summary>
+        private float _fieldFrameHShown = -1f;
+        private float _fieldAimXShown, _fieldAimZShown;
+        private Vector3 _fieldStationShown;
+
+        /// <summary>
         /// 時刻 t の視野を守備カメラへ流す。据え位置は切り替え計画から採り、
         /// 同じ据え位置でいる間は**位置が動かない**（向きと画角だけが動く＝中継の三脚と同じ）。
         /// </summary>
-        /// <param name="dt">前フレームからの経過秒（注視点の高さの速度上限に使う）。</param>
+        /// <param name="dt">前フレームからの経過秒（注視点・ズームの速度上限に使う）。</param>
         private void ApplyFieldCamera(float t, float dt)
         {
             if (_fieldPlan == null || _fieldPlan.Count == 0) return;
@@ -2281,13 +2348,29 @@ namespace KokoSim.Unity.Match
             float frameH;
             ComputeFieldFrame(ct, out target, out frameH);
 
-            // 全景への「カット」は水平・ズームと同じく一気に切り替える（据え置きにしない・上の申し送り）。
-            // それ以外は段差へ即座に飛ばず、速度上限つきで寄せる（急上昇中は追いつかせない＝issue #399②-2）。
-            _fieldAimY = t >= _fieldCamCutT
-                ? target.y
-                : Mathf.MoveTowards(_fieldAimY, target.y, FieldAimYSpeedCapMPerSecond * Mathf.Max(dt, 0f));
+            // 「カット」（全景へ戻る瞬間・据え位置の切り替え・プレーの頭）は上限を通さず一気に切り替える
+            // （カットはカットのまま＝流し始めない。上の申し送り）。それ以外は段差へ即座に飛ばず、
+            // 速度上限つきで寄せる（高さ=issue #399②-2、水平・ズーム=2026-08-05 監督報告で追加）。
+            var station = FieldStationAt(ct);
+            bool cut = t >= _fieldCamCutT || _fieldFrameHShown < 0f || station != _fieldStationShown;
+            _fieldStationShown = station;
+            if (cut)
+            {
+                _fieldAimY = target.y;
+                _fieldAimXShown = target.x;
+                _fieldAimZShown = target.z;
+                _fieldFrameHShown = frameH;
+            }
+            else
+            {
+                float step = Mathf.Max(dt, 0f);
+                _fieldAimY = Mathf.MoveTowards(_fieldAimY, target.y, FieldAimYSpeedCapMPerSecond * step);
+                _fieldAimXShown = Mathf.MoveTowards(_fieldAimXShown, target.x, FieldPanSpeedCapMPerSecond * step);
+                _fieldAimZShown = Mathf.MoveTowards(_fieldAimZShown, target.z, FieldPanSpeedCapMPerSecond * step);
+                _fieldFrameHShown = Mathf.MoveTowards(_fieldFrameHShown, frameH, FieldZoomSpeedCapMPerSecond * step);
+            }
 
-            FramePreview(FieldStationAt(ct), new Vector3(target.x, _fieldAimY, target.z), frameH);
+            FramePreview(station, new Vector3(_fieldAimXShown, _fieldAimY, _fieldAimZShown), _fieldFrameHShown);
         }
 
         // ---- 打球プレーの再生 ---------------------------------------------------
@@ -2416,13 +2499,24 @@ namespace KokoSim.Unity.Match
             // （3Dでは用のないところを見ている travel）は実カットに乗らない。
             var wideStart = CameraPlanBuilder.WideStartTime(play);
             _fieldCamCutT = double.IsFinite(wideStart) ? (float)wideStart : float.PositiveInfinity;
+            // 全景カットをびっくりマークの窓の中で切らない（2026-08-05 監督報告「カメラが見づらい・
+            // 切り替えが早い」。実測: エラーの1秒後＝窓のど真ん中で回転298°/s・画角2273°/sのカットが
+            // 直撃していた）。窓の終わり＝マーク消灯と同時に切る（据え→カットの2拍子に整える）
+            if (_errorMarkRole.HasValue && !float.IsPositiveInfinity(_errorMarkAt)
+                && _fieldCamCutT > _errorMarkAt - ErrorMarkCamBlendSeconds
+                && _fieldCamCutT < _errorMarkAt + ErrorMarkSeconds)
+            {
+                _fieldCamCutT = _errorMarkAt + ErrorMarkSeconds;
+            }
             // プランの終端はレート制限の収束余白（WideSettleBufferSeconds）ぶん後ろにあり、
             // そこを引けば「戻り切った全景」がそのまま出る＝Unity側で全景の値を持ち直さない
             _fieldPlanEndT = _fieldPlan != null && _fieldPlan.Count > 0
                 ? (float)_fieldPlan[_fieldPlan.Count - 1].T : 0f;
 
-            // 前のプレーの高さを引きずらない＝プレーの頭は速度上限を経由せず目標へ直接合わせる
-            // （速度上限が効くのは次フレーム以降の段差だけ。issue #399②-2）
+            // 前のプレーの枠を引きずらない＝プレーの頭は速度上限を経由せず目標へ直接合わせる
+            // （速度上限が効くのは次フレーム以降の段差だけ。issue #399②-2）。
+            // 水平・ズームの表示値も未初期化へ戻す（ApplyFieldCamera が最初のフレームで一気に合わせる）
+            _fieldFrameHShown = -1f;
             if (_fieldPlan != null && _fieldPlan.Count > 0)
             {
                 ComputeFieldFrame(FieldCamTime(t0), out var aim0, out _);
@@ -2578,6 +2672,7 @@ namespace KokoSim.Unity.Match
         // （[エラー確定, +1.5s] の窓）で、位置・正対はフルレート追従＝ポーズ量子化の対象にしない
         // （ボール・カメラと同じ側。design-18 §4.5-②）。
         private GameObject _errorMark;
+        private Material[] _errorMarkMats;
         private FieldPosition? _errorMarkRole;
         private float _errorMarkAt = float.PositiveInfinity;
         private const float ErrorMarkSeconds = 1.5f;
@@ -2610,7 +2705,57 @@ namespace KokoSim.Unity.Match
                     _errorMarkRole = eb.FromRole;
                 }
             }
+            if (_errorMarkRole == null)
+            {
+                // 落球（フライをこぼす）は球列が Flight のまま errT ちょうどで終わり、弾きロールも
+                // 悪送球も持たない＝上の球側ヒューリスティックでは誰も特定できず、マーク自体が
+                // 一度も出ていなかった（2026-08-05 監督報告の実体。レフトのエラーで markAt=∞ を実測）。
+                // 球側に手掛かりが無いときは、エラー確定時刻に**球へ最も近い野手**を採る。落球も弾きも
+                // エラーした本人は定義上球のそばに居る。6m 超しか居なければ「特定できない」＝出さない（安全側）
+                var ball = PlaybackEvaluator.BallAt(play, _errorMarkAt);
+                if (ball.HasValue)
+                {
+                    float best = 6f * 6f;
+                    foreach (var pos in AllFieldPositions)
+                    {
+                        var f = PlaybackEvaluator.FielderAt(play, pos, _errorMarkAt);
+                        float dx = (float)(f.Pos.X - ball.Value.X);
+                        float dz = (float)(f.Pos.Y - ball.Value.Y);
+                        float d2 = dx * dx + dz * dz;
+                        if (d2 < best) { best = d2; _errorMarkRole = pos; }
+                    }
+                }
+            }
             if (_errorMarkRole == null) _errorMarkAt = float.PositiveInfinity;
+
+            // 表示はワンテンポ遅らせる（2026-08-05 監督指示。テロップと同じ engine の演出定数が単一ソース）。
+            // ⚠ ここより上の「誰がエラーしたか」の特定は**物理時刻**で行う（弾きロールの T0 は物理時刻）＝
+            // 遅らせるのは特定が終わった後。以降の据え枠・カメラ窓・カット遅延はみな遅延後の時刻に乗る
+            if (!float.IsPositiveInfinity(_errorMarkAt))
+                _errorMarkAt += (float)PlaybackEvaluator.ErrorDisplayDelaySeconds;
+
+            // マーク窓の据え枠を前計算する（ComputeFieldFrame が窓の間これに据える）。
+            // 収めるのは①エラーした野手 ②エラー時刻の球 ③窓終端の球（転がり先。球が先に消える
+            // プレーでは手前の時刻へ落ちる）。枠は動かさない＝球は枠の中で転がる
+            _errorCamFrameH = 0f;
+            if (_errorMarkRole != null)
+            {
+                var pts = new System.Collections.Generic.List<Vector2>(3);
+                var fp = PlaybackEvaluator.FielderAt(play, _errorMarkRole.Value, _errorMarkAt);
+                pts.Add(new Vector2((float)fp.Pos.X, (float)fp.Pos.Y));
+                foreach (var dt in new[] { 0f, ErrorMarkSeconds, ErrorMarkSeconds * 0.5f })
+                {
+                    var b = PlaybackEvaluator.BallAt(play, _errorMarkAt + dt);
+                    if (b.HasValue) pts.Add(new Vector2((float)b.Value.X, (float)b.Value.Y));
+                }
+                var min = pts[0]; var max = pts[0];
+                foreach (var p in pts) { min = Vector2.Min(min, p); max = Vector2.Max(max, p); }
+                var c = (min + max) * 0.5f;
+                _errorCamAim = new Vector3(c.x, FieldAimYMin, c.y);
+                // 対角で収める＝縦横どちらへ散っても入る。縦寸へは最悪アスペクト(4:3)換算（安全側）
+                _errorCamFrameH = Mathf.Max(12f,
+                    (Vector2.Distance(min, max) + FieldMarginM * 2f) / 1.33f);
+            }
         }
 
         private void UpdateErrorMark(float t)
@@ -2645,7 +2790,15 @@ namespace KokoSim.Unity.Match
                 }
                 _errorMark.transform.localScale = Vector3.one * scale;
             }
-            if (!_errorMark.activeSelf) _errorMark.SetActive(true);
+            if (!_errorMark.activeSelf)
+            {
+                // 全明度は**点灯のたびに**張り直す。ApplyCalibration が _materials 全部へ cal.Ambient を
+                // 流し込み直すので、作成時に一度張るだけでは次の較正適用（打席替わり等）で沼色へ戻る
+                // （2026-08-05 実測: 同一rigの2プレー目＝悪送球側だけ暗いマークで再発）
+                if (_errorMarkMats != null)
+                    foreach (var m in _errorMarkMats) { if (m != null) m.SetFloat("_Ambient", 1f); }
+                _errorMark.SetActive(true);
+            }
         }
 
         private void EnsureErrorMark(int layer)
@@ -2666,6 +2819,18 @@ namespace KokoSim.Unity.Match
                 Vector3.zero, new Vector3(0.16f, 0.14f, 0.05f), amber, layer);
             dot.transform.SetParent(_errorMark.transform, false);
             dot.transform.localPosition = new Vector3(0f, 0.15f, 0f);
+            // マークは盤面の物体ではなく計器（状態コード）＝照明を受けさせない。既定のLambert陰影だと
+            // ビルボード法線とライトの内積次第で (172,138,49) の沼色まで沈み、芝・土に埋もれて
+            // 「マークが出ていない」ように見える（2026-08-05 実測。FlatMaterial は呼び出しごとに
+            // 独立インスタンスなので、_Ambient=1 にしても他の物は沈まない）。
+            // マテリアルは控えて UpdateErrorMark の点灯時にも張り直す（ApplyCalibration が戻すため）
+            var rends = _errorMark.GetComponentsInChildren<MeshRenderer>(true);
+            _errorMarkMats = new Material[rends.Length];
+            for (int i = 0; i < rends.Length; i++)
+            {
+                _errorMarkMats[i] = rends[i].sharedMaterial;
+                _errorMarkMats[i].SetFloat("_Ambient", 1f);
+            }
             _errorMark.SetActive(false);
         }
 

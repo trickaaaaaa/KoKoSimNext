@@ -299,6 +299,19 @@ public static class PlaybackEvaluator
     /// アウトは常時、セーフは <see cref="PlaybackJudgement.CloseCall"/>（際どい判定）だけを対象にする
     /// ＝出し分けは既にデータ側でゲート済み。描画専用の純関数で、判定/帯には一切関与しない。
     /// </summary>
+    /// <summary>
+    /// エラー判定の**表示だけ**を物理時刻（球に触れた/こぼした瞬間）から遅らせる演出定数[s]
+    /// （2026-08-05 監督指示「触れたタイミングですぐ出るのをワンテンポ遅らせたい」）。
+    /// 実際の記録員のE点灯と同じ「一拍おいて確定」の間。判定イベントの T（物理時刻）は動かさない
+    /// ＝判定・帯・タイムラインの意味は不変で、表示窓の起点だけがずれる。
+    /// 3D側のびっくりマーク・カメラ据え（DuelStageRig.PlanErrorMark）もこの定数を参照する（単一ソース）。
+    /// </summary>
+    public const double ErrorDisplayDelaySeconds = 0.5;
+
+    /// <summary>エラーだけ表示起点を遅らせた「表示上の確定時刻」。</summary>
+    private static double DisplayTimeOf(in PlaybackJudgement j)
+        => j.Kind == JudgementKind.Error ? j.T + ErrorDisplayDelaySeconds : j.T;
+
     public static (JudgementKind Kind, double T1, double? DistanceM)? JudgementAt(
         PlaybackPlay play, double t, double holdSeconds)
     {
@@ -306,9 +319,10 @@ public static class PlaybackEvaluator
         (JudgementKind Kind, double T1, double? DistanceM)? best = null;
         foreach (var j in play.Judgements)
         {
-            if (j.T > t || j.T <= t - holdSeconds) continue;   // 表示窓 [T, T+hold) の外
-            if (best.HasValue && j.T < best.Value.T1) continue; // 併殺等は直近の判定だけ出す
-            best = (j.Kind, j.T, j.DistanceM);
+            var dt = DisplayTimeOf(j);
+            if (dt > t || dt <= t - holdSeconds) continue;   // 表示窓 [T, T+hold) の外
+            if (best.HasValue && dt < best.Value.T1) continue; // 併殺等は直近の判定だけ出す
+            best = (j.Kind, dt, j.DistanceM);
         }
         return best;
     }
@@ -322,7 +336,12 @@ public static class PlaybackEvaluator
         if (play is null) return null;
         double? last = null;
         foreach (var j in play.Judgements)
-            if (!last.HasValue || j.T > last.Value) last = j.T;
+        {
+            // エラーは表示起点が遅れる（ErrorDisplayDelaySeconds）ぶん窓の終端も遅い＝
+            // 表示上の時刻で比べないと、遅延したテロップが早切りに刈られる（issue #236 症状Aと同型）
+            var dt = DisplayTimeOf(j);
+            if (!last.HasValue || dt > last.Value) last = dt;
+        }
         return last;
     }
 
