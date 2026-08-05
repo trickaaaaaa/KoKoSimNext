@@ -744,60 +744,118 @@ public static class TimelineBuilder
         };
     }
 
-    /// <summary>盗塁プレーのタイムライン（mock-steal-2d-view.html と同構造）。乱数不使用。</summary>
+    /// <summary>盗塁プレーのタイムライン（mock-steal-2d-view.html と同構造）。乱数不使用（issue #485）。
+    ///
+    /// <para>二盗（既定）・三盗・本盗と、一・三塁の重盗（<paramref name="doubleStealScorer"/> の生還）を
+    /// 同一経路で描く。狙う塁 <paramref name="target"/> で走者レッグの塁・受け手・送球先を一般化する。
+    /// 本盗は捕手からの送球区間そのものが無い（投球が送球を兼ねる＝判定は本塁タッチのみ）ので送球セグメントを持たない。</para>
+    ///
+    /// <para>秒は判定（<see cref="StealResolver"/>）と同一の分解で組む＝絵のために別秒を発明しない（design-18 §4.5-③/⑨）。
+    /// <paramref name="pitchout"/>/<paramref name="startType"/> は判定側の <see cref="StealResolver.DefenseTimeSeconds"/> と
+    /// 揃えて渡す（渡さないと到達時刻の差が「球の速さ」に化ける）。</para></summary>
     public static PlayTimeline BuildSteal(
-        Player runner, Player catcher, StealResult result, BaserunningCoefficients c, FieldGeometry field)
+        Player runner, Player catcher, StealResult result, BaserunningCoefficients c, FieldGeometry field,
+        StealTarget target = StealTarget.Second, bool pitchout = false, Tactics.StartType startType = Tactics.StartType.Normal,
+        Player? doubleStealScorer = null)
     {
-        var runnerTime = StealResolver.RunnerTimeSeconds(runner, c);
-        var defenseTime = StealResolver.DefenseTimeSeconds(catcher, c);
-
-        var first = BasePoint(field, "first");
-        var second = BasePoint(field, "second");
+        var runnerTime = StealResolver.RunnerTimeSeconds(runner, c, startType, target);
+        var defenseTime = StealResolver.DefenseTimeSeconds(catcher, c, pitchout, startType, target);
         var safe = result == StealResult.Safe;
+
+        // 狙う塁で走者レッグの from/to・受け手・実況の塁名を一般化する。
+        var (fromName, toName, receiver, baseLabel) = target switch
+        {
+            StealTarget.Third => ("second", "third", FieldPosition.ThirdBase, "三塁"),
+            StealTarget.Home => ("third", "home", FieldPosition.Catcher, "本塁"),
+            _ => ("first", "second", FieldPosition.Shortstop, "二塁"),
+        };
+        var fromPt = BasePoint(field, fromName);
+        var toPt = BasePoint(field, toName); // "home" は BasePoint の既定で本塁(0,0)へ落ちる
+        var runnerArrive = runnerTime;
 
         var pitchStart = 0.0;
         var pitchArrive = c.PitcherQuickSeconds;                       // クイック（投球が捕手へ）
-        var throwStart = pitchArrive + c.PopTransferSeconds;           // 握り替え
-        var throwArrive = defenseTime - c.TagSeconds;                  // 二塁到達
-        var runnerArrive = runnerTime;
-
         var resolvedAt = Math.Max(runnerArrive, defenseTime);
+
+        var ball = new List<BallSegment>
+        {
+            new() { Kind = BallSegmentKind.Pitch, T0 = pitchStart, T1 = pitchArrive, From = Mound, To = Home },
+        };
+        var moves = new List<FielderMove>();
+        var captions = new List<TimelineCaption> { new(0.05, "スタートを切った！") };
+
+        if (target == StealTarget.Home)
+        {
+            // 本盗は送球区間なし（投球そのものが送球を兼ねる。StealResolver.DefenseTimeSeconds も HomeTag のみ）。
+            captions.Add(new TimelineCaption(pitchArrive, "本盗——本塁へ突っ込む！"));
+        }
+        else
+        {
+            // 捕手の握り替え（ポップ）は判定と同じ守備係数込みの値で使う（バグ修正 issue #485）。
+            // 生の PopTransferSeconds を使うと肩と無関係に送球区間が伸縮し（守備90で約0.1秒短縮）、
+            // 差が全部「球の速さ」に化ける。ピッチアウト／ギャンブルの短縮も同様に投げ始めへ反映する
+            // （StealResolver.DefenseTimeSeconds の引き算と揃える）＝送球区間長を送球そのもの（肩）だけに保つ。
+            var popTransfer = c.PopTransferSeconds
+                * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+            var quickBonus = 0.0;
+            if (pitchout)
+            {
+                quickBonus += c.PitchoutDefenseBonusSeconds;
+                if (startType == Tactics.StartType.Gamble) quickBonus += c.GamblePitchoutExtraBonusSeconds;
+            }
+            var throwStart = Math.Max(pitchArrive, pitchArrive + popTransfer - quickBonus); // 握り替え（守備係数・読み切り込み）
+            var throwArrive = defenseTime - c.TagSeconds;                                    // 送球到達（判定由来）
+            ball.Add(new BallSegment
+            {
+                // 受け手は下の Moves でベースカバーに入る野手と同一（Issue E1・単一ソース）
+                Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = Home, To = toPt,
+                FromRole = FieldPosition.Catcher, ToRole = receiver, ToBase = toName,
+            });
+            moves.Add(new FielderMove
+            {
+                Role = receiver, T0 = 0.3, T1 = Math.Max(0.9, throwArrive - 0.2), To = toPt, Task = FielderTask.CoverBase,
+            });
+            captions.Add(new TimelineCaption(throwStart, $"キャッチャー、{baseLabel}へ送球——"));
+        }
+
+        var runners = new List<RunnerLeg>
+        {
+            new() { Label = "走", T0 = 0.0, T1 = runnerArrive, From = fromPt, To = toPt, OutAtEnd = !safe, Runner = runner },
+        };
+        var judgements = safe
+            ? new List<JudgementEvent>()
+            : new List<JudgementEvent> { new() { Label = "走", T = runnerArrive, Kind = JudgementKind.Out } };
+
+        // 一・三塁の重盗（design-14 P1-4）: 二盗の送球中に三塁走者が本塁へ生還（成立時は無条件セーフ）。
+        // 送球先（二塁）の勝負とは別レッグで、本塁到達まで走る。表示専用・結果不変。
+        var lastEvent = resolvedAt;
+        if (doubleStealScorer is not null && target == StealTarget.Second)
+        {
+            var scorerArrive = StealResolver.RunnerTimeSeconds(doubleStealScorer, c, Tactics.StartType.Normal, StealTarget.Home);
+            runners.Add(new RunnerLeg
+            {
+                Label = "重盗", T0 = 0.0, T1 = scorerArrive,
+                From = BasePoint(field, "third"), To = Home, OutAtEnd = false, Runner = doubleStealScorer,
+            });
+            captions.Add(new TimelineCaption(scorerArrive, "重盗——三塁走者が生還！"));
+            lastEvent = Math.Max(lastEvent, scorerArrive);
+        }
+
+        captions.Add(new TimelineCaption(resolvedAt, safe ? "セーフ！ 盗塁成功" : "タッチアウト！ 盗塁死"));
+
         return new PlayTimeline
         {
-            Duration = resolvedAt + 1.2,
+            Duration = lastEvent + 1.2,
             Result = safe ? "盗塁成功" : "盗塁死",
             ResolvedAt = resolvedAt,
             FielderStarts = StandardStarts(),
-            Ball = new[]
-            {
-                new BallSegment { Kind = BallSegmentKind.Pitch, T0 = pitchStart, T1 = pitchArrive, From = Mound, To = Home },
-                // 受け手は下の Moves で二塁カバーに入る遊撃手と同一（Issue E1・単一ソース）
-                new BallSegment
-                {
-                    Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = Home, To = second,
-                    FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Shortstop, ToBase = "second",
-                },
-            },
-            Moves = new[]
-            {
-                // 遊撃手が二塁ベースカバーへ（陣形ルールの最小適用）。
-                new FielderMove { Role = FieldPosition.Shortstop, T0 = 0.3, T1 = Math.Max(0.9, throwArrive - 0.2), To = second, Task = FielderTask.CoverBase },
-            },
-            Runners = new[]
-            {
-                new RunnerLeg { Label = "走", T0 = 0.0, T1 = runnerArrive, From = first, To = second, OutAtEnd = !safe },
-            },
+            Ball = ball.ToArray(),
+            Moves = moves.ToArray(),
+            Runners = runners.ToArray(),
             // 判定イベント（Issue #260）: 盗塁死は当該レッグ終端で確定。セーフは際どさを未評価のため
             // 積まない（表示条件は #59 のまま維持＝従来もセーフの盗塁は判定オーバーレイの対象外）。
-            Judgements = safe
-                ? Array.Empty<JudgementEvent>()
-                : new[] { new JudgementEvent { Label = "走", T = runnerArrive, Kind = JudgementKind.Out } },
-            Captions = new[]
-            {
-                new TimelineCaption(0.05, "スタートを切った！"),
-                new TimelineCaption(throwStart, "キャッチャー、二塁へ送球——"),
-                new TimelineCaption(resolvedAt, safe ? "セーフ！ 盗塁成功" : "タッチアウト！ 盗塁死"),
-            },
+            Judgements = judgements.ToArray(),
+            Captions = captions.ToArray(),
         };
     }
 

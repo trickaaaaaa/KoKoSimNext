@@ -4,6 +4,7 @@ using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Pitching;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using Xunit;
 
@@ -114,5 +115,54 @@ public sealed class StealUnificationTests
             totalSteals += r.HomeTactics.StealAttempts;
         }
         Assert.True(totalSteals > 0, "3球目以降限定の盗塁指示が一度も発動しなかった（毎球再判定が機能していない疑い）");
+    }
+
+    /// <summary>
+    /// issue #485: 盗塁が「走塁勝負」で解決した球の <see cref="LivePitch.StealPlay"/> に再生データが載る
+    /// （CaptureTimelines+CapturePitches のとき）。打席途中の盗塁を絵にする唯一の運び口。
+    /// </summary>
+    [Fact]
+    public void StealPlay_IsAttachedToTheLivePitchOfTheStealingPitch()
+    {
+        var captured = 0;
+        for (ulong seed = 1; seed <= 30 && captured == 0; seed++)
+        {
+            var prog = new MatchProgression(TeamOf("A"), TeamOf("H", new AlwaysStealBrain()),
+                new GameContext { CaptureTimelines = true, CapturePitches = true }, seed);
+            LivePitch? prev = null;
+            while (true)
+            {
+                var r = prog.AdvancePitch();
+                if (r == AdvancePitchResult.Finished) break;
+                var last = prog.LastPitch;
+                if (last == null || ReferenceEquals(last, prev)) continue;
+                prev = last;
+                if (last.StealPlay is not { } play) continue;
+                captured++;
+                // 盗塁の再生データとして最小限の構造が揃っている（純関数の写し＝乱数消費ゼロ）。
+                Assert.Contains(play.Result, new[] { "盗塁成功", "盗塁死" });
+                Assert.NotEmpty(play.Ball);
+                Assert.NotEmpty(play.Runners);
+            }
+        }
+        Assert.True(captured > 0, "常時盗塁指示なのに StealPlay が一度も載らなかった（配線切れの疑い）");
+    }
+
+    /// <summary>観測ゲート（CaptureTimelines）を閉じれば StealPlay は決して載らない＝統計シム・裏試合はゼロコスト。</summary>
+    [Fact]
+    public void StealPlay_NeverAttachedWhenCaptureTimelinesOff()
+    {
+        var prog = new MatchProgression(TeamOf("A"), TeamOf("H", new AlwaysStealBrain()),
+            new GameContext { CapturePitches = true }, 1UL);  // CaptureTimelines は既定オフ
+        LivePitch? prev = null;
+        while (true)
+        {
+            var r = prog.AdvancePitch();
+            if (r == AdvancePitchResult.Finished) break;
+            var last = prog.LastPitch;
+            if (last == null || ReferenceEquals(last, prev)) continue;
+            prev = last;
+            Assert.Null(last.StealPlay);
+        }
     }
 }
