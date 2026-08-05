@@ -1868,6 +1868,91 @@ namespace KokoSim.EditorTools
         [UnityEditor.MenuItem("KokoSim/Duel/F7 走者の到達クリップを実測する")]
         private static void RunRunnerArriveProbeMenu() => RunRunnerArriveProbe();
 
+        /// <summary>
+        /// タッチプレーの受け手クリップ（<c>AA_Baseball_Defender_Tag_Out</c> /
+        /// <c>AA_Baseball_Catcher_Tag_Out</c>）の**タッチの瞬間**を実測する（issue #489）。
+        ///
+        /// <see cref="RunFielderCatchProbe"/> と同じ考え方（構えからグラブが最も動いた瞬間＝
+        /// 運び終わり／伸び切り）を流用する。タッチ動作は「受けて→走者へ振り下ろす／差し出す」の
+        /// 一続きなので、構えからの変位が最大になった瞬間がそのままタッチの瞬間になるはず
+        /// （捕球で誤判定が起きた「腰→グラブの距離では測れない」罠と同じ理由で、変位量で採る）。
+        ///
+        /// 出す量は F5 の捕球プローブと同型（clip/len/dispMax/tDisp/tPeak/vPeak/gy/gx/gz）。
+        /// <c>gy/gx/gz</c> はタッチの瞬間のグラブの足元からの高さ・アクターローカル水平位置。
+        /// </summary>
+        public static string RunTagOutProbe()
+        {
+            var names = new[] { "Defender_Tag_Out", "Catcher_Tag_Out" };
+            const float dt = 0.02f;
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tlen\tdispMax\ttDisp\ttPeak\tvPeak\tgy\tgx\tgz");
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    var loc = new Vector3[n + 1];   // 腰基準（右/上/前）
+                    var footY = new float[n + 1];   // 足元の高さ（グラブの対地高を出すため）
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "tagout", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var glove = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        // 軸は**アクターのローカル**（F5 の捕球プローブと同じ理由。yaw を決める座標系に揃える）
+                        loc[i] = body.transform.InverseTransformPoint(glove);
+                        footY[i] = glove.y - Mathf.Min(lf.y, rf.y);
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iDisp = 0, iPeak = 0;
+                    float dispMax = 0f, vPeak = 0f;
+                    for (int i = 1; i <= n; i++)
+                    {
+                        float disp = (loc[i] - loc[0]).magnitude;
+                        if (disp > dispMax) { dispMax = disp; iDisp = i; }
+                        float v = (loc[i] - loc[i - 1]).magnitude / dt;
+                        if (v > vPeak) { vPeak = v; iPeak = i; }
+                    }
+
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F3}\t{7:F3}\t{8:F3}",
+                        shortName, clip.length, dispMax, iDisp * dt, iPeak * dt, vPeak,
+                        footY[iDisp], loc[iDisp].x, loc[iDisp].z));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/tagout.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] tag-out probe -> out/duel-stage/tagout.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F9 タッチアウトの受け手クリップを実測する")]
+        private static void RunTagOutProbeMenu() => RunTagOutProbe();
+
         private static AnimationClip FindClip(string clipName)
         {
             // 供給元は本番リグと同じ入口（自作Assets/Motions → 購入Assets/Animoの順）で引く。

@@ -1465,9 +1465,9 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>この走者が最後に止まる時刻と、その塁でどうなったか。</summary>
-        private static bool RunnerFinal(PlaybackRunner r, out float t1, out bool outAtEnd, out bool closeCall)
+        private static bool RunnerFinal(PlaybackRunner r, out float t1, out bool outAtEnd, out bool closeCall, out bool force)
         {
-            t1 = 0f; outAtEnd = false; closeCall = false;
+            t1 = 0f; outAtEnd = false; closeCall = false; force = false;
             if (r?.Segs == null || r.Segs.Count == 0) return false;
             var last = r.Segs[r.Segs.Count - 1];
             // 塁上で動かないレッグ（待機）は到達ではない
@@ -1476,6 +1476,7 @@ namespace KokoSim.Unity.Match
             t1 = (float)last.T1;
             outAtEnd = last.OutAtEnd;
             closeCall = last.CloseCall;
+            force = last.Force;
             return true;
         }
 
@@ -1498,13 +1499,16 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 一塁以外の到達演技を選ぶ**純関数**（乱数を引かない）。アウトかどうかは演技を変えない＝
-        /// アウトは判定オーバーレイ（Issue #328）で読ませる（Issue #417）。一塁到達は
+        /// 一塁以外の到達演技を選ぶ**純関数**（乱数を引かない）。フォースとタッチを区別する
+        /// （issue #489・2026-08-05 監督判断で #417 の方針を改める）: タッチプレーのアウトは
+        /// 走者が滑って失敗する演技（<see cref="ArriveSlideOut"/>）を選ぶ。フォースのアウトは
+        /// #417 のまま演技を変えない（判定オーバーレイ, Issue #328 だけで伝える）＝#448②の
+        /// 「一塁封殺はタッチの芝居を出さない」を維持する。一塁到達は
         /// <see cref="IsBatterArrivingAtFirst"/> で先に分岐し、常にオーバーラン（issue #443）を使う＝
-        /// ここへは来ない。
+        /// ここへは来ない（＝一塁フォースは呼び出し自体が別経路）。
         /// </summary>
-        private static RunnerArriveAnchor SelectArrive(bool closeCall)
-            => closeCall ? ArriveSlideSafe : ArriveRunThrough;
+        private static RunnerArriveAnchor SelectArrive(bool closeCall, bool outAtEnd, bool force)
+            => outAtEnd && !force ? ArriveSlideOut : closeCall ? ArriveSlideSafe : ArriveRunThrough;
 
         /// <summary>走者1人を時刻 t へ進める（守備の <see cref="StepFielderMotion"/> と同じ作り）。</summary>
         private void StepRunnerMotion(int idx, float t, float dt)
@@ -1520,9 +1524,9 @@ namespace KokoSim.Unity.Match
 
             // 到達の予定。**絶対時刻で判定する**（途中の時刻から再生しても同じ絵）
             float t1;
-            bool closeCall;
+            bool outAtEnd, closeCall, force;
             bool firstBaseArrival = IsBatterArrivingAtFirst(r);
-            if (!st.ArriveFired && RunnerFinal(r, out t1, out _, out closeCall))
+            if (!st.ArriveFired && RunnerFinal(r, out t1, out outAtEnd, out closeCall, out force))
             {
                 if (firstBaseArrival)
                 {
@@ -1555,7 +1559,7 @@ namespace KokoSim.Unity.Match
                 }
                 else
                 {
-                    var an = SelectArrive(closeCall);
+                    var an = SelectArrive(closeCall, outAtEnd, force);
                     float tStart = t1 - an.Touch;
                     if (t >= tStart)
                     {
@@ -1698,8 +1702,8 @@ namespace KokoSim.Unity.Match
                 foreach (var r in _fieldPlay.Runners)
                 {
                     float t1;
-                    bool o, c;
-                    if (!RunnerFinal(r, out t1, out o, out c)) continue;
+                    bool o, c, f;
+                    if (!RunnerFinal(r, out t1, out o, out c, out f)) continue;
                     Vector2 at;
                     if (!RunnerXZ(r, t1, out at)) continue;
                     var to = r.Segs[r.Segs.Count - 1].To;
@@ -1721,12 +1725,12 @@ namespace KokoSim.Unity.Match
                 {
                     var r = _fieldPlay.Runners[i];
                     float t1;
-                    bool o, c;
-                    if (!RunnerFinal(r, out t1, out o, out c)) { sb.AppendLine(r.Label + "\t(移動なし)"); continue; }
-                    var clipName = IsBatterArrivingAtFirst(r) ? OverrunClipName : SelectArrive(c).Clip;
+                    bool o, c, f;
+                    if (!RunnerFinal(r, out t1, out o, out c, out f)) { sb.AppendLine(r.Label + "\t(移動なし)"); continue; }
+                    var clipName = IsBatterArrivingAtFirst(r) ? OverrunClipName : SelectArrive(c, o, f).Clip;
                     sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                         "{0}\t{1:F2}\t{2}\t{3}\t{4}", r.Label, t1,
-                        o ? "アウト" : c ? "際どいセーフ" : "セーフ",
+                        o ? (f ? "アウト(フォース)" : "アウト(タッチ)") : c ? "際どいセーフ" : "セーフ",
                         clipName.Replace("AA_Baseball_Offense_", ""),
                         r.HideAt.HasValue ? r.HideAt.Value.ToString("F2") : "—"));
                 }
