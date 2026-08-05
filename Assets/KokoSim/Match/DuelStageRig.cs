@@ -2436,6 +2436,25 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public float BattedElapsedSeconds => _battedT;
 
+        /// <summary>
+        /// 打球が対決構図のビューポートから出たか（issue #481）。呼び出し側（<c>MatchLiveController</c>）は
+        /// 接触後、これが立つまで守備ビューへの切替を据え置く＝「打球の行方を一瞬だけ見せる」
+        /// （design-18 §4.5-④）。まだ打球でなければ（見せるものが無ければ）true＝待たせない。
+        /// 保険は <see cref="BattedMaxSeconds"/>（1.5s。これより先は <see cref="UpdateBattedBall"/> が
+        /// 自分で <see cref="HideBall"/> して畳む＝新しい据え置きは実測0.13〜0.22s程度なので十分長い）。
+        /// </summary>
+        public bool BattedOutOfFrame
+        {
+            get
+            {
+                if (_battedT < 0f || _camera == null) return true;
+                var local = BattedPointAt(_battedT);
+                var vp = _camera.WorldToViewportPoint(_root.transform.TransformPoint(local));
+                bool inFrame = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
+                return !inFrame;
+            }
+        }
+
         /// <summary>飛翔を打ち切って球を隠す（俯瞰へ切り替わる時＝盤面側が球を描くので二重に見えない。#330）。</summary>
         public void HideBall()
         {

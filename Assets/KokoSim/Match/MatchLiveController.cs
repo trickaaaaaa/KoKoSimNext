@@ -244,6 +244,14 @@ namespace KokoSim.Unity.Match
         // Update() 側で表示へ差し替える（投球セグメントの二重表示を避けるため, issue #313）。
         private PlaybackPlay _pendingFoulFlight;
 
+        // インプレー打球は接触直後に守備ビューへ切り替えず、対決構図のまま球がビューポートから出るまで
+        // 据え置く（design-18 §4.5-④・issue #481）。_battedHoldClock は対決ビューを離れられない異常系
+        // （デバッグ操作で _duelOn が途中で切られた等）向けの保険で、DuelStageRig.BattedMaxSeconds（1.5s）
+        // と同じ値を上限にする（あちらより長く待たない＝二重の安全網にしない）。
+        private bool _battedHoldActive;
+        private float _battedHoldClock;
+        private const float BattedHoldSafetyCapSeconds = 1.5f;
+
         // 対決ビューの1球ペーシング（フル振りかぶり再生）を使うか（design-18 §7-2）。
         private bool DuelPacingActive => _duelOn && _duelRig != null && _duelRig.Available;
 
@@ -1246,6 +1254,7 @@ namespace KokoSim.Unity.Match
         {
             _pitchIdx = index;
             _pitchCallDone = false;
+            _battedHoldActive = false;
             _inPitchPhase = true;
             _stage = LiveStage.Pitch;
             var carry = _windowCarry;   // 前の球・窓で余った端数は持ち越す（球間の間合いが倍速でずれないように）
@@ -1645,6 +1654,19 @@ namespace KokoSim.Unity.Match
 
             if (_inPitchPhase)
             {
+                // インプレー打球の据え置き中（issue #481）。_duelRig.Tick は上でこのフレームも既に
+                // 回っている＝対決構図のまま球と残像は進み続ける。ここは「いつ守備ビューへ切り替えるか」
+                // だけを毎フレーム見る。ビューポートから出たら（または保険の秒数を使い切ったら）進める。
+                if (_battedHoldActive)
+                {
+                    _battedHoldClock += Time.deltaTime * _speed;
+                    if ((_duelRig?.BattedOutOfFrame ?? true) || _battedHoldClock >= BattedHoldSafetyCapSeconds)
+                    {
+                        _battedHoldActive = false;
+                        EnterBattedBallOrHold();
+                    }
+                    return;
+                }
                 _pitchClock += Time.deltaTime * _speed;
                 // 対決ビュー中は打席の初球をワインドアップから見せる＝時計が負の間はリリース前（design-18 §7-2）
                 if (_pitchClock < 0f) return;
@@ -1673,6 +1695,15 @@ namespace KokoSim.Unity.Match
                     ShowPitchCall(pt);
                     if (IsTerminalPitch(_pitchIdx))
                     {
+                        // インプレー打球は対決構図のまま球がビューポートから出るまで据え置く
+                        // （design-18 §4.5-④・issue #481）。三振・四球等（Play無し）は見せるものが
+                        // 無いので即座に結果保持へ入る。
+                        if (_current.Play != null && DuelPacingActive && !(_duelRig?.BattedOutOfFrame ?? true))
+                        {
+                            _battedHoldActive = true;
+                            _battedHoldClock = 0f;
+                            return;
+                        }
                         EnterBattedBallOrHold();   // 打席を終わらせた球は判定直後に打球再生／結果保持へ
                         return;
                     }
