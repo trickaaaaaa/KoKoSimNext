@@ -799,8 +799,10 @@ public static class GameEngine
 
                 // 盗塁の再生データ（issue #485）: 盗塁企図が「実際の走塁勝負」で解決した球にだけ載る観測。
                 // CaptureTimelines が真のときだけ組む＝統計シム・裏試合はゼロコスト・乱数消費ゼロ（BuildBattedBall と同作法）。
-                // 牽制死（PickoffResolver 成立）は別issue（#486）の絵なのでここでは組まない。
                 Timeline.Playback.PlaybackPlay? stealPlay = null;
+                // 牽制の再生データ（issue #486）: PickoffResolver.Resolve が発火した球にだけ載る観測。
+                // 判定結果（アウト/セーフ）に関わらず組む＝分岐させない（2026-08-05 issue決定）。
+                Timeline.Playback.PlaybackPlay? pickoffPlay = null;
 
                 // 盗塁/牽制/重盗（設計書02 §4.2・設計書09 §1・design-14 P1-4/P1-5・設計書15 Phase D-2d）:
                 // カウントは消費せず（実球はこの後も通常どおり投げる）、この球の前に走者だけが動く。
@@ -812,7 +814,14 @@ public static class GameEngine
                 {
                     // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ
                     // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ。
-                    if (PickoffResolver.Resolve(bases.First, currentPitcher, paBaserunning, rng))
+                    var pickedOffFirst = PickoffResolver.Resolve(bases.First, currentPitcher, paBaserunning, rng);
+                    // 再生データ（issue #486）: 判定結果（アウト/セーフ）に関わらず、牽制球が投じられた
+                    // 球は絵にする＝分岐させない。乱数不使用（BuildPickoff は既に確定した pickedOffFirst の写し）。
+                    if (ctx.CaptureTimelines)
+                        pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                            Timeline.TimelineBuilder.BuildPickoff(
+                                bases.First, currentPitcher, "first", pickedOffFirst, paBaserunning, ctx.Field));
+                    if (pickedOffFirst)
                     {
                         offense.PickoffCount++;
                         outs++;
@@ -890,7 +899,13 @@ public static class GameEngine
                 else if (stealAttempt is { } thirdStart && stealTarget == StealTarget.Third
                     && bases.Second is not null && bases.First is null && bases.Third is null)
                 {
-                    if (PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng))
+                    var pickedOffSecond = PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng);
+                    // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
+                    if (ctx.CaptureTimelines)
+                        pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                            Timeline.TimelineBuilder.BuildPickoff(
+                                bases.Second, currentPitcher, "second", pickedOffSecond, ctx.Baserunning, ctx.Field));
+                    if (pickedOffSecond)
                     {
                         offense.PickoffCount++;
                         outs++;
@@ -930,7 +945,13 @@ public static class GameEngine
                     && bases.Third is not null && bases.Second is null && bases.First is null
                     && battingOverride != PitchBattingOverride.Squeeze)
                 {
-                    if (PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng))
+                    var pickedOffThird = PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng);
+                    // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
+                    if (ctx.CaptureTimelines)
+                        pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                            Timeline.TimelineBuilder.BuildPickoff(
+                                bases.Third, currentPitcher, "third", pickedOffThird, ctx.Baserunning, ctx.Field));
+                    if (pickedOffThird)
                     {
                         offense.PickoffCount++;
                         outs++;
@@ -1050,6 +1071,8 @@ public static class GameEngine
                         // この球の前に盗塁が解決していれば、その再生データを載せる（issue #485）。
                         // 打席途中の盗塁はこの1球観測が唯一の運び口（打球は Current.Play が運ぶ）。
                         StealPlay = stealPlay,
+                        // この球の前に牽制が発火していれば、その再生データを載せる（issue #486）。
+                        PickoffPlay = pickoffPlay,
                     };
                 }
 

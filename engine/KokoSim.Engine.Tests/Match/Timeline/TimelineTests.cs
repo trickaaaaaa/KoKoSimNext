@@ -885,6 +885,94 @@ public sealed class TimelineTests
         Assert.Equal(normal.T1 - normal.T0, pitchout.T1 - pitchout.T0, 6);
     }
 
+    // --- 牽制タイムライン（issue #486） ---
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PickoffTimeline_HasThrowRunnerLegAndVerdict_RegardlessOfOutcome(bool pickedOff)
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 70, Steal = 60 };
+        var pitcher = new Player { Position = FieldPosition.Pitcher, ArmStrength = 55, Mental = 50 };
+
+        var tl = TimelineBuilder.BuildPickoff(runner, pitcher, "first", pickedOff, c, field);
+
+        var throwSeg = Assert.Single(tl.Ball);
+        Assert.Equal(BallSegmentKind.Throw, throwSeg.Kind);
+        Assert.Equal(FieldPosition.Pitcher, throwSeg.FromRole);
+        Assert.Equal(FieldPosition.FirstBase, throwSeg.ToRole);
+        Assert.Equal("first", throwSeg.ToBase);
+        Assert.True(Near(throwSeg.To, new TimelinePoint(field.FirstBase.X, field.FirstBase.Z)), "送球先が一塁でない");
+
+        var leg = Assert.Single(tl.Runners);
+        Assert.Equal(pickedOff, leg.OutAtEnd);
+        Assert.Same(runner, leg.Runner);
+        Assert.True(Near(leg.To, new TimelinePoint(field.FirstBase.X, field.FirstBase.Z)), "帰塁先が一塁でない");
+        Assert.True(tl.ResolvedAt <= tl.Duration);
+
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.FirstBase && m.Task == FielderTask.CoverBase);
+
+        // アウトは常時判定オーバーレイを積む。セーフは際どさ未評価のため積まない（盗塁と同じ表示条件, Issue #59）。
+        if (pickedOff) Assert.Contains(tl.Judgements, j => j.Kind == JudgementKind.Out);
+        else Assert.Empty(tl.Judgements);
+    }
+
+    [Fact]
+    public void PickoffTimeline_Out_BallArrivesAtOrBeforeRunner()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 90, Steal = 90 }; // 快足でも、アウト確定なら絵は矛盾させない
+        var pitcher = new Player { Position = FieldPosition.Pitcher, ArmStrength = 40, Mental = 40 };
+
+        var tl = TimelineBuilder.BuildPickoff(runner, pitcher, "first", pickedOff: true, c, field);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        var leg = Assert.Single(tl.Runners);
+        Assert.True(leg.T1 >= throwSeg.T1, "アウトなのに走者が送球より先に帰塁している");
+    }
+
+    [Fact]
+    public void PickoffTimeline_Safe_RunnerArrivesAtOrBeforeBall()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 30, Steal = 30 }; // 鈍足でも、セーフ確定なら絵は矛盾させない
+        var pitcher = new Player { Position = FieldPosition.Pitcher, ArmStrength = 90, Mental = 90 };
+
+        var tl = TimelineBuilder.BuildPickoff(runner, pitcher, "first", pickedOff: false, c, field);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        var leg = Assert.Single(tl.Runners);
+        Assert.True(leg.T1 <= throwSeg.T1, "セーフなのに走者が送球より後に帰塁している");
+    }
+
+    [Theory]
+    [InlineData("second", FieldPosition.Shortstop)]
+    [InlineData("third", FieldPosition.ThirdBase)]
+    public void PickoffTimeline_SecondAndThird_ThrowToCorrectBaseAndReceiver(string baseName, FieldPosition receiver)
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var runner = new Player { Speed = 70, Steal = 60 };
+        var pitcher = new Player { Position = FieldPosition.Pitcher, ArmStrength = 55, Mental = 50 };
+
+        var tl = TimelineBuilder.BuildPickoff(runner, pitcher, baseName, pickedOff: true, c, field);
+        var throwSeg = Assert.Single(tl.Ball);
+        Assert.Equal(baseName, throwSeg.ToBase);
+        Assert.Equal(receiver, throwSeg.ToRole);
+        Assert.Contains(tl.Moves, m => m.Role == receiver && m.Task == FielderTask.CoverBase);
+    }
+
+    [Fact]
+    public void PickoffTimeline_ConsumesNoRandomSource()
+    {
+        // BuildPickoff は IRandomSource を一切受け取らない（シグネチャで乱数不使用を固定する）。
+        var method = typeof(TimelineBuilder).GetMethod(nameof(TimelineBuilder.BuildPickoff));
+        Assert.NotNull(method);
+        Assert.DoesNotContain(method!.GetParameters(), p => typeof(IRandomSource).IsAssignableFrom(p.ParameterType));
+    }
+
     // --- #6 外野安打の返球: 送球が走者を追い越さない（三塁打で送球が先着しない） ---
     [Fact]
     public void OutfieldReturnThrow_ArrivesJustAfterRunner_NotBefore()
