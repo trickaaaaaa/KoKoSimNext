@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using KokoSim.Engine.Match.AtBat;   // PlateAppearanceResult（打席パネルの色分け）
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Pitching;   // PitcherGear（とばしていけ）
@@ -1570,6 +1571,7 @@ namespace KokoSim.Unity.Match
             // 打球プレー中は俯瞰を出していても回す＝トグルで切り替えた瞬間に3Dが止まっていない（F9）。
             if (!_paused && (_duelOn || FieldPlayActive)) _duelRig?.Tick(Time.deltaTime * _speed);
             RefreshDuelFieldLabels();   // 頭上フルネームラベル（issue #393）。ポーズ中も現在位置のまま表示を保つ
+            RefreshHudVisibility();     // 打球プレー中はマッチアップHUDを引っ込める（下の説明を参照）
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
@@ -2297,6 +2299,21 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// マッチアップHUDの出し入れ。<b>打球プレー中（3Dの守備ビュー）は出さない</b>——帯は打席の
+        /// 対決を読むための計器で、守備が始まったら見るのは打球と野手であり、頭上フルネームラベル
+        /// （<see cref="RefreshDuelFieldLabels"/>）と役割が重なるうえ Z 順で上に乗って隠してしまう
+        /// （設計書18 §7-1 の既知の限界）。中身は消さず表示だけ落とす＝打席へ戻ったときに
+        /// 組み直しが要らない。
+        /// </summary>
+        private void RefreshHudVisibility()
+        {
+            if (_hudHost == null) return;
+            var show = !FieldPlayActive;
+            var want = show ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_hudHost.style.display != want) _hudHost.style.display = want;
+        }
+
+        /// <summary>
         /// 頭上フルネームラベルの張り替え（issue #393）。打球プレー中だけ、画面内の野手・走者の
         /// 頭上に氏名チップを置く。打席中（対決の寄り）は出さない＝寄りの絵は背番号の担当。
         /// プールを使い回し、余った枠は隠すだけ（毎フレーム Add/Remove しない）。
@@ -2709,67 +2726,77 @@ namespace KokoSim.Unity.Match
             LiveBatterSlot batterToday = batterOrder >= 1 && batterOrder <= offense.Count
                 ? offense[batterOrder - 1] : null;
 
-            _hudPitcherSlot.Add(HudPanel(BuildHudPitcher(defPitcher, mu)));
-            _hudBatterSlot.Add(HudPanel(BuildHudBatter(batterToday, mu, offenseIsTop)));
+            // 名前行のチップの地色＝その選手のチーム色（帽子クラウン＝アンダーシャツと同じ「チーム色」）。
+            // 試合中不変なので観測データには載せず LiveMatchRequest の静的経路から来る（設計書18 §3.5.1）。
+            var offenseColor = TeamChipColor(offenseIsTop ? _awayColors : _homeColors);
+            var defenseColor = TeamChipColor(offenseIsTop ? _homeColors : _awayColors);
+
+            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, mu, defenseColor));
+            _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseColor));
         }
 
-        private static VisualElement HudPanel(VisualElement block)
+        /// <summary>
+        /// チーム色チップの地色。配色が来ていない経路（撮影ハーネス等）では帯に馴染む灰へ落とす
+        /// ——透明にすると守備位置だけ地無しになって行の並びが崩れる。
+        /// </summary>
+        private static Color TeamChipColor(KokoSim.Engine.Nation.TeamColors colors)
         {
-            var panel = new VisualElement { pickingMode = PickingMode.Ignore };
-            panel.AddToClassList("mhud-panel");
-            panel.Add(block);
-            return panel;
+            if (colors == null) return new Color(1f, 1f, 1f, 0.22f);
+            var c = colors.CapCrown;
+            return new Color32(c.R, c.G, c.B, 255);
         }
 
-        private VisualElement BuildHudPitcher(LivePitcherToday def, Matchup m)
+        private VisualElement BuildHudPitcher(LivePitcherToday def, Matchup m, Color teamColor)
         {
-            var block = new VisualElement();
-            block.AddToClassList("mup-block");
-            block.AddToClassList("mup-block--pitcher");
+            var band = HudBand();
 
-            // 1行目＝登板順・背番号・名前・学年（左右投は3Dの絵で分かるので出さない）。
-            var line1 = MakeRow("mup-line");
-            var relief = MakeLabel(MatchLiveStatsProvider.ReliefLabel(def.ReliefOrder), "mup-role");
-            if (def.ReliefOrder > 1) relief.AddToClassList("mup-role--relief");
-            line1.Add(relief);
-            line1.Add(MakeLabel(NumText(m.PitcherNumber), "num-badge", "num-badge--sm", "f-num"));
-            line1.Add(MakeLabel(m.PitcherName, "mup-name"));
-            if (def.Grade > 0) line1.Add(MakeLabel(def.Grade + "年", "mup-grade"));
-            block.Add(line1);
+            // 1段目＝登板順・背番号・名前・学年・球数。打者HUDと同一の行構造（1つ目が白地黒字のチップ、
+            // 次が素の白文字の背番号、その次が名前）で、右端に球数を置く。
+            // 登板順は「N番手」が数字＋和文の混植なので、ReliefLabel の文字列ではなく数値から組んで
+            // Label を分ける（書体3役ルール・設計書16 §2。Oswald は欧文専用）。
+            var idn = HudIdRow();
+            idn.Add(def.ReliefOrder > 1
+                ? HudChip(def.ReliefOrder.ToString(), "番手", "mhud-cp--key", numeric: true)
+                : HudChip("先発", null, "mhud-cp--key"));
+            var pNum = NumText(m.PitcherNumber);
+            if (pNum.Length > 0) idn.Add(HudNumber(pNum));
+            idn.Add(HudName(m.PitcherName));
+            if (def.Grade > 0) idn.Add(HudChip(def.Grade.ToString(), "年", "mhud-cp--dim", numeric: true));
 
-            // 2行目＝通算防御率・本日の奪三振・与四死球・球数。球数は独立行にすると縦4行になって嵩むので
-            // 同じ「今日の投球」の並びへ寄せた（2026-07-31 ユーザー判断）。奪三振と与四死球は対で見て
-            // 初めて「今日の出来」になるので隣接させる（issue #407）。数字だけ Oswald（.f-num）へ分離
-            // （書体3役ルール・設計書16 §2。防御率/奪三振は既存の混植のまま＝範囲外の改修はしない）。
-            // 防御率は通算＋本日の合算（issue #449。通算なしは本日分のみ、登板なしかつ本日アウト0のみ「—」）。
-            var era = MatchLiveStatsProvider.LiveEra(_statsProvider.CareerPitching(m.PitcherSourceId), def.EarnedRuns, def.Outs);
-            var line2 = MakeRow("mup-line");
-            line2.Add(MakeLabel("防 " + era + "　奪三振 " + def.StrikeOuts, "mup-career"));
-            line2.Add(MakeLabel("与四死球", "mup-pitches__lab", "mup-pitches__lab--gap"));
-            line2.Add(MakeLabel((def.Walks + def.HitByPitch).ToString(), "mup-career", "f-num"));
+            // 球数は名前行の右端＝継投判断の主指標なので、スタッツ行のセルに埋もれさせず単体で立てる。
             // 確定球数＋進行中の打席ぶん（issue #397）。据え置きを解消し1球ごとに動かす。
             var totalPitches = def.Pitches + def.PendingPitches;
-            line2.Add(MakeLabel("球数", "mup-pitches__lab", "mup-pitches__lab--gap"));
-            var pc = MakeLabel(totalPitches.ToString(), "mup-pitches", "f-num");
             // 警告色は絶対球数でなく「目安投球数に対する残量」で出す（issue #408）。生成スタミナの水準を
             // 上げて平均球数が100前後になったため、絶対 80/100 だと健康な先発が常時 alert になる。スタミナバー
             // （BuildStaminaBar）と同じ残量帯（<0.6=注意 / <0.3=警告）で数字も落とし、数字とバーの色を一致させる。
-            if (def.StaminaRemaining < 0.3) pc.AddToClassList("mup-pitches--alert");
-            else if (def.StaminaRemaining < 0.6) pc.AddToClassList("mup-pitches--warn");
-            line2.Add(pc);
-            line2.Add(MakeLabel("球", "mup-pitches__lab"));
-            block.Add(line2);
+            var pcMod = def.StaminaRemaining < 0.3 ? "mhud-pc__n--alert"
+                : def.StaminaRemaining < 0.6 ? "mhud-pc__n--warn" : null;
+            idn.Add(MakeRow("mhud-spacer"));
+            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod));
+            band.Add(idn);
 
-            block.Add(BuildStaminaBar(def.StaminaRemaining));
-            return block;
+            // 2段目＝通算防御率・本日の奪三振・与四死球の等幅3セル（打者HUDと同構造）。奪三振と与四死球は
+            // 対で見て初めて「今日の出来」になるので隣接させる（issue #407）。単位は見出しへ逃がしてあるので
+            // 値は数字だけ＝Oswald（.f-num）が素直に効く（設計書16 §2）。
+            // 防御率は通算＋本日の合算（issue #449。通算なしは本日分のみ、登板なしかつ本日アウト0のみ「—」）。
+            var era = MatchLiveStatsProvider.LiveEra(_statsProvider.CareerPitching(m.PitcherSourceId), def.EarnedRuns, def.Outs);
+            var stats = HudStatsRow();
+            stats.Add(HudCell("防御率", era, first: true));
+            stats.Add(HudCell("奪三振", def.StrikeOuts.ToString()));
+            stats.Add(HudCell("与四死球", (def.Walks + def.HitByPitch).ToString()));
+            band.Add(stats);
+
+            // 3段目＝スタミナ。帯の最下段として帯と同幅で組み込む（別要素として浮かせない）。
+            band.Add(BuildStaminaBar(def.StaminaRemaining));
+            return band;
         }
 
         // スタミナ残量のバー（継投の目安）。球数の数字だけでなく形でも「そろそろ」を出す。
         // 色は残量で落とす: 6割超=良好 / 3〜6割=注意 / 3割未満=警告（盤面ビューの状態コード）。
+        // 文字（見出し・％）は持たない＝残量は形と色だけで読ませ、数字は名前行の球数に集約する。
         private static VisualElement BuildStaminaBar(double remaining)
         {
-            var row = MakeRow("mup-line", "stam");
-            row.Add(MakeLabel("スタミナ", "stam__lab"));
+            var row = MakeRow("mhud-stam");
 
             var track = new VisualElement { pickingMode = PickingMode.Ignore };
             track.AddToClassList("stam__track");
@@ -2789,51 +2816,51 @@ namespace KokoSim.Unity.Match
                 track.Add(tick);
             }
             row.Add(track);
-            row.Add(MakeLabel(Mathf.RoundToInt((float)(pct * 100.0)) + "%", "stam__pct", "f-num"));
             return row;
         }
 
-        private VisualElement BuildHudBatter(LiveBatterSlot batterToday, Matchup m, bool offenseIsTop)
+        private VisualElement BuildHudBatter(LiveBatterSlot batterToday, Matchup m, bool offenseIsTop, Color teamColor)
         {
-            var block = new VisualElement();
-            block.AddToClassList("mup-block");
-            block.AddToClassList("mup-block--batter");
+            var band = HudBand();
 
-            // 1行目＝放送と同じ並び「4番 三塁 [5] 中村 陽介 2年 (調子)」。左右打は3Dの絵で分かるので出さない。
-            var line1 = MakeRow("mup-line");
-            line1.Add(MakeLabel(m.BatterOrder.ToString(), "mup-order", "f-num"));
-            line1.Add(MakeLabel("番", "mup-order__unit"));
+            // 1段目＝放送と同じ並び「4番 三塁 5 中村 陽介 2年 (調子)」。左右打は3Dの絵で分かるので出さない。
+            var idn = HudIdRow();
+            idn.Add(HudChip(m.BatterOrder.ToString(), "番", "mhud-cp--key", numeric: true));
             var pos = MatchLiveStatsProvider.PosJp(batterToday?.Position ?? m.BatterPosition);
-            if (pos.Length > 0) line1.Add(MakeLabel(pos, "mup-pos"));
-            line1.Add(MakeLabel(NumText(m.BatterNumber), "num-badge", "num-badge--sm", "f-num"));
-            line1.Add(MakeLabel(m.BatterName, "mup-name"));
-            if (batterToday is { Grade: > 0 }) line1.Add(MakeLabel(batterToday.Grade + "年", "mup-grade"));
+            if (pos.Length > 0) idn.Add(HudTeamChip(pos, teamColor));
+            var bNum = NumText(m.BatterNumber);
+            if (bNum.Length > 0) idn.Add(HudNumber(bNum));
+            idn.Add(HudName(m.BatterName));
+            if (batterToday is { Grade: > 0 }) idn.Add(HudChip(batterToday.Grade.ToString(), "年", "mhud-cp--dim", numeric: true));
+            // 顔は名前行の右端＝学年チップの外側。spacer で押し出す。
+            idn.Add(MakeRow("mhud-spacer"));
             var face = new ConditionFace();
-            face.AddToClassList("mup-cond");
+            face.AddToClassList("mhud-face");
             face.Set(_statsProvider.ConditionOf(m.BatterSourceId, m.BatterConditionValue, m.BatterName));
-            line1.Add(face);
-            block.Add(line1);
+            idn.Add(face);
+            band.Add(idn);
 
-            // 打率は通算＋本日の合算（issue #449。通算なしは本日分のみ、通算なしかつ本日打数0のみ「—」）。
-            // 本塁打・打点は通算のみ（issue範囲外・据え置き）。
+            // 2段目＝成績。打率は通算＋本日の合算（issue #449。通算なしは本日分のみ、通算なしかつ
+            // 本日打数0のみ「—」）。本塁打・打点は通算のみ（issue範囲外・据え置き）＝等幅セルに割ると
+            // 同格の3項目に見えるが、意味の違いはここに残す。
             var b = _statsProvider.CareerBatting(m.BatterSourceId);
-            var avg = MatchLiveStatsProvider.LiveAvg(b, batterToday?.AtBats ?? 0, batterToday?.Hits ?? 0);
-            var career = b == null
-                ? avg
-                : avg + " / " + b.HomeRuns + "本 / " + b.Rbi + "点";
-            var line2 = MakeRow("mup-line");
-            line2.Add(MakeLabel(career, "mup-career"));
-            block.Add(line2);
+            var stats = HudStatsRow();
+            stats.Add(HudCell("打率", MatchLiveStatsProvider.LiveAvg(b, batterToday?.AtBats ?? 0, batterToday?.Hits ?? 0), first: true));
+            stats.Add(HudCell("本塁打", b == null ? "—" : b.HomeRuns.ToString()));
+            stats.Add(HudCell("打点", b == null ? "—" : b.Rbi.ToString()));
+            band.Add(stats);
 
-            var pa = BuildTodayPlateAppearances(m, offenseIsTop);
-            if (pa != null) block.Add(pa);
-            return block;
+            // 3段目＝本日の打席。まだ結果が無い1打席目は段ごと出ない＝帯は2段のまま。
+            var pas = BuildTodayPlateAppearances(m, offenseIsTop);
+            if (pas != null) band.Add(pas);
+            return band;
         }
 
         /// <summary>
-        /// 本日の打撃成績（この打者がここまでに終えた打席の略記を並べる）。出塁した打席だけ点灯させる。
+        /// 本日の打撃成績（この打者がここまでに終えた打席の略記を左から順にパネルで並べる）。
         /// <b>まだ絵にしていない打席は必ず外す</b>（<see cref="_displayedLogCount"/> までしか見ない）——
-        /// 入れると、盤面で再生する前に結果を先に見せてしまう。
+        /// 入れると、盤面で再生する前に結果を先に見せてしまう。落としても例外もテスト失敗も出ない。
+        /// 1件も無ければ null を返す＝段を作らない（1打席目の帯は2段のまま）。
         /// </summary>
         private VisualElement BuildTodayPlateAppearances(Matchup m, bool offenseIsTop)
         {
@@ -2842,8 +2869,7 @@ namespace KokoSim.Unity.Match
             var upTo = Mathf.Min(_displayedLogCount, log.Count);
             if (upTo <= 0) return null;
 
-            var row = MakeRow("mup-line", "mup-pa-row");
-            row.Add(MakeLabel("打席", "mup-pa__lab"));
+            var row = MakeRow("mhud-pas");
             var any = false;
             for (var i = 0; i < upTo; i++)
             {
@@ -2852,12 +2878,27 @@ namespace KokoSim.Unity.Match
                 // （BoxScoreGrid.Build が使うキーと同じ組み合わせ）。
                 if (e.IsTop != offenseIsTop || e.BatterOrder != m.BatterOrder
                     || e.BatterName != m.BatterName) continue;
-                var chip = MakeLabel(MatchLiveStatsProvider.ScorebookAbbr(e), "mup-pa");
-                if (MatchLiveStatsProvider.Reached(e.Result)) chip.AddToClassList("mup-pa--on");
-                row.Add(chip);
+                var pa = MakeRow("mhud-pa", PaKindMod(e));
+                // 略記は和文なので .f-num は付けない（Oswald は欧文専用）。
+                pa.Add(MakeLabel(MatchLiveStatsProvider.ScorebookAbbr(e), "mhud-pa__t"));
+                row.Add(pa);
                 any = true;
             }
             return any ? row : null;
+        }
+
+        /// <summary>
+        /// 打席パネルの色（結果の種類コード）。安打系=桜／四球・バント系=アンバー／アウト=空青。
+        /// 犠飛は「バント」ではないが記録上は犠打と同じ生産的アウトなので黄側へ、失策出塁は
+        /// 「出塁したが安打ではない」ので四球側へ寄せてある（3分類に収まらない2つの置き場）。
+        /// </summary>
+        private static string PaKindMod(PlayLogEntry e)
+        {
+            if (e.Result.IsHit()) return "mhud-pa--hit";
+            if (e.Result is PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch
+                or PlateAppearanceResult.ReachedOnError) return "mhud-pa--walk";
+            if (e.IsSacBunt || e.IsSacFly) return "mhud-pa--walk";
+            return "mhud-pa--out";
         }
 
         // ── 実況履歴（プレー確定ごとに直近3件を薄く積む省スペース型） ──
@@ -2892,6 +2933,102 @@ namespace KokoSim.Unity.Match
             var v = new VisualElement { pickingMode = PickingMode.Ignore };
             foreach (var c in classes) v.AddToClassList(c);
             return v;
+        }
+
+        // ── マッチアップHUD（黒半透明の一体帯）の生成 ──────────────────────────
+        // 見た目（地・区切り線・級数・余白）は部品辞書（components.uss の .mhud-*）が持つ。
+        // ここが決めるのは「どのデータをどの段のどのセルに置くか」だけ。
+        // **地を持つのは帯コンテナ1枚だけ**で、段もセルも背景を持たない（区切りは border のみ・隙間なし）。
+        // MakeLabel / MakeRow の上に積むのは pickingMode=Ignore を無料で継承するため
+        //（HUDは盤面の絵の上に乗る非対話オーバーレイなので、1要素でも拾うとクリック中断が効かなくなる）。
+
+        /// <summary>帯コンテナ（縦1本）。打者・投手とも同じ器で、幅はコーナーが決める＝両者同幅。</summary>
+        private static VisualElement HudBand() => MakeRow("mhud-band");
+
+        /// <summary>1段目＝名前行。</summary>
+        private static VisualElement HudIdRow() => MakeRow("mhud-idrow");
+
+        /// <summary>2段目＝スタッツ行（等幅セルを隙間なしで並べる）。</summary>
+        private static VisualElement HudStatsRow() => MakeRow("mhud-stats");
+
+        /// <summary>
+        /// 名前行のチップ。<paramref name="unit"/> がある場合は数字と和文単位で Label を分ける
+        /// ——Oswald（.f-num）は欧文専用で和文グリフを持たないため（書体3役ルール・設計書16 §2）。
+        /// </summary>
+        private static VisualElement HudChip(string text, string unit, string mod, bool numeric = false)
+        {
+            var chip = MakeRow("mhud-cp");
+            if (mod != null) chip.AddToClassList(mod);
+            var t = MakeLabel(text, "mhud-cp__t");
+            if (numeric) t.AddToClassList("f-num");
+            chip.Add(t);
+            if (!string.IsNullOrEmpty(unit)) chip.Add(MakeLabel(unit, "mhud-cp__u"));
+            return chip;
+        }
+
+        /// <summary>
+        /// チーム色地のチップ（打者=守備位置／投手=背番号）。地色は校ごとに変わるので
+        /// USS では宣言できず、ここでインラインで入れる（値は data/team-colors.yaml 由来・乱数不使用）。
+        /// </summary>
+        private static VisualElement HudTeamChip(string text, Color bg)
+        {
+            var chip = HudChip(text, null, "mhud-cp--team", numeric: IsNumText(text));
+            chip.style.backgroundColor = bg;
+            return chip;
+        }
+
+        /// <summary>
+        /// 帯の中で最も大きい要素＝選手名。人名は明朝なので、書体registryに新クラスを足さず
+        /// <c>.f-display</c> を要素へ直接付ける（UI-BUILD-METHOD の新規コード方針）。
+        /// 姓名間の全角空白は半角へ落として詰める（字間は USS の letter-spacing 側）。
+        /// </summary>
+        private static VisualElement HudName(string name) =>
+            MakeLabel((name ?? "").Replace('　', ' '), "mhud-nm", "f-display");
+
+        /// <summary>背番号。チップにせず素の白文字で名前の直前に置く（打者・投手で共通）。</summary>
+        private static VisualElement HudNumber(string digits) => MakeLabel(digits, "mhud-no", "f-num");
+
+        /// <summary>
+        /// 球数「6球」。数字と和文単位で Label を分ける（Oswald は欧文専用）。見出しは持たない。
+        /// 数字は太字＝学年チップより目立たせる（継投判断の主指標）。
+        /// </summary>
+        private static VisualElement HudPitchCount(string digits, string mod)
+        {
+            var box = MakeRow("mhud-pc");
+            var n = MakeLabel(digits, "mhud-pc__n", "f-num-bd");
+            if (mod != null) n.AddToClassList(mod);
+            box.Add(n);
+            box.Add(MakeLabel("球", "mhud-pc__u"));
+            return box;
+        }
+
+        /// <summary>
+        /// スタッツ行の1セル（ラベル上・数値下の縦積み）。単位はラベルへ逃がしてあるので
+        /// 値は数字だけになり、Oswald が素直に効く（UI原則③）。
+        /// </summary>
+        private static VisualElement HudCell(string lab, string val, bool first = false, string valMod = null)
+        {
+            var cell = MakeRow("mhud-cell");
+            // セル間の区切りは上下15%ずつ短い細片で引く（border では詰められない）。先頭セルには付けない
+            // ＝帯の左端に落ちて「枠の縁」に見えてしまうため。
+            if (!first) cell.Add(MakeRow("mhud-cell__div"));
+            cell.Add(MakeLabel(lab, "mhud-cell__lab"));
+            var v = MakeLabel(val, "mhud-cell__val");
+            // 該当なしの「—」に .f-num を付けると欠字になる（Oswald は ASCII しか収録していない）。
+            // 数字のときだけ載せる＝UiComponents の IsNumericCell と同じ作法。
+            if (IsNumText(val)) v.AddToClassList("f-num");
+            if (valMod != null) v.AddToClassList(valMod);
+            cell.Add(v);
+            return cell;
+        }
+
+        /// <summary>Oswald（.f-num）に載せてよい文字列か。数字・小数点・符号・% だけなら真。</summary>
+        private static bool IsNumText(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            foreach (var c in s)
+                if (!char.IsDigit(c) && c != '.' && c != '-' && c != '+' && c != '%') return false;
+            return true;
         }
 
         // 背番号テキスト（0＝番号なしは空表示）。
@@ -2963,6 +3100,17 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 采配カードをホバー拡大の状態にする（実際のカーソルは要らない）。null で解除。</summary>
         public void SetTacticsHotForCapture(string id) => _signPad?.SetHotForCapture(id);
+
+        /// <summary>
+        /// スクショ用: チーム配色を差し込む。撮影ハーネスの試合は <see cref="LiveMatchRequest"/> を通らないので
+        /// 配色が null のまま＝HUDのチーム色チップが灰色のフォールバックで写ってしまい、実物と違う絵になる。
+        /// 既に配色が入っている経路（実試合）では**上書きしない**。
+        /// </summary>
+        public void FillTeamColorsForCapture(KokoSim.Engine.Nation.TeamColors away, KokoSim.Engine.Nation.TeamColors home)
+        {
+            if (_awayColors == null) _awayColors = away;
+            if (_homeColors == null) _homeColors = home;
+        }
 
         /// <summary>スクショ用: クリック中断ポップアップを強制表示する（クリックと同経路）。</summary>
         public void OpenPauseMenuForCapture() => OpenPauseMenu();

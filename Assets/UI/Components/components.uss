@@ -1199,68 +1199,199 @@
     flex-shrink: 0;
 }
 
-/* ═══ MatchupHud / MatchupBar ─ 投手ブロック / 打者ブロックは単体でも使える分離部品 ═══ */
+/* ═══ MatchupHud（黒半透明の一体帯）─ 対決ビュー上の右上=打者 / 右下=投手 ═══
+   中継のテロップ帯。**面を持つのは帯コンテナ1枚だけ**で、中の段・セル・チップは背景を持たない
+   （白面の独立ボックスを並べる旧タイル型は 2026-08-05 に廃止）。段とセルの区切りは
+   --hud-divider の1px線だけで作り、隙間（gap/margin）は一切置かない＝帯が1枚に見えることが最優先。
+   帯は盤面の右端に密着させる（右マージン・右パディングなし）。
 
-/* 投手/打者ブロック共通（1段目=氏名行・2段目=通算・3段目=今日/球数） */
-.mup-block { flex-direction: column; }
-.mup-line {
+   3Dの絵の上なので文字は全部白系＝データ画面の --tx-* 系統は使わない。
+   色は状態コード（CLAUDE.md「適用範囲の例外（試合盤面）」）＝球数の警告色とスタミナ3色は
+   データ画面の「アクセント3箇所」制限の対象外。ただしここで新しい色は増やさない。 */
+
+/* コーナー：画面座標の固定オーバーレイ（設計書18 §7-1）。面は持たない＝ただの位置決め。
+   打席開始前は中身が空になるので、地を持たせると黒い矩形だけが残ってしまう。 */
+.mhud-corner {
+    position: absolute;
+    width: var(--hud-band-w);
+}
+.mhud-corner--right { right: 0; bottom: 0; }
+/* 打者は右上＝盤面の打者に近い側（2026-07-31）。 */
+.mhud-corner--topright { right: 0; top: 0; }
+
+/* 帯本体。地を持つのはここだけ。パディングは持たない＝スタッツ行のセルが帯の端まで届く。 */
+.mhud-band {
+    flex-direction: column;
+    background-color: var(--hud-bg);
+}
+
+/* ── 1段目＝名前行 ───────────────────────────────────────── */
+/* 行の高さは「名前の実高＋上下パディング」だけ。和文の行箱は級数の倍近くあるので、
+   中の文字要素には必ず高さを明示して行箱の余白を殺す（padding を削っても残る）。 */
+.mhud-idrow {
     flex-direction: row;
     align-items: center;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+/* 名前が帯の中で最も大きい要素。人名は明朝（設計書16 §2）＝生成側で .f-display を直接付ける。
+   字間は詰める（明朝の既定は帯には緩い）。姓名間の全角空白は生成側で半角へ落とす。 */
+.mhud-nm {
+    font-size: var(--hud-fs-name);
+    height: var(--hud-h-name);
+    -unity-text-align: middle-left;
+    letter-spacing: -1px;
+    color: #FFFFFF;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: var(--sp-1);
+    margin-right: var(--sp-1);
+}
+/* 背番号＝チップにせず素の白文字（名前より1段階小さい）。打者・投手で同じ見た目。 */
+.mhud-no {
+    font-size: var(--hud-fs-num);
+    height: var(--hud-h-num);
+    -unity-text-align: middle-center;
+    color: #FFFFFF;
+    flex-shrink: 0;
+    margin-left: var(--sp-1);
+}
+/* 名前行の右端に置くもの（打者=調子の顔／投手=球数）。この spacer が押し出す。 */
+.mhud-spacer { flex-grow: 1; }
+.mhud-face { width: 18px; height: 18px; flex-shrink: 0; --face-ring: rgba(255, 255, 255, 0.55); }
+/* 球数＝継投判断の主指標。ラベルは持たず「6球」だけ。学年チップより目立つ級数・太さで出す。 */
+.mhud-pc {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: var(--sp-2);
+}
+.mhud-pc__n {
+    font-size: var(--hud-fs-num);
+    height: var(--hud-h-num);
+    -unity-text-align: middle-right;
+    color: #FFFFFF;
+}
+.mhud-pc__u { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); color: var(--hud-label); margin-left: 1px; }
+/* 警告色は絶対球数でなくスタミナ残量で出す（issue #408）。スタミナバーと色を一致させる。 */
+.mhud-pc__n--warn { color: var(--cond-bad); }        /* 残量 6割未満＝注意 */
+.mhud-pc__n--alert { color: var(--color-warn); }     /* 残量 3割未満＝警告 */
+
+/* 名前行のチップ（打順・守備位置・先発・学年）。地を持つのは①打順/登板順（白地黒字）
+   ②守備位置（チーム色地白字・地色は生成側がインラインで入れる）③学年（薄い白）の3種。 */
+.mhud-cp {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-right: var(--sp-1);
+}
+.mhud-cp__t { font-size: var(--hud-fs-chip); height: var(--hud-h-chip); -unity-text-align: middle-center; }
+/* 数字に添える和文単位（「番」「年」「番手」）。Oswald は欧文専用なので Label を分ける
+   ＝.nu-unit と同じ作法（設計書16 §2 書体3役ルール）。 */
+.mhud-cp__u { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); margin-left: 2px; }
+.mhud-cp--key { background-color: #FFFFFF; }                       /* 打順・登板順 */
+.mhud-cp--key .mhud-cp__t, .mhud-cp--key .mhud-cp__u { color: var(--ink); }
+.mhud-cp--team .mhud-cp__t, .mhud-cp--team .mhud-cp__u { color: #FFFFFF; }  /* 守備位置 */
+.mhud-cp--dim { background-color: var(--hud-chip-dim); margin-right: 0; }   /* 学年 */
+.mhud-cp--dim .mhud-cp__t, .mhud-cp--dim .mhud-cp__u { color: var(--hud-label); }
+
+/* ── 2段目＝スタッツ行。等幅3セルを隙間なしで並べる（打者・投手とも同構造） ── */
+.mhud-stats {
+    flex-direction: row;
+    border-top-width: 1px;
+    border-top-color: var(--hud-divider);
+}
+.mhud-cell {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+/* セル間の区切りは上下いっぱいに引かず15%ずつ短くする＝帯を格子に見せない。
+   border では詰められない（USS に border の inset は無い）ので絶対配置の細片で引く。
+   先頭セルには付けない＝帯の左端に落ちて「枠の縁」に見えるため（生成側で制御）。 */
+.mhud-cell__div {
+    position: absolute;
+    left: 0;
+    top: 15%;
+    bottom: 15%;
+    width: 1px;
+    background-color: var(--hud-divider);
+}
+.mhud-cell__lab {
+    font-size: var(--hud-fs-lab);
+    height: var(--hud-h-lab);
+    -unity-text-align: middle-center;
+    color: var(--hud-label);
     margin-bottom: 2px;
 }
-.mup-name {
-    font-size: var(--fs-body);
-    color: var(--color-chalk);
-    margin-left: var(--sp-2);
-    margin-right: var(--sp-2);
-    white-space: nowrap;
+.mhud-cell__val {
+    font-size: var(--hud-fs-val);
+    height: var(--hud-h-val);
+    -unity-text-align: middle-center;
+    color: #FFFFFF;
 }
-.mup-hand { font-size: var(--fs-cap); color: var(--color-muted); flex-shrink: 0; }
-.mup-career { font-size: var(--fs-label); color: var(--color-muted); white-space: nowrap; }
 
-/* 1行目の肩書き（放送と同じ「4番 三塁 [5] 名前 2年」の並び）。
-   左右打/左右投は対決ビューの絵で分かるので出さない（2026-07-31 ユーザー判断で .mup-hand は不使用に）。 */
-.mup-order { font-size: var(--fs-num-lg); color: var(--tx-1); flex-shrink: 0; }
-.mup-order__unit { font-size: var(--fs-cap); color: var(--tx-2); flex-shrink: 0; margin-right: var(--sp-2); }
-.mup-pos { font-size: var(--fs-cap); color: var(--tx-2); flex-shrink: 0; margin-right: var(--sp-2); }
-.mup-grade { font-size: var(--fs-cap); color: var(--tx-2); flex-shrink: 0; margin-left: var(--sp-2); }
-/* 登板順（先発 / N番手）。継投したことが一目で分かるよう、リリーフだけ地を沈める。 */
-.mup-role {
-    font-size: var(--fs-cap);
-    color: var(--tx-1);
+/* ── 3段目＝本日の打席（打者のみ）。結果パネルを左から順に並べるだけで、見出しも器も持たない。
+   まだ結果が無い1打席目は生成側が段ごと出さない＝帯の見た目は2段のまま変わらない。
+   色は結果の種類コード（design-19 のパレット）＝盤面ビューなのでアクセント本数制限の対象外。 ── */
+.mhud-pas {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-top-width: 1px;
+    border-top-color: var(--hud-divider);
+}
+.mhud-pa {
     flex-shrink: 0;
-    margin-right: var(--sp-2);
-    padding: 1px var(--sp-2);
-    border-width: var(--border-w);
-    border-color: var(--tx-3);
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    margin-right: 3px;
 }
-.mup-role--relief { border-color: var(--ink); background-color: var(--sf-inset); }
-
-/* 本日の打撃成績（スコアブック略記のチップ列）。出塁した打席だけ点灯させる。 */
-.mup-pa-row { flex-wrap: wrap; }
-.mup-pa__lab { font-size: var(--fs-cap); color: var(--tx-3); margin-right: var(--sp-2); flex-shrink: 0; }
-.mup-pa {
-    font-size: var(--fs-cap);
-    color: var(--tx-2);
-    background-color: var(--sf-inset);
-    border-width: var(--border-w);
-    border-color: var(--divider);
-    padding: 1px var(--sp-2);
-    margin-right: var(--sp-1);
-    flex-shrink: 0;
+.mhud-pa__t {
+    font-size: var(--hud-fs-pa);
+    height: var(--hud-h-pa);
+    -unity-text-align: middle-center;
+    color: var(--ink);
 }
-.mup-pa--on { background-color: var(--color-lamp); border-color: var(--ink); color: var(--color-ink); }
+.mhud-pa--hit { background-color: var(--sakura); }        /* 安打系（単打〜本塁打） */
+.mhud-pa--walk { background-color: var(--color-lamp); }   /* 四球・死球・犠打犠飛・失策出塁 */
+.mhud-pa--out { background-color: var(--sky); }           /* アウト（三振・凡退） */
+/* 空青は暗いので白抜き（.signpad__tile--on と同じ判断）。桜とアンバーは明るいのでインクのまま。 */
+.mhud-pa--out .mhud-pa__t { color: #FFFFFF; }
 
-/* スタミナ残量のバー（継投の目安）。残量で色を落とす＝盤面ビューの状態コード。 */
-.stam { align-items: center; margin-top: var(--sp-1); }
-.stam__lab { font-size: var(--fs-cap); color: var(--tx-3); margin-right: var(--sp-2); flex-shrink: 0; }
+/* ── 最下段＝スタミナ（投手のみ）。文字は持たずバーだけを帯の最下段に全幅で置く ── */
+.mhud-stam {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-top-width: 1px;
+    border-top-color: var(--hud-divider);
+}
+
+/* スタミナ残量のバー（継投の目安）。残量で色を落とす＝盤面ビューの状態コード。
+   溝は帯の上に載るので白の薄膜（昼の --sf-inset だと暗い帯に明るい棒が浮いてしまう）。 */
 .stam__track {
-    width: 150px;
-    height: 13px;
-    flex-shrink: 0;
-    background-color: var(--sf-inset);
-    border-width: var(--nb-border);
-    border-color: var(--ink);
+    height: 6px;
+    flex-grow: 1;
+    background-color: var(--hud-track);
 }
 .stam__fill {
     position: absolute;
@@ -1269,64 +1400,17 @@
 }
 .stam__fill--mid { background-color: var(--color-lamp); }
 .stam__fill--low { background-color: var(--color-warn); }
-.stam__tick { position: absolute; top: 0; bottom: 0; width: 1px; background-color: var(--divider); }
-.stam__pct {
-    font-size: var(--fs-cap);
-    color: var(--tx-2);
-    margin-left: var(--sp-2);
-    width: 42px;
-    -unity-text-align: middle-right;
-    flex-shrink: 0;
-}
-.mup-today {
-    font-size: var(--fs-body);
-    color: var(--color-chalk);
-    white-space: nowrap;
-}
-.mup-today__lab { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
-/* 球数＝采配判断の主指標。大きめ。閾値超で警告色（状態コード）。 */
-.mup-pitches {
-    font-size: var(--fs-num-lg);
-    color: var(--color-chalk);
-}
-.mup-pitches__lab { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
-/* 同じ行に置いた防御率・奪三振との切れ目（線を引かずに余白で分ける）。 */
-.mup-pitches__lab--gap { margin-left: var(--sp-4); }
-/* 白カードに載せ替えたのでアンバー（--color-lamp）は文字に使えない（白地で沈む）。
-   注意→警告の意味はそのままに、白地で読める橙・赤へ振る。 */
-.mup-pitches--warn { color: var(--cond-bad); }          /* 80球超＝注意 */
-.mup-pitches--alert { color: var(--color-warn); }       /* 100球超＝警告 */
-.mup-cond { margin-left: var(--sp-2); }
-
-/* MatchupHud：盤面ホスト上の画面座標固定オーバーレイ。下端アンカー・左下=投手/右下=打者（左右固定）。 */
+/* 目盛は3等分（残り2/3・1/3の位置）＝色の変わり目と同じ場所。溝と同じく帯の上なので白の薄膜。 */
+.stam__tick { position: absolute; top: 0; bottom: 0; width: 1px; background-color: var(--hud-divider); }
+/* MatchupHud：盤面ホスト上の画面座標固定オーバーレイ（コーナーの定義はブロック冒頭）。 */
 .matchup-hud {
     position: absolute;
     left: 0; top: 0; right: 0; bottom: 0;
 }
-.mhud-corner {
-    position: absolute;
-    max-width: 46%;
-}
-.mhud-corner--left { left: 10px; bottom: 10px; }
-.mhud-corner--right { right: 10px; bottom: 10px; }
-/* 打者は右上＝盤面の打者に近い側（2026-07-31）。 */
-.mhud-corner--topright { right: 10px; top: 10px; }
-/* 昼NB（design-19）の白カード。暗色半透明は盤面の絵の上で沈んで読めなかったので、
-   白面＋インク枠＋ベタ影の不透明カードに載せ替えた（右下の太枠でベタ影を作る＝USSに box-shadow は無い）。 */
-.mhud-panel {
-    background-color: var(--sf-card);
-    border-radius: var(--radius-panel);
-    border-top-width: var(--nb-border-card);
-    border-left-width: var(--nb-border-card);
-    border-right-width: var(--nb-card-edge);
-    border-bottom-width: var(--nb-card-edge);
-    border-color: var(--ink);
-    padding: var(--sp-2) var(--sp-3);
-}
 
 /* SignPad：指示パネル（issue #289。試合盤面・投手HUD直下の采配指示タイル。SignPad.cs が生成）。
    設計書15 Phase C-3 の常駐1行帯の後継。攻撃中は打撃、守備中は配球だけを出し、既定（任せ/通常）は無点灯。
-   盤面overlayなので半透明パネルは mhud-panel と同じ inline rgba idiom。選択色は旧セグ選択と同じ --sky を踏襲。
+   盤面overlayなので半透明パネルは MatchupHud の帯（--hud-bg）と同じ考え。選択色は旧セグ選択と同じ --sky を踏襲。
    タイルは flex-wrap で段組み＝定義が増えたら下へ折り返す（gap非対応のため間隔は margin で作る）。 */
 /* 2026-07-31: 試合画面の1球指示は TacticsCardDeck（.tcard*）へ置き換えた。SignPad は
    部品辞書の登録として残す（ComponentGallery 用・他画面で使うときの器）。 */
@@ -1364,18 +1448,6 @@
 .signpad__tile--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
 .signpad__tile--off { color: var(--color-faint); }
 .signpad__tile--off:hover { color: var(--color-faint); }
-
-/* MatchupBar：同ブロックを横帯に並べた版（ComponentGallery 登録のみ・将来のリザルト/選手詳細で流用）。 */
-.matchup-bar {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    background-color: var(--color-panel-deep);
-    border-radius: var(--radius-chip);
-    padding: var(--sp-2) var(--sp-3);
-}
-.matchup-bar__half { flex-direction: column; }
-.matchup-bar__vs { font-size: var(--fs-label); color: var(--color-faint); margin-left: var(--sp-3); margin-right: var(--sp-3); }
 
 /* PitchCall：投球判定の大型オーバーレイ（試合盤面・1球ごとに短時間だけ出す）。
    盤面ビューなので色は状態コード（ストライク＝アンバー／ボール＝良好色／それ以外＝チョーク）で、

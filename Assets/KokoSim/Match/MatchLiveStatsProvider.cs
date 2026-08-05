@@ -104,7 +104,12 @@ namespace KokoSim.Unity.Match
             _ => "",
         };
 
-        /// <summary>登板順の表記（1=先発、2以降は「N番手」）。</summary>
+        /// <summary>
+        /// 登板順の表記（1=先発、2以降は「N番手」）。
+        /// <b>マッチアップHUDはこれを使わない</b>——「N番手」は数字＋和文の混植で、Oswald（.f-num）が
+        /// 欧文専用のため Label を分ける必要があり、HUD 側は <see cref="LivePitcherToday.ReliefOrder"/>
+        /// から直接組む（書体3役ルール・設計書16 §2）。1ラベルで足りる他の表示用に残してある。
+        /// </summary>
         public static string ReliefLabel(int reliefOrder) => reliefOrder <= 1 ? "先発" : reliefOrder + "番手";
 
         public static string ThrowsLabel(Handedness h) => HandednessLabels.Throws(h);
