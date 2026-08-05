@@ -973,6 +973,86 @@ public sealed class TimelineTests
         Assert.DoesNotContain(method!.GetParameters(), p => typeof(IRandomSource).IsAssignableFrom(p.ParameterType));
     }
 
+    // --- 暴投・捕逸タイムライン（design-14 P2-8, issue #487） ---
+
+    private static Player Runner(string name, int speed = 70, int baserunning = 70) =>
+        new() { Name = name, Speed = speed, Baserunning = baserunning };
+
+    [Fact]
+    public void BatteryMissTimeline_AllThreeOccupied_AllAdvanceAndThirdScores()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var first = Runner("R1");
+        var second = Runner("R2");
+        var third = Runner("R3");
+
+        var tl = TimelineBuilder.BuildBatteryMiss(first, second, third, catcher, c, field);
+
+        Assert.Equal(3, tl.Runners.Count);
+        var legFirst = tl.Runners.Single(r => r.Runner == first);
+        var legSecond = tl.Runners.Single(r => r.Runner == second);
+        var legThird = tl.Runners.Single(r => r.Runner == third);
+        Assert.True(Near(legFirst.To, new TimelinePoint(field.SecondBase.X, field.SecondBase.Z)), "一塁走者が二塁へ進んでいない");
+        Assert.True(Near(legSecond.To, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)), "二塁走者が三塁へ進んでいない");
+        Assert.True(Near(legThird.To, new TimelinePoint(0, 0)), "三塁走者が生還していない");
+        // ApplyBatteryMiss はアウトを作らない無条件の進塁。
+        Assert.All(tl.Runners, r => Assert.False(r.OutAtEnd));
+        Assert.Empty(tl.Judgements);
+
+        // ボールは後逸（Roll）→捕手の返球（Throw）の2セグメント。
+        Assert.Equal(2, tl.Ball.Count);
+        Assert.Equal(BallSegmentKind.Roll, tl.Ball[0].Kind);
+        Assert.Equal(BallSegmentKind.Throw, tl.Ball[1].Kind);
+        Assert.Equal(FieldPosition.Catcher, tl.Ball[1].FromRole);
+        Assert.Equal(FieldPosition.Pitcher, tl.Ball[1].ToRole);
+
+        Assert.Contains(tl.Moves, m => m.Role == FieldPosition.Catcher && m.Task == FielderTask.FieldBall);
+        Assert.True(tl.ResolvedAt <= tl.Duration);
+    }
+
+    [Fact]
+    public void BatteryMissTimeline_OnlyFirstOccupied_OnlyOneLegNoScoreCaption()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var first = Runner("R1");
+
+        var tl = TimelineBuilder.BuildBatteryMiss(first, null, null, catcher, c, field);
+
+        var leg = Assert.Single(tl.Runners);
+        Assert.Same(first, leg.Runner);
+        Assert.True(Near(leg.To, new TimelinePoint(field.SecondBase.X, field.SecondBase.Z)));
+        // 三塁走者が居ないので生還キャプションは無い（開始キャプションのみ）。
+        Assert.Single(tl.Captions);
+    }
+
+    [Fact]
+    public void BatteryMissTimeline_ThirdOccupied_ScoresAndCaptionAtArrival()
+    {
+        var c = new BaserunningCoefficients();
+        var field = new FieldGeometry();
+        var catcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 50 };
+        var third = Runner("R3");
+
+        var tl = TimelineBuilder.BuildBatteryMiss(null, null, third, catcher, c, field);
+
+        var leg = Assert.Single(tl.Runners);
+        Assert.True(Near(leg.To, new TimelinePoint(0, 0)), "三塁走者が生還していない");
+        Assert.Contains(tl.Captions, cap => cap.T == leg.T1);
+    }
+
+    [Fact]
+    public void BatteryMissTimeline_ConsumesNoRandomSource()
+    {
+        // BuildBatteryMiss は IRandomSource を一切受け取らない（シグネチャで乱数不使用を固定する）。
+        var method = typeof(TimelineBuilder).GetMethod(nameof(TimelineBuilder.BuildBatteryMiss));
+        Assert.NotNull(method);
+        Assert.DoesNotContain(method!.GetParameters(), p => typeof(IRandomSource).IsAssignableFrom(p.ParameterType));
+    }
+
     // --- #6 外野安打の返球: 送球が走者を追い越さない（三塁打で送球が先着しない） ---
     [Fact]
     public void OutfieldReturnThrow_ArrivesJustAfterRunner_NotBefore()

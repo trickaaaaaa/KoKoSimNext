@@ -91,6 +91,15 @@ public sealed record LivePitch
     /// 変換した純関数の写し＝乱数消費ゼロ・帯不変。<see cref="GameContext.CaptureTimelines"/> が真のときだけ非null。
     /// </summary>
     public PlaybackPlay? PickoffPlay { get; init; }
+
+    /// <summary>
+    /// この球で起きた暴投・捕逸（design-14 P2-8, issue #487）の再生データ。<see cref="StealPlay"/>/
+    /// <see cref="PickoffPlay"/> と違い、この球そのものの結果（キャッチャーが後逸した）として起きるため
+    /// 「この球の前」ではなく「この球の後」に載る。<see cref="TimelineBuilder.BuildBatteryMiss"/> の出力を
+    /// <see cref="PlayTimelineAdapter.ToPlaybackPlay"/> で変換した純関数の写し＝乱数消費ゼロ・帯不変。
+    /// <see cref="GameContext.CaptureTimelines"/> が真のときだけ非null（統計シム・裏試合はゼロコスト）。
+    /// </summary>
+    public PlaybackPlay? BatteryMissPlay { get; init; }
 }
 
 /// <summary>

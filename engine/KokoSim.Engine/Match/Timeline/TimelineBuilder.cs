@@ -23,6 +23,13 @@ public static class TimelineBuilder
     /// <summary>牽制球のリリース→走者が帰塁を始めるまでの反応[s]（演出用の固定値）。
     /// <see cref="PickoffResolver"/> は時間の勝負を持たない単発のベルヌーイ試行なので流用元が無い。</summary>
     private const double PickoffReactionSeconds = 0.05;
+    /// <summary>暴投・捕逸（issue #487）: 後逸から捕手が動き出すまでの反応[s]（演出用の固定値）。
+    /// <see cref="BaserunningModel.ApplyBatteryMiss"/> は距離・速度を持たない無条件の進塁なので流用元が無い。</summary>
+    private const double BatteryMissReactionSeconds = 0.10;
+    /// <summary>暴投・捕逸: 後逸したボールが転がって止まるまでの所要秒（演出用の固定値）。</summary>
+    private const double BatteryMissRollSeconds = 0.55;
+    /// <summary>暴投・捕逸: ボールが転がって止まる位置＝本塁からバックネット側（-Z）へこの距離[m]（演出用の固定値）。</summary>
+    private const double BatteryMissBackstopM = 6.0;
 
     private static readonly TimelinePoint Home = new(0, 0);
     private static readonly TimelinePoint Mound = new(0, 18.44);
@@ -943,6 +950,95 @@ public static class TimelineBuilder
             Runners = runners,
             Judgements = judgements,
             Captions = captions,
+        };
+    }
+
+    /// <summary>暴投・捕逸のタイムライン（design-14 P2-8, issue #487）。乱数不使用——進塁
+    /// （<see cref="BaserunningModel.ApplyBatteryMiss"/>）は呼び出し元で既に確定済み（アウトが起こり得ない
+    /// 無条件の全走者1つ進塁）で、ここでは進塁前の走者配置を走者ごとのレッグへ変換するだけ。
+    ///
+    /// <para>暴投（投手責）とパスボール（捕手責）は同じ絵で描く（2026-08-05 issue決定。engine 側に
+    /// 責任種別のフィールドを足さない）。<see cref="BuildPickoff"/> と同様、<see cref="BaserunningModel.ApplyBatteryMiss"/>
+    /// は「時間の勝負」を持たないため、絵の秒（後逸したボールが転がる距離・捕手/走者の脚力）は新規に組む。</para></summary>
+    /// <param name="first">進塁前の一塁走者（いなければ null）。進塁後は二塁への走者レッグになる。</param>
+    /// <param name="second">進塁前の二塁走者（いなければ null）。進塁後は三塁への走者レッグになる。</param>
+    /// <param name="third">進塁前の三塁走者（いなければ null）。生還レッグになる（issue #487 の必須要件）。</param>
+    public static PlayTimeline BuildBatteryMiss(
+        Player? first, Player? second, Player? third, Player catcher, BaserunningCoefficients c, FieldGeometry field)
+    {
+        var firstPt = BasePoint(field, "first");
+        var secondPt = BasePoint(field, "second");
+        var thirdPt = BasePoint(field, "third");
+        var backstopPt = new TimelinePoint(0, -BatteryMissBackstopM);
+
+        // 後逸したボールが転がって止まる（演出用の固定値。ApplyBatteryMiss は距離・速度を持たない）。
+        var ball = new List<BallSegment>
+        {
+            new() { Kind = BallSegmentKind.Roll, T0 = 0.0, T1 = BatteryMissRollSeconds, From = Home, To = backstopPt },
+        };
+
+        // 捕手が追って拾う→送球姿勢を作って投手へ戻す（issue #487「捕手が追う→拾って戻す」）。
+        var catcherArrive = BatteryMissReactionSeconds
+            + Distance(Home, backstopPt) / catcher.ToFielder().SprintSpeedMps;
+        var pickupAt = Math.Max(BatteryMissRollSeconds, catcherArrive);
+        var moves = new List<FielderMove>
+        {
+            new()
+            {
+                Role = FieldPosition.Catcher, T0 = BatteryMissReactionSeconds, T1 = pickupAt, To = backstopPt,
+                Task = FielderTask.FieldBall,
+            },
+        };
+        var throwStart = pickupAt
+            + c.PopTransferSeconds * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var throwArrive = throwStart + Distance(backstopPt, Mound) / catcher.ToFielder().ThrowSpeedMps;
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = backstopPt, To = Mound,
+            FromRole = FieldPosition.Catcher, ToRole = FieldPosition.Pitcher,
+        });
+
+        // 走者レッグ（design-14 P2-8: 全走者1つ進塁、三塁走者は生還）。ApplyBatteryMiss はアウトを作らない
+        // ため、判定オーバーレイ（Judgements）は積まない（盗塁・牽制の「セーフのみ際どさ未評価」と同じ扱い）。
+        var runners = new List<RunnerLeg>();
+        var lastEvent = throwArrive;
+        if (first is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(first, 1, 2, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走一", T0 = 0.0, T1 = t1, From = firstPt, To = secondPt, OutAtEnd = false, Runner = first });
+            lastEvent = Math.Max(lastEvent, t1);
+        }
+        if (second is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(second, 2, 3, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走二", T0 = 0.0, T1 = t1, From = secondPt, To = thirdPt, OutAtEnd = false, Runner = second });
+            lastEvent = Math.Max(lastEvent, t1);
+        }
+        double? scoreAt = null;
+        if (third is not null)
+        {
+            var t1 = HomePlayResolver.RunnerTimeSeconds(third, 3, 4, field, c);
+            runners.Add(new RunnerLeg
+                { Label = "走三", T0 = 0.0, T1 = t1, From = thirdPt, To = Home, OutAtEnd = false, Runner = third });
+            lastEvent = Math.Max(lastEvent, t1);
+            scoreAt = t1;
+        }
+
+        var captions = new List<TimelineCaption> { new(0.02, "後逸——ボールが転がる！") };
+        if (scoreAt is { } sa) captions.Add(new TimelineCaption(sa, "生還！"));
+
+        return new PlayTimeline
+        {
+            Duration = lastEvent + 1.0,
+            Result = "暴投・捕逸",
+            ResolvedAt = lastEvent,
+            FielderStarts = StandardStarts(),
+            Ball = ball.ToArray(),
+            Moves = moves.ToArray(),
+            Runners = runners.ToArray(),
+            Captions = captions.ToArray(),
         };
     }
 

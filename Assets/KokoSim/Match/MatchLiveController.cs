@@ -265,6 +265,12 @@ namespace KokoSim.Unity.Match
         private PlaybackPlay _pickoffPlay;
         private double _pickoffEndAt;
 
+        // 打席途中の暴投・捕逸の再生（issue #487）。盗塁・牽制と同型だが、この球そのものの結果
+        // （キャッチャーが後逸した）として起きるため、盗塁・牽制（この球の前）より後にチェックする
+        // （＝この球の判定が出た直後）。再生経路は盗塁・牽制と共有（EnterStealPlay と同型）。
+        private PlaybackPlay _batteryMissPlay;
+        private double _batteryMissEndAt;
+
         // 対決ビューの1球ペーシング（フル振りかぶり再生）を使うか（design-18 §7-2）。
         private bool DuelPacingActive => _duelOn && _duelRig != null && _duelRig.Available;
 
@@ -523,8 +529,9 @@ namespace KokoSim.Unity.Match
             _shownAnyHalf = false;
             _paQueue.Clear();
             _paConfirmed = false;
-            _stealPlay = null;   // 打席途中の盗塁再生（issue #485）は試合をまたがない
-            _pickoffPlay = null; // 打席途中の牽制再生（issue #486）も同様
+            _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
+            _pickoffPlay = null;     // 打席途中の牽制再生（issue #486）も同様
+            _batteryMissPlay = null; // 打席途中の暴投・捕逸再生（issue #487）も同様
             _windowClock = _windowHold = _windowCarry = 0f;
             _displayedLogCount = 0;
             _prog = null;
@@ -1659,15 +1666,22 @@ namespace KokoSim.Unity.Match
             return end;
         }
 
-        /// <summary>盗塁再生が終わった: 対決構図へ戻し、盗塁が動かした塁・アウトを反映してから打席の続きへ。</summary>
+        /// <summary>盗塁再生が終わった: 対決構図へ戻し、盗塁が動かした塁・アウトを反映してから打席の続きへ。
+        /// 同じ球で暴投・捕逸も解決していれば（issue #487。走者ありの実球は盗塁企図の後にも投げられる）、
+        /// 盤面を動かす前にその再生へ連結する（先に塁を動かすと二重に見える）。</summary>
         private void FinishStealView()
         {
             EndFieldPlay();          // 守備陣・走者を伏せて対決の構図へ戻す（＝打席への唯一のカット）
             _view.HideJudgement();
             _stealPlay = null;
+            var q = _paQueue[_pitchIdx];
+            if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
+            {
+                EnterBatteryMissPlay(batteryMissPlay);
+                return;
+            }
             // 盗塁が動かした塁・アウトはここで反映＝走者が走り着いてから盤面のダイヤ・アウトを動かす
             // （先に動かすと走る前に着いて見える）。1球観測が無い経路（合成投球列）には盗塁は載らない。
-            var q = _paQueue[_pitchIdx];
             if (q.Live != null)
             {
                 SetOuts(q.Live.Outs);
@@ -1739,7 +1753,8 @@ namespace KokoSim.Unity.Match
 
         /// <summary>牽制再生が終わった: 対決構図へ戻す。同じ球で盗塁企図の勝負に続いていれば
         /// （牽制セーフの直後）盤面を動かす前に盗塁の再生へ連結する（先に塁を動かすと二重に見える）。
-        /// 続きが無ければ盗塁と同じ手順で塁・アウトを反映して打席の続きへ戻る。</summary>
+        /// 盗塁が続かず暴投・捕逸だけ解決していれば（issue #487）そちらへ連結する。
+        /// どちらも続きが無ければ塁・アウトを反映して打席の続きへ戻る。</summary>
         private void FinishPickoffView()
         {
             EndFieldPlay();
@@ -1751,6 +1766,88 @@ namespace KokoSim.Unity.Match
                 EnterStealPlay(stealPlay);
                 return;
             }
+            if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
+            {
+                EnterBatteryMissPlay(batteryMissPlay);
+                return;
+            }
+            if (q.Live != null)
+            {
+                SetOuts(q.Live.Outs);
+                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+            }
+            _foulFlightHoldSeconds = null;
+            _windowCarry = 0f;
+            _pitchCallDone = false;
+            _inPitchPhase = false;
+            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
+            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
+            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
+            _stage = LiveStage.Idle;
+            AdvanceToNextWindow();
+        }
+
+        // ── 打席途中の暴投・捕逸の3D再生（issue #487） ──
+        // EnterPickoffPlay 系（issue #486）と同型。盗塁・牽制と違い「この球の前」ではなく
+        // 「この球そのものの結果」として起きるため、盗塁・牽制の再生（あれば）が終わった後に連結する
+        // （FinishPickoffView／FinishStealView 参照）。
+
+        /// <summary>暴投・捕逸のプレーを守備ビューで再生し始める。ボールの後逸・捕手の返球・走者の進塁は
+        /// engine の <see cref="PlaybackPlay"/>（<c>BuildBatteryMiss</c> の出力）が単一ソース＝
+        /// 盗塁・牽制・打球と同じ経路で描く。</summary>
+        private void EnterBatteryMissPlay(PlaybackPlay batteryMiss)
+        {
+            _inPitchPhase = false;
+            _pitchBallVisible = false;
+            _stage = LiveStage.Play;
+            _windowCarry = 0f;
+            _batteryMissPlay = batteryMiss;
+            _t = 0;
+            _batteryMissEndAt = BatteryMissPlayEndTime(batteryMiss);
+            _view.SetPlay(batteryMiss);
+            if (_duelRig != null && _duelRig.Available)
+            {
+                if (_prog != null && _current != null)
+                    _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
+                _duelRig.BeginFieldPlay(batteryMiss, 0f);
+            }
+            RenderBatteryMissFrame();
+        }
+
+        /// <summary>暴投・捕逸再生の1フレーム（<see cref="RenderPickoffFrame"/> と同型）。</summary>
+        private void RenderBatteryMissFrame()
+        {
+            if (_batteryMissPlay == null) return;
+            _view.SetTime(_t);
+            if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
+            if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_batteryMissPlay, _t);
+        }
+
+        /// <summary>暴投・捕逸再生の打ち切り時刻（<see cref="PickoffPlayEndTime"/> と同じ規則）。</summary>
+        private double BatteryMissPlayEndTime(PlaybackPlay play)
+        {
+            var lastEvent = play.ResAt;
+            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
+            foreach (var r in play.Runners)
+                foreach (var s in r.Segs)
+                {
+                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;
+                    if (s.T1 > lastEvent) lastEvent = s.T1;
+                }
+            var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
+            var judged = PlaybackEvaluator.LastJudgementTime(play);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            return end;
+        }
+
+        /// <summary>暴投・捕逸再生が終わった: 対決構図へ戻し、進塁後の塁・アウトを反映してから打席の続きへ。
+        /// 盗塁・牽制と違いこの球そのものの結果なので、これ以上連結するプレーは無い。</summary>
+        private void FinishBatteryMissView()
+        {
+            EndFieldPlay();
+            _view.HideJudgement();
+            _batteryMissPlay = null;
+            var q = _paQueue[_pitchIdx];
             if (q.Live != null)
             {
                 SetOuts(q.Live.Outs);
@@ -1901,6 +1998,13 @@ namespace KokoSim.Unity.Match
                         EnterStealPlay(stealPlay);
                         return;
                     }
+                    // 打席途中の暴投・捕逸（issue #487）: 盗塁・牽制と違い「この球の前」ではなく
+                    // 「この球そのものの結果」として起きるため、盗塁・牽制の判定を終えたこの位置でチェックする。
+                    if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
+                    {
+                        EnterBatteryMissPlay(batteryMissPlay);
+                        return;
+                    }
                     // 1球ごとの観測があるときは、その球を投げ終えた実状態でアウト・塁も動かす
                     //（打席途中の牽制死等がその場で絵に出る。合成投球列には無いので触らない）。
                     if (q.Live != null)
@@ -1981,6 +2085,14 @@ namespace KokoSim.Unity.Match
             {
                 RenderStealFrame();
                 if (_t > _stealEndAt + 0.3) FinishStealView();
+                return;
+            }
+            // 打席途中の暴投・捕逸の再生（issue #487）: 盗塁・牽制の再生（あれば）が終わった後に連結される
+            // （FinishPickoffView／FinishStealView）ので、盗塁より後にチェックする。
+            if (_batteryMissPlay != null)
+            {
+                RenderBatteryMissFrame();
+                if (_t > _batteryMissEndAt + 0.3) FinishBatteryMissView();
                 return;
             }
             if (_current.Play != null)

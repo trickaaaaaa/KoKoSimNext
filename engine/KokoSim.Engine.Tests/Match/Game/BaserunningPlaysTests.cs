@@ -4,6 +4,7 @@ using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
 using Xunit;
 
@@ -668,6 +669,63 @@ public sealed class BaserunningPlaysTests
         }
         Assert.True(wpOn > 0, "暴投・パスボールを有効化しても一度も発生しなかった");
         Assert.True(totalOn > totalOff, $"暴投・パスボール有効化で得点が増えていない: off={totalOff} on={totalOn}");
+    }
+
+    /// <summary>
+    /// issue #487: 暴投・捕逸が発生した球の <see cref="LivePitch.BatteryMissPlay"/> に再生データが載る
+    /// （CaptureTimelines+CapturePitches のとき）。打席途中の暴投・捕逸を絵にする唯一の運び口。
+    /// </summary>
+    [Fact]
+    public void BatteryMissPlay_IsAttachedToTheLivePitchOfTheMissedPitch()
+    {
+        var on = new GameContext
+        {
+            Baserunning = C with { WildPitchProb = 0.3, PassedBallProb = 0.3 },
+            CaptureTimelines = true, CapturePitches = true,
+        };
+        var captured = 0;
+        for (ulong seed = 1; seed <= 30 && captured == 0; seed++)
+        {
+            var prog = new MatchProgression(FastTeam("A"), FastTeam("H"), on, seed);
+            LivePitch? prev = null;
+            while (true)
+            {
+                var r = prog.AdvancePitch();
+                if (r == AdvancePitchResult.Finished) break;
+                var last = prog.LastPitch;
+                if (last == null || ReferenceEquals(last, prev)) continue;
+                prev = last;
+                if (last.BatteryMissPlay is not { } play) continue;
+                captured++;
+                // 暴投・捕逸の再生データとして最小限の構造が揃っている（純関数の写し＝乱数消費ゼロ）。
+                Assert.Equal("暴投・捕逸", play.Result);
+                Assert.NotEmpty(play.Ball);
+                Assert.NotEmpty(play.Runners);
+            }
+        }
+        Assert.True(captured > 0, "暴投・パスボールを積極化しても BatteryMissPlay が一度も載らなかった（配線切れの疑い）");
+    }
+
+    /// <summary>観測ゲート（CaptureTimelines）を閉じれば BatteryMissPlay は決して載らない＝統計シム・裏試合はゼロコスト。</summary>
+    [Fact]
+    public void BatteryMissPlay_NeverAttachedWhenCaptureTimelinesOff()
+    {
+        var on = new GameContext
+        {
+            Baserunning = C with { WildPitchProb = 0.3, PassedBallProb = 0.3 },
+            CapturePitches = true, // CaptureTimelines は既定オフ
+        };
+        var prog = new MatchProgression(FastTeam("A"), FastTeam("H"), on, 1UL);
+        LivePitch? prev = null;
+        while (true)
+        {
+            var r = prog.AdvancePitch();
+            if (r == AdvancePitchResult.Finished) break;
+            var last = prog.LastPitch;
+            if (last == null || ReferenceEquals(last, prev)) continue;
+            prev = last;
+            Assert.Null(last.BatteryMissPlay);
+        }
     }
 
     // --- StealResolver の target 一般化（design-14 P1-4）: target 省略時は従来と完全一致 ---
