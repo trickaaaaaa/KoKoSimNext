@@ -336,6 +336,34 @@
     /* 案イ（単一要素）でカードのベタ影を出す時の右下枠幅＝枠3px＋影7px。
        USS は border-width を calc/var 加算できないので合算値を1トークンに固定する。 */
     --nb-card-edge:   10px;  /* = --nb-border-card + --nb-shadow-card（案イ右下枠） */
+    --nb-panel-edge:   5px;  /* = --nb-border + --nb-shadow（部品級の案イ右下枠。.row-panel と同値） */
+
+    /* ── マッチアップHUD（対決ビュー上の黒半透明の一体帯）─────────────────────
+       盤面オーバーレイは昼NBの白面カードではなく中継のテロップ帯にする。3Dの絵の上に置くので
+       面は暗く透かし、区切りは白の薄線だけで作る（枠も影も持たない＝帯が1枚に見えることが最優先）。
+       文字は全部白系＝データ画面の --tx-* とは別系統。 */
+    --hud-bg:       rgba(20, 20, 24, 0.82);      /* 帯の地 */
+    --hud-divider:  rgba(255, 255, 255, 0.18);   /* 帯内の区切り線（セル間・段間） */
+    --hud-label:    rgba(255, 255, 255, 0.65);   /* 小ラベルの字 */
+    --hud-chip-dim: rgba(255, 255, 255, 0.14);   /* 従属チップ（学年）の地 */
+    --hud-track:    rgba(255, 255, 255, 0.15);   /* スタミナバーの溝 */
+    /* 帯の幅（盤面ホストに対する割合）。両HUDで共有＝打者と投手が必ず同幅になる。 */
+    --hud-band-w: 34%;
+    /* 帯の級数。名前 > 背番号/球数 > 数値 > チップ > ラベル の順で段差をつける。 */
+    --hud-fs-name: 26px;
+    --hud-fs-num:  22px;   /* 背番号・球数（名前より1段階小さい） */
+    --hud-fs-val:  19px;
+    --hud-fs-chip: 16px;   /* 打順・守備位置・先発・学年（名前より2段階小さい） */
+    --hud-fs-lab:  11px;
+    --hud-fs-pa:   14px;   /* 本日の打席パネル */
+    /* 文字の実高。和文フォントの行箱は級数の倍近くあるので、詰めるには箱の高さを明示するしかない
+       （padding を削っても行箱ぶんの余白は残る）。値は「級数＋わずかな余裕」。 */
+    --hud-h-name: 30px;
+    --hud-h-num:  26px;
+    --hud-h-val:  23px;
+    --hud-h-chip: 20px;
+    --hud-h-lab:  14px;
+    --hud-h-pa:   18px;
 }
 
 /* ── 基底クラス：既定フォント＝IBM Plex Sans JP Regular（設計書16 F1-a・2026-07-21）───
@@ -393,10 +421,6 @@
 .radar-axis--lg .radar-axis__l,
 .radar-axis--lg .radar-axis__v,
 .mlineup-row__name,
-.mup-name,
-.mup-today,
-.mup-pitches,
-.matchup-bar__vs,
 .pitch-call__judge,
 .bs-cell--team,
 .bs-cell--total,
@@ -578,7 +602,6 @@ Button.tp-cta,
 .bench-row__name,        /* 控えベンチ・行の選手名 */
 .sp-pill__name,          /* 先発投手ピルの選手名 */
 .mlineup-row__name,      /* 試合ラインナップ・行の選手名 */
-.mup-name,               /* マッチアップHUDの選手名 */
 .edit-slot__name,        /* 個別指導スロット編集の選手名 */
 .st-name,                /* 成績表の選手名 */
 .tp-roster__name,        /* 練習割当テーブルの選手名 */

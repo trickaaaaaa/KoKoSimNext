@@ -144,37 +144,102 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:Label text="MatchupBar（投手ブロック | 打者ブロック・将来のリザルト/選手詳細で流用）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
-        <ui:VisualElement class="matchup-bar" style="width: 560px;">
-            <ui:VisualElement class="mup-block mup-block--pitcher">
-                <ui:VisualElement class="mup-line">
-                    <ui:Label text="1" class="num-badge num-badge--sm" />
-                    <ui:Label text="福田" class="mup-name" />
-                    <ui:Label text="右投" class="mup-hand" />
+        <ui:Label text="MatchupHud（対決ビュー上の黒半透明の一体帯。地を持つのは帯だけ・区切りは薄線のみ）" class="panel__title" style="margin-top: 16px; margin-bottom: 6px;" />
+
+        <ui:Label text="打者HUD（右上）：名前行＋スタッツ行の2段" class="panel__title" style="margin-bottom: 2px;" />
+        <ui:VisualElement class="mhud-band" style="width: 352px;">
+            <ui:VisualElement class="mhud-idrow">
+                <ui:VisualElement class="mhud-cp mhud-cp--key">
+                    <ui:Label text="4" class="mhud-cp__t f-num" />
+                    <ui:Label text="番" class="mhud-cp__u" />
                 </ui:VisualElement>
-                <ui:VisualElement class="mup-line">
-                    <ui:Label text="防 2.14　奪三振 7" class="mup-career" />
+                <ui:VisualElement class="mhud-cp mhud-cp--team" style="background-color: rgb(28, 62, 122);">
+                    <ui:Label text="三塁" class="mhud-cp__t" />
                 </ui:VisualElement>
-                <ui:VisualElement class="mup-line">
-                    <ui:Label text="球数" class="mup-pitches__lab" />
-                    <ui:Label text="84" class="mup-pitches mup-pitches--warn" />
-                    <ui:Label text="球" class="mup-pitches__lab" />
+                <ui:Label text="5" class="mhud-no f-num" />
+                <ui:Label text="中村 陽介" class="mhud-nm f-display" />
+                <ui:VisualElement class="mhud-cp mhud-cp--dim">
+                    <ui:Label text="2" class="mhud-cp__t f-num" />
+                    <ui:Label text="年" class="mhud-cp__u" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-spacer" />
+                <ui:VisualElement class="mhud-face" />
+            </ui:VisualElement>
+            <ui:VisualElement class="mhud-stats">
+                <ui:VisualElement class="mhud-cell">
+                    <ui:Label text="打率" class="mhud-cell__lab" />
+                    <ui:Label text=".312" class="mhud-cell__val f-num" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-cell">
+                    <ui:VisualElement class="mhud-cell__div" />
+                    <ui:Label text="本塁打" class="mhud-cell__lab" />
+                    <ui:Label text="7" class="mhud-cell__val f-num" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-cell">
+                    <ui:VisualElement class="mhud-cell__div" />
+                    <ui:Label text="打点" class="mhud-cell__lab" />
+                    <ui:Label text="21" class="mhud-cell__val f-num" />
                 </ui:VisualElement>
             </ui:VisualElement>
-            <ui:Label text="VS" class="matchup-bar__vs" />
-            <ui:VisualElement class="mup-block mup-block--batter">
-                <ui:VisualElement class="mup-line">
-                    <ui:Label text="5" class="num-badge num-badge--sm" />
-                    <ui:Label text="清水" class="mup-name" />
-                    <ui:Label text="右打" class="mup-hand" />
-                    <ui:VisualElement class="cond-face" />
+            <ui:VisualElement class="mhud-pas">
+                <ui:VisualElement class="mhud-pa mhud-pa--out">
+                    <ui:Label text="三振" class="mhud-pa__t" />
                 </ui:VisualElement>
-                <ui:VisualElement class="mup-line">
-                    <ui:Label text=".342 / 7本 / 21点 / —盗" class="mup-career" />
+                <ui:VisualElement class="mhud-pa mhud-pa--hit">
+                    <ui:Label text="中安" class="mhud-pa__t" />
                 </ui:VisualElement>
-                <ui:VisualElement class="mup-line">
-                    <ui:Label text="今日" class="mup-today__lab" />
-                    <ui:Label text="2-1" class="mup-today" />
+                <ui:VisualElement class="mhud-pa mhud-pa--walk">
+                    <ui:Label text="四球" class="mhud-pa__t" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-pa mhud-pa--out">
+                    <ui:Label text="遊ゴ" class="mhud-pa__t" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-pa mhud-pa--hit">
+                    <ui:Label text="右本" class="mhud-pa__t" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label text="投手HUD（右下）：名前行（右端に球数）＋スタッツ行3セル＋スタミナバー" class="panel__title" style="margin-top: 12px; margin-bottom: 2px;" />
+        <ui:VisualElement class="mhud-band" style="width: 352px;">
+            <ui:VisualElement class="mhud-idrow">
+                <ui:VisualElement class="mhud-cp mhud-cp--key">
+                    <ui:Label text="2" class="mhud-cp__t f-num" />
+                    <ui:Label text="番手" class="mhud-cp__u" />
+                </ui:VisualElement>
+                <ui:Label text="11" class="mhud-no f-num" />
+                <ui:Label text="伊藤 涼太" class="mhud-nm f-display" />
+                <ui:VisualElement class="mhud-cp mhud-cp--dim">
+                    <ui:Label text="3" class="mhud-cp__t f-num" />
+                    <ui:Label text="年" class="mhud-cp__u" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-spacer" />
+                <ui:VisualElement class="mhud-pc">
+                    <ui:Label text="87" class="mhud-pc__n mhud-pc__n--warn f-num-bd" />
+                    <ui:Label text="球" class="mhud-pc__u" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="mhud-stats">
+                <ui:VisualElement class="mhud-cell">
+                    <ui:Label text="防御率" class="mhud-cell__lab" />
+                    <ui:Label text="2.41" class="mhud-cell__val f-num" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-cell">
+                    <ui:VisualElement class="mhud-cell__div" />
+                    <ui:Label text="奪三振" class="mhud-cell__lab" />
+                    <ui:Label text="5" class="mhud-cell__val f-num" />
+                </ui:VisualElement>
+                <ui:VisualElement class="mhud-cell">
+                    <ui:VisualElement class="mhud-cell__div" />
+                    <ui:Label text="与四死球" class="mhud-cell__lab" />
+                    <ui:Label text="2" class="mhud-cell__val f-num" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="mhud-stam">
+                <ui:VisualElement class="stam__track">
+                    <ui:VisualElement class="stam__fill stam__fill--mid" style="width: 45%;" />
+                    <ui:VisualElement class="stam__tick" style="left: 33.333%;" />
+                    <ui:VisualElement class="stam__tick" style="left: 66.667%;" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
