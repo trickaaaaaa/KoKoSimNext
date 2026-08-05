@@ -1132,12 +1132,26 @@ public static class GameEngine
                         0.0, 1.0);
                     if (MathUtil.Chance(wpProb + pbProb, rng))
                     {
+                        // 進塁前の走者配置を控える（issue #487の絵はこの写しから組む。ApplyBatteryMiss は
+                        // bases を直接書き換えるので、呼び出し後には「誰から誰へ動いたか」が取れない）。
+                        var wpFirst = bases.First;
+                        var wpSecond = bases.Second;
                         var wpScorer = bases.Third; // 暴投/捕逸で生還するのは三塁走者（issue #77 得点帰属）
                         var wpRuns = BaserunningModel.ApplyBatteryMiss(bases);
                         offense.Runs += wpRuns;
                         runsThisHalf += wpRuns;
                         if (wpRuns > 0 && wpScorer is not null) offense.RecordRun(wpScorer);
                         offense.WildPitchCount++;
+                        // 再生データ（issue #487）: この球は暴投判定が投球後に走るため p.LastPitch を
+                        // 既に構築済み（EmitPitchTrace 手前の CapturePitches ブロック）＝with で追加する。
+                        // 乱数を追加消費しない（BuildBatteryMiss は純関数）。
+                        if (ctx.CaptureTimelines && p.LastPitch is { } lpForBatteryMiss)
+                            p.LastPitch = lpForBatteryMiss with
+                            {
+                                BatteryMissPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
+                                    Timeline.TimelineBuilder.BuildBatteryMiss(
+                                        wpFirst, wpSecond, wpScorer, defense.Catcher, paBaserunning, ctx.Field)),
+                            };
                     }
                 }
 
