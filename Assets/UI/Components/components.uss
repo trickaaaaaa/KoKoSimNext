@@ -850,6 +850,40 @@
 .lineup-row__pos { width: 40px; margin-left: var(--sp-2); flex-direction: row; align-items: center; }
 .lineup-row__info { width: 96px; font-size: var(--fs-cap); color: var(--color-muted); }
 
+/* ── LineupRow の交代プレビュー（issue #452 パワプロ方式）──
+   操作が決まった行を「旧名 → 新名」に切り替え、確定前の姿を表の上で見せる。
+   旧名は退色して主役を新名（実ウェイト太字 .f-body-bd 併用）へ譲る。✕は保留中の操作の選び直し。 */
+.lineup-row__name--out { flex-grow: 0; flex-shrink: 1; flex-basis: auto; min-width: 48px; color: var(--color-muted); }
+.lineup-row__arrow { flex-shrink: 0; font-size: var(--fs-body); color: var(--color-muted); margin-right: var(--sp-2); }
+.lineup-row__incoming {
+    /* 主役は「変えたあとの姿」＝新名。幅が足りない行では旧名側（--out）を縮め、新名は縮めない。 */
+    flex-grow: 1;
+    flex-shrink: 0;
+    flex-basis: auto;
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: var(--sp-2);
+}
+.lineup-row__x {
+    width: 24px;
+    height: 24px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: var(--radius-chip);
+    flex-shrink: 0;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: var(--sp-1);
+}
+.lineup-row__x:hover { color: var(--color-chalk); border-color: var(--color-line-focus); }
+
 /* ── PosChip：守備位置チップ（クリックで選択→別チップのクリックで守備位置を入替）。
    スタメン設定では「投」も含めて9枠すべて入替可（issue #233）＝--fixed は使わない。
    --fixed は入替できない場面（試合中の交代パネルの表示専用チップ）だけに残す。指＝DH（守備に就かない）。 ── */

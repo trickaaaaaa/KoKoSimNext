@@ -2918,6 +2918,15 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 攻撃タブを選ぶ（0=代打 1=代走）。守備中はタブ無し＝守備の割当2ペイン（issue #256）。</summary>
         public void SelectSubstitutionKindForCapture(int index) => _subPanel?.SelectKindForCapture(index);
 
+        /// <summary>スクショ用: 守備の割当枠を守備位置で選ぶ（issue #452 プレビュー撮影用）。</summary>
+        public void PickSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition pos) => _subPanel?.PickSlotForCapture(pos);
+
+        /// <summary>スクショ用: 控え一覧の n 番目を選ぶ（行内プレビューを出す。issue #452）。</summary>
+        public void PickSubstitutionCandidateForCapture(int index) => _subPanel?.PickCandidateForCapture(index);
+
+        /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者。issue #452）。</summary>
+        public void PickSubstitutionRunnerForCapture(int baseIndex) => _subPanel?.PickRunnerForCapture(baseIndex);
+
         /// <summary>スクショ用: 自校の控え先頭（代打候補）の名前。</summary>
         public string HomeBenchZeroName =>
             _homeTeam != null && _homeTeam.Reserves.Count > 0 ? _homeTeam.Reserves[0].Name : "";
