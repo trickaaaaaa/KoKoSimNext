@@ -564,8 +564,8 @@ namespace KokoSim.Unity.Match
     /// <summary>
     /// 対決ビューの実体（design-18 §7-1 A案・配線スパイク段階）。
     /// DuelStage レイヤーに簡易ステージ＋素体4体（UBC）を組み、StageCamera（確定構図R）が
-    /// RT 480×270・Point へ毎フレーム描画する。キャラのポーズ更新だけ 12fps に量子化（§4.2 確定値）、
-    /// カメラ・RTはフルレート。ステージは主カメラに映り込まないよう y=-500 へ退避して置き、
+    /// RT（基準960×540・Point。2026-08-05クリーン化改定）へ毎フレーム描画する。
+    /// キャラのポーズ更新だけ 12fps に量子化（§4.2 確定値）、カメラ・RTはフルレート。ステージは主カメラに映り込まないよう y=-500 へ退避して置き、
     /// HideAndDontSave でシーンを汚さない。
     ///
     /// 素体FBXとモーション（Assets/Animo＝再配布NG・gitignore）はエディタ実行時のみ AssetDatabase から
@@ -578,9 +578,14 @@ namespace KokoSim.Unity.Match
     // アクセス変更なしで新ファイルから使えるため＝較正の巣（本ファイル）への diff を最小にする。
     public sealed partial class DuelStageRig : System.IDisposable
     {
-        /// <summary>基準ドット密度（16:9・全画面時の確定解像度）。実RTはカラム実寸から適応する（EnsureSize）。</summary>
-        public const int BaseWidth = 480;
-        public const int BaseHeight = 270;
+        /// <summary>
+        /// 基準ドット密度（16:9・全画面時の確定解像度）。実RTはカラム実寸から適応する（EnsureSize）。
+        /// 監督判定（2026-08-05・実機8構成＋動きGIFの見比べ）: 480×270・ポスタライズ6段の
+        /// ドット表現から **960×540・ポスタライズOFF（クリーン）** へ改定。design-18 §4.2 の
+        /// 「顔の実効ピクセル2〜4px下限」制約は実絵比較の上で意図的に上書きした（同§4.2改定注記）。
+        /// </summary>
+        public const int BaseWidth = 960;
+        public const int BaseHeight = 540;
 
         private const string LayerName = "DuelStage";
         private const float MoundDistance = 18.44f;
@@ -844,10 +849,11 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 色数制限（ポスタライズ）の段数。0または1で無効＝素通し。
-        /// 監督選定（2026-07-28・絵柄マトリクス）: **6段・輪郭なし** を採用既定とする。
-        /// 実装は DuelStagePixelPost の Pass0 をカメラ出力→Target のブリット1枚で常時適用。
+        /// 監督選定（2026-07-28・絵柄マトリクス）: 6段・輪郭なし を採用既定とした。
+        /// → 監督判定（2026-08-05・クリーン化見比べ）: **無効（1）** へ改定。ポストの実装・
+        /// ブリット経路は温存する（戻すときは 6f に上げるだけ。DuelStagePixelPost Pass0）。
         /// </summary>
-        public static float PosterizeLevels = 6f;
+        public static float PosterizeLevels = 1f;
 
         private RenderTexture _colorRt;   // ポスト前のカメラ出力（ポスタライズ有効時のみ生成）
         private Material _postMat;
@@ -4506,6 +4512,12 @@ namespace KokoSim.Unity.Match
         private static readonly Vector3 CatcherHelmetBase = new(0f, 0.125f, -0.015f);
         private static readonly Vector3 CatcherMaskBase = new(0f, 0.090f, 0.075f);
 
+        /// <summary>
+        /// 球審マスク（捕手と同じ生成メッシュ）の装着位置[m]。起点は捕手と同値だが、
+        /// U2素体（恰幅型）の頭に合わせて独立に調整できるよう定数を分ける（捕手側を巻き込まない）。
+        /// </summary>
+        private static readonly Vector3 UmpireMaskBase = new(0f, 0.090f, 0.075f);
+
         /// <summary>胸プロテクターの装着位置[m]（gear-chestコンテナ＝胸ボーン原点・+Z体前）。</summary>
         private static readonly Vector3 ChestMeshBase = new(0f, 0f, 0.085f);
 
@@ -4634,10 +4646,16 @@ namespace KokoSim.Unity.Match
                         }
                         break;
                     case GearKind.UmpireGear:
-                        // 球審: 帽子型クラウン＋ケージバー（顔は見せる）
+                        // 球審: 帽子型クラウン＋マスク。マスクは捕手と同じ生成メッシュ（2026-08-05 監督指示。
+                        // クリーン化＝960×540・ポスタライズOFFで自作ケージバーの粗が見えるようになったため）。
+                        // 生成メッシュが無い環境（gitignore資産の未導入）では従来のプリミティブケージへ落ちる
                         GearPart(c, PrimitiveType.Sphere, "umask-crown", new Vector3(0f, 0.155f, -0.01f),
                             new Vector3(0.21f, 0.15f, 0.21f), dark, layer);
-                        FaceCage(c, "umask", dark, layer);
+                        var uMask = DuelGearMeshes.CatcherMask();
+                        if (uMask != null)
+                            GearMeshPart(c, uMask, "umask-cage", UmpireMaskBase, Quaternion.identity, dark, layer);
+                        else
+                            FaceCage(c, "umask", dark, layer);
                         break;
                 }
             }
