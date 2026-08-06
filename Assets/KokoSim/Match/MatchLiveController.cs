@@ -1342,6 +1342,21 @@ namespace KokoSim.Unity.Match
             var carry = _windowCarry;   // 前の球・窓で余った端数は持ち越す（球間の間合いが倍速でずれないように）
             _windowCarry = _windowClock = _windowHold = 0f;
 
+            // バント/スクイズの構えは**投球の描画に入る前**に入れる（issue #490 実機確認 2026-08-06）。
+            // 構えへの移行は 1.10秒、リリース〜着弾は 0.45秒なので、解決後に確定する
+            // PitchToken.BattingSign を待つと squaring の途中で球が来る（実測: リリース時点で
+            // 移行クリップが毎回 t=0.00）。engine の予約読み口（PendingPitchBattingOverride）は
+            // 投球前に読める＝振りかぶり 1.30秒を助走に使える。
+            // 読める中でいちばん早い指示は**この球のトークン**（解決済みなので既に入っている。
+            // 実測 2026-08-06: BeginPitchRender の時点で token=Bunt）。予約（engine の読み口）は
+            // まだ消費前の球にしか無いので論理和で拾う。
+            // 猶予は打席の初球だけ振りかぶりぶん（1.30秒）あり、2球目以降はほぼ0＝rig 側が
+            // 移行クリップを通すか直接構えるかを猶予で選ぶ。
+            var buntNow = (index >= 0 && index < _paQueue.Count && IsBuntSign(_paQueue[index].Token))
+                          || PendingBuntSign();
+            PrepareBuntStance(buntNow,
+                index == 0 && DuelPacingActive ? DuelStageRig.WindupSeconds : 0f);
+
             if (index == 0 && DuelPacingActive)
             {
                 // セットポジション投球なのでクリップ先頭からではなく DeliveryStartTime から流れる＝
@@ -1498,10 +1513,24 @@ namespace KokoSim.Unity.Match
         /// 対決ビューの打者をバントの構えへ入れる/戻す（issue #490）。**札を押した瞬間**に呼ぶのが本命で、
         /// 構えへの移行クリップ 1.10秒ぶんの助走を窓の滞在時間から取る。表示専用＝判定・帯には無関係。
         /// </summary>
-        private void PrepareBuntStance(bool bunting)
+        /// <summary>
+        /// 次の1球に予約済みのバント・スクイズ指示があるか（issue #490）。engine の
+        /// <see cref="MatchProgression.PendingPitchBattingOverride"/> を読むだけ＝乱数も状態も動かさない。
+        /// 敵AIのサインは解決の途中で決まるのでここには出ない（先読みは乱数順を動かす）。
+        /// </summary>
+        private bool PendingBuntSign()
+        {
+            if (_prog == null) return false;
+            var offenseIsAway = _atBat?.IsTop ?? _prog.IsTeamOnOffense(true);
+            return _prog.PendingPitchBattingOverride(offenseIsAway)
+                is PitchBattingOverride.Bunt or PitchBattingOverride.SafetyBunt
+                or PitchBattingOverride.Squeeze;
+        }
+
+        private void PrepareBuntStance(bool bunting, float leadSeconds = 0f)
         {
             if (!DuelPacingActive) return;
-            _duelRig?.PrepareBatterBunt(bunting);
+            _duelRig?.PrepareBatterBunt(bunting, leadSeconds);
         }
 
         /// <summary>その球にバント・セーフティバント・スクイズの指示が出ているか（issue #490）。表示専用。</summary>
@@ -1588,6 +1617,10 @@ namespace KokoSim.Unity.Match
                 // （当てる／空振り）の差し替えと、予約が漏れた経路への保険を兼ねる。
                 var isBuntAttempt = IsBuntSign(pt);
                 BuntAttemptForCapture = isBuntAttempt;
+                // 構えは予約と実指示の論理和。実指示だけで下ろすと、指示の無い球のリリースが
+                // 予約済みの構えを巻き戻す（issue #490）。敵AIのバントは予約に出ないので、
+                // ここで初めて真になる＝従来どおりリリース時からの切り替えになる。
+                PrepareBuntStance(isBuntAttempt || PendingBuntSign());
                 _duelRig.OnPitchReleased(isLast ? -1f : duelPitchIntervalSeconds, outcome,
                     FlightOf(pt), BattedOf(pt, isLast), isBuntAttempt);
             }

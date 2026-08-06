@@ -376,6 +376,17 @@ public sealed class TeamState
     public void SetPendingPitchBattingOverride(PitchBattingOverride? v) => _pendingPitchBattingOverride = v;
 
     /// <summary>
+    /// 予約済みで**まだ消費していない**打撃指示（issue #490 実機確認 2026-08-06）。表示専用の読み口で、
+    /// 値を返すだけ＝乱数も状態も動かさない（帯不変）。
+    ///
+    /// <para>絵の側は「次の球がバントか」を**投球の前に**知る必要がある。バント構えへの移行は
+    /// 1.10秒かかるのに対しリリース〜着弾は 0.45秒しかなく、解決後に確定する
+    /// <c>PitchToken.BattingSign</c> を待つと squaring の途中で球が来る。振りかぶり（1.30秒）を
+    /// 助走に使うにはここを読むしかない。</para>
+    /// </summary>
+    public PitchBattingOverride? PendingPitchBattingOverride => _pendingPitchBattingOverride;
+
+    /// <summary>
     /// 次の1球への守備上書き（配球方針/ギア/内野・外野の深さ）を予約する（issue #492: 陣形も1球単位へ）。
     /// 全項目null=指示解除。「解除するまで続く」寿命は呼び出し側（UI）が采配窓ごとに再予約して維持する。
     /// </summary>
