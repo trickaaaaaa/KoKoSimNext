@@ -43,6 +43,52 @@ public sealed class CameraPlanBuilderTests
         Assert.InRange(first.Cy, 0.0, FieldDiagramGeometry.Mound.Y);
     }
 
+    // 途中から組むプラン（issue #485/#490 の実機確認 2026-08-06）。打席途中の盗塁は投球を
+    // 対決ビューで見せ終わってから守備ビューへ切り替わるので、カメラも投球区間の後ろから始める。
+    // t=0 から組んだプランを途中から読むと、レート制限（ズーム 2倍/秒）の履歴を引きずって
+    // 頭が全景のままになり、寄り切る前にプレーが終わる（実測: 頭の1.5秒が枠64.7m＝人18px）。
+    [Fact]
+    public void Build_WithStartSeconds_BeginsTightInsteadOfWide()
+    {
+        var play = PlaybackSamples.All[0];   // ① レフト前ヒット（頭に投球区間を持つ）
+        const double start = 1.4;            // 投球が捕手へ届いたあたり＝盗塁の再生開始点に相当
+
+        var whole = CameraPlanBuilder.Build(play);
+        var sliced = CameraPlanBuilder.Build(play, null, start);
+
+        Assert.NotEmpty(sliced);
+        // ① 開始時刻より手前のキーフレームを持たない＝履歴を持ち込まない。
+        Assert.All(sliced, kf => Assert.True(kf.T >= start - 1e-9, $"開始より手前のキーフレーム: {kf.T}"));
+        // ② 開始時刻ちょうどに1本ある（等間隔グリッドが跨いだままにしない）。
+        Assert.True(Math.Abs(sliced[0].T - start) < 1e-9, $"頭が開始時刻でない: {sliced[0].T}");
+        // ③ 頭はレート制限を通さない生の目標値＝全景から始まらない。
+        Assert.True(sliced[0].ZoomMult > CameraPlanBuilder.WideZoom,
+            $"頭が全景のまま: zoom={sliced[0].ZoomMult}");
+        // ④ 通しで組んだプランの同時刻より寄っている（＝これが直したかった差そのもの）。
+        var wholeAtStart = whole.Last(kf => kf.T <= start + 1e-9);
+        Assert.True(sliced[0].ZoomMult >= wholeAtStart.ZoomMult,
+            $"途中開始のほうが引いている: {sliced[0].ZoomMult} < {wholeAtStart.ZoomMult}");
+    }
+
+    // 既定（startSeconds=0）は1キーフレームも変わらないこと＝既存の呼び出しとゴールデンが無傷。
+    [Fact]
+    public void Build_WithZeroStart_IsIdenticalToDefault()
+    {
+        foreach (var play in PlaybackSamples.All)
+        {
+            var a = CameraPlanBuilder.Build(play);
+            var b = CameraPlanBuilder.Build(play, null, 0.0);
+            Assert.Equal(a.Count, b.Count);
+            for (var i = 0; i < a.Count; i++)
+            {
+                Assert.Equal(a[i].T, b[i].T);
+                Assert.Equal(a[i].Cx, b[i].Cx);
+                Assert.Equal(a[i].Cy, b[i].Cy);
+                Assert.Equal(a[i].ZoomMult, b[i].ZoomMult);
+            }
+        }
+    }
+
     [Fact]
     public void Build_ReturnsToWide_AfterResultSettles()
     {

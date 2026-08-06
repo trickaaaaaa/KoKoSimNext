@@ -66,6 +66,15 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool CaptureMode;
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// 【開発用・エディタ限定】試合係数の差し替え口。牽制・暴投・捕逸・振り逃げは実確率が 0.05〜0.001 で、
+        /// 素の試合を流しても絵の検証に必要な回数が出ない。撮影ハーネスだけがここへ確率を上げた
+        /// <see cref="GameContext"/> を返す関数を挿す。既定 null＝恒等＝本番の乱数順・統計帯には一切触れない。
+        /// </summary>
+        public static System.Func<GameContext, GameContext> CaptureContextOverride;
+#endif
+
         [SerializeField] private ulong gameSeed = 20260718UL;
         [SerializeField] private string awayName = "北都大付属";
         [SerializeField] private string homeName = "桜丘";
@@ -646,6 +655,10 @@ namespace KokoSim.Unity.Match
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
             // デバッグHUD（設計書17 §5, F3）が開いているときだけ観測を差し込む。閉じていれば恒等＝従来と完全一致。
             ctx = Unity.Debugging.DebugTraceHub.AttachTo(ctx);
+#endif
+#if UNITY_EDITOR
+            // 撮影ハーネス（稀プレーの絵の検証）だけが挿す差し替え口。既定 null＝恒等。
+            if (CaptureContextOverride != null) ctx = CaptureContextOverride(ctx);
 #endif
             _prog = new MatchProgression(away, home, ctx, gameSeed);
         }
@@ -1230,6 +1243,17 @@ namespace KokoSim.Unity.Match
                 ? _atBat.IsTop == _managerIsAway              // 1球進行: いま止まっている窓の攻守
                 : _prog.IsTeamOnOffense(_managerIsAway);      // 一括経路（撮影ハーネス）
             _prog.SetPitchBattingOverride(_managerIsAway, offense ? _pitchBattingChoice : null);
+            // バント/スクイズの構えは**ここ**で予約する（issue #490 実機確認 2026-08-06）。
+            // リリース時（OnPitchReleased）に切り替えると、構えへの移行クリップ 1.10秒に対して
+            // リリース〜着弾が 0.45秒しかなく**構えに入り切る前に球が来る**（実測: 指示が出ている球で
+            // 打者が通常の構えのままフルスイングしていた）。
+            // ⚠ 球トークンの BattingSign は「その球を解決した時点」で入るので投球の描画前には読めない
+            // （実測: BeginPitchRender では毎球 null）。読めるのは監督自身が押した札だけなので、
+            // 敵AIのバントは従来どおりリリース時の切り替えに委ねる（そちらは OnPitchReleased 側が担う）。
+            if (DuelPacingActive)
+                _duelRig?.PrepareBatterBunt(offense && _pitchBattingChoice
+                    is PitchBattingOverride.Bunt or PitchBattingOverride.SafetyBunt
+                    or PitchBattingOverride.Squeeze);
             _prog.SetOffensiveSign(_managerIsAway, offense ? _signChoice : null);
             _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null);
             // 守備方針の再予約（自校が守備の窓のみ）。攻撃中は相手守備＝brain のまま触らない。
@@ -1471,6 +1495,38 @@ namespace KokoSim.Unity.Match
         /// 始める＝同じ0.5秒を二度描かない。キャプションは <c>CaptionAt</c> が「t以前の最後の1件」を
         /// 拾うので、飛ばした先でも「打った」の実況から出る（2026-07-31）。
         /// </param>
+        /// <summary>その球にバント・セーフティバント・スクイズの指示が出ているか（issue #490）。表示専用。</summary>
+        private static bool IsBuntSign(PitchToken pt)
+            => pt.BattingSign is KokoSim.Engine.Match.Tactics.PitchBattingOverride.Bunt
+                or KokoSim.Engine.Match.Tactics.PitchBattingOverride.SafetyBunt
+                or KokoSim.Engine.Match.Tactics.PitchBattingOverride.Squeeze;
+
+        /// <summary>
+        /// 打席途中プレー（issue #485〜#488）を守備ビューで見せ始める時刻。投球区間を持たないプレーは 0
+        /// （＝頭から全部見せる）。
+        ///
+        /// 投球そのものは対決ビューで見せ終わっているので、守備ビューは**その続き**から始める
+        /// （打球が <see cref="ContactMomentOf"/> で接触から始めるのと同型）。ただし返すのは投球の
+        /// 終わりではなく**次に球が動き出す時刻**（盗塁なら捕手の送球開始）。
+        ///
+        /// 投球の終わりで切ると、そこは「捕手が握り替えている 0.6秒」＝どの球区間にも属さない隙間で、
+        /// カメラプランは見るものが無いので全景を返す。実測（2026-08-06）: 開始を投球の終わり 1.40s に
+        /// しても頭は枠64.7m＝人18px のまま変わらなかった。次の区間の頭で切れば、その瞬間から
+        /// 送球の枠に入る＝寄った絵で始まる。
+        /// </summary>
+        private static double FieldCutMomentOf(PlaybackPlay play)
+        {
+            if (play == null || play.Ball.Count == 0) return 0;
+            var head = play.Ball[0];
+            var isPitch = head is PitchSegment || (head is EndpointBallSegment eb && eb.Kind == BallSegmentKind.Pitch);
+            if (!isPitch) return 0;
+            // 投球の次に球が動き出す時刻（無ければ投球の終わり＝球の出番がもう無いプレー）。
+            var next = double.PositiveInfinity;
+            for (var i = 1; i < play.Ball.Count; i++)
+                if (play.Ball[i].T0 < next) next = play.Ball[i].T0;
+            return double.IsFinite(next) ? System.Math.Max(next, head.T1) : head.T1;
+        }
+
         private static double ContactMomentOf(PlaybackPlay play, double shownSeconds = -1)
         {
             if (play == null || play.Ball.Count == 0) return 0;
@@ -1519,9 +1575,10 @@ namespace KokoSim.Unity.Match
                 };
                 // バント/セーフティバント/スクイズの指示が出ている球（issue #490）: 打者の構え・
                 // 接触/空振りをバント用クリップへ差し替える（表示専用＝判定には無関係）。
-                var isBuntAttempt = pt.BattingSign is KokoSim.Engine.Match.Tactics.PitchBattingOverride.Bunt
-                    or KokoSim.Engine.Match.Tactics.PitchBattingOverride.SafetyBunt
-                    or KokoSim.Engine.Match.Tactics.PitchBattingOverride.Squeeze;
+                // 構えの予約は BeginPitchRender で済ませてある（間に合わせるため）。ここは一発物
+                // （当てる／空振り）の差し替えと、予約が漏れた経路への保険を兼ねる。
+                var isBuntAttempt = IsBuntSign(pt);
+                BuntAttemptForCapture = isBuntAttempt;
                 _duelRig.OnPitchReleased(isLast ? -1f : duelPitchIntervalSeconds, outcome,
                     FlightOf(pt), BattedOf(pt, isLast), isBuntAttempt);
             }
@@ -1647,7 +1704,8 @@ namespace KokoSim.Unity.Match
             _stage = LiveStage.Play;
             _windowCarry = 0f;
             _stealPlay = steal;
-            _t = 0;
+            // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
+            _t = FieldCutMomentOf(steal);
             _stealEndAt = StealPlayEndTime(steal);
             _view.SetPlay(steal);
             // 3Dの守備ビュー（打球と同じ経路。BeginFieldPlay は rig 未導入なら内部で何もしない）。
@@ -1657,7 +1715,7 @@ namespace KokoSim.Unity.Match
                 // （走者が居る＝必ず先行打席がある）＝その IsTop で守備チームを引く。
                 if (_prog != null && _current != null)
                     _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
-                _duelRig.BeginFieldPlay(steal, 0f);
+                _duelRig.BeginFieldPlay(steal, (float)_t);
             }
             RenderStealFrame();
         }
@@ -1744,14 +1802,15 @@ namespace KokoSim.Unity.Match
             _stage = LiveStage.Play;
             _windowCarry = 0f;
             _pickoffPlay = pickoff;
-            _t = 0;
+            // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
+            _t = FieldCutMomentOf(pickoff);
             _pickoffEndAt = PickoffPlayEndTime(pickoff);
             _view.SetPlay(pickoff);
             if (_duelRig != null && _duelRig.Available)
             {
                 if (_prog != null && _current != null)
                     _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
-                _duelRig.BeginFieldPlay(pickoff, 0f);
+                _duelRig.BeginFieldPlay(pickoff, (float)_t);
             }
             RenderPickoffFrame();
         }
@@ -1840,14 +1899,15 @@ namespace KokoSim.Unity.Match
             _stage = LiveStage.Play;
             _windowCarry = 0f;
             _batteryMissPlay = batteryMiss;
-            _t = 0;
+            // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
+            _t = FieldCutMomentOf(batteryMiss);
             _batteryMissEndAt = BatteryMissPlayEndTime(batteryMiss);
             _view.SetPlay(batteryMiss);
             if (_duelRig != null && _duelRig.Available)
             {
                 if (_prog != null && _current != null)
                     _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
-                _duelRig.BeginFieldPlay(batteryMiss, 0f);
+                _duelRig.BeginFieldPlay(batteryMiss, (float)_t);
             }
             RenderBatteryMissFrame();
         }
@@ -1923,14 +1983,15 @@ namespace KokoSim.Unity.Match
             _stage = LiveStage.Play;
             _windowCarry = 0f;
             _dropThirdStrikePlay = dropThirdStrike;
-            _t = 0;
+            // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
+            _t = FieldCutMomentOf(dropThirdStrike);
             _dropThirdStrikeEndAt = DropThirdStrikePlayEndTime(dropThirdStrike);
             _view.SetPlay(dropThirdStrike);
             if (_duelRig != null && _duelRig.Available)
             {
                 if (_prog != null && _current != null)
                     _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
-                _duelRig.BeginFieldPlay(dropThirdStrike, 0f);
+                _duelRig.BeginFieldPlay(dropThirdStrike, (float)_t);
             }
             RenderDropThirdStrikeFrame();
         }
@@ -3610,6 +3671,22 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 采配カードをホバー拡大の状態にする（実際のカーソルは要らない）。null で解除。</summary>
         public void SetTacticsHotForCapture(string id) => _signPad?.SetHotForCapture(id);
+
+        /// <summary>スクショ用: 采配カードをIDで押す（クリックと同経路＝OnSelect も通る）。
+        /// <see cref="SelectPitchBattingForCapture"/> が扱わない群（走塁・仕掛け）を押すのに使う。</summary>
+        public void SelectSignForCapture(string id) => _signPad?.Select(id);
+
+        /// <summary>スクショ用: 打席途中プレー（issue #485〜#488）を再生中なら種類名、そうでなければ null。
+        /// 打球（<see cref="FieldPlayActiveForCapture"/>）とは別経路なので別の口で見る。</summary>
+        public string MidPaPlayForCapture =>
+            _stealPlay != null ? "steal"
+            : _pickoffPlay != null ? "pickoff"
+            : _batteryMissPlay != null ? "battery-miss"
+            : _dropThirdStrikePlay != null ? "drop-third"
+            : null;
+
+        /// <summary>スクショ用: 直前の球にバント・スクイズの指示が出ていたか（issue #490 の絵の検証用）。</summary>
+        public bool BuntAttemptForCapture { get; private set; }
 
         /// <summary>
         /// スクショ用: チーム配色を差し込む。撮影ハーネスの試合は <see cref="LiveMatchRequest"/> を通らないので

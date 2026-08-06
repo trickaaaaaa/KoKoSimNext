@@ -2119,12 +2119,21 @@ namespace KokoSim.Unity.Match
 
         private System.Collections.Generic.IReadOnlyList<CameraKeyframe> _fieldPlan;
 
-        /// <summary>engine の追随カメラのプランを、この rig の守備カメラ用に組む。</summary>
-        private void BuildFieldCameraPlan(PlaybackPlay play)
+        /// <summary>
+        /// engine の追随カメラのプランを、この rig の守備カメラ用に組む。
+        ///
+        /// <paramref name="startSeconds"/> は**このビューが実際に見せ始める時刻**。守備ビューは
+        /// 打球なら接触の瞬間、打席途中プレー（盗塁）なら投球が捕手へ届いた後から始まる＝その手前は
+        /// 対決ビューで見せ終わっている。プランを t=0 から組むとレート制限（ズーム 2倍/秒）の履歴を
+        /// 引きずり、**頭が全景のまま**になって寄り切る前にプレーが終わる
+        /// （実測 2026-08-06: 盗塁の頭1.5秒が枠64.7m＝人18px／バント打球も頭が枠64.3m）。
+        /// </summary>
+        private void BuildFieldCameraPlan(PlaybackPlay play, float startSeconds)
         {
             _fieldPlan = play == null ? null : CameraPlanBuilder.Build(play,
                 new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
-                    FieldThrowFollowsBall));
+                    FieldThrowFollowsBall),
+                startSeconds);
         }
 
         /// <summary>
@@ -2533,7 +2542,7 @@ namespace KokoSim.Unity.Match
             BuildFieldCatchPlan(play);
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             PlanErrorMark(play);               // びっくりマーク（issue #439 ②）
-            BuildFieldCameraPlan(play);
+            BuildFieldCameraPlan(play, t0);    // ⚠ 見せ始める時刻から組む（頭が全景になるのを防ぐ）
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
             // 全景へ戻し始める時刻は engine のプラン（BuildFieldCameraPlan＝CameraPlanBuilder.Build）と
             // 同じ CameraPlanBuilder.WideStartTime を単一ソースにする（issue #406②/#441。片方だけ

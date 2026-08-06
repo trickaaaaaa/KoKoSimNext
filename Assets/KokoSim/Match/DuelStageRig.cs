@@ -1413,6 +1413,18 @@ namespace KokoSim.Unity.Match
         /// なければ FinishOneShot の復帰時に効く」流儀＝振っている最中に構えが割り込んで壊れない）。
         /// バント構えクリップが無い環境（購入パック未取得）では常に無視して通常の打撃構えのまま。
         /// </summary>
+        /// <summary>
+        /// 次に投げる球にバント/セーフティバント/スクイズの指示が出ているかを、**投球の描画に入る前**に渡す
+        /// （issue #490 実機確認 2026-08-06）。構えへの移行 <see cref="BatterIdleToBuntClipName"/> は 1.10秒
+        /// かかる一方、リリースから着弾までは 0.45秒しかない＝<see cref="OnPitchReleased"/> で切り替えると
+        /// **構えに入り切る前に球が来る**（実測: バント指示の球で打者が通常の構えのままフルスイングしていた）。
+        /// </summary>
+        public void PrepareBatterBunt(bool bunting)
+        {
+            if (!Available) return;
+            SetBatterBunting(bunting);
+        }
+
         private void SetBatterBunting(bool bunting)
         {
             if (_batter == null) return;
