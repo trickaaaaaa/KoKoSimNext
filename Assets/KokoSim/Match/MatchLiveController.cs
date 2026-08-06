@@ -73,6 +73,20 @@ namespace KokoSim.Unity.Match
         /// <see cref="GameContext"/> を返す関数を挿す。既定 null＝恒等＝本番の乱数順・統計帯には一切触れない。
         /// </summary>
         public static System.Func<GameContext, GameContext> CaptureContextOverride;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】デモ試合の乱数シードの差し替え口。1試合に出るプレーの取り合わせは
+        /// シードで決まるので、録画ハーネスが「1試合で揃わなかった種類」を別の試合で拾い直すために使う。
+        /// 既定 null＝<c>gameSeed</c> のまま＝従来と完全一致。
+        /// </summary>
+        public static ulong? GameSeedOverrideForCapture;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】デモ試合で監督が持つ側の差し替え口。バント・盗塁は**監督側の采配**なので、
+        /// 監督側が塁に出ない試合では一度も撮れない（実測: 自校が3回で0-18のとき走者が出ずじまい）。
+        /// 撮影ハーネスだけが強い側へ回って絵を作る。既定 null＝後攻(home)＝従来と完全一致。
+        /// </summary>
+        public static bool? ManagerIsAwayOverrideForCapture;
 #endif
 
         [SerializeField] private ulong gameSeed = 20260718UL;
@@ -630,6 +644,9 @@ namespace KokoSim.Unity.Match
 
             // デモ/スクショ用の自前生成（本番フローでは通らない）。
             _managerIsAway = false;
+#if UNITY_EDITOR
+            if (ManagerIsAwayOverrideForCapture is { } mia) _managerIsAway = mia;
+#endif
             _onComplete = null;
             _rematchOnTie = true;
             // 委任AIの采配値も成長した監督の実値を使う（旧ハードコード70を廃す, issue #171）。
@@ -660,7 +677,11 @@ namespace KokoSim.Unity.Match
             // 撮影ハーネス（稀プレーの絵の検証）だけが挿す差し替え口。既定 null＝恒等。
             if (CaptureContextOverride != null) ctx = CaptureContextOverride(ctx);
 #endif
-            _prog = new MatchProgression(away, home, ctx, gameSeed);
+            var seed = gameSeed;
+#if UNITY_EDITOR
+            if (GameSeedOverrideForCapture is { } s) seed = s;
+#endif
+            _prog = new MatchProgression(away, home, ctx, seed);
         }
 
         // 列見出し（左=自校 / 右=相手校）。監督が先攻(away)か後攻(home)かで名前を割り当てる。
@@ -3726,6 +3747,16 @@ namespace KokoSim.Unity.Match
             : _batteryMissPlay != null ? "battery-miss"
             : _dropThirdStrikePlay != null ? "drop-third"
             : null;
+
+        /// <summary>スクショ用: 再生中の打席途中プレーの結果テキスト（盗塁成功/盗塁死/牽制/牽制死/暴投・捕逸/振り逃げ）。
+        /// 種類（<see cref="MidPaPlayForCapture"/>）だけでは盗塁の成否＝タッチアウトの有無が分からない。</summary>
+        public string MidPaPlayResultForCapture =>
+            _stealPlay?.Result ?? _pickoffPlay?.Result
+            ?? _batteryMissPlay?.Result ?? _dropThirdStrikePlay?.Result;
+
+        /// <summary>スクショ用: 1球進行のいまの段（Idle/Window/Pitch/Play/Over）。
+        /// 録画ハーネスが「打席が確定した瞬間」を段の縁で拾うのに使う。</summary>
+        public string StageNameForCapture => _stage.ToString();
 
         /// <summary>スクショ用: 直前の球にバント・スクイズの指示が出ていたか（issue #490 の絵の検証用）。</summary>
         public bool BuntAttemptForCapture { get; private set; }
