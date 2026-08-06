@@ -42,7 +42,8 @@ public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMu
 /// 送球が届くにつれ枠が締まり、受け手の捕球で最も寄る（中継カメラの作法）。
 /// </param>
 public readonly record struct CameraFraming(
-    double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false)
+    double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false,
+    bool HeldBallFollowsRunner = false)
 {
     /// <summary>2D俯瞰の既定（Issue #119 で決めた現行値）。渡さなければこれが使われる。</summary>
     public static readonly CameraFraming Default = new(3.4, 6.0, 2.4);
@@ -287,6 +288,13 @@ public static class CameraPlanBuilder
             if (held.HasValue)
             {
                 var heldV = new PlaybackVec(held.Value.X, held.Value.Y);
+                // 球が止まっている間も走っている走者が居れば一緒に収める（issue #488 実機確認 2026-08-06）。
+                // 振り逃げは「捕手が本塁付近で球を持っている 2.4秒」がまるごとこの分岐で、球だけを
+                // 追うと**一塁へ走る打者走者が一度も枠に入らない**（実測: 注視y が 2.4秒ずっと 1.0）。
+                // 送球前の先取りパンを禁じた issue #448① の意図（未来の送球先を先に見ない）は
+                // 保たれる＝見るのは走者の**現在位置**だけ。2D俯瞰は全部入るので既定オフ。
+                if (fr.HeldBallFollowsRunner && RunningRunnerAt(play, actualT) is { } runner)
+                    return FitBox(heldV, runner, fr);
                 return FitBox(heldV, heldV, fr);
             }
         }
@@ -329,6 +337,29 @@ public static class CameraPlanBuilder
             if (t <= s.T1) return (s, null);
         }
         return (null, null);
+    }
+
+    /// <summary>
+    /// 時刻 t に**実際に動いている**走者の現在位置（複数なら最も遠くまで進む予定のレッグ＝
+    /// そのプレーの主役）。その場に居るだけのレッグ（From==To）は数えない。
+    /// </summary>
+    private static PlaybackVec? RunningRunnerAt(PlaybackPlay play, double t)
+    {
+        PlaybackVec? found = null;
+        var best = double.NegativeInfinity;
+        foreach (var runner in play.Runners)
+            foreach (var seg in runner.Segs)
+            {
+                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (t < seg.T0 || t > seg.T1) continue;
+                var span = Math.Abs(seg.To.X - seg.From.X) + Math.Abs(seg.To.Y - seg.From.Y);
+                if (span <= best) continue;
+                var at = PlaybackEvaluator.RunnerAt(runner, t);
+                if (!at.HasValue) continue;
+                best = span;
+                found = at.Value;
+            }
+        return found;
     }
 
     private static PlaybackRun? FindCriticalRunAt(PlaybackPlay play, double t)

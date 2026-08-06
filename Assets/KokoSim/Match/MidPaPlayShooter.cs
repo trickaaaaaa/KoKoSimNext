@@ -97,7 +97,7 @@ namespace KokoSim.Unity.Match
             var frames = new StringBuilder("種類\tコマ\tt\t球x\t球y\t球h\t枠[m]\t注視y\t人px\t球px\n");
             var done = new HashSet<string>();
             bool prevWindow = false;
-            bool buntArmed = false;
+            bool buntArmed = false, buntPressed = false;
             int pa = 0;
             int guard = 0;
 
@@ -114,9 +114,12 @@ namespace KokoSim.Unity.Match
                     {
                         // 盗塁が先。撮り終えたらバントへ切り替える（同時に出すと絵の切り分けができない）。
                         if (!done.Contains("steal")) _ctrl.SelectSignForCapture("run-steal");
-                        else if (!done.Contains("bunt"))
+                        else if (!done.Contains("bunt") && !buntPressed)
                         {
+                            // ⚠ 1回だけ押す。カードはトグルなので毎窓押すと**次の窓で消灯**し、
+                            // 構えの前倒しが台無しになる（実測: リリース時点で移行クリップが毎回 t=0.00）。
                             _ctrl.SelectPitchBattingForCapture(PitchBattingOverride.Bunt);
+                            buntPressed = true;
                             buntArmed = true;
                         }
                     }
@@ -128,7 +131,8 @@ namespace KokoSim.Unity.Match
                 {
                     int n1 = 0, n2 = 0;
                     yield return ShootStrip("bunt-stance", StanceStepSeconds,
-                        () => _ctrl.BuntAttemptForCapture && !_ctrl.FieldPlayActiveForCapture, x => n1 = x);
+                        () => _ctrl.BuntAttemptForCapture && !_ctrl.FieldPlayActiveForCapture, x => n1 = x,
+                        null, "打者");
                     if (_ctrl.FieldPlayActiveForCapture)
                         yield return ShootStrip("bunt-play", StripStepSeconds,
                             () => _ctrl.FieldPlayActiveForCapture, x => n2 = x, frames);
@@ -177,11 +181,17 @@ namespace KokoSim.Unity.Match
         /// <summary>プレーが続いている間、等間隔で撮り続ける。<paramref name="alive"/> は毎フレーム呼ばれる
         /// （観測の副作用＝判定を見たか等もここで拾う）。</summary>
         private IEnumerator ShootStrip(string prefix, float step, Func<bool> alive, Action<int> count,
-                                       StringBuilder frames = null)
+                                       StringBuilder frames = null, string clipLog = null)
         {
             int i = 0;
             while (i < StripMaxFrames && alive())
             {
+                if (clipLog != null)
+                {
+                    var r = _ctrl.DuelRigForCapture;
+                    Debug.Log("[midpa] " + clipLog + " " + i + " "
+                              + (r != null ? r.BatterClipDiagForCapture() : "-"));
+                }
                 if (frames != null)
                 {
                     var rig = _ctrl.DuelRigForCapture;

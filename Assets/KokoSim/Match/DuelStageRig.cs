@@ -1419,6 +1419,18 @@ namespace KokoSim.Unity.Match
         /// かかる一方、リリースから着弾までは 0.45秒しかない＝<see cref="OnPitchReleased"/> で切り替えると
         /// **構えに入り切る前に球が来る**（実測: バント指示の球で打者が通常の構えのままフルスイングしていた）。
         /// </summary>
+        /// <summary>
+        /// スクショ用: 打者がいま出しているクリップ（名前・クリップ内時刻・待機クリップ・フェード残り・
+        /// バント構えの状態）。「構えが変わらない」ときに、切り替えが届いていないのか届いた上で
+        /// 別のものに上書きされているのかは**絵では区別できない**ので実測で採る（design-18 §3.3 と同型）。
+        /// </summary>
+        public string BatterClipDiagForCapture()
+            => _batter == null ? "-\t-\t-\t-\t-"
+               : (_batter.Clip == null ? "null" : _batter.Clip.name) + "\t"
+                 + _batter.Time.ToString("F2") + "\t"
+                 + (_batter.IdleClip == null ? "null" : _batter.IdleClip.name) + "\t"
+                 + _batter.FadeRemaining.ToString("F2") + "\t" + _batterBunting;
+
         public void PrepareBatterBunt(bool bunting)
         {
             if (!Available) return;

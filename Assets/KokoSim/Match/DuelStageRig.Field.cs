@@ -2132,7 +2132,7 @@ namespace KokoSim.Unity.Match
         {
             _fieldPlan = play == null ? null : CameraPlanBuilder.Build(play,
                 new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
-                    FieldThrowFollowsBall),
+                    FieldThrowFollowsBall, HeldBallFollowsRunner: true),
                 startSeconds);
         }
 

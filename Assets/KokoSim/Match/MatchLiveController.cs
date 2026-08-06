@@ -1144,20 +1144,25 @@ namespace KokoSim.Unity.Match
             {
                 // ── 攻撃: 打ち方（1手）──  Icon はカードの絵の位置に敷く1文字（将来ここへ実際の絵が入る）。
                 new SignPad.SignDef { Id = "batting-swing", Label = "積極的に", Icon = "打", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceSwing,
+                    GroupLabel = "打撃", OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.ForceSwing; PrepareBuntStance(false); },
                     OnClear = () => _pitchBattingChoice = null },
                 new SignPad.SignDef { Id = "batting-take", Label = "待て", Icon = "待", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", OnSelect = () => _pitchBattingChoice = PitchBattingOverride.ForceTake,
+                    GroupLabel = "打撃", OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.ForceTake; PrepareBuntStance(false); },
                     OnClear = () => _pitchBattingChoice = null },
                 // ── 攻撃: 仕掛け（1手・走者が要る）──
+                // ⚠ バント・スクイズは**押した瞬間**に構えの差し替えも始める（issue #490）。
+                // 構えへの移行クリップは 1.10秒かかるのに対し、采配を押し込む PushPitchTactics から
+                // リリースまでは実測 0.3秒しかない（クリップ内時刻を実測: リリース時点で
+                // Idle_To_Bunt が t=0.00＝始まったばかり）。窓の滞在時間ぶんを丸ごと使わないと
+                // 着弾までに構えへ入り切らない。
                 new SignPad.SignDef { Id = "batting-bunt", Label = "バント", Icon = "犠", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnAnyBase,
-                    OnSelect = () => _pitchBattingChoice = PitchBattingOverride.Bunt,
-                    OnClear = () => _pitchBattingChoice = null },
+                    OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
+                    OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
-                    OnSelect = () => _pitchBattingChoice = PitchBattingOverride.Squeeze,
-                    OnClear = () => _pitchBattingChoice = null },
+                    OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Squeeze; PrepareBuntStance(true); },
+                    OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst,
                     OnSelect = () => _signChoice = OffensiveSign.HitAndRun,
@@ -1243,17 +1248,11 @@ namespace KokoSim.Unity.Match
                 ? _atBat.IsTop == _managerIsAway              // 1球進行: いま止まっている窓の攻守
                 : _prog.IsTeamOnOffense(_managerIsAway);      // 一括経路（撮影ハーネス）
             _prog.SetPitchBattingOverride(_managerIsAway, offense ? _pitchBattingChoice : null);
-            // バント/スクイズの構えは**ここ**で予約する（issue #490 実機確認 2026-08-06）。
-            // リリース時（OnPitchReleased）に切り替えると、構えへの移行クリップ 1.10秒に対して
-            // リリース〜着弾が 0.45秒しかなく**構えに入り切る前に球が来る**（実測: 指示が出ている球で
-            // 打者が通常の構えのままフルスイングしていた）。
-            // ⚠ 球トークンの BattingSign は「その球を解決した時点」で入るので投球の描画前には読めない
-            // （実測: BeginPitchRender では毎球 null）。読めるのは監督自身が押した札だけなので、
-            // 敵AIのバントは従来どおりリリース時の切り替えに委ねる（そちらは OnPitchReleased 側が担う）。
-            if (DuelPacingActive)
-                _duelRig?.PrepareBatterBunt(offense && _pitchBattingChoice
-                    is PitchBattingOverride.Bunt or PitchBattingOverride.SafetyBunt
-                    or PitchBattingOverride.Squeeze);
+            // ⚠ ここで構えを**下ろさない**（issue #490 実機確認 2026-08-06）。1手カードは押し込んだ後に
+            // 自動解除される（ResetPitchTacticsChoice）ので、この経路から「札が無い＝構えを解く」を
+            // 流すと、札を押した瞬間に始めた移行が投球の直前で巻き戻り、リリース時の再指定で
+            // t=0 から始まり直す＝前倒しが丸ごと無駄になる（実測: リリース時点で Idle_To_Bunt が
+            // 毎回 t=0.00 のままだった）。構えの真偽はその球の指示を持つ OnPitchReleased が決める。
             _prog.SetOffensiveSign(_managerIsAway, offense ? _signChoice : null);
             _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null);
             // 守備方針の再予約（自校が守備の窓のみ）。攻撃中は相手守備＝brain のまま触らない。
@@ -1495,6 +1494,16 @@ namespace KokoSim.Unity.Match
         /// 始める＝同じ0.5秒を二度描かない。キャプションは <c>CaptionAt</c> が「t以前の最後の1件」を
         /// 拾うので、飛ばした先でも「打った」の実況から出る（2026-07-31）。
         /// </param>
+        /// <summary>
+        /// 対決ビューの打者をバントの構えへ入れる/戻す（issue #490）。**札を押した瞬間**に呼ぶのが本命で、
+        /// 構えへの移行クリップ 1.10秒ぶんの助走を窓の滞在時間から取る。表示専用＝判定・帯には無関係。
+        /// </summary>
+        private void PrepareBuntStance(bool bunting)
+        {
+            if (!DuelPacingActive) return;
+            _duelRig?.PrepareBatterBunt(bunting);
+        }
+
         /// <summary>その球にバント・セーフティバント・スクイズの指示が出ているか（issue #490）。表示専用。</summary>
         private static bool IsBuntSign(PitchToken pt)
             => pt.BattingSign is KokoSim.Engine.Match.Tactics.PitchBattingOverride.Bunt
