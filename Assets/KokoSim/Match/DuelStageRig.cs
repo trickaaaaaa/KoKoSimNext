@@ -1413,7 +1413,37 @@ namespace KokoSim.Unity.Match
         /// なければ FinishOneShot の復帰時に効く」流儀＝振っている最中に構えが割り込んで壊れない）。
         /// バント構えクリップが無い環境（購入パック未取得）では常に無視して通常の打撃構えのまま。
         /// </summary>
-        private void SetBatterBunting(bool bunting)
+        /// <summary>
+        /// 次に投げる球にバント/セーフティバント/スクイズの指示が出ているかを、**投球の描画に入る前**に渡す
+        /// （issue #490 実機確認 2026-08-06）。構えへの移行 <see cref="BatterIdleToBuntClipName"/> は 1.10秒
+        /// かかる一方、リリースから着弾までは 0.45秒しかない＝<see cref="OnPitchReleased"/> で切り替えると
+        /// **構えに入り切る前に球が来る**（実測: バント指示の球で打者が通常の構えのままフルスイングしていた）。
+        /// </summary>
+        /// <summary>
+        /// スクショ用: 打者がいま出しているクリップ（名前・クリップ内時刻・待機クリップ・フェード残り・
+        /// バント構えの状態）。「構えが変わらない」ときに、切り替えが届いていないのか届いた上で
+        /// 別のものに上書きされているのかは**絵では区別できない**ので実測で採る（design-18 §3.3 と同型）。
+        /// </summary>
+        public string BatterClipDiagForCapture()
+            => _batter == null ? "-\t-\t-\t-\t-"
+               : (_batter.Clip == null ? "null" : _batter.Clip.name) + "\t"
+                 + _batter.Time.ToString("F2") + "\t"
+                 + (_batter.IdleClip == null ? "null" : _batter.IdleClip.name) + "\t"
+                 + _batter.FadeRemaining.ToString("F2") + "\t" + _batterBunting;
+
+        /// <param name="leadSeconds">
+        /// この呼び出しから球が来るまでの猶予[秒]。移行クリップ（1.10秒）を通せるだけの猶予がある
+        /// ときだけ「構えに入る芝居」を見せ、足りなければ**構えそのものへ直接入る**。
+        /// 実物のバントも投手のリリース前には squaring を終えているので、猶予が無い球で
+        /// 中途半端な移行を見せるより直接構えたほうが正しい絵になる。
+        /// </param>
+        public void PrepareBatterBunt(bool bunting, float leadSeconds = 0f)
+        {
+            if (!Available) return;
+            SetBatterBunting(bunting, leadSeconds);
+        }
+
+        private void SetBatterBunting(bool bunting, float leadSeconds = 0f)
         {
             if (_batter == null) return;
             if (bunting && _buntLoopClip == null) bunting = false;
@@ -1428,10 +1458,14 @@ namespace KokoSim.Unity.Match
             _batter.IdleClip = _buntLoopClip;
             _batter.IdleEndAt = 0f;   // ループそのまま（末尾まで）
             if (!wasIdling) return;   // 一発物（前球のスイング据え置き等）の最中は復帰時に切り替わる
-            if (_buntIdleToStanceClip != null)
-                CrossfadeActorToClip(_batter, _buntIdleToStanceClip, 0f, 0f, CrossfadeSeconds);
-            else
-                CrossfadeActorToClip(_batter, _buntLoopClip, 0f, 0f, CrossfadeSeconds);
+            // 移行クリップを通せるのは猶予がある球（打席の初球＝振りかぶり 1.30秒）だけ。
+            // 2球目以降は投球の予約が届くのがリリース直前なので、途中まで進んだ squaring で球を
+            // 迎えてしまう（実測 2026-08-06: リリース時点で移行クリップが毎回 t=0.00 で、
+            // 着弾までの 0.45秒では 4割しか進まない＝通常の構えにしか見えない）。
+            bool useTransition = _buntIdleToStanceClip != null
+                                 && leadSeconds >= _buntIdleToStanceClip.length;
+            CrossfadeActorToClip(_batter, useTransition ? _buntIdleToStanceClip : _buntLoopClip,
+                0f, 0f, CrossfadeSeconds);
             GroundFix(_batter);
         }
 
@@ -1880,7 +1914,12 @@ namespace KokoSim.Unity.Match
             KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted, bool isBuntAttempt)
         {
             if (!Available || _pitcher == null) return;
-            SetBatterBunting(isBuntAttempt);
+            // ⚠ ここで構えを切り替えない（issue #490 実機確認 2026-08-06）。リリース時点から始めると
+            // 移行 1.10秒に対して着弾まで 0.45秒しかなく squaring の途中で球が来る。構えは
+            // 振りかぶりの前に PrepareBatterBunt で入れる＝**この球の指示だけを見て下ろすと、
+            // 指示の無い球のリリースが予約済みの構えを巻き戻す**（実測: リリース時点で移行クリップが
+            // 毎回 t=0.00 だった）。構えの真偽はコントローラが予約と実指示の両方から決める。
+            // isBuntAttempt はこの下の一発物（当てる/空振り）の差し替えにだけ使う。
             _pendingBatted = batted;
             // リリースの再同期は**ポーズと向きだけ**合わせ、立ち位置は据え置く。
             //

@@ -445,6 +445,16 @@ public sealed class MatchProgression
     }
 
     /// <summary>
+    /// 次の1球に効く打撃指示のうち、予約済みでまだ消費していないもの（issue #490）。
+    /// offenseIsAway=攻撃側が先攻(away)か。**表示専用の読み口**で乱数も状態も動かさない（帯不変）。
+    ///
+    /// <para>敵AIのサインは解決の途中で決まるので、ここには出ない（先読みすると乱数順が動く）。
+    /// 読めるのは監督が予約した1手だけ。</para>
+    /// </summary>
+    public PitchBattingOverride? PendingPitchBattingOverride(bool offenseIsAway)
+        => _p.OffenseOf(offenseIsAway).PendingPitchBattingOverride;
+
+    /// <summary>
     /// 1球采配（設計書15 Phase C-3・issue #492 で陣形も収容）: 次の1球への守備上書き（配球方針/ギア/内野・外野の
     /// 深さ）を予約する。offenseIsAway=攻撃側が先攻(away)か（守備側はその逆側に適用）。全項目nullで指示解除。1球限り。
     /// 「解除するまで続く」方針カード（配球/ギア/陣形）は、UI が采配窓ごとに現在の選択で再予約して寿命を維持する。

@@ -42,7 +42,8 @@ public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMu
 /// 送球が届くにつれ枠が締まり、受け手の捕球で最も寄る（中継カメラの作法）。
 /// </param>
 public readonly record struct CameraFraming(
-    double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false)
+    double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false,
+    bool HeldBallFollowsRunner = false)
 {
     /// <summary>2D俯瞰の既定（Issue #119 で決めた現行値）。渡さなければこれが使われる。</summary>
     public static readonly CameraFraming Default = new(3.4, 6.0, 2.4);
@@ -89,7 +90,16 @@ public static class CameraPlanBuilder
     /// **渡さなければ出力は1キーフレームも変わらない**（既存の呼び出しとゴールデンは無傷）。
     /// 3Dの守備カメラは <c>MaxZoom</c> を上げた別セットを渡す。
     /// </param>
-    public static IReadOnlyList<CameraKeyframe> Build(PlaybackPlay play, CameraFraming? framing = null)
+    /// <param name="startSeconds">
+    /// 再生を始める時刻[秒]。**0以外を渡すのは「その手前を見せない」プレーだけ**（打席途中の盗塁は
+    /// 投球を対決ビューで見せ終わってから守備ビューへ切り替わる＝投球区間を二度描かない）。
+    /// レート制限は「前のキーフレームからの変化量」に効くので、t=0 から組んだプランを途中から
+    /// 読むと**頭が全景のまま**になる（実測 2026-08-06: 盗塁は頭の1.5秒が枠64.7m＝人18px、
+    /// ズーム上限 2倍/秒では 3.7秒のプレー中に寄り切れない）。ここから組めば最初のキーフレームが
+    /// レート制限なしで採られる＝頭から寄った絵で始まる。既定 0＝従来と1キーフレームも変わらない。
+    /// </param>
+    public static IReadOnlyList<CameraKeyframe> Build(PlaybackPlay play, CameraFraming? framing = null,
+                                                      double startSeconds = 0.0)
     {
         var fr = framing ?? CameraFraming.Default;
         // 「まだ見るものがある」最後の瞬間（決着／球が動き終わる／実際に動く走者レッグの終わり）を
@@ -106,10 +116,13 @@ public static class CameraPlanBuilder
         var kfs = new List<CameraKeyframe>();
 
         double cx = WideCx, cy = WideCy, zoom = WideZoom;
-        var prevT = 0.0;
+        // 開始時刻より手前のサンプルは打たない（レート制限の履歴も持ち込まない＝頭は生の目標値）。
+        var start = double.IsFinite(startSeconds) && startSeconds > 0.0 ? Math.Min(startSeconds, end) : 0.0;
+        var prevT = start;
         var first = true;
-        foreach (var clampedT in SampleTimes(play, end))
+        foreach (var clampedT in SampleTimes(play, end, start))
         {
+            if (clampedT < start) continue;
             var raw = RawTargetAt(play, clampedT, Math.Min(clampedT + LeadSeconds, end), fr, wideStart);
             if (first)
             {
@@ -142,7 +155,7 @@ public static class CameraPlanBuilder
     /// 直前キーフレームがまだ収束し切っていない残差がこの極小 dt に対して「速度上限超過」に見える
     /// （issue #448 回帰）。実時間として意味のある間隔だけを残す。
     /// </summary>
-    private static IEnumerable<double> SampleTimes(PlaybackPlay play, double end)
+    private static IEnumerable<double> SampleTimes(PlaybackPlay play, double end, double start = 0.0)
     {
         const double MinGapSeconds = 1e-6; // 浮動小数の丸め誤差より十分大きく、演出上は無視できる間隔
 
@@ -150,6 +163,9 @@ public static class CameraPlanBuilder
         for (var t = 0.0; t < end; t += SampleStepSeconds)
             raw.Add(t);
         raw.Add(end);
+        // 途中から組むときは開始時刻ちょうどにも必ず1本打つ（等間隔グリッドが跨いだままだと、
+        // 頭のキーフレームが実際の開始より後ろに来て、その手前は先頭値へクランプされる）。
+        if (start > 0 && start < end) raw.Add(start);
 
         foreach (var seg in play.Ball)
         {
@@ -272,6 +288,13 @@ public static class CameraPlanBuilder
             if (held.HasValue)
             {
                 var heldV = new PlaybackVec(held.Value.X, held.Value.Y);
+                // 球が止まっている間も走っている走者が居れば一緒に収める（issue #488 実機確認 2026-08-06）。
+                // 振り逃げは「捕手が本塁付近で球を持っている 2.4秒」がまるごとこの分岐で、球だけを
+                // 追うと**一塁へ走る打者走者が一度も枠に入らない**（実測: 注視y が 2.4秒ずっと 1.0）。
+                // 送球前の先取りパンを禁じた issue #448① の意図（未来の送球先を先に見ない）は
+                // 保たれる＝見るのは走者の**現在位置**だけ。2D俯瞰は全部入るので既定オフ。
+                if (fr.HeldBallFollowsRunner && RunningRunnerAt(play, actualT) is { } runner)
+                    return FitBox(heldV, runner, fr);
                 return FitBox(heldV, heldV, fr);
             }
         }
@@ -314,6 +337,29 @@ public static class CameraPlanBuilder
             if (t <= s.T1) return (s, null);
         }
         return (null, null);
+    }
+
+    /// <summary>
+    /// 時刻 t に**実際に動いている**走者の現在位置（複数なら最も遠くまで進む予定のレッグ＝
+    /// そのプレーの主役）。その場に居るだけのレッグ（From==To）は数えない。
+    /// </summary>
+    private static PlaybackVec? RunningRunnerAt(PlaybackPlay play, double t)
+    {
+        PlaybackVec? found = null;
+        var best = double.NegativeInfinity;
+        foreach (var runner in play.Runners)
+            foreach (var seg in runner.Segs)
+            {
+                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (t < seg.T0 || t > seg.T1) continue;
+                var span = Math.Abs(seg.To.X - seg.From.X) + Math.Abs(seg.To.Y - seg.From.Y);
+                if (span <= best) continue;
+                var at = PlaybackEvaluator.RunnerAt(runner, t);
+                if (!at.HasValue) continue;
+                best = span;
+                found = at.Value;
+            }
+        return found;
     }
 
     private static PlaybackRun? FindCriticalRunAt(PlaybackPlay play, double t)

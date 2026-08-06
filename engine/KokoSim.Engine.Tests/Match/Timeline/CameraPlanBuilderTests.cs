@@ -1,7 +1,10 @@
 using System;
 using System.Linq;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Match.Timeline;
 using KokoSim.Engine.Match.Timeline.Playback;
+using KokoSim.Engine.Players;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Match.Timeline;
@@ -41,6 +44,112 @@ public sealed class CameraPlanBuilderTests
         Assert.True(first.ZoomMult > CameraPlanBuilder.WideZoom);
         Assert.InRange(first.Cx, -1.0, 1.0);
         Assert.InRange(first.Cy, 0.0, FieldDiagramGeometry.Mound.Y);
+    }
+
+    // 途中から組むプラン（issue #485/#490 の実機確認 2026-08-06）。打席途中の盗塁は投球を
+    // 対決ビューで見せ終わってから守備ビューへ切り替わるので、カメラも投球区間の後ろから始める。
+    // t=0 から組んだプランを途中から読むと、レート制限（ズーム 2倍/秒）の履歴を引きずって
+    // 頭が全景のままになり、寄り切る前にプレーが終わる（実測: 頭の1.5秒が枠64.7m＝人18px）。
+    [Fact]
+    public void Build_WithStartSeconds_BeginsTightInsteadOfWide()
+    {
+        var play = PlaybackSamples.All[0];   // ① レフト前ヒット（頭に投球区間を持つ）
+        const double start = 1.4;            // 投球が捕手へ届いたあたり＝盗塁の再生開始点に相当
+
+        var whole = CameraPlanBuilder.Build(play);
+        var sliced = CameraPlanBuilder.Build(play, null, start);
+
+        Assert.NotEmpty(sliced);
+        // ① 開始時刻より手前のキーフレームを持たない＝履歴を持ち込まない。
+        Assert.All(sliced, kf => Assert.True(kf.T >= start - 1e-9, $"開始より手前のキーフレーム: {kf.T}"));
+        // ② 開始時刻ちょうどに1本ある（等間隔グリッドが跨いだままにしない）。
+        Assert.True(Math.Abs(sliced[0].T - start) < 1e-9, $"頭が開始時刻でない: {sliced[0].T}");
+        // ③ 頭はレート制限を通さない生の目標値＝全景から始まらない。
+        Assert.True(sliced[0].ZoomMult > CameraPlanBuilder.WideZoom,
+            $"頭が全景のまま: zoom={sliced[0].ZoomMult}");
+        // ④ 通しで組んだプランの同時刻より寄っている（＝これが直したかった差そのもの）。
+        var wholeAtStart = whole.Last(kf => kf.T <= start + 1e-9);
+        Assert.True(sliced[0].ZoomMult >= wholeAtStart.ZoomMult,
+            $"途中開始のほうが引いている: {sliced[0].ZoomMult} < {wholeAtStart.ZoomMult}");
+    }
+
+    // 既定（startSeconds=0）は1キーフレームも変わらないこと＝既存の呼び出しとゴールデンが無傷。
+    [Fact]
+    public void Build_WithZeroStart_IsIdenticalToDefault()
+    {
+        foreach (var play in PlaybackSamples.All)
+        {
+            var a = CameraPlanBuilder.Build(play);
+            var b = CameraPlanBuilder.Build(play, null, 0.0);
+            Assert.Equal(a.Count, b.Count);
+            for (var i = 0; i < a.Count; i++)
+            {
+                Assert.Equal(a[i].T, b[i].T);
+                Assert.Equal(a[i].Cx, b[i].Cx);
+                Assert.Equal(a[i].Cy, b[i].Cy);
+                Assert.Equal(a[i].ZoomMult, b[i].ZoomMult);
+            }
+        }
+    }
+
+    // 球が止まっている間の走者追従（issue #488 実機確認 2026-08-06）。振り逃げは「捕手が本塁付近で
+    // 球を持っている 2.4秒」がまるごと保持中の分岐で、球だけを追うと一塁へ走る打者走者が一度も
+    // 枠に入らない（実測: 注視y が 2.4秒ずっと 1.0）。3Dの守備カメラだけ opt-in する。
+    [Fact]
+    public void Build_HeldBallFollowsRunner_WidensTowardTheRunner()
+    {
+        var play = DropThirdStrikePlay();
+        var held = TimeWhileBallIsHeld(play);
+
+        // ⚠ 既定の MaxZoom=3.4 では両方とも上限に張り付き、差が潰れて見えない（本塁付近の狭い箱は
+        //   どちらも上限まで寄る）。3Dの守備カメラは上限がもっと高いので、そちら側で測る。
+        var fr = CameraFraming.Default with { MaxZoom = 20.0 };
+        var off = CameraPlanBuilder.Build(play, fr);
+        var on = CameraPlanBuilder.Build(play, fr with { HeldBallFollowsRunner = true });
+
+        var offAt = CameraEvaluator.ViewportAt(off, held);
+        var onAt = CameraEvaluator.ViewportAt(on, held);
+
+        // 走者（一塁方向＝+x/+y）を入れるぶん、注視点は本塁から一塁側へ寄り、枠は広がる（zoom は下がる）。
+        Assert.True(onAt.Cx > offAt.Cx + 0.5, $"一塁側へ寄っていない: {offAt.Cx} → {onAt.Cx}");
+        Assert.True(onAt.ZoomMult < offAt.ZoomMult, $"枠が広がっていない: {offAt.ZoomMult} → {onAt.ZoomMult}");
+    }
+
+    // 既定（opt-out）は1キーフレームも変わらない＝2D俯瞰とゴールデンが無傷。
+    [Fact]
+    public void Build_HeldBallFollowsRunner_DefaultsOff()
+    {
+        foreach (var play in PlaybackSamples.All)
+        {
+            var a = CameraPlanBuilder.Build(play);
+            var b = CameraPlanBuilder.Build(play, CameraFraming.Default);
+            Assert.Equal(a.Count, b.Count);
+            for (var i = 0; i < a.Count; i++)
+            {
+                Assert.Equal(a[i].Cx, b[i].Cx);
+                Assert.Equal(a[i].Cy, b[i].Cy);
+                Assert.Equal(a[i].ZoomMult, b[i].ZoomMult);
+            }
+        }
+    }
+
+    /// <summary>振り逃げの再生プレー（球が長く止まる素材＝保持中の分岐を確実に通る）。</summary>
+    private static PlaybackPlay DropThirdStrikePlay()
+    {
+        var tl = TimelineBuilder.BuildDropThirdStrike(
+            new Player { Name = "打者", Speed = 60 },
+            new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 },
+            new BaserunningCoefficients(), new FieldGeometry());
+        return PlayTimelineAdapter.ToPlaybackPlay(tl);
+    }
+
+    /// <summary>球が「野手の手の中」で止まっている時刻（転がりが終わってから送球が始まるまでの中点）。</summary>
+    private static double TimeWhileBallIsHeld(PlaybackPlay play)
+    {
+        var rollEnd = play.Ball[0].T1;
+        var throwStart = play.Ball[^1].T0;
+        Assert.True(throwStart > rollEnd, "保持区間が無い＝この素材では検証にならない");
+        return (rollEnd + throwStart) / 2.0;
     }
 
     [Fact]
