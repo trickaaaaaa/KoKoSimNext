@@ -3184,7 +3184,7 @@ namespace KokoSim.Unity.Match
             float halfW = Mathf.Max(0.001f, inField ? FieldBattedTrailWidthM : _cal.BattedTrailWidthM) * 0.5f;
             // 色はリニア空間へ自分で落とす（掟: 即時モードは自動変換が効かない）。アルファは変換しない
             var baseCol = _cal.BattedTrailColor.linear;
-            float headA = Mathf.Clamp01(_cal.BattedTrailAlpha);
+            float headA = Mathf.Clamp01(inField ? FieldBattedTrailAlpha : _cal.BattedTrailAlpha);
             var tr = _root.transform;
             var eye = _camera.transform.position;
 

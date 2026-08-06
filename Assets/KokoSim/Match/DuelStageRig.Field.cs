@@ -285,6 +285,15 @@ namespace KokoSim.Unity.Match
 
             /// <summary>いま結び付いている捕球予定の添字（-1=無し）。グラブIKの狙点を引くのに使う。</summary>
             public int CatchEvent;
+
+            /// <summary>
+            /// 送球で向き切る先[度]（<see cref="ThrowYawRate"/> が 0 の間は無効。issue #505 ②）。
+            /// 捕球中に開き切れなかった残りを、投げ始めからリリースまでで回すのに使う。
+            /// </summary>
+            public float ThrowYawTo;
+
+            /// <summary>↑へ寄せる速さ[度/秒]。0=回頭中でない。</summary>
+            public float ThrowYawRate;
         }
 
         private readonly Dictionary<FieldPosition, FielderMotion> _loco = new();
@@ -318,10 +327,18 @@ namespace KokoSim.Unity.Match
             // 位置だけは engine の真値へ置き続ける＝捕球点と体がずれない
             if (t < st.CatchUntil)
             {
+                // 例外は送球の回頭（issue #505 ②）。捕球中に開き切れなかった残りをここで回す
+                if (st.ThrowYawRate > 0f)
+                {
+                    st.Yaw = Mathf.MoveTowardsAngle(st.Yaw, st.ThrowYawTo,
+                        st.ThrowYawRate * Mathf.Max(0f, dt));
+                    if (Mathf.Abs(Mathf.DeltaAngle(st.Yaw, st.ThrowYawTo)) < 1e-3f) st.ThrowYawRate = 0f;
+                }
                 PlaceFielder(a, (float)cur.Pos.X, (float)cur.Pos.Y, st.Yaw);
                 _loco[pos] = st;
                 return;
             }
+            st.ThrowYawRate = 0f;   // 窓を抜けたら回頭は畳む（走りの段の管理へ戻す）
             if (st.CatchEvent >= 0 && t >= st.CatchUntil)
             {
                 st.CatchEvent = -1;
@@ -367,6 +384,11 @@ namespace KokoSim.Unity.Match
             float targetYaw = want < 0
                 ? YawFacingHome((float)cur.Pos.X, (float)cur.Pos.Y)
                 : Mathf.Atan2(vx, vz) * Mathf.Rad2Deg - LocoLadder[want].MoveDirDeg;
+            // ⚠ 立ち止まって「これから投げる」人は本塁でなく**的**を向いて待つ（issue #505 ②）。
+            //    engine のサンプルは捕球と送球が同じ瞬間だが、実データは球を持って待つ場面がある。
+            //    そこで本塁向きへ流すと、捕球中に開いておいた向きが投げる前に捨てられる
+            float pending;
+            if (want < 0 && TryPendingThrowYaw(pos, t, out pending)) targetYaw = pending;
             st.Yaw = st.Started
                 ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
                 : targetYaw;
@@ -841,6 +863,12 @@ namespace KokoSim.Unity.Match
                                 st.Yaw = Mathf.Atan2(toBall.x, toBall.y) * Mathf.Rad2Deg
                                          - Mathf.Atan2(gh.x, gh.y) * Mathf.Rad2Deg;
                         }
+                        // **捕りながら的へ開く**（監督決定 2026-08-06・issue #505 ②）。engine の時計では
+                        // 捕球と送球が同じ瞬間（実測: 送球の TFire は5本とも捕球時刻ちょうど）なので、
+                        // 捕ってから回すと 51〜173° を1コマで反転することになる（実測。絵は瞬間移動）。
+                        // 実物の内野手と同じく**捕る前から体を的へ開いておく**。開ける量はグラブが
+                        // ずれる量で頭打ちにする＝グラブは球の位置に居なければならない（上の掟）
+                        st.Yaw += PreOpenTowardThrow(e.Pos, e.TCatch, st.Yaw, gh.magnitude);
                         _loco[e.Pos] = st;
                         PlaceFielder(a, (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.X,
                             (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.Y, st.Yaw);
@@ -850,6 +878,71 @@ namespace KokoSim.Unity.Match
                 _catchEvents[i] = e;
             }
         }
+
+        /// <summary>
+        /// このあと投げるなら、捕球の向きを**開けるだけ的へ開く**（issue #505 ②・折衷案）。
+        ///
+        /// 返すのは開く角度[度]（＝捕球の向きへの加算）。開ける上限はグラブがずれる量で決める:
+        /// 体を Δ 回すとグラブは <c>|gh|·2sin(Δ/2)</c> だけ動く。これが
+        /// <see cref="FieldCatchOpenBudgetM"/> を超えない範囲までしか開かない
+        /// ＝**グラブは球の位置に居なければならない**（<c>FireDueCatches</c> の掟）を壊さない。
+        ///
+        /// 帰結（実測のグラブオフセットから）: 走り込み捕球（|gh|=0.112m）は上限が 180°＝
+        /// 6-3 や 6-4-3 の前half は**丸ごと開き切る**。一塁手型（|gh|=0.768m）は 19° しか開けない
+        /// ので、残りは <see cref="FireDueThrows"/> がワインドアップの間に回す。
+        /// </summary>
+        private float PreOpenTowardThrow(FieldPosition pos, float tCatch, float baseYaw, float gloveOffsetM)
+        {
+            float want = 0f, bestFire = float.MaxValue;
+            foreach (var e in _throwEvents)
+            {
+                if (e.From != pos) continue;
+                if (e.TFire < tCatch - 1e-3f || e.TFire > tCatch + FieldCatchOpenLeadSeconds) continue;
+                if (e.TFire >= bestFire) continue;   // 同じ野手が続けて投げるなら一番早いほうに合わせる
+                bestFire = e.TFire;
+                want = Mathf.DeltaAngle(baseYaw, e.Yaw);
+            }
+            if (bestFire > float.MaxValue * 0.5f) return 0f;
+
+            float cap = gloveOffsetM <= 1e-3f
+                ? 180f
+                : 2f * Mathf.Asin(Mathf.Clamp01(FieldCatchOpenBudgetM / (2f * gloveOffsetM))) * Mathf.Rad2Deg;
+            float open = Mathf.Clamp(want, -cap, cap);
+            _catchOpenMax = Mathf.Max(_catchOpenMax, Mathf.Abs(open));
+            return open;
+        }
+
+        private float _catchOpenMax;
+
+        /// <summary>
+        /// この野手が「もうすぐ投げる」なら、その的の方角[度]を返す（issue #505 ②）。
+        /// 球を持って待つ場面で本塁向きへ流し戻されるのを防ぐ＝的を向いたまま待たせる。
+        /// </summary>
+        private bool TryPendingThrowYaw(FieldPosition pos, float t, out float yaw)
+        {
+            yaw = 0f;
+            float best = float.MaxValue;
+            foreach (var e in _throwEvents)
+            {
+                if (e.Fired || e.From != pos) continue;
+                if (e.TFire < t || e.TFire > t + FieldCatchOpenLeadSeconds) continue;
+                if (e.TFire >= best) continue;
+                best = e.TFire;
+                yaw = e.Yaw;
+            }
+            return best < float.MaxValue * 0.5f;
+        }
+
+        /// <summary>
+        /// 捕球中に的へ開くとき、グラブが収録の位置からずれてよい量[m]（issue #505 ②）。
+        /// ずれた分は捕球IK（<c>DuelCatcherPose.ReachMitt</c>）が球へ引き戻す＝**IK の仕事量の予算**。
+        /// 大きくすると「最初から的を向いて投げる」が増える代わりに捕球の腕が伸びる。
+        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// </summary>
+        public static float FieldCatchOpenBudgetM = 0.18f;
+
+        /// <summary>捕球からこの秒数までに投げるなら「このあと投げる」とみなす[s]（issue #505 ②）。</summary>
+        public static float FieldCatchOpenLeadSeconds = 0.8f;
 
         /// <summary>
         /// 捕球の前後だけグラブを球へ寄せる（捕手の <c>FixCatcherPose</c> と同型）。
@@ -1026,6 +1119,19 @@ namespace KokoSim.Unity.Match
             public Vector3 HandAtRelease;  // 球が手を離れる点（幾何解。保持中は実測の手で上書き）
             public float DistM;
             public bool Fired;
+
+            // ---- 描かれている体の向きの実測（issue #505 ②）--------------------------
+            // ⚠ 上の AimErrDeg は「root の向き」と的の差＝**構造上ゼロ**（Yaw に atan2(toTarget) を
+            //    入れた直後に同じ物と比べている）。監督が見ているのは root ではなく
+            //    **クリップが描く体の向き**なので、ここは骨から採る（＝絵に出ている物そのもの）。
+            public float MeasHipsFireDeg;    // 投げ始めの腰の向きと的の差[度]（＋で反時計）
+            public float MeasChestFireDeg;   // 同・胸（肩の線の法線）
+            public float MeasHipsRelDeg;     // リリースの瞬間の腰の向きと的の差[度]
+            public float MeasChestRelDeg;    // 同・胸
+            public float MeasHipsSwingDeg;   // 投げ始め→リリースで腰が回った量[度]（＝「くるっと向く」量）
+            public float MeasHipsPreDeg;     // 投げ始めの**直前のコマ**の腰の向きと的の差[度]
+            public float MeasPreT;           // ↑を採った時刻（TFire との差が「見えていた長さ」）
+            public bool MeasHasFire, MeasHasRel, MeasHasPre;
         }
 
         private readonly List<FieldThrowEvent> _throwEvents = new();
@@ -1050,6 +1156,13 @@ namespace KokoSim.Unity.Match
             _throwHeadMin = float.MaxValue;
             _throwLateralMax = 0f;
             _throwAimErrMax = 0f;
+            _throwFacingWorst = 0f;
+            _throwFacingSwingWorst = 0f;
+            _throwFacingPreWorst = 0f;
+            _throwTurnRestMax = 0f;
+            _throwTurnRateMax = 0f;
+            _catchOpenMax = 0f;
+            _trailOnThrowFrames = 0;
             if (play == null || play.Ball == null) return;
 
             foreach (var seg in play.Ball)
@@ -1127,6 +1240,23 @@ namespace KokoSim.Unity.Match
             }
         }
 
+        /// <summary>
+        /// その時刻の球が**送球区間**にいるか（issue #505 ①の残像の切り分け）。
+        /// 予定表（<see cref="_throwEvents"/>）ではなく区間そのものを見るのは、予定表が持つのは
+        /// リリース時刻だけで**いつ受け手に着くか**を持っていないため。
+        /// </summary>
+        private bool IsThrowAt(float t)
+        {
+            if (_fieldPlay?.Ball == null) return false;
+            foreach (var seg in _fieldPlay.Ball)
+            {
+                if (t < seg.T0 || t > seg.T1) continue;
+                return seg is EndpointBallSegment eb
+                    ? eb.Kind == BallSegmentKind.Throw : seg is ThrowSegment;
+            }
+            return false;
+        }
+
         /// <summary>その点に一番近い野手（E1 が無いときのフォールバック）。</summary>
         private static FieldPosition NearestFielder(PlaybackPlay play, float t, double x, double y)
         {
@@ -1190,7 +1320,17 @@ namespace KokoSim.Unity.Match
                         st.Ladder = int.MinValue;        // 走りの段の管理から外す
                         st.CatchEvent = -1;              // グラブIKを切る（捕球の重みが振りかぶりへ食い込まない）
                         st.CatchUntil = e.TRelease + ThrowFollowSeconds + ThrowHoldSeconds;
-                        st.Yaw = e.Yaw;
+                        // ⚠ ここで的へ**スナップしない**（issue #505 ②）。旧実装は `st.Yaw = e.Yaw` で、
+                        //    捕球の向き（球へ向いている）から 51〜173° を1コマで反転していた＝
+                        //    絵では「変な方向を向いていた人が瞬間移動で的を向く」。
+                        //    捕球中に開き切れなかった残りだけを、リリースの**1コマ前まで**に回し切る
+                        //    （当てたい瞬間に間に合わせる作法は design-18 §4.5-③ の IK と同じ）。
+                        st.ThrowYawTo = e.Yaw;
+                        float rest = Mathf.Abs(Mathf.DeltaAngle(st.Yaw, e.Yaw));
+                        float span = Mathf.Max(1f / PoseFps, e.TRelease - 1f / PoseFps - t);
+                        st.ThrowYawRate = rest / span;
+                        _throwTurnRestMax = Mathf.Max(_throwTurnRestMax, rest);
+                        _throwTurnRateMax = Mathf.Max(_throwTurnRateMax, st.ThrowYawRate);
                         _loco[e.From] = st;
                         var p = PlaybackEvaluator.FielderAt(_fieldPlay, e.From, t).Pos;
                         PlaceFielder(a, (float)p.X, (float)p.Y, st.Yaw);
@@ -1244,6 +1384,90 @@ namespace KokoSim.Unity.Match
             return BlendToCatchPoint(enginePos, t);
         }
 
+        /// <summary>
+        /// 送球中に**実際に描かれている体の向き**を採る（issue #505 ②）。
+        ///
+        /// root の向き（<c>st.Yaw</c>）は <c>PlaceFielder</c> が毎コマ的へ向け直しているので、
+        /// 「向きの差」を root で測っても必ず 0 になる。監督が見ているのは**クリップが描く体**なので
+        /// 骨から採る。物差しは <c>DuelMotionSpike.RunFielderFacingProbe</c> と同じ:
+        ///   ・腰 … Hips ボーンの前方（＝足と骨盤の向き。「変な方向を向いて投げ始める」はここ）
+        ///   ・胸 … 肩の線の法線（投球動作では**閉じているのが正しい**＝腰と別に見る）
+        /// ステージローカルへ落としてから角度にする（<c>st.Yaw</c> と同じ座標系＝+Z が 0）。
+        /// </summary>
+        private bool DrawnBodyYaw(Actor a, out float hipsDeg, out float chestDeg)
+        {
+            hipsDeg = chestDeg = 0f;
+            if (a == null || a.Animator == null || _root == null) return false;
+            var hips = a.Animator.GetBoneTransform(HumanBodyBones.Hips);
+            var ra = a.Animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var la = a.Animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            if (hips == null || ra == null || la == null) return false;
+
+            var hf = _root.transform.InverseTransformDirection(hips.rotation * Vector3.forward);
+            hf.y = 0f;
+            if (hf.sqrMagnitude < 1e-6f) return false;
+            hipsDeg = Mathf.Atan2(hf.x, hf.z) * Mathf.Rad2Deg;
+
+            // 肩の線 × 上 ＝ 胸の法線。左右の肩の順序は「右−左 と 上 の外積が前」になる向きで採る
+            var cf = _root.transform.InverseTransformDirection(
+                Vector3.Cross(ra.position - la.position, Vector3.up));
+            cf.y = 0f;
+            chestDeg = cf.sqrMagnitude < 1e-6f ? hipsDeg : Mathf.Atan2(cf.x, cf.z) * Mathf.Rad2Deg;
+            return true;
+        }
+
+        /// <summary>
+        /// 送球の「投げ始め」と「リリース」で体の向きを1回ずつ焼く（issue #505 ②の切り分け）。
+        /// ポーズは12fpsなので**ポーズが進んだ回だけ**呼ぶ（毎フレーム呼んでも値は同じ）。
+        /// </summary>
+        private void MeasureThrowFacing(float t)
+        {
+            for (int i = 0; i < _throwEvents.Count; i++)
+            {
+                var e = _throwEvents[i];
+                // 投げ始めの**手前**も採る。ここが的から大きく外れていると、絵は
+                // 「変な方向を向いていた人が、投げる瞬間にいきなり的を向く」に見える（issue #505 ②）
+                bool wantPre = !e.MeasHasFire && t < e.TFire && t >= e.TFire - 1.0f;
+                bool wantFire = e.Fired && !e.MeasHasFire && t >= e.TFire;
+                bool wantRel = e.Fired && !e.MeasHasRel && t >= e.TRelease;
+                if (!wantPre && !wantFire && !wantRel) continue;
+
+                float hips, chest;
+                if (!DrawnBodyYaw(FielderActor(e.From), out hips, out chest)) continue;
+                if (wantPre)
+                {
+                    e.MeasHipsPreDeg = Mathf.DeltaAngle(e.Yaw, hips);
+                    e.MeasPreT = t;
+                    e.MeasHasPre = true;
+                    _throwEvents[i] = e;
+                    continue;
+                }
+                if (wantFire)
+                {
+                    e.MeasHipsFireDeg = Mathf.DeltaAngle(e.Yaw, hips);
+                    e.MeasChestFireDeg = Mathf.DeltaAngle(e.Yaw, chest);
+                    e.MeasHasFire = true;
+                }
+                if (wantRel)
+                {
+                    e.MeasHipsRelDeg = Mathf.DeltaAngle(e.Yaw, hips);
+                    e.MeasChestRelDeg = Mathf.DeltaAngle(e.Yaw, chest);
+                    e.MeasHipsSwingDeg = e.MeasHasFire
+                        ? Mathf.DeltaAngle(e.MeasHipsFireDeg, e.MeasHipsRelDeg) : 0f;
+                    e.MeasHasRel = true;
+                    _throwFacingWorst = Mathf.Max(_throwFacingWorst, Mathf.Abs(e.MeasHipsFireDeg));
+                    _throwFacingSwingWorst = Mathf.Max(_throwFacingSwingWorst, Mathf.Abs(e.MeasHipsSwingDeg));
+                    if (e.MeasHasPre)
+                        _throwFacingPreWorst = Mathf.Max(_throwFacingPreWorst, Mathf.Abs(e.MeasHipsPreDeg));
+                }
+                _throwEvents[i] = e;
+            }
+        }
+
+        private float _throwFacingWorst, _throwFacingSwingWorst, _throwFacingPreWorst;
+        private float _throwTurnRestMax, _throwTurnRateMax;
+        private int _trailOnThrowFrames;
+
         /// <summary>いま描かれている利き手の中の球の位置（stage-local）。</summary>
         private Vector3 ThrowHandNow(FieldThrowEvent e)
         {
@@ -1268,8 +1492,13 @@ namespace KokoSim.Unity.Match
         /// <c>見せる振り</c> は投げ始めてから球が出ていくまで[s]＝0 だとクリップが一瞬で飛ぶ。
         /// <c>横ずれ</c> は球が手を離れた点と engine の送球線の**横方向**の差[m]＝
         /// 「投げた向きと球の飛ぶ向きが折れて見える量」。体の向きを的へ合わせているので 0 に近いはず。
-        /// <c>向きの差</c> は体の向きと「野手→的」の方角の差[度]（issue #399 ③）。体は的そのものを
-        /// 向けているので 0 のはず＝横ずれと違い ThrowHandoffSeconds で吸収する対象ではない。
+        /// <c>向きの差</c>（<c>aimErrDeg</c>）は **root の向き**と「野手→的」の方角の差[度]（issue #399 ③）。
+        /// ⚠ いまは <c>Yaw</c> にその方角そのものを入れているので**構造上ゼロ**＝何も検出できない。
+        /// 残してあるのは「root は的を向いている」ことの表明で、絵の判定には使えない（issue #505 ②）。
+        /// <c>hipsFire/chestFire</c> が**投げ始めに描かれている体の向き**と的の差[度]、
+        /// <c>hipsRel/chestRel</c> がリリースの瞬間の同じ物、<c>hipsSwing</c> がその間に腰が回った量＝
+        /// 「変な方向を向いて投げ始め、途中でくるっと向き直る」の量。腰で見るのは、胸は投球動作で
+        /// 閉じているのが正しいから（足と骨盤の向きが「体の向き」）。
         /// **どれも絵では読めない**（どれも「野手が投げている」だけ）。
         /// </summary>
         public string FieldThrowDiagForCapture()
@@ -1282,12 +1511,30 @@ namespace KokoSim.Unity.Match
                 + "s\t横ずれの最悪="
                 + _throwLateralMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
                 + "m\t向きの差の最悪="
-                + _throwAimErrMax.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°");
-            sb.AppendLine("from\tto\ttRelease\ttStart\ttFire\tdistM\thandY\taimErrDeg\tclip");
+                + _throwAimErrMax.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°"
+                + "\t投げ始めの腰の差の最悪="
+                + _throwFacingWorst.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°"
+                + "\t腰が回る量の最悪="
+                + _throwFacingSwingWorst.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°"
+                + "\t投げ始め直前の腰の差の最悪="
+                + _throwFacingPreWorst.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°"
+                + "\t捕りながら開いた最大="
+                + _catchOpenMax.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°"
+                + "\t投げ始めに残った回頭="
+                + _throwTurnRestMax.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "°"
+                + "（最大 "
+                + _throwTurnRateMax.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "°/s）"
+                + "\t送球中に残像が写ったコマ=" + _trailOnThrowFrames);
+            sb.AppendLine("from\tto\ttRelease\ttStart\ttFire\tdistM\thandY\taimErrDeg"
+                + "\thipsPre\tpreT\thipsFire\tchestFire\thipsRel\tchestRel\thipsSwing\tclip");
             foreach (var e in _throwEvents)
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "{0}\t{1}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F2}\t{7:F1}\t{8}",
+                    "{0}\t{1}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F2}\t{7:F1}"
+                    + "\t{8:F1}\t{9:F2}\t{10:F1}\t{11:F1}\t{12:F1}\t{13:F1}\t{14:F1}\t{15}",
                     e.From, e.To, e.TRelease, e.TStart, e.TFire, e.DistM, e.HandAtRelease.y, e.AimErrDeg,
+                    e.MeasHipsPreDeg, e.MeasPreT,
+                    e.MeasHipsFireDeg, e.MeasChestFireDeg, e.MeasHipsRelDeg, e.MeasChestRelDeg,
+                    e.MeasHipsSwingDeg,
                     e.Anchor.Clip.Replace("AA_Baseball_Defender_", "").Replace("AA_Baseball_", "")));
             return sb.ToString();
         }
@@ -2100,15 +2347,38 @@ namespace KokoSim.Unity.Match
         /// （<see cref="DuelCalibration.BattedTrailSeconds"/>＝0.28s）は「接触から俯瞰へ渡るまで
         /// （旧・約0.55s）で消え切る」前提で詰めた長さで、いまの引きの構図（frameH 29〜65m）では
         /// 短すぎて「点」に近い。**絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// 0.45→0.35 は監督決定（2026-08-06・issue #505 ①「くどい」）。
         /// </summary>
-        public static float FieldBattedTrailSeconds = 0.45f;
+        public static float FieldBattedTrailSeconds = 0.35f;
 
         /// <summary>
         /// 守備ビューの打球残像・頭の太さ[m]（issue #398 ①）。対決ビュー向けの 0.045m は本塁付近の
         /// 寄った構図で約10pxになるよう詰めた値で、frameH 29m 級の構図では1px未満（実質見えない）。
         /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// 0.35→0.22 は監督決定（2026-08-06・issue #505 ①「くどい」）。
         /// </summary>
-        public static float FieldBattedTrailWidthM = 0.35f;
+        public static float FieldBattedTrailWidthM = 0.22f;
+
+        /// <summary>
+        /// 守備ビューの打球残像・頭の濃さ（issue #505 ①）。
+        ///
+        /// ⚠ **対決ビューとは別に持つ**。濃さと色だけは <see cref="DuelCalibration.BattedTrailAlpha"/>
+        /// を共有していたので、守備ビューを弱めると対決ビュー（0.045m/0.45/0.28s で詰めた絵。
+        /// design-18 §4.5-④）まで薄くなっていた。尾長・太さと同じ「フィールド専用」の枠へ揃える。
+        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある。
+        /// 0.28 は監督決定（2026-08-06・issue #505 ①。対決ビューは 0.45 のまま）。
+        /// </summary>
+        public static float FieldBattedTrailAlpha = 0.28f;
+
+        /// <summary>
+        /// 送球区間でも残像を出すか（issue #505 ①）。
+        ///
+        /// 残像は「打球の行方（フライ／ゴロ／ライナー）を一瞬で読ませる」ための線（design-18 §4.5-④）で、
+        /// **送球には要らない**（始点＝野手・終点＝塁の両方が絵に写っており、行方を線で補う必要がない）。
+        /// それでも従来は区間の種別を見ずに積んでいたので、送球にも打球と同じ太さの帯が出ていた。
+        /// false は監督決定（2026-08-06・issue #505 ①）。
+        /// </summary>
+        public static bool FieldTrailOnThrow = false;
 
         /// <summary>
         /// 送球区間で球を追うか。2D俯瞰の既定は「始点と終点を両方収める」＝送球の距離ぶん必ず引くので、
@@ -2685,6 +2955,7 @@ namespace KokoSim.Unity.Match
             {
                 _fieldPoseGen = _poseGen;
                 FixFielderCatchPose(t);
+                MeasureThrowFacing(t);   // 描かれている体の向きの実測（issue #505 ②）
             }
 
             // ボール
@@ -2698,8 +2969,19 @@ namespace KokoSim.Unity.Match
                     _ball.transform.localPosition = p;
                     _ball.SetActive(true);
                     // 守備ビューの残像はここで一本化する（issue #398 ①）。対決ビュー側の打球ステッパ
-                    // （UpdateBattedBall）は _fieldPlay が立つと呼ばれなくなるので、二重に積む心配はない
-                    PushTrailPoint(p, t, FieldBattedTrailSeconds);
+                    // （UpdateBattedBall）は _fieldPlay が立つと呼ばれなくなるので、二重に積む心配はない。
+                    // ⚠ 送球は種別で外す（issue #505 ①）。外すときも**時計だけは進める**＝
+                    //    進めないと打球の尾が刈られず、送球のあいだ宙に浮いたまま残る
+                    bool onThrow = IsThrowAt(t);
+                    if (FieldTrailOnThrow || !onThrow) PushTrailPoint(p, t, FieldBattedTrailSeconds);
+                    else if (_trail.Count > 0) TrimTrail(t, FieldBattedTrailSeconds);
+                    // 受け入れ実測（issue #505 ①）: 送球中に線が**描かれた**コマ数。
+                    // ⚠ 0 にはならないのが正しい。積むのを止めても、直前まで積んだ打球の尾が
+                    //    FieldBattedTrailSeconds かけて消えるため＝健全な値は「送球1本あたり
+                    //    描画レート×0.35s」（F3 の 12fps 送りで4コマ／実試合の 30fps 送りで10コマ。
+                    //    2026-08-06 実測で両方とも一致）。これを大きく超えたら送球そのものに
+                    //    線が積まれている（IsThrowAt の取りこぼし）
+                    if (onThrow && _trail.Count >= 2) _trailOnThrowFrames++;
                     UpdateBallShadow(p.x, p.z);
                 }
                 else

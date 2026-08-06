@@ -89,6 +89,7 @@ namespace KokoSim.Unity.Match
             // ので、クリップ内時刻ごとの「立ち向きのずれ／立ち位置のずれ」を前後で突き合わせる。
             // 一致すれば delivery は同一＝戻せている（design-18 §7-2 の作法）。
             var legs = new StringBuilder();
+            var throwLog = new StringBuilder();
             var pitcherLog = new StringBuilder("いつ\tclipT\tΔ向き[度]\tΔx\tΔz\trootMotion\tフェード中\n");
             int pitcherPhase = 0;   // 0=1本目の打球より前 / 1=1本目の直後 / 2=採り終わり
             int pitcherFrames = 0;
@@ -242,6 +243,11 @@ namespace KokoSim.Unity.Match
                          .Append(frameAfter.ToString("F1")).Append('\t')
                          .Append(frameLast.ToString("F1")).Append('\t')
                          .Append(stationPlan).Append('\n');
+                    // 送球の体の向き（issue #505 ②）。**実データでこそ確かめたい**＝engine のサンプルは
+                    // 捕球と送球が必ず同じ瞬間だが、実試合には球を持って待つ間がある
+                    if (rig != null)
+                        throwLog.Append("── ").Append(playNo).Append(' ').Append(result).Append('\n')
+                                .Append(rig.FieldThrowDiagForCapture());
                 }
             }
 
@@ -250,6 +256,7 @@ namespace KokoSim.Unity.Match
             File.WriteAllText(Path.Combine(OutDir, "restore.tsv"), restoreLog.ToString());
             File.WriteAllText(Path.Combine(OutDir, "pitcher.tsv"), pitcherLog.ToString());
             File.WriteAllText(Path.Combine(OutDir, "legs.txt"), legs.ToString());
+            File.WriteAllText(Path.Combine(OutDir, "throws.tsv"), throwLog.ToString());
             Debug.Log("[F9] DONE 打球=" + playNo + "本 判定の取りこぼし=" + missing
                 + "件 戻し漏れ=" + restoreBad + "件 gameOver=" + _ctrl.IsGameOver
                 + "\n" + plays + "\n" + restoreLog);
