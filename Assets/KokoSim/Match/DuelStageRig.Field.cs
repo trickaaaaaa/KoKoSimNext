@@ -2418,12 +2418,20 @@ namespace KokoSim.Unity.Match
         /// 対決ビューで見せ終わっている。プランを t=0 から組むとレート制限（ズーム 2倍/秒）の履歴を
         /// 引きずり、**頭が全景のまま**になって寄り切る前にプレーが終わる
         /// （実測 2026-08-06: 盗塁の頭1.5秒が枠64.7m＝人18px／バント打球も頭が枠64.3m）。
+        ///
+        /// 牽制（issue #515）だけは <see cref="FieldThrowFollowsBall"/> を使わない。送球1本だけの短い
+        /// プレー（<c>BuildPickoff</c> の出力＝マウンド始点・投手が投げ手）に「球を追う」枠（0.25秒先取り
+        /// ＋0.6秒先読み）を適用すると、頭出しの時点で既にサンプル先の球が一塁付近まで進んでおり、
+        /// 最初のキーフレームからマウンド（＝投げ手の投手）が枠外になる（実測: 一塁側に寄った絵で始まる）。
+        /// 2D俯瞰と同じ「始点・終点を両方収める」枠に切り替え、投手が画角に入った状態から始める。
         /// </summary>
         private void BuildFieldCameraPlan(PlaybackPlay play, float startSeconds)
         {
+            var isPickoffThrow = play != null && play.Ball.Count == 1
+                && play.Ball[0].FromRole == FieldPosition.Pitcher;
             _fieldPlan = play == null ? null : CameraPlanBuilder.Build(play,
                 new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
-                    FieldThrowFollowsBall, HeldBallFollowsRunner: true),
+                    !isPickoffThrow && FieldThrowFollowsBall, HeldBallFollowsRunner: true),
                 startSeconds);
         }
 
