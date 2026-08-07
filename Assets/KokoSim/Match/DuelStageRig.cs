@@ -1640,6 +1640,7 @@ namespace KokoSim.Unity.Match
         private float _umpireCallEndAt;             // コールクリップの打ち切り時刻（0=末尾まで）
         private float _catchCountdown = -1f;        // 捕球クリップ開始まで（負=予約なし）
         private int _catchIndex = -1;               // 今の球で使う捕球クリップ（CatchAnchors の添字。負=捕らない）
+        private bool _catchIsStrike;                // 今の球の判定がストライク系（見逃し/空振り）か。CatcherLingerSeconds(bool) の分岐に使う（issue #527）
         private float _swingCountdown = -1f;        // スイング開始まで（負=予約なし。SetSwing 参照）
         private AnimationClip _swingPendingClip;    // 予約中のスイングクリップ
         private float _swingPendingAnchor;          // 予約中の接触アンカー[クリップ秒]
@@ -1704,6 +1705,7 @@ namespace KokoSim.Unity.Match
             _umpireCallCountdown = -1f;
             _catchCountdown = -1f;
             _catchIndex = -1;
+            _catchIsStrike = false;
             _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
             ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
@@ -1894,8 +1896,20 @@ namespace KokoSim.Unity.Match
         private const float UmpireCallAnchorSeconds = 0.85f;
 
         /// <summary>
+        /// 球審ストライクコールの再生倍率（issue #527）。クリップ内部の緩急は変えず、一様な倍率で
+        /// クリップ内時刻の進みだけを速める＝「内部緩急を改変しない」掟（design-18 §4.5/§7-2）には
+        /// 触れない（禁じているのはキーの打ち直し。打者スイングの<see cref="Actor.Speed"/>と同じ作法）。
+        /// 捕球からテロップまでを0.5秒前後に収める狙いで <c>0.85 / (0.50 − <see cref="UmpireCallReactSeconds"/>)
+        /// ≈ 2.1</c> と置いた。速度を入れたら実秒の窓（<see cref="UmpireCallAnchorSeconds"/>・
+        /// <see cref="UmpireCallSettleSeconds"/>）はどちらもクリップ秒なので、実秒へ戻すときはこの値で割る
+        /// （<see cref="CallMomentSeconds"/>・<see cref="ScheduleReactions"/> 参照）。
+        /// </summary>
+        private const float UmpireCallPlaybackRate = 2.1f;
+
+        /// <summary>
         /// 戻り終わり＝しゃがみ姿勢へ収まるクリップ内時刻[秒]（実測 2.55s。以降は末尾まで静止）。
-        /// 「コールが途中で切れて構えへ戻らない」を避ける打ち切り可否の基準に使う。
+        /// 「コールが途中で切れて構えへ戻らない」を避ける打ち切り可否の基準に使う。<see cref="UmpireCallPlaybackRate"/>
+        /// 倍で再生するため、実秒での戻り終わりは <c>UmpireCallSettleSeconds / UmpireCallPlaybackRate</c>。
         /// </summary>
         private const float UmpireCallSettleSeconds = 2.55f;
 
@@ -1913,8 +1927,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// この球の判定を画面へ出してよい時刻[秒]（リリース起点）。<see cref="OnPitchReleased"/> の後だけ
-        /// 意味を持つ。捕られる球は球審がコールする瞬間（ミットに収まる時刻＋<see cref="UmpireCallReactSeconds"/>
-        /// ＋<see cref="UmpireCallAnchorSeconds"/>）、
+        /// 意味を持つ。見逃し・空振り（球審がコールの絵を出す）は捕球する瞬間（ミットに収まる時刻＋
+        /// <see cref="UmpireCallReactSeconds"/>＋<see cref="UmpireCallAnchorSeconds"/>÷<see cref="UmpireCallPlaybackRate"/>）、
+        /// ボール（コールの絵が無い＝issue #527 C）は反応だけ（ミットに収まる時刻＋<see cref="UmpireCallReactSeconds"/>）、
         /// 打つ球・死球は当たった瞬間。
         ///
         /// UI（MatchLive）は長らく盤面（2D俯瞰）の投球尺 0.45 秒固定でテロップを出していた。対決ビューの球は
@@ -1922,6 +1937,10 @@ namespace KokoSim.Unity.Match
         /// **捕る前に「ストライク」が出る**（2026-08-01 実測: 捕られた17球すべて捕球前・平均 0.113 秒早い。
         /// 監督指摘「捕球するより前に出ている気がする」）。issue #332 で打者・捕手・球審は実飛翔時間へ
         /// 移したが、UI のテロップだけが取り残されていた＝同じ罠の最後の1箇所。
+        ///
+        /// 捕球からテロップまでが0.95秒と長く、しかもボールはコールの絵が無いのに同じだけ待たされていた
+        /// （issue #527）。ボールは反応秒だけへ縮め、見逃し・空振りは <see cref="UmpireCallPlaybackRate"/>
+        /// でコールの再生自体を速めて約0.5秒へ詰めた。
         /// </summary>
         public float CallMomentSeconds { get; private set; } = BallFlightSeconds;
 
@@ -2002,10 +2021,13 @@ namespace KokoSim.Unity.Match
             bool meetsBat = outcome == DuelPitchOutcome.InPlayContact
                 || outcome == DuelPitchOutcome.FoulContact;
             float flight = LaunchBall(pitch, catchIndex, meetsBat);
-            // 捕られる球は球審のコール（＝捕球後に動き出した腕が伸び切る瞬間）に、
-            // 打つ球・死球は当たった瞬間に判定テロップを合わせる（下の項）。
+            // 見逃し・空振り（ストライク系）は球審のコール（＝捕球後に動き出した腕が伸び切る瞬間）に、
+            // ボール（コールの絵が無い＝issue #527 C）は反応だけに、打つ球・死球は当たった瞬間に
+            // 判定テロップを合わせる（下の項）。
+            bool isStrike = outcome == DuelPitchOutcome.CalledStrike || outcome == DuelPitchOutcome.SwingMiss;
             CallMomentSeconds = _ball == null ? flight
-                : catchIndex >= 0 ? _ballArrival + UmpireCallReactSeconds + UmpireCallAnchorSeconds
+                : isStrike ? _ballArrival + UmpireCallReactSeconds + UmpireCallAnchorSeconds / UmpireCallPlaybackRate
+                : catchIndex >= 0 ? _ballArrival + UmpireCallReactSeconds
                 : _ballArrival;
 
             SeekActor(_pitcher, ReleaseTime);
@@ -2024,14 +2046,14 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
-            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isBuntAttempt);
+            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isStrike, isBuntAttempt);
         }
 
         /// <summary>打者・捕手・球審の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。
         /// <paramref name="isBuntAttempt"/>（issue #490）が真なら、当てる/空振りの一発物をバント用
         /// クリップへ差し替える（無ければ通常の打撃クリップのまま）。</summary>
         private void ScheduleReactions(DuelPitchOutcome outcome, float nextReleaseIn, float flight,
-            int catchIndex, bool isBuntAttempt = false)
+            int catchIndex, bool isStrike, bool isBuntAttempt = false)
         {
             // 球審: ストライク（見逃し・空振り）でコールを予約、それ以外は前球の予約をキャンセル（#333）
             // バットを球へ向けるのは当たる球だけ。空振りで向けると「当たっているのに空振り」になる
@@ -2039,7 +2061,6 @@ namespace KokoSim.Unity.Match
                 || outcome == DuelPitchOutcome.FoulContact;
             _umpireCallCountdown = -1f;
             _swingCountdown = -1f;   // 振らない結果は前球のスイング予約を持ち越さない
-            bool isStrike = outcome == DuelPitchOutcome.CalledStrike || outcome == DuelPitchOutcome.SwingMiss;
             if (isStrike && _umpireStrikeClip != null)
             {
                 // 開始同期: クリップ開始（突き出しの助走の頭）を「捕球 + 反応」に置く＝
@@ -2047,14 +2068,16 @@ namespace KokoSim.Unity.Match
                 // 頭出しはしない（頭こそがジャッジの動作なので捨てる区間が無い）。
                 _umpireCallCountdown = flight + UmpireCallReactSeconds;
                 _umpireCallStartAt = 0f;
-                // 打ち切りは「戻り終わり(UmpireCallSettleSeconds)まで再生できないとき」だけ。
-                // 間隔3.2s・飛翔0.55sなら開始0.65sで戻りまで2.55sが丁度収まる。軟投（飛翔0.60s）は
-                // 0.05s 欠けるが、切られるのは戻り終わり直前（速度≈0.2m/s）＝絵には出ない。
+                // 打ち切りは「戻り終わり(UmpireCallSettleSeconds、クリップ秒)まで再生できないとき」だけ。
+                // 再生は UmpireCallPlaybackRate 倍速なので、実秒の持ち時間(playable)をクリップ秒へ
+                // 換算してから比べる（速度を入れたらアンカーの逆算も実秒→クリップ秒へ換算し直す掟）。
+                // 間隔3.6s・飛翔0.55sなら開始0.65sで戻りまで2.55/2.1≒1.21sが余裕を持って収まる。
                 // 切る場合も腕を出す前で切れないよう、次のリリース直前まで目一杯回す。
                 float playable = nextReleaseIn > 0f ? nextReleaseIn - _umpireCallCountdown : float.MaxValue;
-                _umpireCallEndAt = playable >= UmpireCallSettleSeconds
+                float playableClipSeconds = playable * UmpireCallPlaybackRate;
+                _umpireCallEndAt = playableClipSeconds >= UmpireCallSettleSeconds
                     ? 0f                                                   // 末尾まで（尻尾は静止＝絵は変わらない）
-                    : Mathf.Max(0f, playable);
+                    : Mathf.Max(0f, playableClipSeconds);
             }
 
             // バント/セーフティバント/スクイズの指示が出ていて、かつバント用クリップが揃っている球だけ
@@ -2088,7 +2111,7 @@ namespace KokoSim.Unity.Match
                     SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
                     break;
             }
-            ScheduleCatch(catchIndex);
+            ScheduleCatch(catchIndex, isStrike);
         }
 
         /// <summary>
@@ -2181,10 +2204,11 @@ namespace KokoSim.Unity.Match
         /// （球到達の0.36s前。2026-07-30 監督指摘）。足りないのは「後ろへずらす」＝開始の予約なので、
         /// 球審コール（<see cref="_umpireCallCountdown"/>）と同じ作法でカウントダウンを持つ。
         /// </summary>
-        private void ScheduleCatch(int catchIndex)
+        private void ScheduleCatch(int catchIndex, bool isStrike)
         {
             _catchCountdown = -1f;
             _catchIndex = catchIndex;
+            _catchIsStrike = isStrike;
             if (catchIndex < 0) return;
             var clip = _catchClips[catchIndex];
             float start = _ballArrival - CatchAnchors[catchIndex].Moment;
@@ -2197,7 +2221,7 @@ namespace KokoSim.Unity.Match
                 // ミットを止めて見せる＝フレーミング）。HoldSeconds は SetActorClip の後に張る
                 //（差し替えが保留中のホールド予約を打ち消すため。打者のスイングと同じ作法）
                 SetActorClip(_catcher, clip, -start, CatchAnchors[catchIndex].Moment);
-                _catcher.HoldSeconds = CatcherLingerSeconds;
+                _catcher.HoldSeconds = CatcherLingerSeconds(isStrike);
             }
         }
 
@@ -2491,7 +2515,7 @@ namespace KokoSim.Unity.Match
             _ball.transform.localPosition = _ballCatchPoint;
             _ball.transform.SetParent(hand, true);
             _ballInMitt = true;
-            _ballInMittRemaining = CatcherLingerSeconds;   // 判定表示が消えるまでミットの中に見せる
+            _ballInMittRemaining = CatcherLingerSeconds(_catchIsStrike);   // 判定表示が消えるまでミットの中に見せる
             return true;
         }
 
@@ -2701,7 +2725,10 @@ namespace KokoSim.Unity.Match
             {
                 _umpireCallCountdown -= deltaTime;
                 if (_umpireCallCountdown < 0f)
+                {
                     SetActorClip(_umpire, _umpireStrikeClip, _umpireCallStartAt, _umpireCallEndAt);
+                    _umpire.Speed = UmpireCallPlaybackRate;   // SetActorClip の後（差し替えで持ち越さないため）
+                }
             }
 
             // スイングの開始予約（頭出しでは間に合わない速い再生用。issue #368）。
@@ -2724,7 +2751,7 @@ namespace KokoSim.Unity.Match
                     // 捕球の瞬間（クリップ内 Moment）で打ち切り＋据え置き＝捕った形のまま
                     // 判定表示が消えるまで静止（ScheduleCatch の else 側と同じ作法。片方だけ変えない）
                     SetActorClip(_catcher, _catchClips[_catchIndex], 0f, CatchAnchors[_catchIndex].Moment);
-                    _catcher.HoldSeconds = CatcherLingerSeconds;
+                    _catcher.HoldSeconds = CatcherLingerSeconds(_catchIsStrike);
                     FixCatcherPose();   // 差し替え直後のポーズにも当てる（この同じフレームで球が着くことがある）
                 }
             }
@@ -2740,7 +2767,7 @@ namespace KokoSim.Unity.Match
             if (_catcherShiftT >= 0f)
             {
                 _catcherShiftT += deltaTime;
-                if (_catcherShiftT > _ballArrival + CatcherLingerSeconds + CatcherShiftReturnSeconds + 0.2f)
+                if (_catcherShiftT > _ballArrival + CatcherLingerSeconds(_catchIsStrike) + CatcherShiftReturnSeconds + 0.2f)
                     _catcherShiftT = -1f;
             }
 
@@ -2912,7 +2939,7 @@ namespace KokoSim.Unity.Match
         private void ApplyCatcherResidualShift()
         {
             if (_catcherShiftT < 0f) return;   // 時計が止まっている＝寄せも戻りも完了（素の位置のまま触らない）
-            float w = CatcherShiftWeight(_catcherShiftT, _ballArrival, CatcherLingerSeconds);
+            float w = CatcherShiftWeight(_catcherShiftT, _ballArrival, CatcherLingerSeconds(_catchIsStrike));
             // 高さの残差はルートで吸収しない（issue #440 / #466）。残差はσ=(30−0.22×Control)cm＝
             // 制球の悪い投手では0.2〜0.4m級で、そのままYの平行移動にすると
             //   下外れ → 体ごと地面へめり込む（#440）／上外れ → 足ごと宙に浮く（#466。
@@ -2929,7 +2956,7 @@ namespace KokoSim.Unity.Match
         /// 残差の体寄せの台形重み。<paramref name="ballTime"/> はリリースからの経過秒（0起点。
         /// <see cref="_catcherShiftT"/>＝球より長生きする専用の時計）、<paramref name="settleAt"/> は
         /// 球がミット面へ届く時刻（<see cref="_ballArrival"/>）、<paramref name="holdSeconds"/> は
-        /// 捕球後の据え置き窓（<see cref="CatcherLingerSeconds"/>＝判定表示が消えるまで）。
+        /// 捕球後の据え置き窓（<see cref="CatcherLingerSeconds(bool)"/>＝判定表示が消えるまで）。
         /// リリースから<see cref="CatcherShiftLeadSeconds"/>かけて寄り切り、**据え置き窓の間は動かず**、
         /// 判定表示が消えてから<see cref="CatcherShiftReturnSeconds"/>かけて狙いの構え（残差ゼロ）へ戻る。
         /// 捕球の瞬間から戻すと、ミットの子になった球ごと体が中央へスライドして
@@ -2951,21 +2978,28 @@ namespace KokoSim.Unity.Match
         /// 1球ごとの判定オーバーレイ（ストライク/ボール等）の表示時間[s]。正典は MatchLiveController の
         /// <c>pitchCallHoldSeconds</c>（直列化）で、<c>NewDuelRig</c> が生成時にここへ流し込む＝
         /// この既定値は撮影ハーネス・キャリブレーション等、リグを単体で組む場面のフォールバック。
-        /// 表示の長さと捕手の据え置き（<see cref="CatcherLingerSeconds"/>）を同じ値から出すための入口
+        /// 表示の長さと捕手の据え置き（<see cref="CatcherLingerSeconds(bool)"/>）を同じ値から出すための入口
         /// なので、コントローラ側だけ・ここだけを変えない。
         /// </summary>
         public float PitchCallHoldSeconds { get; set; } = 0.85f;
 
         /// <summary>
-        /// 捕球からの捕手の据え置き窓[s]＝判定表示が消えるまで（コールの間 <see cref="UmpireCallReactSeconds"/>
-        /// ＋<see cref="UmpireCallAnchorSeconds"/>＋表示 <see cref="PitchCallHoldSeconds"/>）。この間、捕手は捕った形のまま動かない
-        /// （捕球クリップの据え置き＋体寄せの据え置き）し、球もミットの中に見せ続ける（監督指示 2026-08-05
-        /// 「判定表示が消えるまで捕球位置から動かない」）。3つを同じ窓に縛るのは #464 の教訓＝
-        /// 球が見えている間に体が動くと、ミットの子の球ごと中央へ引き戻す「全身フレーミング」になる。
-        /// 片方だけ変えない。
+        /// 捕球からの捕手の据え置き窓[s]＝判定表示が消えるまで。<paramref name="isStrike"/>（見逃し・空振り＝
+        /// 球審のコールの絵がある）は「コールの間（<see cref="UmpireCallReactSeconds"/>＋
+        /// <see cref="UmpireCallAnchorSeconds"/>÷<see cref="UmpireCallPlaybackRate"/>）＋表示
+        /// <see cref="PitchCallHoldSeconds"/>」。ボール（コールの絵が無い＝issue #527 C。
+        /// <see cref="CallMomentSeconds"/>と同じ理由でコールの間を待たない）は「反応
+        /// <see cref="UmpireCallReactSeconds"/>＋表示<see cref="PitchCallHoldSeconds"/>」。
+        /// どちらも「テロップが出てから消えるまで」の意味を保つ＝<see cref="CallMomentSeconds"/>と対で動かす。
+        /// この間、捕手は捕った形のまま動かない（捕球クリップの据え置き＋体寄せの据え置き）し、球もミットの中に
+        /// 見せ続ける（監督指示 2026-08-05「判定表示が消えるまで捕球位置から動かない」）。この3つ（コール・
+        /// 体寄せ・球の据え置き）を同じ窓に縛るのは #464 の教訓＝球が見えている間に体が動くと、ミットの子の
+        /// 球ごと中央へ引き戻す「全身フレーミング」になる。片方だけ変えない。
         /// </summary>
-        private float CatcherLingerSeconds
-            => UmpireCallReactSeconds + UmpireCallAnchorSeconds + PitchCallHoldSeconds;
+        private float CatcherLingerSeconds(bool isStrike)
+            => isStrike
+                ? UmpireCallReactSeconds + UmpireCallAnchorSeconds / UmpireCallPlaybackRate + PitchCallHoldSeconds
+                : UmpireCallReactSeconds + PitchCallHoldSeconds;
 
         /// <summary>球が消えてから狙いの構え（基準位置）へ戻るまでの時間[s]。12fpsで5〜6コマ＝
         /// 捕った所からすっと構え直す速さ。短くすると大外れの球で瞬間移動に見える（監督報告 2026-08-04）。</summary>
@@ -5343,9 +5377,10 @@ namespace KokoSim.Unity.Match
                 ? Vector3.zero
                 : _catcher.Go.transform.localPosition - _catcher.BasePos;
 
-        /// <summary>【実測プローブ用】捕球からの据え置き窓[s]（<see cref="CatcherLingerSeconds"/>）。
-        /// CatcherClampShooter が測定窓を組むのに使う（私有 const の写しを持たせない）。</summary>
-        public float CatcherLingerSecondsForCapture => CatcherLingerSeconds;
+        /// <summary>【実測プローブ用】捕球からの据え置き窓[s]（<see cref="CatcherLingerSeconds(bool)"/>）。
+        /// 直近の球の判定（ストライク系か）に連動する＝CatcherClampShooter が測定窓を組むのに使う
+        /// （私有 const の写しを持たせない）。</summary>
+        public float CatcherLingerSecondsForCapture => CatcherLingerSeconds(_catchIsStrike);
 #endif
 
         public string CatchDiagForCapture()
