@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using KokoSim.Engine.Debugging;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
@@ -214,14 +215,23 @@ namespace KokoSim.Unity.Match
                     prevMid = midNow;
                     if (!ReferenceEquals(_ctrl.CurrentPa, prevPa)) { prevPa = _ctrl.CurrentPa; paEpoch++; }
 
-                    // ── 采配（窓の頭で1回だけ）───────────────────────────
+                    // ── 采配・強制（窓の頭で1回だけ）─────────────────────
                     bool win = _ctrl.AtWindowForCapture;
                     if (win && !prevWindow)
                     {
                         pa++;
+                        // まだ撮れていない稀プレーを**強制で出す**（設計書17 §6.1・ForcedOutcome）。
+                        // 確率を上げて起きるまで待つ必要は無く、該当ゲートの抽選を1.0へ寄せて1打席で出す。
+                        // 強制した試合は HasForcedOutcomes が立って digest・統計から自動的に外れる。
+                        // ⚠ 走塁系（牽制・重盗）は**走者一塁・二塁空き**でしか効かないので状況を見て予約する。
+                        var want = NextForced();
+                        if (want != ForcedOutcome.None) _ctrl.ForceNextForCapture(want);
+
                         if (_ctrl.ManagerOnOffenseForCapture)
                         {
-                            // 盗塁が先（成功・失敗の両方を撮る）。揃ったらバントへ切り替える。
+                            // バントだけは強制発動に対応する種別が無い（打席結果でなく構えの話）ので
+                            // 従来どおりサインで起こす。盗塁も監督の采配なのでサインを併用する
+                            // （強制は StealSuccess/StealCaught で成否を固定する側）。
                             if (!_done.Contains("steal-safe") || !_done.Contains("steal-out"))
                                 _ctrl.SelectSignForCapture("run-steal");
                             else if (!_done.Contains("bunt"))
@@ -309,6 +319,32 @@ namespace KokoSim.Unity.Match
             _clipFrames = 0;
             // ⚠ ここで輪を捨てない。捨てると「1本の直後に始まる場面」の前録りが空になり、
             // 見せたいスイングが丸ごと落ちる（実測: 振り逃げの直後の三振が本編1.25秒だけの30コマ）。
+        }
+
+        /// <summary>
+        /// まだ撮れていない種類のうち、いまの塁状況で**強制発動できる**もの（設計書17 §6.1）。
+        /// 無ければ <see cref="ForcedOutcome.None"/>。
+        ///
+        /// 対応表の無いものは強制しない: バント（打席結果でなく構え）／盗塁成功・盗塁死は
+        /// 監督の采配サインで起こす側なので、ここでは扱わずサインに任せる。
+        /// </summary>
+        private ForcedOutcome NextForced()
+        {
+            // 走塁系は走者一塁・二塁空きが要る（GameEngine の ForcesStealAttempt の分岐）。
+            if (_ctrl.CanForceStealPlayForCapture && !_done.Contains("pickoff-out"))
+                return ForcedOutcome.PickoffOut;
+
+            // 打席で完結する稀プレー。塁状況を問わない。
+            if (!_done.Contains("wild-pitch")) return ForcedOutcome.WildPitch;
+            if (!_done.Contains("drop-third")) return ForcedOutcome.DroppedThirdStrike;
+            if (!_done.Contains("hit-by-pitch")) return ForcedOutcome.HitByPitch;
+            if (!_done.Contains("homerun")) return ForcedOutcome.HomeRun;
+            if (!_done.Contains("strikeout")) return ForcedOutcome.Strikeout;
+            if (!_done.Contains("error")) return ForcedOutcome.ReachedOnError;
+            if (!_done.Contains("hit")) return ForcedOutcome.Single;
+            if (!_done.Contains("fly-out")) return ForcedOutcome.FlyOut;
+            if (!_done.Contains("ground-out")) return ForcedOutcome.GroundOut;
+            return ForcedOutcome.None;
         }
 
         /// <summary>いま画面に出ている場面の (同一性キー, 種類, 結果テキスト)。撮る対象でなければ全部 null。</summary>

@@ -91,7 +91,18 @@ public static class ForcedOutcomes
         ForcedOutcome.DroppedThirdStrike => c with { DropThirdStrikeReachProb = 1.0, DropThirdStrikeCatchingSlope = 0.0 },
         ForcedOutcome.FieldersChoice => c with { FieldersChoiceProb = 1.0, DoublePlayProb = 0.0 },
         ForcedOutcome.DoublePlay => c with { DoublePlayProb = 1.0, SpeedSlope = 0.0 },
-        ForcedOutcome.PickoffOut => c with { PickoffBaseProb = 1.0 },
+        // ⚠ 牽制だけは確率が「上限係数でクランプされる」形（PickoffResolver.Probability は
+        //    Clamp(Base + 走者リード − 投手センス, 0, PickoffMaxProb)）なので、Base を 1.0 に
+        //    しても上限 0.08 で頭打ちになり**強制にならなかった**（実測: 8%。200打席×2試合を
+        //    流しても牽制死が撮れなかったのはこれが原因）。上限と傾きも一緒に潰す
+        //    （DoublePlay が SpeedSlope、DroppedThirdStrike が CatchingSlope を潰しているのと同じ作法）。
+        ForcedOutcome.PickoffOut => c with
+        {
+            PickoffBaseProb = 1.0,
+            PickoffMaxProb = 1.0,
+            PickoffRunnerLeadSlope = 0.0,
+            PickoffPitcherSenseSlope = 0.0,
+        },
         ForcedOutcome.DoubleSteal => c with { DoubleStealThirdBreakProb = 1.0 },
         _ => c,
     };

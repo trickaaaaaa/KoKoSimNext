@@ -3907,6 +3907,23 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public bool RunnerOnFirstForCapture => RunnerOnFirst;
 
+        /// <summary>
+        /// 【撮影ハーネス用】次の打席の結果を強制する（設計書17 §6.1・<c>ForcedOutcome</c>）。
+        ///
+        /// 稀プレーの絵を撮るのに「確率を上げて起きるまで待つ」必要は無い＝該当ゲートの抽選を
+        /// 1.0 へ寄せて1打席で出す。強制した試合は <c>GameResult.HasForcedOutcomes</c> が立って
+        /// digest・統計から自動的に外れるので、本番の帯には触れない。
+        ///
+        /// ⚠ 走塁系（盗塁・牽制・重盗）は<b>走者一塁・二塁空き・その打席の初球</b>でしか効かない
+        /// （<c>GameEngine</c> の <c>ForcesStealAttempt</c> の分岐）。打席の頭で予約すること。
+        /// </summary>
+        public void ForceNextForCapture(KokoSim.Engine.Debugging.ForcedOutcome outcome)
+            => _prog?.ForceNext(outcome);
+
+        /// <summary>【撮影ハーネス用】いま走塁系の強制が効く状況か（走者一塁・二塁空き）。</summary>
+        public bool CanForceStealPlayForCapture
+            => _atBat is { BaseFirst: true, BaseSecond: false };
+
         /// <summary>診断用: 采配カードが受付中か（issue #493）。false＝投手が次球の振りかぶりへ入り締め切っている。</summary>
         public bool TacticsAcceptingInputForCapture => _signPad?.IsAcceptingInputForCapture ?? true;
 
