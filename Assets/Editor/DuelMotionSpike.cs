@@ -356,13 +356,34 @@ namespace KokoSim.EditorTools
                     new { name = "bat-mxm", clip = "Batter_Mixamo_Strike_01", t = 0.10f, desired = new Vector3(1f, 0f, 0f) },
                     new { name = "catcher", clip = "AA_Baseball_Catcher_Idle",            t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
                     new { name = "umpire",  clip = "AA_Baseball_Umpire_Crouch_Idle",      t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
+                    // バント構え一式（issue #514）。squaring＝投手正対なので、狙いは打撃系(+X)でなく
+                    // 捕手・審判と同じ「投手を向く」+Z。移行クリップは始点(idleから繋ぐ側)と終点
+                    // (ループへ繋ぐ側)の両方を採り、構え全体を1つの定数オフセットで賄えるか確認する
+                    // 実測（2026-08-07）: bunt-in は始点(t=0.00)=1°に対し終点(t=0.95〜1.00)=54°で安定
+                    // （クリップ自身が構えへ回り込む＝squaringをクリップ内部で持っている）。bunt-loop は
+                    // 始点/中間/終点とも0°で完全に安定（回らないただの構えループ）。ハードカットで直結する
+                    // 終点側どうし（bunt-inの終点=54° と bunt-loopの全区間=0°）を選ぶと、そのカット面で
+                    // 実際の見た目の向きが一致する（DuelCalibration.BuntTransitionYawDeg / BuntYawDeg）
+                    new { name = "bunt-in-start", clip = KokoSim.Unity.Match.DuelStageRig.BatterIdleToBuntClipName, t = 0.00f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-in-end",   clip = KokoSim.Unity.Match.DuelStageRig.BatterIdleToBuntClipName, t = 0.99f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-loop",     clip = KokoSim.Unity.Match.DuelStageRig.BatterBuntLoopClipName,   t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-hit",      clip = KokoSim.Unity.Match.DuelStageRig.BatterBuntHitClipName,   t = 0.10f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-miss",     clip = KokoSim.Unity.Match.DuelStageRig.BatterBuntMissClipName,  t = 0.10f, desired = new Vector3(0f, 0f, 1f) },
                 };
 
                 var sb = new StringBuilder();
                 foreach (var j in jobs)
                 {
+                    var clip = FindClip(j.clip);
+                    if (clip == null)
+                    {
+                        // 一部クリップ（Mixamo Adobe素材等）はgitignoreで環境によって不在＝
+                        // 1本欠けただけで残りの実測ごと落とさない（NullReferenceExceptionでbail outしない）
+                        sb.AppendLine(j.name + ": clip not found (" + j.clip + ")");
+                        continue;
+                    }
                     var body = SpawnBody(root, "probe-" + j.name, Vector3.zero, 0f, Color.white);
-                    Sample(body, FindClip(j.clip), j.t);
+                    Sample(body, clip, j.t);
                     var anim = body.GetComponentInChildren<Animator>();
                     var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
                     var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
