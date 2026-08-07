@@ -2364,6 +2364,7 @@ namespace KokoSim.Unity.Match
             yield return CatcherIdleClipName;
             yield return UmpireIdleClipName;
             yield return UmpireStrikeClipName;
+            yield return UmpireStrikeOutClipName;   // 見逃し三振専用コール（issue #533）
             yield return BatterHbpClipName;
             yield return BatterIdleToBuntClipName;   // バント構え一式（issue #490）
             yield return BatterBuntLoopClipName;

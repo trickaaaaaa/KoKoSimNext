@@ -1684,8 +1684,13 @@ namespace KokoSim.Unity.Match
                 // 予約済みの構えを巻き戻す（issue #490）。敵AIのバントは予約に出ないので、
                 // ここで初めて真になる＝従来どおりリリース時からの切り替えになる。
                 PrepareBuntStance(isBuntAttempt || PendingBuntSign());
+                // 見逃し三振（issue #533）: nextReleaseIn<0（＝最後の球）からは推測しない――盗塁死等で
+                // イニングが終わる打席は最後の球が見逃しストライクでも三振ではない。打席結果
+                // （_paConfirmed済みの pt.StrikesAfter）から直接判定して明示的に渡す。
+                var isCalledStrikeout = _paConfirmed
+                    && pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike && pt.StrikesAfter >= 3;
                 _duelRig.OnPitchReleased(isLast ? -1f : duelPitchIntervalSeconds, outcome,
-                    FlightOf(pt), BattedOf(pt, isLast), isBuntAttempt);
+                    FlightOf(pt), BattedOf(pt, isLast), isBuntAttempt, isCalledStrikeout);
             }
 
             // この1球の判定を出す時刻。俯瞰は盤面の投球尺（0.45秒固定）に合わせた pitchIntervalSeconds だが、
@@ -1772,7 +1777,14 @@ namespace KokoSim.Unity.Match
             {
                 // 守備陣＋走者を静止表示（四球なら押し出し反映＝結果後の塁状況）。盤面を空にしない。
                 _view.SetResting(_current.BaseFirstAfter, _current.BaseSecondAfter, _current.BaseThirdAfter);
-                _t = -noPlayHoldSeconds; // 経過で采配窓へ
+                // 見逃し三振の専用コール（issue #533）はStrike_Type01より長く、既定の据え置きでは
+                // クリップが自然終了する前に次打席へ切り替わって消える恐れがある（実装メモ5節）。
+                // 対決ビューがその球で予約した最低据え置き（PendingResultHoldSeconds。通常球は0）を
+                // 底上げに使う＝他の全ての「打球無し」結果（三振・四球等）は従来どおり変わらない。
+                var hold = DuelPacingActive
+                    ? Mathf.Max(noPlayHoldSeconds, _duelRig?.PendingResultHoldSeconds ?? 0f)
+                    : noPlayHoldSeconds;
+                _t = -hold; // 経過で采配窓へ
                 if (_caption != null) _caption.text = _current.BatterName + "　" + ResultJp(_current.Result);
                 if (_result != null) { _result.text = ResultJp(_current.Result); _result.style.display = DisplayStyle.Flex; }
             }

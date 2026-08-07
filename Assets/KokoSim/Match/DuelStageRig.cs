@@ -818,6 +818,8 @@ namespace KokoSim.Unity.Match
         public const string CatcherIdleClipName = "AA_Baseball_Catcher_Idle";
         public const string UmpireIdleClipName = "AA_Baseball_Umpire_Crouch_Idle";
         public const string UmpireStrikeClipName = "AA_Baseball_Umpire_Crouch_Strike_Type01";
+        // 見逃し三振専用のコール（issue #533）。無い環境ではnull＝UmpireStrikeClipNameのままフォールバック
+        public const string UmpireStrikeOutClipName = "AA_Baseball_Umpire_Crouch_Strike_Out_Type01";
         public const string BatterHbpClipName = "AA_Baseball_Batter_Hit_ByPitch_Type01";
         // バント構え（issue #490）。購入パック（AA）に既存の4クリップ。無い環境では黙って通常の
         // 打撃クリップへフォールバックする（他の一発物クリップと同じ「無いものはnull」流儀）。
@@ -911,7 +913,9 @@ namespace KokoSim.Unity.Match
         private Transform _cChestMount;                 // 捕手の胸プロテクター（gear-chest直下）
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
-        private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _umpireStrikeClip;
+        private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _umpireStrikeClip, _umpireStrikeOutClip;
+        // 球審の実際に予約したコールクリップ（Type01 or 見逃し三振専用。ScheduleReactionsが選ぶ）
+        private AnimationClip _pendingUmpireClip;
         // バント構え一式（issue #490）。無い環境ではすべてnull＝バント指示が出ても通常の打撃構えのまま
         // （他の一発物クリップと同じ「無いものは待機のまま」流儀）。
         private AnimationClip _buntIdleToStanceClip, _buntLoopClip, _buntHitClip, _buntMissClip;
@@ -1226,6 +1230,9 @@ namespace KokoSim.Unity.Match
             // 球審ストライクコール。Type01(3.33s)を**確定採用**（2026-07-31 監督判断・#353 の録画で確認）。
             // Type02(4.67s)は突き出しが2.05s・戻り終わりが3.4sで、リリース間隔2.8sに収まらないため不採用。
             _umpireStrikeClip = LoadClip(UmpireStrikeClipName);
+            // 見逃し三振専用コール（issue #533）。無い環境ではnull＝ScheduleReactionsがStrike_Type01へ
+            // フォールバックする（他の一発物と同じ流儀）。
+            _umpireStrikeOutClip = LoadClip(UmpireStrikeOutClipName);
 
             _bat = SpawnBat(layer);
 
@@ -1703,6 +1710,7 @@ namespace KokoSim.Unity.Match
             _catcherResidual = Vector2.zero;
             if (_catcher != null && _catcher.IdleClip != null) SetActorClip(_catcher, _catcher.IdleClip, 0f, _catcher.IdleEndAt);
             _umpireCallCountdown = -1f;
+            PendingResultHoldSeconds = 0f;   // 打席をまたいで前の球の据え置き延長を引き継がない（issue #533）
             _catchCountdown = -1f;
             _catchIndex = -1;
             _catchIsStrike = false;
@@ -1945,6 +1953,22 @@ namespace KokoSim.Unity.Match
         public float CallMomentSeconds { get; private set; } = BallFlightSeconds;
 
         /// <summary>
+        /// この球の結果保持（打球の無い打席終了＝三振・四球等）に最低限必要な据え置き秒数[s]
+        /// （<see cref="CallMomentSeconds"/> 起点）。既定は0（呼び出し側の <c>noPlayHoldSeconds</c> の
+        /// ままでよい＝従来どおり）。見逃し三振で専用クリップ（<see cref="UmpireStrikeOutClipName"/>。
+        /// Type01比+45%長い＝4.83s）を選んだ球だけ、そのクリップが**自然終了まで途中で切れて構えへ
+        /// 戻らない**（issue #533 実装メモ5節「打ち切りの罠」）ことを保証する値を持つ。
+        ///
+        /// 実測に頼らない安全側の計算＝「アンカー(<see cref="UmpireCallAnchorSeconds"/>)以降を
+        /// 全部見せ切るのに要る実秒」= (クリップ長 − アンカー) / <see cref="UmpireCallPlaybackRate"/>。
+        /// クリップ長はロード済み <see cref="AnimationClip.length"/>（実測不要・常に正確）から取るので
+        /// この値自体は保証できるが、**アンカーの実測はしていない**（Unity Editor 未接続で
+        /// RunClipSpeedProbe が回せなかった＝2026-08-08 夜間ラン）ため Type01 の値を暫定流用している。
+        /// 呼び出し側は <c>Mathf.Max(noPlayHoldSeconds, PendingResultHoldSeconds)</c> で使う。
+        /// </summary>
+        public float PendingResultHoldSeconds { get; private set; }
+
+        /// <summary>
         /// 盤面の「ボールが手を離れた瞬間」（BeginPitchBall）に呼ぶアンカー同期の入口。
         /// 投手クリップをリリース時刻へスナップし、次の1球があれば（nextReleaseIn=リリース間隔）
         /// フォロースルーを FollowSeconds 見せてから次の振りかぶり位置へ切り替える予約を入れる。
@@ -1979,6 +2003,20 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch,
             KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted, bool isBuntAttempt)
+            => OnPitchReleased(nextReleaseIn, outcome, pitch, batted, isBuntAttempt, isCalledStrikeout: false);
+
+        /// <summary>
+        /// 見逃し三振の指示つきのリリース（issue #533）。<paramref name="isCalledStrikeout"/> が真なら、
+        /// 球審のストライクコールを見逃し三振専用クリップ（<see cref="UmpireStrikeOutClipName"/>）へ
+        /// 差し替える（無ければ通常の <see cref="UmpireStrikeClipName"/> のまま＝他の一発物と同じ
+        /// 「無いものは待機のまま」流儀）。<paramref name="nextReleaseIn"/>（＝isLastの推測）からは
+        /// 判定しない――盗塁死等でイニングが終わる打席は最後の球が見逃しストライクでも三振ではない
+        /// ため、呼び出し側（controller）が打席結果（<c>pt.StrikesAfter &gt;= 3</c>）から明示的に渡す
+        /// （<paramref name="isBuntAttempt"/> と同じ作法。issue #533 実装メモ2節）。
+        /// </summary>
+        public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch,
+            KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted, bool isBuntAttempt,
+            bool isCalledStrikeout)
         {
             if (!Available || _pitcher == null) return;
             // ⚠ ここで構えを切り替えない（issue #490 実機確認 2026-08-06）。リリース時点から始めると
@@ -2046,14 +2084,15 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
-            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isStrike, isBuntAttempt);
+            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isStrike, isBuntAttempt, isCalledStrikeout);
         }
 
         /// <summary>打者・捕手・球審の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。
         /// <paramref name="isBuntAttempt"/>（issue #490）が真なら、当てる/空振りの一発物をバント用
-        /// クリップへ差し替える（無ければ通常の打撃クリップのまま）。</summary>
+        /// クリップへ差し替える（無ければ通常の打撃クリップのまま）。<paramref name="isCalledStrikeout"/>
+        /// （issue #533）が真なら、球審のコールを見逃し三振専用クリップへ差し替える。</summary>
         private void ScheduleReactions(DuelPitchOutcome outcome, float nextReleaseIn, float flight,
-            int catchIndex, bool isStrike, bool isBuntAttempt = false)
+            int catchIndex, bool isStrike, bool isBuntAttempt = false, bool isCalledStrikeout = false)
         {
             // 球審: ストライク（見逃し・空振り）でコールを予約、それ以外は前球の予約をキャンセル（#333）
             // バットを球へ向けるのは当たる球だけ。空振りで向けると「当たっているのに空振り」になる
@@ -2061,7 +2100,13 @@ namespace KokoSim.Unity.Match
                 || outcome == DuelPitchOutcome.FoulContact;
             _umpireCallCountdown = -1f;
             _swingCountdown = -1f;   // 振らない結果は前球のスイング予約を持ち越さない
-            if (isStrike && _umpireStrikeClip != null)
+            PendingResultHoldSeconds = 0f;
+            // 見逃し三振（issue #533）: 専用クリップが揃っている・この球が実際に見逃し三振の球である
+            // 両方が真の球だけ差し替える（無い環境や空振り三振では従来の Strike_Type01 のまま＝対象外）。
+            bool useStrikeOut = isCalledStrikeout && outcome == DuelPitchOutcome.CalledStrike
+                && _umpireStrikeOutClip != null;
+            _pendingUmpireClip = useStrikeOut ? _umpireStrikeOutClip : _umpireStrikeClip;
+            if (isStrike && _pendingUmpireClip != null)
             {
                 // 開始同期: クリップ開始（突き出しの助走の頭）を「捕球 + 反応」に置く＝
                 // ミットに収まる前に球審が動き出さない（UmpireCallReactSeconds の項）。
@@ -2073,11 +2118,26 @@ namespace KokoSim.Unity.Match
                 // 換算してから比べる（速度を入れたらアンカーの逆算も実秒→クリップ秒へ換算し直す掟）。
                 // 間隔3.6s・飛翔0.55sなら開始0.65sで戻りまで2.55/2.1≒1.21sが余裕を持って収まる。
                 // 切る場合も腕を出す前で切れないよう、次のリリース直前まで目一杯回す。
+                //
+                // ⚠ 見逃し三振は常に打席最後の球（nextReleaseIn=-1）＝playableは常にfloat.MaxValueで
+                // ここでは絶対に切られない（この分岐は次の投球が同じ打席内にある場合だけ効く）。
+                // 4.83sの新クリップが「途中で切れて構えへ戻らない」罠（実装メモ5節）は下の
+                // PendingResultHoldSeconds（呼び出し側のnoPlayHoldSecondsを底上げする値）で防ぐ。
                 float playable = nextReleaseIn > 0f ? nextReleaseIn - _umpireCallCountdown : float.MaxValue;
                 float playableClipSeconds = playable * UmpireCallPlaybackRate;
                 _umpireCallEndAt = playableClipSeconds >= UmpireCallSettleSeconds
                     ? 0f                                                   // 末尾まで（尻尾は静止＝絵は変わらない）
                     : Mathf.Max(0f, playableClipSeconds);
+                if (useStrikeOut)
+                {
+                    // アンカー(UmpireCallAnchorSeconds)以降を全部見せ切るのに要る実秒。
+                    // クリップ長はAnimationClip.lengthの実値（実測不要・常に正確）を使うので、
+                    // アンカーそのものの実測（RunClipSpeedProbe。issue #533実装メモ3節）が
+                    // 済んでいなくても「クリップが自然終了より手前で切れない」ことだけは保証できる
+                    // （実測はテロップと腕の一致精度だけに影響し、打ち切りの罠には影響しない）。
+                    PendingResultHoldSeconds = Mathf.Max(0f,
+                        (_umpireStrikeOutClip.length - UmpireCallAnchorSeconds) / UmpireCallPlaybackRate);
+                }
             }
 
             // バント/セーフティバント/スクイズの指示が出ていて、かつバント用クリップが揃っている球だけ
@@ -2726,7 +2786,7 @@ namespace KokoSim.Unity.Match
                 _umpireCallCountdown -= deltaTime;
                 if (_umpireCallCountdown < 0f)
                 {
-                    SetActorClip(_umpire, _umpireStrikeClip, _umpireCallStartAt, _umpireCallEndAt);
+                    SetActorClip(_umpire, _pendingUmpireClip, _umpireCallStartAt, _umpireCallEndAt);
                     _umpire.Speed = UmpireCallPlaybackRate;   // SetActorClip の後（差し替えで持ち越さないため）
                 }
             }
