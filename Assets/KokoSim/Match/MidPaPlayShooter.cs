@@ -71,6 +71,9 @@ namespace KokoSim.Unity.Match
                 WildPitchProb = 0.10,             // 既定 0.0012
                 PassedBallProb = 0.10,            // 既定 0.0008
                 DropThirdStrikeReachProb = 0.60,  // 既定 0.001
+                // issue #489: 盗塁死（タッチアウト）の絵を必ず出す。既定 0.38 を大きく下回らせて
+                // 必ず刺される側へ倒す（margin→logisticのバイアス項なので符号反転で確実に振り切る）。
+                StealSuccessBias = -3.0,
             },
         };
 
