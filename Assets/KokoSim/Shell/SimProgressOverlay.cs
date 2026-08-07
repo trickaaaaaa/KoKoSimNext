@@ -38,11 +38,17 @@ namespace KokoSim.Unity.Shell
         private static void Tick(VisualElement strip)
         {
             // BackgroundGameOp（BeginMatch・試合後処理）には裏試合のような区画単位の分子/分母が無いため、
-            // 充填率は従来どおり NationBackgroundSim.Progress を使う（未実行時は1＝満タン表示）。
-            // ここで拡張するのは「出す/消す」の表示条件だけ（issue #325）。
-            var running = NationBackgroundSim.Running || BackgroundGameOp.Running;
+            // それ単体が走っているだけのときは従来どおり NationBackgroundSim.Progress を使う
+            // （未実行時は1＝満タン表示。ここで拡張するのは「出す/消す」の表示条件, issue #325）。
+            var running = NationBackgroundSim.Running || BracketFinishSim.Running || BackgroundGameOp.Running;
             strip.style.display = running ? DisplayStyle.Flex : DisplayStyle.None;
-            if (running) UiComponents.SetSimProgress(strip, NationBackgroundSim.Progress);
+            if (!running) return;
+            // issue #529: 自校敗退後の残りブラケット背景消化（BracketFinishSim）は、全国裏試合
+            // （NationBackgroundSim）が既に完了済み（母数0＝Progress常に1＝満タン表示）のことが多く、
+            // それだけを見ていると「充填率が満タンのまま固まって見える」バグになっていた。実際に消化が
+            // 進んでいる方（BracketFinishSim が走っているならそちら）の充填率を見る。
+            var progress = BracketFinishSim.Running ? BracketFinishSim.Progress : NationBackgroundSim.Progress;
+            UiComponents.SetSimProgress(strip, progress);
         }
     }
 }

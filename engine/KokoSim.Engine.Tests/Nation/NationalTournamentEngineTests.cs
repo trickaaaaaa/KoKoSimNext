@@ -90,6 +90,7 @@ public sealed class NationalTournamentEngineTests
             var runner = new TournamentRunner(pair.s, pair.s[0], Coeff, new Xoshiro256Random((ulong)(pair.i + 1)),
                 Schedule, $"P{pair.i}", playerResolver: null, backgroundResolver: bg);
             while (!runner.Finished) runner.PlayNextPlayerMatch();
+            runner.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
         });
 
         Assert.True(stats.Schools.Count >= 6);

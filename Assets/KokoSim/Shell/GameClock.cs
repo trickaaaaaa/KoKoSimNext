@@ -40,6 +40,9 @@ namespace KokoSim.Unity.Shell
                         // 年度替わり（4月）: AI校も進級・新入生加入・逆算配分成長（#80）。背景の全国裏試合を
                         // 完了させてからロスターを触る（背景タスクとロスター変更を重ねない）。
                         NationBackgroundSim.EnsureCompleted();
+                        // issue #529: 自校敗退後の残りブラケット背景消化も、同じロスター（NationService.Rosters）
+                        // を読むため同様に完了を待ってからロスターへ触る。
+                        BracketFinishSim.EnsureCompleted();
                         NationService.AdvanceAiYear(YearIndex);
                         // 終了した年度ぶんの監督メタ更新（指導力・采配・名声・信頼度・節目イベント, issue #171）。
                         // 夏/秋の大会はこの年度内に消化済み＝自校の年間成績が確定した後で1年1回だけ適用する。
@@ -83,6 +86,7 @@ namespace KokoSim.Unity.Shell
                 NewTeamService.Open(t.NewTeam);
                 // AI校も夏後に代替わり: 進行中の全国裏試合を完了させてから3年生を引退させる（#80・秋は下級生のみ）。
                 NationBackgroundSim.EnsureCompleted();
+                BracketFinishSim.EnsureCompleted();   // issue #529: 同じロスターを読むため同様に完了を待つ。
                 NationService.RetireAiGraduates();
             }
         }

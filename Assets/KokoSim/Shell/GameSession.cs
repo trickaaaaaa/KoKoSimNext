@@ -66,6 +66,23 @@ namespace KokoSim.Unity.Shell
         public TournamentWrapUp? PendingTournamentWrapUp { get; private set; }
 
         /// <summary>
+        /// 自校敗退直後、残りブラケットの背景消化（<see cref="BracketFinishSim"/>, issue #529）が終わるまで
+        /// 保持する進行体（優勝校未確定の間だけ非null）。<see cref="Runner"/> は敗退確定と同時に null化する
+        /// （画面遷移をブロックしないため）が、通算戦績の畳み込み（<see cref="Records"/>.FoldTournament）は
+        /// ブラケット全カード確定後でないと集計できないため、別途ここへ確定時点の Runner/Kind/Year を控えて
+        /// 消化完了後に確定させる。
+        /// </summary>
+        private TournamentRunner _bracketFoldRunner;
+        private TournamentKind _bracketFoldKind;
+        private int _bracketFoldYear;
+
+        /// <summary>
+        /// 残りブラケットの背景消化中で、通算戦績（FoldTournament）がまだ確定していないか。
+        /// true の間はセーブを抑止する（<see cref="SaveGameIO.CanSave"/>）。
+        /// </summary>
+        public bool BracketFoldPending => _bracketFoldRunner != null;
+
+        /// <summary>
         /// 自校選手の成績ストア（通算＝永続／今大会＝大会ごとリセット）。純エンジンの集計器を横断状態として保持。
         /// 詳細シムで回った自校戦のボックススコアを PlayMatch で畳み込む。スタメン画面の成績欄はこれを引く。
         /// </summary>
@@ -348,16 +365,50 @@ namespace KokoSim.Unity.Shell
         private void ExitTournamentIfFinished()
         {
             if (Runner == null || !Runner.Finished) return;
-            // ブラケット全試合（自校戦＋裏試合）を通算戦績へ畳み込む（issue #84）。夏の優勝校は甲子園出場として記録。
-            Records.FoldTournament(Runner.BuildBracketView().Matches, Kind, Year);
+            var runner = Runner;
+
             // 大会別アーカイブ（issue #77）: 今大会成績を「当時の学年×大会枠」＋当時の背番号で確定する。
+            // ロスター情報だけで完結する＝ブラケットの残り消化を待たずに確定してよい。
             // 現状フローは夏(県)=SummerPref・秋(県)=Autumn のみ。甲子園/センバツ枠は tournament Phase 3 で populate。
             ArchiveTournamentStats();
+            // 自校の成績（勝敗・優勝したか）は LastOutcome.IsChampion で既に確定済み（敗退時は常に false）。
+            // 「大会全体の優勝校」の確定を待たずに出せる（issue #529 Plan A）。
             PendingTournamentWrapUp = new TournamentWrapUp(Title, TournamentDay, LastOutcome.IsChampion);
             Mode = GameMode.Normal;
             Runner = null;
             BannerPending = false;
             // ResultPending はここでは変えない＝結果モーダルは引き続き表示する。
+
+            if (runner.BracketResolutionPending)
+            {
+                // issue #529: 敗退直後は残りブラケット（自校非関与の裏カード）が未消化＝大会全体の優勝校が
+                // まだ確定していない。通算戦績（FoldTournament）はブラケット全カードが必要なので、ここでは
+                // 待たずに BracketFinishSim（NationBackgroundSim と同型のスライス駆動）へ渡し、完了後に
+                // メインスレッドで確定する。画面遷移（大会モード離脱）は既に上で完了している＝ここから先は
+                // 「閉じる」を押した側を待たせない。
+                _bracketFoldRunner = runner;
+                _bracketFoldKind = Kind;
+                _bracketFoldYear = Year;
+                BracketFinishSim.Start(runner, CompleteBracketFold);
+            }
+            else
+            {
+                // 優勝時（残り試合なし）はここで同期に畳み込む＝従来どおり即確定。
+                Records.FoldTournament(runner.BuildBracketView().Matches, Kind, Year);
+            }
+        }
+
+        /// <summary>
+        /// 残りブラケットの背景消化（<see cref="BracketFinishSim"/>）が完了した後、通算戦績を確定する
+        /// （issue #529。メインスレッドから <see cref="MainThreadDispatcher"/> 経由で呼ばれる）。
+        /// </summary>
+        private void CompleteBracketFold()
+        {
+            var runner = _bracketFoldRunner;
+            if (runner == null) return;
+            // ブラケット全試合（自校戦＋裏試合）を通算戦績へ畳み込む（issue #84）。夏の優勝校は甲子園出場として記録。
+            Records.FoldTournament(runner.BuildBracketView().Matches, _bracketFoldKind, _bracketFoldYear);
+            _bracketFoldRunner = null;
         }
 
         /// <summary>
@@ -428,6 +479,9 @@ namespace KokoSim.Unity.Shell
             AwaitingMatchStart = false;
             PracticeOpponent = null;
             _prefetchTask = null;
+            // 新規ゲーム/ロードは Records を丸ごと差し替える＝背景消化中だった旧大会の FoldTournament は
+            // 適用先を失うので参照だけ切る（issue #529。CompleteBracketFold は null チェックで安全に無視する）。
+            _bracketFoldRunner = null;
             _matchInjurySeq = 0;
             _injuryNotices.Clear();
         }

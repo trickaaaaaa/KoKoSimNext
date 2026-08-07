@@ -45,6 +45,7 @@ public sealed class BackgroundPrefetchTests
         var runner = new TournamentRunner(
             schools, schools[0], Coeff, new Xoshiro256Random(seed), Schedule, "素", null, bg);
         while (!runner.Finished) runner.PlayNextPlayerMatch();
+        runner.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
         return (runner.ChampionName, stats);
     }
 
@@ -61,6 +62,7 @@ public sealed class BackgroundPrefetchTests
             runner.PrefetchCurrentRoundBackgroundCards();   // 現ラウンド裏カードを先に温める
             runner.PlayNextPlayerMatch();                   // 本解決＝非自校カードはキャッシュ命中
         }
+        runner.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
         return (runner.ChampionName, stats);
     }
 
@@ -113,6 +115,7 @@ public sealed class BackgroundPrefetchTests
         runner.PlayNextPlayerMatch();                   // 本解決も命中（自校カードのみ新規）
         // 二重計上が無ければ、素の実行と最終的に一致する（下の全消化で担保）。
         while (!runner.Finished) { runner.PrefetchCurrentRoundBackgroundCards(); runner.PlayNextPlayerMatch(); }
+        runner.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
 
         var plain = RunPlain(MakePrefecture(2000, 8), 5);
         Assert.Equal(StatTotals(plain.Stats), StatTotals(stats));
@@ -126,6 +129,7 @@ public sealed class BackgroundPrefetchTests
             new BackgroundMatchResolver(new NationRosters(new AiRosterDeps()), new GameContext(), 1, new NationTournamentStats()));
         var runner = new TournamentRunner(schools, schools[0], Coeff, new Xoshiro256Random(3), Schedule, "終", null, bg);
         while (!runner.Finished) runner.PlayNextPlayerMatch();
+        runner.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
 
         var champBefore = runner.ChampionName;
         runner.PrefetchCurrentRoundBackgroundCards();   // 終了後は何もしない

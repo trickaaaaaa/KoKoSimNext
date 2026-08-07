@@ -115,6 +115,11 @@ public static class NationalTournamentEngine
             playerResolver: null, backgroundResolver: bg);
 
         while (!runner.Finished) runner.PlayNextPlayerMatch();
+        // issue #529: 敗退直後は残りブラケットが未消化（TournamentRunner.StepBracketResolution へ
+        // スライス駆動化された）。この県は自校非関与＝画面遷移を待たせる懸念がなく、この呼び出し自体が
+        // 既に NationBackgroundSim のジョブ単位（1県丸ごと）で背景スレッド上を走っているので、ここで
+        // 同期に最後まで消化して優勝校を確定してよい。
+        runner.DrainBracketResolution();
         return new PrefectureResult(region.PrefectureId, region.Name, runner.ChampionName);
     }
 }

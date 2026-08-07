@@ -51,6 +51,9 @@ public sealed class TournamentRunnerAceRestTests
 
         // playerResolver 無し＝自校カードも背景フルシムで解決される＝全国AI校と同じ経路（scope B）。
         while (!runner.Finished) runner.PlayNextPlayerMatch();
+        // issue #529: 敗退後の残りラウンドは StepBracketResolution へスライス駆動化された（自動では進まない）。
+        // ここでは残り試合のフラット列がラウンドごと必要なので、同期の DrainBracketResolution で最後まで消化する。
+        runner.DrainBracketResolution();
 
         Assert.Equal(14, startersInOrder.Count);   // 7試合(4+2+1)×2校分の先発背番号
         var round1 = startersInOrder.GetRange(0, 8);
