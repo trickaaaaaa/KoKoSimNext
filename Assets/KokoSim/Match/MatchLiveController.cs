@@ -3350,25 +3350,25 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private readonly struct Matchup
         {
-            public readonly int BatterOrder, BatterNumber, PitcherNumber;
-            public readonly string BatterName, PitcherName;
-            public readonly int? BatterSourceId, PitcherSourceId;
+            public readonly int BatterOrder, BatterNumber;
+            public readonly string BatterName;
+            public readonly int? BatterSourceId;
             public readonly double BatterConditionValue;
             public readonly FieldPosition BatterPosition;
 
             public Matchup(LiveAtBat a)
             {
-                BatterOrder = a.BatterOrder; BatterNumber = a.BatterNumber; PitcherNumber = a.PitcherNumber;
-                BatterName = a.BatterName; PitcherName = a.PitcherName;
-                BatterSourceId = a.BatterSourceId; PitcherSourceId = a.PitcherSourceId;
+                BatterOrder = a.BatterOrder; BatterNumber = a.BatterNumber;
+                BatterName = a.BatterName;
+                BatterSourceId = a.BatterSourceId;
                 BatterConditionValue = a.BatterConditionValue; BatterPosition = a.BatterPosition;
             }
 
             public Matchup(LivePlateAppearance p)
             {
-                BatterOrder = p.BatterOrder; BatterNumber = p.BatterNumber; PitcherNumber = p.PitcherNumber;
-                BatterName = p.BatterName; PitcherName = p.PitcherName;
-                BatterSourceId = p.BatterSourceId; PitcherSourceId = p.PitcherSourceId;
+                BatterOrder = p.BatterOrder; BatterNumber = p.BatterNumber;
+                BatterName = p.BatterName;
+                BatterSourceId = p.BatterSourceId;
                 BatterConditionValue = p.BatterConditionValue; BatterPosition = p.BatterPosition;
             }
         }
@@ -3392,7 +3392,7 @@ namespace KokoSim.Unity.Match
             var offenseColor = TeamChipColor(offenseIsTop ? _awayColors : _homeColors);
             var defenseColor = TeamChipColor(offenseIsTop ? _homeColors : _awayColors);
 
-            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, mu, defenseColor));
+            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseColor));
             _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseColor));
         }
 
@@ -3407,7 +3407,7 @@ namespace KokoSim.Unity.Match
             return new Color32(c.R, c.G, c.B, 255);
         }
 
-        private VisualElement BuildHudPitcher(LivePitcherToday def, Matchup m, Color teamColor)
+        private VisualElement BuildHudPitcher(LivePitcherToday def, Color teamColor)
         {
             var band = HudBand();
 
@@ -3415,13 +3415,16 @@ namespace KokoSim.Unity.Match
             // 次が素の白文字の背番号、その次が名前）で、右端に球数を置く。
             // 登板順は「N番手」が数字＋和文の混植なので、ReliefLabel の文字列ではなく数値から組んで
             // Label を分ける（書体3役ルール・設計書16 §2。Oswald は欧文専用）。
+            // 背番号・名前は Matchup（打席頭で凍った打者側の事情）ではなく LivePitcherToday（常に現在の
+            // 投手を指すライブソース）から引く。番手・球数・スタミナと同じソースにしないと、交代直後に
+            // 存在しない選手の行が1打席分表示される（issue #528）。
             var idn = HudIdRow();
             idn.Add(def.ReliefOrder > 1
                 ? HudChip(def.ReliefOrder.ToString(), "番手", "mhud-cp--key", numeric: true)
                 : HudChip("先発", null, "mhud-cp--key"));
-            var pNum = NumText(m.PitcherNumber);
+            var pNum = NumText(def.Number);
             if (pNum.Length > 0) idn.Add(HudNumber(pNum));
-            idn.Add(HudName(m.PitcherName));
+            idn.Add(HudName(def.Name));
             if (def.Grade > 0) idn.Add(HudChip(def.Grade.ToString(), "年", "mhud-cp--dim", numeric: true));
 
             // 球数は名前行の右端＝継投判断の主指標なので、スタッツ行のセルに埋もれさせず単体で立てる。
@@ -3440,7 +3443,7 @@ namespace KokoSim.Unity.Match
             // 対で見て初めて「今日の出来」になるので隣接させる（issue #407）。単位は見出しへ逃がしてあるので
             // 値は数字だけ＝Oswald（.f-num）が素直に効く（設計書16 §2）。
             // 防御率は通算＋本日の合算（issue #449。通算なしは本日分のみ、登板なしかつ本日アウト0のみ「—」）。
-            var era = MatchLiveStatsProvider.LiveEra(_statsProvider.CareerPitching(m.PitcherSourceId), def.EarnedRuns, def.Outs);
+            var era = MatchLiveStatsProvider.LiveEra(_statsProvider.CareerPitching(def.SourceId), def.EarnedRuns, def.Outs);
             var stats = HudStatsRow();
             stats.Add(HudCell("防御率", era, first: true));
             stats.Add(HudCell("奪三振", def.StrikeOuts.ToString()));
