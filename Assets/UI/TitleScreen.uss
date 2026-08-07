@@ -1,0 +1,85 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   TitleScreen.uss — タイトル画面の配置のみ（UI-BUILD-METHOD Step 4・issue #482 B案）
+   ───────────────────────────────────────────────────────────────────────
+   上＝球場バック（design-19の色ブロック4段：空/スタンド/芝/土）、下＝白地に見出し＋3項目メニュー。
+   色は tokens.uss の --sky / --field-stand-hi-day / --field-grass-day / --field-clay-day / --day-base /
+   --ink / --color-cta を参照するだけで新規カラーは足さない（UI原則⑤）。
+   gap/grid は使わない（USS非対応）。固定寸法セクションは flex-shrink:0（付けないと縦方向で潰れる）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.ts-root {
+    flex-grow: 1;
+    flex-direction: column;
+    background-color: var(--day-base);
+}
+
+/* ── 球場バック：4段の色ブロック（写真・3Dは使わない） ── */
+.ts-backdrop {
+    flex-direction: column;
+    flex-shrink: 0;
+    height: 400px;
+}
+.ts-band { flex-shrink: 0; }
+.ts-band--sky   { height: 220px; background-color: var(--sky); }
+.ts-band--stand { height: 56px;  background-color: var(--field-stand-hi-day); }
+.ts-band--grass { height: 90px;  background-color: var(--field-grass-day); }
+.ts-band--dirt  { height: 34px;  background-color: var(--field-clay-day); }
+
+/* ── 本文：見出し＋メニュー（白地・左寄せ・UI原則⑦＝主要操作は少なく大きく） ── */
+.ts-content {
+    flex-grow: 1;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding-left: 96px;
+}
+
+.ts-title {
+    font-size: 84px;
+    color: var(--ink);
+    margin: 0;
+}
+
+.ts-rule {
+    width: 280px;
+    height: 4px;
+    flex-shrink: 0;
+    background-color: var(--ink);
+    margin-top: 20px;
+    margin-bottom: 40px;
+}
+
+.ts-menu {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+/* Button の既定テーマ（角丸背景・パディング）を解除し、テキストだけの項目にする。 */
+.ts-menu-item {
+    align-self: flex-start;
+    background-color: transparent;
+    border-width: 0;
+    border-radius: 0;
+    padding: 8px 4px;
+    margin: 0 0 10px 0;
+    font-size: 32px;
+    color: var(--ink);
+}
+.ts-menu-item:hover { color: var(--sky); }
+.ts-menu-item:disabled { opacity: 0.35; }
+
+/* CTA（希少資源・issue #482 = 「はじめから」1箇所だけ）: 応援団赤＋インク下線代わりの border-bottom。 */
+.ts-menu-item--cta {
+    color: var(--color-cta);
+    border-bottom-width: 3px;
+    border-bottom-color: var(--color-cta);
+}
+.ts-menu-item--cta:hover { color: var(--color-cta-hi); border-bottom-color: var(--color-cta-hi); }
+
+.ts-version {
+    position: absolute;
+    right: 24px;
+    bottom: 16px;
+    font-size: var(--fs-cap);
+    color: var(--day-tx-3);
+}
