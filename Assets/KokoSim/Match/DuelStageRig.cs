@@ -1504,7 +1504,11 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private float YawForBatterClip(AnimationClip clip)
         {
-            if (clip != null && clip == _batterOwnIdle) return _cal.IdleYawDeg;
+            // Mixamo素材（gitignore）が無い環境では _swingMissClip が _batterOwnIdle と同一クリップへ
+            // フォールバックする（コンストラクタ参照）。その場合は BatterOnOwnIdle と同じく「own」扱い
+            // しない＝常に既定(BatterYawDeg)側で安定させる（さもないと環境依存で向きが変わる）
+            if (clip != null && clip == _batterOwnIdle && _batterOwnIdle != _swingMissClip)
+                return _cal.IdleYawDeg;
             if (clip != null && clip == _buntIdleToStanceClip) return _cal.BuntTransitionYawDeg;
             if (clip != null && (clip == _buntLoopClip || clip == _buntHitClip || clip == _buntMissClip))
                 return _cal.BuntYawDeg;
