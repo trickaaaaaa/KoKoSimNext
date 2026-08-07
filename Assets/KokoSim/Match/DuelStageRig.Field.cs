@@ -928,7 +928,7 @@ namespace KokoSim.Unity.Match
             {
                 float t1;
                 bool outAtEnd, closeCall, force;
-                if (!RunnerFinal(r, out t1, out outAtEnd, out closeCall, out force)) continue;
+                if (!RunnerFinal(r, out t1, out outAtEnd, out closeCall, out force, out _)) continue;
                 if (!outAtEnd || force) continue;              // フォースのアウトは演技を変えない（#417）
                 if (IsBatterArrivingAtFirst(r)) continue;      // 一塁は常に駆け抜け（#443）
 
@@ -1898,6 +1898,14 @@ namespace KokoSim.Unity.Match
             new("AA_Baseball_Offense_Base_Sliding_Type01_Succ", 0.62f, 0.602f, 0.447f);
         private static readonly RunnerArriveAnchor ArriveSlideOut =
             new("AA_Baseball_Offense_Base_Sliding_Type01_Fail", 0.58f, -0.003f, 0.530f);
+        /// <summary>
+        /// 牽制で帰塁する走者が頭から突っ込む到達演技（issue #524）。<c>Sliding_Type02_Succ</c>
+        /// （頭から滑る収録）を使うが、全尺は使わず突っ込む区間（clip 0.50s〜1.34s）だけを切り取る＝
+        /// <see cref="Touch"/>=1.34 を短い牽制の帰塁レッグに当てると <c>tStart</c> が自動的に負になり、
+        /// クリップは自動的に途中（伸び切り〜着地〜触る）から始まる（issue #524 実測④）。
+        /// </summary>
+        private static readonly RunnerArriveAnchor ArriveDiveBack =
+            new("AA_Baseball_Offense_Base_Sliding_Type02_Succ", 1.34f, -0.138f, 0.833f);
 
         /// <summary>
         /// タッチする側（受け手）の演技1本ぶんのアンカー（issue #489）。走者側の
@@ -2058,9 +2066,10 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>この走者が最後に止まる時刻と、その塁でどうなったか。</summary>
-        private static bool RunnerFinal(PlaybackRunner r, out float t1, out bool outAtEnd, out bool closeCall, out bool force)
+        private static bool RunnerFinal(
+            PlaybackRunner r, out float t1, out bool outAtEnd, out bool closeCall, out bool force, out bool returning)
         {
-            t1 = 0f; outAtEnd = false; closeCall = false; force = false;
+            t1 = 0f; outAtEnd = false; closeCall = false; force = false; returning = false;
             if (r?.Segs == null || r.Segs.Count == 0) return false;
             var last = r.Segs[r.Segs.Count - 1];
             // 塁上で動かないレッグ（待機）は到達ではない
@@ -2070,6 +2079,7 @@ namespace KokoSim.Unity.Match
             outAtEnd = last.OutAtEnd;
             closeCall = last.CloseCall;
             force = last.Force;
+            returning = last.Returning;
             return true;
         }
 
@@ -2092,7 +2102,10 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 一塁以外の到達演技を選ぶ**純関数**（乱数を引かない）。フォースとタッチを区別する
+        /// 一塁以外の到達演技を選ぶ**純関数**（乱数を引かない）。まず帰塁（issue #524）で分岐する:
+        /// 牽制で帰塁する走者は常に頭から突っ込む（<see cref="ArriveDiveBack"/>）＝アウト/セーフで
+        /// 演技を分けない（アウトの理由は受け手のタッグ演技 <see cref="DefenderTagOut"/> と判定
+        /// オーバーレイが持つ）。帰塁でなければ従来どおりフォースとタッチを区別する
         /// （issue #489・2026-08-05 監督判断で #417 の方針を改める）: タッチプレーのアウトは
         /// 走者が滑って失敗する演技（<see cref="ArriveSlideOut"/>）を選ぶ。フォースのアウトは
         /// #417 のまま演技を変えない（判定オーバーレイ, Issue #328 だけで伝える）＝#448②の
@@ -2100,8 +2113,9 @@ namespace KokoSim.Unity.Match
         /// <see cref="IsBatterArrivingAtFirst"/> で先に分岐し、常にオーバーラン（issue #443）を使う＝
         /// ここへは来ない（＝一塁フォースは呼び出し自体が別経路）。
         /// </summary>
-        private static RunnerArriveAnchor SelectArrive(bool closeCall, bool outAtEnd, bool force)
-            => outAtEnd && !force ? ArriveSlideOut : closeCall ? ArriveSlideSafe : ArriveRunThrough;
+        private static RunnerArriveAnchor SelectArrive(bool closeCall, bool outAtEnd, bool force, bool returning)
+            => returning ? ArriveDiveBack
+                : outAtEnd && !force ? ArriveSlideOut : closeCall ? ArriveSlideSafe : ArriveRunThrough;
 
         /// <summary>走者1人を時刻 t へ進める（守備の <see cref="StepFielderMotion"/> と同じ作り）。</summary>
         private void StepRunnerMotion(int idx, float t, float dt)
@@ -2117,9 +2131,9 @@ namespace KokoSim.Unity.Match
 
             // 到達の予定。**絶対時刻で判定する**（途中の時刻から再生しても同じ絵）
             float t1;
-            bool outAtEnd, closeCall, force;
+            bool outAtEnd, closeCall, force, returning;
             bool firstBaseArrival = IsBatterArrivingAtFirst(r);
-            if (!st.ArriveFired && RunnerFinal(r, out t1, out outAtEnd, out closeCall, out force))
+            if (!st.ArriveFired && RunnerFinal(r, out t1, out outAtEnd, out closeCall, out force, out returning))
             {
                 if (firstBaseArrival)
                 {
@@ -2152,7 +2166,7 @@ namespace KokoSim.Unity.Match
                 }
                 else
                 {
-                    var an = SelectArrive(closeCall, outAtEnd, force);
+                    var an = SelectArrive(closeCall, outAtEnd, force, returning);
                     float tStart = t1 - an.Touch;
                     if (t >= tStart)
                     {
@@ -2295,8 +2309,8 @@ namespace KokoSim.Unity.Match
                 foreach (var r in _fieldPlay.Runners)
                 {
                     float t1;
-                    bool o, c, f;
-                    if (!RunnerFinal(r, out t1, out o, out c, out f)) continue;
+                    bool o, c, f, ret;
+                    if (!RunnerFinal(r, out t1, out o, out c, out f, out ret)) continue;
                     Vector2 at;
                     if (!RunnerXZ(r, t1, out at)) continue;
                     var to = r.Segs[r.Segs.Count - 1].To;
@@ -2318,9 +2332,9 @@ namespace KokoSim.Unity.Match
                 {
                     var r = _fieldPlay.Runners[i];
                     float t1;
-                    bool o, c, f;
-                    if (!RunnerFinal(r, out t1, out o, out c, out f)) { sb.AppendLine(r.Label + "\t(移動なし)"); continue; }
-                    var clipName = IsBatterArrivingAtFirst(r) ? OverrunClipName : SelectArrive(c, o, f).Clip;
+                    bool o, c, f, ret;
+                    if (!RunnerFinal(r, out t1, out o, out c, out f, out ret)) { sb.AppendLine(r.Label + "\t(移動なし)"); continue; }
+                    var clipName = IsBatterArrivingAtFirst(r) ? OverrunClipName : SelectArrive(c, o, f, ret).Clip;
                     sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                         "{0}\t{1:F2}\t{2}\t{3}\t{4}", r.Label, t1,
                         o ? (f ? "アウト(フォース)" : "アウト(タッチ)") : c ? "際どいセーフ" : "セーフ",
@@ -2372,6 +2386,7 @@ namespace KokoSim.Unity.Match
             yield return ArriveRunThrough.Clip;
             yield return ArriveSlideSafe.Clip;
             yield return ArriveSlideOut.Clip;
+            yield return ArriveDiveBack.Clip;   // 牽制の帰塁（issue #524）
             yield return OverrunClipName; // 一塁駆け抜け（issue #443）
         }
 
