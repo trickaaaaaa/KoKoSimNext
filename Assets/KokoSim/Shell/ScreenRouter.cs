@@ -41,8 +41,10 @@ namespace KokoSim.Unity.Shell
         // （PlayerList と同一 GameObject・同一 UIDocument に同居）。
         // TitleScreen は起動直後の入口（issue #482）。「はじめから」でホームへ遷移する以外に戻り道が無い
         // （タイトルへ戻る導線は対象外＝セーブ基盤issueで扱う）ため、ExtraScreens 止まりでよい。
+        // SaveSlots はタイトルの「つづきから」からのみ遷移するセーブスロット選択画面（issue #508）。
+        // 同じ理由でタブは持たず、戻り道も無い（「タイトルへ戻る」は対象外＝F2）。
         private static readonly string[] ExtraScreens =
-            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TitleScreen" };
+            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TitleScreen", "SaveSlots" };
 
         // 起動時の既定画面（issue #482 でタイトルへ差し替え）。ホームは「はじめから／つづきから」の後に出す。
         private const string DefaultScreen = "TitleScreen";

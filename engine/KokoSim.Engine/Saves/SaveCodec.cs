@@ -8,6 +8,9 @@ using KokoSim.Engine.Stats;
 
 namespace KokoSim.Engine.Saves;
 
+/// <summary>スロット一覧行に出す最小限のヘッダ（<see cref="SaveCodec.PeekHeader"/>）。</summary>
+public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
+
 /// <summary>
 /// セーブの正典コーデック（issue #507）。<see cref="SaveState"/> ⇔ JSON 文字列。<b>形（スキーマ）は engine 側</b>で、
 /// gzip 圧縮とファイル書き出しは Shell 側が担う（persistentDataPath）。外部依存なし＝Unity からも同じコードで往復する。
@@ -103,6 +106,22 @@ public static class SaveCodec
         {
             var root = JsonValue.Parse(text!).AsObject();
             return root.Has("version") ? root.Int("version") : (int?)null;
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>
+    /// スロット一覧表示に必要な最小限（version/week/yearIndex）だけを覗く（issue #508）。
+    /// ロスター等は読まないため <see cref="TryDeserialize"/> より軽い。読めなければ null。
+    /// </summary>
+    public static SaveHeader? PeekHeader(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        try
+        {
+            var root = JsonValue.Parse(text!).AsObject();
+            if (!root.Has("version")) return null;
+            return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"));
         }
         catch (Exception) { return null; }
     }

@@ -1,0 +1,140 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   SaveSlots.uss — セーブスロット選択画面（issue #508）
+   ───────────────────────────────────────────────────────────────────────
+   値は tokens.uss の変数のみを参照する（直書き禁止）。
+   区切りは面の明度差で作り、罫線は表のヘッダー下だけに引く（UI原則④）。
+   主要操作は右の詳細ペインの「読込」1つ（UI原則⑦）。削除は警告色（本当の警告＝破壊的操作）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.ss-main {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-4);
+    padding-bottom: var(--sp-3);
+}
+
+/* ── 2カラム本体 ─────────────────────────────────────────── */
+.ss-body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+.card--list {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-right: var(--sp-3);
+}
+.card--detail {
+    width: var(--w-editor);
+    flex-shrink: 0;
+}
+
+/* ── スロット一覧（行高32px・UI原則①） ───────────────────── */
+.ss-thead {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-thead);
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--divider);
+}
+.ss-th {
+    font-size: var(--fs-th);
+    color: var(--color-muted);
+}
+.ss-th--slot { width: var(--col-ss-slot); flex-shrink: 0; }
+.ss-th--school { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.ss-th--yw { width: var(--col-ss-yw); flex-shrink: 0; -unity-text-align: middle-right; }
+
+.ss-rows { flex-grow: 1; }
+
+.ss-row {
+    flex-direction: row;
+    align-items: center;
+    height: 32px;
+    flex-shrink: 0;
+    padding-left: var(--sp-1);
+    padding-right: var(--sp-1);
+    border-radius: var(--radius-chip);
+}
+.ss-row:hover { background-color: var(--color-row-hover); }
+.ss-row--on {
+    background-color: var(--sf-hover);
+    border-left-width: 2px;
+    border-left-color: var(--line-focus);
+}
+.ss-row--empty { opacity: 0.5; }
+.ss-row__slot {
+    width: var(--col-ss-slot);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+}
+.ss-row__school {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+}
+.ss-row__yw {
+    width: var(--col-ss-yw);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+    -unity-text-align: middle-right;
+}
+
+/* ── 詳細ペイン ─────────────────────────────────────────── */
+.ss-d__name {
+    color: var(--color-chalk);
+}
+.ss-d__sub {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-top: var(--sp-1);
+    margin-bottom: var(--sp-3);
+}
+.ss-d__facts { flex-shrink: 0; }
+.ss-d__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--divider);
+}
+.ss-d__row-k {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+}
+.ss-d__note {
+    font-size: var(--fs-label);
+    color: var(--color-warn);
+    white-space: normal;
+    margin-top: var(--sp-3);
+}
+.ss-d__foot {
+    flex-direction: row;
+    flex-grow: 1;
+    flex-shrink: 0;
+    align-items: flex-end;
+    justify-content: flex-start;
+    margin-top: var(--sp-3);
+}
+
+/* ── 削除確認ダイアログ ─────────────────────────────────── */
+.ss-confirm__card {
+    padding: 28px 40px;
+    min-width: 360px;
+    align-items: center;
+}
+.ss-confirm__q {
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    margin-bottom: var(--sp-4);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+.ss-confirm__btns { flex-direction: row; }

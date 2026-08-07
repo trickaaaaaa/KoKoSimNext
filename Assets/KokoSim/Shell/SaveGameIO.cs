@@ -91,23 +91,33 @@ namespace KokoSim.Unity.Shell
         /// <summary>ファイルを読み、gunzip→復元して全サービスへ適用する。読めなければ false（例外で落ちない）。</summary>
         public static bool Load(string path, out string error)
         {
+            if (!TryReadText(path, out var json, out error)) return false;
+            if (!SaveCodec.TryDeserialize(json, out var state, out error)) return false;
+            Restore(state);
+            return true;
+        }
+
+        /// <summary>
+        /// ファイルを読み gunzip して JSON テキストを返す（復元はしない）。読めなければ false（例外で落ちない）。
+        /// スロット一覧のヘッダ読み取り（<see cref="SaveSlots.ReadInfo"/>）と <see cref="Load"/> の共通経路。
+        /// </summary>
+        public static bool TryReadText(string path, out string json, out string error)
+        {
+            json = "";
             error = "";
             try
             {
                 if (!File.Exists(path)) { error = "セーブが無い"; return false; }
-                string json;
-                using (var fs = File.OpenRead(path))
-                using (var gz = new GZipStream(fs, CompressionMode.Decompress))
-                using (var reader = new StreamReader(gz, Encoding.UTF8))
-                    json = reader.ReadToEnd();
-                if (!SaveCodec.TryDeserialize(json, out var state, out error)) return false;
-                Restore(state);
+                using var fs = File.OpenRead(path);
+                using var gz = new GZipStream(fs, CompressionMode.Decompress);
+                using var reader = new StreamReader(gz, Encoding.UTF8);
+                json = reader.ReadToEnd();
                 return true;
             }
             catch (Exception e)
             {
                 error = e.Message;
-                Debug.LogWarning($"[セーブ] ロード失敗（{path}）: {e.Message}");
+                Debug.LogWarning($"[セーブ] 読み取り失敗（{path}）: {e.Message}");
                 return false;
             }
         }

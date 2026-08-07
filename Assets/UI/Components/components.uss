@@ -552,6 +552,13 @@
     flex-direction: column;
 }
 
+/* ── DialogButton：modal-card 内の確認ダイアログ用ボタン（issue #508）──────
+   主要=CTA・副次=ゴースト・警告=破壊的操作（削除等・本当の警告だけに使う＝UI原則②）。 */
+.dlg-btn { min-width: 120px; height: 40px; -unity-text-align: middle-center; font-size: 20px; border-radius: var(--radius-card); margin: 0 8px; }
+.dlg-btn--primary { background-color: var(--color-cta); color: #FFFFFF; border-width: 0; }
+.dlg-btn--ghost { background-color: var(--color-panel-deep); color: var(--color-chalk); border-width: 1px; border-color: var(--color-line); }
+.dlg-btn--warn { background-color: var(--color-warn); color: #FFFFFF; border-width: 0; }
+
 /* ── Banner：強調告知バー（合宿など） ───────────────────────────────── */
 .banner {
     flex-direction: row;
