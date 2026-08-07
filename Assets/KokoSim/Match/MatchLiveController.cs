@@ -281,10 +281,16 @@ namespace KokoSim.Unity.Match
         private PlaybackPlay _stealPlay;
         private double _stealEndAt;
 
+        // 牽制セーフの直後に続く盗塁企図か（issue #515）。true の間は FinishStealView が「この球の前」の
+        // 事象として扱う＝暴投/捕逸・振り逃げ（この球の結果）には連結せず、この球を仕切り直して投げる側へ戻す。
+        // FinishPickoffView が盗塁へ連結する直前にだけ立て、FinishStealView が消費した瞬間に倒す。
+        private bool _stealPrePitch;
+
         // 打席途中の牽制の再生（issue #486）。盗塁と同型だが、判定結果（アウト/セーフ）に関わらず
         // 牽制球が投じられた球は必ず再生する（分岐させない、2026-08-05 issue決定）。同じ球に
         // 盗塁も解決していれば（牽制セーフの直後に走塁勝負が続く場合）、終わったら盗塁の再生へ連結する
-        // （FinishPickoffView）。再生経路は盗塁と共有（EnterStealPlay と同型）。
+        // （FinishPickoffView）。再生経路は盗塁と共有（EnterStealPlay と同型）。この球の**前**に再生する
+        // （issue #515。従来はこの球を描き切ってから再生していた＝順序が逆だった）。
         private PlaybackPlay _pickoffPlay;
         private double _pickoffEndAt;
 
@@ -559,6 +565,7 @@ namespace KokoSim.Unity.Match
             _paQueue.Clear();
             _paConfirmed = false;
             _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
+            _stealPrePitch = false;  // 牽制からの連結フラグ（issue #515）も同様
             _pickoffPlay = null;     // 打席途中の牽制再生（issue #486）も同様
             _batteryMissPlay = null; // 打席途中の暴投・捕逸再生（issue #487）も同様
             _dropThirdStrikePlay = null; // 打席途中の振り逃げ再生（issue #488）も同様
@@ -1350,10 +1357,40 @@ namespace KokoSim.Unity.Match
         // ── 1球の描画 ──
 
         /// <summary>
-        /// 投球列の index 球目を描き始める。打席の最初の球だけ、対決ビューでは振りかぶりから見せるため
-        /// 時計を実尺ぶん巻き戻して待つ（design-18 §7-2。2球目以降は前の球の OnPitchReleased が予約済み）。
+        /// 投球列の index 球目を描き始める。
+        ///
+        /// 打席途中の牽制（issue #486/#515）: この球の前に牽制球が投じられていれば、engine の意味づけ
+        /// （「この球の前」）どおり、この球の振りかぶりに入る**前**に守備ビューで再生する。従来はここで
+        /// 素通りして投球を描き切ってから（判定後の _pitchCallDone で）牽制をチェックしていたため、
+        /// 投手が打者へ投げ切ってから一塁の絵へハードカットしていた＝順序が逆だった（issue #515）。
+        /// 前の球のチップが残ったまま牽制の絵に重なると混乱するので先に畳む。牽制（と、その直後に
+        /// 続く盗塁企図）が終わったら <see cref="FinishPickoffView"/>／<see cref="FinishStealView"/> が
+        /// 同じ球を <see cref="BeginPitchWindupOrBall"/> で仕切り直して投げる。
         /// </summary>
         private void BeginPitchRender(int index)
+        {
+            if (index >= 0 && index < _paQueue.Count && _paQueue[index].Live?.PickoffPlay is { } pickoffPlay)
+            {
+                _pitchIdx = index;
+                HidePitchCall();   // 直前の球の球種チップを残さない（issue #515）
+                EnterPickoffPlay(pickoffPlay);
+                return;
+            }
+            BeginPitchWindupOrBall(index, forceWindup: false);
+        }
+
+        /// <summary>
+        /// index 球目の振りかぶり（または継続球のリリース直結）を実際に描き始める。打席の最初の球だけ、
+        /// 対決ビューでは振りかぶりから見せるため時計を実尺ぶん巻き戻して待つ（design-18 §7-2。
+        /// 2球目以降は前の球の OnPitchReleased が予約済み）。
+        ///
+        /// <paramref name="forceWindup"/>: 牽制（issue #515）の直後にこの球を投げ直す場合は index が
+        /// 0でなくても振りかぶりから見せる。3D守備ビューへ逃げていた間、対決ビューの投手は
+        /// 逃げた瞬間のポーズで凍っている（<c>DuelStageRig.EndFieldPlay</c> の Restore）ので、
+        /// 前の球のフォロースルーの「続き」として carry では繋がず、必ずセット〜振りかぶりへ
+        /// 仕切り直す（<c>DuelStageRig.OnPitchWindup</c> が内部で <c>ResetForNewPlateAppearance</c> を呼ぶ）。
+        /// </summary>
+        private void BeginPitchWindupOrBall(int index, bool forceWindup)
         {
             _pitchIdx = index;
             _pitchCallDone = false;
@@ -1375,10 +1412,10 @@ namespace KokoSim.Unity.Match
             // 移行クリップを通すか直接構えるかを猶予で選ぶ。
             var buntNow = (index >= 0 && index < _paQueue.Count && IsBuntSign(_paQueue[index].Token))
                           || PendingBuntSign();
-            PrepareBuntStance(buntNow,
-                index == 0 && DuelPacingActive ? DuelStageRig.WindupSeconds : 0f);
+            var useWindup = (index == 0 || forceWindup) && DuelPacingActive;
+            PrepareBuntStance(buntNow, useWindup ? DuelStageRig.WindupSeconds : 0f);
 
-            if (index == 0 && DuelPacingActive)
+            if (useWindup)
             {
                 // セットポジション投球なのでクリップ先頭からではなく DeliveryStartTime から流れる＝
                 // 巻き戻すのは ReleaseTime ではなく WindupSeconds。
@@ -1811,16 +1848,26 @@ namespace KokoSim.Unity.Match
             return end;
         }
 
-        /// <summary>盗塁再生が終わった: 対決構図へ戻し、盗塁が動かした塁・アウトを反映してから打席の続きへ。
-        /// 同じ球で暴投・捕逸も解決していれば（issue #487。走者ありの実球は盗塁企図の後にも投げられる）、
-        /// 盤面を動かす前にその再生へ連結する（先に塁を動かすと二重に見える）。暴投・捕逸が無く振り逃げ
-        /// だけ解決していれば（issue #488。盗塁成功で一塁が空いた直後に三振＋振り逃げが続く稀な複合）、
-        /// そちらへ連結する。</summary>
+        /// <summary>盗塁再生が終わった。<see cref="_stealPrePitch"/>（issue #515。牽制セーフの直後に続いた
+        /// 盗塁企図＝この球の前の事象）が立っていれば、暴投/捕逸・振り逃げ（この球の結果）には連結せず、
+        /// この球を仕切り直して投げる側へ戻る（<see cref="FinishPickoffView"/> と同じ考え方）。
+        ///
+        /// 立っていなければ従来どおりの標準（この球そのものを描き切った後）の盗塁: 対決構図へ戻し、
+        /// 盗塁が動かした塁・アウトを反映してから打席の続きへ。同じ球で暴投・捕逸も解決していれば
+        /// （issue #487。走者ありの実球は盗塁企図の後にも投げられる）、盤面を動かす前にその再生へ連結する
+        /// （先に塁を動かすと二重に見える）。暴投・捕逸が無く振り逃げだけ解決していれば（issue #488。
+        /// 盗塁成功で一塁が空いた直後に三振＋振り逃げが続く稀な複合）、そちらへ連結する。</summary>
         private void FinishStealView()
         {
             EndFieldPlay();          // 守備陣・走者を伏せて対決の構図へ戻す（＝打席への唯一のカット）
             _view.HideJudgement();
             _stealPlay = null;
+            if (_stealPrePitch)
+            {
+                _stealPrePitch = false;
+                BeginPitchWindupOrBall(_pitchIdx, forceWindup: true);
+                return;
+            }
             var q = _paQueue[_pitchIdx];
             if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
             {
@@ -1904,11 +1951,12 @@ namespace KokoSim.Unity.Match
             return end;
         }
 
-        /// <summary>牽制再生が終わった: 対決構図へ戻す。同じ球で盗塁企図の勝負に続いていれば
-        /// （牽制セーフの直後）盤面を動かす前に盗塁の再生へ連結する（先に塁を動かすと二重に見える）。
-        /// 盗塁が続かず暴投・捕逸だけ解決していれば（issue #487）そちらへ、それも無く振り逃げだけ
-        /// 解決していれば（issue #488）そちらへ連結する。どれも続きが無ければ塁・アウトを反映して
-        /// 打席の続きへ戻る。</summary>
+        /// <summary>牽制再生が終わった: 対決構図へ戻す。牽制・盗塁はどちらも「この球の前」の事象
+        /// （issue #515）なので、同じ球で盗塁企図の勝負に続いていれば（牽制セーフの直後）盗塁の再生へ
+        /// 連結し（<see cref="_stealPrePitch"/> を立てる）、続きが無ければこの球を仕切り直して投げる
+        /// （<see cref="BeginPitchWindupOrBall"/>）。暴投・捕逸（issue #487）・振り逃げ（issue #488）は
+        /// 「この球の結果」であって前ではないため、まだ投げていないここでは連結しない——この球が
+        /// 実際に投げ終わった時点（_pitchCallDone）で従来どおりチェックされる。</summary>
         private void FinishPickoffView()
         {
             EndFieldPlay();
@@ -1917,40 +1965,19 @@ namespace KokoSim.Unity.Match
             var q = _paQueue[_pitchIdx];
             if (q.Live?.StealPlay is { } stealPlay)
             {
+                _stealPrePitch = true;
                 EnterStealPlay(stealPlay);
                 return;
             }
-            if (q.Live?.BatteryMissPlay is { } batteryMissPlay)
-            {
-                EnterBatteryMissPlay(batteryMissPlay);
-                return;
-            }
-            if (q.Live?.DropThirdStrikePlay is { } dropThirdStrikePlay)
-            {
-                EnterDropThirdStrikePlay(dropThirdStrikePlay);
-                return;
-            }
-            if (q.Live != null)
-            {
-                SetOuts(q.Live.Outs);
-                SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
-            }
-            _foulFlightHoldSeconds = null;
-            _windowCarry = 0f;
-            _pitchCallDone = false;
-            _inPitchPhase = false;
-            if (IsTerminalPitch(_pitchIdx)) { _stage = LiveStage.Play; EnterBattedBallOrHold(); return; }
-            if (_pitchIdx + 1 < _paQueue.Count) { BeginPitchRender(_pitchIdx + 1); return; }
-            if (_atBatNext != null) { OpenWindowOrBreak(_atBatNext); return; }
-            _stage = LiveStage.Idle;
-            AdvanceToNextWindow();
+            BeginPitchWindupOrBall(_pitchIdx, forceWindup: true);
         }
 
         // ── 打席途中の暴投・捕逸の3D再生（issue #487） ──
         // EnterPickoffPlay 系（issue #486）と同型。盗塁・牽制と違い「この球の前」ではなく
-        // 「この球そのものの結果」として起きるため、盗塁・牽制の再生（あれば）が終わった後に連結する
-        // （FinishPickoffView／FinishStealView 参照）。同じ球で振り逃げも解決していれば
-        // （issue #488。三振確定後の後処理として判定される）、続けてそちらへ連結する（FinishBatteryMissView）。
+        // 「この球そのものの結果」として起きるため、この球を実際に投げ終えた後（_pitchCallDone。
+        // 牽制・盗塁の再生はいずれもそれより前に済んでいる＝issue #515）でチェックする。同じ球で
+        // 振り逃げも解決していれば（issue #488。三振確定後の後処理として判定される）、続けてそちらへ
+        // 連結する（FinishBatteryMissView）。
 
         /// <summary>暴投・捕逸のプレーを守備ビューで再生し始める。ボールの後逸・捕手の返球・走者の進塁は
         /// engine の <see cref="PlaybackPlay"/>（<c>BuildBatteryMiss</c> の出力）が単一ソース＝
@@ -2227,19 +2254,15 @@ namespace KokoSim.Unity.Match
                     var pt = q.Token;
                     SetCount(pt.BallsAfter, pt.StrikesAfter);
                     ShowPitchCall(pt);
-                    // 打席途中の牽制（issue #486）: この球の前に牽制球が投じられていれば、判定結果
-                    // （アウト/セーフ）に関わらず守備ビューで再生する（分岐させない）。盗塁より先に
-                    // 解決する事象なので盗塁より先にチェックする（同じ球に両方載ることがある＝牽制セーフの
-                    // 直後に走塁勝負が続く場合。その連結は FinishPickoffView が担う）。
-                    if (q.Live?.PickoffPlay is { } pickoffPlay)
-                    {
-                        EnterPickoffPlay(pickoffPlay);
-                        return;
-                    }
+                    // 打席途中の牽制（issue #486/#515）はもうここでは見ない――この球の**前**の事象なので
+                    // BeginPitchRender の頭（この球の振りかぶりに入る前）で既に再生済み。同じ球で
+                    // 盗塁企図が続いていれば、その再生もその時点で終えている（FinishPickoffView が連結）。
                     // 打席途中の盗塁（issue #485）: この球の前に盗塁が解決していれば、守備ビューで
                     // 「走者が走る→捕手が投げる→塁で判定」を見せてから塁・アウトを動かす（先に動かすと
                     // 走る前に着いて見える）。再生が終わったら打席の続きへ戻る（次打席へは進めない）。
-                    if (q.Live?.StealPlay is { } stealPlay)
+                    // 牽制が乗っていた球は上記のとおり既に（牽制セーフ直後の）盗塁企図まで再生済み
+                    // ＝ここで二重に再生しない（PickoffPlay の有無で判別する）。
+                    if (q.Live?.PickoffPlay == null && q.Live?.StealPlay is { } stealPlay)
                     {
                         EnterStealPlay(stealPlay);
                         return;
