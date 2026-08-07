@@ -40,12 +40,16 @@ public static class RosterLifecycle
 
     /// <summary>
     /// 新チーム発足（引退週フック, 設計書09 §8）。3年生を引退扱いにし、残った新チームの最上級生から
-    /// 暫定主将を立てる。以降 <see cref="CaptainSelector.IsDesignationWindow"/> の間だけ
-    /// プレイヤーが <see cref="CaptainSelector.Designate"/> で差し替えられる。冪等（2度呼んでも同じ状態）。
+    /// 暫定主将を立てる。引退者が持っていた背番号は解放し、ベンチ外の在籍部員で空き枠を詰める
+    /// （<see cref="UniformNumberAssigner.FillVacancies"/>、issue #531）。以降
+    /// <see cref="CaptainSelector.IsDesignationWindow"/> の間だけプレイヤーが <see cref="CaptainSelector.Designate"/>
+    /// で差し替えられる。冪等（2度呼んでも同じ状態）。
     /// </summary>
     public static NewTeamTransition BeginNewTeam(IReadOnlyList<DevelopingPlayer> roster)
     {
         var retired = RetireThirdYears(roster);
+        foreach (var p in retired) UniformNumberAssigner.Clear(p);
+        UniformNumberAssigner.FillVacancies(Active(roster));
         var captain = CaptainSelector.BeginNewTeam(roster);
         return new NewTeamTransition(retired, captain);
     }

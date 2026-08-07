@@ -189,4 +189,96 @@ public sealed class UniformNumberAssignerTests
 
         Assert.Equal(a.Select(p => p.UniformNumber), b.Select(p => p.UniformNumber));
     }
+
+    [Fact]
+    public void FillVacancies_FillsGapsWithBenchOutPlayersByLevelDescending_KeepsExistingAssignments()
+    {
+        var roster = Roster(25);
+        UniformNumberAssigner.AutoAssign(roster);
+        // 上位20名(index0..19)が1..20、下位5名(index20..24)がベンチ外。
+        // 3つの穴を作る: 1番・10番・20番を持つ選手をベンチ外へ退避。
+        UniformNumberAssigner.Clear(roster[0]);    // 1番が空く
+        UniformNumberAssigner.Clear(roster[9]);    // 10番が空く
+        UniformNumberAssigner.Clear(roster[19]);   // 20番が空く
+        // ベンチ外は roster[0], roster[9], roster[19]（元1,10,20番）と roster[20..24]（level 70..66）。
+        // level降順: roster[0](90) > roster[9](81) > roster[19](71) > roster[20](70) > ... > roster[24](66)。
+
+        UniformNumberAssigner.FillVacancies(roster);
+
+        // 空いた3枠(1,10,20)を level 上位3名で埋める＝小さい番号から強い順。
+        Assert.Equal(1, roster[0].UniformNumber);
+        Assert.Equal(10, roster[9].UniformNumber);
+        Assert.Equal(20, roster[19].UniformNumber);
+        // 既存の他の割当(2..9, 11..19)は一切変わっていない。
+        for (var i = 1; i < 9; i++) Assert.Equal(i + 1, roster[i].UniformNumber);
+        for (var i = 10; i < 19; i++) Assert.Equal(i + 1, roster[i].UniformNumber);
+        // 埋めきれなかった下位2名(roster[23], roster[24])はベンチ外のまま。
+        Assert.Equal(0, roster[23].UniformNumber);
+        Assert.Equal(0, roster[24].UniformNumber);
+        Assert.True(UniformNumberAssigner.Validate(roster));
+    }
+
+    [Fact]
+    public void FillVacancies_StopsWhenBenchOutIsExhausted_LeavesRemainingSlotsVacant()
+    {
+        // 20人ちょうど、うち2名だけベンチ外(番号0)。空き番号は 2 つ用意する。
+        var roster = Roster(20);
+        UniformNumberAssigner.AutoAssign(roster);
+        UniformNumberAssigner.Clear(roster[5]);   // 6番が空く
+        UniformNumberAssigner.Clear(roster[15]);  // 16番が空く
+        // ベンチ外は roster[5]と roster[15]のみ(2名)。空き番号も6,16の2つ＝過不足なく埋まる。
+
+        UniformNumberAssigner.FillVacancies(roster);
+
+        Assert.DoesNotContain(roster, p => p.UniformNumber == 0);
+        Assert.True(UniformNumberAssigner.Validate(roster));
+    }
+
+    [Fact]
+    public void FillVacancies_TiesKeepRosterOrderDeterministically()
+    {
+        // 18人に既存番号1..18を割当済み。残り4人は同levelでベンチ外。空き番号は19,20の2つだけ。
+        var roster = new List<DevelopingPlayer>();
+        for (var i = 0; i < 18; i++)
+        {
+            var p = Guy($"A{i:00}", 80);
+            p.UniformNumber = i + 1;
+            roster.Add(p);
+        }
+        for (var i = 0; i < 4; i++)
+            roster.Add(Guy($"B{i:00}", 50));   // 同level・ベンチ外(既定0)
+
+        UniformNumberAssigner.FillVacancies(roster);
+
+        // 空き番号は19,20の2つ。同点は元のロスター順＝先頭2名(B00,B01)が小さい番号から埋める。
+        Assert.Equal(19, roster[18].UniformNumber);
+        Assert.Equal(20, roster[19].UniformNumber);
+        Assert.Equal(0, roster[20].UniformNumber);
+        Assert.Equal(0, roster[21].UniformNumber);
+        Assert.True(UniformNumberAssigner.Validate(roster));
+    }
+
+    [Fact]
+    public void FillVacancies_NoVacancies_ChangesNothing()
+    {
+        var roster = Roster(20);
+        UniformNumberAssigner.AutoAssign(roster);
+        var before = roster.Select(p => p.UniformNumber).ToList();
+
+        UniformNumberAssigner.FillVacancies(roster);
+
+        Assert.Equal(before, roster.Select(p => p.UniformNumber));
+    }
+
+    [Fact]
+    public void FillVacancies_NoBenchOutPlayers_ChangesNothing()
+    {
+        var roster = Roster(15);
+        UniformNumberAssigner.AutoAssign(roster);   // 15人全員に1..15が付き、ベンチ外はいない
+        var before = roster.Select(p => p.UniformNumber).ToList();
+
+        UniformNumberAssigner.FillVacancies(roster);
+
+        Assert.Equal(before, roster.Select(p => p.UniformNumber));
+    }
 }
