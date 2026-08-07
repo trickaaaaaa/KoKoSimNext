@@ -1214,6 +1214,9 @@ public static class GameEngine
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, 0, buntOuts, res.Pitches, inning, isTop, log, ctx,
                     timeline: buntTimeline,
+                    outsBefore: outs,
+                    baseFirstBefore: buntPreFirst is not null, baseSecondBefore: buntPreSecond is not null, baseThirdBefore: buntPreThird is not null,
+                    baseFirstAfter: bases.First is not null, baseSecondAfter: bases.Second is not null, baseThirdAfter: bases.Third is not null,
                     batterOrder: batterOrder, pitchLog: res.PitchLog,
                     isSacBunt: buntOutcome == BuntResult.SacrificeSuccess);
                 outs += buntOuts;
@@ -1266,6 +1269,9 @@ public static class GameEngine
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
                     timeline: sqTimeline,
+                    outsBefore: outs,
+                    baseFirstBefore: sqPreFirst is not null, baseSecondBefore: sqPreSecond is not null, baseThirdBefore: sqPreThird is not null,
+                    baseFirstAfter: bases.First is not null, baseSecondAfter: bases.Second is not null, baseThirdAfter: bases.Third is not null,
                     batterOrder: batterOrder, pitchLog: res.PitchLog, unearnedRuns: sqUnearnedRuns,
                     isSacBunt: sq.Bunt == BuntResult.SacrificeSuccess);
                 outs += sqOuts;
@@ -1279,6 +1285,12 @@ public static class GameEngine
                 yield return Pa();
                 continue;
             }
+
+            // 打席前の塁状況を観測（塁ダイヤ／静止走者トークン用。追加記録のみ・判定不変, #3/#4）。
+            // エンドランの空振り（次のブロック）が bases を書き換える前に控える＝issue #534。
+            var preFirst = bases.First is not null;
+            var preSecond = bases.Second is not null;
+            var preThird = bases.Third is not null;
 
             // エンドランの空振り: スタートを切った一塁走者が憤死の危機（§1）。エンドランが効いたのが
             // 打席を終わらせた最後の球か（endrunOnLastPitch）で判定する（issue #492: brain は打席全体・手動は
@@ -1324,10 +1336,6 @@ public static class GameEngine
                     fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus);
             }
 
-            // 打席前の塁状況＋アウト数を観測（塁ダイヤ／静止走者トークン用。追加記録のみ・判定不変, #3/#4）。
-            var preFirst = bases.First is not null;
-            var preSecond = bases.Second is not null;
-            var preThird = bases.Third is not null;
             // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で
             // 延命したとみなし自責対象外にする（簡易規則）。この後 ApplyDetailed が bases を書き換えるため先に控える。
             var preFirstPlayer = bases.First;

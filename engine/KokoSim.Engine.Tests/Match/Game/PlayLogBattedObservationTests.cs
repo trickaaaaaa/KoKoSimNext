@@ -100,7 +100,7 @@ public sealed class PlayLogBattedObservationTests
         Assert.All(sacFlies, e =>
         {
             Assert.Equal(PlateAppearanceResult.InPlayOut, e.Result);
-            Assert.True(e.RunsScored >= 1, "犠飛なのに得点が記録されていない");
+            Assert.Equal(1, e.RunsScored);
         });
     }
 
