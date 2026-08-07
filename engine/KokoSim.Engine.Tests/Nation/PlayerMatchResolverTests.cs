@@ -73,6 +73,8 @@ public sealed class PlayerMatchResolverTests
         var b = Runner(Field(60, 15, 55), new StubResolver(5, 0, forkDraws: 9999));
         while (!a.Finished) a.PlayNextPlayerMatch();
         while (!b.Finished) b.PlayNextPlayerMatch();
+        a.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
+        b.DrainBracketResolution();
 
         // 背景試合の全結果と優勝校が完全一致＝詳細シムの乱数が本流へ漏れていない。
         Assert.Equal(BackgroundKeys(a), BackgroundKeys(b));
@@ -86,6 +88,8 @@ public sealed class PlayerMatchResolverTests
         var b = Runner(Field(60, 15, 55), new StubResolver(3, 2, forkDraws: 5));
         while (!a.Finished) a.PlayNextPlayerMatch();
         while (!b.Finished) b.PlayNextPlayerMatch();
+        a.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
+        b.DrainBracketResolution();
 
         Assert.Equal(a.ChampionName, b.ChampionName);
         Assert.Equal(BackgroundKeys(a), BackgroundKeys(b));
@@ -113,6 +117,10 @@ public sealed class PlayerMatchResolverTests
         Assert.False(outcome.ManagerWon);
         Assert.False(r.PlayerActive);
         Assert.NotNull(outcome.Detail);
+        // issue #529: 敗退直後は残りブラケットが未消化＝優勝校はまだ未確定（スライス駆動で背景消化する）。
+        Assert.True(r.BracketResolutionPending);
+        Assert.Null(r.BuildBracketView().ChampionName);
+        r.DrainBracketResolution();
         Assert.NotNull(r.BuildBracketView().ChampionName); // 背景消化で優勝校は確定
     }
 

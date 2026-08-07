@@ -194,6 +194,8 @@ public sealed class TournamentTieReplayTests
             new Xoshiro256Random(5), Schedule, "t", playerResolver: null, backgroundResolver: new BgTieThenDecisiveResolver());
         while (!a.Finished) a.PlayNextPlayerMatch();
         while (!b.Finished) b.PlayNextPlayerMatch();
+        a.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
+        b.DrainBracketResolution();
 
         Assert.Equal(a.ChampionName, b.ChampionName);
         Assert.Equal(

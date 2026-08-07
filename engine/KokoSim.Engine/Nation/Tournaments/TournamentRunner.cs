@@ -231,7 +231,12 @@ public sealed class TournamentRunner
         {
             PlayerActive = false;
             _nextOpponent = null;
-            FinishBracketInBackground();   // 残りは背景で最後まで消化（概要に優勝校を残す）。
+            // 残りブラケットはここでは消化しない（issue #529）。呼び出し側が BracketResolutionPending を見て
+            // StepBracketResolution をスライス駆動で回す（優勝校の確定は消化完了後）。
+            // 例外: 決勝で負けた場合は ResolveRound で既に _current.Length==1（残り試合なし）＝
+            // BracketResolutionPending は最初から false になるため、ここで確定させないと ChampionName が
+            // 永久に確定しない。
+            if (_current.Length == 1) ChampionName = _current[0]?.Name;
             return outcome;
         }
 
@@ -283,7 +288,10 @@ public sealed class TournamentRunner
         {
             PlayerActive = false;
             _nextOpponent = null;
-            FinishBracketInBackground();
+            // 残りブラケットはここでは消化しない（issue #529、上の PlayNextPlayerMatch と同じ理由）。
+            // 決勝で負けた場合は _current.Length==1 が既に確定しているのでここで ChampionName を確定する
+            // （PlayNextPlayerMatch と同じ例外）。
+            if (_current.Length == 1) ChampionName = _current[0]?.Name;
             return outcome;
         }
 
@@ -427,15 +435,43 @@ public sealed class TournamentRunner
         }
     }
 
-    /// <summary>自校敗退後、残りブラケットを最後まで自動消化する（大会概要用）。</summary>
-    private void FinishBracketInBackground()
+    /// <summary>
+    /// 自校敗退後、優勝校がまだ未確定（残りブラケットの消化が残っている）か。優勝時は決勝を勝った瞬間に
+    /// <c>_current.Length==1</c> で確定済み（残り試合が存在しない）ため常に false。現役中も false。
+    /// </summary>
+    public bool BracketResolutionPending => !PlayerActive && !IsChampion && _current.Length > 1;
+
+    /// <summary>
+    /// 残りブラケットの消化に必要なラウンド数（<see cref="StepBracketResolution"/> を呼ぶべき回数）。
+    /// <see cref="BracketResolutionPending"/> が false のときは0（進捗バーの母数、issue #529）。
+    /// </summary>
+    public int RemainingBracketRounds => BracketResolutionPending ? TournamentRecorder.RoundsRemaining(_current.Length) : 0;
+
+    /// <summary>
+    /// 自校敗退後、残りブラケットを1ラウンドぶんだけ消化する（issue #529）。
+    /// 旧 <c>FinishBracketInBackground</c> は名前に反して同期の while ループで、一回戦負け（残り試合数が
+    /// 最大）のとき呼び出し側を長時間ブロックしていた。呼び出し側（Unity Shell の背景消化ループ）が
+    /// 1呼び出し=1ラウンドの粒度でメインスレッドへ制御を返せるよう刻む（Unity Shell の NationBackgroundSim
+    /// と同型のスライス駆動、#208）。全ラウンド消化し終えたら ChampionName を確定する。
+    /// <see cref="BracketResolutionPending"/> が false のときは何もしない。
+    /// </summary>
+    public void StepBracketResolution()
     {
-        while (_current.Length > 1)
-        {
-            var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
-            _current = ResolveRound(_current, RoundNameFor(roundsRemaining), roundsRemaining, out _);
-        }
-        ChampionName = _current[0]?.Name;
+        if (!BracketResolutionPending) return;
+        var roundsRemaining = TournamentRecorder.RoundsRemaining(_current.Length);
+        _current = ResolveRound(_current, RoundNameFor(roundsRemaining), roundsRemaining, out _);
+        if (_current.Length == 1) ChampionName = _current[0]?.Name;
+    }
+
+    /// <summary>
+    /// 残りブラケットを最後まで同期で消化する（テスト・CLI 等、スライス分割が不要な呼び出し元向けの薄いヘルパ）。
+    /// <see cref="StepBracketResolution"/> を <see cref="BracketResolutionPending"/> が false になるまで回すだけ。
+    /// Unity Shell はこれを使わず、1ラウンドずつ背景消化する（issue #529。旧 FinishBracketInBackground と
+    /// 結果は同一だが、呼び出し元がここへ来るまで自校敗退の事実だけを先に確定できる）。
+    /// </summary>
+    public void DrainBracketResolution()
+    {
+        while (BracketResolutionPending) StepBracketResolution();
     }
 
     /// <summary>1ラウンド全カードを解決し、記録する。自校が試合したら outcome に結果を返す。</summary>

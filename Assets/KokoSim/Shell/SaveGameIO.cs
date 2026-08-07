@@ -23,8 +23,13 @@ namespace KokoSim.Unity.Shell
     {
         public const string Extension = ".sav";
 
-        /// <summary>大会中は保存できない（進行体が復元不能）。UI 側はこれを見てセーブを抑止する（F1）。</summary>
-        public static bool CanSave => GameSession.Current.Mode == GameMode.Normal;
+        /// <summary>
+        /// 大会中は保存できない（進行体が復元不能）。加えて、自校敗退直後は大会モードを抜けていても
+        /// 残りブラケットの背景消化（<see cref="BracketFinishSim"/>, issue #529）が終わるまで通算戦績
+        /// （<see cref="GameSession.Records"/> への FoldTournament）が未確定＝ここで保存すると今大会の
+        /// 勝敗が戦績から抜け落ちたセーブができてしまうため、完了まで待つ。UI 側はこれを見てセーブを抑止する（F1）。
+        /// </summary>
+        public static bool CanSave => GameSession.Current.Mode == GameMode.Normal && !GameSession.Current.BracketFoldPending;
 
         /// <summary>全 static サービスから現在状態を集めて DTO を組む。</summary>
         public static SaveState Capture()

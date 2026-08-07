@@ -40,6 +40,10 @@ public sealed class TournamentRunnerTests
     private static void PlayToEnd(TournamentRunner r)
     {
         while (!r.Finished) r.PlayNextPlayerMatch();
+        // issue #529: 敗退後の残りブラケット消化は StepBracketResolution へスライス駆動化された
+        // （呼び出し側が明示的に回すまで優勝校は未確定）。テストは従来どおり最後まで畳み込んだ状態を見るため
+        // ここで同期の DrainBracketResolution で消化しておく（Unity Shell はこれを使わず1ラウンドずつ刻む）。
+        r.DrainBracketResolution();
     }
 
     [Fact]
@@ -54,6 +58,123 @@ public sealed class TournamentRunnerTests
         Assert.Equal("校1", view.ChampionName);
         Assert.True(view.ManagerIsChampion);
         Assert.False(view.ManagerEliminated);
+    }
+
+    /// <summary>
+    /// issue #529: 優勝時は決勝を勝った瞬間に残り試合が存在しない（_current.Length==1）ので
+    /// BracketResolutionPending は常に false＝背景消化（BracketFinishSim）を起動する必要がない。
+    /// </summary>
+    [Fact]
+    public void StrongManager_WinsChampionship_NeverNeedsBracketResolutionStep()
+    {
+        var r = NewRunner(Field(99, 7, 30));
+        while (!r.Finished)
+        {
+            Assert.False(r.BracketResolutionPending);
+            r.PlayNextPlayerMatch();
+        }
+        Assert.False(r.BracketResolutionPending);
+        Assert.NotNull(r.ChampionName);
+    }
+
+    /// <summary>
+    /// issue #529: 自校敗退の直後は残りブラケットがまだ未消化（優勝校未確定）で、呼び出し側が
+    /// StepBracketResolution を明示的に回すまで進まない＝旧 FinishBracketInBackground のような
+    /// 「敗退した瞬間に全部消化してブロックする」暗黙の同期処理が消えたことを確認する。
+    /// </summary>
+    [Fact]
+    public void WeakManager_EliminatedEarly_BracketResolutionPending_UntilSteppedManually()
+    {
+        var r = NewRunner(Field(8, 7, 95));
+        while (!r.Finished) r.PlayNextPlayerMatch();
+
+        Assert.False(r.PlayerActive);
+        Assert.True(r.BracketResolutionPending);      // 敗退直後はまだ優勝校未確定。
+        Assert.Null(r.ChampionName);
+        Assert.Null(r.BuildBracketView().ChampionName);
+
+        var stepsTaken = 0;
+        while (r.BracketResolutionPending)
+        {
+            r.StepBracketResolution();
+            stepsTaken++;
+            Assert.True(stepsTaken <= 20, "ラウンド数を超えて回っている＝停止条件が壊れている");
+        }
+
+        Assert.True(stepsTaken > 0);
+        Assert.False(r.BracketResolutionPending);
+        Assert.NotNull(r.ChampionName);
+        Assert.NotNull(r.BuildBracketView().ChampionName);
+        Assert.NotEqual("校1", r.ChampionName);
+
+        // 消化済みなので、これ以上呼んでも何も起きない（べき等）。
+        var championBefore = r.ChampionName;
+        r.StepBracketResolution();
+        Assert.Equal(championBefore, r.ChampionName);
+    }
+
+    /// <summary>強豪相手に必ず負ける自校リゾルバ（決勝で負けるケースを決定論で作るための固定結果）。</summary>
+    private sealed class AlwaysLoseResolver : IPlayerMatchResolver
+    {
+        public PlayerMatchDetail Resolve(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null)
+        {
+            var ctx = new GameContext { MercyRuleEnabled = mercyRuleEnabled };
+            // 自校(home)=弱小・相手(away)=強豪で固定＝自校は必ず負ける。
+            var result = GameEngine.Play(MakeTeam(opponent.Name, 90), MakeTeam(manager.Name, 5), ctx, rng.Fork(2));
+            return new(result, ManagerIsAway: false);
+        }
+
+        public PlayerMatchLive BeginLive(School manager, School opponent, IRandomSource rng, bool mercyRuleEnabled,
+            TournamentMatchContext? context = null) => throw new System.NotSupportedException();
+
+        private static Team MakeTeam(string name, int ability)
+        {
+            Player Pos(FieldPosition p) => new()
+            {
+                Position = p, Contact = ability, Power = ability, LaunchTendency = 50, Discipline = ability,
+                Speed = ability, ArmStrength = ability, Fielding = ability, Catching = ability,
+            };
+            var order = new List<Player>
+            {
+                Pos(FieldPosition.Catcher), Pos(FieldPosition.FirstBase), Pos(FieldPosition.SecondBase),
+                Pos(FieldPosition.ThirdBase), Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField),
+                Pos(FieldPosition.CenterField), Pos(FieldPosition.RightField),
+                Pos(FieldPosition.Pitcher) with
+                {
+                    Name = name + "P",
+                    Pitching = new PitcherAttributes
+                    {
+                        MaxVelocityKmh = ability >= 50 ? 150 : 110, Control = ability, StaminaPitches = 90,
+                        PitchRank = ability,
+                    },
+                },
+            };
+            return new Team { Name = name, BattingOrder = order, PitcherSlot = 8 };
+        }
+    }
+
+    /// <summary>
+    /// issue #529 の回帰: 決勝で負けた場合、ResolveRound の時点で既に _current.Length==1（残り試合なし）
+    /// になるため BracketResolutionPending は最初から false になる。ChampionName をそこで確定しないと
+    /// 「優勝校が永久に確定しない」バグになる（StepBracketResolution 側にしか確定処理を置いていないと踏む）。
+    /// </summary>
+    [Fact]
+    public void ManagerLoses_TheFinal_ChampionNameIsSetImmediately_NoStepNeeded()
+    {
+        // 自校＋相手校1のみ＝ブラケットサイズ2＝初戦がそのまま決勝。
+        var r = new TournamentRunner(Field(50, 1, 90), Sch(1, 50), Coeff,
+            new Xoshiro256Random(1), Schedule, "t", new AlwaysLoseResolver());
+
+        var outcome = r.PlayNextPlayerMatch();
+
+        Assert.False(outcome.ManagerWon);
+        Assert.False(r.PlayerActive);
+        Assert.False(r.IsChampion);
+        Assert.False(r.BracketResolutionPending);      // 残り試合が無い＝最初から false。
+        Assert.NotNull(r.ChampionName);                 // それでも優勝校（相手）は確定していること。
+        Assert.NotEqual("校1", r.ChampionName);
+        Assert.Equal(r.ChampionName, r.BuildBracketView().ChampionName);
     }
 
     [Fact]
@@ -92,11 +213,13 @@ public sealed class TournamentRunnerTests
     }
 
     /// <summary>
-    /// issue #138: 試合後の大会処理（ブラケットのフルシム＝FinishBracketInBackground/AdvanceUntilPlayerMatch）を
+    /// issue #138: 試合後の大会処理（自校戦の消化＝PlayNextPlayerMatch/AdvanceUntilPlayerMatch）を
     /// Unity 側で別スレッド（Task.Run）へ載せ替えてメインスレッドから外しても、同シードなら最終大会結果が
     /// 同期実行版と完全一致することを保証する（不変条件#2 決定論・オーナー判断 Q3(a)）。
-    /// エンジンは単一スレッド逐次のままなので、各手（PlayNextPlayerMatch）を呼び出しスレッドで回しても
-    /// スレッドプールで回しても RNG 消費順・取り込み順は不変＝結果は一致する。
+    /// issue #529: 敗退後の残りブラケット消化（StepBracketResolution）も同じ保証が要る＝背景消化
+    /// （Unity Shell の BracketFinishSim）が1ラウンドずつスレッドプールで刻んでも、同期の一括消化と
+    /// 完全一致すること。エンジンは単一スレッド逐次のままなので、各手をどのスレッドで回しても
+    /// RNG 消費順・取り込み順は不変＝結果は一致する。
     /// </summary>
     [Fact]
     public async System.Threading.Tasks.Task OffThreadCompletion_MatchesSyncResult()
@@ -108,9 +231,12 @@ public sealed class TournamentRunnerTests
         PlayToEnd(sync);
 
         // 非同期実行版（各手をスレッドプールで実行してからメインへ join＝Unity の Task.Run 相当）。
+        // 自校戦の消化に続けて、残りブラケットも BracketFinishSim と同じくスレッドプールで1ラウンドずつ刻む。
         var async = NewRunner(field, seed: 7);
         while (!async.Finished)
             await System.Threading.Tasks.Task.Run(() => async.PlayNextPlayerMatch());
+        while (async.BracketResolutionPending)
+            await System.Threading.Tasks.Task.Run(() => async.StepBracketResolution());
 
         var vs = sync.BuildBracketView();
         var va = async.BuildBracketView();

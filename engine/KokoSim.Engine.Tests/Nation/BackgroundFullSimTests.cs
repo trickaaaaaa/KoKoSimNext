@@ -47,6 +47,7 @@ public sealed class BackgroundFullSimTests
 
         // playerResolver 無し＝自校カードも背景フルシムで解決される。大会を最後まで消化する。
         while (!runner.Finished) runner.PlayNextPlayerMatch();
+        runner.DrainBracketResolution();   // issue #529: 敗退後の残り消化は明示的に最後まで回す
         return (runner.ChampionName, stats);
     }
 
