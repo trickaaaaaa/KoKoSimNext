@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- セーブスロット選択画面（issue #508・オーナー承認の案2＝リスト＋詳細ペイン）。
-     タイトルの「つづきから」からのみ遷移する。開いた時点ではまだセーブを読んでおらず、
-     どのシェルサービスも遅延初期化されていないため共通トップバーは出さない（TitleScreen と同じ理由）。
-     左＝手動3枠＋オート1枠の32px行一覧、右＝選択枠の詳細（学校名・年度・週・保存日時）＋読込／削除。
-     保存／上書きは今回のUIに出さない（タイトル経由では保存すべき進行状態が無いため。オーナー判断）。 -->
+<!-- セーブスロット選択画面（issue #508・オーナー承認の案2＝リスト＋詳細ペイン）。issue #509 でホームの
+     メニュー「セーブ」からも同じ画面を開くようになった（SaveSlots.Entry で分岐。SaveSlotsController 参照）。
+     タイトル経由は開いた時点でどのシェルサービスも遅延初期化されていないため共通トップバーは出さない
+     （TitleScreen と同じ理由）。ホーム経由も同じ理由でトップバーは出さず、代わりに ss-back で戻る。
+     左＝手動3枠＋オート1枠の32px行一覧、右＝選択枠の詳細（学校名・年度・週・保存日時）＋保存(ホーム経由のみ)／読込／削除。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
@@ -13,9 +13,12 @@
     <ui:VisualElement class="ui-root ss-root">
         <ui:VisualElement class="ss-main">
 
-            <ui:VisualElement class="rule-head">
-                <ui:VisualElement class="rule-head__rule" />
-                <ui:Label class="rule-head__text f-display" text="セーブデータ" />
+            <ui:VisualElement class="ss-header">
+                <ui:VisualElement class="rule-head">
+                    <ui:VisualElement class="rule-head__rule" />
+                    <ui:Label class="rule-head__text f-display" text="セーブデータ" />
+                </ui:VisualElement>
+                <ui:Button name="ss-back" class="dlg-btn dlg-btn--ghost" text="◀ ホームへ戻る" />
             </ui:VisualElement>
 
             <ui:VisualElement class="ss-body">
@@ -46,6 +49,7 @@
                         <ui:VisualElement name="ss-d-facts" class="ss-d__facts" />
                         <ui:Label name="ss-d-note" class="ss-d__note f-body" text="" />
                         <ui:VisualElement class="ss-d__foot">
+                            <ui:Button name="ss-save" class="dlg-btn dlg-btn--primary" text="保存" style="display: none;" />
                             <ui:Button name="ss-load" class="dlg-btn dlg-btn--primary" text="読込" />
                             <ui:Button name="ss-delete" class="dlg-btn dlg-btn--warn" text="削除" />
                         </ui:VisualElement>

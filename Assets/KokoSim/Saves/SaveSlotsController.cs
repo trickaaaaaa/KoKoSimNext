@@ -10,8 +10,10 @@ namespace KokoSim.Unity.Saves
     /// セーブスロット選択画面（issue #508・オーナー承認の案2 リスト＋詳細ペイン）。手動3枠＋オート1枠を
     /// 並べ、選択枠の詳細（学校名・年度・週・保存日時）と読込／削除を出す。
     ///
-    /// <para>保存／上書きは今回のUIに出さない（タイトル経由では保存すべき進行状態が無いため。
-    /// サービス側は <see cref="SaveSlots.Save"/> に用意済み＝#509 のホーム画面入口で使う）。</para>
+    /// <para>タイトルの「つづきから」とホームのメニュー「セーブ」の2箇所から同じ画面を開く（issue #509）。
+    /// <see cref="SaveSlots.Entry"/> で分岐する: タイトル経由（<see cref="SaveSlotsEntry.Title"/>）は
+    /// 「今保存すべき進行状態が無い」ため読込／削除だけ（オーナー判断・issue #508）。ホーム経由
+    /// （<see cref="SaveSlotsEntry.Home"/>）は保存（オート枠以外・大会中は不可）と「戻る」も出す。</para>
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class SaveSlotsController : MonoBehaviour
@@ -20,18 +22,23 @@ namespace KokoSim.Unity.Saves
         private VisualElement _confirm;
         private string _selected;
         private string _errorText = "";
+        private bool _fromHome;
 
-        private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo;
+        private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo, _saveBtn, _backBtn;
 
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
             _confirm = _root.Q<VisualElement>("ss-confirm");
+            _fromHome = SaveSlots.Entry == SaveSlotsEntry.Home;
 
             _loadBtn = Wire("ss-load", OnLoad);
             _deleteBtn = Wire("ss-delete", OnDeleteRequest);
             _confirmYes = Wire("ss-confirm-yes", OnDeleteConfirm);
             _confirmNo = Wire("ss-confirm-no", OnDeleteCancel);
+            _saveBtn = Wire("ss-save", OnSave);
+            _backBtn = Wire("ss-back", OnBack);
+            if (_backBtn != null) _backBtn.style.display = _fromHome ? DisplayStyle.Flex : DisplayStyle.None;
 
             _selected = DefaultSlot();
             _errorText = "";
@@ -46,6 +53,8 @@ namespace KokoSim.Unity.Saves
             if (_deleteBtn != null) _deleteBtn.clicked -= OnDeleteRequest;
             if (_confirmYes != null) _confirmYes.clicked -= OnDeleteConfirm;
             if (_confirmNo != null) _confirmNo.clicked -= OnDeleteCancel;
+            if (_saveBtn != null) _saveBtn.clicked -= OnSave;
+            if (_backBtn != null) _backBtn.clicked -= OnBack;
         }
 
         private Button Wire(string name, Action handler)
@@ -70,10 +79,12 @@ namespace KokoSim.Unity.Saves
             return SaveSlots.AllSlotIds[0];
         }
 
-        /// <summary>スクショ・自動検証用に枠を選ぶ（通常は行クリック）。空き枠は選べない。</summary>
+        /// <summary>スクショ・自動検証用に枠を選ぶ（通常は行クリック）。空き枠は選べない。ただしホーム経由
+        /// （保存モード）はオート以外の空き枠も選べる＝新規に保存する先として選べる必要があるため。</summary>
         public void Select(string slotId)
         {
-            if (!SaveSlots.ReadInfo(slotId).Exists) return;
+            var info = SaveSlots.ReadInfo(slotId);
+            if (!info.Exists && !(_fromHome && !info.IsAuto)) return;
             _selected = slotId;
             _errorText = "";
             Render();
@@ -113,11 +124,13 @@ namespace KokoSim.Unity.Saves
             yw.AddToClassList("ss-row__yw");
             row.Add(yw);
 
-            if (!info.Exists)
+            var selectable = info.Exists || (_fromHome && !info.IsAuto);
+            if (!selectable)
             {
                 row.AddToClassList("ss-row--empty");
                 return row;   // 「押しても何も起きない見た目」＝クリックハンドラを配線しない
             }
+            if (!info.Exists) row.AddToClassList("ss-row--empty");   // 空きの見た目は保つが保存モードでは選択可
 
             if (info.SlotId == _selected) row.AddToClassList("ss-row--on");
             var id = info.SlotId;
@@ -149,16 +162,34 @@ namespace KokoSim.Unity.Saves
             var note = _root.Q<Label>("ss-d-note");
             if (note != null)
             {
-                note.text = !info.Exists
-                    ? "このスロットにはセーブがありません。"
-                    : info.Corrupt
-                        ? "セーブデータを読み込めません（壊れている、または未対応の版です）。削除はできます。"
-                        : _errorText;
+                note.text = !string.IsNullOrEmpty(_errorText)
+                    ? _errorText
+                    : _fromHome && !SaveGameIO.CanSave
+                        ? SaveDisabledReason()
+                        : !info.Exists
+                            ? (_fromHome ? "空き枠です。「保存」でここに保存できます。" : "このスロットにはセーブがありません。")
+                            : info.Corrupt
+                                ? "セーブデータを読み込めません（壊れている、または未対応の版です）。削除はできます。"
+                                : "";
                 note.style.display = string.IsNullOrEmpty(note.text) ? DisplayStyle.None : DisplayStyle.Flex;
             }
 
             if (_loadBtn != null) _loadBtn.SetEnabled(info.Exists && !info.Corrupt);
             if (_deleteBtn != null) _deleteBtn.SetEnabled(info.Exists);
+            if (_saveBtn != null)
+            {
+                _saveBtn.style.display = _fromHome ? DisplayStyle.Flex : DisplayStyle.None;
+                _saveBtn.SetEnabled(_fromHome && !info.IsAuto && SaveGameIO.CanSave);
+            }
+        }
+
+        /// <summary>大会中はセーブ不可（#507）＝押せてしまう経路が増えても落ちないよう理由を1行で示す。</summary>
+        private static string SaveDisabledReason()
+        {
+            var s = GameSession.Current;
+            if (s.BracketFoldPending) return "大会結果を集計中はセーブできません（集計完了までお待ちください）。";
+            if (s.Mode == GameMode.Tournament) return "大会中はセーブできません。";
+            return "";
         }
 
         private static string SchoolCellText(SaveSlotInfo info)
@@ -203,6 +234,27 @@ namespace KokoSim.Unity.Saves
                 return;
             }
             // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
+            ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+        }
+
+        /// <summary>ホーム経由（保存モード）のみ配線される。オート枠・大会中は SetEnabled(false) で
+        /// 既に押せない状態だが、経路が増えても落ちないよう再度ガードする（issue #509・オーナー申し送り）。</summary>
+        private void OnSave()
+        {
+            if (!_fromHome || SaveSlots.IsAuto(_selected) || !SaveGameIO.CanSave) return;
+            if (!SaveSlots.Save(_selected))
+            {
+                _errorText = "保存に失敗しました。";
+                RenderDetail();
+                return;
+            }
+            _errorText = "";
+            Render();   // 一覧・詳細を保存直後の内容（年度/週/保存日時）へ更新して結果を見せる
+        }
+
+        private void OnBack()
+        {
+            if (!_fromHome) return;
             ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
         }
 

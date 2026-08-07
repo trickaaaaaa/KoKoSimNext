@@ -43,7 +43,11 @@ namespace KokoSim.Unity.Title
         // （ScreenRouter.cs 冒頭コメント参照）。
         private static void OnNewGame() => ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
 
-        private static void OnContinue() => ScreenRouter.Instance?.ShowDeferred("SaveSlots");
+        private static void OnContinue()
+        {
+            SaveSlots.Entry = SaveSlotsEntry.Title;   // ホームのメニューから開いた直後の使い回しを防ぐ（issue #509）
+            ScreenRouter.Instance?.ShowDeferred("SaveSlots");
+        }
 
         private static void OnQuit()
         {

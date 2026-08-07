@@ -1114,10 +1114,33 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tm-result__headline--lose { color: var(--color-warn); }
 .tm-result__score { font-size: 24px; color: var(--color-chalk); margin-top: 10px; margin-bottom: 20px; }
 
-/* 大会モードのボタン（主要=黄CTA・副次=ゴースト） */
+/* 大会モードのボタン（主要=黄CTA・副次=ゴースト・警告=破壊的操作の確認だけに使う, UI原則②） */
 .tm-btn { min-width: 120px; height: 40px; -unity-text-align: middle-center; font-size: 20px; border-radius: var(--radius-card); margin: 0 8px; }
 .tm-btn--primary { background-color: var(--color-cta); color: #FFFFFF; border-width: 0; }
 .tm-btn--ghost { background-color: var(--color-panel-deep); color: var(--color-chalk); border-width: 1px; border-color: var(--color-line); }
+.tm-btn--warn { background-color: var(--color-warn); color: #FFFFFF; border-width: 0; }
+
+/* ===== ホームメニュー（issue #509・セーブ／タイトルへ戻る） =====
+   ヒーロー帯の右端に置く唯一の入口（hm-hero__match/plain が flex-grow:1 のため自然に右端へ収まる）。
+   それ以外の操作（保存・タイトルへ戻る）はこのメニューの中に寄せる（UI原則⑦）。 */
+.hm-menu-btn {
+    flex-shrink: 0;
+    margin-left: 18px;
+    min-width: 100px;
+    height: 34px;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    background-color: var(--color-panel-deep);
+    border-width: 1px;
+    border-color: var(--color-line);
+    border-radius: var(--radius-card);
+}
+.hm-menu__card { min-width: 320px; }
+.hm-menu__title { font-size: var(--fs-page); color: var(--color-chalk); letter-spacing: 2px; margin-bottom: 18px; }
+.hm-menu__row { align-items: center; margin-bottom: 10px; }
+.hm-menu__btn { width: 220px; margin: 0 0 12px 0; }
+.hm-menu__reason { font-size: var(--fs-cap); color: var(--color-warn); white-space: normal; -unity-text-align: middle-center; margin-top: 6px; max-width: 260px; }
 
 /* ===== 新チーム発足：次期主将の指名モーダル（設計書09 §8・案C 左リスト＋右詳細） =====
    同一document内オーバーレイ（部品辞書の modal-scrim / modal-card を使用）。既定は display:none。

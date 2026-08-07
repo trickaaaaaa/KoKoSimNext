@@ -30,18 +30,28 @@ namespace KokoSim.Unity.Shell
         }
     }
 
+    /// <summary>セーブスロット選択画面（<c>SaveSlotsController</c>）をどこから開いたか（issue #509）。
+    /// <see cref="SaveSlotsController"/> はタイトルの「つづきから」（読込／削除だけ）とホームの
+    /// メニュー「セーブ」（保存も出す・戻る導線あり）の2箇所から同じ画面を開く単一画面のため、
+    /// 呼び出し側が遷移前に必ずこれを設定する（既定 Title＝安全側フォールバック）。</summary>
+    public enum SaveSlotsEntry { Title, Home }
+
     /// <summary>
     /// セーブスロットの一覧・メタ読み取り・削除（issue #508 F1）。手動3枠＋オート1枠を固定で持つ。
     /// 「形」は <see cref="SaveCodec"/>、ファイルIOは <see cref="SaveGameIO"/> に任せ、ここはスロットの
     /// 並び・存在確認・削除・保存/上書きの入口だけを持つ。
     ///
-    /// <para><b>保存/上書きは今回 UI に出さない</b>（オーナー判断・issue #508）。タイトル経由で開いた今回は
-    /// 「今保存すべき進行中のゲーム状態」が無いため。サービス側のメソッドは #509（ホーム画面のメニュー入口）で
-    /// 使えるようここに用意しておく。</para>
+    /// <para>保存/上書きはホーム画面のメニュー入口から開いたときだけ UI に出す（issue #509・
+    /// <see cref="Entry"/> が <see cref="SaveSlotsEntry.Home"/> のとき）。タイトル経由（<see cref="SaveSlotsEntry.Title"/>）
+    /// では「今保存すべき進行中のゲーム状態」が無いため出さない（オーナー判断・issue #508）。</para>
     /// </summary>
     public static class SaveSlots
     {
         public const string AutoSlotId = "auto";
+
+        /// <summary>直近の画面遷移元（<see cref="TitleController"/> / <c>HomeDashboardController</c> が
+        /// <c>ShowDeferred("SaveSlots")</c> の直前に設定する）。</summary>
+        public static SaveSlotsEntry Entry { get; set; } = SaveSlotsEntry.Title;
 
         /// <summary>手動スロットID（3枠）。</summary>
         public static readonly string[] ManualSlotIds = { "manual1", "manual2", "manual3" };

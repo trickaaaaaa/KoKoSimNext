@@ -113,6 +113,11 @@ namespace KokoSim.Unity.Home
         /// <summary>セッション常駐の実体（通知フィードが画面往復で消えないようにする）。</summary>
         public static HomeState Current => _current ?? (_current = new HomeState());
 
+        /// <summary>「タイトルへ戻る」用の完全リセット（issue #509）。通知フィードはセーブ対象外の一時状態
+        /// だが、次に始める新規ゲームへ前セッションの出来事を混ぜないためここで捨てる。次回 <see cref="Current"/>
+        /// アクセスで新品を作り直す（コンストラクタの「新チームが始動した」フィード込み）。</summary>
+        public static void Reset() => _current = null;
+
         /// <summary>週送りの対象＝全画面共有の在籍部員（引退者は含まない）。</summary>
         private static IReadOnlyList<DevelopingPlayer> Roster => RosterService.Active;
 
