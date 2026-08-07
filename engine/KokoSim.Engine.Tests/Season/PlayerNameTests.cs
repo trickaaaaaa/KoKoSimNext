@@ -122,12 +122,13 @@ public sealed class PlayerNameTests
             withDedupe.Select(p => p.AverageLevel()).ToList());
     }
 
-    /// <summary>重みの平坦化（0.5乗圧縮）で最人気名の出現率が現実的な水準（約1%）に収まる。issue #11 ③。</summary>
+    /// <summary>重みの平坦化（0.5乗圧縮）で最人気名の出現率が現実的な水準（約1%）に収まる。issue #11 ③。
+    /// 語彙を実測ベースの247件に組み直した後も同じ帯を維持できることをissue #530で確認した。</summary>
     [Fact]
     public void GivenNameWeights_AreFlattened_TopNameIsAboutOnePercent()
     {
         var vocab = new PlayerNameVocab();
-        Assert.True(vocab.GivenNames.Count >= 300, $"名前プールが {vocab.GivenNames.Count} 種（300未満）");
+        Assert.True(vocab.GivenNames.Count >= 200, $"名前プールが {vocab.GivenNames.Count} 種（200未満）");
 
         var rng = new Xoshiro256Random(2026);
         var counts = new Dictionary<string, int>();
@@ -139,7 +140,76 @@ public sealed class PlayerNameTests
         }
         var topShare = counts.Values.Max() / (double)draws;
         // 圧縮前は上位が2.2〜2.9%だった（issue #11 実測）。圧縮後は現実の男子名分布（1位≒1%）並み。
+        // 語彙を377件→247件（実測ベース）に組み直した後（issue #530）も、実測の合成順位由来の生重みは
+        // 上位が僅差で並ぶ形状になったため、指数を変えずに同じ帯（0.5〜1.5%）に収まる。
         Assert.InRange(topShare, 0.005, 0.015);
+    }
+
+    /// <summary>1975〜1995年（昭和50年代〜平成一桁）のトップ5男子名のうち、2007〜2011年の実測
+    /// 名前調査（明治安田生命）に出てこない名前は語彙に無い。issue #530。健太・翔太・翼・大樹・翔・
+    /// 大輝・亮・健太郎・大輔は世代をまたいで2007〜2011年にも実在するため対象外（出典: 同調査）。</summary>
+    [Fact]
+    public void GivenNames_ExcludesShowaEraNamesAbsentFromModernSurvey()
+    {
+        var vocab = new PlayerNameVocab();
+        var given = vocab.GivenNames.Select(n => n.Value).ToHashSet();
+
+        var showaOnlyNames = new[] { "誠", "大介", "学", "剛", "拓也", "直樹", "哲也", "和也", "淳", "達也" };
+        foreach (var name in showaOnlyNames)
+        {
+            Assert.False(given.Contains(name), $"'{name}' は2007〜2011年の実測に出てこない昭和〜平成初期の名前のはずが語彙に残っている");
+        }
+
+        // 大輔は2007〜2011年の実測にも僅かに残るが、issueの明示指示で除去対象（世代をまたぐ4例=健太・翔太・翼・大樹の対象外）。
+        Assert.False(given.Contains("大輔"), "'大輔' はissueで明示的に除去対象とされた昭和50年代ブーム名");
+    }
+
+    /// <summary>語彙を絞っても、1チーム39人（3学年×IntakeMax13）ぶんの生成で MaxGivenRerolls(24) の
+    /// 総当りフォールバックが発生しない（issue #530。将来さらに語彙を絞る変更で静かに壊れるのを防ぐ）。
+    /// PickGiven は private のため、公開されている GivenEffectiveWeights（internal・InternalsVisibleTo
+    /// 経由でテストから参照可）を使って同じ重み付きルーレット＋リロール戦略をここで再現する。</summary>
+    [Fact]
+    public void GivenNames_SupportsThirtyNinePlayersWithoutRerollFallback()
+    {
+        const int maxGivenRerolls = 24; // PlayerNameGenerator.MaxGivenRerolls と同じ値
+        var vocab = new PlayerNameVocab();
+        var names = vocab.GivenNames;
+        var weights = vocab.GivenEffectiveWeights;
+        var total = weights.Sum();
+
+        string PickWeighted(IRandomSource rng)
+        {
+            var roll = rng.NextDouble() * total;
+            for (var i = 0; i < names.Count; i++)
+            {
+                roll -= weights[i];
+                if (roll <= 0) return names[i].Value;
+            }
+            return names[^1].Value;
+        }
+
+        var maxRerollsObserved = 0;
+        for (var seed = 1UL; seed <= 500UL; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var used = new HashSet<string>();
+            for (var i = 0; i < 39; i++)
+            {
+                var given = PickWeighted(rng);
+                var rerolls = 0;
+                while (used.Contains(given))
+                {
+                    Assert.True(rerolls < maxGivenRerolls,
+                        $"seed={seed}, player={i}: リロール上限({maxGivenRerolls})を超えて総当りフォールバックが発生した");
+                    given = PickWeighted(rng);
+                    rerolls++;
+                }
+                maxRerollsObserved = Math.Max(maxRerollsObserved, rerolls);
+                used.Add(given);
+            }
+        }
+        Assert.True(maxRerollsObserved < maxGivenRerolls,
+            $"観測された最大リロール回数 {maxRerollsObserved} が上限 {maxGivenRerolls} に到達（フォールバック発生の危険域）");
     }
 
     /// <summary>data/player-names.yaml とベイク値 PlayerNameData が同内容（語彙の単一ソース維持）。</summary>
