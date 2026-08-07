@@ -1845,7 +1845,7 @@ namespace KokoSim.Unity.Match
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
             var judged = PlaybackEvaluator.LastJudgementTime(play);
             if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
-            return end;
+            return ClampBeforeWideCameraCut(end, play);
         }
 
         /// <summary>盗塁再生が終わった。<see cref="_stealPrePitch"/>（issue #515。牽制セーフの直後に続いた
@@ -1948,7 +1948,7 @@ namespace KokoSim.Unity.Match
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
             var judged = PlaybackEvaluator.LastJudgementTime(play);
             if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
-            return end;
+            return ClampBeforeWideCameraCut(end, play);
         }
 
         /// <summary>牽制再生が終わった: 対決構図へ戻す。牽制・盗塁はどちらも「この球の前」の事象
@@ -2025,7 +2025,7 @@ namespace KokoSim.Unity.Match
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
             var judged = PlaybackEvaluator.LastJudgementTime(play);
             if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
-            return end;
+            return ClampBeforeWideCameraCut(end, play);
         }
 
         /// <summary>暴投・捕逸再生が終わった: 対決構図へ戻す。同じ球で振り逃げも解決していれば
@@ -2109,7 +2109,7 @@ namespace KokoSim.Unity.Match
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
             var judged = PlaybackEvaluator.LastJudgementTime(play);
             if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
-            return end;
+            return ClampBeforeWideCameraCut(end, play);
         }
 
         /// <summary>振り逃げ再生が終わった: 対決構図へ戻し、出塁後の塁・アウトを反映してから打席の続きへ。
@@ -2352,7 +2352,7 @@ namespace KokoSim.Unity.Match
             if (_pickoffPlay != null)
             {
                 RenderPickoffFrame();
-                if (_t > _pickoffEndAt + 0.3) FinishPickoffView();
+                if (_t > _pickoffEndAt + FinishGraceSeconds) FinishPickoffView();
                 return;
             }
             // 打席途中の盗塁の再生（issue #485）: 打球（_current.Play）とは別プレーなので専用に回し、
@@ -2360,7 +2360,7 @@ namespace KokoSim.Unity.Match
             if (_stealPlay != null)
             {
                 RenderStealFrame();
-                if (_t > _stealEndAt + 0.3) FinishStealView();
+                if (_t > _stealEndAt + FinishGraceSeconds) FinishStealView();
                 return;
             }
             // 打席途中の暴投・捕逸の再生（issue #487）: 盗塁・牽制の再生（あれば）が終わった後に連結される
@@ -2368,7 +2368,7 @@ namespace KokoSim.Unity.Match
             if (_batteryMissPlay != null)
             {
                 RenderBatteryMissFrame();
-                if (_t > _batteryMissEndAt + 0.3) FinishBatteryMissView();
+                if (_t > _batteryMissEndAt + FinishGraceSeconds) FinishBatteryMissView();
                 return;
             }
             // 打席途中の振り逃げの再生（issue #488）: 盗塁・牽制・暴投/捕逸の再生（あれば）が
@@ -2376,13 +2376,13 @@ namespace KokoSim.Unity.Match
             if (_dropThirdStrikePlay != null)
             {
                 RenderDropThirdStrikeFrame();
-                if (_t > _dropThirdStrikeEndAt + 0.3) FinishDropThirdStrikeView();
+                if (_t > _dropThirdStrikeEndAt + FinishGraceSeconds) FinishDropThirdStrikeView();
                 return;
             }
             if (_current.Play != null)
             {
                 RenderReplayFrame();
-                if (_t > PlayEndTime() + 0.3) FinishPaView();
+                if (_t > PlayEndTime() + FinishGraceSeconds) FinishPaView();
             }
             else if (_t >= 0)
             {
@@ -2392,6 +2392,29 @@ namespace KokoSim.Unity.Match
 
         /// <summary>再生を打ち切ってから次打席へ移るまでの余韻[秒]。</summary>
         private const double PlayTailSeconds = 0.6;
+
+        /// <summary>再生打ち切り判定（<c>_t &gt; XxxEndAt + FinishGraceSeconds</c>）の余韻[秒]。
+        /// <see cref="ClampBeforeWideCameraCut"/> 参照。</summary>
+        private const double FinishGraceSeconds = 0.3;
+
+        /// <summary>
+        /// 打席途中プレー（盗塁・牽制・暴投捕逸・振り逃げ）の打ち切り時刻を、3D守備カメラが
+        /// 全景へハードカットする時刻（<see cref="CameraPlanBuilder.WideStartTime"/>）より
+        /// 確実に手前で止める（issue #522）。
+        ///
+        /// <see cref="StealPlayEndTime"/> 等は元々 <c>lastEvent + PlayTailSeconds(0.6)</c> 基準だが、
+        /// カメラのハードカットは <c>lastEvent + CameraPlanBuilder.ReturnToWideDelaySeconds(0.9)</c>。
+        /// 打ち切り判定に使う余韻 <see cref="FinishGraceSeconds"/>(0.3) を足すと
+        /// <c>0.6+0.3=0.9</c> でカット時刻とちょうど一致してしまい、判定が発火する前に
+        /// レンダリング（<c>RenderStealFrame</c> 等は判定より前に呼ばれる）が1コマ、
+        /// カット後の全景（縦155m級）を描いてしまう（実測: 枠が10.5m→147.3mへ1コマで飛ぶ）。
+        /// 打ち切りをハードカットより確実に手前で終わらせることで、そのコマを再生の外へ出す。
+        /// </summary>
+        private static double ClampBeforeWideCameraCut(double end, PlaybackPlay play)
+        {
+            var wideStart = CameraPlanBuilder.WideStartTime(play);
+            return double.IsFinite(wideStart) ? System.Math.Min(end, wideStart - FinishGraceSeconds) : end;
+        }
 
         /// <summary>
         /// 再生を打ち切る時刻。**「まだ見るものがある」最後の瞬間＋余韻**で切る。
