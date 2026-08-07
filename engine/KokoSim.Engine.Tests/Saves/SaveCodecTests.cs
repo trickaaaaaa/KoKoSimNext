@@ -123,4 +123,19 @@ public sealed class SaveCodecTests
         Assert.Equal(SaveCodec.CurrentVersion, SaveCodec.PeekVersion(json));
         Assert.Null(SaveCodec.PeekVersion("壊れた"));
     }
+
+    [Fact]
+    public void PeekHeader_ReadsWeekAndYear_OrNullWhenUnreadable()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var header = SaveCodec.PeekHeader(json);
+
+        Assert.NotNull(header);
+        Assert.Equal(SaveCodec.CurrentVersion, header!.Value.Version);
+        Assert.Equal(7, header.Value.Week);
+        Assert.Equal(2, header.Value.YearIndex);
+
+        Assert.Null(SaveCodec.PeekHeader("壊れた"));
+        Assert.Null(SaveCodec.PeekHeader(""));
+    }
 }

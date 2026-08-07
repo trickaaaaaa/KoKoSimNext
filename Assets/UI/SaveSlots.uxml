@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- セーブスロット選択画面（issue #508・オーナー承認の案2＝リスト＋詳細ペイン）。
+     タイトルの「つづきから」からのみ遷移する。開いた時点ではまだセーブを読んでおらず、
+     どのシェルサービスも遅延初期化されていないため共通トップバーは出さない（TitleScreen と同じ理由）。
+     左＝手動3枠＋オート1枠の32px行一覧、右＝選択枠の詳細（学校名・年度・週・保存日時）＋読込／削除。
+     保存／上書きは今回のUIに出さない（タイトル経由では保存すべき進行状態が無いため。オーナー判断）。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="SaveSlots.uss" />
+
+    <ui:VisualElement class="ui-root ss-root">
+        <ui:VisualElement class="ss-main">
+
+            <ui:VisualElement class="rule-head">
+                <ui:VisualElement class="rule-head__rule" />
+                <ui:Label class="rule-head__text f-display" text="セーブデータ" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="ss-body">
+
+                <!-- 左：スロット一覧（手動1〜3＋オート・32px行） -->
+                <ui:VisualElement class="card card--list">
+                    <ui:VisualElement class="card__hd">
+                        <ui:Label class="card__hd-title" text="スロット" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card__body">
+                        <ui:VisualElement class="ss-thead">
+                            <ui:Label class="ss-th ss-th--slot" text="枠" />
+                            <ui:Label class="ss-th ss-th--school" text="学校名" />
+                            <ui:Label class="ss-th ss-th--yw" text="年度/週" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="ss-rows" class="ss-rows" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 右：選択枠の詳細 -->
+                <ui:VisualElement class="card card--detail">
+                    <ui:VisualElement class="card__hd">
+                        <ui:Label class="card__hd-title" text="詳細" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card__body card__body--fill">
+                        <ui:Label name="ss-d-name" class="ss-d__name f-display-lg" text="" />
+                        <ui:Label name="ss-d-sub" class="ss-d__sub f-body" text="" />
+                        <ui:VisualElement name="ss-d-facts" class="ss-d__facts" />
+                        <ui:Label name="ss-d-note" class="ss-d__note f-body" text="" />
+                        <ui:VisualElement class="ss-d__foot">
+                            <ui:Button name="ss-load" class="dlg-btn dlg-btn--primary" text="読込" />
+                            <ui:Button name="ss-delete" class="dlg-btn dlg-btn--warn" text="削除" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 削除確認ダイアログ（同一ドキュメント内オーバーレイ。部品辞書の modal-scrim / modal-card を使用） -->
+        <ui:VisualElement name="ss-confirm" class="ui-root modal-scrim">
+            <ui:VisualElement class="modal-card ss-confirm__card">
+                <ui:Label name="ss-confirm-q" class="ss-confirm__q f-body" text="" />
+                <ui:VisualElement class="ss-confirm__btns">
+                    <ui:Button name="ss-confirm-no" class="dlg-btn dlg-btn--ghost" text="いいえ" />
+                    <ui:Button name="ss-confirm-yes" class="dlg-btn dlg-btn--warn" text="削除する" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
