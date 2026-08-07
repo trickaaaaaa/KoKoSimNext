@@ -40,24 +40,55 @@ namespace KokoSim.Unity.Match
         private const string OutDir = "out/duel-stage/midpa";
         private const string SpawnFlag = "KokoSim.MidPaPlayShooter.Spawn";
 
-        /// <summary>打ち切り（この打席数を消化しても揃わなければ諦めて出力する）。</summary>
+        /// <summary>打ち切り（この<b>打席</b>数を消化しても揃わなければ諦めて出力する）。
+        /// ⚠ 数える口は <see cref="MatchLiveController.AtPaHeadWindowForCapture"/>（打席の頭）であって
+        /// <see cref="MatchLiveController.AtWindowForCapture"/>（球ごとの窓・設計書15）ではない。
+        /// 球の窓で数えると 140 は「140球＝4イニング弱」を意味し、試合が終わる前に打ち切られる
+        /// （実測: 試合終了=False のまま steal と bunt が一度も撮れずに終了。issue #489）。</summary>
         private const int MaxPa = 140;
+
+        /// <summary>盗塁を追うのをやめてバントへ譲る打席数（盗塁は一塁走者が要る＝機会が来ない試合がある）。</summary>
+        private const int StealGiveUpPa = 60;
 
         private const float StripStepSeconds = 0.25f;
         private const float StanceStepSeconds = 0.15f;   // バントの構えは1球ぶんしか窓が無いので細かく
         private const int StripMaxFrames = 14;
 
-        public static void Arm() => UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
+        /// <summary>
+        /// 撮る組。<b>1試合で5種類は撮れない</b>ので2回に分ける（issue #489 実測）。
+        /// 牽制・盗塁・バントはどれも「一塁走者が居る球」を取り合うが、その窓は1試合で 11 回しか無く、
+        /// 牽制を <c>PickoffBaseProb=0.55 / MaxProb=0.90</c> まで持ち上げると走者がその場で消えて
+        /// 盗塁の番が回ってこない（実測: 一塁走者あり11窓・盗塁カード押下8回で盗塁 0 件）。
+        /// </summary>
+        public enum Set
+        {
+            /// <summary>暴投・捕逸・振り逃げ・牽制（電池まわりの稀プレー）。牽制を強く持ち上げる。</summary>
+            Battery,
+            /// <summary>盗塁死・バント（走者を使うプレー）。牽制と暴投・捕逸は既定へ戻して走者を残す。</summary>
+            Runners,
+        }
+
+        private const string SetKey = "KokoSim.MidPaPlayShooter.Set";
+
+        public static void Arm(Set set = Set.Battery)
+        {
+            UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
+            UnityEditor.EditorPrefs.SetInt(SetKey, (int)set);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoSpawn()
         {
             if (!UnityEditor.EditorPrefs.GetBool(SpawnFlag, false)) return;
             UnityEditor.EditorPrefs.SetBool(SpawnFlag, false);
-            // ⚠ 係数の差し替えは MatchProgression が組まれる前でないと効かない（試合開始時に1度だけ読む）。
+            _set = (Set)UnityEditor.EditorPrefs.GetInt(SetKey, (int)Set.Battery);
+            // ⚠ 係数の差し替えは MatchProgression が組まれる前でないと効かない（試合開始時に1度だけ読む）
+            //    ＝撮り終えた種類のぶんだけ確率を戻す、という動的な調整はできない。だから組で分ける。
             MatchLiveController.CaptureContextOverride = Boost;
             new GameObject("~MidPaAuto").AddComponent<MidPaPlayShooter>();
         }
+
+        private static Set _set = Set.Battery;
 
         private MatchLiveController _ctrl;
 
@@ -66,16 +97,25 @@ namespace KokoSim.Unity.Match
         {
             Baserunning = ctx.Baserunning with
             {
-                PickoffBaseProb = 0.55,           // 既定 0.05
-                PickoffMaxProb = 0.90,            // 既定 0.08（上限で頭打ちにしない）
-                WildPitchProb = 0.10,             // 既定 0.0012
-                PassedBallProb = 0.10,            // 既定 0.0008
+                // 一塁走者を取り合う牽制は Battery 組でだけ持ち上げる（Runners 組では既定＝走者が残る）。
+                PickoffBaseProb = _set == Set.Battery ? 0.55 : ctx.Baserunning.PickoffBaseProb,  // 既定 0.05
+                PickoffMaxProb = _set == Set.Battery ? 0.90 : ctx.Baserunning.PickoffMaxProb,    // 既定 0.08
+                // 暴投・捕逸は一塁走者を二塁へ進めてしまう＝これも Battery 組でだけ持ち上げる。
+                WildPitchProb = _set == Set.Battery ? 0.10 : ctx.Baserunning.WildPitchProb,      // 既定 0.0012
+                PassedBallProb = _set == Set.Battery ? 0.10 : ctx.Baserunning.PassedBallProb,    // 既定 0.0008
+                // 振り逃げは打者を一塁へ置く＝どちらの組でも走者を増やす方向なので常に持ち上げてよい。
                 DropThirdStrikeReachProb = 0.60,  // 既定 0.001
                 // issue #489: 盗塁死（タッチアウト）の絵を必ず出す。既定 0.38 を大きく下回らせて
                 // 必ず刺される側へ倒す（margin→logisticのバイアス項なので符号反転で確実に振り切る）。
                 StealSuccessBias = -3.0,
             },
         };
+
+        /// <summary>この組で撮り切るべき種類。</summary>
+        private static string[] Wanted =>
+            _set == Set.Battery
+                ? new[] { "pickoff", "battery-miss", "drop-third" }
+                : new[] { "steal", "bunt" };
 
         private IEnumerator Start()
         {
@@ -99,25 +139,45 @@ namespace KokoSim.Unity.Match
             // 絵では切り分けられない（design-18 §3.3 と同じ理由）＝枠の高さ[m]と注視点で判定する。
             var frames = new StringBuilder("種類\tコマ\tt\t球x\t球y\t球h\t枠[m]\t注視y\t人px\t球px\n");
             var done = new HashSet<string>();
-            bool prevWindow = false;
+            bool prevWindow = false, prevPaHead = false;
             bool buntArmed = false, buntPressed = false;
             int pa = 0;
             int guard = 0;
+            // 撮れなかった時に原因を残すための計数。カードは無効なら押しても黙って何も起きないので、
+            // 「機会が来なかった」のか「押せていたのに出なかった」のかはこれが無いと分からない。
+            int windows = 0, winOnOffense = 0, winRunnerOnFirst = 0, stealPressed = 0;
 
-            while (done.Count < 5 && pa < MaxPa && !_ctrl.IsGameOver && guard++ < 400000)
+            var wanted = new HashSet<string>(Wanted);
+            Debug.Log("[midpa] 組=" + _set + " 撮る種類=" + string.Join(",", Wanted));
+
+            while (!done.IsSupersetOf(wanted) && pa < MaxPa && !_ctrl.IsGameOver && guard++ < 400000)
             {
                 yield return null;
+
+                // 打席数は「打席の頭の窓」で数える（球ごとの窓で数えると MaxPa が球数になる）。
+                bool paHead = _ctrl.AtPaHeadWindowForCapture;
+                if (paHead && !prevPaHead) pa++;
+                prevPaHead = paHead;
 
                 // ── 采配（窓の頭で1回だけ）───────────────────────────────
                 bool win = _ctrl.AtWindowForCapture;
                 if (win && !prevWindow)
                 {
-                    pa++;
+                    windows++;
                     if (_ctrl.ManagerOnOffenseForCapture)
                     {
+                        winOnOffense++;
+                        if (_ctrl.RunnerOnFirstForCapture) winRunnerOnFirst++;
                         // 盗塁が先。撮り終えたらバントへ切り替える（同時に出すと絵の切り分けができない）。
-                        if (!done.Contains("steal")) _ctrl.SelectSignForCapture("run-steal");
-                        else if (!done.Contains("bunt") && !buntPressed)
+                        // ただし盗塁が来ないまま試合を使い切るとバントまで道連れで撮れない（issue #489 の実害）。
+                        // StealGiveUpPa 打席で見切ってバントへ譲る＝どちらか片方は必ず撮れるようにする。
+                        bool chaseSteal = wanted.Contains("steal") && !done.Contains("steal") && pa < StealGiveUpPa;
+                        if (chaseSteal)
+                        {
+                            if (_ctrl.RunnerOnFirstForCapture) stealPressed++;
+                            _ctrl.SelectSignForCapture("run-steal");
+                        }
+                        else if (wanted.Contains("bunt") && !done.Contains("bunt") && !buntPressed)
                         {
                             // ⚠ 1回だけ押す。カードはトグルなので毎窓押すと**次の窓で消灯**し、
                             // 構えの前倒しが台無しになる（実測: リリース時点で移行クリップが毎回 t=0.00）。
@@ -148,7 +208,7 @@ namespace KokoSim.Unity.Match
 
                 // ── 打席途中プレー（#485〜#488）─────────────────────────
                 var kind = _ctrl.MidPaPlayForCapture;
-                if (kind == null || done.Contains(kind)) continue;
+                if (kind == null || done.Contains(kind) || !wanted.Contains(kind)) continue;
 
                 double headT = _ctrl.PlayClockForCapture;
                 bool sawJudge = false, saw3d = false;
@@ -190,8 +250,13 @@ namespace KokoSim.Unity.Match
 
             File.WriteAllText(Path.Combine(OutDir, "plays.tsv"), log.ToString());
             File.WriteAllText(Path.Combine(OutDir, "frames.tsv"), frames.ToString());
+            // 撮れなかった種類がある時に「機会が無かった」のか「機会はあったのに絵にならなかった」のかを
+            // ここだけ見れば切り分けられるようにする（無いと次の人がまた同じ調査からやり直す）。
             Debug.Log("[midpa] 撮り終わり: 揃った=" + string.Join(",", new List<string>(done))
-                      + " / 打席=" + pa + " / 試合終了=" + _ctrl.IsGameOver + "\n" + log);
+                      + " / 打席=" + pa + "(上限" + MaxPa + ") / 試合終了=" + _ctrl.IsGameOver
+                      + " / 窓=" + windows + " 攻撃側=" + winOnOffense
+                      + " 一塁走者あり=" + winRunnerOnFirst + " 盗塁カード押下=" + stealPressed
+                      + "\n" + log);
         }
 
         /// <summary>プレーが続いている間、等間隔で撮り続ける。<paramref name="alive"/> は毎フレーム呼ばれる

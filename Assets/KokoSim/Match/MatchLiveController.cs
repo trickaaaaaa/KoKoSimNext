@@ -3899,6 +3899,14 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: いま采配窓で止まっているか（打席の途中＝球間を含む）。</summary>
         public bool AtWindowForCapture => _stage == LiveStage.Window;
 
+        /// <summary>
+        /// 診断用: いま一塁に走者が居るか（盗塁カード <c>run-steal</c> の <c>EnabledIf</c> と同じ条件）。
+        /// 撮影ハーネスが「盗塁が撮れなかったのは走者が一度も一塁に居なかったからか、居たのに
+        /// 出なかったのか」を切り分けるのに使う。カードは無効時に押しても黙って何も起きないので、
+        /// この口が無いと失敗が絵にもログにも残らない（issue #489: 押し続けたのに撮れず原因不明だった）。
+        /// </summary>
+        public bool RunnerOnFirstForCapture => RunnerOnFirst;
+
         /// <summary>診断用: 采配カードが受付中か（issue #493）。false＝投手が次球の振りかぶりへ入り締め切っている。</summary>
         public bool TacticsAcceptingInputForCapture => _signPad?.IsAcceptingInputForCapture ?? true;
 

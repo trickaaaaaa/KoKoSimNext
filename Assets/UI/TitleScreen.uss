@@ -13,21 +13,29 @@
     background-color: var(--day-base);
 }
 
-/* ── 球場バック：4段の色ブロック（写真・3Dは使わない） ── */
+/* ── 球場バック：4段の色ブロック（写真・3Dは使わない） ──
+   高さは 400px を基準にするが flex-shrink:1 ＝ 縦が足りない時はここが縮んで本文を守る。
+   パネルは ScaleWithScreenSize / 基準 1600x900 / match 0.5 なので、点の高さは画面比で変わり
+   16:9 ちょうどで 900pt まで下がる。背景を flex-shrink:0 のまま固定すると本文 544pt が
+   500pt の枠に入らず、溢れた分がメニュー末尾（「終了」）を画面外へ押し出して切っていた（issue #482）。
+   帯は px でなく背景に対する % で持つ（縮んでも 4 段の比が崩れないため。値は 220/56/90/34px と同一比）。 */
 .ts-backdrop {
     flex-direction: column;
-    flex-shrink: 0;
+    flex-shrink: 1;
     height: 400px;
+    min-height: 200px;
 }
-.ts-band { flex-shrink: 0; }
-.ts-band--sky   { height: 220px; background-color: var(--sky); }
-.ts-band--stand { height: 56px;  background-color: var(--field-stand-hi-day); }
-.ts-band--grass { height: 90px;  background-color: var(--field-grass-day); }
-.ts-band--dirt  { height: 34px;  background-color: var(--field-clay-day); }
+.ts-band { flex-shrink: 1; }
+.ts-band--sky   { height: 55%;   background-color: var(--sky); }
+.ts-band--stand { height: 14%;   background-color: var(--field-stand-hi-day); }
+.ts-band--grass { height: 22.5%; background-color: var(--field-grass-day); }
+.ts-band--dirt  { height: 8.5%;  background-color: var(--field-clay-day); }
 
-/* ── 本文：見出し＋メニュー（白地・左寄せ・UI原則⑦＝主要操作は少なく大きく） ── */
+/* ── 本文：見出し＋メニュー（白地・左寄せ・UI原則⑦＝主要操作は少なく大きく） ──
+   flex-shrink:0 ＝ 縦が足りない時に縮む側は背景であって本文ではない（メニューを切らせない）。 */
 .ts-content {
     flex-grow: 1;
+    flex-shrink: 0;
     flex-direction: column;
     justify-content: center;
     align-items: flex-start;
