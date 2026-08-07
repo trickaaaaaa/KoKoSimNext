@@ -963,6 +963,8 @@ public static class TimelineBuilder
                 Label = "走", T0 = PickoffReactionSeconds, T1 = runnerT1, From = leadPt, To = basePt,
                 // 牽制死は常にタッチプレー（Force既定false, issue #489）。盗塁死と同じくフォース概念が無い。
                 OutAtEnd = pickedOff, Runner = runner,
+                // 表示専用（issue #524）: 牽制の走者レッグは常に帰塁＝頭から突っ込む到達演技を選ばせる。
+                Returning = true,
             },
         };
         // 判定イベント（Issue #260の表示条件を踏襲）: アウトは常時表示。セーフは際どさを未評価のため

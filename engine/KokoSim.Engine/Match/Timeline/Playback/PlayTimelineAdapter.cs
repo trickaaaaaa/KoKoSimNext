@@ -48,7 +48,7 @@ public static class PlayTimelineAdapter
             {
                 Label = grp.Key,
                 Segs = legs.Select(l => new PlaybackRun(l.T0, l.T1, Vec(l.From), Vec(l.To))
-                    { OutAtEnd = l.OutAtEnd, CloseCall = l.CloseCall, Force = l.Force }).ToArray(),
+                    { OutAtEnd = l.OutAtEnd, CloseCall = l.CloseCall, Force = l.Force, Returning = l.Returning }).ToArray(),
                 HideAt = hideAt,
                 Identity = runnerIdentity,
             });

@@ -140,6 +140,11 @@ public sealed record PlaybackRun(double T0, double T1, PlaybackVec From, Playbac
     /// （野手が走者へタッチしにいく）かの区別。<see cref="RunnerLeg.Force"/> をそのまま運ぶ。
     /// </summary>
     public bool Force { get; init; }
+    /// <summary>
+    /// 表示専用（issue #524）: このレッグが帰塁（いま占有している塁へ戻るレッグ）か。
+    /// <see cref="RunnerLeg.Returning"/> をそのまま運ぶ。
+    /// </summary>
+    public bool Returning { get; init; }
 }
 
 /// <summary>走者（複数レッグ＋任意の消滅時刻 hideAt＋表示ラベル）。mock: runners[i]。</summary>
