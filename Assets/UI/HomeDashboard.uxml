@@ -46,6 +46,11 @@
           <ui:Label name="hero-cd-num" class="hm-hero__cd-num f-num-bd" text="15" />
           <ui:Label name="hero-cd-unit" class="hm-hero__cd-unit" text="週" />
         </ui:VisualElement>
+
+        <!-- ゲーム中のセーブ導線はホーム画面のこのメニューだけに置く（issue #509・オーナー判断。
+             試合中のポーズメニューには置かない）。hm-hero-match/plain は flex-grow:1 なので
+             このボタンは自然に帯の右端へ収まる。 -->
+        <ui:Button name="hm-menu-btn" class="hm-menu-btn" text="≡ メニュー" />
       </ui:VisualElement>
 
       <!-- ===== ダッシュボード本体（3カラム・外側スクロールなし） ===== -->
@@ -218,6 +223,33 @@
           <ui:Label name="tm-result-headline" class="tm-result__headline" text="勝利！" />
           <ui:Label name="tm-result-score" class="tm-result__score" text="桜丘 5 - 2 享栄" />
           <ui:Button name="tm-result-ok" class="tm-btn tm-btn--primary" text="次へ" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- ゲーム中のメニュー（issue #509）: セーブ／タイトルへ戻る。ホーム画面のこの1箇所だけに置く
+           （UI原則⑦「操作は少なく深く」＝それ以外の操作はコンテキストに寄せる）。 -->
+      <ui:VisualElement name="hm-menu" class="ui-root tm-scrim">
+        <ui:VisualElement class="tm-card hm-menu__card">
+          <ui:Label class="hm-menu__title" text="メニュー" />
+
+          <ui:VisualElement class="hm-menu__row">
+            <ui:Button name="hm-menu-save" class="tm-btn tm-btn--primary hm-menu__btn" text="セーブ" />
+            <ui:Label name="hm-menu-save-reason" class="hm-menu__reason" text="" />
+          </ui:VisualElement>
+
+          <ui:Button name="hm-menu-title" class="tm-btn tm-btn--ghost hm-menu__btn" text="タイトルへ戻る" />
+          <ui:Button name="hm-menu-close" class="tm-btn tm-btn--ghost hm-menu__btn" text="閉じる" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- 「タイトルへ戻る」確認（破壊的操作＝確認ダイアログを挟む。UI原則②の警告色を使う）。 -->
+      <ui:VisualElement name="hm-menu-title-confirm" class="ui-root tm-scrim">
+        <ui:VisualElement class="tm-card">
+          <ui:Label class="tm-dialog__q" text="タイトルへ戻りますか？　保存していない進行は失われます。" />
+          <ui:VisualElement class="tm-dialog__btns">
+            <ui:Button name="hm-menu-title-no" class="tm-btn tm-btn--ghost" text="いいえ" />
+            <ui:Button name="hm-menu-title-yes" class="tm-btn tm-btn--warn" text="タイトルへ戻る" />
+          </ui:VisualElement>
         </ui:VisualElement>
       </ui:VisualElement>
 

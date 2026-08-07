@@ -21,6 +21,8 @@ namespace KokoSim.Unity.Home
         private HomeState _state;
         private VisualElement _root;
         private VisualElement _banner, _dialog, _result, _newTeam;
+        private VisualElement _menu, _menuTitleConfirm;
+        private Label _menuSaveReason;
 
         // 新チーム発足（次期主将の指名）モーダルの選択状態。RosterService.Active 内の index を持つ。
         private KokoSim.Unity.Components.RadarChartView _ntRadar;
@@ -34,6 +36,7 @@ namespace KokoSim.Unity.Home
         // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
         // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
         private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk;
+        private Button _menuBtn, _menuSaveBtn, _menuTitleBtn, _menuCloseBtn, _menuTitleYes, _menuTitleNo;
         private VisualElement _tsRow;
         private EventCallback<ClickEvent> _tsRowClick;
 
@@ -47,6 +50,9 @@ namespace KokoSim.Unity.Home
             _dialog = _root.Q<VisualElement>("tm-dialog");
             _result = _root.Q<VisualElement>("tm-result");
             _newTeam = _root.Q<VisualElement>("nt-modal");
+            _menu = _root.Q<VisualElement>("hm-menu");
+            _menuTitleConfirm = _root.Q<VisualElement>("hm-menu-title-confirm");
+            _menuSaveReason = _root.Q<Label>("hm-menu-save-reason");
             _ntRadar = new KokoSim.Unity.Components.RadarChartView(
                 _root.Q<VisualElement>("nt-d-radar"), NewTeamRadarRadius);
             _tsRadar = new KokoSim.Unity.Components.RadarChartView(
@@ -59,6 +65,13 @@ namespace KokoSim.Unity.Home
             _dialogNo = Wire("tm-dialog-no", OnMatchNo);
             _resultOk = Wire("tm-result-ok", OnResultOk);
             _newTeamOk = Wire("nt-ok", OnNewTeamConfirm);
+
+            _menuBtn = Wire("hm-menu-btn", OnMenuOpen);
+            _menuSaveBtn = Wire("hm-menu-save", OnMenuSave);
+            _menuTitleBtn = Wire("hm-menu-title", OnMenuTitleRequest);
+            _menuCloseBtn = Wire("hm-menu-close", OnMenuClose);
+            _menuTitleYes = Wire("hm-menu-title-yes", OnMenuTitleConfirm);
+            _menuTitleNo = Wire("hm-menu-title-no", OnMenuTitleCancel);
 
             // 部の状態「チーム総合力」行 → 6角形の専用パネルへ（行クリックで詳細）。
             _tsRow = _root.Q<VisualElement>("team-strength-row");
@@ -101,6 +114,82 @@ namespace KokoSim.Unity.Home
             if (_newTeamOk != null) _newTeamOk.clicked -= OnNewTeamConfirm;
             if (_tsRow != null && _tsRowClick != null) _tsRow.UnregisterCallback(_tsRowClick);
             _tsRowClick = null;
+
+            if (_menuBtn != null) _menuBtn.clicked -= OnMenuOpen;
+            if (_menuSaveBtn != null) _menuSaveBtn.clicked -= OnMenuSave;
+            if (_menuTitleBtn != null) _menuTitleBtn.clicked -= OnMenuTitleRequest;
+            if (_menuCloseBtn != null) _menuCloseBtn.clicked -= OnMenuClose;
+            if (_menuTitleYes != null) _menuTitleYes.clicked -= OnMenuTitleConfirm;
+            if (_menuTitleNo != null) _menuTitleNo.clicked -= OnMenuTitleCancel;
+        }
+
+        // ===== ゲーム中メニュー: セーブ／タイトルへ戻る（issue #509） =====
+
+        private void OnMenuOpen()
+        {
+            // issue #138 と同じ作法: 背景の大会後処理中は静的状態を触る操作を受け付けない。
+            if (KokoSim.Unity.Shell.BackgroundGameOp.Running) return;
+            if (_menu == null) return;
+            var canSave = KokoSim.Unity.Shell.SaveGameIO.CanSave;
+            _menuSaveBtn?.SetEnabled(canSave);
+            if (_menuSaveReason != null)
+            {
+                _menuSaveReason.text = canSave ? "" : SaveDisabledReason();
+                _menuSaveReason.style.display = canSave ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+            _menu.style.display = DisplayStyle.Flex;
+            _menu.BringToFront();
+        }
+
+        /// <summary>大会中はセーブ不可（#507）。SaveSlotsController の同名ロジックと表記を揃える。</summary>
+        private static string SaveDisabledReason()
+        {
+            var s = KokoSim.Unity.Shell.GameSession.Current;
+            if (s.BracketFoldPending) return "大会結果を集計中はセーブできません（集計完了までお待ちください）。";
+            if (s.Mode == KokoSim.Unity.Shell.GameMode.Tournament) return "大会中はセーブできません。";
+            return "";
+        }
+
+        private void OnMenuClose()
+        {
+            if (_menu != null) _menu.style.display = DisplayStyle.None;
+        }
+
+        private void OnMenuSave()
+        {
+            if (!KokoSim.Unity.Shell.SaveGameIO.CanSave) return;   // 押せない経路への防御（オーナー申し送り）
+            OnMenuClose();
+            KokoSim.Unity.Shell.SaveSlots.Entry = KokoSim.Unity.Shell.SaveSlotsEntry.Home;
+            // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
+            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("SaveSlots");
+        }
+
+        private void OnMenuTitleRequest()
+        {
+            OnMenuClose();
+            if (_menuTitleConfirm == null) return;
+            _menuTitleConfirm.style.display = DisplayStyle.Flex;
+            _menuTitleConfirm.BringToFront();
+        }
+
+        private void OnMenuTitleCancel()
+        {
+            if (_menuTitleConfirm != null) _menuTitleConfirm.style.display = DisplayStyle.None;
+            OnMenuOpen();   // メニューへ戻す
+        }
+
+        private void OnMenuTitleConfirm()
+        {
+            if (_menuTitleConfirm != null) _menuTitleConfirm.style.display = DisplayStyle.None;
+            // 背景の全国裏試合／敗退後の残りブラケット消化を完了させてから静的リセットする。GameClock.Advance の
+            // 年度替わり・新チーム発足と同じ作法（issue #529）＝背景スレッドと同じ NationRosters を同時に触らない。
+            // 完了を待たずに Reset すると、リセット後に新しい NationBackgroundSim.Start が走った場合、旧セッションの
+            // ワーカーがまだ生きていて共有カウンタ(_nextJob等)を奪い合う実害があるため。
+            KokoSim.Unity.Shell.NationBackgroundSim.EnsureCompleted();
+            KokoSim.Unity.Shell.BracketFinishSim.EnsureCompleted();
+            KokoSim.Unity.Shell.SaveGameIO.ResetForNewGame();
+            HomeState.Reset();
+            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TitleScreen");
         }
 
         // ===== 大会モード進行（要件1〜7） =====

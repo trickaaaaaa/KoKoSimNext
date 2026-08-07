@@ -12,8 +12,8 @@ namespace KokoSim.Unity.Shell
     /// 担い、ここは全 static サービスからの収集・復元と、gzip 圧縮＋<c>Application.persistentDataPath</c> への
     /// ファイル IO だけを持つ（設計: 書き出しは Shell・形は engine）。
     ///
-    /// <para><b>スロット管理UI・タイトル接続・オートセーブ・「タイトルへ戻る」導線は対象外</b>（F1/F2）。
-    /// ここで提供するのは往復の土台（Capture/Restore/Reset＋ファイル読み書き）まで。</para>
+    /// <para>スロット管理UI・タイトル接続は F1（issue #508）、オートセーブ・ゲーム中のセーブ導線・
+    /// 「タイトルへ戻る」導線は F2（issue #509）でこの土台（Capture/Restore/Reset＋ファイル読み書き）の上に配線した。</para>
     ///
     /// <para><b>大会中はセーブ不可</b>（<see cref="GameMode.Tournament"/>）。進行体 <c>TournamentRunner</c> は
     /// 復元不能（進行中ブラケット・IRandomSource 内部状態・観戦中の MatchProgression を持つ）＝#483 論点3の結論。

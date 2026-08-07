@@ -39,10 +39,11 @@ namespace KokoSim.Unity.Shell
         // MatchResult はその出口（ライブ観戦の終局で自動遷移するボックススコア画面。閉じるとホームへ戻る）。
         // PlayerDetail はマスターディテール化（issue #131）で独立画面ではなくなった
         // （PlayerList と同一 GameObject・同一 UIDocument に同居）。
-        // TitleScreen は起動直後の入口（issue #482）。「はじめから」でホームへ遷移する以外に戻り道が無い
-        // （タイトルへ戻る導線は対象外＝セーブ基盤issueで扱う）ため、ExtraScreens 止まりでよい。
-        // SaveSlots はタイトルの「つづきから」からのみ遷移するセーブスロット選択画面（issue #508）。
-        // 同じ理由でタブは持たず、戻り道も無い（「タイトルへ戻る」は対象外＝F2）。
+        // TitleScreen は起動直後の入口（issue #482）。ホームのメニュー「タイトルへ戻る」（issue #509）が
+        // 唯一の戻り先として遷移してくるため、ExtraScreens 止まりでよい（タブは持たない）。
+        // SaveSlots はタイトルの「つづきから」（issue #508）とホームのメニュー「セーブ」（issue #509）の
+        // 2箇所から開くセーブスロット選択画面。同じ理由でタブは持たない（SaveSlots.Entry で分岐。
+        // ホーム経由は ss-back でホームへ戻る＝SaveSlotsController 参照）。
         private static readonly string[] ExtraScreens =
             { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TitleScreen", "SaveSlots" };
 

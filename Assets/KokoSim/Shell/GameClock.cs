@@ -54,6 +54,11 @@ namespace KokoSim.Unity.Shell
                     }
                     EnterWeek();
                 }
+                // オートセーブ（issue #509）: 週送りのたびにオート枠を上書きする。呼び出し元は大会終了処理など
+                // 背景スレッド（BackgroundGameOp.Run）からもここへ到達するため、File IO は必ず MainThreadDispatcher
+                // 経由でメインスレッドへ載せ替える（Application.persistentDataPath 等のUnity APIをスレッド外から
+                // 直接叩かない。issue #138 と同じ作法）。CanSave のガードは SaveSlots.Save の内部（SaveGameIO）が持つ。
+                if (delta > 0) MainThreadDispatcher.Enqueue(() => SaveSlots.Save(SaveSlots.AutoSlotId));
                 return;
             }
             Step(delta);   // 巻き戻し（練習画面のプレビュー）は遷移フックを回さない
