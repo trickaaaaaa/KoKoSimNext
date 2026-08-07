@@ -1350,77 +1350,195 @@ namespace KokoSim.Unity.Match
 
             foreach (var seg in play.Ball)
             {
-                var eb = seg as EndpointBallSegment;
-                bool isThrow = eb != null ? eb.Kind == BallSegmentKind.Throw : seg is ThrowSegment;
-                if (!isThrow) continue;
-
-                float tr = (float)seg.T0;
-                var from = seg.At(0.0);
-                var to = seg.At(seg.T1 - seg.T0);
-
-                // 投げ手は engine が知っている（E1）。無ければ始点に一番近い野手へ落とす
-                FieldPosition who = seg.FromRole ?? NearestFielder(play, tr, from.X, from.Y);
-                float dist = new Vector2((float)(to.X - from.X), (float)(to.Y - from.Y)).magnitude;
-                var an = SelectFieldThrow(who, dist);
-
-                // 体の向き＝**的を向ける**。F5（グラブを球へ向ける）とは意味が違う: グラブは球の
-                // 位置に居なければならないのに対し、送球は球が的へ飛んでいけばよく、手が的への
-                // 直線上に居る必要はない。以前は「リリースの手が的を向く」よう体ごとオフセット
-                // していたが（an.HandX/HandZ ぶん引く式）、収録ごとの手の水平位置（0.12〜0.36m）
-                // がそのまま体の向きのずれ（実測10〜42°）になっていた（issue #399 ③）。
-                // 手のオフセットで生じる横ずれは ThrowHandoffSeconds の寄せで吸収する（下）
-                var fp = PlaybackEvaluator.FielderAt(play, who, tr).Pos;
-                var toTarget = new Vector2((float)(to.X - fp.X), (float)(to.Y - fp.Y));
-                float yaw = toTarget.sqrMagnitude > 1e-6f
-                    ? Mathf.Atan2(toTarget.x, toTarget.y) * Mathf.Rad2Deg
-                    : YawFacingHome((float)fp.X, (float)fp.Y);
-                float aimErrDeg = toTarget.sqrMagnitude > 1e-6f
-                    ? Mathf.Abs(Mathf.DeltaAngle(yaw, Mathf.Atan2(toTarget.x, toTarget.y) * Mathf.Rad2Deg))
-                    : 0f;
-                _throwAimErrMax = Mathf.Max(_throwAimErrMax, aimErrDeg);
-
-                // 球が手を離れる点の**幾何解**（どの時刻から再生を始めても同じ値）。
-                // 保持中は実測の手で上書きするが、途中から再生した場合はこれが使われる
-                var off = Quaternion.Euler(0f, yaw, 0f) * new Vector3(an.HandX, 0f, an.HandZ);
-                var hand = new Vector3((float)fp.X + off.x,
-                    FieldGroundY((float)fp.X, (float)fp.Y) + an.HandY, (float)fp.Y + off.z);
-
-                float tStart = tr - an.Release;
-                // ⚠ 捕ってからでないと投げられない。ただし**アンカーの側は動かさない**＝
-                //    頭出し量を増やして（クリップの頭を捨てて）リリースの時刻を守る。
-                //    ここで tStart 自体を持ち上げると球が手を離れる時刻がずれる
-                float tFire = Mathf.Max(tStart, CatchTimeOf(who, tr));
-                float rate = 1f;
-
-                // 捕手の握り替え圧縮（監督決定 2026-08-05・issue #485）: 収録のリリースは捕球から 1.16s だが、
-                // 盗塁の握り替えは 0.60〜0.88s しかない。頭を切って入ると「しゃがんで捕った姿勢から立ち上がり
-                // 途中へ瞬間的に飛ぶ」。1.16s の芝居を実際のポップ秒へ一様に圧縮する（#443 一塁駆け抜けと同型・
-                // 一様倍率なので緩急の比は保つ＝design-18「内部緩急の改変禁止」に抵触しない）。捕手の「捕球」は
-                // 投球の到達（盗塁は捕球イベントが無い）か、打球処理の捕球（バント等）。窓が収録より短い時だけ詰める。
-                if (who == FieldPosition.Catcher)
-                {
-                    float catchAt = CatchTimeOf(who, tr);
-                    if (catchAt <= 0f) catchAt = PitchArriveOf(play);   // 盗塁の二塁送球＝投球を受けて投げる
-                    float window = tr - catchAt;
-                    if (catchAt > 0f && window > 1e-3f && window < an.Release)
-                    {
-                        rate = Mathf.Clamp(an.Release / window, 1f, 4f);   // 約1.3〜1.9倍速
-                        tStart = catchAt;                                  // クリップの頭（捕った姿勢）を捕球の瞬間へ
-                        tFire = catchAt;
-                    }
-                }
-
-                _throwEvents.Add(new FieldThrowEvent
-                {
-                    From = who,
-                    To = seg.ToRole ?? NearestFielder(play, (float)seg.T1, to.X, to.Y),
-                    TRelease = tr, TStart = tStart, TFire = tFire, Rate = rate, Anchor = an, Yaw = yaw,
-                    AimErrDeg = aimErrDeg,
-                    SegStart = new Vector3((float)from.X, (float)from.H, (float)from.Y),
-                    SegEnd = new Vector3((float)to.X, (float)to.H, (float)to.Y),
-                    HandAtRelease = hand, DistM = dist,
-                });
+                if (!IsThrowSegment(seg)) continue;
+                _throwEvents.Add(BuildThrowEvent(play, seg));
             }
+        }
+
+        private static bool IsThrowSegment(PlaybackBallSegment seg)
+        {
+            var eb = seg as EndpointBallSegment;
+            return eb != null ? eb.Kind == BallSegmentKind.Throw : seg is ThrowSegment;
+        }
+
+        /// <summary>
+        /// 送球区間1本ぶんのタイミング・向き・クリップを組む（<see cref="BuildFieldThrowPlan"/> と、
+        /// 対決ビュー据え置きのまま直接乗せる <see cref="TryBeginDuelThrow"/> の共通ソース。
+        /// リリース時刻・向きの定義を2箇所に分けない＝issue #512）。
+        /// </summary>
+        private FieldThrowEvent BuildThrowEvent(PlaybackPlay play, PlaybackBallSegment seg)
+        {
+            float tr = (float)seg.T0;
+            var from = seg.At(0.0);
+            var to = seg.At(seg.T1 - seg.T0);
+
+            // 投げ手は engine が知っている（E1）。無ければ始点に一番近い野手へ落とす
+            FieldPosition who = seg.FromRole ?? NearestFielder(play, tr, from.X, from.Y);
+            float dist = new Vector2((float)(to.X - from.X), (float)(to.Y - from.Y)).magnitude;
+            var an = SelectFieldThrow(who, dist);
+
+            // 体の向き＝**的を向ける**。F5（グラブを球へ向ける）とは意味が違う: グラブは球の
+            // 位置に居なければならないのに対し、送球は球が的へ飛んでいけばよく、手が的への
+            // 直線上に居る必要はない。以前は「リリースの手が的を向く」よう体ごとオフセット
+            // していたが（an.HandX/HandZ ぶん引く式）、収録ごとの手の水平位置（0.12〜0.36m）
+            // がそのまま体の向きのずれ（実測10〜42°）になっていた（issue #399 ③）。
+            // 手のオフセットで生じる横ずれは ThrowHandoffSeconds の寄せで吸収する（下）
+            var fp = PlaybackEvaluator.FielderAt(play, who, tr).Pos;
+            var toTarget = new Vector2((float)(to.X - fp.X), (float)(to.Y - fp.Y));
+            float yaw = toTarget.sqrMagnitude > 1e-6f
+                ? Mathf.Atan2(toTarget.x, toTarget.y) * Mathf.Rad2Deg
+                : YawFacingHome((float)fp.X, (float)fp.Y);
+            float aimErrDeg = toTarget.sqrMagnitude > 1e-6f
+                ? Mathf.Abs(Mathf.DeltaAngle(yaw, Mathf.Atan2(toTarget.x, toTarget.y) * Mathf.Rad2Deg))
+                : 0f;
+            _throwAimErrMax = Mathf.Max(_throwAimErrMax, aimErrDeg);
+
+            // 球が手を離れる点の**幾何解**（どの時刻から再生を始めても同じ値）。
+            // 保持中は実測の手で上書きするが、途中から再生した場合はこれが使われる
+            var off = Quaternion.Euler(0f, yaw, 0f) * new Vector3(an.HandX, 0f, an.HandZ);
+            var hand = new Vector3((float)fp.X + off.x,
+                FieldGroundY((float)fp.X, (float)fp.Y) + an.HandY, (float)fp.Y + off.z);
+
+            float tStart = tr - an.Release;
+            // ⚠ 捕ってからでないと投げられない。ただし**アンカーの側は動かさない**＝
+            //    頭出し量を増やして（クリップの頭を捨てて）リリースの時刻を守る。
+            //    ここで tStart 自体を持ち上げると球が手を離れる時刻がずれる
+            float tFire = Mathf.Max(tStart, CatchTimeOf(who, tr));
+            float rate = 1f;
+
+            // 捕手の握り替え圧縮（監督決定 2026-08-05・issue #485）: 収録のリリースは捕球から 1.16s だが、
+            // 盗塁の握り替えは 0.60〜0.88s しかない。頭を切って入ると「しゃがんで捕った姿勢から立ち上がり
+            // 途中へ瞬間的に飛ぶ」。1.16s の芝居を実際のポップ秒へ一様に圧縮する（#443 一塁駆け抜けと同型・
+            // 一様倍率なので緩急の比は保つ＝design-18「内部緩急の改変禁止」に抵触しない）。捕手の「捕球」は
+            // 投球の到達（盗塁は捕球イベントが無い）か、打球処理の捕球（バント等）。窓が収録より短い時だけ詰める。
+            if (who == FieldPosition.Catcher)
+            {
+                float catchAt = CatchTimeOf(who, tr);
+                if (catchAt <= 0f) catchAt = PitchArriveOf(play);   // 盗塁の二塁送球＝投球を受けて投げる
+                float window = tr - catchAt;
+                if (catchAt > 0f && window > 1e-3f && window < an.Release)
+                {
+                    rate = Mathf.Clamp(an.Release / window, 1f, 4f);   // 約1.3〜1.9倍速
+                    tStart = catchAt;                                  // クリップの頭（捕った姿勢）を捕球の瞬間へ
+                    tFire = catchAt;
+                }
+            }
+
+            return new FieldThrowEvent
+            {
+                From = who,
+                To = seg.ToRole ?? NearestFielder(play, (float)seg.T1, to.X, to.Y),
+                TRelease = tr, TStart = tStart, TFire = tFire, Rate = rate, Anchor = an, Yaw = yaw,
+                AimErrDeg = aimErrDeg,
+                SegStart = new Vector3((float)from.X, (float)from.H, (float)from.Y),
+                SegEnd = new Vector3((float)to.X, (float)to.H, (float)to.Y),
+                HandAtRelease = hand, DistM = dist,
+            };
+        }
+
+        // ── 対決ビュー据え置きの送球直乗せ（issue #512） ──────────────────────
+        // 盗塁・牽制は打席途中プレーの投球を対決ビューで見せ終えた直後に始まる。BeginFieldPlay を
+        // 頭から呼ぶとカメラが即座に守備ビュー（ApplyFieldCamera）へスナップする（SetFieldTime(t0) が
+        // 内部時計を直接 t0 へ合わせるため、振りかぶり区間が1コマも描かれない＝issue #512 の症状）。
+        // 対決ビューの固定構図（ApplyCalibration）を保ったまま投げ手（捕手/投手。対決4体と共有の
+        // アクター）だけへ送球クリップを直接乗せ、リリース（TRelease）に達したら呼び出し側が
+        // 従来どおり BeginFieldPlay(play, TRelease) へ引き渡す（このカット自体は変更しない）。
+        // 位置は動かさない（PlaceFielder で XZ を書き換えない）＝対決ビューの立ち位置のまま、
+        // 向きだけ的へ寄せる。リリースでの立ち位置の不連続は BeginFieldPlay 側の Entry フェード
+        // （既存・EntryFadeSeconds）がそのまま吸収する＝ここで新たに作らない。
+
+        private FieldThrowEvent _duelThrow;
+        private Actor _duelThrowActor;
+        private bool _duelThrowActive;
+        private bool _duelThrowFired;
+        private float _duelThrowX, _duelThrowZ, _duelThrowYaw, _duelThrowYawRate, _duelThrowLastT;
+
+        /// <summary>
+        /// この一投の頭出しを準備する。対象は投げ手が捕手/投手の1本だけ（盗塁・牽制はどちらも
+        /// <c>play.Ball</c> に送球区間を1本しか持たない）。投げ手が捕手/投手でない・クリップが
+        /// 見つからない等の対象外なら false を返す＝呼び出し側は従来どおり即座に BeginFieldPlay してよい。
+        /// </summary>
+        /// <param name="fireAt">クリップを流し始める時刻（TFire）。true のときだけ有効。</param>
+        public bool TryBeginDuelThrow(PlaybackPlay play, out float fireAt)
+        {
+            fireAt = 0f;
+            _duelThrowActive = false;
+            _duelThrowFired = false;
+            if (!Available || play?.Ball == null) return false;
+
+            PlaybackBallSegment throwSeg = null;
+            foreach (var seg in play.Ball)
+            {
+                if (!IsThrowSegment(seg)) continue;
+                throwSeg = seg;
+                break;
+            }
+            if (throwSeg == null) return false;
+
+            var who = throwSeg.FromRole;
+            if (who != FieldPosition.Catcher && who != FieldPosition.Pitcher) return false;
+            var a = FielderActor(who.Value);
+            if (a == null || a.Go == null) return false;
+
+            var e = BuildThrowEvent(play, throwSeg);
+            if (LoadClip(e.Anchor.Clip) == null) return false;
+
+            _duelThrow = e;
+            _duelThrowActor = a;
+            _duelThrowActive = true;
+            fireAt = e.TFire;
+            return true;
+        }
+
+        /// <summary>
+        /// 対決ビュー据え置きの送球を1コマ進める。<see cref="TryBeginDuelThrow"/> が真を返した後、
+        /// 呼び出し側が毎フレーム絶対時刻で渡す（<see cref="SetFieldTime"/> と同じ方式）。
+        /// TFire に達するまでは何もしない＝対決ビューの通常の待機描画のまま。
+        /// </summary>
+        public void StepDuelThrow(float t)
+        {
+            if (!_duelThrowActive) return;
+            var e = _duelThrow;
+            if (t < e.TFire) return;
+
+            if (!_duelThrowFired)
+            {
+                _duelThrowFired = true;
+                // 捕球ポーズ補正（ミットIK・体寄せ）に投げのクリップを奪わせない（issue #512。
+                // FixCatcherPose は _catchIndex<0 なら何もしない）
+                if (_duelThrowActor == _catcher) _catchIndex = -1;
+                var clip = LoadClip(e.Anchor.Clip);
+                SetActorClip(_duelThrowActor, clip, (t - e.TStart) * e.Rate, e.Anchor.Release + ThrowFollowSeconds);
+                _duelThrowActor.Speed = e.Rate;
+                _duelThrowActor.HoldSeconds = ThrowHoldSeconds;
+                var lp = _duelThrowActor.Go.transform.localPosition;
+                _duelThrowX = lp.x;
+                _duelThrowZ = lp.z;
+                _duelThrowYaw = _duelThrowActor.Go.transform.localEulerAngles.y;
+                float rest = Mathf.Abs(Mathf.DeltaAngle(_duelThrowYaw, e.Yaw));
+                float span = Mathf.Max(1f / PoseFps, e.TRelease - 1f / PoseFps - t);
+                _duelThrowYawRate = rest / span;
+                _duelThrowLastT = t;
+            }
+
+            if (_duelThrowYawRate > 0f)
+            {
+                _duelThrowYaw = Mathf.MoveTowardsAngle(_duelThrowYaw, e.Yaw,
+                    _duelThrowYawRate * Mathf.Max(0f, t - _duelThrowLastT));
+                if (Mathf.Abs(Mathf.DeltaAngle(_duelThrowYaw, e.Yaw)) < 1e-3f) _duelThrowYawRate = 0f;
+            }
+            _duelThrowLastT = t;
+            // XZ は据え置き（対決ビューの立ち位置のまま）。PlaceFielder は向きの反映と GroundFix
+            // （しゃがみ→立ちの縦の追従）だけを借りる
+            PlaceFielder(_duelThrowActor, _duelThrowX, _duelThrowZ, _duelThrowYaw);
+        }
+
+        /// <summary>対決ビュー据え置きの送球状態を畳む（BeginFieldPlay への引き渡し後・プレー打ち切り時）。</summary>
+        public void EndDuelThrow()
+        {
+            _duelThrowActive = false;
+            _duelThrowFired = false;
+            _duelThrowActor = null;
         }
 
         /// <summary>

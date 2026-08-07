@@ -280,6 +280,10 @@ namespace KokoSim.Unity.Match
         // 再生は打球（_current.Play）と同じ経路（DuelStageRig.BeginFieldPlay＋Match2DPlaybackElement）を通す。
         private PlaybackPlay _stealPlay;
         private double _stealEndAt;
+        // 捕手の送球を対決ビューの寄りで見せてからリリースで守備ビューへ引き渡す（issue #512）。
+        // _stealReleaseAt = FieldCutMomentOf(steal)＝BeginFieldPlay へ渡す t0 と同じ定義（TRelease）。
+        private double _stealReleaseAt;
+        private bool _stealHandedOff;
 
         // 打席途中の牽制の再生（issue #486）。盗塁と同型だが、判定結果（アウト/セーフ）に関わらず
         // 牽制球が投じられた球は必ず再生する（分岐させない、2026-08-05 issue決定）。この球の**前**に
@@ -290,6 +294,10 @@ namespace KokoSim.Unity.Match
         // 連結してしまっていたのが誤りだった）。
         private PlaybackPlay _pickoffPlay;
         private double _pickoffEndAt;
+        // 投手の牽制送球を対決ビューの寄りで見せてからリリースで守備ビューへ引き渡す（issue #512）。
+        // _pickoffReleaseAt = FieldCutMomentOf(pickoff)＝BeginFieldPlay へ渡す t0 と同じ定義（TRelease）。
+        private double _pickoffReleaseAt;
+        private bool _pickoffHandedOff;
 
         // 打席途中の暴投・捕逸の再生（issue #487）。盗塁・牽制と同型だが、この球そのものの結果
         // （キャッチャーが後逸した）として起きるため、盗塁・牽制（この球の前）より後にチェックする
@@ -1802,19 +1810,40 @@ namespace KokoSim.Unity.Match
             _windowCarry = 0f;
             _stealPlay = steal;
             // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
-            _t = FieldCutMomentOf(steal);
+            _stealReleaseAt = FieldCutMomentOf(steal);
             _stealEndAt = StealPlayEndTime(steal);
             _view.SetPlay(steal);
-            // 3Dの守備ビュー（打球と同じ経路。BeginFieldPlay は rig 未導入なら内部で何もしない）。
+            // 対決ビュー据え置きのまま捕手へ送球クリップを直乗せする（issue #512）。頭出しできれば
+            // その時刻（TFire）から再生し、リリース（_stealReleaseAt）に達したら守備ビューへ引き渡す
+            // （RenderStealFrame）。頭出しできない（rig 未導入・クリップ無し等）なら従来どおり即座に
+            // 守備ビューへ切り替える。
+            _stealHandedOff = false;
+            if (_duelRig != null && _duelRig.Available && _duelRig.TryBeginDuelThrow(steal, out var fireAt))
+            {
+                _t = fireAt;
+            }
+            else
+            {
+                _t = _stealReleaseAt;
+                HandOffStealToFieldView();
+            }
+            RenderStealFrame();
+        }
+
+        /// <summary>捕手の送球を対決ビューの寄りで見せ終わり、守備ビューへ引き渡す（issue #512）。
+        /// 送球予定を頭出しできなかった場合は <see cref="EnterStealPlay"/> から即座に呼ばれる。</summary>
+        private void HandOffStealToFieldView()
+        {
+            _stealHandedOff = true;
             if (_duelRig != null && _duelRig.Available)
             {
                 // 守備側の頭上ラベル用の同定。盗塁は打席途中なので _current は同じ半回の直前の打席
                 // （走者が居る＝必ず先行打席がある）＝その IsTop で守備チームを引く。
                 if (_prog != null && _current != null)
                     _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
-                _duelRig.BeginFieldPlay(steal, (float)_t);
+                _duelRig.EndDuelThrow();
+                _duelRig.BeginFieldPlay(_stealPlay, (float)_stealReleaseAt);
             }
-            RenderStealFrame();
         }
 
         /// <summary>盗塁再生の1フレーム（打球の <see cref="RenderReplayFrame"/> の最小版。結果テキスト・
@@ -1823,7 +1852,9 @@ namespace KokoSim.Unity.Match
         {
             if (_stealPlay == null) return;
             _view.SetTime(_t);
+            if (!_stealHandedOff && _t >= _stealReleaseAt) HandOffStealToFieldView();
             if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
+            else _duelRig?.StepDuelThrow((float)_t);
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_stealPlay, _t);
         }
 
@@ -1901,16 +1932,35 @@ namespace KokoSim.Unity.Match
             _windowCarry = 0f;
             _pickoffPlay = pickoff;
             // 投球は対決ビューで見せ終わっている＝その続きから再生する（頭が全景にならない）。
-            _t = FieldCutMomentOf(pickoff);
+            _pickoffReleaseAt = FieldCutMomentOf(pickoff);
             _pickoffEndAt = PickoffPlayEndTime(pickoff);
             _view.SetPlay(pickoff);
+            // 対決ビュー据え置きのまま投手へ牽制送球クリップを直乗せする（issue #512。EnterStealPlay
+            // と同型）。頭出しできなければ従来どおり即座に守備ビューへ切り替える。
+            _pickoffHandedOff = false;
+            if (_duelRig != null && _duelRig.Available && _duelRig.TryBeginDuelThrow(pickoff, out var fireAt))
+            {
+                _t = fireAt;
+            }
+            else
+            {
+                _t = _pickoffReleaseAt;
+                HandOffPickoffToFieldView();
+            }
+            RenderPickoffFrame();
+        }
+
+        /// <summary>投手の牽制送球を対決ビューの寄りで見せ終わり、守備ビューへ引き渡す（issue #512）。</summary>
+        private void HandOffPickoffToFieldView()
+        {
+            _pickoffHandedOff = true;
             if (_duelRig != null && _duelRig.Available)
             {
                 if (_prog != null && _current != null)
                     _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
-                _duelRig.BeginFieldPlay(pickoff, (float)_t);
+                _duelRig.EndDuelThrow();
+                _duelRig.BeginFieldPlay(_pickoffPlay, (float)_pickoffReleaseAt);
             }
-            RenderPickoffFrame();
         }
 
         /// <summary>牽制再生の1フレーム（<see cref="RenderStealFrame"/> と同型）。</summary>
@@ -1918,7 +1968,9 @@ namespace KokoSim.Unity.Match
         {
             if (_pickoffPlay == null) return;
             _view.SetTime(_t);
+            if (!_pickoffHandedOff && _t >= _pickoffReleaseAt) HandOffPickoffToFieldView();
             if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
+            else _duelRig?.StepDuelThrow((float)_t);
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_pickoffPlay, _t);
         }
 
