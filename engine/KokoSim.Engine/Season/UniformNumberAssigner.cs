@@ -33,6 +33,36 @@ public static class UniformNumberAssigner
     }
 
     /// <summary>
+    /// 空いている背番号（1〜20）を、ベンチ外（<see cref="DevelopingPlayer.UniformNumber"/> == 0）の部員の中から
+    /// <see cref="DevelopingPlayer.AverageLevel"/> 降順（同点は元のロスター順＝安定ソート）で、番号の小さい順に詰める。
+    /// 既存の割当（1〜20 を持つ選手）は一切変更しない。ベンチ外か空き番号のどちらかが尽きたら止める
+    /// （部員が20人未満なら空きが残るのは正常）。乱数不使用（不変条件#2）。引退フック（<see cref="RosterLifecycle.BeginNewTeam"/>）用。
+    /// </summary>
+    public static void FillVacancies(IReadOnlyList<DevelopingPlayer> roster)
+    {
+        if (roster is null) throw new ArgumentNullException(nameof(roster));
+
+        var taken = new HashSet<int>();
+        foreach (var p in roster)
+            if (p.UniformNumber > 0) taken.Add(p.UniformNumber);
+
+        var vacant = new List<int>();
+        for (var n = 1; n <= BenchSize; n++)
+            if (!taken.Contains(n)) vacant.Add(n);
+
+        var benchOut = roster
+            .Select((player, index) => (player, index))
+            .Where(t => t.player.UniformNumber == 0)
+            .OrderByDescending(t => t.player.AverageLevel())
+            .Select(t => t.player)
+            .ToList();
+
+        var count = Math.Min(vacant.Count, benchOut.Count);
+        for (var i = 0; i < count; i++)
+            benchOut[i].UniformNumber = vacant[i];
+    }
+
+    /// <summary>
     /// 指定選手に背番号 <paramref name="number"/>（1〜20）を割り当てる。自由割当のため、同じ背番号を
     /// 既に持つ他選手がいれば 0（ベンチ外）へ退避し、一意性を保つ。<paramref name="player"/> が別の背番号を
     /// 持っていたらそれは解放される。
