@@ -369,8 +369,16 @@ namespace KokoSim.EditorTools
                 var sb = new StringBuilder();
                 foreach (var j in jobs)
                 {
+                    var clip = FindClip(j.clip);
+                    if (clip == null)
+                    {
+                        // 一部クリップ（Mixamo Adobe素材等）はgitignoreで環境によって不在＝
+                        // 1本欠けただけで残りの実測ごと落とさない（NullReferenceExceptionでbail outしない）
+                        sb.AppendLine(j.name + ": clip not found (" + j.clip + ")");
+                        continue;
+                    }
                     var body = SpawnBody(root, "probe-" + j.name, Vector3.zero, 0f, Color.white);
-                    Sample(body, FindClip(j.clip), j.t);
+                    Sample(body, clip, j.t);
                     var anim = body.GetComponentInChildren<Animator>();
                     var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
                     var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
