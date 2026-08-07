@@ -2,6 +2,66 @@
 
 実装で勝手に確定せず、ここに記録して相談する（CLAUDE.md「進め方」）。
 
+## Q24. 低ティア帯の得点環境 — Fランク自校がEランク投手に完封される／打高へ寄せるか（2026-08-08）
+
+Issue: [#536](https://github.com/trickaaaaaa/KoKoSimNext/issues/536)
+
+**発端（オーナー指摘・2026-08-08）**: 「開始直後（Fランク）だと、Eランクの投手にさえ手も足も出ず完封される。
+ゲーム体験的につまらないので、打高に寄せたほうがいいのではないか？」
+
+**構造的な背景（調査済み・2026-08-08）**:
+
+1. **統計帯は低ティアを一切測っていない**。`games_10k.runs_per_team 3.5–6.7` を生む `GameSimulation` は
+   両チームの全能力を `N(50, 12)` クランプ `[20, 88]` で振る
+   （`engine/KokoSim.Balance/GameSimulation.cs:334-335`）。ティアも非対称マッチアップも入力に無い＝
+   **「平均的なチーム同士」だけの帯**。帯が全部緑でも低ティア帯の体験は保証されない。
+2. **自校と相手校は別々の生成器で作られ、どちらも帯を通らない**。自校＝`ProspectGenerator`
+   （`TalentCenterDefault = 32.0`, `engine/KokoSim.Engine/Season/ProspectGenerator.cs:39`）、
+   相手校＝`StrengthTeamFactory.Create(strength, ...)`。既知の穴（メモ「帯はロスター生成を測っていない」）。
+3. **表示ランクの算出式が3通りある**＝「F vs E」が本当に1ティア差かどうか未確認。
+   - AI校: `Tiers.FromStrength(School.Strength)`（`engine/KokoSim.Engine/Nation/School.cs:49`）
+   - 自校(A): `TeamStrengthProfile.Compute(roster).Overall`（6指標加重平均＋線形較正 scale 1.037 / offset −6.6）
+   - 自校(B): `roster.Average(p => p.AverageLevel())`（`Assets/KokoSim/Member/MemberSettingState.cs:213`）
+4. ティア境界は10刻み（F=30–40 / E=40–50, `engine/KokoSim.Engine/Nation/Tier.cs:12-22`）。
+
+**決めたいこと**:
+
+1. 「Fランク自校 vs Eランク相手」は**能力値で実際に何点差**か。表示ランクを揃えるべきか（上の3式の統一）。
+2. 低ティア帯の**目標値**をどこに置くか（完封率・平均得点・被安打数）。「弱小同士でも点は入る」のか
+   「弱小の攻撃は弱いままで、相手も弱いから点が入る」のか。
+3. 寄せるとして**どのレバー**を動かすか。候補: ①物理層（初速・打球角の下限側）②ティア→能力の変換
+   （低ティアの投手能力を圧縮する）③初期ロスターの底上げ（`TalentCenterDefault`）
+   ④投手側の低ティア制球を落として四球で塁を賑わす。
+4. **平均帯（`games_10k`）を動かさずに低ティアだけ持ち上げる**のか、全体を打高側へ動かすのか。
+   後者なら既存4帯すべての再校正＋決定論baseline再生成を伴う。
+
+**制約**: 不変条件#1（表示能力値を直接確率に使わない）＝「弱いチームだけ打率に下駄」は不可。
+物理層か生成側（能力の配り方）で解く。
+
+### Q24-1. 球速のバリューを上げるか（オーナー方針・2026-08-08）
+
+**発端**: 「Eランク高校の投手が138キロとか出してくるけど仕様通り？」→ 式の上では仕様通り
+（strength=45 の本格派エースで Lv57＝135.3km/h、+1σ で 138.1km/h）。
+確認の過程で「**球速のバリューはもう少し高くてもいいと思った**」というオーナー方針が出た。
+
+**現状（調査済み）**:
+- Lv→km/h は `108.5 + 0.47 × Lv`（`PitcherAttributes.cs:85-86`）＝切片が高く傾きが緩い。
+  E校(45)とA校(85)のバランス型エースの差は 129.7 → 148.5 で **18.8km/h しかない**。
+- 失点への寄与も小さい。リポジトリ自身の校正記述（`PitcherArchetypeTests.cs:175-176`）に
+  「**制球（与四球）の失点価値は球速の約4倍**」とある。
+- 球速の経路は4本で、うち `ContactQualityPerKmh`（速い球は当たれば強い打球）は**球速に不利**な向き。
+
+**上げ方の候補**: (a) `StuffPerKmh`(0.064) を上げる（km/hレンジ据え置き）／
+(b) `VelocitySlopeKmhPerLevel`(0.47) を上げる・`VelocityInterceptKmh`(108.5) を下げる（レンジ拡大）。
+
+**⚠ Q24 本体と正面衝突する**: 球速の価値を上げる＝能力差が失点差に出やすくなる＝
+「Fランクが完封される」を**悪化させる**方向。両立には ①低ティア帯だけ球速レンジを圧縮する非線形化、
+または ②打者側の下限（低ティアの Contact/Discipline）を同時に持ち上げる、のどちらかが要る。
+
+**⚠ 制約**: `PitcherArchetypeTests.Archetypes_AreBalanceNeutral_InActualGames`（Heavy）が
+「本格派と技巧派の失点が同水準」を固定している。球速の価値を上げると本格派が一方的に有利になり赤くなるので、
+`archetype_*_velocity` / `archetype_*_control` を同じコミットで振り直す（不変条件#4: C#既定も同時に）。
+
 ## Q23. 夏の地方大会の開幕週とトーナメント日程の妥当性（2026-07-23）→ **確定（2026-07-23・ユーザー確定）**
 
 Issue: [#175](https://github.com/trickaaaaaa/KoKoSimNext/issues/175)
