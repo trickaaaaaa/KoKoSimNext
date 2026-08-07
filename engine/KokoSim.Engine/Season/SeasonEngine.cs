@@ -115,20 +115,13 @@ public static class SeasonEngine
 
         for (var year = 1; year <= years; year++)
         {
-            // 年度替わり（4月）: 昇級 → 卒業 → 新入生。
-            foreach (var p in roster) p.Grade++;
-            var graduating = roster.Where(p => p.Grade > 3).ToList();
-            var gradAvg = graduating.Count > 0 ? graduating.Average(p => p.AverageLevel()) : 0;
-            roster.RemoveAll(p => p.Grade > 3);
+            // 年度替わり（4月）: 昇級 → 卒業 → 新入生 → 主将確定。ロジックの実体は RosterLifecycle.AdvanceYear へ
+            // 集約し（issue #535: Unity の週ループと二重実装にしない）、ここは切り出し前と1ビット一致で呼ぶだけ。
             // 名声由来のtalentCenter（Issue #127）。未注入(null)なら従来どおり既定値を使う（不変条件#2）。
             var talentCenter = ctx.Fame is { } fame ? ctx.Roster.TalentCenterFromFame(fame) : (double?)null;
-            // 在籍部員の氏名を渡し、新入生の下の名前が既存部員と被らないようにする（重複回避）。
-            roster.AddRange(ProspectGenerator.Intake(year, ctx.Roster, rng, skills: ctx.Skills,
-                personalities: ctx.Personalities, existingNames: roster.Select(p => p.Name).ToList(),
-                form: ctx.Form, talentCenter: talentCenter));
-
-            // 主将の年度更新（設計書09 §8）: 3年生引退で主将が抜けたら選び直す。手動指名が在籍なら尊重。
-            CaptainSelector.EnsureCaptain(roster);
+            var rollover = RosterLifecycle.AdvanceYear(roster, year, ctx.Roster, rng,
+                skills: ctx.Skills, personalities: ctx.Personalities, form: ctx.Form, talentCenter: talentCenter);
+            var gradAvg = rollover.Graduated.Count > 0 ? rollover.Graduated.Average(p => p.AverageLevel()) : 0;
 
             scheduler.ResetAnnualFlags();
             var eventsFired = 0;

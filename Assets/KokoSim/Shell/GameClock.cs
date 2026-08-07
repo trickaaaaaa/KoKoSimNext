@@ -47,6 +47,10 @@ namespace KokoSim.Unity.Shell
                         // 終了した年度ぶんの監督メタ更新（指導力・采配・名声・信頼度・節目イベント, issue #171）。
                         // 夏/秋の大会はこの年度内に消化済み＝自校の年間成績が確定した後で1年1回だけ適用する。
                         ManagerService.ApplyYearlyGrowth(prevYear);
+                        // issue #535: 自校ロスターも進級・卒業・新入生を適用する（従来は AI校だけで、自校は
+                        // 年度替わりで一切触られず学年が固定されていた）。ロジックは engine の RosterLifecycle.AdvanceYear。
+                        // 監督成長（名声更新）の後に呼ぶ＝今季の成績で上がった名声が新入生の質へ効く（design-04 §1）。
+                        RosterService.AdvanceYear(YearIndex);
                     }
                     EnterWeek();
                 }
