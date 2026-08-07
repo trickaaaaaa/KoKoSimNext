@@ -167,6 +167,19 @@ namespace KokoSim.Unity.Match
                     return true;
                 }, x => shotCount = x, frames);
 
+                // タッチアウトの受け入れ実測（issue #489）。走者が滑って倒れる横で野手が
+                // 届いているかは絵では狙い外しと区別できないので、数を残す。
+                if (kind == "steal")
+                {
+                    var rig2 = _ctrl.DuelRigForCapture;
+                    if (rig2 != null)
+                    {
+                        var diag = rig2.TagOutDiagForCapture();
+                        File.WriteAllText(Path.Combine(OutDir, "tagout.tsv"), diag);
+                        Debug.Log("[midpa] タッチ実測\n" + diag);
+                    }
+                }
+
                 log.Append(kind).Append('\t')
                    .Append((_ctrl.PlayClockForCapture - headT).ToString("F2")).Append('\t')
                    .Append(sawJudge ? "出た" : "出ない").Append('\t')

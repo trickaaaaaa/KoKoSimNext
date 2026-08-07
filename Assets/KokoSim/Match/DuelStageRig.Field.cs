@@ -610,6 +610,31 @@ namespace KokoSim.Unity.Match
 
         private readonly List<FieldCatchEvent> _catchEvents = new();
 
+        /// <summary>タッチの予定1件（issue #489）。捕球と同じ「絶対時刻の予定表」方式。</summary>
+        private struct FieldTagEvent
+        {
+            public FieldPosition Pos;   // タッチする野手（＝その塁で送球を受けた人）
+            public float TTag;          // 走者がアウトになる時刻（プレーの時計）
+            public float TStart;        // クリップを始める時刻＝TTag − Moment/Rate
+            public float Rate;          // 再生倍率（球を持ってからの猶予が足りない時だけ 1 を超える）
+            public Vector3 RunnerAt;    // タッチの瞬間の走者の位置（体を向ける先）
+            /// <summary>タッチの瞬間の「野手の立ち位置 → 走者」の水平距離[m]（実測用）。
+            /// 収録のグラブは体から <c>|gh|</c>＝0.446m の所にあるので、これが大きいほど
+            /// 「腕は伸びているのに走者に届いていない」絵になる。**絵ではカメラの狙い外しと
+            /// 区別できない**ので数で見るしかない（design-18 §3.3 と同じ理由）。</summary>
+            public float GapM;
+            public bool Fired;
+        }
+
+        private readonly List<FieldTagEvent> _tagEvents = new();
+
+        /// <summary>タッチの受け手の探索半径[m]（走者の到達塁 → 送球の捕球点）。</summary>
+        private const float TagReceiverRadiusM = 3.0f;
+
+        /// <summary>受け入れの実測: 球を持ってからタッチまでの猶予に対し、収録が要求した倍率の最悪値。</summary>
+        private float _tagRateMax;
+        private int _tagCount;
+
         /// <summary>捕球点と実際のグラブの差の最悪値（受け入れの実測）。</summary>
         private float _catchGloveErrMax;
         private float _catchWristErrMax, _catchMittErrMax;
@@ -880,6 +905,118 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// このプレーのタッチアウトを洗い出して予定表にする（issue #489）。
+        ///
+        /// 対象は「フォースでないアウト」＝走者側が <see cref="ArriveSlideOut"/>（滑ってアウト）を
+        /// 選ぶ条件とまったく同じ（<see cref="SelectArrive"/>）。片方だけ足すと、滑る走者に
+        /// 棒立ちの野手／立ったままの走者にタッチする野手、という**噛み合わない絵**になる。
+        /// 一塁到達は駆け抜け（<see cref="IsBatterArrivingAtFirst"/>）で常に別経路＝ここでは扱わない
+        /// ＝#448② の「一塁封殺はタッチの芝居を出さない」も自動的に維持される。
+        ///
+        /// タッチする野手は**推定しない**で捕球の予定表から引く。送球の受け手は
+        /// <see cref="BuildFieldCatchPlan"/> が <c>ToRole</c>（seam E1）で確定させており、
+        /// 最近傍で当て直すと併塁の場面で取り違える（同メソッドの注記と同じ理由）。
+        /// </summary>
+        private void BuildFieldTagPlan(PlaybackPlay play)
+        {
+            _tagEvents.Clear();
+            _tagRateMax = 0f;
+            _tagCount = 0;
+            if (play?.Runners == null) return;
+
+            foreach (var r in play.Runners)
+            {
+                float t1;
+                bool outAtEnd, closeCall, force;
+                if (!RunnerFinal(r, out t1, out outAtEnd, out closeCall, out force)) continue;
+                if (!outAtEnd || force) continue;              // フォースのアウトは演技を変えない（#417）
+                if (IsBatterArrivingAtFirst(r)) continue;      // 一塁は常に駆け抜け（#443）
+
+                var last = r.Segs[r.Segs.Count - 1];
+                var bag = new Vector2((float)last.To.X, (float)last.To.Y);
+
+                // その塁で球を受けた野手を捕球の予定表から引く（時刻が t1 に最も近いもの）。
+                int best = -1;
+                float bestDt = float.MaxValue;
+                for (int i = 0; i < _catchEvents.Count; i++)
+                {
+                    var c = _catchEvents[i];
+                    if (c.TCatch > t1 + 1e-3f) continue;       // タッチより後に捕る球は関係ない
+                    var d = new Vector2(c.Point.x, c.Point.z) - bag;
+                    if (d.magnitude > TagReceiverRadiusM) continue;
+                    float dtc = t1 - c.TCatch;
+                    if (dtc < bestDt) { bestDt = dtc; best = i; }
+                }
+                if (best < 0) continue;                        // 誰も受けていない塁でのアウトは芝居を作らない
+
+                var recv = _catchEvents[best];
+                // 球を持ってからタッチまでの猶予。足りなければ再生倍率で詰める（頭出しは負にしない）。
+                float avail = Mathf.Max(1e-3f, t1 - recv.TCatch);
+                float rate = Mathf.Clamp(DefenderTagOut.Moment / avail, 1f, TagMaxRate);
+                _tagRateMax = Mathf.Max(_tagRateMax, DefenderTagOut.Moment / avail);
+                _tagCount++;
+
+                var stand = PlaybackEvaluator.FielderAt(play, recv.Pos, t1).Pos;
+                float gap = new Vector2(bag.x - (float)stand.X, bag.y - (float)stand.Y).magnitude;
+
+                _tagEvents.Add(new FieldTagEvent
+                {
+                    Pos = recv.Pos,
+                    TTag = t1,
+                    TStart = t1 - DefenderTagOut.Moment / rate,
+                    Rate = rate,
+                    RunnerAt = new Vector3(bag.x, 0f, bag.y),
+                    GapM = gap,
+                });
+            }
+        }
+
+        /// <summary>
+        /// 予定の時刻が来たタッチクリップを流す。捕球（<see cref="FireDueCatches"/>）と同じく
+        /// **絶対時刻で判定する**＝途中の時刻から再生を始めても同じ絵になる。
+        /// </summary>
+        private void FireDueTags(float t)
+        {
+            for (int i = 0; i < _tagEvents.Count; i++)
+            {
+                var e = _tagEvents[i];
+                if (e.Fired || t < e.TStart) continue;
+                var a = FielderActor(e.Pos);
+                var clip = LoadClip(DefenderTagOut.Clip);
+                if (a != null && clip != null)
+                {
+                    // 頭出しは Max(0,…) で潰さない（上の t < TStart で降りている＝必ず 0 以上）
+                    SetActorClip(a, clip, (t - e.TStart) * e.Rate,
+                        DefenderTagOut.Moment + TagHoldSeconds * e.Rate);
+                    a.Speed = e.Rate;
+                    a.HoldSeconds = TagHoldSeconds;
+                    FielderMotion st;
+                    if (_loco.TryGetValue(e.Pos, out st))
+                    {
+                        st.Ladder = int.MinValue;      // 走りの段にクリップを奪わせない
+                        st.CatchEvent = -1;            // 捕球の後始末に畳ませない（この窓はタッチが持つ）
+                        st.ThrowYawRate = 0f;          // 送球の回頭は畳む（もう投げない）
+                        st.CatchUntil = e.TTag + TagHoldSeconds;
+                        // **グラブが走者の方を向くように体を回す**（捕球でグラブを球へ向けたのと同型）。
+                        // これが無いと、伸ばした腕が走者と無関係な方向を指したままになる。
+                        var gh = new Vector2(DefenderTagOut.GloveX, DefenderTagOut.GloveZ);
+                        var here = PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, e.TTag).Pos;
+                        var toRunner = new Vector2(e.RunnerAt.x - (float)here.X,
+                                                   e.RunnerAt.z - (float)here.Y);
+                        if (gh.magnitude > 0.05f && toRunner.sqrMagnitude > 1e-6f)
+                            st.Yaw = Mathf.Atan2(toRunner.x, toRunner.y) * Mathf.Rad2Deg
+                                     - Mathf.Atan2(gh.x, gh.y) * Mathf.Rad2Deg;
+                        st.Started = true;
+                        _loco[e.Pos] = st;
+                        PlaceFielder(a, (float)here.X, (float)here.Y, st.Yaw);
+                    }
+                }
+                e.Fired = true;
+                _tagEvents[i] = e;
+            }
+        }
+
+        /// <summary>
         /// このあと投げるなら、捕球の向きを**開けるだけ的へ開く**（issue #505 ②・折衷案）。
         ///
         /// 返すのは開く角度[度]（＝捕球の向きへの加算）。開ける上限はグラブがずれる量で決める:
@@ -1019,6 +1156,31 @@ namespace KokoSim.Unity.Match
                     _catchHoldCount++;
                 }
             }
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】タッチアウト（issue #489）の受け入れ実測。
+        ///
+        /// <c>猶予</c> は球を持ってからタッチまでの時間で、これが収録の <c>Moment</c>（0.88s）に
+        /// 足りないと再生倍率で詰めることになる（<c>要求倍率</c>。1.00 なら等速で足りている）。
+        /// <c>間合い</c> は野手の立ち位置→走者の水平距離で、収録のグラブは体から 0.446m の所にある
+        /// ＝これが大きいほど「腕は伸びているのに走者へ届いていない」。
+        /// **絵ではカメラの狙い外しと区別できない**（design-18 §3.3）ので数で見る。
+        /// </summary>
+        public string TagOutDiagForCapture()
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new StringBuilder();
+            float reach = new Vector2(DefenderTagOut.GloveX, DefenderTagOut.GloveZ).magnitude;
+            sb.AppendLine(string.Format(ci,
+                "タッチ予定={0}件\t収録の届き={1:F3}m\t要求倍率の最悪={2:F2}",
+                _tagEvents.Count, reach, _tagRateMax));
+            sb.AppendLine("守備位置\tTタッチ\tT開始\t猶予\t倍率\t間合い\t発火");
+            foreach (var e in _tagEvents)
+                sb.AppendLine(string.Format(ci, "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F3}\t{6}",
+                    e.Pos, e.TTag, e.TStart, DefenderTagOut.Moment / e.Rate, e.Rate, e.GapM,
+                    e.Fired ? "済" : "未"));
+            return sb.ToString();
         }
 
         /// <summary>
@@ -1620,6 +1782,51 @@ namespace KokoSim.Unity.Match
             new("AA_Baseball_Offense_Base_Sliding_Type01_Fail", 0.58f, -0.003f, 0.530f);
 
         /// <summary>
+        /// タッチする側（受け手）の演技1本ぶんのアンカー（issue #489）。走者側の
+        /// <see cref="RunnerArriveAnchor"/> と同型で、走者が滑ってアウトになる
+        /// <see cref="ArriveSlideOut"/> の**相手役**。これが無いと、走者だけが滑って倒れ
+        /// 野手は棒立ちのまま＝「アウトになった理由が絵に無い」（2026-08-07 実機確認）。
+        /// </summary>
+        private readonly struct TagOutAnchor
+        {
+            public readonly string Clip;
+            /// <summary>クリップ内でタッチが起きる時刻[s]（構えからグラブの変位が最大になる瞬間）。</summary>
+            public readonly float Moment;
+            /// <summary>
+            /// タッチの瞬間のグラブの水平位置（**アクターのローカル**・右/前[m]）。
+            /// 捕球（<see cref="FieldCatchAnchor.GloveX"/>）と同じ理由で解剖学的な軸では採らない。
+            /// 体をどちらへ向ければグラブが走者の方を向くかをここから出す。
+            /// </summary>
+            public readonly float GloveX, GloveZ;
+
+            public TagOutAnchor(string clip, float moment, float gloveX, float gloveZ)
+            {
+                Clip = clip; Moment = moment; GloveX = gloveX; GloveZ = gloveZ;
+            }
+        }
+
+        /// <summary>
+        /// 二塁・三塁でのタッチ（実測 2026-08-07・<c>DuelMotionSpike.RunTagOutProbe</c>／
+        /// <c>out/duel-stage/tagout.tsv</c>）。グラブ対地高 0.177m ＝滑り込む走者へ低く差し出す形で、
+        /// <see cref="ArriveSlideOut"/> の相手役として噛み合う。
+        /// 本塁のタッチ（<c>AA_Baseball_Catcher_Tag_Out</c>）はグラブ高 1.576m と別物なので同じ表に置かない
+        /// （本塁は捕手の役でクリップも構図も違う＝必要になったら別のアンカーとして足す）。
+        /// </summary>
+        private static readonly TagOutAnchor DefenderTagOut =
+            new("AA_Baseball_Defender_Tag_Out", 0.88f, -0.313f, 0.318f);
+
+        /// <summary>タッチの形を見せてから待機へ戻るまでの据え置き[s]（捕球の <c>CatchHoldSeconds</c> と同型）。</summary>
+        private const float TagHoldSeconds = 0.45f;
+
+        /// <summary>
+        /// タッチの受け手が球を持ってからタッチするまでに使える時間が <see cref="TagOutAnchor.Moment"/> に
+        /// 足りないとき、再生倍率をここまで上げて間に合わせる（一塁駆け抜けの <c>OverrunDecelEndsAt</c> と同じ作法）。
+        /// ⚠ 頭出しを <c>Max(0,…)</c> で潰して「捕る前からタッチを始める」形にはしない
+        /// （design-18 §4.5-③ の「負を潰すと常にリリース直後に捕る」と同じ罠）。
+        /// </summary>
+        private const float TagMaxRate = 3f;
+
+        /// <summary>
         /// 一塁駆け抜け（オーバーラン, issue #443・監督決定2026-08-04）の減速クリップ。
         /// バッグ通過はスプリントループのまま走り抜け、通過の瞬間にこのクリップへ切り替える
         /// （通過前には切り替えない）。全長2.67sのうちほぼ全編（<see cref="OverrunDecelEndsAt"/>＝2.58s）が
@@ -2039,6 +2246,7 @@ namespace KokoSim.Unity.Match
             foreach (var a in FieldCatchAnchors) yield return a.Clip;
             foreach (var a in FieldThrowAnchors) yield return a.Clip;
             yield return CatcherThrowAnchor.Clip;
+            yield return DefenderTagOut.Clip;   // タッチアウトの受け手（issue #489）
 
             // 走者（F7）
             yield return RunnerIdleClipName;
@@ -2813,6 +3021,7 @@ namespace KokoSim.Unity.Match
             // 捕球予定・送球予定を先に組む（_loco の初期 Yaw 種付けに使う＝下記。issue #511）。
             BuildFieldCatchPlan(play);
             BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
+            BuildFieldTagPlan(play);           // ⚠ 捕球の後（タッチする野手を捕球の予定表から引く。issue #489）
 
             // 立ち位置の不連続を控える。engine の言う定位置と実際の立ち位置の差を
             // **プレーの頭で1回だけ**採り、0.3秒かけて 0 へ落とす（投手1.347m・捕手1.200m）
@@ -2984,6 +3193,9 @@ namespace KokoSim.Unity.Match
             // 送球を後に置くのは、同じ野手が「捕る→投げる」と続くとき投げるほうが後勝ちであるべきだから
             FireDueCatches(t);
             FireDueThrows(t);
+            // タッチは最後（同じ野手が「捕る→タッチする」と続くとき、タッチが後勝ちであるべき。
+            // 送球より後なのも同じ理由＝タッチする野手はもう投げない。issue #489）
+            FireDueTags(t);
 
             // 守備9人（投手・捕手を含む）。位置は engine の真値、足と向きは Unity が合わせる
             foreach (var pos in AllFieldPositions)
