@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- タイトル画面（issue #482・B案 球場バック型）。起動直後の唯一の入口。
+     共通ナビ（TopBar）は出さない: この画面が開く時点ではどのシェルサービスもまだ遅延初期化されておらず、
+     スコアボードに載せる値（週・総合力ランク・部費等）が存在しないため。
+     背景は design-19「デーゲーム・フルNB」の色ブロック（空/スタンド/芝/土）をそのまま使う。写真・3Dは使わない。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="TitleScreen.uss" />
+
+    <ui:VisualElement class="ui-root ts-root">
+
+        <!-- 球場バック（4段の色ブロック。上から空/スタンド/芝/土）。 -->
+        <ui:VisualElement class="ts-backdrop">
+            <ui:VisualElement class="ts-band ts-band--sky" />
+            <ui:VisualElement class="ts-band ts-band--stand" />
+            <ui:VisualElement class="ts-band ts-band--grass" />
+            <ui:VisualElement class="ts-band ts-band--dirt" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="ts-content">
+            <ui:Label text="高校野球" class="f-display-lg ts-title" />
+            <ui:Label text="シミュレーション" class="f-display-lg ts-title" />
+            <ui:VisualElement class="ts-rule" />
+
+            <ui:VisualElement class="ts-menu">
+                <ui:Button name="ts-new-game" text="▶ はじめから" class="f-body-bd ts-menu-item ts-menu-item--cta" />
+                <ui:Button name="ts-continue" text="▶ つづきから" class="f-body-bd ts-menu-item" />
+                <ui:Button name="ts-quit" text="▶ 終了" class="f-body-bd ts-menu-item" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label name="ts-version" text="v0.1.0" class="f-body ts-version" />
+    </ui:VisualElement>
+</ui:UXML>

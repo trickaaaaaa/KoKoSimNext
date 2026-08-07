@@ -39,10 +39,13 @@ namespace KokoSim.Unity.Shell
         // MatchResult はその出口（ライブ観戦の終局で自動遷移するボックススコア画面。閉じるとホームへ戻る）。
         // PlayerDetail はマスターディテール化（issue #131）で独立画面ではなくなった
         // （PlayerList と同一 GameObject・同一 UIDocument に同居）。
+        // TitleScreen は起動直後の入口（issue #482）。「はじめから」でホームへ遷移する以外に戻り道が無い
+        // （タイトルへ戻る導線は対象外＝セーブ基盤issueで扱う）ため、ExtraScreens 止まりでよい。
         private static readonly string[] ExtraScreens =
-            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult" };
+            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TitleScreen" };
 
-        private const string DefaultScreen = "HomeDashboard";
+        // 起動時の既定画面（issue #482 でタイトルへ差し替え）。ホームは「はじめから／つづきから」の後に出す。
+        private const string DefaultScreen = "TitleScreen";
 
         // ホーム以外で「今週を進める」を持つ画面。ここで引退週／大会開幕週に入ったら、主将指名モーダル／
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
