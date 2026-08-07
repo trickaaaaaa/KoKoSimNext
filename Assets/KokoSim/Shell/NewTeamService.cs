@@ -49,11 +49,26 @@ namespace KokoSim.Unity.Shell
             Pending = true;
         }
 
-        /// <summary>テスト・リセット用（週を巻き戻したときなど）。</summary>
+        /// <summary>テスト・リセット用（週を巻き戻したときなど）。新規ゲームの完全リセットも兼ねる。</summary>
         public static void Clear()
         {
             RetiredNames.Clear();
             Pending = false;
+        }
+
+        /// <summary>セーブ保存: 主将指名待ちの有無と引退者名を DTO へ写す（issue #507）。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s)
+        {
+            s.NewTeamPending = Pending;
+            s.NewTeamRetiredNames = new List<string>(RetiredNames);
+        }
+
+        /// <summary>セーブ復元: 主将指名待ちと引退者名を据える。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s)
+        {
+            RetiredNames.Clear();
+            RetiredNames.AddRange(s.NewTeamRetiredNames);
+            Pending = s.NewTeamPending;
         }
 
         public static NewTeamView BuildView()

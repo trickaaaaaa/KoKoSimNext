@@ -89,4 +89,29 @@ public sealed class BattingStatLine
     /// <summary>盗塁成功率（企図0なら0）。企図＝盗塁＋盗塁死。</summary>
     public double StolenBaseRate => (StolenBases + CaughtStealing) > 0
         ? (double)StolenBases / (StolenBases + CaughtStealing) : 0.0;
+
+    /// <summary>
+    /// セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。生カウンタを直接据える。
+    /// private set の集計器を試合再生なしに復元するための internal フック（引数順は書き出しと一致させる）。
+    /// </summary>
+    internal void Restore(int games, int plateAppearances, int atBats, int hits, int doubles, int triples,
+        int homeRuns, int rbi, int walks, int hitByPitches, int strikeOuts, int stolenBases,
+        int caughtStealing, int runs, int sacrificeFlies)
+    {
+        Games = games;
+        PlateAppearances = plateAppearances;
+        AtBats = atBats;
+        Hits = hits;
+        Doubles = doubles;
+        Triples = triples;
+        HomeRuns = homeRuns;
+        Rbi = rbi;
+        Walks = walks;
+        HitByPitches = hitByPitches;
+        StrikeOuts = strikeOuts;
+        StolenBases = stolenBases;
+        CaughtStealing = caughtStealing;
+        Runs = runs;
+        SacrificeFlies = sacrificeFlies;
+    }
 }

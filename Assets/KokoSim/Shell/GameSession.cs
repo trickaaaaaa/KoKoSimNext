@@ -10,6 +10,7 @@ using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Practice;
+using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
@@ -68,13 +69,13 @@ namespace KokoSim.Unity.Shell
         /// 自校選手の成績ストア（通算＝永続／今大会＝大会ごとリセット）。純エンジンの集計器を横断状態として保持。
         /// 詳細シムで回った自校戦のボックススコアを PlayMatch で畳み込む。スタメン画面の成績欄はこれを引く。
         /// </summary>
-        public PlayerStatStore Stats { get; } = new PlayerStatStore();
+        public PlayerStatStore Stats { get; private set; } = new PlayerStatStore();
 
         /// <summary>
         /// 学校ごとの通算戦績（公式戦勝敗・甲子園出場回数, issue #84）。Stats と同様に大会をまたいで永続する。
         /// 大会終了時にブラケット全試合（自校戦＋裏試合）を <see cref="ExitTournamentIfFinished"/> で畳み込む。
         /// </summary>
-        public SchoolRecordBook Records { get; } = new SchoolRecordBook();
+        public SchoolRecordBook Records { get; private set; } = new SchoolRecordBook();
 
         /// <summary>
         /// 試合前スタメン設定（打順・守備位置・DH・先発）。試合開始フローのスタメン画面で確定して書き込む。
@@ -378,6 +379,57 @@ namespace KokoSim.Unity.Shell
             var w = PendingTournamentWrapUp;
             PendingTournamentWrapUp = null;
             return w;
+        }
+
+        // ===== セーブ往復（issue #507 F0） =====
+        // 大会をまたぐ永続分（年度・成績・戦績）だけを保存する。進行体（Runner）・演出フラグ・
+        // 試合フロー中継は保存しない＝セーブは Normal モードでのみ（TournamentRunner は復元不能）。
+
+        /// <summary>セーブ保存: 年度・成績ストア・戦績を DTO へ写す。</summary>
+        public void Capture(SaveState s)
+        {
+            s.SessionYear = Year;
+            s.Stats = Stats;
+            s.Records = Records;
+        }
+
+        /// <summary>セーブ復元: 年度・成績・戦績を据え、進行状態は通常モードへ初期化する。</summary>
+        public void Restore(SaveState s)
+        {
+            Year = s.SessionYear;
+            Stats = s.Stats;
+            Records = s.Records;
+            ClearTransient();
+        }
+
+        /// <summary>新規ゲームの完全リセット: 成績・戦績を新品にし、進行状態を初期化する。</summary>
+        public void ResetForNewGame()
+        {
+            Stats = new PlayerStatStore();
+            Records = new SchoolRecordBook();
+            Year = 1;
+            ClearTransient();
+        }
+
+        /// <summary>進行体・演出フラグ・試合フロー中継・通知バッファを初期状態へ（保存対象外の一時状態）。</summary>
+        private void ClearTransient()
+        {
+            Mode = GameMode.Normal;
+            Kind = default;
+            Title = "";
+            Runner = null;
+            Field = Array.Empty<School>();
+            TournamentDay = 0;
+            BannerPending = false;
+            ResultPending = false;
+            LastOutcome = null;
+            PendingTournamentWrapUp = null;
+            Lineup = null;
+            AwaitingMatchStart = false;
+            PracticeOpponent = null;
+            _prefetchTask = null;
+            _matchInjurySeq = 0;
+            _injuryNotices.Clear();
         }
     }
 }

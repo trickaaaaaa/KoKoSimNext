@@ -32,6 +32,17 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static IReadOnlyList<DevelopingPlayer> Active => RosterLifecycle.Active(Roster);
 
+        /// <summary>セーブ保存: 現在の共有ロスター（引退者含む全員）を DTO へ写す（issue #507）。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s)
+            => s.Roster = new List<DevelopingPlayer>(Roster);
+
+        /// <summary>セーブ復元: 保存したロスターを据える（背番号・成長・怪我・引退フラグを丸ごと持ち越す）。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s)
+            => _roster = new List<DevelopingPlayer>(s.Roster);
+
+        /// <summary>新規ゲームの完全リセット: 次アクセスで既定シード（42）から再生成させる。</summary>
+        public static void Reset() => _roster = null;
+
         private static List<DevelopingPlayer> Build(ulong seed)
         {
             var rng = new Xoshiro256Random(seed);

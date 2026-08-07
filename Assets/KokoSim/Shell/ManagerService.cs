@@ -72,6 +72,37 @@ namespace KokoSim.Unity.Shell
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
 
+        /// <summary>セーブ保存: 監督メタ・施設・成長の二重適用ガードを DTO へ写す（issue #507）。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s)
+        {
+            s.Manager = Manager;
+            s.Facilities = Facilities;
+            s.ManagerLastGrownYear = _lastGrownYear;
+            s.ManagerGrownWinsBaseline = _grownWinsBaseline;
+            s.ManagerGrownKoshienBaseline = _grownKoshienBaseline;
+        }
+
+        /// <summary>セーブ復元: 監督メタ・施設・成長ガードを据える（練習スケジューラは作り直し）。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s)
+        {
+            _manager = s.Manager;
+            _facilities = s.Facilities;
+            _lastGrownYear = s.ManagerLastGrownYear;
+            _grownWinsBaseline = s.ManagerGrownWinsBaseline;
+            _grownKoshienBaseline = s.ManagerGrownKoshienBaseline;
+            _practice = null;
+            LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
+        }
+
+        /// <summary>新規ゲームの完全リセット: 監督メタ・施設・練習・成長ガードを初期状態へ。</summary>
+        public static void Reset()
+        {
+            _manager = null;
+            _facilities = null;
+            _practice = null;
+            ResetGrowth();
+        }
+
         /// <summary>
         /// 終了した年度 <paramref name="endedYearIndex"/> の自校年間成績を集計し、監督メタ（指導力・采配・
         /// 育成眼・名声・信頼度・資金）と節目イベントを1年ぶん適用する（issue #171・設計書04 §1.1/§1.1b）。

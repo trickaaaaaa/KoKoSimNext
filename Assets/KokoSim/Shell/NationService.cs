@@ -85,6 +85,34 @@ namespace KokoSim.Unity.Shell
             return _schoolById.TryGetValue(id, out var found) ? found : null;
         }
 
+        /// <summary>セーブ保存: materialize 済み全国ロスターと今大会成績を DTO へ写す（issue #507）。
+        /// 学校・県（<see cref="Nation"/>）は決定論再生成なので保存しない（School.cs 設計注記）。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s)
+        {
+            s.NationRosters = new List<AiSchoolRoster>(Rosters.Snapshot());
+            s.TournamentStats = TournamentStats;
+        }
+
+        /// <summary>セーブ復元: 全国ロスター・今大会成績を据え、学校/県キャッシュを落として決定論再生成させる。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s)
+        {
+            _rosters = NationRosters.FromSaved(RosterDeps, s.NationRosters);
+            _tournamentStats = s.TournamentStats;
+            _nation = null;
+            _prefecture = null;
+            _schoolById = null;
+        }
+
+        /// <summary>新規ゲームの完全リセット: 全国・ロスター・今大会成績のキャッシュを落とす（次アクセスで再生成）。</summary>
+        public static void Reset()
+        {
+            _nation = null;
+            _prefecture = null;
+            _schoolById = null;
+            _rosters = null;
+            _tournamentStats = null;
+        }
+
         /// <summary>夏大会後の代替わり: 生成済み全校の3年生を引退させる（秋の新チーム＝下級生のみ）。</summary>
         public static void RetireAiGraduates() => Rosters.RetireGraduatesAll();
 

@@ -36,12 +36,18 @@ namespace KokoSim.Unity.Shell
         /// <summary>自校の現在の配色（上書き前は校IDからの自動割り当て）。設定画面の初期値。</summary>
         public static TeamColors ManagerColors => For(NationService.ManagerSchoolId);
 
-        /// <summary>テスト・リセット用（プロバイダのキャッシュと上書きを捨てる）。</summary>
+        /// <summary>テスト・リセット用（プロバイダのキャッシュと上書きを捨てる）。新規ゲームの完全リセットも兼ねる。</summary>
         public static void Clear()
         {
             _cached = null;
             ManagerOverride = null;
         }
+
+        /// <summary>セーブ保存: 自校の配色上書き（null＝自動割り当て）を DTO へ写す（issue #507）。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s) => s.TeamColorOverride = ManagerOverride;
+
+        /// <summary>セーブ復元: 自校の配色上書きを据える（パレット表キャッシュは再読込に任せる）。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s) => ManagerOverride = s.TeamColorOverride;
 
         private static TeamColorPalette Load()
         {

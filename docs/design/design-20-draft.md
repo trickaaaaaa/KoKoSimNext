@@ -128,7 +128,20 @@ round = バンド→代表順位（FirstRound→1, UpperRound→2, MiddleRound�
 
 - 候補入り／注目度変化の**差分検出は Unity側（Shell）の責務**。engine は「その週の評価スナップショット
   （選手Id→Notability/バンド）」を純関数で返す。Shell が前回スナップショットと比較して Feed へ流す。
-  ＝ engine はセーブスキーマを持たない（保持は Shell 側。破壊的変更を避ける）。
+  この差分検出用の「前回スナップショット」保持は引き続き Shell 側でよい（＝フィード表示のための一時状態で、
+  セーブ本体とは別物）。
+
+> **改訂（issue #507・セーブ基盤 F0, 2026-08-07）**: 旧記述「＝ engine はセーブスキーマを持たない
+> （保持は Shell 側。破壊的変更を避ける）」は**撤回する**。**セーブの正典スキーマ（DTO・シリアライザ・
+> 版管理）は engine 側 `KokoSim.Engine.Saves` に置く**（#483 で決着）。理由: Shell（Assets）には asmdef も
+> テストフレームワークも無く、セーブ→ロードの往復テストと決定論テスト（セーブを跨いでも同シード同結果・
+> とくに `NationRosters` の年度跨ぎ同一性）は engine でしか自動化できないため。engine は純C#の DTO と
+> シリアライザだけを持ち（`UnityEngine` 非依存・不変条件#3。学校・県は決定論再生成なので保存せず、
+> 保持は materialize 済み全国ロスター・自校部員・監督メタ・成績/戦績・母種シード・暦のみ）、gzip 圧縮と
+> `Application.persistentDataPath` へのファイル書き出しは Shell（`SaveGameIO`）が担う（＝形は engine・
+> 書き出しは Shell）。**大会中はセーブ不可**（`TournamentRunner` は進行中ブラケット・IRandomSource 内部
+> 状態・観戦中の `MatchProgression` を持ち復元不能）＝Normal モードでのみ保存する。上のドラフト通知フィードの
+> 差分検出が Shell 側なのは変わらない（あれはセーブでなく表示のための前回比較）。
 
 ## 6. ドラフト画面（③・IA。着手前にワイヤー3案を提示）
 

@@ -75,6 +75,9 @@ public sealed class SchoolRecordBook
         return r;
     }
 
+    /// <summary>セーブ復元専用（issue #507・<see cref="Saves.RecordBookSaves"/> だけが使う）。全消去。</summary>
+    internal void ClearRecords() => _records.Clear();
+
     /// <summary>公式戦1試合ぶんの勝敗を積む（練習試合は呼ばないこと）。</summary>
     public void RecordOfficialMatch(int winnerId, int loserId)
     {

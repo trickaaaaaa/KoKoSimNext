@@ -101,6 +101,34 @@ public sealed class PitchingStatLine
         a.HomeRuns += homeRuns;
     }
 
+    /// <summary>
+    /// セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。生カウンタを直接据える。
+    /// 球種別内訳は <see cref="RestorePitchType"/> を続けて呼ぶ（引数順は書き出しと一致させる）。
+    /// </summary>
+    internal void Restore(int games, int gamesStarted, int wins, int losses, int outs, int battersFaced,
+        int hits, int runs, int earnedRuns, int strikeOuts, int walks, int hitBatters, int pitches,
+        int homeRunsAllowed)
+    {
+        Games = games;
+        GamesStarted = gamesStarted;
+        Wins = wins;
+        Losses = losses;
+        Outs = outs;
+        BattersFaced = battersFaced;
+        Hits = hits;
+        Runs = runs;
+        EarnedRuns = earnedRuns;
+        StrikeOuts = strikeOuts;
+        Walks = walks;
+        HitBatters = hitBatters;
+        Pitches = pitches;
+        HomeRunsAllowed = homeRunsAllowed;
+    }
+
+    /// <summary>セーブ復元専用: 球種別の被打内訳を1件据える（<see cref="AddPitchType"/> への内部委譲）。</summary>
+    internal void RestorePitchType(PitchType type, int atBats, int hits, int homeRuns)
+        => AddPitchType(type, atBats, hits, homeRuns);
+
     private static IReadOnlyDictionary<PitchType, PitchTypeBattingLine> ToBattingLines(Dictionary<PitchType, PitchTypeAccum> src)
     {
         var result = new Dictionary<PitchType, PitchTypeBattingLine>(src.Count);
