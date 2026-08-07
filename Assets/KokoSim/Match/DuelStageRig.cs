@@ -164,6 +164,9 @@ namespace KokoSim.Unity.Match
         public float IdleFromOwnClip;
         // 自作構えのときの立ち向き[度]。素の向きが約30°違う（RunFacingProbe 実測 chest 52°/82°）ため別に持つ
         public float IdleYawDeg;
+        // バント構え（購入AA Bunt系クリップ）の立ち向き[度]（issue #514）。squaring＝投手正対なので、
+        // 打撃系2値（BatterYawDeg/IdleYawDeg）とは別の第3の向きを持つ。RunFacingProbe実測で決める
+        public float BuntYawDeg;
         // 自作構えのバット軸の採り方（<see cref="BatAxisFromGrip"/> のクリップ別版）。自作収録は両手が
         // 23cm開いて実測線が寝るので、合成軸（BatStanceElevDeg）寄りの旧値0.154が既定
         public float IdleBatAxisFromGrip;
@@ -208,7 +211,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 23;
+        private const int CurrentVersion = 24;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -348,6 +351,8 @@ namespace KokoSim.Unity.Match
             IdleFromOwnClip = 1f,
             // 旧・自作の立ち向きは 90+33.8=123.8 だったが、Mixamoのスイングと繋ぐぶん 119 へ寄せた
             IdleYawDeg = 119f,
+            // バント構え（issue #514・RunFacingProbe実測 bunt-loop chest）。後続の実測ステップで確定する
+            BuntYawDeg = 119f,
             // 予想（合成軸寄りの旧値0.154）は外れで、実測線そのままが良かった。
             // 旧値は「両手が23cm開いた収録」を前提にしていたが、いまは FixGrip が握りを10cmまで
             // 詰めてから軸を採るので、自作収録でも実測線が素直に使える
@@ -555,6 +560,10 @@ namespace KokoSim.Unity.Match
                 // 新項目ではないが、調整済みJSONの値を残すと「接触で腰も胸も三塁側を向き切っている」
                 // 旧フォームがそのまま生き続ける。角度は絵を並べて選び直したので一緒に動かす
                 c.BatterYawDeg = d.BatterYawDeg;
+            }
+            if (c.Version < 24)   // v24: バント構えの立ち向き（issue #514・新項目）
+            {
+                c.BuntYawDeg = d.BuntYawDeg;
             }
             c.Version = CurrentVersion;
             return c;
@@ -979,6 +988,7 @@ namespace KokoSim.Unity.Match
             // フェード中でないときは in0 未接続・in1 の重み1＝実質ミキサー無しと同じ絵になる
             public AnimationMixerPlayable Mixer;
             public AnimationClipPlayable FadeFrom;   // 退場側（Pauseして進めない＝ルートモーション寄与ゼロ）
+            public AnimationClip FadeFromClip;       // 退場側の素のクリップ参照（SyncBatterYawが家系判定に使う）
             public float FadeRemaining;
             public float FadeDuration;
             public Vector3 BasePos;
@@ -1470,21 +1480,39 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 打者の立ち向きを「いま流れているクリップ」に合わせる。素の向きが約30°違う
-        /// （RunFacingProbe 実測 chest: Mixamo 52° / 自作 82°）ので、構えを差し替えると向きも替える必要がある。
-        /// クロスフェード中はその重みで補間する＝体だけ1コマで30°回る絵にしない。
+        /// 打者クリップの「立ち向きの家系」を判定し、対応する較正yawを返す（issue #514）。
+        /// 家系は3つ: 自作Rokoko構え(own idle・<see cref="_cal"/>.IdleYawDeg) / バント一式
+        /// （Bunt_Loop・Idle_To_Bunt・Bunt_Hitting・Bunt_Miss＝<see cref="_cal"/>.BuntYawDeg。
+        /// squaring＝投手正対なので他2家系と別枠） / それ以外＝購入AA打撃系の既定
+        /// （<see cref="_cal"/>.BatterYawDeg）。
+        /// </summary>
+        private float YawForBatterClip(AnimationClip clip)
+        {
+            if (clip != null && clip == _batterOwnIdle) return _cal.IdleYawDeg;
+            if (clip != null && (clip == _buntLoopClip || clip == _buntIdleToStanceClip
+                || clip == _buntHitClip || clip == _buntMissClip))
+                return _cal.BuntYawDeg;
+            return _cal.BatterYawDeg;
+        }
+
+        /// <summary>
+        /// 打者の立ち向きを「いま流れているクリップの家系」に合わせる（<see cref="YawForBatterClip"/>）。
+        /// 素の向きは家系ごとに異なる（RunFacingProbe 実測 chest: Mixamo 52° / 自作 82° / バント一式は
+        /// 別途実測）ので、構えを差し替えると向きも替える必要がある。
+        /// クロスフェード中は退場側の家系から現在の家系へその重みで補間する＝体だけ1コマで数十度回る絵にしない。
         /// </summary>
         private void SyncBatterYaw()
         {
             if (_batter == null) return;
-            float own = BatterOnOwnIdle ? 1f : 0f;
+            float targetYaw = YawForBatterClip(_batter.Clip);
             if (_batter.FadeFrom.IsValid() && _batter.FadeDuration > 0f)
             {
+                float fromYaw = YawForBatterClip(_batter.FadeFromClip);
                 float u = Mathf.Clamp01(1f - _batter.FadeRemaining / _batter.FadeDuration);
                 float w = u * u * (3f - 2f * u);   // StepActor の重み送りと同じ smoothstep
-                own = Mathf.Lerp(1f - own, own, w);
+                targetYaw = Mathf.Lerp(fromYaw, targetYaw, w);
             }
-            SetActorYaw(_batter, Mathf.Lerp(_cal.BatterYawDeg, _cal.IdleYawDeg, own));
+            SetActorYaw(_batter, targetYaw);
         }
 
         /// <summary>
@@ -3859,6 +3887,7 @@ namespace KokoSim.Unity.Match
             if (seconds <= 0f || fromClip == null || fromClip == clip) return;
 
             a.FadeFrom = AnimationClipPlayable.Create(a.Graph, fromClip);
+            a.FadeFromClip = fromClip;
             SyncFootIk(a);
             a.FadeFrom.SetTime(fromTime);
             a.FadeFrom.Pause();
@@ -3874,10 +3903,12 @@ namespace KokoSim.Unity.Match
         {
             if (a == null || a.Go == null || !a.Graph.IsValid() || a.Clip == null) return;
             float fromTime = Mathf.Clamp(a.Time, 0f, a.Clip.length - 0.001f);
+            var fromClip = a.Clip;   // 同一クリップ内の飛びなので家系は変わらないが、SyncBatterYaw向けに揃えておく
             SeekActor(a, clipTime);          // 退場側は未接続のまま＝Seek中の評価に混ざらない
             if (seconds <= 0f) return;
 
-            a.FadeFrom = AnimationClipPlayable.Create(a.Graph, a.Clip);
+            a.FadeFrom = AnimationClipPlayable.Create(a.Graph, fromClip);
+            a.FadeFromClip = fromClip;
             SyncFootIk(a);
             a.FadeFrom.SetTime(fromTime);
             a.FadeFrom.Pause();
@@ -3905,6 +3936,7 @@ namespace KokoSim.Unity.Match
             {
                 a.Mixer.DisconnectInput(0);
                 a.FadeFrom.Destroy();
+                a.FadeFromClip = null;
             }
             if (a.Mixer.IsValid()) a.Mixer.SetInputWeight(1, 1f);
             if (wasFading && a.Animator != null)

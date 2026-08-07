@@ -356,6 +356,14 @@ namespace KokoSim.EditorTools
                     new { name = "bat-mxm", clip = "Batter_Mixamo_Strike_01", t = 0.10f, desired = new Vector3(1f, 0f, 0f) },
                     new { name = "catcher", clip = "AA_Baseball_Catcher_Idle",            t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
                     new { name = "umpire",  clip = "AA_Baseball_Umpire_Crouch_Idle",      t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
+                    // バント構え一式（issue #514）。squaring＝投手正対なので、狙いは打撃系(+X)でなく
+                    // 捕手・審判と同じ「投手を向く」+Z。移行クリップは始点(idleから繋ぐ側)と終点
+                    // (ループへ繋ぐ側)の両方を採り、構え全体を1つの定数オフセットで賄えるか確認する
+                    new { name = "bunt-in-start", clip = KokoSim.Unity.Match.DuelStageRig.BatterIdleToBuntClipName, t = 0.05f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-in-end",   clip = KokoSim.Unity.Match.DuelStageRig.BatterIdleToBuntClipName, t = 0.95f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-loop",     clip = KokoSim.Unity.Match.DuelStageRig.BatterBuntLoopClipName,   t = 0.50f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-hit",      clip = KokoSim.Unity.Match.DuelStageRig.BatterBuntHitClipName,   t = 0.10f, desired = new Vector3(0f, 0f, 1f) },
+                    new { name = "bunt-miss",     clip = KokoSim.Unity.Match.DuelStageRig.BatterBuntMissClipName,  t = 0.10f, desired = new Vector3(0f, 0f, 1f) },
                 };
 
                 var sb = new StringBuilder();
