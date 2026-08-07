@@ -119,6 +119,40 @@ public sealed class SeasonEngineTests
     }
 
     [Fact]
+    public void Run_MatchesGolden_AfterAdvanceYearExtraction()
+    {
+        // issue #535: 年度替わりロジックを RosterLifecycle.AdvanceYear へ切り出した前後で SeasonEngine.Run の
+        // 出力が1ビット一致することを固定する。下の黄金値は切り出し直後（＝切り出し前と同一挙動）に採取した値。
+        // AdvanceYear が SeasonEngine の消費する乱数列・進級・卒業・新入生を1つでも変えれば、この表が割れる。
+        var golden = new (int Year, int Roster, double Reg, double Grad, int Events)[]
+        {
+            (1, 11, 0, 0, 27),
+            (2, 21, 39.518181818181816, 0, 22),
+            (3, 30, 39.019047619047626, 0, 31),
+            (4, 29, 39.13333333333334, 40.21818181818182, 32),
+            (5, 28, 39.15964912280702, 38.46, 29),
+            (6, 27, 39.04912280701754, 40.477777777777774, 30),
+            (7, 25, 41.28039215686275, 38.72, 31),
+            (8, 26, 41.64791666666666, 39.918518518518525, 28),
+            (9, 29, 38.84074074074075, 43.33333333333333, 31),
+            (10, 31, 37.979365079365074, 40.45, 35),
+        };
+
+        var summary = SeasonEngine.Run(10, LoadContext(), new Xoshiro256Random(20260808));
+        Assert.Equal(golden.Length, summary.Years.Count);
+        for (var i = 0; i < golden.Length; i++)
+        {
+            var g = golden[i];
+            var y = summary.Years[i];
+            Assert.Equal(g.Year, y.Year);
+            Assert.Equal(g.Roster, y.RosterCount);
+            Assert.Equal(g.Reg, y.AvgLevelRegulars, 12);
+            Assert.Equal(g.Grad, y.GraduatingAvgLevel, 12);
+            Assert.Equal(g.Events, y.EventsFired);
+        }
+    }
+
+    [Fact]
     public void EventScheduler_LoadsFromYaml()
     {
         var events = EventsLoader.LoadFromFile(BalanceRegressionTests.FindDataFile("events.yaml"));

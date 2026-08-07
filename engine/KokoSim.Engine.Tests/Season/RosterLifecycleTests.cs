@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Season;
@@ -224,6 +225,107 @@ public sealed class RosterLifecycleTests
         var after2 = roster.Select(p => p.UniformNumber).ToList();
 
         Assert.Equal(after1, after2);
+    }
+
+    // --- issue #535: 年度替わり（4月）の一括処理 AdvanceYear ---
+
+    private static DevelopingPlayer Player(string name, int grade, int id)
+        => new() { Name = name, Grade = grade, Id = id, Leadership = 50, Mental = 50 };
+
+    private static List<DevelopingPlayer> GradedRoster() => new()
+    {
+        Player("三年甲", 3, 1),
+        Player("三年乙", 3, 2),
+        Player("二年甲", 2, 3),
+        Player("二年乙", 2, 4),
+        Player("一年甲", 1, 5),
+        Player("一年乙", 1, 6),
+    };
+
+    [Fact]
+    public void AdvanceYear_Promotes_Graduates_AndAddsFreshmen()
+    {
+        var roster = GradedRoster();
+        var result = RosterLifecycle.AdvanceYear(
+            roster, year: 2, RosterCoefficients.Default, new Xoshiro256Random(99));
+
+        // 3年（元Grade3）は卒業してロスターから消え、退避リストへ返る。
+        Assert.Equal(new[] { "三年甲", "三年乙" }, result.Graduated.Select(p => p.Name));
+        Assert.DoesNotContain(roster, p => p.Name is "三年甲" or "三年乙");
+
+        // 在校生は1つ進級（元2年→3年・元1年→2年）。
+        Assert.Equal(3, roster.First(p => p.Name == "二年甲").Grade);
+        Assert.Equal(2, roster.First(p => p.Name == "一年甲").Grade);
+
+        // 新入生（Grade=1）が新規に加入している。
+        Assert.NotEmpty(result.Newcomers);
+        Assert.All(result.Newcomers, p => Assert.Equal(1, p.Grade));
+        Assert.Contains(roster, p => p.Grade == 1);
+
+        // 卒業した3年（元Grade3）は、除去前に Grade++ されて4になっている（engine と同じ流儀）。
+        Assert.All(result.Graduated, p => Assert.Equal(4, p.Grade));
+    }
+
+    [Fact]
+    public void AdvanceYear_AssignsMonotonicIds_NoCollisionWithSurvivorsOrGraduates()
+    {
+        var roster = GradedRoster();                 // 既存Id = 1..6
+        var nextId = roster.Max(p => p.Id) + 1;      // = 7
+        var survivorAndGradIds = new HashSet<int>(GradedRoster().Select(p => p.Id));
+
+        var result = RosterLifecycle.AdvanceYear(
+            roster, year: 2, RosterCoefficients.Default, new Xoshiro256Random(99), nextId: nextId);
+
+        // 新入生の Id は 7 から連番で、単調増加＝既存/卒業生の Id と衝突しない。
+        Assert.Equal(Enumerable.Range(nextId, result.Newcomers.Count).ToArray(),
+            result.Newcomers.Select(p => p.Id).ToArray());
+        Assert.All(result.Newcomers, p => Assert.DoesNotContain(p.Id, survivorAndGradIds));
+        Assert.Equal(nextId + result.Newcomers.Count, result.NextId);
+
+        // ロスター全体（在校生＋新入生）の Id に重複が無い。
+        var ids = roster.Select(p => p.Id).ToList();
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+    }
+
+    [Fact]
+    public void AdvanceYear_ZeroNextId_LeavesNewcomerIdsUnassigned()
+    {
+        // 既定 nextId=0（SeasonEngine 経路）は採番しない＝新入生 Id は 0 のまま（切り出し前と一致）。
+        var roster = GradedRoster();
+        var result = RosterLifecycle.AdvanceYear(
+            roster, year: 2, RosterCoefficients.Default, new Xoshiro256Random(99));
+
+        Assert.All(result.Newcomers, p => Assert.Equal(0, p.Id));
+        Assert.Equal(0, result.NextId);
+    }
+
+    [Fact]
+    public void AdvanceYear_EnsuresCaptainAmongCurrentPlayers()
+    {
+        var roster = GradedRoster();
+        RosterLifecycle.AdvanceYear(
+            roster, year: 2, RosterCoefficients.Default, new Xoshiro256Random(99));
+
+        var captains = roster.Where(p => p.IsCaptain).ToList();
+        Assert.Single(captains);
+        Assert.Equal(3, captains[0].Grade);   // 新最上級生（元2年）から選ばれる
+    }
+
+    [Fact]
+    public void AdvanceYear_HigherTalentCenter_RaisesNewcomerLevels()
+    {
+        // 名声由来の talentCenter（issue #127）を上げると新入生の質が上がる。
+        double AvgNewcomerLevel(double? center)
+        {
+            var roster = GradedRoster();
+            var result = RosterLifecycle.AdvanceYear(
+                roster, year: 2, RosterCoefficients.Default, new Xoshiro256Random(99), talentCenter: center);
+            return result.Newcomers.Average(p => p.AverageLevel());
+        }
+
+        var high = AvgNewcomerLevel(RosterCoefficients.Default.TalentCenterFromFame(100));
+        var baseline = AvgNewcomerLevel(RosterCoefficients.Default.TalentCenterFromFame(0));
+        Assert.True(high > baseline, $"名声100の新入生平均 {high:F1} が名声0 {baseline:F1} を上回らない");
     }
 
     [Fact]

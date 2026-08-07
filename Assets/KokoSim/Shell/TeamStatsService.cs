@@ -220,11 +220,13 @@ namespace KokoSim.Unity.Shell
             return row;
         }
 
-        /// <summary>成績の帰属キー（DevelopingPlayer.Id）→ 表示名。引退者も引けるよう Roster 全体から作る。</summary>
+        /// <summary>成績の帰属キー（DevelopingPlayer.Id）→ 表示名。引退者に加え、卒業してロスターを
+        /// 外れた選手（<see cref="RosterService.Graduated"/>）も引けるよう両方から作る（issue #535）。</summary>
         private static Dictionary<int, string> NameIndex()
         {
             var map = new Dictionary<int, string>();
             foreach (var p in RosterService.Roster) map[p.Id] = p.Name;
+            foreach (var p in RosterService.Graduated) map[p.Id] = p.Name;
             return map;
         }
 
