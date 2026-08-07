@@ -164,9 +164,18 @@ namespace KokoSim.Unity.Match
         public float IdleFromOwnClip;
         // 自作構えのときの立ち向き[度]。素の向きが約30°違う（RunFacingProbe 実測 chest 52°/82°）ため別に持つ
         public float IdleYawDeg;
-        // バント構え（購入AA Bunt系クリップ）の立ち向き[度]（issue #514）。squaring＝投手正対なので、
-        // 打撃系2値（BatterYawDeg/IdleYawDeg）とは別の第3の向きを持つ。RunFacingProbe実測で決める
+        // バント構え（Bunt_Loop・Bunt_Hitting・Bunt_Miss）の立ち向き[度]（issue #514）。squaring＝
+        // 投手正対なので、打撃系2値（BatterYawDeg/IdleYawDeg）とは別の第3の向きを持つ。
+        // RunFacingProbe実測（bunt-loop）: chest=0°で始点/中間/終点とも安定（回らない構えループ）
         public float BuntYawDeg;
+        // バント構えへの移行（AA_Baseball_Batter_Idle_To_Bunt）専用の立ち向き[度]。この1本だけ、
+        // クリップ自身が「回り込んでsquaringする」芝居を内部に持つため、始点(RunFacingProbe実測
+        // chest=1°)と終点(同54°)で向きが違う＝BuntYawDegと共有できない。終点側を採るのは、
+        // このクリップの終わりがBunt_Loopの開始へ**クロスフェード無しでハードカット**するため
+        // （FinishOneShot）。始点側（=前段の構えに近い値）を採ると、そのカット面で50°超の
+        // 瞬間回転（実害）が起きる。始点側の見た目のギャップは、直前のクロスフェード
+        // （SyncBatterYawのsmoothstep補間）で吸収する
+        public float BuntTransitionYawDeg;
         // 自作構えのバット軸の採り方（<see cref="BatAxisFromGrip"/> のクリップ別版）。自作収録は両手が
         // 23cm開いて実測線が寝るので、合成軸（BatStanceElevDeg）寄りの旧値0.154が既定
         public float IdleBatAxisFromGrip;
@@ -351,8 +360,12 @@ namespace KokoSim.Unity.Match
             IdleFromOwnClip = 1f,
             // 旧・自作の立ち向きは 90+33.8=123.8 だったが、Mixamoのスイングと繋ぐぶん 119 へ寄せた
             IdleYawDeg = 119f,
-            // バント構え（issue #514・RunFacingProbe実測 bunt-loop chest）。後続の実測ステップで確定する
-            BuntYawDeg = 119f,
+            // バント構え（issue #514・RunFacingProbe実測 2026-08-07。desired=(0,0,1)＝投手正対）。
+            // bunt-loop chest=0°で全区間安定（回らないループなのでそのまま採用）
+            BuntYawDeg = 0f,
+            // bunt-in(Idle_To_Bunt) chest: 始点1° / 終点54°。Bunt_Loopへハードカットする終点側を採る
+            // （BuntYawDeg欄のコメント参照）
+            BuntTransitionYawDeg = 54f,
             // 予想（合成軸寄りの旧値0.154）は外れで、実測線そのままが良かった。
             // 旧値は「両手が23cm開いた収録」を前提にしていたが、いまは FixGrip が握りを10cmまで
             // 詰めてから軸を採るので、自作収録でも実測線が素直に使える
@@ -564,6 +577,7 @@ namespace KokoSim.Unity.Match
             if (c.Version < 24)   // v24: バント構えの立ち向き（issue #514・新項目）
             {
                 c.BuntYawDeg = d.BuntYawDeg;
+                c.BuntTransitionYawDeg = d.BuntTransitionYawDeg;
             }
             c.Version = CurrentVersion;
             return c;
@@ -1481,16 +1495,18 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// 打者クリップの「立ち向きの家系」を判定し、対応する較正yawを返す（issue #514）。
-        /// 家系は3つ: 自作Rokoko構え(own idle・<see cref="_cal"/>.IdleYawDeg) / バント一式
-        /// （Bunt_Loop・Idle_To_Bunt・Bunt_Hitting・Bunt_Miss＝<see cref="_cal"/>.BuntYawDeg。
-        /// squaring＝投手正対なので他2家系と別枠） / それ以外＝購入AA打撃系の既定
-        /// （<see cref="_cal"/>.BatterYawDeg）。
+        /// 家系は4つ: 自作Rokoko構え(own idle・<see cref="_cal"/>.IdleYawDeg) / バント構え・結果
+        /// （Bunt_Loop・Bunt_Hitting・Bunt_Miss＝<see cref="_cal"/>.BuntYawDeg。squaring＝投手正対なので
+        /// 他の家系と別枠） / バントへの移行（Idle_To_Bunt＝<see cref="_cal"/>.BuntTransitionYawDeg。
+        /// クリップ自身が回り込む芝居を持つため、ハードカットで直結するBunt_Loopに合わせた専用値が要る。
+        /// 理由は<see cref="DuelCalibration.BuntTransitionYawDeg"/>のコメント参照） / それ以外＝
+        /// 購入AA打撃系の既定（<see cref="_cal"/>.BatterYawDeg）。
         /// </summary>
         private float YawForBatterClip(AnimationClip clip)
         {
             if (clip != null && clip == _batterOwnIdle) return _cal.IdleYawDeg;
-            if (clip != null && (clip == _buntLoopClip || clip == _buntIdleToStanceClip
-                || clip == _buntHitClip || clip == _buntMissClip))
+            if (clip != null && clip == _buntIdleToStanceClip) return _cal.BuntTransitionYawDeg;
+            if (clip != null && (clip == _buntLoopClip || clip == _buntHitClip || clip == _buntMissClip))
                 return _cal.BuntYawDeg;
             return _cal.BatterYawDeg;
         }
