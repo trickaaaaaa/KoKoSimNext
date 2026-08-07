@@ -9,4 +9,7 @@ public sealed class FieldingStatLine
 
     /// <summary>1試合ぶんを畳み込む。</summary>
     public void Add(FieldingLine l) => Errors += l.Errors;
+
+    /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。</summary>
+    internal void Restore(int errors) => Errors = errors;
 }

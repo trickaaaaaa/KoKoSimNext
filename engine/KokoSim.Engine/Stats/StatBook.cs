@@ -26,6 +26,9 @@ public sealed class StatBook
         return s;
     }
 
+    /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。ID の枠を作って返す。</summary>
+    internal PlayerStats GetOrCreate(int id) => For(id);
+
     /// <summary>
     /// 1試合ぶんを畳み込む。managerIsAway で自校が先攻/後攻どちらのボックススコアかを選ぶ。
     /// winPid/losePid は勝敗投手の育成選手ID（<see cref="DecisionOfRecord"/> が算出, 該当なしは null）。

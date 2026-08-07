@@ -36,6 +36,20 @@ namespace KokoSim.Unity.Shell
         private static string Hex(ulong v)
             => "0x" + v.ToString("x16", System.Globalization.CultureInfo.InvariantCulture);
 
+        // セーブ往復（issue #507）。母種の「表示」と同じく読み書きは define の外に置く。
+        // 「固定（Reset）」は任意シードの引き直し＝操作面なので debug ゲート内に残すが、こちらは
+        // 復元専用の別径路（保存した母種を戻すだけ）＝設計書17 §8 の「表示は残す・固定は消す」を崩さない。
+
+        /// <summary>セーブ保存: 母種を DTO へ写す。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s) => s.MasterSeed = _master;
+
+        /// <summary>セーブ復元: 保存した母種を据える（同じ母種で同じ展開へ再現・不変条件#2）。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s)
+        {
+            _master = s.MasterSeed;
+            UnityEngine.Debug.Log("[KokoSim] master seed restored <- " + Hex(_master));
+        }
+
 // デバッグ面のゲート（設計書17 §8）。Editor と Development Build では常に有効、
 // リリースビルドでは KOKOSIM_DEBUG を明示しない限り型ごと消える。この3項の並びは
 // Assets/KokoSim/Debug/ 配下と同一（grep で1箇所も漏らさないための単一の書き方）。

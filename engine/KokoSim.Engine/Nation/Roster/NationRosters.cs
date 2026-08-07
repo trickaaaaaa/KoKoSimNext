@@ -34,6 +34,44 @@ public sealed class NationRosters
         lock (_gate) return _rosters.TryGetValue(schoolId, out roster!);
     }
 
+    /// <summary>
+    /// セーブ復元専用（issue #507・<see cref="Saves.AiRosterSaves"/> だけが使う）。生成済みロスターを直接据える。
+    /// 遅延ブートストラップ（<see cref="GetOrBootstrap"/>）と違い、年度を跨いで進化させた実体をそのまま持ち越す
+    /// （＝(校ID, 現在年度) の再生成に頼らず、materialize 済みの状態を厳密復元する）。
+    /// </summary>
+    internal void RestoreRoster(AiSchoolRoster roster)
+    {
+        lock (_gate) _rosters[roster.SchoolId] = roster;
+    }
+
+    /// <summary>セーブ復元専用: 保持中の全ロスターを捨てる（復元前の一掃）。</summary>
+    internal void ClearRosters()
+    {
+        lock (_gate) _rosters.Clear();
+    }
+
+    /// <summary>
+    /// セーブ保存用: materialize 済みロスターの一覧（<see cref="AiSchoolRoster.SchoolId"/> 昇順・スナップショット）。
+    /// Shell（別アセンブリ）が保存対象を取り出すための public 入口。
+    /// </summary>
+    public IReadOnlyList<AiSchoolRoster> Snapshot()
+    {
+        List<AiSchoolRoster> list;
+        lock (_gate) list = new List<AiSchoolRoster>(_rosters.Values);
+        list.Sort((a, b) => a.SchoolId.CompareTo(b.SchoolId));
+        return list;
+    }
+
+    /// <summary>
+    /// セーブ復元用: deps を注入した空の保持庫に、生成済みロスター一式を据えて返す（Shell が呼ぶ public 入口）。
+    /// </summary>
+    public static NationRosters FromSaved(AiRosterDeps deps, IEnumerable<AiSchoolRoster> rosters)
+    {
+        var nr = new NationRosters(deps);
+        foreach (var r in rosters) nr.RestoreRoster(r);
+        return nr;
+    }
+
     /// <summary>学校のロスターを取得（未生成なら (校ID, 現在年度) から3学年ブートストラップ）。</summary>
     public AiSchoolRoster GetOrBootstrap(School school, int yearIndex)
     {

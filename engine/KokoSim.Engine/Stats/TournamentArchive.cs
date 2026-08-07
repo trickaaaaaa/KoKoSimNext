@@ -71,4 +71,15 @@ public sealed class TournamentArchive
             if (info.UniformNumber > 0) a.UniformNumber = info.UniformNumber; // 0=未割当は温存
         }
     }
+
+    /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。全消去。</summary>
+    internal void Clear() => _slots.Clear();
+
+    /// <summary>セーブ復元専用: 枠×選手の器を作って返す（成績は呼び出し側が据える）。</summary>
+    internal ArchivedPlayerStats GetOrCreate(TournamentArchiveKey key, int sourceId)
+    {
+        if (!_slots.TryGetValue(key, out var slotMap)) { slotMap = new Dictionary<int, ArchivedPlayerStats>(); _slots[key] = slotMap; }
+        if (!slotMap.TryGetValue(sourceId, out var a)) { a = new ArchivedPlayerStats(); slotMap[sourceId] = a; }
+        return a;
+    }
 }

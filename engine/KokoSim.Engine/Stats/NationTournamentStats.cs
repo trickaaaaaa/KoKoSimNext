@@ -37,6 +37,12 @@ public sealed class NationTournamentStats
         return b;
     }
 
+    /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。校の帳簿を作って返す。</summary>
+    internal StatBook GetOrCreateBook(int schoolId)
+    {
+        lock (_gate) return BookFor(schoolId);
+    }
+
     /// <summary>
     /// 1試合ぶんを両校へ畳み込む。away=先攻校ID・home=後攻校ID。勝敗投手は各サイドで自動判定
     /// （<see cref="DecisionOfRecord"/>）。相手校の生成選手も SourceId（校内ID）を持つので集計に乗る。

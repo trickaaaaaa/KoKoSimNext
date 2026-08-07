@@ -90,6 +90,12 @@ namespace KokoSim.Unity.Shell
         /// <summary>シーズン頭（週0・年度1）へ戻す。監督成長の年度ガードも初期化する（issue #171）。</summary>
         public static void Reset() { Week = 0; YearIndex = 1; ManagerService.ResetGrowth(); }
 
+        /// <summary>セーブ保存: 暦を DTO へ写す（issue #507）。</summary>
+        public static void Capture(KokoSim.Engine.Saves.SaveState s) { s.Week = Week; s.YearIndex = YearIndex; }
+
+        /// <summary>セーブ復元: 暦を据える。</summary>
+        public static void Restore(KokoSim.Engine.Saves.SaveState s) { Week = s.Week; YearIndex = s.YearIndex; }
+
         /// <summary>共通トップバー「現在」表示（YYYY年M月W週目）。</summary>
         public static string CurrentLabel() => SeasonClock.CurrentLabel(YearIndex, Week);
 
