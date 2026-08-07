@@ -934,6 +934,27 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 種付けの時点（<paramref name="t0"/>）で「もう投げ始めているはず」の送球があれば、
+        /// その的の向き[度]を返す（issue #511・<c>BeginFieldPlay</c> の <c>_loco</c> 初期化専用）。
+        /// 対決ビューから続く送球（盗塁の二塁送球・牽制）は投げ手の「前」のコマを見せていないので、
+        /// この場での直接種付けは #505 が禁じた「捕球中の姿からの瞬間移動」に当たらない
+        /// （見せた前の姿が無いので跳ぶ絵自体が存在しない）。
+        /// </summary>
+        private bool TryDueThrowYaw(FieldPosition pos, float t0, out float yaw)
+        {
+            yaw = 0f;
+            float best = float.MaxValue;
+            foreach (var e in _throwEvents)
+            {
+                if (e.From != pos || e.TFire > t0) continue;
+                if (e.TFire >= best) continue;
+                best = e.TFire;
+                yaw = e.Yaw;
+            }
+            return best < float.MaxValue * 0.5f;
+        }
+
+        /// <summary>
         /// 捕球中に的へ開くとき、グラブが収録の位置からずれてよい量[m]（issue #505 ②）。
         /// ずれた分は捕球IK（<c>DuelCatcherPose.ReachMitt</c>）が球へ引き戻す＝**IK の仕事量の予算**。
         /// 大きくすると「最初から的を向いて投げる」が増える代わりに捕球の腕が伸びる。
@@ -2781,6 +2802,10 @@ namespace KokoSim.Unity.Match
             _pitcherSnap = Snapshot(_pitcher);
             _catcherSnap = Snapshot(_catcher);
 
+            // 捕球予定・送球予定を先に組む（_loco の初期 Yaw 種付けに使う＝下記。issue #511）。
+            BuildFieldCatchPlan(play);
+            BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
+
             // 立ち位置の不連続を控える。engine の言う定位置と実際の立ち位置の差を
             // **プレーの頭で1回だけ**採り、0.3秒かけて 0 へ落とす（投手1.347m・捕手1.200m）
             _loco.Clear();
@@ -2793,12 +2818,24 @@ namespace KokoSim.Unity.Match
                 if (a == null || a.Go == null) continue;
                 var want = PlaybackEvaluator.FielderAt(play, pos, t0);
                 var lp = a.Go.transform.localPosition;
-                _loco[pos] = new FielderMotion
+                var motion = new FielderMotion
                 {
                     Ladder = -1,
                     CatchEvent = -1,
                     Entry = new Vector2(lp.x - (float)want.Pos.X, lp.z - (float)want.Pos.Y),
                 };
+                // 対決ビューから続く送球（盗塁の二塁送球・牽制）は、的へ向く「前」のコマを
+                // 一枚も見せていない＝カットの初手がそのまま送球の全て（issue #511）。
+                // 未初期化の 0° を渡すと FireDueThrows が的とのズレ全部を回頭レートへ乗せる上、
+                // 間に合わないぶんはこの最初のコマにそのまま出る（実測: 牽制で腰が的から68°
+                // ずれて残り87°/最大1046°/sの回頭要求＝1コマ目は絵で見える形で外れる）。
+                // ここで的へ直接種付けする＝前の姿を見せていないので「瞬間移動」にはならない。
+                if (TryDueThrowYaw(pos, t0, out var dueYaw))
+                {
+                    motion.Yaw = dueYaw;
+                    motion.Started = true;
+                }
+                _loco[pos] = motion;
             }
 
             // 打者は走者としてやり直す。打席の較正（バット・左打者のミラー親）を引きずったまま
@@ -2809,8 +2846,6 @@ namespace KokoSim.Unity.Match
             _runnerHeadMin = float.MaxValue;
             _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
 
-            BuildFieldCatchPlan(play);
-            BuildFieldThrowPlan(play);         // ⚠ 捕球の後（投げ始めの下限に「その野手の捕球時刻」を使う）
             PlanErrorMark(play);               // びっくりマーク（issue #439 ②）
             BuildFieldCameraPlan(play, t0);    // ⚠ 見せ始める時刻から組む（頭が全景になるのを防ぐ）
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
