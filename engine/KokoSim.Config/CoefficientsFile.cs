@@ -523,6 +523,9 @@ public static class CoefficientsLoader
         public double WildPitchControlSlope { get; set; } = D.WildPitchControlSlope;
         public double PassedBallProb { get; set; } = D.PassedBallProb;
         public double PassedBallCatchingSlope { get; set; } = D.PassedBallCatchingSlope;
+        // 暴投・捕逸・振り逃げの着弾コースゲート（issue #525）
+        public double BatteryMissLowY { get; set; } = D.BatteryMissLowY;
+        public double BatteryMissOutsideM { get; set; } = D.BatteryMissOutsideM;
         // 盗塁（設計書02 §4.2）
         public double StealLeadDistanceM { get; set; } = D.StealLeadDistanceM;
         public double CatchThrowDistanceM { get; set; } = D.CatchThrowDistanceM;
@@ -640,6 +643,8 @@ public static class CoefficientsLoader
             WildPitchControlSlope = WildPitchControlSlope,
             PassedBallProb = PassedBallProb,
             PassedBallCatchingSlope = PassedBallCatchingSlope,
+            BatteryMissLowY = BatteryMissLowY,
+            BatteryMissOutsideM = BatteryMissOutsideM,
             StealLeadDistanceM = StealLeadDistanceM,
             CatchThrowDistanceM = CatchThrowDistanceM,
             StealReactionIntercept = StealReactionIntercept,

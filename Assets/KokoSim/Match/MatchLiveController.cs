@@ -1674,6 +1674,17 @@ namespace KokoSim.Unity.Match
                     KokoSim.Engine.Match.AtBat.PitchKind.HitByPitch => DuelPitchOutcome.HitByPitch,
                     _ => DuelPitchOutcome.Take,
                 };
+                // 捕手が捕り損ねる球（issue #525）は PitchKind より優先して倒す。engine が着弾コースで
+                // 抽選しているので、この球に暴投・捕逸／振り逃げのプレーが載っている＝**捕られない球**。
+                // 倒す対象は捕手が捕る3分類だけ＝打者が触った球（ファウル・インプレー・死球）は
+                // そもそも捕手が捕らないので既存の意味を変えない（issue の「追加であって置き換えではない」）。
+                bool catcherMisses = q.Live?.BatteryMissPlay != null || q.Live?.DropThirdStrikePlay != null;
+                if (catcherMisses && (outcome == DuelPitchOutcome.Take
+                    || outcome == DuelPitchOutcome.CalledStrike
+                    || outcome == DuelPitchOutcome.SwingMiss))
+                {
+                    outcome = DuelPitchOutcome.NotCaught;
+                }
                 // バント/セーフティバント/スクイズの指示が出ている球（issue #490）: 打者の構え・
                 // 接触/空振りをバント用クリップへ差し替える（表示専用＝判定には無関係）。
                 // 構えの予約は BeginPitchRender で済ませてある（間に合わせるため）。ここは一発物
@@ -1689,8 +1700,11 @@ namespace KokoSim.Unity.Match
                 // （_paConfirmed済みの pt.StrikesAfter）から直接判定して明示的に渡す。
                 var isCalledStrikeout = _paConfirmed
                     && pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.CalledStrike && pt.StrikesAfter >= 3;
+                // 捕り損ねる球で打者が振ったか（issue #525）。分類は捕手側の事情しか表せないので、
+                // 振り逃げ（＝ほぼ空振り三振）のスイングが消えないよう別に渡す
+                bool batterSwung = pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike;
                 _duelRig.OnPitchReleased(isLast ? -1f : duelPitchIntervalSeconds, outcome,
-                    FlightOf(pt), BattedOf(pt, isLast), isBuntAttempt, isCalledStrikeout);
+                    FlightOf(pt), BattedOf(pt, isLast), isBuntAttempt, isCalledStrikeout, batterSwung);
             }
 
             // この1球の判定を出す時刻。俯瞰は盤面の投球尺（0.45秒固定）に合わせた pitchIntervalSeconds だが、

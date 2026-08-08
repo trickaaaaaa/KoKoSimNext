@@ -197,12 +197,17 @@ baserunning:
   error_extra_advance_prob: 0.20   # 失策連鎖（design-14 P1-6）: ReachedOnError時に全走者+打者へ追加1進塁（2026-07-17校正）
   error_extra_advance_accuracy_slope: 0.003  # 失策連鎖の送球精度連動（Issue #37）: 確率=prob−(Ac−50)×これ。0で非連動＝恒等
 
-  drop_third_strike_reach_prob: 0.001      # 振り逃げ（design-14 P1-2）: 一塁空き or 2アウトの三振で成立（2026-07-17校正）
+  drop_third_strike_reach_prob: 0.39       # 振り逃げ（design-14 P1-2）: 第3ストライクが捕り損ねうる球のとき成立（issue #525で 0.001→0.39 再校正）
   drop_third_strike_catching_slope: 0.002  # 捕手Catching(-50)あたりの成立確率減少幅
-  wild_pitch_prob: 0.0012          # 暴投（design-14 P2-8）: 走者あり・実球（Ball/CalledStrike/SwingingStrike）ごとの基準確率（2026-07-20校正）
+  wild_pitch_prob: 0.035           # 暴投（design-14 P2-8）: 走者あり・捕り損ねうる球ごとの基準確率（issue #525で 0.0012→0.035 再校正）
   wild_pitch_control_slope: 0.0006 # 投手Control(-50)あたりの暴投確率の減少幅
-  passed_ball_prob: 0.0008         # パスボール（design-14 P2-8）: 同上・捕手責
+  passed_ball_prob: 0.023          # パスボール（design-14 P2-8）: 同上・捕手責（issue #525で 0.0008→0.023 再校正）
   passed_ball_catching_slope: 0.0006 # 捕手Catching(-50)あたりのパスボール確率の減少幅
+  # 暴投・捕逸・振り逃げの着弾コースゲート（issue #525・監督判断 2026-08-07）: 「捕り損ねうる球か」は
+  # 種別でなく実着弾コースで決める（BaserunningModel.CanBatteryMiss）。ゾーン内（BottomM=0.50以上）の球は
+  # 構造的に対象外＝捕れる球が後逸にならない。狭めたぶん上の *_prob を校正で引き上げてある。
+  battery_miss_low_y_m: 0.30       # この高さ[m]未満の低い球（ワンバウンド相当・ゾーン下端より下）は捕り損ねうる
+  battery_miss_outside_m: 0.25     # ゾーン外へこの距離[m]以上外れた球（大きく外れた球）は捕り損ねうる
   # 盗塁（設計書02 §4.2）: すべて秒の時間軸で校正（🟡 設計書07で実タイムに合わせ込む）
   steal_lead_distance_m: 23.5
   catch_throw_distance_m: 38.8

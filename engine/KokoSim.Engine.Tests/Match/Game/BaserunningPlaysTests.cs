@@ -464,6 +464,60 @@ public sealed class BaserunningPlaysTests
         Assert.True(totalOn > totalOff, $"振り逃げ有効化で得点が増えていない: off={totalOff} on={totalOn}");
     }
 
+    // 2アウトの振り逃げは一塁が埋まっていても成立する＝一塁を与えると**押し出しになる**（issue #525）。
+    // 旧実装は bases.First へ直に代入していて一塁走者が消えていた（走者保存則違反。
+    // drop_third_strike_reach_prob が 0.001 の間は滅多に踏まず、0.39 への再校正で表に出た）。
+    // 規則は四球・死球と同じ BaserunningModel.AwardFirstBase に集約したので、ここで純関数として固定する。
+
+    [Fact]
+    public void AwardFirstBase_WithRunnerOnFirst_ForcesRunnerToSecond()
+    {
+        var r1 = WeakContact(FieldPosition.LeftField) with { Name = "R1" };
+        var batter = WeakContact(FieldPosition.CenterField) with { Name = "B" };
+        var bases = new BaseState { First = r1 };
+
+        var (runs, outs) = BaserunningModel.AwardFirstBase(bases, batter);
+
+        Assert.Equal(0, runs);
+        Assert.Equal(0, outs);
+        Assert.Same(batter, bases.First);
+        Assert.Same(r1, bases.Second);   // 消えずに押し出される（旧実装はここが null だった）
+        Assert.Null(bases.Third);
+    }
+
+    [Fact]
+    public void AwardFirstBase_WithBasesLoaded_PushesInARun()
+    {
+        var r1 = WeakContact(FieldPosition.LeftField) with { Name = "R1" };
+        var r2 = WeakContact(FieldPosition.CenterField) with { Name = "R2" };
+        var r3 = WeakContact(FieldPosition.RightField) with { Name = "R3" };
+        var batter = WeakContact(FieldPosition.FirstBase) with { Name = "B" };
+        var bases = new BaseState { First = r1, Second = r2, Third = r3 };
+
+        var (runs, outs) = BaserunningModel.AwardFirstBase(bases, batter);
+
+        Assert.Equal(1, runs);           // 三塁走者が生還
+        Assert.Equal(0, outs);
+        Assert.Same(batter, bases.First);
+        Assert.Same(r1, bases.Second);
+        Assert.Same(r2, bases.Third);
+    }
+
+    [Fact]
+    public void AwardFirstBase_WithEmptyBases_JustPlacesBatter()
+    {
+        var batter = WeakContact(FieldPosition.FirstBase) with { Name = "B" };
+        var bases = new BaseState();
+
+        var (runs, outs) = BaserunningModel.AwardFirstBase(bases, batter);
+
+        Assert.Equal(0, runs);
+        Assert.Equal(0, outs);
+        Assert.Same(batter, bases.First);
+        Assert.Null(bases.Second);
+        Assert.Null(bases.Third);
+    }
+
     // --- 牽制アウト／離塁刺殺（design-14 P1-5）: 既定オフでは rng 消費ゼロ・常に不発 ---
 
     [Fact]

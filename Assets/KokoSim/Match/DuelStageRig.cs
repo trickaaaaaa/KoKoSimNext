@@ -14,6 +14,12 @@ namespace KokoSim.Unity.Match
         FoulContact,    // ファール（Swing_Hitting・走り出し前でカット・捕球なし）
         InPlayContact,  // インプレー（Swing_Hittingフル＝走り出しまで・捕球なし）
         HitByPitch,     // 死球（Hit_ByPitch・捕球なし）
+        // 捕手が捕り損ねる球（issue #525）＝暴投・捕逸・振り逃げ。既存6分類の意味は変えず**追加**する。
+        //
+        // ⚠ この分類は**捕手側だけ**を言う。打者が振ったかどうかは別の軸で、振り逃げは定義上
+        // 空振り（または見逃し）の三振なので、ここへ倒すだけだと**打者のスイングが消える**
+        // （SwingMiss を置き換えてしまうため）。打者は OnPitchReleased の batterSwung で別に駆動する。
+        NotCaught,
     }
 
     /// <summary>
@@ -923,6 +929,10 @@ namespace KokoSim.Unity.Match
 
         // 捕球クリップ（5方向）。CatchAnchors と同じ並び。取れなかったものはnull＝選択から外れる
         private AnimationClip[] _catchClips;
+        // 後逸クリップ（4本。issue #525）。PassedBallAnchors と同じ並び。購入パックに無い環境では
+        // 全てnull＝捕り損ねる球でも捕手は待機のまま（他の一発物と同じ「無いものは待機のまま」流儀）。
+        // ただし**球は捕らせない**（捕らない判断は SelectCatchAnchor 側なのでクリップの有無に依らない）
+        private AnimationClip[] _passedBallClips;
 
         // ボール（issue #332・design-18 §4.5-②「ボールとカメラはフルレート維持」）。
         //
@@ -1227,6 +1237,9 @@ namespace KokoSim.Unity.Match
             _buntMissClip = LoadClip(BatterBuntMissClipName);
             _catchClips = new AnimationClip[CatchAnchors.Length];
             for (int i = 0; i < CatchAnchors.Length; i++) _catchClips[i] = LoadClip(CatchAnchors[i].Clip);
+            // 後逸（issue #525）。捕球クリップと同じ作り＝取れなかったものはnullで選択から外れる
+            _passedBallClips = new AnimationClip[PassedBallAnchors.Length];
+            for (int i = 0; i < PassedBallAnchors.Length; i++) _passedBallClips[i] = LoadClip(PassedBallAnchors[i].Clip);
             // 球審ストライクコール。Type01(3.33s)を**確定採用**（2026-07-31 監督判断・#353 の録画で確認）。
             // Type02(4.67s)は突き出しが2.05s・戻り終わりが3.4sで、リリース間隔2.8sに収まらないため不採用。
             _umpireStrikeClip = LoadClip(UmpireStrikeClipName);
@@ -1648,6 +1661,8 @@ namespace KokoSim.Unity.Match
         private float _catchCountdown = -1f;        // 捕球クリップ開始まで（負=予約なし）
         private int _catchIndex = -1;               // 今の球で使う捕球クリップ（CatchAnchors の添字。負=捕らない）
         private bool _catchIsStrike;                // 今の球の判定がストライク系（見逃し/空振り）か。CatcherLingerSeconds(bool) の分岐に使う（issue #527）
+        private float _passedBallCountdown = -1f;   // 後逸クリップ開始まで（負=予約なし。issue #525）
+        private int _passedBallIndex = -1;          // 今の球で使う後逸クリップ（PassedBallAnchors の添字。負=無し）
         private float _swingCountdown = -1f;        // スイング開始まで（負=予約なし。SetSwing 参照）
         private AnimationClip _swingPendingClip;    // 予約中のスイングクリップ
         private float _swingPendingAnchor;          // 予約中の接触アンカー[クリップ秒]
@@ -1714,6 +1729,8 @@ namespace KokoSim.Unity.Match
             _catchCountdown = -1f;
             _catchIndex = -1;
             _catchIsStrike = false;
+            _passedBallCountdown = -1f;   // 後逸の予約も打席をまたがない（issue #525）
+            _passedBallIndex = -1;
             _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
             ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
@@ -1879,6 +1896,33 @@ namespace KokoSim.Unity.Match
         };
 
         /// <summary>
+        /// 後逸クリップ1本ぶんのアンカー（issue #525・実測 2026-08-08・0.02s刻み・ミット＝左手ボーン）。
+        ///
+        /// <see cref="CatchAnchor"/> と同じ形だが、<see cref="CatchAnchor.Mitt"/> の意味が違う——捕球は
+        /// 「球をそこへ運ぶ狙点」だが、後逸は**球が入らない**ので、ここは「その手が届く所」＝
+        /// クリップを選ぶための代表点でしかない（球の位置には一切使わない）。
+        ///
+        /// <see cref="CatchAnchor.Moment"/> は「捕り損ねる瞬間」のクリップ内秒。方向クリップと同じ
+        /// **運び終わり**（＝その側への伸び切り。速度が落ちきる点）で採った。定義がクリップごとに違う罠
+        /// （design-18 §4.5-③）そのもので、**変位が最大になる時刻を一律に使うと外れる**:
+        ///   L    len=2.67 変位最大 0.62（v 2.75→1.57 で減衰しきる点＝伸び切り。**一致**）
+        ///   L_S  len=2.17 変位最大 1.76 だが、これは後逸後の追いかけ。伸び切りは **0.24**（v 4.11→0.64）
+        ///   R    len=2.67 変位最大 2.24 も追いかけ。伸び切りは **0.96**（v 2.03→0.44・x が右端 +0.221）
+        ///   R_S  len=2.83 変位最大 1.72 も追いかけ。伸び切りは **0.48**（v 3.20→0.82）
+        /// ＝4本中3本は「変位最大」を採ると追いかけの区間に当たり、球が抜けた後に手を出す絵になる。
+        ///
+        /// 4本の伸び切り位置（捕手ローカル・-x=捕手から見て左）が低左/高左/中右/高右に分かれるので、
+        /// 捕球クリップと同じ「一番近いものを選ぶ」でコース別に使い分けられる（<see cref="SelectPassedBall"/>）。
+        /// </summary>
+        private static readonly CatchAnchor[] PassedBallAnchors =
+        {
+            new("AA_Baseball_Catcher_Passed_Ball_L", new Vector3(-0.421f, 0.188f, -0.199f), 0.62f),
+            new("AA_Baseball_Catcher_Passed_Ball_L_S", new Vector3(-0.644f, 0.810f, 0.406f), 0.24f),
+            new("AA_Baseball_Catcher_Passed_Ball_R", new Vector3(0.221f, 0.594f, 0.240f), 0.96f),
+            new("AA_Baseball_Catcher_Passed_Ball_R_S", new Vector3(0.165f, 0.887f, 0.690f), 0.48f),
+        };
+
+        /// <summary>
         /// 中央以外を選ぶための下駄[m]。ゾーン中央付近ではCとU/Dの距離が数cm差で並ぶため、
         /// これが無いとコースのわずかな違いでミットが上下に飛ぶ（見た目が落ち着かない）。
         /// 「はっきり外れたコースだけ方向クリップへ移る」ようにする閾値で、実測の並びから 0.08 と置いた。
@@ -2017,6 +2061,20 @@ namespace KokoSim.Unity.Match
         public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch,
             KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted, bool isBuntAttempt,
             bool isCalledStrikeout)
+            => OnPitchReleased(nextReleaseIn, outcome, pitch, batted, isBuntAttempt, isCalledStrikeout,
+                batterSwung: false);
+
+        /// <summary>
+        /// 捕り損ねる球（<see cref="DuelPitchOutcome.NotCaught"/>）で打者が振ったかを添えるリリース（issue #525）。
+        ///
+        /// 分類は捕手側の事情（捕るか捕らないか）しか表せないのに対し、打者が振ったかは別の軸で、
+        /// **振り逃げは定義上そのほとんどが空振り**＝<see cref="DuelPitchOutcome.SwingMiss"/> を
+        /// NotCaught で置き換えると打者のスイングが丸ごと消える。この引数で打者だけ別に駆動する。
+        /// NotCaught 以外の分類では使わない（打者の芝居は従来どおり分類が決める）。
+        /// </summary>
+        public void OnPitchReleased(float nextReleaseIn, DuelPitchOutcome outcome, DuelPitchFlight? pitch,
+            KokoSim.Engine.Match.Timeline.Playback.PlaybackBallSegment batted, bool isBuntAttempt,
+            bool isCalledStrikeout, bool batterSwung)
         {
             if (!Available || _pitcher == null) return;
             // ⚠ ここで構えを切り替えない（issue #490 実機確認 2026-08-06）。リリース時点から始めると
@@ -2084,7 +2142,8 @@ namespace KokoSim.Unity.Match
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
             }
-            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isStrike, isBuntAttempt, isCalledStrikeout);
+            ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isStrike, isBuntAttempt,
+                isCalledStrikeout, pitch, batterSwung);
         }
 
         /// <summary>打者・捕手・球審の結果分岐（§7-2第2弾）。クリップが無い分岐は待機のまま何もしない。
@@ -2092,7 +2151,8 @@ namespace KokoSim.Unity.Match
         /// クリップへ差し替える（無ければ通常の打撃クリップのまま）。<paramref name="isCalledStrikeout"/>
         /// （issue #533）が真なら、球審のコールを見逃し三振専用クリップへ差し替える。</summary>
         private void ScheduleReactions(DuelPitchOutcome outcome, float nextReleaseIn, float flight,
-            int catchIndex, bool isStrike, bool isBuntAttempt = false, bool isCalledStrikeout = false)
+            int catchIndex, bool isStrike, bool isBuntAttempt = false, bool isCalledStrikeout = false,
+            DuelPitchFlight? pitch = null, bool batterSwung = false)
         {
             // 球審: ストライク（見逃し・空振り）でコールを予約、それ以外は前球の予約をキャンセル（#333）
             // バットを球へ向けるのは当たる球だけ。空振りで向けると「当たっているのに空振り」になる
@@ -2106,6 +2166,10 @@ namespace KokoSim.Unity.Match
             bool useStrikeOut = isCalledStrikeout && outcome == DuelPitchOutcome.CalledStrike
                 && _umpireStrikeOutClip != null;
             _pendingUmpireClip = useStrikeOut ? _umpireStrikeOutClip : _umpireStrikeClip;
+            // ⚠ isStrike は NotCaught（暴投・捕逸・振り逃げ。issue #525）では偽＝球審のコール動作は
+            // 出さない。コールの逆算基準が「ミットに収まる時刻」で、収まらない球には置きようがないため
+            // （頭出しでごまかすと球が転がっているのに構えたままコールする絵になる）。
+            // **判定テロップは別**で、CallMomentSeconds が球の到達時刻を返す＝捕れなくても判定は出る。
             if (isStrike && _pendingUmpireClip != null)
             {
                 // 開始同期: クリップ開始（突き出しの助走の頭）を「捕球 + 反応」に置く＝
@@ -2170,8 +2234,17 @@ namespace KokoSim.Unity.Match
                 case DuelPitchOutcome.HitByPitch:
                     SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
                     break;
+                // NotCaught（暴投・捕逸・振り逃げ。issue #525）。打者が振ったかは分類でなく batterSwung が持つ
+                // ＝振り逃げ（ほぼ空振り三振）で打者のスイングが消えないようにする。見送りなら待機のまま
+                case DuelPitchOutcome.NotCaught:
+                    if (batterSwung)
+                        SetSwing(missClip, missAnchor, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    break;
             }
-            ScheduleCatch(catchIndex, isStrike);
+            // 捕り損ねる球は捕球でなく後逸を予約する（issue #525）。catchIndex は SelectCatchAnchor が
+            // 既に -1 を返しているので、ここで ScheduleCatch を呼んでも何も起きない＝分岐を明示する
+            if (outcome == DuelPitchOutcome.NotCaught) SchedulePassedBall(SelectPassedBall(pitch));
+            else ScheduleCatch(catchIndex, isStrike);
         }
 
         /// <summary>
@@ -2286,6 +2359,56 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 後逸クリップの添字（issue #525）。捕り損ねる球（<see cref="DuelPitchOutcome.NotCaught"/>）だけで
+        /// 使い、無ければ -1＝捕手は待機のまま（球は抜けたまま。捕らない判断はクリップの有無に依らない）。
+        ///
+        /// 左右は<b>実着弾位置</b>（<see cref="DuelPitchFlight.PlateX"/>/<see cref="DuelPitchFlight.PlateY"/>）で
+        /// 選ぶ。捕球クリップが<b>狙い</b>で選ぶ（捕手は未来を知らない）のとは逆で、後逸は「どこへ逸れたか」が
+        /// そのまま手を出す方向だから＝この球が捕れない球であることは既に確定している（engine が
+        /// 着弾コースで抽選している）。乱数は引かない＝同じコースなら常に同じクリップ（決定論）。
+        /// </summary>
+        private int SelectPassedBall(DuelPitchFlight? pitch)
+        {
+            if (_catcher == null || _passedBallClips == null) return -1;
+            float px = pitch?.PlateX ?? 0f;
+            float py = pitch?.PlateY ?? DefaultPlateY;
+            float catcherX = CatcherBaseX;
+            int best = -1;
+            float bestCost = float.MaxValue;
+            for (int i = 0; i < PassedBallAnchors.Length; i++)
+            {
+                if (_passedBallClips[i] == null) continue;
+                var m = PassedBallAnchors[i].Mitt;
+                float dx = px - (catcherX + m.x);
+                float dy = py - m.y;
+                float cost = Mathf.Sqrt(dx * dx + dy * dy);
+                if (cost < bestCost) { bestCost = cost; best = i; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// 後逸を予約する（issue #525）。<see cref="ScheduleCatch"/> と同じ逆算＝クリップ内の
+        /// 「捕り損ねる瞬間」（<see cref="PassedBallAnchors"/> の Moment）が球の到達に一致するよう
+        /// 再生開始をずらす。到達より Moment が後ろのクリップは頭出しで詰める（捕球と同じ作法）。
+        ///
+        /// 打ち切りはしない＝後逸の後は捕手が球を追う動きが続くのが自然で、そこを見せて構わない
+        /// （捕球のような「判定の間ミットを止めて見せる」据え置きは要らない）。
+        /// </summary>
+        private void SchedulePassedBall(int index)
+        {
+            _catchCountdown = -1f;
+            _catchIndex = -1;                 // 球はミットへ入らない＝捕球の予約としては扱わない
+            _passedBallCountdown = -1f;
+            _passedBallIndex = index;
+            if (index < 0) return;
+            var clip = _passedBallClips[index];
+            float start = _ballArrival - PassedBallAnchors[index].Moment;
+            if (start > 0f) _passedBallCountdown = start;
+            else SetActorClip(_catcher, clip, -start, 0f);
+        }
+
+        /// <summary>
         /// コースに一番近い捕球クリップの添字（無ければ-1＝捕手は待機のまま）。
         /// 距離は本塁面の左右・高さで測る（奥行きの差は延長15ms＝2cm未満なので効かない）。
         /// 乱数を引かない純粋な選択＝同じコースなら常に同じクリップ（決定論）。
@@ -2299,6 +2422,8 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private int SelectCatchAnchor(DuelPitchOutcome outcome, DuelPitchFlight? pitch)
         {
+            // NotCaught（暴投・捕逸・振り逃げ。issue #525）はここに**含めない**＝-1 を返す。
+            // 返り値がそのまま LaunchBall の「この球は捕られるか」なので、球はミットへ入らず抜ける。
             bool catcherCatches = outcome == DuelPitchOutcome.Take
                 || outcome == DuelPitchOutcome.CalledStrike
                 || outcome == DuelPitchOutcome.SwingMiss;
@@ -2814,6 +2939,15 @@ namespace KokoSim.Unity.Match
                     _catcher.HoldSeconds = CatcherLingerSeconds(_catchIsStrike);
                     FixCatcherPose();   // 差し替え直後のポーズにも当てる（この同じフレームで球が着くことがある）
                 }
+            }
+
+            // 後逸クリップの開始予約（issue #525）。捕球と同じくプレー時間で数える。
+            // 打ち切り・据え置きは張らない＝抜けた球を追う続きをそのまま見せる（SchedulePassedBall の項）
+            if (_passedBallCountdown >= 0f)
+            {
+                _passedBallCountdown -= deltaTime;
+                if (_passedBallCountdown < 0f && _passedBallIndex >= 0)
+                    SetActorClip(_catcher, _passedBallClips[_passedBallIndex], 0f, 0f);
             }
 
             // ボールはフルレート（design-18 §4.5-②「球筋の読みやすさはゲーム性なので量子化しない」）。
@@ -5445,6 +5579,19 @@ namespace KokoSim.Unity.Match
 
         public string CatchDiagForCapture()
         {
+            // 後逸（issue #525）は捕球と同じ枠で読めるようにする＝「捕らない」と「後逸を出している」は
+            // 絵では区別しづらいので、どのクリップをいつ当てているかを実測の出口に出す（design-18 §3.3）
+            if (_passedBallIndex >= 0)
+            {
+                var pb = PassedBallAnchors[_passedBallIndex];
+                bool pbRunning = _passedBallClips != null && _catcher != null
+                    && _catcher.Clip == _passedBallClips[_passedBallIndex];
+                return "後逸=" + pb.Clip.Replace("AA_Baseball_Catcher_Passed_Ball_", "")
+                    + " 抜ける瞬間=" + pb.Moment.ToString("F2") + "s"
+                    + " クリップ=" + (pbRunning && _catcher != null ? _catcher.Time.ToString("F2") + "s" : "待機")
+                    + (_passedBallCountdown >= 0f ? " 開始まで=" + _passedBallCountdown.ToString("F2") + "s" : "")
+                    + " 球はミット外（捕球なし）";
+            }
             if (_catchIndex < 0) return "捕球=なし（この球は捕手が捕らない分岐）";
             var a = CatchAnchors[_catchIndex];
             string name = a.Clip.Replace("AA_Baseball_Catcher_Catching_", "");
