@@ -127,8 +127,13 @@ public sealed class GameRecordAndTeamTests
         Assert.All(result.Log, e => Assert.InRange(e.Inning, 1, result.InningsPlayed));
         Assert.True(result.AwayHits >= 0 && result.HomeHits >= 0);
         Assert.True(result.AwayErrors >= 0 && result.HomeErrors >= 0);
-        // ログの得点合計＝両チーム総得点。
-        Assert.Equal(result.TotalRuns, result.Log.Sum(e => e.RunsScored));
+        // ログの打点合計 ≤ 両チーム総得点。打席の RunsScored は打点（RBI）＝打席解決で入った得点で、
+        // 暴投・パスボール・本盗（打席の途中で入る非打点の得点）は総得点には入るがどの打席の RunsScored にも
+        // 乗らない。したがって等号ではなく「打点は総得点の部分集合」が正しい不変条件（打席単位の走者保存則は
+        // RunnerConservationTests が別に固定する）。issue #532 の決定論再生成で seed 200 の試合に暴投得点が1回
+        // 生じ、等号版が破れた（従来は偶然0だっただけ）ため部分集合版へ是正した。
+        Assert.True(result.Log.Sum(e => e.RunsScored) <= result.TotalRuns,
+            $"ログ打点合計 {result.Log.Sum(e => e.RunsScored)} が総得点 {result.TotalRuns} を超えた");
     }
 
     [Fact]

@@ -208,10 +208,14 @@ public static class FieldingResolver
         {
             var (catcher, reach) = NearestReach(fielders, landing);
             var catchBudget = CatchTimeBudget(ground.HangTimeSeconds, catcher, coeff);
-            var catchMargin = catchBudget - reach; // 表示専用（Issue #328②）: 正=余裕あり、負=間に合わず
+            // 捕球余裕（正=余裕あり、負=間に合わず）。判定オーバーレイ「フェア」（Issue #328②）の表示だけでなく、
+            // フライ落球の難度連動（issue #532）にも使う＝平凡な飛球ほど落球確率が下限へ落ちる物理量。
+            var catchMargin = catchBudget - reach;
             if (reach <= catchBudget)
             {
-                var result = MaybeError(fielders, landing, coeff, 0.0, rng, BattedBallResult.Out);
+                // フライ落球は「実際に捕る野手（NearestReach）」の Catching で引く（issue #532 C: 距離で選ぶ
+                // NearestFielder との食い違いを解消）。難度は捕球余裕 catchMargin で伸縮（issue #532 A/B）。
+                var result = MaybeFlyError(catcher, catchMargin, coeff, rng);
                 return Base(result) with
                 {
                     IsFly = true,
@@ -648,12 +652,29 @@ public static class FieldingResolver
         return MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng);
     }
 
-    /// <summary>捕球のみのエラー判定（空中捕球用）。捕球ロール1回のみ。
-    /// extraProb はイレギュラーバウンド加算（Issue #63・フライ捕球では0）。</summary>
-    private static BattedBallResult MaybeError(
-        IReadOnlyList<Fielder> fielders, Vector3D landing, FieldingCoefficients coeff,
-        double extraProb, IRandomSource rng, BattedBallResult onSuccess)
-        => CatchErrorOccurs(fielders, landing, coeff, rng, extraProb) ? BattedBallResult.Error : onSuccess;
+    /// <summary>
+    /// フライ落球の失策確率（issue #532）。捕球余裕 <paramref name="catchMargin"/>[s] から難度を出し、
+    /// フライ専用の基準確率 <see cref="FieldingCoefficients.FlyErrorBaseProb"/> を伸縮させる。
+    /// 難度 = clamp(1 − catchMargin/RoutineMargin, 0, 1)＝余裕が大きい平凡な飛球ほど 0（落球確率が下限へ）、
+    /// 余裕≈0 の際どい飛球で 1（基準確率フル）。守備力連動は内野ゴロと同じ非対称スロープ（弱小側は急・精鋭側は緩）を
+    /// 難度と同時に掛け、平凡な飛球はどの守備力でもほぼ落とさない一方、際どい飛球で守備力差が出るようにする。
+    /// </summary>
+    private static double FlyCatchErrorProb(Fielder catcher, double catchMargin, FieldingCoefficients coeff)
+    {
+        var routine = Math.Max(1e-9, coeff.FlyErrorRoutineMarginSeconds);
+        var difficulty = MathUtil.Clamp(1.0 - catchMargin / routine, 0.0, 1.0);
+        var catchingDelta = catcher.Attributes.Catching - 50;
+        var slope = catchingDelta < 0 ? coeff.ErrorCatchingSlope : coeff.ErrorCatchingSlopeStrong;
+        var errProb = (coeff.FlyErrorBaseProb - catchingDelta * slope) * difficulty;
+        return MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb);
+    }
+
+    /// <summary>フライ落球の判定（rng を1回消費＝従来のフライ捕球エラー判定と乱数消費順は同一, issue #532）。
+    /// 落球確率だけが難度・実捕球者連動へ変わる（結果は変わる＝決定論 baseline 再生成を伴う。不変条件#2 は保たれる）。</summary>
+    private static BattedBallResult MaybeFlyError(
+        Fielder catcher, double catchMargin, FieldingCoefficients coeff, IRandomSource rng)
+        => MathUtil.Chance(FlyCatchErrorProb(catcher, catchMargin, coeff), rng)
+            ? BattedBallResult.Error : BattedBallResult.Out;
 
     /// <summary>
     /// 内野ゴロ→一塁送球のエラー判定（Issue #37, design-14 P1-6b）。捕球ロール(Catching)→送球ロール(ThrowAccuracy)の
