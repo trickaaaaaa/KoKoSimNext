@@ -99,8 +99,10 @@ public sealed record FieldingCoefficients
     // new GameContext() の既定を使う）とsim/テストで同じ守備力連動になるよう揃える。変更時は
     // determinism-baseline.txt の再生成が必要（DeterminismBaselineDump）。
     /// <summary>捕球エラーの基準確率（Catching50時）。送球ロール(ThrowErrorBaseProb)有効化に伴い再配分（issue #169, 2026-07-23）：
-    /// 旧0.064（捕球のみで両軍計≈2.4/試合校正）から、内野ゴロ失策の約40%を送球由来へ移す分だけ捕球側を下げた値。</summary>
-    public double ErrorBaseProb { get; init; } = 0.0384;
+    /// 旧0.064（捕球のみで両軍計≈2.4/試合校正）から、内野ゴロ失策の約40%を送球由来へ移す分だけ捕球側を下げた値。
+    /// issue #532（2026-08-08）で×1.29（0.0384→0.0495）：外野フライ落球を難度連動（<see cref="FlyErrorBaseProb"/>）で減らした分、
+    /// errors_per_game を現行水準（≈2.4）に保つため内野ゴロ側を引き上げた（捕球60/送球40の按分は維持）。</summary>
+    public double ErrorBaseProb { get; init; } = 0.0495;
     /// <summary>捕球(Catching−50)あたりのエラー変化（守備が平均より低い側＝弱小の傾き）。急にして弱小同士を大量失策に。</summary>
     public double ErrorCatchingSlope { get; init; } = 0.0065;
     /// <summary>守備が平均(50)より高い側の傾き（弱小側 ErrorCatchingSlope と非対称）。緩くして精鋭側に
@@ -112,12 +114,30 @@ public sealed record FieldingCoefficients
     /// 大量失策（両校計10個規模）にするための天井。</summary>
     public double ErrorMaxProb { get; init; } = 0.30;
 
+    // 空中捕球（フライ落球）の失策モデル（issue #532, 2026-08-08）。内野ゴロの ErrorBaseProb（＝捕球60%/送球40%の
+    // 按分で校正した内野向けの基準）を共有していたため、平凡なフライも際どい飛球も同じ確率で落球し、外野が全失策の
+    // 約39%を占めていた。フライ専用の基準確率＋捕球余裕（catchMargin＝物理層の滞空予算−到達所要）連動の難度で
+    // 伸縮させる（不変条件#1: catchMargin は滞空時間と到達時間から出た物理量）。乱数消費は従来どおり1ロールのまま
+    // （確率だけが変わる＝決定論 baseline の再生成を伴う。不変条件#2 の同シード同結果は保たれる）。
+    /// <summary>
+    /// フライ落球の基準確率（捕球余裕≈0＝ぎりぎりの飛球・Catching50時）。<see cref="ErrorBaseProb"/>（内野ゴロ）とは
+    /// 独立に校正する。実効確率は <see cref="FlyErrorRoutineMarginSeconds"/> による難度で 0（平凡）〜この値（際どい）へ伸縮する。
+    /// </summary>
+    public double FlyErrorBaseProb { get; init; } = 0.20;
+    /// <summary>
+    /// フライを「平凡（難度0＝落球確率が下限 <see cref="ErrorMinProb"/> 近くへ落ちる）」とみなす捕球余裕[s]。
+    /// 難度 = clamp(1 − catchMargin/この値, 0, 1)。余裕がこの秒数以上ある飛球は難度0（＝ほぼ確実に捕る）、
+    /// 余裕0で難度1（＝基準確率フル）。大きいほど「難しい飛球」の範囲が広がり外野失策が増える＝帯校正ノブ。
+    /// </summary>
+    public double FlyErrorRoutineMarginSeconds { get; init; } = 0.35;
+
     // 送球エラー（内野ゴロ→一塁の2段階目, Issue #37 / design-14 P1-6b）。捕球ロール(Catching)の後に
     // 送球ロール(ThrowAccuracy)を引く。既定 base=0.0 は「送球ロールを一切引かない」＝現行の捕球のみ判定と
     // 乱数消費順・結果とも完全一致（ErrorExtraAdvanceProb と同じ gating 方式で決定論を保つ）。
     /// <summary>送球エラーの基準確率（ThrowAccuracy50時）。issue #169で 0.0→0.0266 に正値化＝実ゲームで悪送球が発火。
-    /// Ac50 で内野ゴロ失策の約40%が送球由来になる按分（残り≈60%が捕球由来 ErrorBaseProb）。決定論baselineは再生成済み。</summary>
-    public double ThrowErrorBaseProb { get; init; } = 0.0266;
+    /// Ac50 で内野ゴロ失策の約40%が送球由来になる按分（残り≈60%が捕球由来 ErrorBaseProb）。
+    /// issue #532 で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）。決定論baselineは再生成済み。</summary>
+    public double ThrowErrorBaseProb { get; init; } = 0.0343;
     /// <summary>送球精度(ThrowAccuracy−50)あたりの送球エラー確率の減少幅。精度が高いほど悪送球が減る。
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;

@@ -412,6 +412,8 @@ public static class CoefficientsLoader
         public double ErrorCatchingSlopeStrong { get; set; } = D.ErrorCatchingSlopeStrong;
         public double ErrorMinProb { get; set; } = D.ErrorMinProb;
         public double ErrorMaxProb { get; set; } = D.ErrorMaxProb;
+        public double FlyErrorBaseProb { get; set; } = D.FlyErrorBaseProb;
+        public double FlyErrorRoutineMarginSeconds { get; set; } = D.FlyErrorRoutineMarginSeconds;
         public double ThrowErrorBaseProb { get; set; } = D.ThrowErrorBaseProb;
         public double ThrowErrorAccuracySlope { get; set; } = D.ThrowErrorAccuracySlope;
         public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
@@ -464,6 +466,8 @@ public static class CoefficientsLoader
             ErrorCatchingSlopeStrong = ErrorCatchingSlopeStrong,
             ErrorMinProb = ErrorMinProb,
             ErrorMaxProb = ErrorMaxProb,
+            FlyErrorBaseProb = FlyErrorBaseProb,
+            FlyErrorRoutineMarginSeconds = FlyErrorRoutineMarginSeconds,
             ThrowErrorBaseProb = ThrowErrorBaseProb,
             ThrowErrorAccuracySlope = ThrowErrorAccuracySlope,
             CatchReachFieldingSlope = CatchReachFieldingSlope,

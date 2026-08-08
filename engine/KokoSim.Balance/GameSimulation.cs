@@ -19,6 +19,15 @@ public static class GameSimulation
     // 球種別集計（設計書15 Phase E-4）の配列長。PitchType enum の要素数。
     private static readonly int PitchTypeCount = System.Enum.GetValues(typeof(PitchType)).Length;
 
+    // 守備位置別・フライ/ゴロ別の失策内訳（issue #532）用の配列長。FieldPosition enum の要素数。
+    private static readonly int FieldPositionCount = System.Enum.GetValues(typeof(FieldPosition)).Length;
+
+    // 外野の添字（外野失策シェアの分子）。
+    private static readonly int[] OutfieldPositionIndices =
+    {
+        (int)FieldPosition.LeftField, (int)FieldPosition.CenterField, (int)FieldPosition.RightField,
+    };
+
     private static readonly FieldPosition[] FieldSlots =
     {
         FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
@@ -77,6 +86,39 @@ public static class GameSimulation
             SwingsByPitchType[(int)type] > 0 ? (double)WhiffsByPitchType[(int)type] / SwingsByPitchType[(int)type] : 0;
         public double ChaseRateOf(PitchType type) =>
             OutOfZoneByPitchType[(int)type] > 0 ? (double)ChasesByPitchType[(int)type] / OutOfZoneByPitchType[(int)type] : 0;
+
+        // ===== 守備位置別・フライ/ゴロ別の失策内訳（issue #532: 外野フライ落球の偏りを測る）=====
+        // FieldPosition enum の添字。整数集計＝並列マージ順に依らず決定論。機会＝その位置が処理した打球
+        // （InPlayOut または ReachedOnError。安打で終わった打球は含まない）、失策＝そのうち ReachedOnError。
+        public long[] FlyChancesByPos { get; init; } = new long[FieldPositionCount];
+        public long[] FlyErrorsByPos { get; init; } = new long[FieldPositionCount];
+        public long[] GroundChancesByPos { get; init; } = new long[FieldPositionCount];
+        public long[] GroundErrorsByPos { get; init; } = new long[FieldPositionCount];
+
+        /// <summary>ログから数えた失策総数（両軍計・全試合。フライ落球＋ゴロ失策）。外野シェアの分母。</summary>
+        public long TotalLoggedErrors
+        {
+            get
+            {
+                long sum = 0;
+                for (var i = 0; i < FlyErrorsByPos.Length; i++) sum += FlyErrorsByPos[i] + GroundErrorsByPos[i];
+                return sum;
+            }
+        }
+
+        /// <summary>外野（左中右翼）の失策総数（フライ落球＋ゴロ失策）。issue #532 の外野シェアの分子。</summary>
+        public long OutfieldErrors
+        {
+            get
+            {
+                long sum = 0;
+                foreach (var i in OutfieldPositionIndices) sum += FlyErrorsByPos[i] + GroundErrorsByPos[i];
+                return sum;
+            }
+        }
+
+        /// <summary>外野失策シェア（外野失策÷全失策）。issue #532: 修正前 0.393。目標帯 0.05–0.20。</summary>
+        public double OutfieldErrorShare => TotalLoggedErrors > 0 ? (double)OutfieldErrors / TotalLoggedErrors : 0;
 
         public double AverageRunsPerTeam => Games > 0 ? (double)TotalTeamRuns / (Games * 2) : 0;
         /// <summary>本塁クロスプレー憤死/試合（両軍計。設計書12 §3 F2の参考指標）。</summary>
@@ -174,6 +216,11 @@ public static class GameSimulation
         public readonly long[] Whiffs = new long[PitchTypeCount];
         public readonly long[] OutOfZone = new long[PitchTypeCount];
         public readonly long[] Chases = new long[PitchTypeCount];
+        // 守備位置別・フライ/ゴロ別の失策内訳（issue #532）。FieldPosition enum の添字。
+        public readonly long[] FlyChances = new long[FieldPositionCount];
+        public readonly long[] FlyErrors = new long[FieldPositionCount];
+        public readonly long[] GroundChances = new long[FieldPositionCount];
+        public readonly long[] GroundErrors = new long[FieldPositionCount];
 
         public void Add(GameResult r, int regulationInnings, StrikeZone zone)
         {
@@ -202,6 +249,18 @@ public static class GameSimulation
             foreach (var e in r.Log)
             {
                 if (e.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.HomeRun) TotalHomeRuns++;
+
+                // 守備位置別・フライ/ゴロ別の失策内訳（issue #532）。処理野手が確定した打球（凡打 or 失策出塁）を
+                // フライ/ゴロ別に機会として数え、ReachedOnError を失策として数える。安打で終わった打球は機会に含めない。
+                if (e.FieldedBy is { } pos
+                    && e.Result is KokoSim.Engine.Match.AtBat.PlateAppearanceResult.InPlayOut
+                        or KokoSim.Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError)
+                {
+                    var pi = (int)pos;
+                    var isError = e.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.ReachedOnError;
+                    if (e.BattedIsFly) { FlyChances[pi]++; if (isError) FlyErrors[pi]++; }
+                    else { GroundChances[pi]++; if (isError) GroundErrors[pi]++; }
+                }
 
                 // 球種別の空振り率・チェイス率（設計書15 Phase E-4）。PitchLog は AtBatSession 経由の打席にのみ載る。
                 if (e.PitchLog is null) continue;
@@ -263,6 +322,13 @@ public static class GameSimulation
                 OutOfZone[i] += o.OutOfZone[i];
                 Chases[i] += o.Chases[i];
             }
+            for (var i = 0; i < FieldPositionCount; i++)
+            {
+                FlyChances[i] += o.FlyChances[i];
+                FlyErrors[i] += o.FlyErrors[i];
+                GroundChances[i] += o.GroundChances[i];
+                GroundErrors[i] += o.GroundErrors[i];
+            }
             HomeWins += o.HomeWins;
             Ties += o.Ties;
             Extra += o.Extra;
@@ -305,6 +371,10 @@ public static class GameSimulation
             WhiffsByPitchType = Whiffs,
             OutOfZoneByPitchType = OutOfZone,
             ChasesByPitchType = Chases,
+            FlyChancesByPos = FlyChances,
+            FlyErrorsByPos = FlyErrors,
+            GroundChancesByPos = GroundChances,
+            GroundErrorsByPos = GroundErrors,
         };
     }
 
@@ -422,6 +492,7 @@ public static class GameSimulation
         sb.AppendLine(c, $"| 三塁憤死/試合 | {s.AverageThirdPlayOutsPerGame:F3} | 0.02–0.40 |");
         sb.AppendLine(c, $"| 併殺打/試合（両軍計） | {s.DoublePlaysPerGame:F3} | 0.70–2.20 |");
         sb.AppendLine(c, $"| 失策数/試合（両軍計） | {s.ErrorsPerGame:F2} | 1.8–3.6 |");
+        sb.AppendLine(c, $"| 外野失策シェア | {s.OutfieldErrorShare:P1} | 5–20% |");
         sb.AppendLine(c, $"| 三振率（打席あたり） | {s.StrikeoutRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 四球率（打席あたり） | {s.WalkRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 死球率（打席あたり） | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
@@ -440,6 +511,29 @@ public static class GameSimulation
         sb.AppendLine(c, $"| 暴投・パスボール | {s.WildPitchesPerGame:F3} |");
         sb.AppendLine(c, $"| 盗塁成功率（参考） | {s.StealSuccessRate:P1}（試行 {s.TotalStealAttempts}） |");
         sb.AppendLine(c, $"| 犠打成功率（参考） | {s.SacrificeBuntSuccessRate:P1}（試行 {s.TotalSacrificeBunts}） |");
+        sb.AppendLine();
+        sb.AppendLine("## 守備位置別・フライ/ゴロ別 失策内訳（issue #532）");
+        sb.AppendLine();
+        sb.AppendLine(c,
+            $"- 外野失策シェア: {s.OutfieldErrorShare:P1}（外野失策 {s.OutfieldErrors} / 全失策 {s.TotalLoggedErrors}）目標帯 5–20%");
+        sb.AppendLine("- 機会＝その位置が処理した打球（凡打 or 失策出塁。安打で終わった打球は除く）／落球・失策＝そのうち ReachedOnError");
+        sb.AppendLine();
+        sb.AppendLine("| 守備位置 | フライ機会 | 落球 | 率 | ゴロ機会 | 失策 | 率 |");
+        sb.AppendLine("|---|---|---|---|---|---|---|");
+        long totFlyCh = 0, totFlyErr = 0, totGrCh = 0, totGrErr = 0;
+        foreach (var pos in ReportPositions)
+        {
+            var pi = (int)pos;
+            var flyCh = s.FlyChancesByPos[pi];
+            var flyErr = s.FlyErrorsByPos[pi];
+            var grCh = s.GroundChancesByPos[pi];
+            var grErr = s.GroundErrorsByPos[pi];
+            totFlyCh += flyCh; totFlyErr += flyErr; totGrCh += grCh; totGrErr += grErr;
+            sb.AppendLine(c,
+                $"| {PositionName(pos)} | {flyCh} | {flyErr} | {Rate(flyErr, flyCh):P2} | {grCh} | {grErr} | {Rate(grErr, grCh):P2} |");
+        }
+        sb.AppendLine(c,
+            $"| 合計 | {totFlyCh} | {totFlyErr} | {Rate(totFlyErr, totFlyCh):P2} | {totGrCh} | {totGrErr} | {Rate(totGrErr, totGrCh):P2} |");
         sb.AppendLine();
         sb.AppendLine("## 球種別の空振り率・チェイス率（設計書15 Phase E-4）");
         sb.AppendLine();
@@ -466,6 +560,31 @@ public static class GameSimulation
         }
         return sb.ToString();
     }
+
+    /// <summary>失策内訳レポートの守備位置の並び（issue #532。投→捕は最後）。</summary>
+    private static readonly FieldPosition[] ReportPositions =
+    {
+        FieldPosition.Pitcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
+        FieldPosition.ThirdBase, FieldPosition.Shortstop, FieldPosition.LeftField,
+        FieldPosition.CenterField, FieldPosition.RightField, FieldPosition.Catcher,
+    };
+
+    private static double Rate(long errors, long chances) => chances > 0 ? (double)errors / chances : 0.0;
+
+    /// <summary>守備位置の日本語表示名（失策内訳レポート用）。</summary>
+    private static string PositionName(FieldPosition p) => p switch
+    {
+        FieldPosition.Pitcher => "投手",
+        FieldPosition.Catcher => "捕手",
+        FieldPosition.FirstBase => "一塁",
+        FieldPosition.SecondBase => "二塁",
+        FieldPosition.ThirdBase => "三塁",
+        FieldPosition.Shortstop => "遊撃",
+        FieldPosition.LeftField => "左翼",
+        FieldPosition.CenterField => "中堅",
+        FieldPosition.RightField => "右翼",
+        _ => p.ToString(),
+    };
 
     /// <summary>球種の日本語表示名（用語集準拠）。</summary>
     private static string PitchTypeName(PitchType t) => t switch

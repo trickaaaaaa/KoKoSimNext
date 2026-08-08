@@ -45,6 +45,9 @@ public sealed record GameTargets
     /// <summary>失策数/試合（両軍計）。乱数生成母平均≈3.4（弱小裾の大量失策込み・中央値C50同士は≈2.4）。issue #123で新設。</summary>
     public Band ErrorsPerGame { get; init; } = new(1.8, 3.6);
 
+    /// <summary>外野失策シェア（外野失策÷全失策。issue #532）。修正前0.393＝フライ捕球に難度が無かった。実野球はおよそ1割。</summary>
+    public Band OutfieldErrorShare { get; init; } = new(0.05, 0.20);
+
     // ===== design-14 第1段（P1）新プレー発生率/試合（両軍計）。采配Brain不要＝無指示でも発生する常時系 =====
     public Band FieldersChoicePerGame { get; init; } = new(0.10, 1.20);
     public Band DroppedThirdStrikePerGame { get; init; } = new(0.02, 0.40);
@@ -108,6 +111,7 @@ public static class BalanceTargetsLoader
             ThirdPlayOutsPerGame = g.ThirdPlayOutsPerGame?.ToBand() ?? new Band(0.02, 0.40),
             DoublePlayPerGame = g.DoublePlayPerGame?.ToBand() ?? new Band(0.70, 2.20),
             ErrorsPerGame = g.ErrorsPerGame?.ToBand() ?? new Band(1.8, 3.6),
+            OutfieldErrorShare = g.OutfieldErrorShare?.ToBand() ?? new Band(0.05, 0.20),
             FieldersChoicePerGame = g.FieldersChoicePerGame?.ToBand() ?? new Band(0.10, 1.20),
             DroppedThirdStrikePerGame = g.DroppedThirdStrikePerGame?.ToBand() ?? new Band(0.02, 0.40),
             ErrorExtraAdvancePerGame = g.ErrorExtraAdvancePerGame?.ToBand() ?? new Band(0.10, 0.80),
@@ -193,6 +197,7 @@ public static class BalanceTargetsLoader
         public BandDto? ThirdPlayOutsPerGame { get; set; }
         public BandDto? DoublePlayPerGame { get; set; }
         public BandDto? ErrorsPerGame { get; set; }
+        public BandDto? OutfieldErrorShare { get; set; }
         public BandDto? FieldersChoicePerGame { get; set; }
         public BandDto? DroppedThirdStrikePerGame { get; set; }
         public BandDto? ErrorExtraAdvancePerGame { get; set; }
