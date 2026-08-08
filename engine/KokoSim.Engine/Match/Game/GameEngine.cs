@@ -244,6 +244,15 @@ public static class GameEngine
             if (p.ScenarioSkipsFirstTop) p.ScenarioSkipsFirstTop = false;
             else foreach (var s in PlayHalfSteps(p, p.Away, p.Home, walkoff: null, isTop: true)) yield return s;
 
+            // 規定回未満でも、表を終えた時点で後攻が既にコールド差でリードしていれば裏は行わず終了する
+            // （規定回以降の「後攻リードで裏を省く」は下の既存判定に任せる＝挙動不変。issue #537）。
+            if (ctx.MercyRuleEnabled && p.Inning < ctx.RegulationInnings
+                && p.Home.Runs > p.Away.Runs && IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+            {
+                p.MercyEnded = true;
+                break;
+            }
+
             // 最終回以降、後攻が既にリードなら裏の攻撃はしない。
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs > p.Away.Runs) break;
 

@@ -1,4 +1,5 @@
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Debugging;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
@@ -181,6 +182,51 @@ public sealed class GameEngineTests
             if (r.InningsPlayed == 9) nineInningGames++;
         }
         Assert.True(nineInningGames > 0);
+    }
+
+    /// <summary>issue #537: 5回表を終えた時点で後攻が10点差リード → 5回裏を行わず終了する。</summary>
+    [Fact]
+    public void MercyEnabled_HomeLeadsAfterTop5By10_EndsWithoutPlayingBottom()
+    {
+        var ctx = new GameContext { MercyRuleEnabled = true };
+        var scenario = new ScenarioStart { Inning = 5, IsTop = false, AwayScore = 0, HomeScore = 10 };
+        var p = GameEngine.NewProgress(BuildTeam("A"), BuildTeam("H"), ctx, new Xoshiro256Random(1), scenarioStart: scenario);
+        foreach (var _ in GameEngine.Steps(p)) { }
+        var r = GameEngine.BuildResult(p);
+
+        Assert.True(r.MercyEnded);
+        Assert.Equal(5, r.InningsPlayed);
+        Assert.Equal(5, r.AwayLineScore.Count);
+        Assert.Equal(4, r.HomeLineScore.Count); // 5回裏は消化しない
+    }
+
+    /// <summary>issue #537: 7回表を終えた時点で後攻が7点差リード → 7回裏を行わず終了する。</summary>
+    [Fact]
+    public void MercyEnabled_HomeLeadsAfterTop7By7_EndsWithoutPlayingBottom()
+    {
+        var ctx = new GameContext { MercyRuleEnabled = true };
+        var scenario = new ScenarioStart { Inning = 7, IsTop = false, AwayScore = 0, HomeScore = 7 };
+        var p = GameEngine.NewProgress(BuildTeam("A"), BuildTeam("H"), ctx, new Xoshiro256Random(2), scenarioStart: scenario);
+        foreach (var _ in GameEngine.Steps(p)) { }
+        var r = GameEngine.BuildResult(p);
+
+        Assert.True(r.MercyEnded);
+        Assert.Equal(7, r.InningsPlayed);
+        Assert.Equal(7, r.AwayLineScore.Count);
+        Assert.Equal(6, r.HomeLineScore.Count); // 7回裏は消化しない
+    }
+
+    /// <summary>issue #537 回帰: 先攻がコールド差でリードしている場合は、従来どおり裏を消化してから成立する。</summary>
+    [Fact]
+    public void MercyEnabled_AwayLeadsAfterTop5By10_StillPlaysBottom()
+    {
+        var ctx = new GameContext { MercyRuleEnabled = true };
+        var scenario = new ScenarioStart { Inning = 5, IsTop = true, AwayScore = 10, HomeScore = 0 };
+        var p = GameEngine.NewProgress(BuildTeam("A"), BuildTeam("H"), ctx, new Xoshiro256Random(3), scenarioStart: scenario);
+        foreach (var _ in GameEngine.Steps(p)) { }
+        var r = GameEngine.BuildResult(p);
+
+        Assert.True(r.HomeLineScore.Count >= 5); // 5回裏は消化されている
     }
 
     private static Player Position(FieldPosition pos) => new()
