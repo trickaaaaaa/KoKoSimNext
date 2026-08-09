@@ -106,6 +106,9 @@ namespace KokoSim.Unity.Match
             ctrl.PickSubstitutionSlotForCapture(FieldPosition.LeftField);
             ctrl.PickSubstitutionCandidateForCapture(0);
             var note2 = ctrl.SubstitutionNoteForCapture;
+            // 守備を変える操作で**野手能力**の比較が出ていること（issue #452 指摘4）の絵。
+            // 確定後は選択が消えて比較が空になるので、保留中に撮る。
+            yield return Capture(ctrl, "4-defensive-sub-pending", reopen: false);
             ctrl.ApplySubstitutionForCapture();
             yield return null;
             Check("④ 守備固め", beforeLf, SlotName(ctrl, FieldPosition.LeftField), ctrl, note2);
