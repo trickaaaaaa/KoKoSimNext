@@ -11,17 +11,15 @@ namespace KokoSim.Unity.Shell
     public readonly struct SaveSlotInfo
     {
         public string SlotId { get; }
-        public bool IsAuto { get; }
         public bool Exists { get; }
         public bool Corrupt { get; }
         public int Week { get; }
         public int YearIndex { get; }
         public DateTime SavedAt { get; }
 
-        public SaveSlotInfo(string slotId, bool isAuto, bool exists, bool corrupt, int week, int yearIndex, DateTime savedAt)
+        public SaveSlotInfo(string slotId, bool exists, bool corrupt, int week, int yearIndex, DateTime savedAt)
         {
             SlotId = slotId;
-            IsAuto = isAuto;
             Exists = exists;
             Corrupt = corrupt;
             Week = week;
@@ -37,7 +35,8 @@ namespace KokoSim.Unity.Shell
     public enum SaveSlotsEntry { Title, Home }
 
     /// <summary>
-    /// セーブスロットの一覧・メタ読み取り・削除（issue #508 F1）。手動3枠＋オート1枠を固定で持つ。
+    /// セーブスロットの一覧・メタ読み取り・削除（issue #508 F1）。<b>手動3枠だけ</b>を固定で持つ
+    /// （オート枠は廃止・監督決定 2026-08-09。保存はプレイヤーの明示操作だけにする）。
     /// 「形」は <see cref="SaveCodec"/>、ファイルIOは <see cref="SaveGameIO"/> に任せ、ここはスロットの
     /// 並び・存在確認・削除・保存/上書きの入口だけを持つ。
     ///
@@ -47,25 +46,33 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public static class SaveSlots
     {
-        public const string AutoSlotId = "auto";
-
         /// <summary>直近の画面遷移元（<see cref="TitleController"/> / <c>HomeDashboardController</c> が
         /// <c>ShowDeferred("SaveSlots")</c> の直前に設定する）。</summary>
         public static SaveSlotsEntry Entry { get; set; } = SaveSlotsEntry.Title;
 
-        /// <summary>手動スロットID（3枠）。</summary>
-        public static readonly string[] ManualSlotIds = { "manual1", "manual2", "manual3" };
+        /// <summary>一覧の表示順（手動1〜3）。オート枠は廃止した（監督決定 2026-08-09）。</summary>
+        public static readonly string[] AllSlotIds = { "manual1", "manual2", "manual3" };
 
-        /// <summary>一覧の表示順（手動1〜3→オート）。</summary>
-        public static readonly string[] AllSlotIds = { "manual1", "manual2", "manual3", AutoSlotId };
-
-        public static bool IsAuto(string slotId) => slotId == AutoSlotId;
+        /// <summary>旧オートセーブのファイル名（廃止前の生成物。<see cref="PurgeLegacyAutoSave"/> だけが使う）。</summary>
+        private const string LegacyAutoSlotId = "auto";
 
         public static string PathFor(string slotId) => SaveGameIO.PathForSlot(slotId);
+
+        /// <summary>
+        /// 旧オート枠のファイルを消す（オートセーブ廃止・2026-08-09）。一覧に出ない枠のファイルが残ると
+        /// 「消せないのに容量だけ食う」＋「つづきからが活性なのに一覧が空」になるため、
+        /// 一覧・活性判定のどちらから入っても最初に片付ける。
+        /// </summary>
+        public static void PurgeLegacyAutoSave()
+        {
+            var path = PathFor(LegacyAutoSlotId);
+            if (File.Exists(path)) File.Delete(path);
+        }
 
         /// <summary>どれか1枠でも読めるセーブがあるか（タイトル「つづきから」の活性判定）。</summary>
         public static bool AnySaveExists()
         {
+            PurgeLegacyAutoSave();
             foreach (var id in AllSlotIds)
                 if (File.Exists(PathFor(id))) return true;
             return false;
@@ -76,14 +83,14 @@ namespace KokoSim.Unity.Shell
         {
             var path = PathFor(slotId);
             if (!File.Exists(path))
-                return new SaveSlotInfo(slotId, IsAuto(slotId), exists: false, corrupt: false, week: 0, yearIndex: 0, savedAt: default);
+                return new SaveSlotInfo(slotId, exists: false, corrupt: false, week: 0, yearIndex: 0, savedAt: default);
 
             var savedAt = File.GetLastWriteTime(path);
             if (!SaveGameIO.TryReadText(path, out var json, out _) || SaveCodec.PeekHeader(json) is not { } header
                 || header.Version < 1 || header.Version > SaveCodec.CurrentVersion)
-                return new SaveSlotInfo(slotId, IsAuto(slotId), exists: true, corrupt: true, week: 0, yearIndex: 0, savedAt);
+                return new SaveSlotInfo(slotId, exists: true, corrupt: true, week: 0, yearIndex: 0, savedAt);
 
-            return new SaveSlotInfo(slotId, IsAuto(slotId), exists: true, corrupt: false, header.Week, header.YearIndex, savedAt);
+            return new SaveSlotInfo(slotId, exists: true, corrupt: false, header.Week, header.YearIndex, savedAt);
         }
 
         /// <summary>スロットへ現在状態を保存する（今回 UI からは呼ばない。#509 で使う）。</summary>

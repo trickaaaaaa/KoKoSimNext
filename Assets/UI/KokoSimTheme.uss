@@ -1110,6 +1110,8 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tm-dialog__round { font-size: 19px; color: var(--color-muted); letter-spacing: 2px; }
 .tm-dialog__vs { font-size: 24px; color: var(--color-chalk); margin-top: 6px; }
 .tm-dialog__q { font-size: 21px; color: var(--color-chalk); margin-top: 18px; margin-bottom: 20px; }
+/* 問いに添える補足1行（例: 最後の保存からの経過）。問いより弱く、警告色は使わない（UI原則②）。 */
+.tm-dialog__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: -12px; margin-bottom: 20px; white-space: normal; -unity-text-align: middle-center; }
 .tm-dialog__btns { flex-direction: row; }
 
 /* 試合結果（自動消化） */

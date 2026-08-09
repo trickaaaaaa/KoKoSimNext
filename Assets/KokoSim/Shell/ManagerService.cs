@@ -41,7 +41,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>
         /// 年をまたいでも単調増加する絶対週番号（週1制約のキー）。GameClock の年度＋週から導く。
         /// </summary>
-        public static int AbsoluteWeek => (GameClock.YearIndex - 1) * 50 + GameClock.Week;
+        public static int AbsoluteWeek => GameClock.AbsoluteWeekOf(GameClock.YearIndex, GameClock.Week);
 
         /// <summary>
         /// 試合の委任AIが読む采配値（設計書09/11）。旧ハードコード70を廃し、成長した監督の実値を単一入口で返す
