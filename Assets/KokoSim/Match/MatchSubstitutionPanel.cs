@@ -161,6 +161,43 @@ namespace KokoSim.Unity.Match
             if (index >= 0 && index < _cands.Count) { ClickCandidate(index); Render(); }
         }
 
+        /// <summary>
+        /// スクショ用: いまその守備位置に就いている選手。モーダルの内部モデル（_slots）は開いた瞬間の
+        /// スナップショットなので使わず、engine から選択肢を引き直す＝確定後の姿を読める。
+        /// </summary>
+        public Player FielderForCapture(FieldPosition pos)
+        {
+            if (_prog == null) return null;
+            var opt = _prog.SubstitutionOptions(_teamIsAway);
+            if (pos == FieldPosition.Pitcher)
+                return opt.UsesDh
+                    ? opt.CurrentPitcher
+                    : (opt.PitcherSlot >= 0 && opt.PitcherSlot < opt.Lineup.Count ? opt.Lineup[opt.PitcherSlot] : null);
+            for (var i = 0; i < opt.Lineup.Count; i++)
+            {
+                if (opt.UsesDh && i == opt.DhSlot) continue;
+                if (opt.Lineup[i] != null && opt.Lineup[i].Position == pos) return opt.Lineup[i];
+            }
+            return null;
+        }
+
+        /// <summary>スクショ用: 残っている控えの人数（交代が成立したかの一番素直な証拠）。</summary>
+        public int BenchCountForCapture
+        {
+            get
+            {
+                if (_prog == null) return -1;
+                var opt = _prog.SubstitutionOptions(_teamIsAway);
+                return opt.Reserves != null ? opt.Reserves.Count : -1;
+            }
+        }
+
+        /// <summary>スクショ用: 「この操作を確定」を押す（実行経路はボタンと同一）。issue #452 の操作一巡確認用。</summary>
+        public void ApplyForCapture() => Apply();
+
+        /// <summary>スクショ用: 保留中の操作の要約（フッター文）。確定できる状態かの確認に使う。</summary>
+        public string NoteForCapture => _note?.text ?? "";
+
         /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者）。</summary>
         public void PickRunnerForCapture(int baseIndex)
         {
