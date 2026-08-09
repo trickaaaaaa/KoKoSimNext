@@ -31,6 +31,8 @@ namespace KokoSim.Unity.Member
             yield return null;
 
             Select(member, 0, 1, 0);
+            yield return null;
+            Measure(member, "MemberSetting", "ms-");
             yield return Capture(member, "member-compare-bat");
 
             // 守備適性ダイヤは比較スクロールの下端にあり、既定では窓の外に落ちている（issue #452 の突き合わせ）。
@@ -63,6 +65,63 @@ namespace KokoSim.Unity.Member
 
             Debug.Log("[CmpShooter] DONE");
         }
+
+        /// <summary>
+        /// 比較列の高さの内訳を実測して出す（issue #452 の残件＝守備適性の帯が窓の外に出る問題の判断材料）。
+        /// 「窓に入らない」は目測で語れない＝カード・タブ・表・帯の実寸と、親の余りを数字で出す。
+        /// </summary>
+        private static void Measure(MonoBehaviour ctrl, string label, string prefix)
+        {
+            var root = ctrl.GetComponent<UIDocument>()?.rootVisualElement;
+            if (root == null) return;
+
+            ScrollView scroll = null;
+            foreach (var sv in root.Query<ScrollView>().ToList())
+                foreach (var c in sv.GetClasses())
+                    if (c.EndsWith("cmp-scroll")) scroll = sv;
+            if (scroll == null) { Debug.LogWarning("[CmpMeasure] " + label + ": 比較スクロールが無い"); return; }
+
+            var cards = First(root, prefix + "cmp-cards");
+            var tabs = root.Q<VisualElement>(prefix + "cmp-tabs");
+            var rows = root.Q<VisualElement>(prefix + "cmp-rows");
+            var apt = root.Q<VisualElement>(prefix + "cmp-apt");
+            var panel = scroll.parent;
+
+            Debug.Log("[CmpMeasure] " + label
+                + "\n  比較パネル全体   = " + Px(panel)
+                + "\n  ├ カード         = " + Px(cards)
+                + "\n  ├ タブ           = " + Px(tabs)
+                + "\n  └ 窓（scroll）   = " + F(scroll.contentViewport.resolvedStyle.height)
+                + "\n  中身: 表 = " + Px(rows) + " ／ 帯 = " + Px(apt)
+                + "\n  隠れている量     = " + F(scroll.verticalScroller.highValue)
+                + "  （0 なら全部見えている）"
+                + "\n  カードの中身: " + Children(root.Q<VisualElement>(prefix + "cmp-a")));
+        }
+
+        /// <summary>要素の直下の子を「クラス名=高さ」で並べる（カードのどこが厚いかを見るため）。</summary>
+        private static string Children(VisualElement e)
+        {
+            if (e == null) return "(無し)";
+            var sb = new System.Text.StringBuilder();
+            for (var i = 0; i < e.childCount; i++)
+            {
+                var c = e[i];
+                var cls = "";
+                foreach (var k in c.GetClasses()) { cls = k; break; }
+                sb.Append("\n    ").Append(string.IsNullOrEmpty(cls) ? c.GetType().Name : cls)
+                  .Append(" = ").Append(F(c.resolvedStyle.height));
+            }
+            return sb.ToString();
+        }
+
+        private static VisualElement First(VisualElement root, string className)
+        {
+            foreach (var e in root.Query<VisualElement>(className: className).ToList()) return e;
+            return null;
+        }
+
+        private static string Px(VisualElement e) => e == null ? "(無し)" : F(e.resolvedStyle.height);
+        private static string F(float v) => Mathf.RoundToInt(v) + "px";
 
         // 比較パネルのスクロールを下端／上端へ送る。クラス名は画面ごとに違う（ms-cmp-scroll / lu-cmp-scroll）ので
         // 「cmp-scroll で終わる」で拾う。scrollOffset は verticalScroller.highValue が上限。

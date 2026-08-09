@@ -143,12 +143,16 @@ namespace KokoSim.Unity.Components
         /// <summary>
         /// カテゴリ別ランクのコンパクト版（1字ラベル「打走守投」＋小チップ）。行のメタ枠など
         /// 幅の限られた場所用（Issue #133・練習計画）。フル版と同じくラベル＋文字併記（UI原則③）。
+        /// <paramref name="small"/>＝比較カード埋め込み用（issue #452）。カード幅（約156px）に4組を
+        /// <b>1行で</b>収める＝2段組（<see cref="CategoryRankChipsTwoRow"/>）より縦に42px薄い。
+        /// 比較列は表13行＋守備適性の帯を同時に見せたいので、この縦の差がそのまま効く。
         /// </summary>
-        public static VisualElement CategoryRankChipsCompact(PlayerStrength s)
+        public static VisualElement CategoryRankChipsCompact(PlayerStrength s, bool small = false)
         {
             var box = new VisualElement();
             box.AddToClassList("cat-rank-chips");
             box.AddToClassList("cat-rank-chips--compact");
+            if (small) box.AddToClassList("cat-rank-chips--sm");
             AddCategoryChip(box, "打", s.BattingTier);
             AddCategoryChip(box, "走", s.MobilityTier);
             AddCategoryChip(box, "守", s.DefenseTier);
@@ -469,15 +473,22 @@ namespace KokoSim.Unity.Components
         /// <para>grades は 0〜8 が上の並びに対応する。null や要素不足の側は「—」を出す
         /// （相手校のように <see cref="Players.Player.SourceId"/> が無く名簿へ join できない選手がある）。</para>
         /// </summary>
+        /// <param name="tight">
+        /// 詰め版（issue #452）。比較列（メンバー設定／スタメン設定）は表13行と帯を同時に見せたいので、
+        /// 見出し行を薄く・データ行をチップの高さぎりぎりまで寄せて 90px→70px にする。
+        /// 交代モーダルは高さが別に決まっているので既定（false）のまま＝あちらの見た目は変えない。
+        /// </param>
         public static VisualElement AptitudeStrip(
             IReadOnlyList<string> gradesA, IReadOnlyList<string> gradesB,
-            string labelA, string labelB, string caption = "守備適性")
+            string labelA, string labelB, string caption = "守備適性", bool tight = false)
         {
             var strip = new VisualElement();
             strip.AddToClassList("apt-strip");
+            if (tight) strip.AddToClassList("apt-strip--tight");
 
             var head = new VisualElement();
             head.AddToClassList("apt-strip__row");
+            head.AddToClassList("apt-strip__row--head");   // 詰め版で見出し行だけ薄くするため（USS に nth-child は無い）
             var cap = new Label(caption);
             cap.AddToClassList("apt-strip__lab");
             head.Add(cap);

@@ -76,6 +76,15 @@
     min-width: 24px; height: 26px; font-size: var(--fs-cap);
     padding-left: 3px; padding-right: 3px;
 }
+/* さらに小サイズ（issue #452・比較カード埋め込み）：カード幅約156pxへ4組を1行で収める。
+   折り返すと2段組に戻って縦の得が消えるので、ラベル余白とチップ幅を詰めて 4×(13+20+2)=140px に収める。
+   flex-wrap: nowrap は必須（.cat-rank-chips の wrap を打ち消す）。 */
+.cat-rank-chips--sm { flex-wrap: nowrap; justify-content: center; }
+.cat-rank-chips--sm .cat-rank-chips__label { font-size: 11px; margin-left: 1px; margin-right: 1px; }
+.cat-rank-chips--sm .grade {
+    min-width: 20px; height: 20px; font-size: 11px;
+    padding-left: 2px; padding-right: 2px;
+}
 
 /* ── StackedBar：積み上げ横バー（練習配分の割合可視化, Issue #133） ─
    セグメント色は .stack-bar__seg--X（値は tokens.uss --tm-*）。合計<100% の残りは
@@ -836,7 +845,8 @@
     /* 上端は panel(14px)/画面側コンテナと合わせて積み上がるため詰める（issue #326⑥）。
        詰めた分は球種チャート（cmp-card__pitch）と比較表の可視領域に回る。 */
     padding-top: var(--sp-2);
-    padding-bottom: var(--sp-3);
+    /* 下端は最後の要素（チップ行/チャート）が小さいので詰める（issue #452）。 */
+    padding-bottom: var(--sp-1);
 }
 .cmp-card__lab { font-size: 14px; color: var(--color-ink); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
 .cmp-card__lab--a { background-color: var(--cmp-a); }
@@ -847,13 +857,17 @@
 .cmp-card__name {
     font-size: var(--fs-body);
     color: var(--color-chalk);
-    margin-top: var(--sp-1);
+    /* 上の余白はカードの padding-top と積み上がるので持たない（issue #452）。 */
+    margin-top: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.cmp-card__meta { flex-direction: row; align-items: center; margin-top: 2px; }
-.cmp-card__hand { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-1); }
+/* メタ行（学年＋投打）は補助情報なので行箱を詰める（issue #452）。--fs-cap(17px) のままだと
+   CJK の行箱で40pxになり、比較列に守備適性の帯が入らない。読ませるのは上の名前（明朝）で、
+   ここは添え物＝13px・行高22pxに落とす。 */
+.cmp-card__meta { flex-direction: row; align-items: center; margin-top: 0; height: 22px; }
+.cmp-card__hand { font-size: 13px; color: var(--color-muted); margin-right: var(--sp-1); }
 .cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }
 .cmp-card .cat-rank-chips { margin-top: var(--sp-2); }
 /* 持ち球のミニ球種変化チャート（部品 PitchChartView・compact）。Painter2D 描画のため固定高を確保（issue #94） */
@@ -1090,6 +1104,16 @@
    ラベル列の幅は同じパネルの .cmp-row__lab と揃える＝縦の線が通る（揃わないと帯だけ左右にずれて見える）。 */
 .apt-strip { flex-shrink: 0; margin-top: var(--sp-2); }
 .apt-strip__row { flex-direction: row; align-items: center; min-height: 30px; }
+/* 詰め版（issue #452・メンバー設定／スタメン設定）: 比較列は 表13行＋帯 を同時に見せたいので、
+   見出し行を薄く・データ行を chip の高さ(22px)ぎりぎりまで寄せる。90px→70px。
+   交代モーダルは高さが別に決まっている（msub-cmp-scroll）ので付けない＝あちらの見た目は変えない。 */
+.apt-strip--tight { margin-top: 0; }
+.apt-strip--tight .apt-strip__row { min-height: 26px; }
+.apt-strip--tight .apt-strip__row--head { min-height: 18px; }
+.apt-strip--tight .apt-strip__pos { font-size: 13px; }
+/* データ行の高さは chip(22px) でなく **ラベル列の行箱** が決めていた（--fs-cap 17px の CJK 行箱が32px）。
+   min-height を下げるだけでは縮まないので、詰め版はラベルも小さくする。 */
+.apt-strip--tight .apt-strip__lab { font-size: 13px; }
 .apt-strip__lab {
     width: 76px;
     flex-shrink: 0;

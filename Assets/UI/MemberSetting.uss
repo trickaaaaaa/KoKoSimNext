@@ -92,7 +92,8 @@
 }
 .ms-cmp-card--a { border-right-width: var(--border-w); border-right-color: var(--color-line); }
 
-.ms-cmp-tabs { flex-direction: row; margin-top: var(--sp-2); margin-bottom: var(--sp-1); }
+/* タブ前後の余白は比較列の縦を食うので最小に（issue #452・帯まで収めるため）。 */
+.ms-cmp-tabs { flex-direction: row; margin-top: var(--sp-1); margin-bottom: 2px; }
 .ms-tab {
     flex-grow: 1;
     flex-basis: 0;
@@ -113,4 +114,4 @@
 .ms-cmp-scroll { flex-grow: 1; }
 .ms-cmp-empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; margin-top: var(--sp-4); }
 .ms-cmp-group { font-size: var(--fs-cap); color: var(--color-muted); letter-spacing: 1px; margin-top: var(--sp-1); margin-bottom: var(--sp-1); }
-.ms-cmp-apt { margin-top: var(--sp-1); }
+.ms-cmp-apt { margin-top: 0; }   /* 帯側で margin を持つ（issue #452） */

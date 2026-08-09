@@ -458,7 +458,9 @@ namespace KokoSim.Unity.Member
             // 3画面で同じ部品を使うために、余地のあるこの画面も帯に揃える。
             // 副次効果として、既定で窓の外へ落ちていた 252px のうち 162px が窓に戻る。
             host.Add(UiComponents.AptitudeStrip(
-                v.HasAptA ? v.AptA : null, v.HasAptB ? v.AptB : null, "1人目", "2人目"));
+                v.HasAptA ? v.AptA : null, v.HasAptB ? v.AptB : null, "1人目", "2人目",
+                // 詰め版（issue #452）: 比較列は表13行と帯を同時に見せる。交代モーダルは既定のまま。
+                tight: true));
         }
 
         private static VisualElement NewChild(string cls)
@@ -500,7 +502,9 @@ namespace KokoSim.Unity.Member
             }
             el.Add(meta);
             // 2行固定＋小サイズ（issue #326①）: カード幅が狭く1行4組では中途半端に折り返すため。
-            el.Add(UiComponents.CategoryRankChipsTwoRow(card.Strength, small: true));
+            // 4つの総合ランクは1字ラベル「打走守投」の1行に畳む（issue #452・監督指示 2026-08-09）。
+            // 2段組(66px)だと比較列に守備適性の帯が入らない＝一番厚いここを削る。
+            el.Add(UiComponents.CategoryRankChipsCompact(card.Strength, small: true));
 
             // 持ち球のミニ球種変化チャート（部品 PitchChartView・compact, issue #94 案C）。
             // 投手能力タブのときだけ出す（タブでゲート・投/野区分ではゲートしない, Issue #93/#293）。
