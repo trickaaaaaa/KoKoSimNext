@@ -70,7 +70,7 @@ namespace KokoSim.Unity.Match
         /// </param>
         public MatchSubstitutionPanel(VisualElement root, System.Action onApplied,
             System.Func<int?, IReadOnlyList<string>> aptitudeGrades = null,
-            System.Func<int?, List<PitchChartDatum>> pitchChart = null)
+            System.Func<Player, List<PitchChartDatum>> pitchChart = null)
         {
             _root = root;
             _onApplied = onApplied;
@@ -79,7 +79,7 @@ namespace KokoSim.Unity.Match
         }
 
         private readonly System.Func<int?, IReadOnlyList<string>> _aptitudeGrades;
-        private readonly System.Func<int?, List<PitchChartDatum>> _pitchChart;
+        private readonly System.Func<Player, List<PitchChartDatum>> _pitchChart;
 
         /// <summary>モーダルを開いている間は裏の進行（自動再生・次の打席へ）を止める。</summary>
         public bool IsOpen => _open;
@@ -584,7 +584,6 @@ namespace KokoSim.Unity.Match
 
             if (_cmpRows == null) return;
             _cmpRows.Clear();
-            UiComponents.SetCompareUnitColumn(_cmpRows, pitcherView);
             // 比較列の高さは左の打順表で決まる＝野手ビューの9行（弾道〜精神力）が素の組では入らず、
             // 守備交代の判断に一番要る「守備」「捕球」が既定で窓の外に落ちていた（issue #452）。
             // 密な組に切り替え、グループ名は独立行を持たせずヘッダのラベル列へ畳む。
@@ -593,9 +592,7 @@ namespace KokoSim.Unity.Match
             _cmpRows.Add(UiComponents.CompareHeader(capA, capB, pitcherView ? "投球" : "打撃・走守"));
             foreach (var (label, x, y) in CompareRows(outgoing, incoming, pitcherView))
             {
-                if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Velocity))
-                    _cmpRows.Add(CompareRowEl(label, x, y, KmhText(outgoing), KmhText(incoming)));
-                else if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
+                if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
                     _cmpRows.Add(CompareRowEl(label, x, y, TypeText(x), TypeText(y), hideBar: true));
                 else
                     _cmpRows.Add(CompareRowEl(label, x, y));
@@ -930,7 +927,7 @@ namespace KokoSim.Unity.Match
             // 投手ビューのときだけ出す（ビューでゲート・投/野区分ではゲートしない, issue #93/#293）。
             // 継投は「同じキレでもスライダーかフォークか」で判断が変わる（監督決定 2026-08-09）。
             if (!pitcherView || _pitchChart == null) return;
-            var pitches = _pitchChart(p.SourceId);
+            var pitches = _pitchChart(p);
             if (pitches == null || pitches.Count == 0) return;
             var chartHost = new VisualElement();
             chartHost.AddToClassList("cmp-card__pitch");
@@ -945,7 +942,8 @@ namespace KokoSim.Unity.Match
                 // 並び・項目はエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる
                 // ＝メンバー設定・スタメン設定・練習計画と同じ順（監督決定 2026-08-09）。精神力は AbilityKind 外の
                 // 項目なのでここで足し、向こう（PlayerCompareTabs）の投手能力タブにも同じ位置で足してある。
-                yield return (AbilityLabels.Jp(AbilityKind.Velocity), Velocity(a), Velocity(b));
+                // 球速はこの表に出さない＝カードの持ち球チャートのストレートに km/h で添える
+                // （監督決定 2026-08-09, issue #560。メンバー設定・スタメン設定と同じ扱い）。
                 yield return (AbilityLabels.Jp(AbilityKind.Control), a?.Pitching?.Control ?? -1, b?.Pitching?.Control ?? -1);
                 yield return (AbilityLabels.Jp(AbilityKind.Stamina), Stamina(a), Stamina(b));
                 yield return (AbilityLabels.Jp(AbilityKind.PitchRank), a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
@@ -968,9 +966,6 @@ namespace KokoSim.Unity.Match
             yield return ("肩", a?.ArmStrength ?? -1, b?.ArmStrength ?? -1);
             yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
         }
-
-        private static int Velocity(Player p)
-            => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromVelocityKmh(p.Pitching.MaxVelocityKmh);
 
         // スタミナは Level（0〜100）で出す＝メンバー設定・スタメン設定と同じもの（監督決定 2026-08-09）。
         // 試合用の Player が持つのは目安投球数（issue #356）だけなので、順変換と同じ定数から出す
@@ -1005,9 +1000,6 @@ namespace KokoSim.Unity.Match
                 GradeB = hideBar || b < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(b).ToString(),
                 HideBar = hideBar,
             });
-
-        private static string KmhText(Player p)
-            => p?.Pitching == null ? null : (int)System.Math.Round(p.Pitching.MaxVelocityKmh) + "km/h";
 
         private static string TypeText(int launchTendency)
             => launchTendency < 0 ? null : LaunchTendencyLabels.Jp(launchTendency);

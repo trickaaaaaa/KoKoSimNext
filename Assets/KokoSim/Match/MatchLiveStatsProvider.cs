@@ -101,12 +101,16 @@ namespace KokoSim.Unity.Match
         /// <para>この絵<b>だけ</b>は育成レイヤの値で描く（怪我補正の乗った試合用の値ではない）。見るのは球種の
         /// 構成と変化の形であって能力の大小ではなく、能力の行（＝試合用の実値）とは役割が違う。</para>
         /// </summary>
-        public List<PitchChartDatum> PitchChartOf(int? sourceId)
+        public List<PitchChartDatum> PitchChartOf(Player player)
         {
-            var found = FindDeveloping(sourceId);
+            var found = FindDeveloping(player?.SourceId);
             if (found == null) return null;
-            var topKmh = (int)System.Math.Round(
-                PitcherAttributes.VelocityKmhFromLevel(found.Level(AbilityKind.Velocity)));
+            // 添える km/h は試合用の実値（怪我補正込み）を使う。比較表から球速の行を落として
+            // ここが唯一の球速表示になったので（issue #560）、育成レイヤの Level から出すと
+            // 同じ画面の他の行（すべて実値）と食い違う。
+            var topKmh = (int)System.Math.Round(player?.Pitching != null
+                ? player.Pitching.MaxVelocityKmh
+                : PitcherAttributes.VelocityKmhFromLevel(found.Level(AbilityKind.Velocity)));
             return PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(found), topKmh);
         }
 
