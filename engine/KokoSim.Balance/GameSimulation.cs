@@ -46,6 +46,22 @@ public static class GameSimulation
         public int Ties { get; init; }
         public int ExtraInningGames { get; init; }
         public int Shutouts { get; init; }
+
+        // ===== 先攻/後攻を分けた集計（issue #536）=====
+        // 既存の TotalTeamRuns / Shutouts は両軍を畳んだ値なので、**非対称マッチ**（格下 vs 格上）では
+        // 「どちらが取れなかったのか」が消える。強度を指定して回す計測（teamFactory）はここを見る。
+        /// <summary>先攻の総得点。</summary>
+        public long TotalAwayTeamRuns { get; init; }
+        /// <summary>後攻の総得点。</summary>
+        public long TotalHomeTeamRuns { get; init; }
+        /// <summary>先攻が0点に抑えられた試合数。</summary>
+        public int AwayShutoutGames { get; init; }
+        /// <summary>後攻が0点に抑えられた試合数。</summary>
+        public int HomeShutoutGames { get; init; }
+        /// <summary>先攻の総安打。</summary>
+        public long TotalAwayHits { get; init; }
+        /// <summary>後攻の総安打。</summary>
+        public long TotalHomeHits { get; init; }
         public long TotalPitcherChanges { get; init; }
         public long TotalHomePlayOuts { get; init; }
         public long TotalThirdPlayOuts { get; init; }
@@ -163,8 +179,15 @@ public static class GameSimulation
     /// true で試合ごとの天候（気温）モデル（Issue #120）を有効にする。既定 false＝天候オフ＝従来のベースライン挙動
     /// （既存 games_10k 帯はこちらで校正済み・非破壊）。夏場の乱打効果は applyWeather:true の専用回帰で測る。
     /// </param>
+    /// <param name="teamFactory">
+    /// チーム生成の差し替え口（issue #536）。既定 null＝<see cref="GenerateTeam"/>＝全能力 N(50,12) クランプ[20,88] の
+    /// 合成チーム同士＝**既存の全帯（games_10k 系）はこの経路で校正済み**。ここが null の間は乱数消費列を
+    /// 1ビットも変えない。強度を指定した非対称マッチ（低ティア帯の得点環境）を測るときだけ差す。
+    /// 引数は (試合ローカルの乱数, チーム名, 先攻か)。
+    /// </param>
     public static Stats Run(int games, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null,
-        bool useTacticsBrain = false, bool applyWeather = false)
+        bool useTacticsBrain = false, bool applyWeather = false,
+        Func<IRandomSource, string, bool, Team>? teamFactory = null)
     {
         var ctx = BuildContext(coefficientsPath, field);
         // 天候は既定オフ。coefficients.yaml に weather ブロックがあっても applyWeather:false の間は剥がして従来挙動に固定する。
@@ -188,8 +211,10 @@ public static class GameSimulation
             (i, _, local) =>
             {
                 var g = forks[i];
-                var away = GenerateTeam(g, "遠征校") with { Tactics = brain };
-                var home = GenerateTeam(g, "地元校") with { Tactics = brain };
+                var away = (teamFactory is null ? GenerateTeam(g, "遠征校") : teamFactory(g, "遠征校", true))
+                    with { Tactics = brain };
+                var home = (teamFactory is null ? GenerateTeam(g, "地元校") : teamFactory(g, "地元校", false))
+                    with { Tactics = brain };
                 var r = GameEngine.Play(away, home, ctx, g);
                 local.Add(r, ctx.RegulationInnings, ctx.StrikeZone);
                 return local;
@@ -211,6 +236,10 @@ public static class GameSimulation
         public long TotalSacrificeBunts, TotalSacrificeBuntSuccesses;
         public long TotalStrikeOuts, TotalWalks, TotalHitBatters, TotalHomeRuns, TotalPlateAppearances;
         public int HomeWins, Ties, Extra, Shutouts;
+        // 先攻/後攻を分けた集計（issue #536）。TotalHomeRuns は本塁打の意味で先約済みなので
+        // 後攻の「得点」は TotalHomeRunsScored と名を分ける。
+        public long TotalAwayRuns, TotalHomeRunsScored, TotalAwayHits, TotalHomeHits;
+        public int AwayShutouts, HomeShutouts;
         // 球種別（設計書15 Phase E-4）: enum 添字。
         public readonly long[] Swings = new long[PitchTypeCount];
         public readonly long[] Whiffs = new long[PitchTypeCount];
@@ -284,6 +313,13 @@ public static class GameSimulation
             if (r.Tied) Ties++;
             if (r.InningsPlayed > regulationInnings) Extra++;
             if (r.AwayRuns == 0 || r.HomeRuns == 0) Shutouts++;
+            // 先攻/後攻を分けた集計（issue #536）。非対称マッチで「どちらが取れなかったか」を残す。
+            TotalAwayRuns += r.AwayRuns;
+            TotalHomeRunsScored += r.HomeRuns;
+            if (r.AwayRuns == 0) AwayShutouts++;
+            if (r.HomeRuns == 0) HomeShutouts++;
+            TotalAwayHits += r.AwayHits;
+            TotalHomeHits += r.HomeHits;
             Hist[Math.Min(r.AwayRuns, Hist.Length - 1)]++;
             Hist[Math.Min(r.HomeRuns, Hist.Length - 1)]++;
         }
@@ -333,6 +369,12 @@ public static class GameSimulation
             Ties += o.Ties;
             Extra += o.Extra;
             Shutouts += o.Shutouts;
+            TotalAwayRuns += o.TotalAwayRuns;
+            TotalHomeRunsScored += o.TotalHomeRunsScored;
+            TotalAwayHits += o.TotalAwayHits;
+            TotalHomeHits += o.TotalHomeHits;
+            AwayShutouts += o.AwayShutouts;
+            HomeShutouts += o.HomeShutouts;
         }
 
         public Stats ToStats(int games) => new()
@@ -346,6 +388,12 @@ public static class GameSimulation
             Ties = Ties,
             ExtraInningGames = Extra,
             Shutouts = Shutouts,
+            TotalAwayTeamRuns = TotalAwayRuns,
+            TotalHomeTeamRuns = TotalHomeRunsScored,
+            AwayShutoutGames = AwayShutouts,
+            HomeShutoutGames = HomeShutouts,
+            TotalAwayHits = TotalAwayHits,
+            TotalHomeHits = TotalHomeHits,
             TotalPitcherChanges = TotalChanges,
             TotalHomePlayOuts = TotalHomePlayOuts,
             TotalThirdPlayOuts = TotalThirdPlayOuts,
