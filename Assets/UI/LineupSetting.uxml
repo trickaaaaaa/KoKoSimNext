@@ -82,8 +82,8 @@
 
                 <ui:ScrollView mode="Vertical" class="lu-cmp-scroll">
                     <ui:VisualElement name="lu-cmp-rows" />
-                    <ui:VisualElement name="lu-cmp-stats" class="lu-cmp-stats" />
                     <ui:VisualElement name="lu-cmp-apt" class="lu-cmp-apt" />
+                    <ui:VisualElement name="lu-cmp-stats" class="lu-cmp-stats" />
                 </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -225,6 +225,8 @@ namespace KokoSim.Unity.Lineup
             {
                 // 投手能力タブは球速を km/h で出すので値セルを表ごと広げる（issue #246）。
                 UiComponents.SetCompareUnitColumn(rows, KokoSim.Unity.Shell.PlayerCompareTabs.HasUnitValues(v.Tab));
+                // 行高は試合中の交代モーダルと同じ密な組（32px基準・UI原則①, issue #452）。
+                UiComponents.SetCompareDense(rows, true);
                 rows.Clear();
                 if (v.Rows2.Count == 0)
                 {

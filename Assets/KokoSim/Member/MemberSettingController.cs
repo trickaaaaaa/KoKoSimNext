@@ -426,6 +426,9 @@ namespace KokoSim.Unity.Member
             if (rows == null) return;
             // 投手能力タブは球速を km/h で出すので値セルを表ごと広げる（issue #246）。
             UiComponents.SetCompareUnitColumn(rows, KokoSim.Unity.Shell.PlayerCompareTabs.HasUnitValues(v.Tab));
+            // 行高は試合中の交代モーダルと同じ密な組（32px基準・UI原則①, issue #452）。
+            // 素の組は Label 既定の上下 margin/padding で43pxになり、13行が窓に入らなかった。
+            UiComponents.SetCompareDense(rows, true);
             rows.Clear();
             if (v.Rows.Count == 0)
             {
