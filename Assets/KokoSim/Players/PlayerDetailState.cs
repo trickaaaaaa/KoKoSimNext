@@ -39,6 +39,7 @@ namespace KokoSim.Unity.Players
     public sealed class PitchData
     {
         public string Name = "";
+        public string ShortName = "";  // 略記（狭い器＝比較カードの小型チャート用, issue #560）
         public string Kire = "C";     // キレ（Sharpness→S〜G）＝チップ
         public float DirX;            // 変化方向（画面座標系: +x右 / +y下）
         public float DirY;
@@ -61,6 +62,7 @@ namespace KokoSim.Unity.Players
                 list.Add(new PitchChartDatum
                 {
                     Name = pt.Name,
+                    ShortName = pt.ShortName,
                     Kire = pt.Kire,
                     DirX = pt.DirX,
                     DirY = pt.DirY,
@@ -415,7 +417,7 @@ namespace KokoSim.Unity.Players
                 if (!p.BattingAgainstByPitch.TryGetValue(t, out var line) || line.AtBats == 0) continue;
                 rows.Add(new PitchTypeStatRow
                 {
-                    Label = PitchJp(t),
+                    Label = PitchTypeLabels.Jp(t),
                     AtBats = N(line.AtBats),
                     Hits = N(line.Hits),
                     HomeRuns = N(line.HomeRuns),
@@ -494,7 +496,8 @@ namespace KokoSim.Unity.Players
                 var df = PitchDir(PitchType.Fastball);
                 list.Add(new PitchData
                 {
-                    Name = "ストレート",
+                    Name = PitchTypeLabels.Jp(PitchType.Fastball),
+                    ShortName = PitchTypeLabels.Abbr(PitchType.Fastball),
                     Kire = Tiers.FromStrength(stuffLevel).ToString(),   // 球威(Stuff)＝ストレートの有効軸（Issue #274）
                     DirX = df.x,
                     DirY = df.y,
@@ -519,7 +522,8 @@ namespace KokoSim.Unity.Players
                 var breakScore = lp.PowerOffset + lp.SharpnessOffset;
                 list.Add(new PitchData
                 {
-                    Name = PitchJp(lp.Type),
+                    Name = PitchTypeLabels.Jp(lp.Type),
+                    ShortName = PitchTypeLabels.Abbr(lp.Type),
                     Kire = Tiers.FromStrength(kireScore).ToString(),
                     DirX = dir.x,
                     DirY = dir.y,
@@ -558,22 +562,6 @@ namespace KokoSim.Unity.Players
         private static int Clamp(int v, int lo, int hi) => v < lo ? lo : v > hi ? hi : v;
         private static float ClampF(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
 
-        private static string PitchJp(PitchType t)
-        {
-            switch (t)
-            {
-                case PitchType.Fastball: return "ストレート";
-                case PitchType.TwoSeam: return "ツーシーム";
-                case PitchType.Cutter: return "カットボール";
-                case PitchType.Slider: return "スライダー";
-                case PitchType.Curve: return "カーブ";
-                case PitchType.Fork: return "フォーク";
-                case PitchType.Changeup: return "チェンジアップ";
-                case PitchType.Shuuto: return "シュート";
-                case PitchType.Sinker: return "シンカー";
-                default: return t.ToString();
-            }
-        }
 
         private static string SkillJp(Skill s)
         {
