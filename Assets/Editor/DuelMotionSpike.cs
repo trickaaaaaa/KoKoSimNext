@@ -1890,6 +1890,149 @@ namespace KokoSim.EditorTools
         private static void RunRunnerArriveProbeMenu() => RunRunnerArriveProbe();
 
         /// <summary>
+        /// 頭から突っ込む帰塁（牽制の帰塁）に使う**切り取り位置**を実測する。
+        ///
+        /// <see cref="RunRunnerArriveProbe"/> は「塁に触る瞬間」だけを出すので、
+        /// <c>Sliding_Type02_Succ</c> は「触るまで 1.34s」としか分からない。牽制の帰塁レッグは
+        /// 0.5〜0.75s しか無いので、**そのうち何秒ぶんを見せれば頭から突っ込む形になるか**＝
+        /// 収録のどこから再生すればいいかを決める必要がある（design-18 §4.5-⑬「収録の要らない
+        /// 芝居は尺でなく補正窓で消す」の、窓の端を実測で決める作業）。
+        ///
+        /// 判定材料は**足が地面を離れる瞬間**（＝跳んだ＝ここから先が滑り込み）。
+        /// 出す量:
+        ///   tTouch      … 触る瞬間（<see cref="RunRunnerArriveProbe"/> と同じ定義＝地面高の手足の最前点）
+        ///   tAir        … tTouch より前で**両足が地面から離れた最後の起点**[s]（＝突っ込み始め）
+        ///   lead        … tTouch - tAir[s]＝**見せたい長さ**（切り取る窓の長さ）
+        ///   tHandDown   … 手が地面高（0.35m）まで下りた時刻[s]（突っ込みの形が絵に出る時刻の目安）
+        /// 併せて 0.02s 刻みの生トレース（t/hip/lf/rf/handY/handZ）も吐く＝端の選び直しに使う。
+        /// </summary>
+        public static string RunDiveBackProbe()
+        {
+            var names = new[]
+            {
+                "Offense_Base_Sliding_Type02_Succ", "Offense_Base_Sliding_Type02_Fail",
+                "Offense_Base_Sliding_Type01_Succ", "Offense_Back_To_Base",
+            };
+            const float dt = 0.02f;
+            const float TouchGroundM = 0.35f;   // RunRunnerArriveProbe と同じ「塁に触れる高さ」
+            const float FootAirM = 0.12f;       // 足がこれ以上浮いたら接地していない
+
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+
+                var sum = new StringBuilder();
+                var raw = new StringBuilder();
+                sum.AppendLine("clip\tlen\ttTouch\ttAir\tlead\ttHandDown\tlimb");
+                raw.AppendLine("clip\tt\thip\tlf\trf\thandY\thandZ");
+
+                foreach (var shortName in names)
+                {
+                    var clip = FindClip("AA_Baseball_" + shortName);
+                    if (clip == null) { sum.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                    var hip = new float[n + 1];
+                    var lfY = new float[n + 1];
+                    var rfY = new float[n + 1];
+                    var handY = new float[n + 1];
+                    var handZ = new float[n + 1];
+                    var reachZ = new float[n + 1];
+                    var reachLimb = new HumanBodyBones[n + 1];
+                    var limbs = new[]
+                    {
+                        HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot,
+                        HumanBodyBones.LeftHand, HumanBodyBones.RightHand,
+                    };
+
+                    for (int i = 0; i <= n; i++)
+                    {
+                        float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                        var body = SpawnBody(root, "dive", Vector3.zero, 0f, Color.white);
+                        Sample(body, clip, sec / clip.length);
+                        var anim = body.GetComponentInChildren<Animator>();
+                        var hips = anim.GetBoneTransform(HumanBodyBones.Hips).position;
+                        var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                        var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        var lh = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                        // ⚠ 対地高を「両足の低い方」から採ってはいけない。それだと min(lf,rf) が常に 0 になり
+                        //    **跳んでいる瞬間が定義上存在しなくなる**（実測1回目: tAir がどのクリップでも
+                        //    tTouch と同値＝lead 0.00 になった）。地面はアクターの立っている面で固定する。
+                        float floor = body.transform.position.y;
+                        hip[i] = hips.y - floor;
+                        lfY[i] = lf.y - floor;
+                        rfY[i] = rf.y - floor;
+                        handY[i] = lh.y - floor;
+                        handZ[i] = body.transform.InverseTransformPoint(lh).z;
+
+                        // 触る瞬間の候補。⚠ ここだけは <see cref="RunRunnerArriveProbe"/> と**同じ採り方**
+                        // （足元＝両足の低い方）にしないと runner.tsv の tTouch と突き合わせられない。
+                        float floorFeet = Mathf.Min(lf.y, rf.y);
+                        float best = float.MinValue;
+                        var bestLimb = HumanBodyBones.LeftFoot;
+                        foreach (var b in limbs)
+                        {
+                            var tr = anim.GetBoneTransform(b);
+                            if (tr == null) continue;
+                            if (tr.position.y - floorFeet > TouchGroundM) continue;
+                            float z = body.transform.InverseTransformPoint(tr.position).z;
+                            if (z > best) { best = z; bestLimb = b; }
+                        }
+                        reachZ[i] = best <= float.MinValue * 0.5f ? -99f : best;
+                        reachLimb[i] = bestLimb;
+                        Object.DestroyImmediate(body);
+                    }
+
+                    int iTouch = 0;
+                    float reachMax = float.MinValue;
+                    for (int i = 0; i <= n; i++)
+                        if (reachZ[i] > reachMax) { reachMax = reachZ[i]; iTouch = i; }
+
+                    // 突っ込み始め: iTouch から遡って「両足が浮いている」区間の**始まり**を探す。
+                    // ⚠ 走っている最中も片足ずつは浮くので、**両足とも**浮いている連続区間で採る。
+                    int iAir = iTouch;
+                    while (iAir > 0 && lfY[iAir] > FootAirM && rfY[iAir] > FootAirM) iAir--;
+
+                    // 手が地面高まで下りた時刻（突っ込みの形が絵に出る時刻の目安）
+                    int iHand = iTouch;
+                    while (iHand > 0 && handY[iHand] <= TouchGroundM) iHand--;
+
+                    sum.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F2}\t{6}",
+                        shortName, clip.length, iTouch * dt, iAir * dt, (iTouch - iAir) * dt,
+                        iHand * dt, reachLimb[iTouch]));
+
+                    for (int i = 0; i <= n; i++)
+                        raw.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                            "{0}\t{1:F2}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}",
+                            shortName, i * dt, hip[i], lfY[i], rfY[i], handY[i], handZ[i]));
+                }
+
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/diveback.tsv", sum.ToString());
+                System.IO.File.WriteAllText("out/duel-stage/diveback-raw.tsv", raw.ToString());
+                Debug.Log("[DuelMotionSpike] dive-back probe -> out/duel-stage/diveback.tsv\n" + sum);
+                return sum.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F7 頭から突っ込む帰塁の切り取り位置を実測する")]
+        private static void RunDiveBackProbeMenu() => RunDiveBackProbe();
+
+        /// <summary>
         /// タッチプレーの受け手クリップ（<c>AA_Baseball_Defender_Tag_Out</c> /
         /// <c>AA_Baseball_Catcher_Tag_Out</c>）の**タッチの瞬間**を実測する（issue #489）。
         ///

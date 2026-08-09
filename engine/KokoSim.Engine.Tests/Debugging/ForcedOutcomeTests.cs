@@ -5,6 +5,7 @@ using KokoSim.Engine.Debugging;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Timeline.Playback;
+using KokoSim.Engine.Players;
 using KokoSim.Engine.Tests.Match.Game;
 using Xunit;
 
@@ -195,5 +196,40 @@ public sealed class ForcedOutcomeTests
         Assert.Equal(
             GameResultDigest.Sha256Of(DeterminismCards.Run("avg", 31UL)),
             GameResultDigest.Sha256Of(GameEngine.BuildResult(resumed.Progress)));
+    }
+
+    /// <summary>
+    /// 稀プレー系の強制は「ゲートの確率を1.0へ寄せる」と宣言している（<see cref="ForcedOutcomes.Apply"/>）。
+    /// <b>寄せたつもりで上限係数に頭打ちされていないこと</b>をゲートの実効確率で固定する。
+    ///
+    /// これが無いと壊れても気づけない: <see cref="EveryForcedOutcome_FiresOnceAndDownstreamSurvives"/> は
+    /// 「試合が完走するか」しか見ないので、実効8%でも緑のまま通る。実際に牽制（<see cref="ForcedOutcome.PickoffOut"/>）は
+    /// <c>PickoffBaseProb=1.0</c> だけを上書きしており、<see cref="PickoffResolver.Probability"/> の
+    /// 上限 <c>PickoffMaxProb</c>（既定 0.08）で頭打ち＝**強制になっていなかった**
+    /// （実害: 撮影ハーネスで牽制死が 200打席×2試合流しても撮れなかった）。
+    /// </summary>
+    [Fact]
+    public void ForcedPickoff_ActuallyReachesCertainty()
+    {
+        var applied = ForcedOutcomes.Apply(new BaserunningCoefficients(), ForcedOutcome.PickoffOut);
+
+        // 走者・投手の能力に関わらず 1.0（傾きも潰れていること）。
+        foreach (var (steal, mental) in new[] { (5, 95), (50, 50), (95, 5) })
+        {
+            var p = PickoffResolver.Probability(
+                new Player { Steal = steal }, new Player { Mental = mental }, applied);
+            Assert.True(p >= 1.0, $"Steal={steal}/Mental={mental} で牽制の強制が {p:F3}（1.0 でない）");
+        }
+
+        // 実際に引いても必ず当たる。
+        var rng = new Xoshiro256Random(7UL);
+        for (var i = 0; i < 200; i++)
+            Assert.True(PickoffResolver.Resolve(
+                new Player { Steal = 50 }, new Player { Mental = 50 }, applied, rng));
+
+        // 強制していない素の係数は据え置き（既定 0.08 の帯を動かしていないこと）。
+        var bare = new BaserunningCoefficients();
+        Assert.Equal(0.05, bare.PickoffBaseProb);
+        Assert.Equal(0.08, bare.PickoffMaxProb);
     }
 }
