@@ -56,6 +56,19 @@ public static class BaserunningModel
         => (result is PlateAppearanceResult.Strikeout && !droppedThirdStrikeReached)
            || (result is PlateAppearanceResult.InPlayOut && !batterSafeOnFc);
 
+    /// <summary>
+    /// この着弾コースが「捕手が捕り損ねうる球」か（issue #525）。暴投・捕逸・振り逃げの抽選対象を
+    /// 種別（Ball/CalledStrike/…）でなく実着弾コースで決める唯一の判定式（判定は1箇所に集約する・監督判断 2026-08-07）。
+    /// 低い球（<see cref="BaserunningCoefficients.BatteryMissLowY"/> 未満＝ワンバウンド相当）または大きく外れた球
+    /// （<see cref="Field.StrikeZone.DistanceOutsideM"/> が <see cref="BaserunningCoefficients.BatteryMissOutsideM"/> 以上）
+    /// のみ対象。低い球の閾値は <see cref="Field.StrikeZone.BottomM"/>（=0.50）より下に置いてあるため、
+    /// ストライクゾーンに来た球（捕れる球）は構造的に対象外になる＝ゾーン内の球で暴投・捕逸・振り逃げは起きない。
+    /// </summary>
+    public static bool CanBatteryMiss(
+        double locationX, double locationY, Field.StrikeZone zone, BaserunningCoefficients coeff)
+        => locationY < coeff.BatteryMissLowY
+           || zone.DistanceOutsideM(locationX, locationY) >= coeff.BatteryMissOutsideM;
+
     /// <summary>暴投・パスボール（design-14 P2-8）: 全走者が1つ進塁し、三塁走者は生還する。戻り値=得点。</summary>
     public static int ApplyBatteryMiss(BaseState bases)
     {
@@ -164,6 +177,18 @@ public static class BaserunningModel
     // ※スプリント自体は走力だが、進塁の可否判断はこのパラメータ。
     private static double P(double baseProb, int baserunning, BaserunningCoefficients coeff)
         => MathUtil.Clamp(baseProb + coeff.SpeedSlope * (baserunning - 50), 0.02, 0.98);
+
+    /// <summary>
+    /// 一塁を与えられたときの押し出し（四球・死球・振り逃げ生還）。打者を一塁へ置き、詰まっている走者だけを
+    /// 押し出す（満塁なら三塁走者が生還）。返り値は (得点, アウト)。乱数は引かない。
+    ///
+    /// 振り逃げ（issue #525）から呼ぶために公開した。2アウトの振り逃げは**一塁が埋まっていても成立する**ので、
+    /// <c>bases.First = batter</c> と直に書くと一塁走者が消える（実測: 走者保存則テストが400試合で4件検出。
+    /// 旧 drop_third_strike_reach_prob=0.001 では滅多に踏まなかった経路が、着弾コースゲート導入に伴う
+    /// 再校正 0.39 で表に出た）。「一塁を与える」規則は1箇所に集約する。
+    /// </summary>
+    public static (int Runs, int Outs) AwardFirstBase(BaseState bases, Player batter, List<RunnerMove>? mv = null)
+        => ApplyWalk(bases, batter, bases.First, bases.Second, bases.Third, mv);
 
     private static (int, int) ApplyWalk(BaseState bases, Player batter, Player? r1, Player? r2, Player? r3,
         List<RunnerMove>? mv)

@@ -28,8 +28,11 @@ public sealed record BaserunningCoefficients
     /// (送球者 ThrowAccuracy − 50)×この値。issue #169で 0.0→0.003 に正値化＝「送球が不正確な野手の失策ほど連鎖しやすい」（YAML sim値と一致）。</summary>
     public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.003;
     /// <summary>一塁空き or 2アウトの三振で振り逃げが成立する基準確率（design-14 P1-2）。
-    /// issue #402で 0.0→0.001 に正値化＝実ゲームで振り逃げが発火（YAML校正値と一致）。</summary>
-    public double DropThirdStrikeReachProb { get; init; } = 0.001;
+    /// issue #402で 0.0→0.001 に正値化＝実ゲームで振り逃げが発火（YAML校正値と一致）。
+    /// issue #525で着弾コースゲート（<see cref="CanBatteryMiss"/>）導入に伴い 0.001→0.39 へ再校正
+    /// （対象を第3ストライクが低い/大きく外れた球に絞ったぶん基準を引き上げ、振り逃げ/試合を校正前の
+    /// ≈0.12-0.15 と同オーダーに保つ。Heavy実測 0.12-0.15/試合＝帯 0.02-0.40 内）。</summary>
+    public double DropThirdStrikeReachProb { get; init; } = 0.39;
     /// <summary>捕手Catching(-50)あたりの振り逃げ成立確率の減少幅。</summary>
     public double DropThirdStrikeCatchingSlope { get; init; } = 0.002;
 
@@ -39,14 +42,29 @@ public sealed record BaserunningCoefficients
     // 意味は分けるが、記録は当面「合算1カウント」で簡略化する（design-14の割り切り）。
     // issue #402で 0.0→YAML校正値に正値化＝実ゲームで暴投・パスボールが発火。
     // 走者無しの打席・Foul/InPlayの投球では分岐自体に入らずrng消費ゼロ。
+    // issue #525で着弾コースゲート（<see cref="CanBatteryMiss"/>）導入に伴い 0.0012/0.0008→0.035/0.023 へ再校正
+    // （対象を低い/大きく外れた球に絞ったぶん基準を引き上げ、暴投・パスボール/試合を校正前の ≈0.56-0.59 と
+    // 同オーダーに保つ。Heavy実測 0.54-0.58/試合＝帯 0.15-1.00 内）。制球/捕球スロープは副次的な微調整として
+    // 据え置き（主たる制球依存は着弾コースが低い/外れる頻度＝ゲートの通過率で自然に効く）。
     /// <summary>暴投の基準確率（投手責）。</summary>
-    public double WildPitchProb { get; init; } = 0.0012;
+    public double WildPitchProb { get; init; } = 0.035;
     /// <summary>投手Control(-50)あたりの暴投確率の減少幅。</summary>
     public double WildPitchControlSlope { get; init; } = 0.0006;
     /// <summary>パスボールの基準確率（捕手責）。</summary>
-    public double PassedBallProb { get; init; } = 0.0008;
+    public double PassedBallProb { get; init; } = 0.023;
     /// <summary>捕手Catching(-50)あたりのパスボール確率の減少幅。</summary>
     public double PassedBallCatchingSlope { get; init; } = 0.0006;
+
+    // === 暴投・捕逸・振り逃げの着弾コースゲート（issue #525）===
+    // 「捕り損ねうる球か」は種別でなく実着弾コースで決める（監督判断 2026-08-07）。判定式は
+    // BaserunningModel.CanBatteryMiss に1箇所集約する。ゾーン内の球（BottomM=0.50 以上・ゾーン内）は
+    // 構造的に対象外＝捕れる球が後逸になることは起きない。狭めたぶん基準確率（WildPitchProb/
+    // PassedBallProb/DropThirdStrikeReachProb）を上げて発生頻度を校正前と同オーダーに保つ。
+    /// <summary>この高さ[m]未満の低い球（ワンバウンド相当）は捕手が捕り損ねうる。
+    /// ストライクゾーン下端（<see cref="Field.StrikeZone.BottomM"/>=0.50）より下に置く＝ゾーン内の球と重ならない。</summary>
+    public double BatteryMissLowY { get; init; } = 0.30;
+    /// <summary>ストライクゾーン外へこの距離[m]以上外れた球（大きく外れた球）は捕手が捕り損ねうる。</summary>
+    public double BatteryMissOutsideM { get; init; } = 0.25;
 
     // === 盗塁（設計書02 §4.2）。すべて秒の時間軸で校正（🟡係数は設計書07で調整） ===
     /// <summary>リード後の残り走塁距離[m]（二盗）。</summary>

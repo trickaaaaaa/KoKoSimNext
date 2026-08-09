@@ -1125,10 +1125,11 @@ public static class GameEngine
 
                 // 暴投・パスボール（design-14 P2-8, 設計書15 Phase D-3）: 走者ありの各投球のうち、実際に
                 // キャッチャーへ到達/通過した球（Ball/CalledStrike/SwingingStrike。Foul/InPlayは打者が
-                // 触れた球なので対象外）だけを対象に、低確率のバッテリーミスで全走者が1つ進塁する
-                // （三塁走者は生還）。暴投=投手責/パスボール=捕手責は意味上分けるが、記録は合算1カウントに
-                // 簡略化（design-14の割り切り）。既定0（WildPitchProb=PassedBallProb=0）では走者の有無・
-                // 投球結果によらず分岐自体に入らずrng消費ゼロ＝従来の帯と完全一致。
+                // 触れた球なので対象外）で、低確率のバッテリーミスにより全走者が1つ進塁する（三塁走者は生還）。
+                // 実際に暴投・捕逸が起きるのは、そのうち捕手が捕り損ねうる着弾コースの球（低い/大きく外れた）
+                // だけ＝ゾーン内の捕れる球では起きない（issue #525・下の CanBatteryMiss ゲート）。
+                // 暴投=投手責/パスボール=捕手責は意味上分けるが、記録は合算1カウントに簡略化（design-14の割り切り）。
+                // 既定0（WildPitchProb=PassedBallProb=0）では走者の有無・投球結果によらず分岐自体に入らずrng消費ゼロ。
                 if (bases.RunnerCount > 0
                     && session.LastPitchKind is PitchKind.Ball or PitchKind.CalledStrike or PitchKind.SwingingStrike
                     && (paBaserunning.WildPitchProb > 0.0 || paBaserunning.PassedBallProb > 0.0))
@@ -1139,7 +1140,15 @@ public static class GameEngine
                     var pbProb = MathUtil.Clamp(
                         paBaserunning.PassedBallProb - (defense.Catcher.Catching - 50) * paBaserunning.PassedBallCatchingSlope,
                         0.0, 1.0);
-                    if (MathUtil.Chance(wpProb + pbProb, rng))
+                    // 着弾コースのゲート（issue #525・監督判断 2026-08-07）: 捕手が捕り損ねうる球（低い球/大きく
+                    // 外れた球）だけを対象にする。ゾーン内の捕れる球は構造的に対象外＝捕れる球が後逸にならない。
+                    // 判定式は BaserunningModel.CanBatteryMiss に集約。rng（Chance）は従来どおり対象球ごとに1回引き、
+                    // コースのゲートは Chance の後段（&& の第2項）に置く＝乱数消費の位置と回数を従来と揃え、
+                    // 発生「率」だけを低い/外れた球へ絞る（狭めたぶん基準確率を再校正済み）。&& の短絡により
+                    // Chance が外れた球ではコース評価をしない（CanBatteryMiss は乱数非消費なので順序は帯に無関係）。
+                    if (MathUtil.Chance(wpProb + pbProb, rng)
+                        && BaserunningModel.CanBatteryMiss(
+                            session.PitchLog[^1].LocationX, session.PitchLog[^1].LocationY, ctx.StrikeZone, paBaserunning))
                     {
                         // 進塁前の走者配置を控える（issue #487の絵はこの写しから組む。ApplyBatteryMiss は
                         // bases を直接書き換えるので、呼び出し後には「誰から誰へ動いたか」が取れない）。
@@ -1512,6 +1521,10 @@ public static class GameEngine
             // 振り逃げ（第3ストライク不捕球, design-14 P1-2）: 一塁空き or 2アウトの三振でのみ判定。
             // 既定オフ(DropThirdStrikeReachProb=0)では分岐自体に入らずrng消費ゼロ。投手にはKを計上したまま
             // 打者はアウトにしない（PlateAppearanceResult自体は Strikeout のまま変えない＝打数1・無安打は自動的に満たす）。
+            // 着弾コースのゲート（issue #525・監督判断 2026-08-07）: 暴投・捕逸と同じ条件を振り逃げにも掛ける。
+            // 第3ストライクが捕手の捕り損ねうる球（低い/大きく外れた球）のときだけ成立＝ゾーン内で見逃した/空振り
+            // した「捕れる球」では起きない。暴投・捕逸と同じく rng（Chance）は従来どおり対象三振ごとに1回引き、
+            // コースのゲートは Chance の後段（&& の第2項）に置く＝乱数消費の位置と回数を従来と揃える。
             var droppedThirdStrikeReached = false;
             if (res.Result == PlateAppearanceResult.Strikeout && (bases.First is null || outs == 2)
                 && paBaserunning.DropThirdStrikeReachProb > 0.0)
@@ -1520,10 +1533,21 @@ public static class GameEngine
                     paBaserunning.DropThirdStrikeReachProb
                     - (defense.Catcher.Catching - 50) * paBaserunning.DropThirdStrikeCatchingSlope,
                     0.0, 0.95);
-                if (MathUtil.Chance(reachProb, rng))
+                if (MathUtil.Chance(reachProb, rng)
+                    && session.PitchLog.Count > 0
+                    && BaserunningModel.CanBatteryMiss(
+                        session.PitchLog[^1].LocationX, session.PitchLog[^1].LocationY, ctx.StrikeZone, paBaserunning))
                 {
                     droppedThirdStrikeReached = true;
-                    bases.First = batter;
+                    // 一塁を与える＝**押し出しを伴う**（issue #525）。2アウトの振り逃げは一塁が埋まっていても
+                    // 成立するので、bases.First へ直に代入すると一塁走者が消える（走者保存則違反。400試合中4件を
+                    // Heavy が検出。旧確率 0.001 では滅多に踏まなかった経路が、着弾コースゲートに伴う再校正
+                    // 0.39 で表に出た）。四球・死球と同じ規則を使う＝満塁なら三塁走者が生還する。
+                    // 乱数は引かない（AwardFirstBase は純粋な塁の付け替え）。
+                    // 走者の脚は timeline に足さない＝振り逃げの絵は BuildDropThirdStrike（打者→一塁と捕手の
+                    // 処理）が担当で、押し出される走者の描画は別途（この打席の timeline は既に確定済み）。
+                    var (dtsRuns, _) = BaserunningModel.AwardFirstBase(bases, batter);
+                    runs += dtsRuns;
                     offense.DroppedThirdStrikeCount++;
                     // 再生データ（issue #488）: この球は三振確定後の後処理として判定されるため p.LastPitch を
                     // 既に構築済み（この打席の最終球＝CapturePitches ブロックで既に控えている）＝with で追加する。
