@@ -1023,6 +1023,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
    選手詳細の大きい球種チャートは pd2-pchip--compact が付かないため従来サイズのまま。 */
 .pd2-pchip--compact .pd2-pchip__name { font-size: 12px; margin-right: 4px; }
 .pd2-pchip--compact .rank-chip { min-width: 20px; height: 22px; font-size: var(--fs-cap); padding-left: 3px; padding-right: 3px; }
+/* ストレートに添える最速も小型版に合わせる（issue #560）。比較表から球速の行を落とした代わりに
+   ここが唯一の球速表示になるので、名前より小さくはしない。 */
+.pd2-pchip--compact .pd2-pchip__velo { margin-right: 4px; }
+.pd2-pchip--compact .pd2-pchip__velo .nu-num { font-size: 12px; }
+.pd2-pchip--compact .pd2-pchip__velo .nu-unit { font-size: 10px; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    ミニマルスクロールバー（全画面共通・リファイン）

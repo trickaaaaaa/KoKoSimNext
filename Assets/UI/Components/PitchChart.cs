@@ -84,8 +84,9 @@ namespace KokoSim.Unity.Components
                 // SeparateChips が器の中へ押し込むぶんラベルどうしが必ず重なる。
                 var text = _compact && !string.IsNullOrEmpty(pt.ShortName) ? pt.ShortName : pt.Name;
                 var name = new Label(text); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
-                // ストレートのみ最速を添える（小型版は省スペースのため出さない）。
-                if (pt.IsFastball && !_compact && !string.IsNullOrEmpty(pt.VeloText))
+                // ストレートのみ最速を添える。小型版も出す（監督決定 2026-08-09, issue #560）＝
+                // 比較表から球速の行を落とし、球速はここだけで読ませる。
+                if (pt.IsFastball && !string.IsNullOrEmpty(pt.VeloText))
                     chip.Add(UiComponents.NumUnit(pt.VeloText, "km/h", false, "pd2-pchip__velo"));
                 chip.Add(UiComponents.RankChip(pt.Kire));
                 // 差し替え直後は resolvedStyle が未確定（幅が既定値扱い）のため、チップの実寸が
