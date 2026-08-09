@@ -39,9 +39,9 @@ namespace KokoSim.Unity.Match
             yield return null;
             Directory.CreateDirectory(Dir);
 
-            // 順番は「控えを使う操作を、控えが尽きる前に」。控えは4人で、ベンチを使う操作は
-            // 代打・代走・継投・守備固め・コンバートの自動補充の5つ＝1試合で全部は成立しない。
-            // 入替（控え不要）を最後に置き、攻撃の操作を先に済ませる。
+            // 順番は「控えを使う操作を、控えが尽きる前に」。控えは4人で、ベンチを使うのは
+            // 代打・代走・継投・守備固めの4つ（入替と投野交代は控えを消費しない。issue #452）。
+            // 攻撃でしか出せない操作（代打・代走）を先に済ませる。
             // ── ① 代打（自校の攻撃で次打者を控えへ差し替え） ──
             for (var i = 0; i < 80 && !ctrl.ManagerOnOffenseForCapture && ctrl.StageNameForCapture != "Over"; i++)
                 ctrl.AdvanceForCapture();
@@ -124,23 +124,19 @@ namespace KokoSim.Unity.Match
                 SlotName(ctrl, FieldPosition.SecondBase), SlotName(ctrl, FieldPosition.Shortstop), ctrl, note3);
             yield return Capture(ctrl, "5-swap");
 
-            // ── ⑥ コンバート（投枠 ↔ 在フィールドの野手＝元投手が守備へ回り、その野手が投手になる） ──
+            // ── ⑥ 投野交代（投枠 ↔ 在フィールドの野手＝2人をそのまま入れ替える。issue #452） ──
             var beforeP4 = SlotName(ctrl, FieldPosition.Pitcher);
             var beforeRf = SlotName(ctrl, FieldPosition.RightField);
             ctrl.OpenSubstitutionForCapture();
             ctrl.PickSubstitutionSlotForCapture(FieldPosition.Pitcher);
             ctrl.PickSubstitutionSlotForCapture(FieldPosition.RightField);
             var note4 = ctrl.SubstitutionNoteForCapture;
+            yield return Capture(ctrl, "6-convert-pending", reopen: false);   // 確定前のプレビュー＋フッタ
             ctrl.ApplySubstitutionForCapture();
             yield return null;
-            // 投野交代は「元の野手がマウンドへ、空いた守備位置は自動補充」＝単純な入替ではない
-            // （モーダルのフッターがそう明言している）。元投手が右翼へ回るとは限らない。
-            var afterP4 = SlotName(ctrl, FieldPosition.Pitcher);
-            var afterRf = SlotName(ctrl, FieldPosition.RightField);
-            Line("⑥ コンバート", afterP4 == beforeRf && afterRf != "—" && afterRf != beforeRf
-                    && !ctrl.SubstitutionOpenForCapture,
-                "投 " + beforeP4 + " → " + afterP4 + " / 右 " + beforeRf + " → " + afterRf
-                + "（空き枠は自動補充）   [" + Trim(note4) + "]");
+            // 非DHは単純な入れ替え＝控えは動かない・誰も退場しない（旧仕様の「空き枠は自動補充」は廃止）。
+            CheckSwap("⑥ 投野交代", beforeP4, beforeRf,
+                SlotName(ctrl, FieldPosition.Pitcher), SlotName(ctrl, FieldPosition.RightField), ctrl, note4);
             yield return Capture(ctrl, "6-convert");
 
             _log.Append("\n合計: 成功 ").Append(_pass).Append(" / 失敗 ").Append(_fail).Append("\n");
@@ -181,9 +177,13 @@ namespace KokoSim.Unity.Match
 
         // ── 撮影・下ごしらえ（他のシューターと同型） ──
 
-        private IEnumerator Capture(MatchLiveController ctrl, string file)
+        /// <param name="reopen">
+        /// true＝モーダルを開き直して確定後の打順表を見せる。false＝いま開いている選択状態のまま撮る
+        /// （確定前のプレビューとフッタを見るとき。Open() は選択をリセットするので開き直せない）。
+        /// </param>
+        private IEnumerator Capture(MatchLiveController ctrl, string file, bool reopen = true)
         {
-            ctrl.OpenSubstitutionForCapture();   // 確定後の姿を打順表で見せる
+            if (reopen) ctrl.OpenSubstitutionForCapture();   // 確定後の姿を打順表で見せる
             yield return null;
             yield return new WaitForEndOfFrame();
 

@@ -185,6 +185,77 @@ public sealed class MatchProgressionUnifiedDefenseTests
         Assert.NotNull(after.Lineup.FirstOrDefault(p => p.Position == FieldPosition.Shortstop));  // 遊撃の穴は埋まる
     }
 
+    // ===== 3b. 投野交代＝プレイヤーの明示操作（単純な入れ替え・控えを動かさない。issue #452） =====
+
+    [Fact]
+    public void SwapPitcherWithFielder_SwapsBothWays_NoBenchTouched_NonDh()
+    {
+        var prog = NewProg(7UL);
+        var opt = AdvanceUntilDefense(prog, teamIsAway: false);
+        Assert.NotNull(opt);
+        var ss = opt!.Lineup.First(p => p.Position == FieldPosition.Shortstop);
+        var oldPitcher = opt.CurrentPitcher;
+        var bench = opt.Reserves.Select(p => p.Name).ToList();
+
+        Assert.True(prog.SwapPitcherWithFielder(teamIsAway: false, ss));
+
+        var after = prog.SubstitutionOptions(teamIsAway: false);
+        Assert.Equal(ss.Name, after.CurrentPitcher.Name);                                   // 野手がマウンドへ
+        Assert.Contains(after.Lineup, p => p.Name == oldPitcher.Name && p.Position == FieldPosition.Shortstop);
+        Assert.Equal(bench, after.Reserves.Select(p => p.Name).ToList());                   // 控えは1人も動かない
+        Assert.Equal(9, after.Lineup.Select(p => p.Position).Distinct().Count());           // 守備穴なし
+    }
+
+    [Fact]
+    public void SwapPitcherWithFielder_InDh_ReleasesDh_ExDhTakesField()
+    {
+        // DHでは投手が打順外＝入れ替えが成立しない。控えは動かさず、元DHが空き守備へ（DH解除）。
+        var prog = NewDhProg(7UL);
+        var opt = AdvanceUntilDefense(prog, teamIsAway: false);
+        Assert.NotNull(opt);
+        var ss = opt!.Lineup.First(p => p.Position == FieldPosition.Shortstop);
+        var dh = opt.Lineup[opt.DhSlot];
+        var bench = opt.Reserves.Select(p => p.Name).ToList();
+
+        Assert.True(prog.SwapPitcherWithFielder(teamIsAway: false, ss));
+
+        var after = prog.SubstitutionOptions(teamIsAway: false);
+        Assert.Equal(ss.Name, after.CurrentPitcher.Name);
+        Assert.False(after.UsesDh);
+        Assert.Contains(after.Lineup, p => p.Name == dh.Name && p.Position == FieldPosition.Shortstop);
+        Assert.Equal(bench, after.Reserves.Select(p => p.Name).ToList());
+    }
+
+    [Theory]
+    [InlineData(3UL)]
+    [InlineData(31UL)]
+    public void SaveLoadRoundTrip_WithPitcherFielderSwap_ProducesTheSameResult(ulong seed)
+    {
+        // 新しい決定種別（SwapPitcherWithFielder）が決定列へ載って再生されることを固定する。
+        // 再生が Relieve へ落ちると②が走り得て別の顔ぶれになる＝digest が食い違う。
+        var prog = NewProg(seed);
+        var swapped = false;
+        while (prog.ConfirmedPlateAppearances < 30 && prog.Advance())
+        {
+            var def = prog.SubstitutionOptions(teamIsAway: false);
+            if (def.IsOffense || swapped || prog.ConfirmedPlateAppearances <= 6) continue;
+            var ss = def.Lineup.FirstOrDefault(p => p.Position == FieldPosition.Shortstop);
+            if (ss is not null) swapped = prog.SwapPitcherWithFielder(false, ss);
+        }
+        Assert.True(swapped, "シナリオが投野交代を実際に行使していない（テストの前提が崩れている）");
+
+        var save = prog.Save();
+        var straight = GameResultDigest.Sha256Of(prog.FinishRemaining());
+
+        var json = JsonSerializer.Serialize(save);
+        var back = JsonSerializer.Deserialize<GameSaveState>(json)!;
+        var resumed = GameReplay.Restore(Team("A"), Team("H"), new GameContext { CaptureTimelines = true }, back);
+        while (resumed.Steps.MoveNext()) { /* 続行 */ }
+        var restored = GameResultDigest.Sha256Of(GameEngine.BuildResult(resumed.Progress));
+
+        Assert.Equal(straight, restored);
+    }
+
     // ===== 4. 在フィールド同士の入替（守備位置の入替・誰も退場しない） =====
 
     [Fact]

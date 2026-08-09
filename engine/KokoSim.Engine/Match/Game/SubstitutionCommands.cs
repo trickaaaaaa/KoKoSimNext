@@ -107,6 +107,24 @@ internal static class SubstitutionCommands
     }
 
     /// <summary>
+    /// 投野交代（issue #452）。継投候補（<see cref="TeamState.ReliefRankingCandidates"/>）の candidateIndex が
+    /// 在フィールドの野手なら、現投手と守備位置を<b>そのまま入れ替える</b>（控えからの自動補充をしない）。
+    /// プレイヤーが打順表の2枠を指してする明示操作は「誰が空き守備へ入るか」をエンジンの判定に委ねない
+    /// ＝画面のプレビューと確定結果が必ず一致する。AIの継投は <see cref="Relieve"/> のまま（帯不変）。
+    /// candidateIndex が控えを指していたときは通常継投＝<see cref="Relieve"/> と同じ結果になる。
+    /// </summary>
+    public static bool SwapPitcherWithFielder(GameProgress p, bool teamIsAway, int candidateIndex)
+    {
+        var team = p.OffenseOf(teamIsAway);
+        var candidates = team.ReliefRankingCandidates;
+        if (candidateIndex < 0 || candidateIndex >= candidates.Count) return false;
+        if (!team.RelieveWith(candidates[candidateIndex], p.Ctx.ReliefBackfill, allowBenchBackfill: false)) return false;
+        // 交代ログへ積む（issue #209 表現）。交代した側は守備側＝先攻(away)は裏(!isTop)に守る。
+        p.RecordPitchingChange(team, isTop: !teamIsAway);
+        return true;
+    }
+
+    /// <summary>
     /// 守備割当（issue #256 統合守備割当）。控え候補（<see cref="TeamState.AvailablePitcherCandidates"/>＝控え全員）の
     /// candidateIndex を守備スロット slot に就かせる。就いていた選手は退場する（守備固め／守備割当）。
     /// 役割（投/野）で候補を分けない（#93）。就く守備位置は slot の守備位置を継承する。

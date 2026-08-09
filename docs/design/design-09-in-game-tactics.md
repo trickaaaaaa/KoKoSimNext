@@ -181,17 +181,22 @@
 | 操作 | 導出される交代 | engine 受け口 |
 |---|---|---|
 | 控え → 投枠 | 継投 | `MatchProgression.Relieve`（→`RelieveWith`→`ChangePitcherTo`） |
-| 在フィールド野手枠 ⇄ 投枠 | 投野交代（空き守備を backfill） | `MatchProgression.Relieve`（→`PromoteFielderToMound`） |
+| 在フィールド野手枠 ⇄ 投枠 | 投野交代（2人をそのまま入れ替え） | `MatchProgression.SwapPitcherWithFielder`（→`PromoteFielderToMound` の①固定） |
 | 控え → 守備位置枠 | 守備固め／守備割当 | `MatchProgression.DefenseAssign`（→`AssignFielderToSlot`） |
 | 在フィールド ⇄ 在フィールド | 守備位置の入替 | `MatchProgression.SwapDefensivePositions` |
 | 投枠 → 控え投入＋元投手を守備位置へ | コンバート継投 | `MatchProgression.ConvertPitcherAndRelieve` |
 | 指枠 ⇄ 守備位置枠 ／ 指枠を退場 | DH解除 | `MatchProgression.ReleaseDh(pos / null)` |
 
 - **継投候補はプレイヤーもAIも同一集合** `TeamState.ReliefRankingCandidates`（ブルペン＋ベンチ＋在フィールドの守備野手）を通る
-  （`SubstitutionOptions.ReliefCandidates`）。在フィールド野手を指名すると投野交代で守備穴を backfill する（§6.2 と向きが逆）。
+  （`SubstitutionOptions.ReliefCandidates`）。在フィールド野手を指名すると投野交代になる（§6.2 と向きが逆）。
+- **投野交代の空き守備は、プレイヤー操作では必ず旧投手が埋める**＝単純な入れ替え（issue #452）。
+  `RelieveWith(..., allowBenchBackfill: false)` で②（旧投手退場＋ベンチ野手で補充）へ倒さない。
+  ②は AI が「継投したい」とだけ決めたときの穴の埋め方であって、**打順表で2枠を指す明示操作の意味ではない**
+  ＝画面のプレビューと確定結果が食い違わない。AI の継投（`Relieve`）は従来どおり①/②を判定する＝帯不変。
+  DH制だけは投手が打順外で入れ替えが成立しないので、**元DHが空き守備に就いて投手は退場**（DH解除）に倒れる。
 - 継投は最頻操作なので、守備中にモーダルを開くと**[投]枠をプリセレクト**する（控えを1クリック→確定で従来と同手数）。
 - 可逆（入替）と不可逆（投入・DH解除＝退場）が同居するので、**確定前に「この操作で誰が退場するか」をフッタに必ず出す**。
-- 決定列は `GameDecisionKind.Relieve` / `DefenseAssign`（他は従来どおり）。全経路が添字ベースで Save/Load・委任AI再生と決定論一致（不変条件#2）。
+- 決定列は `GameDecisionKind.Relieve` / `SwapPitcherWithFielder` / `DefenseAssign`（他は従来どおり）。全経路が添字ベースで Save/Load・委任AI再生と決定論一致（不変条件#2）。
 - AI の継投・守備位置操作（`GameEngine`）は従来の `RelieveWith` / `SwapDefensivePositions` 経路のまま＝統計帯は不変（issue #256 はプレイヤーUIの統合）。
 
 ## 7. タイブレーク

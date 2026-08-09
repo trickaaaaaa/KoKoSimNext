@@ -421,8 +421,11 @@ namespace KokoSim.Unity.Match
                     if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return NameOf(_opt.CurrentPitcher);
                     return null;
                 case DefKind.PromoteFielder:
+                    // 単純な入れ替え＝投手枠に野手、その守備位置に今の投手（issue #452）。
+                    // DHでは投手が打順外＝入れ替えが成立せず、元DHがその守備位置に就く（DH解除）。
                     if (s.Role == SlotRole.Pitcher) return NameOf(op.Incoming);
-                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return "自動補充";
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return NameOf(SwapBackfiller());
+                    if (s.Role == SlotRole.Dh) return PosJp(op.Pos) + "へ";
                     return null;
                 case DefKind.FielderSwap:
                     if (slotIdx == _pickedSlot) return PosJp(_slots[_pickedSlot2].Pos) + "へ";
@@ -607,6 +610,18 @@ namespace KokoSim.Unity.Match
         private Player FielderAt(FieldPosition pos)
             => _slots.FirstOrDefault(s => s.Role == SlotRole.Fielder && s.Pos == pos).Player;
 
+        /// <summary>
+        /// 投野交代（<see cref="DefKind.PromoteFielder"/>）で、野手が空ける守備位置に入る選手（issue #452）。
+        /// 非DHは今の投手＝そのまま入れ替え。DHは投手が打順外で入れ替えが成立しないので元DHが就く
+        /// （engine の <c>TeamState.RelieveWith(..., allowBenchBackfill: false)</c> と同じ結論を先出しする）。
+        /// </summary>
+        private Player SwapBackfiller()
+        {
+            if (!_opt.UsesDh) return _opt.CurrentPitcher;
+            var dh = _slots.FirstOrDefault(s => s.Role == SlotRole.Dh);
+            return dh.Player;
+        }
+
         // ── 右：能力比較 ──
 
         private void BuildCompare()
@@ -678,7 +693,8 @@ namespace KokoSim.Unity.Match
                 case DefKind.Convert:
                     return (_opt.CurrentPitcher, op.Incoming, true, "退く", "入る");
                 case DefKind.PromoteFielder:
-                    return (_opt.CurrentPitcher, op.Incoming, true, "退く投手", "登板野手");
+                    // 非DHは入れ替え＝現投手は退場せず守備へ回る。「退く」でなく「降板／登板」で呼ぶ（issue #452）。
+                    return (_opt.CurrentPitcher, op.Incoming, true, "降板", "登板");
                 case DefKind.FielderSwap:
                     return (_slots[_pickedSlot].Player, _slots[_pickedSlot2].Player, false, "1人目", "2人目");
                 case DefKind.Assign:
@@ -740,8 +756,14 @@ namespace KokoSim.Unity.Match
                     return (true, NameOf(op.Incoming) + " が登板。" + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
                         + " を守る（後で再登板できる）。" + PosJp(op.Pos) + " の " + NameOf(op.Outgoing) + " が退場。", false);
                 case DefKind.PromoteFielder:
-                    return (true, NameOf(op.Incoming) + " をマウンドへ（投野交代）。空いた " + PosJp(op.Pos)
-                        + " は自動で補充する（控えが入る場合は1人退場することがある）。", false);
+                    // 単純な入れ替え。非DHは誰も退場しない＝元投手は後で再登板できる（issue #452）。
+                    return _opt.UsesDh
+                        ? (true, NameOf(op.Incoming) + " をマウンドへ。DHの " + NameOf(SwapBackfiller()) + " が "
+                            + PosJp(op.Pos) + " を守り、" + NameOf(_opt.CurrentPitcher)
+                            + " は退場（以降DHなし）。", false)
+                        : (true, NameOf(op.Incoming) + " と " + NameOf(_opt.CurrentPitcher) + " を入れ替える。"
+                            + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
+                            + " を守る（誰も退場しない・後で再登板できる）。", false);
                 case DefKind.FielderSwap:
                     return (true, "守備位置を入れ替える（誰も退場しない・何度でも行える）。", false);
                 case DefKind.Assign:
@@ -786,7 +808,9 @@ namespace KokoSim.Unity.Match
                 {
                     DefKind.Relieve => _prog.Relieve(_teamIsAway, op.Incoming),
                     DefKind.Convert => _prog.ConvertPitcherAndRelieve(_teamIsAway, op.Pos, op.Incoming),
-                    DefKind.PromoteFielder => _prog.Relieve(_teamIsAway, op.Incoming),
+                    // 投野交代は「入れ替え」で確定する＝控えからの自動補充をしない（issue #452）。
+                    // Relieve は AI と共用のルータで、条件次第で控えが入って1人退場する枝へ倒れるため使わない。
+                    DefKind.PromoteFielder => _prog.SwapPitcherWithFielder(_teamIsAway, op.Incoming),
                     DefKind.FielderSwap => _prog.SwapDefensivePositions(_teamIsAway, op.SlotA, op.SlotB),
                     DefKind.Assign => _prog.DefenseAssign(_teamIsAway, op.SlotA, op.Incoming),
                     DefKind.DhToPos => _prog.ReleaseDh(_teamIsAway, op.Pos),

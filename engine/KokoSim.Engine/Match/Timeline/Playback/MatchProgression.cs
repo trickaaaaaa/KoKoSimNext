@@ -276,6 +276,21 @@ public sealed class MatchProgression
     }
 
     /// <summary>
+    /// 投野交代（issue #452）。在フィールドの野手 fielder をマウンドへ上げ、<b>現投手をその守備位置へ回す</b>
+    /// ＝2人の入れ替え。控えは動かさない（誰も退場しない・元投手は後で再登板できる）。
+    /// プレイヤーが打順表で投手枠と守備枠を指したときの明示操作で、<see cref="Relieve"/> と違って
+    /// 「空き守備を誰が埋めるか」をエンジンの判定に委ねない＝画面の見込みと結果が一致する。
+    /// DH制では投手が打順外＝入れ替えが成立しないので、元DHが空き守備に就いて投手は退場する（DH解除）。
+    /// </summary>
+    public bool SwapPitcherWithFielder(bool teamIsAway, Player fielder)
+    {
+        var idx = ReferenceIndexOf(_p.OffenseOf(teamIsAway).ReliefRankingCandidates, fielder);
+        if (idx < 0 || !SubstitutionCommands.SwapPitcherWithFielder(_p, teamIsAway, idx)) return false;
+        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.SwapPitcherWithFielder, teamIsAway, idx));
+        return true;
+    }
+
+    /// <summary>
     /// 守備割当（issue #256 統合守備割当）。控えの sub を守備スロット slot に就かせる
     /// （守備固め／守備割当）。就いていた選手は退場する。役割（投/野）で候補を分けない（#93）。
     /// </summary>
