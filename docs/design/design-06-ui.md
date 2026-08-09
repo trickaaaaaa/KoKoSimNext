@@ -86,6 +86,21 @@ Play すると最初に出る簡易タイトル。共通ナビ（TopBar）は出
   到達する場合があるため、ファイルIOは必ず `MainThreadDispatcher.Enqueue` でメインスレッドへ載せ替える
   （`Application.persistentDataPath` 等のUnity APIをスレッド外から直接叩かない）
 
+#### セーブの実測値と往復の担保（issue #483 の締め・2026-08-09）
+
+- **サイズ（#483 論点2の結論）**: 全4008校を materialize した最悪ケースで **JSON 96.3 MiB → gzip 9.95 MiB**
+  （1校あたり約2.6 KB・圧縮率10.3%）。実プレイに近い「本拠県211校だけ materialize」では **559 KiB**。
+  差分保存・バイナリ化は当面**不要**と判断する。回帰は `SaveSizeTests`（Heavy・上限50 MiB）が張り、
+  実測レポートは `out/overnight/save-size-measurement.txt` に出る
+- **大会中は保存しない（#483 論点3の結論）**: `TournamentRunner` は進行中ブラケット・`IRandomSource` の
+  内部状態・観戦中の `MatchProgression` を持ち復元できない。DTO に進行体を載せず、`SaveGameIO.CanSave` が
+  `GameMode.Normal` かつ集計待ちでないことを要求する。オートセーブも同じガードを通る
+- **往復の担保は2段**。engine の `SaveCodecTests`/`SaveDeterminismTests` は DTO の形と決定論を見るが、
+  **Shell の static サービス群（Capture/Restore の配線）と Unity のファイル IO は通らない**。
+  static が本当に死ぬのは Play 停止（ドメインリロード）の瞬間だけなので、同一 Play 内で往復させても
+  「消えていないだけ」を一致と誤認する。ドメインリロードをまたぐ確認は
+  `Assets/Editor/SaveRoundTripProbe.cs`（PhaseA→Play停止→再Play→PhaseB）で行う
+
 ### 3.1 ホーム（週次ダッシュボード）
 今週のカレンダー / 次の試合カード / 部の状態サマリ（怪我人）/
 通知フィード / クイックアクション（進行・練習計画・個別指導）
