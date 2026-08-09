@@ -198,6 +198,44 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 保留中の操作の要約（フッター文）。確定できる状態かの確認に使う。</summary>
         public string NoteForCapture => _note?.text ?? "";
 
+        /// <summary>
+        /// スクショ用: 指枠の「そのまま退かせる」を選ぶ（<see cref="BuildDhWithdrawChoice"/> の行と同一経路）。
+        /// 先に <see cref="PickSlotForCapture"/> で指枠を主選択しておくこと（<see cref="ResolveDef"/> は
+        /// 主選択が指枠のときだけこのフラグを見る）。
+        /// </summary>
+        public void PickDhWithdrawForCapture()
+        {
+            if (!_open || _opt == null || _opt.IsOffense) return;
+            _dhWithdraw = true;
+            _pickedSlot2 = -1;
+            Render();
+        }
+
+        /// <summary>スクショ用: いまDH制が生きているか（DH解除は不可逆なので前後の突き合わせに使う）。</summary>
+        public bool UsesDhForCapture => _prog != null && _prog.SubstitutionOptions(_teamIsAway).UsesDh;
+
+        /// <summary>スクショ用: 指枠に居る選手（非DH＝null）。<see cref="FielderForCapture"/> と同じく engine から引き直す。</summary>
+        public Player DhForCapture
+        {
+            get
+            {
+                if (_prog == null) return null;
+                var opt = _prog.SubstitutionOptions(_teamIsAway);
+                if (!opt.UsesDh || opt.DhSlot < 0 || opt.DhSlot >= opt.Lineup.Count) return null;
+                return opt.Lineup[opt.DhSlot];
+            }
+        }
+
+        /// <summary>スクショ用: 投手が入っている打順スロット（DH制は -1＝打順外）。DH解除で打順へ入ったかの証拠。</summary>
+        public int PitcherSlotForCapture => _prog == null ? -2 : _prog.SubstitutionOptions(_teamIsAway).PitcherSlot;
+
+        /// <summary>
+        /// スクショ用: 現在の打順9人（交代反映済み）。「誰が退いたか」は控えの増減では見えない
+        /// （退場した先発は控え名簿に居ない）ので、打順から消えたことで確かめる。
+        /// </summary>
+        public IReadOnlyList<Player> LineupForCapture =>
+            _prog == null ? System.Array.Empty<Player>() : _prog.SubstitutionOptions(_teamIsAway).Lineup;
+
         /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者）。</summary>
         public void PickRunnerForCapture(int baseIndex)
         {
