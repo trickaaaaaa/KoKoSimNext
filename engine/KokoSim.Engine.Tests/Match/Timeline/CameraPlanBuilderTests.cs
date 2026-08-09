@@ -133,6 +133,68 @@ public sealed class CameraPlanBuilderTests
         }
     }
 
+    // 球が死んでいる間の「拾いに走る野手」追従（issue #566）。暴投・捕逸は球がバックネットで
+    // 止まってから捕手が拾うまで誰も球を持っておらず、保持中と同じ分岐に落ちる。ここで走者
+    // （25〜40m先）を枠に入れようとすると、枠は 2倍/秒 でしか広がらないのにアイムは 45m/s で
+    // 走れるため、狭い枠のまま被写体と被写体のあいだの地面を舐める（実測: 0.40秒だれも映らない）。
+    [Fact]
+    public void Build_LooseBallFollowsChaser_StaysOnTheCatcherNotTheRunner()
+    {
+        var play = BatteryMissPlay();
+        var loose = TimeWhileBallIsLoose(play);
+
+        var fr = CameraFraming.Default with { MaxZoom = 20.0, HeldBallFollowsRunner = true };
+        var runner = CameraPlanBuilder.Build(play, fr);
+        var chaser = CameraPlanBuilder.Build(play, fr with { LooseBallFollowsChaser = true });
+
+        var runnerAt = CameraEvaluator.ViewportAt(runner, loose);
+        var chaserAt = CameraEvaluator.ViewportAt(chaser, loose);
+
+        // 拾いに走る捕手は球（本塁後方）へ収束するので、走者を入れる枠より確実に寄る。
+        Assert.True(chaserAt.ZoomMult > runnerAt.ZoomMult,
+            $"寄った枠になっていない: {runnerAt.ZoomMult} → {chaserAt.ZoomMult}");
+        // 注視点も本塁の後ろ（-y）に留まる＝走者の居る前方へ引っ張られない。
+        Assert.True(chaserAt.Cy < runnerAt.Cy, $"走者側へ引かれている: {runnerAt.Cy} → {chaserAt.Cy}");
+    }
+
+    // 既定（opt-out）は1キーフレームも変わらない＝2D俯瞰とゴールデンが無傷。
+    [Fact]
+    public void Build_LooseBallFollowsChaser_DefaultsOff()
+    {
+        Assert.False(CameraFraming.Default.LooseBallFollowsChaser);
+        foreach (var play in PlaybackSamples.All)
+        {
+            var a = CameraPlanBuilder.Build(play, CameraFraming.Default);
+            var b = CameraPlanBuilder.Build(play, CameraFraming.Default with { LooseBallFollowsChaser = false });
+            Assert.Equal(a.Count, b.Count);
+            for (var i = 0; i < a.Count; i++)
+            {
+                Assert.Equal(a[i].Cx, b[i].Cx);
+                Assert.Equal(a[i].Cy, b[i].Cy);
+                Assert.Equal(a[i].ZoomMult, b[i].ZoomMult);
+            }
+        }
+    }
+
+    /// <summary>暴投・捕逸の再生プレー（球がバックネットで死に、捕手が拾いに走る素材）。</summary>
+    private static PlaybackPlay BatteryMissPlay()
+    {
+        var tl = TimelineBuilder.BuildBatteryMiss(
+            new Player { Name = "一走", Speed = 60 }, null, null,
+            new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 },
+            new BaserunningCoefficients(), new FieldGeometry());
+        return PlayTimelineAdapter.ToPlaybackPlay(tl);
+    }
+
+    /// <summary>球が誰の手にも無い時刻（転がりが終わってから送球が始まるまでの中点）。</summary>
+    private static double TimeWhileBallIsLoose(PlaybackPlay play)
+    {
+        var rollEnd = play.Ball[0].T1;
+        var throwStart = play.Ball[^1].T0;
+        Assert.True(throwStart > rollEnd, "球が死んでいる区間が無い＝この素材では検証にならない");
+        return (rollEnd + throwStart) / 2.0;
+    }
+
     /// <summary>振り逃げの再生プレー（球が長く止まる素材＝保持中の分岐を確実に通る）。</summary>
     private static PlaybackPlay DropThirdStrikePlay()
     {

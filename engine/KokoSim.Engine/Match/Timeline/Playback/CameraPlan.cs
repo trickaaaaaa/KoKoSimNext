@@ -41,9 +41,25 @@ public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMu
 /// そのプレーで最も引いた絵になる）。<c>true</c> なら打球中と同じく**球を先読みで追う**＝
 /// 送球が届くにつれ枠が締まり、受け手の捕球で最も寄る（中継カメラの作法）。
 /// </param>
+/// <param name="LooseBallFollowsChaser">
+/// 球が死んで（どのセグメントにも属さず）まだ**野手が拾いに走っている**あいだ、被写体を
+/// 「球＋その野手」にする（issue #566）。
+///
+/// <para><see cref="HeldBallFollowsRunner"/> は「野手が球を<b>持っている</b>あいだ」の作法
+/// （振り逃げ＝捕手が本塁で握ったまま、打者走者が一塁へ走る。issue #488）。暴投・捕逸は同じ分岐に
+/// 落ちるが**まだ誰も持っていない**——捕手はバックネットへ走っている最中で、走者は25〜40m先に居る。
+/// ここで走者を枠へ入れようとすると、枠は 2倍/秒 でしか広がらないのにアイムは 45m/s で走れるため、
+/// **枠が狭いまま被写体と被写体のあいだの地面を舐める**（実測 2026-08-10: 0.40秒だれも枠に居ない）。</para>
+///
+/// <para>拾いに走っている野手は球へ収束するので、この枠は 4〜6m のまま＝寄った絵を保ったまま
+/// 「捕手が球を追っている」が読める（実測: 盲点0コマ）。走者を入れる案は枠が最大47.8m必要で、
+/// 人が20pxになる（打球処理の3D化で退けた「点が動くだけ」の絵に近づく）。</para>
+///
+/// <para>2D俯瞰は全景に全部入るので既定オフ（＝ゴールデン不変）。3Dの守備カメラだけが渡す。</para>
+/// </param>
 public readonly record struct CameraFraming(
     double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false,
-    bool HeldBallFollowsRunner = false)
+    bool HeldBallFollowsRunner = false, bool LooseBallFollowsChaser = false)
 {
     /// <summary>2D俯瞰の既定（Issue #119 で決めた現行値）。渡さなければこれが使われる。</summary>
     public static readonly CameraFraming Default = new(3.4, 6.0, 2.4);
@@ -288,6 +304,11 @@ public static class CameraPlanBuilder
             if (held.HasValue)
             {
                 var heldV = new PlaybackVec(held.Value.X, held.Value.Y);
+                // まだ**誰も持っていない**（野手が拾いに走っている最中）なら、被写体はその野手（issue #566）。
+                // 走者は25〜40m先に居るので、ここで走者を入れると枠が追いつかず地面を舐める。下の
+                // HeldBallFollowsRunner は「持っている」あいだの作法なので、走っている間は先に抜ける。
+                if (fr.LooseBallFollowsChaser && ChasingFielderAt(play, actualT) is { } chaser)
+                    return FitBox(heldV, chaser, fr);
                 // 球が止まっている間も走っている走者が居れば一緒に収める（issue #488 実機確認 2026-08-06）。
                 // 振り逃げは「捕手が本塁付近で球を持っている 2.4秒」がまるごとこの分岐で、球だけを
                 // 追うと**一塁へ走る打者走者が一度も枠に入らない**（実測: 注視y が 2.4秒ずっと 1.0）。
@@ -360,6 +381,30 @@ public static class CameraPlanBuilder
                 found = at.Value;
             }
         return found;
+    }
+
+    /// <summary>
+    /// 球を拾いに出た野手（issue #566）。居なければ null。
+    ///
+    /// <para><b>走り終わっても返し続ける</b>のが要点。「走っている間だけ」にすると、拾った瞬間に
+    /// 被写体が走者へ移り、結局そこで枠が追いつかないパンが起きる（実測: 盲点が 0.40秒→2.15秒 に
+    /// 悪化した）。拾った後は球のところに立っているので、球との箱は点に近い＝寄った枠のまま
+    /// 「捕手が拾って投げ返す」が読める。送球が始まればこの分岐自体を抜ける。</para>
+    ///
+    /// <para>列挙は <see cref="FieldPosition"/> の宣言順＝辞書の並びに依らず決定論（不変条件#2）。</para>
+    /// </summary>
+    private static PlaybackVec? ChasingFielderAt(PlaybackPlay play, double t)
+    {
+        if (play.Moves is null || play.Moves.Count == 0) return null;
+        foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
+        {
+            if (!play.Moves.TryGetValue(pos, out var moves) || moves.Count == 0) continue;
+            var started = false;
+            foreach (var m in moves) if (t >= m.T0) { started = true; break; }
+            if (!started) continue;
+            return PlaybackEvaluator.FielderAt(play, pos, t).Pos;
+        }
+        return null;
     }
 
     private static PlaybackRun? FindCriticalRunAt(PlaybackPlay play, double t)
