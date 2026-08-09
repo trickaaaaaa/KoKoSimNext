@@ -620,14 +620,23 @@ namespace KokoSim.Unity.Components
         /// プレースホルダが漏れるのを防ぐため＝どちらのカラムかは、上に並ぶ比較カードの**選手名**と
         /// カラムのアクセント色（--cmp-a / --cmp-b）で判別する。見出しが要らない画面はこの部品を呼ばない
         /// （メンバー設定・スタメン決定がその形）。
+        /// <para><paramref name="caption"/> を渡すと、表のグループ名（例「打撃・走守」）を
+        /// <b>ラベル列の見出し</b>として空セルへ畳む（issue #452）。独立した見出し行を持たない分だけ
+        /// 縦を稼ぐので、<see cref="SetCompareDense"/> と対で使う。渡さなければ従来どおり空セル。</para>
         /// </summary>
-        public static VisualElement CompareHeader(string labelA, string labelB)
+        public static VisualElement CompareHeader(string labelA, string labelB, string caption = null)
         {
             var head = new VisualElement();
             head.AddToClassList("cmp-head");
 
             var spacer = new VisualElement();
             spacer.AddToClassList("cmp-head__spacer");
+            if (!string.IsNullOrEmpty(caption))
+            {
+                var cap = new Label(caption);
+                cap.AddToClassList("cmp-head__cap");
+                spacer.Add(cap);
+            }
             head.Add(spacer);
 
             head.Add(HeadCol(labelA, "a"));
@@ -643,6 +652,18 @@ namespace KokoSim.Unity.Components
         /// </summary>
         public static void SetCompareUnitColumn(VisualElement rowsHost, bool on)
             => rowsHost?.EnableInClassList("cmp-rows--unit", on);
+
+        /// <summary>
+        /// 比較表を密な組（行のピッチを UI原則①の32px基準へ）に切り替える（issue #452）。
+        /// <b>列の高さが自分では決まらない</b>置き場所——交代モーダルのように隣の列（打順表）が
+        /// パネルの高さを決め、比較表はその余りしか使えない——で、野手の9項目（弾道〜精神力）を
+        /// 内部スクロールなしで収めるための組。素の組（43pxピッチ）だと5.5行しか窓に入らず、
+        /// <b>守備交代の判断に一番要る「守備」「捕球」が既定で窓の外</b>に落ちる。
+        /// 文字サイズは落とさず、Label 既定の上下 margin/padding（＝43pxの実体）だけを削る。
+        /// グループ名は <see cref="CompareHeader"/> の caption へ畳む（見出し1行ぶんも縦に回す）。
+        /// </summary>
+        public static void SetCompareDense(VisualElement rowsHost, bool on)
+            => rowsHost?.EnableInClassList("cmp-rows--dense", on);
 
         /// <summary>
         /// 2選手比較の1行（項目名｜A: 値＋ランクチップ｜B: 値＋ランクチップ）。

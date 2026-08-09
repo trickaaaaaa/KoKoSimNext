@@ -467,7 +467,7 @@ namespace KokoSim.Unity.Match
         private void BuildConvertChoices()
         {
             var cap = new Label("元の投手");
-            cap.AddToClassList("msub-cmp-group");
+            cap.AddToClassList("msub-group");
             _inRows.Add(cap);
 
             var retire = ChoiceRow("退場させる（通常の継投）", _convertTo == null);
@@ -567,10 +567,12 @@ namespace KokoSim.Unity.Match
             if (_cmpRows == null) return;
             _cmpRows.Clear();
             UiComponents.SetCompareUnitColumn(_cmpRows, pitcherView);
-            var group = new Label(pitcherView ? "投球" : "打撃・走守");
-            group.AddToClassList("msub-cmp-group");
-            _cmpRows.Add(group);
-            _cmpRows.Add(UiComponents.CompareHeader(capA, capB));
+            // 比較列の高さは左の打順表で決まる＝野手ビューの9行（弾道〜精神力）が素の組では入らず、
+            // 守備交代の判断に一番要る「守備」「捕球」が既定で窓の外に落ちていた（issue #452）。
+            // 密な組に切り替え、グループ名は独立行を持たせずヘッダのラベル列へ畳む。
+            // 投手ビュー（5行）も同じ組にする＝同じ表が選択のたびに行高を変えると比較にならない。
+            UiComponents.SetCompareDense(_cmpRows, true);
+            _cmpRows.Add(UiComponents.CompareHeader(capA, capB, pitcherView ? "投球" : "打撃・走守"));
             foreach (var (label, x, y) in CompareRows(outgoing, incoming, pitcherView))
             {
                 if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Velocity))
@@ -843,6 +845,10 @@ namespace KokoSim.Unity.Match
             if (picked) row.AddToClassList("bench-row--picked");
             var name = new Label(text);
             name.AddToClassList("bench-row__name");
+            // 選択肢は選手名でなく**文**（「退場させる（通常の継投）」等）なので折り返させる。
+            // bench-row__name は名前用に1行省略なので、そのままだと控え列を詰めた分だけ
+            // 文末が「…」で落ちて何を選ぶのか読めない（issue #452）。
+            name.AddToClassList("msub-choice__text");
             row.Add(name);
             return row;
         }

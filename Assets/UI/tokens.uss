@@ -550,7 +550,8 @@ Button.tp-cta,
 .lu-cmp-group,
 .mlive-count-key,
 .mr-subhead,
-.msub-cmp-group,
+.cmp-head__cap,
+.msub-group,
 .ms-cmp-group {
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Medium.asset?fileID=11400000&guid=e0684afefb1bb435cac49ce90b59ce4e&type=2#IBMPlexSansJP-Medium");
 }
