@@ -43,17 +43,17 @@ Play すると最初に出る簡易タイトル。共通ナビ（TopBar）は出
 開いた時点ではまだセーブを読んでおらず、どのシェルサービスも遅延初期化されていないため §3.0 と同じ理由で
 共通トップバーは出さない（ホーム経由でも同様。代わりに `ss-back` で戻る）。
 
-- **レイアウト＝案2（リスト＋詳細ペイン）**: 左に手動3枠＋オート1枠を32px行で並べ（`.card--list`）、
+- **レイアウト＝案2（リスト＋詳細ペイン）**: 左に手動3枠を32px行で並べ（`.card--list`）、
   右に選択枠の詳細（学校名・年度・週・保存日時）と操作ボタン（`.card--detail`、幅は共通トークン
   `--w-editor`）。`HomeDashboard.uxml` の新チーム発足モーダル（`nt-list`/`nt-detail`）と
   `PracticeMatch` の `.card--list`/`.card--detail` に共通する行選択の見た目（32px行・hover・選択時の
   左アクセント）をそのまま踏襲する。オーナー承認（issue #508 コメント・2026-08-07）
-- **手動/オートのスロットID**: `manual1` / `manual2` / `manual3` / `auto`（`SaveSlots.AllSlotIds`）。
-  ファイル名は `SaveGameIO.PathForSlot(slotId)` がそのまま使う
+- **スロットID**: `manual1` / `manual2` / `manual3`（`SaveSlots.AllSlotIds`）。ファイル名は
+  `SaveGameIO.PathForSlot(slotId)` がそのまま使う。**オート枠は廃止**（監督決定 2026-08-09。下の「保存は
+  手動だけ」参照）。旧 `auto.sav` は一覧・活性判定に入るたび `SaveSlots.PurgeLegacyAutoSave()` が消す
 - **出すボタンはタイトル経由＝「読込」「削除」だけ**（オーナー判断のA案）。「今保存すべき進行中の
-  ゲーム状態」が無いため保存は出さない。**ホーム経由（issue #509）は「保存」も出す**（オート枠は対象外＝
-  オートセーブ専用、大会中は `SaveGameIO.CanSave` で非活性＋理由1行）。ホーム経由だけ空き枠（オート以外）も
-  選択できる＝新規に保存する先として選ぶため
+  ゲーム状態」が無いため保存は出さない。**ホーム経由（issue #509）は「保存」も出す**（大会中は
+  `SaveGameIO.CanSave` で非活性＋理由1行）。ホーム経由だけ空き枠も選択できる＝新規に保存する先として選ぶため
 - **削除は確認ダイアログを挟む**。確認ボタンは警告色 `--color-warn`（部品辞書 `components.uss` の
   `.dlg-btn--warn` を新設）。破壊的操作にだけ使う（UI原則②）
 - **空きスロット**は「── 空き ──」表示で、行のクリックハンドラを配線しない（押しても何も起きない）
@@ -81,10 +81,22 @@ Play すると最初に出る簡易タイトル。共通ナビ（TopBar）は出
     完了前にリセットすると、直後に新セッションが背景シムを再始動した場合に旧ワーカーが共有カウンタを
     奪い合う実害がある）
   - **閉じる** → メニューだけ閉じる
-- **オートセーブ**: 週送りの単一フック `GameClock.Advance` の末尾でオート枠（`SaveSlots.AutoSlotId`）を
-  上書きする。`BackgroundGameOp.Run`（issue #138・大会終了処理）経由でバックグラウンドスレッドから
-  到達する場合があるため、ファイルIOは必ず `MainThreadDispatcher.Enqueue` でメインスレッドへ載せ替える
-  （`Application.persistentDataPath` 等のUnity APIをスレッド外から直接叩かない）
+
+#### 保存は手動だけ（オートセーブ廃止・監督決定 2026-08-09）
+
+保存は**プレイヤーが手動3枠へ行う明示操作だけ**にする。`GameClock.Advance` の週送りは
+ファイルIOを一切起こさない（issue #509 で入れたオートセーブを撤回）。
+
+- 撤回の理由: オートは「大会に入った週だけ `CanSave` が false で黙って書かれない」穴があり、
+  当てにすると**大会前まで巻き戻る**事故になる。自動と手動が混ざると「どこまで保存されているか」が
+  プレイヤーから見えないのが根本問題で、明示操作だけにすれば見えるようになる
+- **未保存の可視化**: 「タイトルへ戻る」の確認ダイアログに、最後の保存からの経過を1行出す
+  （`hm-menu-title-since` / `.tm-dialog__sub`。例「最後の保存: 2028年5月5週目（12週前）」、
+  未保存なら「この進行はまだ一度も保存していません。」）。基準は `SaveGameIO.LastSavedAt`
+  （保存・読込の成功時に更新、`ResetForNewGame` で null。**セーブ対象ではない**セッション内の目安）。
+  警告色は使わない＝本当の警告に取っておく（UI原則②）
+- 絶対週の式（`(年度-1)×週/年＋週`）は `GameClock.AbsoluteWeekOf` の一箇所だけに置く
+  （`ManagerService.AbsoluteWeek` もここを通す）
 
 #### セーブの実測値と往復の担保（issue #483 の締め・2026-08-09）
 
@@ -94,7 +106,9 @@ Play すると最初に出る簡易タイトル。共通ナビ（TopBar）は出
   実測レポートは `out/overnight/save-size-measurement.txt` に出る
 - **大会中は保存しない（#483 論点3の結論）**: `TournamentRunner` は進行中ブラケット・`IRandomSource` の
   内部状態・観戦中の `MatchProgression` を持ち復元できない。DTO に進行体を載せず、`SaveGameIO.CanSave` が
-  `GameMode.Normal` かつ集計待ちでないことを要求する。オートセーブも同じガードを通る
+  `GameMode.Normal` かつ集計待ちでないことを要求する。
+  **この結論は撤回予定**（issue #565。手動セーブ一本にした結果、大会中は保存手段が一切無くなり、
+  県211校＝最大8試合ぶっ続けで中断できないため。`TournamentRunner` の永続化で解く）
 - **往復の担保は2段**。engine の `SaveCodecTests`/`SaveDeterminismTests` は DTO の形と決定論を見るが、
   **Shell の static サービス群（Capture/Restore の配線）と Unity のファイル IO は通らない**。
   static が本当に死ぬのは Play 停止（ドメインリロード）の瞬間だけなので、同一 Play 内で往復させても

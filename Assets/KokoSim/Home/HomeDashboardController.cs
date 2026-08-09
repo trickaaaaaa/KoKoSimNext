@@ -168,8 +168,25 @@ namespace KokoSim.Unity.Home
         {
             OnMenuClose();
             if (_menuTitleConfirm == null) return;
+            var since = _root.Q<Label>("hm-menu-title-since");
+            if (since != null) since.text = LastSavedText();
             _menuTitleConfirm.style.display = DisplayStyle.Flex;
             _menuTitleConfirm.BringToFront();
+        }
+
+        /// <summary>
+        /// 最後の保存からの経過1行（オートセーブ廃止・監督決定 2026-08-09）。
+        /// 自動で拾ってくれる保存が無くなったので、「ここで戻ると何週ぶん失うか」を確認の場で見せる。
+        /// 週数は暦の通算週（(年度-1)×50＋週）の差で、単一ソースの <see cref="ManagerService.AbsoluteWeek"/> と同じ式。
+        /// </summary>
+        private static string LastSavedText()
+        {
+            if (KokoSim.Unity.Shell.SaveGameIO.LastSavedAt is not { } at)
+                return "この進行はまだ一度も保存していません。";
+            var lost = KokoSim.Unity.Shell.ManagerService.AbsoluteWeek
+                       - KokoSim.Unity.Shell.GameClock.AbsoluteWeekOf(at.YearIndex, at.Week);
+            var label = KokoSim.Unity.Shell.SeasonClock.CurrentLabel(at.YearIndex, at.Week);
+            return lost <= 0 ? $"最後の保存: {label}（保存済み）" : $"最後の保存: {label}（{lost}週前）";
         }
 
         private void OnMenuTitleCancel()

@@ -246,6 +246,7 @@
       <ui:VisualElement name="hm-menu-title-confirm" class="ui-root tm-scrim">
         <ui:VisualElement class="tm-card">
           <ui:Label class="tm-dialog__q" text="タイトルへ戻りますか？　保存していない進行は失われます。" />
+          <ui:Label name="hm-menu-title-since" class="tm-dialog__sub" text="" />
           <ui:VisualElement class="tm-dialog__btns">
             <ui:Button name="hm-menu-title-no" class="tm-btn tm-btn--ghost" text="いいえ" />
             <ui:Button name="hm-menu-title-yes" class="tm-btn tm-btn--warn" text="タイトルへ戻る" />

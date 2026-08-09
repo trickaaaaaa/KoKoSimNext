@@ -12,8 +12,9 @@ namespace KokoSim.Unity.Shell
     /// 担い、ここは全 static サービスからの収集・復元と、gzip 圧縮＋<c>Application.persistentDataPath</c> への
     /// ファイル IO だけを持つ（設計: 書き出しは Shell・形は engine）。
     ///
-    /// <para>スロット管理UI・タイトル接続は F1（issue #508）、オートセーブ・ゲーム中のセーブ導線・
-    /// 「タイトルへ戻る」導線は F2（issue #509）でこの土台（Capture/Restore/Reset＋ファイル読み書き）の上に配線した。</para>
+    /// <para>スロット管理UI・タイトル接続は F1（issue #508）、ゲーム中のセーブ導線・「タイトルへ戻る」導線は
+    /// F2（issue #509）でこの土台（Capture/Restore/Reset＋ファイル読み書き）の上に配線した。
+    /// <b>オートセーブは廃止</b>（監督決定 2026-08-09）＝保存はプレイヤーが手動3枠へ行う明示操作だけ。</para>
     ///
     /// <para><b>大会中はセーブ不可</b>（<see cref="GameMode.Tournament"/>）。進行体 <c>TournamentRunner</c> は
     /// 復元不能（進行中ブラケット・IRandomSource 内部状態・観戦中の MatchProgression を持つ）＝#483 論点3の結論。
@@ -30,6 +31,13 @@ namespace KokoSim.Unity.Shell
         /// 勝敗が戦績から抜け落ちたセーブができてしまうため、完了まで待つ。UI 側はこれを見てセーブを抑止する（F1）。
         /// </summary>
         public static bool CanSave => GameSession.Current.Mode == GameMode.Normal && !GameSession.Current.BracketFoldPending;
+
+        /// <summary>
+        /// この進行を最後に保存／読込した時点の暦（null＝一度も保存していない）。オートセーブを廃止した
+        /// （監督決定 2026-08-09）ぶん「保存しないと失う進行」が見えなくなるため、「タイトルへ戻る」の
+        /// 確認ダイアログがここを読んで経過を出す。<b>セーブ対象ではない</b>（セッション内の目安）。
+        /// </summary>
+        public static (int YearIndex, int Week)? LastSavedAt { get; private set; }
 
         /// <summary>全 static サービスから現在状態を集めて DTO を組む。</summary>
         public static SaveState Capture()
@@ -69,6 +77,7 @@ namespace KokoSim.Unity.Shell
             NewTeamService.Clear();
             TeamColorProvider.Clear();
             GameClock.Reset();
+            LastSavedAt = null;   // 新しい進行＝まだ一度も保存していない
         }
 
         /// <summary>既定のセーブ先（persistentDataPath/kokosim/&lt;slot&gt;.sav）。スロットUI接続は F1。</summary>
@@ -82,9 +91,10 @@ namespace KokoSim.Unity.Shell
             var raw = Encoding.UTF8.GetBytes(SaveCodec.Serialize(Capture()));
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            using var fs = File.Create(path);
-            using var gz = new GZipStream(fs, System.IO.Compression.CompressionLevel.Optimal);
-            gz.Write(raw, 0, raw.Length);
+            using (var fs = File.Create(path))
+            using (var gz = new GZipStream(fs, System.IO.Compression.CompressionLevel.Optimal))
+                gz.Write(raw, 0, raw.Length);
+            LastSavedAt = (GameClock.YearIndex, GameClock.Week);
             return true;
         }
 
@@ -94,6 +104,8 @@ namespace KokoSim.Unity.Shell
             if (!TryReadText(path, out var json, out error)) return false;
             if (!SaveCodec.TryDeserialize(json, out var state, out error)) return false;
             Restore(state);
+            // 読んだ直後は「その地点が保存済み」＝未保存の経過は0週から数え直す。
+            LastSavedAt = (GameClock.YearIndex, GameClock.Week);
             return true;
         }
 

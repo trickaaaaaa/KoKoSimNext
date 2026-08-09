@@ -54,11 +54,10 @@ namespace KokoSim.Unity.Shell
                     }
                     EnterWeek();
                 }
-                // オートセーブ（issue #509）: 週送りのたびにオート枠を上書きする。呼び出し元は大会終了処理など
-                // 背景スレッド（BackgroundGameOp.Run）からもここへ到達するため、File IO は必ず MainThreadDispatcher
-                // 経由でメインスレッドへ載せ替える（Application.persistentDataPath 等のUnity APIをスレッド外から
-                // 直接叩かない。issue #138 と同じ作法）。CanSave のガードは SaveSlots.Save の内部（SaveGameIO）が持つ。
-                if (delta > 0) MainThreadDispatcher.Enqueue(() => SaveSlots.Save(SaveSlots.AutoSlotId));
+                // オートセーブは廃止（監督決定 2026-08-09）。保存はプレイヤーが手動3枠へ行うものだけにする＝
+                // 週送りはファイル IO を一切起こさない。以前はここでオート枠を上書きしていたが、
+                // 「大会に入った週だけ CanSave が false で黙って書かれない」という穴があり、
+                // オートを当てにすると大会前まで巻き戻る事故になっていた（issue #509 の一部を撤回）。
                 return;
             }
             Step(delta);   // 巻き戻し（練習画面のプレビュー）は遷移フックを回さない
@@ -111,6 +110,10 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>共通トップバー「現在」表示（YYYY年M月W週目）。</summary>
         public static string CurrentLabel() => SeasonClock.CurrentLabel(YearIndex, Week);
+
+        /// <summary>年をまたいでも単調増加する絶対週番号。暦の刻み（<see cref="SeasonCalendar.WeeksPerYear"/>）を
+        /// 使う唯一の場所にする（<see cref="ManagerService.AbsoluteWeek"/> もここを通す）。</summary>
+        public static int AbsoluteWeekOf(int yearIndex, int week) => (yearIndex - 1) * Calendar.WeeksPerYear + week;
 
         /// <summary>夏予選開幕までの残り週（0以下＝開催中）。トップバーのカウントダウンの単一ソース。</summary>
         public static int WeeksUntilSummer => Calendar.SummerTournamentStartWeek - Week;
