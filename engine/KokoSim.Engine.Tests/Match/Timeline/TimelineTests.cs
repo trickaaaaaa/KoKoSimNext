@@ -1300,6 +1300,64 @@ public sealed class TimelineTests
         Assert.True(Near(throws[1].From, cutoffMove.To), "2本目送球の起点が中継野手の立ち位置と一致しない");
     }
 
+    // --- issue #526: 絵の中継も肩で決まる（判定と同じ純関数 HomePlayResolver.NeedsRelay を通る）---
+    // 旧実装はここに 60m 固定の複製（RelayThresholdM）を持っていたため、判定が肩連動になると
+    // 「強肩なのに絵だけカットマンが入る」食い違いが必ず起きる。絵は送球セグメントの本数で決まる
+    // （1本＝直接返球／2本＝中継）ので、そのまま本数で固定する。
+
+    /// <summary>同じ距離・同じ打球で、強肩の外野手は絵でもカットマンを挟まない（issue #526 完了条件）。</summary>
+    [Fact]
+    public void OutfieldReturnThrow_StrongArm_DrawsNoCutoff_AtTheSameDistance()
+    {
+        var field = new FieldGeometry();
+        // 距離は**送球先の塁まで**で測る（表示側は処理点→リード塁）。二塁から 65m 奥で処理する
+        // ＝Arm50 の到達(60.1m)より遠く、Arm80 の到達(67.9m)より近い距離になる。
+        int ThrowCount(double throwSpeedMps)
+        {
+            var play = FieldingPlayFixtures.OutfieldHit(
+                FieldPosition.CenterField, landingX: 0, landingZ: field.SecondBase.Z + 65.0,
+                fieldedAtSeconds: 3.2, result: BattedBallResult.Single, throughInfield: true,
+                throwSpeedMps: throwSpeedMps);
+            var baseTl = TimelineBuilder.BuildBattedBall(
+                play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+            var tl = TimelineBuilder.AppendOutfieldReturnThrow(
+                baseTl, play, field, "second", runnerArriveAnchor: 9.0);
+            return tl.Ball.Count(b => b.Kind == BallSegmentKind.Throw);
+        }
+
+        // Arm50=31.94 / Arm80=36.11（FielderAttributes.ThrowSpeedMps＝(90+Arm×0.5)/3.6）
+        Assert.Equal(2, ThrowCount(31.94));   // 平均肩は中継（外野→カット→塁）
+        Assert.Equal(1, ThrowCount(36.11));   // 強肩は直接返球＝カットマンが入らない
+    }
+
+    /// <summary>絵の中継しきい値が判定の純関数と一致する（複製が復活したら落ちる）。</summary>
+    [Theory]
+    [InlineData(31.94, 55.0, 1)]   // 平均肩・到達内 → 直接
+    [InlineData(31.94, 65.0, 2)]   // 平均肩・到達外 → 中継
+    [InlineData(36.11, 65.0, 1)]   // 強肩・到達内 → 直接
+    [InlineData(36.11, 75.0, 2)]   // 強肩でも十分遠ければ中継（中継は消滅していない）
+    public void OutfieldReturnThrow_RelayDecision_MatchesTheJudgementFunction(
+        double throwSpeedMps, double distanceM, int expectedThrows)
+    {
+        var field = new FieldGeometry();
+        // distanceM は**二塁までの**距離（表示側は処理点→リード塁で測るため）
+        var play = FieldingPlayFixtures.OutfieldHit(
+            FieldPosition.CenterField, landingX: 0, landingZ: field.SecondBase.Z + distanceM,
+            fieldedAtSeconds: 3.2, result: BattedBallResult.Single, throughInfield: true,
+            throwSpeedMps: throwSpeedMps);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: false, TimelineBuilder.DescribeResult(play));
+
+        var tl = TimelineBuilder.AppendOutfieldReturnThrow(
+            baseTl, play, field, "second", runnerArriveAnchor: 9.0);
+
+        Assert.Equal(expectedThrows, tl.Ball.Count(b => b.Kind == BallSegmentKind.Throw));
+        // 判定側の純関数と同じ答えであること（絵と判定が同じ式で動く＝複製が無い）
+        var needsRelay = KokoSim.Engine.Match.Game.HomePlayResolver.NeedsRelay(
+            distanceM, throwSpeedMps, new KokoSim.Engine.Match.Game.BaserunningCoefficients());
+        Assert.Equal(needsRelay, expectedThrows == 2);
+    }
+
     // ═══ Issue #301: 打球の回収点(FieldedX/Z・FieldedAtSeconds)を表示の単一ソースにする ═══
 
     /// <summary>外野へ抜けた飛球の安打。着地点(90m)から回収点(102m)まで転がってから回収される。</summary>

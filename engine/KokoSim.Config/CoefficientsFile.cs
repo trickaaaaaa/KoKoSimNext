@@ -574,7 +574,7 @@ public static class CoefficientsLoader
         public double RelayTransferSeconds { get; set; } = D.RelayTransferSeconds;
         public double RelayThrowSpeedMps { get; set; } = D.RelayThrowSpeedMps;
         public double CutoffFractionFromHome { get; set; } = D.CutoffFractionFromHome;
-        public double CutoffDistanceThresholdM { get; set; } = D.CutoffDistanceThresholdM;
+        public double CutoffThrowSeconds { get; set; } = D.CutoffThrowSeconds;
         public double HomeTagSeconds { get; set; } = D.HomeTagSeconds;
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
@@ -690,7 +690,7 @@ public static class CoefficientsLoader
             RelayTransferSeconds = RelayTransferSeconds,
             RelayThrowSpeedMps = RelayThrowSpeedMps,
             CutoffFractionFromHome = CutoffFractionFromHome,
-            CutoffDistanceThresholdM = CutoffDistanceThresholdM,
+            CutoffThrowSeconds = CutoffThrowSeconds,
             HomeTagSeconds = HomeTagSeconds,
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,

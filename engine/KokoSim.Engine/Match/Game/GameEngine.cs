@@ -1513,8 +1513,9 @@ public static class GameEngine
                     var runnerArrive = 0.0;
                     foreach (var leg in timeline.Runners)
                         if (leg.Label == "打" && leg.T1 > runnerArrive) runnerArrive = leg.T1;
+                    // 中継しきい値は肩連動（issue #526）＝判定と同じ係数を渡して絵と食い違わせない
                     timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
-                        timeline, ofHit, ctx.Field, leadBase, runnerArrive, ctx.Fielding);
+                        timeline, ofHit, ctx.Field, leadBase, runnerArrive, ctx.Fielding, paBaserunning);
                 }
             }
 

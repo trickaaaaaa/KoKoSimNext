@@ -103,6 +103,19 @@ public static class HomePlayResolver
         bool HasRelay, Vector3D CutoffPoint, double ReleaseAtSeconds, double ArriveAtSeconds);
 
     /// <summary>
+    /// この送球で中継（カットマン）を挟むか（issue #526）。**判定式はこの1箇所にしか置かない**——
+    /// 本塁・三塁・併殺の転送（<see cref="ResolveThrowPath"/> 経由）と、外野返球の再生データ
+    /// （<c>TimelineBuilder.AppendOutfieldReturnThrow</c>）が同じ関数を通ることで、
+    /// 判定と絵で中継の出方が食い違わない。
+    ///
+    /// 距離だけでなく<b>投げる野手の肩</b>で決まる＝強肩は遠くから直接返球する。乱数は引かない純関数。
+    /// </summary>
+    /// <param name="distanceM">処理点から送球先までの水平距離[m]。</param>
+    /// <param name="throwSpeedMps">投げる野手の送球速度[m/s]（<c>FielderAttributes.ThrowSpeedMps</c>）。</param>
+    public static bool NeedsRelay(double distanceM, double throwSpeedMps, BaserunningCoefficients c)
+        => distanceM > throwSpeedMps * c.CutoffThrowSeconds;
+
+    /// <summary>
     /// 処理点→送球先ベースの送球経路と時刻を解く（中継しきい値・カットマン位置・肩・握り替えを一括）。
     /// <see cref="DefenseTimeSeconds"/> の算式そのもの（切り出しただけで数値は不変）。
     /// <paramref name="transferSecondsOverride"/>＝処理野手の捕球→送球（握り替え）秒の差し替え（Issue #318）。
@@ -121,7 +134,7 @@ public static class HomePlayResolver
         var transferFactor = new Players.FielderAttributes { Fielding = s.OutfielderFielding }
             .TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
 
-        var hasRelay = dist > c.CutoffDistanceThresholdM;
+        var hasRelay = NeedsRelay(dist, s.OutfielderThrowSpeedMps, c);
         double throwTime;
         if (hasRelay)
         {
