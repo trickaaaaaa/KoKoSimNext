@@ -25,6 +25,7 @@ internal static class CommandLine
             "simulate-career" => RunSimulateCareer(args[1..]),
             "simulate-nation" => RunSimulateNation(args[1..]),
             "simulate-manager" => RunSimulateManager(args[1..]),
+            "simulate-tiers" => RunSimulateTiers(args[1..]),
             "calibrate" => RunCalibrate(args[1..]),
             "infield-timing" => RunInfieldTiming(args[1..]),
             "trace" => RunTrace(args[1..]),
@@ -104,6 +105,41 @@ internal static class CommandLine
         {
             System.IO.File.WriteAllText(reportPath, report);
             Console.WriteLine($"校正レポートを書き出しました: {reportPath}");
+        }
+        else
+        {
+            Console.WriteLine(report);
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// 低ティア帯・非対称マッチの得点環境の計測（issue #536 Phase 1）。**係数も帯も動かさない**。
+    /// 既存の <c>simulate-games</c> は平均的なチーム同士しか測っていないので、ティア格子と
+    /// 「実プレイと同じ自校 vs 相手校」を別立てで測る。
+    /// </summary>
+    private static int RunSimulateTiers(string[] args)
+    {
+        var games = 500;
+        var seed = 42UL;
+        string? reportPath = null;
+        string? coefficientsPath = null;
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--games": games = int.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--report": reportPath = RequireValue(args, ref i); break;
+                case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
+                default: return Fail($"未知のオプション: {args[i]}");
+            }
+        }
+        var report = TierMatchupSimulation.Report(games, seed, coefficientsPath);
+        if (reportPath is not null)
+        {
+            System.IO.File.WriteAllText(reportPath, report);
+            Console.WriteLine($"ティア格子レポートを書き出しました: {reportPath}");
         }
         else
         {
@@ -460,6 +496,8 @@ internal static class CommandLine
         Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram] [--apex]");
         Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--tactics]");
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
+        Console.WriteLine("  simulate-tiers  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml]");
+        Console.WriteLine("                  # ティア格子（強度30〜60の総当たり）＋実プレイの自校vs相手校＋ランク式の食い違い（issue #536・計測のみ）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
         Console.WriteLine("  simulate-nation [--years N]   [--seed S] [--report path] [--school-names data/school-names.yaml]");
         Console.WriteLine("                  [--autumn data] [--start-year 2025]   # 秋の大会フロー(秋季→地区→神宮→センバツ)を併走");
