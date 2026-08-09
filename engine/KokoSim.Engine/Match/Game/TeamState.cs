@@ -734,16 +734,19 @@ public sealed class TeamState
     /// 投野交代（<see cref="PromoteFielderToMound"/>）で backfill し、控えからなら従来の
     /// <see cref="ChangePitcherTo"/>。参照一致で「今守備に就いている sub」を特定する。
     /// <paramref name="backfill"/> は在フィールド野手登板時の ①/② 判定係数（null＝既定）。
+    /// <paramref name="allowBenchBackfill"/>=false なら②（ベンチ野手で補充）を選ばず、必ず①＝<b>現投手と守備位置を
+    /// そのまま入れ替える</b>（issue #452）。プレイヤーが打順表の2枠を指してする明示操作は「誰が空き守備へ入るか」を
+    /// エンジンの判定に委ねない＝画面の見込みと結果が必ず一致する。AIの継投は既定の true のまま＝帯不変。
     /// </summary>
-    public bool RelieveWith(Player sub, ReliefBackfillCoefficients? backfill = null)
+    public bool RelieveWith(Player sub, ReliefBackfillCoefficients? backfill = null, bool allowBenchBackfill = true)
     {
         var skip = _usesDh ? _dhSlot : _pitcherSlot;
         for (var i = 0; i < _lineup.Length; i++)
         {
             if (i != skip && ReferenceEquals(_lineup[i], sub))
                 return _usesDh
-                    ? PromoteFielderToMoundDh(sub, i, backfill ?? new ReliefBackfillCoefficients())
-                    : PromoteFielderToMound(sub, i, backfill ?? new ReliefBackfillCoefficients());
+                    ? PromoteFielderToMoundDh(sub, i, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill)
+                    : PromoteFielderToMound(sub, i, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill);
         }
         return ChangePitcherTo(sub);
     }
@@ -753,8 +756,10 @@ public sealed class TeamState
     /// <paramref name="fSlot"/>）をマウンドへ上げ、空いた守備位置を backfill する。ベンチにその守備を旧投手より
     /// 明確に上手く守れる野手が居て、かつ旧投手を残す打撃的価値が低ければ ②（旧投手退場＋ベンチ野手で補充）、
     /// それ以外は ①（投野交代＝旧投手を空き守備へ回す・両者残留）。判定は <paramref name="backfill"/> 係数駆動。
+    /// <paramref name="allowBenchBackfill"/>=false は②を検討せず必ず①＝単純な入れ替え（issue #452）。
     /// </summary>
-    private bool PromoteFielderToMound(Player fielder, int fSlot, ReliefBackfillCoefficients backfill)
+    private bool PromoteFielderToMound(Player fielder, int fSlot, ReliefBackfillCoefficients backfill,
+        bool allowBenchBackfill = true)
     {
         var retiringPitcher = CurrentPitcher;
         var vacated = fielder.Position;   // 野手が空ける守備位置
@@ -763,7 +768,7 @@ public sealed class TeamState
         var mound = fielder with { Position = FieldPosition.Pitcher };
 
         // ②判定: 空き守備を旧投手より明確に上手く守れるベンチ野手が居るか（打力で基準を補正）。
-        var benchFielder = BestReserveDefender();
+        var benchFielder = allowBenchBackfill ? BestReserveDefender() : null;
         if (benchFielder is not null)
         {
             var battingDelta = (retiringPitcher.Contact + retiringPitcher.Power) / 2.0 - backfill.LeagueAverageBatting;
@@ -816,8 +821,10 @@ public sealed class TeamState
     /// マウンドへ上げ、DHを解除する。DHでは旧投手は打順外なので**必ず退場**（非DHの①「両者残留」は成立しない）。
     /// 空いた守備位置の補充は非DHと同じ②判定：ベンチ最良守備者が元DHより明確に上手ければベンチ野手が入り元DHは退場、
     /// そうでなければ元DHが守備に就く（DHを失って野手化・打順スロットは維持）。判定は <paramref name="backfill"/> 係数駆動。
+    /// <paramref name="allowBenchBackfill"/>=false は②を検討せず必ず「元DHが空き守備へ」（issue #452）。
     /// </summary>
-    private bool PromoteFielderToMoundDh(Player fielder, int fSlot, ReliefBackfillCoefficients backfill)
+    private bool PromoteFielderToMoundDh(Player fielder, int fSlot, ReliefBackfillCoefficients backfill,
+        bool allowBenchBackfill = true)
     {
         var retiringPitcher = CurrentPitcher;   // DHでは打順外＝必ず退場
         var vacated = fielder.Position;         // 野手が空ける守備位置
@@ -825,7 +832,7 @@ public sealed class TeamState
         var dh = _lineup[_dhSlot];              // 元DH（守備に就いていない・打順スロット _dhSlot）
 
         // ②判定: 空き守備を元DHより明確に上手く守れるベンチ野手が居るか（元DHの打力で基準を補正＝好打者DHは残す）。
-        var benchFielder = BestReserveDefender();
+        var benchFielder = allowBenchBackfill ? BestReserveDefender() : null;
         var useBench = false;
         if (benchFielder is not null)
         {

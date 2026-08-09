@@ -38,6 +38,7 @@ namespace KokoSim.Unity.Match
         private readonly System.Action _onApplied;
 
         private VisualElement _scrim, _kinds, _outRows, _inRows, _cmpRows;
+        private ScrollView _cmpScroll;
         private Label _phase, _outsCap, _insCap, _note;
         private Button _ok;
 
@@ -62,11 +63,23 @@ namespace KokoSim.Unity.Match
         private FieldPosition? _convertTo;  // 継投時に元投手を回す守備位置（null=退場）
         private bool _dhWithdraw;        // 指枠を「そのまま退場」させる
 
-        public MatchSubstitutionPanel(VisualElement root, System.Action onApplied)
+        /// <param name="aptitudeGrades">
+        /// 守備適性の9ポジションのランクを <see cref="Player.SourceId"/> から引く（issue #452）。
+        /// 試合中の <see cref="Player"/> は適性配列を持たないので、名簿への join は Shell 側
+        /// （<see cref="MatchLiveStatsProvider.AptitudeGradesOf"/>）に任せて注入する。null なら帯を出さない。
+        /// </param>
+        public MatchSubstitutionPanel(VisualElement root, System.Action onApplied,
+            System.Func<int?, IReadOnlyList<string>> aptitudeGrades = null,
+            System.Func<Player, List<PitchChartDatum>> pitchChart = null)
         {
             _root = root;
             _onApplied = onApplied;
+            _aptitudeGrades = aptitudeGrades;
+            _pitchChart = pitchChart;
         }
+
+        private readonly System.Func<int?, IReadOnlyList<string>> _aptitudeGrades;
+        private readonly System.Func<Player, List<PitchChartDatum>> _pitchChart;
 
         /// <summary>モーダルを開いている間は裏の進行（自動再生・次の打席へ）を止める。</summary>
         public bool IsOpen => _open;
@@ -78,6 +91,8 @@ namespace KokoSim.Unity.Match
             _outRows = _root.Q<VisualElement>("msub-out-rows");
             _inRows = _root.Q<VisualElement>("msub-in-rows");
             _cmpRows = _root.Q<VisualElement>("msub-cmp-rows");
+            // ScrollView 本体（窓の高さを持つ要素）。_cmpRows.parent は contentContainer なので届かない。
+            _cmpScroll = _root.Q<ScrollView>(className: "msub-cmp-scroll");
             _phase = _root.Q<Label>("msub-phase");
             _outsCap = _root.Q<Label>("msub-outs-cap");
             _insCap = _root.Q<Label>("msub-ins-cap");
@@ -145,6 +160,43 @@ namespace KokoSim.Unity.Match
             }
             if (index >= 0 && index < _cands.Count) { ClickCandidate(index); Render(); }
         }
+
+        /// <summary>
+        /// スクショ用: いまその守備位置に就いている選手。モーダルの内部モデル（_slots）は開いた瞬間の
+        /// スナップショットなので使わず、engine から選択肢を引き直す＝確定後の姿を読める。
+        /// </summary>
+        public Player FielderForCapture(FieldPosition pos)
+        {
+            if (_prog == null) return null;
+            var opt = _prog.SubstitutionOptions(_teamIsAway);
+            if (pos == FieldPosition.Pitcher)
+                return opt.UsesDh
+                    ? opt.CurrentPitcher
+                    : (opt.PitcherSlot >= 0 && opt.PitcherSlot < opt.Lineup.Count ? opt.Lineup[opt.PitcherSlot] : null);
+            for (var i = 0; i < opt.Lineup.Count; i++)
+            {
+                if (opt.UsesDh && i == opt.DhSlot) continue;
+                if (opt.Lineup[i] != null && opt.Lineup[i].Position == pos) return opt.Lineup[i];
+            }
+            return null;
+        }
+
+        /// <summary>スクショ用: 残っている控えの人数（交代が成立したかの一番素直な証拠）。</summary>
+        public int BenchCountForCapture
+        {
+            get
+            {
+                if (_prog == null) return -1;
+                var opt = _prog.SubstitutionOptions(_teamIsAway);
+                return opt.Reserves != null ? opt.Reserves.Count : -1;
+            }
+        }
+
+        /// <summary>スクショ用: 「この操作を確定」を押す（実行経路はボタンと同一）。issue #452 の操作一巡確認用。</summary>
+        public void ApplyForCapture() => Apply();
+
+        /// <summary>スクショ用: 保留中の操作の要約（フッター文）。確定できる状態かの確認に使う。</summary>
+        public string NoteForCapture => _note?.text ?? "";
 
         /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者）。</summary>
         public void PickRunnerForCapture(int baseIndex)
@@ -369,8 +421,11 @@ namespace KokoSim.Unity.Match
                     if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return NameOf(_opt.CurrentPitcher);
                     return null;
                 case DefKind.PromoteFielder:
+                    // 単純な入れ替え＝投手枠に野手、その守備位置に今の投手（issue #452）。
+                    // DHでは投手が打順外＝入れ替えが成立せず、元DHがその守備位置に就く（DH解除）。
                     if (s.Role == SlotRole.Pitcher) return NameOf(op.Incoming);
-                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return "自動補充";
+                    if (s.Role == SlotRole.Fielder && s.Pos == op.Pos) return NameOf(SwapBackfiller());
+                    if (s.Role == SlotRole.Dh) return PosJp(op.Pos) + "へ";
                     return null;
                 case DefKind.FielderSwap:
                     if (slotIdx == _pickedSlot) return PosJp(_slots[_pickedSlot2].Pos) + "へ";
@@ -467,7 +522,7 @@ namespace KokoSim.Unity.Match
         private void BuildConvertChoices()
         {
             var cap = new Label("元の投手");
-            cap.AddToClassList("msub-cmp-group");
+            cap.AddToClassList("msub-group");
             _inRows.Add(cap);
 
             var retire = ChoiceRow("退場させる（通常の継投）", _convertTo == null);
@@ -555,33 +610,54 @@ namespace KokoSim.Unity.Match
         private Player FielderAt(FieldPosition pos)
             => _slots.FirstOrDefault(s => s.Role == SlotRole.Fielder && s.Pos == pos).Player;
 
+        /// <summary>
+        /// 投野交代（<see cref="DefKind.PromoteFielder"/>）で、野手が空ける守備位置に入る選手（issue #452）。
+        /// 非DHは今の投手＝そのまま入れ替え。DHは投手が打順外で入れ替えが成立しないので元DHが就く
+        /// （engine の <c>TeamState.RelieveWith(..., allowBenchBackfill: false)</c> と同じ結論を先出しする）。
+        /// </summary>
+        private Player SwapBackfiller()
+        {
+            if (!_opt.UsesDh) return _opt.CurrentPitcher;
+            var dh = _slots.FirstOrDefault(s => s.Role == SlotRole.Dh);
+            return dh.Player;
+        }
+
         // ── 右：能力比較 ──
 
         private void BuildCompare()
         {
             var (outgoing, incoming, pitcherView, capA, capB) = CompareSubjects();
             // 空カードには「次に何を選べばよいか」を出す（開いた直後の空状態の道標。issue #452 指摘4）。
-            FillCard("msub-cmp-a", outgoing, EmptyCardTextA());
-            FillCard("msub-cmp-b", incoming, EmptyCardTextB());
+            FillCard("msub-cmp-a", outgoing, EmptyCardTextA(), pitcherView);
+            FillCard("msub-cmp-b", incoming, EmptyCardTextB(), pitcherView);
+
+            // 投手ビューはカードに持ち球チャートが乗るぶん表の窓を縮め、モーダル全体の高さを一定に保つ。
+            _cmpScroll?.EnableInClassList("msub-cmp-scroll--pitch", pitcherView);
 
             if (_cmpRows == null) return;
             _cmpRows.Clear();
-            UiComponents.SetCompareUnitColumn(_cmpRows, pitcherView);
-            var group = new Label(pitcherView ? "投球" : "打撃・走守");
-            group.AddToClassList("msub-cmp-group");
-            _cmpRows.Add(group);
-            _cmpRows.Add(UiComponents.CompareHeader(capA, capB));
+            // 比較列の高さは左の打順表で決まる＝野手ビューの9行（弾道〜精神力）が素の組では入らず、
+            // 守備交代の判断に一番要る「守備」「捕球」が既定で窓の外に落ちていた（issue #452）。
+            // 密な組に切り替え、グループ名は独立行を持たせずヘッダのラベル列へ畳む。
+            // 投手ビュー（5行）も同じ組にする＝同じ表が選択のたびに行高を変えると比較にならない。
+            UiComponents.SetCompareDense(_cmpRows, true);
+            _cmpRows.Add(UiComponents.CompareHeader(capA, capB, pitcherView ? "投球" : "打撃・走守"));
             foreach (var (label, x, y) in CompareRows(outgoing, incoming, pitcherView))
             {
-                if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Velocity))
-                    _cmpRows.Add(CompareRowEl(label, x, y, KmhText(outgoing), KmhText(incoming)));
-                else if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Stamina))
-                    // スタミナは上限なし（issue #356）＝バーを出さず目安投球数を数値表示（球速のkm/hと同型）。
-                    _cmpRows.Add(CompareRowEl(label, x, y, StaminaText(outgoing), StaminaText(incoming), hideBar: true, unit: "球"));
-                else if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
+                if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
                     _cmpRows.Add(CompareRowEl(label, x, y, TypeText(x), TypeText(y), hideBar: true));
                 else
                     _cmpRows.Add(CompareRowEl(label, x, y));
+            }
+
+            // 守備適性の帯（issue #452・監督選択の案A）。メンバー設定・スタメン設定と同じく**野手ビューのときだけ**出す。
+            // 盤面（252px）はモーダルの残り高さに入らないので、同じ情報を9列×2行の帯へ畳んだ部品を使う。
+            if (!pitcherView && _aptitudeGrades != null)
+            {
+                var aptA = _aptitudeGrades(outgoing?.SourceId);
+                var aptB = _aptitudeGrades(incoming?.SourceId);
+                if (aptA != null || aptB != null)
+                    _cmpRows.Add(UiComponents.AptitudeStrip(aptA, aptB, capA, capB));
             }
         }
 
@@ -617,7 +693,8 @@ namespace KokoSim.Unity.Match
                 case DefKind.Convert:
                     return (_opt.CurrentPitcher, op.Incoming, true, "退く", "入る");
                 case DefKind.PromoteFielder:
-                    return (_opt.CurrentPitcher, op.Incoming, true, "退く投手", "登板野手");
+                    // 非DHは入れ替え＝現投手は退場せず守備へ回る。「退く」でなく「降板／登板」で呼ぶ（issue #452）。
+                    return (_opt.CurrentPitcher, op.Incoming, true, "降板", "登板");
                 case DefKind.FielderSwap:
                     return (_slots[_pickedSlot].Player, _slots[_pickedSlot2].Player, false, "1人目", "2人目");
                 case DefKind.Assign:
@@ -679,8 +756,14 @@ namespace KokoSim.Unity.Match
                     return (true, NameOf(op.Incoming) + " が登板。" + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
                         + " を守る（後で再登板できる）。" + PosJp(op.Pos) + " の " + NameOf(op.Outgoing) + " が退場。", false);
                 case DefKind.PromoteFielder:
-                    return (true, NameOf(op.Incoming) + " をマウンドへ（投野交代）。空いた " + PosJp(op.Pos)
-                        + " は自動で補充する（控えが入る場合は1人退場することがある）。", false);
+                    // 単純な入れ替え。非DHは誰も退場しない＝元投手は後で再登板できる（issue #452）。
+                    return _opt.UsesDh
+                        ? (true, NameOf(op.Incoming) + " をマウンドへ。DHの " + NameOf(SwapBackfiller()) + " が "
+                            + PosJp(op.Pos) + " を守り、" + NameOf(_opt.CurrentPitcher)
+                            + " は退場（以降DHなし）。", false)
+                        : (true, NameOf(op.Incoming) + " と " + NameOf(_opt.CurrentPitcher) + " を入れ替える。"
+                            + NameOf(_opt.CurrentPitcher) + " は " + PosJp(op.Pos)
+                            + " を守る（誰も退場しない・後で再登板できる）。", false);
                 case DefKind.FielderSwap:
                     return (true, "守備位置を入れ替える（誰も退場しない・何度でも行える）。", false);
                 case DefKind.Assign:
@@ -725,7 +808,9 @@ namespace KokoSim.Unity.Match
                 {
                     DefKind.Relieve => _prog.Relieve(_teamIsAway, op.Incoming),
                     DefKind.Convert => _prog.ConvertPitcherAndRelieve(_teamIsAway, op.Pos, op.Incoming),
-                    DefKind.PromoteFielder => _prog.Relieve(_teamIsAway, op.Incoming),
+                    // 投野交代は「入れ替え」で確定する＝控えからの自動補充をしない（issue #452）。
+                    // Relieve は AI と共用のルータで、条件次第で控えが入って1人退場する枝へ倒れるため使わない。
+                    DefKind.PromoteFielder => _prog.SwapPitcherWithFielder(_teamIsAway, op.Incoming),
                     DefKind.FielderSwap => _prog.SwapDefensivePositions(_teamIsAway, op.SlotA, op.SlotB),
                     DefKind.Assign => _prog.DefenseAssign(_teamIsAway, op.SlotA, op.Incoming),
                     DefKind.DhToPos => _prog.ReleaseDh(_teamIsAway, op.Pos),
@@ -843,6 +928,10 @@ namespace KokoSim.Unity.Match
             if (picked) row.AddToClassList("bench-row--picked");
             var name = new Label(text);
             name.AddToClassList("bench-row__name");
+            // 選択肢は選手名でなく**文**（「退場させる（通常の継投）」等）なので折り返させる。
+            // bench-row__name は名前用に1行省略なので、そのままだと控え列を詰めた分だけ
+            // 文末が「…」で落ちて何を選ぶのか読めない（issue #452）。
+            name.AddToClassList("msub-choice__text");
             row.Add(name);
             return row;
         }
@@ -872,7 +961,7 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        private void FillCard(string host, Player p, string placeholder)
+        private void FillCard(string host, Player p, string placeholder, bool pitcherView)
         {
             var el = _root.Q<VisualElement>(host);
             if (el == null) return;
@@ -894,41 +983,69 @@ namespace KokoSim.Unity.Match
             hand.AddToClassList("bench-row__tag");
             meta.Add(hand);
             el.Add(meta);
+
+            // 持ち球のミニ球種チャート（部品 PitchChartView・compact）。メンバー設定・スタメン設定と同じく
+            // 投手ビューのときだけ出す（ビューでゲート・投/野区分ではゲートしない, issue #93/#293）。
+            // 継投は「同じキレでもスライダーかフォークか」で判断が変わる（監督決定 2026-08-09）。
+            if (!pitcherView || _pitchChart == null) return;
+            var pitches = _pitchChart(p);
+            if (pitches == null || pitches.Count == 0) return;
+            var chartHost = new VisualElement();
+            chartHost.AddToClassList("cmp-card__pitch");
+            el.Add(chartHost);
+            new PitchChartView(chartHost, compact: true).SetData(pitches);
         }
 
         private static IEnumerable<(string Label, int A, int B)> CompareRows(Player a, Player b, bool pitcherView)
         {
             if (pitcherView)
             {
-                yield return (AbilityLabels.Jp(AbilityKind.Velocity), Velocity(a), Velocity(b));
+                // 並び・項目はエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる
+                // ＝メンバー設定・スタメン設定・練習計画と同じ順（監督決定 2026-08-09）。精神力は AbilityKind 外の
+                // 項目なのでここで足し、向こう（PlayerCompareTabs）の投手能力タブにも同じ位置で足してある。
+                // 球速はこの表に出さない＝カードの持ち球チャートのストレートに km/h で添える
+                // （監督決定 2026-08-09, issue #560。メンバー設定・スタメン設定と同じ扱い）。
                 yield return (AbilityLabels.Jp(AbilityKind.Control), a?.Pitching?.Control ?? -1, b?.Pitching?.Control ?? -1);
-                yield return (AbilityLabels.Jp(AbilityKind.PitchRank), a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
                 yield return (AbilityLabels.Jp(AbilityKind.Stamina), Stamina(a), Stamina(b));
+                yield return (AbilityLabels.Jp(AbilityKind.PitchRank), a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
+                yield return (AbilityLabels.Jp(AbilityKind.Stuff), Stuff(a), Stuff(b));
                 yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
                 yield break;
             }
+            // 並びはメンバー設定・スタメン設定（PlayerCompareTabs）と同じ相対順にする＝画面をまたいでも目が滑らない。
+            // 盗塁・走塁は代走の判断に要るのに出ていなかったので足した（監督決定 2026-08-09）。
+            // ここに無いのは バント／送球／リード の3つで、これは向こうにだけ有る（画面ごとの差は承知の上）。
             yield return ("弾道", a?.LaunchTendency ?? -1, b?.LaunchTendency ?? -1);
             yield return ("ミート", a?.Contact ?? -1, b?.Contact ?? -1);
             yield return ("パワー", a?.Power ?? -1, b?.Power ?? -1);
             yield return ("選球眼", a?.Discipline ?? -1, b?.Discipline ?? -1);
             yield return ("走力", a?.Speed ?? -1, b?.Speed ?? -1);
-            yield return ("肩", a?.ArmStrength ?? -1, b?.ArmStrength ?? -1);
+            yield return ("盗塁", a?.Steal ?? -1, b?.Steal ?? -1);
+            yield return ("走塁", a?.Baserunning ?? -1, b?.Baserunning ?? -1);
             yield return ("守備", a?.Fielding ?? -1, b?.Fielding ?? -1);
             yield return ("捕球", a?.Catching ?? -1, b?.Catching ?? -1);
+            yield return ("肩", a?.ArmStrength ?? -1, b?.ArmStrength ?? -1);
             yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
         }
 
-        private static int Velocity(Player p)
-            => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromVelocityKmh(p.Pitching.MaxVelocityKmh);
-
-        // スタミナ＝目安投球数（issue #356）。上限がないので 0〜100 スケールに畳まず、そのまま目安投球数を返す。
+        // スタミナは Level（0〜100）で出す＝メンバー設定・スタメン設定と同じもの（監督決定 2026-08-09）。
+        // 試合用の Player が持つのは目安投球数（issue #356）だけなので、順変換と同じ定数から出す
+        // エンジンの逆変換で戻す（UI側で式を作り直さない・不変条件#1）。上限なしなので Lv100超はそのまま。
         private static int Stamina(Player p)
-            => p?.Pitching == null ? -1 : (int)System.Math.Round(p.Pitching.StaminaPitches);
+            => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromStaminaPitches(p.Pitching.StaminaPitches);
 
-        private static string StaminaText(Player p)
-            => p?.Pitching == null ? null : ((int)System.Math.Round(p.Pitching.StaminaPitches)).ToString();
+        // 球威＝ストレートの有効軸（issue #274）。試合用の Player は育成能力を持たないので、
+        // レパートリーのストレート枠の Power から引く（RosterTeamBuilder が Stuff レベルを入れている値）。
+        private static int Stuff(Player p)
+        {
+            if (p?.Pitching == null) return -1;
+            foreach (var slot in p.Pitching.EffectiveRepertoire)
+                if (slot.Type == PitchType.Fastball) return slot.Power;
+            return -1;
+        }
 
-        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false, string unit = null)
+        // 単位つきの値（旧・スタミナの「135球」）はスタミナのLevel化で無くなった＝unit は取らない。
+        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false)
             => UiComponents.CompareRow(new CompareRowData
             {
                 Label = label,
@@ -937,12 +1054,13 @@ namespace KokoSim.Unity.Match
                 Winner = hideBar || a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0,
                 TextA = a >= 0 ? textA : null,
                 TextB = b >= 0 ? textB : null,
+                // ランク併記（監督決定 2026-08-09）。メンバー設定・スタメン設定（PlayerCompareTabs）と
+                // 同じ規則にする＝弾道のようなタイプ軸（優劣なし＝hideBar）以外の全行にチップを出し、
+                // 段はエンジンの Tiers.FromStrength 一本（UI側で帯を作り直さない, issue #326②）。
+                GradeA = hideBar || a < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(a).ToString(),
+                GradeB = hideBar || b < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(b).ToString(),
                 HideBar = hideBar,
-                Unit = unit,
             });
-
-        private static string KmhText(Player p)
-            => p?.Pitching == null ? null : (int)System.Math.Round(p.Pitching.MaxVelocityKmh) + "km/h";
 
         private static string TypeText(int launchTendency)
             => launchTendency < 0 ? null : LaunchTendencyLabels.Jp(launchTendency);

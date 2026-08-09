@@ -99,6 +99,12 @@ public enum GameDecisionKind
     /// </summary>
     Relieve,
     /// <summary>
+    /// 投野交代（issue #452）。OffenseIsAway=**守備側**が先攻か。BenchIndex=継投候補
+    /// （TeamState.ReliefRankingCandidates）の添字。在フィールド野手なら現投手と守備位置を<b>そのまま入れ替える</b>
+    /// （控えからの自動補充をしない）。プレイヤーが2枠を指す明示操作専用で、AIの継投は <see cref="Relieve"/> を通る。
+    /// </summary>
+    SwapPitcherWithFielder,
+    /// <summary>
     /// 守備割当（issue #256 統合守備割当）。OffenseIsAway=**守備側**が先攻か。TargetIndex=就かせる守備スロット（打順0-8）、
     /// BenchIndex=控え候補（TeamState.AvailablePitcherCandidates＝控え全員）の添字。就いていた選手は退場する
     /// （守備固め／守備割当）。役割（投/野）で候補を分けない（#93）。
@@ -266,6 +272,9 @@ public static class GameReplay
                     break;
                 case GameDecisionKind.Relieve:
                     SubstitutionCommands.Relieve(p, d.OffenseIsAway, d.BenchIndex);
+                    break;
+                case GameDecisionKind.SwapPitcherWithFielder:
+                    SubstitutionCommands.SwapPitcherWithFielder(p, d.OffenseIsAway, d.BenchIndex);
                     break;
                 case GameDecisionKind.DefenseAssign:
                     SubstitutionCommands.DefenseAssign(p, d.OffenseIsAway, d.TargetIndex, d.BenchIndex);

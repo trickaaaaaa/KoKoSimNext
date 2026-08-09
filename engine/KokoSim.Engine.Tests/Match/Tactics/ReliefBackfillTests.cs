@@ -290,6 +290,63 @@ public sealed class ReliefBackfillTests
         Assert.Equal(1, st.PitcherChanges);
     }
 
+    // ===== プレイヤーの明示操作は必ず①＝単純な入れ替え（issue #452） =====
+    //
+    // ②（旧投手退場＋ベンチ野手で補充）はAIが「継投したい」とだけ決めたときの守備穴の埋め方であって、
+    // プレイヤーが打順表で投手枠と守備枠の2つを指す操作の意味ではない。明示操作では控えを動かさない
+    // ＝画面のプレビュー（投手→その守備位置／野手→マウンド）と確定結果が必ず一致する。
+
+    [Fact]
+    public void PlayerSwap_NeverUsesBenchBackfill_EvenWhenPath2WouldFire()
+    {
+        // ②が立つ配置（打力の弱い旧投手＋守備の上手いベンチ）でも、明示操作なら必ず①へ倒す。
+        var (st, ss, oldPitcher) = SetupOnFieldPromotion(20, 20, 45, 55);
+
+        Assert.True(st.RelieveWith(ss, backfill: null, allowBenchBackfill: false));
+
+        Assert.Equal("遊", st.CurrentPitcher.Name);
+        Assert.False(st.IsRetired(oldPitcher));                                    // 誰も退場しない
+        Assert.Equal("先発", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name);  // 旧投手が空き守備へ＝入れ替え
+        Assert.Single(st.Reserves);                                                   // 控え非消費
+        Assert.Equal(0, st.Substitutions);
+        Assert.Equal(1, st.PitcherChanges);
+        Assert.Equal(PitchingChangeKind.TwoWaySwap, st.LastPitchingChange!.Value.Kind);
+    }
+
+    [Fact]
+    public void PlayerSwap_InDh_ExDhTakesField_EvenWhenBenchDefendsBetter()
+    {
+        // DHでは投手が打順外＝入れ替えが成立しない。②を止めても控えは動かず「元DHが空き守備へ」に倒れる。
+        var st = new TeamState(DhTeam(Attr(90, 60, 45, 55), Attr(30, 30, 30, 30),
+            dhContact: 20, dhPower: 20, dhFielding: 45, benchFielding: 55));
+        var ss = st.CurrentLineup.First(p => p.Name == "遊");
+        var dh = st.CurrentLineup[st.DhSlot];
+
+        Assert.True(st.RelieveWith(ss, backfill: null, allowBenchBackfill: false));
+
+        Assert.False(st.UsesDh);                                           // 野手登板でDHは消滅
+        Assert.Equal("遊", st.CurrentPitcher.Name);
+        Assert.False(st.IsRetired(dh));                                    // 元DHは残って空き守備へ
+        Assert.Equal("DH", st.PlayerAtPosition(FieldPosition.Shortstop)!.Name);
+        Assert.Equal(2, st.Reserves.Count);                                   // 控え非消費
+        Assert.Equal(9, st.DefensiveAlignment(new FieldGeometry()).Count);     // 守備穴なし
+    }
+
+    [Fact]
+    public void PlayerSwap_WithReservePitcher_FallsBackToNormalChange()
+    {
+        // 控えを指したときは在フィールド野手ではない＝通常継投（allowBenchBackfill は効かない）。
+        var st = new TeamState(NonDhTeam("T", Attr(80, 60, 45, 55), Attr(70, 70, 70, 70)));
+        var oldPitcher = st.CurrentPitcher;
+        var reliever = st.AvailableReserves[0];
+
+        Assert.True(st.RelieveWith(reliever, backfill: null, allowBenchBackfill: false));
+
+        Assert.Equal(reliever.Name, st.CurrentPitcher.Name);
+        Assert.True(st.IsRetired(oldPitcher));
+        Assert.Equal(PitchingChangeKind.ReserveRelief, st.LastPitchingChange!.Value.Kind);
+    }
+
     // ===== ボックススコア: 昇格した野手の投手行が欠落しない（issue #209 Phase C 表現） =====
 
     [Fact]

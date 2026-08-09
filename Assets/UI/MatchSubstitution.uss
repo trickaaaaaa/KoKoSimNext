@@ -9,9 +9,12 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* 高さは中身に合わせる（空白を作らない＝密度優先）。あふれは各列のスクロールに収める。 */
+/* 上限 94%（旧88%）。守備適性の帯を比較列に足した分（issue #452・案A, 2026-08-09）で
+   野手ビューの実測が 826px になり、88%＝792px では収まらなくなった。1600×900 で 94%＝846px。
+   ⚠ 比較列の中身を足すたびにここが効くので、変えたら実測して確認する（絵では「切れている」としか見えない）。 */
 .msub-card {
     width: 80%;
-    max-height: 88%;
+    max-height: 94%;
     padding-left: var(--sp-4);
     padding-right: var(--sp-4);
     padding-top: var(--sp-3);
@@ -56,7 +59,10 @@
 /* 行が最も幅を要る「退く選手」に余りを与え、控え列は固定幅に留める（横に間延びさせない）。 */
 .msub-body { flex-direction: row; align-items: stretch; flex-shrink: 0; }
 .msub-outs { flex-grow: 1; flex-basis: 0; min-width: 0; }
-.msub-ins { width: 30%; flex-shrink: 0; margin-left: var(--sp-4); }
+/* 控え列は「背番号＋名前＋守備タグ」しか置かないので、余りは右の比較列へ回す（issue #452）。
+   実測（1600×900）: 30%＝374px に対し中身は名前最長130px＋タグ＝約200px で 170px 余っていた。
+   20%＝249px。ここを削らないと比較列を広げられず、選手名が枠からはみ出して隣の名前に重なる。 */
+.msub-ins { width: 20%; flex-shrink: 0; margin-left: var(--sp-4); }
 .msub-section {
     font-size: var(--fs-label);
     color: var(--color-muted);
@@ -91,8 +97,14 @@
 }
 
 /* ── 右：2選手比較（スタメン設定の比較パネルと同じ部品） ── */
+/* 比較列。300px は #64（初回実装）の値で、**投手ビュー（5行・数値だけ）**に合わせた寸法だった。
+   #478 で守備交代の既定が野手ビュー（9行・和文の型名あり）になり寸法が足りなくなったので、
+   控え列の余りを回して 400px にした（issue #452）。内訳: カード1枚の中身＝(400-24)/2-24＝164px ≧
+   選手名の実測最長 151px ／ 行の器＝400-32＝368px ≧ ラベル96＋間12＋型の値「ややフライ型」115px×2。
+   **これ以上広げない**＝残りは打順表（主表示）に回す。434pxで試したとき、打順表が9px痩せて
+   代打のプレビュー行（「次打者」タグぶん長い）が「1 田村 … → 10 吉川　陽向」と退く側を落とした。 */
 .msub-compare {
-    width: 300px;
+    width: 400px;
     flex-shrink: 0;
     margin-left: var(--sp-4);
     padding-left: var(--sp-3);
@@ -109,8 +121,27 @@
     border-color: var(--color-line);
 }
 .msub-cmp-card--a { border-right-width: var(--border-w); border-right-color: var(--color-line); }
-.msub-cmp-scroll { max-height: 340px; margin-top: var(--sp-2); }
-.msub-cmp-group {
+/* 比較表の窓。ここを上げると比較列が左の打順表（.msub-scroll 414px）より背高になり、
+   .msub-card ごとモーダルが伸びる（上限は .msub-card の max-height 88%＝1600×900 で 792px）。
+   490px は野手ビューの実測値（11行×32＋ヘッダ38＝391px ＋ 守備適性の帯 90px, issue #452）。
+   **max-height でなく height（固定）**にしてある: 投手ビューは5行＋帯なしで 211px しか要らないので、
+   可変にすると投手枠と野手枠をクリックし分けるたびにモーダルが278pxも伸び縮みする。
+   投手ビューでは下に余白が出るが、余白（UI原則④）のほうが跳ねるモーダルよりまし。
+   ⚠ 増やした分だけモーダル全体が縦に伸びるので、変えたら**モーダルの高さを実測して .msub-card の
+   max-height 以下を確認**する（この帯を足したぶん max-height も 88%→94% へ上げてある）。 */
+.msub-cmp-scroll { height: 490px; margin-top: var(--sp-2); }
+/* 投手ビューはカードに持ち球チャート（cmp-card__pitch = 104px + 上余白8px）が乗るぶん、表の窓を同じだけ
+   縮めてモーダル全体の高さを一定に保つ（issue #452）。高さを固定しているのは、投手枠と野手枠で窓が
+   伸び縮みするとモーダルごと跳ねて比較にならないため。投手は7要素（見出し＋6行）＝約243pxで収まる。 */
+.msub-cmp-scroll--pitch { height: 378px; }
+/* モーダル内の小見出し（例: 継投の行き先を選ぶ「元の投手」）。旧 .msub-cmp-group を改名した
+   （比較表のグループ名はヘッダのラベル列へ畳んだので、同じ名前で別物を指すのをやめた, issue #452）。 */
+/* 継投の行き先など、控え列に出る「文」の選択肢。bench-row を流用しているが中身は選手名でないので
+   1行省略をやめて折り返す（issue #452）。.bench-row__name と同じ詳細度だと読み込み順で勝敗が
+   決まってしまうので、**2クラスの複合**で必ず勝たせる。行高64pxは2行ぶん入るので変えない。 */
+.bench-row__name.msub-choice__text { white-space: normal; overflow: visible; }
+
+.msub-group {
     font-size: var(--fs-cap);
     color: var(--color-muted);
     letter-spacing: 1px;

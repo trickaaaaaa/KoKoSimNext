@@ -500,7 +500,9 @@ namespace KokoSim.Unity.Match
             _inningBreak?.RegisterCallback<PointerDownEvent>(OnInningBreakDown);
 
             ResetPerMatchVisuals();
-            _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied);
+            // 守備適性は Player に無く名簿側にあるので、通算成績と同じ join（SourceId）を注入する（issue #452）。
+            _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied,
+                _statsProvider.AptitudeGradesOf, _statsProvider.PitchChartOf);
             _subPanel.Bind();
             BuildGame();
             _subPanel.SetMatch(_prog, _managerIsAway);
@@ -3964,6 +3966,22 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者。issue #452）。</summary>
         public void PickSubstitutionRunnerForCapture(int baseIndex) => _subPanel?.PickRunnerForCapture(baseIndex);
+
+        /// <summary>スクショ用: 交代モーダルが開いているか（確定に失敗すると開いたまま残る）。</summary>
+        public bool SubstitutionOpenForCapture => _subPanel != null && _subPanel.IsOpen;
+
+        /// <summary>スクショ用: いまその守備位置に就いている選手（確定後の姿を engine から引き直す）。</summary>
+        public KokoSim.Engine.Players.Player FielderForCapture(KokoSim.Engine.Match.Field.FieldPosition pos)
+            => _subPanel?.FielderForCapture(pos);
+
+        /// <summary>スクショ用: 残っている控えの人数（交代が成立したかの証拠）。</summary>
+        public int BenchCountForCapture => _subPanel?.BenchCountForCapture ?? -1;
+
+        /// <summary>スクショ用: 交代を確定する（ボタンと同じ経路。issue #452 の操作一巡確認用）。</summary>
+        public void ApplySubstitutionForCapture() => _subPanel?.ApplyForCapture();
+
+        /// <summary>スクショ用: 交代モーダルのフッター文（保留中の操作の要約・エラー理由）。</summary>
+        public string SubstitutionNoteForCapture => _subPanel?.NoteForCapture ?? "";
 
         /// <summary>スクショ用: 自校の控え先頭（代打候補）の名前。</summary>
         public string HomeBenchZeroName =>

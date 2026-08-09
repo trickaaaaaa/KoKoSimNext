@@ -747,7 +747,17 @@
     border-bottom-width: var(--border-w);
     border-bottom-color: var(--color-line);
 }
-.cmp-head__spacer { width: 76px; flex-shrink: 0; }
+.cmp-head__spacer { width: 76px; flex-shrink: 0; justify-content: center; }
+/* ラベル列の見出し（表のグループ名を空セルへ畳む, issue #452）。独立した見出し行を持たない分、
+   縦を行に回せる。Label 既定の上下 margin/padding は行送りを狂わせるだけなので消す。 */
+.cmp-head__cap {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
 .cmp-head__col { flex-shrink: 0; flex-direction: row; align-items: center; }
 .cmp-head__col--b { margin-left: var(--sp-3); }
 .cmp-head__lab {
@@ -779,6 +789,33 @@
    行単位で広げるとその行だけ数値の右端がずれて桁が揃わなくなる（UI原則③）。
    付け外しは UiComponents.SetCompareUnitColumn（画面側でクラス名を直書きしない, issue #246）。 */
 .cmp-rows--unit .cmp-row__val { width: var(--col-cmp-val-unit); }
+/* 密な組（issue #452）: 比較表の高さが**自分では決まらない**置き場所（交代モーダル＝隣の打順表が
+   パネル高さを決め、比較表はその余り342pxしか使えない）で、野手の9項目を内部スクロールなしに収める。
+   付け外しは UiComponents.SetCompareDense（画面側でクラス名を直書きしない, issue #246 と同じ作法）。
+   実測（1600×900・issue #452）: 素の組は 1行43px×9＋見出し46＋ヘッダ42＝493px で窓334pxに入らず、
+   **「守備」「捕球」「精神力」の3行が既定で窓の外**（縦スクローラは幅6pxで見えない）。
+   43pxの実体は Label 既定の上下 margin(4/2)＋padding(4/4) なので、**文字サイズは落とさず**そこだけ削る
+   （19px＋余白0＝29px → 行ピッチ32px＝UI原則①の基準）。9行×32＋ヘッダ38＝326px で収まる。 */
+.cmp-rows--dense .cmp-row { margin-top: 1px; margin-bottom: 1px; min-height: 30px; align-items: center; }
+.cmp-rows--dense .cmp-row__lab,
+.cmp-rows--dense .cmp-row__val { margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+/* 見出し行を畳んだぶんラベル列を広げる（「打撃・走守」＝和文5文字が入る実測値96px。
+   素の76pxは和文4文字「スタミナ」基準なので、そのままだと見出しが切れる）。
+   ヘッダの空セルと同じ幅にしないと列が揃わない＝必ず2つ一緒に変える。 */
+.cmp-rows--dense .cmp-row__lab,
+.cmp-rows--dense .cmp-head__spacer { width: 96px; }
+.cmp-rows--dense .cmp-head { margin-bottom: 0; }
+/* 広げた列は A/B で等分して**各側の右端で揃える**（issue #452）。素の組は値セルが内容幅のまま
+   左に寄るので、広い列に置くと右に250pxの死に余白ができ、どちらの列の値かも追いにくい
+   （実測: 値の右端1172px に対しパネル右端1424px）。UI原則①（整列で捌く）／③（右揃え・桁揃え）。 */
+.cmp-rows--dense .cmp-row__side,
+.cmp-rows--dense .cmp-head__col { flex-grow: 1; flex-basis: 0; justify-content: flex-end; }
+/* 型の値（弾道）も右端へ。素の組が左揃えなのは「固定幅だと和文が収まらない」から（issue #219）で、
+   側を明け渡した今は右揃えにできる＝9行の右端が1本に揃う。 */
+.cmp-rows--dense .cmp-row--type .cmp-row__val { -unity-text-align: middle-right; }
+/* 数字＋和文単位のセル（スタミナ＝目安投球数, issue #356）は Label 2枚の**横並び**なので、
+   text-align では寄らない＝並びの側で右へ寄せる。これを忘れるとスタミナ行だけ右端が揃わない。 */
+.cmp-rows--dense .cmp-row__numunit { justify-content: flex-end; }
 .cmp-row__val--win { color: var(--color-chalk); }
 /* ランク併記（issue #326②）: 値セルの隣に小型チップを添える。フォントサイズはトークン化
    （旧11px直書きを是正, issue #405）。チップ文字は不可視画像差し替えなので実寸には影響しない。 */
@@ -804,7 +841,17 @@
 .cmp-card__lab { font-size: 14px; color: var(--color-ink); border-radius: var(--radius-chip); padding-left: 5px; padding-right: 5px; letter-spacing: 1px; }
 .cmp-card__lab--a { background-color: var(--cmp-a); }
 .cmp-card__lab--b { background-color: var(--cmp-b); }
-.cmp-card__name { font-size: var(--fs-body); color: var(--color-chalk); margin-top: var(--sp-1); }
+/* 選手名は**カードの外へ出さない**（issue #452）。2枚のカードは隣り合っているので、はみ出すと
+   隣の名前の頭に重なって両方読めなくなる（実測: 枠105pxに文字129px＝「7 佐々木　春斗」の右に
+   「10 吉川　陽向」が来て「春斗0 吉川」に見えた）。切れるほうが重なるよりまし＝自分の枠で省略する。 */
+.cmp-card__name {
+    font-size: var(--fs-body);
+    color: var(--color-chalk);
+    margin-top: var(--sp-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .cmp-card__meta { flex-direction: row; align-items: center; margin-top: 2px; }
 .cmp-card__hand { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-1); }
 .cmp-card__empty { color: var(--color-faint); font-size: var(--fs-cap); -unity-text-align: middle-center; }
@@ -988,7 +1035,10 @@
     color: var(--color-chalk);
 }
 
-/* ── AptField：守備適性ダイヤ（比較パネル内・2選手の位置別適性を盤面表示） ── */
+/* ── AptField：守備適性ダイヤ（盤面表示）──
+   ⚠ 2026-08-09 に全画面で AptitudeStrip（下の帯）へ差し替えたため、**現在どこからも使っていない**。
+   高さ 252px（210px×2枚＋見出し）が試合中の交代モーダルに入らず、3画面で同じ部品にできなかったのが理由
+   （issue #452・案A）。盤面へ戻す判断が出たときのために形だけ残してある。 */
 .apt-pair { flex-direction: row; }
 .apt-field {
     position: relative;
@@ -1033,6 +1083,33 @@
 }
 .apt-node .rank-chip { min-width: 20px; height: 22px; font-size: var(--fs-cap); }
 .apt-node__dash { font-size: var(--fs-label); color: var(--color-faint); -unity-text-align: middle-center; }
+
+/* ── AptitudeStrip：守備適性の帯（issue #452・監督選択の案A, 2026-08-09） ──
+   盤面（.apt-field 210px×2枚＋見出し＝252px）は試合中の交代モーダルに残っている高さ56pxに入らない。
+   同じ情報＝9ポジションの実効守備力ランクを 見出し30＋2行×30 ＝ 約90px の帯へ畳んだ形で、3画面で共有する。
+   ラベル列の幅は同じパネルの .cmp-row__lab と揃える＝縦の線が通る（揃わないと帯だけ左右にずれて見える）。 */
+.apt-strip { flex-shrink: 0; margin-top: var(--sp-2); }
+.apt-strip__row { flex-direction: row; align-items: center; min-height: 30px; }
+.apt-strip__lab {
+    width: 76px;
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+/* 密な組の比較表（cmp-rows--dense）の中に置いたときはラベル列も96pxへ追従する。 */
+.cmp-rows--dense .apt-strip__lab { width: 96px; }
+/* どちらの選手の行かは比較表と同じアクセント（--cmp-a / --cmp-b）で示す。盤面版が枠の色でやっていたのと同じ device。 */
+.apt-strip__lab--a { border-left-width: 3px; border-left-color: var(--cmp-a); padding-left: 5px; }
+.apt-strip__lab--b { border-left-width: 3px; border-left-color: var(--cmp-b); padding-left: 5px; }
+/* 9列は等分。チップは盤面版（apt-node）と同寸にして、見比べたときに大きさが変わらないようにする。 */
+.apt-strip__cell { flex-grow: 1; flex-basis: 0; align-items: center; }
+.apt-strip__pos { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+.apt-strip__cell .rank-chip { min-width: 20px; height: 22px; font-size: var(--fs-cap); }
+.apt-strip__dash { font-size: var(--fs-label); color: var(--color-faint); margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    ライブ観戦（MatchLive）3カラム部品 ─ スタメン列 / 投手行 / マッチアップHUD。

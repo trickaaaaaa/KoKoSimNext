@@ -22,13 +22,6 @@ namespace KokoSim.Unity.Member
             return true;
         }
 
-        // 守備適性ミニダイヤ（比較パネル内・抽象表示）のノード配置（top%, left%）。本図とは別系統。
-        private static readonly Dictionary<int, (float Top, float Left)> AptPos = new()
-        {
-            { 1, (50f, 50f) }, { 2, (86f, 50f) }, { 3, (60f, 87f) }, { 4, (40f, 69f) }, { 5, (60f, 13f) },
-            { 6, (40f, 31f) }, { 7, (17f, 13f) }, { 8, (12f, 50f) }, { 9, (17f, 87f) },
-        };
-
         private const float ChipRise = 8f;   // 立ち位置点からチップ下端までの持ち上げ[px]
 
         private MemberSettingState _state;
@@ -433,6 +426,9 @@ namespace KokoSim.Unity.Member
             if (rows == null) return;
             // 投手能力タブは球速を km/h で出すので値セルを表ごと広げる（issue #246）。
             UiComponents.SetCompareUnitColumn(rows, KokoSim.Unity.Shell.PlayerCompareTabs.HasUnitValues(v.Tab));
+            // 行高は試合中の交代モーダルと同じ密な組（32px基準・UI原則①, issue #452）。
+            // 素の組は Label 既定の上下 margin/padding で43pxになり、13行が窓に入らなかった。
+            UiComponents.SetCompareDense(rows, true);
             rows.Clear();
             if (v.Rows.Count == 0)
             {
@@ -457,47 +453,12 @@ namespace KokoSim.Unity.Member
             host.Clear();
             if (!v.ShowApt) return;
 
-            var title = new Label("守備適性");
-            title.AddToClassList("ms-cmp-group");
-            host.Add(title);
-
-            var pair = new VisualElement();
-            pair.AddToClassList("apt-pair");
-            pair.Add(AptField("apt-field--a", v.HasAptA, v.AptA));
-            pair.Add(AptField("apt-field--b", v.HasAptB, v.AptB));
-            host.Add(pair);
-        }
-
-        // 1選手ぶんの守備適性ダイヤ。9守備位置にランクチップ（G〜S）を配置。未選択なら「—」を薄く。
-        private VisualElement AptField(string accentMod, bool has, System.Collections.Generic.List<string> grades)
-        {
-            var field = new VisualElement();
-            field.AddToClassList("apt-field");
-            field.AddToClassList(accentMod);
-            field.Add(NewChild("apt-field__infield"));
-            field.Add(NewChild("apt-field__home"));
-            var slots = new VisualElement();
-            slots.AddToClassList("apt-field__slots");
-            for (var i = 0; i < 9; i++)
-            {
-                var el = new VisualElement();
-                el.AddToClassList("apt-node");
-                var pos = AptPos[i + 1];
-                el.style.top = Length.Percent(pos.Top);
-                el.style.left = Length.Percent(pos.Left);
-                el.Add(has ? UiComponents.RankChip(grades[i]) : AptDash());
-                slots.Add(el);
-            }
-            field.Add(slots);
-            return field;
-        }
-
-
-        private static Label AptDash()
-        {
-            var d = new Label("—");
-            d.AddToClassList("apt-node__dash");
-            return d;
+            // 盤面（apt-field 210px×2枚＋見出し＝252px）から帯（約90px）へ差し替えた（issue #452・案A, 2026-08-09）。
+            // 理由: この帯は試合中の交代モーダルにも載せるが、あちらは残り高さが 56px しかなく盤面が入らない。
+            // 3画面で同じ部品を使うために、余地のあるこの画面も帯に揃える。
+            // 副次効果として、既定で窓の外へ落ちていた 252px のうち 162px が窓に戻る。
+            host.Add(UiComponents.AptitudeStrip(
+                v.HasAptA ? v.AptA : null, v.HasAptB ? v.AptB : null, "1人目", "2人目"));
         }
 
         private static VisualElement NewChild(string cls)
