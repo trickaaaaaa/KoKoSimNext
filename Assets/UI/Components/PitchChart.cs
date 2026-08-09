@@ -82,8 +82,15 @@ namespace KokoSim.Unity.Components
                 chip.userData = pt;
                 // 小型版は略記（issue #560）。正式名のままだと4球種で幾何的に収まらず、
                 // SeparateChips が器の中へ押し込むぶんラベルどうしが必ず重なる。
-                var text = _compact && !string.IsNullOrEmpty(pt.ShortName) ? pt.ShortName : pt.Name;
-                var name = new Label(text); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
+                // さらに小型版のストレートは球種名を出さず km/h だけにする＝「直 128 km/h」だと112pxになり、
+                // 器（約154px）で他の札と横に並べられず、ボールに乗るか札同士が重なるかしか無くなる。
+                // km/h が付いている札はストレートしかないので、名前が無くても取り違えない。
+                var veloOnly = _compact && pt.IsFastball && !string.IsNullOrEmpty(pt.VeloText);
+                if (!veloOnly)
+                {
+                    var text = _compact && !string.IsNullOrEmpty(pt.ShortName) ? pt.ShortName : pt.Name;
+                    var name = new Label(text); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
+                }
                 // ストレートのみ最速を添える。小型版も出す（監督決定 2026-08-09, issue #560）＝
                 // 比較表から球速の行を落とし、球速はここだけで読ませる。
                 if (pt.IsFastball && !string.IsNullOrEmpty(pt.VeloText))
@@ -181,6 +188,19 @@ namespace KokoSim.Unity.Components
                     var ox = (a.width + b.width) * 0.5f + Gap - Mathf.Abs(dx);
                     var oy = (a.height + b.height) * 0.5f + Gap - Mathf.Abs(dy);
                     if (ox <= 0f || oy <= 0f) continue;
+
+                    // 横に並べ切れない2枚（例: 小型版の「128km/h」90px と「カット」72px で器は154px）は、
+                    // 少しずつ押し分けても必ず器かボールに押し戻されて振動する（issue #560 実害）。
+                    // 上下の端へ振り分けて決着させる＝上に居るほうを上端、もう一方を下端へ。
+                    // 中央のボールの帯（＝この2枚が避けたい所）はちょうど間に空く。
+                    if (a.width + b.width + Gap > rect.width && a.height + b.height + Gap <= rect.height)
+                    {
+                        if (a.center.y <= b.center.y) { a.y = 0f; b.y = rect.height - b.height; }
+                        else { b.y = 0f; a.y = rect.height - a.height; }
+                        boxes[i] = a; boxes[j] = b;
+                        moved = true;
+                        continue;
+                    }
 
                     if (oy <= ox)
                     {
