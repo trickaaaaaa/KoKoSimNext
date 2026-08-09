@@ -226,10 +226,9 @@ namespace KokoSim.Unity.Players
             v.TopVelocityKmh = Kmh(p.Level(AbilityKind.Velocity));
 
             // 投手能力・野手能力（両方表示：モック準拠）。
-            // 球速の数値は km/h 表記に一本化（issue #94/#215）。ランク・バー割合は内部値のまま。
-            var velocity = Bar(p, AbilityKind.Velocity, AbilityLabels.Jp(AbilityKind.Velocity));
-            velocity.Value = v.TopVelocityKmh;
-            v.PitcherAbilities.Add(velocity);
+            // 球速はこの表に出さない＝すぐ下の持ち球チャートのストレートが km/h で出しているので、
+            // 同じ値が同じカードに二度並んでいた（監督決定 2026-08-09, issue #560）。
+            // 比較3画面（メンバー設定・スタメン設定・試合中の選手交代）も同じ扱いにしてある。
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Control, AbilityLabels.Jp(AbilityKind.Control)));
             // 項目と並びはエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる。
             // スタミナは目安投球数でなく Level で出す＝比較パネル3画面と同じもの（監督決定 2026-08-09, issue #561）。
