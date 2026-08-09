@@ -500,7 +500,8 @@ namespace KokoSim.Unity.Match
             _inningBreak?.RegisterCallback<PointerDownEvent>(OnInningBreakDown);
 
             ResetPerMatchVisuals();
-            _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied);
+            // 守備適性は Player に無く名簿側にあるので、通算成績と同じ join（SourceId）を注入する（issue #452）。
+            _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied, _statsProvider.AptitudeGradesOf);
             _subPanel.Bind();
             BuildGame();
             _subPanel.SetMatch(_prog, _managerIsAway);

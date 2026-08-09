@@ -452,6 +452,80 @@ namespace KokoSim.Unity.Components
                 };
         }
 
+        // ===== AptitudeStrip（守備適性の帯・issue #452）=====
+
+        /// <summary>
+        /// 守備適性の9ポジションの並び（投→捕→一→二→三→遊→左→中→右）。
+        /// 呼び出し側が渡す grades の並びと<b>必ず一致させる</b>（MemberSettingState.SlotPosition /
+        /// LineupSettingState.AptOrder と同じ順）。ここを入れ替えると絵だけ静かにずれる。
+        /// </summary>
+        private static readonly string[] AptPositions = { "投", "捕", "一", "二", "三", "遊", "左", "中", "右" };
+
+        /// <summary>
+        /// 守備適性を「9ポジション × 2選手」の帯で出す（issue #452・監督選択の案A, 2026-08-09）。
+        /// <para>盤面表示（<c>apt-field</c>）は 210px×2枚＋見出し＝<b>252px</b> あり、試合中の交代モーダルに
+        /// 残っている高さ（56px）に入らない。同じ情報＝ポジション別の<b>実効守備力ランク</b>を約90pxへ畳んだのがこれで、
+        /// 3画面（交代／メンバー設定／スタメン設定）で共有する。</para>
+        /// <para>grades は 0〜8 が上の並びに対応する。null や要素不足の側は「—」を出す
+        /// （相手校のように <see cref="Players.Player.SourceId"/> が無く名簿へ join できない選手がある）。</para>
+        /// </summary>
+        public static VisualElement AptitudeStrip(
+            IReadOnlyList<string> gradesA, IReadOnlyList<string> gradesB,
+            string labelA, string labelB, string caption = "守備適性")
+        {
+            var strip = new VisualElement();
+            strip.AddToClassList("apt-strip");
+
+            var head = new VisualElement();
+            head.AddToClassList("apt-strip__row");
+            var cap = new Label(caption);
+            cap.AddToClassList("apt-strip__lab");
+            head.Add(cap);
+            foreach (var pos in AptPositions)
+            {
+                var cell = new VisualElement();
+                cell.AddToClassList("apt-strip__cell");
+                var lab = new Label(pos);
+                lab.AddToClassList("apt-strip__pos");
+                cell.Add(lab);
+                head.Add(cell);
+            }
+            strip.Add(head);
+
+            strip.Add(AptStripRow(gradesA, labelA, "a"));
+            strip.Add(AptStripRow(gradesB, labelB, "b"));
+            return strip;
+        }
+
+        private static VisualElement AptStripRow(IReadOnlyList<string> grades, string label, string side)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("apt-strip__row");
+
+            var lab = new Label(label ?? "");
+            lab.AddToClassList("apt-strip__lab");
+            lab.AddToClassList("apt-strip__lab--" + side);
+            row.Add(lab);
+
+            for (var i = 0; i < AptPositions.Length; i++)
+            {
+                var cell = new VisualElement();
+                cell.AddToClassList("apt-strip__cell");
+                if (grades != null && i < grades.Count && !string.IsNullOrEmpty(grades[i]))
+                {
+                    cell.Add(RankChip(grades[i]));
+                }
+                else
+                {
+                    var dash = new Label("—");
+                    dash.AddToClassList("apt-strip__dash");
+                    cell.Add(dash);
+                }
+                row.Add(cell);
+            }
+            return row;
+        }
+
         // ===== NumUnit（数字＋和文単位の混植セル）=====
 
         /// <summary>

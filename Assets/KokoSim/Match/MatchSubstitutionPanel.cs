@@ -62,11 +62,20 @@ namespace KokoSim.Unity.Match
         private FieldPosition? _convertTo;  // 継投時に元投手を回す守備位置（null=退場）
         private bool _dhWithdraw;        // 指枠を「そのまま退場」させる
 
-        public MatchSubstitutionPanel(VisualElement root, System.Action onApplied)
+        /// <param name="aptitudeGrades">
+        /// 守備適性の9ポジションのランクを <see cref="Player.SourceId"/> から引く（issue #452）。
+        /// 試合中の <see cref="Player"/> は適性配列を持たないので、名簿への join は Shell 側
+        /// （<see cref="MatchLiveStatsProvider.AptitudeGradesOf"/>）に任せて注入する。null なら帯を出さない。
+        /// </param>
+        public MatchSubstitutionPanel(VisualElement root, System.Action onApplied,
+            System.Func<int?, IReadOnlyList<string>> aptitudeGrades = null)
         {
             _root = root;
             _onApplied = onApplied;
+            _aptitudeGrades = aptitudeGrades;
         }
+
+        private readonly System.Func<int?, IReadOnlyList<string>> _aptitudeGrades;
 
         /// <summary>モーダルを開いている間は裏の進行（自動再生・次の打席へ）を止める。</summary>
         public bool IsOpen => _open;
@@ -585,6 +594,16 @@ namespace KokoSim.Unity.Match
                 else
                     _cmpRows.Add(CompareRowEl(label, x, y));
             }
+
+            // 守備適性の帯（issue #452・監督選択の案A）。メンバー設定・スタメン設定と同じく**野手ビューのときだけ**出す。
+            // 盤面（252px）はモーダルの残り高さに入らないので、同じ情報を9列×2行の帯へ畳んだ部品を使う。
+            if (!pitcherView && _aptitudeGrades != null)
+            {
+                var aptA = _aptitudeGrades(outgoing?.SourceId);
+                var aptB = _aptitudeGrades(incoming?.SourceId);
+                if (aptA != null || aptB != null)
+                    _cmpRows.Add(UiComponents.AptitudeStrip(aptA, aptB, capA, capB));
+            }
         }
 
         /// <summary>左カード（退く側）の空状態文言。何も選んでいないとき次の一手を指す。</summary>
@@ -913,14 +932,19 @@ namespace KokoSim.Unity.Match
                 yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
                 yield break;
             }
+            // 並びはメンバー設定・スタメン設定（PlayerCompareTabs）と同じ相対順にする＝画面をまたいでも目が滑らない。
+            // 盗塁・走塁は代走の判断に要るのに出ていなかったので足した（監督決定 2026-08-09）。
+            // ここに無いのは バント／送球／リード の3つで、これは向こうにだけ有る（画面ごとの差は承知の上）。
             yield return ("弾道", a?.LaunchTendency ?? -1, b?.LaunchTendency ?? -1);
             yield return ("ミート", a?.Contact ?? -1, b?.Contact ?? -1);
             yield return ("パワー", a?.Power ?? -1, b?.Power ?? -1);
             yield return ("選球眼", a?.Discipline ?? -1, b?.Discipline ?? -1);
             yield return ("走力", a?.Speed ?? -1, b?.Speed ?? -1);
-            yield return ("肩", a?.ArmStrength ?? -1, b?.ArmStrength ?? -1);
+            yield return ("盗塁", a?.Steal ?? -1, b?.Steal ?? -1);
+            yield return ("走塁", a?.Baserunning ?? -1, b?.Baserunning ?? -1);
             yield return ("守備", a?.Fielding ?? -1, b?.Fielding ?? -1);
             yield return ("捕球", a?.Catching ?? -1, b?.Catching ?? -1);
+            yield return ("肩", a?.ArmStrength ?? -1, b?.ArmStrength ?? -1);
             yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
         }
 
@@ -943,6 +967,11 @@ namespace KokoSim.Unity.Match
                 Winner = hideBar || a < 0 || b < 0 ? 0 : a > b ? -1 : b > a ? 1 : 0,
                 TextA = a >= 0 ? textA : null,
                 TextB = b >= 0 ? textB : null,
+                // ランク併記（監督決定 2026-08-09）。メンバー設定・スタメン設定（PlayerCompareTabs）と
+                // 同じ規則にする＝弾道のようなタイプ軸（優劣なし＝hideBar）以外の全行にチップを出し、
+                // 段はエンジンの Tiers.FromStrength 一本（UI側で帯を作り直さない, issue #326②）。
+                GradeA = hideBar || a < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(a).ToString(),
+                GradeB = hideBar || b < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(b).ToString(),
                 HideBar = hideBar,
                 Unit = unit,
             });

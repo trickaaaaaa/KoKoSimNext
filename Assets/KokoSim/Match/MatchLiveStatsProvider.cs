@@ -1,9 +1,12 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Nation;     // Tiers（ランク段の単一ソース）
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Season;     // DevelopingPlayer / EffectiveFielding（守備適性の join, issue #452）
 using KokoSim.Engine.Stats;
 using KokoSim.Unity.Shell;
 
@@ -69,6 +72,36 @@ namespace KokoSim.Unity.Match
             var s = sourceId is int id ? _stats.Career.Get(id) : null;
             return s != null && s.Pitching.Games > 0 ? s.Pitching : null;
         }
+
+        /// <summary>
+        /// 守備適性の9ポジション（投捕一二三遊左中右）のランク（issue #452）。名簿（RosterService）へ
+        /// <see cref="Player.SourceId"/> で join して引く。試合中の <see cref="Player"/> は適性配列を持たない
+        /// （<c>Position</c> と <c>Fielding</c> だけ）ので、通算成績と同じ seam を通す。
+        /// <para>相手校のように SourceId が無い／名簿に居ない選手は <b>null</b>。呼び出し側は「—」を出す。</para>
+        /// <para>値は<b>実効守備力ランク</b>＝ Fielding × 適性補正（issue #371 でメンバー設定・スタメン設定が
+        /// 採った定義と同じ）。生の適性ランクは出さない＝3画面で同じものを見せる。</para>
+        /// </summary>
+        public IReadOnlyList<string> AptitudeGradesOf(int? sourceId)
+        {
+            if (sourceId is not int id) return null;
+            DevelopingPlayer found = null;
+            foreach (var p in RosterService.Roster)
+                if (p.Id == id) { found = p; break; }
+            if (found == null) return null;
+
+            var grades = new List<string>(AptOrder.Length);
+            foreach (var pos in AptOrder)
+                grades.Add(Tiers.FromStrength(EffectiveFielding.Rank(found, pos, FieldingCoeff.Default)).ToString());
+            return grades;
+        }
+
+        /// <summary>守備適性の並び。UiComponents.AptitudeStrip の表示順と必ず一致させる。</summary>
+        private static readonly FieldPosition[] AptOrder =
+        {
+            FieldPosition.Pitcher, FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase,
+            FieldPosition.ThirdBase, FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField,
+            FieldPosition.RightField,
+        };
 
         // ── 表示用の短縮ラベル（部品側でなく共通の書式を1箇所に集約） ──
 

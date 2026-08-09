@@ -14,12 +14,6 @@ namespace KokoSim.Unity.Lineup
     public sealed class LineupSettingController : MonoBehaviour
     {
         // 守備適性ミニダイヤ（比較パネル内）のノード配置（top%, left%）。メンバー設定と同一。
-        private static readonly Dictionary<int, (float Top, float Left)> AptPos = new()
-        {
-            { 1, (50f, 50f) }, { 2, (86f, 50f) }, { 3, (60f, 87f) }, { 4, (40f, 69f) }, { 5, (60f, 13f) },
-            { 6, (40f, 31f) }, { 7, (17f, 13f) }, { 8, (12f, 50f) }, { 9, (17f, 87f) },
-        };
-
         private LineupSettingState _state;
         private VisualElement _root;
 
@@ -259,15 +253,10 @@ namespace KokoSim.Unity.Lineup
             host.Clear();
             if (!v.ShowApt) return;
 
-            var title = new Label("守備適性");
-            title.AddToClassList("lu-cmp-group");
-            host.Add(title);
-
-            var pair = new VisualElement();
-            pair.AddToClassList("apt-pair");
-            pair.Add(AptField("apt-field--a", v.HasAptA, v.AptA));
-            pair.Add(AptField("apt-field--b", v.HasAptB, v.AptB));
-            host.Add(pair);
+            // 盤面（apt-field 210px×2枚＋見出し＝252px）から帯（約90px）へ差し替えた（issue #452・案A, 2026-08-09）。
+            // 3画面で同じ部品にするため。理由と副次効果は MemberSettingController.BuildApt と同じ。
+            host.Add(UiComponents.AptitudeStrip(
+                v.HasAptA ? v.AptA : null, v.HasAptB ? v.AptB : null, "1人目", "2人目"));
         }
 
         // 通算/今大会成績（選んだ選手ごとに1枚＝2列）。
@@ -329,29 +318,6 @@ namespace KokoSim.Unity.Lineup
 
             wrap.Add(table);
             return wrap;
-        }
-
-        private VisualElement AptField(string accentMod, bool has, List<string> grades)
-        {
-            var field = new VisualElement();
-            field.AddToClassList("apt-field");
-            field.AddToClassList(accentMod);
-            field.Add(NewChild("apt-field__infield"));
-            field.Add(NewChild("apt-field__home"));
-            var slots = new VisualElement();
-            slots.AddToClassList("apt-field__slots");
-            for (var i = 0; i < 9; i++)
-            {
-                var el = new VisualElement();
-                el.AddToClassList("apt-node");
-                var pos = AptPos[i + 1];
-                el.style.top = Length.Percent(pos.Top);
-                el.style.left = Length.Percent(pos.Left);
-                el.Add(has ? UiComponents.RankChip(grades[i]) : AptDash());
-                slots.Add(el);
-            }
-            field.Add(slots);
-            return field;
         }
 
         private void FillCompareCard(string host, bool isA, CompareCardView card, bool showPitchChart)
@@ -466,13 +432,6 @@ namespace KokoSim.Unity.Lineup
         }
 
 
-
-        private static Label AptDash()
-        {
-            var d = new Label("—");
-            d.AddToClassList("apt-node__dash");
-            return d;
-        }
 
         private static string NumText(int n) => n > 0 ? n.ToString() : "";
 

@@ -33,6 +33,12 @@ namespace KokoSim.Unity.Member
             Select(member, 0, 1, 0);
             yield return Capture(member, "member-compare-bat");
 
+            // 守備適性ダイヤは比較スクロールの下端にあり、既定では窓の外に落ちている（issue #452 の突き合わせ）。
+            // 「在るのに見えない」ことを絵で示すため、下端まで送った状態も撮る。
+            ScrollCompareToBottom(member);
+            yield return Capture(member, "member-compare-apt");
+            ScrollCompareToTop(member);
+
             Select(member, 0, 1, 1);
             yield return Capture(member, "member-compare-def");
 
@@ -47,7 +53,28 @@ namespace KokoSim.Unity.Member
             Select(lineup, 0, 1, 0);
             yield return Capture(lineup, "lineup-compare-bat");
 
+            ScrollCompareToBottom(lineup);
+            yield return Capture(lineup, "lineup-compare-apt");
+
             Debug.Log("[CmpShooter] DONE");
+        }
+
+        // 比較パネルのスクロールを下端／上端へ送る。クラス名は画面ごとに違う（ms-cmp-scroll / lu-cmp-scroll）ので
+        // 「cmp-scroll で終わる」で拾う。scrollOffset は verticalScroller.highValue が上限。
+        private static void ScrollCompareToBottom(MonoBehaviour ctrl) => ScrollCompare(ctrl, true);
+        private static void ScrollCompareToTop(MonoBehaviour ctrl) => ScrollCompare(ctrl, false);
+
+        private static void ScrollCompare(MonoBehaviour ctrl, bool bottom)
+        {
+            var root = ctrl.GetComponent<UIDocument>()?.rootVisualElement;
+            if (root == null) return;
+            foreach (var sv in root.Query<ScrollView>().ToList())
+            {
+                var isCompare = false;
+                foreach (var c in sv.GetClasses()) if (c.EndsWith("cmp-scroll")) isCompare = true;
+                if (!isCompare) continue;
+                sv.scrollOffset = new Vector2(0, bottom ? sv.verticalScroller.highValue : 0f);
+            }
         }
 
         // 比較の左右（picked=左, hovered=右。hovered=-1 で片側欠損）とタブを差し込んで再描画する。
