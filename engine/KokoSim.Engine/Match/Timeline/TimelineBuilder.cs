@@ -1742,9 +1742,14 @@ public static class TimelineBuilder
     /// 矛盾するときだけ効く（<see cref="GuardAgainstVerdict"/>）。
     /// coefficients=null なら既定係数（Unity 実プレーが使う C# 既定と同一）。
     /// </summary>
+    /// <param name="baserunning">
+    /// 中継しきい値（<c>CutoffThrowSeconds</c>）の出どころ（issue #526）。null なら C#既定
+    /// ＝Unity 実プレーが使う値と同一。判定側（<see cref="Game.HomePlayResolver.ResolveThrowPath"/>）と
+    /// 同じ係数を渡すことで、絵と判定で中継の出方が食い違わない。
+    /// </param>
     public static PlayTimeline AppendOutfieldReturnThrow(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, string leadBaseName, double runnerArriveAnchor,
-        FieldingCoefficients? coefficients = null)
+        FieldingCoefficients? coefficients = null, Game.BaserunningCoefficients? baserunning = null)
     {
         if (!IsOutfieldHit(play)) return timeline; // 外野へ抜けた打球のみ（バウンド抜けを含む, Issue #63）
         foreach (var seg in timeline.Ball)
@@ -1763,7 +1768,10 @@ public static class TimelineBuilder
         var physicalArrive = ExtraBaseResolver.ThrowArriveSeconds(readyAt, straightDist, arm, c);
 
         // 中継: カットマン位置は陣形ルールが実際に配置した中継野手と同一座標ソースにする（#136）。
-        TimelinePoint? cutoff = straightDist > RelayThresholdM
+        // 中継に入るかは**判定と同じ関数**で決める（issue #526）。旧実装はここに 60m 固定の複製を
+        // 持っていて「同値に保つ」というコメントで手当てしていたが、判定側が肩連動になった時点で
+        // 距離固定の複製は必ず食い違う（強肩の直接返球に絵だけカットマンが入る）。
+        TimelinePoint? cutoff = Game.HomePlayResolver.NeedsRelay(straightDist, arm, baserunning ?? new Game.BaserunningCoefficients())
             ? FindCutoffFielderPoint(timeline)
               ?? new TimelinePoint((fieldPoint.X + target.X) * 0.5, (fieldPoint.Z + target.Z) * 0.5)
             : null;
@@ -1795,12 +1803,6 @@ public static class TimelineBuilder
         _ => FieldPosition.Catcher,
     };
 
-    /// <summary>
-    /// 表示上の中継しきい値[m]（これ超で中継、以下は直接返球）。
-    /// <see cref="BaserunningCoefficients.CutoffDistanceThresholdM"/>（本塁レースの判定で使う値）と
-    /// 同値に保つ＝本塁送球と外野返球で中継の出方が食い違わないようにする。
-    /// </summary>
-    private const double RelayThresholdM = 60.0;
 
     private static double Distance(TimelinePoint a, TimelinePoint b)
     {

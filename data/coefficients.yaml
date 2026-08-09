@@ -259,7 +259,11 @@ baserunning:
   relay_transfer_seconds: 0.55               # 中継の握り替え
   relay_throw_speed_mps: 32.0                # 中継野手の送球速度（リーグ平均内野肩）
   cutoff_fraction_from_home: 0.5             # カットマン位置（本塁からの距離割合）
-  cutoff_distance_threshold_m: 60.0          # これ超で中継、以下は本塁へ直接返球
+  # 中継に入る距離は「肩の送球速度 × この秒数」で決まる（issue #526）＝強肩ほど遠くから直接返球できる。
+  # 旧 cutoff_distance_threshold_m: 60.0（距離固定）は肩が判定に一切効かず、しきい値をまたいだ瞬間の
+  # 損失が強肩ほど大きかった（Arm20 +0.41s / Arm99 +0.71s）＝実際の野球と逆。1.88 は Arm50 で 60m ＝
+  # リーグ平均の挙動を旧値と揃える値。Arm20→52m / Arm50→60m / Arm80→68m / Arm99→73m。
+  cutoff_throw_seconds: 1.88
   home_tag_seconds: 0.12
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅

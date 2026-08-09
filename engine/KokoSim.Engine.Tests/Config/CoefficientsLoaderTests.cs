@@ -176,7 +176,7 @@ public sealed class CoefficientsLoaderTests
         Assert.Equal(bundle.Fielding.BaseTurnSeconds, bundle.Baserunning.RunnerBaseTurnSeconds, 6);
         Assert.Equal(0.88, bundle.Baserunning.ThirdSuccessBias, 6);   // #316 で 1.50 から引き下げ
         Assert.Equal(32.0, bundle.Baserunning.RelayThrowSpeedMps, 6);
-        Assert.Equal(60.0, bundle.Baserunning.CutoffDistanceThresholdM, 6);
+        Assert.Equal(1.88, bundle.Baserunning.CutoffThrowSeconds, 6);   // issue #526 で距離固定60mから肩連動へ
         Assert.Equal(0.06, bundle.Baserunning.FieldersChoiceProb, 6); // 野選（FC, design-14 P1-1）帯再校正済み値（2026-07-17）
 
         // 本塁送り判定の采配閾値（F2, 設計書12 §3/§4）も YAML から束縛される。

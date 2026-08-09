@@ -176,8 +176,24 @@ public sealed record BaserunningCoefficients
     public double RelayThrowSpeedMps { get; init; } = 32.0;
     /// <summary>カットマンの立ち位置（本塁からの距離割合。0.5=中間）。</summary>
     public double CutoffFractionFromHome { get; init; } = 0.5;
-    /// <summary>この送球距離[m]を超えたら中継、以下は本塁へ直接返球。</summary>
-    public double CutoffDistanceThresholdM { get; init; } = 60.0;
+    /// <summary>
+    /// 外野手が中継を挟まず投げ切れる時間[s]（issue #526）。中継に入る距離は
+    /// <c>肩の送球速度[m/s] × この秒数</c> で決まる＝**強肩ほど遠くから直接返球できる**。
+    ///
+    /// 旧 <c>CutoffDistanceThresholdM = 60.0</c>（距離固定）を置き換えた。固定だと肩が判定に
+    /// 一切効かず、しきい値をまたいだ瞬間の損失が**強肩ほど大きい**（実測: Arm20 で +0.41s に対し
+    /// Arm99 は +0.71s）＝実際の野球と逆になっていた。中継では肩が前半（外野手→カットマン）に
+    /// しか効かず、固定の握り替え <see cref="RelayTransferSeconds"/> が上乗せされるため。
+    ///
+    /// 1.88 は Arm 50（送球速度 31.94 m/s）でちょうど 60.05m ＝リーグ平均の挙動を旧値と揃える値。
+    /// 中継に入る距離: Arm20→52m ／ Arm50→60m ／ Arm80→68m ／ Arm99→73m。
+    ///
+    /// ⚠ この係数は「**遠い球は外野手がノーバウンドで届かない**」という、engine の送球モデル
+    /// （等速直線・距離減衰なし）に無い物理をしきい値で代用している。単に「直接と中継の速い方を選ぶ」に
+    /// すると Arm51 以上では中継が**絶対に選ばれなくなる**（0.55×守備補正 &lt; dist×0.5×(1/肩 − 1/32) が
+    /// 肩&gt;32m/s で恒真）＝中継が消滅するので、その置き換えはしないこと。距離減衰のモデル化は案B（未着手）。
+    /// </summary>
+    public double CutoffThrowSeconds { get; init; } = 1.88;
     /// <summary>本塁でのタッチ[s]。</summary>
     public double HomeTagSeconds { get; init; } = 0.12;
     /// <summary>margin→生還確率の logistic 幅[s]。</summary>
