@@ -101,7 +101,7 @@
             <ui:VisualElement class="card card--half">
               <ui:VisualElement class="card__hd">
                 <ui:Label class="card__hd-title" text="投手能力" />
-                <ui:Label class="card__hd-sub" text="球速は km/h・他は内部値（1〜100）" />
+                <ui:Label class="card__hd-sub" text="数値は内部値（1〜100）" />
               </ui:VisualElement>
               <ui:VisualElement name="pitcher-abils" class="pd2-abils" />
               <ui:VisualElement name="pitch-chart" class="pd2-pitchchart" />

@@ -39,6 +39,7 @@ namespace KokoSim.Unity.Players
     public sealed class PitchData
     {
         public string Name = "";
+        public string ShortName = "";  // 略記（狭い器＝比較カードの小型チャート用, issue #560）
         public string Kire = "C";     // キレ（Sharpness→S〜G）＝チップ
         public float DirX;            // 変化方向（画面座標系: +x右 / +y下）
         public float DirY;
@@ -61,6 +62,7 @@ namespace KokoSim.Unity.Players
                 list.Add(new PitchChartDatum
                 {
                     Name = pt.Name,
+                    ShortName = pt.ShortName,
                     Kire = pt.Kire,
                     DirX = pt.DirX,
                     DirY = pt.DirY,
@@ -226,14 +228,16 @@ namespace KokoSim.Unity.Players
             v.TopVelocityKmh = Kmh(p.Level(AbilityKind.Velocity));
 
             // 投手能力・野手能力（両方表示：モック準拠）。
-            // 球速の数値は km/h 表記に一本化（issue #94/#215）。ランク・バー割合は内部値のまま。
-            var velocity = Bar(p, AbilityKind.Velocity, AbilityLabels.Jp(AbilityKind.Velocity));
-            velocity.Value = v.TopVelocityKmh;
-            v.PitcherAbilities.Add(velocity);
+            // 球速はこの表に出さない＝すぐ下の持ち球チャートのストレートが km/h で出しているので、
+            // 同じ値が同じカードに二度並んでいた（監督決定 2026-08-09, issue #560）。
+            // 比較3画面（メンバー設定・スタメン設定・試合中の選手交代）も同じ扱いにしてある。
             v.PitcherAbilities.Add(Bar(p, AbilityKind.Control, AbilityLabels.Jp(AbilityKind.Control)));
-            // スタミナは上限なし（issue #356）＝バーを出さず目安投球数を数値表示（設計書02 §1.1e・km/h と同型）。
-            v.PitcherAbilities.Add(StaminaRow(p, AbilityLabels.Jp(AbilityKind.Stamina)));
+            // 項目と並びはエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる。
+            // スタミナは目安投球数でなく Level で出す＝比較パネル3画面と同じもの（監督決定 2026-08-09, issue #561）。
+            v.PitcherAbilities.Add(Bar(p, AbilityKind.Stamina, AbilityLabels.Jp(AbilityKind.Stamina)));
             v.PitcherAbilities.Add(Bar(p, AbilityKind.PitchRank, AbilityLabels.Jp(AbilityKind.PitchRank)));
+            // 球威（issue #274）はこの画面にだけ無かった＝新設時の取りこぼし（issue #561）。
+            v.PitcherAbilities.Add(Bar(p, AbilityKind.Stuff, AbilityLabels.Jp(AbilityKind.Stuff)));
 
             v.FielderAbilities.Add(Bar(p, AbilityKind.LaunchTendency, "弾道"));
             v.FielderAbilities.Add(Bar(p, AbilityKind.Contact, "ミート"));
@@ -313,15 +317,6 @@ namespace KokoSim.Unity.Players
                 Grade = Tiers.FromStrength(v).ToString(),
                 Pct = System.Math.Max(0f, System.Math.Min(1f, v / 100f)),
             };
-        }
-
-        /// <summary>スタミナ行（issue #356）。上限がないので 0〜100 バーは出さず「目安投球数」を数値表示する
-        /// （設計書02 §1.1e。Level→球数の変換はエンジンの公開APIに一本化＝UI側で式を持たない, 球速のkm/hと同型）。</summary>
-        private static AbilityBar StaminaRow(DevelopingPlayer p, string label)
-        {
-            var pitches = (int)System.Math.Round(
-                PitcherAttributes.StaminaPitchesFromLevel(p.Level(AbilityKind.Stamina)));
-            return new AbilityBar { Label = label, Value = pitches, Grade = "", HideBar = true, Unit = "球" };
         }
 
         // カテゴリ別ランク（0〜100 スケール）を 0〜1 のレーダー軸へ正規化する（Issue #93）。
@@ -415,7 +410,7 @@ namespace KokoSim.Unity.Players
                 if (!p.BattingAgainstByPitch.TryGetValue(t, out var line) || line.AtBats == 0) continue;
                 rows.Add(new PitchTypeStatRow
                 {
-                    Label = PitchJp(t),
+                    Label = PitchTypeLabels.Jp(t),
                     AtBats = N(line.AtBats),
                     Hits = N(line.Hits),
                     HomeRuns = N(line.HomeRuns),
@@ -494,7 +489,8 @@ namespace KokoSim.Unity.Players
                 var df = PitchDir(PitchType.Fastball);
                 list.Add(new PitchData
                 {
-                    Name = "ストレート",
+                    Name = PitchTypeLabels.Jp(PitchType.Fastball),
+                    ShortName = PitchTypeLabels.Abbr(PitchType.Fastball),
                     Kire = Tiers.FromStrength(stuffLevel).ToString(),   // 球威(Stuff)＝ストレートの有効軸（Issue #274）
                     DirX = df.x,
                     DirY = df.y,
@@ -519,7 +515,8 @@ namespace KokoSim.Unity.Players
                 var breakScore = lp.PowerOffset + lp.SharpnessOffset;
                 list.Add(new PitchData
                 {
-                    Name = PitchJp(lp.Type),
+                    Name = PitchTypeLabels.Jp(lp.Type),
+                    ShortName = PitchTypeLabels.Abbr(lp.Type),
                     Kire = Tiers.FromStrength(kireScore).ToString(),
                     DirX = dir.x,
                     DirY = dir.y,
@@ -558,22 +555,6 @@ namespace KokoSim.Unity.Players
         private static int Clamp(int v, int lo, int hi) => v < lo ? lo : v > hi ? hi : v;
         private static float ClampF(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
 
-        private static string PitchJp(PitchType t)
-        {
-            switch (t)
-            {
-                case PitchType.Fastball: return "ストレート";
-                case PitchType.TwoSeam: return "ツーシーム";
-                case PitchType.Cutter: return "カットボール";
-                case PitchType.Slider: return "スライダー";
-                case PitchType.Curve: return "カーブ";
-                case PitchType.Fork: return "フォーク";
-                case PitchType.Changeup: return "チェンジアップ";
-                case PitchType.Shuuto: return "シュート";
-                case PitchType.Sinker: return "シンカー";
-                default: return t.ToString();
-            }
-        }
 
         private static string SkillJp(Skill s)
         {

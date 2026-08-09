@@ -294,7 +294,8 @@ namespace KokoSim.Unity.Players
         // ===== 球種変化チャート（プロスピ風） =====
 
         // ViewModel の PitchData を部品辞書の PitchChartDatum へ詰め替えて描画部品へ渡す。
-        // ストレートの最速は投手能力欄の球速と同じ v.TopVelocityKmh を流用し、値を必ず一致させる（Issue #130/#215）。
+        // ストレートの最速 v.TopVelocityKmh。issue #560 で投手能力の表から球速の行を落としたので、
+        // この画面の球速表示はここだけになった（同じ値が表とチャートに二度出るのをやめた, Issue #130/#215）。
         private void BuildPitchChart(List<PitchData> pitches, bool has, int topVelocityKmh)
         {
             _pitchChart?.SetData(has ? PitchData.ToPitchChartData(pitches, topVelocityKmh) : null);

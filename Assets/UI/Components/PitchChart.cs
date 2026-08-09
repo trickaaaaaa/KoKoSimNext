@@ -12,6 +12,8 @@ namespace KokoSim.Unity.Components
     public sealed class PitchChartDatum
     {
         public string Name = "";
+        // 略記（「チェ」）。compact 版だけがこちらを使う（正式名は狭い器に収まらない, issue #560）。空なら Name を出す。
+        public string ShortName = "";
         public string Kire = "C";     // 有効軸ランク（ストレート=球威/Stuff、変化球=キレ/Sharpness）→S〜G。扇の色とチップ（Issue #274）
         public float DirX;            // 変化方向（画面座標系: +x右 / +y下）
         public float DirY;
@@ -78,9 +80,20 @@ namespace KokoSim.Unity.Components
                 // 104px高の器（cmp-card__pitch）でチップ同士・チップとボールの重なりを避ける。
                 if (_compact) chip.AddToClassList("pd2-pchip--compact");
                 chip.userData = pt;
-                var name = new Label(pt.Name); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
-                // ストレートのみ最速を添える（小型版は省スペースのため出さない）。
-                if (pt.IsFastball && !_compact && !string.IsNullOrEmpty(pt.VeloText))
+                // 小型版は略記（issue #560）。正式名のままだと4球種で幾何的に収まらず、
+                // SeparateChips が器の中へ押し込むぶんラベルどうしが必ず重なる。
+                // さらに小型版のストレートは球種名を出さず km/h だけにする＝「直 128 km/h」だと112pxになり、
+                // 器（約154px）で他の札と横に並べられず、ボールに乗るか札同士が重なるかしか無くなる。
+                // km/h が付いている札はストレートしかないので、名前が無くても取り違えない。
+                var veloOnly = _compact && pt.IsFastball && !string.IsNullOrEmpty(pt.VeloText);
+                if (!veloOnly)
+                {
+                    var text = _compact && !string.IsNullOrEmpty(pt.ShortName) ? pt.ShortName : pt.Name;
+                    var name = new Label(text); name.AddToClassList("pd2-pchip__name"); chip.Add(name);
+                }
+                // ストレートのみ最速を添える。小型版も出す（監督決定 2026-08-09, issue #560）＝
+                // 比較表から球速の行を落とし、球速はここだけで読ませる。
+                if (pt.IsFastball && !string.IsNullOrEmpty(pt.VeloText))
                     chip.Add(UiComponents.NumUnit(pt.VeloText, "km/h", false, "pd2-pchip__velo"));
                 chip.Add(UiComponents.RankChip(pt.Kire));
                 // 差し替え直後は resolvedStyle が未確定（幅が既定値扱い）のため、チップの実寸が
@@ -135,7 +148,10 @@ namespace KokoSim.Unity.Components
                 boxes.Add(new Rect(end.x - lw * 0.5f, end.y - lh * 0.5f, lw, lh));
             }
 
-            SeparateChips(boxes, rect);
+            // 中心のボールは動かせない障害物として渡す（issue #560）。器へ押し込むだけだと、
+            // 横へ伸びる球種のラベルが端でクランプされて中心のボールに重なる。
+            var ball = new Rect(_center.x - _arcInner, _center.y - _arcInner, _arcInner * 2f, _arcInner * 2f);
+            SeparateChips(boxes, rect, ball);
             for (var i = 0; i < chips.Count; i++)
             {
                 chips[i].style.left = boxes[i].x;
@@ -144,13 +160,24 @@ namespace KokoSim.Unity.Components
             _host.MarkDirtyRepaint();
         }
 
-        // ラベルの重なりを解く（変化方向が近い球種同士＝落ち球が重なりやすい）。侵入量の小さい軸へ押し分けるAABBリラクゼーション。
-        private static void SeparateChips(List<Rect> boxes, Rect rect)
+        /// <summary>
+        /// ラベルの重なりを解く（変化方向が近い球種同士＝落ち球が重なりやすい）。侵入量の小さい軸へ押し分ける
+        /// AABBリラクゼーション。<paramref name="obstacle"/> は動かせない障害物（中心のボール）。
+        /// <para>器へのクランプは<b>毎パスの最後に</b>掛ける（issue #560）。最後に1回だけ掛けると、
+        /// 縦に逃がした2枚が下端で押し戻されて重なったまま終わる（小型版は104px高で余地が無い）。
+        /// クランプ後の位置を次のパスが見れば、縦が詰まったぶんを横へ回して解ける。</para>
+        /// </summary>
+        private static void SeparateChips(List<Rect> boxes, Rect rect, Rect obstacle)
         {
             const float Gap = 4f;
-            for (var pass = 0; pass < 12; pass++)
+            for (var pass = 0; pass < 16; pass++)
             {
                 var moved = false;
+                for (var i = 0; i < boxes.Count; i++)
+                {
+                    var b = boxes[i];
+                    if (PushOut(ref b, obstacle, Gap)) { boxes[i] = b; moved = true; }
+                }
                 for (var i = 0; i < boxes.Count; i++)
                 for (var j = i + 1; j < boxes.Count; j++)
                 {
@@ -161,6 +188,19 @@ namespace KokoSim.Unity.Components
                     var ox = (a.width + b.width) * 0.5f + Gap - Mathf.Abs(dx);
                     var oy = (a.height + b.height) * 0.5f + Gap - Mathf.Abs(dy);
                     if (ox <= 0f || oy <= 0f) continue;
+
+                    // 横に並べ切れない2枚（例: 小型版の「128km/h」90px と「カット」72px で器は154px）は、
+                    // 少しずつ押し分けても必ず器かボールに押し戻されて振動する（issue #560 実害）。
+                    // 上下の端へ振り分けて決着させる＝上に居るほうを上端、もう一方を下端へ。
+                    // 中央のボールの帯（＝この2枚が避けたい所）はちょうど間に空く。
+                    if (a.width + b.width + Gap > rect.width && a.height + b.height + Gap <= rect.height)
+                    {
+                        if (a.center.y <= b.center.y) { a.y = 0f; b.y = rect.height - b.height; }
+                        else { b.y = 0f; a.y = rect.height - a.height; }
+                        boxes[i] = a; boxes[j] = b;
+                        moved = true;
+                        continue;
+                    }
 
                     if (oy <= ox)
                     {
@@ -175,16 +215,31 @@ namespace KokoSim.Unity.Components
                     boxes[i] = a; boxes[j] = b;
                     moved = true;
                 }
+                for (var i = 0; i < boxes.Count; i++) boxes[i] = Clamp(boxes[i], rect);
                 if (!moved) break;
             }
+        }
 
-            for (var i = 0; i < boxes.Count; i++)
-            {
-                var b = boxes[i];
-                b.x = Mathf.Clamp(b.x, 0f, Mathf.Max(0f, rect.width - b.width));
-                b.y = Mathf.Clamp(b.y, 0f, Mathf.Max(0f, rect.height - b.height));
-                boxes[i] = b;
-            }
+        private static Rect Clamp(Rect b, Rect rect)
+        {
+            b.x = Mathf.Clamp(b.x, 0f, Mathf.Max(0f, rect.width - b.width));
+            b.y = Mathf.Clamp(b.y, 0f, Mathf.Max(0f, rect.height - b.height));
+            return b;
+        }
+
+        /// <summary>box が obstacle に食い込んでいたら、侵入量の小さい軸へ全量ぶん逃がす（obstacle は動かさない）。</summary>
+        private static bool PushOut(ref Rect box, Rect obstacle, float gap)
+        {
+            if (obstacle.width <= 0f || obstacle.height <= 0f) return false;
+            var dx = box.center.x - obstacle.center.x;
+            var dy = box.center.y - obstacle.center.y;
+            var ox = (box.width + obstacle.width) * 0.5f + gap - Mathf.Abs(dx);
+            var oy = (box.height + obstacle.height) * 0.5f + gap - Mathf.Abs(dy);
+            if (ox <= 0f || oy <= 0f) return false;
+
+            if (oy <= ox) box.y += (dy >= 0f ? 1f : -1f) * oy;
+            else box.x += (dx >= 0f ? 1f : -1f) * ox;
+            return true;
         }
 
         private void OnPaint(MeshGenerationContext ctx)

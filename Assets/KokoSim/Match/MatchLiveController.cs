@@ -2683,7 +2683,7 @@ namespace KokoSim.Unity.Match
 
             // 計器表示（球種・球速）。実1球記録がある打席だけ値が入る＝合成投球列では丸ごと畳む。
             var note = PitchNoteJp(pt);
-            var ptype = pt.PitchType.HasValue ? PitchJp(pt.PitchType.Value) : "";
+            var ptype = pt.PitchType.HasValue ? PitchTypeLabels.Jp(pt.PitchType.Value) : "";
             var speed = pt.VelocityKmh.HasValue ? Mathf.RoundToInt((float)pt.VelocityKmh.Value).ToString() : "";
             SetOptionalLabel(_pitchCallNote, note);
             SetOptionalLabel(_pitchCallPitchType, ptype);
@@ -2894,22 +2894,6 @@ namespace KokoSim.Unity.Match
                 : pt.Kind == KokoSim.Engine.Match.AtBat.PitchKind.SwingingStrike ? "空振り" : "";
         }
 
-        private static string PitchJp(PitchType t)
-        {
-            switch (t)
-            {
-                case PitchType.Fastball: return "ストレート";
-                case PitchType.TwoSeam: return "ツーシーム";
-                case PitchType.Cutter: return "カットボール";
-                case PitchType.Slider: return "スライダー";
-                case PitchType.Curve: return "カーブ";
-                case PitchType.Fork: return "フォーク";
-                case PitchType.Changeup: return "チェンジアップ";
-                case PitchType.Shuuto: return "シュート";
-                case PitchType.Sinker: return "シンカー";
-                default: return t.ToString();
-            }
-        }
 
         private void SetBases(bool first, bool second, bool third)
         {
