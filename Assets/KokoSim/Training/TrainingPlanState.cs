@@ -603,14 +603,9 @@ namespace KokoSim.Unity.Training
             var info = new AbilityRowInfo { Jp = AbilityJp(k), Icon = AbilityIcon(k), Value = v };
             if (k == AbilityKind.LaunchTendency)
                 info.TypeLabel = KokoSim.Unity.Shell.LaunchTendencyLabels.Jp(v);
-            else if (k == AbilityKind.Stamina)
-            {
-                // スタミナは上限なし（issue #356）＝バーを出さず目安投球数を数値表示（球速のkm/hと同型）。
-                info.HideBar = true;
-                info.Unit = "球";
-                info.ValueText = ((int)System.Math.Round(PitcherAttributes.StaminaPitchesFromLevel(v))).ToString();
-            }
             else
+                // スタミナも Level のまま出す（目安投球数での表示はやめた）＝比較パネル・選手詳細と同じもの
+                // （監督決定 2026-08-09, issue #561）。上限なし（issue #356）は変わらず、Lv100超はバーが振り切れる。
                 info.Grade = Tiers.FromStrength(v).ToString();
             if (k == AbilityKind.Velocity)
                 info.ValueText = ((int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(v))).ToString();
