@@ -87,6 +87,15 @@ namespace KokoSim.Unity.Match
         /// 撮影ハーネスだけが強い側へ回って絵を作る。既定 null＝後攻(home)＝従来と完全一致。
         /// </summary>
         public static bool? ManagerIsAwayOverrideForCapture;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】デモ試合の自校（home）の組み方の差し替え口。デモは能力順の自動編成
+        /// （<c>RosterTeamBuilder.Build</c>）で組むので**必ず非DH**になり、DH制でしか出ない操作
+        /// （DH解除・DH下の投野交代）が絵にも一巡確認にも一度も出てこない（issue #452 の残件）。
+        /// ハーネスだけが本番と同じ経路（スタメン設定→<c>LineupSpec</c>→<c>BuildFromLineup</c>）で組んだ
+        /// チームを差す。既定 null＝従来と完全一致。
+        /// </summary>
+        public static System.Func<KokoSim.Engine.Match.Game.Team> HomeTeamOverrideForCapture;
 #endif
 
         [SerializeField] private ulong gameSeed = 20260718UL;
@@ -669,6 +678,9 @@ namespace KokoSim.Unity.Match
             var away = KokoSim.Engine.Nation.StrengthTeamFactory.Create(58, awayName, awayRng);
             // デモの自校（home＝左列）は実部員（RosterService）から組み、背番号・調子・通算の join を実機同様に見せる。
             var home = RosterTeamBuilder.Build(RosterService.Active, homeName);
+#if UNITY_EDITOR
+            if (HomeTeamOverrideForCapture != null) home = HomeTeamOverrideForCapture();
+#endif
             // RosterTeamBuilder.Build が積む控え（投手枠2枚）へ、代打采配のデモ用の控えを足す。
             // 控えは1本の名簿なので上書きせず Merge する（上書きすると継投先が消える。issue #381）。
             home = home with
@@ -3966,6 +3978,22 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 代走に出す走者を選ぶ（負値＝先頭の走者。issue #452）。</summary>
         public void PickSubstitutionRunnerForCapture(int baseIndex) => _subPanel?.PickRunnerForCapture(baseIndex);
+
+        /// <summary>スクショ用: 指枠の「そのまま退かせる」を選ぶ（先に指枠を主選択しておくこと。issue #452）。</summary>
+        public void PickSubstitutionDhWithdrawForCapture() => _subPanel?.PickDhWithdrawForCapture();
+
+        /// <summary>スクショ用: いまDH制が生きているか（DH解除は不可逆＝前後の突き合わせに使う。issue #452）。</summary>
+        public bool UsesDhForCapture => _subPanel != null && _subPanel.UsesDhForCapture;
+
+        /// <summary>スクショ用: 指枠に居る選手（非DH＝null）。</summary>
+        public KokoSim.Engine.Players.Player DhForCapture => _subPanel?.DhForCapture;
+
+        /// <summary>スクショ用: 投手の打順スロット（DH制は -1＝打順外）。DH解除で打順へ入ったかの証拠。</summary>
+        public int PitcherSlotForCapture => _subPanel?.PitcherSlotForCapture ?? -2;
+
+        /// <summary>スクショ用: 現在の打順9人（交代反映済み）。退場した先発は打順から消えることで確かめる。</summary>
+        public System.Collections.Generic.IReadOnlyList<KokoSim.Engine.Players.Player> LineupForCapture
+            => _subPanel?.LineupForCapture ?? System.Array.Empty<KokoSim.Engine.Players.Player>();
 
         /// <summary>スクショ用: 交代モーダルが開いているか（確定に失敗すると開いたまま残る）。</summary>
         public bool SubstitutionOpenForCapture => _subPanel != null && _subPanel.IsOpen;
