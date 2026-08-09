@@ -62,25 +62,25 @@ namespace KokoSim.Unity.Shell
             var list = new List<(string, Func<DevelopingPlayer, int>)>();
             foreach (var k in AbilityCompareTabs.PitcherAbilities)
             {
+                // 球速はこの表に出さず、持ち球チャートのストレートに km/h で添える（監督決定 2026-08-09, issue #560）。
+                // 同じ値が表とチャートに二度出るのをやめ、球速はチャート側の1箇所で読ませる。
+                if (k == AbilityKind.Velocity) continue;
                 var kind = k;
                 list.Add((AbilityLabels.Jp(kind), p => p.Level(kind)));
             }
             return list.ToArray();
         }
 
-        // 球速行の判定と km/h 表示（issue #94）。変換はエンジンの公開APIに一本化（UI側で式を再実装しない）。
-        private static readonly string VelocityLabel = AbilityLabels.Jp(AbilityKind.Velocity);
-        private static string KmhText(int velLevel)
-            => (int)System.Math.Round(PitcherAttributes.VelocityKmhFromLevel(velLevel)) + "km/h";
-
         // 弾道はゴロ型〜フライ型のタイプ軸で優劣軸ではない（issue #219）。数値・バーではなくタイプラベルで表示する。
         private static readonly string LaunchTendencyLabel = AbilityLabels.Jp(AbilityKind.LaunchTendency);
 
         /// <summary>
-        /// そのタブの表が「単位つきの物理量」を含むか（issue #246）。投手能力タブは球速を km/h で出す（issue #94）ので
-        /// 値セルを広げないとラベルに重なる。切替は UiComponents.SetCompareUnitColumn（表ごと＝桁が揃う）。
+        /// そのタブの表が「単位つきの物理量」を含むか（issue #246）。値セルを広げないとラベルに重なるため、
+        /// 切替は UiComponents.SetCompareUnitColumn（表ごと＝桁が揃う）。
+        /// <para>唯一の該当だった球速の行を表から外した（issue #560）ため、いまはどちらのタブも false。
+        /// 単位つきの行を足したらここを true に戻す。</para>
         /// </summary>
-        public static bool HasUnitValues(int tab) => tab == 1;
+        public static bool HasUnitValues(int tab) => false;
 
         /// <summary>
         /// 持ち球のミニ球種チャートを出すタブか（issue #293）。投手能力タブでのみ表示し、
@@ -103,12 +103,7 @@ namespace KokoSim.Unity.Shell
                 if (b != null) row.ValueB = get(b);
                 if (a != null && b != null)
                     row.Winner = row.ValueA > row.ValueB ? -1 : row.ValueA < row.ValueB ? 1 : 0;
-                if (label == VelocityLabel)
-                {
-                    if (a != null) { row.TextA = KmhText(row.ValueA); row.FillA = row.ValueA; }
-                    if (b != null) { row.TextB = KmhText(row.ValueB); row.FillB = row.ValueB; }
-                }
-                else if (label == LaunchTendencyLabel)
+                if (label == LaunchTendencyLabel)
                 {
                     row.HideBar = true;
                     row.Winner = 0;
