@@ -38,6 +38,7 @@ namespace KokoSim.Unity.Match
         private readonly System.Action _onApplied;
 
         private VisualElement _scrim, _kinds, _outRows, _inRows, _cmpRows;
+        private ScrollView _cmpScroll;
         private Label _phase, _outsCap, _insCap, _note;
         private Button _ok;
 
@@ -68,14 +69,17 @@ namespace KokoSim.Unity.Match
         /// （<see cref="MatchLiveStatsProvider.AptitudeGradesOf"/>）に任せて注入する。null なら帯を出さない。
         /// </param>
         public MatchSubstitutionPanel(VisualElement root, System.Action onApplied,
-            System.Func<int?, IReadOnlyList<string>> aptitudeGrades = null)
+            System.Func<int?, IReadOnlyList<string>> aptitudeGrades = null,
+            System.Func<int?, List<PitchChartDatum>> pitchChart = null)
         {
             _root = root;
             _onApplied = onApplied;
             _aptitudeGrades = aptitudeGrades;
+            _pitchChart = pitchChart;
         }
 
         private readonly System.Func<int?, IReadOnlyList<string>> _aptitudeGrades;
+        private readonly System.Func<int?, List<PitchChartDatum>> _pitchChart;
 
         /// <summary>モーダルを開いている間は裏の進行（自動再生・次の打席へ）を止める。</summary>
         public bool IsOpen => _open;
@@ -87,6 +91,8 @@ namespace KokoSim.Unity.Match
             _outRows = _root.Q<VisualElement>("msub-out-rows");
             _inRows = _root.Q<VisualElement>("msub-in-rows");
             _cmpRows = _root.Q<VisualElement>("msub-cmp-rows");
+            // ScrollView 本体（窓の高さを持つ要素）。_cmpRows.parent は contentContainer なので届かない。
+            _cmpScroll = _root.Q<ScrollView>(className: "msub-cmp-scroll");
             _phase = _root.Q<Label>("msub-phase");
             _outsCap = _root.Q<Label>("msub-outs-cap");
             _insCap = _root.Q<Label>("msub-ins-cap");
@@ -570,8 +576,11 @@ namespace KokoSim.Unity.Match
         {
             var (outgoing, incoming, pitcherView, capA, capB) = CompareSubjects();
             // 空カードには「次に何を選べばよいか」を出す（開いた直後の空状態の道標。issue #452 指摘4）。
-            FillCard("msub-cmp-a", outgoing, EmptyCardTextA());
-            FillCard("msub-cmp-b", incoming, EmptyCardTextB());
+            FillCard("msub-cmp-a", outgoing, EmptyCardTextA(), pitcherView);
+            FillCard("msub-cmp-b", incoming, EmptyCardTextB(), pitcherView);
+
+            // 投手ビューはカードに持ち球チャートが乗るぶん表の窓を縮め、モーダル全体の高さを一定に保つ。
+            _cmpScroll?.EnableInClassList("msub-cmp-scroll--pitch", pitcherView);
 
             if (_cmpRows == null) return;
             _cmpRows.Clear();
@@ -586,9 +595,6 @@ namespace KokoSim.Unity.Match
             {
                 if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Velocity))
                     _cmpRows.Add(CompareRowEl(label, x, y, KmhText(outgoing), KmhText(incoming)));
-                else if (pitcherView && label == AbilityLabels.Jp(AbilityKind.Stamina))
-                    // スタミナは上限なし（issue #356）＝バーを出さず目安投球数を数値表示（球速のkm/hと同型）。
-                    _cmpRows.Add(CompareRowEl(label, x, y, StaminaText(outgoing), StaminaText(incoming), hideBar: true, unit: "球"));
                 else if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
                     _cmpRows.Add(CompareRowEl(label, x, y, TypeText(x), TypeText(y), hideBar: true));
                 else
@@ -897,7 +903,7 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        private void FillCard(string host, Player p, string placeholder)
+        private void FillCard(string host, Player p, string placeholder, bool pitcherView)
         {
             var el = _root.Q<VisualElement>(host);
             if (el == null) return;
@@ -919,16 +925,31 @@ namespace KokoSim.Unity.Match
             hand.AddToClassList("bench-row__tag");
             meta.Add(hand);
             el.Add(meta);
+
+            // 持ち球のミニ球種チャート（部品 PitchChartView・compact）。メンバー設定・スタメン設定と同じく
+            // 投手ビューのときだけ出す（ビューでゲート・投/野区分ではゲートしない, issue #93/#293）。
+            // 継投は「同じキレでもスライダーかフォークか」で判断が変わる（監督決定 2026-08-09）。
+            if (!pitcherView || _pitchChart == null) return;
+            var pitches = _pitchChart(p.SourceId);
+            if (pitches == null || pitches.Count == 0) return;
+            var chartHost = new VisualElement();
+            chartHost.AddToClassList("cmp-card__pitch");
+            el.Add(chartHost);
+            new PitchChartView(chartHost, compact: true).SetData(pitches);
         }
 
         private static IEnumerable<(string Label, int A, int B)> CompareRows(Player a, Player b, bool pitcherView)
         {
             if (pitcherView)
             {
+                // 並び・項目はエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる
+                // ＝メンバー設定・スタメン設定・練習計画と同じ順（監督決定 2026-08-09）。精神力は AbilityKind 外の
+                // 項目なのでここで足し、向こう（PlayerCompareTabs）の投手能力タブにも同じ位置で足してある。
                 yield return (AbilityLabels.Jp(AbilityKind.Velocity), Velocity(a), Velocity(b));
                 yield return (AbilityLabels.Jp(AbilityKind.Control), a?.Pitching?.Control ?? -1, b?.Pitching?.Control ?? -1);
-                yield return (AbilityLabels.Jp(AbilityKind.PitchRank), a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
                 yield return (AbilityLabels.Jp(AbilityKind.Stamina), Stamina(a), Stamina(b));
+                yield return (AbilityLabels.Jp(AbilityKind.PitchRank), a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
+                yield return (AbilityLabels.Jp(AbilityKind.Stuff), Stuff(a), Stuff(b));
                 yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
                 yield break;
             }
@@ -951,14 +972,24 @@ namespace KokoSim.Unity.Match
         private static int Velocity(Player p)
             => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromVelocityKmh(p.Pitching.MaxVelocityKmh);
 
-        // スタミナ＝目安投球数（issue #356）。上限がないので 0〜100 スケールに畳まず、そのまま目安投球数を返す。
+        // スタミナは Level（0〜100）で出す＝メンバー設定・スタメン設定と同じもの（監督決定 2026-08-09）。
+        // 試合用の Player が持つのは目安投球数（issue #356）だけなので、順変換と同じ定数から出す
+        // エンジンの逆変換で戻す（UI側で式を作り直さない・不変条件#1）。上限なしなので Lv100超はそのまま。
         private static int Stamina(Player p)
-            => p?.Pitching == null ? -1 : (int)System.Math.Round(p.Pitching.StaminaPitches);
+            => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromStaminaPitches(p.Pitching.StaminaPitches);
 
-        private static string StaminaText(Player p)
-            => p?.Pitching == null ? null : ((int)System.Math.Round(p.Pitching.StaminaPitches)).ToString();
+        // 球威＝ストレートの有効軸（issue #274）。試合用の Player は育成能力を持たないので、
+        // レパートリーのストレート枠の Power から引く（RosterTeamBuilder が Stuff レベルを入れている値）。
+        private static int Stuff(Player p)
+        {
+            if (p?.Pitching == null) return -1;
+            foreach (var slot in p.Pitching.EffectiveRepertoire)
+                if (slot.Type == PitchType.Fastball) return slot.Power;
+            return -1;
+        }
 
-        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false, string unit = null)
+        // 単位つきの値（旧・スタミナの「135球」）はスタミナのLevel化で無くなった＝unit は取らない。
+        private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false)
             => UiComponents.CompareRow(new CompareRowData
             {
                 Label = label,
@@ -973,7 +1004,6 @@ namespace KokoSim.Unity.Match
                 GradeA = hideBar || a < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(a).ToString(),
                 GradeB = hideBar || b < 0 ? "" : KokoSim.Engine.Nation.Tiers.FromStrength(b).ToString(),
                 HideBar = hideBar,
-                Unit = unit,
             });
 
         private static string KmhText(Player p)

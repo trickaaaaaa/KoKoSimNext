@@ -45,6 +45,11 @@ namespace KokoSim.Unity.Member
             Select(member, 0, -1, 0);
             yield return Capture(member, "member-compare-single");
 
+            // 持ち球の多い投手（背番号10・変化球3種＝チップ4枚）での投手能力タブ。ミニ球種チャートの
+            // ラベルがカード幅に収まるかの確認用（交代モーダルへ同じ部品を載せた issue #452 の突き合わせ）。
+            Select(member, 16, 1, 1);
+            yield return Capture(member, "member-compare-pitcher");
+
             // ── スタメン設定 ──
             var lineup = Activate("LineupSetting");
             if (lineup == null) { Debug.LogError("[CmpShooter] LineupSetting が見つからない"); yield break; }

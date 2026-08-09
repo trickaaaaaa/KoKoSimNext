@@ -8,6 +8,8 @@ using KokoSim.Engine.Nation;     // Tiers（ランク段の単一ソース）
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;     // DevelopingPlayer / EffectiveFielding（守備適性の join, issue #452）
 using KokoSim.Engine.Stats;
+using KokoSim.Unity.Components;  // PitchChartDatum（持ち球ミニチャート, issue #452）
+using KokoSim.Unity.Players;     // PlayerDetailState.BuildPitchData（球種チャートの生成は単一ソース, issue #94）
 using KokoSim.Unity.Shell;
 
 namespace KokoSim.Unity.Match
@@ -83,16 +85,38 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public IReadOnlyList<string> AptitudeGradesOf(int? sourceId)
         {
-            if (sourceId is not int id) return null;
-            DevelopingPlayer found = null;
-            foreach (var p in RosterService.Roster)
-                if (p.Id == id) { found = p; break; }
+            var found = FindDeveloping(sourceId);
             if (found == null) return null;
 
             var grades = new List<string>(AptOrder.Length);
             foreach (var pos in AptOrder)
                 grades.Add(Tiers.FromStrength(EffectiveFielding.Rank(found, pos, FieldingCoeff.Default)).ToString());
             return grades;
+        }
+
+        /// <summary>
+        /// 持ち球のミニ球種チャート用データ（issue #452）。守備適性と同じく名簿へ <see cref="Player.SourceId"/> で
+        /// join して引く。生成は選手詳細・メンバー設定・スタメン設定と同一（<see cref="PlayerDetailState.BuildPitchData"/>）
+        /// ＝4画面で同じ絵になる（単一ソース, issue #94 案C）。名簿に居ない選手は null。
+        /// <para>この絵<b>だけ</b>は育成レイヤの値で描く（怪我補正の乗った試合用の値ではない）。見るのは球種の
+        /// 構成と変化の形であって能力の大小ではなく、能力の行（＝試合用の実値）とは役割が違う。</para>
+        /// </summary>
+        public List<PitchChartDatum> PitchChartOf(int? sourceId)
+        {
+            var found = FindDeveloping(sourceId);
+            if (found == null) return null;
+            var topKmh = (int)System.Math.Round(
+                PitcherAttributes.VelocityKmhFromLevel(found.Level(AbilityKind.Velocity)));
+            return PitchData.ToPitchChartData(PlayerDetailState.BuildPitchData(found), topKmh);
+        }
+
+        /// <summary>名簿（RosterService）の育成レイヤ選手を <see cref="Player.SourceId"/> で引く（相手校は null）。</summary>
+        private static DevelopingPlayer FindDeveloping(int? sourceId)
+        {
+            if (sourceId is not int id) return null;
+            foreach (var p in RosterService.Roster)
+                if (p.Id == id) return p;
+            return null;
         }
 
         /// <summary>守備適性の並び。UiComponents.AptitudeStrip の表示順と必ず一致させる。</summary>

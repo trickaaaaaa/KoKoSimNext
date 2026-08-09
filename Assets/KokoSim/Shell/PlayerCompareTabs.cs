@@ -65,6 +65,10 @@ namespace KokoSim.Unity.Shell
                 var kind = k;
                 list.Add((AbilityLabels.Jp(kind), p => p.Level(kind)));
             }
+            // 精神力は AbilityKind ではないためエンジン側の割当表には出てこない（野手能力タブと同じ扱い, issue #192）。
+            // 継投の判断でプレッシャー指数に効く値なので投手能力タブにも出す＝試合中の交代モーダルと項目が揃う
+            // （監督決定 2026-08-09, issue #452）。タブが別なので同じ画面に二重には出ない。
+            list.Add(("精神力", p => p.Mental));
             return list.ToArray();
         }
 
