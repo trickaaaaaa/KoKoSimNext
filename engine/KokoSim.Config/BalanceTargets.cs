@@ -71,6 +71,29 @@ public sealed record GameTacticsTargets
     public Band HomeRunRate { get; init; } = new(0.020, 0.036);
 }
 
+/// <summary>
+/// 低ティア・非対称マッチの許容帯（issue #536 / #578 Step 4・tiers_low セクション）。
+///
+/// <para>既存4帯は「平均的なチーム同士」だけを測っているので、格差マッチの体験は帯が全部緑のまま壊れる
+/// （#536 の実測）。ここが守るのは<b>体験そのもの</b>＝開始直後の自校が格上に完封される率と、
+/// 表示1ティアあたりの得点の落ち方。</para>
+/// </summary>
+public sealed record LowTierTargets
+{
+    /// <summary>自校の得点（ほぼ互角の相手＝強度40）。</summary>
+    public Band ManagerRunsVsE40 { get; init; } = new(5.5, 8.0);
+    /// <summary>自校の得点（1ティア上＝強度50）。</summary>
+    public Band ManagerRunsVsD50 { get; init; } = new(3.2, 5.4);
+    /// <summary>自校の得点（2ティア上＝強度60）。</summary>
+    public Band ManagerRunsVsC60 { get; init; } = new(1.9, 3.6);
+    /// <summary>自校が完封される率（1ティア上）。校正前 0.212。</summary>
+    public Band ManagerShutoutRateVsD50 { get; init; } = new(0.02, 0.14);
+    /// <summary>自校が完封される率（2ティア上）。校正前 0.403。</summary>
+    public Band ManagerShutoutRateVsC60 { get; init; } = new(0.08, 0.28);
+    /// <summary>表示1ティア（強度10ポイント）ごとの得点比＝勾配。校正前 0.42 / 校正後 0.61–0.67。</summary>
+    public Band RunsRatioPerTier { get; init; } = new(0.52, 0.80);
+}
+
 public static class BalanceTargetsLoader
 {
     private static readonly IDeserializer Deserializer = new DeserializerBuilder()
@@ -156,6 +179,24 @@ public static class BalanceTargetsLoader
         };
     }
 
+    public static LowTierTargets LoadLowTierFromFile(string path) => ParseLowTier(File.ReadAllText(path));
+
+    public static LowTierTargets ParseLowTier(string yaml)
+    {
+        var t = Root(yaml).TiersLow;
+        if (t is null) return new LowTierTargets();
+        var d = new LowTierTargets();
+        return new LowTierTargets
+        {
+            ManagerRunsVsE40 = t.ManagerRunsVsE40?.ToBand() ?? d.ManagerRunsVsE40,
+            ManagerRunsVsD50 = t.ManagerRunsVsD50?.ToBand() ?? d.ManagerRunsVsD50,
+            ManagerRunsVsC60 = t.ManagerRunsVsC60?.ToBand() ?? d.ManagerRunsVsC60,
+            ManagerShutoutRateVsD50 = t.ManagerShutoutRateVsD50?.ToBand() ?? d.ManagerShutoutRateVsD50,
+            ManagerShutoutRateVsC60 = t.ManagerShutoutRateVsC60?.ToBand() ?? d.ManagerShutoutRateVsC60,
+            RunsRatioPerTier = t.RunsRatioPerTier?.ToBand() ?? d.RunsRatioPerTier,
+        };
+    }
+
     private static RootDto Root(string yaml)
         => Deserializer.Deserialize<RootDto>(yaml)
             ?? throw new InvalidDataException("balance-targets.yaml が空です。");
@@ -173,6 +214,19 @@ public static class BalanceTargetsLoader
 
         [YamlMember(Alias = "games_10k_summer")]
         public GamesDto? Games10kSummer { get; set; }
+
+        [YamlMember(Alias = "tiers_low")]
+        public TiersLowDto? TiersLow { get; set; }
+    }
+
+    private sealed class TiersLowDto
+    {
+        public BandDto? ManagerRunsVsE40 { get; set; }
+        public BandDto? ManagerRunsVsD50 { get; set; }
+        public BandDto? ManagerRunsVsC60 { get; set; }
+        public BandDto? ManagerShutoutRateVsD50 { get; set; }
+        public BandDto? ManagerShutoutRateVsC60 { get; set; }
+        public BandDto? RunsRatioPerTier { get; set; }
     }
 
     private sealed class AtBatDto

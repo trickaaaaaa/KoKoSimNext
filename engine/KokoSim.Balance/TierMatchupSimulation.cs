@@ -82,6 +82,25 @@ public static class TierMatchupSimulation
         return list;
     }
 
+    /// <summary>
+    /// 実プレイと同じ組み合わせ（自校＝<see cref="ProspectGenerator"/> vs 相手校＝<see cref="StrengthTeamFactory"/>）を
+    /// 強度の梯子で測る（issue #536 ②）。レポートと**低ティア帯の統計回帰（issue #578 Step 4）が同じ経路**を
+    /// 通るよう公開している＝帯が守っているものとレポートが見せているものを一致させる。
+    /// 自校は先攻に置く（<c>AwayRunsPerGame</c>／<c>AwayShutoutRate</c> が自校の得点・完封され率）。
+    /// </summary>
+    public static IReadOnlyList<Cell> MeasureManagerLadder(
+        int games, ulong seed, string? coefficientsPath, RosterCoefficients coeff, IReadOnlyList<double> strengths)
+    {
+        var cells = new List<Cell>(strengths.Count);
+        foreach (var h in strengths)
+        {
+            var opp = h;
+            cells.Add(Measure("自校", Label(h), games, seed + 9000 + (ulong)h, coefficientsPath,
+                (rng, name, isAway) => isAway ? ManagerTeam(rng, name, coeff) : StrengthTeam(rng, name, opp, coeff)));
+        }
+        return cells;
+    }
+
     // ── レポート ──
 
     public static string Report(int games, ulong seed, string? coefficientsPath, RosterCoefficients? roster = null)
@@ -151,13 +170,10 @@ public static class TierMatchupSimulation
         sb.AppendLine();
         sb.AppendLine("| 自校 vs 相手強度 | 自校の得点 | 自校の完封され率 | 相手の得点 | 自校の安打 | 三振率 | 四球率 |");
         sb.AppendLine("|---|---|---|---|---|---|---|");
-        foreach (var h in strengths)
+        foreach (var cell in MeasureManagerLadder(games, seed, coefficientsPath, coeff, strengths))
         {
-            var opp = h;
-            var cell = Measure("自校", Label(h), games, seed + 9000 + (ulong)h, coefficientsPath,
-                (rng, name, isAway) => isAway ? ManagerTeam(rng, name, coeff) : StrengthTeam(rng, name, opp, coeff));
             sb.AppendLine(c,
-                $"| 自校 vs {Label(h)} | {cell.AwayRunsPerGame:F2} | {cell.AwayShutoutRate:P1} "
+                $"| 自校 vs {cell.HomeLabel} | {cell.AwayRunsPerGame:F2} | {cell.AwayShutoutRate:P1} "
                 + $"| {cell.HomeRunsPerGame:F2} | {cell.AwayHitsPerGame:F2} | {cell.StrikeoutRate:P1} | {cell.WalkRate:P1} |");
         }
         sb.AppendLine();
