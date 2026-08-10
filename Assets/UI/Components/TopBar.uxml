@@ -55,5 +55,6 @@
         <ui:Label name="nav-management" class="nav__item" text="経営" />
         <ui:Label name="nav-career" class="nav__item" text="キャリア" />
         <ui:Label name="nav-records" class="nav__item" text="記録" />
+        <ui:Label name="nav-system" class="nav__item" text="システム" />
     </ui:VisualElement>
 </ui:UXML>
