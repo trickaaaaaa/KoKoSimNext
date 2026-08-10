@@ -66,6 +66,49 @@ public sealed record RosterCoefficients
         return TalentCenterDefault + shift;
     }
 
+    // --- ティア→能力の圧縮（issue #578 Step 1・OPEN-QUESTIONS Q24 の確定2） ---
+
+    /// <summary>
+    /// 強度→能力中心の圧縮写像のピボット（この強度の学校は圧縮の前後で変わらない）。
+    /// <b>ここを平均帯（50）に置くと体験は変わらない</b>: 自校は <see cref="ProspectGenerator"/>（才能中心
+    /// <see cref="TalentCenterDefault"/>=32・実力≒35）で生成されて圧縮の対象外なので、ピボット50なら
+    /// D(50) の相手は 50 のままで自校との実力差が1ポイントも縮まらない。自校の実力域へ置くのが要件。
+    /// </summary>
+    public double TierCompressionPivot { get; init; } = 40.0;
+
+    /// <summary>
+    /// 強度→能力中心の圧縮率（1.0＝圧縮なし＝従来と1ビット一致）。小さいほどティア間の実力差が縮み、
+    /// 格差マッチの得点差が緩む（issue #536 の実測: 実力差10ポイントごとに得点が約0.4倍）。
+    /// <b>全国トップ校の絶対能力も同時に下がる</b>ので、値は実測（<c>simulate-tiers</c>）で決める。
+    /// </summary>
+    public double TierCompressionSlope { get; init; } = 0.55;
+
+    /// <summary>
+    /// 圧縮を掛ける上限（この強度より上は圧縮せず、100 で元の尺度へ戻るよう傾きを起こす）。
+    /// 100＝膝なし＝全帯域を一様に圧縮する。低い値ほど「低ティアだけ寝かせて上位は保つ」非線形になる
+    /// （Q24 の確定3「低ティアだけ持ち上げる（非線形）」）。
+    /// <para>一様圧縮（膝なし）は上位校の絶対能力まで削る: pivot40/slope0.55 では強度85の学校の実力が
+    /// 76.1→57.6（表示A・中身D）まで落ち、育て切った自校が全国最強になってしまう（実測 2026-08-10）。</para>
+    /// </summary>
+    public double TierCompressionKnee { get; init; } = 60.0;
+
+    /// <summary>
+    /// 学校の強度（<see cref="Nation.School.Strength"/>）を能力中心へ写す（issue #578）。
+    /// **表示ランクは元の強度のまま**（Q24 の確定4＝表示は直さない）で、生成だけがこの写像を通る。
+    /// 呼ぶのは「ティアが能力中心に変わる入口」だけ＝<see cref="Nation.StrengthTeamFactory.Create"/> と
+    /// <c>AiRosterFactory.RecruitCenter</c> の2箇所。個々の能力ロール（<c>Ability()</c>）側では呼ばない
+    /// （そこには打撃中心などの派生値も流れるため、二重に圧縮される）。
+    /// </summary>
+    public double CompressStrength(double strength)
+    {
+        var knee = TierCompressionKnee;
+        var below = TierCompressionPivot + TierCompressionSlope * (Math.Min(strength, knee) - TierCompressionPivot);
+        if (strength <= knee || knee >= 100.0) return below;
+        // 膝から上は「100 で元の尺度に戻る」傾きで起こす＝上位校の絶対能力を保ったまま
+        // 低ティアだけ寝かせる。代わりに中〜上位の勾配は元より急になる（そこは苦情の対象ではない）。
+        return below + (100.0 - below) / (100.0 - knee) * (strength - knee);
+    }
+
     // --- 凸凹配分（設計書04 §2.1: 総ポイントをランダム重みで配分・偏り自体もばらつく） ---
     /// <summary>配分の偏り強度σ。大きいほど内訳が凸凹（金太郎飴回避）。偏り自体もばらつかせる。</summary>
     public double ConcentrationMean { get; init; } = 0.35;

@@ -124,6 +124,9 @@ internal static class CommandLine
         var seed = 42UL;
         string? reportPath = null;
         string? coefficientsPath = null;
+        double? slope = null;
+        double? pivot = null;
+        double? knee = null;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -132,10 +135,22 @@ internal static class CommandLine
                 case "--seed": seed = ulong.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
                 case "--report": reportPath = RequireValue(args, ref i); break;
                 case "--coefficients": coefficientsPath = RequireValue(args, ref i); break;
+                // ティア圧縮の掃引（issue #578 Step 1）。指定しなければ C#既定＝実ゲームと同じ値で走る。
+                case "--compress-slope": slope = double.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--compress-pivot": pivot = double.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
+                case "--compress-knee": knee = double.Parse(RequireValue(args, ref i), CultureInfo.InvariantCulture); break;
                 default: return Fail($"未知のオプション: {args[i]}");
             }
         }
-        var report = TierMatchupSimulation.Report(games, seed, coefficientsPath);
+        var roster = slope is null && pivot is null && knee is null
+            ? null
+            : new KokoSim.Engine.Season.RosterCoefficients
+            {
+                TierCompressionSlope = slope ?? KokoSim.Engine.Season.RosterCoefficients.Default.TierCompressionSlope,
+                TierCompressionPivot = pivot ?? KokoSim.Engine.Season.RosterCoefficients.Default.TierCompressionPivot,
+                TierCompressionKnee = knee ?? KokoSim.Engine.Season.RosterCoefficients.Default.TierCompressionKnee,
+            };
+        var report = TierMatchupSimulation.Report(games, seed, coefficientsPath, roster);
         if (reportPath is not null)
         {
             System.IO.File.WriteAllText(reportPath, report);
@@ -496,7 +511,7 @@ internal static class CommandLine
         Console.WriteLine("  simulate        [--at-bats N] [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--stadium ID] [--histogram] [--apex]");
         Console.WriteLine("  simulate-games  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--tactics]");
         Console.WriteLine("                  [--tactics]                              # 両チームに StandardTacticsBrain を付与（敬遠/重盗/牽制の校正用）");
-        Console.WriteLine("  simulate-tiers  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml]");
+        Console.WriteLine("  simulate-tiers  [--games N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--compress-slope X] [--compress-pivot Y]");
         Console.WriteLine("                  # ティア格子（強度30〜60の総当たり）＋実プレイの自校vs相手校＋ランク式の食い違い（issue #536・計測のみ）");
         Console.WriteLine("  simulate-career [--years N]   [--seed S] [--report path] [--coefficients data/coefficients.yaml] [--events data/events.yaml]");
         Console.WriteLine("  simulate-nation [--years N]   [--seed S] [--report path] [--school-names data/school-names.yaml]");

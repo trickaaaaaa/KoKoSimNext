@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Globalization;
 using System.Text;
 using KokoSim.Engine.Core;
@@ -56,8 +57,8 @@ public static class TierMatchupSimulation
     /// 強度指定のAI校（実ゲームの相手校と同じ生成器）。<paramref name="rng"/> は試合ローカルなので
     /// 試合ごとに違うロスターになる＝1つの強度の中の個体差もならされる。
     /// </summary>
-    private static Team StrengthTeam(IRandomSource rng, string name, double strength)
-        => StrengthTeamFactory.Create(strength, name, rng);
+    private static Team StrengthTeam(IRandomSource rng, string name, double strength, RosterCoefficients coeff)
+        => StrengthTeamFactory.Create(strength, name, rng, rosterCoeff: coeff);
 
     /// <summary>
     /// 実プレイと同じ自校（<see cref="ProspectGenerator"/>＝才能中心 <c>TalentCenterDefault</c> 32.0 の
@@ -83,11 +84,12 @@ public static class TierMatchupSimulation
 
     // ── レポート ──
 
-    public static string Report(int games, ulong seed, string? coefficientsPath)
+    public static string Report(int games, ulong seed, string? coefficientsPath, RosterCoefficients? roster = null)
     {
         var c = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
-        var coeff = new RosterCoefficients();
+        // ティア圧縮（issue #578）の掃引用に外から差し込めるようにする。既定は C#既定＝実ゲームと同じ。
+        var coeff = roster ?? new RosterCoefficients();
         // 30〜60 を5刻み。F=30–40 / E=40–50 / D=50–60（Tier.cs の境界は10刻み）。
         var strengths = new[] { 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0 };
 
@@ -121,7 +123,7 @@ public static class TierMatchupSimulation
                 // マスごとにシードを分ける（同じ乱数列を使い回すと格子の傾きが乱数の癖と混ざる）。
                 var cellSeed = seed + (ulong)(ai * 100 + hi);
                 var cell = Measure(Label(a), Label(h), games, cellSeed, coefficientsPath,
-                    (rng, name, isAway) => StrengthTeam(rng, name, isAway ? a : h));
+                    (rng, name, isAway) => StrengthTeam(rng, name, isAway ? a : h, coeff));
                 cells.Add(cell);
                 sb.Append(c, $" {cell.AwayRunsPerGame:F2} / {cell.AwayShutoutRate:P0} |");
             }
@@ -153,7 +155,7 @@ public static class TierMatchupSimulation
         {
             var opp = h;
             var cell = Measure("自校", Label(h), games, seed + 9000 + (ulong)h, coefficientsPath,
-                (rng, name, isAway) => isAway ? ManagerTeam(rng, name, coeff) : StrengthTeam(rng, name, opp));
+                (rng, name, isAway) => isAway ? ManagerTeam(rng, name, coeff) : StrengthTeam(rng, name, opp, coeff));
             sb.AppendLine(c,
                 $"| 自校 vs {Label(h)} | {cell.AwayRunsPerGame:F2} | {cell.AwayShutoutRate:P1} "
                 + $"| {cell.HomeRunsPerGame:F2} | {cell.AwayHitsPerGame:F2} | {cell.StrikeoutRate:P1} | {cell.WalkRate:P1} |");
@@ -249,22 +251,28 @@ public static class TierMatchupSimulation
         sb.AppendLine("### AI校（StrengthTeamFactory に与えた強度 vs 生成物の実力）");
         sb.AppendLine();
         sb.AppendLine("**C（表示に使う強度）と A（実際に出てきた選手の強さ）がズレていれば、表示ランクは実力を表していない。**");
+        sb.AppendLine(c,
+            $"ティア圧縮（issue #578）は pivot={coeff.TierCompressionPivot:F1} / slope={coeff.TierCompressionSlope:F2}。");
+        sb.AppendLine("**格子の外側（70/85）を併記するのは、圧縮が上位校の絶対能力をどれだけ削るかを見るため**"
+            + "＝低ティアの一方的さを緩める代償はここに出る。");
         sb.AppendLine();
-        sb.AppendLine("| C: 与えた強度 | Cのランク | A: 生成物の実力 | Aのランク | A−C |");
-        sb.AppendLine("|---|---|---|---|---|");
-        foreach (var s in strengths)
+        sb.AppendLine("| C: 与えた強度 | Cのランク | 圧縮後の中心 | A: 生成物の実力 | Aのランク | A−C |");
+        sb.AppendLine("|---|---|---|---|---|---|");
+        // 格子（30〜60）に加えて上位帯（B相当70・A相当85）も測る＝圧縮の代償を数値で出す。
+        foreach (var s in strengths.Concat(new[] { 70.0, 85.0 }))
         {
             var sumMeasured = 0.0;
             const int n = 20;
             for (var i = 0; i < n; i++)
             {
                 var rng = new Xoshiro256Random(seed ^ (0x5A11_0000UL + (ulong)(s * 100 + i)));
-                var team = StrengthTeamFactory.Create(s, "計測", rng);
+                var team = StrengthTeamFactory.Create(s, "計測", rng, rosterCoeff: coeff);
                 sumMeasured += ScoutedTeamProfile.Compute(team, StrengthCoeff).Overall;
             }
             var measured = sumMeasured / n;
             sb.AppendLine(c,
-                $"| {s:F0} | {Tiers.FromStrength(s)} | {measured:F1} | {Tiers.FromStrength(measured)} | {measured - s:+0.0;-0.0;0.0} |");
+                $"| {s:F0} | {Tiers.FromStrength(s)} | {coeff.CompressStrength(s):F1} | {measured:F1} "
+                + $"| {Tiers.FromStrength(measured)} | {measured - s:+0.0;-0.0;0.0} |");
         }
         sb.AppendLine();
         return sb.ToString();

@@ -36,7 +36,7 @@ public static class AiRosterFactory
     {
         var rng = CohortSeed(school.Id, enrollmentYearIndex);
         var pc = deps.Persistent;
-        var center = RecruitCenter(school, pc);
+        var center = RecruitCenter(school, pc, deps.Roster);
 
         var usedGiven = new HashSet<string>();
         var players = new List<AiPlayer>();
@@ -149,8 +149,16 @@ public static class AiRosterFactory
     }
 
     /// <summary>新入生の能力中心（未熟スタート＝Strength − FreshmanGap ＋ 名声上振れ）。</summary>
-    internal static double RecruitCenter(School school, PersistentRosterCoefficients c)
-        => MathUtil.Clamp(school.Strength - c.FreshmanGap + (school.Fame - 50.0) * c.FameRecruitWeight, 10.0, 95.0);
+    /// <summary>
+    /// 入学時の能力中心。<b>実ゲームのAI校はこちらが本線</b>（永続ロスター #80 は
+    /// <see cref="StrengthTeamFactory.Create"/> を通らず <see cref="StrengthTeamFactory.Pitcher"/> /
+    /// <c>PositionPlayer</c> を直接呼ぶ）＝ティア圧縮（issue #578）は Create 側と**両方**に要る。
+    /// 圧縮は強度に対してだけ掛け、新入生ギャップ・名声の上振れは圧縮後の空間で絶対値のまま足す。
+    /// </summary>
+    internal static double RecruitCenter(School school, PersistentRosterCoefficients c, RosterCoefficients rc)
+        => MathUtil.Clamp(
+            rc.CompressStrength(school.Strength) - c.FreshmanGap + (school.Fame - 50.0) * c.FameRecruitWeight,
+            10.0, 95.0);
 
     /// <summary>
     /// 怪物種別に合うコホート成員を選ぶ（投手系→投手向き・鉄砲肩→捕外向き・打撃系→野手向き）。見つからねば −1。
