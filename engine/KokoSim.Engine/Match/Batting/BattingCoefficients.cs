@@ -41,7 +41,7 @@ public sealed record BattingCoefficients
 
     // --- コンタクト（空振り/ファウル/フェア） ---
     /// <summary>空振り率のロジスティック基準（球威=打者互角時の空振り対数オッズ）。</summary>
-    public double WhiffIntercept { get; init; } = -2.40;
+    public double WhiffIntercept { get; init; } = -2.52;
     /// <summary>ミートが空振りを下げる強さ。</summary>
     public double WhiffContactSlope { get; init; } = 0.030;
     /// <summary>ゾーン外スイング時の空振り加算（対数オッズ）。</summary>
@@ -70,7 +70,7 @@ public sealed record BattingCoefficients
     /// <b>球速1レベル ≈ ミート1レベル</b>（<see cref="WhiffContactSlope"/>=0.030）になるよう定める
     /// （0.064×0.47≈0.030）。旧値0.020では球速1レベルがミート0.31レベル相当しかなかった。
     /// </summary>
-    public double StuffPerKmh { get; init; } = 0.064;
+    public double StuffPerKmh { get; init; } = 0.128;
 
     // --- 打球生成 ---
     /// <summary>打球初速上限[km/h] の切片（パワー0相当）。設計書02は 100 + P×0.6 だが伸び不足のため係数化。</summary>

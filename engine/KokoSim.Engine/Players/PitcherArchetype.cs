@@ -23,9 +23,17 @@ public enum PitcherArchetype
 /// 球質タイプの出現割合と、型ごとのレベル配分オフセット（data/coefficients.yaml 駆動・不変条件#4）。
 /// オフセットは<b>実際の試合の失点が型によらず揃うよう実測で校正</b>してある（式の上での加重和ではない）。
 /// <para>実測の限界失点（baseLv68・自校固定打線・YAML係数）: 球速 −0.015/Lv・制球 −0.057/Lv・キレ −0.009/Lv。
-/// 球速の空振り価値は物理層接続（<see cref="Match.Batting.BattingCoefficients.StuffPerKmh"/>）で3倍になったが、
-/// 与四球経由で効く制球の失点価値は依然その約4倍あるため、制球の振れ幅は±5程度が中立の上限。
-/// 本格派は設計書02「球速とキレで押し込む」に合わせてキレを+に戻し、その分の代償を制球で払う配分にしてある。</para>
+/// 本格派は設計書02「球速とキレで押し込む」に合わせてキレを+に保ち、その分の代償を制球で払う配分にしてある。</para>
+///
+/// <para><b>issue #578 Step 2/3 の再校正（2026-08-10）</b>: 球速の空振り価値を2倍にした
+/// （<see cref="Match.Batting.BattingCoefficients.StuffPerKmh"/> 0.064→0.128・オーナー方針 Q24-1）ため、
+/// 旧オフセット（球速+12/−10/−14）のままでは本格派が一方的に有利になり
+/// <c>Archetypes_AreBalanceNeutral_InActualGames</c> が割れた（実測 本格2.33 / 軟投3.48・許容0.50）。
+/// <b>代償を制球・スタミナ・キレへ移しても直らない</b>のが実測の要点で:
+/// 制球は4Lvで +0.17 しか動かず、軟投派に至っては制球を上げると**失点が増える**
+/// （打たせて取る型は制球が良いほどインプレーが増え、失策失点が乗る）。スタミナを下げても
+/// 早めの継投で相殺される。よって<b>球速オフセット自体を価値の上昇ぶん縮める</b>のが唯一効くレバーで、
+/// 8/−7/−10 へ寝かせた（本格派−技巧派は 15Lv≒7.0km/h ＝ 型の見分けは残る）。</para>
 /// </summary>
 public sealed record PitcherArchetypeCoefficients
 {
@@ -35,19 +43,19 @@ public sealed record PitcherArchetypeCoefficients
     public double SoftTossShare { get; init; } = 0.08;
 
     // --- 本格派: 球速↑・キレ↑（代償は制球とスタミナ） ---
-    public double PowerVelocity { get; init; } = 12;
-    public double PowerControl { get; init; } = -4;
+    public double PowerVelocity { get; init; } = 8;
+    public double PowerControl { get; init; } = -12;
     public double PowerStamina { get; init; } = -2;
     public double PowerPitchRank { get; init; } = 2;
 
     // --- 技巧派: 球速↓ 制球・キレ↑ ---
-    public double FinesseVelocity { get; init; } = -10;
-    public double FinesseControl { get; init; } = 3;
+    public double FinesseVelocity { get; init; } = -7;
+    public double FinesseControl { get; init; } = 6;
     public double FinesseStamina { get; init; } = 1;
     public double FinessePitchRank { get; init; } = 3;
 
     // --- 軟投派: 球速↓↓ 制球・キレ↑（上乗せは Issue #24 の打球変更後に実戦で再校正済み） ---
-    public double SoftTossVelocity { get; init; } = -14;
+    public double SoftTossVelocity { get; init; } = -10;
     public double SoftTossControl { get; init; } = 3;
     public double SoftTossStamina { get; init; } = 2;
     public double SoftTossPitchRank { get; init; } = 3;
