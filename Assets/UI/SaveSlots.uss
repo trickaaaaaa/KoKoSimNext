@@ -4,6 +4,12 @@
    値は tokens.uss の変数のみを参照する（直書き禁止）。
    区切りは面の明度差で作り、罫線は表のヘッダー下だけに引く（UI原則④）。
    主要操作は右の詳細ペインの「読込」（ホーム経由は「保存」も）（UI原則⑦）。削除は警告色（本当の警告＝破壊的操作）。
+
+   ── 監督判断（2026-08-10・issue #575。自己レビューで再指摘しないこと）─────────────
+   ・見出し帯の濃緑＋白抜き題字は design-19 §8-4/§8-5 の正典どおり（.card / .card__hd 共通部品）。
+     「白地＋インク枠へ未移行」は誤診＝この画面だけ白見出しにしない。
+   ・画面下半分の余白は「意図した余白」。手動3枠しか無く情報量を増やせないので、カードは
+     中身の高さで止め、上寄せのまま残す（.card--grow 相当を足さない）。
    ═══════════════════════════════════════════════════════════════════════ */
 
 .ss-main {
@@ -118,12 +124,16 @@
     font-size: var(--fs-label);
     color: var(--color-muted);
 }
+/* 詳細ペインの案内文。既定は本文色＝ただの案内（空き枠・セーブ無し）はここに出る。
+   警告色は本当の警告だけに残す（UI原則②）＝読み込み不可・保存できない理由・操作の失敗は
+   --warn を足して赤にする（種別は SaveSlotsController.RenderDetail が知っている。issue #575①）。 */
 .ss-d__note {
     font-size: var(--fs-label);
-    color: var(--color-warn);
+    color: var(--color-chalk);
     white-space: normal;
     margin-top: var(--sp-3);
 }
+.ss-d__note--warn { color: var(--color-warn); }
 .ss-d__foot {
     flex-direction: row;
     flex-grow: 1;

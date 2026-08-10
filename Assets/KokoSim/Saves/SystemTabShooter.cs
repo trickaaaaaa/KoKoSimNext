@@ -10,8 +10,9 @@ namespace KokoSim.Unity.Saves
     /// <summary>
     /// 【開発用・エディタ限定】共通ナビの「システム」タブ（issue #565・A案）を撮る。使い捨て。
     ///
-    /// <para>撮るのは3枚。①通常週にタブから開いた姿（保存できる）②大会中にタブから開いた姿
-    /// （大会中でも保存できることの確認）③タイトル経由（トップバーが出ないこと＝入口で見た目が変わる）。</para>
+    /// <para>撮るのは4枚。①通常週にタブから開いた姿（保存できる）②大会中にタブから開いた姿
+    /// （大会中でも保存できることの確認）③タイトル経由（トップバーが出ないこと＝入口で見た目が変わる）
+    /// ④壊れた枠を選んだ姿（issue #575①＝案内文は本文色・本当の警告だけ警告色）。</para>
     ///
     /// <para><b>タブ経由とホームの ≡メニュー経由で見た目が変わる</b>のがこの変更の肝なので、
     /// 「開けた」ではなく<b>タブ帯が出ているか・戻るボタンが消えているか</b>を絵で見る。</para>
@@ -62,6 +63,19 @@ namespace KokoSim.Unity.Saves
             yield return null; yield return null;
             Debug.Log("[SysTab] タイトル経由 topbar=" + Shown(doc, "ss-topbar") + " back=" + Shown(doc, "ss-back"));
             yield return Capture(doc, "3-from-title");
+
+            // ④ 壊れた枠を選んだ姿（issue #575①）。案内文を本文色へ落としたあとも、
+            //    本当の警告＝「読み込めません」だけは警告色で残ることを絵で確かめる。
+            File.WriteAllText(SaveSlots.PathFor("manual2"), "{ これはセーブではない");
+            SaveSlots.Entry = SaveSlotsEntry.Tab;
+            doc = Open("SaveSlots");
+            yield return null;
+            var ctrl = doc.GetComponent<SaveSlotsController>();
+            if (ctrl != null) ctrl.Select("manual2");
+            yield return null; yield return null;
+            Debug.Log("[SysTab] 壊れた枠 corrupt=" + SaveSlots.ReadInfo("manual2").Corrupt);
+            yield return Capture(doc, "4-corrupt");
+            SaveSlots.Delete("manual2");
 
             Debug.Log("[SysTab] DONE");
         }
