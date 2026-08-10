@@ -21,7 +21,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     // ===== Serialize =====
 
@@ -46,7 +46,8 @@ public static class SaveCodec
             .Add("records", RecordBookSaves.ToJson(s.Records))
             .Add("newTeamPending", s.NewTeamPending)
             .Add("newTeamRetired", RetiredToJson(s.NewTeamRetiredNames))
-            .Add("teamColorOverride", CareerSaves.TeamColorsToJson(s.TeamColorOverride));
+            .Add("teamColorOverride", CareerSaves.TeamColorsToJson(s.TeamColorOverride))
+            .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
 
@@ -132,7 +133,9 @@ public static class SaveCodec
     /// </summary>
     private static JsonObject Migrate(JsonObject root, int version)
     {
-        // 現状は v1 のみ。将来の移行はここに版ごとの段を足す。
+        // v1→v2（issue #565）: 大会モードの進行（tournament）が増えた。v1 は「大会中は保存できない」
+        // 仕様だったので、v1 のセーブは必ず通常モード＝tournament を null で補うだけでよい。
+        if (version < 2 && !root.Has("tournament")) root.Add("tournament", JsonNull.Instance);
         return root;
     }
 
@@ -157,6 +160,7 @@ public static class SaveCodec
             NewTeamPending = root.Bool("newTeamPending"),
             NewTeamRetiredNames = RetiredFromJson(root.Arr("newTeamRetired")),
             TeamColorOverride = CareerSaves.TeamColorsFromJson(root["teamColorOverride"]),
+            Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
         };
 
         s.TournamentStats = new NationTournamentStats();

@@ -16,21 +16,56 @@ namespace KokoSim.Unity.Shell
     /// F2（issue #509）でこの土台（Capture/Restore/Reset＋ファイル読み書き）の上に配線した。
     /// <b>オートセーブは廃止</b>（監督決定 2026-08-09）＝保存はプレイヤーが手動3枠へ行う明示操作だけ。</para>
     ///
-    /// <para><b>大会中はセーブ不可</b>（<see cref="GameMode.Tournament"/>）。進行体 <c>TournamentRunner</c> は
-    /// 復元不能（進行中ブラケット・IRandomSource 内部状態・観戦中の MatchProgression を持つ）＝#483 論点3の結論。
-    /// オートセーブも大会中は取らない前提。</para>
+    /// <para><b>大会中でも試合と試合の間なら保存できる</b>（issue #565 F1。#483 論点3「大会中は不可」の撤回）。
+    /// 進行体 <c>TournamentRunner</c> の可変状態はセーブ DTO に載る。<b>観戦中（MatchProgression を持つ）の
+    /// 中断セーブだけは対象外</b>で、これは F2。</para>
     /// </summary>
     public static class SaveGameIO
     {
         public const string Extension = ".sav";
 
         /// <summary>
-        /// 大会中は保存できない（進行体が復元不能）。加えて、自校敗退直後は大会モードを抜けていても
-        /// 残りブラケットの背景消化（<see cref="BracketFinishSim"/>, issue #529）が終わるまで通算戦績
-        /// （<see cref="GameSession.Records"/> への FoldTournament）が未確定＝ここで保存すると今大会の
-        /// 勝敗が戦績から抜け落ちたセーブができてしまうため、完了まで待つ。UI 側はこれを見てセーブを抑止する（F1）。
+        /// 保存できる局面か。大会中でも「試合と試合の間」なら保存できる（issue #565 F1）が、
+        /// <b>まだ確定していない副作用を抱えた局面では保存しない</b>。保存すると復元後にその副作用
+        /// （週送り・通知・戦績の畳み込み）が失われ、進行が詰まったり戦績が欠けたりする。
+        ///
+        /// <list type="bullet">
+        /// <item>観戦中の自校戦がある（<c>Runner.CanCaptureState</c>）＝F2 の対象</item>
+        /// <item>試合結果モーダルの表示待ち（<c>ResultPending</c>）＝結果を見る前に落ちると結果が消える</item>
+        /// <item>大会終了の後始末待ち（<c>PendingTournamentWrapUp</c>）＝週送りと通知フィードがここで走る</item>
+        /// <item>残りブラケットの背景消化中（<c>BracketFoldPending</c>, issue #529）＝通算戦績が未確定</item>
+        /// <item>試合開始フローの途中（<c>AwaitingMatchStart</c>・練習試合フロー）＝スタメンを保存しないため</item>
+        /// </list>
         /// </summary>
-        public static bool CanSave => GameSession.Current.Mode == GameMode.Normal && !GameSession.Current.BracketFoldPending;
+        public static bool CanSave
+        {
+            get
+            {
+                var s = GameSession.Current;
+                if (s.BracketFoldPending || s.ResultPending || s.PendingTournamentWrapUp != null) return false;
+                if (s.AwaitingMatchStart || s.PendingMatchIsPractice) return false;
+                if (s.Mode == GameMode.Tournament && (s.Runner == null || !s.Runner.CanCaptureState)) return false;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// <see cref="CanSave"/> が false の理由（UI に1行で出す）。true のときは空文字。
+        /// <b>UI 側で条件を書き写さない</b>＝条件が増えたときに片方だけ直して表示と実挙動が食い違う
+        /// （実測ではなく構造の問題。issue #565 で条件が2つから5つへ増えたのが契機）。
+        /// </summary>
+        public static string SaveDisabledReason()
+        {
+            var s = GameSession.Current;
+            if (s.BracketFoldPending) return "大会結果を集計中はセーブできません（集計完了までお待ちください）。";
+            if (s.Mode == GameMode.Tournament && s.Runner != null && !s.Runner.CanCaptureState)
+                return "試合の観戦中はセーブできません（試合を終えるとセーブできます）。";
+            if (s.ResultPending || s.PendingTournamentWrapUp != null)
+                return "試合結果を確認するとセーブできます。";
+            if (s.AwaitingMatchStart || s.PendingMatchIsPractice)
+                return "試合の準備中はセーブできません（ホームに戻るとセーブできます）。";
+            return "";
+        }
 
         /// <summary>
         /// この進行を最後に保存／読込した時点の暦（null＝一度も保存していない）。オートセーブを廃止した
@@ -54,7 +89,11 @@ namespace KokoSim.Unity.Shell
             return s;
         }
 
-        /// <summary>DTO を全 static サービスへ押し戻す（種→暦→部員→監督→全国→セッション→新チーム→色）。</summary>
+        /// <summary>
+        /// DTO を全 static サービスへ押し戻す（種→暦→部員→監督→全国→セッション→新チーム→色）。
+        /// 大会中のセーブなら最後に進行体を組み直す（issue #565 F1。<b>全国ロスター・今大会成績を
+        /// 復元した後</b>でないと resolver が空の全国を掴む＝必ずこの順で呼ぶ）。
+        /// </summary>
         public static void Restore(SaveState s)
         {
             GameSeed.Restore(s);
@@ -65,6 +104,7 @@ namespace KokoSim.Unity.Shell
             GameSession.Current.Restore(s);
             NewTeamService.Restore(s);
             TeamColorProvider.Restore(s);
+            if (s.Tournament != null) TournamentEntry.RestoreRunner(s.Tournament);
         }
 
         /// <summary>新規ゲーム開始のための完全リセット（全 static サービスを初期状態へ）。母種は次の非決定採取に任せる。</summary>
@@ -84,10 +124,18 @@ namespace KokoSim.Unity.Shell
         public static string PathForSlot(string slot = "slot0")
             => Path.Combine(Application.persistentDataPath, "kokosim", slot + Extension);
 
-        /// <summary>現在状態を JSON+gzip でファイルへ書き出す。大会中は書かず false を返す。</summary>
+        /// <summary>
+        /// 現在状態を JSON+gzip でファイルへ書き出す。保存できない局面（<see cref="CanSave"/>）では書かず false。
+        ///
+        /// <para>大会中は<b>全国裏試合の背景シムを完了まで待ってから</b>写す（issue #565 論点1＝(a)）。
+        /// 待たずに保存すると、他46県の途中結果を焼いたセーブができる。ロード後に背景シムを
+        /// 再開する手立ては無い（進捗を保存していない）ので、その県の成績は<b>永久に欠ける</b>。
+        /// 待ち時間が出るのはこのためで、単なる作法ではない。</para>
+        /// </summary>
         public static bool Save(string path)
         {
             if (!CanSave) return false;
+            NationBackgroundSim.EnsureCompleted();
             var raw = Encoding.UTF8.GetBytes(SaveCodec.Serialize(Capture()));
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);

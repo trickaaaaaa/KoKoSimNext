@@ -166,7 +166,7 @@ namespace KokoSim.Unity.Saves
                 note.text = !string.IsNullOrEmpty(_errorText)
                     ? _errorText
                     : _fromHome && !SaveGameIO.CanSave
-                        ? SaveDisabledReason()
+                        ? SaveGameIO.SaveDisabledReason()
                         : !info.Exists
                             ? (_fromHome ? "空き枠です。「保存」でここに保存できます。" : "このスロットにはセーブがありません。")
                             : info.Corrupt
@@ -182,15 +182,6 @@ namespace KokoSim.Unity.Saves
                 _saveBtn.style.display = _fromHome ? DisplayStyle.Flex : DisplayStyle.None;
                 _saveBtn.SetEnabled(_fromHome && SaveGameIO.CanSave);
             }
-        }
-
-        /// <summary>大会中はセーブ不可（#507）＝押せてしまう経路が増えても落ちないよう理由を1行で示す。</summary>
-        private static string SaveDisabledReason()
-        {
-            var s = GameSession.Current;
-            if (s.BracketFoldPending) return "大会結果を集計中はセーブできません（集計完了までお待ちください）。";
-            if (s.Mode == GameMode.Tournament) return "大会中はセーブできません。";
-            return "";
         }
 
         private static string SchoolCellText(SaveSlotInfo info)
