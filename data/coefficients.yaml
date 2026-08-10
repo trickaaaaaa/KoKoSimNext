@@ -67,7 +67,7 @@ batting:
   # 「隅のいい球は見逃されやすい」。投手は隅を狙うため 0.02 でも見逃しKが増える＝atbat_10k 帯を再校正済み
   # （strikeout_rate 天井 0.220→0.230 / batting_average 床 0.240→0.235。実測は issue #403 のコメント参照）。
   zone_edge_swing_penalty: 0.02
-  whiff_intercept: -2.40         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正）
+  whiff_intercept: -2.52         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正。#578 で −2.40→−2.52＝stuff_per_kmh 倍化の平均中立化）
   whiff_contact_slope: 0.030     # ミート→空振り減
   whiff_out_of_zone_penalty: 0.85
   # 誘発変化合成量[m]（設計書15 Phase E-2）あたりの空振り加算。旧stuff_per_pitch_rank（球種ランク直参照）は
@@ -77,7 +77,11 @@ batting:
   # 球速→球威。基準はリーグ平均投手の平均リリース球速（最速132 − 平均ドロップ4）に置き、
   # 傾きは「球速1レベル ≈ ミート1レベル」になるよう 0.030 ÷ 0.47(km/h per level) ≈ 0.064 とする。
   stuff_base_velocity_kmh: 128.0
-  stuff_per_kmh: 0.064
+  # issue #578 Step 2（オーナー方針 Q24-1「球速のバリューはもう少し高くてよい」）: 0.064→0.128 ＝
+  # 球速1レベルの空振り価値をミート1レベル相当から**2レベル相当**へ倍化する。校正前は「制球の失点価値は
+  # 球速の約4倍」だったのを2倍まで詰める。平均三振率は whiff_intercept 側（−2.40→−2.52）で据え置き＝
+  # 動くのは球速の配分だけ（atbat_10k の K% 帯は 21.7/22.6/22.7 で校正前と同値・帯不変）。
+  stuff_per_kmh: 0.128
   exit_velo_intercept_kmh: 125.0 # 打球初速上限の切片
   exit_velo_per_power: 0.82      # パワー1あたり初速上限
   quality_mean: 0.60             # コンタクト品質の平均（issue #262: 打球が散った分の得点増を吸収）
@@ -1079,19 +1083,21 @@ roster:
   archetype_power_share: 0.25        # 本格派
   archetype_finesse_share: 0.22      # 技巧派
   archetype_soft_toss_share: 0.08    # 軟投派（残りはバランス型）
-  archetype_power_velocity: 12
-  archetype_power_control: -4
+  # #578 Step 3: 球速の価値が2倍になったので球速オフセットを寝かせて型の中立性を回復（12/−10/−14 → 8/−7/−10）。
+  # 制球・スタミナ・キレでの代償は実測で効かない（軟投派は制球を上げると失点が増える＝打たせて取る型の宿命）。
+  archetype_power_velocity: 8
+  archetype_power_control: -12
   archetype_power_stamina: -2
   archetype_power_pitch_rank: 2
-  archetype_finesse_velocity: -10
-  archetype_finesse_control: 3
+  archetype_finesse_velocity: -7
+  archetype_finesse_control: 6
   archetype_finesse_stamina: 1
   archetype_finesse_pitch_rank: 3
   # 軟投派の上乗せは 2026-07-21（Issue #24）に再校正。打球の塁打数を転がり込みの幾何で
   # 決めるようにした結果、打球初速の低さ（＝転がらない＝長打になりにくい）が以前より価値を持ち、
   # 軟投派だけ失点が下がった（実測 3.65 vs 技巧派 3.96）。キレ+5→+3・制球+4→+3 で実戦中立へ戻す
   # （Archetypes_AreBalanceNeutral_InActualGames）。
-  archetype_soft_toss_velocity: -14
+  archetype_soft_toss_velocity: -10
   archetype_soft_toss_control: 3
   archetype_soft_toss_stamina: 2
   archetype_soft_toss_pitch_rank: 3

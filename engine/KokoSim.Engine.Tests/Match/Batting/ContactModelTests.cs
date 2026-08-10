@@ -81,16 +81,19 @@ public sealed class ContactModelTests
     // ===== 球速の物理層接続（issue #14 ①: 速い球ほど空振りが取れる） =====
 
     [Fact]
-    public void Stuff_FromVelocity_WeighsVelocityLevelLikeContactLevel()
+    public void Stuff_FromVelocity_WeighsVelocityLevelTwiceContactLevel()
     {
-        // 球速1レベルの空振り対数オッズ寄与が、ミート1レベルとほぼ同じ重みになっていること。
-        // （旧モデルは 0.0094 対 0.030 ＝ 球速1レベルがミート0.31レベル分しかなかった）
+        // 球速1レベルの空振り対数オッズ寄与が、ミート1レベルの約2倍になっていること。
+        // 経緯: 旧モデルは 0.0094 対 0.030（球速1Lv＝ミート0.31Lv）→ issue #14 で等価（1.0倍）→
+        // issue #578 Step 2 で **2倍**（オーナー方針 Q24-1「球速のバリューはもう少し高くてよい」）。
+        // 校正前は「制球（与四球）の失点価値は球速の約4倍」だった＝2倍にして差を半分に詰める。
+        // 平均三振率は whiff_intercept（−2.40→−2.52）で据え置き＝動くのは球速の**配分**だけ（帯不変）。
         var coeff = new BattingCoefficients();
         var perVelocityLevel =
             (PitcherAttributes.VelocityKmhFromLevel(51) - PitcherAttributes.VelocityKmhFromLevel(50))
             * coeff.StuffPerKmh;
 
-        Assert.InRange(perVelocityLevel / coeff.WhiffContactSlope, 0.8, 1.25);
+        Assert.InRange(perVelocityLevel / coeff.WhiffContactSlope, 1.8, 2.25);
     }
 
     [Fact]
