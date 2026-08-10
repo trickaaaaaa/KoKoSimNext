@@ -192,11 +192,17 @@ namespace KokoSim.Unity.Home
             var rng = _rng.Fork(0x1213_0000UL ^ (ulong)(year * 100 + week));
             var newItems = new List<FeedItem>();
 
+            // 医務室（施設）の効果。発生率は WeeklyCheck へ倍率で、全治週は InjuryCoefficients の
+            // MedicalRecoveryFactor（設計書04の備品用に空いていた口）へ載せる。医務室Lv0で 1.0＝従来一致。
+            var facility = KokoSim.Unity.Shell.TrainingWeek.Effects;
+            var injury = _injury with { MedicalRecoveryFactor = facility.InjuryRecoveryFactor };
+
             foreach (var p in Roster)
             {
                 if (p.Injury == InjurySeverity.None)
                 {
-                    if (!InjuryModel.WeeklyCheck(p, rng, _injury, _skills, InjuryCatalog.Default)) continue;
+                    if (!InjuryModel.WeeklyCheck(p, rng, injury, _skills, InjuryCatalog.Default,
+                            facility.InjuryProbFactor)) continue;
                     newItems.Add(new FeedItem
                     {
                         When = "今週",

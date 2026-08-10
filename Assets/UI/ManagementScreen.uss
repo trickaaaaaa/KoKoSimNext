@@ -1,0 +1,217 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ManagementScreen.uss — 経営画面（設計書04 §1.4 資金 / 設計書03 §4 施設・Issue #128）
+   ───────────────────────────────────────────────────────────────────────
+   値は tokens.uss の変数のみを参照する（直書き禁止・UI原則⑤）。
+   カード本体（.card）・行パネル（.row-well + .row-panel）・升目（.lv-pips）・
+   操作ボタン（.tool-btn）はすべて部品辞書のもので、ここは経営画面固有の
+   「並べ方（収支4枠・施設台帳の列幅）」だけを足す。
+   列幅はヘッダー（.mn-th）とデータ（.mn-cell）が同じトークンを参照する（UI-BUILD-METHOD Step 1）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.mn-main {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-1);
+}
+/* 最後のカードは下余白を持たない（画面下端との間は mn-main のパディングが受け持つ）。 */
+.mn-card-last { margin-bottom: 0; }
+
+/* ── 見出し ─────────────────────────────────────────────── */
+.mn-masthead {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+
+/* ── 部費（残高・年間収入・年間支出・差引の4枠を横に並べる） ──────────
+   区切りは線でなく余白と枠間の間隔で作る（UI原則④）。 */
+.mn-ledger {
+    flex-direction: row;
+    align-items: flex-start;
+}
+.mn-kv {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-right: var(--sp-4);
+}
+.mn-kv__k {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin-bottom: var(--sp-1);
+}
+/* 金額と内訳は1行に並べる（内訳を下段に置くと4枠ぶんの行が縦に効いて施設台帳が入らない）。 */
+.mn-kv__line {
+    flex-direction: row;
+    align-items: center;
+}
+/* 数値は NumUnit（数字＝Oswald ／ 単位「万」＝サンセリフ）を差し込む器。 */
+.mn-kv__v {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+.mn-kv__v .nu-num { font-size: 26px; color: var(--color-chalk); }
+.mn-kv__v .nu-unit { font-size: var(--fs-label); color: var(--color-chalk); }
+/* 差引がマイナスの年は本当の警告（部費が減り続ける）なので警告色を許す（UI原則②）。 */
+.mn-kv--neg .nu-num,
+.mn-kv--neg .nu-unit { color: var(--color-warn); }
+.mn-kv__note {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    white-space: normal;
+    margin-left: var(--sp-2);
+}
+
+/* ── 施設台帳：ヘッダー ────────────────────────────────────
+   線を引くのは表のヘッダー下だけ（UI原則④）。行の区切りは row-panel の枠が持つ。 */
+/* 左右の余白は行パネルの内側と実測で揃える（井 12 ＋ 枠 2/5 ＋ 行パディング 16）。
+   ここを row-well の padding だけで揃えると、行パネルの非対称ボーダー（案イのベタ影）ぶん
+   右端が 11px ずれて費用の数字がヘッダーと合わなくなる。 */
+.mn-thead {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-thead);
+    flex-shrink: 0;
+    padding-left: 30px;
+    padding-right: 33px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--divider);
+}
+.mn-th {
+    font-size: var(--fs-th);
+    color: var(--color-muted);
+}
+.mn-th--name { width: var(--col-fc-name); flex-shrink: 0; }
+.mn-th--lv   { width: var(--col-fc-lv); flex-shrink: 0; }
+.mn-th--eff  { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.mn-th--cost { width: var(--col-fc-cost); flex-shrink: 0; -unity-text-align: middle-right; }
+.mn-th--act  { width: var(--col-fc-act); flex-shrink: 0; }
+
+/* ── 施設台帳：行（器は部品辞書の row-well + row-panel）───────────── */
+/* 行数が画面に入らないので本文はスクロールさせる（潰して収めない）。 */
+.mn-scroll {
+    flex-grow: 1;
+    min-height: 0;
+}
+/* 井の下端の余白と行間は共通値より詰める（1画面に見える行数を増やす・UI原則①）。 */
+.mn-well {
+    flex-shrink: 0;
+    padding-bottom: var(--sp-2);
+}
+.mn-row { margin-bottom: var(--sp-1); }
+/* 区分の見出し帯（部品辞書の PlateHeader）。台帳の中の区切りなのでカード上縁より小さく敷く
+   ＝寸法だけ詰め、色（土）と題字の役割は部品辞書のまま。 */
+.mn-group {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-1);
+    padding-left: 16px;
+    padding-right: 16px;
+    border-bottom-width: 0;
+}
+.mn-group .plate-header__title { font-size: var(--fs-label); letter-spacing: 1px; }
+/* 固定幅の列には必ず flex-shrink: 0（可変列に幅を奪われて列がずれる）。 */
+.mn-cell--name {
+    width: var(--col-fc-name);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-chalk);
+}
+.mn-cell--lv {
+    width: var(--col-fc-lv);
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+}
+.mn-cell--lv .mn-lv-text {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-left: var(--sp-1);
+}
+.mn-cell--eff {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-chalk);
+    white-space: normal;
+}
+/* 次の1段は「まだ持っていない」ぶんなので一段弱く出す（いまの効果と読み違えない）。 */
+.mn-cell--eff-next { color: var(--color-muted); }
+.mn-cell--cost {
+    width: var(--col-fc-cost);
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+}
+/* 最大レベルの行は NumUnitAuto が「クラスの無い素の Label」を返すので、
+   .nu-num だけを指定すると既定サイズのまま行が伸びる。型セレクタで両方を受ける。 */
+.mn-cell--cost Label { font-size: var(--fs-label); color: var(--color-chalk); }
+.mn-cell--cost .nu-unit { font-size: var(--fs-cap); color: var(--color-chalk); }
+/* 買えない額（資金不足）は数字そのものを弱め、押せないボタンと意味を揃える。 */
+.mn-cell--cost-off .nu-num,
+.mn-cell--cost-off .nu-unit { color: var(--color-faint); }
+.mn-cell--act {
+    width: var(--col-fc-act);
+    flex-shrink: 0;
+    flex-direction: row;
+    justify-content: flex-end;
+}
+/* 行の中に収める購入ボタン（ToolButton の寸法だけ詰める。色・枠は部品辞書のまま）。 */
+.mn-buy {
+    margin: 0;
+    padding-left: 14px; padding-right: 14px;
+    padding-top: 2px; padding-bottom: 2px;
+    font-size: var(--fs-cap);
+}
+/* 押せない購入ボタン（資金不足・最大レベル）＝白地のまま文字だけ落とす。 */
+.mn-buy--off {
+    color: var(--color-faint);
+    border-right-width: var(--nb-border);
+    border-bottom-width: var(--nb-border);
+}
+/* 最大レベルの行はボタンを置かず、到達した事実だけを静かに出す。 */
+.mn-maxed {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    -unity-text-align: middle-right;
+}
+
+/* ── 施設台帳：合計と操作結果 ───────────────────────────────── */
+.mn-foot {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding-left: 30px;
+    padding-right: 33px;
+}
+.mn-total {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+}
+.mn-total__k {
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin-right: var(--sp-2);
+}
+.mn-total__v {
+    font-size: var(--fs-cap);
+    color: var(--color-chalk);
+    margin-right: var(--sp-4);
+}
+.mn-status {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    flex-shrink: 0;
+}
+.mn-status--warn { color: var(--color-warn); }

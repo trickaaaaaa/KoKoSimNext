@@ -29,6 +29,7 @@ namespace KokoSim.Unity.Shell
             ("nav-match", "MatchScreen"),
             ("nav-tournament", "TournamentPreview"),
             ("nav-manager", "ManagerScreen"),
+            ("nav-management", "ManagementScreen"),
             ("nav-system", "SaveSlots"),
         };
 
@@ -55,7 +56,7 @@ namespace KokoSim.Unity.Shell
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
             { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "ManagerScreen",
-              "TeamSetting", "SaveSlots" };
+              "ManagementScreen", "TeamSetting", "SaveSlots" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>
         public static ScreenRouter Instance { get; private set; }

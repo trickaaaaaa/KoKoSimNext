@@ -241,10 +241,18 @@ public static class CareerEngine
         if (wins == 0) trust -= c.TrustPoorSeasonPenalty;
         m.Trust = MathUtil.Clamp(trust, 0, 100);
 
-        // 資金。年間予算を加算し、合宿費・スカウト費を差し引く（Issue #128）。
-        // 固定支出は既定0で従来一致。資金は下限0で止める（借金しない）。
+        // 部費（運営費）。年間予算を加算し、合宿費・スカウト費を差し引く（Issue #128）。
+        // 資金は下限0で止める（借金しない）。
         m.Funds += c.AnnualBudgetBase + c.BudgetPerTrust * m.Trust;
         m.Funds -= c.SummerCampCost + c.WinterCampCost + c.ScoutCost;
         if (m.Funds < 0) m.Funds = 0;
+
+        // 施設基金（設計書04 §1.4）。学校の設備投資＋名声に比例する後援会・OB寄付が積み上がり、
+        // 甲子園に出た年は一時金が乗る。支出は施設の購入だけ（FacilityPurchase）なのでここでは引かない。
+        // 名声は上の更新後の値を使う＝「勝った年の寄付はその年から増える」。
+        m.FacilityFund += c.FacilityFundSchoolBase
+                          + c.FacilityFundDonationPerFame * m.Fame
+                          + (reachedKoshien ? c.FacilityFundKoshienBonus : 0)
+                          + (nationalChampion ? c.FacilityFundNationalTitleBonus : 0);
     }
 }

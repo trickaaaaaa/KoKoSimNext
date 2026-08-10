@@ -49,6 +49,21 @@ public sealed record SeasonContext
     public FacilityCatalog FacilityCatalog { get; init; } = FacilityCatalog.Default;
 
     /// <summary>
+    /// 練習道具による分野別の成長倍率（設計書04 §1.4 備品）。null＝道具なしで従来と1ビット一致（不変条件#2）。
+    /// 施設係数が全メニュー一律なのに対し、こちらは振っているメニューの分野にだけ効く。
+    /// <see cref="Facilities"/> 注入時は <see cref="ResolveEffects"/> が返す値を使うのが正規経路で、
+    /// ここは道具だけを単体で注入したいテスト・実験用の口。
+    /// </summary>
+    public EquipmentBonus? Equipment { get; init; }
+
+    /// <summary>
+    /// 施設・道具・備品の効果を全軸まとめて解決する。<see cref="Facilities"/> 未注入なら
+    /// <see cref="FacilityEffects.None"/>（全倍率1.0・全加算0）＝従来と1ビット一致（不変条件#2）。
+    /// </summary>
+    public FacilityEffects ResolveEffects()
+        => Facilities is null ? FacilityEffects.None : FacilityCatalog.AggregateEffects(Facilities);
+
+    /// <summary>
     /// 監督の名声（Fame, 0-100, Issue #127・設計書04 §2.1）。null＝名声フィードバックoff＝新入生の総合力中心は
     /// 従来どおり Roster.TalentCenterDefault（不変条件#2）。注入時は Roster.TalentCenterFromFame で
     /// 新入生の質へ反映する（勝つ→名声→良い新入生、の正フィードバック。上振れは頭打ちで暴走を防ぐ）。
@@ -146,7 +161,8 @@ public static class SeasonEngine
                     var stage = ctx.Calendar.StageIndex(p.Grade, week);
                     DevelopmentModel.TrainWeekPlan(
                         p, alloc, training.ReferenceWeekMinutes,
-                        stage, campMult, ctx.Stages, training, ctx.Skills, ctx.Personalities, ctx.Coaching);
+                        stage, campMult, ctx.Stages, training, ctx.Skills, ctx.Personalities, ctx.Coaching,
+                        ctx.Equipment);
                 }
 
                 // 調子の週次更新（設計書02 §3.3: 数週間続く波）。

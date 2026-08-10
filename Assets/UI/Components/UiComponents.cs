@@ -855,5 +855,27 @@ namespace KokoSim.Unity.Components
 
             return el;
         }
+
+        // ===== LevelPips（段階レベルの升目: 経営画面の施設レベル, Issue #128） =====
+
+        /// <summary>
+        /// 段階レベルを升目で示す（保有段＝インク塗り／未保有段＝地色）。数字を読まなくても
+        /// 「何段まで上げたか」「あと何段あるか」が一覧のスキャンで拾える（UI原則⑥）。
+        /// 色は有無の2値だけでアクセントを使わない（UI原則②）。<paramref name="maxLevel"/> が
+        /// 0以下なら空の器を返す（升目を出さない）。
+        /// </summary>
+        public static VisualElement LevelPips(int level, int maxLevel)
+        {
+            var wrap = new VisualElement();
+            wrap.AddToClassList("lv-pips");
+            for (var i = 1; i <= maxLevel; i++)
+            {
+                var pip = new VisualElement();
+                pip.AddToClassList("lv-pip");
+                if (i <= level) pip.AddToClassList("lv-pip--on");
+                wrap.Add(pip);
+            }
+            return wrap;
+        }
     }
 }

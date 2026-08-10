@@ -2441,3 +2441,26 @@
 }
 /* 自校・注目選手など「1列だけ立てる」用（アンバーは列単位でしか使わない）。 */
 .vname--lit .vname__ch { color: var(--color-lamp); }
+
+/* ── LevelPips：段階レベルの升目（経営画面の施設レベル等）────────────────────
+   「何段まで上げたか」を数字を読まずに拾えるようにする器（UI原則⑥）。
+   状態コードではなく有無の2値なので、色はインク（保有）と地色（未保有）だけ＝
+   アクセント（アンバー・警告）は使わない（UI原則②）。段数は呼び出し側が渡す。 */
+.lv-pips {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+.lv-pip {
+    width: 14px;
+    height: 14px;
+    margin-right: var(--sp-1);
+    background-color: var(--sf-inset);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);
+    border-left-width: var(--nb-border);
+    border-right-width: var(--nb-border);
+    border-bottom-width: var(--nb-border);
+    border-radius: 0;
+}
+.lv-pip--on { background-color: var(--ink); }

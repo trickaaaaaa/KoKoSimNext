@@ -21,8 +21,13 @@ namespace KokoSim.Unity.Shell
         private static PracticeMatchScheduler _practice;
         private static FacilitySet _facilities;
 
-        /// <summary>監督（資金は万円単位。初期値は従来のホーム表示に合わせて120万円）。</summary>
-        public static Manager Manager => _manager ?? (_manager = new Manager { Funds = 120 });
+        /// <summary>
+        /// 監督（資金は万円単位）。部費の初期値は従来のホーム表示に合わせて120万円。
+        /// 施設基金は 100万 で始める＝赴任初年度は医務室Lv1（150万）にも届かず、まず1年貯める。
+        /// 以降は名声と戦績で増える（学校の設備投資100万＋名声×20万＋甲子園1000万＋全国優勝5000万）。
+        /// </summary>
+        public static Manager Manager =>
+            _manager ?? (_manager = new Manager { Funds = 120, FacilityFund = 100 });
 
         /// <summary>
         /// 学校の施設保有状態（Issue #128）の単一ソース。funds→施設購入はここを更新し、

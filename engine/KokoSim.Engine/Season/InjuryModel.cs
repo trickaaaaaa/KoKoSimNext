@@ -70,13 +70,17 @@ public static class InjuryModel
         return m;
     }
 
-    /// <summary>週次の発生判定。怪我していない選手に対して呼ぶ。発生したら選手状態を書き換え true。</summary>
+    /// <summary>
+    /// 週次の発生判定。怪我していない選手に対して呼ぶ。発生したら選手状態を書き換え true。
+    /// <paramref name="facilityProbFactor"/> は医務室などの施設由来の発生率倍率（1.0＝施設なし＝従来一致）。
+    /// </summary>
     public static bool WeeklyCheck(DevelopingPlayer p, IRandomSource rng, InjuryCoefficients c,
-        SkillCoefficients? skills = null, InjuryCatalog? catalog = null)
+        SkillCoefficients? skills = null, InjuryCatalog? catalog = null, double facilityProbFactor = 1.0)
     {
         if (p.Injury != InjurySeverity.None) return false;
 
-        var prob = c.WeeklyBaseProb * OccurrenceMultiplier(p.InjuryResistance, p.Skills, c, skills);
+        var prob = c.WeeklyBaseProb * OccurrenceMultiplier(p.InjuryResistance, p.Skills, c, skills)
+                   * facilityProbFactor;
         if (!MathUtil.Chance(MathUtil.Clamp(prob, 0.0, 0.5), rng)) return false;
 
         Apply(p, Sample(InjuryScene.Weekly, rng, c, catalog ?? InjuryCatalog.Default));

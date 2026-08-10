@@ -34,24 +34,17 @@ namespace KokoSim.Unity.Shell
         /// 施設保有状態の加算を足す＝ engine の SeasonContext.ResolveFacility と同じ集約を Unity 側でも通す。
         /// 施設Lv0で加算0＝従来の300分と一致。
         /// </summary>
-        public static int Budget
-        {
-            get
-            {
-                var (_, budgetAdd) = ManagerService.Catalog.Aggregate(ManagerService.Facilities);
-                return Training.DefaultBudgetMinutes + budgetAdd;
-            }
-        }
+        public static int Budget => Training.DefaultBudgetMinutes + Effects.BudgetAdd;
+
+        /// <summary>
+        /// 施設・道具・備品の効果を全軸まとめて解決する（engine の SeasonContext.ResolveEffects と同じ集約）。
+        /// 何も持っていなければ全倍率1.0・全加算0＝従来と1ビット一致（不変条件#2）。
+        /// </summary>
+        public static FacilityEffects Effects =>
+            ManagerService.Catalog.AggregateEffects(ManagerService.Facilities);
 
         /// <summary>施設連動の施設係数（週成長の乗数, Issue #128）。施設Lv0で 1.0＝従来一致。</summary>
-        private static double FacilityCoef
-        {
-            get
-            {
-                var (coefAdd, _) = ManagerService.Catalog.Aggregate(ManagerService.Facilities);
-                return Training.FacilityCoef + coefAdd;
-            }
-        }
+        private static double FacilityCoef => Training.FacilityCoef + Effects.CoefAdd;
 
         /// <summary>
         /// 指定週の合宿倍率（設計書03 §4）。プレビューのバナー表示と実適用が同じ値を使うための単一ソース。
@@ -85,7 +78,9 @@ namespace KokoSim.Unity.Shell
 
             DevelopmentModel.TrainWeekPlan(
                 p, alloc, training.ReferenceWeekMinutes,
-                stage, campMult, Stages, training, Skills, Personalities, coaching);
+                stage, campMult, Stages, training, Skills, Personalities, coaching,
+                // 練習道具は「振っているメニューの分野」にだけ効く（施設係数は全メニュー一律）。
+                Effects.Equipment);
         }
     }
 }

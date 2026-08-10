@@ -60,6 +60,22 @@ public sealed record CareerCoefficients
     /// <summary>スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。</summary>
     public double ScoutCost { get; init; } = 15.0;
 
+    // --- 施設基金（設計書04 §1.4「OB・後援会寄付」, 万円）。部費とは別会計で、建物だけに使う。
+    // 現実の高校でも寮・室内練習場・ナイターは部費でなく学校法人の設備投資と後援会の寄付で建つ。
+    // 既定を全て0にすると施設基金が一切増えない＝従来（部費で建物を買う）とは別世界になるので、
+    // 実ゲームの既定として稼働する値を入れる。 ---
+    /// <summary>
+    /// 学校の設備投資[万円/年]。実績によらず毎年入る土台。名声由来の寄付を主役にするため小さく置く
+    /// （名声10で寄付200万＝土台の2倍、名声100で2000万＝20倍）。
+    /// </summary>
+    public double FacilityFundSchoolBase { get; init; } = 100.0;
+    /// <summary>後援会・OB寄付の名声1あたりの年額[万円]（名声に比例。名声100で年2000万）。</summary>
+    public double FacilityFundDonationPerFame { get; init; } = 20.0;
+    /// <summary>甲子園出場の年に後援会から入る一時金[万円]。</summary>
+    public double FacilityFundKoshienBonus { get; init; } = 1000.0;
+    /// <summary>全国優勝の年に入る一時金[万円]（甲子園出場ぶんとは別に上乗せ）。</summary>
+    public double FacilityFundNationalTitleBonus { get; init; } = 5000.0;
+
     // --- 赴任校（教員監督は弱小校に飛ばされがち） ---
     public double NewSchoolStrengthMean { get; init; } = 34.0;
     public double NewSchoolStrengthSd { get; init; } = 6.0;
