@@ -2750,6 +2750,21 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool FieldThrowFollowsBall = true;
 
+        /// <summary>
+        /// 送球の枠（始点・終点を収める側）を投げ手から球へ**伸ばす**か（issue #566）。
+        /// 既定の切り替え式は枠が階段状に跳び、寄っている3Dではズームが追いつく前にアイムだけが
+        /// 投げ手と受け手のあいだの地面へ着く。伸ばす式なら跳ばない。切り分け用に残す静的スイッチ。
+        /// </summary>
+        public static bool FieldThrowBoxGrows = true;
+
+        /// <summary>
+        /// パンとズームを連動させるか（issue #566）。パン上限 45m/s に対しズーム上限は 2倍/秒 しか
+        /// 無いので、被写体が切り替わる瞬間に**枠が狭いまま被写体のあいだの地面を舐める**区間ができる。
+        /// on にすると、遅れたぶんだけ枠を広げて生の被写体を必ず収める（＝広げる方向にしか効かない）。
+        /// 追従が足りているプレーでは1キーフレームも変わらない。切り分け用に残す静的スイッチ。
+        /// </summary>
+        public static bool FieldKeepSubjectFramed = true;
+
         private System.Collections.Generic.IReadOnlyList<CameraKeyframe> _fieldPlan;
 
         /// <summary>
@@ -2775,12 +2790,21 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void BuildFieldCameraPlan(PlaybackPlay play, float startSeconds)
         {
-            _fieldPlan = play == null ? null : CameraPlanBuilder.Build(play,
-                new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
-                    !IsEndpointFramedThrow(play) && FieldThrowFollowsBall, HeldBallFollowsRunner: true,
-                    LooseBallFollowsChaser: true),
-                startSeconds);
+            _fieldPlan = play == null ? null
+                : CameraPlanBuilder.Build(play, FieldFramingFor(play), startSeconds);
         }
+
+        /// <summary>
+        /// 守備カメラの枠の詰め方（この rig が engine へ渡すもの）。
+        /// <b>実測プローブ（FieldCameraProbe）もここを呼ぶ</b>＝プローブが測っている枠と実機の枠が
+        /// 食い違わないようにするための単一ソース。片方だけ直すと「直したはずが絵に出ない」が起きる。
+        /// </summary>
+        public static CameraFraming FieldFramingFor(PlaybackPlay play)
+            => new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
+                ThrowFollowsBall: !IsEndpointFramedThrow(play) && FieldThrowFollowsBall,
+                HeldBallFollowsRunner: true,
+                LooseBallFollowsChaser: true,
+                ThrowBoxGrowsWithBall: FieldThrowBoxGrows, KeepSubjectFramed: FieldKeepSubjectFramed);
 
         /// <summary>
         /// 「始点と終点を両方収める」枠にすべき短い送球1本のプレーか（牽制 issue #515／暴投・捕逸の

@@ -57,9 +57,44 @@ public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMu
 ///
 /// <para>2D俯瞰は全景に全部入るので既定オフ（＝ゴールデン不変）。3Dの守備カメラだけが渡す。</para>
 /// </param>
+/// <param name="ThrowBoxGrowsWithBall">
+/// 「始点と終点を両方収める」送球の枠（<paramref name="ThrowFollowsBall"/>=false 側）を、
+/// 投げた瞬間に完成形へ切り替えるのではなく<b>投げ手から球へ伸ばす</b>（issue #566）。
+///
+/// <para>切り替え式は枠が階段状に跳ぶ。2D俯瞰は全景に近いので跳んでも絵が変わらないが、
+/// 寄っている3Dでは跳んだ先の枠（送球距離ぶん＝20〜30m）へズームが 2倍/秒 で追いつく前に、
+/// アイムだけが 45m/s で箱の中心＝<b>投げ手と受け手のあいだの何も無い地面</b>へ着いてしまう。</para>
+///
+/// <para>伸ばす式なら t=送球開始で箱は投げ手の一点＝いまカメラが居る所そのもので、球の飛翔と
+/// ともに広がって、届いた時にちょうど始点・終点の枠になる。跳ばないのでレート制限が追いつけ、
+/// 投げ手は最初から最後まで枠の中に居る（＝中継カメラの「引きながら送球を追う」形）。</para>
+///
+/// <para>2D俯瞰は既定オフ（＝ゴールデン不変）。3Dの守備カメラだけが渡す。</para>
+/// </param>
+/// <param name="KeepSubjectFramed">
+/// パンとズームを連動させる（issue #566）。<b>枠に人が1人も居ないコマだけ</b>、いちばん近い人が
+/// 入るところまで枠を広げる。
+///
+/// <para>なぜ要るか: パン上限 45m/s に対しズーム上限は 2倍/秒 しかない。狭い枠（4〜6m）のまま
+/// 被写体が十数m先へ移ると、アイムは 0.3秒で着くのに枠は 2.5秒かけないと開かない＝
+/// <b>枠が狭いまま被写体と被写体のあいだの地面を舐める</b>。「引く→振る→寄る」の"引く"が
+/// 間に合っていないのが正体で、パンを遅くしても直らない（実測 2026-08-10: 遅くすると
+/// 0.40秒→1.85秒に悪化する。カメラが遅れて後ろの地面を映すだけになる）。</para>
+///
+/// <para>効き方は片側だけ＝<b>広げるのみ</b>。寄る側のレート制限（ジャーク防止）はそのまま残す。
+/// 判定は「生の枠が画面に入っているか」ではなく<b>実際に人が居るか</b>で行う（代用すると、
+/// 追いつけているだけで盲点の無いプレーまで巻き込む。実測は
+/// <see cref="CameraPlanBuilder"/> の該当メソッドのコメント）。</para>
+///
+/// <para>全景復帰（<see cref="CameraPlanBuilder.WideStartTime"/> 以降）には効かせない。全景は
+/// 「収めるべき被写体」ではなく戻り先なので、ここで連動させると復帰の1コマ目で全景へ飛ぶ。</para>
+///
+/// <para>2D俯瞰は全景に全部入るので既定オフ（＝ゴールデン不変）。3Dの守備カメラだけが渡す。</para>
+/// </param>
 public readonly record struct CameraFraming(
     double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false,
-    bool HeldBallFollowsRunner = false, bool LooseBallFollowsChaser = false)
+    bool HeldBallFollowsRunner = false, bool LooseBallFollowsChaser = false,
+    bool ThrowBoxGrowsWithBall = false, bool KeepSubjectFramed = false)
 {
     /// <summary>2D俯瞰の既定（Issue #119 で決めた現行値）。渡さなければこれが使われる。</summary>
     public static readonly CameraFraming Default = new(3.4, 6.0, 2.4);
@@ -151,6 +186,11 @@ public static class CameraPlanBuilder
                 var dt = clampedT - prevT;
                 zoom = ClampZoomRate(zoom, raw.ZoomMult, dt);
                 (cx, cy) = ClampPan(cx, cy, raw.Cx, raw.Cy, dt);
+                // パンとズームの連動（issue #566）。上の2つは互いを知らないので、パンだけが先に走って
+                // 「狭い枠が被写体のあいだの地面を舐める」区間ができる。遅れたぶんだけ枠を広げて塞ぐ。
+                // 全景復帰は戻り先であって被写体ではないので効かせない（1コマ目で全景へ飛ぶ）。
+                if (fr.KeepSubjectFramed && clampedT < wideStart)
+                    zoom = ZoomKeepingSomeoneFramed(play, clampedT, cx, cy, zoom, fr);
             }
             kfs.Add(new CameraKeyframe(clampedT, cx, cy, zoom));
             prevT = clampedT;
@@ -253,6 +293,67 @@ public static class CameraPlanBuilder
         return Math.Clamp(target, lo, hi);
     }
 
+    /// <summary>
+    /// 「枠に人が1人も居ない」コマだけ、いちばん近い人が入るまで枠を広げる（issue #566）。
+    /// 誰か1人でも枠に居れば <paramref name="zoom"/> をそのまま返す＝<b>何もしない</b>。
+    ///
+    /// <para>判定を「生の枠が画面に入っているか」で代用してはいけない。それだと**追いつけて
+    /// いるだけで盲点の無いプレーまで巻き込んで広がる**（実測 2026-08-10: 生の箱ぜんぶを要求すると
+    /// 中継バックホームの枠が 64.7m→123.5m、振り逃げが 8.9m→40.3m。2点のどちらかへ緩めても
+    /// 中継が最大6.9倍に膨らんだ。どちらも元から盲点0コマ＝広げる必要がまったく無いプレー）。
+    /// 野手・走者の位置は <see cref="PlaybackPlay"/> が持っているので、<b>実際の条件そのもの</b>で
+    /// 判定できる。代用を挟まないぶん、必要なコマだけに効く。</para>
+    ///
+    /// <para>球は数えない。「球だけが映っていて人が居ない」は issue #566 が直したい絵そのもの
+    /// （＝空の地面の上を球が飛んでいく）。</para>
+    ///
+    /// <para>この平面の枠は3Dの実カメラより<b>狭い</b>（斜めに見下ろすぶん地面は奥へ伸びる。
+    /// 実測 2026-08-10: 実カメラに写っている人が平面の枠の最大7.2倍先に居ることがある）。
+    /// つまりこの判定は安全側＝「平面の枠に居る＝実カメラにも必ず写っている」。逆は言えないので、
+    /// 広げすぎないように判定側の余白は0にしてある。</para>
+    /// </summary>
+    private static double ZoomKeepingSomeoneFramed(PlaybackPlay play, double t,
+        double cx, double cy, double zoom, CameraFraming fr)
+    {
+        var nearest = 0.0;
+        foreach (var p in ActorsAt(play, t))
+        {
+            // 判定は余白なし＝**枠の中に居るか**そのもの。ここに余白を足すと厳しすぎて、
+            // 盲点の無いプレーまで広がる（実測 2026-08-10: 余白2mを足すと振り逃げが 8.9m→20.9m、
+            // 中継バックホームが最大4.6倍に膨らんだ。どちらも元から盲点0コマ）。
+            if (ZoomKeeping(cx, cy, p, fr, 0.0) >= zoom) return zoom;
+            // 広げる先には余白を足す（画面の端に張り付いた人は「映っている」と言い難い）。
+            var z = ZoomKeeping(cx, cy, p, fr, fr.MarginM);
+            if (z > nearest) nearest = z;
+        }
+        return nearest > 0.0 ? nearest : zoom;   // 誰も居ない＝いちばん近い人が入るところまで広げる
+    }
+
+    /// <summary>点 <paramref name="p"/> が <paramref name="margin"/> ぶん内側に入る最大のズーム倍率。</summary>
+    private static double ZoomKeeping(double cx, double cy, PlaybackVec p, CameraFraming fr, double margin)
+    {
+        var halfW = Math.Abs(p.X - cx) + margin;
+        var halfH = Math.Abs(p.Y - cy) + margin;
+        var zoom = Math.Min(DesignWidthM / (halfW * 2.0), DesignHeightM / (halfH * 2.0));
+        return Math.Clamp(zoom, WideZoom, fr.MaxZoom);
+    }
+
+    /// <summary>
+    /// 時刻 t に盤面に居る人（守備9人＋その時点で走っている走者）。列挙順は
+    /// <see cref="FieldPosition"/> の宣言順→走者の並び順＝辞書の並びに依らず決定論（不変条件#2）。
+    /// </summary>
+    private static IEnumerable<PlaybackVec> ActorsAt(PlaybackPlay play, double t)
+    {
+        foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
+        {
+            if (pos == FieldPosition.DesignatedHitter) continue;   // 守備に就かない
+            yield return PlaybackEvaluator.FielderAt(play, pos, t).Pos;
+        }
+        foreach (var runner in play.Runners)
+            if (PlaybackEvaluator.RunnerAt(runner, t) is { } p)
+                yield return p;
+    }
+
     private static (double Cx, double Cy) ClampPan(double px, double py, double tx, double ty, double dt)
     {
         var maxDist = PanSpeedCapMPerSecond * dt;
@@ -287,8 +388,18 @@ public static class CameraPlanBuilder
         // ThrowFollowsBall なら下の「ボールを追う」へ落とす＝送球も打球と同じ扱いになる。
         if (!fr.ThrowFollowsBall && IsKind(covering, BallSegmentKind.Throw))
         {
-            var from = covering!.At(0);
-            var to = covering.At(covering.T1 - covering.T0);
+            var span = covering!.T1 - covering.T0;
+            var from = covering.At(0);
+            // 既定は「投げた瞬間に始点・終点の枠へ切り替える」＝**枠が階段状に跳ぶ**。3Dのように
+            // 寄っていると、跳んだ先の枠（24m）へズームが 2倍/秒 で追いつく前にアイムだけが
+            // 箱の中心（＝投げ手と受け手のあいだの何も無い地面）へ着く（issue #566。実測 2026-08-10:
+            // 暴投の投げ返しで枠 7.7m のまま 12m 移動＝誰も映らないコマが出た）。
+            // ThrowBoxGrowsWithBall なら箱を**投げ手から球へ伸ばす**＝t=T0 で投げ手の一点から始まり
+            // 球の飛翔とともに広がって、届いた時にちょうど始点・終点の枠になる。跳ばないので
+            // レート制限が追いつけ、投げ手は最初から最後まで枠の中に居る。
+            var to = fr.ThrowBoxGrowsWithBall
+                ? covering.At(Math.Clamp(leadT - covering.T0, 0.0, span))
+                : covering.At(span);
             return FitBox(new PlaybackVec(from.X, from.Y), new PlaybackVec(to.X, to.Y), fr);
         }
 
