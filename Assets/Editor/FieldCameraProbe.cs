@@ -104,7 +104,9 @@ namespace KokoSim.Unity.EditorTools
         /// 実際には人が映っているコマまで「誰も居ない」と誤判定して枠を広げてしまう。</para>
         ///
         /// <para>出すのは「実カメラで人が見えているコマで、平面の枠を何倍にすればその人を含むか」の
-        /// 分布。engine 側の探索枠に掛ける倍率（<c>SubjectSearchScale</c>）はこの実測から決める。</para>
+        /// 分布。実測 2026-08-10 は 中央値0.25／90%点1.17／<b>最大7.24</b>＝ばらつきが大きすぎて
+        /// 1つの倍率では吸収できない。よって engine 側は倍率を持たず<b>等倍のまま安全側</b>で判定する
+        /// （平面の枠に居る＝実カメラにも必ず写っている。逆は言えない）。この表はその根拠。</para>
         /// </summary>
         private static void MeasureSearchScale(StringBuilder sb)
         {
