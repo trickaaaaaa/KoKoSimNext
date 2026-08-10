@@ -133,6 +133,143 @@ public sealed class CameraPlanBuilderTests
         }
     }
 
+    // 球が死んでいる間の「拾いに走る野手」追従（issue #566）。暴投・捕逸は球がバックネットで
+    // 止まってから捕手が拾うまで誰も球を持っておらず、保持中と同じ分岐に落ちる。ここで走者
+    // （25〜40m先）を枠に入れようとすると、枠は 2倍/秒 でしか広がらないのにアイムは 45m/s で
+    // 走れるため、狭い枠のまま被写体と被写体のあいだの地面を舐める（実測: 0.40秒だれも映らない）。
+    [Fact]
+    public void Build_LooseBallFollowsChaser_StaysOnTheCatcherNotTheRunner()
+    {
+        var play = BatteryMissPlay();
+        var loose = TimeWhileBallIsLoose(play);
+
+        var fr = CameraFraming.Default with { MaxZoom = 20.0, HeldBallFollowsRunner = true };
+        var runner = CameraPlanBuilder.Build(play, fr);
+        var chaser = CameraPlanBuilder.Build(play, fr with { LooseBallFollowsChaser = true });
+
+        var runnerAt = CameraEvaluator.ViewportAt(runner, loose);
+        var chaserAt = CameraEvaluator.ViewportAt(chaser, loose);
+
+        // 拾いに走る捕手は球（本塁後方）へ収束するので、走者を入れる枠より確実に寄る。
+        Assert.True(chaserAt.ZoomMult > runnerAt.ZoomMult,
+            $"寄った枠になっていない: {runnerAt.ZoomMult} → {chaserAt.ZoomMult}");
+        // 注視点も本塁の後ろ（-y）に留まる＝走者の居る前方へ引っ張られない。
+        Assert.True(chaserAt.Cy < runnerAt.Cy, $"走者側へ引かれている: {runnerAt.Cy} → {chaserAt.Cy}");
+    }
+
+    // 既定（opt-out）は1キーフレームも変わらない＝2D俯瞰とゴールデンが無傷。
+    [Fact]
+    public void Build_LooseBallFollowsChaser_DefaultsOff()
+    {
+        Assert.False(CameraFraming.Default.LooseBallFollowsChaser);
+        foreach (var play in PlaybackSamples.All)
+        {
+            var a = CameraPlanBuilder.Build(play, CameraFraming.Default);
+            var b = CameraPlanBuilder.Build(play, CameraFraming.Default with { LooseBallFollowsChaser = false });
+            Assert.Equal(a.Count, b.Count);
+            for (var i = 0; i < a.Count; i++)
+            {
+                Assert.Equal(a[i].Cx, b[i].Cx);
+                Assert.Equal(a[i].Cy, b[i].Cy);
+                Assert.Equal(a[i].ZoomMult, b[i].ZoomMult);
+            }
+        }
+    }
+
+    // 送球の枠を「投げ手→球」へ伸ばす（issue #566）。切り替え式は投げた瞬間に完成形（始点・終点）へ
+    // 跳ぶので、寄っている3Dではズームが追いつく前にアイムだけが箱の中心＝投げ手と受け手のあいだの
+    // 何も無い地面へ着く。伸ばす式なら投げ始めの枠は投げ手の一点＝いまカメラが居る所そのもの。
+    [Fact]
+    public void Build_ThrowBoxGrowsWithBall_StartsOnTheThrowerNotTheMidpoint()
+    {
+        var play = BatteryMissPlay();
+        var throwStart = play.Ball[^1].T0;
+        var from = play.Ball[^1].At(0);
+
+        var fr = CameraFraming.Default with { MaxZoom = 20.0, ThrowFollowsBall = false };
+        var jump = CameraPlanBuilder.Build(play, fr, throwStart);
+        var grow = CameraPlanBuilder.Build(play, fr with { ThrowBoxGrowsWithBall = true }, throwStart);
+
+        // レート制限の履歴を持ち込まないよう送球開始から組む＝頭のキーフレームが生の目標そのもの。
+        var jumpAt = CameraEvaluator.ViewportAt(jump, throwStart);
+        var growAt = CameraEvaluator.ViewportAt(grow, throwStart);
+
+        // 跳ぶ側は投げ手と受け手の中点、伸ばす側は投げ手のすぐそば。
+        Assert.True(Math.Abs(growAt.Cy - from.Y) < Math.Abs(jumpAt.Cy - from.Y),
+            $"投げ手から離れている: 跳ぶ {jumpAt.Cy:F1} / 伸ばす {growAt.Cy:F1}（投げ手 {from.Y:F1}）");
+        // 箱が小さいぶん寄れる（跳ぶ側は送球距離ぶん必ず引く）。
+        Assert.True(growAt.ZoomMult > jumpAt.ZoomMult,
+            $"寄れていない: {jumpAt.ZoomMult:F2} → {growAt.ZoomMult:F2}");
+    }
+
+    // 枠に人が1人も居ないコマだけ広げる（issue #566）。パン上限 45m/s に対しズーム上限は 2倍/秒 で、
+    // 被写体が切り替わる瞬間に「狭い枠が被写体のあいだの地面を舐める」区間ができる。
+    [Fact]
+    public void Build_KeepSubjectFramed_WidensOnlyWhereNobodyIsInFrame()
+    {
+        var play = BatteryMissPlay();
+        var fr = CameraFraming.Default with
+        {
+            MaxZoom = 20.0, ThrowFollowsBall = false,
+            HeldBallFollowsRunner = true, LooseBallFollowsChaser = true, ThrowBoxGrowsWithBall = true,
+        };
+        var off = CameraPlanBuilder.Build(play, fr);
+        var on = CameraPlanBuilder.Build(play, fr with { KeepSubjectFramed = true });
+
+        Assert.Equal(off.Count, on.Count);
+        var widened = 0;
+        for (var i = 0; i < off.Count; i++)
+        {
+            // 注視点は動かさない（広げる方向にしか効かない機構）。
+            Assert.Equal(off[i].Cx, on[i].Cx);
+            Assert.Equal(off[i].Cy, on[i].Cy);
+            Assert.True(on[i].ZoomMult <= off[i].ZoomMult + 1e-9,
+                $"寄る方向へ効いている（t={off[i].T:F2}）: {off[i].ZoomMult:F3} → {on[i].ZoomMult:F3}");
+            if (on[i].ZoomMult < off[i].ZoomMult - 1e-9) widened++;
+        }
+        Assert.True(widened > 0, "1コマも広がっていない＝この素材では検証にならない");
+        Assert.True(widened < off.Count, "全コマ広がっている＝必要な所だけに効いていない");
+    }
+
+    // 既定（opt-out）は1キーフレームも変わらない＝2D俯瞰とゴールデンが無傷。
+    [Fact]
+    public void Build_NewFramingSwitches_DefaultOff()
+    {
+        Assert.False(CameraFraming.Default.ThrowBoxGrowsWithBall);
+        Assert.False(CameraFraming.Default.KeepSubjectFramed);
+        foreach (var play in PlaybackSamples.All)
+        {
+            var a = CameraPlanBuilder.Build(play);
+            var b = CameraPlanBuilder.Build(play, CameraFraming.Default);
+            Assert.Equal(a.Count, b.Count);
+            for (var i = 0; i < a.Count; i++)
+            {
+                Assert.Equal(a[i].Cx, b[i].Cx);
+                Assert.Equal(a[i].Cy, b[i].Cy);
+                Assert.Equal(a[i].ZoomMult, b[i].ZoomMult);
+            }
+        }
+    }
+
+    /// <summary>暴投・捕逸の再生プレー（球がバックネットで死に、捕手が拾いに走る素材）。</summary>
+    private static PlaybackPlay BatteryMissPlay()
+    {
+        var tl = TimelineBuilder.BuildBatteryMiss(
+            new Player { Name = "一走", Speed = 60 }, null, null,
+            new Player { Position = FieldPosition.Catcher, ArmStrength = 50, Fielding = 50 },
+            new BaserunningCoefficients(), new FieldGeometry());
+        return PlayTimelineAdapter.ToPlaybackPlay(tl);
+    }
+
+    /// <summary>球が誰の手にも無い時刻（転がりが終わってから送球が始まるまでの中点）。</summary>
+    private static double TimeWhileBallIsLoose(PlaybackPlay play)
+    {
+        var rollEnd = play.Ball[0].T1;
+        var throwStart = play.Ball[^1].T0;
+        Assert.True(throwStart > rollEnd, "球が死んでいる区間が無い＝この素材では検証にならない");
+        return (rollEnd + throwStart) / 2.0;
+    }
+
     /// <summary>振り逃げの再生プレー（球が長く止まる素材＝保持中の分岐を確実に通る）。</summary>
     private static PlaybackPlay DropThirdStrikePlay()
     {

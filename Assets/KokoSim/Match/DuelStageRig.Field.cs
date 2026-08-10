@@ -2750,6 +2750,21 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool FieldThrowFollowsBall = true;
 
+        /// <summary>
+        /// 送球の枠（始点・終点を収める側）を投げ手から球へ**伸ばす**か（issue #566）。
+        /// 既定の切り替え式は枠が階段状に跳び、寄っている3Dではズームが追いつく前にアイムだけが
+        /// 投げ手と受け手のあいだの地面へ着く。伸ばす式なら跳ばない。切り分け用に残す静的スイッチ。
+        /// </summary>
+        public static bool FieldThrowBoxGrows = true;
+
+        /// <summary>
+        /// パンとズームを連動させるか（issue #566）。パン上限 45m/s に対しズーム上限は 2倍/秒 しか
+        /// 無いので、被写体が切り替わる瞬間に**枠が狭いまま被写体のあいだの地面を舐める**区間ができる。
+        /// on にすると、遅れたぶんだけ枠を広げて生の被写体を必ず収める（＝広げる方向にしか効かない）。
+        /// 追従が足りているプレーでは1キーフレームも変わらない。切り分け用に残す静的スイッチ。
+        /// </summary>
+        public static bool FieldKeepSubjectFramed = true;
+
         private System.Collections.Generic.IReadOnlyList<CameraKeyframe> _fieldPlan;
 
         /// <summary>
@@ -2766,15 +2781,48 @@ namespace KokoSim.Unity.Match
         /// ＋0.6秒先読み）を適用すると、頭出しの時点で既にサンプル先の球が一塁付近まで進んでおり、
         /// 最初のキーフレームからマウンド（＝投げ手の投手）が枠外になる（実測: 一塁側に寄った絵で始まる）。
         /// 2D俯瞰と同じ「始点・終点を両方収める」枠に切り替え、投手が画角に入った状態から始める。
+        ///
+        /// 暴投・捕逸の**投げ返し**（issue #566）も同じ扱いにする。捕手がバックネット（本塁後方6m）で
+        /// 拾ってマウンド（本塁前18.4m）へ返す24mの送球1本で、球を追うと枠4〜5mのまま毎秒12画面ぶんの
+        /// 速さで地面を舐める＝投げ手も受け手も枠外の区間ができる（実測 2026-08-10: 0.15秒）。
+        /// 見分けは「送球が1本だけで、その受け手が投手」＝球を投手へ戻すだけの送球。盗塁（捕手→二塁）・
+        /// 振り逃げ（捕手→一塁）は受け手が塁なので従来どおり球を追う。
         /// </summary>
         private void BuildFieldCameraPlan(PlaybackPlay play, float startSeconds)
         {
-            var isPickoffThrow = play != null && play.Ball.Count == 1
-                && play.Ball[0].FromRole == FieldPosition.Pitcher;
-            _fieldPlan = play == null ? null : CameraPlanBuilder.Build(play,
-                new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
-                    !isPickoffThrow && FieldThrowFollowsBall, HeldBallFollowsRunner: true),
-                startSeconds);
+            _fieldPlan = play == null ? null
+                : CameraPlanBuilder.Build(play, FieldFramingFor(play), startSeconds);
+        }
+
+        /// <summary>
+        /// 守備カメラの枠の詰め方（この rig が engine へ渡すもの）。
+        /// <b>実測プローブ（FieldCameraProbe）もここを呼ぶ</b>＝プローブが測っている枠と実機の枠が
+        /// 食い違わないようにするための単一ソース。片方だけ直すと「直したはずが絵に出ない」が起きる。
+        /// </summary>
+        public static CameraFraming FieldFramingFor(PlaybackPlay play)
+            => new CameraFraming(FieldMaxZoom, FieldMarginM, CameraFraming.Default.PitchZoom,
+                ThrowFollowsBall: !IsEndpointFramedThrow(play) && FieldThrowFollowsBall,
+                HeldBallFollowsRunner: true,
+                LooseBallFollowsChaser: true,
+                ThrowBoxGrowsWithBall: FieldThrowBoxGrows, KeepSubjectFramed: FieldKeepSubjectFramed);
+
+        /// <summary>
+        /// 「始点と終点を両方収める」枠にすべき短い送球1本のプレーか（牽制 issue #515／暴投・捕逸の
+        /// 投げ返し issue #566）。球を追う枠は、投げ手と受け手のどちらも枠に入らない瞬間を作る。
+        /// </summary>
+        private static bool IsEndpointFramedThrow(PlaybackPlay play)
+        {
+            if (play?.Ball == null) return false;
+            PlaybackBallSegment only = null;
+            foreach (var seg in play.Ball)
+            {
+                if (!IsThrowSegment(seg)) continue;
+                if (only != null) return false;   // 送球が2本以上＝打球処理のプレー
+                only = seg;
+            }
+            if (only == null) return false;
+            // 牽制＝投手が投げる（受け手は塁）／投げ返し＝受け手が投手。
+            return only.FromRole == FieldPosition.Pitcher || only.ToRole == FieldPosition.Pitcher;
         }
 
         /// <summary>
