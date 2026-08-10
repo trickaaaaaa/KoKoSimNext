@@ -197,16 +197,10 @@ namespace KokoSim.Unity.Saves
             var note = _root.Q<Label>("ss-d-note");
             if (note != null)
             {
-                note.text = !string.IsNullOrEmpty(_errorText)
-                    ? _errorText
-                    : _inGame && !SaveGameIO.CanSave
-                        ? SaveGameIO.SaveDisabledReason()
-                        : !info.Exists
-                            ? (_inGame ? "空き枠です。「保存」でここに保存できます。" : "このスロットにはセーブがありません。")
-                            : info.Corrupt
-                                ? "セーブデータを読み込めません（壊れている、または未対応の版です）。削除はできます。"
-                                : "";
-                note.style.display = string.IsNullOrEmpty(note.text) ? DisplayStyle.None : DisplayStyle.Flex;
+                var (text, warn) = NoteFor(info);
+                note.text = text;
+                note.EnableInClassList("ss-d__note--warn", warn);
+                note.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
             }
 
             if (_loadBtn != null) _loadBtn.SetEnabled(info.Exists && !info.Corrupt);
@@ -216,6 +210,23 @@ namespace KokoSim.Unity.Saves
                 _saveBtn.style.display = _inGame ? DisplayStyle.Flex : DisplayStyle.None;
                 _saveBtn.SetEnabled(_inGame && SaveGameIO.CanSave);
             }
+        }
+
+        /// <summary>
+        /// 詳細ペインの案内文と、それが<b>本当の警告か</b>を返す（issue #575①）。
+        /// 警告色（<c>--color-warn</c>）を許すのは「読み込めない／保存できない／操作が失敗した」＝
+        /// プレイヤーが困る事態だけで、「空き枠です」「セーブがありません」はただの案内なので本文色にする
+        /// （UI原則②「警告色は本当の警告だけに使う」）。
+        /// </summary>
+        private (string Text, bool Warn) NoteFor(SaveSlotInfo info)
+        {
+            if (!string.IsNullOrEmpty(_errorText)) return (_errorText, true);                     // 読込/保存の失敗
+            if (_inGame && !SaveGameIO.CanSave) return (SaveGameIO.SaveDisabledReason(), true);    // 保存できない理由
+            if (!info.Exists)
+                return (_inGame ? "空き枠です。「保存」でここに保存できます。" : "このスロットにはセーブがありません。", false);
+            if (info.Corrupt)
+                return ("セーブデータを読み込めません（壊れている、または未対応の版です）。削除はできます。", true);
+            return ("", false);
         }
 
         private static string SchoolCellText(SaveSlotInfo info)
