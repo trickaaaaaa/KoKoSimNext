@@ -23,15 +23,21 @@ namespace KokoSim.Unity.Saves
         private VisualElement _confirm;
         private string _selected;
         private string _errorText = "";
-        private bool _fromHome;
+        /// <summary>進行中のゲームの上で開いているか（保存できるのはこの2入口だけ）。</summary>
+        private bool _inGame;
+        /// <summary>「◀ ホームへ戻る」を出すか（タブ経由はタブで移動するので出さない）。</summary>
+        private bool _showBack;
 
-        private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo, _saveBtn, _backBtn;
+        private Button _loadBtn, _deleteBtn, _confirmYes, _confirmNo, _saveBtn, _backBtn, _advanceBtn;
 
         private void OnEnable()
         {
             _root = GetComponent<UIDocument>().rootVisualElement;
             _confirm = _root.Q<VisualElement>("ss-confirm");
-            _fromHome = SaveSlots.Entry == SaveSlotsEntry.Home;
+            var entry = SaveSlots.Entry;
+            _inGame = entry != SaveSlotsEntry.Title;
+            _showBack = entry == SaveSlotsEntry.Home;
+            SetupTopBar(entry == SaveSlotsEntry.Tab);
 
             _loadBtn = Wire("ss-load", OnLoad);
             _deleteBtn = Wire("ss-delete", OnDeleteRequest);
@@ -39,7 +45,7 @@ namespace KokoSim.Unity.Saves
             _confirmNo = Wire("ss-confirm-no", OnDeleteCancel);
             _saveBtn = Wire("ss-save", OnSave);
             _backBtn = Wire("ss-back", OnBack);
-            if (_backBtn != null) _backBtn.style.display = _fromHome ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_backBtn != null) _backBtn.style.display = _showBack ? DisplayStyle.Flex : DisplayStyle.None;
 
             _selected = DefaultSlot();
             _errorText = "";
@@ -56,7 +62,35 @@ namespace KokoSim.Unity.Saves
             if (_confirmNo != null) _confirmNo.clicked -= OnDeleteCancel;
             if (_saveBtn != null) _saveBtn.clicked -= OnSave;
             if (_backBtn != null) _backBtn.clicked -= OnBack;
+            if (_advanceBtn != null) _advanceBtn.clicked -= OnAdvance;
         }
+
+        /// <summary>
+        /// タブ経由のときだけ共通トップバー（掲示板ヘッダ＋タブ帯）を出して値を埋める（issue #565）。
+        /// タイトル経由では出せない＝この画面はシェルサービスの遅延初期化より前に開くので、
+        /// 値を引いた時点でロスターや全国が生成されてしまう（<see cref="SaveSlotsEntry"/> の注記）。
+        /// </summary>
+        private void SetupTopBar(bool show)
+        {
+            var bar = _root.Q<VisualElement>("ss-topbar");
+            if (bar != null) bar.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!show) return;
+
+            KokoSim.Unity.Components.ScoreboardStrip.Fill(_root);
+            TopBarMeters.Fill(_root);
+            var rank = _root.Q<VisualElement>("team-rank");
+            if (rank != null)
+            {
+                rank.Clear();
+                rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Active)));
+            }
+
+            // 「今週を進める」は他のタブと同じ共通実装へ配線する（配線しないと死にボタンになる＝issue #134）。
+            _advanceBtn = _root.Q<Button>("advance");
+            if (_advanceBtn != null) _advanceBtn.clicked += OnAdvance;
+        }
+
+        private void OnAdvance() => WeekAdvance.FromSideScreen(Render);
 
         private Button Wire(string name, Action handler)
         {
@@ -85,7 +119,7 @@ namespace KokoSim.Unity.Saves
         public void Select(string slotId)
         {
             var info = SaveSlots.ReadInfo(slotId);
-            if (!info.Exists && !_fromHome) return;
+            if (!info.Exists && !_inGame) return;
             _selected = slotId;
             _errorText = "";
             Render();
@@ -125,7 +159,7 @@ namespace KokoSim.Unity.Saves
             yw.AddToClassList("ss-row__yw");
             row.Add(yw);
 
-            var selectable = info.Exists || _fromHome;
+            var selectable = info.Exists || _inGame;
             if (!selectable)
             {
                 row.AddToClassList("ss-row--empty");
@@ -165,10 +199,10 @@ namespace KokoSim.Unity.Saves
             {
                 note.text = !string.IsNullOrEmpty(_errorText)
                     ? _errorText
-                    : _fromHome && !SaveGameIO.CanSave
+                    : _inGame && !SaveGameIO.CanSave
                         ? SaveGameIO.SaveDisabledReason()
                         : !info.Exists
-                            ? (_fromHome ? "空き枠です。「保存」でここに保存できます。" : "このスロットにはセーブがありません。")
+                            ? (_inGame ? "空き枠です。「保存」でここに保存できます。" : "このスロットにはセーブがありません。")
                             : info.Corrupt
                                 ? "セーブデータを読み込めません（壊れている、または未対応の版です）。削除はできます。"
                                 : "";
@@ -179,8 +213,8 @@ namespace KokoSim.Unity.Saves
             if (_deleteBtn != null) _deleteBtn.SetEnabled(info.Exists);
             if (_saveBtn != null)
             {
-                _saveBtn.style.display = _fromHome ? DisplayStyle.Flex : DisplayStyle.None;
-                _saveBtn.SetEnabled(_fromHome && SaveGameIO.CanSave);
+                _saveBtn.style.display = _inGame ? DisplayStyle.Flex : DisplayStyle.None;
+                _saveBtn.SetEnabled(_inGame && SaveGameIO.CanSave);
             }
         }
 
@@ -232,7 +266,7 @@ namespace KokoSim.Unity.Saves
         /// 状態だが、経路が増えても落ちないよう再度ガードする（issue #509・オーナー申し送り）。</summary>
         private void OnSave()
         {
-            if (!_fromHome || !SaveGameIO.CanSave) return;
+            if (!_inGame || !SaveGameIO.CanSave) return;
             if (!SaveSlots.Save(_selected))
             {
                 _errorText = "保存に失敗しました。";
@@ -245,7 +279,7 @@ namespace KokoSim.Unity.Saves
 
         private void OnBack()
         {
-            if (!_fromHome) return;
+            if (!_inGame) return;
             ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
         }
 

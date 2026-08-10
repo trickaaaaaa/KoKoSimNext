@@ -1,16 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- セーブスロット選択画面（issue #508・オーナー承認の案2＝リスト＋詳細ペイン）。issue #509 でホームの
      メニュー「セーブ」からも同じ画面を開くようになった（SaveSlots.Entry で分岐。SaveSlotsController 参照）。
+     入口は3つ（タイトルの「つづきから」／ホームの ≡メニュー／共通ナビの「システム」タブ）。
      タイトル経由は開いた時点でどのシェルサービスも遅延初期化されていないため共通トップバーは出さない
-     （TitleScreen と同じ理由）。ホーム経由も同じ理由でトップバーは出さず、代わりに ss-back で戻る。
+     （TitleScreen と同じ理由）。ホームのメニュー経由も出さず ss-back で戻る。
+     タブ経由（issue #565）だけトップバーを出す＝他のタブと同じ見え方にし、移動はタブで行う。
      左＝手動3枠＋オート1枠の32px行一覧、右＝選択枠の詳細（学校名・年度・週・保存日時）＋保存(ホーム経由のみ)／読込／削除。 -->
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
     <Style src="tokens.uss" />
     <Style src="KokoSimTheme.uss" />
     <Style src="Components/components.uss" />
     <Style src="SaveSlots.uss" />
 
     <ui:VisualElement class="ui-root ss-root">
+        <!-- 共通トップバー（タブ帯）。「システム」タブから開いたときだけ出す＝他のタブと同じ見え方にする。
+             タイトル/ホームのメニュー経由では隠す（SaveSlotsController が display を切る）。 -->
+        <ui:VisualElement name="ss-topbar" style="display: none;">
+            <ui:Instance template="TopBar" />
+        </ui:VisualElement>
         <ui:VisualElement class="ss-main">
 
             <ui:VisualElement class="ss-header">

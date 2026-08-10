@@ -29,6 +29,7 @@ namespace KokoSim.Unity.Shell
             ("nav-match", "MatchScreen"),
             ("nav-tournament", "TournamentPreview"),
             ("nav-manager", "ManagerScreen"),
+            ("nav-system", "SaveSlots"),
         };
 
         // タブに現れない従属画面（試合前スタメン設定など）。ナビ項目は持たないが Show 対象＋
@@ -41,11 +42,11 @@ namespace KokoSim.Unity.Shell
         // （PlayerList と同一 GameObject・同一 UIDocument に同居）。
         // TitleScreen は起動直後の入口（issue #482）。ホームのメニュー「タイトルへ戻る」（issue #509）が
         // 唯一の戻り先として遷移してくるため、ExtraScreens 止まりでよい（タブは持たない）。
-        // SaveSlots はタイトルの「つづきから」（issue #508）とホームのメニュー「セーブ」（issue #509）の
-        // 2箇所から開くセーブスロット選択画面。同じ理由でタブは持たない（SaveSlots.Entry で分岐。
-        // ホーム経由は ss-back でホームへ戻る＝SaveSlotsController 参照）。
+        // SaveSlots はタブ（システム）を持つので Map 側にある。タイトルの「つづきから」（issue #508）と
+        // ホームのメニュー「セーブ」（issue #509）からも同じ画面を開く＝入口3種を SaveSlots.Entry で分岐する
+        // （SaveSlotsController 参照）。
         private static readonly string[] ExtraScreens =
-            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TitleScreen", "SaveSlots" };
+            { "LineupSetting", "TeamStrength", "MatchPreview", "MatchLive", "MatchResult", "TitleScreen" };
 
         // 起動時の既定画面（issue #482 でタイトルへ差し替え）。ホームは「はじめから／つづきから」の後に出す。
         private const string DefaultScreen = "TitleScreen";
@@ -54,7 +55,7 @@ namespace KokoSim.Unity.Shell
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
             { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "ManagerScreen",
-              "TeamSetting" };
+              "TeamSetting", "SaveSlots" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>
         public static ScreenRouter Instance { get; private set; }
@@ -203,7 +204,13 @@ namespace KokoSim.Unity.Shell
                 item.EnableInClassList("nav__item--on", goName == target);   // 現在画面のタブを強調
                 var next = goName; // クロージャ捕捉
                 // 即 Show せず遅延（再入防止）。Update が次フレームで実際の切替を行う。
-                item.RegisterCallback<ClickEvent>(_ => _pending = next);
+                // セーブ画面は入口が3つ（タイトル／ホームのメニュー／このタブ）で見た目と操作が変わるため、
+                // タブから開くときだけここで Tab を立てる（他2つは各呼び出し元が遷移直前に設定する）。
+                item.RegisterCallback<ClickEvent>(_ =>
+                {
+                    if (next == "SaveSlots") SaveSlots.Entry = SaveSlotsEntry.Tab;
+                    _pending = next;
+                });
             }
 
             // #208: ブースト画面（スタメン設定・結果）では背景シムの集中消化中だけ下端に「ロード中」を出す。

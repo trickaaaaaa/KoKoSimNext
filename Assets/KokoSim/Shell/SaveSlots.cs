@@ -28,11 +28,21 @@ namespace KokoSim.Unity.Shell
         }
     }
 
-    /// <summary>セーブスロット選択画面（<c>SaveSlotsController</c>）をどこから開いたか（issue #509）。
-    /// <see cref="SaveSlotsController"/> はタイトルの「つづきから」（読込／削除だけ）とホームの
-    /// メニュー「セーブ」（保存も出す・戻る導線あり）の2箇所から同じ画面を開く単一画面のため、
-    /// 呼び出し側が遷移前に必ずこれを設定する（既定 Title＝安全側フォールバック）。</summary>
-    public enum SaveSlotsEntry { Title, Home }
+    /// <summary>
+    /// セーブスロット選択画面（<c>SaveSlotsController</c>）をどこから開いたか（issue #509 ／ タブは #565）。
+    /// 同じ1画面を3つの入口から開くため、呼び出し側が遷移前に必ずこれを設定する
+    /// （既定 <see cref="Title"/>＝安全側フォールバック）。
+    ///
+    /// <list type="bullet">
+    /// <item><see cref="Title"/> — タイトルの「つづきから」。読込／削除だけ。まだどのシェルサービスも
+    /// 遅延初期化されていないので<b>共通トップバーを出せない</b>（値を引くと初期化が走ってしまう）</item>
+    /// <item><see cref="Home"/> — ホームの ≡メニュー「セーブ」。保存も出す。トップバーは出さず
+    /// 「◀ ホームへ戻る」で戻る（オーバーレイから開いた流れを保つ）</item>
+    /// <item><see cref="Tab"/> — 共通ナビの「システム」タブ。保存も出す。<b>トップバー（タブ帯）を出す</b>
+    /// ＝他のタブと同じ見え方にし、戻るボタンは出さない（移動はタブで行う）</item>
+    /// </list>
+    /// </summary>
+    public enum SaveSlotsEntry { Title, Home, Tab }
 
     /// <summary>
     /// セーブスロットの一覧・メタ読み取り・削除（issue #508 F1）。<b>手動3枠だけ</b>を固定で持つ
