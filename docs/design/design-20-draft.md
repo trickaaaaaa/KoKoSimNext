@@ -139,8 +139,8 @@ round = バンド→代表順位（FirstRound→1, UpperRound→2, MiddleRound�
 > シリアライザだけを持ち（`UnityEngine` 非依存・不変条件#3。学校・県は決定論再生成なので保存せず、
 > 保持は materialize 済み全国ロスター・自校部員・監督メタ・成績/戦績・母種シード・暦のみ）、gzip 圧縮と
 > `Application.persistentDataPath` へのファイル書き出しは Shell（`SaveGameIO`）が担う（＝形は engine・
-> 書き出しは Shell）。**大会中はセーブ不可**（`TournamentRunner` は進行中ブラケット・IRandomSource 内部
-> 状態・観戦中の `MatchProgression` を持ち復元不能）＝Normal モードでのみ保存する。上のドラフト通知フィードの
+> 書き出しは Shell）。**大会中も試合と試合の間なら保存できる**（issue #565 F1。`TournamentRunner` の
+> 可変状態を `SaveState.Tournament` に載せる。観戦中＝`MatchProgression` を持つ局面だけが対象外）。上のドラフト通知フィードの
 > 差分検出が Shell 側なのは変わらない（あれはセーブでなく表示のための前回比較）。
 
 ## 6. ドラフト画面（③・IA。着手前にワイヤー3案を提示）

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
@@ -95,7 +96,10 @@ public sealed class SaveCodecTests
     public void NewerVersion_IsRejected_WithoutThrowing()
     {
         var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
-        var future = json.Replace("\"version\":1", "\"version\":999");
+        // 版番号は上がる（issue #565 で 1→2）。リテラルで書くと版を上げた瞬間に置換が空振りして
+        // **テストが黙って無効化される**（実測: v2 化で ok=true になり素通りした）ので現行版から作る。
+        var future = json.Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":999");
+        Assert.Contains("999", future);
 
         var ok = SaveCodec.TryDeserialize(future, out _, out var err);
         Assert.False(ok);
@@ -114,6 +118,71 @@ public sealed class SaveCodecTests
         Assert.False(ok);
         Assert.NotEqual("", err);
         Assert.NotNull(s);   // 失敗時も空の DTO を返す（null を返さない）
+    }
+
+    // ===== 大会モードの保存分（issue #565 F1） =====
+
+    // v1（大会中は保存できなかった版）のセーブは tournament を持たない。読めて、通常モード扱いになること。
+    [Fact]
+    public void V1Save_WithoutTournament_StillLoads_AsNormalMode()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        // v1 のセーブを作る＝版を1へ落とし、v2 で増えた項目を落とす。
+        var v1 = json
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":1")
+            .Replace(",\"tournament\":null", "");
+        Assert.DoesNotContain("\"tournament\"", v1);
+
+        Assert.True(SaveCodec.TryDeserialize(v1, out var s, out var err), err);
+        Assert.Null(s.Tournament);
+        Assert.Equal(7, s.Week);        // 他の項目は素通りで読めている
+    }
+
+    // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。
+    [Fact]
+    public void TournamentState_RoundTrips()
+    {
+        var s = SaveTestFixtures.BuildRichState();
+        s.Tournament = SaveTestFixtures.BuildTournamentState();
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(s), out var back, out var err), err);
+
+        var a = s.Tournament!;
+        var b = back.Tournament;
+        Assert.NotNull(b);
+        Assert.Equal(a.Kind, b!.Kind);
+        Assert.Equal(a.Title, b.Title);
+        Assert.Equal(a.TournamentDay, b.TournamentDay);
+        Assert.Equal(a.BannerPending, b.BannerPending);
+        Assert.Equal(a.FieldSchoolIds, b.FieldSchoolIds);
+
+        var ra = a.Runner;
+        var rb = b.Runner;
+        Assert.Equal(ra.Title, rb.Title);
+        Assert.Equal(ra.PlayerActive, rb.PlayerActive);
+        Assert.Equal(ra.IsChampion, rb.IsChampion);
+        Assert.Equal(ra.ChampionName, rb.ChampionName);
+        Assert.Equal(ra.RoundIndex, rb.RoundIndex);
+        Assert.Equal(ra.RngState, rb.RngState);
+        Assert.Equal(ra.Current, rb.Current);
+        Assert.Equal(ra.Cards, rb.Cards);
+        Assert.Equal(ra.Matches, rb.Matches);
+        Assert.Equal(ra.PitchLedger, rb.PitchLedger);
+        Assert.Equal(ra.RoundEntrants.Count, rb.RoundEntrants.Count);
+        for (var i = 0; i < ra.RoundEntrants.Count; i++)
+            Assert.Equal(ra.RoundEntrants[i], rb.RoundEntrants[i]);
+    }
+
+    // 不戦勝の空き枠は null で往復すること（0 や -1 の番兵に潰れない＝自校 Id=-1 と衝突しない）。
+    [Fact]
+    public void TournamentState_KeepsByeSlotsAsNull()
+    {
+        var s = SaveTestFixtures.BuildRichState();
+        s.Tournament = SaveTestFixtures.BuildTournamentState();
+        s.Tournament.Runner.Current = new List<int?> { -1, null, 100, null };
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(s), out var back, out var err), err);
+        Assert.Equal(new List<int?> { -1, null, 100, null }, back.Tournament!.Runner.Current);
     }
 
     [Fact]

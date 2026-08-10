@@ -13,9 +13,9 @@ namespace KokoSim.Engine.Saves;
 /// 保存せず（School.cs の設計注記）、保存するのは「進行して変化した実体」だけ＝自校部員・監督メタ・施設・
 /// materialize 済み全国ロスター・成績/戦績・母種シード・暦。
 ///
-/// <para><b>大会中はセーブ不可</b>（<see cref="Nation.Tournaments.TournamentRunner"/> は復元不能＝進行中の
-/// ブラケット・IRandomSource 内部状態・観戦中の <c>MatchProgression</c> を持つ。#483 論点3の結論）。
-/// よって進行体（Runner/Mode/日送りフラグ）は DTO に含めず、Normal モードでのみ保存する。</para>
+/// <para><b>大会中も試合と試合の間なら保存できる</b>（issue #565 F1。#483 論点3「大会中は不可」の撤回）。
+/// 進行体の可変状態は <see cref="Tournament"/> に載る。<b>観戦中（<c>MatchProgression</c> を持つ）の
+/// 中断セーブだけは対象外</b>で、これは F2 の話。</para>
 ///
 /// <para>Shell の各 static サービスは <c>Capture()</c> でこの DTO を組み、<c>Restore()</c> で押し戻す。
 /// DI が要る <see cref="Nation.Roster.NationRosters"/> は <see cref="Nation.Roster.NationRosters.FromSaved"/> で
@@ -56,4 +56,10 @@ public sealed class SaveState
 
     // --- 自校チームカラー上書き（null＝校IDからの自動割り当て） ---
     public TeamColors? TeamColorOverride { get; set; }
+
+    /// <summary>
+    /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。
+    /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。
+    /// </summary>
+    public TournamentSaveState? Tournament { get; set; }
 }

@@ -24,6 +24,16 @@ public readonly record struct PitcherLedgerKey
 
     /// <summary>相手校の生成投手（校ID＋背番号）。</summary>
     public static PitcherLedgerKey ForOpponent(int schoolId, int uniformNumber) => new(false, schoolId, uniformNumber);
+
+    // ===== セーブ往復（issue #565） =====
+    // 中身は同定のためだけの3値で、外から個別に読む用途は無い（読めると「キーの意味」を外で解釈する
+    // コードが生えてしまう）。よって getter は生やさず、**そのまま書いてそのまま戻す**3値だけを開ける。
+
+    /// <summary>セーブ用の分解（<see cref="Restore"/> と往復する。意味を外で解釈しないこと）。</summary>
+    public (bool BySource, int A, int B) Decompose() => (_bySource, _a, _b);
+
+    /// <summary><see cref="Decompose"/> の出力からキーを組み直す。</summary>
+    public static PitcherLedgerKey Restore(bool bySource, int a, int b) => new(bySource, a, b);
 }
 
 /// <summary>
@@ -91,4 +101,45 @@ public sealed class TournamentPitchLedger
 
     /// <summary>大会終了時のリセット（全投手の記録を破棄）。</summary>
     public void Reset() => _outings.Clear();
+
+    // ===== セーブ往復（issue #565） =====
+
+    /// <summary>台帳1件（投手キーの3値＋登板1回）。セーブ DTO の要素＝<b>順序も含めて</b>往復する。</summary>
+    public readonly record struct SavedOuting(bool BySource, int KeyA, int KeyB, int MatchDay, int Pitches);
+
+    /// <summary>
+    /// 台帳の中身を平坦な列で返す（issue #565）。列挙順は「投手の初出順 → 登板の記録順」で決定論
+    /// （<see cref="Dictionary{TKey,TValue}"/> の列挙順に依存しないよう、<see cref="Restore"/> は
+    /// この順で積み直すだけ＝往復して同じ台帳になる）。
+    /// </summary>
+    public List<SavedOuting> CaptureState()
+    {
+        var list = new List<SavedOuting>();
+        foreach (var kv in _outings)
+        {
+            var (bySource, a, b) = kv.Key.Decompose();
+            foreach (var o in kv.Value) list.Add(new SavedOuting(bySource, a, b, o.MatchDay, o.Pitches));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// <see cref="CaptureState"/> の出力から台帳を組み直す（既存の記録は破棄）。
+    /// <see cref="Record"/> は通さず<b>そのまま積む</b>＝同一試合日の合算が二度掛からない
+    /// （Record 経由だと保存時点で合算済みの値を再合算してしまう）。
+    /// </summary>
+    public void RestoreState(IReadOnlyList<SavedOuting> saved)
+    {
+        _outings.Clear();
+        foreach (var s in saved)
+        {
+            var key = PitcherLedgerKey.Restore(s.BySource, s.KeyA, s.KeyB);
+            if (!_outings.TryGetValue(key, out var list))
+            {
+                list = new List<Outing>();
+                _outings[key] = list;
+            }
+            list.Add(new Outing(s.MatchDay, s.Pitches));
+        }
+    }
 }

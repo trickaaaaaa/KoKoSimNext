@@ -116,6 +116,17 @@ public sealed class TournamentRunner
     private readonly IBackgroundMatchResolver? _backgroundResolver;
     private readonly int _managerId;
     private readonly int _totalRounds;
+    /// <summary>
+    /// 裏カードを<b>ランナーが記録した瞬間</b>に呼ぶフック（(先攻ID, 後攻ID, 結果)）。全国成績への畳み込みに使う。
+    ///
+    /// <para>畳み込みを <see cref="IBackgroundMatchResolver"/> の中（＝<b>計算時</b>）でやってはいけない。
+    /// プレフェッチ（<see cref="PrefetchCurrentRoundBackgroundCards"/>）は同じ resolver で先に計算するので、
+    /// 計算時に畳むと「まだランナーが記録していないカード」が成績へ入る。セッション内はメモ化が
+    /// 「1カード1回」を守るので露見しないが、<b>大会中セーブ（issue #565）を挟むとメモが消えて二重計上になる</b>
+    /// （実測 2026-08-10: ロード後の DTO が保存時より大きくなり、自県の裏カードが2回積まれていた）。
+    /// ここ＝記録時に畳めば、成績とランナーの状態が常に一致する。</para>
+    /// </summary>
+    private readonly Action<int, int, GameResult>? _onBackgroundMatch;
     private readonly List<BracketMatch> _matches = new();
     /// <summary>大会中の投手球数台帳（issue #41）。エース温存判断（issue #42）の消耗入力として本大会内で共有する。</summary>
     private readonly TournamentPitchLedger _pitchLedger = new();
@@ -172,7 +183,8 @@ public sealed class TournamentRunner
         string title,
         IPlayerMatchResolver? playerResolver = null,
         IBackgroundMatchResolver? backgroundResolver = null,
-        bool isNationalTournament = false)
+        bool isNationalTournament = false,
+        Action<int, int, GameResult>? onBackgroundMatch = null)
     {
         if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
         if (entrants.All(s => s.Id != manager.Id)) throw new ArgumentException("自校が参加校に含まれていません。");
@@ -184,6 +196,7 @@ public sealed class TournamentRunner
         _backgroundResolver = backgroundResolver;
         _managerId = manager.Id;
         _isNationalTournament = isNationalTournament;
+        _onBackgroundMatch = onBackgroundMatch;
         Title = title;
 
         // 強さ順にシード（同値は Id で決定化）。不足分は不戦勝(null)。
@@ -202,6 +215,150 @@ public sealed class TournamentRunner
         _roundEntrants[0] = (School?[])_current.Clone();   // 初期シード配置は確定済み＝樹形図の起点。
 
         AdvanceUntilPlayerMatch();
+    }
+
+    // ===== セーブ往復（issue #565） =====
+
+    /// <summary>
+    /// セーブから進行体を組み直す（issue #565）。<b>係数・日程・resolver・自校は呼び出し側が渡し直す</b>
+    /// ＝保存するのは「進行して変化したもの」だけ（<see cref="TournamentRunnerState"/> の注記）。
+    ///
+    /// <para><paramref name="field"/> は Id→School の解決表としてだけ使う（順序は問わない）。
+    /// シード配置は組み直さず保存された並びを使う＝自校の Strength が大会中の実戦成長で動いても
+    /// 樹形図がずれない。<paramref name="manager"/> は <paramref name="field"/> に含めても含めなくてもよい
+    /// （どちらでも自校 Id で引けるよう先に登録する）。</para>
+    /// </summary>
+    /// <exception cref="ArgumentException">保存された Id が <paramref name="field"/> に見つからないとき。</exception>
+    public static TournamentRunner FromSaved(
+        TournamentRunnerState state,
+        IReadOnlyList<School> field,
+        School manager,
+        NationCoefficients coeff,
+        TournamentSchedule schedule,
+        IPlayerMatchResolver? playerResolver = null,
+        IBackgroundMatchResolver? backgroundResolver = null,
+        Action<int, int, GameResult>? onBackgroundMatch = null)
+        => new(state, field, manager, coeff, schedule, playerResolver, backgroundResolver, onBackgroundMatch);
+
+    private TournamentRunner(
+        TournamentRunnerState state,
+        IReadOnlyList<School> field,
+        School manager,
+        NationCoefficients coeff,
+        TournamentSchedule schedule,
+        IPlayerMatchResolver? playerResolver,
+        IBackgroundMatchResolver? backgroundResolver,
+        Action<int, int, GameResult>? onBackgroundMatch)
+    {
+        _coeff = coeff;
+        _rng = Xoshiro256Random.FromState(state.RngState);
+        _schedule = schedule;
+        _playerResolver = playerResolver;
+        _backgroundResolver = backgroundResolver;
+        _managerId = manager.Id;
+        _isNationalTournament = state.IsNationalTournament;
+        _onBackgroundMatch = onBackgroundMatch;
+        Title = state.Title;
+
+        var byId = new Dictionary<int, School> { [manager.Id] = manager };
+        foreach (var s in field) byId[s.Id] = s;
+
+        School?[] Resolve(List<int?> ids)
+        {
+            var arr = new School?[ids.Count];
+            for (var i = 0; i < ids.Count; i++)
+            {
+                if (ids[i] is not { } id) continue;              // 不戦勝の空き枠
+                if (!byId.TryGetValue(id, out var school))
+                    throw new ArgumentException($"セーブの学校 Id={id} が出場校に見つかりません。");
+                arr[i] = school;
+            }
+            return arr;
+        }
+
+        if (state.RoundEntrants.Count == 0 || state.RoundEntrants[0] is null)
+            throw new ArgumentException("セーブに初期シード配置がありません。");
+        _totalRounds = TournamentRecorder.RoundsRemaining(state.RoundEntrants[0]!.Count);
+        _roundEntrants = new School?[]?[_totalRounds + 1];
+        for (var r = 0; r < state.RoundEntrants.Count && r < _roundEntrants.Length; r++)
+            if (state.RoundEntrants[r] is { } row) _roundEntrants[r] = Resolve(row);
+
+        _current = Resolve(state.Current);
+        // 現在ラウンドの行は _current と同じ配列にしておく（保存前の実体と同じ関係にする）。
+        var curRound = RoundIndexOf(_current);
+        if (curRound >= 0 && curRound < _roundEntrants.Length) _roundEntrants[curRound] = _current;
+
+        _roundIndex = state.RoundIndex;
+        PlayerActive = state.PlayerActive;
+        IsChampion = state.IsChampion;
+        ChampionName = state.ChampionName;
+
+        foreach (var c in state.Cards)
+            _cardResults[(c.Round, c.Slot)] = new CardResult(c.TopWon, c.WinnerScore, c.LoserScore, c.MercyEnded);
+        _matches.AddRange(state.Matches);
+        _pitchLedger.RestoreState(state.PitchLedger);
+
+        // 次戦相手は状態から導く（保存しない＝保存値と実体が食い違う余地を作らない）。
+        // AdvanceUntilPlayerMatch は呼ばない: 呼ぶと不戦勝ラウンドを「もう一度」解決して乱数を余計に
+        // 消費する（保存時点で消化済みのはず）。
+        _nextOpponent = DeriveNextOpponent();
+    }
+
+    /// <summary>
+    /// 現在の残存校から次戦相手を導く。<see cref="AdvanceUntilPlayerMatch"/> が返る時点の
+    /// <see cref="_nextOpponent"/> と同じ値になる（自校が居て相方が居れば相方、それ以外は null）。
+    /// </summary>
+    private School? DeriveNextOpponent()
+    {
+        if (!PlayerActive || IsChampion || _current.Length < 2) return null;
+        var idx = IndexOfManager(_current);
+        return idx < 0 ? null : _current[idx ^ 1];
+    }
+
+    /// <summary>
+    /// 状態を保存できるか。観戦中の自校戦（<see cref="HasPendingLiveMatch"/>）がある間は false
+    /// ＝試合の途中で中断して保存するのは別段階（issue #565 F2）。
+    /// </summary>
+    public bool CanCaptureState => _pending is null;
+
+    /// <summary>
+    /// 進行体の可変状態をセーブ DTO へ写す（issue #565）。
+    /// <see cref="CanCaptureState"/> が false のときは投げる（呼び出し側が先に抑止する契約）。
+    /// </summary>
+    public TournamentRunnerState CaptureState()
+    {
+        if (!CanCaptureState)
+            throw new InvalidOperationException("観戦中の自校戦がある間は保存できません（issue #565 F2）。");
+
+        static List<int?> Ids(School?[] arr)
+        {
+            var list = new List<int?>(arr.Length);
+            foreach (var s in arr) list.Add(s?.Id);
+            return list;
+        }
+
+        var state = new TournamentRunnerState
+        {
+            Title = Title,
+            IsNationalTournament = _isNationalTournament,
+            PlayerActive = PlayerActive,
+            IsChampion = IsChampion,
+            ChampionName = ChampionName,
+            RoundIndex = _roundIndex,
+            RngState = ((Xoshiro256Random)_rng).CaptureState(),
+            Current = Ids(_current),
+            Matches = new List<BracketMatch>(_matches),
+            PitchLedger = _pitchLedger.CaptureState(),
+        };
+
+        foreach (var row in _roundEntrants) state.RoundEntrants.Add(row is null ? null : Ids(row));
+
+        // 列挙順は Dictionary 任せにせず (ラウンド, スロット) 昇順で固定する（往復のバイト一致・差分の読みやすさ）。
+        foreach (var kv in _cardResults.OrderBy(k => k.Key.Round).ThenBy(k => k.Key.Slot))
+            state.Cards.Add(new SavedBracketCard(
+                kv.Key.Round, kv.Key.Slot, kv.Value.TopWon, kv.Value.WinnerScore, kv.Value.LoserScore, kv.Value.MercyEnded));
+
+        return state;
     }
 
     /// <summary>自校の次戦相手（不戦勝続き/敗退済み/優勝は null）。</summary>
@@ -672,6 +829,7 @@ public sealed class TournamentRunner
                 var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger, attempt);
                 var g = _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, slot, attempt)), context);
                 RecordOutings(g, a, b, matchDay);
+                _onBackgroundMatch?.Invoke(a.Id, b.Id, g);   // 全国成績への畳み込みは**記録時**（上のコメント参照）。
                 return g;
             });
             var winner = awayWon ? a : b;

@@ -134,20 +134,11 @@ namespace KokoSim.Unity.Home
             _menuSaveBtn?.SetEnabled(canSave);
             if (_menuSaveReason != null)
             {
-                _menuSaveReason.text = canSave ? "" : SaveDisabledReason();
+                _menuSaveReason.text = canSave ? "" : KokoSim.Unity.Shell.SaveGameIO.SaveDisabledReason();
                 _menuSaveReason.style.display = canSave ? DisplayStyle.None : DisplayStyle.Flex;
             }
             _menu.style.display = DisplayStyle.Flex;
             _menu.BringToFront();
-        }
-
-        /// <summary>大会中はセーブ不可（#507）。SaveSlotsController の同名ロジックと表記を揃える。</summary>
-        private static string SaveDisabledReason()
-        {
-            var s = KokoSim.Unity.Shell.GameSession.Current;
-            if (s.BracketFoldPending) return "大会結果を集計中はセーブできません（集計完了までお待ちください）。";
-            if (s.Mode == KokoSim.Unity.Shell.GameMode.Tournament) return "大会中はセーブできません。";
-            return "";
         }
 
         private void OnMenuClose()

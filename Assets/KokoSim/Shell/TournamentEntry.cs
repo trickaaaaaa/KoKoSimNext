@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
@@ -5,6 +6,7 @@ using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
 
 namespace KokoSim.Unity.Shell
@@ -45,13 +47,18 @@ namespace KokoSim.Unity.Shell
             var brains = new EnemyAiBrainFactory();
             // 自県の裏カードはメモ化 resolver で包む＝プレフェッチ（GameSession が暇な時間に背景で先行解決）で温めた
             // 結果を、本解決（BeginRound/ResolveRound）がキャッシュ命中で即座に再利用する（#試合開始前ロード短縮）。
+            // ⚠ stats はここで渡さない（resolver に畳ませない）＝プレフェッチは「計算するだけ」にする。
+            //   全国成績への畳み込みはランナーが裏カードを**記録した瞬間**に行う（下の onBackgroundMatch）。
+            //   計算時に畳むと、大会中セーブ（issue #565）を挟んだときにメモ化キャッシュが消え、
+            //   同じカードがロード後にもう一度畳まれる＝二重計上になる。
             var homeBg = new MemoizingBackgroundResolver(
-                new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats,
+                new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats: null,
                     modernRules: null, calendarYear: calendarYear, brains: brains));
 
             // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
-                TournamentTitle(kind), new PlayerMatchResolver(), homeBg);
+                TournamentTitle(kind), new PlayerMatchResolver(), homeBg,
+                onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
             // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
             GameSession.Current.EnterTournament(kind, TournamentTitle(kind), runner, field);
             GameSession.Current.Year = yearIndex;
@@ -59,6 +66,55 @@ namespace KokoSim.Unity.Shell
             // 他県（全国46県）の裏試合をバックグラウンドでフルシム（自県は上の runner が対話的に消化＝除外）。
             NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
                 yearIndex, calendarYear, NationService.PrefectureId, seed, brains);
+        }
+
+        /// <summary>
+        /// セーブから大会モードへ復帰する（issue #565 F1）。<see cref="Enter"/> と同じ部品で resolver を
+        /// 組み直し、進行体だけをセーブの状態から作る。
+        ///
+        /// <para><b>ここで <c>stats.StartTournament()</c> を呼んではいけない</b>＝今大会成績は
+        /// <see cref="NationService.Restore"/> で復元済みで、呼ぶとその場で全部消える。</para>
+        ///
+        /// <para><b>全国裏試合（<see cref="NationBackgroundSim"/>）も起動しない</b>。保存は他県の消化を
+        /// 待ってから行う（<see cref="SaveGameIO.Save"/>）ので、復元時点で全46県は消化済み。ここで
+        /// 起動し直すと同じ大会を二度積む＝全国成績が倍になる。</para>
+        /// </summary>
+        public static void RestoreRunner(TournamentSaveState t)
+        {
+            if (t == null) return;
+            var manager = BuildManagerSchool();
+            var field = ResolveField(t.FieldSchoolIds, manager);
+            var yearIndex = GameClock.YearIndex;
+            var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
+            var brains = new EnemyAiBrainFactory();
+            var stats = NationService.TournamentStats;   // 復元済み＝StartTournament は呼ばない
+            var homeBg = new MemoizingBackgroundResolver(
+                new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats: null,
+                    modernRules: null, calendarYear: calendarYear, brains: brains));
+
+            var runner = TournamentRunner.FromSaved(t.Runner, field, manager, NationCoeff, Schedule,
+                new PlayerMatchResolver(), homeBg,
+                onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
+            GameSession.Current.RestoreTournament(t, runner, field);
+        }
+
+        /// <summary>
+        /// 保存された出場校 Id を School へ戻す。自校（Id=-1）は現在のロスターから組み直す
+        /// （強さは実戦成長で動くが、シード配置は保存された並びを使うので樹形図はずれない）。
+        /// 見つからない Id は捨てず例外にする＝黙って出場校が減った大会を作らない。
+        /// </summary>
+        private static List<School> ResolveField(List<int> ids, School manager)
+        {
+            var field = new List<School>(ids?.Count ?? 0);
+            if (ids == null) return field;
+            foreach (var id in ids)
+            {
+                if (id == manager.Id) { field.Add(manager); continue; }
+                var s = NationService.SchoolById(id);
+                if (s == null) throw new InvalidOperationException($"セーブの出場校 Id={id} が全国に見つかりません。");
+                field.Add(s);
+            }
+            return field;
         }
 
         /// <summary>開幕バナー用の大会名（例「2028年 選手権神奈川大会」）。ホームのバナー表示と同一の表記。</summary>

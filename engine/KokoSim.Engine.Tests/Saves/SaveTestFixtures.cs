@@ -5,6 +5,7 @@ using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
+using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
@@ -161,6 +162,34 @@ internal static class SaveTestFixtures
                 new RgbColor(0xE8, 0x6A, 0x4A), new RgbColor(0xF5, 0xC6, 0x4A),
                 new RgbColor(0x14, 0x23, 0x1B), new RgbColor(0x00, 0x00, 0x00),
                 TeamColors.DefaultShoes, new TeamStripe(true, new RgbColor(0x23, 0x24, 0x2A), 40.0)),
+        };
+    }
+
+    /// <summary>
+    /// 大会中セーブ（issue #565 F1）の素材。<b>実物の進行体から採る</b>＝手で組んだ DTO だと
+    /// 「保存できる形」しか試せず、実際の進行が持つ形（不戦勝の null 枠・未到達ラウンドの null 行・
+    /// 乱数の内部状態）を取りこぼす。
+    /// </summary>
+    public static TournamentSaveState BuildTournamentState()
+    {
+        // 12校＝16枠のうち4枠が不戦勝(null)になる素材。1試合消化した「試合と試合の間」で採る。
+        var field = new List<School> { new() { Id = -1, Name = "自校", PrefectureId = 13, Strength = 62 } };
+        for (var i = 0; i < 11; i++)
+            field.Add(new School { Id = 500 + i, Name = $"校{i}", PrefectureId = 13, Strength = 30 + i * 5 });
+
+        var runner = new TournamentRunner(
+            field, field[0], NationCoeff, new Xoshiro256Random(20260810UL),
+            new TournamentSchedule(), "2028年 選手権神奈川大会");
+        runner.PlayNextPlayerMatch();
+
+        return new TournamentSaveState
+        {
+            Kind = TournamentKind.Summer,
+            Title = "2028年 選手権神奈川大会",
+            TournamentDay = 3,
+            BannerPending = false,
+            FieldSchoolIds = field.ConvertAll(s => s.Id),
+            Runner = runner.CaptureState(),
         };
     }
 

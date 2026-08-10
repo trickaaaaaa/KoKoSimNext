@@ -432,25 +432,69 @@ namespace KokoSim.Unity.Shell
             return w;
         }
 
-        // ===== セーブ往復（issue #507 F0） =====
-        // 大会をまたぐ永続分（年度・成績・戦績）だけを保存する。進行体（Runner）・演出フラグ・
-        // 試合フロー中継は保存しない＝セーブは Normal モードでのみ（TournamentRunner は復元不能）。
+        // ===== セーブ往復（issue #507 F0 ／ 大会中は issue #565 F1） =====
+        // 大会をまたぐ永続分（年度・成績・戦績）に加え、大会モードの進行（進行体・大会内経過日・出場校）も
+        // 保存する。**試合と試合の間だけ**＝観戦中（MatchProgression を持つ）の中断は F2。
+        // 演出フラグ（結果モーダル待ち）・試合フロー中継（スタメン設定〜試合開始）は保存しない
+        // ＝それらの途中では保存させない（SaveGameIO.CanSave）。
 
-        /// <summary>セーブ保存: 年度・成績ストア・戦績を DTO へ写す。</summary>
+        /// <summary>セーブ保存: 年度・成績ストア・戦績＋（大会中なら）大会の進行を DTO へ写す。</summary>
         public void Capture(SaveState s)
         {
             s.SessionYear = Year;
             s.Stats = Stats;
             s.Records = Records;
+            s.Tournament = CaptureTournament();
         }
 
-        /// <summary>セーブ復元: 年度・成績・戦績を据え、進行状態は通常モードへ初期化する。</summary>
+        /// <summary>大会モードの進行を DTO へ（通常モード・保存できない局面なら null）。</summary>
+        private TournamentSaveState CaptureTournament()
+        {
+            if (!InTournament || !Runner.CanCaptureState) return null;
+            var ids = new List<int>(Field.Count);
+            foreach (var s in Field) ids.Add(s.Id);
+            return new TournamentSaveState
+            {
+                Kind = Kind,
+                Title = Title,
+                TournamentDay = TournamentDay,
+                BannerPending = BannerPending,
+                FieldSchoolIds = ids,
+                Runner = Runner.CaptureState(),
+            };
+        }
+
+        /// <summary>
+        /// セーブ復元: 年度・成績・戦績を据え、進行状態を初期化する。
+        /// <b>大会の進行体はここでは組まない</b>＝復元には resolver 一式（Shell の部品）が要るので
+        /// <see cref="TournamentEntry.RestoreRunner"/> が <see cref="RestoreTournament"/> 経由で押し戻す
+        /// （engine 純度の都合ではなく、依存の向きを Shell→engine の一方向に保つため）。
+        /// </summary>
         public void Restore(SaveState s)
         {
             Year = s.SessionYear;
             Stats = s.Stats;
             Records = s.Records;
             ClearTransient();
+        }
+
+        /// <summary>
+        /// 大会モードへ復帰する（issue #565 F1。<see cref="TournamentEntry.RestoreRunner"/> から呼ぶ）。
+        /// <see cref="EnterTournament"/> との違いは2つ＝<b>今大会成績をリセットしない</b>（保存された成績を
+        /// そのまま使う）ことと、<b>大会内経過日を0へ戻さない</b>こと。
+        /// </summary>
+        public void RestoreTournament(TournamentSaveState t, TournamentRunner runner, IReadOnlyList<School> field)
+        {
+            Mode = GameMode.Tournament;
+            Kind = t.Kind;
+            Title = t.Title;
+            Runner = runner;
+            Field = field ?? Array.Empty<School>();
+            TournamentDay = t.TournamentDay;
+            BannerPending = t.BannerPending;
+            ResultPending = false;
+            LastOutcome = null;
+            KickPrefetch();   // 次戦ラウンドの自県裏カードを温め直す（キャッシュはセーブに載らない）。
         }
 
         /// <summary>新規ゲームの完全リセット: 成績・戦績を新品にし、進行状態を初期化する。</summary>
