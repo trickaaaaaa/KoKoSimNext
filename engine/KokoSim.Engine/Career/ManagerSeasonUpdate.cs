@@ -20,18 +20,22 @@ public static class ManagerSeasonUpdate
     /// <param name="nationalChampion">このシーズンに全国優勝したか（甲子園本戦が実プレイ接続するまでは false）。</param>
     /// <param name="wins">このシーズンの公式戦勝数。</param>
     /// <param name="upsetFameDelta">番狂わせ連動の名声デルタ（issue #170）。未算出時は 0（順当扱い＝二重計上なし）。</param>
+    /// <param name="contracts">
+    /// 年契約の実効値（設計書04 §1.4a）。null なら従来どおりスカウト費を固定で引く＝1ビット一致。
+    /// </param>
     public static IReadOnlyList<ManagerGrowthNotice> Apply(
         Manager m, bool reachedKoshien, bool nationalChampion, int wins,
         IRandomSource milestoneRng,
         CareerCoefficients? careerCoeff = null,
         ManagerGrowthCoefficients? growthCoeff = null,
-        double upsetFameDelta = 0)
+        double upsetFameDelta = 0,
+        ContractEffects? contracts = null)
     {
         var c = careerCoeff ?? new CareerCoefficients();
         var mg = growthCoeff ?? new ManagerGrowthCoefficients();
 
         // 自然増（指導力・采配・育成眼・名声・信頼度・資金）。
-        CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameDelta, c);
+        CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameDelta, c, contracts);
         m.CareerYears++;
         if (reachedKoshien) m.KoshienAppearances++;
 

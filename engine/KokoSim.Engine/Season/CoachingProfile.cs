@@ -33,13 +33,25 @@ public sealed record CoachingProfile
         AbilityKinds.IsDefense(k)
         || k is AbilityKind.Speed or AbilityKind.Bunt or AbilityKind.Steal or AbilityKind.Baserunning;
 
-    /// <summary>監督メタ（分野別指導力）から育成注入値を作る（Phase 5監督メタ ⇄ Phase 3育成の接続）。</summary>
-    public static CoachingProfile FromManager(Career.Manager m) => new()
+    /// <summary>
+    /// 監督メタ（分野別指導力）から育成注入値を作る（Phase 5監督メタ ⇄ Phase 3育成の接続）。
+    ///
+    /// <paramref name="contracts"/> に年契約（専門コーチ・設計書04 §1.4a）を渡すと、その分野の実効値だけを
+    /// 底上げする。<b>監督自身の <see cref="Career.Manager.CoachingBatting"/> 等は書き換えない</b>＝
+    /// 解約すればその年から元に戻る（雇っている間だけ効く）。監督の指導力上限（99）でクランプもしない：
+    /// 上限に張り付いた監督でもコーチを雇う意味を残すため（長期プレイのエンドゲーム対策）。
+    /// null（未指定）なら従来と1ビット一致。
+    /// </summary>
+    public static CoachingProfile FromManager(Career.Manager m, Career.ContractEffects? contracts = null)
     {
-        Batting = m.CoachingBatting,
-        Pitching = m.CoachingPitching,
-        Defense = m.CoachingDefense,
-    };
+        var e = contracts ?? Career.ContractEffects.None;
+        return new CoachingProfile
+        {
+            Batting = m.CoachingBatting + e.CoachingBattingAdd,
+            Pitching = m.CoachingPitching + e.CoachingPitchingAdd,
+            Defense = m.CoachingDefense + e.CoachingDefenseAdd,
+        };
+    }
 
     /// <summary>全分野を同一の指導力に据える（テスト・後方互換の基準用）。</summary>
     public static CoachingProfile Uniform(double level) => new()

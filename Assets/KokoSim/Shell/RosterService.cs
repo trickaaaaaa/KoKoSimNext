@@ -65,8 +65,11 @@ namespace KokoSim.Unity.Shell
             _ = Roster;   // 初回アクセスなら生成（_roster / _graduates / _nextId を確定させる）
 
             var coefficients = new RosterCoefficients();
-            // 名声由来の talentCenter（issue #127 / design-04 §1「名声 → 新入生の質」）。
-            var talentCenter = coefficients.TalentCenterFromFame(ManagerService.Manager.Fame);
+            // 名声由来の talentCenter（issue #127 / design-04 §1「名声 → 新入生の質」）に、
+            // 年契約のスカウト網（design-04 §1.4a）を上乗せする。名声は飽和カーブで頭打ちなのに対し、
+            // スカウト網は毎年払い続ける固定費＝「金で買う上振れ」として別軸で足す。
+            var talentCenter = coefficients.TalentCenterFromFame(ManagerService.Manager.Fame)
+                               + ManagerService.ContractEffects.ScoutTalentAdd;
             var rng = new Xoshiro256Random(GameSeed.Master ^ (YearRolloverStream ^ (ulong)newYearIndex));
 
             var rollover = RosterLifecycle.AdvanceYear(

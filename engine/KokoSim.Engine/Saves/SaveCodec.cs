@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using KokoSim.Engine.Career;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Saves.Json;
@@ -21,7 +22,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     // ===== Serialize =====
 
@@ -36,6 +37,7 @@ public static class SaveCodec
             .Add("roster", RosterToJson(s.Roster))
             .Add("manager", CareerSaves.ManagerToJson(s.Manager))
             .Add("facilities", CareerSaves.FacilitiesToJson(s.Facilities))
+            .Add("contracts", CareerSaves.ContractsToJson(s.Contracts))
             .Add("managerLastGrownYear", s.ManagerLastGrownYear)
             .Add("managerGrownWinsBaseline", s.ManagerGrownWinsBaseline)
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
@@ -136,6 +138,9 @@ public static class SaveCodec
         // v1→v2（issue #565）: 大会モードの進行（tournament）が増えた。v1 は「大会中は保存できない」
         // 仕様だったので、v1 のセーブは必ず通常モード＝tournament を null で補うだけでよい。
         if (version < 2 && !root.Has("tournament")) root.Add("tournament", JsonNull.Instance);
+        // v2→v3: 施設基金（manager.facilityFund）と年契約（contracts）が増えた。どちらも欠損時の
+        // 安全な既定が決まっている（基金0／スカウト網Lv1＝従来のスカウト費と同額）ので、
+        // ここで補わず Read 側の Has 分岐で読む＝旧セーブがそのまま開ける。
         return root;
     }
 
@@ -152,6 +157,10 @@ public static class SaveCodec
             Roster = RosterFromJson(root.Arr("roster")),
             Manager = CareerSaves.ManagerFromJson(root.Obj("manager")),
             Facilities = CareerSaves.FacilitiesFromJson(root.Obj("facilities")),
+            // 年契約は v3 で追加。旧セーブには無いので既定（スカウト網 Lv1＝従来のスカウト費15万と同額）で読む。
+            Contracts = root.Has("contracts")
+                ? CareerSaves.ContractsFromJson(root.Obj("contracts"))
+                : ContractSet.Initial(),
             ManagerLastGrownYear = root.Int("managerLastGrownYear"),
             ManagerGrownWinsBaseline = root.Int("managerGrownWinsBaseline"),
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),

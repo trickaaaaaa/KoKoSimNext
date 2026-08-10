@@ -126,6 +126,11 @@ internal static class SaveTestFixtures
         facilities.SetLevel("lighting", 2);
         facilities.SetLevel("indoor", 1);
 
+        // 年契約（設計書04 §1.4a）。既定（スカウト網 Lv1 だけ）と区別できる状態にして往復を測る。
+        var contracts = new ContractSet();
+        contracts.SetLevel("scouting", 3);
+        contracts.SetLevel("coach_pitching", 1);
+
         return new SaveState
         {
             MasterSeed = 0xDEADBEEFCAFEF00DUL,
@@ -143,10 +148,12 @@ internal static class SaveTestFixtures
                 Fame = 22.0,
                 Trust = 61.0,
                 Funds = 137.5,
+                FacilityFund = 8642.5,
                 CareerYears = 3,
                 KoshienAppearances = 1,
             },
             Facilities = facilities,
+            Contracts = contracts,
             ManagerLastGrownYear = 1,
             ManagerGrownWinsBaseline = 4,
             ManagerGrownKoshienBaseline = 1,

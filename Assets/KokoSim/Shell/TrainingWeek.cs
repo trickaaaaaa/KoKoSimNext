@@ -74,7 +74,9 @@ namespace KokoSim.Unity.Shell
             var campMult = Calendar.CampMultiplier(week, Training) * extraMult;
             // 施設係数を焼き込んだ係数で走らせる（engine SeasonEngine と同じ: training with { FacilityCoef }）。
             var training = Training with { FacilityCoef = FacilityCoef };
-            var coaching = CoachingProfile.FromManager(ManagerService.Manager);
+            // 専門コーチ（年契約・設計書04 §1.4a）は雇っている分野の指導力だけを底上げする。
+            // 監督自身の指導力は変えない＝解約すればその年から元に戻る。
+            var coaching = CoachingProfile.FromManager(ManagerService.Manager, ManagerService.ContractEffects);
 
             DevelopmentModel.TrainWeekPlan(
                 p, alloc, training.ReferenceWeekMinutes,

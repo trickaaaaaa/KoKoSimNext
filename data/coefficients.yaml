@@ -1039,6 +1039,45 @@ facilities:
       - {}
       - { cost: 50, insight_prob_factor: 1.5, insight_accuracy_add: 0.05 }
 
+# --- 年契約（設計書04 §1.4a）: 毎年部費から払い、いつでも解約できる継続契約 ---
+# 施設・練習道具（facilities:）が「買い切り・効果が累積」なのに対し、年契約は
+# 「いま何段で契約しているか」だけが効く＝Lv2 の年額と効果は Lv1 を置き換える（累積しない）。
+# tiers[0] は未契約（年額0・効果なし）。
+#
+# スカウト網 Lv1（15万/年・効果0）は career.scout_cost と同額・同効果で、新規ゲームの
+# 既定契約になっている＝年契約を入れても実ゲームの年間支出は変わらず、上へ伸ばす選択肢だけが増える。
+# 全部を最上段にすると 50+20+30×3＝160万/年。部費の年間収入（信頼度50で120万・100で160万）に
+# 合宿費45万も乗るので全部は抱えられない＝どれを取るかの選択になる。
+contracts:
+  - id: scouting
+    name: スカウト網
+    tiers:
+      - {}
+      - { annual_cost: 15, scout_talent_add: 0 }   # 県内を回る（従来どおり）
+      - { annual_cost: 30, scout_talent_add: 3 }   # 近隣県まで足を伸ばす
+      - { annual_cost: 50, scout_talent_add: 6 }   # 全国に網を張る
+  - id: expedition
+    name: 遠征
+    tiers:
+      - {}
+      - { annual_cost: 20, out_of_prefecture_opponents: true }   # 県外の学校と練習試合が組める
+  # 専門コーチ: 分野別指導力の実効値だけを底上げする（監督自身の指導力は変えない＝解約で元に戻る）
+  - id: coach_batting
+    name: 打撃コーチ
+    tiers:
+      - {}
+      - { annual_cost: 30, coaching_batting_add: 10 }
+  - id: coach_pitching
+    name: 投手コーチ
+    tiers:
+      - {}
+      - { annual_cost: 30, coaching_pitching_add: 10 }
+  - id: coach_defense
+    name: 守備走塁コーチ
+    tiers:
+      - {}
+      - { annual_cost: 30, coaching_defense_add: 10 }
+
 # --- 新入生生成（設計書04 §2.1・設計書01 §1.1b-c）: 名声→総合力→凸凹配分 ---
 roster:
   intake_mean: 10.0

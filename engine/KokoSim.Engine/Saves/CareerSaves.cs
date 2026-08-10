@@ -26,6 +26,7 @@ internal static class CareerSaves
         .Add("fame", m.Fame)
         .Add("trust", m.Trust)
         .Add("funds", m.Funds)
+        .Add("facilityFund", m.FacilityFund)
         .Add("careerYears", m.CareerYears)
         .Add("koshienApp", m.KoshienAppearances);
 
@@ -41,6 +42,8 @@ internal static class CareerSaves
         Fame = o.Double("fame"),
         Trust = o.Double("trust"),
         Funds = o.Double("funds"),
+        // 施設基金は v3 で追加。旧セーブ（v1/v2）には無いので 0 で読む＝建物は買えないが壊れない。
+        FacilityFund = o.Has("facilityFund") ? o.Double("facilityFund") : 0,
         CareerYears = o.Int("careerYears"),
         KoshienAppearances = o.Int("koshienApp"),
     };
@@ -59,6 +62,26 @@ internal static class CareerSaves
     public static FacilitySet FacilitiesFromJson(JsonObject o)
     {
         var set = new FacilitySet();
+        var levels = o.Obj("levels");
+        foreach (var id in levels.Keys) set.SetLevel(id, levels.Int(id));
+        return set;
+    }
+
+    // ===== ContractSet（年契約・設計書04 §1.4a） =====
+    // 施設と同じく、保存するのは「契約ID→現在の段」の辞書だけ（年額・効果はカタログ側の静的設定）。
+
+    public static JsonObject ContractsToJson(ContractSet c)
+    {
+        var levels = new JsonObject();
+        var ids = new List<string>(c.Levels.Keys);
+        ids.Sort(System.StringComparer.Ordinal);
+        foreach (var id in ids) levels.Add(id, c.LevelOf(id));
+        return new JsonObject().Add("levels", levels);
+    }
+
+    public static ContractSet ContractsFromJson(JsonObject o)
+    {
+        var set = new ContractSet();
         var levels = o.Obj("levels");
         foreach (var id in levels.Keys) set.SetLevel(id, levels.Int(id));
         return set;

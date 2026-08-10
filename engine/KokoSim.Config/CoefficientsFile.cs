@@ -53,6 +53,8 @@ public sealed record CoefficientsBundle
     public PracticeMatchCoefficients PracticeMatch { get; init; } = new();
     /// <summary>施設カタログ（Issue #128）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
     public FacilityCatalog Facilities { get; init; } = FacilityCatalog.Default;
+    /// <summary>年契約カタログ（設計書04 §1.4a）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
+    public ContractCatalog Contracts { get; init; } = ContractCatalog.Default;
 }
 
 /// <summary>
@@ -108,6 +110,7 @@ public static class CoefficientsLoader
         public TournamentDto? Tournament { get; set; }
         public PracticeMatchDto? PracticeMatch { get; set; }
         public List<FacilityDefDto>? Facilities { get; set; }
+        public List<ContractDefDto>? Contracts { get; set; }
 
         public CoefficientsBundle ToBundle() => new()
         {
@@ -143,6 +146,45 @@ public static class CoefficientsLoader
             Facilities = Facilities is null
                 ? FacilityCatalog.Default
                 : new FacilityCatalog { Facilities = Facilities.Select(f => f.ToModel()).ToList() },
+            Contracts = Contracts is null
+                ? ContractCatalog.Default
+                : new ContractCatalog { Contracts = Contracts.Select(c => c.ToModel()).ToList() },
+        };
+    }
+
+    private sealed class ContractDefDto
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public List<ContractTierDto>? Tiers { get; set; }
+
+        public ContractDef ToModel() => new()
+        {
+            Id = Id,
+            Name = Name,
+            Tiers = Tiers is null
+                ? new[] { new ContractTier() }
+                : Tiers.Select(t => t.ToModel()).ToList(),
+        };
+    }
+
+    private sealed class ContractTierDto
+    {
+        public double AnnualCost { get; set; }
+        public double ScoutTalentAdd { get; set; }
+        public double CoachingBattingAdd { get; set; }
+        public double CoachingPitchingAdd { get; set; }
+        public double CoachingDefenseAdd { get; set; }
+        public bool OutOfPrefectureOpponents { get; set; }
+
+        public ContractTier ToModel() => new()
+        {
+            AnnualCost = AnnualCost,
+            ScoutTalentAdd = ScoutTalentAdd,
+            CoachingBattingAdd = CoachingBattingAdd,
+            CoachingPitchingAdd = CoachingPitchingAdd,
+            CoachingDefenseAdd = CoachingDefenseAdd,
+            OutOfPrefectureOpponents = OutOfPrefectureOpponents,
         };
     }
 

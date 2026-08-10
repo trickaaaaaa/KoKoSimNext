@@ -59,6 +59,20 @@ namespace KokoSim.Unity.Management
             Dump("mixed");
             yield return Capture(doc, "02-mixed");
 
+            // ④ 年契約（設計書04 §1.4a）。台帳の最下段なのでスクロールして写す。
+            // 既定（スカウト網Lv1）から、上げた契約・最上位の契約・未契約が同時に見える状態にする。
+            ManagerService.Contracts.SetLevel("scouting", 2);
+            ManagerService.Contracts.SetLevel("expedition", 1);
+            ManagerService.Contracts.SetLevel("coach_batting", 1);
+            doc = Open("ManagementScreen");
+            yield return null; yield return null;
+            ScrollToGroup(doc, "年契約");
+            yield return null; yield return null;
+            Debug.Log("[MN] contracts 年額=" + ManagerService.ContractEffects.AnnualCost
+                      + " scoutAdd=" + ManagerService.ContractEffects.ScoutTalentAdd
+                      + " away=" + ManagerService.ContractEffects.OutOfPrefectureOpponents);
+            yield return Capture(doc, "03-contracts");
+
             Debug.Log("[MN] DONE all shots");
         }
 
@@ -70,6 +84,26 @@ namespace KokoSim.Unity.Management
                 + " lighting=" + f.LevelOf("lighting") + " indoor=" + f.LevelOf("indoor")
                 + " dorm=" + f.LevelOf("dorm") + " weight=" + f.LevelOf("weight")
                 + " budget=" + TrainingWeek.Budget + "分");
+        }
+
+        // 台帳のスクロールを「指定の区分見出しが視野の先頭に来る位置」へ送る。
+        // ScrollView.ScrollTo は最小移動なので見出しが下端に来てしまう＝オフセットを自分で計算する。
+        private static void ScrollToGroup(UIDocument doc, string groupLabel)
+        {
+            var sv = doc.rootVisualElement.Q<ScrollView>(className: "mn-scroll");
+            if (sv == null) { Debug.LogError("[MN] mn-scroll が無い"); return; }
+
+            VisualElement head = null;
+            foreach (var h in sv.contentContainer.Query<VisualElement>(className: "plate-header").ToList())
+            {
+                var title = h.Q<Label>(className: "plate-header__title");
+                if (title != null && title.text == groupLabel) { head = h; break; }
+            }
+            if (head == null) { Debug.LogError("[MN] 区分が見つからない: " + groupLabel); return; }
+
+            var y = head.worldBound.y - sv.contentContainer.worldBound.y;
+            var max = Mathf.Max(0f, sv.contentContainer.layout.height - sv.contentViewport.layout.height);
+            sv.scrollOffset = new Vector2(0f, Mathf.Clamp(y, 0f, max));
         }
 
         // 指定画面だけをアクティブにして開き直す（OnEnable を確実に走らせる）。

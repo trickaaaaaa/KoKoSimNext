@@ -39,6 +39,20 @@ namespace KokoSim.Unity.Management
             Render();
         }
 
+        /// <summary>年契約の段を1つ上げる（契約する）。</summary>
+        public void Sign(string contractId)
+        {
+            _state.Sign(contractId);
+            Render();
+        }
+
+        /// <summary>年契約を解約する。</summary>
+        public void Cancel(string contractId)
+        {
+            _state.Cancel(contractId);
+            Render();
+        }
+
         private void Render()
         {
             var v = _state.BuildView();
@@ -179,28 +193,41 @@ namespace KokoSim.Unity.Management
 
             // 最大レベルの行は数字が無いので NumUnitAuto に任せる（数字を含まない文字列は
             // 分割せず1枚の Label で返る＝Oswald に無い記号を載せて豆腐にしない）。
-            var cost = UiComponents.NumUnitAuto(
-                r.NextCost.HasValue ? r.NextCost.Value.ToString("0") + "万" : "—", false, "mn-cell--cost");
+            // 年契約は買い切りと単位が違う（毎年かかる）ので「/年」を必ず添える。
+            var costText = r.NextCost.HasValue
+                ? r.NextCost.Value.ToString("0") + (r.IsContract ? "万/年" : "万")
+                : "—";
+            var cost = UiComponents.NumUnitAuto(costText, false, "mn-cell--cost");
             if (r.NextCost.HasValue && !r.Affordable) cost.AddToClassList("mn-cell--cost-off");
             row.Add(cost);
 
             var act = new VisualElement();
             act.AddToClassList("mn-cell--act");
+            var id = r.Id;   // クロージャ捕捉
             if (r.NextCost.HasValue)
             {
-                var id = r.Id;   // クロージャ捕捉
-                var buy = new Button(() => Buy(id)) { text = "購入" };
+                var buy = r.IsContract
+                    ? new Button(() => Sign(id)) { text = r.ActionLabel }
+                    : new Button(() => Buy(id)) { text = r.ActionLabel };
                 buy.AddToClassList("tool-btn");
                 buy.AddToClassList("mn-buy");
                 buy.SetEnabled(r.Affordable);
                 buy.EnableInClassList("mn-buy--off", !r.Affordable);
                 act.Add(buy);
             }
-            else
+            else if (!r.IsContract)
             {
                 var maxed = new Label("最大レベル");
                 maxed.AddToClassList("mn-maxed");
                 act.Add(maxed);
+            }
+            // 解約は年契約だけの操作。買い切りには戻す手段が無い（施設は学校の資産として残る）。
+            if (r.CanCancel)
+            {
+                var cancel = new Button(() => Cancel(id)) { text = "解約" };
+                cancel.AddToClassList("tool-btn");
+                cancel.AddToClassList("mn-cancel");
+                act.Add(cancel);
             }
             row.Add(act);
 

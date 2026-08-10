@@ -5,13 +5,15 @@ using KokoSim.Unity.Shell;   // ManagerService（監督メタ・施設・カタ�
 
 namespace KokoSim.Unity.Management
 {
-    /// <summary>台帳の区分見出し＋その区分の行（施設／練習道具／備品）。</summary>
+    /// <summary>台帳の区分見出し＋その区分の行（施設／練習道具／備品／年契約）。</summary>
     public sealed class LedgerGroup
     {
         public PurchaseKind Kind;
         public string Label = "";
         /// <summary>見出しの下に小さく出す補足（区分の性質）。</summary>
         public string Note = "";
+        /// <summary>年契約の区分か（買い切りでなく毎年払い・解約できる）。</summary>
+        public bool IsContract;
         public List<FacilityLedgerRow> Rows = new List<FacilityLedgerRow>();
     }
 
@@ -22,14 +24,24 @@ namespace KokoSim.Unity.Management
         public string Name = "";
         public int Level;
         public int MaxLevel;
-        /// <summary>いま保有しているレベルぶんの合計効果。未所持は「—」。</summary>
+        /// <summary>
+        /// いまの段の効果。買い切り（施設・道具・備品）は Lv1..lv の積み上げ、
+        /// 年契約はいまの段だけ（累積しない）。未所持・未契約は「—」。
+        /// </summary>
         public string CurrentEffect = "";
         /// <summary>次の1段で増える効果。最大レベルなら空。</summary>
         public string NextEffect = "";
-        /// <summary>次の1段の費用[万円]。null＝最大レベル（これ以上買えない）。</summary>
+        /// <summary>次の1段の費用[万円]。年契約は次の段の年額。null＝最大レベル（これ以上上げられない）。</summary>
         public double? NextCost;
-        /// <summary>資金が足りるか（最大レベルなら false）。</summary>
+        /// <summary>資金が足りるか（最大レベルなら false）。年契約は前払いが無いので常に true。</summary>
         public bool Affordable;
+
+        /// <summary>年契約の行か（費用の単位が「/年」になり、解約できる）。</summary>
+        public bool IsContract;
+        /// <summary>操作ボタンの文言（購入／契約／上げる）。</summary>
+        public string ActionLabel = "購入";
+        /// <summary>解約ボタンを出すか（年契約で1段以上契約中のときだけ）。</summary>
+        public bool CanCancel;
     }
 
     /// <summary>経営画面に表示する一式（スナップショット）。</summary>
@@ -86,8 +98,12 @@ namespace KokoSim.Unity.Management
             var catalog = ManagerService.Catalog;
             var set = ManagerService.Facilities;
 
+            var contracts = ManagerService.ContractEffects;
             var income = Career.AnnualBudgetBase + Career.BudgetPerTrust * m.Trust;
-            var expense = Career.SummerCampCost + Career.WinterCampCost + Career.ScoutCost;
+            // 固定支出＝合宿（年2回）＋年契約の年額合計。スカウト費は年契約「スカウト網」に含まれる
+            // （engine 側 CareerEngine.ApplyResults も同じ数え方＝二重には引かない）。
+            var camps = Career.SummerCampCost + Career.WinterCampCost;
+            var expense = camps + contracts.AnnualCost;
             var donation = Career.FacilityFundDonationPerFame * m.Fame;
             var fundIncome = Career.FacilityFundSchoolBase + donation;
 
@@ -102,8 +118,8 @@ namespace KokoSim.Unity.Management
                 IncomeNote = "学校予算 " + Career.AnnualBudgetBase.ToString("0")
                              + " ＋ 信頼度 " + (Career.BudgetPerTrust * m.Trust).ToString("0"),
                 Expense = expense,
-                ExpenseNote = "合宿 " + (Career.SummerCampCost + Career.WinterCampCost).ToString("0")
-                              + " ／ スカウト " + Career.ScoutCost.ToString("0"),
+                ExpenseNote = "合宿 " + camps.ToString("0")
+                              + " ／ 年契約 " + contracts.AnnualCost.ToString("0"),
                 Net = income - expense,
                 FacilityFund = m.FacilityFund,
                 FundIncome = fundIncome,
@@ -125,8 +141,103 @@ namespace KokoSim.Unity.Management
                 "効果小・効果大の2段。振っているメニューの分野にだけ効く ／ 部費から支払う");
             AddGroup(v, catalog, set, m, PurchaseKind.Gear, "備品",
                 "買い切り ／ 部費から支払う");
+            AddContractGroup(v);
 
             return v;
+        }
+
+        /// <summary>
+        /// 年契約（設計書04 §1.4a）。買い切りの3区分と違い、年額を毎年部費から払い、いつでも解約できる。
+        /// 契約時の前払いは無いので購入可否の判定も無く、代わりに「部費 年間差引」が赤くなることで
+        /// 抱えすぎが分かる（UI原則②: 本当の警告だけ警告色）。
+        /// </summary>
+        private static void AddContractGroup(ManagementView v)
+        {
+            var catalog = ManagerService.ContractList;
+            var set = ManagerService.Contracts;
+            var group = new LedgerGroup
+            {
+                Label = "年契約",
+                Note = "毎年かかる ／ いつでも解約できる ／ 部費から支払う",
+                IsContract = true,
+            };
+            foreach (var def in catalog.Contracts) group.Rows.Add(BuildContractRow(def, set));
+            if (group.Rows.Count > 0) v.Groups.Add(group);
+        }
+
+        private static FacilityLedgerRow BuildContractRow(ContractDef def, ContractSet set)
+        {
+            var lv = def.MaxLevel <= 0 ? 0 : System.Math.Clamp(set.LevelOf(def.Id), 0, def.MaxLevel);
+
+            var row = new FacilityLedgerRow
+            {
+                Id = def.Id,
+                Name = def.Name,
+                Level = lv,
+                MaxLevel = def.MaxLevel,
+                // 年契約は累積しない＝いまの段の効果だけを出す。
+                CurrentEffect = ContractEffectText(def.Tiers[lv]),
+                IsContract = true,
+                CanCancel = lv > 0,
+                ActionLabel = lv == 0 ? "契約" : "上げる",
+            };
+
+            if (lv < def.MaxLevel)
+            {
+                var next = def.Tiers[lv + 1];
+                row.NextEffect = ContractEffectText(next);
+                row.NextCost = next.AnnualCost;
+                row.Affordable = true;   // 契約時の前払いは無い（年度頭にまとめて引かれる）
+            }
+            return row;
+        }
+
+        /// <summary>年契約1段の効果の1行表記。効果ゼロ（未契約・据え置きの段）は「—」。</summary>
+        private static string ContractEffectText(ContractTier t)
+        {
+            var parts = new List<string>();
+            if (t.ScoutTalentAdd > 0) parts.Add("新入生の質 +" + t.ScoutTalentAdd.ToString("0"));
+            if (t.OutOfPrefectureOpponents) parts.Add("県外と練習試合");
+            if (t.CoachingBattingAdd > 0) parts.Add("打撃の指導 +" + t.CoachingBattingAdd.ToString("0"));
+            if (t.CoachingPitchingAdd > 0) parts.Add("投手の指導 +" + t.CoachingPitchingAdd.ToString("0"));
+            if (t.CoachingDefenseAdd > 0) parts.Add("守備走塁の指導 +" + t.CoachingDefenseAdd.ToString("0"));
+            return parts.Count == 0 ? "—" : string.Join(" ／ ", parts);
+        }
+
+        /// <summary>年契約の段を1つ上げる（契約する）。前払いが無いので資金判定はしない。</summary>
+        public void Sign(string contractId)
+        {
+            var def = ManagerService.ContractList.Find(contractId);
+            if (def == null)
+            {
+                _status = "その契約はありません（" + contractId + "）";
+                _statusWarn = true;
+                return;
+            }
+
+            var set = ManagerService.Contracts;
+            var lv = System.Math.Clamp(set.LevelOf(contractId), 0, def.MaxLevel);
+            if (lv >= def.MaxLevel)
+            {
+                _status = def.Name + " はすでに最上位の契約です";
+                _statusWarn = true;
+                return;
+            }
+
+            set.SetLevel(contractId, lv + 1);
+            _status = def.Name + " を Lv" + (lv + 1) + " で契約しました（年 "
+                      + def.Tiers[lv + 1].AnnualCost.ToString("0") + "万）";
+            _statusWarn = false;
+        }
+
+        /// <summary>年契約を解約する（段を0へ戻す）。年額も効果もその場で消える。</summary>
+        public void Cancel(string contractId)
+        {
+            var def = ManagerService.ContractList.Find(contractId);
+            if (def == null) return;
+            ManagerService.Contracts.SetLevel(contractId, 0);
+            _status = def.Name + " を解約しました";
+            _statusWarn = false;
         }
 
         private static void AddGroup(ManagementView v, FacilityCatalog catalog, FacilitySet set,

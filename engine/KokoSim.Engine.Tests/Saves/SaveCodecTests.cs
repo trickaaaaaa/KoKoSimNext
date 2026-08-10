@@ -47,10 +47,14 @@ public sealed class SaveCodecTests
         Assert.Equal(18, s.Roster[7].UniformNumber);
         Assert.Equal(InjurySite.Elbow, s.Roster[1].InjurySite);
 
-        // 監督メタ・施設
+        // 監督メタ・施設・年契約（財布は2つ＝部費と施設基金の両方が往復すること）
         Assert.Equal(137.5, s.Manager.Funds, 6);
+        Assert.Equal(8642.5, s.Manager.FacilityFund, 6);
         Assert.Equal("テスト監督", s.Manager.Name);
         Assert.Equal(2, s.Facilities.LevelOf("lighting"));
+        Assert.Equal(3, s.Contracts.LevelOf("scouting"));
+        Assert.Equal(1, s.Contracts.LevelOf("coach_pitching"));
+        Assert.Equal(0, s.Contracts.LevelOf("expedition"));
         Assert.Equal(1, s.ManagerLastGrownYear);
 
         // 成績（private set の集計器＋球種別内訳が復元されている）
@@ -136,6 +140,33 @@ public sealed class SaveCodecTests
         Assert.True(SaveCodec.TryDeserialize(v1, out var s, out var err), err);
         Assert.Null(s.Tournament);
         Assert.Equal(7, s.Week);        // 他の項目は素通りで読めている
+    }
+
+    // ===== 財布2つ・年契約の追加分（設計書04 §1.4a） =====
+
+    // v2（財布が1つ・年契約が無かった版）のセーブは facilityFund / contracts を持たない。
+    // 読めて、施設基金0・スカウト網Lv1（＝従来のスカウト費と同額・同効果）で始まること。
+    [Fact]
+    public void V2Save_WithoutFacilityFundAndContracts_StillLoads_WithSafeDefaults()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var v2 = json
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":2")
+            .Replace(",\"facilityFund\":8642.5", "");
+        // contracts ブロックは丸ごと落とす（値は fixture 由来で固定）。
+        var start = v2.IndexOf(",\"contracts\":{", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "contracts ブロックが見つからない");
+        var end = v2.IndexOf("}}", start, System.StringComparison.Ordinal) + 2;
+        v2 = v2.Remove(start, end - start);
+        Assert.DoesNotContain("\"facilityFund\"", v2);
+        Assert.DoesNotContain("\"contracts\"", v2);
+
+        Assert.True(SaveCodec.TryDeserialize(v2, out var s, out var err), err);
+        Assert.Equal(0, s.Manager.FacilityFund, 9);
+        Assert.Equal(1, s.Contracts.LevelOf("scouting"));
+        Assert.Equal(0, s.Contracts.LevelOf("coach_pitching"));
+        Assert.Equal(137.5, s.Manager.Funds, 6);   // 他の項目は素通りで読めている
+        Assert.Equal(2, s.Facilities.LevelOf("lighting"));
     }
 
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。

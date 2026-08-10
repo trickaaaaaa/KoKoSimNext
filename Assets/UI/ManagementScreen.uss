@@ -177,6 +177,16 @@
     border-right-width: var(--nb-border);
     border-bottom-width: var(--nb-border);
 }
+/* 解約（年契約だけの操作）。契約と同格に見せたくないので枠は同じまま文字だけ落とす。
+   解約は取り返しがつく操作なので警告色は使わない（UI原則②: 警告色は本当の警告だけ）。 */
+.mn-cancel {
+    margin: 0;
+    margin-left: var(--sp-1);
+    padding-left: 10px; padding-right: 10px;
+    padding-top: 2px; padding-bottom: 2px;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+}
 /* 最大レベルの行はボタンを置かず、到達した事実だけを静かに出す。 */
 .mn-maxed {
     font-size: var(--fs-cap);

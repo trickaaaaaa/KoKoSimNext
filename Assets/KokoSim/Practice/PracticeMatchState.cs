@@ -18,6 +18,8 @@ namespace KokoSim.Unity.Practice
         public int Overall;
         public string Tradition = "";
         public int AcceptPercent;
+        /// <summary>県外（遠征先）の相手なら県名。県内は空文字＝校名だけ出す。</summary>
+        public string PrefectureName = "";
     }
 
     /// <summary>選択中の相手校の詳細（6角形＋指標＋申込条件）。</summary>
@@ -84,18 +86,12 @@ namespace KokoSim.Unity.Practice
                 CostText = "¥" + scheduler.Cost.ToString("0") + "万",
             };
 
-            foreach (var s in NationService.PrefectureSchools)
-            {
-                v.Opponents.Add(new PracticeOpponentRow
-                {
-                    SchoolId = s.Id,
-                    Name = s.Name,
-                    TierLetter = s.Tier.ToString(),
-                    Overall = (int)Math.Round(s.Strength),
-                    Tradition = TraditionLabel(s.Tradition),
-                    AcceptPercent = Percent(scheduler.AcceptChance(manager, own, s)),
-                });
-            }
+            foreach (var s in NationService.PrefectureSchools) v.Opponents.Add(Row(s, "", manager, own, scheduler));
+
+            // 年契約「遠征」（設計書04 §1.4a）を結んでいる年だけ、県外の強豪も申込先に並ぶ。
+            if (ManagerService.ContractEffects.OutOfPrefectureOpponents)
+                foreach (var s in NationService.AwaySchools)
+                    v.Opponents.Add(Row(s, NationService.PrefectureName(s.PrefectureId), manager, own, scheduler));
 
             var selected = Find(_selectedId);
             if (selected != null) v.Selected = BuildDetail(selected, own);
@@ -226,10 +222,28 @@ namespace KokoSim.Unity.Practice
             });
         }
 
+        private static PracticeOpponentRow Row(
+            School s, string prefName, KokoSim.Engine.Career.Manager manager, School own,
+            PracticeMatchScheduler scheduler) => new PracticeOpponentRow
+        {
+            SchoolId = s.Id,
+            Name = s.Name,
+            TierLetter = s.Tier.ToString(),
+            Overall = (int)Math.Round(s.Strength),
+            Tradition = TraditionLabel(s.Tradition),
+            AcceptPercent = Percent(scheduler.AcceptChance(manager, own, s)),
+            PrefectureName = prefName,
+        };
+
+        // 申込先は県内＋（遠征契約中なら）県外の強豪。選択の解決も同じ2つを見る
+        // ＝契約を解いた週に選択が残っていても null になって申込ボタンが落ちるだけで壊れない。
         private static School Find(int schoolId)
         {
             foreach (var s in NationService.PrefectureSchools)
                 if (s.Id == schoolId) return s;
+            if (ManagerService.ContractEffects.OutOfPrefectureOpponents)
+                foreach (var s in NationService.AwaySchools)
+                    if (s.Id == schoolId) return s;
             return null;
         }
 
