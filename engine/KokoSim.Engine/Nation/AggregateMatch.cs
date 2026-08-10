@@ -14,8 +14,24 @@ namespace KokoSim.Engine.Nation;
 /// </summary>
 public static class AggregateMatch
 {
-    public static double WinProbability(double strengthA, double strengthB, NationCoefficients c)
-        => MathUtil.Logistic((strengthA - strengthB) / c.AggregateScale);
+    /// <summary>
+    /// 強さ差から A の勝率を出す。差は<b>ティア圧縮（issue #578）を通した能力中心どうし</b>で取る。
+    ///
+    /// <para>この集計モデルは「フルエンジンで回したら何が起きるか」の近道なので、フルエンジンが見る能力
+    /// （＝<see cref="StrengthTeamFactory"/> が生成する中心）と同じ尺度で差を測らないと**裏表が食い違う**。
+    /// 生の <see cref="School.Strength"/> 差のまま置くと、圧縮でフル側の勝率だけが 0.92→0.8 台へ寝て、
+    /// 集計で消化した裏試合の方が番狂わせが起きない世界になる（Heavy の
+    /// <c>AggregateModel_MatchesGameEngineWinRate</c> がこれを検出する）。</para>
+    ///
+    /// <para><paramref name="roster"/> 省略時は C#既定＝実ゲームと同じ圧縮。ロジスティック尺度
+    /// <c>AggregateScale</c> 自体は据え置き＝圧縮ぶんだけ差が縮んで勝率が寝る。</para>
+    /// </summary>
+    public static double WinProbability(double strengthA, double strengthB, NationCoefficients c,
+        Season.RosterCoefficients? roster = null)
+    {
+        var rc = roster ?? Season.RosterCoefficients.Default;
+        return MathUtil.Logistic((rc.CompressStrength(strengthA) - rc.CompressStrength(strengthB)) / c.AggregateScale);
+    }
 
     /// <summary>A が勝つか。</summary>
     public static bool AWins(double strengthA, double strengthB, NationCoefficients c, IRandomSource rng)
@@ -34,7 +50,10 @@ public static class AggregateMatch
     {
         var winner = Play(a, b, c, rng);
         var loser = ReferenceEquals(winner, a) ? b : a;
-        var gap = Math.Abs(winner.Strength - loser.Strength);
+        // 得点差も勾配の一部なので勝率と同じ尺度（圧縮後の能力中心）で測る（issue #578）。
+        // 生の強度差のままだと「勝率は僅差なのにスコアだけ大差」というちぐはぐな裏試合になる。
+        var rc = Season.RosterCoefficients.Default;
+        var gap = Math.Abs(rc.CompressStrength(winner.Strength) - rc.CompressStrength(loser.Strength));
         var margin = 1 + (int)Math.Round(MathUtil.Clamp(gap / 8.0 + rng.NextGaussian(0, 1.2), 0.0, 12.0));
         return (winner, loser, margin);
     }

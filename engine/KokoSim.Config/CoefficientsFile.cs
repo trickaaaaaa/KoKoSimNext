@@ -1733,6 +1733,10 @@ public static class CoefficientsLoader
         // 名声→talentCenterフィードバック（Issue #127）
         public double FameTalentCenterSpan { get; set; } = D.FameTalentCenterSpan;
         public double FameTalentCenterTau { get; set; } = D.FameTalentCenterTau;
+        // ティア→能力の圧縮（issue #578・Q24 確定2）
+        public double TierCompressionPivot { get; set; } = D.TierCompressionPivot;
+        public double TierCompressionSlope { get; set; } = D.TierCompressionSlope;
+        public double TierCompressionKnee { get; set; } = D.TierCompressionKnee;
         // 凸凹配分
         public double ConcentrationMean { get; set; } = D.ConcentrationMean;
         public double ConcentrationSd { get; set; } = D.ConcentrationSd;
@@ -1865,6 +1869,9 @@ public static class CoefficientsLoader
             TalentMax = TalentMax,
             FameTalentCenterSpan = FameTalentCenterSpan,
             FameTalentCenterTau = FameTalentCenterTau,
+            TierCompressionPivot = TierCompressionPivot,
+            TierCompressionSlope = TierCompressionSlope,
+            TierCompressionKnee = TierCompressionKnee,
             ConcentrationMean = ConcentrationMean,
             ConcentrationSd = ConcentrationSd,
             SpecialtyFloor = SpecialtyFloor,

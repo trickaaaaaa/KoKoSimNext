@@ -189,7 +189,11 @@ public sealed class PitcherRoleEmergenceTests
         var fielders = teams.SelectMany(t => t.BattingOrder)
             .Where(p => p.Position != FieldPosition.Pitcher).ToList();
 
-        // strength=55 中心・σ=6 の Ability ロールなので、平均は 55 近傍に収まる。
-        Assert.InRange(fielders.Average(p => (p.Contact + p.Power) / 2.0), 53.0, 57.0);
+        // 中心・σ=6 の Ability ロールなので、平均は「その学校の能力中心」の近傍に収まる。
+        // 中心は strength そのものではなく**ティア圧縮を通した値**（issue #578）＝ここで literal 55 を
+        // 期待すると、圧縮の有無ではなく写像の定義を二重に書くことになる。見たいのは
+        // 「野手に隠れたオフセットが乗っていないこと」なので、中心は写像から引く。
+        var center = C.CompressStrength(55.0);
+        Assert.InRange(fielders.Average(p => (p.Contact + p.Power) / 2.0), center - 2.0, center + 2.0);
     }
 }

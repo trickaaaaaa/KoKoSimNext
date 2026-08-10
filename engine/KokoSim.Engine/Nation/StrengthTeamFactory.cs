@@ -59,6 +59,10 @@ public static class StrengthTeamFactory
         var pc = personalityCoeff ?? new PersonalityCoefficients();
         var vocab = nameVocab ?? new PlayerNameVocab();
         var rc = rosterCoeff ?? new RosterCoefficients();
+        // ティア→能力の圧縮（issue #578・Q24 確定2）。ここで1度だけ写す＝以降の控え・中継ぎの
+        // 差分（−4/−2/−6/−8）は圧縮後の空間で絶対値のまま効く（チーム内の厚みは縮めない）。
+        // 表示ランクは元の strength のまま（確定4＝表示は直さない）。
+        strength = rc.CompressStrength(strength);
         var ac = rc.Archetypes;   // 球質タイプ係数は自校生成と同じ RosterCoefficients に同居
         var archSalt = 0x7B15_0000UL;   // 球質タイプ用の Fork ソルト（主RNG非消費）
         var order = new List<Player>(9);
