@@ -17,11 +17,15 @@ namespace KokoSim.Unity.Components
     /// </summary>
     public static class ScoreboardStrip
     {
-        /// <summary>通常週：共有現在週（GameClock）と夏予選までの残り週で埋める。</summary>
+        /// <summary>
+        /// 通常週：共有現在週（GameClock）と**次の公式戦**までの残り週で埋める（issue #582）。
+        /// 夏の後は秋、秋の後は翌年の夏へ自動で切り替わる（種別も残り週も GameClock.NextTournament 由来）。
+        /// </summary>
         public static void Fill(VisualElement root)
         {
-            var left = GameClock.WeeksUntilSummer;
-            Fill(root, "夏予選まで", left > 0 ? left + "週" : "開催中", "");
+            var next = GameClock.NextTournament;
+            Fill(root, SeasonClock.CountdownLabel(next.Kind),
+                next.WeeksLeft > 0 ? next.WeeksLeft + "週" : "開催中", "");
         }
 
         /// <summary>

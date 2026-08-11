@@ -61,6 +61,55 @@ public sealed class SeasonCalendarTests
         }
     }
 
+    // --- 次の公式戦（issue #582: トップバーのカウントダウン） ---
+
+    [Theory]
+    [InlineData(0, TournamentKind.Summer, 13)]   // シーズン頭 → 夏まで13週
+    [InlineData(12, TournamentKind.Summer, 1)]   // 夏の前週
+    [InlineData(13, TournamentKind.Summer, 0)]   // 夏の開幕週＝開催中
+    [InlineData(14, TournamentKind.Autumn, 9)]   // 夏の翌週からは秋を指す（旧実装はここから負＝ずっと開催中だった）
+    [InlineData(22, TournamentKind.Autumn, 1)]   // 秋の前週
+    [InlineData(23, TournamentKind.Autumn, 0)]   // 秋の開幕週＝開催中
+    [InlineData(24, TournamentKind.Summer, 39)]  // 秋の翌週からは翌年の夏へ折り返す
+    [InlineData(49, TournamentKind.Summer, 14)]  // 最終週 → 翌年の夏まで14週
+    public void NextTournament_SwitchesKindAndWrapsAtYearEnd(int week, TournamentKind kind, int weeksLeft)
+    {
+        Assert.Equal((kind, weeksLeft), _cal.NextTournament(week));
+    }
+
+    [Fact]
+    public void NextTournament_NeverGoesNegative_AndCountsDownByOne()
+    {
+        // 全50週で残り週が非負（「開催中」は開幕週の2回だけ）。
+        var live = 0;
+        for (var w = 0; w < _cal.WeeksPerYear; w++)
+        {
+            var (_, left) = _cal.NextTournament(w);
+            Assert.True(left >= 0, $"第{w}週の残り週が負: {left}");
+            if (left == 0) live++;
+        }
+        Assert.Equal(2, live);
+
+        // 週が1つ進むと残りはちょうど1つ減る（開幕週で次の大会へ乗り換わる所を除く）。
+        for (var w = 0; w < _cal.WeeksPerYear - 1; w++)
+        {
+            var (kind, left) = _cal.NextTournament(w);
+            var (nextKind, nextLeft) = _cal.NextTournament(w + 1);
+            if (kind == nextKind) Assert.Equal(left - 1, nextLeft);
+        }
+    }
+
+    [Fact]
+    public void NextTournament_StartWeeks_AgreeWithTournamentStartingAt()
+    {
+        // 「開催中(残り0)」と「その週に開幕する大会がある」は同じ週でなければならない。
+        for (var w = 0; w < _cal.WeeksPerYear; w++)
+        {
+            var (kind, left) = _cal.NextTournament(w);
+            Assert.Equal(left == 0 ? kind : (TournamentKind?)null, _cal.TournamentStartingAt(w));
+        }
+    }
+
     [Fact]
     public void DateOf_CoversExactlyFiftyWeeks_NoGaps()
     {

@@ -36,6 +36,13 @@ namespace KokoSim.Unity.Shell
             return d.Month + "月" + d.WeekOfMonth + "週";
         }
 
+        /// <summary>
+        /// 次の公式戦のカウントダウン見出し（issue #582）。夏＝地方予選なので「夏予選まで」、
+        /// 秋＝秋季県大会は予選ではなく本大会なので「秋大会まで」。文言もここが単一ソース。
+        /// </summary>
+        public static string CountdownLabel(TournamentKind kind)
+            => kind == TournamentKind.Summer ? "夏予選まで" : "秋大会まで";
+
         /// <summary>暦年の小書き（"YYYY年"）。年度と4月始まりの繰り上がりは CurrentLabel と同じ規則。</summary>
         public static string YearLabel(int yearIndex, int week)
         {

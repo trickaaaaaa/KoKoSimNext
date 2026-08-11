@@ -41,6 +41,21 @@ public sealed record SeasonCalendar
     /// <summary>その週がドラフト指名週か（設計書20 §4）。週送りループの指名フック判定に使う。</summary>
     public bool IsDraftWeek(int week) => week == DraftWeek;
 
+    /// <summary>
+    /// その週から見た「次の公式戦」と開幕までの残り週（issue #582）。トップバーのカウントダウンの単一ソース。
+    /// 開幕週ちょうどは残り0＝開催中。年をまたぐ折り返し（秋の後→翌年の夏）もここで畳む。
+    ///
+    /// 「夏までの残り週」を素朴に引き算すると夏の後がずっと負（＝開催中の表示）になり、
+    /// 第14〜49週が1年の大半にわたって「開催中」と出る。次の大会が何かを決めてから引くこと。
+    /// </summary>
+    public (TournamentKind Kind, int WeeksLeft) NextTournament(int week)
+    {
+        if (week <= SummerTournamentStartWeek) return (TournamentKind.Summer, SummerTournamentStartWeek - week);
+        if (week <= AutumnTournamentStartWeek) return (TournamentKind.Autumn, AutumnTournamentStartWeek - week);
+        // 秋の後は翌年の夏まで（今年の残り週＋来年の開幕週）。
+        return (TournamentKind.Summer, WeeksPerYear - week + SummerTournamentStartWeek);
+    }
+
     /// <summary>その週に開幕する大会があれば種別を返す（なければ null）。大会モードへの遷移判定に使う。</summary>
     public TournamentKind? TournamentStartingAt(int week)
     {
