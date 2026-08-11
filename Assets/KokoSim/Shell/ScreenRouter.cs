@@ -28,9 +28,11 @@ namespace KokoSim.Unity.Shell
             ("nav-practice", "PracticeMatch"),
             ("nav-match", "MatchScreen"),
             ("nav-tournament", "TournamentPreview"),
-            ("nav-manager", "ManagerScreen"),
             ("nav-scout", "ScoutScreen"),
             ("nav-management", "ManagementScreen"),
+            // 旧「監督」タブ（nav-manager / ManagerScreen）は issue #586 でキャリアへ統合し廃止した。
+            // 監督メタ（指導力・采配・育成眼・名声・信頼度）はこの画面が持つ。
+            ("nav-career", "CareerScreen"),
             ("nav-system", "SaveSlots"),
         };
 
@@ -59,7 +61,7 @@ namespace KokoSim.Unity.Shell
         // ホーム以外で「今週を進める」を持つ画面。ここで引退週／大会開幕週に入ったら、主将指名モーダル／
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
-            { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "ManagerScreen",
+            { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "CareerScreen",
               "ManagementScreen", "TeamSetting", "SaveSlots", "ScoutScreen" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>

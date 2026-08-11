@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Career;
+using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Season;
@@ -80,6 +81,13 @@ public sealed class SaveState
     /// 3月の判定で使い切り、次の秋に新しいリストで上書きされる。
     /// </summary>
     public RecruitingState? Recruiting { get; set; }
+
+    // --- 教え子名鑑（過年度のドラフト指名確定・issue #586。v7 で追加） ---
+    /// <summary>
+    /// 監督キャリアに紐づく指名実績の台帳（設計書20 §6）。空＝一度も指名が出ていない
+    /// （旧セーブは Unity側でドラフトが走っていなかったので必ず空）。
+    /// </summary>
+    public DraftHistory Draft { get; set; } = new();
 
     /// <summary>
     /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。

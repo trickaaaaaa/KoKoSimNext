@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Career;
+using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
@@ -177,7 +178,25 @@ internal static class SaveTestFixtures
             Incoming = BuildIncomingClass(),
             // 能動勧誘（v6・issue #588）。秋にリストが出て、訪問を重ねた途中の状態で採る。
             Recruiting = BuildRecruitingState(),
+            // 教え子名鑑（v7・issue #586）。過年度の指名を2件だけ積んだ状態で採る。
+            Draft = BuildDraftHistory(),
         };
+    }
+
+    /// <summary>
+    /// 過年度の指名確定2件（issue #586）。実物の指名（<see cref="DraftEngine.RunNomination"/>）から採り、
+    /// 指名が出ない引きに当たっても台帳が空にならないよう手組みの1件を足しておく。
+    /// </summary>
+    public static DraftHistory BuildDraftHistory()
+    {
+        var history = new DraftHistory();
+        history.Add(new DraftRecord(
+            Year: 2027, YearIndex: 2, PlayerId: 41, Name: "中田　大祐",
+            UniformNumber: 1, Round: 2, Band: DraftRankBand.UpperRound, Notability: 78.5));
+        history.Add(new DraftRecord(
+            Year: 2028, YearIndex: 3, PlayerId: 52, Name: "岩崎　幹太",
+            UniformNumber: 18, Round: 6, Band: DraftRankBand.LowerRound, Notability: 61.25));
+        return history;
     }
 
     /// <summary>

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
@@ -161,6 +162,7 @@ namespace KokoSim.Unity.Home
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
+            RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
         }
 
         /// <summary>
@@ -221,6 +223,67 @@ namespace KokoSim.Unity.Home
                     Tag = "発見",
                 });
             }
+            if (items.Count > 0) PushFeed(items);
+        }
+
+        /// <summary>
+        /// ドラフトの通知フィード（設計書20 §5・issue #586）。候補入り／評価の増減は週次のバンド差分、
+        /// 指名確定は10月最終週の結果から出す。判定そのものは
+        /// <see cref="KokoSim.Unity.Shell.DraftService"/> が済ませており、ここは提示だけ。
+        /// </summary>
+        private void RunDraftFeed()
+        {
+            var items = new List<FeedItem>();
+
+            foreach (var c in KokoSim.Unity.Shell.DraftService.DrainChanges())
+            {
+                if (c.Entered)
+                {
+                    items.Add(new FeedItem
+                    {
+                        When = "今週",
+                        Text = c.Name + " がドラフト候補に挙がった（" + DraftRankBands.Label(c.To) + "）",
+                        Kind = FeedKind.Discover,
+                        Tag = "発見",
+                    });
+                    continue;
+                }
+                // 圏外へ落ちたときは「圏外」ではなく、候補から外れたことを言い切る。
+                var to = c.To == DraftRankBand.None ? "候補から外れた" : DraftRankBands.Label(c.To);
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = c.Name + " の評価が" + (c.Improved ? "上がった" : "下がった")
+                           + "（" + DraftRankBands.Label(c.From) + "→" + to + "）",
+                    Kind = c.Improved ? FeedKind.Up : FeedKind.Warn,
+                    Tag = c.Improved ? "成長" : "警告",
+                });
+            }
+
+            var result = KokoSim.Unity.Shell.DraftService.LastNomination;
+            if (result != null)
+            {
+                KokoSim.Unity.Shell.DraftService.LastNomination = null;
+                foreach (var pick in result.Picks)
+                {
+                    items.Add(pick.Nominated
+                        ? new FeedItem
+                        {
+                            When = "今週",
+                            Text = pick.Name + " がドラフト" + pick.Round + "位指名！",
+                            Kind = FeedKind.Discover,
+                            Tag = "発見",
+                        }
+                        : new FeedItem
+                        {
+                            When = "今週",
+                            Text = pick.Name + " は指名されなかった。",
+                            Kind = FeedKind.Normal,
+                            Tag = "情報",
+                        });
+                }
+            }
+
             if (items.Count > 0) PushFeed(items);
         }
 

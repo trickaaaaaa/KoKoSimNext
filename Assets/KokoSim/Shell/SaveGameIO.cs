@@ -88,6 +88,7 @@ namespace KokoSim.Unity.Shell
             GameSession.Current.Capture(s);
             NewTeamService.Capture(s);
             TeamColorProvider.Capture(s);
+            DraftService.Capture(s);
             return s;
         }
 
@@ -108,6 +109,9 @@ namespace KokoSim.Unity.Shell
             GameSession.Current.Restore(s);
             NewTeamService.Restore(s);
             TeamColorProvider.Restore(s);
+            // 教え子名鑑はロスター**と**成績の後（issue #586）。復元時にバンドの基準を採り直すため、
+            // 部員（RosterService）と公式戦通算（GameSession.Stats）の両方が据わっている必要がある。
+            DraftService.Restore(s);
             if (s.Tournament != null) TournamentEntry.RestoreRunner(s.Tournament);
         }
 

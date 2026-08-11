@@ -272,6 +272,17 @@
     --col-sc-hand: 92px;     /* 投打（「右投左打」の4文字） */
     --col-sc-unknown: 56px;  /* ？の残り数（数値・右揃え） */
 
+    /* ── キャリア：年表と教え子名鑑（issue #586。ヘッダーとデータが同一変数を参照） ── */
+    --col-tl-year: 52px;     /* 年表の暦年（4桁・Oswald・右揃え） */
+    --col-tl-rail: 12px;     /* 年表の縦軸（節点の丸の直径） */
+    --col-cr-year: 56px;     /* 教え子名鑑 年（4桁＋余白） */
+    --col-cr-no: 52px;       /* 教え子名鑑 当時の背番号（数値・右揃え） */
+    --col-cr-round: 96px;    /* 教え子名鑑 指名順位（「2位指名」） */
+    --col-cr-rec-k: 116px;   /* 通算成績の項目名（「最高成績」が最長） */
+    --col-cr-post-year: 84px;/* 歴任校 就任年（「2026-」） */
+    --col-cr-post-term: 76px;/* 歴任校 在任（「3年目」） */
+    --col-cr-post-wl: 132px; /* 歴任校 公式戦（「24勝 9敗」） */
+
     /* ── メンバー設定：グラウンド装飾＋2選手比較の意味色 ───────────
        比較パネルの適性ミニダイヤ（apt-field、未移行）専用。ダイヤ枠本体（field-diamond）は
        #271 で下の --field-*-day 系へ移行済み（BaseballFieldElement/.field-diamond/.field-chip）。 */

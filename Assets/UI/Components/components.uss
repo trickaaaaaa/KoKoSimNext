@@ -2594,3 +2594,47 @@ Button.ucp-arrow {
 }
 
 Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
+
+/* ── Timeline：キャリア年表の縦軸＋節点（設計書16 §10.2 の穴#7・issue #586）───────
+   「年 ｜ 節点と縦軸 ｜ 出来事」の3列。縦軸は装飾ではなく<b>時間が続いていることを示す線</b>なので
+   UI原則④（線は機能がある場所だけ）に反しない。最終節点（現在）だけ白抜きの丸にして、
+   そこから先がまだ書かれていないことを形で出す。色はインクの濃淡だけでアクセントを使わない（UI原則②）。 */
+.timeline { }
+.timeline__node { flex-direction: row; align-items: stretch; flex-shrink: 0; }
+/* 年は数字だけのセル＝Oswald（書体3役）。右揃えで桁を揃える。 */
+.timeline__year {
+    width: var(--col-tl-year);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-2);
+    -unity-text-align: upper-right;
+    margin: 0;
+    padding: 0;
+    padding-top: 5px;
+}
+/* 節点と縦軸の列。丸の直径ぶんだけ幅を取り、線は丸の中心を通す。 */
+.timeline__rail {
+    width: var(--col-tl-rail);
+    flex-shrink: 0;
+    align-items: center;
+    margin-left: var(--sp-3);
+    margin-right: var(--sp-3);
+}
+.timeline__dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    background-color: var(--ink);
+    margin-top: 7px;
+    flex-shrink: 0;
+}
+.timeline__line { width: 2px; background-color: var(--ink); opacity: 0.28; flex-grow: 1; }
+/* 現在（まだ続いている節点）＝白抜き。線はここで終わるので出さない。 */
+.timeline__node--now .timeline__dot { background-color: var(--sf-card); border-width: 2px; border-color: var(--ink); }
+.timeline__node--now .timeline__year { color: var(--tx-3); }
+.timeline__body { flex-grow: 1; flex-basis: 0; min-width: 0; padding-bottom: var(--sp-2); }
+.timeline__title { font-size: var(--fs-body); color: var(--tx-1); margin: 0; padding: 0; overflow: hidden; }
+.timeline__note { font-size: var(--fs-cap); color: var(--tx-2); margin: 2px 0 0 0; padding: 0; white-space: normal; }
+.timeline__node--now .timeline__title { color: var(--tx-2); }
+/* 空状態（まだ何も起きていない）。 */
+.timeline__empty { font-size: var(--fs-label); color: var(--tx-3); margin: 0; padding: var(--sp-3) 0; }

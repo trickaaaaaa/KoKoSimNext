@@ -1204,26 +1204,14 @@ GameObject:
   m_Component:
   - component: {fileID: 1099443961}
   - component: {fileID: 1099443960}
-  - component: {fileID: 1099443959}
+  - component: {fileID: 1099443962}
   m_Layer: 0
-  m_Name: ManagerScreen
+  m_Name: CareerScreen
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 0
---- !u!114 &1099443959
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1099443958}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 689096a707d09417db05ec3412793938, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::KokoSim.Unity.ManagerMeta.ManagerScreenController
 --- !u!114 &1099443960
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1238,7 +1226,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
   m_PanelSettings: {fileID: 11400000, guid: 87283b994fb60454d9feb9916b222a0d, type: 2}
   m_ParentUI: {fileID: 0}
-  sourceAsset: {fileID: 9197481963319205126, guid: 031284bc5aac54c76930ad24538cf159, type: 3}
+  sourceAsset: {fileID: 9197481963319205126, guid: 9e6f36b9a704d4f8d96aefae237a66ff, type: 3}
   m_SortingOrder: 1
   m_Position: 0
   m_WorldSpaceSizeMode: 1
@@ -1262,6 +1250,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1099443962
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1099443958}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75dc20f28efed43cf85840799aaed3c2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::KokoSim.Unity.CareerMeta.CareerScreenController
 --- !u!1 &1299467240
 GameObject:
   m_ObjectHideFlags: 0

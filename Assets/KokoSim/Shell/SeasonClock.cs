@@ -44,10 +44,13 @@ namespace KokoSim.Unity.Shell
             => kind == TournamentKind.Summer ? "夏予選まで" : "秋大会まで";
 
         /// <summary>暦年の小書き（"YYYY年"）。年度と4月始まりの繰り上がりは CurrentLabel と同じ規則。</summary>
-        public static string YearLabel(int yearIndex, int week)
-        {
-            var d = Calendar.DateOf(week);
-            return (SeasonBaseYear + (yearIndex - 1) + d.YearOffset) + "年";
-        }
+        public static string YearLabel(int yearIndex, int week) => CalendarYear(yearIndex, week) + "年";
+
+        /// <summary>
+        /// 年度＋週 → 暦年（4月始まりの繰り上がり込み）。表示文字列から年を切り出して数え直さないための
+        /// 単一ソース（issue #586: ドラフト指名年・キャリア年表がこの値を数値のまま要る）。
+        /// </summary>
+        public static int CalendarYear(int yearIndex, int week)
+            => SeasonBaseYear + (yearIndex - 1) + Calendar.DateOf(week).YearOffset;
     }
 }

@@ -115,6 +115,12 @@ round = バンド→代表順位（FirstRound→1, UpperRound→2, MiddleRound�
 - 週送りループ（Unity Shell / SeasonEngine 週ループ）で `IsDraftWeek` の週に `DraftEngine.RunNomination` を
   1回だけ呼び、結果を通知フィードへ流す（③）。指名は独立Fork乱数なので試合結果・帯に影響しない。
 
+> **③の配線（issue #586・実装済み）**: `GameClock.EnterWeek` が毎週 `DraftService.RefreshBands()`（注目度の
+> 再評価＝純関数・乱数不要）を回し、`IsDraftWeek` の週だけ `DraftService.RunNomination` を呼ぶ。
+> **対象ロスターは `RosterService.Roster`（`Active` ではない）**＝3年生は夏に引退して Active から外れるが、
+> 指名は10月なので**引退した3年こそが本命**。評価の母数は**公式戦通算**（`PlayerStatStore.Official`）で、
+> 練習試合の成績は公になった実績ではないのでスカウトの評価軸に載せない。
+
 ## 5. 通知フィード（③・Unity側）
 
 `Assets/KokoSim/Home/HomeState.cs` の `FeedItem`/`FeedKind` を使う（既存 `Discover` 種別あり）。
@@ -149,14 +155,33 @@ round = バンド→代表順位（FirstRound→1, UpperRound→2, MiddleRound�
   予想順位文言・主要成績。数字は Oswald 右揃え（書体3役）。
   主要成績は**出場実績で選ぶ**（登板があれば ERA/K、打席があれば OPS/HR、二刀流は両方）＝
   役割で切り替えない（設計書01 §1.1a、#379 でスタメン画面に入れたのと同じ作法）。
-- **指名実績**（過年度の指名確定＝教え子がプロへ）: 年・名前・round・（将来）球団。キャリアの勲章として残す。
 - 部品は RankChip / StatBar3 等の部品辞書内で構成（UI原則⑤）。新規見た目が要るなら部品辞書に追加してから。
+
+> **改訂（issue #586・2026-08-11）**: 旧記述「**指名実績**（過年度の指名確定）もドラフト画面に置く」は撤回。
+> **候補一覧＝ドラフト画面（現役選手の話）／指名実績＝キャリアタブの「教え子名鑑」（過去の勲章）** に分ける。
+> 候補一覧はドラフトが近づくと毎年見る運用画面、指名実績は監督の歩みの一部で見る頻度も文脈も違う。
+> 教え子名鑑は**年・当時の背番号・名前・round**（球団は将来）。
+
+### 6.1 教え子名鑑の実装（issue #586・実装済み）
+
+- 台帳は engine の `Career/Draft/DraftHistory.cs`（`DraftRecord`）。**指名された者だけ**を積む
+  （落選は勲章ではない＝指名週の通知フィードにだけ出て消える）。セーブ **v7** の `SaveState.Draft` で永続化する。
+- **暦年は導出せず確定時の値をそのまま焼く**。暦年の起点（`SeasonClock.SeasonBaseYear`）は Shell 側の定数で
+  engine は知らない＝導出にすると起点を動かした瞬間に過去の勲章の年が全部ずれる。
+- **「当時の背番号」は選手本体からは引けない**。3年生は夏の新チーム発足で背番号を返上する
+  （`RosterLifecycle.BeginNewTeam` → `UniformNumberAssigner.Clear`・issue #531）のに対し、指名は10月。
+  素直に `DevelopingPlayer.UniformNumber` を読むと**必ず 0 になる**。大会別アーカイブを遡る
+  `TournamentArchive.LastUniformNumber(sourceId)`（学年の高い順・同学年は夏→秋→春）を唯一の入口にする。
 
 ## 7. スコープと帯不変の確認
 
 - **② engine（本PR）**: 純C#・決定論・表示専用。指名は独立Fork乱数。既存の match/pitching/running 解決や
   `data/balance-targets.yaml` に一切触れない＝**バランス帯に影響しない**。
-- **③ Unity（別PR）**: 表示のみ。フィード投入・画面。engine DLL 同期が要る（夜間ランではDLLをコミットしない）。
+- **③ Unity（issue #586 で指名フック・通知フィード・教え子名鑑まで実装済み。候補一覧画面は未着手）**:
+  表示のみ。engine DLL 同期が要る（夜間ランではDLLをコミットしない）。
+  週次のバンド差分（候補入り／評価の増減）は **Shell が持ち、セーブには載せない**（表示のための前回比較で
+  進行の実体ではない）。ただし**セーブ復元時に基準を採り直す**こと＝採り直さないと読み込み直後の1週目に
+  在籍候補が全員「候補入り」として流れる（`DraftService.Restore`）。
 
 ## 8. 未確定・将来拡張
 

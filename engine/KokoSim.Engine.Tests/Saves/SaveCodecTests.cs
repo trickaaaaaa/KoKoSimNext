@@ -367,6 +367,60 @@ public sealed class SaveCodecTests
         Assert.NotNull(s.Incoming);   // 他の項目は素通りで読めている
     }
 
+    // ===== 教え子名鑑（issue #586） =====
+
+    // 過年度の指名確定（年・当時の背番号・順位・バンド・注目度）が往復すること。
+    [Fact]
+    public void DraftHistory_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        var a = state.Draft.Records;
+        var b = s.Draft.Records;
+        Assert.Equal(a.Count, b.Count);
+        Assert.NotEmpty(b);
+        for (var i = 0; i < a.Count; i++)
+        {
+            Assert.Equal(a[i].Year, b[i].Year);
+            Assert.Equal(a[i].YearIndex, b[i].YearIndex);
+            Assert.Equal(a[i].PlayerId, b[i].PlayerId);
+            Assert.Equal(a[i].Name, b[i].Name);
+            Assert.Equal(a[i].UniformNumber, b[i].UniformNumber);
+            Assert.Equal(a[i].Round, b[i].Round);
+            Assert.Equal(a[i].Band, b[i].Band);
+            Assert.Equal(a[i].Notability, b[i].Notability, 9);
+        }
+    }
+
+    // 指名がまだ一度も出ていない進行（新規ゲーム）も往復すること。
+    [Fact]
+    public void DraftHistory_Empty_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Draft = new KokoSim.Engine.Career.Draft.DraftHistory();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Empty(s.Draft.Records);
+    }
+
+    // v6（教え子名鑑が無かった版）のセーブは draft を持たない。読めて空で補われること。
+    [Fact]
+    public void V6Save_WithoutDraft_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"draft\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "draft が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が draft の後に居ない");
+        var v6 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":6");
+        Assert.DoesNotContain("\"draft\"", v6);
+
+        Assert.True(SaveCodec.TryDeserialize(v6, out var s, out var err), err);
+        Assert.Empty(s.Draft.Records);
+        Assert.NotNull(s.Recruiting);   // 他の項目は素通りで読めている
+    }
+
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。
     [Fact]
     public void TournamentState_RoundTrips()
