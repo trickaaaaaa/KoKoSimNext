@@ -200,13 +200,16 @@ public sealed class SaveCodecTests
     public void V3Save_WithoutSchoolIdentity_StillLoads_AsSakuragaokaInKanagawa()
     {
         var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
-        var v3 = json
-            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":3")
-            .Replace(",\"schoolName\":\"北嶺\"", "")
-            .Replace(",\"prefectureId\":27", "")
-            .Replace(",\"districtId\":3", "");
+
+        // 自校の同定「だけ」を切り取る。文字列置換で消すと、同じキー名を持つ入れ子
+        // （勧誘の中学生も prefectureId を持つ・issue #588）まで巻き添えにするので、
+        // トップレベルの区間（schoolName の手前 〜 incoming の手前）を位置で切る。
+        var start = json.IndexOf(",\"schoolName\":", System.StringComparison.Ordinal);
+        var end = json.IndexOf(",\"incoming\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "自校の同定が想定の位置に直列化されていない");
+        var v3 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":3");
         Assert.DoesNotContain("\"schoolName\"", v3);
-        Assert.DoesNotContain("\"prefectureId\"", v3);
         Assert.DoesNotContain("\"districtId\"", v3);
 
         Assert.True(SaveCodec.TryDeserialize(v3, out var s, out var err), err);
@@ -242,7 +245,21 @@ public sealed class SaveCodecTests
             Assert.Equal(a.Reports[i].Batting, b.Reports[i].Batting, 9);
             Assert.Equal(a.Reports[i].Pitching, b.Reports[i].Pitching, 9);
             Assert.Equal(a.Reports[i].UnknownCount, b.Reports[i].UnknownCount);
+            Assert.Equal(a.Reports[i].Recruited, b.Reports[i].Recruited);
         }
+    }
+
+    // 能動勧誘で獲った子は印が付いて往復すること（受動枠と混ざっても区別が残る・issue #588）。
+    [Fact]
+    public void IncomingClass_RecruitedFlag_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Incoming!.Reports[0].Recruited = true;
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.True(s.Incoming!.Reports[0].Recruited);
+        Assert.False(s.Incoming.Reports[1].Recruited);
     }
 
     // 合流済みの学年は選手の実体を持たず（ロスター側にしか居ない）、見立てだけが残ること。
@@ -291,6 +308,63 @@ public sealed class SaveCodecTests
         Assert.True(SaveCodec.TryDeserialize(v4, out var s, out var err), err);
         Assert.Null(s.Incoming);
         Assert.Equal("北嶺", s.SchoolName);   // 他の項目は素通りで読めている
+    }
+
+    // ===== 能動勧誘（issue #588） =====
+
+    // 中学生リスト・訪問回数・競合校の格・勧誘対象が往復すること。
+    [Fact]
+    public void RecruitingState_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        var a = state.Recruiting!;
+        var b = s.Recruiting;
+        Assert.NotNull(b);
+        Assert.Equal(a.YearIndex, b!.YearIndex);
+        Assert.Equal(a.Slots, b.Slots);
+        Assert.Equal(a.Resolved, b.Resolved);
+        Assert.Equal(a.Prospects.Count, b.Prospects.Count);
+        Assert.Equal(a.TargetedCount, b.TargetedCount);
+        for (var i = 0; i < a.Prospects.Count; i++)
+        {
+            Assert.Equal(a.Prospects[i].Player.Name, b.Prospects[i].Player.Name);
+            Assert.Equal(a.Prospects[i].PrefectureId, b.Prospects[i].PrefectureId);
+            Assert.Equal(a.Prospects[i].Distance, b.Prospects[i].Distance);
+            Assert.Equal(a.Prospects[i].RivalTier, b.Prospects[i].RivalTier);
+            Assert.Equal(a.Prospects[i].Visits, b.Prospects[i].Visits);
+            Assert.Equal(a.Prospects[i].Targeted, b.Prospects[i].Targeted);
+            Assert.Equal(a.Prospects[i].Report.Batting, b.Prospects[i].Report.Batting, 9);
+        }
+    }
+
+    // 勧誘を持たない進行（寮が無い／秋を跨いでいない）も往復すること。
+    [Fact]
+    public void RecruitingState_Null_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Recruiting = null;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Null(s.Recruiting);
+    }
+
+    // v5（勧誘が無かった版）のセーブは recruiting を持たない。読めて null で補われること。
+    [Fact]
+    public void V5Save_WithoutRecruiting_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"recruiting\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "recruiting が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が recruiting の後に居ない");
+        var v5 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":5");
+        Assert.DoesNotContain("\"recruiting\"", v5);
+
+        Assert.True(SaveCodec.TryDeserialize(v5, out var s, out var err), err);
+        Assert.Null(s.Recruiting);
+        Assert.NotNull(s.Incoming);   // 他の項目は素通りで読めている
     }
 
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。

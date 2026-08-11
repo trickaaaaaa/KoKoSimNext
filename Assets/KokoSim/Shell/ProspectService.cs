@@ -71,6 +71,20 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
+        /// 勧誘で獲得した中学生を入部予定者へ足す（設計書04 §2.2・issue #588）。
+        /// <b>選手を作り直さない</b>＝秋のリストで見ていた本人がそのまま4月に入部する。
+        /// 確定済み（未合流）の学年が無い／すでに合流済みなら何もしない。
+        /// </summary>
+        public static void AddRecruited(DevelopingPlayer player, ProspectReport report)
+        {
+            if (Current == null || Current.Joined || player == null) return;
+            var r = report ?? new ProspectReport { Name = player.Name };
+            r.Recruited = true;   // 受動枠で降ってきた子と区別して見せる（能力には影響しない）
+            Current.Players.Add(player);
+            Current.Reports.Add(r);
+        }
+
+        /// <summary>
         /// 4月の合流で取り出す（<see cref="RosterService.AdvanceYear"/> から呼ぶ）。年度が違う／すでに合流済み
         /// ／そもそも確定していない場合は null を返し、呼び出し側は従来どおりその場生成へ落ちる。
         /// </summary>

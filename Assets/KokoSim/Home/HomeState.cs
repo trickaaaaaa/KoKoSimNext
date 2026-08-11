@@ -184,6 +184,31 @@ namespace KokoSim.Unity.Home
                     Tag = "発見",
                 });
             }
+            if (KokoSim.Unity.Shell.GameClock.RecruitListOpened)
+            {
+                KokoSim.Unity.Shell.GameClock.RecruitListOpened = false;
+                var n = KokoSim.Unity.Shell.RecruitService.Current?.Prospects.Count ?? 0;
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = "中学生 " + n + "名 のリストが届いた。勧誘枠は "
+                           + KokoSim.Unity.Shell.RecruitService.Slots + "名。",
+                    Kind = FeedKind.Discover,
+                    Tag = "発見",
+                });
+            }
+            if (KokoSim.Unity.Shell.GameClock.RecruitsWon > 0)
+            {
+                var won = KokoSim.Unity.Shell.GameClock.RecruitsWon;
+                KokoSim.Unity.Shell.GameClock.RecruitsWon = 0;
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = "勧誘した中学生 " + won + "名 が入部を決めた。",
+                    Kind = FeedKind.Up,
+                    Tag = "成長",
+                });
+            }
             if (KokoSim.Unity.Shell.GameClock.ProspectJoined)
             {
                 KokoSim.Unity.Shell.GameClock.ProspectJoined = false;

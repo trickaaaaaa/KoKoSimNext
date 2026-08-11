@@ -175,7 +175,36 @@ internal static class SaveTestFixtures
             DistrictId = 3,
             // 入部予定者（v5・issue #587）。3月に確定し、まだ合流していない状態で採る。
             Incoming = BuildIncomingClass(),
+            // 能動勧誘（v6・issue #588）。秋にリストが出て、訪問を重ねた途中の状態で採る。
+            Recruiting = BuildRecruitingState(),
         };
+    }
+
+    /// <summary>
+    /// 訪問を重ねた途中の勧誘状態（issue #588）。実物の生成・訪問・見立てから採る
+    /// （手で組んだ DTO では「保存できる形」しか試せない）。
+    /// </summary>
+    public static RecruitingState BuildRecruitingState()
+    {
+        var coeff = new RecruitCoefficients();
+        var state = RecruitModel.BuildList(
+            yearIndex: 3, slots: 2, homePrefectureId: 27, homeTier: Tier.C,
+            talentCenter: new RosterCoefficients().TalentCenterDefault,
+            roster: new RosterCoefficients(), c: coeff, rng: new Xoshiro256Random(9101));
+
+        var visitRng = new Xoshiro256Random(9102);
+        var scoutRng = new Xoshiro256Random(9103);
+        var strength = new TeamStrengthCoefficients();
+        var scoutCoeff = new ProspectScoutingCoefficients();
+        for (var i = 0; i < state.Prospects.Count; i++)
+        {
+            var p = state.Prospects[i];
+            p.Report = ProspectScouting.Survey(p.Player, 0.45, strength, scoutCoeff, scoutRng);
+            if (i >= 2) continue;
+            p.Targeted = true;                                   // 枠2つを使っている途中
+            for (var v = 0; v <= i; v++) RecruitModel.Visit(p, coeff, visitRng);
+        }
+        return state;
     }
 
     /// <summary>

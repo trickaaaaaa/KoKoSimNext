@@ -774,6 +774,34 @@ scouting:
   reveal_min: 0.05        # 開示0のとき隠し1項目が判明する確率
   reveal_max: 0.85        # 開示1でも1.0にしない＝全部は見えない
 
+# --- 能動勧誘枠（設計書04 §2.2・issue #588）---
+# 寮を建てると解禁される「年最大2名」の枠。位置づけは補強の主役ではなくスパイスなので、
+# リストの質は上振れさせつつ、成功率は名声・距離・競合校の格で削られるように置く。
+recruiting:
+  list_size: 12                    # 中学生リストに載る人数
+  talent_center_add: 10.0          # 受動枠の中心(32)より上振れ＝わざわざ名前が挙がる中学生
+  out_of_prefecture_ratio: 0.65    # 県外から載る割合（残りは自県＝距離0）
+  # 成功率 = base + fame項 - 距離の減点(寮で緩和) - 競合校の格の減点 + 訪問の積み上げ
+  base_probability: 0.20
+  prob_per_fame: 0.0035            # 名声100で +0.35
+  prob_per_visit: 0.09
+  visit_gain_max: 0.36             # 通い詰めても確実にはしない
+  prob_per_rival_tier: 0.08        # 自校より上の段だけ効く
+  probability_min: 0.02
+  probability_max: 0.92
+  penalty_same_region: 0.06
+  penalty_neighbor_region: 0.14
+  penalty_far: 0.24
+  dorm_distance_relief: 0.6        # 「距離は寮でカバー」の実体（距離の減点を6割打ち消す）
+  # 訪問費用[万円]（部費から。設計書04 §1.4）
+  visit_cost_same_prefecture: 5.0
+  visit_cost_same_region: 10.0
+  visit_cost_neighbor_region: 20.0
+  visit_cost_far: 30.0
+  # 争奪戦
+  rival_event_prob: 0.22           # 訪問1回あたりに競合校が動く確率
+  rival_event_tier_step: 1         # 動くと競合校の格が1段上がる
+
 # --- 監督成長イベント（設計書04 §1.1b: 節目の跳ね）🟡 ---
 manager_growth:
   koshien_tactical_boost: 5.0
@@ -984,11 +1012,11 @@ facilities:
       - { cost: 3000, coef_add: 0.15, budget_add: 50 }
       - { cost: 5000, coef_add: 0.15, budget_add: 50 }
       - { cost: 8000, coef_add: 0.15, budget_add: 50 }
-  - id: dorm              # 寮: 生活・体調管理で効率↑
+  - id: dorm              # 寮: 生活・体調管理で効率↑。Lv1 で能動勧誘枠が2つ解禁（設計書04 §2.2・#588）
     name: 寮
     tiers:
       - {}
-      - { cost: 5000,  coef_add: 0.15 }
+      - { cost: 5000,  coef_add: 0.15, recruit_slots: 2 }   # 枠は Lv1 だけ＝上げても「年最大2名」は変わらない
       - { cost: 8000,  coef_add: 0.15 }
       - { cost: 12000, coef_add: 0.15 }
   - id: weight            # トレーニング場: ウェイト・マシンで効率↑

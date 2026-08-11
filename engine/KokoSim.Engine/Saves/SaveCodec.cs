@@ -22,7 +22,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     // ===== Serialize =====
 
@@ -53,6 +53,7 @@ public static class SaveCodec
             .Add("prefectureId", s.PrefectureId)
             .Add("districtId", s.DistrictId.HasValue ? JsonValue.Of(s.DistrictId.Value) : JsonNull.Instance)
             .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
+            .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -157,6 +158,9 @@ public static class SaveCodec
         // その場生成」だったので、予定者を持たない＝null で補う。旧セーブを4月へ進めると
         // RosterLifecycle.AdvanceYear の従来経路（incoming=null＝その場生成）へそのまま落ちる。
         if (version < 5 && !root.Has("incoming")) root.Add("incoming", JsonNull.Instance);
+        // v5→v6（issue #588）: 能動勧誘（中学生リストと訪問の状態）が増えた。v5 以前は寮を建てても
+        // 勧誘枠が無かったので、リストを持たない＝null で補う（次の秋に初めて作られる）。
+        if (version < 6 && !root.Has("recruiting")) root.Add("recruiting", JsonNull.Instance);
         return root;
     }
 
@@ -192,6 +196,8 @@ public static class SaveCodec
             DistrictId = root["districtId"] is JsonNull ? (int?)null : root.Int("districtId"),
             // 入部予定者は v5 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Incoming = IncomingClassSaves.FromJson(root.Has("incoming") ? root["incoming"] : null),
+            // 能動勧誘は v6 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            Recruiting = RecruitingSaves.FromJson(root.Has("recruiting") ? root["recruiting"] : null),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
         };
 

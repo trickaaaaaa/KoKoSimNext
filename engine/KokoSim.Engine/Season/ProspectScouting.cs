@@ -40,6 +40,12 @@ public sealed class ProspectReport
     /// <summary>予定者の氏名（合流後もロスターを引かずに一覧を出せるよう控えておく）。</summary>
     public string Name { get; set; } = "";
 
+    /// <summary>
+    /// 能動勧誘で獲った中学生か（issue #588）。受動枠で降ってきた子と区別して見せるための印で、
+    /// 能力には一切影響しない。
+    /// </summary>
+    public bool Recruited { get; set; }
+
     // 推定カテゴリ強さ（0〜100。実値は PlayerStrengthProfile.Compute）。
     public double Batting { get; set; }
     public double Mobility { get; set; }

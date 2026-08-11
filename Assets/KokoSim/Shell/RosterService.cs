@@ -140,6 +140,7 @@ namespace KokoSim.Unity.Shell
         {
             _roster = null; _graduates = null; _nextId = 0; _newSchool = false;
             ProspectService.Reset();   // 予定者もこの進行のものなので一緒に捨てる（issue #587）
+            RecruitService.Reset();    // 勧誘の中学生リストも同じ（issue #588）
         }
 
         /// <summary>

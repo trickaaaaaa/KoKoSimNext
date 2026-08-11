@@ -50,6 +50,15 @@ events:
     cooldown_weeks: 10
     text: "OB会から寄付があった。"
 
+  # 争奪戦（能動勧誘・設計書04 §2.2・issue #588）。
+  # 発火のタイミングは週次の抽選ではなく「訪問1回ごと」なので、確率は
+  # coefficients.yaml recruiting.rival_event_prob が持つ（週次イベントの weight は使わない）。
+  # ここはイベント表としての登録と文言の正典で、UI もこの言い回しに合わせる。
+  - id: recruit_rival_move
+    kind: Random
+    weight: 0.0
+    text: "訪問した。だが競合校も動いたようだ。"
+
   # --- 選択肢イベント（Phase 5で効果接続） ---
   - id: ace_hidden_injury
     kind: Choice

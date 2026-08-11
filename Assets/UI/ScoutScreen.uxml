@@ -26,8 +26,9 @@
 
         <ui:VisualElement class="sc-split">
 
-          <!-- ===== 左：入部予定者の名簿 ===== -->
+          <!-- ===== 左：名簿（入部予定者 / 中学生リストのタブ切替・issue #588 A案） ===== -->
           <ui:VisualElement class="sc-split__left">
+            <ui:VisualElement name="sc-tabs" class="sc-tabs" />
             <ui:VisualElement class="nb-plate sc-plate">
               <ui:VisualElement class="nb-plate__shadow" />
               <ui:VisualElement class="nb-plate__front">
@@ -62,6 +63,22 @@
               <ui:VisualElement class="sc-head">
                 <ui:Label name="sc-name" class="sc-name f-display" text="" />
                 <ui:Label name="sc-sub" class="sc-sub" text="" />
+              </ui:VisualElement>
+
+              <!-- 勧誘（中学生リストを見ているときだけ出す・issue #588） -->
+              <ui:VisualElement name="sc-recruit-card" class="card">
+                <ui:VisualElement class="card__hd card__hd--tight">
+                  <ui:Label class="card__hd-title" text="勧誘" />
+                  <ui:Label name="sc-recruit-note" class="card__hd-sub" text="" />
+                </ui:VisualElement>
+                <ui:VisualElement class="card__body">
+                  <ui:VisualElement name="sc-recruit" class="sc-recruit" />
+                  <ui:VisualElement class="sc-recruit__actions">
+                    <ui:Button name="sc-target" class="tool-btn" text="勧誘対象にする" />
+                    <ui:Button name="sc-visit" class="tool-btn" text="訪問する" />
+                    <ui:Label name="sc-recruit-status" class="sc-recruit__status" text="" />
+                  </ui:VisualElement>
+                </ui:VisualElement>
               </ui:VisualElement>
 
               <!-- 見立てと隠しパラメータは横並び（片方だけだと項目4つに対して幅が余りすぎる）。 -->
@@ -106,6 +123,7 @@
 
         <!-- ===== 下：スカウト網の状態（変更は経営タブ） ===== -->
         <ui:VisualElement class="sc-foot">
+          <ui:Label name="sc-slots" class="sc-slots" text="" />
           <ui:Label name="sc-net" class="sc-net" text="" />
           <ui:VisualElement class="sc-foot__spacer" />
           <ui:Button name="sc-to-management" class="tool-btn" text="経営で変更" />
