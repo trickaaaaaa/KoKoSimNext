@@ -107,17 +107,35 @@ namespace KokoSim.Unity.Shell
             if (s.Tournament != null) TournamentEntry.RestoreRunner(s.Tournament);
         }
 
-        /// <summary>新規ゲーム開始のための完全リセット（全 static サービスを初期状態へ）。母種は次の非決定採取に任せる。</summary>
+        /// <summary>
+        /// 新規ゲーム開始のための完全リセット（全 static サービスを初期状態へ）。母種は次の非決定採取に任せる。
+        /// 自校の同定（校名・県・地区）も既定（桜丘・神奈川・地区なし）へ戻す＝
+        /// <see cref="NationService.Reset"/> はキャッシュしか捨てないので明示で戻す。
+        /// </summary>
         public static void ResetForNewGame()
         {
             RosterService.Reset();
             ManagerService.Reset();
             NationService.Reset();
+            NationService.SetSchoolIdentity(
+                NationService.DefaultSchoolName, NationService.DefaultPrefectureId, null);
             GameSession.Current.ResetForNewGame();
             NewTeamService.Clear();
             TeamColorProvider.Clear();
             GameClock.Reset();
             LastSavedAt = null;   // 新しい進行＝まだ一度も保存していない
+        }
+
+        /// <summary>
+        /// 新設校として新規ゲームを開始する（issue #585）。<see cref="ResetForNewGame"/> の後に
+        /// プレイヤーが決めた同定を据え、初回のロスター生成を「1年生10人だけ」に切り替える。
+        /// 新規ゲーム設定画面の「この高校ではじめる」がここだけを通る＝開始手順を2箇所に書かない。
+        /// </summary>
+        public static void StartNewSchool(string schoolName, int prefectureId, int? districtId)
+        {
+            ResetForNewGame();
+            NationService.SetSchoolIdentity(schoolName, prefectureId, districtId);
+            RosterService.ResetAsNewSchool();
         }
 
         /// <summary>既定のセーブ先（persistentDataPath/kokosim/&lt;slot&gt;.sav）。スロットUI接続は F1。</summary>

@@ -1,0 +1,29 @@
+# confidence: verified
+# 出典: kanaloco 1198920, kanagawa-baseball.com/fall/2025
+# 型見本: 地区予選がリーグ戦（round_robin） + 夏代表の予選免除
+pref: kanagawa
+snapshot_year: 2025
+region: kanto
+districts: [川崎, 横浜北, 横浜南, 横須賀, 湘南, 西湘, 北相]  # 4地区に集約運用（要項PDFで最終確認）
+district_assignment: geographic
+regional_berths: 2
+seed_exemption: true          # 夏の選手権代表校（横浜）を県大会へ推薦
+stages:
+  - name: 地区予選
+    type: group_split
+    groups: 4                 # 4地区
+    grouping: geographic
+    child:
+      type: round_robin       # 各ブロック4チームのリーグ戦
+      teams_per_group: 4
+    advance_per_group: null    # リーグ上位が県大会へ（枠数は要項PDFで確認）
+  - name: 県大会
+    type: knockout
+# 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=横浜スタジアム、序盤=市営級プールから抽選
+stadiums:
+  final: kanagawa_final
+  early: [municipal_small_01, municipal_small_02]
+notes:
+  - 春と異なり秋は地区がリーグ戦形式
+  - seed_exemptionの推薦校は県大会から登場
+  - ブロック内の進出数は要項PDFで確定させる（現状 structure 寄り）

@@ -2491,3 +2491,106 @@
     border-radius: 0;
 }
 .lv-pip--on { background-color: var(--ink); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UniformColorPicker（配色の領域行・部品辞書 / 設計書18 §3.5.1・issue #585）
+   ───────────────────────────────────────────────────────────────────────
+   チーム設定画面と新規ゲーム設定画面が共有する。組み立ては Components/UniformColorPicker.cs。
+   行高・文字はデータ画面（32px・UI原則①）でなく**操作の的**として決めている＝
+   一覧をスキャンする画面ではなく色を送って選ぶ部品だから
+   （2026-07-29 監督指示「文字大きく・枠も大きく・ボタンも大きくして選びやすく」）。
+   列幅はヘッダー(.ucp-th--*)とデータ(.ucp-cell--*)が同じ変数を見る＝横ずれの構造的対策。
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+    --ucp-col-name: 200px;    /* 領域名（最長「アンダーシャツ」7字） */
+    --ucp-col-val: 170px;     /* 色の名前（最長「ワインレッド」6字。150pxだと見本欄に噛む） */
+    --ucp-col-swatch: 110px;  /* 見本 */
+    --ucp-col-pick: 130px;    /* 送りボタン。伸ばさず**固定**＝右に空列を作らない */
+    /* 操作行の高さ。8行＋縞の塊分け(12px)が1画面に収まる上限で、これ以上大きくすると
+       最終行（縞色）がカードからはみ出して切れる（実測: 行の入る高さ372px / 8行+12 ≦ 372 → 45px） */
+    --ucp-row-h: 44px;
+}
+
+.ucp-thead {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    height: 28px;
+    border-bottom-width: 2px;
+    border-bottom-color: var(--color-line);
+    margin-bottom: var(--sp-2);
+}
+
+.ucp-th {
+    font-size: var(--fs-th);
+    color: var(--color-muted);
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.ucp-th--name { width: var(--ucp-col-name); }
+.ucp-th--val { width: var(--ucp-col-val); }
+.ucp-th--swatch { width: var(--ucp-col-swatch); }
+.ucp-th--pick { width: var(--ucp-col-pick); }
+
+.ucp-rows { flex-shrink: 0; }
+
+.ucp-row {
+    flex-direction: row;
+    align-items: center;
+    height: var(--ucp-row-h);
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--color-line-soft);
+}
+
+/* 縞の2行は配色本体と役割が違うので、上に間を空けて塊を分ける（線でなく余白で区切る＝UI原則④） */
+.ucp-row--group { margin-top: var(--sp-3); }
+
+.ucp-cell {
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    font-size: var(--fs-page);
+    color: var(--color-chalk);
+}
+
+.ucp-cell--name { width: var(--ucp-col-name); }
+.ucp-cell--val { width: var(--ucp-col-val); color: var(--color-muted); }
+
+.ucp-cell--swatch {
+    width: var(--ucp-col-swatch);
+    flex-direction: row;
+    align-items: center;
+}
+
+.ucp-swatch {
+    width: 84px;
+    height: 30px;
+    border-width: 1px;
+    border-color: var(--color-line-focus);
+}
+
+.ucp-pick {
+    width: var(--ucp-col-pick);
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+}
+
+Button.ucp-arrow {
+    width: 56px;
+    height: 36px;
+    margin: 0;
+    margin-right: var(--sp-2);
+    padding: 0;
+    font-size: var(--fs-body);
+    background-color: var(--color-panel-deep);
+    color: var(--color-chalk);
+    border-width: 1px;
+    border-color: var(--color-line-focus);
+    border-radius: var(--radius-chip);
+}
+
+Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }

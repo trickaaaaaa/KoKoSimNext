@@ -17,18 +17,47 @@ namespace KokoSim.Unity.Shell
         /// <summary>自校ID（生成校と衝突しない専用ID）。</summary>
         public const int ManagerSchoolId = -1;
 
-        /// <summary>本拠県（神奈川。Prefecture.Id は0基点＝JIS番号-1）。</summary>
-        public const int PrefectureId = 13;
+        /// <summary>本拠県・校名の既定（新規ゲーム設定画面が無かった頃の固定値。旧セーブの補完値でもある）。</summary>
+        public const int DefaultPrefectureId = 13;   // 神奈川（Prefecture.Id は0基点＝JIS番号-1）
+        public const string DefaultSchoolName = "桜丘";
 
-        public const string ManagerSchoolName = "桜丘";
+        /// <summary>
+        /// 本拠県（issue #585 でセッション状態へ）。新規ゲーム設定画面が確定し、セーブにも載る。
+        /// 全国生成（seed=2026）はこの値に依存しない＝どの県を選んでも全国4000校の顔ぶれは同じ。
+        /// </summary>
+        public static int PrefectureId { get; private set; } = DefaultPrefectureId;
+
+        /// <summary>自校の校名（「高校」を含まない幹。表示側で付ける）。</summary>
+        public static string ManagerSchoolName { get; private set; } = DefaultSchoolName;
+
+        /// <summary>県内地区（0基点。地区を持たない県は null。設計書05 §2.2）。</summary>
+        public static int? DistrictId { get; private set; }
+
+        /// <summary>
+        /// 自校の同定を据える（新規ゲーム設定の確定／セーブ復元の1経路）。県が変わると
+        /// 「本拠県の全高校」「県外の遠征先」のキャッシュが意味を失うので必ず捨てる。
+        /// </summary>
+        public static void SetSchoolIdentity(string name, int prefectureId, int? districtId)
+        {
+            ManagerSchoolName = string.IsNullOrWhiteSpace(name) ? DefaultSchoolName : name.Trim();
+            PrefectureId = prefectureId;
+            DistrictId = districtId;
+            _prefecture = null;
+            _away = null;
+        }
 
         private static readonly NationCoefficients Coeff = new NationCoefficients();
         private static Nation _nation;
         private static List<School> _prefecture;
         private static List<School> _away;
 
+        /// <summary>
+        /// 全国4000校。<b>県内地区（DistrictId）の割当を渡して生成する</b>（issue #585）。地区の付与は
+        /// 独立Fork（NationGenerator 側）なので強さ・名声・校風の生成列は乱れない＝全国生成は不変。
+        /// </summary>
         public static Nation Nation => _nation ?? (_nation = NationGenerator.Generate(
-            SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026)));
+            SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026),
+            districtPlan: DistrictPlanProvider.Plan));
 
         /// <summary>本拠県の全高校（自校は含まない）。順序は生成順で安定。</summary>
         public static IReadOnlyList<School> PrefectureSchools
@@ -110,6 +139,7 @@ namespace KokoSim.Unity.Shell
             Id = ManagerSchoolId,
             Name = ManagerSchoolName,
             PrefectureId = PrefectureId,
+            DistrictId = DistrictId,
             Strength = TeamOverall.Of(RosterService.Active),
         };
 
@@ -147,6 +177,10 @@ namespace KokoSim.Unity.Shell
         {
             s.NationRosters = new List<AiSchoolRoster>(Rosters.Snapshot());
             s.TournamentStats = TournamentStats;
+            // 自校の同定（issue #585・v4）。学校・県と違い再生成では出てこないので保存する。
+            s.SchoolName = ManagerSchoolName;
+            s.PrefectureId = PrefectureId;
+            s.DistrictId = DistrictId;
         }
 
         /// <summary>セーブ復元: 全国ロスター・今大会成績を据え、学校/県キャッシュを落として決定論再生成させる。</summary>
@@ -155,12 +189,16 @@ namespace KokoSim.Unity.Shell
             _rosters = NationRosters.FromSaved(RosterDeps, s.NationRosters);
             _tournamentStats = s.TournamentStats;
             _nation = null;
-            _prefecture = null;
-            _away = null;
             _schoolById = null;
+            // 自校の同定（旧セーブは Migrate が桜丘・神奈川で補ってくる）。県別キャッシュもここで落ちる。
+            SetSchoolIdentity(s.SchoolName, s.PrefectureId, s.DistrictId);
         }
 
-        /// <summary>新規ゲームの完全リセット: 全国・ロスター・今大会成績のキャッシュを落とす（次アクセスで再生成）。</summary>
+        /// <summary>
+        /// 新規ゲームの完全リセット: 全国・ロスター・今大会成績のキャッシュを落とす（次アクセスで再生成）。
+        /// 自校の同定は<b>ここでは戻さない</b>＝新規ゲーム設定画面が確定した直後に呼ばれても
+        /// 選んだ県・校名が消えないようにする（既定へ戻したいときは <see cref="SetSchoolIdentity"/> を明示で呼ぶ）。
+        /// </summary>
         public static void Reset()
         {
             _nation = null;

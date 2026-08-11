@@ -34,13 +34,13 @@
               <ui:Label name="ts-changed" class="card__hd-sub" text="" />
             </ui:VisualElement>
             <ui:VisualElement class="card__body card__body--fill">
-              <ui:VisualElement class="ts-thead">
-                <ui:Label class="ts-th ts-th--name" text="領域" />
-                <ui:Label class="ts-th ts-th--val" text="色" />
-                <ui:Label class="ts-th ts-th--swatch" text="見本" />
-                <ui:Label class="ts-th ts-th--pick" text="" />
+              <ui:VisualElement class="ucp-thead">
+                <ui:Label class="ucp-th ucp-th--name" text="領域" />
+                <ui:Label class="ucp-th ucp-th--val" text="色" />
+                <ui:Label class="ucp-th ucp-th--swatch" text="見本" />
+                <ui:Label class="ucp-th ucp-th--pick" text="" />
               </ui:VisualElement>
-              <ui:VisualElement name="ts-rows" class="ts-rows" />
+              <ui:VisualElement name="ts-rows" class="ucp-rows" />
             </ui:VisualElement>
           </ui:VisualElement>
 

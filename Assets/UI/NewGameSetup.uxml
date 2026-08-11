@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 新規ゲーム設定 画面（issue #585・B案「上下2段」2026-08-11 監督選定）。
+     上段＝本拠地と校名（決めるもの）、下段＝ユニフォーム配色（左）と見え方（右）。
+     決めるものが上から下へ流れ、下段は チーム設定画面と同じ「左＝領域行／右＝プレビュー」構造を
+     そのまま流用する（配色UIは部品辞書 Components/UniformColorPicker.cs ＝ 同じ実装を2つ作らない）。
+
+     共通ナビ（TopBar）は出さない: タイトル画面と同じく、この時点ではシェルサービスが未初期化で
+     スコアボードに載せる値（週・総合力ランク・部費）が存在しないため。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="NewGameSetup.uss" />
+
+    <ui:VisualElement class="root ui-root ngs-root">
+
+      <ui:VisualElement class="ngs-main">
+
+        <ui:VisualElement class="ngs-masthead">
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="新しい高校をつくる" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 上段: 本拠地と校名 -->
+        <ui:VisualElement class="card">
+          <ui:VisualElement class="card__hd">
+            <ui:Label class="card__hd-title" text="本拠地と校名" />
+            <ui:Label name="ngs-hint" class="card__hd-sub" text="" />
+          </ui:VisualElement>
+          <ui:VisualElement class="card__body">
+
+            <ui:VisualElement class="ngs-line">
+              <ui:Label class="ngs-lbl" text="都道府県" />
+              <ui:DropdownField name="ngs-pref" class="ngs-drop" />
+              <ui:Label name="ngs-district-lbl" class="ngs-lbl ngs-lbl--2nd" text="県内地区" />
+              <ui:DropdownField name="ngs-district" class="ngs-drop ngs-drop--narrow" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="ngs-line">
+              <ui:Label class="ngs-lbl" text="校名" />
+              <ui:TextField name="ngs-name" class="ngs-text" max-length="12" />
+              <ui:Label class="ngs-suffix f-display" text="高校" />
+              <ui:Label class="ngs-lbl ngs-lbl--2nd" text="候補" />
+              <ui:VisualElement name="ngs-suggest" class="ngs-suggest" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="ngs-summary">
+              <ui:Label name="ngs-summary-text" class="f-display ngs-summary__text" text="" />
+              <ui:Label name="ngs-error" class="ngs-error" text="" />
+            </ui:VisualElement>
+
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 下段: 配色（左）と見え方（右） -->
+        <ui:VisualElement class="ngs-body">
+
+          <ui:VisualElement class="card card--rows">
+            <ui:VisualElement class="card__hd">
+              <ui:Label class="card__hd-title" text="ユニフォーム配色" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body card__body--fill">
+              <ui:VisualElement class="ucp-thead">
+                <ui:Label class="ucp-th ucp-th--name" text="領域" />
+                <ui:Label class="ucp-th ucp-th--val" text="色" />
+                <ui:Label class="ucp-th ucp-th--swatch" text="見本" />
+                <ui:Label class="ucp-th ucp-th--pick" text="" />
+              </ui:VisualElement>
+              <ui:VisualElement name="ngs-rows" class="ucp-rows" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="card card--preview">
+            <ui:VisualElement class="card__hd card__hd--dirt">
+              <ui:Label class="card__hd-title" text="見え方" />
+              <ui:Label name="ngs-preview-kind" class="card__hd-sub" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="card__body card__body--fill">
+              <ui:VisualElement name="ngs-preview" class="ngs-preview" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <ui:VisualElement class="tp-cta-wrap">
+          <ui:Button name="ngs-start" class="tp-cta" text="この高校ではじめる ▶" />
+        </ui:VisualElement>
+
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

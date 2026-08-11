@@ -25,8 +25,21 @@ namespace KokoSim.Unity.Shell
     {
         public const ulong DefaultSeed = 42;
 
+        /// <summary>
+        /// 新設校の初年度の部員数（issue #585・確定事項1）。1年生ちょうどこの人数だけで始める
+        /// （<c>IntakeMean/Min/Max</c> の抽選ではない）。9人を割らない最小限＋控え1人。
+        /// </summary>
+        public const int NewSchoolIntake = 10;
+
         /// <summary>年度替わりの新入生生成に使う決定論ストリームの識別子（<see cref="GameSeed.Master"/> と混合, issue #535）。</summary>
         private const ulong YearRolloverStream = 0x5535_0000UL;
+
+        /// <summary>
+        /// 新設校モード（issue #585）。true なら初回生成が「1年生 <see cref="NewSchoolIntake"/> 人だけ」になる。
+        /// 新規ゲーム設定画面の確定で立ち、初年度の生成に一度だけ効く（翌年度からは通常の
+        /// <see cref="AdvanceYear"/> ＝新入生 Intake に合流する）。
+        /// </summary>
+        private static bool _newSchool;
 
         private static List<DevelopingPlayer> _roster;
         private static List<DevelopingPlayer> _graduates;
@@ -102,16 +115,31 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>新規ゲームの完全リセット: 次アクセスで既定シード（42）から再生成させる。</summary>
-        public static void Reset() { _roster = null; _graduates = null; _nextId = 0; }
+        public static void Reset() { _roster = null; _graduates = null; _nextId = 0; _newSchool = false; }
+
+        /// <summary>
+        /// 新設校として作り直す（issue #585）。次アクセスの生成が「1年生 <see cref="NewSchoolIntake"/> 人だけ」になる。
+        /// 新規ゲーム設定の確定から呼ぶ。<see cref="Reset"/> と違いモードを立てる点だけが違う。
+        /// </summary>
+        public static void ResetAsNewSchool()
+        {
+            Reset();
+            _newSchool = true;
+        }
 
         private static List<DevelopingPlayer> Build(ulong seed)
         {
             var rng = new Xoshiro256Random(seed);
             var coefficients = new RosterCoefficients();
             var list = new List<DevelopingPlayer>();
-            for (var grade = 1; grade <= 3; grade++)
+            // 新設校の初年度は1年生だけ（2・3年は作らない）。人数も抽選せず固定する（issue #585 確定事項1）。
+            // 投手・捕手の供給下限（#377 / #589）は Intake の中で効くので、10人でも役が必ず立つ。
+            var lastGrade = _newSchool ? 1 : 3;
+            for (var grade = 1; grade <= lastGrade; grade++)
             {
-                foreach (var p in ProspectGenerator.Intake(grade, coefficients, rng))
+                var intake = ProspectGenerator.Intake(
+                    grade, coefficients, rng, fixedCount: _newSchool ? NewSchoolIntake : (int?)null);
+                foreach (var p in intake)
                 {
                     p.Grade = grade;
                     list.Add(p);

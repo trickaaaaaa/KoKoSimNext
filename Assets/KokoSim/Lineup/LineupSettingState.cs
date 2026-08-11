@@ -478,7 +478,7 @@ namespace KokoSim.Unity.Lineup
                 DhSlot: _usesDh ? _dhSlot : -1,
                 StartingPitcher: _usesDh && _spIdx >= 0 ? _roster[_spIdx] : null,
                 Reserves: reserves,
-                Name: "桜丘");
+                Name: KokoSim.Unity.Shell.NationService.ManagerSchoolName);
         }
 
         // ── View 構築 ──

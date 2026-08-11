@@ -169,6 +169,10 @@ internal static class SaveTestFixtures
                 new RgbColor(0xE8, 0x6A, 0x4A), new RgbColor(0xF5, 0xC6, 0x4A),
                 new RgbColor(0x14, 0x23, 0x1B), new RgbColor(0x00, 0x00, 0x00),
                 TeamColors.DefaultShoes, new TeamStripe(true, new RgbColor(0x23, 0x24, 0x2A), 40.0)),
+            // 自校の同定（v4・issue #585）。既定（桜丘・神奈川13・地区null）と全部違う値にして往復を試す。
+            SchoolName = "北嶺",
+            PrefectureId = 27,      // 兵庫県
+            DistrictId = 3,
         };
     }
 

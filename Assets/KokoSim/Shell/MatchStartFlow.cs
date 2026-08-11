@@ -45,8 +45,8 @@ namespace KokoSim.Unity.Shell
                     {
                         Progression = live.Progression,
                         ManagerIsAway = live.ManagerIsAway,
-                        AwayName = live.ManagerIsAway ? "桜丘" : live.OpponentName,
-                        HomeName = live.ManagerIsAway ? live.OpponentName : "桜丘",
+                        AwayName = live.ManagerIsAway ? NationService.ManagerSchoolName : live.OpponentName,
+                        HomeName = live.ManagerIsAway ? live.OpponentName : NationService.ManagerSchoolName,
                         AwayColors = TeamColorsOf(live.ManagerIsAway
                             ? NationService.ManagerSchoolId : live.OpponentId),
                         HomeColors = TeamColorsOf(live.ManagerIsAway

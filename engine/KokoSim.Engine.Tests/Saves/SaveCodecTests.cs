@@ -169,6 +169,52 @@ public sealed class SaveCodecTests
         Assert.Equal(2, s.Facilities.LevelOf("lighting"));
     }
 
+    // ===== 自校の同定（新設校スタート・issue #585） =====
+
+    // 校名・本拠県・県内地区が往復すること。
+    [Fact]
+    public void SchoolIdentity_RoundTrips()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal("北嶺", s.SchoolName);
+        Assert.Equal(27, s.PrefectureId);
+        Assert.Equal(3, s.DistrictId);
+    }
+
+    // 地区を持たない県（DistrictId=null）も往復すること（null が 0 に化けない）。
+    [Fact]
+    public void SchoolIdentity_NullDistrict_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.DistrictId = null;
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Null(s.DistrictId);
+    }
+
+    // v3（自校が神奈川の桜丘固定だった版）のセーブは schoolName/prefectureId/districtId を持たない。
+    // 読めて、当時の固定値（桜丘・神奈川13・地区なし）で補われること。
+    [Fact]
+    public void V3Save_WithoutSchoolIdentity_StillLoads_AsSakuragaokaInKanagawa()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var v3 = json
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":3")
+            .Replace(",\"schoolName\":\"北嶺\"", "")
+            .Replace(",\"prefectureId\":27", "")
+            .Replace(",\"districtId\":3", "");
+        Assert.DoesNotContain("\"schoolName\"", v3);
+        Assert.DoesNotContain("\"prefectureId\"", v3);
+        Assert.DoesNotContain("\"districtId\"", v3);
+
+        Assert.True(SaveCodec.TryDeserialize(v3, out var s, out var err), err);
+        Assert.Equal("桜丘", s.SchoolName);
+        Assert.Equal(13, s.PrefectureId);
+        Assert.Null(s.DistrictId);
+        Assert.Equal(7, s.Week);        // 他の項目は素通りで読めている
+    }
+
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。
     [Fact]
     public void TournamentState_RoundTrips()

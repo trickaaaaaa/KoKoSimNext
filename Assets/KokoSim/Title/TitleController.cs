@@ -6,8 +6,7 @@ namespace KokoSim.Unity.Title
 {
     /// <summary>
     /// タイトル画面（issue #482・B案 球場バック型）。起動直後の入口。
-    /// 「はじめから」→ ホームへ（部員ロスター等は各シェルサービスの遅延初期化に任せる。新規状態を
-    /// ここで作らない）。「つづきから」はセーブが1件も無ければ非活性、あればセーブスロット選択画面
+    /// 「はじめから」→ 新規ゲーム設定画面へ（issue #585。新設校の県・地区・校名・配色をそこで決める）。「つづきから」はセーブが1件も無ければ非活性、あればセーブスロット選択画面
     /// （issue #508）へ遷移する。「終了」は Editor / Player の両方で意図どおり動くよう分岐する。
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
@@ -41,7 +40,9 @@ namespace KokoSim.Unity.Title
 
         // クリック配信中に同期 Show すると UITK のイベント木が壊れるため、遷移は必ず遅延切替を使う
         // （ScreenRouter.cs 冒頭コメント参照）。
-        private static void OnNewGame() => ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+        // 「はじめから」は新規ゲーム設定画面へ（issue #585）。新設校（県・地区・校名・配色）を
+        // そこで作ってからホームへ渡す＝ここでホームへ直行しない。
+        private static void OnNewGame() => ScreenRouter.Instance?.ShowDeferred("NewGameSetup");
 
         private static void OnContinue()
         {

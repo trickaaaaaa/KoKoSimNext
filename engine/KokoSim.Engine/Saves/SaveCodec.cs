@@ -22,7 +22,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     // ===== Serialize =====
 
@@ -49,6 +49,9 @@ public static class SaveCodec
             .Add("newTeamPending", s.NewTeamPending)
             .Add("newTeamRetired", RetiredToJson(s.NewTeamRetiredNames))
             .Add("teamColorOverride", CareerSaves.TeamColorsToJson(s.TeamColorOverride))
+            .Add("schoolName", s.SchoolName)
+            .Add("prefectureId", s.PrefectureId)
+            .Add("districtId", s.DistrictId.HasValue ? JsonValue.Of(s.DistrictId.Value) : JsonNull.Instance)
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -141,6 +144,14 @@ public static class SaveCodec
         // v2→v3: 施設基金（manager.facilityFund）と年契約（contracts）が増えた。どちらも欠損時の
         // 安全な既定が決まっている（基金0／スカウト網Lv1＝従来のスカウト費と同額）ので、
         // ここで補わず Read 側の Has 分岐で読む＝旧セーブがそのまま開ける。
+        // v3→v4（issue #585）: 自校の同定（校名・本拠県・県内地区）が増えた。v3 以前は
+        // 神奈川の「桜丘」固定だったので、その値で補う（地区は未設定＝null）。
+        if (version < 4)
+        {
+            if (!root.Has("schoolName")) root.Add("schoolName", "桜丘");
+            if (!root.Has("prefectureId")) root.Add("prefectureId", 13);
+            if (!root.Has("districtId")) root.Add("districtId", JsonNull.Instance);
+        }
         return root;
     }
 
@@ -169,6 +180,10 @@ public static class SaveCodec
             NewTeamPending = root.Bool("newTeamPending"),
             NewTeamRetiredNames = RetiredFromJson(root.Arr("newTeamRetired")),
             TeamColorOverride = CareerSaves.TeamColorsFromJson(root["teamColorOverride"]),
+            // 自校の同定は v4 で追加。Migrate が旧セーブへ既定（桜丘・神奈川・地区なし）を補うので素直に読む。
+            SchoolName = root.Str("schoolName") ?? "桜丘",
+            PrefectureId = root.Int("prefectureId"),
+            DistrictId = root["districtId"] is JsonNull ? (int?)null : root.Int("districtId"),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
         };
 
