@@ -57,8 +57,12 @@ public sealed record CareerCoefficients
     public double SummerCampCost { get; init; } = 20.0;
     /// <summary>冬合宿の費用[万円]（設計書04 §4）。</summary>
     public double WinterCampCost { get; init; } = 25.0;
-    /// <summary>スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。</summary>
-    public double ScoutCost { get; init; } = 15.0;
+    /// <summary>
+    /// スカウト（新入生勧誘）の年間費用[万円]（設計書04 §4, #127連動）。年契約を持たない経路
+    /// （キャリアシム）の固定費で、<b>年契約カタログのスカウト網 Lv1 と同額に保つ</b>
+    /// （2026-08-11 の値上げで 15 → 30。片方だけ動かすと sim と実ゲームで支出がずれる）。
+    /// </summary>
+    public double ScoutCost { get; init; } = 30.0;
 
     // --- 施設基金（設計書04 §1.4「OB・後援会寄付」, 万円）。部費とは別会計で、建物だけに使う。
     // 現実の高校でも寮・室内練習場・ナイターは部費でなく学校法人の設備投資と後援会の寄付で建つ。

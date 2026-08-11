@@ -56,9 +56,9 @@ public sealed class AnnualContractTests
     /// 施設（FacilityCatalog.Aggregate が 1..lv を合算する）との決定的な違い。
     /// </summary>
     [Theory]
-    [InlineData(1, 15, 0)]
-    [InlineData(2, 30, 3)]
-    [InlineData(3, 50, 6)]
+    [InlineData(1, 30, 0)]
+    [InlineData(2, 80, 3)]
+    [InlineData(3, 140, 6)]
     public void Scouting_ReplacesLowerTier_DoesNotAccumulate(int level, double cost, double talentAdd)
     {
         var set = new ContractSet();
@@ -75,7 +75,7 @@ public sealed class AnnualContractTests
         var set = new ContractSet();
         set.SetLevel("scouting", 3);
         set.SetLevel("coach_batting", 1);
-        Assert.Equal(80, Catalog.Aggregate(set).AnnualCost, 9);
+        Assert.Equal(190, Catalog.Aggregate(set).AnnualCost, 9);   // 140 + 50
 
         // 解約＝段を0へ戻す。年額も効果もその場で消える（買い切りの施設にはできない挙動）。
         set.SetLevel("scouting", 0);
@@ -91,7 +91,7 @@ public sealed class AnnualContractTests
         set.SetLevel("no_such_contract", 2);   // カタログに無いIDは無視
         var e = Catalog.Aggregate(set);
 
-        Assert.Equal(50, e.AnnualCost, 9);
+        Assert.Equal(140, e.AnnualCost, 9);
         Assert.Equal(6, e.ScoutTalentAdd, 9);
     }
 
@@ -126,8 +126,9 @@ public sealed class AnnualContractTests
         foreach (var d in Catalog.Contracts) set.SetLevel(d.Id, d.MaxLevel);
         var e = Catalog.Aggregate(set);
 
-        // 50（スカウト網Lv3）+ 20（遠征）+ 30×3（専門コーチ3分野）= 160万/年。
-        Assert.Equal(160, e.AnnualCost, 9);
+        // 140（スカウト網Lv3）+ 20（遠征）+ 50×3（専門コーチ3分野）= 310万/年。
+        // 自由に使える上限（信頼度100で115万）の約3倍＝全部は絶対に抱えられない。
+        Assert.Equal(310, e.AnnualCost, 9);
         Assert.Equal(6, e.ScoutTalentAdd, 9);
         Assert.True(e.OutOfPrefectureOpponents);
     }
@@ -229,12 +230,12 @@ public sealed class AnnualContractTests
     public void YearEnd_ExtraContracts_CostMore()
     {
         var set = new ContractSet();
-        set.SetLevel("scouting", 3);        // 50万
-        set.SetLevel("coach_batting", 1);   // 30万
+        set.SetLevel("scouting", 3);        // 140万
+        set.SetLevel("coach_batting", 1);   // 50万
         var rich = FundsAfterOneYear(Catalog.Aggregate(set));
 
-        // 従来経路（スカウト費15万固定）より 65万ぶん多く出ていく。
-        Assert.Equal(FundsAfterOneYear(null) - 65, rich, 6);
+        // 従来経路（スカウト費＝スカウト網Lv1と同額）より 160万ぶん多く出ていく。
+        Assert.Equal(FundsAfterOneYear(null) - 160, rich, 6);
     }
 
     [Fact]
