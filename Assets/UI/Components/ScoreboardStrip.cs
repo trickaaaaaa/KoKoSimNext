@@ -24,13 +24,14 @@ namespace KokoSim.Unity.Components
         public static void Fill(VisualElement root)
         {
             var next = GameClock.NextTournament;
+            // 大会中はどの画面のトップバーにも実月日を出す（issue #583）。書式は GameSession が単一ソース。
             Fill(root, SeasonClock.CountdownLabel(next.Kind),
-                next.WeeksLeft > 0 ? next.WeeksLeft + "週" : "開催中", "");
+                next.WeeksLeft > 0 ? next.WeeksLeft + "週" : "開催中", GameSession.Current.DateSuffix);
         }
 
         /// <summary>
         /// カウントダウンを呼び出し側が決める版（大会モードのホーム＝「次戦まで／本日試合」等）。
-        /// weekSuffix は年の添え字に続けて出す小書き（「夏の大会 3日目」など。升目には載せない）。
+        /// weekSuffix は年の添え字に続けて出す小書き（「夏の大会 7月13日」など。升目には載せない）。
         /// </summary>
         public static void Fill(VisualElement root, string countdownLabel, string countdownValue, string weekSuffix)
         {

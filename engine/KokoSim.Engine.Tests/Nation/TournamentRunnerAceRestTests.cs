@@ -42,7 +42,7 @@ public sealed class TournamentRunnerAceRestTests
         }
 
         var bg = new BackgroundMatchResolver(rosters, new GameContext(), yearIndex: 1, onMatch: OnMatch);
-        var schedule = new TournamentSchedule { FirstRoundDay = 1, RoundGapDays = 3 };
+        var schedule = new TournamentSchedule();
         var runner = new TournamentRunner(
             // seed は「7試合きっかりで終わる（引き分け再試合が出ない）」ブラケットになる値を選ぶ。
             // 打球方向の改定（issue #262）で 123 は10回引き分け→再試合が発生するようになったため 124 へ更新。

@@ -117,6 +117,22 @@ namespace KokoSim.Unity.Shell
         public bool ReachedMatchDay =>
             InTournament && !Runner.Finished && TournamentDay >= Runner.NextMatchDay;
 
+        /// <summary>
+        /// 大会中の実月日の小書き（"夏の大会 7月13日"）。大会外は空文字（issue #583）。
+        /// ホームも側画面のトップバーもここを読む＝書式を画面ごとに作らない単一ソース。
+        /// </summary>
+        public string DateSuffix =>
+            !InTournament
+                ? ""
+                : (Kind == TournamentKind.Summer ? "夏" : "秋") + "の大会 "
+                  + TournamentDate.Label(TournamentEntry.Schedule, Kind, TournamentDay);
+
+        /// <summary>大会中の次戦日の実月日（"7月16日"）。大会外・終了済みは空文字（issue #583）。</summary>
+        public string NextMatchDateLabel =>
+            !InTournament || Runner.Finished
+                ? ""
+                : TournamentDate.Label(TournamentEntry.Schedule, Kind, Runner.NextMatchDay);
+
         /// <summary>大会モードに入る（HomeState が構築した進行体を公開し、開幕演出を要求する）。</summary>
         /// <param name="field">出場校（自校を含む）。大会展望が実際の出場校を引くために保持する。</param>
         public void EnterTournament(TournamentKind kind, string title, TournamentRunner runner,

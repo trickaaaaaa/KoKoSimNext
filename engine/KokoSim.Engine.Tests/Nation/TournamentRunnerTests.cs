@@ -19,7 +19,7 @@ namespace KokoSim.Engine.Tests.Nation;
 public sealed class TournamentRunnerTests
 {
     private static readonly NationCoefficients Coeff = new();
-    private static readonly TournamentSchedule Schedule = new() { FirstRoundDay = 1, RoundGapDays = 3 };
+    private static readonly TournamentSchedule Schedule = new();
 
     private static School Sch(int id, double strength) => new()
     {
@@ -256,14 +256,15 @@ public sealed class TournamentRunnerTests
     [Fact]
     public void NextMatchDay_AdvancesByGap_WhenNoByes()
     {
-        // 8校（2の冪, 不戦勝なし）。強い自校が確実に勝ち上がる。
+        // 8校（2の冪, 不戦勝なし）＝3ラウンド。強い自校が確実に勝ち上がる。
+        // 3ラウンドはすべて終盤扱い（同日開催）で、準々決勝相当の後・準決勝の後に休養日が入る＝1日目→3日目→5日目。
         var r = NewRunner(Field(99, 7, 30));
-        Assert.Equal(Schedule.MatchDay(0), r.NextMatchDay);      // 初戦。
+        Assert.Equal(Schedule.RoundStartDay(3, 0), r.NextMatchDay);   // 初戦（自校は最強シード＝カード0）。
         Assert.NotNull(r.NextOpponent);
 
-        r.PlayNextPlayerMatch();                                // 1勝→2回戦へ。
+        r.PlayNextPlayerMatch();                                     // 1勝→2回戦へ。
         Assert.False(r.Finished);
-        Assert.Equal(Schedule.MatchDay(1), r.NextMatchDay);     // 中3日ぶん進む。
+        Assert.Equal(Schedule.RoundStartDay(3, 1), r.NextMatchDay);  // 休養日ぶん進む。
     }
 
     [Fact]
@@ -274,8 +275,8 @@ public sealed class TournamentRunnerTests
 
         Assert.True(r.PlayerActive);
         Assert.False(r.Finished);
-        Assert.NotNull(r.NextOpponent);                         // 不戦勝を消化し実対戦相手が確定。
-        Assert.Equal(Schedule.MatchDay(1), r.NextMatchDay);     // 初戦不戦勝で1ラウンド進んでいる。
+        Assert.NotNull(r.NextOpponent);                              // 不戦勝を消化し実対戦相手が確定。
+        Assert.Equal(Schedule.RoundStartDay(2, 1), r.NextMatchDay);  // 初戦不戦勝で1ラウンド進んでいる。
     }
 
     [Fact]
@@ -477,7 +478,7 @@ public sealed class TournamentRunnerTests
         r.CompleteNextPlayerMatch(again.Progression.BuildResult());
 
         Assert.False(r.HasPendingLiveMatch);
-        Assert.Equal(Schedule.MatchDay(1), r.NextMatchDay);   // ラウンドが進んだ（日程が据え置かれない）。
+        Assert.Equal(Schedule.RoundStartDay(3, 1), r.NextMatchDay);   // ラウンドが進んだ（日程が据え置かれない）。
     }
 
     [Fact]

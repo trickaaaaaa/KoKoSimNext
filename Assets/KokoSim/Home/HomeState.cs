@@ -56,7 +56,7 @@ namespace KokoSim.Unity.Home
         public string CountdownValue = "";
         /// <summary>掲示板の升目に載せる短縮カウントダウン（"15週" / "3日" / "本日試合" / "開催中" / "―"）。</summary>
         public string CountdownCells = "";
-        /// <summary>年の小書きに続けて出す補足（"夏の大会 3日目"）。升目には載せない。</summary>
+        /// <summary>年の小書きに続けて出す補足（"夏の大会 7月13日"）。升目には載せない。</summary>
         public string WeekSuffix = "";
 
         public string HomeTeam = "桜丘";
@@ -583,6 +583,8 @@ namespace KokoSim.Unity.Home
                     new FeedItem { When = "大会", Text = summary, Kind = w.IsChampion ? FeedKind.Up : FeedKind.Normal, Tag = "情報" },
                 });
                 // 大会が消費した週ぶん共有週を進める（大会モードは既に抜けているのでここでは時計だけ）。
+                // 大会が消費した週数＝最終日がどの週に入るか（切り捨てで正しい: 18日目は開幕週+2週の
+                // 範囲 14〜20日に入る）。A案の日程（issue #583）で8ラウンド県18日＝2週・9ラウンド県21日＝3週。
                 var weeks = System.Math.Max(1, w.TournamentDay / 7);
                 KokoSim.Unity.Shell.GameClock.Advance(weeks);
             }
@@ -617,8 +619,9 @@ namespace KokoSim.Unity.Home
             view.TournamentMode = true;
             view.CountdownLabel = "次戦まで";
 
-            var kindWord = s.Kind == TournamentKind.Summer ? "夏" : "秋";
-            view.WeekSuffix = kindWord + "の大会 " + (s.TournamentDay + 1) + "日目";
+            // 大会中は実月日で出す（issue #583）。週暦は50週×7日で実暦と一致しないため、
+            // 大会期間だけ実カレンダーで数える（書式は GameSession.DateSuffix が単一ソース）。
+            view.WeekSuffix = s.DateSuffix;
 
             view.HomeTeam = NationService.ManagerSchoolName;
             view.HomeSub = "自校";
@@ -645,7 +648,9 @@ namespace KokoSim.Unity.Home
                 view.AwaySub = r.NextOpponent != null
                     ? "ランク " + r.NextOpponentTier + OfficialRecordSuffix(s.Records.For(r.NextOpponent.Id))
                     : "";
-                view.GameDate = reached ? "本日 試合" : "試合まで " + days + " 日";
+                // 日付欄は実月日（issue #583）。カウントダウンの升目は「あと N 日」のまま
+                // ＝「いつ」と「あと何日」は別の情報なので両方出す。
+                view.GameDate = reached ? "本日 試合" : s.NextMatchDateLabel + " 試合";
             }
         }
 

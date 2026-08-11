@@ -23,7 +23,12 @@ namespace KokoSim.Unity.Shell
     public static class TournamentEntry
     {
         private static readonly NationCoefficients NationCoeff = new NationCoefficients();
-        private static readonly TournamentSchedule Schedule = new TournamentSchedule();
+
+        /// <summary>
+        /// 大会日程（issue #583）。進行体の構築と<b>表示（実月日）で同じ実体を使う</b>＝日割りと
+        /// 開幕月日が2箇所に散らないようにする。C#既定＝data/coefficients.yaml tournament: と同値。
+        /// </summary>
+        public static TournamentSchedule Schedule { get; } = new TournamentSchedule();
         private const int ManagerSchoolId = -1;      // 自校（生成校と衝突しない専用ID）
 
         /// <summary>

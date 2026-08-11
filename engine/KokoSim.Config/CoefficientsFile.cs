@@ -263,12 +263,32 @@ public static class CoefficientsLoader
     {
         private static readonly TournamentSchedule D = new();
         public int FirstRoundDay { get; set; } = D.FirstRoundDay;
-        public int RoundGapDays { get; set; } = D.RoundGapDays;
+        public int EarlyRoundSpreadDays { get; set; } = D.EarlyRoundSpreadDays;
+        public int MiddleRoundSpreadDays { get; set; } = D.MiddleRoundSpreadDays;
+        public int LateRoundSpreadDays { get; set; } = D.LateRoundSpreadDays;
+        public int EarlyRoundsThreshold { get; set; } = D.EarlyRoundsThreshold;
+        public int LateRoundsThreshold { get; set; } = D.LateRoundsThreshold;
+        public int RestDaysAfterQuarterfinal { get; set; } = D.RestDaysAfterQuarterfinal;
+        public int RestDaysAfterSemifinal { get; set; } = D.RestDaysAfterSemifinal;
+        public int SummerOpenMonth { get; set; } = D.SummerOpenMonth;
+        public int SummerOpenDay { get; set; } = D.SummerOpenDay;
+        public int AutumnOpenMonth { get; set; } = D.AutumnOpenMonth;
+        public int AutumnOpenDay { get; set; } = D.AutumnOpenDay;
 
         public TournamentSchedule ToModel() => new()
         {
             FirstRoundDay = FirstRoundDay,
-            RoundGapDays = RoundGapDays,
+            EarlyRoundSpreadDays = EarlyRoundSpreadDays,
+            MiddleRoundSpreadDays = MiddleRoundSpreadDays,
+            LateRoundSpreadDays = LateRoundSpreadDays,
+            EarlyRoundsThreshold = EarlyRoundsThreshold,
+            LateRoundsThreshold = LateRoundsThreshold,
+            RestDaysAfterQuarterfinal = RestDaysAfterQuarterfinal,
+            RestDaysAfterSemifinal = RestDaysAfterSemifinal,
+            SummerOpenMonth = SummerOpenMonth,
+            SummerOpenDay = SummerOpenDay,
+            AutumnOpenMonth = AutumnOpenMonth,
+            AutumnOpenDay = AutumnOpenDay,
         };
     }
 
