@@ -38,7 +38,7 @@
           <!-- 左：申込先テーブル -->
           <ui:VisualElement class="card card--list">
             <ui:VisualElement class="card__hd">
-              <ui:Label class="card__hd-title" text="申込先（県内校）" />
+              <ui:Label name="pm-list-title" class="card__hd-title" text="申込先（県内校）" />
               <ui:Label name="pm-count" class="card__hd-sub" text="" />
             </ui:VisualElement>
             <ui:VisualElement class="card__body card__body--fill">
