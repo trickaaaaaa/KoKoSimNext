@@ -173,10 +173,11 @@ public static class SaveCodec
             Roster = RosterFromJson(root.Arr("roster")),
             Manager = CareerSaves.ManagerFromJson(root.Obj("manager")),
             Facilities = CareerSaves.FacilitiesFromJson(root.Obj("facilities")),
-            // 年契約は v3 で追加。旧セーブには無いので既定（スカウト網 Lv1＝従来のスカウト費15万と同額）で読む。
+            // 年契約は v3 で追加。旧セーブ（v1/v2）には無いので、当時と同額・同効果の
+            // スカウト網 Lv1 で読む＝その進行の収支を後から変えない（新規ゲームの既定は未契約だが別物）。
             Contracts = root.Has("contracts")
                 ? CareerSaves.ContractsFromJson(root.Obj("contracts"))
-                : ContractSet.Initial(),
+                : ContractSet.LegacyScoutingLevel1(),
             ManagerLastGrownYear = root.Int("managerLastGrownYear"),
             ManagerGrownWinsBaseline = root.Int("managerGrownWinsBaseline"),
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),

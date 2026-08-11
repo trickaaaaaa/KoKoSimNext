@@ -46,19 +46,21 @@ namespace KokoSim.Unity.Scout
                       + " unknownAvg=" + UnknownAverage());
             ctrl.Select(0);
             yield return null; yield return null;
-            yield return Capture(doc, "01-confirmed-lv1");
+            yield return Capture(doc, "01-confirmed-nocontract");
 
-            // ③ スカウト網を最上段にして引き直す（見え方だけが変わり、来る選手は変わらないことの確認）
+            // ③ 段を上げて引き直す（見え方だけが変わり、来る選手は変わらないことの確認）
             var namesBefore = Names();
-            ManagerService.Contracts.SetLevel("scouting", 3);
-            ProspectService.Reset();
-            ProspectService.Confirm(GameClock.YearIndex + 1);
+            yield return Reconfirm(ctrl, 1);
+            Debug.Log("[SC] lv1 disclosure=" + ProspectService.Current.Disclosure
+                      + " unknownAvg=" + UnknownAverage()
+                      + " sameProspects=" + (namesBefore == Names()));
+            yield return Capture(doc, "02-confirmed-lv1");
+
+            yield return Reconfirm(ctrl, 3);
             Debug.Log("[SC] lv3 disclosure=" + ProspectService.Current.Disclosure
                       + " unknownAvg=" + UnknownAverage()
                       + " sameProspects=" + (namesBefore == Names()));
-            ctrl.Select(0);
-            yield return null; yield return null;
-            yield return Capture(doc, "02-confirmed-lv3");
+            yield return Capture(doc, "03-confirmed-lv3");
 
             // ④ 4月へ跨いで入部させる（推定と実際が並ぶ＝「？が埋まった」状態）
             var rosterBefore = RosterService.Active.Count;
@@ -68,9 +70,19 @@ namespace KokoSim.Unity.Scout
                       + " roster " + rosterBefore + " -> " + RosterService.Active.Count);
             ctrl.Select(0);
             yield return null; yield return null;
-            yield return Capture(doc, "03-joined");
+            yield return Capture(doc, "04-joined");
 
             Debug.Log("[SC] DONE all shots");
+        }
+
+        /// <summary>スカウト網の段を変えて予定者を引き直す（見立てだけが変わる経路の確認用）。</summary>
+        private static IEnumerator Reconfirm(ScoutScreenController ctrl, int scoutingLevel)
+        {
+            ManagerService.Contracts.SetLevel("scouting", scoutingLevel);
+            ProspectService.Reset();
+            ProspectService.Confirm(GameClock.YearIndex + 1);
+            ctrl.Select(0);
+            yield return null; yield return null;
         }
 
         /// <summary>目的の週まで1週ずつ送る。途中で大会モードへ入ったら通常モードへ戻す（撮影用の素通し）。</summary>
