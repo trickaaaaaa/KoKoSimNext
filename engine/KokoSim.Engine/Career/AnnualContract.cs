@@ -149,9 +149,9 @@ public sealed record ContractCatalog
                     new ContractTier(),
                     // 効果1＝新入生の質（ScoutTalentAdd）／効果2＝入部前にどこまで見えるか（ProspectDisclosure）。
                     // Lv1 は従来のスカウト費と同額で質も据え置き。上げると質より先に「見通し」が良くなる。
-                    new ContractTier { AnnualCost = 15, ScoutTalentAdd = 0, ProspectDisclosure = 0.15 },   // 県内を回る（従来どおり）
-                    new ContractTier { AnnualCost = 30, ScoutTalentAdd = 3, ProspectDisclosure = 0.45 },   // 近隣県まで足を伸ばす
-                    new ContractTier { AnnualCost = 50, ScoutTalentAdd = 6, ProspectDisclosure = 0.75 },   // 全国に網を張る
+                    new ContractTier { AnnualCost = 30, ScoutTalentAdd = 0, ProspectDisclosure = 0.15 },   // 県内を回る
+                    new ContractTier { AnnualCost = 80, ScoutTalentAdd = 3, ProspectDisclosure = 0.45 },   // 近隣県まで足を伸ばす
+                    new ContractTier { AnnualCost = 140, ScoutTalentAdd = 6, ProspectDisclosure = 0.75 },  // 全国に網を張る
                 },
             },
             // 遠征: 県外の学校と練習試合が組める（相手の幅＝実戦成長の相手ティアの幅）。
@@ -171,19 +171,19 @@ public sealed record ContractCatalog
             {
                 Id = "coach_batting",
                 Name = "打撃コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 30, CoachingBattingAdd = 10 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingBattingAdd = 10 } },
             },
             new ContractDef
             {
                 Id = "coach_pitching",
                 Name = "投手コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 30, CoachingPitchingAdd = 10 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingPitchingAdd = 10 } },
             },
             new ContractDef
             {
                 Id = "coach_defense",
                 Name = "守備走塁コーチ",
-                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 30, CoachingDefenseAdd = 10 } },
+                Tiers = new[] { new ContractTier(), new ContractTier { AnnualCost = 50, CoachingDefenseAdd = 10 } },
             },
         },
     };
@@ -214,7 +214,7 @@ public sealed class ContractSet
 
     /// <summary>
     /// 年契約が無かった版（セーブ v1/v2）を読むときの既定。当時は
-    /// <see cref="CareerCoefficients.ScoutCost"/>（15万/年）が固定で引かれていたので、
+    /// <see cref="CareerCoefficients.ScoutCost"/>（＝スカウト網 Lv1 と同額）が固定で引かれていたので、
     /// 同額・同効果のスカウト網 Lv1 で読む＝<b>その進行の収支を後から変えない</b>。
     /// </summary>
     public static ContractSet LegacyScoutingLevel1()
