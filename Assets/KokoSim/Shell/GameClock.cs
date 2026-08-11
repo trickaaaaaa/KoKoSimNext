@@ -102,6 +102,12 @@ namespace KokoSim.Unity.Shell
             if (Calendar.IsRecruitListWeek(Week))
                 RecruitListOpened = RecruitService.BuildList(YearIndex + 1);
 
+            // ドラフト（設計書20 §4・issue #586）。注目度の再評価は毎週（候補入り／評価の増減を拾うため）、
+            // 指名の確定は10月最終週だけ。どちらも母種由来の独立ストリームで、本編の乱数列は進めない＝帯不変。
+            DraftService.RefreshBands();
+            if (Calendar.IsDraftWeek(Week))
+                DraftService.RunNomination(YearIndex, DraftYear());
+
             // 大会開幕週なら大会モードへ入る（要件1）。二重入場を避けるため通常モードのときだけ。
             if (t.TournamentStarting is { } kind && GameSession.Current.Mode == GameMode.Normal)
                 TournamentEntry.Enter(kind);
@@ -136,6 +142,12 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>直前の3月の判定で勧誘に成功した人数（issue #588）。フィードへ流したら0へ戻す。</summary>
         public static int RecruitsWon { get; set; }
+
+        /// <summary>
+        /// 指名週（10月最終週）の暦年（issue #586）。暦年の起点は Shell 側の
+        /// <see cref="SeasonClock.SeasonBaseYear"/> にしか無いので、engine へ渡す値をここで作る。
+        /// </summary>
+        private static int DraftYear() => SeasonClock.CalendarYear(YearIndex, Week);
 
         /// <summary>シーズン頭（週0・年度1）へ戻す。監督成長の年度ガードも初期化する（issue #171）。</summary>
         public static void Reset()

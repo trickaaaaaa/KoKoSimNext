@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- キャリア画面（設計書06 §3.8・設計書16 §3.8 ワイヤー ／ issue #586）。
+     旧「監督」タブを統合した画面＝監督メタ（指導力・采配・育成眼・名声・信頼度）はここに載る。
+     監督選択のB案＝上下2段: 上段「今の監督」を4カード横並び、下段「歩み」（年表・教え子名鑑・歴任校）。
+     表示専用でロジックを持たない（ManagerService / GameSession.Records / DraftService を読むだけ）。
+     上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="CareerScreen.uss" />
+    <ui:VisualElement class="root ui-root">
+
+      <ui:Instance template="TopBar" />
+
+      <ui:VisualElement class="cr-main">
+
+        <!-- 見出し＋監督の身元（柱見出し＝RuleHead・設計書16 §5） -->
+        <ui:VisualElement class="cr-masthead">
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="キャリア" />
+          </ui:VisualElement>
+          <ui:VisualElement class="cr-ident">
+            <ui:Label name="cr-name" class="cr-ident__name f-display" text="" />
+            <ui:Label name="cr-status" class="chip chip--tag cr-ident__status" text="" />
+            <ui:VisualElement class="cr-ident__spacer" />
+            <ui:Label name="cr-post" class="cr-ident__post f-display" text="" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:ScrollView mode="Vertical" class="cr-scroll scroll">
+
+          <!-- ===== 上段：今の監督（4カード横並び） ===== -->
+          <ui:VisualElement class="cr-row">
+
+            <ui:VisualElement class="card card--col">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="指導力" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="cr-coaching" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="card card--col">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="采配・育成" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="cr-tactics" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="card card--col">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="名声・信頼度" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="cr-eval" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="card card--col cr-card-last">
+              <ui:VisualElement class="card__hd card__hd--tight card__hd--dirt">
+                <ui:Label class="card__hd-title" text="通算成績" />
+                <ui:Label class="card__hd-sub" text="卒業後も継続" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="cr-record" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+          </ui:VisualElement>
+
+          <!-- ===== 下段：歩み（年表と教え子名鑑を左右） ===== -->
+          <ui:VisualElement class="cr-row">
+
+            <ui:VisualElement class="card card--half">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="キャリア年表" />
+                <ui:Label name="cr-timeline-sub" class="card__hd-sub" text="" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="cr-timeline" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 右カラム：教え子名鑑と歴任校を縦に積む（名鑑だけだと年表の高さに対して右が空く） -->
+            <ui:VisualElement class="cr-col">
+
+              <ui:VisualElement class="card">
+                <ui:VisualElement class="card__hd card__hd--tight">
+                  <ui:Label class="card__hd-title" text="教え子名鑑" />
+                  <ui:Label name="cr-alumni-sub" class="card__hd-sub" text="" />
+                </ui:VisualElement>
+                <ui:VisualElement class="card__body">
+                  <ui:VisualElement name="cr-alumni-head" class="cr-al cr-al--head">
+                    <ui:Label class="cr-al__year" text="年" />
+                    <ui:Label class="cr-al__no" text="背番号" />
+                    <ui:Label class="cr-al__name" text="名前" />
+                    <ui:Label class="cr-al__round" text="指名" />
+                  </ui:VisualElement>
+                  <ui:VisualElement name="cr-alumni" />
+                  <ui:Label name="cr-alumni-empty" class="cr-empty" text="" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+
+              <!-- 歴任校（転任が入ったら行が増えるだけの器） -->
+              <ui:VisualElement class="card">
+                <ui:VisualElement class="card__hd card__hd--tight">
+                  <ui:Label class="card__hd-title" text="歴任校" />
+                  <ui:Label class="card__hd-sub" text="転任は未実装" />
+                </ui:VisualElement>
+                <ui:VisualElement class="card__body">
+                  <ui:VisualElement class="cr-post cr-post--head">
+                    <ui:Label class="cr-post__year" text="就任年" />
+                    <ui:Label class="cr-post__school" text="学校" />
+                    <ui:Label class="cr-post__term" text="在任" />
+                    <ui:Label class="cr-post__wl" text="公式戦" />
+                    <ui:Label class="cr-post__ko" text="甲子園" />
+                  </ui:VisualElement>
+                  <ui:VisualElement name="cr-posts" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+
+            </ui:VisualElement>
+
+          </ui:VisualElement>
+
+        </ui:ScrollView>
+
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

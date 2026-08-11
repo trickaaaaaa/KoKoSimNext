@@ -1,0 +1,168 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   CareerScreen.uss — キャリア画面（設計書06 §3.8 / 16 §3.8・issue #586）の画面固有スタイル。
+   昼NBスキンは tokens/KokoSimTheme が担い、器（.card / .chip / .rule-head / AbilityRow /
+   Timeline）は共通部品 components.uss を使う。
+   ここに置くのは「上下2段の並べ方」と「教え子名鑑・歴任校の列合わせ」だけ。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.cr-main {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-2);
+}
+
+.cr-masthead {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+
+/* ── 監督の身元（氏名＋身分／右端に就任年数と校名） ─────────────── */
+.cr-ident {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--sp-2);
+}
+.cr-ident__name { font-size: 30px; color: var(--tx-1); margin: 0; padding: 0; }
+.cr-ident__status { margin-left: var(--sp-3); }
+.cr-ident__spacer { flex-grow: 1; }
+.cr-ident__post { font-size: var(--fs-body); color: var(--tx-2); margin: 0; padding: 0; }
+
+/* ── 上下2段（1段＝カードの横並び。等幅は共通 card 側の col/half 修飾子が持つ） ── */
+.cr-scroll { flex-grow: 1; min-height: 0; }
+.cr-row { flex-direction: row; align-items: flex-start; flex-shrink: 0; }
+/* 行の最後のカードだけ右余白を落とす（card--col/--half は列間 margin-right を持つ）。 */
+.cr-card-last { margin-right: 0; }
+/* カードを縦に積む列（行の中の右半分）。等幅は .card--half と同じ配分にする。 */
+.cr-col { flex-grow: 1; flex-basis: 0; min-width: 0; }
+
+/* ── 通算成績（項目名＋数値。行高32px・数値は右揃え＝UI原則①③） ── */
+.cr-rec { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.cr-rec__k {
+    width: var(--col-cr-rec-k);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+.cr-rec__v {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+/* 記録がまだ無い欄（0勝0敗・未出場）は最弱文字で沈める＝「有る」ものだけが目に入る。 */
+.cr-rec__v--none { color: var(--tx-3); }
+
+/* ── 教え子名鑑（年 / 当時の背番号 / 名前 / 指名順位） ───────────── */
+.cr-al { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.cr-al--head { height: 26px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
+.cr-al--head .cr-al__year,
+.cr-al--head .cr-al__no,
+.cr-al--head .cr-al__name,
+.cr-al--head .cr-al__round { font-size: var(--fs-cap); color: var(--tx-3); }
+.cr-al__year {
+    width: var(--col-cr-year);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+.cr-al__no {
+    width: var(--col-cr-no);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+/* 人名は明朝（書体3役）。長い姓名でも指名順位を押し出さないよう、縮むのは名前だけにする。 */
+.cr-al__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-body);
+    color: var(--tx-1);
+    margin: 0 0 0 var(--sp-3);
+    padding: 0;
+    overflow: hidden;
+}
+.cr-al__round {
+    width: var(--col-cr-round);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+
+/* ── 歴任校（就任年 / 学校 / 在任 / 公式戦 / 甲子園） ─────────────── */
+.cr-post { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.cr-post--head { height: 26px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
+.cr-post--head .cr-post__year,
+.cr-post--head .cr-post__school,
+.cr-post--head .cr-post__term,
+.cr-post--head .cr-post__wl,
+.cr-post--head .cr-post__ko { font-size: var(--fs-cap); color: var(--tx-3); }
+.cr-post__year {
+    width: var(--col-cr-post-year);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+.cr-post__school {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-body);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+.cr-post__term {
+    width: var(--col-cr-post-term);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+.cr-post__wl {
+    width: var(--col-cr-post-wl);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+.cr-post__ko {
+    width: var(--col-cr-post-wl);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+
+/* 空状態（まだ勲章が無い）。表のヘッダごと伏せるので、ここは一言だけ。 */
+.cr-empty {
+    font-size: var(--fs-label);
+    color: var(--tx-3);
+    margin: 0;
+    padding: var(--sp-3) 0;
+}

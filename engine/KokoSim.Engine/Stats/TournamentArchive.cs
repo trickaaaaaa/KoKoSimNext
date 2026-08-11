@@ -48,6 +48,34 @@ public sealed class TournamentArchive
     public ArchivedPlayerStats? Get(TournamentArchiveKey key, int sourceId)
         => _slots.TryGetValue(key, out var m) && m.TryGetValue(sourceId, out var a) ? a : null;
 
+    // 1学年の中で新しい順（夏の甲子園 → 夏の県 → 秋 → 春）。LastUniformNumber の探索順。
+    private static readonly TournamentSlot[] SlotsNewestFirst =
+    {
+        TournamentSlot.SummerKoshien, TournamentSlot.SummerPref,
+        TournamentSlot.Autumn, TournamentSlot.Senbatsu,
+    };
+
+    /// <summary>
+    /// その選手が<b>最後に付けていた背番号</b>（0＝記録なし。issue #586）。
+    ///
+    /// <para>夏の引退で背番号は返上される（<see cref="Season.UniformNumberAssigner.Clear"/>・issue #531）ので、
+    /// 秋のドラフト指名時や卒業後に「当時の背番号」を選手本体から引くことはできない。ここを唯一の入口にする。</para>
+    ///
+    /// <para>学年の高い順・同学年では新しい大会から探す。</para>
+    /// </summary>
+    public int LastUniformNumber(int sourceId)
+    {
+        for (var grade = 3; grade >= 1; grade--)
+        {
+            foreach (var slot in SlotsNewestFirst)
+            {
+                var a = Get(new TournamentArchiveKey(grade, slot), sourceId);
+                if (a != null && a.UniformNumber > 0) return a.UniformNumber;
+            }
+        }
+        return 0;
+    }
+
     /// <summary>
     /// 大会終了時に今大会スコープ（<paramref name="currentTournament"/>）の成績を枠へ載せる。
     /// 各選手は「当時の学年 × <paramref name="slot"/>」の枠へ振る（1つの大会に1〜3年生が混在するため、

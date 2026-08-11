@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using KokoSim.Engine.Career;
+using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Saves.Json;
@@ -22,7 +23,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 
     // ===== Serialize =====
 
@@ -54,6 +55,7 @@ public static class SaveCodec
             .Add("districtId", s.DistrictId.HasValue ? JsonValue.Of(s.DistrictId.Value) : JsonNull.Instance)
             .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
             .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
+            .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -161,6 +163,9 @@ public static class SaveCodec
         // v5→v6（issue #588）: 能動勧誘（中学生リストと訪問の状態）が増えた。v5 以前は寮を建てても
         // 勧誘枠が無かったので、リストを持たない＝null で補う（次の秋に初めて作られる）。
         if (version < 6 && !root.Has("recruiting")) root.Add("recruiting", JsonNull.Instance);
+        // v6→v7（issue #586）: 教え子名鑑（過年度のドラフト指名確定）が増えた。v6 以前は Unity 側で
+        // 指名が一度も走っていなかった＝勲章が存在しえないので、空配列で補う。
+        if (version < 7 && !root.Has("draft")) root.Add("draft", new JsonArray());
         return root;
     }
 
@@ -209,6 +214,10 @@ public static class SaveCodec
 
         s.Records = new SchoolRecordBook();
         RecordBookSaves.RestoreInto(s.Records, root.Arr("records"));
+
+        // 教え子名鑑は v7 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        s.Draft = new DraftHistory();
+        DraftSaves.RestoreInto(s.Draft, root.Arr("draft"));
 
         return s;
     }

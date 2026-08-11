@@ -905,5 +905,81 @@ namespace KokoSim.Unity.Components
             }
             return wrap;
         }
+
+        // ===== Timeline（キャリア年表の縦軸＋節点。設計書16 §10.2 の穴#7・issue #586） =====
+
+        /// <summary>キャリア年表の1節点。</summary>
+        public sealed class TimelineNodeData
+        {
+            /// <summary>暦年（4桁）。数字だけのセルなので Oswald で出す。</summary>
+            public string Year;
+            /// <summary>出来事の見出し（校名・大会名を含む＝明朝）。</summary>
+            public string Title;
+            /// <summary>補足（成績・人数など。無ければ null）。</summary>
+            public string Note;
+            /// <summary>いま続いている節点（＝年表の末尾）。白抜きの丸になり縦軸が伸びない。</summary>
+            public bool Current;
+        }
+
+        /// <summary>
+        /// キャリア年表（年 ｜ 節点＋縦軸 ｜ 出来事）。最後の節点だけ白抜きにして「ここから先はまだ」を
+        /// 形で出す。節点が無ければ空状態のラベルだけを返す（空の縦軸を残さない）。
+        /// </summary>
+        public static VisualElement Timeline(IReadOnlyList<TimelineNodeData> nodes, string emptyText = "まだ記録がない。")
+        {
+            var root = new VisualElement();
+            root.AddToClassList("timeline");
+            if (nodes == null || nodes.Count == 0)
+            {
+                var empty = new Label(emptyText);
+                empty.AddToClassList("timeline__empty");
+                root.Add(empty);
+                return root;
+            }
+
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                var d = nodes[i];
+                var node = new VisualElement();
+                node.AddToClassList("timeline__node");
+                if (d.Current) node.AddToClassList("timeline__node--now");
+
+                var year = new Label(d.Year ?? "");
+                year.AddToClassList("timeline__year");
+                year.AddToClassList("f-num");
+                node.Add(year);
+
+                var rail = new VisualElement();
+                rail.AddToClassList("timeline__rail");
+                var dot = new VisualElement();
+                dot.AddToClassList("timeline__dot");
+                rail.Add(dot);
+                // 縦軸は「次の節点へ続く」ことを示す線。最後の節点の下には引かない。
+                if (i < nodes.Count - 1)
+                {
+                    var line = new VisualElement();
+                    line.AddToClassList("timeline__line");
+                    rail.Add(line);
+                }
+                node.Add(rail);
+
+                var body = new VisualElement();
+                body.AddToClassList("timeline__body");
+                var title = new Label(d.Title ?? "");
+                title.AddToClassList("timeline__title");
+                title.AddToClassList("f-display");
+                body.Add(title);
+                if (!string.IsNullOrEmpty(d.Note))
+                {
+                    var note = new Label(d.Note);
+                    note.AddToClassList("timeline__note");
+                    body.Add(note);
+                }
+                node.Add(body);
+
+                root.Add(node);
+            }
+            return root;
+        }
     }
 }

@@ -84,6 +84,51 @@ public sealed class TournamentArchiveTests
         Assert.Equal(1, y2.UniformNumber);  // 2年夏の当時の背番号
     }
 
+    // ===== 最後に付けていた背番号（issue #586） =====
+
+    /// <summary>
+    /// 夏の引退で背番号を返上した3年でも、アーカイブから「当時の背番号」が引ける。
+    /// これが無いと10月のドラフト指名で教え子名鑑の背番号が必ず 0 になる（issue #531 との噛み合わせ）。
+    /// </summary>
+    [Fact]
+    public void LastUniformNumber_SurvivesRetirement()
+    {
+        var store = new PlayerStatStore();
+        var player = new KokoSim.Engine.Season.DevelopingPlayer { Id = 1, Grade = 3, UniformNumber = 7 };
+
+        store.StartTournament();
+        store.FoldGame(ManagerHomeGame(sourceId: 1, hits: 2, runs: 1), managerIsAway: false);
+        store.ArchiveCurrentTournament(TournamentSlot.SummerPref, Info(id: 1, grade: 3, number: 7));
+
+        // 夏の新チーム発足＝3年は引退し、背番号は返上される（RosterLifecycle・issue #531）。
+        KokoSim.Engine.Season.RosterLifecycle.BeginNewTeam(new[] { player });
+        Assert.Equal(0, player.UniformNumber);
+
+        Assert.Equal(7, store.Archive.LastUniformNumber(1));
+    }
+
+    /// <summary>学年の高い順に探す（3年夏の番号が2年夏の番号に優先する）。</summary>
+    [Fact]
+    public void LastUniformNumber_PrefersTheLatestGrade()
+    {
+        var store = new PlayerStatStore();
+
+        store.StartTournament();
+        store.FoldGame(ManagerHomeGame(sourceId: 1, hits: 1, runs: 0), managerIsAway: false);
+        store.ArchiveCurrentTournament(TournamentSlot.SummerPref, Info(1, grade: 2, number: 14));
+
+        store.StartTournament();
+        store.FoldGame(ManagerHomeGame(sourceId: 1, hits: 3, runs: 1), managerIsAway: false);
+        store.ArchiveCurrentTournament(TournamentSlot.SummerPref, Info(1, grade: 3, number: 1));
+
+        Assert.Equal(1, store.Archive.LastUniformNumber(1));
+    }
+
+    /// <summary>一度も大会に出ていない選手は0（＝背番号なし）。落ちない。</summary>
+    [Fact]
+    public void LastUniformNumber_UnknownPlayer_IsZero()
+        => Assert.Equal(0, new PlayerStatStore().Archive.LastUniformNumber(999));
+
     [Fact]
     public void Archive_SkipsPlayersWithUnknownGrade()
     {
