@@ -140,7 +140,7 @@ namespace KokoSim.Unity.Tournament
                 next = "本日 試合　" + runner.RoundName + "　vs " + (runner.NextOpponent?.Name ?? "―");
             else
                 next = "次戦　" + runner.RoundName + "　vs " + (runner.NextOpponent?.Name ?? "―")
-                       + "　（あと " + session.DaysUntilNextMatch + " 日）";
+                       + "　（" + session.NextMatchDateLabel + "・あと " + session.DaysUntilNextMatch + " 日）";
             SetText("tb-next", next);
 
             RenderBracketTree(view);

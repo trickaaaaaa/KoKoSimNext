@@ -941,8 +941,23 @@ nation:
 
 # --- 大会モード日程（設計書03/05, 抽象日カウント） ---
 tournament:
-  first_round_day: 1      # 開幕(0日目)から初戦までの日数
-  round_gap_days: 2       # ラウンド間の日数間隔＝中1日（地方予選の連戦感。8ラウンド×2日＝決勝15日目。OPEN-QUESTIONS Q23）
+  # 大会日程（issue #583）。ラウンド番号でなく「残りラウンド数」で引く＝ラウンド数は県の出場校数で
+  # 5〜9と変わるのに対し、決勝・準決勝・準々決勝は決勝から数えた位置で決まるため。
+  # 既定（A案）で8ラウンド県は全18日・5ラウンド県は9日。試合日は AceRestSelector の温存抽選シードに
+  # 入るので**帯に効く**（旧 round_gap_days=2 の等差は本 issue が置き換え。OPEN-QUESTIONS Q23）。
+  first_round_day: 1                # 開幕(0日目)から初戦までの日数
+  early_round_spread_days: 3        # 序盤ラウンドのカードを分散させる日数（1回戦は1日で消化しきれない）
+  middle_round_spread_days: 2       # 中盤ラウンドの分散日数
+  late_round_spread_days: 1         # 準々決勝以降は同日開催
+  early_rounds_threshold: 6         # 残りこのラウンド数以上を序盤とする
+  late_rounds_threshold: 3          # 残りこのラウンド数以下を終盤とする（準々決勝・準決勝・決勝）
+  rest_days_after_quarterfinal: 1   # 準々決勝の後の休養日
+  rest_days_after_semifinal: 1      # 準決勝の後の休養日
+  # 実開幕月日（表示専用）。週暦は50週×7日＝350日で実暦と一致しないので、大会期間だけ実カレンダーで数える。
+  summer_open_month: 7
+  summer_open_day: 10
+  autumn_open_month: 9
+  autumn_open_day: 12
 
 # --- 練習試合（設計書03 §週ターン③・設計書04 §名声の効果） ---
 practice_match:

@@ -20,7 +20,7 @@ namespace KokoSim.Engine.Tests.Nation;
 public sealed class TournamentTieReplayTests
 {
     private static readonly NationCoefficients Coeff = new();
-    private static readonly TournamentSchedule Schedule = new() { FirstRoundDay = 1, RoundGapDays = 3 };
+    private static readonly TournamentSchedule Schedule = new();
 
     private static School Sch(int id, double strength) => new()
     {

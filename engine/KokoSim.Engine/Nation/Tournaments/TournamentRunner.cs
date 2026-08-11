@@ -3,17 +3,96 @@ using KokoSim.Engine.Match.Game;
 
 namespace KokoSim.Engine.Nation.Tournaments;
 
-/// <summary>大会内の日程（抽象日カウント, 設計書03/05）。初戦日とラウンド間の中○日を持つ。YAML駆動。</summary>
+/// <summary>
+/// 大会内の日程（設計書05 §1.1・issue #583）。実際のトーナメント日程の形を持つ日程表。
+///
+/// <para><b>ラウンド番号ではなく残りラウンド数（roundsRemaining）で引く</b>。ラウンド数は県の出場校数で
+/// 5〜9と変わるのに対し、「決勝・準決勝・準々決勝」は決勝から数えた位置で決まるため。
+/// 1=決勝 / 2=準決勝 / 3=準々決勝 / 4以上=それ以前。</para>
+///
+/// <para>形は3段: <b>序盤は数日に分散</b>（1回戦の全カードを1日では消化できない＝自校の初戦日が
+/// ブラケット位置で変わる）→<b>中盤は2日</b>→<b>準々決勝以降は同日開催</b>、そして
+/// <b>準々決勝の後と準決勝の後に休養日</b>。既定（A案）で8ラウンド県は全18日・5ラウンド県は9日。</para>
+///
+/// <para><b>帯・決定論に効く</b>: 試合日は <see cref="Roster.AceRestSelector"/> の温存抽選シードに入り、
+/// 球数台帳（<see cref="TournamentPitchLedger"/>）の休養日ウィンドウの意味も決める。
+/// ここを触ると裏試合のエース選択が動く（OPEN-QUESTIONS Q23 →本 issue が置き換え）。</para>
+/// </summary>
 public sealed record TournamentSchedule
 {
     /// <summary>初戦の試合日（開幕=0日目からの相対）。</summary>
     public int FirstRoundDay { get; init; } = 1;
-    /// <summary>ラウンド間の日数間隔（＝中(RoundGapDays−1)日）。既定2＝中1日＝地方予選の連戦感（8ラウンド×2日＝決勝は15日目≒2週強）。
-    /// MatchDay に直結し、AceRestSelector の温存抽選ストリーム(seed に MatchDay を含む)を左右するため帯/決定論baselineに効く（OPEN-QUESTIONS Q23）。</summary>
-    public int RoundGapDays { get; init; } = 2;
 
-    /// <summary>ラウンド index（0基点＝初戦）の試合日を返す。</summary>
-    public int MatchDay(int roundIndex) => FirstRoundDay + roundIndex * RoundGapDays;
+    /// <summary>序盤ラウンド（残り <see cref="EarlyRoundsThreshold"/> 以上）のカードを分散させる日数。</summary>
+    public int EarlyRoundSpreadDays { get; init; } = 3;
+    /// <summary>中盤ラウンドのカードを分散させる日数。</summary>
+    public int MiddleRoundSpreadDays { get; init; } = 2;
+    /// <summary>終盤ラウンド（残り <see cref="LateRoundsThreshold"/> 以下＝準々決勝以降）は同日開催＝1。</summary>
+    public int LateRoundSpreadDays { get; init; } = 1;
+
+    /// <summary>この残りラウンド数以上を序盤とする（既定6＝8ラウンド県なら1〜3回戦）。</summary>
+    public int EarlyRoundsThreshold { get; init; } = 6;
+    /// <summary>この残りラウンド数以下を終盤とする（既定3＝準々決勝・準決勝・決勝）。</summary>
+    public int LateRoundsThreshold { get; init; } = 3;
+
+    /// <summary>準々決勝（残り3）の後に置く休養日。</summary>
+    public int RestDaysAfterQuarterfinal { get; init; } = 1;
+    /// <summary>準決勝（残り2）の後に置く休養日。</summary>
+    public int RestDaysAfterSemifinal { get; init; } = 1;
+
+    /// <summary>夏の地方大会の実開幕月（表示専用・issue #583）。</summary>
+    public int SummerOpenMonth { get; init; } = 7;
+    /// <summary>夏の地方大会の実開幕日。</summary>
+    public int SummerOpenDay { get; init; } = 10;
+    /// <summary>秋季県大会の実開幕月。</summary>
+    public int AutumnOpenMonth { get; init; } = 9;
+    /// <summary>秋季県大会の実開幕日。</summary>
+    public int AutumnOpenDay { get; init; } = 12;
+
+    /// <summary>残りラウンド数 <paramref name="roundsRemaining"/> のカードを分散させる日数。</summary>
+    public int SpreadDaysFor(int roundsRemaining)
+    {
+        if (roundsRemaining <= LateRoundsThreshold) return Math.Max(1, LateRoundSpreadDays);
+        if (roundsRemaining >= EarlyRoundsThreshold) return Math.Max(1, EarlyRoundSpreadDays);
+        return Math.Max(1, MiddleRoundSpreadDays);
+    }
+
+    /// <summary>そのラウンドを消化した後に置く休養日（準々決勝後・準決勝後だけ）。</summary>
+    public int RestDaysAfter(int roundsRemaining) => roundsRemaining switch
+    {
+        3 => Math.Max(0, RestDaysAfterQuarterfinal),
+        2 => Math.Max(0, RestDaysAfterSemifinal),
+        _ => 0,
+    };
+
+    /// <summary>ラウンド index（0基点＝初戦）の初日。以降のカードはここから分散する。</summary>
+    public int RoundStartDay(int totalRounds, int roundIndex)
+    {
+        var day = FirstRoundDay;
+        for (var r = 0; r < roundIndex; r++)
+        {
+            var rr = totalRounds - r;
+            day += SpreadDaysFor(rr) + RestDaysAfter(rr);
+        }
+        return day;
+    }
+
+    /// <summary>
+    /// ラウンド index <paramref name="roundIndex"/>・カード <paramref name="slot"/> の試合日。
+    /// カードは <see cref="SpreadDaysFor"/> 日に均等割りする（slot が小さいほど早い日＝ブラケットの上から順に消化）。
+    /// </summary>
+    public int MatchDay(int totalRounds, int roundIndex, int slot, int cardsInRound)
+    {
+        var rr = Math.Max(1, totalRounds - roundIndex);
+        var spread = SpreadDaysFor(rr);
+        var cards = Math.Max(1, cardsInRound);
+        var offset = (int)((long)Math.Max(0, slot) * spread / cards);
+        if (offset >= spread) offset = spread - 1;
+        return RoundStartDay(totalRounds, roundIndex) + offset;
+    }
+
+    /// <summary>大会の最終日（＝決勝の日）。消費する週数の算出に使う。</summary>
+    public int FinalDay(int totalRounds) => RoundStartDay(totalRounds, Math.Max(0, totalRounds - 1));
 }
 
 /// <summary>
@@ -366,7 +445,8 @@ public sealed class TournamentRunner
     /// <summary>次戦相手のランク（NextOpponent が null のときは意味を持たない）。</summary>
     public Tier NextOpponentTier => _nextOpponent?.Tier ?? Tier.G;
     /// <summary>次戦の試合日（大会開幕からの相対日）。</summary>
-    public int NextMatchDay => _schedule.MatchDay(_roundIndex);
+    public int NextMatchDay =>
+        _schedule.MatchDay(_totalRounds, _roundIndex, ManagerCardSlot(_current), Math.Max(1, _current.Length / 2));
     /// <summary>次戦のラウンド名（決勝/準決勝/…/N回戦）。</summary>
     public string RoundName => RoundNameFor(TournamentRecorder.RoundsRemaining(_current.Length));
 
@@ -517,6 +597,23 @@ public sealed class TournamentRunner
     /// <summary>残存校配列のサイズからラウンド添字（0基点）を導く。_roundIndex とは独立＝背景消化でも正しい。</summary>
     private int RoundIndexOf(School?[] cur) => _totalRounds - TournamentRecorder.RoundsRemaining(cur.Length);
 
+    /// <summary>
+    /// 残りラウンド数とカード添字から試合日を引く<b>唯一の入口</b>（issue #583）。序盤ラウンドはカードが
+    /// 数日に分散するので、同じラウンドでもカードごとに日が違う。プレフェッチ（<see cref="PrefetchCurrentRoundBackgroundCards"/>）と
+    /// 本解決が別の日を渡すと、メモ化 resolver が別条件で温めた結果を本解決が拾ってしまうため、必ずここを通す。
+    /// </summary>
+    private int MatchDayOf(int roundsRemaining, int slot)
+        => _schedule.MatchDay(
+            _totalRounds, _totalRounds - roundsRemaining, slot, 1 << Math.Max(0, roundsRemaining - 1));
+
+    /// <summary>現ラウンドで自校が入っているカードの添字（＝自校の試合日を決める位置）。居なければ0。</summary>
+    private int ManagerCardSlot(School?[] cur)
+    {
+        for (var i = 0; i < cur.Length; i++)
+            if (cur[i] is { } s && s.Id == _managerId) return i / 2;
+        return 0;
+    }
+
     private void RecordCard(int round, int slot, bool topWon, int winnerScore, int loserScore, bool mercyEnded = false)
         => _cardResults[(round, slot)] = new CardResult(topWon, winnerScore, loserScore, mercyEnded);
 
@@ -538,16 +635,16 @@ public sealed class TournamentRunner
         if (_backgroundResolver is null || Finished) return;
         var cur = _current;
         if (cur.Length < 2) return;
-        var round = RoundIndexOf(cur);
         var roundsRemaining = TournamentRecorder.RoundsRemaining(cur.Length);
-        var matchDay = _schedule.MatchDay(round);
         for (var i = 0; i < cur.Length / 2; i++)
         {
             var a = cur[2 * i];
             var b = cur[2 * i + 1];
             if (a is null || b is null) continue;                       // 不戦勝（裏カードなし）
             if (a.Id == _managerId || b.Id == _managerId) continue;     // 自校カードはライブ解決＝プレフェッチしない
-            var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
+            // 試合日はカードごとに違う（序盤は数日に分散・issue #583）。本解決と<b>必ず同じ日</b>で
+            // 呼ばないと、メモ化 resolver が別条件で温めた結果を本解決が拾ってしまう。
+            var context = new TournamentMatchContext(roundsRemaining, MatchDayOf(roundsRemaining, i), _pitchLedger);
             // ResolveRound の裏カード分岐と同一呼び出し（結果は捨てる＝メモ化 resolver が温める）。
             _backgroundResolver.Resolve(a, b, _rng.Fork(BackgroundStream(roundsRemaining, i)), context);
         }
@@ -653,7 +750,7 @@ public sealed class TournamentRunner
                 ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
-                var matchDay = _schedule.MatchDay(round);
+                var matchDay = MatchDayOf(roundsRemaining, i);
                 var mercy = MercyRuleEnabledFor(roundsRemaining);
                 // 初戦（再試合回0）は従来と完全一致（同一Fork・同一context）＝非引き分け試合は決定論baseline不変。
                 var first = _playerResolver.Resolve(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
@@ -730,7 +827,7 @@ public sealed class TournamentRunner
                 ConsumeLegacyManagerCardRng(a, b);
                 var mgr = a.Id == _managerId ? a : b;
                 var opp = a.Id == _managerId ? b : a;
-                var matchDay = _schedule.MatchDay(round);
+                var matchDay = MatchDayOf(roundsRemaining, i);
                 var context = new TournamentMatchContext(roundsRemaining, matchDay, _pitchLedger);
                 var live = _playerResolver!.BeginLive(mgr, opp, _rng.Fork(PlayerMatchStream(roundsRemaining, i)),
                     MercyRuleEnabledFor(roundsRemaining), context);
@@ -820,7 +917,7 @@ public sealed class TournamentRunner
     {
         if (_backgroundResolver is not null)
         {
-            var matchDay = _schedule.MatchDay(_totalRounds - roundsRemaining);
+            var matchDay = MatchDayOf(roundsRemaining, slot);
             // 引き分け再試合（設計書05 §1.3, issue #253）。初戦（attempt 0）は従来と同一 Fork・同一 context ＝
             // 非引き分け試合は決定論baseline不変。延長上限で引き分けたときだけ別Fork の再試合を積む。
             // 各試合（引き分け含む）を全国成績へ畳み込み・台帳へ記録する（再試合＝両試合とも公式試合という現実準拠）。

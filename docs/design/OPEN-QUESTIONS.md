@@ -2,6 +2,25 @@
 
 実装で勝手に確定せず、ここに記録して相談する（CLAUDE.md「進め方」）。
 
+## Q26. 球数台帳のキーが AI校をまたいで衝突している（2026-08-11・issue #583 で発見）
+
+`TournamentPitchLedger` の記録キーは `RecordSide` が
+`l.SourceId is int sid ? PitcherLedgerKey.ForPlayer(sid) : ForOpponent(schoolId, uniform)` で選ぶ。
+AI校の選手は `AiRosterFactory.Bootstrap` が `nextId = 1` から振った**校内選手ID**を `SourceId` に焼くため、
+**全AI校の「選手ID 5」が同じキーになる**。実測（64校フルシム大会）: 79登板が **19キー**へ潰れていた。
+
+さらに `AceRestSelector` は `ForOpponent(school.Id, AceUniformNumber)` で引くのに対し、記録は
+`ForPlayer` 側へ入るので、**AI校のエース温存判断は台帳の消耗を一度も見ていない**（`recentPitches` が常に0
+＝`fatigueLoad` が常に0）。issue #41（台帳）／#42（温存）の配線が繋がっていない。
+
+**#583 では直していない**（日程の issue なので）。直すと AI校の先発選択が変わり、裏試合の結果＝
+統計帯が動くため、独立した issue で帯の確認込みでやるべき。直し方の候補:
+
+1. `SourceId` を全国で一意にする（校ID×1000+校内ID 等）。成績帰属（`PlayerStatStore`）も同じキーを使うので
+   影響範囲が広い。
+2. 台帳のキーだけ `ForOpponent(schoolId, uniform)` に一本化する（`RecordSide` に schoolId は既に来ている）。
+   `AceRestSelector` の引き方と揃うので最小の修正。ただし自校選手は `ForPlayer` のままにする必要がある。
+
 ## Q25. 監督の氏名を決める導線が無い（2026-08-11・issue #586 で発見）
 
 `Manager.Name` は engine 既定の **"監督"** のまま**どこからも設定されない**（`Assets/` 全体で
@@ -185,9 +204,25 @@ Issue: [#536](https://github.com/trickaaaaaa/KoKoSimNext/issues/536)
 「本格派と技巧派の失点が同水準」を固定している。球速の価値を上げると本格派が一方的に有利になり赤くなるので、
 `archetype_*_velocity` / `archetype_*_control` を同じコミットで振り直す（不変条件#4: C#既定も同時に）。
 
-## Q23. 夏の地方大会の開幕週とトーナメント日程の妥当性（2026-07-23）→ **確定（2026-07-23・ユーザー確定）**
+## Q23. 夏の地方大会の開幕週とトーナメント日程の妥当性（2026-07-23）→ **確定（2026-07-23）／日程は #583 が置き換え（2026-08-11）**
 
-Issue: [#175](https://github.com/trickaaaaaa/KoKoSimNext/issues/175)
+Issue: [#175](https://github.com/trickaaaaaa/KoKoSimNext/issues/175) →
+日程モデルの置き換え: [#583](https://github.com/trickaaaaaa/KoKoSimNext/issues/583)
+
+> **改訂（2026-08-11・issue #583）**: 下の確定2「`round_gap_days`＝中1日の等差」は**撤回し日程表モデルへ移行した**。
+> 等差1本ではラウンドの別（1回戦か準決勝か）も大会の別も表現できず、現実の高校野球の
+> 「1回戦は数日に分散／準々決勝・準決勝は同日／その後に休養日」という形が出せなかったため。
+> 新モデルは**残りラウンド数**で引く（ラウンド数は県の出場校数で5〜9と変わるが、決勝・準決勝・準々決勝は
+> 決勝から数えた位置で決まる）。既定（A案・ユーザー確定）で8ラウンド県は全18日・5ラウンド県は9日
+> ＝5ラウンド県は旧等差と同じ長さのまま、大きい県だけ長くなる。開幕週（確定1）は据え置き。
+>
+> **試合日はカードごとに違う**ようになった＝自校の初戦日がブラケット位置で変わる。
+> よって `MatchDay(round)` は `MatchDay(totalRounds, roundIndex, slot, cardsInRound)` へ。
+> プレフェッチと本解決が必ず同じ日を渡すこと（メモ化 resolver が別条件の結果を返してしまう）。
+>
+> **帯の実測（2026-08-11）**: Heavy は全緑で係数の寄せは不要だった。ただし**既存の Heavy 帯は
+> `TournamentRunner` を1本も通らない**（`GameEngine` を直接回すだけ）＝日程は帯が測っていないことが
+> 判明したので、大会を実際に回す Heavy テスト（`TournamentScheduleIntegrationTests`）を新設した。
 
 > **確定（2026-07-23・ユーザー確定）**:
 > 1. **開幕週を第15週（7月3週目）→ 第13週（7月1週目）へ早める**。現実の夏の地方予選（7月上旬開幕）に合わせ、開幕→引退(週17)の暦幅を広げる。大会モードは1週ターン内で抽象日を一気消化するため、開幕週はトーナメント内部日程(`MatchDay`)には無影響＝**この定数変更だけなら帯/決定論baselineに効かない**。`SeasonCalendar.SummerTournamentStartWeek = 13`。
