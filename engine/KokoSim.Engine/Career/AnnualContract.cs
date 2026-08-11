@@ -19,6 +19,13 @@ public sealed record ContractTier
     /// <summary>新入生の才能中心値への加算（スカウト網）。名声由来の上振れに上乗せする。</summary>
     public double ScoutTalentAdd { get; init; }
 
+    /// <summary>
+    /// 入部予定者の事前開示精度 0〜1（スカウト網の効果2・設計書04 §2.1・issue #587）。
+    /// 3月に確定した予定者を4月の入部前にどこまで見通せるか＝推定能力の誤差の小ささと
+    /// 隠しパラメータが判明する確率。0＝ほぼ何も分からない、1＝ほぼ実値。
+    /// </summary>
+    public double ProspectDisclosure { get; init; }
+
     /// <summary>打撃系の指導力への加算（専門コーチ）。監督自身の指導力は変えず、実効値だけ底上げする。</summary>
     public double CoachingBattingAdd { get; init; }
 
@@ -60,6 +67,12 @@ public sealed record ContractEffects
     public double CoachingDefenseAdd { get; init; }
     public bool OutOfPrefectureOpponents { get; init; }
 
+    /// <summary>
+    /// 入部予定者の事前開示精度 0〜1（issue #587）。他の軸が加算で畳まれるのに対し、これだけは
+    /// <b>最大値</b>で畳む。「見えている度合い」は重ねても倍にならず、いちばん通った網の分だけ見える。
+    /// </summary>
+    public double ProspectDisclosure { get; init; }
+
     /// <summary>何も契約していない状態（年額0・効果なし）。</summary>
     public static ContractEffects None { get; } = new();
 }
@@ -82,7 +95,7 @@ public sealed record ContractCatalog
     /// <summary>契約状態から実効値を畳む。段は 0..MaxLevel にクランプするので未知の段でも壊れない。</summary>
     public ContractEffects Aggregate(ContractSet set)
     {
-        double cost = 0, scout = 0, bat = 0, pit = 0, def = 0;
+        double cost = 0, scout = 0, bat = 0, pit = 0, def = 0, disclosure = 0;
         var away = false;
         foreach (var d in Contracts)
         {
@@ -96,6 +109,7 @@ public sealed record ContractCatalog
             pit += t.CoachingPitchingAdd;
             def += t.CoachingDefenseAdd;
             away |= t.OutOfPrefectureOpponents;
+            disclosure = Math.Max(disclosure, t.ProspectDisclosure);   // 開示は重ねない＝最大値
         }
         return new ContractEffects
         {
@@ -105,6 +119,7 @@ public sealed record ContractCatalog
             CoachingPitchingAdd = pit,
             CoachingDefenseAdd = def,
             OutOfPrefectureOpponents = away,
+            ProspectDisclosure = disclosure,
         };
     }
 
@@ -130,9 +145,11 @@ public sealed record ContractCatalog
                 Tiers = new[]
                 {
                     new ContractTier(),
-                    new ContractTier { AnnualCost = 15, ScoutTalentAdd = 0 },   // 県内を回る（従来どおり）
-                    new ContractTier { AnnualCost = 30, ScoutTalentAdd = 3 },   // 近隣県まで足を伸ばす
-                    new ContractTier { AnnualCost = 50, ScoutTalentAdd = 6 },   // 全国に網を張る
+                    // 効果1＝新入生の質（ScoutTalentAdd）／効果2＝入部前にどこまで見えるか（ProspectDisclosure）。
+                    // Lv1 は従来のスカウト費と同額で質も据え置き。上げると質より先に「見通し」が良くなる。
+                    new ContractTier { AnnualCost = 15, ScoutTalentAdd = 0, ProspectDisclosure = 0.15 },   // 県内を回る（従来どおり）
+                    new ContractTier { AnnualCost = 30, ScoutTalentAdd = 3, ProspectDisclosure = 0.45 },   // 近隣県まで足を伸ばす
+                    new ContractTier { AnnualCost = 50, ScoutTalentAdd = 6, ProspectDisclosure = 0.75 },   // 全国に網を張る
                 },
             },
             // 遠征: 県外の学校と練習試合が組める（相手の幅＝実戦成長の相手ティアの幅）。

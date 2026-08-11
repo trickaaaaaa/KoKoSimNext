@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- スカウト画面（設計書04 §2.1 受動枠・設計書06 §3.6 ／ issue #587）。
+     3月に確定した入部予定者を「？のまま眺めて期待する」ための画面。
+     レイアウトは監督選択のB案＝左に予定者一覧・右に選んだ1人の見立て（選手一覧と同じマスターディテール）。
+     スカウト網の契約段はここでは変更しない（買い物の唯一の場所は経営タブ・二重実装しない）。
+     上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="ScoutScreen.uss" />
+    <ui:VisualElement class="root ui-root">
+
+      <ui:Instance template="TopBar" />
+
+      <ui:VisualElement class="sc-main">
+
+        <!-- 見出し（新聞の柱見出し＝RuleHead・設計書16 §5） -->
+        <ui:VisualElement class="sc-masthead">
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="スカウト" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="sc-split">
+
+          <!-- ===== 左：入部予定者の名簿 ===== -->
+          <ui:VisualElement class="sc-split__left">
+            <ui:VisualElement class="nb-plate sc-plate">
+              <ui:VisualElement class="nb-plate__shadow" />
+              <ui:VisualElement class="nb-plate__front">
+
+                <ui:VisualElement class="plate-header plate-header--grass">
+                  <ui:Label name="sc-list-title" class="plate-header__title" text="入部予定者" />
+                  <ui:Label name="sc-list-sub" class="plate-header__sub" text="" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="row-well sc-well">
+                  <ui:VisualElement name="sc-thead" class="sc-thead">
+                    <ui:Label class="sc-th sc-th--name" text="氏名" />
+                    <ui:Label class="sc-th sc-th--hand" text="投打" />
+                    <ui:Label class="sc-th sc-th--est" text="事前の見立て" />
+                    <ui:Label class="sc-th sc-th--unknown" text="？" />
+                  </ui:VisualElement>
+                  <ui:ScrollView name="sc-scroll" mode="Vertical" class="sc-scroll">
+                    <ui:VisualElement name="sc-rows" />
+                  </ui:ScrollView>
+                  <ui:Label name="sc-empty" class="sc-empty" text="" />
+                </ui:VisualElement>
+
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <!-- ===== 右：選んだ1人の見立て ===== -->
+          <ui:ScrollView mode="Vertical" class="sc-split__right scroll">
+
+            <ui:VisualElement name="sc-detail" class="sc-detail">
+
+              <ui:VisualElement class="sc-head">
+                <ui:Label name="sc-name" class="sc-name f-display" text="" />
+                <ui:Label name="sc-sub" class="sc-sub" text="" />
+              </ui:VisualElement>
+
+              <!-- 見立てと隠しパラメータは横並び（片方だけだと項目4つに対して幅が余りすぎる）。 -->
+              <ui:VisualElement class="sc-row2">
+                <ui:VisualElement class="card card--half">
+                  <ui:VisualElement class="card__hd card__hd--tight">
+                    <ui:Label class="card__hd-title" text="事前の見立て" />
+                    <ui:Label name="sc-est-note" class="card__hd-sub" text="" />
+                  </ui:VisualElement>
+                  <ui:VisualElement class="card__body">
+                    <ui:VisualElement name="sc-est" class="sc-est" />
+                  </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="card card--half sc-card-last">
+                  <ui:VisualElement class="card__hd card__hd--tight">
+                    <ui:Label class="card__hd-title" text="わかっていること" />
+                    <ui:Label class="card__hd-sub" text="段が上がるほど？が減る" />
+                  </ui:VisualElement>
+                  <ui:VisualElement class="card__body">
+                    <ui:VisualElement name="sc-hidden" class="sc-hidden" />
+                  </ui:VisualElement>
+                </ui:VisualElement>
+              </ui:VisualElement>
+
+              <ui:VisualElement class="card">
+                <ui:VisualElement class="card__hd card__hd--tight">
+                  <ui:Label class="card__hd-title" text="スカウト評" />
+                </ui:VisualElement>
+                <ui:VisualElement class="card__body">
+                  <ui:Label name="sc-comment" class="sc-comment" text="" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+
+            </ui:VisualElement>
+
+            <ui:Label name="sc-detail-empty" class="sc-detail-empty" text="" />
+
+          </ui:ScrollView>
+
+        </ui:VisualElement>
+
+        <!-- ===== 下：スカウト網の状態（変更は経営タブ） ===== -->
+        <ui:VisualElement class="sc-foot">
+          <ui:Label name="sc-net" class="sc-net" text="" />
+          <ui:VisualElement class="sc-foot__spacer" />
+          <ui:Button name="sc-to-management" class="tool-btn" text="経営で変更" />
+        </ui:VisualElement>
+
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

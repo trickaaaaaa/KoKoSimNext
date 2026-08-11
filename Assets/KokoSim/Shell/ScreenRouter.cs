@@ -13,7 +13,7 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public sealed class ScreenRouter : MonoBehaviour
     {
-        // ナビ項目 name → 画面 GameObject 名。未マップの項目（大会・スカウト…）はクリックしても無反応。
+        // ナビ項目 name → 画面 GameObject 名。未マップの項目（キャリア・記録…）はクリックしても無反応。
         // MatchScreen: 試合はカレンダー進行（週送り）から遷移する設計のため、ナビの「試合」タブは撤去済み
         // （設計書06 §3.4: ハブ＆スポークのスポーク＝遷移先画面）。ここに残すのは休眠画面として
         // 起動時に確実に SetActive(false) にするためだけ（外すと描画競合でパネルが消える）。nav-match の
@@ -29,6 +29,7 @@ namespace KokoSim.Unity.Shell
             ("nav-match", "MatchScreen"),
             ("nav-tournament", "TournamentPreview"),
             ("nav-manager", "ManagerScreen"),
+            ("nav-scout", "ScoutScreen"),
             ("nav-management", "ManagementScreen"),
             ("nav-system", "SaveSlots"),
         };
@@ -59,7 +60,7 @@ namespace KokoSim.Unity.Shell
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
             { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "ManagerScreen",
-              "ManagementScreen", "TeamSetting", "SaveSlots" };
+              "ManagementScreen", "TeamSetting", "SaveSlots", "ScoutScreen" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>
         public static ScreenRouter Instance { get; private set; }

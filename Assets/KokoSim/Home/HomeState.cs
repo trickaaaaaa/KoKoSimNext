@@ -160,6 +160,43 @@ namespace KokoSim.Unity.Home
             RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
+            RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
+        }
+
+        /// <summary>
+        /// 入部予定者の開示演出（設計書04 §2.1・issue #587）。3月の確定と4月の入部を通知フィードへ流す。
+        /// 遷移そのものは <see cref="KokoSim.Unity.Shell.GameClock"/> と
+        /// <see cref="KokoSim.Unity.Shell.RosterService"/> が済ませており、ここは提示だけ
+        /// （大会開幕バナーと同じ「遷移とUI提示の分離」）。フラグは流したら下ろす。
+        /// </summary>
+        private void RunProspectFeed()
+        {
+            var items = new List<FeedItem>();
+            if (KokoSim.Unity.Shell.GameClock.ProspectConfirmed)
+            {
+                KokoSim.Unity.Shell.GameClock.ProspectConfirmed = false;
+                var n = KokoSim.Unity.Shell.ProspectService.Current?.Count ?? 0;
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = "来春の入部予定者 " + n + "名 が決まった。スカウトの見立てが届いている。",
+                    Kind = FeedKind.Discover,
+                    Tag = "発見",
+                });
+            }
+            if (KokoSim.Unity.Shell.GameClock.ProspectJoined)
+            {
+                KokoSim.Unity.Shell.GameClock.ProspectJoined = false;
+                var n = KokoSim.Unity.Shell.ProspectService.Current?.Count ?? 0;
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = "新入生 " + n + "名 が入部した。能力が見えるようになった。",
+                    Kind = FeedKind.Discover,
+                    Tag = "発見",
+                });
+            }
+            if (items.Count > 0) PushFeed(items);
         }
 
         /// <summary>開幕演出（バナー）を出す直前に「大会が開幕した」を通知フィードへ流す（設計書06 §2）。

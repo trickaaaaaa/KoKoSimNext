@@ -78,6 +78,33 @@ public static class RosterLifecycle
         => CaptainSelector.IsNewTeamStartWeek(week, calendar) ? BeginNewTeam(roster) : null;
 
     /// <summary>
+    /// 入部予定者の確定（3月・設計書04 §2.1・issue #587）。<see cref="AdvanceYear"/> の③と<b>同じ入力・同じ
+    /// 乱数消費</b>で新入生コホートを作るが、ロスターには入れずに返すだけ＝4月まで「予定者」として持ち回る。
+    ///
+    /// <para>③が渡す <c>existingNames</c> は「卒業を済ませた後のロスター」の氏名列だが、この時点ではまだ
+    /// 卒業していない。<b>卒業後に残るのは現1・2年だけ</b>なので <c>Grade &lt;= 2</c> で絞れば、
+    /// 順序まで含めて③と同一の列になる（＝下の名前の重複回避が1ビット一致する）。</para>
+    ///
+    /// <para>確定したコホートをそのまま <see cref="AdvanceYear"/> の <c>incoming</c> へ渡すと、
+    /// 従来の1段生成と同じロスターになる（<c>ProspectSplitTests</c> が固定）。</para>
+    /// </summary>
+    /// <param name="roster">確定時点（3月）のロスター。引退した3年も含んでよい（学年で除外する）。</param>
+    /// <param name="year">合流する年度（<see cref="AdvanceYear"/> へ渡すのと同じ値）。</param>
+    public static IReadOnlyList<DevelopingPlayer> ConfirmIncoming(
+        IReadOnlyList<DevelopingPlayer> roster, int year, RosterCoefficients coeff, IRandomSource rng,
+        SkillCoefficients? skills = null, PersonalityCoefficients? personalities = null,
+        FormCoefficients? form = null, double? talentCenter = null)
+    {
+        if (roster is null) throw new ArgumentNullException(nameof(roster));
+        if (coeff is null) throw new ArgumentNullException(nameof(coeff));
+        if (rng is null) throw new ArgumentNullException(nameof(rng));
+
+        var survivors = roster.Where(p => p.Grade <= 2).Select(p => p.Name).ToList();
+        return ProspectGenerator.Intake(year, coeff, rng, skills: skills, personalities: personalities,
+            existingNames: survivors, form: form, talentCenter: talentCenter);
+    }
+
+    /// <summary>
     /// 年度替わり（4月）の一括処理（設計書03 §2「昇級 → 卒業 → 新入生」）。<paramref name="roster"/> を
     /// その場で更新する: ①全員を1つ進級（3年は Grade=4 になる）②卒業（Grade&gt;3）をロスターから除去して
     /// <see cref="YearRollover.Graduated"/> へ返す ③新入生（1年）を <see cref="ProspectGenerator.Intake"/> で
@@ -96,10 +123,16 @@ public static class RosterLifecycle
     /// （不変条件#2）。<paramref name="talentCenter"/> に名声由来の中心値（<see cref="RosterCoefficients.TalentCenterFromFame"/>）
     /// を渡すと新入生の質へ反映される（null＝既定中心・従来一致）。</para>
     /// </summary>
+    /// <param name="incoming">
+    /// 3月に確定済みの入部予定者（<see cref="ConfirmIncoming"/> の戻り値・issue #587）。渡すとこの集団が
+    /// そのまま合流し、<b>生成を行わない＝<paramref name="rng"/> を1ビットも消費しない</b>。
+    /// null（既定）なら従来どおりその場で生成する（旧セーブ・3月を跨がなかった進行のフォールバック）。
+    /// </param>
     public static YearRollover AdvanceYear(
         List<DevelopingPlayer> roster, int year, RosterCoefficients coeff, IRandomSource rng,
         SkillCoefficients? skills = null, PersonalityCoefficients? personalities = null,
-        FormCoefficients? form = null, double? talentCenter = null, int nextId = 0)
+        FormCoefficients? form = null, double? talentCenter = null, int nextId = 0,
+        IReadOnlyList<DevelopingPlayer>? incoming = null)
     {
         if (roster is null) throw new ArgumentNullException(nameof(roster));
         if (coeff is null) throw new ArgumentNullException(nameof(coeff));
@@ -110,8 +143,9 @@ public static class RosterLifecycle
         var graduated = roster.Where(p => p.Grade > 3).ToList();
         roster.RemoveAll(p => p.Grade > 3);
 
-        // ③ 新入生（1年）。在籍部員の氏名を渡し、下の名前の重複を避ける（既存挙動を維持）。
-        var newcomers = ProspectGenerator.Intake(year, coeff, rng, skills: skills,
+        // ③ 新入生（1年）。3月に確定済み（issue #587）ならそれを合流させ、無ければその場で生成する。
+        // 在籍部員の氏名を渡し、下の名前の重複を避ける（既存挙動を維持）。
+        var newcomers = incoming ?? ProspectGenerator.Intake(year, coeff, rng, skills: skills,
             personalities: personalities, existingNames: roster.Select(p => p.Name).ToList(),
             form: form, talentCenter: talentCenter);
 

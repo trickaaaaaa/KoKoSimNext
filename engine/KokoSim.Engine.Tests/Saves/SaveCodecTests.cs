@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
@@ -213,6 +214,83 @@ public sealed class SaveCodecTests
         Assert.Equal(13, s.PrefectureId);
         Assert.Null(s.DistrictId);
         Assert.Equal(7, s.Week);        // 他の項目は素通りで読めている
+    }
+
+    // ===== 入部予定者（3月確定→4月仮入部・issue #587） =====
+
+    // 確定済み（未合流）の予定者が、選手の実体と見立ての両方で往復すること。
+    [Fact]
+    public void IncomingClass_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+
+        var a = state.Incoming!;
+        var b = s.Incoming;
+        Assert.NotNull(b);
+        Assert.Equal(a.YearIndex, b!.YearIndex);
+        Assert.Equal(a.Disclosure, b.Disclosure, 9);
+        Assert.False(b.Joined);
+        Assert.Equal(a.Players.Count, b.Players.Count);
+        Assert.Equal(a.Reports.Count, b.Reports.Count);
+        Assert.Equal(a.Players.Select(p => p.Name), b.Players.Select(p => p.Name));
+        Assert.Equal(a.Players.Select(p => p.Level(AbilityKind.Contact)), b.Players.Select(p => p.Level(AbilityKind.Contact)));
+        for (var i = 0; i < a.Reports.Count; i++)
+        {
+            Assert.Equal(a.Reports[i].Name, b.Reports[i].Name);
+            Assert.Equal(a.Reports[i].Batting, b.Reports[i].Batting, 9);
+            Assert.Equal(a.Reports[i].Pitching, b.Reports[i].Pitching, 9);
+            Assert.Equal(a.Reports[i].UnknownCount, b.Reports[i].UnknownCount);
+        }
+    }
+
+    // 合流済みの学年は選手の実体を持たず（ロスター側にしか居ない）、見立てだけが残ること。
+    [Fact]
+    public void IncomingClass_AfterJoin_KeepsOnlyReports()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var incoming = state.Incoming!;
+        var joined = incoming.Players.ToList();
+        for (var i = 0; i < joined.Count; i++) joined[i].Id = 900 + i;
+        incoming.MarkJoined(joined);
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.NotNull(s.Incoming);
+        Assert.True(s.Incoming!.Joined);
+        Assert.Empty(s.Incoming.Players);
+        Assert.Equal(joined.Count, s.Incoming.Reports.Count);
+        Assert.Equal(900, s.Incoming.Reports[0].PlayerId);
+    }
+
+    // 予定者を持たない進行（3月をまだ跨いでいない）も往復すること。
+    [Fact]
+    public void IncomingClass_Null_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.Incoming = null;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Null(s.Incoming);
+    }
+
+    // v4（入部予定者が無かった版）のセーブは incoming を持たない。読めて null で補われること
+    // ＝4月に進めると RosterLifecycle.AdvanceYear の従来経路（その場生成）へ落ちる。
+    [Fact]
+    public void V4Save_WithoutIncoming_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"incoming\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "incoming が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が incoming の後に居ない");
+        var v4 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":4");
+        Assert.DoesNotContain("\"incoming\"", v4);
+
+        Assert.True(SaveCodec.TryDeserialize(v4, out var s, out var err), err);
+        Assert.Null(s.Incoming);
+        Assert.Equal("北嶺", s.SchoolName);   // 他の項目は素通りで読めている
     }
 
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。

@@ -765,6 +765,15 @@ insight:
   accuracy_per_talent_eye: 0.004
   accuracy_max: 0.97
 
+# --- 入部予定者の事前開示（設計書04 §2.1 効果2・issue #587）---
+# スカウト網の契約段が渡す開示精度 0〜1 を「推定誤差σ」と「隠しパラメータの判明確率」へ写す。
+# 表示専用＝選手そのものには触れないので帯に影響しない。
+scouting:
+  estimate_sd_max: 20.0   # 開示0（未契約）のときの推定誤差σ（カテゴリ強さ0〜100スケール）
+  estimate_sd_min: 4.0    # 開示1でもσは0にしない＝最上位でも「見立て」の域を出ない
+  reveal_min: 0.05        # 開示0のとき隠し1項目が判明する確率
+  reveal_max: 0.85        # 開示1でも1.0にしない＝全部は見えない
+
 # --- 監督成長イベント（設計書04 §1.1b: 節目の跳ね）🟡 ---
 manager_growth:
   koshien_tactical_boost: 5.0
@@ -1053,9 +1062,10 @@ contracts:
     name: スカウト網
     tiers:
       - {}
-      - { annual_cost: 15, scout_talent_add: 0 }   # 県内を回る（従来どおり）
-      - { annual_cost: 30, scout_talent_add: 3 }   # 近隣県まで足を伸ばす
-      - { annual_cost: 50, scout_talent_add: 6 }   # 全国に網を張る
+      # 効果1=新入生の質(scout_talent_add) / 効果2=入部予定者の事前開示精度(prospect_disclosure, #587)
+      - { annual_cost: 15, scout_talent_add: 0, prospect_disclosure: 0.15 }   # 県内を回る（従来どおり）
+      - { annual_cost: 30, scout_talent_add: 3, prospect_disclosure: 0.45 }   # 近隣県まで足を伸ばす
+      - { annual_cost: 50, scout_talent_add: 6, prospect_disclosure: 0.75 }   # 全国に網を張る
   - id: expedition
     name: 遠征
     tiers:

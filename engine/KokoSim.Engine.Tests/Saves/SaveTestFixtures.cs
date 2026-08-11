@@ -173,6 +173,30 @@ internal static class SaveTestFixtures
             SchoolName = "北嶺",
             PrefectureId = 27,      // 兵庫県
             DistrictId = 3,
+            // 入部予定者（v5・issue #587）。3月に確定し、まだ合流していない状態で採る。
+            Incoming = BuildIncomingClass(),
+        };
+    }
+
+    /// <summary>
+    /// 3月に確定した入部予定者（issue #587）。実物の生成（<see cref="RosterLifecycle.ConfirmIncoming"/>）と
+    /// 実物の下見（<see cref="ProspectScouting.Survey"/>）から採る＝手で組んだ DTO では
+    /// 「保存できる形」しか試せない。
+    /// </summary>
+    public static IncomingClass BuildIncomingClass()
+    {
+        var coeff = new RosterCoefficients();
+        var roster = BuildManagerRoster(seed: 4242);
+        var players = RosterLifecycle.ConfirmIncoming(roster, year: 3, coeff, new Xoshiro256Random(9001));
+        var reports = ProspectScouting.Survey(
+            players, disclosure: 0.45, new TeamStrengthCoefficients(),
+            new ProspectScoutingCoefficients(), new Xoshiro256Random(9002));
+        return new IncomingClass
+        {
+            YearIndex = 3,
+            Disclosure = 0.45,
+            Players = new List<DevelopingPlayer>(players),
+            Reports = reports,
         };
     }
 

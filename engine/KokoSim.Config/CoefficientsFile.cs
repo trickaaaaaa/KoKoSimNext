@@ -42,6 +42,8 @@ public sealed record CoefficientsBundle
     public MatchInjuryCoefficients MatchInjury { get; init; } = new();
     public GrowthEventCoefficients Growth { get; init; } = new();
     public InsightCoefficients Insight { get; init; } = new();
+    /// <summary>入部予定者の事前開示（設計書04 §2.1 効果2・issue #587）。</summary>
+    public ProspectScoutingCoefficients Scouting { get; init; } = new();
     public ManagerGrowthCoefficients ManagerGrowth { get; init; } = new();
     public TrainingCoefficients Training { get; init; } = new();
     public RosterCoefficients Roster { get; init; } = new();
@@ -100,6 +102,7 @@ public static class CoefficientsLoader
         public InjuryDto? Injury { get; set; }
         public GrowthDto? Growth { get; set; }
         public InsightDto? Insight { get; set; }
+        public ScoutingDto? Scouting { get; set; }
         public ManagerGrowthDto? ManagerGrowth { get; set; }
         public TrainingDto? Training { get; set; }
         public RosterDto? Roster { get; set; }
@@ -134,6 +137,7 @@ public static class CoefficientsLoader
             MatchInjury = Injury?.ToMatchModel() ?? new MatchInjuryCoefficients(),
             Growth = Growth?.ToModel() ?? new GrowthEventCoefficients(),
             Insight = Insight?.ToModel() ?? new InsightCoefficients(),
+            Scouting = Scouting?.ToModel() ?? new ProspectScoutingCoefficients(),
             ManagerGrowth = ManagerGrowth?.ToModel() ?? new ManagerGrowthCoefficients(),
             Training = Training?.ToModel() ?? new TrainingCoefficients(),
             Roster = Roster?.ToModel() ?? new RosterCoefficients(),
@@ -176,6 +180,7 @@ public static class CoefficientsLoader
         public double CoachingPitchingAdd { get; set; }
         public double CoachingDefenseAdd { get; set; }
         public bool OutOfPrefectureOpponents { get; set; }
+        public double ProspectDisclosure { get; set; }
 
         public ContractTier ToModel() => new()
         {
@@ -185,6 +190,7 @@ public static class CoefficientsLoader
             CoachingPitchingAdd = CoachingPitchingAdd,
             CoachingDefenseAdd = CoachingDefenseAdd,
             OutOfPrefectureOpponents = OutOfPrefectureOpponents,
+            ProspectDisclosure = ProspectDisclosure,
         };
     }
 
@@ -1067,6 +1073,23 @@ public static class CoefficientsLoader
             AccuracyBase = AccuracyBase,
             AccuracyPerTalentEye = AccuracyPerTalentEye,
             AccuracyMax = AccuracyMax,
+        };
+    }
+
+    private sealed class ScoutingDto
+    {
+        private static readonly ProspectScoutingCoefficients D = new();
+        public double EstimateSdMax { get; set; } = D.EstimateSdMax;
+        public double EstimateSdMin { get; set; } = D.EstimateSdMin;
+        public double RevealMin { get; set; } = D.RevealMin;
+        public double RevealMax { get; set; } = D.RevealMax;
+
+        public ProspectScoutingCoefficients ToModel() => new()
+        {
+            EstimateSdMax = EstimateSdMax,
+            EstimateSdMin = EstimateSdMin,
+            RevealMin = RevealMin,
+            RevealMax = RevealMax,
         };
     }
 

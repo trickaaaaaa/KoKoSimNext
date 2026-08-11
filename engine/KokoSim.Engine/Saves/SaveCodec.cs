@@ -22,7 +22,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     // ===== Serialize =====
 
@@ -52,6 +52,7 @@ public static class SaveCodec
             .Add("schoolName", s.SchoolName)
             .Add("prefectureId", s.PrefectureId)
             .Add("districtId", s.DistrictId.HasValue ? JsonValue.Of(s.DistrictId.Value) : JsonNull.Instance)
+            .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -152,6 +153,10 @@ public static class SaveCodec
             if (!root.Has("prefectureId")) root.Add("prefectureId", 13);
             if (!root.Has("districtId")) root.Add("districtId", JsonNull.Instance);
         }
+        // v4→v5（issue #587）: 入部予定者（3月確定→4月仮入部）が増えた。v4 以前は「年度替わりで
+        // その場生成」だったので、予定者を持たない＝null で補う。旧セーブを4月へ進めると
+        // RosterLifecycle.AdvanceYear の従来経路（incoming=null＝その場生成）へそのまま落ちる。
+        if (version < 5 && !root.Has("incoming")) root.Add("incoming", JsonNull.Instance);
         return root;
     }
 
@@ -184,6 +189,8 @@ public static class SaveCodec
             SchoolName = root.Str("schoolName") ?? "桜丘",
             PrefectureId = root.Int("prefectureId"),
             DistrictId = root["districtId"] is JsonNull ? (int?)null : root.Int("districtId"),
+            // 入部予定者は v5 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            Incoming = IncomingClassSaves.FromJson(root.Has("incoming") ? root["incoming"] : null),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
         };
 
