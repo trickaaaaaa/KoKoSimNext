@@ -100,6 +100,7 @@ namespace KokoSim.Unity.Home
         private readonly TrainingCoefficients _training = new TrainingCoefficients();
         private readonly InjuryCoefficients _injury = new InjuryCoefficients();
         private readonly SkillCoefficients _skills = new SkillCoefficients();
+        private readonly InsightCoefficients _insight = new InsightCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
         // 個別指導枠の並べ替えに使うカテゴリ別指標の係数。他画面の比較カードと同一の単一ソース。
@@ -135,6 +136,7 @@ namespace KokoSim.Unity.Home
         {
             RunPracticeWeek(1.0);                       // 通常週の練習（効果1.0）
             RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
+            RunInsightWeek();                           // 気づき（設計書03 §5.6）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
         }
 
@@ -230,6 +232,91 @@ namespace KokoSim.Unity.Home
             PushFeed(newItems);
         }
 
+        /// <summary>
+        /// 気づきの週次処理（設計書03 §5.6）。監督の育成眼を通じて隠しパラメータの兆しを受動的に開示する。
+        /// 状態は一切変えない＝通知フィードへ流すだけ。
+        ///
+        /// <para>備品「ビデオ・分析機材」（設計書04 §1.4a）が頻度と精度を上げる。未購入なら 1.0 / 0.0＝
+        /// エンジンの既定と1ビット一致。</para>
+        ///
+        /// <para><b><see cref="InsightNotice.IsAccurate"/> はプレイヤーに見せない</b>（内部検証用）。
+        /// 読み違えも同じ「〜かもしれない」の温度で出す＝当たっているか分からないことが気づきの価値。</para>
+        ///
+        /// <para>乱数は怪我と同じ作法で、年度・週から導く独立ストリームを Fork して引く（不変条件#2）。
+        /// 怪我とは別のストリームIDにする＝どちらかの抽選回数が変わっても他方がずれない。</para>
+        ///
+        /// <para><b>大会中は <see cref="KokoSim.Unity.Shell.GameClock.Week"/> が進まない</b>（進むのは
+        /// <see cref="GameSession.TournamentDay"/> だけ）ので、年度・週だけを種にすると大会をまたぐ
+        /// 練習週で毎回まったく同じ気づきが出てしまう。大会日も種に混ぜて週ごとに別の抽選にする
+        /// （大会外は TournamentDay=0 なので従来どおりの (年度,週) 決定論）。</para>
+        /// </summary>
+        private void RunInsightWeek()
+        {
+            var week = KokoSim.Unity.Shell.GameClock.Week;
+            var year = KokoSim.Unity.Shell.GameClock.YearIndex;
+            // 桁をずらして混ぜる（怪我側の year*100+week 形式は年が3桁を超えると大会日と衝突しうる。
+            // 200年プレイを想定するのでビットで分ける）。
+            var day = GameSession.Current.TournamentDay;
+            var rng = _rng.Fork(0x1E51_0000UL ^ ((ulong)day << 40) ^ ((ulong)year << 16) ^ (ulong)week);
+
+            var gear = KokoSim.Unity.Shell.TrainingWeek.Effects;
+            var notices = InsightModel.Week(
+                Roster, KokoSim.Unity.Shell.ManagerService.Manager.TalentEye, rng, _insight,
+                gear.InsightProbFactor, gear.InsightAccuracyAdd);
+            if (notices.Count == 0) return;
+
+            var newItems = new List<FeedItem>();
+            foreach (var n in notices)
+            {
+                // タグ語彙は 成長 / 警告 / 発見 / 情報 の4つだけ（FeedItem の定義）。
+                // 「気づき」のような新語を足すと HomeDashboardController.TagColor が拾えず
+                // 既定の灰色に落ちる＝コードは通るのに画面だけ間違う。気づきは「発見」に載せる。
+                newItems.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = InsightText(n),
+                    Kind = FeedKind.Discover,
+                    Tag = "発見",
+                });
+            }
+            PushFeed(newItems);
+        }
+
+        /// <summary>
+        /// 気づき1件の文言。断定しない温度で出す（設計書03 §5.6）。当たり外れは文面に出さない。
+        /// </summary>
+        private static string InsightText(InsightNotice n)
+        {
+            var name = n.Player.Name;
+            switch (n.Topic)
+            {
+                case InsightTopic.RecentGrowth:
+                    return name + " は最近伸びてきているようだ。";
+                case InsightTopic.Personality:
+                    return name + " は " + n.Domain + " な性格かもしれない。";
+                case InsightTopic.HighGrowthDomain:
+                    return name + " は " + DomainJp(n.Domain) + " にまだ伸びる余地がありそうだ。";
+                case InsightTopic.LowGrowthDomain:
+                    return name + " の " + DomainJp(n.Domain) + " は伸びしろがないかもしれない。";
+                case InsightTopic.GrowthType:
+                    return name + " は大器晩成かもしれない。";
+                default:
+                    return name + " について何か気づいた。";
+            }
+        }
+
+        /// <summary>成長分野の内部名（InsightModel.GrowthExtremes が返す3種）を日本語にする。</summary>
+        private static string DomainJp(string domain)
+        {
+            switch (domain)
+            {
+                case "pitching": return "投球";
+                case "batting": return "打撃";
+                case "defense": return "守備";
+                default: return domain;
+            }
+        }
+
         // ===== 大会モード（要件1〜7） =====
 
         public bool InTournament => GameSession.Current.InTournament;
@@ -271,6 +358,7 @@ namespace KokoSim.Unity.Home
             if (!practiceDue) return;
             RunPracticeWeek(_training.TournamentPracticeMult);
             RunInjuryWeek();
+            RunInsightWeek();
         }
 
         /// <summary>自校の次戦を自動消化する（要件7「はい」）。結果をフィード化する。</summary>
