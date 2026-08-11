@@ -25,7 +25,6 @@ namespace KokoSim.Unity.Shell
         private static readonly NationCoefficients NationCoeff = new NationCoefficients();
         private static readonly TournamentSchedule Schedule = new TournamentSchedule();
         private const int ManagerSchoolId = -1;      // 自校（生成校と衝突しない専用ID）
-        private const int FieldPrefectureId = 13;    // 神奈川（Prefecture.Id は0基点＝JIS番号-1）
 
         /// <summary>
         /// 大会モードへ入る（進行体＋全国裏試合フルシムを構築して <see cref="GameSession"/> へ公開する）。
@@ -117,13 +116,18 @@ namespace KokoSim.Unity.Shell
             return field;
         }
 
-        /// <summary>開幕バナー用の大会名（例「2028年 選手権神奈川大会」）。ホームのバナー表示と同一の表記。</summary>
+        /// <summary>
+        /// 開幕バナー用の大会名（例「2028年 選手権神奈川大会」）。ホームのバナー表示と同一の表記。
+        /// 県は自校の本拠県から引く（issue #585 で可変になった）。夏は短縮形（神奈川）、
+        /// 秋は正式名（神奈川県）＝実在の大会名の慣習に合わせる。
+        /// </summary>
         public static string TournamentTitle(TournamentKind kind)
         {
             var year = SeasonClock.SeasonBaseYear + (GameClock.YearIndex - 1);
+            var pref = NationService.PrefectureId;
             return kind == TournamentKind.Summer
-                ? year + "年 選手権神奈川大会"
-                : year + "年 秋季神奈川県大会";
+                ? year + "年 選手権" + PrefectureNames.ShortOf(pref) + "大会"
+                : year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "大会";
         }
 
         private static School BuildManagerSchool()
@@ -131,7 +135,12 @@ namespace KokoSim.Unity.Shell
             var trainable = RosterService.Active.Where(p => p.Grade <= 3).ToList();
             // 総合＝6指標のリーグ標準化総合（③）。
             var strength = trainable.Count == 0 ? 40.0 : TeamOverall.Of(trainable);
-            return new School { Id = ManagerSchoolId, Name = "桜丘", PrefectureId = FieldPrefectureId, Strength = strength };
+            return new School
+            {
+                Id = ManagerSchoolId, Name = NationService.ManagerSchoolName,
+                PrefectureId = NationService.PrefectureId, DistrictId = NationService.DistrictId,
+                Strength = strength,
+            };
         }
 
         private static List<School> BuildField(School manager)

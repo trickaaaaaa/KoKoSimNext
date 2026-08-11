@@ -260,10 +260,15 @@ public static class ProspectGenerator
         AbilityKind.Speed, AbilityKind.ArmStrength, AbilityKind.Stamina,
     };
 
+    /// <param name="fixedCount">
+    /// 人数を抽選せず固定する（新設校の初年度＝1年生ちょうどN人・issue #585）。null（既定）なら
+    /// 従来どおり <c>IntakeMean/Sd/Min/Max</c> から引く。**指定したときは人数の乱数draw自体を行わない**
+    /// ＝以降の乱数列が既定経路とずれるが、これは新設校専用の別経路なので既存の決定論には影響しない。
+    /// </param>
     public static IReadOnlyList<DevelopingPlayer> Intake(int year, RosterCoefficients c, IRandomSource rng,
         PlayerNameVocab? nameVocab = null, double? talentCenter = null, SkillCoefficients? skills = null,
         PersonalityCoefficients? personalities = null, IEnumerable<string>? existingNames = null,
-        FormCoefficients? form = null)
+        FormCoefficients? form = null, int? fixedCount = null)
     {
         var vocab = nameVocab ?? new PlayerNameVocab();
         // 同一チーム内で下の名前が被らないよう、既存部員の名前も含めて持ち回る（苗字の重複はOK）。
@@ -274,7 +279,9 @@ public static class ProspectGenerator
         var personalityCoeff = personalities ?? new PersonalityCoefficients();
         var formCoeff = form ?? new FormCoefficients();
         var center = talentCenter ?? c.TalentCenterDefault;
-        var count = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.IntakeMean, c.IntakeSd)), c.IntakeMin, c.IntakeMax);
+        var count = fixedCount is { } fc
+            ? Math.Max(0, fc)
+            : (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.IntakeMean, c.IntakeSd)), c.IntakeMin, c.IntakeMax);
         var list = new List<DevelopingPlayer>(count);
         for (var i = 0; i < count; i++)
             list.Add(Create(year, i, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));

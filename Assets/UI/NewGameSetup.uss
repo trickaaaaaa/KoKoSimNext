@@ -1,0 +1,150 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   NewGameSetup.uss — 新規ゲーム設定 画面の配置のみ（issue #585・B案「上下2段」）
+   ───────────────────────────────────────────────────────────────────────
+   配色の領域行は部品辞書（Components/components.uss の .ucp-*）にあり、ここには置かない。
+   色・寸法は tokens.uss の変数のみ参照する（UI原則⑤）。
+   gap/grid は使わない（USS非対応）。固定寸法セクションは flex-shrink:0（付けないと縦方向で潰れる）。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 配色行はこの画面だけ少し詰める（部品の既定44px → 38px）。上段（本拠地と校名）を載せたぶん
+   下段の背が足りず、既定のままだと最終行（縞色）がカードから溢れて切れる
+   （実測: 8行×44＋塊の間12＝364px に対し、入る高さは330px）。38pxなら 8×38＋12＝316 で収まり、
+   送りボタン（36px）も的として成立する。 */
+.ngs-root {
+    flex-grow: 1;
+    --ucp-row-h: 38px;
+}
+
+.ngs-main {
+    flex-grow: 1;
+    min-height: 0;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 12px;
+    padding-bottom: 8px;
+}
+
+.ngs-masthead { flex-shrink: 0; margin-bottom: var(--sp-2); }
+
+/* ── 上段: 入力の行 ───────────────────────────────────────── */
+
+/* 1行に「ラベル＋入力」を並べる。行高は操作の的として配色行(.ucp-row)と同じ44pxに揃える
+   ＝上下段でリズムが合う（UI原則①: 整列で捌く）。 */
+.ngs-line {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    flex-shrink: 0;
+}
+
+.ngs-lbl {
+    width: 120px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-body);
+    color: var(--color-muted);
+}
+
+/* 2つ目のラベル（県内地区）は左に間を空けて塊を分ける（線でなく余白で区切る＝UI原則④）。 */
+.ngs-lbl--2nd { margin-left: var(--sp-4); width: 130px; }
+
+.ngs-drop { width: 260px; flex-shrink: 0; margin: 0; }
+.ngs-drop--narrow { width: 180px; }
+
+.ngs-text { width: 300px; flex-shrink: 0; margin: 0; }
+
+.ngs-suffix {
+    margin: 0;
+    margin-left: var(--sp-2);
+    padding: 0;
+    font-size: var(--fs-page);
+    color: var(--ink);
+}
+
+/* 校名候補（語彙から出す）。押すと校名欄へ入る。
+   **校名と同じ行に置く**＝独立行にすると上段が1行ぶん高くなり、下段の配色カードから
+   最終2行（縦縞・縞色）が溢れて切れる（実測: 溢れ75px＝2行ぶん）。折り返さない本数に絞る。 */
+.ngs-suggest {
+    flex-direction: row;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+Button.ngs-sug {
+    height: 32px;
+    flex-shrink: 0;
+    margin: 0;
+    margin-right: var(--sp-2);
+    padding-left: 12px;
+    padding-right: 12px;
+    font-size: var(--fs-body);
+    background-color: var(--sf-inset);
+    color: var(--ink);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);
+    border-left-width: var(--nb-border);
+    border-right-width: var(--nb-border);
+    border-bottom-width: var(--nb-border);
+    border-radius: 0;
+}
+
+Button.ngs-sug:hover { background-color: var(--color-panel-hover); }
+
+/* ── 確認の1行（今の選択がそのまま学校名として読める） ──────── */
+
+.ngs-summary {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    flex-shrink: 0;
+    margin-top: var(--sp-2);
+    border-top-width: 1px;
+    border-top-color: var(--color-line-soft);
+}
+
+.ngs-summary__text {
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-page);
+    color: var(--ink);
+}
+
+/* 入力が通らない理由だけを警告色で出す（UI原則②: 本当の警告だけ）。 */
+.ngs-error {
+    margin: 0;
+    margin-left: var(--sp-4);
+    padding: 0;
+    font-size: var(--fs-body);
+    color: var(--color-warn);
+}
+
+/* ── 下段: 配色（左・内容ぴったりの固定幅）と見え方（右・残り全部） ──
+   逆（左が伸びる）だと選択欄の右に何も置かない空列ができ、プレビューだけが痩せる
+   （チーム設定画面と同じ理由・2026-07-29 監督指摘）。 */
+
+.ngs-body {
+    flex-direction: row;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.ngs-body .card--rows {
+    width: 648px;   /* 200+170+110+130 列 ＋ card__body の左右余白32 ＋ 枠 */
+    flex-shrink: 0;
+    margin-right: 14px;
+}
+
+.ngs-body .card--preview {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+}
+
+/* 図の地は必ず選手より暗い色にする（カード面の白のままだと白ユニが背景に消える。
+   チーム設定画面と同じ実測結果 2026-07-29）。 */
+.ngs-preview {
+    flex-grow: 1;
+    min-height: 0;
+    background-color: var(--field-grass-day);
+}

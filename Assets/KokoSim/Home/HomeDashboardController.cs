@@ -446,9 +446,7 @@ namespace KokoSim.Unity.Home
             var advance = _root.Q<Button>("advance");
             if (advance != null) advance.text = v.TournamentMode ? "1日進める ▶" : "今週を進める ▶";
 
-            SetText("badge", v.Badge);
-            SetText("school-name", v.SchoolName);
-            SetText("pref", v.Prefecture);
+            // 自校の表札（校章・校名・県名）は TopBarMeters が全画面共通で埋める（issue #585）。
             // 掲示板の升目（週・カウントダウン）。大会モードでは文言が変わるので上書き版を使う。
             KokoSim.Unity.Components.ScoreboardStrip.Fill(_root, v.CountdownLabel, v.CountdownCells, v.WeekSuffix);
             KokoSim.Unity.Shell.TopBarMeters.Fill(_root);   // 部費残高・名声・信頼度（ManagerService 単一ソース・全画面共通）

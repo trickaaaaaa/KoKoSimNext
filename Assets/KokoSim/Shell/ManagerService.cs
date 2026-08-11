@@ -23,12 +23,16 @@ namespace KokoSim.Unity.Shell
         private static ContractSet _contracts;
 
         /// <summary>
-        /// 監督（資金は万円単位）。部費の初期値は従来のホーム表示に合わせて120万円。
-        /// 施設基金は 100万 で始める＝赴任初年度は医務室Lv1（150万）にも届かず、まず1年貯める。
-        /// 以降は名声と戦績で増える（学校の設備投資100万＋名声×20万＋甲子園1000万＋全国優勝5000万）。
+        /// 監督（資金は万円単位）。**新設校スタート水準**（issue #585 確定事項5）＝
+        /// 部費60万・施設基金0・名声0・信頼30。
+        ///
+        /// 施設基金0は「初年度は建物が一切買えない」を意味する（最安の医務室Lv1でも150万）。
+        /// 名声0は実績ゼロの新任＝新入生の質（talentCenter）も底から始まる。信頼30は
+        /// 中立(50)より下＝学校からも選手からもまだ信用されていない状態。以降は名声と戦績で増える
+        /// （学校の設備投資100万＋名声×20万＋甲子園1000万＋全国優勝5000万）。
         /// </summary>
         public static Manager Manager =>
-            _manager ?? (_manager = new Manager { Funds = 120, FacilityFund = 100 });
+            _manager ?? (_manager = new Manager { Funds = 60, FacilityFund = 0, Fame = 0, Trust = 30 });
 
         /// <summary>
         /// 学校の施設保有状態（Issue #128）の単一ソース。funds→施設購入はここを更新し、

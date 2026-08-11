@@ -42,6 +42,19 @@ public static class PrefectureNames
     public static string JapaneseOf(int id)
         => id >= 0 && id < Japanese.Count ? Japanese[id] : "";
 
+    /// <summary>
+    /// Id → 大会名に載せる短縮形（「選手権<b>神奈川</b>大会」の形）。末尾の「県／都／府」を落とす。
+    /// <b>北海道だけは落とさない</b>（「北海」になってしまう）＝実在の大会名も「南北海道大会」等で
+    /// 「北海道」を保つ。範囲外は空文字。
+    /// </summary>
+    public static string ShortOf(int id)
+    {
+        var name = JapaneseOf(id);
+        if (name.Length <= 1 || name == "北海道") return name;
+        var tail = name[name.Length - 1];
+        return tail == '県' || tail == '都' || tail == '府' ? name.Substring(0, name.Length - 1) : name;
+    }
+
     /// <summary>ローマ字名 → Id。未知名は -1。</summary>
     public static int IdOf(string romaji)
     {

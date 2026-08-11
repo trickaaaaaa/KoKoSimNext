@@ -59,6 +59,14 @@ public sealed class SaveState
     // --- 自校チームカラー上書き（null＝校IDからの自動割り当て） ---
     public TeamColors? TeamColorOverride { get; set; }
 
+    // --- 自校の同定（新設校スタート・issue #585。v4 で追加） ---
+    /// <summary>自校の校名（「高校」を含まない幹の部分）。旧セーブは "桜丘" で補う。</summary>
+    public string SchoolName { get; set; } = "桜丘";
+    /// <summary>本拠県（Prefecture.Id ＝ JIS順0基点）。旧セーブは13＝神奈川で補う。</summary>
+    public int PrefectureId { get; set; } = 13;
+    /// <summary>県内地区（0基点。地区を持たない県・旧セーブは null）。</summary>
+    public int? DistrictId { get; set; }
+
     /// <summary>
     /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。

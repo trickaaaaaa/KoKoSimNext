@@ -50,9 +50,6 @@ namespace KokoSim.Unity.Home
     /// <summary>ホーム画面に表示する一式（スナップショット）。</summary>
     public sealed class HomeView
     {
-        public string SchoolName = "県立桜丘高校";
-        public string Prefecture = "神奈川県";
-        public string Badge = "桜";
         public string TeamRankGrade = "C";
         public string CountdownLabel = "夏予選まで";
         public string CountdownValue = "";
@@ -498,7 +495,7 @@ namespace KokoSim.Unity.Home
             var kindWord = s.Kind == TournamentKind.Summer ? "夏" : "秋";
             view.WeekSuffix = kindWord + "の大会 " + (s.TournamentDay + 1) + "日目";
 
-            view.HomeTeam = "桜丘";
+            view.HomeTeam = NationService.ManagerSchoolName;
             view.HomeSub = "自校";
             view.Venue = s.Title;
             view.Weather = "―";
