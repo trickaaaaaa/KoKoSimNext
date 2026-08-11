@@ -104,12 +104,30 @@
     border-left-width: 2px;
     border-left-color: var(--line-focus);
 }
+/* 学校の欄。校名＋（遠征先だけ）県名を横に並べる器。列の幅は器が持つ。 */
+.pm-row__namecell {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+}
 .pm-row__name {
     flex-grow: 1;
     flex-basis: 0;
     min-width: 0;
     font-size: var(--fs-label);
     color: var(--color-chalk);
+}
+/* 器の中では校名を内容ぶんに留め、県名をすぐ右へ添える（列の右端まで押し出さない）。 */
+.pm-row__namecell > .pm-row__name {
+    flex-grow: 0;
+}
+.pm-row__pref {
+    margin-left: var(--sp-1);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
 }
 .pm-row__tier {
     width: var(--col-pm-tier);

@@ -39,13 +39,19 @@ public sealed record InsightCoefficients
 /// </summary>
 public static class InsightModel
 {
-    /// <summary>週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は変更しない（通知のみ）。</summary>
+    /// <summary>
+    /// 週次の気づき抽選。talentEye=監督の育成眼(1〜100)。状態は変更しない（通知のみ）。
+    /// <paramref name="probFactor"/>／<paramref name="accuracyAdd"/> はビデオ・分析機材などの備品由来
+    /// （1.0／0.0＝備品なし＝従来一致）。精度の上限は <see cref="InsightCoefficients.AccuracyMax"/> のまま。
+    /// </summary>
     public static IReadOnlyList<InsightNotice> Week(
-        IReadOnlyList<DevelopingPlayer> roster, double talentEye, IRandomSource rng, InsightCoefficients c)
+        IReadOnlyList<DevelopingPlayer> roster, double talentEye, IRandomSource rng, InsightCoefficients c,
+        double probFactor = 1.0, double accuracyAdd = 0.0)
     {
         var notices = new List<InsightNotice>();
-        var prob = c.BaseWeeklyProb + talentEye * c.ProbPerTalentEye;
-        var accuracy = MathUtil.Clamp(c.AccuracyBase + talentEye * c.AccuracyPerTalentEye, 0.0, c.AccuracyMax);
+        var prob = (c.BaseWeeklyProb + talentEye * c.ProbPerTalentEye) * probFactor;
+        var accuracy = MathUtil.Clamp(
+            c.AccuracyBase + talentEye * c.AccuracyPerTalentEye + accuracyAdd, 0.0, c.AccuracyMax);
 
         foreach (var p in roster)
         {

@@ -207,8 +207,14 @@ public static class CareerEngine
         return (reachedKoshien, nationalChampion, managerWins, upsetMatches);
     }
 
+    /// <param name="contracts">
+    /// 年契約の実効値（設計書04 §1.4a）。null なら従来どおり <see cref="CareerCoefficients.ScoutCost"/> を
+    /// 固定で引く＝年契約を持たないキャリアシムは1ビットも変わらない（不変条件#2）。
+    /// 非nullならスカウト費は年契約側（スカウト網 Lv1 が同額）に含まれるので二重には引かない。
+    /// </param>
     internal static void ApplyResults(
-        Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameDelta, CareerCoefficients c)
+        Manager m, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameDelta, CareerCoefficients c,
+        ContractEffects? contracts = null)
     {
         // 指導力成長（采配経験, 設計書04 §1.1）。上限近傍で減衰する漸近成長にする
         // （「気づいたら練れていた」の意図に沿った緩やかなカーブ。線形だと十数年で99へ急上昇し
@@ -241,10 +247,19 @@ public static class CareerEngine
         if (wins == 0) trust -= c.TrustPoorSeasonPenalty;
         m.Trust = MathUtil.Clamp(trust, 0, 100);
 
-        // 資金。年間予算を加算し、合宿費・スカウト費を差し引く（Issue #128）。
-        // 固定支出は既定0で従来一致。資金は下限0で止める（借金しない）。
+        // 部費（運営費）。年間予算を加算し、合宿費と年契約の年額を差し引く（Issue #128・設計書04 §1.4a）。
+        // 年契約を持たない経路（キャリアシム）は従来どおりスカウト費だけを固定で引く。
+        // 資金は下限0で止める（借金しない）。
         m.Funds += c.AnnualBudgetBase + c.BudgetPerTrust * m.Trust;
-        m.Funds -= c.SummerCampCost + c.WinterCampCost + c.ScoutCost;
+        m.Funds -= c.SummerCampCost + c.WinterCampCost + (contracts?.AnnualCost ?? c.ScoutCost);
         if (m.Funds < 0) m.Funds = 0;
+
+        // 施設基金（設計書04 §1.4）。学校の設備投資＋名声に比例する後援会・OB寄付が積み上がり、
+        // 甲子園に出た年は一時金が乗る。支出は施設の購入だけ（FacilityPurchase）なのでここでは引かない。
+        // 名声は上の更新後の値を使う＝「勝った年の寄付はその年から増える」。
+        m.FacilityFund += c.FacilityFundSchoolBase
+                          + c.FacilityFundDonationPerFame * m.Fame
+                          + (reachedKoshien ? c.FacilityFundKoshienBonus : 0)
+                          + (nationalChampion ? c.FacilityFundNationalTitleBonus : 0);
     }
 }

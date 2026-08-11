@@ -20,9 +20,15 @@ namespace KokoSim.Unity.Shell
         private static Manager _manager;
         private static PracticeMatchScheduler _practice;
         private static FacilitySet _facilities;
+        private static ContractSet _contracts;
 
-        /// <summary>監督（資金は万円単位。初期値は従来のホーム表示に合わせて120万円）。</summary>
-        public static Manager Manager => _manager ?? (_manager = new Manager { Funds = 120 });
+        /// <summary>
+        /// 監督（資金は万円単位）。部費の初期値は従来のホーム表示に合わせて120万円。
+        /// 施設基金は 100万 で始める＝赴任初年度は医務室Lv1（150万）にも届かず、まず1年貯める。
+        /// 以降は名声と戦績で増える（学校の設備投資100万＋名声×20万＋甲子園1000万＋全国優勝5000万）。
+        /// </summary>
+        public static Manager Manager =>
+            _manager ?? (_manager = new Manager { Funds = 120, FacilityFund = 100 });
 
         /// <summary>
         /// 学校の施設保有状態（Issue #128）の単一ソース。funds→施設購入はここを更新し、
@@ -33,6 +39,21 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>施設カタログ（効果・費用・上限の参照元, Issue #128）。</summary>
         public static FacilityCatalog Catalog { get; } = FacilityCatalog.Default;
+
+        /// <summary>
+        /// 年契約の契約状態（設計書04 §1.4a）の単一ソース。買い切りの施設と違い、年額を毎年部費から払い、
+        /// いつでも段を下げて解約できる。新規ゲームの既定はスカウト網 Lv1 だけ＝従来のスカウト費15万/年と同額。
+        /// </summary>
+        public static ContractSet Contracts => _contracts ?? (_contracts = ContractSet.Initial());
+
+        /// <summary>年契約カタログ（年額・効果・上限の参照元）。C#既定＝data/coefficients.yaml contracts: と同値。</summary>
+        public static ContractCatalog ContractList { get; } = ContractCatalog.Default;
+
+        /// <summary>
+        /// 契約中の年契約をまとめた実効値。年額・新入生の才能加算・分野別指導力の上乗せ・遠征可否を
+        /// ここから配る（各所で Aggregate を呼び直さない）。
+        /// </summary>
+        public static ContractEffects ContractEffects => ContractList.Aggregate(Contracts);
 
         /// <summary>練習試合の申込窓口（週1制約・資金・受諾判定を保持）。</summary>
         public static PracticeMatchScheduler Practice =>
@@ -72,21 +93,23 @@ namespace KokoSim.Unity.Shell
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
 
-        /// <summary>セーブ保存: 監督メタ・施設・成長の二重適用ガードを DTO へ写す（issue #507）。</summary>
+        /// <summary>セーブ保存: 監督メタ・施設・年契約・成長の二重適用ガードを DTO へ写す（issue #507）。</summary>
         public static void Capture(KokoSim.Engine.Saves.SaveState s)
         {
             s.Manager = Manager;
             s.Facilities = Facilities;
+            s.Contracts = Contracts;
             s.ManagerLastGrownYear = _lastGrownYear;
             s.ManagerGrownWinsBaseline = _grownWinsBaseline;
             s.ManagerGrownKoshienBaseline = _grownKoshienBaseline;
         }
 
-        /// <summary>セーブ復元: 監督メタ・施設・成長ガードを据える（練習スケジューラは作り直し）。</summary>
+        /// <summary>セーブ復元: 監督メタ・施設・年契約・成長ガードを据える（練習スケジューラは作り直し）。</summary>
         public static void Restore(KokoSim.Engine.Saves.SaveState s)
         {
             _manager = s.Manager;
             _facilities = s.Facilities;
+            _contracts = s.Contracts;
             _lastGrownYear = s.ManagerLastGrownYear;
             _grownWinsBaseline = s.ManagerGrownWinsBaseline;
             _grownKoshienBaseline = s.ManagerGrownKoshienBaseline;
@@ -94,11 +117,12 @@ namespace KokoSim.Unity.Shell
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
 
-        /// <summary>新規ゲームの完全リセット: 監督メタ・施設・練習・成長ガードを初期状態へ。</summary>
+        /// <summary>新規ゲームの完全リセット: 監督メタ・施設・年契約・練習・成長ガードを初期状態へ。</summary>
         public static void Reset()
         {
             _manager = null;
             _facilities = null;
+            _contracts = null;
             _practice = null;
             ResetGrowth();
         }
@@ -124,8 +148,11 @@ namespace KokoSim.Unity.Shell
             var milestoneRng = new Xoshiro256Random(GameSeed.Master ^ (0xA6A6_0000UL ^ (ulong)endedYearIndex));
 
             // 全国優勝は甲子園本戦が実プレイに接続する（tournament Phase 3）まで到達不能＝false 固定。
+            // 年契約（設計書04 §1.4a）の年額は部費からここで引かれる。既定（スカウト網 Lv1）なら
+            // 従来のスカウト費15万と同額＝年契約を入れても初期状態の収支は変わらない。
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
-                Manager, reachedKoshien, nationalChampion: false, wins, milestoneRng);
+                Manager, reachedKoshien, nationalChampion: false, wins, milestoneRng,
+                contracts: ContractEffects);
 
             _lastGrownYear = endedYearIndex;
             _grownWinsBaseline = record.OfficialWins;

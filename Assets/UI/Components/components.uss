@@ -248,6 +248,33 @@
     margin-bottom: 6px;
 }
 
+/* ── SegTabs：区分の切替（セグメント）──
+   1つの表の中身を排他で入れ替えるときに使う（区分見出しを縦に積む代わりに横で切る）。
+   配色は design-19 の NB スキン（白地＋インク線・選択＝空の青）で、画面ローカルに
+   同型を書いていた .tpm-tab / .ms-tab / .lu-tab の共通形をここへ出したもの。
+   CTA（応援団赤）とは別＝操作系は空の青（UI原則②・design-19 §5）。 */
+.seg-tabs {
+    flex-direction: row;
+    flex-shrink: 0;
+    align-items: center;
+}
+.seg-tab {
+    height: 34px;
+    padding-left: 18px; padding-right: 18px;
+    padding-top: 0; padding-bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    background-color: var(--sf-card);
+    border-width: var(--border-w);
+    border-color: var(--color-line);
+    border-radius: 0;
+    margin: 0;
+    margin-right: 2px;
+}
+.seg-tab:hover { color: var(--color-chalk); }
+.seg-tab--on { background-color: var(--sky); color: #FFFFFF; border-color: var(--sky); }
+
 /* ── ToolButton：見出しプレート等に置く操作ボタン（白地・空青文字・インク枠＋小ベタ影）──
    並び替え・切替など。CTA（赤）とは別＝操作系は空の青（design-19 §5）。 */
 .tool-btn {
@@ -2441,3 +2468,26 @@
 }
 /* 自校・注目選手など「1列だけ立てる」用（アンバーは列単位でしか使わない）。 */
 .vname--lit .vname__ch { color: var(--color-lamp); }
+
+/* ── LevelPips：段階レベルの升目（経営画面の施設レベル等）────────────────────
+   「何段まで上げたか」を数字を読まずに拾えるようにする器（UI原則⑥）。
+   状態コードではなく有無の2値なので、色はインク（保有）と地色（未保有）だけ＝
+   アクセント（アンバー・警告）は使わない（UI原則②）。段数は呼び出し側が渡す。 */
+.lv-pips {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+.lv-pip {
+    width: 14px;
+    height: 14px;
+    margin-right: var(--sp-1);
+    background-color: var(--sf-inset);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);
+    border-left-width: var(--nb-border);
+    border-right-width: var(--nb-border);
+    border-bottom-width: var(--nb-border);
+    border-radius: 0;
+}
+.lv-pip--on { background-color: var(--ink); }

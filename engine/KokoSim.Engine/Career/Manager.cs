@@ -27,8 +27,20 @@ public sealed class Manager
     public double Fame { get; set; } = 10;
     public double Trust { get; set; } = 50;
 
-    /// <summary>資金[万円]（設計書04 §1.4）。</summary>
+    /// <summary>
+    /// 部費＝部の運営費[万円]（設計書04 §1.4）。学校予算と信頼度連動で年度頭に入り、
+    /// 練習道具・備品・合宿・スカウト・遠征・練習試合に使う。校舎級の建物はここからは建たない
+    /// （建物は <see cref="FacilityFund"/>）。
+    /// </summary>
     public double Funds { get; set; } = 100;
+
+    /// <summary>
+    /// 施設基金[万円]（設計書04 §1.4「OB・後援会寄付」）。部費とは別会計で、学校の設備投資と
+    /// 後援会・OB の寄付が積み上がる。用途は施設（照明・室内練習場・寮・トレーニング場・医務室）だけ。
+    /// 現実の高校でも寮や室内練習場は部費でなく学校法人の設備投資／後援会の寄付で建つため、
+    /// 「年100万台の部費で数千万の建物を建てる」という無理を構造で分けている。
+    /// </summary>
+    public double FacilityFund { get; set; }
 
     /// <summary>通算赴任年数。</summary>
     public int CareerYears { get; set; }

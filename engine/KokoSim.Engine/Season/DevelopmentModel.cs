@@ -14,6 +14,8 @@ public static class DevelopmentModel
     /// 1週間の練習を「練習時間配分（複数メニュー×分）」で適用する（設計書03 §3.1）。
     /// 各メニューの成長は common × (配分分 ÷ 基準週時間) に線形スケール。休養メニューは効果なし。
     /// 1メニューに基準週フル配分すると TrainWeek と厳密一致（後方互換）。乱数を使わない決定論。
+    /// <para><paramref name="equipment"/>（練習道具・設計書04 §1.4 備品）は分野ごとの倍率で、
+    /// 配分スケールと同じ位置に掛かる。null／全分野1.0 で従来と1ビット一致（不変条件#2）。</para>
     /// </summary>
     public static void TrainWeekPlan(
         DevelopingPlayer p,
@@ -25,7 +27,8 @@ public static class DevelopmentModel
         TrainingCoefficients c,
         Players.SkillCoefficients? skills = null,
         Players.PersonalityCoefficients? personalities = null,
-        CoachingProfile? coaching = null)
+        CoachingProfile? coaching = null,
+        EquipmentBonus? equipment = null)
     {
         // 怪我中は練習不可（設計書03 §3.5）: 全メニュー効果なし。
         if (p.Injury != Players.InjurySeverity.None) return;
@@ -56,6 +59,12 @@ public static class DevelopmentModel
             if (menu == TrainingMenu.Rest) continue;
 
             var scale = minutes / refMinutes;
+            // 練習道具（設計書04 §1.4 備品）はメニューの分野にだけ掛かる。未所持は 1.0＝従来一致。
+            if (equipment is not null)
+            {
+                var field = TrainingFields.OfOrNull(menu);
+                if (field.HasValue) scale *= equipment.For(field.Value);
+            }
             var eff = TrainingMenus.Effects(menu);
             if (eff.Main is { } mainAbility)
                 ApplyExp(p, mainAbility, common * scale * CoachAdj(mainAbility, coaching, c, receptivity, baselineFactor)

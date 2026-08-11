@@ -751,6 +751,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .card__hd--dirt .card__hd-title { color: var(--ink); }
 .card__hd--dirt .card__hd-sub { color: var(--ink); }
 .card__hd--sky { background-color: var(--sky); }
+/* 見出し帯の高さを詰める（1画面に複数のカードを縦積みする画面用。既定 72px → 60px）。
+   題字・副題の書体と色はそのままで、上下の余白だけを落とす。 */
+.card__hd--tight { padding-top: 6px; padding-bottom: 6px; }
 
 /* ═══ ホーム（情報構成 案A・2026-07-21） ═══════════════════════════════
    左＝部の実力（6指標レーダー）＋故障者 / 中＝チーム成績＋チーム内ランキング /

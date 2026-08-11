@@ -43,32 +43,36 @@ public sealed class FacilityEconomyTests
         Assert.Equal(380, budget);
     }
 
+    // 建物は施設基金から出る（部費ではない・設計書04 §1.4）。
     [Fact]
-    public void Purchase_DeductsFundsAndRaisesLevel()
+    public void Purchase_DeductsFacilityFundAndRaisesLevel()
     {
-        var m = new Manager { Funds = 100 };
+        var m = new Manager { Funds = 100, FacilityFund = 3000 };
         var set = new FacilitySet();
         var r = FacilityPurchase.TryUpgrade(m, set, Catalog, "lighting");
         Assert.Equal(FacilityPurchaseResult.Ok, r);
         Assert.Equal(1, set.LevelOf("lighting"));
-        Assert.Equal(60, m.Funds); // 100 - 40(Lv1費用)
+        Assert.Equal(1000, m.FacilityFund); // 3000 - 2000(Lv1費用)
+        Assert.Equal(100, m.Funds);         // 部費は減らない
     }
 
     [Fact]
     public void Purchase_InsufficientFunds_DoesNotMutate()
     {
-        var m = new Manager { Funds = 30 };
+        // 部費をいくら持っていても建物は買えない（財布が違う）。
+        var m = new Manager { Funds = 100000, FacilityFund = 1500 };
         var set = new FacilitySet();
-        var r = FacilityPurchase.TryUpgrade(m, set, Catalog, "lighting"); // Lv1=40万必要
+        var r = FacilityPurchase.TryUpgrade(m, set, Catalog, "lighting"); // Lv1=2000万必要
         Assert.Equal(FacilityPurchaseResult.InsufficientFunds, r);
         Assert.Equal(0, set.LevelOf("lighting"));
-        Assert.Equal(30, m.Funds);
+        Assert.Equal(1500, m.FacilityFund);
+        Assert.Equal(100000, m.Funds);
     }
 
     [Fact]
     public void Purchase_StopsAtMaxLevel()
     {
-        var m = new Manager { Funds = 10000 };
+        var m = new Manager { FacilityFund = 100000 };
         var set = new FacilitySet();
         var def = Catalog.Find("lighting")!;
         for (var i = 0; i < def.MaxLevel; i++)
@@ -83,7 +87,7 @@ public sealed class FacilityEconomyTests
     [Fact]
     public void Purchase_UnknownFacility_IsRejected()
     {
-        var m = new Manager { Funds = 100 };
+        var m = new Manager { Funds = 100, FacilityFund = 100 };
         Assert.Equal(FacilityPurchaseResult.UnknownFacility,
             FacilityPurchase.TryUpgrade(m, new FacilitySet(), Catalog, "nope"));
     }

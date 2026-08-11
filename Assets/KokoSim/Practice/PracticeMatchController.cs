@@ -106,9 +106,20 @@ namespace KokoSim.Unity.Practice
             row.AddToClassList("pm-row");
             if (r.SchoolId == _selectedId) row.AddToClassList("pm-row--on");
 
+            // 学校の欄。遠征契約中は県外校も並ぶので、県外の行にだけ県名を小さく添える
+            // （どこへ遠征するのかが行を読むだけで拾える・UI原則⑥）。県内の行は従来どおり校名だけ。
+            var nameCell = new VisualElement();
+            nameCell.AddToClassList("pm-row__namecell");
             var name = new Label(r.Name);
             name.AddToClassList("pm-row__name");
-            row.Add(name);
+            nameCell.Add(name);
+            if (!string.IsNullOrEmpty(r.PrefectureName))
+            {
+                var pref = new Label(r.PrefectureName);
+                pref.AddToClassList("pm-row__pref");
+                nameCell.Add(pref);
+            }
+            row.Add(nameCell);
 
             var tier = new VisualElement();
             tier.AddToClassList("pm-row__tier");

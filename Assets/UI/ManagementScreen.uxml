@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 経営 画面（設計書04 §1.4 資金・§4 合宿 ／ 設計書03 §4 施設・Issue #128）。
+     上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。
+     上＝部費の年間収支（表示専用。収入と固定支出は年度頭にエンジンが自動処理する）、
+     下＝施設4系統の台帳（行パネル1枚が1系統・右端で1段ずつ買う）。
+     主要CTA（応援団赤）はトップバーの「今週を進める」が持つので、購入は操作系の空の青で出す。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="ManagementScreen.uss" />
+    <ui:VisualElement class="root ui-root">
+
+      <ui:Instance template="TopBar" />
+
+      <ui:VisualElement class="mn-main">
+
+        <!-- 見出し（新聞の柱見出し＝RuleHead・設計書16 §5） -->
+        <ui:VisualElement class="mn-masthead">
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="経営" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 資金（財布は2つ。部費＝道具・備品・合宿・スカウトの運営費、施設基金＝建物専用の別会計） -->
+        <ui:VisualElement class="card">
+          <ui:VisualElement class="card__hd card__hd--tight">
+            <ui:Label class="card__hd-title" text="資金" />
+            <ui:Label class="card__hd-sub" text="単位: 万円 ／ 部費＝運営費、施設基金＝建物専用。どちらも年度頭に入る" />
+          </ui:VisualElement>
+          <ui:VisualElement class="card__body">
+            <ui:VisualElement name="mn-ledger" class="mn-ledger" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 買えるもの（施設・練習道具・備品・年契約）。区分は縦に積まず、タブで排他に切り替える
+             ＝一度に出るのは最大5行なのでスクロールせずに全部見える（積むと19行で窓に4.4行しか入らない）。
+             ヘッダーとデータは同じ列幅トークンを参照する。 -->
+        <ui:VisualElement class="card card--grow mn-card-last">
+          <ui:VisualElement class="card__hd card__hd--tight">
+            <ui:Label class="card__hd-title" text="買えるもの" />
+            <ui:Label class="card__hd-sub" text="1段ずつ購入 ／ 効果はすぐ反映" />
+          </ui:VisualElement>
+          <ui:VisualElement class="card__body card__body--fill">
+            <ui:VisualElement name="mn-tabs" class="mn-tabs" />
+            <ui:VisualElement class="mn-thead">
+              <ui:Label class="mn-th mn-th--name" text="名称" />
+              <ui:Label class="mn-th mn-th--lv" text="段階" />
+              <ui:Label class="mn-th mn-th--eff" text="いまの効果" />
+              <ui:Label class="mn-th mn-th--eff" text="次の1段で増える効果" />
+              <ui:Label class="mn-th mn-th--cost" text="費用" />
+              <ui:Label class="mn-th mn-th--act" text="" />
+            </ui:VisualElement>
+            <ui:ScrollView mode="Vertical" class="mn-scroll">
+              <ui:VisualElement class="row-well mn-well">
+                <ui:VisualElement name="mn-list" />
+              </ui:VisualElement>
+            </ui:ScrollView>
+            <ui:VisualElement class="mn-foot">
+              <ui:VisualElement name="mn-total" class="mn-total" />
+              <ui:Label name="mn-status" class="mn-status" text="" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

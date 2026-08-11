@@ -53,6 +53,8 @@ public sealed record CoefficientsBundle
     public PracticeMatchCoefficients PracticeMatch { get; init; } = new();
     /// <summary>施設カタログ（Issue #128）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
     public FacilityCatalog Facilities { get; init; } = FacilityCatalog.Default;
+    /// <summary>年契約カタログ（設計書04 §1.4a）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
+    public ContractCatalog Contracts { get; init; } = ContractCatalog.Default;
 }
 
 /// <summary>
@@ -108,6 +110,7 @@ public static class CoefficientsLoader
         public TournamentDto? Tournament { get; set; }
         public PracticeMatchDto? PracticeMatch { get; set; }
         public List<FacilityDefDto>? Facilities { get; set; }
+        public List<ContractDefDto>? Contracts { get; set; }
 
         public CoefficientsBundle ToBundle() => new()
         {
@@ -143,6 +146,45 @@ public static class CoefficientsLoader
             Facilities = Facilities is null
                 ? FacilityCatalog.Default
                 : new FacilityCatalog { Facilities = Facilities.Select(f => f.ToModel()).ToList() },
+            Contracts = Contracts is null
+                ? ContractCatalog.Default
+                : new ContractCatalog { Contracts = Contracts.Select(c => c.ToModel()).ToList() },
+        };
+    }
+
+    private sealed class ContractDefDto
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public List<ContractTierDto>? Tiers { get; set; }
+
+        public ContractDef ToModel() => new()
+        {
+            Id = Id,
+            Name = Name,
+            Tiers = Tiers is null
+                ? new[] { new ContractTier() }
+                : Tiers.Select(t => t.ToModel()).ToList(),
+        };
+    }
+
+    private sealed class ContractTierDto
+    {
+        public double AnnualCost { get; set; }
+        public double ScoutTalentAdd { get; set; }
+        public double CoachingBattingAdd { get; set; }
+        public double CoachingPitchingAdd { get; set; }
+        public double CoachingDefenseAdd { get; set; }
+        public bool OutOfPrefectureOpponents { get; set; }
+
+        public ContractTier ToModel() => new()
+        {
+            AnnualCost = AnnualCost,
+            ScoutTalentAdd = ScoutTalentAdd,
+            CoachingBattingAdd = CoachingBattingAdd,
+            CoachingPitchingAdd = CoachingPitchingAdd,
+            CoachingDefenseAdd = CoachingDefenseAdd,
+            OutOfPrefectureOpponents = OutOfPrefectureOpponents,
         };
     }
 
@@ -150,25 +192,59 @@ public static class CoefficientsLoader
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
+        /// <summary>facility（既定） / equipment（練習道具） / gear（備品）。</summary>
+        public string? Kind { get; set; }
         public List<FacilityTierDtoNew>? Tiers { get; set; }
 
         public FacilityDef ToModel() => new()
         {
             Id = Id,
             Name = Name,
+            Kind = ParseKind(Kind),
             Tiers = Tiers is null
                 ? new[] { new FacilityUpgrade() }
                 : Tiers.Select(t => t.ToModel()).ToList(),
+        };
+
+        private static PurchaseKind ParseKind(string? s) => s switch
+        {
+            "equipment" => PurchaseKind.Equipment,
+            "gear" => PurchaseKind.Gear,
+            _ => PurchaseKind.Facility,
         };
     }
 
     private sealed class FacilityTierDtoNew
     {
+        private static readonly FacilityUpgrade D = new();
+
         public double Cost { get; set; }
         public double CoefAdd { get; set; }
         public int BudgetAdd { get; set; }
+        // 倍率は既定1.0・加算は既定0（YAML に書かなければ「その段では効果なし」）。
+        public double InjuryProbFactor { get; set; } = D.InjuryProbFactor;
+        public double InjuryRecoveryFactor { get; set; } = D.InjuryRecoveryFactor;
+        public double InsightProbFactor { get; set; } = D.InsightProbFactor;
+        public double InsightAccuracyAdd { get; set; } = D.InsightAccuracyAdd;
+        public double BattingFactor { get; set; } = D.BattingFactor;
+        public double DefenseFactor { get; set; } = D.DefenseFactor;
+        public double BaseRunningFactor { get; set; } = D.BaseRunningFactor;
+        public double PitchingFactor { get; set; } = D.PitchingFactor;
 
-        public FacilityUpgrade ToModel() => new() { Cost = Cost, CoefAdd = CoefAdd, BudgetAdd = BudgetAdd };
+        public FacilityUpgrade ToModel() => new()
+        {
+            Cost = Cost,
+            CoefAdd = CoefAdd,
+            BudgetAdd = BudgetAdd,
+            InjuryProbFactor = InjuryProbFactor,
+            InjuryRecoveryFactor = InjuryRecoveryFactor,
+            InsightProbFactor = InsightProbFactor,
+            InsightAccuracyAdd = InsightAccuracyAdd,
+            BattingFactor = BattingFactor,
+            DefenseFactor = DefenseFactor,
+            BaseRunningFactor = BaseRunningFactor,
+            PitchingFactor = PitchingFactor,
+        };
     }
 
     private sealed class TournamentDto
@@ -2115,6 +2191,10 @@ public static class CoefficientsLoader
         public double SummerCampCost { get; set; } = D.SummerCampCost;
         public double WinterCampCost { get; set; } = D.WinterCampCost;
         public double ScoutCost { get; set; } = D.ScoutCost;
+        public double FacilityFundSchoolBase { get; set; } = D.FacilityFundSchoolBase;
+        public double FacilityFundDonationPerFame { get; set; } = D.FacilityFundDonationPerFame;
+        public double FacilityFundKoshienBonus { get; set; } = D.FacilityFundKoshienBonus;
+        public double FacilityFundNationalTitleBonus { get; set; } = D.FacilityFundNationalTitleBonus;
         public double NewSchoolStrengthMean { get; set; } = D.NewSchoolStrengthMean;
         public double NewSchoolStrengthSd { get; set; } = D.NewSchoolStrengthSd;
         public double FreeChoiceSchoolStrength { get; set; } = D.FreeChoiceSchoolStrength;
@@ -2146,6 +2226,10 @@ public static class CoefficientsLoader
             SummerCampCost = SummerCampCost,
             WinterCampCost = WinterCampCost,
             ScoutCost = ScoutCost,
+            FacilityFundSchoolBase = FacilityFundSchoolBase,
+            FacilityFundDonationPerFame = FacilityFundDonationPerFame,
+            FacilityFundKoshienBonus = FacilityFundKoshienBonus,
+            FacilityFundNationalTitleBonus = FacilityFundNationalTitleBonus,
             NewSchoolStrengthMean = NewSchoolStrengthMean,
             NewSchoolStrengthSd = NewSchoolStrengthSd,
             FreeChoiceSchoolStrength = FreeChoiceSchoolStrength,

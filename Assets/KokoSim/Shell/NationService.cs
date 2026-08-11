@@ -25,6 +25,7 @@ namespace KokoSim.Unity.Shell
         private static readonly NationCoefficients Coeff = new NationCoefficients();
         private static Nation _nation;
         private static List<School> _prefecture;
+        private static List<School> _away;
 
         public static Nation Nation => _nation ?? (_nation = NationGenerator.Generate(
             SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026)));
@@ -43,6 +44,61 @@ namespace KokoSim.Unity.Shell
                 }
                 return _prefecture;
             }
+        }
+
+        /// <summary>
+        /// 県外の練習試合相手（年契約「遠征」・design-04 §1.4a）。全国4000校をそのまま並べても選べないので
+        /// <see cref="AwaySchoolCount"/> 校へ絞るが、<b>絞り方は「強い順の上位」ではなく「強さ順の等間隔」</b>。
+        ///
+        /// <para>各県の最強校だけを並べると総合66〜95に固まり、赴任直後（総合33前後）の監督には
+        /// 受諾率2%＝一生組めない相手しか並ばない＝20万/年を払う意味が無くなる（実測で確認した）。
+        /// 等間隔に取れば全国最強から自校と同格まで散るので、名声が上がるほど上の相手に手が届く段階ができる。</para>
+        ///
+        /// <para>乱数は使わず、同点は校IDの昇順で割る＝同じ全国生成なら常に同じ顔ぶれ（不変条件#2）。
+        /// 自校の強さには依存しないので、年をまたいでも作り直しが要らない。</para>
+        /// </summary>
+        public static IReadOnlyList<School> AwaySchools
+        {
+            get
+            {
+                if (_away != null) return _away;
+
+                var all = new List<School>();
+                foreach (var s in Nation.Schools)
+                    if (s.PrefectureId != PrefectureId) all.Add(s);
+
+                all.Sort((a, b) =>
+                {
+                    var c = b.Strength.CompareTo(a.Strength);
+                    return c != 0 ? c : a.Id.CompareTo(b.Id);
+                });
+
+                var list = new List<School>();
+                if (all.Count <= AwaySchoolCount)
+                {
+                    list.AddRange(all);
+                }
+                else
+                {
+                    // 先頭（全国最強）を必ず含め、そこから末尾まで等間隔に拾う。
+                    for (var i = 0; i < AwaySchoolCount; i++)
+                        list.Add(all[(int)((long)i * (all.Count - 1) / (AwaySchoolCount - 1))]);
+                }
+
+                _away = list;
+                return _away;
+            }
+        }
+
+        /// <summary>遠征先として並べる県外校の数（1画面でスキャンできる長さに抑える）。</summary>
+        private const int AwaySchoolCount = 24;
+
+        /// <summary>県ID→県名（遠征先の行に添える）。見つからなければ空文字。</summary>
+        public static string PrefectureName(int prefectureId)
+        {
+            foreach (var p in Nation.Prefectures)
+                if (p.Id == prefectureId) return p.Name;
+            return "";
         }
 
         /// <summary>
@@ -100,6 +156,7 @@ namespace KokoSim.Unity.Shell
             _tournamentStats = s.TournamentStats;
             _nation = null;
             _prefecture = null;
+            _away = null;
             _schoolById = null;
         }
 
@@ -108,6 +165,7 @@ namespace KokoSim.Unity.Shell
         {
             _nation = null;
             _prefecture = null;
+            _away = null;
             _schoolById = null;
             _rosters = null;
             _tournamentStats = null;

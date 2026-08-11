@@ -945,6 +945,12 @@ career:
   summer_camp_cost: 20.0            # 夏合宿費（設計書04 §4）
   winter_camp_cost: 25.0            # 冬合宿費（設計書04 §4・冬は長め）
   scout_cost: 15.0                  # スカウト（新入生勧誘）の年間費用（#127連動）
+  # 施設基金（設計書04 §1.4「OB・後援会寄付」）。部費とは別会計で、建物だけに使う。
+  # 現実の高校でも寮・室内練習場・ナイターは部費でなく学校の設備投資と後援会の寄付で建つ。
+  facility_fund_school_base: 100.0        # 学校の設備投資[万円/年]（実績によらない土台。名声由来の寄付を主役にするため小さく）
+  facility_fund_donation_per_fame: 20.0   # 後援会・OB寄付（名声1あたり[万円/年]。名声100で年2000万）
+  facility_fund_koshien_bonus: 1000.0     # 甲子園出場の年の一時金[万円]
+  facility_fund_national_title_bonus: 5000.0  # 全国優勝の年の一時金[万円]（出場ぶんに上乗せ）
   new_school_strength_mean: 34.0    # 教員監督の赴任先は弱小
   new_school_strength_sd: 6.0
   free_choice_school_strength: 48.0 # フリー化後の本拠地
@@ -959,30 +965,118 @@ facilities:
     name: 照明設備
     tiers:
       - {}
-      - { cost: 40,  budget_add: 80 }
-      - { cost: 70,  budget_add: 80 }
-      - { cost: 110, budget_add: 90 }
+      - { cost: 2000, budget_add: 80 }
+      - { cost: 3000, budget_add: 80 }
+      - { cost: 5000, budget_add: 90 }
   - id: indoor            # 室内練習場: 雨天でも練習（時間）＋設備（効率）
     name: 室内練習場
     tiers:
       - {}
-      - { cost: 60,  coef_add: 0.15, budget_add: 50 }
-      - { cost: 100, coef_add: 0.15, budget_add: 50 }
-      - { cost: 160, coef_add: 0.15, budget_add: 50 }
+      - { cost: 3000, coef_add: 0.15, budget_add: 50 }
+      - { cost: 5000, coef_add: 0.15, budget_add: 50 }
+      - { cost: 8000, coef_add: 0.15, budget_add: 50 }
   - id: dorm              # 寮: 生活・体調管理で効率↑
     name: 寮
     tiers:
       - {}
-      - { cost: 50,  coef_add: 0.15 }
-      - { cost: 90,  coef_add: 0.15 }
-      - { cost: 140, coef_add: 0.15 }
+      - { cost: 5000,  coef_add: 0.15 }
+      - { cost: 8000,  coef_add: 0.15 }
+      - { cost: 12000, coef_add: 0.15 }
   - id: weight            # トレーニング場: ウェイト・マシンで効率↑
     name: トレーニング場
     tiers:
       - {}
-      - { cost: 40,  coef_add: 0.15 }
-      - { cost: 70,  coef_add: 0.15 }
-      - { cost: 110, coef_add: 0.20 }
+      - { cost: 500,  coef_add: 0.15 }
+      - { cost: 1000, coef_add: 0.15 }
+      - { cost: 2000, coef_add: 0.20 }
+  # 医務室: 怪我が起きにくくなり復帰も早まる。coef_add / budget_add を持たないので
+  # 全系統Lv3の (2.40 / 700分) は動かない（#115の校正を保つ）。累計Lv3で発生率0.61倍・全治週0.73倍。
+  - id: clinic
+    name: 医務室
+    tiers:
+      - {}
+      - { cost: 150, injury_prob_factor: 0.85, injury_recovery_factor: 0.90 }
+      - { cost: 300, injury_prob_factor: 0.85, injury_recovery_factor: 0.90 }
+      - { cost: 500, injury_prob_factor: 0.85, injury_recovery_factor: 0.90 }
+
+  # --- 練習道具（kind: equipment）: 効果小 Lv1 / 効果大 Lv2 の2段。
+  # 施設の練習効率が全メニュー一律なのに対し、道具は振っているメニューの分野にだけ効く。
+  # 累計 Lv2 で 1.05 × 1.07 ≒ +12%。
+  - id: gear_batting
+    name: 打撃の道具
+    kind: equipment
+    tiers:
+      - {}
+      - { cost: 30, batting_factor: 1.05 }       # バッティングティー・ネット
+      - { cost: 70, batting_factor: 1.07 }       # ピッチングマシン
+  - id: gear_defense
+    name: 守備の道具
+    kind: equipment
+    tiers:
+      - {}
+      - { cost: 30, defense_factor: 1.05 }       # ノックバット・防具一式
+      - { cost: 70, defense_factor: 1.07 }       # 守備マシン
+  - id: gear_baserunning
+    name: 走塁の道具
+    kind: equipment
+    tiers:
+      - {}
+      - { cost: 10, base_running_factor: 1.05 }  # ラダー・ミニハードル
+      - { cost: 70, base_running_factor: 1.07 }  # タイム計測システム
+  - id: gear_pitching
+    name: 投手の道具
+    kind: equipment
+    tiers:
+      - {}
+      - { cost: 15, pitching_factor: 1.05 }      # 重量球・練習球一式
+      - { cost: 70, pitching_factor: 1.07 }      # スピードガン＋ブルペン整備
+
+  # --- 備品（kind: gear）: 買い切り1段 ---
+  - id: video             # ビデオ・分析機材: 気づきが増え、読み違えも減る
+    name: ビデオ・分析機材
+    kind: gear
+    tiers:
+      - {}
+      - { cost: 50, insight_prob_factor: 1.5, insight_accuracy_add: 0.05 }
+
+# --- 年契約（設計書04 §1.4a）: 毎年部費から払い、いつでも解約できる継続契約 ---
+# 施設・練習道具（facilities:）が「買い切り・効果が累積」なのに対し、年契約は
+# 「いま何段で契約しているか」だけが効く＝Lv2 の年額と効果は Lv1 を置き換える（累積しない）。
+# tiers[0] は未契約（年額0・効果なし）。
+#
+# スカウト網 Lv1（15万/年・効果0）は career.scout_cost と同額・同効果で、新規ゲームの
+# 既定契約になっている＝年契約を入れても実ゲームの年間支出は変わらず、上へ伸ばす選択肢だけが増える。
+# 全部を最上段にすると 50+20+30×3＝160万/年。部費の年間収入（信頼度50で120万・100で160万）に
+# 合宿費45万も乗るので全部は抱えられない＝どれを取るかの選択になる。
+contracts:
+  - id: scouting
+    name: スカウト網
+    tiers:
+      - {}
+      - { annual_cost: 15, scout_talent_add: 0 }   # 県内を回る（従来どおり）
+      - { annual_cost: 30, scout_talent_add: 3 }   # 近隣県まで足を伸ばす
+      - { annual_cost: 50, scout_talent_add: 6 }   # 全国に網を張る
+  - id: expedition
+    name: 遠征
+    tiers:
+      - {}
+      - { annual_cost: 20, out_of_prefecture_opponents: true }   # 県外の学校と練習試合が組める
+  # 専門コーチ: 分野別指導力の実効値だけを底上げする（監督自身の指導力は変えない＝解約で元に戻る）
+  - id: coach_batting
+    name: 打撃コーチ
+    tiers:
+      - {}
+      - { annual_cost: 30, coaching_batting_add: 10 }
+  - id: coach_pitching
+    name: 投手コーチ
+    tiers:
+      - {}
+      - { annual_cost: 30, coaching_pitching_add: 10 }
+  - id: coach_defense
+    name: 守備走塁コーチ
+    tiers:
+      - {}
+      - { annual_cost: 30, coaching_defense_add: 10 }
 
 # --- 新入生生成（設計書04 §2.1・設計書01 §1.1b-c）: 名声→総合力→凸凹配分 ---
 roster:

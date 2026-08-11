@@ -34,9 +34,11 @@ public sealed class SaveState
     // --- 自校部員（背番号・引退フラグ含む。生成順の全員） ---
     public List<DevelopingPlayer> Roster { get; set; } = new();
 
-    // --- 監督メタ・施設・監督成長の二重適用ガード ---
+    // --- 監督メタ・施設・年契約・監督成長の二重適用ガード ---
     public Manager Manager { get; set; } = new();
     public FacilitySet Facilities { get; set; } = new();
+    /// <summary>年契約の契約状態（設計書04 §1.4a）。v3 で追加。</summary>
+    public ContractSet Contracts { get; set; } = ContractSet.Initial();
     public int ManagerLastGrownYear { get; set; }
     public int ManagerGrownWinsBaseline { get; set; }
     public int ManagerGrownKoshienBaseline { get; set; }
