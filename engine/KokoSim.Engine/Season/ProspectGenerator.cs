@@ -34,6 +34,17 @@ public sealed record RosterCoefficients
     /// </summary>
     public double PitcherAptitudeWeightSpan { get; init; } = 6.0;
 
+    /// <summary>
+    /// 「捕手として読める」下限適性（#589・設計書04 §2.3）。判定は
+    /// <see cref="CatcherRoleResolver.ReadsAsCatcher(int,RosterCoefficients)"/> に集約する。
+    ///
+    /// 既定50は <see cref="Match.Fielding.FieldingCoefficients.AptitudeNeutral"/>＝適性補正が付かない点
+    /// （×1.0）。これ未満は「捕手に置くと不利補正が付く＝不慣れ」なので、そこを境界に採る。
+    /// 供給下限の発動率は実測0.122%（40,000コホート）＝ほぼ発動しない最小限の保険
+    /// （design-04 §2.3「硬派さを損なわない最小限」）。
+    /// </summary>
+    public double CatcherAptitudeFloor { get; init; } = 50.0;
+
     // --- 総合力（名声由来）。既定は一般校相当。名声接続は SeasonEngine 側で talentCenter を渡す ---
     /// <summary>総合力の既定中心値（＝専門能力の平均目標, 一般校）。名声で上下する。</summary>
     public double TalentCenterDefault { get; init; } = 32.0;
@@ -268,6 +279,7 @@ public static class ProspectGenerator
         for (var i = 0; i < count; i++)
             list.Add(Create(year, i, center, c, rng, vocab, skillCoeff, personalityCoeff, formCoeff, usedGiven));
         EnsurePitcherSupply(list, c);
+        EnsureCatcherSupply(list, c);
         return list;
     }
 
@@ -308,6 +320,49 @@ public static class ProspectGenerator
         // 判定は apt + bias > bestField。ちょうど跨ぐ最小値まで引き上げる（能力には触れない）。
         var lifted = (int)Math.Ceiling(bestField - c.PitcherAptitudeBias) + 1;
         best.SetAptitude(FieldPosition.Pitcher, (int)MathUtil.Clamp(lifted, 1, 99));
+    }
+
+    /// <summary>
+    /// 捕手供給の下限（#589・設計書04 §2.3「捕手のみ最低保証」）。<see cref="EnsurePitcherSupply"/> と同型で、
+    /// 捕手として読める選手（<see cref="CatcherRoleResolver.ReadsAsCatcher(DevelopingPlayer,RosterCoefficients)"/>）が
+    /// 1人も居ないコホートに、捕手適性が最も惜しい1人を判定境界ちょうどまで引き上げる。
+    ///
+    /// 捕手不在は「苦しい年」ではなく守備が組めない詰みなので、投手と同じ扱いで下限を入れる。
+    /// 発動率は実測0.122%（40,000コホート・下限50）＝ほぼ発動しない保険であり、
+    /// 「硬派さを損なわない最小限」（design-04 §2.3）に収まる。乱数を使わない決定論操作（不変条件#2）。
+    ///
+    /// 能力（Catching / ThrowAccuracy 等）は底上げしない＝「その年は捕手が居ない」苦しさは絵に残る
+    /// （投手版と同じ作法）。
+    ///
+    /// 候補から**投手役の選手を外す**のが要点。捕手適性を上げると最良守備適性が上がり
+    /// <see cref="PitcherRoleResolver.LeansPitcher(DevelopingPlayer,RosterCoefficients)"/> の判定を割り得るので、
+    /// 投手を持ち上げると直前の <see cref="EnsurePitcherSupply"/> が保証した投手供給を壊す。
+    /// 逆に野手を持ち上げる分には（最良守備適性が上がる方向＝投手側へ倒れない）投手判定は動かない。
+    /// </summary>
+    internal static void EnsureCatcherSupply(List<DevelopingPlayer> cohort, RosterCoefficients c)
+    {
+        if (cohort.Count == 0) return;
+        foreach (var p in cohort)
+            if (CatcherRoleResolver.ReadsAsCatcher(p, c)) return;
+
+        // 捕手適性が最大＝最も惜しい1人。同点は先頭優先で決定論。
+        // 全員が投手役という極小コホートでは候補が空になるので、その場合だけ全員から採る。
+        DevelopingPlayer? best = null;
+        var bestApt = int.MinValue;
+        for (var pass = 0; pass < 2 && best == null; pass++)
+        {
+            foreach (var p in cohort)
+            {
+                if (pass == 0 && PitcherRoleResolver.LeansPitcher(p, c)) continue;
+                var apt = p.Aptitude(FieldPosition.Catcher);
+                if (best != null && apt <= bestApt) continue;
+                best = p;
+                bestApt = apt;
+            }
+        }
+        if (best == null) return;
+
+        best.SetAptitude(FieldPosition.Catcher, CatcherRoleResolver.MinimumAptitude(c));
     }
 
     /// <summary>「苗字　名前」から下の名前だけを取り出す（区切りが無ければ全体を名前とみなす）。</summary>
