@@ -29,6 +29,9 @@
     padding-left: var(--sp-4);
 }
 
+/* 名簿のタブ（入部予定者 / 中学生リスト）。共通部品 .seg-tabs の器に載せる。 */
+.sc-tabs { flex-shrink: 0; margin-bottom: var(--sp-2); }
+
 /* 左ペインは高さいっぱいに伸ばし、中の一覧だけがスクロールする（カードごと流れない）。 */
 .sc-plate { flex-grow: 1; flex-shrink: 1; min-height: 0; }
 .sc-plate .nb-plate__front { flex-grow: 1; flex-shrink: 1; min-height: 0; }
@@ -149,6 +152,37 @@
     white-space: normal;
 }
 
+/* ── 勧誘カード（中学生リストのときだけ出す・issue #588） ────────────
+   「何が効いているか」を隠さないので、成功率とその内訳を素直に縦へ並べる。 */
+.sc-recruit { flex-direction: column; }
+.sc-recruit__row { flex-direction: row; align-items: center; height: 30px; }
+.sc-recruit__key {
+    width: 108px;
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin: 0;
+    padding: 0;
+}
+.sc-recruit__val { font-size: var(--fs-body); color: var(--ink); margin: 0; padding: 0; }
+/* 成功率だけは大きく出す（この画面で監督が見る唯一の数字）。 */
+.sc-recruit__prob { font-size: var(--fs-num-lg); color: var(--ink); margin: 0; padding: 0; }
+/* 不利に効いている行は淡く（警告色は使わない＝勧誘が難しいのは警告ではない・UI原則②）。 */
+.sc-recruit__val--minus { color: var(--color-faint); }
+
+.sc-recruit__actions {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--sp-3);
+}
+.sc-recruit__actions .tool-btn { margin-right: var(--sp-2); }
+.sc-recruit__status {
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    white-space: normal;
+    flex-shrink: 1;
+}
+
 /* ── 下段: スカウト網の状態（変更は経営タブ＝ここには買い物を置かない） ─── */
 .sc-foot {
     flex-direction: row;
@@ -159,4 +193,5 @@
     padding-right: var(--sp-2);
 }
 .sc-net { font-size: var(--fs-label); color: var(--color-muted); }
+.sc-slots { font-size: var(--fs-label); color: var(--color-muted); margin-right: var(--sp-4); }
 .sc-foot__spacer { flex-grow: 1; }

@@ -74,6 +74,13 @@ public sealed class SaveState
     /// </summary>
     public IncomingClass? Incoming { get; set; }
 
+    // --- 能動勧誘（寮で解禁・issue #588。v6 で追加） ---
+    /// <summary>
+    /// 中学生リストと訪問の状態。<b>null＝寮が無い／まだ秋を跨いでいない</b>（旧セーブも null）。
+    /// 3月の判定で使い切り、次の秋に新しいリストで上書きされる。
+    /// </summary>
+    public RecruitingState? Recruiting { get; set; }
+
     /// <summary>
     /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。

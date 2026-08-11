@@ -20,7 +20,7 @@ internal static class IncomingClassSaves
         foreach (var p in c.Players) players.Add(DevelopingPlayerSaves.ToJson(p));
 
         var reports = new JsonArray();
-        foreach (var r in c.Reports) reports.Add(ReportToJson(r));
+        foreach (var r in c.Reports) reports.Add(ProspectReportSaves.ToJson(r));
 
         return new JsonObject()
             .Add("yearIndex", c.YearIndex)
@@ -41,11 +41,19 @@ internal static class IncomingClassSaves
             Joined = o.Bool("joined"),
         };
         foreach (var p in o.Arr("players").Items) c.Players.Add(DevelopingPlayerSaves.FromJson(p.AsObject()));
-        foreach (var r in o.Arr("reports").Items) c.Reports.Add(ReportFromJson(r.AsObject()));
+        foreach (var r in o.Arr("reports").Items) c.Reports.Add(ProspectReportSaves.FromJson(r.AsObject()));
         return c;
     }
 
-    private static JsonObject ReportToJson(ProspectReport r) => new JsonObject()
+}
+
+/// <summary>
+/// 見立て（<see cref="ProspectReport"/>）の JSON 往復。入部予定者（issue #587）と
+/// 能動勧誘の中学生リスト（issue #588）が同じ形を共有するので、ここに1つだけ置く。
+/// </summary>
+internal static class ProspectReportSaves
+{
+    public static JsonObject ToJson(ProspectReport r) => new JsonObject()
         .Add("id", r.PlayerId)
         .Add("name", r.Name)
         .Add("bat", r.Batting)
@@ -55,9 +63,10 @@ internal static class IncomingClassSaves
         .Add("kGrowth", r.KnowsGrowthType)
         .Add("kPotential", r.KnowsPotential)
         .Add("kPersonality", r.KnowsPersonality)
-        .Add("kInjury", r.KnowsInjuryResistance);
+        .Add("kInjury", r.KnowsInjuryResistance)
+        .Add("recruited", r.Recruited);
 
-    private static ProspectReport ReportFromJson(JsonObject o) => new()
+    public static ProspectReport FromJson(JsonObject o) => new()
     {
         PlayerId = o.Int("id"),
         Name = o.Str("name") ?? "",
@@ -69,5 +78,6 @@ internal static class IncomingClassSaves
         KnowsPotential = o.Bool("kPotential"),
         KnowsPersonality = o.Bool("kPersonality"),
         KnowsInjuryResistance = o.Bool("kInjury"),
+        Recruited = o.Bool("recruited"),
     };
 }

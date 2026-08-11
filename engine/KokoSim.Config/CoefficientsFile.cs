@@ -44,6 +44,8 @@ public sealed record CoefficientsBundle
     public InsightCoefficients Insight { get; init; } = new();
     /// <summary>入部予定者の事前開示（設計書04 §2.1 効果2・issue #587）。</summary>
     public ProspectScoutingCoefficients Scouting { get; init; } = new();
+    /// <summary>能動勧誘枠（設計書04 §2.2・issue #588）。</summary>
+    public RecruitCoefficients Recruiting { get; init; } = new();
     public ManagerGrowthCoefficients ManagerGrowth { get; init; } = new();
     public TrainingCoefficients Training { get; init; } = new();
     public RosterCoefficients Roster { get; init; } = new();
@@ -103,6 +105,7 @@ public static class CoefficientsLoader
         public GrowthDto? Growth { get; set; }
         public InsightDto? Insight { get; set; }
         public ScoutingDto? Scouting { get; set; }
+        public RecruitingDto? Recruiting { get; set; }
         public ManagerGrowthDto? ManagerGrowth { get; set; }
         public TrainingDto? Training { get; set; }
         public RosterDto? Roster { get; set; }
@@ -138,6 +141,7 @@ public static class CoefficientsLoader
             Growth = Growth?.ToModel() ?? new GrowthEventCoefficients(),
             Insight = Insight?.ToModel() ?? new InsightCoefficients(),
             Scouting = Scouting?.ToModel() ?? new ProspectScoutingCoefficients(),
+            Recruiting = Recruiting?.ToModel() ?? new RecruitCoefficients(),
             ManagerGrowth = ManagerGrowth?.ToModel() ?? new ManagerGrowthCoefficients(),
             Training = Training?.ToModel() ?? new TrainingCoefficients(),
             Roster = Roster?.ToModel() ?? new RosterCoefficients(),
@@ -236,6 +240,7 @@ public static class CoefficientsLoader
         public double DefenseFactor { get; set; } = D.DefenseFactor;
         public double BaseRunningFactor { get; set; } = D.BaseRunningFactor;
         public double PitchingFactor { get; set; } = D.PitchingFactor;
+        public int RecruitSlots { get; set; } = D.RecruitSlots;
 
         public FacilityUpgrade ToModel() => new()
         {
@@ -250,6 +255,7 @@ public static class CoefficientsLoader
             DefenseFactor = DefenseFactor,
             BaseRunningFactor = BaseRunningFactor,
             PitchingFactor = PitchingFactor,
+            RecruitSlots = RecruitSlots,
         };
     }
 
@@ -1090,6 +1096,55 @@ public static class CoefficientsLoader
             EstimateSdMin = EstimateSdMin,
             RevealMin = RevealMin,
             RevealMax = RevealMax,
+        };
+    }
+
+    private sealed class RecruitingDto
+    {
+        private static readonly RecruitCoefficients D = new();
+        public int ListSize { get; set; } = D.ListSize;
+        public double TalentCenterAdd { get; set; } = D.TalentCenterAdd;
+        public double OutOfPrefectureRatio { get; set; } = D.OutOfPrefectureRatio;
+        public double BaseProbability { get; set; } = D.BaseProbability;
+        public double ProbPerFame { get; set; } = D.ProbPerFame;
+        public double ProbPerVisit { get; set; } = D.ProbPerVisit;
+        public double VisitGainMax { get; set; } = D.VisitGainMax;
+        public double ProbPerRivalTier { get; set; } = D.ProbPerRivalTier;
+        public double ProbabilityMin { get; set; } = D.ProbabilityMin;
+        public double ProbabilityMax { get; set; } = D.ProbabilityMax;
+        public double PenaltySameRegion { get; set; } = D.PenaltySameRegion;
+        public double PenaltyNeighborRegion { get; set; } = D.PenaltyNeighborRegion;
+        public double PenaltyFar { get; set; } = D.PenaltyFar;
+        public double DormDistanceRelief { get; set; } = D.DormDistanceRelief;
+        public double VisitCostSamePrefecture { get; set; } = D.VisitCostSamePrefecture;
+        public double VisitCostSameRegion { get; set; } = D.VisitCostSameRegion;
+        public double VisitCostNeighborRegion { get; set; } = D.VisitCostNeighborRegion;
+        public double VisitCostFar { get; set; } = D.VisitCostFar;
+        public double RivalEventProb { get; set; } = D.RivalEventProb;
+        public int RivalEventTierStep { get; set; } = D.RivalEventTierStep;
+
+        public RecruitCoefficients ToModel() => new()
+        {
+            ListSize = ListSize,
+            TalentCenterAdd = TalentCenterAdd,
+            OutOfPrefectureRatio = OutOfPrefectureRatio,
+            BaseProbability = BaseProbability,
+            ProbPerFame = ProbPerFame,
+            ProbPerVisit = ProbPerVisit,
+            VisitGainMax = VisitGainMax,
+            ProbPerRivalTier = ProbPerRivalTier,
+            ProbabilityMin = ProbabilityMin,
+            ProbabilityMax = ProbabilityMax,
+            PenaltySameRegion = PenaltySameRegion,
+            PenaltyNeighborRegion = PenaltyNeighborRegion,
+            PenaltyFar = PenaltyFar,
+            DormDistanceRelief = DormDistanceRelief,
+            VisitCostSamePrefecture = VisitCostSamePrefecture,
+            VisitCostSameRegion = VisitCostSameRegion,
+            VisitCostNeighborRegion = VisitCostNeighborRegion,
+            VisitCostFar = VisitCostFar,
+            RivalEventProb = RivalEventProb,
+            RivalEventTierStep = RivalEventTierStep,
         };
     }
 

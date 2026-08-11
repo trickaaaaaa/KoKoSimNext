@@ -93,7 +93,14 @@ namespace KokoSim.Unity.Shell
             {
                 ManagerService.ApplyYearlyGrowth(YearIndex);
                 ProspectConfirmed = ProspectService.Confirm(YearIndex + 1);
+                // 能動勧誘の成否も同じ週に決まる（設計書04 §2.2・issue #588）。受動枠の器ができた
+                // 後に呼ぶ＝勧誘で獲った中学生はその器へ合流する。
+                RecruitsWon = RecruitService.Resolve(YearIndex + 1);
             }
+
+            // 中学生リストが出る週（秋の大会の直後）。寮が無ければ何も起きない。
+            if (Calendar.IsRecruitListWeek(Week))
+                RecruitListOpened = RecruitService.BuildList(YearIndex + 1);
 
             // 大会開幕週なら大会モードへ入る（要件1）。二重入場を避けるため通常モードのときだけ。
             if (t.TournamentStarting is { } kind && GameSession.Current.Mode == GameMode.Normal)
@@ -122,11 +129,20 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static bool ProspectJoined { get; set; }
 
+        /// <summary>
+        /// 直前の週送りで中学生リストが出たか（issue #588）。ホームが通知フィードへ流したら下ろす。
+        /// </summary>
+        public static bool RecruitListOpened { get; set; }
+
+        /// <summary>直前の3月の判定で勧誘に成功した人数（issue #588）。フィードへ流したら0へ戻す。</summary>
+        public static int RecruitsWon { get; set; }
+
         /// <summary>シーズン頭（週0・年度1）へ戻す。監督成長の年度ガードも初期化する（issue #171）。</summary>
         public static void Reset()
         {
             Week = 0; YearIndex = 1; ManagerService.ResetGrowth();
             ProspectConfirmed = false; ProspectJoined = false;
+            RecruitListOpened = false; RecruitsWon = 0;
         }
 
         /// <summary>セーブ保存: 暦を DTO へ写す（issue #507）。</summary>

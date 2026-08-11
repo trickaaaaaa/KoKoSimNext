@@ -31,6 +31,41 @@ namespace KokoSim.Unity.Scout
 
         /// <summary>スカウト評（見立てのいちばん高い軸を一言にしたもの）。</summary>
         public string Comment = "";
+
+        // ── 中学生リストのときだけ埋まる（能動勧誘・issue #588） ──
+        /// <summary>中学生リストの行か（false＝入部予定者）。</summary>
+        public bool IsRecruit;
+        /// <summary>出身県（「静岡県」）。</summary>
+        public string Hometown = "";
+        /// <summary>自校から見た遠さ（「遠方」）。</summary>
+        public string DistanceWord = "";
+        /// <summary>競合校の格（「A」）。</summary>
+        public string RivalTier = "";
+        /// <summary>競合校が自校より上か（不利に効いている＝淡く出す）。</summary>
+        public bool RivalIsStronger;
+        /// <summary>勧誘対象に指定しているか（枠を1つ使っている）。中学生リストで使う。</summary>
+        public bool Targeted;
+        /// <summary>能動勧誘で獲った子か（入部予定者の一覧で印を付ける）。</summary>
+        public bool Recruited;
+        /// <summary>訪問回数。</summary>
+        public int Visits;
+        /// <summary>いまの成功率（0〜1）。</summary>
+        public double SuccessProbability;
+        /// <summary>訪問1回の費用[万円]。</summary>
+        public double VisitCost;
+        /// <summary>3月の判定が済んでいるか。</summary>
+        public bool Decided;
+        /// <summary>判定の結果（<see cref="Decided"/> が true のときだけ意味を持つ）。</summary>
+        public bool Succeeded;
+    }
+
+    /// <summary>左の名簿のタブ（設計書06 §3.6・issue #588 A案）。</summary>
+    public enum ScoutTab
+    {
+        /// <summary>入部予定者（受動枠・issue #587）。</summary>
+        Incoming = 0,
+        /// <summary>中学生リスト（能動勧誘・issue #588）。</summary>
+        Recruits = 1,
     }
 
     /// <summary>スカウト画面の ViewModel（設計書06 §3.6）。</summary>
@@ -52,6 +87,14 @@ namespace KokoSim.Unity.Scout
         public string EstimateNote = "";
         /// <summary>下段のスカウト網の状態（段・年額・開示）。</summary>
         public string NetworkLine = "";
+        /// <summary>下段の勧誘枠の状態（「勧誘枠 1/2 ・ 寮 Lv1」）。空＝寮が無い。</summary>
+        public string SlotLine = "";
+        /// <summary>いま見ているタブ。</summary>
+        public ScoutTab Tab;
+        /// <summary>中学生リストのタブを出せるか（寮を建てて枠が解禁されている）。</summary>
+        public bool HasRecruiting;
+        /// <summary>いま訪問できる時期か（秋〜冬）。</summary>
+        public bool InRecruitSeason;
         public List<ProspectRow> Rows = new List<ProspectRow>();
     }
 
@@ -65,10 +108,19 @@ namespace KokoSim.Unity.Scout
         private static readonly TeamStrengthCoefficients Strength = new TeamStrengthCoefficients();
         private readonly SeasonCalendar _calendar = new SeasonCalendar();
 
+        /// <summary>いま見ているタブ（画面から切り替える）。</summary>
+        public ScoutTab Tab { get; set; }
+
         public ScoutView BuildView()
         {
             var v = new ScoutView();
             BuildNetworkLine(v);
+            BuildSlotLine(v);
+            v.HasRecruiting = RecruitService.Slots > 0;
+            v.InRecruitSeason = RecruitService.InSeason;
+            v.Tab = v.HasRecruiting ? Tab : ScoutTab.Incoming;
+
+            if (v.Tab == ScoutTab.Recruits) return BuildRecruitView(v);
 
             var cls = ProspectService.Current;
             if (cls == null)
@@ -97,6 +149,85 @@ namespace KokoSim.Unity.Scout
             return v;
         }
 
+        // ── 中学生リスト（能動勧誘・issue #588） ─────────────────────
+        private ScoutView BuildRecruitView(ScoutView v)
+        {
+            var state = RecruitService.Current;
+            v.ListTitle = "中学生リスト";
+            v.EstimateNote = state == null || state.Prospects.Count == 0
+                ? ""
+                : DisclosureWord(ManagerService.ContractEffects.ProspectDisclosure);
+
+            if (state == null || state.Prospects.Count == 0)
+            {
+                v.ListSub = "未着";
+                v.EmptyText = "中学生リストは秋（10月）に届く（あと " + WeeksUntilRecruitList() + " 週）。\n"
+                              + "届いたら枠のぶんだけ勧誘対象を選び、秋〜冬に訪問を重ねる。";
+                return v;
+            }
+
+            v.ListSub = state.Prospects.Count + "名 ・ " + (state.Resolved ? "決着済み" : "勧誘期間中");
+            foreach (var p in state.Prospects) v.Rows.Add(BuildRecruitRow(p));
+            return v;
+        }
+
+        private ProspectRow BuildRecruitRow(RecruitProspect p)
+        {
+            var r = p.Report;
+            var hasEstimate = ManagerService.ContractEffects.ProspectDisclosure > 0;
+            var row = new ProspectRow
+            {
+                IsRecruit = true,
+                Name = string.IsNullOrEmpty(r.Name) ? p.Player.Name : r.Name,
+                Handedness = HandednessJp(p.Player),
+                Estimate = new PlayerStrength(r.Batting, r.Mobility, r.Defense, r.Pitching),
+                HasEstimate = hasEstimate,
+                UnknownCount = r.UnknownCount,
+                Hometown = PrefectureNames.JapaneseOf(p.PrefectureId),
+                DistanceWord = PrefectureRegions.DisplayName(p.Distance),
+                RivalTier = p.RivalTier.ToString(),
+                RivalIsStronger = RecruitModel.TierRank(p.RivalTier) > RecruitModel.TierRank(HomeTier()),
+                Targeted = p.Targeted,
+                Visits = p.Visits,
+                SuccessProbability = RecruitService.SuccessProbability(p.Index),
+                VisitCost = RecruitService.VisitCost(p.Index),
+                Decided = p.Decided,
+                Succeeded = p.Succeeded,
+            };
+
+            // 隠しパラメータは受動枠と同じ扱い（判明した項目だけ出す）。
+            if (r.KnowsGrowthType) row.GrowthType = GrowthTypeJp(p.Player.GrowthType);
+            if (r.KnowsPotential) row.Potential = PotentialJp(p.Player);
+            if (r.KnowsPersonality) row.Personality = Personalities.DisplayName(p.Player.Personality);
+            if (r.KnowsInjuryResistance) row.InjuryResistance = InjuryResistanceJp(p.Player.InjuryResistance);
+
+            row.Comment = hasEstimate
+                ? Comment(row)
+                : "スカウト網を契約していないので、名前しか分からない。";
+            return row;
+        }
+
+        private static Tier HomeTier() => Tiers.FromStrength(TeamOverall.Of(RosterService.Active));
+
+        private static void BuildSlotLine(ScoutView v)
+        {
+            var slots = RecruitService.Slots;
+            if (slots <= 0)
+            {
+                v.SlotLine = "勧誘枠 なし（寮を建てると解禁）";
+                return;
+            }
+            var used = RecruitService.Current?.TargetedCount ?? 0;
+            v.SlotLine = "勧誘枠 " + used + "/" + slots
+                         + " ・ 寮 Lv" + ManagerService.Facilities.LevelOf("dorm");
+        }
+
+        private int WeeksUntilRecruitList()
+        {
+            var left = _calendar.RecruitListWeek - GameClock.Week;
+            return left > 0 ? left : left + _calendar.WeeksPerYear;
+        }
+
         // ── 1行ぶん ────────────────────────────────────────────
         private ProspectRow BuildRow(IncomingClass cls, int index)
         {
@@ -111,6 +242,7 @@ namespace KokoSim.Unity.Scout
                 HasEstimate = cls.Disclosure > 0,
                 // 入部したら隠しは全部開くので「？」は残さない（詳細が値を出しているのに一覧だけ？だと矛盾する）。
                 UnknownCount = cls.Joined ? 0 : r.UnknownCount,
+                Recruited = r.Recruited,
                 // スカウト評は見立てから起こすので、見立てが無ければ出さない。
                 Comment = "",
             };

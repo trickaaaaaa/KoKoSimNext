@@ -43,10 +43,23 @@ public sealed record SeasonCalendar
     /// </summary>
     public int ProspectConfirmWeek { get; init; } = 46;
 
+    /// <summary>
+    /// 中学生リストが出る週（秋の大会の直後 ≒ 第24週。設計書04 §2.2・issue #588）。
+    /// ここから <see cref="ProspectConfirmWeek"/> の前週までが「秋〜冬の訪問期間」で、
+    /// 成否は入部予定者と同じ3月の確定週に決まる。
+    /// </summary>
+    public int RecruitListWeek { get; init; } = 24;
+
     public bool IsFirstHalf(int week) => week < SecondHalfStartWeek;
 
     /// <summary>その週が入部予定者の確定週か（設計書04 §2.1）。</summary>
     public bool IsProspectConfirmWeek(int week) => week == ProspectConfirmWeek;
+
+    /// <summary>その週に中学生リストが出るか（設計書04 §2.2）。</summary>
+    public bool IsRecruitListWeek(int week) => week == RecruitListWeek;
+
+    /// <summary>その週に訪問できるか（リストが出てから確定週の前まで）。</summary>
+    public bool IsRecruitingSeason(int week) => week >= RecruitListWeek && week < ProspectConfirmWeek;
 
     /// <summary>その週がドラフト指名週か（設計書20 §4）。週送りループの指名フック判定に使う。</summary>
     public bool IsDraftWeek(int week) => week == DraftWeek;

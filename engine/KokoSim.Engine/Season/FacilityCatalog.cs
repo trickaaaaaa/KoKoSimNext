@@ -37,6 +37,12 @@ public sealed record FacilityUpgrade
     public double BaseRunningFactor { get; init; } = 1.0;
     /// <summary>投手分野の練習効率への倍率（投手の道具）。</summary>
     public double PitchingFactor { get; init; } = 1.0;
+
+    /// <summary>
+    /// 能動勧誘枠の解禁数（寮・設計書04 §2.2・issue #588）。段をまたいで<b>足し算で累積する</b>ので、
+    /// 「年最大2名」は Lv1 に2を置き、上の段は0のまま（上げても枠は増えない）にする。
+    /// </summary>
+    public int RecruitSlots { get; init; }
 }
 
 /// <summary>
@@ -117,6 +123,7 @@ public sealed record FacilityCatalog
         var budgetAdd = 0;
         double injuryProb = 1.0, injuryRecovery = 1.0, insightProb = 1.0, insightAccuracy = 0.0;
         double batting = 1.0, defense = 1.0, baseRunning = 1.0, pitching = 1.0;
+        var recruitSlots = 0;
 
         foreach (var f in Facilities)
         {
@@ -134,6 +141,7 @@ public sealed record FacilityCatalog
                 defense *= t.DefenseFactor;
                 baseRunning *= t.BaseRunningFactor;
                 pitching *= t.PitchingFactor;
+                recruitSlots += t.RecruitSlots;
             }
         }
 
@@ -145,6 +153,7 @@ public sealed record FacilityCatalog
             InjuryRecoveryFactor = injuryRecovery,
             InsightProbFactor = insightProb,
             InsightAccuracyAdd = insightAccuracy,
+            RecruitSlots = recruitSlots,
             Equipment = new EquipmentBonus
             {
                 Batting = batting,
@@ -188,14 +197,15 @@ public sealed record FacilityCatalog
                     new FacilityUpgrade { Cost = 8000, CoefAdd = 0.15, BudgetAdd = 50 },
                 },
             },
-            // 寮: 生活・体調管理で練習効率が上がる。
+            // 寮: 生活・体調管理で練習効率が上がる。Lv1 で能動勧誘枠が2つ解禁される（設計書04 §2.2）。
+            // 枠は Lv1 だけが持つ＝上の段を買っても「年最大2名」は変わらない。
             new FacilityDef
             {
                 Id = "dorm", Name = "寮",
                 Tiers = new[]
                 {
                     new FacilityUpgrade(),
-                    new FacilityUpgrade { Cost = 5000, CoefAdd = 0.15 },
+                    new FacilityUpgrade { Cost = 5000, CoefAdd = 0.15, RecruitSlots = 2 },
                     new FacilityUpgrade { Cost = 8000, CoefAdd = 0.15 },
                     new FacilityUpgrade { Cost = 12000, CoefAdd = 0.15 },
                 },
@@ -305,6 +315,8 @@ public sealed record FacilityEffects
     public double InsightProbFactor { get; init; } = 1.0;
     /// <summary>気づきの精度への加算。</summary>
     public double InsightAccuracyAdd { get; init; }
+    /// <summary>能動勧誘枠の数（寮・設計書04 §2.2）。0＝勧誘できない。</summary>
+    public int RecruitSlots { get; init; }
 
     /// <summary>何も持っていない状態（全倍率1.0・全加算0）。</summary>
     public static FacilityEffects None { get; } = new();
