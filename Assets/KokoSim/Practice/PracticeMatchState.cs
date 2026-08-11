@@ -40,6 +40,8 @@ namespace KokoSim.Unity.Practice
         public string OwnLabel = "";              // 自校名（総合 X / 値）
         public string CostText = "";
         public List<PracticeOpponentRow> Opponents = new List<PracticeOpponentRow>();
+        /// <summary>県外の相手が並んでいるか（年契約「遠征」を結んだ年だけ true）。</summary>
+        public bool IncludesAwaySchools;
         public PracticeOpponentDetail Selected;   // null=未選択
         public bool ActionEnabled;
         public string ActionLabel = "練習試合を申し込む";
@@ -88,8 +90,9 @@ namespace KokoSim.Unity.Practice
 
             foreach (var s in NationService.PrefectureSchools) v.Opponents.Add(Row(s, "", manager, own, scheduler));
 
-            // 年契約「遠征」（設計書04 §1.4a）を結んでいる年だけ、県外の強豪も申込先に並ぶ。
-            if (ManagerService.ContractEffects.OutOfPrefectureOpponents)
+            // 年契約「遠征」（設計書04 §1.4a）を結んでいる年だけ、県外の相手も申込先に並ぶ。
+            v.IncludesAwaySchools = ManagerService.ContractEffects.OutOfPrefectureOpponents;
+            if (v.IncludesAwaySchools)
                 foreach (var s in NationService.AwaySchools)
                     v.Opponents.Add(Row(s, NationService.PrefectureName(s.PrefectureId), manager, own, scheduler));
 

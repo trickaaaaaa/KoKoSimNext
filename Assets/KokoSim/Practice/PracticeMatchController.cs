@@ -61,6 +61,8 @@ namespace KokoSim.Unity.Practice
             SetText("pm-own", v.OwnLabel);
             SetText("pm-cost", v.CostText);
             SetText("pm-count", v.Opponents.Count + "校");
+            // 遠征（年契約）を結んだ年は県外校も並ぶので、見出しの但し書きを合わせる。
+            SetText("pm-list-title", v.IncludesAwaySchools ? "申込先（県内校＋遠征先）" : "申込先（県内校）");
 
             RenderList(v.Opponents);
             RenderDetail(v.Selected);

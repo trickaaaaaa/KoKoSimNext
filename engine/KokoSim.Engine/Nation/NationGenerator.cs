@@ -80,7 +80,9 @@ public static class NationGenerator
         {
             // 重み総和 ≈ 3600 を約4000校へスケール。
             var count = (int)Math.Round(PrefectureWeights[i] * 1.11);
-            prefectures.Add(new Prefecture(i, $"第{i + 1}県", count));
+            // 県名は実名（JIS順の不変表）。夏の地区名（SummerRegions）は北海道・東京だけ日本語で
+            // 分割名を持っていて、それ以外がここの名前をそのまま使う＝「第N県」だと片方だけ実名になる。
+            prefectures.Add(new Prefecture(i, PrefectureNames.JapaneseOf(i), count));
         }
 
         var schools = new List<School>(4000);

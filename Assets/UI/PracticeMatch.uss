@@ -119,9 +119,12 @@
     font-size: var(--fs-label);
     color: var(--color-chalk);
 }
-/* 器の中では校名を内容ぶんに留め、県名をすぐ右へ添える（列の右端まで押し出さない）。 */
+/* 器の中では校名を内容ぶんに留め、県名をすぐ右へ添える（列の右端まで押し出さない）。
+   flex-basis を 0 のままにすると校名の幅が0になり、次の県名ラベルに重なって描画される。 */
 .pm-row__namecell > .pm-row__name {
     flex-grow: 0;
+    flex-shrink: 1;
+    flex-basis: auto;
 }
 .pm-row__pref {
     margin-left: var(--sp-1);
