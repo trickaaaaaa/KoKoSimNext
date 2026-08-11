@@ -115,7 +115,10 @@ namespace KokoSim.Unity.Shell
         /// 使う唯一の場所にする（<see cref="ManagerService.AbsoluteWeek"/> もここを通す）。</summary>
         public static int AbsoluteWeekOf(int yearIndex, int week) => (yearIndex - 1) * Calendar.WeeksPerYear + week;
 
-        /// <summary>夏予選開幕までの残り週（0以下＝開催中）。トップバーのカウントダウンの単一ソース。</summary>
-        public static int WeeksUntilSummer => Calendar.SummerTournamentStartWeek - Week;
+        /// <summary>
+        /// 次の公式戦と開幕までの残り週（残り0＝開催中）。トップバーのカウントダウンの単一ソース。
+        /// 判定は <see cref="SeasonCalendar.NextTournament"/> にしかない（画面ごとに引き算を書かない）。
+        /// </summary>
+        public static (TournamentKind Kind, int WeeksLeft) NextTournament => Calendar.NextTournament(Week);
     }
 }

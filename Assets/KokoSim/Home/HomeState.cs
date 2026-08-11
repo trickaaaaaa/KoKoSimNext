@@ -558,11 +558,13 @@ namespace KokoSim.Unity.Home
             }
             else
             {
-                // 通常モード: 夏予選までの残り週（設計書03: 夏は第15週前後）。
+                // 通常モード: **次の公式戦**までの残り週（issue #582）。夏の後は秋、秋の後は翌年の夏。
+                // 引き算はここに置かず SeasonCalendar.NextTournament を通す（トップバーと同じ単一ソース）。
                 // 「次の試合」カードは大会モード中だけ出す（通常週はダミーの対戦カードを出さない）。
                 view.TournamentMode = false;
-                view.CountdownLabel = "夏予選まで";
-                var left = _calendar.SummerTournamentStartWeek - week;
+                var next = _calendar.NextTournament(week);
+                var left = next.WeeksLeft;
+                view.CountdownLabel = SeasonClock.CountdownLabel(next.Kind);
                 view.CountdownValue = left > 0 ? "残り " + left + " 週" : "開催中";
                 view.CountdownCells = left > 0 ? left + "週" : "開催中";
                 // 主役ヒーロー帯（通常週）: 数字＝Oswald にするため単位と分けて持つ。
