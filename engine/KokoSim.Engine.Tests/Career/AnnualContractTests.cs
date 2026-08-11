@@ -22,12 +22,30 @@ public sealed class AnnualContractTests
         Assert.Equal(ContractEffects.None, e);
     }
 
+    /// <summary>
+    /// 新規ゲームの既定は<b>未契約</b>（監督決定 2026-08-11）。監督が一度も選んでいない年額を
+    /// 既定で引き続けない＝スカウトは「払っている間だけ効く」ものにする。
+    /// </summary>
     [Fact]
-    public void Initial_IsScoutingLevel1_AndCostsExactlyTheLegacyScoutFee()
+    public void Initial_IsEmpty_NoCostNoEffect()
     {
         var e = Catalog.Aggregate(ContractSet.Initial());
 
-        // 新規ゲームの既定は「スカウト網 Lv1 だけ契約」。年額は従来のスカウト費と同額、効果は従来どおり0。
+        Assert.Equal(ContractEffects.None, e);
+        Assert.Equal(0, e.AnnualCost, 9);
+        Assert.Equal(0, e.ScoutTalentAdd, 9);
+        Assert.Equal(0, e.ProspectDisclosure, 9);
+    }
+
+    /// <summary>
+    /// 年契約が無かった版（セーブ v1/v2）の読み替えは、当時と同額・同効果のスカウト網 Lv1。
+    /// 新規ゲームの既定（未契約）とは別物＝旧セーブの収支を後から変えない。
+    /// </summary>
+    [Fact]
+    public void LegacyScoutingLevel1_CostsExactlyTheLegacyScoutFee()
+    {
+        var e = Catalog.Aggregate(ContractSet.LegacyScoutingLevel1());
+
         Assert.Equal(new CareerCoefficients().ScoutCost, e.AnnualCost, 9);
         Assert.Equal(0, e.ScoutTalentAdd, 9);
         Assert.False(e.OutOfPrefectureOpponents);
@@ -186,12 +204,23 @@ public sealed class AnnualContractTests
         Assert.Equal(expected, m.Funds, 6);
     }
 
-    /// <summary>既定契約（スカウト網 Lv1）なら年契約経路でも従来と同額しか引かれない。</summary>
+    /// <summary>旧セーブの読み替え（スカウト網 Lv1）なら年契約経路でも従来と同額しか引かれない。</summary>
     [Fact]
-    public void YearEnd_WithInitialContracts_MatchesLegacyFunds()
+    public void YearEnd_WithLegacyScoutingContract_MatchesLegacyFunds()
     {
         Assert.Equal(
             FundsAfterOneYear(null),
+            FundsAfterOneYear(Catalog.Aggregate(ContractSet.LegacyScoutingLevel1())),
+            6);
+    }
+
+    /// <summary>新規ゲームの既定（未契約）は、従来のスカウト費15万ぶんだけ支出が軽い。</summary>
+    [Fact]
+    public void YearEnd_WithInitialContracts_SavesTheLegacyScoutFee()
+    {
+        var c = new CareerCoefficients();
+        Assert.Equal(
+            FundsAfterOneYear(null) + c.ScoutCost,
             FundsAfterOneYear(Catalog.Aggregate(ContractSet.Initial())),
             6);
     }
@@ -204,7 +233,7 @@ public sealed class AnnualContractTests
         set.SetLevel("coach_batting", 1);   // 30万
         var rich = FundsAfterOneYear(Catalog.Aggregate(set));
 
-        // 既定（15万）より 65万ぶん多く出ていく。
+        // 従来経路（スカウト費15万固定）より 65万ぶん多く出ていく。
         Assert.Equal(FundsAfterOneYear(null) - 65, rich, 6);
     }
 

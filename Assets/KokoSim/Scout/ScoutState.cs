@@ -16,6 +16,9 @@ namespace KokoSim.Unity.Scout
         public string Handedness = "";
         /// <summary>事前の見立て（推定カテゴリ強さ）。ランクチップはこの値から起こす。</summary>
         public PlayerStrength Estimate = new PlayerStrength(0, 0, 0, 0);
+        /// <summary>見立てが有効か。スカウト網が未契約なら false＝<b>推定そのものを出さない</b>
+        /// （開示0の推定は誤差σ20でほぼ雑音なので、色付きランクとして出すと嘘をつくことになる）。</summary>
+        public bool HasEstimate;
         /// <summary>入部後にだけ埋まる実測（null＝まだ入部していない＝答え合わせは出さない）。</summary>
         public PlayerStrength Actual;
         public int UnknownCount;
@@ -43,6 +46,8 @@ namespace KokoSim.Unity.Scout
         public string EmptyText = "";
         /// <summary>入部済みの学年を見ているか（＝答え合わせの列を出す）。</summary>
         public bool Joined;
+        /// <summary>見立てを出せるか（スカウト網が未契約なら false）。</summary>
+        public bool HasEstimate;
         /// <summary>見立てカードの注記（開示の程度）。</summary>
         public string EstimateNote = "";
         /// <summary>下段のスカウト網の状態（段・年額・開示）。</summary>
@@ -75,9 +80,12 @@ namespace KokoSim.Unity.Scout
             }
 
             v.Joined = cls.Joined;
+            v.HasEstimate = cls.Disclosure > 0;
             v.ListTitle = cls.Joined ? "今年の入部者" : "入部予定者";
             // 半幅カードの見出しに収まる長さにする（長いと右端で黙って切れる）。
-            v.EstimateNote = cls.Joined ? "見立てと実際" : DisclosureWord(cls.Disclosure);
+            v.EstimateNote = !v.HasEstimate ? "スカウト網 未契約"
+                : cls.Joined ? "見立てと実際"
+                : DisclosureWord(cls.Disclosure);
             v.StateWord = cls.Joined ? "入部済み" : YearLabel(cls.YearIndex) + "4月入部予定";
             v.ListSub = cls.Count + "名 ・ " + v.StateWord;
 
@@ -100,8 +108,11 @@ namespace KokoSim.Unity.Scout
             {
                 Name = string.IsNullOrEmpty(r.Name) ? "？" : r.Name,
                 Estimate = new PlayerStrength(r.Batting, r.Mobility, r.Defense, r.Pitching),
+                HasEstimate = cls.Disclosure > 0,
                 // 入部したら隠しは全部開くので「？」は残さない（詳細が値を出しているのに一覧だけ？だと矛盾する）。
                 UnknownCount = cls.Joined ? 0 : r.UnknownCount,
+                // スカウト評は見立てから起こすので、見立てが無ければ出さない。
+                Comment = "",
             };
 
             if (player != null)
@@ -116,7 +127,9 @@ namespace KokoSim.Unity.Scout
                 if (cls.Joined || r.KnowsInjuryResistance) row.InjuryResistance = InjuryResistanceJp(player.InjuryResistance);
             }
 
-            row.Comment = Comment(row);
+            row.Comment = row.HasEstimate
+                ? Comment(row)
+                : "スカウト網を契約していないので、入ってくるまで何も分からない。";
             return row;
         }
 
@@ -157,7 +170,7 @@ namespace KokoSim.Unity.Scout
             if (disclosure >= 0.65) return "かなり見える";
             if (disclosure >= 0.35) return "一部見える";
             if (disclosure > 0.0) return "ほとんど？";
-            return "なし";
+            return "なし（未契約）";
         }
 
         private static string HandednessJp(DevelopingPlayer p)

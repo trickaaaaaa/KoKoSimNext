@@ -113,6 +113,9 @@
     padding: 0;
 }
 .sc-est__th { font-size: var(--fs-cap); color: var(--color-faint); }
+/* 未契約で見立てが無いときの「？」。淡く出す（分からないことは警告ではない・UI原則②）。 */
+.sc-est__none { font-size: var(--fs-body); color: var(--color-faint); margin: 0; padding: 0; }
+.sc-cell--none { font-size: var(--fs-label); color: var(--color-faint); margin: 0; padding: 0; }
 
 /* 隠しパラメータ: 判明していれば値、していなければ「？」。？は淡く出す
    （警告色を使わない＝分からないことは警告ではない・UI原則②）。 */

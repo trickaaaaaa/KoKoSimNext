@@ -118,8 +118,18 @@ namespace KokoSim.Unity.Scout
             var est = new VisualElement();
             est.AddToClassList("sc-cell");
             est.AddToClassList("sc-cell--est");
-            // 1段の「打走守投」＋小チップ。2段組は3文字ラベルが小チップに食い込んで読めない。
-            est.Add(UiComponents.CategoryRankChipsCompact(r.Estimate, small: true));
+            if (r.HasEstimate)
+            {
+                // 1段の「打走守投」＋小チップ。2段組は3文字ラベルが小チップに食い込んで読めない。
+                est.Add(UiComponents.CategoryRankChipsCompact(r.Estimate, small: true));
+            }
+            else
+            {
+                // 未契約＝報告書そのものが無い。雑音のランクを色付きで出さず「？」で通す。
+                var none = new Label("？");
+                none.AddToClassList("sc-cell--none");
+                est.Add(none);
+            }
             row.Add(est);
 
             // 「？」の残り数。分からないことは警告ではないので警告色を使わない（UI原則②）。
@@ -175,12 +185,14 @@ namespace KokoSim.Unity.Scout
             if (host == null) return;
             host.Clear();
 
-            var compare = r.Actual != null;
-            if (compare) host.Add(EstimateHead());
-            host.Add(EstimateRow("打撃力", r.Estimate.BattingTier, compare ? r.Actual.BattingTier : (Tier?)null));
-            host.Add(EstimateRow("走力", r.Estimate.MobilityTier, compare ? r.Actual.MobilityTier : (Tier?)null));
-            host.Add(EstimateRow("守備力", r.Estimate.DefenseTier, compare ? r.Actual.DefenseTier : (Tier?)null));
-            host.Add(EstimateRow("投手力", r.Estimate.PitchingTier, compare ? r.Actual.PitchingTier : (Tier?)null));
+            // 列は「見立て（契約しているときだけ）」と「実際（入部後だけ）」の2本。
+            // 両方あるときだけ列見出しを出す（1本しか無い列に見出しは要らない）。
+            var hasActual = r.Actual != null;
+            if (r.HasEstimate && hasActual) host.Add(EstimateHead());
+            host.Add(EstimateRow("打撃力", r, s => s.BattingTier, hasActual));
+            host.Add(EstimateRow("走力", r, s => s.MobilityTier, hasActual));
+            host.Add(EstimateRow("守備力", r, s => s.DefenseTier, hasActual));
+            host.Add(EstimateRow("投手力", r, s => s.PitchingTier, hasActual));
         }
 
         private static VisualElement EstimateHead()
@@ -202,7 +214,8 @@ namespace KokoSim.Unity.Scout
             return l;
         }
 
-        private static VisualElement EstimateRow(string label, Tier estimate, Tier? actual)
+        private static VisualElement EstimateRow(
+            string label, ProspectRow r, System.Func<PlayerStrength, Tier> axis, bool hasActual)
         {
             var row = new VisualElement();
             row.AddToClassList("sc-est__row");
@@ -211,8 +224,9 @@ namespace KokoSim.Unity.Scout
             l.AddToClassList("sc-est__label");
             row.Add(l);
 
-            row.Add(ChipCell(estimate));
-            if (actual.HasValue) row.Add(ChipCell(actual.Value));
+            // 未契約なら見立ての列は「？」。入部後は実測の列を足す。
+            row.Add(r.HasEstimate ? ChipCell(axis(r.Estimate)) : UnknownCell());
+            if (hasActual) row.Add(ChipCell(axis(r.Actual)));
             return row;
         }
 
@@ -221,6 +235,16 @@ namespace KokoSim.Unity.Scout
             var cell = new VisualElement();
             cell.AddToClassList("sc-est__col");
             cell.Add(UiComponents.RankChipLegacy(tier.ToString()));
+            return cell;
+        }
+
+        private static VisualElement UnknownCell()
+        {
+            var cell = new VisualElement();
+            cell.AddToClassList("sc-est__col");
+            var l = new Label("？");
+            l.AddToClassList("sc-est__none");
+            cell.Add(l);
             return cell;
         }
 

@@ -127,8 +127,10 @@ public sealed record ContractCatalog
     /// C#既定（data/coefficients.yaml <c>contracts:</c> と一致させること・不変条件#4）。
     ///
     /// <para>スカウト網 Lv1（15万/年）は従来の <see cref="CareerCoefficients.ScoutCost"/> と同額で、
-    /// 効果も従来と同じ（加算0）。新規ゲームの既定契約（<see cref="ContractSet.Initial"/>）を Lv1 にすることで、
-    /// 年契約を導入しても実ゲームの年間支出は変わらず、上へ伸ばす選択肢だけが増える。</para>
+    /// 質への加算は0＝<b>買うのは「見立て」だけ</b>（issue #587 の事前開示）。質が動くのは Lv2 以上で、
+    /// 実測では最良軸がC以上の逸材の出現率が 2.78%（未契約）→ 3.99%（Lv2）→ 5.74%（Lv3）と<b>倍化する</b>
+    /// （平均が2〜3上がるより、当たりの頻度が変わる効き方）。新規ゲームは<b>未契約</b>から始まる
+    /// （<see cref="ContractSet.Initial"/>）。</para>
     ///
     /// <para>全部を最上段で契約すると 50+20+30×3＝160万/年。部費の年間収入は信頼度50で120万・
     /// 信頼度100で160万なので、合宿費45万と合わせると全部は抱えられない＝「どれを取るか」の選択になる。</para>
@@ -201,9 +203,21 @@ public sealed class ContractSet
     public IReadOnlyDictionary<string, int> Levels => _levels;
 
     /// <summary>
-    /// 新規ゲームの既定。スカウト網 Lv1 だけ契約済み＝従来の「スカウト費15万/年が固定で引かれる」と同じ。
+    /// 新規ゲームの既定＝<b>何も契約していない</b>（監督決定 2026-08-11）。
+    ///
+    /// <para>スカウトは「金を払っている間だけ効く継続契約」で、払わなければ何も見えないし質も素のまま
+    /// ＝<b>新入生は毎年8〜13人が勝手に入ってくる（受動枠）が、それが誰なのかは分からない</b>という
+    /// 立ち上がりになる。以前は Lv1 を既定にして「年契約を導入しても収支が変わらない」ことを優先していたが、
+    /// 監督が一度も選んでいない15万/年が既定で引かれ続けるのは筋が悪い。</para>
     /// </summary>
-    public static ContractSet Initial()
+    public static ContractSet Initial() => new ContractSet();
+
+    /// <summary>
+    /// 年契約が無かった版（セーブ v1/v2）を読むときの既定。当時は
+    /// <see cref="CareerCoefficients.ScoutCost"/>（15万/年）が固定で引かれていたので、
+    /// 同額・同効果のスカウト網 Lv1 で読む＝<b>その進行の収支を後から変えない</b>。
+    /// </summary>
+    public static ContractSet LegacyScoutingLevel1()
     {
         var s = new ContractSet();
         s.SetLevel("scouting", 1);
