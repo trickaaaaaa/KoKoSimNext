@@ -23,7 +23,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 7;
+    public const int CurrentVersion = 8;
 
     // ===== Serialize =====
 
@@ -56,6 +56,7 @@ public static class SaveCodec
             .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
             .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
             .Add("draft", DraftSaves.ToJson(s.Draft))
+            .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -166,6 +167,10 @@ public static class SaveCodec
         // v6→v7（issue #586）: 教え子名鑑（過年度のドラフト指名確定）が増えた。v6 以前は Unity 側で
         // 指名が一度も走っていなかった＝勲章が存在しえないので、空配列で補う。
         if (version < 7 && !root.Has("draft")) root.Add("draft", new JsonArray());
+        // v7→v8（issue #600）: 歴代大会結果（年度別の到達ラウンドと優勝校）が増えた。v7 以前は年度の情報を
+        // 累計へ畳んで捨てていた＝過去ぶんは作り直せないので、空配列で補う（通算戦績 records は無傷で残る）。
+        // 大会別アーカイブに増えた year は要素ごとの欠損＝Read 側で 0（＝年不明）として読む。
+        if (version < 8 && !root.Has("tournamentHistory")) root.Add("tournamentHistory", new JsonArray());
         return root;
     }
 
@@ -218,6 +223,10 @@ public static class SaveCodec
         // 教え子名鑑は v7 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
         s.Draft = new DraftHistory();
         DraftSaves.RestoreInto(s.Draft, root.Arr("draft"));
+
+        // 歴代大会結果は v8 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        s.TournamentHistory = new TournamentHistory();
+        TournamentHistorySaves.RestoreInto(s.TournamentHistory, root.Arr("tournamentHistory"));
 
         return s;
     }

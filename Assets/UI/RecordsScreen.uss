@@ -1,0 +1,150 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   RecordsScreen.uss — 記録画面（設計書06 §3.9 / 16 §10.1・issue #600）の画面固有スタイル。
+   昼NBスキンは tokens/KokoSimTheme が担い、器（.card / .chip / .rule-head / SegTabs /
+   RecordCell / EmptyState）は共通部品 components.uss を使う。
+   ここに置くのは「タブ2ページの並べ方」と「歴代大会・個人記録の列合わせ」だけ。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.rc-main {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-2);
+}
+
+.rc-masthead {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+
+/* ── 学校の身元（校名＋本拠県／右端に画面内タブ） ─────────────── */
+.rc-ident {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--sp-2);
+}
+.rc-ident__name { font-size: 30px; color: var(--tx-1); margin: 0; padding: 0; }
+.rc-ident__pref { margin-left: var(--sp-3); }
+.rc-ident__spacer { flex-grow: 1; }
+/* タブ自体の見た目は共通部品（.seg-tabs / .seg-tab）。ここは置き場所だけ。 */
+.rc-tabs { flex-shrink: 0; }
+
+/* ── ページ（タブで排他表示。1ページ＝カードの横並び） ─────────── */
+.rc-scroll { flex-grow: 1; min-height: 0; }
+.rc-row { flex-direction: row; align-items: flex-start; flex-shrink: 0; }
+/* 主役のカード（年が増えるほど縦に伸びる表／部門の一覧）。 */
+.rc-card-grow { flex-grow: 1; flex-basis: 0; min-width: 0; margin-right: 0; }
+/* 添えるカード（学校の通算＝行数が固定）。表の幅を食わないよう固定幅で右に置く。 */
+.rc-card-side { width: 320px; flex-shrink: 0; margin-left: var(--sp-3); margin-right: 0; }
+
+/* ── 歴代大会結果（年度 / 大会 / 成績 / 優勝校） ─────────────── */
+.rc-th { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.rc-th--head { height: 26px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
+.rc-th--head .rc-th__year,
+.rc-th--head .rc-th__cup,
+.rc-th--head .rc-th__res,
+.rc-th--head .rc-th__champ { font-size: var(--fs-cap); color: var(--tx-3); }
+.rc-th__year {
+    width: var(--col-rc-th-year);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+.rc-th__cup {
+    width: var(--col-rc-th-cup);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+.rc-th__res {
+    width: var(--col-rc-th-res);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+}
+/* 校名は明朝（書体3役）。縮むのはここだけ＝左の列が押し出されない。 */
+.rc-th__champ {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-body);
+    color: var(--tx-1);
+    margin: 0 0 0 var(--sp-2);
+    padding: 0;
+    overflow: hidden;
+}
+/* 優勝校がまだ確定していない年（決勝が未消化のまま年を跨いだ進行）。 */
+.rc-th__champ--none { color: var(--tx-3); }
+/* 自校が優勝した年の行は面で沈めて目立たせる（線を足さない＝UI原則④）。 */
+.rc-th--own { background-color: var(--sf-inset); }
+
+/* ── 学校の通算（項目名＋数値。行高32px・数値は右揃え＝UI原則①③） ── */
+.rc-sum { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.rc-sum__k {
+    width: var(--col-rc-sum-k);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+.rc-sum__v {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+/* 記録がまだ無い欄（0勝0敗・未出場）は最弱文字で沈める＝「有る」ものだけが目に入る。 */
+.rc-sum__v--none { color: var(--tx-3); }
+
+/* ── 個人記録（部門 / 1位 / 2位 / 3位。各セルは RecordCell） ─────── */
+.rc-rr { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.rc-rr--head { height: 26px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
+.rc-rr--head .rc-rr__cat,
+.rc-rr--head .rc-rr__th { font-size: var(--fs-cap); color: var(--tx-3); }
+.rc-rr__cat {
+    width: var(--col-rc-cat);
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--tx-2);
+    margin: 0;
+    padding: 0;
+}
+/* 見出しの1位/2位/3位は RecordCell と同じ配分の器に入れ、中の文字を値の桁（右揃え・--col-rc-val）へ
+   合わせる。器を分けないと見出しが列の左端に乗って値の桁と1文字もそろわない。 */
+.rc-rr__thcell {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-left: var(--sp-3);
+}
+.rc-rr__th {
+    width: var(--col-rc-val);
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+/* セル間の余白（RecordCell 自体は余白を持たない＝並べる側が決める）。 */
+.rc-rr .recc { margin-left: var(--sp-3); }
+/* 区分見出し（打撃 / 投手）。タブと違って「切替」ではないので帯にせず小さく置く。 */
+.rc-rr__section {
+    height: 28px;
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--tx-3);
+    margin: var(--sp-2) 0 0 0;
+    padding: 0;
+    -unity-text-align: lower-left;
+}

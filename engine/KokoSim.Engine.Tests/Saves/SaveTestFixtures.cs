@@ -117,6 +117,9 @@ internal static class SaveTestFixtures
         var stats = new PlayerStatStore();
         stats.StartTournament();
         stats.FoldGame(SyntheticGame(), managerIsAway: true, isOfficial: true);
+        // 大会別アーカイブ（issue #77）＋その年度（v8・issue #600）。学年・背番号・年が往復すること。
+        stats.ArchiveCurrentTournament(TournamentSlot.SummerPref,
+            new Dictionary<int, (int Grade, int UniformNumber)> { [1] = (3, 1), [2] = (2, 18) }, year: 2);
 
         var records = new SchoolRecordBook();
         records.RecordOfficialMatch(winnerId: 100, loserId: 200);
@@ -180,7 +183,27 @@ internal static class SaveTestFixtures
             Recruiting = BuildRecruitingState(),
             // 教え子名鑑（v7・issue #586）。過年度の指名を2件だけ積んだ状態で採る。
             Draft = BuildDraftHistory(),
+            // 歴代大会結果（v8・issue #600）。優勝した年・敗退した年・優勝校が未確定の年を混ぜる。
+            TournamentHistory = BuildTournamentHistory(),
         };
+    }
+
+    /// <summary>
+    /// 歴代大会結果3件（issue #600）。優勝／準優勝／優勝校が空欄の3通りを混ぜて往復を測る。
+    /// </summary>
+    public static TournamentHistory BuildTournamentHistory()
+    {
+        var history = new TournamentHistory();
+        history.Add(new TournamentHistoryEntry(
+            Year: 1, Kind: TournamentKind.Summer, ReachedRoundName: "3回戦",
+            ManagerIsChampion: false, ChampionId: 220, ChampionName: "弘学学園"));
+        history.Add(new TournamentHistoryEntry(
+            Year: 1, Kind: TournamentKind.Autumn, ReachedRoundName: "決勝",
+            ManagerIsChampion: true, ChampionId: 100, ChampionName: "北嶺"));
+        history.Add(new TournamentHistoryEntry(
+            Year: 2, Kind: TournamentKind.Summer, ReachedRoundName: "準々決勝",
+            ManagerIsChampion: false, ChampionId: 0, ChampionName: ""));
+        return history;
     }
 
     /// <summary>

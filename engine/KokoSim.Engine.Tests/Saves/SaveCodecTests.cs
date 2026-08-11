@@ -421,6 +421,78 @@ public sealed class SaveCodecTests
         Assert.NotNull(s.Recruiting);   // 他の項目は素通りで読めている
     }
 
+    // 歴代大会結果（issue #600・v8）が往復すること。年度別の情報は累計へ畳むと復元できない＝焼く必要がある。
+    [Fact]
+    public void TournamentHistory_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        var a = state.TournamentHistory.Entries;
+        var b = s.TournamentHistory.Entries;
+        Assert.Equal(a.Count, b.Count);
+        Assert.NotEmpty(b);
+        for (var i = 0; i < a.Count; i++)
+        {
+            Assert.Equal(a[i].Year, b[i].Year);
+            Assert.Equal(a[i].Kind, b[i].Kind);
+            Assert.Equal(a[i].ReachedRoundName, b[i].ReachedRoundName);
+            Assert.Equal(a[i].ManagerIsChampion, b[i].ManagerIsChampion);
+            Assert.Equal(a[i].ChampionId, b[i].ChampionId);
+            Assert.Equal(a[i].ChampionName, b[i].ChampionName);
+        }
+    }
+
+    // まだ1つも大会を終えていない進行（新規ゲーム）も往復すること。
+    [Fact]
+    public void TournamentHistory_Empty_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.TournamentHistory = new KokoSim.Engine.Nation.TournamentHistory();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Empty(s.TournamentHistory.Entries);
+    }
+
+    // 大会別アーカイブの年度（issue #600・v8）が往復すること。学年キーは年を持たないので、
+    // ここが落ちるとシーズン記録の「（2027）」が出せなくなる。
+    [Fact]
+    public void ArchivedYear_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        var key = new KokoSim.Engine.Stats.TournamentArchiveKey(3, KokoSim.Engine.Stats.TournamentSlot.SummerPref);
+        var before = state.Stats.Archive.Slot(key);
+        var after = s.Stats.Archive.Slot(key);
+        Assert.NotNull(before);
+        Assert.NotNull(after);
+        foreach (var kv in before!)
+        {
+            var back = after![kv.Key];
+            Assert.Equal(kv.Value.Year, back.Year);
+            Assert.Equal(kv.Value.UniformNumber, back.UniformNumber);
+        }
+        Assert.Contains(before, kv => kv.Value.Year == 2);   // 年が焼かれていること自体も測る
+    }
+
+    // v7（歴代大会結果が無かった版）のセーブは tournamentHistory を持たない。読めて空で補われること。
+    [Fact]
+    public void V7Save_WithoutTournamentHistory_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"tournamentHistory\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "tournamentHistory が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が tournamentHistory の後に居ない");
+        var v7 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":7");
+        Assert.DoesNotContain("\"tournamentHistory\"", v7);
+
+        Assert.True(SaveCodec.TryDeserialize(v7, out var s, out var err), err);
+        Assert.Empty(s.TournamentHistory.Entries);
+        Assert.NotEmpty(s.Draft.Records);   // 他の項目は素通りで読めている
+    }
+
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。
     [Fact]
     public void TournamentState_RoundTrips()

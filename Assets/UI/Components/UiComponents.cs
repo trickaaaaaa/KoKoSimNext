@@ -981,5 +981,85 @@ namespace KokoSim.Unity.Components
             }
             return root;
         }
+
+        // ===== RecordCell（記録室の混植セル。設計書16 §10.2 の穴#8・issue #600） =====
+
+        /// <summary>記録室の1件（値・保持者・年）。</summary>
+        public sealed class RecordCellData
+        {
+            /// <summary>整形済みの値（".384" / "12" / "84 1/3"）。数字だけのセル＝Oswald。</summary>
+            public string Value;
+            /// <summary>保持者の氏名（人名＝明朝）。</summary>
+            public string Name;
+            /// <summary>年（4桁）。null/空なら年を出さない（通算記録は特定の年に紐づかない）。</summary>
+            public string Year;
+            /// <summary>該当者なし（規定未達で誰も載らない部門）。「—」だけを出す。</summary>
+            public bool Empty;
+        }
+
+        /// <summary>
+        /// 記録室の1件を「値 ｜ 氏名 ｜ 年」で組む（設計書16 §10.2 の穴#8）。
+        ///
+        /// <para>Oswald は欧文専用で和文グリフを持たないため、<b>数字と和文は必ず Label を分ける</b>
+        /// （1つの Label に「.384 中田 大祐（2027）」と入れると豆腐が出る）。
+        /// この分割を画面ごとに書かずに済ませるための部品。</para>
+        /// </summary>
+        public static VisualElement RecordCell(RecordCellData d)
+        {
+            var cell = new VisualElement();
+            cell.AddToClassList("recc");
+            if (d == null || d.Empty)
+            {
+                cell.AddToClassList("recc--empty");
+                var dash = new Label("—");
+                dash.AddToClassList("recc__dash");
+                cell.Add(dash);
+                return cell;
+            }
+
+            var value = new Label(d.Value ?? "");
+            value.AddToClassList("recc__value");
+            value.AddToClassList("f-num");
+            cell.Add(value);
+
+            var name = new Label(d.Name ?? "");
+            name.AddToClassList("recc__name");
+            name.AddToClassList("f-display");
+            cell.Add(name);
+
+            if (!string.IsNullOrEmpty(d.Year))
+            {
+                var year = new Label(d.Year);
+                year.AddToClassList("recc__year");
+                year.AddToClassList("f-num");
+                cell.Add(year);
+            }
+            return cell;
+        }
+
+        // ===== EmptyState（空状態の汎用。設計書16 §10.2 の穴#11・issue #600） =====
+
+        /// <summary>
+        /// 空状態（まだ記録が無い・該当者が居ない）。1年目はどの新規画面も全欄が空になるので、
+        /// 「壊れている」ではなく「これから埋まる」ことが伝わる一言を置く場所を辞書化する。
+        /// 罫線も枠も足さない＝空白と最弱文字だけで表す（UI原則④）。
+        /// </summary>
+        public static VisualElement EmptyState(string text, string sub = null)
+        {
+            var wrap = new VisualElement();
+            wrap.AddToClassList("empty-state");
+
+            var main = new Label(text ?? "");
+            main.AddToClassList("empty-state__text");
+            wrap.Add(main);
+
+            if (!string.IsNullOrEmpty(sub))
+            {
+                var note = new Label(sub);
+                note.AddToClassList("empty-state__note");
+                wrap.Add(note);
+            }
+            return wrap;
+        }
     }
 }

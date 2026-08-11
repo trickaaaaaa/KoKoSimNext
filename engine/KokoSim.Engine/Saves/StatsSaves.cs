@@ -191,6 +191,7 @@ internal static class StatsSaves
                 players.Add(new JsonObject()
                     .Add("id", id)
                     .Add("num", a.UniformNumber)
+                    .Add("year", a.Year)
                     .Add("bat", BattingToJson(a.Batting))
                     .Add("pit", PitchingToJson(a.Pitching)));
             }
@@ -214,6 +215,8 @@ internal static class StatsSaves
                 var po = pv.AsObject();
                 var a = target.GetOrCreate(key, po.Int("id"));
                 a.UniformNumber = po.Int("num");
+                // year は v8（issue #600）で追加。旧セーブは項目ごと無い＝0（年不明）で読む。
+                a.Year = po.Has("year") ? po.Int("year") : 0;
                 RestoreBattingInto(a.Batting, po.Obj("bat"));
                 RestorePitchingInto(a.Pitching, po.Obj("pit"));
             }

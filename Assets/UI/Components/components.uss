@@ -2638,3 +2638,61 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 .timeline__node--now .timeline__title { color: var(--tx-2); }
 /* 空状態（まだ何も起きていない）。 */
 .timeline__empty { font-size: var(--fs-label); color: var(--tx-3); margin: 0; padding: var(--sp-3) 0; }
+
+/* ── RecordCell：記録室の混植セル（設計書16 §10.2 の穴#8・issue #600）───────────
+   「.384 ／ 中田 大祐 ／ 2027」を1行に組む。Oswald は欧文専用で和文グリフを持たないため
+   数字と和文は Label を分ける（書体3役ルール）。値は右揃え・固定幅で桁を揃え（UI原則③）、
+   縮むのは氏名だけにする＝年が押し出されない。 */
+.recc { flex-direction: row; align-items: center; flex-grow: 1; flex-basis: 0; min-width: 0; }
+.recc__value {
+    width: var(--col-rc-val);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-1);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+/* 氏名は固定幅。flex-grow にすると年が列の右端まで飛んで「どの記録の年か」が読めなくなる
+   （値・氏名・年は1つの記録なので、離さず塊で置く）。 */
+.recc__name {
+    width: var(--col-rc-name);
+    flex-shrink: 0;
+    font-size: var(--fs-body);
+    color: var(--tx-1);
+    margin: 0 0 0 var(--sp-3);
+    padding: 0;
+    overflow: hidden;
+}
+.recc__year {
+    width: var(--col-rc-year);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--tx-3);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-left;
+}
+/* 該当者なし（規定未達で誰も載らない）。列の左端に「—」だけ置いて空けておく。 */
+.recc--empty { }
+.recc__dash {
+    width: var(--col-rc-val);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--tx-3);
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-right;
+}
+
+/* ── EmptyState：空状態の汎用（設計書16 §10.2 の穴#11・issue #600）─────────────
+   1年目はどの新規画面も全欄が空になる。「壊れている」ではなく「これから埋まる」と読めるよう、
+   罫線も枠も足さず余白と最弱文字だけで表す（UI原則④）。 */
+.empty-state {
+    flex-shrink: 0;
+    align-items: center;
+    padding-top: var(--sp-4);
+    padding-bottom: var(--sp-4);
+}
+.empty-state__text { font-size: var(--fs-label); color: var(--tx-3); margin: 0; padding: 0; }
+.empty-state__note { font-size: var(--fs-cap); color: var(--tx-3); margin: var(--sp-2) 0 0 0; padding: 0; }

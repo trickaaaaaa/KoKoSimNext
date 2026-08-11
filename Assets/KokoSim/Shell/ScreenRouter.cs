@@ -33,6 +33,8 @@ namespace KokoSim.Unity.Shell
             // 旧「監督」タブ（nav-manager / ManagerScreen）は issue #586 でキャリアへ統合し廃止した。
             // 監督メタ（指導力・采配・育成眼・名声・信頼度）はこの画面が持つ。
             ("nav-career", "CareerScreen"),
+            // 記録タブ（issue #600）。主語は学校＝年度別の大会結果と校歴代の個人記録。
+            ("nav-records", "RecordsScreen"),
             ("nav-system", "SaveSlots"),
         };
 
@@ -62,7 +64,7 @@ namespace KokoSim.Unity.Shell
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
             { "TrainingPlan", "TournamentPreview", "PracticeMatch", "PlayerList", "MemberSetting", "CareerScreen",
-              "ManagementScreen", "TeamSetting", "SaveSlots", "ScoutScreen" };
+              "RecordsScreen", "ManagementScreen", "TeamSetting", "SaveSlots", "ScoutScreen" };
 
         /// <summary>プログラム遷移用（試合開始→スタメン設定→ホームなど、ナビを介さない画面切替）。</summary>
         public static ScreenRouter Instance { get; private set; }

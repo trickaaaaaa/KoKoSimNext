@@ -54,6 +54,9 @@ public sealed class SchoolRecord
     public BestResult BestResult { get; internal set; } = BestResult.None;
 }
 
+/// <summary>大会の優勝校（校ID＋校名, issue #600）。決勝が未消化の大会では存在しない＝null で表す。</summary>
+public readonly record struct TournamentChampion(int Id, string Name);
+
 /// <summary>
 /// 学校ごとの通算戦績を積む集計器（issue #84, design-05 §2.3「生きた勢力図」）。
 /// School.Id → SchoolRecord。乱数を消費しない（不変条件#2・統計帯は不変）。
@@ -124,18 +127,22 @@ public sealed class SchoolRecordBook
     /// <summary>
     /// 大会1回ぶんのブラケット全試合（自校戦＋裏試合とも）を通算戦績へ畳み込む。
     /// 決勝（RoundsRemaining==1）の勝者は、夏の大会なら甲子園出場として記録する（issue #84 当面の定義）。
+    ///
+    /// <para>戻り値は決勝の勝者（未消化で決勝が無ければ null）。<see cref="TournamentHistory.Fold"/> が
+    /// 同じ走査を書き直さずに済むよう、ここで一度だけ拾った結果を渡す（issue #600）。</para>
     /// </summary>
-    public void FoldTournament(IReadOnlyList<BracketMatch> matches, TournamentKind kind, int currentYear)
+    public TournamentChampion? FoldTournament(IReadOnlyList<BracketMatch> matches, TournamentKind kind, int currentYear)
     {
-        int? championId = null;
+        TournamentChampion? champion = null;
         foreach (var m in matches)
         {
             RecordOfficialMatch(m.WinnerId, m.LoserId);
-            if (m.RoundsRemaining == 1) championId = m.WinnerId;
+            if (m.RoundsRemaining == 1) champion = new TournamentChampion(m.WinnerId, m.WinnerName);
         }
-        if (kind == TournamentKind.Summer && championId is { } id)
+        if (kind == TournamentKind.Summer && champion is { } c)
         {
-            RecordKoshienAppearance(id, KoshienKind.Summer, currentYear);
+            RecordKoshienAppearance(c.Id, KoshienKind.Summer, currentYear);
         }
+        return champion;
     }
 }
