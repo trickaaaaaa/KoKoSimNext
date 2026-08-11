@@ -59,14 +59,16 @@ namespace KokoSim.Unity.Management
             Dump("mixed");
             yield return Capture(doc, "02-mixed");
 
-            // ④ 年契約（設計書04 §1.4a）。台帳の最下段なのでスクロールして写す。
+            // ④ 年契約（設計書04 §1.4a）。区分タブを切り替えて写す。
             // 既定（スカウト網Lv1）から、上げた契約・最上位の契約・未契約が同時に見える状態にする。
             ManagerService.Contracts.SetLevel("scouting", 2);
             ManagerService.Contracts.SetLevel("expedition", 1);
             ManagerService.Contracts.SetLevel("coach_batting", 1);
             doc = Open("ManagementScreen");
             yield return null; yield return null;
-            ScrollToGroup(doc, "年契約");
+            var ctrl2 = doc.GetComponent<ManagementScreenController>();
+            if (ctrl2 == null) Debug.LogError("[MN] コントローラが付いていない");
+            else ctrl2.SelectTab(3);   // 施設 / 練習道具 / 備品 / 年契約
             yield return null; yield return null;
             Debug.Log("[MN] contracts 年額=" + ManagerService.ContractEffects.AnnualCost
                       + " scoutAdd=" + ManagerService.ContractEffects.ScoutTalentAdd
@@ -86,24 +88,60 @@ namespace KokoSim.Unity.Management
                 + " budget=" + TrainingWeek.Budget + "分");
         }
 
-        // 台帳のスクロールを「指定の区分見出しが視野の先頭に来る位置」へ送る。
-        // ScrollView.ScrollTo は最小移動なので見出しが下端に来てしまう＝オフセットを自分で計算する。
-        private static void ScrollToGroup(UIDocument doc, string groupLabel)
+        /// <summary>
+        /// 撮影解像度でのレイアウト実測。どの段が何px使っていて、台帳の見える行数が何行なのかを出す。
+        /// Play 前は layout が NaN なのでここ（撮影直前）でしか正しく測れない。
+        /// </summary>
+        private static void Measure(UIDocument doc, string tag)
         {
-            var sv = doc.rootVisualElement.Q<ScrollView>(className: "mn-scroll");
-            if (sv == null) { Debug.LogError("[MN] mn-scroll が無い"); return; }
+            var root = doc.rootVisualElement;
+            var sb = new System.Text.StringBuilder();
+            sb.Append("[MN-measure ").Append(tag).Append("] ");
+            Section(root, "topbar", sb, "トップバー");
+            Section(root, "mn-masthead", sb, "見出し");
+            Section(root, "mn-ledger", sb, "資金の中身");
+            Section(root, "mn-tabs", sb, "区分タブ帯");
+            Section(root, "mn-thead", sb, "列見出し");
+            Section(root, "mn-scroll", sb, "台帳の窓");
+            Section(root, "mn-foot", sb, "合計");
 
-            VisualElement head = null;
-            foreach (var h in sv.contentContainer.Query<VisualElement>(className: "plate-header").ToList())
+            var rows = root.Query<VisualElement>(className: "mn-row").ToList();
+            var tabs = root.Query<VisualElement>(className: "seg-tab").ToList();
+            var rowH = rows.Count > 0 ? rows[0].layout.height : 0f;
+            var tabH = tabs.Count > 0 ? tabs[0].layout.height : 0f;
+            var sv = root.Q<ScrollView>(className: "mn-scroll");
+            var viewport = sv == null ? 0f : sv.contentViewport.layout.height;
+            var content = sv == null ? 0f : sv.contentContainer.layout.height;
+
+            sb.Append(" | 行=").Append(rows.Count).Append("本(").Append(rowH.ToString("0")).Append("px)")
+              .Append(" タブ=").Append(tabs.Count).Append("本(").Append(tabH.ToString("0")).Append("px)")
+              .Append(" 窓=").Append(viewport.ToString("0")).Append("px")
+              .Append(" 中身=").Append(content.ToString("0")).Append("px")
+              .Append(" 見える行≒").Append(rowH > 0 ? (viewport / rowH).ToString("0.0") : "?");
+
+            // 行が何で背が高くなっているのかを子ごとに出す（詰める先を推測で決めないため）。
+            if (rows.Count > 0)
             {
-                var title = h.Q<Label>(className: "plate-header__title");
-                if (title != null && title.text == groupLabel) { head = h; break; }
+                var r = rows[0];
+                sb.Append("\n  行の内訳: 枠+余白=")
+                  .Append((r.layout.height - r.contentRect.height).ToString("0")).Append("px");
+                for (var i = 0; i < r.childCount; i++)
+                {
+                    var ch = r[i];
+                    var cls = "";
+                    foreach (var c in ch.GetClasses()) cls = cls + c + " ";
+                    sb.Append(" | ").Append(cls.Trim()).Append("=").Append(ch.layout.height.ToString("0"));
+                    for (var j = 0; j < ch.childCount; j++)
+                        sb.Append(" (子").Append(j).Append("=").Append(ch[j].layout.height.ToString("0")).Append(")");
+                }
             }
-            if (head == null) { Debug.LogError("[MN] 区分が見つからない: " + groupLabel); return; }
+            Debug.Log(sb.ToString());
+        }
 
-            var y = head.worldBound.y - sv.contentContainer.worldBound.y;
-            var max = Mathf.Max(0f, sv.contentContainer.layout.height - sv.contentViewport.layout.height);
-            sv.scrollOffset = new Vector2(0f, Mathf.Clamp(y, 0f, max));
+        private static void Section(VisualElement root, string cls, System.Text.StringBuilder sb, string label)
+        {
+            var e = root.Q<VisualElement>(className: cls);
+            sb.Append(label).Append("=").Append(e == null ? "?" : e.layout.height.ToString("0")).Append("px ");
         }
 
         // 指定画面だけをアクティブにして開き直す（OnEnable を確実に走らせる）。
@@ -133,6 +171,9 @@ namespace KokoSim.Unity.Management
             yield return new WaitForEndOfFrame();
             yield return null;
             yield return new WaitForEndOfFrame();
+
+            // 撮影解像度（1600x900）でのレイアウト実測。案を推測でなく数字で作るために出す。
+            Measure(doc, file);
 
             Texture2D tex = null;
             try

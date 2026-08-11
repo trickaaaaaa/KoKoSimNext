@@ -1,6 +1,7 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
-using KokoSim.Unity.Components;  // 部品辞書（RankChip / LevelPips / NumUnit）
+using KokoSim.Unity.Components;  // 部品辞書（RankChip / LevelPips / NumUnit / SegTabs）
 using KokoSim.Unity.Shell;       // WeekAdvance / TopBarMeters / RosterService / TeamOverall
 
 namespace KokoSim.Unity.Management
@@ -100,6 +101,9 @@ namespace KokoSim.Unity.Management
         {
             var box = new VisualElement();
             box.AddToClassList("mn-kv");
+            // 内訳を持つ枠（差引・年間収入）だけ幅を倍取る。4枠を均等に割ると内訳の幅が
+            // 足りず、1文字ずつ折り返して縦に潰れる（実測）。
+            if (!string.IsNullOrEmpty(note)) box.AddToClassList("mn-kv--wide");
             if (warnIfNegative && amount < 0) box.AddToClassList("mn-kv--neg");
 
             var k = new Label(key);
@@ -125,39 +129,41 @@ namespace KokoSim.Unity.Management
             return box;
         }
 
-        // ── 台帳（区分の見出しを挟んで1行＝1系統） ────────────────────────
+        // ── 台帳（区分タブで排他に切り替え、選択中の区分だけを並べる） ──────────
+        // 区分見出しを縦に積むと 15行＋見出し4本＝19行になり、1画面（窓254px）に4.4行しか
+        // 入らなかった。タブなら一度に出るのは最大5行で、スクロールなしで全部見える。
         private void RenderFacilities(ManagementView v)
         {
+            var tabs = _root.Q<VisualElement>("mn-tabs");
+            if (tabs != null)
+            {
+                tabs.Clear();
+                var labels = new List<string>();
+                foreach (var g in v.Groups) labels.Add(g.Label);
+                tabs.Add(UiComponents.SegTabs(labels, v.SelectedTab, SelectTab));
+
+                var spacer = new VisualElement();
+                spacer.style.flexGrow = 1;
+                tabs.Add(spacer);
+
+                // 区分の性質（どの財布から出るか等）はタブ帯の右へ添える。
+                var note = new Label(v.Selected == null ? "" : v.Selected.Note);
+                note.AddToClassList("mn-tabnote");
+                tabs.Add(note);
+            }
+
             var host = _root.Q<VisualElement>("mn-list");
             if (host == null) return;
             host.Clear();
-            foreach (var g in v.Groups)
-            {
-                host.Add(GroupHeader(g));
-                foreach (var r in g.Rows) host.Add(BuildRow(r));
-            }
+            if (v.Selected == null) return;
+            foreach (var r in v.Selected.Rows) host.Add(BuildRow(r));
         }
 
-        /// <summary>区分の見出し帯（部品辞書の PlateHeader。土色＝副見出し）。</summary>
-        private static VisualElement GroupHeader(LedgerGroup g)
+        /// <summary>台帳の区分タブを切り替える（表示だけ。エンジンには触れない）。</summary>
+        public void SelectTab(int index)
         {
-            var head = new VisualElement();
-            head.AddToClassList("plate-header");
-            head.AddToClassList("plate-header--dirt");
-            head.AddToClassList("mn-group");
-
-            var title = new Label(g.Label);
-            title.AddToClassList("plate-header__title");
-            head.Add(title);
-
-            var spacer = new VisualElement();
-            spacer.AddToClassList("plate-header__spacer");
-            head.Add(spacer);
-
-            var note = new Label(g.Note);
-            note.AddToClassList("plate-header__sub");
-            head.Add(note);
-            return head;
+            _state.SelectTab(index);
+            Render();
         }
 
         private VisualElement BuildRow(FacilityLedgerRow r)

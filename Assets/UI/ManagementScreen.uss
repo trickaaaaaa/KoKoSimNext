@@ -30,21 +30,32 @@
     flex-direction: row;
     align-items: flex-start;
 }
+/* 見出しと金額を横に並べる（縦に積むと4枠ぶんの段差が効いて、下の台帳の窓が50px近く痩せる）。 */
 .mn-kv {
+    flex-direction: row;
+    align-items: center;
     flex-grow: 1;
     flex-basis: 0;
     min-width: 0;
     margin-right: var(--sp-4);
 }
+/* 内訳を持つ枠（差引・年間収入）は幅を倍取る。均等割りだと内訳が1文字ずつ折り返して縦に潰れる。 */
+.mn-kv--wide { flex-grow: 2; }
 .mn-kv__k {
+    flex-shrink: 0;
     font-size: var(--fs-label);
     color: var(--color-muted);
-    margin-bottom: var(--sp-1);
+    margin-right: var(--sp-2);
 }
 /* 金額と内訳は1行に並べる（内訳を下段に置くと4枠ぶんの行が縦に効いて施設台帳が入らない）。 */
 .mn-kv__line {
     flex-direction: row;
     align-items: center;
+    /* 器が内容幅に縮むと、中の内訳（flex-basis:0）が0幅に潰れて1文字ずつ折り返す。
+       枠の残り幅をここで受け取ってから内訳へ渡す。 */
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
 }
 /* 数値は NumUnit（数字＝Oswald ／ 単位「万」＝サンセリフ）を差し込む器。 */
 .mn-kv__v {
@@ -103,19 +114,29 @@
     flex-shrink: 0;
     padding-bottom: var(--sp-2);
 }
-.mn-row { margin-bottom: var(--sp-1); }
-/* 区分の見出し帯（部品辞書の PlateHeader）。台帳の中の区切りなのでカード上縁より小さく敷く
-   ＝寸法だけ詰め、色（土）と題字の役割は部品辞書のまま。 */
-.mn-group {
+/* 行の縦余白は落とし、背は中身（Oswald の数字ラベル）に決めさせる。
+   実測: 余白ありだと58px（枠余白15＋費用セル43）で、窓254pxに4.4行しか入らなかった。 */
+.mn-row {
+    margin-bottom: 2px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+/* ── 区分タブ（部品辞書の SegTabs）───────────────────────────────
+   区分見出しを縦に積むのをやめ、横で排他に切り替える。右端にはその区分の性質
+   （どの財布から出るか等）を小さく添える。 */
+.mn-tabs {
+    flex-direction: row;
+    align-items: center;
     flex-shrink: 0;
     margin-bottom: var(--sp-2);
-    padding-top: var(--sp-1);
-    padding-bottom: var(--sp-1);
-    padding-left: 16px;
-    padding-right: 16px;
-    border-bottom-width: 0;
 }
-.mn-group .plate-header__title { font-size: var(--fs-label); letter-spacing: 1px; }
+.mn-tabnote {
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    -unity-text-align: middle-right;
+}
 /* 固定幅の列には必ず flex-shrink: 0（可変列に幅を奪われて列がずれる）。 */
 .mn-cell--name {
     width: var(--col-fc-name);
@@ -153,7 +174,9 @@
 }
 /* 最大レベルの行は NumUnitAuto が「クラスの無い素の Label」を返すので、
    .nu-num だけを指定すると既定サイズのまま行が伸びる。型セレクタで両方を受ける。 */
-.mn-cell--cost Label { font-size: var(--fs-label); color: var(--color-chalk); }
+/* 数字は他セルと同寸にする（Oswald は同じ px でも行が高く、ここだけ 19px だと
+   費用セル43px が行の背を決めていた＝実測。表として揃えるのは大きさでなく右揃えと桁）。 */
+.mn-cell--cost Label { font-size: var(--fs-cap); color: var(--color-chalk); }
 .mn-cell--cost .nu-unit { font-size: var(--fs-cap); color: var(--color-chalk); }
 /* 買えない額（資金不足）は数字そのものを弱め、押せないボタンと意味を揃える。 */
 .mn-cell--cost-off .nu-num,

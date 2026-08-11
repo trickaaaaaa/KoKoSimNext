@@ -5,12 +5,15 @@ using KokoSim.Unity.Shell;   // ManagerService（監督メタ・施設・カタ�
 
 namespace KokoSim.Unity.Management
 {
-    /// <summary>台帳の区分見出し＋その区分の行（施設／練習道具／備品／年契約）。</summary>
+    /// <summary>
+    /// 台帳の区分（施設／練習道具／備品／年契約）。区分見出しを縦に積むのをやめ、
+    /// タブで排他に切り替える＝一度に出るのは1区分（最大5行）なので1画面に収まる。
+    /// </summary>
     public sealed class LedgerGroup
     {
         public PurchaseKind Kind;
         public string Label = "";
-        /// <summary>見出しの下に小さく出す補足（区分の性質）。</summary>
+        /// <summary>タブ帯の右に小さく出す補足（その区分の性質・どの財布から出るか）。</summary>
         public string Note = "";
         /// <summary>年契約の区分か（買い切りでなく毎年払い・解約できる）。</summary>
         public bool IsContract;
@@ -56,7 +59,13 @@ namespace KokoSim.Unity.Management
         public string ExpenseNote = "";
         public double Net;
 
+        /// <summary>区分の一覧（タブ帯の順）。中身は選択中の1区分ぶんだけ描く。</summary>
         public List<LedgerGroup> Groups = new List<LedgerGroup>();
+        /// <summary>選択中の区分の添字（<see cref="Groups"/> の添字）。</summary>
+        public int SelectedTab;
+        /// <summary>選択中の区分（<see cref="Groups"/> が空なら null）。</summary>
+        public LedgerGroup Selected =>
+            Groups.Count == 0 ? null : Groups[System.Math.Min(System.Math.Max(SelectedTab, 0), Groups.Count - 1)];
 
         /// <summary>いまの練習効率係数と、全系統を最大まで上げたときの値。</summary>
         public double CoefNow;
@@ -91,6 +100,8 @@ namespace KokoSim.Unity.Management
 
         private string _status = "";
         private bool _statusWarn;
+        // 選択中の区分タブ（0=施設）。画面を開き直すと施設へ戻る＝表示だけの一時状態。
+        private int _selectedTab;
 
         public ManagementView BuildView()
         {
@@ -133,8 +144,9 @@ namespace KokoSim.Unity.Management
                 StatusIsWarning = _statusWarn,
             };
 
-            // 区分ごとに1つの台帳へ並べる（見出しを挟むだけで、購入の操作はどれも同じ）。
-            // 支払いに使う財布は区分で決まる（FacilityPurchase.WalletOf が単一ソース）。
+            // 区分はタブで排他に切り替える（縦に積むと19行になって1画面に入らない）。
+            // 購入の操作はどの区分でも同じで、支払いに使う財布だけが区分で決まる
+            // （FacilityPurchase.WalletOf が単一ソース）。
             AddGroup(v, catalog, set, m, PurchaseKind.Facility, "施設",
                 "レベル制・学校の資産として残る ／ 施設基金から支払う");
             AddGroup(v, catalog, set, m, PurchaseKind.Equipment, "練習道具",
@@ -143,8 +155,15 @@ namespace KokoSim.Unity.Management
                 "買い切り ／ 部費から支払う");
             AddContractGroup(v);
 
+            // 区分が減ることは無いが、念のため範囲外を丸めてから返す。
+            v.SelectedTab = v.Groups.Count == 0
+                ? 0
+                : System.Math.Min(System.Math.Max(_selectedTab, 0), v.Groups.Count - 1);
             return v;
         }
+
+        /// <summary>台帳の区分タブを切り替える。表示だけの状態でエンジンには触れない。</summary>
+        public void SelectTab(int index) => _selectedTab = index;
 
         /// <summary>
         /// 年契約（設計書04 §1.4a）。買い切りの3区分と違い、年額を毎年部費から払い、いつでも解約できる。

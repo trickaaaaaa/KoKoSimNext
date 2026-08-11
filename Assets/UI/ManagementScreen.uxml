@@ -35,15 +35,16 @@
           </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- 買えるもの（施設・練習道具・備品を1つの台帳に、区分の見出しを挟んで並べる）。
-             ヘッダーとデータは同じ列幅トークンを参照する。行数が画面に入らないので本文はスクロールさせる
-             （潰して収めない＝UI-BUILD-METHOD の落とし穴）。 -->
+        <!-- 買えるもの（施設・練習道具・備品・年契約）。区分は縦に積まず、タブで排他に切り替える
+             ＝一度に出るのは最大5行なのでスクロールせずに全部見える（積むと19行で窓に4.4行しか入らない）。
+             ヘッダーとデータは同じ列幅トークンを参照する。 -->
         <ui:VisualElement class="card card--grow mn-card-last">
           <ui:VisualElement class="card__hd card__hd--tight">
             <ui:Label class="card__hd-title" text="買えるもの" />
             <ui:Label class="card__hd-sub" text="1段ずつ購入 ／ 効果はすぐ反映" />
           </ui:VisualElement>
           <ui:VisualElement class="card__body card__body--fill">
+            <ui:VisualElement name="mn-tabs" class="mn-tabs" />
             <ui:VisualElement class="mn-thead">
               <ui:Label class="mn-th mn-th--name" text="名称" />
               <ui:Label class="mn-th mn-th--lv" text="段階" />

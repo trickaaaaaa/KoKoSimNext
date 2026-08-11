@@ -856,6 +856,34 @@ namespace KokoSim.Unity.Components
             return el;
         }
 
+        // ===== SegTabs（区分の切替セグメント） =====
+
+        /// <summary>
+        /// 区分切替のセグメントタブ。1つの表の中身を排他で入れ替えるときに使う
+        /// （区分見出しを縦に積む代わりに横で切る＝行数の多い台帳を1画面へ収める）。
+        ///
+        /// <para>選択状態は呼び出し側が持つ（<paramref name="selected"/>）。押されたら
+        /// <paramref name="onSelect"/> に添字を渡すだけで、ここは状態を持たない。
+        /// 見た目は部品辞書の <c>.seg-tab</c>（NBスキン・選択＝空の青）。</para>
+        /// </summary>
+        public static VisualElement SegTabs(IReadOnlyList<string> labels, int selected,
+                                            System.Action<int> onSelect)
+        {
+            var bar = new VisualElement();
+            bar.AddToClassList("seg-tabs");
+            if (labels == null) return bar;
+
+            for (var i = 0; i < labels.Count; i++)
+            {
+                var index = i;   // クロージャ捕捉
+                var b = new Button(() => { if (onSelect != null) onSelect(index); }) { text = labels[i] };
+                b.AddToClassList("seg-tab");
+                b.EnableInClassList("seg-tab--on", i == selected);
+                bar.Add(b);
+            }
+            return bar;
+        }
+
         // ===== LevelPips（段階レベルの升目: 経営画面の施設レベル, Issue #128） =====
 
         /// <summary>
