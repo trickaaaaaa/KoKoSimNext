@@ -36,7 +36,17 @@ public sealed record SeasonCalendar
     /// 表示・スケジュールのアンカーのみ＝指名は独立Fork乱数の表示専用処理で、帯/決定論baselineに無影響。</summary>
     public int DraftWeek { get; init; } = 28;
 
+    /// <summary>
+    /// 入部予定者が確定する週（3月1週目 ≒ 第46週。設計書04 §2.1・issue #587）。ここで来年度の新入生が
+    /// 決まり、4月の年度替わり（週0）で仮入部する。年度の総括（監督メタの年次更新）も同じ週に置く
+    /// ＝その年度の夏・秋の結果が新入生の質へ効く順序を保つため（4月に総括すると1年遅れる）。
+    /// </summary>
+    public int ProspectConfirmWeek { get; init; } = 46;
+
     public bool IsFirstHalf(int week) => week < SecondHalfStartWeek;
+
+    /// <summary>その週が入部予定者の確定週か（設計書04 §2.1）。</summary>
+    public bool IsProspectConfirmWeek(int week) => week == ProspectConfirmWeek;
 
     /// <summary>その週がドラフト指名週か（設計書20 §4）。週送りループの指名フック判定に使う。</summary>
     public bool IsDraftWeek(int week) => week == DraftWeek;

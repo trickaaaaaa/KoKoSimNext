@@ -67,6 +67,13 @@ public sealed class SaveState
     /// <summary>県内地区（0基点。地区を持たない県・旧セーブは null）。</summary>
     public int? DistrictId { get; set; }
 
+    // --- 入部予定者（3月確定→4月仮入部・issue #587。v5 で追加） ---
+    /// <summary>
+    /// 入部予定者の学年1つぶん。<b>null＝まだ一度も3月を跨いでいない</b>（旧セーブ・初年度の途中）。
+    /// 4月に合流すると選手の実体は落ちて見立てだけが残る（<see cref="IncomingClass.Joined"/>）。
+    /// </summary>
+    public IncomingClass? Incoming { get; set; }
+
     /// <summary>
     /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。

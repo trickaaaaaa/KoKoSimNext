@@ -110,6 +110,24 @@ public sealed class SeasonCalendarTests
         }
     }
 
+    // 入部予定者の確定週（issue #587）: 暦の3月1週目でなければならない。
+    // 週番号を直に持つ定数なので、月配分（WeeksPerMonth）を触ると黙ってずれる＝ここで固定する。
+    [Fact]
+    public void ProspectConfirmWeek_IsFirstWeekOfMarch()
+    {
+        var (month, weekOfMonth, yearOffset) = _cal.DateOf(_cal.ProspectConfirmWeek);
+        Assert.Equal(3, month);
+        Assert.Equal(1, weekOfMonth);
+        Assert.Equal(1, yearOffset);   // 3月は年度開始の翌暦年
+
+        // 年度替わり（週0）より前で、その年の秋の大会より後（＝その年度の結果が出そろっている）。
+        Assert.True(_cal.ProspectConfirmWeek > _cal.AutumnTournamentStartWeek);
+        Assert.True(_cal.ProspectConfirmWeek < _cal.WeeksPerYear);
+
+        for (var w = 0; w < _cal.WeeksPerYear; w++)
+            Assert.Equal(w == _cal.ProspectConfirmWeek, _cal.IsProspectConfirmWeek(w));
+    }
+
     [Fact]
     public void DateOf_CoversExactlyFiftyWeeks_NoGaps()
     {

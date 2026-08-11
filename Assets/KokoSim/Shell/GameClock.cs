@@ -45,7 +45,9 @@ namespace KokoSim.Unity.Shell
                         BracketFinishSim.EnsureCompleted();
                         NationService.AdvanceAiYear(YearIndex);
                         // 終了した年度ぶんの監督メタ更新（指導力・采配・名声・信頼度・節目イベント, issue #171）。
-                        // 夏/秋の大会はこの年度内に消化済み＝自校の年間成績が確定した後で1年1回だけ適用する。
+                        // 通常は3月の総括（EnterWeek の確定週フック・issue #587）で済んでいるので、ここは
+                        // 二重適用ガードで no-op になる。3月を跨がずに年度替わりへ来た進行（旧セーブの
+                        // 読み込み位置が3月より後 など）のための取りこぼし防止として残す。
                         ManagerService.ApplyYearlyGrowth(prevYear);
                         // issue #535: 自校ロスターも進級・卒業・新入生を適用する（従来は AI校だけで、自校は
                         // 年度替わりで一切触られず学年が固定されていた）。ロジックは engine の RosterLifecycle.AdvanceYear。
@@ -84,6 +86,15 @@ namespace KokoSim.Unity.Shell
         {
             var t = SeasonTransitions.OnWeekEntered(RosterService.Roster, Week, Calendar);
 
+            // 年度の総括＋入部予定者の確定（3月・設計書04 §2.1 / issue #587）。
+            // 総括を4月でなくここで回すのは順序のため: この年度の夏・秋の結果はもう出ているので、
+            // 上がった名声をその場で来年度の新入生の質へ効かせられる（4月に総括すると1年遅れる）。
+            if (Calendar.IsProspectConfirmWeek(Week))
+            {
+                ManagerService.ApplyYearlyGrowth(YearIndex);
+                ProspectConfirmed = ProspectService.Confirm(YearIndex + 1);
+            }
+
             // 大会開幕週なら大会モードへ入る（要件1）。二重入場を避けるため通常モードのときだけ。
             if (t.TournamentStarting is { } kind && GameSession.Current.Mode == GameMode.Normal)
                 TournamentEntry.Enter(kind);
@@ -99,8 +110,24 @@ namespace KokoSim.Unity.Shell
             }
         }
 
+        /// <summary>
+        /// 直前の週送りで入部予定者が確定したか（issue #587）。ホームが通知フィードへ流したら下ろす
+        /// ＝大会開幕バナー（<c>GameSession.BannerPending</c>）と同じ「遷移とUI提示の分離」。
+        /// </summary>
+        public static bool ProspectConfirmed { get; set; }
+
+        /// <summary>
+        /// 直前の週送りで入部予定者がロスターへ合流したか（issue #587）。年度替わりで
+        /// <see cref="RosterService.AdvanceYear"/> が合流させたときに立つ。
+        /// </summary>
+        public static bool ProspectJoined { get; set; }
+
         /// <summary>シーズン頭（週0・年度1）へ戻す。監督成長の年度ガードも初期化する（issue #171）。</summary>
-        public static void Reset() { Week = 0; YearIndex = 1; ManagerService.ResetGrowth(); }
+        public static void Reset()
+        {
+            Week = 0; YearIndex = 1; ManagerService.ResetGrowth();
+            ProspectConfirmed = false; ProspectJoined = false;
+        }
 
         /// <summary>セーブ保存: 暦を DTO へ写す（issue #507）。</summary>
         public static void Capture(KokoSim.Engine.Saves.SaveState s) { s.Week = Week; s.YearIndex = YearIndex; }

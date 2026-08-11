@@ -1,0 +1,159 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ScoutScreen.uss — スカウト画面（設計書04 §2.1 / 06 §3.6・issue #587）の画面固有スタイル。
+   昼NBスキンは tokens/KokoSimTheme が担い、器（.nb-plate / .plate-header / .row-well /
+   .row-panel / .card / .tool-btn）は共通部品 components.uss を使う。
+   ここに置くのは「左右2ペイン分割」と「予定者一覧の列合わせ」だけ。
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.sc-main {
+    flex-grow: 1;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-1);
+}
+
+.sc-masthead {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-2);
+}
+
+/* ── マスターディテール（監督選択のB案）: 左=予定者一覧 / 右=選んだ1人の見立て。
+   比率は選手一覧（40:60）に合わせる＝タブを移っても目線の位置が変わらない。 */
+.sc-split { flex-direction: row; flex-grow: 1; min-height: 0; }
+.sc-split__left { flex-grow: 0; flex-shrink: 0; width: 40%; }
+.sc-split__right {
+    flex-grow: 0;
+    flex-shrink: 0;
+    width: 60%;
+    padding-left: var(--sp-4);
+}
+
+/* 左ペインは高さいっぱいに伸ばし、中の一覧だけがスクロールする（カードごと流れない）。 */
+.sc-plate { flex-grow: 1; flex-shrink: 1; min-height: 0; }
+.sc-plate .nb-plate__front { flex-grow: 1; flex-shrink: 1; min-height: 0; }
+.sc-well { flex-grow: 1; flex-shrink: 1; min-height: 0; }
+.sc-scroll { flex-grow: 1; flex-shrink: 1; min-height: 0; }
+
+/* ── 予定者一覧の見出し行。列幅はデータ行と同じトークンを参照する（横ずれの構造的対策）。 */
+.sc-thead {
+    flex-direction: row;
+    align-items: center;
+    height: var(--h-thead);
+    flex-shrink: 0;
+    padding-left: 18px;
+    padding-right: 21px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--divider);
+}
+.sc-th {
+    font-size: var(--fs-th);
+    color: var(--color-muted);
+    margin: 0;
+    padding: 0;
+}
+.sc-th--name    { width: var(--col-sc-name); flex-shrink: 0; }
+.sc-th--hand    { width: var(--col-sc-hand); flex-shrink: 0; }
+.sc-th--est     { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.sc-th--unknown { width: var(--col-sc-unknown); flex-shrink: 0; -unity-text-align: middle-right; }
+
+/* ── 予定者1行（.row-panel の中身）。 */
+.sc-cell { margin: 0; padding: 0; }
+.sc-cell--name    { width: var(--col-sc-name); flex-shrink: 0; font-size: var(--fs-body); }
+.sc-cell--hand    { width: var(--col-sc-hand); flex-shrink: 0; font-size: var(--fs-label); color: var(--color-muted); }
+.sc-cell--est     { flex-grow: 1; flex-basis: 0; min-width: 0; }
+.sc-cell--unknown {
+    width: var(--col-sc-unknown);
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+}
+
+/* 空状態。行が無いときは見出し行と一覧を伏せ、この一文だけを上に出す。 */
+.sc-empty {
+    flex-shrink: 0;
+    padding: var(--sp-4);
+    white-space: normal;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    white-space: normal;
+}
+
+/* ── 右ペイン ───────────────────────────────────────────── */
+.sc-head { flex-shrink: 0; margin-bottom: var(--sp-3); }
+.sc-name { font-size: var(--fs-page); color: var(--ink); }
+.sc-sub { font-size: var(--fs-label); color: var(--color-muted); margin-top: 2px; }
+
+/* 見立て・隠しパラメータの横並び（等幅は共通部品 .card--half が持つ）。 */
+.sc-row2 { flex-direction: row; flex-shrink: 0; }
+.sc-card-last { margin-right: 0; }
+
+/* 隠しパラメータは半幅カードに入るので1列に積む（2列だと値が折り返す）。 */
+.sc-hidden__item--full { width: 100%; }
+
+/* 見立て表: 4軸を縦に並べ、入部後は「実際」の列が右に足される（列見出しはそのときだけ出す）。 */
+.sc-est { flex-direction: column; }
+.sc-est__row { flex-direction: row; align-items: center; height: 34px; }
+.sc-est__row--head { height: 24px; }
+.sc-est__label {
+    width: 92px;
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin: 0;
+    padding: 0;
+}
+.sc-est__col {
+    width: 84px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+.sc-est__th { font-size: var(--fs-cap); color: var(--color-faint); }
+
+/* 隠しパラメータ: 判明していれば値、していなければ「？」。？は淡く出す
+   （警告色を使わない＝分からないことは警告ではない・UI原則②）。 */
+.sc-hidden { flex-direction: column; }
+.sc-hidden__item {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+}
+.sc-hidden__key {
+    width: 96px;
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin: 0;
+    padding: 0;
+}
+.sc-hidden__val { font-size: var(--fs-body); color: var(--ink); margin: 0; padding: 0; }
+.sc-hidden__val--unknown { color: var(--color-faint); }
+
+.sc-comment {
+    font-size: var(--fs-body);
+    color: var(--ink);
+    white-space: normal;
+}
+
+.sc-detail-empty {
+    padding: var(--sp-4);
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    white-space: normal;
+}
+
+/* ── 下段: スカウト網の状態（変更は経営タブ＝ここには買い物を置かない） ─── */
+.sc-foot {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    height: 40px;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+}
+.sc-net { font-size: var(--fs-label); color: var(--color-muted); }
+.sc-foot__spacer { flex-grow: 1; }

@@ -35,6 +35,23 @@ namespace KokoSim.Unity.Shell
         private const ulong YearRolloverStream = 0x5535_0000UL;
 
         /// <summary>
+        /// その年度の新入生生成に使う乱数源（issue #535 / #587）。3月の確定（<see cref="ProspectService"/>）と
+        /// 4月のその場生成が<b>同じ母種・同じストリーム</b>を使うための単一ソース。ここを分けると
+        /// 「確定を前に倒しただけ」のはずが別の新入生になる。
+        /// </summary>
+        public static IRandomSource YearRng(int newYearIndex)
+            => new Xoshiro256Random(GameSeed.Master ^ (YearRolloverStream ^ (ulong)newYearIndex));
+
+        /// <summary>
+        /// 新入生の才能中心値（design-04 §1「名声 → 新入生の質」＋年契約スカウト網の上乗せ）。名声は
+        /// 飽和カーブで頭打ちなのに対し、スカウト網は毎年払い続ける固定費＝「金で買う上振れ」として別軸で足す。
+        /// 3月の確定と4月のその場生成が同じ値を使うためにここへ集約する（issue #587）。
+        /// </summary>
+        public static double TalentCenter()
+            => new RosterCoefficients().TalentCenterFromFame(ManagerService.Manager.Fame)
+               + ManagerService.ContractEffects.ScoutTalentAdd;
+
+        /// <summary>
         /// 新設校モード（issue #585）。true なら初回生成が「1年生 <see cref="NewSchoolIntake"/> 人だけ」になる。
         /// 新規ゲーム設定画面の確定で立ち、初年度の生成に一度だけ効く（翌年度からは通常の
         /// <see cref="AdvanceYear"/> ＝新入生 Intake に合流する）。
@@ -78,16 +95,20 @@ namespace KokoSim.Unity.Shell
             _ = Roster;   // 初回アクセスなら生成（_roster / _graduates / _nextId を確定させる）
 
             var coefficients = new RosterCoefficients();
-            // 名声由来の talentCenter（issue #127 / design-04 §1「名声 → 新入生の質」）に、
-            // 年契約のスカウト網（design-04 §1.4a）を上乗せする。名声は飽和カーブで頭打ちなのに対し、
-            // スカウト網は毎年払い続ける固定費＝「金で買う上振れ」として別軸で足す。
-            var talentCenter = coefficients.TalentCenterFromFame(ManagerService.Manager.Fame)
-                               + ManagerService.ContractEffects.ScoutTalentAdd;
-            var rng = new Xoshiro256Random(GameSeed.Master ^ (YearRolloverStream ^ (ulong)newYearIndex));
+
+            // 3月に確定済みの入部予定者（issue #587）を合流させる。null＝3月を跨いでいない進行・旧セーブで、
+            // その場合だけ従来どおり年度替わりでその場生成する（乱数源は同じ YearRng）。
+            var incoming = ProspectService.TakeFor(newYearIndex);
 
             var rollover = RosterLifecycle.AdvanceYear(
-                _roster, newYearIndex, coefficients, rng, talentCenter: talentCenter, nextId: _nextId);
+                _roster, newYearIndex, coefficients, YearRng(newYearIndex),
+                talentCenter: TalentCenter(), nextId: _nextId, incoming: incoming);
             _nextId = rollover.NextId;
+            if (incoming != null)
+            {
+                ProspectService.MarkJoined(rollover.Newcomers);
+                GameClock.ProspectJoined = true;   // ホームが通知フィードへ流す（遷移とUI提示の分離）
+            }
             _graduates.AddRange(rollover.Graduated);   // 卒業生を退避（名前解決に使う）。
 
             // 卒業・引退で空いた背番号を、在籍部員（新入生含むベンチ外）へ小さい番号から詰める
@@ -115,7 +136,11 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>新規ゲームの完全リセット: 次アクセスで既定シード（42）から再生成させる。</summary>
-        public static void Reset() { _roster = null; _graduates = null; _nextId = 0; _newSchool = false; }
+        public static void Reset()
+        {
+            _roster = null; _graduates = null; _nextId = 0; _newSchool = false;
+            ProspectService.Reset();   // 予定者もこの進行のものなので一緒に捨てる（issue #587）
+        }
 
         /// <summary>
         /// 新設校として作り直す（issue #585）。次アクセスの生成が「1年生 <see cref="NewSchoolIntake"/> 人だけ」になる。
