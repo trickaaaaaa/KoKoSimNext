@@ -109,3 +109,135 @@
     /* 伝令ボタンは2行（残数を2行目に出す）。既定の nowrap だと改行が効かない。 */
     white-space: normal;
 }
+
+/* ── 選手能力ビューア（issue #602・監督決定A案） ──
+   タイムから開く両校の名簿。左＝自校・右＝相手を同時に出し、行の右へ能力をランクチップで並べる。
+   器は部品の modal-scrim / modal-card、ヘッダは交代モーダルの msub-* を流用し、
+   ここでは「2カラムの割り付け」と「行の列合わせ」だけを足す。**読むだけ**の画面なので操作系は
+   タブと閉じるだけ＝CTA 色は持たない（UI原則⑦）。 */
+.mscout-card {
+    width: 94%;
+    max-height: 94%;
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    padding-top: var(--sp-3);
+    padding-bottom: var(--sp-3);
+}
+.mscout-head { flex-direction: row; align-items: center; flex-shrink: 0; margin-bottom: var(--sp-2); }
+.mscout-tabs { margin-left: var(--sp-4); }
+
+/* 両校を等幅で左右に。あふれは各カラムのスクロールに収める（カード全体は伸ばさない）。 */
+.mscout-body { flex-direction: row; align-items: stretch; flex-grow: 1; min-height: 0; }
+.mscout-team {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    margin-right: var(--sp-4);
+}
+.mscout-team--last { margin-right: 0; }
+.mscout-team__hd { flex-direction: row; align-items: center; flex-shrink: 0; margin-bottom: var(--sp-1); }
+.mscout-team__name { font-size: var(--fs-body); color: var(--color-chalk); margin: 0; padding: 0; }
+.mscout-team__tag { margin-left: var(--sp-2); }
+.mscout-scroll { flex-grow: 1; min-height: 0; }
+
+/* 区分（打線 / 投手 / 控え）。切替ではないので帯にせず小さく置く（UI原則④）。 */
+.mscout-section {
+    height: 24px;
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-faint);
+    margin: var(--sp-2) 0 0 0;
+    padding: 0;
+    -unity-text-align: lower-left;
+}
+
+/* 行（行高32px基準・UI原則①）。 */
+.mscout-row { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; }
+.mscout-row--head { height: 24px; border-bottom-width: 1px; border-bottom-color: var(--color-line-soft); }
+.mscout-row--head .msc__ord,
+.mscout-row--head .msc__pos,
+.mscout-row--head .msc__no,
+.mscout-row--head .msc__name,
+.mscout-row--head .msc__grade,
+.mscout-row--head .msc__hand,
+.mscout-row--head .msc__cell { font-size: var(--fs-cap); color: var(--color-faint); }
+/* いま出ている選手（次打者・現投手）は面で示す。盤面の状態色とは別の「注目」なので線も色も足さない。 */
+.mscout-row--now { background-color: var(--color-panel-deep); }
+/* もう使えない控え（出場済み・登板済み＝リエントリー禁止）は沈める。 */
+.mscout-row--used .msc__name,
+.mscout-row--used .msc__pos,
+.mscout-row--used .msc__no,
+.mscout-row--used .msc__grade,
+.mscout-row--used .msc__hand { color: var(--color-faint); }
+.mscout-row--used .msc__abil { opacity: 0.45; }
+
+.msc__ord {
+    width: var(--col-msc-ord);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin: 0; padding: 0;
+    -unity-text-align: middle-right;
+}
+.msc__pos {
+    width: var(--col-msc-pos);
+    flex-shrink: 0;
+    margin-left: 3px;   /* 打順の「—」とくっついて「一投」の2文字に見えるのを防ぐ */
+    font-size: var(--fs-label);
+    color: var(--color-muted);
+    margin: 0; padding: 0;
+    -unity-text-align: middle-center;
+}
+.msc__no {
+    width: var(--col-msc-no);
+    flex-shrink: 0;
+    font-size: var(--fs-num);
+    color: var(--color-chalk);
+    margin: 0; padding: 0;
+    -unity-text-align: middle-right;
+}
+/* 人名は明朝（書体3役）。縮むのはここだけ＝能力列が押し出されない。 */
+.msc__name {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--fs-label);
+    color: var(--color-chalk);
+    margin: 0 0 0 var(--sp-2);
+    padding: 0;
+    overflow: hidden;
+}
+.msc__grade {
+    width: var(--col-msc-grade);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin: 0; padding: 0;
+}
+.msc__hand {
+    width: var(--col-msc-hand);
+    flex-shrink: 0;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin: 0; padding: 0;
+}
+
+/* 能力列（タブで野手11項目 / 投手6項目に入れ替わる）。
+   投打（「右投左打」）と先頭のセルが地続きに見えるので、ここで能力の帯を切り離す。 */
+.msc__abil { flex-direction: row; align-items: center; flex-shrink: 0; margin-left: var(--sp-2); }
+.msc__cell {
+    width: var(--col-msc-cell);
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--fs-cap);
+    color: var(--color-muted);
+    margin: 0; padding: 0;
+    -unity-text-align: middle-center;
+}
+/* 単位つきの物理量（球速）は3桁が入るので広く取る。 */
+.msc__cell--unit { width: var(--col-msc-cell-unit); }
+.msc__unitnum { font-size: var(--fs-cap); color: var(--color-chalk); margin: 0; padding: 0; }
+.msc__unit { font-size: var(--fs-cap); color: var(--color-faint); margin: 0 0 0 2px; padding: 0; }
+.msc__none { font-size: var(--fs-cap); color: var(--color-faint); margin: 0; padding: 0; }

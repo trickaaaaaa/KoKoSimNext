@@ -33,6 +33,9 @@
 .rank-chip--F { background-image: url("project:///Assets/UI/Images/ranks/rank-F.png"); }
 .rank-chip--G { background-image: url("project:///Assets/UI/Images/ranks/rank-G.png"); }
 /* サイズ違い：総合ランクなど「1画面で1つだけ大きく出す」用途に限る（強調は希少資源＝UI原則②）。 */
+/* Small は逆向きの用途＝1画面に何十個も並ぶ密な一覧（試合中の能力ビューア・issue #602）。
+   画像は background-size: contain なので、枠を縮めればレターもそのまま縮む。 */
+.rank-chip--sm { min-width: 22px; height: 22px; font-size: 13px; padding-left: 0; padding-right: 0; }
 .rank-chip--lg { min-width: 44px; height: 44px; font-size: 28px; padding-left: 12px; padding-right: 12px; }
 .rank-chip--xl { min-width: 60px; height: 60px; font-size: 40px; padding-left: 18px; padding-right: 18px; }
 
