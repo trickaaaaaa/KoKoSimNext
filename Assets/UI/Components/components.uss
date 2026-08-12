@@ -1546,6 +1546,23 @@
     left: 0; top: 0; right: 0; bottom: 0;
 }
 
+/* ═══ MiniDiamond：守備フォーカス中の小ダイヤモンド（issue #595・器は MiniDiamondElement.cs）═══════
+   守備カメラは球と野手に寄って追随するので、枠外へ出た走者は原理的に映らない
+   ＝「三塁で止まったのか本塁を狙ったのか」が絵から読めない。画面固定の小さな図で走者だけを補う。
+   面は ScoreBug と同じ黒島語彙（--sb-face ＋ インク枠）＝芝・土・空のどの背景の上でも沈まない。
+   黒島は盤面に2つだけ（左上＝ScoreBug／右下＝これ）で対角に置く。
+   中身（塁・塁間・走者ドット）は Painter2D。塁と走者の色は tokens の --field-chalk / --color-lamp を
+   要素側が読む＝ここでは面と枠だけを持つ。パディングは箱の内側の余白（走者ドットが枠へ触れない幅）。 */
+.mdia {
+    width: 120px;
+    height: 120px;
+    flex-shrink: 0;
+    background-color: var(--sb-face);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    padding: 8px;
+}
+
 /* SignPad：指示パネル（issue #289。試合盤面・投手HUD直下の采配指示タイル。SignPad.cs が生成）。
    設計書15 Phase C-3 の常駐1行帯の後継。攻撃中は打撃、守備中は配球だけを出し、既定（任せ/通常）は無点灯。
    盤面overlayなので半透明パネルは MatchupHud の帯（--hud-bg）と同じ考え。選択色は旧セグ選択と同じ --sky を踏襲。

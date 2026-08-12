@@ -167,6 +167,8 @@ namespace KokoSim.Unity.Match
         // ビューポート正規化座標をそのまま _duelImg の実寸へ掛けるだけで済む。
         private VisualElement _duelLabelHost;
         private readonly List<Label> _duelFieldLabelPool = new();
+        private VisualElement _miniDiaHost;
+        private MiniDiamondElement _miniDia;
         private const int MaxDuelFieldLabels = 6;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
@@ -431,6 +433,7 @@ namespace KokoSim.Unity.Match
             _rightPitcher = _root.Q<VisualElement>("right-pitcher");
             _hudHost = _root.Q<VisualElement>("hud-host");
             BuildHudCorners();   // 右上=打者HUD／右下=投手HUD の常設コーナー
+            BuildMiniDiamond();  // 守備フォーカス中だけ出す走者の小ダイヤ（issue #595）
             _capHistHost = _root.Q<VisualElement>("caption-history");
             _leftTeam = _root.Q<Label>("left-team");
             _rightTeam = _root.Q<Label>("right-team");
@@ -2246,6 +2249,7 @@ namespace KokoSim.Unity.Match
             // 打球プレー中は俯瞰を出していても回す＝トグルで切り替えた瞬間に3Dが止まっていない（F9）。
             if (!_paused && (_duelOn || FieldPlayActive)) _duelRig?.Tick(Time.deltaTime * _speed);
             RefreshDuelFieldLabels();   // 頭上フルネームラベル（issue #393）。ポーズ中も現在位置のまま表示を保つ
+            RefreshMiniDiamond();       // 走者の小ダイヤ（issue #595）。同じくポーズ中も現在位置のまま残す
             RefreshHudVisibility();     // 打球プレー中はマッチアップHUDを引っ込める（下の説明を参照）
             UpdateTacticsAcceptance();  // 采配カードの受付ゲート（issue #493）。投手が次球の振りかぶりへ入ったら締め切る
 
@@ -3076,6 +3080,43 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 走者の小ダイヤモンド（issue #595）を盤面の右下へ1つだけ作る。
+        /// 頭上ラベルのホスト（<see cref="EnsureDuelImg"/>）と違って <c>_duelImg</c> の子にはしない
+        /// ——頭上ラベルが RT の子なのは<b>ビューポート座標に紐づくから</b>（design-18 §3.6）で、
+        /// 画面固定のこの図は同じ理由を持たない＝盤面ラッパの子（UXML の <c>minidia-host</c>）に置く。
+        /// こうすると <c>_duelImg</c> を作り直しても孤児にならない（issue #454 の罠を踏まない）。
+        /// </summary>
+        private void BuildMiniDiamond()
+        {
+            _miniDiaHost = _root.Q<VisualElement>("minidia-host");
+            if (_miniDiaHost == null) return;
+            _miniDiaHost.pickingMode = PickingMode.Ignore;   // 盤面クリック（→中断ポップアップ）を塞がない
+            _miniDiaHost.Clear();
+            _miniDia = new MiniDiamondElement();
+            _miniDiaHost.Add(_miniDia);
+        }
+
+        /// <summary>
+        /// 走者の小ダイヤモンド（issue #595）の張り替え。守備カメラは球に寄って追随するので枠外の走者が
+        /// 映らない＝「三塁で止まったのか本塁を狙ったのか」を画面固定の図で補う。
+        ///
+        /// <para>出すのは<b>守備フォーカス中だけ</b>（打席の寄りでは出さない＝塁の在/不在は ScoreBug の
+        /// 塁ダイヤの担当で役割を重ねない）。<c>EndFieldPlay</c> で <c>FieldPlayActive</c> が落ちるので、
+        /// 畳むのはここ1箇所で足りる（守備陣・走者を伏せる経路と同じ扱い）。</para>
+        ///
+        /// <para>2D俯瞰（デバッグトグル）を出している間も伏せる——あちらは走者も野手も打球も描いている＝
+        /// 同じ情報を二重に出しても読む場所が増えるだけ。</para>
+        /// </summary>
+        private void RefreshMiniDiamond()
+        {
+            if (_miniDiaHost == null) return;
+            var show = FieldPlayActive && _duelOn;
+            var want = show ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_miniDiaHost.style.display != want) _miniDiaHost.style.display = want;
+            if (show) _miniDia.SetRunners(_duelRig.CurrentRunnerDots());
+        }
+
+        /// <summary>
         /// 頭上フルネームラベルの張り替え（issue #393）。打球プレー中だけ、画面内の野手・走者の
         /// 頭上に氏名チップを置く。打席中（対決の寄り）は出さない＝寄りの絵は背番号の担当。
         /// プールを使い回し、余った枠は隠すだけ（毎フレーム Add/Remove しない）。
@@ -3831,6 +3872,14 @@ namespace KokoSim.Unity.Match
         /// <summary>判定オーバーレイの文言（出ていなければ空）。</summary>
         public string JudgementTextForCapture =>
             JudgementVisibleForCapture ? (_root?.Q<Label>("judgement-judge")?.text ?? "") : "";
+
+        /// <summary>【撮影ハーネス用】走者の小ダイヤ（issue #595）が今出ているか。</summary>
+        public bool MiniDiamondVisibleForCapture =>
+            _miniDiaHost != null && _miniDiaHost.resolvedStyle.display == DisplayStyle.Flex;
+
+        /// <summary>【撮影ハーネス用】小ダイヤと3Dの走者の突き合わせ（同じ時刻・同じ補間か）。</summary>
+        public string MiniDiamondDiagForCapture =>
+            _duelRig != null ? _duelRig.MiniDiamondDiagForCapture() : "(rig なし)";
 
         /// <summary>スクショ用: 1球采配ショートカットをクリックしたのと同じ状態にする（打撃側）。</summary>
         public void SelectPitchBattingForCapture(PitchBattingOverride? v)

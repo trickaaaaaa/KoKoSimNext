@@ -78,6 +78,16 @@
     background-color: var(--field-outside);
 }
 
+/* 守備フォーカス中の小ダイヤモンド（issue #595）の置き場所。盤面の右下＝左上の ScoreBug と対角。
+   部品の見た目（黒島の面・枠・寸法）は components.uss の .mdia が持ち、ここは配置だけを決める。
+   既定は非表示で、MatchLiveController が守備フォーカス中だけ出す（打席の寄りでは出さない）。 */
+.mdia-host {
+    position: absolute;
+    right: var(--sp-3);
+    bottom: var(--sp-3);
+    display: none;
+}
+
 /* 下部スタック（1球指示帯・実況履歴・実況バー・伝令残数）は issue #289 で撤去済み。
    1球指示は盤面直下の采配カード（components.uss の .tcard*）へ、タイム系操作は pause-modal へ移した。
    実況ログはロジックのみ存続（MatchLiveController._capHist）＝描画スタイルは持たない。 */

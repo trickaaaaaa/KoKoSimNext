@@ -32,6 +32,11 @@
                     <!-- 中継風の常時表示バグ。盤面の左上に出しっぱなしにして、打席の演出中も
                          カウント・塁・両校の得点を切らさない。俯瞰と対決ビューのどちらでも同じ位置に残る。 -->
                     <ui:Instance template="ScoreBug" />
+                    <!-- 守備フォーカス中の小ダイヤモンド（issue #595）。守備カメラは球に寄って追随するので
+                         枠外の走者が映らない＝止まったのか回ったのかが読めない。盤面の右下に画面固定で
+                         走者ドットと塁だけを描いて補う。中身の MiniDiamondElement は MatchLiveController が
+                         生成する。既定は非表示（守備フォーカス中だけ・打席の寄りでは出さない）。 -->
+                    <ui:VisualElement name="minidia-host" class="mdia-host" />
                     <ui:VisualElement name="hud-host" class="matchup-hud" />
                     <!-- 1球ごとの判定＋球速球種（短時間で自動的に消えるので既存UIと重なってよい）。
                          judge は影用の複製を先に置いて背面に敷く（USS の text_shadow は1要素1つしか
