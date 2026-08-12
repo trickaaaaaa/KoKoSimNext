@@ -302,6 +302,32 @@ public static class PlaybackEvaluator
     }
 
     /// <summary>
+    /// 時刻 t でこの走者が<b>既にアウトになっているか</b>（issue #595・小ダイヤモンドの消灯判定）。
+    ///
+    /// <para><see cref="PlaybackRunner.HideAt"/> は「塁で決着したアウト」（封殺・タッチ・憤死・
+    /// 牽制死・盗塁死）しか持たない——<b>飛球の捕球アウトは打者走者のレッグに載らない</b>
+    /// （<c>TimelineBuilder</c> の <c>batterOut = Out &amp;&amp; !IsFly</c>）。捕球アウトの確定時刻は
+    /// 判定イベント側（<c>Label="打"</c> の <see cref="JudgementKind.Out"/>）にだけ有るので、
+    /// HideAt を持たない走者はそちらで補う＝<b>どの種類のアウトでも走者を残さない</b>。</para>
+    ///
+    /// <para>HideAt を持つ走者は HideAt だけで判定する（同じアウトに対して判定イベントの方が
+    /// 数十msだけ早い＝内野ゴロの一塁フォースは送球到達で確定し、走者はその後も塁まで走り切る絵になる。
+    /// Issue #328①）。ここを混ぜると<b>塁に着く手前で走者が消える</b>ので、既存の
+    /// 2D俯瞰と同じ「塁に着いた瞬間に消える」を保つ。</para>
+    ///
+    /// <para>表示専用の純関数＝判定・帯・タイムラインには一切関与しない。</para>
+    /// </summary>
+    public static bool IsRunnerOut(PlaybackPlay play, PlaybackRunner r, double t)
+    {
+        if (r is null) return false;
+        if (r.HideAt.HasValue) return t > r.HideAt.Value;
+        if (play?.Judgements is null) return false;
+        foreach (var j in play.Judgements)
+            if (j.Kind == JudgementKind.Out && j.Label == r.Label && t > j.T) return true;
+        return false;
+    }
+
+    /// <summary>
     /// 時刻 t で表示すべき判定（Issue #59 の判定オーバーレイ、Issue #328②で「フェア」を追加）。
     /// 確定時刻 T が <c>[t - holdSeconds, t]</c> に入る判定のうち直近（最大 T）を返す。判定が無ければ null。
     /// 判定イベント列（<see cref="PlaybackPlay.Judgements"/>）が単一ソース（Issue #260。
