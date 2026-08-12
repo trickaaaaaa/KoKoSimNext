@@ -2,7 +2,28 @@
 
 実装で勝手に確定せず、ここに記録して相談する（CLAUDE.md「進め方」）。
 
-## Q26. 球数台帳のキーが AI校をまたいで衝突している（2026-08-11・issue #583 で発見）
+## Q26. 球数台帳のキーが AI校をまたいで衝突している（2026-08-11・issue #583 で発見）→ **修正済み・クローズ（2026-08-12）**
+
+**確定（2026-08-12・監督決定）**: 候補2（台帳のキーだけ直す）を採用。`TournamentRunner.RecordSide` の
+キー選択を「SourceId を持つか」ではなく **「自校かどうか」**（`schoolId == _managerId`）で分ける
+＝自校は育成選手ID、AI校は `(校ID, 背番号)`＝唯一の読み手 `AceRestSelector` の引き方と揃える。
+
+着手前調査で、当初の見立てより**被害範囲も修正コストも小さい**ことが分かった:
+
+- **`SourceId` 衝突の被害は台帳だけ**。`StatBook.FoldGame` は `managerIsAway` で**自校側のボックススコアしか
+  畳まない**ので `PlayerStatStore` に他校選手は入らない。`NationTournamentStats` は
+  `Dictionary<校ID, StatBook>` で**校ごとに分離済み**。よって候補1（`SourceId` の全国一意化）は
+  現時点で受益者がゼロ＝やらない（やっても読み手が `ForOpponent` で引く限り台帳は直らない）。
+- **統計帯は動かない**。Heavy に `TournamentRunner` を回すテストが1本も無い（大会は帯の測定対象外）。
+  変わるのは AI校のエース温存の挙動そのもの＝これが修正の目的。
+
+固定したテスト（`TournamentPitchLedgerKeyTests`。**修正前は2本とも落ちることを確認済み**）:
+8校の大会で自校以外の7校すべてが自分の枠を持つこと／`AceRestSelector` が引くキー
+`(校ID, 背番号1)` に球数が実際に乗ること（旧実装では必ず0だった）。
+
+---
+
+### 発見時の記録（2026-08-11）
 
 `TournamentPitchLedger` の記録キーは `RecordSide` が
 `l.SourceId is int sid ? PitcherLedgerKey.ForPlayer(sid) : ForOpponent(schoolId, uniform)` で選ぶ。
@@ -21,7 +42,20 @@ AI校の選手は `AiRosterFactory.Bootstrap` が `nextId = 1` から振った**
 2. 台帳のキーだけ `ForOpponent(schoolId, uniform)` に一本化する（`RecordSide` に schoolId は既に来ている）。
    `AceRestSelector` の引き方と揃うので最小の修正。ただし自校選手は `ForPlayer` のままにする必要がある。
 
-## Q25. 監督の氏名を決める導線が無い（2026-08-11・issue #586 で発見）
+## Q25. 監督の氏名を決める導線が無い（2026-08-11・issue #586 で発見）→ **確定・クローズ（2026-08-12）**
+
+**確定（2026-08-12・監督決定）**: 選択肢3を採用＝**監督名の入力欄は足さない**。
+新規ゲーム設定は校名・県・地区のままにし、キャリア画面の見出しの主役を**校名**へ差し替える
+（`CareerScreenController.RenderIdentity`。設計書06 §3.8／設計書16 §3.8 のワイヤーを改定）。
+
+- `Manager.Name` は engine 既定の "監督" のまま残す（偽の氏名は生成しない）。
+- 教員監督/フリー監督のタグは**氏名なしでも意味のある事実**なので残す。右肩は「監督就任N年目」。
+- ⚠ **転任（設計書04 §1.2）が入ると校名は変わる**＝見出しの意味が「歴任校のうち今の1校」に変わる。
+  「誰が」の主語が要るなら、そのときに氏名の導線を改めて検討する（この決定は転任実装までの構え）。
+
+---
+
+### 発見時の記録（2026-08-11）
 
 `Manager.Name` は engine 既定の **"監督"** のまま**どこからも設定されない**（`Assets/` 全体で
 `Manager.Name` への代入が1件も無い）。新規ゲーム設定画面（`NewGameSetup`・issue #585）は

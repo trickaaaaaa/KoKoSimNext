@@ -75,11 +75,22 @@ namespace KokoSim.Unity.CareerMeta
             rank.Add(UiComponents.RankChipLegacy(TeamOverall.GradeOf(RosterService.Active)));
         }
 
+        /// <summary>
+        /// 見出しの身元。<b>主役は校名</b>（OPEN-QUESTIONS Q25・2026-08-12 監督決定）。
+        ///
+        /// <para>設計書16 §3.8 のワイヤーは監督の氏名を主役に置いていたが、<c>Manager.Name</c> は
+        /// engine 既定の "監督" のままどこからも設定されない＝氏名を主役にすると見出しに「監督」とだけ出る。
+        /// 氏名を決める導線（新規ゲーム設定の入力欄）は<b>足さない</b>と決めたので、見出しは校名に差し替える。
+        /// 偽の氏名を勝手に生成はしない（<c>m.Status</c> の教員/フリーは氏名なしでも意味のある事実なので残す）。</para>
+        ///
+        /// <para>⚠ 転任（設計書04 §1.2）が入ると校名は変わる＝そのときは「歴任校のうち今の1校」に
+        /// 意味が変わる。主役の据え直しはその実装とセットで考える。</para>
+        /// </summary>
         private void RenderIdentity(Manager m)
         {
-            SetText("cr-name", m.Name);
+            SetText("cr-name", TopBarMeters.SchoolDisplayName());
             SetText("cr-status", m.Status == ManagerStatus.Teacher ? "教員監督" : "フリー監督");
-            SetText("cr-post", "就任" + TenureYears + "年目 ／ " + TopBarMeters.SchoolDisplayName());
+            SetText("cr-post", "監督就任" + TenureYears + "年目");
         }
 
         // ── 通算成績 ────────────────────────────────────────────

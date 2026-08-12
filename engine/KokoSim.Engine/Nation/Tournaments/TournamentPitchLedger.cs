@@ -3,7 +3,11 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// <summary>
 /// 大会中の投手を跨いで同定する安定キー（issue #41）。
 /// 自校投手は育成選手ID（<see cref="BoxScore"/> の SourceId）で一意。
-/// 相手校の生成投手は SourceId=null だが、校ID＋年度の決定論生成なので背番号が安定キーになる。
+/// 相手校の生成投手は (校ID, 背番号)＝校IDが全国で一意・背番号が校内で一意なので衝突しない。
+///
+/// <para>⚠ <b>「SourceId を持つ側＝自校」ではない</b>（OPEN-QUESTIONS Q26）。AI校の選手も
+/// <c>AiRosterFactory</c> が振った<b>校内選手ID</b>を SourceId に持つ（校をまたぐと衝突する）。
+/// どちらのキーを使うかは<b>自校かどうか</b>で分ける＝<c>TournamentRunner.RecordSide</c> にしか置かない。</para>
 /// </summary>
 /// <remarks>BoxScore は Match.Game 名前空間。ここでは値の同定だけを担い、集計は <see cref="TournamentPitchLedger"/> が行う。</remarks>
 public readonly record struct PitcherLedgerKey
