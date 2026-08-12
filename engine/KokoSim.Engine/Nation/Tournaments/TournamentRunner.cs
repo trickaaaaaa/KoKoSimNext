@@ -948,11 +948,27 @@ public sealed class TournamentRunner
         RecordSide(r.HomePitching, homeSchool.Id, matchDay);
     }
 
+    /// <summary>
+    /// 片チームぶんの登板を台帳へ積む。
+    ///
+    /// <para>⚠ <b>キーの選択を「SourceId を持つか」で分けてはいけない</b>（OPEN-QUESTIONS Q26・2026-08-12 修正）。
+    /// AI校の選手も <c>AiRosterFactory.Bootstrap</c> が <c>nextId = 1</c> から振った<b>校内選手ID</b>を
+    /// SourceId に焼くので、旧実装（<c>SourceId is int sid ? ForPlayer(sid) : …</c>）では
+    /// <b>全AI校の「選手ID 5」が同じキー</b>に潰れていた（実測: 64校フルシム大会で79登板→19キー）。
+    /// さらに唯一の読み手 <see cref="Roster.AceRestSelector"/> は <c>ForOpponent(校ID, 背番号)</c> で引くため、
+    /// AI校のエース温存は<b>台帳の消耗を一度も見ていなかった</b>（<c>fatigueLoad</c> が常に0）。</para>
+    ///
+    /// <para>したがって<b>自校かどうか</b>で分ける: 自校は育成選手ID（セーブ内で一意・年をまたいでも安定）、
+    /// AI校は (校ID, 背番号)＝読み手の引き方と揃える。校IDは全国で一意、背番号は校内で一意なので衝突しない。</para>
+    /// </summary>
     private void RecordSide(IReadOnlyList<PitchingLine> lines, int schoolId, int matchDay)
     {
+        var isManagerSchool = schoolId == _managerId;
         foreach (var l in lines)
         {
-            var key = l.SourceId is int sid ? PitcherLedgerKey.ForPlayer(sid) : PitcherLedgerKey.ForOpponent(schoolId, l.UniformNumber);
+            var key = isManagerSchool && l.SourceId is int sid
+                ? PitcherLedgerKey.ForPlayer(sid)
+                : PitcherLedgerKey.ForOpponent(schoolId, l.UniformNumber);
             _pitchLedger.Record(key, l.Pitches, matchDay);
         }
     }
