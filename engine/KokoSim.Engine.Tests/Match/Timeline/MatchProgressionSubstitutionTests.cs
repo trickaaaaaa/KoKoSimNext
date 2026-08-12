@@ -406,6 +406,33 @@ public sealed class MatchProgressionSubstitutionTests
         Assert.Equal(GameResultDigest.Sha256Of(batch), GameResultDigest.Sha256Of(prog.BuildResult()));
     }
 
+    /// <summary>
+    /// 能力ビューア（issue #602）は<b>1球の合間</b>にも開く——クリック中断（issue #289）は打席の途中でも
+    /// 止まるため、観測は打席境界だけでなく1球ごとに走る。打席境界での観測（上のテスト）に加えて
+    /// 1球ごとに両チームぶん問い合わせても、結果はバッチ Play と1ビットも変わらないこと。
+    /// ここが崩れる＝ビューアを開くと試合結果が変わる（不変条件#2）。
+    /// </summary>
+    [Fact]
+    public void SubstitutionOptions_QueriedBetweenPitches_DoesNotChangeTheGame()
+    {
+        var batch = GameEngine.Play(Team("A"), Team("H"), new GameContext { CaptureTimelines = true },
+            new Xoshiro256Random(77UL));
+
+        var prog = NewProg(77UL);
+        var queried = 0;
+        while (true)
+        {
+            // 「いま盤面に出ている両校」を読む＝ビューアが開くたびに行う観測そのもの。
+            prog.SubstitutionOptions(teamIsAway: true);
+            prog.SubstitutionOptions(teamIsAway: false);
+            queried++;
+            if (prog.AdvancePitch() == AdvancePitchResult.Finished) break;
+        }
+
+        Assert.True(queried > 100, $"1球ごとの観測が少なすぎる（{queried}回）＝経路を通っていない");
+        Assert.Equal(GameResultDigest.Sha256Of(batch), GameResultDigest.Sha256Of(prog.BuildResult()));
+    }
+
     // ===== 5. 途中出場選手の成績が独立行として出ること =====
 
     [Fact]

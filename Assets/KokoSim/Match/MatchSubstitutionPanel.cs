@@ -3,9 +3,8 @@ using System.Linq;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Timeline.Playback;
 using KokoSim.Engine.Players;
-using KokoSim.Engine.Season;      // AbilityKind（能力ラベル単一ソースの引数, issue #94）
 using KokoSim.Unity.Components;   // 部品辞書（CompareRow等）
-using KokoSim.Unity.Shell;        // 能力ラベル単一ソース（AbilityLabels, issue #94）
+using KokoSim.Unity.Shell;        // 球種チャート（PitchChartView / PitchChartDatum）・弾道ラベル
 using UnityEngine.UIElements;
 
 namespace KokoSim.Unity.Match
@@ -680,9 +679,9 @@ namespace KokoSim.Unity.Match
             // 投手ビュー（5行）も同じ組にする＝同じ表が選択のたびに行高を変えると比較にならない。
             UiComponents.SetCompareDense(_cmpRows, true);
             _cmpRows.Add(UiComponents.CompareHeader(capA, capB, pitcherView ? "投球" : "打撃・走守"));
-            foreach (var (label, x, y) in CompareRows(outgoing, incoming, pitcherView))
+            foreach (var (label, x, y, typeAxis) in MatchAbilityColumns.CompareRows(outgoing, incoming, pitcherView))
             {
-                if (!pitcherView && label == AbilityLabels.Jp(AbilityKind.LaunchTendency))
+                if (typeAxis)
                     _cmpRows.Add(CompareRowEl(label, x, y, TypeText(x), TypeText(y), hideBar: true));
                 else
                     _cmpRows.Add(CompareRowEl(label, x, y));
@@ -1034,53 +1033,8 @@ namespace KokoSim.Unity.Match
             new PitchChartView(chartHost, compact: true).SetData(pitches);
         }
 
-        private static IEnumerable<(string Label, int A, int B)> CompareRows(Player a, Player b, bool pitcherView)
-        {
-            if (pitcherView)
-            {
-                // 並び・項目はエンジンの単一ソース AbilityKinds.Pitching（球速/制球/スタミナ/キレ/球威）に合わせる
-                // ＝メンバー設定・スタメン設定・練習計画と同じ順（監督決定 2026-08-09）。精神力は AbilityKind 外の
-                // 項目なのでここで足し、向こう（PlayerCompareTabs）の投手能力タブにも同じ位置で足してある。
-                // 球速はこの表に出さない＝カードの持ち球チャートのストレートに km/h で添える
-                // （監督決定 2026-08-09, issue #560。メンバー設定・スタメン設定と同じ扱い）。
-                yield return (AbilityLabels.Jp(AbilityKind.Control), a?.Pitching?.Control ?? -1, b?.Pitching?.Control ?? -1);
-                yield return (AbilityLabels.Jp(AbilityKind.Stamina), Stamina(a), Stamina(b));
-                yield return (AbilityLabels.Jp(AbilityKind.PitchRank), a?.Pitching?.PitchRank ?? -1, b?.Pitching?.PitchRank ?? -1);
-                yield return (AbilityLabels.Jp(AbilityKind.Stuff), Stuff(a), Stuff(b));
-                yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
-                yield break;
-            }
-            // 並びはメンバー設定・スタメン設定（PlayerCompareTabs）と同じ相対順にする＝画面をまたいでも目が滑らない。
-            // 盗塁・走塁は代走の判断に要るのに出ていなかったので足した（監督決定 2026-08-09）。
-            // ここに無いのは バント／送球／リード の3つで、これは向こうにだけ有る（画面ごとの差は承知の上）。
-            yield return ("弾道", a?.LaunchTendency ?? -1, b?.LaunchTendency ?? -1);
-            yield return ("ミート", a?.Contact ?? -1, b?.Contact ?? -1);
-            yield return ("パワー", a?.Power ?? -1, b?.Power ?? -1);
-            yield return ("選球眼", a?.Discipline ?? -1, b?.Discipline ?? -1);
-            yield return ("走力", a?.Speed ?? -1, b?.Speed ?? -1);
-            yield return ("盗塁", a?.Steal ?? -1, b?.Steal ?? -1);
-            yield return ("走塁", a?.Baserunning ?? -1, b?.Baserunning ?? -1);
-            yield return ("守備", a?.Fielding ?? -1, b?.Fielding ?? -1);
-            yield return ("捕球", a?.Catching ?? -1, b?.Catching ?? -1);
-            yield return ("肩", a?.ArmStrength ?? -1, b?.ArmStrength ?? -1);
-            yield return ("精神力", a?.Mental ?? -1, b?.Mental ?? -1);
-        }
-
-        // スタミナは Level（0〜100）で出す＝メンバー設定・スタメン設定と同じもの（監督決定 2026-08-09）。
-        // 試合用の Player が持つのは目安投球数（issue #356）だけなので、順変換と同じ定数から出す
-        // エンジンの逆変換で戻す（UI側で式を作り直さない・不変条件#1）。上限なしなので Lv100超はそのまま。
-        private static int Stamina(Player p)
-            => p?.Pitching == null ? -1 : PitcherAttributes.LevelFromStaminaPitches(p.Pitching.StaminaPitches);
-
-        // 球威＝ストレートの有効軸（issue #274）。試合用の Player は育成能力を持たないので、
-        // レパートリーのストレート枠の Power から引く（RosterTeamBuilder が Stuff レベルを入れている値）。
-        private static int Stuff(Player p)
-        {
-            if (p?.Pitching == null) return -1;
-            foreach (var slot in p.Pitching.EffectiveRepertoire)
-                if (slot.Type == PitchType.Fastball) return slot.Power;
-            return -1;
-        }
+        // 比較行（ラベル・並び・スタミナ/球威の逆変換）は MatchAbilityColumns が単一ソース（issue #602）。
+        // 能力ビューア（両校の一覧）と同じ表を引く＝画面をまたいでも項目の順が変わらない。
 
         // 単位つきの値（旧・スタミナの「135球」）はスタミナのLevel化で無くなった＝unit は取らない。
         private static VisualElement CompareRowEl(string label, int a, int b, string textA = null, string textB = null, bool hideBar = false)

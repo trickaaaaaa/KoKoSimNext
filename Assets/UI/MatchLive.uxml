@@ -136,9 +136,35 @@
                     <ui:Button name="pm-sub" class="msub-btn msub-btn--ghost pausem-btn" text="⇄ 選手交代" />
                 </ui:VisualElement>
                 <ui:VisualElement class="pausem-row">
+                    <ui:Button name="pm-scout" class="msub-btn msub-btn--ghost pausem-btn" text="🔍 選手能力" />
                     <ui:Button name="pm-skip" class="msub-btn msub-btn--ghost pausem-btn" text="⏭ スキップ（委任）" />
-                    <ui:Button name="pm-resume" class="msub-btn msub-btn--go pausem-btn" text="▶ 再開" />
                 </ui:VisualElement>
+                <ui:VisualElement class="pausem-row">
+                    <ui:Button name="pm-resume" class="msub-btn msub-btn--go pausem-btn pausem-btn--wide" text="▶ 再開" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 選手能力ビューア（issue #602）。タイム（pause-modal）から開き、閉じるとポップアップへ戻る。
+             両校の打線・現投手・控えを左右に並べ、行の右に能力をランクチップで出す（監督決定 A案）。
+             **読むだけ**＝エンジンに一切触れない（伝令を消費しない・乱数を引かない・決定論不変）。
+             骨組みだけ置き、行は MatchScoutPanel が部品辞書で動的生成する。 -->
+        <ui:VisualElement name="scout-modal" class="ui-root modal-scrim">
+            <ui:VisualElement class="modal-card mscout-card">
+
+                <ui:VisualElement class="mscout-head">
+                    <ui:Label text="選手能力" class="msub-title" />
+                    <ui:Label name="mscout-situation" text="" class="msub-phase" />
+                    <ui:VisualElement name="mscout-tabs" class="seg-tabs mscout-tabs" />
+                    <ui:VisualElement class="msub-head__spacer" />
+                    <ui:Button name="mscout-close" text="✕" class="msub-close" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="mscout-body">
+                    <ui:VisualElement name="mscout-left" class="mscout-team" />
+                    <ui:VisualElement name="mscout-right" class="mscout-team mscout-team--last" />
+                </ui:VisualElement>
+
             </ui:VisualElement>
         </ui:VisualElement>
 

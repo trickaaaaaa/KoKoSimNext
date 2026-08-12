@@ -6,8 +6,9 @@ using KokoSim.Unity.Shell;   // RankPalette（ランク色のコード側単一�
 
 namespace KokoSim.Unity.Components
 {
-    /// <summary>ランクチップの大きさ（通常 / 大 / 特大）。</summary>
-    public enum RankChipSize { Normal, Large, XLarge }
+    /// <summary>ランクチップの大きさ（通常 / 大 / 特大 / 小）。
+    /// Small＝1画面に何十個も並ぶ密な一覧（試合中の能力ビューア・issue #602）。</summary>
+    public enum RankChipSize { Normal, Large, XLarge, Small }
 
     /// <summary>能力バー行の大きさ。Normal＝選手詳細、Large＝チーム総合力パネル、
     /// Compact＝行高32px固定（練習計画モーダルの14行級一覧・issue #327②-b）。</summary>
@@ -87,6 +88,7 @@ namespace KokoSim.Unity.Components
             {
                 case RankChipSize.Large: chip.AddToClassList("rank-chip--lg"); break;
                 case RankChipSize.XLarge: chip.AddToClassList("rank-chip--xl"); break;
+                case RankChipSize.Small: chip.AddToClassList("rank-chip--sm"); break;
             }
             return chip;
         }

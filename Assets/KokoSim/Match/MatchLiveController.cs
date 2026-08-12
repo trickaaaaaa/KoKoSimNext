@@ -170,6 +170,9 @@ namespace KokoSim.Unity.Match
         private const int MaxDuelFieldLabels = 6;
         // 選手交代モーダル（設計書09 §6 / issue #22）。代打・代走・投手交代・守備交代・DH解除の入口。
         private MatchSubstitutionPanel _subPanel;
+        // 選手能力ビューア（issue #602）。タイムから開く両校の名簿＝**読むだけ**でエンジンに触れない。
+        private MatchScoutPanel _scoutPanel;
+        private Button _pmScout;
         private readonly List<Button> _speedButtons = new();
         // 速度ボタンのハンドラ（ラムダのため OnDisable で外せるよう保持する）。
         private readonly List<(Button Button, System.Action Handler)> _speedHandlers = new();
@@ -447,6 +450,8 @@ namespace KokoSim.Unity.Match
             if (_pmTimeout != null) _pmTimeout.clicked += OnSendTimeout;
             _pmSub = _root.Q<Button>("pm-sub");
             if (_pmSub != null) _pmSub.clicked += OnOpenSubstitution;
+            _pmScout = _root.Q<Button>("pm-scout");
+            if (_pmScout != null) _pmScout.clicked += OnOpenScout;
             _pmSkip = _root.Q<Button>("pm-skip");
             if (_pmSkip != null) _pmSkip.clicked += OnSkip;
             _pmResume = _root.Q<Button>("pm-resume");
@@ -513,8 +518,12 @@ namespace KokoSim.Unity.Match
             _subPanel = new MatchSubstitutionPanel(_root, OnSubstitutionApplied,
                 _statsProvider.AptitudeGradesOf, _statsProvider.PitchChartOf);
             _subPanel.Bind();
+            // 能力ビューア（issue #602）。局面文はポップアップと同じ単一ソースを渡す。
+            _scoutPanel = new MatchScoutPanel(_root, PauseSituationText);
+            _scoutPanel.Bind();
             BuildGame();
             _subPanel.SetMatch(_prog, _managerIsAway);
+            _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp);
             // 指示パネルの初期フェーズ（1打席目の攻守）。以降は采配窓ごとに OpenWindow が追従させる。
             if (_prog != null) _signPad?.SetPhase(_prog.IsTeamOnOffense(_managerIsAway));
             // 試合開始前の掲示板（校名と空の升目）を先に掲げる。掲げないと最初の打席が確定するまで枠が出ない。
@@ -794,6 +803,7 @@ namespace KokoSim.Unity.Match
             if (_gameOver || _paused || _inningBreakOn || CaptureMode) return;
             if (_prog == null) return;
             if (_subPanel != null && _subPanel.IsOpen) return;   // 交代モーダルを開いている間は待つ
+            if (_scoutPanel != null && _scoutPanel.IsOpen) return;   // 能力ビューアも同じ（issue #602）
 
             if (commitTactics) PushPitchTacticsChoice();
             var before = _prog.LastPitch;
@@ -962,6 +972,7 @@ namespace KokoSim.Unity.Match
             if (CaptureMode) return;   // スクショハーネス中は中断を出さない（バッチ撮影を暗幕で潰さない）
             if (_gameOver || _paused || _prog == null) return;
             if (_subPanel != null && _subPanel.IsOpen) return;
+            if (_scoutPanel != null && _scoutPanel.IsOpen) return;
             if (IsPauseExempt(evt.target as VisualElement)) return;
             OpenPauseMenu();
         }
@@ -1012,6 +1023,7 @@ namespace KokoSim.Unity.Match
                     !resolving && !_timeoutSentThisPause && _prog.CanCallTimeout(_managerIsAway));
             }
             SetEnabled(_pmSub, !resolving);
+            SetEnabled(_pmScout, !resolving);
             SetEnabled(_pmSkip, !resolving);
         }
 
@@ -1066,6 +1078,7 @@ namespace KokoSim.Unity.Match
         {
             if (_gameOver || !_paused) return;
             _subPanel?.Close();
+            _scoutPanel?.Close();
             SetVisible(_pauseModal, false);
             _paused = false;
             UpdateControlState();
@@ -1083,6 +1096,17 @@ namespace KokoSim.Unity.Match
             _subPanel?.Open();
         }
 
+        // 選手能力ビューア（issue #602）。中断中ならいつでも開ける＝**読むだけ**なので
+        // 伝令を消費せず乱数も引かない（開閉が試合結果に影響しない＝決定論不変）。
+        // 打席解決中（BackgroundGameOp）でも進行体の可変状態には触れないが、交代・伝令と同じ守りで
+        // ボタンを伏せておく（解決の途中で読んだ観測が「いまの盤面」とずれて見えるため。issue #278 と同じ考え方）。
+        private void OnOpenScout()
+        {
+            if (_gameOver || _prog == null || !_paused) return;
+            if (BackgroundGameOp.Running) return;
+            _scoutPanel?.Open();
+        }
+
         // 交代確定後（即時・取り消し不可）。該当スロットを即入替（退いた選手名を薄く併記）。
         private void OnSubstitutionApplied()
         {
@@ -1097,6 +1121,7 @@ namespace KokoSim.Unity.Match
             // ボタン自体も UpdateControlState で伏せているが、二重に守る（押下配信は1フレーム遅れうる）。
             if (BackgroundGameOp.Running) return;
             _subPanel?.Close();
+            _scoutPanel?.Close();
             SetVisible(_pauseModal, false);
             _paused = false;
             var result = _prog.SkipDelegateToAi(_managerIsAway, managerTacticalSense);
@@ -3951,6 +3976,12 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>スクショ用: 選手交代モーダルを開く（局面に合う種別で開く）。</summary>
+        /// <summary>スクショ用: 能力ビューアを開く／閉じる／タブを切り替える（issue #602 の受け入れ絵）。</summary>
+        public void OpenScoutForCapture() { _paused = true; SetVisible(_pauseModal, true); _scoutPanel?.Open(); }
+        public void CloseScoutForCapture() => _scoutPanel?.Close();
+        public void SelectScoutTabForCapture(int tab) => _scoutPanel?.SelectTabForCapture(tab);
+        public bool ScoutOpenForCapture => _scoutPanel != null && _scoutPanel.IsOpen;
+
         public void OpenSubstitutionForCapture() => _subPanel?.Open();
 
         /// <summary>スクショ用: 交代ポップアップ（issue #209）を任意の継投ログで強制表示する。</summary>
