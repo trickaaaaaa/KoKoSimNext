@@ -95,6 +95,12 @@ namespace KokoSim.Unity.Shell
         public SchoolRecordBook Records { get; private set; } = new SchoolRecordBook();
 
         /// <summary>
+        /// 自校の歴代大会結果（issue #600・設計書06 §3.9）。<see cref="Records"/> が累計へ畳んで捨てる
+        /// 「年度ごとの1行」を残す台帳＝記録タブの「歴代大会結果」の源。
+        /// </summary>
+        public TournamentHistory History { get; private set; } = new TournamentHistory();
+
+        /// <summary>
         /// 試合前スタメン設定（打順・守備位置・DH・先発）。試合開始フローのスタメン画面で確定して書き込む。
         /// null＝未設定（RosterTeamBuilder.Build の自動編成へフォールバック）。
         /// </summary>
@@ -410,7 +416,7 @@ namespace KokoSim.Unity.Shell
             else
             {
                 // 優勝時（残り試合なし）はここで同期に畳み込む＝従来どおり即確定。
-                Records.FoldTournament(runner.BuildBracketView().Matches, Kind, Year);
+                FoldTournamentRecords(runner, Kind, Year);
             }
         }
 
@@ -423,8 +429,20 @@ namespace KokoSim.Unity.Shell
             var runner = _bracketFoldRunner;
             if (runner == null) return;
             // ブラケット全試合（自校戦＋裏試合）を通算戦績へ畳み込む（issue #84）。夏の優勝校は甲子園出場として記録。
-            Records.FoldTournament(runner.BuildBracketView().Matches, _bracketFoldKind, _bracketFoldYear);
+            FoldTournamentRecords(runner, _bracketFoldKind, _bracketFoldYear);
             _bracketFoldRunner = null;
+        }
+
+        /// <summary>
+        /// 通算戦績（issue #84）と歴代大会結果（issue #600）をブラケットから確定する。同期・非同期の
+        /// 2経路が同じ処理を書かないための単一の入口。<b>乱数を引かない</b>＝統計帯は不変。
+        /// 優勝校は通算戦績の畳み込みが返す値をそのまま渡す（決勝カードを2度走査しない）。
+        /// </summary>
+        private void FoldTournamentRecords(TournamentRunner runner, TournamentKind kind, int year)
+        {
+            var matches = runner.BuildBracketView().Matches;
+            var champion = Records.FoldTournament(matches, kind, year);
+            History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion);
         }
 
         /// <summary>
@@ -437,7 +455,7 @@ namespace KokoSim.Unity.Shell
             var info = new Dictionary<int, (int Grade, int UniformNumber)>();
             foreach (var p in RosterService.Roster)
                 if (p.Id > 0) info[p.Id] = (p.Grade, p.UniformNumber);
-            Stats.ArchiveCurrentTournament(slot, info);
+            Stats.ArchiveCurrentTournament(slot, info, Year);
         }
 
         /// <summary>大会終了の後始末情報を取り出して消費する（結果モーダルのOKクリックから1回だけ呼ぶ）。</summary>
@@ -460,6 +478,7 @@ namespace KokoSim.Unity.Shell
             s.SessionYear = Year;
             s.Stats = Stats;
             s.Records = Records;
+            s.TournamentHistory = History;
             s.Tournament = CaptureTournament();
         }
 
@@ -491,6 +510,7 @@ namespace KokoSim.Unity.Shell
             Year = s.SessionYear;
             Stats = s.Stats;
             Records = s.Records;
+            History = s.TournamentHistory;
             ClearTransient();
         }
 
@@ -518,6 +538,7 @@ namespace KokoSim.Unity.Shell
         {
             Stats = new PlayerStatStore();
             Records = new SchoolRecordBook();
+            History = new TournamentHistory();
             Year = 1;
             ClearTransient();
         }

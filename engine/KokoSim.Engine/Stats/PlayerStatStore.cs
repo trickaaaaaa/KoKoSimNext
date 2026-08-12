@@ -7,6 +7,11 @@ namespace KokoSim.Engine.Stats;
 /// 公式戦通算（Official, 大会の試合だけ・永続）、今大会（CurrentTournament, 大会ごとにリセット）を
 /// 並行して積む。純データ・決定論・UnityEngine 非依存。
 /// インスタンスは横断状態として Shell（GameSession）が保持する。
+///
+/// <para><b>TODO（転任・設計書04 §1.2 が入ったとき）</b>: このストアは「監督の手持ち」であって
+/// <b>学校に紐づいていない</b>。転任すると前任校の選手成績がそのまま残り、記録タブ（issue #600・
+/// 主語＝学校）の校歴代記録へ他校の成績が混ざる。帰属の分離は転任 issue で行う（記録タブ側では直せない
+/// ＝どの成績がどの学校のものかを、このストアが区別していないため）。</para>
 /// </summary>
 public sealed class PlayerStatStore
 {
@@ -28,10 +33,11 @@ public sealed class PlayerStatStore
     /// <summary>
     /// 大会終了時に今大会成績を大会別アーカイブへ確定する（issue #77）。次の StartTournament が
     /// CurrentTournament をクリアする前に呼ぶ。playerInfo は sourceId→(当時の学年, 当時の背番号)。
+    /// year はその大会の年度（YearIndex。記録タブのシーズン記録が年を出すのに使う, issue #600）。
     /// </summary>
     public void ArchiveCurrentTournament(TournamentSlot slot,
-        IReadOnlyDictionary<int, (int Grade, int UniformNumber)> playerInfo)
-        => Archive.Archive(slot, CurrentTournament, playerInfo);
+        IReadOnlyDictionary<int, (int Grade, int UniformNumber)> playerInfo, int year = 0)
+        => Archive.Archive(slot, CurrentTournament, playerInfo, year);
 
     /// <summary>
     /// 1試合ぶんの詳細結果を各スコープへ畳み込む。勝敗投手は自動判定（<see cref="DecisionOfRecord"/>）。

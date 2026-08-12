@@ -106,15 +106,11 @@ namespace KokoSim.Unity.Shell
             var book = GameSession.Current.Stats.Career;
             var names = NameIndex();
 
-            // 規定の基準になるチーム試合数＝選手の最大出場試合数（チーム試合数のカウンタが無いための代用）。
-            var teamGames = 0;
-            foreach (var kv in book.Players)
-            {
-                if (kv.Value.Batting.Games > teamGames) teamGames = kv.Value.Batting.Games;
-                if (kv.Value.Pitching.Games > teamGames) teamGames = kv.Value.Pitching.Games;
-            }
-            var paNeeded = System.Math.Max(1, teamGames * 2);       // 規定打席＝チーム試合数×2
-            var outsNeeded = System.Math.Max(1, teamGames * 3);     // 規定投球回＝チーム試合数×1
+            // 規定打席・規定投球回は engine の単一ソース（RecordRoom＋data/coefficients.yaml の records:）から引く。
+            // 記録タブ（issue #600）と同じ閾値＝画面ごとに「チーム試合数×2」を書き直さない。
+            var qualification = RecordRoom.QualificationOf(book);
+            var paNeeded = qualification.PlateAppearances;
+            var outsNeeded = qualification.Outs;
 
             var rows = new List<RankRow>();
 

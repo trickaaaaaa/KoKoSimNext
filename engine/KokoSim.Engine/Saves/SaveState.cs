@@ -89,6 +89,13 @@ public sealed class SaveState
     /// </summary>
     public DraftHistory Draft { get; set; } = new();
 
+    // --- 歴代大会結果（年度別の到達ラウンドと優勝校・issue #600。v8 で追加） ---
+    /// <summary>
+    /// 自校の歴代大会結果（設計書06 §3.9）。空＝まだ大会を1つも終えていない
+    /// （旧セーブは年度別の記録を持っていなかったので必ず空＝過去ぶんは復元できない）。
+    /// </summary>
+    public TournamentHistory TournamentHistory { get; set; } = new();
+
     /// <summary>
     /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。

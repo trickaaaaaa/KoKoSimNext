@@ -54,6 +54,8 @@ public sealed record CoefficientsBundle
     public NationCoefficients Nation { get; init; } = new();
     public CareerCoefficients Career { get; init; } = new();
     public TournamentSchedule Tournament { get; init; } = new();
+    /// <summary>記録室の規定打席・規定投球回（issue #600）。表示専用＝帯には効かない。</summary>
+    public KokoSim.Engine.Stats.RecordsCoefficients Records { get; init; } = new();
     public PracticeMatchCoefficients PracticeMatch { get; init; } = new();
     /// <summary>施設カタログ（Issue #128）。未指定なら C# 既定（Unity実プレイと同値）。</summary>
     public FacilityCatalog Facilities { get; init; } = FacilityCatalog.Default;
@@ -114,6 +116,7 @@ public static class CoefficientsLoader
         public NationDto? Nation { get; set; }
         public CareerDto? Career { get; set; }
         public TournamentDto? Tournament { get; set; }
+        public RecordsDto? Records { get; set; }
         public PracticeMatchDto? PracticeMatch { get; set; }
         public List<FacilityDefDto>? Facilities { get; set; }
         public List<ContractDefDto>? Contracts { get; set; }
@@ -150,6 +153,7 @@ public static class CoefficientsLoader
             Nation = Nation?.ToModel() ?? new NationCoefficients(),
             Career = Career?.ToModel() ?? new CareerCoefficients(),
             Tournament = Tournament?.ToModel() ?? new TournamentSchedule(),
+            Records = Records?.ToModel() ?? new KokoSim.Engine.Stats.RecordsCoefficients(),
             PracticeMatch = PracticeMatch?.ToModel() ?? new PracticeMatchCoefficients(),
             Facilities = Facilities is null
                 ? FacilityCatalog.Default
@@ -2260,6 +2264,19 @@ public static class CoefficientsLoader
             FameDecay = FameDecay,
             FameChampion = FameChampion,
             FamePerWin = FamePerWin,
+        };
+    }
+
+    private sealed class RecordsDto
+    {
+        private static readonly KokoSim.Engine.Stats.RecordsCoefficients D = new();
+        public double QualifiedPlateAppearancesPerGame { get; set; } = D.QualifiedPlateAppearancesPerGame;
+        public double QualifiedOutsPerGame { get; set; } = D.QualifiedOutsPerGame;
+
+        public KokoSim.Engine.Stats.RecordsCoefficients ToModel() => new()
+        {
+            QualifiedPlateAppearancesPerGame = QualifiedPlateAppearancesPerGame,
+            QualifiedOutsPerGame = QualifiedOutsPerGame,
         };
     }
 

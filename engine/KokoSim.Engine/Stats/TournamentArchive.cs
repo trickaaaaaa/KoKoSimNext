@@ -24,6 +24,16 @@ public sealed class ArchivedPlayerStats
 {
     /// <summary>その大会当時の背番号（設計書06 §3.3b）。</summary>
     public int UniformNumber { get; set; }
+
+    /// <summary>
+    /// その大会の年度（YearIndex・1始まり。0＝記録なし＝issue #600 より前のセーブ）。
+    ///
+    /// <para>枠のキーは<b>学年</b>で年を持たないため、これが無いと「何年の記録か」を後から出せない
+    /// （卒業生は学年が3で止まり、在籍者の学年からの逆算もできない）。記録タブのシーズン記録が
+    /// 年を出せる唯一の入口（issue #600）。1つの学年の夏と秋は同じ年度なので合算しても矛盾しない。</para>
+    /// </summary>
+    public int Year { get; set; }
+
     public BattingStatLine Batting { get; } = new();
     public PitchingStatLine Pitching { get; } = new();
 }
@@ -81,9 +91,10 @@ public sealed class TournamentArchive
     /// 各選手は「当時の学年 × <paramref name="slot"/>」の枠へ振る（1つの大会に1〜3年生が混在するため、
     /// キーの学年は選手ごと）。既存枠がある場合は合算する（秋の県/地区/神宮を「n年秋」1枠にまとめる）。
     /// <paramref name="playerInfo"/> は sourceId→(当時の学年, 当時の背番号)。学年不明の選手はスキップ。
+    /// <paramref name="year"/> はその大会の年度（YearIndex。0＝不明のまま残す＝issue #600 より前の呼び出し互換）。
     /// </summary>
     public void Archive(TournamentSlot slot, StatBook currentTournament,
-        IReadOnlyDictionary<int, (int Grade, int UniformNumber)> playerInfo)
+        IReadOnlyDictionary<int, (int Grade, int UniformNumber)> playerInfo, int year = 0)
     {
         foreach (var kv in currentTournament.Players)
         {
@@ -97,6 +108,7 @@ public sealed class TournamentArchive
             a.Batting.Merge(kv.Value.Batting);
             a.Pitching.Merge(kv.Value.Pitching);
             if (info.UniformNumber > 0) a.UniformNumber = info.UniformNumber; // 0=未割当は温存
+            if (year > 0) a.Year = year;                                       // 0=不明は温存（旧セーブ）
         }
     }
 

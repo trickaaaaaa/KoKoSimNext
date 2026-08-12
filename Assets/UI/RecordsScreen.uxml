@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 記録画面（設計書06 §3.9 / 16 §10.1 ワイヤー ／ issue #600）。
+     主語は学校（キャリアタブ #586 は監督）。転任しても学校に残る記録だけを載せる。
+     監督決定のC案＝画面内タブで［歴代大会］［個人記録］を排他に切り替える（部品は SegTabs）。
+     表示専用でロジックを持たない（GameSession.History / .Records / .Stats を読むだけ）。
+     上部は共通トップバー（Components/TopBar.uxml）を単一ソースとして使う。 -->
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="TopBar" src="Components/TopBar.uxml" />
+    <Style src="tokens.uss" />
+    <Style src="Components/components.uss" />
+    <Style src="KokoSimTheme.uss" />
+    <Style src="RecordsScreen.uss" />
+    <ui:VisualElement class="root ui-root">
+
+      <ui:Instance template="TopBar" />
+
+      <ui:VisualElement class="rc-main">
+
+        <!-- 見出し＋学校の身元（柱見出し＝RuleHead・設計書16 §5） -->
+        <ui:VisualElement class="rc-masthead">
+          <ui:VisualElement class="rule-head">
+            <ui:VisualElement class="rule-head__rule" />
+            <ui:Label class="rule-head__text f-display" text="記録" />
+          </ui:VisualElement>
+          <ui:VisualElement class="rc-ident">
+            <ui:Label name="rc-school" class="rc-ident__name f-display" text="" />
+            <ui:Label name="rc-pref" class="chip chip--tag rc-ident__pref" text="" />
+            <ui:VisualElement class="rc-ident__spacer" />
+            <ui:VisualElement name="rc-tabs" class="rc-tabs" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:ScrollView mode="Vertical" class="rc-scroll scroll">
+
+          <!-- ===== タブ1：歴代大会（左＝年度別の表／右＝学校の通算） ===== -->
+          <ui:VisualElement name="rc-page-tournaments" class="rc-row">
+
+            <ui:VisualElement class="card rc-card-grow">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="歴代大会結果" />
+                <ui:Label name="rc-th-sub" class="card__hd-sub" text="" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="rc-th-head" class="rc-th rc-th--head">
+                  <ui:Label class="rc-th__year" text="年度" />
+                  <ui:Label class="rc-th__cup" text="大会" />
+                  <ui:Label class="rc-th__res" text="成績" />
+                  <ui:Label class="rc-th__champ" text="優勝校" />
+                </ui:VisualElement>
+                <ui:VisualElement name="rc-th-rows" />
+                <ui:VisualElement name="rc-th-empty" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="card rc-card-side">
+              <ui:VisualElement class="card__hd card__hd--tight card__hd--dirt">
+                <ui:Label class="card__hd-title" text="学校の通算" />
+                <ui:Label class="card__hd-sub" text="監督が代わっても残る" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement name="rc-summary" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+          </ui:VisualElement>
+
+          <!-- ===== タブ2：個人記録（校歴代・全幅なので3位まで出す） ===== -->
+          <ui:VisualElement name="rc-page-records" class="rc-row">
+
+            <ui:VisualElement class="card rc-card-grow">
+              <ui:VisualElement class="card__hd card__hd--tight">
+                <ui:Label class="card__hd-title" text="校歴代 個人記録" />
+                <ui:Label name="rc-rr-sub" class="card__hd-sub" text="" />
+                <ui:VisualElement class="rc-ident__spacer" />
+                <ui:VisualElement name="rc-scope-tabs" class="rc-tabs" />
+              </ui:VisualElement>
+              <ui:VisualElement class="card__body">
+                <ui:VisualElement class="rc-rr rc-rr--head">
+                  <ui:Label class="rc-rr__cat" text="部門" />
+                  <ui:VisualElement class="rc-rr__thcell"><ui:Label class="rc-rr__th" text="1位" /></ui:VisualElement>
+                  <ui:VisualElement class="rc-rr__thcell"><ui:Label class="rc-rr__th" text="2位" /></ui:VisualElement>
+                  <ui:VisualElement class="rc-rr__thcell"><ui:Label class="rc-rr__th" text="3位" /></ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="rc-rr-rows" />
+                <ui:VisualElement name="rc-rr-empty" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+          </ui:VisualElement>
+
+        </ui:ScrollView>
+
+      </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
