@@ -454,6 +454,15 @@ public static class GameEngine
         // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
         MaybeDefenseSwap(defense, offense, ctx, rng, inning, isTop);
 
+        // issue #619: 1球指示の予約は半回をまたがない。盗塁・牽制が3アウト目になった球は
+        // 予約を消費しないまま半回が終わる（stealEndedHalf）ため、消さないと次の攻撃回の
+        // 先頭打者へ持ち越される。予約は「押した次の1球」の寿命なので、ここで捨てるのが正しい。
+        // 読み書きのみで乱数を消費しない＝無指示のシム・統計帯は不変。
+        offense.SetPendingPitchBattingOverride(null);
+        offense.SetPendingSteal(null, StealTarget.Second);
+        offense.ConsumePendingOffensiveSign();
+        defense.SetPendingPitchDefenseOverride(null, null);
+
         while (outs < 3)
         {
             // 選手交代（設計書09 §6, 攻撃側）: 代走→代打。控え空/無指示なら素通り＝従来と完全一致。
@@ -880,7 +889,11 @@ public static class GameEngine
                         // 一・三塁の重盗（design-14 P1-4）: 二盗の送球中に三塁走者も本塁を狙う。既定オフ
                         // (DoubleStealThirdBreakProb=0)では分岐自体に入らずrng消費ゼロ＝単独二盗と完全一致。
                         // 投げた塁（二塁）だけがアウト対象という原則から、成立時の三塁走者は無条件生還。
+                        // issue #619: 本盗と同じ理由で、未消費の手動スクイズ予約があるときは三塁走者を
+                        // 走らせない（同じ球で三塁走者がスクイズと重盗の両方に使われるのを防ぐ）。
+                        // 既定 DoubleStealThirdBreakProb=0 では従来どおりこの分岐に入らず乱数消費ゼロ。
                         if (bases.Third is not null && paBaserunning.DoubleStealThirdBreakProb > 0.0
+                            && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze
                             && MathUtil.Chance(paBaserunning.DoubleStealThirdBreakProb, rng))
                         {
                             offense.DoubleStealThirdBreakCount++;
@@ -950,9 +963,13 @@ public static class GameEngine
                 }
                 // 本盗（issue #67, design-14）: 三塁のみ在塁でのみ判断側が返す。同じ球でスクイズが確定していれば
                 // 三塁走者は既にそちらへ使われているため、本盗は試みない（単純上書き, Q12-3と同型）。
+                // issue #619: 抑止は brain 由来のスクイズ（battingOverride）だけでなく、まだ消費していない
+                // 手動スクイズ予約も見る。手動指示の消費はこの下（盗塁解決の後）なので、予約を覗かないと
+                // 「同じ球でスクイズと本盗が両方走り、三塁走者が二重に使われる」ことになる。
                 else if (stealAttempt is { } homeStart && stealTarget == StealTarget.Home
                     && bases.Third is not null && bases.Second is null && bases.First is null
-                    && battingOverride != PitchBattingOverride.Squeeze)
+                    && battingOverride != PitchBattingOverride.Squeeze
+                    && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze)
                 {
                     var pickedOffThird = PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
@@ -1050,9 +1067,23 @@ public static class GameEngine
                 double? sqWasteOverride = null;
                 if (battingOverride == PitchBattingOverride.Squeeze && squeezeSign is null)
                 {
-                    sqThirdOverride = bases.Third;
-                    sqWasteOverride = SqueezeWasteNow();
-                    offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
+                    // issue #619: 予約を消費した時点で三塁が空なら、スクイズが成立しない場面なので
+                    // 無指示（強攻）へ落とす。盗塁・牽制の解決は手動指示の消費より前に走るため、
+                    // 「窓を開けた時は三塁走者が居たのに、投球の直前に本盗・牽制死・重盗で消えた」が起こりうる。
+                    // ここで落とさないと ①両方nullで AtBatSession が例外を投げて試合が止まる
+                    // ②打席頭スナップショット（_thirdBaseRunner）が生きていると、もう三塁に居ない走者で
+                    // スクイズが解決される（幽霊走者）— のどちらかになる。
+                    // 無指示へ落とす経路は SqueezeWasteNow（純計算）も RecordSqueeze も通らない＝乱数消費ゼロ。
+                    if (bases.Third is null)
+                    {
+                        battingOverride = null;
+                    }
+                    else
+                    {
+                        sqThirdOverride = bases.Third;
+                        sqWasteOverride = SqueezeWasteNow();
+                        offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
+                    }
                 }
 
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,

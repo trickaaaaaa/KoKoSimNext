@@ -1316,6 +1316,7 @@ namespace KokoSim.Unity.Match
         // 現在の選択を毎窓ここで再予約して寿命を保つ（issue #492: 1球の口は消費後に自動でnullへ戻るため）。
         private void PushPitchTacticsChoice()
         {
+            DropImpossiblePitchChoices();
             // 自校が攻撃していない球へは攻撃の1手を渡さない。渡すと自校の予約として残り、
             // **次に自校が攻撃する回の初球で不意に発動する**。
             var offense = _atBat != null
@@ -1335,6 +1336,38 @@ namespace KokoSim.Unity.Match
                 var offenseSide = _atBat != null ? _atBat.IsTop : !_managerIsAway;
                 _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield);
             }
+        }
+
+        // issue #619: 押し込む直前に局面条件を採り直し、満たさなくなった「1手」は engine へ渡さず点灯も落とす。
+        // 窓の中では塁は変わらない（ApplyWindowSituation の RefreshEnabled で足りる）が、打席一括経路には
+        // 窓のスナップショットが無く、前の球の選択が残ったまま別の塁状況へ押し込まれうる。
+        // 本命の防御は engine 側（三塁が空ならスクイズは無指示へ落ちる）で、ここはその表示側の整合＝
+        // 「押せてしまった指示が黙って別物として効く」のを防ぐ。構えは下ろさない（issue #490: この経路から
+        // 構えを解くと、札を押した瞬間に始めた移行が投球直前で巻き戻る）。
+        private void DropImpossiblePitchChoices()
+        {
+            var dropBatting = false;
+            if (_pitchBattingChoice == PitchBattingOverride.Squeeze && !RunnerOnThird)
+            {
+                _pitchBattingChoice = null;
+                dropBatting = true;
+            }
+            else if (_pitchBattingChoice == PitchBattingOverride.Bunt && !RunnerOnAnyBase)
+            {
+                _pitchBattingChoice = null;
+                dropBatting = true;
+            }
+            if (_signChoice == OffensiveSign.HitAndRun && !RunnerOnFirst)
+            {
+                _signChoice = null;
+                dropBatting = true;
+            }
+            var dropRun = _stealChoice != null && !RunnerOnFirst;
+            if (dropRun) _stealChoice = null;
+
+            if (dropBatting && dropRun) _signPad?.ClearSelection("batting", "run");
+            else if (dropBatting) _signPad?.ClearSelection("batting");
+            else if (dropRun) _signPad?.ClearSelection("run");
         }
 
         // ①の1手は消費後に自動解除（Q12-3: 次球は方針に復帰）。②の方針カードは点けたまま残す。
