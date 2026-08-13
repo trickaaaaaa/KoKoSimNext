@@ -108,6 +108,7 @@ namespace KokoSim.Unity.Shell
                     Id = f.Event.Id,
                     FeedText = EventTextFormat.Apply(f.Event.Text, values),
                     Lines = ResolveLines(f.Script, values),
+                    Effect = ApplyEffect(f.Event.Effect),
                 };
                 _pending.Add(e);
                 _queuedThisWeek++;
@@ -162,6 +163,41 @@ namespace KokoSim.Unity.Shell
                 Effect = effect,
             });
         }
+
+        /// <summary>
+        /// イベントの効果を適用し、効果帯へ出す形にして返す（issue #613）。何も起こさないイベントは null。
+        ///
+        /// <para><b>適用はここ1箇所</b>。財布（部費・施設基金）を持っているのは Shell なので、
+        /// engine はデータ定義まで、実際に足し引きするのはここ、と分ける。部費が足りなくても
+        /// <b>マイナスにはしない</b>（払えないのに買えた、という状態を作らない）。</para>
+        /// </summary>
+        private static PresentedEffect ApplyEffect(EventEffect effect)
+        {
+            if (effect == null || effect.IsEmpty) return null;
+
+            var m = ManagerService.Manager;
+            var items = new List<EffectItem>();
+
+            if (effect.Funds != 0.0)
+            {
+                var before = m.Funds;
+                m.Funds = System.Math.Max(0.0, m.Funds + effect.Funds);
+                items.Add(new EffectItem("部費", Signed(m.Funds - before), "万"));
+            }
+            if (effect.FacilityFund != 0.0)
+            {
+                var before = m.FacilityFund;
+                m.FacilityFund = System.Math.Max(0.0, m.FacilityFund + effect.FacilityFund);
+                items.Add(new EffectItem("施設基金", Signed(m.FacilityFund - before), "万"));
+            }
+            if (items.Count == 0) return null;
+
+            return new PresentedEffect { Subject = "", Detail = "", Items = items };
+        }
+
+        // 全角の符号（半角にすると Oswald と混植になって高さが揃わない）。
+        private static string Signed(double value)
+            => (value >= 0 ? "＋" : "−") + System.Math.Round(System.Math.Abs(value)).ToString("0");
 
         /// <summary>
         /// 先頭の未提示イベントを<b>取り出さずに</b>見る（無ければ null）。

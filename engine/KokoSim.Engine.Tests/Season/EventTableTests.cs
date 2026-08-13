@@ -143,6 +143,7 @@ events:
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
             "insight_growth_type",
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
+            "booster_club_fund", "gear_broken", "local_company_support",
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
@@ -230,6 +231,61 @@ events:
         foreach (var v in e.Variants)
         foreach (var line in v.Lines)
             Assert.True(known.Contains(line.Who), $"{e.Id}: 未知の役割 {line.Who}（立ち絵が出ない）");
+    }
+
+    // ===== 効果（issue #613） =====
+
+    [Fact]
+    public void Parse_ReadsEffects()
+    {
+        var events = EventTableParser.Parse(
+            "events:\n  - id: donation\n    kind: Random\n    text: \"寄付。\"\n"
+            + "    effects:\n      funds: 30\n      facility_fund: -12.5\n");
+
+        Assert.Equal(30.0, events[0].Effect.Funds, 6);
+        Assert.Equal(-12.5, events[0].Effect.FacilityFund, 6);
+        Assert.False(events[0].Effect.IsEmpty);
+    }
+
+    [Fact]
+    public void Parse_WithoutEffects_HasNoEffect()
+    {
+        var events = EventTableParser.Parse("events:\n  - id: talk\n    kind: Random\n    text: \"雑談。\"\n");
+        Assert.True(events[0].Effect.IsEmpty);
+    }
+
+    /// <summary>
+    /// 効果が<b>次のイベントへ漏れない</b>こと。1件ぶんの素を使い回すパーサなので、
+    /// 取り出しのたびに戻し忘れると、寄付イベントの次のイベントまで部費が増える。
+    /// </summary>
+    [Fact]
+    public void Parse_EffectsDoNotLeakIntoTheNextEvent()
+    {
+        var events = EventTableParser.Parse(
+            "events:\n  - id: a\n    text: \"寄付。\"\n    effects:\n      funds: 30\n"
+            + "  - id: b\n    text: \"雑談。\"\n");
+
+        Assert.Equal(30.0, events[0].Effect.Funds, 6);
+        Assert.True(events[1].Effect.IsEmpty, "前のイベントの効果が次へ漏れている");
+    }
+
+    /// <summary>
+    /// 財布の区別（設計書04 §1.4）。後援会・OB寄付は<b>施設基金</b>（建物にしか使えない）へ、
+    /// 道具の破損は<b>部費</b>から。ここが入れ替わると、寄付で道具が買えてしまう。
+    /// </summary>
+    [Fact]
+    public void RepositoryTable_FundEvents_UseTheRightWallet()
+    {
+        var byId = RepositoryEvents().ToDictionary(e => e.Id);
+
+        Assert.True(byId["booster_club_fund"].Effect.FacilityFund > 0, "後援会の寄付が施設基金へ入っていない");
+        Assert.Equal(0.0, byId["booster_club_fund"].Effect.Funds, 6);
+
+        Assert.True(byId["gear_broken"].Effect.Funds < 0, "道具の破損が部費から出ていない");
+        Assert.Equal(0.0, byId["gear_broken"].Effect.FacilityFund, 6);
+
+        Assert.True(byId["ob_donation"].Effect.Funds > 0);
+        Assert.True(byId["local_company_support"].Effect.Funds > 0);
     }
 
     // ===== バリエーション抽選 =====

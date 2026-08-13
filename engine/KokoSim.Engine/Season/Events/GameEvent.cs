@@ -10,6 +10,23 @@ public enum EventKind
 }
 
 /// <summary>
+/// イベントが起こす効果（issue #613）。<b>データに書く</b>＝新しい寄付イベントを足すのに
+/// コードを触らせない。適用は Shell（財布を持っている側）が行い、engine はここまでを定義する。
+///
+/// <para>0 の軸は「動かさない」。金額は万円単位（<c>Manager.Funds</c> と同じ）。</para>
+/// </summary>
+/// <param name="Funds">部費の増減（万円）。運営費の財布。</param>
+/// <param name="FacilityFund">施設基金の増減（万円）。建物にしか使えない財布（design-04 §1.4）。</param>
+public sealed record EventEffect(double Funds = 0.0, double FacilityFund = 0.0)
+{
+    /// <summary>何も起こさない（既定）。</summary>
+    public static readonly EventEffect None = new();
+
+    /// <summary>1つでも動く軸があるか。</summary>
+    public bool IsEmpty => Funds == 0.0 && FacilityFund == 0.0;
+}
+
+/// <summary>
 /// イベント定義（データ駆動, 設計書04 §3.1）。Phase 3 は発火の基盤のみで、効果適用は Phase 5 で接続する。
 /// </summary>
 public sealed record GameEvent
@@ -43,4 +60,10 @@ public sealed record GameEvent
     /// 空なら <see cref="Text"/> の1行だけを地の文として見せる（旧データの後方互換）。
     /// </summary>
     public IReadOnlyList<EventScript> Variants { get; init; } = System.Array.Empty<EventScript>();
+
+    /// <summary>
+    /// 発火したときに起こす効果（issue #613）。既定は <see cref="EventEffect.None"/>＝何も起こさない
+    /// （文言だけのイベントはこのまま）。
+    /// </summary>
+    public EventEffect Effect { get; init; } = EventEffect.None;
 }

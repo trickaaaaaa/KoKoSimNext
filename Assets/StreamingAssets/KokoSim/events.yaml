@@ -250,6 +250,8 @@ events:
     weight: 1.0
     cooldown_weeks: 10
     text: "OB会から寄付があった。"
+    effects:
+      funds: 30            # 部費＝運営費の財布（道具・備品・合宿・スカウト）
     variants:
       - lines:
           - who: ob
@@ -266,6 +268,78 @@ events:
             say: "うちの代は一回戦負けでしてね。だから、あなたたちに託すんです。"
           - who: manager
             say: "重い荷物だ。……だが、悪くない。"
+
+  # 設備・資金イベント（設計書04 §1.4・issue #613）。
+  # **財布は2つ**＝部費（運営費）と施設基金（建物にしか使えない）。イベントもその区別を守る
+  # （後援会・OB寄付は建物へ、備品の破損は運営費から）。効果は effects: に書くだけで足せる。
+  - id: booster_club_fund
+    kind: Random
+    weight: 1.0
+    cooldown_weeks: 16
+    text: "後援会が施設基金に寄付してくれた。"
+    effects:
+      facility_fund: 120
+    variants:
+      - lines:
+          - who: local
+            name: "後援会長"
+            say: "監督、みんなで少しずつ出し合いました。建物に使ってください。"
+          - who: manager
+            say: "……この町は、うちの部を子どもの頃から見てきた人ばかりだ。無駄にはできません。"
+      - lines:
+          - who: narration
+            say: "職員室に呼ばれると、後援会名義の書類が机に置いてあった。"
+          - who: manager
+            say: "（部費では建たないものがある。この金はそのためのものだ）"
+      - lines:
+          - who: ob
+            say: "室内が無いと、雪の日に何もできんでしょう。少しですが。"
+          - who: manager
+            say: "冬にやれる学校とやれない学校で、夏が変わります。ありがたい。"
+
+  - id: gear_broken
+    kind: Random
+    weight: 1.2
+    cooldown_weeks: 8
+    text: "練習道具が壊れた。買い替えに部費を使った。"
+    effects:
+      funds: -18
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、ネットが裂けました。あれではフリー打撃が回せません。"
+          - who: manager
+            say: "……買うしかないな。安いのを探してくれ。"
+      - lines:
+          - who: player
+            say: "すみません、バットが折れました。自分のじゃなくて、部の……。"
+          - who: manager
+            say: "道具は消耗品だ。折れるまで振ったなら文句はない。"
+      - lines:
+          - who: narration
+            say: "マシンが止まった。分解した部員たちが、そろって首を横に振る。"
+          - who: manager
+            say: "（今年の予算、ここで一度組み直しだな）"
+
+  - id: local_company_support
+    kind: Random
+    weight: 0.8
+    cooldown_weeks: 20
+    text: "地元企業が用具を支援してくれた。"
+    effects:
+      funds: 45
+    variants:
+      - lines:
+          - who: local
+            name: "地元企業の人"
+            say: "うちの社長、ここのOBでしてね。毎年やらせてもらってます。"
+          - who: manager
+            say: "……その「毎年」に、どれだけ助けられているか。"
+      - lines:
+          - who: narration
+            say: "段ボールが三箱、部室の前に積まれている。伝票の差出人は町の工場だった。"
+          - who: captain
+            say: "監督、これ全部ボールです。……新品の。"
 
   # 争奪戦（能動勧誘・設計書04 §2.2・issue #588）。
   # 発火のタイミングは週次の抽選ではなく「訪問1回ごと」なので、確率は

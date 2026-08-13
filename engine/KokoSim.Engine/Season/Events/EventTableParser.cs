@@ -42,6 +42,7 @@ public static class EventTableParser
         int? calendarWeek = null;
         double weight = 1.0;
         int cooldown = 4;
+        double effFunds = 0.0, effFacilityFund = 0.0;
         var variants = new List<EventScript>();
         List<EventLine>? currentLines = null;
         string? lineWho = null, lineName = null, lineSay = null;
@@ -77,11 +78,13 @@ public static class EventTableParser
                 RequiresNotAnnualFlag = requiresNotFlag,
                 Text = text ?? "",
                 Variants = variants.ToArray(),
+                Effect = new EventEffect(effFunds, effFacilityFund),
             });
             id = kind = text = setsFlag = requiresNotFlag = null;
             calendarWeek = null;
             weight = 1.0;
             cooldown = 4;
+            effFunds = effFacilityFund = 0.0;
             variants = new List<EventScript>();
         }
 
@@ -148,6 +151,9 @@ public static class EventTableParser
                 case "sets_annual_flag": setsFlag = value.Length > 0 ? value : null; break;
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
+                // 効果（issue #613）。`effects:` の下に書くが、キー名で拾うので入れ子の深さは問わない。
+                case "funds": effFunds = ParseDouble(value, 0.0); break;
+                case "facility_fund": effFacilityFund = ParseDouble(value, 0.0); break;
                 case "variants": FlushVariant(); variantsKeyIndent = keyIndent; linesKeyIndent = -1; break;
                 case "lines": currentLines ??= new List<EventLine>(); linesKeyIndent = keyIndent; break;
                 case "who": lineWho = value; break;
