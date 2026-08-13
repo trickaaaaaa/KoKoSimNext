@@ -185,6 +185,38 @@ namespace KokoSim.Unity.Home
                 }
             }
 
+            // ── ドラフト（issue #617）──
+            // 指名は10月最終週にしか走らないので、結果だけ据えて**提示は実経路**（週送り → RunDraftFeed）に通す。
+            if (RosterService.Active.Count >= 2)
+            {
+                var a = RosterService.Active[0];
+                var b = RosterService.Active[1];
+                DraftService.LastNomination = new KokoSim.Engine.Career.Draft.DraftResult(1, new[]
+                {
+                    new KokoSim.Engine.Career.Draft.DraftPick(
+                        a.Id, a.Name, 78.0, KokoSim.Engine.Career.Draft.DraftRankBand.UpperRound, true, 3),
+                    new KokoSim.Engine.Career.Draft.DraftPick(
+                        b.Id, b.Name, 41.0, KokoSim.Engine.Career.Draft.DraftRankBand.LowerRound, false, 0),
+                });
+
+                var doc4 = Open("HomeDashboard");
+                yield return null; yield return null;
+                var nov5 = doc4.rootVisualElement.Q<VisualElement>("ev-novel");
+                var adv3 = doc4.rootVisualElement.Q<Button>("advance");
+                Submit(adv3);
+                yield return null; yield return null;
+
+                var shot = 0;
+                for (var i = 0; i < 14 && nov5.resolvedStyle.display != DisplayStyle.None; i++)
+                {
+                    Debug.Log("[EV] ドラフト: " + Text(doc4, "ev-speaker") + " / " + Text(doc4, "ev-say")
+                        + " / 帯=" + Text(doc4, "ev-fx-subject") + " " + Text(doc4, "ev-fx-detail"));
+                    yield return Capture(doc4, string.Format("D{0:00}-draft", shot++));
+                    Click(nov5);
+                    yield return null; yield return null;
+                }
+            }
+
             // ── 実経路の確認（怪我）──
             // 週送りで実際に故障が起きたときにノベルが出ることを、12週ぶん回して観測する。
             // 出なければ「この12週では起きなかった」とだけ言う（確率なので失敗にはしない）。

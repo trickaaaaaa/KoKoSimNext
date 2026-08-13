@@ -342,7 +342,26 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Discover,
                         Tag = "発見",
                     });
+                    // 候補入りはノベルで見せる（issue #617）。名前が世に出た瞬間はキャリアの節目。
+                    KokoSim.Unity.Shell.EventService.Push("draft_candidate", c.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = c.Name,
+                            Detail = "ドラフト候補入り（" + DraftRankBands.Label(c.To) + "）",
+                        }, c.PlayerId);
                     continue;
+                }
+
+                // 評価が上がった週は「スカウトが見に来た」として出す（issue #617）。
+                // 評価が下がった週は出さない＝下降のたびにノベルを挟むと、通わせるほど話が重くなる。
+                if (c.Improved)
+                {
+                    KokoSim.Unity.Shell.EventService.Push("draft_scout_visit", c.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = c.Name,
+                            Detail = "評価 " + DraftRankBands.Label(c.From) + " → " + DraftRankBands.Label(c.To),
+                        }, c.PlayerId);
                 }
                 // 圏外へ落ちたときは「圏外」ではなく、候補から外れたことを言い切る。
                 var to = c.To == DraftRankBand.None ? "候補から外れた" : DraftRankBands.Label(c.To);
@@ -377,6 +396,19 @@ namespace KokoSim.Unity.Home
                             Kind = FeedKind.Normal,
                             Tag = "情報",
                         });
+
+                    // 指名の可否はどちらもノベルで見せる（issue #617）。指名漏れを黙って流すと、
+                    // 三年間見てきた選手の最後が通知1行で終わる。
+                    KokoSim.Unity.Shell.EventService.Push(
+                        pick.Nominated ? "draft_nominated" : "draft_missed", pick.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = pick.Name,
+                            Detail = pick.Nominated ? "NPB 指名" : "指名なし",
+                            Items = pick.Nominated
+                                ? new[] { new KokoSim.Unity.Shell.EffectItem("順位", pick.Round.ToString(), "位") }
+                                : System.Array.Empty<KokoSim.Unity.Shell.EffectItem>(),
+                        }, pick.PlayerId);
                 }
             }
 

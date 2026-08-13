@@ -558,6 +558,83 @@ events:
           - who: manager
             say: "半分は勘だ。だが勘の当たる歳になった。"
 
+  # ドラフト（設計書20・issue #617）。候補入り・スカウト視察（評価上昇）・指名確定。
+  # 主役は3年の選手。指名の可否そのものは engine が決めており、ここは提示だけ。
+  - id: draft_candidate
+    kind: System
+    text: "選手がドラフト候補に挙がった。"
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、{player} の名前が候補に載っています。地元紙にも出ていました。"
+          - who: manager
+            say: "本人には言うな。……いや、言っておくか。知らずに浮つくよりましだ。"
+      - lines:
+          - who: narration
+            say: "部室の壁に貼られた新聞の切り抜きに、見慣れた名前が混じっている。"
+          - who: manager
+            say: "（ここからが長い。名前が載っただけで終わる子を、何人も見てきた）"
+      - lines:
+          - who: player
+            say: "監督、自分……候補って、本当ですか。"
+          - who: manager
+            say: "本当だ。だが今日の練習は昨日と同じことをやる。それだけだ。"
+
+  - id: draft_scout_visit
+    kind: System
+    text: "スカウトが視察に来た。"
+    variants:
+      - lines:
+          - who: scout
+            say: "今日はお邪魔します。……いい体してますね、あの子。"
+          - who: manager
+            say: "（見に来たか。本人には言わないでおこう）"
+      - lines:
+          - who: scout
+            say: "{player} 君、去年の秋から見ています。肩の強さは高校で上位です。"
+          - who: manager
+            say: "褒めるのは構いませんが、本人の前ではやめてください。まだ夏が残っている。"
+      - lines:
+          - who: narration
+            say: "ネット裏に、明らかに保護者ではない大人がひとり座っている。"
+          - who: coach
+            say: "……三人目ですね、今週。"
+
+  - id: draft_nominated
+    kind: System
+    text: "教え子に指名がかかった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "電話が鳴った。部室の全員が、一斉に振り向いた。"
+          - who: manager
+            say: "……おめでとう。ここからは、俺の教えられることは何もない。"
+      - lines:
+          - who: player
+            say: "監督。……行ってきます。"
+          - who: manager
+            say: "ああ。三年間、よくやった。次は俺がテレビで見る番だ。"
+      - lines:
+          - who: coach
+            say: "うちから指名者が出るなんて。監督、泣かないでくださいよ。"
+          - who: manager
+            say: "泣くか。……グラウンドの砂が目に入っただけだ。"
+
+  - id: draft_missed
+    kind: System
+    text: "教え子の指名は無かった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "最後の名前が読み上げられて、テレビが野球以外の話題に移った。"
+          - who: manager
+            say: "……よく三年、続けたな。それだけで十分だ。"
+      - lines:
+          - who: player
+            say: "監督、すみません。……呼ばれませんでした。"
+          - who: manager
+            say: "謝ることじゃない。呼ばれる場所まで来た奴が、うちに居たというだけで大したことだ。"
+
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
   - id: ace_hidden_injury

@@ -142,6 +142,7 @@ events:
             "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
             "insight_growth_type",
+            "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
