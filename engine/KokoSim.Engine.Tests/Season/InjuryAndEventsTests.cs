@@ -316,6 +316,35 @@ public sealed class InjuryAndEventsTests
         Assert.True(master.Accuracy < 1.0);
     }
 
+    /// <summary>
+    /// 成長タイプの気づきが実際に返ってくること（issue #614）。<see cref="InsightTopic.GrowthType"/> は
+    /// 列挙子だけあって<b>一度も返されていなかった</b>（＝「大器晩成かもしれない」は実在しない気づきだった）。
+    /// 列挙子の存在はテストにならないので、話題として出ることを測る。
+    /// </summary>
+    [Fact]
+    public void Insight_YieldsGrowthTypeTopic()
+    {
+        var c = new InsightCoefficients();
+        var roster = ProspectGenerator.Intake(1, new RosterCoefficients(), new Xoshiro256Random(9)).ToList();
+        var rng = new Xoshiro256Random(2026);
+
+        var all = Enumerable.Range(0, 3000)
+            .SelectMany(_ => InsightModel.Week(roster, talentEye: 60, rng, c)).ToList();
+
+        var growthType = all.Where(n => n.Topic == InsightTopic.GrowthType).ToList();
+        Assert.NotEmpty(growthType);
+        // 示唆されたタイプは Domain に入る（表示名。空だと UI が「型かもしれない」になる）。
+        Assert.All(growthType, n => Assert.False(string.IsNullOrEmpty(n.Domain)));
+        // 読み違えのときは本当のタイプと違うものが出る（当てにいく気づきにしない）。
+        var wrong = growthType.Where(n => !n.IsAccurate).ToList();
+        Assert.NotEmpty(wrong);
+        Assert.All(wrong, n =>
+            Assert.NotEqual(GrowthTypeNames.DisplayName(n.Player.GrowthType), n.Domain));
+        // 当たりのときは本当のタイプが出る。
+        Assert.All(growthType.Where(n => n.IsAccurate), n =>
+            Assert.Equal(GrowthTypeNames.DisplayName(n.Player.GrowthType), n.Domain));
+    }
+
     // ===== 監督成長イベント（設計書04 §1.1b） =====
 
     [Fact]

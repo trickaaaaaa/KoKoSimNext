@@ -534,6 +534,18 @@ namespace KokoSim.Unity.Home
                     Kind = FeedKind.Discover,
                     Tag = "発見",
                 });
+
+                // 成長タイプの見立てだけノベルへ昇格する（issue #614）。起用と我慢の判断に直結する
+                // 一番重い気づきで、1行のフィードでは流れて消える。ほかの話題はフィードのまま
+                // （全部ノベルにすると毎週クリックさせることになる）。
+                if (n.Topic != InsightTopic.GrowthType) continue;
+                KokoSim.Unity.Shell.EventService.Push("insight_growth_type", n.Player.Name,
+                    new KokoSim.Unity.Shell.PresentedEffect
+                    {
+                        Subject = n.Player.Name,
+                        // ★ 断定しない（設計書03 §5.6）。育成眼が低いと読み違える＝当たっているとは限らない。
+                        Detail = "成長タイプの見立て: " + n.Domain + "型",
+                    }, n.Player.Id);
             }
             PushFeed(newItems);
         }
@@ -555,7 +567,8 @@ namespace KokoSim.Unity.Home
                 case InsightTopic.LowGrowthDomain:
                     return name + " の " + DomainJp(n.Domain) + " は伸びしろがないかもしれない。";
                 case InsightTopic.GrowthType:
-                    return name + " は大器晩成かもしれない。";
+                    // 示唆されたタイプは n.Domain に入る（晩成とは限らない・issue #614）。
+                    return name + " は " + n.Domain + "型かもしれない。";
                 default:
                     return name + " について何か気づいた。";
             }

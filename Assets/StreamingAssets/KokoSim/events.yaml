@@ -534,6 +534,30 @@ events:
           - who: manager
             say: "……それが一番聞きたい話です。"
 
+  # 気づき: 成長タイプの見立て（設計書03 §5.6・issue #614）。
+  # **断定しない**（育成眼が低いと読み違える）。会話も「かもしれない」の温度で書く。
+  - id: insight_growth_type
+    kind: System
+    text: "選手の成長タイプに見当がついた。"
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、{player}、冬に入ってから急に伸びてきましたね。"
+          - who: manager
+            say: "（このタイプか。……三年の夏に間に合う）"
+      - lines:
+          - who: narration
+            say: "同じ練習をしていても、伸びる時期は選手ごとに違う。"
+          - who: manager
+            say: "（{player} は、そういう伸び方をする子だ。……たぶん）"
+      - lines:
+          - who: manager
+            say: "（{player} の測定値、去年から辿ると形が見えてきたな）"
+          - who: coach
+            say: "見立て、当たってますかね。"
+          - who: manager
+            say: "半分は勘だ。だが勘の当たる歳になった。"
+
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
   - id: ace_hidden_injury

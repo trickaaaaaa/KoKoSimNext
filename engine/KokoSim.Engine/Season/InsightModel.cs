@@ -78,6 +78,16 @@ public static class InsightModel
             return new InsightNotice(p, InsightTopic.Personality, Players.Personalities.DisplayName(shown), accurate);
         }
 
+        // 成長タイプの兆し（設計書03 §5.6・issue #614）。
+        // ★ この話題は列挙子だけあって**一度も返されていなかった**（2026-08-14 まで実在しない気づき）。
+        //    「大器晩成かもしれない」は隠しパラメータの中でも起用と我慢の判断に直結するので、
+        //    伸びしろの高低より前に置く。読み違え時は別のタイプを示唆する。
+        if (rng.NextDouble() < 0.25)
+        {
+            var shownType = accurate ? p.GrowthType : WrongGrowthType(p.GrowthType, rng);
+            return new InsightNotice(p, InsightTopic.GrowthType, GrowthTypeNames.DisplayName(shownType), accurate);
+        }
+
         // 分野別伸びしろの最大/最小を話題にする。読み違え(accurate=false)時は逆の示唆を返す。
         var (highDomain, lowDomain) = GrowthExtremes(p);
         if (rng.NextDouble() < 0.5)
@@ -90,6 +100,18 @@ public static class InsightModel
             var domain = accurate ? lowDomain : highDomain;
             return new InsightNotice(p, InsightTopic.LowGrowthDomain, domain, accurate);
         }
+    }
+
+    /// <summary>読み違え用: 本当の成長タイプと異なるタイプを1つ選ぶ（必ず別タイプになる）。</summary>
+    private static GrowthType WrongGrowthType(GrowthType actual, IRandomSource rng)
+    {
+        var others = actual switch
+        {
+            GrowthType.Early => new[] { GrowthType.Standard, GrowthType.Late },
+            GrowthType.Late => new[] { GrowthType.Standard, GrowthType.Early },
+            _ => new[] { GrowthType.Early, GrowthType.Late },
+        };
+        return others[rng.NextInt(0, others.Length)];
     }
 
     /// <summary>読み違え用: 本当の性格と異なる生成対象タイプを1つ選ぶ。</summary>
