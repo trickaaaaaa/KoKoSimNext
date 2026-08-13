@@ -10,8 +10,14 @@ using KokoSim.Engine.Stats;
 
 namespace KokoSim.Engine.Saves;
 
-/// <summary>スロット一覧行に出す最小限のヘッダ（<see cref="SaveCodec.PeekHeader"/>）。</summary>
-public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
+/// <summary>
+/// スロット一覧行に出す最小限のヘッダ（<see cref="SaveCodec.PeekHeader"/>）。
+///
+/// <para><paramref name="SchoolName"/> は v4（issue #585）から本体に入っている自校名。
+/// <b>それより前のセーブには無い</b>ので null になる＝呼び出し側で既定（桜丘）へ落とす。
+/// ここで既定を埋めない（「読めなかった」と「桜丘という校名だった」を潰さないため）。</para>
+/// </summary>
+public readonly record struct SaveHeader(int Version, int Week, int YearIndex, string? SchoolName);
 
 /// <summary>
 /// セーブの正典コーデック（issue #507）。<see cref="SaveState"/> ⇔ JSON 文字列。<b>形（スキーマ）は engine 側</b>で、
@@ -122,8 +128,12 @@ public static class SaveCodec
     }
 
     /// <summary>
-    /// スロット一覧表示に必要な最小限（version/week/yearIndex）だけを覗く（issue #508）。
+    /// スロット一覧表示に必要な最小限（version/week/yearIndex/schoolName）だけを覗く（issue #508・#624）。
     /// ロスター等は読まないため <see cref="TryDeserialize"/> より軽い。読めなければ null。
+    ///
+    /// <para>校名は <b>スキーマ版を上げずに</b>読む＝v4 から本体に既に書かれている項目を覗くだけで、
+    /// 書式は何も変わらない。無い（v3以前）／文字列でない場合は <c>SchoolName = null</c> を返し、
+    /// 表示側が既定へ落とす（issue #624）。</para>
     /// </summary>
     public static SaveHeader? PeekHeader(string? text)
     {
@@ -132,7 +142,11 @@ public static class SaveCodec
         {
             var root = JsonValue.Parse(text!).AsObject();
             if (!root.Has("version")) return null;
-            return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"));
+            // ⚠ 任意項目は必ず Has で分岐する。型付きゲッタは欠損を KeyNotFound で投げる作りなので、
+            // 素で Str すると**校名が無いだけの旧セーブでヘッダ全体が読めなくなる**＝一覧が
+            // 「壊れている」表示に落ちる（この分岐が無い版をテストが赤で捕まえた）。
+            return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"),
+                root.Has("schoolName") ? root.Str("schoolName") : null);
         }
         catch (Exception) { return null; }
     }

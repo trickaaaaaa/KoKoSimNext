@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Components;   // 部品辞書（NumUnit）
-using KokoSim.Unity.Shell;        // SaveSlots / NationService / ScreenRouter
+using KokoSim.Unity.Shell;        // SaveSlots / ScreenRouter
 
 namespace KokoSim.Unity.Saves
 {
@@ -177,8 +177,10 @@ namespace KokoSim.Unity.Saves
         {
             var info = SaveSlots.ReadInfo(_selected);
 
+            // 校名は**そのセーブの中身**から出す（issue #624）。実行中の自校名を出すと、
+            // タイトル経由ではどの枠も静的既定の「桜丘」になる＝スロットの区別が付かない。
             SetText("ss-d-name", info.Exists
-                ? (info.Corrupt ? "読み込めません" : NationService.ManagerSchoolName)
+                ? (info.Corrupt ? "読み込めません" : info.SchoolNameOrDefault)
                 : "── 空き ──");
             SetText("ss-d-sub", SlotLabel(_selected));
 
@@ -232,7 +234,7 @@ namespace KokoSim.Unity.Saves
         private static string SchoolCellText(SaveSlotInfo info)
         {
             if (!info.Exists) return "── 空き ──";
-            return info.Corrupt ? "（読み込み不可）" : NationService.ManagerSchoolName;
+            return info.Corrupt ? "（読み込み不可）" : info.SchoolNameOrDefault;   // issue #624
         }
 
         private static VisualElement FactRow(string label, VisualElement value)
