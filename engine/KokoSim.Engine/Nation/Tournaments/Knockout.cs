@@ -25,15 +25,8 @@ public static class Knockout
         foreach (var s in entrants) wins[s.Id] = 0;
         if (entrants.Count == 1) return new KnockoutResult(new[] { entrants[0] }, wins);
 
-        var seeded = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
-        var size = NextPowerOfTwo(seeded.Count);
-        var seedOrder = SeedOrder(size);
-        var current = new School?[size];
-        for (var slot = 0; slot < size; slot++)
-        {
-            var seed = seedOrder[slot] - 1;
-            current[slot] = seed < seeded.Count ? seeded[seed] : null;
-        }
+        // 組み合わせ抽選（issue #631）。抽選は Fork した専用ストリーム＝試合の乱数列は従来のまま。
+        var current = TournamentDraw.Arrange(entrants, rng.Fork(TournamentDraw.DrawStreamId));
 
         // ラウンドごとの敗者（浅い敗退＝下位）。最後に優勝→準優勝→…の順へ組み立てる。
         var losersByRound = new List<List<School>>();
@@ -82,30 +75,5 @@ public static class Knockout
         }
 
         return new KnockoutResult(placement, wins);
-    }
-
-    private static int NextPowerOfTwo(int n)
-    {
-        var p = 1;
-        while (p < n) p <<= 1;
-        return p;
-    }
-
-    /// <summary>サイズ n(2の冪)の標準シード配置。1番と2番が対角になるよう再帰生成。</summary>
-    private static int[] SeedOrder(int n)
-    {
-        int[] order = { 1 };
-        while (order.Length < n)
-        {
-            var m = order.Length * 2;
-            var next = new int[m];
-            for (var i = 0; i < order.Length; i++)
-            {
-                next[2 * i] = order[i];
-                next[2 * i + 1] = m + 1 - order[i];
-            }
-            order = next;
-        }
-        return order;
     }
 }

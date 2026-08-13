@@ -278,17 +278,11 @@ public sealed class TournamentRunner
         _onBackgroundMatch = onBackgroundMatch;
         Title = title;
 
-        // 強さ順にシード（同値は Id で決定化）。不足分は不戦勝(null)。
-        var seeded = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
-        var size = TournamentEngine.NextPowerOfTwo(seeded.Count);
-        _totalRounds = TournamentRecorder.RoundsRemaining(size);
-        var order = TournamentEngine.SeedOrder(size);
-        _current = new School?[size];
-        for (var slot = 0; slot < size; slot++)
-        {
-            var seed = order[slot] - 1;
-            _current[slot] = seed < seeded.Count ? seeded[seed] : null;
-        }
+        // 組み合わせ抽選（issue #631）: 上位K校をシードとして対角へ、残りは抽選で空きへ。不足分は不戦勝(null)。
+        // 抽選は Fork した専用ストリーム＝本編の乱数列を進めない（試合結果・統計帯は動かない）。
+        // rng は大会ごとに（母種＾年＾種別で）違うので、同じ年でも夏と秋で別の表になる。
+        _current = TournamentDraw.Arrange(entrants, rng.Fork(TournamentDraw.DrawStreamId));
+        _totalRounds = TournamentRecorder.RoundsRemaining(_current.Length);
 
         _roundEntrants = new School?[]?[_totalRounds + 1];
         _roundEntrants[0] = (School?[])_current.Clone();   // 初期シード配置は確定済み＝樹形図の起点。
