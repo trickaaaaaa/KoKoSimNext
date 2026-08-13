@@ -1504,18 +1504,21 @@ public static class GameEngine
                 }
 
                 // 本塁送球が無い外野安打は、先頭走者の到達塁へ返球してボールを内野へ戻す（#6）。
-                // 返球到達は打者走者の到達時刻（"打"レッグ終端＝到達塁）に紐付けて、送球が走者を追い越さないようにする。
+                // 狙う塁は**走塁結果から**決める（issue #627）。打者の塁打数だけで決めていた頃は、単打で
+                // 一塁走者が三塁まで進んでも二塁へ返していた。返球到達のアンカーも同じ走者のレッグ終端に
+                // 揃える＝打者走者に紐付けると「三塁へ投げるが打者の一塁到達に合わせて着く」ことになる。
                 if (!homeThrowAdded && res.Play is { } ofHit && (ofHit.RangeM > 46.0 || ofHit.ThroughInfield)
                     && ofHit.Result is Match.Fielding.BattedBallResult.Single
                         or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple)
                 {
-                    var leadBase = ofHit.Result == Match.Fielding.BattedBallResult.Triple ? "third" : "second";
+                    var returnTo = Match.Timeline.TimelineBuilder.ResolveOutfieldReturnTarget(runnerMoves, ofHit.Result);
                     var runnerArrive = 0.0;
                     foreach (var leg in timeline.Runners)
-                        if (leg.Label == "打" && leg.T1 > runnerArrive) runnerArrive = leg.T1;
+                        if (leg.Label == returnTo.AnchorLabel && leg.T1 > runnerArrive) runnerArrive = leg.T1;
                     // 中継しきい値は肩連動（issue #526）＝判定と同じ係数を渡して絵と食い違わせない
                     timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
-                        timeline, ofHit, ctx.Field, leadBase, runnerArrive, ctx.Fielding, paBaserunning);
+                        timeline, ofHit, ctx.Field, returnTo.BaseName, runnerArrive, ctx.Fielding, paBaserunning,
+                        returnTo.RunnerOut);
                 }
             }
 
