@@ -23,7 +23,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 8;
+    public const int CurrentVersion = 9;
 
     // ===== Serialize =====
 
@@ -57,6 +57,7 @@ public static class SaveCodec
             .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
+            .Add("events", EventSaves.ToJson(s.Events))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -171,6 +172,10 @@ public static class SaveCodec
         // 累計へ畳んで捨てていた＝過去ぶんは作り直せないので、空配列で補う（通算戦績 records は無傷で残る）。
         // 大会別アーカイブに増えた year は要素ごとの欠損＝Read 側で 0（＝年不明）として読む。
         if (version < 8 && !root.Has("tournamentHistory")) root.Add("tournamentHistory", new JsonArray());
+        // v8→v9（issue #609）: 週次イベントの発火状態（クールダウン・年次フラグ）が増えた。v8 以前は
+        // イベントが週送りに繋がっていなかった＝一度も発火していないので、null で補う（＝全部まっさら）。
+        // 旧セーブを開いた直後は全イベントがクールダウン明けになるが、実際に一度も出ていないので正しい。
+        if (version < 9 && !root.Has("events")) root.Add("events", JsonNull.Instance);
         return root;
     }
 
@@ -208,6 +213,8 @@ public static class SaveCodec
             Incoming = IncomingClassSaves.FromJson(root.Has("incoming") ? root["incoming"] : null),
             // 能動勧誘は v6 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Recruiting = RecruitingSaves.FromJson(root.Has("recruiting") ? root["recruiting"] : null),
+            // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
         };
 

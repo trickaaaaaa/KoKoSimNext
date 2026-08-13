@@ -493,6 +493,67 @@ public sealed class SaveCodecTests
         Assert.NotEmpty(s.Draft.Records);   // 他の項目は素通りで読めている
     }
 
+    // 週次イベントの発火状態（issue #609・v9）が往復すること。
+    [Fact]
+    public void EventSchedulerState_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.NotNull(s.Events);
+        Assert.Equal(state.Events!.AbsoluteWeek, s.Events!.AbsoluteWeek);
+        Assert.Equal(state.Events.LastFiredWeeks.Count, s.Events.LastFiredWeeks.Count);
+        foreach (var kv in state.Events.LastFiredWeeks) Assert.Equal(kv.Value, s.Events.LastFiredWeeks[kv.Key]);
+        Assert.Equal(state.Events.AnnualFlags.Count, s.Events.AnnualFlags.Count);
+        foreach (var f in state.Events.AnnualFlags) Assert.Contains(f, s.Events.AnnualFlags);
+    }
+
+    /// <summary>
+    /// クールダウンがロードで明けないこと（issue #609 の本題）。状態を載せ忘れると、
+    /// 直前に見たイベントが開き直した直後にもう一度出る＝往復の値比較だけでは気づけないので、
+    /// <b>復元したスケジューラが実際に発火を止める</b>ところまで測る。
+    /// </summary>
+    [Fact]
+    public void EventSchedulerState_KeepsCooldownsAcrossLoad()
+    {
+        var table = new[]
+        {
+            new KokoSim.Engine.Season.Events.GameEvent
+            {
+                Id = "injury", Kind = KokoSim.Engine.Season.Events.EventKind.Random, Weight = 1.0,
+                CooldownWeeks = 12, Text = "故障した。",
+            },
+        };
+
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        var scheduler = new KokoSim.Engine.Season.Events.EventScheduler(table);
+        s.Events!.RestoreInto(scheduler);
+
+        // 通算37週で最終発火31週・クールダウン12週＝まだ明けていない。
+        var fired = scheduler.Week(week: 20, rng: new KokoSim.Engine.Core.Xoshiro256Random(1));
+        Assert.Empty(fired);
+    }
+
+    // v8（イベント状態が無かった版）のセーブは events を持たない。読めて null で補われること。
+    [Fact]
+    public void V8Save_WithoutEventState_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"events\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "events が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が events の後に居ない");
+        var v8 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":8");
+        Assert.DoesNotContain("\"events\"", v8);
+
+        Assert.True(SaveCodec.TryDeserialize(v8, out var s, out var err), err);
+        Assert.Null(s.Events);              // 一度も発火していない＝まっさらで正しい
+        Assert.NotEmpty(s.TournamentHistory.Entries);   // 他の項目は素通りで読めている
+    }
+
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。
     [Fact]
     public void TournamentState_RoundTrips()

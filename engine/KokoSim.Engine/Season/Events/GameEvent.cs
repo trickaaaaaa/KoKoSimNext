@@ -31,5 +31,15 @@ public sealed record GameEvent
     /// <summary>この年次フラグが立っていると発火しない。</summary>
     public string? RequiresNotAnnualFlag { get; init; }
 
+    /// <summary>
+    /// 通知フィード1行の要約（従来の <c>text:</c>）。ノベル画面で読み終えたあとも履歴として残る行なので、
+    /// バリエーションを持たせず<b>常に同じ1行</b>にする（後から一覧で追えることを優先）。
+    /// </summary>
     public string Text { get; init; } = "";
+
+    /// <summary>
+    /// ノベル提示用の会話（issue #609）。<b>会話まるごと</b>で N 通り持ち、発火時に1つだけ選ぶ。
+    /// 空なら <see cref="Text"/> の1行だけを地の文として見せる（旧データの後方互換）。
+    /// </summary>
+    public IReadOnlyList<EventScript> Variants { get; init; } = System.Array.Empty<EventScript>();
 }

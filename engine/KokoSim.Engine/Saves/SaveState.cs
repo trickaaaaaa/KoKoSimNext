@@ -96,6 +96,13 @@ public sealed class SaveState
     /// </summary>
     public TournamentHistory TournamentHistory { get; set; } = new();
 
+    // --- 週次イベントの発火状態（issue #609。v9 で追加） ---
+    /// <summary>
+    /// クールダウンと年次フラグ（設計書03 §5）。<b>null＝旧セーブ</b>（イベントが週送りに繋がる前の進行）。
+    /// 載せないとロードでクールダウンが全部明けて、直前に見たイベントが即もう一度出る。
+    /// </summary>
+    public EventSchedulerSaveState? Events { get; set; }
+
     /// <summary>
     /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。

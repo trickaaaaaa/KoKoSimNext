@@ -42,6 +42,8 @@ public sealed record CoefficientsBundle
     public MatchInjuryCoefficients MatchInjury { get; init; } = new();
     public GrowthEventCoefficients Growth { get; init; } = new();
     public InsightCoefficients Insight { get; init; } = new();
+    /// <summary>週次イベントの発火（設計書03 §5 / 04 §3.2・issue #609）。</summary>
+    public KokoSim.Engine.Season.Events.EventCoefficients Events { get; init; } = new();
     /// <summary>入部予定者の事前開示（設計書04 §2.1 効果2・issue #587）。</summary>
     public ProspectScoutingCoefficients Scouting { get; init; } = new();
     /// <summary>能動勧誘枠（設計書04 §2.2・issue #588）。</summary>
@@ -107,6 +109,7 @@ public static class CoefficientsLoader
         public GrowthDto? Growth { get; set; }
         public InsightDto? Insight { get; set; }
         public ScoutingDto? Scouting { get; set; }
+        public EventsDto? Events { get; set; }
         public RecruitingDto? Recruiting { get; set; }
         public ManagerGrowthDto? ManagerGrowth { get; set; }
         public TrainingDto? Training { get; set; }
@@ -144,6 +147,7 @@ public static class CoefficientsLoader
             Growth = Growth?.ToModel() ?? new GrowthEventCoefficients(),
             Insight = Insight?.ToModel() ?? new InsightCoefficients(),
             Scouting = Scouting?.ToModel() ?? new ProspectScoutingCoefficients(),
+            Events = Events?.ToModel() ?? new KokoSim.Engine.Season.Events.EventCoefficients(),
             Recruiting = Recruiting?.ToModel() ?? new RecruitCoefficients(),
             ManagerGrowth = ManagerGrowth?.ToModel() ?? new ManagerGrowthCoefficients(),
             Training = Training?.ToModel() ?? new TrainingCoefficients(),
@@ -1120,6 +1124,19 @@ public static class CoefficientsLoader
             EstimateSdMin = EstimateSdMin,
             RevealMin = RevealMin,
             RevealMax = RevealMax,
+        };
+    }
+
+    private sealed class EventsDto
+    {
+        private static readonly KokoSim.Engine.Season.Events.EventCoefficients D = new();
+        public double WeeklyFireProbability { get; set; } = D.WeeklyFireProbability;
+        public int MaxRandomPerWeek { get; set; } = D.MaxRandomPerWeek;
+
+        public KokoSim.Engine.Season.Events.EventCoefficients ToModel() => new()
+        {
+            WeeklyFireProbability = WeeklyFireProbability,
+            MaxRandomPerWeek = MaxRandomPerWeek,
         };
     }
 

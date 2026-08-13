@@ -53,6 +53,9 @@ namespace KokoSim.Unity.Shell
                         // 年度替わりで一切触られず学年が固定されていた）。ロジックは engine の RosterLifecycle.AdvanceYear。
                         // 監督成長（名声更新）の後に呼ぶ＝今季の成績で上がった名声が新入生の質へ効く（design-04 §1）。
                         RosterService.AdvanceYear(YearIndex);
+                        // 週次イベントの年次フラグを落とす（issue #609）。「今年はもう出た」印を
+                        // 年度替わりで解除しないと、一度出たイベントが二度と出なくなる。
+                        EventService.OnYearChanged();
                     }
                     EnterWeek();
                 }

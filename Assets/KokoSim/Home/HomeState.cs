@@ -163,6 +163,25 @@ namespace KokoSim.Unity.Home
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
             RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
+            RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
+        }
+
+        /// <summary>
+        /// 週次イベント（設計書03 §5・issue #609）。<b>発火だけ</b>行い、ノベル画面での提示は
+        /// <see cref="KokoSim.Unity.Shell.EventService"/> のキューに積んで画面側へ委ねる
+        /// （大会開幕週・新チーム発足週は先にそちらのモーダルが出るので、取りこぼさないよう分離する）。
+        ///
+        /// <para><see cref="KokoSim.Unity.Shell.GameClock.Advance"/> の<b>後</b>に呼ぶ＝入った週のイベントを
+        /// 出す。入学式（週0）の会話が「新入部員 N名」を語れるのは、合流が Advance の中で済んでいるため。</para>
+        ///
+        /// <para>提示を見逃してもフィードには必ず残す（後から何が起きたか追える）。</para>
+        /// </summary>
+        private void RunEventWeek()
+        {
+            var items = new List<FeedItem>();
+            foreach (var text in KokoSim.Unity.Shell.EventService.RunWeek())
+                items.Add(new FeedItem { When = "今週", Text = text, Kind = FeedKind.Normal, Tag = "情報" });
+            if (items.Count > 0) PushFeed(items);
         }
 
         /// <summary>

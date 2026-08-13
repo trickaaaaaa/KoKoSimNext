@@ -1,5 +1,23 @@
-# イベントテーブル（設計書04 §3）。Phase 3 は発火の基盤のみ（効果適用は Phase 5 で接続）。
+# イベントテーブル（設計書04 §3）。発火は EventScheduler、提示はノベル画面（issue #609）。
 # 追加・調整はこのファイル編集だけで完結させる（データ駆動）。
+#
+# ■ 書き方
+#   text:     通知フィードに残る1行の要約。**バリエーションを持たせない**（後から一覧で追う行なので固定）。
+#   variants: ノベル画面で見せる会話。**会話まるごと**でN通り書き、発火時に1つだけ選ばれる
+#             （行ごとに独立抽選すると前後が噛み合わない文が出るため。2026-08-13 オーナー決定）。
+#             同じ (イベント, 通算週) なら常に同じ会話＝開き直しても文が変わらない。
+#   lines:    会話の中身。who=役割ID（立ち絵スロット＋既定の話者名）、say=本文、name=話者名の上書き。
+#             who: manager 監督 / player 部員 / coach コーチ / ob OB / scout スカウト /
+#                  local 地域の人 / captain 主将 / narration 地の文（立ち絵なし）
+#
+# ■ 差し込み語（EventTextFormat が展開。未知の語はそのまま残る＝データ側の書き間違いが絵に出る）
+#   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 1年生の人数（新入部員）
+#   ※ {player} はいまは「在籍部員から暦で決まる1人」。イベントの効果（誰が故障したか等）と
+#     結び付くのは #610 以降で、そのとき主役はイベント側から渡される。
+#
+# ■ バリエーションを足すとき
+#   variants: の下に `- lines:` を1ブロック足すだけでよい（コード変更は不要）。
+#   発火の乱数は Fork で引くので、**通数を増やしても「いつ何が起きるか」は1語もずれない**。
 
 events:
   # --- 固定イベント（カレンダー連動, calendar_week: 0〜49） ---
@@ -7,26 +25,146 @@ events:
     kind: Fixed
     calendar_week: 0
     text: "入学式。新入部員が加わった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "校門の桜はもう散りかけている。新しい部員が、少し大きすぎる制服で並んでいた。"
+          - who: captain
+            say: "監督、今年の一年、声だけは立派です。"
+          - who: manager
+            say: "声が出るのはいいことだ。あとは三年でどこまで伸びるかだな。"
+      - lines:
+          - who: narration
+            say: "入学式。グラウンドの土はまだ湿っていて、真新しいスパイクの跡がくっきり残る。"
+          - who: player
+            say: "あの、自分、中学では外野で……いえ、どこでもやります！"
+          - who: manager
+            say: "緊張しなくていい。まずは名前と、投げるか打つかだけ教えてくれ。"
+      - lines:
+          - who: coach
+            say: "新入部員、{count}名です。少ないですが、身体つきは悪くない。"
+          - who: manager
+            say: "人数はどうにでもなる。問題は三年後にどんな顔をしているかだ。"
+      - lines:
+          - who: narration
+            say: "{school}野球部、新年度。部室の名簿にまた行が増えた。"
+          - who: manager
+            say: "……さて、今年はどんなチームになるかな。"
+
   - id: summer_camp
     kind: Fixed
     calendar_week: 18
     text: "夏合宿。全体の経験値が跳ね上がる。"
+    variants:
+      - lines:
+          - who: narration
+            say: "夏合宿。日が落ちてもアスファルトは熱を持ったままで、ノックの音だけが響いていた。"
+          - who: coach
+            say: "監督、そろそろ切り上げますか。倒れられたら元も子もない。"
+          - who: manager
+            say: "あと十本。……いや、五本にしておこう。"
+      - lines:
+          - who: player
+            say: "もう……無理です……。"
+          - who: captain
+            say: "無理って言えるうちは大丈夫だ。俺なんか声も出ねえ。"
+          - who: manager
+            say: "（この時期に一度、底を見せておくといい。夏はそこから始まる）"
+      - lines:
+          - who: narration
+            say: "合宿最終日の夜。誰も口を利かず、それでも誰も先に寝ようとしなかった。"
+          - who: manager
+            say: "……よくやった。明日からは、勝つ練習をする。"
+
   - id: culture_festival
     kind: Fixed
     calendar_week: 28
     text: "文化祭。束の間の休息。"
+    variants:
+      - lines:
+          - who: narration
+            say: "文化祭。グラウンドの脇に模擬店が並び、バットの音がしない土曜日。"
+          - who: player
+            say: "監督、焼きそば食べていきませんか。俺たちの店なんで。"
+          - who: manager
+            say: "……野球部が焼きそばか。まあいい、二つもらおう。"
+      - lines:
+          - who: captain
+            say: "一日くらい、部活のこと忘れてもバチは当たらないですよね。"
+          - who: manager
+            say: "当たらんよ。忘れられるならな。"
+      - lines:
+          - who: narration
+            say: "教室から笑い声が漏れてくる。部員たちの、野球以外の顔を見た。"
+          - who: manager
+            say: "（こういう時間があるから、あの練習に戻れる）"
+
   - id: winter_camp
     kind: Fixed
     calendar_week: 38
     text: "冬合宿。鍛錬期の山場。"
+    variants:
+      - lines:
+          - who: narration
+            say: "冬。吐く息が白い。打球音が乾いて、遠くまで届く。"
+          - who: coach
+            say: "この時期に走らせた分だけ、夏に足が残ります。"
+          - who: manager
+            say: "分かっている。……見えない場所で差がつく季節だ。"
+      - lines:
+          - who: player
+            say: "監督、指の感覚がないんですけど……。"
+          - who: manager
+            say: "握れるならまだ振れる。振れなくなったら言え。"
+      - lines:
+          - who: captain
+            say: "夏に負けた分、冬でやり返します。"
+          - who: manager
+            say: "いい顔になった。その顔のまま三月まで来い。"
+
   - id: draft_meeting
     kind: Fixed
     calendar_week: 30
     text: "ドラフト会議。教え子に指名がかかるか。"
+    variants:
+      - lines:
+          - who: narration
+            say: "ドラフト会議。部室の小さなテレビの前に、全員が座り込んでいる。"
+          - who: manager
+            say: "（呼ばれても呼ばれなくても、こいつらの三年は変わらん。……それでも）"
+      - lines:
+          - who: coach
+            say: "監督、電話は繋がるようにしてありますか。"
+          - who: manager
+            say: "……ああ。鳴らないほうに賭けたいくらいだがな。"
+      - lines:
+          - who: scout
+            say: "今年はどこも即戦力を欲しがっています。高校生は下位まで残るかと。"
+          - who: manager
+            say: "順位は本人には関係ない。行けるかどうかだけだ。"
+
   - id: graduation
     kind: Fixed
     calendar_week: 49
     text: "卒業式。3年生を送り出す。"
+    variants:
+      - lines:
+          - who: narration
+            say: "卒業式。三年生が、最後にグラウンドへ寄っていった。"
+          - who: player
+            say: "……監督。ありがとうございました。"
+          - who: manager
+            say: "礼はいい。次に会うときは、野球の話以外もしよう。"
+      - lines:
+          - who: captain
+            say: "この土、持って帰っていいですか。"
+          - who: manager
+            say: "好きなだけ持っていけ。どうせ来週には均される。"
+      - lines:
+          - who: narration
+            say: "背番号を返しに来た三年生の手が、少しだけ震えていた。"
+          - who: manager
+            say: "……よく三年、続けたな。それだけで十分だ。"
 
   # --- ランダムイベント（重み付き抽選） ---
   - id: injury
@@ -34,21 +172,100 @@ events:
     weight: 2.0
     cooldown_weeks: 6
     text: "選手が練習中に故障した。"
+    variants:
+      - lines:
+          - who: player
+            say: "監督、すみません……走ったら、ここが。"
+          - who: coach
+            say: "無理はさせられません。二、三週は外しましょう。"
+          - who: manager
+            say: "分かった。治すのも練習のうちだ。焦るな。"
+      - lines:
+          - who: coach
+            say: "{player} が練習中に痛めました。歩けてはいますが。"
+          - who: manager
+            say: "……歩けるうちに止めたのは正解だ。よく見ていた。"
+      - lines:
+          - who: narration
+            say: "ノックの途中で、ひとり動きが止まった。周りの音がすっと引いていく。"
+          - who: player
+            say: "……大丈夫です。まだやれます。"
+          - who: manager
+            say: "その『大丈夫』が一番あてにならん。今日は上がれ。"
+      - lines:
+          - who: captain
+            say: "監督、{player} が。……あいつ、痛いって言わないタイプなんで心配で。"
+          - who: manager
+            say: "よく言ってくれた。言わない奴ほど、周りが見てやるしかない。"
+
   - id: rain_week
     kind: Random
     weight: 3.0
     cooldown_weeks: 2
     text: "雨天でグラウンドが使えない。"
+    variants:
+      - lines:
+          - who: narration
+            say: "朝から雨。水たまりに映る空は、当分晴れそうにない。"
+          - who: coach
+            say: "室内に切り替えますか。"
+          - who: manager
+            say: "そうしよう。こういう日に何をしたかで、夏に差が出る。"
+      - lines:
+          - who: player
+            say: "監督、今日は中止ですよね？"
+          - who: manager
+            say: "グラウンドは使えん。だが体はある。走るぞ。"
+      - lines:
+          - who: captain
+            say: "雨、恵みだと思うことにします。脚がもう限界だったんで。"
+          - who: manager
+            say: "……たまには休むのも仕事だ。今日はそれでいい。"
+
   - id: media_coverage
     kind: Random
     weight: 1.5
     cooldown_weeks: 8
     text: "マスコミの取材が入った。名声が上がる。"
+    variants:
+      - lines:
+          - who: narration
+            say: "地元紙の記者がグラウンドに来ている。カメラを向けられた部員が急に固くなった。"
+          - who: manager
+            say: "普段どおりでいい。見られて困る練習はしていない。"
+      - lines:
+          - who: local
+            name: "記者"
+            say: "監督、今年のチームの手応えは？"
+          - who: manager
+            say: "……悪くない、とだけ。あとは夏に見てください。"
+      - lines:
+          - who: coach
+            say: "写真、{player} ばかり撮られていましたね。"
+          - who: manager
+            say: "本人が浮かれなければいい。浮かれたら、それも勉強だ。"
+
   - id: ob_donation
     kind: Random
     weight: 1.0
     cooldown_weeks: 10
     text: "OB会から寄付があった。"
+    variants:
+      - lines:
+          - who: ob
+            say: "監督、少ないですが部で使ってください。私も、ここで三年間転がされた口です。"
+          - who: manager
+            say: "……ありがたく。道具に回させてもらいます。"
+      - lines:
+          - who: narration
+            say: "OB会の封筒が部室の机に置かれていた。添えられた紙には「がんばれ」の四文字だけ。"
+          - who: manager
+            say: "（この四文字が一番重い）"
+      - lines:
+          - who: ob
+            say: "うちの代は一回戦負けでしてね。だから、あなたたちに託すんです。"
+          - who: manager
+            say: "重い荷物だ。……だが、悪くない。"
 
   # 争奪戦（能動勧誘・設計書04 §2.2・issue #588）。
   # 発火のタイミングは週次の抽選ではなく「訪問1回ごと」なので、確率は
@@ -60,6 +277,7 @@ events:
     text: "訪問した。だが競合校も動いたようだ。"
 
   # --- 選択肢イベント（Phase 5で効果接続） ---
+  # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
   - id: ace_hidden_injury
     kind: Choice
     weight: 1.0
@@ -67,8 +285,41 @@ events:
     sets_annual_flag: ace_injured_this_year
     requires_not_annual_flag: ace_injured_this_year
     text: "エースが肘の違和感を隠しているようだ…"
+    variants:
+      - lines:
+          - who: captain
+            say: "監督。……{player}、投げたあと肘を庇ってます。本人は何も言いませんけど。"
+          - who: manager
+            say: "……見ていたか。よく言ってくれた。"
+      - lines:
+          - who: coach
+            say: "エースの球、走ってはいるんです。ただ、フォームが微妙に短い。"
+          - who: manager
+            say: "痛みを避けている動きだな。本人に聞いても『大丈夫』と言うだろうが。"
+      - lines:
+          - who: narration
+            say: "ブルペンの後、{player} がひとりで肘に手を当てているのが見えた。"
+          - who: manager
+            say: "（言わないのは、外されたくないからだ。……さて、どうする）"
+
   - id: skipping_practice
     kind: Choice
     weight: 1.0
     cooldown_weeks: 12
     text: "主力が練習をサボっているらしい。"
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、{player} が今週も途中で抜けています。"
+          - who: manager
+            say: "……理由も聞かずに叱るのはやめておこう。まず話す。"
+      - lines:
+          - who: captain
+            say: "あいつ、最近来ないんです。俺が言っても聞かなくて。"
+          - who: manager
+            say: "主将が抱え込む話じゃない。ここからは俺の仕事だ。"
+      - lines:
+          - who: narration
+            say: "全体練習の輪に、いるはずの背番号が見当たらない。"
+          - who: manager
+            say: "（サボりで片づくなら簡単なんだがな）"
