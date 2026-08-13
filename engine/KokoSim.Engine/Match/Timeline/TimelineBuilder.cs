@@ -1409,8 +1409,20 @@ public static class TimelineBuilder
     ///
     /// 2アウトのフライアウト（#299）はタッチアップ不要のため例外: 静止させず、接触直後
     /// （<see cref="AppendRunnerLegs"/> と同じ ContactAt+0.10）から走者速度で次塁方向へスタートさせ、
-    /// 捕球時刻（イニング終了）でその位置に止める（帰塁の描画はしない）。0/1アウトのフライ・
-    /// ゴロアウトは従来どおり静止のまま（issue の「判断が要る点」によりフライの2アウトだけに限定）。
+    /// 捕球時刻（イニング終了）でその位置に止める（帰塁の描画はしない）。
+    ///
+    /// <para>2アウトの<b>ゴロアウト</b>も同じ扱いにする（issue #625）。判定側（<c>BaserunningModel</c>）は
+    /// 3アウト目の凡打で進塁計算を打ち切る＝移動レッグが1件も積まれないため、直さないと
+    /// フォースされた走者が塁に張り付いて見える。止める時刻は<b>打者が一塁でアウトになる瞬間</b>
+    /// （＝3アウト目の成立）で、フライの捕球時刻と同じ役割。走り切らせない（監督決定 2026-08-13・案B）。</para>
+    ///
+    /// <para>フライは走者全員が対象だが、<b>ゴロはフォースされている塁だけ</b>（一塁は常に／
+    /// 二塁は一塁が埋まっていれば／三塁は一・二塁が埋まっていれば）。フォースの無い走者は
+    /// 走る義務が無く、engine も進塁を解いていないので静止のままにする。
+    /// <c>IsFly</c> は「空中で捕った」の意味なので、<c>IsFly: false</c> がそのまま
+    /// 「地面に落ちた＝タッチアップの要らない打球」と一致する。</para>
+    ///
+    /// <para>0/1アウトは従来どおり静止のまま。乱数不使用・結果不変の表示専用。</para>
     /// </summary>
     public static PlayTimeline AppendHeldRunners(
         PlayTimeline timeline, bool first, bool second, bool third,
@@ -1421,15 +1433,19 @@ public static class TimelineBuilder
         var movedFrom = new HashSet<int>();
         foreach (var m in moves) movedFrom.Add(m.FromBase); // 1/2/3（0=打者）
 
-        var autoRun = outsBefore == 2 && play is { IsFly: true, Result: BattedBallResult.Out };
-        var catchAt = autoRun ? ContactAt + (play!.FieldedAtSeconds ?? play.HangTimeSeconds) : 0.0;
+        var flyAutoRun = outsBefore == 2 && play is { IsFly: true, Result: BattedBallResult.Out };
+        var groundForceRun = outsBefore == 2 && play is { IsFly: false, Result: BattedBallResult.Out };
+        // 止める時刻＝イニングが終わる瞬間。フライは捕球、ゴロは打者が一塁でアウトになる時刻。
+        var stopAt = flyAutoRun ? ContactAt + (play!.FieldedAtSeconds ?? play.HangTimeSeconds)
+            : groundForceRun ? FindBatterArrive(timeline)
+            : 0.0;
 
         var legs = new List<RunnerLeg>(timeline.Runners);
-        void AddHeld(int b, bool occupied, Player? runner, string name, string nextName, string label)
+        void AddHeld(int b, bool occupied, Player? runner, string name, string nextName, string label, bool forced)
         {
             if (!occupied || movedFrom.Contains(b)) return;
             var pt = BasePoint(field, name);
-            if (autoRun && runner is not null)
+            if ((flyAutoRun || (groundForceRun && forced)) && runner is not null)
             {
                 // 走者の時計は判定と共通（Issue #316）。塁上からのスタートなので
                 // AppendRunnerLegs の「塁上から」文脈とまったく同じ扱いにする。
@@ -1438,25 +1454,26 @@ public static class TimelineBuilder
                 // 二次リードは AppendRunnerLegs と同じ扱い（時計が塁間から引いている距離を絵にも乗せる）。
                 var leadPt = LeadPoint(field, b, Math.Max(0.0, ctx.LeadDistanceM));
                 legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = leadPt, OutAtEnd = false, Runner = runner });
-                if (catchAt > t0)
+                if (stopAt > t0)
                 {
                     var speed = runner.ToFielder().SprintSpeedMps;
                     var perBase = RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field) - ctx.StartDelaySeconds;
-                    var frac = Math.Clamp((catchAt - t0) / perBase, 0.0, 1.0);
+                    var frac = Math.Clamp((stopAt - t0) / perBase, 0.0, 1.0);
                     var next = BasePoint(field, nextName);
                     // 進むのは「リード位置から次塁まで」＝時計が持っている距離。塁からの満距離で刻むと
                     // リードぶんだけ速く走ることになる。
                     var stop = new TimelinePoint(
                         leadPt.X + (next.X - leadPt.X) * frac, leadPt.Z + (next.Z - leadPt.Z) * frac);
-                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = catchAt, From = leadPt, To = stop, OutAtEnd = false, Runner = runner });
+                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = stopAt, From = leadPt, To = stop, OutAtEnd = false, Runner = runner });
                 }
                 return;
             }
             legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = timeline.Duration, From = pt, To = pt, OutAtEnd = false, Runner = runner });
         }
-        AddHeld(1, first, firstPlayer, "first", "second", "走一");
-        AddHeld(2, second, secondPlayer, "second", "third", "走二");
-        AddHeld(3, third, thirdPlayer, "third", "home", "走三");
+        // フォースは打者走者から連なる（一塁は常に／二塁は一塁が埋まっていれば／三塁は一・二塁が埋まっていれば）。
+        AddHeld(1, first, firstPlayer, "first", "second", "走一", forced: true);
+        AddHeld(2, second, secondPlayer, "second", "third", "走二", forced: first);
+        AddHeld(3, third, thirdPlayer, "third", "home", "走三", forced: first && second);
 
         if (legs.Count == timeline.Runners.Count) return timeline;
         return timeline with { Runners = legs };
