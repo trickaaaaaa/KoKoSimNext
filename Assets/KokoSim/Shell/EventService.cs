@@ -82,8 +82,18 @@ namespace KokoSim.Unity.Shell
         public static EventCoefficients Coefficients { get; private set; } = new EventCoefficients();
 
         /// <summary>常駐スケジューラ（イベント表は StreamingAssets から一度だけ読む）。</summary>
-        public static EventScheduler Scheduler =>
-            _scheduler ?? (_scheduler = new EventScheduler(EventTableProvider.Events, Coefficients));
+        public static EventScheduler Scheduler
+        {
+            get
+            {
+                if (_scheduler == null)
+                    _scheduler = new EventScheduler(EventTableProvider.Events, Coefficients);
+                // 自校の地方（issue #616）。転校（新規ゲーム・転任）で変わるので毎回据える＝
+                // 一度きりの初期化にすると、県を変えて始めた進行に前の県のイベントが出る。
+                _scheduler.Region = KokoSim.Engine.Nation.PrefectureRegions.RegionOf(NationService.PrefectureId);
+                return _scheduler;
+            }
+        }
 
         /// <summary>未提示のイベント（週送りが積み、ノベル画面が消化する）。</summary>
         public static IReadOnlyList<PresentedEvent> Pending => _pending;

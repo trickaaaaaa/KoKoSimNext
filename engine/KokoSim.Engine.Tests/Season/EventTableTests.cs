@@ -145,6 +145,7 @@ events:
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
             "booster_club_fund", "gear_broken", "local_company_support",
             "outside_coach_visit", "self_practice_awakened", "exam_week_slump",
+            "region_snow_indoor", "region_local_festival", "region_urban_ground_share",
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
@@ -328,6 +329,48 @@ events:
         Assert.False(byId["outside_coach_visit"].Effect.TrainingTargetIsPlayer, "外部コーチは部全体のはず");
         Assert.True(byId["self_practice_awakened"].Effect.TrainingTargetIsPlayer, "自主練は本人だけのはず");
         Assert.True(byId["exam_week_slump"].Effect.TrainingMult < 1.0, "テスト週間は効率が下がるはず");
+    }
+
+    // ===== 地域イベント（issue #616） =====
+
+    /// <summary>
+    /// 地方指定つきイベントは<b>その地方でだけ</b>出ること。地方を設定していないスケジューラ
+    /// （ヘッドレスシム）では一切出ない＝その土地でしか起きない話が全国に混ざらない。
+    /// </summary>
+    [Fact]
+    public void RegionalEvents_FireOnlyInTheirRegion()
+    {
+        var snow = RepositoryEvents().Where(e => e.Id == "region_snow_indoor").ToList();
+        Assert.Single(snow);
+        Assert.Equal(KokoSim.Engine.Nation.JapanRegion.HokkaidoTohoku, snow[0].RequiresRegion);
+
+        var coeff = new EventCoefficients { WeeklyFireProbability = 1.0 };
+
+        // 地方を設定していない＝出ない。
+        var noRegion = new EventScheduler(snow, coeff);
+        var rng = new Xoshiro256Random(5);
+        for (var w = 0; w < 60; w++) Assert.Empty(noRegion.Week(w, rng));
+
+        // 別の地方＝出ない。
+        var kanto = new EventScheduler(snow, coeff) { Region = KokoSim.Engine.Nation.JapanRegion.Kanto };
+        for (var w = 0; w < 60; w++) Assert.Empty(kanto.Week(w, rng));
+
+        // その地方＝出る。
+        var tohoku = new EventScheduler(snow, coeff) { Region = KokoSim.Engine.Nation.JapanRegion.HokkaidoTohoku };
+        var fired = 0;
+        for (var w = 0; w < 60; w++) fired += tohoku.Week(w, rng).Count;
+        Assert.True(fired > 0, "その地方でも発火しない");
+    }
+
+    /// <summary>
+    /// 未知の地方名は<b>例外</b>にすること。既定値へ落とすと、綴りを間違えた雪国イベントが
+    /// 全国どこでも出る（絵では気づけない）。
+    /// </summary>
+    [Fact]
+    public void Parse_UnknownRegion_Throws()
+    {
+        Assert.Throws<FormatException>(() => EventTableParser.Parse(
+            "events:\n  - id: x\n    text: \"t\"\n    requires_region: Hokkaido\n"));
     }
 
     // ===== バリエーション抽選 =====

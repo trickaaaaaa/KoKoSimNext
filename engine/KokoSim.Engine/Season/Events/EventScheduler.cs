@@ -27,6 +27,13 @@ public sealed class EventScheduler
         _coeff = coeff ?? new EventCoefficients();
     }
 
+    /// <summary>
+    /// 自校の地方（issue #616）。地方指定つきイベントはここと一致したときだけ発火する。
+    /// <b>null（既定）のときは地方指定つきイベントを一切出さない</b>＝地方の概念を持たない
+    /// ヘッドレスシムに、その土地でしか起きない話が混ざらない。
+    /// </summary>
+    public Nation.JapanRegion? Region { get; set; }
+
     /// <summary>年の切り替えで年次フラグをリセット。</summary>
     public void ResetAnnualFlags() => _annualFlags.Clear();
 
@@ -113,6 +120,7 @@ public sealed class EventScheduler
 
     private bool CanFire(GameEvent e)
     {
+        if (e.RequiresRegion is { } need && Region != need) return false;
         if (e.RequiresNotAnnualFlag is { } f && _annualFlags.Contains(f)) return false;
         if (_lastFiredWeek.TryGetValue(e.Id, out var last) && _absoluteWeek - last < e.CooldownWeeks) return false;
         return true;

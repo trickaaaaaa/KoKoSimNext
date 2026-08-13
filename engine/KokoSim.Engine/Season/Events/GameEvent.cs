@@ -61,6 +61,13 @@ public sealed record GameEvent
     public string? RequiresNotAnnualFlag { get; init; }
 
     /// <summary>
+    /// この地方の学校でだけ発火する（issue #616。null＝地方を問わない）。
+    /// 判定に使う地方は <see cref="EventScheduler.Region"/>。<b>Region が未設定（null）のときは
+    /// 地方指定つきイベントは発火しない</b>＝ヘッドレスシムには地方の概念が無いので黙って混ざらない。
+    /// </summary>
+    public Nation.JapanRegion? RequiresRegion { get; init; }
+
+    /// <summary>
     /// 通知フィード1行の要約（従来の <c>text:</c>）。ノベル画面で読み終えたあとも履歴として残る行なので、
     /// バリエーションを持たせず<b>常に同じ1行</b>にする（後から一覧で追えることを優先）。
     /// </summary>

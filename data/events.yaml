@@ -416,6 +416,74 @@ events:
           - who: manager
             say: "うまいことを言うな。言う元気があるなら大丈夫だ。"
 
+  # 地域イベント（issue #616）。`requires_region:` の地方でだけ発火する。
+  # 地方名は engine の JapanRegion（HokkaidoTohoku / Kanto / Chubu / Kinki / Chugoku / Shikoku / Kyushu）。
+  # **綴りを間違えるとパースで落ちる**（黙って全国に出さない）。
+  - id: region_snow_indoor
+    kind: Random
+    weight: 1.4
+    cooldown_weeks: 20
+    requires_region: HokkaidoTohoku
+    text: "雪で外の練習ができない日が続く。"
+    effects:
+      training_mult: 0.90
+      training_weeks: 3
+    variants:
+      - lines:
+          - who: narration
+            say: "朝、グラウンドは白一色だった。線を引く場所も分からない。"
+          - who: coach
+            say: "監督、除雪だけで午前が終わります。"
+          - who: manager
+            say: "……体育館を借りよう。振るだけならどこでもできる。"
+      - lines:
+          - who: player
+            say: "監督、雪かきも練習に入りますか。"
+          - who: manager
+            say: "入る。冬にこれをやった学校が、夏に足で勝つ。"
+
+  - id: region_local_festival
+    kind: Random
+    weight: 1.0
+    cooldown_weeks: 24
+    requires_region: Kyushu
+    text: "地域の祭りに部員が駆り出された。"
+    effects:
+      funds: 12
+    variants:
+      - lines:
+          - who: local
+            name: "町内会の人"
+            say: "監督、今年も神輿の担ぎ手が足りんとです。三年生だけでも貸してもらえんですか。"
+          - who: manager
+            say: "……こういうときに顔を出しておくのも、うちの仕事です。"
+      - lines:
+          - who: narration
+            say: "揃いの法被を着た部員たちが、慣れない手つきで綱を握っている。"
+          - who: captain
+            say: "監督、これ、明日の練習より疲れます。"
+
+  - id: region_urban_ground_share
+    kind: Random
+    weight: 1.2
+    cooldown_weeks: 18
+    requires_region: Kanto
+    text: "グラウンドが他部と重なり、使える面積が減った。"
+    effects:
+      training_mult: 0.92
+      training_weeks: 2
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、今週はサッカー部と半面ずつです。ノックは飛ばせません。"
+          - who: manager
+            say: "狭いなら狭いなりの練習がある。ケースバッティングに切り替えよう。"
+      - lines:
+          - who: narration
+            say: "同じ校庭に三つの部が並んでいる。打球が隣の陣地へ飛ぶたび、声が上がる。"
+          - who: manager
+            say: "（都会の学校は、どこもこれと付き合っている）"
+
   # 争奪戦（能動勧誘・設計書04 §2.2・issue #588）。
   # 発火のタイミングは週次の抽選ではなく「訪問1回ごと」なので、確率は
   # coefficients.yaml recruiting.rival_event_prob が持つ（週次イベントの weight は使わない）。

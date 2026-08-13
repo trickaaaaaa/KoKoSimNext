@@ -38,7 +38,7 @@ public static class EventTableParser
 
         // 収集中のイベント1件ぶんの素。ネストが3段（イベント→variants→lines）あるので、
         // 「いま何を読んでいるか」を状態で持つのではなく、インデントで所属を決める。
-        string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null;
+        string? id = null, kind = null, text = null, setsFlag = null, requiresNotFlag = null, region = null;
         int? calendarWeek = null;
         double weight = 1.0;
         int cooldown = 4;
@@ -78,12 +78,13 @@ public static class EventTableParser
                 CooldownWeeks = cooldown,
                 SetsAnnualFlag = setsFlag,
                 RequiresNotAnnualFlag = requiresNotFlag,
+                RequiresRegion = ParseRegion(region),
                 Text = text ?? "",
                 Variants = variants.ToArray(),
                 Effect = new EventEffect(
                     effFunds, effFacilityFund, effTrainingMult, effTrainingWeeks, effTrainingPlayer),
             });
-            id = kind = text = setsFlag = requiresNotFlag = null;
+            id = kind = text = setsFlag = requiresNotFlag = region = null;
             calendarWeek = null;
             weight = 1.0;
             cooldown = 4;
@@ -154,6 +155,7 @@ public static class EventTableParser
                 case "cooldown_weeks": cooldown = ParseInt(value) ?? 4; break;
                 case "sets_annual_flag": setsFlag = value.Length > 0 ? value : null; break;
                 case "requires_not_annual_flag": requiresNotFlag = value.Length > 0 ? value : null; break;
+                case "requires_region": region = value.Length > 0 ? value : null; break;
                 case "text": text = value; break;
                 // 効果（issue #613）。`effects:` の下に書くが、キー名で拾うので入れ子の深さは問わない。
                 case "funds": effFunds = ParseDouble(value, 0.0); break;
@@ -182,6 +184,15 @@ public static class EventTableParser
         "System" => EventKind.System,
         _ => EventKind.Random,
     };
+
+    // 未知の地方名は「指定なし」に落とさず**例外**にする。落とすと、綴りを間違えた雪国イベントが
+    // 全国どこでも出る（絵で気づけない形で壊れる）。
+    private static Nation.JapanRegion? ParseRegion(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        if (Enum.TryParse<Nation.JapanRegion>(name, out var r)) return r;
+        throw new FormatException($"requires_region に未知の地方名: {name}");
+    }
 
     private static int IndentOf(string line)
     {
