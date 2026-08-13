@@ -555,6 +555,11 @@ public static class CoefficientsLoader
         public double ChopperWaitFactor { get; set; } = D.ChopperWaitFactor;
         public double InfieldInterceptStepSeconds { get; set; } = D.InfieldInterceptStepSeconds;
         public double PitcherFieldingReactionPenaltySeconds { get; set; } = D.PitcherFieldingReactionPenaltySeconds;
+        public double ChargeSlowBallSpeedMps { get; set; } = D.ChargeSlowBallSpeedMps;
+        public double ChargeMaxAdvanceCornerM { get; set; } = D.ChargeMaxAdvanceCornerM;
+        public double ChargeMaxAdvanceMiddleM { get; set; } = D.ChargeMaxAdvanceMiddleM;
+        public double ChargeThrowPenaltySeconds { get; set; } = D.ChargeThrowPenaltySeconds;
+        public double ChargeThrowAccuracyPenalty { get; set; } = D.ChargeThrowAccuracyPenalty;
         public double IrregularBounceProb { get; set; } = D.IrregularBounceProb;
         public double IrregularBounceLateralDeg { get; set; } = D.IrregularBounceLateralDeg;
         public double IrregularBounceRestitutionSwing { get; set; } = D.IrregularBounceRestitutionSwing;
@@ -608,6 +613,11 @@ public static class CoefficientsLoader
             ChopperWaitFactor = ChopperWaitFactor,
             InfieldInterceptStepSeconds = InfieldInterceptStepSeconds,
             PitcherFieldingReactionPenaltySeconds = PitcherFieldingReactionPenaltySeconds,
+            ChargeSlowBallSpeedMps = ChargeSlowBallSpeedMps,
+            ChargeMaxAdvanceCornerM = ChargeMaxAdvanceCornerM,
+            ChargeMaxAdvanceMiddleM = ChargeMaxAdvanceMiddleM,
+            ChargeThrowPenaltySeconds = ChargeThrowPenaltySeconds,
+            ChargeThrowAccuracyPenalty = ChargeThrowAccuracyPenalty,
             IrregularBounceProb = IrregularBounceProb,
             IrregularBounceLateralDeg = IrregularBounceLateralDeg,
             IrregularBounceRestitutionSwing = IrregularBounceRestitutionSwing,

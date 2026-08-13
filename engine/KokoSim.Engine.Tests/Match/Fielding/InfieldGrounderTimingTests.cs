@@ -71,9 +71,10 @@ public sealed class InfieldGrounderTimingTests
     [Fact]
     public void RoutineShortstopGrounder_IsOut()
     {
-        // 三遊間へのふつうのゴロ（初速32m/s＝115km/h）。遊撃が定位置(z≈39m・送球37.6m)で捕る＝処理時刻1.51s。
+        // 三遊間へのふつうのゴロ（初速32m/s＝115km/h）。遊撃が定位置(z≈39m)まで下がって待つと処理時刻1.51s。
         // 修正前は「アウトの条件が fieldTime ≤ 1.458s」だったので、この当たりはちょうど内野安打になっていた
         // （守備所要 1.51+1.58+1.17 = 4.26s > 走者 4.23s）。#358 の症状そのもの。
+        // issue #630 の前進捕球で 3m 詰めて 1.39s（z≈36m）＝強い当たりでも一歩は前へ出る。
         var play = Grounder(32.0, -18.0, Batter());
 
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
@@ -82,7 +83,7 @@ public sealed class InfieldGrounderTimingTests
             play.BatterToFirstSeconds, play.JudgementMarginSeconds, play.Result));
 
         Assert.Equal(FieldPosition.Shortstop, play.FielderRole);
-        Assert.InRange(play.FieldedAtSeconds!.Value, 1.4, 1.7);
+        Assert.InRange(play.FieldedAtSeconds!.Value, 1.3, 1.7);
         Assert.Equal(BattedBallResult.Out, play.Result);
     }
 

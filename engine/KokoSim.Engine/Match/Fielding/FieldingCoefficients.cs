@@ -85,8 +85,14 @@ public sealed record FieldingCoefficients
     /// ②捕球点が実戦より本塁寄り＝送球距離が短いぶんの残差。①を分散として物理層へ入れられれば
     /// その分だけ小さくできる（将来の増分）。値は打率・BABIP帯から逆算した 0.60
     /// （0.55 だと AVG が帯下限 .240 に張り付く）。data/coefficients.yaml と同値。
+    ///
+    /// <para>issue #630（2026-08-13・オーナー選択）で 0.60→0.72。前進捕球（<see cref="ChargeSlowBallSpeedMps"/>）で
+    /// 守備所要が平均 0.046s 縮んだ分をここへ戻し、内野安打の水準（内野ゴロの 9.6%）と AVG 帯を据え置いた。
+    /// <b>チャージは守備を速くする＝内野安打を減らす方向</b>なので、この下駄は薄くではなく厚くなる
+    /// （issue の当初想定とは逆向き）。実測（60000打席/10000打席×seed 42・7・2024）:
+    /// 0.72 で内野安打 9.7%・AVG .251/.244/.237＝修正前（9.6%・.250/.244/.237）と同等。</para>
     /// </summary>
-    public double ForceOutMarginSeconds { get; init; } = 0.60;
+    public double ForceOutMarginSeconds { get; init; } = 0.72;
 
     /// <summary>
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。
@@ -234,6 +240,39 @@ public sealed record FieldingCoefficients
     /// 0で従来（投手も他内野手と同じ反応）。処理野手の割り当てにのみ効き、頭上抜け判定（帯校正）には影響しない。
     /// </summary>
     public double PitcherFieldingReactionPenaltySeconds { get; init; } = 0.35;
+
+    // --- 前進捕球（チャージ, issue #630）---
+    // 従来は処理野手が「守備位置に最も近い経路上の点」で打球を待った＝ボテボテのゴロほど長く突っ立って
+    // 待つ絵になり、内野安打が転がっていた。緩い打球だけ前へ出て早い時刻・本塁寄りの点で捕る。
+    // 乱数は引かない（幾何と時間だけ＝不変条件#1/#2）。
+
+    /// <summary>
+    /// 前進捕球を始める打球の「緩さ」しきい[m/s]（待って捕るときの打球速度）。この速度で前進量0、
+    /// 静止球で前進量が上限いっぱいへ直線的に増える（＝しきいの前後で絵と判定が不連続に飛ばない）。
+    /// 強い打球は前進量0＝<b>従来と完全に同じ捕球点・処理時刻</b>になる。
+    ///
+    /// <para>30.0＝オーナー選択（2026-08-13）。「強い当たりでも3〜4m詰める・緩い当たりは思い切り突っ込む」水準で、
+    /// 実測では遊撃定位置への 86km/h のゴロが 2.18s/39m地点 → 1.88s/35m地点、115km/h のゴロが
+    /// 1.51s/39m → 1.39s/36m。母集団では平均捕球が 1.237→1.191s。減った内野安打は
+    /// <see cref="ForceOutMarginSeconds"/> を 0.60→0.72 へ厚くして水準ごと戻してある（帯は書き換えていない）。</para>
+    /// </summary>
+    public double ChargeSlowBallSpeedMps { get; init; } = 30.0;
+
+    /// <summary>コーナー（投手・一塁手・三塁手）が前へ出られる距離[m]（最短の守備範囲からの上乗せ）。
+    /// 一塁が近く送球が短いぶん、実戦でも思い切って突っ込める役割。</summary>
+    public double ChargeMaxAdvanceCornerM { get; init; } = 6.0;
+
+    /// <summary>ミドル（二塁手・遊撃手）が前へ出られる距離[m]。一塁までの送球が長く、
+    /// 体勢を崩すと間に合わないぶんコーナーより浅い。</summary>
+    public double ChargeMaxAdvanceMiddleM { get; init; } = 4.0;
+
+    /// <summary>前進捕球いっぱいのときの握り替え追加時間[s]（走りながら捕る＝体勢が悪い）。
+    /// 前進量に比例して掛ける。前進で縮んだ捕球時刻をそのぶん食い戻す＝一方的な守備強化にしない項。</summary>
+    public double ChargeThrowPenaltySeconds { get; init; } = 0.12;
+
+    /// <summary>前進捕球いっぱいのときの送球精度の低下[点]（走りながらの送球は逸れる）。
+    /// 前進量に比例して野手の ThrowAccuracy から引き、悪送球ロール（design-14 P1-6b）へ効かせる。</summary>
+    public double ChargeThrowAccuracyPenalty { get; init; } = 6.0;
 
     /// <summary>イレギュラーバウンドの発生確率（一律。球場の土質との接続は将来の別Issue）。</summary>
     public double IrregularBounceProb { get; init; } = 0.030;
