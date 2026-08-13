@@ -6,6 +6,7 @@ public enum EventKind
     Fixed,   // カレンダー連動固定イベント
     Random,  // ランダムイベント（重み付き抽選）
     Choice,  // 選択肢イベント（監督判断で分岐, Phase 5で効果接続）
+    System,  // 別経路で起きた出来事の提示（怪我・成長・気づき等・issue #610〜）。週次抽選には載せない
 }
 
 /// <summary>

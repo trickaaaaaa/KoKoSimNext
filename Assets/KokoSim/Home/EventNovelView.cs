@@ -19,8 +19,9 @@ namespace KokoSim.Unity.Home
     public sealed class EventNovelView
     {
         private readonly VisualElement _root;       // ev-novel
-        private readonly VisualElement _portrait;
+        private readonly VisualElement _portrait, _effect, _effectItems;
         private readonly Label _eyebrow, _role, _speaker, _say, _progress, _hint;
+        private readonly Label _fxSubject, _fxDetail;
         private readonly System.Action _onClosed;
         private readonly EventCallback<PointerDownEvent> _click;
 
@@ -38,6 +39,10 @@ namespace KokoSim.Unity.Home
             _say = root?.Q<Label>("ev-say");
             _progress = root?.Q<Label>("ev-progress");
             _hint = root?.Q<Label>("ev-hint");
+            _effect = root?.Q<VisualElement>("ev-effect");
+            _effectItems = root?.Q<VisualElement>("ev-fx-items");
+            _fxSubject = root?.Q<Label>("ev-fx-subject");
+            _fxDetail = root?.Q<Label>("ev-fx-detail");
 
             _click = _ => Advance();
             if (_root != null) _root.RegisterCallback(_click);
@@ -66,6 +71,7 @@ namespace KokoSim.Unity.Home
             _event = next;
             _line = 0;
             _root.style.display = DisplayStyle.Flex;
+            RenderEffect();
             RenderLine();
             return true;
         }
@@ -88,6 +94,57 @@ namespace KokoSim.Unity.Home
             _event = null;
             if (_root != null) _root.style.display = DisplayStyle.None;
             if (_onClosed != null) _onClosed();
+        }
+
+        /// <summary>
+        /// 結果の帯（案A2）。<b>会話の1行目から出しっぱなし</b>にする＝最後まで読まないと結果が
+        /// 分からない作りにしない（読み飛ばしても何が起きたかは残る）。効果が無いイベントは帯ごと消す。
+        /// </summary>
+        private void RenderEffect()
+        {
+            var fx = _event?.Effect;
+            if (_effect == null) return;
+            if (fx == null)
+            {
+                _effect.style.display = DisplayStyle.None;
+                return;
+            }
+            _effect.style.display = DisplayStyle.Flex;
+
+            if (_fxSubject != null)
+            {
+                _fxSubject.text = fx.Subject ?? "";
+                _fxSubject.style.display = string.IsNullOrEmpty(fx.Subject) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+            if (_fxDetail != null) _fxDetail.text = fx.Detail ?? "";
+
+            if (_effectItems == null) return;
+            _effectItems.Clear();
+            foreach (var item in fx.Items) _effectItems.Add(BuildItem(item));
+        }
+
+        // 「離脱 2 週」。数字だけ Oswald に載せ、和文の単位は別 Label にする（Oswald は欧文専用）。
+        private static VisualElement BuildItem(EffectItem item)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("ev__fx-item");
+            if (!string.IsNullOrEmpty(item.Label))
+            {
+                var k = new Label(item.Label);
+                k.AddToClassList("ev__fx-k");
+                row.Add(k);
+            }
+            var v = new Label(item.Value);
+            v.AddToClassList("ev__fx-v");
+            v.AddToClassList("f-num-bd");
+            row.Add(v);
+            if (!string.IsNullOrEmpty(item.Unit))
+            {
+                var u = new Label(item.Unit);
+                u.AddToClassList("ev__fx-u");
+                row.Add(u);
+            }
+            return row;
         }
 
         private void RenderLine()

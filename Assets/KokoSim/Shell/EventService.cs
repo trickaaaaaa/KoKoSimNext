@@ -16,6 +16,33 @@ namespace KokoSim.Unity.Shell
         public string Say;
     }
 
+    /// <summary>効果帯の1項目（「離脱 2 週」）。数値と単位は Oswald と和文で Label を分ける（書体3役）。</summary>
+    public sealed class EffectItem
+    {
+        public string Label;
+        public string Value;
+        public string Unit;
+
+        public EffectItem(string label, string value, string unit = "")
+        {
+            Label = label; Value = value; Unit = unit;
+        }
+    }
+
+    /// <summary>
+    /// 会話の下に出す「結果」（案A2・監督決定 2026-08-13）。<b>会話で何が起きたかを語り、
+    /// ここで数値を示す</b>＝本文に数字を埋め込まない（UI原則③）。null なら帯ごと出さない。
+    /// </summary>
+    public sealed class PresentedEffect
+    {
+        /// <summary>主役（選手名・監督名）。空なら出さない。</summary>
+        public string Subject;
+        /// <summary>内容の言い切り（「右足首 捻挫（軽度）」）。空なら出さない。</summary>
+        public string Detail;
+        /// <summary>数値の並び（0件でもよい）。</summary>
+        public IReadOnlyList<EffectItem> Items = System.Array.Empty<EffectItem>();
+    }
+
     /// <summary>
     /// 発火して「まだ見せていない」イベント1件（issue #609）。会話は<b>発火時に確定</b>しており、
     /// 提示層は選び直さない＝同じ週のイベントを何度開いても同じ文になる。
@@ -26,6 +53,8 @@ namespace KokoSim.Unity.Shell
         /// <summary>通知フィードに残す1行（差し込み語を展開済み）。</summary>
         public string FeedText;
         public IReadOnlyList<PresentedLine> Lines;
+        /// <summary>会話の下に出す結果（null＝帯を出さない）。</summary>
+        public PresentedEffect Effect;
     }
 
     /// <summary>
@@ -81,9 +110,57 @@ namespace KokoSim.Unity.Shell
                     Lines = ResolveLines(f.Script, values),
                 };
                 _pending.Add(e);
+                _queuedThisWeek++;
                 feed.Add(e.FeedText);
             }
             return feed;
+        }
+
+        /// <summary>
+        /// 1回の週送りでノベルにできる件数の上限（issue #610）。故障・成長・気づきが重なった週に
+        /// クリックを何度も要求しないための歯止め。<b>あふれた分もフィードには残る</b>ので情報は落ちない。
+        /// </summary>
+        private const int MaxNovelPerWeek = 3;
+
+        private static int _queuedThisWeek;
+
+        /// <summary>週送りの先頭で呼ぶ（この週にノベルへ載せた件数を数え直す）。</summary>
+        public static void BeginWeek() => _queuedThisWeek = 0;
+
+        /// <summary>
+        /// 実際に起きた出来事を<b>主役つき</b>でノベルのキューへ積む（issue #610〜）。
+        /// 週次抽選（<see cref="RunWeek"/>）とは別経路で、クールダウンも年次フラグも通さない
+        /// ＝起きたことは必ず語られる。
+        ///
+        /// <para><b>通知フィードはここでは触らない</b>。呼び出し元（怪我・成長など）が診断名つきの
+        /// 詳しい行をすでに流しているので、二重に出さない。</para>
+        ///
+        /// <para><paramref name="salt"/> には主役の選手IDを渡す＝同じ週に2人同時に故障しても
+        /// 別の会話になる（同じ人・同じ週なら常に同じ会話）。</para>
+        /// </summary>
+        public static void Push(string eventId, string subjectName, PresentedEffect effect, int salt = 0)
+        {
+            var e = Scheduler.Find(eventId);
+            if (e == null)
+            {
+                // 表から消えても進行は止めない（会話が出ないだけ）。黙って消えると気づけないので警告は出す。
+                UnityEngine.Debug.LogWarning("[イベント] " + eventId + " が events.yaml に無い（提示を飛ばす）");
+                return;
+            }
+            if (_queuedThisWeek >= MaxNovelPerWeek) return;
+            _queuedThisWeek++;
+
+            var values = BuildValues();
+            if (!string.IsNullOrEmpty(subjectName)) values["player"] = subjectName;
+            var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, salt, Rng());
+
+            _pending.Add(new PresentedEvent
+            {
+                Id = e.Id,
+                FeedText = EventTextFormat.Apply(e.Text, values),
+                Lines = ResolveLines(script, values),
+                Effect = effect,
+            });
         }
 
         /// <summary>
@@ -103,6 +180,7 @@ namespace KokoSim.Unity.Shell
         {
             _scheduler = null;
             _pending.Clear();
+            _queuedThisWeek = 0;
         }
 
         /// <summary>セーブ保存: クールダウンと年次フラグ（issue #609・v9）。</summary>

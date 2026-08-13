@@ -1276,7 +1276,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 }
 
 /* 役割スロット（単色シルエット＋役割名）。絵が入ったらこの中身だけ差し替える。 */
-.ev-por { align-items: center; justify-content: flex-end; }
+/* 立ち絵は<b>舞台の高さに追従させる</b>（胴を伸縮させる）。固定高にすると、効果帯が付いて
+   舞台が縮んだ週だけ頭が切れる＝「効果のあるイベントでだけ絵が壊れる」形になる。 */
+.ev-por { flex-grow: 1; flex-shrink: 1; min-height: 0; align-items: center; justify-content: flex-end; }
 /* 枠はインクで締める（この画面だけ枠なしの塊が浮くのを避ける。design-19 の「インク枠」）。 */
 .ev-por__head {
     width: 92px; height: 92px;
@@ -1287,13 +1289,14 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     flex-shrink: 0;
 }
 .ev-por__body {
-    width: 208px; height: 260px;
+    width: 208px;
+    flex-grow: 1; flex-shrink: 1;
+    min-height: 96px; max-height: 260px;
     border-radius: 96px 96px 0 0;   /* 肩の丸み。人の形に見える最低限 */
     background-color: var(--day-tx-3);
     border-width: var(--nb-border);
     border-color: var(--ink);
     margin-top: var(--sp-1);
-    flex-shrink: 0;
 }
 .ev-por__role {
     font-size: var(--fs-cap);
@@ -1340,3 +1343,36 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 }
 .ev__progress { font-size: var(--fs-cap); color: var(--day-tx-3); }
 .ev__hint { font-size: var(--fs-cap); color: var(--day-tx-2); letter-spacing: 2px; }
+
+/* 結果の帯（案A2・監督決定 2026-08-13）。会話ボックスの下端に、上だけ罫で仕切って積む。
+   別カードにしないのは、会話と結果を1枚として読ませるため（クリックも増やさない）。
+   数値は Oswald・単位は和文で Label を分ける（書体3役）。色は付けない＝
+   良い知らせも悪い知らせも同じ帯で出す（警告色は本当の警告だけ・UI原則②）。 */
+.ev__fx {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: var(--sp-3);
+    padding-top: var(--sp-3);
+    border-top-width: 1px;
+    border-top-color: var(--divider);
+    display: none;              /* 効果の無いイベントでは帯ごと出さない */
+}
+.ev__fx-sub {
+    font-size: var(--fs-body);
+    color: var(--ink);
+    margin-right: var(--sp-4);
+}
+.ev__fx-det {
+    font-size: var(--fs-label);
+    color: var(--day-tx-2);
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+}
+.ev__fx-items { flex-direction: row; align-items: center; flex-shrink: 0; }
+/* 1項目＝「離脱 2 週」。ラベルは弱く、数字を主役にする（UI原則③）。 */
+.ev__fx-item { flex-direction: row; align-items: center; margin-left: var(--sp-4); }
+.ev__fx-k { font-size: var(--fs-cap); color: var(--day-tx-2); margin-right: var(--sp-2); }
+.ev__fx-v { font-size: var(--fs-num-lg); color: var(--ink); }
+.ev__fx-u { font-size: var(--fs-cap); color: var(--day-tx-2); margin-left: 2px; }

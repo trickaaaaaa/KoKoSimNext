@@ -159,10 +159,14 @@ public static class EventTableParser
         return events;
     }
 
+    // 既定を Random にしているのは kind 省略の後方互換。**新しい種別を足したらここにも足す**＝
+    // 足し忘れると System が Random に化けて週次抽選のプールへ入り、主役の居ない会話が出るうえ
+    // 抽選の重み合計が変わって発火の乱数列までずれる（issue #610 の作業中に実際に踏んだ）。
     private static EventKind ParseKind(string? kind) => kind switch
     {
         "Fixed" => EventKind.Fixed,
         "Choice" => EventKind.Choice,
+        "System" => EventKind.System,
         _ => EventKind.Random,
     };
 

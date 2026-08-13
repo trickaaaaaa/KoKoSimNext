@@ -72,6 +72,22 @@ events:
         Assert.Equal("監督、すみません。#1 じゃなくてもいいです。", randomOne.Variants[0].Lines[0].Say);
     }
 
+    /// <summary>
+    /// <c>kind:</c> の全種別が読めること。パーサは未知の語を Random へ落とすので、種別を足したときに
+    /// <c>ParseKind</c> を直し忘れると<b>例外もパース失敗も出ずに Random へ化ける</b>
+    /// （＝週次抽選のプールに入り、重み合計が変わって発火の乱数列までずれる。issue #610 で実際に踏んだ）。
+    /// </summary>
+    [Theory]
+    [InlineData("Fixed", EventKind.Fixed)]
+    [InlineData("Random", EventKind.Random)]
+    [InlineData("Choice", EventKind.Choice)]
+    [InlineData("System", EventKind.System)]
+    public void Parse_ReadsEveryKind(string word, EventKind expected)
+    {
+        var events = EventTableParser.Parse($"events:\n  - id: x\n    kind: {word}\n    text: \"t\"\n");
+        Assert.Equal(expected, events[0].Kind);
+    }
+
     [Fact]
     public void Parse_OldTableWithoutVariants_StillLoads()
     {
@@ -118,6 +134,9 @@ events:
             "entrance_ceremony", "summer_camp", "culture_festival", "winter_camp", "draft_meeting", "graduation",
             "injury", "rain_week", "media_coverage", "ob_donation", "recruit_rival_move",
             "ace_hidden_injury", "skipping_practice",
+            // システムイベント（issue #610〜）。IDは呼び出し側にベタ書きされているので、
+            // 消えると「その出来事だけ黙って会話が出ない」形で壊れる。
+            "injury_occurred", "injury_returned",
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
@@ -127,13 +146,59 @@ events:
     public void RepositoryTable_WeeklyEventsHaveSeveralVariants()
     {
         // 毎年・何度も出るイベントは同じ文が続くと一気に飽きるので、複数通り持たせる。
-        // 週次抽選に乗らないもの（weight 0＝別経路で出す）は対象外。
+        // 週次抽選に乗らないもの（weight 0＝別経路で出す）は対象外。System は出番が多いので対象。
         foreach (var e in RepositoryEvents())
         {
-            if (e.Kind != EventKind.Fixed && e.Weight <= 0) continue;
+            if (e.Kind != EventKind.Fixed && e.Kind != EventKind.System && e.Weight <= 0) continue;
             Assert.True(e.Variants.Count >= 2, $"{e.Id} の会話が {e.Variants.Count} 通りしかない");
             Assert.All(e.Variants, v => Assert.NotEmpty(v.Lines));
         }
+    }
+
+    /// <summary>
+    /// システムイベント（issue #610〜）は週次抽選に載らないこと。載ると「誰も故障していないのに
+    /// 故障の会話だけ出る」＝主役の居ない会話になる（{player} が無関係の部員に化ける）。
+    /// </summary>
+    [Fact]
+    public void SystemEvents_AreNotDrawnByTheWeeklyLottery()
+    {
+        var system = RepositoryEvents().Where(e => e.Kind == EventKind.System).ToList();
+        Assert.NotEmpty(system);
+
+        var scheduler = new EventScheduler(system, new EventCoefficients { WeeklyFireProbability = 1.0 });
+        var rng = new Xoshiro256Random(9);
+        for (var w = 0; w < 50; w++) Assert.Empty(scheduler.Week(w, rng));
+    }
+
+    /// <summary>
+    /// 主役つき提示は<b>同じ週でも人が違えば別の会話</b>になること（issue #610）。
+    /// 同じ週に2人が同時に故障したとき、一字一句同じ会話が2回続くと「バグに見える」。
+    /// </summary>
+    [Fact]
+    public void PickScript_WithSalt_DiffersPerSubject_AndIsStablePerSubject()
+    {
+        var e = RepositoryEvents().First(x => x.Id == "injury_occurred");
+        var rng = new Xoshiro256Random(31);
+
+        // 同じ人・同じ週なら常に同じ会話。
+        Assert.Same(EventScheduler.PickScript(e, 10, 7, rng), EventScheduler.PickScript(e, 10, 7, rng));
+
+        // 人が違えば少なくとも1回は別の会話になる。
+        var seen = new HashSet<EventScript>();
+        for (var id = 1; id <= 30; id++) seen.Add(EventScheduler.PickScript(e, 10, id, rng));
+        Assert.True(seen.Count >= 2, "同じ週だと誰が故障しても同じ会話になる");
+    }
+
+    /// <summary>
+    /// salt 無しの呼び出しが従来と1ビットも変わらないこと（既存の週次イベントの会話が動かない）。
+    /// </summary>
+    [Fact]
+    public void PickScript_WithoutSalt_IsUnchanged()
+    {
+        var e = RepositoryEvents().First(x => x.Variants.Count >= 3);
+        var rng = new Xoshiro256Random(44);
+        for (var w = 1; w <= 20; w++)
+            Assert.Same(EventScheduler.PickScript(e, w, rng), EventScheduler.PickScript(e, w, 0, rng));
     }
 
     [Fact]

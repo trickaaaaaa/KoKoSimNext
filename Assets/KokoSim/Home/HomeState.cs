@@ -157,6 +157,7 @@ namespace KokoSim.Unity.Home
         /// 見てホームが出す。</summary>
         public void AdvanceWeek()
         {
+            KokoSim.Unity.Shell.EventService.BeginWeek();   // この週のノベル件数を数え直す（issue #610）
             RunPracticeWeek(1.0);                       // 通常週の練習（効果1.0）
             RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
@@ -384,6 +385,19 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Warn,
                         Tag = "警告",
                     });
+                    // ノベルで見せる（issue #610）。診断名と離脱週は効果帯へ回し、会話には数字を入れない。
+                    KokoSim.Unity.Shell.EventService.Push("injury_occurred", p.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = p.Name,
+                            Detail = InjuryLabel.Diagnosis(p.InjuryType, p.InjurySite)
+                                     + "（" + InjuryLabel.Severity(p.Injury) + "）",
+                            Items = new[]
+                            {
+                                new KokoSim.Unity.Shell.EffectItem(
+                                    "全治", InjuryLabel.WeeksToFullRecovery(p).ToString(), "週"),
+                            },
+                        }, p.Id);
                 }
                 else
                 {
@@ -396,6 +410,12 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Up,
                         Tag = "情報",
                     });
+                    KokoSim.Unity.Shell.EventService.Push("injury_returned", p.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = p.Name,
+                            Detail = "全快（練習に合流）",
+                        }, p.Id);
                 }
             }
 

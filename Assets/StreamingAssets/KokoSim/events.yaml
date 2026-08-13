@@ -11,7 +11,9 @@
 #                  local 地域の人 / captain 主将 / narration 地の文（立ち絵なし）
 #
 # ■ 差し込み語（EventTextFormat が展開。未知の語はそのまま残る＝データ側の書き間違いが絵に出る）
-#   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 人数
+#   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 1年生の人数（新入部員）
+#   ※ {player} はいまは「在籍部員から暦で決まる1人」。イベントの効果（誰が故障したか等）と
+#     結び付くのは #610 以降で、そのとき主役はイベント側から渡される。
 #
 # ■ バリエーションを足すとき
 #   variants: の下に `- lines:` を1ブロック足すだけでよい（コード変更は不要）。
@@ -273,6 +275,59 @@ events:
     kind: Random
     weight: 0.0
     text: "訪問した。だが競合校も動いたようだ。"
+
+  # --- システムイベント（issue #610〜）---
+  # 週次抽選には載せず（kind: System）、実際に起きた出来事から**主役つき**で呼ばれる。
+  # 発生元が誰に何が起きたかを知っているので {player} は必ず実在の部員になる。
+  # クールダウンは効かない（起きたら必ず出す）。通知フィードの行は発生元が出すので text は控えに留める。
+  - id: injury_occurred
+    kind: System
+    text: "選手が故障した。"
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、{player} がノックの途中で足を止めました。"
+          - who: player
+            say: "……大丈夫です。まだやれます。"
+          - who: manager
+            say: "その「大丈夫」が一番あてにならん。今日は上がれ。"
+      - lines:
+          - who: player
+            say: "監督、すみません……ここ、ちょっと。"
+          - who: manager
+            say: "隠さずに言えたなら上出来だ。治すのも練習のうちだぞ。"
+      - lines:
+          - who: narration
+            say: "全体練習の途中で、ひとり動きが止まった。周りの音がすっと引いていく。"
+          - who: coach
+            say: "{player} です。歩けてはいますが、無理はさせられません。"
+          - who: manager
+            say: "……歩けるうちに止めたのは正解だ。よく見ていた。"
+      - lines:
+          - who: captain
+            say: "監督、{player} が。……あいつ、痛いって言わないタイプなんで心配で。"
+          - who: manager
+            say: "よく言ってくれた。言わない奴ほど、周りが見てやるしかない。"
+
+  - id: injury_returned
+    kind: System
+    text: "選手が怪我から復帰した。"
+    variants:
+      - lines:
+          - who: player
+            say: "監督。……戻りました。"
+          - who: manager
+            say: "焦って取り返そうとするな。まず走れ。話はそれからだ。"
+      - lines:
+          - who: coach
+            say: "{player}、今日から全体に合流させます。動きは戻っています。"
+          - who: manager
+            say: "本人が「もう平気だ」と言い出したら、逆に一日休ませろ。"
+      - lines:
+          - who: narration
+            say: "久しぶりに、その背番号がノックの列に並んでいる。"
+          - who: manager
+            say: "（休んでいた間に、周りが伸びた。それも本人が一番よく分かっている）"
 
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。

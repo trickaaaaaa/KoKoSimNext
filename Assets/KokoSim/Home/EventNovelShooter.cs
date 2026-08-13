@@ -106,6 +106,55 @@ namespace KokoSim.Unity.Home
                 yield return Capture(doc, "92-feed-after");   // 通知フィードに要約行が残っていること
             }
 
+            // ── 効果帯（案A2・issue #610）──
+            // 故障は確率で起きるので、絵の確認だけは主役つき提示を直接叩いて確実に撮る。
+            var subject = RosterService.Active.Count > 0 ? RosterService.Active[0] : null;
+            if (subject != null)
+            {
+                EventService.BeginWeek();
+                EventService.Push("injury_occurred", subject.Name, new PresentedEffect
+                {
+                    Subject = subject.Name,
+                    Detail = "右足首 捻挫（軽度）",
+                    Items = new[] { new EffectItem("全治", "2", "週") },
+                }, subject.Id);
+
+                var home = Open("HomeDashboard");
+                yield return null; yield return null;
+                novel = home.rootVisualElement.Q<VisualElement>("ev-novel");
+                var band = home.rootVisualElement.Q<VisualElement>("ev-effect");
+                Debug.Log("[EV] effect band display=" + (band == null ? "null" : band.resolvedStyle.display.ToString()));
+                for (var i = 0; i < 6 && novel.resolvedStyle.display != DisplayStyle.None; i++)
+                {
+                    yield return Capture(home, string.Format("A{0:00}-injury", i));
+                    Click(novel);
+                    yield return null; yield return null;
+                }
+            }
+
+            // ── 実経路の確認（怪我）──
+            // 週送りで実際に故障が起きたときにノベルが出ることを、12週ぶん回して観測する。
+            // 出なければ「この12週では起きなかった」とだけ言う（確率なので失敗にはしない）。
+            var seen = 0;
+            for (var w = 0; w < 12; w++)
+            {
+                var doc2 = Open("HomeDashboard");
+                yield return null; yield return null;
+                var nov2 = doc2.rootVisualElement.Q<VisualElement>("ev-novel");
+                var btn = doc2.rootVisualElement.Q<Button>("advance");
+                if (btn == null) break;
+                Submit(btn);
+                yield return null; yield return null;
+                foreach (var p in EventService.Pending)
+                    if (p.Id.StartsWith("injury_")) { seen++; Debug.Log("[EV] 実経路で発火: " + p.Id + " / " + p.Lines[0].Say); }
+                for (var i = 0; i < 12 && nov2.resolvedStyle.display != DisplayStyle.None; i++)
+                {
+                    Click(nov2);
+                    yield return null; yield return null;
+                }
+            }
+            Debug.Log("[EV] 実経路の怪我イベント: " + seen + " 件（12週）");
+
             Debug.Log("[EV] DONE all shots");
         }
 

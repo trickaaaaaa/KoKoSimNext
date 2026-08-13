@@ -53,6 +53,16 @@ public sealed class EventScheduler
         foreach (var f in annualFlags) _annualFlags.Add(f);
     }
 
+    /// <summary>
+    /// IDでイベント定義を引く（主役つき提示の入口・issue #610）。見つからなければ null＝
+    /// 呼び出し側は<b>提示だけ諦めて処理は続ける</b>（会話が無くても出来事そのものは起きている）。
+    /// </summary>
+    public GameEvent? Find(string id)
+    {
+        foreach (var e in _events) if (e.Id == id) return e;
+        return null;
+    }
+
     public IReadOnlyList<FiredEvent> Week(int week, IRandomSource rng)
     {
         _absoluteWeek++;
@@ -74,7 +84,9 @@ public sealed class EventScheduler
             var totalWeight = 0.0;
             foreach (var e in _events)
             {
-                if (e.Kind == EventKind.Fixed) continue;
+                // 抽選に載るのは Random と Choice だけ。Fixed は暦で出し、System は
+                // 別経路（怪我・成長など実際に起きた出来事）から主役つきで出す（issue #610）。
+                if (e.Kind != EventKind.Random && e.Kind != EventKind.Choice) continue;
                 if (!CanFire(e)) continue;
                 pool.Add(e);
                 totalWeight += e.Weight;
@@ -119,10 +131,19 @@ public sealed class EventScheduler
     /// 「いつ何が起きるか」は変わらない）。同じ (イベントID, 通算週) なら常に同じ会話。
     /// </summary>
     public static EventScript PickScript(GameEvent e, int absoluteWeek, IRandomSource rng)
+        => PickScript(e, absoluteWeek, 0, rng);
+
+    /// <summary>
+    /// 主役つきイベント用（issue #610）。<paramref name="salt"/> に主役の選手IDを渡すと、
+    /// <b>同じ週に2人が同時に故障しても別の会話</b>になる（同じ人・同じ週なら常に同じ会話）。
+    /// </summary>
+    public static EventScript PickScript(GameEvent e, int absoluteWeek, int salt, IRandomSource rng)
     {
         if (e.Variants.Count == 0) return EventScript.Single(EventRoles.Narration, e.Text);
         if (e.Variants.Count == 1) return e.Variants[0];
-        var stream = Fnv1a(e.Id) ^ ((ulong)absoluteWeek * 0x9E3779B97F4A7C15UL);
+        var stream = Fnv1a(e.Id)
+                     ^ ((ulong)absoluteWeek * 0x9E3779B97F4A7C15UL)
+                     ^ ((ulong)(uint)salt * 0xD1B54A32D192ED03UL);
         return e.Variants[rng.Fork(stream).NextInt(0, e.Variants.Count)];
     }
 
