@@ -822,6 +822,23 @@ public static class GameEngine
                 // 判定結果（アウト/セーフ）に関わらず組む＝分岐させない（2026-08-05 issue決定）。
                 Timeline.Playback.PlaybackPlay? pickoffPlay = null;
 
+                // issue #626: 盗塁が無効になる球（ファウル＝ボールデッド／打球＝打球優先）のための控え。
+                // 盗塁は実球より前に完全解決する構造で、その球が無効だったと判るのは投げた後になる。
+                // 解決順・乱数消費順は<b>一切動かさず</b>、適用結果だけを後から巻き戻す（不変条件#2）。
+                // 牽制（PickoffResolver）は投球前の独立事象なので巻き戻さない＝牽制で決着した球には
+                // そもそも盗塁が走らないので、下の stealRolledBack 系は立たない。
+                var steal0First = bases.First;
+                var steal0Second = bases.Second;
+                var steal0Third = bases.Third;
+                var steal0Outs = outs;
+                var steal0Runs = offense.Runs;
+                var steal0RunsThisHalf = runsThisHalf;
+                Player? stealRecRunner = null;      // RecordSteal した走者（取り消し対象）
+                var stealRecSuccess = false;
+                Player? stealRecScorer = null;      // 本盗・重盗で得点した走者（帰属の取り消し対象）
+                var stealDoubleBreak = false;       // 重盗の三塁ブレイクを数えたか
+                StartType? stealStartApplied = null; // 実際に走った始動種別（打球の球でだけ活かす）
+
                 // 盗塁/牽制/重盗（設計書02 §4.2・設計書09 §1・design-14 P1-4/P1-5・設計書15 Phase D-2d）:
                 // カウントは消費せず（実球はこの後も通常どおり投げる）、この球の前に走者だけが動く。
                 // PickoffResolver→StealReadModel.RollPitchout→StealResolver→重盗ロールの呼び出し順は
@@ -868,6 +885,8 @@ public static class GameEngine
                                 bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart) == StealResult.Safe,
                         };
                         offense.RecordSteal(bases.First, safe);
+                        stealRecRunner = secondStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
+                        stealStartApplied = stealStart;
                         // 全力疾走・スライディング（設計書03 §3.5）: 盗塁企図ごとに走者が受傷しうる。
                         if (bases.First is { } slider)
                         {
@@ -897,12 +916,14 @@ public static class GameEngine
                             && MathUtil.Chance(paBaserunning.DoubleStealThirdBreakProb, rng))
                         {
                             offense.DoubleStealThirdBreakCount++;
+                            stealDoubleBreak = true;         // issue #626: 巻き戻し対象
                             offense.Runs += 1;
                             runsThisHalf += 1;
                             if (bases.Third is { } dsScorer)
                             {
                                 offense.RecordRun(dsScorer); // 得点帰属（issue #77）
                                 doubleScorer = dsScorer;     // 重盗の絵（issue #485）
+                                stealRecScorer = dsScorer;   // issue #626: 巻き戻し対象
                             }
                             bases.Third = null;
                         }
@@ -943,6 +964,7 @@ public static class GameEngine
                             bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart,
                             StealTarget.Third) == StealResult.Safe;
                         offense.RecordSteal(bases.Second, safe);
+                        stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Second is { } thirdSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -993,6 +1015,7 @@ public static class GameEngine
                             bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart,
                             StealTarget.Home) == StealResult.Safe;
                         offense.RecordSteal(bases.Third, safe);
+                        stealRecRunner = homeStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Third is { } homeSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -1004,7 +1027,11 @@ public static class GameEngine
                         {
                             offense.Runs += 1;
                             runsThisHalf += 1;
-                            if (bases.Third is { } homeScorer) offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
+                            if (bases.Third is { } homeScorer)
+                            {
+                                offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
+                                stealRecScorer = homeScorer;   // issue #626: 巻き戻し対象
+                            }
                         }
                         else
                         {
@@ -1090,6 +1117,37 @@ public static class GameEngine
                     batterOverride: batterAttrsPitch, swingFactorOverride: swingFactorPitch,
                     fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
                     squeezeWasteOverride: sqWasteOverride);
+
+                // 盗塁の取り消し（issue #626）: 投げた球が「盗塁が成立しない球」だったら、上で適用した
+                // 盗塁の結果だけを巻き戻す。乱数は既に引き終わっており順序も量も変えない（不変条件#2）。
+                //
+                //  - Foul   … ボールデッド。走者は元の塁へ戻り、企図そのものが無かったことになる
+                //  - InPlay … 打球優先。盗塁は記録されず、走者は打球の解決（BaserunningModel.ApplyDetailed）で進む。
+                //             スタートを切っていた分は r1Start へ渡して走塁の有利として活かす
+                //
+                // ファウルチップ（実ルールではインプレーで盗塁が成立する）は PitchKind に区別が無いため
+                // 当面 Foul へ一括する（2026-08-13 監督判断。OPEN-QUESTIONS 参照）。
+                // 三盗・本盗を打球の球で巻き戻した場合の「スタートの有利」は、走塁モデルが一塁走者の始動しか
+                // 受け取らないため表現しない（走者は通常の始動で進む＝有利を捨てる保守側に倒す）。
+                if (stealRecRunner is not null
+                    && session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay)
+                {
+                    bases.First = steal0First;
+                    bases.Second = steal0Second;
+                    bases.Third = steal0Third;
+                    outs = steal0Outs;
+                    offense.Runs = steal0Runs;
+                    runsThisHalf = steal0RunsThisHalf;
+                    offense.UndoSteal(stealRecRunner, stealRecSuccess);
+                    if (stealRecScorer is not null) offense.UndoRun(stealRecScorer);
+                    if (stealDoubleBreak) offense.DoubleStealThirdBreakCount--;
+                    stealPlay = null;   // 絵にも出さない＝同じ球のファウル打球の再生へ落ちる
+                    if (session.LastPitchKind == AtBat.PitchKind.InPlay
+                        && stealStartApplied is { } appliedStart)
+                    {
+                        r1Start = appliedStart;
+                    }
+                }
 
                 // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
                 // 打席が確定する前に1球ずつ絵にするための供給口で、MatchProgression.AdvancePitch と対で使う。
