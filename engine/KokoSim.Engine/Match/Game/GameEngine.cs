@@ -1367,12 +1367,17 @@ public static class GameEngine
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
             // 失策連鎖（design-14 P1-6b）の送球精度連動用: 失策を犯した野手の ThrowAccuracy（未処理球では既定50）。
             var errorThrowAccuracy = res.Play?.FielderThrowAccuracy ?? 50;
+            // 失策種別（issue #629）: 連鎖は悪送球にだけ乗る。強制結果（設計書17 §6.1）は物理層を
+            // 1回も回さない＝res.Play ごと無く種別も取れないので、注入で連鎖を再現できるよう悪送球とみなす
+            // （実試合の失策は必ず FieldingResolver 由来の Play を持つので、この既定へは落ちない）。
+            var errorKind = res.Play?.ErrorKind
+                ?? (res.Result == PlateAppearanceResult.ReachedOnError ? Match.Fielding.FieldingErrorKind.Throw : null);
             // collectMoves は常に true（GameEngine は自校の詳細試合専用＝裏試合は通らない, RNG中立）。
             // 得点帰属（issue #77）に本塁到達 RunnerMove を使うため、観戦しない試合でも moves を収集する。
             // 走塁係数は paBaserunning（設計書17 §6.1, F4）。非強制時は ctx.Baserunning と同一参照＝従来と不変。
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, paBaserunning, rng, collectMoves: true,
-                homePlay, r1Start, errorThrowAccuracy);
+                homePlay, r1Start, errorThrowAccuracy, errorKind);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
@@ -1516,6 +1521,14 @@ public static class GameEngine
                     // 中継しきい値は肩連動（issue #526）＝判定と同じ係数を渡して絵と食い違わせない
                     timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
                         timeline, ofHit, ctx.Field, leadBase, runnerArrive, ctx.Fielding, paBaserunning);
+                }
+
+                // 失策でこぼれた球を拾った野手は内野へ投げ返す（issue #629 ③）。積まないと、拾った野手が
+                // 球を持ったまま棒立ちで、走者が本塁まで走り抜けるのを眺めている絵になる。
+                // 本塁クロスプレーを描いた打席では投げない＝上の AppendBackHomeThrows と二重にならない。
+                if (!homeThrowAdded && res.Play is { } errPlay && timeline.ErrorPickupAt is not null)
+                {
+                    timeline = Match.Timeline.TimelineBuilder.AppendErrorReturnThrow(timeline, errPlay, ctx.Field);
                 }
             }
 

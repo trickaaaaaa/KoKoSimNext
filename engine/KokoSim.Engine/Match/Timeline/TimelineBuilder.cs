@@ -287,6 +287,10 @@ public static class TimelineBuilder
         TimelinePoint? errorBallRest = null;
         var errorBallDeadAt = 0.0;
         FieldPosition? errorChaser = null;
+        // 失策球を拾い上げる瞬間（issue #629 ③。返球を積むのは GameEngine 側）。
+        double? errorPickupAt = null;
+        TimelinePoint? errorPickupPoint = null;
+        FieldPosition? errorPickupRole = null;
         if (play.ThrowArriveSeconds is { } throwArrive && play.Result is BattedBallResult.Out or BattedBallResult.Single or BattedBallResult.Error)
         {
             if (!play.IsFly && play.RangeM <= 46.0)
@@ -667,6 +671,25 @@ public static class TimelineBuilder
             }
         }
 
+        // フライ落球（issue #629 ④）: 送球が存在しない（ThrowArriveSeconds=null）ため上の失策球ブロックへ
+        // 一切入らず、球が着地点に貼り付いて静止していた＝外野失策で走者が還る場面がいちばん
+        // 「野手がぼーっとしている」ように見えていた原因。落とした球は足元へ転がり、落とした本人が拾い直す。
+        // ゴロの捕球エラー（お手玉）とまったく同じ形＝弾む距離・時間・追いかける野手の決め方を共有する。
+        if (play.IsFly && play.Result == BattedBallResult.Error && errorBallRest is null)
+        {
+            var dropRest = Overshoot(Home, fieldPoint, ErrorDeflectM);
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Roll,
+                T0 = fieldedAt, T1 = fieldedAt + ErrorDeflectSeconds,
+                From = fieldPoint, To = dropRest,
+                FromRole = play.FielderRole,
+            });
+            errorBallRest = dropRest;
+            errorBallDeadAt = fieldedAt + ErrorDeflectSeconds;
+            errorChaser = play.FielderRole;
+        }
+
         // エラーでこぼれた/逸れた球は野手が追いかけて拾いに行く（issue #439 ①）。
         // 捕球エラー＝弾いた本人が拾い直す／悪送球＝一塁カバーが振り返って追う。
         // 表示専用の定点計算のみ（乱数不使用）。3D側はエラープレーの決着後レッグを剥がさない
@@ -699,6 +722,12 @@ public static class TimelineBuilder
                     Role = chaserRole, T0 = t0, T1 = t1, To = chaseTo, Task = FielderTask.Chase,
                 });
                 if (t1 + 0.5 > returnTail) returnTail = t1 + 0.5;
+                // 拾い上げる瞬間を明示的に控える（issue #629 ③）。返球はこの後 GameEngine が
+                // AppendErrorReturnThrow で積む＝本塁送球を描いた打席では積まない、という判断を
+                // 「本塁へ投げるか」を知っている側（GameEngine）に残すため、ここでは投げない。
+                errorPickupAt = t1;
+                errorPickupPoint = chaseTo;
+                errorPickupRole = chaserRole;
             }
         }
 
@@ -727,6 +756,9 @@ public static class TimelineBuilder
             Runners = runners,
             Captions = captions,
             Judgements = judgements,
+            ErrorPickupAt = errorPickupAt,
+            ErrorPickupPoint = errorPickupPoint,
+            ErrorPickupRole = errorPickupRole,
         };
     }
 
@@ -1297,6 +1329,46 @@ public static class TimelineBuilder
             Captions = captions,
             Judgements = judgements,
         };
+    }
+
+    /// <summary>失策球の返球を握り替える間[s]（表示専用の演出値）。</summary>
+    private const double ErrorReturnTransferSeconds = 0.25;
+
+    /// <summary>
+    /// 失策でこぼれた球を拾った野手が内野へ投げ返す（issue #629 ③）。表示専用・乱数不使用。
+    ///
+    /// <para>これが無いと、拾った野手は球を持ったまま<b>棒立ち</b>で、走者が本塁まで走り抜けるのを
+    /// 眺めている絵になる（issue #629 の症状）。投げ先は球の位置で決める＝外野で拾ったら二塁へ
+    /// 投げ返し、内野で拾ったら投手へ返して間合いを切る。走者を刺しにいく送球ではないので
+    /// 判定には一切関与しない（<see cref="GuardAgainstVerdict"/> も通さない）。</para>
+    ///
+    /// <para>本塁クロスプレーを描いた打席では呼ばない（<c>AppendBackHomeThrows</c> と二重に投げる）。
+    /// 判断は「本塁へ投げるか」を知っている GameEngine 側に置く。</para>
+    /// </summary>
+    public static PlayTimeline AppendErrorReturnThrow(PlayTimeline timeline, FieldingPlay play, FieldGeometry field)
+    {
+        if (timeline.ErrorPickupAt is not { } pickAt
+            || timeline.ErrorPickupPoint is not { } from
+            || timeline.ErrorPickupRole is not { } fromRole) return timeline;
+
+        var deep = Distance(Home, from) > OutfieldDepthM;
+        var to = deep ? BasePoint(field, "second") : Mound;
+        var toRole = deep ? DefaultBaseGuard("second") : FieldPosition.Pitcher;
+        // 自分から自分へは投げない（投手のお手玉＝拾った本人がマウンドに居る）。
+        // 距離ゼロの送球は絵に出ないが、ボール区間としては嘘なので積まない＝そのまま持っている。
+        if (toRole == fromRole || Distance(from, to) < 5.0) return timeline;
+        var t0 = pickAt + ErrorReturnTransferSeconds;
+        var t1 = t0 + LegSeconds(Distance(from, to), ThrowSpeedOf(play));
+
+        var ball = new List<BallSegment>(timeline.Ball)
+        {
+            new()
+            {
+                Kind = BallSegmentKind.Throw, T0 = t0, T1 = t1, From = from, To = to,
+                FromRole = fromRole, ToRole = toRole, ToBase = deep ? "second" : null,
+            },
+        };
+        return timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, t1 + 0.6) };
     }
 
     /// <summary>

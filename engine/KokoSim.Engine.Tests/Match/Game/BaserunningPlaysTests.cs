@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Match.Timeline.Playback;
@@ -322,7 +323,8 @@ public sealed class BaserunningPlaysTests
         var bases = new BaseState { Second = second, Third = third };
         var rng = new SequenceRandom(0.99, 0.0); // 二塁走者の本盗判定は失敗(→三塁へ) → 続く追加進塁判定は確実成立
         var (runs, extraOuts, _, _, _, moves) = BaserunningModel.ApplyDetailed(
-            bases, PlateAppearanceResult.ReachedOnError, batter, 0, coeff, rng);
+            bases, PlateAppearanceResult.ReachedOnError, batter, 0, coeff, rng,
+            errorKind: FieldingErrorKind.Throw);   // 連鎖は悪送球だけ（issue #629）
 
         Assert.Equal(2, runs); // 三塁走者(元)生還＋追加進塁で経由してきた走者も生還
         Assert.Equal(0, extraOuts);
@@ -347,7 +349,8 @@ public sealed class BaserunningPlaysTests
                     Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 },
                 };
                 var (runs, _, _, _, _, _) = BaserunningModel.ApplyDetailed(
-                    bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng);
+                    bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng,
+                    errorKind: FieldingErrorKind.Throw);
                 total += runs;
             }
             return (double)total / trials;
@@ -356,6 +359,60 @@ public sealed class BaserunningPlaysTests
         var off = AvgRuns(0.0);
         var on = AvgRuns(0.9);
         Assert.True(on > off, $"失策連鎖を有効化しても平均得点が増えない: off={off:F2} on={on:F2}");
+    }
+
+    // --- 失策連鎖は悪送球だけ（issue #629・監督決定 2026-08-13） ---
+    // 捕球エラー（お手玉）とフライ落球は球が野手の足元にある＝全走者が1つ多く進む理由がない。
+    // 絵も「3m弾いて拾い直す」だけなので、走者だけ進むと因果が合わない（issue #629 の症状そのもの）。
+
+    /// <summary>本題: 同じ乱数・同じ場面でも、捕球エラーとフライ落球では連鎖しない。</summary>
+    [Theory]
+    [InlineData(null)]                          // 失策種別が不明（強制結果など）＝連鎖させない
+    [InlineData(FieldingErrorKind.Catch)]       // お手玉・フライ落球
+    public void ErrorExtraAdvance_OnlyChainsOnThrowError(FieldingErrorKind? kind)
+    {
+        var coeff = C with { ErrorExtraAdvanceProb = 1.0 };   // 悪送球なら必ず連鎖する設定
+
+        var thrown = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
+        var t = BaserunningModel.ApplyDetailed(
+            thrown, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff,
+            new SequenceRandom(0.99, 0.0), errorKind: FieldingErrorKind.Throw);
+
+        var caught = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
+        var c = BaserunningModel.ApplyDetailed(
+            caught, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff,
+            new SequenceRandom(0.99, 0.0), errorKind: kind);
+
+        Assert.True(t.ErrorExtraAdvanceOccurred, "悪送球で連鎖していない");
+        Assert.False(c.ErrorExtraAdvanceOccurred, $"{kind?.ToString() ?? "種別なし"} で連鎖している");
+        // 症状そのもの: お手玉で二塁走者が生還しない（悪送球なら還る）。
+        Assert.Equal(2, t.Runs);
+        Assert.Equal(1, c.Runs);
+        Assert.Same(caught.Third, caught.Third);   // 元二塁走者は三塁で止まる
+        Assert.NotNull(caught.Third);
+    }
+
+    /// <summary>
+    /// ゲートは<b>乱数を引いてから</b>効く（issue #525 と同じ流儀）。捕球エラーでも消費は1回のままで、
+    /// 打席あたりの乱数消費位置が失策種別で揺れない＝帯の再校正が連鎖の増減だけで済む。
+    /// </summary>
+    [Fact]
+    public void ErrorExtraAdvance_Gate_DoesNotChangeRandomConsumption()
+    {
+        var coeff = C with { ErrorExtraAdvanceProb = 1.0 };
+        for (ulong seed = 0; seed < 100; seed++)
+        {
+            var a = new Xoshiro256Random(seed);
+            var b = new Xoshiro256Random(seed);
+            var ba = new BaseState { Second = new Player { Baserunning = 50 } };
+            var bb = new BaseState { Second = new Player { Baserunning = 50 } };
+            BaserunningModel.ApplyDetailed(ba, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, a,
+                errorKind: FieldingErrorKind.Throw);
+            BaserunningModel.ApplyDetailed(bb, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, b,
+                errorKind: FieldingErrorKind.Catch);
+            // 消費が同じなら、次に引く値も同じ。
+            Assert.Equal(a.NextDouble(), b.NextDouble());
+        }
     }
 
     // --- 失策連鎖の送球精度連動（Issue #37, design-14 P1-6b） ---
@@ -372,7 +429,7 @@ public sealed class BaserunningPlaysTests
             };
             var (_, _, _, _, chain, _) = BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng,
-                errorThrowAccuracy: throwAccuracy);
+                errorThrowAccuracy: throwAccuracy, errorKind: FieldingErrorKind.Throw);
             if (chain) occurred++;
         }
         return (double)occurred / trials;
@@ -397,11 +454,11 @@ public sealed class BaserunningPlaysTests
             var bLo = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
             var lo = BaserunningModel.ApplyDetailed(
                 bLo, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed),
-                errorThrowAccuracy: 10);
+                errorThrowAccuracy: 10, errorKind: FieldingErrorKind.Throw);
             var bHi = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
             var hi = BaserunningModel.ApplyDetailed(
                 bHi, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed),
-                errorThrowAccuracy: 90);
+                errorThrowAccuracy: 90, errorKind: FieldingErrorKind.Throw);
             Assert.Equal(lo.Runs, hi.Runs);
             Assert.Equal(lo.ErrorExtraAdvanceOccurred, hi.ErrorExtraAdvanceOccurred);
         }

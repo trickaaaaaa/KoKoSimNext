@@ -198,7 +198,7 @@ baserunning:
   productive_out_advance_prob: 0.18
   double_play_prob: 0.13
   fielders_choice_prob: 0.06       # 野選（FC, design-14 P1-1）: DP不成立時に先行走者アウト＋打者一塁生存（2026-07-17校正）
-  error_extra_advance_prob: 0.20   # 失策連鎖（design-14 P1-6）: ReachedOnError時に全走者+打者へ追加1進塁（2026-07-17校正）
+  error_extra_advance_prob: 0.90   # 失策連鎖（design-14 P1-6）: **悪送球のみ**でReachedOnError時に全走者+打者へ追加1進塁（issue #629 で 0.20→0.90 再校正・2026-08-13）
   error_extra_advance_accuracy_slope: 0.003  # 失策連鎖の送球精度連動（Issue #37）: 確率=prob−(Ac−50)×これ。0で非連動＝恒等
 
   drop_third_strike_reach_prob: 0.39       # 振り逃げ（design-14 P1-2）: 第3ストライクが捕り損ねうる球のとき成立（issue #525で 0.001→0.39 再校正）
