@@ -173,6 +173,14 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 野手を stage-local の (x,z) へ置く。yaw を渡さなければ本塁を向く。
         /// 縦は <see cref="GroundFix"/> が骨の実測で解く（クリップごとに根の高さが違うため）。
+        ///
+        /// ⚠ <see cref="Actor.BasePos"/> の<b>縦は書き換えない</b>（issue #607）。BasePos.y は
+        /// 「その役者の待機クリップでの接地高」＝役者ごとに一度決まる基準で、クリップごとの縦の差は
+        /// transform 側の <see cref="GroundFix"/> が毎コマ吸収する担当。ここで現在の縦を焼き直すと、
+        /// <b>そのクリップ固有の補正が基準へ混ざる</b>。とくに捕手は毎コマ
+        /// <c>BasePos + 横オフセット</c> で位置を書き直す（<see cref="ApplyCatcherResidualShift"/>）ため、
+        /// 盗塁の送球（<see cref="StepDuelThrow"/>。立ちクリップ）でここを通ると
+        /// 立ちの縦が基準として焼き付き、しゃがみの構えへ戻ったあとも以降ずっと宙に浮いた。
         /// </summary>
         private void PlaceFielder(Actor a, float x, float z, float? yawDeg = null)
         {
@@ -180,7 +188,7 @@ namespace KokoSim.Unity.Match
             var lp = a.Go.transform.localPosition;
             a.Go.transform.localPosition = new Vector3(x, lp.y, z);
             a.Go.transform.localRotation = Quaternion.Euler(0f, yawDeg ?? YawFacingHome(x, z), 0f);
-            a.BasePos = a.Go.transform.localPosition;
+            a.BasePos = new Vector3(x, a.BasePos.y, z);   // ⚠ 縦は据え置き（上の項）
             a.BaseRot = a.Go.transform.localRotation;
             a.GroundY = FieldGroundY(x, z);   // マウンドの上だけ持ち上がる（投手が降りたら地面へ）
             GroundFix(a);
@@ -2277,14 +2285,16 @@ namespace KokoSim.Unity.Match
             _runnerMotion[idx] = st;
         }
 
-        /// <summary>走者を置く（守備の <see cref="PlaceFielder"/> と同じ。接地はマウンド以外は平ら）。</summary>
+        /// <summary>走者を置く（守備の <see cref="PlaceFielder"/> と同じ。接地はマウンド以外は平ら）。
+        /// 縦を基準へ焼かないのも同じ理由（issue #607。走者は毎コマ基準から書き直す相手が今は居ないが、
+        /// 「<see cref="PlaceFielder"/> と同じ」と書いてある以上ここだけ違う規則にしない）。</summary>
         private void PlaceRunner(Actor a, float x, float z, float yawDeg)
         {
             if (a == null || a.Go == null) return;
             var lp = a.Go.transform.localPosition;
             a.Go.transform.localPosition = new Vector3(x, lp.y, z);
             a.Go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
-            a.BasePos = a.Go.transform.localPosition;
+            a.BasePos = new Vector3(x, a.BasePos.y, z);   // ⚠ 縦は据え置き（PlaceFielder の項）
             a.BaseRot = a.Go.transform.localRotation;
             a.GroundY = FieldGroundY(x, z);
             GroundFix(a);
