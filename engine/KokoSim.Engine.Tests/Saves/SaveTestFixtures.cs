@@ -121,6 +121,13 @@ internal static class SaveTestFixtures
         stats.ArchiveCurrentTournament(TournamentSlot.SummerPref,
             new Dictionary<int, (int Grade, int UniformNumber)> { [1] = (3, 1), [2] = (2, 18) }, year: 2);
 
+        // 全国の学校別成績（#43）。今大会と通算で値が別々になる状態にする（issue #634）＝
+        // 前の大会ぶんを畳んでから StartTournament で今大会だけ消し、もう1試合積む。
+        var nationStats = new NationTournamentStats();
+        nationStats.FoldMatch(awaySchoolId: 200, homeSchoolId: 300, SyntheticGame());
+        nationStats.StartTournament();
+        nationStats.FoldMatch(awaySchoolId: 200, homeSchoolId: 300, SyntheticGame());
+
         var records = new SchoolRecordBook();
         records.RecordOfficialMatch(winnerId: 100, loserId: 200);
         records.RecordOfficialMatch(winnerId: 100, loserId: 300);
@@ -162,7 +169,7 @@ internal static class SaveTestFixtures
             ManagerGrownWinsBaseline = 4,
             ManagerGrownKoshienBaseline = 1,
             NationRosters = new List<AiSchoolRoster>(rosters.Snapshot()),
-            TournamentStats = new NationTournamentStats(),
+            TournamentStats = nationStats,
             SessionYear = 2,
             Stats = stats,
             Records = records,

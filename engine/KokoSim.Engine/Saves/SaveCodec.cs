@@ -23,7 +23,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 8;
+    public const int CurrentVersion = 9;
 
     // ===== Serialize =====
 
@@ -44,6 +44,7 @@ public static class SaveCodec
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
             .Add("nationRosters", NationRostersToJson(s.NationRosters))
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
+            .Add("nationCareerStats", StatsSaves.NationCareerToJson(s.TournamentStats))
             .Add("sessionYear", s.SessionYear)
             .Add("stats", StatsSaves.StoreToJson(s.Stats))
             .Add("records", RecordBookSaves.ToJson(s.Records))
@@ -171,6 +172,10 @@ public static class SaveCodec
         // 累計へ畳んで捨てていた＝過去ぶんは作り直せないので、空配列で補う（通算戦績 records は無傷で残る）。
         // 大会別アーカイブに増えた year は要素ごとの欠損＝Read 側で 0（＝年不明）として読む。
         if (version < 8 && !root.Has("tournamentHistory")) root.Add("tournamentHistory", new JsonArray());
+        // v8→v9（issue #634）: 全国の学校別成績に通算スコープが増えた。v8 以前は今大会スコープしか
+        // 積んでおらず、過去の大会ぶんは作り直せないので空配列で補う（＝そのセーブでは相手校の通算が
+        // これからの試合ぶんだけ積み上がる。今大会 nationTournamentStats は無傷で残る）。
+        if (version < 9 && !root.Has("nationCareerStats")) root.Add("nationCareerStats", new JsonArray());
         return root;
     }
 
@@ -213,6 +218,8 @@ public static class SaveCodec
 
         s.TournamentStats = new NationTournamentStats();
         StatsSaves.RestoreInto(s.TournamentStats, root.Arr("nationTournamentStats"));
+        // 通算スコープは v9 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        StatsSaves.RestoreCareerInto(s.TournamentStats, root.Arr("nationCareerStats"));
 
         s.Stats = new PlayerStatStore();
         StatsSaves.RestoreInto(s.Stats, root.Obj("stats"));

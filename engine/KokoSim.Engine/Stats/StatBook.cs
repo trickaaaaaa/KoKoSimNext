@@ -4,8 +4,10 @@ using KokoSim.Engine.Match.Game;
 namespace KokoSim.Engine.Stats;
 
 /// <summary>
-/// 選手ID→累積成績の帳簿（1スコープぶん＝通算 or 今大会）。試合結果の自校側ラインだけを畳み込む。
-/// 相手校の生成選手は SourceId=null なのでスキップ（帰属先が無い）。純データ・決定論。
+/// 選手ID→累積成績の帳簿（1スコープぶん＝通算 or 今大会）。試合結果の<b>片側</b>のラインだけを畳み込む。
+/// 学校ごとに1冊持つ（自校＝<see cref="PlayerStatStore"/>／相手校＝<see cref="NationTournamentStats"/>）＝
+/// <b>この中の選手IDは校の中でしか一意でない</b>ので、帳簿をまたいで同じIDを引かないこと（issue #634）。
+/// SourceId を持たない選手（旧 StrengthTeamFactory の使い捨て生成）はスキップする。純データ・決定論。
 /// </summary>
 public sealed class StatBook
 {

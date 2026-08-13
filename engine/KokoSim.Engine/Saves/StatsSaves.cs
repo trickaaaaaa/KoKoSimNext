@@ -47,11 +47,36 @@ internal static class StatsSaves
 
     public static void RestoreInto(NationTournamentStats target, JsonArray arr)
     {
-        target.StartTournament();   // 全消去してから積む
+        target.StartTournament();   // 今大会スコープを全消去してから積む
         foreach (var v in arr.Items)
         {
             var o = v.AsObject();
             RestoreBookInto(target.GetOrCreateBook(o.Int("schoolId")), o.Obj("book"));
+        }
+    }
+
+    /// <summary>全国の通算スコープ（校ID→StatBook, issue #634）。今大会と別配列で持つ。</summary>
+    public static JsonArray NationCareerToJson(NationTournamentStats s)
+    {
+        var ids = new List<int>(s.CareerSchools);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids)
+        {
+            var book = s.CareerForSchool(id);
+            if (book is null) continue;
+            arr.Add(new JsonObject().Add("schoolId", id).Add("book", BookToJson(book)));
+        }
+        return arr;
+    }
+
+    public static void RestoreCareerInto(NationTournamentStats target, JsonArray arr)
+    {
+        target.ClearCareer();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            RestoreBookInto(target.GetOrCreateCareerBook(o.Int("schoolId")), o.Obj("book"));
         }
     }
 

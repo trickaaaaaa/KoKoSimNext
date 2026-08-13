@@ -111,7 +111,10 @@ public sealed record PlayerMatchOutcome(
     bool ManagerWasAway = false,
     bool MercyEnded = false,
     // 引き分け再試合（設計書05 §1.3）で行われた再試合数。0＝初戦で決着。>0 なら Detail は決着した再試合の結果。
-    int TieReplays = 0);
+    int TieReplays = 0,
+    // 相手校の学校ID（issue #634）。<see cref="Detail"/> の相手校側ボックススコアを全国成績
+    // （NationTournamentStats）へ畳み込む帰属先。校名だけでは学校を同定できないため持つ。
+    int OpponentId = -1);
 
 /// <summary>
 /// ライブ観戦する自校戦の受け渡し（<see cref="TournamentRunner.BeginNextPlayerMatch"/> の戻り）。
@@ -772,7 +775,8 @@ public sealed class TournamentRunner
                 var mls = Math.Min(mgrRuns, oppRuns);
                 outcome = new PlayerMatchOutcome(
                     managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, roundName, IsChampion: false,
-                    Detail: r, ManagerWasAway: managerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays);
+                    Detail: r, ManagerWasAway: managerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays,
+                    OpponentId: opp.Id);
                 _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mw.Id, ml.Id, mws, mls, true, r.MercyEnded));
                 RecordCard(round, i, mw.Id == a.Id, mws, mls, r.MercyEnded);
                 RecordOutings(r, managerIsAway ? mgr : opp, managerIsAway ? opp : mgr, matchDay);
@@ -794,7 +798,7 @@ public sealed class TournamentRunner
                     managerWon, opponent.Name, opponent.Tier,
                     managerWon ? winScore : loseScore,
                     managerWon ? loseScore : winScore,
-                    roundName, IsChampion: false);
+                    roundName, IsChampion: false, OpponentId: opponent.Id);
             }
 
             next[i] = winner;
@@ -897,7 +901,8 @@ public sealed class TournamentRunner
         _current = p.Next;
         return new PlayerMatchOutcome(
             managerWon, p.Opp.Name, p.Opp.Tier, mgrRuns, oppRuns, p.RoundName, IsChampion: false,
-            Detail: r, ManagerWasAway: p.ManagerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays);
+            Detail: r, ManagerWasAway: p.ManagerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays,
+            OpponentId: p.Opp.Id);
     }
 
     /// <summary>得点差(margin)から表示用スコアを合成する（敗者0〜3点＋差）。決定論（注入乱数）。</summary>

@@ -32,7 +32,7 @@ namespace KokoSim.Unity.Tournament
             public string Number;       // 背番号（丸バッジ・中立色。投打で塗り分けない, issue #379）
             public string Name;
             public string Sub;          // 校名・学年・投打・守備位置
-            public string StatLine;     // 最速/防御率 or 打率/本塁打（合成の見込み値）
+            public string StatLine;     // 最速/防御率 or 打率/本塁打（今大会の実測値, issue #634）
             public string Blurb;
         }
 
@@ -42,6 +42,11 @@ namespace KokoSim.Unity.Tournament
             public string Name;         // 氏名（守備位置つき）
             public string Grade;        // 「2年」
             public string Hand;         // 「右投左打」
+            // 今大会成績の3列（issue #634）。登板のある選手は投手の数字（防御率・投球回・奪三振）、
+            // それ以外は打者の数字（打率・本塁打・打点）。出場が無ければ3つとも「—」。
+            public string Stat1;
+            public string Stat2;
+            public string Stat3;
         }
 
         public sealed class RosterBlock
@@ -50,6 +55,7 @@ namespace KokoSim.Unity.Tournament
             public string Tag;          // 「総合 A ／ 第1シード」
             public string TierLetter;
             public string Sub;          // チーム寸評
+            public string StatsCaption; // 「今大会 2試合」（1試合もしていなければ「今大会 まだ試合なし」）
             public List<MemberRow> Members;
         }
 
@@ -116,7 +122,9 @@ namespace KokoSim.Unity.Tournament
                 berths: summer ? 1 : 2,
                 nextStageName: summer ? "甲子園" : "地区大会",
                 yearIndex: session.Year,
-                teamProvider: (school, year) => KokoSim.Unity.Shell.NationService.Rosters.TeamFor(school, year));
+                teamProvider: TeamFor,
+                // 注目選手の成績行は今大会の実測値で書く（issue #634。以前は能力から合成した見込み値だった）。
+                statsForSchool: id => KokoSim.Unity.Shell.NationService.StatsLookup.CurrentTournamentBook(id));
 
             var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
 
@@ -177,10 +185,14 @@ namespace KokoSim.Unity.Tournament
             var summer = session.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
             var excerpt = TournamentPreviewBuilder.BuildRosterFor(
                 school, session.Field, berths: summer ? 1 : 2, yearIndex: session.Year,
-                teamProvider: (s, year) => KokoSim.Unity.Shell.NationService.Rosters.TeamFor(s, year));
+                teamProvider: TeamFor);
 
             // 通算戦績（issue #84）は寸評の頭に付け足す（展望の Contenders 行と同じ扱い）。
             var history = KoshienHistoryText(session.Records.For(school.Id));
+
+            // 今大会成績（issue #634）。裏試合フルシム（#43）が積んだ実測値を (校ID, 選手ID) で引く。
+            // 帳簿は校ごとに1回だけ引き、行ごとに引き直さない。
+            var book = KokoSim.Unity.Shell.NationService.StatsLookup.CurrentTournamentBook(school.Id);
 
             var block = new RosterBlock
             {
@@ -188,19 +200,71 @@ namespace KokoSim.Unity.Tournament
                 TierLetter = excerpt.Tier.ToString(),
                 Tag = "総合 " + excerpt.Tier + " ／ " + excerpt.SeedLabel,
                 Sub = history + excerpt.TeamBlurb,
+                StatsCaption = GamesCaption(book),
                 Members = new List<MemberRow>(excerpt.Members.Count),
             };
             foreach (var m in excerpt.Members)
             {
-                block.Members.Add(new MemberRow
+                var row = new MemberRow
                 {
                     Number = m.UniformNumber.ToString(),
                     Name = m.Name + "（" + m.PositionLabel + "）",
                     Grade = m.Grade + "年",
                     Hand = m.HandednessLabel,
-                });
+                };
+                FillStats(row, book?.Get(m.SourceId));
+                block.Members.Add(row);
             }
             return block;
+        }
+
+        /// <summary>
+        /// 出場校1校のチーム（登録メンバー・注目選手の材料）。相手校は永続ロスター（#80）＝実戦と同一ソース。
+        /// <b>自校だけは実戦と同じ入口（<see cref="KokoSim.Unity.Shell.PlayerMatchResolver.BuildManagerTeam"/>）
+        /// から組む</b>——自校ID（-1）を全国ロスターへ渡すと架空の部員が生成され、実在しない選手名の表で
+        /// メンバー表が出る（issue #634 の実装中に発見。成績列を足すと、その架空の名前に自校選手の
+        /// 成績が並ぶ＝「出ていない選手が出たことになる」）。
+        /// </summary>
+        private static KokoSim.Engine.Match.Game.Team TeamFor(School school, int year)
+            => school.Id == KokoSim.Unity.Shell.NationService.ManagerSchoolId
+                ? KokoSim.Unity.Shell.PlayerMatchResolver.BuildManagerTeam(school.Name)
+                : KokoSim.Unity.Shell.NationService.Rosters.TeamFor(school, year);
+
+        /// <summary>
+        /// 今大会成績の3セル（issue #634）。<b>登板があれば投手の数字</b>（防御率・投球回・奪三振）、
+        /// 無ければ打者の数字（打率・本塁打・打点）。出場そのものが無ければ3つとも「—」。
+        /// 表は背番号順の1本のまま＝並びは分けず、見せる数字だけ役割に合わせる（ライブ観戦の控え行と同じ作法, #381）。
+        /// </summary>
+        private static void FillStats(MemberRow row, KokoSim.Engine.Stats.PlayerStats stats)
+        {
+            row.Stat1 = row.Stat2 = row.Stat3 = "—";
+            if (stats == null) return;
+
+            if (stats.Pitching.Games > 0)
+            {
+                row.Stat1 = stats.Pitching.Era.ToString("0.00");
+                row.Stat2 = stats.Pitching.InningsText;
+                row.Stat3 = stats.Pitching.StrikeOuts.ToString();
+                return;
+            }
+            if (stats.Batting.AtBats <= 0) return;
+            row.Stat1 = KokoSim.Unity.Match.MatchLiveStatsProvider.Avg(stats.Batting.Average);
+            row.Stat2 = stats.Batting.HomeRuns.ToString();
+            row.Stat3 = stats.Batting.Rbi.ToString();
+        }
+
+        /// <summary>その校が今大会で消化した試合数（選手ごとの出場試合数の最大＝先発で全試合出た選手の数）。</summary>
+        private static string GamesCaption(KokoSim.Engine.Stats.StatBook book)
+        {
+            var games = 0;
+            if (book != null)
+                foreach (var kv in book.Players)
+                {
+                    var p = kv.Value;
+                    if (p.Batting.Games > games) games = p.Batting.Games;
+                    if (p.Pitching.Games > games) games = p.Pitching.Games;
+                }
+            return games > 0 ? "今大会 " + games + "試合" : "今大会 まだ試合なし";
         }
 
         /// <summary>

@@ -47,6 +47,14 @@ namespace KokoSim.Unity.Match
             /// </summary>
             public KokoSim.Engine.Nation.TeamColors AwayColors;
             public KokoSim.Engine.Nation.TeamColors HomeColors;
+            /// <summary>
+            /// 両校の学校ID（issue #634）。成績の帰属キー (校ID, 選手ID) の校側で、通算成績を
+            /// 自校ストアと全国ストアのどちらから引くかを決める。<b>試合中に変わらない同定情報</b>なので
+            /// 観測データ（<see cref="MatchLiveSnapshot"/>）には載せず、チーム配色と同じ静的経路で渡す。
+            /// 不明（デモ・練習試合の相手など）は <c>int.MinValue</c>＝どちらの校とも一致しない＝成績なし。
+            /// </summary>
+            public int AwaySchoolId = int.MinValue;
+            public int HomeSchoolId = int.MinValue;
             public int ManagerTacticalSense = 70;
             /// <summary>
             /// 勝者が要る文脈か（大会戦＝true）。結果画面で延長上限の引き分けを「引き分け（再試合）」と
@@ -123,6 +131,9 @@ namespace KokoSim.Unity.Match
         // 両校の配色（設計書18 §3.5.1）。攻守交代のたびに守備側/攻撃側へ割り当て直す（DuelStageRig.SetTeamColors）。
         private KokoSim.Engine.Nation.TeamColors _awayColors;
         private KokoSim.Engine.Nation.TeamColors _homeColors;
+        // 両校の学校ID（成績の帰属キーの校側, issue #634）。既定はどちらの校とも一致しない値＝成績なし。
+        private int _awaySchoolId = int.MinValue;
+        private int _homeSchoolId = int.MinValue;
         private bool? _duelColorsOffenseIsTop;   // 対決ビューへ最後に流した攻守（null=未適用）
         private System.Action<GameResult> _onComplete;
         private GameResult _finalResult;
@@ -671,6 +682,8 @@ namespace KokoSim.Unity.Match
                 _homeDisp = req.HomeName ?? homeName;
                 _awayColors = req.AwayColors;
                 _homeColors = req.HomeColors;
+                _awaySchoolId = req.AwaySchoolId;
+                _homeSchoolId = req.HomeSchoolId;
                 // 掲示板の校名はエンジンの観測データ（LiveLineScore.Name）から出るのでここでは埋めない。
                 SetColumnTitles();
                 return;
@@ -678,6 +691,10 @@ namespace KokoSim.Unity.Match
 
             // デモ/スクショ用の自前生成（本番フローでは通らない）。
             _managerIsAway = false;
+            // 校IDは持たない＝どちらの校とも一致しない＝成績は「—」（issue #634）。
+            // 直前の実試合の値が残ると、デモの選手に他校の成績が付く。
+            _awaySchoolId = int.MinValue;
+            _homeSchoolId = int.MinValue;
 #if UNITY_EDITOR
             if (ManagerIsAwayOverrideForCapture is { } mia) _managerIsAway = mia;
 #endif
@@ -3322,8 +3339,13 @@ namespace KokoSim.Unity.Match
             var order = _atBat?.BatterOrder ?? snap.CurrentBatterOrder;
 
             // 左右とも同じ並び（打順→守備→名前→背番号→調子→今日）。ミラーはしない。
-            BuildColumn(_leftLineup, _leftPitcher, own, mirror: false, highlightOrder: offenseIsOwn ? order : 0);
-            BuildColumn(_rightLineup, _rightPitcher, opp, mirror: false, highlightOrder: offenseIsOwn ? 0 : order);
+            // 校ID＝調子の真値/誤認と通算成績の帰属先（issue #634）。配色と同じ静的経路から来る。
+            var ownSchoolId = ownIsAway ? _awaySchoolId : _homeSchoolId;
+            var oppSchoolId = ownIsAway ? _homeSchoolId : _awaySchoolId;
+            BuildColumn(_leftLineup, _leftPitcher, own, mirror: false, highlightOrder: offenseIsOwn ? order : 0,
+                schoolId: ownSchoolId);
+            BuildColumn(_rightLineup, _rightPitcher, opp, mirror: false, highlightOrder: offenseIsOwn ? 0 : order,
+                schoolId: oppSchoolId);
             RefreshHud(snap, offenseIsTop, order);
             ApplyDuelTeamColors(offenseIsTop);
         }
@@ -3345,13 +3367,13 @@ namespace KokoSim.Unity.Match
         }
 
         private void BuildColumn(VisualElement lineupHost, VisualElement pitcherHost,
-            LiveTeamSnapshot team, bool mirror, int highlightOrder)
+            LiveTeamSnapshot team, bool mirror, int highlightOrder, int schoolId)
         {
             if (lineupHost != null)
             {
                 lineupHost.Clear();
                 foreach (var s in team.Lineup)
-                    lineupHost.Add(BuildLineupRow(s, mirror, atBat: s.Order == highlightOrder));
+                    lineupHost.Add(BuildLineupRow(s, mirror, atBat: s.Order == highlightOrder, schoolId));
             }
             if (pitcherHost != null)
             {
@@ -3366,8 +3388,8 @@ namespace KokoSim.Unity.Match
                     if (b.Number <= 0) continue;
                     var asPitcher = FindReservePitcher(team, b.Number);
                     benchRows.Add((b.Number, asPitcher is null
-                        ? BuildBenchRow(b, mirror)
-                        : BuildBenchPitcherRow(asPitcher, mirror)));
+                        ? BuildBenchRow(b, mirror, schoolId)
+                        : BuildBenchPitcherRow(asPitcher, mirror, schoolId)));
                 }
                 if (benchRows.Count > 0)
                 {
@@ -3383,7 +3405,7 @@ namespace KokoSim.Unity.Match
         // 並び: 打順 / 守備位置 / 名前(フルネーム) / 背番号 / 調子（右列は row-reverse でミラー）。
         // 名前セルはライブ観戦だけ固定幅にする（mlineup-row--compact。試合前画面と共有クラスのため
         // 画面ローカルの直書きにせずモディファイアで限定。issue #297）。
-        private VisualElement BuildLineupRow(LiveBatterSlot s, bool mirror, bool atBat)
+        private VisualElement BuildLineupRow(LiveBatterSlot s, bool mirror, bool atBat, int schoolId)
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-row");
@@ -3399,7 +3421,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm", "f-num"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
         }
@@ -3416,7 +3438,7 @@ namespace KokoSim.Unity.Match
         }
 
         // 控え1行（背番号・名前フル・調子）。守備位置は出さない。代打・代走・守備固めの候補。
-        private VisualElement BuildBenchRow(LiveBatterSlot s, bool mirror)
+        private VisualElement BuildBenchRow(LiveBatterSlot s, bool mirror, int schoolId)
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-benchrow");
@@ -3425,13 +3447,13 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(s.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
         }
 
         // 控え投手1行（背番号・名前フル・調子）。
-        private VisualElement BuildBenchPitcherRow(LivePitcherToday p, bool mirror)
+        private VisualElement BuildBenchPitcherRow(LivePitcherToday p, bool mirror, int schoolId)
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-benchrow");
@@ -3440,7 +3462,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(p.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(p.SourceId, p.ConditionValue, p.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, p.ConditionValue, p.Name));
             row.Add(face);
             return row;
         }
@@ -3534,8 +3556,12 @@ namespace KokoSim.Unity.Match
             var offenseColor = TeamChipColor(offenseIsTop ? _awayColors : _homeColors);
             var defenseColor = TeamChipColor(offenseIsTop ? _homeColors : _awayColors);
 
-            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseColor));
-            _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseColor));
+            // 校ID＝通算成績の帰属先（issue #634。配色とまったく同じ攻守の割り当て）。
+            var offenseSchoolId = offenseIsTop ? _awaySchoolId : _homeSchoolId;
+            var defenseSchoolId = offenseIsTop ? _homeSchoolId : _awaySchoolId;
+
+            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseColor, defenseSchoolId));
+            _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseColor, offenseSchoolId));
         }
 
         /// <summary>
@@ -3549,7 +3575,7 @@ namespace KokoSim.Unity.Match
             return new Color32(c.R, c.G, c.B, 255);
         }
 
-        private VisualElement BuildHudPitcher(LivePitcherToday def, Color teamColor)
+        private VisualElement BuildHudPitcher(LivePitcherToday def, Color teamColor, int schoolId)
         {
             var band = HudBand();
 
@@ -3585,7 +3611,8 @@ namespace KokoSim.Unity.Match
             // 対で見て初めて「今日の出来」になるので隣接させる（issue #407）。単位は見出しへ逃がしてあるので
             // 値は数字だけ＝Oswald（.f-num）が素直に効く（設計書16 §2）。
             // 防御率は通算＋本日の合算（issue #449。通算なしは本日分のみ、登板なしかつ本日アウト0のみ「—」）。
-            var era = MatchLiveStatsProvider.LiveEra(_statsProvider.CareerPitching(def.SourceId), def.EarnedRuns, def.Outs);
+            var era = MatchLiveStatsProvider.LiveEra(
+                _statsProvider.CareerPitching(schoolId, def.SourceId), def.EarnedRuns, def.Outs);
             var stats = HudStatsRow();
             stats.Add(HudCell("防御率", era, first: true));
             stats.Add(HudCell("奪三振", def.StrikeOuts.ToString()));
@@ -3625,7 +3652,8 @@ namespace KokoSim.Unity.Match
             return row;
         }
 
-        private VisualElement BuildHudBatter(LiveBatterSlot batterToday, Matchup m, bool offenseIsTop, Color teamColor)
+        private VisualElement BuildHudBatter(LiveBatterSlot batterToday, Matchup m, bool offenseIsTop,
+            Color teamColor, int schoolId)
         {
             var band = HudBand();
 
@@ -3642,14 +3670,14 @@ namespace KokoSim.Unity.Match
             idn.Add(MakeRow("mhud-spacer"));
             var face = new ConditionFace();
             face.AddToClassList("mhud-face");
-            face.Set(_statsProvider.ConditionOf(m.BatterSourceId, m.BatterConditionValue, m.BatterName));
+            face.Set(_statsProvider.ConditionOf(schoolId, m.BatterConditionValue, m.BatterName));
             idn.Add(face);
             band.Add(idn);
 
             // 2段目＝成績。打率は通算＋本日の合算（issue #449。通算なしは本日分のみ、通算なしかつ
             // 本日打数0のみ「—」）。本塁打・打点は通算のみ（issue範囲外・据え置き）＝等幅セルに割ると
             // 同格の3項目に見えるが、意味の違いはここに残す。
-            var b = _statsProvider.CareerBatting(m.BatterSourceId);
+            var b = _statsProvider.CareerBatting(schoolId, m.BatterSourceId);
             var stats = HudStatsRow();
             stats.Add(HudCell("打率", MatchLiveStatsProvider.LiveAvg(b, batterToday?.AtBats ?? 0, batterToday?.Hits ?? 0), first: true));
             stats.Add(HudCell("本塁打", b == null ? "—" : b.HomeRuns.ToString()));

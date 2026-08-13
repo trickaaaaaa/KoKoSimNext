@@ -568,7 +568,8 @@ namespace KokoSim.Unity.Tournament
             if (r == null) return;
 
             SetText("td-title", r.SchoolName);
-            SetText("td-tag", r.Tag);
+            // 消化試合数は格付けと同じ1行に載せる（新しい欄を作らず、表の数字の分母を先に示す, issue #634）。
+            SetText("td-tag", r.Tag + " ／ " + r.StatsCaption);
             SetText("td-blurb", r.Sub);
 
             var host = _root.Q<VisualElement>("td-roster");
@@ -667,6 +668,8 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>登録メンバー表の見出し行（背番号・選手・学年・投打）。校別詳細ページの表で使う。</summary>
+        // 今大会成績の3列は「登板があれば投手の数字」（issue #634・案A）。1本の背番号順の表のまま、
+        // 見せる数字だけ役割に合わせるので、見出しは打者側／投手側を両方書く（例「打率/防」）。
         private static VisualElement MemberHeader()
         {
             var th = new VisualElement();
@@ -675,6 +678,9 @@ namespace KokoSim.Unity.Tournament
             th.Add(Cell("選手", "tp-mc--name"));
             th.Add(Cell("学年", "tp-mc--grade"));
             th.Add(Cell("投打", "tp-mc--hand"));
+            th.Add(Cell("打率/防", "tp-mc--st"));
+            th.Add(Cell("本/回", "tp-mc--st"));
+            th.Add(Cell("点/奪", "tp-mc--st"));
             return th;
         }
 
@@ -688,7 +694,18 @@ namespace KokoSim.Unity.Tournament
             row.Add(Cell(m.Name, "tp-mc--name"));
             row.Add(Cell(m.Grade, "tp-mc--grade"));
             row.Add(Cell(m.Hand, "tp-mc--hand"));
+            row.Add(StatCell(m.Stat1));
+            row.Add(StatCell(m.Stat2));
+            row.Add(StatCell(m.Stat3));
             return row;
+        }
+
+        /// <summary>今大会成績の1セル。数字だけのセルなのでコンデンス数字（.f-num・UI原則③）。</summary>
+        private static Label StatCell(string text)
+        {
+            var l = Cell(text, "tp-mc--st");
+            l.AddToClassList("f-num");
+            return l;
         }
 
         private static Label Cell(string text, string cls)

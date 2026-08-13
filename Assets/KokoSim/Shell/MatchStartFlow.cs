@@ -51,6 +51,9 @@ namespace KokoSim.Unity.Shell
                             ? NationService.ManagerSchoolId : live.OpponentId),
                         HomeColors = TeamColorsOf(live.ManagerIsAway
                             ? live.OpponentId : NationService.ManagerSchoolId),
+                        // 成績の帰属キーの校側（issue #634）。配色と同じ静的経路で渡す。
+                        AwaySchoolId = live.ManagerIsAway ? NationService.ManagerSchoolId : live.OpponentId,
+                        HomeSchoolId = live.ManagerIsAway ? live.OpponentId : NationService.ManagerSchoolId,
                         ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                         OnComplete = result =>
                         {
@@ -97,6 +100,9 @@ namespace KokoSim.Unity.Shell
                     ? NationService.ManagerSchoolId : opponentId),
                 HomeColors = TeamColorsOf(live.ManagerIsAway
                     ? opponentId : NationService.ManagerSchoolId),
+                // 成績の帰属キーの校側（issue #634）。練習試合の相手校も全国ストア側で引く。
+                AwaySchoolId = live.ManagerIsAway ? NationService.ManagerSchoolId : opponentId,
+                HomeSchoolId = live.ManagerIsAway ? opponentId : NationService.ManagerSchoolId,
                 ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                 RematchOnTie = false,   // 練習試合は引き分けで終わる（再試合はない）
                 OnComplete = result =>

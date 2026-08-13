@@ -13,7 +13,7 @@ namespace KokoSim.Unity.Shell
     /// <summary>
     /// 自校の一戦だけを詳細試合エンジン（GameEngine）で解決する Shell 実装（設計書05 §1.4）。
     /// 自校ロスター＋スタメン（GameSession.Lineup）を持つのはこの層なのでここに置く。相手校は
-    /// DevelopingPlayer を持たないため学校から生成（StrengthTeamFactory.ForSchool）。
+    /// 永続ロスター（#80・<see cref="NationService.Rosters"/>）から組む＝展望・実戦・全国成績が同一ソース。
     /// 自校の先攻/後攻は <see cref="HomeAwayAssignment"/> が対戦の組み合わせ（校ID対＋年度＋週）から
     /// 決定論で決める（OPEN-Q 未決I, issue #70）。大会本流の乱数には依存しないので、対戦カード画面
     /// （<see cref="MatchPreview.MatchPreviewState"/>）でも同じ入口で先読みできる。

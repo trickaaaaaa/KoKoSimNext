@@ -16,8 +16,10 @@ namespace KokoSim.Unity.Match
 {
     /// <summary>
     /// ライブ観戦の表示合成（設計書06・不変条件「数値はエンジン集計から引く」）。エンジンのスナップショット
-    /// （今日の成績・左右・守備位置・調子の真値）に、Shell 側の単一ソースから通算成績を <see cref="Player.SourceId"/>
-    /// をキーに join する（相手校は SourceId=null で通算「—」）。
+    /// （今日の成績・左右・守備位置・調子の真値）に、Shell 側の単一ソースから通算成績を
+    /// <b>(校ID, <see cref="Player.SourceId"/>)</b> をキーに join する（issue #634）。校IDで自校ストアと
+    /// 全国ストアを振り分けるのは engine の <see cref="SchoolStatsLookup"/> ＝ここでは集計しない。
+    /// <b>選手IDは校ごとに1から振るので、校IDを見ずに引くと相手校の選手に同じ番号の自校選手の成績が出る</b>。
     /// 調子は自校=常に真値、相手校=監督の育成眼に応じた誤認モデル（<see cref="FormModel.Observe"/>）を通す
     /// （設計書02 §3.3, issue #47）。観測ノイズは試合ごとに固定した RNG を選手名で Fork するため、
     /// 同一試合中は同じ見え方になる（決定論・不変条件#2）。UI 側で数値を再計算しない（表示専用）。
@@ -26,13 +28,13 @@ namespace KokoSim.Unity.Match
     {
         private static int _seq;
 
-        private readonly PlayerStatStore _stats;
+        private readonly SchoolStatsLookup _lookup;
         private readonly IRandomSource _observeRng;
         private readonly FormCoefficients _formCoeff = new();
 
         public MatchLiveStatsProvider()
         {
-            _stats = GameSession.Current.Stats;
+            _lookup = NationService.StatsLookup;
             // 試合ごとに独立した決定論ストリーム（週・年度・生成連番から導出。GameSession.ApplyMatchInjuries と同型）。
             _observeRng = new Xoshiro256Random(
                 0x0BF0_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_seq)));
@@ -41,15 +43,18 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 調子（自校=常に真値。相手校=育成眼に応じた誤認あり）。<paramref name="name"/> は相手校の観測ノイズを
         /// 選手ごとに Fork で固定するためのキー（Fork は親ストリームを進めないため、同一選手は毎回同じ結果になる）。
+        /// <para>自校判定は<b>校ID</b>で行う（issue #634）。永続ロスター（#80）以降は相手校の生成選手も
+        /// SourceId を持つので、「SourceId 非 null＝自校」で判定すると相手校の調子まで真値で見えてしまう
+        /// ＝育成眼の誤認モデル（#47）が効かない。</para>
         /// </summary>
-        public Condition ConditionOf(int? sourceId, double conditionValue, string name) =>
-            sourceId is int
+        public Condition ConditionOf(int schoolId, double conditionValue, string name) =>
+            _lookup.IsManagerSchool(schoolId)
                 ? FormModel.Quantize(conditionValue)
                 : FormModel.Observe(conditionValue, ManagerService.Manager.TalentEye,
                     _observeRng.Fork(NameStreamId(name)), _formCoeff);
 
-        // 選手名 → Fork streamId（FNV-1a 64bit）。相手校の生成選手には SourceId が無いため、
-        // 名前を安定キーとして使う（同一試合の同一選手なら常に同じ streamId）。
+        // 選手名 → Fork streamId（FNV-1a 64bit）。相手校の選手IDは校ごとに1から振られ校をまたいで
+        // 一意でないため、名前を安定キーとして使う（同一試合の同一選手なら常に同じ streamId）。
         private static ulong NameStreamId(string name)
         {
             var hash = 0xcbf29ce484222325UL;
@@ -61,17 +66,20 @@ namespace KokoSim.Unity.Match
             return hash;
         }
 
-        /// <summary>公式戦通算の打撃成績（試合数0＝未出場は null）。</summary>
-        public BattingStatLine? CareerBatting(int? sourceId)
+        /// <summary>
+        /// 通算の打撃成績（試合数0＝未出場は null）。<paramref name="schoolId"/> が自校なら自校ストア、
+        /// それ以外は全国ストアの通算スコープから引く（issue #634）。
+        /// </summary>
+        public BattingStatLine? CareerBatting(int schoolId, int? sourceId)
         {
-            var s = sourceId is int id ? _stats.Career.Get(id) : null;
+            var s = _lookup.Career(schoolId, sourceId);
             return s != null && s.Batting.Games > 0 ? s.Batting : null;
         }
 
-        /// <summary>公式戦通算の投手成績（登板0は null）。</summary>
-        public PitchingStatLine? CareerPitching(int? sourceId)
+        /// <summary>通算の投手成績（登板0は null）。校IDで自校／全国のストアを振り分ける（issue #634）。</summary>
+        public PitchingStatLine? CareerPitching(int schoolId, int? sourceId)
         {
-            var s = sourceId is int id ? _stats.Career.Get(id) : null;
+            var s = _lookup.Career(schoolId, sourceId);
             return s != null && s.Pitching.Games > 0 ? s.Pitching : null;
         }
 

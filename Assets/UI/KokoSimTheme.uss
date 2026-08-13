@@ -590,6 +590,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-mc--name { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--sp-4); }
 .tp-mc--grade { width: var(--col-mem-grade); flex-shrink: 0; -unity-text-align: middle-right; }
 .tp-mc--hand { width: var(--col-mem-hand); flex-shrink: 0; -unity-text-align: middle-right; }
+/* 今大会成績（issue #634）。数字は右揃え・桁揃え（UI原則③）。見出しと同じ幅トークンを参照する。 */
+.tp-mc--st {
+    width: var(--col-mem-stat); flex-shrink: 0; -unity-text-align: middle-right;
+    padding-left: var(--sp-2);
+}
 /* 背番号だけアンバー（モックの td.n 相当）。数値は右揃え・装飾なし。 */
 .tp-mrow .tp-mc--no { color: var(--ink); }
 .tp-mrow .tp-mc--hand { color: var(--tx-2); }

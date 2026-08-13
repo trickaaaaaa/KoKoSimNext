@@ -19,7 +19,8 @@ public sealed record PreviewContender(
 /// <summary>
 /// 注目選手1人（設計書06 §3.5b「注目選手ピックアップ」）。
 /// 氏名・背番号・学年・投打・最速球速は<b>実際の対戦相手ラインナップと同一の真値</b>
-/// （StrengthTeamFactory.ForSchool 由来）。StatLine の成績値だけは能力から導いた読み物用の見込み値。
+/// （StrengthTeamFactory.ForSchool 由来）。StatLine の成績値は<b>今大会の実測値</b>
+/// （裏試合フルシム #43 が積んだ値。まだ1試合もしていなければ成績を出さない, issue #634）。
 ///
 /// <paramref name="PitcherLed"/> は<b>選手の属性ではなく校の看板の別</b>＝この校を投手力で採ったか
 /// 打力で採ったか（<see cref="PickNotable"/> の選出理由）。旧名 <c>IsPitcher</c> は選手が投手か否かに
@@ -29,9 +30,14 @@ public sealed record NotablePlayer(
     string SchoolName, int UniformNumber, string Name, int Grade, string PositionLabel,
     string HandednessLabel, bool PitcherLed, string StatLine, string Blurb);
 
-/// <summary>登録メンバー1人（背番号・氏名・守備位置・学年・投打まで。詳細指標は出さない＝設計§3.5b）。</summary>
+/// <summary>
+/// 登録メンバー1人（背番号・氏名・守備位置・学年・投打まで。能力の詳細指標は出さない＝設計§3.5b）。
+/// <paramref name="SourceId"/> は校内選手ID＝<b>成績の帰属キー</b>（issue #634）。校別詳細は
+/// (校ID, SourceId) で今大会成績を join する（能力からの合成値ではなく実測値を出すため）。
+/// </summary>
 public sealed record RosterMember(
-    int UniformNumber, string Name, string PositionLabel, int Grade, string HandednessLabel);
+    int UniformNumber, string Name, string PositionLabel, int Grade, string HandednessLabel,
+    int SourceId = 0);
 
 /// <summary>出場校1校の登録メンバー（ベンチ入り20人）。</summary>
 public sealed record RosterExcerpt(
@@ -61,9 +67,14 @@ public static class TournamentPreviewBuilder
         _ => (0, 0, 0),                             // 型なし
     };
 
+    /// <param name="statsForSchool">
+    /// 校ID→今大会成績の帳簿（issue #634）。注目選手の成績行は<b>実測値</b>で書く。省略／未登録の校は
+    /// 「まだ試合をしていない」扱いで成績を出さない（能力から合成した見込み値は出さない＝嘘を書かない）。
+    /// </param>
     public static TournamentPreview Build(
         string title, IReadOnlyList<School> entrants, int berths, string nextStageName, int yearIndex = 1,
-        System.Func<School, int, Match.Game.Team>? teamProvider = null)
+        System.Func<School, int, Match.Game.Team>? teamProvider = null,
+        System.Func<int, Stats.StatBook?>? statsForSchool = null)
     {
         if (entrants.Count == 0) throw new System.ArgumentException("出場校が空です。");
 
@@ -102,7 +113,8 @@ public static class TournamentPreviewBuilder
             // 実戦と同一ソース。永続ロスター（#80）を注入すれば展望＝実戦の一致契約を保つ（既定は従来の ForSchool）。
             var team = teamProvider is not null ? teamProvider(school, yearIndex)
                 : StrengthTeamFactory.ForSchool(school, yearIndex);
-            notables.Add(PickNotable(c, team));
+            var book = statsForSchool?.Invoke(school.Id);
+            notables.Add(PickNotable(c, team, book));
             rosters.Add(BuildRoster(c, team));
         }
 
@@ -160,7 +172,7 @@ public static class TournamentPreviewBuilder
     /// 1校の看板選手を選ぶ。投手力が打力を上回る校はエース、そうでなければ主砲。
     /// 表示中の3軸バーと選出理由が一致するので「なぜこの選手か」が読み手に伝わる。
     /// </summary>
-    private static NotablePlayer PickNotable(PreviewContender c, Match.Game.Team team)
+    private static NotablePlayer PickNotable(PreviewContender c, Match.Game.Team team, Stats.StatBook? book)
     {
         // 同値は打者側に寄せる（投手ばかりが並ぶのを避け、投打の顔ぶれが混ざるようにする）。
         var pitcherLed = c.Rating.Pitching > c.Rating.Batting;
@@ -179,7 +191,7 @@ public static class TournamentPreviewBuilder
             PositionLabel: PositionLabel(p.Position),
             HandednessLabel: Players.HandednessLabels.Combined(p.Throws, p.Bats),
             PitcherLed: pitcherLed,
-            StatLine: pitcherLed ? PitcherStatLine(p) : BatterStatLine(p),
+            StatLine: pitcherLed ? PitcherStatLine(p, StatsOf(book, p)) : BatterStatLine(p, StatsOf(book, p)),
             Blurb: pitcherLed ? PitcherBlurb(p) : BatterBlurb(p));
     }
 
@@ -192,7 +204,8 @@ public static class TournamentPreviewBuilder
             .Select(p => new RosterMember(
                 p.UniformNumber, p.Name,
                 PositionLabel(ReferenceEquals(p, dhPlayer) ? Match.Field.FieldPosition.DesignatedHitter : p.Position),
-                p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats)))
+                p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats),
+                SourceId: p.SourceId ?? 0))
             .ToList();
         var seedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : $"第{c.Seed}シード";
         return new RosterExcerpt(c.Name, c.Tier, seedLabel, c.Blurb, members);
@@ -213,7 +226,15 @@ public static class TournamentPreviewBuilder
         _ => "―",
     };
 
-    // --- 成績の見込み値（能力からの決定論導出＝読み物用の合成。裏試合は成績が付かないため実測値は存在しない） ---
+    // --- 成績行（今大会の実測値。裏試合フルシム #43 が全4000校ぶん積んでいる, issue #634） ---
+    //
+    // 以前はここで能力から確率的な打率・防御率を合成して「今大会 打率.312」と書いていたが、
+    // それは実際の試合結果とは無関係の数字だった（#43 で実測が積まれるようになったのに読み口が
+    // 繋がっていなかった）。まだ1試合もしていない校は**成績を出さない**＝合成値で埋め戻さない。
+
+    /// <summary>この選手の今大会成績（帳簿が無い／選手IDが無い／未登録なら null）。</summary>
+    private static Stats.PlayerStats? StatsOf(Stats.StatBook? book, Players.Player p)
+        => book is not null && p.SourceId is int id ? book.Get(id) : null;
 
     /// <summary>球質タイプ。生成時に確定した型があればそれを使い、無ければ能力から推定する。</summary>
     private static Players.PitcherArchetype ArchetypeOf(Players.Player p)
@@ -223,24 +244,24 @@ public static class TournamentPreviewBuilder
             Players.PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh), a.Control, a.PitchRank);
     }
 
-    private static string PitcherStatLine(Players.Player p)
+    private static string PitcherStatLine(Players.Player p, Stats.PlayerStats? stats)
     {
-        var a = p.Pitching;
-        var skill = (a.Control + a.PitchRank) / 2.0;
-        // 上位校のエースが防御率1点台に収まる傾斜（県大会の実感に合わせる）。skill85→約0.9 / 70→約2.4 / 50→4.4。
-        var era = System.Math.Round(MathUtil.Clamp(4.40 - (skill - 50) * 0.10, 0.35, 6.50), 2);
-        var k = (int)System.Math.Round(MathUtil.Clamp(12 + (a.PitchRank - 40) * 0.55, 6, 60));
         // 球質タイプを先に置き、球速は「特徴のひとつ」として併記する（球速を主役にしない）。
         var type = Players.PitcherArchetypes.Label(ArchetypeOf(p));
-        return $"{type} ／ 最速{(int)System.Math.Round(a.MaxVelocityKmh)}km/h ／ 今大会 防御率{era:0.00}・{k}奪三振";
+        var head = $"{type} ／ 最速{(int)System.Math.Round(p.Pitching.MaxVelocityKmh)}km/h ／ 今大会 ";
+        var s = stats?.Pitching;
+        if (s is null || s.Games == 0) return head + "未登板";
+        return head + $"防御率{s.Era:0.00}・{s.StrikeOuts}奪三振";
     }
 
-    private static string BatterStatLine(Players.Player p)
+    private static string BatterStatLine(Players.Player p, Stats.PlayerStats? stats)
     {
-        var avg = MathUtil.Clamp(0.230 + (p.Contact - 50) * 0.0055, 0.180, 0.520);
-        var hr = (int)System.Math.Round(MathUtil.Clamp((p.Power - 55) * 0.14, 0, 9));
-        var avgText = avg.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture).TrimStart('0');
-        return hr > 0 ? $"今大会 打率{avgText}・{hr}本" : $"今大会 打率{avgText}・{p.Steal / 12}盗塁";
+        var s = stats?.Batting;
+        if (s is null || s.AtBats == 0) return "今大会 未出場";
+        var avgText = s.Average.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture).TrimStart('0');
+        return s.HomeRuns > 0
+            ? $"今大会 打率{avgText}・{s.HomeRuns}本"
+            : $"今大会 打率{avgText}・{s.Rbi}打点";
     }
 
     /// <summary>球質タイプで語り口を分ける（球速の閾値では分けない＝技巧派・軟投派も主役になれる）。</summary>
