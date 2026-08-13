@@ -106,7 +106,12 @@ namespace KokoSim.Unity.Home
             if (_effect == null) return;
             if (fx == null)
             {
+                // 中身も消す。残しておくと、帯を出さないイベントの上に前の結果の文字が残り、
+                // 表示ではなく<b>読み取り</b>（スクショ検証・デバッグ）で前の値を掴む。
                 _effect.style.display = DisplayStyle.None;
+                if (_fxSubject != null) _fxSubject.text = "";
+                if (_fxDetail != null) _fxDetail.text = "";
+                if (_effectItems != null) _effectItems.Clear();
                 return;
             }
             _effect.style.display = DisplayStyle.Flex;

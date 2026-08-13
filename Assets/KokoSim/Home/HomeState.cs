@@ -166,8 +166,47 @@ namespace KokoSim.Unity.Home
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
+            RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
             RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
+        }
+
+        /// <summary>
+        /// 監督成長の節目（設計書04 §1.1b・issue #612）。engine は年度更新で発火一覧を返していたが
+        /// <b>`LastGrowthNotices` を誰も読んでおらず</b>、甲子園に行っても名将に負けても画面には何も出なかった。
+        ///
+        /// <para>発火が複数あっても<b>ノベルは年に1本</b>にする（節目ごとに会話を積むとクリックだけ増える）。
+        /// 会話は一番語る価値のある1件から選び、効果帯には<b>その年に動いた軸を全部</b>並べる
+        /// ＝実測の差分なので、選ばれなかった節目のぶんも数字には出る。</para>
+        /// </summary>
+        private void RunManagerGrowthFeed()
+        {
+            var notices = KokoSim.Unity.Shell.ManagerService.DrainGrowthNotices();
+            if (notices.Count == 0) return;
+
+            var lead = ManagerGrowthText.Lead(notices);
+            var delta = KokoSim.Unity.Shell.ManagerService.LastGrowthDelta;
+
+            PushFeed(new List<FeedItem>
+            {
+                new FeedItem
+                {
+                    When = "今週",
+                    Text = ManagerGrowthText.Feed(lead, delta),
+                    Kind = FeedKind.Up,
+                    Tag = "成長",
+                },
+            });
+
+            KokoSim.Unity.Shell.EventService.Push(
+                ManagerGrowthText.EventId(lead),
+                KokoSim.Unity.Shell.ManagerService.Manager.Name,
+                delta.IsEmpty ? null : new KokoSim.Unity.Shell.PresentedEffect
+                {
+                    Subject = KokoSim.Unity.Shell.ManagerService.Manager.Name,
+                    Detail = ManagerGrowthText.Title(lead),
+                    Items = delta.ToItems(),
+                });
         }
 
         /// <summary>

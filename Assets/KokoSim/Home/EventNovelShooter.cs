@@ -156,6 +156,35 @@ namespace KokoSim.Unity.Home
                 }
             }
 
+            // ── 監督成長の節目（issue #612）──
+            // 3月の総括まで48週送るのは大会を跨いで重いので、年度更新だけを直接回して節目を起こし、
+            // **提示は実経路**（週送り → RunManagerGrowthFeed）に通す。
+            for (var y = 1; y <= 12 && ManagerService.LastGrowthNotices.Count == 0; y++)
+                ManagerService.ApplyYearlyGrowth(y);
+            Debug.Log("[EV] 監督の節目: " + ManagerService.LastGrowthNotices.Count + " 件");
+            if (ManagerService.LastGrowthNotices.Count > 0)
+            {
+                var doc3 = Open("HomeDashboard");
+                yield return null; yield return null;
+                var nov4 = doc3.rootVisualElement.Q<VisualElement>("ev-novel");
+                var adv2 = doc3.rootVisualElement.Q<Button>("advance");
+                Submit(adv2);
+                yield return null; yield return null;
+
+                var shot = 0;
+                for (var i = 0; i < 12 && nov4.resolvedStyle.display != DisplayStyle.None; i++)
+                {
+                    if (Text(doc3, "ev-fx-subject").Length > 0 || i == 0)
+                    {
+                        Debug.Log("[EV] 監督ノベル: " + Text(doc3, "ev-speaker") + " / " + Text(doc3, "ev-say")
+                            + " / 帯=" + Text(doc3, "ev-fx-subject") + " " + Text(doc3, "ev-fx-detail"));
+                        yield return Capture(doc3, string.Format("C{0:00}-manager", shot++));
+                    }
+                    Click(nov4);
+                    yield return null; yield return null;
+                }
+            }
+
             // ── 実経路の確認（怪我）──
             // 週送りで実際に故障が起きたときにノベルが出ることを、12週ぶん回して観測する。
             // 出なければ「この12週では起きなかった」とだけ言う（確率なので失敗にはしない）。

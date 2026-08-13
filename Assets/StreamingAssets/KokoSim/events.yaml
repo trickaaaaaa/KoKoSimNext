@@ -443,6 +443,97 @@ events:
           - who: coach
             say: "{player}、戻りましたね。長かった。"
 
+  # 監督成長イベント（設計書04 §1.1b・issue #612）。年度の終わり（3月の総括）に出る。
+  # 主役は監督なので {player} は使わない（{manager} と {school} だけ）。
+  - id: mgr_koshien_experience
+    kind: System
+    text: "甲子園の経験が采配に返ってきた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "あの夏、ベンチから見た景色は、まだ手の中に残っている。"
+          - who: manager
+            say: "（あそこで動けなかった一球を、来年は動ける）"
+      - lines:
+          - who: coach
+            say: "監督、去年とサインの出し方が変わりましたね。速くなった。"
+          - who: manager
+            say: "……甲子園は、迷っている時間をくれないからな。"
+
+  - id: mgr_rival_lesson
+    kind: System
+    text: "名将との練習試合で学びがあった。"
+    variants:
+      - lines:
+          - who: manager
+            say: "（同じ場面で、あの人はもう一枚代えていた。……そういうことか）"
+      - lines:
+          - who: coach
+            say: "完敗でしたね。点差以上に、やられた感じがします。"
+          - who: manager
+            say: "いい負け方だ。何をされたか全部分かる負けは、勉強代が安い。"
+
+  - id: mgr_big_loss
+    kind: System
+    text: "大敗から学んだ。"
+    variants:
+      - lines:
+          - who: narration
+            say: "勝てないまま一年が終わった。ノートには反省ばかりが並んでいる。"
+          - who: manager
+            say: "（選手のせいにした行が一行でもあるなら、そこが俺の弱点だ）"
+      - lines:
+          - who: captain
+            say: "監督。……来年は、勝ちましょう。"
+          - who: manager
+            say: "ああ。まず俺が直す。お前たちに直させる前にな。"
+
+  - id: mgr_seminar
+    kind: System
+    text: "指導者講習会に参加した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "オフの週末、他校の監督たちに混じって、また生徒の側に座っている。"
+          - who: manager
+            say: "（教える側が習わなくなったら終わりだ。費用は部費から出させてもらおう）"
+      - lines:
+          - who: coach
+            say: "講習、どうでした。"
+          - who: manager
+            say: "半分は知っていた。残りの半分に金を払った価値がある。"
+
+  - id: mgr_pro_ob
+    kind: System
+    text: "プロOBが訪ねてきた。"
+    variants:
+      - lines:
+          - who: ob
+            say: "監督、久しぶりです。……この子ら、いい体になってきましたね。"
+          - who: manager
+            say: "見る目が違う。どこを見ているのか、あとで教えてください。"
+      - lines:
+          - who: ob
+            say: "現役の頃は、こうやって見られる側だったんですけどね。"
+          - who: manager
+            say: "（見られる側にいた人間の言葉は、やはり重い）"
+
+  - id: mgr_mentor
+    kind: System
+    text: "名伯楽との出会いがあった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "全国の常連校を三度率いた老将が、ふらりとグラウンドに現れた。"
+          - who: manager
+            say: "（この人と話した二時間で、去年一年ぶんの答え合わせが終わった）"
+      - lines:
+          - who: ob
+            name: "老監督"
+            say: "教えられることは何もない。ただ、私が間違えたことなら話せます。"
+          - who: manager
+            say: "……それが一番聞きたい話です。"
+
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
   - id: ace_hidden_injury

@@ -139,6 +139,8 @@ events:
             "injury_occurred", "injury_returned",
             "growth_awakening", "growth_breakthrough", "growth_slump",
             "growth_plateau", "growth_yips", "growth_yips_overcome",
+            "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
+            "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
