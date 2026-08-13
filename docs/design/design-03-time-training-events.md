@@ -184,6 +184,36 @@
   （＝大会中に溜まった分は大会後に出る）。
 - **イベントを表から消さない**。抽選プールが変わると発火の乱数列まで動く＝黙って「いつ何が起きるか」がずれる
   （#609 の作業中に実際に踏んだ）。`EventTableTests.RepositoryTable_KeepsEveryRegisteredEvent` が固定する。
+  同じ理由で、**Random を1件足すと `SeasonEngineTests` のゴールデンは必ず割れる**（採り直す前提で考える）。
+
+### 5.3b イベントが起こせること（データ駆動・issue #610〜#617）
+
+`data/events.yaml` に書ける項目。**新しいイベントを足すのにコードを触らせない**のが目標で、
+ここに無い効果が要るときだけ engine の `EventEffect` を広げる。
+
+```yaml
+  - id: booster_club_fund
+    kind: Random            # Fixed（暦）/ Random・Choice（週次抽選）/ System（別経路から主役つき）
+    weight: 1.0
+    cooldown_weeks: 16
+    requires_region: Kyushu # その地方でだけ（省略＝全国。未知の地方名はパースで落とす）
+    text: "後援会が施設基金に寄付してくれた。"
+    effects:
+      funds: 30             # 部費（運営費）の増減・万円
+      facility_fund: 120    # 施設基金（建物専用）の増減・万円
+      training_mult: 1.10   # 練習効率の倍率
+      training_weeks: 4     #   … が効く週数（倍率と両方書かないと効かない）
+      training_target: team # team（既定・部全体）/ player（会話の主役ひとり）
+```
+
+- **`kind: System` は週次抽選に載らない**。怪我・成長・気づき・ドラフトのように「実際に起きた出来事」から
+  `EventService.Push(id, 主役, 効果)` で呼ぶ。主役つきなので `{player}` は必ず実在の部員になる。
+  会話の抽選には選手IDを salt に混ぜる＝同じ週に2人同時に故障しても別の会話になる。
+- **効果の適用は Shell 1箇所**（`EventService.ApplyEffect`）。財布を持っているのが Shell 側なので、
+  engine はデータ定義まで。部費はマイナスにしない。
+- **期間つき補正はセーブに載る**（v10）。載せないとロードで効果が消える。
+- **1週にノベルへ出すのは3件まで**（あふれた分もフィードには残る）。
+- 効果の見せ方は会話ボックス下の**効果帯**（設計書06 §3.10）。数値は会話本文に書かない。
 
 ### 5.4 学業要素（軽め）
 - テスト週（年4回）は練習効率が自動低下
