@@ -760,13 +760,19 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void SetTeamColors(KokoSim.Engine.Nation.TeamColors defense, KokoSim.Engine.Nation.TeamColors offense)
         {
-            if (defense == null || offense == null) return;
-            _defenseColors = UniformPalette.From(defense);
-            _offenseColors = UniformPalette.From(offense);
-
-            Repaint(_pitcher, _defenseColors);
-            Repaint(_catcher, _defenseColors);
-            Repaint(_batter, _offenseColors);   // 打者ヘルメットは暗紺固定＝チーム色の装備は無い
+            // issue #618: 片方が null でも塗れる側は塗る（旧実装は片方 null で両校とも既定色のままだった）。
+            // null は「その校の配色が不明」であって「既定色で描け」ではないので、不明な側だけ既定に残す。
+            if (defense != null)
+            {
+                _defenseColors = UniformPalette.From(defense);
+                Repaint(_pitcher, _defenseColors);
+                Repaint(_catcher, _defenseColors);
+            }
+            if (offense != null)
+            {
+                _offenseColors = UniformPalette.From(offense);
+                Repaint(_batter, _offenseColors);   // 打者ヘルメットは暗紺固定＝チーム色の装備は無い
+            }
         }
 
         private static void Repaint(Actor a, UniformPalette pal)
@@ -1177,8 +1183,10 @@ namespace KokoSim.Unity.Match
             // 未指定＝スクショ・デモ経路は既定（白＋紺）で立つ
             if (InitialTeamColors is { } tc)
             {
-                _defenseColors = UniformPalette.From(tc.Defense);
-                _offenseColors = UniformPalette.From(tc.Offense);
+                // issue #618: 片側だけ判っている場合がある（相手校ID不明の練習試合）。
+                // UniformPalette.From は null を受けられないので側ごとに判定する。
+                if (tc.Defense != null) _defenseColors = UniformPalette.From(tc.Defense);
+                if (tc.Offense != null) _offenseColors = UniformPalette.From(tc.Offense);
             }
 
             // 立ち位置・装備位置は絵作りパラメータ（DuelCalibration.Default が単一ソース。
