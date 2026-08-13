@@ -69,6 +69,21 @@ public sealed record LivePitch
     public bool BaseSecond { get; init; }
     public bool BaseThird { get; init; }
 
+    /// <summary>
+    /// この球を投げ終えた時点の得点（issue #628）。打席途中に入る点——本盗の生還・暴投/捕逸での生還——を
+    /// <b>その場で掲示板へ出すため</b>の観測値。<see cref="MatchProgression.Snapshot"/> は打席まるごと
+    /// 解決した後の集計なので、打席途中に読むと同じ打席の後の得点まで先に出てしまう（issue #438 で
+    /// 直した「得点の先出し」の再発）。再生側はこの値と集計が一致するときだけ掲げる。
+    ///
+    /// <para>例外は振り逃げの押し出し（issue #525）で、三振確定後の後処理として入るため
+    /// この値には乗らない（＝一致せず打席途中では掲げない）。押し出しは打席が確定するので、
+    /// 打球の無い結果として打席確定時に掲示される＝取りこぼさない。</para>
+    /// </summary>
+    public int AwayScore { get; init; }
+
+    /// <inheritdoc cref="AwayScore"/>
+    public int HomeScore { get; init; }
+
     /// <summary>打席内で何球目だったか（1始まり）。</summary>
     public int PitchNumberInPa { get; init; }
 
