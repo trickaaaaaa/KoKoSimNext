@@ -99,6 +99,7 @@ namespace KokoSim.Unity.Home
         private readonly InjuryCoefficients _injury = new InjuryCoefficients();
         private readonly SkillCoefficients _skills = new SkillCoefficients();
         private readonly InsightCoefficients _insight = new InsightCoefficients();
+        private readonly GrowthEventCoefficients _growth = new GrowthEventCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
         // 個別指導枠の並べ替えに使うカテゴリ別指標の係数。他画面の比較カードと同一の単一ソース。
@@ -123,6 +124,7 @@ namespace KokoSim.Unity.Home
         // 週次抽選のストリームID（互いに独立＝どちらかの抽選回数が変わっても他方がずれない）。
         private const ulong InjuryStream = 0x1213_0000UL;
         private const ulong InsightStream = 0x1E51_0000UL;
+        private const ulong GrowthStream = 0x6110_0000UL;   // 選手成長イベント（issue #611）
 
         /// <summary>
         /// 週次抽選の乱数ストリーム種（不変条件#2）。「その週ならいつ引いても同じ結果」になるよう、
@@ -160,11 +162,46 @@ namespace KokoSim.Unity.Home
             KokoSim.Unity.Shell.EventService.BeginWeek();   // この週のノベル件数を数え直す（issue #610）
             RunPracticeWeek(1.0);                       // 通常週の練習（効果1.0）
             RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
+            RunGrowthWeek();                            // 選手成長イベント（設計書03 §5.5）
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
             RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
             RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
+        }
+
+        /// <summary>
+        /// 選手成長イベント（設計書03 §5.5・issue #611）。engine の <see cref="GrowthEventModel"/> は
+        /// Phase 1 からあったが<b>ヘッドレスシム（SeasonEngine）からしか呼ばれておらず</b>、
+        /// 実プレイでは覚醒もスランプも一度も起きていなかった。ここで週送りへ接続する。
+        ///
+        /// <para>乱数は専用ストリーム（<see cref="GrowthStream"/>）。怪我・気づきと同じ作法で
+        /// <see cref="IRandomSource.Fork"/> するので、既に走っている抽選の乱数列はずれない。</para>
+        ///
+        /// <para>効果の適用は engine が済ませる。ここは提示だけ＝<b>数値は係数と実測から作る</b>
+        /// （スランプ週数は適用後の <see cref="DevelopingPlayer.SlumpWeeks"/> をそのまま読む）。</para>
+        /// </summary>
+        private void RunGrowthWeek()
+        {
+            var rng = _rng.Fork(WeeklyStream(GrowthStream));
+            var notices = GrowthEventModel.Week(Roster, rng, _growth);
+            if (notices.Count == 0) return;
+
+            var items = new List<FeedItem>();
+            foreach (var n in notices)
+            {
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = GrowthEventText.Feed(n, _growth),
+                    Kind = GrowthEventText.IsGood(n.Type) ? FeedKind.Up : FeedKind.Warn,
+                    Tag = GrowthEventText.IsGood(n.Type) ? "成長" : "警告",
+                });
+                KokoSim.Unity.Shell.EventService.Push(
+                    GrowthEventText.EventId(n.Type), n.Player.Name,
+                    GrowthEventText.Effect(n, _growth), n.Player.Id);
+            }
+            PushFeed(items);
         }
 
         /// <summary>

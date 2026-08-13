@@ -329,6 +329,120 @@ events:
           - who: manager
             say: "（休んでいた間に、周りが伸びた。それも本人が一番よく分かっている）"
 
+  # 選手成長イベント（設計書03 §5.5・issue #611）。
+  # 上げは「兆しの上に起きた」、下げは**理不尽にしない**（「ここが限界だった」と納得できる言い方）。
+  - id: growth_awakening
+    kind: System
+    text: "選手が覚醒した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "打球音が、今週だけ違う。"
+          - who: coach
+            say: "監督、{player} のスイング……先週までと別人です。"
+          - who: manager
+            say: "（来たな。毎年ひとりだけ、ここで一段上がる子がいる）"
+      - lines:
+          - who: player
+            say: "監督、なんか……分かった気がします。うまく言えないんですけど。"
+          - who: manager
+            say: "言葉にしなくていい。その感じを、明日も覚えていろ。"
+      - lines:
+          - who: captain
+            say: "{player}、化けましたね。夏前にこれは大きい。"
+          - who: manager
+            say: "本人が調子に乗る前に、もう一段上を見せてやらんとな。"
+
+  - id: growth_breakthrough
+    kind: System
+    text: "選手がコツを掴んだ。"
+    variants:
+      - lines:
+          - who: coach
+            say: "{player}、フォームの詰まりが取れました。素直な回り方になっています。"
+          - who: manager
+            say: "本人が気づいたなら本物だ。教えすぎるな、ここからは。"
+      - lines:
+          - who: player
+            say: "監督、今のもう一回いいですか。……今のが一番しっくり来ました。"
+          - who: manager
+            say: "覚えておけ。その形が、お前の基準だ。"
+      - lines:
+          - who: narration
+            say: "同じ練習をしているのに、ひとりだけ音が変わる日がある。"
+          - who: manager
+            say: "（積み上げた分が、今日つながったな）"
+
+  - id: growth_slump
+    kind: System
+    text: "選手がスランプに入った。"
+    variants:
+      - lines:
+          - who: player
+            say: "……なんで当たらないんですかね。やってること、変えてないのに。"
+          - who: manager
+            say: "変えるな。三週間で戻す。それまでは振り方に手を入れるな。"
+      - lines:
+          - who: coach
+            say: "{player}、数字が落ちてきました。手首をいじり始めています。"
+          - who: manager
+            say: "止めろ。落ちている時に触ると、戻り方まで忘れる。"
+      - lines:
+          - who: narration
+            say: "バットは同じ、フォームも同じ。それでも打球が上がらない時期がある。"
+          - who: manager
+            say: "（こういう時に何を言うかで、三年の残りが決まる）"
+
+  - id: growth_plateau
+    kind: System
+    text: "選手の伸びが頭打ちになった。"
+    variants:
+      - lines:
+          - who: coach
+            say: "{player}、ここから先はもう、大きくは伸びないかもしれません。"
+          - who: manager
+            say: "なら、伸ばす場所を変える。そこで勝負しない野球はいくらでもある。"
+      - lines:
+          - who: narration
+            say: "測っても、去年の数字とほとんど変わらない。"
+          - who: manager
+            say: "（限界が見えた、というだけだ。使い方はこれから考えればいい）"
+      - lines:
+          - who: player
+            say: "自分、もう頭打ちですかね。"
+          - who: manager
+            say: "上限が見えるところまで来た、ということだ。そこまで来た奴は多くない。"
+
+  - id: growth_yips
+    kind: System
+    text: "選手が送球・制球を崩した。"
+    variants:
+      - lines:
+          - who: player
+            say: "……投げられないんです。近い距離ほど、手が言うことを聞かなくて。"
+          - who: manager
+            say: "原因を探すな。今日は遠投だけしろ。近いのは、そのうち戻る。"
+      - lines:
+          - who: coach
+            say: "{player}、山なりでしか投げられなくなっています。"
+          - who: manager
+            say: "見ている前で投げさせるな。人の目が一番効く時期だ。"
+
+  - id: growth_yips_overcome
+    kind: System
+    text: "選手が送球・制球の不調を克服した。"
+    variants:
+      - lines:
+          - who: player
+            say: "監督。……さっきの、普通に投げられました。"
+          - who: manager
+            say: "そうか。何も言わずに見ていた甲斐があった。"
+      - lines:
+          - who: narration
+            say: "何でもない送球が、何でもないように一塁へ収まった。"
+          - who: coach
+            say: "{player}、戻りましたね。長かった。"
+
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
   - id: ace_hidden_injury

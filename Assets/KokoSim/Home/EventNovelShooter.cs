@@ -132,6 +132,30 @@ namespace KokoSim.Unity.Home
                 }
             }
 
+            // ── 成長イベントの効果帯（issue #611）──
+            // 覚醒・スランプは週あたり 0.15〜0.4% の低確率なので、絵の確認は主役つき提示を直接叩く。
+            if (subject != null)
+            {
+                EventService.BeginWeek();
+                var awake = new KokoSim.Engine.Season.GrowthNotice(
+                    subject, KokoSim.Engine.Season.GrowthEventType.Awakening,
+                    KokoSim.Engine.Season.AbilityKind.Power);
+                var coeff = new KokoSim.Engine.Season.GrowthEventCoefficients();
+                EventService.Push(GrowthEventText.EventId(awake.Type), subject.Name,
+                    GrowthEventText.Effect(awake, coeff), subject.Id);
+                Debug.Log("[EV] 成長フィード: " + GrowthEventText.Feed(awake, coeff));
+
+                var home2 = Open("HomeDashboard");
+                yield return null; yield return null;
+                var nov3 = home2.rootVisualElement.Q<VisualElement>("ev-novel");
+                for (var i = 0; i < 6 && nov3.resolvedStyle.display != DisplayStyle.None; i++)
+                {
+                    yield return Capture(home2, string.Format("B{0:00}-growth", i));
+                    Click(nov3);
+                    yield return null; yield return null;
+                }
+            }
+
             // ── 実経路の確認（怪我）──
             // 週送りで実際に故障が起きたときにノベルが出ることを、12週ぶん回して観測する。
             // 出なければ「この12週では起きなかった」とだけ言う（確率なので失敗にはしない）。
@@ -146,7 +170,8 @@ namespace KokoSim.Unity.Home
                 Submit(btn);
                 yield return null; yield return null;
                 foreach (var p in EventService.Pending)
-                    if (p.Id.StartsWith("injury_")) { seen++; Debug.Log("[EV] 実経路で発火: " + p.Id + " / " + p.Lines[0].Say); }
+                    if (p.Id.StartsWith("injury_") || p.Id.StartsWith("growth_"))
+                    { seen++; Debug.Log("[EV] 実経路で発火: " + p.Id + " / " + p.Lines[0].Say); }
                 for (var i = 0; i < 12 && nov2.resolvedStyle.display != DisplayStyle.None; i++)
                 {
                     Click(nov2);

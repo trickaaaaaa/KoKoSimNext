@@ -137,6 +137,8 @@ events:
             // システムイベント（issue #610〜）。IDは呼び出し側にベタ書きされているので、
             // 消えると「その出来事だけ黙って会話が出ない」形で壊れる。
             "injury_occurred", "injury_returned",
+            "growth_awakening", "growth_breakthrough", "growth_slump",
+            "growth_plateau", "growth_yips", "growth_yips_overcome",
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
