@@ -19,10 +19,14 @@ public enum BattedBallResult
 }
 
 /// <summary>
-/// 失策の種類（issue #439）。Catch=捕球エラー（お手玉・落球）／Throw=悪送球。
-/// 表示層が「弾く絵」か「逸れる絵」かを選ぶための観測データで、判定・帯には関与しない。
+/// 失策の種類（issue #439 / #632）。Catch=捕球エラー（お手玉・落球）／Throw=悪送球／
+/// Tunnel=トンネル（股・脇を抜けて球が外野へ行く）。
+///
+/// <para>Catch/Throw は「絵の選び方」だけの観測データだが、<b>Tunnel は球の行き先が違う</b>
+/// ＝失策後の走者の進塁が幾何で決まる（不変条件#1）。issue #629 の失策連鎖（悪送球だけに乗る
+/// 一律確率）と役割が分かれていて、こちらは<b>外野からの返球との時間勝負</b>になる。</para>
 /// </summary>
-public enum FieldingErrorKind { Catch, Throw }
+public enum FieldingErrorKind { Catch, Throw, Tunnel }
 
 /// <summary>
 /// 守備解決の詳細（結果＋幾何・時間情報, CHANGELOG 32）。
@@ -91,6 +95,19 @@ public sealed record FieldingPlay
     /// 引いたロールの結果を記録するだけ＝新規RNGなし（不変条件#2）。
     /// </summary>
     public FieldingErrorKind? ErrorKind { get; init; }
+
+    /// <summary>
+    /// 失策を犯した野手（issue #632）。トンネルでは<b>処理野手（回収する外野手）と別人</b>になるので、
+    /// 失策の個人帰属はこちらから引く。null＝<see cref="FielderRole"/> と同じ（捕球エラー・悪送球）。
+    /// </summary>
+    public FieldPosition? ErrorFielderRole { get; init; }
+
+    /// <summary>
+    /// 失策が確定した瞬間[s]（表示専用, issue #632）。トンネルでは<b>抜かれた瞬間</b>＝
+    /// 外野手が球を回収する <see cref="FieldedAtSeconds"/> よりずっと前。
+    /// null＝従来どおり（捕球エラー＝処理点で弾いた時刻／悪送球＝一塁へ届くはずだった時刻）。
+    /// </summary>
+    public double? ErrorAtSeconds { get; init; }
 
     // --- 打球のバウンド（Issue #63 / OPEN-QUESTIONS Q14） ---
 
@@ -325,6 +342,30 @@ public static class FieldingResolver
                 // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
                 var (result, errorKind) = MaybeInfieldError(fielders, catchPoint, infielder, coeff, rng, errorBonus);
+                if (errorKind == FieldingErrorKind.Tunnel)
+                {
+                    // トンネル（issue #632）: 野手は触れず、球は捕球点から<b>その瞬間の速度のまま</b>
+                    // 転がり続ける。以降は内野を抜けた打球とまったく同じ経路＝外野手が回収して返球する
+                    // （回収野手・回収時刻・回収点・肩は HitFromRoll が埋める）ので、二塁走者の生還は
+                    // 一律確率ではなく外野からの返球との時間勝負（HomePlayResolver）で決まる。
+                    // 時刻は fieldTimeRaw（経路上の実時刻）で採る。fieldTime のチョッパー待ちは
+                    // 「野手が落ちてくるのを待つ」時間なので、触らずに抜けた球には乗らない。
+                    var through = ExtraBaseResolver.RollFrom(
+                        catchPoint, path.DirectionAt(fieldTimeRaw), path.HorizontalSpeedAt(fieldTimeRaw),
+                        fieldTimeRaw, fenceDist, coeff);
+                    return HitFromRoll(GroundBase, through, field, batter, fielders, coeff, runnerTime) with
+                    {
+                        Result = BattedBallResult.Error,
+                        ThroughInfield = true,
+                        ErrorKind = FieldingErrorKind.Tunnel,
+                        ErrorFielderRole = infielder.Position,     // 失策は抜かれた内野手に付く
+                        ErrorAtSeconds = fieldTimeRaw,             // 「エラー」が出るのは抜かれた瞬間
+                        // 表示専用（Issue #336②）: 抜かれた本人が打球ラインへ飛びつく絵の入力。
+                        ClosestInfielderRole = infielder.Position,
+                        ClosestApproachX = catchPoint.X,
+                        ClosestApproachZ = catchPoint.Z,
+                    };
+                }
                 return GroundBase(result) with
                 {
                     FieldedX = catchPoint.X,
@@ -687,7 +728,15 @@ public static class FieldingResolver
         FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0)
     {
         if (CatchErrorOccurs(fielders, landing, coeff, rng, extraProb))
+        {
+            // 捕球エラーの内訳（issue #632）: 一定割合は股・脇を抜けて外野へ行く＝トンネル。
+            // 失策の総数は変えない（お手玉が減ってトンネルが増える）＝#123/#532 の失策率校正を保つ。
+            // TunnelShareProb=0 のときはロール自体を引かない＝乱数消費順・結果とも完全に従来どおり
+            // （ThrowErrorBaseProb と同じ恒等の作法）。
+            if (coeff.TunnelShareProb > 0.0 && MathUtil.Chance(coeff.TunnelShareProb, rng))
+                return (BattedBallResult.Error, FieldingErrorKind.Tunnel);
             return (BattedBallResult.Error, FieldingErrorKind.Catch);
+        }
         if (coeff.ThrowErrorBaseProb > 0.0)
         {
             // 送球精度が高いほど悪送球が減る。クランプは捕球エラーと共通の min/max を流用。

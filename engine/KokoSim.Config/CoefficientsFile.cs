@@ -528,6 +528,7 @@ public static class CoefficientsLoader
         public double FlyErrorRoutineMarginSeconds { get; set; } = D.FlyErrorRoutineMarginSeconds;
         public double ThrowErrorBaseProb { get; set; } = D.ThrowErrorBaseProb;
         public double ThrowErrorAccuracySlope { get; set; } = D.ThrowErrorAccuracySlope;
+        public double TunnelShareProb { get; set; } = D.TunnelShareProb;
         public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
         public double CatchReachCapSeconds { get; set; } = D.CatchReachCapSeconds;
         public double RollDecelMps2 { get; set; } = D.RollDecelMps2;
@@ -582,6 +583,7 @@ public static class CoefficientsLoader
             FlyErrorRoutineMarginSeconds = FlyErrorRoutineMarginSeconds,
             ThrowErrorBaseProb = ThrowErrorBaseProb,
             ThrowErrorAccuracySlope = ThrowErrorAccuracySlope,
+            TunnelShareProb = TunnelShareProb,
             CatchReachFieldingSlope = CatchReachFieldingSlope,
             CatchReachCapSeconds = CatchReachCapSeconds,
             RollDecelMps2 = RollDecelMps2,

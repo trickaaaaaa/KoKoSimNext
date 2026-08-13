@@ -142,6 +142,18 @@ public sealed record FieldingCoefficients
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
 
+    /// <summary>
+    /// トンネル（股・脇を抜けて球が外野へ行く失策, issue #632）の割合。
+    /// <b>捕球エラーの内訳</b>＝失策の総数は変えず、お手玉が減ってトンネルが増える
+    /// （失策率は #123/#532 で実測域へ校正済みなので動かさない）。
+    ///
+    /// <para>0 のときは内訳ロール自体を引かない＝乱数消費順・結果とも完全に従来どおり
+    /// （<see cref="ThrowErrorBaseProb"/> と同じ恒等の作法）。正値にすると
+    /// 「球が外野へ行ったから走者が還った」という因果が物理層で成立する（不変条件#1）。</para>
+    /// data/coefficients.yaml と同値。
+    /// </summary>
+    public double TunnelShareProb { get; init; } = 0.30;
+
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 
     /// <summary>着地後の転がりの減速度[m/s²]（芝・土の摩擦＋バウンドの損失を集約）。</summary>
