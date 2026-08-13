@@ -554,6 +554,40 @@ public sealed class SaveCodecTests
         Assert.NotEmpty(s.TournamentHistory.Entries);   // 他の項目は素通りで読めている
     }
 
+    // 練習効率の補正（issue #615・v10）が往復すること。
+    [Fact]
+    public void TrainingBoosts_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Equal(state.TrainingBoosts.Count, s.TrainingBoosts.Count);
+        for (var i = 0; i < state.TrainingBoosts.Count; i++)
+        {
+            Assert.Equal(state.TrainingBoosts[i].Source, s.TrainingBoosts[i].Source);
+            Assert.Equal(state.TrainingBoosts[i].Mult, s.TrainingBoosts[i].Mult, 6);
+            Assert.Equal(state.TrainingBoosts[i].WeeksLeft, s.TrainingBoosts[i].WeeksLeft);
+            Assert.Equal(state.TrainingBoosts[i].PlayerId, s.TrainingBoosts[i].PlayerId);
+        }
+    }
+
+    // v9（補正が無かった版）のセーブは trainingBoosts を持たない。読めて空で補われること。
+    [Fact]
+    public void V9Save_WithoutTrainingBoosts_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"trainingBoosts\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "trainingBoosts が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が trainingBoosts の後に居ない");
+        var v9 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":9");
+
+        Assert.True(SaveCodec.TryDeserialize(v9, out var s, out var err), err);
+        Assert.Empty(s.TrainingBoosts);
+        Assert.NotNull(s.Events);   // 他の項目は素通りで読めている
+    }
+
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。
     [Fact]
     public void TournamentState_RoundTrips()

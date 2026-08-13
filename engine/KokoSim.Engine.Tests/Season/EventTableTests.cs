@@ -144,6 +144,7 @@ events:
             "insight_growth_type",
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
             "booster_club_fund", "gear_broken", "local_company_support",
+            "outside_coach_visit", "self_practice_awakened", "exam_week_slump",
         };
         var ids = RepositoryEvents().Select(e => e.Id).ToHashSet();
         foreach (var id in required) Assert.True(ids.Contains(id), $"イベント {id} が events.yaml から消えている");
@@ -286,6 +287,47 @@ events:
 
         Assert.True(byId["ob_donation"].Effect.Funds > 0);
         Assert.True(byId["local_company_support"].Effect.Funds > 0);
+    }
+
+    /// <summary>
+    /// 期間つきの練習効率補正（issue #615）が読めること。<b>倍率と週数の両方</b>が要る
+    /// （片方だけだと「効くけど終わらない」「終わるけど効かない」になる）。
+    /// </summary>
+    [Fact]
+    public void Parse_ReadsTrainingBoost()
+    {
+        var events = EventTableParser.Parse(
+            "events:\n  - id: camp\n    text: \"合宿。\"\n"
+            + "    effects:\n      training_mult: 1.15\n      training_weeks: 3\n      training_target: player\n");
+
+        Assert.Equal(1.15, events[0].Effect.TrainingMult, 6);
+        Assert.Equal(3, events[0].Effect.TrainingWeeks);
+        Assert.True(events[0].Effect.TrainingTargetIsPlayer);
+        Assert.True(events[0].Effect.HasTrainingBoost);
+    }
+
+    [Fact]
+    public void TrainingBoost_NeedsBothMultiplierAndWeeks()
+    {
+        var onlyMult = EventTableParser.Parse(
+            "events:\n  - id: a\n    text: \"t\"\n    effects:\n      training_mult: 1.2\n")[0];
+        var onlyWeeks = EventTableParser.Parse(
+            "events:\n  - id: b\n    text: \"t\"\n    effects:\n      training_weeks: 4\n")[0];
+
+        Assert.False(onlyMult.Effect.HasTrainingBoost);
+        Assert.False(onlyWeeks.Effect.HasTrainingBoost);
+        Assert.True(onlyMult.Effect.IsEmpty);
+        Assert.True(onlyWeeks.Effect.IsEmpty);
+    }
+
+    /// <summary>既定は部全体（<c>training_target</c> 省略）。個人向けを既定にすると全体強化が効かない。</summary>
+    [Fact]
+    public void RepositoryTable_TrainingEvents_HaveSaneTargets()
+    {
+        var byId = RepositoryEvents().ToDictionary(e => e.Id);
+        Assert.False(byId["outside_coach_visit"].Effect.TrainingTargetIsPlayer, "外部コーチは部全体のはず");
+        Assert.True(byId["self_practice_awakened"].Effect.TrainingTargetIsPlayer, "自主練は本人だけのはず");
+        Assert.True(byId["exam_week_slump"].Effect.TrainingMult < 1.0, "テスト週間は効率が下がるはず");
     }
 
     // ===== バリエーション抽選 =====

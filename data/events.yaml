@@ -341,6 +341,81 @@ events:
           - who: captain
             say: "監督、これ全部ボールです。……新品の。"
 
+  # 練習効率イベント（issue #615）。**期間つき**の倍率で、部全体か本人ひとりに効く。
+  #   training_mult   1.10＝＋10%
+  #   training_weeks  効く週数（0＝補正なし）
+  #   training_target team（既定・部全体）／player（会話の主役ひとり）
+  - id: outside_coach_visit
+    kind: Random
+    weight: 1.0
+    cooldown_weeks: 14
+    text: "外部コーチが指導に来てくれることになった。"
+    effects:
+      training_mult: 1.10
+      training_weeks: 4
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、県の指定を受けました。月に一度、外部の方が来てくれるそうです。"
+          - who: manager
+            say: "……こちらが教わる気で臨まないと、来てもらう意味がない。"
+      - lines:
+          - who: ob
+            say: "しばらく手伝わせてください。現役の頃、ここで拾ってもらった恩がある。"
+          - who: manager
+            say: "助かります。……守備は全部お任せしていいですか。"
+      - lines:
+          - who: narration
+            say: "見慣れない大人がノックバットを持って立っている。打球が、明らかに速い。"
+          - who: captain
+            say: "監督、あの人……プロですか。"
+
+  - id: self_practice_awakened
+    kind: Random
+    weight: 1.2
+    cooldown_weeks: 10
+    text: "自主練に目覚めた部員がいる。"
+    effects:
+      training_mult: 1.20
+      training_weeks: 6
+      training_target: player
+    variants:
+      - lines:
+          - who: narration
+            say: "全体練習が終わって一時間。まだ素振りの音がしている。"
+          - who: manager
+            say: "（{player} か。……止めるのは簡単だが、今は言うまい）"
+      - lines:
+          - who: coach
+            say: "{player}、朝も来ています。鍵を開けるのが自分より早い。"
+          - who: manager
+            say: "怪我だけ気をつけて見ておいてくれ。やる気は取り上げられん。"
+      - lines:
+          - who: player
+            say: "監督、あと三十分だけいいですか。今日、掴めそうな気がして。"
+          - who: manager
+            say: "三十分だ。それ以上は明日の自分から借りることになる。"
+
+  - id: exam_week_slump
+    kind: Random
+    weight: 1.0
+    cooldown_weeks: 12
+    text: "テスト週間で練習時間が削られる。"
+    effects:
+      training_mult: 0.85
+      training_weeks: 2
+    variants:
+      - lines:
+          - who: coach
+            say: "監督、今週から試験前です。全体練習は短縮になります。"
+          - who: manager
+            say: "赤点を出したら大会に出られん。それも野球の一部だ。"
+      - lines:
+          - who: player
+            say: "監督、正直……バットより教科書のほうが重いです。"
+          - who: manager
+            say: "うまいことを言うな。言う元気があるなら大丈夫だ。"
+
   # 争奪戦（能動勧誘・設計書04 §2.2・issue #588）。
   # 発火のタイミングは週次の抽選ではなく「訪問1回ごと」なので、確率は
   # coefficients.yaml recruiting.rival_event_prob が持つ（週次イベントの weight は使わない）。

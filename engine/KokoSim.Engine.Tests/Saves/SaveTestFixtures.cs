@@ -187,6 +187,12 @@ internal static class SaveTestFixtures
             TournamentHistory = BuildTournamentHistory(),
             // 週次イベントの発火状態（v9・issue #609）。クールダウン途中＋年次フラグ1本で往復を測る。
             Events = BuildEventState(),
+            // 練習効率の補正（v10・issue #615）。全体ぶんと個人ぶんを1本ずつ。
+            TrainingBoosts = new List<TrainingBoostSaveState>
+            {
+                new TrainingBoostSaveState { Source = "outside_coach_visit", Mult = 1.10, WeeksLeft = 3, PlayerId = 0 },
+                new TrainingBoostSaveState { Source = "self_practice_awakened", Mult = 1.20, WeeksLeft = 5, PlayerId = 7 },
+            },
         };
     }
 

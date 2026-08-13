@@ -169,6 +169,9 @@ namespace KokoSim.Unity.Home
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
             RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
+            // 練習効率の補正を1週ぶん減らす（issue #615）。**練習を適用した後**に呼ぶ＝
+            // 「N週」と言われた週にちゃんとN回効く（先に減らすと1週ぶん短くなる）。
+            KokoSim.Unity.Shell.TrainingBoostService.Tick();
         }
 
         /// <summary>
@@ -438,7 +441,9 @@ namespace KokoSim.Unity.Home
             {
                 if (!KokoSim.Unity.Shell.TrainingWeek.CanTrain(p.Grade, week)) continue;
                 var before = Snapshot(p);
-                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult);
+                // 期間つきの練習効率補正（issue #615）。補正が無ければ 1.0＝従来と1ビット一致。
+                var boost = KokoSim.Unity.Shell.TrainingBoostService.MultiplierFor(p.Id);
+                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult * boost);
                 foreach (var k in AbilityKinds.All)
                 {
                     var gained = p.Level(k) - before[k];

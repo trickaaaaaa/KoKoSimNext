@@ -23,7 +23,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 9;
+    public const int CurrentVersion = 10;
 
     // ===== Serialize =====
 
@@ -58,6 +58,7 @@ public static class SaveCodec
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("events", EventSaves.ToJson(s.Events))
+            .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -176,6 +177,9 @@ public static class SaveCodec
         // イベントが週送りに繋がっていなかった＝一度も発火していないので、null で補う（＝全部まっさら）。
         // 旧セーブを開いた直後は全イベントがクールダウン明けになるが、実際に一度も出ていないので正しい。
         if (version < 9 && !root.Has("events")) root.Add("events", JsonNull.Instance);
+        // v9→v10（issue #615）: 期間つきの練習効率補正が増えた。v9 以前はイベントが効率を動かして
+        // いなかった＝効いている補正が存在しえないので、空配列で補う。
+        if (version < 10 && !root.Has("trainingBoosts")) root.Add("trainingBoosts", new JsonArray());
         return root;
     }
 
@@ -215,6 +219,8 @@ public static class SaveCodec
             Recruiting = RecruitingSaves.FromJson(root.Has("recruiting") ? root["recruiting"] : null),
             // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
+            // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            TrainingBoosts = EventSaves.BoostsFromJson(root.Arr("trainingBoosts")),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
         };
 

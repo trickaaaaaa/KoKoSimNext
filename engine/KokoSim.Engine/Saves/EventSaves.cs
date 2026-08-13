@@ -40,6 +40,22 @@ public sealed class EventSchedulerSaveState
 }
 
 /// <summary>
+/// 期間つきの練習効率補正1本（issue #615・セーブ v10）。
+/// 載せないと、強化指定を受けた直後にロードすると効果が消える＝起きたことが無かったことになる。
+/// </summary>
+public sealed class TrainingBoostSaveState
+{
+    /// <summary>由来のイベントID。</summary>
+    public string Source { get; set; } = "";
+    /// <summary>倍率（1.10＝＋10%）。</summary>
+    public double Mult { get; set; } = 1.0;
+    /// <summary>残り週数。</summary>
+    public int WeeksLeft { get; set; }
+    /// <summary>対象の選手Id（0＝部全体）。</summary>
+    public int PlayerId { get; set; }
+}
+
+/// <summary>
 /// <see cref="EventSchedulerSaveState"/> の JSON 往復（issue #609）。
 /// null（＝旧セーブ・まだ一度も週を送っていない進行）も往復できる。
 /// </summary>
@@ -85,5 +101,39 @@ internal static class EventSaves
             if (item is JsonString js && !string.IsNullOrEmpty(js.Value)) s.AnnualFlags.Add(js.Value);
         }
         return s;
+    }
+
+    // ===== 練習効率の補正（issue #615・v10） =====
+
+    public static JsonArray BoostsToJson(List<TrainingBoostSaveState>? boosts)
+    {
+        var arr = new JsonArray();
+        if (boosts is null) return arr;
+        foreach (var b in boosts)
+        {
+            arr.Add(new JsonObject()
+                .Add("source", b.Source ?? "")
+                .Add("mult", b.Mult)
+                .Add("weeks", b.WeeksLeft)
+                .Add("player", b.PlayerId));
+        }
+        return arr;
+    }
+
+    public static List<TrainingBoostSaveState> BoostsFromJson(JsonArray arr)
+    {
+        var list = new List<TrainingBoostSaveState>(arr.Count);
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            list.Add(new TrainingBoostSaveState
+            {
+                Source = o.Str("source") ?? "",
+                Mult = o.Double("mult"),
+                WeeksLeft = o.Int("weeks"),
+                PlayerId = o.Int("player"),
+            });
+        }
+        return list;
     }
 }

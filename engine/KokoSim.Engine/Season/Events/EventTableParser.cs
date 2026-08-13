@@ -42,7 +42,9 @@ public static class EventTableParser
         int? calendarWeek = null;
         double weight = 1.0;
         int cooldown = 4;
-        double effFunds = 0.0, effFacilityFund = 0.0;
+        double effFunds = 0.0, effFacilityFund = 0.0, effTrainingMult = 1.0;
+        int effTrainingWeeks = 0;
+        bool effTrainingPlayer = false;
         var variants = new List<EventScript>();
         List<EventLine>? currentLines = null;
         string? lineWho = null, lineName = null, lineSay = null;
@@ -78,13 +80,15 @@ public static class EventTableParser
                 RequiresNotAnnualFlag = requiresNotFlag,
                 Text = text ?? "",
                 Variants = variants.ToArray(),
-                Effect = new EventEffect(effFunds, effFacilityFund),
+                Effect = new EventEffect(
+                    effFunds, effFacilityFund, effTrainingMult, effTrainingWeeks, effTrainingPlayer),
             });
             id = kind = text = setsFlag = requiresNotFlag = null;
             calendarWeek = null;
             weight = 1.0;
             cooldown = 4;
             effFunds = effFacilityFund = 0.0;
+            effTrainingMult = 1.0; effTrainingWeeks = 0; effTrainingPlayer = false;
             variants = new List<EventScript>();
         }
 
@@ -154,6 +158,9 @@ public static class EventTableParser
                 // 効果（issue #613）。`effects:` の下に書くが、キー名で拾うので入れ子の深さは問わない。
                 case "funds": effFunds = ParseDouble(value, 0.0); break;
                 case "facility_fund": effFacilityFund = ParseDouble(value, 0.0); break;
+                case "training_mult": effTrainingMult = ParseDouble(value, 1.0); break;
+                case "training_weeks": effTrainingWeeks = ParseInt(value) ?? 0; break;
+                case "training_target": effTrainingPlayer = value == "player"; break;
                 case "variants": FlushVariant(); variantsKeyIndent = keyIndent; linesKeyIndent = -1; break;
                 case "lines": currentLines ??= new List<EventLine>(); linesKeyIndent = keyIndent; break;
                 case "who": lineWho = value; break;

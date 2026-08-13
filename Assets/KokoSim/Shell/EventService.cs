@@ -108,7 +108,7 @@ namespace KokoSim.Unity.Shell
                     Id = f.Event.Id,
                     FeedText = EventTextFormat.Apply(f.Event.Text, values),
                     Lines = ResolveLines(f.Script, values),
-                    Effect = ApplyEffect(f.Event.Effect),
+                    Effect = ApplyEffect(f.Event.Effect, f.Event.Id, SubjectId()),
                 };
                 _pending.Add(e);
                 _queuedThisWeek++;
@@ -171,7 +171,7 @@ namespace KokoSim.Unity.Shell
         /// engine はデータ定義まで、実際に足し引きするのはここ、と分ける。部費が足りなくても
         /// <b>マイナスにはしない</b>（払えないのに買えた、という状態を作らない）。</para>
         /// </summary>
-        private static PresentedEffect ApplyEffect(EventEffect effect)
+        private static PresentedEffect ApplyEffect(EventEffect effect, string sourceId, int subjectId)
         {
             if (effect == null || effect.IsEmpty) return null;
 
@@ -189,6 +189,16 @@ namespace KokoSim.Unity.Shell
                 var before = m.FacilityFund;
                 m.FacilityFund = System.Math.Max(0.0, m.FacilityFund + effect.FacilityFund);
                 items.Add(new EffectItem("施設基金", Signed(m.FacilityFund - before), "万"));
+            }
+            if (effect.HasTrainingBoost)
+            {
+                // 対象が「主役の1人」なら選手Id、そうでなければ 0＝部全体（issue #615）。
+                var target = effect.TrainingTargetIsPlayer ? subjectId : 0;
+                TrainingBoostService.Add(sourceId, effect.TrainingMult, effect.TrainingWeeks, target);
+                items.Add(new EffectItem(
+                    effect.TrainingTargetIsPlayer ? "本人の練習効率" : "練習効率",
+                    Signed((effect.TrainingMult - 1.0) * 100.0), "%"));
+                items.Add(new EffectItem("期間", effect.TrainingWeeks.ToString(), "週"));
             }
             if (items.Count == 0) return null;
 
@@ -271,10 +281,23 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         private static string SubjectName()
         {
+            var p = Subject();
+            return p == null ? "" : p.Name;
+        }
+
+        /// <summary>会話の主役の選手Id（0＝居ない）。個人向けの効果（issue #615）が誰に付くかを決める。</summary>
+        private static int SubjectId()
+        {
+            var p = Subject();
+            return p == null ? 0 : p.Id;
+        }
+
+        private static KokoSim.Engine.Season.DevelopingPlayer Subject()
+        {
             var roster = RosterService.Active;
-            if (roster == null || roster.Count == 0) return "";
+            if (roster == null || roster.Count == 0) return null;
             var index = (GameClock.YearIndex * 100 + GameClock.Week) % roster.Count;
-            return roster[index].Name;
+            return roster[index];
         }
 
         /// <summary>{count}＝1年生の人数（入学式の「新入部員 N名」）。</summary>
