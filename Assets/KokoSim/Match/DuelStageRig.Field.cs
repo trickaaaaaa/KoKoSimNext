@@ -113,7 +113,9 @@ namespace KokoSim.Unity.Match
                 // 初期ポーズを1コマ評価してから装備を焼く（AttachGear/AttachGlove は視線の実測が要る）
                 StepActor(a, 0.001f);
                 GroundFix(a);
-                if (!useVendor) AttachGear(a, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer);
+                if (!useVendor)
+                    AttachGear(a, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer,
+                        _defenseColors.CapVisor);
                 CollectTeamMats(a, _defenseColors.Cap);
                 // グラブは投手と同じ左手・同じメッシュ。視線ターゲットは本塁（＝ステージ原点）
                 AttachGlove(a, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal,
@@ -2015,7 +2017,9 @@ namespace KokoSim.Unity.Match
                 a.IdleClip = idle;
                 StepActor(a, 0.001f);
                 GroundFix(a);
-                if (!useVendor) AttachGear(a, GearKind.Cap, Vector3.zero, _offenseColors.Cap, layer);
+                if (!useVendor)
+                    AttachGear(a, GearKind.Cap, Vector3.zero, _offenseColors.Cap, layer,
+                        _offenseColors.CapVisor);
                 CollectTeamMats(a, _offenseColors.Cap);
                 a.Go.SetActive(false);
                 a.Enabled = false;

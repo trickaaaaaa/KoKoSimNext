@@ -686,7 +686,7 @@ namespace KokoSim.Unity.Match
             /// <summary>肌の固定色（全役割共通）。</summary>
             private static readonly Color SkinTone = new(0.85f, 0.68f, 0.55f);
 
-            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, Belt;
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Belt;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
             /// <summary>縞の本数[本/m]。シェーダへはアクターのスケールを掛けて渡す（RegionMaterial）。</summary>
@@ -694,13 +694,15 @@ namespace KokoSim.Unity.Match
 
             public UniformPalette(Color shirt, Color pants, Color undershirt, Color socks, Color cap,
                 bool stripeOn = false, Color stripeColor = default, float stripeFreqPerMeter = 0f,
-                Color? shoes = null)
+                Color? shoes = null, Color? capVisor = null)
             {
                 Shirt = shirt;
                 Pants = pants;
                 Undershirt = undershirt;
                 Socks = socks;
                 Cap = cap;
+                // つばの指定が無ければクラウンと同色＝従来どおりの1色帽子（issue #621）。
+                CapVisor = capVisor ?? cap;
                 Skin = SkinTone;
                 // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。値はパレット表の「黒」#23242A と
                 // 揃える＝画面で選べる黒と同じ黒になる。**わずかでも赤に寄せると濃い臙脂に見える**
@@ -712,10 +714,14 @@ namespace KokoSim.Unity.Match
                 StripeFreqPerMeter = stripeFreqPerMeter;
             }
 
-            /// <summary>エンジンの確定配色（7領域＋縞）から作る。つばは帽子と1メッシュなので使わない。</summary>
+            /// <summary>
+            /// エンジンの確定配色（7領域＋縞）から作る。つばは issue #621 で帽子メッシュを幾何で
+            /// 二分し、クラウンと別領域になった＝ここで渡した色がそのまま絵に出る。
+            /// </summary>
             public static UniformPalette From(KokoSim.Engine.Nation.TeamColors c) => new(
                 Rgb(c.Shirt), Rgb(c.Pants), Rgb(c.Undershirt), Rgb(c.Socks), Rgb(c.CapCrown),
-                c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter, Rgb(c.Shoes));
+                c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter, Rgb(c.Shoes),
+                Rgb(c.CapVisor));
 
             private static Color Rgb(KokoSim.Engine.Nation.RgbColor c)
                 => new(c.R / 255f, c.G / 255f, c.B / 255f);
@@ -774,6 +780,7 @@ namespace KokoSim.Unity.Match
             if (a == null) return;
             if (a.RegionMat != null) ApplyRegionColors(a.RegionMat, pal, a.BodyScale);
             foreach (var m in a.TeamMats) if (m != null) m.SetColor("_BaseColor", pal.Cap);
+            foreach (var m in a.VisorMats) if (m != null) m.SetColor("_BaseColor", pal.CapVisor);
         }
 
         /// <summary>
@@ -793,6 +800,10 @@ namespace KokoSim.Unity.Match
                 // 素体の領域マテリアルは _BaseColor が白のダミー＝ここで拾ってはいけない
                 // （チーム色に白を選ばれた瞬間に素体まで塗り替え対象になる）。RegionMat 側で塗り替わる
                 if (m.GetFloat("_UseRegions") > 0.5f) continue;
+                // つばは装着時に直接登録してある（issue #621）。色の一致で拾う一般の走査に任せると、
+                // クラウンとつばが同色で立ち上がった学校で**両方が両方のリストに入り**、
+                // 攻守交代の塗り替えで最後に書いた色へ二つとも倒れる
+                if (a.VisorMats.Contains(m)) continue;
                 if (m.GetColor("_BaseColor") == accent && !a.TeamMats.Contains(m)) a.TeamMats.Add(m);
             }
         }
@@ -1042,6 +1053,7 @@ namespace KokoSim.Unity.Match
             public Material RegionMat;               // 領域塗り分けマテリアル（攻守交代の塗り替え用。一色フォールバック時はnull）
             public float BodyScale;                  // ワールドスケール（縞の刻みをオブジェクト空間へ換算するのに要る）
             public readonly List<Material> TeamMats = new();  // チーム色で塗った装備のマテリアル（帽子・捕手ヘルメット殻）
+            public readonly List<Material> VisorMats = new(); // つばの色で塗った装備（帽子つば・issue #621）
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
             public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
@@ -1299,7 +1311,8 @@ namespace KokoSim.Unity.Match
             SeekActor(_pitcher, ReleaseTime);
             // 購入素体は帽子を素で持っている（頭ボーン直付けの剛体メッシュ）ので生成帽子は載せない＝二重帽子を避ける
             if (!useVendor)
-                AttachGear(_pitcher, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer);
+                AttachGear(_pitcher, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer,
+                    _defenseColors.CapVisor);
             SeekActor(_pitcher, 0.001f);
             GroundFix(_pitcher);
             // 生成直後はセット姿勢で止めておく。止めないと Tick が勝手にクリップを頭から流し、
@@ -3924,7 +3937,7 @@ namespace KokoSim.Unity.Match
         /// </param>
         private static void ApplyRegionColors(Material mat, UniformPalette pal, float objectScale)
         {
-            var colors = new Color[8];
+            var colors = new Color[DuelUniformMeshBuilder.RegionCount];
             colors[(int)DuelUniformMeshBuilder.Region.Shirt] = pal.Shirt;
             colors[(int)DuelUniformMeshBuilder.Region.Pants] = pal.Pants;
             colors[(int)DuelUniformMeshBuilder.Region.Undershirt] = pal.Undershirt;
@@ -3933,6 +3946,9 @@ namespace KokoSim.Unity.Match
             colors[(int)DuelUniformMeshBuilder.Region.Shoes] = pal.Shoes;
             colors[(int)DuelUniformMeshBuilder.Region.Cap] = pal.Cap;
             colors[(int)DuelUniformMeshBuilder.Region.Belt] = pal.Belt;
+            // つばはクラウンと別領域（issue #621）。領域を持たない古い焼き資産では帽子が丸ごと
+            // Cap 領域なので、つばの色は単に使われない＝落ちない・黙って1色に戻るだけ。
+            colors[(int)DuelUniformMeshBuilder.Region.CapVisor] = pal.CapVisor;
             // **ガンマ→リニア変換を自分でやる**。プロジェクトはリニア色空間で、Properties に宣言した
             // Color（_BaseColor・_StripeColor）は SetColor が自動変換してくれるが、_RegionColors は
             // 配列＝Properties に宣言できず SetColorArray が素通しする。素通しすると sRGB値を
@@ -5036,7 +5052,8 @@ namespace KokoSim.Unity.Match
         /// 寸法はUBC頭部の実測（2026-07-28: 頭ボーン基準で幅0.18・奥行き0.22・頭頂+0.21）から。
         /// コンテナはlossyScale逆数でワールドスケール1に戻してあるので、子パーツは実寸(m)で置く。
         /// </summary>
-        private void AttachGear(Actor actor, GearKind kind, Vector3 gazeLocal, Color accent, int layer)
+        private void AttachGear(Actor actor, GearKind kind, Vector3 gazeLocal, Color accent, int layer,
+            Color? visorAccent = null)
         {
             var head = actor.Animator.GetBoneTransform(HumanBodyBones.Head);
             var dark = new Color(0.13f, 0.13f, 0.15f);
@@ -5088,8 +5105,24 @@ namespace KokoSim.Unity.Match
                         // 後頭部の露出はわずかな後ろ寄せだけで拾う
                         if (DuelGearMeshes.Cap() != null)
                         {
-                            GearMeshPart(mount, DuelGearMeshes.Cap(), "cap-mesh",
-                                new Vector3(0f, 0.185f, -0.025f), Quaternion.identity, accent, layer);
+                            var capPos = new Vector3(0f, 0.185f, -0.025f);
+                            Mesh crown, visorMesh;
+                            // つばはクラウンと別色にできる（issue #621）。生成メッシュは1マテリアルなので
+                            // 幾何で二分した複製を2つ置く。二分できなければ従来どおり1色で被せる。
+                            if (visorAccent.HasValue && SplitCapMesh(DuelGearMeshes.Cap(), out crown, out visorMesh))
+                            {
+                                GearMeshPart(mount, crown, "cap-mesh",
+                                    capPos, Quaternion.identity, accent, layer);
+                                var visorGo = GearMeshPart(mount, visorMesh, "cap-visor",
+                                    capPos, Quaternion.identity, visorAccent.Value, layer);
+                                var visorMat = visorGo.GetComponent<MeshRenderer>().sharedMaterial;
+                                if (!actor.VisorMats.Contains(visorMat)) actor.VisorMats.Add(visorMat);
+                            }
+                            else
+                            {
+                                GearMeshPart(mount, DuelGearMeshes.Cap(), "cap-mesh",
+                                    capPos, Quaternion.identity, accent, layer);
+                            }
                         }
                         else
                         {
@@ -5376,6 +5409,74 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>較正済み装備メッシュ（DuelGearMeshes）をコンテナ実寸空間へ置く。scale は一様倍率。</summary>
+        // ---- 帽子の二分（issue #621） -------------------------------------------------
+
+        /// <summary>
+        /// つばと判定する境界（生成メッシュ AIGear_Cap1_lo の境界箱に対する比）。実測した箱は
+        /// y -0.160..0.069 / z -0.058..0.221（クラウン中心=原点・つば+Z の較正どおり）で、
+        /// つばの頂点は<b>下40%かつ前55%より先</b>にしか無い。比で持つのは、メッシュを差し替えた
+        /// ときに絶対値の閾値だと帽子が丸ごと片方の色になるため。
+        /// </summary>
+        private const float GearVisorBelowShare = 0.40f;
+        private const float GearVisorAheadShare = 0.55f;
+
+        private static readonly Dictionary<Mesh, (Mesh Crown, Mesh Visor)> _capSplitCache = new();
+
+        /// <summary>
+        /// 生成メッシュの帽子をクラウンとつばへ二分した複製を返す（頂点配列は共有し、三角形だけ振り分ける）。
+        /// どちらかが空になったら false＝閾値が形に合っていない合図なので、呼び元は1色へ戻す。
+        /// </summary>
+        private static bool SplitCapMesh(Mesh src, out Mesh crown, out Mesh visor)
+        {
+            crown = null; visor = null;
+            if (src == null) return false;
+            if (_capSplitCache.TryGetValue(src, out var cached))
+            {
+                crown = cached.Crown; visor = cached.Visor;
+                return crown != null && visor != null;
+            }
+
+            var v = src.vertices;
+            var tris = src.triangles;
+            var b = src.bounds;
+            float yEdge = b.min.y + b.size.y * GearVisorBelowShare;
+            float zEdge = b.min.z + b.size.z * GearVisorAheadShare;
+
+            var crownTris = new List<int>();
+            var visorTris = new List<int>();
+            for (int t = 0; t < tris.Length; t += 3)
+            {
+                var mid = (v[tris[t]] + v[tris[t + 1]] + v[tris[t + 2]]) / 3f;
+                var into = (mid.y < yEdge && mid.z > zEdge) ? visorTris : crownTris;
+                into.Add(tris[t]); into.Add(tris[t + 1]); into.Add(tris[t + 2]);
+            }
+            if (crownTris.Count == 0 || visorTris.Count == 0)
+            {
+                _capSplitCache[src] = (null, null);
+                return false;
+            }
+
+            crown = CloneWithTriangles(src, crownTris, "-crown");
+            visor = CloneWithTriangles(src, visorTris, "-visor");
+            _capSplitCache[src] = (crown, visor);
+            return true;
+        }
+
+        private static Mesh CloneWithTriangles(Mesh src, List<int> tris, string suffix)
+        {
+            var m = new Mesh
+            {
+                name = src.name + suffix,
+                hideFlags = HideFlags.HideAndDontSave,
+                vertices = src.vertices,
+                normals = src.normals,
+                uv = src.uv,
+            };
+            m.SetTriangles(tris, 0);
+            m.RecalculateBounds();
+            return m;
+        }
+
         private GameObject GearMeshPart(GameObject container, Mesh mesh, string name,
             Vector3 localPos, Quaternion localRot, Color color, int layer, float scale = 1f)
         {
@@ -5852,6 +5953,12 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool ForceCatalogOnly;
 
+        /// <summary>
+        /// 【開発用】購入素体を無視してU2素体で組む（issue #621）。購入素体は gitignore 配下で
+        /// 手元に無い環境がある＝U2側にも実装が要る作り（帽子つばの塗り分け等）を、素体を消さずに確かめる。
+        /// </summary>
+        public static bool ForceU2Body;
+
         private static DuelAssetCatalog _catalog;
         private static bool _catalogTried;
 
@@ -5899,6 +6006,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private static GameObject LoadVendorBody()
         {
+            // 【検証用】購入素体が手元に無い環境（＝U2素体へ落ちる経路）を、素体を消さずに再現する。
+            // 帽子つばの塗り分けのように**素体ごとに実装が別**な作りでは、こちらの経路も絵で確かめる要がある。
+            if (ForceU2Body) return null;
 #if UNITY_EDITOR
             if (!ForceCatalogOnly)
             {

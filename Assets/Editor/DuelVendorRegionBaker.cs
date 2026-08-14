@@ -56,10 +56,11 @@ namespace KokoSim.EditorTools
             { "RightEye_Ball_Geo", Region.Skin },
             // 帽子は独立領域（2026-07-29。チームカラーをプレイヤーが領域ごとに決めるため、
             // アンダーと同色に固定していた従来運用をやめた）。
-            // **クラウンとつばは1メッシュなので塗り分けられない**＝帽子は1色。分けるにはこのメッシュを
-            // 幾何で二分する前処理が要る（つば＝クラウン下端より下かつ前方の頂点帯）。
-            { "A_Players_0001_Cap_0001", Region.Cap },
+            // クラウンとつばは1メッシュだが、issue #621 で幾何で二分して塗り分けるようにした
+            // （ClassifyCap。ここには載せず三角形単位で振り分ける）。
         };
+
+        private const string CapMeshName = "A_Players_0001_Cap_0001";
 
         private const string SuitMeshName = "A_Players_0001_Suit_0001";
         private const string PantsMeshName = "A_Players_0001_Pants_0001";
@@ -110,6 +111,10 @@ namespace KokoSim.EditorTools
                 {
                     regionPerVertex = ClassifyPants(copy, pantsTex, out note);
                 }
+                else if (r.name == CapMeshName)
+                {
+                    regionPerVertex = ClassifyCap(copy, out note);
+                }
                 else
                 {
                     Region reg;
@@ -131,7 +136,8 @@ namespace KokoSim.EditorTools
                 var rest = copy.vertices;
                 var uv1 = new Vector2[copy.vertexCount];
                 for (int i = 0; i < uv1.Length; i++)
-                    uv1[i] = new Vector2((regionPerVertex[i] + 0.5f) / 8f, rest[i].x);
+                    uv1[i] = new Vector2(
+                        KokoSim.Unity.Match.DuelUniformMeshBuilder.RegionUv(regionPerVertex[i]), rest[i].x);
                 copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
 
                 var outPath = OutDir + "/" + r.name + "_Regions.asset";
@@ -147,6 +153,61 @@ namespace KokoSim.EditorTools
             AssetDatabase.Refresh();
             return sb.ToString();
         }
+
+        /// <summary>
+        /// 帽子を三角形単位で クラウン / つば に振り分ける（issue #621）。
+        ///
+        /// テクスチャでは分けられない（帽子は無地1色）ので<b>幾何で二分する</b>。実測した
+        /// メッシュ空間（Z-up・顔は -y 側）での形は:
+        ///   y  -0.169(つば先) 〜 0.114(後頭部) ／ z  1.666(下端) 〜 1.789(天辺)
+        ///   前方の1/4（y &lt; min+0.25）かつ下40%（z &lt; min+0.40）にだけ、薄い板状の帯がある＝つば
+        /// しきい値は<b>境界箱に対する比</b>で持つ（絶対値で持つと取り込みスケールが変わった瞬間に
+        /// 帽子が丸ごと片方の色になる）。
+        /// </summary>
+        private static int[] ClassifyCap(Mesh mesh, out string note)
+        {
+            var v = mesh.vertices;
+            var tris = mesh.triangles;
+            var b = mesh.bounds;
+
+            float yEdge = b.min.y + b.size.y * VisorFrontShare;
+            float zEdge = b.min.z + b.size.z * VisorHeightShare;
+
+            var voteCrown = new int[v.Length];
+            var voteVisor = new int[v.Length];
+            int triCrown = 0, triVisor = 0;
+            for (int t = 0; t < tris.Length; t += 3)
+            {
+                int a = tris[t], b2 = tris[t + 1], c = tris[t + 2];
+                var mid = (v[a] + v[b2] + v[c]) / 3f;   // 三角形の重心で判定（頂点だと縁で割れる）
+                if (mid.y < yEdge && mid.z < zEdge)
+                {
+                    triVisor++; voteVisor[a]++; voteVisor[b2]++; voteVisor[c]++;
+                }
+                else
+                {
+                    triCrown++; voteCrown[a]++; voteCrown[b2]++; voteCrown[c]++;
+                }
+            }
+
+            int conflicts = 0;
+            var outRegion = new int[v.Length];
+            for (int i = 0; i < v.Length; i++)
+            {
+                if (voteCrown[i] > 0 && voteVisor[i] > 0) conflicts++;
+                outRegion[i] = voteVisor[i] > voteCrown[i] ? (int)Region.CapVisor : (int)Region.Cap;
+            }
+
+            note = "三角形 クラウン=" + triCrown + " つば=" + triVisor
+                 + " / 頂点の領域またぎ=" + conflicts + "（多い＝境界がギザつく）";
+            return outRegion;
+        }
+
+        /// <summary>つばと判定する前方の割合（境界箱の y 幅に対する比）。</summary>
+        private const float VisorFrontShare = 0.25f;
+
+        /// <summary>同・高さの割合（境界箱の z 高さに対する比）。</summary>
+        private const float VisorHeightShare = 0.40f;
 
         /// <summary>
         /// Suit を三角形単位で Shirt / Undershirt に振り分ける。頂点ではなく三角形の UV 重心で

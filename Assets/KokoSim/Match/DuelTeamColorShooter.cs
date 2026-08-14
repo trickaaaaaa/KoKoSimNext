@@ -24,7 +24,7 @@ namespace KokoSim.Unity.Match
         private static readonly (string Defense, string Offense, string Tag)[] Cases =
         {
             ("white_navy", "cream_crimson", "a-normal"),        // 白＋紺 vs クリーム＋えんじ
-            ("white_navy_pin", "gray_black", "b-stripe"),       // 縦縞の go/no-go（守備側が縞）
+            ("white_navy", "gray_black", "b-stripe"),           // 縦縞の go/no-go（守備側が縞）
             ("white_navy", "white_deepnavy", "c-clash"),        // 紺 vs 濃紺＝承知の上の同系色衝突
         };
 
@@ -65,14 +65,19 @@ namespace KokoSim.Unity.Match
                     Debug.LogError($"[ColorShot] 配色IDが表に無い: {c.Defense} / {c.Offense}");
                     continue;
                 }
-                DuelStageRig.Live?.SetTeamColors(TeamColors.FromEntry(def), TeamColors.FromEntry(off));
+                // 縞は表の1件では決まらず校IDの軸が決める（issue #621）ので、縞の絵が要る場面では
+                // ここで明示的に着せる。
+                var defColors = TeamColors.FromEntry(def);
+                if (c.Tag == "b-stripe")
+                    defColors = defColors with { Stripe = new TeamStripe(true, def.Team, 40.0) };
+                DuelStageRig.Live?.SetTeamColors(defColors, TeamColors.FromEntry(off));
                 for (int i = 0; i < 12; i++) yield return null;
                 yield return Capture(FileName + "-" + c.Tag);
                 Debug.Log($"[ColorShot] {c.Tag}: 守備={def.Label} 攻撃={off.Label}");
             }
 
             // 縦縞スイープ（未決事項#6）。守備側＝投手に縞を着せ、投手への寄りで判定する。
-            var pin = palette.FindById("white_navy_pin");
+            var pin = palette.FindById("white_navy");
             var plain = palette.FindById("gray_black");
             if (pin != null && plain != null)
             {
@@ -82,7 +87,7 @@ namespace KokoSim.Unity.Match
                 {
                     var striped = TeamColors.FromEntry(pin) with
                     {
-                        Stripe = new TeamStripe(true, pin.Stripe.Color, freq),
+                        Stripe = new TeamStripe(true, pin.Team, freq),
                     };
                     DuelStageRig.Live?.SetTeamColors(striped, TeamColors.FromEntry(plain));
                     for (int i = 0; i < 12; i++) yield return null;
@@ -94,7 +99,7 @@ namespace KokoSim.Unity.Match
                 {
                     var striped = TeamColors.FromEntry(pin) with
                     {
-                        Stripe = new TeamStripe(true, pin.Stripe.Color, 24f),
+                        Stripe = new TeamStripe(true, pin.Team, 24f),
                     };
                     DuelStageRig.Live?.SetTeamColors(striped, TeamColors.FromEntry(plain));
                     var prev = DuelStageRig.CalibrationOverride;
@@ -118,7 +123,7 @@ namespace KokoSim.Unity.Match
                 {
                     var striped = TeamColors.FromEntry(pin) with
                     {
-                        Stripe = new TeamStripe(true, pin.Stripe.Color, freq),
+                        Stripe = new TeamStripe(true, pin.Team, freq),
                     };
                     DuelStageRig.Live?.SetTeamColors(TeamColors.FromEntry(plain), striped);
                     for (int i = 0; i < 12; i++) yield return null;
@@ -129,7 +134,7 @@ namespace KokoSim.Unity.Match
                 {
                     var striped = TeamColors.FromEntry(pin) with
                     {
-                        Stripe = new TeamStripe(true, pin.Stripe.Color, 40f),
+                        Stripe = new TeamStripe(true, pin.Team, 40f),
                     };
                     DuelStageRig.Live?.SetTeamColors(striped, TeamColors.FromEntry(plain));
                     var prev = DuelStageRig.CalibrationOverride;

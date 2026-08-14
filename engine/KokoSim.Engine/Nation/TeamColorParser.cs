@@ -11,7 +11,10 @@ namespace KokoSim.Engine.Nation;
 /// 対応する構文は本ファイルが想定する部分集合のみ:
 ///   - 全行コメント／行末コメント（<c>#</c>。<b>引用符の中は除く</b>＝色が "#EDEBE0" なので必須）
 ///   - <c>palettes:</c> 見出しの下の <c>- { ... }</c> フロー・マップ（波括弧が閉じるまで複数行を連結）
-///   - 入れ子のフロー・マップ（<c>stripe: { on: true, color: "#293356", freq: 40 }</c>）
+///   - 入れ子のフロー・マップ（<c>stripe: { color: "#293356", freq: 40 }</c>）
+///
+/// 見出しは読まず、項目が持つキーで種類を見分ける（<c>hex+name</c>＝色名／<c>id</c>なし＋軸名＝
+/// <c>axes:</c> の軸／それ以外＝パレット1件）。
 /// </summary>
 public static class TeamColorParser
 {
@@ -23,6 +26,7 @@ public static class TeamColorParser
     {
         var entries = new List<TeamColorEntry>();
         var names = new Dictionary<RgbColor, string>();
+        var axes = TeamColorAxes.Default;
         foreach (var block in FlowItems(yaml))
         {
             var map = ParseFlowMap(block);
@@ -35,6 +39,18 @@ public static class TeamColorParser
                 continue;
             }
 
+            // 配色の軸（axes: の項目・issue #621）。id を持たず軸の名前を持つことで見分ける
+            // （パレット1件も stripe を持つが、そちらは必ず id を持つ）。
+            if (!map.ContainsKey("id") &&
+                (map.ContainsKey("visor") || map.ContainsKey("white_under") || map.ContainsKey("stripe")))
+            {
+                axes = new TeamColorAxes(
+                    StripeRate: Rate(map, "stripe", axes.StripeRate),
+                    VisorRate: Rate(map, "visor", axes.VisorRate),
+                    WhiteUnderRate: Rate(map, "white_under", axes.WhiteUnderRate));
+                continue;
+            }
+
             if (!map.TryGetValue("id", out var id) || id.Length == 0) continue;
             if (!map.TryGetValue("base", out var baseHex) || !RgbColor.TryParseHex(baseHex, out var bas)) continue;
             if (!map.TryGetValue("team", out var teamHex) || !RgbColor.TryParseHex(teamHex, out var team)) continue;
@@ -42,28 +58,30 @@ public static class TeamColorParser
             var visor = team;
             if (map.TryGetValue("visor", out var visorHex)) RgbColor.TryParseHex(visorHex, out visor);
 
-            var stripe = TeamStripe.None;
+            // 縞は「型」だけ（色・密度）。出すかどうかは校IDの軸が決める（issue #621）。
+            TeamStripeStyle? stripe = null;
             if (map.TryGetValue("stripe", out var stripeBlock))
             {
                 var s = ParseFlowMap(stripeBlock);
-                var on = s.TryGetValue("on", out var onText)
-                         && onText.Equals("true", System.StringComparison.OrdinalIgnoreCase);
-                if (on)
-                {
-                    var color = team;
-                    if (s.TryGetValue("color", out var colorHex)) RgbColor.TryParseHex(colorHex, out color);
-                    double freq = 40.0;
-                    if (s.TryGetValue("freq", out var freqText))
-                        double.TryParse(freqText, NumberStyles.Float, CultureInfo.InvariantCulture, out freq);
-                    stripe = new TeamStripe(true, color, freq);
-                }
+                var color = team;
+                if (s.TryGetValue("color", out var colorHex)) RgbColor.TryParseHex(colorHex, out color);
+                var freq = TeamStripeStyle.DefaultFreqPerMeter;
+                if (s.TryGetValue("freq", out var freqText))
+                    double.TryParse(freqText, NumberStyles.Float, CultureInfo.InvariantCulture, out freq);
+                stripe = new TeamStripeStyle(color, freq);
             }
 
             map.TryGetValue("label", out var label);
             entries.Add(new TeamColorEntry(id, string.IsNullOrEmpty(label) ? id : label, bas, team, visor, stripe));
         }
-        return entries.Count > 0 ? new TeamColorPalette(entries, names) : null;
+        return entries.Count > 0 ? new TeamColorPalette(entries, names, axes) : null;
     }
+
+    /// <summary>軸の出現率を読む（欠けていれば既定のまま＝表に書かなくても壊れない）。</summary>
+    private static double Rate(Dictionary<string, string> map, string key, double fallback)
+        => map.TryGetValue(key, out var text)
+           && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
+            ? v : fallback;
 
     /// <summary>
     /// <c>- { ... }</c> を1件ずつ切り出す（波括弧の深さで判定＝複数行に跨って良い）。

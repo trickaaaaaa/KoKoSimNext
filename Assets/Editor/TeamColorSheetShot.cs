@@ -29,6 +29,11 @@ namespace KokoSim.UnityEditorTools
         private static readonly Vector3 LookAt = new Vector3(0f, 1.10f, 18.44f);
         private const float FrameHeightM = 1.95f;
 
+        // 頭の寄り（つばの塗り分けの判定用）。実寸[m]で指定する＝欄の縦横比が変わっても大きさが動かない。
+        private const float HeadHeightM = 1.62f;
+        private const float CloseUpDistM = 0.85f;
+        private const float CloseUpFrameHeightM = 0.42f;
+
         [UnityEditor.MenuItem("KokoSim/Duel/チームカラー一覧を撮る")]
         public static void Run()
         {
@@ -55,7 +60,89 @@ namespace KokoSim.UnityEditorTools
             }
             Shoot(added, cols: 4, cellW: 520, cellH: 390, file: "sheet-added");
 
+            // ③ 軸の掛け算（issue #621）。同じ表の1件が、つば・白アンダー・縦縞の有無で
+            //    どこまで別の校に見えるかを確かめる（8通り＝軸3本の全組み合わせ）。
+            var axes = new List<Cell>();
+            var baseEntry = palette.FindById("white_navy");
+            if (baseEntry != null)
+            {
+                for (var mask = 0; mask < 8; mask++)
+                {
+                    var c = TeamColors.FromEntry(baseEntry);
+                    var name = "白＋紺";
+                    if ((mask & 1) != 0) { c = c with { CapVisor = baseEntry.Base }; name += "・白つば"; }
+                    if ((mask & 2) != 0)
+                    {
+                        c = c with { Undershirt = baseEntry.Base, Socks = baseEntry.Base };
+                        name += "・白アンダー";
+                    }
+                    if ((mask & 4) != 0)
+                    {
+                        var s = baseEntry.Stripe ?? TeamStripeStyle.DefaultFor(baseEntry.Team);
+                        c = c with { Stripe = new TeamStripe(true, s.Color, s.FreqPerMeter) };
+                        name += "・縦縞";
+                    }
+                    axes.Add(new Cell(name, c));
+                }
+            }
+            Shoot(axes, cols: 4, cellW: 520, cellH: 390, file: "sheet-axes");
+
+            // ③b つばの寄り（issue #621）。帽子メッシュを幾何で二分した境界は**寄りでしか判定できない**
+            //     ＝全身の絵ではつばが数画素しかなく「ずれている」のか「そう見えるだけ」か分からない。
+            var visor = new List<Cell>();
+            foreach (var id in new[] { "white_navy", "white_navy_red", "white_black_gold", "white_royal_navy" })
+            {
+                var e = palette.FindById(id);
+                if (e == null) continue;
+                var c = TeamColors.FromEntry(e);
+                if (id == "white_navy") c = c with { CapVisor = e.Base };   // 軸で白つばにした型
+                visor.Add(new Cell(e.Label, c));
+            }
+            Shoot(visor, cols: 4, cellW: 520, cellH: 390, file: "sheet-visor", closeUp: true);
+            Shoot(visor, cols: 4, cellW: 520, cellH: 390, file: "sheet-visor-side",
+                closeUp: true, closeUpYawDeg: 75f);
+
+            // ③c 同じ寄りをU2素体でも撮る。購入素体は gitignore 配下で手元に無い環境があり、
+            //     そちらは帽子が別メッシュ（生成メッシュ）＝つばの塗り分けが**別実装**になる。
+            try
+            {
+                DuelStageRig.ForceU2Body = true;
+                Shoot(visor, cols: 4, cellW: 520, cellH: 390, file: "sheet-visor-u2", closeUp: true);
+                Shoot(visor, cols: 4, cellW: 520, cellH: 390, file: "sheet-visor-u2-side",
+                    closeUp: true, closeUpYawDeg: 75f);
+            }
+            finally
+            {
+                DuelStageRig.ForceU2Body = false;
+            }
+
+            // ④ 実際の校IDで引いた見た目（軸込み）。同一県規模で並べて被りの体感を確かめる。
+            var pref = new List<Cell>();
+            for (var i = 0; i < 40; i++)
+                pref.Add(new Cell(palette.EntryFor(i).Label + " #" + i, palette.ColorsFor(i)));
+            Shoot(pref, cols: 10, cellW: 240, cellH: 180, file: "sheet-prefecture");
+
             Debug.Log("[ColorSheet] DONE -> " + Dir);
+        }
+
+        /// <summary>
+        /// 立っている投手の帽子の中心を実測して、ステージ根ローカルで返す（<see cref="DuelStageRig.FramePreview"/>
+        /// はステージ根ローカルで受ける）。見つからなければ全身の狙点へ落ちる。
+        /// </summary>
+        private static Vector3 FindCapCenter(DuelStageRig rig)
+        {
+            var root = rig.StageRoot;
+            foreach (var r in Resources.FindObjectsOfTypeAll<Renderer>())
+            {
+                if (!r.gameObject.activeInHierarchy) continue;
+                // 購入素体は "A_Players_0001_Cap_0001"、U2素体は "cap-mesh"＝**大小文字を無視して探す**
+                // （揃っていると思い込むと、狙点が全身の既定へ落ちて胸の寄りが撮れる。2026-08-14 実害）。
+                if (r.name.IndexOf("cap", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (root != null && !r.transform.IsChildOf(root)) continue;
+                return root != null ? root.InverseTransformPoint(r.bounds.center) : r.bounds.center;
+            }
+            Debug.LogWarning("[ColorSheet] 帽子メッシュが見つからないので全身の狙点で撮る");
+            return LookAt;
         }
 
         private readonly struct Cell
@@ -65,7 +152,8 @@ namespace KokoSim.UnityEditorTools
             public Cell(string label, TeamColors colors) { Label = label; Colors = colors; }
         }
 
-        private static void Shoot(List<Cell> cells, int cols, int cellW, int cellH, string file)
+        private static void Shoot(List<Cell> cells, int cols, int cellW, int cellH, string file,
+            bool closeUp = false, float closeUpYawDeg = 0f)
         {
             if (cells.Count == 0) return;
             var rows = (cells.Count + cols - 1) / cols;
@@ -77,7 +165,21 @@ namespace KokoSim.UnityEditorTools
             {
                 if (!rig.Available) { Debug.LogError("[ColorSheet] 素体が使えない（リグが組めない）"); return; }
                 if (!rig.PosePreviewStanding()) Debug.LogWarning("[ColorSheet] 直立クリップが無い＝投球姿勢のまま撮る");
-                rig.FramePreview(CamPos, LookAt, FrameHeightM);
+                if (closeUp)
+                {
+                    // 帽子の寄り。狙点は**目測でなく帽子メッシュの実測**で採る（目で置いた狙点だと
+                    // 「カメラの狙い外し」と「塗り分けの失敗」が絵で区別できない）。
+                    // 向きは全身と同じまま距離だけ詰める（横へ回るとつばの前後が分からなくなる）。
+                    var cap = FindCapCenter(rig);
+                    // 横へ回した絵も撮れるようにする＝つばが正面を向いていると板が顔に被さって見え、
+                    // 「つばなのか塗り間違いなのか」が1枚では分からない（横顔なら形で判る）。
+                    var dir = Quaternion.Euler(0f, closeUpYawDeg, 0f) * (CamPos - LookAt).normalized;
+                    rig.FramePreview(cap + dir * CloseUpDistM, cap, CloseUpFrameHeightM);
+                }
+                else
+                {
+                    rig.FramePreview(CamPos, LookAt, FrameHeightM);
+                }
                 rig.EnsureSize(cellW, cellH);
 
                 // EnsureSize は縦横比を丸める（4:3 より縦長にしない）ので、実寸は必ず RT から採る。
