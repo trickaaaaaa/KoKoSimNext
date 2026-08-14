@@ -10,7 +10,28 @@
 #   帽子つば                 ← visor（省略時は team）
 # 実物の高校野球は「白系の地色＋チーム色1」でほぼ説明がつくので、この形が破綻しない最小の表現になる。
 #
-# stripe: 縦縞（§3.5.3）。on=false のとき color/freq は無視する。
+# 表の規模（issue #620）: 4000校をこの表で回すので、件数が少ないと1シーズン10校見ただけで被る。
+# 60件前後を保つ。ただし実物準拠を壊さない＝**地色は白が過半**のままにする（現実の高校野球は
+# 「白系の地色＋チーム色1」でほぼ説明がつく）。派手な型を等分に足すと嘘くさくなる。
+#
+# 地色の階調は**身体の上で測ってから足す**（issue #620 実測・KokoSim/Duel/チームカラー一覧を撮る）。
+# 16進では違って見えても、照明とポスタライズを通すと潰れる。実測した着用時の色:
+#   白 #EDEBE0→#A6A59D ／ クリーム #E8E2CE→#A29E90 ／ 薄グレー #D8D8D4→#979794
+#   砂色 #DCD3B8→#9A9380 ／ 銀鼠 #C6C7C4→#8A8B89
+# 「生成り #F4F1E6」も一度足したが、着ると #ABA9A1＝白との差が全チャンネル5しかなく
+# **白との見分けが付かない**ので取り下げた（表の枠を1件使って被りが減らないのが理由）。
+#
+# 配色の軸（issue #621）。**表の1件とは独立に校IDから**決まる型で、表の件数を増減しても
+# 出方は変わらない（＝#620 で表を厚くするのとは別に掛け算で効く。60件×2×2×2＝240通り相当）。
+#   stripe       … 縦縞を出す割合。色と密度は下の stripe: の型（無ければチーム色・40本/m）
+#   visor        … つばを地色にする割合（つばの色を明示している件には効かない＝二重に振らない）
+#   white_under  … アンダーシャツ・ソックスを地色にする割合（チーム色が帽子だけに残る型）
+# 実物準拠で偏らせる＝等分にしない。縦縞と白アンダーは少数派、白つばはそこそこ居る。
+axes:
+  - { stripe: 0.20, visor: 0.30, white_under: 0.20 }
+
+# stripe: 縦縞の型（§3.5.3）。**縞を出すかどうかは上の軸が決める**ので、ここに書くのは
+#   「その配色が縞を出すときの色と密度」だけ（省略＝チーム色・40本/m）。
 #   freq は横1mあたりの縞の本数。実物のピンストライプは間隔2.5cm前後＝40本/m。
 #
 # 注意: 対決ビューは両校とも自校の配色で描く（実物準拠・2026-07-29 監督決定）。したがって
@@ -22,7 +43,9 @@
 color_names:
   - { hex: "#EDEBE0", name: 白 }
   - { hex: "#E8E2CE", name: クリーム }
+  - { hex: "#DCD3B8", name: 砂色 }
   - { hex: "#D8D8D4", name: 薄グレー }
+  - { hex: "#C6C7C4", name: 銀鼠 }
   - { hex: "#293356", name: 紺 }
   - { hex: "#1C2440", name: 濃紺 }
   - { hex: "#853032", name: えんじ }
@@ -40,6 +63,10 @@ color_names:
   - { hex: "#3A3F45", name: チャコール }
   - { hex: "#1F6B6B", name: 青緑 }
   - { hex: "#4E3526", name: 焦茶 }
+  - { hex: "#6E63A6", name: 藤紫 }
+  - { hex: "#C7961B", name: 山吹 }
+  - { hex: "#5A6B37", name: モスグリーン }
+  - { hex: "#2E9AA0", name: ターコイズ }
 
 palettes:
   # ---- 白地（最多数派） ----
@@ -47,7 +74,8 @@ palettes:
   - { id: white_deepnavy,    label: 白＋濃紺,         base: "#EDEBE0", team: "#1C2440" }
   - { id: white_crimson,     label: 白＋えんじ,       base: "#EDEBE0", team: "#853032" }
   - { id: white_darkgreen,   label: 白＋深緑,         base: "#EDEBE0", team: "#1F4A34" }
-  - { id: white_black,       label: 白＋黒,           base: "#EDEBE0", team: "#23242A" }
+  - { id: white_black,       label: 白＋黒,           base: "#EDEBE0", team: "#23242A",
+      stripe: { color: "#23242A", freq: 44 } }
   - { id: white_royal,       label: 白＋ロイヤルブルー, base: "#EDEBE0", team: "#1F4E9C" }
   - { id: white_sky,         label: 白＋水色,         base: "#EDEBE0", team: "#4E9BC4" }
   - { id: white_red,         label: 白＋赤,           base: "#EDEBE0", team: "#A32B2B" }
@@ -59,12 +87,20 @@ palettes:
   - { id: white_wine,        label: 白＋ワインレッド, base: "#EDEBE0", team: "#6B2233" }
   - { id: white_charcoal,    label: 白＋チャコール,   base: "#EDEBE0", team: "#3A3F45" }
   - { id: white_teal,        label: 白＋青緑,         base: "#EDEBE0", team: "#1F6B6B" }
+  - { id: white_brown,       label: 白＋焦茶,         base: "#EDEBE0", team: "#4E3526" }
+  - { id: white_fuji,        label: 白＋藤紫,         base: "#EDEBE0", team: "#6E63A6" }
+  - { id: white_yamabuki,    label: 白＋山吹,         base: "#EDEBE0", team: "#C7961B" }
+  - { id: white_moss,        label: 白＋モスグリーン, base: "#EDEBE0", team: "#5A6B37" }
+  - { id: white_turquoise,   label: 白＋ターコイズ,   base: "#EDEBE0", team: "#2E9AA0" }
 
   # ---- 白地＋つば別色（クラウンとつばを塗り分ける型） ----
   - { id: white_navy_red,    label: 白＋紺（つば赤）, base: "#EDEBE0", team: "#293356", visor: "#A32B2B" }
   - { id: white_black_gold,  label: 白＋黒（つば金）, base: "#EDEBE0", team: "#23242A", visor: "#A8863A" }
   - { id: white_green_white, label: 白＋深緑（つば白）, base: "#EDEBE0", team: "#1F4A34", visor: "#EDEBE0" }
   - { id: white_royal_navy,  label: 白＋青（つば紺）, base: "#EDEBE0", team: "#1F4E9C", visor: "#1C2440" }
+  - { id: white_red_navy,    label: 白＋赤（つば紺）, base: "#EDEBE0", team: "#A32B2B", visor: "#1C2440" }
+  - { id: white_navy_gold,   label: 白＋紺（つば金）, base: "#EDEBE0", team: "#293356", visor: "#A8863A" }
+  - { id: white_crimson_white, label: 白＋えんじ（つば白）, base: "#EDEBE0", team: "#853032", visor: "#EDEBE0" }
 
   # ---- クリーム地 ----
   - { id: cream_navy,        label: クリーム＋紺,     base: "#E8E2CE", team: "#293356" }
@@ -72,25 +108,44 @@ palettes:
   - { id: cream_darkgreen,   label: クリーム＋深緑,   base: "#E8E2CE", team: "#1F4A34" }
   - { id: cream_brown,       label: クリーム＋焦茶,   base: "#E8E2CE", team: "#4E3526" }
   - { id: cream_black,       label: クリーム＋黒,     base: "#E8E2CE", team: "#23242A" }
+  - { id: cream_royal,       label: クリーム＋青,     base: "#E8E2CE", team: "#1F4E9C" }
+  - { id: cream_gold,        label: クリーム＋金茶,   base: "#E8E2CE", team: "#A8863A" }
+  - { id: cream_maroon,      label: クリーム＋えび茶, base: "#E8E2CE", team: "#6B3A2E" }
+
+  # ---- 砂色地（クリームより濃い土色寄りの階調） ----
+  - { id: sand_navy,         label: 砂色＋紺,         base: "#DCD3B8", team: "#293356" }
+  - { id: sand_crimson,      label: 砂色＋えんじ,     base: "#DCD3B8", team: "#853032" }
+  - { id: sand_darkgreen,    label: 砂色＋深緑,       base: "#DCD3B8", team: "#1F4A34" }
+  - { id: sand_brown,        label: 砂色＋焦茶,       base: "#DCD3B8", team: "#4E3526" }
+  - { id: sand_wine,         label: 砂色＋ワインレッド, base: "#DCD3B8", team: "#6B2233" }
 
   # ---- 薄グレー地 ----
-  - { id: gray_navy,         label: 薄グレー＋紺,     base: "#D8D8D4", team: "#293356" }
+  - { id: gray_navy,         label: 薄グレー＋紺,     base: "#D8D8D4", team: "#293356",
+      stripe: { color: "#1C2440", freq: 44 } }
   - { id: gray_crimson,      label: 薄グレー＋えんじ, base: "#D8D8D4", team: "#853032" }
   - { id: gray_black,        label: 薄グレー＋黒,     base: "#D8D8D4", team: "#23242A" }
   - { id: gray_royal,        label: 薄グレー＋青,     base: "#D8D8D4", team: "#1F4E9C" }
+  - { id: gray_darkgreen,    label: 薄グレー＋深緑,   base: "#D8D8D4", team: "#1F4A34" }
+  - { id: gray_wine,         label: 薄グレー＋ワインレッド, base: "#D8D8D4", team: "#6B2233" }
+  - { id: gray_maroon,       label: 薄グレー＋えび茶, base: "#D8D8D4", team: "#6B3A2E" }
 
-  # ---- 縦縞（ピンストライプ） ----
-  - { id: white_navy_pin,    label: 白＋紺（縦縞）,   base: "#EDEBE0", team: "#293356",
-      stripe: { on: true, color: "#293356", freq: 40 } }
-  - { id: white_crimson_pin, label: 白＋えんじ（縦縞）, base: "#EDEBE0", team: "#853032",
-      stripe: { on: true, color: "#853032", freq: 40 } }
-  - { id: white_black_pin,   label: 白＋黒（縦縞）,   base: "#EDEBE0", team: "#23242A",
-      stripe: { on: true, color: "#23242A", freq: 44 } }
-  - { id: white_green_pin,   label: 白＋深緑（縦縞）, base: "#EDEBE0", team: "#1F4A34",
-      stripe: { on: true, color: "#1F4A34", freq: 40 } }
-  - { id: cream_navy_pin,    label: クリーム＋紺（縦縞）, base: "#E8E2CE", team: "#293356",
-      stripe: { on: true, color: "#293356", freq: 36 } }
-  - { id: cream_wine_pin,    label: クリーム＋ワイン（縦縞）, base: "#E8E2CE", team: "#6B2233",
-      stripe: { on: true, color: "#6B2233", freq: 36 } }
-  - { id: gray_navy_pin,     label: 薄グレー＋紺（縦縞）, base: "#D8D8D4", team: "#293356",
-      stripe: { on: true, color: "#1C2440", freq: 44 } }
+  # ---- 銀鼠地（薄グレーより濃い階調） ----
+  - { id: silver_navy,       label: 銀鼠＋紺,         base: "#C6C7C4", team: "#293356" }
+  - { id: silver_crimson,    label: 銀鼠＋えんじ,     base: "#C6C7C4", team: "#853032" }
+  - { id: silver_black,      label: 銀鼠＋黒,         base: "#C6C7C4", team: "#23242A" }
+  - { id: silver_royal,      label: 銀鼠＋青,         base: "#C6C7C4", team: "#1F4E9C" }
+  - { id: silver_darkgreen,  label: 銀鼠＋深緑,       base: "#C6C7C4", team: "#1F4A34" }
+
+  # ---- #621 で空いた枠に足した組み合わせ（60件を保つ） ----
+  # 「この配色は必ず縞」だった7件（*_pin）は issue #621 で廃止した。縞を出すかどうかは軸が決めるので
+  # 素の件と重複するだけになり、表の枠を無駄に使う。色・密度が既定（チーム色・40本/m）と違う型だけを
+  # 元の件へ移し（上の gray_navy / white_black と下の cream_wine）、残りは既定に任せる。
+  - { id: cream_wine,        label: クリーム＋ワインレッド, base: "#E8E2CE", team: "#6B2233",
+      stripe: { color: "#6B2233", freq: 36 } }
+  - { id: cream_charcoal,    label: クリーム＋チャコール, base: "#E8E2CE", team: "#3A3F45" }
+  - { id: sand_black,        label: 砂色＋黒,         base: "#DCD3B8", team: "#23242A" }
+  - { id: silver_wine,       label: 銀鼠＋ワインレッド, base: "#C6C7C4", team: "#6B2233" }
+  # 白地は縞の4件を手放したぶんを、つば別色の型で戻す（白が過半という実物準拠を保つ）。
+  - { id: white_orange_black, label: 白＋オレンジ（つば黒）, base: "#EDEBE0", team: "#C9622A", visor: "#23242A" }
+  - { id: white_sky_navy,    label: 白＋水色（つば紺）, base: "#EDEBE0", team: "#4E9BC4", visor: "#1C2440" }
+  - { id: white_purple_gold, label: 白＋紫（つば金）, base: "#EDEBE0", team: "#4E3272", visor: "#A8863A" }
