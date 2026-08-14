@@ -1579,7 +1579,12 @@ public static class GameEngine
             {
                 if (runnerMoves.Count > 0)
                 {
-                    timeline = Match.Timeline.TimelineBuilder.AppendRunnerLegs(timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding);
+                    // フライ捕球なら捕球時刻を渡す＝進塁する走者は全員タッチアップ（捕球起点）になる。
+                    var flyCaughtAt = res.Play is { IsFly: true, Result: Match.Fielding.BattedBallResult.Out } caughtFly
+                        ? caughtFly.FieldedAtSeconds ?? caughtFly.HangTimeSeconds   // 接触からの秒（TagUpCatchAtSeconds と同じ基準）
+                        : (double?)null;
+                    timeline = Match.Timeline.TimelineBuilder.AppendRunnerLegs(
+                        timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding, flyCaughtAt);
 
                     // 併殺(二塁封殺)かつ内野ゴロなら、ボールの送球連鎖を 6-4-3 型に差し替える（設計書12 §2, F1 Slice 3）。
                     // 野選（FC, design-14 P1-1）も同じ二塁封殺 RunnerMove を積むが打者は生存するため、

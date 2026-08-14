@@ -812,17 +812,17 @@ public sealed class TimelineTests
         }
 
         // 守備の差は「投げ始め（握り替え）」に出る＝守備90の捕手の方が早く投げ始める。
-        // ⚠ 見るのは**アウト**の回。セーフの回は矛盾ガード（issue match-picture-vs-safe-out-verdict）が
-        // 到達を「走者到達＋0.20秒」へ固定するので、区間長が同じである以上**投げ始めも一致する**
-        // ＝守備の差は絵から消える。これは案Bの既知の限界（境界の帯に入るセーフは濃淡が潰れる）で、
-        // 濃淡を戻すには校正項を物理層へ移す（issue verdict-margin-into-physical-layer）。
-        var quickOut = Throw(quickCatcher, StealResult.CaughtStealing);
-        var slowOut = Throw(slowCatcher, StealResult.CaughtStealing);
-        Assert.True(quickOut.T0 < slowOut.T0,
-            $"守備90の捕手が守備30より早く投げ始めていない（{quickOut.T0:F3} vs {slowOut.T0:F3}）");
-        var quickSafe = Throw(quickCatcher, StealResult.Safe);
-        var slowSafe = Throw(slowCatcher, StealResult.Safe);
-        Assert.Equal(slowSafe.T0, quickSafe.T0, 6);   // セーフはガードで揃う（上のコメントの根拠）
+        // ⚠ セーフの回**でも**差が出ること。校正項を物理層へ移す前（案B＝表示側の矛盾ガード）は、
+        // セーフの到達が「走者到達＋0.20秒」へ固定され、区間長が同じである以上投げ始めも一致した
+        // ＝<b>捕手の守備の差が絵から消えていた</b>。いまは判定が使った秒をそのまま描くので濃淡が戻る
+        // （issue verdict-margin-into-physical-layer）。
+        foreach (var result in new[] { StealResult.CaughtStealing, StealResult.Safe })
+        {
+            var q = Throw(quickCatcher, result);
+            var s = Throw(slowCatcher, result);
+            Assert.True(q.T0 < s.T0,
+                $"守備90の捕手が守備30より早く投げ始めていない（{result}: {q.T0:F3} vs {s.T0:F3}）");
+        }
     }
 
     // --- 本盗（issue #485）: 投球が送球を兼ねる＝捕手からの送球区間そのものが無い。 ---

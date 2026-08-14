@@ -1453,9 +1453,20 @@ public static class TimelineBuilder
     /// null を返し、かつ <see cref="AppendHeldRunners"/> も「動いた塁」を除外するため、フォース進塁する
     /// 走者が接触時刻まで盤面から消える（＝塁上に居ないように見える）。表示専用・結果不変。
     /// </summary>
+    /// <param name="flyCaughtAtSeconds">
+    /// この打球が<b>空中で捕られた</b>フライなら、その捕球時刻[s]（<b>接触からの秒</b>＝
+    /// <see cref="RunnerMove.TagUpCatchAtSeconds"/> と同じ基準。それ以外は null）。
+    ///
+    /// <para>フライ捕球で塁を進む走者は例外なくタッチアップ＝捕球まで塁を離れられない。判定側は
+    /// 本塁レース（<c>HomePlaySituation</c>）を持つ場面でだけ <see cref="RunnerMove.TagUpCatchAtSeconds"/> を
+    /// 積むので、レースを持たない進塁（固定確率の進塁打）は起点が無いまま接触＋反応で走り出していた
+    /// ＝<b>捕球より前に離塁する絵</b>が残っていた（実測: 犠飛34件中4人。乱数列がずれて表に出た潜在不具合）。
+    /// ここで拾って全員を捕球起点に揃える。表示専用・乱数不使用。</para>
+    /// </param>
     public static PlayTimeline AppendRunnerLegs(
         PlayTimeline timeline, IReadOnlyList<RunnerMove> moves, FieldGeometry field,
-        BaserunningCoefficients baserunning, FieldingCoefficients fielding)
+        BaserunningCoefficients baserunning, FieldingCoefficients fielding,
+        double? flyCaughtAtSeconds = null)
     {
         if (moves.Count == 0) return timeline;
 
@@ -1472,12 +1483,14 @@ public static class TimelineBuilder
             // タッチアップ（フライ捕球を待つ走者）は文脈が違う＝二次リードなし・静止スタート。
             // 起点も接触でなく捕球なので、その秒をそのまま追加スタート遅延として払う
             // （issue score-display-before-home-touch。判定 TagUpRunnerTimeSeconds と同じ時計になる）。
+            // 判定がタッチアップの起点を持たない進塁（固定確率の進塁打）も、フライ捕球なら捕球起点に揃える。
+            var tagUpAt = fromBox ? null : m.TagUpCatchAtSeconds ?? flyCaughtAtSeconds;
             var ctx = fromBox
                 ? ExtraBaseResolver.BatterContextOf(fielding)
-                : m.TagUpCatchAtSeconds is not null
+                : tagUpAt is not null
                     ? HomePlayResolver.TagUpContextOf(m.Runner, baserunning)
                     : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
-            var extraStart = m.ExtraStartDelaySeconds + (m.TagUpCatchAtSeconds ?? 0.0);
+            var extraStart = m.ExtraStartDelaySeconds + (tagUpAt ?? 0.0);
 
             var label = fromBox ? "打" : $"走{++runnerIndex}";
             var startBase = fromBox ? 1 : m.FromBase;          // 打者は一塁到達後の続きから

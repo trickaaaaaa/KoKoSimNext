@@ -126,7 +126,11 @@ public sealed class PictureVsVerdictTests
     [InlineData(StealTarget.Third)]
     public void StealThrow_ArrivesAfterASafeRunner(StealTarget target)
     {
-        // 走力・捕手の肩を振っても「セーフなのに送球先着」が出ないこと。
+        // 走力・捕手の肩を振っても「セーフなのに（タッチが）先着」が出ないこと。
+        // ⚠ 見るのは**タッチ**（送球到達＋タッチ時間）。盗塁はフォースでなくタッグプレーなので、
+        // 球が走者より先に着くこと自体は正しい絵（着いた球でタッチする間に走者が滑り込む）。
+        // 校正項を物理層へ移す前は「送球の到達」で見ていたが、それは 0.20秒のガードで
+        // 到達を後ろへ倒していたから成り立っていた条件（issue verdict-margin-into-physical-layer）。
         for (var speed = 30; speed <= 90; speed += 15)
             for (var arm = 30; arm <= 90; arm += 15)
             {
@@ -135,8 +139,9 @@ public sealed class PictureVsVerdictTests
                 var throwAt = ThrowArrival(tl, target == StealTarget.Third ? "third" : "second");
                 var runner = tl.Runners.Single(r => r.Label == "走");
                 Assert.NotNull(throwAt);
-                Assert.True(throwAt!.Value > runner.T1,
-                    $"走力{speed}・肩{arm}: セーフなのに送球が {runner.T1 - throwAt.Value:F2}s 先着している");
+                var tagAt = throwAt!.Value + C.TagSeconds;
+                Assert.True(tagAt > runner.T1,
+                    $"走力{speed}・肩{arm}: セーフなのにタッチが {runner.T1 - tagAt:F2}s 先着している");
             }
     }
 
@@ -151,8 +156,8 @@ public sealed class PictureVsVerdictTests
     }
 
     /// <summary>
-    /// ガードでずれるのは<b>投げ始め</b>だけで、送球区間の長さ（＝距離÷肩）は動かない（Issue #334 の回帰なし）。
-    /// 同じ走者・同じ捕手でセーフ/アウトを引き比べ、区間長が一致することで固定する。
+    /// セーフ/アウトでずれるのは<b>投げ始め</b>だけで、送球区間の長さ（＝距離÷肩）は動かない
+    /// （Issue #334 の回帰なし）。同じ走者・同じ捕手で引き比べ、区間長が一致することで固定する。
     /// </summary>
     [Fact]
     public void StealThrow_KeepsItsFlightLength_WhenTheGuardFires()

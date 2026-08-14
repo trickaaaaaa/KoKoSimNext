@@ -513,7 +513,9 @@ public sealed class BaserunningPlaysTests
         var on = new GameContext { Baserunning = C with { DropThirdStrikeReachProb = 0.9, DropThirdStrikeCatchingSlope = 0.0 } };
         var totalOff = 0;
         var totalOn = 0;
-        for (ulong s = 0; s < 30; s++)
+        // ⚠ 30シードでは足りない（実測 2026-08-14: off=72 / on=70 で逆転した）。振り逃げ1回の得点価値は
+        // 小さく、乱数列がずれると試合ごとの揺れに埋もれる＝母数で殺す（150シード）。
+        for (ulong s = 0; s < 150; s++)
         {
             totalOff += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
             totalOn += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(s)).TotalRuns;
@@ -771,7 +773,8 @@ public sealed class BaserunningPlaysTests
         var totalOff = 0;
         var totalOn = 0;
         var wpOn = 0;
-        for (ulong s = 0; s < 30; s++)
+        // ⚠ 30シードでは足りない（実測 2026-08-14: off=255 / on=252 で逆転した）。理由は上の振り逃げと同じ。
+        for (ulong s = 0; s < 150; s++)
         {
             totalOff += GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
             var r = GameEngine.Play(FastTeam("A"), FastTeam("H"), on, new Xoshiro256Random(s));
