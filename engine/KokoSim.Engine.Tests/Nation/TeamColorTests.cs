@@ -40,6 +40,44 @@ public sealed class TeamColorTests
     }
 
     [Fact]
+    public void RealFile_KeepsWhiteBasesInTheMajority()
+    {
+        // 実物準拠（表の冒頭コメント）。地色を足しても「白＋チーム色1」が過半でないと
+        // 大会表が色とりどりになって嘘くさくなる。
+        var entries = LoadReal().Entries;
+        var white = entries.Count(e => e.Base.ToHex() == "#EDEBE0");
+        Assert.True(white * 2 >= entries.Count,
+            $"白の地色が {white}/{entries.Count} 件（過半を割った）");
+
+        // 地色は3階調では足りない（issue #620）。砂色・銀鼠を足して5階調にしてある。
+        // ただし**身体の上で見分けが付く階調だけ**を数える意味の下限（実測で潰した経緯は表のコメント）。
+        Assert.True(entries.Select(e => e.Base).Distinct().Count() >= 5, "地色の階調が5種未満");
+    }
+
+    [Fact]
+    public void RealFile_KeepsCollisionsLow_AtPrefectureScale()
+    {
+        // issue #620: 表が薄いと同一県（約85校）の大会表で同じ配色が並ぶ。校IDは県ごとに連番なので、
+        // 47県ぶんの窓（85校）で「何種類の配色が出るか」を数えて件数拡充の効果を固定する。
+        // 実測: 36件のとき 最低28種・平均32.5／60件で 最低39種・平均45.9。
+        var palette = LoadReal();
+        const int schoolsInPrefecture = 85;
+        var distinctPerPrefecture = new List<int>();
+        for (var pref = 0; pref < 47; pref++)
+        {
+            var used = new HashSet<string>();
+            for (var i = 0; i < schoolsInPrefecture; i++)
+                used.Add(palette.EntryFor(pref * schoolsInPrefecture + i).Id);
+            distinctPerPrefecture.Add(used.Count);
+        }
+
+        var worstPref = distinctPerPrefecture.Min();
+        var average = distinctPerPrefecture.Average();
+        Assert.True(worstPref >= 38, $"一番薄い県で85校が {worstPref} 種類しか着ていない");
+        Assert.True(average >= 43.0, $"85校あたり平均 {average:0.0} 種類（表が薄い）");
+    }
+
+    [Fact]
     public void RealFile_HasStripedEntries_AndTheyCarryColorAndFreq()
     {
         var striped = LoadReal().Entries.Where(e => e.Stripe.On).ToList();
