@@ -622,12 +622,17 @@ public static class TimelineBuilder
                     var from = new TimelinePoint(coverer.Location.X, coverer.Location.Z);
                     var to = FirstBaseCoverPoint(field, fieldPoint);
                     var dist = Distance(from, to);
-                    if (dist >= 0.5)
-                    {
-                        var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
-                        var t0 = ContactAt + 0.35;
-                        moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t0 + dist / speed, To = to, Task = FielderTask.CoverBase });
-                    }
+                    var t0 = ContactAt + 0.35;
+                    var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
+                    var t1 = t0 + dist / speed;
+                    // ⚠ 既に別の持ち場へ走っている野手には注入しない（体は2箇所に居られない）。
+                    // 表の担当（例: 右方向の打球で投手は本塁バックアップ）と、この動的注入が同じ時刻に
+                    // 重なると、FielderAt は重なった区間で**両方の行き先へ同時に寄せる**ので合成速度が
+                    // 脚力を超える（実測: 右前へのフライを一塁手が捕った seed182 で投手 11.26 m/s。
+                    // 一塁へ球は来ておらず、カバー自体が要らない場面だった＝LegSpeedTests が検出）。
+                    // 絵では「向きが少し変」としか見えないので、重なりそのものを作らせない。
+                    if (dist >= 0.5 && !IsBusy(moves, firstBaseCoverer, t0, t1))
+                        moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t1, To = to, Task = FielderTask.CoverBase });
                 }
             }
 
@@ -1939,6 +1944,24 @@ public static class TimelineBuilder
             if (r.Label == "打") return r.T1;
         }
         return ContactAt + 4.3;
+    }
+
+    /// <summary>
+    /// この野手が [t0,t1) に別のレッグで走っているか（レッグの二重付与よけ）。
+    ///
+    /// <para>再生の <c>PlaybackEvaluator.FielderAt</c> は同じ役の移動を**順に合成**する（前のレッグの
+    /// 到達点を次のレッグの出発点にする）ので、時刻が重なった2本は「両方の行き先へ同時に寄る」
+    /// 合成移動になり、どちらのレッグの尺よりも速く動く。判定には出ず絵にも「向きが変」としか
+    /// 出ないので、重なりを作る側で塞ぐ（検出は LegSpeedTests / PictureNeverSplitsAFielder）。</para>
+    /// </summary>
+    private static bool IsBusy(IReadOnlyList<FielderMove> moves, FieldPosition role, double t0, double t1)
+    {
+        foreach (var m in moves)
+        {
+            if (m.Role != role) continue;
+            if (m.T0 < t1 - 1e-9 && t0 < m.T1 - 1e-9) return true;
+        }
+        return false;
     }
 
     private static Fielder? Find(IReadOnlyList<Fielder> fielders, FieldPosition pos)

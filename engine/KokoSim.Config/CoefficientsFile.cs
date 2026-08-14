@@ -518,6 +518,8 @@ public static class CoefficientsLoader
         public double LeftBatterFirstStepBonusSeconds { get; set; } = D.LeftBatterFirstStepBonusSeconds;
         public double InfieldDepthM { get; set; } = D.InfieldDepthM;
         public double ForceOutMarginSeconds { get; set; } = D.ForceOutMarginSeconds;
+        public double InfieldHandleJitterMeanSeconds { get; set; } = D.InfieldHandleJitterMeanSeconds;
+        public double InfieldHandleJitterMaxFactor { get; set; } = D.InfieldHandleJitterMaxFactor;
         public double CatchCloseCallMarginSeconds { get; set; } = D.CatchCloseCallMarginSeconds;
         public double ErrorBaseProb { get; set; } = D.ErrorBaseProb;
         public double ErrorCatchingSlope { get; set; } = D.ErrorCatchingSlope;
@@ -572,6 +574,8 @@ public static class CoefficientsLoader
             LeftBatterFirstStepBonusSeconds = LeftBatterFirstStepBonusSeconds,
             InfieldDepthM = InfieldDepthM,
             ForceOutMarginSeconds = ForceOutMarginSeconds,
+            InfieldHandleJitterMeanSeconds = InfieldHandleJitterMeanSeconds,
+            InfieldHandleJitterMaxFactor = InfieldHandleJitterMaxFactor,
             CatchCloseCallMarginSeconds = CatchCloseCallMarginSeconds,
             ErrorBaseProb = ErrorBaseProb,
             ErrorCatchingSlope = ErrorCatchingSlope,

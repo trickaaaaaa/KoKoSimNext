@@ -122,6 +122,52 @@ public sealed class LegSpeedTests
             $"走者が {g.Peak:F2} m/s（上限 {runnerCap:F2}）で動いている: {g.Where}");
     }
 
+    /// <summary>
+    /// 1人の野手に<b>同じ時刻の行き先を2つ</b>与えない（<see cref="NoLegRequiresMoreThanHumanLegs"/> の
+    /// 原因側を直接固定する）。
+    ///
+    /// <para><c>FielderAt</c> は同じ役の移動を順に合成する＝時刻が重なった2本は「両方の行き先へ同時に
+    /// 寄る」1つの動きになり、どちらのレッグの尺より速くなる。実測（2026-08-14）: 右前へのフライを
+    /// 一塁手が捕った seed182 で、投手が「本塁バックアップ(0,-6)」と「一塁カバー(19.6,19.7)」を
+    /// 同時刻に持ち 11.26 m/s（上限 8.53）。一塁へ球は来ておらずカバー自体が不要な場面だった。
+    /// 脚力の上限だけを見ていると、重なりが短い/近い時は上限に収まって**素通りする**ので、
+    /// 重なりの有無そのものをここで見る。</para>
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Heavy")]
+    public void PictureNeverSplitsAFielder()
+    {
+        var seeds = Enumerable.Range(1, Games).Select(i => (ulong)i).ToArray();
+        var worst = new string?[seeds.Length];
+
+        System.Threading.Tasks.Parallel.For(0, seeds.Length, i =>
+        {
+            var r = GameEngine.Play(BuildTeam("A", 50), BuildTeam("H", 50),
+                new GameContext { CaptureTimelines = true }, new Xoshiro256Random(seeds[i]));
+            foreach (var e in r.Log)
+            {
+                if (e.Timeline is null) continue;
+                foreach (var g in e.Timeline.Moves.GroupBy(m => m.Role))
+                {
+                    var segs = g.OrderBy(m => m.T0).ToList();
+                    for (var k = 1; k < segs.Count; k++)
+                    {
+                        if (segs[k].T0 >= segs[k - 1].T1 - 1e-9) continue;
+                        worst[i] ??= string.Format(CultureInfo.InvariantCulture,
+                            "seed{0} {1} {2}: {3} t={4:F2}→{5:F2} と {6} t={7:F2}→{8:F2} が重なる",
+                            seeds[i], g.Key, e.Timeline.Result,
+                            segs[k - 1].Task, segs[k - 1].T0, segs[k - 1].T1,
+                            segs[k].Task, segs[k].T0, segs[k].T1);
+                    }
+                }
+            }
+        });
+
+        var found = worst.Where(w => w is not null).ToList();
+        Assert.True(found.Count == 0,
+            found.Count == 0 ? "" : $"同時刻に2つの行き先を持つ野手が {found.Count} 試合で出た: {found[0]}");
+    }
+
     private static double Dist(PlaybackVec a, PlaybackVec b)
         => Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
 }
