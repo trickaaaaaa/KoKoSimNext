@@ -36,7 +36,10 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="BatterConditionValue">打者の調子の真値（連続値・両校とも。相手校の観測誤認は Shell 側で計算, issue #47）。</param>
 /// <param name="PitcherConditionValue">対戦投手の調子の真値（連続値・両校とも）。</param>
 /// <param name="FieldedBy">打球を処理した野手の守備位置（<see cref="Fielding.FieldingPlay.FielderRole"/> の写し。
-/// 三振/四球/死球/本塁打/バント経路は null）。本日成績の略記（右安・二ゴ等）の守備位置部に使う。</param>
+/// 三振/四球/死球/本塁打/バント経路は null）。本日成績の略記（右安・二ゴ等）の守備位置部に使う。
+/// <b>失策では記録の帰属側</b>（<see cref="Fielding.FieldingPlay.ErrorFielderRole"/>）を優先する＝
+/// トンネル（issue #632）は球を回収するのが外野手なので、そのままだと「左失」＝外野失策として
+/// 記録にも Balance CLI の守備位置別内訳（#532 の外野失策シェア帯）にも乗ってしまう。</param>
 /// <param name="BattedIsFly">空中捕球か（<see cref="Fielding.FieldingPlay.IsFly"/> の写し。Play が無い経路は false）。</param>
 /// <param name="BattedClass">打球の4分類（ゴロ/バウンド/ライナー/フライ。<see cref="Fielding.FieldingPlay.Class"/> の写し）。</param>
 /// <param name="BattedBearingDeg">打球方向[度]（<see cref="Fielding.FieldingPlay.BearingDeg"/> の写し。本塁打の左/中/右の導出用）。</param>

@@ -1528,9 +1528,13 @@ public static class GameEngine
                 // 狙う塁は**走塁結果から**決める（issue #627）。打者の塁打数だけで決めていた頃は、単打で
                 // 一塁走者が三塁まで進んでも二塁へ返していた。返球到達のアンカーも同じ走者のレッグ終端に
                 // 揃える＝打者走者に紐付けると「三塁へ投げるが打者の一塁到達に合わせて着く」ことになる。
+                // トンネル（issue #632）も外野まで球が行く＝返球しないと外野手が球を持ったまま棒立ちになる
+                // （issue #629 ③と同じ症状）。ただしお手玉・悪送球・フライ落球は「拾い直し」を持つので、
+                // 下の AppendErrorReturnThrow が投げる＝二重に積まないよう ErrorPickupAt が無い失策だけを拾う。
                 if (!homeThrowAdded && res.Play is { } ofHit && (ofHit.RangeM > 46.0 || ofHit.ThroughInfield)
-                    && ofHit.Result is Match.Fielding.BattedBallResult.Single
-                        or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple)
+                    && (ofHit.Result is Match.Fielding.BattedBallResult.Single
+                            or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple
+                        || (ofHit.Result == Match.Fielding.BattedBallResult.Error && timeline.ErrorPickupAt is null)))
                 {
                     var returnTo = Match.Timeline.TimelineBuilder.ResolveOutfieldReturnTarget(runnerMoves, ofHit.Result);
                     var runnerArrive = 0.0;
@@ -1627,11 +1631,14 @@ public static class GameEngine
                 timeline = timeline with { Captions = caps };
             }
 
-            // 失策の個人帰属（issue #91）: FielderRole（守備位置）から当該選手を引く。守備位置は必ず埋まっている
+            // 失策の個人帰属（issue #91）: 守備位置から当該選手を引く。守備位置は必ず埋まっている
             // ため通常は解決できるが、万一 null でもチーム計（AddError相当）は FinishPlateAppearance 側で必ず加算する。
+            // ⚠ トンネル（issue #632）は<b>処理野手が回収する外野手</b>なので FielderRole では別人に付く。
+            // 失策は抜かれた内野手（ErrorFielderRole）に付ける（他の種別では null＝FielderRole と同じ）。
             Player? errorFielder = null;
             Match.Field.FieldPosition errorRole = default;
-            if (res.Result == PlateAppearanceResult.ReachedOnError && res.Play is { FielderRole: { } eRole })
+            if (res.Result == PlateAppearanceResult.ReachedOnError
+                && (res.Play?.ErrorFielderRole ?? res.Play?.FielderRole) is { } eRole)
             {
                 errorRole = eRole;
                 errorFielder = defense.PlayerAtPosition(eRole);
@@ -1707,7 +1714,9 @@ public static class GameEngine
             pitchLog,
             batter.ConditionValue, pitcher.ConditionValue,
             // 打球観測（本日成績の略記列用）: 既に確定した FieldingPlay の値を写すだけ＝判定・乱数順・digest不変。
-            play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
+            // ⚠ 失策の記録は「処理した野手」ではなく「失策を犯した野手」に付く。トンネル（issue #632）は
+            // 球を回収するのが外野手なので、ErrorFielderRole を優先しないと「左失」（＝外野失策）になる。
+            play?.ErrorFielderRole ?? play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
             outsThisPa, isSacFly, isSacBunt));
     }
 

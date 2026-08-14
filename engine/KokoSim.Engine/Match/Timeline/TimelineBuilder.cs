@@ -433,11 +433,15 @@ public static class TimelineBuilder
         else if (play.Result == BattedBallResult.Error)
         {
             // 失策出塁（issue #439）: エラー確定の瞬間に「エラー」を必ず1枚出す。
-            // 捕球エラー＝処理点で弾いた時刻／悪送球＝送球が一塁に届くはずだった時刻。
+            // 捕球エラー＝処理点で弾いた時刻／悪送球＝送球が一塁に届くはずだった時刻／
+            // トンネル（issue #632）＝内野手が抜かれた瞬間（ErrorAtSeconds。処理時刻は外野手が
+            // 球を回収する時刻＝ずっと後なので、fieldedAt を使うと絵とテロップが数秒ずれる）。
             // セーフと違い際どさ条件を課さない＝「アウトの絵に見えるのに黙って出塁」を防ぐのが目的。
-            var errAt = play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
-                ? ContactAt + et
-                : fieldedAt;
+            var errAt = play.ErrorAtSeconds is { } ea
+                ? ContactAt + ea
+                : play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
+                    ? ContactAt + et
+                    : fieldedAt;
             judgements.Add(new JudgementEvent { Label = "打", T = errAt, Kind = JudgementKind.Error });
         }
         else if (batterCloseCall)
@@ -2046,11 +2050,16 @@ public static class TimelineBuilder
     /// <summary>
     /// 守備結果を守備位置・打球種別から具体的な実況文にする（"ショートゴロ" "レフト前ヒット" 等）。
     /// 表示専用。判定・乱数には一切影響しない（既存の FieldingPlay から派生するだけ）。
-    /// 凡打・失策は処理/失策した野手名（FielderRole）、安打は着地方向（AreaName）で命名する。
+    /// 凡打は処理した野手名（FielderRole）、安打は着地方向（AreaName）で命名する。
+    /// <b>失策は失策を犯した野手名</b>（ErrorFielderRole。トンネル＝issue #632 では処理野手が回収する
+    /// 外野手なので、FielderRole のままだと「レフトのエラー」＝抜かれた内野手の失策が外野手の名前で出る）。
     /// </summary>
     public static string DescribeResult(FieldingPlay play)
     {
-        var pos = play.FielderRole is { } r ? PositionName(r) : "";
+        var namedRole = play.Result == BattedBallResult.Error
+            ? play.ErrorFielderRole ?? play.FielderRole
+            : play.FielderRole;
+        var pos = namedRole is { } r ? PositionName(r) : "";
         return play.Result switch
         {
             BattedBallResult.HomeRun => "ホームラン",
