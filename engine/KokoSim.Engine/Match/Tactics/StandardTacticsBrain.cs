@@ -313,7 +313,12 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
             .OrderBy(p => p.Fielding).FirstOrDefault();
         if (weakest is null) return null;
 
-        var best = BestBy(s.Reserves, p => p.Fielding);
+        // 交代で入る選手は**退く選手の守備位置を引き継ぐ**（TeamState.SubstituteAtSlot）。
+        // 左投げを捕手・二塁・三塁・遊撃へ入れない（issue ai-lefty-not-at-c-2b-3b-ss）＝
+        // 生成側だけ直すと「生成では出ないのに守備固めで出る」形で漏れる。
+        var best = BestBy(s.Reserves, p => p.Fielding,
+            allow: p => p.Throws != Players.Handedness.Left
+                        || !Field.FieldPositions.IsRightThrowOnly(weakest.Position));
         if (best is null || best.Fielding < weakest.Fielding + _c.DefensiveSubImprovement) return null;
         return (weakest, best);
     }
@@ -338,12 +343,15 @@ public sealed class StandardTacticsBrain : ITacticsBrain, IPitchTacticsBrain
     }
 
     /// <summary>控えから score が最大の選手を決定論で選ぶ（同値は控え順で先勝ち）。</summary>
-    private static Player? BestBy(IReadOnlyList<Player> bench, System.Func<Player, int> score)
+    /// <param name="allow">起用してよいか（null＝全員可）。守備位置の制約を掛けるのに使う。</param>
+    private static Player? BestBy(
+        IReadOnlyList<Player> bench, System.Func<Player, int> score, System.Func<Player, bool>? allow = null)
     {
         Player? best = null;
         var bestScore = int.MinValue;
         foreach (var p in bench)
         {
+            if (allow != null && !allow(p)) continue;
             var v = score(p);
             if (v > bestScore) { bestScore = v; best = p; }
         }

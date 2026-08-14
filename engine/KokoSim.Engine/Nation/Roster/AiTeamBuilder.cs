@@ -181,11 +181,37 @@ public static class AiTeamBuilder
         var w = new double[FieldSlots.Length, fielders.Count];
         for (var slot = 0; slot < FieldSlots.Length; slot++)
             for (var i = 0; i < fielders.Count; i++)
-                w[slot, i] = Season.EffectiveFielding.Raw(
+            {
+                var raw = Season.EffectiveFielding.Raw(
                     fielders[i].Snapshot.Fielding, fielders[i].Aptitude(FieldSlots[slot]), coeff);
+                if (fielders[i].Snapshot.Throws == Players.Handedness.Left)
+                    raw -= LeftThrowPenalty(FieldSlots[slot]);
+                w[slot, i] = raw;
+            }
 
         return Core.AssignmentSolver.MaxWeight(w);
     }
+
+    /// <summary>
+    /// 左投げを <see cref="FieldPositions.IsRightThrowOnly"/> の位置へ座らせないための重み罰
+    /// （issue ai-lefty-not-at-c-2b-3b-ss）。
+    ///
+    /// <para>⚠ ハード除外（候補から外す）にしない＝<b>右投げの野手が4人未満のチームで割当そのものが
+    /// 成立しなくなる</b>（<c>AssignmentSolver.MaxWeight</c> が解を返せない）。罰の大小で「どうしても
+    /// 入れる場合の妥協順」を表す＝<b>三塁 → 二塁 → 捕手 → 遊撃</b>（監督決定 2026-08-13。
+    /// 遊撃がいちばん譲れない）。</para>
+    ///
+    /// <para>値は実効守備力（高々150程度）より1桁大きく、かつ位置どうしの差もそれより大きい。
+    /// ＝右投げが足りているうちは必ず右投げが勝ち、足りないときは妥協順のとおりに崩れる。</para>
+    /// </summary>
+    private static double LeftThrowPenalty(FieldPosition pos) => pos switch
+    {
+        FieldPosition.ThirdBase => 1000.0,
+        FieldPosition.SecondBase => 2000.0,
+        FieldPosition.Catcher => 3000.0,
+        FieldPosition.Shortstop => 4000.0,
+        _ => 0.0,
+    };
 
     /// <summary>投手の起用序列スコア（球速レベル＋制球＋キレ＋スタミナレベル）。</summary>
     private static double PitcherScore(AiPlayer p)
