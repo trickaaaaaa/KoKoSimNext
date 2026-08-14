@@ -76,7 +76,7 @@ public static class StrengthTeamFactory
         // 背番号は高校野球の慣例に沿って採番: 先発の野手＝守備位置番号(2〜9)、エース＝1、控え野手＝10〜17、控え投手＝18〜。
         foreach (var pos in FieldSlots)
         {
-            var pr = Profile(rc, rng, ref profileSalt, starter: true);
+            var pr = Profile(rc, rng, ref profileSalt, starter: true, pos);
             order.Add(PositionPlayer(pos, strength, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven))
                 with { UniformNumber = PositionNumber(pos), Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
@@ -110,7 +110,7 @@ public static class StrengthTeamFactory
         for (var i = 0; i < BenchSlots.Length; i++)
         {
             var ability = rng.Fork(benchSalt++);   // 控えの能力ロールは Fork（主RNG非消費）
-            var pr = Profile(rc, rng, ref profileSalt, starter: false);
+            var pr = Profile(rc, rng, ref profileSalt, starter: false, BenchSlots[i]);
             bench.Add(PositionPlayer(BenchSlots[i], strength - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven))
                 with { UniformNumber = 10 + i, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
         }
@@ -196,11 +196,21 @@ public static class StrengthTeamFactory
     /// 投打の分布は ProspectGenerator.Create（設計書01 §1.1c）と同じ条件付き抽選＝自校と同一の傾向にする。
     /// 学年は先発を上級生寄り・控えを下級生寄りに配分する（高校野球の実感に沿う）。
     /// </summary>
+    /// <param name="position">
+    /// この選手が就く守備位置（分かっているとき）。<see cref="FieldPositions.IsRightThrowOnly"/> の位置なら
+    /// 左投げを引いても右投げに固定する（issue ai-lefty-not-at-c-2b-3b-ss）。
+    /// null＝位置が決まっていない経路（永続AIロスターの生成。配置は <c>AiTeamBuilder</c> が後で決める）。
+    /// </param>
     internal static (Handedness Throws, Handedness Bats, int Grade) Profile(
-        RosterCoefficients c, IRandomSource rng, ref ulong profileSalt, bool starter)
+        RosterCoefficients c, IRandomSource rng, ref ulong profileSalt, bool starter,
+        FieldPosition? position = null)
     {
         var r = rng.Fork(profileSalt++);
         var throws = r.NextDouble() < c.ThrowLeftProb ? Handedness.Left : Handedness.Right;
+        // ⚠ 乱数は**引いてから捨てる**（issue #525/#629 と同じ流儀）。引き直すと Fork の消費列が
+        // ずれて学年・以降の生成まで動く＝裏試合の決定論と帯が動く。下の Bats も右投げ側の
+        // 条件分布へ落ちるだけで**引く回数は左右どちらでも1回**なので消費不変。
+        if (throws == Handedness.Left && position is { } p && FieldPositions.IsRightThrowOnly(p)) throws = Handedness.Right;
         Handedness bats;
         if (r.NextDouble() < c.SwitchProb) bats = Handedness.Switch;
         else if (throws == Handedness.Left) bats = r.NextDouble() < c.BatLeftGivenLeftThrow ? Handedness.Left : Handedness.Right;

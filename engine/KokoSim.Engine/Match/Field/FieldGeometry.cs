@@ -22,6 +22,25 @@ public enum FieldPosition
     DesignatedHitter,
 }
 
+/// <summary>守備位置についての小さな規則（幾何を持たない分類）。</summary>
+public static class FieldPositions
+{
+    /// <summary>
+    /// 左投げが就かない守備位置か（issue ai-lefty-not-at-c-2b-3b-ss）。捕手・二塁・三塁・遊撃は
+    /// 一塁への送球で体を回さねばならず、現実の野球ではまず存在しない配置＝見ると萎える。
+    /// 左投げが就いて良いのは<b>投手・一塁・外野</b>だけ。
+    ///
+    /// <para>この判定はここにしか置かない。AI校の生成（<c>StrengthTeamFactory</c>）・永続ロスターの
+    /// 配置（<c>AiTeamBuilder</c>）・試合中の守備固め（<c>StandardTacticsBrain</c>）の3経路が同じ規則を引く
+    /// ＝どれか1つを直し忘れると「生成では出ないのに交代で出る」という形で漏れる。</para>
+    ///
+    /// <para>⚠ 自校（プレイヤーの部員）には適用しない。ポジションはプレイヤーが決める（issue #93）。</para>
+    /// </summary>
+    public static bool IsRightThrowOnly(FieldPosition pos) => pos
+        is FieldPosition.Catcher or FieldPosition.SecondBase
+        or FieldPosition.ThirdBase or FieldPosition.Shortstop;
+}
+
 /// <summary>1人の野手（守備位置＋能力）。</summary>
 public sealed record Fielder(FieldPosition Position, Vector3D Location, FielderAttributes Attributes);
 
