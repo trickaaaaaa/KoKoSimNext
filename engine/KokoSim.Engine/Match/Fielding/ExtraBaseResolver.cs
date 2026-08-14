@@ -42,6 +42,77 @@ public static class ExtraBaseResolver
     }
 
     /// <summary>
+    /// フェンス直撃の跳ね返り（issue fence-carom-and-over-the-head-cues）。**表示専用**の観測値で、
+    /// 判定（回収時刻・塁打数）を決める <see cref="RollPath.PositionAt"/> は一切変えない
+    /// ＝帯・決定論ダイジェストは不変。
+    /// </summary>
+    /// <param name="HitAtSeconds">フェンスに当たる時刻[s]（接触基準）。</param>
+    /// <param name="HitPoint">当たった位置。</param>
+    /// <param name="Direction">跳ね返る向き（単位ベクトル・フェンス弧の法線で反射）。</param>
+    /// <param name="SpeedMps">跳ね返り初速＝到達時の残速 × 反発係数。</param>
+    /// <param name="DecelMps2">転がりの減速度（往路と同じ）。</param>
+    /// <param name="DistanceM">戻る距離＝v²/(2a)。</param>
+    public readonly record struct FenceCarom(
+        double HitAtSeconds, Vector3D HitPoint, Vector3D Direction,
+        double SpeedMps, double DecelMps2, double DistanceM)
+    {
+        /// <summary>跳ね返った球が止まる時刻[s]。</summary>
+        public double SettleAtSeconds => HitAtSeconds + (DecelMps2 > 0 ? SpeedMps / DecelMps2 : 0.0);
+
+        /// <summary>止まる位置。</summary>
+        public Vector3D StopPosition => HitPoint + Direction * DistanceM;
+
+        /// <summary>時刻 t の位置（当たる前は当たった点、止まった後は停止点）。</summary>
+        public Vector3D PositionAt(double t)
+        {
+            var tau = Math.Max(0.0, t - HitAtSeconds);
+            var tStop = DecelMps2 > 0 ? SpeedMps / DecelMps2 : 0.0;
+            var te = Math.Min(tau, tStop);
+            var d = Math.Min(DistanceM, SpeedMps * te - 0.5 * DecelMps2 * te * te);
+            return HitPoint + Direction * Math.Max(0.0, d);
+        }
+    }
+
+    /// <summary>
+    /// フェンスに達した転がりの跳ね返りを解く（純関数・乱数不使用）。フェンスに達していなければ null。
+    ///
+    /// <para>材料はすべて既に <see cref="RollFrom"/> が計算しているもの:
+    /// 到達時の残速 <c>√(v0² − 2·a·rollDist)</c>、反発係数
+    /// <see cref="FieldingCoefficients.FenceRestitution"/>、向きはフェンス弧の法線での反射
+    /// （弧は本塁中心と近似＝法線は本塁向き）。</para>
+    ///
+    /// <para>⚠ 呼ぶのは**絵を描く側だけ**。判定側の回収時刻（<c>SettleAtSeconds</c> に含まれる
+    /// <see cref="FieldingCoefficients.FenceCaromSeconds"/>）は据え置きで、跳ね返りは
+    /// 「その予算の中でどこに球があるか」を描き直すだけ。</para>
+    /// </summary>
+    public static FenceCarom? ComputeFenceCarom(in RollPath path, FieldingCoefficients c)
+    {
+        if (!path.ReachedFence) return null;
+        var decel = Math.Max(0.1, path.DecelMps2);
+        // フェンスに当たる時刻＝往路の転がりが rollDist に達する最初の t（RollFrom と同じ式）。
+        var disc = Math.Max(0.0, path.InitialSpeedMps * path.InitialSpeedMps - 2.0 * decel * path.RollDistanceM);
+        var remaining = Math.Sqrt(disc);
+        var hitAt = path.HangTimeSeconds + (path.InitialSpeedMps - remaining) / decel;
+        var speed = remaining * Math.Max(0.0, c.FenceRestitution);
+        if (speed <= 1e-6) return null;
+
+        var hit = path.StopPosition;
+        // フェンス弧の法線（内向き）＝当たった点から本塁へ向かう単位ベクトル。反射 d' = d − 2(d·n)n。
+        var r = Math.Sqrt(hit.X * hit.X + hit.Z * hit.Z);
+        var n = r > 1e-6 ? new Vector3D(-hit.X / r, 0, -hit.Z / r) : new Vector3D(0, 0, -1);
+        var d = path.Direction;
+        var dot = d.X * n.X + d.Z * n.Z;
+        var refl = new Vector3D(d.X - 2.0 * dot * n.X, 0, d.Z - 2.0 * dot * n.Z);
+        // 反射の向きが外向きのまま（浅い角度での数値誤差）なら法線そのもの＝素直に戻す。
+        if (refl.X * n.X + refl.Z * n.Z <= 0.0) refl = n;
+        var len = Math.Sqrt(refl.X * refl.X + refl.Z * refl.Z);
+        if (len <= 1e-6) return null;
+        var dir = new Vector3D(refl.X / len, 0, refl.Z / len);
+
+        return new FenceCarom(hitAt, hit, dir, speed, decel, speed * speed / (2.0 * decel));
+    }
+
+    /// <summary>
     /// 着地状態から転がりを解く。前進速度の保持率は落下角で決まる
     /// （水平に近いライナーは滑って伸び、真上から落ちる大飛球は失速して死ぬ）。
     /// </summary>

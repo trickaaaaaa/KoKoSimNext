@@ -174,6 +174,17 @@ public sealed record FieldingCoefficients
     /// <summary>フェンスに達した打球の跳ね返り処理に要する追加時間[s]（カロムの方向は当面無視）。</summary>
     public double FenceCaromSeconds { get; init; } = 0.40;
 
+    /// <summary>
+    /// フェンスの反発係数（issue fence-carom-and-over-the-head-cues）。跳ね返り初速＝
+    /// フェンス到達時の残速 × これ。**表示専用**（判定＝回収時刻・塁打数は
+    /// <see cref="FenceCaromSeconds"/> のままで一切変わらない）。
+    ///
+    /// <para>高校の球場の金網＋パッドを想定して 0.30〜0.40 が出発点（監督決定 2026-08-13）。
+    /// 現行の <see cref="RollDecelMps2"/>=2.60 だと、左中間へ低いライナー（フェンス到達時 17.3 m/s）で
+    /// e=0.35 なら約 7m 戻る。将来は球場ごとの材質差へ拡張できる（design-13 の延長）。</para>
+    /// </summary>
+    public double FenceRestitution { get; init; } = 0.35;
+
     /// <summary>外野手が転がる打球を拾い上げるのに要する時間[s]（内野ゴロの InfieldPlayOverheadSeconds 相当）。</summary>
     public double OutfieldPickupSeconds { get; init; } = 0.30;
 

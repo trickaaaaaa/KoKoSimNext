@@ -2422,7 +2422,12 @@ namespace KokoSim.Unity.Match
 
         private const float FenceWingM = 95f;    // 両翼（2D の _wingM と同値）
         private const float FenceCenterM = 118f; // 中堅（同 _centerM）
-        private const float FenceHeightM = 3.2f;
+        // フェンス高さは engine の既定（FieldGeometry.FenceHeightM）を単一ソースにする
+        // （issue fence-carom-and-over-the-head-cues）。3Dだけ 3.2m を持っていて、engine の判定
+        // （本塁打・フェンス激突）が使う 4.0m と食い違っていた＝**絵で越えているのに越えていない**
+        // （逆も）が起こり得る。跳ね返りを描く前に揃える。
+        private static readonly float FenceHeightM =
+            (float)new KokoSim.Engine.Match.Field.FieldGeometry().FenceHeightM;
         private const float WarningTrackM = 3.5f;
         private const float HomeCircleM = 4.3f;
         private const float FoulQuarterRad = Mathf.PI / 4f;   // フェア領域は ±45°

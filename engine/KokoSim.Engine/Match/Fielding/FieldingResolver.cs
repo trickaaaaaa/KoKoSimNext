@@ -54,6 +54,20 @@ public sealed record FieldingPlay
     /// </summary>
     public double? FieldedX { get; init; }
     public double? FieldedZ { get; init; }
+    /// <summary>
+    /// 転がりがフェンスまで届いたか（issue fence-carom-and-over-the-head-cues）。
+    /// <see cref="ExtraBaseResolver.RollPath.ReachedFence"/> の写し＝新規計算も乱数消費もゼロの観測値。
+    /// 実測（400試合）: 二塁打の 92.9% ／ 三塁打の 100% が該当＝長打のほぼ全部で跳ね返りの出番がある。
+    /// </summary>
+    public bool ReachedFence { get; init; }
+
+    /// <summary>
+    /// フェンス直撃の跳ね返り（<see cref="ExtraBaseResolver.ComputeFenceCarom"/> の結果）。
+    /// **表示専用**＝タイムラインが絵を描くためだけに運ぶ。判定（回収時刻・塁打数・送球）は
+    /// 一切これを読まない。<see cref="ReachedFence"/> でも速度が0なら null。
+    /// </summary>
+    public ExtraBaseResolver.FenceCarom? Carom { get; init; }
+
     /// <summary>処理した野手（フライ捕球/ゴロ処理）。ファウル・本塁打では null。</summary>
     public FieldPosition? FielderRole { get; init; }
     /// <summary>野手が打球に到達（捕球/処理）した時刻[s]。</summary>
@@ -721,6 +735,16 @@ public static class FieldingResolver
         {
             FieldedX = fieldedPoint.X,
             FieldedZ = fieldedPoint.Z,
+            // 絵のための観測（issue fence-carom-and-over-the-head-cues）。既に決まった値の写しと
+            // その純関数変換だけ＝乱数を1発も引かず、判定にも使わない。
+            ReachedFence = roll.ReachedFence,
+            // ⚠ `ReachedFence` は「**放っておけば**フェンスまで転がる」＝野手が先に追いつけば球は
+            // フェンスに当たらない（実測: 単打の3分の1が ReachedFence だが、その多くは外野手が
+            // 手前で回収している）。跳ね返りを描くのは**実際に当たったプレーだけ**なので、
+            // 回収時刻が衝突時刻より後のときに限って観測を載せる。
+            Carom = ExtraBaseResolver.ComputeFenceCarom(roll, coeff) is { } k && retrieveAt > k.HitAtSeconds + 1e-9
+                ? k
+                : null,
             FielderRole = retriever.Position,
             FieldedAtSeconds = retrieveAt,
             FielderThrowSpeedMps = retriever.Attributes.ThrowSpeedMps,

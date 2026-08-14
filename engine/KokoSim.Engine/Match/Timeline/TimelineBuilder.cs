@@ -190,6 +190,17 @@ public static class TimelineBuilder
         // （Issue #301①②）。着地点しか見ていなかったため、外野安打でボールが着地点に貼り付いたまま
         // 静止し、野手の居場所ともズレていた。
         var fieldPoint = FieldPointOf(play);
+        // フェンス直撃の跳ね返り（issue fence-carom-and-over-the-head-cues）。判定はフェンス際で
+        // 回収した扱いのままだが、**絵では球が戻ってくる**ので、回収の瞬間に球が居る場所は内野寄りになる。
+        // 表示の回収点をそこへ差し替える＝野手の到達先・送球の起点・球の終端が1つの点で揃う
+        // （バラバラに持つと「野手が戻ってくる球を通り過ごす」絵になる）。
+        // 送球の**到達時刻は判定どおり**（AppendBackHomeThrows 等が判定の秒で組む）＝起点が近づいたぶんは
+        // 投げ始めが遅れる＝返球前にボールを保持する「間」に吸収される（Issue #334 と同じ形）。
+        if (play.Carom is { } caromForPoint && play.FieldedAtSeconds is { } fieldedForPoint)
+        {
+            var meet = caromForPoint.PositionAt(fieldedForPoint);
+            fieldPoint = new TimelinePoint(meet.X, meet.Z);
+        }
 
         // 守備陣形（9人全員に役割を付与, CHANGELOG 33）。ゾーン分類は着地点距離(RangeM)ではなく
         // 実際の回収点(fieldPoint)基準にする（Issue #336①）。ゴロは本塁寄りで着地して転がるため、
@@ -240,7 +251,28 @@ public static class TimelineBuilder
             // 経路・時刻はエンジンの転がり結果（FieldedX/Z・FieldedAtSeconds）をそのまま使い、
             // 表示側で独自の転がりを発明しない。空中捕球（fieldedAt≤landAt）・本塁打・ファウル
             // （回収点＝着地点）は差が出ないので区間を足さない。
-            if (fieldedAt > landAt + 1e-9 && Distance(landing, fieldPoint) >= 0.5)
+            if (play.Carom is { } carom)
+            {
+                // フェンス直撃（issue fence-carom-and-over-the-head-cues）: 転がりを**当たる瞬間で区切り**、
+                // 残速×反発係数から出した跳ね返りを内野側へ足す。「0.40秒の無」だった区間に絵が付く。
+                var hitPt = new TimelinePoint(carom.HitPoint.X, carom.HitPoint.Z);
+                var hitAt = ContactAt + carom.HitAtSeconds;
+                if (hitAt > landAt + 1e-9 && Distance(landing, hitPt) >= 0.5)
+                {
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Roll, T0 = landAt, T1 = hitAt, From = landing, To = hitPt,
+                    });
+                }
+                if (fieldedAt > hitAt + 1e-9 && Distance(hitPt, fieldPoint) >= 0.5)
+                {
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Roll, T0 = hitAt, T1 = fieldedAt, From = hitPt, To = fieldPoint,
+                    });
+                }
+            }
+            else if (fieldedAt > landAt + 1e-9 && Distance(landing, fieldPoint) >= 0.5)
             {
                 ball.Add(new BallSegment
                 {
@@ -278,6 +310,19 @@ public static class TimelineBuilder
                 _ => "打球が転がる！",
             };
         var captions = new List<TimelineCaption> { new(0.05, "ピッチャー、投げた"), new(ContactAt + 0.01, contactMsg) };
+
+        // 打球の行方の手がかり（issue fence-carom-and-over-the-head-cues ③）。絵だけでは
+        // 「アウトじゃない＝じゃあ長打か」と結果から逆算するしかなかったので、言葉でも出す。
+        // 判定は増やさない＝engine が既に持っている観測（着地点の深さ・ReachedFence）を写すだけ。
+        if (play.Result != BattedBallResult.HomeRun && play.RangeM > 46.0
+            && play.FielderRole is { } overRole && Find(fielders, overRole) is { } overFielder)
+        {
+            var startRange = Math.Sqrt(
+                overFielder.Location.X * overFielder.Location.X + overFielder.Location.Z * overFielder.Location.Z);
+            if (play.RangeM > startRange + 1.0) captions.Add(new TimelineCaption(landAt, "頭を越えた！"));
+        }
+        if (play.Carom is { } caromCaption)
+            captions.Add(new TimelineCaption(ContactAt + caromCaption.HitAtSeconds, "フェンス直撃！"));
 
         // 一塁送球（内野ゴロ）。到達時刻(T1)はエンジンの ThrowArriveSeconds のまま固定し、投げ始め(T0)を
         // 「実距離÷肩」の飛行時間から逆算する（Issue #334）。捕球オーバーヘッド＋握り替えは、捕球点で
