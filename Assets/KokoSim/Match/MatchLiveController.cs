@@ -1966,8 +1966,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2082,8 +2082,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2153,8 +2153,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2238,8 +2238,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2598,8 +2598,8 @@ namespace KokoSim.Unity.Match
             // 内野ゴロの打者走者は「送球到達＝アウト成立」より後に一塁へ着く（T1＞ResAt）ので、
             // 早切りだけだと最頻のアウトが一度も出ない。Dur でクランプしない（SetTime は t の純関数で、
             // Dur を超えた時刻を評価しても最終フレームを保持するだけ）。
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
 
             // ⚠ 得点テロップ（#60）の寿命も含める。FinishPaView が HideScoreCall するので、
             // 含めないと**加算の途中でテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
