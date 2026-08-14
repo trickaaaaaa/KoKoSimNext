@@ -47,10 +47,10 @@ namespace KokoSim.Unity.Shell
                         ManagerIsAway = live.ManagerIsAway,
                         AwayName = live.ManagerIsAway ? NationService.ManagerSchoolName : live.OpponentName,
                         HomeName = live.ManagerIsAway ? live.OpponentName : NationService.ManagerSchoolName,
-                        AwayColors = TeamColorsOf(live.ManagerIsAway
-                            ? NationService.ManagerSchoolId : live.OpponentId),
-                        HomeColors = TeamColorsOf(live.ManagerIsAway
-                            ? live.OpponentId : NationService.ManagerSchoolId),
+                        AwayColors = live.ManagerIsAway
+                            ? ManagerColors() : OpponentColorsOf(live.OpponentId),
+                        HomeColors = live.ManagerIsAway
+                            ? OpponentColorsOf(live.OpponentId) : ManagerColors(),
                         ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                         OnComplete = result =>
                         {
@@ -93,10 +93,10 @@ namespace KokoSim.Unity.Shell
                 ManagerIsAway = live.ManagerIsAway,
                 AwayName = live.ManagerIsAway ? ownName : opponentName,
                 HomeName = live.ManagerIsAway ? opponentName : ownName,
-                AwayColors = TeamColorsOf(live.ManagerIsAway
-                    ? NationService.ManagerSchoolId : opponentId),
-                HomeColors = TeamColorsOf(live.ManagerIsAway
-                    ? opponentId : NationService.ManagerSchoolId),
+                AwayColors = live.ManagerIsAway
+                    ? ManagerColors() : OpponentColorsOf(opponentId),
+                HomeColors = live.ManagerIsAway
+                    ? OpponentColorsOf(opponentId) : ManagerColors(),
                 ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                 RematchOnTie = false,   // 練習試合は引き分けで終わる（再試合はない）
                 OnComplete = result =>
@@ -112,9 +112,19 @@ namespace KokoSim.Unity.Shell
             return true;
         }
 
-        /// <summary>校IDからユニフォーム配色を引く（設計書18 §3.5.1）。自校だけはプレイヤーの上書きが効く。
-        /// ID不明（-1）のときは null＝対決ビューが既定色で描く。</summary>
-        private static TeamColors TeamColorsOf(int schoolId)
+        // issue #618: 旧 TeamColorsOf(int) は `schoolId < 0 ? null : ...` で弾いていたが、自校ID
+        // （NationService.ManagerSchoolId）は -1 ＝「生成校と衝突しない専用ID」であって「ID不明」ではない。
+        // 番兵 -1 が2つの意味に多重定義されていたため、自校の配色は常に null で返り、
+        // 消費側が「両方揃わないと塗らない」設計だったので相手校の配色まで巻き添えで捨てられていた
+        // （＝対決ビューが常に既定色）。呼び出し側で自校/相手校を明示的に分けて番兵の多重定義を解く。
+
+        /// <summary>自校のユニフォーム配色（設計書18 §3.5.1）。プレイヤーの上書きがあればそれ、
+        /// 無ければ校IDからの決定論割り当て。<b>必ず非nullを返す</b>。</summary>
+        private static TeamColors ManagerColors() => TeamColorProvider.ManagerColors;
+
+        /// <summary>相手校のユニフォーム配色。ID不明のときだけ null＝対決ビューがその側を既定色で描く
+        /// （練習試合で相手が未確定の保険経路。大会戦の OpponentId は必ず実在する）。</summary>
+        private static TeamColors OpponentColorsOf(int schoolId)
             => schoolId < 0 ? null : TeamColorProvider.For(schoolId);
     }
 }

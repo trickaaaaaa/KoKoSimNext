@@ -2979,10 +2979,13 @@ namespace KokoSim.Unity.Match
         private DuelStageRig NewDuelRig()
         {
             var offenseIsTop = _prog?.Snapshot().OffenseIsTop ?? true;
-            DuelStageRig.InitialTeamColors = _awayColors != null && _homeColors != null
+            // issue #618: 片方でも判っていれば渡す（旧実装は両方揃わないと渡さず、自校の配色が常に null
+            // だったせいで相手校の配色まで捨てていた）。判らない側は rig 側で既定色のまま残る。
+            var anyColors = _awayColors != null || _homeColors != null;
+            DuelStageRig.InitialTeamColors = anyColors
                 ? (offenseIsTop ? _homeColors : _awayColors, offenseIsTop ? _awayColors : _homeColors)
                 : ((KokoSim.Engine.Nation.TeamColors, KokoSim.Engine.Nation.TeamColors)?)null;
-            _duelColorsOffenseIsTop = _awayColors != null && _homeColors != null ? offenseIsTop : (bool?)null;
+            _duelColorsOffenseIsTop = anyColors ? offenseIsTop : (bool?)null;
             var rig = new DuelStageRig();
             DuelStageRig.InitialTeamColors = null;   // 静的な受け渡し窓は使ったら必ず閉じる
             // 判定表示の長さを流し込む＝捕手の据え置き（捕球位置で静止する窓）が表示と同じ時刻に終わる
@@ -3336,7 +3339,7 @@ namespace KokoSim.Unity.Match
         private void ApplyDuelTeamColors(bool offenseIsTop)
         {
             if (_duelRig == null || !_duelRig.Available) return;
-            if (_awayColors == null || _homeColors == null) return;
+            if (_awayColors == null && _homeColors == null) return;   // issue #618: 片方でも判れば塗る
             if (_duelColorsOffenseIsTop == offenseIsTop) return;   // 半回が変わった時だけ塗る
             _duelColorsOffenseIsTop = offenseIsTop;
             var offense = offenseIsTop ? _awayColors : _homeColors;
