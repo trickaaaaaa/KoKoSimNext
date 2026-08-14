@@ -38,19 +38,10 @@ public static class TournamentEngine
 
         if (entrants.Count == 1) return new TournamentResult(entrants[0], wins);
 
-        // 強さ順にシード（同値は Id で決定化）。
-        var seeded = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
-
-        var size = NextPowerOfTwo(seeded.Count);
-        var seedOrder = SeedOrder(size); // 1-based seed → スロット位置
-        var slots = new School?[size];
-        for (var slot = 0; slot < size; slot++)
-        {
-            var seed = seedOrder[slot] - 1; // 0-based
-            slots[slot] = seed < seeded.Count ? seeded[seed] : null; // 不足分は不戦勝(null)
-        }
-
-        var current = slots;
+        // 組み合わせ抽選（issue #631・Tournaments.TournamentDraw が単一ソース）。
+        // 抽選は Fork した専用ストリーム＝以降の試合が引く乱数列は従来と同じ。
+        var current = Tournaments.TournamentDraw.Arrange(
+            entrants, rng.Fork(Tournaments.TournamentDraw.DrawStreamId));
         while (current.Length > 1)
         {
             var next = new School?[current.Length / 2];
