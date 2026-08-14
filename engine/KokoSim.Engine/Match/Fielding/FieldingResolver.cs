@@ -283,7 +283,7 @@ public static class FieldingResolver
 
             // 内野が処理 → 一塁送球 vs 打者走者。処理野手・処理時刻・捕球点はバウンド経路を辿って
             // 「打球が実際に転がり込む内野手」を実捕球点で決める（Issue #261。着地点決め打ちを廃止）。
-            var (infielder, fieldTimeRaw, catchPoint) = FieldInfieldGrounder(fielders, path, coeff);
+            var (infielder, fieldTimeRaw, catchPoint, advanceM) = FieldInfieldGrounder(fielders, path, coeff);
             var fieldTime = fieldTimeRaw;
             // Issue #63 (a) やること1: 高く弾むバウンド（チョッパー）は落ちてくるまで野手が待たされる。
             // 待ち時間＝最大バウンド頂点からの自由落下時間×係数（バウンド分類のときだけ効かせる）。
@@ -293,9 +293,17 @@ public static class FieldingResolver
                              * Math.Sqrt(2.0 * path.MaxBounceApexM / BouncePath.GravityMps2);
             }
             var throwDist = (field.FirstBase - catchPoint).Length;
+            // 前進捕球のぶんだけ体勢が悪い（issue #630）。前進0＝従来と恒等。捕球点が本塁寄りへ動いて
+            // 送球距離が縮むのを、握り替えの追加時間と送球精度の低下で食い戻す＝一方的な守備強化にしない。
+            var chargeFrac = MaxChargeAdvanceM(infielder.Position, coeff) is var maxAdvance and > 0.0
+                ? MathUtil.Clamp(advanceM / maxAdvance, 0.0, 1.0)
+                : 0.0;
+            var throwAccuracy = (int)Math.Round(
+                infielder.Attributes.ThrowAccuracy - coeff.ChargeThrowAccuracyPenalty * chargeFrac);
             // 握り替え（トランスファー）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
             var transfer = coeff.ThrowTransferSeconds
-                           * infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin);
+                           * infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin)
+                           + coeff.ChargeThrowPenaltySeconds * chargeFrac;
             var throwTime = fieldTime + coeff.InfieldPlayOverheadSeconds
                             + transfer + throwDist / infielder.Attributes.ThrowSpeedMps;
             // アンアシスト刺殺（3U, Issue #400）: 処理野手が一塁手なら、投手カバーへ送球する以外に「自分で
@@ -324,7 +332,8 @@ public static class FieldingResolver
             {
                 // 送球が間に合う → アウト。捕球ロール(Catching＋イレギュラー加算)→送球ロール(ThrowAccuracy)の
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
-                var (result, errorKind) = MaybeInfieldError(fielders, catchPoint, infielder, coeff, rng, errorBonus);
+                var (result, errorKind) = MaybeInfieldError(
+                    fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy);
                 return GroundBase(result) with
                 {
                     FieldedX = catchPoint.X,
@@ -335,7 +344,7 @@ public static class FieldingResolver
                     UnassistedPutout = unassistedPutout,
                     FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
                     FielderFielding = infielder.Attributes.Fielding,
-                    FielderThrowAccuracy = infielder.Attributes.ThrowAccuracy,
+                    FielderThrowAccuracy = throwAccuracy,
                     JudgementMarginSeconds = judgementMargin,
                     ErrorKind = errorKind,
                 };
@@ -351,7 +360,7 @@ public static class FieldingResolver
                 UnassistedPutout = unassistedPutout,
                 FielderThrowSpeedMps = infielder.Attributes.ThrowSpeedMps,
                 FielderFielding = infielder.Attributes.Fielding,
-                FielderThrowAccuracy = infielder.Attributes.ThrowAccuracy,
+                FielderThrowAccuracy = throwAccuracy,
                 JudgementMarginSeconds = judgementMargin,
             };
         }
@@ -448,13 +457,15 @@ public static class FieldingResolver
     ///   これを流用すると通り道の近くを通っただけの打球までマウンドの投手が吸い込む＝本Issueの不具合になる）。
     ///   投手はフォロースルー直後で守備体勢が崩れているぶん追加の反応遅延を負う
     ///   （<see cref="FieldingCoefficients.PitcherFieldingReactionPenaltySeconds"/>）。</item>
-    /// <item><b>捕球点・処理時刻（どこで・いつ）</b>: 処理野手の守備位置に最も近く打球が通る点（＝最短の守備範囲）。
-    ///   前へ突っ込んで最速地点で捕るのではなく、自分の間合いで捕る（処理時刻は打球がその点へ来る時刻＝打球到達に
-    ///   間に合えば待ち、遅れれば追いつく時刻）。これにより送球距離・処理時刻が実戦的になる。</item>
+    /// <item><b>捕球点・処理時刻（どこで・いつ）</b>: 基準は処理野手の守備位置に最も近く打球が通る点
+    ///   （＝最短の守備範囲）で、強い打球は<b>自分の間合いで</b>捕る（処理時刻は打球がその点へ来る時刻＝打球到達に
+    ///   間に合えば待ち、遅れれば追いつく時刻）。緩い打球だけ前へ出て早い時刻で捕る
+    ///   （<see cref="ChargeCatch"/>＝issue #630。従来はここが常に「待ち」で、ボテボテのゴロほど長く突っ立って
+    ///   待つ絵と内野安打を作っていた）。</item>
     /// </list>
     /// 誰も間に合わないまま内野内で失速して死ぬ緩いゴロは、打球が最も近くを通った内野手が回収する（内野安打寄り）。
     /// </summary>
-    private static (Fielder Fielder, double Time, Vector3D Point) FieldInfieldGrounder(
+    private static (Fielder Fielder, double Time, Vector3D Point, double AdvanceM) FieldInfieldGrounder(
         IReadOnlyList<Fielder> fielders, BouncePath path, FieldingCoefficients coeff)
     {
         var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
@@ -532,7 +543,7 @@ public static class FieldingResolver
             {
                 if (cutTime[k] < bestCut) { bestCut = cutTime[k]; best = k; }
             }
-            if (best >= 0) return (infield[best], cutTime[best], cutPoint[best]);
+            if (best >= 0) return (infield[best], cutTime[best], cutPoint[best], 0.0);
 
             // 誰も触れない＝内野内で失速して死ぬ緩いゴロ（打球は内野の中で止まっている）。
             // 最も近くを通った内野手が拾いに行く（内野安打寄り）。
@@ -546,13 +557,18 @@ public static class FieldingResolver
         {
             // 内野内をグラブの届く高さで通る点が皆無（想定外）→ 従来どおり着地点の最寄り内野手。
             var fallback = NearestInfielder(fielders, path.Landing);
-            return (fallback, ReachTime(fallback, path.Landing), path.Landing);
+            return (fallback, ReachTime(fallback, path.Landing), path.Landing, 0.0);
         }
 
         var chosen = infield[best];
         var reachToZone = ReachTime(chosen, zonePoint[best]);
-        // 打球到達に間に合う＝自分の間合いで待って捕る。
-        if (reachToZone <= zoneBallTime[best]) return (chosen, zoneBallTime[best], zonePoint[best]);
+        // 打球到達に間に合う＝待つ余裕がある。緩い打球はその余裕で前へ出る（issue #630）。
+        if (reachToZone <= zoneBallTime[best])
+        {
+            var charge = ChargeCatch(
+                chosen, path, zoneDist[best], zoneBallTime[best], zonePoint[best], coeff);
+            return (chosen, charge.Time, charge.Point, charge.AdvanceM);
+        }
 
         // 間に合わない＝追いかける。**1回の代入では解けない**: 「自分が最接近点へ着く時刻の打球位置」は
         // そのぶん先へ転がっているので、そこへはまだ届いていない。以前はここで1回だけ代入しており、
@@ -567,8 +583,53 @@ public static class FieldingResolver
             if (next <= time + CatchUpToleranceSeconds) break;
             time = next;
         }
-        return (chosen, time, path.PositionAt(time));
+        return (chosen, time, path.PositionAt(time), 0.0);
     }
+
+    /// <summary>
+    /// 前進捕球（チャージ, issue #630）。待って捕るなら <paramref name="zoneBallTime"/> に
+    /// <paramref name="zonePoint"/> で捕る打球について、<b>それより早く捕れる本塁寄りの点</b>を返す。
+    ///
+    /// <para>前へ出られる距離は「打球の緩さ」で決める:
+    /// 上限 ×(1 − 待って捕るときの打球速度 / <see cref="FieldingCoefficients.ChargeSlowBallSpeedMps"/>)。
+    /// <b>強い打球は上限0＝走査に入らず従来と完全に同じ捕球点・処理時刻を返す</b>（帯・絵とも不変）。
+    /// しきいをまたぐ瞬間に前進量が飛ばないよう、比例で0へ落とす。</para>
+    ///
+    /// <para>「間に合うか」は処理野手の割り当て（<c>gloveTime</c>）と<b>同じ式</b>で見る
+    /// ＝守備範囲の半径を足さない実距離＋投手の追加反応遅延。乱数は引かない（幾何と時間だけ）。</para>
+    /// </summary>
+    private static (double Time, Vector3D Point, double AdvanceM) ChargeCatch(
+        Fielder f, BouncePath path, double zoneDist, double zoneBallTime, Vector3D zonePoint,
+        FieldingCoefficients coeff)
+    {
+        var slowLimit = coeff.ChargeSlowBallSpeedMps;
+        if (slowLimit <= 0.0) return (zoneBallTime, zonePoint, 0.0);
+        var slowness = MathUtil.Clamp(
+            (slowLimit - path.HorizontalSpeedAt(zoneBallTime)) / slowLimit, 0.0, 1.0);
+        var cap = slowness * MaxChargeAdvanceM(f.Position, coeff);
+        if (cap <= 0.0) return (zoneBallTime, zonePoint, 0.0);
+
+        var reaction = f.Attributes.ReactionDelaySeconds
+                       + (f.Position == FieldPosition.Pitcher ? coeff.PitcherFieldingReactionPenaltySeconds : 0.0);
+        var step = Math.Max(0.005, coeff.InfieldInterceptStepSeconds);
+        for (var t = path.HangTimeSeconds; t < zoneBallTime; t += step)
+        {
+            if (path.HeightAt(t) > coeff.InfielderReachHeightM) continue;  // グラブが届かない高さ
+            var p = path.PositionAt(t);
+            var dist = (p - f.Location).Length;
+            if (dist - zoneDist > cap) continue;                           // ここまでは出られない
+            if (dist / f.Attributes.SprintSpeedMps + reaction > t) continue; // その時刻までに届かない
+            return (t, p, dist - zoneDist);                                // 最も早い＝いちばん前で捕る点
+        }
+        return (zoneBallTime, zonePoint, 0.0);
+    }
+
+    /// <summary>前へ出られる距離の上限[m]。コーナー（投手・一塁手・三塁手）は一塁が近く思い切って
+    /// 突っ込める／ミドル（二塁手・遊撃手）は送球が長く体勢を崩せない（issue #630）。</summary>
+    private static double MaxChargeAdvanceM(FieldPosition position, FieldingCoefficients coeff)
+        => position is FieldPosition.Pitcher or FieldPosition.FirstBase or FieldPosition.ThirdBase
+            ? coeff.ChargeMaxAdvanceCornerM
+            : coeff.ChargeMaxAdvanceMiddleM;
 
 
     /// <summary>追いかけ捕球の反復上限（打球が止まれば数回で収まる。無限ループの保険）。</summary>
@@ -684,14 +745,16 @@ public static class FieldingResolver
     /// </summary>
     private static (BattedBallResult Result, FieldingErrorKind? ErrorKind) MaybeInfieldError(
         IReadOnlyList<Fielder> fielders, Vector3D landing, Fielder infielder,
-        FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0)
+        FieldingCoefficients coeff, IRandomSource rng, double extraProb = 0.0, int? throwAccuracy = null)
     {
         if (CatchErrorOccurs(fielders, landing, coeff, rng, extraProb))
             return (BattedBallResult.Error, FieldingErrorKind.Catch);
         if (coeff.ThrowErrorBaseProb > 0.0)
         {
             // 送球精度が高いほど悪送球が減る。クランプは捕球エラーと共通の min/max を流用。
-            var errProb = coeff.ThrowErrorBaseProb - (infielder.Attributes.ThrowAccuracy - 50) * coeff.ThrowErrorAccuracySlope;
+            // throwAccuracy は前進捕球の低下を織り込んだ実効精度（issue #630。null＝素の精度）。
+            var accuracy = throwAccuracy ?? infielder.Attributes.ThrowAccuracy;
+            var errProb = coeff.ThrowErrorBaseProb - (accuracy - 50) * coeff.ThrowErrorAccuracySlope;
             if (MathUtil.Chance(MathUtil.Clamp(errProb, coeff.ErrorMinProb, coeff.ErrorMaxProb), rng))
             {
                 return (BattedBallResult.Error, FieldingErrorKind.Throw);
