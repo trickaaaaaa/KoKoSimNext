@@ -1498,7 +1498,12 @@ public static class GameEngine
                         var toHome = Math.Abs(leg.To.X) < 0.5 && Math.Abs(leg.To.Z) < 0.5;
                         if (!toHome) continue;
                         if (leg.OutAtEnd) { outAtHome = leg; break; }
-                        safeAtHome ??= leg;
+                        // 複数生還するプレーでは**最後に還る走者**に送球を合わせる（issue
+                        // match-picture-vs-safe-out-verdict）。走者レッグは三塁走者→二塁走者→一塁走者の順に
+                        // 積まれるので、先に見つかったものを採ると<b>いちばん早く還る走者</b>に固定され、
+                        // 後から還る走者は捕手がボールを持ったあとに悠々とホームインする絵になっていた
+                        // （実測 300試合で189件・中央値0.82秒・最大1.76秒の先着）。すぐ下の外野返球の枝と同じ形。
+                        if (safeAtHome is null || leg.T1 > safeAtHome.T1) safeAtHome = leg;
                     }
                     if (outAtHome is { } o)
                     {
