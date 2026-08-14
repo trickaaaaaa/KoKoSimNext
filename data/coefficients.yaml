@@ -219,13 +219,15 @@ baserunning:
   catch_throw_distance_m: 38.8
   steal_reaction_intercept: 0.90   # スタート遅延[s] = intercept − steal×slope（Step4再校正: 快足を3.4秒台へ）
   steal_reaction_slope: 0.004
+  steal_jump_credit_seconds: 0.19  # ジャンプ[s]。走者は投手の始動を読んで既に動き出している＝遅延から差し引く（床の後に引く）。steal_success_bias 0.38 を物理層へ移した半分（2026-08-14）。走力50/盗塁50の二塁到達 3.94→3.75秒（高校生の実測3.6〜3.8秒へ）
   pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
-  pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋送球時間）
+  pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋立ち上がり＋送球時間）
+  catcher_pop_rise_seconds: 0.19   # 捕手の立ち上がり[s]（守備力で縮まない固定部分）。steal_success_bias 0.38 を物理層へ移した残り半分（2026-08-14）。肩50のポップタイム 1.91→2.10秒（高校生の実測2.0〜2.3秒へ）。⚠ pop_transfer_seconds へ足し込むと守備力で伸縮して「移しただけ」でなくなる
   transfer_fielding_slope: 0.004   # 走塁系トランスファーの守備連動（Issue #36）。fielding.throw_transfer_fielding_slope と揃える
   transfer_factor_min: 0.70        # 走塁系トランスファー倍率の下限（Issue #36）
   tag_seconds: 0.10
   steal_margin_scale: 0.22         # margin→成功確率のlogistic幅（Step4再校正: 肩差が効く幅に拡張）
-  steal_success_bias: 0.38         # リーグ平均成功率の校正項（🟡, Step4再校正）
+  steal_success_bias: 0.0          # リーグ平均成功率の校正項（🟡）。2026-08-14 に 0.38→0.0＝中身を物理層の秒（steal_jump_credit_seconds 0.19 ＋ catcher_pop_rise_seconds 0.19）へ移した。判定の秒だけを動かして絵の秒に出ない項なので、0以外にすると「送球が先に届いた絵なのにセーフ」が戻る（実測: 成功50%の場面で送球が0.48秒先着）。平均成功率を動かすときは移した先の2項を動かす
   catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
   steal_third_success_bias: -0.35  # 三盗の成功率バイアス（design-14「三盗は成功率下方」）
   steal_home_success_bias: -0.7    # 本盗の成功率バイアス（design-14「本盗はさらに下方」）

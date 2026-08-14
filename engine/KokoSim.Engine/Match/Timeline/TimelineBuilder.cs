@@ -806,13 +806,20 @@ public static class TimelineBuilder
     /// <para>秒は判定（<see cref="StealResolver"/>）と同一の分解で組む＝絵のために別秒を発明しない（design-18 §4.5-③/⑨）。
     /// <paramref name="pitchout"/>/<paramref name="startType"/> は判定側の <see cref="StealResolver.DefenseTimeSeconds"/> と
     /// 揃えて渡す（渡さないと到達時刻の差が「球の速さ」に化ける）。</para></summary>
+    /// <param name="runnerSeconds">判定が使った走者の秒（ゆらぎ込み・<see cref="StealResolver.ResolveVerdict"/> の出力）。
+    /// 省略すると<b>ゆらぎ0</b>から結果に矛盾しない最小の秒を組む（絵づくり用の呼び出し）。</param>
+    /// <param name="defenseSeconds">同じく守備の秒。<paramref name="runnerSeconds"/> と対で渡す。</param>
     public static PlayTimeline BuildSteal(
         Player runner, Player catcher, StealResult result, BaserunningCoefficients c, FieldGeometry field,
         StealTarget target = StealTarget.Second, bool pitchout = false, Tactics.StartType startType = Tactics.StartType.Normal,
-        Player? doubleStealScorer = null)
+        Player? doubleStealScorer = null, double? runnerSeconds = null, double? defenseSeconds = null)
     {
-        var runnerTime = StealResolver.RunnerTimeSeconds(runner, c, startType, target);
-        var defenseTime = StealResolver.DefenseTimeSeconds(catcher, c, pitchout, startType, target);
+        // 秒は判定が使ったものをそのまま写す（表示専用・新規計算ゼロ）。持たない呼び出しだけ組み直す。
+        var play = runnerSeconds is { } rs && defenseSeconds is { } ds
+            ? new StealVerdict(result, rs, ds)
+            : StealResolver.Forced(runner, catcher, c, result, pitchout, startType, target);
+        var runnerTime = play.RunnerSeconds;
+        var defenseTime = play.DefenseSeconds;
         var safe = result == StealResult.Safe;
 
         // 狙う塁で走者レッグの from/to・受け手・実況の塁名を一般化する。
@@ -844,20 +851,14 @@ public static class TimelineBuilder
         }
         else
         {
-            // 捕手の握り替え（ポップ）は判定と同じ守備係数込みの値で使う（バグ修正 issue #485）。
-            // 生の PopTransferSeconds を使うと肩と無関係に送球区間が伸縮し（守備90で約0.1秒短縮）、
-            // 差が全部「球の速さ」に化ける。ピッチアウト／ギャンブルの短縮も同様に投げ始めへ反映する
-            // （StealResolver.DefenseTimeSeconds の引き算と揃える）＝送球区間長を送球そのもの（肩）だけに保つ。
-            var popTransfer = c.PopTransferSeconds
-                * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-            var quickBonus = 0.0;
-            if (pitchout)
-            {
-                quickBonus += c.PitchoutDefenseBonusSeconds;
-                if (startType == Tactics.StartType.Gamble) quickBonus += c.GamblePitchoutExtraBonusSeconds;
-            }
-            var throwStart = Math.Max(pitchArrive, pitchArrive + popTransfer - quickBonus); // 握り替え（守備係数・読み切り込み）
-            var throwArrive = defenseTime - c.TagSeconds;                                    // 送球到達（判定由来）
+            // 到達は判定が使った秒そのもの（守備の巧拙・読み切り・ゆらぎは全部この中に入っている）。
+            // 投げ始めは「到達 − 距離÷肩」で逆算する（issue #485 の性質＝差が球の速さに化けない）。
+            var throwArrive = defenseTime - c.TagSeconds;   // 送球到達（判定が使った秒。ゆらぎ込み）
+            // 送球区間の長さは常に「距離÷肩」（issue #485）。ゆらぎ（握り替えのもたつき/速いポップ）は
+            // 投げ始めの位置に出す＝球の見た目の速さは肩どおりのまま。
+            var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
+            var flightToBase = throwDistance / catcher.ToFielder().ThrowSpeedMps;
+            var throwStart = Math.Max(pitchArrive, throwArrive - flightToBase);   // 捕る前には投げられない
             ball.Add(new BallSegment
             {
                 // 受け手は下の Moves でベースカバーに入る野手と同一（Issue E1・単一ソース）

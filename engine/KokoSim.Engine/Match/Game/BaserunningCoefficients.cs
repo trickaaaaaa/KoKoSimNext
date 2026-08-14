@@ -75,10 +75,35 @@ public sealed record BaserunningCoefficients
     /// スプリント速度は天井速度（加速ランプ非モデル化）なので、反応＋加速不足をこの遅延で吸収する（Step4再校正）。</summary>
     public double StealReactionIntercept { get; init; } = 0.90;
     public double StealReactionSlope { get; init; } = 0.004;
+    /// <summary>
+    /// ジャンプ[s]（走者が投手の始動を読んで既に動き出している分。上の遅延から差し引く）。
+    ///
+    /// <para>2026-08-14: 判定境界の校正項 <see cref="StealSuccessBias"/>(0.38) を物理層へ移した半分
+    /// （残り半分は <see cref="CatcherPopRiseSeconds"/>）。走者は「投球を見てから走り出す」のではなく
+    /// 投手の始動を読んで走るので、遅延の全部を反応として払うのは過大だった＝この分を免除する。
+    /// 実測: 走力50/盗塁50の二塁到達が 3.94秒 → 3.75秒（高校生の実測 3.6〜3.8秒に寄る）。</para>
+    ///
+    /// <para>⚠ 床（<c>max(0.10, …)</c> / ギャンブルの <c>max(0.05, …)</c>）の**後**に引く＝全走者から
+    /// ちょうど同じ秒だけ引かれる。床の前に引くと快足走者だけ床に当たって引きが浅くなり、
+    /// 「校正項を移しただけ（帯不変）」でなくなる。</para>
+    /// </summary>
+    public double StealJumpCreditSeconds { get; init; } = 0.19;
     /// <summary>投手クイック[s]（投法補正は後回し, §2.2）。</summary>
     public double PitcherQuickSeconds { get; init; } = 1.40;
     /// <summary>捕手の握り替え[s]（ポップタイム＝これ＋送球時間）。</summary>
     public double PopTransferSeconds { get; init; } = 0.70;
+    /// <summary>
+    /// 捕手が立ち上がって投げる形を作る分[s]（ポップタイムの**守備力で縮まない**固定部分）。
+    ///
+    /// <para>2026-08-14: <see cref="StealSuccessBias"/>(0.38) を物理層へ移した半分（残り半分は
+    /// <see cref="StealJumpCreditSeconds"/>）。実測: 肩50のポップタイム（捕球→二塁到達）が
+    /// 1.91秒 → 2.10秒（高校生の実測 2.0〜2.3秒に寄る。1.91秒はプロの好捕手の値だった）。</para>
+    ///
+    /// <para>⚠ <see cref="PopTransferSeconds"/> に足し込まず別項にするのは、あちらが守備力で伸縮する
+    /// （<see cref="TransferFieldingSlope"/>）ため。足し込むと捕手ごとに移した秒が変わり
+    /// 「校正項を移しただけ」でなくなる。立ち上がりは技術で縮められない部分＝固定が物理的にも正しい。</para>
+    /// </summary>
+    public double CatcherPopRiseSeconds { get; init; } = 0.19;
     /// <summary>
     /// トランスファー倍率の守備(Fielding)傾き（Issue #36）。走塁系の各握り替え（捕手ポップ/外野返球/中継/帰塁）
     /// に共通。倍率 = max(min, 1 − (Fielding−50)×この値)。守備50で×1.0＝恒等（帯不変）。
@@ -92,8 +117,16 @@ public sealed record BaserunningCoefficients
     /// <summary>margin→成功確率のlogistic幅[s]（Step4再校正: 反応係数を上げ絶対タイムを現実化した分、
     /// グリッドが飽和しないよう幅を広げ、肩差が効くようにする）。</summary>
     public double StealMarginScale { get; init; } = 0.22;
-    /// <summary>成功率バイアス[s]（リーグ平均成功率を現実値に寄せる校正項, 🟡）。</summary>
-    public double StealSuccessBias { get; init; } = 0.38;
+    /// <summary>
+    /// 成功率バイアス[s]（リーグ平均成功率を現実値に寄せる校正項, 🟡）。
+    ///
+    /// <para>⚠ 2026-08-14 に <b>0.38 → 0.0</b>。中身を物理層の秒へ移した
+    /// （走者側 <see cref="StealJumpCreditSeconds"/> 0.19 ＋ 守備側 <see cref="CatcherPopRiseSeconds"/> 0.19）。
+    /// この項は<b>判定の秒だけを動かして絵の秒には出ない</b>ので、0以外にすると
+    /// 「捕手の送球が先に届いた絵なのにセーフ」が構造的に戻る（実測: 成功50%の場面で送球が0.48秒先着）。
+    /// リーグ平均成功率を動かしたいときは、移した先の2項（＝絵に出る秒）を動かすこと。</para>
+    /// </summary>
+    public double StealSuccessBias { get; init; } = 0.0;
     /// <summary>本塁→三塁の送球距離[m]（design-14 P1-4、三盗）。</summary>
     public double CatchThrowToThirdDistanceM { get; init; } = 27.4;
     /// <summary>三盗の成功率バイアス（design-14「三盗は成功率下方」）。StealSuccessBiasに加算。</summary>
