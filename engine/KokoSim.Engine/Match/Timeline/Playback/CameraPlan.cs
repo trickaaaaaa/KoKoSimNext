@@ -91,10 +91,25 @@ public readonly record struct CameraViewport(double Cx, double Cy, double ZoomMu
 ///
 /// <para>2D俯瞰は全景に全部入るので既定オフ（＝ゴールデン不変）。3Dの守備カメラだけが渡す。</para>
 /// </param>
+/// <param name="ReturnsToWide">
+/// <see cref="CameraPlanBuilder.WideStartTime"/> 以降に全景（縦155m）へ戻すか（issue field-view-cut-back-sooner）。
+///
+/// <para><c>true</c>（既定・2D俯瞰）＝従来どおり全景へ戻す。2Dは全景に全部入るので戻して問題ない。</para>
+///
+/// <para><c>false</c>（3Dの守備ビュー）＝<b>戻さず、その時刻の枠のまま止める</b>。寄った3Dで全景へ跳ぶと
+/// 「用のないところを見ている」ハードカットになり、居残りそのものより<b>そのカットが悪目立ちする</b>
+/// （監督指示 2026-08-13）。この挙動は <c>CameraPlan</c> のコメントが以前から書いていたもので、
+/// 実装だけが全景へ戻していた＝コメント側が正しかった。</para>
+///
+/// <para>ただし本塁打の一周のように<b>まだ走っている走者</b>が残るなら、止めた枠から走者が出ていくので
+/// 「走者＋向かう塁」を収める枠へ切り替える（1人＋1塁間＝27.43m＋余白。走者を全部入れようとして
+/// 47.8m 必要になり人が20pxになった issue #566 の失敗を繰り返さない大きさ）。</para>
+/// </param>
 public readonly record struct CameraFraming(
     double MaxZoom, double MarginM, double PitchZoom, bool ThrowFollowsBall = false,
     bool HeldBallFollowsRunner = false, bool LooseBallFollowsChaser = false,
-    bool ThrowBoxGrowsWithBall = false, bool KeepSubjectFramed = false)
+    bool ThrowBoxGrowsWithBall = false, bool KeepSubjectFramed = false,
+    bool ReturnsToWide = true)
 {
     /// <summary>2D俯瞰の既定（Issue #119 で決めた現行値）。渡さなければこれが使われる。</summary>
     public static readonly CameraFraming Default = new(3.4, 6.0, 2.4);
@@ -374,7 +389,25 @@ public static class CameraPlanBuilder
     /// </summary>
     private static CameraViewport RawTargetAt(PlaybackPlay play, double actualT, double leadT, CameraFraming fr, double wideStart)
     {
-        if (leadT >= wideStart) return Wide();
+        if (leadT >= wideStart)
+        {
+            if (fr.ReturnsToWide) return Wide();
+            // 全景へ戻さない（issue field-view-cut-back-sooner ④）。まだ走っている走者が居るなら
+            // その走者が走っている**塁間まるごと**を収める（本塁打の一周。止めた枠のままだと枠外へ出ていく）。
+            // ⚠ 枠を「走者の現在地＋向かう塁」にしてはいけない。塁に近づくほど箱が点へ縮んで**ズームが
+            // 脈打ち**、塁を踏んだ瞬間に 27m へ跳ね返る（実測: 上限40倍まで寄ってから戻れず走者が枠外へ出た）。
+            // 塁間（27.4m）で固定なら、レッグが変わってもズームは変わらず中心が寄るだけ＝穏やかに追える。
+            // ⚠ 追う走者を探すのは actualT（先取りしない）。leadT で探すと、レッグが終わる
+            // LeadSeconds 秒前に「もう誰も走っていない」と判断して枠が離れ始める＝
+            // <b>走者が塁を踏む直前に画面から外れる</b>（実測: 本塁到達 0.25 秒前に枠が外れた）。
+            if (RunningRunnerLegAt(play, actualT) is { } trailing)
+                return FitBox(trailing.From, trailing.To, fr);
+            // 追っていた走者が着いた直後は、その塁間の枠のまま据える（着いた瞬間に別の場所へ跳ばない）。
+            if (LastRunnerLegEndedAfter(play, actualT, wideStart) is { } settled)
+                return FitBox(settled.From, settled.To, fr);
+            // 誰も動いていないなら**戻し始める時刻の枠のまま**止める（wideStart を +∞ にして再入を断つ）。
+            return RawTargetAt(play, wideStart, wideStart, fr, double.PositiveInfinity);
+        }
 
         var (covering, nextUpcoming) = FindSegmentAt(play, actualT);
 
@@ -475,6 +508,50 @@ public static class CameraPlanBuilder
     /// 時刻 t に**実際に動いている**走者の現在位置（複数なら最も遠くまで進む予定のレッグ＝
     /// そのプレーの主役）。その場に居るだけのレッグ（From==To）は数えない。
     /// </summary>
+    /// <summary>
+    /// 時刻 t に**実際に動いている**走者が走っているレッグの両端（issue field-view-cut-back-sooner）。
+    /// 選び方は <see cref="RunningRunnerAt"/> と同じ（最も遠くまで進む予定のレッグ＝そのプレーの主役）。
+    /// 全景へ戻さない守備ビューで「その塁間まるごと」を収めるのに使う＝走者は必ず枠の中に居る。
+    /// </summary>
+    private static (PlaybackVec From, PlaybackVec To)? RunningRunnerLegAt(PlaybackPlay play, double t)
+    {
+        (PlaybackVec From, PlaybackVec To)? found = null;
+        var best = double.NegativeInfinity;
+        foreach (var runner in play.Runners)
+            foreach (var seg in runner.Segs)
+            {
+                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (t < seg.T0 || t > seg.T1) continue;
+                var span = Math.Abs(seg.To.X - seg.From.X) + Math.Abs(seg.To.Y - seg.From.Y);
+                if (span <= best) continue;
+                best = span;
+                found = (seg.From, seg.To);
+            }
+        return found;
+    }
+
+    /// <summary>
+    /// <paramref name="t"/> より前に終わった走者レッグのうち、<paramref name="after"/> 以降に終わった
+    /// 最後のもの（issue field-view-cut-back-sooner）。全景へ戻さない守備ビューで「追っていた走者が
+    /// 着いた直後」に枠を据え置くために使う。<paramref name="after"/> より前にしか無ければ null
+    /// ＝そもそも走者を追っていないプレー（枠は戻し始める時刻のまま止める）。
+    /// </summary>
+    private static (PlaybackVec From, PlaybackVec To)? LastRunnerLegEndedAfter(
+        PlaybackPlay play, double t, double after)
+    {
+        (PlaybackVec From, PlaybackVec To)? found = null;
+        var latest = after;
+        foreach (var runner in play.Runners)
+            foreach (var seg in runner.Segs)
+            {
+                if (seg.From.X == seg.To.X && seg.From.Y == seg.To.Y) continue;
+                if (seg.T1 > t || seg.T1 < latest) continue;
+                latest = seg.T1;
+                found = (seg.From, seg.To);
+            }
+        return found;
+    }
+
     private static PlaybackVec? RunningRunnerAt(PlaybackPlay play, double t)
     {
         PlaybackVec? found = null;

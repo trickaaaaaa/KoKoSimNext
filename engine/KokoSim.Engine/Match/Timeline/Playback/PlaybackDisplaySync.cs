@@ -59,6 +59,58 @@ public static class PlaybackDisplaySync
     }
 
     /// <summary>
+    /// 守備ビューで「まだ見るもの」が終わる時刻[s]（issue field-view-cut-back-sooner ①）。
+    /// 決着（<see cref="PlaybackPlay.ResAt"/>）・球の最後・<b>実際に動く</b>走者レッグの終わりの最大。
+    ///
+    /// <para>⚠ <b>凡打の打者走者（アウト確定）の一塁到達は待たない</b>。判定は送球到達で確定していて、
+    /// そのあとの駆け抜け（issue #443）は守備ビューとしては用の済んだ絵＝ここを待つと決着から
+    /// 1秒以上「野手が定位置へ戻るだけ」を映すことになる（監督指示 2026-08-13「少し間をおいて切って良い」）。
+    /// 他の走者が進塁中なら従来どおり待つ＝まだ見るものがある。</para>
+    ///
+    /// <para>⚠ 動かない走者のレッグ（<c>AppendHeldRunners</c> が T1=Duration で張る定点）は数えない。
+    /// 除かないと必ずプレー尺へ戻り、1秒も縮まらない。</para>
+    /// </summary>
+    public static double LastActionTime(PlaybackPlay play)
+    {
+        if (play is null) return 0.0;
+        var last = play.ResAt;
+        foreach (var seg in play.Ball)
+        {
+            if (seg.T1 > last) last = seg.T1;
+        }
+
+        var batterOut = BatterIsOut(play);
+        foreach (var r in play.Runners)
+        {
+            if (batterOut && r.Label == "打") continue;
+            foreach (var s in r.Segs)
+            {
+                if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
+                if (s.T1 > last) last = s.T1;
+            }
+        }
+        return last;
+    }
+
+    /// <summary>打者がこのプレーでアウトになったか（レッグ終端のアウト or 「打」のアウト判定イベント）。</summary>
+    private static bool BatterIsOut(PlaybackPlay play)
+    {
+        foreach (var j in play.Judgements)
+        {
+            if (j.Kind == JudgementKind.Out && j.Label == "打") return true;
+        }
+        foreach (var r in play.Runners)
+        {
+            if (r.Label != "打") continue;
+            foreach (var s in r.Segs)
+            {
+                if (s.OutAtEnd) return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// 得点を1点ずつ加算する時刻（昇順）。各走者の本塁到達レッグ（To が本塁・終端セーフ）の T1。
     /// 生還数より本塁到達が多い場合（第3アウトと同時のタイムプレー等）は先着から
     /// <paramref name="runsScored"/> 本だけ数える。足りない場合（保険。実測30試合で0件）は

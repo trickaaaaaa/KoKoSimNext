@@ -2556,6 +2556,12 @@ namespace KokoSim.Unity.Match
         /// レンダリング（<c>RenderStealFrame</c> 等は判定より前に呼ばれる）が1コマ、
         /// カット後の全景（縦155m級）を描いてしまう（実測: 枠が10.5m→147.3mへ1コマで飛ぶ）。
         /// 打ち切りをハードカットより確実に手前で終わらせることで、そのコマを再生の外へ出す。
+        ///
+        /// <para>⚠ 全景ハードカットは廃止した（issue field-view-cut-back-sooner ④・
+        /// <see cref="DuelStageRig.FieldReturnsToWide"/>）ので、この clamp が守っていた「全景の1コマ」
+        /// はもう出ない。それでも残しているのは<b>打席途中プレーの尺そのもの</b>が
+        /// この値で決まっているため（外すと盗塁・牽制の再生が伸びる＝この issue が頼まれていない変更に
+        /// なる）。旧挙動（FieldReturnsToWide=true）へ戻したときの保険も兼ねる。</para>
         /// </summary>
         private static double ClampBeforeWideCameraCut(double end, PlaybackPlay play)
         {
@@ -2582,16 +2588,9 @@ namespace KokoSim.Unity.Match
             var play = _current.Play;
 
             // 「まだ見るもの」＝決着／球が動き終わる／**実際に動く**走者レッグの終わり。
-            // ⚠ 動かない走者のレッグを数えないこと。塁上で止まる走者は AppendHeldRunners が
-            // T1=Duration で張るので、除かないと必ず Dur に戻って1秒も縮まらない。
-            var lastEvent = play.ResAt;
-            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            foreach (var r in play.Runners)
-                foreach (var s in r.Segs)
-                {
-                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
-                    if (s.T1 > lastEvent) lastEvent = s.T1;
-                }
+            // 規則は engine の純関数（PlaybackDisplaySync.LastActionTime）が単一ソース＝
+            // 凡打の打者走者の駆け抜けを待たない扱い（issue field-view-cut-back-sooner ①）も含む。
+            var lastEvent = PlaybackDisplaySync.LastActionTime(play);
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
 
             // 判定オーバーレイ（#59）の表示窓 [T1, T1+hold) を必ず含める（issue #236 症状A）。
