@@ -96,6 +96,20 @@ public sealed class SaveState
     /// </summary>
     public TournamentHistory TournamentHistory { get; set; } = new();
 
+    // --- 週次イベントの発火状態（issue #609。v9 で追加） ---
+    /// <summary>
+    /// クールダウンと年次フラグ（設計書03 §5）。<b>null＝旧セーブ</b>（イベントが週送りに繋がる前の進行）。
+    /// 載せないとロードでクールダウンが全部明けて、直前に見たイベントが即もう一度出る。
+    /// </summary>
+    public EventSchedulerSaveState? Events { get; set; }
+
+    // --- 期間つきの練習効率補正（issue #615。v10 で追加） ---
+    /// <summary>
+    /// イベントが作った「N週だけ効率が上がる」の残り（設計書03 §5）。空＝補正なし。
+    /// 載せないと、強化指定を受けた直後にロードすると効果が消える。
+    /// </summary>
+    public List<TrainingBoostSaveState> TrainingBoosts { get; set; } = new();
+
     /// <summary>
     /// 大会モードの進行（issue #565 F1）。<b>null＝通常モードのセーブ</b>（v1 のセーブは常に null）。
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。

@@ -1249,3 +1249,143 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     border-radius: 0;
 }
 .advance:hover { background-color: #F0563C; }
+
+/* ═══ イベント（ノベル提示・設計書03 §5 / issue #609）════════════════════════
+   案B「トップバー残し・立ち絵中」。トップバーは残し、本文域（ヒーロー帯＋3カラム）だけを
+   この面と入れ替える（display の二者択一。コントローラが切り替える）。
+   暗幕を敷かないのは、昼NB（白地＋インク枠）に全画面の黒幕が乗ると別のゲームに見えるため。
+
+   色は使わない: 立ち絵が入るまでのプレースホルダは単色シルエットで、アクセント（応援団赤）は
+   1つも置かない（UI原則②＝赤はCTA専用。ここに主要操作は無く、面のどこを押しても進む）。 */
+.ev {
+    flex-grow: 1;
+    flex-direction: column;
+    padding: 14px;          /* .dash と同じ＝入れ替えても本文域の起点が動かない */
+    overflow: hidden;
+    display: none;          /* 既定は非表示。コントローラが出す */
+}
+.ev__eyebrow { flex-shrink: 0; }
+
+/* 立ち絵の舞台。薄い土の井に沈め、会話ボックスとの主従を作る。 */
+.ev__stage {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    align-items: center;
+    justify-content: flex-end;
+    background-color: var(--dirt-well);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    padding: var(--sp-4);
+    overflow: hidden;
+}
+
+/* 役割スロット（単色シルエット＋役割名）。絵が入ったらこの中身だけ差し替える。 */
+/* 立ち絵は<b>舞台の高さに追従させる</b>（胴を伸縮させる）。固定高にすると、効果帯が付いて
+   舞台が縮んだ週だけ頭が切れる＝「効果のあるイベントでだけ絵が壊れる」形になる。 */
+.ev-por { flex-grow: 1; flex-shrink: 1; min-height: 0; align-items: center; justify-content: flex-end; }
+/* 枠はインクで締める（この画面だけ枠なしの塊が浮くのを避ける。design-19 の「インク枠」）。 */
+.ev-por__head {
+    width: 92px; height: 92px;
+    border-radius: 46px;            /* 正円（--radius-pill=12px では角丸の四角に見える） */
+    background-color: var(--day-tx-3);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    flex-shrink: 0;
+}
+.ev-por__body {
+    width: 208px;
+    flex-grow: 1; flex-shrink: 1;
+    min-height: 96px; max-height: 260px;
+    border-radius: 96px 96px 0 0;   /* 肩の丸み。人の形に見える最低限 */
+    background-color: var(--day-tx-3);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    margin-top: var(--sp-1);
+}
+.ev-por__role {
+    font-size: var(--fs-cap);
+    letter-spacing: 3px;
+    color: var(--day-tx-2);
+    margin-top: var(--sp-2);
+}
+/* 地の文（narration）は話者が居ない＝立ち絵ごと消す。 */
+.ev-por--none { display: none; }
+
+/* 会話ボックス。白面＋インク枠＋ベタ影（案イ＝右下だけ枠を太らせる。部品級）。 */
+.ev__box {
+    flex-shrink: 0;
+    min-height: 168px;
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);
+    border-left-width: var(--nb-border);
+    border-right-width: var(--nb-panel-edge);
+    border-bottom-width: var(--nb-panel-edge);
+    padding: var(--sp-3) var(--sp-4);
+    margin-top: var(--sp-3);
+}
+.ev__speaker {
+    font-size: var(--fs-page);
+    color: var(--ink);
+    margin-bottom: var(--sp-2);
+}
+.ev__speaker--none { display: none; }
+.ev__say {
+    font-size: var(--fs-body);
+    color: var(--ink);
+    white-space: normal;
+    flex-grow: 1;
+}
+/* 地の文は「誰の声でもない」＝一段落として中央に置く。 */
+.ev__say--narration { color: var(--day-tx-2); -unity-text-align: middle-center; }
+.ev__foot {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--sp-2);
+    flex-shrink: 0;
+}
+.ev__progress { font-size: var(--fs-cap); color: var(--day-tx-3); }
+.ev__hint { font-size: var(--fs-cap); color: var(--day-tx-2); letter-spacing: 2px; }
+
+/* 結果の帯（案A2・監督決定 2026-08-13）。会話ボックスの下端に、上だけ罫で仕切って積む。
+   別カードにしないのは、会話と結果を1枚として読ませるため（クリックも増やさない）。
+   数値は Oswald・単位は和文で Label を分ける（書体3役）。色は付けない＝
+   良い知らせも悪い知らせも同じ帯で出す（警告色は本当の警告だけ・UI原則②）。 */
+.ev__fx {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: var(--sp-3);
+    padding-top: var(--sp-3);
+    border-top-width: 1px;
+    border-top-color: var(--divider);
+    display: none;              /* 効果の無いイベントでは帯ごと出さない */
+}
+.ev__fx-sub {
+    font-size: var(--fs-body);
+    color: var(--ink);
+    margin-right: var(--sp-4);
+}
+.ev__fx-det {
+    font-size: var(--fs-label);
+    color: var(--day-tx-2);
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+}
+/* 監督の年次更新は7軸まとまって動くことがある。1行に収まらなければ折り返す
+   （収まる前提で組むと、動いた軸が多い年だけ右端が切れて消える）。 */
+.ev__fx-items {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex-shrink: 1;
+}
+/* 1項目＝「離脱 2 週」。ラベルは弱く、数字を主役にする（UI原則③）。 */
+.ev__fx-item { flex-direction: row; align-items: center; margin-left: var(--sp-4); }
+.ev__fx-k { font-size: var(--fs-cap); color: var(--day-tx-2); margin-right: var(--sp-2); }
+.ev__fx-v { font-size: var(--fs-num-lg); color: var(--ink); }
+.ev__fx-u { font-size: var(--fs-cap); color: var(--day-tx-2); margin-left: 2px; }

@@ -272,6 +272,12 @@ PanelSettings に同居するとレンダリング競合でパネルごと消え
   - 選択は `ClickEvent` でなく **`PointerDownEvent`** で採る（Click は down/up の対と合成に依存する）。
   - 切り分け手順: ① `panel.Pick(worldBound.center)` が狙いの要素を返すか ② ハンドラを直接呼べば効くか。
     両方Yesなら経路の問題＝この項を疑う（合成イベントの `SendEvent` で down/up を撃つと再現できる）。
+- **開閉の判定に `style.display` を使わない**（2026-08-13 イベントのノベル画面で判明）。`style.*` は
+  **インラインで指定した値**しか返さないので、USS の `.ev { display: none }` で閉じている要素も
+  `style.display` は既定の `Flex` に見える。**判定は `resolvedStyle.display`**（実際に効いている値）で行う。
+  コントローラが `style.display = None` を書いた後だけ正しく見えるため、**片側だけ動くテスト**になりやすい。
+  - 併せて: **インラインで隠した要素は画面を離れても隠れたまま**。UIDocument のツリーは SetActive の
+    付け外しで作り直されないので、`OnEnable` で「必ず見える状態」から始めないと空の画面が残る。
 - **絵文字グリフはSDFフォントに無い**ことが多い → アイコンは漢字1文字や記号（フォント収録字）を使う。
 - **`translate` のパーセント併用**は動くが凝らない。位置合わせは基本Flexで。
 - **文字がガビガビ（ジャギる）＝SDFフォント未適用**。PanelSettings 既定テーマの legacy ビットマップ

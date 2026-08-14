@@ -87,6 +87,24 @@ namespace KokoSim.Unity.Shell
             System.Array.Empty<ManagerGrowthNotice>();
 
         /// <summary>
+        /// 直近の年度更新で監督メタが<b>実際にどれだけ動いたか</b>（issue #612）。
+        /// 節目イベントの種別から効果を推測せず、適用の前後を測って作る＝
+        /// engine の中身（どの分野が伸びたか・自然増と節目の合算）と食い違わない。
+        /// </summary>
+        public static ManagerGrowthDelta LastGrowthDelta { get; private set; } = new ManagerGrowthDelta();
+
+        /// <summary>
+        /// 発火した節目イベントと実測の差分を取り出して<b>空にする</b>（issue #612）。
+        /// 提示は1回だけ＝週送りのたびに同じ話が出ないようにする。
+        /// </summary>
+        public static IReadOnlyList<ManagerGrowthNotice> DrainGrowthNotices()
+        {
+            var notices = LastGrowthNotices;
+            LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
+            return notices;
+        }
+
+        /// <summary>
         /// 監督成長の内部状態をリセットする（新規ゲーム開始時。<see cref="GameClock.Reset"/> と対で呼ぶ）。
         /// </summary>
         public static void ResetGrowth()
@@ -154,9 +172,15 @@ namespace KokoSim.Unity.Shell
             // 全国優勝は甲子園本戦が実プレイに接続する（tournament Phase 3）まで到達不能＝false 固定。
             // 年契約（設計書04 §1.4a）の年額は部費からここで引かれる。既定（スカウト網 Lv1）なら
             // 従来のスカウト費15万と同額＝年契約を入れても初期状態の収支は変わらない。
+            // 適用の前後を測って差分を作る（issue #612）。種別から効果を推測すると、自然増や
+            // 「弱点分野が伸びる」ような engine 側の分岐と食い違う。
+            var before = ManagerGrowthDelta.Snapshot(Manager);
+
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
                 Manager, reachedKoshien, nationalChampion: false, wins, milestoneRng,
                 contracts: ContractEffects);
+
+            LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 
             _lastGrownYear = endedYearIndex;
             _grownWinsBaseline = record.OfficialWins;

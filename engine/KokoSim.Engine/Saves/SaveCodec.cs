@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 9;
+    public const int CurrentVersion = 11;
 
     // ===== Serialize =====
 
@@ -64,6 +64,8 @@ public static class SaveCodec
             .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
+            .Add("events", EventSaves.ToJson(s.Events))
+            .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament));
         return root.ToString();
     }
@@ -186,10 +188,15 @@ public static class SaveCodec
         // 累計へ畳んで捨てていた＝過去ぶんは作り直せないので、空配列で補う（通算戦績 records は無傷で残る）。
         // 大会別アーカイブに増えた year は要素ごとの欠損＝Read 側で 0（＝年不明）として読む。
         if (version < 8 && !root.Has("tournamentHistory")) root.Add("tournamentHistory", new JsonArray());
-        // v8→v9（issue #634）: 全国の学校別成績に通算スコープが増えた。v8 以前は今大会スコープしか
-        // 積んでおらず、過去の大会ぶんは作り直せないので空配列で補う（＝そのセーブでは相手校の通算が
-        // これからの試合ぶんだけ積み上がる。今大会 nationTournamentStats は無傷で残る）。
-        if (version < 9 && !root.Has("nationCareerStats")) root.Add("nationCareerStats", new JsonArray());
+        // ⚠ v9 以降は **別々のブランチが同時に版を上げた**（#634 が v9、#609 が v9、#615 が v10）。
+        // ローカル統合時に 11 へ揃え、3つとも「11 未満なら欠けているものを補う」形にした
+        // ＝どちらの枝で書いたセーブ（v9/v10）を開いても取りこぼしが出ない。
+        // ・nationCareerStats（issue #634）: 全国の学校別成績の通算スコープ。過去ぶんは作り直せないので空配列。
+        // ・events（issue #609）: 週次イベントの発火状態（クールダウン・年次フラグ）。未発火＝null。
+        // ・trainingBoosts（issue #615）: 期間つきの練習効率補正。効いている補正は存在しえないので空配列。
+        if (version < 11 && !root.Has("nationCareerStats")) root.Add("nationCareerStats", new JsonArray());
+        if (version < 11 && !root.Has("events")) root.Add("events", JsonNull.Instance);
+        if (version < 11 && !root.Has("trainingBoosts")) root.Add("trainingBoosts", new JsonArray());
         return root;
     }
 
@@ -227,6 +234,10 @@ public static class SaveCodec
             Incoming = IncomingClassSaves.FromJson(root.Has("incoming") ? root["incoming"] : null),
             // 能動勧誘は v6 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Recruiting = RecruitingSaves.FromJson(root.Has("recruiting") ? root["recruiting"] : null),
+            // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
+            // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            TrainingBoosts = EventSaves.BoostsFromJson(root.Arr("trainingBoosts")),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
         };
 

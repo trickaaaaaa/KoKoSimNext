@@ -9,6 +9,20 @@ public enum GrowthType
 }
 
 /// <summary>
+/// 成長タイプの表示名（issue #614）。気づき（<see cref="InsightModel"/>）が示唆の文言に使う。
+/// 隠しパラメータなので、確定情報として一覧に出すのはここではなく開示済みの経路だけ。
+/// </summary>
+public static class GrowthTypeNames
+{
+    public static string DisplayName(GrowthType t) => t switch
+    {
+        GrowthType.Early => "早熟",
+        GrowthType.Late => "晩成",
+        _ => "標準",
+    };
+}
+
+/// <summary>
 /// 成長段階係数（設計書02 §5.2）。半期単位: [1年前半,1年後半,2年前半,2年後半,3年(4〜7月)]。
 /// 在籍月数[6,6,6,6,4]で加重した生涯獲得量が 早熟28.8/標準29.2/晩成31.2 になる（＝ほぼ等価, 晩成わずかに上）。
 /// </summary>

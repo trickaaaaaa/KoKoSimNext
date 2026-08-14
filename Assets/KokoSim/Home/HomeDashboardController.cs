@@ -40,6 +40,10 @@ namespace KokoSim.Unity.Home
         private VisualElement _tsRow;
         private EventCallback<ClickEvent> _tsRowClick;
 
+        // イベントのノベル提示（issue #609）。本文域（ヒーロー帯＋3カラム）と二者択一で入れ替える。
+        private EventNovelView _novel;
+        private VisualElement _hero, _dash;
+
         private void OnEnable()
         {
             // セッション常駐（画面往復で通知フィードと成長が消えないよう、単一の状態を使い回す）。
@@ -81,6 +85,13 @@ namespace KokoSim.Unity.Home
                 _tsRow.RegisterCallback(_tsRowClick);
             }
 
+            _hero = _root.Q<VisualElement>("home-hero");
+            _dash = _root.Q<VisualElement>("home-dash");
+            _novel = new EventNovelView(_root.Q<VisualElement>("ev-novel"), OnNovelClosed);
+            // 本文域は必ず見える状態から始める。UIDocument のツリーは画面を離れても生き残るので、
+            // ノベルを開いたまま他タブへ移ると、隠したインライン指定が残って空のホームになる。
+            SetBodyVisible(true);
+
             Render();
 
             // 他画面（練習・大会・練習試合・選手・メンバー）で週を進めて引退週／大会開幕週に入った場合は
@@ -88,6 +99,8 @@ namespace KokoSim.Unity.Home
             // その回送分もこの1箇所で受けて指名モーダル／開幕バナーを出す（演出の導線をホームに集約する）。
             if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
             else if (_state.BannerPending) ShowBanner();
+            // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
+            else TryShowEvent();
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
             if (session.ResultPending && session.LastOutcome != null)
@@ -114,6 +127,7 @@ namespace KokoSim.Unity.Home
             if (_newTeamOk != null) _newTeamOk.clicked -= OnNewTeamConfirm;
             if (_tsRow != null && _tsRowClick != null) _tsRow.UnregisterCallback(_tsRowClick);
             _tsRowClick = null;
+            if (_novel != null) { _novel.Dispose(); _novel = null; }
 
             if (_menuBtn != null) _menuBtn.clicked -= OnMenuOpen;
             if (_menuSaveBtn != null) _menuSaveBtn.clicked -= OnMenuSave;
@@ -219,7 +233,42 @@ namespace KokoSim.Unity.Home
                 Render();
                 if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();  // 引退週＝新チーム発足（設計書09 §8）
                 else if (_state.BannerPending) ShowBanner();    // 大会開幕演出（要件1・2）
+                else TryShowEvent();                            // 週次イベントのノベル提示（issue #609）
             }
+        }
+
+        // ===== イベント（ノベル提示・issue #609） =====
+
+        /// <summary>
+        /// 溜まっているイベントがあればノベル面へ入れ替える。開いている間は本文域（ヒーロー帯＋3カラム）を
+        /// 隠す＝案B「トップバー残し」。新チーム発足・開幕バナーが出る週は<b>呼ばない</b>ので、
+        /// イベントはキューに残り、次にホームへ来たとき（<c>OnEnable</c>）に出る。
+        /// </summary>
+        private void TryShowEvent()
+        {
+            if (_novel == null || !KokoSim.Unity.Shell.EventService.HasPending) return;
+            if (!_novel.OpenNext()) return;
+            SetBodyVisible(false);
+        }
+
+        /// <summary>ノベルを閉じた（全イベント消化）＝本文域を戻して最新化する。</summary>
+        private void OnNovelClosed()
+        {
+            SetBodyVisible(true);
+            Render();
+        }
+
+        /// <summary>
+        /// 本文域（ヒーロー帯＋3カラム）の表示。ノベルを出している間は隠す。
+        /// <b>週送りボタンも一緒に止める</b>＝トップバーは残る作りなので、会話の途中でも押せてしまい、
+        /// 押すと読んでいる最中に次の週のイベントが積み上がる。
+        /// </summary>
+        private void SetBodyVisible(bool visible)
+        {
+            var d = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_hero != null) _hero.style.display = d;
+            if (_dash != null) _dash.style.display = d;
+            if (_advanceBtn != null) _advanceBtn.SetEnabled(visible);
         }
 
         // ===== 新チーム発足：次期主将の指名（設計書09 §8・案C 左リスト＋右詳細） =====
@@ -354,6 +403,7 @@ namespace KokoSim.Unity.Home
             if (_newTeam != null) _newTeam.style.display = DisplayStyle.None;
             Render();
             if (_state.BannerPending) ShowBanner();   // 指名の後に大会開幕演出が残っていれば続けて出す
+            else TryShowEvent();                      // 開幕が無ければ持ち越したイベントを続けて出す（issue #609）
         }
 
         private void ShowBanner()

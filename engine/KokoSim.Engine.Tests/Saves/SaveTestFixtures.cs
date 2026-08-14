@@ -192,8 +192,27 @@ internal static class SaveTestFixtures
             Draft = BuildDraftHistory(),
             // 歴代大会結果（v8・issue #600）。優勝した年・敗退した年・優勝校が未確定の年を混ぜる。
             TournamentHistory = BuildTournamentHistory(),
+            // 週次イベントの発火状態（v9・issue #609）。クールダウン途中＋年次フラグ1本で往復を測る。
+            Events = BuildEventState(),
+            // 練習効率の補正（v10・issue #615）。全体ぶんと個人ぶんを1本ずつ。
+            TrainingBoosts = new List<TrainingBoostSaveState>
+            {
+                new TrainingBoostSaveState { Source = "outside_coach_visit", Mult = 1.10, WeeksLeft = 3, PlayerId = 0 },
+                new TrainingBoostSaveState { Source = "self_practice_awakened", Mult = 1.20, WeeksLeft = 5, PlayerId = 7 },
+            },
         };
     }
+
+    /// <summary>
+    /// 週次イベントの発火状態（issue #609）。クールダウンが効いている途中の状態で採る
+    /// （空だと「載っていない」と「まっさら」の区別が付かない）。
+    /// </summary>
+    public static EventSchedulerSaveState BuildEventState() => new()
+    {
+        AbsoluteWeek = 37,
+        LastFiredWeeks = new Dictionary<string, int> { ["injury"] = 31, ["rain_week"] = 35, ["ob_donation"] = 12 },
+        AnnualFlags = new List<string> { "draft_done" },
+    };
 
     /// <summary>
     /// 歴代大会結果3件（issue #600）。優勝／準優勝／優勝校が空欄の3通りを混ぜて往復を測る。

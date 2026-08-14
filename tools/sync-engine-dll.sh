@@ -18,7 +18,7 @@ echo "配置完了: $DST_DIR/KokoSim.Engine.dll"
 # data/ の YAML を StreamingAssets へ複製（Unity は data/ を直接読めない＝C-1）。data/ を単一ソースに保つ。
 SA_DIR="$ROOT/Assets/StreamingAssets/KokoSim"
 mkdir -p "$SA_DIR"
-for y in school-names.yaml team-colors.yaml; do
+for y in school-names.yaml team-colors.yaml events.yaml; do
   cp "$ROOT/data/$y" "$SA_DIR/$y"
   echo "配置完了: $SA_DIR/$y"
 done

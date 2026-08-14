@@ -99,6 +99,7 @@ namespace KokoSim.Unity.Home
         private readonly InjuryCoefficients _injury = new InjuryCoefficients();
         private readonly SkillCoefficients _skills = new SkillCoefficients();
         private readonly InsightCoefficients _insight = new InsightCoefficients();
+        private readonly GrowthEventCoefficients _growth = new GrowthEventCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
         // 個別指導枠の並べ替えに使うカテゴリ別指標の係数。他画面の比較カードと同一の単一ソース。
@@ -123,6 +124,7 @@ namespace KokoSim.Unity.Home
         // 週次抽選のストリームID（互いに独立＝どちらかの抽選回数が変わっても他方がずれない）。
         private const ulong InjuryStream = 0x1213_0000UL;
         private const ulong InsightStream = 0x1E51_0000UL;
+        private const ulong GrowthStream = 0x6110_0000UL;   // 選手成長イベント（issue #611）
 
         /// <summary>
         /// 週次抽選の乱数ストリーム種（不変条件#2）。「その週ならいつ引いても同じ結果」になるよう、
@@ -157,12 +159,109 @@ namespace KokoSim.Unity.Home
         /// 見てホームが出す。</summary>
         public void AdvanceWeek()
         {
+            KokoSim.Unity.Shell.EventService.BeginWeek();   // この週のノベル件数を数え直す（issue #610）
             RunPracticeWeek(1.0);                       // 通常週の練習（効果1.0）
             RunInjuryWeek();                            // 怪我の発生判定と回復（設計書03 §3.5）
+            RunGrowthWeek();                            // 選手成長イベント（設計書03 §5.5）
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
+            RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
+            RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
+            // 練習効率の補正を1週ぶん減らす（issue #615）。**練習を適用した後**に呼ぶ＝
+            // 「N週」と言われた週にちゃんとN回効く（先に減らすと1週ぶん短くなる）。
+            KokoSim.Unity.Shell.TrainingBoostService.Tick();
+        }
+
+        /// <summary>
+        /// 監督成長の節目（設計書04 §1.1b・issue #612）。engine は年度更新で発火一覧を返していたが
+        /// <b>`LastGrowthNotices` を誰も読んでおらず</b>、甲子園に行っても名将に負けても画面には何も出なかった。
+        ///
+        /// <para>発火が複数あっても<b>ノベルは年に1本</b>にする（節目ごとに会話を積むとクリックだけ増える）。
+        /// 会話は一番語る価値のある1件から選び、効果帯には<b>その年に動いた軸を全部</b>並べる
+        /// ＝実測の差分なので、選ばれなかった節目のぶんも数字には出る。</para>
+        /// </summary>
+        private void RunManagerGrowthFeed()
+        {
+            var notices = KokoSim.Unity.Shell.ManagerService.DrainGrowthNotices();
+            if (notices.Count == 0) return;
+
+            var lead = ManagerGrowthText.Lead(notices);
+            var delta = KokoSim.Unity.Shell.ManagerService.LastGrowthDelta;
+
+            PushFeed(new List<FeedItem>
+            {
+                new FeedItem
+                {
+                    When = "今週",
+                    Text = ManagerGrowthText.Feed(lead, delta),
+                    Kind = FeedKind.Up,
+                    Tag = "成長",
+                },
+            });
+
+            KokoSim.Unity.Shell.EventService.Push(
+                ManagerGrowthText.EventId(lead),
+                KokoSim.Unity.Shell.ManagerService.Manager.Name,
+                delta.IsEmpty ? null : new KokoSim.Unity.Shell.PresentedEffect
+                {
+                    Subject = KokoSim.Unity.Shell.ManagerService.Manager.Name,
+                    Detail = ManagerGrowthText.Title(lead),
+                    Items = delta.ToItems(),
+                });
+        }
+
+        /// <summary>
+        /// 選手成長イベント（設計書03 §5.5・issue #611）。engine の <see cref="GrowthEventModel"/> は
+        /// Phase 1 からあったが<b>ヘッドレスシム（SeasonEngine）からしか呼ばれておらず</b>、
+        /// 実プレイでは覚醒もスランプも一度も起きていなかった。ここで週送りへ接続する。
+        ///
+        /// <para>乱数は専用ストリーム（<see cref="GrowthStream"/>）。怪我・気づきと同じ作法で
+        /// <see cref="IRandomSource.Fork"/> するので、既に走っている抽選の乱数列はずれない。</para>
+        ///
+        /// <para>効果の適用は engine が済ませる。ここは提示だけ＝<b>数値は係数と実測から作る</b>
+        /// （スランプ週数は適用後の <see cref="DevelopingPlayer.SlumpWeeks"/> をそのまま読む）。</para>
+        /// </summary>
+        private void RunGrowthWeek()
+        {
+            var rng = _rng.Fork(WeeklyStream(GrowthStream));
+            var notices = GrowthEventModel.Week(Roster, rng, _growth);
+            if (notices.Count == 0) return;
+
+            var items = new List<FeedItem>();
+            foreach (var n in notices)
+            {
+                items.Add(new FeedItem
+                {
+                    When = "今週",
+                    Text = GrowthEventText.Feed(n, _growth),
+                    Kind = GrowthEventText.IsGood(n.Type) ? FeedKind.Up : FeedKind.Warn,
+                    Tag = GrowthEventText.IsGood(n.Type) ? "成長" : "警告",
+                });
+                KokoSim.Unity.Shell.EventService.Push(
+                    GrowthEventText.EventId(n.Type), n.Player.Name,
+                    GrowthEventText.Effect(n, _growth), n.Player.Id);
+            }
+            PushFeed(items);
+        }
+
+        /// <summary>
+        /// 週次イベント（設計書03 §5・issue #609）。<b>発火だけ</b>行い、ノベル画面での提示は
+        /// <see cref="KokoSim.Unity.Shell.EventService"/> のキューに積んで画面側へ委ねる
+        /// （大会開幕週・新チーム発足週は先にそちらのモーダルが出るので、取りこぼさないよう分離する）。
+        ///
+        /// <para><see cref="KokoSim.Unity.Shell.GameClock.Advance"/> の<b>後</b>に呼ぶ＝入った週のイベントを
+        /// 出す。入学式（週0）の会話が「新入部員 N名」を語れるのは、合流が Advance の中で済んでいるため。</para>
+        ///
+        /// <para>提示を見逃してもフィードには必ず残す（後から何が起きたか追える）。</para>
+        /// </summary>
+        private void RunEventWeek()
+        {
+            var items = new List<FeedItem>();
+            foreach (var text in KokoSim.Unity.Shell.EventService.RunWeek())
+                items.Add(new FeedItem { When = "今週", Text = text, Kind = FeedKind.Normal, Tag = "情報" });
+            if (items.Count > 0) PushFeed(items);
         }
 
         /// <summary>
@@ -246,7 +345,26 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Discover,
                         Tag = "発見",
                     });
+                    // 候補入りはノベルで見せる（issue #617）。名前が世に出た瞬間はキャリアの節目。
+                    KokoSim.Unity.Shell.EventService.Push("draft_candidate", c.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = c.Name,
+                            Detail = "ドラフト候補入り（" + DraftRankBands.Label(c.To) + "）",
+                        }, c.PlayerId);
                     continue;
+                }
+
+                // 評価が上がった週は「スカウトが見に来た」として出す（issue #617）。
+                // 評価が下がった週は出さない＝下降のたびにノベルを挟むと、通わせるほど話が重くなる。
+                if (c.Improved)
+                {
+                    KokoSim.Unity.Shell.EventService.Push("draft_scout_visit", c.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = c.Name,
+                            Detail = "評価 " + DraftRankBands.Label(c.From) + " → " + DraftRankBands.Label(c.To),
+                        }, c.PlayerId);
                 }
                 // 圏外へ落ちたときは「圏外」ではなく、候補から外れたことを言い切る。
                 var to = c.To == DraftRankBand.None ? "候補から外れた" : DraftRankBands.Label(c.To);
@@ -281,6 +399,19 @@ namespace KokoSim.Unity.Home
                             Kind = FeedKind.Normal,
                             Tag = "情報",
                         });
+
+                    // 指名の可否はどちらもノベルで見せる（issue #617）。指名漏れを黙って流すと、
+                    // 三年間見てきた選手の最後が通知1行で終わる。
+                    KokoSim.Unity.Shell.EventService.Push(
+                        pick.Nominated ? "draft_nominated" : "draft_missed", pick.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = pick.Name,
+                            Detail = pick.Nominated ? "NPB 指名" : "指名なし",
+                            Items = pick.Nominated
+                                ? new[] { new KokoSim.Unity.Shell.EffectItem("順位", pick.Round.ToString(), "位") }
+                                : System.Array.Empty<KokoSim.Unity.Shell.EffectItem>(),
+                        }, pick.PlayerId);
                 }
             }
 
@@ -310,7 +441,9 @@ namespace KokoSim.Unity.Home
             {
                 if (!KokoSim.Unity.Shell.TrainingWeek.CanTrain(p.Grade, week)) continue;
                 var before = Snapshot(p);
-                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult);
+                // 期間つきの練習効率補正（issue #615）。補正が無ければ 1.0＝従来と1ビット一致。
+                var boost = KokoSim.Unity.Shell.TrainingBoostService.MultiplierFor(p.Id);
+                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult * boost);
                 foreach (var k in AbilityKinds.All)
                 {
                     var gained = p.Level(k) - before[k];
@@ -365,6 +498,19 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Warn,
                         Tag = "警告",
                     });
+                    // ノベルで見せる（issue #610）。診断名と離脱週は効果帯へ回し、会話には数字を入れない。
+                    KokoSim.Unity.Shell.EventService.Push("injury_occurred", p.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = p.Name,
+                            Detail = InjuryLabel.Diagnosis(p.InjuryType, p.InjurySite)
+                                     + "（" + InjuryLabel.Severity(p.Injury) + "）",
+                            Items = new[]
+                            {
+                                new KokoSim.Unity.Shell.EffectItem(
+                                    "全治", InjuryLabel.WeeksToFullRecovery(p).ToString(), "週"),
+                            },
+                        }, p.Id);
                 }
                 else
                 {
@@ -377,6 +523,12 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Up,
                         Tag = "情報",
                     });
+                    KokoSim.Unity.Shell.EventService.Push("injury_returned", p.Name,
+                        new KokoSim.Unity.Shell.PresentedEffect
+                        {
+                            Subject = p.Name,
+                            Detail = "全快（練習に合流）",
+                        }, p.Id);
                 }
             }
 
@@ -419,6 +571,18 @@ namespace KokoSim.Unity.Home
                     Kind = FeedKind.Discover,
                     Tag = "発見",
                 });
+
+                // 成長タイプの見立てだけノベルへ昇格する（issue #614）。起用と我慢の判断に直結する
+                // 一番重い気づきで、1行のフィードでは流れて消える。ほかの話題はフィードのまま
+                // （全部ノベルにすると毎週クリックさせることになる）。
+                if (n.Topic != InsightTopic.GrowthType) continue;
+                KokoSim.Unity.Shell.EventService.Push("insight_growth_type", n.Player.Name,
+                    new KokoSim.Unity.Shell.PresentedEffect
+                    {
+                        Subject = n.Player.Name,
+                        // ★ 断定しない（設計書03 §5.6）。育成眼が低いと読み違える＝当たっているとは限らない。
+                        Detail = "成長タイプの見立て: " + n.Domain + "型",
+                    }, n.Player.Id);
             }
             PushFeed(newItems);
         }
@@ -440,7 +604,8 @@ namespace KokoSim.Unity.Home
                 case InsightTopic.LowGrowthDomain:
                     return name + " の " + DomainJp(n.Domain) + " は伸びしろがないかもしれない。";
                 case InsightTopic.GrowthType:
-                    return name + " は大器晩成かもしれない。";
+                    // 示唆されたタイプは n.Domain に入る（晩成とは限らない・issue #614）。
+                    return name + " は " + n.Domain + "型かもしれない。";
                 default:
                     return name + " について何か気づいた。";
             }

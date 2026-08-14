@@ -54,7 +54,7 @@
       </ui:VisualElement>
 
       <!-- ===== ダッシュボード本体（3カラム・外側スクロールなし） ===== -->
-      <ui:VisualElement class="dash">
+      <ui:VisualElement name="home-dash" class="dash">
 
         <!-- COL1: 部の実力＝6指標レーダー / 故障者（「次の試合」は主役ヒーロー帯へ移設） -->
         <ui:VisualElement class="dash-col dash-col--a">
@@ -152,6 +152,43 @@
           </ui:VisualElement>
         </ui:VisualElement>
 
+      </ui:VisualElement>
+
+      <!-- ===== イベント（ノベル提示・設計書03 §5 / issue #609）=====
+           案B「トップバー残し・立ち絵中」。暗幕を全画面に敷かず、トップバーの下の本文域だけを
+           入れ替える（昼NBの白地に暗幕は合わないため。コントローラが hero/dash と二者択一する）。
+           面のどこを押しても次の行へ進み、最後の行で閉じる。 -->
+      <ui:VisualElement name="ev-novel" class="ev">
+        <ui:VisualElement class="rule-head ev__eyebrow">
+          <ui:VisualElement class="rule-head__rule" />
+          <ui:Label name="ev-eyebrow" class="rule-head__text" text="今週の出来事" />
+        </ui:VisualElement>
+
+        <!-- 立ち絵スロット（役割ごとの単色シルエット。絵はまだ無く、差し替え口だけ用意する） -->
+        <ui:VisualElement class="ev__stage">
+          <ui:VisualElement name="ev-portrait" class="ev-por">
+            <ui:VisualElement class="ev-por__head" />
+            <ui:VisualElement class="ev-por__body" />
+            <ui:Label name="ev-portrait-role" class="ev-por__role" text="コーチ" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 会話ボックス（話者名＝明朝／本文＝サンセリフ） -->
+        <ui:VisualElement class="ev__box">
+          <ui:Label name="ev-speaker" class="ev__speaker f-display" text="コーチ" />
+          <ui:Label name="ev-say" class="ev__say" text="" />
+          <ui:VisualElement class="ev__foot">
+            <ui:Label name="ev-progress" class="ev__progress f-num" text="" />
+            <ui:Label name="ev-hint" class="ev__hint" text="クリックで次へ" />
+          </ui:VisualElement>
+
+          <!-- 結果の帯（案A2）。会話で何が起きたかを語り、数値はここに置く。中身は動的生成。 -->
+          <ui:VisualElement name="ev-effect" class="ev__fx">
+            <ui:Label name="ev-fx-subject" class="ev__fx-sub f-display" text="" />
+            <ui:Label name="ev-fx-detail" class="ev__fx-det" text="" />
+            <ui:VisualElement name="ev-fx-items" class="ev__fx-items" />
+          </ui:VisualElement>
+        </ui:VisualElement>
       </ui:VisualElement>
 
       <!-- 大会モード: 開幕バナー（全画面センター・フェード）。既定は非表示、コントローラが出す。 -->
