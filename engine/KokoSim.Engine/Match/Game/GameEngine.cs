@@ -844,8 +844,15 @@ public static class GameEngine
                 // PickoffResolver→StealReadModel.RollPitchout→StealResolver→重盗ロールの呼び出し順は
                 // 旧来の打席頭一括判定と不変。3アウト目ならこの打席は未決着のまま次イニングへ
                 // （スクイズの挟殺と同じ扱い＝設計書15 Phase D-2c の squeezeAbandoned を踏襲）。
+                // 狙える塁の判定は StealTargets が単一ソース（issue #622）。UI の可否・ラベルも同じ式を引く
+                // ＝「押せたのに engine が解決しない指示」を構造的に作らない。各分岐に残っている
+                // `bases.X is { }` は判定の重複ではなく**コンパイラへの非null証明**（走者をそのまま
+                // 牽制・盗塁解決へ渡すため。式が bool 経由になると null 解析が届かない）。
+                var stealFeasible = StealTargets.FromBases(
+                    bases.First is not null, bases.Second is not null, bases.Third is not null);
+
                 if (stealAttempt is { } stealStart && stealTarget == StealTarget.Second
-                    && bases.First is not null && bases.Second is null)
+                    && stealFeasible == StealTarget.Second && bases.First is { })
                 {
                     // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ
                     // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ。
@@ -940,7 +947,7 @@ public static class GameEngine
                 }
                 // 三盗（issue #67）: 二塁のみ在塁でのみ判断側が返す（塁状況が排他のため一・三塁の重盗とは無競合）。
                 else if (stealAttempt is { } thirdStart && stealTarget == StealTarget.Third
-                    && bases.Second is not null && bases.First is null && bases.Third is null)
+                    && stealFeasible == StealTarget.Third && bases.Second is { })
                 {
                     var pickedOffSecond = PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
@@ -989,7 +996,7 @@ public static class GameEngine
                 // 手動スクイズ予約も見る。手動指示の消費はこの下（盗塁解決の後）なので、予約を覗かないと
                 // 「同じ球でスクイズと本盗が両方走り、三塁走者が二重に使われる」ことになる。
                 else if (stealAttempt is { } homeStart && stealTarget == StealTarget.Home
-                    && bases.Third is not null && bases.Second is null && bases.First is null
+                    && stealFeasible == StealTarget.Home && bases.Third is { }
                     && battingOverride != PitchBattingOverride.Squeeze
                     && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze)
                 {

@@ -20,6 +20,12 @@ namespace KokoSim.Unity.Components
         {
             public string Id;
             public string Label;
+            /// <summary>
+            /// 局面で変わる表示名（null=<see cref="Label"/> 固定）。同じ1枚の意味が塁状況で変わる札
+            /// （盗塁→三盗→本盗・issue #622）のために、<see cref="TacticsCardDeck.RefreshEnabled"/> が
+            /// 可否と一緒に文字も引き直す。
+            /// </summary>
+            public Func<string> LabelOf;
             /// <summary>将来のアイコン化用（null=文字タイル）。指定時はアイコンを主表示に回す。</summary>
             public string Icon;
             /// <summary>true=攻撃中に出す指示 / false=守備中に出す指示。</summary>
