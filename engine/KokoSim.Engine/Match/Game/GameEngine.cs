@@ -257,9 +257,25 @@ public static class GameEngine
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs > p.Away.Runs) break;
 
             // 裏: 後攻(home)攻撃 / 先攻(away)守備。最終回以降はサヨナラ判定。
+            //
+            // issue #633: コールドも「点差がついた時点で打ち切る」（設計書05 §1.3）。判定が半回の
+            // 境目（上の :249 と下の :268）にしか無かったため、裏の攻撃中に点差が開いてもその半回を
+            // 3アウトまで消化していた。サヨナラと同じ器＝打席の決着ごとに評価される述語へ相乗りさせる。
+            //
+            // 表には入れない: 先攻がコールド差をつけても**その回の裏は行ってから**終わるのが実際の
+            // ルールで、表の中で打ち切ると後攻の攻撃機会を奪う（:249 の「表を終えた時点で後攻が既に
+            // リードなら裏を省く」はそのまま維持）。
+            //
+            // MercyEnded と break はここでは触らない。半回を早く抜けた後に既存の :268 が
+            // そのまま拾う（二重に break を足すと表の分岐と食い違う）。
             var allowWalkoff = p.Inning >= ctx.RegulationInnings;
+            var stopBottomHalf = allowWalkoff || ctx.MercyRuleEnabled
+                ? () => p.Home.Runs > p.Away.Runs
+                        && (allowWalkoff
+                            || IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+                : (Func<bool>?)null;
             foreach (var s in PlayHalfSteps(p, p.Home, p.Away,
-                walkoff: allowWalkoff ? () => p.Home.Runs > p.Away.Runs : null, isTop: false)) yield return s;
+                walkoff: stopBottomHalf, isTop: false)) yield return s;
 
             // 規定回以降で決着していれば終了。
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs != p.Away.Runs) break;
