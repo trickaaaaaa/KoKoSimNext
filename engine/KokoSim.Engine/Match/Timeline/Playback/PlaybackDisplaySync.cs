@@ -20,6 +20,18 @@ public static class PlaybackDisplaySync
     private const double NearHomeSq = 4.0;
 
     /// <summary>
+    /// 打球の無い得点（押し出しの四球・死球）を掲示板へ出すまでの間[s]（issue score-display-before-home-touch）。
+    ///
+    /// <para>四球・死球はタイムラインを持たない＝<b>本塁到達の時刻がそもそも存在しない</b>ので、
+    /// <see cref="RunScoreTimes"/> の「絵の到達で1点ずつ」に乗せられない。結果確定と同時に加算すると
+    /// 走者が歩いて還る前に点だけが増えるため、固定の一拍だけ待ってから掲げる。</para>
+    ///
+    /// <para>物理の再現ではなく<b>演出値</b>（監督決定 2026-08-13・初期値 1.5〜2.0 秒）。
+    /// 実測 300試合で押し出しは43点（四球40・死球3）＝この経路を通る得点は全体の 1.4%。</para>
+    /// </summary>
+    public const double NonBattedScoreDelaySeconds = 1.8;
+
+    /// <summary>
     /// 結果テキスト（「レフト前ヒット」等）を出す時刻。
     /// ・本塁打＝柵越え（<see cref="PlaybackPlay.ResAt"/>＝着地）で確定。ダイヤモンド一周は待たない
     /// ・打者アウト（レッグ終端アウト or 「打」のアウト判定イベント）＝確定の瞬間（ResAt）のまま

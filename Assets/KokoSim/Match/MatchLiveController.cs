@@ -139,6 +139,9 @@ namespace KokoSim.Unity.Match
         // 得点コール（issue #60）を何回回すかの単一ソース。打球・押し出し・打席途中の生還が別々に
         // 掲げるようになったので、各経路が自分の点数を数え直すと同じ点を二度祝う。
         private int _postedAwayRuns, _postedHomeRuns;
+        // 打球の無い得点（押し出し）を掲げる時刻（打席の時計。issue score-display-before-home-touch）。
+        // null＝予約なし。据え置きの途中で来るので、必ず FinishPaView までに掲げ切る。
+        private double? _nonBattedScoreAt;
         // クリック中断ポップアップ（issue #289・案P1）。盤面クリック＝演出だけを止める自由中断で、
         // エンジンには触れない（CallTimeout を呼ばない＝伝令・動揺解除は動かさない）。
         // 伝令・選手交代・スキップ・再開はこのポップアップに集約する。
@@ -595,6 +598,7 @@ namespace KokoSim.Unity.Match
             _shownIsTop = false;
             _shownAnyHalf = false;
             _postedAwayRuns = _postedHomeRuns = 0;   // 掲示済み得点の基準（issue #628）も試合をまたがない
+            _nonBattedScoreAt = null;                // 待たせていた押し出しの掲示予約も持ち越さない
             _paQueue.Clear();
             _paConfirmed = false;
             _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
@@ -1845,14 +1849,24 @@ namespace KokoSim.Unity.Match
                 var hold = DuelPacingActive
                     ? Mathf.Max(noPlayHoldSeconds, _duelRig?.PendingResultHoldSeconds ?? 0f)
                     : noPlayHoldSeconds;
-                // 掲示板はここで掲げる（issue #628）。押し出しの得点は走者の到達アニメが無いので、
-                // 打球のように「最後の走者が本塁へ帰るまで」待つ理由がない＝結果テロップと同時。
-                var posted = PostResolvedScore(_current.Inning, _current.IsTop);
-                // 得点コールを出したら、終わるまで据え置きを伸ばす。伸ばさないと FinishPaView の
-                // HideScoreCall が加算の途中でコールを消す（既定 1.2 秒 < 1点ぶん 0.5+1.1 秒）。
-                if (posted > 0)
-                    hold = Mathf.Max(hold, scoreCallStepSeconds * posted + scoreCallFinalHoldSeconds);
+                // 掲示板はここで掲げる（issue #628）。ただし押し出しの得点は「走者が歩いて還る一拍」を
+                // 待ってから掲げる（issue score-display-before-home-touch）。絵が無いぶん、結果テロップと
+                // 同時に加算すると走者がまだ塁上に居るのに点だけが増えて見える。間の長さは engine が単一ソース。
+                var pendingRuns = RunsNotYetPosted(_current.IsTop);
+                var scoreDelay = (float)PlaybackDisplaySync.NonBattedScoreDelaySeconds;
+                if (pendingRuns > 0)
+                {
+                    // 得点コールが終わるまで据え置きを伸ばす。伸ばさないと FinishPaView の HideScoreCall が
+                    // 加算の途中でコールを消す（既定 1.2 秒 < 待ち 1.8 + 1点ぶん 0.5+1.1 秒）。
+                    hold = Mathf.Max(hold, scoreDelay + scoreCallStepSeconds * pendingRuns + scoreCallFinalHoldSeconds);
+                }
+                else
+                {
+                    PostResolvedScore(_current.Inning, _current.IsTop);   // 点が動かない結果は待つ理由がない
+                }
                 _t = -hold; // 経過で采配窓へ
+                // 待ってから掲げる予約（点が入ったときだけ）。実時間でなく打席の時計で数えるので倍速に追従する。
+                _nonBattedScoreAt = pendingRuns > 0 ? _t + scoreDelay : (double?)null;
                 if (_caption != null) _caption.text = _current.BatterName + "　" + ResultJp(_current.Result);
                 if (_result != null) { _result.text = ResultJp(_current.Result); _result.style.display = DisplayStyle.Flex; }
             }
@@ -1861,6 +1875,7 @@ namespace KokoSim.Unity.Match
         // 打席の再生が終わった: 塁ダイヤを結果へ更新してから、中断中でなければ次の采配窓を開けに行く。
         private void FinishPaView()
         {
+            FlushPendingNonBattedScore();   // 待たせていた押し出しの点を落とさない（据え置きが縮む経路の保険）
             EndFieldPlay();   // 守備陣・走者を伏せて対決の構図へ戻す（＝次打席への唯一のカット）
             _view.HideJudgement();   // 器は盤面の外＝ビュー切替では消えない（打ち切りに据え置きを添えるのと同型）
             HidePitchCall();
@@ -2502,10 +2517,24 @@ namespace KokoSim.Unity.Match
                 RenderReplayFrame();
                 if (_t > PlayEndTime() + FinishGraceSeconds) FinishPaView();
             }
-            else if (_t >= 0)
+            else
             {
-                FinishPaView();
+                // 押し出しの得点は据え置きの途中で掲げる（issue score-display-before-home-touch）。
+                if (_nonBattedScoreAt is { } at && _t >= at) FlushPendingNonBattedScore();
+                if (_t >= 0) FinishPaView();
             }
+        }
+
+        /// <summary>
+        /// 待たせていた「打球の無い得点」を掲げる（issue score-display-before-home-touch）。
+        /// 据え置きの途中で来るのが通常だが、スキップ等で打席が畳まれる経路でも点を落とさないよう
+        /// <see cref="FinishPaView"/> からも呼ぶ（二度掲げないよう予約は必ず消す）。
+        /// </summary>
+        private void FlushPendingNonBattedScore()
+        {
+            if (_nonBattedScoreAt is null) return;
+            _nonBattedScoreAt = null;
+            if (_current != null) PostResolvedScore(_current.Inning, _current.IsTop);
         }
 
         /// <summary>再生を打ち切ってから次打席へ移るまでの余韻[秒]。</summary>
@@ -3933,6 +3962,13 @@ namespace KokoSim.Unity.Match
         // ── 打球プレーの3D再生を外から覗く窓（打球処理の3D化 F9 の受け入れ用） ──
         /// <summary>打球再生の時計[秒]。俯瞰・3D・判定オーバーレイを同時に駆動している唯一の値。</summary>
         public double PlayClockForCapture => _t;
+
+        /// <summary>
+        /// いま掲示板に出ている得点（"先攻-後攻"）。得点が<b>いつ</b>増えたかは絵の外側からは
+        /// 分からない（掲示板の数字は撮った瞬間の値でしかない）ので、時刻と並べて記録するための窓
+        /// （issue score-display-before-home-touch）。
+        /// </summary>
+        public string PostedScoreForCapture => _postedAwayRuns + "-" + _postedHomeRuns;
 
         /// <summary>3Dの守備ビューが走っているか。</summary>
         public bool FieldPlayActiveForCapture => FieldPlayActive;

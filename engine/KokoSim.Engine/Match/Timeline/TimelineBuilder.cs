@@ -1323,15 +1323,21 @@ public static class TimelineBuilder
             // 「27.43/速度 + 0.35」という第4の式を持っていて、判定より 0.58〜1.63 秒遅かった。
             var fromBox = m.FromBase == 0;
             var speed = m.Runner.ToFielder().SprintSpeedMps;
+            // タッチアップ（フライ捕球を待つ走者）は文脈が違う＝二次リードなし・静止スタート。
+            // 起点も接触でなく捕球なので、その秒をそのまま追加スタート遅延として払う
+            // （issue score-display-before-home-touch。判定 TagUpRunnerTimeSeconds と同じ時計になる）。
             var ctx = fromBox
                 ? ExtraBaseResolver.BatterContextOf(fielding)
-                : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+                : m.TagUpCatchAtSeconds is not null
+                    ? HomePlayResolver.TagUpContextOf(m.Runner, baserunning)
+                    : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+            var extraStart = m.ExtraStartDelaySeconds + (m.TagUpCatchAtSeconds ?? 0.0);
 
             var label = fromBox ? "打" : $"走{++runnerIndex}";
             var startBase = fromBox ? 1 : m.FromBase;          // 打者は一塁到達後の続きから
             var t = fromBox
                 ? FindBatterArrive(timeline)                   // 一塁到達時刻から続ける
-                : ContactAt + ctx.StartDelaySeconds + m.ExtraStartDelaySeconds;
+                : ContactAt + ctx.StartDelaySeconds + extraStart;
 
             if (fromBox && m.ToBase <= 1) continue;            // 打者の一塁までは既定レッグ
 
@@ -1361,7 +1367,7 @@ public static class TimelineBuilder
                 var t1 = fromBox
                     ? t + RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field)
                     : ContactAt + RunnerClock.SegmentSeconds(
-                        speed, m.FromBase, b + 1, ctx, field, m.ExtraStartDelaySeconds);
+                        speed, m.FromBase, b + 1, ctx, field, extraStart);
                 legs.Add(new RunnerLeg
                 {
                     Label = label,
