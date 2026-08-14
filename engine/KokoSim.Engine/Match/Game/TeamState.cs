@@ -118,6 +118,27 @@ public sealed class TeamState
         if (!_bat.TryGetValue(runner, out var a)) { a = new BatAccum(); _bat[runner] = a; }
         if (success) a.SB++; else a.CS++;
     }
+    /// <summary>
+    /// issue #626: 無効になった盗塁企図の記録を取り消す（ファウル＝ボールデッド／打球＝打球優先）。
+    ///
+    /// <para>盗塁は投球より前に完全解決してから実球を投げる構造なので、投球結果が「無かったことにする球」
+    /// だったと判るのは記録の後になる。乱数消費順を動かさないために<b>解決はそのまま走らせて記録だけ戻す</b>
+    /// （<see cref="RecordSteal"/> と対称。ここで乱数も試合状態も動かさない）。</para>
+    /// </summary>
+    public void UndoSteal(Player runner, bool success)
+    {
+        StealAttempts--;
+        if (success) StealSuccesses--;
+        if (!_bat.TryGetValue(runner, out var a)) return;
+        if (success) a.SB--; else a.CS--;
+    }
+
+    /// <summary>issue #626: 無効になった得点の個人帰属を取り消す（本盗・重盗の生還）。</summary>
+    public void UndoRun(Player runner)
+    {
+        if (_bat.TryGetValue(runner, out var a)) a.R--;
+    }
+
     public void RecordSacrificeBunt(bool success) { SacrificeBunts++; if (success) SacrificeBuntSuccesses++; }
     public void RecordSqueeze() => Squeezes++;
 

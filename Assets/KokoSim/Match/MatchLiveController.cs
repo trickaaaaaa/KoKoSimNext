@@ -1251,17 +1251,30 @@ namespace KokoSim.Unity.Match
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
-                    OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Squeeze; PrepareBuntStance(true); },
-                    OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
+                    GroupLabel = "打撃", EnabledIf = () => RunnerOnThird && !HomeStealChosen,
+                    OnSelect = () =>
+                    {
+                        _pitchBattingChoice = PitchBattingOverride.Squeeze;
+                        PrepareBuntStance(true);
+                        _signPad?.RefreshEnabled();   // 本盗札をその場で消灯（issue #622）
+                    },
+                    OnClear = () =>
+                    {
+                        _pitchBattingChoice = null;
+                        PrepareBuntStance(false);
+                        _signPad?.RefreshEnabled();
+                    } },
                 new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst,
                     OnSelect = () => _signChoice = OffensiveSign.HitAndRun,
                     OnClear = () => _signChoice = null },
+                // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗／三塁のみ→本盗）ので、
+                // カードは1枚のままラベルだけ書き換える（issue #622・案A）。
                 new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Offense = true, Group = "run",
-                    GroupLabel = "走塁", EnabledIf = () => RunnerOnFirst,
-                    OnSelect = () => _stealChoice = StartType.Gamble,
-                    OnClear = () => _stealChoice = null },
+                    GroupLabel = "走塁", LabelOf = () => StealCardLabel,
+                    EnabledIf = () => StealTargetNow != null,
+                    OnSelect = () => { _stealChoice = StartType.Gamble; _signPad?.RefreshEnabled(); },
+                    OnClear = () => { _stealChoice = null; _signPad?.RefreshEnabled(); } },
                 // ── 攻撃: 構え（方針・解除するまで続く）──
                 new SignPad.SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.WorkCount),
@@ -1300,6 +1313,33 @@ namespace KokoSim.Unity.Match
         private bool RunnerOnAnyBase =>
             _atBat is { BaseFirst: true } or { BaseSecond: true } or { BaseThird: true };
 
+        /// <summary>
+        /// いまの塁状況で単独盗塁が狙える塁（issue #622。null＝どの塁も狙えない＝カードは消灯）。
+        /// 判定式は engine の <see cref="StealTargets"/> が単一ソース＝「押せたのに engine が
+        /// 解決しない指示」を構造的に作らない。狙う塁は塁状況で一意に決まるので選ばせない。
+        /// </summary>
+        private StealTarget? StealTargetOnBases => _atBat == null
+            ? null
+            : StealTargets.FromBases(_atBat.BaseFirst, _atBat.BaseSecond, _atBat.BaseThird);
+
+        private StealTarget? StealTargetNow
+            // 本盗とスクイズは同じ三塁走者を使う。engine は手動スクイズの予約がある球で本盗を
+            // 走らせない（issue #619）ので、押しても不発になる並びをカード側でも作らせない。
+            => StealTargetOnBases == StealTarget.Home && _pitchBattingChoice == PitchBattingOverride.Squeeze
+                ? null
+                : StealTargetOnBases;
+
+        /// <summary>本盗を予約済みか（スクイズ側の可否に効かせる。上の裏返し）。</summary>
+        private bool HomeStealChosen => _stealChoice != null && StealTargetOnBases == StealTarget.Home;
+
+        /// <summary>盗塁カードの表示名（狙う塁で書き換える。案A・2026-08-14 監督選択）。</summary>
+        private string StealCardLabel => StealTargetNow switch
+        {
+            StealTarget.Third => "三盗",
+            StealTarget.Home => "本盗",
+            _ => "盗塁",
+        };
+
         // ② 方針カード: 押した瞬間にエンジンへ入れて、解除するまでそのままにする。
         private void PushApproach(BattingApproach approach)
         {
@@ -1333,6 +1373,7 @@ namespace KokoSim.Unity.Match
         // 現在の選択を毎窓ここで再予約して寿命を保つ（issue #492: 1球の口は消費後に自動でnullへ戻るため）。
         private void PushPitchTacticsChoice()
         {
+            DropImpossiblePitchChoices();
             // 自校が攻撃していない球へは攻撃の1手を渡さない。渡すと自校の予約として残り、
             // **次に自校が攻撃する回の初球で不意に発動する**。
             var offense = _atBat != null
@@ -1345,13 +1386,48 @@ namespace KokoSim.Unity.Match
             // t=0 から始まり直す＝前倒しが丸ごと無駄になる（実測: リリース時点で Idle_To_Bunt が
             // 毎回 t=0.00 のままだった）。構えの真偽はその球の指示を持つ OnPitchReleased が決める。
             _prog.SetOffensiveSign(_managerIsAway, offense ? _signChoice : null);
-            _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null);
+            // 狙う塁は塁状況から導く（issue #622）。無指示のときは既定（二盗）を渡す＝engine の
+            // 消費順・乱数列は無指示時とまったく同じ（不変条件#2）。
+            _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null,
+                StealTargetNow ?? StealTarget.Second);
             // 守備方針の再予約（自校が守備の窓のみ）。攻撃中は相手守備＝brain のまま触らない。
             if (!offense)
             {
                 var offenseSide = _atBat != null ? _atBat.IsTop : !_managerIsAway;
                 _prog.SetPitchDefenseOverride(offenseSide, _defPolicy, _defGear, _defInfield, _defOutfield);
             }
+        }
+
+        // issue #619: 押し込む直前に局面条件を採り直し、満たさなくなった「1手」は engine へ渡さず点灯も落とす。
+        // 窓の中では塁は変わらない（ApplyWindowSituation の RefreshEnabled で足りる）が、打席一括経路には
+        // 窓のスナップショットが無く、前の球の選択が残ったまま別の塁状況へ押し込まれうる。
+        // 本命の防御は engine 側（三塁が空ならスクイズは無指示へ落ちる）で、ここはその表示側の整合＝
+        // 「押せてしまった指示が黙って別物として効く」のを防ぐ。構えは下ろさない（issue #490: この経路から
+        // 構えを解くと、札を押した瞬間に始めた移行が投球直前で巻き戻る）。
+        private void DropImpossiblePitchChoices()
+        {
+            var dropBatting = false;
+            if (_pitchBattingChoice == PitchBattingOverride.Squeeze && !RunnerOnThird)
+            {
+                _pitchBattingChoice = null;
+                dropBatting = true;
+            }
+            else if (_pitchBattingChoice == PitchBattingOverride.Bunt && !RunnerOnAnyBase)
+            {
+                _pitchBattingChoice = null;
+                dropBatting = true;
+            }
+            if (_signChoice == OffensiveSign.HitAndRun && !RunnerOnFirst)
+            {
+                _signChoice = null;
+                dropBatting = true;
+            }
+            var dropRun = _stealChoice != null && StealTargetNow == null;
+            if (dropRun) _stealChoice = null;
+
+            if (dropBatting && dropRun) _signPad?.ClearSelection("batting", "run");
+            else if (dropBatting) _signPad?.ClearSelection("batting");
+            else if (dropRun) _signPad?.ClearSelection("run");
         }
 
         // ①の1手は消費後に自動解除（Q12-3: 次球は方針に復帰）。②の方針カードは点けたまま残す。
@@ -4038,6 +4114,48 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 現在のライブ観戦スナップショット（HUD/スタメン列の数値の元, issue #397）。</summary>
         public MatchLiveSnapshot SnapshotForCapture() => _prog?.Snapshot();
+
+        /// <summary>
+        /// スクショ用: 盗塁カードを押した状態にする（狙う塁は塁状況から決まる・issue #622）。
+        /// 自校が攻撃している窓でだけ効く＝実際にカードを押せる条件と同じ。
+        /// </summary>
+        public bool SelectStealForCapture()
+        {
+            if (_atBat == null || StealTargetNow == null) return false;
+            if (_atBat.IsTop != _managerIsAway) return false;   // 守備の窓では攻撃の1手を出さない
+            _stealChoice = StartType.Gamble;
+            _signPad?.RefreshEnabled();
+            return true;
+        }
+
+        /// <summary>スクショ用: 盗塁の再生（走者→捕手送球→判定）が走っているか。</summary>
+        public bool StealPlayActiveForCapture => _stealPlay != null;
+
+        /// <summary>スクショ用: 再生速度（待ち時間を詰める。画面の×N と同じ口）。</summary>
+        public void SetSpeedForCapture(float speed) => _speed = speed;
+
+        /// <summary>
+        /// スクショ用: 進行だけを止める（タイムの導線は通らない）。再生中の1コマを撮るには、
+        /// <see cref="FreezeCurrentAtResult"/> のように打席結果へ飛ばしてしまうと**その瞬間が消える**。
+        /// </summary>
+        public void SetPausedForCapture(bool paused) => _paused = paused;
+
+        /// <summary>スクショ用: 盗塁カードのいまの表示名と可否（issue #622）。</summary>
+        public string StealCardLabelForCapture => StealCardLabel;
+
+        public bool StealCardEnabledForCapture => StealTargetNow != null;
+
+        /// <summary>スクショ用: いま窓に映っている塁（"一二三" の在塁だけを並べた文字列）。</summary>
+        public string BasesForCapture
+        {
+            get
+            {
+                if (_atBat == null) return "(窓なし)";
+                var s = (_atBat.BaseFirst ? "一" : "") + (_atBat.BaseSecond ? "二" : "")
+                        + (_atBat.BaseThird ? "三" : "");
+                return s.Length == 0 ? "走者なし" : s;
+            }
+        }
 
         /// <summary>スクショ用: 次の打席を1つ解決してロードする（Update 非依存）。試合終了なら false。</summary>
         public bool AdvanceForCapture()

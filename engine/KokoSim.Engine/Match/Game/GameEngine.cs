@@ -470,6 +470,15 @@ public static class GameEngine
         // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
         MaybeDefenseSwap(defense, offense, ctx, rng, inning, isTop);
 
+        // issue #619: 1球指示の予約は半回をまたがない。盗塁・牽制が3アウト目になった球は
+        // 予約を消費しないまま半回が終わる（stealEndedHalf）ため、消さないと次の攻撃回の
+        // 先頭打者へ持ち越される。予約は「押した次の1球」の寿命なので、ここで捨てるのが正しい。
+        // 読み書きのみで乱数を消費しない＝無指示のシム・統計帯は不変。
+        offense.SetPendingPitchBattingOverride(null);
+        offense.SetPendingSteal(null, StealTarget.Second);
+        offense.ConsumePendingOffensiveSign();
+        defense.SetPendingPitchDefenseOverride(null, null);
+
         while (outs < 3)
         {
             // 選手交代（設計書09 §6, 攻撃側）: 代走→代打。控え空/無指示なら素通り＝従来と完全一致。
@@ -829,13 +838,37 @@ public static class GameEngine
                 // 判定結果（アウト/セーフ）に関わらず組む＝分岐させない（2026-08-05 issue決定）。
                 Timeline.Playback.PlaybackPlay? pickoffPlay = null;
 
+                // issue #626: 盗塁が無効になる球（ファウル＝ボールデッド／打球＝打球優先）のための控え。
+                // 盗塁は実球より前に完全解決する構造で、その球が無効だったと判るのは投げた後になる。
+                // 解決順・乱数消費順は<b>一切動かさず</b>、適用結果だけを後から巻き戻す（不変条件#2）。
+                // 牽制（PickoffResolver）は投球前の独立事象なので巻き戻さない＝牽制で決着した球には
+                // そもそも盗塁が走らないので、下の stealRolledBack 系は立たない。
+                var steal0First = bases.First;
+                var steal0Second = bases.Second;
+                var steal0Third = bases.Third;
+                var steal0Outs = outs;
+                var steal0Runs = offense.Runs;
+                var steal0RunsThisHalf = runsThisHalf;
+                Player? stealRecRunner = null;      // RecordSteal した走者（取り消し対象）
+                var stealRecSuccess = false;
+                Player? stealRecScorer = null;      // 本盗・重盗で得点した走者（帰属の取り消し対象）
+                var stealDoubleBreak = false;       // 重盗の三塁ブレイクを数えたか
+                StartType? stealStartApplied = null; // 実際に走った始動種別（打球の球でだけ活かす）
+
                 // 盗塁/牽制/重盗（設計書02 §4.2・設計書09 §1・design-14 P1-4/P1-5・設計書15 Phase D-2d）:
                 // カウントは消費せず（実球はこの後も通常どおり投げる）、この球の前に走者だけが動く。
                 // PickoffResolver→StealReadModel.RollPitchout→StealResolver→重盗ロールの呼び出し順は
                 // 旧来の打席頭一括判定と不変。3アウト目ならこの打席は未決着のまま次イニングへ
                 // （スクイズの挟殺と同じ扱い＝設計書15 Phase D-2c の squeezeAbandoned を踏襲）。
+                // 狙える塁の判定は StealTargets が単一ソース（issue #622）。UI の可否・ラベルも同じ式を引く
+                // ＝「押せたのに engine が解決しない指示」を構造的に作らない。各分岐に残っている
+                // `bases.X is { }` は判定の重複ではなく**コンパイラへの非null証明**（走者をそのまま
+                // 牽制・盗塁解決へ渡すため。式が bool 経由になると null 解析が届かない）。
+                var stealFeasible = StealTargets.FromBases(
+                    bases.First is not null, bases.Second is not null, bases.Third is not null);
+
                 if (stealAttempt is { } stealStart && stealTarget == StealTarget.Second
-                    && bases.First is not null && bases.Second is null)
+                    && stealFeasible == StealTarget.Second && bases.First is { })
                 {
                     // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ
                     // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ。
@@ -875,6 +908,8 @@ public static class GameEngine
                                 bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart) == StealResult.Safe,
                         };
                         offense.RecordSteal(bases.First, safe);
+                        stealRecRunner = secondStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
+                        stealStartApplied = stealStart;
                         // 全力疾走・スライディング（設計書03 §3.5）: 盗塁企図ごとに走者が受傷しうる。
                         if (bases.First is { } slider)
                         {
@@ -896,16 +931,22 @@ public static class GameEngine
                         // 一・三塁の重盗（design-14 P1-4）: 二盗の送球中に三塁走者も本塁を狙う。既定オフ
                         // (DoubleStealThirdBreakProb=0)では分岐自体に入らずrng消費ゼロ＝単独二盗と完全一致。
                         // 投げた塁（二塁）だけがアウト対象という原則から、成立時の三塁走者は無条件生還。
+                        // issue #619: 本盗と同じ理由で、未消費の手動スクイズ予約があるときは三塁走者を
+                        // 走らせない（同じ球で三塁走者がスクイズと重盗の両方に使われるのを防ぐ）。
+                        // 既定 DoubleStealThirdBreakProb=0 では従来どおりこの分岐に入らず乱数消費ゼロ。
                         if (bases.Third is not null && paBaserunning.DoubleStealThirdBreakProb > 0.0
+                            && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze
                             && MathUtil.Chance(paBaserunning.DoubleStealThirdBreakProb, rng))
                         {
                             offense.DoubleStealThirdBreakCount++;
+                            stealDoubleBreak = true;         // issue #626: 巻き戻し対象
                             offense.Runs += 1;
                             runsThisHalf += 1;
                             if (bases.Third is { } dsScorer)
                             {
                                 offense.RecordRun(dsScorer); // 得点帰属（issue #77）
                                 doubleScorer = dsScorer;     // 重盗の絵（issue #485）
+                                stealRecScorer = dsScorer;   // issue #626: 巻き戻し対象
                             }
                             bases.Third = null;
                         }
@@ -922,7 +963,7 @@ public static class GameEngine
                 }
                 // 三盗（issue #67）: 二塁のみ在塁でのみ判断側が返す（塁状況が排他のため一・三塁の重盗とは無競合）。
                 else if (stealAttempt is { } thirdStart && stealTarget == StealTarget.Third
-                    && bases.Second is not null && bases.First is null && bases.Third is null)
+                    && stealFeasible == StealTarget.Third && bases.Second is { })
                 {
                     var pickedOffSecond = PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
@@ -946,6 +987,7 @@ public static class GameEngine
                             bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart,
                             StealTarget.Third) == StealResult.Safe;
                         offense.RecordSteal(bases.Second, safe);
+                        stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Second is { } thirdSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -966,9 +1008,13 @@ public static class GameEngine
                 }
                 // 本盗（issue #67, design-14）: 三塁のみ在塁でのみ判断側が返す。同じ球でスクイズが確定していれば
                 // 三塁走者は既にそちらへ使われているため、本盗は試みない（単純上書き, Q12-3と同型）。
+                // issue #619: 抑止は brain 由来のスクイズ（battingOverride）だけでなく、まだ消費していない
+                // 手動スクイズ予約も見る。手動指示の消費はこの下（盗塁解決の後）なので、予約を覗かないと
+                // 「同じ球でスクイズと本盗が両方走り、三塁走者が二重に使われる」ことになる。
                 else if (stealAttempt is { } homeStart && stealTarget == StealTarget.Home
-                    && bases.Third is not null && bases.Second is null && bases.First is null
-                    && battingOverride != PitchBattingOverride.Squeeze)
+                    && stealFeasible == StealTarget.Home && bases.Third is { }
+                    && battingOverride != PitchBattingOverride.Squeeze
+                    && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze)
                 {
                     var pickedOffThird = PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
@@ -992,6 +1038,7 @@ public static class GameEngine
                             bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart,
                             StealTarget.Home) == StealResult.Safe;
                         offense.RecordSteal(bases.Third, safe);
+                        stealRecRunner = homeStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Third is { } homeSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -1003,7 +1050,11 @@ public static class GameEngine
                         {
                             offense.Runs += 1;
                             runsThisHalf += 1;
-                            if (bases.Third is { } homeScorer) offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
+                            if (bases.Third is { } homeScorer)
+                            {
+                                offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
+                                stealRecScorer = homeScorer;   // issue #626: 巻き戻し対象
+                            }
                         }
                         else
                         {
@@ -1066,15 +1117,60 @@ public static class GameEngine
                 double? sqWasteOverride = null;
                 if (battingOverride == PitchBattingOverride.Squeeze && squeezeSign is null)
                 {
-                    sqThirdOverride = bases.Third;
-                    sqWasteOverride = SqueezeWasteNow();
-                    offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
+                    // issue #619: 予約を消費した時点で三塁が空なら、スクイズが成立しない場面なので
+                    // 無指示（強攻）へ落とす。盗塁・牽制の解決は手動指示の消費より前に走るため、
+                    // 「窓を開けた時は三塁走者が居たのに、投球の直前に本盗・牽制死・重盗で消えた」が起こりうる。
+                    // ここで落とさないと ①両方nullで AtBatSession が例外を投げて試合が止まる
+                    // ②打席頭スナップショット（_thirdBaseRunner）が生きていると、もう三塁に居ない走者で
+                    // スクイズが解決される（幽霊走者）— のどちらかになる。
+                    // 無指示へ落とす経路は SqueezeWasteNow（純計算）も RecordSqueeze も通らない＝乱数消費ゼロ。
+                    if (bases.Third is null)
+                    {
+                        battingOverride = null;
+                    }
+                    else
+                    {
+                        sqThirdOverride = bases.Third;
+                        sqWasteOverride = SqueezeWasteNow();
+                        offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
+                    }
                 }
 
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,
                     batterOverride: batterAttrsPitch, swingFactorOverride: swingFactorPitch,
                     fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
                     squeezeWasteOverride: sqWasteOverride);
+
+                // 盗塁の取り消し（issue #626）: 投げた球が「盗塁が成立しない球」だったら、上で適用した
+                // 盗塁の結果だけを巻き戻す。乱数は既に引き終わっており順序も量も変えない（不変条件#2）。
+                //
+                //  - Foul   … ボールデッド。走者は元の塁へ戻り、企図そのものが無かったことになる
+                //  - InPlay … 打球優先。盗塁は記録されず、走者は打球の解決（BaserunningModel.ApplyDetailed）で進む。
+                //             スタートを切っていた分は r1Start へ渡して走塁の有利として活かす
+                //
+                // ファウルチップ（実ルールではインプレーで盗塁が成立する）は PitchKind に区別が無いため
+                // 当面 Foul へ一括する（2026-08-13 監督判断。OPEN-QUESTIONS 参照）。
+                // 三盗・本盗を打球の球で巻き戻した場合の「スタートの有利」は、走塁モデルが一塁走者の始動しか
+                // 受け取らないため表現しない（走者は通常の始動で進む＝有利を捨てる保守側に倒す）。
+                if (stealRecRunner is not null
+                    && session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay)
+                {
+                    bases.First = steal0First;
+                    bases.Second = steal0Second;
+                    bases.Third = steal0Third;
+                    outs = steal0Outs;
+                    offense.Runs = steal0Runs;
+                    runsThisHalf = steal0RunsThisHalf;
+                    offense.UndoSteal(stealRecRunner, stealRecSuccess);
+                    if (stealRecScorer is not null) offense.UndoRun(stealRecScorer);
+                    if (stealDoubleBreak) offense.DoubleStealThirdBreakCount--;
+                    stealPlay = null;   // 絵にも出さない＝同じ球のファウル打球の再生へ落ちる
+                    if (session.LastPitchKind == AtBat.PitchKind.InPlay
+                        && stealStartApplied is { } appliedStart)
+                    {
+                        r1Start = appliedStart;
+                    }
+                }
 
                 // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
                 // 打席が確定する前に1球ずつ絵にするための供給口で、MatchProgression.AdvancePitch と対で使う。

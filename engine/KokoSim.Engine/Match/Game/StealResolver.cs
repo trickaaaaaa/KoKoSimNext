@@ -22,6 +22,31 @@ public enum StealTarget
 }
 
 /// <summary>
+/// 塁状況から「単独盗塁で狙える塁」を出す（issue #622）。
+///
+/// <para><b>判定式はここにしか置かない</b>。<see cref="GameEngine"/> の解決分岐も、采配カードの
+/// 可否・ラベルもこの1か所を引く＝「押せたのに engine が解決しない指示」が構造的に作れない。</para>
+///
+/// <para>3つの条件は排他なので狙う塁は塁状況で一意に決まる（＝プレイヤーに選ばせる余地が無い）。
+/// 一・二塁や満塁のように<b>どれにも当たらない塁状況では null</b>＝単独盗塁は走らない
+/// （重盗は別経路・design-14 P1-4）。</para>
+/// </summary>
+public static class StealTargets
+{
+    /// <summary>狙える塁（null＝単独盗塁が成立しない塁状況）。</summary>
+    public static StealTarget? FromBases(bool onFirst, bool onSecond, bool onThird)
+    {
+        // 二盗: 一塁に走者・二塁が空（一・三塁を含む＝三塁走者の有無は問わない）。
+        if (onFirst && !onSecond) return StealTarget.Second;
+        // 三盗: 二塁のみ。
+        if (onSecond && !onFirst && !onThird) return StealTarget.Third;
+        // 本盗: 三塁のみ。
+        if (onThird && !onFirst && !onSecond) return StealTarget.Home;
+        return null;
+    }
+}
+
+/// <summary>
 /// 盗塁の解決（設計書02 §4.2）。走塁と同じ「時間の勝負」で幾何・秒換算する。
 /// 走者: スプリント速度(走力) ＋ スタート遅延(盗塁パラメータ)。ギャンブル始動は好スタート＝短縮（G3）。
 /// 守備: 投手クイック ＋ 捕手ポップ(肩＝送球速度 ＋ 握り替え) ＋ タッチ。読み切り(ピッチアウト)で短縮＝優位（G3）。

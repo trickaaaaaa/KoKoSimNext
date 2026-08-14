@@ -155,6 +155,11 @@ namespace KokoSim.Unity.Components
                 var def = FindDef(pair.Key);
                 var on = (def?.EnabledIf?.Invoke() ?? true) && _accepting;
                 pair.Value.EnableInClassList("tcard--off", !on);
+                // 局面で名前が変わる札（盗塁→三盗→本盗・issue #622）は可否と一緒に文字も引き直す。
+                // 可否だけ更新すると「本盗の局面なのに『盗塁』と書かれた札が点く」ことになる。
+                if (def?.LabelOf == null) continue;
+                var name = pair.Value.Q<Label>(className: "tcard__name");
+                if (name != null) name.text = WrapLabel(def.LabelOf());
             }
         }
 
@@ -255,7 +260,7 @@ namespace KokoSim.Unity.Components
             // 下＝名前。左の帯（隣に隠れない幅）の中央へ置く。
             var cap = new VisualElement { pickingMode = PickingMode.Ignore };
             cap.AddToClassList("tcard__cap");
-            var name = new Label(WrapLabel(def.Label)) { pickingMode = PickingMode.Ignore };
+            var name = new Label(WrapLabel(def.LabelOf?.Invoke() ?? def.Label)) { pickingMode = PickingMode.Ignore };
             name.AddToClassList("tcard__name");
             cap.Add(name);
             card.Add(cap);
