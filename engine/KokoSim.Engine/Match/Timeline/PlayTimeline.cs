@@ -180,4 +180,19 @@ public sealed record PlayTimeline
     /// <summary>判定イベント列（判定オーバーレイ, Issue #260）。時刻付きの独立イベントで、
     /// 走者レッグの終端に依存せず「いつ判定が出るか」を表す。</summary>
     public IReadOnlyList<JudgementEvent> Judgements { get; init; } = System.Array.Empty<JudgementEvent>();
+
+    /// <summary>
+    /// 失策でこぼれた球を野手が拾い上げる瞬間（issue #629）。失策プレーで追いかけレッグを積んだときだけ非null。
+    ///
+    /// <para><see cref="TimelineBuilder.AppendErrorReturnThrow"/> が「いつ・どこから投げ返すか」を決めるのに使う。
+    /// 拾い上げた時刻は追いかけレッグの終端そのものだが、レッグ列から後で当て推量で拾うと
+    /// 同じ <c>Chase</c> を使う別の動き（決着後に定位置へ戻る等）と区別できないので、組んだ側が明示的に置く。</para>
+    /// </summary>
+    public double? ErrorPickupAt { get; init; }
+
+    /// <summary>失策球を拾い上げる地点（<see cref="ErrorPickupAt"/> と対）。</summary>
+    public TimelinePoint? ErrorPickupPoint { get; init; }
+
+    /// <summary>失策球を拾い上げる野手（<see cref="ErrorPickupAt"/> と対）。</summary>
+    public FieldPosition? ErrorPickupRole { get; init; }
 }

@@ -90,7 +90,8 @@ public static class BaserunningModel
         bool ErrorExtraAdvanceOccurred, IReadOnlyList<RunnerMove> Moves) ApplyDetailed(
         BaseState bases, PlateAppearanceResult result, Player batter,
         int currentOuts, BaserunningCoefficients coeff, IRandomSource rng, bool collectMoves = true,
-        HomePlayContext? home = null, StartType r1Start = StartType.Normal, int errorThrowAccuracy = 50)
+        HomePlayContext? home = null, StartType r1Start = StartType.Normal, int errorThrowAccuracy = 50,
+        Fielding.FieldingErrorKind? errorKind = null)
     {
         var mv = collectMoves ? new List<RunnerMove>() : null;
         var r1 = bases.First;
@@ -123,7 +124,7 @@ public static class BaserunningModel
                 var errorExtraAdvanceOccurred = false;
                 if (coeff.ErrorExtraAdvanceProb > 0.0)
                 {
-                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, coeff, rng, mv, errorThrowAccuracy);
+                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, coeff, rng, mv, errorThrowAccuracy, errorKind);
                     runs += extraRuns;
                     errorExtraAdvanceOccurred = occurred;
                 }
@@ -417,13 +418,19 @@ public static class BaserunningModel
     /// 一括モデル化する（個別確率ではない）。<paramref name="coeff"/>.ErrorExtraAdvanceProb &gt; 0 のときのみ呼ばれる。</summary>
     private static (int Runs, bool Occurred) ApplyErrorExtraAdvance(
         BaseState bases, Player batter, int currentOuts, int extraOuts,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, int throwAccuracy)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, int throwAccuracy,
+        Fielding.FieldingErrorKind? errorKind)
     {
         if (currentOuts + extraOuts >= 3) return (0, false);
         // 送球精度連動（Issue #37）: 送球者の精度が低いほど連鎖しやすい。Ac=50 で base と恒等（傾き項=0）。
         var prob = MathUtil.Clamp(
             coeff.ErrorExtraAdvanceProb - (throwAccuracy - 50) * coeff.ErrorExtraAdvanceAccuracySlope, 0.0, 1.0);
-        if (!MathUtil.Chance(prob, rng)) return (0, false);
+        // 失策種別のゲート（issue #629）: 連鎖は design-14 P1-6 が定義するとおり**悪送球**の連鎖。
+        // 捕球エラー（お手玉）とフライ落球では球は野手の足元にあり、全走者が1つ多く進む理由がない
+        // （絵も「3m弾いて拾い直す」だけなので、走者だけ進むと因果が合わない）。
+        // ⚠ 判定の位置は &&の第2項＝**Chance を引いてから**捨てる（issue #525 と同じ流儀）。
+        // 乱数の消費位置と回数を従来と揃え、発生「率」だけを絞る。
+        if (!MathUtil.Chance(prob, rng) || errorKind != Fielding.FieldingErrorKind.Throw) return (0, false);
 
         var runs = 0;
         var third = bases.Third;
