@@ -156,9 +156,19 @@ namespace KokoSim.Unity.Shell
         /// <summary>全国の永続ロスター保持庫（遅延生成の単一ソース）。</summary>
         public static NationRosters Rosters => _rosters ?? (_rosters = new NationRosters(RosterDeps));
 
-        /// <summary>全国の今大会通算成績（裏試合フルシムが積む単一ソース）。</summary>
+        /// <summary>全国の学校別成績（裏試合フルシムが積む単一ソース。今大会＋通算の2スコープ）。</summary>
         public static NationTournamentStats TournamentStats
             => _tournamentStats ?? (_tournamentStats = new NationTournamentStats());
+
+        /// <summary>
+        /// 成績を (校ID, 選手ID) で引く単一の入口（issue #634）。自校ストア（<see cref="GameSession.Stats"/>）と
+        /// 全国ストア（<see cref="TournamentStats"/>）の振り分けは engine の <see cref="SchoolStatsLookup"/> に
+        /// 集約されている＝画面ごとに「SourceId があれば自校」と書かない。
+        /// <para>参照するストア実体はセーブ復元で差し替わる（<see cref="GameSession.Current"/> ごと入れ替わる）ので
+        /// 都度組む＝軽い値オブジェクト。</para>
+        /// </summary>
+        public static SchoolStatsLookup StatsLookup
+            => new SchoolStatsLookup(ManagerSchoolId, GameSession.Current.Stats, TournamentStats);
 
         /// <summary>学校ID→School 解決（成長ターゲット＝進化後Strength を引く）。自校IDは対象外＝null。</summary>
         public static School SchoolById(int id)

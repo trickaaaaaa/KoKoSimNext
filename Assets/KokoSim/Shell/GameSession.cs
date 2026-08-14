@@ -320,6 +320,11 @@ namespace KokoSim.Unity.Shell
             // 先攻/後攻は BeginPracticeMatch で解決済みの値を使う（対戦カード表示・実試合と必ず一致する）。
             var managerIsAway = _practiceManagerIsAway;
             Stats.FoldGame(result, managerIsAway, isOfficial: false);
+            // 相手校側も全国成績へ（issue #634）。自校の通算（Career）が練習試合を含むので、
+            // 相手校の通算も同じ意味＝両校のHUDに出る「通算」が同じ範囲を指す。
+            if (PracticeOpponent is { } practiceOpponent)
+                NationService.TournamentStats.FoldSchool(
+                    practiceOpponent.Id, result, schoolIsAway: !managerIsAway);
             ApplyMatchGrowth(result, managerIsAway);
             ApplyMatchCondition(result, managerIsAway);
             ApplyMatchInjuries(result, managerIsAway);
@@ -335,6 +340,7 @@ namespace KokoSim.Unity.Shell
             if (LastOutcome.Detail is { } detail)
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
+                FoldOpponentIntoNation(detail, LastOutcome);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
@@ -343,6 +349,20 @@ namespace KokoSim.Unity.Shell
             ExitTournamentIfFinished();
             KickPrefetch();   // 次ラウンドの自県裏カードを先行して温める（未終了時のみ）。
             return LastOutcome;
+        }
+
+        /// <summary>
+        /// 自校戦の<b>相手校側</b>のボックススコアを全国成績へ畳み込む（issue #634）。裏試合は
+        /// <see cref="TournamentEntry"/> の onBackgroundMatch が畳むが、自校が出る一戦だけはその経路を
+        /// 通らないため、相手校の通算からこの試合が抜け落ちる（＝次に同じ校と当たったとき成績が食い違う）。
+        /// 自校側は <see cref="Stats"/> が持つので全国側へは積まない（帰属先は1つ）。
+        /// </summary>
+        private static void FoldOpponentIntoNation(
+            KokoSim.Engine.Match.Game.GameResult detail, PlayerMatchOutcome outcome)
+        {
+            if (outcome.OpponentId == NationService.ManagerSchoolId) return;   // 保険（自校IDは積まない）
+            NationService.TournamentStats.FoldSchool(
+                outcome.OpponentId, detail, schoolIsAway: !outcome.ManagerWasAway);
         }
 
         /// <summary>
@@ -364,6 +384,7 @@ namespace KokoSim.Unity.Shell
             if (LastOutcome.Detail is { } detail)
             {
                 Stats.FoldGame(detail, LastOutcome.ManagerWasAway);
+                FoldOpponentIntoNation(detail, LastOutcome);
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);

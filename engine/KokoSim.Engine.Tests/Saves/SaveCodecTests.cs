@@ -443,6 +443,53 @@ public sealed class SaveCodecTests
         }
     }
 
+    // 全国の学校別成績（issue #634・v9）が2スコープとも往復すること。通算は大会をまたいで積むので、
+    // ここが落ちると相手校のHUDに出す「通算」がロードのたびに消える。
+    [Fact]
+    public void NationStats_BothScopes_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        // 素材は先攻(200)側だけ打撃行を持つ合成試合を2試合ぶん（間に StartTournament）。
+        // ＝今大会は1試合ぶん・通算は2試合ぶんで、スコープが混ざっていれば必ず食い違う。
+        const int awayId = 200;
+        Assert.Equal(3, Hits(state.TournamentStats.ForSchool(awayId)));
+        Assert.Equal(6, Hits(state.TournamentStats.CareerForSchool(awayId)));
+
+        Assert.Equal(3, Hits(s.TournamentStats.ForSchool(awayId)));
+        Assert.Equal(6, Hits(s.TournamentStats.CareerForSchool(awayId)));
+        Assert.Equal(
+            new List<int>(state.TournamentStats.CareerSchools).Count,
+            new List<int>(s.TournamentStats.CareerSchools).Count);
+    }
+
+    // v8 のセーブ（通算スコープが無い）が読めること。今大会ぶんは無傷で残り、通算は空から積み直す。
+    [Fact]
+    public void V8Save_WithoutNationCareerStats_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"nationCareerStats\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "nationCareerStats が直列化されていない");
+        var end = json.IndexOf(",\"sessionYear\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "sessionYear が nationCareerStats の後に居ない");
+        var v8 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":8");
+        Assert.DoesNotContain("\"nationCareerStats\"", v8);
+
+        Assert.True(SaveCodec.TryDeserialize(v8, out var s, out var err), err);
+        Assert.Empty(s.TournamentStats.CareerSchools);
+        Assert.NotEmpty(s.TournamentStats.Schools);   // 今大会ぶんは素通りで読めている
+    }
+
+    private static int Hits(KokoSim.Engine.Stats.StatBook? book)
+    {
+        var hits = 0;
+        if (book != null)
+            foreach (var kv in book.Players) hits += kv.Value.Batting.Hits;
+        return hits;
+    }
+
     // まだ1つも大会を終えていない進行（新規ゲーム）も往復すること。
     [Fact]
     public void TournamentHistory_Empty_RoundTrips()

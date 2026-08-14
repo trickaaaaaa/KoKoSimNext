@@ -126,6 +126,96 @@ public sealed class TournamentPreviewTests
         }
     }
 
+    // ===== 注目選手の成績行＝今大会の実測値（issue #634） =====
+    //
+    // 以前はここで能力から確率的な打率・防御率を合成しており、実際の試合結果とは無関係の数字が
+    // 「今大会 防御率1.13」として出ていた（裏試合フルシム #43 が実測を積んでいるのに読んでいなかった）。
+
+    /// <summary>SourceId を焼いた素朴なチーム（豪腕商業＝投手力が上＝エースが看板になる）。</summary>
+    private static Team MakeAceTeam()
+    {
+        var fielders = new[]
+        {
+            FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase, FieldPosition.ThirdBase,
+            FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
+            FieldPosition.DesignatedHitter,
+        };
+        var order = fielders
+            .Select((p, i) => new Player { Position = p, Name = $"{p}先発", UniformNumber = i + 2, SourceId = i + 2 })
+            .ToList();
+        var pitcher = new Player
+        {
+            Position = FieldPosition.Pitcher, Name = "エース", UniformNumber = 1, SourceId = 1,
+            Pitching = PitcherAttributes.LeagueAverage,
+        };
+        order[0] = pitcher;
+        return new Team
+        {
+            Name = "豪腕商業", BattingOrder = order, PitcherSlot = 0, StartingPitcher = pitcher,
+            Reserves = new List<Player>(),
+        };
+    }
+
+    private static KokoSim.Engine.Stats.StatBook AceBook()
+    {
+        var book = new KokoSim.Engine.Stats.StatBook();
+        // 27アウト・自責1・奪三振12 の1試合＝防御率1.00。
+        book.FoldGame(new GameResult
+        {
+            AwayName = "豪腕商業", HomeName = "相手", AwayRuns = 3, HomeRuns = 1,
+            InningsPlayed = 9, TotalPitches = 0, PitcherChanges = 0,
+            AwayPitching = new[]
+            {
+                new PitchingLine("エース", Outs: 27, BattersFaced: 30, Hits: 4, Runs: 1, StrikeOuts: 12,
+                    Walks: 1, Pitches: 110, SourceId: 1, EarnedRuns: 1),
+            },
+        }, managerIsAway: true, winPid: 1, losePid: null);
+        return book;
+    }
+
+    [Fact]
+    public void NotableStatLine_UsesMeasuredStats_WhenTheSchoolHasPlayed()
+    {
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) =>
+                school.Name == "豪腕商業" ? MakeAceTeam() : StrengthTeamFactory.ForSchool(school, year),
+            statsForSchool: id => id == 3 ? AceBook() : null);
+
+        var ace = p.NotablePlayers.First(n => n.SchoolName == "豪腕商業");
+        Assert.True(ace.PitcherLed);
+        Assert.Contains("防御率1.00", ace.StatLine);   // 実測（27アウト・自責1）
+        Assert.Contains("12奪三振", ace.StatLine);
+    }
+
+    [Fact]
+    public void NotableStatLine_SaysNotPlayedYet_WhenTheSchoolHasNoGames()
+    {
+        // 帳簿を渡さない＝開幕前。合成した見込み値で埋め戻さず「まだしていない」と書く。
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) =>
+                school.Name == "豪腕商業" ? MakeAceTeam() : StrengthTeamFactory.ForSchool(school, year));
+
+        var ace = p.NotablePlayers.First(n => n.SchoolName == "豪腕商業");
+        Assert.Contains("最速", ace.StatLine);          // 能力（真値）は今までどおり出る
+        Assert.Contains("今大会 未登板", ace.StatLine);
+        Assert.DoesNotContain("防御率", ace.StatLine);
+    }
+
+    [Fact]
+    public void RosterMembers_CarryTheSourceId_ForStatJoin()
+    {
+        // 成績の帰属キーを持つのは永続ロスター（#80）＝実戦・裏試合フルシムと同一ソース。
+        // 旧 StrengthTeamFactory の使い捨て生成は SourceId を持たない＝成績も積まれない（join も空振りで正しい）。
+        var rosters = new KokoSim.Engine.Nation.Roster.NationRosters(
+            new KokoSim.Engine.Nation.Roster.AiRosterDeps());
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) => rosters.TeamFor(school, year));
+
+        // 校別詳細が (校ID, 選手ID) で今大会成績を join するための帰属キー。
+        foreach (var r in p.Rosters)
+            Assert.All(r.Members, m => Assert.True(m.SourceId > 0, $"{r.SchoolName} の {m.Name} に SourceId が無い"));
+    }
+
     // ===== DHスロットの登録メンバー表記（enum由来の「指」, issue #70） =====
 
     private static Team MakeDhTeam()
