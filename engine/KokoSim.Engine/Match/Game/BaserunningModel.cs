@@ -26,6 +26,20 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     public double ExtraStartDelaySeconds { get; init; }
 
     /// <summary>
+    /// タイムライン表示専用: タッチアップ（フライ捕球を待ってから走る）の走者なら、その**捕球時刻**[s]
+    /// （接触基準＝<see cref="HomePlaySituation.BallFieldedAtSeconds"/>）。null＝タッチアップでない。
+    ///
+    /// <para>判定側（<see cref="HomePlayResolver.TagUpRunnerTimeSeconds"/>）は捕球起点・二次リードなしで
+    /// 走者の時計を回すのに、表示側は塁上の走者を一律「接触＋反応遅れ」で走らせていた（issue
+    /// score-display-before-home-touch）。結果、犠飛の走者は<b>打った瞬間に三塁を離れ</b>（実測 208/208 件・
+    /// 中央値 4.04 秒早い）、得点も本塁到達＝捕球のころに入っていた。ここに捕球時刻を載せて
+    /// <see cref="HomePlayResolver.TagUpContextOf"/> と組で使うと、レッグが判定と同じ時計になる。</para>
+    ///
+    /// <para>乱数不使用・判定不変の観測値の写し（<c>ExtraStartDelaySeconds</c> と同じ扱い）。</para>
+    /// </summary>
+    public double? TagUpCatchAtSeconds { get; init; }
+
+    /// <summary>
     /// タイムライン表示専用（issue #489）: この移動の到達がフォース（塁を踏むだけでアウト。
     /// タッチの芝居を出さない）か、タッチプレー（野手が走者へタッチしにいく）かの区別。
     /// 判定・帯には無関係＝乱数を消費せず、確定済みの Out と組み合わせて表示側が演技を選ぶだけ。
@@ -612,15 +626,19 @@ public static class BaserunningModel
                 {
                     var tagMargin = HomePlayResolver.TagUpMargin(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp);
                     var tagCloseCall = Math.Abs(tagMargin) < coeff.CloseCallMarginSeconds;
+                    // 絵も判定と同じ「捕球を待ってから走る」時計にする（issue score-display-before-home-touch）。
+                    var tagCatchAt = hfly.Situation.BallFieldedAtSeconds;
                     if (HomePlayResolver.TagUpResolveSafe(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp, rng))
                     {
                         runs++;
-                        mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = tagCloseCall });
+                        mv?.Add(new RunnerMove(r3, 3, 4, false)
+                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt });
                     }
                     else
                     {
                         extraOuts++; homeOuts++; // タッチアップ失敗＝本塁での走塁死
-                        mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = tagCloseCall });
+                        mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
+                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt });
                     }
                     bases.Third = null;
                     r3 = null;
@@ -643,6 +661,12 @@ public static class BaserunningModel
         // （Issue #318, 設計書12 §3.5）。守備は幾何（P_direct）で「一塁を取る/一塁を捨てて三塁へ直接投げる/
         // 走者は自重」を選び、送り判定1段だけが本塁・三塁レースと同じ流儀で入る。それ以外（フォース・フライ・
         // extraOuts>0・home無し）は従来テーブル（ProductiveOutAdvanceProb）へフォールバック（rng消費順も従来どおり）。
+        // フライ捕球での非フォース進塁はタッチアップ＝捕球まで塁を離れられない。絵の起点にだけ使う
+        // 観測値（表示専用・乱数不使用。issue score-display-before-home-touch）。
+        var flyTagUpCatchAt = home is { IsFly: true } flyAdv
+            ? (double?)flyAdv.Situation.BallFieldedAtSeconds
+            : null;
+
         if (r2 is not null && bases.Third is null)
         {
             if (!r2Forced && extraOuts == 0 && home is { IsFly: false } adv)
@@ -652,7 +676,8 @@ public static class BaserunningModel
             }
             else if (r2Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
             {
-                mv?.Add(new RunnerMove(r2, 2, 3, false));
+                mv?.Add(new RunnerMove(r2, 2, 3, false)
+                    { TagUpCatchAtSeconds = r2Forced ? null : flyTagUpCatchAt });
                 bases.Third = r2;
                 bases.Second = null;
                 r2 = null;
@@ -660,7 +685,8 @@ public static class BaserunningModel
         }
         if (r1 is not null && bases.Second is null && (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
         {
-            mv?.Add(new RunnerMove(r1, 1, 2, false));
+            mv?.Add(new RunnerMove(r1, 1, 2, false)
+                { TagUpCatchAtSeconds = r1Forced ? null : flyTagUpCatchAt });
             bases.Second = r1;
             bases.First = null;
         }

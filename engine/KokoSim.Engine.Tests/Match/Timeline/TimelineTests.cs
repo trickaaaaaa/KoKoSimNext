@@ -796,18 +796,33 @@ public sealed class TimelineTests
         var quickCatcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 90 };
         var slowCatcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 30 };
 
-        BallSegment Throw(Player catcher) => TimelineBuilder
-            .BuildSteal(runner, catcher, StealResult.Safe, c, field)
+        BallSegment Throw(Player catcher, StealResult result) => TimelineBuilder
+            .BuildSteal(runner, catcher, result, c, field)
             .Ball.Single(b => b.Kind == BallSegmentKind.Throw);
 
-        // 送球区間の長さ（＝球の速さ）は肩だけで決まる＝同じ肩なら守備が違っても不変。
+        // 送球区間の長さ（＝球の速さ）は肩だけで決まる＝同じ肩なら守備が違っても、
+        // セーフ/アウトが違っても不変（矛盾ガードは投げ始めをずらすだけ）。
         var expected = c.CatchThrowDistanceM / quickCatcher.ToFielder().ThrowSpeedMps;
-        var quick = Throw(quickCatcher);
-        var slow = Throw(slowCatcher);
-        Assert.Equal(expected, quick.T1 - quick.T0, 6);
-        Assert.Equal(expected, slow.T1 - slow.T0, 6);
+        foreach (var result in new[] { StealResult.Safe, StealResult.CaughtStealing })
+        {
+            var q = Throw(quickCatcher, result);
+            var s = Throw(slowCatcher, result);
+            Assert.Equal(expected, q.T1 - q.T0, 6);
+            Assert.Equal(expected, s.T1 - s.T0, 6);
+        }
+
         // 守備の差は「投げ始め（握り替え）」に出る＝守備90の捕手の方が早く投げ始める。
-        Assert.True(quick.T0 < slow.T0, $"守備90の捕手が守備30より早く投げ始めていない（{quick.T0:F3} vs {slow.T0:F3}）");
+        // ⚠ 見るのは**アウト**の回。セーフの回は矛盾ガード（issue match-picture-vs-safe-out-verdict）が
+        // 到達を「走者到達＋0.20秒」へ固定するので、区間長が同じである以上**投げ始めも一致する**
+        // ＝守備の差は絵から消える。これは案Bの既知の限界（境界の帯に入るセーフは濃淡が潰れる）で、
+        // 濃淡を戻すには校正項を物理層へ移す（issue verdict-margin-into-physical-layer）。
+        var quickOut = Throw(quickCatcher, StealResult.CaughtStealing);
+        var slowOut = Throw(slowCatcher, StealResult.CaughtStealing);
+        Assert.True(quickOut.T0 < slowOut.T0,
+            $"守備90の捕手が守備30より早く投げ始めていない（{quickOut.T0:F3} vs {slowOut.T0:F3}）");
+        var quickSafe = Throw(quickCatcher, StealResult.Safe);
+        var slowSafe = Throw(slowCatcher, StealResult.Safe);
+        Assert.Equal(slowSafe.T0, quickSafe.T0, 6);   // セーフはガードで揃う（上のコメントの根拠）
     }
 
     // --- 本盗（issue #485）: 投球が送球を兼ねる＝捕手からの送球区間そのものが無い。 ---

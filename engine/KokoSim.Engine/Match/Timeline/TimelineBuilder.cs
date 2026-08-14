@@ -296,7 +296,17 @@ public static class TimelineBuilder
             if (!play.IsFly && play.RangeM <= 46.0)
             {
                 var firstBase = BasePoint(field, "first");
-                var arrive = ContactAt + throwArrive;
+                var physicalArrive = ContactAt + throwArrive;
+                // 判定と絵の矛盾ガード（issue match-picture-vs-safe-out-verdict）。
+                // 一塁の封殺は `defenseTime + ForceOutMarginSeconds(0.60) <= runnerTime` でアウトなので、
+                // `runnerTime − 0.60 < defenseTime <= runnerTime` の帯は<b>絵では送球が先着しているのに
+                // 内野安打</b>になる（実測: 内野安打 1,374 件中 1,147 件＝83.5%・平均 0.37 秒先着＝走者が
+                // 塁の 2.4〜3.0m 手前。最大 0.60 秒＝約4m）。本塁クロスプレー・外野返球と同じガードを通す。
+                // ⚠ ずれた分は捕球点でボールを保持する「間」に吸収される（Issue #334 と同じ形）＝
+                // 送球そのものの見た目の速度は肩どおりのまま。アウト側は必ず 0.60 秒以上先着しているので不発。
+                var runnerAnchor = ContactAt + play.BatterToFirstSeconds;
+                var firstOut = play.Result == BattedBallResult.Out;
+                var arrive = physicalArrive;   // エラーの枝は一塁へ正着しない＝ガードの対象外
                 if (play.Result == BattedBallResult.Error
                     && play.ErrorKind == FieldingErrorKind.Throw && !play.UnassistedPutout)
                 {
@@ -343,6 +353,8 @@ public static class TimelineBuilder
                     // アンアシスト（3U, Issue #400）: 送球せず一塁手がボールをグラブに収めたまま運ぶ。
                     // Carry セグメント（保持しての移動）で表現し、山なりの Throw は積まない。到達(T1)は判定を
                     // 決めた刺殺時刻のまま＝一塁手のカバー移動レッグ（下の注入）と同時にベースへ着く。
+                    // 走って運ぶので「間」で詰められない＝最速も物理そのもの（ガードはセーフ側でしか効かない）。
+                    arrive = GuardAgainstVerdict(physicalArrive, physicalArrive, runnerAnchor, firstOut);
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Carry,
@@ -354,6 +366,7 @@ public static class TimelineBuilder
                 else
                 {
                     var flight = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
+                    arrive = GuardAgainstVerdict(physicalArrive, fieldedAt + flight, runnerAnchor, firstOut);
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Throw,
@@ -884,8 +897,19 @@ public static class TimelineBuilder
                 quickBonus += c.PitchoutDefenseBonusSeconds;
                 if (startType == Tactics.StartType.Gamble) quickBonus += c.GamblePitchoutExtraBonusSeconds;
             }
-            var throwStart = Math.Max(pitchArrive, pitchArrive + popTransfer - quickBonus); // 握り替え（守備係数・読み切り込み）
-            var throwArrive = defenseTime - c.TagSeconds;                                    // 送球到達（判定由来）
+            var throwStartPhysical = Math.Max(pitchArrive, pitchArrive + popTransfer - quickBonus); // 握り替え（守備係数・読み切り込み）
+            var throwArrivePhysical = defenseTime - c.TagSeconds;                                   // 送球到達（判定由来）
+            // 判定と絵の矛盾ガード（issue match-picture-vs-safe-out-verdict）。盗塁の判定は
+            // `logistic((defense − runner + StealSuccessBias(0.38)) / StealMarginScale(0.22))` なので、
+            // 成功50%の場面は「捕手の送球が走者到達の 0.48 秒前（bias 0.38 ＋ タッチ 0.10）に塁へ届く」絵
+            // ＝<b>先に届いた絵でも五分五分でセーフ</b>になる。しかも盗塁のセーフは判定表示を出さないので
+            // 画面に説明が出ない。本塁クロスプレー・一塁と同じガードを通して、セーフ確定なら走者到達の直後へ回す。
+            // ⚠ ずらした分は<b>投げ始め</b>を後ろへ倒して吸収する（区間長＝飛行時間は不変）＝
+            // 「捕手の握り替えが遅れた」絵になり、送球そのものの見た目の速度は肩どおりのまま（Issue #334 の性質）。
+            var flightToBase = Math.Max(0.0, throwArrivePhysical - throwStartPhysical);
+            var throwArrive = GuardAgainstVerdict(
+                throwArrivePhysical, pitchArrive + flightToBase, runnerArrive, runnerOut: !safe);
+            var throwStart = throwArrive - flightToBase;
             ball.Add(new BallSegment
             {
                 // 受け手は下の Moves でベースカバーに入る野手と同一（Issue E1・単一ソース）
@@ -894,7 +918,11 @@ public static class TimelineBuilder
             });
             moves.Add(new FielderMove
             {
-                Role = receiver, T0 = 0.3, T1 = Math.Max(0.9, throwArrive - 0.2), To = toPt, Task = FielderTask.CoverBase,
+                // カバーに入る野手は球より先に塁へ着く。ガードで送球が遅れた回に合わせて
+                // 野手まで遅らせない（塁に入るのは送球の都合と無関係）＝物理の到達で見る。
+                Role = receiver, T0 = 0.3,
+                T1 = Math.Max(0.9, Math.Min(throwArrive, throwArrivePhysical) - 0.2),
+                To = toPt, Task = FielderTask.CoverBase,
             });
             captions.Add(new TimelineCaption(throwStart, $"キャッチャー、{baseLabel}へ送球——"));
         }
@@ -1399,15 +1427,21 @@ public static class TimelineBuilder
             // 「27.43/速度 + 0.35」という第4の式を持っていて、判定より 0.58〜1.63 秒遅かった。
             var fromBox = m.FromBase == 0;
             var speed = m.Runner.ToFielder().SprintSpeedMps;
+            // タッチアップ（フライ捕球を待つ走者）は文脈が違う＝二次リードなし・静止スタート。
+            // 起点も接触でなく捕球なので、その秒をそのまま追加スタート遅延として払う
+            // （issue score-display-before-home-touch。判定 TagUpRunnerTimeSeconds と同じ時計になる）。
             var ctx = fromBox
                 ? ExtraBaseResolver.BatterContextOf(fielding)
-                : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+                : m.TagUpCatchAtSeconds is not null
+                    ? HomePlayResolver.TagUpContextOf(m.Runner, baserunning)
+                    : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+            var extraStart = m.ExtraStartDelaySeconds + (m.TagUpCatchAtSeconds ?? 0.0);
 
             var label = fromBox ? "打" : $"走{++runnerIndex}";
             var startBase = fromBox ? 1 : m.FromBase;          // 打者は一塁到達後の続きから
             var t = fromBox
                 ? FindBatterArrive(timeline)                   // 一塁到達時刻から続ける
-                : ContactAt + ctx.StartDelaySeconds + m.ExtraStartDelaySeconds;
+                : ContactAt + ctx.StartDelaySeconds + extraStart;
 
             if (fromBox && m.ToBase <= 1) continue;            // 打者の一塁までは既定レッグ
 
@@ -1437,7 +1471,7 @@ public static class TimelineBuilder
                 var t1 = fromBox
                     ? t + RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field)
                     : ContactAt + RunnerClock.SegmentSeconds(
-                        speed, m.FromBase, b + 1, ctx, field, m.ExtraStartDelaySeconds);
+                        speed, m.FromBase, b + 1, ctx, field, extraStart);
                 legs.Add(new RunnerLeg
                 {
                     Label = label,

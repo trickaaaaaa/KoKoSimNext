@@ -76,6 +76,19 @@ public static class HomePlayResolver
             RoundsStartingBase: false);
 
     /// <summary>
+    /// タッチアップの走者の時計の文脈（issue score-display-before-home-touch）。
+    /// 捕球でベースを蹴るので<b>二次リードは取れず</b>（塁間は全距離）、<b>静止から出る</b>ので
+    /// 走り出しの速度倍率も乗らない。起点（捕球時刻）は呼び出し側が足す
+    /// （<see cref="RunnerMove.TagUpCatchAtSeconds"/>）。
+    ///
+    /// <para>これで <see cref="RunnerClock"/> が <see cref="TagUpRunnerTimeSeconds"/> と同じ秒を返す＝
+    /// 判定と表示が同じ時計になる（Issue #316 の原則の穴埋め）。両者が一致することは
+    /// <c>TagUpRunnerLegTests</c> が固定する（判定側の式は帯・決定論のため1文字も動かさない）。</para>
+    /// </summary>
+    public static RunnerContext TagUpContextOf(Player runner, BaserunningCoefficients c)
+        => RunnerContextOf(runner, c) with { LeadDistanceM = 0.0, TopSpeedFactor = 1.0 };
+
+    /// <summary>
     /// 走者が目標塁へ到達する所要時間[s]（接触基準）。fromBase: 0〜3、toBase: 3=三塁/4=本塁。
     /// extraStartDelaySeconds=打球を読んでから走り出す等の追加遅延（G1ゴロ本塁レースで正値。ヒットは0）。
     /// </summary>

@@ -348,6 +348,48 @@ public static class PlaybackEvaluator
     private static double DisplayTimeOf(in PlaybackJudgement j)
         => j.Kind == JudgementKind.Error ? j.T + ErrorDisplayDelaySeconds : j.T;
 
+    /// <summary>
+    /// 打者走者が本塁を踏む時刻[s]（本塁打の一周。無ければ null）。
+    /// 「ホームラン」の表示窓の終端に使う（issue homerun-call-until-home-touch）。
+    /// </summary>
+    public static double? BatterHomeTouchTime(PlaybackPlay play)
+    {
+        if (play is null) return null;
+        double? touch = null;
+        foreach (var r in play.Runners)
+        {
+            if (r.Label != "打") continue;
+            foreach (var s in r.Segs)
+            {
+                var dx = s.To.X - s.From.X; var dy = s.To.Y - s.From.Y;
+                if (dx * dx + dy * dy < 0.25) continue;                 // 待機・定点レッグ
+                if (s.To.X * s.To.X + s.To.Y * s.To.Y > 4.0) continue;  // 本塁で終わるレッグだけ
+                if (touch is null || s.T1 > touch) touch = s.T1;
+            }
+        }
+        return touch;
+    }
+
+    /// <summary>
+    /// この判定を出しておく終端時刻[s]（表示窓は <c>[表示起点, ここ)</c>）。
+    ///
+    /// <para>種別ごとに違う（issue homerun-call-until-home-touch）。<b>ホームランだけ</b>
+    /// 「打者走者が本塁を踏むまで＋余韻」で、それ以外は従来どおり固定窓
+    /// （<paramref name="holdSeconds"/>）。柵越えの判定は<b>着地の瞬間</b>に立つのに対し、
+    /// 打者が一周して還るのは約10秒後（実測400試合: p10 9.3 / p50 10.2 / p90 11.1 秒）なので、
+    /// 固定 0.6 秒だと<b>9.6秒間なにも出ていない</b>時間ができていた。</para>
+    ///
+    /// <para>この規則を engine に置くのは、表示打ち切り時刻（<see cref="LastJudgementEndTime"/> を
+    /// 読む再生側）と同じ規則を共有するため（issue #236 症状A の方針）。Unity 側に種別分岐を書かない。</para>
+    /// </summary>
+    public static double JudgementEndTime(PlaybackPlay play, in PlaybackJudgement j, double holdSeconds)
+    {
+        var start = DisplayTimeOf(j);
+        if (j.Kind == JudgementKind.HomeRun && BatterHomeTouchTime(play) is { } touch && touch > start)
+            return touch + holdSeconds;
+        return start + holdSeconds;
+    }
+
     public static (JudgementKind Kind, double T1, double? DistanceM)? JudgementAt(
         PlaybackPlay play, double t, double holdSeconds)
     {
@@ -356,7 +398,7 @@ public static class PlaybackEvaluator
         foreach (var j in play.Judgements)
         {
             var dt = DisplayTimeOf(j);
-            if (dt > t || dt <= t - holdSeconds) continue;   // 表示窓 [T, T+hold) の外
+            if (dt > t || t >= JudgementEndTime(play, j, holdSeconds)) continue;   // 表示窓の外
             if (best.HasValue && dt < best.Value.T1) continue; // 併殺等は直近の判定だけ出す
             best = (j.Kind, dt, j.DistanceM);
         }
@@ -364,8 +406,28 @@ public static class PlaybackEvaluator
     }
 
     /// <summary>
-    /// プレー内で最後に出る判定の時刻（判定が無ければ null）。表示窓の終端を求めるのに使う
-    /// ＝再生の早切り時刻がこれ＋hold を下回ると判定が一度も見えない（issue #236 症状A）。
+    /// プレー内の判定が<b>すべて消え終わる</b>時刻（判定が無ければ null）。再生の早切りはここまで
+    /// 必ず含める＝下回ると判定が一度も見えない／途中で消える（issue #236 症状A）。
+    ///
+    /// <para>種別ごとの窓（<see cref="JudgementEndTime"/>）を使うので、本塁打は打者が本塁を踏むまで
+    /// 含まれる（issue homerun-call-until-home-touch）。呼び出し側が
+    /// <c>LastJudgementTime + hold</c> と自前で組むと、この種別差が落ちる。</para>
+    /// </summary>
+    public static double? LastJudgementEndTime(PlaybackPlay play, double holdSeconds)
+    {
+        if (play is null) return null;
+        double? last = null;
+        foreach (var j in play.Judgements)
+        {
+            var end = JudgementEndTime(play, j, holdSeconds);
+            if (!last.HasValue || end > last.Value) last = end;
+        }
+        return last;
+    }
+
+    /// <summary>
+    /// プレー内で最後に出る判定の<b>表示起点</b>（判定が無ければ null）。
+    /// 早切りに使うなら <see cref="LastJudgementEndTime"/>（種別ごとの窓を含む）を使うこと。
     /// </summary>
     public static double? LastJudgementTime(PlaybackPlay play)
     {

@@ -201,4 +201,14 @@ public sealed class PlaybackDisplaySyncTests
         }
         Assert.True(scoringPlays > 0, "得点プレーが1件も無い＝テストが何も検証していない");
     }
+
+    /// <summary>
+    /// 打球の無い得点（押し出し）の待ち時間は監督決定の帯（1.5〜2.0秒）にある
+    /// （issue score-display-before-home-touch）。演出値なので式で導けない＝決定を数字で留める。
+    /// </summary>
+    [Fact]
+    public void NonBattedScoreDelay_StaysInTheDecidedRange()
+    {
+        Assert.InRange(PlaybackDisplaySync.NonBattedScoreDelaySeconds, 1.5, 2.0);
+    }
 }

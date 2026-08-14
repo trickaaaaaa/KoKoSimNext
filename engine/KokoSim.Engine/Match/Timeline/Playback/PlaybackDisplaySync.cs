@@ -20,6 +20,18 @@ public static class PlaybackDisplaySync
     private const double NearHomeSq = 4.0;
 
     /// <summary>
+    /// 打球の無い得点（押し出しの四球・死球）を掲示板へ出すまでの間[s]（issue score-display-before-home-touch）。
+    ///
+    /// <para>四球・死球はタイムラインを持たない＝<b>本塁到達の時刻がそもそも存在しない</b>ので、
+    /// <see cref="RunScoreTimes"/> の「絵の到達で1点ずつ」に乗せられない。結果確定と同時に加算すると
+    /// 走者が歩いて還る前に点だけが増えるため、固定の一拍だけ待ってから掲げる。</para>
+    ///
+    /// <para>物理の再現ではなく<b>演出値</b>（監督決定 2026-08-13・初期値 1.5〜2.0 秒）。
+    /// 実測 300試合で押し出しは43点（四球40・死球3）＝この経路を通る得点は全体の 1.4%。</para>
+    /// </summary>
+    public const double NonBattedScoreDelaySeconds = 1.8;
+
+    /// <summary>
     /// 結果テキスト（「レフト前ヒット」等）を出す時刻。
     /// ・本塁打＝柵越え（<see cref="PlaybackPlay.ResAt"/>＝着地）で確定。ダイヤモンド一周は待たない
     /// ・打者アウト（レッグ終端アウト or 「打」のアウト判定イベント）＝確定の瞬間（ResAt）のまま
@@ -44,6 +56,58 @@ public static class PlaybackDisplaySync
             break;
         }
         return t;
+    }
+
+    /// <summary>
+    /// 守備ビューで「まだ見るもの」が終わる時刻[s]（issue field-view-cut-back-sooner ①）。
+    /// 決着（<see cref="PlaybackPlay.ResAt"/>）・球の最後・<b>実際に動く</b>走者レッグの終わりの最大。
+    ///
+    /// <para>⚠ <b>凡打の打者走者（アウト確定）の一塁到達は待たない</b>。判定は送球到達で確定していて、
+    /// そのあとの駆け抜け（issue #443）は守備ビューとしては用の済んだ絵＝ここを待つと決着から
+    /// 1秒以上「野手が定位置へ戻るだけ」を映すことになる（監督指示 2026-08-13「少し間をおいて切って良い」）。
+    /// 他の走者が進塁中なら従来どおり待つ＝まだ見るものがある。</para>
+    ///
+    /// <para>⚠ 動かない走者のレッグ（<c>AppendHeldRunners</c> が T1=Duration で張る定点）は数えない。
+    /// 除かないと必ずプレー尺へ戻り、1秒も縮まらない。</para>
+    /// </summary>
+    public static double LastActionTime(PlaybackPlay play)
+    {
+        if (play is null) return 0.0;
+        var last = play.ResAt;
+        foreach (var seg in play.Ball)
+        {
+            if (seg.T1 > last) last = seg.T1;
+        }
+
+        var batterOut = BatterIsOut(play);
+        foreach (var r in play.Runners)
+        {
+            if (batterOut && r.Label == "打") continue;
+            foreach (var s in r.Segs)
+            {
+                if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
+                if (s.T1 > last) last = s.T1;
+            }
+        }
+        return last;
+    }
+
+    /// <summary>打者がこのプレーでアウトになったか（レッグ終端のアウト or 「打」のアウト判定イベント）。</summary>
+    private static bool BatterIsOut(PlaybackPlay play)
+    {
+        foreach (var j in play.Judgements)
+        {
+            if (j.Kind == JudgementKind.Out && j.Label == "打") return true;
+        }
+        foreach (var r in play.Runners)
+        {
+            if (r.Label != "打") continue;
+            foreach (var s in r.Segs)
+            {
+                if (s.OutAtEnd) return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>

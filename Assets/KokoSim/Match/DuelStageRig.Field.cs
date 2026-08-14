@@ -2818,7 +2818,16 @@ namespace KokoSim.Unity.Match
                 ThrowFollowsBall: !IsEndpointFramedThrow(play) && FieldThrowFollowsBall,
                 HeldBallFollowsRunner: true,
                 LooseBallFollowsChaser: true,
-                ThrowBoxGrowsWithBall: FieldThrowBoxGrows, KeepSubjectFramed: FieldKeepSubjectFramed);
+                ThrowBoxGrowsWithBall: FieldThrowBoxGrows, KeepSubjectFramed: FieldKeepSubjectFramed,
+                ReturnsToWide: FieldReturnsToWide);
+
+        /// <summary>
+        /// プレーの終わりに全景（縦155m）へ戻すか（issue field-view-cut-back-sooner ④）。
+        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある（true で旧挙動）。
+        /// engine のプラン（<see cref="CameraFraming.ReturnsToWide"/>）と3D側のカット
+        /// （<see cref="_fieldCamCutT"/>）の両方がここを見る＝片方だけ変えるとプランと実カットがずれる。
+        /// </summary>
+        public static bool FieldReturnsToWide = false;
 
         /// <summary>
         /// 「始点と終点を両方収める」枠にすべき短い送球1本のプレーか（牽制 issue #515／暴投・捕逸の
@@ -3268,7 +3277,11 @@ namespace KokoSim.Unity.Match
             // では着弾＋余韻へ前倒しされる＝カットも同じ瞬間に跳ぶので、プランの「全景への移動走行」
             // （3Dでは用のないところを見ている travel）は実カットに乗らない。
             var wideStart = CameraPlanBuilder.WideStartTime(play);
-            _fieldCamCutT = double.IsFinite(wideStart) ? (float)wideStart : float.PositiveInfinity;
+            // 全景へ戻さない設定（issue field-view-cut-back-sooner ④）ではカットそのものを打たない。
+            // プランも全景へ戻らない（ReturnsToWide:false）ので、ここで切ると**戻り先ではない枠**へ跳ぶ。
+            _fieldCamCutT = FieldReturnsToWide && double.IsFinite(wideStart)
+                ? (float)wideStart
+                : float.PositiveInfinity;
             // 全景カットをびっくりマークの窓の中で切らない（2026-08-05 監督報告「カメラが見づらい・
             // 切り替えが早い」。実測: エラーの1秒後＝窓のど真ん中で回転298°/s・画角2273°/sのカットが
             // 直撃していた）。窓の終わり＝マーク消灯と同時に切る（据え→カットの2拍子に整える）

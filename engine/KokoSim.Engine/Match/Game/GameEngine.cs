@@ -1188,6 +1188,10 @@ public static class GameEngine
                         BaseFirst = bases.First is not null,
                         BaseSecond = bases.Second is not null,
                         BaseThird = bases.Third is not null,
+                        // 得点も同じく「この球を投げ終えた時点」（issue #628）。本盗の生還はこの球より前に
+                        // 解決済みなのでここに乗る。暴投・捕逸はこの後に判定するので、そちらで with し直す。
+                        AwayScore = p.Away.Runs,
+                        HomeScore = p.Home.Runs,
                         PitchNumberInPa = session.PitchCount,
                         // この球の前に盗塁が解決していれば、その再生データを載せる（issue #485）。
                         // 打席途中の盗塁はこの1球観測が唯一の運び口（打球は Current.Play が運ぶ）。
@@ -1284,6 +1288,14 @@ public static class GameEngine
                             };
                     }
                 }
+
+                // 得点を「この球を投げ終えた時点」へ揃え直す（issue #628）。LivePitch を組んだ後にも
+                // その球ぶんの得点が入りうる（いまは暴投・捕逸での生還）ので、投球ごとの処理を
+                // すべて終えたここで一度だけ上書きする＝発生源が増えても取りこぼさない。
+                // 観測（CapturePitches）の担当なので CaptureTimelines のオン/オフとは無関係。乱数不使用。
+                if (ctx.CapturePitches && p.LastPitch is { } lpScore
+                    && (lpScore.AwayScore != p.Away.Runs || lpScore.HomeScore != p.Home.Runs))
+                    p.LastPitch = lpScore with { AwayScore = p.Away.Runs, HomeScore = p.Home.Runs };
 
                 // この1球ぶんの観測を流す（暴投判定まで含めて「この球の窓」の乱数消費に数える）。
                 EmitPitchTrace();
@@ -1603,7 +1615,12 @@ public static class GameEngine
                         var toHome = Math.Abs(leg.To.X) < 0.5 && Math.Abs(leg.To.Z) < 0.5;
                         if (!toHome) continue;
                         if (leg.OutAtEnd) { outAtHome = leg; break; }
-                        safeAtHome ??= leg;
+                        // 複数生還するプレーでは**最後に還る走者**に送球を合わせる（issue
+                        // match-picture-vs-safe-out-verdict）。走者レッグは三塁走者→二塁走者→一塁走者の順に
+                        // 積まれるので、先に見つかったものを採ると<b>いちばん早く還る走者</b>に固定され、
+                        // 後から還る走者は捕手がボールを持ったあとに悠々とホームインする絵になっていた
+                        // （実測 300試合で189件・中央値0.82秒・最大1.76秒の先着）。すぐ下の外野返球の枝と同じ形。
+                        if (safeAtHome is null || leg.T1 > safeAtHome.T1) safeAtHome = leg;
                     }
                     if (outAtHome is { } o)
                     {

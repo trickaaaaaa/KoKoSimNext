@@ -146,6 +146,13 @@ namespace KokoSim.Unity.Match
         // ラインスコアを描き直したかのフラグ。掲示板は「プレーが確定してから点を掲げる」（実物の運用と同じ）
         // ので、打席の演出が resolved になった瞬間に1回だけ更新する（毎フレーム Snapshot を組み直さない）。
         private bool _lineScorePosted;
+        // いま掲示板に出ている得点（issue #628）。「まだ掲げていない点」＝これとエンジン集計の差、が
+        // 得点コール（issue #60）を何回回すかの単一ソース。打球・押し出し・打席途中の生還が別々に
+        // 掲げるようになったので、各経路が自分の点数を数え直すと同じ点を二度祝う。
+        private int _postedAwayRuns, _postedHomeRuns;
+        // 打球の無い得点（押し出し）を掲げる時刻（打席の時計。issue score-display-before-home-touch）。
+        // null＝予約なし。据え置きの途中で来るので、必ず FinishPaView までに掲げ切る。
+        private double? _nonBattedScoreAt;
         // クリック中断ポップアップ（issue #289・案P1）。盤面クリック＝演出だけを止める自由中断で、
         // エンジンには触れない（CallTimeout を呼ばない＝伝令・動揺解除は動かさない）。
         // 伝令・選手交代・スキップ・再開はこのポップアップに集約する。
@@ -601,6 +608,8 @@ namespace KokoSim.Unity.Match
             _shownInning = 0;
             _shownIsTop = false;
             _shownAnyHalf = false;
+            _postedAwayRuns = _postedHomeRuns = 0;   // 掲示済み得点の基準（issue #628）も試合をまたがない
+            _nonBattedScoreAt = null;                // 待たせていた押し出しの掲示予約も持ち越さない
             _paQueue.Clear();
             _paConfirmed = false;
             _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
@@ -1933,7 +1942,24 @@ namespace KokoSim.Unity.Match
                 var hold = DuelPacingActive
                     ? Mathf.Max(noPlayHoldSeconds, _duelRig?.PendingResultHoldSeconds ?? 0f)
                     : noPlayHoldSeconds;
+                // 掲示板はここで掲げる（issue #628）。ただし押し出しの得点は「走者が歩いて還る一拍」を
+                // 待ってから掲げる（issue score-display-before-home-touch）。絵が無いぶん、結果テロップと
+                // 同時に加算すると走者がまだ塁上に居るのに点だけが増えて見える。間の長さは engine が単一ソース。
+                var pendingRuns = RunsNotYetPosted(_current.IsTop);
+                var scoreDelay = (float)PlaybackDisplaySync.NonBattedScoreDelaySeconds;
+                if (pendingRuns > 0)
+                {
+                    // 得点コールが終わるまで据え置きを伸ばす。伸ばさないと FinishPaView の HideScoreCall が
+                    // 加算の途中でコールを消す（既定 1.2 秒 < 待ち 1.8 + 1点ぶん 0.5+1.1 秒）。
+                    hold = Mathf.Max(hold, scoreDelay + scoreCallStepSeconds * pendingRuns + scoreCallFinalHoldSeconds);
+                }
+                else
+                {
+                    PostResolvedScore(_current.Inning, _current.IsTop);   // 点が動かない結果は待つ理由がない
+                }
                 _t = -hold; // 経過で采配窓へ
+                // 待ってから掲げる予約（点が入ったときだけ）。実時間でなく打席の時計で数えるので倍速に追従する。
+                _nonBattedScoreAt = pendingRuns > 0 ? _t + scoreDelay : (double?)null;
                 if (_caption != null) _caption.text = _current.BatterName + "　" + ResultJp(_current.Result);
                 if (_result != null) { _result.text = ResultJp(_current.Result); _result.style.display = DisplayStyle.Flex; }
             }
@@ -1942,6 +1968,7 @@ namespace KokoSim.Unity.Match
         // 打席の再生が終わった: 塁ダイヤを結果へ更新してから、中断中でなければ次の采配窓を開けに行く。
         private void FinishPaView()
         {
+            FlushPendingNonBattedScore();   // 待たせていた押し出しの点を落とさない（据え置きが縮む経路の保険）
             EndFieldPlay();   // 守備陣・走者を伏せて対決の構図へ戻す（＝次打席への唯一のカット）
             _view.HideJudgement();   // 器は盤面の外＝ビュー切替では消えない（打ち切りに据え置きを添えるのと同型）
             HidePitchCall();
@@ -2032,8 +2059,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2065,6 +2092,7 @@ namespace KokoSim.Unity.Match
             {
                 SetOuts(q.Live.Outs);
                 SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
             }
             // 打席の続きへ（打球の FinishPaView と違い次打席へは進めない）。この球が打席を終わらせていれば
             // 続けて打球再生／結果保持へ入る（盗塁のあと同じ球で三振・四球・インプレーが起きる稀な複合）。
@@ -2147,8 +2175,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2218,8 +2246,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2241,6 +2269,7 @@ namespace KokoSim.Unity.Match
             {
                 SetOuts(q.Live.Outs);
                 SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
             }
             _foulFlightHoldSeconds = null;
             _windowCarry = 0f;
@@ -2302,8 +2331,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2319,6 +2348,7 @@ namespace KokoSim.Unity.Match
             {
                 SetOuts(q.Live.Outs);
                 SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
             }
             _foulFlightHoldSeconds = null;
             _windowCarry = 0f;
@@ -2482,6 +2512,7 @@ namespace KokoSim.Unity.Match
                     {
                         SetOuts(q.Live.Outs);
                         SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                        PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
                     }
                     if (IsTerminalPitch(_pitchIdx))
                     {
@@ -2579,10 +2610,24 @@ namespace KokoSim.Unity.Match
                 RenderReplayFrame();
                 if (_t > PlayEndTime() + FinishGraceSeconds) FinishPaView();
             }
-            else if (_t >= 0)
+            else
             {
-                FinishPaView();
+                // 押し出しの得点は据え置きの途中で掲げる（issue score-display-before-home-touch）。
+                if (_nonBattedScoreAt is { } at && _t >= at) FlushPendingNonBattedScore();
+                if (_t >= 0) FinishPaView();
             }
+        }
+
+        /// <summary>
+        /// 待たせていた「打球の無い得点」を掲げる（issue score-display-before-home-touch）。
+        /// 据え置きの途中で来るのが通常だが、スキップ等で打席が畳まれる経路でも点を落とさないよう
+        /// <see cref="FinishPaView"/> からも呼ぶ（二度掲げないよう予約は必ず消す）。
+        /// </summary>
+        private void FlushPendingNonBattedScore()
+        {
+            if (_nonBattedScoreAt is null) return;
+            _nonBattedScoreAt = null;
+            if (_current != null) PostResolvedScore(_current.Inning, _current.IsTop);
         }
 
         /// <summary>再生を打ち切ってから次打席へ移るまでの余韻[秒]。</summary>
@@ -2604,6 +2649,12 @@ namespace KokoSim.Unity.Match
         /// レンダリング（<c>RenderStealFrame</c> 等は判定より前に呼ばれる）が1コマ、
         /// カット後の全景（縦155m級）を描いてしまう（実測: 枠が10.5m→147.3mへ1コマで飛ぶ）。
         /// 打ち切りをハードカットより確実に手前で終わらせることで、そのコマを再生の外へ出す。
+        ///
+        /// <para>⚠ 全景ハードカットは廃止した（issue field-view-cut-back-sooner ④・
+        /// <see cref="DuelStageRig.FieldReturnsToWide"/>）ので、この clamp が守っていた「全景の1コマ」
+        /// はもう出ない。それでも残しているのは<b>打席途中プレーの尺そのもの</b>が
+        /// この値で決まっているため（外すと盗塁・牽制の再生が伸びる＝この issue が頼まれていない変更に
+        /// なる）。旧挙動（FieldReturnsToWide=true）へ戻したときの保険も兼ねる。</para>
         /// </summary>
         private static double ClampBeforeWideCameraCut(double end, PlaybackPlay play)
         {
@@ -2630,24 +2681,17 @@ namespace KokoSim.Unity.Match
             var play = _current.Play;
 
             // 「まだ見るもの」＝決着／球が動き終わる／**実際に動く**走者レッグの終わり。
-            // ⚠ 動かない走者のレッグを数えないこと。塁上で止まる走者は AppendHeldRunners が
-            // T1=Duration で張るので、除かないと必ず Dur に戻って1秒も縮まらない。
-            var lastEvent = play.ResAt;
-            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            foreach (var r in play.Runners)
-                foreach (var s in r.Segs)
-                {
-                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
-                    if (s.T1 > lastEvent) lastEvent = s.T1;
-                }
+            // 規則は engine の純関数（PlaybackDisplaySync.LastActionTime）が単一ソース＝
+            // 凡打の打者走者の駆け抜けを待たない扱い（issue field-view-cut-back-sooner ①）も含む。
+            var lastEvent = PlaybackDisplaySync.LastActionTime(play);
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
 
             // 判定オーバーレイ（#59）の表示窓 [T1, T1+hold) を必ず含める（issue #236 症状A）。
             // 内野ゴロの打者走者は「送球到達＝アウト成立」より後に一塁へ着く（T1＞ResAt）ので、
             // 早切りだけだと最頻のアウトが一度も出ない。Dur でクランプしない（SetTime は t の純関数で、
             // Dur を超えた時刻を評価しても最終フレームを保持するだけ）。
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
 
             // ⚠ 得点テロップ（#60）の寿命も含める。FinishPaView が HideScoreCall するので、
             // 含めないと**加算の途中でテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
@@ -2702,7 +2746,7 @@ namespace KokoSim.Unity.Match
             if (_runScoreShowAt.Count > 0 && _runScoreShown < _runScoreShowAt.Count)
             {
                 if (!_scoreCallOn && _runScoreShown == 0 && _t >= _runScoreShowAt[0] - scoreCallStepSeconds)
-                    BeginScoreCall(_current, playDriven: true);
+                    BeginScoreCall(_current.IsTop, _runScoreShowAt.Count, playDriven: true);
                 while (_scoreCallOn && _scoreCallPlayDriven
                        && _runScoreShown < _runScoreShowAt.Count && _t >= _runScoreShowAt[_runScoreShown])
                 {
@@ -2729,7 +2773,10 @@ namespace KokoSim.Unity.Match
                 return;
             }
             _resultShowAt = PlaybackDisplaySync.ResultShowTime(play);
-            _runScoreShowAt = PlaybackDisplaySync.RunScoreTimes(play, item.RunsScored, scoreCallStepSeconds);
+            // 掲げる点は打席の得点（RunsScored）でなく「まだ掲示板に出していない点」で数える（issue #628）。
+            // ①打席途中に暴投・本盗で入って既に掲げた点を二度祝わない ②RunsScored に乗らない得点
+            //（暴投での生還・重盗の生還。MatchProgression のコメント参照）を取りこぼさない。
+            _runScoreShowAt = PlaybackDisplaySync.RunScoreTimes(play, RunsNotYetPosted(item.IsTop), scoreCallStepSeconds);
             _lineScorePostAt = _runScoreShowAt.Count > 0
                 ? System.Math.Max(_resultShowAt, _runScoreShowAt[_runScoreShowAt.Count - 1])
                 : _resultShowAt;
@@ -2744,9 +2791,11 @@ namespace KokoSim.Unity.Match
         {
             if (!resolved) { _lineScorePosted = false; return; }
             if (_lineScorePosted) return;
+            // 掲げる前に「まだ出していない点」を数える（PostLineScore が基準を更新するため, issue #628）。
+            var gained = RunsNotYetPosted(item.IsTop);
             _lineScorePosted = true;
             PostLineScore(item.Inning, item.IsTop, finished: false);
-            if (item.RunsScored > 0) BeginScoreCall(item, playDriven: false);
+            BeginScoreCall(item.IsTop, gained, playDriven: false);
         }
 
         private void UpdateScoreboardFinal(GameResult r)
@@ -2761,6 +2810,55 @@ namespace KokoSim.Unity.Match
             var snap = _prog.Snapshot();
             LineScorePanel.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
             ScoreBug.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            // 掲げた点を控える（issue #628）。次に掲げるときの「まだ出していない点」の基準になる。
+            _postedAwayRuns = snap.AwayLine.Runs;
+            _postedHomeRuns = snap.HomeLine.Runs;
+        }
+
+        /// <summary>まだ掲示板へ出していない得点（攻撃側ぶん）。負にはしない。</summary>
+        private int RunsNotYetPosted(bool isTop)
+        {
+            if (_prog == null) return 0;
+            var snap = _prog.Snapshot();
+            var gained = isTop ? snap.AwayLine.Runs - _postedAwayRuns : snap.HomeLine.Runs - _postedHomeRuns;
+            return Mathf.Max(0, gained);
+        }
+
+        /// <summary>
+        /// 打球の無い打席確定（四球・死球・三振＝押し出しはここ）で掲示板を掲げる（issue #628）。
+        /// 走者の到達アニメが無いので待つ理由がなく、結果テロップと同じ瞬間に出す。
+        /// 打球のある経路の掲示時刻（#438「最後の走者が本塁へ帰ってから」）には触らない。
+        /// </summary>
+        /// <returns>この掲示で新たに出した得点（＝据え置きを伸ばすかの判断に使う）。</returns>
+        private int PostResolvedScore(int inning, bool isTop)
+        {
+            if (_prog == null || _lineScorePosted) return 0;
+            var gained = RunsNotYetPosted(isTop);
+            _lineScorePosted = true;
+            PostLineScore(inning, isTop, finished: false);
+            // 得点コール（issue #60）も出す（監督決定 2026-08-13）。走者の到達アニメが無いので
+            // 打球のような「帰るたび1点ずつ」ではなく、確定の瞬間に既存の実時間演出で回す。
+            if (gained > 0) { HidePitchCall(); BeginScoreCall(isTop, gained, playDriven: false); }
+            return gained;
+        }
+
+        /// <summary>
+        /// 打席途中のプレー（本盗の生還・暴投/捕逸での生還）で入った点を、その再生の終わりで掲げる（issue #628）。
+        ///
+        /// <para>エンジンの集計（<c>Snapshot</c>）は打席まるごと解決済みなので、そのまま掲げると
+        /// <b>同じ打席の後の得点まで先に出る</b>（#438 で直した得点の先出しの再発）。1球観測が持つ
+        /// 「その球の時点の得点」と集計が一致するときだけ掲げる＝残りがあるなら打球側の掲示に任せる。</para>
+        /// </summary>
+        private void PostMidPaScore(LivePitch live)
+        {
+            if (_prog == null || live == null) return;
+            var snap = _prog.Snapshot();
+            if (live.AwayScore != snap.AwayLine.Runs || live.HomeScore != snap.HomeLine.Runs) return;
+            var gained = RunsNotYetPosted(_shownIsTop);
+            if (gained <= 0) return;
+            PostLineScore(_shownInning, _shownIsTop, finished: false);
+            HidePitchCall();
+            BeginScoreCall(_shownIsTop, gained, playDriven: false);
         }
 
         // ── 中継風カウント（BSO）＋塁ダイヤ ──
@@ -2887,17 +2985,24 @@ namespace KokoSim.Unity.Match
         // 加算タイミング（issue #438）: 通常再生は**各走者の本塁到達**（プレー時計・RenderReplayFrame が
         // PlaybackDisplaySync.RunScoreTimes で駆動）。キャプチャ（結果時点へ一気に飛ぶ）だけ
         // 旧・等間隔（実時間）で回す＝playDriven で切り替える。
-        private void BeginScoreCall(LivePlateAppearance item, bool playDriven)
+        /// <summary>
+        /// 得点コール（issue #60）を始める。<paramref name="runs"/> は<b>これから掲げる点</b>だけ
+        /// （issue #628）。打席の得点（<c>RunsScored</c>）で数えると、暴投での生還のように打席に
+        /// 紐づかない点や、打席途中に既に掲げた点を二度祝う。加点前スコアはエンジン集計から逆算する。
+        /// </summary>
+        private void BeginScoreCall(bool isTop, int runs, bool playDriven)
         {
             if (_scoreCall == null || _scoreCallOwnNum == null || _scoreCallOppNum == null) return;
+            if (_prog == null || runs <= 0) return;
 
             var ownIsAway = _managerIsAway;
-            var awayBefore = item.IsTop ? item.AwayScore - item.RunsScored : item.AwayScore;
-            var homeBefore = item.IsTop ? item.HomeScore : item.HomeScore - item.RunsScored;
+            var snap = _prog.Snapshot();
+            var awayBefore = isTop ? snap.AwayLine.Runs - runs : snap.AwayLine.Runs;
+            var homeBefore = isTop ? snap.HomeLine.Runs : snap.HomeLine.Runs - runs;
             _scoreCallOwnScore = ownIsAway ? awayBefore : homeBefore;
             _scoreCallOppScore = ownIsAway ? homeBefore : awayBefore;
-            _scoreCallOwnScoring = item.IsTop == ownIsAway;
-            _scoreCallRunsRemaining = item.RunsScored;
+            _scoreCallOwnScoring = isTop == ownIsAway;
+            _scoreCallRunsRemaining = runs;
             _scoreCallClock = 0f;
             _scoreCallOn = true;
             _scoreCallPlayDriven = playDriven;
@@ -3963,6 +4068,13 @@ namespace KokoSim.Unity.Match
         // ── 打球プレーの3D再生を外から覗く窓（打球処理の3D化 F9 の受け入れ用） ──
         /// <summary>打球再生の時計[秒]。俯瞰・3D・判定オーバーレイを同時に駆動している唯一の値。</summary>
         public double PlayClockForCapture => _t;
+
+        /// <summary>
+        /// いま掲示板に出ている得点（"先攻-後攻"）。得点が<b>いつ</b>増えたかは絵の外側からは
+        /// 分からない（掲示板の数字は撮った瞬間の値でしかない）ので、時刻と並べて記録するための窓
+        /// （issue score-display-before-home-touch）。
+        /// </summary>
+        public string PostedScoreForCapture => _postedAwayRuns + "-" + _postedHomeRuns;
 
         /// <summary>3Dの守備ビューが走っているか。</summary>
         public bool FieldPlayActiveForCapture => FieldPlayActive;
