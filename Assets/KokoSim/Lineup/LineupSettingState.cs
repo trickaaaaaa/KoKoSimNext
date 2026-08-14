@@ -165,9 +165,14 @@ namespace KokoSim.Unity.Lineup
         private readonly int[] _idx = new int[9];
         private readonly FieldPosition[] _pos = new FieldPosition[9];
         private bool _usesDh;
-        private int _dhSlot = -1;
-        private int _pitcherSlot = 8;
         private int _spIdx = -1;         // DH制の先発投手（ロスターindex）
+
+        // 投手枠・DH枠は独立フィールドで持たず、割当配列 _pos から引き直す（DefenseAssignment の規約）。
+        // 打順入替（ClickRow）は選手と守備位置を丸ごと交換するので、別フィールドで持つと
+        // 「投を別の打順へ動かしたのに PitcherSlot が古いまま」のズレが起き、確定した LineupSpec が
+        // 9ポジション網羅を満たさず試合開始時に engine が例外を投げる。
+        private int PitcherSlot => DefenseAssignment.SlotOf(_pos, FieldPosition.Pitcher);
+        private int DhSlot => DefenseAssignment.SlotOf(_pos, FieldPosition.DesignatedHitter);
 
         // 操作状態：クリック選択＝比較の左＋入替の主体。ホバー＝比較の右。
         private int _picked = -1;
@@ -196,8 +201,6 @@ namespace KokoSim.Unity.Lineup
             // roster[0] を絶対に選べない（かつ前回シードの DH が残る）。
             Array.Fill(_idx, -1);
             _usesDh = false;
-            _dhSlot = -1;
-            _pitcherSlot = 8;
 
             // 9番＝投手（背番号1）。**打順より先に押さえる**＝穴埋めが役割で候補を絞らなくなったので
             // （#379）、先に打順を埋めると投手力上位が野手枠に吸われて投手枠へ2番手が回る。
@@ -387,12 +390,7 @@ namespace KokoSim.Unity.Lineup
             if (a == b || a < 0 || b < 0 || a > 8 || b > 8) return;
             var next = DefenseAssignment.Swap(_pos, a, b);
             for (var i = 0; i < 9; i++) _pos[i] = next[i];
-            // 投手枠・DH枠は配列から引き直す（別に持つとズレる）。DH中は投手が打順外なので、
-            // 「指」の枠＝DHを解除したとき投手が戻る枠。
-            if (_usesDh)
-                _pitcherSlot = _dhSlot = DefenseAssignment.SlotOf(_pos, FieldPosition.DesignatedHitter);
-            else
-                _pitcherSlot = DefenseAssignment.SlotOf(_pos, FieldPosition.Pitcher);
+            // 投手枠・DH枠は配列から引き直す＝PitcherSlot / DhSlot が自動で追従する（別に持たない）。
             ClearPick();
         }
 
@@ -402,25 +400,26 @@ namespace KokoSim.Unity.Lineup
             if (!_usesDh)
             {
                 // ON：投手スロットの投手を先発（打順外）へ。空いた打順へ控えの最良野手をDHとして入れる。
-                var pitcherIdx = _idx[_pitcherSlot];
+                var slot = PitcherSlot;
+                if (slot < 0) return;              // 投手枠が無い（起こらないが安全網）
+                var pitcherIdx = _idx[slot];
                 var dh = BestBenchHitter();
                 if (dh < 0) return;                // 野手控えが居なければ切替不可
                 _spIdx = pitcherIdx;
-                _idx[_pitcherSlot] = dh;
+                _idx[slot] = dh;
                 // 「指」は守備位置として保持する（守備に就かない枠を配列上でも一意に表す）。
                 // これで DH枠も他の枠と同じ入替1手で動かせる（issue #233）。
-                _pos[_pitcherSlot] = FieldPosition.DesignatedHitter;
-                _dhSlot = _pitcherSlot;
+                _pos[slot] = FieldPosition.DesignatedHitter;
                 _usesDh = true;
             }
             else
             {
-                // OFF：DHの選手を控えへ戻し、先発投手を打順（元の投手スロット）へ。
-                _idx[_dhSlot] = _spIdx;
-                _pos[_dhSlot] = FieldPosition.Pitcher;
-                _pitcherSlot = _dhSlot;
+                // OFF：DHの選手を控えへ戻し、先発投手を打順（「指」の枠＝DH解除で投手が戻る枠）へ。
+                var slot = DhSlot;
+                if (slot < 0) return;              // 「指」が無い（起こらないが安全網）
+                _idx[slot] = _spIdx;
+                _pos[slot] = FieldPosition.Pitcher;
                 _spIdx = -1;
-                _dhSlot = -1;
                 _usesDh = false;
             }
             ClearPick();
@@ -435,8 +434,15 @@ namespace KokoSim.Unity.Lineup
             return -1;
         }
 
-        /// <summary>スタメンを確定できるか（ベンチ入り9人未満なら不可）。</summary>
-        public bool CanConfirm => !_shortage;
+        /// <summary>
+        /// スタメンを確定できるか（ベンチ入り9人未満なら不可）。守備網羅は engine の受け入れ条件
+        /// （<see cref="DefenseAssignment.CoversAllPositions"/>＝RosterTeamBuilder.BuildFromLineup と同じ判定）
+        /// をそのまま安全網に使う。ここを通した仕様が試合開始時に例外で弾かれることは無い、が契約。
+        /// </summary>
+        public bool CanConfirm => !_shortage && CoversAllPositions;
+
+        private bool CoversAllPositions
+            => DefenseAssignment.CoversAllPositions(_pos, _usesDh ? DhSlot : -1);
 
         /// <summary>カーソルを合わせた選手。未選択なら比較の左、選択中なら比較の右に出る。-1＝ホバーなし。</summary>
         public void SetHovered(int index) => _hovered = index;
@@ -474,8 +480,8 @@ namespace KokoSim.Unity.Lineup
 
             return new LineupSpec(
                 order,
-                PitcherSlot: _usesDh ? 8 : _pitcherSlot,
-                DhSlot: _usesDh ? _dhSlot : -1,
+                PitcherSlot: _usesDh ? 8 : PitcherSlot,
+                DhSlot: _usesDh ? DhSlot : -1,
                 StartingPitcher: _usesDh && _spIdx >= 0 ? _roster[_spIdx] : null,
                 Reserves: reserves,
                 Name: KokoSim.Unity.Shell.NationService.ManagerSchoolName);
@@ -515,9 +521,11 @@ namespace KokoSim.Unity.Lineup
 
         public LineupSettingView BuildView()
         {
-            var v = new LineupSettingView { Tab = _tab, UsesDh = _usesDh, CanConfirm = !_shortage };
+            var v = new LineupSettingView { Tab = _tab, UsesDh = _usesDh, CanConfirm = CanConfirm };
             if (_shortage)
                 v.WarnText = "ベンチ入りが9人未満です。メンバー設定で背番号を割り当ててください。";
+            else if (!CoversAllPositions)
+                v.WarnText = "守備位置が9ポジションを網羅していません。「守」チップの入替で直してください。";
             else
                 v.WarnText = InjuredStarterWarning();
 
@@ -534,7 +542,7 @@ namespace KokoSim.Unity.Lineup
                     Order = i + 1,
                     UniformNumber = p.UniformNumber,
                     PosKanji = PosKanji[_pos[i]],
-                    IsDhSlot = _usesDh && i == _dhSlot,
+                    IsDhSlot = _usesDh && i == DhSlot,
                     Name = p.Name,
                     GradeLabel = p.Grade + "年",
                     HandLabel = HandednessLabels.Combined(p.Throws, p.Bats),
