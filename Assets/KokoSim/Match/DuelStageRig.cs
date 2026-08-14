@@ -1063,6 +1063,12 @@ namespace KokoSim.Unity.Match
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
             public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+            /// <summary>
+            /// いま**上下をクリップ（ルートモーション）に預けている**か（横っ飛び・スライディング）。
+            /// 立っている収録は足を地面へ吸わせる（<c>GroundFix</c>）のが正しいが、足が上がって胴が下がる
+            /// 収録では同じことをすると胴が地面へ潜る（実測 −0.40m）。窓を抜けたら false へ戻す。
+            /// </summary>
+            public bool RootDrivenY;
 
             /// <summary>
             /// 直前の <see cref="StepActor"/> でこの体のポーズを**書き直したか**。

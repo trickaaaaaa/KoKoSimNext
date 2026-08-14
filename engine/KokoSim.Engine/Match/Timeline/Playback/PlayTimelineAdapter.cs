@@ -69,6 +69,9 @@ public static class PlayTimelineAdapter
             // 出発点（判定が距離を測った守備配置）。座標と違って推定できないので素通しする
             Starts = t.FielderStarts?.ToDictionary(kv => kv.Key, kv => Vec(kv.Value)),
             Runners = runners,
+            // 守備の芝居の入力（表示専用）。座標と同じく既に決まった値の素通し
+            CatchMargin = t.CatchMarginSeconds,
+            Fumbled = t.FumbledCatch,
             Caps = caps,
             Judgements = judgements,
         };

@@ -1584,6 +1584,8 @@ namespace KokoSim.EditorTools
                 // 伸び切り系
                 "Defender_Catching_Jumping_Catch", "Defender_Movement_Run_Back_To_Jumping_Catch",
                 "Defender_Movement_Sprint_Diving_Catch", "Defender_Movement_Sprint_Sliding_Catch",
+                // 弾く系（お手玉。捕らずに手から離れる収録なので gy は「弾いた瞬間の手の高さ」）
+                "Defender_Movement_Fumble_L", "Defender_Movement_Fumble_R",
             };
             const float dt = 0.02f;
 
@@ -1601,7 +1603,12 @@ namespace KokoSim.EditorTools
                 }
 
                 var sb = new StringBuilder();
-                sb.AppendLine("clip\tlen\tdispMax\ttDisp\ttPeak\tvPeak\tgy\tgx\tgz");
+                // gy … グラブの**足元からの**高さ（接地を足で解くクリップの狙点＝従来の主軸）
+                // gyAbs/rootY … グラブの**地面からの**高さと、そのとき根が沈んだ量。
+                //   飛び込み・スライディングは体の上下が丸ごとルートモーションに入っており
+                //   （実測: 根が 0.60m 沈む）、足で接地を解くと胴が 0.40m 地面へめり込む。
+                //   この2列がその場合の正しい狙点になる（design-18 §7-2）。
+                sb.AppendLine("clip\tlen\tdispMax\ttDisp\ttPeak\tvPeak\tgy\tgx\tgz\tgyAbs\trootY\trootM\trootEnd\thip0\thipEnd");
                 foreach (var shortName in names)
                 {
                     var clip = FindClip("AA_Baseball_" + shortName);
@@ -1610,6 +1617,12 @@ namespace KokoSim.EditorTools
                     int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
                     var loc = new Vector3[n + 1];   // 腰基準（右/上/前）
                     var footY = new float[n + 1];   // 足元の高さ（グラブの対地高を出すため）
+                    // 飛び込み・スライディングは**大きく移動する収録**（走り込みですらない）。
+                    // 着地位置が engine の捕球点とずれる量はここでしか判らない（design-18 §7-2）。
+                    var rootXZ = new Vector2[n + 1];
+                    var rootY = new float[n + 1];   // 根の上下（＝体の上下がルートモーションに入る収録がある）
+                    var gloveAbs = new float[n + 1];// グラブの地面からの高さ
+                    var hipY = new float[n + 1];    // 腰の対地高＝末尾で起き上がっているかの判定材料
                     for (int i = 0; i <= n; i++)
                     {
                         float sec = Mathf.Min(clip.length - 0.001f, i * dt);
@@ -1619,6 +1632,11 @@ namespace KokoSim.EditorTools
                         var glove = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
                         var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
                         var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        rootXZ[i] = new Vector2(body.transform.localPosition.x, body.transform.localPosition.z);
+                        rootY[i] = body.transform.position.y - root.transform.position.y;
+                        gloveAbs[i] = glove.y - root.transform.position.y;
+                        var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
+                        hipY[i] = hips != null ? hips.position.y - root.transform.position.y : 0f;
                         // ⚠ 軸は**アクターのローカル**（＝立ち位置と yaw を与える座標系）で採る。
                         // 肩の線から作った解剖学的な前後左右で採ると、収録が捕球までに体を回している分だけ
                         // ずれ、その表で yaw を決めると「グラブが球の方を向いていない」形になる
@@ -1639,13 +1657,17 @@ namespace KokoSim.EditorTools
                     }
 
                     sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                        "{0}\t{1:F2}\t{2:F3}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F3}\t{7:F3}\t{8:F3}",
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F2}\t{4:F2}\t{5:F1}\t{6:F3}\t{7:F3}\t{8:F3}\t{9:F3}\t{10:F3}\t{11:F3}\t{12:F3}\t{13:F3}\t{14:F3}",
                         shortName, clip.length, dispMax, iDisp * dt, iPeak * dt, vPeak,
-                        footY[iDisp], loc[iDisp].x, loc[iDisp].z));
+                        footY[iDisp], loc[iDisp].x, loc[iDisp].z,
+                        gloveAbs[iDisp], rootY[iDisp],
+                        (rootXZ[iDisp] - rootXZ[0]).magnitude, (rootXZ[n] - rootXZ[0]).magnitude,
+                        hipY[0], hipY[n]));
                 }
 
                 System.IO.Directory.CreateDirectory("out/duel-stage");
                 System.IO.File.WriteAllText("out/duel-stage/fieldcatch.tsv", sb.ToString());
+                System.IO.File.WriteAllText("out/duel-stage/fieldcatch-detail.tsv", DumpFrames(root, dt));
                 Debug.Log("[DuelMotionSpike] fielder catch probe -> out/duel-stage/fieldcatch.tsv\n" + sb);
                 return sb.ToString();
             }
@@ -1657,6 +1679,79 @@ namespace KokoSim.EditorTools
 
         [UnityEditor.MenuItem("KokoSim/Duel/F5 野手の捕球クリップを実測する")]
         private static void RunFielderCatchProbeMenu() => RunFielderCatchProbe();
+
+        /// <summary>
+        /// 飛び込み系・お手玉の**全コマ**を吐く（issue wire-unused-defender-motions ②）。
+        ///
+        /// <para>集計値（dispMax の1点）だけでは「捕球の瞬間」を決められない収録がある。
+        /// 実測でそれが出た: <c>Sprint_Diving_Catch</c> は dispMax が 0.80s（走っている最中の腕振り）に
+        /// 立ってしまい、実際に伸び切るのは <c>vPeak</c> 側の 1.96s。<b>一律の式で出さず、
+        /// 波形を見て1本ずつ決める</b>（design-18 §4.5-③）ための素データ。</para>
+        ///
+        /// <para>出す量は秒ごとに: グラブの構えからの移動量／グラブの**根からの高さ**／アクターローカルの
+        /// 右・前／足の根からの高さ／体の最下点の根からの高さ／腰の根からの高さ。</para>
+        ///
+        /// <para>高さは全部<b>地面（ステージ原点）から</b>読む＝収録どおりの世界座標。
+        /// <c>rootY</c> は根の上下で、飛び込み・スライディングは体の落下が丸ごとここに入る
+        /// （実測: 根が 0.60m 沈む）。本番の野手は <c>rootMotion:false</c> ＋
+        /// <c>GroundFix</c>（足を地面へ吸わせる）で置いているので、<c>gyFoot</c>（グラブの足元からの高さ）が
+        /// そのまま狙点になるが、**足が浮く収録ではこれが破綻する**＝<c>low</c>（体の最下点）が
+        /// 負になったら足で吸わせてはいけない、の判定材料。</para>
+        /// </summary>
+        private static string DumpFrames(GameObject root, float dt)
+        {
+            var bones = new[]
+            {
+                HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes,
+                HumanBodyBones.RightToes, HumanBodyBones.Hips, HumanBodyBones.Chest,
+                HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightHand,
+                HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm,
+                HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg,
+            };
+            var names = new[]
+            {
+                "Defender_Movement_Sprint_Diving_Catch", "Defender_Movement_Sprint_Sliding_Catch",
+                "Defender_Movement_Run_Back_To_Jumping_Catch",
+                "Defender_Movement_Fumble_L", "Defender_Movement_Fumble_R",
+            };
+            var sb = new StringBuilder();
+            sb.AppendLine("clip\tt\tdisp\tgyAbs\tgyFoot\tgx\tgz\trootY\tlow\thip");
+            foreach (var shortName in names)
+            {
+                var clip = FindClip("AA_Baseball_" + shortName);
+                if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+                int n = Mathf.Max(1, Mathf.FloorToInt(clip.length / dt));
+                Vector3 loc0 = Vector3.zero;
+                for (int i = 0; i <= n; i++)
+                {
+                    float sec = Mathf.Min(clip.length - 0.001f, i * dt);
+                    var body = SpawnBody(root, "catch", Vector3.zero, 0f, Color.white);
+                    var anim = body.GetComponentInChildren<Animator>();
+                    Sample(body, clip, sec / clip.length);
+                    float baseY = root.transform.position.y;   // 地面（ステージ原点）基準で読む
+                    var glove = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                    var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                    var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                    var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
+                    float low = float.MaxValue;
+                    foreach (var b in bones)
+                    {
+                        var tb = anim.GetBoneTransform(b);
+                        if (tb != null) low = Mathf.Min(low, tb.position.y - baseY);
+                    }
+                    var loc = body.transform.InverseTransformPoint(glove);
+                    if (i == 0) loc0 = loc;
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0}\t{1:F2}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F3}\t{8:F3}",
+                        shortName, sec, (loc - loc0).magnitude,
+                        glove.y - baseY, glove.y - Mathf.Min(lf.y, rf.y), loc.x, loc.z,
+                        body.transform.position.y - baseY, low,
+                        hips != null ? hips.position.y - baseY : 0f));
+                    Object.DestroyImmediate(body);
+                }
+            }
+            return sb.ToString();
+        }
 
         /// <summary>
         /// 送球クリップの**リリースの瞬間**と**手の位置**を実測する（打球処理の3D化 F6）。

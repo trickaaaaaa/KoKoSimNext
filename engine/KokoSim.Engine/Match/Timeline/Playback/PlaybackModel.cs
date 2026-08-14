@@ -183,6 +183,13 @@ public sealed record PlaybackPlay
     /// </summary>
     public IReadOnlyDictionary<FieldPosition, PlaybackVec>? Starts { get; init; }
     public IReadOnlyList<PlaybackRunner> Runners { get; init; } = Array.Empty<PlaybackRunner>();
+    /// <summary>
+    /// 空中捕球の余裕[s]（<see cref="KokoSim.Engine.Match.Timeline.PlayTimeline.CatchMarginSeconds"/> の写し）。
+    /// 3Dの守備が飛び込み系の収録を選ぶ唯一の入力。null＝フライ/ライナーでない（またはモック）。
+    /// </summary>
+    public double? CatchMargin { get; init; }
+    /// <summary>球を弾いたか（<see cref="KokoSim.Engine.Match.Timeline.PlayTimeline.FumbledCatch"/> の写し）。</summary>
+    public bool Fumbled { get; init; }
     public IReadOnlyList<PlaybackCaption> Caps { get; init; } = Array.Empty<PlaybackCaption>();
     /// <summary>判定イベント列（Issue #260）。<see cref="PlaybackEvaluator.JudgementAt"/> の単一ソース。</summary>
     public IReadOnlyList<PlaybackJudgement> Judgements { get; init; } = Array.Empty<PlaybackJudgement>();

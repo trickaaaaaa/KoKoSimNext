@@ -522,6 +522,8 @@ public static class CoefficientsLoader
         public double LeftBatterFirstStepBonusSeconds { get; set; } = D.LeftBatterFirstStepBonusSeconds;
         public double InfieldDepthM { get; set; } = D.InfieldDepthM;
         public double ForceOutMarginSeconds { get; set; } = D.ForceOutMarginSeconds;
+        public double InfieldHandleJitterMeanSeconds { get; set; } = D.InfieldHandleJitterMeanSeconds;
+        public double InfieldHandleJitterMaxFactor { get; set; } = D.InfieldHandleJitterMaxFactor;
         public double CatchCloseCallMarginSeconds { get; set; } = D.CatchCloseCallMarginSeconds;
         public double ErrorBaseProb { get; set; } = D.ErrorBaseProb;
         public double ErrorCatchingSlope { get; set; } = D.ErrorCatchingSlope;
@@ -583,6 +585,8 @@ public static class CoefficientsLoader
             LeftBatterFirstStepBonusSeconds = LeftBatterFirstStepBonusSeconds,
             InfieldDepthM = InfieldDepthM,
             ForceOutMarginSeconds = ForceOutMarginSeconds,
+            InfieldHandleJitterMeanSeconds = InfieldHandleJitterMeanSeconds,
+            InfieldHandleJitterMaxFactor = InfieldHandleJitterMaxFactor,
             CatchCloseCallMarginSeconds = CatchCloseCallMarginSeconds,
             ErrorBaseProb = ErrorBaseProb,
             ErrorCatchingSlope = ErrorCatchingSlope,
@@ -661,8 +665,10 @@ public static class CoefficientsLoader
         public double CatchThrowDistanceM { get; set; } = D.CatchThrowDistanceM;
         public double StealReactionIntercept { get; set; } = D.StealReactionIntercept;
         public double StealReactionSlope { get; set; } = D.StealReactionSlope;
+        public double StealJumpCreditSeconds { get; set; } = D.StealJumpCreditSeconds;
         public double PitcherQuickSeconds { get; set; } = D.PitcherQuickSeconds;
         public double PopTransferSeconds { get; set; } = D.PopTransferSeconds;
+        public double CatcherPopRiseSeconds { get; set; } = D.CatcherPopRiseSeconds;
         public double TransferFieldingSlope { get; set; } = D.TransferFieldingSlope;
         public double TransferFactorMin { get; set; } = D.TransferFactorMin;
         public double TagSeconds { get; set; } = D.TagSeconds;
@@ -779,8 +785,10 @@ public static class CoefficientsLoader
             CatchThrowDistanceM = CatchThrowDistanceM,
             StealReactionIntercept = StealReactionIntercept,
             StealReactionSlope = StealReactionSlope,
+            StealJumpCreditSeconds = StealJumpCreditSeconds,
             PitcherQuickSeconds = PitcherQuickSeconds,
             PopTransferSeconds = PopTransferSeconds,
+            CatcherPopRiseSeconds = CatcherPopRiseSeconds,
             TransferFieldingSlope = TransferFieldingSlope,
             TransferFactorMin = TransferFactorMin,
             TagSeconds = TagSeconds,

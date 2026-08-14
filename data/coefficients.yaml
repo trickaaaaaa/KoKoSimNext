@@ -125,7 +125,9 @@ fielding:
   runner_reaction_seconds: 0.45        # 実戦オフセット（設計書02 §4.1b: 走力50右で本塁→一塁≈4.2s）
   left_batter_first_step_bonus_seconds: 0.13  # 左打者は一塁が近く速い（§4.1b）
   infield_depth_m: 46.0
-  force_out_margin_seconds: 0.72       # 一塁封殺の判定余裕（issue #358で0.0→0.60、issue #630で0.60→0.72）。issue #630の前進捕球（charge_*）で守備所要が平均0.046s縮んだ分をここへ戻し、内野安打の水準（内野ゴロの9.6%）とAVG帯を据え置いた＝オーナー選択2026-08-13。「チャージ＝守備が速くなる＝内野安打が減る」ので、下駄は薄くではなく厚くなる（issueの想定と逆向き）。守備の所要時間の水増しをやめた代わりに、判定側の余裕としてここへ移した分。物理層(=絵)は現実の秒に戻したまま、内野安打の頻度だけをここで校正する。0.0のままだと内野安打が内野ゴロの1.5%へ潰れる（実測。実際は6〜7%規模で、当ゲームは打率・BABIP帯に合わせて11%）＝この項はシムに無い内野安打の源（もたつき・弾き・守備位置の揺らぎ）と、捕球点が実戦より本塁寄り＝送球距離が短いぶんの残差を吸う
+  force_out_margin_seconds: 0.0        # 一塁封殺の判定余裕。issue #358 で 0.0→0.60 とした校正項を 2026-08-14 に物理層（infield_handle_jitter_mean_seconds）へ移して 0 へ戻した＝判定は素のタイミング比較。判定の秒を動かすのに絵の秒に出ない項だったため「送球が先に届いた絵なのにセーフ」が構造的に出ていた（実測: 内野安打の83.5%）。0以外にすると再びその食い違いが戻る
+  infield_handle_jitter_mean_seconds: 0.43  # 内野の打球処理のもたつき[s]の平均（指数分布・下限0で右に裾）。捕ってから離すまでに余分にかかる時間で、引いた値が**そのままタイムラインの秒**になる＝絵と判定が一致する。守備力（transfer と同じ係数）で伸縮。0.43 は内野安打率から逆算（従来の定数0.60と**同じ**内野ゴロの帰結＝アウト82.8%/内野安打9.6%/失策7.6%になる平均。実測 2026-08-14・200,000打席・seed 7）
+  infield_handle_jitter_max_factor: 3.0     # もたつきの上限＝平均の何倍で頭打ちにするか。指数の裾は無限に伸びるので「捕ってから4秒動かない内野手」が極稀に出る。絵に出る量なので実在しない値は切る（3.0＝1.2秒・上位5%が頭打ち）
 
   catch_close_call_margin_seconds: 0.15  # 判定オーバーレイ「フェア」（Issue #328②）: |捕球余裕|がこれ未満の落球だけ着地の瞬間に表示。表示専用・帯不変
   # 失策モデル（issue #123, 2026-07-23）: 平均守備(Catching50)で0.064＝両軍計≈2.4/試合（甲子園実測2.1〜2.7域）。
@@ -230,13 +232,15 @@ baserunning:
   catch_throw_distance_m: 38.8
   steal_reaction_intercept: 0.90   # スタート遅延[s] = intercept − steal×slope（Step4再校正: 快足を3.4秒台へ）
   steal_reaction_slope: 0.004
+  steal_jump_credit_seconds: 0.19  # ジャンプ[s]。走者は投手の始動を読んで既に動き出している＝遅延から差し引く（床の後に引く）。steal_success_bias 0.38 を物理層へ移した半分（2026-08-14）。走力50/盗塁50の二塁到達 3.94→3.75秒（高校生の実測3.6〜3.8秒へ）
   pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
-  pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋送球時間）
+  pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋立ち上がり＋送球時間）
+  catcher_pop_rise_seconds: 0.19   # 捕手の立ち上がり[s]（守備力で縮まない固定部分）。steal_success_bias 0.38 を物理層へ移した残り半分（2026-08-14）。肩50のポップタイム 1.91→2.10秒（高校生の実測2.0〜2.3秒へ）。⚠ pop_transfer_seconds へ足し込むと守備力で伸縮して「移しただけ」でなくなる
   transfer_fielding_slope: 0.004   # 走塁系トランスファーの守備連動（Issue #36）。fielding.throw_transfer_fielding_slope と揃える
   transfer_factor_min: 0.70        # 走塁系トランスファー倍率の下限（Issue #36）
   tag_seconds: 0.10
   steal_margin_scale: 0.22         # margin→成功確率のlogistic幅（Step4再校正: 肩差が効く幅に拡張）
-  steal_success_bias: 0.38         # リーグ平均成功率の校正項（🟡, Step4再校正）
+  steal_success_bias: 0.0          # リーグ平均成功率の校正項（🟡）。2026-08-14 に 0.38→0.0＝中身を物理層の秒（steal_jump_credit_seconds 0.19 ＋ catcher_pop_rise_seconds 0.19）へ移した。判定の秒だけを動かして絵の秒に出ない項なので、0以外にすると「送球が先に届いた絵なのにセーフ」が戻る（実測: 成功50%の場面で送球が0.48秒先着）。平均成功率を動かすときは移した先の2項を動かす
   catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
   steal_third_success_bias: -0.35  # 三盗の成功率バイアス（design-14「三盗は成功率下方」）
   steal_home_success_bias: -0.7    # 本盗の成功率バイアス（design-14「本盗はさらに下方」）

@@ -332,11 +332,15 @@ public static class FieldingResolver
             var throwAccuracy = (int)Math.Round(
                 infielder.Attributes.ThrowAccuracy - coeff.ChargeThrowAccuracyPenalty * chargeFrac);
             // 握り替え（トランスファー）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
-            var transfer = coeff.ThrowTransferSeconds
-                           * infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin)
+            var handFactor = infielder.Attributes.TransferFactor(coeff.ThrowTransferFieldingSlope, coeff.ThrowTransferFactorMin);
+            // 前進捕球（issue #630）の体勢の悪さは握り替えへ乗せる（チャージ量に比例）。
+            var transfer = coeff.ThrowTransferSeconds * handFactor
                            + coeff.ChargeThrowPenaltySeconds * chargeFrac;
+            // もたつき（判定境界の校正項を物理層へ移した項）。**引いた値がそのまま絵の秒**になる
+            // ＝送球開始が遅れる形で見える。守備力で伸縮＝手さばきの単一ソース（transfer と同じ係数）
+            var handleJitter = DrawHandleJitter(coeff, rng) * handFactor;
             var throwTime = fieldTime + coeff.InfieldPlayOverheadSeconds
-                            + transfer + throwDist / infielder.Attributes.ThrowSpeedMps;
+                            + transfer + handleJitter + throwDist / infielder.Attributes.ThrowSpeedMps;
             // アンアシスト刺殺（3U, Issue #400）: 処理野手が一塁手なら、投手カバーへ送球する以外に「自分で
             // ベースを踏む」選択肢を持つ。捕球点がベース至近なら握り替え0.70sを払わずに済むぶん自重で踏むほうが
             // 速い＝実際の 3U が発生する。所要は握り替え・送球を除いた「捕球点→一塁ベースを走り込む」時間で、
@@ -345,7 +349,8 @@ public static class FieldingResolver
             var defenseTime = throwTime;
             if (infielder.Position == FieldPosition.FirstBase)
             {
-                var carryTime = fieldTime + coeff.InfieldPlayOverheadSeconds
+                // もたつきは「捕ってから次の動作に移るまで」なので、自分で踏みにいく側も同じだけ払う
+                var carryTime = fieldTime + coeff.InfieldPlayOverheadSeconds + handleJitter
                                 + throwDist / infielder.Attributes.SprintSpeedMps;
                 if (carryTime < throwTime)
                 {
@@ -428,6 +433,27 @@ public static class FieldingResolver
     /// イレギュラーバウンドの抽選（Issue #63 (c)。一律確率＝球場の土質との接続は将来の別Issue）。
     /// 乱数消費: 発生判定1回＋発生時に横ぶれ・反発の2回。
     /// </summary>
+    /// <summary>
+    /// 内野の打球処理のもたつき[s]を引く（<see cref="FieldingCoefficients.InfieldHandleJitterMeanSeconds"/>）。
+    ///
+    /// <para>指数分布の逆関数法。下限0・右に裾＝「たいていは澱みなく、たまに大きくもたつく」。
+    /// 上限は平均の <see cref="FieldingCoefficients.InfieldHandleJitterMaxFactor"/> 倍で切る
+    /// （指数の裾は無限に伸びるので、切らないと「捕ってから4秒動かない内野手」が極稀に出る＝
+    /// これは<b>絵に出る量</b>なので実在しない値を残さない）。</para>
+    ///
+    /// <para>⚠ 平均が 0 でも<b>必ず1つ引く</b>。分岐で消費数を変えると同シード同結果が壊れる
+    /// （不変条件#2。係数を 0 にして帯を比べる、という運用ができなくなる）。</para>
+    /// </summary>
+    private static double DrawHandleJitter(FieldingCoefficients coeff, IRandomSource rng)
+    {
+        var u = rng.NextDouble();
+        if (coeff.InfieldHandleJitterMeanSeconds <= 0.0) return 0.0;
+        // u∈[0,1) なので 1−u∈(0,1] ＝ log の引数は必ず正
+        var jitter = -coeff.InfieldHandleJitterMeanSeconds * Math.Log(1.0 - u);
+        var cap = coeff.InfieldHandleJitterMeanSeconds * coeff.InfieldHandleJitterMaxFactor;
+        return Math.Min(jitter, cap);
+    }
+
     private static IrregularBounce DrawIrregular(FieldingCoefficients coeff, IRandomSource rng)
     {
         if (!MathUtil.Chance(coeff.IrregularBounceProb, rng)) return IrregularBounce.None;

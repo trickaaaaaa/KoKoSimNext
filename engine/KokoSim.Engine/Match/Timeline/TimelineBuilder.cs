@@ -688,12 +688,17 @@ public static class TimelineBuilder
                     var from = new TimelinePoint(coverer.Location.X, coverer.Location.Z);
                     var to = FirstBaseCoverPoint(field, fieldPoint);
                     var dist = Distance(from, to);
-                    if (dist >= 0.5)
-                    {
-                        var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
-                        var t0 = ContactAt + 0.35;
-                        moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t0 + dist / speed, To = to, Task = FielderTask.CoverBase });
-                    }
+                    var t0 = ContactAt + 0.35;
+                    var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
+                    var t1 = t0 + dist / speed;
+                    // ⚠ 既に別の持ち場へ走っている野手には注入しない（体は2箇所に居られない）。
+                    // 表の担当（例: 右方向の打球で投手は本塁バックアップ）と、この動的注入が同じ時刻に
+                    // 重なると、FielderAt は重なった区間で**両方の行き先へ同時に寄せる**ので合成速度が
+                    // 脚力を超える（実測: 右前へのフライを一塁手が捕った seed182 で投手 11.26 m/s。
+                    // 一塁へ球は来ておらず、カバー自体が要らない場面だった＝LegSpeedTests が検出）。
+                    // 絵では「向きが少し変」としか見えないので、重なりそのものを作らせない。
+                    if (dist >= 0.5 && !IsBusy(moves, firstBaseCoverer, t0, t1))
+                        moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t1, To = to, Task = FielderTask.CoverBase });
                 }
             }
 
@@ -813,6 +818,9 @@ public static class TimelineBuilder
             Result = resultText,
             ResolvedAt = resolvedAt,
             FielderStarts = StartsOf(fielders),
+            // 表示専用の観測（既に決まった値の写し＝新規計算・乱数消費ゼロ）
+            CatchMarginSeconds = play.CatchMarginSeconds,
+            FumbledCatch = play.ErrorKind == FieldingErrorKind.Catch,
             Ball = ball,
             Moves = moves,
             Runners = runners,
@@ -892,13 +900,20 @@ public static class TimelineBuilder
     /// <para>秒は判定（<see cref="StealResolver"/>）と同一の分解で組む＝絵のために別秒を発明しない（design-18 §4.5-③/⑨）。
     /// <paramref name="pitchout"/>/<paramref name="startType"/> は判定側の <see cref="StealResolver.DefenseTimeSeconds"/> と
     /// 揃えて渡す（渡さないと到達時刻の差が「球の速さ」に化ける）。</para></summary>
+    /// <param name="runnerSeconds">判定が使った走者の秒（ゆらぎ込み・<see cref="StealResolver.ResolveVerdict"/> の出力）。
+    /// 省略すると<b>ゆらぎ0</b>から結果に矛盾しない最小の秒を組む（絵づくり用の呼び出し）。</param>
+    /// <param name="defenseSeconds">同じく守備の秒。<paramref name="runnerSeconds"/> と対で渡す。</param>
     public static PlayTimeline BuildSteal(
         Player runner, Player catcher, StealResult result, BaserunningCoefficients c, FieldGeometry field,
         StealTarget target = StealTarget.Second, bool pitchout = false, Tactics.StartType startType = Tactics.StartType.Normal,
-        Player? doubleStealScorer = null)
+        Player? doubleStealScorer = null, double? runnerSeconds = null, double? defenseSeconds = null)
     {
-        var runnerTime = StealResolver.RunnerTimeSeconds(runner, c, startType, target);
-        var defenseTime = StealResolver.DefenseTimeSeconds(catcher, c, pitchout, startType, target);
+        // 秒は判定が使ったものをそのまま写す（表示専用・新規計算ゼロ）。持たない呼び出しだけ組み直す。
+        var play = runnerSeconds is { } rs && defenseSeconds is { } ds
+            ? new StealVerdict(result, rs, ds)
+            : StealResolver.Forced(runner, catcher, c, result, pitchout, startType, target);
+        var runnerTime = play.RunnerSeconds;
+        var defenseTime = play.DefenseSeconds;
         var safe = result == StealResult.Safe;
 
         // 狙う塁で走者レッグの from/to・受け手・実況の塁名を一般化する。
@@ -930,31 +945,14 @@ public static class TimelineBuilder
         }
         else
         {
-            // 捕手の握り替え（ポップ）は判定と同じ守備係数込みの値で使う（バグ修正 issue #485）。
-            // 生の PopTransferSeconds を使うと肩と無関係に送球区間が伸縮し（守備90で約0.1秒短縮）、
-            // 差が全部「球の速さ」に化ける。ピッチアウト／ギャンブルの短縮も同様に投げ始めへ反映する
-            // （StealResolver.DefenseTimeSeconds の引き算と揃える）＝送球区間長を送球そのもの（肩）だけに保つ。
-            var popTransfer = c.PopTransferSeconds
-                * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-            var quickBonus = 0.0;
-            if (pitchout)
-            {
-                quickBonus += c.PitchoutDefenseBonusSeconds;
-                if (startType == Tactics.StartType.Gamble) quickBonus += c.GamblePitchoutExtraBonusSeconds;
-            }
-            var throwStartPhysical = Math.Max(pitchArrive, pitchArrive + popTransfer - quickBonus); // 握り替え（守備係数・読み切り込み）
-            var throwArrivePhysical = defenseTime - c.TagSeconds;                                   // 送球到達（判定由来）
-            // 判定と絵の矛盾ガード（issue match-picture-vs-safe-out-verdict）。盗塁の判定は
-            // `logistic((defense − runner + StealSuccessBias(0.38)) / StealMarginScale(0.22))` なので、
-            // 成功50%の場面は「捕手の送球が走者到達の 0.48 秒前（bias 0.38 ＋ タッチ 0.10）に塁へ届く」絵
-            // ＝<b>先に届いた絵でも五分五分でセーフ</b>になる。しかも盗塁のセーフは判定表示を出さないので
-            // 画面に説明が出ない。本塁クロスプレー・一塁と同じガードを通して、セーフ確定なら走者到達の直後へ回す。
-            // ⚠ ずらした分は<b>投げ始め</b>を後ろへ倒して吸収する（区間長＝飛行時間は不変）＝
-            // 「捕手の握り替えが遅れた」絵になり、送球そのものの見た目の速度は肩どおりのまま（Issue #334 の性質）。
-            var flightToBase = Math.Max(0.0, throwArrivePhysical - throwStartPhysical);
-            var throwArrive = GuardAgainstVerdict(
-                throwArrivePhysical, pitchArrive + flightToBase, runnerArrive, runnerOut: !safe);
-            var throwStart = throwArrive - flightToBase;
+            // 到達は判定が使った秒そのもの（守備の巧拙・読み切り・ゆらぎは全部この中に入っている）。
+            // 投げ始めは「到達 − 距離÷肩」で逆算する（issue #485 の性質＝差が球の速さに化けない）。
+            var throwArrive = defenseTime - c.TagSeconds;   // 送球到達（判定が使った秒。ゆらぎ込み）
+            // 送球区間の長さは常に「距離÷肩」（issue #485）。ゆらぎ（握り替えのもたつき/速いポップ）は
+            // 投げ始めの位置に出す＝球の見た目の速さは肩どおりのまま。
+            var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
+            var flightToBase = throwDistance / catcher.ToFielder().ThrowSpeedMps;
+            var throwStart = Math.Max(pitchArrive, throwArrive - flightToBase);   // 捕る前には投げられない
             ball.Add(new BallSegment
             {
                 // 受け手は下の Moves でベースカバーに入る野手と同一（Issue E1・単一ソース）
@@ -963,10 +961,9 @@ public static class TimelineBuilder
             });
             moves.Add(new FielderMove
             {
-                // カバーに入る野手は球より先に塁へ着く。ガードで送球が遅れた回に合わせて
-                // 野手まで遅らせない（塁に入るのは送球の都合と無関係）＝物理の到達で見る。
+                // カバーに入る野手は球より先に塁へ着く（塁に入るのは送球の都合と無関係）。
                 Role = receiver, T0 = 0.3,
-                T1 = Math.Max(0.9, Math.Min(throwArrive, throwArrivePhysical) - 0.2),
+                T1 = Math.Max(0.9, throwArrive - 0.2),
                 To = toPt, Task = FielderTask.CoverBase,
             });
             captions.Add(new TimelineCaption(throwStart, $"キャッチャー、{baseLabel}へ送球——"));
@@ -2163,6 +2160,24 @@ public static class TimelineBuilder
             if (r.Label == "打") return r.T1;
         }
         return ContactAt + 4.3;
+    }
+
+    /// <summary>
+    /// この野手が [t0,t1) に別のレッグで走っているか（レッグの二重付与よけ）。
+    ///
+    /// <para>再生の <c>PlaybackEvaluator.FielderAt</c> は同じ役の移動を**順に合成**する（前のレッグの
+    /// 到達点を次のレッグの出発点にする）ので、時刻が重なった2本は「両方の行き先へ同時に寄る」
+    /// 合成移動になり、どちらのレッグの尺よりも速く動く。判定には出ず絵にも「向きが変」としか
+    /// 出ないので、重なりを作る側で塞ぐ（検出は LegSpeedTests / PictureNeverSplitsAFielder）。</para>
+    /// </summary>
+    private static bool IsBusy(IReadOnlyList<FielderMove> moves, FieldPosition role, double t0, double t1)
+    {
+        foreach (var m in moves)
+        {
+            if (m.Role != role) continue;
+            if (m.T0 < t1 - 1e-9 && t0 < m.T1 - 1e-9) return true;
+        }
+        return false;
     }
 
     private static Fielder? Find(IReadOnlyList<Fielder> fielders, FieldPosition pos)

@@ -900,13 +900,16 @@ public static class GameEngine
                         // 強制発動（F4）は抽選をスキップして成否を固定する。ここだけ乱数の消費順が変わるが、
                         // 強制した試合は HasForcedOutcomes で digest・統計から丸ごと外れるので影響が漏れない。
                         // 非強制時 paBaserunning は ctx.Baserunning と同一参照＝従来の乱数順・結果に不変。
-                        var safe = force switch
+                        var steal = force switch
                         {
-                            Debugging.ForcedOutcome.StealSuccess => true,
-                            Debugging.ForcedOutcome.StealCaught => false,
-                            _ => StealResolver.Resolve(
-                                bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart) == StealResult.Safe,
+                            Debugging.ForcedOutcome.StealSuccess => StealResolver.Forced(
+                                bases.First, defense.Catcher, paBaserunning, StealResult.Safe, pitchout, stealStart),
+                            Debugging.ForcedOutcome.StealCaught => StealResolver.Forced(
+                                bases.First, defense.Catcher, paBaserunning, StealResult.CaughtStealing, pitchout, stealStart),
+                            _ => StealResolver.ResolveVerdict(
+                                bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart),
                         };
+                        var safe = steal.Safe;
                         offense.RecordSteal(bases.First, safe);
                         stealRecRunner = secondStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         stealStartApplied = stealStart;
@@ -955,8 +958,9 @@ public static class GameEngine
                         if (ctx.CaptureTimelines)
                             stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                 Timeline.TimelineBuilder.BuildSteal(
-                                    secondStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
-                                    paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer));
+                                    secondStealer, defense.Catcher, steal.Result,
+                                    paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer,
+                                    steal.RunnerSeconds, steal.DefenseSeconds));
 
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -983,9 +987,9 @@ public static class GameEngine
                         var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
-                        var safe = StealResolver.Resolve(
-                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart,
-                            StealTarget.Third) == StealResult.Safe;
+                        var steal = StealResolver.ResolveVerdict(
+                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart, StealTarget.Third);
+                        var safe = steal.Safe;
                         offense.RecordSteal(bases.Second, safe);
                         stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Second is { } thirdSlider)
@@ -1001,8 +1005,9 @@ public static class GameEngine
                         if (ctx.CaptureTimelines)
                             stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                 Timeline.TimelineBuilder.BuildSteal(
-                                    thirdStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
-                                    ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart));
+                                    thirdStealer, defense.Catcher, steal.Result,
+                                    ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart,
+                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds));
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }
@@ -1034,9 +1039,9 @@ public static class GameEngine
                         var homeStealer = bases.Third!; // 本盗の走者（下で bases.Third は生還 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Third, defense.Catcher, currentPitcher, homeStart, ctx.Baserunning, rng);
-                        var safe = StealResolver.Resolve(
-                            bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart,
-                            StealTarget.Home) == StealResult.Safe;
+                        var steal = StealResolver.ResolveVerdict(
+                            bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart, StealTarget.Home);
+                        var safe = steal.Safe;
                         offense.RecordSteal(bases.Third, safe);
                         stealRecRunner = homeStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Third is { } homeSlider)
@@ -1065,8 +1070,9 @@ public static class GameEngine
                         if (ctx.CaptureTimelines)
                             stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                 Timeline.TimelineBuilder.BuildSteal(
-                                    homeStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
-                                    ctx.Baserunning, ctx.Field, StealTarget.Home, pitchout, homeStart));
+                                    homeStealer, defense.Catcher, steal.Result,
+                                    ctx.Baserunning, ctx.Field, StealTarget.Home, pitchout, homeStart,
+                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds));
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }

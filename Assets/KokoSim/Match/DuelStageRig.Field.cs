@@ -193,7 +193,9 @@ namespace KokoSim.Unity.Match
             a.BasePos = new Vector3(x, a.BasePos.y, z);   // ⚠ 縦は据え置き（上の項）
             a.BaseRot = a.Go.transform.localRotation;
             a.GroundY = FieldGroundY(x, z);   // マウンドの上だけ持ち上がる（投手が降りたら地面へ）
-            GroundFix(a);
+            // 飛び込み中は上下をクリップ（ルートモーション）が持っている＝足で吸わせない。
+            // 吸わせると足が上がったぶんだけ胴が地面へ潜る（実測 −0.40m。design-18 §7-2）
+            if (!a.RootDrivenY) GroundFix(a);
         }
 
         /// <summary>投手板まわりの平坦部の半径[m]。マウンドの断面はここまで水平。</summary>
@@ -353,6 +355,12 @@ namespace KokoSim.Unity.Match
             {
                 st.CatchEvent = -1;
                 st.Ladder = -1;   // 走り／待機の管理へ戻す
+                // 上下をクリップに預けていたなら返してもらう（次の PlaceFielder が足で接地を解き直す）
+                if (a.RootDrivenY)
+                {
+                    a.RootDrivenY = false;
+                    if (a.Animator != null) a.Animator.applyRootMotion = false;
+                }
             }
 
             // 速度は中央差分。engine は位置しか返さないので、速さも向きもここで採るしかない
@@ -513,12 +521,27 @@ namespace KokoSim.Unity.Match
             /// </summary>
             public readonly float PostCatchFollowSeconds;
 
+            /// <summary>
+            /// 体の上下が**ルートモーションに入っている**収録か（横っ飛び・スライディング）。
+            ///
+            /// 野手は <c>rootMotion:false</c> ＋ <see cref="GroundFix"/>（足を地面へ吸わせる）で置いており、
+            /// 立っている収録ではそれで正しい。だが飛び込みは**足が上がって胴が下**になるので、
+            /// 足で吸わせると胴が地面へめり込む（実測 2026-08-14: 伸び切りのコマで足は根から 1.083m、
+            /// 体の最下点は 0.688m ＝ 足を地面へ置くと最下点が **−0.40m**）。
+            /// この収録の間だけ <c>applyRootMotion</c> を入れて上下をクリップに持たせ、
+            /// <see cref="GroundFix"/> を止める（横位置と向きは従来どおり engine が毎コマ置く）。
+            /// このとき <see cref="GloveY"/> は「足元から」ではなく<b>地面から</b>の高さになる。
+            /// </summary>
+            public readonly bool RootDrivenY;
+
             public FieldCatchAnchor(string clip, float moment, float gloveY,
-                float gloveX, float gloveZ, CatchApproach approach, float postCatchFollowSeconds = -1f)
+                float gloveX, float gloveZ, CatchApproach approach, float postCatchFollowSeconds = -1f,
+                bool rootDrivenY = false)
             {
                 Clip = clip; Moment = moment; GloveY = gloveY;
                 GloveX = gloveX; GloveZ = gloveZ; Approach = approach;
                 PostCatchFollowSeconds = postCatchFollowSeconds;
+                RootDrivenY = rootDrivenY;
             }
         }
 
@@ -549,6 +572,53 @@ namespace KokoSim.Unity.Match
         };
 
         /// <summary>
+        /// 飛び込み系の捕球（issue wire-unused-defender-motions）。**捕球余裕が小さいときだけ**選ばれ、
+        /// 高さの主軸（<see cref="FieldCatchAnchors"/>）とは別表にしてある。
+        ///
+        /// <para>engine は空中捕球の余裕（<c>CatchTimeBudget − 到達所要</c>）を持っており、
+        /// 小さい正＝ぎりぎり届く／小さい負＝あと一歩届かない。**絵ではこの区別が付かない**
+        /// （届かなかったのか、余裕で前に落ちたのか）のが元の症状で、これがそのまま発火条件になる。</para>
+        ///
+        /// <para>アンカーは実測（2026-08-14・<c>DuelMotionSpike.RunFielderCatchProbe</c>／
+        /// <c>out/duel-stage/fieldcatch.tsv</c> ＋ 波形 <c>fieldcatch-detail.tsv</c>）。
+        /// ⚠ **集計の <c>tDisp</c> をそのまま使えない収録がある**（design-18 §4.5-③）:
+        /// スライディングは「構えからグラブが最も動いた瞬間」が走り出しの腕振り（0.24s）に立ち、
+        /// 実際に体を投げ出して捕るのは 0.88s。波形（根の沈み <c>rootY</c> が底を打つ区間）で採った。</para>
+        /// </summary>
+        private static readonly FieldCatchAnchor[] FieldDiveAnchors =
+        {
+            // 横っ飛び。伸び切りは 0.80s（根が 0.606m 沈む＝地面すれすれ 0.170m でグラブが止まる）
+            new("AA_Baseball_Defender_Movement_Sprint_Diving_Catch", 0.80f, 0.170f, -0.789f, -0.023f,
+                CatchApproach.Forward, rootDrivenY: true),
+            // スライディングキャッチ。0.88s（根が 0.685m 沈み切ったコマ。グラブは 0.330m）
+            new("AA_Baseball_Defender_Movement_Sprint_Sliding_Catch", 0.88f, 0.330f, -0.356f, 0.086f,
+                CatchApproach.Forward, rootDrivenY: true),
+            // 背走ジャンピング。1.36s（跳躍の頂点。足が上がるだけで胴は下がらない＝接地は従来どおり足で解ける）
+            new("AA_Baseball_Defender_Movement_Run_Back_To_Jumping_Catch", 1.36f, 1.581f, -0.252f, 0.287f,
+                CatchApproach.Back),
+        };
+
+        private const int DiveAnchorDiving = 0;
+        private const int DiveAnchorSliding = 1;
+        private const int DiveAnchorBackJump = 2;
+
+        /// <summary>
+        /// 飛び込みを出す捕球余裕[s]（監督決定 2026-08-13）。
+        ///
+        /// <para>母集団の実測（40試合・空中捕球1341件。<c>CatchMarginDisplayTests</c> に表がある）:
+        /// 0.20 秒なら捕球の 9.6%／落球の 16.7% が該当＝**10打席に1回強**。0.50 秒まで開けると
+        /// 4本に1本が飛び込みで安っぽく、0.10 秒まで絞ると 4.6% で死に演出になる。</para>
+        /// </summary>
+        public const float DiveMarginSeconds = 0.20f;
+
+        /// <summary>
+        /// 横っ飛びとスライディングを分ける捕球余裕[s]。**際どいほど大げさな収録**にする
+        /// （実測で 0〜0.10 が 4.6%、0.10〜0.20 が 5.0% ＝ ほぼ半々に割れる）。
+        /// 単調なしきい値なので、同じプレーは常に同じ絵になる（乱数を引かない）。
+        /// </summary>
+        private const float DiveLayoutMarginSeconds = 0.10f;
+
+        /// <summary>
         /// 近づき方を切り替える速さ[m/s]。これ未満は「その場」。
         /// <see cref="FielderIdleSpeedMps"/> と別に持つのは、走りの段の切替と捕球クリップの選択が
         /// **同じ閾値である必要はない**ため（歩き程度で近づくならその場の捕球で足りる）。
@@ -561,6 +631,20 @@ namespace KokoSim.Unity.Match
 
         /// <summary>捕った形を見せる据え置き[s]（打ち切りには必ず据え置きを添える＝design-18 §4.5-⑭）。</summary>
         private const float CatchHoldSeconds = 0.35f;
+
+        /// <summary>
+        /// 飛び込み・お手玉の後、収録の尻尾（着地〜起き上がり）を見せる上限[s]。
+        /// 収録の実尺は 1.6〜2.0 秒だが、engine の回収時刻はこちらの都合を待たない＝
+        /// 上限で頭打ちにして、走りの段へ戻す（起き上がりの途中でも engine の予定が優先）。
+        /// </summary>
+        private const float DiveTailMaxSeconds = 1.6f;
+
+        /// <summary>その収録の「捕る瞬間より後」の尺[s]（上限つき）。窓の長さと譲る範囲の**単一ソース**。</summary>
+        private static float DiveTailSeconds(FieldCatchAnchor anchor)
+        {
+            var clip = LoadClip(anchor.Clip);
+            return clip == null ? 0f : Mathf.Min(DiveTailMaxSeconds, clip.length - anchor.Moment);
+        }
 
         /// <summary>
         /// 捕球点を収録のグラブ位置より何割ぶん内側へ置くか（腕に残す余裕）。
@@ -577,6 +661,33 @@ namespace KokoSim.Unity.Match
         /// 捕球クリップを選ぶ**純関数**（乱数を引かない＝同じプレーは常に同じ絵）。
         /// 主軸は球の高さ、副軸は近づき方。残差はグラブIKが詰めるので、ここは「系統が合っていれば良い」。
         /// </summary>
+        /// <summary>
+        /// お手玉（弾く）の収録。左右2本（実測 2026-08-14）。<c>Moment</c> は「グラブが球へ届いて
+        /// 弾く瞬間」＝グラブが最も下がったコマで、その後の**もう一度掴みにいく芝居**（L=1.10s／R=1.36s）
+        /// ではない。<c>tDisp</c>（構えからの移動量の最大）はその後者に立つので使えない。
+        /// どちらも根は動かない（<c>rootY</c>≈0）＝接地は従来どおり足で解ける。
+        /// </summary>
+        private static readonly FieldCatchAnchor[] FieldFumbleAnchors =
+        {
+            new("AA_Baseball_Defender_Movement_Fumble_L", 0.34f, 0.490f, -0.696f, 0.335f, CatchApproach.Left),
+            new("AA_Baseball_Defender_Movement_Fumble_R", 0.84f, 0.304f, -0.454f, 0.306f, CatchApproach.Right),
+        };
+
+        /// <summary>
+        /// 飛び込み系を選ぶ**純関数**（乱数なし）。合わなければ −1 ＝従来の高さ×近づき方へ落とす。
+        ///
+        /// <para>高さの主軸は使わない。<c>CatchHeightFor</c> は種別ごとの定数（滞空は一律 1.40m）で
+        /// 飛球の間に差が無く、飛び込むかどうかを決められるのは engine の**捕球余裕**だけだからである。
+        /// 落球側（余裕が負）は常に横っ飛び＝「飛び込んだが届かなかった」の絵（監督決定 2026-08-13）。</para>
+        /// </summary>
+        private static int SelectFieldDive(float catchMarginSeconds, CatchApproach approach)
+        {
+            if (Mathf.Abs(catchMarginSeconds) >= DiveMarginSeconds) return -1;
+            if (approach == CatchApproach.Back) return DiveAnchorBackJump;   // 背走はジャンピング一択
+            if (catchMarginSeconds < DiveLayoutMarginSeconds) return DiveAnchorDiving;
+            return DiveAnchorSliding;
+        }
+
         private static int SelectFieldCatch(float ballHeightM, CatchApproach approach)
         {
             int best = -1;
@@ -610,13 +721,45 @@ namespace KokoSim.Unity.Match
             public FieldPosition Pos;
             public float TCatch;      // 球が着く時刻（プレーの時計）
             public float TStart;      // クリップを始める時刻＝TCatch − Moment（負なら頭を捨てて始める）
+            public FieldCatchKind Kind;
             public int Anchor;
             public Vector3 Point;     // 捕球点（**予定時に1回だけ確定**。毎コマ球を追わない）
             public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
             public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
             public float PulledM;     // 捕球点を engine の終点から**軌跡に沿って**遡らせた量[m]
+            /// <summary>
+            /// クリップを流さない（球の扱いだけ行う）。飛び込んだ本人が**そのまま拾う**ときに立つ。
+            ///
+            /// <para>実測 2026-08-14: 抜けた飛球の回収時刻は落球の <b>0.08 秒後</b>だった
+            /// （engine の回収は落下点で決まるので、飛び込んだ足元に落ちればほぼ同時になる）。
+            /// そのまま両方流すと、飛び込みが 0.12 秒で走り込み捕球のクリップに奪われ、
+            /// **飛び込みが絵に出ない**。回収時刻は判定なので動かせない＝<b>クリップ側を譲る</b>。
+            /// 球は予定どおりこの野手のグラブへ入る（倒れたまま掴む絵になる）。</para>
+            /// </summary>
+            public bool SkipClip;
             public bool Fired;
         }
+
+        /// <summary>
+        /// 予定1件が「どう終わる芝居か」。<b>engine が既に決めた結果</b>の写しで、ここで何かを決めはしない。
+        ///
+        /// <para><see cref="Catch"/>/<see cref="Dive"/> だけが球をグラブへ吸わせ、グラブIKを当てる。
+        /// <see cref="DiveMiss"/>（飛び込んだが届かない）と <see cref="Fumble"/>（弾く）は
+        /// **球に触らせない**＝engine の球の位置がそのまま描かれ、届かなかった距離は
+        /// 「野手の立ち位置と球の距離」そのものになる（絵のために距離を発明しない）。</para>
+        /// </summary>
+        private enum FieldCatchKind { Catch, Dive, DiveMiss, Fumble }
+
+        private static FieldCatchAnchor AnchorOf(FieldCatchKind kind, int index) => kind switch
+        {
+            FieldCatchKind.Dive or FieldCatchKind.DiveMiss => FieldDiveAnchors[index],
+            FieldCatchKind.Fumble => FieldFumbleAnchors[index],
+            _ => FieldCatchAnchors[index],
+        };
+
+        /// <summary>球をグラブへ吸わせる種別か（＝捕った芝居）。</summary>
+        private static bool HoldsBall(FieldCatchKind kind)
+            => kind == FieldCatchKind.Catch || kind == FieldCatchKind.Dive;
 
         private readonly List<FieldCatchEvent> _catchEvents = new();
 
@@ -658,6 +801,67 @@ namespace KokoSim.Unity.Match
         private float _catchHoldDriftMax;
         private int _catchHoldCount;
 
+        /// <summary>飛び込み系の窓での「体の最下点の対地高」[m]。負＝地面へめり込んだ・実測用。</summary>
+        private float _diveClearanceMin = float.MaxValue, _diveClearanceMax = float.MinValue;
+        /// <summary>このプレーで組んだ芝居の内訳（受け入れの実測・撮影ハーネス用）。</summary>
+        private int _kindCatch, _kindDive, _kindDiveMiss, _kindFumble;
+
+        /// <summary>体の最下点（ワールドY）。接地の判定材料＝目測では「そういう姿勢」と区別できない。</summary>
+        private static float LowestBoneY(Animator anim)
+        {
+            var bones = new[]
+            {
+                HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes,
+                HumanBodyBones.RightToes, HumanBodyBones.Hips, HumanBodyBones.Chest,
+                HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightHand,
+                HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm,
+                HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg,
+            };
+            float low = float.MaxValue;
+            foreach (var b in bones)
+            {
+                var t = anim.GetBoneTransform(b);
+                if (t != null) low = Mathf.Min(low, t.position.y);
+            }
+            return low;
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】守備の芝居の実測（issue wire-unused-defender-motions）。
+        ///
+        /// <c>内訳</c> は engine の結果から選ばれた芝居の数＝しきい値が母集団で効いているかの根拠。
+        /// <c>接地</c> は飛び込み中の体の最下点の対地高で、**負ならめり込んでいる**（絵では
+        /// 「そういう姿勢」と区別できないので数で見る＝design-18 §3.3 と同じ理由）。
+        /// </summary>
+        public string FieldDiveDiagForCapture() => string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "内訳 捕球={0} 飛び込み={1} 届かず={2} お手玉={3}\t接地={4:F3}〜{5:F3}m\t直近={6}@{7:F2}s({8})→今{9:F2}s",
+            _kindCatch, _kindDive, _kindDiveMiss, _kindFumble,
+            _diveClearanceMin > 1e6f ? 0f : _diveClearanceMin,
+            _diveClearanceMax < -1e6f ? 0f : _diveClearanceMax,
+            _lastFiredClip ?? "-", _lastFiredAt, _lastFiredKind,
+            _lastFiredPos.HasValue && FielderActor(_lastFiredPos.Value) != null
+                ? FielderActor(_lastFiredPos.Value).Time : -1f)
+            + "\t予定=" + FieldCatchPlanForCapture();
+
+        private string _lastFiredClip;
+        private float _lastFiredAt;
+        private FieldCatchKind _lastFiredKind;
+        private FieldPosition? _lastFiredPos;
+
+        /// <summary>【撮影ハーネス用】このプレーの芝居の予定表（誰が・いつ・何を）。</summary>
+        public string FieldCatchPlanForCapture()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var e in _catchEvents)
+            {
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(e.Pos).Append(':').Append(e.Kind).Append('@')
+                    .Append(e.TCatch.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return sb.Length > 0 ? sb.ToString() : "-";
+        }
+
         /// <summary>
         /// このプレーの捕球を全部洗い出して予定表にする。
         ///
@@ -666,6 +870,12 @@ namespace KokoSim.Unity.Match
         /// **送球の受け手だけは推定しない**（<c>ToRole</c>＝seam E1）。併殺のように二塁の周りへ
         /// 遊撃手・二塁手・走者が同時に集まる場面では最近傍が取り違え、「受けていない野手が捕る」
         /// という形で絵に出るのに、原因は絵からは切り分けられない。
+        ///
+        /// <para>「捕ったのか・弾いたのか・届かなかったのか」も推定しない（issue wire-unused-defender-motions）。
+        /// engine が <c>CatchMargin</c>（空中捕球の余裕）と <c>Fumbled</c>（弾いた）で既に決めており、
+        /// ここはその写しで芝居を選ぶだけ。<b>余裕が負＝捕っていない</b>ので、その打球は球をグラブへ
+        /// 吸わせない（従来はここが「終点に野手が居るか」だけの判定で、抜けた打球でも近ければ
+        /// 球がグラブへ寄っていた）。</para>
         /// </summary>
         private void BuildFieldCatchPlan(PlaybackPlay play)
         {
@@ -675,6 +885,15 @@ namespace KokoSim.Unity.Match
             _catchHoldDriftMax = 0f;
             _catchHoldCount = 0;
             if (play == null || play.Ball == null) return;
+
+            // 弾いた瞬間（お手玉）。engine の判定イベントが単一ソース＝時刻を絵の側で作らない
+            var fumbleAt = float.NaN;
+            if (play.Fumbled && play.Judgements != null)
+                foreach (var j in play.Judgements)
+                    if (j.Kind == JudgementKind.Error) fumbleAt = (float)j.T;
+            // 空中捕球の余裕（フライ/ライナーのみ非null）。ゴロは NaN＝下の分岐が全部素通りする
+            var catchMargin = play.CatchMargin.HasValue ? (float)play.CatchMargin.Value : float.NaN;
+            var aerialResolved = false;   // 空中の勝負は1本の打球につき1回だけ
 
             foreach (var seg in play.Ball)
             {
@@ -696,6 +915,29 @@ namespace KokoSim.Unity.Match
 
                 float tc = (float)seg.T1;
                 var end = seg.At(seg.T1 - seg.T0);
+
+                // どう終わる芝居か（engine が決めた結果の写し）。
+                //   弾いた瞬間で終わる打球  → お手玉
+                //   空中の勝負で余裕が負    → 捕っていない。際どければ飛び込んで届かない絵、
+                //                             完全に抜けた当たりは芝居なし（従来の「落球に捕球クリップを
+                //                             流さない」を明示的に保つ）
+                var kind = FieldCatchKind.Catch;
+                var aerial = !isThrow && !float.IsNaN(catchMargin) && !aerialResolved
+                    && (eb == null ? seg is ArcSegment : eb.Kind == BallSegmentKind.Flight);
+                if (!isThrow && !float.IsNaN(fumbleAt) && Mathf.Abs(tc - fumbleAt) < 0.05f)
+                {
+                    kind = FieldCatchKind.Fumble;
+                    aerialResolved |= aerial;
+                }
+                else if (aerial)
+                {
+                    aerialResolved = true;
+                    if (catchMargin < 0f)
+                    {
+                        if (catchMargin <= -DiveMarginSeconds) continue;   // 抜けた当たり＝誰も触らない
+                        kind = FieldCatchKind.DiveMiss;
+                    }
+                }
 
                 // 受け手。送球は engine が知っている（E1）＝推定しない。無ければ従来どおり最近傍へ落とす
                 FieldPosition who;
@@ -727,13 +969,27 @@ namespace KokoSim.Unity.Match
                 float h = isThrow ? ThrowCatchHeightM
                     : CatchHeightFor(eb != null ? eb.Kind
                         : (seg is RollSegment ? BallSegmentKind.Roll : BallSegmentKind.Flight));
-                int anchor = SelectFieldCatch(h, app);
-                if (anchor < 0) continue;
+                int anchor;
+                if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
+                else if (kind == FieldCatchKind.DiveMiss) anchor = DiveAnchorDiving;
+                else
+                {
+                    // ぎりぎり届く飛球は「間に合わせ方」で選ぶ（高さの主軸より優先）
+                    anchor = aerial ? SelectFieldDive(catchMargin, app) : -1;
+                    if (anchor >= 0) kind = FieldCatchKind.Dive;
+                    else
+                    {
+                        anchor = SelectFieldCatch(h, app);
+                        if (anchor < 0) continue;
+                    }
+                }
 
                 // 次のセグメントが始まるまでは球を捕球点に留める（engine の保持位置は高さ0のため）
                 float holdUntil = (float)play.Dur;
                 foreach (var nxt in play.Ball)
                     if (nxt.T0 >= seg.T1 - 1e-4 && nxt.T0 < holdUntil) holdUntil = (float)nxt.T0;
+                // 捕っていない芝居は球に触らせない（窓を開かない）＝球は engine の位置のまま
+                if (!HoldsBall(kind)) holdUntil = float.NegativeInfinity;
 
                 // 捕球点を**収録のグラブが居る距離**へ合わせる。engine の終点は「球が止まる点」で
                 // あって「捕る点」ではなく、実測では**両側に**破綻していた:
@@ -743,7 +999,7 @@ namespace KokoSim.Unity.Match
                 //             グラブを胸の中へ畳むことになる
                 // どちらも「グラブの居る距離で捕る」で解ける。嘘の大きさは両側とも
                 // |野手との距離 − グラブの距離| に収まる（打点を投手側へ出す既存の作法と同型）。
-                var an = FieldCatchAnchors[anchor];
+                var an = AnchorOf(kind, anchor);
                 float reach = new Vector2(an.GloveX, an.GloveZ).magnitude * CatchReachSlack;
                 var fp = PlaybackEvaluator.FielderAt(play, who, tc).Pos;
                 // 高さは**選んだ収録のグラブの高さそのもの**にする。`h` は「その種別ならこのくらいの高さ」
@@ -787,14 +1043,59 @@ namespace KokoSim.Unity.Match
                 {
                     Pos = who,
                     TCatch = tc,
-                    TStart = tc - FieldCatchAnchors[anchor].Moment,
+                    TStart = tc - an.Moment,
+                    Kind = kind,
                     Anchor = anchor,
                     Point = pt,
                     HoldUntil = holdUntil,
                     FielderGapM = bestD,
                     PulledM = pulled,
                 });
+                switch (kind)
+                {
+                    case FieldCatchKind.Dive: _kindDive++; break;
+                    case FieldCatchKind.DiveMiss: _kindDiveMiss++; break;
+                    case FieldCatchKind.Fumble: _kindFumble++; break;
+                    default: _kindCatch++; break;
+                }
             }
+
+            // 飛び込み・お手玉の**尻尾**（着地〜起き上がり）に、同じ野手の次の予定が食い込む場合は
+            // そちらのクリップを譲らせる（球の扱いだけ残す）。engine の時刻は1つも動かさない
+            for (int i = 0; i < _catchEvents.Count; i++)
+            {
+                var body = _catchEvents[i];
+                if (body.Kind == FieldCatchKind.Catch) continue;
+                var tail = body.TCatch + DiveTailSeconds(AnchorOf(body.Kind, body.Anchor));
+                for (int j = 0; j < _catchEvents.Count; j++)
+                {
+                    if (j == i) continue;
+                    var next = _catchEvents[j];
+                    if (next.Pos != body.Pos || next.TCatch <= body.TCatch || next.TCatch > tail) continue;
+                    next.SkipClip = true;
+                    _catchEvents[j] = next;
+                }
+            }
+        }
+
+        /// <summary>
+        /// お手玉の左右を**打球の到来方向**で決める（監督決定 2026-08-13。乱数を引かない＝決定論）。
+        ///
+        /// <para>球がその野手の右手側へ流れていれば <c>Fumble_R</c>、左手側なら <c>Fumble_L</c>。
+        /// 「体の向き」は捕球と同じくグラブが球へ向くよう後から回すので、判定は<b>向きに依らない量</b>
+        /// ——球の進行方向と「野手→球」の外積の符号——で採る。</para>
+        /// </summary>
+        private static int SelectFumbleSide(PlaybackPlay play, FieldPosition who, float tc, PlaybackBallSegment seg)
+        {
+            var end = seg.At(seg.T1 - seg.T0);
+            var back = seg.At(Mathf.Max(0f, (float)(seg.T1 - seg.T0) - 0.1f));
+            var travel = new Vector2((float)(end.X - back.X), (float)(end.Y - back.Y));
+            var fp = PlaybackEvaluator.FielderAt(play, who, tc).Pos;
+            var toBall = new Vector2((float)(end.X - fp.X), (float)(end.Y - fp.Y));
+            if (travel.sqrMagnitude < 1e-8f || toBall.sqrMagnitude < 1e-8f) return 0;
+            // 外積 z＞0 … 球は野手から見て**左手側**へ抜けていく（フィールドの (x,z) 系）
+            float cross = toBall.x * travel.y - toBall.y * travel.x;
+            return cross > 0f ? 0 : 1;
         }
 
         /// <summary>終点からこれ以上離れていたら「誰も捕っていない」[m]。</summary>
@@ -864,14 +1165,34 @@ namespace KokoSim.Unity.Match
                 var e = _catchEvents[i];
                 if (e.Fired || t < e.TStart) continue;
                 var a = FielderActor(e.Pos);
-                var anchor = FieldCatchAnchors[e.Anchor];
+                var anchor = AnchorOf(e.Kind, e.Anchor);
                 var clip = LoadClip(anchor.Clip);
+                if (e.SkipClip)
+                {
+                    // 飛び込みの尻尾に食い込む回収。**クリップは譲る**（倒れたまま掴む絵）が、
+                    // 球はこの予定のものなので狙点とIKはそのまま生かす
+                    FielderMotion sk;
+                    if (_loco.TryGetValue(e.Pos, out sk))
+                    {
+                        sk.CatchEvent = i;
+                        _loco[e.Pos] = sk;
+                    }
+                    e.Fired = true;
+                    _catchEvents[i] = e;
+                    continue;
+                }
                 if (a != null && clip != null)
                 {
                     // ⚠ 頭出しは Max(0,…) で潰さない。TStart が未来なら**まだ来ていない**ので
                     //    上の t < TStart で降りており、ここへ来る時点で t − TStart ≥ 0 が保証されている
                     var endAt = anchor.PostCatchFollowSeconds >= 0f
                         ? anchor.Moment + anchor.PostCatchFollowSeconds : 0f;
+                    // 上下をクリップに持たせる収録（横っ飛び・スライディング）。
+                    // ⚠ **頭出しの前に切って、置き直してから入れる**。SeekActor はルートモーションを
+                    //    積みながら 0→頭出し位置まで進めるので、入れたまま頭出しすると
+                    //    「まだ沈んでいないはずの量」だけ根が下がった状態から始まる
+                    if (a.Animator != null) a.Animator.applyRootMotion = false;
+                    a.RootDrivenY = false;
                     SetActorClip(a, clip, t - e.TStart, endAt);
                     a.Speed = 1f;                       // 走りの倍率を持ち越さない
                     a.HoldSeconds = CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
@@ -879,7 +1200,12 @@ namespace KokoSim.Unity.Match
                     if (_loco.TryGetValue(e.Pos, out st))
                     {
                         st.Ladder = int.MinValue;       // 走りの段の管理から外す（クリップを奪わせない）
-                        st.CatchUntil = e.TCatch + CatchHoldSeconds;
+                        // 飛び込み系は**起き上がりまで収録に入っている**（実測: 横っ飛び 2.83s のうち
+                        // 捕るのは 0.80s で、残りが着地〜起き上がり。腰の高さが 0.79→0.17→0.72 と戻る）。
+                        // 0.35 秒で窓を閉じると走りの段がクリップを奪い、倒れた姿勢から待機へ瞬間移動する
+                        // （打ち切りには必ず据え置きを添える＝design-18 §4.5-⑬⑭ と同じ失敗）。
+                        st.CatchUntil = e.TCatch + (e.Kind == FieldCatchKind.Catch
+                            ? CatchHoldSeconds : DiveTailSeconds(anchor));
                         st.CatchEvent = i;
                         // **グラブが球の来る方を向くように体を回す**。走る向きを速度ベクトルへ
                         // 合わせたのと同じ考え方で、今度は合わせる対象がグラブになる。
@@ -907,10 +1233,21 @@ namespace KokoSim.Unity.Match
                         _loco[e.Pos] = st;
                         PlaceFielder(a, (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.X,
                             (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.Y, st.Yaw);
+                        // 足が地面に載った状態で置き直してから、上下をクリップへ渡す（横位置と向きは
+                        // これまでどおり毎コマ engine が置く＝ルートモーションの XZ は捨てられる）
+                        if (anchor.RootDrivenY && a.Animator != null)
+                        {
+                            a.RootDrivenY = true;
+                            a.Animator.applyRootMotion = true;
+                        }
                     }
                 }
                 e.Fired = true;
                 _catchEvents[i] = e;
+                _lastFiredClip = anchor.Clip;
+                _lastFiredAt = e.TCatch;
+                _lastFiredKind = e.Kind;
+                _lastFiredPos = e.Pos;
             }
         }
 
@@ -951,6 +1288,7 @@ namespace KokoSim.Unity.Match
                 for (int i = 0; i < _catchEvents.Count; i++)
                 {
                     var c = _catchEvents[i];
+                    if (!HoldsBall(c.Kind)) continue;          // 球を持っていない＝タッチしにいけない
                     if (c.TCatch > t1 + 1e-3f) continue;       // タッチより後に捕る球は関係ない
                     var d = new Vector2(c.Point.x, c.Point.z) - bag;
                     if (d.magnitude > TagReceiverRadiusM) continue;
@@ -1126,6 +1464,23 @@ namespace KokoSim.Unity.Match
                 var st = kv.Value;
                 if (st.CatchEvent < 0 || st.CatchEvent >= _catchEvents.Count) continue;
                 var e = _catchEvents[st.CatchEvent];
+                // 接地の実測（飛び込み系）。**絵では「そういう姿勢」と区別できない**ので数で見る。
+                // 体の最下点が負＝地面へめり込んでいる／大きな正＝浮いている
+                if (e.Kind != FieldCatchKind.Catch)
+                {
+                    var ac = FielderActor(kv.Key);
+                    if (ac?.Animator != null)
+                    {
+                        float clr = LowestBoneY(ac.Animator) - _root.transform.position.y - ac.GroundY;
+                        _diveClearanceMin = Mathf.Min(_diveClearanceMin, clr);
+                        _diveClearanceMax = Mathf.Max(_diveClearanceMax, clr);
+                    }
+                }
+                // 捕っていない芝居（飛び込んだが届かない・お手玉）はグラブを球へ寄せない。
+                // 寄せると**捕ってしまう**＝収録は捕るクリップなので、IK を当てないことが
+                // 「届かなかった」の表現そのものになる。外れる量は engine の幾何
+                // （その時刻の野手の位置と球の位置の差）がそのまま出る＝絵のために距離を発明しない
+                if (!HoldsBall(e.Kind)) continue;
                 var a = FielderActor(kv.Key);
                 if (a == null || a.Animator == null) continue;
 
@@ -1211,12 +1566,14 @@ namespace KokoSim.Unity.Match
                 + "s）のグラブ→捕球点の最悪="
                 + _catchHoldDriftMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
                 + "m\t計測コマ=" + _catchHoldCount);
-            sb.AppendLine("pos\ttCatch\ttStart\tcatchH\t野手との距離\t手前へ\tclip");
+            sb.AppendLine("pos\t芝居\ttCatch\ttStart\tcatchH\t野手との距離\t手前へ\tclip");
             foreach (var e in _catchEvents)
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F2}\t{6}", e.Pos, e.TCatch, e.TStart,
+                    "{0}\t{1}{2}\t{3:F2}\t{4:F2}\t{5:F2}\t{6:F2}\t{7:F2}\t{8}",
+                    e.Pos, e.Kind, e.SkipClip ? "(譲)" : "", e.TCatch, e.TStart,
                     e.Point.y, e.FielderGapM, e.PulledM,
-                    FieldCatchAnchors[e.Anchor].Clip.Replace("AA_Baseball_Defender_", "")));
+                    // ⚠ 表は3つある（通常／飛び込み／お手玉）。添字だけで引くと別の収録名が出る
+                    AnchorOf(e.Kind, e.Anchor).Clip.Replace("AA_Baseball_Defender_", "")));
             return sb.ToString();
         }
 

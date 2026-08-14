@@ -28,8 +28,15 @@ public sealed class UnassistedPutoutTests
 
     private static readonly Aerodynamics Aero = new();
     private static readonly FieldGeometry Field = new();
-    /// <summary>失策乱数を止め、判定を所要時間だけに絞る（InfieldGrounderTimingTests と同型）。</summary>
-    private static readonly FieldingCoefficients Coeff = new() { ErrorBaseProb = 0, ThrowErrorBaseProb = 0 };
+    /// <summary>
+    /// 失策乱数を止め、判定を所要時間だけに絞る（InfieldGrounderTimingTests と同型）。
+    /// もたつき（<c>InfieldHandleJitterMeanSeconds</c>）も 0 にする＝ここで見たいのは
+    /// 「送球するか自分で踏むか」の<b>幾何</b>で、引いた秒はどちらの経路にも同じだけ乗るので邪魔なだけ。
+    /// </summary>
+    private static readonly FieldingCoefficients Coeff = new()
+    {
+        ErrorBaseProb = 0, ThrowErrorBaseProb = 0, InfieldHandleJitterMeanSeconds = 0,
+    };
 
     private static FieldingPlay Grounder(double exitVelocityMps, double bearingDeg, double launchAngleDeg = 3.0)
         => FieldingResolver.ResolveDetailed(

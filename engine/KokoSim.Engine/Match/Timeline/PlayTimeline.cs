@@ -173,6 +173,23 @@ public sealed record PlayTimeline
     /// </summary>
     public IReadOnlyDictionary<FieldPosition, TimelinePoint>? FielderStarts { get; init; }
 
+    /// <summary>
+    /// 空中捕球の余裕[s]（<see cref="Fielding.FieldingPlay.CatchMarginSeconds"/> の写し。表示専用）。
+    /// 正＝余裕を持って捕った／負＝間に合わず落ちた。フライ・ライナーのみ非null。
+    ///
+    /// <para>判定側は既にこの値で捕る/捕らないを決めており、ここは**決まった値の写し**＝新規計算も
+    /// 乱数消費もゼロ（<see cref="FielderStarts"/> と同じ構図）。3Dの守備は「ぎりぎり届く」＝
+    /// 横っ飛び・スライディング・背走ジャンピングを出すのにこの値だけを見る（絵からは
+    /// 「届かなかったのか、余裕で前に落ちたのか」が区別できないのが元の症状）。</para>
+    /// </summary>
+    public double? CatchMarginSeconds { get; init; }
+
+    /// <summary>
+    /// 打球処理で球を弾いたか（<c>FieldingPlay.ErrorKind == Catch</c> の写し。表示専用）。
+    /// 3Dの守備が「お手玉」の収録を流す条件そのもの。悪送球（Throw）は false。
+    /// </summary>
+    public bool FumbledCatch { get; init; }
+
     public IReadOnlyList<BallSegment> Ball { get; init; } = System.Array.Empty<BallSegment>();
     public IReadOnlyList<FielderMove> Moves { get; init; } = System.Array.Empty<FielderMove>();
     public IReadOnlyList<RunnerLeg> Runners { get; init; } = System.Array.Empty<RunnerLeg>();
