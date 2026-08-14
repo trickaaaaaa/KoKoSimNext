@@ -100,6 +100,7 @@ namespace KokoSim.Unity.Home
         private readonly SkillCoefficients _skills = new SkillCoefficients();
         private readonly InsightCoefficients _insight = new InsightCoefficients();
         private readonly GrowthEventCoefficients _growth = new GrowthEventCoefficients();
+        private readonly FormCoefficients _form = new FormCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
         // 個別指導枠の並べ替えに使うカテゴリ別指標の係数。他画面の比較カードと同一の単一ソース。
@@ -125,6 +126,7 @@ namespace KokoSim.Unity.Home
         private const ulong InjuryStream = 0x1213_0000UL;
         private const ulong InsightStream = 0x1E51_0000UL;
         private const ulong GrowthStream = 0x6110_0000UL;   // 選手成長イベント（issue #611）
+        private const ulong FormStream = 0xF0F0_0000UL;     // 調子の週次の波（設計書02 §3.3）
 
         /// <summary>
         /// 週次抽選の乱数ストリーム種（不変条件#2）。「その週ならいつ引いても同じ結果」になるよう、
@@ -165,6 +167,7 @@ namespace KokoSim.Unity.Home
             RunGrowthWeek();                            // 選手成長イベント（設計書03 §5.5）
             RunInsightWeek();                           // 気づき（設計書03 §5.6）
             KokoSim.Unity.Shell.GameClock.Advance();    // 共有週を進める（大会入り判定は EnterWeek に集約）
+            RunFormWeek();                              // 調子の週次の波（設計書02 §3.3）
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
@@ -172,6 +175,27 @@ namespace KokoSim.Unity.Home
             // 練習効率の補正を1週ぶん減らす（issue #615）。**練習を適用した後**に呼ぶ＝
             // 「N週」と言われた週にちゃんとN回効く（先に減らすと1週ぶん短くなる）。
             KokoSim.Unity.Shell.TrainingBoostService.Tick();
+        }
+
+        /// <summary>
+        /// 調子の週次の波（設計書02 §3.3）。平均回帰つきランダムウォーク（AR(1)・持ち越し0.75）で
+        /// 数週間続く波を作る。
+        ///
+        /// <para>⚠ engine の <see cref="FormModel.NextWeeklyCondition"/> は Phase 1 からあったが
+        /// <b>ヘッドレスシム（SeasonEngine）からしか呼ばれておらず</b>、実プレイでは
+        /// <see cref="ProspectGenerator"/> が生成時に引いた初期値のまま<b>3年間まったく動かなかった</b>
+        /// （動くのは試合後フィードバックの ±0.02〜0.05 だけ＝出た試合が少ないエースほど固まる）。
+        /// #609/#611 と同じ「engine にモデルはあるが週送りへ繋がっていない」型の穴。</para>
+        ///
+        /// <para>乱数は専用ストリーム（<see cref="FormStream"/>）＝怪我・成長と同じ作法で、
+        /// 他の抽選回数が変わってもここがずれない。AI校は (校ID, 年度) で毎季引き直す
+        /// （<c>AiTeamBuilder</c>）ので従来どおり＝この修正は自校の部員だけに効く。</para>
+        /// </summary>
+        private void RunFormWeek()
+        {
+            var rng = _rng.Fork(WeeklyStream(FormStream));
+            foreach (var p in Roster)
+                p.ConditionValue = FormModel.NextWeeklyCondition(p.ConditionValue, rng, _form);
         }
 
         /// <summary>
