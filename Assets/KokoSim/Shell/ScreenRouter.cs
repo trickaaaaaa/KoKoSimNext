@@ -60,6 +60,14 @@ namespace KokoSim.Unity.Shell
         // 起動時の既定画面（issue #482 でタイトルへ差し替え）。ホームは「はじめから／つづきから」の後に出す。
         private const string DefaultScreen = "TitleScreen";
 
+        // 主将指名モーダル／大会開幕バナーの提示先＝ハブ画面。**起動時の既定画面とは別物**。
+        // 元は両方とも "HomeDashboard" で DefaultScreen 1本だったが、issue #482 で起動時の入口を
+        // タイトルへ差し替えたときに回送先まで巻き込まれ、大会開幕週にホーム以外のタブで週を進めると
+        // タイトルへ飛ばされていた（例外は出ないので気づけない）。さらに SaveSlots は下の
+        // WeekAdvancers に入っているため、タイトルの「つづきから」を押しても1フレームで
+        // タイトルへ弾き返され、押しても無反応にしか見えなかった。定数を用途ごとに分ける。
+        private const string HomeScreen = "HomeDashboard";
+
         // ホーム以外で「今週を進める」を持つ画面。ここで引退週／大会開幕週に入ったら、主将指名モーダル／
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
@@ -98,7 +106,7 @@ namespace KokoSim.Unity.Shell
             if (_pending == null
                 && (NewTeamService.Pending || GameSession.Current.BannerPending)
                 && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
-                _pending = DefaultScreen;
+                _pending = HomeScreen;
 
             if (_pending == null) return;
             var target = _pending;
