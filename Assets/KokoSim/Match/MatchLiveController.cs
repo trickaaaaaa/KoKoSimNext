@@ -1170,6 +1170,19 @@ namespace KokoSim.Unity.Match
             _paused = false;
             // 中断ポップアップを開いたまま背景解決が終局に達した場合も閉じる（結果画面へ暗幕を残さない）。
             SetVisible(_pauseModal, false);
+            _subPanel?.Close();
+            _scoutPanel?.Close();
+            // ⚠ 終局の受け渡し（_gameSetPending → FinishGameEndHandOff）は Update の中で、
+            //    _paused / _inningBreakOn の早期 return より**後ろ**にある。つまり終局の瞬間に
+            //    立っていた演出フラグは、そのまま結果画面への遷移を人質に取る。演出は畳めばよいだけ
+            //    なので、終局ではここで全部下ろしてから _gameSetPending を立てる
+            //    （実害: 得点コールが残って試合が終わらなかった 2026-08-14。同じ形が回間の暗幕にもある）。
+            //    ⚠ EndInningBreak は使わない＝あれは保留していた**次の采配窓を開く**のが仕事で、
+            //      終局後に呼ぶと終わった試合の打席を描き始める。ここは暗幕を畳むだけにする。
+            _inningBreakOn = false;
+            _inningBreakClock = 0f;
+            _afterInningBreak = null;
+            SetVisible(_inningBreak, false);
             _finalResult = result;
             UpdateScoreboardFinal(result);
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }

@@ -19,17 +19,23 @@ namespace KokoSim.Unity.Shell
         /// 大会戦は <see cref="BackgroundGameOp"/> 経由で非同期に走り、完了後に MatchLive へ自動遷移する
         /// （呼び出し元は結果を待つ必要が無い）。既に他のバックグラウンド処理が走っていて開始できなかった場合
         /// （二重起動）は AwaitingMatchStart を戻して false を返す＝呼び出し元は詰まらず入力を再開してよい。
+        ///
+        /// <para><paramref name="onFailed"/> は<b>非同期に</b>失敗したときにメインスレッドで呼ぶ
+        /// （＝false を返す同期の失敗とは別経路）。大会戦の準備は別スレッドなので、そこで例外が出ると
+        /// 戻り値では伝えられない。呼び出し元は「準備中」の入力ロックをここで必ず解くこと。</para>
         /// </summary>
-        public static bool Begin()
+        public static bool Begin(System.Action onFailed = null)
         {
             var session = GameSession.Current;
             session.AwaitingMatchStart = false;
-            var started = session.PendingMatchIsPractice ? BeginPractice(session) : BeginTournament(session);
+            var started = session.PendingMatchIsPractice
+                ? BeginPractice(session)
+                : BeginTournament(session, onFailed);
             if (!started) session.AwaitingMatchStart = true;   // 開始できなかった＝取りこぼし対策で元に戻す
             return started;
         }
 
-        private static bool BeginTournament(GameSession session)
+        private static bool BeginTournament(GameSession session, System.Action onFailed)
         {
             var homeState = HomeState.Current;
 
@@ -41,6 +47,19 @@ namespace KokoSim.Unity.Shell
                 () => live = homeState.BeginMatch(),
                 () =>
                 {
+                    // ⚠ work が例外を投げると live は null のまま来る（例外自体は BackgroundGameOp が
+                    //    ログに出して握り潰す）。null チェックが無いとここで NRE になり、遷移もせず
+                    //    呼び出し元の「準備中」ロックも解けない＝**試合開始ボタンが二度と押せなくなる**
+                    //    （実害: スタメンの守備網羅が崩れて BuildFromLineup が ArgumentException を投げ、
+                    //    対戦カード画面から一歩も進めなくなった 2026-08-14）。練習試合側（BeginPractice）は
+                    //    もともと outcome.Live の null を見ているので、大会戦だけが素通しだった。
+                    if (live == null)
+                    {
+                        UnityEngine.Debug.LogError("[試合開始] 準備に失敗した（ログの例外を参照）。入力を戻す。");
+                        session.AwaitingMatchStart = true;   // 消費した導線を戻す＝押し直せる
+                        onFailed?.Invoke();
+                        return;
+                    }
                     MatchLiveController.Pending = new MatchLiveController.LiveMatchRequest
                     {
                         Progression = live.Progression,
