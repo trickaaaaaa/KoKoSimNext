@@ -7,7 +7,7 @@
     <ui:VisualElement class="root">
 
       <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
-      <ui:Instance template="TopBar" />
+      <ui:Instance template="TopBar" class="topbar-slot" />
 
       <!-- ===== 主役ブロック: 直近の予定（全幅ヒーロー帯・design-16 §5 / 決定1-A）=====
            均等3カラムを破って本文最上部に横断で載る主役。大会週は「次の試合」（対戦カード）、

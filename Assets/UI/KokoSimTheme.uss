@@ -14,6 +14,13 @@
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Regular.asset?fileID=11400000&guid=1c2f415f2731d410cad039b0f26f6602&type=2#IBMPlexSansJP-Regular");
 }
 
+/* トップバー（<ui:Instance template="TopBar" class="topbar-slot" />）は絶対に潰さない。
+   ⚠ instance が作る TemplateContainer は**どの USS にも当たらない裸の要素**で、既定で縮む。
+   中身（.sb2 / .nav）は flex-shrink:0 なので、潰れた分だけ下の本文域が上へ乗り上げ、
+   タブが隠れて押せなくなる（実測 2026-08-14: 本文が育つと 181px → 67px まで潰れた）。
+   本文側の要求高を抑えるのは .dash-col / .card__scroll の役目で、こちらは最後の砦。 */
+.topbar-slot { flex-shrink: 0; }
+
 /* UI Toolkit は Web と違いパネルが固定高。コンテナが flex-shrink で潰れて
    重ならないよう、主要ブロックは縮小を禁止して自然な内容高を保つ。 */
 .header, .nav, .board, .school, .meters, .meter,
@@ -718,7 +725,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 
 /* --- 3カラム本体（外側スクロールなし・内部スクロール） --- */
 .dash { flex-grow: 1; flex-direction: row; padding: 14px; overflow: hidden; }
-.dash-col { flex-direction: column; overflow: hidden; }
+/* min-height:0 が無いと、カード内 ScrollView の**中身の高さ**が列の最小高になり、
+   列が縮めない＝本文域が要求する高さが青天井になる（トップバーが潰される。下の .topbar-slot 参照）。 */
+.dash-col { flex-direction: column; overflow: hidden; min-height: 0; }
 .dash-col--a { width: 440px; flex-shrink: 0; margin-right: 14px; }
 .dash-col--b { flex-grow: 1; margin-right: 14px; }
 .dash-col--c { width: 372px; flex-shrink: 0; }
@@ -741,7 +750,10 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .card__hd-title { font-size: 20px; letter-spacing: 1px; color: #FFFFFF; }
 .card__hd-sub { font-size: var(--fs-cap); color: #FFFFFF; opacity: 0.82; letter-spacing: 1px; }
 .card__body { padding: 6px 16px 16px 16px; }
-.card__scroll { flex-grow: 1; }
+/* flex-shrink の既定は UI Toolkit では 0。ScrollView に付けないと「中身の高さのまま」居座り、
+   カードからあふれてスクロールバーも出ない（＝12件のフィードが 1,349px を要求して画面を押し広げる。
+   実測 2026-08-14）。縮められるようにして初めて「はみ出しはスクロールで受ける」が成立する。 */
+.card__scroll { flex-grow: 1; flex-shrink: 1; }
 /* ── 横並びカードの寸法（左右に並べる時。列間は margin-right で作る）───────────
    旧 pd2-card--half/--grow/--radar/--hidden/--pitch を .card に統合（部品一本化・design-19）。
    縦積み(margin-bottom)と横並び(margin-right)が両立するよう、横並びは modifier で右余白を持つ。 */
