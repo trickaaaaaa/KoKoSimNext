@@ -562,4 +562,33 @@ public sealed class SaveCodecTests
         Assert.Null(SaveCodec.PeekHeader("壊れた"));
         Assert.Null(SaveCodec.PeekHeader(""));
     }
+
+    /// <summary>
+    /// issue #624: スロット一覧が「実行中の自校名」でなく<b>そのセーブの校名</b>を出せるよう、
+    /// ヘッダが <c>schoolName</c> を運ぶ。v4（issue #585）から本体に書かれている項目を覗くだけ＝
+    /// スキーマ版は上げない。
+    /// </summary>
+    [Fact]
+    public void PeekHeader_ReadsSchoolName()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.Equal("北嶺", SaveCodec.PeekHeader(json)!.Value.SchoolName);
+    }
+
+    /// <summary>
+    /// 校名が無い（v3以前）・型が違う・null のセーブでも<b>例外にならず null を返す</b>。
+    /// 既定（桜丘）はヘッダで埋めない＝「読めなかった」と「桜丘という校名だった」を潰さないため。
+    /// </summary>
+    [Theory]
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1}")]                        // 項目ごと無い（v3以前相当）
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1,\"schoolName\":null}")]    // null
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1,\"schoolName\":42}")]      // 文字列でない
+    public void PeekHeader_MissingSchoolName_IsNullNotThrow(string json)
+    {
+        var header = SaveCodec.PeekHeader(json);
+
+        Assert.NotNull(header);
+        Assert.Equal(3, header!.Value.Week);   // 他の項目は読めている（丸ごと失敗にしていない）
+        Assert.Null(header.Value.SchoolName);
+    }
 }
