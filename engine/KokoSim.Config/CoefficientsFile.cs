@@ -534,6 +534,7 @@ public static class CoefficientsLoader
         public double RollRetentionFlat { get; set; } = D.RollRetentionFlat;
         public double RollRetentionSteep { get; set; } = D.RollRetentionSteep;
         public double FenceCaromSeconds { get; set; } = D.FenceCaromSeconds;
+        public double FenceRestitution { get; set; } = D.FenceRestitution;
         public double OutfieldPickupSeconds { get; set; } = D.OutfieldPickupSeconds;
         public double ThrowDistanceDragPerM { get; set; } = D.ThrowDistanceDragPerM;
         public double RunningTopSpeedFactor { get; set; } = D.RunningTopSpeedFactor;
@@ -588,6 +589,7 @@ public static class CoefficientsLoader
             RollRetentionFlat = RollRetentionFlat,
             RollRetentionSteep = RollRetentionSteep,
             FenceCaromSeconds = FenceCaromSeconds,
+            FenceRestitution = FenceRestitution,
             OutfieldPickupSeconds = OutfieldPickupSeconds,
             ThrowDistanceDragPerM = ThrowDistanceDragPerM,
             RunningTopSpeedFactor = RunningTopSpeedFactor,

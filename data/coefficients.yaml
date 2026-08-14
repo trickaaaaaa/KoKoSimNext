@@ -157,6 +157,7 @@ fielding:
   roll_retention_flat: 0.72      # 水平に近いライナーがバウンドで保持する前進速度の割合（滑って伸びる）
   roll_retention_steep: 0.25     # 真上から落ちる大飛球が保持する割合（失速して死ぬ）
   fence_carom_seconds: 0.40      # フェンス到達打球の跳ね返り処理の追加時間
+  fence_restitution: 0.35        # フェンスの反発係数（跳ね返り初速＝到達時の残速×これ。表示専用・判定不変）
   outfield_pickup_seconds: 0.30  # 転がる打球を拾い上げる時間
   throw_distance_drag_per_m: 0.0045  # 送球の失速: 到達 = 距離÷送球速度×(1+距離×この値)
   running_top_speed_factor: 1.15 # 一塁到達後の巡航速度倍率（本塁→一塁の平均速度に対する比）
