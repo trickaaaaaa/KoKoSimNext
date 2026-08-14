@@ -1749,9 +1749,54 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 外野安打の返球先（issue #627）。<b>アウトも含めた先頭走者の到達塁</b>と、その走者のレッグ名・生死。
+    /// </summary>
+    /// <param name="BaseName">投げる塁（"second" / "third" 等）。<see cref="AppendOutfieldReturnThrow"/> へ渡す。</param>
+    /// <param name="AnchorLabel">
+    /// 返球到達を紐付ける走者レッグの名前（<see cref="AppendRunnerLegs"/> が付ける "走1".."走N" / "打"）。
+    /// Player の同値ではなく名前で引く＝<c>Player</c> は record（値同値）なので、能力の等しい別人を掴み得る。
+    /// </param>
+    /// <param name="RunnerOut">その走者が狙う塁で憤死したか。</param>
+    public readonly record struct OutfieldReturnTarget(string BaseName, string AnchorLabel, bool RunnerOut);
+
+    /// <summary>
+    /// 外野安打の返球先を走塁結果から決める（issue #627）。表示専用・乱数不使用の純関数。
+    ///
+    /// <para>従来は打者の塁打数だけで決めていた（単打・二塁打は無条件で二塁）ため、単打で一塁走者が
+    /// 三塁まで進んでも中堅手が二塁へ返し、<b>三塁の走者が無警戒で到達する</b>絵になっていた。
+    /// #89 の物理レースは三塁での走塁死まで解いているので、アウトになった走者も先頭として数える
+    /// （でないと「ボールは二塁へ行ったのに三塁でアウト」になる）。</para>
+    ///
+    /// <para>本塁到達（<c>ToBase</c>=4）は <see cref="AppendBackHomeThrows"/> の持ち場なのでここでは狙わない。
+    /// 塁上の走者が誰も進まなかった打席は従来どおり打者の到達塁（＝三塁打なら三塁・他は二塁）。</para>
+    /// </summary>
+    public static OutfieldReturnTarget ResolveOutfieldReturnTarget(
+        IReadOnlyList<RunnerMove> moves, BattedBallResult result)
+    {
+        var leadTo = 0;
+        var leadOut = false;
+        string? leadLabel = null;
+        var index = 0;
+        foreach (var m in moves)
+        {
+            if (m.FromBase == 0) continue;              // 打者走者は「先頭走者」ではない（下の既定で見る）
+            index++;                                    // AppendRunnerLegs の "走N" と同じ採番（塁上の走者だけ数える）
+            if (m.ToBase <= m.FromBase) continue;       // 動いていない＝レッグが無いのでアンカーに使えない
+            if (m.ToBase > 3 || m.ToBase <= leadTo) continue;
+            leadTo = m.ToBase;
+            leadOut = m.Out;
+            leadLabel = $"走{index}";
+        }
+        if (leadLabel is null)
+            return new OutfieldReturnTarget(result == BattedBallResult.Triple ? "third" : "second", "打", false);
+        return new OutfieldReturnTarget(BaseName(leadTo), leadLabel, leadOut);
+    }
+
+    /// <summary>
     /// 外野安打でボールを内野へ返す送球連鎖（設計書12, #6）。外野処理点→(中継 or 直接)→先頭走者の到達塁。
     /// 本塁クロスプレーが無い外野安打専用（バックホームと二重に描かない）。結果不変・乱数不使用の表示専用。
-    /// leadBaseName は "second"（単打/二塁打）/"third"（三塁打）。ボールが外野で死ぬのを防ぐ。
+    /// leadBaseName は <see cref="ResolveOutfieldReturnTarget"/> が決める（issue #627。打者の塁打数だけで
+    /// 決めていた頃の "second"/"third" 固定ではない）。ボールが外野で死ぬのを防ぐ。
     ///
     /// 到達時刻は**エンジンが塁打数を決めたのと同じ式**（<see cref="ExtraBaseResolver.ThrowArriveSeconds"/>）
     /// で出す（Issue #301③）。従来は定数31m/s固定で、かつ到達を常に「走者到達+0.3s」へ紐付けていたため、
@@ -1764,9 +1809,14 @@ public static class TimelineBuilder
     /// ＝Unity 実プレーが使う値と同一。判定側（<see cref="Game.HomePlayResolver.ResolveThrowPath"/>）と
     /// 同じ係数を渡すことで、絵と判定で中継の出方が食い違わない。
     /// </param>
+    /// <param name="runnerOut">
+    /// 狙う塁で走者が憤死したか（issue #627）。<see cref="GuardAgainstVerdict"/> の向きが真逆になる
+    /// ＝アウトなら送球は走者より**先に**着かねばならない。既定 false（セーフ）。
+    /// </param>
     public static PlayTimeline AppendOutfieldReturnThrow(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, string leadBaseName, double runnerArriveAnchor,
-        FieldingCoefficients? coefficients = null, Game.BaserunningCoefficients? baserunning = null)
+        FieldingCoefficients? coefficients = null, Game.BaserunningCoefficients? baserunning = null,
+        bool runnerOut = false)
     {
         if (!IsOutfieldHit(play)) return timeline; // 外野へ抜けた打球のみ（バウンド抜けを含む, Issue #63）
         foreach (var seg in timeline.Ball)
@@ -1797,7 +1847,7 @@ public static class TimelineBuilder
         var leg1 = LegSeconds(Distance(fieldPoint, cutoff ?? target), arm);
         var leg2 = cutoff is { } cut ? LegSeconds(Distance(cut, target), arm) : 0.0;
         var arrive = GuardAgainstVerdict(
-            physicalArrive, readyAt + leg1 + leg2, runnerArriveAnchor, runnerOut: false);
+            physicalArrive, readyAt + leg1 + leg2, runnerArriveAnchor, runnerOut);
 
         var ball = new List<BallSegment>(timeline.Ball);
         AddThrowChain(ball, fieldPoint, target, cutoff, readyAt, arrive, leg1, leg2,
