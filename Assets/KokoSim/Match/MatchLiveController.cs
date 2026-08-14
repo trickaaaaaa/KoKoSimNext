@@ -3263,6 +3263,35 @@ namespace KokoSim.Unity.Match
         private void EndFieldPlay()
         {
             if (FieldPlayActive) _duelRig.EndFieldPlay();
+            SettlePlayDrivenScoreCall();
+        }
+
+        /// <summary>
+        /// プレー時計で駆動している得点コール（issue #438）を、駆動元のプレーが畳まれた時点で決着させる。
+        ///
+        /// <para><b>これが無いと試合が終わらない</b>（オーナー報告 2026-08-14）。得点コールは playDriven の間、
+        /// 残り点を減らすのが <see cref="RenderReplayFrame"/> の本塁到達だけで、<see cref="AdvanceScoreCall"/> は
+        /// 実時間では1点も減らさず必ず早期 return する。プレーを畳む経路（スキップ委任＝<c>EndGame</c> の
+        /// <c>EndFieldPlay</c>／<c>SetPlay(null)</c>）を通ると走者は二度と本塁へ着かないので、
+        /// <c>_scoreCallRunsRemaining &gt; 0</c> のまま <c>_scoreCallOn</c> が永久に立つ。すると Update の
+        /// <c>if (_gameSetPending &amp;&amp; !_scoreCallOn)</c> が一生通らず、
+        /// <b>試合は内部で終わっているのに「ゲームセット」も結果画面も来ない</b>
+        /// （実測: <c>_gameOver=True / _gameSetPending=True / _scoreCallOn=True /
+        /// _scoreCallRunsRemaining=1 / _scoreCallClock=696秒</c>）。
+        /// 絵は「投手が投げないだけ」に見え、UIは生きているので原因が画面に出ない止まり方になる。</para>
+        ///
+        /// <para>残りを表示上いっきに乗せてから実時間駆動へ戻す＝最終スコアは正しく出て、
+        /// 既存の最終ホールド（<c>scoreCallFinalHoldSeconds</c>）を経て通常どおり消える＝
+        /// 「得点テロップの演出が済んでからゲームセットを掲げる」順序（issue #442）は保つ。
+        /// プレーが最後まで再生された通常経路では残りが0なので何もしない。</para>
+        /// </summary>
+        private void SettlePlayDrivenScoreCall()
+        {
+            if (!_scoreCallOn || !_scoreCallPlayDriven) return;
+            while (_scoreCallRunsRemaining > 0) StepScoreCallOnce();
+            _runScoreShown = _runScoreShowAt.Count;
+            _scoreCallPlayDriven = false;   // 以降は実時間の最終ホールドで畳む
+            _scoreCallClock = 0f;
         }
 
         /// <summary>

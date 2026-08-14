@@ -527,9 +527,17 @@ public static class GameEngine
             // 打席頭のスナップショット。1球采配（設計書15 §2.3）の Base としても使う。打撃・スコア等は
             // 打席内で不変だが、塁上/アウト数は盗塁の毎球判定（設計書15 Phase D-2d）により打席途中で
             // 変わりうるため、毎球ループの先頭（下）で都度作り直す。
-            // Brain が両方nullなら未構築のまま＝以降 IPitchTacticsBrain 判定も必ずfalseなので参照されない。
+            // Brain が両方nullなら未構築のまま。
+            // ⚠ 「未構築なら以降 IPitchTacticsBrain 判定も必ずfalse」は成り立たない。打席の**途中**で
+            //    brain が差し込まれうるからで、実際 MatchProgression.SkipDelegateToAi（スキップ委任）が
+            //    OverrideTactics でそれをやる。未構築の situation は Batter が null なので、そのまま
+            //    1球采配へ渡すと StandardTacticsBrain.CallPitchAction の s.Base.Batter で NRE になる
+            //    （＝スキップが例外で落ち、押した側からは「試合が進まない」としか見えない）。
+            //    構築済みかを下の1球采配の入口で見張る（両チームとも brain 無しの試合だけが該当し、
+            //    既存経路では brain がある＝必ず構築済みなので RNG 消費も結果も1ビットも変わらない）。
             var situation = default(TacticsSituation);
-            if (offense.Tactics is not null || defense.Tactics is not null)
+            var situationBuilt = offense.Tactics is not null || defense.Tactics is not null;
+            if (situationBuilt)
             {
                 situation = new TacticsSituation(
                     inning, ctx.RegulationInnings, outs, offense.Runs - defense.Runs,
@@ -758,7 +766,7 @@ public static class GameEngine
 
                 // 塁上/アウト数は盗塁の毎球判定（下）で打席途中に変わりうるため、brain へ渡す前に
                 // 毎球作り直す（打者・スコア差等その他のフィールドは打席内不変なので変えない）。
-                if (offense.Tactics is not null || defense.Tactics is not null)
+                if (situationBuilt)
                 {
                     situation = situation with
                     {
@@ -788,7 +796,7 @@ public static class GameEngine
                 // （解決式は StealResolver 等の従来のまま、下の盗塁ブロックで解決する）。
                 StartType? stealAttempt = null;
                 var stealTarget = StealTarget.Second;
-                if (offense.Tactics is IPitchTacticsBrain offensePitchBrain)
+                if (situationBuilt && offense.Tactics is IPitchTacticsBrain offensePitchBrain)
                 {
                     var pSituation = new PitchTacticsSituation(
                         situation, session.Balls, session.Strikes, session.PitchCount, session.LastPitchKind);
@@ -809,7 +817,7 @@ public static class GameEngine
                     stealAttempt = manualSteal.Start;
                     stealTarget = manualSteal.Target;
                 }
-                if (defense.Tactics is IPitchTacticsBrain defensePitchBrain)
+                if (situationBuilt && defense.Tactics is IPitchTacticsBrain defensePitchBrain)
                 {
                     var pSituation = new PitchTacticsSituation(
                         situation, session.Balls, session.Strikes, session.PitchCount, session.LastPitchKind);
