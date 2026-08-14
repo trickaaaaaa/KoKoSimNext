@@ -239,6 +239,19 @@ public sealed class TeamState
         }
     }
 
+    /// <summary>
+    /// 打席の外で成立した走塁アウト（盗塁死・牽制死・スクイズ挟殺）を投手のアウト数（投球回）へ計上する。
+    /// これらは打席確定を通らず <see cref="RecordPitching"/> に乗らないため、計上しないと完投でも
+    /// アウト合計が27に届かず「9回投げたのに8回2/3」と表示される。対戦記録（BF等）は動かさない。
+    /// outs=-1 は issue #626 の巻き戻し用（ファウル/打球で無効になった盗塁死と対で呼ぶ）。
+    /// </summary>
+    public void RecordRunnerOut(Player pitcher, int outs = 1)
+    {
+        var key = KeyOf(pitcher);
+        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        a.Outs += outs;
+    }
+
     /// <summary>当該試合でこの打者が既に完了した打席数（尻上がり等の試合内非線形スキル用, 設計書10）。</summary>
     public int PriorPlateAppearances(Player batter) => _bat.TryGetValue(KeyOf(batter), out var a) ? a.PA : 0;
 

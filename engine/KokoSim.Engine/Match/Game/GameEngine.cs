@@ -891,6 +891,7 @@ public static class GameEngine
                     {
                         offense.PickoffCount++;
                         outs++;
+                        defense.RecordRunnerOut(currentPitcher); // 牽制死も投球回に数える（完投=27アウトの保証）
                         bases.First = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -936,6 +937,7 @@ public static class GameEngine
                         else
                         {
                             outs++;
+                            defense.RecordRunnerOut(currentPitcher); // 盗塁死も投球回に数える（下の巻き戻しと対）
                         }
                         bases.First = null;
 
@@ -987,6 +989,7 @@ public static class GameEngine
                     {
                         offense.PickoffCount++;
                         outs++;
+                        defense.RecordRunnerOut(currentPitcher); // 牽制死も投球回に数える
                         bases.Second = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -1007,7 +1010,8 @@ public static class GameEngine
                                 inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog,
                                 sub: session.PitchCount));
                         }
-                        if (safe) { bases.Third = bases.Second; } else { outs++; }
+                        if (safe) { bases.Third = bases.Second; }
+                        else { outs++; defense.RecordRunnerOut(currentPitcher); } // 三盗死も投球回に数える
                         bases.Second = null;
                         // 再生データ（issue #485）: 三盗の走塁勝負を絵にする（送球先＝三塁・受け手＝三塁手）。
                         if (ctx.CaptureTimelines)
@@ -1039,6 +1043,7 @@ public static class GameEngine
                     {
                         offense.PickoffCount++;
                         outs++;
+                        defense.RecordRunnerOut(currentPitcher); // 牽制死も投球回に数える
                         bases.Third = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -1072,6 +1077,7 @@ public static class GameEngine
                         else
                         {
                             outs++;
+                            defense.RecordRunnerOut(currentPitcher); // 本盗死も投球回に数える
                         }
                         bases.Third = null;
                         // 再生データ（issue #485）: 本盗は捕手からの送球区間そのものが無い（投球が送球を兼ねる）。
@@ -1176,6 +1182,8 @@ public static class GameEngine
                     offense.Runs = steal0Runs;
                     runsThisHalf = steal0RunsThisHalf;
                     offense.UndoSteal(stealRecRunner, stealRecSuccess);
+                    // 盗塁死を上で投球回に計上済みなら、それも対で戻す（outs は steal0Outs へ戻している）。
+                    if (!stealRecSuccess) defense.RecordRunnerOut(currentPitcher, -1);
                     if (stealRecScorer is not null) offense.UndoRun(stealRecScorer);
                     if (stealDoubleBreak) offense.DoubleStealThirdBreakCount--;
                     stealPlay = null;   // 絵にも出さない＝同じ球のファウル打球の再生へ落ちる
@@ -1250,6 +1258,7 @@ public static class GameEngine
                     // （盗塁死で3アウトになる場合と同じ扱い＝この打者は次イニング先頭）。
                     bases.Third = null;
                     outs++;
+                    defense.RecordRunnerOut(currentPitcher); // スクイズ挟殺も投球回に数える
                     if (outs >= 3) { squeezeAbandoned = true; EmitPitchTrace(); break; }
                 }
 
@@ -1964,7 +1973,8 @@ public static class GameEngine
             bases.First = null;
             return 0;
         }
-        // 盗塁死。
+        // 盗塁死。投球回にも数える（完投=27アウトの保証）。
+        defense.RecordRunnerOut(defense.CurrentPitcher);
         bases.First = null;
         return 1;
     }
