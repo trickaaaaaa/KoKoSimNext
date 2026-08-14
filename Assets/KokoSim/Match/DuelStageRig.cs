@@ -4368,11 +4368,24 @@ namespace KokoSim.Unity.Match
         /// <summary>低い方の足ボーンが接地面＋足首オフセットに来るよう縦だけ合わせる（ステージローカル）。</summary>
         private void GroundFix(Actor a)
         {
+            a.Go.transform.localPosition -= new Vector3(0f, FootClearance(a), 0f);
+        }
+
+        /// <summary>
+        /// 接地誤差[m]＝低い方の足ボーンのy −（接地面＋足首オフセット）。正＝宙に浮いている／
+        /// 負＝地面へめり込んでいる。<see cref="GroundFix"/> が消す量そのもの＝
+        /// **「浮いている」の定義をここ一箇所に置く**（実測プローブが写しを持つと、直したのに
+        /// 別の式で測って NG に見える。design-18 の「目測でなく実測で判定する」の前提）。
+        /// 骨が引けない素体では 0（＝補正しない）を返す。
+        /// </summary>
+        private float FootClearance(Actor a)
+        {
+            if (a?.Animator == null || a.Go == null) return 0f;
             var lf = a.Animator.GetBoneTransform(HumanBodyBones.LeftFoot);
             var rf = a.Animator.GetBoneTransform(HumanBodyBones.RightFoot);
-            if (lf == null || rf == null) return;
+            if (lf == null || rf == null) return 0f;
             float footLocalY = Mathf.Min(lf.position.y, rf.position.y) - _root.transform.position.y;
-            a.Go.transform.localPosition += new Vector3(0f, (a.GroundY + a.AnkleOffset) - footLocalY, 0f);
+            return footLocalY - (a.GroundY + a.AnkleOffset);
         }
 
         // ---- 小道具（§3.3。両手整列バット＋手ボーン子ミット） ------------------
@@ -5596,6 +5609,15 @@ namespace KokoSim.Unity.Match
         /// 直近の球の判定（ストライク系か）に連動する＝CatcherClampShooter が測定窓を組むのに使う
         /// （私有 const の写しを持たせない）。</summary>
         public float CatcherLingerSecondsForCapture => CatcherLingerSeconds(_catchIsStrike);
+
+        /// <summary>【実測プローブ用】捕手の接地誤差[m]（<see cref="FootClearance"/>）。
+        /// 正＝宙に浮いている／負＝めり込んでいる（issue #607 の受け入れは構え時 |誤差| ≈ 0）。</summary>
+        public float CatcherFootClearanceForCapture() => FootClearance(_catcher);
+
+        /// <summary>【実測プローブ用】捕手の立ち位置基準の縦（<c>BasePos.y</c>）。
+        /// <see cref="ApplyCatcherResidualShift"/> が毎コマここへ焼き直すので、
+        /// <b>これが汚れると接地補正の結果が毎コマ捨てられる</b>（issue #607 の原因の直接観測）。</summary>
+        public float CatcherBaseYForCapture => _catcher == null ? 0f : _catcher.BasePos.y;
 #endif
 
         public string CatchDiagForCapture()
