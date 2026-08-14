@@ -32,9 +32,9 @@ internal static class SubstitutionCommands
         var runner = RunnerAt(bases, baseIndex);
         if (runner is null) return false;
         if (!TryBench(team, benchIndex, out var sub)) return false;
-        if (!team.PinchRunFor(runner, sub)) return false;
-        // 打順スロットは守備位置を継承して置換されるので、塁上の参照も同じ実体へ揃える。
-        SetRunnerAt(bases, baseIndex, sub with { Position = runner.Position });
+        if (!team.PinchRunFor(runner, sub, out var inserted)) return false;
+        // 塁上の参照は engine が実際に打順へ入れた実体へ揃える（ここで組み直すと打順の実体とズレる）。
+        SetRunnerAt(bases, baseIndex, inserted!);
         return true;
     }
 

@@ -2023,9 +2023,9 @@ public static class GameEngine
 
         // 代走: 塁上の鈍足走者を速い控えへ。塁の参照も差し替える。
         if (offense.Tactics.CallPinchRun(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
-            is { } r && offense.PinchRunFor(r.Runner, r.Sub))
+            is { } r && offense.PinchRunFor(r.Runner, r.Sub, out var inserted))
         {
-            var inserted = r.Sub with { Position = r.Runner.Position };
+            // 塁上の参照は engine が実際に打順へ入れた実体へ揃える（ここで組み直すと打順の実体とズレる）。
             if (bases.First == r.Runner) bases.First = inserted;
             else if (bases.Second == r.Runner) bases.Second = inserted;
             else if (bases.Third == r.Runner) bases.Third = inserted;
