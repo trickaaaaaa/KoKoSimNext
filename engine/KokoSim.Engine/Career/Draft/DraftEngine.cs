@@ -54,7 +54,7 @@ public static class DraftEngine
 
     /// <summary>
     /// 10月最終週の指名確定（設計書20 §3.2）。対象は「3年生（Grade>=3）」かつ「候補（Band!=None）」のみ。
-    /// 各候補は注目度からのロジスティック確率を注入乱数で判定し、指名時はバンドの代表順位を round とする。
+    /// 各候補は注目度からのロジスティック確率を注入乱数で判定し、指名時はバンド内で注目度に応じて按分した順位を round とする。
     /// 指名漏れも <see cref="DraftPick.Nominated"/>=false で残す。乱数は年でずらした独立Forkで既存決定論を保存。
     /// </summary>
     public static DraftResult RunNomination(
@@ -78,7 +78,7 @@ public static class DraftEngine
             var prob = Logistic((n - c.NominationMidpoint) / c.NominationSpread);
             var nominated = draftRng.NextDouble() < prob;
             picks.Add(new DraftPick(
-                p.Id, p.Name, n, band, nominated, nominated ? band.RepresentativeRound() : 0));
+                p.Id, p.Name, n, band, nominated, nominated ? band.RoundOf(n, c) : 0));
         }
         return new DraftResult(year, picks);
     }

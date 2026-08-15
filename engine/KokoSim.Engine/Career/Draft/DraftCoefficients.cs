@@ -25,8 +25,9 @@ public sealed record DraftCoefficients
     public double BatterOpsScale { get; init; } = 45.0;
     /// <summary>1試合あたり本塁打への加点。</summary>
     public double BatterHrPerGameScale { get; init; } = 6.0;
-    /// <summary>実績が満点加重に達する打席数（これ未満は中立50へ収縮）。</summary>
-    public int BatterMinPlateAppearances { get; init; } = 40;
+    /// <summary>実績が満点加重に達する打席数（これ未満は中立50へ収縮）。40 だと夏県＋秋で満額に達し
+    /// 一夏の固め打ちがフルに効いたので 100 へ（2026-08-15）。</summary>
+    public int BatterMinPlateAppearances { get; init; } = 100;
 
     // --- 投手の実績スコア ---
     public double PitcherEraBase { get; init; } = 3.50;

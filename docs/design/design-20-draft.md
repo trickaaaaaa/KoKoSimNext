@@ -69,7 +69,8 @@ PerfScore = clamp( 50·(1 - shrink) + raw·shrink , 0 , 100 )
 
 - `opsBase=0.700 opsScale=45 hrScale=6`（打者）／`eraBase=3.50 eraScale=6 k9Base=7 k9Scale=2`（投手）。
 - 出場がない選手（`Stats` 未登録）は PerfScore=50（中立）＝能力だけで評価される。
-- サンプル収縮で「1打席の固め打ち」が過大評価されない（打者 `minSample=40`打席／投手 `minSample=60`打者）。
+- サンプル収縮で「1打席の固め打ち」が過大評価されない（打者 `minSample=100`打席／投手 `minSample=60`打者）。
+  打者は当初 40 だったが、夏県＋秋の10試合前後で満額に達して一夏の固め打ちがフルに効いたため 100 へ（2026-08-15）。
 - **投打の合わせ方は AbilityScore と違い単純な max にしない**（2026-08-02・issue #378）。
   出場が無い側は中立50を返すので、素朴に max を採ると**悪い成績が中立50に隠れて全員が50以上へ
   持ち上がる**（防御率9点台の投手が、打席ゼロなので50を貰って浮く）。先にサンプルの有無で振り分け、
@@ -86,8 +87,8 @@ YAML は sim/テスト調整用（既存の sim-vs-unity 係数分割に倣う�
 |---|---|---|---|
 | ≥ 86 | `FirstRound` | 1位候補 | 「1位指名が有力」 |
 | ≥ 76 | `UpperRound` | 上位（2〜3位） | 「上位指名圏」 |
-| ≥ 66 | `MiddleRound` | 中位（4〜6位） | 「中位指名圏」 |
-| ≥ `CandidateThreshold`(58) | `LowerRound` | 下位・育成 | 「下位／育成で名前が挙がる」 |
+| ≥ 66 | `MiddleRound` | 中位（4〜7位） | 「中位指名圏」 |
+| ≥ `CandidateThreshold`(58) | `LowerRound` | 下位・育成（8位） | 「下位／育成で名前が挙がる」 |
 | < 58 | `None` | 圏外 | （候補でない） |
 
 - **候補入り＝ Notability ≥ CandidateThreshold(58)** かつ **§3.1a の足切りを通過**＝予想が `None` 以外。学年を問わない。
@@ -114,9 +115,9 @@ best = max( 打撃力チップ, 投手力チップ )        # PlayerStrengthProf
   `RunNomination`）はすべて足切り込みの `BandOf(player, n, strength, c)` を通す。
 - `CandidateMinTier` は `data/draft.yaml` の `candidate_min_tier`（G〜S）で調整（C# 既定＝B が実プレイの真値）。
 
-> 併せて残る「甘さ」の要因（未対応・要判断）: ①中位バンドは指名時に一律「4位」（`RepresentativeRound`）
-> ＝66.1 も 75.9 も 4位表示。バンド内で 6→4 位に按分する案あり。②指名確率の中点（64）が中位下限（66）より低く、
-> 中位候補はほぼ確実に指名される。③打者の規定 40 打席は夏県＋秋で満額に達し、小サンプル収縮が効きにくい。
+> 併せて挙がっていた「甘さ」の要因のうち、①中位一律4位→§3.2 の按分（4〜7位）で対応、③打者の規定打席→100 へ
+> （2026-08-15）。②指名確率の中点（64）が中位下限（66）より低く中位候補はほぼ確実に指名される点は
+> 「一旦このまま」（owner 判断・2026-08-15）。
 
 ### 3.2 指名の確定（10月最終週・3年のみ）
 
@@ -126,8 +127,14 @@ best = max( 打撃力チップ, 投手力チップ )        # PlayerStrengthProf
 ```
 p = 1 / (1 + exp( -(Notability - nomMid)/nomSpread ))   # nomMid=64 nomSpread=6
 nominated = rng.NextDouble() < p
-round = バンド→代表順位（FirstRound→1, UpperRound→2, MiddleRound→4, LowerRound→6）
+round = バンド内で注目度に応じて按分（DraftRankBands.RoundOf）
+        FirstRound→1 / UpperRound→2〜3 / MiddleRound→4〜7 / LowerRound→8
+        バンドの注目度区間を順位数で等分し、上端ほど上の順位（中位: 76→4位 … 66→7位）
 ```
+
+- 順位の按分は 2026-08-15 から。以前は「バンドの代表順位」（中位なら一律 4位）だったため、
+  中位ギリギリで滑り込んだ候補まで全員「4位指名」と表示され、実力より甘く見えた。
+  中位が 7位まで降りるので、下位・育成の順位は必ずその下（8位）に置く。
 
 - 乱数は `IRandomSource` を注入（不変条件#2）。**独立ストリームを Fork** して既存の決定論baselineを乱さない
   （CareerEngine の autumn-flow 前例に倣う。キーは年/週 XOR のマジック定数）。同シード同結果。

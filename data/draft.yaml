@@ -15,7 +15,7 @@ draft:
   batter_ops_base: 0.700
   batter_ops_scale: 45.0
   batter_hr_per_game_scale: 6.0
-  batter_min_plate_appearances: 40   # これ未満の打席数は中立50へ収縮
+  batter_min_plate_appearances: 100  # これ未満の打席数は中立50へ収縮（40だと夏県＋秋で満額＝一夏の固め打ちがフルに効く）
 
   # --- 投手の実績スコア（ERA基準＋K/9） ---
   pitcher_era_base: 3.50

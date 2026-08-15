@@ -5,9 +5,9 @@ public enum DraftRankBand
 {
     /// <summary>圏外（候補でない）。</summary>
     None = 0,
-    /// <summary>下位・育成。</summary>
+    /// <summary>下位・育成（8位）。</summary>
     LowerRound = 1,
-    /// <summary>中位（4〜6位）。</summary>
+    /// <summary>中位（4〜7位）。</summary>
     MiddleRound = 2,
     /// <summary>上位（2〜3位）。</summary>
     UpperRound = 3,
@@ -21,15 +21,46 @@ public static class DraftRankBands
     /// <summary>候補か（圏外でない）。</summary>
     public static bool IsCandidate(this DraftRankBand band) => band != DraftRankBand.None;
 
-    /// <summary>バンドの代表指名順位（指名確定時のround）。圏外は0。</summary>
-    public static int RepresentativeRound(this DraftRankBand band) => band switch
+    /// <summary>バンドの最上位の指名順位（バンド内で最も注目度が高いときの round）。圏外は0。</summary>
+    public static int RepresentativeRound(this DraftRankBand band) => RoundRange(band).Top;
+
+    /// <summary>
+    /// バンドが対応する指名順位の範囲（Top=最上位, Bottom=最下位）。1位候補は1位だけ、上位は2〜3位、
+    /// 中位は4〜7位、下位・育成は8位。中位が7位まで降りるので下位は必ずその下（8位）に置く。
+    /// </summary>
+    public static (int Top, int Bottom) RoundRange(this DraftRankBand band) => band switch
     {
-        DraftRankBand.FirstRound => 1,
-        DraftRankBand.UpperRound => 2,
-        DraftRankBand.MiddleRound => 4,
-        DraftRankBand.LowerRound => 6,
-        _ => 0,
+        DraftRankBand.FirstRound => (1, 1),
+        DraftRankBand.UpperRound => (2, 3),
+        DraftRankBand.MiddleRound => (4, 7),
+        DraftRankBand.LowerRound => (8, 8),
+        _ => (0, 0),
     };
+
+    /// <summary>
+    /// 指名確定時の順位（設計書20 §3.2）。バンドの注目度区間を順位数で等分し、注目度が高いほど上の順位を採る
+    /// （中位なら 76→4位 … 66→7位）。以前はバンドの最上位を一律に返していたため、中位ギリギリの候補まで
+    /// 全員「4位指名」になっていた。圏外は0。
+    /// </summary>
+    public static int RoundOf(this DraftRankBand band, double notability, DraftCoefficients c)
+    {
+        var (top, bottom) = RoundRange(band);
+        if (top == 0 || top == bottom) return top;
+
+        var (lo, hi) = band switch
+        {
+            DraftRankBand.UpperRound => (c.UpperRoundThreshold, c.FirstRoundThreshold),
+            DraftRankBand.MiddleRound => (c.MiddleRoundThreshold, c.UpperRoundThreshold),
+            _ => (c.CandidateThreshold, c.MiddleRoundThreshold),
+        };
+        if (hi <= lo) return top;
+
+        // 区間上端からの深さ 0(上端)〜1(下端) を順位数で刻む。区間下端ちょうどは最下位に丸める。
+        var depth = (hi - notability) / (hi - lo);
+        var count = bottom - top + 1;
+        var offset = (int)Math.Floor(depth * count);
+        return Math.Clamp(top + offset, top, bottom);
+    }
 
     /// <summary>予想の短い日本語文言（フィード/画面のデフォルト）。</summary>
     public static string Label(this DraftRankBand band) => band switch

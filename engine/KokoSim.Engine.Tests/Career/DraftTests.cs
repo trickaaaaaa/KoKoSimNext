@@ -91,9 +91,9 @@ public sealed class DraftTests
     [Fact]
     public void PerformanceScore_LowSampleShrinksTowardNeutral()
     {
-        var c = new DraftCoefficients(); // BatterMinPlateAppearances=40
+        var c = new DraftCoefficients(); // BatterMinPlateAppearances=100
         var p = Batter(1, 3, 70, 80);
-        // OPS高いが打席5のみ → shrink=5/40=0.125 で中立50へ強く収縮
+        // OPS高いが打席5のみ → shrink=5/100=0.05 で中立50へ強く収縮
         var fewPa = NotabilityModel.PerformanceScore(p, BattingStats(1, games: 2, pa: 5, ab: 5, hits: 4, hr: 2), c);
         var manyPa = NotabilityModel.PerformanceScore(p, BattingStats(1, games: 12, pa: 45, ab: 45, hits: 30, hr: 8), c);
         Assert.True(fewPa < manyPa);
@@ -234,6 +234,56 @@ public sealed class DraftTests
         Assert.False(pick.Nominated);                // 指名はされない
         Assert.Equal(0, pick.Round);
         Assert.Empty(result.Nominated);
+    }
+
+    // ── 指名順位のバンド内按分（§3.2: 中位 76→4位 … 66→7位、上位 2〜3位、下位 8位） ──
+
+    [Theory]
+    [InlineData(DraftRankBand.FirstRound, 90.0, 1)]
+    [InlineData(DraftRankBand.UpperRound, 85.9, 2)]
+    [InlineData(DraftRankBand.UpperRound, 80.9, 3)]   // 区間 76〜86 の下半分
+    [InlineData(DraftRankBand.UpperRound, 76.0, 3)]
+    [InlineData(DraftRankBand.MiddleRound, 75.9, 4)]
+    [InlineData(DraftRankBand.MiddleRound, 73.4, 5)]
+    [InlineData(DraftRankBand.MiddleRound, 70.9, 6)]
+    [InlineData(DraftRankBand.MiddleRound, 66.0, 7)]  // 区間 66〜76 を4等分・下端は最下位
+    [InlineData(DraftRankBand.LowerRound, 60.0, 8)]
+    [InlineData(DraftRankBand.None, 50.0, 0)]
+    public void RoundOf_SpreadsWithinBand_ByNotability(DraftRankBand band, double notability, int expected)
+    {
+        Assert.Equal(expected, band.RoundOf(notability, new DraftCoefficients()));
+    }
+
+    [Fact]
+    public void RoundOf_NeverLeavesBandRange_AndIsMonotone()
+    {
+        var c = new DraftCoefficients();
+        foreach (var band in new[] { DraftRankBand.UpperRound, DraftRankBand.MiddleRound, DraftRankBand.LowerRound })
+        {
+            var (top, bottom) = band.RoundRange();
+            var prev = 0;
+            for (var n = 0.0; n <= 100.0; n += 0.25)
+            {
+                if (NotabilityModel.BandOf(n, c) != band) continue;
+                var r = band.RoundOf(n, c);
+                Assert.InRange(r, top, bottom);
+                if (prev != 0) Assert.True(r <= prev, $"{band} n={n}: {r} > {prev}（注目度が上がって順位が下がった）");
+                prev = r;
+            }
+        }
+    }
+
+    [Fact]
+    public void RunNomination_MiddleBand_UsesSpreadRound_NotFixedFour()
+    {
+        // 中位ギリギリ（66台）で確定した指名は 7位。以前は中位なら一律 4位だった。
+        var c = new DraftCoefficients { NominationMidpoint = 0.0, NominationSpread = 1.0 };
+        var p = Batter(1, 3, level: 82, cap: 84);           // ability=82.7, perf=50 → n=66.35 → 中位の下端
+        var result = DraftEngine.RunNomination(2, new[] { p }, _ => null, c, S, new Xoshiro256Random(1));
+        var pick = Assert.Single(result.Picks);
+        Assert.True(pick.Nominated);
+        Assert.Equal(DraftRankBand.MiddleRound, pick.Band);
+        Assert.Equal(7, pick.Round);
     }
 
     // ── 候補入りの足切り（§3.1a: 打撃力／投手力チップの高い方が B 未満なら圏外） ──
