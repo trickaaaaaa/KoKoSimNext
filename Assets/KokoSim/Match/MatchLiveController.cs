@@ -1139,7 +1139,17 @@ namespace KokoSim.Unity.Match
         // 交代確定後（即時・取り消し不可）。該当スロットを即入替（退いた選手名を薄く併記）。
         private void OnSubstitutionApplied()
         {
-            RefreshPanel();
+            // 采配窓で止まっているなら、窓の対戦（打者・投手）を engine から引き直す。engine は交代の直後に
+            // LiveAtBat を今の実体へ差し替え（MatchProgression.RecordSubstitution）、次の球からその選手で
+            // 解決する（打席の頭なら束縛前・途中なら束縛し直し）。引き直さないと HUD の打者・対決ビューの
+            // 利き腕がこの打席のあいだ古いまま＝「交代したのに前の投手が投げている」に見える（2026-08-15）。
+            if (_stage == LiveStage.Window && _atBat != null && _prog?.CurrentAtBat is { } at)
+            {
+                _atBat = at;
+                ApplyWindowSituation();     // HUD・スタメン列・カードの可否
+                ApplyDuelHandedness();      // 継投後の利き腕・代打の左右で立たせ替える（issue #337 と同じ入口）
+            }
+            else RefreshPanel();
             if (_caption != null) _caption.text = "選手交代を行った。";
         }
 

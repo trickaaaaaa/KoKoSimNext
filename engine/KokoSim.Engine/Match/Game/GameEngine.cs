@@ -491,6 +491,45 @@ public static class GameEngine
                 if (outs >= 3) break;
             }
 
+            // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。乱数は消費しない。
+            Timeline.Playback.LiveAtBat LiveAtBatOf(Player b, Player pit, int balls, int strikes, int pitchNumberInPa) => new()
+            {
+                Inning = inning,
+                IsTop = isTop,
+                AwayScore = p.Away.Runs,
+                HomeScore = p.Home.Runs,
+                Outs = outs,
+                BaseFirst = bases.First is not null,
+                BaseSecond = bases.Second is not null,
+                BaseThird = bases.Third is not null,
+                Balls = balls,
+                Strikes = strikes,
+                PitchNumberInPa = pitchNumberInPa,
+                BatterOrder = offense.CurrentBatterOrder,
+                BatterName = b.Name,
+                BatterSourceId = b.SourceId,
+                BatterBats = b.Bats,
+                BatterPosition = b.Position,
+                BatterNumber = b.UniformNumber,
+                BatterConditionValue = b.ConditionValue,
+                PitcherName = pit.Name,
+                PitcherSourceId = pit.SourceId,
+                PitcherThrows = pit.Throws,
+                PitcherNumber = pit.UniformNumber,
+                PitcherConditionValue = pit.ConditionValue,
+            };
+
+            // 打席の頭の采配窓（まだ1球も投げていない窓）。**投手・打者を束縛する前**に開く（2026-08-15）。
+            // 旧実装は束縛（実効能力の計算・AtBatSession.Begin）を済ませてから窓を開いていたため、この窓で
+            // 行った継投・代打はこの打席に届かず次の打席から効いた（監督報告「一人目の打者の間、前の投手が
+            // 投げている」）。GameReplay は決定列を打席境界＝この窓と同じ位置で適用するので、順序を揃えることで
+            // Save/Load 往復とも一致する。yield は乱数非消費＝一括 Play・AI駆動のシムは1ビットも変わらない。
+            // **打席の頭でも埋まる**のが肝で、これが無いとUIは1球目を投げるまで打者を知れず、打席の頭で
+            // サインを受け付けられない。
+            if (ctx.CapturePitches)
+                p.LiveAtBat = LiveAtBatOf(offense.PeekBatter(), defense.CurrentPitcher, pendingBalls, pendingStrikes, 1);
+            yield return Pitch();
+
             var batter = offense.PeekBatter();
             var batterOrder = offense.CurrentBatterOrder; // ライブ観戦のスタメン列ハイライト用（打順消費前に採取）
             var currentPitcher = defense.CurrentPitcher; // 成績計上用の投手アイデンティティ
@@ -592,31 +631,38 @@ public static class GameEngine
             // （＝従来と完全一致・帯不変）。減衰カーブ（VelocityDrop/ControlDrop）は共通なので、エース酷使でも
             // 実効能力の算出結果は ctx.Fatigue と同値＝変わるのは継投「時期」（ShouldRelieve）だけ。
             var fatigue = defense.Fatigue ?? ctx.Fatigue;
-            var pitcher = PitchingFatigue.Effective(currentPitcher, defense.FatiguePitches, fatigue);
-            // 調子・当日の出来（設計書02 §3.3/§3.3b）。
-            pitcher = Players.FormModel.ApplyPitcher(pitcher, currentPitcher.Condition, FormOf(dayForm, currentPitcher), ctx.Form);
-            var batterAttrs = Players.FormModel.ApplyBatter(batter.ToBatter(), batter.Condition, FormOf(dayForm, batter), ctx.Form);
+            // 投手・打者の実効能力（疲労→調子→スキル→プレッシャー）。**純関数の連鎖で乱数非消費**。
+            // 打席頭と、采配窓で継投・代打が入ったときの束縛し直し（RebindMatchup）が同じ式を通る＝一箇所に置く。
+            (PitcherAttributes Pitcher, BatterAttributes BatterBase, SkillPlayMods PlayMods) EffectiveMatchup()
+            {
+                var pit = PitchingFatigue.Effective(currentPitcher, defense.FatiguePitches, fatigue);
+                // 調子・当日の出来（設計書02 §3.3/§3.3b）。
+                pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, FormOf(dayForm, currentPitcher), ctx.Form);
+                var bat = Players.FormModel.ApplyBatter(batter.ToBatter(), batter.Condition, FormOf(dayForm, batter), ctx.Form);
 
-            // スキル（設計書10）: 尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
-            var priorPa = offense.PriorPlateAppearances(batter);
-            var priorBf = defense.PriorBattersFaced(currentPitcher);
-            batterAttrs = SkillModel.ApplyBatter(batterAttrs, batter.Skills, priorPa, ctx.Skills);
-            pitcher = SkillModel.ApplyPitcher(pitcher, currentPitcher.Skills, priorBf, ctx.Skills);
-            var playMods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
+                // スキル（設計書10）: 尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
+                var priorPa = offense.PriorPlateAppearances(batter);
+                var priorBf = defense.PriorBattersFaced(currentPitcher);
+                bat = SkillModel.ApplyBatter(bat, batter.Skills, priorPa, ctx.Skills);
+                pit = SkillModel.ApplyPitcher(pit, currentPitcher.Skills, priorBf, ctx.Skills);
+                var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
 
-            // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
-            var pitcherFatigueOver = defense.FatiguePitches > currentPitcher.Pitching.StaminaPitches;
-            pitcher = PressureModel.ApplyPitcher(pitcher, PressureModel.Multiplier(
-                currentPitcher.Mental, pressureIdx, ctx.Pressure,
-                defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
-                defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0));
-            batterAttrs = PressureModel.ApplyBatter(batterAttrs, PressureModel.Multiplier(
-                batter.Mental, pressureIdx, ctx.Pressure,
-                offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
+                // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
+                var pitcherFatigueOver = defense.FatiguePitches > currentPitcher.Pitching.StaminaPitches;
+                pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
+                    currentPitcher.Mental, pressureIdx, ctx.Pressure,
+                    defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
+                    defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0));
+                bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
+                    batter.Mental, pressureIdx, ctx.Pressure,
+                    offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
+                return (pit, bat, mods);
+            }
+            var (pitcher, batterBase, playMods) = EffectiveMatchup();
             // ここまで（調子・スキル・プレッシャー）が打席内で不変な実効打者能力の土台。以降のサイン補正
             // （エンドラン/バスター/得点圏）と打撃姿勢は毎球評価しうる（issue #492）ので、土台を控えておき
             // 球ごとに BatterFor(...) で組み直す。無指示なら毎球の値は打席頭の値とビット単位で一致する。
-            var batterBase = batterAttrs;
+            var batterAttrs = batterBase;
 
             // --- バントサイン（設計書02 §4.3・設計書15 Phase D-2b）: AtBatSession の投球ループへ統一。
             // 2ストライクに達するまで毎球バント試行を上書きし、決着しなければ実カウントを保ったまま
@@ -696,16 +742,21 @@ public static class GameEngine
             // 1球単位で上書き（issue #492）するときはこの基準から組み直す。
             var baseAlignment = defense.DefensiveAlignment(ctx.Field);
             var fielders = AlignmentTactics.Adjust(baseAlignment, defTactics, ctx.Tactics);
-            var directive = defTactics.Policy == PitchPolicy.Auto
-                ? (PitchDirective?)null
-                : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
-            // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。名捕手（設計書10）は実効リードを底上げ。
-            var catcherLead = defense.Catcher.Lead
-                + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
-            var abCtx = ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
-                gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
-                skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
-                swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics));
+            // 打席文脈（守備配置・配球方針・捕手リード・スキル）。打席頭と束縛し直し（RebindMatchup）が同じ式を通る。
+            AtBatContext BuildAtBatContext()
+            {
+                var directive = defTactics.Policy == PitchPolicy.Auto
+                    ? (PitchDirective?)null
+                    : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
+                // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。名捕手（設計書10）は実効リードを底上げ。
+                var catcherLead = defense.Catcher.Lead
+                    + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
+                return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
+                    gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
+                    skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
+                    swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics));
+            }
+            var abCtx = BuildAtBatContext();
 
             // 通常打席の投球ループ（設計書15 §2.1）: AtBatSession を1球ずつ回し、各投球の前に采配窓を yield する。
             // 一括 ResolveDetailed と実装・RNG消費が完全一致（yield は乱数非消費）＝バッチ Play と対話進行は同一結果。
@@ -714,6 +765,29 @@ public static class GameEngine
                 initialBalls: pendingBalls, initialStrikes: pendingStrikes,
                 forcedResult: forcedPaResult);
             pendingBalls = pendingStrikes = 0; // 途中カウントは場面ジャンプ直後の1打席にだけ効く
+
+            // 采配窓で継投・代打が入ったとき（プレイヤーの手動交代。AI・一括シムはここへ来ない＝帯不変）、
+            // この打席の投手・打者を差し替えて実効能力・打席文脈・AtBatSession を組み直す。頭の窓は上で束縛より
+            // 前に開いたので通常ここへは来ないが、打席途中の窓（クリック中断→交代）では毎回ここで拾う＝
+            // 新投手が同じカウントから同じ打者に投げ続ける（成績・球数はこの打席ぶんまるごと新投手へ＝簡略）。
+            // 乱数は一切消費しない（EffectiveMatchup / BuildAtBatContext はすべて純関数）。
+            void RebindMatchup()
+            {
+                batter = offense.PeekBatter();
+                currentPitcher = defense.CurrentPitcher;
+                if (situationBuilt)
+                    situation = situation with { Batter = batter, Pitcher = currentPitcher, Catcher = defense.Catcher };
+                (pitcher, batterBase, playMods) = EffectiveMatchup();
+                // 得点圏の強攻補正は打者の性格で決まる（上の chanceApplies と同じ式・同じ sign 状態）
+                chanceApplies = sign == OffensiveSign.Swing
+                    && (bases.Second is not null || bases.Third is not null)
+                    && batter.ChanceHitFactor != 1.0;
+                batterAttrs = BatterFor(offense.BattingApproach, brainHitAndRun);
+                baseAlignment = defense.DefensiveAlignment(ctx.Field);   // 投野交代・守備交代で野手が代わりうる
+                fielders = AlignmentTactics.Adjust(baseAlignment, defTactics, ctx.Tactics);
+                abCtx = BuildAtBatContext();
+                session.RebindMatchup(batterAttrs, pitcher, abCtx, batter);
+            }
 
             // 采配ラベル（観測専用・設計書17 §4.1）。sign はバント/スクイズ/敬遠で Swing へ畳まれた後なので、
             // 畳む前の別名（buntSign/squeezeSign/IntentionalWalk）から表示用に復元する。
@@ -724,39 +798,20 @@ public static class GameEngine
 
             var squeezeAbandoned = false;
             var stealEndedHalf = false;
+            var atHeadWindow = true;   // 打席の頭の窓は束縛の前（上）で開いた
             while (!session.IsComplete)
             {
-                // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。
-                // **打席の頭（まだ1球も投げていない窓）でも埋まる**のが肝で、これが無いとUIは1球目を
-                // 投げるまで打者を知れず、打席の頭でサインを受け付けられない。乱数は消費しない。
-                if (ctx.CapturePitches)
-                    p.LiveAtBat = new Timeline.Playback.LiveAtBat
-                    {
-                        Inning = inning,
-                        IsTop = isTop,
-                        AwayScore = p.Away.Runs,
-                        HomeScore = p.Home.Runs,
-                        Outs = outs,
-                        BaseFirst = bases.First is not null,
-                        BaseSecond = bases.Second is not null,
-                        BaseThird = bases.Third is not null,
-                        Balls = session.Balls,
-                        Strikes = session.Strikes,
-                        PitchNumberInPa = session.PitchCount + 1,
-                        BatterOrder = batterOrder,
-                        BatterName = batter.Name,
-                        BatterSourceId = batter.SourceId,
-                        BatterBats = batter.Bats,
-                        BatterPosition = batter.Position,
-                        BatterNumber = batter.UniformNumber,
-                        BatterConditionValue = batter.ConditionValue,
-                        PitcherName = currentPitcher.Name,
-                        PitcherSourceId = currentPitcher.SourceId,
-                        PitcherThrows = currentPitcher.Throws,
-                        PitcherNumber = currentPitcher.UniformNumber,
-                        PitcherConditionValue = currentPitcher.ConditionValue,
-                    };
-                yield return Pitch();
+                // 打席途中の采配窓（各投球の手前）。頭の窓は上で開いてあるので1周目は開かない。
+                if (!atHeadWindow)
+                {
+                    if (ctx.CapturePitches)
+                        p.LiveAtBat = LiveAtBatOf(batter, currentPitcher, session.Balls, session.Strikes, session.PitchCount + 1);
+                    yield return Pitch();
+                }
+                atHeadWindow = false;
+                // 窓で継投・代打が入っていたら、この球からその選手で解決する（上の RebindMatchup の項）。
+                if (!ReferenceEquals(offense.PeekBatter(), batter) || !ReferenceEquals(defense.CurrentPitcher, currentPitcher))
+                    RebindMatchup();
 
                 // 観測（設計書17 §4）: この球の乱数消費を測るため、采配窓を抜けた直後の値を控える。
                 var drawsAtPitchStart = rngStats?.Draws ?? 0;

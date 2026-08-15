@@ -208,6 +208,16 @@ Phase D-1 でエンジン側の1球進行（`AdvancePitch`）は完成してい�
 - どちらも `GameContext.CapturePitches` が真のときだけ。観測専用＝乱数非消費・digest不変・帯不変
 - `LiveAtBat` が**打席の頭でも埋まる**ことが要（無いとUIは1球目まで打者を知れず、
   バント・盗塁・エンドランを出す一番大事な瞬間が消える）
+- **采配窓での選手交代の効き方（2026-08-15 改定）**: 打席の頭の窓は**投手・打者を束縛する前**に開く
+  （`GameEngine.PlayHalfSteps`＝`PeekBatter`/`CurrentPitcher`・実効能力・`AtBatSession.Begin` は窓の後）。
+  打席途中の窓では、窓を抜けた直後に打者・投手の実体が変わっていれば束縛し直す（`RebindMatchup`＝
+  実効能力・打席文脈を同じ式で組み直し `AtBatSession.RebindMatchup` でカウント・球数を引き継ぐ）。
+  つまり継投・代打は**押した次の球から効く**。旧実装は頭の窓が束縛の後にあり、窓で行った交代が
+  次の打席から効いていた（「投手交代したのに一人目の打者の間、前の投手が投げている」）。
+  決定列（`GameDecision.PitchIndex`）は交代でも窓の球数を記録し、`GameReplay` が同じ球の手前で適用する
+  ＝ライブと Save/Load 往復で「どの球から効くか」が一致する。交代の直後に `LiveAtBat` の打者・投手も
+  差し替える（`MatchProgression.RecordSubstitution`）ので、UI は窓の対戦を引き直すだけでよい。
+  いずれも乱数非消費＝AI・一括シムは打席中に交代しないので帯・digest 不変
 - `PitchRecord`→`PitchToken` の変換は `PitchTokenFactory` の1本。打席確定時の一括変換と
   1球ごとの変換が同じ経路を通る＝同じ球を2通りに描かない
 

@@ -1819,6 +1819,12 @@ namespace KokoSim.Unity.Match
         private bool _duelThrowActive;
         private bool _duelThrowFired;
         private float _duelThrowX, _duelThrowZ, _duelThrowYaw, _duelThrowYawRate, _duelThrowLastT;
+        // 投げ手の**基準**（BasePos/BaseRot）の控え。PlaceFielder は基準を書き換える（守備の役者は置いた所が
+        // 基準）が、この送球の投げ手は対決4体と共有の役者で、基準は対決の構え位置・向き。ここを通った
+        // 立ちの向き（三塁送球なら約−45°）を基準に焼いたまま BeginFieldPlay が控え、EndFieldPlay が戻すと、
+        // 以降ずっと捕手の体の軸が三塁を向いた（2026-08-15 監督報告。issue #607 の縦と同型で、向きと横位置の版）
+        private Vector3 _duelThrowBasePos;
+        private Quaternion _duelThrowBaseRot;
 
         /// <summary>
         /// この一投の頭出しを準備する。対象は投げ手が捕手/投手の1本だけ（盗塁・牽制はどちらも
@@ -1829,8 +1835,7 @@ namespace KokoSim.Unity.Match
         public bool TryBeginDuelThrow(PlaybackPlay play, out float fireAt)
         {
             fireAt = 0f;
-            _duelThrowActive = false;
-            _duelThrowFired = false;
+            EndDuelThrow();   // 前の送球が畳まれずに残っていたら基準を戻してから始める
             if (!Available || play?.Ball == null) return false;
 
             PlaybackBallSegment throwSeg = null;
@@ -1882,6 +1887,8 @@ namespace KokoSim.Unity.Match
                 _duelThrowX = lp.x;
                 _duelThrowZ = lp.z;
                 _duelThrowYaw = _duelThrowActor.Go.transform.localEulerAngles.y;
+                _duelThrowBasePos = _duelThrowActor.BasePos;   // 基準を控える（EndDuelThrow で戻す。上の項）
+                _duelThrowBaseRot = _duelThrowActor.BaseRot;
                 float rest = Mathf.Abs(Mathf.DeltaAngle(_duelThrowYaw, e.Yaw));
                 float span = Mathf.Max(1f / PoseFps, e.TRelease - 1f / PoseFps - t);
                 _duelThrowYawRate = rest / span;
@@ -1900,9 +1907,19 @@ namespace KokoSim.Unity.Match
             PlaceFielder(_duelThrowActor, _duelThrowX, _duelThrowZ, _duelThrowYaw);
         }
 
-        /// <summary>対決ビュー据え置きの送球状態を畳む（BeginFieldPlay への引き渡し後・プレー打ち切り時）。</summary>
+        /// <summary>
+        /// 対決ビュー据え置きの送球状態を畳む（BeginFieldPlay への引き渡し後・プレー打ち切り時）。
+        /// 投げ手の基準（BasePos/BaseRot）を対決の構えへ戻す＝<b>必ず BeginFieldPlay より前に呼ぶ</b>
+        /// （BeginFieldPlay がその時点の基準を控え、EndFieldPlay がそれを戻すため。transform は触らない＝
+        /// 見えている送球の姿勢はそのまま、次の打席の巻き戻し先だけを正す）。
+        /// </summary>
         public void EndDuelThrow()
         {
+            if (_duelThrowFired && _duelThrowActor != null)
+            {
+                _duelThrowActor.BasePos = _duelThrowBasePos;
+                _duelThrowActor.BaseRot = _duelThrowBaseRot;
+            }
             _duelThrowActive = false;
             _duelThrowFired = false;
             _duelThrowActor = null;
@@ -3582,6 +3599,9 @@ namespace KokoSim.Unity.Match
             SetFieldCastVisible(true);
             _fieldPlay = play;
             _fieldT0 = t0;
+            // 対決ビュー据え置きの送球（盗塁・牽制）から続く場合、投げ手の基準を対決の構えへ戻してから控える
+            // （呼び出し側も EndDuelThrow を先に呼ぶが、順序を構造で保証する。EndDuelThrow の項）
+            EndDuelThrow();
             _pitcherSnap = Snapshot(_pitcher);
             _catcherSnap = Snapshot(_catcher);
 

@@ -773,11 +773,16 @@ namespace KokoSim.Unity.Match
                 _defenseColors = UniformPalette.From(defense);
                 Repaint(_pitcher, _defenseColors);
                 Repaint(_catcher, _defenseColors);
+                // 守備7人（打球処理・盗塁で出る）も守備側の色。生成が遅延（最初の打球で EnsureFieldCast）で
+                // 一度きりのため、ここで塗り替えないと生成時の半回の守備校＝いまの攻撃校の色のまま
+                // 攻守交代をまたぐ（2026-08-15 監督報告「守備陣に攻撃側のユニフォーム」）
+                foreach (var kv in _fieldCast) Repaint(kv.Value, _defenseColors);
             }
             if (offense != null)
             {
                 _offenseColors = UniformPalette.From(offense);
                 Repaint(_batter, _offenseColors);   // 打者ヘルメットは暗紺固定＝チーム色の装備は無い
+                foreach (var a in _runnerCast) Repaint(a, _offenseColors);   // 走者プールも同じ理由で塗り替える
             }
         }
 

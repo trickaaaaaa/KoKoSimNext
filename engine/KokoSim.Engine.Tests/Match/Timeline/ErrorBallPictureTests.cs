@@ -74,13 +74,13 @@ public sealed class ErrorBallPictureTests
 
     // --- ③ 拾ったら内野へ投げ返す ---
 
-    /// <summary>内野のお手玉: 拾い直した野手が投手へ返球する（棒立ちにしない）。</summary>
+    /// <summary>内野のお手玉: 拾い直した野手が投手へ返球する（棒立ちにしない）。走者なし＝投手はマウンドに居る。</summary>
     [Fact]
     public void InfieldCatchError_ReturnThrowGoesToThePitcher()
     {
         var play = FieldingPlayFixtures.InfieldGrounder(FieldPosition.Shortstop, result: BattedBallResult.Error)
             with { ErrorKind = FieldingErrorKind.Catch };
-        var tl = TimelineBuilder.AppendErrorReturnThrow(Build(play), play, Field);
+        var tl = TimelineBuilder.AppendErrorReturnThrow(Build(play, runnersOn: false), play, Field);
 
         var back = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).OrderBy(b => b.T1).Last();
         Assert.True(Dist(back.To, new TimelinePoint(0, 18.44)) < 1.0,
@@ -88,6 +88,33 @@ public sealed class ErrorBallPictureTests
         Assert.Equal(FieldPosition.Pitcher, back.ToRole);
         Assert.True(back.T0 >= tl.ErrorPickupAt, "拾う前に投げている");
         Assert.True(tl.Duration >= back.T1, "尺が返球到達より短い");
+    }
+
+    /// <summary>
+    /// 投手がマウンドを離れている（走者ありの内野ゴロ＝本塁バックアップ）失策では投手へ返さない
+    /// （誰も居ないマウンドへ球が飛ぶ絵になる。2026-08-15 監督報告）＝二塁ベースのカバーへ返す。
+    /// 遊撃お手玉・三塁悪送球の両方で、投げ始めの時刻に投手がマウンドから離れていることも実測で確かめる。
+    /// </summary>
+    [Theory]
+    [InlineData(FieldPosition.Shortstop, FieldingErrorKind.Catch)]
+    [InlineData(FieldPosition.ThirdBase, FieldingErrorKind.Throw)]
+    public void InfieldError_WithPitcherBackingUpHome_ReturnThrowGoesToSecond(FieldPosition role, FieldingErrorKind kind)
+    {
+        var play = (role == FieldPosition.ThirdBase
+                ? FieldingPlayFixtures.InfieldGrounder(role, fieldedX: -18.0, fieldedZ: 24.0, result: BattedBallResult.Error)
+                : FieldingPlayFixtures.InfieldGrounder(role, result: BattedBallResult.Error))
+            with { ErrorKind = kind };
+        var before = Build(play, runnersOn: true);
+        Assert.Contains(before.Moves, m => m.Role == FieldPosition.Pitcher && m.Task == FielderTask.Backup);   // 前提: 投手は本塁バックアップ
+
+        var tl = TimelineBuilder.AppendErrorReturnThrow(before, play, Field);
+        var back = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).OrderBy(b => b.T1).Last();
+        Assert.NotEqual(FieldPosition.Pitcher, back.ToRole);
+        Assert.Equal("second", back.ToBase);
+        Assert.True(Dist(back.To, new TimelinePoint(Field.SecondBase.X, Field.SecondBase.Z)) < 1.0,
+            $"投手不在時の返球先が二塁でない（({back.To.X:F1},{back.To.Z:F1})）");
+        Assert.NotEqual(back.ToRole, back.FromRole);
+        Assert.True(back.T0 >= tl.ErrorPickupAt, "拾う前に投げている");
     }
 
     /// <summary>外野のフライ落球: 二塁へ投げ返す（内野へ戻す）。</summary>

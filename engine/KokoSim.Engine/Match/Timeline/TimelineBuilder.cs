@@ -1408,6 +1408,36 @@ public static class TimelineBuilder
     /// <summary>失策球の返球を握り替える間[s]（表示専用の演出値）。</summary>
     private const double ErrorReturnTransferSeconds = 0.25;
 
+    /// <summary>失策球を投手へ返してよい「マウンドに居る」とみなす半径[m]（マウンド接地半径 2.74m と同程度）。</summary>
+    private const double ErrorReturnPitcherOnMoundM = 3.0;
+
+    /// <summary>
+    /// 時刻 <paramref name="t"/> にその役の野手が居る点（表示専用の写し）。開始位置
+    /// （<see cref="PlayTimeline.FielderStarts"/>）から野手レッグを時刻順に辿り、走行中なら線形補間する
+    /// ＝再生層 <c>PlaybackEvaluator.FielderAt</c> と同じ読み方。開始位置が無ければ標準守備位置。
+    /// 判定には使わない（返球先の選択＝絵の都合にだけ使う）。
+    /// </summary>
+    private static TimelinePoint FielderPositionAt(PlayTimeline timeline, FieldPosition role, double t)
+    {
+        var pos = timeline.FielderStarts is { } starts && starts.TryGetValue(role, out var s0)
+            ? s0 : StandardStarts()[role];
+        // その役のレッグを開始時刻順に辿る（積み順は保証されていないので並べ替える）
+        var legs = new List<FielderMove>();
+        foreach (var m in timeline.Moves) if (m.Role == role) legs.Add(m);
+        legs.Sort((a, b) => a.T0.CompareTo(b.T0));
+        FielderMove? current = null;   // t の時点で走行中、または直近に終えたレッグ
+        foreach (var m in legs)
+        {
+            if (m.T0 > t) break;
+            if (current is not null) pos = current.To;   // 前のレッグの行き先が次のレッグの出発点
+            current = m;
+        }
+        if (current is null) return pos;
+        if (t >= current.T1 || current.T1 <= current.T0) return current.To;
+        var u = (t - current.T0) / (current.T1 - current.T0);
+        return new TimelinePoint(pos.X + (current.To.X - pos.X) * u, pos.Z + (current.To.Z - pos.Z) * u);
+    }
+
     /// <summary>
     /// 失策でこぼれた球を拾った野手が内野へ投げ返す（issue #629 ③）。表示専用・乱数不使用。
     ///
@@ -1415,6 +1445,13 @@ public static class TimelineBuilder
     /// 眺めている絵になる（issue #629 の症状）。投げ先は球の位置で決める＝外野で拾ったら二塁へ
     /// 投げ返し、内野で拾ったら投手へ返して間合いを切る。走者を刺しにいく送球ではないので
     /// 判定には一切関与しない（<see cref="GuardAgainstVerdict"/> も通さない）。</para>
+    ///
+    /// <para><b>投手へ返すのは、投げる時刻に投手がマウンドに居るときだけ</b>。走者ありの内野ゴロでは陣形表が
+    /// 投手を本塁バックアップへ走らせる（<see cref="DefensiveFormation"/>）ので、失策球を拾って投げる頃
+    /// （お手玉で約3.8秒・悪送球で約6秒）の投手は本塁後方〜戻りの途中に居て、マウンドへ投げると誰も
+    /// 居ない所へ球が飛ぶ（実測: 遊撃お手玉で投手は 20m、三塁悪送球で 16m 離れていた。2026-08-15
+    /// 監督報告「なぜか投手にボールを送る」）。投手が居なければ二塁ベース（実際に塁カバーへ入っている
+    /// 野手）へ返す＝外野で拾った場合と同じ扱い。位置は野手レッグの写しから引くだけで新たな判定はしない。</para>
     ///
     /// <para>本塁クロスプレーを描いた打席では呼ばない（<c>AppendBackHomeThrows</c> と二重に投げる）。
     /// 判断は「本塁へ投げるか」を知っている GameEngine 側に置く。</para>
@@ -1425,13 +1462,20 @@ public static class TimelineBuilder
             || timeline.ErrorPickupPoint is not { } from
             || timeline.ErrorPickupRole is not { } fromRole) return timeline;
 
+        // 投手のお手玉＝拾った本人が投手。自分から自分へは投げないし、他所へ投げる理由も無い＝そのまま持っている。
+        if (fromRole == FieldPosition.Pitcher) return timeline;
+
+        var t0 = pickAt + ErrorReturnTransferSeconds;
         var deep = Distance(Home, from) > OutfieldDepthM;
-        var to = deep ? BasePoint(field, "second") : Mound;
-        var toRole = deep ? DefaultBaseGuard("second") : FieldPosition.Pitcher;
-        // 自分から自分へは投げない（投手のお手玉＝拾った本人がマウンドに居る）。
+        // 投手がマウンドを離れている（本塁バックアップ・一塁カバー・戻りの途中）なら投手へは返さない。
+        // 送球が着く頃の位置ではなく**投げ始めの位置**で見る＝実物の野手も「いま居る人」へ投げる。
+        var pitcherOnMound = Distance(FielderPositionAt(timeline, FieldPosition.Pitcher, t0), Mound) < ErrorReturnPitcherOnMoundM;
+        var toSecond = deep || !pitcherOnMound;
+        var to = toSecond ? BasePoint(field, "second") : Mound;
+        var toRole = toSecond ? CoverRoleAt(timeline, to, DefaultBaseGuard("second")) : FieldPosition.Pitcher;
+        // 自分から自分へは投げない（二塁カバーが自分で拾い直した等）。
         // 距離ゼロの送球は絵に出ないが、ボール区間としては嘘なので積まない＝そのまま持っている。
         if (toRole == fromRole || Distance(from, to) < 5.0) return timeline;
-        var t0 = pickAt + ErrorReturnTransferSeconds;
         var t1 = t0 + LegSeconds(Distance(from, to), ThrowSpeedOf(play));
 
         var ball = new List<BallSegment>(timeline.Ball)
@@ -1439,7 +1483,7 @@ public static class TimelineBuilder
             new()
             {
                 Kind = BallSegmentKind.Throw, T0 = t0, T1 = t1, From = from, To = to,
-                FromRole = fromRole, ToRole = toRole, ToBase = deep ? "second" : null,
+                FromRole = fromRole, ToRole = toRole, ToBase = toSecond ? "second" : null,
             },
         };
         return timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, t1 + 0.6) };

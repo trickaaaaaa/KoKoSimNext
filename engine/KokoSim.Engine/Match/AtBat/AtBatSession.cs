@@ -33,13 +33,14 @@ public readonly record struct PitchResolution(bool EndsPlateAppearance, bool Squ
 /// </summary>
 public sealed class AtBatSession
 {
-    private readonly BatterAttributes _batter;
-    private readonly Player? _batterPlayer;
+    // 打席途中の交代（RebindMatchup）で差し替わる＝readonly にしない。それ以外は打席内で不変。
+    private BatterAttributes _batter;
+    private Player? _batterPlayer;
     private readonly Player? _thirdBaseRunner;
     private readonly double _squeezeWasteProbability;
-    private readonly PitcherAttributes _pitcher;
-    private readonly AtBatContext _ctx;
-    private readonly BattingCoefficients _batting;
+    private PitcherAttributes _pitcher;
+    private AtBatContext _ctx;
+    private BattingCoefficients _batting;
 
     private int _balls;
     private int _strikes;
@@ -141,9 +142,21 @@ public sealed class AtBatSession
         int initialBalls = 0, int initialStrikes = 0,
         PlateAppearanceResult? forcedResult = null)
     {
-        // スキルの打球挙動補正（設計書10）。行動特性・球質だけをここで反映（数値補正は実効能力側で適用済み）。
-        // 広角打法（引っ張りバイアスの縮小, issue #262）・粘り打ち（ファウル率）は打撃係数の1打席コピーへ。
-        // スキルなしなら共有係数のまま。
+        var session = new AtBatSession(
+            batter, batterPlayer, thirdBaseRunner, squeezeWasteProbability, pitcher, ctx, BattingFor(ctx));
+        session._balls = initialBalls;
+        session._strikes = initialStrikes;
+        session._forcedResult = forcedResult;
+        return session;
+    }
+
+    /// <summary>
+    /// スキルの打球挙動補正（設計書10）を反映した打撃係数の1打席コピー。行動特性・球質だけをここで反映
+    /// （数値補正は実効能力側で適用済み）。広角打法（引っ張りバイアスの縮小, issue #262）・粘り打ち（ファウル率）。
+    /// スキルなしなら共有係数のまま。RNG非消費（従来 <see cref="Begin"/> のインラインと同一）。
+    /// </summary>
+    private static BattingCoefficients BattingFor(AtBatContext ctx)
+    {
         var batting = ctx.Batting;
         if (ctx.Skills.BearingPullFactor != 1.0 || ctx.Skills.FoulShareFactor != 1.0)
         {
@@ -157,13 +170,23 @@ public sealed class AtBatSession
                 FoulShare = MathUtil.Clamp(batting.FoulShare * ctx.Skills.FoulShareFactor, 0.0, 0.9),
             };
         }
+        return batting;
+    }
 
-        var session = new AtBatSession(
-            batter, batterPlayer, thirdBaseRunner, squeezeWasteProbability, pitcher, ctx, batting);
-        session._balls = initialBalls;
-        session._strikes = initialStrikes;
-        session._forcedResult = forcedResult;
-        return session;
+    /// <summary>
+    /// 采配窓で投手・打者が代わったとき（継投・代打。2026-08-15）、この打席の対戦を差し替える。
+    /// カウント・球数・投球記録・トレースはそのまま引き継ぐ＝打席途中の継投は新投手が同じカウントから
+    /// 同じ打者に投げ続ける。実効能力と打席文脈（守備配置・配球方針・捕手リード）は呼び出し側
+    /// （GameEngine の打席頭と同じ式）で組み直して渡す。乱数は一切消費しない。
+    /// </summary>
+    public void RebindMatchup(BatterAttributes batter, PitcherAttributes pitcher, AtBatContext ctx, Player? batterPlayer)
+    {
+        if (IsComplete) throw new System.InvalidOperationException("確定した打席の対戦は差し替えられません。");
+        _batter = batter;
+        _batterPlayer = batterPlayer;
+        _pitcher = pitcher;
+        _ctx = ctx;
+        _batting = BattingFor(ctx);
     }
 
     /// <summary>
