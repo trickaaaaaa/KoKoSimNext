@@ -3,6 +3,7 @@ using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 using Xunit;
@@ -15,15 +16,20 @@ namespace KokoSim.Engine.Tests.Career;
 /// </summary>
 public sealed class DraftTests
 {
+    // 注目度の打者軸（NotabilityModel.BatterWeights）＋選手画面の打撃力チップ（弾道/選球眼）。
+    // 後者を埋めないと打撃力が C（0.7×level）に留まり、足切り（§3.1a）で全員が圏外になる。
     private static readonly AbilityKind[] BatterKinds =
     {
         AbilityKind.Contact, AbilityKind.Power, AbilityKind.Speed,
         AbilityKind.Fielding, AbilityKind.ArmStrength, AbilityKind.Catching,
+        AbilityKind.LaunchTendency, AbilityKind.Discipline,
     };
     private static readonly AbilityKind[] PitcherKinds =
     {
         AbilityKind.Velocity, AbilityKind.Control, AbilityKind.Stamina, AbilityKind.PitchRank,
     };
+
+    private static readonly TeamStrengthCoefficients S = new();
 
     private static DevelopingPlayer Batter(int id, int grade, int level, int cap, string name = "打者")
     {
@@ -112,7 +118,7 @@ public sealed class DraftTests
     {
         var c = new DraftCoefficients();
         var p = Batter(1, 2, level: 40, cap: 50);       // abilityScore=43.5, perf=50 → 46.75 < 58
-        var e = DraftEngine.Evaluate(p, null, c);
+        var e = DraftEngine.Evaluate(p, null, c, S);
         Assert.Equal(DraftRankBand.None, e.Band);
         Assert.False(e.Band.IsCandidate());
     }
@@ -123,7 +129,7 @@ public sealed class DraftTests
         var c = new DraftCoefficients();
         // 1年生でも能力＋成績が高ければ候補入りしうる（設計書20 §1）。
         var freshman = Batter(7, grade: 1, level: 92, cap: 98, name: "1年怪物");
-        var e = DraftEngine.Evaluate(freshman, BattingStats(7, 12, 48, 45, 30, 10), c);
+        var e = DraftEngine.Evaluate(freshman, BattingStats(7, 12, 48, 45, 30, 10), c, S);
         Assert.True(e.Band.IsCandidate());
         Assert.Equal(1, e.Grade);
     }
@@ -133,7 +139,7 @@ public sealed class DraftTests
     {
         var c = new DraftCoefficients();
         var ace = Pitcher(3, 3, level: 85, cap: 92, name: "エース");
-        var e = DraftEngine.Evaluate(ace, PitchingStats(3, outs: 90, bf: 90, hits: 40, runs: 5, k: 100), c);
+        var e = DraftEngine.Evaluate(ace, PitchingStats(3, outs: 90, bf: 90, hits: 40, runs: 5, k: 100), c, S);
         Assert.True(e.EvaluatedAsPitcher);
         Assert.True(e.Band.IsCandidate());
     }
@@ -153,7 +159,7 @@ public sealed class DraftTests
         {
             [1] = BattingStats(1, 12, 48, 45, 30, 9),
         };
-        var evals = DraftEngine.EvaluateRoster(roster, id => stats.TryGetValue(id, out var s) ? s : null, c);
+        var evals = DraftEngine.EvaluateRoster(roster, id => stats.TryGetValue(id, out var st) ? st : null, c, S);
 
         Assert.Equal(2, evals.Count);
         Assert.Equal(1, evals[0].PlayerId);
@@ -176,7 +182,7 @@ public sealed class DraftTests
             Batter(3, 3, 45, 50, "3年控え"),   // 3年だが非候補 → 対象外
         };
         var result = DraftEngine.RunNomination(1, roster,
-            _ => null, c, new Xoshiro256Random(42));
+            _ => null, c, S, new Xoshiro256Random(42));
 
         Assert.All(result.Picks, p => Assert.Equal(1, p.PlayerId));   // 1人だけ
     }
@@ -187,8 +193,8 @@ public sealed class DraftTests
         var c = new DraftCoefficients();
         var roster = new[] { Batter(1, 3, 80, 88), Batter(4, 3, 78, 84) };
 
-        var a = DraftEngine.RunNomination(3, roster, _ => null, c, new Xoshiro256Random(7));
-        var b = DraftEngine.RunNomination(3, roster, _ => null, c, new Xoshiro256Random(7));
+        var a = DraftEngine.RunNomination(3, roster, _ => null, c, S, new Xoshiro256Random(7));
+        var b = DraftEngine.RunNomination(3, roster, _ => null, c, S, new Xoshiro256Random(7));
 
         Assert.Equal(a.Picks.Count, b.Picks.Count);
         for (var i = 0; i < a.Picks.Count; i++)
@@ -206,7 +212,7 @@ public sealed class DraftTests
         var c = new DraftCoefficients { NominationMidpoint = 0.0, NominationSpread = 1.0 };
         var monster = Batter(1, 3, 95, 99, "怪物");   // FirstRound
         var result = DraftEngine.RunNomination(2, new[] { monster },
-            _ => BattingStats(1, 12, 48, 45, 32, 12), c, new Xoshiro256Random(1));
+            _ => BattingStats(1, 12, 48, 45, 32, 12), c, S, new Xoshiro256Random(1));
 
         var pick = Assert.Single(result.Picks);
         Assert.True(pick.Nominated);
@@ -222,11 +228,67 @@ public sealed class DraftTests
         var c = new DraftCoefficients { NominationMidpoint = 1000.0, NominationSpread = 1.0 };
         var candidate = Batter(1, 3, 92, 98);        // 候補（FirstRound）だが…
         var result = DraftEngine.RunNomination(2, new[] { candidate },
-            _ => null, c, new Xoshiro256Random(1));
+            _ => null, c, S, new Xoshiro256Random(1));
 
         var pick = Assert.Single(result.Picks);      // 候補なのでピック行は立つ
         Assert.False(pick.Nominated);                // 指名はされない
         Assert.Equal(0, pick.Round);
         Assert.Empty(result.Nominated);
+    }
+
+    // ── 候補入りの足切り（§3.1a: 打撃力／投手力チップの高い方が B 未満なら圏外） ──
+
+    /// <summary>
+    /// 実害の再現: 打撃力チップが D（現在値55）でも、隠し上限が高く（cap 90）成績も良ければ
+    /// 注目度は中位圏に届く。床が無いと「打者ランクDが4位指名」になる。床があれば圏外。
+    /// </summary>
+    [Fact]
+    public void RankDBatter_WithHighCeilingAndStats_IsBlockedByFloor()
+    {
+        var c = new DraftCoefficients();
+        var p = Batter(1, 3, level: 55, cap: 90, name: "D打者");
+        var stats = BattingStats(1, games: 14, pa: 56, ab: 50, hits: 25, hr: 8);   // OPS 1.0超
+
+        var n = NotabilityModel.Compute(p, stats, c);
+        Assert.Equal(Tier.D, PlayerStrengthProfile.Compute(p, S).BattingTier);
+        Assert.True(NotabilityModel.BandOf(n, c) >= DraftRankBand.MiddleRound,
+            $"床が無ければ中位圏に届くはず（notability={n:F1}）");
+
+        var e = DraftEngine.Evaluate(p, stats, c, S);
+        Assert.Equal(DraftRankBand.None, e.Band);
+        Assert.Equal(n, e.Notability, 6);            // 注目度自体は据え置き（表示用）
+
+        var result = DraftEngine.RunNomination(1, new[] { p }, _ => stats,
+            new DraftCoefficients { NominationMidpoint = 0.0 }, S, new Xoshiro256Random(1));
+        Assert.Empty(result.Picks);                  // 指名対象にすら乗らない
+    }
+
+    [Fact]
+    public void RankBBatter_PassesFloor()
+    {
+        var c = new DraftCoefficients();
+        var p = Batter(1, 3, level: 70, cap: 85);    // 打撃力ちょうど B
+        Assert.Equal(Tier.B, PlayerStrengthProfile.Compute(p, S).BattingTier);
+        Assert.True(NotabilityModel.MeetsCandidateFloor(p, S, c));
+    }
+
+    [Fact]
+    public void Floor_TakesHigherOfBattingAndPitching()
+    {
+        var c = new DraftCoefficients();
+        var ace = Pitcher(1, 3, level: 80, cap: 90);   // 投手力 A・打撃力 G
+        Assert.True(NotabilityModel.MeetsCandidateFloor(ace, S, c));
+
+        var weak = Pitcher(2, 3, level: 60, cap: 90);  // 投手力 C・打撃力 G
+        Assert.False(NotabilityModel.MeetsCandidateFloor(weak, S, c));
+    }
+
+    [Fact]
+    public void Floor_IsCoefficientDriven()
+    {
+        var p = Batter(1, 3, level: 55, cap: 90);      // 打撃力 D
+        Assert.False(NotabilityModel.MeetsCandidateFloor(p, S, new DraftCoefficients()));
+        Assert.True(NotabilityModel.MeetsCandidateFloor(p, S, new DraftCoefficients { CandidateMinTier = Tier.D }));
+        Assert.True(NotabilityModel.MeetsCandidateFloor(p, S, new DraftCoefficients { CandidateMinTier = Tier.G }));
     }
 }

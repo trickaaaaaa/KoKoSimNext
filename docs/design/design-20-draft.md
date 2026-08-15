@@ -90,8 +90,33 @@ YAML は sim/テスト調整用（既存の sim-vs-unity 係数分割に倣う�
 | ≥ `CandidateThreshold`(58) | `LowerRound` | 下位・育成 | 「下位／育成で名前が挙がる」 |
 | < 58 | `None` | 圏外 | （候補でない） |
 
-- **候補入り＝ Notability ≥ CandidateThreshold(58)**＝予想が `None` 以外。学年を問わない。
+- **候補入り＝ Notability ≥ CandidateThreshold(58)** かつ **§3.1a の足切りを通過**＝予想が `None` 以外。学年を問わない。
 - 閾値・バンド境界は `data/draft.yaml` 駆動。
+
+### 3.1a 候補入りの足切り（カテゴリランク B 以上・2026-08-15）
+
+注目度は「隠し上限のブレンド」と「成績」で持ち上がるため、選手画面で**打撃力 D** と出ている打者が
+（足・守備が良く、上限が高く、夏秋に打った）だけで中位圏に届き「4位指名」される実害が出た。
+プレイヤーの体感は「指名されるなら少なくともランク B」なので、注目度とは別に**床**を置く:
+
+```
+best = max( 打撃力チップ, 投手力チップ )        # PlayerStrengthProfile の現在値合成（隠し上限を混ぜない）
+候補入り ⇔ Tier(best) ≥ CandidateMinTier(B) かつ Notability ≥ CandidateThreshold
+```
+
+- 判定に使う合成は**選手画面のカテゴリランクチップと同じ式・同じ係数**（`TeamStrengthCoefficients`）。
+  ドラフト独自の打者軸（走力・守備込み）ではなく、プレイヤーが見ている「打撃力」「投手力」の文字で切る
+  ＝画面で D と出ている選手が指名されることは無い。
+- **投打の高い方**で見る（投手力 A・打撃力 G のエースは通る）。
+- 床に届かない選手は注目度に関わらず `None`（候補入り通知も出ない）。注目度の値自体は据え置き
+  （`DraftEvaluation.Notability`）＝将来の候補一覧画面で「注目度は高いがランク不足」を出せる。
+- 判定は `NotabilityModel.MeetsCandidateFloor` の1箇所。`DraftEngine` の3入口（`Evaluate` / `EvaluateRoster` /
+  `RunNomination`）はすべて足切り込みの `BandOf(player, n, strength, c)` を通す。
+- `CandidateMinTier` は `data/draft.yaml` の `candidate_min_tier`（G〜S）で調整（C# 既定＝B が実プレイの真値）。
+
+> 併せて残る「甘さ」の要因（未対応・要判断）: ①中位バンドは指名時に一律「4位」（`RepresentativeRound`）
+> ＝66.1 も 75.9 も 4位表示。バンド内で 6→4 位に按分する案あり。②指名確率の中点（64）が中位下限（66）より低く、
+> 中位候補はほぼ確実に指名される。③打者の規定 40 打席は夏県＋秋で満額に達し、小サンプル収縮が効きにくい。
 
 ### 3.2 指名の確定（10月最終週・3年のみ）
 
