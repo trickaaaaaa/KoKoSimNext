@@ -18,13 +18,14 @@ namespace KokoSim.Unity.Shell
             _ => "普通",
         };
 
+        // tokens.uss --cond-* と同値（赤＝絶好調 … 青＝絶不調のパワプロ式・2026-08-15）。
         public static string ColorHex(Condition condition) => condition switch
         {
-            Condition.Excellent => "#69B98B",
-            Condition.Good => "#A8C64E",
-            Condition.Poor => "#EC8B3C",
-            Condition.Terrible => "#E86A4A",
-            _ => "#9AA5A0",
+            Condition.Excellent => "#EF3B3B",
+            Condition.Good => "#F28B2E",
+            Condition.Poor => "#5AA9E6",
+            Condition.Terrible => "#4C5BD4",
+            _ => "#F4CB3C",
         };
     }
 }

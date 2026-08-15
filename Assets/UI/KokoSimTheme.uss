@@ -292,6 +292,7 @@
 .cell--name { flex-grow: 2.2; }
 .cell--wide { flex-grow: 3.2; }
 .cell--narrow { flex-grow: 0.8; }
+.cell--warn { color: var(--color-warn); }   /* 怪我など本当の警告だけ（調子色 .cond--* を借りない） */
 
 /* ===== 練習計画 ===== */
 .day__e { font-size: 18px; color: var(--color-muted); margin-top: 3px; -unity-text-align: middle-center; white-space: normal; }
@@ -868,11 +869,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* 調子5段階の色（選手一覧・主将指名など全画面共通）。
    値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
    色分岐はC#側で Condition enum から行い、表示文字列で比較しない。 */
-.cond--best { color: #F5C64A; }    /* = --cond-best 絶好調 */
-.cond--good { color: #9FCB3B; }    /* = --cond-good 好調 */
-.cond--normal { color: #9AA5A0; }  /* = --cond-normal 普通 */
-.cond--bad { color: #EE8A3C; }     /* = --cond-bad 不調 */
-.cond--worst { color: #E86A4A; }   /* = --cond-worst 絶不調 */
+.cond--best { color: #EF3B3B; }    /* = --cond-best 絶好調（赤） */
+.cond--good { color: #F28B2E; }    /* = --cond-good 好調（橙） */
+.cond--normal { color: #F4CB3C; }  /* = --cond-normal 普通（黄） */
+.cond--bad { color: #5AA9E6; }     /* = --cond-bad 不調（水色） */
+.cond--worst { color: #4C5BD4; }   /* = --cond-worst 絶不調（青） */
 
 /* --- 通知フィード --- */
 .fd-item { flex-direction: row; align-items: stretch; border-bottom-width: 1px; border-bottom-color: var(--color-line); }

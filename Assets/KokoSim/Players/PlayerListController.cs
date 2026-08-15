@@ -115,7 +115,7 @@ namespace KokoSim.Unity.Players
             {
                 var injuryLabel = new Label(r.Injury);
                 injuryLabel.AddToClassList("cell");
-                injuryLabel.AddToClassList("cond--worst");
+                injuryLabel.AddToClassList("cell--warn");
                 injury.Add(injuryLabel);
             }
             row.Add(injury);

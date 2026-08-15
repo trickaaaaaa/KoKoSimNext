@@ -1414,7 +1414,7 @@
 }
 .mhud-pc__u { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); color: var(--hud-label); margin-left: 1px; }
 /* 警告色は絶対球数でなくスタミナ残量で出す（issue #408）。スタミナバーと色を一致させる。 */
-.mhud-pc__n--warn { color: var(--cond-bad); }        /* 残量 6割未満＝注意 */
+.mhud-pc__n--warn { color: var(--color-lamp); }      /* 残量 6割未満＝注意（= .stam__fill--mid。調子色を借りない） */
 .mhud-pc__n--alert { color: var(--color-warn); }     /* 残量 3割未満＝警告 */
 
 /* 名前行のチップ（打順・守備位置・先発・学年）。地を持つのは①打順/登板順（白地黒字）
