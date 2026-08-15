@@ -464,6 +464,8 @@ namespace KokoSim.Unity.Shell
             var matches = runner.BuildBracketView().Matches;
             var champion = Records.FoldTournament(matches, kind, year);
             History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion);
+            // 番狂わせの名声デルタ（issue #170）もここで積む＝通算戦績と同じ「ブラケット確定」の単一入口。
+            ManagerService.RecordTournamentUpsets(matches);
         }
 
         /// <summary>

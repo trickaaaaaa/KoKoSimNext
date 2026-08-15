@@ -845,7 +845,8 @@ manager_growth:
 
 # --- 育成（練習→能力, 設計書02 §5.1） ---
 training:
-  base_main_exp: 85.0
+  # 2026-08-15: 85→130（案D）。旧値では中核能力+4〜5/3年で「新入生の質＝チームの質」になりすぎた。
+  base_main_exp: 130.0
   sub_factor: 0.4
   facility_coef: 1.0          # 施設レベル0（施設なし）の基準施設係数。facility_tiers で上位を注入（#115）
   # 基準指導力（中立点, #115）。監督メタ（分野別指導力）を注入しないときの既定＝この指導力で従来と1ビット一致。
@@ -866,7 +867,9 @@ training:
     - { coef: 2.05, budget_minutes: 600 }   # Lv3
     - { coef: 2.40, budget_minutes: 700 }   # Lv4 フル施設（名門・強豪）
   level_up_base: 100.0        # 必要exp = base × growth^level
-  level_up_growth: 1.05
+  # 2026-08-15: 1.05→1.04（案D）。1.05だと Lv70台の必要expがLv32の7.8倍で成長がほぼ止まり、名声で入る
+  # B/Aの新入生が「入学時が完成形」になる。1.04で Lv74 でも3年+2〜3（施設フルで+10）。
+  level_up_growth: 1.04
   aptitude_required_exp_factor: 0.6   # 守備位置適性は能力より緩い必要exp（<1.0で速く伸びる, 守備適性 未決1）
   # 能力別 trainability（伸ばしやすさ, Issue #114）: 能力の素質の形（内在特性）。exp加算時に乗算する。
   # GrowthMultiplier（分野別の伸びしろ・個体差）や環境倍率（監督指導力・施設 #115）とは直交する。
@@ -899,7 +902,7 @@ training:
   reference_week_minutes: 300
   default_budget_minutes: 300  # 照明/寮などの施設導入で増やす（設計書03 §4, 今回は口だけ）
   # 実戦成長（設計書02 §5.3a, Q8・2026-07-20）: 精神力/走塁判断/捕手リードは試合出場でのみ伸びる。
-  # 1試合出場あたりのexp（成長段階係数を乗算）。必要expは能力値と同じ曲線（100×1.05^v）🟡
+  # 1試合出場あたりのexp（成長段階係数を乗算）。必要expは能力値と同じ曲線（100×level_up_growth^v）🟡
   match_mental_exp: 260.0
   match_lead_exp: 400.0        # 捕手として出場した試合のみ
   match_baserunning_exp: 300.0
@@ -1012,10 +1015,13 @@ career:
   retain_trust_threshold: 60.0      # 残留確率ロジスティックの中点（この信頼度で残留確率＝上限の半分）
   retain_trust_spread: 10.0         # ロジスティックの傾き（信頼度の効き幅）
   retain_probability: 0.8           # 高信頼時の残留確率の上限
-  fame_koshien_appearance: 22.0
+  # 2026-08-15（案2）: 甲22/勝1.5/減衰0.92 → 甲30/勝4.0/減衰0.80。旧値は時定数 1/(1−0.92)=12.5年で
+  # 名声が「勝っても動かない」（年2勝で5年目12・10年目21）。新値は時定数5年・定常=勝数×20（旧18.75と同等）＝
+  # 上がりも下がりも速い（100→年1勝で6年後41）。全国優勝は甲子園本戦の実プレイ接続まで実ゲームでは発火しない。
+  fame_koshien_appearance: 30.0
   fame_national_champion: 45.0
-  fame_per_win: 1.5
-  fame_decay: 0.92
+  fame_per_win: 4.0
+  fame_decay: 0.80
   # 番狂わせ連動の名声変動（issue #170）。格上撃破=金星で↑、格下敗北=取りこぼしで↓。順当な結果には効かない。
   fame_upset_win_per_tier: 3.0    # 格上に勝った時のTier格差1段あたりの上昇（金星）
   fame_upset_loss_per_tier: 3.5   # 格下に負けた時のTier格差1段あたりの低下（取りこぼし・やや重く）
@@ -1188,9 +1194,12 @@ roster:
   talent_max: 90.0
   # 名声→talentCenterフィードバック（issue #127・設計書04 §2.1）: 監督の名声が高いほど良い新入生が集まる。
   # 上振れは指数飽和カーブ（線形→漸近）で頭打ち＝「勝つ→怪物→また勝つ」の暴走ループ防止が必須要件。
-  # 既定は控えめな幅（Fame最大でも talent_center_default 32→40程度に留める）。
-  fame_talent_center_span: 8.0
-  fame_talent_center_tau: 30.0
+  # 2026-08-15（案D）: 8/30 → 50/50。旧値は Fame最大でも 32→40（E境界）で、自校の新入生は名声を極めても
+  # AI C校（強度60）の新入生に届かず、自校がD以上へ行く経路が実質閉じていた。新値は名声20→48(E) / 40→59(D) /
+  # 60→67(C) / 80→72(B) / 100→75(B。SD8なので上位個体はA)。頭打ち（span）は残す＝暴走防止の要件は維持。
+  # 名声は fame_decay(0.80) で自己制限するので、勝ち続けないと中心も落ちる。
+  fame_talent_center_span: 50.0
+  fame_talent_center_tau: 50.0
   # ティア→能力の圧縮（issue #578・OPEN-QUESTIONS Q24 の確定2）。AI校の「強度→能力中心」だけを寝かせ、
   # 格差マッチの一方的さを緩める。#536 の実測では実力差10ポイントごとに得点が約0.4倍になっていた。
   # 自校（ProspectGenerator）は対象外なので、ピボットを平均帯(50)に置くと自校との差が縮まらず効果が出ない
@@ -1205,9 +1214,14 @@ roster:
   specialty_floor: 14         # 専門能力の下限（「できない」を作らない）
   off_specialty_factor: 0.55  # 専門外能力の中心係数（総合力×これ）。パワプロ型特化を禁止
   off_specialty_floor: 8
-  # 運動能力ベースライン（走力・地肩・スタミナ, 名声独立, §1.1b-2）
+  # 運動能力ベースライン（走力・地肩・スタミナ, §1.1b-2）。physical_mean は名声0（talentCenter=talent_center_default）
+  # のときの中心。physical_talent_slope は talentCenter が上がったぶんの何割を身体系中心に乗せるか
+  # （2026-08-15 案D: 0.75。0 なら旧来の名声独立）。SD は据え置き＝弱小校の俊足・強肩は残る。
+  # 0 のままだと名声で入るB/Aの新入生が「打撃Aで走力E」になり、機動力・肩・球速の天井でチームがCで頭打ちになる。
+  # AI校（StrengthTeamFactory）は身体系が強度連動なので、これで自校だけ天井が低い非対称が消える。
   physical_mean: 45.0
   physical_sd: 12.0
+  physical_talent_slope: 0.75
   # スタミナLevel→目安投球数の変換（切片・傾き, 設計書02 §1.1e / issue #408）。#356の上限撤廃に伴い水準を引き上げ。
   # Lv10→70.5 / Lv45→96.75（生成平均）/ Lv50→100.5（D帯）/ Lv92→132（完投上限域）。傾きを 0.9→0.75 に寝かせて
   # 下限を持ち上げつつ上限が高校野球の完投域(120〜140)を外れないよう解いた。順変換・逆変換・生成が同じ定数で動く。

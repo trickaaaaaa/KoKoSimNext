@@ -1961,9 +1961,10 @@ public static class CoefficientsLoader
         public int SpecialtyFloor { get; set; } = D.SpecialtyFloor;
         public double OffSpecialtyFactor { get; set; } = D.OffSpecialtyFactor;
         public int OffSpecialtyFloor { get; set; } = D.OffSpecialtyFloor;
-        // 運動能力ベースライン（名声独立）
+        // 運動能力ベースライン（中心は名声に半連動, §1.1b-2）
         public double PhysicalMean { get; set; } = D.PhysicalMean;
         public double PhysicalSd { get; set; } = D.PhysicalSd;
+        public double PhysicalTalentSlope { get; set; } = D.PhysicalTalentSlope;
         // スタミナLevel→目安投球数の変換（issue #408）
         public double StaminaPitchesIntercept { get; set; } = D.StaminaPitchesIntercept;
         public double StaminaPitchesPerLevel { get; set; } = D.StaminaPitchesPerLevel;
@@ -2098,6 +2099,7 @@ public static class CoefficientsLoader
             OffSpecialtyFloor = OffSpecialtyFloor,
             PhysicalMean = PhysicalMean,
             PhysicalSd = PhysicalSd,
+            PhysicalTalentSlope = PhysicalTalentSlope,
             StaminaPitchesIntercept = StaminaPitchesIntercept,
             StaminaPitchesPerLevel = StaminaPitchesPerLevel,
             MentalMean = MentalMean,

@@ -6,7 +6,7 @@ namespace KokoSim.Engine.Season;
 /// <summary>
 /// 1週間の練習→能力成長（設計書02 §5.1）。
 /// Δexp = 基礎値 × 施設係数 × (1+指導力×0.005) × 性格係数 × 成長段階係数 × 合宿倍率。
-/// 必要exp(v→v+1) = 100×1.05^v、才能上限で停止。乱数を使わない決定論。
+/// 必要exp(v→v+1) = LevelUpBase×LevelUpGrowth^v（既定 100×1.04^v）、才能上限で停止。乱数を使わない決定論。
 /// </summary>
 public static class DevelopmentModel
 {

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Career;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Practice;
 using KokoSim.Engine.Season;
 
@@ -81,6 +82,10 @@ namespace KokoSim.Unity.Shell
         // 前回成長適用時点の自校 通算成績スナップショット（このシーズンぶんの勝数・甲子園到達を差分で取る）。
         private static int _grownWinsBaseline;
         private static int _grownKoshienBaseline;
+        // 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと）。大会の確定時に積み、年度末の成長で畳み込んで消費する
+        // （2026-08-15・issue #170 の実ゲーム配線）。engine の CareerEngine（sim）と同じ FameUpsetModel を通す。
+        private static readonly List<double> _pendingUpsetDeltas = new List<double>();
+        private static readonly CareerCoefficients CareerCoeff = new CareerCoefficients();
 
         /// <summary>直近の年度替わりで発火した監督成長イベント（ホーム通知フィード用・任意消費）。</summary>
         public static IReadOnlyList<ManagerGrowthNotice> LastGrowthNotices { get; private set; } =
@@ -112,8 +117,33 @@ namespace KokoSim.Unity.Shell
             _lastGrownYear = 0;
             _grownWinsBaseline = 0;
             _grownKoshienBaseline = 0;
+            _pendingUpsetDeltas.Clear();
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
+
+        /// <summary>
+        /// 大会1回ぶんのブラケットから自校の公式戦を拾い、番狂わせの名声デルタ（金星/取りこぼし）を
+        /// <b>その時点の自校の強さ</b>で試合ごとに積む（設計書04 §1.2・issue #170）。年度末の
+        /// <see cref="ApplyYearlyGrowth"/> が畳み込んで消費する。自校が居ない大会は何も積まない。乱数を引かない。
+        /// <para>強さを試合時点で固定するのは、実ゲームの自校の強さがロスター由来で季節ごとに動くため
+        /// （夏は3年生込み・3月は新チーム）。年度末の1値で評価すると「格上に勝った」が誇張される。</para>
+        /// </summary>
+        public static void RecordTournamentUpsets(IReadOnlyList<BracketMatch> matches)
+        {
+            if (matches == null) return;
+            var self = NationService.ManagerSchool().Strength;
+            foreach (var m in matches)
+            {
+                if (!m.ManagerInvolved) continue;
+                var won = m.WinnerId == NationService.ManagerSchoolId;
+                var opponent = NationService.SchoolById(won ? m.LoserId : m.WinnerId);
+                if (opponent == null) continue;
+                _pendingUpsetDeltas.Add(FameUpsetModel.MatchDelta(self, opponent.Strength, won, CareerCoeff));
+            }
+        }
+
+        /// <summary>今年度に積まれた番狂わせデルタの畳み込み値（表示・デバッグ用。消費しない）。</summary>
+        public static double PendingUpsetFameDelta => FameUpsetModel.SeasonDelta(_pendingUpsetDeltas, CareerCoeff);
 
         /// <summary>セーブ保存: 監督メタ・施設・年契約・成長の二重適用ガードを DTO へ写す（issue #507）。</summary>
         public static void Capture(KokoSim.Engine.Saves.SaveState s)
@@ -124,6 +154,7 @@ namespace KokoSim.Unity.Shell
             s.ManagerLastGrownYear = _lastGrownYear;
             s.ManagerGrownWinsBaseline = _grownWinsBaseline;
             s.ManagerGrownKoshienBaseline = _grownKoshienBaseline;
+            s.ManagerPendingUpsetDeltas = new List<double>(_pendingUpsetDeltas);
         }
 
         /// <summary>セーブ復元: 監督メタ・施設・年契約・成長ガードを据える（練習スケジューラは作り直し）。</summary>
@@ -135,6 +166,8 @@ namespace KokoSim.Unity.Shell
             _lastGrownYear = s.ManagerLastGrownYear;
             _grownWinsBaseline = s.ManagerGrownWinsBaseline;
             _grownKoshienBaseline = s.ManagerGrownKoshienBaseline;
+            _pendingUpsetDeltas.Clear();
+            if (s.ManagerPendingUpsetDeltas != null) _pendingUpsetDeltas.AddRange(s.ManagerPendingUpsetDeltas);
             _practice = null;
             LastGrowthNotices = System.Array.Empty<ManagerGrowthNotice>();
         }
@@ -176,9 +209,14 @@ namespace KokoSim.Unity.Shell
             // 「弱点分野が伸びる」ような engine 側の分岐と食い違う。
             var before = ManagerGrowthDelta.Snapshot(Manager);
 
+            // 番狂わせ加減点（issue #170）: 大会確定時に積んだ試合ごとのデルタを畳み込む（上昇側は季8上限）。
+            // 二重適用ガードの内側で消費するので、同じ年度を複数回叩いても1回だけ効く。
+            var upsetFameDelta = FameUpsetModel.SeasonDelta(_pendingUpsetDeltas, CareerCoeff);
+            _pendingUpsetDeltas.Clear();
+
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
                 Manager, reachedKoshien, nationalChampion: false, wins, milestoneRng,
-                contracts: ContractEffects);
+                upsetFameDelta: upsetFameDelta, contracts: ContractEffects);
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
 

@@ -25,10 +25,13 @@ public sealed record CareerCoefficients
     public double RetainProbability { get; init; } = 0.8;
 
     // --- 名声（設計書04 §1.2, 全国区・持ち越し） ---
-    public double FameKoshienAppearance { get; init; } = 22.0;
+    // 2026-08-15（案2）: 甲22/勝1.5/減衰0.92 → 甲30/勝4.0/減衰0.80。旧値は時定数 1/(1−0.92)=12.5年で
+    // 「勝っても名声が動かない」（年2勝で5年目12・10年目21）。新値は時定数5年・定常＝勝数×20（旧18.75と同等）で
+    // 上がりも下がりも速い（100→年1勝で6年後41）。全国優勝は甲子園本戦の実プレイ接続まで実ゲームでは発火しない。
+    public double FameKoshienAppearance { get; init; } = 30.0;
     public double FameNationalChampion { get; init; } = 45.0;
-    public double FamePerWin { get; init; } = 1.5;
-    public double FameDecay { get; init; } = 0.92;
+    public double FamePerWin { get; init; } = 4.0;
+    public double FameDecay { get; init; } = 0.80;
 
     // --- 番狂わせ連動の名声変動（issue #170, 設計書04 §1.2） ---
     // FamePerWin は「勝った事実」への一律加算のまま。ここは勝敗に加えて「相手との Tier 格差」だけを見る

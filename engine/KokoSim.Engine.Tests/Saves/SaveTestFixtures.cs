@@ -168,6 +168,7 @@ internal static class SaveTestFixtures
             ManagerLastGrownYear = 1,
             ManagerGrownWinsBaseline = 4,
             ManagerGrownKoshienBaseline = 1,
+            ManagerPendingUpsetDeltas = new List<double> { 6.0, -3.5, 0.0 },
             NationRosters = new List<AiSchoolRoster>(rosters.Snapshot()),
             TournamentStats = nationStats,
             SessionYear = 2,

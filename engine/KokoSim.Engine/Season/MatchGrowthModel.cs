@@ -8,7 +8,7 @@ namespace KokoSim.Engine.Season;
 /// 精神力(Mental)・走塁判断(Baserunning)・捕手リード(Lead)は「公式戦/練習試合の出場でのみ成長」する。
 /// 詳細試合の <see cref="GameResult"/> ボックススコア（SourceId=DevelopingPlayer.Id）と自校ロスターを
 /// 突き合わせ、出場者へ経験値を付与する。乱数を一切使わない決定論処理（不変条件#2）で、
-/// 必要exp曲線（100×1.05^v）・成長段階係数（GrowthType×時期）・隠しcapは練習成長（DevelopmentModel）と同じ流儀。
+/// 必要exp曲線（100×level_up_growth^v）・成長段階係数（GrowthType×時期）・隠しcapは練習成長（DevelopmentModel）と同じ流儀。
 /// </summary>
 public static class MatchGrowthModel
 {

@@ -108,6 +108,12 @@
 - **地肩（arm strength）**: 名声と独立。「弱小校の強肩捕手」「地方の大砲級の外野肩」が出る
 - **スタミナ**: §1.1eの通り独立管理（目安投球数）。「弱小校の完投型」が出る
 - これらは総合力に埋もれさせず、身体系だけ別枠で分布させる（能力表では他能力と並ぶが、生成ロジックが別）
+- **但し書き（2026-08-15 案D）**: 「独立」なのは**ばらつき**であって**中心**ではない。身体系の中心は
+  `physical_mean(45) + (talentCenter − 32) × physical_talent_slope(0.75)` で名声に半連動する
+  （`RosterCoefficients.PhysicalCenterFor`）。SD（12）は据え置きなので「弱小校の俊足1年」は残る。
+  完全独立のままだと、名声で入る B/A の新入生が「打撃Aで走力E」になり、機動力・肩・球速の天井で
+  自校が C で頭打ちになる（AI校は `StrengthTeamFactory` で身体系が強度連動＝自校だけ天井が低い非対称だった）。
+  slope=0 で旧来の完全独立に戻る（`ProspectGenerationTests.PhysicalAbilities_AreIndependentOfTalent_WhenSlopeIsZero`）
 
 #### 1.1b-3 地肩と球速・送球速度の関係（完全連動でも独立でもない）
 「地肩を鍛えれば球速が上がるだけ」にはしない。地肩は土台だが、球速には投手固有の要素が乗る。

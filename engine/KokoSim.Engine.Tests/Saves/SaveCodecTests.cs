@@ -57,6 +57,8 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.Contracts.LevelOf("coach_pitching"));
         Assert.Equal(0, s.Contracts.LevelOf("expedition"));
         Assert.Equal(1, s.ManagerLastGrownYear);
+        // 番狂わせ名声デルタの持ち越し（v12）: 試合ごとの値と並びがそのまま往復すること。
+        Assert.Equal(new[] { 6.0, -3.5, 0.0 }, s.ManagerPendingUpsetDeltas);
 
         // 成績（private set の集計器＋球種別内訳が復元されている）
         var p1 = s.Stats.Career.Get(1);
@@ -365,6 +367,25 @@ public sealed class SaveCodecTests
         Assert.True(SaveCodec.TryDeserialize(v5, out var s, out var err), err);
         Assert.Null(s.Recruiting);
         Assert.NotNull(s.Incoming);   // 他の項目は素通りで読めている
+    }
+
+    // v11（番狂わせデルタの持ち越しが無かった版）のセーブは managerPendingUpsetDeltas を持たない。
+    // 読めて空で補われること（今年度ぶんは順当扱い＝名声は勝数と甲子園だけで動く）。
+    [Fact]
+    public void V11Save_WithoutPendingUpsetDeltas_StillLoads_AsEmpty()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"managerPendingUpsetDeltas\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "managerPendingUpsetDeltas が直列化されていない");
+        var end = json.IndexOf(",\"nationRosters\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "nationRosters が managerPendingUpsetDeltas の後に居ない");
+        var v11 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":11");
+        Assert.DoesNotContain("\"managerPendingUpsetDeltas\"", v11);
+
+        Assert.True(SaveCodec.TryDeserialize(v11, out var s, out var err), err);
+        Assert.Empty(s.ManagerPendingUpsetDeltas);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
     }
 
     // ===== 教え子名鑑（issue #586） =====

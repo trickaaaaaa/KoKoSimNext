@@ -57,6 +57,10 @@ public sealed class TeamOverallCalibrationTests
         }
         _out.WriteLine($"最大残差 = {maxResidual:0.0}");
         // 較正後は旧尺度（＝AI校Strength尺度）に十分近い。バランス保存の回帰として固定。
-        Assert.True(maxResidual < 1.5, $"較正残差が大きすぎる: {maxResidual:0.0}");
+        // 2026-08-15（案D・身体系の名声連動）から、中心70〜80で残差が −1.8〜−2.4 に開く: 旧総合（AverageLevel）は
+        // 走力・地肩を含むぶん身体系連動で速く上がるのに対し、6指標は精神力中心（46固定・試合成長のみ）を
+        // 0.08 で抱えて遅れる。scale/offset を採り直すと AI校の逆算配分（Overall==Strength）まで動くので
+        // 据え置き、閾値だけ 1.5→3.0 に広げる（低〜中位帯 ≤50 は従来どおり |残差|<1）。
+        Assert.True(maxResidual < 3.0, $"較正残差が大きすぎる: {maxResidual:0.0}");
     }
 }

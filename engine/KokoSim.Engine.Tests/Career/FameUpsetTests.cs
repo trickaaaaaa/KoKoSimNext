@@ -89,6 +89,22 @@ public sealed class FameUpsetTests
     public void NoTrackedMatches_MeansNoDelta()
     {
         Assert.Equal(0.0, FameUpsetModel.SeasonDelta(System.Array.Empty<TrackedMatch>(), SelfE, C), 6);
+        Assert.Equal(0.0, FameUpsetModel.SeasonDelta(System.Array.Empty<double>(), C), 6);
+    }
+
+    [Fact]
+    public void SeasonDelta_FromPerMatchDeltas_MatchesTrackedMatchFold()
+    {
+        // 実ゲーム経路（2026-08-15）: 試合ごとに MatchDelta を先に出して年度末に畳み込む。TrackedMatch を
+        // 同じ自校強度で評価した畳み込みと1ビット一致する（頭打ち・下降側非頭打ちの規則も同じ）。
+        var matches = new List<TrackedMatch>
+        {
+            new(OppA, Won: true), new(OppA, Won: true), new(OppG, Won: false), new(OppE, Won: true),
+        };
+        var deltas = matches.Select(m => FameUpsetModel.MatchDelta(SelfE, m.OpponentStrength, m.Won, C)).ToList();
+        Assert.Equal(FameUpsetModel.SeasonDelta(matches, SelfE, C), FameUpsetModel.SeasonDelta(deltas, C), 9);
+        // 金星2つ（+12,+12）は cap 8 に頭打ち、取りこぼし −7 は素通し ＝ +1。
+        Assert.Equal(C.FameUpsetSeasonCap - 2 * C.FameUpsetLossPerTier, FameUpsetModel.SeasonDelta(deltas, C), 6);
     }
 
     // ===== TournamentEngine の観測（trackSchoolId）=====

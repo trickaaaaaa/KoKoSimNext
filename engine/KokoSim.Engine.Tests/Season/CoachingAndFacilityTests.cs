@@ -279,8 +279,11 @@ public sealed class CoachingAndFacilityTests
         File.WriteAllText(Path.Combine(outDir, "environment-growth-report.md"), sb.ToString());
 
         // 完了条件: 強豪環境で +15〜20km/h（B〜A級球速）が成立する。弱小との差が環境倍率の効き。
+        // 上限は 2026-08-15（案D: base_main_exp 85→130・level_up_growth 1.05→1.04）で 22→26 に広げた。
+        // 「球速全振り3年×名将×フル施設」の極端条件で 130→155km/h（+24.9）。お任せ練習は球速に1/5しか
+        // 割かないので通常プレイでここまでは行かない（弱小・施設なしは +8.5）。
         Assert.True(aceFullGain >= 15.0, $"強豪環境で +15km/h に届かない（実測 +{aceFullGain:F1}km/h）");
-        Assert.True(aceFullGain <= 22.0, $"強豪環境の伸びが過大（実測 +{aceFullGain:F1}km/h）");
+        Assert.True(aceFullGain <= 26.0, $"強豪環境の伸びが過大（実測 +{aceFullGain:F1}km/h）");
         Assert.True(aceFullGain > weakNoneGain + 8.0,
             $"環境倍率の効きが弱い（強豪+{aceFullGain:F1} vs 弱小+{weakNoneGain:F1}km/h）");
     }

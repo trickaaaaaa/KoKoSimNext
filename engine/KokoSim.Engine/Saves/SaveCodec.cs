@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 11;
+    public const int CurrentVersion = 12;
 
     // ===== Serialize =====
 
@@ -48,6 +48,7 @@ public static class SaveCodec
             .Add("managerLastGrownYear", s.ManagerLastGrownYear)
             .Add("managerGrownWinsBaseline", s.ManagerGrownWinsBaseline)
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
+            .Add("managerPendingUpsetDeltas", DoublesToJson(s.ManagerPendingUpsetDeltas))
             .Add("nationRosters", NationRostersToJson(s.NationRosters))
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
             .Add("nationCareerStats", StatsSaves.NationCareerToJson(s.TournamentStats))
@@ -197,6 +198,8 @@ public static class SaveCodec
         if (version < 11 && !root.Has("nationCareerStats")) root.Add("nationCareerStats", new JsonArray());
         if (version < 11 && !root.Has("events")) root.Add("events", JsonNull.Instance);
         if (version < 11 && !root.Has("trainingBoosts")) root.Add("trainingBoosts", new JsonArray());
+        // v12（2026-08-15）: 番狂わせ名声デルタの持ち越し。旧セーブは今年度ぶんが無い＝空配列（順当扱い）。
+        if (version < 12 && !root.Has("managerPendingUpsetDeltas")) root.Add("managerPendingUpsetDeltas", new JsonArray());
         return root;
     }
 
@@ -221,6 +224,8 @@ public static class SaveCodec
             ManagerLastGrownYear = root.Int("managerLastGrownYear"),
             ManagerGrownWinsBaseline = root.Int("managerGrownWinsBaseline"),
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),
+            // 番狂わせデルタは v12 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            ManagerPendingUpsetDeltas = DoublesFromJson(root.Arr("managerPendingUpsetDeltas")),
             NationRosters = NationRostersFromJson(root.Arr("nationRosters")),
             SessionYear = root.Int("sessionYear"),
             NewTeamPending = root.Bool("newTeamPending"),
@@ -291,6 +296,20 @@ public static class SaveCodec
     {
         var list = new List<AiSchoolRoster>(arr.Count);
         foreach (var v in arr.Items) list.Add(AiRosterSaves.SchoolRosterFromJson(v.AsObject()));
+        return list;
+    }
+
+    private static JsonArray DoublesToJson(List<double> values)
+    {
+        var arr = new JsonArray();
+        foreach (var v in values) arr.Add(JsonValue.Of(v));
+        return arr;
+    }
+
+    private static List<double> DoublesFromJson(JsonArray arr)
+    {
+        var list = new List<double>(arr.Count);
+        foreach (var v in arr.Items) list.Add(((JsonNumber)v).AsDouble());
         return list;
     }
 

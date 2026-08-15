@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Nation;
 
 namespace KokoSim.Engine.Career;
@@ -28,10 +29,22 @@ public static class FameUpsetModel
     /// </summary>
     public static double SeasonDelta(IEnumerable<TrackedMatch> matches, double selfStrength, CareerCoefficients c)
     {
+        var deltas = new List<double>();
+        foreach (var m in matches) deltas.Add(MatchDelta(selfStrength, m.OpponentStrength, m.Won, c));
+        return SeasonDelta(deltas, c);
+    }
+
+    /// <summary>
+    /// <see cref="MatchDelta"/> を試合ごとに<b>その時点の自校の強さ</b>で先に出しておき、年度末に畳み込む形
+    /// （実ゲーム用・2026-08-15）。実ゲームは自校の強さがロスター由来で季節ごとに動く（夏は3年生込み、
+    /// 3月は新チーム）ので、年度末の1値で全試合を評価すると「格上に勝った」が誇張される。
+    /// 畳み込み規則は上のオーバーロードと同じ（上昇側だけ FameUpsetSeasonCap で頭打ち・下降側は頭打ちなし）。
+    /// </summary>
+    public static double SeasonDelta(IEnumerable<double> matchDeltas, CareerCoefficients c)
+    {
         double up = 0.0, down = 0.0;
-        foreach (var m in matches)
+        foreach (var d in matchDeltas)
         {
-            var d = MatchDelta(selfStrength, m.OpponentStrength, m.Won, c);
             if (d > 0) up += d; else down += d;
         }
         if (up > c.FameUpsetSeasonCap) up = c.FameUpsetSeasonCap;

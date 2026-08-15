@@ -43,6 +43,11 @@ public sealed class SaveState
     public int ManagerLastGrownYear { get; set; }
     public int ManagerGrownWinsBaseline { get; set; }
     public int ManagerGrownKoshienBaseline { get; set; }
+    /// <summary>
+    /// 今年度の自校公式戦の番狂わせ名声デルタ（試合ごと・<see cref="Career.FameUpsetModel.MatchDelta"/> の値）。
+    /// 年度末の監督成長で畳み込んで消費する。v12 で追加（2026-08-15・番狂わせ加点の実ゲーム配線）。
+    /// </summary>
+    public List<double> ManagerPendingUpsetDeltas { get; set; } = new();
 
     // --- 全国（materialize 済みロスターのみ。学校・県は再生成） ---
     public List<AiSchoolRoster> NationRosters { get; set; } = new();

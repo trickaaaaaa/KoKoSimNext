@@ -54,15 +54,18 @@ public sealed record RosterCoefficients
 
     /// <summary>
     /// 名声(Fame, 0-100)由来のtalentCenter上振れ幅の上限（頭打ち, issue #127・設計書04 §2.1）。
-    /// 既定8.0＝Fame最大でも TalentCenterDefault(32)→40程度に留める（控えめな幅。暴走ループ防止）。
+    /// 2026-08-15（案D）に 8→50。旧値は Fame最大でも 32→40（E境界）で、自校の新入生が AI C校（強度60）の
+    /// 新入生にも届かず、自校が D 以上へ行く経路が実質閉じていた。新値は名声20→48(E)/40→59(D)/60→67(C)/
+    /// 80→72(B)/100→75(B。SD8 なので上位個体は A)。頭打ち自体は残す＝暴走防止の要件は維持し、
+    /// 名声は <c>CareerCoefficients.FameDecay</c> で自己制限する。
     /// </summary>
-    public double FameTalentCenterSpan { get; init; } = 8.0;
+    public double FameTalentCenterSpan { get; init; } = 50.0;
 
     /// <summary>
     /// 名声由来の上振れが頭打ちへ漸近する速さ（指数飽和の時定数, issue #127）。
     /// 小さいほど低い名声でも早く頭打ちに近づき、大きいほど線形に近い緩やかな伸びになる。
     /// </summary>
-    public double FameTalentCenterTau { get; init; } = 30.0;
+    public double FameTalentCenterTau { get; init; } = 50.0;
 
     /// <summary>
     /// 名声(Fame, 0-100)から新入生の総合力中心(talentCenter)を求める（設計書04 §2.1・issue #127）。
@@ -132,6 +135,18 @@ public sealed record RosterCoefficients
 
     // --- 運動能力ベースライン（走力・地肩・スタミナ, 名声独立, 設計書01 §1.1b-2） ---
     public double PhysicalMean { get; init; } = 45.0;
+    /// <summary>
+    /// 身体系（走力・地肩・スタミナ）中心の名声連動（2026-08-15 案D・設計書01 §1.1b-2 但し書き）。
+    /// 身体系中心 = PhysicalMean + (talentCenter − TalentCenterDefault) × これ。0 なら旧来の名声独立。
+    /// SD は据え置きなので弱小校の俊足・強肩は残る。0 のままだと名声で入る B/A の新入生が「打撃Aで走力E」になり、
+    /// 機動力・肩・球速の天井でチームが C で頭打ちになる。AI校（StrengthTeamFactory）は身体系が強度連動なので、
+    /// これで自校だけ天井が低い非対称が消える。既定は data/coefficients.yaml roster.physical_talent_slope と一致。
+    /// </summary>
+    public double PhysicalTalentSlope { get; init; } = 0.75;
+
+    /// <summary>新入生の総合力中心 <paramref name="talentCenter"/> に対応する身体系中心（<see cref="PhysicalTalentSlope"/>）。</summary>
+    public double PhysicalCenterFor(double talentCenter)
+        => PhysicalMean + (talentCenter - TalentCenterDefault) * PhysicalTalentSlope;
     public double PhysicalSd { get; init; } = 12.0;
 
     /// <summary>
@@ -481,10 +496,11 @@ public static class ProspectGenerator
         // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。プールの出し分けも連続量。
         p.Skills = SkillGenerator.Generate(wRole, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff);
 
-        // --- Stage 1: 運動能力ベースライン（名声独立） ---
+        // --- Stage 1: 運動能力ベースライン（中心は名声に半連動・SDは独立, §1.1b-2） ---
+        var physicalCenter = c.PhysicalCenterFor(talentCenter);
         foreach (var k in Physical)
         {
-            var level = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.PhysicalMean, c.PhysicalSd)), 10, 92);
+            var level = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(physicalCenter, c.PhysicalSd)), 10, 92);
             SetWithCap(p, k, level, c, growth, rng);
         }
 

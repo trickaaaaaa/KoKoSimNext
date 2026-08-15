@@ -89,7 +89,12 @@ public sealed class TrainingPlanTests
             new[] { new MenuAllocation(TrainingMenu.Batting, 600) },
             Ref, 0, 1.0, stages, c);
 
-        Assert.True(big.Exp(AbilityKind.Contact) > small.Exp(AbilityKind.Contact));
+        // 600分だと週内にレベルアップして exp を消費しうる（base_main_exp 130 では実際に起きる）ので、
+        // 残exp ではなく「レベル→exp」の辞書順で進みを比べる。
+        var bigLv = big.Level(AbilityKind.Contact);
+        var smallLv = small.Level(AbilityKind.Contact);
+        Assert.True(bigLv > smallLv || (bigLv == smallLv && big.Exp(AbilityKind.Contact) > small.Exp(AbilityKind.Contact)),
+            $"600分({bigLv}/{big.Exp(AbilityKind.Contact):F1}) が 300分({smallLv}/{small.Exp(AbilityKind.Contact):F1}) より進んでいない");
     }
 
     // 4. 休養メニューは効果なし（成長させない）。
