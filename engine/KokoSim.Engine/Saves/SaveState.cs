@@ -52,6 +52,14 @@ public sealed class SaveState
     // --- 全国（materialize 済みロスターのみ。学校・県は再生成） ---
     public List<AiSchoolRoster> NationRosters { get; set; } = new();
     public NationTournamentStats TournamentStats { get; set; } = new();
+    /// <summary>
+    /// AI校の進化後 Strength/Fame（issue wire-ai-school-evolve-into-game・v13）。<b>空＝一度も年度末を跨いでいない</b>
+    /// （旧セーブも空）＝生成値のまま。年度末の <see cref="Nation.AiSchoolEvolution.ApplyYear"/> 以降は全校ぶん載る。
+    /// 学校・県の名前は決定論再生成で戻るので、変化する2値だけを持つ。
+    /// </summary>
+    public List<SchoolEvolutionState> NationSchools { get; set; } = new();
+    /// <summary>今年度の校別勝数（年度末の進化で消費・v13）。校ID→勝数。空＝今年度まだ大会が無い。</summary>
+    public Dictionary<int, int> NationYearWins { get; set; } = new();
 
     // --- 大会をまたぐ成績・戦績（Normal モードで保存＝進行体は持たない） ---
     public int SessionYear { get; set; } = 1;

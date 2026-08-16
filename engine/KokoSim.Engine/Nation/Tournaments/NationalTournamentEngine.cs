@@ -9,8 +9,19 @@ using KokoSim.Engine.Stats;
 
 namespace KokoSim.Engine.Nation.Tournaments;
 
-/// <summary>1県の大会結果（全国ダイジェスト・新聞用）。</summary>
-public sealed record PrefectureResult(int PrefectureId, string PrefectureName, string? ChampionName);
+/// <summary>
+/// 1県の大会結果（全国ダイジェスト・新聞用）。<see cref="WinsBySchool"/> は区画内の校別勝数
+/// （issue wire-ai-school-evolve-into-game: 年次進化 <see cref="AiSchoolModel.Evolve"/> の材料。
+/// ChampionsOnly でも集計モデルの勝敗はブラケットに残るので数えられる）。
+/// </summary>
+public sealed record PrefectureResult(
+    int PrefectureId, string PrefectureName, string? ChampionName,
+    IReadOnlyDictionary<int, int>? WinsBySchool = null)
+{
+    private static readonly IReadOnlyDictionary<int, int> Empty = new Dictionary<int, int>();
+    /// <summary>校別勝数（未集計なら空）。</summary>
+    public IReadOnlyDictionary<int, int> Wins => WinsBySchool ?? Empty;
+}
 
 /// <summary>
 /// 裏試合（自校非関与の県）の解像度（#試合開始前ロード短縮）。
@@ -55,9 +66,9 @@ public static class NationalTournamentEngine
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         int? excludePrefectureId = null, ModernRules? modernRules = null, int? calendarYear = null,
-        IEnemyBrainFactory? brains = null)
+        IEnemyBrainFactory? brains = null, SummerResolution resolution = SummerResolution.Full)
         => BeginSummer(nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-            excludePrefectureId, modernRules, calendarYear, brains).Jobs.Select(j => j()).ToList();
+            excludePrefectureId, modernRules, calendarYear, brains, resolution: resolution).Jobs.Select(j => j()).ToList();
 
     /// <summary>
     /// 夏の全国裏試合を「区画ごとの独立ジョブ列」として構築する（#208）。区画数（進捗の母数）を先に確定させ、
@@ -120,6 +131,15 @@ public static class NationalTournamentEngine
         // 既に NationBackgroundSim のジョブ単位（1県丸ごと）で背景スレッド上を走っているので、ここで
         // 同期に最後まで消化して優勝校を確定してよい。
         runner.DrainBracketResolution();
-        return new PrefectureResult(region.PrefectureId, region.Name, runner.ChampionName);
+        return new PrefectureResult(region.PrefectureId, region.Name, runner.ChampionName,
+            WinsBySchoolOf(runner.BuildBracketView().Matches));
+    }
+
+    /// <summary>ブラケット全カードから校別勝数を数える（AI校の年次進化の材料）。乱数不使用。</summary>
+    public static IReadOnlyDictionary<int, int> WinsBySchoolOf(IReadOnlyList<BracketMatch> matches)
+    {
+        var wins = new Dictionary<int, int>();
+        foreach (var m in matches) wins[m.WinnerId] = (wins.TryGetValue(m.WinnerId, out var v) ? v : 0) + 1;
+        return wins;
     }
 }

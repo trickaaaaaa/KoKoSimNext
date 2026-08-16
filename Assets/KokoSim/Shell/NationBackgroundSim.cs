@@ -133,7 +133,9 @@ namespace KokoSim.Unity.Shell
 
                 // 重い処理: 1区画をフルシム。県内の各試合の合間で PauseGate（engine の afterMatch フック経由）が
                 // 走るので、ライブ試合に入った瞬間に県の途中でも即座に手を止められる＝県丸ごと走り切らない。
-                jobs[idx]();
+                var result = jobs[idx]();
+                // 他県の校別勝数を年間台帳へ（AI校の年次進化の材料。台帳はロックで守られている）。
+                NationService.YearLedger.AddWins(result.Wins);
                 Interlocked.Increment(ref _done);
 
                 // 区画間で必ずメインスレッドへ時間を譲る（確保レート抑制＝GC を短く分散させる）。
