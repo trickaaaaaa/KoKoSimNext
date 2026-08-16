@@ -35,6 +35,8 @@ internal static class SubstitutionCommands
         if (!team.PinchRunFor(runner, sub, out var inserted)) return false;
         // 塁上の参照は engine が実際に打順へ入れた実体へ揃える（ここで組み直すと打順の実体とズレる）。
         SetRunnerAt(bases, baseIndex, inserted!);
+        // 代走は元走者の責任投手を引き継ぐ（issue inherited-runner-run-attribution）。
+        p.TransferRunnerResponsibility(runner, inserted!);
         return true;
     }
 

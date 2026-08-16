@@ -397,6 +397,13 @@ public static class GameEngine
         // 自責点（issue #69）: 失策で出塁 or 失策連鎖で延命した走者を集合で追跡し、生還時に自責から除外する。
         // 半イニング内で使い切り（次の半イニングは新しい集合）。簡易規則の詳細は design-14/PitchingStatLine 参照。
         var unearnedRunners = new HashSet<Player>();
+        // 引き継ぎ走者の責任投手（issue inherited-runner-run-attribution）: 走者→出塁させた投手。
+        // unearnedRunners と同じ寿命（半イニング）・同じ場所で持つ。GameProgress に置くのは代走の差し替え
+        // （SubstitutionCommands.PinchRun＝対話采配）からも引き継ぎを書けるようにするため。
+        var responsible = p.RunnerResponsibility;
+        responsible.Clear();
+        // 直前の打席を投げた投手（Pa() で「未登録の走者＝この打席で出塁した打者走者」の責任投手にする）。
+        Player? paPitcher = null;
 
         // デバッグ観測（設計書17 §4）。既定 null＝以降の観測分岐はすべて素通り＝従来と完全一致。
         var traceSink = p.TraceSink;
@@ -411,6 +418,14 @@ public static class GameEngine
             p.CurrentBases = bases;
             p.CurrentOuts = outs;
             p.CurrentIsTop = isTop;
+            // 打席で出塁した打者走者の責任投手＝この打席を投げた投手。塁上で未登録の走者は打者走者だけ
+            // （タイブレーク/場面ジャンプの走者は半イニング頭で、代走は差し替え時に登録済み）。
+            if (paPitcher is not null)
+            {
+                if (bases.First is { } r1 && !responsible.ContainsKey(r1)) responsible[r1] = paPitcher;
+                if (bases.Second is { } r2 && !responsible.ContainsKey(r2)) responsible[r2] = paPitcher;
+                if (bases.Third is { } r3 && !responsible.ContainsKey(r3)) responsible[r3] = paPitcher;
+            }
             // 打席の観測レコード（設計書17 §4.1）。この時点で outs は当該打席ぶんを加算済み。
             if (traceSink is not null && log.Count > 0)
             {
@@ -462,6 +477,10 @@ public static class GameEngine
             pendingBalls = seeded.Balls;
             pendingStrikes = seeded.Strikes;
         }
+        // タイブレーク／場面ジャンプで最初から塁にいる走者は、この半イニングの頭の投手の責任にする。
+        if (bases.First is { } seededFirst) responsible[seededFirst] = defense.CurrentPitcher;
+        if (bases.Second is { } seededSecond) responsible[seededSecond] = defense.CurrentPitcher;
+        if (bases.Third is { } seededThird) responsible[seededThird] = defense.CurrentPitcher;
 
         // 守備固め（設計書09 §6）: イニング頭に守備側が控えを起用。控え空/無指示なら素通り＝従来一致。
         MaybeDefensiveSub(defense, offense, ctx, rng, inning, bases);
@@ -482,7 +501,7 @@ public static class GameEngine
         while (outs < 3)
         {
             // 選手交代（設計書09 §6, 攻撃側）: 代走→代打。控え空/無指示なら素通り＝従来と完全一致。
-            MaybeOffenseSubs(offense, defense, ctx, rng, inning, outs, bases);
+            MaybeOffenseSubs(p, offense, defense, ctx, rng, inning, outs, bases);
 
             // スモールボール暫定ヒューリスティック（既定オフ）。采配Brain設定時はサインが置き換える。
             if (ctx.EnableSmallBall && offense.Tactics is null)
@@ -533,6 +552,18 @@ public static class GameEngine
             var batter = offense.PeekBatter();
             var batterOrder = offense.CurrentBatterOrder; // ライブ観戦のスタメン列ハイライト用（打順消費前に採取）
             var currentPitcher = defense.CurrentPitcher; // 成績計上用の投手アイデンティティ
+            paPitcher = currentPitcher;
+            // 打者一巡: 打席に立つ選手は塁上に居ないので、前の出塁で残った責任投手を忘れる
+            // （残すと救援のときに出た同じ選手の生還が先発へ付く）。
+            responsible.Remove(batter);
+
+            // 走者の責任投手（issue inherited-runner-run-attribution）: 登録があればその投手、無ければ
+            // 今の投手（＝この打席で出た打者走者）。生還時の失点・自責点はこの投手へ付ける。
+            Player ResponsibleFor(Player runner)
+                => responsible.TryGetValue(runner, out var owner) ? owner : currentPitcher;
+            // 打席の外（本盗・重盗・暴投/捕逸）で生還した走者の失点を責任投手へ付ける（sign=-1 は巻き戻し）。
+            void ChargeRunnerScored(Player runner, int sign = 1)
+                => defense.ChargeRuns(ResponsibleFor(runner), sign, unearnedRunners.Contains(runner) ? sign : 0);
 
             // 試合中の受傷（設計書03 §3.5・issue #29 B）。判定はすべて Fork した専用ストリームなので
             // 本体の乱数順・試合結果は不変。この打席で起きた分をタイムラインのキャプションにも載せる。
@@ -775,6 +806,8 @@ public static class GameEngine
             {
                 batter = offense.PeekBatter();
                 currentPitcher = defense.CurrentPitcher;
+                paPitcher = currentPitcher;
+                responsible.Remove(batter);
                 if (situationBuilt)
                     situation = situation with { Batter = batter, Pitcher = currentPitcher, Catcher = defense.Catcher };
                 (pitcher, batterBase, playMods) = EffectiveMatchup();
@@ -1013,6 +1046,7 @@ public static class GameEngine
                             if (bases.Third is { } dsScorer)
                             {
                                 offense.RecordRun(dsScorer); // 得点帰属（issue #77）
+                                ChargeRunnerScored(dsScorer); // 失点は責任投手へ
                                 doubleScorer = dsScorer;     // 重盗の絵（issue #485）
                                 stealRecScorer = dsScorer;   // issue #626: 巻き戻し対象
                             }
@@ -1126,6 +1160,7 @@ public static class GameEngine
                             if (bases.Third is { } homeScorer)
                             {
                                 offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
+                                ChargeRunnerScored(homeScorer); // 失点は責任投手へ
                                 stealRecScorer = homeScorer;   // issue #626: 巻き戻し対象
                             }
                         }
@@ -1239,7 +1274,11 @@ public static class GameEngine
                     offense.UndoSteal(stealRecRunner, stealRecSuccess);
                     // 盗塁死を上で投球回に計上済みなら、それも対で戻す（outs は steal0Outs へ戻している）。
                     if (!stealRecSuccess) defense.RecordRunnerOut(currentPitcher, -1);
-                    if (stealRecScorer is not null) offense.UndoRun(stealRecScorer);
+                    if (stealRecScorer is not null)
+                    {
+                        offense.UndoRun(stealRecScorer);
+                        ChargeRunnerScored(stealRecScorer, -1); // 責任投手の失点も対で戻す
+                    }
                     if (stealDoubleBreak) offense.DoubleStealThirdBreakCount--;
                     stealPlay = null;   // 絵にも出さない＝同じ球のファウル打球の再生へ落ちる
                     if (session.LastPitchKind == AtBat.PitchKind.InPlay
@@ -1352,7 +1391,11 @@ public static class GameEngine
                         var wpRuns = BaserunningModel.ApplyBatteryMiss(bases);
                         offense.Runs += wpRuns;
                         runsThisHalf += wpRuns;
-                        if (wpRuns > 0 && wpScorer is not null) offense.RecordRun(wpScorer);
+                        if (wpRuns > 0 && wpScorer is not null)
+                        {
+                            offense.RecordRun(wpScorer);
+                            ChargeRunnerScored(wpScorer); // 失点は責任投手へ
+                        }
                         offense.WildPitchCount++;
                         // 再生データ（issue #487）: この球は暴投判定が投球後に走るため p.LastPitch を
                         // 既に構築済み（EmitPitchTrace 手前の CapturePitches ブロック）＝with で追加する。
@@ -1477,6 +1520,14 @@ public static class GameEngine
                 // その1点は自責対象外のまま引き継ぐ。
                 var sqUnearnedRuns = sq.Runs > 0 && sqScorer is not null && unearnedRunners.Contains(sqScorer) ? sq.Runs : 0;
                 if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
+                // 生還する三塁走者が引き継ぎ走者なら失点は責任投手へ（今の投手の行には積まない）。
+                var sqOwnRuns = sq.Runs;
+                if (sq.Runs > 0 && sqScorer is not null && !ResponsibleFor(sqScorer).Equals(currentPitcher))
+                {
+                    defense.ChargeRuns(ResponsibleFor(sqScorer), sq.Runs, sqUnearnedRuns);
+                    sqOwnRuns = 0;
+                    sqUnearnedRuns = 0;
+                }
                 // スクイズのタイムライン（issue #490）: バントと同じビルダーを使い回す（三塁走者の生還は
                 // pre/post の突き合わせで自然に描かれる）。
                 var sqTimeline = ctx.CaptureTimelines
@@ -1488,6 +1539,7 @@ public static class GameEngine
                     : null;
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
+                    pitcherRuns: sqOwnRuns,
                     timeline: sqTimeline,
                     outsBefore: outs,
                     baseFirstBefore: sqPreFirst is not null, baseSecondBefore: sqPreSecond is not null, baseThirdBefore: sqPreThird is not null,
@@ -1601,13 +1653,26 @@ public static class GameEngine
 
             // 本塁到達（ToBase>=4・非アウト）した走者へ得点を帰属（issue #77）。同時に自責点対象外の
             // 生還数を数える（issue #69）。
+            // 失点の帰属（issue inherited-runner-run-attribution）: 走者ごとに責任投手を引き、今の投手の
+            // 分（ownRuns）だけを打席の投手行へ、引き継ぎ走者の分は責任投手へ直接付ける。
             var unearnedRunsThisPa = 0;
+            var ownRunsThisPa = 0;
             foreach (var m in runnerMoves)
             {
                 if (m.ToBase >= 4 && !m.Out)
                 {
                     offense.RecordRun(m.Runner);
-                    if (unearnedRunners.Contains(m.Runner)) unearnedRunsThisPa++;
+                    var unearned = unearnedRunners.Contains(m.Runner);
+                    var owner = ResponsibleFor(m.Runner);
+                    if (owner.Equals(currentPitcher))
+                    {
+                        ownRunsThisPa++;
+                        if (unearned) unearnedRunsThisPa++;
+                    }
+                    else
+                    {
+                        defense.ChargeRuns(owner, 1, unearned ? 1 : 0);
+                    }
                 }
             }
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
@@ -1849,6 +1914,7 @@ public static class GameEngine
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
                 batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
+                pitcherRuns: ownRunsThisPa,
                 play: res.Play);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
@@ -1885,7 +1951,8 @@ public static class GameEngine
         bool isSacFly = false,
         int unearnedRuns = 0,
         Match.Fielding.FieldingPlay? play = null,
-        bool isSacBunt = false)
+        bool isSacBunt = false,
+        int? pitcherRuns = null)
     {
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
@@ -1894,7 +1961,9 @@ public static class GameEngine
         PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay
             ? pl[^1].PitchType
             : null;
-        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
+        // pitcherRuns＝この打席の投手に付ける失点（引き継ぎ走者の分は呼び出し側が責任投手へ付けた後）。
+        // 省略時は runs 全部＝走者の由来を持たない経路（バント等・得点なし）向け。
+        defense.RecordPitching(pitcher, result, pitcherRuns ?? runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
         defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
             outsThisPa, ctx.Tactics.RattledRecoveryOuts);
         offense.TickOffenseCalm();
@@ -2082,7 +2151,7 @@ public static class GameEngine
 
     /// <summary>攻撃側の打席頭の代走・代打判断（代走が先＝走者を確定してから打者を替える）。</summary>
     private static void MaybeOffenseSubs(
-        TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int inning, int outs, BaseState bases)
+        GameProgress p, TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int inning, int outs, BaseState bases)
     {
         if (offense.Tactics is null || offense.Reserves.Count == 0) return;
 
@@ -2094,6 +2163,8 @@ public static class GameEngine
             if (bases.First == r.Runner) bases.First = inserted;
             else if (bases.Second == r.Runner) bases.Second = inserted;
             else if (bases.Third == r.Runner) bases.Third = inserted;
+            // 代走は元走者の責任投手を引き継ぐ（issue inherited-runner-run-attribution）。
+            if (inserted is not null) p.TransferRunnerResponsibility(r.Runner, inserted);
         }
 
         // 代打: 次打者を厚い控えへ（投手枠はStandard側で除外）。
@@ -2226,6 +2297,23 @@ public sealed class GameProgress
     public int CurrentOuts { get; internal set; }
     /// <summary>直近に確定した打席が表（先攻の攻撃）だったか。交代対象チームの攻守判定に使う。</summary>
     public bool CurrentIsTop { get; internal set; } = true;
+
+    // ===== 引き継ぎ走者の責任投手（issue inherited-runner-run-attribution・野球規則 9.16(g)） =====
+    // 走者 → その走者を出塁させた投手。生還時の失点・自責点はこの投手へ付ける（救援は自分が出した走者と
+    // 打者走者ぶんだけ）。半イニング内で使い切り（PlayHalfSteps の頭で空にする）。記録のみ＝乱数非消費・
+    // 試合進行には一切影響しない。代走は元走者の責任投手を引き継ぐ（<see cref="TransferRunnerResponsibility"/>）。
+    /// <summary>走者→責任投手（今の半イニングぶん）。走者の実体は塁上の参照と同じ（record の値等価で引く）。</summary>
+    internal Dictionary<Player, Player> RunnerResponsibility { get; } = new();
+
+    /// <summary>代走: 元走者 <paramref name="from"/> の責任投手を、塁に入る <paramref name="to"/> へ引き継ぐ。</summary>
+    internal void TransferRunnerResponsibility(Player from, Player to)
+    {
+        if (RunnerResponsibility.TryGetValue(from, out var pitcher))
+        {
+            RunnerResponsibility.Remove(from);
+            RunnerResponsibility[to] = pitcher;
+        }
+    }
 
     // ===== デバッグ観測（設計書17 §4, F1）。すべて観測専用で試合結果には影響しない。 =====
 
