@@ -431,6 +431,11 @@ public static class CoefficientsLoader
         public double WhiffContactSlope { get; set; } = D.WhiffContactSlope;
         public double WhiffOutOfZonePenalty { get; set; } = D.WhiffOutOfZonePenalty;
         public double WhiffBreakSlope { get; set; } = D.WhiffBreakSlope;
+        public double WhiffMatchupCap { get; set; } = D.WhiffMatchupCap;
+        public double FamiliarityWhiffPerPa { get; set; } = D.FamiliarityWhiffPerPa;
+        public double FamiliarityChasePerPa { get; set; } = D.FamiliarityChasePerPa;
+        public int FamiliarityMaxPa { get; set; } = D.FamiliarityMaxPa;
+        public double FamiliarityBreakDiscountPerM { get; set; } = D.FamiliarityBreakDiscountPerM;
         public double FoulShare { get; set; } = D.FoulShare;
         public double StuffBaseVelocityKmh { get; set; } = D.StuffBaseVelocityKmh;
         public double StuffPerKmh { get; set; } = D.StuffPerKmh;
@@ -477,6 +482,11 @@ public static class CoefficientsLoader
             WhiffContactSlope = WhiffContactSlope,
             WhiffOutOfZonePenalty = WhiffOutOfZonePenalty,
             WhiffBreakSlope = WhiffBreakSlope,
+            WhiffMatchupCap = WhiffMatchupCap,
+            FamiliarityWhiffPerPa = FamiliarityWhiffPerPa,
+            FamiliarityChasePerPa = FamiliarityChasePerPa,
+            FamiliarityMaxPa = FamiliarityMaxPa,
+            FamiliarityBreakDiscountPerM = FamiliarityBreakDiscountPerM,
             FoulShare = FoulShare,
             StuffBaseVelocityKmh = StuffBaseVelocityKmh,
             StuffPerKmh = StuffPerKmh,
@@ -881,6 +891,9 @@ public static class CoefficientsLoader
         public double VelocityDropPerOverPitch { get; set; } = D.VelocityDropPerOverPitch;
         public double ControlDropPerOverPitch { get; set; } = D.ControlDropPerOverPitch;
         public double RelievePitchMargin { get; set; } = D.RelievePitchMargin;
+        public double OnsetRatio { get; set; } = D.OnsetRatio;
+        public double VelocityDropAtGuidelineKmh { get; set; } = D.VelocityDropAtGuidelineKmh;
+        public double ControlDropAtGuideline { get; set; } = D.ControlDropAtGuideline;
         // HardCapPitches はハードキャップ撤廃（issue #356）で撤去。
 
         public FatigueCoefficients ToModel() => new()
@@ -888,6 +901,9 @@ public static class CoefficientsLoader
             VelocityDropPerOverPitch = VelocityDropPerOverPitch,
             ControlDropPerOverPitch = ControlDropPerOverPitch,
             RelievePitchMargin = RelievePitchMargin,
+            OnsetRatio = OnsetRatio,
+            VelocityDropAtGuidelineKmh = VelocityDropAtGuidelineKmh,
+            ControlDropAtGuideline = ControlDropAtGuideline,
         };
     }
 

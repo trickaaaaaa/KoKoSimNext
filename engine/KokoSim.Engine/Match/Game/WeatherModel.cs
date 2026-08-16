@@ -93,6 +93,9 @@ public static class WeatherModel
         {
             VelocityDropPerOverPitch = fatigue.VelocityDropPerOverPitch * factor,
             ControlDropPerOverPitch = fatigue.ControlDropPerOverPitch * factor,
+            // 目安の手前から効くカーブ（issue fatigue-gradual-before-threshold）の目安時低下量は気温で増やさない
+            // ＝夏場の上乗せは従来どおり「目安超過1球あたりの勾配」だけ。両方を増やすと夏場帯（games_10k_summer 4.9–5.8）を
+            // 超えた（実測 5.87・seed42）。夏場をもっと効かせるかは帯の張り直しと一緒に別途判断する。
         };
     }
 

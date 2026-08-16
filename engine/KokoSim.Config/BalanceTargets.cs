@@ -94,6 +94,27 @@ public sealed record LowTierTargets
     public Band RunsRatioPerTier { get; init; } = new(0.52, 0.80);
 }
 
+/// <summary>
+/// 投打差の格子（issue matchup-gap-saturation-k-rate・matchup_grid セクション）。
+/// <c>atbat_10k</c> は平均同士（N(50,12)）しか測らず、A/S投手 vs E/F打線の裾（24奪三振試合）が帯を全部緑のまま通る。
+/// 格子は Balance の <c>AtBatSimulation.RunMatchupGrid</c>（投手=球速/制球/キレ同レベル・打者=ミート/選球眼同レベル）。
+/// </summary>
+public sealed record MatchupGridTargets
+{
+    /// <summary>A投手(80) vs F打者(30) の K%。線形時 65%（歴史的試合が平均になる）→ soft-cap 後 ≈44%。</summary>
+    public Band StrikeoutRateP80B30 { get; init; } = new(0.30, 0.48);
+    /// <summary>A投手(80) vs E打者(45) の K%。</summary>
+    public Band StrikeoutRateP80B45 { get; init; } = new(0.28, 0.46);
+    /// <summary>S投手(90) vs F打者(30) の K%（裾の天井）。</summary>
+    public Band StrikeoutRateP90B30 { get; init; } = new(0.32, 0.52);
+    /// <summary>互角（P50 vs B45）の K%＝飽和が互角近傍を動かしていないこと。</summary>
+    public Band StrikeoutRateP50B45 { get; init; } = new(0.17, 0.28);
+    /// <summary>F投手(35) vs B打者(75) の被打率（逆側の裾。パワー50固定）。</summary>
+    public Band AverageP35B75 { get; init; } = new(0.260, 0.360);
+    /// <summary>A投手(80) vs F打者(30) の被打率（格下でも「当たれば飛ぶ」余地）。</summary>
+    public Band AverageP80B30 { get; init; } = new(0.120, 0.220);
+}
+
 public static class BalanceTargetsLoader
 {
     private static readonly IDeserializer Deserializer = new DeserializerBuilder()
@@ -197,6 +218,24 @@ public static class BalanceTargetsLoader
         };
     }
 
+    public static MatchupGridTargets LoadMatchupGridFromFile(string path) => ParseMatchupGrid(File.ReadAllText(path));
+
+    public static MatchupGridTargets ParseMatchupGrid(string yaml)
+    {
+        var t = Root(yaml).MatchupGrid;
+        if (t is null) return new MatchupGridTargets();
+        var d = new MatchupGridTargets();
+        return new MatchupGridTargets
+        {
+            StrikeoutRateP80B30 = t.StrikeoutRateP80B30?.ToBand() ?? d.StrikeoutRateP80B30,
+            StrikeoutRateP80B45 = t.StrikeoutRateP80B45?.ToBand() ?? d.StrikeoutRateP80B45,
+            StrikeoutRateP90B30 = t.StrikeoutRateP90B30?.ToBand() ?? d.StrikeoutRateP90B30,
+            StrikeoutRateP50B45 = t.StrikeoutRateP50B45?.ToBand() ?? d.StrikeoutRateP50B45,
+            AverageP35B75 = t.AverageP35B75?.ToBand() ?? d.AverageP35B75,
+            AverageP80B30 = t.AverageP80B30?.ToBand() ?? d.AverageP80B30,
+        };
+    }
+
     private static RootDto Root(string yaml)
         => Deserializer.Deserialize<RootDto>(yaml)
             ?? throw new InvalidDataException("balance-targets.yaml が空です。");
@@ -217,6 +256,19 @@ public static class BalanceTargetsLoader
 
         [YamlMember(Alias = "tiers_low")]
         public TiersLowDto? TiersLow { get; set; }
+
+        [YamlMember(Alias = "matchup_grid")]
+        public MatchupGridDto? MatchupGrid { get; set; }
+    }
+
+    private sealed class MatchupGridDto
+    {
+        public BandDto? StrikeoutRateP80B30 { get; set; }
+        public BandDto? StrikeoutRateP80B45 { get; set; }
+        public BandDto? StrikeoutRateP90B30 { get; set; }
+        public BandDto? StrikeoutRateP50B45 { get; set; }
+        public BandDto? AverageP35B75 { get; set; }
+        public BandDto? AverageP80B30 { get; set; }
     }
 
     private sealed class TiersLowDto

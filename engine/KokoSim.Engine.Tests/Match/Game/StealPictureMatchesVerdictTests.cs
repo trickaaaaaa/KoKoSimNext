@@ -167,7 +167,9 @@ public sealed class StealPictureMatchesVerdictTests
     private static IEnumerable<(PlaybackPlay Play, bool Safe)> StealPlays()
     {
         var ctx = new GameContext { CaptureTimelines = true, CapturePitches = true };
-        for (ulong seed = 1; seed <= 20; seed++)
+        // 30試合（2026-08-16 に 20→30。投打差の飽和＋消耗カーブで出塁の分布が動き、20試合では盗塁成功が
+        // 47件と母集団ガード（≥50）を割った。ガードは食い違いの検出力を保つためのもので、増やして薄まらない）。
+        for (ulong seed = 1; seed <= 30; seed++)
         {
             var prog = new MatchProgression(Team("A"), Team("H", new AlwaysStealBrain()), ctx, seed);
             LivePitch? prev = null;

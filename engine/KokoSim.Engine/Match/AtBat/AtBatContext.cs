@@ -50,6 +50,13 @@ public sealed record AtBatContext
     /// <summary>守備側の捕手リード（設計書01 §2①）。試合エンジンが捕手から設定。既定50=平均で恒等。</summary>
     public int CatcherLead { get; init; } = 50;
 
+    /// <summary>
+    /// 打者の「慣れ」（設計書02 §2.3b・issue times-through-order-familiarity）: この打者が<b>この試合で</b>この投手と
+    /// 既に対戦した打席数。試合エンジンが <see cref="Game.TeamState.PriorPlateAppearancesAgainst"/> から設定
+    /// （継投でその投手に対して0へ戻る）。既定 0＝慣れ無し＝1打席シム・従来と1ビットも変わらない。
+    /// </summary>
+    public int FamiliarityPa { get; init; }
+
     /// <summary>スキルによる1打席の挙動補正（設計書10）。既定は無効果（スキルなしと同一）。</summary>
     public SkillPlayMods Skills { get; init; } = SkillPlayMods.None;
 
