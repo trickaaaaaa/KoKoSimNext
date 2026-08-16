@@ -464,6 +464,9 @@ namespace KokoSim.Unity.Shell
             var matches = runner.BuildBracketView().Matches;
             var champion = Records.FoldTournament(matches, kind, year);
             History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion);
+            // AI校の年次進化の材料（issue wire-ai-school-evolve-into-game）: 自県ブラケットの校別勝数を台帳へ。
+            // 自校の勝ちも積まれるが Nation に自校は居ないので進化には効かない（自校の強さは共有ロスター由来）。
+            NationService.YearLedger.AddMatches(matches);
             // 番狂わせの名声デルタ（issue #170）もここで積む＝通算戦績と同じ「ブラケット確定」の単一入口。
             ManagerService.RecordTournamentUpsets(matches);
         }

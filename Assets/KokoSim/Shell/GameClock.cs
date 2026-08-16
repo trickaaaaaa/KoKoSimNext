@@ -43,6 +43,9 @@ namespace KokoSim.Unity.Shell
                         // issue #529: 自校敗退後の残りブラケット背景消化も、同じロスター（NationService.Rosters）
                         // を読むため同様に完了を待ってからロスターへ触る。
                         BracketFinishSim.EnsureCompleted();
+                        // AI校の年次進化（issue wire-ai-school-evolve-into-game・設計書05 §2.3）: 終了年度の勝数で
+                        // Strength/Fame を動かす。AdvanceAiYear の**前**＝逆算配分の目標を進化後の値にする。
+                        NationService.EvolveAiSchools(prevYear);
                         NationService.AdvanceAiYear(YearIndex);
                         // 終了した年度ぶんの監督メタ更新（指導力・采配・名声・信頼度・節目イベント, issue #171）。
                         // 通常は3月の総括（EnterWeek の確定週フック・issue #587）で済んでいるので、ここは

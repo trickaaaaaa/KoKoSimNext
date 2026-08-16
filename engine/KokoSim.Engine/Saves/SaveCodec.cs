@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 12;
+    public const int CurrentVersion = 13;
 
     // ===== Serialize =====
 
@@ -52,6 +52,8 @@ public static class SaveCodec
             .Add("nationRosters", NationRostersToJson(s.NationRosters))
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
             .Add("nationCareerStats", StatsSaves.NationCareerToJson(s.TournamentStats))
+            .Add("nationSchools", NationSchoolsToJson(s.NationSchools))
+            .Add("nationYearWins", IntMapToJson(s.NationYearWins))
             .Add("sessionYear", s.SessionYear)
             .Add("stats", StatsSaves.StoreToJson(s.Stats))
             .Add("records", RecordBookSaves.ToJson(s.Records))
@@ -200,6 +202,10 @@ public static class SaveCodec
         if (version < 11 && !root.Has("trainingBoosts")) root.Add("trainingBoosts", new JsonArray());
         // v12（2026-08-15）: 番狂わせ名声デルタの持ち越し。旧セーブは今年度ぶんが無い＝空配列（順当扱い）。
         if (version < 12 && !root.Has("managerPendingUpsetDeltas")) root.Add("managerPendingUpsetDeltas", new JsonArray());
+        // v13（issue wire-ai-school-evolve-into-game）: AI校の進化後 Strength/Fame と今年度の校別勝数。
+        // 旧セーブは進化が一度も走っていない＝生成値のまま・勝数なし＝どちらも空配列で補う。
+        if (version < 13 && !root.Has("nationSchools")) root.Add("nationSchools", new JsonArray());
+        if (version < 13 && !root.Has("nationYearWins")) root.Add("nationYearWins", new JsonArray());
         return root;
     }
 
@@ -227,6 +233,9 @@ public static class SaveCodec
             // 番狂わせデルタは v12 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             ManagerPendingUpsetDeltas = DoublesFromJson(root.Arr("managerPendingUpsetDeltas")),
             NationRosters = NationRostersFromJson(root.Arr("nationRosters")),
+            // AI校の進化状態・年間勝数は v13 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            NationSchools = NationSchoolsFromJson(root.Arr("nationSchools")),
+            NationYearWins = IntMapFromJson(root.Arr("nationYearWins")),
             SessionYear = root.Int("sessionYear"),
             NewTeamPending = root.Bool("newTeamPending"),
             NewTeamRetiredNames = RetiredFromJson(root.Arr("newTeamRetired")),
@@ -297,6 +306,50 @@ public static class SaveCodec
         var list = new List<AiSchoolRoster>(arr.Count);
         foreach (var v in arr.Items) list.Add(AiRosterSaves.SchoolRosterFromJson(v.AsObject()));
         return list;
+    }
+
+    // AI校の進化状態（v13）: [[id, strength, fame], ...] を校ID順で。4000校×3値なので配列の配列で詰める。
+    private static JsonArray NationSchoolsToJson(List<SchoolEvolutionState> states)
+    {
+        var sorted = new List<SchoolEvolutionState>(states);
+        sorted.Sort((a, b) => a.SchoolId.CompareTo(b.SchoolId));
+        var arr = new JsonArray();
+        foreach (var st in sorted)
+            arr.Add(new JsonArray().Add(JsonValue.Of(st.SchoolId)).Add(JsonValue.Of(st.Strength)).Add(JsonValue.Of(st.Fame)));
+        return arr;
+    }
+
+    private static List<SchoolEvolutionState> NationSchoolsFromJson(JsonArray arr)
+    {
+        var list = new List<SchoolEvolutionState>(arr.Count);
+        foreach (var v in arr.Items)
+        {
+            var t = v.AsArray();
+            list.Add(new SchoolEvolutionState(
+                ((JsonNumber)t[0]).AsInt(), ((JsonNumber)t[1]).AsDouble(), ((JsonNumber)t[2]).AsDouble()));
+        }
+        return list;
+    }
+
+    // 校ID→整数（年間勝数）: [[id, n], ...] を校ID順で。
+    private static JsonArray IntMapToJson(Dictionary<int, int> map)
+    {
+        var ids = new List<int>(map.Keys);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids) arr.Add(new JsonArray().Add(JsonValue.Of(id)).Add(JsonValue.Of(map[id])));
+        return arr;
+    }
+
+    private static Dictionary<int, int> IntMapFromJson(JsonArray arr)
+    {
+        var map = new Dictionary<int, int>(arr.Count);
+        foreach (var v in arr.Items)
+        {
+            var t = v.AsArray();
+            map[((JsonNumber)t[0]).AsInt()] = ((JsonNumber)t[1]).AsInt();
+        }
+        return map;
     }
 
     private static JsonArray DoublesToJson(List<double> values)
