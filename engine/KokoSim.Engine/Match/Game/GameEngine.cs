@@ -785,7 +785,9 @@ public static class GameEngine
                 return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
                     skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
-                    swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics));
+                    swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics),
+                    // 慣れ（設計書02 §2.3b）: この打者がこの試合でこの投手と対戦した打席数。継投で0へ戻る。
+                    familiarityPa: offense.PriorPlateAppearancesAgainst(batter, currentPitcher));
             }
             var abCtx = BuildAtBatContext();
 
@@ -1335,6 +1337,9 @@ public static class GameEngine
                         PressureIndex = pressureIdx,
                         Rattled = defense.PitcherRattled,
                         PitchingFatigue = (int)System.Math.Round(defense.FatiguePitches),
+                        EffectiveVelocityCeilingKmh = pitcher.MaxVelocityKmh,
+                        EffectiveControl = pitcher.Control,
+                        FamiliarityPa = abCtx.FamiliarityPa,
                         Gear = gearOverride ?? defTactics.Gear,
                         Policy = tracePolicy ?? defTactics.Policy,
                         ChosenSign = battingOverride?.ToString() ?? paSignLabel,
@@ -1957,6 +1962,7 @@ public static class GameEngine
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
         offense.RecordBatting(batter, result, runs, isSacFly);
+        offense.RecordMatchup(batter, pitcher);   // 慣れの蓄積（設計書02 §2.3b）
         // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
         PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay
             ? pl[^1].PitchType

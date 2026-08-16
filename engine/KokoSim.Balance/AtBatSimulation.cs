@@ -771,6 +771,108 @@ public static class AtBatSimulation
         };
     }
 
+    // ===== 投打差の格子（issue matchup-gap-saturation-k-rate） =====
+
+    /// <summary>
+    /// 「投手レベル×打者レベル」の1対1格子。投手は球速/制球/キレを同レベル、打者はミート/選球眼を同レベルに置き、
+    /// 各マスを <paramref name="atBatsPerCell"/> 打席回して K% / BB% / 被打率 を出す。
+    /// 統計帯 <c>atbat_10k</c>（平均同士）では見えない A/S 投手 vs E/F 打線の裾（24奪三振試合）を検収する。
+    /// 決定論並列（マス×打席の事前 Fork）。
+    /// </summary>
+    public sealed record MatchupGrid(
+        int[] PitcherLevels, int[] BatterLevels,
+        int[,] Pa, int[,] Ab, int[,] H, int[,] So, int[,] Bb)
+    {
+        public double StrikeoutRate(int pi, int bi) => Pa[pi, bi] > 0 ? (double)So[pi, bi] / Pa[pi, bi] : 0;
+        public double WalkRate(int pi, int bi) => Pa[pi, bi] > 0 ? (double)Bb[pi, bi] / Pa[pi, bi] : 0;
+        public double Average(int pi, int bi) => Ab[pi, bi] > 0 ? (double)H[pi, bi] / Ab[pi, bi] : 0;
+
+        public string ToMarkdown()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("| 投手＼打者 | " + string.Join(" | ", BatterLevels.Select(b => $"B{b}")) + " |");
+            sb.AppendLine("|---|" + string.Concat(BatterLevels.Select(_ => "---|")));
+            for (var pi = 0; pi < PitcherLevels.Length; pi++)
+            {
+                var kmh = PitcherAttributes.VelocityKmhFromLevel(PitcherLevels[pi]);
+                sb.Append($"| P{PitcherLevels[pi]} ({kmh:F0}km/h) |");
+                for (var bi = 0; bi < BatterLevels.Length; bi++)
+                    sb.Append($" {StrikeoutRate(pi, bi):P0} / {WalkRate(pi, bi):P0} / {Average(pi, bi):.000} |");
+                sb.AppendLine();
+            }
+            sb.AppendLine();
+            sb.AppendLine("各マス: K% / BB% / 被打率");
+            return sb.ToString();
+        }
+    }
+
+    public static readonly int[] DefaultGridPitcherLevels = { 35, 50, 65, 80, 90 };
+    public static readonly int[] DefaultGridBatterLevels = { 30, 45, 60, 75 };
+
+    /// <summary>格子の投手（球速/制球/キレ＝level・スタミナは打席単位で無関係・ストレート＋スライダー）。</summary>
+    public static PitcherAttributes GridPitcher(int level) => new()
+    {
+        MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(level),
+        Control = level,
+        PitchRank = level,
+        StaminaPitches = 90.0,
+        Repertoire = new[]
+        {
+            PitchSlot.FastballOf(level),
+            new PitchSlot { Type = PitchType.Slider, Power = level, Sharpness = level },
+        },
+    };
+
+    /// <summary>格子の打者（ミート/選球眼＝level・他は50・右打ち）。</summary>
+    public static BatterAttributes GridBatter(int level) => new()
+    {
+        Contact = level, Discipline = level,
+        Power = 50, LaunchTendency = 50, Speed = 50, Bats = Handedness.Right,
+    };
+
+    public static MatchupGrid RunMatchupGrid(int atBatsPerCell, ulong seed, string? coefficientsPath = null,
+        int[]? pitcherLevels = null, int[]? batterLevels = null)
+    {
+        var pl = pitcherLevels ?? DefaultGridPitcherLevels;
+        var bl = batterLevels ?? DefaultGridBatterLevels;
+        var ctx = BuildContext(coefficientsPath);
+        var root = new Xoshiro256Random(seed);
+        var cells = pl.Length * bl.Length;
+        var forks = new IRandomSource[cells * atBatsPerCell];
+        for (var i = 0; i < forks.Length; i++) forks[i] = root.Fork((ulong)i);
+
+        const int Counters = 5; // pa, ab, h, so, bb
+        var total = new int[cells * Counters];
+        Parallel.For(0, forks.Length,
+            () => new int[cells * Counters],
+            (i, _, local) =>
+            {
+                var cell = i / atBatsPerCell;
+                var pi = cell / bl.Length;
+                var bi = cell % bl.Length;
+                var r = AtBatResolver.ResolveDetailed(GridBatter(bl[bi]), GridPitcher(pl[pi]), ctx, forks[i]).Result;
+                var b = cell * Counters;
+                local[b]++;
+                if (r.IsAtBat()) local[b + 1]++;
+                if (r.IsHit()) local[b + 2]++;
+                if (r == PlateAppearanceResult.Strikeout) local[b + 3]++;
+                if (r == PlateAppearanceResult.Walk) local[b + 4]++;
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < total.Length; k++) total[k] += local[k]; } });
+
+        var pa = new int[pl.Length, bl.Length]; var ab = new int[pl.Length, bl.Length];
+        var h = new int[pl.Length, bl.Length]; var so = new int[pl.Length, bl.Length]; var bb = new int[pl.Length, bl.Length];
+        for (var pi = 0; pi < pl.Length; pi++)
+            for (var bi = 0; bi < bl.Length; bi++)
+            {
+                var b = (pi * bl.Length + bi) * Counters;
+                pa[pi, bi] = total[b]; ab[pi, bi] = total[b + 1]; h[pi, bi] = total[b + 2];
+                so[pi, bi] = total[b + 3]; bb[pi, bi] = total[b + 4];
+            }
+        return new MatchupGrid(pl, bl, pa, ab, h, so, bb);
+    }
+
     private static int SampleAbility(IRandomSource rng, double mean = 50, double sd = 12, int min = 20, int max = 88)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(mean, sd)), min, max);
 

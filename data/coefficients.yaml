@@ -73,6 +73,16 @@ batting:
   # 誘発変化合成量[m]（設計書15 Phase E-2）あたりの空振り加算。旧stuff_per_pitch_rank（球種ランク直参照）は
   # Sharpness→rpm→変化量の経路で弾道へ織り込み済みのため完全置換（二重計上回避）。校正ノブ。
   whiff_break_slope: 1.5
+  # 投打差（球威−ミート項）の対数オッズ寄与の soft-cap（issue matchup-gap-saturation-k-rate）: cap×tanh(d/cap)。
+  # 互角近傍は線形のまま、大差で ±cap に飽和＝A投手が格下打線から平均24三振を取るのを止める。0以下＝無効（従来の線形）。
+  whiff_matchup_cap: 1.5
+  # 打者の「慣れ」（設計書02 §2.3b・issue times-through-order-familiarity）: 同一投手との試合内対戦回数（打席）が
+  # 増えるほど空振り対数オッズと追いかけ率が控えめに下がる。継投でその投手に対して0から。変化量が大きい球ほど割引
+  # （1 − break_discount_per_m × 変化量[m]・下限0）。1打席シム（atbat_10k）は対戦回数0＝不変。
+  familiarity_whiff_per_pa: 0.08
+  familiarity_chase_per_pa: 0.008
+  familiarity_max_pa: 3
+  familiarity_break_discount_per_m: 1.2
   foul_share: 0.35               # コンタクト中のファウル割合（方位角±45°超の幾何ファウルは別枠, issue #262）
   # 球速→球威。基準はリーグ平均投手の平均リリース球速（最速132 − 平均ドロップ4）に置き、
   # 傾きは「球速1レベル ≈ ミート1レベル」になるよう 0.030 ÷ 0.47(km/h per level) ≈ 0.064 とする。
@@ -347,6 +357,12 @@ fatigue:
   velocity_drop_per_over_pitch: 0.05
   control_drop_per_over_pitch: 0.12
   relieve_pitch_margin: 25.0
+  # 目安の手前から徐々に効く消耗カーブ（issue fatigue-gradual-before-threshold・設計書02 §1.1e）。
+  # 目安×onset_ratio から二次カーブで低下を始め、目安到達時に球速天井 −velocity_drop_at_guideline_kmh／
+  # 制球 −control_drop_at_guideline、超過後は上の per_over_pitch 勾配で段差なく続く。onset_ratio ≥ 1.0 で旧階段型。
+  onset_ratio: 0.6
+  velocity_drop_at_guideline_kmh: 2.0
+  control_drop_at_guideline: 5.0
   # hard_cap_pitches はハードキャップ撤廃（issue #356）で撤去。降板は目安投球数＋relieve_pitch_margin と
   # 疲労による能力低下だけで決まる。スタミナ自体も上限なし（伸ばした分だけ長く投げられる）。
 
@@ -1287,8 +1303,12 @@ roster:
   archetype_soft_toss_share: 0.08    # 軟投派（残りはバランス型）
   # #578 Step 3: 球速の価値が2倍になったので球速オフセットを寝かせて型の中立性を回復（12/−10/−14 → 8/−7/−10）。
   # 制球・スタミナ・キレでの代償は実測で効かない（軟投派は制球を上げると失点が増える＝打たせて取る型の宿命）。
+  # 2026-08-16（issue matchup-gap-saturation-k-rate ＋ fatigue-gradual-before-threshold）: 投打差の soft-cap で高球速の
+  # 空振り価値が頭打ちになり（本格派 3.01→3.85 失点）、消耗カーブで球速天井が目安の手前から落ちる（→4.08）ため、
+  # 本格派の制球の代償を −12→−7 に寝かせて型の中立性を回復（実測400試合: バランス3.49／本格3.6前後／技巧3.29／軟投3.49）。
+  # 投手総合の加重和では本格派が +1.5 ほど有利に見えるが、型の中立は「実戦の失点」で校正する（式の中立は循環論法）。
   archetype_power_velocity: 8
-  archetype_power_control: -12
+  archetype_power_control: -7
   archetype_power_stamina: -2
   archetype_power_pitch_rank: 2
   archetype_finesse_velocity: -7

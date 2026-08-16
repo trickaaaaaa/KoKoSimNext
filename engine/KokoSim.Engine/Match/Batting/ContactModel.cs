@@ -28,18 +28,42 @@ public static class ContactModel
         PitchPlan plan,
         PitchTrajectoryFeatures features,
         bool inZone,
-        BattingCoefficients coeff)
+        BattingCoefficients coeff,
+        int familiarityPa = 0)
     {
+        // 投打差 d＝球威（腕の振り＋捕手リード）− ミート項。差の効きは soft-cap で飽和させる
+        // （issue matchup-gap-saturation-k-rate）: 互角近傍は線形のまま、大差で頭打ち。
+        var matchup = plan.Stuff - coeff.WhiffContactSlope * (batter.Contact - 50);
         var z = coeff.WhiffIntercept
-                - coeff.WhiffContactSlope * (batter.Contact - 50)
-                + plan.Stuff
-                + coeff.WhiffBreakSlope * features.BreakMagnitudeM;
+                + SaturateMatchup(matchup, coeff.WhiffMatchupCap)
+                + coeff.WhiffBreakSlope * features.BreakMagnitudeM
+                // 慣れ（設計書02 §2.3b）: 同一投手との対戦回数ぶん空振りにくくなる。変化量が大きい球ほど割引。
+                - coeff.FamiliarityWhiffPerPa * FamiliarityEffect(familiarityPa, features.BreakMagnitudeM, coeff);
         if (!inZone)
         {
             z += coeff.WhiffOutOfZonePenalty;
         }
         return MathUtil.Logistic(z);
     }
+
+    /// <summary>
+    /// 慣れの実効蓄積（issue times-through-order-familiarity）: min(対戦回数, 上限) × (1 − 割引/m × 変化量)、下限0。
+    /// 対戦回数0なら常に0＝慣れ無し（従来と1ビットも変わらない）。
+    /// </summary>
+    public static double FamiliarityEffect(int familiarityPa, double breakMagnitudeM, BattingCoefficients coeff)
+    {
+        if (familiarityPa <= 0) return 0.0;
+        var n = System.Math.Min(familiarityPa, coeff.FamiliarityMaxPa);
+        var discount = System.Math.Max(0.0, 1.0 - coeff.FamiliarityBreakDiscountPerM * breakMagnitudeM);
+        return n * discount;
+    }
+
+    /// <summary>
+    /// 投打差の対数オッズ寄与の soft-cap: cap×tanh(d/cap)。cap≤0 なら恒等（従来の線形）。
+    /// 奇関数なので平均同士（d≈0）の環境は動かさず、裾だけを潰す。
+    /// </summary>
+    public static double SaturateMatchup(double d, double cap)
+        => cap > 0.0 ? cap * System.Math.Tanh(d / cap) : d;
 
     /// <summary>
     /// コンタクト品質への投手側の寄与（「打たせて取る」の土台）。打球初速・打球角のばらつきの双方を通じて
@@ -84,9 +108,10 @@ public static class ContactModel
         PitchTrajectoryFeatures features,
         bool inZone,
         BattingCoefficients coeff,
-        IRandomSource rng)
+        IRandomSource rng,
+        int familiarityPa = 0)
     {
-        var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff);
+        var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff, familiarityPa);
         if (MathUtil.Chance(whiffProb, rng))
         {
             return (ContactOutcome.Whiff, null);

@@ -44,7 +44,7 @@ public sealed record PitcherArchetypeCoefficients
 
     // --- 本格派: 球速↑・キレ↑（代償は制球とスタミナ） ---
     public double PowerVelocity { get; init; } = 8;
-    public double PowerControl { get; init; } = -12;
+    public double PowerControl { get; init; } = -7;   // 2026-08-16: −12→−7（投打差の飽和＋消耗カーブで本格派が不利になった分を戻す）
     public double PowerStamina { get; init; } = -2;
     public double PowerPitchRank { get; init; } = 2;
 

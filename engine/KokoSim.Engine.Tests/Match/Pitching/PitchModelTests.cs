@@ -45,8 +45,10 @@ public sealed class PitchModelTests
     public void Fatigue_UsesStaminaPitches_AsFreshWindow()
     {
         var p = new Player { Pitching = new PitcherAttributes { StaminaPitches = 80.0, MaxVelocityKmh = 140.0, Control = 60 } };
-        var fresh = PitchingFatigue.Effective(p, 80.0, new FatigueCoefficients());
-        Assert.Equal(140.0, fresh.MaxVelocityKmh); // 目安以内は無減衰
+        // 目安の onset（既定60%）までは無減衰。目安到達時は係数どおり（−2km/h・−5）＝FatigueCurveTests 参照
+        // （issue fatigue-gradual-before-threshold で「目安まで完全ゼロ」の階段型は廃止）。
+        var fresh = PitchingFatigue.Effective(p, 80.0 * new FatigueCoefficients().OnsetRatio, new FatigueCoefficients());
+        Assert.Equal(140.0, fresh.MaxVelocityKmh);
 
         var tired = PitchingFatigue.Effective(p, 120.0, new FatigueCoefficients());
         Assert.True(tired.MaxVelocityKmh < 140.0, "目安超過で球速天井が落ちない");

@@ -117,8 +117,9 @@ public sealed record GameContext
     public AtBatContext ToAtBatContext(IReadOnlyList<Fielder> fielders, bool runnersOn = false,
         PitcherGear gear = PitcherGear.Normal, Tactics.PitchDirective? directive = null,
         bool takeFirstPitch = false, SkillPlayMods? skills = null, int catcherLead = 50,
-        bool intentionalWalk = false, double swingProbabilityFactor = 1.0) => new()
+        bool intentionalWalk = false, double swingProbabilityFactor = 1.0, int familiarityPa = 0) => new()
     {
+        FamiliarityPa = familiarityPa,
         Aerodynamics = Aerodynamics,
         Mound = Mound,
         StrikeZone = StrikeZone,

@@ -269,6 +269,21 @@ public sealed class TeamState
     /// <summary>当該試合でこの打者が既に完了した打席数（尻上がり等の試合内非線形スキル用, 設計書10）。</summary>
     public int PriorPlateAppearances(Player batter) => _bat.TryGetValue(KeyOf(batter), out var a) ? a.PA : 0;
 
+    // 打者×投手の試合内対戦回数（設計書02 §2.3b「慣れ」・issue times-through-order-familiarity）。
+    // キーは帰属キー（守備位置の書き換えで実体が変わっても同じ選手）。継投で新しい投手が来れば自然に0から。
+    private readonly Dictionary<(Player Batter, Player Pitcher), int> _matchupPa = new();
+
+    /// <summary>この打者がこの試合でこの投手と既に完了した打席数（慣れの蓄積値）。相手が変われば0。</summary>
+    public int PriorPlateAppearancesAgainst(Player batter, Player pitcher)
+        => _matchupPa.TryGetValue((KeyOf(batter), KeyOf(pitcher)), out var n) ? n : 0;
+
+    /// <summary>打席の確定で対戦回数を1つ進める（<see cref="RecordBatting"/> と同じ打席境界で呼ぶ）。</summary>
+    public void RecordMatchup(Player batter, Player pitcher)
+    {
+        var key = (KeyOf(batter), KeyOf(pitcher));
+        _matchupPa[key] = (_matchupPa.TryGetValue(key, out var n) ? n : 0) + 1;
+    }
+
     /// <summary>当該試合でこの投手が既に対戦した打者数（尻上がり/打者一巡用, 設計書10）。継投でリセット。</summary>
     public int PriorBattersFaced(Player pitcher) => _pit.TryGetValue(KeyOf(pitcher), out var a) ? a.BF : 0;
 

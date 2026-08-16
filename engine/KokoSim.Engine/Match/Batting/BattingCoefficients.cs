@@ -53,6 +53,29 @@ public sealed record BattingCoefficients
     /// </summary>
     public double WhiffBreakSlope { get; init; } = 1.5;
     /// <summary>
+    /// 投打差（球威 − ミート項）の対数オッズ寄与を頭打ちにする soft-cap（issue matchup-gap-saturation-k-rate）。
+    /// z 寄与 = cap × tanh(d / cap)。互角近傍（|d| ≪ cap）は従来の線形と一致し、大差では ±cap で飽和する
+    /// ＝A投手が格下打線から平均24三振・四球ゼロを取る「線形で飽和しない効き」を止める。0 以下＝無効（従来の線形）。
+    /// 既定 1.2: P80(146km/h) vs B30 の d≈2.4 → 1.15、P50 vs B45（d≈0.15）は不変。平均同士（atbat_10k）は帯内のまま。
+    /// </summary>
+    public double WhiffMatchupCap { get; init; } = 1.5;
+
+    // --- 打者の「慣れ」（設計書02 §2.3b・issue times-through-order-familiarity） ---
+    // 同一投手との試合内の対戦回数（打席の頭で数える・継投でその投手に対して0から）が増えるほど
+    // コンタクト（空振り対数オッズ）と選球（追いかけ率）が控えめに良くなる。個人スキル SecondTimeThrough
+    // （打者一巡で投手側が落ちる）は一般則の上の個人差として残す。
+    /// <summary>1打席あたりの空振り対数オッズ低下。既定 0.08 ＝ 3打席目（蓄積2）で −0.16 ≒ ミート+5相当。</summary>
+    public double FamiliarityWhiffPerPa { get; init; } = 0.08;
+    /// <summary>1打席あたりの追いかけ率（ゾーン外スイング確率）低下。</summary>
+    public double FamiliarityChasePerPa { get; init; } = 0.008;
+    /// <summary>蓄積の上限打席数（これ以上は慣れが進まない）。</summary>
+    public int FamiliarityMaxPa { get; init; } = 3;
+    /// <summary>
+    /// 慣れを万能にしない（§2.3b）: 誘発変化合成量[m]が大きい球ほど慣れの効きを割り引く（1 − これ×変化量、下限0）。
+    /// 既定 1.2 ＝ 変化量 0.4m の球で効きが 52%、0.8m 超では 0。制球で散らす投手ほど進みにくい表現は係数の器のみ（未接続）。
+    /// </summary>
+    public double FamiliarityBreakDiscountPerM { get; init; } = 1.2;
+    /// <summary>
     /// コンタクトのうちファウルになる割合。方位角が±45°を越えて幾何的にファウルになる分は別枠で、
     /// issue #262 で打球方向が広がった結果その別枠が増えたため、ここを 0.40→0.35 に下げて総ファウル率を保つ。
     /// </summary>

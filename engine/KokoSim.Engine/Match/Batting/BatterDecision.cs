@@ -34,7 +34,8 @@ public static class BatterDecision
         BatterAttributes batter,
         BattingCoefficients coeff,
         double swingFactor = 1.0,
-        double zoneEdgeProximity = 0.0)
+        double zoneEdgeProximity = 0.0,
+        int familiarityPa = 0)
     {
         double p;
         if (inZone)
@@ -46,9 +47,11 @@ public static class BatterDecision
         else
         {
             // 選球眼が高いほど釣られにくい。変化量は釣られを増やすが、ゾーンから遠いほど減衰する。
+            // 慣れ（設計書02 §2.3b・issue times-through-order-familiarity）: 同一投手との対戦回数ぶん釣られにくくなる。
             p = coeff.ChaseBase - (batter.Discipline - 50) * coeff.ChaseDisciplineSlope
                 + coeff.ChaseBreakSlope * breakMagnitudeM
-                - coeff.ChaseDistanceSlope * distanceOutsideM;
+                - coeff.ChaseDistanceSlope * distanceOutsideM
+                - coeff.FamiliarityChasePerPa * ContactModel.FamiliarityEffect(familiarityPa, breakMagnitudeM, coeff);
         }
 
         return MathUtil.Clamp(p * swingFactor, 0.02, 0.98);
@@ -63,7 +66,8 @@ public static class BatterDecision
         BattingCoefficients coeff,
         IRandomSource rng,
         double swingFactor = 1.0,
-        double zoneEdgeProximity = 0.0)
+        double zoneEdgeProximity = 0.0,
+        int familiarityPa = 0)
         => MathUtil.Chance(
-            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor, zoneEdgeProximity), rng);
+            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor, zoneEdgeProximity, familiarityPa), rng);
 }
