@@ -2148,6 +2148,7 @@ public static class CoefficientsLoader
         private static readonly PhenomCoefficients PD = new();
         public int CohortSize { get; set; } = D.CohortSize;
         public int PitcherCountFloor { get; set; } = D.PitcherCountFloor;
+        public double FieldSlotBattingWeight { get; set; } = D.FieldSlotBattingWeight;
         public double FreshmanGap { get; set; } = D.FreshmanGap;
         public double FameRecruitWeight { get; set; } = D.FameRecruitWeight;
         public double AnnualGrowth { get; set; } = D.AnnualGrowth;
@@ -2176,6 +2177,7 @@ public static class CoefficientsLoader
         {
             CohortSize = CohortSize,
             PitcherCountFloor = PitcherCountFloor,
+            FieldSlotBattingWeight = FieldSlotBattingWeight,
             FreshmanGap = FreshmanGap,
             FameRecruitWeight = FameRecruitWeight,
             AnnualGrowth = AnnualGrowth,

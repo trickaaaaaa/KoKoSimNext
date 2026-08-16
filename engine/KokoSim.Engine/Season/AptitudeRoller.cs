@@ -64,4 +64,20 @@ public static class AptitudeRoller
             if (pos != FieldPosition.Pitcher) best = Math.Max(best, apt[(int)pos]);
         return best;
     }
+
+    /// <summary>
+    /// 投手を除く8守備位置のうち最良適性の位置（同点は <see cref="AllPositions"/> の並びで先のもの）。
+    /// 生成時に投手寄りだった選手を控え野手として置くときのラベル（AiTeamBuilder・issue ai-two-way-hitting-pitchers-start-as-fielders）。
+    /// </summary>
+    public static FieldPosition BestFieldPosition(System.Collections.Generic.IReadOnlyList<int> apt)
+    {
+        var best = int.MinValue;
+        var bestPos = FieldPosition.LeftField;
+        foreach (var pos in AllPositions)
+        {
+            if (pos == FieldPosition.Pitcher) continue;
+            if (apt[(int)pos] > best) { best = apt[(int)pos]; bestPos = pos; }
+        }
+        return bestPos;
+    }
 }

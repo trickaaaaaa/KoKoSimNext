@@ -166,9 +166,11 @@ public sealed class AiLeftThrowPositionTests
         var deps = new KokoSim.Engine.Nation.Roster.AiRosterDeps();
         var players = new List<KokoSim.Engine.Nation.Roster.AiPlayer>();
         // 野手9人＋投手2人。守備適性は一律にして、罰と（必要なら）守備力だけが効くようにする。
+        // 控え投手は二刀流運用（issue ai-two-way-hitting-pitchers-start-as-fielders）で守備8枠の候補にも入るので、
+        // 「野手9人中 右投げN人」の前提を保つため投手2人は左投げにする（右投げの供給を増やさない）。
         for (var i = 0; i < 11; i++)
         {
-            var left = i < leftThrowers;
+            var left = i < leftThrowers || i >= 9;
             var snap = Pos(FieldPosition.Shortstop) with
             {
                 Name = "P" + i,

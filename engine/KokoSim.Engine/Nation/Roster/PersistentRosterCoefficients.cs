@@ -23,6 +23,15 @@ public sealed record PersistentRosterCoefficients
     public int PitcherCountFloor { get; init; } = 1;
 
     /// <summary>
+    /// 守備8枠の割当重みに足す打撃総合（<see cref="LineupOrderer.BattingScore"/>＝ミート・パワーの加重）の係数
+    /// （issue ai-two-way-hitting-pitchers-start-as-fielders）。0＝従来どおり守備だけで先発を選ぶ。
+    /// 既定2.0＝実効守備力（〜100程度）に対し打撃を2倍の重みで足す（600校の実測: 1.0 では先発野手の平均打撃 41.5・
+    /// 控え投手の57%が最も打てない先発より打てるまま、2.0 で 42.0／42%。3.0 は 42.2／36% と頭打ち＝2.0 を採る）。
+    /// 打撃は候補ごとの定数なので枠の割り振り（誰がどこを守るか）には効かず、誰を出すかにだけ効く。
+    /// </summary>
+    public double FieldSlotBattingWeight { get; init; } = 2.0;
+
+    /// <summary>
     /// 新入生（1年）の能力中心 = 学校Strength − これ（未熟スタート・3年間の実戦で開花）。
     /// 自校の <c>ProspectGenerator</c>（mental_mean 46 等）と同じ「新入生は未熟」の思想に合わせる。
     /// </summary>
