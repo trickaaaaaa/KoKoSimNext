@@ -240,6 +240,20 @@ public sealed class TeamState
     }
 
     /// <summary>
+    /// 失点・自責点を投手 <paramref name="pitcher"/> の行へ直接積む（issue inherited-runner-run-attribution）。
+    /// 引き継ぎ走者の生還（責任投手＝前の投手）と、打席の外で入る得点（本盗・重盗・暴投/捕逸）に使う。
+    /// <see cref="RecordPitching"/> の runs は「その打席の投手に付く分」だけになり、残りはここで責任投手へ付ける。
+    /// 負値は巻き戻し（issue #626 の盗塁無効化）。対戦記録（BF/H/SO/BB…）は動かさない。
+    /// </summary>
+    public void ChargeRuns(Player pitcher, int runs, int unearnedRuns = 0)
+    {
+        var key = KeyOf(pitcher);
+        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        a.Runs += runs;
+        a.EarnedRuns += runs - unearnedRuns;
+    }
+
+    /// <summary>
     /// 打席の外で成立した走塁アウト（盗塁死・牽制死・スクイズ挟殺）を投手のアウト数（投球回）へ計上する。
     /// これらは打席確定を通らず <see cref="RecordPitching"/> に乗らないため、計上しないと完投でも
     /// アウト合計が27に届かず「9回投げたのに8回2/3」と表示される。対戦記録（BF等）は動かさない。
