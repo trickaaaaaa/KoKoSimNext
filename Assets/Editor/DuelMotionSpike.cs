@@ -1545,6 +1545,124 @@ namespace KokoSim.EditorTools
         private static void RunLocomotionProbeMenu() => RunLocomotionProbe();
 
         /// <summary>
+        /// 走行ループの**向きの中身**を実測する（issue wire-defender-locomotion-motions）。
+        ///
+        /// <see cref="RunLocomotionProbe"/> は入りの胸の向きと1ループの移動量しか採らないので、
+        /// 「L90/R90」の走りが横走りなのか・首だけ横を向いた前走りなのか・胸だけ開いた前走りなのかを
+        /// 区別できない（名前で決めると絵で裏切られる）。ここではループ内の複数時刻で
+        /// 胸・腰・頭のヨーを**進行方向基準**で出す。頭は Humanoid の筋（Neck/Head Turn）で採る
+        /// （骨の軸は素体ごとに違うが筋は正規化されている）。
+        /// </summary>
+        public static string RunLocomotionFacingProbe()
+        {
+            var names = new[]
+            {
+                "Defender_Movement_Run_Loop", "Defender_Movement_Run_Back_Loop",
+                "Defender_Movement_Run_L90_Loop", "Defender_Movement_Run_R90_Loop",
+                "Defender_Movement_Sprint_Loop", "Defender_Movement_Sprint_L90_Loop",
+                "Defender_Movement_Sprint_R90_Loop",
+                "Defender_Movement_Walk_F_Loop", "Defender_Movement_Walk_B_Loop",
+                "Defender_Movement_Walk_L_Loop", "Defender_Movement_Walk_R_Loop",
+                "Defender_Movement_Shuffle_L", "Defender_Movement_Shuffle_R",
+                "Defender_Movement_Crouch_To_Run_Type01", "Defender_Movement_Crouch_To_Run_Type02",
+                "Defender_Movement_Crouch_To_Run_Back", "Defender_Movement_Crouch_To_Run_L90",
+                "Defender_Movement_Crouch_To_Run_R90",
+            };
+            float[] times = { 0.05f, 0.30f, 0.55f, 0.80f, 1.00f };
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                int neckTurn = -1, headTurn = -1;
+                for (int i = 0; i < HumanTrait.MuscleCount; i++)
+                {
+                    var mn = HumanTrait.MuscleName[i];
+                    if (mn == "Neck Turn Left-Right") neckTurn = i;
+                    if (mn == "Head Turn Left-Right") headTurn = i;
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("clip\tu\tmoveDeg\tchestVsMove\thipsVsMove\tneckMuscle\theadMuscle\tspeedHere");
+                foreach (var shortName in names)
+                {
+                    var name = "AA_Baseball_" + shortName;
+                    var clip = FindClip(name);
+                    if (clip == null) { sb.AppendLine(shortName + "\t(クリップが無い)"); continue; }
+
+                    // 進行方向は1ループ全体の移動量で採る（RunLocomotionProbe と同じ）
+                    var bA = SpawnBody(root, "locoA", Vector3.zero, 0f, Color.white);
+                    Sample(bA, clip, 0.02f);
+                    var pStart = bA.transform.position;
+                    Object.DestroyImmediate(bA);
+                    var bB = SpawnBody(root, "locoB", Vector3.zero, 0f, Color.white);
+                    Sample(bB, clip, 1f);
+                    var pEnd = bB.transform.position;
+                    Object.DestroyImmediate(bB);
+                    var move = new Vector3(pEnd.x - pStart.x, 0f, pEnd.z - pStart.z);
+                    float moveDeg = move.magnitude > 0.01f ? Mathf.Atan2(move.x, move.z) * Mathf.Rad2Deg : 0f;
+                    var moveDir = move.magnitude > 0.01f ? move.normalized : Vector3.forward;
+
+                    foreach (var u in times)
+                    {
+                        var b = SpawnBody(root, "loco", Vector3.zero, 0f, Color.white);
+                        Sample(b, clip, u);
+                        var anim = b.GetComponentInChildren<Animator>();
+                        var ra = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                        var la = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+                        var chest = Vector3.Cross(ra - la, Vector3.up); chest.y = 0f; chest.Normalize();
+                        var rl = anim.GetBoneTransform(HumanBodyBones.RightUpperLeg).position;
+                        var ll = anim.GetBoneTransform(HumanBodyBones.LeftUpperLeg).position;
+                        var hips = Vector3.Cross(rl - ll, Vector3.up); hips.y = 0f; hips.Normalize();
+                        float chestVsMove = Vector3.SignedAngle(moveDir, chest, Vector3.up);
+                        float hipsVsMove = Vector3.SignedAngle(moveDir, hips, Vector3.up);
+                        float neck = 0f, head = 0f;
+                        if (anim.avatar != null && anim.avatar.isHuman)
+                        {
+                            var hph = new HumanPoseHandler(anim.avatar, anim.transform);
+                            var pose = new HumanPose();
+                            hph.GetHumanPose(ref pose);
+                            if (neckTurn >= 0) neck = pose.muscles[neckTurn];
+                            if (headTurn >= 0) head = pose.muscles[headTurn];
+                            hph.Dispose();
+                        }
+                        // その時刻近傍の速さ（前後 0.05 の差分）
+                        var b2 = SpawnBody(root, "loco2", Vector3.zero, 0f, Color.white);
+                        Sample(b2, clip, Mathf.Clamp01(u - 0.05f));
+                        var q0 = b2.transform.position;
+                        Object.DestroyImmediate(b2);
+                        var q1 = b.transform.position;
+                        float dtSpan = Mathf.Max(1e-3f, (u - Mathf.Clamp01(u - 0.05f)) * clip.length);
+                        float speedHere = new Vector3(q1.x - q0.x, 0f, q1.z - q0.z).magnitude / dtSpan;
+                        Object.DestroyImmediate(b);
+
+                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                            "{0}\t{1:F2}\t{2:F0}\t{3:F0}\t{4:F0}\t{5:F2}\t{6:F2}\t{7:F2}",
+                            shortName, u, moveDeg, chestVsMove, hipsVsMove, neck, head, speedHere));
+                    }
+                }
+                System.IO.Directory.CreateDirectory("out/duel-stage");
+                System.IO.File.WriteAllText("out/duel-stage/locomotion-facing.tsv", sb.ToString());
+                Debug.Log("[DuelMotionSpike] locomotion facing probe -> out/duel-stage/locomotion-facing.tsv\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        [UnityEditor.MenuItem("KokoSim/Duel/F4 走行クリップの向きを実測する")]
+        private static void RunLocomotionFacingProbeMenu() => RunLocomotionFacingProbe();
+
+        /// <summary>
         /// 野手の捕球クリップの**捕球の瞬間**と**グラブの位置**を実測する（打球処理の3D化 F5）。
         ///
         /// 捕手で確立した三点セット（アンカー表＋開始予約＋短時間IK）を野手へ広げるための表を焼く。
