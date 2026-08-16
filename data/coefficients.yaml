@@ -1330,6 +1330,9 @@ persistent_roster:
   # 投手適性のバイアスは自校と共通（roster.pitcher_aptitude_bias）＝AI校だけ別の下駄を履かせない。
   cohort_size: 11                # 1学年の人数（旧編成の実測 8＋約2.9人 に合わせた値）
   pitcher_count_floor: 1         # マウンドに立てる人数の下限（0人化を構造的に防ぐ）
+  # 二刀流運用（issue ai-two-way-hitting-pitchers-start-as-fielders）: 守備8枠の割当重み＝実効守備力＋打撃総合×これ。
+  # 0 なら従来どおり守備だけで先発を選ぶ。打撃は候補ごとの定数なので「誰を出すか」にだけ効き、枠の割り振りには効かない。
+  field_slot_batting_weight: 2.0
   freshman_gap: 8.0             # 新入生の能力中心 = Strength − これ（未熟スタート・3年で開花）
   fame_recruit_weight: 0.04     # 名声由来の入学時上振れ（(Fame−50)×これ）
   annual_growth: 6.0            # 逆算配分のベースライン年間成長素点
