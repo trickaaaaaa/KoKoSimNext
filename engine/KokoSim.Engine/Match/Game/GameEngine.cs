@@ -764,6 +764,9 @@ public static class GameEngine
             // 一塁走者のスタート種別（設計書12 §4, Q10決定）: エンドランは接触と同時に飛び出すコンタクト始動。
             // 投球ループが「その球でエンドランが効いたか」で毎球更新し、打席確定時（打球解決）に最後の値を使う。
             var r1Start = brainHitAndRun ? StartType.Contact : StartType.Normal;
+            // 一塁走者が投球と同時に走っていた（盗塁企図が打球で巻き戻された。issue #626）か。打球が空中で
+            // 捕られると始動種別によらず飛び出しの勝負になる（issue fly-out-runner-dp-table-and-doubled-off-depiction）。
+            var r1StealBreak = false;
             var endrunOnLastPitch = brainHitAndRun; // 空振り三振でのスタート走者の憤死判定（下）に使う
 
             // 打順消費（設計書15 Phase D-2e）: 打席が実際に確定した時点まで遅らせる（下の squeezeAbandoned/
@@ -1202,6 +1205,7 @@ public static class GameEngine
                 var endrunThisPitch = brainHitAndRun || (manualEndrun && bases.First is not null);
                 endrunOnLastPitch = endrunThisPitch;
                 r1Start = endrunThisPitch ? StartType.Contact : StartType.Normal;
+                r1StealBreak = false;
 
                 // 実効打者能力とスイング頻度をこの球の状態（姿勢＋エンドラン）で組み直す（issue #492）。
                 // 無指示なら打席頭の値とビット単位で一致（BatterFor は同じ純関数・DecideSwing/ContactModel は
@@ -1287,6 +1291,7 @@ public static class GameEngine
                         && stealStartApplied is { } appliedStart)
                     {
                         r1Start = appliedStart;
+                        r1StealBreak = true;   // stealStartApplied は二盗（一塁走者）でだけ立つ
                     }
                 }
 
@@ -1636,7 +1641,7 @@ public static class GameEngine
             // 走塁係数は paBaserunning（設計書17 §6.1, F4）。非強制時は ctx.Baserunning と同一参照＝従来と不変。
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, paBaserunning, rng, collectMoves: true,
-                homePlay, r1Start, errorThrowAccuracy, errorKind);
+                homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
@@ -1752,6 +1757,14 @@ public static class GameEngine
                         }
                         timeline = Match.Timeline.TimelineBuilder.AppendDoublePlayThrows(
                             timeline, dpPlay, ctx.Field, batterArrive);
+                    }
+
+                    // 飛び出しの勝負（フライ捕球→一塁走者が戻る vs 戻し送球）: 戻し送球を描く
+                    // （issue fly-out-runner-dp-table-and-doubled-off-depiction）。走者レッグは AppendRunnerLegs が積む。
+                    if (res.Play is { IsFly: true } doPlay)
+                    {
+                        timeline = Match.Timeline.TimelineBuilder.AppendDoubledOffThrow(
+                            timeline, doPlay, runnerMoves, ctx.Field, paBaserunning);
                     }
                 }
 

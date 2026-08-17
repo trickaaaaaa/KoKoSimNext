@@ -339,6 +339,8 @@ baserunning:
   doubled_off_tag_seconds: 0.10
   doubled_off_margin_scale: 0.20             # margin→塁へ戻れる確率のlogistic幅
   doubled_off_success_bias: 0.0              # 校正前の暫定値（Heavy実測で調整）
+  steal_break_extra_lead_m: 6.0              # 盗塁で走っていた一塁走者が接触時点で稼いでいたリード（飛び出しの戻り距離に加算）
+  doubled_off_retreat_speed_mps: 3.0         # コミット上限を過ぎてから捕球までに打球を見ながら塁へ戻る速さ（深いフライで刺されない）
   # 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）: 捕手リード＋投手センス vs 状況の意外性
   steal_expectedness_intercept: 0.42         # 盗塁企図の基準「予想されやすさ」E
   steal_expectedness_steal_slope: 0.006      # Steal能力→予想度（快足盗塁屋は読まれやすい）

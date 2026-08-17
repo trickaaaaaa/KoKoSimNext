@@ -47,6 +47,20 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     /// 「満塁ゴロの本塁封殺」の3種のみ true にする（design-18 §4.5, issue #489）。
     /// </summary>
     public bool Force { get; init; }
+
+    /// <summary>
+    /// タイムライン表示専用（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 飛び出し（ライナー併殺の
+    /// 物理レース <see cref="DoubledOffResolver"/>）を走った一塁走者なら、守備の戻し送球が一塁に届く時刻[s]
+    /// （接触基準）。<c>FromBase == ToBase == 1</c> の move（憤死=Out／帰塁セーフ=!Out）にだけ載る。
+    /// null＝飛び出しの勝負ではない。判定・帯には無関係（判定側で計算済みの値の写し）。
+    /// </summary>
+    public double? DoubledOffThrowArriveSeconds { get; init; }
+
+    /// <summary>同上・捕球時点で走者が塁から離れていた距離[m]（判定の戻り距離＝絵の折り返し後の戻り）。</summary>
+    public double DoubledOffLeadM { get; init; }
+
+    /// <summary>同上・飛び出しの最大リード[m]（コミット上限まで走った点。長い滞空ではここから捕球まで塁の方へ戻る）。</summary>
+    public double DoubledOffMaxLeadM { get; init; }
 }
 
 /// <summary>
@@ -105,7 +119,7 @@ public static class BaserunningModel
         BaseState bases, PlateAppearanceResult result, Player batter,
         int currentOuts, BaserunningCoefficients coeff, IRandomSource rng, bool collectMoves = true,
         HomePlayContext? home = null, StartType r1Start = StartType.Normal, int errorThrowAccuracy = 50,
-        Fielding.FieldingErrorKind? errorKind = null)
+        Fielding.FieldingErrorKind? errorKind = null, bool r1StealBreak = false)
     {
         var mv = collectMoves ? new List<RunnerMove>() : null;
         var r1 = bases.First;
@@ -176,7 +190,7 @@ public static class BaserunningModel
 
             case PlateAppearanceResult.InPlayOut:
             {
-                var (runs, outs, homeOuts, batterSafeOnFc) = ApplyInPlayOut(bases, batter, r1, r2, r3, currentOuts, coeff, rng, mv, home, r1Start);
+                var (runs, outs, homeOuts, batterSafeOnFc) = ApplyInPlayOut(bases, batter, r1, r2, r3, currentOuts, coeff, rng, mv, home, r1Start, r1StealBreak);
                 return (runs, outs, (homeOuts, 0), batterSafeOnFc, false, Moves(mv)); // 凡打の塁上憤死は本塁のみ
             }
 
@@ -472,10 +486,12 @@ public static class BaserunningModel
         return (runs, true);
     }
 
+    /// <param name="r1StealBreak">一塁走者が投球と同時に走っていた（盗塁企図が打球で巻き戻された。issue #626）か。
+    /// 打球が空中で捕られると<b>始動種別によらず</b>飛び出しの勝負になる（<see cref="DoubledOffResolver"/>）。</param>
     private static (int, int, int, bool) ApplyInPlayOut(
         BaseState bases, Player batter, Player? r1, Player? r2, Player? r3, int currentOuts,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, HomePlayContext? home = null,
-        StartType r1Start = StartType.Normal)
+        StartType r1Start = StartType.Normal, bool r1StealBreak = false)
     {
         if (currentOuts >= 2) return (0, 0, 0, false); // この凡打が3アウト目。進塁なし。
 
@@ -495,15 +511,22 @@ public static class BaserunningModel
         var batterSafeOnFc = false;
         // 併殺・野選（内野ゴロ×一塁走者, Issue #369）: 実試合経路（home!=null・ゴロ・打者の一塁到達時刻あり）は
         // 13%固定テーブルでなく「捕球点→二塁の封殺（P_force2）／二塁→一塁の転送」の二段の物理レースで解く
-        // （#318 のゴロ進塁打と同じ流儀）。それ以外（home無し・フライ・打者一塁到達時刻なし＝単体テスト/
+        // （#318 のゴロ進塁打と同じ流儀）。それ以外（home無し・打者一塁到達時刻なし＝単体テスト/
         // 純テーブル経路）は従来テーブル（DoublePlayProb / FieldersChoiceProb）へフォールバックし乱数消費順も保存する。
+        //
+        // ⚠ フライ（home is { IsFly: true }）は従来テーブルの対象外（issue fly-out-legacy-double-play-table）:
+        // 13% はゴロ併殺の率で、フライで一塁走者にフォースは掛からない（「二塁で封殺」の形自体が嘘）。
+        // 空中で捕られた打球で一塁走者が余分にアウトになるのは、下の飛び出しの物理レース（DoubledOffResolver＝
+        // 一塁へ戻れず憤死）だけ。実測では 0/1死・一塁走者ありのフライアウトの 20% がここで「捕球を待って
+        // 二塁へ走って刺される」絵になっていた。
+        var flyOut = home is { IsFly: true };
         if (r1 is not null && home is { IsFly: false, BatterToFirstSeconds: not null } dp)
         {
             (extraOuts, batterSafeOnFc) = ResolveDoublePlay(bases, batter, r1, dp, coeff, rng, mv);
             if (extraOuts > 0) r1 = null; // 二塁封殺成立＝一塁走者は塁上に残らない（分岐Aは extraOuts==0 で r1 温存）
         }
-        // 併殺（1塁走者あり, 従来テーブル）。
-        else if (r1 is not null && MathUtil.Chance(
+        // 併殺（1塁走者あり, 従来テーブル。ゴロ／home無しだけ）。
+        else if (r1 is not null && !flyOut && MathUtil.Chance(
                 MathUtil.Clamp(coeff.DoublePlayProb - coeff.SpeedSlope * (r1.Speed - 50), 0.02, 0.5), rng))
         {
             extraOuts = 1;
@@ -514,7 +537,7 @@ public static class BaserunningModel
         // 野選（FC, design-14 P1-1）: DP不成立時のみ判定。既定0では分岐自体に入らず rng を一切消費しない
         // （MathUtil.Chance は確率0でも rng.NextDouble() を1回消費するため、確率式へ0を渡すだけでは
         //  乱数消費順が既存と不一致になる。ガードで分岐そのものをスキップして完全一致を保つ）。
-        else if (r1 is not null && coeff.FieldersChoiceProb > 0.0 && MathUtil.Chance(
+        else if (r1 is not null && !flyOut && coeff.FieldersChoiceProb > 0.0 && MathUtil.Chance(
                 MathUtil.Clamp(coeff.FieldersChoiceProb + coeff.SpeedSlope * (batter.Speed - 50), 0.0, 0.95), rng))
         {
             extraOuts = 1;
@@ -526,19 +549,41 @@ public static class BaserunningModel
         }
 
         // ライナー併殺（設計書12 §4, G2）: コンタクト始動(エンドラン等)の一塁走者は打球が空中で捕られた時点で
-        // 既に走り出している＝塁へ戻れるかの時間の勝負になる。上の一般併殺判定を生き残った場合のみ追加で効く
-        // （同一走者への二重計上を避ける）。フライ/ライナー以外（ゴロ）は対象外。
-        if (r1 is not null && r1Start == StartType.Contact && home is { IsFly: true } liner)
+        // 既に走り出している＝塁へ戻れるかの時間の勝負になる。フライ/ライナー以外（ゴロ）は対象外。
+        // 盗塁で走っていた走者（r1StealBreak・issue #626 の巻き戻し）とギャンブル始動も同じ勝負に乗る
+        // （issue fly-out-runner-dp-table-and-doubled-off-depiction）。投球で既に走っていたぶんは
+        // StealBreakExtraLeadM だけリードが余計に伸びる（戻りが遠い）。通常始動（Normal）は対象外＝帰塁できる。
+        var r1RacedBack = false;
+        if (r1 is not null && home is { IsFly: true } liner
+            && (r1Start is StartType.Contact or StartType.Gamble || r1StealBreak))
         {
+            var catchAt = liner.Situation.BallFieldedAtSeconds;
             var catchToFirstM = (liner.Field.FirstBase - liner.Situation.BallFieldedPoint).Length;
-            if (DoubledOffResolver.Resolve(
-                    r1, liner.Situation.BallFieldedAtSeconds, catchToFirstM, liner.Situation.OutfielderThrowSpeedMps,
-                    coeff, rng, liner.Situation.OutfielderFielding) == DoubledOffResult.DoubledOff)
+            var extraLead = r1StealBreak || r1Start == StartType.Gamble ? coeff.StealBreakExtraLeadM : 0.0;
+            var arm = liner.Situation.OutfielderThrowSpeedMps;
+            var fielding = liner.Situation.OutfielderFielding;
+            // 絵の材料（表示専用）: 守備の戻し送球が一塁に届く時刻・走者が稼いだリード・際どさ。
+            var throwArrive = catchAt + DoubledOffResolver.DefenseReturnSeconds(catchToFirstM, arm, coeff, fielding);
+            var leadM = DoubledOffResolver.LeadGainedM(catchAt, coeff, extraLead);
+            var maxLeadM = DoubledOffResolver.MaxLeadM(catchAt, coeff, extraLead);
+            var doMargin = DoubledOffResolver.Margin(r1, catchAt, catchToFirstM, arm, coeff, fielding, extraLead);
+            var doCloseCall = Math.Abs(doMargin) < coeff.CloseCallMarginSeconds;
+            r1RacedBack = true;
+            if (DoubledOffResolver.Resolve(r1, catchAt, catchToFirstM, arm, coeff, rng, fielding, extraLead)
+                == DoubledOffResult.DoubledOff)
             {
                 extraOuts++;
-                mv?.Add(new RunnerMove(r1, 1, 1, Out: true)); // 一塁へ戻れず憤死
+                mv?.Add(new RunnerMove(r1, 1, 1, Out: true) // 一塁へ戻れず憤死
+                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM });
                 bases.First = null;
                 r1 = null;
+            }
+            else
+            {
+                // 帰塁セーフ。塁上は不変だが「飛び出して戻った」絵を出すため move を積む（表示専用・
+                // ToBase==FromBase なので得点・封殺・先頭走者の判定はどれも拾わない）。
+                mv?.Add(new RunnerMove(r1, 1, 1, Out: false)
+                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM });
             }
         }
 
@@ -683,7 +728,9 @@ public static class BaserunningModel
                 r2 = null;
             }
         }
-        if (r1 is not null && bases.Second is null && (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
+        // 飛び出しの勝負を走って戻った一塁走者は、その捕球でタッチアップはできない（塁に戻るのが捕球の後）＝進塁抽選を引かない。
+        if (r1 is not null && !r1RacedBack && bases.Second is null
+            && (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
         {
             mv?.Add(new RunnerMove(r1, 1, 2, false)
                 { TagUpCatchAtSeconds = r1Forced ? null : flyTagUpCatchAt });

@@ -359,6 +359,14 @@ public sealed record BaserunningCoefficients
     public double DoubledOffMarginScale { get; init; } = 0.20;
     /// <summary>戻れる確率バイアス[s]（Heavy実測で校正, 🟡）。</summary>
     public double DoubledOffSuccessBias { get; init; } = 0.0;
+    /// <summary>盗塁で投球と同時に走っていた一塁走者（issue #626 の巻き戻し）が、接触の時点で既に稼いでいた
+    /// リード[m]。飛び出しの勝負（<see cref="DoubledOffResolver"/>）で戻りの距離にそのまま乗る
+    /// （issue fly-out-runner-dp-table-and-doubled-off-depiction）。投手の始動〜接触≈1.1s × 基準走力から。</summary>
+    public double StealBreakExtraLeadM { get; init; } = 6.0;
+    /// <summary>飛び出した走者が「盲目的に走る」上限（<see cref="LinerCommitCapSeconds"/>）を過ぎてから捕球までの間に、
+    /// 打球を見ながら塁の方へ戻る速さ[m/s]（歩き〜小走り）。長い滞空ほど捕球時点のリードが縮む＝深いフライで
+    /// 盗塁・エンドランの走者が刺されない現実（issue fly-out-runner-dp-table-and-doubled-off-depiction）。</summary>
+    public double DoubledOffRetreatSpeedMps { get; init; } = 3.0;
 
     // === 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）===
     // 「捕手リード＋投手センス vs 状況の意外性」を確率化。読まれた盗塁はピッチアウトで捕手が優位に立ち

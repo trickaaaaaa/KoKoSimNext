@@ -1552,6 +1552,16 @@ public static class TimelineBuilder
 
             if (fromBox && m.ToBase <= 1) continue;            // 打者の一塁までは既定レッグ
 
+            // 飛び出しの勝負（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 一塁走者が二塁方向へ
+            // 飛び出し→捕球で反転→一塁へ戻る（憤死 or 帰塁セーフ）。ToBase==FromBase なので下の塁間ループは
+            // 1本も積まない＝以前は憤死も帰塁も描かれず「描写なしでツーアウト」に見えていた。
+            if (m.FromBase == 1 && m.ToBase == 1 && m.DoubledOffThrowArriveSeconds is { } doThrowArrive)
+            {
+                AppendDoubledOffLegs(legs, judgements, m, label, speed, field, baserunning,
+                    flyCaughtAtSeconds, doThrowArrive);
+                continue;
+            }
+
             // 二次リード（<see cref="RunnerContext.LeadDistanceM"/>）。時計は塁間からリードぶんを**引いた**
             // 距離で回っているので、絵でも次塁側へ出しておかないと「引いた距離ぶんの時間で満距離を走る」
             // ことになる（実測: 塁間27.43mを2.87秒＝9.56 m/s。リードを描くと 8.34 m/s＝脚力×1.15 ちょうど）。
@@ -1626,6 +1636,102 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 飛び出しの走者レッグ（issue fly-out-runner-dp-table-and-doubled-off-depiction）。判定
+    /// （<see cref="DoubledOffResolver"/>）と同じ材料＝稼いだリード <see cref="RunnerMove.DoubledOffLeadM"/>・
+    /// 走者の脚力・反転の判断遅延で組む: 一塁で待機 → 二塁方向へリードぶん走る（盗塁で走っていた走者は
+    /// 投球中から動き出す＝脚力で逆算した開始時刻） → 捕球まで止まる → 反転して一塁へ戻る（Returning）。
+    /// 戻りの尺は判定の RunnerReturnSeconds と同じ「反転遅延＋リード÷脚力」＝レッグ終端が判定の走者到達時刻。
+    /// 憤死は戻し送球の到達（判定の守備所要）で確定＝判定イベントはその時刻に置く。
+    /// </summary>
+    private static void AppendDoubledOffLegs(
+        List<RunnerLeg> legs, List<JudgementEvent> judgements, RunnerMove m, string label, double speed,
+        FieldGeometry field, BaserunningCoefficients baserunning,
+        double? flyCaughtAtSeconds, double throwArriveSeconds)
+    {
+        var first = BasePoint(field, "first");
+        // 飛び出す走者は二次リードを取っている（タッチアップ文脈ではない）。
+        var ctx = HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+        var lead = Math.Max(0.0, ctx.LeadDistanceM);
+        var leadPt = LeadPoint(field, 1, lead);
+        var leadM = Math.Max(0.0, m.DoubledOffLeadM);                       // 捕球時点の距離（判定の戻り距離）
+        var maxLeadM = Math.Max(leadM, m.DoubledOffMaxLeadM);                // 折り返し点（コミット上限まで走った点）
+        var farPt = LeadPoint(field, 1, lead + maxLeadM);
+        var catchPt = LeadPoint(field, 1, lead + leadM);
+        // 捕球時刻（接触基準）。判定側は捕球点の時刻をそのまま使うので、絵も同じ起点にする。
+        var caughtAt = flyCaughtAtSeconds ?? baserunning.LinerCommitCapSeconds;
+        var catchAt = ContactAt + caughtAt;
+        // 走者が飛び出しを止める時刻（判定の LinerCommitCapSeconds までしか盲目的に走らない）。
+        var commitEnd = ContactAt + Math.Min(caughtAt, baserunning.LinerCommitCapSeconds);
+        var runSeconds = maxLeadM / Math.Max(1e-6, speed);
+        // 走り始めは脚力から逆算（盗塁で走っていた走者は接触前＝投球中から動く。コンタクト始動は接触直後）。
+        var runStart = Math.Max(0.0, Math.Min(commitEnd - runSeconds, ContactAt + baserunning.LinerBreakReactionSeconds));
+        var runEnd = Math.Max(runStart + 0.05, commitEnd);
+        var reverseAt = catchAt + baserunning.DoubledOffReverseSeconds;
+        var runnerArrive = catchAt + baserunning.DoubledOffReverseSeconds + leadM / Math.Max(1e-6, speed);
+        var throwArrive = ContactAt + throwArriveSeconds;
+
+        if (runStart > 0)
+            legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = runStart, From = first, To = leadPt, Runner = m.Runner });
+        legs.Add(new RunnerLeg { Label = label, T0 = runStart, T1 = runEnd, From = leadPt, To = farPt, Runner = m.Runner });
+        // 長い滞空: 折り返し点から捕球まで打球を見ながら塁の方へ戻る（判定の DoubledOffRetreatSpeedMps）。
+        if (catchAt > runEnd)
+            legs.Add(new RunnerLeg { Label = label, T0 = runEnd, T1 = catchAt, From = farPt, To = catchPt, Runner = m.Runner });
+        if (reverseAt > Math.Max(runEnd, catchAt))
+            legs.Add(new RunnerLeg { Label = label, T0 = Math.Max(runEnd, catchAt), T1 = reverseAt, From = catchPt, To = catchPt, Runner = m.Runner });
+        legs.Add(new RunnerLeg
+        {
+            Label = label, T0 = reverseAt, T1 = Math.Max(reverseAt + 0.05, runnerArrive), From = catchPt, To = first,
+            OutAtEnd = m.Out, CloseCall = m.CloseCall, Returning = true, Runner = m.Runner,
+        });
+        if (m.Out || m.CloseCall)
+        {
+            judgements.Add(new JudgementEvent
+            {
+                Label = label,
+                T = m.Out ? Math.Min(throwArrive, runnerArrive) : runnerArrive,
+                Kind = m.Out ? JudgementKind.Out : JudgementKind.Safe,
+                CloseCall = m.CloseCall,
+            });
+        }
+    }
+
+    /// <summary>
+    /// 飛び出しの勝負の戻し送球（捕球点→一塁）を描く（issue fly-out-runner-dp-table-and-doubled-off-depiction）。
+    /// 対象は <c>FromBase == ToBase == 1</c> かつ <see cref="RunnerMove.DoubledOffThrowArriveSeconds"/> を持つ move
+    /// （憤死・帰塁セーフとも）。到達時刻は判定の守備所要（握り替え＋送球＋タッチ）＝タッチぶんだけ手前で球が着く。
+    /// 同じ打球で本塁へ還る走者が居る（外野手が本塁へ投げる）場合は積まない（<c>AppendBackHomeThrows</c> が投げる）。
+    /// 表示専用・乱数不使用。
+    /// </summary>
+    public static PlayTimeline AppendDoubledOffThrow(
+        PlayTimeline timeline, FieldingPlay play, IReadOnlyList<RunnerMove> moves, FieldGeometry field,
+        BaserunningCoefficients baserunning)
+    {
+        RunnerMove? target = null;
+        foreach (var m in moves)
+        {
+            if (m.ToBase >= 4 && !m.Out) return timeline; // 本塁へ還る走者あり＝返球は本塁へ
+            if (m.FromBase == 1 && m.ToBase == 1 && m.DoubledOffThrowArriveSeconds is not null) target = m;
+        }
+        if (target is null || !play.IsFly) return timeline;
+
+        var fieldPoint = FieldPointOf(play);
+        var first = BasePoint(field, "first");
+        var catchAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
+        var t1 = ContactAt + target.DoubledOffThrowArriveSeconds!.Value - baserunning.DoubledOffTagSeconds;
+        var t0 = Math.Min(t1 - 0.05, catchAt + baserunning.DoubledOffTransferSeconds);
+        var ball = new List<BallSegment>(timeline.Ball)
+        {
+            new()
+            {
+                Kind = BallSegmentKind.Throw, T0 = t0, T1 = t1, From = fieldPoint, To = first,
+                FromRole = play.FielderRole, ToRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase),
+                ToBase = "first",
+            },
+        };
+        return timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, t1 + 0.6) };
+    }
+
+    /// <summary>
     /// 同一走者（<b>参照同値</b>）の連続 move（前の <c>ToBase</c> == 次の <c>FromBase</c>・前がアウトでない）を
     /// 1本に連結する（issue error-extra-advance-phantom-runner）。失策の連鎖
     /// （<c>BaserunningModel.ApplyErrorExtraAdvance</c>）は「もう1つ進む」ぶんを別 move として積むので、
@@ -1640,10 +1746,12 @@ public static class TimelineBuilder
         foreach (var m in moves)
         {
             var joined = false;
-            for (var i = 0; i < merged.Count; i++)
+            // 塁を動かない move（飛び出しの帰塁 1→1 等）は連結の対象にも起点にもしない。
+            for (var i = 0; i < merged.Count && m.ToBase > m.FromBase; i++)
             {
                 var (prev, cfb) = merged[i];
-                if (!ReferenceEquals(prev.Runner, m.Runner) || prev.Out || prev.ToBase != m.FromBase) continue;
+                if (!ReferenceEquals(prev.Runner, m.Runner) || prev.Out || prev.ToBase <= prev.FromBase
+                    || prev.ToBase != m.FromBase) continue;
                 merged[i] = (prev with
                 {
                     ToBase = m.ToBase, Out = m.Out, CloseCall = m.CloseCall, Force = m.Force,
