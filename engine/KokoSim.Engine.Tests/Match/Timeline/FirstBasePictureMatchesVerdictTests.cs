@@ -95,7 +95,7 @@ public sealed class FirstBasePictureMatchesVerdictTests
 
     private static IEnumerable<PlayLogEntry> Plays()
     {
-        for (ulong seed = 1; seed <= 30; seed++)
+        for (ulong seed = 1; seed <= 40; seed++)
         {
             var r = GameEngine.Play(BuildTeam("A"), BuildTeam("H"),
                 new GameContext { CaptureTimelines = true }, new Xoshiro256Random(seed));

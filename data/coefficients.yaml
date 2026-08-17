@@ -323,7 +323,7 @@ baserunning:
   second_force_margin_scale: 0.45            # 二塁封殺 margin→到達確率のlogistic幅（三塁・進塁と同軸）
   second_force_success_bias: 0.00           # 二塁封殺の校正項[s]
   double_play_force_max_runner_success: 0.60 # 一塁走者の二塁到達見込みがこれ超なら封殺自体が不可＝一塁を取る（分岐A-1・稀）
-  double_play_attempt_min_relay_success: 0.80 # 二塁→一塁の転送で打者を刺せる見込みがこれ未満なら併殺を狙わず確実な一塁アウト（分岐A-2）
+  double_play_attempt_min_relay_success: 0.55 # 二塁→一塁の転送で打者を刺せる見込みがこれ未満なら併殺を狙わず確実な一塁アウト（分岐A-2）。0.80→0.55（2026-08-18: 見込み6〜8割の併殺まで一塁へ逃げていた）
   double_play_pivot_transfer_seconds: 0.90   # 二塁ベース経由の転送（ピボット）握り替え[s]（relay_transfer_seconds とは別値）
   double_play_relay_margin_scale: 0.20       # 二塁→一塁の転送 margin→打者生存（野選）確率のlogistic幅
   double_play_relay_bias: 0.00               # 二塁→一塁の転送の校正項[s]（正で打者生存＝野選寄り）。併殺打/得点をHeavyで校正
