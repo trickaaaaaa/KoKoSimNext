@@ -53,6 +53,8 @@ public sealed class ErrorExtraAdvanceLegTests
         // 一塁での待機レッグ（T0=0・From=To=一塁）が無い。
         Assert.DoesNotContain(tl.Runners, l => l.T0 == 0.0 && l.From == l.To);
 
+        // 一塁駆け抜け（#443）のレッグは続きがあるので外れている（同時刻に2方向へ走らない）。
+        Assert.DoesNotContain(tl.Runners, l => l.Label == "打" && l.From == First && l.To != Second);
         // 二塁へのレッグは1本だけで、一塁到達の続き＆失策の瞬間以降に走り出す。
         var toSecond = Assert.Single(tl.Runners, l => l.To == Second);
         var arriveFirst = tl.Runners.Where(l => l.To == First).Max(l => l.T1);

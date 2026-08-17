@@ -1598,6 +1598,14 @@ public static class TimelineBuilder
                 : ContactAt + ctx.StartDelaySeconds + extraStart;
 
             if (fromBox && m.ToBase <= 1) continue;            // 打者の一塁までは既定レッグ
+            if (fromBox)
+            {
+                // 打者走者が一塁を回って続く（失策の連鎖等）なら、内野ゴロの一塁駆け抜けレッグ（#443）は要らない
+                // ＝同時刻に「駆け抜ける」と「二塁へ向かう」の2本が重ならないよう外す（表示専用）。
+                var firstPt = BasePoint(field, "first");
+                legs.RemoveAll(l => l.Label == "打" && l.T0 >= t - 1e-6
+                    && Distance(l.From, firstPt) < 0.5 && Distance(l.To, firstPt) <= FirstBaseOverrunDistanceM + 0.1);
+            }
 
             // 飛び出しの勝負（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 一塁走者が二塁方向へ
             // 飛び出し→捕球で反転→一塁へ戻る（憤死 or 帰塁セーフ）。ToBase==FromBase なので下の塁間ループは
