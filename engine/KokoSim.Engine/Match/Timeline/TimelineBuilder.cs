@@ -183,7 +183,8 @@ public static class TimelineBuilder
         double closeCallMarginSeconds = 0.15,
         double closeFlyMarginSeconds = 0.15,
         double fielderReachM = 4.20,
-        Player? batter = null)
+        Player? batter = null,
+        FieldingCoefficients? fieldingCoeff = null)
     {
         var table = formations ?? FormationTable.Default;
         var landing = new TimelinePoint(play.LandingX, play.LandingZ);
@@ -611,6 +612,16 @@ public static class TimelineBuilder
                 // （issue fielder-body-far-from-ball-at-catch）: 判定は「体が実効リーチまで寄れた時刻」で処理点を
                 // 採るので、絵の出足が判定より遅いと守備の巧い野手ほど体が球に届かない絵になる。
                 var reaction = isBallFielder ? Math.Min(0.35, fielder.Attributes.ReactionDelaySeconds) : 0.35;
+                // 走路取りの巧さ（issue fielder-body-far-from-ball-at-catch 案C）: 判定は守備力>50 の野手に
+                // 滞空時間比例の到達猶予（CatchTimeBudget の routeFactor）を与える＝「脚力より長く走れる」ことにして
+                // いるので、絵の出足を接触＋反応にしたままだと体が落下点に届かない（守備80で 2%・最大 3.4m）。
+                // 猶予ぶんだけ出足を早める（打った瞬間の読み＝接触の少し前まで）。判定は不変・表示専用。
+                if (isBallFielder && play.IsFly && play.Result == BattedBallResult.Out && fieldingCoeff is { } fc)
+                {
+                    var routeBudget = Math.Min(play.HangTimeSeconds * fc.CatchReachFactor, fc.CatchReachCapSeconds);
+                    var routeBonus = routeBudget * (fielder.Attributes.Fielding - 50) * fc.CatchReachFieldingSlope;
+                    if (routeBonus > 0) reaction = Math.Max(-FlyJumpAnticipationSeconds, reaction - routeBonus);
+                }
                 var t0 = diveEnd is not null ? Math.Max(ContactAt + reaction, diveT1 + 0.1) : ContactAt + reaction;
 
                 // 急ぎ度（issue fielder-leg-speed-by-distance）: 全レッグを「距離÷脚力」で切ると、2m 寄るだけの
@@ -2337,6 +2348,9 @@ public static class TimelineBuilder
 
     /// <summary>塁カバーで送球到達より前に着いておく猶予[s]（同上）。</summary>
     private const double CoverSetSeconds = 0.4;
+
+    /// <summary>走路取りの巧い野手が飛球へ出足を早められる上限[s]（接触より前＝打者の振りを読んだ分。表示専用）。</summary>
+    private const double FlyJumpAnticipationSeconds = 0.10;
 
     /// <summary>その塁へ向かう送球（<see cref="BallSegment.ToBase"/>）の到達時刻。無ければ null。</summary>
     private static double? ThrowArriveAtBase(IReadOnlyList<BallSegment> ball, string? baseName)

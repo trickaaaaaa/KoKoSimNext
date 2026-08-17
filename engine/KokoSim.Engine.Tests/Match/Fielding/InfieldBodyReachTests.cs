@@ -117,9 +117,11 @@ public sealed class InfieldBodyReachTests
     /// </summary>
     [Theory]
     [Trait("Category", "Heavy")]
-    [InlineData(50, 0.02, 2.5)]
-    [InlineData(80, 0.05, 2.5)]
-    public void GrounderOuts_BodyIsAtTheBall(int fielding, double maxFarShare, double maxDistM)
+    [InlineData(50, false, 0.02, 2.5)]
+    [InlineData(80, false, 0.05, 2.5)]
+    [InlineData(50, true, 0.02, 2.5)]   // フライ: 守備50は routeFactor=1 で従来から 0%
+    [InlineData(80, true, 0.02, 2.5)]   // フライ: 守備80は routeFactor で体が届かなかった（2%・最大3.4m）→ 出足を早める（案C）
+    public void GrounderOuts_BodyIsAtTheBall(int fielding, bool fly, double maxFarShare, double maxDistM)
     {
         const int games = 120;
         var far = new int[games];
@@ -131,9 +133,9 @@ public sealed class InfieldBodyReachTests
                 new GameContext { CaptureTimelines = true }, new Xoshiro256Random((ulong)(i + 1)));
             foreach (var e in r.Log)
             {
-                if (e.Timeline is null || e.BattedIsFly || e.Result != PlateAppearanceResult.InPlayOut) continue;
+                if (e.Timeline is null || e.BattedIsFly != fly || e.Result != PlateAppearanceResult.InPlayOut) continue;
                 if (e.FieldedBy is not { } role) continue;
-                if (role is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField) continue;
+                if (!fly && (role is FieldPosition.LeftField or FieldPosition.CenterField or FieldPosition.RightField)) continue; // ゴロは内野だけ
                 var leg = e.Timeline.Moves.Where(m => m.Role == role && m.Task == FielderTask.FieldBall)
                     .OrderBy(m => m.T0).LastOrDefault();
                 if (leg is null) continue;
@@ -152,7 +154,7 @@ public sealed class InfieldBodyReachTests
         var f = far.Sum();
         var w = worst.Max();
         _out.WriteLine(string.Format(CultureInfo.InvariantCulture,
-            "守備{0}: 内野ゴロアウト {1} 件・体と球 >2m {2} 件（{3:P1}）・最大 {4:F2}m", fielding, n, f, (double)f / Math.Max(1, n), w));
+            "守備{0} {5}: アウト {1} 件・体と球 >2m {2} 件（{3:P1}）・最大 {4:F2}m", fielding, n, f, (double)f / Math.Max(1, n), w, fly ? "フライ" : "内野ゴロ"));
         Assert.True(n > 500);
         Assert.True((double)f / n < maxFarShare, $"体が球から 2m 超で処理したアウトが {f}/{n}（{(double)f / n:P1}）");
         Assert.True(w <= maxDistM, $"体と球の最大距離 {w:F2}m");

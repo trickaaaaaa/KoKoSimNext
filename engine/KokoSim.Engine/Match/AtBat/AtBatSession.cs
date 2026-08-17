@@ -442,7 +442,7 @@ public sealed class AtBatSession
                         play, fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
                         Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
                         ctx.Fielding.CatchCloseCallMarginSeconds, ctx.Fielding.InfielderFieldingRadiusM,
-                        _batterPlayer);
+                        _batterPlayer, ctx.Fielding);
                 }
                 _result = new AtBatResult(pa, _pitchCount)
                 {

@@ -211,10 +211,18 @@ public static class AtBatSimulation
         public required int[] AtBats { get; init; }
         public required int[] Hits { get; init; }
         public required int[] Strikeouts { get; init; }
+        /// <summary>四球（issue walk-rate-floor-vs-elite-pitcher の検収: 高制球投手の与四球/9）。</summary>
+        public required int[] Walks { get; init; }
+        /// <summary>アウト（打席のうち出塁しなかったもの＝ 打席 − 安打 − 四死球 − 失策出塁）。与四球/9 の分母。</summary>
+        public required int[] Outs { get; init; }
 
         public double StrikeoutRate(Tier t) =>
             PlateAppearances[(int)t] > 0 ? (double)Strikeouts[(int)t] / PlateAppearances[(int)t] : 0;
         public double Average(Tier t) => AtBats[(int)t] > 0 ? (double)Hits[(int)t] / AtBats[(int)t] : 0;
+        public double WalkRate(Tier t) =>
+            PlateAppearances[(int)t] > 0 ? (double)Walks[(int)t] / PlateAppearances[(int)t] : 0;
+        /// <summary>与四球/9（打席シムの近似: 四球 ÷ アウト × 27）。</summary>
+        public double WalksPer9(Tier t) => Outs[(int)t] > 0 ? 27.0 * Walks[(int)t] / Outs[(int)t] : 0;
     }
 
     /// <summary>サンプル投手の総合等級（投手総合＝TeamStrengthCoefficients の重みで G〜S に量子化）。</summary>
@@ -239,7 +247,7 @@ public static class AtBatSimulation
         for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
 
         const int TierCount = 8;  // G..S
-        const int Counters = 4;   // pa, ab, h, so
+        const int Counters = 6;   // pa, ab, h, so, bb, outs
         var width = TierCount * Counters;
         var total = new int[width];
         Parallel.For(0, atBats,
@@ -255,19 +263,26 @@ public static class AtBatSimulation
                 if (r.IsAtBat()) local[b + 1]++;     // AB
                 if (r.IsHit()) local[b + 2]++;       // H
                 if (r == PlateAppearanceResult.Strikeout) local[b + 3]++;
+                if (r == PlateAppearanceResult.Walk) local[b + 4]++;
+                if (!r.IsHit() && r is not (PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch
+                        or PlateAppearanceResult.ReachedOnError)) local[b + 5]++;
                 return local;
             },
             local => { lock (total) { for (var k = 0; k < width; k++) total[k] += local[k]; } });
 
         var pa = new int[TierCount]; var ab = new int[TierCount]; var h = new int[TierCount]; var so = new int[TierCount];
+        var bb = new int[TierCount]; var outs = new int[TierCount];
         for (var t = 0; t < TierCount; t++)
         {
             pa[t] = total[t * Counters];
             ab[t] = total[t * Counters + 1];
             h[t] = total[t * Counters + 2];
             so[t] = total[t * Counters + 3];
+            bb[t] = total[t * Counters + 4];
+            outs[t] = total[t * Counters + 5];
         }
-        return new PitcherRankStats { PlateAppearances = pa, AtBats = ab, Hits = h, Strikeouts = so };
+        return new PitcherRankStats
+            { PlateAppearances = pa, AtBats = ab, Hits = h, Strikeouts = so, Walks = bb, Outs = outs };
     }
 
     /// <summary>投手ランク別 三振率・被打率のMarkDownレポート（issue #402 検証出力）。</summary>
@@ -279,12 +294,12 @@ public static class AtBatSimulation
         sb.AppendLine();
         sb.AppendLine(c, $"投手総合＝球速.40/制球.25/スタミナ.15/キレ.20 の等級（G〜S）で層別（シード {seed}）。");
         sb.AppendLine();
-        sb.AppendLine("| 投手ランク | 打席(PA) | 三振率 K% | 被打率 AVG |");
-        sb.AppendLine("|---|---:|---:|---:|");
+        sb.AppendLine("| 投手ランク | 打席(PA) | 三振率 K% | 被打率 AVG | 四球率 BB% | 与四球/9（近似） |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---:|");
         foreach (var t in new[] { Tier.S, Tier.A, Tier.B, Tier.C, Tier.D, Tier.E, Tier.F, Tier.G })
         {
             if (s.PlateAppearances[(int)t] == 0) continue;
-            sb.AppendLine(c, $"| {t} | {s.PlateAppearances[(int)t]} | {s.StrikeoutRate(t):P1} | {s.Average(t):F3} |");
+            sb.AppendLine(c, $"| {t} | {s.PlateAppearances[(int)t]} | {s.StrikeoutRate(t):P1} | {s.Average(t):F3} | {s.WalkRate(t):P1} | {s.WalksPer9(t):F2} |");
         }
         return sb.ToString();
     }
