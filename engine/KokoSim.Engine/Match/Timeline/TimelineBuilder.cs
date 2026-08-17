@@ -647,7 +647,13 @@ public static class TimelineBuilder
                 var pace = speed;
                 if (paceDeadline is { } dl && dl - t0 > 1e-6)
                 {
-                    pace = Math.Min(speed, Math.Max(EasyPaceMinMps, dist / (dl - t0)));
+                    var need = dist / (dl - t0);
+                    // 歩き（≤EasyPaceMinMps）と小走り（≥EasyJogMps）の間は小走りへ切り上げる（早く着いて待つ）。
+                    // 3D の収録は歩き 0.73 m/s と走り 4.28 m/s の間に何も無く、間の速さは足が滑る
+                    // （実測 2026-08-18: 間の速さのレッグは尺が長くコマ数を稼ぐので「目立つ」が 7%→15〜18%）。
+                    pace = need <= EasyPaceMinMps ? EasyPaceMinMps
+                        : need < EasyJogMps ? Math.Min(speed, EasyJogMps)
+                        : Math.Min(speed, need);
                 }
                 var t1 = t0 + dist / pace;
                 if (isBallFielder)
@@ -2339,9 +2345,16 @@ public static class TimelineBuilder
     /// <summary>実捕球者の移動レッグの最短表示長[s]（瞬間移動に見せないための下限）。</summary>
     private const double MinFieldLegSeconds = 0.12;
 
-    /// <summary>急がない移動の最低ペース[m/s]（小走り。issue fielder-leg-speed-by-distance）。これより遅くは
-    /// 走らせない＝期限が遠くても歩き以下にならず、着いたら待つ。</summary>
-    private const double EasyPaceMinMps = 2.0;
+    /// <summary>急がない移動の最低ペース[m/s]（歩き。issue fielder-leg-speed-by-distance）。これより遅くは
+    /// 動かさない＝期限が遠くても止まって見えず、着いたら待つ。0.9＝歩きの収録（Walk 0.73 m/s×再生倍率上限 1.45
+    /// ＝巡航 1.06）とシャッフル（1.35×1.45＝1.96）の両方に収まる速さ。2.0 だと巡航 2.35 でシャッフルが一度も
+    /// 選ばれず、1.5 だと巡航 1.76 が歩き（≤1.06）と走り（≥2.57）の収録の隙間に落ちて足が滑る（実測 2026-08-18:
+    /// 目立つ 7%→18%）。</summary>
+    private const double EasyPaceMinMps = 0.9;
+
+    /// <summary>急がない移動の小走り[m/s]（同上）。歩きより速く必要な移動はここへ切り上げる＝走りの収録
+    /// （4.28 m/s×再生倍率下限 0.6＝巡航 2.57）に収まる速さ。</summary>
+    private const double EasyJogMps = 2.2;
 
     /// <summary>余裕のあるフライで落下点に着いておく、捕球からの猶予[s]（同上）。</summary>
     private const double FlySettleSeconds = 0.5;

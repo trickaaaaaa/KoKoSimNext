@@ -45,7 +45,7 @@ public sealed class FielderPaceTests
         var sprint = Field.StandardAlignment().First(f => f.Position == FieldPosition.FirstBase).Attributes.SprintSpeedMps;
         var v = Speed(tl, cover);
         Assert.True(v < sprint * 0.6, $"塁カバーが {v:F2} m/s（脚力 {sprint:F2}）＝全力のまま");
-        Assert.True(v >= 2.0 - 1e-9, $"塁カバーが {v:F2} m/s＝小走りより遅い");
+        Assert.True(v >= 0.9 - 1e-9, $"塁カバーが {v:F2} m/s＝歩きより遅い");
         var throwArrive = tl.Ball.First(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "first").T1;
         Assert.True(cover.T1 <= throwArrive - 0.4 + 1e-9, $"送球到達 {throwArrive:F2} に対しカバー完了 {cover.T1:F2}");
     }
@@ -75,7 +75,7 @@ public sealed class FielderPaceTests
         var sprint = Field.StandardAlignment().First(f => f.Position == FieldPosition.CenterField).Attributes.SprintSpeedMps;
         var v = Speed(tl, leg);
         Assert.True(v < sprint * 0.6, $"余裕のあるフライへ {v:F2} m/s（脚力 {sprint:F2}）＝全力のまま");
-        Assert.True(v >= 2.0 - 1e-9, $"{v:F2} m/s＝小走りより遅い（下限 2.0）");
+        Assert.True(v >= 0.9 - 1e-9, $"{v:F2} m/s＝歩きより遅い（下限 0.9）");
         Assert.True(leg.T1 <= TimelineBuilder.ContactAt + 4.5 - 0.5 + 1e-9, $"捕球 0.5s 前に落下点に居ない（{leg.T1:F2}）");
         Assert.Equal(4.0, leg.To.X, 6);
         Assert.Equal(78.0, leg.To.Z, 6);
