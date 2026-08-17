@@ -178,6 +178,19 @@ public sealed record RosterCoefficients
     /// <summary>リードcapの野球脳相関（Q8(c): 名捕手の天井は野球脳で決まる）。(Mental−50)×これ を cap に加算。</summary>
     public double LeadCapMentalCorr { get; init; } = 0.15;
 
+    // --- AI校の精神力・統率・捕手リード（issue ai-school-mental-fixed-50, 2026-08-18） ---
+    // 旧実装は AI校の選手が全員 Mental=Leadership=Lead=50 固定・主将なし（Player の既定値のまま）で、
+    // 相手の「精神」ランクが常に D・プレッシャー/動揺/読みが全校同じだった。自校（上の mental_mean 等）と同じ
+    // 分布を、学校の強さ・校風・学年で寄せて引く。乱数は専用 Fork（主RNG非消費）＝他の能力ロールは不変。
+    /// <summary>AI校の精神力中心 = mental_mean + (School.Strength − 50) × これ。強さは**圧縮前**の学校強度
+    /// （ティア圧縮は身体・技術の下位校救済であって精神の物差しではない）。0.25 で G校 ≈40／D校 ≈47／S校 ≈56。</summary>
+    public double AiMentalStrengthSlope { get; init; } = 0.25;
+    /// <summary>AI校の精神力の学年アーク（進級ごとに +これ。3年で +8）。自校の実戦成長（新入生46→3年間で開花）の
+    /// 平均像に合わせた定数＝相手校も上級生ほど精神が強い。</summary>
+    public double AiMentalPerGrade { get; init; } = 4.0;
+    /// <summary>校風「守り勝つ」「全員野球」の精神・統率の上乗せ（design-11 三層プロファイルの精神の項）。</summary>
+    public double AiStyleMentalBonus { get; init; } = 3.0;
+
     // --- 投打の利き（設計書01 §1.1c） ---
     public double ThrowLeftProb { get; init; } = 0.12;
     public double SwitchProb { get; init; } = 0.03;

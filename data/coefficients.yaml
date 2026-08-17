@@ -1258,6 +1258,11 @@ roster:
   lead_sd: 8.0
   lead_mental_corr: 0.30
   lead_cap_mental_corr: 0.15     # Q8(c): リードcapの野球脳相関（名捕手の天井）
+  # AI校の精神力・統率・捕手リード（issue ai-school-mental-fixed-50, 2026-08-18）: 旧実装は全員50固定・主将なし。
+  # 自校と同じ分布（mental_mean/sd・leadership_*・lead_*）を学校の強さ・校風・学年で寄せて引く（専用Fork＝他の能力ロール不変）
+  ai_mental_strength_slope: 0.25   # 精神力中心 = mental_mean + (School.Strength − 50)×これ（圧縮前の強度。G≈40／D≈47／S≈56）
+  ai_mental_per_grade: 4.0         # 進級ごとに精神力 +これ（3年で +8＝自校の実戦成長の平均像）
+  ai_style_mental_bonus: 3.0       # 校風「守り勝つ」「全員野球」の精神・統率の上乗せ
   # 投打の利き（§1.1c）
   throw_left_prob: 0.12
   switch_prob: 0.03

@@ -42,7 +42,8 @@ public static class AiRosterCycle
         foreach (var p in roster.Players)
         {
             p.Grade++;
-            p.Snapshot = p.Snapshot with { Grade = p.Grade };
+            // 精神力の学年アーク（issue ai-school-mental-fixed-50）: 進級ごとに +AiMentalPerGrade。能力の逆算配分とは別。
+            p.Snapshot = AiMentalModel.Promote(p.Snapshot with { Grade = p.Grade }, deps.Roster);
         }
 
         // 新入生コホート（Grade=1）を加入。

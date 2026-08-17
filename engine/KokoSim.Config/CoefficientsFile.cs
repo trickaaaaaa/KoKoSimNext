@@ -2003,6 +2003,10 @@ public static class CoefficientsLoader
         public double LeadSd { get; set; } = D.LeadSd;
         public double LeadMentalCorr { get; set; } = D.LeadMentalCorr;
         public double LeadCapMentalCorr { get; set; } = D.LeadCapMentalCorr;
+        // AI校の精神力・統率・捕手リード（issue ai-school-mental-fixed-50）
+        public double AiMentalStrengthSlope { get; set; } = D.AiMentalStrengthSlope;
+        public double AiMentalPerGrade { get; set; } = D.AiMentalPerGrade;
+        public double AiStyleMentalBonus { get; set; } = D.AiStyleMentalBonus;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
         public double SwitchProb { get; set; } = D.SwitchProb;
@@ -2136,6 +2140,9 @@ public static class CoefficientsLoader
             LeadSd = LeadSd,
             LeadMentalCorr = LeadMentalCorr,
             LeadCapMentalCorr = LeadCapMentalCorr,
+            AiMentalStrengthSlope = AiMentalStrengthSlope,
+            AiMentalPerGrade = AiMentalPerGrade,
+            AiStyleMentalBonus = AiStyleMentalBonus,
             ThrowLeftProb = ThrowLeftProb,
             SwitchProb = SwitchProb,
             BatLeftGivenRightThrow = BatLeftGivenRightThrow,

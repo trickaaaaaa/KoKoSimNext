@@ -19,6 +19,9 @@ public sealed class AiSchoolRoster
     /// <summary>校内で次に採番する選手ID（在籍中不変・新入生に連番で払い出す）。</summary>
     public int NextPlayerId { get; internal set; }
 
+    /// <summary>旧セーブの精神系後埋め（<see cref="AiMentalModel.BackfillIfUnrolled"/>）を検査済みか（校ごとに一度）。</summary>
+    internal bool MentalBackfillChecked { get; set; }
+
     public AiSchoolRoster(int schoolId, IEnumerable<AiPlayer> players, int nextPlayerId)
     {
         SchoolId = schoolId;

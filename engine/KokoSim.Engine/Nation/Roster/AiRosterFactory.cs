@@ -45,6 +45,10 @@ public static class AiRosterFactory
         var archSalt = 0x7B25_0000UL;
         var nameSalt = 0x4E27_0000UL;
         var rc = deps.Roster;
+        // 精神力・統率・リードの中心＝圧縮前の学校強度と校風（issue ai-school-mental-fixed-50。AiMentalModel が単一ソース）。
+        // 新入生は学年アーク前の値。進級（AiRosterCycle.AdvanceOneYear）とブートストラップの上級生でアークを載せる。
+        var mental = new AiMentalDraw(
+            AiMentalModel.MentalCenter(school.Strength, school.Style, rc), AiMentalModel.StyleBonus(school.Style, rc));
 
         // コホートは「守備8枠＋投手プール」ではなく**同じ生成器を通した N 人**（issue #384）。
         // 一人ひとり守備位置適性をロールし、そこから投手寄せ重み w（打撃の連続補間）と
@@ -67,10 +71,10 @@ public static class AiRosterFactory
             // それ以外は肩からの推定で埋まる（#381）＝「全員が投手能力を持つが、投げ慣れた者が上」。
             var snap = leansPitcher
                 ? StrengthTeamFactory.Pitcher(name, center, weight, rng, deps.Personality,
-                        salt++, rc.Archetypes, archSalt++, rc)
+                        salt++, rc.Archetypes, archSalt++, rc, mental)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats }
                 : StrengthTeamFactory.PositionPlayer(
-                        BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name)
+                        BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name, mental, rc)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
             players.Add(new AiPlayer(nextPlayerId++, enrollmentYearIndex, aptitudes, PhenomType.None, 1, snap));
         }
@@ -115,7 +119,8 @@ public static class AiRosterFactory
             foreach (var ai in cohort)
             {
                 ai.Grade = grade;
-                ai.Snapshot = ai.Snapshot with { Grade = grade };
+                // 上級生は (grade−1) 学年ぶんの精神力アークを載せる（進級と同じ量＝ブートストラップと通常進行で同じ値）。
+                ai.Snapshot = AiMentalModel.WithGradeArc(ai.Snapshot with { Grade = grade }, grade, deps.Roster);
                 roster.Add(ai);
             }
         }
