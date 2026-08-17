@@ -341,8 +341,12 @@ public static class RosterTeamBuilder
     /// 育成レイヤの習得球種→試合用レパートリー（設計書02 §2.2）。
     /// ストレート必修＋習得変化球（ランク＝PitchRankレベル＋個体オフセット。育成で全球種が底上げされる）。
     /// Issue #274: ストレートの有効軸(Power)は球威(Stuff)レベルから設定する。
+    /// <para>公開しているのは表示側（球種チャート）が同じ式で球種ごとのランクを出すため。UI で
+    /// 「50＋オフセット×2」のような独自式を持つと、キレEの投手のチェンジアップがSと出る（2026-08-17 実害）。
+    /// <paramref name="pitchRank"/>/<paramref name="stuffLevel"/> は呼び手が決める（試合用は怪我補正込み、
+    /// 表示用は能力表と同じ素のレベル）。</para>
     /// </summary>
-    private static IReadOnlyList<PitchSlot> BuildRepertoire(DevelopingPlayer dp, int pitchRank, int stuffLevel)
+    public static IReadOnlyList<PitchSlot> BuildRepertoire(DevelopingPlayer dp, int pitchRank, int stuffLevel)
     {
         // ストレートの球威(Power)は育成能力「球威(Stuff)」から。
         // Sharpnessは将来拡張用に保持するが現在は未使用（ストレートの有効軸はPower）。
