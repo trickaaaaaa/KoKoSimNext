@@ -725,6 +725,59 @@ namespace KokoSim.EditorTools
         }
 
         /// <summary>
+        /// 【実測プローブ・issue batter-take-timing-load／design-18 §4.5-㉔】打者クリップの足上げ〜トップ〜振り出しの時刻表を採る。
+        /// 各刻みで 前足(LeftFoot)/後ろ足(RightFoot) の高さ・両掌中点の腰基準の位置・右手速度を出す。
+        /// 右打者（yaw 90°で投手は +z 側）前提。左右は絵で読む。
+        /// </summary>
+        public static string RunBatterLoadProbe(string clipName, float fromSec, float toSec, float stepSec)
+        {
+            try
+            {
+                DuelStageComposer.Cleanup();
+                DuelStageComposer.BuildStage();
+                SpawnPose.Clear();
+                AnkleOffset.Clear();
+                var root = GameObject.Find(DuelStageComposer.RootName);
+                foreach (var proxy in new[] { "pitcher", "batter", "catcher", "umpire" })
+                {
+                    var t = root.transform.Find(proxy);
+                    if (t != null) t.gameObject.SetActive(false);
+                }
+                var clip = FindClip(clipName);
+                if (clip == null) return clipName + " NOT FOUND";
+                var sb = new StringBuilder();
+                sb.AppendLine(clipName + " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture));
+                sb.AppendLine("sec\tLfootY\tRfootY\tLfootZ\tgripX\tgripY\tgripZ\trhSpeed\thipsYaw");
+                Vector3 prevRh = Vector3.zero; bool has = false;
+                for (float sec = fromSec; sec <= toSec + 1e-4f; sec += stepSec)
+                {
+                    float s = Mathf.Min(clip.length - 0.001f, sec);
+                    var body = SpawnBody(root, "probe-l", Vector3.zero, 90f, Color.white);
+                    Sample(body, clip, s / clip.length);
+                    var anim = body.GetComponentInChildren<Animator>();
+                    var lf = anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+                    var rf = anim.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                    var lh = anim.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                    var rh = anim.GetBoneTransform(HumanBodyBones.RightHand).position;
+                    var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
+                    var grip = (lh + rh) * 0.5f - hips.position;
+                    float speed = has ? (rh - prevRh).magnitude / stepSec : 0f;
+                    prevRh = rh; has = true;
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0:F3}\t{1:F3}\t{2:F3}\t{3:F3}\t{4:F3}\t{5:F3}\t{6:F3}\t{7:F2}\t{8:F0}",
+                        s, lf.y, rf.y, lf.z, grip.x, grip.y, grip.z, speed, hips.eulerAngles.y));
+                    Object.DestroyImmediate(body);
+                }
+                Debug.Log("[DuelMotionSpike] batter load probe\n" + sb);
+                return sb.ToString();
+            }
+            finally
+            {
+                DuelStageComposer.Cleanup();
+            }
+        }
+
+        /// <summary>
         /// 打者クリップの両手ボーン間隔カーブを0.1s刻みで実測する（AlignBatの片手判定閾値の根拠）。
         /// 素体UBCは両手で握っていてもボーン間隔が~0.2m台あるため、閾値は「本当に手が離れた」区間と
         /// 通常保持区間をこの表で分離できる値に置く。

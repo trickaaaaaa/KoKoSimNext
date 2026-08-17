@@ -1702,6 +1702,9 @@ namespace KokoSim.Unity.Match
         private float _swingPendingAnchor;          // 予約中の接触アンカー[クリップ秒]
         private float _swingPendingEndAt;           // 予約中の打ち切り[クリップ秒]
         private float _swingPendingHold;            // 予約中の据え置き[秒]（SwingFinishHoldSeconds）
+        private bool _swingPendingIsLoad;           // 予約がスイングでなく見逃しのタイミング取り（TakeLoad）か
+        private bool _batterTakeLoad;               // いま打者が見逃しのタイミング取り（振らない頭出し）中か
+        private bool _batterTakeLoadReturning;      // タイミング取りのトップ→構えへ戻るクロスフェード中か（バット軸を凍結する）
 
         /// <summary>
         /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
@@ -1766,6 +1769,9 @@ namespace KokoSim.Unity.Match
             _passedBallCountdown = -1f;   // 後逸の予約も打席をまたがない（issue #525）
             _passedBallIndex = -1;
             _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
+            _swingPendingIsLoad = false;
+            _batterTakeLoad = false;
+            _batterTakeLoadReturning = false;
             ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
             if (_pitcher != null)
@@ -1858,6 +1864,22 @@ namespace KokoSim.Unity.Match
         // -0.71 では 0.382m しかなく芯が球を通り越す。design-18 §4.5-⑪
         private const float SwingMissPlane = 1.08f;
         private const float SwingHitContact = 1.17f;
+
+        // ---- 見逃しの「タイミング取り」（issue batter-take-timing-load, 2026-08-18） ----
+        // 見逃す球（ボール見送り・見逃しストライク・振らない暴投/捕逸）でも足を上げてトップを作り、振らずに構えへ戻す。
+        // 専用収録は無いので、同じ打撃クリップの**構え→トップ**を頭出し再生し、振り出す直前で止めて据え置く。
+        // 実測（DuelMotionSpike.RunBatterLoadProbe・0.025s刻み・Batter_Mixamo_Strike_01・右打者）:
+        //   0.00 構え（前足 y0.059 z0.30・握り z−0.09）／ 0.15 足上げ開始（y0.062→）／ 0.45 前足を後ろ足へ引き寄せ切る（z0.00）
+        //   0.55〜0.575 頂点（前足 y0.164）／ 0.775 トップ（握りが最も後ろ z−0.369。〜0.90 まで保持）
+        //   0.925 踏み込み完了（前足 z0.360）・前足ほぼ接地（y0.078）／ 0.95〜1.00 バット始動（右手 2.2→3.4 m/s）／ 1.00〜1.05 前足接地（y0.058→0.053）
+        // 腰の開き: 83°→111°（0.65 コイル）→ 0.80 から戻り始め 0.95 で 93°＝トップと接地は振り出しと同時（この収録は「足が着いた瞬間に振る」）。
+        // 見逃しは**バット始動の手前 0.925 で止める**（前足は着き・握りはトップ・腰は開き始め）＝ここが「構えて待つ」形。
+        /// <summary>見逃しのタイミング取りで止めるクリップ内秒（振り出す直前）。</summary>
+        private const float TakeLoadStopSec = 0.925f;
+        /// <summary>止める瞬間を球の到達より何秒前に置くか（実物は前足接地が到達の 0.10〜0.20s 前）。</summary>
+        private const float TakeLoadLeadSeconds = 0.15f;
+        /// <summary>止めた形（トップ）を据え置く秒数。捕球と判定が出るまで持たせてから構えへ戻す。</summary>
+        private const float TakeLoadHoldSeconds = 0.45f;
 
         /// <summary>
         /// バント（issue #490）の面通過・当てのクリップ内時刻。<see cref="SwingMissPlane"/>/
@@ -2262,9 +2284,14 @@ namespace KokoSim.Unity.Match
                 case DuelPitchOutcome.InPlayContact:
                     SetSwing(hitClip, hitAnchor, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
-                // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
-                // バントの見送り（Sign=Bunt・Kind=Ball等でoutcome=Take）も同様＝バント構えのまま何もしない。
-                // 捕手の捕球は下の catcherCatches に含めたまま残す
+                // 見逃し（Take／CalledStrike）: 旧 #291 は待機のまま何もしなかった（呆然と見送る）。
+                // 実物は見逃す球でも足を上げてトップを作り、振らないと決めて止める＝同じ打撃クリップの
+                // 構え→トップを頭出し再生し、振り出す直前で止めて構えへ戻す（issue batter-take-timing-load）。
+                // バント構え中（Sign=Bunt で outcome=Take 等）はバント構えのまま何もしない。
+                case DuelPitchOutcome.Take:
+                case DuelPitchOutcome.CalledStrike:
+                    if (!_batterBunting) SetTakeLoad(flight);
+                    break;
                 case DuelPitchOutcome.HitByPitch:
                     SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
                     break;
@@ -2273,6 +2300,8 @@ namespace KokoSim.Unity.Match
                 case DuelPitchOutcome.NotCaught:
                     if (batterSwung)
                         SetSwing(missClip, missAnchor, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    else if (!_batterBunting)
+                        SetTakeLoad(flight);   // 振らない暴投・捕逸もタイミングだけは取る
                     break;
             }
             // 捕り損ねる球は捕球でなく後逸を予約する（issue #525）。catchIndex は SelectCatchAnchor が
@@ -2298,7 +2327,8 @@ namespace KokoSim.Unity.Match
         /// クリップ頭（構え）から始めて、アンカーが球に一致するまで開始そのものを待つ。
         /// これでつまみの全域が安全になり、速度を上げても面通過は球からずれない。
         /// </summary>
-        private void SetSwing(AnimationClip clip, float anchorClipSec, float flight, float endAt, float hold)
+        private void SetSwing(AnimationClip clip, float anchorClipSec, float flight, float endAt, float hold,
+            bool isLoad = false)
         {
             if (_batter == null || clip == null) return;
             float k = Mathf.Max(0.1f, _cal.SwingSpeed);
@@ -2312,10 +2342,26 @@ namespace KokoSim.Unity.Match
                 _swingPendingAnchor = anchorClipSec;
                 _swingPendingEndAt = endAt;
                 _swingPendingHold = hold;
+                _swingPendingIsLoad = isLoad;
                 _swingCountdown = flight - anchorClipSec / k;
                 return;
             }
-            StartSwing(clip, anchorClipSec, seek, endAt, k, hold);
+            StartSwing(clip, anchorClipSec, seek, endAt, k, hold, isLoad);
+        }
+
+        /// <summary>
+        /// 見逃しのタイミング取り（issue batter-take-timing-load）。<see cref="SetSwing"/> と同じカウントダウン方式で、
+        /// アンカー＝止める形（<see cref="TakeLoadStopSec"/>＝前足が着きトップが決まった直後・振り出す直前）を
+        /// 球の到達の <see cref="TakeLoadLeadSeconds"/> 前に置く。再生速度はスイングと同じ <c>SwingSpeed</c>＝
+        /// 振るときと見逃すときで足上げ〜トップの動きが同じ（振り出すかどうかまで見分けが付かない＝実物どおり）。
+        /// 止めた後は <see cref="TakeLoadHoldSeconds"/> 据え置き（design-18 §4.5-⑭）→ 構えへクロスフェードで戻る。
+        /// バット軌道（<see cref="SwingBatAxis"/>）は武装しない＝バットは構えで焼いた向きのまま手について動く。
+        /// </summary>
+        private void SetTakeLoad(float flight)
+        {
+            if (_batter == null || _swingMissClip == null) return;
+            SetSwing(_swingMissClip, TakeLoadStopSec, Mathf.Max(0f, flight - TakeLoadLeadSeconds),
+                TakeLoadStopSec, TakeLoadHoldSeconds, isLoad: true);
         }
 
         /// <summary>
@@ -2324,9 +2370,11 @@ namespace KokoSim.Unity.Match
         /// 差し替えのたびに <c>HoldSeconds</c> を0へ落とすので、呼び元で先に張ると予約側で消える。
         /// </summary>
         private void StartSwing(AnimationClip clip, float anchorClipSec, float seek, float endAt, float k,
-            float hold)
+            float hold, bool isLoad = false)
         {
             if (_batter == null || clip == null) return;
+            _batterTakeLoad = isLoad;
+            _batterTakeLoadReturning = false;
             // 構えを別クリップにしていると、ここが**クリップの切り口**になる（構え→スイング）。
             // 頭出しだけだと姿勢が飛ぶので投手のカットバックと同じクロスフェードで繋ぐ。
             // 同じクリップのとき（既定）は従来どおり頭出しだけ＝絵は1ビットも変わらない
@@ -2337,9 +2385,11 @@ namespace KokoSim.Unity.Match
 #if UNITY_EDITOR
             if (SwingAnchorOverrideForCapture > 0f) anchorClipSec = SwingAnchorOverrideForCapture;
 #endif
-            _swingAnchorClip = anchorClipSec;   // バット軌道（SwingBatAxis）の終点＝接触の時刻
+            // 見逃しのタイミング取りはバット軌道を武装しない（接触の時刻を 0 にすると SwingBatAxis は
+            // 構えで焼いた向きをそのまま返す＝トップでも手に付いて平行移動するだけ）。軌跡（#444）も出さない。
+            _swingAnchorClip = isLoad ? 0f : anchorClipSec;   // バット軌道（SwingBatAxis）の終点＝接触の時刻
             _batWrapValid = false;
-            _batTrailSwing = true;   // バット軌跡の武装（issue #444）。解除は FinishOneShot／打席の仕切り直し
+            _batTrailSwing = !isLoad;   // バット軌跡の武装（issue #444）。解除は FinishOneShot／打席の仕切り直し
             _batRestValid = false;
             // 頭出しは「基準位置へ戻して0→seekをルートモーション込みで積分し直す」ので、
             // **クリップ頭からseekまでの水平移動がそのまま位置の差分として乗る**。待機ループ側は
@@ -2965,7 +3015,7 @@ namespace KokoSim.Unity.Match
                 _swingCountdown -= deltaTime;
                 if (_swingCountdown < 0f && _swingPendingClip != null)
                     StartSwing(_swingPendingClip, _swingPendingAnchor, 0f, _swingPendingEndAt,
-                        Mathf.Max(0.1f, _cal.SwingSpeed), _swingPendingHold);
+                        Mathf.Max(0.1f, _cal.SwingSpeed), _swingPendingHold, _swingPendingIsLoad);
             }
 
             // 捕球クリップの開始予約（球到達に捕球の瞬間を合わせる。issue #332 第2弾）。
@@ -4380,9 +4430,21 @@ namespace KokoSim.Unity.Match
             // 構えとスイングが同じクリップ（既定）では復帰後の Time/EndAt が待機区間の値になり、
             // クリップ時刻の比較だけでは戻り動作を区別できないため、ここで明示的に下ろす
             if (a == _batter) _batTrailSwing = false;
+            bool wasTakeLoad = a == _batter && _batterTakeLoad;
+            if (a == _batter) { _batterTakeLoad = false; _batterTakeLoadReturning = wasTakeLoad; }
             a.Time = 0f;
             a.EndAt = a.DefaultEndAt;   // 投手は購入クリップ6.00sの尻尾を毎回切り落とす（既定0=末尾まで）
             a.Speed = 1f;               // 一発物の速度指定は持ち越さない（待機は常に収録の速さ）
+            if (wasTakeLoad && a.IdleClip != null && a.Clip == a.IdleClip)
+            {
+                // 見逃しのタイミング取り（トップで据え置き）→構え。構えが同じクリップの頭（IdleFromOwnClip=0）の
+                // ときはクリップ内の飛びになるので、ハードカットせず同一クリップ内クロスフェードで戻す
+                // （振り切り→構えの巻き戻しは従来どおりハードカット＝据え置きの後なので許容している）
+                CrossfadeActorTo(a, 0f, CrossfadeSeconds);
+                a.EndAt = a.IdleEndAt;
+                if (a.HoldAtEnd) a.Holding = true;
+                return;
+            }
             if (a.IdleClip != null && a.Clip != a.IdleClip)
             {
                 // 打者の構えを別クリップにしていると、フォロー→構えもクリップの切り口になる。
@@ -4912,13 +4974,20 @@ namespace KokoSim.Unity.Match
                 // **捕手向き(0.18)** と暴れており、肝心の接触の姿勢が「芯が捕手を向く」＝軌道にならない。
                 // 収録の手首は道具を持たない前提の振りなので、そもそもバット軸の情報を持っていない。
                 bool onIdleLoop = _batter.Clip == _batter.IdleClip;
-                if (onIdleLoop)
+                // 見逃しのタイミング取り（トップ）→構えへ戻るクロスフェードの間は、混ざりかけの両手から
+                // 合成軸を採り直さない（握り線の水平方向が混合の途中で回り、バットが1コマ横に寝る＝2026-08-18 実測）。
+                // トップの間ずっと凍結していた構えの向きをそのまま持ち、フェードが終わったら通常の採り直しへ戻る
+                // （始点も終点も同じ構えの向きなので飛ばない）。
+                if (_batterTakeLoadReturning && _batter.FadeRemaining <= 0f) _batterTakeLoadReturning = false;
+                bool freezeHeld = onIdleLoop && _batterTakeLoadReturning && _batHeldValid;
+                if (onIdleLoop && !freezeHeld)
                 {
                     _batHeldAxis = axis;
                     _batHeldValid = true;
                     _batWrapValid = false;   // 次のスイングへ巻き付きの起点を持ち越さない
                     _batRestValid = false;
                 }
+                if (freezeHeld) axis = _batHeldAxis;
                 var grip = (lh + rh) * 0.5f;
                 if (!onIdleLoop && battingClip && _batHeldValid) axis = SwingBatAxis(grip, RestFrameBone());
                 // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。
