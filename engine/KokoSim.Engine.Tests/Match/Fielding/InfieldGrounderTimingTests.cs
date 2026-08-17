@@ -100,7 +100,8 @@ public sealed class InfieldGrounderTimingTests
             play.BatterToFirstSeconds, play.JudgementMarginSeconds, play.Result));
 
         Assert.Equal(FieldPosition.Shortstop, play.FielderRole);
-        Assert.InRange(play.FieldedAtSeconds!.Value, 1.3, 1.7);
+        // ミドルの前進上限 4→10m（issue middle-infielder-charge-cap）でさらに一歩前へ＝1.29s。
+        Assert.InRange(play.FieldedAtSeconds!.Value, 1.2, 1.7);
         Assert.Equal(BattedBallResult.Out, play.Result);
     }
 
@@ -137,9 +138,11 @@ public sealed class InfieldGrounderTimingTests
         // （母集団全体の内野安打率は 9.5%。ここは「深い所へのゴロ」という難しい一群を見ている）。
         // ⚠ 緩いゴロの率は issue #630（前進捕球）が入る前は 83.5% だった。チャージは<b>緩いゴロほど
         // 前へ出る</b>のでここが最も効く＝率が半減するのは #630 の目的どおり（帯もそれに合わせて下げた）。
-        Assert.InRange(slow, 0.28, 0.60);
+        // ⚠ ミドルの前進上限 4→10m（issue middle-infielder-charge-cap・2026-08-18）で遊撃が緩いゴロへ突っ込むように
+        //    なり、緩いゴロ 41.0%→22.0% / 強いゴロ 15.5%→12.0%（母集団の内野安打率はもたつき 0.48→0.49 で水準維持）。
+        Assert.InRange(slow, 0.15, 0.60);
         Assert.True(routine < 0.30, $"強いゴロが {routine:P1} も抜けている");
-        Assert.True(slow > routine + 0.15, "緩いゴロと強いゴロで内野安打率が変わっていない（秒軸が効いていない）");
+        Assert.True(slow > routine + 0.08, "緩いゴロと強いゴロで内野安打率が変わっていない（秒軸が効いていない）");
     }
 
     [Fact]

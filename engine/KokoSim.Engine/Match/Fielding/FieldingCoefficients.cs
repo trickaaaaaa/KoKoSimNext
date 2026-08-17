@@ -126,7 +126,12 @@ public sealed record FieldingCoefficients
     /// 走路側でやるなら選択と落とし先を作り直す必要があり、この issue の範囲を越える。
     /// data/coefficients.yaml と同値。</para>
     /// </summary>
-    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.48;
+    ///
+    /// <para><b>0.48 → 0.49（2026-08-18・issue middle-infielder-charge-cap ＋ fielder-body-far-from-ball-at-catch）</b>:
+    /// ミドルの前進上限 4→10m（捕球が早くなる方向）と、半径捕球の処理点を体が届く時刻へ採り直す（遅くなる方向）を
+    /// 同時に入れた差し引きが −0.4pt（実測 60,000打席×seed 7/42/2024: 9.0/8.8/9.5%）。0.49 で 9.4/9.3/10.0%
+    /// ＝従来水準（9.5/9.1/9.8%）に戻る。</para>
+    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.49;
 
 
     /// <summary>
@@ -290,6 +295,15 @@ public sealed record FieldingCoefficients
     public double InfielderFieldingRadiusM { get; init; } = 4.20;
 
     /// <summary>
+    /// 飛びつきの実効リーチ[m]（体の中心から捕球点まで。伸ばした腕＋倒れ込む体）。
+    /// <see cref="InfielderFieldingRadiusM"/> が「内野を抜けるか」の判定半径なのに対し、こちらは
+    /// **処理点・処理時刻**を決める（issue fielder-body-far-from-ball-at-catch）: 半径で触れると判定した打球も、
+    /// 処理は体がこの距離まで球に寄れた時刻・点で行う＝絵で野手の体が球から 3〜4m 離れたまま捕球・送球しない。
+    /// 常に <see cref="InfielderFieldingRadiusM"/> 以下として扱う。
+    /// </summary>
+    public double InfielderDiveReachM { get; init; } = 2.0;
+
+    /// <summary>
     /// 高く弾むバウンド（チョッパー）で内野手が待たされる時間の係数（Issue #63 やること1）。
     /// 待ち時間 = この係数 × √(2×最大バウンド頂点/g)＝頂点からの自由落下時間。
     /// 大きいほど高バウンドが内野安打になりやすい。0で従来（待ちなし）。
@@ -330,7 +344,12 @@ public sealed record FieldingCoefficients
 
     /// <summary>ミドル（二塁手・遊撃手）が前へ出られる距離[m]。一塁までの送球が長く、
     /// 体勢を崩すと間に合わないぶんコーナーより浅い。</summary>
-    public double ChargeMaxAdvanceMiddleM { get; init; } = 4.0;
+    ///
+    /// <para><b>4.0 → 10.0（issue middle-infielder-charge-cap）</b>: 4m は 30 m/s 分母の線形係数が掛かって実効 1〜2.4m
+    /// ＝遊撃・二塁が正面のボテボテに 2〜3m しか出ず立って待っていた（実測: 79 km/h 遊撃正面で 3.3m/2.25s→内野安打。
+    /// 上限なしで会える最速点は 9.6m/1.76s）。コーナーの 6m は上限なしと同値だったので触らない。突っ込んだ代償は
+    /// 前進量に比例する握り替え・送球精度のペナルティが払う。</para>
+    public double ChargeMaxAdvanceMiddleM { get; init; } = 10.0;
 
     /// <summary>前進捕球いっぱいのときの握り替え追加時間[s]（走りながら捕る＝体勢が悪い）。
     /// 前進量に比例して掛ける。前進で縮んだ捕球時刻をそのぶん食い戻す＝一方的な守備強化にしない項。</summary>

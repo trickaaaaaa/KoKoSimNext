@@ -607,7 +607,11 @@ public static class TimelineBuilder
                 if (dist < 0.5) continue;
 
                 var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
-                var t0 = diveEnd is not null ? Math.Max(ContactAt + 0.35, diveT1 + 0.1) : ContactAt + 0.35; // 反応
+                // 反応 0.35s。処理野手だけは判定の反応遅延（守備力で縮む・F80=0.28s）より遅く出さない
+                // （issue fielder-body-far-from-ball-at-catch）: 判定は「体が実効リーチまで寄れた時刻」で処理点を
+                // 採るので、絵の出足が判定より遅いと守備の巧い野手ほど体が球に届かない絵になる。
+                var reaction = isBallFielder ? Math.Min(0.35, fielder.Attributes.ReactionDelaySeconds) : 0.35;
+                var t0 = diveEnd is not null ? Math.Max(ContactAt + reaction, diveT1 + 0.1) : ContactAt + reaction;
                 var t1 = t0 + dist / speed;
                 if (isBallFielder)
                 {

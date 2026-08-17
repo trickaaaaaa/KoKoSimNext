@@ -569,15 +569,20 @@ public static class FieldingResolver
         var gloveTime = new double[n];      // 実捕球できる最初のボール時刻（∞=最後まで間に合わない）
         var cutTime = new double[n];        // 守備範囲(半径)込みで触れる最初の時刻＝InfielderCanCutOff と同式
         var cutPoint = new Vector3D[n];     // その触れる点
+        var bodyTime = new double[n];       // 飛びつきの実効リーチ（体から届く距離）で処理できる最初の時刻
+        var bodyPoint = new Vector3D[n];    // その処理点
         var zoneDist = new double[n];       // 守備位置への最接近距離
         var zoneBallTime = new double[n];   // その最接近点を打球が通る時刻
         var zonePoint = new Vector3D[n];    // その最接近点
         var cutRadius = Math.Max(0.0, coeff.InfielderFieldingRadiusM);
+        var diveReach = Math.Max(0.0, Math.Min(cutRadius, coeff.InfielderDiveReachM));
         for (var k = 0; k < n; k++)
         {
             gloveTime[k] = double.PositiveInfinity;
             cutTime[k] = double.PositiveInfinity;
             cutPoint[k] = path.Landing;
+            bodyTime[k] = double.PositiveInfinity;
+            bodyPoint[k] = path.Landing;
             zoneDist[k] = double.MaxValue;
             zoneBallTime[k] = path.HangTimeSeconds;
             zonePoint[k] = path.Landing;
@@ -606,6 +611,17 @@ public static class FieldingResolver
                         cutPoint[k] = p;
                     }
                 }
+                if (double.IsPositiveInfinity(bodyTime[k]))
+                {
+                    // 処理点・処理時刻の候補（issue fielder-body-far-from-ball-at-catch）: 体が「飛びつきの
+                    // 実効リーチ」まで球に寄れた最初の時刻。半径 4.2m は「内野を抜けるか」の判定にだけ残す。
+                    var travel = Math.Max(0.0, dist - diveReach);
+                    if (travel / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds <= tt)
+                    {
+                        bodyTime[k] = tt;
+                        bodyPoint[k] = p;
+                    }
+                }
                 if (!double.IsPositiveInfinity(gloveTime[k])) continue;
                 var reach = dist / f.Attributes.SprintSpeedMps + f.Attributes.ReactionDelaySeconds;
                 if (f.Position == FieldPosition.Pitcher) reach += coeff.PitcherFieldingReactionPenaltySeconds;
@@ -632,7 +648,19 @@ public static class FieldingResolver
             {
                 if (cutTime[k] < bestCut) { bestCut = cutTime[k]; best = k; }
             }
-            if (best >= 0) return (infield[best], cutTime[best], cutPoint[best], 0.0);
+            if (best >= 0)
+            {
+                // 処理点・処理時刻は「体（グラブ）が球に届く時刻」で採る（issue fielder-body-far-from-ball-at-catch）。
+                // 従来は半径 4.2m で触れた点・時刻＝内野ゴロアウトの 22% で体が球から 3〜4m 離れたまま
+                // 「捕球→送球」していた（半径は内野を抜けるかの帯校正ノブで、飛びつきの実効リーチより大きい）。
+                // 実効リーチ内まで体が寄れる打球はその時刻・点で処理する。寄れないまま内野を出る（走査終端）
+                // 打球は飛びついて止めた（触れた点で球が死ぬ）扱い＝体がその点へ着く時刻に拾う。
+                var f = infield[best];
+                if (!double.IsPositiveInfinity(bodyTime[best]))
+                    return (f, bodyTime[best], bodyPoint[best], 0.0);
+                var knockedDownAt = Math.Max(cutTime[best], ReachTime(f, cutPoint[best]));
+                return (f, knockedDownAt, cutPoint[best], 0.0);
+            }
 
             // 誰も触れない＝内野内で失速して死ぬ緩いゴロ（打球は内野の中で止まっている）。
             // 最も近くを通った内野手が拾いに行く（内野安打寄り）。
