@@ -1725,8 +1725,14 @@ public static class GameEngine
                     var flyCaughtAt = res.Play is { IsFly: true, Result: Match.Fielding.BattedBallResult.Out } caughtFly
                         ? caughtFly.FieldedAtSeconds ?? caughtFly.HangTimeSeconds   // 接触からの秒（TagUpCatchAtSeconds と同じ基準）
                         : (double?)null;
+                    // 失策の連鎖（design-14 P1-6）で同一走者に積まれた続きの move は、失策の瞬間より前に
+                    // 走り出させない（issue error-extra-advance-phantom-runner）。悪送球＝一塁へ届くはずだった時刻。
+                    var errorAt = res.Play is { Result: Match.Fielding.BattedBallResult.Error } chainErrPlay
+                        ? chainErrPlay.ErrorAtSeconds
+                          ?? (chainErrPlay.ErrorKind == Match.Fielding.FieldingErrorKind.Throw ? chainErrPlay.ThrowArriveSeconds : null)
+                        : null;
                     timeline = Match.Timeline.TimelineBuilder.AppendRunnerLegs(
-                        timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding, flyCaughtAt);
+                        timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding, flyCaughtAt, errorAt);
 
                     // 併殺(二塁封殺)かつ内野ゴロなら、ボールの送球連鎖を 6-4-3 型に差し替える（設計書12 §2, F1 Slice 3）。
                     // 野選（FC, design-14 P1-1）も同じ二塁封殺 RunnerMove を積むが打者は生存するため、

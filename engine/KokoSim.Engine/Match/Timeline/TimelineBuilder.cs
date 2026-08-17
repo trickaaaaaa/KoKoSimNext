@@ -19,7 +19,8 @@ public static class TimelineBuilder
     /// <summary>投球の所要時間[s]（演出用の固定値。実測球速の反映は詳細モードで）。</summary>
     private const double PitchDuration = 0.45;
     /// <summary>投球開始→接触までのリード[s]。</summary>
-    private const double ContactAt = 0.85;
+    /// <summary>接触（打球発生）のタイムライン時刻[s]。走者・野手のレッグはこれを起点に「接触からの秒」を足す。</summary>
+    public const double ContactAt = 0.85;
     /// <summary>牽制球のリリース→走者が帰塁を始めるまでの反応[s]（演出用の固定値）。
     /// <see cref="PickoffResolver"/> は時間の勝負を持たない単発のベルヌーイ試行なので流用元が無い。</summary>
     private const double PickoffReactionSeconds = 0.05;
@@ -245,7 +246,7 @@ public static class TimelineBuilder
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Flight, T0 = ContactAt, T1 = landAt,
-                From = Home, To = landing, ApexHeightM = play.ApexHeightM,
+                From = Home, To = landing, ApexHeightM = play.ApexHeightM, LaunchHeightM = play.LaunchHeightM,
             });
             // 抜けた飛球は着地して終わりではない: 着地点→回収点まで転がる（Issue #301②）。
             // 経路・時刻はエンジンの転がり結果（FieldedX/Z・FieldedAtSeconds）をそのまま使い、
@@ -865,6 +866,7 @@ public static class TimelineBuilder
             {
                 Kind = isFly ? BallSegmentKind.Flight : BallSegmentKind.Roll,
                 T0 = ContactAt, T1 = landAt, From = Home, To = landing, ApexHeightM = ground.ApexHeightM,
+                LaunchHeightM = isFly ? ball.ContactHeightM : 0.0,
             },
         };
 
@@ -1507,17 +1509,23 @@ public static class TimelineBuilder
     /// ＝<b>捕球より前に離塁する絵</b>が残っていた（実測: 犠飛34件中4人。乱数列がずれて表に出た潜在不具合）。
     /// ここで拾って全員を捕球起点に揃える。表示専用・乱数不使用。</para>
     /// </param>
+    /// <param name="errorAtSeconds">
+    /// 失策（悪送球）が確定した時刻[s]（<b>接触からの秒</b>）。失策の連鎖（design-14 P1-6）で同一走者に積まれた
+    /// 続きの move（0→1 の後の 1→2 等）は、この時刻より前には走り出させない（悪送球が逸れる前に
+    /// 次塁へ走る絵を防ぐ）。null＝連結はするが起点は前の塁への到達時刻のまま。
+    /// </param>
     public static PlayTimeline AppendRunnerLegs(
         PlayTimeline timeline, IReadOnlyList<RunnerMove> moves, FieldGeometry field,
         BaserunningCoefficients baserunning, FieldingCoefficients fielding,
-        double? flyCaughtAtSeconds = null)
+        double? flyCaughtAtSeconds = null, double? errorAtSeconds = null)
     {
         if (moves.Count == 0) return timeline;
 
         var legs = new List<RunnerLeg>(timeline.Runners);
         var judgements = new List<JudgementEvent>(timeline.Judgements);
         var runnerIndex = 0;
-        foreach (var m in moves)
+        var chainStartAt = errorAtSeconds is { } errAt ? ContactAt + errAt : 0.0;
+        foreach (var (m, chainFromBase) in MergeChainedMoves(moves))
         {
             // 走者の時計は判定と共通（Issue #316）。打席から走り出す打者走者と、塁上でリードを
             // 取ってから走る走者は物理が違うので、式ではなく文脈で分ける。以前はここだけ
@@ -1563,12 +1571,18 @@ public static class TimelineBuilder
             {
                 var from = BaseName(b);
                 var to = BaseName(b + 1);
+                // 失策の連鎖ぶん（issue error-extra-advance-phantom-runner）: 連結した続きの区間は
+                // 「前の塁に着いた後、失策の瞬間以降に、その塁を回るところから」走る。判定はこの区間に
+                // 時計を持たない（連鎖は確率で決まる進塁）ので、打者走者の続きの区間と同じ式で描く。
+                var chained = chainFromBase is { } cfb && b >= cfb;
+                if (chained) t = Math.Max(t, chainStartAt);
                 // 打者走者は塁打数判定と同じ「1塁ぶんを積む」書き方、塁上の走者は本塁レースと同じ
                 // 「出発塁からの累積」。どちらも判定側とまったく同じ数式・同じ順序なので、
                 // 最終レッグの終端がそのまま判定に使われた到達時刻になる。
                 // （累積で書くのは二次リードを塁ごとに二重に引かないため）
-                var t1 = fromBox
-                    ? t + RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field)
+                var t1 = fromBox || chained
+                    ? t + RunnerClock.SegmentSeconds(
+                        speed, b, b + 1, fromBox ? ctx : ExtraBaseResolver.BatterContextOf(fielding), field)
                     : ContactAt + RunnerClock.SegmentSeconds(
                         speed, m.FromBase, b + 1, ctx, field, extraStart);
                 legs.Add(new RunnerLeg
@@ -1609,6 +1623,37 @@ public static class TimelineBuilder
             if (l.T1 + 1.0 > maxT) maxT = l.T1 + 1.0;
         }
         return timeline with { Runners = legs, Duration = maxT, Judgements = judgements };
+    }
+
+    /// <summary>
+    /// 同一走者（<b>参照同値</b>）の連続 move（前の <c>ToBase</c> == 次の <c>FromBase</c>・前がアウトでない）を
+    /// 1本に連結する（issue error-extra-advance-phantom-runner）。失策の連鎖
+    /// （<c>BaserunningModel.ApplyErrorExtraAdvance</c>）は「もう1つ進む」ぶんを別 move として積むので、
+    /// そのまま描くと 2本目が「打席前から次塁に居た走者」になり幻の走者が立つ。判定・記録は move 列のまま
+    /// （得点は <c>ToBase&gt;=4</c> を数えるだけ）なので、連結は描画の中だけで行う。
+    /// <c>Player</c> は record（値同値）なので参照同値で結ぶ（能力が同じ別人を掴まない＝#627 と同じ注意）。
+    /// 戻り値の第2要素は連鎖ぶんが始まる塁（連結が無ければ null）。
+    /// </summary>
+    internal static List<(RunnerMove Move, int? ChainFromBase)> MergeChainedMoves(IReadOnlyList<RunnerMove> moves)
+    {
+        var merged = new List<(RunnerMove Move, int? ChainFromBase)>(moves.Count);
+        foreach (var m in moves)
+        {
+            var joined = false;
+            for (var i = 0; i < merged.Count; i++)
+            {
+                var (prev, cfb) = merged[i];
+                if (!ReferenceEquals(prev.Runner, m.Runner) || prev.Out || prev.ToBase != m.FromBase) continue;
+                merged[i] = (prev with
+                {
+                    ToBase = m.ToBase, Out = m.Out, CloseCall = m.CloseCall, Force = m.Force,
+                }, cfb ?? m.FromBase);
+                joined = true;
+                break;
+            }
+            if (!joined) merged.Add((m, null));
+        }
+        return merged;
     }
 
     /// <summary>
