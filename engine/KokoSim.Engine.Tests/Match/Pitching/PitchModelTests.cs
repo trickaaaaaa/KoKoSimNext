@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Batting;
@@ -124,6 +125,30 @@ public sealed class PitchModelTests
 
         // 目安＋margin を超えれば（球数の絶対値とは無関係に）降板する。
         Assert.True(PitchingFatigue.ShouldRelieve(ace, 185.0, c));
+    }
+
+    // --- 隅を狙う（issue walk-rate-floor-vs-elite-pitcher） ---
+
+    [Fact]
+    public void HigherControl_SpreadsTheAim_TowardTheCorners_And50IsIdentity()
+    {
+        // 狙い散布σは max(0.5, 1 + slope×(Control−50)) 倍。C50 は恒等・C90 は広く・C30 は狭い（真ん中を狙う）・乱数消費は同じ。
+        double AimSpread(int control, ulong seed)
+        {
+            var pitcher = new PitcherAttributes { MaxVelocityKmh = 140.0, Control = control };
+            var rng = new Xoshiro256Random(seed);
+            var xs = Enumerable.Range(0, 3000).Select(_ => PitchSelection.Select(pitcher, Zone, Bat, Pit, rng).AimX).ToList();
+            var mean = xs.Average();
+            return Math.Sqrt(xs.Sum(x => (x - mean) * (x - mean)) / xs.Count);
+        }
+        var c30 = AimSpread(30, 9);
+        var c50 = AimSpread(50, 9);
+        var c90 = AimSpread(90, 9);
+        Assert.InRange(c50, Bat.AimSigmaXMeters * 0.95, Bat.AimSigmaXMeters * 1.05);
+        var expected90 = Bat.AimSigmaXMeters * (1.0 + Bat.AimSpreadControlSlopePerPoint * 40);
+        var expected30 = Bat.AimSigmaXMeters * System.Math.Max(0.5, 1.0 - Bat.AimSpreadControlSlopePerPoint * 20);
+        Assert.InRange(c90, expected90 * 0.95, expected90 * 1.05);
+        Assert.InRange(c30, expected30 * 0.95, expected30 * 1.05);
     }
 
     // --- ギア「飛ばす/流す」（§1.1f） ---

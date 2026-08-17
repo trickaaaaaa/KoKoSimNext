@@ -420,6 +420,7 @@ public static class CoefficientsLoader
         private static readonly BattingCoefficients D = new();
         public double AimSigmaXM { get; set; } = D.AimSigmaXMeters;
         public double AimSigmaYM { get; set; } = D.AimSigmaYMeters;
+        public double AimSpreadControlSlopePerPoint { get; set; } = D.AimSpreadControlSlopePerPoint;
         public double ZoneSwingBase { get; set; } = D.ZoneSwingBase;
         public double ChaseBase { get; set; } = D.ChaseBase;
         public double ChaseDisciplineSlope { get; set; } = D.ChaseDisciplineSlope;
@@ -471,6 +472,7 @@ public static class CoefficientsLoader
         {
             AimSigmaXMeters = AimSigmaXM,
             AimSigmaYMeters = AimSigmaYM,
+            AimSpreadControlSlopePerPoint = AimSpreadControlSlopePerPoint,
             ZoneSwingBase = ZoneSwingBase,
             ChaseBase = ChaseBase,
             ChaseDisciplineSlope = ChaseDisciplineSlope,
@@ -570,6 +572,7 @@ public static class CoefficientsLoader
         public double LinerApexRangeRatio { get; set; } = D.LinerApexRangeRatio;
         public double InfielderReachHeightM { get; set; } = D.InfielderReachHeightM;
         public double InfielderFieldingRadiusM { get; set; } = D.InfielderFieldingRadiusM;
+        public double InfielderDiveReachM { get; set; } = D.InfielderDiveReachM;
         public double ChopperWaitFactor { get; set; } = D.ChopperWaitFactor;
         public double InfieldInterceptStepSeconds { get; set; } = D.InfieldInterceptStepSeconds;
         public double PitcherFieldingReactionPenaltySeconds { get; set; } = D.PitcherFieldingReactionPenaltySeconds;
@@ -632,6 +635,7 @@ public static class CoefficientsLoader
             LinerApexRangeRatio = LinerApexRangeRatio,
             InfielderReachHeightM = InfielderReachHeightM,
             InfielderFieldingRadiusM = InfielderFieldingRadiusM,
+            InfielderDiveReachM = InfielderDiveReachM,
             ChopperWaitFactor = ChopperWaitFactor,
             InfieldInterceptStepSeconds = InfieldInterceptStepSeconds,
             PitcherFieldingReactionPenaltySeconds = PitcherFieldingReactionPenaltySeconds,
@@ -668,7 +672,9 @@ public static class CoefficientsLoader
         public double PassedBallProb { get; set; } = D.PassedBallProb;
         public double PassedBallCatchingSlope { get; set; } = D.PassedBallCatchingSlope;
         // 暴投・捕逸・振り逃げの着弾コースゲート（issue #525）
-        public double BatteryMissLowY { get; set; } = D.BatteryMissLowY;
+        // YAML の鍵は battery_miss_low_y_m（単位付き）。DTO 名が BatteryMissLowY だと battery_miss_low_y に束縛され
+        // 黙って既定が使われていた（CoefficientsYamlKeysAreBoundTests で検出・2026-08-18）。
+        public double BatteryMissLowYM { get; set; } = D.BatteryMissLowY;
         public double BatteryMissOutsideM { get; set; } = D.BatteryMissOutsideM;
         // 盗塁（設計書02 §4.2）
         public double StealLeadDistanceM { get; set; } = D.StealLeadDistanceM;
@@ -759,6 +765,8 @@ public static class CoefficientsLoader
         public double DoubledOffTagSeconds { get; set; } = D.DoubledOffTagSeconds;
         public double DoubledOffMarginScale { get; set; } = D.DoubledOffMarginScale;
         public double DoubledOffSuccessBias { get; set; } = D.DoubledOffSuccessBias;
+        public double StealBreakExtraLeadM { get; set; } = D.StealBreakExtraLeadM;
+        public double DoubledOffRetreatSpeedMps { get; set; } = D.DoubledOffRetreatSpeedMps;
         // 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）
         public double StealExpectednessIntercept { get; set; } = D.StealExpectednessIntercept;
         public double StealExpectednessStealSlope { get; set; } = D.StealExpectednessStealSlope;
@@ -789,7 +797,7 @@ public static class CoefficientsLoader
             WildPitchControlSlope = WildPitchControlSlope,
             PassedBallProb = PassedBallProb,
             PassedBallCatchingSlope = PassedBallCatchingSlope,
-            BatteryMissLowY = BatteryMissLowY,
+            BatteryMissLowY = BatteryMissLowYM,
             BatteryMissOutsideM = BatteryMissOutsideM,
             StealLeadDistanceM = StealLeadDistanceM,
             CatchThrowDistanceM = CatchThrowDistanceM,
@@ -872,6 +880,8 @@ public static class CoefficientsLoader
             DoubledOffTagSeconds = DoubledOffTagSeconds,
             DoubledOffMarginScale = DoubledOffMarginScale,
             DoubledOffSuccessBias = DoubledOffSuccessBias,
+            StealBreakExtraLeadM = StealBreakExtraLeadM,
+            DoubledOffRetreatSpeedMps = DoubledOffRetreatSpeedMps,
             StealExpectednessIntercept = StealExpectednessIntercept,
             StealExpectednessStealSlope = StealExpectednessStealSlope,
             GambleUnexpectednessReduction = GambleUnexpectednessReduction,

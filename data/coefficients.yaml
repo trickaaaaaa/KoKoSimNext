@@ -56,6 +56,7 @@ pitching:
 batting:
   aim_sigma_x_m: 0.10            # 投手の狙い散布σ（横）
   aim_sigma_y_m: 0.155           # 投手の狙い散布σ（縦）
+  aim_spread_control_slope_per_point: 0.008  # 制球の高い投手ほど隅を狙う・低い投手は真ん中を狙う＝狙い散布σ×max(0.5, 1+これ×(Control−50))。C50で恒等（issue walk-rate-floor-vs-elite-pitcher）
   zone_swing_base: 0.68          # ゾーン内スイング率
   chase_base: 0.28               # ゾーン外追いかけ率
   chase_discipline_slope: 0.0045 # 選球眼→追いかけ抑制

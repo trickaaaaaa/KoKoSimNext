@@ -105,6 +105,13 @@ matchup_grid:
   strikeout_rate_p50_b45: { min: 0.17, max: 0.28 }   # 互角近傍は不変（0.22–0.23）
   average_p35_b75:        { min: 0.260, max: 0.360 } # 逆側の裾（F投手 vs B打者・パワー50）
   average_p80_b30:        { min: 0.120, max: 0.220 } # 格下でも当たれば飛ぶ余地。線形時 .098
+  # 四球率の下限（issue walk-rate-floor-vs-elite-pitcher・2026-08-18）: 空振りの飽和とは別軸で、A/S投手は制球σが縮む一方
+  # 「隅を狙う」が無くゾーン率 68% まで上がり四球が 1% に消えていた。制球連動の狙い散布（aim_spread_control_slope_per_point 0.008・
+  # 高制球は隅へ散らし低制球は真ん中を狙う対称形）で P80/B30 3%・P90/B75 7%・互角 P50/B45 は 8% のまま（6,000打席×seed42/2024）。
+  # 0.010 だと母集団（atbat_10k）の BB% が seed42 で 10.1% と天井を超えるので 0.008。
+  walk_rate_p80_b30:      { min: 0.025, max: 0.08 }  # A投手 vs F打者。修正前 0.01
+  walk_rate_p90_b75:      { min: 0.03, max: 0.13 }   # S投手 vs B打者。修正前 0.01
+  walk_rate_p50_b45:      { min: 0.06, max: 0.10 }   # 互角近傍は不変（0.08）
 
 games_10k_tactics:
   # 上限を 6.2→6.7 に一般帯（games_10k）と整合（issue #63, 2026-07-24）: #123 で守備力連動→失策失点増を

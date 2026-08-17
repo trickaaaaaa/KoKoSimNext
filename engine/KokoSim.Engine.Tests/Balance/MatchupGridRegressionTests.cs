@@ -49,5 +49,12 @@ public sealed class MatchupGridRegressionTests
             $"P35 vs B75 被打率 {grid.Average(P(35), B(75)):.000} が帯外");
         Assert.True(targets.AverageP80B30.Contains(grid.Average(P(80), B(30))),
             $"P80 vs B30 被打率 {grid.Average(P(80), B(30)):.000} が帯外");
+        // 四球率の下限（issue walk-rate-floor-vs-elite-pitcher）: 投手側が上振れても四球が消えない。
+        Assert.True(targets.WalkRateP80B30.Contains(grid.WalkRate(P(80), B(30))),
+            $"P80 vs B30 BB% {grid.WalkRate(P(80), B(30)):P1} が帯外");
+        Assert.True(targets.WalkRateP90B75.Contains(grid.WalkRate(P(90), B(75))),
+            $"P90 vs B75 BB% {grid.WalkRate(P(90), B(75)):P1} が帯外");
+        Assert.True(targets.WalkRateP50B45.Contains(grid.WalkRate(P(50), B(45))),
+            $"P50 vs B45 BB% {grid.WalkRate(P(50), B(45)):P1} が帯外（互角近傍が動いた）");
     }
 }

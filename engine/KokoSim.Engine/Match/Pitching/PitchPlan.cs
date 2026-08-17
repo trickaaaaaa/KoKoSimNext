@@ -50,8 +50,12 @@ public static class PitchSelection
 
         // ゾーン中心を狙い、意図的なばらつき（AimSigma）を加える。実際の散布は後段のコントロールσで別途加算。
         // 方針は狙い位置（低め/内角）と散らし幅（コントロール重視）に効く＝効果は物理から出る。
-        var aimX = rng.NextGaussian(0.0, coeff.AimSigmaXMeters * d.AimSigmaFactor) + d.AimXOffsetM;
-        var aimY = zone.CenterY + rng.NextGaussian(0.0, coeff.AimSigmaYMeters * d.AimSigmaFactor) + d.AimYOffsetM;
+        // 制球の高い投手ほど隅を狙う（issue walk-rate-floor-vs-elite-pitcher）: 狙い散布を制球に応じて広げる。
+        // 制球の低い投手は逆に真ん中を狙う（隅を狙う余裕が無い＝倍率<1・下限0.5）。50 で恒等。
+        // 乱数の消費は従来と同じ（同じガウス2発に倍率を掛けるだけ）。
+        var spread = Math.Max(0.5, 1.0 + coeff.AimSpreadControlSlopePerPoint * (pitcher.Control - 50));
+        var aimX = rng.NextGaussian(0.0, coeff.AimSigmaXMeters * d.AimSigmaFactor * spread) + d.AimXOffsetM;
+        var aimY = zone.CenterY + rng.NextGaussian(0.0, coeff.AimSigmaYMeters * d.AimSigmaFactor * spread) + d.AimYOffsetM;
 
         // ① 球種選択（Phase 簡略: ストレート基礎シェア±方針の重み、残りを変化球で等分）。
         var slot = ChoosePitch(pitcher, pitching, rng, d.StraightShareDelta);

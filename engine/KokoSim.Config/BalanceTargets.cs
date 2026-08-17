@@ -113,6 +113,12 @@ public sealed record MatchupGridTargets
     public Band AverageP35B75 { get; init; } = new(0.260, 0.360);
     /// <summary>A投手(80) vs F打者(30) の被打率（格下でも「当たれば飛ぶ」余地）。</summary>
     public Band AverageP80B30 { get; init; } = new(0.120, 0.220);
+    /// <summary>A投手(80) vs F打者(30) の BB%（下限＝四球が消えない。issue walk-rate-floor-vs-elite-pitcher）。</summary>
+    public Band WalkRateP80B30 { get; init; } = new(0.025, 0.08);
+    /// <summary>S投手(90) vs B打者(75) の BB%。</summary>
+    public Band WalkRateP90B75 { get; init; } = new(0.03, 0.13);
+    /// <summary>互角（P50 vs B45）の BB%＝隅狙いが互角近傍を動かしていないこと。</summary>
+    public Band WalkRateP50B45 { get; init; } = new(0.06, 0.10);
 }
 
 public static class BalanceTargetsLoader
@@ -233,6 +239,9 @@ public static class BalanceTargetsLoader
             StrikeoutRateP50B45 = t.StrikeoutRateP50B45?.ToBand() ?? d.StrikeoutRateP50B45,
             AverageP35B75 = t.AverageP35B75?.ToBand() ?? d.AverageP35B75,
             AverageP80B30 = t.AverageP80B30?.ToBand() ?? d.AverageP80B30,
+            WalkRateP80B30 = t.WalkRateP80B30?.ToBand() ?? d.WalkRateP80B30,
+            WalkRateP90B75 = t.WalkRateP90B75?.ToBand() ?? d.WalkRateP90B75,
+            WalkRateP50B45 = t.WalkRateP50B45?.ToBand() ?? d.WalkRateP50B45,
         };
     }
 
@@ -269,6 +278,9 @@ public static class BalanceTargetsLoader
         public BandDto? StrikeoutRateP50B45 { get; set; }
         public BandDto? AverageP35B75 { get; set; }
         public BandDto? AverageP80B30 { get; set; }
+        public BandDto? WalkRateP80B30 { get; set; }
+        public BandDto? WalkRateP90B75 { get; set; }
+        public BandDto? WalkRateP50B45 { get; set; }
     }
 
     private sealed class TiersLowDto
