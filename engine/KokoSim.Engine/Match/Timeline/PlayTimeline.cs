@@ -36,6 +36,14 @@ public sealed record BallSegment
     public double ApexHeightM { get; init; }
 
     /// <summary>
+    /// 滞空セグメントの打ち出し高さ[m]（Flight のみ・表示専用。issue duel-view-fly-leaves-bat-flat-then-rises）。
+    /// 0（既定）＝地面から始まる従来プロファイル（送球の山なり等はこのまま）。打球の滞空は接触点の高さ
+    /// （<see cref="Fielding.FieldingPlay.LaunchHeightM"/>）を載せ、h(0)=打点から立ち上がる放物線にする。
+    /// 着地（u=1）は 0 のまま＝落下点・滞空時間は不変。
+    /// </summary>
+    public double LaunchHeightM { get; init; }
+
+    /// <summary>
     /// この送球を投げた野手（<see cref="BallSegmentKind.Throw"/> のみ。表示専用・Issue E1）。
     ///
     /// 3Dの守備ビューは「誰が投げるモーションをするか」を決める必要があるが、座標だけでは

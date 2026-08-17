@@ -994,6 +994,8 @@ namespace KokoSim.Unity.Match
         private float _battedDur;            // セグメントの長さ[s]（超えたら位置を止める）
         private Vector3 _battedOffset;       // 接触点 − セグメント始点（下の LaunchFadeSeconds で解消）
         private float _battedFade;           // 上を解消するまでの秒数＝打点からの自由落下時間
+        /// <summary>打球プロファイルが地面（h(0)=0）から始まるか（<see cref="BeginBattedBall"/> で判定）。</summary>
+        private bool _battedFromGround;
         private readonly List<Vector4> _trail = new();   // 残像（xyz=ステージローカル / w=残像時計[s]）
         /// <summary>
         /// 残像の「現在時刻」（<see cref="DrawBattedTrail"/> のフェード計算の基準）。対決ビューは
@@ -2740,12 +2742,13 @@ namespace KokoSim.Unity.Match
         /// 球を打球セグメントへ乗り換える（＝接触の瞬間）。<paramref name="overshoot"/> は接触を跨いだ
         /// このフレームぶんの端数[s]で、打球時計をそこから始める＝時間が飛ばず球も跳ばない。
         ///
-        /// 打点（＝球が判定面に着いた位置）と、engine のセグメント始点（本塁=原点・高さ0）は食い違う。
-        /// セグメント側は俯瞰の平面図用に「高さは種別ごとのプロファイル」で作られていて、滞空も
-        /// ゴロも h(0)=0＝地面から始まるためで、そのまま乗せると球がバットから足元へ飛ぶ。
+        /// 打点（＝球が判定面に着いた位置）と、engine のセグメント始点（本塁=原点）は食い違う。
+        /// セグメント側は俯瞰の平面図用に「高さは種別ごとのプロファイル」で作られていて、ゴロは h(0)=0＝
+        /// 地面から始まるためで、そのまま乗せると球がバットから足元へ飛ぶ。
         /// 差は**打点からの自由落下**で解消する（左右・前後は同じ時間で線形に寄せる）:
         ///   ・ゴロは打点から落ちて地面を這う＝これがそのまま「バットから出て弾む」絵になる
-        ///   ・フライは4秒の弧に0.8mが0.4秒だけ乗るだけ＝落下点も滞空時間も engine のまま動かない
+        ///   ・滞空は engine の打ち出し高さ（<c>BallSegment.LaunchHeightM</c>＝接触点 1.0m）から立ち上がる
+        ///     プロファイルなので、実打点との差（±0.2m）は線形に寄せるだけ＝落下点も滞空時間も engine のまま
         /// </summary>
         private void BeginBattedBall(float overshoot)
         {
@@ -2754,6 +2757,10 @@ namespace KokoSim.Unity.Match
             var contact = BallPointAt(_ballArrival);
             _battedOffset = new Vector3(
                 contact.x - (float)head.X, contact.y - (float)head.H, contact.z - (float)head.Y);
+            // プロファイルが地面（h(0)=0）から始まるか（ゴロ／古い滞空）。打ち出し高さ付きの滞空
+            // （engine BallSegment.LaunchHeightM・issue duel-view-fly-leaves-bat-flat-then-rises）は打点の
+            // 高さから立ち上がるので、max の細工でなく差ぶんを線形に寄せる側へ落とす（下 BattedPointAt）。
+            _battedFromGround = head.H <= 1e-3;
             // 打点から地面までの自由落下時間。左右のずれ（±0.4m程度）もこの時間で解消する
             _battedFade = Mathf.Sqrt(2f * Mathf.Max(0.05f, Mathf.Abs(_battedOffset.y)) / 9.8f);
             _battedT = 0f;
@@ -2809,10 +2816,13 @@ namespace KokoSim.Unity.Match
             // ゴロも同じ）ので、足すとゴロが自由落下と最初のバウンドの合計で 0.78→1.05m へ**上がって**
             // しまう（2026-07-31 実測）。max なら「打点から落ちる → プロファイルが追い越したらそちらへ
             // 乗る」となり、ゴロは落ちて弾み、フライは2コマで弧に乗る。落下点も滞空時間も engine のまま。
+            // 打ち出し高さ付きの滞空（LaunchHeightM）は h(0)＝engine の打点（1.0m）から始まるので、対決の
+            // 実打点（投球の実着弾高さ）との差（±0.2m 程度）は左右・前後と同じく線形に寄せる＝
+            // 最初のフレームから上がる（平らな区間が無い）。ゴロは従来どおり max（打点から落ちて弾む）。
             float h = (float)b.H;
-            float y = _battedOffset.y > 0f
+            float y = _battedFromGround && _battedOffset.y > 0f
                 ? Mathf.Max(h, _battedOffset.y - 4.9f * t * t)   // 打点から落ちる／追い越されたら弧へ乗る
-                : h + _battedOffset.y * k;                       // 既に打点の高さから始まる見本用
+                : h + _battedOffset.y * k;                       // 打点の高さから始まるプロファイル（差は線形に解消）
             return new Vector3(
                 (float)b.X + _battedOffset.x * k,
                 y,

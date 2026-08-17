@@ -41,6 +41,13 @@ public sealed record FieldingPlay
     public required double LandingZ { get; init; }
     public required double HangTimeSeconds { get; init; }
     public required double ApexHeightM { get; init; }
+    /// <summary>
+    /// 打ち出し（接触）点の高さ[m]（表示専用・issue duel-view-fly-leaves-bat-flat-then-rises）。
+    /// 弾道積分は <see cref="Batting.BattedBall.ContactHeightM"/> から始まるのに、表示の滞空プロファイルは
+    /// h(0)=0（地面）から始まっていて、対決ビューのフライが「打点まで平らに走ってから急上昇＝弾んだ」絵になっていた。
+    /// 生成側が既に持っている値の素通し。0＝未設定（ファウル判定前の経路等）。
+    /// </summary>
+    public double LaunchHeightM { get; init; }
     public required double RangeM { get; init; }
     public required double BearingDeg { get; init; }
     /// <summary>
@@ -220,6 +227,7 @@ public static class FieldingResolver
             LandingZ = landing.Z,
             HangTimeSeconds = ground.HangTimeSeconds,
             ApexHeightM = ground.ApexHeightM,
+            LaunchHeightM = ball.ContactHeightM,
             RangeM = range,
             BearingDeg = ball.BearingDeg,
             BatterToFirstSeconds = runnerTime,
