@@ -388,6 +388,47 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
     }
 
+    // ===== 前回スタメンの記憶（issue lineup-carry-over-previous-game・v14） =====
+
+    [Fact]
+    public void LastLineup_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.NotNull(s.LastLineup);
+        Assert.Equal(state.LastLineup!.PlayerIds, s.LastLineup!.PlayerIds);
+        Assert.Equal(state.LastLineup.Positions, s.LastLineup.Positions);
+        Assert.Equal(1, s.LastLineup.StartingPitcherId);
+        Assert.True(s.LastLineup.UsesDh);
+        Assert.Equal(4, s.LastLineup.DhSlot);
+    }
+
+    [Fact]
+    public void LastLineup_Null_RoundTripsAsNull()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastLineup = null;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Null(s.LastLineup);
+    }
+
+    [Fact]
+    public void V13Save_WithoutLastLineup_StillLoads_AsNull()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"lastLineup\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "lastLineup が直列化されていない");
+        var end = json.LastIndexOf('}');
+        var v13 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":13");
+        Assert.DoesNotContain("\"lastLineup\"", v13);
+
+        Assert.True(SaveCodec.TryDeserialize(v13, out var s, out var err), err);
+        Assert.Null(s.LastLineup);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
     // ===== 教え子名鑑（issue #586） =====
 
     // 過年度の指名確定（年・当時の背番号・順位・バンド・注目度）が往復すること。

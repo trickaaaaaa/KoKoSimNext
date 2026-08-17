@@ -107,6 +107,13 @@ namespace KokoSim.Unity.Shell
         public LineupSpec Lineup { get; set; }
 
         /// <summary>
+        /// 前の試合で確定したスタメンの記憶（issue lineup-carry-over-previous-game）。スタメン設定画面が
+        /// 既定として復元する（打順・守備位置・DH・先発）。<see cref="Lineup"/> と違い選手IDで持つ純データで
+        /// **セーブに載る**（v14）＝ロード後も引き継ぐ。null＝まだ一度も確定していない（自動シード）。
+        /// </summary>
+        public LineupMemory LastLineup { get; set; }
+
+        /// <summary>
         /// 試合開始フローの中継フラグ。試合日「はい」でスタメン設定画面へ遷移する際に true。対戦カード画面
         /// （MatchPreview）の「試合開始」が <see cref="MatchStartFlow.Begin"/> でこれを消費して自校戦を始める
         /// （issue #325: ホームは中継しない）。キャンセルで false。開始に失敗した場合（二重起動）は戻される。
@@ -506,6 +513,7 @@ namespace KokoSim.Unity.Shell
             s.Records = Records;
             s.TournamentHistory = History;
             s.Tournament = CaptureTournament();
+            s.LastLineup = LastLineup;
         }
 
         /// <summary>大会モードの進行を DTO へ（通常モード・保存できない局面なら null）。</summary>
@@ -538,6 +546,7 @@ namespace KokoSim.Unity.Shell
             Records = s.Records;
             History = s.TournamentHistory;
             ClearTransient();
+            LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
         }
 
         /// <summary>
@@ -583,6 +592,7 @@ namespace KokoSim.Unity.Shell
             LastOutcome = null;
             PendingTournamentWrapUp = null;
             Lineup = null;
+            LastLineup = null;   // 新規ゲームは白紙。ロードは Restore がこの後で書き戻す
             AwaitingMatchStart = false;
             PracticeOpponent = null;
             _prefetchTask = null;

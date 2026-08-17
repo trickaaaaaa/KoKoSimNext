@@ -388,7 +388,10 @@ namespace KokoSim.Unity.Lineup
         private void OnOk()
         {
             if (!_state.CanConfirm) return;   // 編成不備（ベンチ入り9人未満）では確定させない
-            KokoSim.Unity.Shell.GameSession.Current.Lineup = _state.ToLineupSpec();
+            var spec = _state.ToLineupSpec();
+            KokoSim.Unity.Shell.GameSession.Current.Lineup = spec;
+            // 次の試合のスタメン画面はここから始まる（issue lineup-carry-over-previous-game）。選手IDで持つのでセーブにも載る。
+            KokoSim.Unity.Shell.GameSession.Current.LastLineup = KokoSim.Engine.Season.LineupMemory.FromSpec(spec);
             // AwaitingMatchStart は立てたまま → 試合開始前画面（対戦カード）を挟み、そこの「試合開始」が
             // 直接自校戦を消化する（issue #7 / #325。ホームは中継しない）。
             // クリック配信中に同期 Show すると UITK のイベント木が壊れて全画面が非アクティブに落ちるため、

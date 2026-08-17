@@ -190,7 +190,27 @@ namespace KokoSim.Unity.Lineup
             // メンバー設定でベンチ入りを増やしてもらう（不正な LineupSpec はエンジンが弾く）。
             _shortage = benchIn.Count < 9;
             _eligible = _shortage ? Enumerable.Range(0, _roster.Count).ToList() : benchIn;
-            SeedFromUniformNumbers();
+            if (!TryRestoreLastLineup()) SeedFromUniformNumbers();
+        }
+
+        // 前の試合で確定したスタメンから始める（issue lineup-carry-over-previous-game）。
+        // 照合・穴埋め・DHの畳み・守備網羅の確認は engine の純関数 LineupRestorer が単一ソース。
+        // 穴埋めの順位は自動シードと同じ（打順＝打撃力順・投手枠＝投手力順）を渡す。
+        // ベンチ入り9人未満（_shortage）は従来どおり全部員で描いて確定を塞ぐだけなので復元しない。
+        private bool TryRestoreLastLineup()
+        {
+            if (_shortage) return false;
+            var memory = KokoSim.Unity.Shell.GameSession.Current.LastLineup;
+            if (memory == null) return false;
+            var eligible = new HashSet<int>(_eligible);
+            var r = LineupRestorer.Restore(
+                memory, _roster, eligible.Contains, ByBatting().ToList(), ByPitching().ToList());
+            if (!r.Restored) return false;
+            Array.Copy(r.RosterIndices, _idx, 9);
+            Array.Copy(r.Positions, _pos, 9);
+            _usesDh = r.UsesDh;
+            _spIdx = r.StartingPitcherIndex;
+            return true;
         }
 
         // 初期打順をシード（非DH）。守備位置は背番号2〜9の慣例（捕一二三遊左中右）を各自が保持しつつ、

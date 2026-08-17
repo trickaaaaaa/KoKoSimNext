@@ -201,8 +201,21 @@ internal static class SaveTestFixtures
                 new TrainingBoostSaveState { Source = "outside_coach_visit", Mult = 1.10, WeeksLeft = 3, PlayerId = 0 },
                 new TrainingBoostSaveState { Source = "self_practice_awakened", Mult = 1.20, WeeksLeft = 5, PlayerId = 7 },
             },
+            // 前回スタメンの記憶（v14・issue lineup-carry-over-previous-game）。DH制で採る（先発IDが載ることまで測る）。
+            LastLineup = BuildLastLineup(),
         };
     }
+
+    /// <summary>前回スタメン（DH制・「指」は5番・先発ID=1）。</summary>
+    public static LineupMemory BuildLastLineup() => new(
+        new[] { 2, 3, 4, 5, 6, 7, 8, 9, 10 },
+        new[]
+        {
+            FieldPosition.CenterField, FieldPosition.SecondBase, FieldPosition.Shortstop, FieldPosition.FirstBase,
+            FieldPosition.DesignatedHitter, FieldPosition.LeftField, FieldPosition.ThirdBase, FieldPosition.Catcher,
+            FieldPosition.RightField,
+        },
+        StartingPitcherId: 1);
 
     /// <summary>
     /// 週次イベントの発火状態（issue #609）。クールダウンが効いている途中の状態で採る

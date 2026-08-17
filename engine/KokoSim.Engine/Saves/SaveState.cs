@@ -128,4 +128,10 @@ public sealed class SaveState
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。
     /// </summary>
     public TournamentSaveState? Tournament { get; set; }
+
+    /// <summary>
+    /// 前の試合で確定したスタメンの記憶（issue lineup-carry-over-previous-game・v14）。スタメン設定画面の既定に使う。
+    /// 選手IDで持つ純データ。<b>null＝まだ一度も確定していない</b>（v13 以前のセーブは常に null＝自動シード）。
+    /// </summary>
+    public LineupMemory? LastLineup { get; set; }
 }

@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 13;
+    public const int CurrentVersion = 14;
 
     // ===== Serialize =====
 
@@ -69,7 +69,8 @@ public static class SaveCodec
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
             .Add("events", EventSaves.ToJson(s.Events))
             .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
-            .Add("tournament", TournamentSaves.ToJson(s.Tournament));
+            .Add("tournament", TournamentSaves.ToJson(s.Tournament))
+            .Add("lastLineup", LineupSaves.ToJson(s.LastLineup));
         return root.ToString();
     }
 
@@ -206,6 +207,8 @@ public static class SaveCodec
         // 旧セーブは進化が一度も走っていない＝生成値のまま・勝数なし＝どちらも空配列で補う。
         if (version < 13 && !root.Has("nationSchools")) root.Add("nationSchools", new JsonArray());
         if (version < 13 && !root.Has("nationYearWins")) root.Add("nationYearWins", new JsonArray());
+        // v14（issue lineup-carry-over-previous-game）: 前回スタメンの記憶。旧セーブは一度も確定していない扱い＝null。
+        if (version < 14 && !root.Has("lastLineup")) root.Add("lastLineup", JsonNull.Instance);
         return root;
     }
 
@@ -253,6 +256,8 @@ public static class SaveCodec
             // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             TrainingBoosts = EventSaves.BoostsFromJson(root.Arr("trainingBoosts")),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
+            // 前回スタメンは v14 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            LastLineup = LineupSaves.FromJson(root["lastLineup"]),
         };
 
         s.TournamentStats = new NationTournamentStats();
