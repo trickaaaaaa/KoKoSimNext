@@ -88,12 +88,18 @@ public sealed class ContactModelTests
         // issue #578 Step 2 で **2倍**（オーナー方針 Q24-1「球速のバリューはもう少し高くてよい」）。
         // 校正前は「制球（与四球）の失点価値は球速の約4倍」だった＝2倍にして差を半分に詰める。
         // 平均三振率は whiff_intercept（−2.40→−2.52）で据え置き＝動くのは球速の**配分**だけ（帯不変）。
+        // Lv50 を境に上位の傾きが 0.47→0.36 に寝る（issue velocity-kmh-mapping-flatten-top, 2026-08-18）ので、
+        // 「2倍」は Lv≦50 側の傾きで測る。上位側は 0.36/0.47 倍＝約1.5倍（物理は km/h のまま・意図した副作用）。
         var coeff = new BattingCoefficients();
-        var perVelocityLevel =
+        var perVelocityLevelBelow =
+            (PitcherAttributes.VelocityKmhFromLevel(50) - PitcherAttributes.VelocityKmhFromLevel(49))
+            * coeff.StuffPerKmh;
+        Assert.InRange(perVelocityLevelBelow / coeff.WhiffContactSlope, 1.8, 2.25);
+
+        var perVelocityLevelAbove =
             (PitcherAttributes.VelocityKmhFromLevel(51) - PitcherAttributes.VelocityKmhFromLevel(50))
             * coeff.StuffPerKmh;
-
-        Assert.InRange(perVelocityLevel / coeff.WhiffContactSlope, 1.8, 2.25);
+        Assert.InRange(perVelocityLevelAbove / coeff.WhiffContactSlope, 1.4, 1.7);
     }
 
     [Fact]

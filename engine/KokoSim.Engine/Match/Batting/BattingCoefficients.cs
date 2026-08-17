@@ -104,6 +104,8 @@ public sealed record BattingCoefficients
     /// 球速1km/hあたりの stuff 寄与（対数オッズ）。球速Level→km/h の傾き 0.47 と掛けて
     /// <b>球速1レベル ≈ ミート1レベル</b>（<see cref="WhiffContactSlope"/>=0.030）になるよう定める
     /// （0.064×0.47≈0.030）。旧値0.020では球速1レベルがミート0.31レベル相当しかなかった。
+    /// ⚠ 0.47 は Lv≦50 の傾き。Lv&gt;50 は <see cref="Players.PitcherAttributes.VelocitySlopeAboveKneeKmhPerLevel"/>=0.36
+    /// （issue velocity-kmh-mapping-flatten-top）＝上位では球速Lv1 の空振り価値が 0.36/0.47 に下がる（物理は km/h のまま）。
     /// </summary>
     public double StuffPerKmh { get; init; } = 0.128;
 

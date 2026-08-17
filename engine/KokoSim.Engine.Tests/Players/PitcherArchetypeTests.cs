@@ -89,7 +89,8 @@ public sealed class PitcherArchetypeTests
         var top = PitcherAttributes.VelocityKmhFromLevel(99);
 
         Assert.InRange(lo, 112, 122);    // 弱小校の投手
-        Assert.InRange(top, 152, 158);   // 全国級の剛腕
+        // 全国級の剛腕: 149〜151（issue velocity-kmh-mapping-flatten-top で 155→149.6。甲子園の 150+ は年に数人）
+        Assert.InRange(top, 148, 152);
         // 上限に張り付かず最上位帯でも差が残る（旧式は Lv80 以上が全部155で潰れていた）。
         Assert.True(PitcherAttributes.VelocityKmhFromLevel(99) > PitcherAttributes.VelocityKmhFromLevel(85));
         Assert.True(PitcherAttributes.VelocityKmhFromLevel(85) > PitcherAttributes.VelocityKmhFromLevel(70));
