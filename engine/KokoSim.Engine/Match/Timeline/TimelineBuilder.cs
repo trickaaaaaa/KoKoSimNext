@@ -612,11 +612,37 @@ public static class TimelineBuilder
                 // 採るので、絵の出足が判定より遅いと守備の巧い野手ほど体が球に届かない絵になる。
                 var reaction = isBallFielder ? Math.Min(0.35, fielder.Attributes.ReactionDelaySeconds) : 0.35;
                 var t0 = diveEnd is not null ? Math.Max(ContactAt + reaction, diveT1 + 0.1) : ContactAt + reaction;
-                var t1 = t0 + dist / speed;
+
+                // 急ぎ度（issue fielder-leg-speed-by-distance）: 全レッグを「距離÷脚力」で切ると、2m 寄るだけの
+                // 二塁手も送球を受けに塁へ寄る一塁手も余裕のある飛球の中堅手も全員が全力疾走になる
+                // （実測 501 レッグの巡航が全部 8.3〜8.8 m/s）。急がない移動＝塁カバー／バックアップ／中継／
+                // 余裕のあるフライは<b>期限から逆算した必要速度</b>で走らせる（上限は脚力＝間に合わない移動は
+                // 従来どおり全力、下限は小走り）。着く時刻は期限＝判定の秒より前で、判定はこのレッグを読まない
+                // （表示専用・帯不変）。期限: 塁カバー＝その塁への送球到達の少し前／バックアップ・中継＝決着／
+                // 余裕のあるフライ＝捕球の少し前（落下点で待ち構える）。
+                double? paceDeadline = null;
+                if (isBallFielder)
+                {
+                    if (play.IsFly && play.Result == BattedBallResult.Out) paceDeadline = fieldedAt - FlySettleSeconds;
+                }
+                else if (task == FielderTask.CoverBase)
+                {
+                    paceDeadline = (ThrowArriveAtBase(ball, a.Target) ?? resolvedAt) - CoverSetSeconds;
+                }
+                else if (task is FielderTask.Backup or FielderTask.Cutoff)
+                {
+                    paceDeadline = resolvedAt;
+                }
+                var pace = speed;
+                if (paceDeadline is { } dl && dl - t0 > 1e-6)
+                {
+                    pace = Math.Min(speed, Math.Max(EasyPaceMinMps, dist / (dl - t0)));
+                }
+                var t1 = t0 + dist / pace;
                 if (isBallFielder)
                 {
                     (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
-                    to = StopWithinReach(moveFrom, to, speed * (t1 - t0), fielderReachM);
+                    to = StopWithinReach(moveFrom, to, pace * (t1 - t0), fielderReachM);
                     if (a.Position == FieldPosition.FirstBase) firstBaseFieldEnd = to; // アンアシスト運びの起点（#400）
                 }
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
@@ -2301,6 +2327,29 @@ public static class TimelineBuilder
 
     /// <summary>実捕球者の移動レッグの最短表示長[s]（瞬間移動に見せないための下限）。</summary>
     private const double MinFieldLegSeconds = 0.12;
+
+    /// <summary>急がない移動の最低ペース[m/s]（小走り。issue fielder-leg-speed-by-distance）。これより遅くは
+    /// 走らせない＝期限が遠くても歩き以下にならず、着いたら待つ。</summary>
+    private const double EasyPaceMinMps = 2.0;
+
+    /// <summary>余裕のあるフライで落下点に着いておく、捕球からの猶予[s]（同上）。</summary>
+    private const double FlySettleSeconds = 0.5;
+
+    /// <summary>塁カバーで送球到達より前に着いておく猶予[s]（同上）。</summary>
+    private const double CoverSetSeconds = 0.4;
+
+    /// <summary>その塁へ向かう送球（<see cref="BallSegment.ToBase"/>）の到達時刻。無ければ null。</summary>
+    private static double? ThrowArriveAtBase(IReadOnlyList<BallSegment> ball, string? baseName)
+    {
+        if (baseName is null) return null;
+        double? arrive = null;
+        foreach (var b in ball)
+        {
+            if (b.Kind != BallSegmentKind.Throw || b.ToBase != baseName) continue;
+            if (arrive is null || b.T1 < arrive) arrive = b.T1;
+        }
+        return arrive;
+    }
 
     /// <summary>守備位置の日本語呼称（実況・結果表示用）。</summary>
     private static string PositionName(FieldPosition p) => p switch
