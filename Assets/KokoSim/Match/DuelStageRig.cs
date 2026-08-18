@@ -142,6 +142,11 @@ namespace KokoSim.Unity.Match
         // 頭出しが負になる速度でも面通過は球からずれない（SetSwing のカウントダウン開始）＝
         // つまみの全域 0.5〜3.0 が安全（issue #368）
         public float SwingSpeed;            // 1=収録のまま。スイング系の一発物にだけ掛かる
+        // 足上げ〜トップ（振り出しの手前まで＝クリップ 0.925s まで）の再生倍率（issue batter-timing-load-earlier, 2026-08-18）。
+        // SwingSpeed(2.0) を足上げにも掛けると脚を上げてから振り出すまでが 0.4s しか無く、リリース直前にしか
+        // タイミングを取り始められない（実物は投手の踏み出し〜リリースの 0.3〜0.4s 前から足を上げ、接地→振り出し）。
+        // 区間ごとの一様倍率＝各区間の内部緩急は保つ（キーの打ち直しではない）。振り出し以降は SwingSpeed。
+        public float LoadSpeed;             // 1=収録のまま。足上げ〜トップにだけ掛かる
         // ---- バットの置き方（AlignBat）----
         // 握りが直った今は「両手を結んだ線＝バットの軸」がそのまま使える。旧実装は両手が23cm開いて
         // 拳が積み重ならない収録を前提に、ヨーだけ実測して仰角を決め打ちしていた（合成軸）。
@@ -226,7 +231,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 24;
+        private const int CurrentVersion = 25;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -339,6 +344,9 @@ namespace KokoSim.Unity.Match
             // 実物のスイング（振り出し→接触 0.15〜0.20s）より速いが、**実寸に合わせるだけでは
             // 絵として遅い**というのが監督判断。12fps のポーズが2コマを切るのは承知の上
             SwingSpeed = 2.0f,
+            // 足上げ(0.15)→振り出し(0.925) 0.775 クリップ秒を 1.2 倍で 0.65s＝実物の足上げ〜接地（0.5〜0.7s）相当。
+            // 到達 0.45s の球で、足上げがリリースの約 0.35s 前から始まる（PreLoad）
+            LoadSpeed = 1.2f,
             // 旧0.154（＝ほぼ合成軸）。自作Rokokoは両手が開いて拳が積み重ならない収録だったので
             // 実測線が使えなかったが、Mixamoは元からバットを両手で握った収録なので実測線が素直に使える。
             // 0.154のままだと合成軸の仰角35.7°が頭の方向へ立ち上がり、構えでバットが顔を貫く（2026-07-30 絵で確認）
@@ -584,6 +592,10 @@ namespace KokoSim.Unity.Match
             {
                 c.BuntYawDeg = d.BuntYawDeg;
                 c.BuntTransitionYawDeg = d.BuntTransitionYawDeg;
+            }
+            if (c.Version < 25)   // v25: 足上げ〜トップの再生倍率（issue batter-timing-load-earlier・新項目）
+            {
+                c.LoadSpeed = d.LoadSpeed;
             }
             c.Version = CurrentVersion;
             return c;
@@ -1061,6 +1073,10 @@ namespace KokoSim.Unity.Match
             // 速度を入れたら**アンカーの逆算も実秒→クリップ秒へ換算し直す**こと（Speed倍する）。
             // 忘れると面通過が球の到達からずれ、絵では「差し替えたら合わなくなった」としか見えない
             public float Speed = 1f;
+            /// <summary>このクリップ秒に達したら <see cref="Speed"/> を <see cref="SpeedAfterSwitch"/> へ切り替える
+            /// （負＝切替なし）。跨ぐコマは切替点で分けて積分する＝境目の誤差を出さない（打者の足上げ→振り出し）。</summary>
+            public float SpeedSwitchAt = -1f;
+            public float SpeedAfterSwitch = 1f;
             public float HoldSeconds;                // 末尾到達時、待機へ戻る前にそのポーズで止める秒数（0=即戻る）
             public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
             public Material RegionMat;               // 領域塗り分けマテリアル（攻守交代の塗り替え用。一色フォールバック時はnull）
@@ -1703,6 +1719,9 @@ namespace KokoSim.Unity.Match
         private float _swingPendingEndAt;           // 予約中の打ち切り[クリップ秒]
         private float _swingPendingHold;            // 予約中の据え置き[秒]（SwingFinishHoldSeconds）
         private bool _swingPendingIsLoad;           // 予約がスイングでなく見逃しのタイミング取り（TakeLoad）か
+        private float _preLoadCountdown = -1f;      // 足上げ（PreLoad）開始まで（プレー時間秒。負=予約なし）
+        private float _preLoadStartClip;            // PreLoad の頭出し位置[クリップ秒]
+        private bool _batterPreLoaded;              // 足上げを先に始めていて、リリースで結果に合わせて倍率を決め直す待ち
         private bool _batterTakeLoad;               // いま打者が見逃しのタイミング取り（振らない頭出し）中か
         private bool _batterTakeLoadReturning;      // タイミング取りのトップ→構えへ戻るクロスフェード中か（バット軸を凍結する）
 
@@ -1722,6 +1741,94 @@ namespace KokoSim.Unity.Match
             CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
             GroundFix(_pitcher);
             _pitcher.Speed = 1f;   // 采配窓の静止を解いて等速再生を始める
+            SchedulePreLoad(WindupSeconds);   // 打者の足上げはリリースの前から（issue batter-timing-load-earlier）
+        }
+
+        /// <summary>
+        /// 打者の足上げ（PreLoad）を「次のリリースの lead 秒前」に予約する（issue batter-timing-load-earlier）。
+        /// lead ＝ 足上げ(<see cref="TakeLoadStartSec"/>)→振り出し(<see cref="TakeLoadStopSec"/>) を LoadSpeed で再生する実秒 −
+        /// （典型の到達時間 − 前足接地の先行 <see cref="TakeLoadLeadSeconds"/>）。到達 0.45s・LoadSpeed 1.2 なら
+        /// リリースの約 0.35s 前から足が上がり、リリース後 0.30s で前足が着く（＝実物の間合い）。
+        /// lead が次のリリースまでに収まらないときは足上げ開始を遅らせる（頭出しを後ろへ＝足上げの途中から）。
+        /// </summary>
+        private void SchedulePreLoad(float releaseIn)
+        {
+            _preLoadCountdown = -1f;
+            if (_batter == null || _swingMissClip == null || releaseIn <= 0.05f) return;
+            float kLoad = Mathf.Max(0.1f, _cal.LoadSpeed);
+            float loadReal = (TakeLoadStopSec - TakeLoadStartSec) / kLoad;
+            float lead = loadReal - (PreLoadAssumedFlightSeconds - TakeLoadLeadSeconds);
+            lead = Mathf.Clamp(lead, 0f, releaseIn - 0.05f);
+            _preLoadStartClip = Mathf.Max(0f,
+                TakeLoadStopSec - kLoad * (lead + PreLoadAssumedFlightSeconds - TakeLoadLeadSeconds));
+            _preLoadCountdown = releaseIn - lead;
+        }
+
+        /// <summary>
+        /// PreLoad の発火。打者が待機中（バント構えでも一発物の途中でもない）なら足上げ〜トップを LoadSpeed で始める。
+        /// 止める形・据え置きは見逃しと同じ（リリースで振ると決まれば <see cref="SetSwing"/> が倍率と打ち切りを差し替える）。
+        /// </summary>
+        private void StartPreLoad()
+        {
+            if (_batter == null || _swingMissClip == null || _batterBunting) return;
+            bool idle = _batter.Clip == _batter.IdleClip && Mathf.Approximately(_batter.EndAt, _batter.IdleEndAt)
+                        && _batter.HoldRemaining <= 0f && _swingCountdown < 0f;
+            if (!idle) return;
+            StartSwing(_swingMissClip, TakeLoadStopSec, _preLoadStartClip, TakeLoadStopSec,
+                Mathf.Max(0.1f, _cal.LoadSpeed), TakeLoadHoldSeconds, isLoad: true);
+            _batterPreLoaded = true;
+        }
+
+        /// <summary>
+        /// PreLoad 中の打者を、リリースで確定した結果と飛翔時間に合わせて**倍率だけ**決め直す（頭出しし直さない）。
+        /// 見逃し: 振り出しの手前 S(<see cref="TakeLoadStopSec"/>) を <paramref name="timeToAnchor"/> 後に置く。
+        /// スイング: S までを LoadSpeed 側の倍率で、S から接触までを SwingSpeed で（区間の切替は StepActor が跨ぎを分けて積分）。
+        /// 倍率が LoadSpeed/SwingSpeed の 0.5〜2.5 倍に収まらない（＝予測から大きく外れた）ときは false＝従来の頭出しへ落とす。
+        /// </summary>
+        private bool TryRetimePreLoaded(float anchorClipSec, float timeToAnchor, float endAt, float hold, bool isLoad)
+        {
+            if (!_batterPreLoaded || _batter == null || _batter.Clip != _swingMissClip) return false;
+            if (_batter.HoldRemaining > 0f || timeToAnchor <= 0.03f) return false;
+            float T = _batter.Time;
+            if (T >= anchorClipSec - 1e-3f) return false;
+            float S = TakeLoadStopSec;
+            float kLoad = Mathf.Max(0.1f, _cal.LoadSpeed);
+            float kSwing = Mathf.Max(0.1f, _cal.SwingSpeed);
+            bool Ok(float k, float nominal) => k >= 0.5f * nominal && k <= 2.5f * nominal;
+
+            float speed, switchAt = -1f, after = kSwing;
+            if (isLoad || T >= S)
+            {
+                // 単一区間: 残りを timeToAnchor で
+                float nominal = isLoad ? kLoad : kSwing;
+                speed = (anchorClipSec - T) / timeToAnchor;
+                if (!Ok(speed, nominal)) return false;
+            }
+            else
+            {
+                // 二区間: S→接触は SwingSpeed のまま、足上げ側の倍率で帳尻を合わせる
+                float tail = (anchorClipSec - S) / kSwing;
+                float tLoad = timeToAnchor - tail;
+                if (tLoad <= 0.03f) return false;
+                speed = (S - T) / tLoad;
+                if (!Ok(speed, kLoad)) return false;
+                switchAt = S;
+            }
+            _batter.Speed = speed;
+            _batter.SpeedSwitchAt = switchAt;
+            _batter.SpeedAfterSwitch = after;
+            _batter.EndAt = endAt;
+            _batter.HoldSeconds = hold;
+            _batter.HoldRemaining = 0f;
+            _swingAnchorClip = isLoad ? 0f : anchorClipSec;
+            _batTrailSwing = !isLoad;
+            _batterTakeLoad = isLoad;
+            _batterTakeLoadReturning = false;
+            _batWrapValid = false;
+            _batRestValid = false;
+            _batterPreLoaded = false;
+            _swingCountdown = -1f;
+            return true;
         }
 
         /// <summary>
@@ -1772,6 +1879,8 @@ namespace KokoSim.Unity.Match
             _swingPendingIsLoad = false;
             _batterTakeLoad = false;
             _batterTakeLoadReturning = false;
+            _preLoadCountdown = -1f;
+            _batterPreLoaded = false;
             ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
             if (_pitcher != null)
@@ -1880,6 +1989,14 @@ namespace KokoSim.Unity.Match
         private const float TakeLoadLeadSeconds = 0.15f;
         /// <summary>止めた形（トップ）を据え置く秒数。捕球と判定が出るまで持たせてから構えへ戻す。</summary>
         private const float TakeLoadHoldSeconds = 0.45f;
+        /// <summary>足上げが始まるクリップ秒（実測表の「足上げ開始」）。PreLoad はここから再生する。</summary>
+        private const float TakeLoadStartSec = 0.15f;
+        /// <summary>
+        /// PreLoad（issue batter-timing-load-earlier）: 足上げは**リリースの前**から始める。結果（振る/見逃す）と
+        /// 飛翔時間はリリースまで分からないので、典型の到達時間でタイミングを組み、リリースで実際の飛翔時間に合わせて
+        /// 再生倍率だけ決め直す（頭出しし直さない＝絵が飛ばない）。
+        /// </summary>
+        private const float PreLoadAssumedFlightSeconds = 0.45f;
 
         /// <summary>
         /// バント（issue #490）の面通過・当てのクリップ内時刻。<see cref="SwingMissPlane"/>/
@@ -2193,10 +2310,12 @@ namespace KokoSim.Unity.Match
                 float preRoll = Mathf.Clamp(nextReleaseIn - FollowSeconds, 0.5f, WindupSeconds);
                 _cutCountdown = nextReleaseIn - preRoll;
                 _cutClipTime = ReleaseTime - preRoll;
+                SchedulePreLoad(nextReleaseIn);   // 次球の足上げも次のリリースの前から
             }
             else
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
+                _preLoadCountdown = -1f;
             }
             ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isStrike, isBuntAttempt,
                 isCalledStrikeout, pitch, batterSwung);
@@ -2293,7 +2412,10 @@ namespace KokoSim.Unity.Match
                     if (!_batterBunting) SetTakeLoad(flight);
                     break;
                 case DuelPitchOutcome.HitByPitch:
-                    SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
+                    // 足上げの途中（PreLoad）から死球へは姿勢差が大きいのでクロスフェードで繋ぐ
+                    if (_batterPreLoaded) CrossfadeActorToClip(_batter, _hbpClip, HbpReact - flight, 4.2f, 0.15f);
+                    else SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
+                    _batterPreLoaded = false;
                     break;
                 // NotCaught（暴投・捕逸・振り逃げ。issue #525）。打者が振ったかは分類でなく batterSwung が持つ
                 // ＝振り逃げ（ほぼ空振り三振）で打者のスイングが消えないようにする。見送りなら待機のまま
@@ -2331,6 +2453,9 @@ namespace KokoSim.Unity.Match
             bool isLoad = false)
         {
             if (_batter == null || clip == null) return;
+            // 足上げを先に始めている（PreLoad）なら頭出しし直さず倍率だけ合わせる（issue batter-timing-load-earlier）
+            if (clip == _swingMissClip && TryRetimePreLoaded(anchorClipSec, flight, endAt, hold, isLoad)) return;
+            _batterPreLoaded = false;
             float k = Mathf.Max(0.1f, _cal.SwingSpeed);
             float seek = anchorClipSec - flight * k;
             _swingCountdown = -1f;
@@ -2975,6 +3100,7 @@ namespace KokoSim.Unity.Match
             a.EndAt = endAt;
             a.HoldSeconds = 0f;      // 新しいクリップへの差し替えは保留中のホールド予約を打ち消す
             a.HoldRemaining = 0f;
+            a.SpeedSwitchAt = -1f;   // 倍率の切替予約も持ち越さない
             SeekActor(a, Mathf.Max(0f, seekTo));
         }
 
@@ -3006,6 +3132,13 @@ namespace KokoSim.Unity.Match
                     SetActorClip(_umpire, _pendingUmpireClip, _umpireCallStartAt, _umpireCallEndAt);
                     _umpire.Speed = UmpireCallPlaybackRate;   // SetActorClip の後（差し替えで持ち越さないため）
                 }
+            }
+
+            // 足上げ（PreLoad）の開始予約（リリースの前から。issue batter-timing-load-earlier）
+            if (_preLoadCountdown >= 0f)
+            {
+                _preLoadCountdown -= deltaTime;
+                if (_preLoadCountdown < 0f) StartPreLoad();
             }
 
             // スイングの開始予約（頭出しでは間に合わない速い再生用。issue #368）。
@@ -4352,7 +4485,20 @@ namespace KokoSim.Unity.Match
                 return;
             }
             float before = a.Time;
-            a.Time += step * a.Speed;
+            // 区間ごとの再生倍率（打者の足上げ→振り出し）。切替点を跨ぐコマは手前を旧倍率・先を新倍率で積分する
+            float adv = step * a.Speed;
+            if (a.SpeedSwitchAt > 0f && a.Time < a.SpeedSwitchAt)
+            {
+                float toSwitch = a.SpeedSwitchAt - a.Time;
+                if (adv >= toSwitch)
+                {
+                    float realLeft = step - toSwitch / Mathf.Max(0.01f, a.Speed);
+                    a.Speed = a.SpeedAfterSwitch;
+                    a.SpeedSwitchAt = -1f;
+                    adv = toSwitch + Mathf.Max(0f, realLeft) * a.Speed;
+                }
+            }
+            a.Time += adv;
             float end = a.EndAt > 0f && a.EndAt < a.Clip.length ? a.EndAt : a.Clip.length;
             if (a.Time >= end)
             {
@@ -4395,7 +4541,7 @@ namespace KokoSim.Unity.Match
             // 0.18秒遅れて出る＝「振りが遅くて球と合っていない」。倍率を上げても、それまでは
             // 「クリップを早く打ち切る」だけでポーズは常に1倍速だった。
             // グラフはアクター別なので、他の役（Speed=1）の見え方は変わらない
-            EvaluateWithMirrorFix(a, step * a.Speed);
+            EvaluateWithMirrorFix(a, adv);
             a.PoseAdvanced = true;
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
@@ -4431,10 +4577,11 @@ namespace KokoSim.Unity.Match
             // クリップ時刻の比較だけでは戻り動作を区別できないため、ここで明示的に下ろす
             if (a == _batter) _batTrailSwing = false;
             bool wasTakeLoad = a == _batter && _batterTakeLoad;
-            if (a == _batter) { _batterTakeLoad = false; _batterTakeLoadReturning = wasTakeLoad; }
+            if (a == _batter) { _batterTakeLoad = false; _batterTakeLoadReturning = wasTakeLoad; _batterPreLoaded = false; }
             a.Time = 0f;
             a.EndAt = a.DefaultEndAt;   // 投手は購入クリップ6.00sの尻尾を毎回切り落とす（既定0=末尾まで）
             a.Speed = 1f;               // 一発物の速度指定は持ち越さない（待機は常に収録の速さ）
+            a.SpeedSwitchAt = -1f;
             if (wasTakeLoad && a.IdleClip != null && a.Clip == a.IdleClip)
             {
                 // 見逃しのタイミング取り（トップで据え置き）→構え。構えが同じクリップの頭（IdleFromOwnClip=0）の
