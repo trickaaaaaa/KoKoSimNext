@@ -110,13 +110,24 @@ public sealed record BattingCoefficients
     public double StuffPerKmh { get; init; } = 0.128;
 
     // --- 打球生成 ---
-    /// <summary>打球初速上限[km/h] の切片（パワー0相当）。設計書02は 100 + P×0.6 だが伸び不足のため係数化。</summary>
-    public double ExitVeloInterceptKmh { get; init; } = 125.0;
+    /// <summary>
+    /// 打球初速上限[km/h] の切片（パワー0相当）。設計書02は 100 + P×0.6 だが伸び不足のため係数化。
+    /// issue homerun-rate-explodes-at-high-power（2026-08-18）: 旧 125+0.82P は P90 で 199 km/h（MLB全史最速級）・
+    /// P70 で 182 と上位が急峻で、B/A校同士の試合が 5〜10 本塁打/試合になっていた。P50 の 166 を固定したまま
+    /// 傾きを 0.50 へ寝かせる（141+0.50P: P30 156／P70 176／P90 186／P99 190.5）。P&lt;50 は +6 km/h 以内の差
+    /// （P30 150→156）で弱小校の本塁打はほぼ動かない。傾き 0.40 以下は強豪同士の打率が .20 に落ちる（安打も
+    /// 初速に依る）ので採らない。帯は本塁打率 1.4%／二塁打÷本塁打 3.5 へ再校正。
+    /// </summary>
+    public double ExitVeloInterceptKmh { get; init; } = 141.0;
     /// <summary>打球初速上限[km/h] のパワー1あたり係数。</summary>
-    public double ExitVeloPerPower { get; init; } = 0.82;
+    public double ExitVeloPerPower { get; init; } = 0.50;
 
-    /// <summary>コンタクト品質(0〜1)の平均（互角時）。issue #262 で打球が野手の間を抜けやすくなった分を 0.62→0.60 で吸収。</summary>
-    public double QualityMean { get; init; } = 0.60;
+    /// <summary>
+    /// コンタクト品質(0〜1)の平均（互角時）。issue #262 で打球が野手の間を抜けやすくなった分を 0.62→0.60 で吸収していたが、
+    /// issue homerun-rate-explodes-at-high-power（2026-08-18）で本塁打判定の正し＋初速上限の上位圧縮により本塁打が
+    /// 安打から抜けた分（AVG .253→.235〜.243＝帯の床）を 0.62 へ戻して補う（AVG .242〜.253＝改定前と同水準）。
+    /// </summary>
+    public double QualityMean { get; init; } = 0.62;
     /// <summary>コンタクト品質へのミート寄与((Contact−50)あたり)。</summary>
     public double QualityContactSlope { get; init; } = 0.0020;
     /// <summary>コンタクト品質の標準偏差。</summary>

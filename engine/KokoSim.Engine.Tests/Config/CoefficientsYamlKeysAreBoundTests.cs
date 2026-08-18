@@ -37,10 +37,37 @@ public sealed class CoefficientsYamlKeysAreBoundTests
             "data/coefficients.yaml に DTO 未束縛の鍵（YAML を編集しても効かない）:\n" + string.Join("\n", unbound));
     }
 
+    /// <summary>
+    /// data/balance-targets.yaml も同じ罠を踏む（実害 2026-08-18: <c>doubles_per_homerun</c> は規約変換だと
+    /// <c>doubles_per_home_run</c> になり束縛されず、帯を YAML でいくら動かしても C# 既定 1.30–2.60 が使われていた）。
+    /// <c>version</c> だけは束縛の要らないメタ鍵として除外する。
+    /// </summary>
+    [Fact]
+    public void EveryBalanceTargetsKey_HasADtoProperty()
+    {
+        var path = FindDataFile("balance-targets.yaml");
+        var yaml = new YamlStream();
+        using (var reader = new StreamReader(path)) yaml.Load(reader);
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+
+        var dtoType = typeof(BalanceTargetsLoader).GetNestedType("RootDto", BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("RootDto が見つからない");
+        var unbound = new List<string>();
+        Walk(root, dtoType, "", unbound);
+        unbound.Remove("version");
+
+        Assert.True(unbound.Count == 0,
+            "data/balance-targets.yaml に DTO 未束縛の鍵（YAML を編集しても効かない）:\n" + string.Join("\n", unbound));
+    }
+
     private static void Walk(YamlMappingNode node, Type dtoType, string path, List<string> unbound)
     {
+        // [YamlMember(Alias=…)] が付いていればその名前、無ければ規約変換（snake_case）で束縛される。
         var props = dtoType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .ToDictionary(p => UnderscoredNamingConvention.Instance.Apply(p.Name), p => p, StringComparer.Ordinal);
+            .ToDictionary(
+                p => p.GetCustomAttribute<YamlDotNet.Serialization.YamlMemberAttribute>()?.Alias
+                     ?? UnderscoredNamingConvention.Instance.Apply(p.Name),
+                p => p, StringComparer.Ordinal);
         foreach (var (k, v) in node.Children)
         {
             var key = ((YamlScalarNode)k).Value ?? "";

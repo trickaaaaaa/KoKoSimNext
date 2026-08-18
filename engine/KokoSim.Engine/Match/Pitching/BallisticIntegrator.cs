@@ -87,28 +87,56 @@ public static class BallisticIntegrator
         public readonly Vector3D LandingPosition;
         public readonly Vector3D LandingVelocity;
         public readonly double ApexHeightM;
+        /// <summary>
+        /// 空中でフェンス弧（水平距離 <c>fenceDistanceM</c>）を横切ったか（issue homerun-rate-explodes-at-high-power）。
+        /// 横切ったときだけ <see cref="FenceCrossSeconds"/>／<see cref="FenceCrossPosition"/>（Y＝**フェンス上での高さ**）／
+        /// <see cref="FenceCrossVelocity"/> が入る。本塁打は「着地距離≥フェンス距離」ではなく
+        /// **フェンス上での高さ≥フェンス高**で決める（頂点だけ高い低い当たりは柵の手前でフェンスに当たる）。
+        /// </summary>
+        public readonly bool CrossedFence;
+        public readonly double FenceCrossSeconds;
+        public readonly Vector3D FenceCrossPosition;
+        public readonly Vector3D FenceCrossVelocity;
         public GroundResult(double hangTime, Vector3D landing, Vector3D landingVelocity, double apex)
+            : this(hangTime, landing, landingVelocity, apex, false, 0.0, Vector3D.Zero, Vector3D.Zero) { }
+        public GroundResult(double hangTime, Vector3D landing, Vector3D landingVelocity, double apex,
+            bool crossedFence, double fenceCrossSeconds, Vector3D fenceCrossPosition, Vector3D fenceCrossVelocity)
         {
             HangTimeSeconds = hangTime;
             LandingPosition = landing;
             LandingVelocity = landingVelocity;
             ApexHeightM = apex;
+            CrossedFence = crossedFence;
+            FenceCrossSeconds = fenceCrossSeconds;
+            FenceCrossPosition = fenceCrossPosition;
+            FenceCrossVelocity = fenceCrossVelocity;
         }
     }
 
     /// <summary>
     /// 打球用: リリース（コンタクト点）から着地（Y=0）まで積分する。守備解決の幾何計算に使う（設計書01 §2⑥）。
     /// </summary>
+    /// <param name="fenceDistanceM">
+    /// フェンス弧の水平距離[m]（本塁中心）。有限値を渡すと、空中でこの距離を横切った瞬間の高さ・速度・時刻を
+    /// <see cref="GroundResult"/> に載せる（守備解決の本塁打／フェンス直撃判定用）。既定＝追跡しない。
+    /// 追跡は観測だけで積分そのものは変えない＝着地・頂点・滞空時間は引数の有無で1ビットも変わらない。
+    /// </param>
     public static GroundResult IntegrateToGround(
         Vector3D contactPoint,
         Vector3D initialVelocity,
         Vector3D spin,
         Aerodynamics aero,
-        double dt = 0.001)
+        double dt = 0.001,
+        double fenceDistanceM = double.PositiveInfinity)
     {
         var state = new State(contactPoint, initialVelocity);
         var time = 0.0;
         var apex = contactPoint.Y;
+        var trackFence = !double.IsInfinity(fenceDistanceM) && !double.IsNaN(fenceDistanceM) && fenceDistanceM > 0.0;
+        var crossed = false;
+        var crossAt = 0.0;
+        var crossPos = Vector3D.Zero;
+        var crossVel = Vector3D.Zero;
 
         const int maxSteps = 200_000;
         for (var step = 0; step < maxSteps; step++)
@@ -119,6 +147,21 @@ public static class BallisticIntegrator
                 apex = next.Position.Y;
             }
 
+            if (trackFence && !crossed)
+            {
+                var r0 = HorizontalRange(state.Position);
+                var r1 = HorizontalRange(next.Position);
+                if (r1 >= fenceDistanceM && r0 < fenceDistanceM)
+                {
+                    // 横切りの瞬間を1歩の中で線形補間（着地の補間と同じ流儀）。
+                    var frac = r1 > r0 ? (fenceDistanceM - r0) / (r1 - r0) : 1.0;
+                    crossed = true;
+                    crossPos = state.Position + (next.Position - state.Position) * frac;
+                    crossVel = state.Velocity + (next.Velocity - state.Velocity) * frac;
+                    crossAt = time + dt * frac;
+                }
+            }
+
             if (next.Position.Y <= 0.0 && next.Velocity.Y < 0.0)
             {
                 var y0 = state.Position.Y;
@@ -127,7 +170,12 @@ public static class BallisticIntegrator
                 var landing = state.Position + (next.Position - state.Position) * frac;
                 var vel = state.Velocity + (next.Velocity - state.Velocity) * frac;
                 var t = time + dt * frac;
-                return new GroundResult(t, landing, vel, apex);
+                // 着地の一歩の中でフェンス弧を横切った（着地点がちょうど柵の外）ケースは、横切りが着地より先。
+                if (crossed && crossAt > t)
+                {
+                    crossed = false;
+                }
+                return new GroundResult(t, landing, vel, apex, crossed, crossAt, crossPos, crossVel);
             }
 
             state = next;
@@ -136,6 +184,8 @@ public static class BallisticIntegrator
 
         throw new InvalidOperationException("打球が着地しませんでした（初期条件が異常です）。");
     }
+
+    private static double HorizontalRange(Vector3D p) => Math.Sqrt(p.X * p.X + p.Z * p.Z);
 
     private static State Rk4Step(State s, Vector3D spin, Aerodynamics aero, double dt)
     {

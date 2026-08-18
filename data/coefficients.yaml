@@ -95,9 +95,11 @@ batting:
   # 球速の約4倍」だったのを2倍まで詰める。平均三振率は whiff_intercept 側（−2.40→−2.52）で据え置き＝
   # 動くのは球速の配分だけ（atbat_10k の K% 帯は 21.7/22.6/22.7 で校正前と同値・帯不変）。
   stuff_per_kmh: 0.128
-  exit_velo_intercept_kmh: 125.0 # 打球初速上限の切片
-  exit_velo_per_power: 0.82      # パワー1あたり初速上限
-  quality_mean: 0.60             # コンタクト品質の平均（issue #262: 打球が散った分の得点増を吸収）
+  # 打球初速上限 = 切片 + パワー×傾き [km/h]。P50=166 を固定して上位を寝かせた（旧 125+0.82P は P90 で 199＝
+  # MLB全史最速級・B/A校の試合が 5〜10 本塁打/試合。issue homerun-rate-explodes-at-high-power, 2026-08-18）。
+  exit_velo_intercept_kmh: 141.0 # 打球初速上限の切片（P30 156／P70 176／P90 186）
+  exit_velo_per_power: 0.50      # パワー1あたり初速上限
+  quality_mean: 0.62             # コンタクト品質の平均（#262 で 0.62→0.60、本塁打判定の正しで安打が抜けた分を 0.62 へ戻す 2026-08-18）
   quality_contact_slope: 0.0020
   quality_sigma: 0.17
   launch_angle_at_lt1: -5.0      # 弾道1の平均打球角

@@ -37,9 +37,13 @@ public sealed class StadiumRegressionTests
         Assert.True(standard.HomeRunRate > wide.HomeRunRate,
             $"標準 HR% {standard.HomeRunRate:P2} ≤ 広 {wide.HomeRunRate:P2}");
 
-        // 長打率(SLG)も同順
-        Assert.True(narrow.Slugging > standard.Slugging && standard.Slugging > wide.Slugging,
+        // 長打率(SLG)は 狭 > 広（両端）。標準は両端の間（±0.01 の揺れは許す）。
+        // issue homerun-rate-explodes-at-high-power（2026-08-18）で本塁打が半減し、広い球場では本塁打が減る一方で
+        // 外野の間に落ちる二塁打・三塁打が増えるので、隣接ティア（標準 vs 広）の SLG 差は 40,000 打席でも
+        // 揺れ（実測 標準 .357 vs 広 .361）に埋もれる＝厳密な3段順序は本塁打が多かった頃の性質。
+        Assert.True(narrow.Slugging > wide.Slugging,
             $"SLG順序が崩れた: 狭{narrow.Slugging:F3} / 標準{standard.Slugging:F3} / 広{wide.Slugging:F3}");
+        Assert.InRange(standard.Slugging, wide.Slugging - 0.010, narrow.Slugging + 0.010);
 
         // 差は現実的な幅（隣接ティアで HR% 差 ≈±1%、全体でも数%に収まる）
         Assert.InRange(narrow.HomeRunRate - wide.HomeRunRate, 0.005, 0.05);

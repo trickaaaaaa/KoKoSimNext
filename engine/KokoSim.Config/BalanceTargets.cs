@@ -19,13 +19,13 @@ public sealed record BalanceTargets
 
     // ===== 長打の量と配分（Issue #24）。塁打数を幾何と走力から決めるようにした結果の帯 =====
     /// <summary>長打率 SLG。</summary>
-    public Band Slugging { get; init; } = new(0.380, 0.480);
+    public Band Slugging { get; init; } = new(0.340, 0.480);
     /// <summary>二塁打率（打席あたり）。</summary>
-    public Band DoubleRate { get; init; } = new(0.035, 0.058);
+    public Band DoubleRate { get; init; } = new(0.035, 0.065);
     /// <summary>三塁打率（打席あたり）。</summary>
     public Band TripleRate { get; init; } = new(0.002, 0.009);
     /// <summary>二塁打÷本塁打。長打の「種類の配分」が壊れていないことを直接見る指標（実野球はおよそ2〜2.5）。</summary>
-    public Band DoublesPerHomeRun { get; init; } = new(1.30, 2.60);
+    public Band DoublesPerHomeRun { get; init; } = new(2.00, 4.50);
 }
 
 /// <summary>Phase 2（試合）の許容帯。</summary>
@@ -68,7 +68,7 @@ public sealed record GameTacticsTargets
     // 1球采配（設計書15 Phase C-2）: 追い込まれ矯正/3-0待て/決め球切替の影響を最も受ける指標。
     public Band StrikeoutRate { get; init; } = new(0.16, 0.22);
     public Band WalkRate { get; init; } = new(0.06, 0.10);
-    public Band HomeRunRate { get; init; } = new(0.020, 0.036);
+    public Band HomeRunRate { get; init; } = new(0.010, 0.022);
 }
 
 /// <summary>
@@ -139,10 +139,10 @@ public static class BalanceTargetsLoader
             StrikeoutRate = a.StrikeoutRate!.ToBand(),
             WalkRate = a.WalkRate!.ToBand(),
             HomeRunRate = a.HomeRunRate!.ToBand(),
-            Slugging = a.Slugging?.ToBand() ?? new Band(0.380, 0.480),
-            DoubleRate = a.DoubleRate?.ToBand() ?? new Band(0.035, 0.058),
+            Slugging = a.Slugging?.ToBand() ?? new Band(0.340, 0.480),
+            DoubleRate = a.DoubleRate?.ToBand() ?? new Band(0.035, 0.065),
             TripleRate = a.TripleRate?.ToBand() ?? new Band(0.002, 0.009),
-            DoublesPerHomeRun = a.DoublesPerHomeRun?.ToBand() ?? new Band(1.30, 2.60),
+            DoublesPerHomeRun = a.DoublesPerHomeRun?.ToBand() ?? new Band(2.00, 4.50),
         };
     }
 
@@ -202,7 +202,7 @@ public static class BalanceTargetsLoader
             DoubleStealThirdBreakPerGame = g.DoubleStealThirdBreakPerGame?.ToBand() ?? new Band(0.0, 0.05),
             StrikeoutRate = g.StrikeoutRate?.ToBand() ?? new Band(0.16, 0.22),
             WalkRate = g.WalkRate?.ToBand() ?? new Band(0.06, 0.10),
-            HomeRunRate = g.HomeRunRate?.ToBand() ?? new Band(0.020, 0.036),
+            HomeRunRate = g.HomeRunRate?.ToBand() ?? new Band(0.010, 0.022),
         };
     }
 
@@ -302,6 +302,9 @@ public static class BalanceTargetsLoader
         public BandDto? Slugging { get; set; }
         public BandDto? DoubleRate { get; set; }
         public BandDto? TripleRate { get; set; }
+        // YAML 鍵は doubles_per_homerun（UnderscoredNamingConvention だと doubles_per_home_run になり束縛されず、
+        // C#既定 1.30–2.60 が黙って使われていた。2026-08-18 に本塁打帯の再校正で発覚）。
+        [YamlMember(Alias = "doubles_per_homerun")]
         public BandDto? DoublesPerHomeRun { get; set; }
     }
 

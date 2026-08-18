@@ -204,13 +204,27 @@ public static class FieldingResolver
             };
         }
 
+        var bearingRad = ball.BearingDeg * Math.PI / 180.0;
+        var fenceDist = field.FenceDistance(bearingRad);
         var ground = BallisticIntegrator.IntegrateToGround(
-            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero);
+            ball.ContactPoint(), ball.InitialVelocity(), ball.SpinVector(), aero, fenceDistanceM: fenceDist);
+
+        // 本塁打: **フェンス上での高さ**がフェンス高以上（issue homerun-rate-explodes-at-high-power）。
+        // 旧判定「着地距離≥フェンス距離 かつ 頂点≥フェンス高」は、柵の0〜6m先に落ちる低い当たり
+        // （フェンス上では 4m に届かない）まで本塁打にしていた（実測: 本塁打の41%）。
+        var clearsFence = ground.CrossedFence && ground.FenceCrossPosition.Y >= field.FenceHeightM;
+        // フェンス直撃（空中で柵に届いたが越えない）: 打球はそこで落ちる。着地＝フェンス弧上の点・
+        // 着地時刻＝到達時刻・着地速度＝到達時の速度（転がりモデルはフェンス到達＝距離0で跳ね返り待ちに入る）。
+        // 積分結果を柵で打ち切るだけ＝乱数不使用。
+        if (ground.CrossedFence && !clearsFence)
+        {
+            var hit = ground.FenceCrossPosition;
+            ground = new BallisticIntegrator.GroundResult(
+                ground.FenceCrossSeconds, new Vector3D(hit.X, 0.0, hit.Z), ground.FenceCrossVelocity, ground.ApexHeightM);
+        }
 
         var landing = ground.LandingPosition;
-        var bearingRad = ball.BearingDeg * Math.PI / 180.0;
         var range = Math.Sqrt(landing.X * landing.X + landing.Z * landing.Z);
-        var fenceDist = field.FenceDistance(bearingRad);
 
         // 4分類のうち「空を飛ぶ側」（Issue #63 (b)）。頂点÷水平到達距離が小さい＝低い弾道＝ライナー。
         // 地上側（ゴロ/バウンド）は内野ゴロ経路でバウンド積分の結果から決める。
@@ -234,8 +248,8 @@ public static class FieldingResolver
             Class = airClass,
         };
 
-        // 本塁打: フェンス距離を越えて着地し、かつ壁を越える高さで飛んでいる。
-        if (range >= fenceDist && ground.ApexHeightM >= field.FenceHeightM)
+        // 本塁打（上の clearsFence）。着地点は柵の外＝本塁打らしく飛んでいく絵のまま。
+        if (clearsFence)
         {
             return Base(BattedBallResult.HomeRun);
         }
