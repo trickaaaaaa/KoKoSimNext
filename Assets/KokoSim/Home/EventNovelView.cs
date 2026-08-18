@@ -19,9 +19,8 @@ namespace KokoSim.Unity.Home
     public sealed class EventNovelView
     {
         private readonly VisualElement _root;       // ev-novel
-        private readonly VisualElement _portrait, _effect, _effectItems;
+        private readonly VisualElement _portrait;
         private readonly Label _eyebrow, _role, _speaker, _say, _progress, _hint;
-        private readonly Label _fxSubject, _fxDetail;
         private readonly System.Action _onClosed;
         private readonly EventCallback<PointerDownEvent> _click;
 
@@ -39,10 +38,6 @@ namespace KokoSim.Unity.Home
             _say = root?.Q<Label>("ev-say");
             _progress = root?.Q<Label>("ev-progress");
             _hint = root?.Q<Label>("ev-hint");
-            _effect = root?.Q<VisualElement>("ev-effect");
-            _effectItems = root?.Q<VisualElement>("ev-fx-items");
-            _fxSubject = root?.Q<Label>("ev-fx-subject");
-            _fxDetail = root?.Q<Label>("ev-fx-detail");
 
             _click = _ => Advance();
             if (_root != null) _root.RegisterCallback(_click);
@@ -71,7 +66,6 @@ namespace KokoSim.Unity.Home
             _event = next;
             _line = 0;
             _root.style.display = DisplayStyle.Flex;
-            RenderEffect();
             RenderLine();
             return true;
         }
@@ -96,73 +90,18 @@ namespace KokoSim.Unity.Home
             if (_onClosed != null) _onClosed();
         }
 
-        /// <summary>
-        /// 結果の帯（案A2）。<b>会話の1行目から出しっぱなし</b>にする＝最後まで読まないと結果が
-        /// 分からない作りにしない（読み飛ばしても何が起きたかは残る）。効果が無いイベントは帯ごと消す。
-        /// </summary>
-        private void RenderEffect()
-        {
-            var fx = _event?.Effect;
-            if (_effect == null) return;
-            if (fx == null)
-            {
-                // 中身も消す。残しておくと、帯を出さないイベントの上に前の結果の文字が残り、
-                // 表示ではなく<b>読み取り</b>（スクショ検証・デバッグ）で前の値を掴む。
-                _effect.style.display = DisplayStyle.None;
-                if (_fxSubject != null) _fxSubject.text = "";
-                if (_fxDetail != null) _fxDetail.text = "";
-                if (_effectItems != null) _effectItems.Clear();
-                return;
-            }
-            _effect.style.display = DisplayStyle.Flex;
-
-            if (_fxSubject != null)
-            {
-                _fxSubject.text = fx.Subject ?? "";
-                _fxSubject.style.display = string.IsNullOrEmpty(fx.Subject) ? DisplayStyle.None : DisplayStyle.Flex;
-            }
-            if (_fxDetail != null) _fxDetail.text = fx.Detail ?? "";
-
-            if (_effectItems == null) return;
-            _effectItems.Clear();
-            foreach (var item in fx.Items) _effectItems.Add(BuildItem(item));
-        }
-
-        // 「離脱 2 週」。数字だけ Oswald に載せ、和文の単位は別 Label にする（Oswald は欧文専用）。
-        private static VisualElement BuildItem(EffectItem item)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("ev__fx-item");
-            if (!string.IsNullOrEmpty(item.Label))
-            {
-                var k = new Label(item.Label);
-                k.AddToClassList("ev__fx-k");
-                row.Add(k);
-            }
-            var v = new Label(item.Value);
-            v.AddToClassList("ev__fx-v");
-            v.AddToClassList("f-num-bd");
-            row.Add(v);
-            if (!string.IsNullOrEmpty(item.Unit))
-            {
-                var u = new Label(item.Unit);
-                u.AddToClassList("ev__fx-u");
-                row.Add(u);
-            }
-            return row;
-        }
-
         private void RenderLine()
         {
             var line = _event.Lines[_line];
             var narration = EventRoles.IsNarration(line.Who);
+            var result = EventRoles.IsResult(line.Who);
 
             if (_eyebrow != null) _eyebrow.text = "今週の出来事";
 
-            // 立ち絵。地の文は話者が居ないのでスロットごと消す（空の枠を残すと「絵が抜けている」ように見える）。
+            // 立ち絵。地の文・結果行は話者が居ないのでスロットごと消す（空の枠を残すと「絵が抜けている」ように見える）。
             if (_portrait != null)
             {
-                _portrait.EnableInClassList("ev-por--none", narration);
+                _portrait.EnableInClassList("ev-por--none", narration || result);
                 if (_role != null) _role.text = EventPortraits.RoleLabel(line.Who);
             }
 
@@ -175,6 +114,13 @@ namespace KokoSim.Unity.Home
             {
                 _say.text = line.Say ?? "";
                 _say.EnableInClassList("ev__say--narration", narration);
+                // 結果行（監督指示 2026-08-19）: 太字＋色で会話の中に「誰の・何が・いくつ」を言い切る。
+                // 色は通知フィードの Up/Warn と同じ意味づけ（吉報＝空の青／凶報＝警告色）。
+                // 太字は実ウェイト（.f-body-bd）で出す＝疑似ボールド禁止（設計書16）。
+                var bad = result && _event.Effect != null && _event.Effect.Tone == EffectTone.Bad;
+                _say.EnableInClassList("ev__say--result", result);
+                _say.EnableInClassList("ev__say--result-bad", bad);
+                _say.EnableInClassList("f-body-bd", result);
             }
 
             // 何行の会話の何行目か（残りが見えないと読み飛ばしていいのか判断できない）。

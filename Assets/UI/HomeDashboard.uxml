@@ -181,13 +181,9 @@
             <ui:Label name="ev-progress" class="ev__progress f-num" text="" />
             <ui:Label name="ev-hint" class="ev__hint" text="クリックで次へ" />
           </ui:VisualElement>
-
-          <!-- 結果の帯（案A2）。会話で何が起きたかを語り、数値はここに置く。中身は動的生成。 -->
-          <ui:VisualElement name="ev-effect" class="ev__fx">
-            <ui:Label name="ev-fx-subject" class="ev__fx-sub f-display" text="" />
-            <ui:Label name="ev-fx-detail" class="ev__fx-det" text="" />
-            <ui:VisualElement name="ev-fx-items" class="ev__fx-items" />
-          </ui:VisualElement>
+          <!-- 結果（誰の・何が・いくつ）は右下の帯でなく会話の最終行＝結果行（USS の ev__say の result 修飾）で出す
+               （2026-08-19 監督指示。旧・案A2 の帯 ev-effect は廃止）。XMLコメント内に二重ハイフンを書くと
+               UXML の取り込みが黙って空になる（画面が丸ごと消える）ので、クラス名をそのまま書かない。 -->
         </ui:VisualElement>
       </ui:VisualElement>
 

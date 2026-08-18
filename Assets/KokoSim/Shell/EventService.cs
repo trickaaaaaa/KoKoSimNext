@@ -16,7 +16,10 @@ namespace KokoSim.Unity.Shell
         public string Say;
     }
 
-    /// <summary>効果帯の1項目（「離脱 2 週」）。数値と単位は Oswald と和文で Label を分ける（書体3役）。</summary>
+    /// <summary>
+    /// 動いた項目1つ（「全治 2 週」「采配 ＋2」）。通知フィードの文と結果行を<b>同じ材料</b>から組む
+    /// ための小片で、画面に直接は出ない（旧・効果帯の項目。帯は 2026-08-19 に廃止）。
+    /// </summary>
     public sealed class EffectItem
     {
         public string Label;
@@ -27,20 +30,38 @@ namespace KokoSim.Unity.Shell
         {
             Label = label; Value = value; Unit = unit;
         }
+
+        /// <summary>「采配 ＋2」「全治 2 週」の形。</summary>
+        public override string ToString()
+            => string.IsNullOrEmpty(Label) ? Value + Unit : Label + " " + Value + Unit;
     }
 
+    /// <summary>結果行の色分け（吉報＝空の青／凶報＝警告色。通知フィードの Up/Warn と同じ意味づけ）。</summary>
+    public enum EffectTone { Good, Bad }
+
     /// <summary>
-    /// 会話の下に出す「結果」（案A2・監督決定 2026-08-13）。<b>会話で何が起きたかを語り、
-    /// ここで数値を示す</b>＝本文に数字を埋め込まない（UI原則③）。null なら帯ごと出さない。
+    /// イベントの結果＝会話の<b>最終行に出す1文</b>（issue event-result-line-in-dialogue・監督指示 2026-08-19）。
+    /// 「{player} のミートが ＋5 上がった！」のように、誰の・何が・いくつ動いたかを会話の中で言い切る。
+    ///
+    /// <para>旧・案A2（会話で語り、数字は右下の帯へ）は撤回。帯は小さすぎて読まれなかった。
+    /// 文は効果を知っている呼び出し元（<see cref="GrowthEventText"/> 等の単一ソース）が、
+    /// 通知フィードの文と<b>同じ場所・同じ材料</b>で組む＝2箇所の数字が食い違わない。</para>
     /// </summary>
     public sealed class PresentedEffect
     {
-        /// <summary>主役（選手名・監督名）。空なら出さない。</summary>
-        public string Subject;
-        /// <summary>内容の言い切り（「右足首 捻挫（軽度）」）。空なら出さない。</summary>
-        public string Detail;
-        /// <summary>数値の並び（0件でもよい）。</summary>
-        public IReadOnlyList<EffectItem> Items = System.Array.Empty<EffectItem>();
+        /// <summary>結果の1文（空なら結果行を出さない）。</summary>
+        public string Sentence;
+        /// <summary>色分け（既定＝吉報）。</summary>
+        public EffectTone Tone = EffectTone.Good;
+
+        public static PresentedEffect Good(string sentence)
+            => new PresentedEffect { Sentence = sentence, Tone = EffectTone.Good };
+
+        public static PresentedEffect Bad(string sentence)
+            => new PresentedEffect { Sentence = sentence, Tone = EffectTone.Bad };
+
+        /// <summary>出すものがあるか。</summary>
+        public bool HasSentence => !string.IsNullOrEmpty(Sentence);
     }
 
     /// <summary>
@@ -52,8 +73,9 @@ namespace KokoSim.Unity.Shell
         public string Id;
         /// <summary>通知フィードに残す1行（差し込み語を展開済み）。</summary>
         public string FeedText;
+        /// <summary>会話（結果行 <see cref="EventRoles.Result"/> を含む＝提示層は足し直さない）。</summary>
         public IReadOnlyList<PresentedLine> Lines;
-        /// <summary>会話の下に出す結果（null＝帯を出さない）。</summary>
+        /// <summary>結果（null＝結果行なし）。色分けの参照用で、文そのものは <see cref="Lines"/> の末尾に入っている。</summary>
         public PresentedEffect Effect;
     }
 
@@ -113,12 +135,13 @@ namespace KokoSim.Unity.Shell
             foreach (var f in fired)
             {
                 var values = BuildValues();
+                var effect = ApplyEffect(f.Event.Effect, f.Event.Id, SubjectId(), SubjectName());
                 var e = new PresentedEvent
                 {
                     Id = f.Event.Id,
                     FeedText = EventTextFormat.Apply(f.Event.Text, values),
-                    Lines = ResolveLines(f.Script, values),
-                    Effect = ApplyEffect(f.Event.Effect, f.Event.Id, SubjectId()),
+                    Lines = WithResult(ResolveLines(f.Script, values), effect),
+                    Effect = effect,
                 };
                 _pending.Add(e);
                 _queuedThisWeek++;
@@ -169,50 +192,68 @@ namespace KokoSim.Unity.Shell
             {
                 Id = e.Id,
                 FeedText = EventTextFormat.Apply(e.Text, values),
-                Lines = ResolveLines(script, values),
+                Lines = WithResult(ResolveLines(script, values), effect),
                 Effect = effect,
             });
         }
 
         /// <summary>
-        /// イベントの効果を適用し、効果帯へ出す形にして返す（issue #613）。何も起こさないイベントは null。
+        /// イベントの効果を適用し、結果行の1文にして返す（issue #613）。何も起こさないイベントは null。
         ///
         /// <para><b>適用はここ1箇所</b>。財布（部費・施設基金）を持っているのは Shell なので、
         /// engine はデータ定義まで、実際に足し引きするのはここ、と分ける。部費が足りなくても
-        /// <b>マイナスにはしない</b>（払えないのに買えた、という状態を作らない）。</para>
+        /// <b>マイナスにはしない</b>（払えないのに買えた、という状態を作らない）。文は<b>実際に動いた量</b>で
+        /// 書く（下限で止まった分は出さない＝「−18万」と言って −5万しか引けていない嘘を作らない）。</para>
         /// </summary>
-        private static PresentedEffect ApplyEffect(EventEffect effect, string sourceId, int subjectId)
+        private static PresentedEffect ApplyEffect(EventEffect effect, string sourceId, int subjectId, string subjectName)
         {
             if (effect == null || effect.IsEmpty) return null;
 
             var m = ManagerService.Manager;
-            var items = new List<EffectItem>();
+            var parts = new List<string>();
+            var bad = false;
 
             if (effect.Funds != 0.0)
             {
                 var before = m.Funds;
                 m.Funds = System.Math.Max(0.0, m.Funds + effect.Funds);
-                items.Add(new EffectItem("部費", Signed(m.Funds - before), "万"));
+                var d = m.Funds - before;
+                parts.Add("部費 " + Signed(d) + " 万");
+                if (d < 0) bad = true;
             }
             if (effect.FacilityFund != 0.0)
             {
                 var before = m.FacilityFund;
                 m.FacilityFund = System.Math.Max(0.0, m.FacilityFund + effect.FacilityFund);
-                items.Add(new EffectItem("施設基金", Signed(m.FacilityFund - before), "万"));
+                var d = m.FacilityFund - before;
+                parts.Add("施設基金 " + Signed(d) + " 万");
+                if (d < 0) bad = true;
             }
             if (effect.HasTrainingBoost)
             {
                 // 対象が「主役の1人」なら選手Id、そうでなければ 0＝部全体（issue #615）。
                 var target = effect.TrainingTargetIsPlayer ? subjectId : 0;
                 TrainingBoostService.Add(sourceId, effect.TrainingMult, effect.TrainingWeeks, target);
-                items.Add(new EffectItem(
-                    effect.TrainingTargetIsPlayer ? "本人の練習効率" : "練習効率",
-                    Signed((effect.TrainingMult - 1.0) * 100.0), "%"));
-                items.Add(new EffectItem("期間", effect.TrainingWeeks.ToString(), "週"));
+                var whose = effect.TrainingTargetIsPlayer && !string.IsNullOrEmpty(subjectName)
+                    ? subjectName + " の練習効率"
+                    : "部全体の練習効率";
+                parts.Add(whose + " " + Signed((effect.TrainingMult - 1.0) * 100.0) + "%（" + effect.TrainingWeeks + " 週）");
+                if (effect.TrainingMult < 1.0) bad = true;
             }
-            if (items.Count == 0) return null;
+            if (parts.Count == 0) return null;
 
-            return new PresentedEffect { Subject = "", Detail = "", Items = items };
+            var sentence = string.Join("、", parts.ToArray()) + (bad ? "" : "！");
+            return bad ? PresentedEffect.Bad(sentence) : PresentedEffect.Good(sentence);
+        }
+
+        /// <summary>会話の末尾に結果行を1本足す（結果が無ければそのまま）。</summary>
+        private static IReadOnlyList<PresentedLine> WithResult(IReadOnlyList<PresentedLine> lines, PresentedEffect effect)
+        {
+            if (effect == null || !effect.HasSentence) return lines;
+            var list = new List<PresentedLine>(lines.Count + 1);
+            list.AddRange(lines);
+            list.Add(new PresentedLine { Who = EventRoles.Result, Name = "", Say = effect.Sentence });
+            return list;
         }
 
         // 全角の符号（半角にすると Oswald と混植になって高さが揃わない）。

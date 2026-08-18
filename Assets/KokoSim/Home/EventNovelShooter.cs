@@ -106,24 +106,18 @@ namespace KokoSim.Unity.Home
                 yield return Capture(doc, "92-feed-after");   // 通知フィードに要約行が残っていること
             }
 
-            // ── 効果帯（案A2・issue #610）──
+            // ── 結果行（issue #610・2026-08-19 に帯から会話の最終行へ）──
             // 故障は確率で起きるので、絵の確認だけは主役つき提示を直接叩いて確実に撮る。
             var subject = RosterService.Active.Count > 0 ? RosterService.Active[0] : null;
             if (subject != null)
             {
                 EventService.BeginWeek();
-                EventService.Push("injury_occurred", subject.Name, new PresentedEffect
-                {
-                    Subject = subject.Name,
-                    Detail = "右足首 捻挫（軽度）",
-                    Items = new[] { new EffectItem("全治", "2", "週") },
-                }, subject.Id);
+                EventService.Push("injury_occurred", subject.Name,
+                    PresentedEffect.Bad(subject.Name + " が右足首を捻挫（軽度）。全治 2 週"), subject.Id);
 
                 var home = Open("HomeDashboard");
                 yield return null; yield return null;
                 novel = home.rootVisualElement.Q<VisualElement>("ev-novel");
-                var band = home.rootVisualElement.Q<VisualElement>("ev-effect");
-                Debug.Log("[EV] effect band display=" + (band == null ? "null" : band.resolvedStyle.display.ToString()));
                 for (var i = 0; i < 6 && novel.resolvedStyle.display != DisplayStyle.None; i++)
                 {
                     yield return Capture(home, string.Format("A{0:00}-injury", i));
@@ -132,7 +126,7 @@ namespace KokoSim.Unity.Home
                 }
             }
 
-            // ── 成長イベントの効果帯（issue #611）──
+            // ── 成長イベントの結果行（issue #611）──
             // 覚醒・スランプは週あたり 0.15〜0.4% の低確率なので、絵の確認は主役つき提示を直接叩く。
             if (subject != null)
             {
@@ -174,12 +168,8 @@ namespace KokoSim.Unity.Home
                 var shot = 0;
                 for (var i = 0; i < 12 && nov4.resolvedStyle.display != DisplayStyle.None; i++)
                 {
-                    if (Text(doc3, "ev-fx-subject").Length > 0 || i == 0)
-                    {
-                        Debug.Log("[EV] 監督ノベル: " + Text(doc3, "ev-speaker") + " / " + Text(doc3, "ev-say")
-                            + " / 帯=" + Text(doc3, "ev-fx-subject") + " " + Text(doc3, "ev-fx-detail"));
-                        yield return Capture(doc3, string.Format("C{0:00}-manager", shot++));
-                    }
+                    Debug.Log("[EV] 監督ノベル: " + Text(doc3, "ev-speaker") + " / " + Text(doc3, "ev-say"));
+                    yield return Capture(doc3, string.Format("C{0:00}-manager", shot++));
                     Click(nov4);
                     yield return null; yield return null;
                 }
@@ -209,8 +199,7 @@ namespace KokoSim.Unity.Home
                 var shot = 0;
                 for (var i = 0; i < 14 && nov5.resolvedStyle.display != DisplayStyle.None; i++)
                 {
-                    Debug.Log("[EV] ドラフト: " + Text(doc4, "ev-speaker") + " / " + Text(doc4, "ev-say")
-                        + " / 帯=" + Text(doc4, "ev-fx-subject") + " " + Text(doc4, "ev-fx-detail"));
+                    Debug.Log("[EV] ドラフト: " + Text(doc4, "ev-speaker") + " / " + Text(doc4, "ev-say"));
                     yield return Capture(doc4, string.Format("D{0:00}-draft", shot++));
                     Click(nov5);
                     yield return null; yield return null;

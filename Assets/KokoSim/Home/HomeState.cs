@@ -203,7 +203,7 @@ namespace KokoSim.Unity.Home
         /// <b>`LastGrowthNotices` を誰も読んでおらず</b>、甲子園に行っても名将に負けても画面には何も出なかった。
         ///
         /// <para>発火が複数あっても<b>ノベルは年に1本</b>にする（節目ごとに会話を積むとクリックだけ増える）。
-        /// 会話は一番語る価値のある1件から選び、効果帯には<b>その年に動いた軸を全部</b>並べる
+        /// 会話は一番語る価値のある1件から選び、結果行には<b>その年に動いた軸を全部</b>並べる
         /// ＝実測の差分なので、選ばれなかった節目のぶんも数字には出る。</para>
         /// </summary>
         private void RunManagerGrowthFeed()
@@ -228,12 +228,7 @@ namespace KokoSim.Unity.Home
             KokoSim.Unity.Shell.EventService.Push(
                 ManagerGrowthText.EventId(lead),
                 KokoSim.Unity.Shell.ManagerService.Manager.Name,
-                delta.IsEmpty ? null : new KokoSim.Unity.Shell.PresentedEffect
-                {
-                    Subject = KokoSim.Unity.Shell.ManagerService.Manager.Name,
-                    Detail = ManagerGrowthText.Title(lead),
-                    Items = delta.ToItems(),
-                });
+                ManagerGrowthText.Effect(delta));
         }
 
         /// <summary>
@@ -371,11 +366,9 @@ namespace KokoSim.Unity.Home
                     });
                     // 候補入りはノベルで見せる（issue #617）。名前が世に出た瞬間はキャリアの節目。
                     KokoSim.Unity.Shell.EventService.Push("draft_candidate", c.Name,
-                        new KokoSim.Unity.Shell.PresentedEffect
-                        {
-                            Subject = c.Name,
-                            Detail = "ドラフト候補入り（" + DraftRankBands.Label(c.To) + "）",
-                        }, c.PlayerId);
+                        KokoSim.Unity.Shell.PresentedEffect.Good(
+                            c.Name + " がドラフト候補に入った（" + DraftRankBands.Label(c.To) + "）！"),
+                        c.PlayerId);
                     continue;
                 }
 
@@ -384,11 +377,10 @@ namespace KokoSim.Unity.Home
                 if (c.Improved)
                 {
                     KokoSim.Unity.Shell.EventService.Push("draft_scout_visit", c.Name,
-                        new KokoSim.Unity.Shell.PresentedEffect
-                        {
-                            Subject = c.Name,
-                            Detail = "評価 " + DraftRankBands.Label(c.From) + " → " + DraftRankBands.Label(c.To),
-                        }, c.PlayerId);
+                        KokoSim.Unity.Shell.PresentedEffect.Good(
+                            c.Name + " のドラフト評価が " + DraftRankBands.Label(c.From) + " → "
+                            + DraftRankBands.Label(c.To) + " に上がった！"),
+                        c.PlayerId);
                 }
                 // 圏外へ落ちたときは「圏外」ではなく、候補から外れたことを言い切る。
                 var to = c.To == DraftRankBand.None ? "候補から外れた" : DraftRankBands.Label(c.To);
@@ -428,14 +420,10 @@ namespace KokoSim.Unity.Home
                     // 三年間見てきた選手の最後が通知1行で終わる。
                     KokoSim.Unity.Shell.EventService.Push(
                         pick.Nominated ? "draft_nominated" : "draft_missed", pick.Name,
-                        new KokoSim.Unity.Shell.PresentedEffect
-                        {
-                            Subject = pick.Name,
-                            Detail = pick.Nominated ? "NPB 指名" : "指名なし",
-                            Items = pick.Nominated
-                                ? new[] { new KokoSim.Unity.Shell.EffectItem("順位", pick.Round.ToString(), "位") }
-                                : System.Array.Empty<KokoSim.Unity.Shell.EffectItem>(),
-                        }, pick.PlayerId);
+                        pick.Nominated
+                            ? KokoSim.Unity.Shell.PresentedEffect.Good(pick.Name + " が NPB " + pick.Round + " 位で指名された！")
+                            : KokoSim.Unity.Shell.PresentedEffect.Bad(pick.Name + " に指名は無かった"),
+                        pick.PlayerId);
                 }
             }
 
@@ -522,19 +510,13 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Warn,
                         Tag = "警告",
                     });
-                    // ノベルで見せる（issue #610）。診断名と離脱週は効果帯へ回し、会話には数字を入れない。
+                    // ノベルで見せる（issue #610）。診断名と離脱週は会話の最終行＝結果行で言い切る（2026-08-19）。
                     KokoSim.Unity.Shell.EventService.Push("injury_occurred", p.Name,
-                        new KokoSim.Unity.Shell.PresentedEffect
-                        {
-                            Subject = p.Name,
-                            Detail = InjuryLabel.Diagnosis(p.InjuryType, p.InjurySite)
-                                     + "（" + InjuryLabel.Severity(p.Injury) + "）",
-                            Items = new[]
-                            {
-                                new KokoSim.Unity.Shell.EffectItem(
-                                    "全治", InjuryLabel.WeeksToFullRecovery(p).ToString(), "週"),
-                            },
-                        }, p.Id);
+                        KokoSim.Unity.Shell.PresentedEffect.Bad(
+                            p.Name + " が " + InjuryLabel.Diagnosis(p.InjuryType, p.InjurySite)
+                            + "（" + InjuryLabel.Severity(p.Injury) + "）。全治 "
+                            + InjuryLabel.WeeksToFullRecovery(p) + " 週"),
+                        p.Id);
                 }
                 else
                 {
@@ -548,11 +530,8 @@ namespace KokoSim.Unity.Home
                         Tag = "情報",
                     });
                     KokoSim.Unity.Shell.EventService.Push("injury_returned", p.Name,
-                        new KokoSim.Unity.Shell.PresentedEffect
-                        {
-                            Subject = p.Name,
-                            Detail = "全快（練習に合流）",
-                        }, p.Id);
+                        KokoSim.Unity.Shell.PresentedEffect.Good(p.Name + " が全快、練習に合流した！"),
+                        p.Id);
                 }
             }
 
@@ -601,12 +580,10 @@ namespace KokoSim.Unity.Home
                 // （全部ノベルにすると毎週クリックさせることになる）。
                 if (n.Topic != InsightTopic.GrowthType) continue;
                 KokoSim.Unity.Shell.EventService.Push("insight_growth_type", n.Player.Name,
-                    new KokoSim.Unity.Shell.PresentedEffect
-                    {
-                        Subject = n.Player.Name,
-                        // ★ 断定しない（設計書03 §5.6）。育成眼が低いと読み違える＝当たっているとは限らない。
-                        Detail = "成長タイプの見立て: " + n.Domain + "型",
-                    }, n.Player.Id);
+                    // ★ 断定しない（設計書03 §5.6）。育成眼が低いと読み違える＝当たっているとは限らない。
+                    KokoSim.Unity.Shell.PresentedEffect.Good(
+                        n.Player.Name + " は " + n.Domain + "型かもしれない（見立て）"),
+                    n.Player.Id);
             }
             PushFeed(newItems);
         }

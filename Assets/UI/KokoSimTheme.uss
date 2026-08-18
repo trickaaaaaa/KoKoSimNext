@@ -1362,43 +1362,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .ev__progress { font-size: var(--fs-cap); color: var(--day-tx-3); }
 .ev__hint { font-size: var(--fs-cap); color: var(--day-tx-2); letter-spacing: 2px; }
 
-/* 結果の帯（案A2・監督決定 2026-08-13）。会話ボックスの下端に、上だけ罫で仕切って積む。
-   別カードにしないのは、会話と結果を1枚として読ませるため（クリックも増やさない）。
-   数値は Oswald・単位は和文で Label を分ける（書体3役）。色は付けない＝
-   良い知らせも悪い知らせも同じ帯で出す（警告色は本当の警告だけ・UI原則②）。 */
-.ev__fx {
-    flex-direction: row;
-    align-items: center;
-    flex-shrink: 0;
-    margin-top: var(--sp-3);
-    padding-top: var(--sp-3);
-    border-top-width: 1px;
-    border-top-color: var(--divider);
-    display: none;              /* 効果の無いイベントでは帯ごと出さない */
-}
-.ev__fx-sub {
-    font-size: var(--fs-body);
-    color: var(--ink);
-    margin-right: var(--sp-4);
-}
-.ev__fx-det {
-    font-size: var(--fs-label);
-    color: var(--day-tx-2);
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
-}
-/* 監督の年次更新は7軸まとまって動くことがある。1行に収まらなければ折り返す
-   （収まる前提で組むと、動いた軸が多い年だけ右端が切れて消える）。 */
-.ev__fx-items {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    flex-shrink: 1;
-}
-/* 1項目＝「離脱 2 週」。ラベルは弱く、数字を主役にする（UI原則③）。 */
-.ev__fx-item { flex-direction: row; align-items: center; margin-left: var(--sp-4); }
-.ev__fx-k { font-size: var(--fs-cap); color: var(--day-tx-2); margin-right: var(--sp-2); }
-.ev__fx-v { font-size: var(--fs-num-lg); color: var(--ink); }
-.ev__fx-u { font-size: var(--fs-cap); color: var(--day-tx-2); margin-left: 2px; }
+/* 結果行（監督指示 2026-08-19。旧・案A2 の右下の帯は廃止）。会話の最終行に
+   「山田 のミートが ＋5 上がった！」を太字＋色で言い切る。色は通知フィードの Up/Warn と
+   同じ意味づけ＝吉報は空の青、凶報（怪我・スランプ・破損）は警告色。太字は実ウェイト
+   （.f-body-bd をコード側で付ける）。中央寄せは地の文と同じ「誰の声でもない行」の扱い。 */
+.ev__say--result { color: var(--sky); -unity-text-align: middle-center; }
+.ev__say--result-bad { color: var(--color-warn); }

@@ -36,6 +36,13 @@ public static class EventRoles
     public const string Local = "local";
     public const string Captain = "captain";
     public const string Narration = "narration";
+    /// <summary>
+    /// 結果行（issue event-result-line-in-dialogue・2026-08-19）。「{player} のミートが ＋5 上がった！」のように
+    /// <b>実際に動いた数値</b>を会話の最終行として言い切る行。data/events.yaml には書かず、
+    /// 効果を知っている呼び出し元（怪我・成長・資金…）が提示時に足す＝会話の文と数字が別々の場所で
+    /// 作られてずれるのを防ぐ。立ち絵も話者名も無い（地の文と同じ扱い）。
+    /// </summary>
+    public const string Result = "result";
     public const string Unknown = "unknown";
 
     /// <summary>役割の既定の話者名（<c>name:</c> 未指定のとき使う）。</summary>
@@ -49,9 +56,16 @@ public static class EventRoles
         Local => "地域の人",
         Captain => "主将",
         Narration => "",
+        Result => "",
         _ => "",
     };
 
     /// <summary>ナレーション（立ち絵を出さず地の文として見せる行）か。</summary>
     public static bool IsNarration(string who) => who == Narration;
+
+    /// <summary>結果行（立ち絵なし・数値を言い切る強調行）か。</summary>
+    public static bool IsResult(string who) => who == Result;
+
+    /// <summary>立ち絵（話者）を出さない行か＝地の文と結果行。</summary>
+    public static bool IsVoiceless(string who) => IsNarration(who) || IsResult(who);
 }

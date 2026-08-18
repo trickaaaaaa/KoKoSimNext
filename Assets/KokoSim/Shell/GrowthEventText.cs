@@ -58,50 +58,33 @@ namespace KokoSim.Unity.Shell
             }
         }
 
-        /// <summary>会話の下に出す結果（案A2）。</summary>
+        /// <summary>
+        /// 会話の最終行に出す結果行（監督指示 2026-08-19。旧・案A2 の帯は廃止）。
+        /// 「{player} のミートが ＋5 上がった！」＝誰の・何が・いくつを1文で言い切る。
+        /// 数値は <see cref="Feed"/> と同じ係数・同じ実測から作る＝フィードと会話で食い違わない。
+        /// </summary>
         public static PresentedEffect Effect(GrowthNotice n, GrowthEventCoefficients c)
         {
-            var ability = n.Ability.HasValue ? AbilityLabels.Jp(n.Ability.Value) : "";
+            var who = n.Player.Name;
+            var ability = n.Ability.HasValue ? AbilityLabels.Jp(n.Ability.Value) : "能力";
             switch (n.Type)
             {
                 case GrowthEventType.Awakening:
-                    return Make(n, "覚醒", ability, "＋" + c.AwakeningGain);
+                    return PresentedEffect.Good(who + " の" + ability + "が ＋" + c.AwakeningGain + " 上がった！");
                 case GrowthEventType.Breakthrough:
-                    return Make(n, "フォーム開眼", ability, "＋" + c.BreakthroughGain);
+                    return PresentedEffect.Good(who + " の" + ability + "が ＋" + c.BreakthroughGain + " 上がった！");
                 case GrowthEventType.Slump:
                     // 週数は抽選済みの実測値。能力の落ち幅は倍率なので「−7%」の形で出す。
-                    return new PresentedEffect
-                    {
-                        Subject = n.Player.Name,
-                        Detail = "スランプ（立て直せる）",
-                        Items = new[]
-                        {
-                            new EffectItem("能力", "−" + Percent(c.SlumpPerformanceFactor), "%"),
-                            new EffectItem("残り", n.Player.SlumpWeeks.ToString(), "週"),
-                        },
-                    };
+                    return PresentedEffect.Bad(who + " がスランプに入った（能力 −" + Percent(c.SlumpPerformanceFactor)
+                                               + "%・" + n.Player.SlumpWeeks + " 週）");
                 case GrowthEventType.Plateau:
                     // 恒久の頭打ち。数値を出すと「劣化した」に見えるので、伸びしろの話として書く。
-                    return new PresentedEffect
-                    {
-                        Subject = n.Player.Name,
-                        Detail = ability + " の伸びしろが頭打ち（恒久）",
-                    };
+                    return PresentedEffect.Bad(who + " の" + ability + "は、もう大きくは伸びない");
                 case GrowthEventType.Yips:
-                    return Make(n, "送球・制球の不調", ability, "−" + c.YipsAbilityDrop);
+                    return PresentedEffect.Bad(who + " の" + ability + "が −" + c.YipsAbilityDrop + " 下がった");
                 default:
-                    return Make(n, "不調を克服", ability, "＋" + c.YipsAbilityDrop);
+                    return PresentedEffect.Good(who + " の" + ability + "が ＋" + c.YipsAbilityDrop + " 戻った！");
             }
-        }
-
-        private static PresentedEffect Make(GrowthNotice n, string detail, string ability, string value)
-        {
-            return new PresentedEffect
-            {
-                Subject = n.Player.Name,
-                Detail = detail,
-                Items = new[] { new EffectItem(ability, value) },
-            };
         }
 
         // 0.93 → "7"（落ち幅の％）。四捨五入で整数にする＝小数の％は帯で読みにくい。
