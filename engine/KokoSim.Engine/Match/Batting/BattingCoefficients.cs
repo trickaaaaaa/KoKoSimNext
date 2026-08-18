@@ -126,8 +126,10 @@ public sealed record BattingCoefficients
     /// コンタクト品質(0〜1)の平均（互角時）。issue #262 で打球が野手の間を抜けやすくなった分を 0.62→0.60 で吸収していたが、
     /// issue homerun-rate-explodes-at-high-power（2026-08-18）で本塁打判定の正し＋初速上限の上位圧縮により本塁打が
     /// 安打から抜けた分（AVG .253→.235〜.243＝帯の床）を 0.62 へ戻して補う（AVG .242〜.253＝改定前と同水準）。
+    /// 同日、投手の打球品質寄与 ×3（issue pitcher-barely-affects-contact-quality）で母集団の打率が −.009 動く分を
+    /// 0.63 で戻す（AVG .240〜.250。0.64 だと夏場帯 4.90–5.80 を 5.90 で越える）。
     /// </summary>
-    public double QualityMean { get; init; } = 0.62;
+    public double QualityMean { get; init; } = 0.63;
     /// <summary>コンタクト品質へのミート寄与((Contact−50)あたり)。</summary>
     public double QualityContactSlope { get; init; } = 0.0020;
     /// <summary>コンタクト品質の標準偏差。</summary>
@@ -147,16 +149,19 @@ public sealed record BattingCoefficients
     // 打球質が打者能力だけで決まると、技巧派の優位は与四球の少なさからしか生まれず
     // 「弱い打球を打たせる＝結果が守備力に左右される」という型の個性が成立しない。
     // 3項とも基準値で寄与0＝リーグ平均投手では恒等（帯中立）に組む。
+    // 2026-08-18（issue pitcher-barely-affects-contact-quality・監督承認）: 3項を ×3 へ。旧値は初速換算で ±2km/h しか動かず
+    // 「エースが本塁打を減らせるのは三振の分だけ＝当てられればF投手と同じ本塁打率」（インプレー打球あたり P90 打者で
+    // A投手 12.7% vs F投手 16.1%）だった。×3 で 9.6% vs 17.4%（2〜4倍差）。母集団の打率 −.009 は quality_mean で戻す。
     /// <summary>コンタクト品質への球速寄与の基準[km/h]（平均的な配球の実投球速度＝この球速で寄与0）。</summary>
     public double ContactQualityVelocityRefKmh { get; init; } = 121.5;
     /// <summary>実投球速度1km/hあたりのコンタクト品質寄与。正＝速い球は当たれば強い打球になる（本格派の代償）。</summary>
-    public double ContactQualityPerKmh { get; init; } = 0.0010;
+    public double ContactQualityPerKmh { get; init; } = 0.0030;
     /// <summary>投手コントロール(−50)あたりのコンタクト品質寄与。負＝制球が良いほど芯を外させる。</summary>
-    public double ContactQualityPerControl { get; init; } = -0.0010;
+    public double ContactQualityPerControl { get; init; } = -0.0030;
     /// <summary>コンタクト品質への誘発変化合成量の基準[m]（リーグ平均球速×平均キレ＝この変化量で寄与0）。</summary>
     public double ContactQualityBreakRefM { get; init; } = 0.47;
     /// <summary>誘発変化合成量[m]あたりのコンタクト品質寄与。負＝変化が大きいほど詰まる。</summary>
-    public double ContactQualityPerBreakM { get; init; } = -0.30;
+    public double ContactQualityPerBreakM { get; init; } = -0.90;
 
     // --- ④ タイミングのズレ → ⑤ 打球方向（設計書01 §2④⑤, issue #262） ---
     // 打者はスイング開始を投球に合わせる。速い球・変化の大きい球ほど遅れ（差し込まれ）、ミートが良いほどズレない。

@@ -99,7 +99,7 @@ batting:
   # MLB全史最速級・B/A校の試合が 5〜10 本塁打/試合。issue homerun-rate-explodes-at-high-power, 2026-08-18）。
   exit_velo_intercept_kmh: 141.0 # 打球初速上限の切片（P30 156／P70 176／P90 186）
   exit_velo_per_power: 0.50      # パワー1あたり初速上限
-  quality_mean: 0.62             # コンタクト品質の平均（#262 で 0.62→0.60、本塁打判定の正しで安打が抜けた分を 0.62 へ戻す 2026-08-18）
+  quality_mean: 0.63             # コンタクト品質の平均（#262 で 0.62→0.60、本塁打判定の正しで 0.62、投手の品質寄与×3 で 0.63 へ 2026-08-18）
   quality_contact_slope: 0.0020
   quality_sigma: 0.17
   launch_angle_at_lt1: -5.0      # 弾道1の平均打球角
@@ -123,11 +123,13 @@ batting:
   bearing_ground_angle_deg: 0.0      # 「純ゴロ」とみなす打球角（以下で頭打ち）
   bearing_fly_angle_deg: 25.0        # 「純フライ」とみなす打球角（以上で頭打ち）
   # コンタクト品質への投手側寄与（「打たせて取る」の土台）。3項とも基準値で寄与0＝リーグ平均投手で恒等。
+  # 2026-08-18: 3項を ×3（旧 0.0010/-0.0010/-0.30）。旧値だとエースが本塁打を減らせるのは三振の分だけで、当てられれば
+  # F投手と同じ本塁打率だった（issue pitcher-barely-affects-contact-quality）。
   contact_quality_velocity_ref_kmh: 121.5  # 平均的な配球の実投球速度（ストレート比0.55×球種の球速比込み）
-  contact_quality_per_kmh: 0.0010          # 速い球は当たれば強い打球（本格派の代償）
-  contact_quality_per_control: -0.0010     # 制球が良いほど芯を外させる（技巧派の武器）
+  contact_quality_per_kmh: 0.0030          # 速い球は当たれば強い打球（本格派の代償）
+  contact_quality_per_control: -0.0030     # 制球が良いほど芯を外させる（技巧派の武器）
   contact_quality_break_ref_m: 0.47        # 132km/h・2200rpm の誘発変化合成量
-  contact_quality_per_break_m: -0.30       # 変化が大きいほど詰まる
+  contact_quality_per_break_m: -0.90       # 変化が大きいほど詰まる
 
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
@@ -1320,22 +1322,26 @@ roster:
   # 空振り価値が頭打ちになり（本格派 3.01→3.85 失点）、消耗カーブで球速天井が目安の手前から落ちる（→4.08）ため、
   # 本格派の制球の代償を −12→−7 に寝かせて型の中立性を回復（実測400試合: バランス3.49／本格3.6前後／技巧3.29／軟投3.49）。
   # 投手総合の加重和では本格派が +1.5 ほど有利に見えるが、型の中立は「実戦の失点」で校正する（式の中立は循環論法）。
-  archetype_power_velocity: 8
-  archetype_power_control: -7
+  # 2026-08-18（issue pitcher-barely-affects-contact-quality）: 投手の打球品質寄与を ×3 にしたので制球・キレの失点価値がさらに
+  # 上がり、本格派 3.35 vs 技巧派 2.49（spread 0.86）に開いた。制球の振れ幅を縮め（本格 −7→−4・技巧 +6→+3）球速の振れ幅を
+  # 広げ（本格 +8→+10・技巧 −7→−8・軟投 −10→−11）、キレを +2 で揃えて実戦中立へ（400試合: バランス2.97／本格2.99／技巧2.74／
+  # 軟投2.79＝spread 0.26。守備依存 swing 本格 8.86 vs 技巧・軟投 9.27 で「打たせて取る＝守備依存」も維持）。
+  archetype_power_velocity: 10
+  archetype_power_control: -4
   archetype_power_stamina: -2
   archetype_power_pitch_rank: 2
-  archetype_finesse_velocity: -7
-  archetype_finesse_control: 6
+  archetype_finesse_velocity: -8
+  archetype_finesse_control: 3
   archetype_finesse_stamina: 1
-  archetype_finesse_pitch_rank: 3
+  archetype_finesse_pitch_rank: 2
   # 軟投派の上乗せは 2026-07-21（Issue #24）に再校正。打球の塁打数を転がり込みの幾何で
   # 決めるようにした結果、打球初速の低さ（＝転がらない＝長打になりにくい）が以前より価値を持ち、
   # 軟投派だけ失点が下がった（実測 3.65 vs 技巧派 3.96）。キレ+5→+3・制球+4→+3 で実戦中立へ戻す
   # （Archetypes_AreBalanceNeutral_InActualGames）。
-  archetype_soft_toss_velocity: -10
-  archetype_soft_toss_control: 3
+  archetype_soft_toss_velocity: -11
+  archetype_soft_toss_control: 2
   archetype_soft_toss_stamina: 2
-  archetype_soft_toss_pitch_rank: 3
+  archetype_soft_toss_pitch_rank: 2
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0

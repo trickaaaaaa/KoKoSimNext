@@ -43,22 +43,22 @@ public sealed record PitcherArchetypeCoefficients
     public double SoftTossShare { get; init; } = 0.08;
 
     // --- 本格派: 球速↑・キレ↑（代償は制球とスタミナ） ---
-    public double PowerVelocity { get; init; } = 8;
-    public double PowerControl { get; init; } = -7;   // 2026-08-16: −12→−7（投打差の飽和＋消耗カーブで本格派が不利になった分を戻す）
+    public double PowerVelocity { get; init; } = 10;
+    public double PowerControl { get; init; } = -4;   // 2026-08-16: −12→−7 ／ 2026-08-18: −7→−4・球速 8→10（投手の打球品質寄与×3 で制球の価値がさらに上がった分。issue pitcher-barely-affects-contact-quality）
     public double PowerStamina { get; init; } = -2;
     public double PowerPitchRank { get; init; } = 2;
 
     // --- 技巧派: 球速↓ 制球・キレ↑ ---
-    public double FinesseVelocity { get; init; } = -7;
-    public double FinesseControl { get; init; } = 6;
+    public double FinesseVelocity { get; init; } = -8;
+    public double FinesseControl { get; init; } = 3;
     public double FinesseStamina { get; init; } = 1;
-    public double FinessePitchRank { get; init; } = 3;
+    public double FinessePitchRank { get; init; } = 2;
 
     // --- 軟投派: 球速↓↓ 制球・キレ↑（上乗せは Issue #24 の打球変更後に実戦で再校正済み） ---
-    public double SoftTossVelocity { get; init; } = -10;
-    public double SoftTossControl { get; init; } = 3;
+    public double SoftTossVelocity { get; init; } = -11;
+    public double SoftTossControl { get; init; } = 2;
     public double SoftTossStamina { get; init; } = 2;
-    public double SoftTossPitchRank { get; init; } = 3;
+    public double SoftTossPitchRank { get; init; } = 2;
 }
 
 /// <summary>球質タイプの抽選・オフセット適用・表示名（純関数）。</summary>
