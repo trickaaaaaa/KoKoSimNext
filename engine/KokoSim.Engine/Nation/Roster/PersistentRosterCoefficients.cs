@@ -46,8 +46,10 @@ public sealed record PersistentRosterCoefficients
     /// </summary>
     public double AnnualGrowth { get; init; } = 6.0;
 
-    /// <summary>3年（引退間際）の成長係数（引退が近いほど伸び代小）。1・2年は 1.0。</summary>
-    public double SeniorGrowthFactor { get; init; } = 0.4;
+    /// <summary>3年（引退間際）の成長係数（引退が近いほど伸び代小）。1・2年は 1.0。
+    /// 0.4→0.75（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）: 逆算配分の伸び g が大きい強豪ほど
+    /// 2年が +g・3年が +0.4g で **2年が3年を追い越す**（実測: 全ティアで 58〜82% の校）。</summary>
+    public double SeniorGrowthFactor { get; init; } = 0.75;
 
     /// <summary>逆算配分の許容誤差（進化後Strength と 翌夏チーム総合 の差の許容帯・テスト整合）。</summary>
     public double TargetTolerance { get; init; } = 3.0;

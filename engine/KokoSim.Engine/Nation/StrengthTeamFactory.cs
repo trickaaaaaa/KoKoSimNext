@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
@@ -338,15 +339,17 @@ public static class StrengthTeamFactory
         // 打撃中心: 本業(strength) ↔ 専門外(strength×OffSpecialtyFactor) を w で補間。
         var battingCenter = strength + (strength * rc.OffSpecialtyFactor - strength) * pitcherWeight;
 
-        // Ability() の呼び出し順を従来どおり保ち、乱数消費列を不変にする（決定論の後方互換, 2A）。
-        var contact = Ability(battingCenter, rng);
-        var power = Ability(battingCenter, rng);
+        // 打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）: パワーを希少側にしてミートへ振り替え（打撃指標不変）
+        // ＋5能力の凸凹配分（重みは専用 Fork から＝主RNG非消費）。Ability() の呼び出し順・回数は従来どおり保つ。
+        var prof = AiBattingProfile.Draw(rng.Fork(salt ^ AiBattingProfile.ProfileSalt), rc);
+        var contact = Ability((battingCenter + rc.AiPowerSkew) * prof.Contact, rng);
+        var power = Ability(Math.Max(0.0, battingCenter - rc.AiPowerSkew) * prof.Power, rng);
         var launch = Ability(50, rng);
-        var discipline = Ability(strength, rng);
+        var discipline = Ability(strength * prof.Discipline, rng);
         var speed = Ability(strength, rng);
         var arm = Ability(strength, rng);
-        var fielding = Ability(strength, rng);
-        var catching = Ability(strength, rng);
+        var fielding = Ability(strength * prof.Fielding, rng);
+        var catching = Ability(strength * prof.Catching, rng);
 
         PitcherAttributes? pitching = null;
         if (onMound)

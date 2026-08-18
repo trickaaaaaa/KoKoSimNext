@@ -135,8 +135,11 @@ public static class ContactModel
         var veloFactor = coeff.MinQualityVeloFactor + (1.0 - coeff.MinQualityVeloFactor) * quality;
         var exitMps = maxExitKmh * veloFactor / 3.6;
 
-        // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。
-        var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality));
+        // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。ミートが良いほど締まる（安打の分業。issue ai-roster-power-top-tier-all-sluggers）。
+        var contactTighten = coeff.LaunchAngleSigmaPerContact > 0.0
+            ? Math.Max(coeff.LaunchAngleSigmaContactFloor, 1.0 - coeff.LaunchAngleSigmaPerContact * (batter.Contact - 50))
+            : 1.0;
+        var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality)) * contactTighten;
         var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + rng.NextGaussian(0, angleSigma);
 
         // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。

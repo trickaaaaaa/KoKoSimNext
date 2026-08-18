@@ -21,13 +21,19 @@ public sealed class EnemyLineupCompositionTests
     [Fact]
     public void Create_WithoutModernRules_NeverUsesDh_RegressionOfDefaultBehavior()
     {
+        // 投手は原則9番だが、打撃総合が野手平均以上の打撃型エースだけは上位打順に入る（issue #360＝設計どおり）。
+        // AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers: パワー⇄ミートの振り替え＋凸凹配分）で
+        // その個体がまれに出る（20校中1校）ので、「全校9番」ではなく「DHは使わない・投手は打順にいる・大半は9番」を固定する。
+        var ninth = 0;
         foreach (var id in Enumerable.Range(1, 20))
         {
             var team = StrengthTeamFactory.ForSchool(Sch(id), yearIndex: 1);
             Assert.False(team.UsesDh);
-            Assert.Equal(8, team.PitcherSlot);
+            Assert.InRange(team.PitcherSlot, 0, 8);
             Assert.Equal(FieldPosition.Pitcher, team.BattingOrder[team.PitcherSlot].Position);
+            if (team.PitcherSlot == 8) ninth++;
         }
+        Assert.True(ninth >= 17, $"投手が9番の校 {ninth}/20");
     }
 
     [Fact]

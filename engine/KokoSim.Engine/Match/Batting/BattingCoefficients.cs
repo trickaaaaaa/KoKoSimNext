@@ -140,6 +140,16 @@ public sealed record BattingCoefficients
     public double LaunchAngleAtLt100 { get; init; } = 26.0;
     /// <summary>打球角度の標準偏差[deg]。</summary>
     public double LaunchAngleSigma { get; init; } = 12.0;
+    /// <summary>
+    /// ミートによる打球角度σの締まり（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）。
+    /// σ × (1 − これ×(Contact−50))（下限 <see cref="LaunchAngleSigmaContactFloor"/>）。ミートが良いほど角度のばらつきが小さく
+    /// ＝ゴロ・ポップが減ってライナー帯（安打）に集まる。本塁打帯（25〜35°）は平均角（弾道）から遠いので増えない
+    /// ＝ミートは「安打を生む」「パワーは本塁打を生む」の分業。0 で無効。
+    /// </summary>
+    /// 0.010: C90 で σ×0.6（下限）＝AVG .353→.380／HR 4.2→1.9%（P60・D投手）、C30 で σ×1.2。母集団は AVG .249→.252・HR 1.67→1.60%。
+    public double LaunchAngleSigmaPerContact { get; init; } = 0.010;
+    /// <summary>ミートによる角度σ倍率の下限。</summary>
+    public double LaunchAngleSigmaContactFloor { get; init; } = 0.6;
     /// <summary>方位角の残差（引っ張り/流しを引いた後のばらつき）の標準偏差[deg]。</summary>
     public double BearingSigma { get; init; } = 19.0;
     /// <summary>芯を外すと初速が落ちる度合い（品質1で満初速, 0で係数分だけ残る）。</summary>

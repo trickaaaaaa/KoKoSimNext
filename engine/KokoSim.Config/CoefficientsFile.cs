@@ -448,6 +448,8 @@ public static class CoefficientsLoader
         public double LaunchAngleAtLt1 { get; set; } = D.LaunchAngleAtLt1;
         public double LaunchAngleAtLt100 { get; set; } = D.LaunchAngleAtLt100;
         public double LaunchAngleSigma { get; set; } = D.LaunchAngleSigma;
+        public double LaunchAngleSigmaPerContact { get; set; } = D.LaunchAngleSigmaPerContact;
+        public double LaunchAngleSigmaContactFloor { get; set; } = D.LaunchAngleSigmaContactFloor;
         public double BearingSigma { get; set; } = D.BearingSigma;
         // ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）
         public double TimingSigma { get; set; } = D.TimingSigma;
@@ -500,6 +502,8 @@ public static class CoefficientsLoader
             LaunchAngleAtLt1 = LaunchAngleAtLt1,
             LaunchAngleAtLt100 = LaunchAngleAtLt100,
             LaunchAngleSigma = LaunchAngleSigma,
+            LaunchAngleSigmaPerContact = LaunchAngleSigmaPerContact,
+            LaunchAngleSigmaContactFloor = LaunchAngleSigmaContactFloor,
             BearingSigma = BearingSigma,
             TimingSigma = TimingSigma,
             TimingRefKmh = TimingRefKmh,
@@ -2007,6 +2011,9 @@ public static class CoefficientsLoader
         public double AiMentalStrengthSlope { get; set; } = D.AiMentalStrengthSlope;
         public double AiMentalPerGrade { get; set; } = D.AiMentalPerGrade;
         public double AiStyleMentalBonus { get; set; } = D.AiStyleMentalBonus;
+        // AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）
+        public double AiPowerSkew { get; set; } = D.AiPowerSkew;
+        public double AiConcentration { get; set; } = D.AiConcentration;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
         public double SwitchProb { get; set; } = D.SwitchProb;
@@ -2143,6 +2150,8 @@ public static class CoefficientsLoader
             AiMentalStrengthSlope = AiMentalStrengthSlope,
             AiMentalPerGrade = AiMentalPerGrade,
             AiStyleMentalBonus = AiStyleMentalBonus,
+            AiPowerSkew = AiPowerSkew,
+            AiConcentration = AiConcentration,
             ThrowLeftProb = ThrowLeftProb,
             SwitchProb = SwitchProb,
             BatLeftGivenRightThrow = BatLeftGivenRightThrow,

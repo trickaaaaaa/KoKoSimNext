@@ -191,6 +191,18 @@ public sealed record RosterCoefficients
     /// <summary>校風「守り勝つ」「全員野球」の精神・統率の上乗せ（design-11 三層プロファイルの精神の項）。</summary>
     public double AiStyleMentalBonus { get; init; } = 3.0;
 
+    // --- AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18） ---
+    // 旧実装は AI校の選手の全能力を同じ中心 N(center,6) で独立に引き、永続ロスターの成長（逆算配分）も全能力を
+    // 一律に足すので、B/A校は先発9人がみな中心≒75〜85 の万能型（全員スラッガー）になっていた。
+    // 本塁打率はパワーに対して凸（HR% ∝ exp(0.053P)）なので「平均を保って散らす」だけでは本塁打が増える。
+    // パワーを希少側にし（中心 −skew）、同じ量をミートへ回して打撃指標（.35C+.35P）を保つ＝学校の強さの意味は不変。
+    /// <summary>AI校の打者のパワー中心を下げ、ミート中心を同じ量だけ上げる幅（打撃指標を保つ振り替え）。</summary>
+    public double AiPowerSkew { get; init; } = 8.0;
+    /// <summary>AI校の打撃・技術5能力（ミート/パワー/選球眼/守備/捕球）の凸凹配分σ（重み exp(N(0,σ)) を平均1に正規化＝
+    /// 総和不変）。自校の <see cref="ConcentrationMean"/>（0.35）より控えめ＝AI は成長で一律に伸びるので生成時の凸凹が
+    /// そのまま残る。0 で凸凹なし。</summary>
+    public double AiConcentration { get; init; } = 0.15;
+
     // --- 投打の利き（設計書01 §1.1c） ---
     public double ThrowLeftProb { get; init; } = 0.12;
     public double SwitchProb { get; init; } = 0.03;

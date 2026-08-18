@@ -105,6 +105,11 @@ batting:
   launch_angle_at_lt1: -5.0      # 弾道1の平均打球角
   launch_angle_at_lt100: 26.0    # 弾道100の平均打球角
   launch_angle_sigma: 12.0
+  # ミートによる打球角度σの締まり（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）: σ×(1−これ×(Contact−50))、下限 floor。
+  # ミートが良いほどゴロ・ポップが減ってライナー帯（安打）に集まり、本塁打帯（25〜35°）からは外れる＝「パワーは本塁打・ミートは安打」の分業。
+  # C90 で AVG .353→.380／HR 4.2→1.9%（P60・D投手）。母集団は AVG .249→.252・HR 1.67→1.60%。
+  launch_angle_sigma_per_contact: 0.010
+  launch_angle_sigma_contact_floor: 0.6
   bearing_sigma: 19.0            # 打球方向の「残差」σ（引っ張り/流しを引いた後のばらつき）
   min_quality_velo_factor: 0.55
   # ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）🟡実測校正
@@ -1269,6 +1274,10 @@ roster:
   ai_mental_strength_slope: 0.25   # 精神力中心 = mental_mean + (School.Strength − 50)×これ（圧縮前の強度。G≈40／D≈47／S≈56）
   ai_mental_per_grade: 4.0         # 進級ごとに精神力 +これ（3年で +8＝自校の実戦成長の平均像）
   ai_style_mental_bonus: 3.0       # 校風「守り勝つ」「全員野球」の精神・統率の上乗せ
+  # AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）: 旧実装は全能力を同じ中心で独立に引き
+  # 成長も一律なので B/A校は先発全員がスラッガーだった。パワーを希少側にしてミートへ振り替え（打撃指標不変）＋5能力の凸凹配分。
+  ai_power_skew: 8.0               # パワー中心 −これ／ミート中心 +これ（.35C+.35P の打撃指標を保つ）
+  ai_concentration: 0.15           # ミート/パワー/選球眼/守備/捕球の凸凹配分σ（総和不変。自校 concentration_mean 0.35 より控えめ）
   # 投打の利き（§1.1c）
   throw_left_prob: 0.12
   switch_prob: 0.03
@@ -1375,7 +1384,7 @@ persistent_roster:
   freshman_gap: 8.0             # 新入生の能力中心 = Strength − これ（未熟スタート・3年で開花）
   fame_recruit_weight: 0.04     # 名声由来の入学時上振れ（(Fame−50)×これ）
   annual_growth: 6.0            # 逆算配分のベースライン年間成長素点
-  senior_growth_factor: 0.4     # 3年（引退間際）の成長係数
+  senior_growth_factor: 0.75    # 3年（引退間際）の成長係数（0.4→0.75 2026-08-18: 逆算配分の伸びが2年に集中して2年>3年が6〜8割の校で起きていた）
   target_tolerance: 3.0         # 逆算配分の許容誤差（翌夏チーム総合 vs 進化後Strength）
   max_residual_per_node: 4.0    # 逆算残差補正の1節目あたり上限
   # 年3節目の分割比（夏大会後 / 秋大会後 / 冬明け）。合計1.0。
