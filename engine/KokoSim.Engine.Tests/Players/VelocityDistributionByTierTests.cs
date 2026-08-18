@@ -54,15 +54,17 @@ public sealed class VelocityDistributionByTierTests
         // 能力中心が落ち、表示ティア別のエース最速が C 135.6／B 138.1／A 137.8 と横一線になった（A校のエースが 138km/h）。
         // 上位集中＝スター型（issue prefecture-dominance-star）でエース格の投手能力中心を raw へ戻した後: C 137.4／B 142.4／
         // A 145.0／S 145.3（n=5・小標本）＝案A の実測（C 139.6／B 144.6／A 148.9）にほぼ戻る。ティア=表示（raw）で集計。
+        // 圧縮撤去（設計書21・2026-08-19。寝かせる役は ability_effect へ）＋スター lift=(強さ−40)×0.25: C 140.3／B 148.2／
+        // A 149.6／S 149.6（A/S は Lv99 のクランプ 149.6 に張り付く＝150 超は出ない）。lift 0 でも B 146.0／A 149.6。
         var byTier = AceKmhByTier();
         foreach (var t in new[] { Tier.S, Tier.A, Tier.B, Tier.C, Tier.D, Tier.E, Tier.F, Tier.G })
         {
             if (!byTier.TryGetValue(t, out var xs)) continue;
             _out.WriteLine($"{t}: n={xs.Count} p10 {Pct(xs, .1):F1} / p50 {Pct(xs, .5):F1} / p90 {Pct(xs, .9):F1} | 145+ {100.0 * xs.Count(x => x >= 145) / xs.Count:F0}%");
         }
-        Assert.InRange(Pct(byTier[Tier.C], .5), 135.0, 141.0);
-        Assert.InRange(Pct(byTier[Tier.B], .5), 140.0, 146.0);
-        Assert.InRange(Pct(byTier[Tier.A], .5), 143.0, 149.0);   // n=5・小標本。一様圧縮だけの世界（137.8）は帯外
+        Assert.InRange(Pct(byTier[Tier.C], .5), 136.0, 143.0);
+        Assert.InRange(Pct(byTier[Tier.B], .5), 143.0, 149.0);
+        Assert.InRange(Pct(byTier[Tier.A], .5), 145.0, 150.0);   // n=5・小標本。一様圧縮だけの世界（137.8）は帯外
         Assert.InRange(Pct(byTier[Tier.D], .5), 132.0, 137.5);
         Assert.InRange(Pct(byTier[Tier.E], .5), 130.0, 135.0);   // E 以下は変更前後で不変（Lv≦50 側）
         Assert.InRange(Pct(byTier[Tier.G], .5), 116.0, 125.0);   // 逆算配分の目標が圧縮後（G は raw より上）になり +0.5

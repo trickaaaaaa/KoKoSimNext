@@ -109,7 +109,7 @@ public sealed class RunnerLegMatchesVerdictTests
 
             // ExtraBaseResolver.ResolveBases が塁打数を決めるのに使った到達時刻そのもの。
             var perBase = RunnerClock.SegmentSeconds(
-                batter.ToBatter().SpeedToFirstMps(), 1, 2, ExtraBaseResolver.BatterContextOf(Fielding), Field);
+                batter.ToBatter(Baserunning.AbilityEffect).SpeedToFirstMps(), 1, 2, ExtraBaseResolver.BatterContextOf(Fielding), Field);
             var expected = ContactAtSeconds + play.BatterToFirstSeconds;
             for (var b = 1; b < toBase; b++) expected += perBase;
 
@@ -136,7 +136,7 @@ public sealed class RunnerLegMatchesVerdictTests
         var tl = TimelineBuilder.AppendRunnerLegs(BaseTimeline(play), moves, Field, Baserunning, Fielding);
 
         // #316 以前の表示式をそのまま書き下したもの。
-        var oldPerBase = Field.BaseDistanceM / runner.ToFielder().SprintSpeedMps + 0.35;
+        var oldPerBase = Field.BaseDistanceM / runner.ToFielder(Baserunning.AbilityEffect).SprintSpeedMps + 0.35;
         var oldArrive = ContactAtSeconds + 0.10 + (toBase - fromBase) * oldPerBase;
 
         var gained = oldArrive - ArriveOf(tl, "走1");

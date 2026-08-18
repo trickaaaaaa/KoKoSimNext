@@ -164,16 +164,23 @@ public sealed class ContactModelTests
     }
 
     [Fact]
-    public void PitcherContactQualityBias_FasterPitches_AreHitHarder()
+    public void PitcherContactQualityBias_FasterPitches_AreHitWeaker_AndUseReactionVelocity()
     {
-        // 速い球は空振りを取れる代わりに、当てられたときは強い打球になる（本格派の代償）。
+        // 速い球は空振りを取れるうえ、当てられても芯を外しやすい（contact_quality_per_kmh < 0。設計書21・2026-08-19）。
+        // 旧 +0.003（速いほど強い打球）は「速い球ほど絶対変化量が小さい」効果と合わさって球速の価値を打ち消し、
+        // 球速+40Lv で打球あたり安打率が .323→.376 と**速いほど打たれる**倒錯を生んでいた（球速の価値の是正）。
         var coeff = new BattingCoefficients();
+        Assert.True(coeff.ContactQualityPerKmh < 0.0);
         var features = new PitchTrajectoryFeatures(coeff.ContactQualityBreakRefM, 0.0, 0.45);
         var slow = Plan(coeff.ContactQualityVelocityRefKmh - 10) with { ControlLevel = 50.0 };
         var fast = Plan(coeff.ContactQualityVelocityRefKmh + 10) with { ControlLevel = 50.0 };
 
         Assert.True(ContactModel.PitcherContactQualityBias(fast, features, coeff)
-            > ContactModel.PitcherContactQualityBias(slow, features, coeff));
+            < ContactModel.PitcherContactQualityBias(slow, features, coeff));
+
+        // 読むのは反応球速（効きを通した値）: 実球速が速くても反応球速が基準なら寄与0。
+        var muted = fast with { ReactionVelocityKmh = coeff.ContactQualityVelocityRefKmh };
+        Assert.Equal(0.0, ContactModel.PitcherContactQualityBias(muted, features, coeff), 12);
     }
 
     [Fact]

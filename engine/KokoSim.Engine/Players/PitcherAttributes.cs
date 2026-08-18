@@ -19,6 +19,15 @@ public sealed record PitcherAttributes
     /// <summary>最高球速[km/h]（範囲110〜165）。カタログ上限であり、試合中は毎球これ以下をサンプリング（§1.1d）。</summary>
     public double MaxVelocityKmh { get; init; } = 132.0;
 
+    /// <summary>
+    /// 球速の反応オフセット[km/h]（設計書21）。打者の反応（球威・タイミング・打球質・バント難度）に使う球速は
+    /// 実球速＋これ。表示→物理の効き <see cref="AbilityEffectCoefficients.Pitcher"/> が
+    /// <c>PitchingKmh(MaxVelocityKmh) − MaxVelocityKmh</c> を焼く（速い投手ほど負・遅い投手ほど正・Lv50=132km/h で0）。
+    /// 差分で持つので、その後の消耗・調子・ギア・毎球のドロップ（いずれも実測 km/h の単位）は寝かせずそのまま効く。
+    /// 育成レイヤの投手（<see cref="Player.Pitching"/>）では常に0＝保存もしない。
+    /// </summary>
+    public double ReactionVelocityOffsetKmh { get; init; } = 0.0;
+
     /// <summary>コントロール: 狙いからの散布σ（1〜100）。</summary>
     public int Control { get; init; } = 50;
 

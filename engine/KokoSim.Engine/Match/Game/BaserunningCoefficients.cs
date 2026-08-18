@@ -3,6 +3,13 @@ namespace KokoSim.Engine.Match.Game;
 /// <summary>走塁進塁の確率係数（YAML駆動, 得点分布の統計回帰で調整）。</summary>
 public sealed record BaserunningCoefficients
 {
+    /// <summary>
+    /// 表示能力→物理層の効き（設計書21・<see cref="KokoSim.Engine.Players.AbilityEffectCoefficients"/>）。正典は YAML の <c>ability_effect:</c> 1ブロックで、
+    /// ローダが batting/fielding/baserunning の3ブロックへ<b>同じ値</b>を配る（解決式が手元の係数束から引けるようにするため）。
+    /// 3つが食い違わないことは <c>AbilityEffectConsistencyTests</c> が固定する。
+    /// </summary>
+    public KokoSim.Engine.Players.AbilityEffectCoefficients AbilityEffect { get; init; } = new();
+
     /// <summary>単打で1塁走者が3塁まで進む基準確率（走力50時）。</summary>
     public double FirstToThirdOnSingle { get; init; } = 0.28;
     /// <summary>単打で2塁走者が生還する基準確率。</summary>

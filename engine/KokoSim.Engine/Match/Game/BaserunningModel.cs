@@ -278,7 +278,7 @@ public static class BaserunningModel
         {
             if (currentOuts + extraOuts >= 3) return (HomeVerdict.Held, false); // 既に3アウト＝以降は進めない
             if (home is not { } h)
-                return (tableUnconditional || MathUtil.Chance(P(tableProb, runner.Baserunning, coeff), rng)
+                return (tableUnconditional || MathUtil.Chance(P(tableProb, coeff.AbilityEffect.Running(runner.Baserunning), coeff), rng)
                     ? HomeVerdict.Scored : HomeVerdict.Held, false);
 
             // F2: 送り判定（勝てる時だけ送る）→ 時間の勝負（外野中継 vs 走者）。
@@ -527,7 +527,7 @@ public static class BaserunningModel
         }
         // 併殺（1塁走者あり, 従来テーブル。ゴロ／home無しだけ）。
         else if (r1 is not null && !flyOut && MathUtil.Chance(
-                MathUtil.Clamp(coeff.DoublePlayProb - coeff.SpeedSlope * (r1.Speed - 50), 0.02, 0.5), rng))
+                MathUtil.Clamp(coeff.DoublePlayProb - coeff.SpeedSlope * (coeff.AbilityEffect.Running(r1.Speed) - 50), 0.02, 0.5), rng))
         {
             extraOuts = 1;
             mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { Force = true }); // 二塁封殺
@@ -538,7 +538,7 @@ public static class BaserunningModel
         // （MathUtil.Chance は確率0でも rng.NextDouble() を1回消費するため、確率式へ0を渡すだけでは
         //  乱数消費順が既存と不一致になる。ガードで分岐そのものをスキップして完全一致を保つ）。
         else if (r1 is not null && !flyOut && coeff.FieldersChoiceProb > 0.0 && MathUtil.Chance(
-                MathUtil.Clamp(coeff.FieldersChoiceProb + coeff.SpeedSlope * (batter.Speed - 50), 0.0, 0.95), rng))
+                MathUtil.Clamp(coeff.FieldersChoiceProb + coeff.SpeedSlope * (coeff.AbilityEffect.Running(batter.Speed) - 50), 0.0, 0.95), rng))
         {
             extraOuts = 1;
             batterSafeOnFc = true;

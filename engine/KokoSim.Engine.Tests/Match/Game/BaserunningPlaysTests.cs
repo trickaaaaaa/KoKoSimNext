@@ -640,9 +640,10 @@ public sealed class BaserunningPlaysTests
     [Fact]
     public void DoubleStealThirdBreak_Enabled_ChangesOutcomesForStealHeavyTeams()
     {
-        Team Brainy(string name) => FastTeam(name) with { Tactics = new StandardTacticsBrain(new TacticsCoefficients()) };
-        var off = new GameContext();
-        var on = new GameContext { Baserunning = C with { DoubleStealThirdBreakProb = 1.0 } };
+        // 俊足チームの走力を額面どおり効かせる（効き＝恒等）＝既定の効き 0.55 では重盗の企図が減り 40 シードで差が出ない。
+        var off = new GameContext().WithAbilityEffect(AbilityEffectCoefficients.Identity);
+        var on = off with { Baserunning = off.Baserunning with { DoubleStealThirdBreakProb = 1.0 } };
+        Team Brainy(string name) => FastTeam(name) with { Tactics = new StandardTacticsBrain(new TacticsCoefficients(), off.Baserunning) };
         var differs = false;
         for (ulong s = 0; s < 40 && !differs; s++)
         {

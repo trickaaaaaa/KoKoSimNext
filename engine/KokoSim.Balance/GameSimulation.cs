@@ -187,11 +187,14 @@ public static class GameSimulation
     /// </param>
     public static Stats Run(int games, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null,
         bool useTacticsBrain = false, bool applyWeather = false,
-        Func<IRandomSource, string, bool, Team>? teamFactory = null)
+        Func<IRandomSource, string, bool, Team>? teamFactory = null,
+        Func<GameContext, GameContext>? contextTransform = null)
     {
         var ctx = BuildContext(coefficientsPath, field);
         // 天候は既定オフ。coefficients.yaml に weather ブロックがあっても applyWeather:false の間は剥がして従来挙動に固定する。
         if (!applyWeather) ctx = ctx with { Weather = null };
+        // 係数ファイルの外から文脈を差し替える口（表示→物理の効きの掃引など。既定 null＝従来と1ビットも変えない）。
+        if (contextTransform is not null) ctx = contextTransform(ctx);
         var brain = useTacticsBrain ? new StandardTacticsBrain(ctx.Tactics, ctx.Baserunning) : null;
         var root = new Xoshiro256Random(seed);
 

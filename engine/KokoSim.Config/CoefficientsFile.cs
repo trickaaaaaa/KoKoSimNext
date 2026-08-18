@@ -97,6 +97,7 @@ public static class CoefficientsLoader
         public FieldingDto? Fielding { get; set; }
         public BaserunningDto? Baserunning { get; set; }
         public FatigueDto? Fatigue { get; set; }
+        public AbilityEffectDto? AbilityEffect { get; set; }
         public WeatherDto? Weather { get; set; }
         public PitchRecoveryDto? PitchRecovery { get; set; }
         public FormDto? Form { get; set; }
@@ -124,15 +125,20 @@ public static class CoefficientsLoader
         public List<FacilityDefDto>? Facilities { get; set; }
         public List<ContractDefDto>? Contracts { get; set; }
 
-        public CoefficientsBundle ToBundle() => new()
+        public CoefficientsBundle ToBundle()
+        {
+            // 表示→物理の効き（設計書21）: 正典は ability_effect: の1ブロック。解決式が手元の係数束から引けるよう
+            // batting/fielding/baserunning の3ブロックへ同じ値を配る（食い違いは AbilityEffectConsistencyTests が検出）。
+            var effect = AbilityEffect?.ToModel() ?? new KokoSim.Engine.Players.AbilityEffectCoefficients();
+            return new()
         {
             Version = Version,
             Aerodynamics = Aerodynamics?.ToModel() ?? new Aerodynamics(),
             Mound = Mound?.ToModel() ?? new MoundGeometry(),
             Pitching = Pitching?.ToModel() ?? new PitchingCoefficients(),
-            Batting = Batting?.ToModel() ?? new BattingCoefficients(),
-            Fielding = Fielding?.ToModel() ?? new FieldingCoefficients(),
-            Baserunning = Baserunning?.ToModel() ?? new BaserunningCoefficients(),
+            Batting = (Batting?.ToModel() ?? new BattingCoefficients()) with { AbilityEffect = effect },
+            Fielding = (Fielding?.ToModel() ?? new FieldingCoefficients()) with { AbilityEffect = effect },
+            Baserunning = (Baserunning?.ToModel() ?? new BaserunningCoefficients()) with { AbilityEffect = effect },
             Fatigue = Fatigue?.ToModel() ?? new FatigueCoefficients(),
             Weather = Weather?.ToModel(),   // Issue #120: weather ブロック無し＝null＝無効（従来挙動）
             PitchRecovery = PitchRecovery?.ToModel() ?? new PitchRecoveryCoefficients(),
@@ -165,6 +171,27 @@ public static class CoefficientsLoader
             Contracts = Contracts is null
                 ? ContractCatalog.Default
                 : new ContractCatalog { Contracts = Contracts.Select(c => c.ToModel()).ToList() },
+        };
+        }
+    }
+
+    /// <summary>表示能力→物理層の効き（設計書21）。1ブロックで batting/fielding/baserunning へ配る。</summary>
+    private sealed class AbilityEffectDto
+    {
+        private static readonly KokoSim.Engine.Players.AbilityEffectCoefficients D = new();
+        public double Pivot { get; set; } = D.Pivot;
+        public double BattingScale { get; set; } = D.BattingScale;
+        public double FieldingScale { get; set; } = D.FieldingScale;
+        public double RunningScale { get; set; } = D.RunningScale;
+        public double PitchingScale { get; set; } = D.PitchingScale;
+
+        public KokoSim.Engine.Players.AbilityEffectCoefficients ToModel() => new()
+        {
+            Pivot = Pivot,
+            BattingScale = BattingScale,
+            FieldingScale = FieldingScale,
+            RunningScale = RunningScale,
+            PitchingScale = PitchingScale,
         };
     }
 
@@ -2016,6 +2043,7 @@ public static class CoefficientsLoader
         public double AiConcentration { get; set; } = D.AiConcentration;
         // AI校の上位集中＝スター型（issue prefecture-dominance-star）
         public double AiStarShare { get; set; } = D.AiStarShare;
+        public double AiStarLiftPerPoint { get; set; } = D.AiStarLiftPerPoint;
         public int AiStarHitters { get; set; } = D.AiStarHitters;
         public int AiStarHittersPerCohort { get; set; } = D.AiStarHittersPerCohort;
         public int AiStarPitchersPerCohort { get; set; } = D.AiStarPitchersPerCohort;
@@ -2159,6 +2187,7 @@ public static class CoefficientsLoader
             AiPowerSkew = AiPowerSkew,
             AiConcentration = AiConcentration,
             AiStarShare = AiStarShare,
+            AiStarLiftPerPoint = AiStarLiftPerPoint,
             AiStarHitters = AiStarHitters,
             AiStarHittersPerCohort = AiStarHittersPerCohort,
             AiStarPitchersPerCohort = AiStarPitchersPerCohort,

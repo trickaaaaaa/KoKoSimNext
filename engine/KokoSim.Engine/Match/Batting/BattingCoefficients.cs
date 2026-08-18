@@ -6,6 +6,13 @@ namespace KokoSim.Engine.Match.Batting;
 /// </summary>
 public sealed record BattingCoefficients
 {
+    /// <summary>
+    /// 表示能力→物理層の効き（設計書21・<see cref="KokoSim.Engine.Players.AbilityEffectCoefficients"/>）。正典は YAML の <c>ability_effect:</c> 1ブロックで、
+    /// ローダが batting/fielding/baserunning の3ブロックへ<b>同じ値</b>を配る（解決式が手元の係数束から引けるようにするため）。
+    /// 3つが食い違わないことは <c>AbilityEffectConsistencyTests</c> が固定する。
+    /// </summary>
+    public KokoSim.Engine.Players.AbilityEffectCoefficients AbilityEffect { get; init; } = new();
+
     // --- 配球（狙いの散らばり） ---
     /// <summary>投手が狙う位置のゾーン中心からの散布σ（横）[m]。</summary>
     public double AimSigmaXMeters { get; init; } = 0.10;
@@ -165,7 +172,10 @@ public sealed record BattingCoefficients
     /// <summary>コンタクト品質への球速寄与の基準[km/h]（平均的な配球の実投球速度＝この球速で寄与0）。</summary>
     public double ContactQualityVelocityRefKmh { get; init; } = 121.5;
     /// <summary>実投球速度1km/hあたりのコンタクト品質寄与。正＝速い球は当たれば強い打球になる（本格派の代償）。</summary>
-    public double ContactQualityPerKmh { get; init; } = 0.0030;
+    /// <para>2026-08-19（設計書21・球速の価値）: +0.0030（×3）では球速Lv 50→90 で打球あたりの安打率 .323→.376・本塁打率 1.8→3.45% と
+    /// 「速い投手ほど打たれる」になり、三振増と相殺して球速の価値がゼロだった（球速+10＝得点差 ±0）。速い球は差し込まれる
+    /// （打球の質が落ちる）側へ −0.0050 に置き、打球あたりの質を球速に対して平坦〜微減にする＝球速+10 ≈ 制球+10（AVG −.017）。</para>
+    public double ContactQualityPerKmh { get; init; } = -0.0050;
     /// <summary>投手コントロール(−50)あたりのコンタクト品質寄与。負＝制球が良いほど芯を外させる。</summary>
     public double ContactQualityPerControl { get; init; } = -0.0030;
     /// <summary>コンタクト品質への誘発変化合成量の基準[m]（リーグ平均球速×平均キレ＝この変化量で寄与0）。</summary>

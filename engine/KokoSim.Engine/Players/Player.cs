@@ -113,23 +113,38 @@ public sealed record Player
     /// </summary>
     public PitcherAttributes Pitching { get; init; } = new();
 
-    public BatterAttributes ToBatter() => new()
+    /// <summary>表示能力そのまま（効き＝恒等）。物理解決へ渡す値は <see cref="ToBatter(AbilityEffectCoefficients)"/> を使う。</summary>
+    public BatterAttributes ToBatter() => ToBatter(AbilityEffectCoefficients.Identity);
+
+    /// <summary>
+    /// 表示層→物理層の変換（不変条件#1・設計書21）。打撃3能力は <see cref="AbilityEffectCoefficients.Batting"/>、走力は
+    /// <see cref="AbilityEffectCoefficients.Running"/> の効きを通す。弾道は「型」なので通さない。
+    /// </summary>
+    public BatterAttributes ToBatter(AbilityEffectCoefficients e) => new()
     {
-        Contact = Contact,
-        Power = Power,
+        Contact = e.Batting(Contact),
+        Power = e.Batting(Power),
         LaunchTendency = LaunchTendency,
-        Discipline = Discipline,
-        Speed = Speed,
+        Discipline = e.Batting(Discipline),
+        Speed = e.Running(Speed),
         Bats = Bats,
     };
 
-    public FielderAttributes ToFielder() => new()
+    /// <summary>表示能力そのまま（効き＝恒等）。物理解決へ渡す値は <see cref="ToFielder(AbilityEffectCoefficients)"/> を使う。</summary>
+    public FielderAttributes ToFielder() => ToFielder(AbilityEffectCoefficients.Identity);
+
+    /// <summary>
+    /// 表示層→物理層の変換（不変条件#1・設計書21）。守備4能力は <see cref="AbilityEffectCoefficients.Fielding"/>、走力は
+    /// <see cref="AbilityEffectCoefficients.Running"/> の効きを通す。捕手リードは投手側の能力なので
+    /// <see cref="AbilityEffectCoefficients.Pitching"/> の効きを通す（配球の球威上乗せ・盗塁の読み）。
+    /// </summary>
+    public FielderAttributes ToFielder(AbilityEffectCoefficients e) => new()
     {
-        Speed = Speed,
-        ArmStrength = ArmStrength,
-        ThrowAccuracy = ThrowAccuracy,
-        Fielding = Fielding,
-        Catching = Catching,
-        Lead = Lead,
+        Speed = e.Running(Speed),
+        ArmStrength = e.Fielding(ArmStrength),
+        ThrowAccuracy = e.Fielding(ThrowAccuracy),
+        Fielding = e.Fielding(Fielding),
+        Catching = e.Fielding(Catching),
+        Lead = e.Pitching(Lead),
     };
 }

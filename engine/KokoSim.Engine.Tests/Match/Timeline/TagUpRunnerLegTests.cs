@@ -49,7 +49,7 @@ public sealed class TagUpRunnerLegTests
 
         var verdict = HomePlayResolver.TagUpRunnerTimeSeconds(runner, 3, 4, s, field, c);
         var display = s.BallFieldedAtSeconds
-                      + RunnerClock.SegmentSeconds(runner, 3, 4, HomePlayResolver.TagUpContextOf(runner, c), field);
+                      + RunnerClock.SegmentSeconds(runner, c.AbilityEffect, 3, 4, HomePlayResolver.TagUpContextOf(runner, c), field);
 
         Assert.Equal(verdict, display, 9);
     }
@@ -136,7 +136,7 @@ public sealed class TagUpRunnerLegTests
                 if (leg.Runner is not { } runner) continue;
                 if (!IsHome(leg.To)) continue;
                 var expected = RunnerClock.SegmentSeconds(
-                    runner, 3, 4, HomePlayResolver.TagUpContextOf(runner, c), field);
+                    runner, c.AbilityEffect, 3, 4, HomePlayResolver.TagUpContextOf(runner, c), field);
                 var actual = leg.T1 - tc;
                 checkedLegs++;
                 if (Math.Abs(actual - expected) > worst)

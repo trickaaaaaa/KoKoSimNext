@@ -162,8 +162,10 @@ public sealed class PictureVsVerdictTests
     [Fact]
     public void StealThrow_KeepsItsFlightLength_WhenTheGuardFires()
     {
-        var safe = TimelineBuilder.BuildSteal(Runner(70), Catcher(60), StealResult.Safe, C, Field);
-        var caught = TimelineBuilder.BuildSteal(Runner(70), Catcher(60), StealResult.CaughtStealing, C, Field);
+        // 走力70 vs 肩60 でガードが発火する前提は効き＝恒等のときの値（既定 0.55 では 61 vs 54.5 に寝て発火しない）。
+        var c0 = C with { AbilityEffect = AbilityEffectCoefficients.Identity };
+        var safe = TimelineBuilder.BuildSteal(Runner(70), Catcher(60), StealResult.Safe, c0, Field);
+        var caught = TimelineBuilder.BuildSteal(Runner(70), Catcher(60), StealResult.CaughtStealing, c0, Field);
 
         var s = safe.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
         var c = caught.Ball.Single(b => b.Kind == BallSegmentKind.Throw);

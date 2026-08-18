@@ -5,6 +5,7 @@ using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Season;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Nation;
@@ -99,32 +100,36 @@ public sealed class AiRosterTests
         Assert.DoesNotContain(roster.Players, p => p.Id == id);
     }
 
-    // --- 逆算配分整合: チーム総合 ≈ 圧縮後の Strength（#80 完了条件・issue prefecture-dominance） ---
+    // --- 逆算配分整合: チーム総合 ≈ 目標（GrowthTarget＝圧縮後の Strength・既定は恒等＝raw。#80 完了条件・issue prefecture-dominance） ---
 
     /// <summary>
-    /// 逆算配分のターゲットは <b>ティア圧縮後</b>の強さ（<see cref="AiRosterCycle.GrowthTarget"/>）。旧実装は raw を
-    /// 目標にしていたので、入学中心だけ圧縮しても成長で raw へ戻され、実ゲームのAI校は #578 の前と同じ能力だった
-    /// （強度80校の先発平均Lv 86）。ここでは「raw ではなく圧縮後に一致する」ことを固定する。
+    /// 逆算配分のターゲットは <see cref="AiRosterCycle.GrowthTarget"/>（＝<c>CompressStrength(raw)</c>）。旧実装は生成の
+    /// 圧縮を無視して raw を目標にしていたので、入学中心だけ圧縮しても成長で raw へ戻され、圧縮が実ゲームに届かなかった。
+    /// 2026-08-19（設計書21）から圧縮は恒等＝目標は raw そのもの（表示ランクと中身が一致）で、圧縮を入れたときは
+    /// 目標もそれに追従することを、圧縮あり（slope 0.55）の deps で別途固定する。
     /// </summary>
     [Theory]
     [InlineData(40)]
     [InlineData(55)]
     [InlineData(70)]
     [InlineData(85)]
-    public void Bootstrap_TeamOverall_TracksCompressedStrength(double strength)
+    public void Bootstrap_TeamOverall_TracksGrowthTarget(double strength)
     {
-        var deps = NoPhenomDeps();
-        var school = MakeSchool(strength: strength);
-        var roster = AiRosterFactory.Bootstrap(school, 1, deps);
+        foreach (var slope in new[] { 1.0, 0.55 })
+        {
+            var deps = NoPhenomDeps() with { Roster = new RosterCoefficients { TierCompressionSlope = slope } };
+            var school = MakeSchool(strength: strength);
+            var roster = AiRosterFactory.Bootstrap(school, 1, deps);
 
-        var team = AiTeamBuilder.Build(roster, school, 1, deps);
-        var overall = ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
-        var target = AiRosterCycle.GrowthTarget(school, deps);
+            var team = AiTeamBuilder.Build(roster, school, 1, deps);
+            var overall = ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
+            var target = AiRosterCycle.GrowthTarget(school, deps);
 
-        Assert.Equal(deps.Roster.CompressStrength(strength), target, 9);
-        Assert.InRange(overall, target - deps.Persistent.TargetTolerance - 3, target + deps.Persistent.TargetTolerance);
-        // 圧縮が効く帯（ピボット40より上）では raw より明確に低い＝raw へ戻す旧挙動の再発検出。
-        if (strength >= 55) Assert.True(overall < strength - 3, $"raw の強さまで育っている: overall={overall:F1} raw={strength}");
+            Assert.Equal(deps.Roster.CompressStrength(strength), target, 9);
+            Assert.InRange(overall, target - deps.Persistent.TargetTolerance - 3, target + deps.Persistent.TargetTolerance);
+            // 圧縮が効く帯（ピボット40より上）では raw より明確に低い＝raw へ戻す旧挙動の再発検出。恒等では raw に一致する。
+            if (slope < 1.0 && strength >= 55) Assert.True(overall < strength - 3, $"raw の強さまで育っている: overall={overall:F1} raw={strength}");
+        }
     }
 
     [Fact]

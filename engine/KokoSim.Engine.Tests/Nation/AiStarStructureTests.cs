@@ -12,11 +12,11 @@ using Xunit;
 namespace KokoSim.Engine.Tests.Nation;
 
 /// <summary>
-/// AI校の上位集中＝スター型（issue prefecture-dominance-star・OPEN-QUESTIONS Q24-4）。
-/// ティア圧縮で削った分（raw−圧縮後）をエース＋主軸へ戻し、脇役は圧縮後の中心のまま＝「強豪はエースが速く
+/// AI校の上位集中＝スター型（issue prefecture-dominance-star・OPEN-QUESTIONS Q24-4／設計書21）。
+/// 強い学校ほどエース＋主軸が突出し（lift＝(強さ−40)×0.25）、脇役は中心のまま＝「強豪はエースが速く
 /// 主軸が打つが打線は薄い」。使い捨て生成（<see cref="StrengthTeamFactory.Create"/>）と永続ロスター
-/// （<see cref="AiRosterFactory"/>）の両経路で構造が出ていること、弱小校には出ないこと、チーム総合が圧縮後の
-/// 尺度に留まることを固定する。
+/// （<see cref="AiRosterFactory"/>）の両経路で構造が出ていること、弱小校には出ないこと、チーム総合が raw の
+/// 尺度（圧縮は恒等）に留まることを固定する。
 /// </summary>
 public sealed class AiStarStructureTests
 {
@@ -30,13 +30,14 @@ public sealed class AiStarStructureTests
     private static double Bat(Player p) => (p.Contact + p.Power + p.Discipline) / 3.0;
 
     [Fact]
-    public void StarLift_IsZeroBelowPivot_AndEqualsRawMinusCompressedAtShareOne()
+    public void StarLift_IsZeroBelowPivot_AndGrowsWithStrength()
     {
         var c = new RosterCoefficients();
         Assert.Equal(0.0, c.StarLift(30.0), 9);
         Assert.Equal(0.0, c.StarLift(40.0), 9);
-        Assert.Equal(80.0 - c.CompressStrength(80.0), c.StarLift(80.0), 9);
+        Assert.Equal((80.0 - 40.0) * c.AiStarLiftPerPoint, c.StarLift(80.0), 9);   // 既定 0.25 → +10
         Assert.Equal(0.0, (c with { AiStarShare = 0.0 }).StarLift(80.0), 9);
+        Assert.Equal(c.StarLift(80.0) * 0.5, (c with { AiStarShare = 0.5 }).StarLift(80.0), 9);
     }
 
     /// <summary>使い捨て生成: 強度80の先発野手8人のうち主軸3人の打撃中心が脇役より明確に高く、エースの投手能力が控え投手より高い。</summary>
@@ -55,8 +56,8 @@ public sealed class AiStarStructureTests
             var ace = pitchers.Single(p => p.UniformNumber == 1);
             aceGaps.Add(ace.Pitching!.MaxVelocityKmh - pitchers.Where(p => p != ace).Average(p => p.Pitching!.MaxVelocityKmh));
         }
-        // 主軸の中心 = raw 80、脇役 = 62 − 0.3×18 ≈ 56.6 → 差 ≈ 23（観測は個体差で縮む）。一様圧縮（差 ≈ 8）と分離できる下限。
-        Assert.True(gaps.Average() > 14.0, $"主軸と脇役の打撃差が小さい: {gaps.Average():F1}");
+        // 主軸の中心 = 80＋10、脇役 = 80 − 0.3×10 = 77 → 差 ≈ 13（観測は個体差で縮む）。スター無し（差 ≈ 8）と分離できる下限。
+        Assert.True(gaps.Average() > 10.0, $"主軸と脇役の打撃差が小さい: {gaps.Average():F1}");
         Assert.True(aceGaps.Average() > 4.0, $"エースと控え投手の球速差が小さい: {aceGaps.Average():F1} km/h");
     }
 
@@ -75,7 +76,7 @@ public sealed class AiStarStructureTests
         Assert.True(gaps.Average() < 12.0, $"弱小校に主軸構造が出ている: {gaps.Average():F1}");
     }
 
-    /// <summary>share=0 は一様圧縮＝スター無し（比較用の固定。旧挙動へ戻せる）。</summary>
+    /// <summary>share=0 はスター無し（比較用の固定。旧挙動へ戻せる）。</summary>
     [Fact]
     public void ShareZero_IsUniformCompression()
     {
@@ -113,7 +114,7 @@ public sealed class AiStarStructureTests
 
     /// <summary>
     /// 永続ロスター（実ゲーム経路）: 強度80校の年度3チームは、エースの最速が脇の投手より速く、主軸3人が脇6人より打ち、
-    /// それでもチーム総合（6指標）は圧縮後の目標（62）近傍＝逆算配分が脇役で吸収する。
+    /// それでもチーム総合（6指標）は目標（<see cref="AiRosterCycle.GrowthTarget"/>＝raw 80）近傍＝逆算配分が脇役で吸収する。
     /// </summary>
     [Fact]
     public void Persistent_StrongSchool_TopHeavy_ButOverallStaysOnCompressedScale()
@@ -138,7 +139,8 @@ public sealed class AiStarStructureTests
         }
         var target = deps.Roster.CompressStrength(80.0);
         Assert.InRange(overalls.Average(), target - 3.0, target + 3.0);
-        Assert.True(gaps.Average() > 10.0, $"永続ロスターに主軸構造が出ていない: {gaps.Average():F1}");
-        Assert.True(aceKmh.Average() >= 142.0, $"強度80校のエース最速が遅い: {aceKmh.Average():F1} km/h（一様圧縮 ≈139）");
+        // 主軸 +10 vs 脇（逆算配分で −3 前後）→ 差 ≈ 8〜13。スター無しの個体差（≈4）と分離できる下限。
+        Assert.True(gaps.Average() > 6.0, $"永続ロスターに主軸構造が出ていない: {gaps.Average():F1}");
+        Assert.True(aceKmh.Average() >= 144.0, $"強度80校のエース最速が遅い: {aceKmh.Average():F1} km/h（旧・一様圧縮 ≈139）");
     }
 }

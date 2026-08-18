@@ -65,10 +65,10 @@ public static class RunnerClock
                + extraStartDelaySeconds;
     }
 
-    /// <summary>選手から直接引く版（走塁の脚力は守備投影のスプリント速度と同一定義）。</summary>
+    /// <summary>選手から直接引く版（表示→物理の効き付き・設計書21）。試合の解決はこちらを通す。</summary>
     public static double SegmentSeconds(
-        Player runner, int fromBase, int toBase, in RunnerContext ctx, FieldGeometry field,
+        Player runner, Players.AbilityEffectCoefficients effect, int fromBase, int toBase, in RunnerContext ctx, FieldGeometry field,
         double extraStartDelaySeconds = 0.0)
         => SegmentSeconds(
-            runner.ToFielder().SprintSpeedMps, fromBase, toBase, ctx, field, extraStartDelaySeconds);
+            runner.ToFielder(effect).SprintSpeedMps, fromBase, toBase, ctx, field, extraStartDelaySeconds);
 }

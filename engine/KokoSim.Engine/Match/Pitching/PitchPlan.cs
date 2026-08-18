@@ -22,6 +22,16 @@ public sealed record PitchPlan
     public required double Stuff { get; init; }
 
     /// <summary>
+    /// 打者の反応に使う球速[km/h]（設計書21・<see cref="Players.AbilityEffectCoefficients.PitchingKmh"/>）。
+    /// 実球速 <see cref="VelocityKmh"/> は表示・弾道（飛翔時間・変化量）にそのまま使い、球威・タイミング・打球質・バント難度は
+    /// こちらを読む。null＝実球速と同じ（テスト等で直接組んだ PitchPlan の後方互換）。
+    /// </summary>
+    public double? ReactionVelocityKmh { get; init; }
+
+    /// <summary>反応球速（未設定なら実球速）。</summary>
+    public double ReactionKmh => ReactionVelocityKmh ?? VelocityKmh;
+
+    /// <summary>
     /// この球を投げた投手のコントロールLevel。打球質（芯を外させる度合い）の算出に使う
     /// （<see cref="Batting.ContactModel.PitcherContactQualityBias"/>）。既定50＝リーグ平均で恒等。
     /// </summary>
@@ -74,12 +84,15 @@ public static class PitchSelection
 
         // 球種の球速比を掛けた実投球速度（表示・実況・タイムライン用）。
         var pitchVelo = rawVelo * slot.SpeedRatio;
+        // 打者の反応に使う球速（設計書21）: 効きが焼いた反応オフセット（速い投手ほど負）を足す＝ストレートの速さの差だけを
+        // Lv50=132km/h 軸で寝かせ、消耗・ギア・ドロップ・球種の緩急はそのまま。オフセット0（効き1.0／平均投手）で rawVelo と同値。
+        var reactionRaw = rawVelo + pitcher.ReactionVelocityOffsetKmh;
 
         // ③ 球威 = 腕の振り（生球速）成分 ＋ 捕手リード成分。
         // 球種ランク（球威×キレ）の効きは設計書15 Phase E-2 で弾道由来の変化量へ完全移管した
         // （Sharpness→rpm→変化量の経路で既に織り込み済みのため、ここでの直参照は廃止＝二重計上回避）。
         // 捕手リード（設計書01 §2①）: 良い配球ほど球威が引き立つ。50=平均で恒等（帯不変）。
-        var stuff = (rawVelo - coeff.StuffBaseVelocityKmh) * coeff.StuffPerKmh
+        var stuff = (reactionRaw - coeff.StuffBaseVelocityKmh) * coeff.StuffPerKmh
                     + (catcherLead - 50) * pitching.CatcherLeadStuffPerPoint;
 
         return new PitchPlan
@@ -88,6 +101,7 @@ public static class PitchSelection
             AimX = aimX,
             AimY = aimY,
             VelocityKmh = pitchVelo,
+            ReactionVelocityKmh = reactionRaw * slot.SpeedRatio,
             Stuff = stuff,
             ControlLevel = pitcher.Control,
         };

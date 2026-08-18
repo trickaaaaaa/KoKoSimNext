@@ -1223,6 +1223,10 @@ public sealed class TeamState
 
     /// <summary>守備陣（打順の非投手8人＋現投手）を守備位置に配置する。DH制ではDHが守備に就かない（§6）。</summary>
     public IReadOnlyList<Fielder> DefensiveAlignment(FieldGeometry field)
+        => DefensiveAlignment(field, Players.AbilityEffectCoefficients.Identity);
+
+    /// <summary>守備陣（表示→物理の効き付き・設計書21）。試合の解決はこちらを通す。</summary>
+    public IReadOnlyList<Fielder> DefensiveAlignment(FieldGeometry field, Players.AbilityEffectCoefficients effect)
     {
         var byPos = new Dictionary<FieldPosition, FielderAttributes>();
         var skipSlot = _usesDh ? _dhSlot : _pitcherSlot;
@@ -1230,9 +1234,9 @@ public sealed class TeamState
         {
             if (i == skipSlot) continue;
             var p = _lineup[i];
-            byPos[p.Position] = p.ToFielder();
+            byPos[p.Position] = p.ToFielder(effect);
         }
-        byPos[FieldPosition.Pitcher] = CurrentPitcher.ToFielder();
+        byPos[FieldPosition.Pitcher] = CurrentPitcher.ToFielder(effect);
         return field.AlignmentFrom(byPos);
     }
 }

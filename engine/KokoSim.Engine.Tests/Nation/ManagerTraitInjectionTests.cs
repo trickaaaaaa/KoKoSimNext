@@ -115,13 +115,16 @@ public sealed class ManagerTraitInjectionTests
         var plain = Sch(420, 65);
         var opponent = StrengthTeamFactory.Create(60, "対戦相手", new Xoshiro256Random(4242));
 
+        // 監督傾向の配線を見るテストなので、俊足の探針チーム（走力88/盗塁88）を額面どおり効かせる（効き＝恒等）。
+        // 既定の効き 0.55 では 88→71 に寝て成功見込みが閾値を割り、傾向の有無に関わらず企図が消える。
+        var ctx = new GameContext().WithAbilityEffect(AbilityEffectCoefficients.Identity);
         int Steals(School s)
         {
-            var team = SpeedyOnBaseTeam(EnemyAiFactory.BrainFor(s));
+            var team = SpeedyOnBaseTeam(EnemyAiFactory.BrainFor(s, baserunning: ctx.Baserunning));
             var total = 0;
             const int games = 100;
             for (ulong i = 0; i < games; i++)
-                total += GameEngine.Play(team, opponent, new GameContext(), new Xoshiro256Random(7000 + i)).AwayTactics.StealAttempts;
+                total += GameEngine.Play(team, opponent, ctx, new Xoshiro256Random(7000 + i)).AwayTactics.StealAttempts;
             return total;
         }
 

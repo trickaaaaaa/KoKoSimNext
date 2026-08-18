@@ -95,7 +95,10 @@ public sealed record RosterCoefficients
     /// 格差マッチの得点差が緩む（issue #536 の実測: 実力差10ポイントごとに得点が約0.4倍）。
     /// <b>全国トップ校の絶対能力も同時に下がる</b>ので、値は実測（<c>simulate-tiers</c>）で決める。
     /// </summary>
-    public double TierCompressionSlope { get; init; } = 0.55;
+    /// <para>2026-08-19（設計書21・案C）: 0.55 → <b>1.0（圧縮なし）</b>。ティア圧縮はAI校だけを寝かせるため表示ランクと中身が乖離した。
+    /// 代わりに表示→物理の効き（<see cref="Players.AbilityEffectCoefficients"/>）を全員対称に寝かせる＝raw が中身。写像の式は
+    /// 比較・実験用に残す（slope=1・knee=100 は恒等）。</para>
+    public double TierCompressionSlope { get; init; } = 1.0;
 
     /// <summary>
     /// 圧縮を掛ける上限（この強度より上は圧縮せず、100 で元の尺度へ戻るよう傾きを起こす）。
@@ -214,8 +217,14 @@ public sealed record RosterCoefficients
     // スターは打撃（主軸）か投球（エース）の能力中心だけ lift×share を上乗せし、脇役は圧縮後の中心のまま。
     // 使い捨て生成（StrengthTeamFactory.Create）は脇役を lift×cast_drop だけ下げてチーム総合を圧縮後の尺度に留める。
     // 永続ロスターは逆算配分（AiRosterCycle.Settle）が総合を圧縮後の目標へ寄せるので脇役の補正は自動で決まる。
-    /// <summary>スターへ戻す割合（1.0＝スターの中心は raw の強さ・0＝スター無し＝一様圧縮）。</summary>
+    /// <summary>スターの上乗せの割合（1.0＝既定量・0＝スター無し）。</summary>
     public double AiStarShare { get; init; } = 1.0;
+    /// <summary>
+    /// スターの上乗せ量＝(強さ − ピボット40)×これ×share（2026-08-19・設計書21）。圧縮を撤去したので「圧縮で削った分を戻す」
+    /// 定義から「強い学校ほどエース・主軸が突出する」定義へ。0.25 で raw 80 の校はエース/主軸 +10（Lv 90＝エース最速 146km/h）、
+    /// 脇役は Create で −3（総合据え置き）。永続ロスターは逆算配分が総合を raw に留めるので脇役の補正は自動。
+    /// </summary>
+    public double AiStarLiftPerPoint { get; init; } = 0.25;
     /// <summary>使い捨て生成（Create）で先発野手8人のうち主軸にする人数。</summary>
     public int AiStarHitters { get; init; } = 3;
     /// <summary>永続ロスターの1学年（コホート）あたりの主軸打者の人数（3学年で Create の人数に揃える）。</summary>
@@ -225,9 +234,9 @@ public sealed record RosterCoefficients
     /// <summary>使い捨て生成で脇役の中心を lift×これ だけ下げ、チーム総合（6指標）を圧縮後の尺度に留める。</summary>
     public double AiStarCastDrop { get; init; } = 0.30;
 
-    /// <summary>スターへ戻す量＝(raw − 圧縮後)×share。ピボットより弱い学校（圧縮で持ち上がる側）は 0。</summary>
+    /// <summary>スターの上乗せ量＝(強さ − ピボット)×lift_per_point×share。ピボット（40）より弱い学校は 0。</summary>
     public double StarLift(double strength)
-        => Math.Max(0.0, strength - CompressStrength(strength)) * AiStarShare;
+        => Math.Max(0.0, strength - TierCompressionPivot) * AiStarLiftPerPoint * AiStarShare;
 
     // --- 投打の利き（設計書01 §1.1c） ---
     public double ThrowLeftProb { get; init; } = 0.12;

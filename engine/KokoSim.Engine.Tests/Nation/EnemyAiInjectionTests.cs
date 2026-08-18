@@ -103,13 +103,16 @@ public sealed class EnemyAiInjectionTests
         var standard = Sch(310, strength: 65, style: SchoolStyle.Standard); // 同Id=同校風以外は同一プロファイル
         var opponent = StrengthTeamFactory.Create(60, "対戦相手", new Xoshiro256Random(4242));
 
+        // 校風の配線を見るテストなので、俊足の探針チーム（走力88/盗塁88）を額面どおり効かせる（効き＝恒等）。
+        // 既定の効き 0.55 では 88→71 に寝て、対 C校捕手の成功見込みが閾値 0.72 を割り込み両校風とも企図が消える。
+        var ctx = new GameContext().WithAbilityEffect(AbilityEffectCoefficients.Identity);
         int Steals(School school)
         {
-            var team = SpeedyOnBaseTeam(EnemyAiFactory.BrainFor(school));
+            var team = SpeedyOnBaseTeam(EnemyAiFactory.BrainFor(school, baserunning: ctx.Baserunning));
             var total = 0;
             const int games = 100;
             for (ulong i = 0; i < games; i++)
-                total += GameEngine.Play(team, opponent, new GameContext(), new Xoshiro256Random(7000 + i)).AwayTactics.StealAttempts;
+                total += GameEngine.Play(team, opponent, ctx, new Xoshiro256Random(7000 + i)).AwayTactics.StealAttempts;
             return total;
         }
 

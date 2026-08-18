@@ -29,10 +29,10 @@ public sealed class ScoutedTeamProfileTests
         var strong = ScoutedTeamProfile.Compute(StrengthTeamFactory.ForSchool(School(2, 80), 0), C);
 
         Assert.True(strong.Overall > weak.Overall);
-        // 圧縮後の Strength（一様0.55: 30→34.5 / 80→62）と同尺度に収まる。生成中心＝圧縮後の値で
-        // Overall ≒ 中心−5 なので、強度80校は 55 前後（表示ランク A・中身 C+）。
+        // 学校の強さ（raw。圧縮は恒等＝設計書21）と同尺度に収まる。生成中心＝raw で Overall ≒ 中心−5 なので
+        // 強度80校は 72〜80 前後（表示ランク A・中身も A/B+＝乖離しない）。
         Assert.InRange(weak.Overall, 15, 45);
-        Assert.InRange(strong.Overall, 50, 70);
+        Assert.InRange(strong.Overall, 65, 85);
     }
 
     [Fact]

@@ -51,6 +51,25 @@ pitching:
   gear_coast_velocity_penalty_kmh: 2.5
   gear_coast_stamina_factor: 0.7
 
+# --- 表示能力→物理層の効き（設計書21・issue prefecture-dominance-physics, 2026-08-19） ---
+# エンジンは「チーム全体が10Lv上＝勝率90%」と急で、AI校だけを生成で寝かせる圧縮（roster.tier_compression_*）は表示ランクと中身を
+# 乖離させた。代わりに表示→物理の境界（Player.ToBatter/ToFielder・AbilityEffectCoefficients.Pitcher・PitchPlan.ReactionVelocityKmh）で
+# 全員対称に effective = pivot + scale×(Lv−pivot) を掛ける。表示Lv・最速km/h・目安球数・3D表現は変えず、動くのは「Lv1あたりの結果の差」だけ。
+# 正典はこの1ブロック。ローダが batting/fielding/baserunning の3ブロックへ同じ値を配る（食い違いは AbilityEffectConsistencyTests）。
+# 実測（永続ロスター同士＝実ゲーム経路・スター lift 0.25・300試合×2方向）:
+#   全部1.0: 80vs75 74.5%／80vs70 86%／80vs65 96%／60vs50 94%（10Lv差≈90%＝急すぎ）
+#   投手1.0/打撃0.5/守備0.4/走力0.5: 65／78／89／85 だが 80vs80 が 1.3−1.3 の投手戦（投手だけ素の効きだと強豪戦が全部投手戦）
+#   全員一律 0.55（守備0.45）: 65／82／88／81、80vs80 2.4−2.4 → 案A採用（オーナー決定 2026-08-19）。エースの突出はスター（roster.ai_star_*）で。
+ability_effect:
+  pivot: 50.0
+  batting_scale: 0.55    # ミート/パワー/選球眼/バント
+  fielding_scale: 0.45   # 守備/捕球/肩/送球（守備+10 の得点価値が打撃+10 より大きいので少し深く）
+  running_scale: 0.55    # 走力/盗塁/走塁
+  # 投手（制球/キレ/球威ランク/捕手リード）と球速の反応。球速は km/h が画面に出るので実球速は変えず、打者の反応
+  # （球威・タイミング・打球質・バント難度）に使う反応球速だけを Lv50=132km/h 軸で寝かせる。スタミナ（目安球数）も据え置き。
+  # 案A（オーナー決定 2026-08-19）: 投手を寝かせないと 80vs80 が 1.3−1.3 の投手戦（実測）。全員一律≈0.55 で 2.4−2.4。
+  pitching_scale: 0.55
+
 # --- 打撃（打席解決の確率・物理変換, Phase 1 統計回帰で調整済み） ---
 # league-average 母集団で AVG≈.265 / K%≈19.6 / BB%≈8.6 / HR%≈3.1 に収まる初期値。
 batting:
@@ -131,7 +150,10 @@ batting:
   # 2026-08-18: 3項を ×3（旧 0.0010/-0.0010/-0.30）。旧値だとエースが本塁打を減らせるのは三振の分だけで、当てられれば
   # F投手と同じ本塁打率だった（issue pitcher-barely-affects-contact-quality）。
   contact_quality_velocity_ref_kmh: 121.5  # 平均的な配球の実投球速度（ストレート比0.55×球種の球速比込み）
-  contact_quality_per_kmh: 0.0030          # 速い球は当たれば強い打球（本格派の代償）
+  # 2026-08-19（設計書21・球速の価値）: +0.0030 では球速Lv 50→90 で打球あたり安打率 .323→.376・本塁打率 1.8→3.45% と「速い投手ほど
+  # 打たれる」になり三振増と相殺＝球速+10 の得点差 ±0（Q24-1 の倍化が無効化されていた）。−0.0050 で打球の質を球速に対して平坦〜微減
+  # （差し込まれ）にする＝球速+10 ≈ 制球+10（AVG −.017）。単一対戦の実測は OPEN-QUESTIONS Q24-5。
+  contact_quality_per_kmh: -0.0050         # 速い球は差し込まれる（当たっても弱い）
   contact_quality_per_control: -0.0030     # 制球が良いほど芯を外させる（技巧派の武器）
   contact_quality_break_ref_m: 0.47        # 132km/h・2200rpm の誘発変化合成量
   contact_quality_per_break_m: -0.90       # 変化が大きいほど詰まる
@@ -990,7 +1012,10 @@ nation:
   # （宮崎 seed2026 は 81.8 vs 65.6）、その県は生成時点で一強が確定していた。
   storied_strength_bonus: 4.0
   emerging_fame_penalty: -5.0
-  aggregate_scale: 4.0        # 強さ差→勝率。GameEngineにキャリブレーション（差10→≈0.92）。圧縮後の差で引くので膝の有無に追従する
+  # 強さ差→勝率のロジスティック尺度。フルシム（実ゲーム経路＝永続ロスター同士）へ校正: 4.0→7.2（2026-08-19・設計書21）。
+  # 圧縮撤去＋効き ability_effect ≈0.55 の世界で 差5→63%／10→77〜84%／15→88%／20→95%／30→99% を fit すると 6〜9（平均 7.1）。
+  # 旧 4.0 は圧縮0.55の差で引いていた（＝raw 差なら 4/0.55≈7.3）ので、実質据え置き。Heavy AggregateModel_MatchesGameEngineWinRate が固定する。
+  aggregate_scale: 7.2
   # 年次進化（issue prefecture-dominance・2026-08-18）: 旧 rev 0.10 / churn 5.5 / per_win 0.12 だと強さ82の校の期待ドリフトが
   # −2/年＝一度覇権を取った校が10年近く落ちず、集計20年×49地区で最多優勝校の中央値 9/20・10回以上が15地区。
   # rev 0.15 / churn 6.5 / per_win 0.06 で中央値 5〜7/20・10回以上 4〜7地区（現実の県の分布に近い）。
@@ -1242,7 +1267,9 @@ roster:
   # 自校（ProspectGenerator）は対象外なので、ピボットを平均帯(50)に置くと自校との差が縮まらず効果が出ない
   # ＝自校の実力域（≒35〜40）に置く。表示ランク（School.Strength）は圧縮しない（確定4＝表示は直さない）。
   tier_compression_pivot: 40.0
-  tier_compression_slope: 0.55  # 実測で決めた値（自校の完封され率 D50 21.2%→10.2% / C60 40.3%→21.5%）
+  # 2026-08-19（設計書21・案C）: 0.55 → 1.0（圧縮なし）。AI校だけを寝かせる圧縮は表示ランクと中身を乖離させるので撤去し、
+  # 代わりに ability_effect:（表示→物理の効き）を全員対称に寝かせる＝raw が中身。式は比較・実験用に残す（slope=1・knee=100 は恒等）。
+  tier_compression_slope: 1.0
   # 膝（issue prefecture-dominance・2026-08-18 で 60→100＝膝なし・一様圧縮）: 膝60は「上を100で元尺度へ戻す」勾配1.225で
   # 上位帯の差を raw より拡大し（80→75.5 / 65→57.1）、県1位 vs 2位（差15）が単試合 99%＝同じ校が毎年優勝する主因だった。
   # 一様0.55: 80vs75 63% / 80vs70 75% / 80vs65 86% / 80vs60 92% / 80vs50 98%（フルシム実測）。代償として強度85の校の
@@ -1291,7 +1318,9 @@ roster:
   # AI校の上位集中＝スター型（issue prefecture-dominance-star, 2026-08-18）: ティア圧縮を一様に掛けると上位校のエースが平凡になる
   # （A校のエース最速 138km/h）。圧縮で削った分（raw−圧縮後）をエース＋主軸へ戻し、脇役は圧縮後の中心のまま＝現実の強豪の形。
   # チーム総合（6指標）は圧縮後の尺度に留める（Create は脇役を lift×cast_drop 下げる／永続ロスターは逆算配分が自動で寄せる）。
-  ai_star_share: 1.0               # スターの中心 = 圧縮後 + (raw−圧縮後)×これ（1.0＝raw そのもの／0＝一様圧縮）
+  ai_star_share: 1.0               # スターの上乗せの割合（1.0＝既定量／0＝スター無し）
+  # 2026-08-19: 圧縮撤去に伴い lift の定義を「圧縮で削った分」から (強さ−40)×これ へ。raw 80 でエース/主軸 +10（Lv 90＝146km/h）
+  ai_star_lift_per_point: 0.25
   ai_star_hitters: 3               # 使い捨て生成（Create）: 先発野手8人のうち主軸の人数
   ai_star_hitters_per_cohort: 1    # 永続ロスター: 1学年あたりの主軸打者（3学年で Create と同数）
   ai_star_pitchers_per_cohort: 1   # 永続ロスター: 1学年あたりのエース格（投手適性順）

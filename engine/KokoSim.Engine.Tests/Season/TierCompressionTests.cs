@@ -11,8 +11,8 @@ namespace KokoSim.Engine.Tests.Season;
 ///
 /// <para>#536 の実測で分かったのは「Fランクが弱い」ではなく<b>勾配が急すぎる</b>こと
 /// （強度10ポイント＝表示1ティアごとに得点が約0.4倍）だった。ここでは写像そのものの性質
-/// （恒等・単調・ピボット不動・上位帯の差が縮む）を固定する。得点環境が目標に入るかは
-/// <c>simulate-tiers</c> の実測で見る（帯としての固定は Step 4）。</para>
+/// （恒等・単調・ピボット不動・上位帯の差が縮む）を固定する。2026-08-19（設計書21）から既定は恒等＝
+/// 寝かせる役は表示→物理の効き <c>ability_effect</c> に移り、圧縮は比較・実験用の式として残る。</para>
 /// </summary>
 public sealed class TierCompressionTests
 {
@@ -38,22 +38,27 @@ public sealed class TierCompressionTests
     }
 
     /// <summary>
-    /// 既定は膝なし（knee=100）の一様圧縮（issue prefecture-dominance・2026-08-18）。旧既定の膝60は
-    /// 「上を100で元尺度へ戻す」勾配 1.225 で上位帯の差を raw より広げ（80→75.5 / 65→57.1＝差18.4）、
-    /// 県1位 vs 2位が単試合 99% になっていた。一様なら差15 → 8.25（86%）。膝の式自体は残す（比較・実験用）。
+    /// 既定は<b>恒等</b>（slope 1.0・knee 100。設計書21・2026-08-19）。AI校だけを生成で寝かせる圧縮は表示ランクと中身を
+    /// 乖離させたので廃止し、勾配を寝かせる役は表示→物理の効き（<c>ability_effect</c>）が全員対称に担う。
+    /// 式は比較・実験用に残す（slope 0.55＝一様圧縮／knee 60＝旧既定の膝）ので、その性質も固定しておく。
     /// </summary>
     [Fact]
-    public void Default_IsUniform_TopGapNarrowed()
+    public void Default_IsIdentity_AndTheFormulaStillWorksForExperiments()
     {
         var c = new RosterCoefficients();
+        Assert.Equal(1.0, c.TierCompressionSlope, 9);
         Assert.Equal(100.0, c.TierCompressionKnee, 6);
-        Assert.Equal(40.0 + 0.55 * 40.0, c.CompressStrength(80.0), 6);          // 62.0
-        Assert.Equal(40.0 + 0.55 * 25.0, c.CompressStrength(65.0), 6);          // 53.75
-        var gap = c.CompressStrength(80.0) - c.CompressStrength(65.0);
-        Assert.True(gap < 15.0 * 0.6, $"上位帯の差が縮んでいない: 80vs65 → {gap:F2}");
+        foreach (var s in new[] { 10.0, 40.0, 65.0, 80.0, 99.0 })
+            Assert.Equal(s, c.CompressStrength(s), 9);
 
-        // 膝60（旧既定）は上位帯の差を raw より広げる＝一強の主因。式は生きていることも固定する。
-        var kneed = c with { TierCompressionKnee = 60.0 };
+        // 一様 0.55（2026-08-18 の旧既定）: 80→62 / 65→53.75、上位帯の差 15 → 8.25。
+        var uniform = c with { TierCompressionSlope = 0.55 };
+        Assert.Equal(40.0 + 0.55 * 40.0, uniform.CompressStrength(80.0), 6);
+        Assert.Equal(40.0 + 0.55 * 25.0, uniform.CompressStrength(65.0), 6);
+        Assert.True(uniform.CompressStrength(80.0) - uniform.CompressStrength(65.0) < 15.0 * 0.6);
+
+        // 膝60（#578 の旧既定）は「上を100で元尺度へ戻す」勾配 1.225 で上位帯の差を raw より広げる＝一強の主因だった。
+        var kneed = uniform with { TierCompressionKnee = 60.0 };
         Assert.Equal(100.0, kneed.CompressStrength(100.0), 6);
         Assert.True(kneed.CompressStrength(80.0) - kneed.CompressStrength(65.0) > 15.0,
             $"膝60は上位帯を raw より広げるはず: {kneed.CompressStrength(80.0) - kneed.CompressStrength(65.0):F2}");
@@ -73,11 +78,11 @@ public sealed class TierCompressionTests
         }
     }
 
-    /// <summary>低ティア帯の実力差が実際に縮む（勾配を緩めるという目的の直接確認）。</summary>
+    /// <summary>圧縮を入れたとき低ティア帯の実力差が実際に縮む（式の向きの直接確認。既定は恒等なので明示 0.55）。</summary>
     [Fact]
     public void LowTierGap_IsNarrowed()
     {
-        var c = new RosterCoefficients();
+        var c = new RosterCoefficients { TierCompressionSlope = 0.55 };
         var before = 50.0 - 35.0;                                     // 自校(≒35) と D(50) の実力差
         var after = c.CompressStrength(50.0) - 35.0;
         Assert.True(after < before * 0.75, $"低ティア差が縮んでいない: {before:F1} → {after:F1}");
@@ -85,14 +90,14 @@ public sealed class TierCompressionTests
 
     /// <summary>
     /// 生成の入口が圧縮を通っている（写像を足しただけで呼ばれていない、を防ぐ）。
-    /// <see cref="StrengthTeamFactory.Create"/> は Unity 実プレイの大会展望・練習試合の経路。
+    /// <see cref="StrengthTeamFactory.Create"/> は Unity 実プレイの大会展望・練習試合の経路。既定は恒等なので圧縮側を明示する。
     /// </summary>
     [Fact]
     public void StrengthTeamFactory_AppliesCompression()
     {
-        var compressed = StrengthTeamFactory.Create(30.0, "圧縮あり", new Xoshiro256Random(7));
-        var raw = StrengthTeamFactory.Create(30.0, "圧縮なし", new Xoshiro256Random(7),
-            rosterCoeff: new RosterCoefficients { TierCompressionSlope = 1.0, TierCompressionKnee = 100.0 });
+        var compressed = StrengthTeamFactory.Create(30.0, "圧縮あり", new Xoshiro256Random(7),
+            rosterCoeff: new RosterCoefficients { TierCompressionSlope = 0.55, TierCompressionKnee = 100.0 });
+        var raw = StrengthTeamFactory.Create(30.0, "圧縮なし", new Xoshiro256Random(7));
 
         var a = Average(compressed);
         var b = Average(raw);

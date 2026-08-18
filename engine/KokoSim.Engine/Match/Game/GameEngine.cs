@@ -666,10 +666,12 @@ public static class GameEngine
             // 打席頭と、采配窓で継投・代打が入ったときの束縛し直し（RebindMatchup）が同じ式を通る＝一箇所に置く。
             (PitcherAttributes Pitcher, BatterAttributes BatterBase, SkillPlayMods PlayMods) EffectiveMatchup()
             {
-                var pit = PitchingFatigue.Effective(currentPitcher, defense.FatiguePitches, fatigue);
+                // 表示→物理の効き（設計書21）: 投手は制球・キレを Lv で寝かせる（球速の反応は PitchSelection・スタミナは据え置き）。
+                var pit = PitchingFatigue.Effective(ctx.Batting.AbilityEffect.Pitcher(currentPitcher.Pitching), defense.FatiguePitches, fatigue);
                 // 調子・当日の出来（設計書02 §3.3/§3.3b）。
                 pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, FormOf(dayForm, currentPitcher), ctx.Form);
-                var bat = Players.FormModel.ApplyBatter(batter.ToBatter(), batter.Condition, FormOf(dayForm, batter), ctx.Form);
+                // 表示→物理の効き（設計書21）は ToBatter の中＝ここが打者側の唯一の入口。
+                var bat = Players.FormModel.ApplyBatter(batter.ToBatter(ctx.Batting.AbilityEffect), batter.Condition, FormOf(dayForm, batter), ctx.Form);
 
                 // スキル（設計書10）: 尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
                 var priorPa = offense.PriorPlateAppearances(batter);
@@ -714,7 +716,7 @@ public static class GameEngine
             // 打席途中に押されうるので下の投球ループで球ごとに取り直す。
             double SqueezeWasteNow() => MathUtil.Clamp(
                 ctx.Tactics.SqueezeReadBase
-                + (defense.Catcher.Fielding - 50) * ctx.Tactics.SqueezeReadPerLead
+                + (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Fielding) - 50) * ctx.Tactics.SqueezeReadPerLead
                 + (outs == 1 && Math.Abs(offense.Runs - defense.Runs) <= 1
                     ? ctx.Tactics.SqueezeReadObviousBonus : 0.0),
                 0.0, 0.60);
@@ -774,7 +776,7 @@ public static class GameEngine
 
             // 守備指示→初期守備位置（陣形の効果は幾何＝物理から出る, §2.1）。基準配置を控えておき、陣形を
             // 1球単位で上書き（issue #492）するときはこの基準から組み直す。
-            var baseAlignment = defense.DefensiveAlignment(ctx.Field);
+            var baseAlignment = defense.DefensiveAlignment(ctx.Field, ctx.Fielding.AbilityEffect);
             var fielders = AlignmentTactics.Adjust(baseAlignment, defTactics, ctx.Tactics);
             // 打席文脈（守備配置・配球方針・捕手リード・スキル）。打席頭と束縛し直し（RebindMatchup）が同じ式を通る。
             AtBatContext BuildAtBatContext()
@@ -783,7 +785,7 @@ public static class GameEngine
                     ? (PitchDirective?)null
                     : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
                 // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。名捕手（設計書10）は実効リードを底上げ。
-                var catcherLead = defense.Catcher.Lead
+                var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead)
                     + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
                 return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
                     gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
@@ -821,7 +823,7 @@ public static class GameEngine
                     && (bases.Second is not null || bases.Third is not null)
                     && batter.ChanceHitFactor != 1.0;
                 batterAttrs = BatterFor(offense.BattingApproach, brainHitAndRun);
-                baseAlignment = defense.DefensiveAlignment(ctx.Field);   // 投野交代・守備交代で野手が代わりうる
+                baseAlignment = defense.DefensiveAlignment(ctx.Field, ctx.Fielding.AbilityEffect);   // 投野交代・守備交代で野手が代わりうる
                 fielders = AlignmentTactics.Adjust(baseAlignment, defTactics, ctx.Tactics);
                 abCtx = BuildAtBatContext();
                 session.RebindMatchup(batterAttrs, pitcher, abCtx, batter);
@@ -1381,7 +1383,7 @@ public static class GameEngine
                         paBaserunning.WildPitchProb - (pitcher.Control - 50) * paBaserunning.WildPitchControlSlope,
                         0.0, 1.0);
                     var pbProb = MathUtil.Clamp(
-                        paBaserunning.PassedBallProb - (defense.Catcher.Catching - 50) * paBaserunning.PassedBallCatchingSlope,
+                        paBaserunning.PassedBallProb - (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Catching) - 50) * paBaserunning.PassedBallCatchingSlope,
                         0.0, 1.0);
                     // 着弾コースのゲート（issue #525・監督判断 2026-08-07）: 捕手が捕り損ねうる球（低い球/大きく
                     // 外れた球）だけを対象にする。ゾーン内の捕れる球は構造的に対象外＝捕れる球が後逸にならない。
@@ -1853,7 +1855,7 @@ public static class GameEngine
             {
                 var reachProb = MathUtil.Clamp(
                     paBaserunning.DropThirdStrikeReachProb
-                    - (defense.Catcher.Catching - 50) * paBaserunning.DropThirdStrikeCatchingSlope,
+                    - (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Catching) - 50) * paBaserunning.DropThirdStrikeCatchingSlope,
                     0.0, 0.95);
                 if (MathUtil.Chance(reachProb, rng)
                     && session.PitchLog.Count > 0

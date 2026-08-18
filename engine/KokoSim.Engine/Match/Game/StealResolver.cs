@@ -85,12 +85,12 @@ public static class StealResolver
     public static double RunnerTimeSeconds(Player runner, BaserunningCoefficients c, StartType startType = StartType.Normal,
         StealTarget target = StealTarget.Second)
     {
-        var startDelay = Math.Max(0.10, c.StealReactionIntercept - runner.Steal * c.StealReactionSlope);
+        var startDelay = Math.Max(0.10, c.StealReactionIntercept - c.AbilityEffect.Running(runner.Steal) * c.StealReactionSlope);
         if (startType == StartType.Gamble) startDelay = Math.Max(0.05, startDelay - c.GambleJumpBonusSeconds);
         // ジャンプ（投手の始動を読んで既に動き出している分）。床の**後**に引く＝全走者から同じ秒だけ
         // 引かれる（理由は StealJumpCreditSeconds のコメント）。
         startDelay -= c.StealJumpCreditSeconds;
-        return c.StealLeadDistanceM / runner.ToFielder().SprintSpeedMps + startDelay;
+        return c.StealLeadDistanceM / runner.ToFielder(c.AbilityEffect).SprintSpeedMps + startDelay;
     }
 
     /// <summary>守備所要時間[s]（投手クイック＋捕手ポップ＋タッチ）。ピッチアウト成立で捕手優位＝短縮（G3）。
@@ -108,7 +108,7 @@ public static class StealResolver
         else
         {
             var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
-            var catcherFielder = catcher.ToFielder();
+            var catcherFielder = catcher.ToFielder(c.AbilityEffect);
             var throwTime = throwDistance / catcherFielder.ThrowSpeedMps;
             // 捕手の握り替え（ポップ）を守備力で伸縮（Issue #36）。守備50で×1.0＝現行と恒等。
             var popTransfer = c.PopTransferSeconds * catcherFielder.TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);

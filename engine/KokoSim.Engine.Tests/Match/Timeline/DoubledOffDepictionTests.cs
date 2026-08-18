@@ -70,7 +70,7 @@ public sealed class DoubledOffDepictionTests
         Assert.Equal(First, back.To);
         Assert.Equal(TimelineBuilder.ContactAt + 2.2 + Baserunning.DoubledOffReverseSeconds, back.T0, 6);
         // 戻りの尺は判定と同じ「リード÷脚力」
-        var speed = move.Runner.ToFielder().SprintSpeedMps;
+        var speed = move.Runner.ToFielder(Baserunning.AbilityEffect).SprintSpeedMps;
         Assert.Equal(back.T0 + 10.0 / speed, back.T1, 6);
         // 全レッグが連続（同一走者が瞬間移動しない）
         for (var i = 1; i < legs.Count; i++) Assert.Equal(legs[i - 1].To, legs[i].From);

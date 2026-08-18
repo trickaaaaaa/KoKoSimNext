@@ -39,8 +39,14 @@ public static class PitchingFatigue
 
     /// <summary>消耗を反映した実効投手能力（球速天井・制球を減衰）。fatiguePitches はギア重み込みの実効消費球数。</summary>
     public static PitcherAttributes Effective(Player pitcher, double fatiguePitches, FatigueCoefficients c)
+        => Effective(pitcher.Pitching, fatiguePitches, c);
+
+    /// <summary>
+    /// 消耗の適用（表示→物理の効きを通した土台に対して。設計書21）。効きは制球のLvを寝かせるが、消耗の落ち幅は
+    /// 「目安球数を超えた分」で決まる実測単位なので寝かせない＝効き→消耗の順で掛ける。
+    /// </summary>
+    public static PitcherAttributes Effective(PitcherAttributes basep, double fatiguePitches, FatigueCoefficients c)
     {
-        var basep = pitcher.Pitching;
         var (velDrop, ctrlDrop) = Drops(fatiguePitches, basep.StaminaPitches, c);
         if (velDrop <= 0.0 && ctrlDrop <= 0.0) return basep;
 

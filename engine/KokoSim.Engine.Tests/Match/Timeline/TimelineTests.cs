@@ -790,7 +790,8 @@ public sealed class TimelineTests
     [Fact]
     public void StealTimeline_ThrowSpeedReflectsArmNotCatcherFielding()
     {
-        var c = new BaserunningCoefficients();
+        // 走力80 vs 守備90/30 の濃淡を額面どおり見る（効き＝恒等）。既定の効き 0.55 では差が矛盾ガードの中に埋もれる。
+        var c = new BaserunningCoefficients { AbilityEffect = AbilityEffectCoefficients.Identity };
         var field = new FieldGeometry();
         var runner = new Player { Speed = 80, Steal = 75 };
         var quickCatcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 90 };
@@ -802,7 +803,7 @@ public sealed class TimelineTests
 
         // 送球区間の長さ（＝球の速さ）は肩だけで決まる＝同じ肩なら守備が違っても、
         // セーフ/アウトが違っても不変（矛盾ガードは投げ始めをずらすだけ）。
-        var expected = c.CatchThrowDistanceM / quickCatcher.ToFielder().ThrowSpeedMps;
+        var expected = c.CatchThrowDistanceM / quickCatcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
         foreach (var result in new[] { StealResult.Safe, StealResult.CaughtStealing })
         {
             var q = Throw(quickCatcher, result);
@@ -856,7 +857,7 @@ public sealed class TimelineTests
         Assert.Equal("third", throwSeg.ToBase);
         Assert.Equal(FieldPosition.ThirdBase, throwSeg.ToRole);
         Assert.True(Near(throwSeg.To, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)), "送球先が三塁でない");
-        Assert.Equal(c.CatchThrowToThirdDistanceM / catcher.ToFielder().ThrowSpeedMps, throwSeg.T1 - throwSeg.T0, 6);
+        Assert.Equal(c.CatchThrowToThirdDistanceM / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps, throwSeg.T1 - throwSeg.T0, 6);
         var leg = Assert.Single(tl.Runners);
         Assert.True(Near(leg.From, new TimelinePoint(field.SecondBase.X, field.SecondBase.Z)), "三盗の走者が二塁発でない");
         Assert.Contains(tl.Moves, m => m.Role == FieldPosition.ThirdBase && m.Task == FielderTask.CoverBase);

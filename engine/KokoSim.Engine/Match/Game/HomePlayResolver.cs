@@ -69,7 +69,7 @@ public static class HomePlayResolver
     public static RunnerContext RunnerContextOf(Player runner, BaserunningCoefficients c)
         => new(
             StartDelaySeconds:
-                Math.Max(0.10, c.HomeRunnerReactionIntercept - runner.Baserunning * c.HomeRunnerReactionSlope),
+                Math.Max(0.10, c.HomeRunnerReactionIntercept - c.AbilityEffect.Running(runner.Baserunning) * c.HomeRunnerReactionSlope),
             LeadDistanceM: c.HomeLeadDistanceM,
             TopSpeedFactor: c.RunnerTopSpeedFactor,
             TurnSecondsPerBase: c.RunnerBaseTurnSeconds,
@@ -96,7 +96,7 @@ public static class HomePlayResolver
         Player runner, int fromBase, int toBase, FieldGeometry field, BaserunningCoefficients c,
         double extraStartDelaySeconds = 0.0)
         => RunnerClock.SegmentSeconds(
-            runner, fromBase, toBase, RunnerContextOf(runner, c), field, extraStartDelaySeconds);
+            runner, c.AbilityEffect, fromBase, toBase, RunnerContextOf(runner, c), field, extraStartDelaySeconds);
 
     /// <summary>本塁への走者所要時間[s]（後方互換: toBase=4 固定）。</summary>
     public static double RunnerTimeSeconds(
@@ -251,9 +251,9 @@ public static class HomePlayResolver
     public static double TagUpRunnerTimeSeconds(
         Player runner, int fromBase, int toBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c)
     {
-        var startDelay = Math.Max(0.10, c.HomeRunnerReactionIntercept - runner.Baserunning * c.HomeRunnerReactionSlope);
+        var startDelay = Math.Max(0.10, c.HomeRunnerReactionIntercept - c.AbilityEffect.Running(runner.Baserunning) * c.HomeRunnerReactionSlope);
         var distance = (toBase - fromBase) * field.BaseDistanceM; // 二次リードなし＝全塁間
-        return s.BallFieldedAtSeconds + distance / runner.ToFielder().SprintSpeedMps + startDelay;
+        return s.BallFieldedAtSeconds + distance / runner.ToFielder(c.AbilityEffect).SprintSpeedMps + startDelay;
     }
 
     /// <summary>タッチアップ到達の margin[s]（守備所要−走者所要＋バイアス）。塁は <paramref name="p"/> で指定。</summary>

@@ -109,10 +109,13 @@ public sealed class MercyMidHalfTests
 
             var reached = pas.FindIndex(pa => pa.IsTop && pa.AwayScore - pa.HomeScore >= 10);
             if (reached < 0) continue;
+            Assert.Contains(pas, pa => pa.Inning == 5 && !pa.IsTop);   // 5回裏が行われている
+            // 5回裏で後攻が返して差が10未満に戻ったシードはコールド不成立が正しい＝対象外。
+            var lastBottom5 = pas.FindLast(pa => pa.Inning == 5 && !pa.IsTop)!;
+            if (lastBottom5.AwayScore - lastBottom5.HomeScore < 10) continue;
             hits++;
 
             Assert.True(result.MercyEnded, $"seed {seed}: MercyEnded が立っていない");
-            Assert.Contains(pas, pa => pa.Inning == 5 && !pa.IsTop);   // 5回裏が行われている
         }
         Assert.True(hits >= 8, $"コールド差へ到達するシードが足りない（{hits} 件）");
     }

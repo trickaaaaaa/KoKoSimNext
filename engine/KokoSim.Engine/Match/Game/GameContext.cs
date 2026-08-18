@@ -113,6 +113,18 @@ public sealed record GameContext
     /// <summary>観測が実際に走るか（フラグとシンクの両方が揃ったときだけ）。</summary>
     public bool TracingEnabled => CaptureTrace && TraceSink is not null;
 
+    /// <summary>
+    /// 表示→物理の効き（設計書21）を打撃/守備/走塁の3ブロックへ同じ値で配った写し。正典は1つ（YAML <c>ability_effect:</c>）で
+    /// 3ブロックが食い違うと「走者は寝ているのに野手は寝ていない」世界になるので、差し替えは必ずここを通す
+    /// （テストで恒等 <see cref="Players.AbilityEffectCoefficients.Identity"/> に戻すときも同じ）。
+    /// </summary>
+    public GameContext WithAbilityEffect(Players.AbilityEffectCoefficients e) => this with
+    {
+        Batting = Batting with { AbilityEffect = e },
+        Fielding = Fielding with { AbilityEffect = e },
+        Baserunning = Baserunning with { AbilityEffect = e },
+    };
+
     /// <summary>指定守備陣で打席解決用コンテキストを作る。gear/directive/take は采配（設計書09）、skills はスキル（設計書10）が設定する。</summary>
     public AtBatContext ToAtBatContext(IReadOnlyList<Fielder> fielders, bool runnersOn = false,
         PitcherGear gear = PitcherGear.Normal, Tactics.PitchDirective? directive = null,

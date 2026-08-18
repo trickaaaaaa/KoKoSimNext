@@ -5,6 +5,13 @@ namespace KokoSim.Engine.Match.Fielding;
 /// <summary>守備解決の係数（YAML駆動, 統計回帰で調整）。</summary>
 public sealed record FieldingCoefficients
 {
+    /// <summary>
+    /// 表示能力→物理層の効き（設計書21・<see cref="KokoSim.Engine.Players.AbilityEffectCoefficients"/>）。正典は YAML の <c>ability_effect:</c> 1ブロックで、
+    /// ローダが batting/fielding/baserunning の3ブロックへ<b>同じ値</b>を配る（解決式が手元の係数束から引けるようにするため）。
+    /// 3つが食い違わないことは <c>AbilityEffectConsistencyTests</c> が固定する。
+    /// </summary>
+    public KokoSim.Engine.Players.AbilityEffectCoefficients AbilityEffect { get; init; } = new();
+
     /// <summary>守備位置適性の基準値（この適性で補正なし＝×1.0）。設計書01 §1.1。</summary>
     public double AptitudeNeutral { get; init; } = 50.0;
     /// <summary>適性1ポイントあたりの実効守備力補正の傾き。</summary>

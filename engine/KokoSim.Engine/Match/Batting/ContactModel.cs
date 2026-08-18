@@ -69,10 +69,11 @@ public static class ContactModel
     /// コンタクト品質への投手側の寄与（「打たせて取る」の土台）。打球初速・打球角のばらつきの双方を通じて
     /// 打球質を動かす。速い球は当たれば強い打球になり（本格派の代償）、制球とキレは芯を外させる（技巧派の武器）。
     /// 3項とも基準値で0＝リーグ平均投手では恒等なので、係数を入れても得点環境の平均は動かない。
+    /// 球速は反応球速（<see cref="PitchPlan.ReactionKmh"/>＝効きを通した値）を読む（設計書21）。
     /// </summary>
     public static double PitcherContactQualityBias(
         PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
-        => coeff.ContactQualityPerKmh * (plan.VelocityKmh - coeff.ContactQualityVelocityRefKmh)
+        => coeff.ContactQualityPerKmh * (plan.ReactionKmh - coeff.ContactQualityVelocityRefKmh)
            + coeff.ContactQualityPerControl * (plan.ControlLevel - 50.0)
            + coeff.ContactQualityPerBreakM * (features.BreakMagnitudeM - coeff.ContactQualityBreakRefM);
 
@@ -82,7 +83,7 @@ public static class ContactModel
     /// </summary>
     public static double TimingOffsetMean(
         BatterAttributes batter, PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
-        => coeff.TimingPerKmh * (plan.VelocityKmh - coeff.TimingRefKmh)
+        => coeff.TimingPerKmh * (plan.ReactionKmh - coeff.TimingRefKmh)
            + coeff.TimingPerBreakM * (features.BreakMagnitudeM - coeff.TimingBreakRefM)
            - coeff.TimingPerContact * (batter.Contact - 50);
 

@@ -19,6 +19,9 @@ namespace KokoSim.Engine.Tests.Match.Tactics;
 public sealed class TacticsTests
 {
     private static readonly TacticsCoefficients C = new();
+    // 盗塁の始動・三盗の単体テストは表示能力を額面どおり効かせる（効き＝恒等）。既定の効き 0.55 では
+    // 走力95 vs 肩20 が中庸に寄り「際どい/余裕」のしきい値前提が崩れる。
+    private static readonly BaserunningCoefficients Br = new() { AbilityEffect = AbilityEffectCoefficients.Identity };
 
     private static Player P(int contact = 50, int power = 50, int bunt = 50, int speed = 50,
         int steal = 50, int arm = 50, int mental = 50, FieldPosition pos = FieldPosition.CenterField)
@@ -104,10 +107,10 @@ public sealed class TacticsTests
         // 成功見込みが際どい盗塁（通常始動では心もとない）＝好ジャンプ・意表のギャンブルに賭ける。
         // 試みが発生するために StealMinSuccess(0.72) 以上、ギャンブル対象になるために
         // GambleStartMaxSuccess(0.82) 未満の帯を狙う（設計書15 Phase D-2d で両判定が1メソッドに統合された）。
-        var brain = new StandardTacticsBrain(C);
+        var brain = new StandardTacticsBrain(C, Br);
         var runner = P(speed: 80, steal: 80);
         var catcher = P(arm: 60, pos: FieldPosition.Catcher);
-        var est = StealResolver.SuccessProbability(runner, catcher, new BaserunningCoefficients());
+        var est = StealResolver.SuccessProbability(runner, catcher, Br);
         Assert.True(est >= C.StealMinSuccess && est < C.GambleStartMaxSuccess, $"前提: 際どい見込みのはず est={est}");
         var s = Situation(first: runner, catcher: catcher);
         Assert.True(GambleCount(brain, s, 300) > 0, "際どい盗塁でギャンブル始動が一度も出ない");
@@ -117,10 +120,10 @@ public sealed class TacticsTests
     public void Brain_StartType_ComfortableSteal_NeverGambles()
     {
         // 見込みが十分高い盗塁は通常始動で堅実に決める（無防備リスクを負わない）。
-        var brain = new StandardTacticsBrain(C);
+        var brain = new StandardTacticsBrain(C, Br);
         var runner = P(speed: 95, steal: 95);
         var catcher = P(arm: 20, pos: FieldPosition.Catcher);
-        var est = StealResolver.SuccessProbability(runner, catcher, new BaserunningCoefficients());
+        var est = StealResolver.SuccessProbability(runner, catcher, Br);
         Assert.True(est >= C.GambleStartMaxSuccess, $"前提: 余裕の見込みのはず est={est}");
         var s = Situation(first: runner, catcher: catcher);
         Assert.Equal(0, GambleCount(brain, s, 300));
@@ -141,7 +144,7 @@ public sealed class TacticsTests
     [Fact]
     public void Brain_StealThird_OnlyWhenSecondOnlyOccupied()
     {
-        var brain = new StandardTacticsBrain(C);
+        var brain = new StandardTacticsBrain(C, Br);
         var runner = P(speed: 95, steal: 95);
         var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
         var second = Situation(outs: 0, second: runner, catcher: weakCatcher);
@@ -159,7 +162,7 @@ public sealed class TacticsTests
     [Fact]
     public void Brain_StealThird_RespectsOutsAndScoreDiffLimits()
     {
-        var brain = new StandardTacticsBrain(C);
+        var brain = new StandardTacticsBrain(C, Br);
         var runner = P(speed: 95, steal: 95);
         var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
         var tooManyOuts = Situation(outs: C.StealThirdMaxOuts + 1, second: runner, catcher: weakCatcher);
@@ -172,7 +175,7 @@ public sealed class TacticsTests
     [Fact]
     public void Brain_StealHome_OnlyWhenThirdOnlyOccupied_AndAlwaysGambles()
     {
-        var brain = new StandardTacticsBrain(C);
+        var brain = new StandardTacticsBrain(C, Br);
         var runner = P(speed: 95, steal: 95);
         var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
         var third = Situation(outs: 0, third: runner, catcher: weakCatcher);

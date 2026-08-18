@@ -23,8 +23,9 @@ public static class AggregateMatch
     /// 集計で消化した裏試合の方が番狂わせが起きない世界になる（Heavy の
     /// <c>AggregateModel_MatchesGameEngineWinRate</c> がこれを検出する）。</para>
     ///
-    /// <para><paramref name="roster"/> 省略時は C#既定＝実ゲームと同じ圧縮。ロジスティック尺度
-    /// <c>AggregateScale</c> 自体は据え置き＝圧縮ぶんだけ差が縮んで勝率が寝る。</para>
+    /// <para><paramref name="roster"/> 省略時は C#既定＝実ゲームと同じ圧縮。2026-08-19 以降は圧縮が恒等（slope 1.0）で
+    /// 差は raw のまま、寝かせる役は表示→物理の効き（設計書21 <c>ability_effect</c>）が担う＝<c>AggregateScale</c> を
+    /// フルシムの実測（差10→≈80%）へ 7.2 に再校正した。</para>
     /// </summary>
     public static double WinProbability(double strengthA, double strengthB, NationCoefficients c,
         Season.RosterCoefficients? roster = null)

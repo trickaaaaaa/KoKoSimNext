@@ -1000,7 +1000,7 @@ public static class TimelineBuilder
             // 送球区間の長さは常に「距離÷肩」（issue #485）。ゆらぎ（握り替えのもたつき/速いポップ）は
             // 投げ始めの位置に出す＝球の見た目の速さは肩どおりのまま。
             var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
-            var flightToBase = throwDistance / catcher.ToFielder().ThrowSpeedMps;
+            var flightToBase = throwDistance / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
             var throwStart = Math.Max(pitchArrive, throwArrive - flightToBase);   // 捕る前には投げられない
             ball.Add(new BallSegment
             {
@@ -1089,8 +1089,8 @@ public static class TimelineBuilder
         // 走者のリード位置（次塁方向へ HomeLeadDistanceM ぶん）。本塁クロスプレーの二次リードと同じ量を流用。
         var leadPt = LeadPoint(field, baseIndex, c.HomeLeadDistanceM);
 
-        var throwT1 = Distance(Mound, basePt) / pitcher.ToFielder().ThrowSpeedMps;
-        var naturalReturn = PickoffReactionSeconds + Distance(leadPt, basePt) / runner.ToFielder().SprintSpeedMps;
+        var throwT1 = Distance(Mound, basePt) / pitcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
+        var naturalReturn = PickoffReactionSeconds + Distance(leadPt, basePt) / runner.ToFielder(c.AbilityEffect).SprintSpeedMps;
         var runnerT1 = pickedOff
             ? Math.Max(naturalReturn, throwT1 + c.TagSeconds)
             : Math.Min(naturalReturn, Math.Max(PickoffReactionSeconds + 0.05, throwT1 - c.TagSeconds));
@@ -1173,7 +1173,7 @@ public static class TimelineBuilder
 
         // 捕手が追って拾う→送球姿勢を作って投手へ戻す（issue #487「捕手が追う→拾って戻す」）。
         var catcherArrive = BatteryMissReactionSeconds
-            + Distance(Home, backstopPt) / catcher.ToFielder().SprintSpeedMps;
+            + Distance(Home, backstopPt) / catcher.ToFielder(c.AbilityEffect).SprintSpeedMps;
         var pickupAt = Math.Max(BatteryMissRollSeconds, catcherArrive);
         var moves = new List<FielderMove>
         {
@@ -1184,8 +1184,8 @@ public static class TimelineBuilder
             },
         };
         var throwStart = pickupAt
-            + c.PopTransferSeconds * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-        var throwArrive = throwStart + Distance(backstopPt, Mound) / catcher.ToFielder().ThrowSpeedMps;
+            + c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var throwArrive = throwStart + Distance(backstopPt, Mound) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
         ball.Add(new BallSegment
         {
             Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = backstopPt, To = Mound,
@@ -1259,7 +1259,7 @@ public static class TimelineBuilder
 
         // 捕手が追って拾う（issue #487 の暴投・捕逸と同じ組み立て。落球位置が近いぶん往復は短い）。
         var catcherArrive = DropThirdStrikeReactionSeconds
-            + Distance(Home, missPt) / catcher.ToFielder().SprintSpeedMps;
+            + Distance(Home, missPt) / catcher.ToFielder(c.AbilityEffect).SprintSpeedMps;
         var pickupAt = Math.Max(DropThirdStrikeRollSeconds, catcherArrive);
         var moves = new List<FielderMove>
         {
@@ -1271,10 +1271,10 @@ public static class TimelineBuilder
         };
 
         var throwStart = pickupAt
-            + c.PopTransferSeconds * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-        var throwFlight = Distance(missPt, firstPt) / catcher.ToFielder().ThrowSpeedMps;
+            + c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var throwFlight = Distance(missPt, firstPt) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
         var batterArrive = DropThirdStrikeBatterReactionSeconds
-            + Distance(Home, firstPt) / batter.ToFielder().SprintSpeedMps;
+            + Distance(Home, firstPt) / batter.ToFielder(c.AbilityEffect).SprintSpeedMps;
 
         // 出塁は確定済み＝送球が走者を追い越して見える絵にしない（矛盾ガード）。
         var throwArrive = Math.Max(throwStart + throwFlight, batterArrive + DropThirdStrikeThrowGuardSeconds);
@@ -1383,9 +1383,9 @@ public static class TimelineBuilder
             // 呼び出し元は safety フラグを保持していないため、既定として犠打側で揃える＝絵の近似）。
             var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
                 ? c.BuntLeftFirstStepBonusSeconds : 0.0;
-            var battingTime = c.BuntBaseDistanceM / batter.ToBatter().SpeedToFirstMps()
+            var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                 + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
-            var defenseTime = c.BuntFieldThrowBaseSeconds + (batter.Bunt - 50) * c.BuntPlacementSlope;
+            var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
 
             var fieldAt = ContactAt + defenseTime * BuntFieldShareOfDefenseTime;
             var throwArriveRaw = ContactAt + defenseTime;
@@ -1578,7 +1578,7 @@ public static class TimelineBuilder
             // 取ってから走る走者は物理が違うので、式ではなく文脈で分ける。以前はここだけ
             // 「27.43/速度 + 0.35」という第4の式を持っていて、判定より 0.58〜1.63 秒遅かった。
             var fromBox = m.FromBase == 0;
-            var speed = m.Runner.ToFielder().SprintSpeedMps;
+            var speed = m.Runner.ToFielder(baserunning.AbilityEffect).SprintSpeedMps;
             // タッチアップ（フライ捕球を待つ走者）は文脈が違う＝二次リードなし・静止スタート。
             // 起点も接触でなく捕球なので、その秒をそのまま追加スタート遅延として払う
             // （issue score-display-before-home-touch。判定 TagUpRunnerTimeSeconds と同じ時計になる）。
@@ -1873,7 +1873,7 @@ public static class TimelineBuilder
                 legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = leadPt, OutAtEnd = false, Runner = runner });
                 if (stopAt > t0)
                 {
-                    var speed = runner.ToFielder().SprintSpeedMps;
+                    var speed = runner.ToFielder(baserunning.AbilityEffect).SprintSpeedMps;
                     var perBase = RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field) - ctx.StartDelaySeconds;
                     var frac = Math.Clamp((stopAt - t0) / perBase, 0.0, 1.0);
                     var next = BasePoint(field, nextName);

@@ -17,9 +17,9 @@ public sealed record NationCoefficients
     public double StoriedStrengthBonus { get; init; } = 4.0;
     public double EmergingFamePenalty { get; init; } = -5.0;
 
-    /// <summary>集計マッチのロジスティック尺度（強さ差→勝率）。GameEngineにキャリブレーション済み
-    /// （差10→勝率≈0.92, 差15→≈0.98）。</summary>
-    public double AggregateScale { get; init; } = 4.0;
+    /// <summary>集計マッチのロジスティック尺度（強さ差→勝率）。フルシム（実ゲーム経路）へキャリブレーション済み
+    /// （2026-08-19・設計書21: 差5→63%／10→≈80%／15→88%／20→95%）。旧 4.0 は圧縮0.55後の差で引いていた＝raw 差なら ≈7.3。</summary>
+    public double AggregateScale { get; init; } = 7.2;
 
     // --- AI校の年次進化（設計書05 §2.3） ---
     /// <summary>

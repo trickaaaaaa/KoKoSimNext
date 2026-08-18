@@ -46,7 +46,7 @@ public static class DoubledOffResolver
         Player runner, double caughtAtSeconds, BaserunningCoefficients c, double extraLeadM = 0.0)
     {
         var lead = LeadGainedM(caughtAtSeconds, c, extraLeadM);
-        return c.DoubledOffReverseSeconds + lead / runner.ToFielder().SprintSpeedMps;
+        return c.DoubledOffReverseSeconds + lead / runner.ToFielder(c.AbilityEffect).SprintSpeedMps;
     }
 
     /// <summary>守備の送球所要時間[s]（捕球点→塁, 握り替え＋送球＋タッチ）。

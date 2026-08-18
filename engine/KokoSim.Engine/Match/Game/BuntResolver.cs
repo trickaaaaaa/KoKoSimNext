@@ -23,11 +23,12 @@ public static class BuntResolver
     /// <summary>バント成功率（犠打が転がる確率。分岐後の成功判定に使う）。</summary>
     public static double SuccessRate(Player batter, PitcherAttributes pitcher, BaserunningCoefficients c)
     {
-        var veloPenalty = System.Math.Max(0.0, pitcher.MaxVelocityKmh - c.BuntVelocityRefKmh)
+        // 球速は反応球速（効きを通した値・設計書21）で読む＝速い投手ほどバントしにくいが、差は寝かせる。
+        var veloPenalty = System.Math.Max(0.0, pitcher.MaxVelocityKmh + pitcher.ReactionVelocityOffsetKmh - c.BuntVelocityRefKmh)
                           * c.BuntVelocityPenaltyPerKmh;
         // 性格④（設計書01 §1.1）: 自己犠牲型は+、目立ちたがりは−。BuntSuccessBonus は投影時に性格表から解決済み（既定0）。
         return MathUtil.Clamp(
-            c.BuntBase + batter.Bunt * c.BuntSkillSlope - veloPenalty + batter.BuntSuccessBonus, 0.05, 0.98);
+            c.BuntBase + c.AbilityEffect.Batting(batter.Bunt) * c.BuntSkillSlope - veloPenalty + batter.BuntSuccessBonus, 0.05, 0.98);
     }
 
     /// <summary>
@@ -40,9 +41,9 @@ public static class BuntResolver
         var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
             ? c.BuntLeftFirstStepBonusSeconds : 0.0;
         var squareDelay = safety ? c.SafetyBuntSquareDelaySeconds : c.SacrificeBuntSquareDelaySeconds;
-        var batterTime = c.BuntBaseDistanceM / batter.ToBatter().SpeedToFirstMps()
+        var batterTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                          + c.BuntRunnerReactionSeconds + squareDelay - handednessBonus;
-        var defenseTime = c.BuntFieldThrowBaseSeconds + (batter.Bunt - 50) * c.BuntPlacementSlope;
+        var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
         var margin = defenseTime - batterTime;
         return MathUtil.Clamp(MathUtil.Logistic(margin / c.BuntInfieldHitTimeScale), 0.01, 0.95);
     }
@@ -58,7 +59,7 @@ public static class BuntResolver
 
         // ファウル: 上手い打者ほど減る（設計書02 §4.3, Step4-③）。
         var foulShare = System.Math.Max(c.BuntFoulFloor,
-            c.BuntFoulShare - (batter.Bunt - 50) * c.BuntFoulSkillSlope);
+            c.BuntFoulShare - (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntFoulSkillSlope);
         if (MathUtil.Chance(foulShare, rng)) return BuntResult.Foul;
         if (MathUtil.Chance(c.BuntPopShare, rng)) return BuntResult.PopOut;
 
