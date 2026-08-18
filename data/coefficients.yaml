@@ -986,12 +986,18 @@ nation:
   strength_min: 8.0
   strength_max: 99.0
   storied_fame_bonus: 20.0
-  storied_strength_bonus: 8.0
+  # 古豪の強さボーナス（issue prefecture-dominance・2026-08-18）: 8→4。8だと県1位−2位の差が最大22ポイントに開き
+  # （宮崎 seed2026 は 81.8 vs 65.6）、その県は生成時点で一強が確定していた。
+  storied_strength_bonus: 4.0
   emerging_fame_penalty: -5.0
-  aggregate_scale: 4.0        # 強さ差→勝率。GameEngineにキャリブレーション（差10→≈0.92）
-  mean_reversion: 0.10        # 平均回帰（全国統計の安定化）
-  churn_sd: 5.5               # 世代交代の揺らぎ（勢力変動）。定常sd≈初期sdを保つ
-  strength_per_win: 0.12
+  aggregate_scale: 4.0        # 強さ差→勝率。GameEngineにキャリブレーション（差10→≈0.92）。圧縮後の差で引くので膝の有無に追従する
+  # 年次進化（issue prefecture-dominance・2026-08-18）: 旧 rev 0.10 / churn 5.5 / per_win 0.12 だと強さ82の校の期待ドリフトが
+  # −2/年＝一度覇権を取った校が10年近く落ちず、集計20年×49地区で最多優勝校の中央値 9/20・10回以上が15地区。
+  # rev 0.15 / churn 6.5 / per_win 0.06 で中央値 5〜7/20・10回以上 4〜7地区（現実の県の分布に近い）。
+  # 定常sd＝churn/√(1−(1−rev)²)＝6.5/0.527≈12.3≈初期sd13 なので全国平均・sd は不変（30年で確認）。
+  mean_reversion: 0.15        # 平均回帰（全国統計の安定化）
+  churn_sd: 6.5               # 世代交代の揺らぎ（勢力変動）。定常sd≈初期sdを保つ
+  strength_per_win: 0.06
   fame_to_strength: 0.015
   fame_decay: 0.90
   fame_champion: 40.0
@@ -1237,7 +1243,11 @@ roster:
   # ＝自校の実力域（≒35〜40）に置く。表示ランク（School.Strength）は圧縮しない（確定4＝表示は直さない）。
   tier_compression_pivot: 40.0
   tier_compression_slope: 0.55  # 実測で決めた値（自校の完封され率 D50 21.2%→10.2% / C60 40.3%→21.5%）
-  tier_compression_knee: 60.0   # これ以上は圧縮せず100で元の尺度へ戻す（膝なしだとA校の実力が76→58まで落ちる）
+  # 膝（issue prefecture-dominance・2026-08-18 で 60→100＝膝なし・一様圧縮）: 膝60は「上を100で元尺度へ戻す」勾配1.225で
+  # 上位帯の差を raw より拡大し（80→75.5 / 65→57.1）、県1位 vs 2位（差15）が単試合 99%＝同じ校が毎年優勝する主因だった。
+  # 一様0.55: 80vs75 63% / 80vs70 75% / 80vs65 86% / 80vs60 92% / 80vs50 98%（フルシム実測）。代償として強度85の校の
+  # 能力中心は 64.75（表示A・中身B−）まで落ちる＝オーナー承認済み（表示ランクは raw のまま。展望の能力バーとは乖離する）。
+  tier_compression_knee: 100.0
 
   # 凸凹配分（総ポイントをランダム重みで配分・偏り自体もばらつく＝金太郎飴回避）
   concentration_mean: 0.35    # 偏り強度σ。大きいほど内訳が凸凹

@@ -13,7 +13,8 @@ public sealed record NationCoefficients
 
     /// <summary>古豪/新興の名声初期補正。</summary>
     public double StoriedFameBonus { get; init; } = 20.0;
-    public double StoriedStrengthBonus { get; init; } = 8.0;
+    /// <summary>古豪の強さボーナス。8 だと県1位−2位の差が最大22ポイントに開き生成時点で一強が確定した（2026-08-18 に 4 へ）。</summary>
+    public double StoriedStrengthBonus { get; init; } = 4.0;
     public double EmergingFamePenalty { get; init; } = -5.0;
 
     /// <summary>集計マッチのロジスティック尺度（強さ差→勝率）。GameEngineにキャリブレーション済み
@@ -21,12 +22,15 @@ public sealed record NationCoefficients
     public double AggregateScale { get; init; } = 4.0;
 
     // --- AI校の年次進化（設計書05 §2.3） ---
-    /// <summary>平均回帰の強さ（暴走防止＝全国統計の安定化）。</summary>
-    public double MeanReversion { get; init; } = 0.10;
-    /// <summary>世代交代の揺らぎσ（古豪凋落・新興台頭の源泉）。定常sd≈初期sd を保つ大きさ。</summary>
-    public double ChurnSd { get; init; } = 5.5;
-    /// <summary>大会成績1勝あたりの強さボーナス（成功が補強を呼ぶ）。</summary>
-    public double StrengthPerWin { get; init; } = 0.12;
+    /// <summary>
+    /// 平均回帰の強さ（暴走防止＝全国統計の安定化）。旧 0.10 では強さ82の校の期待ドリフトが −2/年で覇権が10年落ちず、
+    /// 集計20年で最多優勝校の中央値が 9/20 だった（issue prefecture-dominance・2026-08-18 に 0.15 へ）。
+    /// </summary>
+    public double MeanReversion { get; init; } = 0.15;
+    /// <summary>世代交代の揺らぎσ（古豪凋落・新興台頭の源泉）。定常sd＝σ/√(1−(1−rev)²)≈初期sd を保つ大きさ。</summary>
+    public double ChurnSd { get; init; } = 6.5;
+    /// <summary>大会成績1勝あたりの強さボーナス（成功が補強を呼ぶ）。旧 0.12 は覇者の正帰還が強すぎた。</summary>
+    public double StrengthPerWin { get; init; } = 0.06;
     /// <summary>名声→強さの寄与（強豪に人が集まる）。</summary>
     public double FameToStrength { get; init; } = 0.015;
     /// <summary>名声の年次減衰。</summary>

@@ -198,3 +198,16 @@ games_10k_tactics:
 # この改定で消える）。平時帯（3.5–6.7）は帯内のまま。
 games_10k_summer:
   runs_per_team: { min: 4.90, max: 5.80 }
+
+# --- 県内の寡占（issue prefecture-dominance・2026-08-18） ---
+# 帯4本＋tiers_low は大会も勢力図も測っていないので「同じ校が27大会連続優勝」は帯が全部緑のまま起きた。
+# 実ゲームの他県裏試合と同じ部品（NationalTournamentEngine.RunSummer ChampionsOnly＋AiSchoolEvolution.ApplyYear）で
+# 全国4000校を20年回し、49地区の「最多優勝校の優勝回数」の分布を固定する（AiSchoolEvolutionTests の Heavy）。
+# 校正前（膝60・rev 0.10・churn 5.5・per_win 0.12・古豪+8, seed 2026/7/42）: 中央値 8〜9・10回以上 15〜17地区・最大 19〜20。
+# 校正後（膝なし一様0.55・rev 0.15・churn 6.5・per_win 0.06・古豪+4）: 中央値 4〜5・10回以上 1〜2地区・最大 11〜13・1位vs2位 0.66。
+# 現実の県（20年）は典型 5〜7回、聖光学院/明徳義塾級の一強でも 13〜16。
+nation_dominance:
+  max_champion_count_median: { min: 3, max: 7 }      # 49地区の最多優勝校の回数の中央値（20年）
+  regions_with_ten_plus:     { min: 0, max: 8 }      # 最多校が10回以上の地区数
+  max_champion_count_max:    { min: 0, max: 17 }     # 一強の尾（20年全部＝20 は不可）
+  top_two_win_probability_mean: { min: 0.55, max: 0.78 }  # 初期の県1位 vs 2位の単試合勝率（集計モデル・49地区平均）。校正前 ≈0.85

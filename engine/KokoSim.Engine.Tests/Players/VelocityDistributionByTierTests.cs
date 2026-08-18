@@ -50,16 +50,19 @@ public sealed class VelocityDistributionByTierTests
     {
         // 変更前（傾き 0.47 一本）: C 142／B 148／A 154／S 155（145+ が C校の 25%・A/S 全員 155 で飽和）。
         // 案A（Lv>50 を 0.36 で寝かせる）: C 139.6／B 144.6／A 148.9／S 149.6。
+        // ティア圧縮の膝を外し逆算配分の目標も圧縮後へ（issue prefecture-dominance・2026-08-18）: 上位校の能力中心が
+        // 一様0.55（raw 80→62・85→64.75）に落ちるので、表示ティア別のエース最速は C 135.6／B 138.1／A 137.8（n=5）。
+        // 「表示Aのエースが 138km/h」は膝廃止の代償（オーナー承認）。ティア=表示（raw）のまま集計する。
         var byTier = AceKmhByTier();
         foreach (var t in new[] { Tier.S, Tier.A, Tier.B, Tier.C, Tier.D, Tier.E, Tier.F, Tier.G })
         {
             if (!byTier.TryGetValue(t, out var xs)) continue;
             _out.WriteLine($"{t}: n={xs.Count} p10 {Pct(xs, .1):F1} / p50 {Pct(xs, .5):F1} / p90 {Pct(xs, .9):F1} | 145+ {100.0 * xs.Count(x => x >= 145) / xs.Count:F0}%");
         }
-        Assert.InRange(Pct(byTier[Tier.C], .5), 137.0, 141.0);
-        Assert.InRange(Pct(byTier[Tier.B], .5), 142.0, 147.0);
-        Assert.InRange(Pct(byTier[Tier.A], .5), 145.0, 150.0);
-        Assert.InRange(Pct(byTier[Tier.D], .5), 134.0, 138.5);
+        Assert.InRange(Pct(byTier[Tier.C], .5), 133.0, 139.0);
+        Assert.InRange(Pct(byTier[Tier.B], .5), 135.0, 142.0);
+        Assert.InRange(Pct(byTier[Tier.A], .5), 135.0, 143.0);   // n=5・小標本
+        Assert.InRange(Pct(byTier[Tier.D], .5), 131.0, 137.0);
         Assert.InRange(Pct(byTier[Tier.E], .5), 130.0, 135.0);   // E 以下は変更前後で不変（Lv≦50 側）
         Assert.InRange(Pct(byTier[Tier.G], .5), 116.0, 124.0);
         // C校で 145+ のエースは 1 割未満（変更前 25%）。

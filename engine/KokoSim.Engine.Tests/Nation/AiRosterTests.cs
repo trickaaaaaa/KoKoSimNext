@@ -99,13 +99,19 @@ public sealed class AiRosterTests
         Assert.DoesNotContain(roster.Players, p => p.Id == id);
     }
 
-    // --- 逆算配分整合: チーム総合 ≈ Strength（#80 完了条件） ---
+    // --- 逆算配分整合: チーム総合 ≈ 圧縮後の Strength（#80 完了条件・issue prefecture-dominance） ---
 
+    /// <summary>
+    /// 逆算配分のターゲットは <b>ティア圧縮後</b>の強さ（<see cref="AiRosterCycle.GrowthTarget"/>）。旧実装は raw を
+    /// 目標にしていたので、入学中心だけ圧縮しても成長で raw へ戻され、実ゲームのAI校は #578 の前と同じ能力だった
+    /// （強度80校の先発平均Lv 86）。ここでは「raw ではなく圧縮後に一致する」ことを固定する。
+    /// </summary>
     [Theory]
     [InlineData(40)]
     [InlineData(55)]
     [InlineData(70)]
-    public void Bootstrap_TeamOverall_TracksSchoolStrength(double strength)
+    [InlineData(85)]
+    public void Bootstrap_TeamOverall_TracksCompressedStrength(double strength)
     {
         var deps = NoPhenomDeps();
         var school = MakeSchool(strength: strength);
@@ -113,8 +119,12 @@ public sealed class AiRosterTests
 
         var team = AiTeamBuilder.Build(roster, school, 1, deps);
         var overall = ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
+        var target = AiRosterCycle.GrowthTarget(school, deps);
 
-        Assert.InRange(overall, strength - deps.Persistent.TargetTolerance - 3, strength + deps.Persistent.TargetTolerance);
+        Assert.Equal(deps.Roster.CompressStrength(strength), target, 9);
+        Assert.InRange(overall, target - deps.Persistent.TargetTolerance - 3, target + deps.Persistent.TargetTolerance);
+        // 圧縮が効く帯（ピボット40より上）では raw より明確に低い＝raw へ戻す旧挙動の再発検出。
+        if (strength >= 55) Assert.True(overall < strength - 3, $"raw の強さまで育っている: overall={overall:F1} raw={strength}");
     }
 
     [Fact]
@@ -129,8 +139,9 @@ public sealed class AiRosterTests
             AiRosterCycle.AdvanceOneYear(roster, school, y, deps);
             var team = AiTeamBuilder.Build(roster, school, y, deps);
             var overall = ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
-            Assert.InRange(overall, school.Strength - deps.Persistent.TargetTolerance - 4,
-                school.Strength + deps.Persistent.TargetTolerance);
+            var target = AiRosterCycle.GrowthTarget(school, deps);
+            Assert.InRange(overall, target - deps.Persistent.TargetTolerance - 4,
+                target + deps.Persistent.TargetTolerance);
         }
     }
 
@@ -204,9 +215,10 @@ public sealed class AiRosterTests
 
         var team = AiTeamBuilder.Build(roster, school, 1, deps);
         var overall = ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
-        // 逆算配分は怪物を除いて Strength に合わせるので、怪物込みの実チームは Strength を上回る。
-        Assert.True(overall > school.Strength,
-            $"怪物在籍校のチーム総合が Strength を上回らない (overall={overall}, strength={school.Strength})");
+        // 逆算配分は怪物を除いて圧縮後の Strength に合わせるので、怪物込みの実チームはそれを上回る。
+        var target = AiRosterCycle.GrowthTarget(school, deps);
+        Assert.True(overall > target,
+            $"怪物在籍校のチーム総合がターゲットを上回らない (overall={overall}, target={target})");
     }
 
     [Fact]
@@ -217,7 +229,7 @@ public sealed class AiRosterTests
         var roster = AiRosterFactory.Bootstrap(school, 1, deps);
         var team = AiTeamBuilder.Build(roster, school, 1, deps);
         var overall = ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
-        // 怪物なしは Strength を大きく超えない（上乗せは怪物だけの効果）。
-        Assert.True(overall <= school.Strength + deps.Persistent.TargetTolerance);
+        // 怪物なしは圧縮後の Strength を大きく超えない（上乗せは怪物だけの効果）。
+        Assert.True(overall <= AiRosterCycle.GrowthTarget(school, deps) + deps.Persistent.TargetTolerance);
     }
 }

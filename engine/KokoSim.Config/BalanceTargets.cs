@@ -78,6 +78,23 @@ public sealed record GameTacticsTargets
 /// （#536 の実測）。ここが守るのは<b>体験そのもの</b>＝開始直後の自校が格上に完封される率と、
 /// 表示1ティアあたりの得点の落ち方。</para>
 /// </summary>
+/// <summary>
+/// 県内の寡占（issue prefecture-dominance・2026-08-18）。集計モデル（ChampionsOnly＝実ゲームの他県裏試合と同じ部品）で
+/// 全国4000校×20年を回し、49地区それぞれの「最多優勝校の優勝回数」の分布を固定する。帯4本は大会も勢力図も測らないので、
+/// 「同じ校が27大会連続優勝」は帯が全部緑のまま起きた。現実の県（20年で最多校 5〜7回・聖光学院/明徳級で13〜16）に寄せる。
+/// </summary>
+public sealed record NationDominanceTargets
+{
+    /// <summary>49地区の最多優勝校の回数（20年）の中央値。校正前 8〜9。</summary>
+    public Band MaxChampionCountMedian { get; init; } = new(3, 7);
+    /// <summary>最多優勝校が10回以上（20年の半分）の地区数。校正前 15〜17/49。</summary>
+    public Band RegionsWithTenPlus { get; init; } = new(0, 8);
+    /// <summary>49地区の最多優勝校の回数の最大（一強の尾）。校正前 19〜20（＝20年全部）。</summary>
+    public Band MaxChampionCountMax { get; init; } = new(0, 17);
+    /// <summary>県1位の圧縮後の強さ vs 2位（初期）の単試合勝率＝集計モデルの平均。校正前 0.85 前後。</summary>
+    public Band TopTwoWinProbabilityMean { get; init; } = new(0.55, 0.78);
+}
+
 public sealed record LowTierTargets
 {
     /// <summary>自校の得点（ほぼ互角の相手＝強度40）。</summary>
@@ -245,6 +262,22 @@ public static class BalanceTargetsLoader
         };
     }
 
+    public static NationDominanceTargets LoadNationDominanceFromFile(string path) => ParseNationDominance(File.ReadAllText(path));
+
+    public static NationDominanceTargets ParseNationDominance(string yaml)
+    {
+        var t = Root(yaml).NationDominance;
+        if (t is null) return new NationDominanceTargets();
+        var d = new NationDominanceTargets();
+        return new NationDominanceTargets
+        {
+            MaxChampionCountMedian = t.MaxChampionCountMedian?.ToBand() ?? d.MaxChampionCountMedian,
+            RegionsWithTenPlus = t.RegionsWithTenPlus?.ToBand() ?? d.RegionsWithTenPlus,
+            MaxChampionCountMax = t.MaxChampionCountMax?.ToBand() ?? d.MaxChampionCountMax,
+            TopTwoWinProbabilityMean = t.TopTwoWinProbabilityMean?.ToBand() ?? d.TopTwoWinProbabilityMean,
+        };
+    }
+
     private static RootDto Root(string yaml)
         => Deserializer.Deserialize<RootDto>(yaml)
             ?? throw new InvalidDataException("balance-targets.yaml が空です。");
@@ -268,6 +301,17 @@ public static class BalanceTargetsLoader
 
         [YamlMember(Alias = "matchup_grid")]
         public MatchupGridDto? MatchupGrid { get; set; }
+
+        [YamlMember(Alias = "nation_dominance")]
+        public NationDominanceDto? NationDominance { get; set; }
+    }
+
+    private sealed class NationDominanceDto
+    {
+        public BandDto? MaxChampionCountMedian { get; set; }
+        public BandDto? RegionsWithTenPlus { get; set; }
+        public BandDto? MaxChampionCountMax { get; set; }
+        public BandDto? TopTwoWinProbabilityMean { get; set; }
     }
 
     private sealed class MatchupGridDto

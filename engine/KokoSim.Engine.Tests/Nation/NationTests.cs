@@ -169,9 +169,10 @@ public sealed class NationTests
         // 全年で安定帯に収まる。
         Assert.All(avgs, a => Assert.InRange(a, 43.0, 47.0));
 
-        // 後半10年は均衡（平均回帰目標44＋勝利ボーナスで45強）近傍で落ち着く（単調な痩せが起きていない）。
+        // 後半10年は均衡（平均回帰目標44＋勝利ボーナス）近傍で落ち着く（単調な痩せが起きていない）。
+        // 勝利ボーナスは per_win 0.06 / rev 0.15（issue prefecture-dominance）で ≈+0.3 ＝ 44.3〜44.5 に定常。
         var tail = avgs.Skip(20).ToList();
-        Assert.All(tail, a => Assert.InRange(a, 44.5, 46.0));
+        Assert.All(tail, a => Assert.InRange(a, 43.5, 46.0));
 
         // 終盤が序盤より2以上低い、という systematic な下押しが無い。
         Assert.True(avgs[^1] > avgs[0] - 2.0,

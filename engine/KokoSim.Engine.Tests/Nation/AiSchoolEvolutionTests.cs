@@ -7,7 +7,9 @@ using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Stats;
+using KokoSim.Engine.Tests.Balance;
 using KokoSim.Engine.Tests.Saves;
+using KokoSim.Config;
 using Xunit;
 using Xunit.Abstractions;
 using NationModel = KokoSim.Engine.Nation.Nation;
@@ -240,6 +242,71 @@ public sealed class AiSchoolEvolutionTests
         Assert.InRange(topStrengths.Skip(10).Average(), 60, 80);
         Assert.InRange(meanN, mean0 - 3, mean0 + 3);
         Assert.InRange(sdN, sd0 - 3, sd0 + 3);
+    }
+
+    /// <summary>
+    /// 県内の寡占の帯（issue prefecture-dominance・<c>balance-targets.yaml nation_dominance</c>）。実ゲームの他県裏試合と同じ部品
+    /// （ChampionsOnly＋ApplyYear）で全国4000校を20年×3母種回し、49地区の「最多優勝校の優勝回数」の分布と、初期の県1位 vs 2位の
+    /// 単試合勝率を固定する。校正前（膝60・rev 0.10・churn 5.5・per_win 0.12・古豪+8）は中央値 8〜9／10回以上 15〜17地区／
+    /// 最大 19〜20（20年全部）／1位vs2位 ≈0.85 で「同じ校が毎年優勝」が帯が全部緑のまま起きていた。
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Heavy")]
+    public void TwentyYears_PrefectureDominance_StaysWithinBands()
+    {
+        var targets = BalanceTargetsLoader.LoadNationDominanceFromFile(
+            BalanceRegressionTests.FindDataFile("balance-targets.yaml"));
+
+        var medians = new List<double>();
+        var tenPlus = new List<int>();
+        var maxes = new List<int>();
+        var topTwo = new List<double>();
+        foreach (var seed in new ulong[] { 2026, 7, 42 })
+        {
+            var nation = NationGenerator.Generate(new SchoolNameVocab(), Coeff, new Xoshiro256Random(seed));
+            var rosters = new NationRosters(new AiRosterDeps());
+            var champions = new Dictionary<string, List<string>>();
+
+            // 初期の県1位 vs 2位の単試合勝率（集計モデル＝圧縮後の差で引く）。
+            foreach (var region in SummerRegions.Build(nation.Prefectures))
+            {
+                var top = SummerRegions.Entrants(nation, region).OrderByDescending(s => s.Strength).Take(2).ToList();
+                if (top.Count == 2) topTwo.Add(AggregateMatch.WinProbability(top[0].Strength, top[1].Strength, Coeff));
+            }
+
+            for (var year = 1; year <= 20; year++)
+            {
+                var ledger = new AiSchoolYearLedger();
+                var results = NationalTournamentEngine.RunSummer(
+                    nation, rosters, new GameContext(), Coeff, Schedule, year, new NationTournamentStats(),
+                    new Xoshiro256Random(0xABCDUL ^ seed ^ ((ulong)year << 8)), resolution: SummerResolution.ChampionsOnly);
+                foreach (var r in results)
+                {
+                    ledger.AddWins(r.Wins);
+                    if (!champions.TryGetValue(r.PrefectureName, out var list)) champions[r.PrefectureName] = list = new List<string>();
+                    list.Add(r.ChampionName ?? "");
+                }
+                AiSchoolEvolution.ApplyYear(nation, ledger.Snapshot(), -1, Coeff, masterSeed: seed, endedYearIndex: year);
+            }
+
+            var maxCounts = champions.Values
+                .Select(c => c.GroupBy(x => x).Max(g => g.Count()))
+                .OrderBy(x => x).ToList();
+            medians.Add(maxCounts[maxCounts.Count / 2]);
+            tenPlus.Add(maxCounts.Count(x => x >= 10));
+            maxes.Add(maxCounts.Max());
+            _out.WriteLine($"seed {seed}: 最多優勝校の回数 中央値 {maxCounts[maxCounts.Count / 2]} / 平均 {maxCounts.Average():F1}"
+                + $" / 最大 {maxCounts.Max()} / 10回以上 {maxCounts.Count(x => x >= 10)}地区 / 5回以下 {maxCounts.Count(x => x <= 5)}地区");
+        }
+        _out.WriteLine($"初期 県1位vs2位 勝率（49地区×3母種 平均）: {topTwo.Average():F3}");
+
+        var failures = new List<string>();
+        var median = medians.OrderBy(x => x).ElementAt(medians.Count / 2);
+        if (!targets.MaxChampionCountMedian.Contains(median)) failures.Add($"中央値 {median}");
+        if (!targets.RegionsWithTenPlus.Contains(tenPlus.Max())) failures.Add($"10回以上の地区 {tenPlus.Max()}");
+        if (!targets.MaxChampionCountMax.Contains(maxes.Max())) failures.Add($"最大 {maxes.Max()}");
+        if (!targets.TopTwoWinProbabilityMean.Contains(topTwo.Average())) failures.Add($"1位vs2位 {topTwo.Average():F3}");
+        Assert.True(failures.Count == 0, "県内の寡占が帯外: " + string.Join(" / ", failures));
     }
 
     private static double Sd(IEnumerable<double> xs)
