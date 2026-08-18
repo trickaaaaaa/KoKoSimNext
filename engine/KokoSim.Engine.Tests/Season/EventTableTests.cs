@@ -221,6 +221,21 @@ events:
             Assert.True(EventTextFormat.KnownKeys.Contains(key), $"{e.Id}: 未知の差し込み語 {{{key}}}");
     }
 
+    /// <summary>
+    /// 結果行（<see cref="EventRoles.Result"/>）は地の文と同じく話者を持たない。yaml には書かず提示層が
+    /// 足す行なので、既定名が空で「声の無い行」に分類されることだけ固定する（立ち絵スロットが空で出ない）。
+    /// </summary>
+    [Fact]
+    public void ResultRole_IsVoicelessAndUnnamed()
+    {
+        Assert.Equal("", EventRoles.DefaultName(EventRoles.Result));
+        Assert.True(EventRoles.IsResult(EventRoles.Result));
+        Assert.False(EventRoles.IsNarration(EventRoles.Result));
+        Assert.True(EventRoles.IsVoiceless(EventRoles.Result));
+        Assert.True(EventRoles.IsVoiceless(EventRoles.Narration));
+        Assert.False(EventRoles.IsVoiceless(EventRoles.Manager));
+    }
+
     [Fact]
     public void RepositoryTable_UsesOnlyKnownRoles()
     {
@@ -233,6 +248,47 @@ events:
         foreach (var v in e.Variants)
         foreach (var line in v.Lines)
             Assert.True(known.Contains(line.Who), $"{e.Id}: 未知の役割 {line.Who}（立ち絵が出ない）");
+    }
+
+    /// <summary>
+    /// 監督に語らせすぎない（監督指示 2026-08-19・issue event-dialogue-manager-too-cool）。
+    /// 旧版は 109 通り中 104 通りが監督の決め台詞で締まり、（……）の独白 26 本で自分の哲学を語る
+    /// 「ナルシスト監督」だった。プレイヤー＝監督なので、ゲームが勝手に自分の口から臭い台詞を出す形になる。
+    /// 文体の良し悪しは検査できないが、<b>構造</b>（締める・独白・連発・溜め）は検査できるので固定する。
+    /// AI で会話を量産すると同じ癖が再発するための歯止め。
+    /// </summary>
+    [Fact]
+    public void RepositoryTable_ManagerDoesNotPreach()
+    {
+        var variants = 0;
+        var managerCloses = 0;
+        foreach (var e in RepositoryEvents())
+        foreach (var v in e.Variants)
+        {
+            variants++;
+            var managerLines = v.Lines.Count(l => l.Who == EventRoles.Manager);
+            Assert.True(managerLines <= 1, $"{e.Id}: 1つの会話に監督の発話が {managerLines} 本（1本まで）");
+
+            var ellipses = v.Lines.Sum(l => Occurrences(l.Say, "……"));
+            Assert.True(ellipses <= 1, $"{e.Id}: 「……」が1会話に {ellipses} 回（溜めは1回まで）");
+
+            foreach (var l in v.Lines.Where(l => l.Who == EventRoles.Manager))
+            {
+                Assert.False(l.Say.StartsWith("（"), $"{e.Id}: 監督の独白「{l.Say}」（プレイヤーの内面を勝手に決めない）");
+                Assert.True(l.Say.Length <= 24, $"{e.Id}: 監督の台詞が長い（{l.Say.Length}字）「{l.Say}」");
+            }
+            if (v.Lines[^1].Who == EventRoles.Manager) managerCloses++;
+        }
+        Assert.True(variants > 0);
+        Assert.True(managerCloses * 3 <= variants,
+            $"監督の行で締まる会話が {managerCloses}/{variants}（1/3 まで。締めは地の文・部員・コーチへ）");
+    }
+
+    private static int Occurrences(string s, string needle)
+    {
+        var n = 0;
+        for (var i = s.IndexOf(needle, StringComparison.Ordinal); i >= 0; i = s.IndexOf(needle, i + needle.Length, StringComparison.Ordinal)) n++;
+        return n;
     }
 
     // ===== 効果（issue #613） =====
