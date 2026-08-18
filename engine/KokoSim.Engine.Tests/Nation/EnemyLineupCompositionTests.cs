@@ -71,8 +71,15 @@ public sealed class EnemyLineupCompositionTests
 
         var team = dhSchool.Team;
         Assert.Equal(9, team.BattingOrder.Count);
-        Assert.All(team.BattingOrder, p => Assert.NotEqual(FieldPosition.Pitcher, p.Position));
+        // 先発投手は打順に入らない。DH は控え全員から選ぶ（打てる控え投手も候補＝issue ai-two-way-hitting-pitchers-start-as-fielders）
+        // ので、Position=Pitcher の打者が居るとすればそれは DH 枠だけ。
         Assert.NotNull(team.StartingPitcher);
+        Assert.DoesNotContain(team.BattingOrder, p => ReferenceEquals(p, team.StartingPitcher));
+        for (var i = 0; i < team.BattingOrder.Count; i++)
+        {
+            if (i == team.DhSlot) continue;
+            Assert.NotEqual(FieldPosition.Pitcher, team.BattingOrder[i].Position);
+        }
         Assert.Equal(FieldPosition.Pitcher, team.StartingPitcher!.Position);
         Assert.Equal(-1, team.PitcherSlot);
         Assert.InRange(team.DhSlot, 0, 8);

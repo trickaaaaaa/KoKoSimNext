@@ -207,6 +207,28 @@ public sealed record RosterCoefficients
     /// そのまま残る。0 で凸凹なし。</summary>
     public double AiConcentration { get; init; } = 0.15;
 
+    // --- AI校の上位集中＝スター型（issue prefecture-dominance-star, 2026-08-18） ---
+    // ティア圧縮（CompressStrength）は「チーム全体の能力差」を縮めて番狂わせを起こすが、一様に掛けると上位校のエースが
+    // 平凡になる（一様0.55で A校のエース最速が 138km/h＝DからSまで 136〜140 で横一線）。現実の強豪は
+    // 「エース＋主軸数人が突出＋脇は平均」の上位集中なので、圧縮で削った分（raw−圧縮後＝lift）を少数のスターへ戻す。
+    // スターは打撃（主軸）か投球（エース）の能力中心だけ lift×share を上乗せし、脇役は圧縮後の中心のまま。
+    // 使い捨て生成（StrengthTeamFactory.Create）は脇役を lift×cast_drop だけ下げてチーム総合を圧縮後の尺度に留める。
+    // 永続ロスターは逆算配分（AiRosterCycle.Settle）が総合を圧縮後の目標へ寄せるので脇役の補正は自動で決まる。
+    /// <summary>スターへ戻す割合（1.0＝スターの中心は raw の強さ・0＝スター無し＝一様圧縮）。</summary>
+    public double AiStarShare { get; init; } = 1.0;
+    /// <summary>使い捨て生成（Create）で先発野手8人のうち主軸にする人数。</summary>
+    public int AiStarHitters { get; init; } = 3;
+    /// <summary>永続ロスターの1学年（コホート）あたりの主軸打者の人数（3学年で Create の人数に揃える）。</summary>
+    public int AiStarHittersPerCohort { get; init; } = 1;
+    /// <summary>永続ロスターの1学年あたりのエース格（投手適性で最も投手に寄った者から順）。</summary>
+    public int AiStarPitchersPerCohort { get; init; } = 1;
+    /// <summary>使い捨て生成で脇役の中心を lift×これ だけ下げ、チーム総合（6指標）を圧縮後の尺度に留める。</summary>
+    public double AiStarCastDrop { get; init; } = 0.30;
+
+    /// <summary>スターへ戻す量＝(raw − 圧縮後)×share。ピボットより弱い学校（圧縮で持ち上がる側）は 0。</summary>
+    public double StarLift(double strength)
+        => Math.Max(0.0, strength - CompressStrength(strength)) * AiStarShare;
+
     // --- 投打の利き（設計書01 §1.1c） ---
     public double ThrowLeftProb { get; init; } = 0.12;
     public double SwitchProb { get; init; } = 0.03;

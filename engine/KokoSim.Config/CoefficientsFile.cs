@@ -2014,6 +2014,12 @@ public static class CoefficientsLoader
         // AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）
         public double AiPowerSkew { get; set; } = D.AiPowerSkew;
         public double AiConcentration { get; set; } = D.AiConcentration;
+        // AI校の上位集中＝スター型（issue prefecture-dominance-star）
+        public double AiStarShare { get; set; } = D.AiStarShare;
+        public int AiStarHitters { get; set; } = D.AiStarHitters;
+        public int AiStarHittersPerCohort { get; set; } = D.AiStarHittersPerCohort;
+        public int AiStarPitchersPerCohort { get; set; } = D.AiStarPitchersPerCohort;
+        public double AiStarCastDrop { get; set; } = D.AiStarCastDrop;
         // 投打の利き
         public double ThrowLeftProb { get; set; } = D.ThrowLeftProb;
         public double SwitchProb { get; set; } = D.SwitchProb;
@@ -2152,6 +2158,11 @@ public static class CoefficientsLoader
             AiStyleMentalBonus = AiStyleMentalBonus,
             AiPowerSkew = AiPowerSkew,
             AiConcentration = AiConcentration,
+            AiStarShare = AiStarShare,
+            AiStarHitters = AiStarHitters,
+            AiStarHittersPerCohort = AiStarHittersPerCohort,
+            AiStarPitchersPerCohort = AiStarPitchersPerCohort,
+            AiStarCastDrop = AiStarCastDrop,
             ThrowLeftProb = ThrowLeftProb,
             SwitchProb = SwitchProb,
             BatLeftGivenRightThrow = BatLeftGivenRightThrow,
