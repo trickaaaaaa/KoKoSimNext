@@ -586,7 +586,10 @@ namespace KokoSim.Unity.Tournament
             Show(section, rows.Count > 0);
             if (rows.Count == 0) return;
 
-            SetText("tp-entrants-h", "出場 " + rows.Count + "代表");
+            // 甲子園は「県の代表」だが、センバツは複数校が同じ地区から選ばれることもある選出枠＝「校」。
+            var koshien = KokoSim.Unity.Shell.GameSession.Current.Kind
+                == KokoSim.Engine.Season.TournamentKind.SummerKoshien;
+            SetText("tp-entrants-h", "出場 " + rows.Count + (koshien ? "代表" : "校"));
 
             var head = _root.Q<VisualElement>("tp-ent-head");
             if (head != null)
@@ -659,17 +662,25 @@ namespace KokoSim.Unity.Tournament
                 bars.Add(Bar("守備", r.Defense, true));
             }
 
-            // 成績スコープの切替（県予選／甲子園）。既定は県予選＝開幕前でも中身のある表が出る。
+            // 成績スコープの切替（甲子園＝県予選／甲子園・センバツ＝地区大会／センバツ）。既定は
+            // 直前の大会の実測＝開幕前でも中身のある表が出る（大会が変われば選択も追従する）。
+            var senbatsu = KokoSim.Unity.Shell.GameSession.Current.Kind
+                == KokoSim.Engine.Season.TournamentKind.SenbatsuKoshien;
+            var qualifierScope = senbatsu
+                ? TournamentPreviewState.StatScope.RegionalQualifier
+                : TournamentPreviewState.StatScope.PrefQualifier;
+            if (_entrantScope != qualifierScope && _entrantScope != TournamentPreviewState.StatScope.CurrentTournament)
+                _entrantScope = qualifierScope;
+
             var tabs = _root.Q<VisualElement>("tp-ed-tabs");
             if (tabs != null)
             {
                 tabs.Clear();
-                var selected = _entrantScope == TournamentPreviewState.StatScope.PrefQualifier ? 0 : 1;
-                tabs.Add(UiComponents.SegTabs(new[] { "県予選", "甲子園" }, selected, i =>
+                var selected = _entrantScope == qualifierScope ? 0 : 1;
+                tabs.Add(UiComponents.SegTabs(new[] { senbatsu ? "地区大会" : "県予選", senbatsu ? "センバツ" : "甲子園" },
+                    selected, i =>
                 {
-                    _entrantScope = i == 0
-                        ? TournamentPreviewState.StatScope.PrefQualifier
-                        : TournamentPreviewState.StatScope.CurrentTournament;
+                    _entrantScope = i == 0 ? qualifierScope : TournamentPreviewState.StatScope.CurrentTournament;
                     Render();
                 }));
             }

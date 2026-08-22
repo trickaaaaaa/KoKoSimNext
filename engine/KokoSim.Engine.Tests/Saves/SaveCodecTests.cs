@@ -463,6 +463,48 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
     }
 
+    // ===== センバツの地区大会成績（設計書05 §1.5b・v17） =====
+
+    [Fact]
+    public void RegionalQualifierStats_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        // 自校ぶん（PlayerStatStore）と他校ぶん（NationTournamentStats）の両方に実測を入れる
+        // （SchoolStatsLookup が校IDで振り分ける対の構造＝PrefQualifier と同じ形）。
+        // 自校は「今大会成績を地区大会スコープへ焼き取る」経路で積む（BuildRichState が既に
+        // CurrentTournament へ1試合分積んでいる＝SnapshotPrefQualifier と対の作法）。
+        state.Stats.SnapshotRegionalQualifier();
+        // SyntheticGame() は away 側だけ埋める合成ボックススコア＝schoolIsAway: true で畳む
+        // （BuildRichState 内の他の畳み込みと同じ作法。BuildManagerRoster の管理ロスターとは無関係の
+        // 別校=400として積む）。
+        state.TournamentStats.FoldRegionalQualifier(400, SaveTestFixtures.SyntheticGame(), schoolIsAway: true);
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.True(s.Stats.RegionalQualifier.Players.Count > 0);
+        var restoredBook = s.TournamentStats.RegionalQualifierForSchool(400);
+        Assert.NotNull(restoredBook);
+        Assert.True(restoredBook!.Players.Count > 0);
+    }
+
+    [Fact]
+    public void V16Save_WithoutRegionalQualifierStats_StillLoads_AsEmpty()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"nationRegionalQualifierStats\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "nationRegionalQualifierStats が直列化されていない");
+        var end = json.IndexOf(",\"nationSchools\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "nationSchools が nationRegionalQualifierStats の後に居ない");
+        var v16 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":16");
+        Assert.DoesNotContain("\"nationRegionalQualifierStats\"", v16);
+
+        Assert.True(SaveCodec.TryDeserialize(v16, out var s, out var err), err);
+        Assert.Empty(s.TournamentStats.RegionalQualifierSchools);
+        Assert.Empty(s.Stats.RegionalQualifier.Players);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
     // ===== 教え子名鑑（issue #586） =====
 
     // 過年度の指名確定（年・当時の背番号・順位・バンド・注目度）が往復すること。

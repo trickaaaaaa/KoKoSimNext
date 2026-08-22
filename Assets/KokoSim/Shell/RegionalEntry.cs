@@ -106,6 +106,11 @@ namespace KokoSim.Unity.Shell
             var placement = GameSession.Current.LastRegionalPlacementIds;
             if (placement == null || placement.Count == 0) return false;
 
+            // 自校の地区大会成績を焼き取る（設計書05 §1.5b）。次の大会（神宮 or センバツ待ち）で
+            // 今大会スコープが消える前に、ここで写す＝これがセンバツの大会展望の
+            // 「選手一人一人の地区大会成績」の源（KoshienEntry の県予選焼き取りと同じ作法）。
+            GameSession.Current.Stats.SnapshotRegionalQualifier();
+
             var myRegion = PrefectureNames.RegionOf(NationService.PrefectureId);
             return JinguEntry.ContinueFrom(myRegion, placement, GameClock.YearIndex);
         }

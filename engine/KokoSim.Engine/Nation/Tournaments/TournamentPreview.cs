@@ -282,11 +282,16 @@ public static class TournamentPreviewBuilder
     }
 
     /// <summary>
-    /// 注目選手の成績行が指す期間の呼び名。甲子園の展望は<b>県予選</b>の実測を出す（開幕前は今大会が空なので、
-    /// 「今大会 未登板」しか書けなくなる）。文言は engine 側で決める（UIで文字列を組み立てない）。
+    /// 注目選手の成績行が指す期間の呼び名。甲子園の展望は<b>県予選</b>、センバツの展望は<b>地区大会</b>の
+    /// 実測を出す（開幕前は今大会が空なので、そのままだと「今大会 未登板」しか書けなくなる）。
+    /// 文言は engine 側で決める（UIで文字列を組み立てない）。
     /// </summary>
-    private static string StatPeriodLabel(PreviewStage stage)
-        => stage == PreviewStage.SummerKoshien ? "県予選" : "今大会";
+    private static string StatPeriodLabel(PreviewStage stage) => stage switch
+    {
+        PreviewStage.SummerKoshien => "県予選",
+        PreviewStage.SenbatsuKoshien => "地区大会",
+        _ => "今大会",
+    };
 
     /// <summary>
     /// このステージに「次のステージへの切符」という言い回しが無いか（＝終着点の文言を使うか）。

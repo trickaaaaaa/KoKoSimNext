@@ -10,10 +10,18 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// <see cref="PlacementIds"/> は順位付き（先頭が地区王者）＝センバツ選考（<see cref="SenbatsuSelection.Select"/>）
 /// の入力そのもの。
 /// </summary>
-public sealed record RegionalResult(string Region, IReadOnlyList<int> PlacementIds, bool ChampionToJingu)
+public sealed record RegionalResult(
+    string Region, IReadOnlyList<int> PlacementIds, bool ChampionToJingu,
+    IReadOnlyList<TournamentMatchRecord>? Matches = null)
 {
     public bool HasChampion => PlacementIds.Count > 0;
     public int ChampionId => PlacementIds.Count > 0 ? PlacementIds[0] : PrefectureResult.NoChampion;
+
+    private static readonly IReadOnlyList<TournamentMatchRecord> NoMatches = new List<TournamentMatchRecord>();
+
+    /// <summary>この地区大会で実際に消化されたカード（初戦から決勝へ・単独県開催は空）。
+    /// センバツの「選手一人一人の地区大会成績」再シム（<see cref="QualifierStatsSim"/>）の入力。</summary>
+    public IReadOnlyList<TournamentMatchRecord> BracketMatches => Matches ?? NoMatches;
 }
 
 /// <summary>
@@ -52,6 +60,7 @@ public static class RegionalNationEngine
             if (!byRegion.TryGetValue(fmt.Region, out var prefIds)) continue;
 
             IReadOnlyList<int> placement;
+            IReadOnlyList<TournamentMatchRecord>? matches = null;
             if (fmt.SinglePrefecture)
             {
                 // 都大会・全道大会が地区大会を兼任＝県大会の順位をそのまま地区順位とする。
@@ -71,11 +80,16 @@ public static class RegionalNationEngine
                 else
                 {
                     var regionRng = rng.Fork(0xB10C_0000UL ^ (uint)StableHash(fmt.Region));
-                    var knock = Knockout.Run(entrants, coeff, regionRng);
+                    // カード記録は球場割当なし（StadiumPlan.None）で回す＝本編の乱数列には触れない
+                    // （TournamentRecorder の球場抽選は専用 Fork のみで消費し、対戦解決の rng は進めない）。
+                    // センバツの「選手一人一人の地区大会成績」再シム（QualifierStatsSim）の入力になる。
+                    var recorder = new TournamentRecorder(StadiumPlan.None, regionRng.Fork(0xB10C_57AD_0000UL));
+                    var knock = Knockout.Run(entrants, coeff, regionRng, recorder: recorder);
                     placement = knock.Placement.Select(s => s.Id).ToList();
+                    matches = recorder.Records;
                 }
             }
-            results.Add(new RegionalResult(fmt.Region, placement, fmt.ChampionToJingu));
+            results.Add(new RegionalResult(fmt.Region, placement, fmt.ChampionToJingu, matches));
         }
         return results;
     }

@@ -20,6 +20,7 @@ internal static class StatsSaves
         .Add("official", BookToJson(s.Official))
         .Add("current", BookToJson(s.CurrentTournament))
         .Add("prefQualifier", BookToJson(s.PrefQualifier))
+        .Add("regionalQualifier", BookToJson(s.RegionalQualifier))
         .Add("archive", ArchiveToJson(s.Archive));
 
     public static void RestoreInto(PlayerStatStore target, JsonObject o)
@@ -31,6 +32,9 @@ internal static class StatsSaves
         // （その年の甲子園展望に県予選成績が出ないだけで進行は詰まらない）。
         if (o.Has("prefQualifier")) RestoreBookInto(target.PrefQualifier, o.Obj("prefQualifier"));
         else target.PrefQualifier.Clear();
+        // regionalQualifier は v17（センバツの地区大会成績）で追加。旧セーブは項目ごと無い＝空で読む。
+        if (o.Has("regionalQualifier")) RestoreBookInto(target.RegionalQualifier, o.Obj("regionalQualifier"));
+        else target.RegionalQualifier.Clear();
         RestoreArchiveInto(target.Archive, o.Arr("archive"));
     }
 
@@ -111,6 +115,35 @@ internal static class StatsSaves
         {
             var o = v.AsObject();
             RestoreBookInto(target.GetOrCreatePrefQualifierBook(o.Int("schoolId")), o.Obj("book"));
+        }
+    }
+
+    /// <summary>
+    /// 全国の地区大会スコープ（校ID→StatBook。設計書05 §1.5b）。今大会・通算・県予選と別配列で持つ。
+    /// センバツの大会展望が引く読み物なので、消えても進行は詰まらないが、選出校の再シムは
+    /// 大会をまたいで走り直さないため保存する。
+    /// </summary>
+    public static JsonArray NationRegionalQualifierToJson(NationTournamentStats s)
+    {
+        var ids = new List<int>(s.RegionalQualifierSchools);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids)
+        {
+            var book = s.RegionalQualifierForSchool(id);
+            if (book is null) continue;
+            arr.Add(new JsonObject().Add("schoolId", id).Add("book", BookToJson(book)));
+        }
+        return arr;
+    }
+
+    public static void RestoreRegionalQualifierInto(NationTournamentStats target, JsonArray arr)
+    {
+        target.ClearRegionalQualifier();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            RestoreBookInto(target.GetOrCreateRegionalQualifierBook(o.Int("schoolId")), o.Obj("book"));
         }
     }
 

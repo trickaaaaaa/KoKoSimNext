@@ -129,10 +129,11 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>
-        /// 校別詳細の成績スコープ（issue 甲子園）。甲子園の展望は<b>県予選</b>を既定にする
-        /// （「選手一人一人の県予選成績が見れる」＝要望）。大会が進めば甲子園側も見られる。
+        /// 校別詳細の成績スコープ（issue 甲子園）。甲子園の展望は<b>県予選</b>、センバツの展望は
+        /// <b>地区大会</b>を既定にする（「選手一人一人の[県予選/地区大会]成績が見れる」＝要望）。
+        /// 大会が進めば今大会側も見られる。
         /// </summary>
-        public enum StatScope { CurrentTournament, PrefQualifier }
+        public enum StatScope { CurrentTournament, PrefQualifier, RegionalQualifier }
 
         /// <summary>大会が開催中でなければ null（呼び出し側は空状態を出す）。</summary>
         public View Build()
@@ -152,17 +153,19 @@ namespace KokoSim.Unity.Tournament
                 TK.SenbatsuKoshien => (PreviewStage.SenbatsuKoshien, 1, ""),
                 _ => (PreviewStage.Autumn, 2, "地区大会"),
             };
-            // 県予選の実測を出せるのは夏の甲子園だけ（KoshienQualifierStatsSim が打ち直す専用帳簿）。
-            // センバツは秋季県大会→地区大会→神宮の複数段にまたがるため同種の帳簿を持たず、他大会と同じ
-            // 「今大会」スコープに倣う＝開幕前は「未登板/未出場」と出る（合成値で埋め戻さない）。
+            // 県予選の実測を出せるのは夏の甲子園（KoshienQualifierStatsSim）、地区大会の実測を出せるのは
+            // センバツ（SenbatsuQualifierStatsSim）。どちらも開幕前の「直前の大会でどう戦ったか」を見せる。
             var koshien = kind == TK.SummerKoshien;
-            var showEntrants = kind == TK.SummerKoshien || kind == TK.SenbatsuKoshien;
+            var senbatsu = kind == TK.SenbatsuKoshien;
+            var statScope = koshien ? StatScope.PrefQualifier
+                : senbatsu ? StatScope.RegionalQualifier : StatScope.CurrentTournament;
+            var showEntrants = koshien || senbatsu;
             // 注目選手・登録メンバーは実戦と同一の永続ロスター（#80）から引く＝展望で見た選手が実戦で出る。
             var preview = TournamentPreviewBuilder.Build(
                 d.Title, d.Field, berths: berths, nextStageName: nextStageName,
                 yearIndex: KokoSim.Unity.Shell.GameSession.Current.Year,
                 teamProvider: TeamFor,
-                statsForSchool: id => BookFor(id, koshien ? StatScope.PrefQualifier : StatScope.CurrentTournament),
+                statsForSchool: id => BookFor(id, statScope),
                 stage: stage);
 
             var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
@@ -370,9 +373,12 @@ namespace KokoSim.Unity.Tournament
         private static KokoSim.Engine.Stats.StatBook BookFor(int schoolId, StatScope scope)
         {
             var lookup = KokoSim.Unity.Shell.NationService.StatsLookup;
-            return scope == StatScope.PrefQualifier
-                ? lookup.PrefQualifierBook(schoolId)
-                : lookup.CurrentTournamentBook(schoolId);
+            return scope switch
+            {
+                StatScope.PrefQualifier => lookup.PrefQualifierBook(schoolId),
+                StatScope.RegionalQualifier => lookup.RegionalQualifierBook(schoolId),
+                _ => lookup.CurrentTournamentBook(schoolId),
+            };
         }
 
         /// <summary>
@@ -426,8 +432,12 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>成績スコープの呼び名（表の見出し・キャプション・タブが同じ語を使う）。</summary>
-        public static string ScopeLabel(StatScope scope)
-            => scope == StatScope.PrefQualifier ? "県予選" : "今大会";
+        public static string ScopeLabel(StatScope scope) => scope switch
+        {
+            StatScope.PrefQualifier => "県予選",
+            StatScope.RegionalQualifier => "地区大会",
+            _ => "今大会",
+        };
 
         /// <summary>
         /// エンジンのブラケット出力（TournamentRunner.BuildBracketView）を樹形図の描画用に変換する。

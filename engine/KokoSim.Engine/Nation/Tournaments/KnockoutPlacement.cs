@@ -43,4 +43,25 @@ public static class KnockoutPlacement
 
         return placement;
     }
+
+    /// <summary>
+    /// <paramref name="matches"/>（<see cref="TournamentRecorder.Records"/>・初戦から決勝への順）から
+    /// 指定校が実際に戦った相手の並びを組み立てる（<see cref="NationalTournamentEngine.ChampionPathOf"/>
+    /// の一般化＝優勝校に限らず、敗退するまでの並びを返す）。センバツの「選手一人一人の地区大会成績」
+    /// 再シム（<see cref="QualifierStatsSim"/>）の入力。乱数不使用。
+    /// </summary>
+    public static IReadOnlyList<ChampionMatchup> PathOf(IReadOnlyList<TournamentMatchRecord> matches, int schoolId)
+    {
+        var path = new List<ChampionMatchup>();
+        foreach (var m in matches)
+        {
+            if (m.Winner.Id == schoolId) path.Add(new ChampionMatchup(m.Loser.Id, m.RoundsRemaining));
+            else if (m.Loser.Id == schoolId)
+            {
+                path.Add(new ChampionMatchup(m.Winner.Id, m.RoundsRemaining));
+                break;   // 敗退＝この校のブラケットはここで終わる（単一エリミネーション）。
+            }
+        }
+        return path;
+    }
 }

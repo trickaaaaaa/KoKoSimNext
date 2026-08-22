@@ -35,6 +35,13 @@ public sealed class PlayerStatStore
     /// </summary>
     public StatBook PrefQualifier { get; } = new();
 
+    /// <summary>
+    /// 直前の地区大会成績（設計書05 §1.5b）。センバツの大会展望が「選手一人一人の地区大会成績」を
+    /// 出すための焼き取り。<see cref="SnapshotRegionalQualifier"/> が自校の地区大会終了時に一度だけ写す
+    /// （自校が出場枠外で地区大会に出ていない年は空のまま＝センバツにも選ばれない年なので実害なし）。
+    /// </summary>
+    public StatBook RegionalQualifier { get; } = new();
+
     /// <summary>大会別アーカイブ（学年×大会枠＋当時の背番号, issue #77）。永続・セーブ横断。</summary>
     public TournamentArchive Archive { get; } = new();
 
@@ -46,6 +53,12 @@ public sealed class PlayerStatStore
     /// 上書き＝去年の県予選成績は残さない（展望が見せるのは「今年の夏の県予選」だけ）。
     /// </summary>
     public void SnapshotPrefQualifier() => PrefQualifier.ReplaceWith(CurrentTournament);
+
+    /// <summary>
+    /// 今大会スコープを地区大会スコープへ焼き取る（自校の地区大会終了時に一度だけ呼ぶ）。
+    /// 上書き＝去年の地区大会成績は残さない（展望が見せるのは「今年の地区大会」だけ）。
+    /// </summary>
+    public void SnapshotRegionalQualifier() => RegionalQualifier.ReplaceWith(CurrentTournament);
 
     /// <summary>
     /// 大会終了時に今大会成績を大会別アーカイブへ確定する（issue #77）。次の StartTournament が

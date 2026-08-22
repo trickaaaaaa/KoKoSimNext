@@ -60,6 +60,25 @@ namespace KokoSim.Unity.Tournament
             Check("センバツ32校が確定した", pending != null && pending.Count == 32,
                 "count=" + (pending == null ? 0 : pending.Count));
 
+            // 選出校の地区大会成績の打ち直し（SenbatsuQualifierStatsSim）を待って、非自校の1校に
+            // 実測が入ったか確かめる（設計書05 §1.5b 計画の残課題①・2026-08-22 追加検証）。
+            if (pending != null && pending.Count > 0)
+            {
+                SenbatsuQualifierStatsSim.EnsureCompleted();
+                var lookup = NationService.StatsLookup;
+                var filled = 0;
+                var checkedNonSelf = 0;
+                foreach (var id in pending)
+                {
+                    if (id == -1) continue;
+                    checkedNonSelf++;
+                    var book = lookup.RegionalQualifierBook(id);
+                    if (book != null && book.Players.Count > 0) filled++;
+                }
+                Check("選出校（非自校）の地区大会成績が実測で埋まった", filled > 0,
+                    "filled=" + filled + "/" + checkedNonSelf);
+            }
+
             var toGo = cal.SenbatsuAnnounceWeek - GameClock.Week;
             Note("選考発表週まで " + toGo + " 週");
             if (toGo > 0)

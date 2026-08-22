@@ -41,7 +41,12 @@ namespace KokoSim.Unity.Shell
             foreach (var r in otherRegions) placements[r.Region] = ResolveSchools(r.PlacementIds);
 
             var field = SenbatsuSelection.Select(placements, new SenbatsuBerths(), jinguChampionRegion);
-            GameSession.Current.SetPendingSenbatsuField(field.Select(s => s.Id).ToList(), jinguChampionRegion);
+            var fieldIds = field.Select(s => s.Id).ToList();
+            GameSession.Current.SetPendingSenbatsuField(fieldIds, jinguChampionRegion);
+
+            // 選出校の地区大会成績を背景で打ち直す（設計書05 §1.5b）。選考発表までに終わっていれば
+            // 「選手一人一人の地区大会成績」が実測で埋まる。終わっていなくても進行は止まらない（読み物なので）。
+            SenbatsuQualifierStatsSim.Start(fieldIds, otherRegions, yearIndex, GameSeed.Master);
         }
 
         /// <summary>

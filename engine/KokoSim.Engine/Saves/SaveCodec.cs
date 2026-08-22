@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 16;
+    public const int CurrentVersion = 17;
 
     // ===== Serialize =====
 
@@ -53,6 +53,7 @@ public static class SaveCodec
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
             .Add("nationCareerStats", StatsSaves.NationCareerToJson(s.TournamentStats))
             .Add("nationPrefQualifierStats", StatsSaves.NationPrefQualifierToJson(s.TournamentStats))
+            .Add("nationRegionalQualifierStats", StatsSaves.NationRegionalQualifierToJson(s.TournamentStats))
             .Add("nationSchools", NationSchoolsToJson(s.NationSchools))
             .Add("nationYearWins", IntMapToJson(s.NationYearWins))
             .Add("nationKoshienChampionId", s.NationKoshienChampionId)
@@ -226,6 +227,11 @@ public static class SaveCodec
         if (version < 16 && !root.Has("senbatsu")) root.Add("senbatsu", JsonNull.Instance);
         if (version < 16 && !root.Has("pendingSenbatsuFieldIds")) root.Add("pendingSenbatsuFieldIds", new JsonArray());
         if (version < 16 && !root.Has("pendingSenbatsuJinguRegion")) root.Add("pendingSenbatsuJinguRegion", "");
+        // v17（センバツの地区大会成績）: 全国の地区大会スコープ（センバツの大会展望が引く読み物）。
+        // 旧セーブは存在しえない＝空配列で補う。自校ぶん（stats.regionalQualifier）は StatsSaves 側の
+        // Has 分岐で読む。
+        if (version < 17 && !root.Has("nationRegionalQualifierStats"))
+            root.Add("nationRegionalQualifierStats", new JsonArray());
         return root;
     }
 
@@ -291,6 +297,8 @@ public static class SaveCodec
         StatsSaves.RestoreCareerInto(s.TournamentStats, root.Arr("nationCareerStats"));
         // 県予選スコープは v15 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
         StatsSaves.RestorePrefQualifierInto(s.TournamentStats, root.Arr("nationPrefQualifierStats"));
+        // 地区大会スコープは v17 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        StatsSaves.RestoreRegionalQualifierInto(s.TournamentStats, root.Arr("nationRegionalQualifierStats"));
 
         s.Stats = new PlayerStatStore();
         StatsSaves.RestoreInto(s.Stats, root.Obj("stats"));

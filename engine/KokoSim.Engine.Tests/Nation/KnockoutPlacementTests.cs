@@ -83,4 +83,51 @@ public sealed class KnockoutPlacementTests
     [Fact]
     public void FromMatches_EmptyMatches_ReturnsEmpty()
         => Assert.Empty(KnockoutPlacement.FromMatches(System.Array.Empty<BracketMatch>(), _ => throw new System.Exception()));
+
+    // ===== PathOf（TournamentMatchRecord・センバツの地区大会成績再シムの入力） =====
+
+    private static List<TournamentMatchRecord> RecordedMatches(IReadOnlyList<School> field, ulong seed)
+    {
+        var rng = new Xoshiro256Random(seed);
+        var recorder = new TournamentRecorder(StadiumPlan.None, rng.Fork(1));
+        Knockout.Run(field, Coeff, rng, recorder: recorder);
+        return recorder.Records.ToList();
+    }
+
+    [Fact]
+    public void PathOf_Champion_MatchesChampionPathOf()
+    {
+        var field = MakeField(8);
+        var matches = RecordedMatches(field, 5);
+        var championId = matches.Last().Winner.Id;
+
+        var path = KnockoutPlacement.PathOf(matches, championId);
+
+        // 優勝校は全ラウンドぶん（8校なら3試合）勝者として現れる＝どのラウンドも敗退なし。
+        Assert.Equal(3, path.Count);
+        Assert.All(path, step => Assert.NotEqual(championId, step.OpponentId));
+    }
+
+    [Fact]
+    public void PathOf_EarlyRoundLoser_StopsAtItsOwnElimination()
+    {
+        var field = MakeField(8);
+        var matches = RecordedMatches(field, 5);
+        // 初戦（RoundsRemaining が最大）で負けた校を1人選ぶ。
+        var firstRoundRemaining = matches.Max(m => m.RoundsRemaining);
+        var loser = matches.First(m => m.RoundsRemaining == firstRoundRemaining).Loser.Id;
+
+        var path = KnockoutPlacement.PathOf(matches, loser);
+
+        // 初戦敗退＝道のりは1試合だけ（そこで終わり、以降のラウンドには現れない）。
+        Assert.Single(path);
+    }
+
+    [Fact]
+    public void PathOf_UnknownSchool_ReturnsEmpty()
+    {
+        var field = MakeField(8);
+        var matches = RecordedMatches(field, 5);
+        Assert.Empty(KnockoutPlacement.PathOf(matches, schoolId: 9999));
+    }
 }

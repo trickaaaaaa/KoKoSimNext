@@ -21,6 +21,7 @@ public sealed class NationTournamentStats
     private readonly Dictionary<int, StatBook> _bySchool = new();
     private readonly Dictionary<int, StatBook> _careerBySchool = new();
     private readonly Dictionary<int, StatBook> _prefQualifierBySchool = new();
+    private readonly Dictionary<int, StatBook> _regionalQualifierBySchool = new();
     // 全国裏試合はバックグラウンドスレッドで回し得る（設計書05 §1.4）。自校県（メインスレッド）と
     // 他県（背景スレッド）が同時に別校を畳み込むため、辞書構造の競合をロックで防ぐ（校キーは disjoint）。
     private readonly object _gate = new();
@@ -97,6 +98,35 @@ public sealed class NationTournamentStats
         }
     }
 
+    /// <summary>
+    /// 学校IDの地区大会成績（未登録なら null。設計書05 §1.5b）。センバツの大会展望が引く。
+    /// 自校は <see cref="PlayerStatStore.RegionalQualifier"/> 側（<see cref="SchoolStatsLookup"/> が振り分け）、
+    /// 他校ぶんは選出校の勝ち上がりの再シム（Shell の <c>SenbatsuQualifierStatsSim</c>）が
+    /// <see cref="FoldRegionalQualifier"/> で直接積む＝スナップショットは要らない
+    /// （地区大会の背景解決は <see cref="Nation.Tournaments.SummerResolution.ChampionsOnly"/> で
+    /// 成績を畳んでいないため、今大会スコープに写す元データが無い）。
+    /// </summary>
+    public StatBook? RegionalQualifierForSchool(int schoolId)
+    {
+        lock (_gate) return _regionalQualifierBySchool.TryGetValue(schoolId, out var b) ? b : null;
+    }
+
+    /// <summary>地区大会成績を持つ学校ID一覧（セーブ用・スナップショット）。</summary>
+    public IReadOnlyCollection<int> RegionalQualifierSchools
+    {
+        get { lock (_gate) return new List<int>(_regionalQualifierBySchool.Keys); }
+    }
+
+    /// <summary>1試合の片側だけを地区大会スコープへ積む（選出校の勝ち上がり再シム専用）。</summary>
+    public void FoldRegionalQualifier(int schoolId, GameResult result, bool schoolIsAway)
+    {
+        lock (_gate)
+        {
+            var (winPid, losePid) = DecisionOfRecord.Resolve(result, schoolIsAway);
+            BookFor(_regionalQualifierBySchool, schoolId).FoldGame(result, schoolIsAway, winPid, losePid);
+        }
+    }
+
     private static StatBook BookFor(Dictionary<int, StatBook> books, int schoolId)
     {
         if (!books.TryGetValue(schoolId, out var b)) { b = new StatBook(); books[schoolId] = b; }
@@ -126,6 +156,15 @@ public sealed class NationTournamentStats
 
     /// <summary>セーブ復元専用。県予選スコープだけを全消去する。</summary>
     internal void ClearPrefQualifier() { lock (_gate) _prefQualifierBySchool.Clear(); }
+
+    /// <summary>セーブ復元専用。校の地区大会帳簿を作って返す。</summary>
+    internal StatBook GetOrCreateRegionalQualifierBook(int schoolId)
+    {
+        lock (_gate) return BookFor(_regionalQualifierBySchool, schoolId);
+    }
+
+    /// <summary>セーブ復元専用。地区大会スコープだけを全消去する。</summary>
+    internal void ClearRegionalQualifier() { lock (_gate) _regionalQualifierBySchool.Clear(); }
 
     /// <summary>
     /// 1試合ぶんを両校へ畳み込む。away=先攻校ID・home=後攻校ID。勝敗投手は各サイドで自動判定

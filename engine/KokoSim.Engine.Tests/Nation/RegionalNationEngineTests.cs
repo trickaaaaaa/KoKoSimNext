@@ -128,4 +128,40 @@ public sealed class RegionalNationEngineTests
         // 実データは10地区とも神宮動線を持つ（regional-tournaments.yaml 全件 champion_to_jingu: true）。
         Assert.All(results, r => Assert.True(r.ChampionToJingu));
     }
+
+    // ===== BracketMatches（センバツの地区大会成績再シムの入力・設計書05 §1.5b） =====
+
+    [Fact]
+    public void RunOtherRegions_MultiPrefectureRegion_CarriesBracketMatches()
+    {
+        var formats = LoadRealFormats();
+        var (placements, byId) = MakePlacements();
+
+        var results = RegionalNationEngine.RunOtherRegions(
+            formats, placements, PrefectureNames.RegionOf, id => byId[id],
+            Coeff, new Xoshiro256Random(21), calendarYear: 2028);
+
+        var kanto = results.Single(r => r.Region == "kanto");
+        Assert.NotEmpty(kanto.BracketMatches);
+        // 記録されたカードから優勝校の道のりを復元できる（KnockoutPlacement.PathOf との結合）。
+        var path = KnockoutPlacement.PathOf(kanto.BracketMatches, kanto.ChampionId);
+        Assert.NotEmpty(path);
+        Assert.All(path, step => Assert.NotEqual(kanto.ChampionId, step.OpponentId));
+    }
+
+    [Fact]
+    public void RunOtherRegions_SinglePrefectureRegion_HasNoBracketMatches()
+    {
+        var formats = LoadRealFormats();
+        var (placements, byId) = MakePlacements();
+
+        var results = RegionalNationEngine.RunOtherRegions(
+            formats, placements, PrefectureNames.RegionOf, id => byId[id],
+            Coeff, new Xoshiro256Random(21), calendarYear: 2028);
+
+        // 東京・北海道は県大会がそのまま地区大会＝新たなブラケットを組まないので記録も無い
+        // （出場校は自地区の背景シム=AutumnBackgroundSim 側の別経路で既に扱っている）。
+        var tokyo = results.Single(r => r.Region == "tokyo");
+        Assert.Empty(tokyo.BracketMatches);
+    }
 }

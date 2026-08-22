@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Stats;
 
 namespace KokoSim.Engine.Nation.Tournaments;
@@ -34,16 +35,8 @@ public static class QualifierStatsSim
     /// <summary>
     /// 代表校1校ぶんの勝ち上がりを打ち直し、その校の県予選成績を <paramref name="stats"/> へ積む。
     /// 既に成績がある校（自県＝実測がある）を渡さないのは呼び出し側の責任。
+    /// <see cref="ReplayPath"/> へ委譲する薄いラッパー（既存呼び出し口の互換用）。
     /// </summary>
-    /// <param name="result">区画の結果（代表校IDと勝ち上がりの並びを持つ）。</param>
-    /// <param name="schoolById">校ID→School。見つからない相手はその1試合だけ飛ばす。</param>
-    /// <param name="resolver">1球シムの解決器（<b>成績を自前で畳まない</b>設定で渡すこと）。</param>
-    /// <param name="stats">積み先（県予選スコープ）。</param>
-    /// <param name="schedule">試合日の算出（エース温存・球数台帳の入力）。</param>
-    /// <param name="totalRounds">その区画の総ラウンド数（試合日を引く母数）。</param>
-    /// <param name="yearIndex">年度（先攻/後攻の決定論シードに入る）。</param>
-    /// <param name="rng">基準乱数。<b>状態は進まない</b>（Fork のみ）。</param>
-    /// <param name="afterMatch">1試合解決するたびに呼ぶ任意フック（スロットル用。結果・乱数に触れない）。</param>
     public static void ReplayChampionPath(
         PrefectureResult result,
         Func<int, School?> schoolById,
@@ -56,22 +49,57 @@ public static class QualifierStatsSim
         Action? afterMatch = null)
     {
         if (!result.HasChampion || result.Path.Count == 0) return;
-        var champion = schoolById(result.ChampionId);
-        if (champion is null) return;
+        ReplayPath(
+            result.ChampionId, result.Path, schoolById, resolver, stats.FoldPrefQualifier,
+            schedule, totalRounds, yearIndex, rng, afterMatch);
+    }
 
-        // 球数台帳は代表校ぶんだけを新しく持つ（本大会の台帳とは別＝甲子園の投手起用に影響させない）。
+    /// <summary>
+    /// 指定校1校ぶんの勝ち上がり（<paramref name="path"/>）を打ち直し、<paramref name="foldInto"/> へ積む。
+    /// <see cref="ReplayChampionPath"/> の一般化＝優勝校（<see cref="PrefectureResult"/>）に限らず、
+    /// 敗退した校の道のり（<see cref="KnockoutPlacement.PathOf"/>）も同じ手順で打ち直せる
+    /// （センバツの「選手一人一人の地区大会成績」再シムが使う）。
+    /// </summary>
+    /// <param name="schoolId">打ち直す校のID。</param>
+    /// <param name="path">その校が実際に戦った相手の並び（初戦から最後の試合へ）。</param>
+    /// <param name="schoolById">校ID→School。見つからない相手はその1試合だけ飛ばす。</param>
+    /// <param name="resolver">1球シムの解決器（<b>成績を自前で畳まない</b>設定で渡すこと）。</param>
+    /// <param name="foldInto">1試合ぶんの積み先（<c>NationTournamentStats.FoldPrefQualifier</c> 等）。
+    /// (schoolId, 試合結果, schoolIsAway) を渡す。</param>
+    /// <param name="schedule">試合日の算出（エース温存・球数台帳の入力）。</param>
+    /// <param name="totalRounds">その区画の総ラウンド数（試合日を引く母数）。</param>
+    /// <param name="yearIndex">年度（先攻/後攻の決定論シードに入る）。</param>
+    /// <param name="rng">基準乱数。<b>状態は進まない</b>（Fork のみ）。</param>
+    /// <param name="afterMatch">1試合解決するたびに呼ぶ任意フック（スロットル用。結果・乱数に触れない）。</param>
+    public static void ReplayPath(
+        int schoolId,
+        IReadOnlyList<ChampionMatchup> path,
+        Func<int, School?> schoolById,
+        IBackgroundMatchResolver resolver,
+        Action<int, GameResult, bool> foldInto,
+        TournamentSchedule schedule,
+        int totalRounds,
+        int yearIndex,
+        IRandomSource rng,
+        Action? afterMatch = null)
+    {
+        if (path.Count == 0) return;
+        var self = schoolById(schoolId);
+        if (self is null) return;
+
+        // 球数台帳は打ち直しぶんだけを新しく持つ（本大会の台帳とは別＝実戦の投手起用に影響させない）。
         var ledger = new TournamentPitchLedger();
 
-        foreach (var step in result.Path)
+        foreach (var step in path)
         {
             var opponent = schoolById(step.OpponentId);
             if (opponent is null) continue;
 
             // 先攻/後攻は本大会と同じ決定論規則で決める（同じ組み合わせなら常に同じ側）。
-            var championIsAway = HomeAwayAssignment.ManagerIsAway(
-                champion.Id, opponent.Id, yearIndex, step.RoundsRemaining);
-            var away = championIsAway ? champion : opponent;
-            var home = championIsAway ? opponent : champion;
+            var selfIsAway = HomeAwayAssignment.ManagerIsAway(
+                self.Id, opponent.Id, yearIndex, step.RoundsRemaining);
+            var away = selfIsAway ? self : opponent;
+            var home = selfIsAway ? opponent : self;
 
             var roundIndex = Math.Max(0, totalRounds - step.RoundsRemaining);
             var cards = Math.Max(1, 1 << Math.Max(0, totalRounds - roundIndex - 1));
@@ -79,15 +107,15 @@ public static class QualifierStatsSim
 
             // 試合ごとに独立した Fork（校ID＋ラウンド）＝走らせる順に依存しない。
             var matchRng = rng.Fork(StreamId
-                ^ (ulong)(long)champion.Id
+                ^ (ulong)(long)self.Id
                 ^ ((ulong)(long)opponent.Id << 20)
                 ^ ((ulong)(long)step.RoundsRemaining << 44));
 
             var game = resolver.Resolve(away, home, matchRng,
                 new TournamentMatchContext(step.RoundsRemaining, matchDay, ledger));
 
-            // 代表校の側だけを積む（相手校は「その1試合だけ出てくる」ので県予選成績としては半端になる）。
-            stats.FoldPrefQualifier(champion.Id, game, championIsAway);
+            // 本人の側だけを積む（相手校は「その1試合だけ出てくる」ので成績としては半端になる）。
+            foldInto(self.Id, game, selfIsAway);
             afterMatch?.Invoke();
         }
     }

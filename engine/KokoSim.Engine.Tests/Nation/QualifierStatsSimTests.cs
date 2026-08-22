@@ -182,4 +182,57 @@ public sealed class QualifierStatsSimTests
     [InlineData(190, 8)]
     public void RoundsFor_CountsBracketDepth(int entrants, int expected)
         => Assert.Equal(expected, QualifierStatsSim.RoundsFor(entrants));
+
+    // ===== ReplayPath（一般化版・センバツの地区大会成績再シムが使う） =====
+
+    /// <summary>
+    /// <see cref="QualifierStatsSim.ReplayPath"/> は優勝校に限らず、初戦で敗退した校（道のり1試合）も
+    /// 同じ手順で打ち直せる。積み先は任意の delegate（センバツは FoldRegionalQualifier）。
+    /// </summary>
+    [Fact]
+    public void ReplayPath_NonChampion_FillsSuppliedScope()
+    {
+        var field = Field(1000, 8);
+        var byId = field.ToDictionary(s => s.Id);
+        var stats = new NationTournamentStats();
+        var resolver = new BackgroundMatchResolver(
+            new NationRosters(new AiRosterDeps()), new GameContext(), yearIndex: 1, stats: null);
+        var rng = new Xoshiro256Random(9);
+
+        // 初戦だけ戦って敗退した校（1試合ぶんの道のり）。
+        var path = new List<ChampionMatchup> { new(field[1].Id, 3) };
+        QualifierStatsSim.ReplayPath(
+            field[0].Id, path, id => byId.TryGetValue(id, out var s) ? s : null,
+            resolver, stats.FoldRegionalQualifier, Schedule, totalRounds: 3, yearIndex: 1, rng);
+
+        var book = stats.RegionalQualifierForSchool(field[0].Id);
+        Assert.NotNull(book);
+        Assert.Equal(1, book!.Players.Values.Max(p => p.Batting.Games));
+        // 別スコープ（県予選・今大会）には一切積まれない。
+        Assert.Null(stats.PrefQualifierForSchool(field[0].Id));
+        Assert.Empty(stats.Schools);
+    }
+
+    /// <summary>空の道のり（不戦勝のみ等）は何も積まない。</summary>
+    [Fact]
+    public void ReplayPath_EmptyPath_DoesNothing()
+    {
+        var stats = new NationTournamentStats();
+        var resolver = new BackgroundMatchResolver(
+            new NationRosters(new AiRosterDeps()), new GameContext(), yearIndex: 1, stats: null);
+        QualifierStatsSim.ReplayPath(
+            1000, new List<ChampionMatchup>(), _ => null, resolver, stats.FoldRegionalQualifier,
+            Schedule, totalRounds: 1, yearIndex: 1, new Xoshiro256Random(1));
+
+        Assert.Empty(stats.RegionalQualifierSchools);
+    }
+
+    /// <summary><see cref="QualifierStatsSim.ReplayChampionPath"/> は引き続き県予選スコープへ積む（互換ラッパー）。</summary>
+    [Fact]
+    public void ReplayChampionPath_StillFoldsIntoPrefQualifier_NotRegionalQualifier()
+    {
+        var (stats, _) = Replay(3);
+        Assert.NotNull(stats.PrefQualifierForSchool(1000));
+        Assert.Null(stats.RegionalQualifierForSchool(1000));
+    }
 }

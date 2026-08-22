@@ -53,6 +53,14 @@ public sealed class SchoolStatsLookup
     public StatBook? PrefQualifierBook(int schoolId)
         => IsManagerSchool(schoolId) ? _manager.PrefQualifier : _nation.PrefQualifierForSchool(schoolId);
 
+    /// <summary>直前の地区大会成績（センバツの大会展望が引く。設計書05 §1.5b）。未登録なら null。</summary>
+    public PlayerStats? RegionalQualifier(int schoolId, int? playerId)
+        => Get(RegionalQualifierBook(schoolId), playerId);
+
+    /// <summary>学校の地区大会帳簿（未登録なら null）。</summary>
+    public StatBook? RegionalQualifierBook(int schoolId)
+        => IsManagerSchool(schoolId) ? _manager.RegionalQualifier : _nation.RegionalQualifierForSchool(schoolId);
+
     private static PlayerStats? Get(StatBook? book, int? playerId)
         => book is not null && playerId is int id ? book.Get(id) : null;
 }
