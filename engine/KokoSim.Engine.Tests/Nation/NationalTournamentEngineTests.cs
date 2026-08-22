@@ -205,6 +205,152 @@ public sealed class NationalTournamentEngineTests
         Assert.DoesNotContain(results, r => r.PrefectureId == 2);
     }
 
+    /// <summary>
+    /// 分割県（北海道/東京）は excludeSplit を添えると<b>片方の区画だけ</b>除外される＝もう片方は
+    /// 通常どおりジョブに残り、独自の代表を出す（issue 北海道・東京分割。自校が分割県でも49代表になる）。
+    /// </summary>
+    [Fact]
+    public void BeginSummer_ExcludesOnlyTheMatchingSplit_LeavesTheOtherHalf()
+    {
+        var nation = MakeNationWithHokkaidoAndTokyo();
+        var run = NationalTournamentEngine.BeginSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, new NationTournamentStats(), new Xoshiro256Random(3),
+            excludePrefectureId: 0, excludeSplit: 0);
+
+        Assert.Equal(3, run.Total);   // 北北海道だけ除外＝南北海道＋東東京＋西東京が残る
+        var results = run.Jobs.Select(j => j()).ToList();
+        Assert.DoesNotContain(results, r => r.PrefectureName == "北北海道");
+        Assert.Contains(results, r => r.PrefectureName == "南北海道");
+        Assert.Contains(results, r => r.PrefectureName == "東東京");
+        Assert.Contains(results, r => r.PrefectureName == "西東京");
+    }
+
+    /// <summary>excludeSplit を渡さない（null）と従来どおり分割県の両区画とも除外される
+    /// ＝非分割プレフィクチャーを1区画丸ごと除外する既存呼び出し（秋の背景除外等）は挙動不変。</summary>
+    [Fact]
+    public void BeginSummer_ExcludeSplitNull_ExcludesBothHalvesOfASplitPrefecture()
+    {
+        var nation = MakeNationWithHokkaidoAndTokyo();
+        var run = NationalTournamentEngine.BeginSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, new NationTournamentStats(), new Xoshiro256Random(3),
+            excludePrefectureId: 0);
+
+        Assert.Equal(2, run.Total);   // 北海道の2区画とも除外＝東京の2区画だけ残る
+        var results = run.Jobs.Select(j => j()).ToList();
+        Assert.All(results, r => Assert.Equal(12, r.PrefectureId));
+    }
+
+    // ── 甲子園（49代表）の入力 ────────────────────────────
+
+    /// <summary>
+    /// 代表は<b>校IDで</b>返る（校名だけでは同定できない＝甲子園のブラケットも成績の帰属キーもID）。
+    /// </summary>
+    [Fact]
+    public void RunSummer_ReturnsChampionIdMatchingTheChampionName()
+    {
+        var nation = MakeMiniNation();
+        var (results, _) = RunAll(nation, 42);
+
+        Assert.All(results, r =>
+        {
+            Assert.True(r.HasChampion);
+            Assert.Equal(r.ChampionName, nation.Schools.Single(s => s.Id == r.ChampionId).Name);
+        });
+    }
+
+    /// <summary>
+    /// 代表校の勝ち上がり（<see cref="ChampionMatchup"/> の並び）が、ブラケット上でその校が勝った
+    /// 全カードと一致すること。県予選成績の再シムはこの並びをそのまま打ち直すので、
+    /// <b>1試合でも欠けると成績が足りなくなる</b>。
+    /// </summary>
+    [Fact]
+    public void RunSummer_ChampionPath_ListsEveryGameTheChampionWon()
+    {
+        var nation = MakeMiniNation();
+        var (results, _) = RunAll(nation, 42);
+
+        foreach (var r in results)
+        {
+            // 6校＝3ラウンド。不戦勝があるので実際の試合数はラウンド数以下。
+            Assert.NotEmpty(r.Path);
+            Assert.True(r.Path.Count <= 3);
+            // 決勝（残り1）は必ず含む＝優勝までの最後の1勝。
+            Assert.Contains(r.Path, m => m.RoundsRemaining == 1);
+            // 相手に自分自身は入らない。ラウンドは重複しない（1ラウンド1試合）。
+            Assert.DoesNotContain(r.Path, m => m.OpponentId == r.ChampionId);
+            Assert.Equal(r.Path.Count, r.Path.Select(m => m.RoundsRemaining).Distinct().Count());
+            // 積まれた順＝初戦から決勝へ（残りラウンド数は単調減少）。
+            Assert.Equal(
+                r.Path.Select(m => m.RoundsRemaining),
+                r.Path.Select(m => m.RoundsRemaining).OrderByDescending(x => x));
+        }
+    }
+
+    /// <summary>
+    /// 自校が出場しない大会（<see cref="TournamentRunner.Spectated"/>）は、生成直後から
+    /// 「残りブラケット消化待ち」になり、どのカードも自校扱いされない
+    /// （＝樹形図で無関係な校がアンバー強調されない）。日程に合わせて1ラウンドずつ刻める。
+    /// </summary>
+    [Fact]
+    public void Spectated_ResolvesRoundByRound_WithNoManagerHighlight()
+    {
+        var field = MakePrefectureSchools(1000, 8);
+        var runner = TournamentRunner.Spectated(
+            field, Coeff, new Xoshiro256Random(11), Schedule, "甲子園", isNationalTournament: true);
+
+        Assert.False(runner.PlayerActive);
+        Assert.True(runner.BracketResolutionPending);
+        Assert.Equal(3, runner.RemainingBracketRounds);   // 8校＝3ラウンド
+
+        runner.StepBracketResolution();                    // 1ラウンドだけ刻む
+        Assert.True(runner.BracketResolutionPending);
+        Assert.Null(runner.ChampionName);
+
+        runner.DrainBracketResolution();
+        Assert.False(runner.BracketResolutionPending);
+        Assert.False(string.IsNullOrEmpty(runner.ChampionName));
+
+        var view = runner.BuildBracketView();
+        Assert.All(view.Matches, m => Assert.False(m.ManagerInvolved));
+        Assert.False(view.ManagerIsChampion);
+    }
+
+    /// <summary>観るだけの大会も決定論（同シード同結果）。</summary>
+    [Fact]
+    public void Spectated_IsDeterministic()
+    {
+        static string Run(ulong seed)
+        {
+            var r = TournamentRunner.Spectated(
+                MakePrefectureSchools(1000, 8), Coeff, new Xoshiro256Random(seed), Schedule, "甲子園");
+            r.DrainBracketResolution();
+            return r.ChampionName!;
+        }
+        Assert.Equal(Run(11), Run(11));
+    }
+
+    /// <summary>
+    /// 代表校の勝ち上がりは<b>集計モデル（ChampionsOnly）でも</b>得られる。
+    /// ここが空だと甲子園の県予選成績を作る材料が無くなる。
+    /// </summary>
+    [Fact]
+    public void BeginSummer_ChampionsOnly_StillProducesChampionIdAndPath()
+    {
+        var nation = MakeMiniNation();
+        var run = NationalTournamentEngine.BeginSummer(
+            nation, new NationRosters(new AiRosterDeps()), new GameContext(), Coeff, Schedule,
+            yearIndex: 1, new NationTournamentStats(), new Xoshiro256Random(42),
+            resolution: SummerResolution.ChampionsOnly);
+
+        foreach (var r in run.Jobs.Select(j => j()))
+        {
+            Assert.True(r.HasChampion);
+            Assert.NotEmpty(r.Path);
+        }
+    }
+
     // 北海道(0)・東京(12)は夏の地方大会だけ2区画に分割される（設計書05 §1.1 / issue #65）。
     private static NationModel MakeNationWithHokkaidoAndTokyo()
     {

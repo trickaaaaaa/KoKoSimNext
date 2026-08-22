@@ -143,6 +143,7 @@ events:
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
             "insight_growth_type",
             "draft_candidate", "draft_scout_visit", "draft_nominated", "draft_missed",
+            "koshien_berth_donation", "koshien_draw",
             "booster_club_fund", "gear_broken", "local_company_support",
             "outside_coach_visit", "self_practice_awakened", "exam_week_slump",
             "region_snow_indoor", "region_local_festival", "region_urban_ground_share",

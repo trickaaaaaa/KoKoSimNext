@@ -1047,6 +1047,10 @@ tournament:
   summer_open_day: 10
   autumn_open_month: 9
   autumn_open_day: 12
+  # 夏の甲子園（設計書05 §1.1）。暦の週では始まらず夏の県大会の後始末から直接つなぐので、
+  # ここは「表示する実月日」だけを決める（週インデックスとは独立）。
+  koshien_open_month: 8
+  koshien_open_day: 6
 
 # --- 記録室の規定（issue #600・設計書06 §3.9） ---
 # 高校野球は試合数が少なく、閾値が無いと「1打数1安打＝打率1.000」が校歴代1位に出る。
@@ -1104,6 +1108,10 @@ career:
   facility_fund_donation_per_fame: 20.0   # 後援会・OB寄付（名声1あたり[万円/年]。名声100で年2000万）
   facility_fund_koshien_bonus: 1000.0     # 甲子園出場の年の一時金[万円]
   facility_fund_national_title_bonus: 5000.0  # 全国優勝の年の一時金[万円]（出場ぶんに上乗せ）
+  # 甲子園出場が決まった日にOB・卒業生から入る激励金（設計書05 §1.1a）。上の施設基金とは別の財布
+  # ＝**部費**（遠征・宿泊・応援バス）で、その場でイベントとして見える形で入る。
+  koshien_berth_donation_base: 120.0      # 土台[万円]（年間予算 80+0.8×信頼 の約1倍）
+  koshien_berth_donation_per_fame: 1.5    # 名声1あたりの上乗せ[万円]
   new_school_strength_mean: 34.0    # 教員監督の赴任先は弱小
   new_school_strength_sd: 6.0
   free_choice_school_strength: 48.0 # フリー化後の本拠地

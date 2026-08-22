@@ -50,4 +50,37 @@ public static class SummerRegions
     /// <summary>この区画の参加校（Nation.InPrefecture を区画の Contains でさらに絞る）。</summary>
     public static IEnumerable<School> Entrants(Nation nation, SummerRegion region)
         => nation.InPrefecture(region.PrefectureId).Where(region.Contains);
+
+    /// <summary>
+    /// 学校 Id の偶奇に頼れない主体（自校＝専用ID。<see cref="SummerRegion.Contains"/> がどの区画にも
+    /// 一致しない）が属する区画を、県内地区 <c>DistrictId</c> の偶奇から決める（issue 北海道・東京分割）。
+    /// 地区は新チーム発足時に地理固定割で付与済み（設計書05 §2.2）＝この選び方も学校のIdとは無関係に
+    /// セーブをまたいで安定する。地区未設定（null）は0区画目（北北海道/東東京）に倒す。
+    /// 非分割県は該当する1区画をそのまま返す。
+    /// </summary>
+    public static SummerRegion RegionFor(IReadOnlyList<Prefecture> prefectures, int prefectureId, int? districtId)
+    {
+        var matches = Build(prefectures).Where(r => r.PrefectureId == prefectureId).ToList();
+        if (matches.Count == 1) return matches[0];
+        var split = ((districtId ?? 0) % 2 + 2) % 2;
+        return matches.First(r => r.Split == split);
+    }
+
+    /// <summary>
+    /// その学校が属する夏の区画名（"北北海道" / "神奈川" 等）。甲子園の出場校一覧が
+    /// 「どこの代表か」を出すために引く（設計書05 §1.1）。
+    ///
+    /// <para>どの区画にも属さない学校（自校＝専用IDで <see cref="Nation"/> に居ない、
+    /// 分割県で Id の偶奇が合わない等）は県名へ落とす＝呼び出し側で分岐させない。
+    /// 乱数を使わない純関数。</para>
+    /// </summary>
+    public static string NameOf(IReadOnlyList<Prefecture> prefectures, School school)
+    {
+        foreach (var region in Build(prefectures))
+            if (region.Contains(school)) return region.Name;
+
+        foreach (var pref in prefectures)
+            if (pref.Id == school.PrefectureId) return pref.Name;
+        return "";
+    }
 }

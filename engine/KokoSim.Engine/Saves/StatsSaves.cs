@@ -13,12 +13,13 @@ namespace KokoSim.Engine.Saves;
 /// </summary>
 internal static class StatsSaves
 {
-    // ===== PlayerStatStore（4スコープ） =====
+    // ===== PlayerStatStore（5スコープ） =====
 
     public static JsonObject StoreToJson(PlayerStatStore s) => new JsonObject()
         .Add("career", BookToJson(s.Career))
         .Add("official", BookToJson(s.Official))
         .Add("current", BookToJson(s.CurrentTournament))
+        .Add("prefQualifier", BookToJson(s.PrefQualifier))
         .Add("archive", ArchiveToJson(s.Archive));
 
     public static void RestoreInto(PlayerStatStore target, JsonObject o)
@@ -26,6 +27,10 @@ internal static class StatsSaves
         RestoreBookInto(target.Career, o.Obj("career"));
         RestoreBookInto(target.Official, o.Obj("official"));
         RestoreBookInto(target.CurrentTournament, o.Obj("current"));
+        // prefQualifier は v15（夏の甲子園）で追加。旧セーブは項目ごと無い＝空で読む
+        // （その年の甲子園展望に県予選成績が出ないだけで進行は詰まらない）。
+        if (o.Has("prefQualifier")) RestoreBookInto(target.PrefQualifier, o.Obj("prefQualifier"));
+        else target.PrefQualifier.Clear();
         RestoreArchiveInto(target.Archive, o.Arr("archive"));
     }
 
@@ -77,6 +82,35 @@ internal static class StatsSaves
         {
             var o = v.AsObject();
             RestoreBookInto(target.GetOrCreateCareerBook(o.Int("schoolId")), o.Obj("book"));
+        }
+    }
+
+    /// <summary>
+    /// 全国の県予選スコープ（校ID→StatBook。設計書05 §1.4b）。今大会・通算と別配列で持つ。
+    /// 甲子園の大会展望が引く読み物なので、消えても進行は詰まらないが、代表校の再シムは
+    /// 大会をまたいで走り直さないため保存する。
+    /// </summary>
+    public static JsonArray NationPrefQualifierToJson(NationTournamentStats s)
+    {
+        var ids = new List<int>(s.PrefQualifierSchools);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids)
+        {
+            var book = s.PrefQualifierForSchool(id);
+            if (book is null) continue;
+            arr.Add(new JsonObject().Add("schoolId", id).Add("book", BookToJson(book)));
+        }
+        return arr;
+    }
+
+    public static void RestorePrefQualifierInto(NationTournamentStats target, JsonArray arr)
+    {
+        target.ClearPrefQualifier();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            RestoreBookInto(target.GetOrCreatePrefQualifierBook(o.Int("schoolId")), o.Obj("book"));
         }
     }
 

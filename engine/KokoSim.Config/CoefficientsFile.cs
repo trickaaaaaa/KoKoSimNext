@@ -309,6 +309,8 @@ public static class CoefficientsLoader
         public int SummerOpenDay { get; set; } = D.SummerOpenDay;
         public int AutumnOpenMonth { get; set; } = D.AutumnOpenMonth;
         public int AutumnOpenDay { get; set; } = D.AutumnOpenDay;
+        public int KoshienOpenMonth { get; set; } = D.KoshienOpenMonth;
+        public int KoshienOpenDay { get; set; } = D.KoshienOpenDay;
 
         public TournamentSchedule ToModel() => new()
         {
@@ -324,6 +326,8 @@ public static class CoefficientsLoader
             SummerOpenDay = SummerOpenDay,
             AutumnOpenMonth = AutumnOpenMonth,
             AutumnOpenDay = AutumnOpenDay,
+            KoshienOpenMonth = KoshienOpenMonth,
+            KoshienOpenDay = KoshienOpenDay,
         };
     }
 
@@ -2437,6 +2441,8 @@ public static class CoefficientsLoader
         public double FacilityFundDonationPerFame { get; set; } = D.FacilityFundDonationPerFame;
         public double FacilityFundKoshienBonus { get; set; } = D.FacilityFundKoshienBonus;
         public double FacilityFundNationalTitleBonus { get; set; } = D.FacilityFundNationalTitleBonus;
+        public double KoshienBerthDonationBase { get; set; } = D.KoshienBerthDonationBase;
+        public double KoshienBerthDonationPerFame { get; set; } = D.KoshienBerthDonationPerFame;
         public double NewSchoolStrengthMean { get; set; } = D.NewSchoolStrengthMean;
         public double NewSchoolStrengthSd { get; set; } = D.NewSchoolStrengthSd;
         public double FreeChoiceSchoolStrength { get; set; } = D.FreeChoiceSchoolStrength;
@@ -2472,6 +2478,8 @@ public static class CoefficientsLoader
             FacilityFundDonationPerFame = FacilityFundDonationPerFame,
             FacilityFundKoshienBonus = FacilityFundKoshienBonus,
             FacilityFundNationalTitleBonus = FacilityFundNationalTitleBonus,
+            KoshienBerthDonationBase = KoshienBerthDonationBase,
+            KoshienBerthDonationPerFame = KoshienBerthDonationPerFame,
             NewSchoolStrengthMean = NewSchoolStrengthMean,
             NewSchoolStrengthSd = NewSchoolStrengthSd,
             FreeChoiceSchoolStrength = FreeChoiceSchoolStrength,

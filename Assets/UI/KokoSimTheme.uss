@@ -483,12 +483,17 @@
 /* 優勝候補だけは左端の太罫（新聞の柱）で示す。全周アンバー枠は面を飾りすぎるのでやめた。 */
 .tp-team--fav { border-left-width: 3px; border-left-color: var(--sky); }
 
-.tp-mark { width: 64px; align-items: center; justify-content: flex-start; }
+/* 幅は「優勝候補」（4字＋字送り）が収まる実測値。64px だと右へはみ出して寸評に重なる
+   （実機で確認）。flex-shrink:0 が無いと本文側の伸長で潰れてやはり重なる。 */
+.tp-mark { width: 80px; flex-shrink: 0; align-items: center; justify-content: flex-start; }
 .tp-mark__sym { font-size: 34px; }
 .tp-mark__sym--fav { color: var(--sky); }
 .tp-mark__sym--cont { color: var(--color-chalk); }
 .tp-mark__sym--dark { color: var(--color-warn); }
-.tp-mark__label { font-size: var(--fs-cap); letter-spacing: 1px; color: var(--color-muted); margin-top: 2px; }
+.tp-mark__label {
+    font-size: var(--fs-cap); letter-spacing: 1px; color: var(--color-muted); margin-top: 2px;
+    white-space: nowrap; -unity-text-align: middle-center;
+}
 
 .tp-body { flex-grow: 1; }
 .tp-team-sub { flex-direction: row; align-items: center; flex-wrap: wrap; }
@@ -573,6 +578,54 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-pcard__sub { font-size: var(--fs-cap); color: var(--tx-2); margin-left: var(--sp-2); }
 .tp-pcard__stat { font-size: var(--fs-label); color: var(--ink); margin-bottom: var(--sp-1); white-space: normal; }
 .tp-pcard__blurb { font-size: var(--fs-label); color: var(--tx-1); white-space: normal; }
+
+/* ── 出場校（甲子園の展望）: 左＝49代表の名簿／右＝選んだ1校 ────────────
+   ブロック自体は固定高で、中の2ペインが独立にスクロールする（ページのスクロールに
+   49行が埋もれると「選んだ校の詳細」が画面外へ出てしまうため）。
+   区切りは面の明度差だけ（UI原則④）。表は登録メンバー表と同じ語彙で組む。 */
+.tp-ent-split {
+    flex-direction: row; height: var(--tp-ent-h); flex-shrink: 0; margin-bottom: var(--sp-3);
+}
+.tp-ent-split__left {
+    width: 40%; flex-shrink: 0; background-color: var(--sf-card);
+    border-radius: var(--radius-card); overflow: hidden;
+}
+.tp-ent-split__right {
+    flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-3);
+    background-color: var(--sf-card); border-radius: var(--radius-card);
+    padding: var(--sp-3) var(--sp-4);
+}
+/* 左ペインの見出しはスクロールの外（列名を常に見せる）。 */
+.tp-eth {
+    flex-direction: row; align-items: center; height: var(--h-thead); flex-shrink: 0;
+    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    border-bottom-width: 1px; border-bottom-color: var(--divider);
+}
+.tp-eth Label { font-size: var(--fs-th); color: var(--tx-2); margin: 0; }
+.tp-ent-scroll { flex-grow: 1; min-height: 0; }
+
+.tp-erow {
+    flex-direction: row; align-items: center; min-height: 32px; flex-shrink: 0;
+    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    border-bottom-width: 1px; border-bottom-color: var(--color-line-soft);
+}
+.tp-erow Label { font-size: var(--fs-label); color: var(--tx-1); margin: 0; }
+.tp-erow:hover { background-color: var(--sf-hover); }
+/* 選択中・自校は「面」で示す（線を足さない・UI原則④）。自校は一段濃い面で常に見つけられる。 */
+.tp-erow--selected { background-color: var(--sf-inset); }
+.tp-erow--own .tp-ec--name { color: var(--sky); }
+
+.tp-ec--pref { width: var(--col-ent-pref); flex-shrink: 0; color: var(--tx-2); }
+.tp-ec--name { flex-grow: 1; flex-basis: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-ec--rank { width: var(--col-ent-rank); flex-shrink: 0; flex-direction: row; justify-content: center; }
+.tp-ec--app { width: var(--col-ent-app); flex-shrink: 0; -unity-text-align: middle-right; color: var(--tx-2); }
+
+/* 右ペイン（選んだ1校）。見出し・寸評は展望カードと同じ語彙・同じ物差しで出す。 */
+.tp-ed-name { font-size: 24px; color: var(--tx-1); margin-bottom: var(--sp-1); }
+.tp-ed-tag { font-size: var(--fs-label); color: var(--tx-2); margin-bottom: var(--sp-2); }
+.tp-ed-blurb { font-size: var(--fs-label); color: var(--tx-1); white-space: normal; margin-bottom: var(--sp-3); }
+/* 成績スコープの切替（県予選／甲子園）。部品辞書の SegTabs をそのまま置く器。 */
+.tp-ed-tabs { margin-top: var(--sp-3); margin-bottom: var(--sp-2); flex-shrink: 0; }
 
 /* 登録メンバー：背番号順の表を収める枠（校別詳細ページ, issue #189）。 */
 .tp-roster {

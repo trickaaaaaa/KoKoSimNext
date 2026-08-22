@@ -21,8 +21,12 @@ public static class AppearanceLabel
         if (priorAppearances <= 0 || priorLastYear is null) return "初出場";
 
         var count = priorAppearances + 1;
-        if (priorLastYear.Value == currentYear - 1) return $"2年連続{count}回目";
-        return $"{currentYear - priorLastYear.Value}年ぶり{count}回目";
+        var gap = currentYear - priorLastYear.Value;
+        // 同じ年に2度積まれた（＝記録の取り違え）ときに「0年ぶり」「-1年ぶり」を印字しない。
+        // 何回目かは分かるのでそこだけ出す＝画面に明らかな嘘を出さない。
+        if (gap <= 0) return $"{count}回目";
+        if (gap == 1) return $"2年連続{count}回目";
+        return $"{gap}年ぶり{count}回目";
     }
 }
 
@@ -47,7 +51,7 @@ public sealed class SchoolRecord
     public string SummerAppearanceLabel { get; internal set; } = "";
     public string SpringAppearanceLabel { get; internal set; } = "";
 
-    /// <summary>甲子園本戦の通算勝敗（#65で甲子園本戦が実装されるまでは常に0）。</summary>
+    /// <summary>甲子園本戦の通算勝敗（<see cref="SchoolRecordBook.FoldTournament"/> が夏の甲子園で積む）。</summary>
     public int KoshienWins { get; internal set; }
     public int KoshienLosses { get; internal set; }
 
@@ -110,14 +114,14 @@ public sealed class SchoolRecordBook
         if (r.BestResult == BestResult.None) r.BestResult = BestResult.Appearance;
     }
 
-    /// <summary>甲子園本戦1試合ぶんの勝敗（#65で甲子園本戦が実装されたら配線。現状は未使用の器）。</summary>
+    /// <summary>甲子園本戦1試合ぶんの勝敗。<see cref="FoldTournament"/> が夏の甲子園で呼ぶ。</summary>
     public void RecordKoshienMatch(int winnerId, int loserId)
     {
         For(winnerId).KoshienWins++;
         For(loserId).KoshienLosses++;
     }
 
-    /// <summary>甲子園本戦の最高成績を現状より良ければ更新する（#65で配線予定。現状は未使用の器）。</summary>
+    /// <summary>甲子園本戦の最高成績を現状より良ければ更新する。</summary>
     public void UpdateBestResult(int schoolId, BestResult result)
     {
         var r = For(schoolId);
@@ -126,23 +130,47 @@ public sealed class SchoolRecordBook
 
     /// <summary>
     /// 大会1回ぶんのブラケット全試合（自校戦＋裏試合とも）を通算戦績へ畳み込む。
-    /// 決勝（RoundsRemaining==1）の勝者は、夏の大会なら甲子園出場として記録する（issue #84 当面の定義）。
+    /// 決勝（RoundsRemaining==1）の勝者は、夏の県大会なら甲子園出場として記録する（issue #84 当面の定義）。
+    ///
+    /// <para><b>甲子園本戦（<see cref="TournamentKind.SummerKoshien"/>）では出場を数え直さない。</b>
+    /// 出場は県大会優勝の時点で1回積んでいるので、ここで積むと同じ夏を2回出場したことになる。
+    /// 代わりに甲子園の勝敗（<see cref="RecordKoshienMatch"/>）と最高成績
+    /// （<see cref="UpdateBestResult"/>）を積む。</para>
     ///
     /// <para>戻り値は決勝の勝者（未消化で決勝が無ければ null）。<see cref="TournamentHistory.Fold"/> が
     /// 同じ走査を書き直さずに済むよう、ここで一度だけ拾った結果を渡す（issue #600）。</para>
     /// </summary>
     public TournamentChampion? FoldTournament(IReadOnlyList<BracketMatch> matches, TournamentKind kind, int currentYear)
     {
+        var koshien = kind == TournamentKind.SummerKoshien;
         TournamentChampion? champion = null;
         foreach (var m in matches)
         {
             RecordOfficialMatch(m.WinnerId, m.LoserId);
+            if (koshien)
+            {
+                RecordKoshienMatch(m.WinnerId, m.LoserId);
+                // 負けた校の最高成績はこのカードで確定する（＝そのラウンドまで到達した）。
+                UpdateBestResult(m.LoserId, ReachedBy(m.RoundsRemaining));
+            }
             if (m.RoundsRemaining == 1) champion = new TournamentChampion(m.WinnerId, m.WinnerName);
         }
-        if (kind == TournamentKind.Summer && champion is { } c)
-        {
-            RecordKoshienAppearance(c.Id, KoshienKind.Summer, currentYear);
-        }
+        if (champion is not { } c) return champion;
+
+        if (kind == TournamentKind.Summer) RecordKoshienAppearance(c.Id, KoshienKind.Summer, currentYear);
+        else if (koshien) UpdateBestResult(c.Id, BestResult.Champion);
         return champion;
     }
+
+    /// <summary>
+    /// 甲子園で「残り <paramref name="roundsRemaining"/> ラウンドのカードに負けた」＝どこまで到達したか。
+    /// 1＝決勝で負けた＝準優勝／2＝準決勝敗退＝ベスト4／3＝準々決勝敗退＝ベスト8／それ以前は出場止まり。
+    /// </summary>
+    private static BestResult ReachedBy(int roundsRemaining) => roundsRemaining switch
+    {
+        1 => BestResult.RunnerUp,
+        2 => BestResult.RoundOf4,
+        3 => BestResult.RoundOf8,
+        _ => BestResult.Appearance,
+    };
 }

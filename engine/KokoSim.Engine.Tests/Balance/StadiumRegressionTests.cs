@@ -82,4 +82,30 @@ public sealed class StadiumRegressionTests
         Assert.True(koshien.HomeRunRate > wideRegional.HomeRunRate,
             $"甲子園 HR% {koshien.HomeRunRate:P2} ≤ 地方広め {wideRegional.HomeRunRate:P2}");
     }
+
+    /// <summary>
+    /// 実ゲームで甲子園の寸法を挿したときに<b>実際どれだけ動くか</b>を固定する（設計書05 §1.1a）。
+    ///
+    /// <para>地方大会は球場割当が未配線で <see cref="FieldGeometry"/> の初期値のまま走っている。
+    /// その初期値は<b>距離が甲子園と同じ</b>（95/95/118）でフェンスだけ高い（4.0m）ので、
+    /// 甲子園で効くのは<b>フェンス高 1.4m ぶんだけ</b>。差が消えたら「聖地に来た実感」も消えるし、
+    /// 逆に跳ね上がったらフェンス判定（issue homerun-fence-height-and-ev-cap）の回帰なので、
+    /// どちらにも気づけるよう上下を挟む。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(42UL)]
+    [InlineData(2024UL)]
+    public void Koshien_LowerFence_LiftsHomeRunsOverTheDefaultField(ulong seed)
+    {
+        var coeff = BalanceRegressionTests.FindDataFile("coefficients.yaml");
+        const int atBats = 40000;
+
+        var koshien = AtBatSimulation.Run(atBats, seed, coeff, Stadium("koshien"));
+        var current = AtBatSimulation.Run(atBats, seed, coeff, new FieldGeometry());
+
+        // 実測（40,000打席・seed 42 / 2024）: 甲子園 1.645% / 1.773% に対し既定 1.330% / 1.493%
+        // ＝ +0.28〜0.32pt（約+21%・1試合あたり 約+0.2本）。聖地で一発が増えるが乱打戦にはならない幅。
+        var lift = koshien.HomeRunRate - current.HomeRunRate;
+        Assert.InRange(lift, 0.0015, 0.0060);
+    }
 }

@@ -10,17 +10,48 @@ using KokoSim.Engine.Stats;
 namespace KokoSim.Engine.Nation.Tournaments;
 
 /// <summary>
+/// 代表校が勝ち上がる途中で戦った1カード（設計書05 §1.4b）。<see cref="OpponentId"/> は倒した相手の校ID、
+/// <see cref="RoundsRemaining"/> は決勝から数えたラウンド位置（1＝決勝）。
+///
+/// <para>用途は「代表校の県予選成績だけを後から1球シムで作り直す」こと。集計モデル（ChampionsOnly）で
+/// 回した県は選手個人の成績が1つも積まれないので、甲子園の大会展望で県予選成績を出すために
+/// <b>代表校が実際に勝ち上がった対戦相手の並び</b>だけを残しておく。</para>
+/// </summary>
+public readonly record struct ChampionMatchup(int OpponentId, int RoundsRemaining);
+
+/// <summary>
 /// 1県の大会結果（全国ダイジェスト・新聞用）。<see cref="WinsBySchool"/> は区画内の校別勝数
 /// （issue wire-ai-school-evolve-into-game: 年次進化 <see cref="AiSchoolModel.Evolve"/> の材料。
 /// ChampionsOnly でも集計モデルの勝敗はブラケットに残るので数えられる）。
+///
+/// <para><see cref="ChampionId"/> は甲子園（49代表）の入力。<b>校名だけでは学校を同定できない</b>
+/// （同名校を作らない保証が無く、成績の帰属キーも校ID）ので ID で持つ。区画に2校未満で
+/// 大会が成立しなかったときだけ 0 未満（<see cref="NoChampion"/>）。</para>
 /// </summary>
 public sealed record PrefectureResult(
     int PrefectureId, string PrefectureName, string? ChampionName,
-    IReadOnlyDictionary<int, int>? WinsBySchool = null)
+    IReadOnlyDictionary<int, int>? WinsBySchool = null,
+    int ChampionId = PrefectureResult.NoChampion,
+    IReadOnlyList<ChampionMatchup>? ChampionPath = null,
+    int EntrantCount = 0)
 {
+    /// <summary>代表校なし（区画に2校未満）。</summary>
+    public const int NoChampion = int.MinValue;
+
     private static readonly IReadOnlyDictionary<int, int> Empty = new Dictionary<int, int>();
+    private static readonly IReadOnlyList<ChampionMatchup> NoPath = new List<ChampionMatchup>();
+
     /// <summary>校別勝数（未集計なら空）。</summary>
     public IReadOnlyDictionary<int, int> Wins => WinsBySchool ?? Empty;
+
+    /// <summary>代表校の勝ち上がり（決勝が先頭ではなく、ブラケットに積まれた順＝初戦から）。</summary>
+    public IReadOnlyList<ChampionMatchup> Path => ChampionPath ?? NoPath;
+
+    /// <summary>その区画の出場校数（<see cref="QualifierStatsSim.RoundsFor"/> の入力＝試合日を引く母数）。</summary>
+    public int Entrants => EntrantCount;
+
+    /// <summary>代表校が決まったか。</summary>
+    public bool HasChampion => ChampionId != NoChampion;
 }
 
 /// <summary>
@@ -53,7 +84,9 @@ public sealed record SummerRun(int Total, IReadOnlyList<Func<PrefectureResult>> 
 /// 全国の裏試合を一括フルシムするオーケストレータ（設計書05 §1.4 / #43・全国47県）。各県の地方大会を
 /// 永続ロスターの GameEngine.Play で最後まで解決し、全4000校のボックススコアを全国通算成績へ積む。
 /// 自校が対話的に消化する県は <c>excludePrefectureId</c> で除外する（Shell が別 TournamentRunner
-/// で回して同一 <see cref="NationTournamentStats"/> へ積む＝重複しない）。県ごとに Fork した独立乱数で決定論。
+/// で回して同一 <see cref="NationTournamentStats"/> へ積む＝重複しない）。分割県（北海道/東京）は
+/// <c>excludeSplit</c> を添えて片方の区画だけを除外する＝もう片方は通常どおり背景で消化され独自の代表を出す
+/// （null のときは両区画とも一致扱い＝非分割県の1区画のみを除外する従来どおりの挙動）。県ごとに Fork した独立乱数で決定論。
 /// エンジンは Unity 非依存なので、呼び出し側（Shell）はこれをバックグラウンドスレッドで回してよい。
 /// </summary>
 public static class NationalTournamentEngine
@@ -65,10 +98,12 @@ public static class NationalTournamentEngine
     public static IReadOnlyList<PrefectureResult> RunSummer(
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
-        int? excludePrefectureId = null, ModernRules? modernRules = null, int? calendarYear = null,
-        IEnemyBrainFactory? brains = null, SummerResolution resolution = SummerResolution.Full)
+        int? excludePrefectureId = null, int? excludeSplit = null, ModernRules? modernRules = null,
+        int? calendarYear = null, IEnemyBrainFactory? brains = null,
+        SummerResolution resolution = SummerResolution.Full)
         => BeginSummer(nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-            excludePrefectureId, modernRules, calendarYear, brains, resolution: resolution).Jobs.Select(j => j()).ToList();
+            excludePrefectureId, excludeSplit, modernRules, calendarYear, brains, resolution: resolution)
+            .Jobs.Select(j => j()).ToList();
 
     /// <summary>
     /// 夏の全国裏試合を「区画ごとの独立ジョブ列」として構築する（#208）。区画数（進捗の母数）を先に確定させ、
@@ -83,13 +118,16 @@ public static class NationalTournamentEngine
     public static SummerRun BeginSummer(
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
-        int? excludePrefectureId = null, ModernRules? modernRules = null, int? calendarYear = null,
-        IEnemyBrainFactory? brains = null, Action? afterMatch = null,
+        int? excludePrefectureId = null, int? excludeSplit = null, ModernRules? modernRules = null,
+        int? calendarYear = null, IEnemyBrainFactory? brains = null, Action? afterMatch = null,
         SummerResolution resolution = SummerResolution.Full)
     {
         var regions = SummerRegions.Build(nation.Prefectures);
+        // excludeSplit=null は「区画を問わず県ごと除外」（従来どおり・分割県も両区画とも除外）。
+        // 値ありは「その区画だけ除外」（分割県のもう片方は残す＝issue 北海道・東京分割）。
         var jobs = regions
-            .Where(r => !(excludePrefectureId is int ex && r.PrefectureId == ex))
+            .Where(r => !(excludePrefectureId is int ex && r.PrefectureId == ex
+                          && (excludeSplit is null || r.Split == excludeSplit)))
             .Select(region => (Func<PrefectureResult>)(() => RunPrefecture(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
                 region, modernRules, calendarYear, brains, afterMatch, resolution)))
@@ -110,7 +148,13 @@ public static class NationalTournamentEngine
     {
         var field = SummerRegions.Entrants(nation, region).ToList();
         if (field.Count < 2)
-            return new PrefectureResult(region.PrefectureId, region.Name, field.FirstOrDefault()?.Name);
+        {
+            // 1校しか居ない区画は無条件で代表（試合が無いので勝ち上がりも空）。
+            var sole = field.FirstOrDefault();
+            return new PrefectureResult(
+                region.PrefectureId, region.Name, sole?.Name,
+                ChampionId: sole?.Id ?? PrefectureResult.NoChampion, EntrantCount: field.Count);
+        }
 
         // ChampionsOnly は集計モデル（backgroundResolver=null）＝1球シムも成績畳み込みもしない軽量経路。
         IBackgroundMatchResolver? bg = resolution == SummerResolution.ChampionsOnly
@@ -131,8 +175,10 @@ public static class NationalTournamentEngine
         // 既に NationBackgroundSim のジョブ単位（1県丸ごと）で背景スレッド上を走っているので、ここで
         // 同期に最後まで消化して優勝校を確定してよい。
         runner.DrainBracketResolution();
+        var matches = runner.BuildBracketView().Matches;
+        var championId = ChampionIdOf(matches);
         return new PrefectureResult(region.PrefectureId, region.Name, runner.ChampionName,
-            WinsBySchoolOf(runner.BuildBracketView().Matches));
+            WinsBySchoolOf(matches), championId, ChampionPathOf(matches, championId), field.Count);
     }
 
     /// <summary>ブラケット全カードから校別勝数を数える（AI校の年次進化の材料）。乱数不使用。</summary>
@@ -141,5 +187,31 @@ public static class NationalTournamentEngine
         var wins = new Dictionary<int, int>();
         foreach (var m in matches) wins[m.WinnerId] = (wins.TryGetValue(m.WinnerId, out var v) ? v : 0) + 1;
         return wins;
+    }
+
+    /// <summary>
+    /// 優勝校の校ID（決勝＝残りラウンド1 の勝者）。決勝が未消化なら <see cref="PrefectureResult.NoChampion"/>。
+    /// 乱数不使用。
+    /// </summary>
+    public static int ChampionIdOf(IReadOnlyList<BracketMatch> matches)
+    {
+        foreach (var m in matches)
+            if (m.RoundsRemaining == 1) return m.WinnerId;
+        return PrefectureResult.NoChampion;
+    }
+
+    /// <summary>
+    /// 優勝校が勝ち上がる途中で戦った全カード（ブラケットに積まれた順＝初戦から決勝へ）。乱数不使用。
+    ///
+    /// <para>不戦勝（Bye）はカードとしてブラケットに積まれないので自然に落ちる＝
+    /// 「実際に試合をした相手」だけが並ぶ（県予選成績の再シムはこの並びをそのまま打ち直す）。</para>
+    /// </summary>
+    public static IReadOnlyList<ChampionMatchup> ChampionPathOf(IReadOnlyList<BracketMatch> matches, int championId)
+    {
+        var path = new List<ChampionMatchup>();
+        if (championId == PrefectureResult.NoChampion) return path;
+        foreach (var m in matches)
+            if (m.WinnerId == championId) path.Add(new ChampionMatchup(m.LoserId, m.RoundsRemaining));
+        return path;
     }
 }

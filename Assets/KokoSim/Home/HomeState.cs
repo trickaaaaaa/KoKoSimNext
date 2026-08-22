@@ -171,6 +171,7 @@ namespace KokoSim.Unity.Home
             RunProspectFeed();                          // 入部予定者の確定/入部（設計書04 §2.1）
             RunManagerGrowthFeed();                     // 監督成長の節目（設計書04 §1.1b）
             RunDraftFeed();                             // ドラフト候補入り・評価変化・指名確定（設計書20 §5）
+            RunKoshienFeed();                           // 観るだけの甲子園の決着（設計書05 §1.1a）
             RunEventWeek();                             // 週次イベントの発火（設計書03 §5）
             // 練習効率の補正を1週ぶん減らす（issue #615）。**練習を適用した後**に呼ぶ＝
             // 「N週」と言われた週にちゃんとN回効く（先に減らすと1週ぶん短くなる）。
@@ -206,6 +207,21 @@ namespace KokoSim.Unity.Home
         /// 会話は一番語る価値のある1件から選び、結果行には<b>その年に動いた軸を全部</b>並べる
         /// ＝実測の差分なので、選ばれなかった節目のぶんも数字には出る。</para>
         /// </summary>
+        /// <summary>
+        /// 観るだけの甲子園（自校が出場していない年）が決着したら優勝校を通知フィードへ1行流す
+        /// （設計書05 §1.1a）。自校が出場した年の結果は大会モードの後始末が出すので、ここは通らない。
+        /// </summary>
+        private void RunKoshienFeed()
+        {
+            var champion = GameSession.Current.ConsumeKoshienResult();
+            if (string.IsNullOrEmpty(champion)) return;
+
+            PushFeed(new List<FeedItem>
+            {
+                new FeedItem { When = "大会", Text = champion + " が全国制覇。", Kind = FeedKind.Normal, Tag = "情報" },
+            });
+        }
+
         private void RunManagerGrowthFeed()
         {
             var notices = KokoSim.Unity.Shell.ManagerService.DrainGrowthNotices();
@@ -753,6 +769,12 @@ namespace KokoSim.Unity.Home
                 // 範囲 14〜20日に入る）。A案の日程（issue #583）で8ラウンド県18日＝2週・9ラウンド県21日＝3週。
                 var weeks = System.Math.Max(1, w.TournamentDay / 7);
                 KokoSim.Unity.Shell.GameClock.Advance(weeks);
+
+                // 夏の県大会の直後は甲子園へ直接つなぐ（設計書05 §1.1a）。暦の開幕週を作ると
+                // 3年引退（第18週）と正面衝突して出場校の3年が甲子園の前に引退するため、ここでつなぐ。
+                // 自校が出場する年は対話モードに入り（開幕バナー＋激励金・抽選会のノベル）、
+                // 出場しない年は観るだけの甲子園が始まる（展望とトーナメント表は閲覧できる）。
+                KokoSim.Unity.Shell.KoshienEntry.EnterAfterPrefectureTournament(w.Kind);
             }
         }
 

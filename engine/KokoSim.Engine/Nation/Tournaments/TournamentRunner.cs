@@ -49,6 +49,11 @@ public sealed record TournamentSchedule
     /// <summary>秋季県大会の実開幕日。</summary>
     public int AutumnOpenDay { get; init; } = 12;
 
+    /// <summary>夏の甲子園の実開幕月（設計書05 §1.1「夏の甲子園（8月）」）。</summary>
+    public int KoshienOpenMonth { get; init; } = 8;
+    /// <summary>夏の甲子園の実開幕日。</summary>
+    public int KoshienOpenDay { get; init; } = 6;
+
     /// <summary>残りラウンド数 <paramref name="roundsRemaining"/> のカードを分散させる日数。</summary>
     public int SpreadDaysFor(int roundsRemaining)
     {
@@ -267,16 +272,66 @@ public sealed class TournamentRunner
         IBackgroundMatchResolver? backgroundResolver = null,
         bool isNationalTournament = false,
         Action<int, int, GameResult>? onBackgroundMatch = null)
+        : this(entrants, ManagerIdIn(entrants, manager), coeff, rng, schedule, title,
+               playerResolver, backgroundResolver, isNationalTournament, onBackgroundMatch)
+    {
+    }
+
+    /// <summary>
+    /// どの学校にも一致しない自校ID（<see cref="Spectated"/> 専用）。実在の校IDは 0 以上か自校の -1 なので衝突しない。
+    /// </summary>
+    private const int NoManagerId = int.MinValue;
+
+    /// <summary>参加校に自校が居ることを確かめて自校IDを返す（居なければ投げる＝取り違えを早期に落とす）。</summary>
+    private static int ManagerIdIn(IReadOnlyList<School> entrants, School manager)
     {
         if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
         if (entrants.All(s => s.Id != manager.Id)) throw new ArgumentException("自校が参加校に含まれていません。");
+        return manager.Id;
+    }
 
+    /// <summary>
+    /// <b>自校が出場していない大会</b>の進行体を組む（設計書05 §1.1a）。自校が県予選で敗退した年の
+    /// 夏の甲子園がこれで、プレイヤーは観るだけ＝全カードが裏試合として解決される。
+    ///
+    /// <para>自校IDをどの学校にも一致しない値にするので、生成直後に <c>PlayerActive=false</c>
+    /// （＝<see cref="BracketResolutionPending"/> が true）になる。呼び出し側は
+    /// <see cref="StepBracketResolution"/> を日程に合わせて刻めばよい。<b>nominal manager として
+    /// 出場校の1つを渡してはいけない</b>＝その校が樹形図で「自校」として強調されてしまう。</para>
+    /// </summary>
+    public static TournamentRunner Spectated(
+        IReadOnlyList<School> entrants,
+        NationCoefficients coeff,
+        IRandomSource rng,
+        TournamentSchedule schedule,
+        string title,
+        IBackgroundMatchResolver? backgroundResolver = null,
+        bool isNationalTournament = false,
+        Action<int, int, GameResult>? onBackgroundMatch = null)
+    {
+        if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
+        return new TournamentRunner(entrants, NoManagerId, coeff, rng, schedule, title,
+            playerResolver: null, backgroundResolver, isNationalTournament, onBackgroundMatch);
+    }
+
+    private TournamentRunner(
+        IReadOnlyList<School> entrants,
+        int managerId,
+        NationCoefficients coeff,
+        IRandomSource rng,
+        TournamentSchedule schedule,
+        string title,
+        IPlayerMatchResolver? playerResolver,
+        IBackgroundMatchResolver? backgroundResolver,
+        bool isNationalTournament,
+        Action<int, int, GameResult>? onBackgroundMatch)
+    {
         _coeff = coeff;
         _rng = rng;
         _schedule = schedule;
         _playerResolver = playerResolver;
         _backgroundResolver = backgroundResolver;
-        _managerId = manager.Id;
+        _managerId = managerId;
         _isNationalTournament = isNationalTournament;
         _onBackgroundMatch = onBackgroundMatch;
         Title = title;

@@ -117,6 +117,8 @@ namespace KokoSim.Unity.Shell
             EventService.Restore(s);
             TrainingBoostService.Restore(s);
             if (s.Tournament != null) TournamentEntry.RestoreRunner(s.Tournament);
+            // 観るだけの甲子園（自校が出場していない年）。対話モードの大会とは排他なので順序は問わない。
+            if (s.Koshien != null) KoshienEntry.RestoreSpectated(s.Koshien);
         }
 
         /// <summary>

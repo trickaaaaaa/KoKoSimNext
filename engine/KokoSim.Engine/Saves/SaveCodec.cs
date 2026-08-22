@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 14;
+    public const int CurrentVersion = 15;
 
     // ===== Serialize =====
 
@@ -52,8 +52,10 @@ public static class SaveCodec
             .Add("nationRosters", NationRostersToJson(s.NationRosters))
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
             .Add("nationCareerStats", StatsSaves.NationCareerToJson(s.TournamentStats))
+            .Add("nationPrefQualifierStats", StatsSaves.NationPrefQualifierToJson(s.TournamentStats))
             .Add("nationSchools", NationSchoolsToJson(s.NationSchools))
             .Add("nationYearWins", IntMapToJson(s.NationYearWins))
+            .Add("nationKoshienChampionId", s.NationKoshienChampionId)
             .Add("sessionYear", s.SessionYear)
             .Add("stats", StatsSaves.StoreToJson(s.Stats))
             .Add("records", RecordBookSaves.ToJson(s.Records))
@@ -70,6 +72,7 @@ public static class SaveCodec
             .Add("events", EventSaves.ToJson(s.Events))
             .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament))
+            .Add("koshien", TournamentSaves.ToJson(s.Koshien))
             .Add("lastLineup", LineupSaves.ToJson(s.LastLineup));
         return root.ToString();
     }
@@ -209,6 +212,12 @@ public static class SaveCodec
         if (version < 13 && !root.Has("nationYearWins")) root.Add("nationYearWins", new JsonArray());
         // v14（issue lineup-carry-over-previous-game）: 前回スタメンの記憶。旧セーブは一度も確定していない扱い＝null。
         if (version < 14 && !root.Has("lastLineup")) root.Add("lastLineup", JsonNull.Instance);
+        // v15（夏の甲子園）: 全国の県予選スコープ（甲子園の大会展望が引く読み物）と、非対話の甲子園
+        // （自校が出場しなかった年の進行体）。旧セーブはどちらも存在しえない＝空配列／null で補う。
+        // 自校ぶんの県予選スコープ（stats.prefQualifier）は StatsSaves 側の Has 分岐で読む。
+        if (version < 15 && !root.Has("nationPrefQualifierStats")) root.Add("nationPrefQualifierStats", new JsonArray());
+        if (version < 15 && !root.Has("koshien")) root.Add("koshien", JsonNull.Instance);
+        if (version < 15 && !root.Has("nationKoshienChampionId")) root.Add("nationKoshienChampionId", -1);
         return root;
     }
 
@@ -239,6 +248,8 @@ public static class SaveCodec
             // AI校の進化状態・年間勝数は v13 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             NationSchools = NationSchoolsFromJson(root.Arr("nationSchools")),
             NationYearWins = IntMapFromJson(root.Arr("nationYearWins")),
+            // 甲子園王者は v15 で追加。Migrate が旧セーブへ -1（未確定）を補うので素直に読む。
+            NationKoshienChampionId = root.Int("nationKoshienChampionId"),
             SessionYear = root.Int("sessionYear"),
             NewTeamPending = root.Bool("newTeamPending"),
             NewTeamRetiredNames = RetiredFromJson(root.Arr("newTeamRetired")),
@@ -256,6 +267,8 @@ public static class SaveCodec
             // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
             TrainingBoosts = EventSaves.BoostsFromJson(root.Arr("trainingBoosts")),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
+            // 非対話の甲子園（自校が出場していない年）は v15 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            Koshien = TournamentSaves.FromJson(root.Has("koshien") ? root["koshien"] : null),
             // 前回スタメンは v14 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             LastLineup = LineupSaves.FromJson(root["lastLineup"]),
         };
@@ -264,6 +277,8 @@ public static class SaveCodec
         StatsSaves.RestoreInto(s.TournamentStats, root.Arr("nationTournamentStats"));
         // 通算スコープは v9 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
         StatsSaves.RestoreCareerInto(s.TournamentStats, root.Arr("nationCareerStats"));
+        // 県予選スコープは v15 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        StatsSaves.RestorePrefQualifierInto(s.TournamentStats, root.Arr("nationPrefQualifierStats"));
 
         s.Stats = new PlayerStatStore();
         StatsSaves.RestoreInto(s.Stats, root.Obj("stats"));

@@ -922,6 +922,75 @@ events:
           - who: captain
             say: "そうだぞ。呼ばれるところまで来たんだ。"
 
+  # 夏の甲子園（設計書05 §1.1a）。県大会を勝ち抜いた直後に、激励金 → 抽選会 の順で出る。
+  # どちらも効果の数値は yaml に書かない＝呼び出し元（KoshienEntry）が実際に動いた額・
+  # 実際に決まった相手で結果行を組む。
+  - id: koshien_berth_donation
+    kind: System
+    text: "OB会と卒業生から甲子園の激励金が届いた。"
+    variants:
+      - lines:
+          - who: ob
+            say: "監督、遠征も宿も金がかかるでしょう。同期で集めました。"
+          - who: manager
+            say: "ありがたく使わせてもらいます。"
+          - who: coach
+            say: "封筒、思ったより厚いですよ。数えるの手伝ってください。"
+      - lines:
+          - who: narration
+            say: "部室の机に、名前の並んだ紙が一枚と封筒がいくつも積まれていた。卒業生の名簿だった。"
+          - who: captain
+            say: "……知らない先輩の名前ばっかりです。"
+          - who: coach
+            say: "この学校で三年やった人たちだ。全員な。"
+      - lines:
+          - who: local
+            name: "後援会長"
+            say: "商店街も出しますよ。うちの店、あの夏のポスターまだ貼ってますからね。"
+          - who: coach
+            say: "何年前のですか、それ。"
+          - who: local
+            name: "後援会長"
+            say: "十七年前。今年、貼り替えられる。"
+      - lines:
+          - who: ob
+            say: "私は補欠で終わりました。だから、行く奴の靴代くらいは出したい。"
+          - who: manager
+            say: "必ず届けます。"
+          - who: narration
+            say: "封筒には、背番号も何も書かれていなかった。"
+
+  - id: koshien_draw
+    kind: System
+    text: "甲子園の組み合わせ抽選会が行われた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "抽選会場の壇上で、主将が箱に手を入れる。会場のざわめきが一段落ちた。"
+          - who: captain
+            say: "……引きました。"
+          - who: coach
+            say: "監督、番号が出ます。"
+      - lines:
+          - who: coach
+            say: "組み合わせ、出ましたよ。"
+          - who: manager
+            say: "山はどうだ。"
+          - who: coach
+            say: "厳しいほうです。でも、どこと当たっても同じでしょう。"
+      - lines:
+          - who: captain
+            say: "監督、俺、手が震えて箱の中でくじを二回落としました。"
+          - who: narration
+            say: "笑い声が起きて、それから全員が黙って掲示板を見上げた。"
+      - lines:
+          - who: narration
+            say: "宿舎に戻ると、部員たちが新聞の組み合わせ表を囲んで頭を突き合わせていた。"
+          - who: player
+            say: "コーチ、この学校ってどんなチームですか。"
+          - who: coach
+            say: "明日ビデオを出す。今日はもう寝ろ。"
+
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
   - id: ace_hidden_injury

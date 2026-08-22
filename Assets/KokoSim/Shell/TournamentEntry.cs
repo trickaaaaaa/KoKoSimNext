@@ -38,7 +38,12 @@ namespace KokoSim.Unity.Shell
         public static void Enter(TournamentKind kind)
         {
             var manager = BuildManagerSchool();
-            var field = BuildField(manager);
+            // 夏だけ北海道・東京の区画（北北海道/南北海道・東東京/西東京）を意識する。秋は47県のまま
+            // ＝region=null にして従来どおり県全体を1大会にする（SummerRegions は夏の予選単位の概念）。
+            var region = kind == TournamentKind.Summer
+                ? SummerRegions.RegionFor(NationService.Nation.Prefectures, manager.PrefectureId, manager.DistrictId)
+                : (SummerRegion?)null;
+            var field = BuildField(manager, region);
             var yearIndex = GameClock.YearIndex;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             // 大会シードは母種（プレイ毎に変動）＋年・種別で導出。同じ母種なら完全再現される（決定論は維持）。
@@ -67,9 +72,10 @@ namespace KokoSim.Unity.Shell
             GameSession.Current.EnterTournament(kind, TournamentTitle(kind), runner, field);
             GameSession.Current.Year = yearIndex;
 
-            // 他県（全国46県）の裏試合をバックグラウンドでフルシム（自県は上の runner が対話的に消化＝除外）。
+            // 他県（全国46〜48県）の裏試合をバックグラウンドでフルシム（自県の区画は上の runner が
+            // 対話的に消化＝除外。分割県はもう片方の区画だけ背景で消化され独自の代表を出す）。
             NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
-                yearIndex, calendarYear, NationService.PrefectureId, seed, brains);
+                yearIndex, calendarYear, NationService.PrefectureId, region?.Split, seed, brains);
         }
 
         /// <summary>
@@ -148,11 +154,19 @@ namespace KokoSim.Unity.Shell
             };
         }
 
-        private static List<School> BuildField(School manager)
+        /// <summary>
+        /// 出場校。<paramref name="region"/> が付いている（＝夏・分割県）ときは自校の区画だけに絞る
+        /// （<see cref="SummerRegions.Entrants"/>）。null（秋、または夏の非分割県）は従来どおり
+        /// <see cref="NationService.PrefectureSchools"/>＝県全体（両者は非分割県では同じ中身になる）。
+        /// </summary>
+        private static List<School> BuildField(School manager, SummerRegion? region)
         {
             // 母集団は NationService（全画面の単一ソース）。練習試合の申込先と同じ School を引く。
+            var pool = region is { } r
+                ? SummerRegions.Entrants(NationService.Nation, r)
+                : NationService.PrefectureSchools;
             var field = new List<School> { manager };
-            foreach (var s in NationService.PrefectureSchools)
+            foreach (var s in pool)
             {
                 if (s.Id == manager.Id) continue;
                 field.Add(s);

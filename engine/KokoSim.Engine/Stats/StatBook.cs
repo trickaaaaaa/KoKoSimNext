@@ -22,6 +22,26 @@ public sealed class StatBook
     /// <summary>全消去（今大会スコープの大会切替時に使う）。</summary>
     public void Clear() => _players.Clear();
 
+    /// <summary>
+    /// <paramref name="source"/> の中身をこの帳簿へ複写する（元の中身は捨てる）。
+    ///
+    /// <para>用途は「今大会スコープが次の大会でクリアされる前に、別スコープへ焼き取る」こと
+    /// （県予選成績＝<see cref="PlayerStatStore.PrefQualifier"/> /
+    /// <see cref="NationTournamentStats.PrefQualifierForSchool"/>）。参照ではなく値を複写するので、
+    /// この後 <paramref name="source"/> を Clear しても焼いた側は残る。</para>
+    /// </summary>
+    public void ReplaceWith(StatBook source)
+    {
+        _players.Clear();
+        foreach (var kv in source._players)
+        {
+            var dst = For(kv.Key);
+            dst.Batting.Merge(kv.Value.Batting);
+            dst.Pitching.Merge(kv.Value.Pitching);
+            dst.Fielding.Merge(kv.Value.Fielding);
+        }
+    }
+
     private PlayerStats For(int id)
     {
         if (!_players.TryGetValue(id, out var s)) { s = new PlayerStats(id); _players[id] = s; }

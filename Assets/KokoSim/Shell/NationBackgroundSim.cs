@@ -82,23 +82,43 @@ namespace KokoSim.Unity.Shell
             get { var total = _total; return total <= 0 ? 1f : Math.Min(1f, (float)Done / total); }
         }
 
+        // 消化した区画の結果（他県ぶん）。甲子園（49代表）の入力なので**捨てない**。
+        // 背景ワーカーが並列に書き、メインスレッド（KoshienEntry）が読むのでロックで守る。
+        // 並列消化は順不同なので、読み出し側で区画Id順に整列してから使う（決定論＝並び順に依存させない）。
+        private static readonly List<PrefectureResult> Results = new List<PrefectureResult>();
+        private static readonly object ResultsGate = new object();
+
+        /// <summary>
+        /// 他県の地方大会結果（消化済みぶん・スナップショット）。甲子園の出場校を組むために使う。
+        ///
+        /// <para>並列消化なので<b>積まれる順は不定</b>。<see cref="EnsureCompleted"/> を先に呼んで
+        /// 全区画を確定させ、呼び出し側が区画Id順へ整列すること（並び順が結果に効く場所では
+        /// 決定論が壊れるため）。</para>
+        /// </summary>
+        public static IReadOnlyList<PrefectureResult> PrefectureResults
+        {
+            get { lock (ResultsGate) return new List<PrefectureResult>(Results); }
+        }
+
         /// <summary>
         /// 他県（<paramref name="excludePrefectureId"/> 以外）の夏の地方大会をスライス駆動で開始する。
         /// 自県は呼び出し側（HomeState の TournamentRunner）が対話的に消化して同一 stats へ積むため除外する。
+        /// 自県が北海道・東京（分割県）のときは <paramref name="excludeSplit"/> に自校の区画だけを渡す＝
+        /// もう片方の区画（南北海道等）はここで通常どおり背景消化され、独自の代表を出す（issue 北海道・東京分割）。
         /// </summary>
         public static void Start(
             Nation nation, NationRosters rosters, NationTournamentStats stats,
             NationCoefficients coeff, TournamentSchedule schedule, int yearIndex, int calendarYear,
-            int excludePrefectureId, ulong seed, IEnemyBrainFactory brains)
+            int excludePrefectureId, int? excludeSplit, ulong seed, IEnemyBrainFactory brains)
         {
             var rng = new Xoshiro256Random(seed ^ 0x4E37_1000UL);
             var ctx = new GameContext();
-            // 他46県（自校非関与）は優勝校のみ集計モデルで即決する（#試合開始前ロード短縮）。甲子園本戦・全国成績閲覧が
+            // 他46〜48県（自校非関与）は優勝校のみ集計モデルで即決する（#試合開始前ロード短縮）。甲子園本戦・全国成績閲覧が
             // 未実装の現状、他県は優勝校しか消費されないため1球フルシムは不要＝約4000試合の裏 churn（約5分・2GB確保）を消す。
             // 自県は別途プレフェッチでフルシムする（TournamentEntry 側）。個別県の詳細が要る場面が来たらオンデマンド Full 化する。
             var run = NationalTournamentEngine.BeginSummer(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-                excludePrefectureId: excludePrefectureId, modernRules: null, calendarYear: calendarYear,
+                excludePrefectureId: excludePrefectureId, excludeSplit: excludeSplit, modernRules: null, calendarYear: calendarYear,
                 brains: brains, afterMatch: PauseGate, resolution: SummerResolution.ChampionsOnly);
 
             _throttle = (int)SimThrottle.Normal;
@@ -106,6 +126,7 @@ namespace KokoSim.Unity.Shell
             Volatile.Write(ref _done, 0);
             Volatile.Write(ref _nextJob, 0);
             Volatile.Write(ref _matchesResolved, 0);
+            lock (ResultsGate) Results.Clear();   // 今年ぶんだけを持つ（去年の代表を混ぜない）
 
             // 静止画面で待ち時間を縮めるため複数ワーカーで並列消化（区画は独立 Fork ＝決定論不変）。
             // Paused（ライブ試合中）は各ワーカーが手前で停止＝確保が止まり2D再生の滑らかさを守る。
@@ -136,6 +157,9 @@ namespace KokoSim.Unity.Shell
                 var result = jobs[idx]();
                 // 他県の校別勝数を年間台帳へ（AI校の年次進化の材料。台帳はロックで守られている）。
                 NationService.YearLedger.AddWins(result.Wins);
+                // 代表校（＋勝ち上がり）は甲子園の入力なので控える。以前はここで捨てていたため
+                // 「49代表が集まらない」＝甲子園を組めない状態だった。
+                lock (ResultsGate) Results.Add(result);
                 Interlocked.Increment(ref _done);
 
                 // 区画間で必ずメインスレッドへ時間を譲る（確保レート抑制＝GC を短く分散させる）。

@@ -3,8 +3,9 @@ using KokoSim.Engine.Match.Game;
 namespace KokoSim.Engine.Stats;
 
 /// <summary>
-/// 自校選手の成績ストア（3スコープ）。通算（Career, 練習試合を含む全試合・永続）、
-/// 公式戦通算（Official, 大会の試合だけ・永続）、今大会（CurrentTournament, 大会ごとにリセット）を
+/// 自校選手の成績ストア（4スコープ）。通算（Career, 練習試合を含む全試合・永続）、
+/// 公式戦通算（Official, 大会の試合だけ・永続）、今大会（CurrentTournament, 大会ごとにリセット）、
+/// 県予選（PrefQualifier, 夏の県予選の終了時に今大会から焼き取る）を
 /// 並行して積む。純データ・決定論・UnityEngine 非依存。
 /// インスタンスは横断状態として Shell（GameSession）が保持する。
 ///
@@ -24,11 +25,27 @@ public sealed class PlayerStatStore
     /// <summary>今大会成績（大会開始時にクリア）。</summary>
     public StatBook CurrentTournament { get; } = new();
 
+    /// <summary>
+    /// 直前の夏の県予選成績（設計書05 §1.4b）。甲子園の大会展望が「選手一人一人の県予選成績」を
+    /// 出すための焼き取り。<see cref="SnapshotPrefQualifier"/> が県予選の終了時に一度だけ写す。
+    ///
+    /// <para>今大会スコープ（<see cref="CurrentTournament"/>）は甲子園の開始で消えるので、
+    /// 消える前にここへ移しておく必要がある。相手校側の対は
+    /// <see cref="NationTournamentStats.PrefQualifierForSchool"/>。</para>
+    /// </summary>
+    public StatBook PrefQualifier { get; } = new();
+
     /// <summary>大会別アーカイブ（学年×大会枠＋当時の背番号, issue #77）。永続・セーブ横断。</summary>
     public TournamentArchive Archive { get; } = new();
 
-    /// <summary>大会開始時に今大会スコープをリセット（通算・公式戦通算・アーカイブは保持）。</summary>
+    /// <summary>大会開始時に今大会スコープをリセット（通算・公式戦通算・県予選・アーカイブは保持）。</summary>
     public void StartTournament() => CurrentTournament.Clear();
+
+    /// <summary>
+    /// 今大会スコープを県予選スコープへ焼き取る（夏の県予選の終了時に一度だけ呼ぶ）。
+    /// 上書き＝去年の県予選成績は残さない（展望が見せるのは「今年の夏の県予選」だけ）。
+    /// </summary>
+    public void SnapshotPrefQualifier() => PrefQualifier.ReplaceWith(CurrentTournament);
 
     /// <summary>
     /// 大会終了時に今大会成績を大会別アーカイブへ確定する（issue #77）。次の StartTournament が

@@ -80,6 +80,15 @@ public sealed record CareerCoefficients
     public double FacilityFundDonationPerFame { get; init; } = 20.0;
     /// <summary>甲子園出場の年に後援会から入る一時金[万円]。</summary>
     public double FacilityFundKoshienBonus { get; init; } = 1000.0;
+
+    // --- 甲子園出場が決まった日の激励金（設計書05 §1.1a・OB/卒業生の募金） ---
+    // 上の FacilityFundKoshienBonus（施設基金・年度末に無言で入る）とは<b>別の財布・別のタイミング</b>。
+    // こちらは**部費**＝遠征・宿泊・応援バスに使う運営費で、出場が決まったその場でイベントとして見える形で入る
+    // （オーナー決定 2026-08-21）。二重計上ではない（建物の金と遠征の金は現実でも別勘定）。
+    /// <summary>甲子園出場が決まった日にOB・卒業生から入る激励金の土台[万円]。</summary>
+    public double KoshienBerthDonationBase { get; init; } = 120.0;
+    /// <summary>同・名声1あたりの上乗せ[万円]（名声100で +150万＝年間予算の2倍強）。</summary>
+    public double KoshienBerthDonationPerFame { get; init; } = 1.5;
     /// <summary>全国優勝の年に入る一時金[万円]（甲子園出場ぶんとは別に上乗せ）。</summary>
     public double FacilityFundNationalTitleBonus { get; init; } = 5000.0;
 

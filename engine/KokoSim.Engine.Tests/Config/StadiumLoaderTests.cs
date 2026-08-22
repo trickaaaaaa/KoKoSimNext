@@ -84,4 +84,46 @@ public sealed class StadiumLoaderTests
         Assert.Equal(95, koshien.LeftM, 6);
         Assert.Equal(118, koshien.CenterM, 6);
     }
+
+    /// <summary>
+    /// 甲子園の C#既定（<see cref="Stadium.Koshien"/>）と data/stadiums.yaml が一致すること（不変条件#4）。
+    /// 実ゲームは YAML を読まず C#既定で走るので、片方だけ動かすと<b>実ゲームだけ別の球場で試合をする</b>。
+    /// </summary>
+    [Fact]
+    public void KoshienDefault_MatchesTheRepositoryYaml()
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("stadiums.yaml");
+        var yaml = StadiumCatalogLoader.LoadCatalog(path)["koshien"];
+        var code = Stadium.Koshien;
+
+        Assert.Equal(yaml.Id, code.Id);
+        Assert.Equal(yaml.Name, code.Name);
+        Assert.Equal(yaml.Tier, code.Tier);
+        Assert.Equal(yaml.LeftM, code.LeftM, 6);
+        Assert.Equal(yaml.RightM, code.RightM, 6);
+        Assert.Equal(yaml.CenterM, code.CenterM, 6);
+        Assert.Equal(yaml.FenceHeightM, code.FenceHeightM, 6);
+    }
+
+    /// <summary>
+    /// 甲子園と既定の球場（<see cref="FieldGeometry"/> の初期値）の関係を固定する。
+    ///
+    /// <para><b>距離は既に同じ</b>（95/95/118）＝既定の球場がもともと甲子園の寸法で書かれている。
+    /// 違うのは<b>フェンス高だけ</b>（既定4.0m に対し甲子園2.6m）で、実ゲームで甲子園の寸法を使うと
+    /// 効くのはこの1.4mである。「地方は広い → 甲子園は狭い」という差はまだ存在しない
+    /// （地方大会の球場割当＝設計書13 の <c>StadiumPlan</c> が実ゲームへ未配線なため）。
+    /// この事実を知らずに距離だけ見ると「注入しても何も変わらないはず」と誤読する。</para>
+    /// </summary>
+    [Fact]
+    public void Koshien_DiffersFromTheDefaultField_OnlyInFenceHeight()
+    {
+        var koshien = Stadium.Koshien.ToFieldGeometry();
+        var standard = new FieldGeometry();
+
+        Assert.Equal(standard.LeftFenceM, koshien.LeftFenceM, 6);
+        Assert.Equal(standard.RightFenceM, koshien.RightFenceM, 6);
+        Assert.Equal(standard.CenterFenceM, koshien.CenterFenceM, 6);
+        Assert.True(koshien.FenceHeightM < standard.FenceHeightM,
+            $"甲子園のフェンス({koshien.FenceHeightM}m)が既定({standard.FenceHeightM}m)より低くない");
+    }
 }

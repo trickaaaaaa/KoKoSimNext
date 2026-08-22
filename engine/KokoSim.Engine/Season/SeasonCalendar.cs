@@ -1,10 +1,22 @@
 namespace KokoSim.Engine.Season;
 
-/// <summary>大会種別（夏の地方大会 / 秋季県大会）。大会モードの開始判定に使う（設計書05 §1.1）。</summary>
+/// <summary>
+/// 大会種別（夏の地方大会 / 秋季県大会 / 夏の甲子園）。大会モードの開始判定に使う（設計書05 §1.1）。
+///
+/// <para><b>値は末尾にだけ足す</b>。セーブ（<see cref="Saves.TournamentSaveState.Kind"/>）へ int で
+/// 直列化されるので、途中に挿すと既存セーブの大会種別が別物になる。</para>
+///
+/// <para><see cref="SummerKoshien"/> は<b>週で始まらない</b>唯一の大会＝
+/// <see cref="SeasonCalendar.TournamentStartingAt"/> は決して返さない。夏の県大会の後始末から
+/// 直接つなぐ（設計書05 §1.1a）。3年引退（<see cref="SeasonCalendar.SummerRetireWeek"/>+1）と
+/// 夏合宿（第18週）に衝突させないため。</para>
+/// </summary>
 public enum TournamentKind
 {
     Summer,
     Autumn,
+    /// <summary>夏の甲子園（49代表の全国大会）。夏の県大会の優勝で出場が決まる。</summary>
+    SummerKoshien,
 }
 
 /// <summary>
@@ -79,7 +91,12 @@ public sealed record SeasonCalendar
         return (TournamentKind.Summer, WeeksPerYear - week + SummerTournamentStartWeek);
     }
 
-    /// <summary>その週に開幕する大会があれば種別を返す（なければ null）。大会モードへの遷移判定に使う。</summary>
+    /// <summary>
+    /// その週に開幕する大会があれば種別を返す（なければ null）。大会モードへの遷移判定に使う。
+    ///
+    /// <para><b><see cref="TournamentKind.SummerKoshien"/> は決して返さない。</b> 甲子園は暦の週でなく
+    /// 夏の県大会の後始末から直接つなぐ（設計書05 §1.1a）＝ここへ足すと3年引退・夏合宿の週と衝突する。</para>
+    /// </summary>
     public TournamentKind? TournamentStartingAt(int week)
     {
         if (week == SummerTournamentStartWeek) return TournamentKind.Summer;

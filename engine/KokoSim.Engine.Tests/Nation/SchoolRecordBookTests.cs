@@ -1,4 +1,7 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Nation;
+using KokoSim.Engine.Nation.Tournaments;
+using KokoSim.Engine.Season;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Nation;
@@ -79,7 +82,9 @@ public sealed class SchoolRecordBookTests
     [InlineData(0, null, 2028, "初出場")]
     [InlineData(1, 2027, 2028, "2年連続2回目")]
     [InlineData(4, 2025, 2028, "3年ぶり5回目")]
-    [InlineData(2, 2028, 2028, "0年ぶり3回目")] // 通常発生しないが式は素直に計算する
+    // 同じ年に2度積まれた（記録の取り違え）ときは「0年ぶり」「-1年ぶり」を印字せず回数だけ出す。
+    [InlineData(2, 2028, 2028, "3回目")]
+    [InlineData(2, 2029, 2028, "3回目")]
     public void AppearanceLabel_For_ProducesExpectedText(
         int priorAppearances, int? priorLastYear, int currentYear, string expected)
     {
@@ -98,5 +103,79 @@ public sealed class SchoolRecordBookTests
 
         book.RecordKoshienAppearance(1, KoshienKind.Summer, 2033); // 4年ぶり3回目
         Assert.Equal("4年ぶり3回目", book.For(1).SummerAppearanceLabel);
+    }
+
+    // ── 甲子園本戦（夏の甲子園）──────────────────────────
+
+    /// <summary>ブラケット1試合ぶん。roundsRemaining=1 が決勝。</summary>
+    private static BracketMatch M(int roundsRemaining, int winnerId, int loserId)
+        => new("", roundsRemaining, "W" + winnerId, "L" + loserId, winnerId, loserId, 5, 2, false);
+
+    /// <summary>優勝校=1 の8校トーナメント（準々決勝→準決勝→決勝を1本の山だけ書いた最小形）。</summary>
+    private static List<BracketMatch> KoshienBracket() => new()
+    {
+        M(3, 1, 11),   // 準々決勝: 1 が 11 に勝つ → 11 はベスト8
+        M(3, 2, 12),
+        M(2, 1, 2),    // 準決勝:   1 が 2 に勝つ  → 2 はベスト4
+        M(1, 1, 3),    // 決勝:     1 が 3 に勝つ  → 3 は準優勝・1 は優勝
+    };
+
+    [Fact]
+    public void FoldTournament_Koshien_RecordsWinsLossesAndBestResult()
+    {
+        var book = new SchoolRecordBook();
+        var champion = book.FoldTournament(KoshienBracket(), TournamentKind.SummerKoshien, 2028);
+
+        Assert.Equal(1, champion!.Value.Id);
+        Assert.Equal(3, book.For(1).KoshienWins);
+        Assert.Equal(0, book.For(1).KoshienLosses);
+        Assert.Equal(BestResult.Champion, book.For(1).BestResult);
+
+        Assert.Equal(BestResult.RunnerUp, book.For(3).BestResult);
+        Assert.Equal(BestResult.RoundOf4, book.For(2).BestResult);
+        Assert.Equal(BestResult.RoundOf8, book.For(11).BestResult);
+        Assert.Equal(1, book.For(11).KoshienLosses);
+    }
+
+    /// <summary>
+    /// 甲子園の畳み込みで<b>出場回数を数え直さない</b>（県大会優勝の時点で1回積んでいる）。
+    /// ここで積むと同じ夏を2回出場したことになる。
+    /// </summary>
+    [Fact]
+    public void FoldTournament_Koshien_DoesNotCountAppearanceTwice()
+    {
+        var book = new SchoolRecordBook();
+        book.RecordKoshienAppearance(1, KoshienKind.Summer, 2028);   // 県大会優勝＝出場決定
+        Assert.Equal(1, book.For(1).SummerAppearances);
+
+        book.FoldTournament(KoshienBracket(), TournamentKind.SummerKoshien, 2028);
+
+        Assert.Equal(1, book.For(1).SummerAppearances);
+        Assert.Equal("初出場", book.For(1).SummerAppearanceLabel);
+    }
+
+    /// <summary>最高成績は良い方だけを残す（翌年に初戦敗退しても去年の優勝は消えない）。</summary>
+    [Fact]
+    public void FoldTournament_Koshien_KeepsTheBestResultAcrossYears()
+    {
+        var book = new SchoolRecordBook();
+        book.FoldTournament(KoshienBracket(), TournamentKind.SummerKoshien, 2028);
+        Assert.Equal(BestResult.Champion, book.For(1).BestResult);
+
+        book.FoldTournament(new List<BracketMatch> { M(1, 9, 1) }, TournamentKind.SummerKoshien, 2029);
+        Assert.Equal(BestResult.Champion, book.For(1).BestResult);
+    }
+
+    /// <summary>県大会の畳み込みでは甲子園の勝敗を積まない（甲子園の通算戦績が県大会で汚れない）。</summary>
+    [Fact]
+    public void FoldTournament_Prefecture_DoesNotTouchKoshienRecord()
+    {
+        var book = new SchoolRecordBook();
+        book.FoldTournament(KoshienBracket(), TournamentKind.Summer, 2028);
+
+        Assert.Equal(0, book.For(1).KoshienWins);
+        Assert.Equal(0, book.For(3).KoshienLosses);
+        Assert.Equal(BestResult.Appearance, book.For(1).BestResult);   // 県大会優勝＝甲子園出場のみ
+        Assert.Equal(BestResult.None, book.For(3).BestResult);
     }
 }

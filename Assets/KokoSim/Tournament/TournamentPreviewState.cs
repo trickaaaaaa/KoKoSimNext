@@ -55,7 +55,9 @@ namespace KokoSim.Unity.Tournament
             public string Tag;          // 「総合 A ／ 第1シード」
             public string TierLetter;
             public string Sub;          // チーム寸評
-            public string StatsCaption; // 「今大会 2試合」（1試合もしていなければ「今大会 まだ試合なし」）
+            public string StatsCaption; // 「県予選 6試合」（1試合もしていなければ「県予選 まだ試合なし」）
+            // 3軸（打力/投手/守備）。甲子園の右ペインは展望カードと同じ物差しをその場で出す。
+            public int Batting, Pitching, Defense;
             public List<MemberRow> Members;
         }
 
@@ -99,6 +101,21 @@ namespace KokoSim.Unity.Tournament
             public BracketCardRow ManagerFocus;   // 初期表示でスクロールする先（自校の最新カード）
         }
 
+        /// <summary>
+        /// 甲子園の出場校一覧の1行（設計書05 §1.1a・要望「N年ぶりN回目が見れる」）。
+        /// 左ペインの名簿がこれを並べ、押すと右ペインにその校の詳細（県予選成績まで）が出る。
+        /// </summary>
+        public sealed class EntrantRow
+        {
+            public string RegionName;      // 代表（"北北海道" / "神奈川県"）
+            public string SchoolName;
+            public string TierLetter;      // S..G（ランクチップ）
+            public string AppearanceLabel; // 「3年ぶり4回目」「初出場」
+            public bool IsManager;         // 自校の行（面で強調）
+            /// <summary>並び順（49区画の並び＝北から南へ）。表示しない。</summary>
+            public int RegionOrder;
+        }
+
         public sealed class View
         {
             public string Title;
@@ -106,31 +123,47 @@ namespace KokoSim.Unity.Tournament
             public string Lead;
             public List<ContenderRow> Contenders = new List<ContenderRow>();
             public List<NotableRow> Notables = new List<NotableRow>();
+            /// <summary>出場校の名簿（甲子園のときだけ埋まる。県大会は空＝セクションごと出さない）。</summary>
+            public List<EntrantRow> Entrants = new List<EntrantRow>();
         }
+
+        /// <summary>
+        /// 校別詳細の成績スコープ（issue 甲子園）。甲子園の展望は<b>県予選</b>を既定にする
+        /// （「選手一人一人の県予選成績が見れる」＝要望）。大会が進めば甲子園側も見られる。
+        /// </summary>
+        public enum StatScope { CurrentTournament, PrefQualifier }
 
         /// <summary>大会が開催中でなければ null（呼び出し側は空状態を出す）。</summary>
         public View Build()
         {
-            var session = KokoSim.Unity.Shell.GameSession.Current;
-            if (!session.InTournament || session.Field == null || session.Field.Count == 0) return null;
+            var d = KokoSim.Unity.Shell.GameSession.Current.Display;
+            if (d == null || d.Field.Count == 0) return null;
 
-            // 上位2校が次のステージへ（秋＝地区/関東、夏＝甲子園）。現状の大会構造に合わせた表示上の既定。
-            var summer = session.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
+            var koshien = d.Kind == KokoSim.Engine.Season.TournamentKind.SummerKoshien;
+            var summer = d.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
             // 注目選手・登録メンバーは実戦と同一の永続ロスター（#80）から引く＝展望で見た選手が実戦で出る。
             var preview = TournamentPreviewBuilder.Build(
-                session.Title, session.Field,
-                berths: summer ? 1 : 2,
-                nextStageName: summer ? "甲子園" : "地区大会",
-                yearIndex: session.Year,
+                d.Title, d.Field,
+                // 上位何校が次へ行くか。甲子園は次のステージが無いので枠の言い回し自体を出さない（engine 側で分岐）。
+                berths: koshien || summer ? 1 : 2,
+                nextStageName: koshien ? "" : summer ? "甲子園" : "地区大会",
+                yearIndex: KokoSim.Unity.Shell.GameSession.Current.Year,
                 teamProvider: TeamFor,
-                // 注目選手の成績行は今大会の実測値で書く（issue #634。以前は能力から合成した見込み値だった）。
-                statsForSchool: id => KokoSim.Unity.Shell.NationService.StatsLookup.CurrentTournamentBook(id));
+                // 注目選手の成績行は実測値で書く（issue #634）。甲子園は<b>県予選</b>の実測＝
+                // 開幕前でも「この選手は県予選で打っている」が読める（今大会スコープはまだ空）。
+                statsForSchool: id => BookFor(id, koshien ? StatScope.PrefQualifier : StatScope.CurrentTournament),
+                stage: koshien ? PreviewStage.SummerKoshien
+                    : summer ? PreviewStage.SummerPrefecture : PreviewStage.Autumn);
 
             var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
+            if (koshien) v.Entrants = BuildEntrants(d.Field);
+            var session = KokoSim.Unity.Shell.GameSession.Current;
 
             // 通算戦績（issue #84）はGameSession側の記録簿にあり、engineのプレビュー生成は校名しか
             // 持たないため、ここで校名→Idを引いて寸評の頭に付け足す（新規パネル・新規要素は作らない）。
-            var idByName = session.Field.ToDictionary(s => s.Name, s => s.Id);
+            // 同名校が居ても落ちないよう先勝ちで畳む（校名は生成物なので一意の保証が無い）。
+            var idByName = new Dictionary<string, int>();
+            foreach (var s in d.Field) if (!idByName.ContainsKey(s.Name)) idByName[s.Name] = s.Id;
             var records = session.Records;
 
             foreach (var c in preview.Contenders)
@@ -174,25 +207,32 @@ namespace KokoSim.Unity.Tournament
         /// 展望の Contenders（格付け校のみ）とは独立に、出場校なら誰でもオンデマンドで生成できる。
         /// 大会が開催中でない・該当校が見つからない場合は null（呼び出し側は既存ビューのままにする）。
         /// </summary>
-        public static RosterBlock BuildSchoolDetail(string schoolName)
+        /// <param name="scope">
+        /// 成績3列のスコープ。既定の今大会に加え、甲子園では<b>県予選</b>を選べる
+        /// （設計書05 §1.4b・要望「選手一人一人の県予選成績が見れる」）。
+        /// </param>
+        public static RosterBlock BuildSchoolDetail(
+            string schoolName, StatScope scope = StatScope.CurrentTournament)
         {
-            var session = KokoSim.Unity.Shell.GameSession.Current;
-            if (!session.InTournament || session.Field == null || session.Field.Count == 0) return null;
+            var d = KokoSim.Unity.Shell.GameSession.Current.Display;
+            if (d == null || d.Field.Count == 0) return null;
 
-            var school = session.Field.FirstOrDefault(s => s.Name == schoolName);
+            var school = d.Field.FirstOrDefault(s => s.Name == schoolName);
             if (school == null) return null;
 
-            var summer = session.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
+            var session = KokoSim.Unity.Shell.GameSession.Current;
+            var koshien = d.Kind == KokoSim.Engine.Season.TournamentKind.SummerKoshien;
+            var summer = d.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
             var excerpt = TournamentPreviewBuilder.BuildRosterFor(
-                school, session.Field, berths: summer ? 1 : 2, yearIndex: session.Year,
+                school, d.Field, berths: koshien || summer ? 1 : 2, yearIndex: session.Year,
                 teamProvider: TeamFor);
 
             // 通算戦績（issue #84）は寸評の頭に付け足す（展望の Contenders 行と同じ扱い）。
             var history = KoshienHistoryText(session.Records.For(school.Id));
 
-            // 今大会成績（issue #634）。裏試合フルシム（#43）が積んだ実測値を (校ID, 選手ID) で引く。
-            // 帳簿は校ごとに1回だけ引き、行ごとに引き直さない。
-            var book = KokoSim.Unity.Shell.NationService.StatsLookup.CurrentTournamentBook(school.Id);
+            // 成績（issue #634 / 設計書05 §1.4b）。裏試合フルシム（#43）と代表校の打ち直しが積んだ実測値を
+            // (校ID, 選手ID) で引く。帳簿は校ごとに1回だけ引き、行ごとに引き直さない。
+            var book = BookFor(school.Id, scope);
 
             var block = new RosterBlock
             {
@@ -200,7 +240,10 @@ namespace KokoSim.Unity.Tournament
                 TierLetter = excerpt.Tier.ToString(),
                 Tag = "総合 " + excerpt.Tier + " ／ " + excerpt.SeedLabel,
                 Sub = history + excerpt.TeamBlurb,
-                StatsCaption = GamesCaption(book),
+                StatsCaption = GamesCaption(book, scope),
+                Batting = excerpt.Rating.Batting,
+                Pitching = excerpt.Rating.Pitching,
+                Defense = excerpt.Rating.Defense,
                 Members = new List<MemberRow>(excerpt.Members.Count),
             };
             foreach (var m in excerpt.Members)
@@ -216,6 +259,76 @@ namespace KokoSim.Unity.Tournament
                 block.Members.Add(row);
             }
             return block;
+        }
+
+        /// <summary>
+        /// 甲子園の出場校名簿（要望「N年ぶりN回目が見れる」）。並びは<b>代表の区画Id順</b>
+        /// ＝北から南へ（実際の出場校一覧と同じ読み順）。同じ区画の中は校IDで安定化する。
+        ///
+        /// <para>「N年ぶりN回目」は engine の <see cref="AppearanceLabel"/> が
+        /// 出場を記録した時点で焼いた文言（<see cref="SchoolRecord.SummerAppearanceLabel"/>）。
+        /// <b>UI で数え直さない</b>＝出場回数の数え方が2箇所に散らない。</para>
+        /// </summary>
+        private static List<EntrantRow> BuildEntrants(IReadOnlyList<School> field)
+        {
+            var prefectures = KokoSim.Unity.Shell.NationService.Nation.Prefectures;
+            var records = KokoSim.Unity.Shell.GameSession.Current.Records;
+            var managerId = KokoSim.Unity.Shell.NationService.ManagerSchoolId;
+            // 49区画は JIS順（北海道→沖縄）に並んでいる＝この並びの添字がそのまま「北から南へ」。
+            // 校名や区画名の文字列で並べると読み順が崩れる（"三重県" < "京都府" < "佐賀県" になる）。
+            var regions = SummerRegions.Build(prefectures);
+
+            var rows = new List<EntrantRow>(field.Count);
+            foreach (var s in field)
+            {
+                var order = int.MaxValue;
+                var name = "";
+                for (var i = 0; i < regions.Count; i++)
+                    if (regions[i].Contains(s)) { order = i; name = regions[i].Name; break; }
+                if (name.Length == 0 && s.Id == managerId)
+                {
+                    // 自校は専用IDで Contains がどの区画にも一致しない。DistrictId から実際に戦った区画
+                    // （分割県なら北北海道/南北海道等）を決め直す＝TournamentEntry.BuildField と同じ区画。
+                    var region = SummerRegions.RegionFor(prefectures, s.PrefectureId, s.DistrictId);
+                    name = region.Name;
+                    for (var i = 0; i < regions.Count; i++)
+                        if (regions[i] == region) { order = i; break; }
+                }
+                else if (name.Length == 0)
+                {
+                    // どの区画にも属さない（想定外の学校）。県名へ落として県の位置へ並べる。
+                    name = SummerRegions.NameOf(prefectures, s);
+                    for (var i = 0; i < regions.Count; i++)
+                        if (regions[i].PrefectureId == s.PrefectureId) { order = i; break; }
+                }
+
+                var label = records.For(s.Id).SummerAppearanceLabel;
+                rows.Add(new EntrantRow
+                {
+                    RegionName = name,
+                    SchoolName = s.Name,
+                    TierLetter = s.Tier.ToString(),
+                    // 未記録（旧セーブから来た年など）は空にせず「出場」と出す＝空欄で列が抜けたように見せない。
+                    AppearanceLabel = string.IsNullOrEmpty(label) ? "出場" : label,
+                    IsManager = s.Id == managerId,
+                    RegionOrder = order,
+                });
+            }
+            rows.Sort((a, b) =>
+            {
+                var c = a.RegionOrder.CompareTo(b.RegionOrder);
+                return c != 0 ? c : string.CompareOrdinal(a.SchoolName, b.SchoolName);
+            });
+            return rows;
+        }
+
+        /// <summary>成績スコープ→校の帳簿（振り分けは engine の <see cref="SchoolStatsLookup"/> 1箇所）。</summary>
+        private static KokoSim.Engine.Stats.StatBook BookFor(int schoolId, StatScope scope)
+        {
+            var lookup = KokoSim.Unity.Shell.NationService.StatsLookup;
+            return scope == StatScope.PrefQualifier
+                ? lookup.PrefQualifierBook(schoolId)
+                : lookup.CurrentTournamentBook(schoolId);
         }
 
         /// <summary>
@@ -254,7 +367,7 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>その校が今大会で消化した試合数（選手ごとの出場試合数の最大＝先発で全試合出た選手の数）。</summary>
-        private static string GamesCaption(KokoSim.Engine.Stats.StatBook book)
+        private static string GamesCaption(KokoSim.Engine.Stats.StatBook book, StatScope scope)
         {
             var games = 0;
             if (book != null)
@@ -264,8 +377,13 @@ namespace KokoSim.Unity.Tournament
                     if (p.Batting.Games > games) games = p.Batting.Games;
                     if (p.Pitching.Games > games) games = p.Pitching.Games;
                 }
-            return games > 0 ? "今大会 " + games + "試合" : "今大会 まだ試合なし";
+            var label = ScopeLabel(scope);
+            return games > 0 ? label + " " + games + "試合" : label + " まだ試合なし";
         }
+
+        /// <summary>成績スコープの呼び名（表の見出し・キャプション・タブが同じ語を使う）。</summary>
+        public static string ScopeLabel(StatScope scope)
+            => scope == StatScope.PrefQualifier ? "県予選" : "今大会";
 
         /// <summary>
         /// エンジンのブラケット出力（TournamentRunner.BuildBracketView）を樹形図の描画用に変換する。

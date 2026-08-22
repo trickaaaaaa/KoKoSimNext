@@ -325,6 +325,32 @@ public sealed class TournamentPreviewTests
         Assert.All(p.Contenders, c => Assert.False(string.IsNullOrEmpty(c.Blurb)));
     }
 
+    /// <summary>
+    /// 甲子園は「次のステージ」が無い＝進出枠の言い回しを出さない（設計書06 §3.5b）。
+    /// 秋・夏の県大会は従来どおり枠を出す。
+    /// </summary>
+    [Fact]
+    public void Lead_And_Meta_AdaptToTheStage()
+    {
+        var koshien = TournamentPreviewBuilder.Build(
+            "2028年 全国高等学校野球選手権大会", Field(), berths: 1, nextStageName: "",
+            stage: PreviewStage.SummerKoshien);
+        Assert.Contains("代表", koshien.Meta);
+        Assert.DoesNotContain("上位", koshien.Meta);
+        Assert.Contains("頂点に立つのは一校だけ", koshien.Lead);
+        Assert.DoesNotContain("新チーム始動の秋", koshien.Lead);
+
+        var summer = TournamentPreviewBuilder.Build(
+            "2028年 選手権神奈川大会", Field(), berths: 1, nextStageName: "甲子園",
+            stage: PreviewStage.SummerPrefecture);
+        Assert.Contains("最後の夏", summer.Lead);
+        Assert.Contains("甲子園", summer.Meta);
+
+        // 既定（秋）は従来の文言のまま＝旧来の呼び出しは1文字も変わらない。
+        var autumn = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会");
+        Assert.Contains("新チーム始動の秋", autumn.Lead);
+    }
+
     [Fact]
     public void Build_IsDeterministic()
     {

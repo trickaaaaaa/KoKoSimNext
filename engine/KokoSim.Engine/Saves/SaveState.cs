@@ -61,6 +61,12 @@ public sealed class SaveState
     /// <summary>今年度の校別勝数（年度末の進化で消費・v13）。校ID→勝数。空＝今年度まだ大会が無い。</summary>
     public Dictionary<int, int> NationYearWins { get; set; } = new();
 
+    /// <summary>
+    /// 今年度の甲子園王者（校ID・v15）。<c>-1</c>＝未確定／自校が優勝。校別勝数と同じ寿命
+    /// （8月に決まり年度末の進化で消費する）なので同じ区画に置く。
+    /// </summary>
+    public int NationKoshienChampionId { get; set; } = -1;
+
     // --- 大会をまたぐ成績・戦績（Normal モードで保存＝進行体は持たない） ---
     public int SessionYear { get; set; } = 1;
     public PlayerStatStore Stats { get; set; } = new();
@@ -128,6 +134,16 @@ public sealed class SaveState
     /// 大会に入っていても保存できるのは<b>試合と試合の間</b>だけで、観戦中の中断は F2。
     /// </summary>
     public TournamentSaveState? Tournament { get; set; }
+
+    /// <summary>
+    /// <b>自校が出場していない</b>夏の甲子園の進行（v15・設計書05 §1.1a）。null＝開催中でない
+    /// （＝自校が出場している年は <see cref="Tournament"/> 側に載る／甲子園が終わった後も null）。
+    ///
+    /// <para>自校が県予選で敗退した年も甲子園は開催され、大会展望とトーナメント表を閲覧できる。
+    /// プレイヤーは通常モードのまま週を進め、その経過日ぶんだけブラケットが消化される
+    /// ＝進行体をセーブへ載せないと、ロード後に優勝校が永久に決まらない。</para>
+    /// </summary>
+    public TournamentSaveState? Koshien { get; set; }
 
     /// <summary>
     /// 前の試合で確定したスタメンの記憶（issue lineup-carry-over-previous-game・v14）。スタメン設定画面の既定に使う。

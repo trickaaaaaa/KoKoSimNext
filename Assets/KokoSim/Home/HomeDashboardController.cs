@@ -209,6 +209,7 @@ namespace KokoSim.Unity.Home
             // ワーカーがまだ生きていて共有カウンタ(_nextJob等)を奪い合う実害があるため。
             KokoSim.Unity.Shell.NationBackgroundSim.EnsureCompleted();
             KokoSim.Unity.Shell.BracketFinishSim.EnsureCompleted();
+            KokoSim.Unity.Shell.KoshienQualifierStatsSim.EnsureCompleted();
             KokoSim.Unity.Shell.SaveGameIO.ResetForNewGame();
             HomeState.Reset();
             KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TitleScreen");

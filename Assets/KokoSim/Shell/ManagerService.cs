@@ -87,6 +87,13 @@ namespace KokoSim.Unity.Shell
         private static readonly List<double> _pendingUpsetDeltas = new List<double>();
         private static readonly CareerCoefficients CareerCoeff = new CareerCoefficients();
 
+        /// <summary>
+        /// 監督メタ・資金の係数（C#既定＝<c>data/coefficients.yaml career:</c> と同値・不変条件#4）。
+        /// 実ゲームで資金を動かす側（甲子園の激励金など）が同じ実体を引くための入口＝
+        /// 呼び出し側で <c>new CareerCoefficients()</c> を作らない。
+        /// </summary>
+        public static CareerCoefficients Coefficients => CareerCoeff;
+
         /// <summary>直近の年度替わりで発火した監督成長イベント（ホーム通知フィード用・任意消費）。</summary>
         public static IReadOnlyList<ManagerGrowthNotice> LastGrowthNotices { get; private set; } =
             System.Array.Empty<ManagerGrowthNotice>();
@@ -202,7 +209,17 @@ namespace KokoSim.Unity.Shell
             // 節目イベント抽選は母種＋年度から導く独立ストリーム（本編の乱数列を乱さない・同母種同結果）。
             var milestoneRng = new Xoshiro256Random(GameSeed.Master ^ (0xA6A6_0000UL ^ (ulong)endedYearIndex));
 
-            // 全国優勝は甲子園本戦が実プレイに接続する（tournament Phase 3）まで到達不能＝false 固定。
+            // 全国優勝はその年度の甲子園を自校が制したか（設計書05 §1.1a）。歴代大会結果は
+            // 「自校が1試合でも戦った大会」だけを年度つきで残すので、ここが唯一の判定入口
+            // （通算戦績 BestResult は年をまたぐ最高成績なので「今年優勝したか」は答えられない）。
+            var nationalChampion = false;
+            foreach (var e in GameSession.Current.History.Entries)
+                if (e.Kind == TournamentKind.SummerKoshien && e.Year == endedYearIndex && e.ManagerIsChampion)
+                {
+                    nationalChampion = true;
+                    break;
+                }
+
             // 年契約（設計書04 §1.4a）の年額は部費からここで引かれる。既定（スカウト網 Lv1）なら
             // 従来のスカウト費15万と同額＝年契約を入れても初期状態の収支は変わらない。
             // 適用の前後を測って差分を作る（issue #612）。種別から効果を推測すると、自然増や
@@ -215,7 +232,7 @@ namespace KokoSim.Unity.Shell
             _pendingUpsetDeltas.Clear();
 
             LastGrowthNotices = ManagerSeasonUpdate.Apply(
-                Manager, reachedKoshien, nationalChampion: false, wins, milestoneRng,
+                Manager, reachedKoshien, nationalChampion, wins, milestoneRng,
                 upsetFameDelta: upsetFameDelta, contracts: ContractEffects);
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);

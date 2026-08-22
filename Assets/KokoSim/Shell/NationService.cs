@@ -91,11 +91,12 @@ namespace KokoSim.Unity.Shell
         /// 年度替わり（4月）に1回、終了した年度 <paramref name="endedYearIndex"/> の勝数で全AI校を進化させる
         /// （<see cref="GameClock"/> が <see cref="AdvanceAiYear"/> の<b>前</b>に呼ぶ＝進化後の Strength を
         /// 逆算配分の目標にする）。乱数は母種×年度の専用ストリーム＝他の抽選列は不変（不変条件#2）。
-        /// 甲子園本戦は未実装なので王者は無し（-1）。自校は <see cref="Nation"/> に含まれない（専用ID）ので対象外。
+        /// 甲子園王者は台帳が持ち回る（8月に決まり進化は翌4月＝年をまたぐ）。
+        /// 自校は <see cref="Nation"/> に含まれない（専用ID）ので、自校が優勝した年は対象校なし＝無しと同じ。
         /// </summary>
         public static void EvolveAiSchools(int endedYearIndex)
         {
-            AiSchoolEvolution.ApplyYear(Nation, YearLedger.Snapshot(), championId: -1, Coeff,
+            AiSchoolEvolution.ApplyYear(Nation, YearLedger.Snapshot(), YearLedger.ChampionId, Coeff,
                 GameSeed.Master, endedYearIndex);
             YearLedger.Clear();
             _hasEvolution = true;
@@ -234,6 +235,7 @@ namespace KokoSim.Unity.Shell
             // AI校の進化状態（v13）。一度も進化していなければ空＝生成値のまま（旧セーブと同じ意味）。
             s.NationSchools = _hasEvolution ? AiSchoolEvolution.Snapshot(Nation) : new List<SchoolEvolutionState>();
             s.NationYearWins = new Dictionary<int, int>(YearLedger.Snapshot());
+            s.NationKoshienChampionId = YearLedger.ChampionId;
             // 自校の同定（issue #585・v4）。学校・県と違い再生成では出てこないので保存する。
             s.SchoolName = ManagerSchoolName;
             s.PrefectureId = PrefectureId;
@@ -253,6 +255,7 @@ namespace KokoSim.Unity.Shell
             _hasEvolution = _pendingSchoolStates != null;
             YearLedger.Clear();
             if (s.NationYearWins != null) YearLedger.AddWins(s.NationYearWins);
+            YearLedger.SetChampion(s.NationKoshienChampionId);
             // 自校の同定（旧セーブは Migrate が桜丘・神奈川で補ってくる）。県別キャッシュもここで落ちる。
             SetSchoolIdentity(s.SchoolName, s.PrefectureId, s.DistrictId);
         }

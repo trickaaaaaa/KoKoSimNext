@@ -76,6 +76,31 @@
 
                 <ui:Label class="tp-h2 f-display" text="注目選手" />
                 <ui:VisualElement name="tp-notables" class="tp-players" />
+
+                <!-- 出場校（甲子園のときだけ表示）。左＝49代表の名簿／右＝選んだ1校の詳細。
+                     選んだ校の県予選成績がその場で読める（クリック1回で完結させる）。 -->
+                <ui:VisualElement name="tp-entrants-section">
+                    <ui:Label name="tp-entrants-h" class="tp-h2 f-display" text="出場校" />
+                    <ui:VisualElement class="tp-ent-split">
+
+                        <ui:VisualElement class="tp-ent-split__left">
+                            <ui:VisualElement name="tp-ent-head" class="tp-eth" />
+                            <ui:ScrollView mode="Vertical" class="tp-ent-scroll">
+                                <ui:VisualElement name="tp-entrants" />
+                            </ui:ScrollView>
+                        </ui:VisualElement>
+
+                        <ui:ScrollView mode="Vertical" name="tp-ent-detail" class="tp-ent-split__right">
+                            <ui:Label name="tp-ed-name" class="tp-ed-name f-display" text="" />
+                            <ui:Label name="tp-ed-tag" class="tp-ed-tag" text="" />
+                            <ui:Label name="tp-ed-blurb" class="tp-ed-blurb" text="" />
+                            <ui:VisualElement name="tp-ed-bars" class="tp-bars" />
+                            <ui:VisualElement name="tp-ed-tabs" class="tp-ed-tabs" />
+                            <ui:VisualElement name="tp-ed-roster" class="tp-roster" />
+                        </ui:ScrollView>
+
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- ビュー3：校別詳細（トーナメント表の高校名クリックで開く。issue #189） -->

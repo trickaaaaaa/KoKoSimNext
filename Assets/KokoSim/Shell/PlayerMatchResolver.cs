@@ -27,7 +27,8 @@ namespace KokoSim.Unity.Shell
         {
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
-            var ctx = Rules.ApplyTo(new GameContext { MercyRuleEnabled = mercyRuleEnabled }, CalendarYear());
+            var ctx = Rules.ApplyTo(
+                new GameContext { MercyRuleEnabled = mercyRuleEnabled, Field = Stadium() }, CalendarYear());
             var managerIsAway = ManagerIsAway(manager, opponent);
             var result = managerIsAway
                 ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2))
@@ -45,7 +46,11 @@ namespace KokoSim.Unity.Shell
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var ctx = Rules.ApplyTo(
-                new GameContext { CaptureTimelines = true, CapturePitches = true, MercyRuleEnabled = mercyRuleEnabled },
+                new GameContext
+                {
+                    CaptureTimelines = true, CapturePitches = true,
+                    MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(),
+                },
                 CalendarYear());
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
             // 大会フローの実試合にもデバッグHUDの観測を差し込む（設計書17 §5/§12.4, #95）。HUDが閉じていれば
@@ -71,6 +76,14 @@ namespace KokoSim.Unity.Shell
         /// <summary>現代ルール（現状トグルなし・年代連動の既定値, 設計書05 §1.3）。DH判定と
         /// タイブレーク/球数制限の GameContext 反映（issue #252）の両方でこの1インスタンスを使う。</summary>
         private static readonly ModernRules Rules = new();
+
+        /// <summary>
+        /// いま戦っている大会の球場寸法（設計書13 §1）。甲子園だけが固有の球場を持ち、それ以外は既定
+        /// ＝地方大会の判定は1ビットも変わらない。<b>Resolve と BeginLive が同じ値を使う</b>
+        /// （観戦しても結果が変わらない契約）ので、両者ともこの1メソッドを通す。
+        /// </summary>
+        private static KokoSim.Engine.Match.Field.FieldGeometry Stadium()
+            => MatchStadium.For(GameSession.Current.Kind);
 
         /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
         private static int CalendarYear() => SeasonClock.SeasonBaseYear + (GameSession.Current.Year - 1);

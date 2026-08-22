@@ -113,8 +113,32 @@ public sealed class AiSchoolYearLedger
 
     public int Count { get { lock (_gate) return _wins.Count; } }
 
+    /// <summary>
+    /// 今年度の甲子園王者（校ID。<see cref="NoChampion"/>＝未確定／自校が優勝）。
+    /// <see cref="AiSchoolEvolution.ApplyYear"/> の <c>championId</c> の材料で、王者は名声・強さに上乗せを受ける。
+    ///
+    /// <para>年度の途中（8月）に決まり、進化が走るのは翌4月なので<b>年をまたいで持ち回る</b>
+    /// ＝台帳（勝数）と同じ寿命・同じセーブ項目に載せる。</para>
+    /// </summary>
+    public int ChampionId { get { lock (_gate) return _championId; } }
+
+    /// <summary>王者未確定を表す値（自校が優勝した年もこれ＝自校は Nation に居ないので進化の対象外）。</summary>
+    public const int NoChampion = -1;
+
+    private int _championId = NoChampion;
+
+    /// <summary>今年度の甲子園王者を据える（大会終了時に1回）。</summary>
+    public void SetChampion(int schoolId)
+    {
+        lock (_gate) _championId = schoolId;
+    }
+
     public void Clear()
     {
-        lock (_gate) _wins.Clear();
+        lock (_gate)
+        {
+            _wins.Clear();
+            _championId = NoChampion;
+        }
     }
 }
