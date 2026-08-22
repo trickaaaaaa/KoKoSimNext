@@ -24,7 +24,13 @@ namespace KokoSim.Unity.Tournament
             Application.runInBackground = true;
             yield return null;
 
-            BoostManagerRoster();
+            // 自校を圧倒的に強くして各大会を確実に勝ち抜かせる（分岐①＝全大会に出場する年を見るため）。
+            // 「途中で観戦/選外に落ちる」分岐（RegionalEntry の !qualifies・JinguEntry の
+            // championIsManager=false・SenbatsuEntry の非選出）を確かめたいときは、下の BoostLevel を
+            // 0（無敗ブーストなし）や中間値へ書き換え、必要なら GameSeed.Reset(0x...) で母種も固定して使う
+            // （GameSeed.Master は起動ごとに非決定的＝DateTime.UtcNow.Ticks 由来なので、特定の分岐を
+            // 再現よく狙うには母種の固定が要る。2026-08-22 の検証で3分岐とも実機確認済み）。
+            BoostManagerRoster(BoostLevel, BoostCap);
             var cal = new SeasonCalendar();
 
             GameClock.Reset();
@@ -47,7 +53,9 @@ namespace KokoSim.Unity.Tournament
             EventService.Clear();
             yield return StartCoroutine(PlayChainToCompletion());
 
-            Note("週: " + GameClock.Week + "（秋季大会後の連鎖が済んだ時点）");
+            Note("週: " + GameClock.Week + "（秋季大会後の連鎖が済んだ時点） mode=" + GameSession.Current.Mode
+                + " inTournament=" + GameSession.Current.InTournament
+                + (GameSession.Current.InTournament ? " kind=" + GameSession.Current.Kind : ""));
             var pending = GameSession.Current.PendingSenbatsuFieldIds;
             Check("センバツ32校が確定した", pending != null && pending.Count == 32,
                 "count=" + (pending == null ? 0 : pending.Count));
@@ -134,16 +142,22 @@ namespace KokoSim.Unity.Tournament
             }
         }
 
-        private static void BoostManagerRoster()
+        /// <summary>0＝ブーストしない（平均的な強さのまま＝途中で観戦/選外へ落ちる分岐を確かめる用）。
+        /// 実行前に書き換えて使う使い捨てのつまみ（本体コードには出てこない）。</summary>
+        private const int BoostLevel = 95;
+        private const int BoostCap = 99;
+
+        private static void BoostManagerRoster(int level, int cap)
         {
+            if (level <= 0) return;
             foreach (var p in RosterService.Roster)
             {
                 foreach (var k in AbilityKinds.All)
                 {
-                    p.SetCap(k, 99);
-                    p.SetLevel(k, 95);
+                    p.SetCap(k, cap);
+                    p.SetLevel(k, level);
                 }
-                p.Mental = 95;
+                p.Mental = System.Math.Min(95, level);
                 p.ConditionValue = 1.0;
             }
         }

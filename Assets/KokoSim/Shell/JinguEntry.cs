@@ -76,6 +76,12 @@ namespace KokoSim.Unity.Shell
             if (endedKind != TournamentKind.Jingu) return false;
             if (GameSession.Current.Mode != GameMode.Normal) return false;
 
+            // 自校が神宮大会で優勝せず敗退したときは LastJinguChampionId がまだ背景畳み込み待ち
+            // （RegionalEntry.EnterJinguAfterRegionalTournament と同じ理由・2026-08-22 実機検証で発見）。
+            // 先に完了させないと ?? PrefectureResult.NoChampion に落ちて「神宮に王者が居ない」扱いになる。
+            BracketFinishSim.EnsureCompleted();
+            GameSession.Current.FlushPendingBracketFold();
+
             var myPlacement = GameSession.Current.MyRegionPlacementIds;
             if (myPlacement == null || myPlacement.Count == 0) return false;
             var myRegion = PrefectureNames.RegionOf(NationService.PrefectureId);

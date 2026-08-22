@@ -95,6 +95,14 @@ namespace KokoSim.Unity.Shell
             if (endedKind != TournamentKind.Regional) return false;
             if (GameSession.Current.Mode != GameMode.Normal) return false;
 
+            // 自校が地区大会を優勝せず敗退したときは、消化しきれなかった残りのカードを
+            // BracketFinishSim が背景で解決してから GameSession.FoldTournamentRecords が
+            // LastRegionalPlacementIds を確定する（ExitTournamentIfFinished の非同期畳み込み）。
+            // ここで先に完了を待たないと、優勝したときだけ通り敗退したときは順位が未確定のまま
+            // （count=0）神宮大会・センバツへ繋がらない（2026-08-22 実機検証で発見）。
+            BracketFinishSim.EnsureCompleted();
+            GameSession.Current.FlushPendingBracketFold();
+
             var placement = GameSession.Current.LastRegionalPlacementIds;
             if (placement == null || placement.Count == 0) return false;
 
