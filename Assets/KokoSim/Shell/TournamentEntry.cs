@@ -74,8 +74,16 @@ namespace KokoSim.Unity.Shell
 
             // 他県（全国46〜48県）の裏試合をバックグラウンドでフルシム（自県の区画は上の runner が
             // 対話的に消化＝除外。分割県はもう片方の区画だけ背景で消化され独自の代表を出す）。
-            NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
-                yearIndex, calendarYear, NationService.PrefectureId, region?.Split, seed, brains);
+            // 夏だけ＝これは夏フォーマット（NationalTournamentEngine.BeginSummer）の49代表決めなので
+            // 秋の入場でも呼ぶと「無関係な夏ブラケットを毎年もう一度引く」だけの無駄になる。かつては
+            // kind を問わず毎回呼んでいたため、秋の入場のたびに AiSchoolYearLedger.AddWins（AI校進化の
+            // 勝数シグナル）へ夏ぶんが二重に積まれていた（docs/design/OPEN-QUESTIONS.md 2026-08-22
+            // で発見・実測で影響は小さいと確認＝15〜30年シムで標準偏差の広がりが約1.03〜1.04倍）。
+            if (kind == TournamentKind.Summer)
+            {
+                NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
+                    yearIndex, calendarYear, NationService.PrefectureId, region?.Split, seed, brains);
+            }
 
             // 秋季県大会は地区大会の出場枠判定に順位（優勝校だけでなく）が要るため、47県ぶんを別途
             // 順位付きで背景シムする（設計書05 §1.5b・RegionalEntry が読む）。夏は使わない。

@@ -1362,7 +1362,7 @@ issue #626 の巻き戻し対象リストに受傷が入っていなかったた
 
 ---
 
-## 2026-08-22 AI校進化の勝数シグナルが夏ぶん二重計上されている（センバツ実装中に発見・未修正）
+## 2026-08-22 AI校進化の勝数シグナルが夏ぶん二重計上されている（センバツ実装中に発見・修正済み）
 
 `NationBackgroundSim.Start`（`TournamentEntry.Enter` から呼ぶ）は `NationalTournamentEngine.BeginSummer`
 を**大会種別に関係なく**毎回呼ぶ＝夏(週13)の入場でも秋(週23)の入場でも、他46〜48県ぶんの**夏フォーマット**の
@@ -1378,14 +1378,16 @@ issue #626 の巻き戻し対象リストに受傷が入っていなかったた
 計算コストの面では実害は小さい（`resolution: SummerResolution.ChampionsOnly` で1球シムも成績畳み込みも
 しない軽量な集計モデルなので、秋の入場でこれが走ること自体は無視できる負荷）。問題は**シグナルの二重計上**の方。
 
-**あえて未修正にした理由**: 現行のAI校の強さ成長カーブは、この2倍シグナルを前提にすでに観測・調整されて
-きた可能性がある。単純に秋側の重複呼び出しを止めるだけで「勝数シグナルが半分になる」変更になり、
-長期の学校成長トラジェクトリに影響しうる。かつ `[bands-dont-cover-roster-generation]`（メモリ）の通り、
-Heavy統計帯4本は `StrengthTeamFactory`/AI校進化まわりを直接測っていない＝この種の変更はHeavyの安全網が
-薄い。センバツ本体とは無関係な既存バグのため、センバツ実装に混ぜて直さず、単独issueとして切る。
+**実測して修正した**（2026-08-22）。`Heavy統計帯4本は StrengthTeamFactory/AI校進化まわりを直接測っていない`
+（`[bands-dont-cover-roster-generation]`）ため、engine 側の `AiSchoolModel.Evolve`/`AiSchoolYearLedger`
+だけを使った使い捨ての実験（Unity非依存・47県×20校の模擬全国で夏の集計モデルを15年・30年ぶん反復し、
+勝数を単純計上した場合と二重計上した場合の最終 Strength 分布を比較）を engine テストとして一時的に書いて
+実行した。結果、二重計上ありでも標準偏差の広がりは単純計上に対して**約1.03〜1.04倍**（複数シード・
+15年/30年どちらでも同程度）＝平均回帰（`MeanReversion`）が支配的でwin項の影響は元から小さく、
+二重計上を止めても長期トラジェクトリへの影響は誤差範囲に収まると判断できた。
 
-直すときの選択肢: (A) 秋の入場では `NationBackgroundSim.Start` を呼ばない（二重計上をただ止める＝
-勝数シグナルは夏ぶんだけの実質半減）。(B) `AutumnBackgroundSim.Worker` にも `AddWins` を配線し秋の
-実データを積む（二重計上ではなくなるが、夏と秋の両方を正しく反映する形に変わる＝評価が要る）。
-どちらを選ぶにせよ、AI校の強さ分布の実測（`NationService.YearLedger`／`AiSchoolEvolution` 経由の
-長期シム）を取ってから決める。
+**選んだ修正**: 選択肢(A)＝`TournamentEntry.Enter` で `NationBackgroundSim.Start`（夏フォーマットの
+49代表決め）を `kind == TournamentKind.Summer` のときだけ呼ぶよう限定（秋の入場では呼ばない）。
+`AutumnBackgroundSim` 側に `AddWins` を新設する(B)は、実測で影響が小さいと分かった以上オーバーエンジニアリング
+と判断し見送った。実験用の一時テスト（`AiSchoolEvolutionTests` 内）は数値を確認した後に削除済み
+（本体コードには残らない・実測値はこの記述に残す）。
