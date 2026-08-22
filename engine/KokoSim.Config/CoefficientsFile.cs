@@ -311,6 +311,12 @@ public static class CoefficientsLoader
         public int AutumnOpenDay { get; set; } = D.AutumnOpenDay;
         public int KoshienOpenMonth { get; set; } = D.KoshienOpenMonth;
         public int KoshienOpenDay { get; set; } = D.KoshienOpenDay;
+        public int RegionalOpenMonth { get; set; } = D.RegionalOpenMonth;
+        public int RegionalOpenDay { get; set; } = D.RegionalOpenDay;
+        public int JinguOpenMonth { get; set; } = D.JinguOpenMonth;
+        public int JinguOpenDay { get; set; } = D.JinguOpenDay;
+        public int SenbatsuOpenMonth { get; set; } = D.SenbatsuOpenMonth;
+        public int SenbatsuOpenDay { get; set; } = D.SenbatsuOpenDay;
 
         public TournamentSchedule ToModel() => new()
         {
@@ -328,6 +334,12 @@ public static class CoefficientsLoader
             AutumnOpenDay = AutumnOpenDay,
             KoshienOpenMonth = KoshienOpenMonth,
             KoshienOpenDay = KoshienOpenDay,
+            RegionalOpenMonth = RegionalOpenMonth,
+            RegionalOpenDay = RegionalOpenDay,
+            JinguOpenMonth = JinguOpenMonth,
+            JinguOpenDay = JinguOpenDay,
+            SenbatsuOpenMonth = SenbatsuOpenMonth,
+            SenbatsuOpenDay = SenbatsuOpenDay,
         };
     }
 

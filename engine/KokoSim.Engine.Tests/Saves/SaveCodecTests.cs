@@ -429,6 +429,40 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
     }
 
+    // ===== センバツ選考発表待ち（設計書05 §1.5b・v16） =====
+
+    [Fact]
+    public void PendingSenbatsuField_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.PendingSenbatsuFieldIds = new List<int> { -1, 100, 200, 300 };
+        state.PendingSenbatsuJinguRegion = "kanto";
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Equal(new List<int> { -1, 100, 200, 300 }, s.PendingSenbatsuFieldIds);
+        Assert.Equal("kanto", s.PendingSenbatsuJinguRegion);
+    }
+
+    [Fact]
+    public void V15Save_WithoutSenbatsuFields_StillLoads_AsEmpty()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"senbatsu\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "senbatsu が直列化されていない");
+        var end = json.IndexOf(",\"lastLineup\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "lastLineup が senbatsu 系の後に居ない");
+        var v15 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":15");
+        Assert.DoesNotContain("\"senbatsu\"", v15);
+        Assert.DoesNotContain("\"pendingSenbatsuFieldIds\"", v15);
+
+        Assert.True(SaveCodec.TryDeserialize(v15, out var s, out var err), err);
+        Assert.Null(s.Senbatsu);
+        Assert.Empty(s.PendingSenbatsuFieldIds);
+        Assert.Equal("", s.PendingSenbatsuJinguRegion);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
     // ===== 教え子名鑑（issue #586） =====
 
     // 過年度の指名確定（年・当時の背番号・順位・バンド・注目度）が往復すること。

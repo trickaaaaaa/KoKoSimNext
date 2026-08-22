@@ -47,7 +47,22 @@ public sealed class PrefectureNamesTests
         {
             Assert.Equal(PrefectureNames.JisOrder[info.Id], info.Name);
             Assert.NotEqual("", PrefectureNames.JapaneseOf(info.Id));
+            Assert.Equal(info.Region, PrefectureNames.RegionOf(info.Id));
         }
+    }
+
+    /// <summary>10地区（regional-tournaments.yaml の region キー）のいずれかに必ず属し、余分な地区名が無いこと。</summary>
+    [Fact]
+    public void RegionOf_CoversAllTenRegions_NoStrayNames()
+    {
+        var known = new HashSet<string>
+        {
+            "hokkaido", "tohoku", "kanto", "tokyo", "hokushinetsu",
+            "tokai", "kinki", "chugoku", "shikoku", "kyushu",
+        };
+        Assert.Equal(47, PrefectureNames.RegionRomaji.Count);
+        Assert.All(PrefectureNames.RegionRomaji, r => Assert.Contains(r, known));
+        Assert.Equal(known, PrefectureNames.RegionRomaji.Distinct().ToHashSet());
     }
 
     [Fact]

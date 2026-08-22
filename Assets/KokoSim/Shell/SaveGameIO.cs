@@ -119,6 +119,8 @@ namespace KokoSim.Unity.Shell
             if (s.Tournament != null) TournamentEntry.RestoreRunner(s.Tournament);
             // 観るだけの甲子園（自校が出場していない年）。対話モードの大会とは排他なので順序は問わない。
             if (s.Koshien != null) KoshienEntry.RestoreSpectated(s.Koshien);
+            // 観るだけのセンバツ（自校が選ばれていない年）。同上。
+            if (s.Senbatsu != null) SenbatsuEntry.RestoreSpectated(s.Senbatsu);
         }
 
         /// <summary>

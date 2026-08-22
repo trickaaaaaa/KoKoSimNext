@@ -146,6 +146,21 @@ public sealed class SaveState
     public TournamentSaveState? Koshien { get; set; }
 
     /// <summary>
+    /// 観るだけのセンバツ（自校が選ばれていない年・v16）。<see cref="Koshien"/> と同じ理由でセーブに載せる。
+    /// </summary>
+    public TournamentSaveState? Senbatsu { get; set; }
+
+    /// <summary>
+    /// 選考発表を待つセンバツ32校の校ID（v16）。神宮大会が終わった時点で確定済みだが、実際の大会モードへの
+    /// 遷移は選考発表週（<see cref="SeasonCalendar.SenbatsuAnnounceWeek"/>）から＝その間セーブ/ロードを挟んでも
+    /// 選考結果が失われないよう保存する。空＝未確定 or 発表済み。
+    /// </summary>
+    public List<int> PendingSenbatsuFieldIds { get; set; } = new();
+
+    /// <summary>選考発表時点の神宮枠地区（表示用・v16）。空文字＝該当なし。</summary>
+    public string PendingSenbatsuJinguRegion { get; set; } = "";
+
+    /// <summary>
     /// 前の試合で確定したスタメンの記憶（issue lineup-carry-over-previous-game・v14）。スタメン設定画面の既定に使う。
     /// 選手IDで持つ純データ。<b>null＝まだ一度も確定していない</b>（v13 以前のセーブは常に null＝自動シード）。
     /// </summary>

@@ -1051,6 +1051,14 @@ tournament:
   # ここは「表示する実月日」だけを決める（週インデックスとは独立）。
   koshien_open_month: 8
   koshien_open_day: 6
+  # 秋季地区大会・明治神宮大会・春のセンバツ本戦（設計書05 §1.5b）。地区大会・神宮大会は
+  # 前段の後始末から即座連鎖、センバツ本戦は選考発表週から即座連鎖＝ここも表示専用。
+  regional_open_month: 10
+  regional_open_day: 18
+  jingu_open_month: 11
+  jingu_open_day: 15
+  senbatsu_open_month: 3
+  senbatsu_open_day: 19
 
 # --- 記録室の規定（issue #600・設計書06 §3.9） ---
 # 高校野球は試合数が少なく、閾値が無いと「1打数1安打＝打率1.000」が校歴代1位に出る。

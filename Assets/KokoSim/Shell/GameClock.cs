@@ -125,6 +125,14 @@ namespace KokoSim.Unity.Shell
             // ラウンドが埋まっていき、決着したら優勝校が通知フィードへ出る。
             GameSession.Current.AdvanceSpectatedKoshien(7);
 
+            // センバツ選考発表（設計書05 §1.5b）。地区大会・神宮大会が終わった時点で32校は確定済み
+            // （GameSession.PendingSenbatsuFieldIds）＝ここでは読み上げるだけ。
+            if (Calendar.IsSenbatsuAnnounceWeek(Week) && GameSession.Current.Mode == GameMode.Normal)
+                SenbatsuEntry.Announce();
+
+            // 観るだけのセンバツ（自校が選ばれていない年）を1週ぶん進める（AdvanceSpectatedKoshien と同型）。
+            GameSession.Current.AdvanceSpectatedSenbatsu(7);
+
             // 新チーム発足（夏の3年引退の翌週）: 主将指名の導線（NewTeamService）を開き、AI校も代替わりさせる。
             if (t.NewTeam != null)
             {

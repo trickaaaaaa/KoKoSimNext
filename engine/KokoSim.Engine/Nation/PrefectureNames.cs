@@ -64,4 +64,27 @@ public static class PrefectureNames
         }
         return -1;
     }
+
+    /// <summary>
+    /// JIS順の秋季地区大会の所属地区（ローマ字。<see cref="Tournaments.RegionalFormat"/> の Region と
+    /// 同じキー、data/prefectures.yaml の region 列と同じ並び）。10地区
+    /// （hokkaido/tohoku/kanto/tokyo/hokushinetsu/tokai/kinki/chugoku/shikoku/kyushu）のいずれか。
+    /// 都道府県の所属自体は変わらない事実なので、YAML でなくここが正典でよい（<see cref="JisOrder"/> と同じ理由）。
+    /// 勧誘距離専用の <see cref="JapanRegion"/>（7区分）とは別概念＝混同しない。
+    /// </summary>
+    public static readonly IReadOnlyList<string> RegionRomaji = new[]
+    {
+        "hokkaido", "tohoku", "tohoku", "tohoku", "tohoku", "tohoku", "tohoku",
+        "kanto", "kanto", "kanto", "kanto", "kanto", "tokyo", "kanto",
+        "hokushinetsu", "hokushinetsu", "hokushinetsu", "hokushinetsu", "kanto", "hokushinetsu",
+        "tokai", "tokai", "tokai", "tokai",
+        "kinki", "kinki", "kinki", "kinki", "kinki", "kinki",
+        "chugoku", "chugoku", "chugoku", "chugoku", "chugoku",
+        "shikoku", "shikoku", "shikoku", "shikoku",
+        "kyushu", "kyushu", "kyushu", "kyushu", "kyushu", "kyushu", "kyushu", "kyushu",
+    };
+
+    /// <summary>Id → 秋季地区大会の所属地区（ローマ字）。範囲外は空文字。</summary>
+    public static string RegionOf(int id)
+        => id >= 0 && id < RegionRomaji.Count ? RegionRomaji[id] : "";
 }

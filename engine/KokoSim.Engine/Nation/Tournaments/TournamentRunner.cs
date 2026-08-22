@@ -54,6 +54,21 @@ public sealed record TournamentSchedule
     /// <summary>夏の甲子園の実開幕日。</summary>
     public int KoshienOpenDay { get; init; } = 6;
 
+    /// <summary>秋季地区大会の実開幕月（表示専用。前段の秋季県大会の後始末から即座連鎖するため
+    /// 週アンカーとは無関係、設計書05 §1.5b）。</summary>
+    public int RegionalOpenMonth { get; init; } = 10;
+    /// <summary>秋季地区大会の実開幕日。</summary>
+    public int RegionalOpenDay { get; init; } = 18;
+    /// <summary>明治神宮大会の実開幕月（表示専用）。</summary>
+    public int JinguOpenMonth { get; init; } = 11;
+    /// <summary>明治神宮大会の実開幕日。</summary>
+    public int JinguOpenDay { get; init; } = 15;
+    /// <summary>春のセンバツ本戦の実開幕月（表示専用。選考発表週から即座連鎖するため
+    /// 週アンカーとは無関係、設計書05 §1.5b）。</summary>
+    public int SenbatsuOpenMonth { get; init; } = 3;
+    /// <summary>春のセンバツ本戦の実開幕日。</summary>
+    public int SenbatsuOpenDay { get; init; } = 19;
+
     /// <summary>残りラウンド数 <paramref name="roundsRemaining"/> のカードを分散させる日数。</summary>
     public int SpreadDaysFor(int roundsRemaining)
     {

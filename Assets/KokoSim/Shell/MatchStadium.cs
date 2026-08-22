@@ -22,7 +22,7 @@ namespace KokoSim.Unity.Shell
         /// 戻り値が null のときは <c>GameContext</c> の初期値をそのまま使う（＝呼び出し側で分岐しない）。
         /// </summary>
         public static FieldGeometry For(TournamentKind kind)
-            => kind == TournamentKind.SummerKoshien ? Koshien : Default;
+            => kind is TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien ? Koshien : Default;
 
         /// <summary>甲子園（C#既定＝data/stadiums.yaml の koshien と一致・不変条件#4）。</summary>
         private static readonly FieldGeometry Koshien = Stadium.Koshien.ToFieldGeometry();

@@ -76,6 +76,15 @@ namespace KokoSim.Unity.Shell
             // 対話的に消化＝除外。分割県はもう片方の区画だけ背景で消化され独自の代表を出す）。
             NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
                 yearIndex, calendarYear, NationService.PrefectureId, region?.Split, seed, brains);
+
+            // 秋季県大会は地区大会の出場枠判定に順位（優勝校だけでなく）が要るため、47県ぶんを別途
+            // 順位付きで背景シムする（設計書05 §1.5b・RegionalEntry が読む）。夏は使わない。
+            if (kind == TournamentKind.Autumn)
+            {
+                var autumnSeed = GameSeed.Master ^ (ulong)(9400 + yearIndex * 10 + (int)kind);
+                AutumnBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
+                    yearIndex, calendarYear, NationService.PrefectureId, autumnSeed, brains);
+            }
         }
 
         /// <summary>

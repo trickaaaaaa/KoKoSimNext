@@ -132,17 +132,21 @@ public sealed class SchoolRecordBook
     /// 大会1回ぶんのブラケット全試合（自校戦＋裏試合とも）を通算戦績へ畳み込む。
     /// 決勝（RoundsRemaining==1）の勝者は、夏の県大会なら甲子園出場として記録する（issue #84 当面の定義）。
     ///
-    /// <para><b>甲子園本戦（<see cref="TournamentKind.SummerKoshien"/>）では出場を数え直さない。</b>
-    /// 出場は県大会優勝の時点で1回積んでいるので、ここで積むと同じ夏を2回出場したことになる。
-    /// 代わりに甲子園の勝敗（<see cref="RecordKoshienMatch"/>）と最高成績
-    /// （<see cref="UpdateBestResult"/>）を積む。</para>
+    /// <para><b>甲子園本戦（<see cref="TournamentKind.SummerKoshien"/>／<see cref="TournamentKind.SenbatsuKoshien"/>）
+    /// では出場を数え直さない。</b> 夏は県大会優勝の時点で、春は選考発表の時点（<c>SenbatsuEntry.RecordAppearances</c>）
+    /// でそれぞれ1回積んでいるので、ここで積むと同じ大会を2回出場したことになる。代わりに勝敗
+    /// （<see cref="RecordKoshienMatch"/>）と最高成績（<see cref="UpdateBestResult"/>）を積む。</para>
+    ///
+    /// <para><see cref="TournamentKind.Regional"/>／<see cref="TournamentKind.Jingu"/>（秋季地区大会・
+    /// 明治神宮大会）は<b>出場回数・甲子園勝敗・最高成績のいずれも対象外</b>（現実の記録文化でも
+    /// 地区大会出場は校の通算記録に数えない）。公式戦勝敗（<see cref="RecordOfficialMatch"/>）だけ積む。</para>
     ///
     /// <para>戻り値は決勝の勝者（未消化で決勝が無ければ null）。<see cref="TournamentHistory.Fold"/> が
     /// 同じ走査を書き直さずに済むよう、ここで一度だけ拾った結果を渡す（issue #600）。</para>
     /// </summary>
     public TournamentChampion? FoldTournament(IReadOnlyList<BracketMatch> matches, TournamentKind kind, int currentYear)
     {
-        var koshien = kind == TournamentKind.SummerKoshien;
+        var koshien = kind is TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien;
         TournamentChampion? champion = null;
         foreach (var m in matches)
         {

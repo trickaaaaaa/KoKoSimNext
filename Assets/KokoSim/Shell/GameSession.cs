@@ -4,6 +4,7 @@
 // 静的なこのホルダーに置き、どの画面へ移動しても大会状態が失われないようにする。
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
@@ -172,12 +173,133 @@ namespace KokoSim.Unity.Shell
         /// <summary>観るだけの甲子園が開催中か（展望・トーナメント表の閲覧可否）。</summary>
         public bool HasSpectatedKoshien => KoshienRunner != null;
 
+        // ===== 観るだけのセンバツ（自校が選ばれていない年・設計書05 §1.5b） =====
+        // 神宮大会が終わった時点で32校は確定済み（<see cref="PendingSenbatsuFieldIds"/>）だが、実際の
+        // 大会モードへの遷移は選考発表週（<see cref="SeasonCalendar.SenbatsuAnnounceWeek"/>）から。
+        // 観戦は夏の甲子園と同型（週送りで日程どおりブラケットが埋まる）。
+
+        /// <summary>選考発表を待つセンバツ32校（校ID・順位は問わない）。空＝未確定 or 発表済み。</summary>
+        public List<int> PendingSenbatsuFieldIds { get; private set; } = new List<int>();
+
+        /// <summary>選考発表時点の神宮枠地区（表示用）。空文字＝該当なし。</summary>
+        public string PendingSenbatsuJinguRegion { get; private set; } = "";
+
+        /// <summary>観るだけのセンバツの進行体。null＝開催していない（自校が出場した年は <see cref="Runner"/> 側）。</summary>
+        public TournamentRunner SenbatsuRunner { get; private set; }
+
+        /// <summary>観るだけのセンバツの出場校（32代表）。</summary>
+        public IReadOnlyList<School> SenbatsuField { get; private set; } = Array.Empty<School>();
+
+        /// <summary>観るだけのセンバツの大会名。</summary>
+        public string SenbatsuTitle { get; private set; } = "";
+
+        /// <summary>観るだけのセンバツの大会内経過日（開幕=0日目）。週送りで +7。</summary>
+        public int SenbatsuDay { get; private set; }
+
+        private int _senbatsuTotalRounds;
+
+        /// <summary>観るだけのセンバツが開催中か（展望・トーナメント表の閲覧可否）。</summary>
+        public bool HasSpectatedSenbatsu => SenbatsuRunner != null;
+
+        /// <summary>
+        /// 観るだけのセンバツが決着した直後に1回だけ立つ優勝校名（<see cref="ConsumeKoshienResult"/> と同型）。
+        /// </summary>
+        public string PendingSenbatsuChampion { get; private set; }
+
+        /// <summary>センバツ選考結果を控える（<see cref="JinguEntry"/> から呼ぶ。乱数は消費しない）。</summary>
+        public void SetPendingSenbatsuField(IReadOnlyList<int> fieldIds, string jinguRegion)
+        {
+            PendingSenbatsuFieldIds = new List<int>(fieldIds);
+            PendingSenbatsuJinguRegion = jinguRegion ?? "";
+        }
+
+        /// <summary>観るだけのセンバツを開く（<see cref="SenbatsuEntry"/> から呼ぶ）。対話モードには入らない。</summary>
+        public void EnterSpectatedSenbatsu(string title, TournamentRunner runner, IReadOnlyList<School> field)
+        {
+            SenbatsuTitle = title;
+            SenbatsuRunner = runner;
+            SenbatsuField = field ?? Array.Empty<School>();
+            SenbatsuDay = 0;
+            _senbatsuTotalRounds = runner.RemainingBracketRounds;
+            PendingSenbatsuChampion = null;
+        }
+
+        /// <summary>セーブから観るだけのセンバツへ復帰する（<see cref="SenbatsuEntry.RestoreSpectated"/> から）。</summary>
+        public void RestoreSpectatedSenbatsu(TournamentSaveState t, TournamentRunner runner, IReadOnlyList<School> field)
+        {
+            SenbatsuTitle = t.Title;
+            SenbatsuRunner = runner;
+            SenbatsuField = field ?? Array.Empty<School>();
+            SenbatsuDay = t.TournamentDay;
+            _senbatsuTotalRounds = RoundsFor(SenbatsuField.Count);
+        }
+
+        /// <summary>観るだけのセンバツを <paramref name="days"/> 日ぶん進める（<see cref="AdvanceSpectatedKoshien"/> と同型）。</summary>
+        public void AdvanceSpectatedSenbatsu(int days)
+        {
+            var runner = SenbatsuRunner;
+            if (runner == null) return;
+            SenbatsuDay += Math.Max(0, days);
+
+            while (runner.BracketResolutionPending)
+            {
+                var roundIndex = _senbatsuTotalRounds - runner.RemainingBracketRounds;
+                var cards = Math.Max(1, 1 << Math.Max(0, _senbatsuTotalRounds - roundIndex - 1));
+                var lastCardDay = TournamentEntry.Schedule.MatchDay(_senbatsuTotalRounds, roundIndex, cards - 1, cards);
+                if (SenbatsuDay < lastCardDay) return;
+                runner.StepBracketResolution();
+            }
+
+            FoldTournamentRecords(runner, TournamentKind.SenbatsuKoshien, Year);
+            PendingSenbatsuChampion = runner.ChampionName;
+            SenbatsuRunner = null;
+            SenbatsuField = Array.Empty<School>();
+            SenbatsuTitle = "";
+            SenbatsuDay = 0;
+        }
+
+        /// <summary>観るだけのセンバツの優勝校を取り出して消費する（<see cref="ConsumeKoshienResult"/> と同型）。</summary>
+        public string ConsumeSenbatsuResult()
+        {
+            var champion = PendingSenbatsuChampion;
+            PendingSenbatsuChampion = null;
+            return champion;
+        }
+
         /// <summary>
         /// 直近に終わった夏の県大会の優勝校ID（＝自県の甲子園代表）。null＝まだ決勝が消化されていない。
         /// <see cref="KoshienEntry"/> だけが読む一時値で、甲子園へ入った時点で用済み（セーブに載せない
         /// ＝この値が必要な窓では <see cref="SaveGameIO.CanSave"/> が保存自体を抑止している）。
         /// </summary>
         public int? LastPrefChampionId { get; private set; }
+
+        /// <summary>
+        /// 直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。
+        /// null＝まだ決勝が消化されていない。<see cref="RegionalEntry"/> だけが読む一時値
+        /// （<see cref="LastPrefChampionId"/> と同じ理由でセーブに載せない）。
+        /// </summary>
+        public IReadOnlyList<int> LastAutumnPlacementIds { get; private set; }
+
+        /// <summary>
+        /// 直近に終わった地区大会の優勝校ID（＝明治神宮大会の自地区代表）。null＝地区大会が決勝まで
+        /// 消化されていない（＝自校が地区大会に出場しなかった年。その場合は
+        /// <see cref="RegionalEntry"/> が同期解決した結果を <see cref="JinguEntry"/> へ直接渡す）。
+        /// </summary>
+        public int? LastRegionalChampionId { get; private set; }
+
+        /// <summary>直近に終わった地区大会の順位付き出場校ID（＝センバツ選考の自地区ぶんの材料）。
+        /// 自校が地区大会に出場しなかった年（単独県開催の地区・出場枠外）は null のまま＝
+        /// <see cref="MyRegionPlacementIds"/> が <see cref="LastAutumnPlacementIds"/> へ自動で落ちる。</summary>
+        public IReadOnlyList<int> LastRegionalPlacementIds { get; private set; }
+
+        /// <summary>自地区の順位付き出場校ID。単独県開催の地区（東京・北海道）は地区大会を開かないため
+        /// 秋季県大会の順位をそのまま使う（<see cref="RegionalEntry"/> と同じフォールバック規則）。</summary>
+        public IReadOnlyList<int> MyRegionPlacementIds => LastRegionalPlacementIds ?? LastAutumnPlacementIds;
+
+        /// <summary>直近に終わった明治神宮大会の優勝校ID（＝センバツ選考の神宮枠）。null＝自校が
+        /// 神宮大会に出場しなかった年（その場合は <see cref="JinguEntry"/> が同期解決した結果を
+        /// <see cref="SenbatsuEntry"/> へ直接渡す）。</summary>
+        public int? LastJinguChampionId { get; private set; }
 
         /// <summary>
         /// 観るだけの甲子園が決着した直後に1回だけ立つ優勝校名（UIが通知フィードへ流したら
@@ -553,6 +675,27 @@ namespace KokoSim.Unity.Shell
             // 自県の代表＝甲子園の出場校の1つ。ここが「夏の県大会の優勝校」を知る唯一の地点なので控える
             // （Runner は敗退確定と同時に null 化されるので、後から拾い直せない）。
             if (kind == TournamentKind.Summer) LastPrefChampionId = champion?.Id;
+            // 秋季県大会の順位＝地区大会の出場枠判定の材料。夏と違い優勝校だけでは足りない
+            // （県によっては2〜3位も地区大会へ進む）ので、順位付きプレースメントを丸ごと控える。
+            if (kind == TournamentKind.Autumn)
+            {
+                var byId = (System.Func<int, School>)(id => id == NationService.ManagerSchoolId
+                    ? NationService.ManagerSchool() : NationService.SchoolById(id));
+                LastAutumnPlacementIds = KnockoutPlacement.FromMatches(matches, byId)
+                    .Select(s => s.Id).ToList();
+            }
+            // 地区大会の優勝校＝自地区の明治神宮大会代表。自校が地区大会に出場した年だけここを通る
+            // （出場しなかった年は RegionalEntry が同期解決した結果を JinguEntry へ直接渡す）。
+            if (kind == TournamentKind.Regional)
+            {
+                LastRegionalChampionId = champion?.Id;
+                var byId = (System.Func<int, School>)(id => id == NationService.ManagerSchoolId
+                    ? NationService.ManagerSchool() : NationService.SchoolById(id));
+                LastRegionalPlacementIds = KnockoutPlacement.FromMatches(matches, byId)
+                    .Select(s => s.Id).ToList();
+            }
+            // 明治神宮大会の優勝校＝センバツ選考の神宮枠。自校が神宮大会に出場した年だけここを通る。
+            if (kind == TournamentKind.Jingu) LastJinguChampionId = champion?.Id;
             // 歴代大会結果は「自校の年度別の1行」なので、自校が1試合も出ていない大会は積まない
             // （積むと甲子園に出ていない年が毎年「不参加」の行で埋まる）。
             var managerPlayed = false;
@@ -562,7 +705,8 @@ namespace KokoSim.Unity.Shell
             // 自校の勝ちも積まれるが Nation に自校は居ないので進化には効かない（自校の強さは共有ロスター由来）。
             NationService.YearLedger.AddMatches(matches);
             // 甲子園の王者は年度末の進化で「全国制覇」の上乗せを受ける（8月に決まり進化は翌4月＝台帳が持ち回る）。
-            if (kind == TournamentKind.SummerKoshien && champion is { } c)
+            // センバツ（3月）も同じ枠を使う＝同年度に夏春とも王者が決まれば後勝ち（既知の簡略化）。
+            if (kind is TournamentKind.SummerKoshien or TournamentKind.SenbatsuKoshien && champion is { } c)
                 NationService.YearLedger.SetChampion(c.Id);
             // 番狂わせの名声デルタ（issue #170）もここで積む＝通算戦績と同じ「ブラケット確定」の単一入口。
             ManagerService.RecordTournamentUpsets(matches);
@@ -664,8 +808,9 @@ namespace KokoSim.Unity.Shell
         {
             var slot = Kind switch
             {
-                TournamentKind.Autumn => TournamentSlot.Autumn,
+                TournamentKind.Autumn or TournamentKind.Regional or TournamentKind.Jingu => TournamentSlot.Autumn,
                 TournamentKind.SummerKoshien => TournamentSlot.SummerKoshien,
+                TournamentKind.SenbatsuKoshien => TournamentSlot.Senbatsu,
                 _ => TournamentSlot.SummerPref,
             };
             var info = new Dictionary<int, (int Grade, int UniformNumber)>();
@@ -697,7 +842,28 @@ namespace KokoSim.Unity.Shell
             s.TournamentHistory = History;
             s.Tournament = CaptureTournament();
             s.Koshien = CaptureSpectatedKoshien();
+            s.Senbatsu = CaptureSpectatedSenbatsu();
+            s.PendingSenbatsuFieldIds = new List<int>(PendingSenbatsuFieldIds);
+            s.PendingSenbatsuJinguRegion = PendingSenbatsuJinguRegion;
             s.LastLineup = LastLineup;
+        }
+
+        /// <summary>観るだけのセンバツを DTO へ（<see cref="CaptureSpectatedKoshien"/> と同型）。</summary>
+        private TournamentSaveState CaptureSpectatedSenbatsu()
+        {
+            var runner = SenbatsuRunner;
+            if (runner == null || !runner.CanCaptureState) return null;
+            var ids = new List<int>(SenbatsuField.Count);
+            foreach (var s in SenbatsuField) ids.Add(s.Id);
+            return new TournamentSaveState
+            {
+                Kind = TournamentKind.SenbatsuKoshien,
+                Title = SenbatsuTitle,
+                TournamentDay = SenbatsuDay,
+                BannerPending = false,
+                FieldSchoolIds = ids,
+                Runner = runner.CaptureState(),
+            };
         }
 
         /// <summary>
@@ -752,6 +918,9 @@ namespace KokoSim.Unity.Shell
             History = s.TournamentHistory;
             ClearTransient();
             LastLineup = s.LastLineup;   // ClearTransient の後（一時状態と違いセーブに載る＝ロードで戻す）
+            PendingSenbatsuFieldIds = s.PendingSenbatsuFieldIds != null
+                ? new List<int>(s.PendingSenbatsuFieldIds) : new List<int>();
+            PendingSenbatsuJinguRegion = s.PendingSenbatsuJinguRegion ?? "";
         }
 
         /// <summary>
@@ -802,7 +971,19 @@ namespace KokoSim.Unity.Shell
             KoshienDay = 0;
             _koshienTotalRounds = 0;
             PendingKoshienChampion = null;
+            SenbatsuRunner = null;
+            SenbatsuField = Array.Empty<School>();
+            SenbatsuTitle = "";
+            SenbatsuDay = 0;
+            _senbatsuTotalRounds = 0;
+            PendingSenbatsuChampion = null;
+            PendingSenbatsuFieldIds = new List<int>();
+            PendingSenbatsuJinguRegion = "";
             LastPrefChampionId = null;
+            LastAutumnPlacementIds = null;
+            LastRegionalChampionId = null;
+            LastRegionalPlacementIds = null;
+            LastJinguChampionId = null;
             Lineup = null;
             LastLineup = null;   // 新規ゲームは白紙。ロードは Restore がこの後で書き戻す
             AwaitingMatchStart = false;

@@ -43,6 +43,9 @@ public static class TournamentDate
     {
         TournamentKind.Summer => (schedule.SummerOpenMonth, schedule.SummerOpenDay),
         TournamentKind.SummerKoshien => (schedule.KoshienOpenMonth, schedule.KoshienOpenDay),
+        TournamentKind.Regional => (schedule.RegionalOpenMonth, schedule.RegionalOpenDay),
+        TournamentKind.Jingu => (schedule.JinguOpenMonth, schedule.JinguOpenDay),
+        TournamentKind.SenbatsuKoshien => (schedule.SenbatsuOpenMonth, schedule.SenbatsuOpenDay),
         _ => (schedule.AutumnOpenMonth, schedule.AutumnOpenDay),
     };
 

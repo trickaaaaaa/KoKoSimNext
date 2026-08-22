@@ -991,6 +991,84 @@ events:
           - who: coach
             say: "明日ビデオを出す。今日はもう寝ろ。"
 
+  - id: senbatsu_berth_donation
+    kind: System
+    text: "OB会と卒業生からセンバツの激励金が届いた。"
+    variants:
+      - lines:
+          - who: ob
+            say: "冬の遠征は寒いでしょう。少ないですが足しにしてください。"
+          - who: manager
+            say: "助かります。"
+          - who: coach
+            say: "毛布代も出そうですね、これは。"
+      - lines:
+          - who: narration
+            say: "年明けの部室に、振込明細の束が届いていた。差出人は卒業生の会だった。"
+          - who: captain
+            say: "……去年出た先輩たちもいますね。"
+          - who: coach
+            say: "選ばれた後輩に賭けたんだろう。"
+      - lines:
+          - who: local
+            name: "後援会長"
+            say: "選抜出場、街の掲示板に貼りましたよ。"
+          - who: coach
+            say: "気が早いですね。"
+          - who: local
+            name: "後援会長"
+            say: "毎年これくらいでちょうどいい。"
+
+  - id: senbatsu_draw
+    kind: System
+    text: "センバツの組み合わせ抽選会が行われた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "抽選会場のモニターに、地区名と校名が順に映し出されていく。"
+          - who: captain
+            say: "……出ました。"
+          - who: coach
+            say: "監督、初戦の相手です。"
+      - lines:
+          - who: coach
+            say: "組み合わせ出ましたよ、監督。"
+          - who: manager
+            say: "初戦はどこだ。"
+          - who: coach
+            say: "去年の秋、県で当たった相手です。"
+      - lines:
+          - who: player
+            say: "コーチ、相手の映像ってもうありますか。"
+          - who: coach
+            say: "冬の間に集めておいた。明日から見るぞ。"
+
+  - id: senbatsu_not_selected
+    kind: System
+    text: "センバツの選考発表があった。今年は選ばれなかった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "発表の紙に、自分たちの校名は無かった。部室はしばらく静かだった。"
+          - who: captain
+            say: "……夏で見返します。"
+          - who: coach
+            say: "その言葉、忘れるなよ。"
+      - lines:
+          - who: coach
+            say: "監督、選外でした。"
+          - who: manager
+            say: "次で取り返す。"
+          - who: player
+            say: "はい。"
+      - lines:
+          - who: narration
+            say: "掲示板の前で部員が肩を落としている横を、他校の歓声が通り過ぎていった。"
+          - who: captain
+            say: "悔しいです、正直。"
+          - who: coach
+            say: "悔しいうちは伸びる。次の練習からだ。"
+
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
   - id: ace_hidden_injury

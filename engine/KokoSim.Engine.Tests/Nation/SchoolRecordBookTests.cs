@@ -178,4 +178,49 @@ public sealed class SchoolRecordBookTests
         Assert.Equal(BestResult.Appearance, book.For(1).BestResult);   // 県大会優勝＝甲子園出場のみ
         Assert.Equal(BestResult.None, book.For(3).BestResult);
     }
+
+    // ── センバツ本戦・地区大会・神宮大会（設計書05 §1.5b）──────────────────
+
+    /// <summary>センバツ本戦も夏の甲子園と同じ扱い（勝敗・最高成績を積む）。BestResultは季節共通の1本。</summary>
+    [Fact]
+    public void FoldTournament_SenbatsuKoshien_RecordsWinsLossesAndBestResult()
+    {
+        var book = new SchoolRecordBook();
+        var champion = book.FoldTournament(KoshienBracket(), TournamentKind.SenbatsuKoshien, 2028);
+
+        Assert.Equal(1, champion!.Value.Id);
+        Assert.Equal(3, book.For(1).KoshienWins);
+        Assert.Equal(BestResult.Champion, book.For(1).BestResult);
+        Assert.Equal(BestResult.RunnerUp, book.For(3).BestResult);
+    }
+
+    /// <summary>センバツの出場記録は選考発表時点で別途積む契約＝FoldTournamentでは出場回数を増やさない。</summary>
+    [Fact]
+    public void FoldTournament_SenbatsuKoshien_DoesNotRecordAppearance()
+    {
+        var book = new SchoolRecordBook();
+        book.FoldTournament(KoshienBracket(), TournamentKind.SenbatsuKoshien, 2028);
+
+        Assert.Equal(0, book.For(1).SpringAppearances);
+        Assert.Equal("", book.For(1).SpringAppearanceLabel);
+    }
+
+    /// <summary>地区大会・明治神宮大会は出場回数・甲子園勝敗・最高成績のいずれも対象外
+    /// （公式戦勝敗だけ積む＝現実の記録文化どおり）。</summary>
+    [Theory]
+    [InlineData(TournamentKind.Regional)]
+    [InlineData(TournamentKind.Jingu)]
+    public void FoldTournament_RegionalOrJingu_OnlyRecordsOfficialWinLoss(TournamentKind kind)
+    {
+        var book = new SchoolRecordBook();
+        var champion = book.FoldTournament(KoshienBracket(), kind, 2028);
+
+        Assert.Equal(1, champion!.Value.Id);
+        Assert.Equal(3, book.For(1).OfficialWins);
+        Assert.Equal(0, book.For(1).KoshienWins);
+        Assert.Equal(0, book.For(3).KoshienLosses);
+        Assert.Equal(BestResult.None, book.For(1).BestResult);   // Appearanceすら付かない
+        Assert.Equal(BestResult.None, book.For(3).BestResult);
+        Assert.Equal(0, book.For(1).SummerAppearances + book.For(1).SpringAppearances);
+    }
 }

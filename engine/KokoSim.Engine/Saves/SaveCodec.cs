@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 15;
+    public const int CurrentVersion = 16;
 
     // ===== Serialize =====
 
@@ -73,6 +73,9 @@ public static class SaveCodec
             .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
             .Add("tournament", TournamentSaves.ToJson(s.Tournament))
             .Add("koshien", TournamentSaves.ToJson(s.Koshien))
+            .Add("senbatsu", TournamentSaves.ToJson(s.Senbatsu))
+            .Add("pendingSenbatsuFieldIds", IntsToJson(s.PendingSenbatsuFieldIds))
+            .Add("pendingSenbatsuJinguRegion", s.PendingSenbatsuJinguRegion)
             .Add("lastLineup", LineupSaves.ToJson(s.LastLineup));
         return root.ToString();
     }
@@ -218,6 +221,11 @@ public static class SaveCodec
         if (version < 15 && !root.Has("nationPrefQualifierStats")) root.Add("nationPrefQualifierStats", new JsonArray());
         if (version < 15 && !root.Has("koshien")) root.Add("koshien", JsonNull.Instance);
         if (version < 15 && !root.Has("nationKoshienChampionId")) root.Add("nationKoshienChampionId", -1);
+        // v16（春のセンバツ）: 観るだけのセンバツ（自校が選ばれていない年の進行体）と、選考発表を待つ32校。
+        // 旧セーブはどちらも存在しえない＝null／空配列で補う。
+        if (version < 16 && !root.Has("senbatsu")) root.Add("senbatsu", JsonNull.Instance);
+        if (version < 16 && !root.Has("pendingSenbatsuFieldIds")) root.Add("pendingSenbatsuFieldIds", new JsonArray());
+        if (version < 16 && !root.Has("pendingSenbatsuJinguRegion")) root.Add("pendingSenbatsuJinguRegion", "");
         return root;
     }
 
@@ -269,6 +277,10 @@ public static class SaveCodec
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
             // 非対話の甲子園（自校が出場していない年）は v15 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Koshien = TournamentSaves.FromJson(root.Has("koshien") ? root["koshien"] : null),
+            // 非対話のセンバツ・選考発表待ち32校は v16 で追加。Migrate が旧セーブへ null/空配列を補うので素直に読む。
+            Senbatsu = TournamentSaves.FromJson(root.Has("senbatsu") ? root["senbatsu"] : null),
+            PendingSenbatsuFieldIds = IntsFromJson(root.Arr("pendingSenbatsuFieldIds")),
+            PendingSenbatsuJinguRegion = root.Has("pendingSenbatsuJinguRegion") ? (root.Str("pendingSenbatsuJinguRegion") ?? "") : "",
             // 前回スタメンは v14 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             LastLineup = LineupSaves.FromJson(root["lastLineup"]),
         };
@@ -383,6 +395,21 @@ public static class SaveCodec
     {
         var list = new List<double>(arr.Count);
         foreach (var v in arr.Items) list.Add(((JsonNumber)v).AsDouble());
+        return list;
+    }
+
+    // 校ID列（v16・センバツ選考発表待ちの32校）: [id, id, ...]。
+    private static JsonArray IntsToJson(List<int> values)
+    {
+        var arr = new JsonArray();
+        foreach (var v in values) arr.Add(JsonValue.Of(v));
+        return arr;
+    }
+
+    private static List<int> IntsFromJson(JsonArray arr)
+    {
+        var list = new List<int>(arr.Count);
+        foreach (var v in arr.Items) list.Add(((JsonNumber)v).AsInt());
         return list;
     }
 

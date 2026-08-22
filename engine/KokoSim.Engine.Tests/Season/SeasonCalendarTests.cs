@@ -128,6 +128,27 @@ public sealed class SeasonCalendarTests
             Assert.Equal(w == _cal.ProspectConfirmWeek, _cal.IsProspectConfirmWeek(w));
     }
 
+    // センバツ選考発表週（設計書05 §1.5b）: 冬合宿（第38週）の直後・1月であること。
+    // 神宮大会（11月頃）〜選考発表（1月）の間に現実の実プレイ週（冬合宿）が挟まるため、
+    // 地区大会・神宮大会と違い週アンカーが要る＝ここで固定する。
+    [Fact]
+    public void SenbatsuAnnounceWeek_IsJanuary_AfterWinterCamp_NoCollision()
+    {
+        var (month, _, yearOffset) = _cal.DateOf(_cal.SenbatsuAnnounceWeek);
+        Assert.Equal(1, month);
+        Assert.Equal(1, yearOffset);
+
+        Assert.True(_cal.SenbatsuAnnounceWeek > _cal.WinterCampWeek);
+        Assert.NotEqual(_cal.WinterCampWeek, _cal.SenbatsuAnnounceWeek);
+        Assert.NotEqual(_cal.DraftWeek, _cal.SenbatsuAnnounceWeek);
+        Assert.NotEqual(_cal.RecruitListWeek, _cal.SenbatsuAnnounceWeek);
+        Assert.NotEqual(_cal.ProspectConfirmWeek, _cal.SenbatsuAnnounceWeek);
+        Assert.True(_cal.SenbatsuAnnounceWeek < _cal.ProspectConfirmWeek);
+
+        for (var w = 0; w < _cal.WeeksPerYear; w++)
+            Assert.Equal(w == _cal.SenbatsuAnnounceWeek, _cal.IsSenbatsuAnnounceWeek(w));
+    }
+
     [Fact]
     public void DateOf_CoversExactlyFiftyWeeks_NoGaps()
     {
