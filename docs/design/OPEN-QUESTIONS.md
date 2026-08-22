@@ -1359,3 +1359,33 @@ issue #626 の巻き戻し対象リストに受傷が入っていなかったた
 
 直すには `ApplyDetailed` が走者ごとの始動種別を受け取る形へ広げる必要があり、
 走塁の解決式そのものに触るため帯の再校正を伴う。単独の課題として切る。
+
+---
+
+## 2026-08-22 AI校進化の勝数シグナルが夏ぶん二重計上されている（センバツ実装中に発見・未修正）
+
+`NationBackgroundSim.Start`（`TournamentEntry.Enter` から呼ぶ）は `NationalTournamentEngine.BeginSummer`
+を**大会種別に関係なく**毎回呼ぶ＝夏(週13)の入場でも秋(週23)の入場でも、他46〜48県ぶんの**夏フォーマット**の
+地方大会を再計算する。ジョブの結果は Shell 側 `NationBackgroundSim.Worker` が無条件に
+`NationService.YearLedger.AddWins(result.Wins)` へ積む。
+
+秋季大会（週23）は今回の実装（地区大会・神宮大会・センバツ）で新設した `AutumnBackgroundSim` が
+本来の秋データ（順位付き）を別途持つが、そちらは `AddWins` を呼ばない。つまり**同じ年の夏の勝数が
+夏の入場と秋の入場の両方で `AddWins` に積まれ、AI校進化（`AiSchoolEvolution`／`EvolveAiSchools`）が
+受け取る勝数シグナルが実質2倍になっている**。この二重計上は秋季大会が実装された時点から毎年起きており、
+今回のセンバツ実装が持ち込んだものではない（地区大会の出場枠判定に47県ぶんの順位が要ることを調べる過程で発見）。
+
+計算コストの面では実害は小さい（`resolution: SummerResolution.ChampionsOnly` で1球シムも成績畳み込みも
+しない軽量な集計モデルなので、秋の入場でこれが走ること自体は無視できる負荷）。問題は**シグナルの二重計上**の方。
+
+**あえて未修正にした理由**: 現行のAI校の強さ成長カーブは、この2倍シグナルを前提にすでに観測・調整されて
+きた可能性がある。単純に秋側の重複呼び出しを止めるだけで「勝数シグナルが半分になる」変更になり、
+長期の学校成長トラジェクトリに影響しうる。かつ `[bands-dont-cover-roster-generation]`（メモリ）の通り、
+Heavy統計帯4本は `StrengthTeamFactory`/AI校進化まわりを直接測っていない＝この種の変更はHeavyの安全網が
+薄い。センバツ本体とは無関係な既存バグのため、センバツ実装に混ぜて直さず、単独issueとして切る。
+
+直すときの選択肢: (A) 秋の入場では `NationBackgroundSim.Start` を呼ばない（二重計上をただ止める＝
+勝数シグナルは夏ぶんだけの実質半減）。(B) `AutumnBackgroundSim.Worker` にも `AddWins` を配線し秋の
+実データを積む（二重計上ではなくなるが、夏と秋の両方を正しく反映する形に変わる＝評価が要る）。
+どちらを選ぶにせよ、AI校の強さ分布の実測（`NationService.YearLedger`／`AiSchoolEvolution` 経由の
+長期シム）を取ってから決める。

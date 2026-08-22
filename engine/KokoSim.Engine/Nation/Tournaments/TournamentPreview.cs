@@ -19,6 +19,12 @@ public enum PreviewStage
     SummerPrefecture,
     /// <summary>夏の甲子園（49代表・次のステージが無い）。</summary>
     SummerKoshien,
+    /// <summary>秋季地区大会（関東・九州等10地区。県大会の上位校が集う）。</summary>
+    Regional,
+    /// <summary>明治神宮大会（各地区の王者が集う。次のステージという言い方が無い＝終着点の文言）。</summary>
+    Jingu,
+    /// <summary>春のセンバツ本戦（32校・次のステージが無い）。</summary>
+    SenbatsuKoshien,
 }
 
 /// <summary>チームの3軸レーティング（表示用0〜99。打力/投手/守備）。</summary>
@@ -122,14 +128,17 @@ public static class TournamentPreviewBuilder
         contenders = contenders
             .OrderBy(c => (int)c.Mark).ThenBy(c => c.Seed).ToList();
 
-        var meta = stage == PreviewStage.SummerKoshien
-            ? $"出場 {entrants.Count}代表 ─ 自動生成プレビュー"
+        var meta = IsFinalStage(stage)
+            ? $"出場 {entrants.Count}{(stage == PreviewStage.SummerKoshien ? "代表" : "校")} ─ 自動生成プレビュー"
             : $"出場 {entrants.Count}校 ／ 上位{berths}校が{nextStageName}へ ─ 自動生成プレビュー";
         var lead = BuildLead(contenders, entrants.Count, berths, nextStageName, stage);
 
         // 注目選手・登録メンバーは格付け校ぶんだけ実チーム（＝実戦と同一ソース）から組む。
         // 全出場校を先食い生成しない（出場200校規模でもコストは格付け校ぶんに収まる）。
-        var byName = ranked.ToDictionary(s => s.Name, s => s);
+        // 校名は生成物で一意の保証が無い（甲子園・センバツは多数の県から集まるため衝突しうる）＝
+        // ToDictionary だと重複キーで例外を投げるので、同名校が居ても落ちないよう先勝ちで畳む。
+        var byName = new Dictionary<string, School>();
+        foreach (var s in ranked) if (!byName.ContainsKey(s.Name)) byName[s.Name] = s;
         var notables = new List<NotablePlayer>();
         var rosters = new List<RosterExcerpt>();
         foreach (var c in contenders)
@@ -278,6 +287,14 @@ public static class TournamentPreviewBuilder
     /// </summary>
     private static string StatPeriodLabel(PreviewStage stage)
         => stage == PreviewStage.SummerKoshien ? "県予選" : "今大会";
+
+    /// <summary>
+    /// このステージに「次のステージへの切符」という言い回しが無いか（＝終着点の文言を使うか）。
+    /// 甲子園（夏・センバツ）は最終到達点なので当然。明治神宮大会も、優勝校が新たな組み合わせへ
+    /// 進むわけではない（センバツ選考の材料になるだけ）ため同じ扱いにする。
+    /// </summary>
+    private static bool IsFinalStage(PreviewStage stage)
+        => stage is PreviewStage.SummerKoshien or PreviewStage.Jingu or PreviewStage.SenbatsuKoshien;
 
     private static string PitcherStatLine(Players.Player p, Stats.PlayerStats? stats, PreviewStage stage)
     {
@@ -450,12 +467,15 @@ public static class TournamentPreviewBuilder
     {
         PreviewStage.SummerKoshien => $"{entrantCount}代表が出そろった。ここから先は一度負ければ終わりだ。",
         PreviewStage.SummerPrefecture => "三年生にとって最後の夏が来た。",
+        PreviewStage.Regional => "秋季県大会を勝ち抜いた顔ぶれが、地区の頂点をかけて集う。",
+        PreviewStage.Jingu => "各地区の代表が全国屈指の力を競う、大学野球部との定期戦とは別の高校の部。",
+        PreviewStage.SenbatsuKoshien => $"秋の激闘を経て選ばれた{entrantCount}校が、春の聖地に集った。",
         _ => "新チーム始動の秋、まだ誰も完成していない。",
     };
 
-    /// <summary>リード文の締め（甲子園は「次のステージ」が無いので勝ち抜きの言い方に変える）。</summary>
+    /// <summary>リード文の締め（終着点のステージは「次のステージ」が無いので勝ち抜きの言い方に変える）。</summary>
     private static string Closing(PreviewStage stage, int entrantCount, int berths, string nextStageName)
-        => stage == PreviewStage.SummerKoshien
+        => IsFinalStage(stage)
             ? "頂点に立つのは一校だけ。"
             : $"上位{berths}校に与えられる{nextStageName}への切符を、{entrantCount}校が争う。";
 }

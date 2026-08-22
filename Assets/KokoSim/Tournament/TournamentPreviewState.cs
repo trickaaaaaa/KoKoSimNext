@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
+using TK = KokoSim.Engine.Season.TournamentKind;
 
 namespace KokoSim.Unity.Tournament
 {
@@ -139,24 +140,34 @@ namespace KokoSim.Unity.Tournament
             var d = KokoSim.Unity.Shell.GameSession.Current.Display;
             if (d == null || d.Field.Count == 0) return null;
 
-            var koshien = d.Kind == KokoSim.Engine.Season.TournamentKind.SummerKoshien;
-            var summer = d.Kind == KokoSim.Engine.Season.TournamentKind.Summer;
+            var kind = d.Kind;
+            // 大会ごとの差分は「見出し文言（stage）」「上位何校が次へ行くか」「出場校一覧を出すか」の3点だけ。
+            // 3軸・格付け・寸評のロジックは TournamentPreviewBuilder 1本で共通（engine 側で分岐）。
+            var (stage, berths, nextStageName) = kind switch
+            {
+                TK.Summer => (PreviewStage.SummerPrefecture, 1, "甲子園"),
+                TK.SummerKoshien => (PreviewStage.SummerKoshien, 1, ""),
+                TK.Regional => (PreviewStage.Regional, 1, "明治神宮大会"),
+                TK.Jingu => (PreviewStage.Jingu, 1, ""),
+                TK.SenbatsuKoshien => (PreviewStage.SenbatsuKoshien, 1, ""),
+                _ => (PreviewStage.Autumn, 2, "地区大会"),
+            };
+            // 県予選の実測を出せるのは夏の甲子園だけ（KoshienQualifierStatsSim が打ち直す専用帳簿）。
+            // センバツは秋季県大会→地区大会→神宮の複数段にまたがるため同種の帳簿を持たず、他大会と同じ
+            // 「今大会」スコープに倣う＝開幕前は「未登板/未出場」と出る（合成値で埋め戻さない）。
+            var koshien = kind == TK.SummerKoshien;
+            var showEntrants = kind == TK.SummerKoshien || kind == TK.SenbatsuKoshien;
             // 注目選手・登録メンバーは実戦と同一の永続ロスター（#80）から引く＝展望で見た選手が実戦で出る。
             var preview = TournamentPreviewBuilder.Build(
-                d.Title, d.Field,
-                // 上位何校が次へ行くか。甲子園は次のステージが無いので枠の言い回し自体を出さない（engine 側で分岐）。
-                berths: koshien || summer ? 1 : 2,
-                nextStageName: koshien ? "" : summer ? "甲子園" : "地区大会",
+                d.Title, d.Field, berths: berths, nextStageName: nextStageName,
                 yearIndex: KokoSim.Unity.Shell.GameSession.Current.Year,
                 teamProvider: TeamFor,
-                // 注目選手の成績行は実測値で書く（issue #634）。甲子園は<b>県予選</b>の実測＝
-                // 開幕前でも「この選手は県予選で打っている」が読める（今大会スコープはまだ空）。
                 statsForSchool: id => BookFor(id, koshien ? StatScope.PrefQualifier : StatScope.CurrentTournament),
-                stage: koshien ? PreviewStage.SummerKoshien
-                    : summer ? PreviewStage.SummerPrefecture : PreviewStage.Autumn);
+                stage: stage);
 
             var v = new View { Title = preview.Title, Meta = preview.Meta, Lead = preview.Lead };
-            if (koshien) v.Entrants = BuildEntrants(d.Field);
+            if (showEntrants)
+                v.Entrants = koshien ? BuildEntrants(d.Field) : BuildSenbatsuEntrants(d.Field);
             var session = KokoSim.Unity.Shell.GameSession.Current;
 
             // 通算戦績（issue #84）はGameSession側の記録簿にあり、engineのプレビュー生成は校名しか
@@ -312,6 +323,39 @@ namespace KokoSim.Unity.Tournament
                     AppearanceLabel = string.IsNullOrEmpty(label) ? "出場" : label,
                     IsManager = s.Id == managerId,
                     RegionOrder = order,
+                });
+            }
+            rows.Sort((a, b) =>
+            {
+                var c = a.RegionOrder.CompareTo(b.RegionOrder);
+                return c != 0 ? c : string.CompareOrdinal(a.SchoolName, b.SchoolName);
+            });
+            return rows;
+        }
+
+        /// <summary>
+        /// センバツ本戦の出場校名簿（<see cref="BuildEntrants"/> のセンバツ版）。夏と違い分割区画
+        /// （北北海道/南北海道等）の概念が無く1校=1都道府県なので県IDがそのまま JIS 順（北→南）になる
+        /// （<see cref="PrefectureNames.JisOrder"/> は県IDを添字とする配列＝県ID自体が既に北から南への通し番号）。
+        /// 「N年ぶりN回目」は <see cref="SchoolRecord.SpringAppearanceLabel"/>（春の出場歴）を使う。
+        /// </summary>
+        private static List<EntrantRow> BuildSenbatsuEntrants(IReadOnlyList<School> field)
+        {
+            var records = KokoSim.Unity.Shell.GameSession.Current.Records;
+            var managerId = KokoSim.Unity.Shell.NationService.ManagerSchoolId;
+
+            var rows = new List<EntrantRow>(field.Count);
+            foreach (var s in field)
+            {
+                var label = records.For(s.Id).SpringAppearanceLabel;
+                rows.Add(new EntrantRow
+                {
+                    RegionName = PrefectureNames.JapaneseOf(s.PrefectureId),
+                    SchoolName = s.Name,
+                    TierLetter = s.Tier.ToString(),
+                    AppearanceLabel = string.IsNullOrEmpty(label) ? "出場" : label,
+                    IsManager = s.Id == managerId,
+                    RegionOrder = s.PrefectureId,
                 });
             }
             rows.Sort((a, b) =>

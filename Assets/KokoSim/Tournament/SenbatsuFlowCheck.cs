@@ -113,6 +113,7 @@ namespace KokoSim.Unity.Tournament
             var guard = 0;
             while (guard++ < 10)
             {
+                if (GameSession.Current.InTournament) LogPreview();
                 // 秋季県大会は夏の分割地区(SummerRegions)と違い県全体が1本の裏ブラケット（神奈川で212校規模）。
                 // 背景解決はフレーム毎にスロットルされるため、自校の1ラウンド進行に複数フレームかかることがある
                 // （実測: コルーチンでは60回試行してラウンド2までしか進まないが、フレーム制約のない直接呼び出しでは
@@ -165,6 +166,22 @@ namespace KokoSim.Unity.Tournament
             "pending=" + EventService.Pending.Count);
 
         private void Note(string text) => _log.Append("  ・    ").Append(text).Append('\n');
+
+        /// <summary>
+        /// 大会展望（TournamentPreviewState.Build）を今の対話中大会に対して1回組んでみる（設計書05 §1.5b
+        /// 計画F6の検証）。地区大会・神宮大会・センバツ本戦それぞれの見出し文言・出場校一覧の有無だけ確かめる
+        /// （UIのレイアウトはControllerが既存のまま描くだけなので、ここではUnityEngine非依存のViewModelを見る）。
+        /// </summary>
+        private void LogPreview()
+        {
+            var kind = GameSession.Current.Kind;
+            var v = new TournamentPreviewState().Build();
+            Check(kind + " の展望が組めた", v != null, "kind=" + kind);
+            if (v == null) return;
+            Note("展望[" + kind + "]: " + v.Title + " ／ " + v.Meta
+                + " ／ 出場一覧=" + v.Entrants.Count + "件");
+        }
+
     }
 }
 #endif
