@@ -46,6 +46,16 @@ namespace KokoSim.Unity.Shell
         public static FacilityCatalog Catalog { get; } = FacilityCatalog.Default;
 
         /// <summary>
+        /// 転任時: 施設は学校資産＝置いていく（設計書04 §4、OPEN-QUESTIONS Q6）。施設基金も学校の設備投資・
+        /// 寄付の積み上げなので同様にゼロへ戻す。部費・名声は監督個人の実績として持ち越す（ここでは触らない）。
+        /// </summary>
+        internal static void ResetFacilitiesForTransfer()
+        {
+            _facilities = new FacilitySet();
+            Manager.FacilityFund = 0;
+        }
+
+        /// <summary>
         /// 年契約の契約状態（設計書04 §1.4a）の単一ソース。買い切りの施設と違い、年額を毎年部費から払い、
         /// いつでも段を下げて解約できる。新規ゲームの既定はスカウト網 Lv1 だけ＝従来のスカウト費15万/年と同額。
         /// </summary>
@@ -236,6 +246,14 @@ namespace KokoSim.Unity.Shell
                 upsetFameDelta: upsetFameDelta, contracts: ContractEffects);
 
             LastGrowthDelta = ManagerGrowthDelta.Since(before, Manager);
+
+            // 転任判定（設計書04 §1.3）。成長更新の直後の Fame/Trust を判定に使う
+            // （CareerEngine.Run と同じ順序: 自然増→節目→フリー化資格/残留判定）。
+            // 独立ストリーム（milestoneRng とは別タグ）で本編の乱数列を乱さない（不変条件#2）。
+            var transferRng = new Xoshiro256Random(GameSeed.Master ^ (0xA6A7_0000UL ^ (ulong)endedYearIndex));
+            var transferResult = ManagerTransferModel.Evaluate(
+                Manager, NationService.PrefectureId, NationService.Nation, transferRng, CareerCoeff);
+            ManagerTransferService.Open(transferResult);
 
             _lastGrownYear = endedYearIndex;
             _grownWinsBaseline = record.OfficialWins;

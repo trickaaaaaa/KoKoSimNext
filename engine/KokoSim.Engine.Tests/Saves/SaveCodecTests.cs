@@ -76,6 +76,15 @@ public sealed class SaveCodecTests
         Assert.Equal(state.NationRosters.Count, s.NationRosters.Count);
         Assert.True(s.NewTeamPending);
         Assert.Equal(2, s.NewTeamRetiredNames.Count);
+
+        // 監督オファー待ち（v18）: 種別・候補（地区なし/地区ありの両方）が往復すること。
+        Assert.True(s.ManagerTransferPending);
+        Assert.Equal((int)KokoSim.Engine.Career.TransferEventKind.FreeAgentOffer, s.ManagerTransferKind);
+        Assert.Equal(2, s.ManagerTransferCandidates.Count);
+        Assert.Equal(1200, s.ManagerTransferCandidates[0].SchoolId);
+        Assert.Null(s.ManagerTransferCandidates[0].DistrictId);
+        Assert.Equal(2, s.ManagerTransferCandidates[1].DistrictId);
+        Assert.Equal(47.25, s.ManagerTransferCandidates[1].Strength, 6);
         Assert.NotNull(s.TeamColorOverride);
         Assert.True(s.TeamColorOverride!.Stripe.On);
         Assert.Equal(state.TeamColorOverride!.Shirt, s.TeamColorOverride.Shirt);

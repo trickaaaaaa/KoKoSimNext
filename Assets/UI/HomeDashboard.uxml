@@ -249,6 +249,42 @@
         </ui:VisualElement>
       </ui:VisualElement>
 
+      <!-- 監督オファー: 転任の選択（設計書04 §1.3）。左に候補（残留＋オファー校）、右に選択中の詳細。
+           強制転任は残留行が無く候補1件のみ＝拒否できない（設計どおり）。 -->
+      <ui:VisualElement name="xt-modal" class="ui-root modal-scrim">
+        <ui:VisualElement class="modal-card xt-card">
+          <ui:VisualElement class="xt-hd">
+            <ui:Label name="xt-hd-title" class="xt-hd__t" text="" />
+          </ui:VisualElement>
+          <ui:Label name="xt-lead" class="xt-lead" text="" />
+
+          <ui:VisualElement class="xt-body">
+            <!-- 左: 候補リスト（32px行） -->
+            <ui:VisualElement class="xt-list">
+              <ui:VisualElement class="xt-th">
+                <ui:Label class="xt-c-name xt-th__c" text="学校" />
+                <ui:Label class="xt-c-pref xt-th__c" text="県" />
+                <ui:Label class="xt-c-rank xt-th__c" text="格" />
+                <ui:Label class="xt-c-power xt-th__c" text="総合" />
+              </ui:VisualElement>
+              <ui:ScrollView name="xt-rows" class="xt-rows" />
+            </ui:VisualElement>
+
+            <!-- 右: 選択中の詳細 -->
+            <ui:VisualElement class="xt-detail">
+              <ui:Label name="xt-d-name" class="xt-d__name" text="" />
+              <ui:Label name="xt-d-sub" class="xt-d__sub" text="" />
+              <ui:VisualElement name="xt-d-facts" class="xt-d__facts" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="xt-foot">
+            <ui:Label name="xt-note" class="xt-foot__note" text="" />
+            <ui:Button name="xt-ok" class="tm-btn tm-btn--primary xt-ok" text="" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
       <!-- 大会モード: 試合結果（自動消化）。 -->
       <ui:VisualElement name="tm-result" class="ui-root tm-scrim">
         <ui:VisualElement class="tm-card tm-result__card">

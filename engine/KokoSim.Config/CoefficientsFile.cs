@@ -2464,6 +2464,9 @@ public static class CoefficientsLoader
         public double NewSchoolStrengthMean { get; set; } = D.NewSchoolStrengthMean;
         public double NewSchoolStrengthSd { get; set; } = D.NewSchoolStrengthSd;
         public double FreeChoiceSchoolStrength { get; set; } = D.FreeChoiceSchoolStrength;
+        public double FreeAgentOfferChance { get; set; } = D.FreeAgentOfferChance;
+        public int FreeAgentOfferCount { get; set; } = D.FreeAgentOfferCount;
+        public double FreeAgentOfferSpread { get; set; } = D.FreeAgentOfferSpread;
 
         public CareerCoefficients ToModel() => new()
         {
@@ -2501,6 +2504,9 @@ public static class CoefficientsLoader
             NewSchoolStrengthMean = NewSchoolStrengthMean,
             NewSchoolStrengthSd = NewSchoolStrengthSd,
             FreeChoiceSchoolStrength = FreeChoiceSchoolStrength,
+            FreeAgentOfferChance = FreeAgentOfferChance,
+            FreeAgentOfferCount = FreeAgentOfferCount,
+            FreeAgentOfferSpread = FreeAgentOfferSpread,
         };
     }
 }

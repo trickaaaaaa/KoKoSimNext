@@ -154,6 +154,19 @@ namespace KokoSim.Unity.Shell
             _newSchool = true;
         }
 
+        /// <summary>
+        /// 転任先の新校として作り直す（設計書04 §1.3）。部員は旧校に残る想定（issue「監督の転任システムが
+        /// 実ゲームに完全未配線」の決定）なので、新設校と同じ「1年生 <see cref="NewSchoolIntake"/> 人だけ」で
+        /// 作り直す。<see cref="Reset"/> と違い <see cref="DraftService.Reset"/> は呼ばない＝教え子名鑑
+        /// （プロ入りOB台帳）はキャリア横断の記録なので転任では捨てない（design-04 §1.3「監督能力と名声は持ち越し」）。
+        /// </summary>
+        public static void ResetForTransfer()
+        {
+            _roster = null; _graduates = null; _nextId = 0; _newSchool = true;
+            ProspectService.Reset();   // 旧校の入部予定者は同行しない
+            RecruitService.Reset();    // 旧校で勧誘中だった中学生リストも同様
+        }
+
         private static List<DevelopingPlayer> Build(ulong seed)
         {
             var rng = new Xoshiro256Random(seed);

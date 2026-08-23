@@ -20,13 +20,16 @@ namespace KokoSim.Unity.Home
 
         private HomeState _state;
         private VisualElement _root;
-        private VisualElement _banner, _dialog, _result, _newTeam;
+        private VisualElement _banner, _dialog, _result, _newTeam, _xt;
         private VisualElement _menu, _menuTitleConfirm;
         private Label _menuSaveReason;
 
         // 新チーム発足（次期主将の指名）モーダルの選択状態。RosterService.Active 内の index を持つ。
         private KokoSim.Unity.Components.RadarChartView _ntRadar;
         private int _ntPick = -1;
+
+        // 監督オファー（転任の選択, 設計書04 §1.3）モーダルの選択状態。null＝残留。
+        private int? _xtPick;
 
         // 「部の実力」の6角形（部品辞書 RadarChartView）。総合力パネルと同じ絵をカードサイズで出す。
         private KokoSim.Unity.Components.RadarChartView _tsRadar;
@@ -35,7 +38,7 @@ namespace KokoSim.Unity.Home
 
         // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
         // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
-        private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk;
+        private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk, _xtOk;
         private Button _menuBtn, _menuSaveBtn, _menuTitleBtn, _menuCloseBtn, _menuTitleYes, _menuTitleNo;
         private VisualElement _tsRow;
         private EventCallback<ClickEvent> _tsRowClick;
@@ -54,6 +57,7 @@ namespace KokoSim.Unity.Home
             _dialog = _root.Q<VisualElement>("tm-dialog");
             _result = _root.Q<VisualElement>("tm-result");
             _newTeam = _root.Q<VisualElement>("nt-modal");
+            _xt = _root.Q<VisualElement>("xt-modal");
             _menu = _root.Q<VisualElement>("hm-menu");
             _menuTitleConfirm = _root.Q<VisualElement>("hm-menu-title-confirm");
             _menuSaveReason = _root.Q<Label>("hm-menu-save-reason");
@@ -69,6 +73,7 @@ namespace KokoSim.Unity.Home
             _dialogNo = Wire("tm-dialog-no", OnMatchNo);
             _resultOk = Wire("tm-result-ok", OnResultOk);
             _newTeamOk = Wire("nt-ok", OnNewTeamConfirm);
+            _xtOk = Wire("xt-ok", OnTransferConfirm);
 
             _menuBtn = Wire("hm-menu-btn", OnMenuOpen);
             _menuSaveBtn = Wire("hm-menu-save", OnMenuSave);
@@ -98,6 +103,7 @@ namespace KokoSim.Unity.Home
             // ここへ回送されてくる（ScreenRouter が Pending/BannerPending を見て回送する, issue #134）。
             // その回送分もこの1箇所で受けて指名モーダル／開幕バナーを出す（演出の導線をホームに集約する）。
             if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();
             else if (_state.BannerPending) ShowBanner();
             // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
             else TryShowEvent();
@@ -125,6 +131,7 @@ namespace KokoSim.Unity.Home
             if (_dialogNo != null) _dialogNo.clicked -= OnMatchNo;
             if (_resultOk != null) _resultOk.clicked -= OnResultOk;
             if (_newTeamOk != null) _newTeamOk.clicked -= OnNewTeamConfirm;
+            if (_xtOk != null) _xtOk.clicked -= OnTransferConfirm;
             if (_tsRow != null && _tsRowClick != null) _tsRow.UnregisterCallback(_tsRowClick);
             _tsRowClick = null;
             if (_novel != null) { _novel.Dispose(); _novel = null; }
@@ -233,6 +240,7 @@ namespace KokoSim.Unity.Home
                 _state.AdvanceWeek();
                 Render();
                 if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();  // 引退週＝新チーム発足（設計書09 §8）
+                else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();  // 転任判定（設計書04 §1.3）
                 else if (_state.BannerPending) ShowBanner();    // 大会開幕演出（要件1・2）
                 else TryShowEvent();                            // 週次イベントのノベル提示（issue #609）
             }
@@ -386,6 +394,112 @@ namespace KokoSim.Unity.Home
             var v = new Label(value); v.AddToClassList("nt-fact__v");
             e.Add(k); e.Add(v);
             return e;
+        }
+
+        // ===== 監督オファー（転任の選択, 設計書04 §1.3・issue「監督の転任システムが実ゲームに完全未配線」） =====
+
+        private void ShowTransferOffer()
+        {
+            if (_xt == null) return;
+            var view = KokoSim.Unity.Shell.ManagerTransferService.BuildView();
+            if (view.Rows.Count == 0)
+            {
+                // 候補が組めなかった（想定外）＝導線を閉じて通常進行へ戻す。
+                KokoSim.Unity.Shell.ManagerTransferService.Clear();
+                return;
+            }
+
+            _xtPick = view.Rows[0].SchoolId;
+            RenderTransferOffer(view);
+            _xt.style.display = DisplayStyle.Flex;
+            _xt.BringToFront();
+        }
+
+        private void RenderTransferOffer(KokoSim.Unity.Shell.TransferOfferView view)
+        {
+            SetText("xt-hd-title", view.Headline);
+            SetText("xt-lead", view.Lead);
+            SetText("xt-note", view.CanStay ? "" : "強制転任のため、この赴任先は拒否できません。");
+
+            var rows = _root.Q<ScrollView>("xt-rows");
+            if (rows != null)
+            {
+                rows.Clear();
+                foreach (var r in view.Rows) rows.Add(BuildOfferRow(r));
+            }
+            RenderTransferOfferDetail(view);
+        }
+
+        private VisualElement BuildOfferRow(KokoSim.Unity.Shell.TransferOfferRow r)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("xt-row");
+            if (r.SchoolId == _xtPick) row.AddToClassList("xt-row--on");
+
+            var name = new Label(r.IsStay ? r.SchoolName + "（残留）" : r.SchoolName);
+            name.AddToClassList("xt-c-name");
+            row.Add(name);
+
+            var pref = new Label(r.PrefectureName); pref.AddToClassList("xt-c-pref"); row.Add(pref);
+
+            var rank = new VisualElement(); rank.AddToClassList("xt-c-rank");
+            rank.Add(UiComponents.RankChip(r.TierLetter, RankChipSize.Small));
+            row.Add(rank);
+
+            var power = new Label(((int)System.Math.Round(r.Strength)).ToString());
+            power.AddToClassList("xt-c-power");
+            power.AddToClassList("f-num");   // 純数値セル＝コンデンス体（書体3役, 設計書16）
+            row.Add(power);
+
+            var id = r.SchoolId;
+            row.RegisterCallback<ClickEvent>(_ => OnPickOffer(id));
+            return row;
+        }
+
+        private void OnPickOffer(int? schoolId)
+        {
+            if (_xtPick == schoolId) return;
+            _xtPick = schoolId;
+            RenderTransferOffer(KokoSim.Unity.Shell.ManagerTransferService.BuildView());
+        }
+
+        private void RenderTransferOfferDetail(KokoSim.Unity.Shell.TransferOfferView view)
+        {
+            KokoSim.Unity.Shell.TransferOfferRow picked = null;
+            foreach (var r in view.Rows) if (r.SchoolId == _xtPick) { picked = r; break; }
+            if (picked == null) return;
+
+            SetText("xt-d-name", picked.IsStay ? picked.SchoolName + "（残留）" : picked.SchoolName);
+            SetText("xt-d-sub", picked.PrefectureName);
+
+            var facts = _root.Q<VisualElement>("xt-d-facts");
+            if (facts != null)
+            {
+                facts.Clear();
+                facts.Add(XtFact("総合", ((int)System.Math.Round(picked.Strength)).ToString()));
+                facts.Add(XtFact("名声", ((int)System.Math.Round(picked.Fame)).ToString()));
+            }
+
+            if (_xtOk != null) _xtOk.text = picked.IsStay ? "残留する" : "この学校へ赴任する";
+        }
+
+        private static VisualElement XtFact(string key, string value)
+        {
+            var e = new VisualElement();
+            e.AddToClassList("xt-fact");
+            var k = new Label(key); k.AddToClassList("xt-fact__k");
+            var v = new Label(value); v.AddToClassList("xt-fact__v"); v.AddToClassList("f-num");
+            e.Add(k); e.Add(v);
+            return e;
+        }
+
+        private void OnTransferConfirm()
+        {
+            if (!KokoSim.Unity.Shell.ManagerTransferService.Confirm(_xtPick)) return;
+            if (_xt != null) _xt.style.display = DisplayStyle.None;
+            Render();
+            if (_state.BannerPending) ShowBanner();
+            else TryShowEvent();
         }
 
         // 隠しパラメータ一覧（選手詳細と同じ判明ルール）から取り出す。未判明は「？」のまま出す。

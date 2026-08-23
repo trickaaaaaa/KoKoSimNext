@@ -1126,6 +1126,10 @@ career:
   new_school_strength_mean: 34.0    # 教員監督の赴任先は弱小
   new_school_strength_sd: 6.0
   free_choice_school_strength: 48.0 # フリー化後の本拠地
+  # フリー監督のオファー（設計書04 §1.3「残留自由・他校オファーの選択制」）。残留はいつでも選べる。
+  free_agent_offer_chance: 0.35     # 1年にオファーが届く確率
+  free_agent_offer_count: 2         # 1回のオファーで並べる移籍先候補数（残留は別枠）
+  free_agent_offer_spread: 10.0     # 候補校の強さの散らばり（free_choice_school_strength を中心）
 
 # --- 施設（Issue #128・設計書03 §4 / 04 §4）: funds→施設購入の支出先。多軸（照明/室内/寮/トレ） ---
 # 各系統は tiers[0]=施設なし（費用0・効果0）から並べる。全系統Lv0で従来一致（不変条件#2）。

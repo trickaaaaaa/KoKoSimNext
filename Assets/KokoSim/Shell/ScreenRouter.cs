@@ -100,11 +100,12 @@ namespace KokoSim.Unity.Shell
             // バックグラウンド Task（試合後の大会処理）の完了をメインスレッドで反映する（issue #138）。
             MainThreadDispatcher.Drain();
 
-            // 新チーム発足（夏の3年引退の翌週）の主将指名／夏・秋の大会開幕バナーは、どの画面で週を進めても
-            // ホームで出す（導線を1箇所に集約する, 設計書09 §8 / issue #134）。回送元は「週を進められる画面」だけに
-            // 限る（試合中フローの画面から引き剥がさない）。BannerPending はホームが開幕演出を出して下ろす。
+            // 新チーム発足（夏の3年引退の翌週）の主将指名／夏・秋の大会開幕バナー／監督オファー（設計書04 §1.3）は、
+            // どの画面で週を進めてもホームで出す（導線を1箇所に集約する, 設計書09 §8 / issue #134）。回送元は
+            // 「週を進められる画面」だけに限る（試合中フローの画面から引き剥がさない）。各 Pending はホームが
+            // 該当のモーダル/オファー画面を出して下ろす。
             if (_pending == null
-                && (NewTeamService.Pending || GameSession.Current.BannerPending)
+                && (NewTeamService.Pending || GameSession.Current.BannerPending || ManagerTransferService.Pending)
                 && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
                 _pending = HomeScreen;
 

@@ -76,6 +76,14 @@ public sealed class SaveState
     public bool NewTeamPending { get; set; }
     public List<string> NewTeamRetiredNames { get; set; } = new();
 
+    // --- 監督オファー待ち（設計書04 §1.3・転任システム。v18 で追加） ---
+    /// <summary>年度末の転任判定の結果、プレイヤーの選択待ちか。</summary>
+    public bool ManagerTransferPending { get; set; }
+    /// <summary><see cref="TransferEventKind"/> の int 値。Pending=false のときは無効。</summary>
+    public int ManagerTransferKind { get; set; }
+    /// <summary>提示中の移籍先候補（残留可否は <see cref="ManagerTransferKind"/> から導く）。</summary>
+    public List<TransferCandidate> ManagerTransferCandidates { get; set; } = new();
+
     // --- 自校チームカラー上書き（null＝校IDからの自動割り当て） ---
     public TeamColors? TeamColorOverride { get; set; }
 

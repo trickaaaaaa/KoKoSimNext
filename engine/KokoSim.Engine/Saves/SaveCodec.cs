@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 17;
+    public const int CurrentVersion = 18;
 
     // ===== Serialize =====
 
@@ -62,6 +62,9 @@ public static class SaveCodec
             .Add("records", RecordBookSaves.ToJson(s.Records))
             .Add("newTeamPending", s.NewTeamPending)
             .Add("newTeamRetired", RetiredToJson(s.NewTeamRetiredNames))
+            .Add("managerTransferPending", s.ManagerTransferPending)
+            .Add("managerTransferKind", s.ManagerTransferKind)
+            .Add("managerTransferCandidates", TransferCandidatesToJson(s.ManagerTransferCandidates))
             .Add("teamColorOverride", CareerSaves.TeamColorsToJson(s.TeamColorOverride))
             .Add("schoolName", s.SchoolName)
             .Add("prefectureId", s.PrefectureId)
@@ -232,6 +235,14 @@ public static class SaveCodec
         // Has 分岐で読む。
         if (version < 17 && !root.Has("nationRegionalQualifierStats"))
             root.Add("nationRegionalQualifierStats", new JsonArray());
+        // v18（監督の転任システム・設計書04 §1.3）: 監督オファーの保留状態が増えた。
+        // 旧セーブは待機が存在しえない＝false/0/空配列で補う。
+        if (version < 18)
+        {
+            if (!root.Has("managerTransferPending")) root.Add("managerTransferPending", false);
+            if (!root.Has("managerTransferKind")) root.Add("managerTransferKind", 0);
+            if (!root.Has("managerTransferCandidates")) root.Add("managerTransferCandidates", new JsonArray());
+        }
         return root;
     }
 
@@ -267,6 +278,10 @@ public static class SaveCodec
             SessionYear = root.Int("sessionYear"),
             NewTeamPending = root.Bool("newTeamPending"),
             NewTeamRetiredNames = RetiredFromJson(root.Arr("newTeamRetired")),
+            // 監督オファー待ちは v18 で追加。Migrate が旧セーブへ false/0/空配列を補うので素直に読む。
+            ManagerTransferPending = root.Bool("managerTransferPending"),
+            ManagerTransferKind = root.Int("managerTransferKind"),
+            ManagerTransferCandidates = TransferCandidatesFromJson(root.Arr("managerTransferCandidates")),
             TeamColorOverride = CareerSaves.TeamColorsFromJson(root["teamColorOverride"]),
             // 自校の同定は v4 で追加。Migrate が旧セーブへ既定（桜丘・神奈川・地区なし）を補うので素直に読む。
             SchoolName = root.Str("schoolName") ?? "桜丘",
@@ -432,6 +447,38 @@ public static class SaveCodec
     {
         var list = new List<string>(arr.Count);
         foreach (var v in arr.Items) list.Add(((JsonString)v).Value);
+        return list;
+    }
+
+    // 監督オファーの候補校（v18）: [id, name, prefectureId, districtId|null, strength, fame] の配列。
+    private static JsonArray TransferCandidatesToJson(List<TransferCandidate> candidates)
+    {
+        var arr = new JsonArray();
+        foreach (var cand in candidates)
+            arr.Add(new JsonArray()
+                .Add(JsonValue.Of(cand.SchoolId))
+                .Add(JsonValue.Of(cand.SchoolName))
+                .Add(JsonValue.Of(cand.PrefectureId))
+                .Add(cand.DistrictId.HasValue ? JsonValue.Of(cand.DistrictId.Value) : JsonNull.Instance)
+                .Add(JsonValue.Of(cand.Strength))
+                .Add(JsonValue.Of(cand.Fame)));
+        return arr;
+    }
+
+    private static List<TransferCandidate> TransferCandidatesFromJson(JsonArray arr)
+    {
+        var list = new List<TransferCandidate>(arr.Count);
+        foreach (var v in arr.Items)
+        {
+            var t = v.AsArray();
+            list.Add(new TransferCandidate(
+                SchoolId: ((JsonNumber)t[0]).AsInt(),
+                SchoolName: ((JsonString)t[1]).Value,
+                PrefectureId: ((JsonNumber)t[2]).AsInt(),
+                DistrictId: t[3] is JsonNull ? (int?)null : ((JsonNumber)t[3]).AsInt(),
+                Strength: ((JsonNumber)t[4]).AsDouble(),
+                Fame: ((JsonNumber)t[5]).AsDouble()));
+        }
         return list;
     }
 }

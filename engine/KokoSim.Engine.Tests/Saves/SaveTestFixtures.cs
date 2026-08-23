@@ -176,6 +176,14 @@ internal static class SaveTestFixtures
             Records = records,
             NewTeamPending = true,
             NewTeamRetiredNames = new List<string> { "卒業太郎", "卒業次郎" },
+            // 監督オファー待ち（v18・転任システム）。地区なし候補と地区ありの候補を両方混ぜて往復を試す。
+            ManagerTransferPending = true,
+            ManagerTransferKind = (int)TransferEventKind.FreeAgentOffer,
+            ManagerTransferCandidates = new List<TransferCandidate>
+            {
+                new(SchoolId: 1200, SchoolName: "遠征学園", PrefectureId: 27, DistrictId: null, Strength: 61.5, Fame: 12.0),
+                new(SchoolId: 340, SchoolName: "海浜工業", PrefectureId: 1, DistrictId: 2, Strength: 47.25, Fame: 3.5),
+            },
             TeamColorOverride = new TeamColors(
                 new RgbColor(0x1D, 0x32, 0x27), new RgbColor(0xED, 0xEB, 0xE0),
                 new RgbColor(0xE8, 0x6A, 0x4A), new RgbColor(0xF5, 0xC6, 0x4A),

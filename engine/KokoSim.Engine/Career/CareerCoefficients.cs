@@ -97,4 +97,12 @@ public sealed record CareerCoefficients
     public double NewSchoolStrengthSd { get; init; } = 6.0;
     /// <summary>フリー監督が選べる好条件校の強さ。</summary>
     public double FreeChoiceSchoolStrength { get; init; } = 48.0;
+
+    // --- フリー監督のオファー（設計書04 §1.3「残留自由・他校オファーの選択制」） ---
+    /// <summary>フリー監督が1年に他校オファーを受け取る確率（残留はいつでも選べる＝拒否できる）。</summary>
+    public double FreeAgentOfferChance { get; init; } = 0.35;
+    /// <summary>1回のオファーで提示する移籍先候補の数（残留の選択肢は別枠で常に付く）。</summary>
+    public int FreeAgentOfferCount { get; init; } = 2;
+    /// <summary>オファー候補校の強さの散らばり（<see cref="FreeChoiceSchoolStrength"/> を中心とした正規分布）。</summary>
+    public double FreeAgentOfferSpread { get; init; } = 10.0;
 }
