@@ -613,6 +613,10 @@ namespace KokoSim.Unity.Match
             //    そこで本塁向きへ流すと、捕球中に開いておいた向きが投げる前に捨てられる
             float pending;
             if (want < 0 && TryPendingThrowYaw(pos, t, out pending)) targetYaw = pending;
+            // 停止中、まだ生きている球（飛んでいる／転がっている／保持中）があればその方向を向く。
+            // 追いつけず立ち止まった野手が本塁（≈カメラの向き）へフォールバックし、打球を見送るはずの
+            // 瞬間にこちらを向いてしまう不自然さの対策（issue fence-camera-zoom-and-outfielder-facing）
+            else if (want < 0 && TryFacingLiveBall(t, cur.Pos, out pending)) targetYaw = pending;
             st.Yaw = st.Started
                 ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
                 : targetYaw;
@@ -1840,6 +1844,23 @@ namespace KokoSim.Unity.Match
                 yaw = e.Yaw;
             }
             return best < float.MaxValue * 0.5f;
+        }
+
+        /// <summary>
+        /// 停止中、まだ生きている（飛んでいる／転がっている／保持中の）球があればその方向[度]を返す
+        /// （issue fence-camera-zoom-and-outfielder-facing）。<see cref="TryPendingThrowYaw"/> と同じ
+        /// 「本塁向きへ流れ戻るのを防ぐ」作法で、対象を送球予定でなく球そのものに広げたもの。
+        /// 距離が近すぎる（自分がちょうど居る位置＝球を持っている本人）ときは向きが数値的に決まらないので拾わない。
+        /// </summary>
+        private bool TryFacingLiveBall(float t, PlaybackVec here, out float yaw)
+        {
+            yaw = 0f;
+            var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
+            if (!ball.HasValue) return false;
+            var toBall = new Vector2((float)(ball.Value.X - here.X), (float)(ball.Value.Y - here.Y));
+            if (toBall.magnitude < FacingMinBallDistM) return false;
+            yaw = Mathf.Atan2(toBall.x, toBall.y) * Mathf.Rad2Deg;
+            return true;
         }
 
         /// <summary>
@@ -3621,8 +3642,22 @@ namespace KokoSim.Unity.Match
                 ThrowFollowsBall: !IsEndpointFramedThrow(play) && FieldThrowFollowsBall,
                 HeldBallFollowsRunner: true,
                 LooseBallFollowsChaser: true,
-                ThrowBoxGrowsWithBall: FieldThrowBoxGrows, KeepSubjectFramed: FieldKeepSubjectFramed,
+                ThrowBoxGrowsWithBall: FieldThrowBoxGrows,
+                KeepSubjectFramed: FieldKeepSubjectFramed && !IsHomeRun(play),
                 ReturnsToWide: FieldReturnsToWide);
+
+        /// <summary>
+        /// 本塁打（誰にも処理されない打球）か（issue fence-camera-zoom-and-outfielder-facing）。
+        ///
+        /// <para>本塁打では守備9人全員が「各塁のカバーへ入る」演出で <see cref="PlaybackPlay.Moves"/> に
+        /// 登録され、常に「動いている」扱いになる。<see cref="CameraPlanBuilder.ZoomKeepingSomeoneFramed"/>
+        /// （issue #566・枠に人が1人も居ないコマだけ広げる機構）はこの内野〜捕手陣も候補にするため、
+        /// 球が外野の奥（60〜130m）へ飛んでいく間、常に本塁付近の内野手までを収めようとして
+        /// 寄り切れない（実測: センター方向へ直線的に飛ぶサンプルでズームが 6.88→3.72 倍のあいだで
+        /// 振動し続け、6.88倍で頭打ちのまま着地まで寄らなかった）。誰も捕れない本塁打では
+        /// 「守備の誰かを収める」こと自体が不要な絵の要求なので、この打球だけ機構を切る。</para>
+        /// </summary>
+        private static bool IsHomeRun(PlaybackPlay play) => play?.Result != null && play.Result.Contains("ホームラン");
 
         /// <summary>
         /// プレーの終わりに全景（縦155m）へ戻すか（issue field-view-cut-back-sooner ④）。
@@ -3659,12 +3694,19 @@ namespace KokoSim.Unity.Match
         /// 存在しない＝プランが持っていない**ので、ここで足す。無いと寄った瞬間にフライが画面の上へ抜ける
         /// （枠 19m の構図に対し打球の頂点は 30m 級＝1枠ぶん以上うわを通る）。
         ///
-        /// 滞空中（<see cref="BallSegmentKind.Flight"/>）は**現在高度を追わない**（issue #399②-1）。
+        /// 滞空中（<see cref="BallSegmentKind.Flight"/>）の**上昇中**は現在高度を追わない（issue #399②-1）。
         /// 現在高度＋0.6秒先読みで決めると、上昇中はほぼ同じ高さへ貼り付き続けて上昇が絵から消える
         /// （ライナーに見える症状の主因）。代わりに**そのセグメントの頂点・着地点（0とApexHeightM）を
-        /// 両端とする箱**を取る＝engine 側 FitBox の縦版で、セグメント中は枠が一定のまま
-        /// 球がその中で弧を描いて見える。頂点は <c>apex·4u(1−u)</c>（u=0.5で最大）の性質から
-        /// セグメント中央の値をそのまま読むだけで求まる（式を Unity 側で持ち直さない）。
+        /// 両端とする箱**を取る＝engine 側 FitBox の縦版で、上昇中は枠が一定のまま球がその中で弧を描いて見える。
+        /// 頂点は <c>apex·4u(1−u)</c>（u=0.5で最大）の性質からセグメント中央の値をそのまま読むだけで求まる
+        /// （式を Unity 側で持ち直さない）。
+        ///
+        /// **頂点を過ぎた下降中は、その時点の現在高度を基準に切り替える**（issue
+        /// fence-camera-zoom-and-outfielder-facing）。頂点固定のままだとフェンス際・本塁打の着地・
+        /// 頭越えの瞬間まで頂点ぶんの縦枠（本塁打級で20〜30m）を引きずり、寄れない。高さは着地へ向けて
+        /// 単調に下がるので現在高度をそのまま使っても上昇時の問題（貼り付いて絵から消える）は起きない。
+        /// frameH の変化自体は <see cref="ApplyFieldCamera"/> 側のレート制限（毎秒 <see cref="FieldZoomSpeedCapMPerSecond"/>）
+        /// で滑らかに追いつく＝段差では跳ばない。
         /// それ以外の区間（保持中・ゴロ・送球等）は従来どおり現在＋先読みの箱に落ちる。
         /// </summary>
         private void ComputeFieldFrame(float t, out Vector3 aim, out float frameH)
@@ -3677,9 +3719,12 @@ namespace KokoSim.Unity.Match
             var flight = FieldFlightSegmentAt(t);
             if (flight != null)
             {
-                float apex = Mathf.Max(0f, (float)flight.At((flight.T1 - flight.T0) * 0.5).H);
-                aimY = Mathf.Max(FieldAimYMin, apex * 0.5f);
-                frameH = Mathf.Max(frameH, apex + FieldMarginM * 2f);
+                double half = (flight.T1 - flight.T0) * 0.5;
+                float apex = Mathf.Max(0f, (float)flight.At(half).H);
+                double rel = t - flight.T0;
+                float h = rel > half ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
+                aimY = Mathf.Max(FieldAimYMin, h * 0.5f);
+                frameH = Mathf.Max(frameH, h + FieldMarginM * 2f);
             }
             else
             {

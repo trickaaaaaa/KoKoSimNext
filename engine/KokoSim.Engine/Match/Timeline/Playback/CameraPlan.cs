@@ -354,19 +354,41 @@ public static class CameraPlanBuilder
     }
 
     /// <summary>
-    /// 時刻 t に盤面に居る人（守備9人＋その時点で走っている走者）。列挙順は
-    /// <see cref="FieldPosition"/> の宣言順→走者の並び順＝辞書の並びに依らず決定論（不変条件#2）。
+    /// 時刻 t に盤面に居る、<b>そのプレーに関与している</b>人（動き出した野手＋走者）。
+    /// 列挙順は <see cref="FieldPosition"/> の宣言順→走者の並び順＝辞書の並びに依らず決定論（不変条件#2）。
+    ///
+    /// <para>定位置に立ったまま一度も動かない野手は候補にしない（issue
+    /// fence-camera-zoom-and-outfielder-facing）。本塁打・長打で誰も追いつけない打球では、
+    /// タイムラインが動かしていない無関係な野手（例: 反対方向の外野手・動かないバッテリー）を
+    /// 画面へ収めようとして <see cref="ZoomKeepingSomeoneFramed"/> が不要にズームアウトする（実測:
+    /// センター方向へ直線的に飛ぶ本塁打サンプルで、絞り込み前はズームが 6.88→3.72 倍のあいだで
+    /// 振動し続け、絞り込み後は振動が消えて着地まで滑らかに最大10.72倍まで寄った）。
+    /// バッテリー（投手・捕手）を無条件の例外にすると、本塁打のように誰も動かない打球で
+    /// 静止したバッテリー自身が「遠い候補」として残り振動が消えなかった（実測で確認）ため、
+    /// 例外を設けず全ポジションを同じ基準（Moves登録＋動き出し）で扱う。暴投・振り逃げ等で
+    /// バッテリーが唯一の関与者になる場面（issue #566 の想定）は、その捕手・投手自身が
+    /// Movesへ登録されて動くのでこの基準でも拾える。</para>
     /// </summary>
     private static IEnumerable<PlaybackVec> ActorsAt(PlaybackPlay play, double t)
     {
         foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
         {
             if (pos == FieldPosition.DesignatedHitter) continue;   // 守備に就かない
+            if (!HasStartedMoving(play, pos, t)) continue;
             yield return PlaybackEvaluator.FielderAt(play, pos, t).Pos;
         }
         foreach (var runner in play.Runners)
             if (PlaybackEvaluator.RunnerAt(runner, t) is { } p)
                 yield return p;
+    }
+
+    /// <summary>時刻 t までに、この野手の予定された動き（<see cref="PlaybackPlay.Moves"/>）が始まっているか。</summary>
+    private static bool HasStartedMoving(PlaybackPlay play, FieldPosition pos, double t)
+    {
+        if (play.Moves == null || !play.Moves.TryGetValue(pos, out var moves) || moves.Count == 0) return false;
+        foreach (var m in moves)
+            if (t >= m.T0) return true;
+        return false;
     }
 
     private static (double Cx, double Cy) ClampPan(double px, double py, double tx, double ty, double dt)
