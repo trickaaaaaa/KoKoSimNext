@@ -788,7 +788,6 @@ public static class CoefficientsLoader
         public double AdvanceMarginScale { get; set; } = D.AdvanceMarginScale;
         public double AdvanceSuccessBias { get; set; } = D.AdvanceSuccessBias;
         public double AdvanceRelayTransferSeconds { get; set; } = D.AdvanceRelayTransferSeconds;
-        public double AdvanceDirectThrowMaxRunnerSuccess { get; set; } = D.AdvanceDirectThrowMaxRunnerSuccess;
         // 併殺の物理レース（内野ゴロ×一塁走者, Issue #369）
         public double DoublePlayR1StartDelaySeconds { get; set; } = D.DoublePlayR1StartDelaySeconds;
         public double SecondForceTagSeconds { get; set; } = D.SecondForceTagSeconds;
@@ -906,7 +905,6 @@ public static class CoefficientsLoader
             AdvanceMarginScale = AdvanceMarginScale,
             AdvanceSuccessBias = AdvanceSuccessBias,
             AdvanceRelayTransferSeconds = AdvanceRelayTransferSeconds,
-            AdvanceDirectThrowMaxRunnerSuccess = AdvanceDirectThrowMaxRunnerSuccess,
             DoublePlayR1StartDelaySeconds = DoublePlayR1StartDelaySeconds,
             SecondForceTagSeconds = SecondForceTagSeconds,
             SecondForceMarginScale = SecondForceMarginScale,

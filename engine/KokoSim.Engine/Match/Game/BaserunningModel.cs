@@ -716,7 +716,7 @@ public static class BaserunningModel
         {
             if (!r2Forced && extraOuts == 0 && home is { IsFly: false } adv)
             {
-                ResolveGrounderAdvance(bases, batter, r2, adv, coeff, rng, mv, ref extraOuts, ref batterSafeOnFc);
+                ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts);
                 r2 = null; // 進塁・憤死・自重のいずれでも二塁走者の帰趨はここで確定（自重時は bases.Second のまま）。
             }
             else if (r2Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
@@ -742,41 +742,24 @@ public static class BaserunningModel
     }
 
     /// <summary>
-    /// ゴロ凡打の非フォース進塁打（二塁→三塁, Issue #318, 設計書12 §3.5）を物理レースで解く。
-    /// 守備は幾何で決まる「捕球点→三塁の直接送球でどれだけ刺せそうか（P_direct）」だけで3分岐を純関数で選ぶ:
-    /// A) 走者自重（RNG非消費）／ B) 一塁を捨てて三塁へ直接送球（打者は野選で一塁生存, P_direct でレース）／
-    /// C) 一塁を取り（打者アウト）走者は一塁経由の転送とレース（P_relay）。方向性は係数でなく幾何から創発する
-    /// （三遊間ゴロは捕球点が三塁に近い＝P_direct 低＝自重／一二塁間ゴロは遠い＝P_direct 高＝無血進塁）。
+    /// ゴロ凡打の非フォース進塁打（二塁→三塁, Issue #318／issue productive-out-second-to-third-not-advancing,
+    /// 設計書12 §3.5）を物理レースで解く。この呼び出しに至った時点で打者走者は一塁アウトが確定している
+    /// （実際の内野は「一塁の確実な1アウト」を捨てて三塁の走者を直接狙う判断はしない＝守備の危険回避を
+    /// 物理レースだけでは表現できないため、旧実装にあった「一塁を捨てて三塁へ直接送球」分岐は廃止）。
+    /// 二塁走者の帰趨は、実際に発生する送球（一塁への送球到達時刻）を起点にした転送レース（P_relay）だけで決まる:
+    /// A) 転送の脅威が実在する（P_relay &lt; 送り閾値）→ 走者自重（RNG非消費）／
+    /// B) 脅威が薄い → 走者は三塁へ進み、転送とレース（P_relay）。
     /// 走者所要は本塁・三塁レースと同じ <see cref="HomePlayResolver"/> 経由（新しい走者の式を書かない）。
     /// 呼び出し前提: 非フォースの二塁走者（⇒一塁は必ず空）・三塁は空き・extraOuts==0・ゴロ。
     /// </summary>
     private static void ResolveGrounderAdvance(
-        BaseState bases, Player batter, Player r2, HomePlayContext home,
+        BaseState bases, Player r2, HomePlayContext home,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
-        ref int extraOuts, ref bool batterSafeOnFc)
+        ref int extraOuts)
     {
         var advance = HomePlayResolver.AdvanceParams(home.Field, coeff);
         var delay = coeff.GrounderAdvanceStartDelaySeconds;
-        // P_direct: 守備が捕球点から三塁へ直接投げた場合の走者到達確率（打球方向・深さは home.Situation から創発）。
-        var pDirect = HomePlayResolver.SuccessProbability(r2, 2, home.Situation, home.Field, coeff, advance, delay);
-        // 送り閾値（アウト数を取らない＝2アウト緩和なし。理由は HomeSendDecision.SendAdvanceThreshold のコメント）。
-        var t = HomeSendDecision.SendAdvanceThreshold(home.Aggression, home.Tactics);
 
-        // A) 自重。二塁残留（bases.Second は r2 のまま）。RNG非消費（本塁・三塁レースの流儀, 不変条件#2）。
-        if (pDirect < t) return;
-
-        if (pDirect <= coeff.AdvanceDirectThrowMaxRunnerSuccess)
-        {
-            // B) 守備は一塁を捨てて三塁へ直接送球。打者は野選で一塁生存（非フォースの r2 ⇒ 一塁は必ず空＝衝突しない）。
-            batterSafeOnFc = true;
-            bases.First = batter;
-            mv?.Add(new RunnerMove(batter, 0, 1, false));
-            var margin = HomePlayResolver.Margin(r2, 2, home.Situation, home.Field, coeff, advance, delay);
-            ResolveAdvanceRace(bases, r2, pDirect, margin, delay, coeff, rng, mv, ref extraOuts);
-            return;
-        }
-
-        // C) 守備は一塁を取る（打者アウト）。走者は一塁経由の転送とレース（P_relay）。
         if (home.ThrowArriveSeconds is not { } arriveAtFirst)
         {
             // 一塁送球が無い経路（転送起点が組めない）＝無血進塁（RNG非消費・フォールバック）。
@@ -791,6 +774,13 @@ public static class BaserunningModel
             home.Field.FirstBase, arriveAtFirst, coeff.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
         var pRelay = HomePlayResolver.SuccessProbability(
             r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
+        // 送り閾値（アウト数を取らない＝2アウト緩和なし。理由は HomeSendDecision.SendAdvanceThreshold のコメント）。
+        var t = HomeSendDecision.SendAdvanceThreshold(home.Aggression, home.Tactics);
+
+        // A) 自重。二塁残留（bases.Second は r2 のまま）。RNG非消費（本塁・三塁レースの流儀, 不変条件#2）。
+        if (pRelay < t) return;
+
+        // B) 走者は一塁経由の転送とレース。打者は一塁アウト（batterSafeOnFc は変えない＝この呼び出しに入った時点で確定済み）。
         var relayMargin = HomePlayResolver.Margin(
             r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
         ResolveAdvanceRace(bases, r2, pRelay, relayMargin, delay, coeff, rng, mv, ref extraOuts);

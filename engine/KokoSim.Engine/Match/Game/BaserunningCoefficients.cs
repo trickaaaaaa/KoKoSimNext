@@ -284,8 +284,6 @@ public sealed record BaserunningCoefficients
     /// <summary>一塁手の転送握り替え[s]（一塁を取ってから三塁へ転送する経路 P_relay 用。
     /// <see cref="RelayTransferSeconds"/> と同軸）。</summary>
     public double AdvanceRelayTransferSeconds { get; init; } = 0.55;
-    /// <summary>走者の三塁到達見込みがこれ以下なら守備は一塁を捨てて三塁へ直接送球する（分岐B/Cの境界）。</summary>
-    public double AdvanceDirectThrowMaxRunnerSuccess { get; init; } = 0.45;
 
     // === 併殺の物理レース（内野ゴロ×一塁走者, Issue #369, 設計書12 §2）===
     // 13%固定テーブル（DoublePlayProb）を二段の秒勝負へ置換する: ①捕球点→二塁の封殺が間に合うか（P_force2）
@@ -305,8 +303,7 @@ public sealed record BaserunningCoefficients
     /// <summary>二塁封殺 到達確率バイアス[s]（校正項。一塁走者物理の保守性を吸収する）。</summary>
     public double SecondForceSuccessBias { get; init; } = 0.00;
     /// <summary>一塁走者の二塁到達見込み（P_r1_safe）がこれを超えたら守備は封殺自体が不可＝一塁を取る（分岐A）。
-    /// 内野ゴロの二塁封殺は短い送球で走者(≈3.5s)に先着するのが通常＝この分岐Aは俊足走者/深い右方向ゴロ等の稀ケース。
-    /// <see cref="AdvanceDirectThrowMaxRunnerSuccess"/> と同型の「守備が幾何で送球先を選ぶ」境界。</summary>
+    /// 内野ゴロの二塁封殺は短い送球で走者(≈3.5s)に先着するのが通常＝この分岐Aは俊足走者/深い右方向ゴロ等の稀ケース。</summary>
     public double DoublePlayForceMaxRunnerSuccess { get; init; } = 0.60;
     /// <summary>二塁封殺は間に合うが、二塁→一塁の転送で打者を刺せる見込み（P_relay_out）がこれ未満なら
     /// 守備は併殺を狙わず「確実な一塁アウト」を取る（分岐A＝打者一塁アウト＋一塁走者は二塁へ）。

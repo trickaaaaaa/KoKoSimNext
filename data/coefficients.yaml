@@ -338,14 +338,15 @@ baserunning:
   third_tag_seconds: 0.10                     # 三塁でのベースタッチ（本塁クロスプレーより短い）
   third_margin_scale: 0.45                    # margin→確率のlogistic幅（本塁より広め＝打球の深さ・外野の肩を効かせる）
   third_success_bias: 0.88                    # #316: 加速+回る損失をモデル化した分(-0.62s)を引いて 1.50→0.88
-  # ゴロ凡打の進塁打（二塁→三塁, Issue #318, 設計書12 §3.5）: 18%固定テーブルを「捕球点→三塁の物理レース」へ。
-  # 守備は幾何（P_direct）で「一塁を取る/一塁を捨てて三塁へ直接投げる/走者は自重」を選ぶ（采配でなく物理で決める）。
+  # ゴロ凡打の進塁打（二塁→三塁, Issue #318／issue productive-out-second-to-third-not-advancing, 設計書12 §3.5）:
+  # 18%固定テーブルを「一塁送球到達→三塁への転送レース」へ。打者走者はこの場面に至った時点で一塁アウトが確定して
+  # おり（実際の内野は確実な1アウトを捨てて三塁の走者を直接狙わない）、二塁走者は転送の脅威（P_relay）だけで
+  # 進むか自重するかが決まる（采配でなく物理で決める）。
   grounder_advance_start_delay_seconds: 0.90 # ゴロを読んでから走り出す追加遅延[s]。本塁(1.55)より短い＝進塁は生還ほど慎重に見極めない
   advance_tag_seconds: 0.10                   # 進塁先でのタッチ[s]（third_tag_seconds と同軸）
   advance_margin_scale: 0.45                  # margin→確率のlogistic幅（三塁レースと同軸）
   advance_success_bias: 0.00                  # 校正項[s]。帯校正はこの1本だけで行う（Issue #318）
   advance_relay_transfer_seconds: 0.55        # 一塁手の転送握り替え[s]（relay_transfer_seconds と同軸）
-  advance_direct_throw_max_runner_success: 0.45 # 走者の到達見込みがこれ以下なら守備は一塁を捨てて三塁へ直接投げる
   # 併殺の物理レース（内野ゴロ×一塁走者, Issue #369, 設計書12 §2）: 13%固定テーブル（double_play_prob）を
   # 「捕球点→二塁の封殺（P_force2）／二塁→一塁の転送」の二段の秒勝負へ。守備は幾何で3分岐を純関数で選ぶ
   # （A=一塁のみ／B=野選／C=併殺）。方向性・深さ・打者/走者の脚は係数でなく幾何から創発する。

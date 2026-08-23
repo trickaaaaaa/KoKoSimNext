@@ -17,7 +17,8 @@ namespace KokoSim.Engine.Tests.Match.Game;
 /// ここでは<b>巻き戻しが漏れなく効いているか</b>を球単位の観測（<see cref="LivePitch"/>）で固定する。</para>
 ///
 /// <para>強制発動にファウルを作る手段が無いので、狙い撃ちではなく「全球で盗塁を試みる試合」を回して
-/// 不変条件で殺す。既定係数では牽制確率が0なので、盗塁以外に打席途中で塁を動かす事象は無い。</para>
+/// 不変条件で殺す。牽制（<see cref="LivePitch.PickoffPlay"/> が載る球）は盗塁と独立に塁・アウトを動かせる
+/// 正当な事象（issue #402 で PickoffBaseProb が 0→0.05 に正値化済み）なので、その球自体は比較から除く。</para>
 /// </summary>
 public sealed class StealOnDeadBallTests
 {
@@ -90,8 +91,10 @@ public sealed class StealOnDeadBallTests
     }
 
     /// <summary>
-    /// ファウルはボールデッド＝その球で塁・アウトが1つも動かない。
-    /// 打席の2球目以降だけを見る（初球は打席頭との比較先が無い）。
+    /// ファウルはボールデッド＝盗塁企図だけではその球で塁・アウトが動かない。
+    /// 打席の2球目以降だけを見る（初球は打席頭との比較先が無い）。牽制
+    /// （<see cref="LivePitch.PickoffPlay"/> が載る球）は投球そのものと独立に塁・アウトを動かせる
+    /// 正当な事象なので比較から除く（ファウルかどうかとは無関係に牽制刺殺が起きうる）。
     /// </summary>
     [Theory]
     [InlineData(1UL)]
@@ -107,6 +110,7 @@ public sealed class StealOnDeadBallTests
             var cur = pitches[i];
             if (cur.Pitch.Kind != PitchKind.Foul) continue;
             if (cur.PitchNumberInPa <= 1) continue;      // 同じ打席の前の球が無い
+            if (cur.PickoffPlay is not null) continue;   // 牽制は投球と独立に塁・アウトを動かせる正当な事象
             var prev = pitches[i - 1];
             Assert.Equal(prev.Outs, cur.Outs);
             Assert.Equal(prev.BaseFirst, cur.BaseFirst);
