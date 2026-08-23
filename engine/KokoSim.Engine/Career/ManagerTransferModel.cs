@@ -36,6 +36,10 @@ public sealed record TransferResult(
 /// （フリー化資格→残留ロジスティック）を使うが、赴任先は sim のような捏造値でなく<b>実在の
 /// <see cref="School"/> から選ぶ</b>（実ゲームは4000校の Nation を持つため）。
 ///
+/// <para><b>強制転任（教員）は同一県内に限る</b>＝都道府県教育委員会の異動という設定上、県境を越えない。
+/// フリー監督（本拠地選択・以降のオファー）は教員身分を離れた全国区の存在なのでこの制約を受けない
+/// （県外だけを候補にする）。</para>
+///
 /// <para>純関数・決定論（不変条件#2）。呼び出し側は本編の乱数列を乱さない独立 Fork ストリームを渡すこと
 /// （<see cref="ManagerGrowthEvents.Yearly"/> の <c>milestoneRng</c> と同じ作法）。</para>
 /// </summary>
@@ -46,12 +50,12 @@ public static class ManagerTransferModel
     {
         if (manager.Status == ManagerStatus.Teacher)
         {
-            // フリー化資格（設計書04 §1.3）。
+            // フリー化資格（設計書04 §1.3）。このタイミングで教員身分を離れる＝以降は県境の制約を受けない。
             if (manager.KoshienAppearances >= c.FreeKoshienThreshold || manager.Fame >= c.FreeFameThreshold)
             {
                 var candidates = PickCandidates(
-                    nation, currentPrefectureId, c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread,
-                    c.FreeAgentOfferCount, rng);
+                    nation, currentPrefectureId, samePrefectureOnly: false,
+                    c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread, c.FreeAgentOfferCount, rng);
                 return new TransferResult(TransferEventKind.BecameFreeAgent, candidates, CanStay: true);
             }
 
@@ -60,18 +64,20 @@ public static class ManagerTransferModel
             var retainChance = c.RetainProbability / (1.0 + Math.Exp(-z));
             if (rng.NextDouble() < retainChance) return TransferResult.Stayed;
 
-            // 強制転任。選択肢は1件だけ（拒否できない＝設計書どおり）。
+            // 強制転任。教員は都道府県教育委員会の異動なので同一県内に限る。選択肢は1件だけ（拒否できない）。
             var forced = PickCandidates(
-                nation, currentPrefectureId, c.NewSchoolStrengthMean, c.NewSchoolStrengthSd, 1, rng);
+                nation, currentPrefectureId, samePrefectureOnly: true,
+                c.NewSchoolStrengthMean, c.NewSchoolStrengthSd, 1, rng);
             return new TransferResult(TransferEventKind.ForcedTransfer, forced, CanStay: false);
         }
 
-        // フリー監督: 残留自由・他校オファーの選択制。オファーが届かない年は何も起きない。
+        // フリー監督: 教員身分を離れた全国区の存在＝県境の制約を受けない（残留自由・他校オファーの選択制）。
+        // オファーが届かない年は何も起きない。
         if (rng.NextDouble() < c.FreeAgentOfferChance)
         {
             var candidates = PickCandidates(
-                nation, currentPrefectureId, c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread,
-                c.FreeAgentOfferCount, rng);
+                nation, currentPrefectureId, samePrefectureOnly: false,
+                c.FreeChoiceSchoolStrength, c.FreeAgentOfferSpread, c.FreeAgentOfferCount, rng);
             return new TransferResult(TransferEventKind.FreeAgentOffer, candidates, CanStay: true);
         }
         return TransferResult.Stayed;
@@ -81,16 +87,18 @@ public static class ManagerTransferModel
     public static void ApplyTransfer(Manager m, CareerCoefficients c) => m.Trust = c.TrustReset;
 
     /// <summary>
-    /// 実在校から<paramref name="count"/>件の候補を選ぶ。同一県は除外（他県へ渡り歩く手触り）。
-    /// 強さは正規分布サンプルに最も近い校を拾う（乱数は<paramref name="rng"/>だけを消費・決定論）。
+    /// 実在校から<paramref name="count"/>件の候補を選ぶ。<paramref name="samePrefectureOnly"/>=true なら
+    /// 同一県内だけ（教員の強制転任＝都道府県教育委員会の異動は県境を越えない）、false なら県外だけ
+    /// （フリー監督のオファー＝教員身分を離れた全国区の存在）。強さは正規分布サンプルに最も近い校を拾う
+    /// （乱数は<paramref name="rng"/>だけを消費・決定論）。
     /// </summary>
     private static IReadOnlyList<TransferCandidate> PickCandidates(
-        NationState nation, int excludePrefectureId, double targetStrength, double spread, int count,
-        IRandomSource rng)
+        NationState nation, int prefectureId, bool samePrefectureOnly, double targetStrength, double spread,
+        int count, IRandomSource rng)
     {
         var pool = new List<School>();
         foreach (var s in nation.Schools)
-            if (s.PrefectureId != excludePrefectureId) pool.Add(s);
+            if ((s.PrefectureId == prefectureId) == samePrefectureOnly) pool.Add(s);
         if (pool.Count == 0) return Array.Empty<TransferCandidate>();
 
         var picked = new List<TransferCandidate>(count);

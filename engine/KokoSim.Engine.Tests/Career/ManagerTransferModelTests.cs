@@ -74,18 +74,40 @@ public sealed class ManagerTransferModelTests
     }
 
     [Fact]
-    public void Evaluate_ForcedTransfer_NeverPicksCurrentPrefecture()
+    public void Evaluate_ForcedTransfer_AlwaysStaysWithinCurrentPrefecture()
     {
+        // 教員は都道府県教育委員会の異動＝強制転任は県境を越えない。
         var m = new Manager { Status = ManagerStatus.Teacher, Trust = 0 };
         var nation = BuildNation();
 
+        var sawForcedTransfer = false;
         for (var seed = 0UL; seed < 20; seed++)
         {
             var rng = new Xoshiro256Random(seed);
             var result = ManagerTransferModel.Evaluate(m, currentPrefectureId: 13, nation, rng, C);
             if (result.Kind != TransferEventKind.ForcedTransfer) continue;
-            Assert.All(result.Candidates, cand => Assert.NotEqual(13, cand.PrefectureId));
+            sawForcedTransfer = true;
+            Assert.All(result.Candidates, cand => Assert.Equal(13, cand.PrefectureId));
         }
+        Assert.True(sawForcedTransfer, "20シードのどれかは強制転任に当たる想定（テストの前提確認）");
+    }
+
+    [Fact]
+    public void Evaluate_FreeAgentOffers_NeverPickCurrentPrefecture()
+    {
+        // フリー監督（本拠地選択・以降のオファー）は教員身分を離れた全国区＝県境の制約を受けない。
+        var becameFree = new Manager { Status = ManagerStatus.Teacher, KoshienAppearances = 1 };
+        var nation = BuildNation();
+        var becameFreeResult = ManagerTransferModel.Evaluate(
+            becameFree, currentPrefectureId: 13, nation, new Xoshiro256Random(1), C);
+        Assert.Equal(TransferEventKind.BecameFreeAgent, becameFreeResult.Kind);
+        Assert.All(becameFreeResult.Candidates, cand => Assert.NotEqual(13, cand.PrefectureId));
+
+        var alreadyFree = new Manager { Status = ManagerStatus.Free };
+        var offerResult = ManagerTransferModel.Evaluate(
+            alreadyFree, 13, nation, new FixedDoubleRandomSource(0.0), C);
+        Assert.Equal(TransferEventKind.FreeAgentOffer, offerResult.Kind);
+        Assert.All(offerResult.Candidates, cand => Assert.NotEqual(13, cand.PrefectureId));
     }
 
     [Fact]
