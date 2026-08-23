@@ -146,7 +146,7 @@ namespace KokoSim.Unity.Shell
 
             ManagerTransferModel.ApplyTransfer(ManagerService.Manager, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();
-            RosterService.ResetForTransfer();
+            RosterService.ResetForTransfer(GameClock.YearIndex);
             NationService.SetSchoolIdentity(target.SchoolName, target.PrefectureId, target.DistrictId);
 
             Clear();
