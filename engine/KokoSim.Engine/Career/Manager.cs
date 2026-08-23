@@ -45,6 +45,9 @@ public sealed class Manager
     /// <summary>通算赴任年数。</summary>
     public int CareerYears { get; set; }
 
+    /// <summary>現在の学校での在任年数。転任のたび0にリセットされる（<see cref="CareerYears"/>と違い通算しない）。</summary>
+    public int YearsAtSchool { get; set; }
+
     /// <summary>甲子園出場回数（フリー化資格判定）。</summary>
     public int KoshienAppearances { get; set; }
 

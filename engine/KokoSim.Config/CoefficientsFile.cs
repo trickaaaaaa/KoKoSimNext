@@ -2436,6 +2436,7 @@ public static class CoefficientsLoader
         public double CoachingToStrength { get; set; } = D.CoachingToStrength;
         public int FreeKoshienThreshold { get; set; } = D.FreeKoshienThreshold;
         public double FreeFameThreshold { get; set; } = D.FreeFameThreshold;
+        public int MinTenureYears { get; set; } = D.MinTenureYears;
         public double RetainTrustThreshold { get; set; } = D.RetainTrustThreshold;
         public double RetainTrustSpread { get; set; } = D.RetainTrustSpread;
         public double RetainProbability { get; set; } = D.RetainProbability;
@@ -2476,6 +2477,7 @@ public static class CoefficientsLoader
             CoachingToStrength = CoachingToStrength,
             FreeKoshienThreshold = FreeKoshienThreshold,
             FreeFameThreshold = FreeFameThreshold,
+            MinTenureYears = MinTenureYears,
             RetainTrustThreshold = RetainTrustThreshold,
             RetainTrustSpread = RetainTrustSpread,
             RetainProbability = RetainProbability,

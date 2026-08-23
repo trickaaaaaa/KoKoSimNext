@@ -48,7 +48,13 @@ public sealed class ManagerTransferModelTests
     public void Evaluate_Teacher_BelowThreshold_HighTrust_RetainsWithoutTransfer()
     {
         // 信頼度が十分高いロジスティック中点+3σ相当なら、残留確率は上限(0.8)近傍に張り付く。
-        var m = new Manager { Status = ManagerStatus.Teacher, Trust = C.RetainTrustThreshold + 3 * C.RetainTrustSpread };
+        // 最低在任年数は満たしている前提（下限そのものの検証は別テスト）。
+        var m = new Manager
+        {
+            Status = ManagerStatus.Teacher,
+            Trust = C.RetainTrustThreshold + 3 * C.RetainTrustSpread,
+            YearsAtSchool = C.MinTenureYears,
+        };
         var nation = BuildNation();
 
         // 上限0.8を下回る一様乱数(0.1)なら必ず残留する。
@@ -62,7 +68,13 @@ public sealed class ManagerTransferModelTests
     public void Evaluate_Teacher_BelowThreshold_LowTrust_ForcedTransfer_HasExactlyOneCandidate_NoStayOption()
     {
         // 信頼度が中点より十分低ければ残留確率はほぼ0。0.99は必ず残留確率を上回る。
-        var m = new Manager { Status = ManagerStatus.Teacher, Trust = C.RetainTrustThreshold - 3 * C.RetainTrustSpread };
+        // 最低在任年数は満たしている前提。
+        var m = new Manager
+        {
+            Status = ManagerStatus.Teacher,
+            Trust = C.RetainTrustThreshold - 3 * C.RetainTrustSpread,
+            YearsAtSchool = C.MinTenureYears,
+        };
         var nation = BuildNation();
 
         var rng = new FixedDoubleRandomSource(0.99);
@@ -76,8 +88,8 @@ public sealed class ManagerTransferModelTests
     [Fact]
     public void Evaluate_ForcedTransfer_AlwaysStaysWithinCurrentPrefecture()
     {
-        // 教員は都道府県教育委員会の異動＝強制転任は県境を越えない。
-        var m = new Manager { Status = ManagerStatus.Teacher, Trust = 0 };
+        // 教員は都道府県教育委員会の異動＝強制転任は県境を越えない。最低在任年数は満たしている前提。
+        var m = new Manager { Status = ManagerStatus.Teacher, Trust = 0, YearsAtSchool = C.MinTenureYears };
         var nation = BuildNation();
 
         var sawForcedTransfer = false;
@@ -90,6 +102,26 @@ public sealed class ManagerTransferModelTests
             Assert.All(result.Candidates, cand => Assert.Equal(13, cand.PrefectureId));
         }
         Assert.True(sawForcedTransfer, "20シードのどれかは強制転任に当たる想定（テストの前提確認）");
+    }
+
+    [Fact]
+    public void Evaluate_BelowMinTenure_NeverForcedTransfer_EvenWithZeroTrust()
+    {
+        // 赴任したて（在任0年）は信頼度が最低でも強制転任の抽選そのものに入らない＝必ず残留。
+        // 「採った1年生が卒業するまでは追い出されない」という下限（ユーザー指摘で追加）。
+        var m = new Manager { Status = ManagerStatus.Teacher, Trust = 0, YearsAtSchool = 0 };
+        var nation = BuildNation();
+
+        for (var seed = 0UL; seed < 20; seed++)
+        {
+            var result = ManagerTransferModel.Evaluate(m, currentPrefectureId: 13, nation, new Xoshiro256Random(seed), C);
+            Assert.Equal(TransferResult.Stayed, result);
+        }
+
+        // 在任年数が下限ちょうど手前(MinTenureYears-1)でもまだ対象外。
+        var almost = new Manager { Status = ManagerStatus.Teacher, Trust = 0, YearsAtSchool = C.MinTenureYears - 1 };
+        var stillStayed = ManagerTransferModel.Evaluate(almost, 13, nation, new FixedDoubleRandomSource(0.99), C);
+        Assert.Equal(TransferResult.Stayed, stillStayed);
     }
 
     [Fact]
@@ -156,13 +188,14 @@ public sealed class ManagerTransferModelTests
     }
 
     [Fact]
-    public void ApplyTransfer_ResetsTrustOnly_KeepingFameAndCoaching()
+    public void ApplyTransfer_ResetsTrustAndTenure_KeepingFameAndCoaching()
     {
-        var m = new Manager { Trust = 90, Fame = 55, CoachingBatting = 40 };
+        var m = new Manager { Trust = 90, Fame = 55, CoachingBatting = 40, YearsAtSchool = 7 };
 
         ManagerTransferModel.ApplyTransfer(m, C);
 
         Assert.Equal(C.TrustReset, m.Trust);
+        Assert.Equal(0, m.YearsAtSchool);
         Assert.Equal(55, m.Fame);
         Assert.Equal(40, m.CoachingBatting);
     }

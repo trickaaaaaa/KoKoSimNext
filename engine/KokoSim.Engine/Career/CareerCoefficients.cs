@@ -16,6 +16,14 @@ public sealed record CareerCoefficients
     public double FreeFameThreshold { get; init; } = 52;  // または名声
 
     // --- 強制転任（教員監督, 設計書04 §1.3） ---
+    /// <summary>
+    /// 赴任してから強制転任の対象になるまでの最低在任年数。赴任した年に獲った1年生が卒業する
+    /// （3年で卒業）までは追い出されない、という手触りを保証する下限（2026-08-23 ユーザー指摘で追加）。
+    /// この年数未満は残留ロジスティックの抽選そのものを行わず必ず残留する。フリー化資格
+    /// （<see cref="FreeKoshienThreshold"/>/<see cref="FreeFameThreshold"/>）はこの下限の対象外
+    /// （実績による解放は早く起きてもプレイヤーに不利益がない）。
+    /// </summary>
+    public int MinTenureYears { get; init; } = 3;
     /// <summary>残留確率ロジスティックの中点となる信頼度（この信頼度で残留確率＝上限の半分）。
     /// TrustReset(50)近傍から到達可能な帯に置き、信頼を積むほど腰を据えられるようにする。</summary>
     public double RetainTrustThreshold { get; init; } = 60;

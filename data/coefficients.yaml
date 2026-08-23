@@ -1089,6 +1089,7 @@ career:
   coaching_to_strength: 0.78        # 指導力→チーム力の押し上げ
   free_koshien_threshold: 1         # 甲子園1回でフリー資格
   free_fame_threshold: 52.0         # または名声60
+  min_tenure_years: 3               # 赴任してから強制転任の対象になるまでの最低在任年数（採った1年生の卒業年数）
   retain_trust_threshold: 60.0      # 残留確率ロジスティックの中点（この信頼度で残留確率＝上限の半分）
   retain_trust_spread: 10.0         # ロジスティックの傾き（信頼度の効き幅）
   retain_probability: 0.8           # 高信頼時の残留確率の上限

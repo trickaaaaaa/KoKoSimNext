@@ -37,6 +37,7 @@ public static class ManagerSeasonUpdate
         // 自然増（指導力・采配・育成眼・名声・信頼度・資金）。
         CareerEngine.ApplyResults(m, reachedKoshien, nationalChampion, wins, upsetFameDelta, c, contracts);
         m.CareerYears++;
+        m.YearsAtSchool++;
         if (reachedKoshien) m.KoshienAppearances++;
 
         // 節目イベント（甲子園経験・大敗の学び・講習会・OB訪問等）。独立ストリームで既存の乱数列を乱さない。

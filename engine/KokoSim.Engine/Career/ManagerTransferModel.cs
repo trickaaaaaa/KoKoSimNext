@@ -59,6 +59,10 @@ public static class ManagerTransferModel
                 return new TransferResult(TransferEventKind.BecameFreeAgent, candidates, CanStay: true);
             }
 
+            // 最低在任年数（設計書04 §1.3追記）。赴任した年に採った1年生が卒業する（3年）までは
+            // 強制転任の抽選そのものを行わない＝必ず残留。CareerEngine.Run と同じ判定式。
+            if (manager.YearsAtSchool < c.MinTenureYears) return TransferResult.Stayed;
+
             // 残留判定（信頼度が高いほど校が引き留める）。CareerEngine.Run と同じロジスティック式。
             var z = (manager.Trust - c.RetainTrustThreshold) / c.RetainTrustSpread;
             var retainChance = c.RetainProbability / (1.0 + Math.Exp(-z));
@@ -83,8 +87,15 @@ public static class ManagerTransferModel
         return TransferResult.Stayed;
     }
 
-    /// <summary>転任に伴う監督メタの更新（信頼度リセットのみ。設計書04 §1.3「監督能力と名声は持ち越し」）。</summary>
-    public static void ApplyTransfer(Manager m, CareerCoefficients c) => m.Trust = c.TrustReset;
+    /// <summary>
+    /// 転任に伴う監督メタの更新（設計書04 §1.3「監督能力と名声は持ち越し」）。信頼度は転任でリセットし、
+    /// 在任年数も新しい学校での0に戻す（最低在任年数の下限はここから再カウント）。
+    /// </summary>
+    public static void ApplyTransfer(Manager m, CareerCoefficients c)
+    {
+        m.Trust = c.TrustReset;
+        m.YearsAtSchool = 0;
+    }
 
     /// <summary>
     /// 実在校から<paramref name="count"/>件の候補を選ぶ。<paramref name="samePrefectureOnly"/>=true なら
