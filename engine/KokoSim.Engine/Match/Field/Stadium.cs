@@ -65,4 +65,45 @@ public sealed record Stadium
         CenterM = 118.0,
         FenceHeightM = 2.6,
     };
+
+    /// <summary>
+    /// 地方大会（県大会）の汎用ティア球場（設計書13 §1・issue #41系「地方大会の球場割当」）。
+    /// 47県固有の実在球場は追わず、data/stadiums.yaml の汎用タイプ3種を序盤/準決勝・決勝で使い分ける
+    /// （<see cref="RegionalStadiumTier"/>）。<b>値は data/stadiums.yaml と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.RegionalTierDefaults_MatchTheRepositoryYaml</c> が固定する）。
+    /// </summary>
+    public static Stadium MunicipalSmall01 { get; } = new()
+    {
+        Id = "municipal_small_01",
+        Name = "市営球場（狭い）",
+        Tier = StadiumTier.Municipal,
+        LeftM = 91.0,
+        RightM = 91.0,
+        CenterM = 115.0,
+        FenceHeightM = 2.0,
+    };
+
+    /// <summary>同上（序盤ラウンドのもう一方）。</summary>
+    public static Stadium MunicipalSmall02 { get; } = new()
+    {
+        Id = "municipal_small_02",
+        Name = "市営球場（やや狭い）",
+        Tier = StadiumTier.Municipal,
+        LeftM = 93.0,
+        RightM = 93.0,
+        CenterM = 116.0,
+        FenceHeightM = 2.0,
+    };
+
+    /// <summary>同上（準決勝・決勝＝県営級。地方の県営級の実測基準として design-02/13 で参照される寸法）。</summary>
+    public static Stadium PrefLarge { get; } = new()
+    {
+        Id = "pref_large_01",
+        Name = "県営球場（広い）",
+        Tier = StadiumTier.Prefectural,
+        LeftM = 100.0,
+        RightM = 100.0,
+        CenterM = 122.0,
+        FenceHeightM = 3.0,
+    };
 }

@@ -106,13 +106,44 @@ public sealed class StadiumLoaderTests
     }
 
     /// <summary>
+    /// 汎用ティア球場（<see cref="Stadium.MunicipalSmall01"/>/<see cref="Stadium.MunicipalSmall02"/>/
+    /// <see cref="Stadium.PrefLarge"/>）の C#既定と data/stadiums.yaml が一致すること（不変条件#4）。
+    /// 実ゲーム（<c>RegionalStadiumTier</c> 経由）は YAML を読まず C#既定で走るので、片方だけ動かすと
+    /// 実ゲームだけ別の寸法で試合をする。
+    /// </summary>
+    [Theory]
+    [InlineData("municipal_small_01")]
+    [InlineData("municipal_small_02")]
+    [InlineData("pref_large_01")]
+    public void RegionalTierDefaults_MatchTheRepositoryYaml(string id)
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("stadiums.yaml");
+        var yaml = StadiumCatalogLoader.LoadCatalog(path)[id];
+        var code = id switch
+        {
+            "municipal_small_01" => Stadium.MunicipalSmall01,
+            "municipal_small_02" => Stadium.MunicipalSmall02,
+            "pref_large_01" => Stadium.PrefLarge,
+            _ => throw new System.ArgumentException(id),
+        };
+
+        Assert.Equal(yaml.Id, code.Id);
+        Assert.Equal(yaml.Name, code.Name);
+        Assert.Equal(yaml.Tier, code.Tier);
+        Assert.Equal(yaml.LeftM, code.LeftM, 6);
+        Assert.Equal(yaml.RightM, code.RightM, 6);
+        Assert.Equal(yaml.CenterM, code.CenterM, 6);
+        Assert.Equal(yaml.FenceHeightM, code.FenceHeightM, 6);
+    }
+
+    /// <summary>
     /// 甲子園と既定の球場（<see cref="FieldGeometry"/> の初期値）の関係を固定する。
     ///
     /// <para><b>距離は既に同じ</b>（95/95/118）＝既定の球場がもともと甲子園の寸法で書かれている。
     /// 違うのは<b>フェンス高だけ</b>（既定4.0m に対し甲子園2.6m）で、実ゲームで甲子園の寸法を使うと
-    /// 効くのはこの1.4mである。「地方は広い → 甲子園は狭い」という差はまだ存在しない
-    /// （地方大会の球場割当＝設計書13 の <c>StadiumPlan</c> が実ゲームへ未配線なため）。
-    /// この事実を知らずに距離だけ見ると「注入しても何も変わらないはず」と誤読する。</para>
+    /// 効くのはこの1.4mである。夏・秋の県大会は <c>RegionalStadiumTier</c> 配線後は既定を離れて
+    /// 汎用ティア球場（<see cref="RegionalTierDefaults_MatchTheRepositoryYaml"/>）を使うが、
+    /// 地区大会・神宮大会・大会外の試合はまだこの既定のまま（<c>MatchStadium.Default</c>）。</para>
     /// </summary>
     [Fact]
     public void Koshien_DiffersFromTheDefaultField_OnlyInFenceHeight()

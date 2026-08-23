@@ -28,7 +28,7 @@ namespace KokoSim.Unity.Shell
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var ctx = Rules.ApplyTo(
-                new GameContext { MercyRuleEnabled = mercyRuleEnabled, Field = Stadium() }, CalendarYear());
+                new GameContext { MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng) }, CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
             var managerIsAway = ManagerIsAway(manager, opponent);
             var result = managerIsAway
@@ -50,7 +50,7 @@ namespace KokoSim.Unity.Shell
                 new GameContext
                 {
                     CaptureTimelines = true, CapturePitches = true,
-                    MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(),
+                    MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
@@ -96,13 +96,16 @@ namespace KokoSim.Unity.Shell
         /// タイブレーク/球数制限の GameContext 反映（issue #252）の両方でこの1インスタンスを使う。</summary>
         private static readonly ModernRules Rules = new();
 
+        /// <summary>専用の球場抽選ストリームid（設計書13。本編・継投等の乱数を汚さない＝Fork は親状態を進めない）。</summary>
+        private const ulong StadiumStreamId = 13;
+
         /// <summary>
-        /// いま戦っている大会の球場寸法（設計書13 §1）。甲子園だけが固有の球場を持ち、それ以外は既定
-        /// ＝地方大会の判定は1ビットも変わらない。<b>Resolve と BeginLive が同じ値を使う</b>
-        /// （観戦しても結果が変わらない契約）ので、両者ともこの1メソッドを通す。
+        /// いま戦っている大会の球場寸法（設計書13 §1）。甲子園は固有球場、夏・秋の県大会は汎用ティア
+        /// （序盤=市営級／準決勝・決勝=県営級）、それ以外（地区・神宮）は既定。<b>Resolve と BeginLive が
+        /// 同じ値を使う</b>（観戦しても結果が変わらない契約）ので、両者ともこの1メソッドを通す。
         /// </summary>
-        private static KokoSim.Engine.Match.Field.FieldGeometry Stadium()
-            => MatchStadium.For(GameSession.Current.Kind);
+        private static KokoSim.Engine.Match.Field.FieldGeometry Stadium(TournamentMatchContext? context, IRandomSource rng)
+            => MatchStadium.For(GameSession.Current.Kind, context?.RoundsRemaining, rng.Fork(StadiumStreamId));
 
         /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
         private static int CalendarYear() => SeasonClock.SeasonBaseYear + (GameSession.Current.Year - 1);
