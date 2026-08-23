@@ -69,6 +69,49 @@ public sealed class FatigueCurveTests
     }
 
     [Fact]
+    public void Effective_WithOverride_UsesInjectedStamina_InsteadOfPlayerAttribute()
+    {
+        // 試合間の回復モデル（issue #41 本流配線）: 実効目安投球数を渡した版は基準の StaminaPitches を無視する。
+        var pitcher = new Player
+        {
+            Position = KokoSim.Engine.Match.Field.FieldPosition.Pitcher,
+            Pitching = PitcherAttributes.LeagueAverage with { MaxVelocityKmh = 146.0, Control = 80, StaminaPitches = Stamina },
+        };
+        // 選手本来の目安（Stamina=123）ならまだ効かない球数でも、回復劣化で実効30なら既に目安超過。
+        var withoutOverride = PitchingFatigue.Effective(pitcher, 40, C);
+        var withOverride = PitchingFatigue.Effective(pitcher, 40, C, effectiveStaminaPitches: 30.0);
+        Assert.Equal(146.0, withoutOverride.MaxVelocityKmh);
+        Assert.True(withOverride.MaxVelocityKmh < 146.0, $"実効30なのに劣化していない: {withOverride.MaxVelocityKmh}");
+
+        // 4引数版に素の StaminaPitches をそのまま渡せば3引数版と一致する（後方互換）。
+        var identity = PitchingFatigue.Effective(pitcher, 112, C, pitcher.Pitching.StaminaPitches);
+        var legacy = PitchingFatigue.Effective(pitcher, 112, C);
+        Assert.Equal(legacy.MaxVelocityKmh, identity.MaxVelocityKmh, 9);
+        Assert.Equal(legacy.Control, identity.Control);
+    }
+
+    [Fact]
+    public void ShouldRelieve_WithOverride_UsesInjectedStamina_InsteadOfPlayerAttribute()
+    {
+        var pitcher = new Player
+        {
+            Position = KokoSim.Engine.Match.Field.FieldPosition.Pitcher,
+            Pitching = PitcherAttributes.LeagueAverage with { StaminaPitches = Stamina },
+        };
+        // 素の目安(123)+マージン(25)=148球まで継投不要。回復劣化で実効30なら 30+25=55球で継投。
+        Assert.False(PitchingFatigue.ShouldRelieve(pitcher, 50, C));
+        Assert.True(PitchingFatigue.ShouldRelieve(pitcher, 56, C, effectiveStaminaPitches: 30.0),
+            "実効30+マージン25=55球を超えても継投トリガーが立っていない");
+        Assert.False(PitchingFatigue.ShouldRelieve(pitcher, 54, C, effectiveStaminaPitches: 30.0),
+            "55球未満でトリガーが立ってしまっている");
+
+        // 素の StaminaPitches をそのまま渡せば3引数版と一致する（後方互換）。
+        Assert.Equal(
+            PitchingFatigue.ShouldRelieve(pitcher, 130, C),
+            PitchingFatigue.ShouldRelieve(pitcher, 130, C, pitcher.Pitching.StaminaPitches));
+    }
+
+    [Fact]
     public void OnsetRatioOne_ReproducesTheOldStepShape()
     {
         var step = C with { OnsetRatio = 1.0, VelocityDropAtGuidelineKmh = 0.0, ControlDropAtGuideline = 0.0 };

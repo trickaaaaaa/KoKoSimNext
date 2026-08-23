@@ -713,13 +713,30 @@ public sealed class TeamState
     /// スタミナ残量（1=満タン、0=目安投球数を使い切った）。継投の目安として見せるための観測値で、
     /// 実際の継投判定は <see cref="PitchingFatigue.ShouldRelieve"/>（目安投球数＋マージン。ハードキャップ撤廃, issue #356）が行う。
     /// </summary>
-    private static double StaminaRemainingOf(Player pitcher, double fatiguePitches)
+    private double StaminaRemainingOf(Player pitcher, double fatiguePitches)
     {
-        var stamina = pitcher.Pitching.StaminaPitches;
+        var stamina = EffectiveBaseStamina(pitcher);
         if (stamina <= 0) return 0.0;
         var remaining = 1.0 - fatiguePitches / stamina;
         return remaining < 0.0 ? 0.0 : remaining > 1.0 ? 1.0 : remaining;
     }
+
+    // ===== 試合間の回復モデル（設計書02 §1.1e-2, issue #41 本流配線） =====
+    private IReadOnlyDictionary<Player, double>? _pitchRecovery;
+
+    /// <summary>
+    /// 大会台帳（<see cref="Nation.Tournaments.TournamentPitchLedger"/>）から求めた実効目安投球数を注入する
+    /// （<see cref="GameEngine.NewProgress"/> から。null/未登録の投手は素の <c>Pitching.StaminaPitches</c> のまま
+    /// ＝一発トーナメント序盤・Balance CLI 等は従来挙動と完全一致）。選手能力そのもの
+    /// （<see cref="Players.PitcherAttributes.StaminaPitches"/>）は書き換えない。
+    /// </summary>
+    public void SetPitchRecovery(IReadOnlyDictionary<Player, double>? effectiveStaminaPitches)
+        => _pitchRecovery = effectiveStaminaPitches;
+
+    /// <summary>その投手の実効目安投球数（連戦の消耗を反映済み。上書きが無ければ素の目安投球数）。</summary>
+    public double EffectiveBaseStamina(Player pitcher)
+        => _pitchRecovery is not null && _pitchRecovery.TryGetValue(pitcher, out var v)
+            ? v : pitcher.Pitching.StaminaPitches;
 
     /// <summary>球数を加算。staminaWeight はギア「飛ばす/流す」の消耗倍率（既定1.0＝Normal）。</summary>
     public void AddPitches(int pitches, double staminaWeight = 1.0)

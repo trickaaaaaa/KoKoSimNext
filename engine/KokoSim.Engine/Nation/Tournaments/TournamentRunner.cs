@@ -1035,9 +1035,7 @@ public sealed class TournamentRunner
         var isManagerSchool = schoolId == _managerId;
         foreach (var l in lines)
         {
-            var key = isManagerSchool && l.SourceId is int sid
-                ? PitcherLedgerKey.ForPlayer(sid)
-                : PitcherLedgerKey.ForOpponent(schoolId, l.UniformNumber);
+            var key = PitcherLedgerKey.For(isManagerSchool, schoolId, l.SourceId, l.UniformNumber);
             _pitchLedger.Record(key, l.Pitches, matchDay);
         }
     }

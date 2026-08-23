@@ -134,7 +134,10 @@ public sealed class MatchProgression
     /// <b>試合開始前の内部状態を控える</b>ので、シードを持たなくても <see cref="Save"/> で中断保存できる。
     /// それ以外の実装（テスト用の固定乱数など）では従来どおり <see cref="Save"/> は使えない。</para>
     /// </summary>
-    public MatchProgression(Team away, Team home, GameContext ctx, IRandomSource rng)
+    public MatchProgression(
+        Team away, Team home, GameContext ctx, IRandomSource rng,
+        IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
     {
         _seed = 0;
         _seedable = false;
@@ -143,7 +146,8 @@ public sealed class MatchProgression
         _ctx = ctx;
         // NewProgress は dayForm 抽選で rng を消費するので、控えるのは必ずその手前。
         _rngState = (rng as Xoshiro256Random)?.CaptureState();
-        _p = GameEngine.NewProgress(away, home, ctx, rng);
+        _p = GameEngine.NewProgress(
+            away, home, ctx, rng, awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
 

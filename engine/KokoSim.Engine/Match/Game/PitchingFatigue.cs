@@ -39,15 +39,29 @@ public static class PitchingFatigue
 
     /// <summary>消耗を反映した実効投手能力（球速天井・制球を減衰）。fatiguePitches はギア重み込みの実効消費球数。</summary>
     public static PitcherAttributes Effective(Player pitcher, double fatiguePitches, FatigueCoefficients c)
-        => Effective(pitcher.Pitching, fatiguePitches, c);
+        => Effective(pitcher.Pitching, fatiguePitches, c, pitcher.Pitching.StaminaPitches);
+
+    /// <summary>
+    /// 試合間の回復モデル（<see cref="PitchRecoveryModel"/>・issue #41 本流配線）で調整された実効目安投球数を
+    /// 使う版。<paramref name="effectiveStaminaPitches"/> は連戦の消耗を反映済みの目安投球数
+    /// （フル回復なら <c>pitcher.Pitching.StaminaPitches</c> と同値＝一発トーナメント序盤は従来と完全一致）。
+    /// </summary>
+    public static PitcherAttributes Effective(
+        Player pitcher, double fatiguePitches, FatigueCoefficients c, double effectiveStaminaPitches)
+        => Effective(pitcher.Pitching, fatiguePitches, c, effectiveStaminaPitches);
 
     /// <summary>
     /// 消耗の適用（表示→物理の効きを通した土台に対して。設計書21）。効きは制球のLvを寝かせるが、消耗の落ち幅は
     /// 「目安球数を超えた分」で決まる実測単位なので寝かせない＝効き→消耗の順で掛ける。
     /// </summary>
     public static PitcherAttributes Effective(PitcherAttributes basep, double fatiguePitches, FatigueCoefficients c)
+        => Effective(basep, fatiguePitches, c, basep.StaminaPitches);
+
+    /// <summary>試合間の回復モデルで調整された目安投球数を使う版（<paramref name="effectiveStaminaPitches"/>）。</summary>
+    public static PitcherAttributes Effective(
+        PitcherAttributes basep, double fatiguePitches, FatigueCoefficients c, double effectiveStaminaPitches)
     {
-        var (velDrop, ctrlDrop) = Drops(fatiguePitches, basep.StaminaPitches, c);
+        var (velDrop, ctrlDrop) = Drops(fatiguePitches, effectiveStaminaPitches, c);
         if (velDrop <= 0.0 && ctrlDrop <= 0.0) return basep;
 
         var vel = basep.MaxVelocityKmh - velDrop;
@@ -80,8 +94,10 @@ public static class PitchingFatigue
 
     /// <summary>継投すべきか（実効消費球数ベース）。目安投球数＋マージンだけで判断（ハードキャップ撤廃, issue #356）。</summary>
     public static bool ShouldRelieve(Player pitcher, double fatiguePitches, FatigueCoefficients c)
-    {
-        var basep = pitcher.Pitching;
-        return fatiguePitches >= basep.StaminaPitches + c.RelievePitchMargin;
-    }
+        => ShouldRelieve(pitcher, fatiguePitches, c, pitcher.Pitching.StaminaPitches);
+
+    /// <summary>試合間の回復モデルで調整された目安投球数（<paramref name="effectiveStaminaPitches"/>）を使う版。</summary>
+    public static bool ShouldRelieve(
+        Player pitcher, double fatiguePitches, FatigueCoefficients c, double effectiveStaminaPitches)
+        => fatiguePitches >= effectiveStaminaPitches + c.RelievePitchMargin;
 }

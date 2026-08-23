@@ -18,6 +18,7 @@ public sealed record GameContext
     public FieldingCoefficients Fielding { get; init; } = new();
     public BaserunningCoefficients Baserunning { get; init; } = new();
     public FatigueCoefficients Fatigue { get; init; } = new();
+    public PitchRecoveryCoefficients PitchRecovery { get; init; } = new();
 
     /// <summary>
     /// 試合ごとの天候（気温）モデル（Issue #120, design-05 大会単位の味付け）。null または無効の間は

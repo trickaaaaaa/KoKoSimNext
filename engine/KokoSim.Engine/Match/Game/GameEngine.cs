@@ -102,9 +102,13 @@ public static class GameEngine
     // 内部は Steps(...) を drain するだけ＝対話進行と単一コードパス（決定論ゲートで前後一致を固定）。
     public static GameResult Play(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng,
-        IReadOnlyDictionary<Player, int>? priorWeekPitches = null)
+        IReadOnlyDictionary<Player, int>? priorWeekPitches = null,
+        IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
     {
-        var p = NewProgress(awayTeam, homeTeam, ctx, rng, priorWeekPitches);
+        var p = NewProgress(
+            awayTeam, homeTeam, ctx, rng, priorWeekPitches,
+            awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         foreach (var _ in Steps(p)) { /* drain */ }
         return BuildResult(p);
     }
@@ -118,10 +122,19 @@ public static class GameEngine
     /// <param name="scenarioStart">
     /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
     /// </param>
+    /// <param name="awayPitchRecovery">
+    /// 試合間の回復モデル（設計書02 §1.1e-2, issue #41 本流配線）で調整済みの実効目安投球数（先攻チーム分）。
+    /// null=素の目安投球数のまま（従来挙動と完全一致・Balance CLI 等は常にこちら）。チームごとに別辞書にするのは、
+    /// <see cref="Player"/> が値等価の record で、1つの辞書へ merge すると別校の選手が偶然全属性一致したとき
+    /// 同一キーに潰れかねないため（校内は背番号が一意なので同一チーム内では衝突しない）。
+    /// </param>
+    /// <param name="homePitchRecovery">同上（後攻チーム分）。</param>
     public static GameProgress NewProgress(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng,
         IReadOnlyDictionary<Player, int>? priorWeekPitches = null,
-        Debugging.ScenarioStart? scenarioStart = null)
+        Debugging.ScenarioStart? scenarioStart = null,
+        IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
     {
         // 試合ごとの天候（気温）モデル（Issue #120）。専用Forkストリームで気温を1回引き、空気密度・投手消耗を
         // 派生させた ctx に差し替える。Fork は親 rng の状態を進めない＝以降の乱数順・決定論は不変。
@@ -146,6 +159,9 @@ public static class GameEngine
         // 球数制限（設計書05 §1.3）。既定 WeeklyPitchLimit=MaxValue＝無効＝従来の継投挙動と完全一致。
         away.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, priorWeekPitches);
         home.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, priorWeekPitches);
+        // 試合間の回復モデル（設計書02 §1.1e-2）。既定 null＝素の目安投球数のまま＝従来挙動と完全一致。
+        away.SetPitchRecovery(awayPitchRecovery);
+        home.SetPitchRecovery(homePitchRecovery);
 
         // 試合限りの好不調（設計書02 §3.3b）: 試合開始時に全選手へ当日の揺らぎを付与。
         // 大半は微小・スパイクは十数試合に一度。事前に見えない（投げて/打って初めて分かる）。
@@ -667,7 +683,9 @@ public static class GameEngine
             (PitcherAttributes Pitcher, BatterAttributes BatterBase, SkillPlayMods PlayMods) EffectiveMatchup()
             {
                 // 表示→物理の効き（設計書21）: 投手は制球・キレを Lv で寝かせる（球速の反応は PitchSelection・スタミナは据え置き）。
-                var pit = PitchingFatigue.Effective(ctx.Batting.AbilityEffect.Pitcher(currentPitcher.Pitching), defense.FatiguePitches, fatigue);
+                var pit = PitchingFatigue.Effective(
+                    ctx.Batting.AbilityEffect.Pitcher(currentPitcher.Pitching), defense.FatiguePitches, fatigue,
+                    defense.EffectiveBaseStamina(currentPitcher));
                 // 調子・当日の出来（設計書02 §3.3/§3.3b）。
                 pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, FormOf(dayForm, currentPitcher), ctx.Form);
                 // 表示→物理の効き（設計書21）は ToBatter の中＝ここが打者側の唯一の入口。
@@ -681,7 +699,7 @@ public static class GameEngine
                 var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
 
                 // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
-                var pitcherFatigueOver = defense.FatiguePitches > currentPitcher.Pitching.StaminaPitches;
+                var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
                 pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
                     currentPitcher.Mental, pressureIdx, ctx.Pressure,
                     defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
@@ -1457,7 +1475,7 @@ public static class GameEngine
 
             // 投球過多（設計書03 §3.5）: スタミナ目安を大きく超えて投げ続けた投手の肩肘。
             if (defense.FatiguePitches
-                > currentPitcher.Pitching.StaminaPitches + ctx.MatchInjury.OveruseOverPitches)
+                > defense.EffectiveBaseStamina(currentPitcher) + ctx.MatchInjury.OveruseOverPitches)
             {
                 Hurt(MatchInjuryModel.Roll(
                     InjuryScene.Overuse, ctx.MatchInjury.OveruseProb, currentPitcher, defense.Name,
@@ -2050,13 +2068,14 @@ public static class GameEngine
         int inning, bool isTop, int paIndex, int runsThisHalf, int outs)
     {
         var fatigue = defense.Fatigue ?? ctx.Fatigue;
-        var fatigueTriggered = PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, fatigue);
+        var staminaTarget = defense.EffectiveBaseStamina(defense.CurrentPitcher);
+        var fatigueTriggered = PitchingFatigue.ShouldRelieve(
+            defense.CurrentPitcher, defense.FatiguePitches, fatigue, staminaTarget);
         var atWeekly = defense.CurrentPitcherAtWeeklyLimit();
 
         var changed = false;
         if (defense.Tactics is { } brain)
         {
-            var staminaTarget = defense.CurrentPitcher.Pitching.StaminaPitches;
             // 継投人選の候補＝控え全員＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
             // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
             var candidates = defense.ReliefRankingCandidates;
