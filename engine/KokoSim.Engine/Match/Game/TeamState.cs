@@ -661,15 +661,32 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// プレッシャー負補正の緩和量（0〜1）: 主将の在場×統率力（§8）＋伝令の効果窓（§3）。
-    /// offense=true なら攻撃側（打者へ）、false なら守備側（投手へ）。
+    /// プレッシャー負補正の緩和量（0〜1）: 主将の在場×統率力（§8）＋ムードメーカーの在場（設計書10）＋
+    /// 伝令の効果窓（§3）。offense=true なら攻撃側（打者へ）、false なら守備側（投手へ）。
     /// </summary>
     public double MitigationFor(bool offense, TacticsCoefficients c, SkillCoefficients? skills = null)
     {
-        var m = CaptainMitigation(c, skills);
+        var m = CaptainMitigation(c, skills) + MoodmakerMitigation(skills);
         if (offense && OffenseCalmPa > 0) m += c.TimeoutMitigation;
         if (!offense && DefenseCalmPa > 0) m += c.TimeoutMitigation;
         return Math.Min(1.0, m);
+    }
+
+    /// <summary>
+    /// ムードメーカー（設計書10）の緩和量。出場中（投手 or 守備でフィールドに立っている）の誰か1人でも
+    /// 保有していれば加算する。主将の統率力とは別枠＝複数人保有していても加算は1回だけ。
+    /// </summary>
+    private double MoodmakerMitigation(SkillCoefficients? skills)
+    {
+        if (skills is null) return 0.0;
+        if (CurrentPitcher.Skills.Has(Skill.Moodmaker)) return skills.MoodmakerMitigationBonus;
+        for (var i = 0; i < 9; i++)
+        {
+            if (_usesDh && i == _dhSlot) continue;
+            if (!_usesDh && i == _pitcherSlot) continue;
+            if (_lineup[i].Skills.Has(Skill.Moodmaker)) return skills.MoodmakerMitigationBonus;
+        }
+        return 0.0;
     }
 
     /// <summary>

@@ -235,6 +235,192 @@ public sealed class SkillTests
                      pillar.CaptainMitigation(tactics, C), 9);
     }
 
+    // ===== ムードメーカー: 出場中ならプレッシャー緩和量へ加算（主将とは別枠） =====
+
+    [Fact]
+    public void Moodmaker_OnFieldFielder_AddsToMitigation_OnTopOfCaptain()
+    {
+        var captain = Pos(FieldPosition.Catcher);
+        var moodmaker = Pos(FieldPosition.FirstBase, new SkillSet(new[] { Skill.Moodmaker }));
+        var order = new List<Player>
+        {
+            captain, moodmaker, Pos(FieldPosition.SecondBase), Pos(FieldPosition.ThirdBase),
+            Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField), Pos(FieldPosition.CenterField),
+            Pos(FieldPosition.RightField),
+            new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage },
+        };
+        var team = new Team { Name = "A", BattingOrder = order, PitcherSlot = 8, Captain = captain };
+        var state = new TeamState(team);
+        var tactics = new KokoSim.Engine.Match.Tactics.TacticsCoefficients();
+
+        var withMoodmaker = state.MitigationFor(offense: true, tactics, C);
+        var baseline = new TeamState(team with { BattingOrder = new List<Player>
+        {
+            captain, Pos(FieldPosition.FirstBase), Pos(FieldPosition.SecondBase), Pos(FieldPosition.ThirdBase),
+            Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField), Pos(FieldPosition.CenterField),
+            Pos(FieldPosition.RightField),
+            new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage },
+        } }).MitigationFor(offense: true, tactics, C);
+
+        Assert.Equal(baseline + C.MoodmakerMitigationBonus, withMoodmaker, 9);
+    }
+
+    [Fact]
+    public void Moodmaker_OnBench_DoesNotContribute()
+    {
+        var moodmaker = Pos(FieldPosition.FirstBase, new SkillSet(new[] { Skill.Moodmaker }));
+        var order = new List<Player>
+        {
+            Pos(FieldPosition.Catcher), Pos(FieldPosition.FirstBase), Pos(FieldPosition.SecondBase),
+            Pos(FieldPosition.ThirdBase), Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField),
+            Pos(FieldPosition.CenterField), Pos(FieldPosition.RightField),
+            new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage },
+        };
+        var team = new Team { Name = "A", BattingOrder = order, PitcherSlot = 8, Reserves = new[] { moodmaker } };
+        var state = new TeamState(team);
+        var tactics = new KokoSim.Engine.Match.Tactics.TacticsCoefficients();
+        Assert.Equal(0.0, state.MitigationFor(offense: true, tactics, C), 9);
+    }
+
+    [Fact]
+    public void Moodmaker_NullSkillCoefficients_NoEffect_MatchesBaseline()
+    {
+        var moodmaker = Pos(FieldPosition.FirstBase, new SkillSet(new[] { Skill.Moodmaker }));
+        var order = new List<Player>
+        {
+            Pos(FieldPosition.Catcher), moodmaker, Pos(FieldPosition.SecondBase), Pos(FieldPosition.ThirdBase),
+            Pos(FieldPosition.Shortstop), Pos(FieldPosition.LeftField), Pos(FieldPosition.CenterField),
+            Pos(FieldPosition.RightField),
+            new Player { Position = FieldPosition.Pitcher, Pitching = PitcherAttributes.LeagueAverage },
+        };
+        var team = new Team { Name = "A", BattingOrder = order, PitcherSlot = 8 };
+        var state = new TeamState(team);
+        var tactics = new KokoSim.Engine.Match.Tactics.TacticsCoefficients();
+        Assert.Equal(0.0, state.MitigationFor(offense: true, tactics, skills: null), 9);
+    }
+
+    // ===== 練習リーダー: ロスターに1人でも保有者が居れば他の全部員の週間経験値へ乗る =====
+
+    [Fact]
+    public void PracticeLeader_BoostsTeammatesGrowth_ButNotItself()
+    {
+        var leader = new DevelopingPlayer { Id = 1, Skills = new SkillSet(new[] { Skill.PracticeLeader }) };
+        var mate = new DevelopingPlayer { Id = 2 };
+        PitcherRoleResolver.SeedAptitudeForRole(leader, false);
+        PitcherRoleResolver.SeedAptitudeForRole(mate, false);
+        var roster = new List<DevelopingPlayer> { leader, mate };
+
+        var factorForMate = DevelopmentModel.TeamSkillExpFactor(mate, roster, C);
+        var factorForLeader = DevelopmentModel.TeamSkillExpFactor(leader, roster, C);
+
+        Assert.Equal(C.PracticeLeaderExpFactor, factorForMate, 9);
+        Assert.Equal(1.0, factorForLeader, 9);   // 本人には掛からない
+    }
+
+    [Fact]
+    public void PracticeLeader_NoRosterOrSingleMember_NoEffect()
+    {
+        var p = new DevelopingPlayer { Id = 1, Skills = new SkillSet(new[] { Skill.PracticeLeader }) };
+        Assert.Equal(1.0, DevelopmentModel.TeamSkillExpFactor(p, roster: null, C), 9);
+        Assert.Equal(1.0, DevelopmentModel.TeamSkillExpFactor(p, new List<DevelopingPlayer> { p }, C), 9);
+    }
+
+    [Fact]
+    public void PracticeLeader_MatchesById_NotByReference_SoClonesAreExcludedCorrectly()
+    {
+        // 練習計画プレビューは Clone() した複製を渡す（issue #484）。参照比較だと自分自身を
+        // 「別の部員」として誤検出し、本人には掛からないはずの倍率が掛かってしまう。
+        var p = new DevelopingPlayer { Id = 1 };
+        var clone = p.Clone();
+        var roster = new List<DevelopingPlayer> { p };   // ロスターには本物（p）だけが載っている
+        Assert.Equal(1.0, DevelopmentModel.TeamSkillExpFactor(clone, roster, C), 9);
+    }
+
+    // ===== お手本: 先輩・同ポジション保有者が居ればその後輩の週間経験値へ乗る =====
+
+    private static DevelopingPlayer PlayerAt(int id, int grade, FieldPosition bestPos, SkillSet? skills = null)
+    {
+        var p = new DevelopingPlayer { Id = id, Grade = grade, Skills = skills ?? SkillSet.Empty };
+        foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
+            p.SetAptitude(pos, pos == bestPos ? 90 : 40);
+        return p;
+    }
+
+    [Fact]
+    public void RoleModel_SeniorSamePosition_BoostsJuniorsGrowth()
+    {
+        var senior = PlayerAt(1, grade: 3, FieldPosition.Shortstop, new SkillSet(new[] { Skill.RoleModel }));
+        var junior = PlayerAt(2, grade: 1, FieldPosition.Shortstop);
+        var roster = new List<DevelopingPlayer> { senior, junior };
+
+        Assert.Equal(C.RoleModelExpFactor, DevelopmentModel.TeamSkillExpFactor(junior, roster, C), 9);
+    }
+
+    [Fact]
+    public void RoleModel_DifferentPosition_NoBoost()
+    {
+        var senior = PlayerAt(1, grade: 3, FieldPosition.Shortstop, new SkillSet(new[] { Skill.RoleModel }));
+        var junior = PlayerAt(2, grade: 1, FieldPosition.CenterField);
+        var roster = new List<DevelopingPlayer> { senior, junior };
+
+        Assert.Equal(1.0, DevelopmentModel.TeamSkillExpFactor(junior, roster, C), 9);
+    }
+
+    [Fact]
+    public void RoleModel_HolderIsJunior_NoBoost_OnlySeniorsMentor()
+    {
+        // お手本は「後輩の成長を促す」＝保有者が年下（後輩）なら誰にも掛からない。
+        var juniorHolder = PlayerAt(1, grade: 1, FieldPosition.Shortstop, new SkillSet(new[] { Skill.RoleModel }));
+        var senior = PlayerAt(2, grade: 3, FieldPosition.Shortstop);
+        var roster = new List<DevelopingPlayer> { juniorHolder, senior };
+
+        Assert.Equal(1.0, DevelopmentModel.TeamSkillExpFactor(senior, roster, C), 9);
+    }
+
+    [Fact]
+    public void RoleModel_SameGrade_NoBoost_MustBeStrictlySenior()
+    {
+        var peerHolder = PlayerAt(1, grade: 2, FieldPosition.Shortstop, new SkillSet(new[] { Skill.RoleModel }));
+        var peer = PlayerAt(2, grade: 2, FieldPosition.Shortstop);
+        var roster = new List<DevelopingPlayer> { peerHolder, peer };
+
+        Assert.Equal(1.0, DevelopmentModel.TeamSkillExpFactor(peer, roster, C), 9);
+    }
+
+    [Fact]
+    public void PracticeLeaderAndRoleModel_StackMultiplicatively_WhenBothPresent()
+    {
+        var leader = PlayerAt(1, grade: 3, FieldPosition.Catcher, new SkillSet(new[] { Skill.PracticeLeader }));
+        var mentor = PlayerAt(2, grade: 3, FieldPosition.Shortstop, new SkillSet(new[] { Skill.RoleModel }));
+        var junior = PlayerAt(3, grade: 1, FieldPosition.Shortstop);
+        var roster = new List<DevelopingPlayer> { leader, mentor, junior };
+
+        var expected = C.PracticeLeaderExpFactor * C.RoleModelExpFactor;
+        Assert.Equal(expected, DevelopmentModel.TeamSkillExpFactor(junior, roster, C), 9);
+    }
+
+    [Fact]
+    public void TeamSkillExpFactor_FeedsIntoTrainWeek_ActualGrowthDiffers()
+    {
+        int LevelAfter(bool withLeader)
+        {
+            var p = new DevelopingPlayer { Id = 2 };
+            var leader = new DevelopingPlayer { Id = 1, Skills = new SkillSet(new[] { Skill.PracticeLeader }) };
+            PitcherRoleResolver.SeedAptitudeForRole(p, false);
+            PitcherRoleResolver.SeedAptitudeForRole(leader, false);
+            p.SetLevel(AbilityKind.Contact, 30);
+            p.SetCap(AbilityKind.Contact, 99);
+            var roster = withLeader ? new List<DevelopingPlayer> { p, leader } : new List<DevelopingPlayer> { p };
+            var stages = new GrowthStageTable();
+            var tc = new TrainingCoefficients();
+            for (var w = 0; w < 20; w++)
+                DevelopmentModel.TrainWeek(p, TrainingMenu.Batting, 0, 1.0, stages, tc, C, roster: roster);
+            return p.Level(AbilityKind.Contact);
+        }
+        Assert.True(LevelAfter(withLeader: true) >= LevelAfter(withLeader: false),
+            "練習リーダーが居るのに伸びが同等以上になっていない");
+    }
+
     // ===== シーズン: 体質スキル =====
 
     [Fact]

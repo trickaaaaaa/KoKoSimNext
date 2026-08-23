@@ -1391,3 +1391,28 @@ issue #626 の巻き戻し対象リストに受傷が入っていなかったた
 `AutumnBackgroundSim` 側に `AddWins` を新設する(B)は、実測で影響が小さいと分かった以上オーバーエンジニアリング
 と判断し見送った。実験用の一時テスト（`AiSchoolEvolutionTests` 内）は数値を確認した後に削除済み
 （本体コードには残らない・実測値はこの記述に残す）。
+
+## 2026-08-23 「アンダースローの妙」（SubmarineMastery）は前提の投法軸が生成すらされておらず実装できない（設計書vs実装監査issue③で発見）
+
+特殊能力4種（ムードメーカー・練習リーダー・お手本・アンダースローの妙）が生成・UI表示されるだけで
+試合内効果ゼロという監査結果（`out/issues-pending/decorative-skills-no-effect.md`）を受けて実装を進めたところ、
+前者3つ（ムードメーカー→`TeamState.MoodmakerMitigation`、練習リーダー/お手本→
+`DevelopmentModel.TeamSkillExpFactor`）は既存の緩和量・週次経験値パイプラインへ素直に接続できたが、
+**アンダースローの妙だけは実装できる前提が無い**ことが判明した。
+
+`PitcherAttributes.Style`（`ThrowingStyle`: Overhand/Sidearm/Underhand）は**箱だけ存在し、補正ロジックは
+「現フェーズ実装しない」と明記された意図的な保留**（`PitcherAttributes.cs:5` コメント、設計書02 §2.2 /
+CHANGELOG 31b）。実際に確認すると、この保留は徹底されている:
+
+- 生成側（`ProspectGenerator`/`AiRosterFactory`等）が `Style` を一切代入しない＝**全投手が生涯 Overhand 固定**
+  （デフォルト値のまま）。サブマリン投手はそもそも1人も生成されない
+- `SkillGenerator.cs:78` は `SubmarineMastery` を `Style` を見ずに「投手寄り重み w」だけで抽選している
+  ＝現状はオーバーハンド投手にも普通に付与される、名前と実態が食い違ったスキルになっている
+
+「アンダースローの妙」を意味のある形で実装するには、①投法の生成分布を作る（誰かをUnderhandにする）
+②アンダースロー特有の球質補正（現フェーズ非実装と明記された投法補正そのもの）のどちらか、または両方に
+着手する必要があり、これは design-02 §2.2 が意図的に切り離した別フェーズの作業＝本issueのスコープを超える。
+
+**判断**: 他3スキルは実装済み（コミット待ち）。SubmarineMastery は据え置き、
+`data/skills.yaml` の説明文もそのまま残す（削除・改変しない＝将来の投法軸実装時にそのまま使える）。
+投法軸を実装する別issueが先に必要（未起票）。

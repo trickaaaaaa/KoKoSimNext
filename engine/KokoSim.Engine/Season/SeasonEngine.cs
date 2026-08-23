@@ -162,7 +162,7 @@ public static class SeasonEngine
                     DevelopmentModel.TrainWeekPlan(
                         p, alloc, training.ReferenceWeekMinutes,
                         stage, campMult, ctx.Stages, training, ctx.Skills, ctx.Personalities, ctx.Coaching,
-                        ctx.Equipment);
+                        ctx.Equipment, roster);
                 }
 
                 // 調子の週次更新（設計書02 §3.3: 数週間続く波）。

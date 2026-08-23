@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
@@ -57,13 +58,15 @@ namespace KokoSim.Unity.Shell
         /// <summary>
         /// 1週ぶんの練習を選手 <paramref name="p"/> へ適用する（<paramref name="p"/> を破壊的に更新）。
         /// <paramref name="extraMult"/> は大会モード時の効果低下（&lt;1.0）に使う（通常週は1.0）。
-        /// 練習不可週（<see cref="CanTrain"/> が false）は何もしない。
+        /// <paramref name="roster"/> はチーム内スキル（練習リーダー/お手本, 設計書10）の判定に使う全部員
+        /// （null=判定なし＝従来一致）。練習不可週（<see cref="CanTrain"/> が false）は何もしない。
         ///
         /// プレビューは実選手のクローンにこれを呼ぶ（非破壊ドライラン）。実選手の
         /// <see cref="DevelopingPlayer.Clone"/> は Plan・IndividualCoaching を引き継ぐので、
         /// クローンへの適用結果＝実選手への適用結果（プレビューバー＝実際の伸び）。
         /// </summary>
-        public static void Apply(DevelopingPlayer p, int week, double extraMult = 1.0)
+        public static void Apply(
+            DevelopingPlayer p, int week, double extraMult = 1.0, IReadOnlyList<DevelopingPlayer>? roster = null)
         {
             if (!Calendar.CanTrain(p.Grade, week)) return;
 
@@ -82,7 +85,7 @@ namespace KokoSim.Unity.Shell
                 p, alloc, training.ReferenceWeekMinutes,
                 stage, campMult, Stages, training, Skills, Personalities, coaching,
                 // 練習道具は「振っているメニューの分野」にだけ効く（施設係数は全メニュー一律）。
-                Effects.Equipment);
+                Effects.Equipment, roster);
         }
     }
 }

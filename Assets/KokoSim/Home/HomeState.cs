@@ -471,7 +471,7 @@ namespace KokoSim.Unity.Home
                 var before = Snapshot(p);
                 // 期間つきの練習効率補正（issue #615）。補正が無ければ 1.0＝従来と1ビット一致。
                 var boost = KokoSim.Unity.Shell.TrainingBoostService.MultiplierFor(p.Id);
-                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult * boost);
+                KokoSim.Unity.Shell.TrainingWeek.Apply(p, week, extraMult * boost, Roster);
                 foreach (var k in AbilityKinds.All)
                 {
                     var gained = p.Level(k) - before[k];

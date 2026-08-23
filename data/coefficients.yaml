@@ -493,6 +493,9 @@ skills:
   master_catcher_lead_bonus: 10          # 名捕手: 実効リード+10（設計書10, 01 §2①）
   # チーム系
   spiritual_pillar_captain_factor: 1.4   # 精神的支柱: 主将の緩和量拡大（設計書09 §8）
+  moodmaker_mitigation_bonus: 0.06       # ムードメーカー: 出場中なら緩和量へ加算（主将とは別枠、複数人でも重複しない）
+  practice_leader_exp_factor: 1.05       # 練習リーダー: 保有者が居ると他の全部員の週間経験値へ乗る倍率
+  role_model_exp_factor: 1.08            # お手本: 先輩・同ポジション保有者が居るとその後輩の週間経験値へ乗る倍率
   # 体質・成長系
   diligent_exp_factor: 1.15
   lazy_exp_factor: 0.85

@@ -1442,6 +1442,9 @@ public static class CoefficientsLoader
         public double DoublePlayArtistBonus { get; set; } = D.DoublePlayArtistBonus;
         public int MasterCatcherLeadBonus { get; set; } = D.MasterCatcherLeadBonus;
         public double SpiritualPillarCaptainFactor { get; set; } = D.SpiritualPillarCaptainFactor;
+        public double MoodmakerMitigationBonus { get; set; } = D.MoodmakerMitigationBonus;
+        public double PracticeLeaderExpFactor { get; set; } = D.PracticeLeaderExpFactor;
+        public double RoleModelExpFactor { get; set; } = D.RoleModelExpFactor;
         public double DiligentExpFactor { get; set; } = D.DiligentExpFactor;
         public double LazyExpFactor { get; set; } = D.LazyExpFactor;
         public double DurableInjuryFactor { get; set; } = D.DurableInjuryFactor;
@@ -1476,6 +1479,9 @@ public static class CoefficientsLoader
             DoublePlayArtistBonus = DoublePlayArtistBonus,
             MasterCatcherLeadBonus = MasterCatcherLeadBonus,
             SpiritualPillarCaptainFactor = SpiritualPillarCaptainFactor,
+            MoodmakerMitigationBonus = MoodmakerMitigationBonus,
+            PracticeLeaderExpFactor = PracticeLeaderExpFactor,
+            RoleModelExpFactor = RoleModelExpFactor,
             DiligentExpFactor = DiligentExpFactor,
             LazyExpFactor = LazyExpFactor,
             DurableInjuryFactor = DurableInjuryFactor,

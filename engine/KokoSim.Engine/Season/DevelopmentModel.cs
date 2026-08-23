@@ -28,7 +28,8 @@ public static class DevelopmentModel
         Players.SkillCoefficients? skills = null,
         Players.PersonalityCoefficients? personalities = null,
         CoachingProfile? coaching = null,
-        EquipmentBonus? equipment = null)
+        EquipmentBonus? equipment = null,
+        IReadOnlyList<DevelopingPlayer>? roster = null)
     {
         // 怪我中は練習不可（設計書03 §3.5）: 全メニュー効果なし。
         if (p.Injury != Players.InjurySeverity.None) return;
@@ -45,6 +46,7 @@ public static class DevelopmentModel
         {
             if (p.Skills.Has(Players.Skill.Diligent)) skillExp *= skills.DiligentExpFactor;
             if (p.Skills.Has(Players.Skill.Lazy)) skillExp *= skills.LazyExpFactor;
+            skillExp *= TeamSkillExpFactor(p, roster, skills);
         }
 
         var common = c.BaseMainExp * c.FacilityCoef * baselineFactor
@@ -113,7 +115,8 @@ public static class DevelopmentModel
         TrainingCoefficients c,
         Players.SkillCoefficients? skills = null,
         Players.PersonalityCoefficients? personalities = null,
-        CoachingProfile? coaching = null)
+        CoachingProfile? coaching = null,
+        IReadOnlyList<DevelopingPlayer>? roster = null)
     {
         if (menu == TrainingMenu.Rest) return;
 
@@ -133,6 +136,7 @@ public static class DevelopmentModel
         {
             if (p.Skills.Has(Players.Skill.Diligent)) skillExp *= skills.DiligentExpFactor;
             if (p.Skills.Has(Players.Skill.Lazy)) skillExp *= skills.LazyExpFactor;
+            skillExp *= TeamSkillExpFactor(p, roster, skills);
         }
 
         var eff = TrainingMenus.Effects(menu);
@@ -148,6 +152,60 @@ public static class DevelopmentModel
         // 守備位置適性（設計書01 §1.1）: 守備分野の伸びしろを乗せる（Defense 指導力）。
         foreach (var (pos, weight) in eff.Aptitudes)
             ApplyAptitudeExp(p, pos, common * weight * defenseAdj, c);
+    }
+
+    /// <summary>
+    /// チーム内スキル（練習リーダー/お手本, 設計書10）による週間経験値の加算倍率。1.0=効果なし。
+    /// <paramref name="roster"/> が null/1人以下、または <paramref name="skills"/> が null なら 1.0（従来一致）。
+    /// 練習リーダーは保有者（本人以外）がロスターに1人でも居れば加算。お手本は「自分より学年が上
+    /// （先輩）」かつ「同ポジション（<see cref="BestFieldingPosition"/> が一致）」の保有者が居れば加算。
+    /// いずれも複数人保有していても加算は1回だけ（同じ倍率を重ねがけしない）。
+    /// 本人の除外は <see cref="DevelopingPlayer.Id"/> で行う（参照比較だと、練習計画プレビューが
+    /// <see cref="DevelopingPlayer.Clone"/> した複製を <paramref name="p"/> に渡すため常に不一致になる）。
+    /// </summary>
+    public static double TeamSkillExpFactor(
+        DevelopingPlayer p, IReadOnlyList<DevelopingPlayer>? roster, Players.SkillCoefficients? skills)
+    {
+        if (roster is null || roster.Count <= 1 || skills is null) return 1.0;
+
+        var hasPracticeLeader = false;
+        var hasRoleModel = false;
+        Match.Field.FieldPosition? myBest = null;
+
+        foreach (var other in roster)
+        {
+            if (other.Id == p.Id) continue;
+            if (!hasPracticeLeader && other.Skills.Has(Players.Skill.PracticeLeader))
+                hasPracticeLeader = true;
+            if (!hasRoleModel && other.Grade > p.Grade && other.Skills.Has(Players.Skill.RoleModel))
+            {
+                myBest ??= BestFieldingPosition(p);
+                if (BestFieldingPosition(other) == myBest) hasRoleModel = true;
+            }
+        }
+
+        var factor = 1.0;
+        if (hasPracticeLeader) factor *= skills.PracticeLeaderExpFactor;
+        if (hasRoleModel) factor *= skills.RoleModelExpFactor;
+        return factor;
+    }
+
+    /// <summary>
+    /// 最高適性の守備位置（指名打者を除く9分類。同値はenum順で先に来る方＝Pitcher優先）。
+    /// ポジションは選手の固有属性ではなく試合ごとの配置（issue #93）なので、「お手本」の同ポジション判定に
+    /// 使う簡易プロキシとしてこの値を用いる（実際のスタメン配置とは独立）。
+    /// </summary>
+    private static Match.Field.FieldPosition BestFieldingPosition(DevelopingPlayer p)
+    {
+        var best = Match.Field.FieldPosition.Pitcher;
+        var bestValue = p.Aptitude(best);
+        foreach (Match.Field.FieldPosition pos in Enum.GetValues(typeof(Match.Field.FieldPosition)))
+        {
+            if (pos == Match.Field.FieldPosition.DesignatedHitter) continue;
+            var v = p.Aptitude(pos);
+            if (v > bestValue) { bestValue = v; best = pos; }
+        }
+        return best;
     }
 
     // internal: 実戦成長（MatchGrowthModel, Q8）が走塁判断へ同じ式でexpを注ぐため。
