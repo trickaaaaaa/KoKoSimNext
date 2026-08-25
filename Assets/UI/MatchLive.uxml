@@ -29,6 +29,13 @@
                     <!-- 対決ビュー（設計書18 A案）。盤面と差し替えで表示する3D RTのホスト。
                          中身の DuelViewElement は MatchLiveController が生成し整数倍サイズへスナップする。 -->
                     <ui:VisualElement name="duel-host" class="mlive-duel" />
+                    <!-- 高速試合モード（design-06 §3.4）。演出（対決ビュー/2D俯瞰）を出さず、盤面をこの
+                         大型ラインスコアに差し替えて実時間経過で半イニングずつ進める。ScoreBug（得点・BSO・塁）
+                         は下で常時表示のまま重ねて残す＝このホストより先に置いて背面に敷く（DOM順=描画順）。
+                         中身の充填は MatchLiveController.PostFastModeBoard が LineScorePanel.Fill を叩く。 -->
+                    <ui:VisualElement name="fastmode-board" class="fastmode-board" style="display: none;">
+                        <ui:Instance template="LineScorePanel" />
+                    </ui:VisualElement>
                     <!-- 中継風の常時表示バグ。盤面の左上に出しっぱなしにして、打席の演出中も
                          カウント・塁・両校の得点を切らさない。俯瞰と対決ビューのどちらでも同じ位置に残る。 -->
                     <ui:Instance template="ScoreBug" />
@@ -109,6 +116,7 @@
                         <ui:Button name="spd-1" class="chip-btn chip-btn--on" text="×1" />
                         <ui:Button name="spd-2" class="chip-btn" text="×2" />
                         <ui:Button name="spd-4" class="chip-btn" text="×4" />
+                        <ui:Button name="spd-fast" class="chip-btn" text="⚡高速" />
                     </ui:VisualElement>
                     <ui:VisualElement class="md-group">
                         <ui:Button name="cam-work" class="chip-btn" text="🎥 カメラ演出" />

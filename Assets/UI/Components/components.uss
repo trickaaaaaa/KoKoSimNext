@@ -2256,22 +2256,36 @@
     letter-spacing: 3px;
 }
 /* 回間にカウントは無意味なので、イニング間のラインスコアでは右袖ごと畳む。
-   上部常設だった頃の下マージンも、中央に置く今は不要。 */
-.inning-break .lsc-count { display: none; }
-.inning-break .lsc { margin-bottom: 0; padding: var(--sp-2) var(--sp-4); }
+   上部常設だった頃の下マージンも、中央に置く今は不要。
+   高速試合モード（.fastmode-board）も同じ大写し寸法を共有する＝カウント・塁は ScoreBug が別途常時表示する。 */
+.inning-break .lsc-count, .fastmode-board .lsc-count { display: none; }
+.inning-break .lsc, .fastmode-board .lsc { margin-bottom: 0; padding: var(--sp-2) var(--sp-4); }
 
 /* 大写し。ドットは16の整数倍サイズ限定なので 32→48 に上げ、マスと行高もそれに合わせて広げる
    （scale で引き伸ばすと罫が半端に太るので、寸法そのものを差し替える）。 */
-.inning-break .lsc-row { height: var(--lsc-row-h-big); }
-.inning-break .lsc-row--head { height: var(--lsc-head-h-big); }
-.inning-break .lsc-cell { width: var(--lsc-cell-w-big); font-size: var(--fs-dot-48); }
-.inning-break .lsc-cell--total { width: var(--lsc-total-w-big); }
-.inning-break .lsc-cell--name { width: var(--lsc-name-w-big); font-size: 30px; }
-.inning-break .lsc-cell--inning { width: var(--lsc-name-w-big); font-size: var(--fs-dot-32); }
-.inning-break .lsc-row--head .lsc-cell { font-size: var(--fs-dot-32); }
+.inning-break .lsc-row, .fastmode-board .lsc-row { height: var(--lsc-row-h-big); }
+.inning-break .lsc-row--head, .fastmode-board .lsc-row--head { height: var(--lsc-head-h-big); }
+.inning-break .lsc-cell, .fastmode-board .lsc-cell { width: var(--lsc-cell-w-big); font-size: var(--fs-dot-48); }
+.inning-break .lsc-cell--total, .fastmode-board .lsc-cell--total { width: var(--lsc-total-w-big); }
+.inning-break .lsc-cell--name, .fastmode-board .lsc-cell--name { width: var(--lsc-name-w-big); font-size: 30px; }
+.inning-break .lsc-cell--inning, .fastmode-board .lsc-cell--inning { width: var(--lsc-name-w-big); font-size: var(--fs-dot-32); }
+.inning-break .lsc-row--head .lsc-cell, .fastmode-board .lsc-row--head .lsc-cell { font-size: var(--fs-dot-32); }
 /* 延長でマスが増えたら大写しをやめて通常寸法へ戻す（潰して収めない）。 */
-.inning-break .lsc--dense .lsc-cell { width: var(--lsc-cell-w); font-size: var(--fs-dot-32); }
-.inning-break .lsc--dense .lsc-row { height: var(--sb-cell-h); }
+.inning-break .lsc--dense .lsc-cell, .fastmode-board .lsc--dense .lsc-cell { width: var(--lsc-cell-w); font-size: var(--fs-dot-32); }
+.inning-break .lsc--dense .lsc-row, .fastmode-board .lsc--dense .lsc-row { height: var(--sb-cell-h); }
+
+/* ═══ FastModeBoard：高速試合モードの大型スコアボード（design-06 §3.4 / ローカルIssue
+   fast-mode-match-scoreboard-only）════════════════════════════════════════════════
+   演出（対決ビュー/2D俯瞰）の代わりに盤面へ被せる。InningBreak と違い一過性オーバーレイではなく
+   モード解除まで出しっぱなしにするので、暗幕にはせずパネル面（--sb-face）で盤面色調をそのまま踏襲する。 */
+.fastmode-board {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--sb-face);
+}
 
 /* ═══ ScoreBug：盤面左上の常時表示バグ（試合画面改修・器は Components/ScoreBug.uxml）═══════
    野球中継のアレ。打席の演出中も切らさずカウント・塁・両校の得点を出しっぱなしにする。

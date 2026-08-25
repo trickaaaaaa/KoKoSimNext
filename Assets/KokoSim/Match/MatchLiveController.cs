@@ -125,6 +125,8 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float scoreCallFinalHoldSeconds = 1.1f;
         [Tooltip("自校（後攻 home）の采配能力（委任AIの強さ・スキップ時に使用）。")]
         [SerializeField] private int managerTacticalSense = 70;
+        [Tooltip("高速試合モード（design-06 §3.4）の半イニング送り間隔[秒]（×1基準。既存の速度倍率 _speed で伸縮する）。演出（対決ビュー/2D俯瞰）を出さずスコアボードだけ進める観戦モード。")]
+        [SerializeField] private float fastModeHalfInningSeconds = 1.0f;
 
         // ライブ観戦（大会フロー）モードの状態。デモ生成モードでは false / null。
         private bool _managerIsAway;
@@ -196,6 +198,12 @@ namespace KokoSim.Unity.Match
         private readonly List<Button> _speedButtons = new();
         // 速度ボタンのハンドラ（ラムダのため OnDisable で外せるよう保持する）。
         private readonly List<(Button Button, System.Action Handler)> _speedHandlers = new();
+
+        // 高速試合モード（design-06 §3.4）。演出を出さずスコアボードだけを実時間経過で半イニング送りする。
+        // 速度ボタン列と同じ排他選択グループの一員（_speedButtons/_speedHandlers に相乗り）。
+        private bool _fastMode;
+        private double _fastModeClock;
+        private VisualElement _fastModeBoard;
 
         // 3カラム（左=自校 / 右=相手）＋マッチアップHUD。表示専用（数値はエンジン集計 Snapshot から引く）。
         // 左下コーナーは「上=投手HUD／下=指示パネル」の常設スタック（issue #289）。HUD はスロットの
@@ -482,6 +490,9 @@ namespace KokoSim.Unity.Match
             _backHome = _root.Q<Button>("back-home");
             if (_backHome != null) _backHome.clicked += OnBackHome;
             WireSpeed("spd-05", 0.5f); WireSpeed("spd-1", 1f); WireSpeed("spd-2", 2f); WireSpeed("spd-4", 4f);
+            WireFastMode("spd-fast");
+            _fastModeBoard = _root.Q<VisualElement>("fastmode-board");
+            if (_fastModeBoard != null) _fastModeBoard.style.display = DisplayStyle.None;
             _camWork = _root.Q<Button>("cam-work");
             if (_camWork != null) _camWork.clicked += OnToggleCameraWork;
             ApplyCameraWorkState();
@@ -622,6 +633,8 @@ namespace KokoSim.Unity.Match
             _homeTeam = null;
             _t = 0;
             _speed = 1f;
+            _fastMode = false;
+            _fastModeClock = 0;
             _pitchIdx = 0;
             _pitchClock = 0f;
             _pitchCallAt = pitchIntervalSeconds;
@@ -1169,9 +1182,14 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = "以降を委任して試合終了。";
         }
 
-        // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら試合結果画面へ渡す。
+        // 終局処理（自然終了・スキップ委任・高速試合モード中の終局 共通）。結果を確定表示し、
+        // ライブ観戦なら試合結果画面へ渡す。
         private void EndGame(GameResult result)
         {
+            // 高速試合モード中に終局した場合はここで抜ける（_prog.IsFinished なので OpenWindowOrBreak は
+            // 何もしない＝安全）。抜けておかないと通常ループが止まったままで「ゲームセット」テロップ等の
+            // Update() 側の後処理（_gameSetPending の消化）が一生走らない。
+            SetFastMode(false);
             EndFieldPlay();   // 打球の途中で終局しても守備陣・走者を場に置き去りにしない
             _view.HideJudgement();
             _gameOver = true;
@@ -2386,6 +2404,9 @@ namespace KokoSim.Unity.Match
 
         private void Update()
         {
+            // 高速試合モード中は演出系（対決ビュー/2D俯瞰/HUD各種）を一切更新しない別ループへ分岐する。
+            if (_fastMode) { TickFastMode(); return; }
+
             // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
             _view.CameraWorkEnabled = _cameraWorkWanted && _speed < 4f;
             // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
@@ -2831,7 +2852,12 @@ namespace KokoSim.Unity.Match
         {
             if (_prog == null) return;
             var snap = _prog.Snapshot();
-            LineScorePanel.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            // lsc-root は LineScorePanel テンプレートの内部名なので、fastmode-board 追加後は
+            // inning-break のインスタンスと同名が2つ並ぶ。_root の丸ごと検索（単一マッチ）だと
+            // ツリー順で先に来る側しか埋まらず、もう一方が空のまま表示される（2026-08-25 実害）。
+            // 各インスタンスの器（自分のサブツリーだけ）を渡して個別に埋める。
+            LineScorePanel.Fill(_inningBreak, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            LineScorePanel.Fill(_fastModeBoard, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
             ScoreBug.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
             // 掲げた点を控える（issue #628）。次に掲げるときの「まだ出していない点」の基準になる。
             _postedAwayRuns = snap.AwayLine.Runs;
@@ -3173,10 +3199,100 @@ namespace KokoSim.Unity.Match
             System.Action handler = () =>
             {
                 _speed = speed;
+                SetFastMode(false);   // 数値速度を選び直す＝高速試合モードの解除操作を兼ねる（専用の「戻る」ボタンは作らない）
                 foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
             };
             b.clicked += handler;
             _speedHandlers.Add((b, handler));
+        }
+
+        // 高速試合モードの入口（design-06 §3.4）。速度ボタンと同じ排他選択グループの一員として登録する
+        // （_speedButtons への相乗り＝OnDisable の一括解除もそのまま効く）。_speed 自体は変更しない
+        // （直前の速度倍率のまま「半イニング送りの間隔」にも流用する＝新しいペース系統を増やさない）。
+        private void WireFastMode(string name)
+        {
+            var b = _root.Q<Button>(name);
+            if (b == null) return;
+            _speedButtons.Add(b);
+            System.Action handler = () =>
+            {
+                SetFastMode(true);
+                foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
+            };
+            b.clicked += handler;
+            _speedHandlers.Add((b, handler));
+        }
+
+        /// <summary>
+        /// 高速試合モードの切替。ON: 対決ビュー/2D俯瞰を隠して大型スコアボードへ差し替える。
+        /// OFF: 表示を戻し、<see cref="AdvanceToNextWindow"/>（打席頭のウィンドウを開く既存の入口そのもの。
+        /// 試合開始時の <see cref="StartAutoRun"/> と同じ経路）で1球進行ループへ戻す。
+        ///
+        /// <para><b>罠</b>: <see cref="MatchProgression.CurrentAtBat"/> は「<see cref="MatchProgression.AdvancePitch"/>
+        /// が Pitch を返した直後に読む」契約（同プロパティのXMLコメント）で、<see cref="MatchProgression.Advance"/>
+        /// 系（<see cref="TickFastMode"/> が使う <c>AdvanceUntilInningEnd</c>）の直後に読むと打席途中の値を
+        /// 拾うことがある（実測: 2026-08-24、高速モード中に「3番 2-2」のような未確定値が出た）。
+        /// 復帰時は必ずこの経路（内部で <c>AdvancePitch</c> を1回呼んで窓を張り直す）を通す。</para>
+        /// </summary>
+        private void SetFastMode(bool on)
+        {
+            if (_fastMode == on) return;
+            _fastMode = on;
+            _fastModeClock = 0;
+            if (_fastModeBoard != null) _fastModeBoard.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
+            var tacticsHost = _root?.Q<VisualElement>("tactics-host");
+            if (tacticsHost != null) tacticsHost.style.display = on ? DisplayStyle.None : DisplayStyle.Flex;
+            if (on)
+            {
+                if (_fieldHost != null) _fieldHost.style.display = DisplayStyle.None;
+                if (_duelHost != null) _duelHost.style.display = DisplayStyle.None;
+                // 演出系の一過性オーバーレイ（プレイボール等のテロップ・判定・得点コール・交代ポップアップ・
+                // イニング間画面）は自前の実時間タイマーで消える設計だが、そのタイマーは高速試合モードの
+                // Update() 分岐では回さない。ここで畳んでおかないと消えるきっかけを永遠に失い、
+                // 盤面に張り付いたまま高速試合モードの間じゅう残る（EndGame の EndFieldPlay と同じ理由）。
+                EndFieldPlay();
+                _view.HideJudgement();
+                HideGameTelop();
+                HidePitchCall();
+                HideSubCall();
+                if (_scoreCallOn) { _scoreCallOn = false; if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None; }
+                if (_inningBreakOn) { _inningBreakOn = false; _inningBreakClock = 0f; _afterInningBreak = null; SetVisible(_inningBreak, false); }
+                PostFastModeBoard();
+            }
+            else
+            {
+                ApplyDuelViewState();   // 対決ビュー/俯瞰の表示を _duelOn の状態へ戻す
+                if (_prog != null && !_prog.IsFinished) { _stage = LiveStage.Idle; AdvanceToNextWindow(); }
+            }
+        }
+
+        /// <summary>
+        /// 高速試合モードの進行（design-17 §6.2 向けに実装済みの早送りAPIをそのまま使う。結果は不変）。
+        /// 実時間で <see cref="fastModeHalfInningSeconds"/>（×<see cref="_speed"/>）ごとに半イニング進め、
+        /// スコアボードだけ更新する。試合終了は通常終了と同じ <see cref="EndGame"/> 経路に合流する。
+        /// </summary>
+        private void TickFastMode()
+        {
+            if (_gameOver || _paused || _prog == null) return;
+            _fastModeClock += Time.deltaTime * _speed;
+            if (_fastModeClock < fastModeHalfInningSeconds) return;
+            _fastModeClock -= fastModeHalfInningSeconds;
+            _prog.AdvanceUntilInningEnd();
+            if (_prog.IsFinished) { EndGame(_prog.BuildResult()); return; }
+            PostFastModeBoard();
+        }
+
+        /// <summary>
+        /// 大型スコアボード＋左右スタメン列（現打者ハイライト）を今の進行状況へ更新する。BSO/塁は
+        /// <see cref="MatchProgression.CurrentAtBat"/> が信頼できる区間（1球進行の窓）でしか安全に読めない
+        /// （<see cref="SetFastMode"/> の罠コメント参照）ため、高速モード中は更新しない＝入る前の値のまま残る。
+        /// </summary>
+        private void PostFastModeBoard()
+        {
+            if (_prog?.Current is not { } current) return;   // まだ1打席も確定していない（滅多にない）
+            _atBat = null;   // RefreshPanel を snap.OffenseIsTop/CurrentBatterOrder のフォールバックへ倒す
+            PostLineScore(current.Inning, current.IsTop, finished: false);
+            RefreshPanel();
         }
 
         // カメラ演出トグル（Issue #119）。押すたびオン/オフ、既定オフ。
@@ -4232,6 +4348,9 @@ namespace KokoSim.Unity.Match
         /// 「実進行のまま任意のコマで止める」入口を別に用意する。
         /// </summary>
         public void FreezeLiveForCapture(bool on) => _paused = on;
+
+        /// <summary>検証用: いま高速試合モード中か（design-06 §3.4）。</summary>
+        public bool FastModeForCapture => _fastMode;
 
         /// <summary>
         /// スクショ用: いま<b>打席の頭の采配窓</b>で止まっているか（まだ1球も投げていない＝設計書15 §8 の肝）。
