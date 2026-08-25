@@ -1699,8 +1699,9 @@ namespace KokoSim.Unity.Match
             // 実況の区別は「控えから出たか／守備に就いていた者が回ったか（＝守備に穴が開くか）」（issue #381）。
             // 出てきた控えが投手枠かどうかでは分けない＝控えからの登板はすべて「投手交代」。
             var isFielder = kind != KokoSim.Engine.Match.Game.PitchingChangeKind.ReserveRelief;
-            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.ReserveRelief ? "投手交代"
-                : kind == KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap ? "投野交代" : "野手登板";
+            // 「野手登板」は表示しない＝控えから出たか在フィールド野手が回ったかを盤面の文言では区別しない
+            //（アンバー強調のみ isFielder で残す）。
+            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap ? "投野交代" : "投手交代";
             _subCallTag.EnableInClassList("sub-call__tag--fielder", isFielder);   // 野手系だけアンバー点灯（一過性強調）
             _subCallText.text = SubEventText(e);
             _subCall.style.display = DisplayStyle.Flex;
