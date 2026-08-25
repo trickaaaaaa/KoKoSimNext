@@ -243,6 +243,16 @@ public static class HomePlayResolver
     public static BasePlayParams TagUpHomeParams(BaserunningCoefficients c)
         => new(4, new Vector3D(0, 0, 0), c.HomeTagSeconds, c.TagUpSuccessBias, c.TagUpMarginScale);
 
+    /// <summary>タッチアップ（二塁→三塁）のレース係数束（design-14 P3-11）。送球先=三塁・タッチは三塁レースと
+    /// 同軸（<see cref="BaserunningCoefficients.ThirdTagSeconds"/>）、幅はタッチアップ共通、バイアスだけ塁固有。</summary>
+    public static BasePlayParams TagUpThirdParams(FieldGeometry field, BaserunningCoefficients c)
+        => new(3, field.ThirdBase, c.ThirdTagSeconds, c.TagUpThirdSuccessBias, c.TagUpMarginScale);
+
+    /// <summary>タッチアップ（一塁→二塁）のレース係数束（design-14 P3-11）。送球先=二塁・タッチは二塁と
+    /// 同軸（<see cref="BaserunningCoefficients.SecondForceTagSeconds"/>＝ベースでのタッチ/捕球0.10）。</summary>
+    public static BasePlayParams TagUpSecondParams(FieldGeometry field, BaserunningCoefficients c)
+        => new(2, field.SecondBase, c.SecondForceTagSeconds, c.TagUpSecondSuccessBias, c.TagUpMarginScale);
+
     /// <summary>
     /// タッチアップ走者が目標塁へ到達する所要時間[s]（接触基準）。離塁は捕球後なので起点は捕球時刻
     /// （<paramref name="s"/>.BallFieldedAtSeconds）。二次リードは取れない（捕球時にベースへ触れている）ため

@@ -95,6 +95,16 @@ public sealed record TacticsCoefficients
     /// <summary>aggression(0=超慎重, 0.5=中立, 1=超積極) で閾値を動かす幅。</summary>
     public double SendAdvanceAggressionSpan { get; init; } = 0.40;
 
+    // ===== 犠飛以外のタッチアップの送り判定（一塁→二塁 / 二塁→三塁, design-14 P3-11）=====
+    // 進塁打（ゴロ）と同じく**アウト数を取らない**（ApplyInPlayOut が 2アウトで即 return する）。
+    // 閾値が他より高いのは、タッチアップの走者が**静止から出る**ぶん博打の分が悪く、実物の三塁コーチも
+    // 「ほぼ確実な時だけ行かせる」ため。進塁打の 0.35 を流用すると送った試行の3〜4割が走塁死になり、
+    // 走者を進めるどころか攻撃を削る（実測: 0.35 で走塁死28〜40%・得点が帯の下限割れ）。
+    /// <summary>中立采配でタッチアップを行かせる閾値（到達見込みがこの値以上で走る）。</summary>
+    public double SendTagUpMinSuccess { get; init; } = 0.85;
+    /// <summary>aggression(0=超慎重, 0.5=中立, 1=超積極) で閾値を動かす幅。</summary>
+    public double SendTagUpAggressionSpan { get; init; } = 0.20;
+
     // ===== 守備指示判断 =====
     public double BuntShiftProb { get; init; } = 0.50;
     public int InfieldInFromInning { get; init; } = 8;

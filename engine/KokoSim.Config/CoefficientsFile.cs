@@ -801,6 +801,9 @@ public static class CoefficientsLoader
         // 犠飛のタッチアップ（Issue #90）
         public double TagUpMarginScale { get; set; } = D.TagUpMarginScale;
         public double TagUpSuccessBias { get; set; } = D.TagUpSuccessBias;
+        // 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）
+        public double TagUpThirdSuccessBias { get; set; } = D.TagUpThirdSuccessBias;
+        public double TagUpSecondSuccessBias { get; set; } = D.TagUpSecondSuccessBias;
         public double CloseCallMarginSeconds { get; set; } = D.CloseCallMarginSeconds;
         // ライナー併殺（設計書12 §4, G2）
         public double LinerBreakReactionSeconds { get; set; } = D.LinerBreakReactionSeconds;
@@ -916,6 +919,8 @@ public static class CoefficientsLoader
             DoublePlayRelayBias = DoublePlayRelayBias,
             TagUpMarginScale = TagUpMarginScale,
             TagUpSuccessBias = TagUpSuccessBias,
+            TagUpThirdSuccessBias = TagUpThirdSuccessBias,
+            TagUpSecondSuccessBias = TagUpSecondSuccessBias,
             CloseCallMarginSeconds = CloseCallMarginSeconds,
             LinerBreakReactionSeconds = LinerBreakReactionSeconds,
             LinerCommitCapSeconds = LinerCommitCapSeconds,
@@ -1612,6 +1617,9 @@ public static class CoefficientsLoader
         // ゴロ凡打の進塁打の送り判定（二塁→三塁, Issue #318。アウト数を取らない＝2アウト緩和なし）
         public double SendAdvanceMinSuccess { get; set; } = D.SendAdvanceMinSuccess;
         public double SendAdvanceAggressionSpan { get; set; } = D.SendAdvanceAggressionSpan;
+        // 犠飛以外のタッチアップの送り判定（design-14 P3-11）
+        public double SendTagUpMinSuccess { get; set; } = D.SendTagUpMinSuccess;
+        public double SendTagUpAggressionSpan { get; set; } = D.SendTagUpAggressionSpan;
         // 守備指示判断
         public double BuntShiftProb { get; set; } = D.BuntShiftProb;
         public int InfieldInFromInning { get; set; } = D.InfieldInFromInning;
@@ -1734,6 +1742,8 @@ public static class CoefficientsLoader
             SendThirdAggressionSpan = SendThirdAggressionSpan,
             SendAdvanceMinSuccess = SendAdvanceMinSuccess,
             SendAdvanceAggressionSpan = SendAdvanceAggressionSpan,
+            SendTagUpMinSuccess = SendTagUpMinSuccess,
+            SendTagUpAggressionSpan = SendTagUpAggressionSpan,
             BuntShiftProb = BuntShiftProb,
             InfieldInFromInning = InfieldInFromInning,
             InfieldInMaxLead = InfieldInMaxLead,

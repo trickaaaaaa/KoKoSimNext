@@ -340,6 +340,27 @@ public sealed record BaserunningCoefficients
     /// 実戦バランス中立（Archetypes_AreBalanceNeutral_InActualGames）を維持。</summary>
     public double TagUpSuccessBias { get; init; } = 1.50;
 
+    // === 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）===
+    // 犠飛（三塁→本塁）と同じ機構を目標塁だけ替えて使う（走者の式・幅は共有し、塁固有はバイアスだけ分離）。
+    // 置換前は両方とも ProductiveOutAdvanceProb の18%固定で、打球の深さ・外野の肩・走力を一切見ていなかった
+    // （浅いライトフライでも一塁走者が18%で二塁へ走る＝非現実的）。物理レースにすると、浅いフライは送球が
+    // 短く到達見込みが低い＝自重、深いフライだけ試みる、が幾何から創発する。
+    /// <summary>タッチアップ（二塁→三塁）の到達確率バイアス[s]（校正項）。本塁と別に持つのは、送球距離が
+    /// 塁ごとに大きく違い <see cref="TagUpSuccessBias"/>（本塁用 1.50）を流用すると浅いフライでも
+    /// 成立してしまうため。帯校正はこの1本で行う（#318 の AdvanceSuccessBias と同役）。
+    /// 実測（走者50・肩50・中堅方向・2000試行）: 100m まで0%・105m 86%・115m 93%・120m 95%（走塁死は5〜14%）。
+    /// <para>1.30 まで上げると 95m から動き出すが、<b>球場の広さと結び付いて帯を割る</b>——広い球場ほど
+    /// 外野が深い位置で捕る＝タッチアップが増えるため、広い球場の得点が上がって
+    /// <c>StadiumRegressionTests</c> の「標準 &gt; 広」順序が崩れ、<c>PitcherArchetypeTests</c> の守備依存差も
+    /// 詰まる（どちらも差 0.03〜0.04 の僅差比較）。0.85 では両方とも緑。</para></summary>
+    public double TagUpThirdSuccessBias { get; init; } = 0.85;
+    /// <summary>タッチアップ（一塁→二塁）の到達確率バイアス[s]（校正項）。二塁への送球は最短＝実物でも
+    /// 一塁走者のタッチアップはごく稀。<see cref="TagUpThirdSuccessBias"/> と同役で塁だけ違う。
+    /// 実測（走者50・肩50・中堅方向）: 105m まで0%・115m から動く＝<b>最深部のフライでだけ走る</b>。
+    /// 三塁側（0.85）より高くできるのは、一塁走者のタッチアップは元々頻度が低く、球場の広さと結び付いて
+    /// 帯を動かす主因（数の多い二塁→三塁）から分離できるため（この値で Stadium/Archetype とも緑）。</summary>
+    public double TagUpSecondSuccessBias { get; init; } = 1.20;
+
     /// <summary>
     /// 判定オーバーレイ（Issue #59）: margin[s]の絶対値がこの値未満なら「際どい」＝セーフ表示の対象。
     /// アウトは常に表示するため使わない。表示専用（判定・帯には無関係, 決定論を変えない）。

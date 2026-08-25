@@ -365,6 +365,11 @@ baserunning:
   # 守備も同じ捕球時刻から送球＝共通起点が捕球時刻。深い外野フライは送球が長く生還、浅いフライは自重/憤死。
   tag_up_margin_scale: 0.40                   # margin→生還確率のlogistic幅（本塁クロスプレーより広め＝深さ・肩を効かせる）
   tag_up_success_bias: 1.50                   # 生還率・本塁憤死頻度を現実値へ校正（Heavy実測, Issue #90。球質タイプ中立を維持）
+  # 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）: 置換前は両方とも
+  # productive_out_advance_prob の18%固定で深さ・肩・走力を見ていなかった（浅いライトフライでも一塁走者が
+  # 18%で二塁へ）。塁ごとに送球距離が大きく違うため、本塁用の tag_up_success_bias(1.50) は流用せず塁固有に持つ。
+  tag_up_third_success_bias: 0.85             # 二塁→三塁の校正項[s]。実測 100mまで0%・105m 86%・115m 93%。1.30だと広い球場の得点が上がりStadium/Archetypeの僅差比較が割れる
+  tag_up_second_success_bias: 1.20            # 一塁→二塁の校正項[s]。二塁への送球は最短＝実測 105mまで0%・115mから動く（最深部のフライでだけ走る）
   close_call_margin_seconds: 0.15            # 判定オーバーレイ（Issue #59）: |margin|がこれ未満なら「際どい」＝セーフ表示。アウトは常時表示のため無関係
   # ライナー併殺（コンタクト始動の一塁走者が捕られ戻れず, 設計書12 §4, G2）
   liner_break_reaction_seconds: 0.05         # 接触と同時に飛び出す＝ほぼ即時
@@ -595,6 +600,10 @@ tactics:
   # ゴロ凡打は currentOuts>=2 で ApplyInPlayOut が即 return するため 2アウト緩和は死にコードになる。
   send_advance_min_success: 0.35     # 中立采配で進塁を狙う閾値
   send_advance_aggression_span: 0.40 # aggression(0..1)で閾値を±動かす幅
+  # 犠飛以外のタッチアップの送り判定（design-14 P3-11）。静止から出るぶん博打の分が悪く、実物の三塁コーチも
+  # 「ほぼ確実な時だけ行かせる」＝他の送り閾値より高い。進塁打の0.35を流用すると送った試行の3〜4割が走塁死になる。
+  send_tag_up_min_success: 0.85      # 中立采配でタッチアップを行かせる閾値
+  send_tag_up_aggression_span: 0.20  # aggression(0..1)で閾値を±動かす幅
   # 内野深さ×ゴロ×本塁（G1, 設計書12 §4/§5）は深さで本塁プレーの有無を分岐（前進=勝負/後退=献上/通常=テーブル）。
   # 送りバイアスは baserunning.home_grounder_start_delay_seconds で調整。
   # 守備指示判断

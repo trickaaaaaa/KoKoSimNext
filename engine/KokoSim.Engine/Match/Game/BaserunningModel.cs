@@ -719,6 +719,13 @@ public static class BaserunningModel
                 ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts);
                 r2 = null; // 進塁・憤死・自重のいずれでも二塁走者の帰趨はここで確定（自重時は bases.Second のまま）。
             }
+            else if (extraOuts == 0 && home is { IsFly: true } fly2)
+            {
+                // フライ捕球＝タッチアップ（design-14 P3-11）。18%固定でなく犠飛と同じ物理レース。
+                // フライではフォースが掛からない（r2Forced は必ず false）ので分岐を分けない。
+                ResolveFlyTagUp(bases, r2, 2, fly2, coeff, rng, mv, ref extraOuts);
+                r2 = null; // 進塁・憤死・自重のいずれでも帰趨はここで確定（自重時は bases.Second のまま）。
+            }
             else if (r2Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
             {
                 mv?.Add(new RunnerMove(r2, 2, 3, false)
@@ -728,14 +735,26 @@ public static class BaserunningModel
                 r2 = null;
             }
         }
+        // タッチアップが3アウト目を作ったらここで打ち切る（進塁は起きない）。既存経路では
+        // ここに来る時点で extraOuts が増えているのは ResolveGrounderAdvance だけ＝そのとき r1 は必ず null
+        // （非フォースの二塁走者⇒一塁は空）なので、この行の追加は従来経路に対して恒等。
+        if (currentOuts + battersOwnOut + extraOuts >= 3) return (runs, extraOuts, homeOuts, batterSafeOnFc);
         // 飛び出しの勝負を走って戻った一塁走者は、その捕球でタッチアップはできない（塁に戻るのが捕球の後）＝進塁抽選を引かない。
-        if (r1 is not null && !r1RacedBack && bases.Second is null
-            && (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
+        if (r1 is not null && !r1RacedBack && bases.Second is null)
         {
-            mv?.Add(new RunnerMove(r1, 1, 2, false)
-                { TagUpCatchAtSeconds = r1Forced ? null : flyTagUpCatchAt });
-            bases.Second = r1;
-            bases.First = null;
+            if (extraOuts == 0 && home is { IsFly: true } fly1)
+            {
+                // 一塁→二塁のタッチアップ（design-14 P3-11）。二塁への送球は最短なので、
+                // 浅い・中くらいのフライでは到達見込みが送り閾値に届かず自重する＝実物どおり稀になる。
+                ResolveFlyTagUp(bases, r1, 1, fly1, coeff, rng, mv, ref extraOuts);
+            }
+            else if (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
+            {
+                mv?.Add(new RunnerMove(r1, 1, 2, false)
+                    { TagUpCatchAtSeconds = r1Forced ? null : flyTagUpCatchAt });
+                bases.Second = r1;
+                bases.First = null;
+            }
         }
 
         return (runs, extraOuts, homeOuts, batterSafeOnFc);
@@ -784,6 +803,48 @@ public static class BaserunningModel
         var relayMargin = HomePlayResolver.Margin(
             r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
         ResolveAdvanceRace(bases, r2, pRelay, relayMargin, delay, coeff, rng, mv, ref extraOuts);
+    }
+
+    /// <summary>
+    /// 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）を物理レースで解く。
+    /// 犠飛（三塁→本塁, Issue #90）と<b>同じ機構を目標塁だけ替えて</b>使う＝走者の式は新設しない（不変条件#1）。
+    /// 走者は捕球時刻にスタート（二次リードなし＝全塁間を走る）、守備も同じ捕球時刻から送球するので、
+    /// 勝負は「塁間を走る時間」対「捕球地点→次塁の送球時間」＝打球の深さ・方向と外野の肩だけが効く。
+    /// 浅いフライは送球が短く到達見込みが送り閾値に届かない＝自重（RNG非消費）。
+    /// 呼び出し前提: フライ・extraOuts==0・進塁先が空き。
+    /// </summary>
+    private static void ResolveFlyTagUp(
+        BaseState bases, Player runner, int fromBase, HomePlayContext fly,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
+        ref int extraOuts)
+    {
+        var p = fromBase == 2
+            ? HomePlayResolver.TagUpThirdParams(fly.Field, coeff)
+            : HomePlayResolver.TagUpSecondParams(fly.Field, coeff);
+        var prob = HomePlayResolver.TagUpSuccessProbability(runner, fromBase, fly.Situation, fly.Field, coeff, p);
+        // 送り閾値はタッチアップ専用（他の送り判定より高い）。静止から出るぶん博打の分が悪く、実物の
+        // 三塁コーチも「ほぼ確実な時だけ行かせる」＝低い閾値を流用すると送った試行の3〜4割が走塁死になり、
+        // 走者を進めるどころか攻撃を削る（実測で得点が帯の下限割れ）。理由は SendTagUpMinSuccess のコメント。
+        if (!HomeSendDecision.ShouldSendTagUp(prob, fly.Aggression, fly.Tactics)) return; // 自重（RNG非消費）
+
+        var margin = HomePlayResolver.TagUpMargin(runner, fromBase, fly.Situation, fly.Field, coeff, p);
+        var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
+        // 絵も判定と同じ「捕球を待ってから走る」時計にする（犠飛と同じ扱い）。
+        var catchAt = fly.Situation.BallFieldedAtSeconds;
+        var toBase = fromBase + 1;
+        if (HomePlayResolver.TagUpResolveSafe(runner, fromBase, fly.Situation, fly.Field, coeff, p, rng))
+        {
+            mv?.Add(new RunnerMove(runner, fromBase, toBase, false)
+                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt });
+            if (toBase == 3) bases.Third = runner; else bases.Second = runner;
+        }
+        else
+        {
+            extraOuts++; // タッチアップ失敗＝進塁先での走塁死
+            mv?.Add(new RunnerMove(runner, fromBase, toBase, Out: true)
+                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt });
+        }
+        if (fromBase == 2) bases.Second = null; else bases.First = null;
     }
 
     /// <summary>進塁レースの決着（Issue #318）。セーフ=三塁到達／アウト=三塁での走塁死（extraOuts加算）。

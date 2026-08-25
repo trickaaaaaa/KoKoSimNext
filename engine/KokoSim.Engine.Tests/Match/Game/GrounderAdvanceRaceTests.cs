@@ -208,16 +208,18 @@ public sealed class GrounderAdvanceRaceTests
     // ================= 従来テーブルへのフォールバック =================
 
     [Fact]
-    public void Fallback_FlyOut_UsesLegacyTable_Deterministic()
+    public void FlyOut_UsesTagUpRace_NotLegacyTable_Deterministic()
     {
-        // フライアウト（IsFly=true）は走者の時計が別物＝物理レース対象外。従来テーブル（productive_out_advance_prob）。
-        var flyDeep = Grounder(x: 20, z: 48, fieldedAt: 2.4, arm: 55, throwArriveSeconds: 2.9, isFly: true);
+        // フライアウト（IsFly=true）はゴロの転送レースではなくタッチアップの物理レースで解く
+        // （design-14 P3-11。かつては走者の時計が別物という理由で18%固定テーブルへ落としていた）。
+        // この浅いフライ（48m）は三塁への送球が短く到達見込みが送り閾値に届かない＝全試行で自重する。
+        // 18%固定テーブルのままなら 2000試行で 300〜460 程度進んでいた。深さ依存の網羅は FlyTagUpTests。
+        var flyShallow = Grounder(x: 20, z: 48, fieldedAt: 2.4, arm: 55, throwArriveSeconds: 2.9, isFly: true);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
-        var a = CountAdvances(flyDeep, r2, seed: 99);
-        var b = CountAdvances(flyDeep, r2, seed: 99);
+        var a = CountAdvances(flyShallow, r2, seed: 99);
+        var b = CountAdvances(flyShallow, r2, seed: 99);
         Assert.Equal(a, b); // 決定論
-        // 18%固定テーブル（走力補正で微増）＝2000試行で概ね 300〜460。物理レース（深い→ほぼ全進塁）とは明確に違う。
-        Assert.InRange(a, 250, 500);
+        Assert.Equal(0, a);
     }
 
     [Fact]
