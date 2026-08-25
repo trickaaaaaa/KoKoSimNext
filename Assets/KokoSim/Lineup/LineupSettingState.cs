@@ -33,6 +33,8 @@ namespace KokoSim.Unity.Lineup
         public bool IsCaptain;
         /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空（設計書03 §3.5）。</summary>
         public string Injury = "";
+        /// <summary>調子（常に自校の真値。UI原則⑥・ConditionFaceで表情顔として出す）。</summary>
+        public Condition Condition = Condition.Normal;
     }
 
     /// <summary>控え（打順外）の1選手。</summary>
@@ -45,6 +47,8 @@ namespace KokoSim.Unity.Lineup
         public bool IsPicked;
         /// <summary>故障中の短縮表示（例「捻挫・中度」）。健常なら空（設計書03 §3.5）。</summary>
         public string Injury = "";
+        /// <summary>調子（常に自校の真値。UI原則⑥・ConditionFaceで表情顔として出す）。</summary>
+        public Condition Condition = Condition.Normal;
     }
 
     /// <summary>
@@ -572,6 +576,7 @@ namespace KokoSim.Unity.Lineup
                     IsPosPicked = _pickKind == PickKind.SlotPosition && _posPickSlot == i,
                     IsCaptain = p.IsCaptain,
                     Injury = InjuryChipText(p),
+                    Condition = FormModel.Quantize(p.ConditionValue),
                 });
             }
 
@@ -599,6 +604,7 @@ namespace KokoSim.Unity.Lineup
                     GradeLabel = p.Grade + "年",
                     IsPicked = _picked == i && _pickKind == PickKind.OrderPlayer,
                     Injury = InjuryChipText(p),
+                    Condition = FormModel.Quantize(p.ConditionValue),
                 });
             }
 

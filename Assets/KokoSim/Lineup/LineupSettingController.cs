@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using KokoSim.Engine.Players;    // Condition（調子・ConditionFaceの入力型）
 using KokoSim.Unity.Components; // 部品辞書（RankChip / AbilityRow）
 
 namespace KokoSim.Unity.Lineup
@@ -115,6 +116,9 @@ namespace KokoSim.Unity.Lineup
                 // 故障中は警告チップ（部品辞書の .chip--out を流用＝新規の見た目を作らない）。
                 if (r.Injury.Length > 0) row.Add(InjuryChip(r.Injury));
 
+                // 調子（表情顔・常に自校の真値）。試合中HUD（MatchLiveController）と同じ部品。
+                row.Add(ConditionFaceEl(r.Condition));
+
                 // 選手個人の総合ランクチップは出さない（Issue #30 で廃止・#220 の決定1-D と同じ扱い）。
                 // カテゴリ別ランクは右の比較カードで見る。
 
@@ -189,6 +193,8 @@ namespace KokoSim.Unity.Lineup
                 row.Add(name);
                 // 控えの投/野タグは出さない（役割はプレイヤーが決める, Issue #93）。識別は背番号と名前。
                 if (b.Injury.Length > 0) row.Add(InjuryChip(b.Injury));
+                // 調子（表情顔・常に自校の真値）。打順行と同じ部品。
+                row.Add(ConditionFaceEl(b.Condition));
                 // 打順行と同じく総合ランクチップは出さない（Issue #30/#270）。
 
                 var idx = b.Index;
@@ -419,6 +425,15 @@ namespace KokoSim.Unity.Lineup
             l.AddToClassList("chip--tag");
             l.AddToClassList("chip--out");
             return l;
+        }
+
+        /// <summary>調子の表情顔（UI原則⑥）。試合中HUD（MatchLiveController）と同じ ConditionFace 部品。</summary>
+        private static KokoSim.Unity.Shell.ConditionFace ConditionFaceEl(Condition c)
+        {
+            var face = new KokoSim.Unity.Shell.ConditionFace();
+            face.AddToClassList("lu-row__cond");
+            face.Set(c);
+            return face;
         }
 
         private static Label CaptainMark()
