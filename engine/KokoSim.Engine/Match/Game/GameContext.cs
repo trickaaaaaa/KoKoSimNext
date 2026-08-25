@@ -96,6 +96,16 @@ public sealed record GameContext
     /// </summary>
     public bool CapturePitches { get; init; }
 
+    /// <summary>
+    /// 自校の投手交代をプレイヤーの采配権にするか（issue: 試合中に投手が勝手に交代される・2026-08-25）。
+    /// 既定オフ＝裏試合・統計シム・既存テストは全部これ＝<see cref="GameEngine.MaybeChangePitcher"/> の
+    /// 挙動もその帯も従来どおり変わらない。真のときだけ、<see cref="TeamState.Tactics"/> が null の自校に対して、
+    /// 週間球数制限（<see cref="TeamState.CurrentPitcherAtWeeklyLimit"/>）到達時の自動交代を止め、
+    /// <see cref="Timeline.Playback.MatchProgression.PendingForcedPitcherChange"/> でプレイヤーの人選待ちにする。
+    /// 疲労トリガー（目安に過ぎない）は真偽どちらでも自動交代・通知の対象から外す。
+    /// </summary>
+    public bool PlayerControlsPitcherChanges { get; init; }
+
     /// <summary>守備陣形ルール表（CHANGELOG 33, data/defensive-formations.yaml から注入。null=既定表）。</summary>
     public Match.Timeline.FormationTable? Formations { get; init; }
 

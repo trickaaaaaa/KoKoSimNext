@@ -41,7 +41,7 @@ namespace KokoSim.Unity.Match
         private VisualElement _scrim, _kinds, _outRows, _inRows, _cmpRows, _cmpToggle;
         private ScrollView _cmpScroll;
         private Label _phase, _outsCap, _insCap, _note;
-        private Button _ok;
+        private Button _ok, _close, _cancel;
 
         private MatchProgression _prog;
         private bool _teamIsAway;
@@ -101,6 +101,8 @@ namespace KokoSim.Unity.Match
             _insCap = _root.Q<Label>("msub-ins-cap");
             _note = _root.Q<Label>("msub-note");
             _ok = _root.Q<Button>("msub-ok");
+            _close = _root.Q<Button>("msub-close");
+            _cancel = _root.Q<Button>("msub-cancel");
 
             Click("msub-close", Close);
             Click("msub-cancel", Close);
@@ -127,8 +129,15 @@ namespace KokoSim.Unity.Match
             Render();
         }
 
+        /// <summary>
+        /// 週間球数制限で強制的に開いた投手交代待ち（<see cref="MatchProgression.PendingForcedPitcherChange"/>）の間は、
+        /// 閉じても何も変えずに投げさせ続けることになるため、実際に継投するまで閉じさせない。
+        /// </summary>
+        private bool ForcedPitcherChangePending => _prog != null && _prog.PendingForcedPitcherChange;
+
         public void Close()
         {
+            if (ForcedPitcherChangePending) return;
             _open = false;
             if (_scrim != null) _scrim.style.display = DisplayStyle.None;
         }
@@ -344,7 +353,14 @@ namespace KokoSim.Unity.Match
         private void Render()
         {
             if (_opt == null) return;
-            if (_phase != null) _phase.text = _opt.IsFinished ? "試合終了" : _opt.IsOffense ? "攻撃中" : "守備中";
+            var forced = ForcedPitcherChangePending;
+            if (_phase != null)
+                _phase.text = _opt.IsFinished ? "試合終了"
+                    : forced ? "球数制限：投手を交代してください"
+                    : _opt.IsOffense ? "攻撃中" : "守備中";
+            // 交代するまで閉じさせない（Close 側のガードと対で、押せる/押せないを見た目にも出す）。
+            _close?.SetEnabled(!forced);
+            _cancel?.SetEnabled(!forced);
             BuildKinds();
             if (_opt.IsOffense) { BuildOffenseOut(); BuildOffenseIn(); }
             else { BuildDefenseAssign(); BuildDefenseCandidates(); }

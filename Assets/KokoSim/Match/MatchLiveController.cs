@@ -166,6 +166,9 @@ namespace KokoSim.Unity.Match
         private bool _timeoutSentThisPause;   // 1中断につき伝令1回（連打で複数消費させない）
         // 自動連続進行の中断中フラグ（ポップアップ表示〜再開の間 true）。盤面・自動進行の両方を止める。
         private bool _paused;
+        // 球数制限の強制交代パネル（OpenForcedPitcherChangePanel）が中断メニューを経由せず _paused を
+        // 立てた印。中断メニューの「再開」は押せないので、Update() がパネルの Close を検知して自分で戻す。
+        private bool _forcedSubPause;
         // 自動進行を開始したか（OnEnable の一度だけ。スクショ時＝CaptureMode は開始しない）。
         private bool _autoStarted;
         // タイムライン駆動カメラワーク（design-06/12・Issue #119）の観戦設定トグル。既定オフ＝現行の固定全景。
@@ -867,6 +870,14 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
+            // 週間球数制限に達した自校投手がいる（MatchProgression.PendingForcedPitcherChange）。
+            // 疲労だけでは起きない＝プレイヤーが自分で気づいて代える（要件どおりシステムからは何も言わない）。
+            if (result == AdvancePitchResult.AwaitingForcedPitcherChange)
+            {
+                OpenForcedPitcherChangePanel();
+                return;
+            }
+
             if (result == AdvancePitchResult.PlateAppearance)
             {
                 // 打席が確定した。<b>打席を終わらせた1球はここから描く</b>——インプレーの打球は確定して
@@ -1136,6 +1147,20 @@ namespace KokoSim.Unity.Match
         {
             if (_gameOver || _prog == null || !_paused) return;
             _subPanel?.Open();
+        }
+
+        /// <summary>
+        /// 週間球数制限に達した自校投手がいて、プレイヤーの人選待ちになった
+        /// （<see cref="MatchProgression.PendingForcedPitcherChange"/>）。中断メニューを経由せず、
+        /// 交代パネルを直接・強制的に開く。<see cref="MatchSubstitutionPanel.Close"/> 側が
+        /// 交代するまで閉じさせないので、これ以降の自動進行は既存の IsOpen ガードで自然に止まる。
+        /// </summary>
+        private void OpenForcedPitcherChangePanel()
+        {
+            if (_gameOver || _prog == null || _subPanel == null || _subPanel.IsOpen) return;
+            _paused = true;
+            _forcedSubPause = true;
+            _subPanel.Open();
         }
 
         // 選手能力ビューア（issue #602）。中断中ならいつでも開ける＝**読むだけ**なので
@@ -2421,6 +2446,16 @@ namespace KokoSim.Unity.Match
             RefreshHudVisibility();     // 打球プレー中はマッチアップHUDを引っ込める（下の説明を参照）
             UpdateTacticsAcceptance();  // 采配カードの受付ゲート（issue #493）。投手が次球の振りかぶりへ入ったら締め切る
 
+            // 強制交代パネル（球数制限）が閉じた＝継投が確定した。中断メニューを経由していないので
+            // 「再開」ボタンを押しようがない＝ここで自分から中断を解いて自動進行へ戻す。
+            if (_forcedSubPause && (_subPanel == null || !_subPanel.IsOpen))
+            {
+                _forcedSubPause = false;
+                _paused = false;
+                AdvanceToNextWindow();
+                return;
+            }
+
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
 
@@ -3280,6 +3315,10 @@ namespace KokoSim.Unity.Match
             _fastModeClock -= fastModeHalfInningSeconds;
             _prog.AdvanceUntilInningEnd();
             if (_prog.IsFinished) { EndGame(_prog.BuildResult()); return; }
+            // 球数制限で投手交代待ちになった＝早送り中でも必ず一旦止めてプレイヤーに選ばせる。
+            // 高速試合モードを解いて通常速度へ戻すと、直後の AdvanceToNextWindow が窓を開き直す
+            // 過程で AwaitingForcedPitcherChange を検知し、交代パネルが自動的に開く。
+            if (_prog.PendingForcedPitcherChange) { SetFastMode(false); return; }
             PostFastModeBoard();
         }
 

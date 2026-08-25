@@ -72,6 +72,11 @@ public enum AdvancePitchResult
     PlateAppearance,
     /// <summary>試合が終了した。</summary>
     Finished,
+    /// <summary>
+    /// 週間球数制限に達した自校投手がいて、プレイヤーが交代先を選ぶまで進めない
+    /// （<see cref="MatchProgression.PendingForcedPitcherChange"/> が真の間）。
+    /// </summary>
+    AwaitingForcedPitcherChange,
 }
 
 /// <summary>
@@ -569,9 +574,29 @@ public sealed class MatchProgression
             Start: start, StealTarget: target, PitchIndex: PendingPitchIndex));
     }
 
+    /// <summary>
+    /// 週間球数制限に達した自校投手がいて、プレイヤーが交代先を選ぶまで <see cref="Advance"/>／
+    /// <see cref="AdvancePitch"/> が進めない状態か（<see cref="GameContext.PlayerControlsPitcherChanges"/> が
+    /// 真の試合限定）。<see cref="TeamState.CurrentPitcherAtWeeklyLimit"/> は副作用のない述語なので、
+    /// プレイヤーが継投すれば（投手が入れ替わり球数が0に戻れば）次に読んだ時点で自然に false へ戻る＝
+    /// 専用のリセット処理は持たない。
+    /// </summary>
+    public bool PendingForcedPitcherChange
+    {
+        get
+        {
+            if (!_ctx.PlayerControlsPitcherChanges || Current is null || IsFinished) return false;
+            var sameHalf = _p.CurrentOuts < 3;
+            var nextIsTop = sameHalf ? _p.CurrentIsTop : !_p.CurrentIsTop;
+            var defense = _p.OffenseOf(!nextIsTop);
+            return defense.Tactics is null && defense.CurrentPitcherAtWeeklyLimit();
+        }
+    }
+
     /// <summary>次の打席を1つ解決して <see cref="Current"/> に載せる。試合終了なら false。</summary>
     public bool Advance()
     {
+        if (PendingForcedPitcherChange) return false;
         if (IsFinished) return false;
         // 1球ごとの采配窓（GameStepKind.Pitch, 設計書15）は読み飛ばし、打席が確定した境界だけを表に出す。
         // 従来どおりの打席単位供給（Pitch 窓で一時停止したいなら AdvancePitch を使う＝Phase D-1）。
@@ -601,6 +626,7 @@ public sealed class MatchProgression
     /// </summary>
     public AdvancePitchResult AdvancePitch()
     {
+        if (PendingForcedPitcherChange) return AdvancePitchResult.AwaitingForcedPitcherChange;
         if (IsFinished) return AdvancePitchResult.Finished;
         if (!_steps.MoveNext())
         {

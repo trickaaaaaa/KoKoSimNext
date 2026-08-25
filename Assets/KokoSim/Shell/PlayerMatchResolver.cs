@@ -50,6 +50,8 @@ namespace KokoSim.Unity.Shell
                 new GameContext
                 {
                     CaptureTimelines = true, CapturePitches = true,
+                    // 自校の投手交代はプレイヤーの采配権にする（Resolve側＝観戦しない裏解決には付けない）。
+                    PlayerControlsPitcherChanges = true,
                     MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
                 },
                 CalendarYear());

@@ -2102,8 +2102,12 @@ public static class GameEngine
                 };
             }
         }
-        else if (fatigueTriggered || atWeekly)
+        else if (!ctx.PlayerControlsPitcherChanges && (fatigueTriggered || atWeekly))
         {
+            // PlayerControlsPitcherChanges が真の自校だけは何もしない：疲労のみ（fatigueTriggered）は
+            // 目安に過ぎないので自動交代せずプレイヤーの采配権のまま、atWeekly はルール上の強制だが
+            // engine で機械的に選ばず MatchProgression.PendingForcedPitcherChange 側で人選待ちにする。
+            // 既定（false＝裏試合・統計シム・既存テスト）はここに来ず従来どおり1ビットも変わらない。
             changed = defense.TryChangePitcher();
         }
 
