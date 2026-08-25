@@ -4495,6 +4495,9 @@ namespace KokoSim.Unity.Match
         /// <summary>スクショ用: 指枠の「そのまま退かせる」を選ぶ（先に指枠を主選択しておくこと。issue #452）。</summary>
         public void PickSubstitutionDhWithdrawForCapture() => _subPanel?.PickDhWithdrawForCapture();
 
+        /// <summary>スクショ用: 投手が絡む比較の「投球／打撃・守備」トグルを切り替える。</summary>
+        public void ToggleSubstitutionCmpViewForCapture() => _subPanel?.ToggleCmpFielderViewForCapture();
+
         /// <summary>スクショ用: いまDH制が生きているか（DH解除は不可逆＝前後の突き合わせに使う。issue #452）。</summary>
         public bool UsesDhForCapture => _subPanel != null && _subPanel.UsesDhForCapture;
 

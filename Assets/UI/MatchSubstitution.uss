@@ -116,6 +116,9 @@
     padding-top: var(--sp-3);
     padding-bottom: var(--sp-3);
 }
+/* 投手が絡む操作のときだけ「投球／打撃・守備」の .seg-tabs が乗る。無いときも高さを予約して
+   空欄のままにする（表示/非表示で高さを変えるとモーダルが跳ねる。上の .msub-cmp-scroll と同じ理由）。 */
+.msub-cmp-toggle { min-height: 34px; flex-shrink: 0; margin-bottom: var(--sp-2); }
 .msub-cmp-cards {
     flex-direction: row;
     flex-shrink: 0;
