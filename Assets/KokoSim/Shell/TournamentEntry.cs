@@ -48,7 +48,7 @@ namespace KokoSim.Unity.Shell
             var yearIndex = GameClock.YearIndex;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             // 大会シードは母種（プレイ毎に変動）＋年・種別で導出。同じ母種なら完全再現される（決定論は維持）。
-            var seed = GameSeed.Master ^ (ulong)(9000 + yearIndex * 10 + (int)kind);
+            var seed = TournamentSeed(kind, yearIndex);
 
             // 裏試合フルシム（#43）: 全国通算成績の今大会スコープをリセットし、自県の裏試合を永続ロスターの
             // GameEngine.Play で解決する resolver を用意する（成績を全国集計へ積む・敵AI采配を注入）。
@@ -80,11 +80,7 @@ namespace KokoSim.Unity.Shell
             // kind を問わず毎回呼んでいたため、秋の入場のたびに AiSchoolYearLedger.AddWins（AI校進化の
             // 勝数シグナル）へ夏ぶんが二重に積まれていた（docs/design/OPEN-QUESTIONS.md 2026-08-22
             // で発見・実測で影響は小さいと確認＝15〜30年シムで標準偏差の広がりが約1.03〜1.04倍）。
-            if (kind == TournamentKind.Summer)
-            {
-                NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
-                    yearIndex, calendarYear, NationService.PrefectureId, region?.Split, seed, brains);
-            }
+            if (kind == TournamentKind.Summer) StartSummerBackgroundSim(yearIndex, calendarYear, stats, brains);
 
             // 秋季県大会は地区大会の出場枠判定に順位（優勝校だけでなく）が要るため、47県ぶんを別途
             // 順位付きで背景シムする（設計書05 §1.5b・RegionalEntry が読む）。夏は使わない。
@@ -111,21 +107,49 @@ namespace KokoSim.Unity.Shell
             => GameSeed.Master ^ (ulong)(9400 + yearIndex * 10 + (int)TournamentKind.Autumn);
 
         /// <summary>
+        /// 夏の全国裏試合（49区画ぶんの代表決め）の起動。<see cref="StartAutumnBackgroundSim"/> と同型だが、
+        /// <b>校別勝数を年間台帳へ積む</b>ぶんだけ扱いが重い＝積み直しでは <paramref name="foldLedger"/> を
+        /// false にしないと AI校進化の勝数が倍になる。
+        /// </summary>
+        private static void StartSummerBackgroundSim(
+            int yearIndex, int calendarYear, NationTournamentStats stats, IEnemyBrainFactory brains,
+            bool foldLedger = true, bool collectGarbage = true)
+        {
+            // 自校の区画（北海道・東京は分割）だけを除外する。Enter と同じ導出でないと、
+            // 積み直しで自校の区画がもう一度背景消化され代表が二重に出る（BuildManagerSchool の
+            // 県・地区は NationService の同定そのものなので、ここでは直接引く）。
+            var region = SummerRegions.RegionFor(
+                NationService.Nation.Prefectures, NationService.PrefectureId, NationService.DistrictId);
+            NationBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
+                yearIndex, calendarYear, NationService.PrefectureId, region?.Split,
+                SummerBackgroundSeed(yearIndex), brains, foldLedger, collectGarbage);
+        }
+
+        /// <summary>夏の全国裏試合のシード。<b>大会シードそのもの</b>（自校の進行体と同じ値）なので
+        /// <see cref="TournamentSeed"/> から引く＝<see cref="Enter"/> と食い違いようがない形にしておく。</summary>
+        private static ulong SummerBackgroundSeed(int yearIndex)
+            => TournamentSeed(TournamentKind.Summer, yearIndex);
+
+        /// <summary>大会シード（母種＋年＋種別）。<see cref="Enter"/> の進行体と
+        /// <see cref="SummerBackgroundSeed"/> の唯一の出どころ。</summary>
+        private static ulong TournamentSeed(TournamentKind kind, int yearIndex)
+            => GameSeed.Master ^ (ulong)(9000 + yearIndex * 10 + (int)kind);
+
+        /// <summary>
         /// セーブから大会モードへ復帰する（issue #565 F1）。<see cref="Enter"/> と同じ部品で resolver を
         /// 組み直し、進行体だけをセーブの状態から作る。
         ///
         /// <para><b>ここで <c>stats.StartTournament()</c> を呼んではいけない</b>＝今大会成績は
         /// <see cref="NationService.Restore"/> で復元済みで、呼ぶとその場で全部消える。</para>
         ///
-        /// <para><b>夏の全国裏試合（<see cref="NationBackgroundSim"/>）は起動しない</b>。ここで起動し直すと
-        /// <c>AiSchoolYearLedger.AddWins</c>（AI校進化の勝数シグナル）を二度積む＝勝数が倍になる。
-        /// ⚠ そのぶん「Play を起動し直してからロードすると49代表が空＝甲子園が開かれない」という穴が
-        /// 残っている（issue summer-koshien-skipped-after-load）。夏は台帳を積まない追いつき実行か
-        /// セーブへの保存かを選んでから直す。</para>
+        /// <para><b>全国裏試合（夏 <see cref="NationBackgroundSim"/>・秋 <see cref="AutumnBackgroundSim"/>）は
+        /// 起動し直す</b>。結果はセーブに載らない static なので、Play を起動し直してからロードすると空になり、
+        /// 夏は「甲子園が開かれない」・秋は「自県ぶんだけの2校の地区大会」になる。同じシードなら結果が
+        /// バイト一致する（base rng は Fork のみで進めない）ので、セーブへ焼かず再計算で戻す。</para>
         ///
-        /// <para><b>秋の全国裏試合（<see cref="AutumnBackgroundSim"/>）は起動し直す</b>。こちらは勝数を持たず
-        /// 集計モデル解決（<c>ChampionsOnly</c>）なので台帳も全国成績も積まず、同じシードなら結果が
-        /// バイト一致する＝二度積む問題が無い。詳細は下の分岐のコメント。</para>
+        /// <para>⚠ <b>夏は <c>foldLedger:false</c> で積み直す</b>。<c>AiSchoolYearLedger.AddWins</c>
+        /// （AI校進化の勝数シグナル）はセーブ（<c>nationYearWins</c>）から復元済みなので、
+        /// ここで積むと勝数が倍になる。秋は勝数を持たないのでこの区別が要らない。</para>
         /// </summary>
         public static void RestoreRunner(TournamentSaveState t)
         {
@@ -158,6 +182,19 @@ namespace KokoSim.Unity.Shell
             {
                 if (!AutumnBackgroundSim.HasResultsFor(AutumnBackgroundSeed(yearIndex)))
                     StartAutumnBackgroundSim(yearIndex, calendarYear, stats, brains, collectGarbage: false);
+            }
+
+            // 夏の県大会の途中で復帰したときも同じ理由で積み直す（49代表が空だと甲子園が開かれない）。
+            // 秋と違うのは校別勝数の扱いだけ＝勝数はセーブ（nationYearWins）から復元済みなので
+            // foldLedger:false で積まない。積むと AI校進化の勝数が倍になる。
+            //
+            // 甲子園本戦（SummerKoshien）での復帰では要らない。49代表は進行体（fieldSchoolIds）に
+            // 焼かれており、KoshienEntry.EnterAfterPrefectureTournament はもう走らないため。
+            if (t.Kind == TournamentKind.Summer
+                && !NationBackgroundSim.HasResultsFor(SummerBackgroundSeed(yearIndex)))
+            {
+                StartSummerBackgroundSim(
+                    yearIndex, calendarYear, stats, brains, foldLedger: false, collectGarbage: false);
             }
         }
 
