@@ -168,6 +168,28 @@ public sealed class SaveState
     /// <summary>選考発表時点の神宮枠地区（表示用・v16）。空文字＝該当なし。</summary>
     public string PendingSenbatsuJinguRegion { get; set; } = "";
 
+    // --- 大会連鎖の中継値（v19。夏: 県大会→甲子園／秋: 県大会→地区大会→明治神宮→センバツ選考） ---
+    //
+    // 連鎖の後段は必ずこれらを読む（例: MyRegionPlacementIds が null だとセンバツ選考が丸ごと飛ぶ）。
+    // 「大会中は保存できない」前提で一時値として持っていたが、issue #565 F1 で試合と試合の間の保存が
+    // 解禁された時点でその前提は崩れていた＝地区大会・明治神宮の最中にロードすると連鎖が切れる
+    // （issue autumn-chain-placements-not-saved）。順位は数百バイトなので素直に載せる。
+
+    /// <summary>直近に終わった夏の県大会の優勝校ID（＝自県の甲子園代表）。null＝未確定。</summary>
+    public int? LastPrefChampionId { get; set; }
+
+    /// <summary>直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。空＝未確定。</summary>
+    public List<int> LastAutumnPlacementIds { get; set; } = new();
+
+    /// <summary>直近に終わった地区大会の優勝校ID（＝明治神宮大会の自地区代表）。null＝未確定。</summary>
+    public int? LastRegionalChampionId { get; set; }
+
+    /// <summary>直近に終わった地区大会の順位付き出場校ID（＝センバツ選考の自地区ぶんの材料）。空＝未確定。</summary>
+    public List<int> LastRegionalPlacementIds { get; set; } = new();
+
+    /// <summary>直近に終わった明治神宮大会の優勝校ID（＝センバツ選考の神宮枠）。null＝未確定。</summary>
+    public int? LastJinguChampionId { get; set; }
+
     /// <summary>
     /// 前の試合で確定したスタメンの記憶（issue lineup-carry-over-previous-game・v14）。スタメン設定画面の既定に使う。
     /// 選手IDで持つ純データ。<b>null＝まだ一度も確定していない</b>（v13 以前のセーブは常に null＝自動シード）。

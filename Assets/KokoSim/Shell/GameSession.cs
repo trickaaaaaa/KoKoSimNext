@@ -268,15 +268,19 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 直近に終わった夏の県大会の優勝校ID（＝自県の甲子園代表）。null＝まだ決勝が消化されていない。
-        /// <see cref="KoshienEntry"/> だけが読む一時値で、甲子園へ入った時点で用済み（セーブに載せない
-        /// ＝この値が必要な窓では <see cref="SaveGameIO.CanSave"/> が保存自体を抑止している）。
+        /// <see cref="KoshienEntry"/> だけが読む中継値。
+        ///
+        /// <para><b>セーブに載る</b>（v19）。かつては「この値が必要な窓では <see cref="SaveGameIO.CanSave"/> が
+        /// 保存自体を抑止している」ため一時値でよかったが、issue #565 F1 で試合と試合の間の保存が
+        /// 解禁された時点でその前提は崩れていた＝大会連鎖の途中でロードすると後段が動かなくなる
+        /// （issue autumn-chain-placements-not-saved）。</para>
         /// </summary>
         public int? LastPrefChampionId { get; private set; }
 
         /// <summary>
         /// 直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。
-        /// null＝まだ決勝が消化されていない。<see cref="RegionalEntry"/> だけが読む一時値
-        /// （<see cref="LastPrefChampionId"/> と同じ理由でセーブに載せない）。
+        /// null＝まだ決勝が消化されていない。<see cref="RegionalEntry"/> だけが読む中継値
+        /// （<see cref="LastPrefChampionId"/> と同じ理由でセーブに載る・v19）。
         /// </summary>
         public IReadOnlyList<int> LastAutumnPlacementIds { get; private set; }
 
@@ -845,6 +849,15 @@ namespace KokoSim.Unity.Shell
             s.Senbatsu = CaptureSpectatedSenbatsu();
             s.PendingSenbatsuFieldIds = new List<int>(PendingSenbatsuFieldIds);
             s.PendingSenbatsuJinguRegion = PendingSenbatsuJinguRegion;
+            // 大会連鎖の中継値（v19）。null は「未確定」の意味を持つので、空リストへ潰して保存し
+            // Restore 側で null へ戻す（MyRegionPlacementIds の ?? フォールバックが効かなくなるため）。
+            s.LastPrefChampionId = LastPrefChampionId;
+            s.LastAutumnPlacementIds = LastAutumnPlacementIds != null
+                ? new List<int>(LastAutumnPlacementIds) : new List<int>();
+            s.LastRegionalChampionId = LastRegionalChampionId;
+            s.LastRegionalPlacementIds = LastRegionalPlacementIds != null
+                ? new List<int>(LastRegionalPlacementIds) : new List<int>();
+            s.LastJinguChampionId = LastJinguChampionId;
             s.LastLineup = LastLineup;
         }
 
@@ -921,6 +934,16 @@ namespace KokoSim.Unity.Shell
             PendingSenbatsuFieldIds = s.PendingSenbatsuFieldIds != null
                 ? new List<int>(s.PendingSenbatsuFieldIds) : new List<int>();
             PendingSenbatsuJinguRegion = s.PendingSenbatsuJinguRegion ?? "";
+            // 大会連鎖の中継値（v19）。**空リストは null へ戻す**＝MyRegionPlacementIds の
+            // 「地区大会の順位が無ければ県大会の順位を使う」フォールバックは ?? で書かれており、
+            // 空リストのまま据えると「順位0件の地区大会があった」ことになって連鎖が切れる。
+            LastPrefChampionId = s.LastPrefChampionId;
+            LastAutumnPlacementIds = s.LastAutumnPlacementIds != null && s.LastAutumnPlacementIds.Count > 0
+                ? new List<int>(s.LastAutumnPlacementIds) : null;
+            LastRegionalChampionId = s.LastRegionalChampionId;
+            LastRegionalPlacementIds = s.LastRegionalPlacementIds != null && s.LastRegionalPlacementIds.Count > 0
+                ? new List<int>(s.LastRegionalPlacementIds) : null;
+            LastJinguChampionId = s.LastJinguChampionId;
         }
 
         /// <summary>

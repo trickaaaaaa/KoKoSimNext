@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 18;
+    public const int CurrentVersion = 19;
 
     // ===== Serialize =====
 
@@ -80,6 +80,11 @@ public static class SaveCodec
             .Add("senbatsu", TournamentSaves.ToJson(s.Senbatsu))
             .Add("pendingSenbatsuFieldIds", IntsToJson(s.PendingSenbatsuFieldIds))
             .Add("pendingSenbatsuJinguRegion", s.PendingSenbatsuJinguRegion)
+            .Add("lastPrefChampionId", NullableIntToJson(s.LastPrefChampionId))
+            .Add("lastAutumnPlacementIds", IntsToJson(s.LastAutumnPlacementIds))
+            .Add("lastRegionalChampionId", NullableIntToJson(s.LastRegionalChampionId))
+            .Add("lastRegionalPlacementIds", IntsToJson(s.LastRegionalPlacementIds))
+            .Add("lastJinguChampionId", NullableIntToJson(s.LastJinguChampionId))
             .Add("lastLineup", LineupSaves.ToJson(s.LastLineup));
         return root.ToString();
     }
@@ -243,6 +248,18 @@ public static class SaveCodec
             if (!root.Has("managerTransferKind")) root.Add("managerTransferKind", 0);
             if (!root.Has("managerTransferCandidates")) root.Add("managerTransferCandidates", new JsonArray());
         }
+        // v19（issue autumn-chain-placements-not-saved）: 大会連鎖の中継値（県大会→甲子園／
+        // 県大会→地区大会→明治神宮→センバツ選考）が増えた。旧セーブは一時値として捨てられていて
+        // 作り直せないので「未確定」＝null／空配列で補う。ロード直後に連鎖の後段へ入る局面
+        // （地区大会・明治神宮の最中のセーブ）だけは旧セーブでは救えず、従来どおり選考が飛ぶ。
+        if (version < 19)
+        {
+            if (!root.Has("lastPrefChampionId")) root.Add("lastPrefChampionId", JsonNull.Instance);
+            if (!root.Has("lastAutumnPlacementIds")) root.Add("lastAutumnPlacementIds", new JsonArray());
+            if (!root.Has("lastRegionalChampionId")) root.Add("lastRegionalChampionId", JsonNull.Instance);
+            if (!root.Has("lastRegionalPlacementIds")) root.Add("lastRegionalPlacementIds", new JsonArray());
+            if (!root.Has("lastJinguChampionId")) root.Add("lastJinguChampionId", JsonNull.Instance);
+        }
         return root;
     }
 
@@ -301,6 +318,11 @@ public static class SaveCodec
             // 非対話のセンバツ・選考発表待ち32校は v16 で追加。Migrate が旧セーブへ null/空配列を補うので素直に読む。
             Senbatsu = TournamentSaves.FromJson(root.Has("senbatsu") ? root["senbatsu"] : null),
             PendingSenbatsuFieldIds = IntsFromJson(root.Arr("pendingSenbatsuFieldIds")),
+            LastPrefChampionId = NullableIntFromJson(root, "lastPrefChampionId"),
+            LastAutumnPlacementIds = IntsFromJson(root.Arr("lastAutumnPlacementIds")),
+            LastRegionalChampionId = NullableIntFromJson(root, "lastRegionalChampionId"),
+            LastRegionalPlacementIds = IntsFromJson(root.Arr("lastRegionalPlacementIds")),
+            LastJinguChampionId = NullableIntFromJson(root, "lastJinguChampionId"),
             PendingSenbatsuJinguRegion = root.Has("pendingSenbatsuJinguRegion") ? (root.Str("pendingSenbatsuJinguRegion") ?? "") : "",
             // 前回スタメンは v14 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             LastLineup = LineupSaves.FromJson(root["lastLineup"]),
@@ -435,6 +457,13 @@ public static class SaveCodec
         foreach (var v in arr.Items) list.Add(((JsonNumber)v).AsInt());
         return list;
     }
+
+    // 校ID1つ（v19・大会連鎖の中継値）。null＝未確定なので JSON null と往復させる。
+    private static JsonValue NullableIntToJson(int? value)
+        => value.HasValue ? JsonValue.Of(value.Value) : (JsonValue)JsonNull.Instance;
+
+    private static int? NullableIntFromJson(JsonObject root, string key)
+        => !root.Has(key) || root[key] is JsonNull ? (int?)null : root.Int(key);
 
     private static JsonArray RetiredToJson(List<string> names)
     {

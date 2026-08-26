@@ -472,6 +472,64 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
     }
 
+    // ===== 大会連鎖の中継値（設計書05 §1.1a/§1.5b・v19） =====
+
+    [Fact]
+    public void TournamentChainRelayValues_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastPrefChampionId = -1;
+        state.LastAutumnPlacementIds = new List<int> { -1, 3848, 3867, 3851 };
+        state.LastRegionalChampionId = 3848;
+        state.LastRegionalPlacementIds = new List<int> { 3848, -1 };
+        state.LastJinguChampionId = 4200;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Equal(-1, s.LastPrefChampionId);
+        Assert.Equal(new List<int> { -1, 3848, 3867, 3851 }, s.LastAutumnPlacementIds);
+        Assert.Equal(3848, s.LastRegionalChampionId);
+        Assert.Equal(new List<int> { 3848, -1 }, s.LastRegionalPlacementIds);
+        Assert.Equal(4200, s.LastJinguChampionId);
+    }
+
+    /// <summary>未確定（null）と「0件の順位」を取り違えない＝<c>MyRegionPlacementIds</c> の
+    /// フォールバック（地区の順位が無ければ県の順位を使う）は null 判定で書かれている。</summary>
+    [Fact]
+    public void TournamentChainRelayValues_Unset_RoundTripsAsNullAndEmpty()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Null(s.LastPrefChampionId);
+        Assert.Empty(s.LastAutumnPlacementIds);
+        Assert.Null(s.LastRegionalChampionId);
+        Assert.Empty(s.LastRegionalPlacementIds);
+        Assert.Null(s.LastJinguChampionId);
+    }
+
+    [Fact]
+    public void V18Save_WithoutChainRelayValues_StillLoads_AsUnset()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastAutumnPlacementIds = new List<int> { -1, 3848 };
+        var json = SaveCodec.Serialize(state);
+        var start = json.IndexOf(",\"lastPrefChampionId\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "lastPrefChampionId が直列化されていない");
+        var end = json.IndexOf(",\"lastLineup\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "lastLineup が連鎖中継値の後に居ない");
+        var v18 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":18");
+        Assert.DoesNotContain("\"lastAutumnPlacementIds\"", v18);
+
+        Assert.True(SaveCodec.TryDeserialize(v18, out var s, out var err), err);
+        Assert.Null(s.LastPrefChampionId);
+        Assert.Empty(s.LastAutumnPlacementIds);
+        Assert.Null(s.LastRegionalChampionId);
+        Assert.Empty(s.LastRegionalPlacementIds);
+        Assert.Null(s.LastJinguChampionId);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
     // ===== センバツの地区大会成績（設計書05 §1.5b・v17） =====
 
     [Fact]
