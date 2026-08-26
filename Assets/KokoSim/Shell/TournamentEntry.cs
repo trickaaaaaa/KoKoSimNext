@@ -8,6 +8,7 @@ using KokoSim.Engine.Nation.Tournaments;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Saves;
 using KokoSim.Engine.Season;
+using KokoSim.Engine.Stats;
 
 namespace KokoSim.Unity.Shell
 {
@@ -87,13 +88,27 @@ namespace KokoSim.Unity.Shell
 
             // 秋季県大会は地区大会の出場枠判定に順位（優勝校だけでなく）が要るため、47県ぶんを別途
             // 順位付きで背景シムする（設計書05 §1.5b・RegionalEntry が読む）。夏は使わない。
-            if (kind == TournamentKind.Autumn)
-            {
-                var autumnSeed = GameSeed.Master ^ (ulong)(9400 + yearIndex * 10 + (int)kind);
-                AutumnBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
-                    yearIndex, calendarYear, NationService.PrefectureId, autumnSeed, brains);
-            }
+            if (kind == TournamentKind.Autumn) StartAutumnBackgroundSim(yearIndex, calendarYear, stats, brains);
         }
+
+        /// <summary>
+        /// 秋季全国裏試合（47県ぶんの順位付き県大会）の起動。<see cref="Enter"/> の秋分岐と
+        /// <see cref="RestoreRunner"/> の追いつき実行が<b>同じシード式・同じ引数</b>で通る唯一の経路。
+        /// シードを2箇所に書き写すと、ロード復帰の結果がセーブ前と食い違って樹形図がずれる。
+        /// </summary>
+        private static void StartAutumnBackgroundSim(
+            int yearIndex, int calendarYear, NationTournamentStats stats, IEnemyBrainFactory brains,
+            bool collectGarbage = true)
+        {
+            AutumnBackgroundSim.Start(NationService.Nation, NationService.Rosters, stats, NationCoeff, Schedule,
+                yearIndex, calendarYear, NationService.PrefectureId, AutumnBackgroundSeed(yearIndex),
+                brains, collectGarbage);
+        }
+
+        /// <summary>秋季全国裏試合のシード。母種＋年から導出＝<b>この大会の同定でもある</b>
+        /// （<see cref="AutumnBackgroundSim.HasResultsFor"/> が手元の結果と突き合わせる鍵）。</summary>
+        private static ulong AutumnBackgroundSeed(int yearIndex)
+            => GameSeed.Master ^ (ulong)(9400 + yearIndex * 10 + (int)TournamentKind.Autumn);
 
         /// <summary>
         /// セーブから大会モードへ復帰する（issue #565 F1）。<see cref="Enter"/> と同じ部品で resolver を
@@ -102,9 +117,15 @@ namespace KokoSim.Unity.Shell
         /// <para><b>ここで <c>stats.StartTournament()</c> を呼んではいけない</b>＝今大会成績は
         /// <see cref="NationService.Restore"/> で復元済みで、呼ぶとその場で全部消える。</para>
         ///
-        /// <para><b>全国裏試合（<see cref="NationBackgroundSim"/>）も起動しない</b>。保存は他県の消化を
-        /// 待ってから行う（<see cref="SaveGameIO.Save"/>）ので、復元時点で全46県は消化済み。ここで
-        /// 起動し直すと同じ大会を二度積む＝全国成績が倍になる。</para>
+        /// <para><b>夏の全国裏試合（<see cref="NationBackgroundSim"/>）は起動しない</b>。ここで起動し直すと
+        /// <c>AiSchoolYearLedger.AddWins</c>（AI校進化の勝数シグナル）を二度積む＝勝数が倍になる。
+        /// ⚠ そのぶん「Play を起動し直してからロードすると49代表が空＝甲子園が開かれない」という穴が
+        /// 残っている（issue summer-koshien-skipped-after-load）。夏は台帳を積まない追いつき実行か
+        /// セーブへの保存かを選んでから直す。</para>
+        ///
+        /// <para><b>秋の全国裏試合（<see cref="AutumnBackgroundSim"/>）は起動し直す</b>。こちらは勝数を持たず
+        /// 集計モデル解決（<c>ChampionsOnly</c>）なので台帳も全国成績も積まず、同じシードなら結果が
+        /// バイト一致する＝二度積む問題が無い。詳細は下の分岐のコメント。</para>
         /// </summary>
         public static void RestoreRunner(TournamentSaveState t)
         {
@@ -123,6 +144,21 @@ namespace KokoSim.Unity.Shell
                 new PlayerMatchResolver(), homeBg,
                 onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
             GameSession.Current.RestoreTournament(t, runner, field);
+
+            // 秋の連鎖（県大会→地区大会→明治神宮）の途中で復帰したときは、47県ぶんの秋季県大会を
+            // 背景で積み直す。結果はセーブに載らない static なので、Play を起動し直してからロードすると
+            // 空のまま地区大会が組まれ、自県ぶんだけの「2校の地区大会」になる（2040年秋に実機発症）。
+            //
+            // 地区大会・明治神宮での復帰でも要る＝JinguEntry.ComputeOtherRegions が他9地区を組むときに
+            // 同じ結果を読むため。**待たない**のが要点で、通常経路（Enter）も大会入場時に背景起動して
+            // 待つのは県大会が終わる瞬間の EnsureCompleted() だけ。復帰時点ではまだ試合が残っているので、
+            // 試合を1つ消化する間に終わる＝ロード時間は伸びない（47県で実測80ms）。
+            if (t.Kind == TournamentKind.Autumn || t.Kind == TournamentKind.Regional
+                || t.Kind == TournamentKind.Jingu)
+            {
+                if (!AutumnBackgroundSim.HasResultsFor(AutumnBackgroundSeed(yearIndex)))
+                    StartAutumnBackgroundSim(yearIndex, calendarYear, stats, brains, collectGarbage: false);
+            }
         }
 
         /// <summary>

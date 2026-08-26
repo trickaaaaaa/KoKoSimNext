@@ -59,7 +59,14 @@ namespace KokoSim.Unity.Shell
             var qualifies = myRank >= 0 && myRank < berths;
 
             var field = BuildField(myRegion, fmt, calendarYear, myPlacement);
-            if (field.Count < 2) return false;   // 出場校が1校以下＝大会が成立しない（異常系）。
+            if (field.Count < 2)
+            {
+                UnityEngine.Debug.LogWarning(
+                    $"[地区大会] {RegionDisplayName(myRegion)}大会の出場校が {field.Count} 校＝開催できない。"
+                    + "秋季全国裏試合の結果が揃っていない可能性がある"
+                    + $"（他県の消化済み={AutumnBackgroundSim.PrefectureResults.Count} 県）。");
+                return false;
+            }
 
             var seed = GameSeed.Master ^ (ulong)(9500 + yearIndex * 10 + (int)TournamentKind.Regional);
             var title = Title(myRegion, yearIndex);
@@ -125,13 +132,17 @@ namespace KokoSim.Unity.Shell
             var otherResults = AutumnBackgroundSim.PrefectureResults;
             var field = new List<School>();
 
+            var missing = new List<string>();
             foreach (var prefId in PrefecturesInRegion(region))
             {
                 IReadOnlyList<int> placement = prefId == myPrefId
                     ? myPlacement
                     : otherResults.FirstOrDefault(r => r.PrefectureId == prefId)?.PlacementIds
                       ?? Array.Empty<int>();
-                if (placement.Count == 0) continue;
+                // 県大会の結果が無い県は出場枠を埋められない。ここを黙って飛ばすと、地区大会が
+                // 「結果のある県ぶんだけ」の小さな大会として成立してしまい、絵の上では正常に見える
+                // （2040年秋＝自県2校だけの九州大会。issue autumn-regional-field-collapses-after-load）。
+                if (placement.Count == 0) { missing.Add(PrefectureNames.JapaneseOf(prefId)); continue; }
 
                 var prefRomaji = PrefectureNames.JisOrder[prefId];
                 var berths = Math.Max(1, fmt.BerthsFor(prefRomaji, calendarYear));
@@ -141,6 +152,11 @@ namespace KokoSim.Unity.Shell
                     if (school != null) field.Add(school);
                 }
             }
+            if (missing.Count > 0)
+                UnityEngine.Debug.LogWarning(
+                    $"[地区大会] {RegionDisplayName(region)}大会の出場枠を埋められない県がある: "
+                    + string.Join("・", missing) + $"（出場校 {field.Count} 校で開催してしまう）。"
+                    + "秋季全国裏試合（AutumnBackgroundSim）が回っていない可能性がある。");
             return field;
         }
 

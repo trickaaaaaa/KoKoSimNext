@@ -53,7 +53,16 @@ namespace KokoSim.Unity.Shell
 
             var results = NationBackgroundSim.PrefectureResults;
             var reps = CollectRepresentatives(results);
-            if (reps.Count < 2) return false;   // 代表が揃わない（生成が異常）。黙って甲子園を飛ばす。
+            if (reps.Count < 2)
+            {
+                // 49代表が揃わない。全国裏試合（NationBackgroundSim）の結果はセーブに載らない static なので、
+                // Play を起動し直してから夏の県大会中のセーブをロードすると空になる
+                // （issue summer-koshien-skipped-after-load）。黙って飛ばすと「甲子園が来ない年」に見える。
+                UnityEngine.Debug.LogWarning(
+                    $"[甲子園] 代表が {reps.Count} 校＝開催できない。今年の甲子園を飛ばす"
+                    + $"（消化済みの県={results.Count} 区画）。");
+                return false;
+            }
 
             var yearIndex = GameClock.YearIndex;
             RecordAppearances(reps, yearIndex);

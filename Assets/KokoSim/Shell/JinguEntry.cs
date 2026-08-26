@@ -39,7 +39,16 @@ namespace KokoSim.Unity.Shell
                 var s = NationService.SchoolById(r.ChampionId);
                 if (s != null) field.Add(s);
             }
-            if (field.Count < 2) return false;
+            if (field.Count < 2)
+            {
+                // 他9地区の王者が1校も居ない＝地区大会が組めていない（＝47県の秋季県大会が空）。
+                // ここで黙って返すと明治神宮大会もセンバツ選考も丸ごと飛ぶ
+                // （issue autumn-regional-field-collapses-after-load）。
+                UnityEngine.Debug.LogWarning(
+                    $"[明治神宮] 出場校が {field.Count} 校＝開催できない。神宮大会とセンバツ選考を飛ばす"
+                    + $"（他地区の王者={otherRegions.Count(r => r.ChampionToJingu && r.HasChampion)} 校）。");
+                return false;
+            }
 
             var seed = GameSeed.Master ^ (ulong)(9600 + yearIndex * 10 + (int)TournamentKind.Jingu);
             var title = Title(yearIndex);
