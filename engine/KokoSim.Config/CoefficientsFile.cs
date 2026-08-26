@@ -2452,6 +2452,8 @@ public static class CoefficientsLoader
         public double FameNationalChampion { get; set; } = D.FameNationalChampion;
         public double FamePerWin { get; set; } = D.FamePerWin;
         public double FameDecay { get; set; } = D.FameDecay;
+        public double FameGainCeiling { get; set; } = D.FameGainCeiling;
+        public double FameSeasonRiseCap { get; set; } = D.FameSeasonRiseCap;
         public double FameUpsetWinPerTier { get; set; } = D.FameUpsetWinPerTier;
         public double FameUpsetLossPerTier { get; set; } = D.FameUpsetLossPerTier;
         public double FameUpsetSeasonCap { get; set; } = D.FameUpsetSeasonCap;
@@ -2493,6 +2495,8 @@ public static class CoefficientsLoader
             FameNationalChampion = FameNationalChampion,
             FamePerWin = FamePerWin,
             FameDecay = FameDecay,
+            FameGainCeiling = FameGainCeiling,
+            FameSeasonRiseCap = FameSeasonRiseCap,
             FameUpsetWinPerTier = FameUpsetWinPerTier,
             FameUpsetLossPerTier = FameUpsetLossPerTier,
             FameUpsetSeasonCap = FameUpsetSeasonCap,
