@@ -397,19 +397,36 @@ public static class PlaybackEvaluator
         return start + holdSeconds;
     }
 
-    public static (JudgementKind Kind, double T1, double? DistanceM)? JudgementAt(
+    /// <summary>
+    /// 時刻 t に表示すべき判定（Issue #59）。<paramref name="holdSeconds"/> は表示保持[s]。
+    /// <c>IsAdditionalOut</c>＝このアウトより<b>前に</b>別走者(別Label)のアウト判定がこのプレー内に
+    /// あるか（issue double-play-throw-pace-and-second-out-call ③案F・2026-08-27監督判断）。
+    /// 併殺の2つ目のアウト（常に打者）だけを見分けるための表示専用フラグ＝判定・帯には無関係。
+    /// </summary>
+    public static (JudgementKind Kind, double T1, double? DistanceM, bool IsAdditionalOut)? JudgementAt(
         PlaybackPlay play, double t, double holdSeconds)
     {
         if (play is null) return null;
-        (JudgementKind Kind, double T1, double? DistanceM)? best = null;
+        (JudgementKind Kind, double T1, double? DistanceM, string Label)? best = null;
         foreach (var j in play.Judgements)
         {
             var dt = DisplayTimeOf(j);
             if (dt > t || t >= JudgementEndTime(play, j, holdSeconds)) continue;   // 表示窓の外
             if (best.HasValue && dt < best.Value.T1) continue; // 併殺等は直近の判定だけ出す
-            best = (j.Kind, dt, j.DistanceM);
+            best = (j.Kind, dt, j.DistanceM, j.Label);
         }
-        return best;
+        if (!best.HasValue) return null;
+
+        var isAdditionalOut = false;
+        if (best.Value.Kind == JudgementKind.Out)
+        {
+            foreach (var j in play.Judgements)
+            {
+                if (j.Kind != JudgementKind.Out || j.Label == best.Value.Label) continue;
+                if (DisplayTimeOf(j) < best.Value.T1) { isAdditionalOut = true; break; }
+            }
+        }
+        return (best.Value.Kind, best.Value.T1, best.Value.DistanceM, isAdditionalOut);
     }
 
     /// <summary>
