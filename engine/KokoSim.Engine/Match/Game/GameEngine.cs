@@ -1775,9 +1775,11 @@ public static class GameEngine
                     // 描き直す（issue double-play-throw-pace-and-second-out-call の追加報告。以前は !batterSafeOnFc
                     // で除外していたため、野選が「打者も一塁アウト＝併殺成立」に誤って見えていた）。
                     var hasForceAtSecond = false;
+                    RunnerMove? selfForceLead = null;
                     foreach (var m in runnerMoves)
                     {
-                        if (m.Out && m.FromBase == 1 && m.ToBase == 2) { hasForceAtSecond = true; break; }
+                        if (m.Out && m.FromBase == 1 && m.ToBase == 2) hasForceAtSecond = true;
+                        else if (m.SelfForceDoublePlayLead) selfForceLead = m;
                     }
                     if (hasForceAtSecond && res.Play is { IsFly: false } dpPlay)
                     {
@@ -1820,6 +1822,20 @@ public static class GameEngine
                             timeline, dpPlay, ctx.Field, batterArrive, ctx.Baserunning, dpPivotBonusForDisplay,
                             pivotSprintSpeedByRole, batterOut: !batterSafeOnFc,
                             pivotThrowSpeedByRole: pivotThrowSpeedByRole);
+                    }
+                    // 併殺の代替ルート（三塁/本塁の自己フォース, Q31）: 三塁手/捕手/投手が自打球を自分でベースへ
+                    // 運んで封殺→一塁へ自己送球。上の二塁封殺(hasForceAtSecond)とは互いに排他
+                    // （BaserunningModel.ResolveDoublePlay がどちらか一方の経路しか選ばないため）。
+                    else if (selfForceLead is { } sfl && res.Play is { IsFly: false } sfPlay)
+                    {
+                        var batterArrive = timeline.Duration;
+                        foreach (var leg in timeline.Runners)
+                        {
+                            if (leg.Label == "打") { batterArrive = leg.T1; break; }
+                        }
+                        timeline = Match.Timeline.TimelineBuilder.AppendSelfForceDoublePlayThrows(
+                            timeline, sfPlay, ctx.Field, batterArrive, sfl.ToBase, ctx.Baserunning,
+                            batterOut: !batterSafeOnFc);
                     }
 
                     // 飛び出しの勝負（フライ捕球→一塁走者が戻る vs 戻し送球）: 戻し送球を描く

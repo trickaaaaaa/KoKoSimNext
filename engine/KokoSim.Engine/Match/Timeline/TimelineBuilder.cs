@@ -2261,6 +2261,150 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 併殺の代替ルート（三塁/本塁の自己フォース, Q31）の送球連鎖を描く。既存の「野手→一塁」1本 Throw を、
+    /// 「処理点→対象塁（自己フォース, Carry）→一塁（自己送球, Throw）」の2本に差し替える。結果不変・
+    /// 乱数不使用の表示専用。判定モデル（<see cref="BaserunningModel"/> の <c>ResolveDoublePlaySelfForce</c>）と
+    /// <b>同じ入力・同じ式</b>（<see cref="HomePlayResolver.ResolveThrowPath"/>）で秒を組む＝
+    /// <see cref="AppendDoublePlayThrows"/> と同じ設計。
+    ///
+    /// <para>一段目（処理点→対象塁）は送球ではなく<see cref="BallSegmentKind.Carry"/>（グラブに収めたまま
+    /// 走ってベースを踏む）＝<see cref="FieldingPlay.UnassistedPutout"/>（3U）と同じ表現。二段目（対象塁→
+    /// 一塁）は同じ野手がそのまま投げる自己送球（中継〈ピボット〉なし＝<see cref="AppendDoublePlayThrows"/>の
+    /// ような2人目の受け手・地肩差し替えは不要）。</para>
+    ///
+    /// targetBase=対象塁（3=三塁自己フォース／4=本塁自己フォース）。呼び出し元は
+    /// <see cref="RunnerMove.SelfForceDoublePlayLead"/> が立った move の <c>ToBase</c> をそのまま渡す。
+    /// batterOut=打者が実際にアウトか（<see cref="AppendDoublePlayThrows"/> と同じ意味・同じ既定true。
+    /// 三塁/本塁は封殺できても一塁への転送がわずかに間に合わない野選では false）。
+    /// </summary>
+    public static PlayTimeline AppendSelfForceDoublePlayThrows(
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
+        int targetBase, BaserunningCoefficients? coefficients = null, bool batterOut = true)
+    {
+        if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
+
+        if (play.IsFly || play.RangeM > 46.0) return timeline; // ゲート自体が内野ゴロ限定（Q31）＝保守的に同じ条件
+
+        // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す（AppendDoublePlayThrows と同型）。
+        BallSegment? existingThrow = null;
+        var ball = new List<BallSegment>(timeline.Ball.Count + 1);
+        foreach (var seg in timeline.Ball)
+        {
+            if (seg.Kind == BallSegmentKind.Throw && existingThrow is null)
+            {
+                existingThrow = seg;
+                continue;
+            }
+            ball.Add(seg);
+        }
+        if (existingThrow is null) return timeline;
+
+        var c = coefficients ?? new BaserunningCoefficients();
+        var fieldPoint = FieldPointOf(play);
+        var arm = ThrowSpeedOf(play);
+        var fieldedAtSeconds = play.FieldedAtSeconds ?? play.HangTimeSeconds;
+        var first = BasePoint(field, "first");
+        var firstRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
+
+        var force = targetBase == 3 ? HomePlayResolver.ThirdForceParams(field, c) : HomePlayResolver.HomeForceParams(c);
+        var targetPt = targetBase == 3 ? BasePoint(field, "third") : Home;
+        var targetBaseName = targetBase == 3 ? "third" : "home";
+
+        // 一段目（処理点→対象塁）: 送球ではなく自分で運ぶ（UnassistedPutout と同じ Carry 表現）。判定モデルと
+        // 同じ式・transferSecondsOverride: 0.0（握り替えなし＝その場でベースへ踏み込むだけ）。
+        var situation = new HomePlaySituation(
+            new Core.Vector3D(fieldPoint.X, 0, fieldPoint.Z), fieldedAtSeconds, arm, play.FielderFielding);
+        var pathToTarget = HomePlayResolver.ResolveThrowPath(situation, force.TargetPoint, c, transferSecondsOverride: 0.0);
+        var carryStart = ContactAt + pathToTarget.ReleaseAtSeconds;
+        var targetArrive = ContactAt + pathToTarget.ArriveAtSeconds;
+
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Carry, T0 = carryStart, T1 = targetArrive,
+            From = fieldPoint, To = targetPt,
+            FromRole = play.FielderRole, ToRole = play.FielderRole, ToBase = targetBaseName,
+        });
+
+        // 二段目（対象塁→一塁）: 同じ野手がそのまま投げる自己送球（中継なし）。起点は対象塁・時刻は判定モデルと
+        // 同じ基準（BallFieldedAtSeconds＝一段目と同じ捕球時刻。ResolveDoublePlaySelfForce 参照）、握り替えは
+        // 自己フォース専用の DoublePlaySelfForceRelayTransferSeconds。
+        var selfForceSituation = new HomePlaySituation(force.TargetPoint, fieldedAtSeconds, arm, play.FielderFielding);
+        var pathToFirst = HomePlayResolver.ResolveThrowPath(
+            selfForceSituation, field.FirstBase, c, transferSecondsOverride: c.DoublePlaySelfForceRelayTransferSeconds);
+        // 判定モデルの握り替え起点は一段目と同じ捕球時刻（対象塁への到達＝targetArrive を待たない）なので、
+        // 一段目の運びが長い稀なケース（対象を守る野手が遠くまで追ったゴロ）では、この式のまま描くと
+        // 「まだベースへ向かっている絵なのに一塁へ投げ始めている」順序矛盾になる（実測3000試合1573件中2件・
+        // 最大0.061秒の逆転）。判定の到達秒（firstArrive）はそのまま（結果不変）、表示だけ「対象塁へ着くまでは
+        // 投げ始めない」下限で詰める（GuardAgainstVerdict と同型の表示専用ガード）。
+        var throwStart = Math.Max(ContactAt + pathToFirst.ReleaseAtSeconds, targetArrive);
+        var firstArrivePhysical = ContactAt + pathToFirst.ArriveAtSeconds + c.SecondForceTagSeconds;
+        var firstArrive = GuardAgainstVerdict(firstArrivePhysical, firstArrivePhysical, batterArriveAnchor, runnerOut: batterOut);
+
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = firstArrive,
+            From = targetPt, To = first,
+            FromRole = play.FielderRole, ToRole = firstRole, ToBase = "first",
+        });
+
+        // 対象走者（三塁/本塁で自己フォースされた走者）の判定時刻を、実際に描いた到達（targetArrive）へ
+        // 差し替える（AppendDoublePlayThrows の二塁封殺パッチと同型）。フォースはタッチが要らないので、
+        // 判定確定後も走者は塁まで走り切る絵のまま（レッグそのものは弄らない）。
+        var runners = timeline.Runners;
+        var judgements = timeline.Judgements;
+        foreach (var leg in timeline.Runners)
+        {
+            if (!leg.OutAtEnd || leg.Label == "打" || Distance(leg.To, targetPt) >= 0.5) continue;
+
+            var updatedJudgements = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+            {
+                updatedJudgements.Add(
+                    j.Label == leg.Label && j.Kind == JudgementKind.Out && Math.Abs(j.T - leg.T1) < 1e-9
+                        ? j with { T = targetArrive }
+                        : j);
+            }
+            judgements = updatedJudgements;
+            break;
+        }
+
+        double resolvedAt;
+        if (batterOut)
+        {
+            // 打者のアウト判定: 描かれない直接送球ではなく、実際に描いた2本目の到達へ合わせる。
+            var judgements2 = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+                judgements2.Add(j.Label == "打" && j.Kind == JudgementKind.Out ? j with { T = firstArrive } : j);
+            judgements = judgements2;
+            resolvedAt = firstArrive;
+        }
+        else
+        {
+            // 野選（FC）: 冒頭の PatchFieldersChoiceBatterLeg で既にアウト判定は消してある（安全側）。
+            // 際どければ「セーフ」演出へ格上げする（AppendDoublePlayThrows と同じ出し分け規約）。
+            var fcCloseCall = Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
+            if (fcCloseCall)
+            {
+                var updatedRunners = new List<RunnerLeg>(runners.Count);
+                foreach (var r in runners)
+                    updatedRunners.Add(r.Label == "打" ? r with { CloseCall = true } : r);
+                runners = updatedRunners;
+                judgements = new List<JudgementEvent>(judgements)
+                {
+                    new() { Label = "打", T = batterArriveAnchor, Kind = JudgementKind.Safe, CloseCall = true },
+                };
+            }
+            resolvedAt = batterArriveAnchor;
+        }
+
+        var duration = Math.Max(timeline.Duration, firstArrive + 1.0);
+        return timeline with
+        {
+            Ball = ball, Duration = duration, Runners = runners, Judgements = judgements, ResolvedAt = resolvedAt,
+        };
+    }
+
+    /// <summary>
     /// タイムラインに既に置かれている中継(カットオフ)野手の位置（<see cref="FielderTask.Cutoff"/>）を返す。
     /// 中継送球のボール経由点と野手の立ち位置を**単一の座標ソース**にするために使う（#136）。
     /// 陣形ルールにカットオフ割当が無い/野手が既にその場にいて移動が発生しない場合は null。
