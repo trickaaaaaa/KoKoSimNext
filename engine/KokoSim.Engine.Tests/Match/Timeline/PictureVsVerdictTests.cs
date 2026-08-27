@@ -174,6 +174,38 @@ public sealed class PictureVsVerdictTests
         Assert.Equal(c.T1 - c.T0, s.T1 - s.T0, 9);
     }
 
+    // ---- ④ 外野安打: 本塁への安全な生還と、別走者の他塁憤死が同時に起きると、憤死側の送球が消える ----
+    // (issue outfield-hit-home-safe-and-third-out-throw-missing)
+
+    /// <summary>
+    /// 本塁への安全な生還（クロスプレーでない）は無条件で演出用の送球を描くが（#7）、同じ打球で
+    /// 別走者が本塁以外（三塁等）で憤死しているなら、実際の送球はそちら（1プレー1送球）へ行っている。
+    /// 憤死側の送球が本塁の演出用送球に握りつぶされて消えていないこと。
+    /// </summary>
+    [Fact]
+    public void OutfieldReturnThrow_StillDrawn_WhenAnotherRunnerScoresSafelyOnTheSamePlay()
+    {
+        var checkedPlays = 0;
+        foreach (var tl in Timelines())
+        {
+            var scoredSafely = tl.Runners.Any(l => !l.OutAtEnd && IsHome(l.To) && Dist(l.From, l.To) >= 0.5);
+            if (!scoredSafely) continue;
+
+            var otherOut = tl.Runners.FirstOrDefault(l => l.OutAtEnd && !IsHome(l.To));
+            if (otherOut is null) continue;
+
+            checkedPlays++;
+            var hasThrowToOtherBase = tl.Ball.Any(b =>
+                (b.Kind == BallSegmentKind.Throw || b.Kind == BallSegmentKind.Carry)
+                && Dist(b.To, otherOut.To) < 1.0);
+            Assert.True(hasThrowToOtherBase,
+                $"{tl.Result}: {otherOut.Label} が憤死しているのに、本塁生還と同時発生のためその塁への"
+                + "送球が描かれていない（本塁の演出用送球に握りつぶされている）");
+        }
+        Assert.True(checkedPlays >= 1,
+            $"本塁生還+別走者の他塁憤死が同時に起きるプレーが {checkedPlays} 件しかない＝テストが空回り");
+    }
+
     // ---- 補助 ----
 
     /// <summary>実試合のタイムライン（打球プレーのみ）。</summary>

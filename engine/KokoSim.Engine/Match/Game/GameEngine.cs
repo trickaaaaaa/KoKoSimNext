@@ -1879,9 +1879,14 @@ public static class GameEngine
                             timeline, bhPlay, ctx.Field, o.T1, runnerOut: true, paBaserunning);
                         homeThrowAdded = true;
                     }
-                    else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield))
+                    else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield)
+                        && !HasOutAtOtherBase(runnerMoves))
                     {
                         // 外野安打での生還は際どくなくても返球を描く（ボールが外野で死なない, #7）。
+                        // ただし同じ打球で本塁以外（三塁等）に憤死した走者がいるなら、実際の送球は
+                        // そちら（1プレー1送球＝BaserunningModel の outThrowUsed）へ行っている＝
+                        // ここで本塁への演出用送球を描くと、実際にアウトを取った送球が下のブロックで
+                        // 握りつぶされてしまう（issue outfield-hit-home-safe-and-third-out-throw-missing）。
                         timeline = Match.Timeline.TimelineBuilder.AppendBackHomeThrows(
                             timeline, bhPlay, ctx.Field, s.T1, runnerOut: false, paBaserunning);
                         homeThrowAdded = true;
@@ -2116,6 +2121,19 @@ public static class GameEngine
         => pos is Match.Field.FieldPosition.LeftField
                or Match.Field.FieldPosition.CenterField
                or Match.Field.FieldPosition.RightField;
+
+    /// <summary>
+    /// 本塁以外（三塁等）で憤死した走者がこの打球にいるか（issue
+    /// outfield-hit-home-safe-and-third-out-throw-missing）。<see cref="BaserunningModel"/> は1プレー1送球
+    /// （<c>outThrowUsed</c>）なので、本塁以外で憤死した走者がいれば実際の送球はそちらへ行っており、
+    /// 本塁への安全な生還は無条件（送球なし）だったということになる。
+    /// </summary>
+    private static bool HasOutAtOtherBase(IReadOnlyList<RunnerMove> moves)
+    {
+        foreach (var m in moves)
+            if (m.Out && m.ToBase != 4) return true;
+        return false;
+    }
 
     /// <summary>
     /// 継投判断（設計書11 §4, issue #209）。打席境界ごとに呼ぶ。采配Brainがあれば <see cref="ITacticsBrain.CallPitchingChange"/>
