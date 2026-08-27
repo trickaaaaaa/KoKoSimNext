@@ -412,6 +412,8 @@ public static class CoefficientsLoader
         // 配球（Phase 簡略）
         public double StraightShare { get; set; } = D.StraightShare;
         public double CatcherLeadStuffPerPoint { get; set; } = D.CatcherLeadStuffPerPoint;
+        public double LeadStraightShareMaxShift { get; set; } = D.LeadStraightShareMaxShift;
+        public double LeadPitchWeightMaxExponent { get; set; } = D.LeadPitchWeightMaxExponent;
         // 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式）
         public double SpinRpmBase { get; set; } = D.SpinRpmBase;
         /// <summary>ストレートの球威(Power-50)あたりの回転数傾き（Issue #274）。</summary>
@@ -440,6 +442,8 @@ public static class CoefficientsLoader
                 VelocityDropMaxKmh = VelocityDropMaxKmh,
                 StraightShare = StraightShare,
                 CatcherLeadStuffPerPoint = CatcherLeadStuffPerPoint,
+                LeadStraightShareMaxShift = LeadStraightShareMaxShift,
+                LeadPitchWeightMaxExponent = LeadPitchWeightMaxExponent,
                 SpinRpmBase = SpinRpmBase,
                 SpinRpmPerPower = SpinRpmPerPower,
                 SpinRpmPerSharpness = SpinRpmPerSharpness,

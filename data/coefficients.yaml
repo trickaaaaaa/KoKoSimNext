@@ -40,6 +40,8 @@ pitching:
   # 配球（Phase 簡略。設計書09で采配・慣れ §2.3b に接続）
   straight_share: 0.55
   catcher_lead_stuff_per_point: 0.004   # 捕手リード→球威（設計書01 §2①）。(Lead−50)×これ。50=恒等
+  lead_straight_share_max_shift: 0.10   # 捕手リード→配球のストレート比率シフト上限（符号あり・catcher_lead_stuff_per_pointと同じ対称設計）。(Lead−50)×投手の軸差(FB球威 vs 変化球キレ平均)で最大この幅。Lead50/軸互角は恒等
+  lead_pitch_weight_max_exponent: 1.0   # 捕手リード→変化球の選び分け強さ上限。weight=Rank^exponent（exponent=leadFactor×これ、符号あり）。Lead50/変化球1本以下は一様抽選のまま
   # 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式。判定には未接続＝帯に無関係）
   # Issue #274: 球種分岐。ストレート=球威(Power)軸、変化球=キレ(Sharpness)軸。
   spin_rpm_base: 2200.0            # 基準回転数[rpm]（能力=50のとき・145km/h・2200rpm）

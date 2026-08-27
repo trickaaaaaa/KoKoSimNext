@@ -59,6 +59,21 @@ public sealed record PitchingCoefficients
     /// </summary>
     public double CatcherLeadStuffPerPoint { get; init; } = 0.004;
 
+    /// <summary>
+    /// 捕手リード→配球選択（設計書01 §2①「投手センス＋捕手リード＋カウント＋打者の弱点から球種・コースを選択」の一部実装）。
+    /// Lead が50から離れたぶんだけ、投手の中で有効な軸（ストレート=球威／変化球=キレ平均）が強い側
+    /// （50未満なら弱い側）へストレート比率を最大この幅だけ動かす。<see cref="CatcherLeadStuffPerPoint"/> と同じ
+    /// 対称設計（(Lead−50)に符号あり）。Lead50、または軸が互角（差0）なら恒等（帯不変）。
+    /// </summary>
+    public double LeadStraightShareMaxShift { get; init; } = 0.10;
+
+    /// <summary>
+    /// 捕手リード→変化球の選び分け。複数の変化球を持つ投手で、Lead が50から離れたぶんだけ
+    /// weight=Rank^exponent（exponent=leadFactor×これ、符号あり）でキレ(Rank)の高い（50未満なら低い）
+    /// 球種を優先して選ぶ。ちょうどLead50、または変化球1本以下は従来どおり一様抽選のまま（RNG消費列も変えない）。
+    /// </summary>
+    public double LeadPitchWeightMaxExponent { get; init; } = 1.0;
+
     // === 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式） ===
     // Trajectory（弾道）は観測専用（判定に未接続, Phase E で本接続）。回転軸は全球種バックスピン固定
     // （横変化は現状モデル化しない）。
