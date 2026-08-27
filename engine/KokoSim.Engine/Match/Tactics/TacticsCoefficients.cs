@@ -27,19 +27,32 @@ public sealed record TacticsCoefficients
     public int SqueezeMaxDiffAbs { get; init; } = 1;
     public int SqueezeMinBunt { get; init; } = 55;
 
-    /// <summary>盗塁: 成功見込みがこの値以上のときだけ、確率的に仕掛ける。</summary>
-    public double StealMinSuccess { get; init; } = 0.72;
+    /// <summary>盗塁: 成功見込みがこの値以上のときだけ、確率的に仕掛ける。
+    ///
+    /// <para>issue steal-thresholds-unreachable（2026-08-27）: 旧値 0.72 は 2026-08-14 の
+    /// steal_success_bias 物理層移設と design-21 の能力圧縮より前のレンジで校正されており、
+    /// 実ロスター（<see cref="Nation.StrengthTeamFactory"/>、強度30〜90・全打順・全捕手の組み合わせ
+    /// 11200件で実測）の到達可能上限は p99=60.7%・観測max=65.8% しかない＝0.72 は原理的に一度も通らない
+    /// 死にコードだった。現行値 0.50 は概ね p70 相当（実測 p50=40.4%・p75=48.3%）＝「上位3割程度の
+    /// 好機だけ仕掛ける」という元の設計意図をいまの解決式で実現する値。</para></summary>
+    public double StealMinSuccess { get; init; } = 0.50;
     public double StealProb { get; init; } = 0.45;
 
     // ===== 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。 =====
     // 一・三塁の重盗（DoubleStealThirdBreakProb）とは塁状況が排他（重盗は一塁+三塁）のため優先順位の
     // 競合はない。三塁が絡む唯一の競合はスクイズ（本盗も三塁走者が起点）で、GameEngine 側で
     // 「この球スクイズが確定していれば本盗は試みない」という単純上書きで解消する（Q12-3と同型）。
-    /// <summary>三盗: 二盗より選別的な成功見込み閾値（実測ベースの初期値）。三盗はキャッチャーの三塁送球が
-    /// 二塁送球より短い一方、StealThirdSuccessBiasの下方補正が上回るため、解決式が返す実現可能な見込みの
-    /// 天井自体が二盗（≈0.95）よりずっと低い（俊足×弱肩でも≈0.4〜0.65）。よって0.30は「二盗と同じ絶対値」
-    /// ではなく「三盗の実現可能レンジの中で上位のみ」という相対的な選別線。</summary>
-    public double StealThirdMinSuccess { get; init; } = 0.30;
+    /// <summary>三盗: 二盗より選別的な成功見込み閾値。
+    ///
+    /// <para>issue steal-thresholds-unreachable（2026-08-27）: 旧コメントは「俊足×弱肩でも≈0.4〜0.65」と
+    /// 仮定していたが、実ロスター11200件の実測では <b>p99=6.4%・観測max=7.9%</b> しか無く、旧値 0.30 は
+    /// 二盗以上に到達不能だった（StealThirdSuccessBias の下方補正＋捕手からの短い送球でも、走者側の
+    /// 塁間走破そのものが重い）。現行値 0.045 は概ね p85 相当（実測 p75=3.9%・p90=4.9%）＝「解決式が返す
+    /// 実現可能レンジの中で上位のみ」という元の相対的な選別線の意図を保ったまま、いまの物理層で実際に
+    /// 到達できる値に引き直したもの。天井自体が低いレアプレーである点は変えていない（それ自体を動かすなら
+    /// StealThirdSuccessBias か走者側の距離モデルを触る、別の判断が要る＝design-02 §4.2 の
+    /// 「リーグ平均成功率を動かしたいときは jump/pop time を動かす」と同種のバランス判断）。</para></summary>
+    public double StealThirdMinSuccess { get; init; } = 0.045;
     public double StealThirdProb { get; init; } = 0.25;
     /// <summary>三盗を考えるアウトカウント上限（0=無死のみ）と、大差では狙わない点差上限。</summary>
     public int StealThirdMaxOuts { get; init; } = 0;

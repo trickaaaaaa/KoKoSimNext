@@ -104,7 +104,8 @@ public sealed class EnemyAiInjectionTests
         var opponent = StrengthTeamFactory.Create(60, "対戦相手", new Xoshiro256Random(4242));
 
         // 校風の配線を見るテストなので、俊足の探針チーム（走力88/盗塁88）を額面どおり効かせる（効き＝恒等）。
-        // 既定の効き 0.55 では 88→71 に寝て、対 C校捕手の成功見込みが閾値 0.72 を割り込み両校風とも企図が消える。
+        // 既定の効き 0.55 では 88→71 に寝て成功見込みが下がる＝校風差の信号が小標本ノイズに埋もれやすくなる
+        // （閾値そのものは issue steal-thresholds-unreachable で実測レンジに合わせて 0.72→0.50 へ再校正済み）。
         var ctx = new GameContext().WithAbilityEffect(AbilityEffectCoefficients.Identity);
         int Steals(School school)
         {
@@ -119,6 +120,39 @@ public sealed class EnemyAiInjectionTests
         var sb = Steals(smallBall);
         var st = Steals(standard);
         Assert.True(sb > st, $"機動力校は標準校より盗塁企図の総数が多いはず（結合後も校風差が出る）: smallBall={sb} standard={st}");
+    }
+
+    /// <summary>
+    /// issue steal-thresholds-unreachable（2026-08-27）の回帰: 旧閾値0.72は実ロスターでは到達不能で、
+    /// 盗塁企図がほぼ「無謀（EnemyAiCoefficients.RecklessOnMissProb）」由来だけになっていた。無謀は
+    /// 采配ミス時に発火するので、采配力(TacticalSense)が高いほど無謀は減り＝**盗塁も減る**逆転が起きていた
+    /// （設計書11の「校風・采配力が高いほど戦術を使いこなす」意図と逆）。閾値を実測レンジへ再校正した後は
+    /// 「狙って仕掛ける」経路が働くため、採配力が高いほど盗塁が増える向きに戻ることを固定する。
+    /// 既定の効き(0.55)のまま測る（SmallBall比較と違い、この逆転自体が既定の効きの下でだけ起きていたため）。
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Heavy")] // 数百試合のフルシム集計（数十秒）
+    public void HigherTacticalSense_AttemptsMoreSteals_NotFewer()
+    {
+        var highSense = Sch(410, strength: 65, style: SchoolStyle.Standard, tacticalSense: 95);
+        var lowSense = Sch(411, strength: 65, style: SchoolStyle.Standard, tacticalSense: 10); // 同Id以外は同一
+        var opponent = StrengthTeamFactory.Create(60, "対戦相手", new Xoshiro256Random(4242));
+        var ctx = new GameContext(); // 既定の効き（実ゲームと同じ）
+
+        int Steals(School school)
+        {
+            var team = SpeedyOnBaseTeam(EnemyAiFactory.BrainFor(school, baserunning: ctx.Baserunning));
+            var total = 0;
+            const int games = 300;
+            for (ulong i = 0; i < games; i++)
+                total += GameEngine.Play(team, opponent, ctx, new Xoshiro256Random(7000 + i)).AwayTactics.StealAttempts;
+            return total;
+        }
+
+        var high = Steals(highSense);
+        var low = Steals(lowSense);
+        Assert.True(high > low,
+            $"采配力が高い校の方が盗塁企図が多いはず（逆転回帰）: sense95={high} sense10={low}");
     }
 
     /// <summary>

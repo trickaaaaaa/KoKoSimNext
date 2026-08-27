@@ -160,6 +160,7 @@ public static class GameSimulation
         public double IntentionalWalksPerGame => Games > 0 ? (double)TotalIntentionalWalks / Games : 0;
         public double DoubleStealThirdBreaksPerGame => Games > 0 ? (double)TotalDoubleStealThirdBreaks / Games : 0;
         public double WildPitchesPerGame => Games > 0 ? (double)TotalWildPitches / Games : 0;
+        public double StealAttemptsPerGame => Games > 0 ? (double)TotalStealAttempts / Games : 0;
         public double StealSuccessRate => TotalStealAttempts > 0 ? (double)TotalStealSuccesses / TotalStealAttempts : 0;
         public double SacrificeBuntsPerGame => Games > 0 ? (double)TotalSacrificeBunts / Games : 0;
         public double SacrificeBuntSuccessRate =>

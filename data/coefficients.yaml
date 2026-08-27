@@ -575,13 +575,17 @@ tactics:
   squeeze_prob: 0.28
   squeeze_max_diff_abs: 1
   squeeze_min_bunt: 55
-  steal_min_success: 0.72          # 解決式の成功見込みがこの値以上で仕掛ける
+  # issue steal-thresholds-unreachable（2026-08-27）: 旧0.72は実ロスター実測の到達可能上限（p99=60.7%・
+  # max=65.8%）を超えていて原理的に一度も通らない死にコードだった。0.50は概ねp70相当（詳細は
+  # TacticsCoefficients.StealMinSuccess のコメント参照）。
+  steal_min_success: 0.50          # 解決式の成功見込みがこの値以上で仕掛ける
   steal_prob: 0.45
   # 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。塁状況が排他のため
   # 一・三塁の重盗（baserunning.double_steal_third_break_prob）とは競合しない。
-  # 三盗: 解決式の実現可能な見込み天井自体が二盗（≈0.95）よりずっと低い（俊足×弱肩でも≈0.4〜0.65）ため、
-  # 0.30は「三盗レンジの中で上位のみ」という相対的な選別線（TacticsCoefficients.StealThirdMinSuccess参照）。
-  steal_third_min_success: 0.30
+  # 三盗: issue steal-thresholds-unreachable（2026-08-27）: 旧コメントの想定天井（俊足×弱肩でも≈0.4〜0.65）
+  # は実測と食い違い、実際の到達可能上限は p99=6.4%・max=7.9%（実ロスター11200件）。旧0.30は死にコード
+  # だった。0.045は概ねp85相当（詳細はTacticsCoefficients.StealThirdMinSuccessのコメント参照）。
+  steal_third_min_success: 0.045
   steal_third_prob: 0.25
   steal_third_max_outs: 0          # 無死のみ
   steal_third_max_diff_abs: 3      # 大差では狙わない

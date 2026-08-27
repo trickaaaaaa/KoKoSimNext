@@ -419,9 +419,11 @@ public sealed class AiTacticsBrain : ITacticsBrain, IPitchTacticsBrain, IExplain
                 // issue #67: 機動力校は三盗・本盗も同じ重みで多用する（狙う塁ごとに専用係数は設けない）。
                 // 三盗・本盗は解決式の実現可能レンジ自体が二盗よりずっと低い（StealThirdMinSuccess/
                 // StealHomeMinSuccessのコメント参照）ため、下限クランプは二盗と同じ0.4を流用しない
-                // （0.4だと素の既定値0.30/0.0より緩和後の値が高くなり、校風で"渋くなる"逆転が起きる）。
+                // （0.4だと素の既定値より緩和後の値が高くなり、校風で"渋くなる"逆転が起きる）。
+                // issue steal-thresholds-unreachable（2026-08-27）で素の既定値を0.30→0.045へ下げたのに合わせ、
+                // 下限も0.05→0.01へ下げる（0.05のままだと 0.045-0.08 の緩和後がまた既定値を上回って同じ逆転が起きる）。
                 StealThirdProb = Clamp01(b.StealThirdProb * ai.SmallBallStealFactor),
-                StealThirdMinSuccess = MathUtil.Clamp(b.StealThirdMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.05, 0.99),
+                StealThirdMinSuccess = MathUtil.Clamp(b.StealThirdMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.01, 0.99),
                 StealHomeProb = Clamp01(b.StealHomeProb * ai.SmallBallStealFactor),
                 StealHomeMinSuccess = MathUtil.Clamp(b.StealHomeMinSuccess - ai.SmallBallStealMinSuccessRelax, 0.0, 0.99),
                 GambleStartProb = Clamp01(b.GambleStartProb * ai.SmallBallGambleStartFactor),

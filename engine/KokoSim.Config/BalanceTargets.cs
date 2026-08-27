@@ -65,6 +65,15 @@ public sealed record GameTacticsTargets
     public Band PickoffPerGame { get; init; } = new(0.0, 0.05);
     public Band IntentionalWalkPerGame { get; init; } = new(0.0, 0.30);
     public Band DoubleStealThirdBreakPerGame { get; init; } = new(0.0, 0.05);
+    /// <summary>単独盗塁（二盗・三盗・本盗計）の企図/試合。issue steal-thresholds-unreachable（2026-08-27）:
+    /// 采配閾値が解決式の到達可能上限を超えていて長らく実質0件だった。閾値を実測レンジへ再校正した後の
+    /// 実測（3000試合・tactics有効）は 0.24/試合。旧来「0件が正常」だった帯を、この回帰で初めて意味を持つ
+    /// 帯として追加する。</summary>
+    public Band StealAttemptPerGame { get; init; } = new(0.05, 0.60);
+    /// <summary>単独盗塁の成功率。解決式の物理層（<see cref="Match.Game.StealResolver"/>）が返す到達可能
+    /// レンジ自体が現実の高校野球（65〜70%）より低い（design-14「リーグ平均を動かすなら jump/pop time を
+    /// 動かす」参照、本issueのスコープ外）ため、帯は現行物理層の実測値（3000試合で37.5%）を中心に取る。</summary>
+    public Band StealSuccessRate { get; init; } = new(0.20, 0.55);
     // 1球采配（設計書15 Phase C-2）: 追い込まれ矯正/3-0待て/決め球切替の影響を最も受ける指標。
     public Band StrikeoutRate { get; init; } = new(0.16, 0.22);
     public Band WalkRate { get; init; } = new(0.06, 0.10);
@@ -217,6 +226,8 @@ public static class BalanceTargetsLoader
             PickoffPerGame = g.PickoffPerGame?.ToBand() ?? new Band(0.0, 0.05),
             IntentionalWalkPerGame = g.IntentionalWalkPerGame?.ToBand() ?? new Band(0.0, 0.30),
             DoubleStealThirdBreakPerGame = g.DoubleStealThirdBreakPerGame?.ToBand() ?? new Band(0.0, 0.05),
+            StealAttemptPerGame = g.StealAttemptPerGame?.ToBand() ?? new Band(0.05, 0.60),
+            StealSuccessRate = g.StealSuccessRate?.ToBand() ?? new Band(0.20, 0.55),
             StrikeoutRate = g.StrikeoutRate?.ToBand() ?? new Band(0.16, 0.22),
             WalkRate = g.WalkRate?.ToBand() ?? new Band(0.06, 0.10),
             HomeRunRate = g.HomeRunRate?.ToBand() ?? new Band(0.010, 0.022),
@@ -375,6 +386,8 @@ public static class BalanceTargetsLoader
         public BandDto? PickoffPerGame { get; set; }
         public BandDto? IntentionalWalkPerGame { get; set; }
         public BandDto? DoubleStealThirdBreakPerGame { get; set; }
+        public BandDto? StealAttemptPerGame { get; set; }
+        public BandDto? StealSuccessRate { get; set; }
         public BandDto? StrikeoutRate { get; set; }
         public BandDto? WalkRate { get; set; }
         public BandDto? HomeRunRate { get; set; }
