@@ -5,14 +5,16 @@ using KokoSim.Engine.Players;
 namespace KokoSim.Engine.Match.Game;
 
 /// <summary>
-/// 個人打撃成績（1試合）。プレー記録から集計。HitByPitches/StolenBases/CaughtStealing は SourceId より後
-/// （互換のため末尾追加）。Position は表示専用＝DHスロットは <see cref="FieldPosition.DesignatedHitter"/>（issue #70）。
+/// 個人打撃成績（1試合）。プレー記録から集計。HitByPitches/StolenBases/CaughtStealing/SacrificeHits は
+/// SourceId より後（互換のため末尾追加）。Position は表示専用＝DHスロットは <see cref="FieldPosition.DesignatedHitter"/>（issue #70）。
+/// SacrificeHits＝犠打（issue sacrifice-bunt-counted-as-at-bat）。犠飛と違い出塁率の分母にも入らない。
 /// </summary>
 public sealed record BattingLine(
     int Order, FieldPosition Position, string Name,
     int PlateAppearances, int AtBats, int Hits, int Doubles, int Triples, int HomeRuns,
     int Rbi, int Walks, int StrikeOuts, int? SourceId = null, int HitByPitches = 0,
-    int StolenBases = 0, int CaughtStealing = 0, int Runs = 0, int SacrificeFlies = 0)
+    int StolenBases = 0, int CaughtStealing = 0, int Runs = 0, int SacrificeFlies = 0,
+    int SacrificeHits = 0)
 {
     /// <summary>打率（打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;

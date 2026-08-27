@@ -2065,7 +2065,7 @@ public static class GameEngine
     {
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
-        offense.RecordBatting(batter, result, runs, isSacFly);
+        offense.RecordBatting(batter, result, runs, isSacFly, isSacBunt);
         offense.RecordMatchup(batter, pitcher);   // 慣れの蓄積（設計書02 §2.3b）
         // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
         PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay

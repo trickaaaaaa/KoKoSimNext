@@ -5,7 +5,8 @@ namespace KokoSim.Engine.Stats;
 /// <summary>
 /// 個人打撃の累積成績（複数試合の集計）。1試合ぶんの <see cref="BattingLine"/> を <see cref="Add"/> で畳み込む。
 /// 生カウンタのみ保持し、打率・出塁率・長打率は派生プロパティで算出（純データ・決定論）。
-/// 犠飛（SF, issue #68）は打数から除外し、出塁率の分母にのみ算入する。
+/// 犠飛（SF, issue #68）は打数から除外し、出塁率の分母にのみ算入する。犠打（SH）は打数にも
+/// 出塁率の分母にも入れない（issue sacrifice-bunt-counted-as-at-bat）。
 /// </summary>
 public sealed class BattingStatLine
 {
@@ -26,6 +27,8 @@ public sealed class BattingStatLine
     public int Runs { get; private set; }
     /// <summary>犠飛（issue #68）。打数には含めず、出塁率の分母にのみ算入する。</summary>
     public int SacrificeFlies { get; private set; }
+    /// <summary>犠打（issue sacrifice-bunt-counted-as-at-bat）。打数にも出塁率の分母にも含めない。</summary>
+    public int SacrificeHits { get; private set; }
 
     /// <summary>単打＝安打−（二塁打＋三塁打＋本塁打）。</summary>
     public int Singles => Hits - Doubles - Triples - HomeRuns;
@@ -64,6 +67,7 @@ public sealed class BattingStatLine
         CaughtStealing += l.CaughtStealing;
         Runs += l.Runs;
         SacrificeFlies += l.SacrificeFlies;
+        SacrificeHits += l.SacrificeHits;
     }
 
     /// <summary>別の累積打撃成績を合算する（大会別アーカイブの秋合算＝県/地区/神宮, issue #77）。</summary>
@@ -84,6 +88,7 @@ public sealed class BattingStatLine
         CaughtStealing += o.CaughtStealing;
         Runs += o.Runs;
         SacrificeFlies += o.SacrificeFlies;
+        SacrificeHits += o.SacrificeHits;
     }
 
     /// <summary>盗塁成功率（企図0なら0）。企図＝盗塁＋盗塁死。</summary>
@@ -96,7 +101,7 @@ public sealed class BattingStatLine
     /// </summary>
     internal void Restore(int games, int plateAppearances, int atBats, int hits, int doubles, int triples,
         int homeRuns, int rbi, int walks, int hitByPitches, int strikeOuts, int stolenBases,
-        int caughtStealing, int runs, int sacrificeFlies)
+        int caughtStealing, int runs, int sacrificeFlies, int sacrificeHits = 0)
     {
         Games = games;
         PlateAppearances = plateAppearances;
@@ -113,5 +118,6 @@ public sealed class BattingStatLine
         CaughtStealing = caughtStealing;
         Runs = runs;
         SacrificeFlies = sacrificeFlies;
+        SacrificeHits = sacrificeHits;
     }
 }

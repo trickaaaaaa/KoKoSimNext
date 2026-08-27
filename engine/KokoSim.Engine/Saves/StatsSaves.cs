@@ -201,11 +201,14 @@ internal static class StatsSaves
         .Add("sb", b.StolenBases)
         .Add("cs", b.CaughtStealing)
         .Add("r", b.Runs)
-        .Add("sf", b.SacrificeFlies);
+        .Add("sf", b.SacrificeFlies)
+        .Add("sh", b.SacrificeHits);
 
+    // sh は issue sacrifice-bunt-counted-as-at-bat で追加。旧セーブは項目ごと無い＝0で読む。
     public static void RestoreBattingInto(BattingStatLine target, JsonObject o) => target.Restore(
         o.Int("g"), o.Int("pa"), o.Int("ab"), o.Int("h"), o.Int("2b"), o.Int("3b"), o.Int("hr"),
-        o.Int("rbi"), o.Int("bb"), o.Int("hbp"), o.Int("so"), o.Int("sb"), o.Int("cs"), o.Int("r"), o.Int("sf"));
+        o.Int("rbi"), o.Int("bb"), o.Int("hbp"), o.Int("so"), o.Int("sb"), o.Int("cs"), o.Int("r"), o.Int("sf"),
+        o.Has("sh") ? o.Int("sh") : 0);
 
     // ===== PitchingStatLine =====
 
