@@ -455,6 +455,9 @@ public static class GameSimulation
     private static int Ability(IRandomSource rng)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(50, 12)), 20, 88);
 
+    // issue game-sim-all-right-handed-batters: 打席の左右を実ロスターと揃える（AtBatSimulation.SampleBats が
+    // 単一ソース）。それ以前は全員右打ちで、打球方向（issue #262）が三塁・遊撃側へ偏って games_10k 系の
+    // 帯がその母集団で校正されていた。
     private static Player GeneratePositionPlayer(IRandomSource rng, FieldPosition pos) => new()
     {
         Name = pos.ToString(),
@@ -467,6 +470,7 @@ public static class GameSimulation
         ArmStrength = Ability(rng),
         Fielding = Ability(rng),
         Catching = Ability(rng),
+        Bats = AtBatSimulation.SampleBats(rng),
     };
 
     private static Player GeneratePitcher(IRandomSource rng, string name)
@@ -487,6 +491,7 @@ public static class GameSimulation
             ArmStrength = Ability(rng),
             Fielding = Ability(rng),
             Catching = Ability(rng),
+            Bats = AtBatSimulation.SampleBats(rng),
             Pitching = new PitcherAttributes
             {
                 MaxVelocityKmh = velo,

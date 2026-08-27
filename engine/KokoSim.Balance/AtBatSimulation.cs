@@ -906,8 +906,9 @@ public static class AtBatSimulation
     /// 実ロスター（<see cref="Season.ProspectGenerator"/> / <see cref="Nation.StrengthTeamFactory"/>）と揃える。
     /// それ以前は全員右打ちだったので、引っ張り方向が片側へ寄って分布が実態とずれる。
     /// 確率は生成器の既定と同値（スイッチ3% ／ 左投12% ／ 左投の98%が左打 ／ 右投の40%が左打）。
+    /// <see cref="GameSimulation"/> も同じ式を使う（左右の分布式は1箇所に集約する）。
     /// </summary>
-    private static Handedness SampleBats(IRandomSource rng)
+    internal static Handedness SampleBats(IRandomSource rng)
     {
         if (rng.NextDouble() < 0.03) return Handedness.Switch;
         var throwsLeft = rng.NextDouble() < 0.12;
