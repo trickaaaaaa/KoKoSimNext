@@ -900,8 +900,11 @@ public static class BaserunningModel
         var arriveAtSecond = HomePlayResolver
             .ResolveThrowPath(home.Situation, home.Field.SecondBase, coeff).ArriveAtSeconds;
         var pivotTransfer = Math.Max(0.0, coeff.DoublePlayPivotTransferSeconds - home.DoublePlayPivotBonusSeconds);
+        // 中継球速は二塁カバーに実際に入った野手の地肩（issue⑦。渡されなければ従来のカットマン用
+        // 共通定数 RelayThrowSpeedMps へフォールバック＝旧挙動と恒等）。
+        var pivotArm = home.DoublePlayPivotArmMps ?? coeff.RelayThrowSpeedMps;
         var pivot = new HomePlaySituation(
-            home.Field.SecondBase, arriveAtSecond, coeff.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
+            home.Field.SecondBase, arriveAtSecond, pivotArm, home.Situation.OutfielderFielding);
         var relayToFirst = HomePlayResolver
             .ResolveThrowPath(pivot, home.Field.FirstBase, coeff, transferSecondsOverride: pivotTransfer)
             .ArriveAtSeconds + coeff.SecondForceTagSeconds;

@@ -28,6 +28,11 @@ namespace KokoSim.Engine.Match.Game;
 /// <param name="DoublePlayPivotBonusSeconds">「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）
 /// による二塁経由の転送握り替えの短縮量[s]（時間の短縮＝確率でなく, Issue #369）。守備側の遊撃手/二塁手が
 /// スキルを持つとき正値。既定0＝短縮なし（帯不変）。</param>
+/// <param name="DoublePlayPivotArmMps">併殺の二塁→一塁転送を投げる野手（二塁カバーに実際に入った
+/// 遊撃手/二塁手）の送球速度[m/s]（<c>FielderAttributes.ThrowSpeedMps</c>）。null＝呼び出し側が未対応
+/// （単体テスト等）＝ <see cref="BaserunningCoefficients.RelayThrowSpeedMps"/>（カットマン用の共通定数の
+/// 流用）へフォールバック。issue double-play-throw-pace-and-second-out-call ⑦（二塁手の地肩が併殺成立率に
+/// 無効だった）の是正。</param>
 public readonly record struct HomePlayContext(
     FieldGeometry Field,
     HomePlaySituation Situation,
@@ -37,4 +42,5 @@ public readonly record struct HomePlayContext(
     bool IsFly,
     double? ThrowArriveSeconds = null,
     double? BatterToFirstSeconds = null,
-    double DoublePlayPivotBonusSeconds = 0.0);
+    double DoublePlayPivotBonusSeconds = 0.0,
+    double? DoublePlayPivotArmMps = null);

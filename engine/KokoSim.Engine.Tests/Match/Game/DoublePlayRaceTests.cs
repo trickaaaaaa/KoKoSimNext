@@ -42,18 +42,31 @@ public sealed class DoublePlayRaceTests
             r1, 1, home.Situation, home.Field, C, HomePlayResolver.SecondForceParams(home.Field, C),
             C.DoublePlayR1StartDelaySeconds);
 
-    /// <summary>二塁封殺後、打者が二塁経由の転送を上回って一塁生存する見込み（＝野選になる確率）。</summary>
-    private static double PBatterSafe(HomePlayContext home)
+    /// <summary>二塁封殺後、打者が二塁経由の転送を上回って一塁生存する見込み（＝野選になる確率）。
+    /// <paramref name="pivotArmMps"/> は中継球速の直接指定（issue⑦・既定null＝従来の RelayThrowSpeedMps 定数）。</summary>
+    private static double PBatterSafe(HomePlayContext home, double? pivotArmMps = null)
     {
         var arriveAtSecond = HomePlayResolver.ResolveThrowPath(home.Situation, Field.SecondBase, C).ArriveAtSeconds;
         var pivotTransfer = Math.Max(0.0, C.DoublePlayPivotTransferSeconds - home.DoublePlayPivotBonusSeconds);
         var pivot = new HomePlaySituation(
-            Field.SecondBase, arriveAtSecond, C.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
+            Field.SecondBase, arriveAtSecond, pivotArmMps ?? C.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
         var relayToFirst = HomePlayResolver
             .ResolveThrowPath(pivot, Field.FirstBase, C, transferSecondsOverride: pivotTransfer)
             .ArriveAtSeconds + C.SecondForceTagSeconds;
         var margin = relayToFirst - home.BatterToFirstSeconds!.Value + C.DoublePlayRelayBias;
         return MathUtil.Clamp(MathUtil.Logistic(margin / C.DoublePlayRelayMarginScale), 0.01, 0.99);
+    }
+
+    private static int DpCount(HomePlayContext home, ulong seed, int trials = 3000)
+    {
+        var rng = new Xoshiro256Random(seed);
+        var dp = 0;
+        for (var i = 0; i < trials; i++)
+        {
+            var (_, _, batterSafeOnFc, moves) = RunOnce(home, new Player { Speed = 50, Baserunning = 50 }, new Player(), rng);
+            if (!batterSafeOnFc && ForceOutAtSecond(moves)) dp++;
+        }
+        return dp;
     }
 
     // 1死一塁の内野ゴロを1回解く（打者アウトのカウントは呼び出し側の battersOwnOut なので extraOuts には含まれない）。
@@ -232,6 +245,39 @@ public sealed class DoublePlayRaceTests
             return dp;
         }
         Assert.True(Dp(artist, 505) > Dp(plain, 505), "名手のいる守備は併殺成立が多いはず");
+    }
+
+    // ================= 中継の地肩（issue⑦: 従来 RelayThrowSpeedMps 固定で二塁手/遊撃手の肩が無効だった）=================
+
+    [Fact]
+    public void Order_StrongerPivotArm_LowersBatterSafeAtFirst()
+    {
+        // 中継球速が強いほど二塁→一塁の転送が速くなり、打者が転送を上回って一塁生存する（野選）見込みは下がるはず。
+        var home = Grounder(x: -6, z: 37, fieldedAt: 1.4, batterToFirst: 4.45);
+        var weak = PBatterSafe(home, pivotArmMps: 25.0);
+        var strong = PBatterSafe(home, pivotArmMps: 35.0);
+        Assert.True(strong < weak, $"肩が強い中継のほうが打者生存(野選)しにくいはず: strong={strong:F3} < weak={weak:F3}");
+    }
+
+    [Fact]
+    public void PivotArm_FlowsFromHomePlayContext_ChangesDoublePlayRate()
+    {
+        // HomePlayContext.DoublePlayPivotArmMps → BaserunningModel.ResolveDoublePlay の実経路で、
+        // 中継の肩の強さが実際に併殺の成立率を動かすことを末端（RunOnce）まで通して確認する。
+        var baseHome = Grounder(x: -6, z: 37, fieldedAt: 1.4, batterToFirst: 4.45);
+        var weakHome = baseHome with { DoublePlayPivotArmMps = 25.0 };
+        var strongHome = baseHome with { DoublePlayPivotArmMps = 35.0 };
+        Assert.True(DpCount(strongHome, 707) > DpCount(weakHome, 707), "中継の肩が強いほうが併殺成立が多いはず");
+    }
+
+    [Fact]
+    public void PivotArm_Null_FallsBackToRelayThrowSpeedMpsConstant_ExactMatch()
+    {
+        // DoublePlayPivotArmMps 未指定(null)は従来どおり RelayThrowSpeedMps 定数へフォールバックする
+        // （帯保存の根拠＝明示的に同じ定数を渡した場合と完全一致するはず）。
+        var withoutArm = Grounder(x: -6, z: 37, fieldedAt: 1.4, batterToFirst: 4.45); // DoublePlayPivotArmMps 未指定
+        var withConstantArm = withoutArm with { DoublePlayPivotArmMps = C.RelayThrowSpeedMps };
+        Assert.Equal(DpCount(withoutArm, 808), DpCount(withConstantArm, 808));
     }
 
     // ================= 決定論・従来テーブルへのフォールバック =================

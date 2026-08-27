@@ -1898,8 +1898,6 @@ public static class TimelineBuilder
 
     /// <summary>処理野手の肩が不明なとき（FielderRole なし等）に使う送球速度[m/s]。表示専用のフォールバック。</summary>
     private const double FallbackThrowSpeedMps = 31.0;
-    /// <summary>併殺の二塁での握り替え[s]（表示専用の演出値。判定/帯に一切干渉しない）。</summary>
-    private const double DpTransferSeconds = 0.15;
 
     /// <summary>
     /// 送球を描く速度[m/s]＝処理野手の肩（<see cref="FieldingPlay.FielderThrowSpeedMps"/>）。
@@ -1933,6 +1931,31 @@ public static class TimelineBuilder
         }
         // セーフなのに送球が先着して見える → 走者到達の直後へ回す。
         return Math.Max(physicalArrive, runnerArriveAnchor + VerdictGuardLagSeconds);
+    }
+
+    /// <summary>
+    /// 野選（FC）で「打」（打者走者）の誤ったアウト表現を実際の結末（セーフ）へ訂正する
+    /// （issue double-play-throw-pace-and-second-out-call の追加報告）。<see cref="BuildBattedBall"/> は
+    /// 二塁封殺・野選の区別を知らずに、打球の基礎解決（処理点→一塁の直接送球1本の前提）だけで
+    /// 「打」レッグ・判定を一塁アウトとして作ってしまう＝<see cref="AppendDoublePlayThrows"/> が
+    /// batterOut=false を受け取った時点で必ず訂正が要る。<paramref name="closeCall"/>=false（保守側）
+    /// なら判定オーバーレイは出さず（アウト判定を消すだけ）、true なら「セーフ」を出す。
+    /// </summary>
+    private static PlayTimeline PatchFieldersChoiceBatterLeg(
+        PlayTimeline timeline, double batterArriveAnchor, bool closeCall)
+    {
+        var runners = new List<RunnerLeg>(timeline.Runners.Count);
+        foreach (var r in timeline.Runners)
+            runners.Add(r.Label == "打" && r.OutAtEnd ? r with { OutAtEnd = false, CloseCall = closeCall } : r);
+
+        var judgements = new List<JudgementEvent>(timeline.Judgements.Count);
+        foreach (var j in timeline.Judgements)
+        {
+            if (j.Label != "打" || j.Kind != JudgementKind.Out) { judgements.Add(j); continue; }
+            if (closeCall) judgements.Add(j with { T = batterArriveAnchor, Kind = JudgementKind.Safe, CloseCall = true });
+            // closeCall=false は消すだけ（際どくない安全な出塁にまで演出を出さない通常の内野安打と同じ扱い）。
+        }
+        return timeline with { Runners = runners, Judgements = judgements, ResolvedAt = batterArriveAnchor };
     }
 
     /// <summary>送球1本の所要時間[s]（実際に描く距離÷その送球の速度＝画面上の速度が肩どおりになる）。</summary>
@@ -2001,14 +2024,58 @@ public static class TimelineBuilder
     }
 
     /// <summary>
-    /// 併殺(6-4-3型)の送球連鎖を描く（設計書12 §2, F1 Slice 2）。既存の「野手→一塁」1本 Throw を、
+    /// 併殺(6-4-3型)の送球連鎖を描く（設計書12 §2, F1 Slice 2。秒の組み方は issue
+    /// double-play-throw-pace-and-second-out-call の案B+C+E）。既存の「野手→一塁」1本 Throw を、
     /// 「野手処理点→二塁→一塁」の2本 Throw に差し替える。結果不変・乱数不使用の表示専用。
     /// 内野ゴロ(!IsFly かつ既存の一塁送球あり)以外は何もせず元のタイムラインをそのまま返す。
-    /// batterArriveAnchor=打者走者の一塁到達時刻[s]（2本目の到達をここへ合わせる。物理下限は保持）。
+    ///
+    /// <para>秒は判定モデル（<see cref="BaserunningModel"/> の <c>ResolveDoublePlay</c>）と<b>同じ式</b>
+    /// （<see cref="HomePlayResolver.ResolveThrowPath"/>）で組む＝処理点→二塁の握り替え・二塁→一塁の
+    /// ピボット握り替え・中継球速・タッチが判定と絵で食い違わない。以前は握り替え固定0.15秒×2＋
+    /// 一塁到達を打者到達へ強制アンカーしていたため、①送球が肩そのままの速さで飛び ②2本目が
+    /// 打者到達までの余りを全部飛行時間に吸って極端に遅くなり ③すべての併殺が完全な同着（差0秒）に
+    /// 見えていた（走力・肩・守備・打球の違いが絵に一切出ない）。</para>
+    ///
+    /// <para>二塁カバー（<paramref name="pivotSprintSpeedByRole"/>）の急ぎ度（issue
+    /// fielder-leg-speed-by-distance）も引き直す。陣形ループの時点ではこの二塁送球がまだ存在せず、
+    /// 期限が「一塁送球の決着＝ずっと後」へフォールバックして悠々と歩くため、球のほうが先にベースへ
+    /// 着いていた（誰も居ないベースに球が飛ぶ絵）。</para>
+    ///
+    /// <para>打者のアウト判定（<see cref="JudgementKind.Out"/>, Label="打"）も、このプレーでは描かれない
+    /// 「処理点→一塁の直接送球」の到達（<see cref="FieldingPlay.ThrowArriveSeconds"/>）ではなく、
+    /// 実際に描いた2本目の到達へ差し替える（判定オーバーレイ／結果テキストが球より早く消える問題）。</para>
+    ///
+    /// <para>二塁封殺の一塁走者は、封殺（Force=true）判定の確定時刻（＝二塁送球の到達）だけを実際の
+    /// 秒へ差し替え、走者のレッグそのものは弄らない（issue④・2026-08-27 監督判断）。フォースはタッチが
+    /// 要らないので、実物の併殺と同じく「アウトが確定した後も走者はそのまま塁まで走り切る」絵になる
+    /// （一塁フォースの打者走者と同じ扱い。3Dの演技選択は Force フラグで既に非タッチへ分岐済み）。</para>
+    ///
+    /// batterArriveAnchor=打者走者の一塁到達時刻[s]（食い違いのガードにのみ使う。Issue #301③と同じ
+    /// <see cref="GuardAgainstVerdict"/> 方式＝物理を基本にし、確定判定と矛盾するときだけ寄せる）。
+    /// coefficients=null なら既定係数（Unity 実プレーが使う C# 既定と同一、判定と同じ既定）。
+    /// pivotBonusSeconds=「併殺の名手」スキルによるピボット握り替え短縮[s]（判定側と同じ値を渡す）。
+    /// pivotSprintSpeedByRole=二塁カバー野手のスプリント速度[m/s]（Role→値。無ければ既定の走力で代用）。
+    ///
+    /// <para>batterOut=打者が実際にアウトか（既定true）。二塁は封殺できても一塁への転送が僅かに間に合わない
+    /// 野選（FC, <c>BaserunningModel.ResolveDoublePlay</c> 分岐B）では false を渡す。この呼び出し元
+    /// （<see cref="Game.GameEngine"/>）に来る時点で打者の「打」レッグ・判定は<b>常に一塁アウトとして
+    /// 作られている</b>（<see cref="BuildBattedBall"/> は二塁封殺・野選の区別を知らない基礎解決の時点で
+    /// 走るため）。false を渡すと、その既に作られたアウト判定・レッグを実際の秒・結果へ差し替える
+    /// （さもないと野選が「打者も一塁アウト＝併殺成立」に見えてしまう）。</para>
     /// </summary>
     public static PlayTimeline AppendDoublePlayThrows(
-        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor)
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
+        BaserunningCoefficients? coefficients = null, double pivotBonusSeconds = 0.0,
+        IReadOnlyDictionary<FieldPosition, double>? pivotSprintSpeedByRole = null, bool batterOut = true,
+        IReadOnlyDictionary<FieldPosition, double>? pivotThrowSpeedByRole = null)
     {
+        // 野選（FC・batterOut=false）は、この先どの経路を通っても（3Uアンアシスト等でこの下の早期returnに
+        // 掛かっても）「打」の誤アウトだけは必ず訂正する。BuildBattedBall は二塁封殺・野選の区別を知らず、
+        // 打球の基礎解決（直接送球1本の前提）の時点で「打」を一塁アウトとして作ってしまっているため。
+        // ここでは実際の際どさ（送球との秒差）が分からないので保守的にアウト判定だけ消す＝際どさが分かる
+        // 経路（下の本処理）まで進めたら、際どければ「セーフ」演出へ差し替える。
+        if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
+
         if (play.IsFly || play.RangeM > 46.0) return timeline; // 内野ゴロ以外は対象外
 
         // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す。
@@ -2025,24 +2092,45 @@ public static class TimelineBuilder
         }
         if (existingThrow is null) return timeline;
 
+        var c = coefficients ?? new BaserunningCoefficients();
         var fieldPoint = FieldPointOf(play);                        // ロール終端＝実捕球点（Issue #301①）
         var second = BasePoint(field, "second");
         var first = BasePoint(field, "first");
-
         var arm = ThrowSpeedOf(play);                              // 処理野手の肩（Issue #301③）
-        // 野手処理時刻は play から直接出す（Issue #334: 差し替え前の Throw の T0 はもう捕球時刻と
-        // 一致しない＝一塁向け送球の投げ始めに変わったので、existingThrow.T0 を流用できない）。
-        var fieldedAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
-        var releaseAt = fieldedAt + DpTransferSeconds;              // 処理点で握り替えてから投げ始める
-        var secondArrive = releaseAt + Distance(fieldPoint, second) / arm;
-        var pivotAt = secondArrive + DpTransferSeconds;             // 二塁で握り替え
-        // 一塁到達は打者到達へアンカー（＝際どく封殺）。ただし物理的な下限は割らない。
-        var firstArrive = Math.Max(batterArriveAnchor, pivotAt + Distance(second, first) / arm);
+
+        // 1本目（処理点→二塁）: 判定モデル（BaserunningModel.ResolveDoublePlay）と同じ入力・同じ式。
+        var situation = new HomePlaySituation(
+            new Core.Vector3D(fieldPoint.X, 0, fieldPoint.Z),
+            play.FieldedAtSeconds ?? play.HangTimeSeconds, arm, play.FielderFielding);
+        var pathToSecond = HomePlayResolver.ResolveThrowPath(situation, field.SecondBase, c);
+        var releaseAt = ContactAt + pathToSecond.ReleaseAtSeconds;
+        var secondArrive = ContactAt + pathToSecond.ArriveAtSeconds;
 
         // 送球の投げ手／受け手（Issue E1）。**併殺はここが最近傍マッチの壊れる場所**＝
         // 二塁の周りに遊撃手・二塁手・走者が同時に居るので、座標だけでは中継役を取り違える。
+        // pivotRole はこの先の2本目の中継球速（issue⑦）にも使うため、ここで先に確定させる。
         var pivotRole = CoverRoleAt(timeline, second, FieldPosition.SecondBase);
         var firstRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
+
+        // 2本目（二塁→一塁）: ピボット握り替え・タッチは判定と同じ式。中継球速は実際に二塁カバーへ
+        // 入った野手の地肩（issue⑦。`RelayThrowSpeedMps` は本来カットマン専用の共通定数の流用だった＝
+        // 二塁手/遊撃手の地肩が併殺成立率に一切効かない不整合があった）。渡されない/該当が無ければ
+        // 従来の定数へフォールバック（帯を動かす変更なので判定側 BaserunningModel.ResolveDoublePlay と
+        // 必ず同じ値を使う＝呼び出し側 GameEngine が同一のソースから両方へ渡す）。
+        var pivotTransfer = Math.Max(0.0, c.DoublePlayPivotTransferSeconds - pivotBonusSeconds);
+        var pivotArm = pivotRole is { } pivotArmRole && pivotThrowSpeedByRole != null
+            && pivotThrowSpeedByRole.TryGetValue(pivotArmRole, out var pArm) ? pArm : c.RelayThrowSpeedMps;
+        var pivotSituation = new HomePlaySituation(
+            field.SecondBase, pathToSecond.ArriveAtSeconds, pivotArm, play.FielderFielding);
+        var pathToFirst = HomePlayResolver.ResolveThrowPath(
+            pivotSituation, field.FirstBase, c, transferSecondsOverride: pivotTransfer);
+        var pivotAt = ContactAt + pathToFirst.ReleaseAtSeconds;
+        var firstArrivePhysical = ContactAt + pathToFirst.ArriveAtSeconds + c.SecondForceTagSeconds;
+        // 食い違いのガード（Issue #301③と同型）: 打者アウトが確定判定なら物理が打者到達より遅く見える
+        // ときだけタッチの瞬間へ詰める。野選（batterOut=false）は逆＝物理が打者より先着して見える絵にせず
+        // 走者到達の直後へ回す。物理下限（食い違いゼロの最速）はここが兼ねる。
+        var firstArrive = GuardAgainstVerdict(firstArrivePhysical, firstArrivePhysical, batterArriveAnchor, runnerOut: batterOut);
+
         ball.Add(new BallSegment
         {
             Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = secondArrive,
@@ -2056,26 +2144,60 @@ public static class TimelineBuilder
             FromRole = pivotRole, ToRole = firstRole, ToBase = "first",
         });
 
-        // 二塁封殺の判定時刻を走者到達ではなく実際の送球到達へ差し替える（Issue #328①）。
-        // 送球のほうが先に着くのが通常（DP成立の前提）なので、走者レッグもその時刻・位置で止め、
-        // 判定確定後に走者だけ塁上まで走り切る絵にしない（送球が後着の稀なケースは物理無矛盾の
-        // 保証が無いため、判定時刻だけ差し替えてレッグは弄らない）。
+        // 二塁カバーの急ぎ度を、実際に描いた二塁送球の到達へ引き直す（issue③・fielder-leg-speed-by-distance
+        // と同じ式）。陣形ループはこの二塁送球がまだ無い時点で急ぎ度を決めており、期限がここへ届かず
+        // 決着（＝ずっと後）へフォールバックして悠々と歩いてしまう＝球のほうが先にベースへ着く。
+        var moves = timeline.Moves;
+        if (pivotRole is { } pr)
+        {
+            var idx = -1;
+            for (var i = 0; i < moves.Count; i++)
+            {
+                if (moves[i].Role == pr && moves[i].Task == FielderTask.CoverBase && Distance(moves[i].To, second) < 1.0)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0)
+            {
+                var mv = moves[idx];
+                var start = timeline.FielderStarts is { } starts && starts.TryGetValue(pr, out var s0) ? s0 : mv.To;
+                var dist = Distance(start, mv.To);
+                var deadline = secondArrive - CoverSetSeconds;
+                var speed = Math.Max(4.0, pivotSprintSpeedByRole != null
+                    && pivotSprintSpeedByRole.TryGetValue(pr, out var sp) ? sp : new FielderAttributes().SprintSpeedMps);
+                double t1;
+                if (deadline - mv.T0 > 1e-6)
+                {
+                    var need = dist / (deadline - mv.T0);
+                    var pace = need <= EasyPaceMinMps ? EasyPaceMinMps
+                        : need < EasyJogMps ? Math.Min(speed, EasyJogMps)
+                        : Math.Min(speed, need);
+                    t1 = mv.T0 + dist / pace;
+                }
+                else
+                {
+                    t1 = mv.T0 + dist / speed;   // 間に合わない＝全力（fielder-leg-speed-by-distance と同じ扱い）
+                }
+                if (t1 < mv.T1)
+                {
+                    var updatedMoves = new List<FielderMove>(moves);
+                    updatedMoves[idx] = mv with { T1 = t1 };
+                    moves = updatedMoves;
+                }
+            }
+        }
+
+        // 二塁封殺の判定時刻を走者到達ではなく実際の送球到達へ差し替える（Issue #328①）。フォース
+        // （このレッグは常に Force=true・BaserunningModel.ResolveDoublePlay 参照）はタッチが要らないので、
+        // 判定確定後も走者は塁まで走り切る絵のまま（issue double-play-throw-pace-and-second-out-call ④・
+        // 2026-08-27 監督判断）＝一塁フォースの打者走者と同じ扱い（弄るのは判定時刻だけでレッグは弄らない）。
         var runners = timeline.Runners;
         var judgements = timeline.Judgements;
         foreach (var leg in timeline.Runners)
         {
             if (!leg.OutAtEnd || leg.Label == "打" || Distance(leg.To, second) >= 0.5) continue;
-
-            if (secondArrive < leg.T1 - 1e-9)
-            {
-                var frac = leg.T1 > leg.T0 ? Math.Clamp((secondArrive - leg.T0) / (leg.T1 - leg.T0), 0.0, 1.0) : 0.0;
-                var stop = new TimelinePoint(
-                    leg.From.X + (leg.To.X - leg.From.X) * frac, leg.From.Z + (leg.To.Z - leg.From.Z) * frac);
-                var updatedRunners = new List<RunnerLeg>(runners.Count);
-                foreach (var r in runners)
-                    updatedRunners.Add(ReferenceEquals(r, leg) ? r with { T1 = Math.Max(leg.T0, secondArrive), To = stop } : r);
-                runners = updatedRunners;
-            }
 
             var updatedJudgements = new List<JudgementEvent>(judgements.Count);
             foreach (var j in judgements)
@@ -2089,8 +2211,53 @@ public static class TimelineBuilder
             break;
         }
 
+        double resolvedAt;
+        if (batterOut)
+        {
+            // 打者のアウト判定（issue③）: 描かれない直接送球ではなく、実際に描いた2本目の到達へ合わせる。
+            var judgements2 = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+                judgements2.Add(j.Label == "打" && j.Kind == JudgementKind.Out ? j with { T = firstArrive } : j);
+            judgements = judgements2;
+
+            // 結果確定時刻（issue⑤）: 判定オーバーレイと同じく、描かれない直接送球の到達
+            // （ResolvedAt は元々 forceOutAt=ContactAt+ThrowArriveSeconds のまま）ではなく、
+            // 実際に描いた2本目の到達に合わせる。結果テキスト（PlaybackDisplaySync.ResultShowTime）が
+            // 判定オーバーレイと同じ「打」Out判定の存在をゲートにこの値を読むため、判定側だけ直すと
+            // テロップは直らない（表示専用フィールド・帯/digestの対象外）。
+            resolvedAt = firstArrive;
+        }
+        else
+        {
+            // 野選（FC）: 冒頭の PatchFieldersChoiceBatterLeg で既にアウト判定は消してある（安全側）。
+            // ここでは実際の際どさ（判定の物理下限＝打者到達に対する勝敗マージン。GuardAgainstVerdict
+            // 適用前）が分かるので、際どければ「セーフ」演出へ格上げする＝際どくない（守備が大差で負けた）
+            // 野選まで毎回演出を出さない（通常の内野安打と同じ出し分け規約, batterCloseCall 参照）。
+            var fcCloseCall = Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
+            if (fcCloseCall)
+            {
+                var updatedRunners = new List<RunnerLeg>(runners.Count);
+                foreach (var r in runners)
+                    updatedRunners.Add(r.Label == "打" ? r with { CloseCall = true } : r);
+                runners = updatedRunners;
+                judgements = new List<JudgementEvent>(judgements)
+                {
+                    new() { Label = "打", T = batterArriveAnchor, Kind = JudgementKind.Safe, CloseCall = true },
+                };
+            }
+
+            // 結果確定時刻: 打者がセーフで生きる結果なので、送球の到達ではなく走者自身の到達を使う
+            // （PlaybackDisplaySync.ResultShowTime の「打者がセーフで生きる結果は走者到達まで待つ」と同じ規約。
+            // 冒頭の Patch で既に同じ値をセット済みだが、Ball/Moves と一緒に with で返すため明示する）。
+            resolvedAt = batterArriveAnchor;
+        }
+
         var duration = Math.Max(timeline.Duration, firstArrive + 1.0);
-        return timeline with { Ball = ball, Duration = duration, Runners = runners, Judgements = judgements };
+        return timeline with
+        {
+            Ball = ball, Moves = moves, Duration = duration, Runners = runners, Judgements = judgements,
+            ResolvedAt = resolvedAt,
+        };
     }
 
     /// <summary>

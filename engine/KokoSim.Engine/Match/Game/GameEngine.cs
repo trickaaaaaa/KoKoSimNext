@@ -1633,9 +1633,17 @@ public static class GameEngine
                 var dpPivotBonus = (defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.Skills.Has(Skill.DoublePlayArtist) == true
                                     || defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.Skills.Has(Skill.DoublePlayArtist) == true)
                     ? ctx.Skills.DoublePlayArtistBonus : 0.0;
+                // 併殺ピボットの中継球速（issue⑦: 従来 RelayThrowSpeedMps 固定で二塁手/遊撃手の地肩が
+                // 併殺成立率に無効だった）。二塁カバーへ実際に入るのは「処理した側と逆の中堅手」
+                // （FormationTable の全ゾーンでこの対応＝遊撃手/三塁手が処理→二塁手がカバー、それ以外
+                // （二塁手/一塁手/投手/捕手）が処理→遊撃手がカバー）。判定層はゾーン表を持たないので、
+                // 処理役から同じ対応を導く（DefensiveFormation.BuildGenericRules と等価）。
+                var dpPivotRole = fp.FielderRole is Field.FieldPosition.ThirdBase or Field.FieldPosition.Shortstop
+                    ? Field.FieldPosition.SecondBase : Field.FieldPosition.Shortstop;
+                var dpPivotArm = defense.PlayerAtPosition(dpPivotRole)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps;
                 homePlay = new HomePlayContext(
                     ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
-                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus);
+                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus, dpPivotArm);
             }
 
             // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で
@@ -1760,23 +1768,57 @@ public static class GameEngine
                         timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding, flyCaughtAt, errorAt);
 
                     // 併殺(二塁封殺)かつ内野ゴロなら、ボールの送球連鎖を 6-4-3 型に差し替える（設計書12 §2, F1 Slice 3）。
-                    // 野選（FC, design-14 P1-1）も同じ二塁封殺 RunnerMove を積むが打者は生存するため、
-                    // !batterSafeOnFc で除外しないと「打者アウト」の2本目送球が誤って描画される。
+                    // 野選（FC, design-14 P1-1）も同じ二塁封殺 RunnerMove を積む。BuildBattedBall は二塁封殺・
+                    // 野選の区別を知らずに「打」レッグ・判定を一塁アウトとして作ってしまっている（打球の基礎
+                    // 解決＝直接送球1本の前提で組むため）ので、FCでも呼んで実際の結末（打者セーフ）へ
+                    // 描き直す（issue double-play-throw-pace-and-second-out-call の追加報告。以前は !batterSafeOnFc
+                    // で除外していたため、野選が「打者も一塁アウト＝併殺成立」に誤って見えていた）。
                     var hasForceAtSecond = false;
                     foreach (var m in runnerMoves)
                     {
                         if (m.Out && m.FromBase == 1 && m.ToBase == 2) { hasForceAtSecond = true; break; }
                     }
-                    if (hasForceAtSecond && !batterSafeOnFc && res.Play is { IsFly: false } dpPlay)
+                    if (hasForceAtSecond && res.Play is { IsFly: false } dpPlay)
                     {
-                        // 打者走者の一塁到達（"打"レッグ終端）を2本目送球のアンカーにする。
+                        // 打者走者の一塁到達（"打"レッグ終端）を食い違いガードのアンカーにする。
                         var batterArrive = timeline.Duration;
                         foreach (var leg in timeline.Runners)
                         {
                             if (leg.Label == "打") { batterArrive = leg.T1; break; }
                         }
+                        // 判定側（BaserunningModel.ResolveDoublePlay）と同じ値を渡す＝絵と判定が同じ秒で組まれる
+                        // （issue double-play-throw-pace-and-second-out-call 案B/C）。
+                        var dpPivotBonusForDisplay =
+                            (defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.Skills.Has(Skill.DoublePlayArtist) == true
+                             || defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.Skills.Has(Skill.DoublePlayArtist) == true)
+                            ? ctx.Skills.DoublePlayArtistBonus : 0.0;
+                        var pivotSprintSpeedByRole = new Dictionary<Field.FieldPosition, double>
+                        {
+                            [Field.FieldPosition.SecondBase] =
+                                defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.ToFielder(ctx.Baserunning.AbilityEffect).SprintSpeedMps
+                                    ?? new FielderAttributes().SprintSpeedMps,
+                            [Field.FieldPosition.Shortstop] =
+                                defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.ToFielder(ctx.Baserunning.AbilityEffect).SprintSpeedMps
+                                    ?? new FielderAttributes().SprintSpeedMps,
+                        };
+                        // 中継球速（issue⑦）: 絵側の二塁カバー役は AppendDoublePlayThrows 内部の実際の陣形
+                        // （CoverRoleAt）で決まる＝2B/SSどちらが来ても引けるよう両方を渡す。判定側
+                        // （HomePlayContext.DoublePlayPivotArmMps）とは別経路の辞書だが、実際に選ばれる役
+                        // （二塁手/遊撃手のどちらが処理側と反対か）は同じ対応（DefensiveFormation）から
+                        // 出るので値は一致する。
+                        var pivotThrowSpeedByRole = new Dictionary<Field.FieldPosition, double>
+                        {
+                            [Field.FieldPosition.SecondBase] =
+                                defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps
+                                    ?? new FielderAttributes().ThrowSpeedMps,
+                            [Field.FieldPosition.Shortstop] =
+                                defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps
+                                    ?? new FielderAttributes().ThrowSpeedMps,
+                        };
                         timeline = Match.Timeline.TimelineBuilder.AppendDoublePlayThrows(
-                            timeline, dpPlay, ctx.Field, batterArrive);
+                            timeline, dpPlay, ctx.Field, batterArrive, ctx.Baserunning, dpPivotBonusForDisplay,
+                            pivotSprintSpeedByRole, batterOut: !batterSafeOnFc,
+                            pivotThrowSpeedByRole: pivotThrowSpeedByRole);
                     }
 
                     // 飛び出しの勝負（フライ捕球→一塁走者が戻る vs 戻し送球）: 戻し送球を描く
@@ -1910,7 +1952,8 @@ public static class GameEngine
             offense.ThirdPlayOuts += thirdOuts; // 単打の一塁→三塁レース憤死（Issue #89, 統計参考値）
             if (batterSafeOnFc) offense.FieldersChoiceCount++; // 野選（FC, design-14 P1-1。統計参考値）
             // 併殺打（GIDP, Issue #369）: 二塁封殺（1→2 Out）成立かつ打者一塁アウト（野選でない）の内野ゴロ。
-            // AppendDoublePlayThrows の描画条件（hasForceAtSecond && !batterSafeOnFc）と同一＝件数と絵が一致する。
+            // AppendDoublePlayThrows は野選（FC）でも呼ぶ（打者を実際の結末へ描き直すため）が、
+            // この集計は従来どおり !batterSafeOnFc だけを併殺打として数える。
             if (!batterSafeOnFc && res.Play is { IsFly: false })
             {
                 foreach (var m in runnerMoves)
