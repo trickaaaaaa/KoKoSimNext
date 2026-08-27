@@ -1643,7 +1643,8 @@ public static class GameEngine
                 var dpPivotArm = defense.PlayerAtPosition(dpPivotRole)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps;
                 homePlay = new HomePlayContext(
                     ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
-                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus, dpPivotArm);
+                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus, dpPivotArm,
+                    FielderRole: fp.FielderRole);
             }
 
             // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で

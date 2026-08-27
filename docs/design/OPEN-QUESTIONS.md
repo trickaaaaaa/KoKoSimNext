@@ -2,7 +2,7 @@
 
 実装で勝手に確定せず、ここに記録して相談する（CLAUDE.md「進め方」）。
 
-## Q31. 一・二塁の併殺で「三塁封殺」ルートがモデルに無い（2026-08-27・DPパターン網羅性の会話で発見）
+## Q31. 一・二塁の併殺で「三塁封殺」ルートがモデルに無い（2026-08-27・DPパターン網羅性の会話で発見）→ **判定層は実装済み（2026-08-27）。表示層は別ターン**
 
 `out/issues-pending/double-play-throw-pace-and-second-out-call.md`（併殺の絵の壊れ①〜⑧・⑦まで実装済み）
 の対応中、監督との会話（併殺のパターンとして何があるか／「サードが自打球点で三塁を踏んでフォース→
@@ -34,7 +34,32 @@
    「まれに三塁/本塁を狙う」という守備側のオプションの多様性であり、結果に出るのは主に**絵の単調さ**
    （3B正面への強いゴロで律儀に二塁へ回り道する）と**得点環境**（満塁併殺で毎回失点する）
 
-**発端**: `out/issues-pending/double-play-throw-pace-and-second-out-call.md`「範囲外で見つかった関連課題」⑩ BackgroundGameOp が戻らないと全操作が静かに死ぬ（見張りを置くか）（2026-08-14・「静かに詰まる」経路の棚卸しで発見）
+**発端**: `out/issues-pending/double-play-throw-pace-and-second-out-call.md`「範囲外で見つかった関連課題」⑩
+
+**実装状況（2026-08-27）**: 判定層のみ実装済み（(b)満塁の本塁封殺も含めて一式・監督決定）。表示層は別ターン。
+
+- 決定ルール: 実際にその塁を処理した野手（`HomePlayContext.FielderRole`）だけが代替を検討できる
+  （三塁手が自打球＋二塁走者あり／捕手or投手が自打球＋満塁）。対象走者の到達見込みが二塁封殺より
+  低い（守備に有利）ときだけ選ぶ。ゲート不成立の大多数のケースは1バイトも変えない
+  （`ResolveDoublePlayAtSecond` は無改変のまま温存）
+- 新設: `HomePlayResolver.ThirdForceParams`/`HomeForceParams`、`BaserunningModel.ResolveDoublePlaySelfForce`、
+  `HomePlayContext.FielderRole`、`RunnerMove.SelfForceDoublePlayLead`（表示区別用）、係数7個
+  （`ThirdForceTagSeconds`等・`data/coefficients.yaml`と3点セット）
+- **実装中に発見・修正したバグ2件**: ①野選（打者一塁生存）成立時、既存の一塁走者カスケードが打者を
+  一塁から消す走者保存則違反（`RunnerConservationTests`が検出。後始末を「まだ元の走者がそこにいる
+  ときだけ」に絞って修正）／②本塁代替のゲートが二塁走者の在塁を要求しておらず、満塁でなくても
+  （二塁が空でも）発動しうる漏れ（`r3Forced`の定義に揃えて二塁走者も必須に修正）
+- 発動頻度実測（2000試合・平均的な能力同士）: 三塁代替は**約2試合に1回**（1022件中1021件成立）、
+  本塁代替は**約118試合に1回**（17件中17件成立）
+- Heavy実測: fast 2716／Heavy 72中71緑。唯一の残り＝`LowTierMatchups_StayWithinTargetBands(seed:42)`
+  の「自校の得点 vs D(50)」が2.995（帯下限3.0を0.005下回る）。**係数を試しに動かしても変化せず
+  （0.15で無反応・2.0という機能を無効化するレベルでようやく+0.03）、seed=42・4000試合では3.154、
+  他9シードは全て3.0〜3.31＝この特定シード・400試合というサンプルがたまたま境界に触れただけと判明**。
+  監督判断でノイズと認定・係数は0.00のまま据え置き、この1件の帯外は既知・許容として記録
+- 決定論ベースラインは200行中83行変化（意図した変更・`tools/regen-determinism-baseline.sh`で再生成済み）
+- 未着手: 表示層（`TimelineBuilder.AppendSelfForceDoublePlayThrows`新設・Unity実機確認）
+
+## Q30. BackgroundGameOp が戻らないと全操作が静かに死ぬ（見張りを置くか）（2026-08-14・「静かに詰まる」経路の棚卸しで発見）
 
 `BackgroundGameOp` は**同時1本の共有スロット**で、`Running` が立っている間は週送り
 （`HomeDashboardController` 145/223/482）・試合結果の「閉じる」（`MatchResultController` 203）・

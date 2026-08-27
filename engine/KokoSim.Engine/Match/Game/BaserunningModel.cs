@@ -1,6 +1,7 @@
 using System;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Players;
 
@@ -47,6 +48,15 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     /// 「満塁ゴロの本塁封殺」の3種のみ true にする（design-18 §4.5, issue #489）。
     /// </summary>
     public bool Force { get; init; }
+
+    /// <summary>
+    /// タイムライン表示専用（Q31）: この Out が併殺の「代替一段目」（三塁手/捕手/投手が自打球を自分で
+    /// ベースへ運んで封殺＝送球なし・中継〈ピボット〉なし）か。既存の「内野前進時の単独本塁封殺」
+    /// （<see cref="ApplyInPlayOut"/> の r3Forced×InfieldDepth.In 分岐）も同じ
+    /// FromBase=3/ToBase=4/Out=true/Force=true の形を作るため、後続（一塁への転送送球）が伴う併殺の絵か、
+    /// 単発の本塁封殺の絵かを <c>Force</c> フラグだけでは区別できない。乱数不使用・判定不変。
+    /// </summary>
+    public bool SelfForceDoublePlayLead { get; init; }
 
     /// <summary>
     /// タイムライン表示専用（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 飛び出し（ライナー併殺の
@@ -522,8 +532,22 @@ public static class BaserunningModel
         var flyOut = home is { IsFly: true };
         if (r1 is not null && home is { IsFly: false, BatterToFirstSeconds: not null } dp)
         {
-            (extraOuts, batterSafeOnFc) = ResolveDoublePlay(bases, batter, r1, dp, coeff, rng, mv);
-            if (extraOuts > 0) r1 = null; // 二塁封殺成立＝一塁走者は塁上に残らない（分岐Aは extraOuts==0 で r1 温存）
+            DoublePlayForceTarget dpTarget;
+            (extraOuts, batterSafeOnFc, dpTarget) = ResolveDoublePlay(bases, batter, r1, r2, r3, dp, coeff, rng, mv);
+            if (extraOuts > 0)
+            {
+                // どの塁を攻めたかで空ける走者が違う（Q31）。二塁/三塁が空けば、後続の押し出し進塁
+                // カスケード（717行目〜）が既存のまま自動的に残りの走者を正しく進める＝特別扱い不要。
+                switch (dpTarget)
+                {
+                    case DoublePlayForceTarget.Second: r1 = null; break;
+                    case DoublePlayForceTarget.Third: r2 = null; break;
+                    case DoublePlayForceTarget.Home:
+                        r3 = null;
+                        homeOuts++; // 本塁クロスプレー憤死の統計参考値（603行目の単独本塁封殺と同じ計上先）
+                        break;
+                }
+            }
         }
         // 併殺（1塁走者あり, 従来テーブル。ゴロ／home無しだけ）。
         else if (r1 is not null && !flyOut && MathUtil.Chance(
@@ -753,7 +777,12 @@ public static class BaserunningModel
                 mv?.Add(new RunnerMove(r1, 1, 2, false)
                     { TagUpCatchAtSeconds = r1Forced ? null : flyTagUpCatchAt });
                 bases.Second = r1;
-                bases.First = null;
+                // 一塁の後始末は「まだ r1 自身が居るとき」だけ行う（Q31）。併殺の代替ルート
+                // （三塁/本塁の自己フォース）で野選（打者一塁生存）が成立すると、r1 は対象走者でない
+                // （生存し続けここへ来る）のに一塁には既に打者が立っている＝無条件で null にすると
+                // 打者を消してしまう（2026-08-27実測: 走者保存則違反で発覚）。既存の全経路では
+                // ここに来る時点で bases.First は必ず r1 自身のまま＝この条件は既存経路には無害。
+                if (ReferenceEquals(bases.First, r1)) bases.First = null;
             }
         }
 
@@ -867,6 +896,129 @@ public static class BaserunningModel
         bases.Second = null;
     }
 
+    /// <summary>どの塁を攻めて併殺を狙ったか（Q31・タイムライン/統計の分岐に使う）。</summary>
+    private enum DoublePlayForceTarget { Second, Third, Home }
+
+    /// <summary>
+    /// 併殺・野選を解く（Q31でディスパッチャ化）。既定は二塁封殺ルート（<see cref="ResolveDoublePlayAtSecond"/>、
+    /// 従来どおり1バイトも変えない）。二つの代替ゲートが成立するときだけ、対象走者の到達見込みを二塁封殺と
+    /// 比較し、代替のほうが守備に有利（生存確率が低い）なら代替（<see cref="ResolveDoublePlaySelfForce"/>）を選ぶ:
+    /// ①三塁手が自打球を処理＋二塁走者あり → 二塁走者を三塁で自己フォース（送球なし・中継なしで一塁へ転送）／
+    /// ②捕手/投手が自打球を処理＋三塁走者あり（満塁）→ 三塁走者を本塁で自己フォース。
+    /// ゲート不成立（大多数のケース）では <c>home.FielderRole</c> を1回比較するだけで即座に二塁封殺へ落ちる＝
+    /// 一塁走者のみ在塁シナリオの RNG 消費順・挙動は完全不変（帯不変の根拠）。
+    /// </summary>
+    /// <returns>(追加アウト数, 打者が野選で一塁生存したか, どの塁を攻めたか)。</returns>
+    private static (int ExtraOuts, bool BatterSafeOnFc, DoublePlayForceTarget Target) ResolveDoublePlay(
+        BaseState bases, Player batter, Player r1, Player? r2, Player? r3, HomePlayContext home,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+    {
+        var thirdCandidate = r2 is not null && home.FielderRole == FieldPosition.ThirdBase;
+        // 本塁のフォースは満塁（一・二・三塁とも占有）でなければ成立しない（r3Forced＝486行目付近と同じ定義）。
+        // 二塁が空いていれば三塁走者は押し出されない＝フォースでないので自己フォースの対象外。
+        var homeCandidate = r2 is not null && r3 is not null && home.FielderRole is FieldPosition.Catcher or FieldPosition.Pitcher;
+
+        if (!thirdCandidate && !homeCandidate)
+        {
+            var (eo, fc) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv);
+            return (eo, fc, DoublePlayForceTarget.Second);
+        }
+
+        var force2nd = HomePlayResolver.SecondForceParams(home.Field, coeff);
+        var delay = coeff.DoublePlayR1StartDelaySeconds;
+        var pR1Safe2nd = HomePlayResolver.SuccessProbability(r1, 1, home.Situation, home.Field, coeff, force2nd, delay);
+
+        if (thirdCandidate)
+        {
+            var force3rd = HomePlayResolver.ThirdForceParams(home.Field, coeff);
+            var pR2Safe3rd = HomePlayResolver.SuccessProbability(
+                r2!, 2, home.Situation, home.Field, coeff, force3rd, delay, transferSecondsOverride: 0.0);
+            if (pR2Safe3rd < pR1Safe2nd)
+            {
+                var (eo, fc) = ResolveDoublePlaySelfForce(
+                    bases, batter, leadRunner: r2!, leadFromBase: 2, home, force3rd, delay, coeff, rng, mv);
+                return (eo, fc, DoublePlayForceTarget.Third);
+            }
+        }
+        if (homeCandidate)
+        {
+            var forceHome = HomePlayResolver.HomeForceParams(coeff);
+            var pR3SafeHome = HomePlayResolver.SuccessProbability(
+                r3!, 3, home.Situation, home.Field, coeff, forceHome, delay, transferSecondsOverride: 0.0);
+            if (pR3SafeHome < pR1Safe2nd)
+            {
+                var (eo, fc) = ResolveDoublePlaySelfForce(
+                    bases, batter, leadRunner: r3!, leadFromBase: 3, home, forceHome, delay, coeff, rng, mv);
+                return (eo, fc, DoublePlayForceTarget.Home);
+            }
+        }
+
+        var (eo2, fc2) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv);
+        return (eo2, fc2, DoublePlayForceTarget.Second);
+    }
+
+    /// <summary>
+    /// 併殺の代替一段目（Q31）: 三塁手/捕手/投手が自打球を自分でベースへ運んで封殺（送球なし）→
+    /// そのまま自分の肩で一塁へ転送する（中継〈ピボット〉なし＝1回投げのみ）。ゲート
+    /// （<c>home.FielderRole</c> が実際にその塁を処理した野手であること）は呼び出し元
+    /// （<see cref="ResolveDoublePlay"/>）が既に確認済み。分岐構造は <see cref="ResolveDoublePlayAtSecond"/>
+    /// と同型（A-1/A-2は RNG非消費、成立時のみ1回消費）だが、二段目の起点・転送秒・タッチ秒は
+    /// 対象塁（三塁/本塁）固有の係数を使う。
+    /// </summary>
+    private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlaySelfForce(
+        BaseState bases, Player batter, Player leadRunner, int leadFromBase, HomePlayContext home,
+        HomePlayResolver.BasePlayParams force, double delay,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+    {
+        // A-1) 自己フォース自体が間に合わない（現実にはほぼ起きない＝呼び出し元の比較で既に二塁封殺より
+        // 有利と分かっているが、絶対的な間に合わなさは独立に見る）＝守備は諦め一塁を取る。RNG非消費。
+        var pLeadSafe = HomePlayResolver.SuccessProbability(
+            leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+        if (pLeadSafe > coeff.DoublePlayForceMaxRunnerSuccess) return (0, false);
+
+        // 二段目: 自己フォースした野手自身がそのまま一塁へ転送する（中継なし＝ピボット無し。issue⑦のような
+        // 「二塁カバーに実際に入った野手」探しは不要＝この野手自身が投げ手）。起点は処理点でなく対象塁
+        // （force.TargetPoint）、時刻はフォースした瞬間（=BallFieldedAtSeconds、握り替えは自己フォース専用の
+        // DoublePlaySelfForceRelayTransferSeconds＝中継を受けてから投げ返す DoublePlayPivotTransferSeconds とは別）。
+        var selfForceSituation = new HomePlaySituation(
+            force.TargetPoint, home.Situation.BallFieldedAtSeconds, home.Situation.OutfielderThrowSpeedMps,
+            home.Situation.OutfielderFielding);
+        var relayToFirst = HomePlayResolver
+            .ResolveThrowPath(selfForceSituation, home.Field.FirstBase, coeff,
+                transferSecondsOverride: coeff.DoublePlaySelfForceRelayTransferSeconds)
+            .ArriveAtSeconds + coeff.SecondForceTagSeconds; // 一塁のタッチは二塁封殺ルートと同軸
+        var batterMargin = relayToFirst - home.BatterToFirstSeconds!.Value + coeff.DoublePlayRelayBias;
+        var pBatterSafe = MathUtil.Clamp(
+            MathUtil.Logistic(batterMargin / coeff.DoublePlayRelayMarginScale), 0.01, 0.99);
+
+        // A-2) この代替の一塁転送が薄い＝仕掛けない（二塁封殺への再挑戦はしない＝v1の単純化。代替は
+        // 二塁より生存見込みが低いと分かった上で選ばれているため、二塁を試しても大差ない見込み）。RNG非消費。
+        if (1.0 - pBatterSafe < coeff.DoublePlayAttemptMinRelaySuccess) return (0, false);
+
+        // 自己フォースは成立（対象走者アウト）。際どさは表示のみ（RNG非消費）。
+        var leadMargin = HomePlayResolver.Margin(
+            leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+        var leadClose = Math.Abs(leadMargin) < coeff.CloseCallMarginSeconds;
+        mv?.Add(new RunnerMove(leadRunner, leadFromBase, force.TargetBase, Out: true)
+            { CloseCall = leadClose, Force = true, SelfForceDoublePlayLead = true });
+        if (leadFromBase == 2) bases.Second = null; else bases.Third = null;
+
+        if (MathUtil.Chance(pBatterSafe, rng))
+        {
+            // B) 野選: 代替を狙ったが打者が転送を上回って一塁生存。対象走者(r2/r3)は本塁封殺と違い r1
+            // 自身ではないので r1 は生存し続け、この先の一塁走者カスケード（ApplyInPlayOut）が
+            // 「r1 は一塁から出た」として bases.First の後始末を走らせる＝ここで打者を置いても、
+            // その後始末が対象を見ずに上書きすると打者が消える（2026-08-27実測: 走者保存則違反で発覚）。
+            // 後始末側を「まだ r1 自身が居るときだけクリアする」よう絞ったので、ここでは通常どおり
+            // 即座に置いてよい（ApplyWalk の bases.First=batter 直書き注意と同種の罠）。
+            bases.First = batter;
+            mv?.Add(new RunnerMove(batter, 0, 1, false));
+            return (1, true);
+        }
+        // C) 併殺: 打者も一塁でアウト（打者アウトは呼び出し側の battersOwnOut=1 が計上）。
+        return (1, false);
+    }
+
     /// <summary>
     /// 併殺・野選を「捕球点→二塁の封殺（P_force2）」と「二塁→一塁の転送」の二段レースで解く
     /// （Issue #369, 設計書12 §2）。#318 の <see cref="ResolveGrounderAdvance"/> と同型で、守備は幾何だけで
@@ -882,7 +1034,7 @@ public static class BaserunningModel
     /// 呼び出し前提: 一塁走者あり・ゴロ・home.BatterToFirstSeconds 非null。
     /// </summary>
     /// <returns>(追加アウト数, 打者が野選で一塁生存したか)。</returns>
-    private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlay(
+    private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlayAtSecond(
         BaseState bases, Player batter, Player r1, HomePlayContext home,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
     {

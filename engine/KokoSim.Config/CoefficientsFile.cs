@@ -798,6 +798,14 @@ public static class CoefficientsLoader
         public double DoublePlayPivotTransferSeconds { get; set; } = D.DoublePlayPivotTransferSeconds;
         public double DoublePlayRelayMarginScale { get; set; } = D.DoublePlayRelayMarginScale;
         public double DoublePlayRelayBias { get; set; } = D.DoublePlayRelayBias;
+        // 併殺の代替ルート（三塁/本塁の自己フォース, Q31）
+        public double ThirdForceTagSeconds { get; set; } = D.ThirdForceTagSeconds;
+        public double ThirdForceMarginScale { get; set; } = D.ThirdForceMarginScale;
+        public double ThirdForceSuccessBias { get; set; } = D.ThirdForceSuccessBias;
+        public double HomeForceTagSeconds { get; set; } = D.HomeForceTagSeconds;
+        public double HomeForceMarginScale { get; set; } = D.HomeForceMarginScale;
+        public double HomeForceSuccessBias { get; set; } = D.HomeForceSuccessBias;
+        public double DoublePlaySelfForceRelayTransferSeconds { get; set; } = D.DoublePlaySelfForceRelayTransferSeconds;
         // 犠飛のタッチアップ（Issue #90）
         public double TagUpMarginScale { get; set; } = D.TagUpMarginScale;
         public double TagUpSuccessBias { get; set; } = D.TagUpSuccessBias;
@@ -917,6 +925,13 @@ public static class CoefficientsLoader
             DoublePlayPivotTransferSeconds = DoublePlayPivotTransferSeconds,
             DoublePlayRelayMarginScale = DoublePlayRelayMarginScale,
             DoublePlayRelayBias = DoublePlayRelayBias,
+            ThirdForceTagSeconds = ThirdForceTagSeconds,
+            ThirdForceMarginScale = ThirdForceMarginScale,
+            ThirdForceSuccessBias = ThirdForceSuccessBias,
+            HomeForceTagSeconds = HomeForceTagSeconds,
+            HomeForceMarginScale = HomeForceMarginScale,
+            HomeForceSuccessBias = HomeForceSuccessBias,
+            DoublePlaySelfForceRelayTransferSeconds = DoublePlaySelfForceRelayTransferSeconds,
             TagUpMarginScale = TagUpMarginScale,
             TagUpSuccessBias = TagUpSuccessBias,
             TagUpThirdSuccessBias = TagUpThirdSuccessBias,

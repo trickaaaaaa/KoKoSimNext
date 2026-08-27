@@ -33,6 +33,10 @@ namespace KokoSim.Engine.Match.Game;
 /// （単体テスト等）＝ <see cref="BaserunningCoefficients.RelayThrowSpeedMps"/>（カットマン用の共通定数の
 /// 流用）へフォールバック。issue double-play-throw-pace-and-second-out-call ⑦（二塁手の地肩が併殺成立率に
 /// 無効だった）の是正。</param>
+/// <param name="FielderRole">この打球を処理した野手の守備位置（Q31）。併殺の代替ルート（三塁手が自打球→
+/// 三塁を自分で踏んでフォース／捕手・投手が自打球→本塁を自分で踏んでフォース）を検討してよいかの
+/// ゲートに使う。null＝呼び出し側が未対応（単体テスト等）＝ゲート不成立＝従来どおり常に二塁封殺
+/// （帯不変）。</param>
 public readonly record struct HomePlayContext(
     FieldGeometry Field,
     HomePlaySituation Situation,
@@ -43,4 +47,5 @@ public readonly record struct HomePlayContext(
     double? ThrowArriveSeconds = null,
     double? BatterToFirstSeconds = null,
     double DoublePlayPivotBonusSeconds = 0.0,
-    double? DoublePlayPivotArmMps = null);
+    double? DoublePlayPivotArmMps = null,
+    FieldPosition? FielderRole = null);

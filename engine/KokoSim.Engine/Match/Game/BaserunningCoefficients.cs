@@ -325,6 +325,31 @@ public sealed record BaserunningCoefficients
     /// 併殺打/試合と得点環境を Heavy 実測で校正するノブ（#318 の AdvanceSuccessBias と同役）。</summary>
     public double DoublePlayRelayBias { get; init; } = 0.00;
 
+    // === 併殺の代替ルート（三塁/本塁の自己フォース, Q31・issue double-play-throw-pace-and-second-out-call ⑩）===
+    // 一・二塁（三塁手が自打球）／満塁（捕手・投手が自打球）では、守備が二塁封殺でなく「自分でベースを踏んで
+    // フォース→一塁へ転送」を選ぶことがある（送球1本で完結＝中継〈ピボット〉が無い点が二塁封殺と違う）。
+    // 実際にその塁を処理した野手だけがこのルートを検討でき（BaserunningModel.ResolveDoublePlay のゲート）、
+    // 対象走者の到達見込みが二塁封殺より低い（＝守備に有利）ときだけ選ばれる。
+
+    /// <summary>三塁での自己フォースのタッチ/捕球[s]（<see cref="SecondForceTagSeconds"/> と同軸）。</summary>
+    public double ThirdForceTagSeconds { get; init; } = 0.10;
+    /// <summary>三塁での自己フォース margin→到達確率の logistic 幅[s]（<see cref="SecondForceMarginScale"/> と同軸）。</summary>
+    public double ThirdForceMarginScale { get; init; } = 0.45;
+    /// <summary>三塁での自己フォース 到達確率バイアス[s]（校正項。<see cref="ThirdParams"/> とは別＝
+    /// あちらは開けた進塁レース用の校正で意味が違う）。</summary>
+    public double ThirdForceSuccessBias { get; init; } = 0.00;
+    /// <summary>本塁での自己フォースのタッチ/捕球[s]（<see cref="SecondForceTagSeconds"/> と同軸）。</summary>
+    public double HomeForceTagSeconds { get; init; } = 0.10;
+    /// <summary>本塁での自己フォース margin→到達確率の logistic 幅[s]（<see cref="SecondForceMarginScale"/> と同軸）。</summary>
+    public double HomeForceMarginScale { get; init; } = 0.45;
+    /// <summary>本塁での自己フォース 到達確率バイアス[s]（校正項。<see cref="HomeSuccessBias"/> とは別＝
+    /// あちらは開けた本塁生還レース用の校正で意味が違う）。</summary>
+    public double HomeForceSuccessBias { get; init; } = 0.00;
+    /// <summary>自己フォース側の一塁への転送送球の握り替え[s]。既に塁上でボールを握っている野手がそのまま
+    /// 投げる動作＝中継を受けてから投げ返す <see cref="DoublePlayPivotTransferSeconds"/>（0.90）とは別物
+    /// （受け取り動作が無いぶん短い）。</summary>
+    public double DoublePlaySelfForceRelayTransferSeconds { get; init; } = 0.70;
+
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは走者の時計の起点が「捕球の瞬間」である点だけが本塁クロスプレーと異なる。走者は捕球時刻に
     // スタート（二次リードなし＝全塁間 27.4m を走る）、守備も同じ捕球時刻から送球する＝共通起点が捕球時刻。

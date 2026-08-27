@@ -62,6 +62,18 @@ public static class HomePlayResolver
     public static BasePlayParams SecondForceParams(FieldGeometry field, BaserunningCoefficients c)
         => new(2, field.SecondBase, c.SecondForceTagSeconds, c.SecondForceSuccessBias, c.SecondForceMarginScale);
 
+    /// <summary>三塁封殺レースの係数束（併殺の代替一段目＝二塁走者を三塁で自己フォース, Q31）。送球先は
+    /// 三塁ベース、タッチ/バイアス/幅は自己フォース固有（<see cref="ThirdParams"/> とは別＝あちらは開けた
+    /// 進塁レース用の校正で意味が違う）。TargetBase=3。</summary>
+    public static BasePlayParams ThirdForceParams(FieldGeometry field, BaserunningCoefficients c)
+        => new(3, field.ThirdBase, c.ThirdForceTagSeconds, c.ThirdForceSuccessBias, c.ThirdForceMarginScale);
+
+    /// <summary>本塁封殺レースの係数束（併殺の代替一段目＝三塁走者を本塁で自己フォース, Q31）。送球先は
+    /// 本塁、タッチ/バイアス/幅は自己フォース固有（<see cref="HomeParams"/> とは別＝あちらは開けた本塁生還
+    /// レース用の校正で意味が違う）。TargetBase=4。</summary>
+    public static BasePlayParams HomeForceParams(BaserunningCoefficients c)
+        => new(4, new Vector3D(0, 0, 0), c.HomeForceTagSeconds, c.HomeForceSuccessBias, c.HomeForceMarginScale);
+
     /// <summary>
     /// 塁上の走者の時計の文脈（Issue #316）。二次リードで前に出ており、走塁判断ぶんの反応遅延がある。
     /// 判定・表示ともこの文脈で <see cref="RunnerClock"/> を呼べば同じ時刻になる。
