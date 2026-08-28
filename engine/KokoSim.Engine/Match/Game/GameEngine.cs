@@ -165,9 +165,15 @@ public static class GameEngine
 
         // 試合限りの好不調（設計書02 §3.3b）: 試合開始時に全選手へ当日の揺らぎを付与。
         // 大半は微小・スパイクは十数試合に一度。事前に見えない（投げて/打って初めて分かる）。
-        var dayForm = SampleDayForms(awayTeam, homeTeam, ctx, rng);
+        // チームごとに別辞書で TeamState へ持たせる（issue dayform-dictionary-shared-across-teams）:
+        // SetPitchRecovery と同じ理由＝Player が値等価の record なので、1つの辞書へ merge すると
+        // 別校の選手が偶然全属性一致したとき同一キーに潰れかねない（校内は背番号が一意なので
+        // 同一チーム内では衝突しない）。
+        var (awayDayForm, homeDayForm) = SampleDayForms(awayTeam, homeTeam, ctx, rng);
+        away.SetDayForm(awayDayForm);
+        home.SetDayForm(homeDayForm);
 
-        var progress = new GameProgress(awayTeam, homeTeam, away, home, ctx, rng, dayForm);
+        var progress = new GameProgress(awayTeam, homeTeam, away, home, ctx, rng);
         if (scenarioStart is not null) ApplyScenarioStart(progress, scenarioStart);
         if (traceHeader is not null) ctx.TraceSink!.OnGameStart(traceHeader);
         return progress;
@@ -370,17 +376,23 @@ public static class GameEngine
     private static TacticsTally TallyOf(TeamState t)
         => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes);
 
-    /// <summary>打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。</summary>
-    private static Dictionary<Player, double> SampleDayForms(
+    /// <summary>
+    /// 打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。
+    /// チームごとに別辞書を返す（issue dayform-dictionary-shared-across-teams）＝
+    /// <see cref="TeamState.SetPitchRecovery"/> と同じ理由（値等価の <see cref="Player"/> record を
+    /// 1本の辞書へ merge すると別校の選手が偶然全属性一致したとき同一キーに潰れかねない）。
+    /// 抽選順は先攻→後攻で従来と1ビットも変えない。
+    /// </summary>
+    private static (Dictionary<Player, double> Away, Dictionary<Player, double> Home) SampleDayForms(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng)
     {
-        var map = new Dictionary<Player, double>();
         // ムラっけ（設計書10）は当日の出来の振れ幅を拡大。スキルなしは倍率1.0で従来と同一。
         double Sample(Player p) => Players.FormModel.SampleDayForm(
             rng, ctx.Form, SkillModel.DayFormVarianceFactor(p.Skills, ctx.Skills));
 
-        foreach (var team in new[] { awayTeam, homeTeam })
+        Dictionary<Player, double> SampleTeam(Team team)
         {
+            var map = new Dictionary<Player, double>();
             foreach (var p in team.BattingOrder) map[p] = Sample(p);
             // DH制の先発投手は打順外（設計書09 §6）なので個別にサンプリング。
             if (team.UsesDh && team.StartingPitcher is not null)
@@ -393,8 +405,10 @@ public static class GameEngine
             // 消費が増える別の変更なので、やるなら帯の張り直しを伴う独立した issue にする。
             foreach (var p in team.Reserves)
                 if (p.Position == Field.FieldPosition.Pitcher) map[p] = Sample(p);
+            return map;
         }
-        return map;
+
+        return (SampleTeam(awayTeam), SampleTeam(homeTeam));
     }
 
     private static IEnumerable<GameStep> PlayHalfSteps(
@@ -404,7 +418,6 @@ public static class GameEngine
         var ctx = p.Ctx;
         var rng = p.Rng;
         var log = p.Log;
-        var dayForm = p.DayForm;
         var inning = p.Inning; // 半イニングは単一イニング内で完結（p.Inning は Steps が進める）
 
         var bases = new BaseState();
@@ -687,9 +700,9 @@ public static class GameEngine
                     ctx.Batting.AbilityEffect.Pitcher(currentPitcher.Pitching), defense.FatiguePitches, fatigue,
                     defense.EffectiveBaseStamina(currentPitcher));
                 // 調子・当日の出来（設計書02 §3.3/§3.3b）。
-                pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, FormOf(dayForm, currentPitcher), ctx.Form);
+                pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, defense.DayFormOf(currentPitcher), ctx.Form);
                 // 表示→物理の効き（設計書21）は ToBatter の中＝ここが打者側の唯一の入口。
-                var bat = Players.FormModel.ApplyBatter(batter.ToBatter(ctx.Batting.AbilityEffect), batter.Condition, FormOf(dayForm, batter), ctx.Form);
+                var bat = Players.FormModel.ApplyBatter(batter.ToBatter(ctx.Batting.AbilityEffect), batter.Condition, offense.DayFormOf(batter), ctx.Form);
 
                 // スキル（設計書10）: 尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
                 var priorPa = offense.PriorPlateAppearances(batter);
@@ -2316,10 +2329,6 @@ public static class GameEngine
             team.CurrentLineup, team.Reserves);
     }
 
-    /// <summary>当日の出来を引く（途中出場等で未登録なら0=平常）。</summary>
-    private static double FormOf(Dictionary<Player, double> dayForm, Player p)
-        => dayForm.TryGetValue(p, out var v) ? v : 0.0;
-
     /// <summary>コールドゲーム（マーシールール）判定（設計書05 §1.3, OPEN-QUESTIONS Q18）。internal はテスト専用。</summary>
     internal static bool IsMercy(int inning, int away, int home)
     {
@@ -2363,7 +2372,6 @@ public sealed class GameProgress
     public TeamState Home { get; }
     public GameContext Ctx { get; }
     public IRandomSource Rng { get; }
-    public Dictionary<Player, double> DayForm { get; }
 
     /// <summary>現在のイニング（Steps が進める）。</summary>
     public int Inning { get; set; } = 1;
@@ -2402,7 +2410,7 @@ public sealed class GameProgress
     }
 
     public GameProgress(Team awayTeam, Team homeTeam, TeamState away, TeamState home,
-        GameContext ctx, IRandomSource rng, Dictionary<Player, double> dayForm)
+        GameContext ctx, IRandomSource rng)
     {
         AwayTeam = awayTeam;
         HomeTeam = homeTeam;
@@ -2410,7 +2418,6 @@ public sealed class GameProgress
         Home = home;
         Ctx = ctx;
         Rng = rng;
-        DayForm = dayForm;
     }
 
     /// <summary>攻撃側の TeamState（isTop=true なら先攻 away）。対話采配の適用先判定に使う。</summary>

@@ -759,6 +759,21 @@ public sealed class TeamState
         => _pitchRecovery is not null && _pitchRecovery.TryGetValue(pitcher, out var v)
             ? v : pitcher.Pitching.StaminaPitches;
 
+    // ===== 試合限りの好不調 dayForm（設計書02 §3.3b, issue dayform-dictionary-shared-across-teams） =====
+    private IReadOnlyDictionary<Player, double>? _dayForm;
+
+    /// <summary>
+    /// 当日の出来（<see cref="GameEngine.NewProgress"/> の抽選結果）を注入する。<see cref="_pitchRecovery"/>
+    /// と同じ理由でチームごとに別辞書にする＝ <see cref="Player"/> が値等価の record なので、両チームを
+    /// 1本の辞書へ merge すると別校の選手が偶然全属性一致したとき同一キーに潰れかねない
+    /// （校内は背番号が一意なので同一チーム内では衝突しない）。
+    /// </summary>
+    public void SetDayForm(IReadOnlyDictionary<Player, double> dayForm) => _dayForm = dayForm;
+
+    /// <summary>当日の出来を引く（途中出場等で未登録なら0=平常）。</summary>
+    public double DayFormOf(Player p)
+        => _dayForm is not null && _dayForm.TryGetValue(p, out var v) ? v : 0.0;
+
     /// <summary>球数を加算。staminaWeight はギア「飛ばす/流す」の消耗倍率（既定1.0＝Normal）。</summary>
     public void AddPitches(int pitches, double staminaWeight = 1.0)
     {
