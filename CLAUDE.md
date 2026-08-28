@@ -209,8 +209,8 @@ docs/design/                  # 設計書01〜07
 ## コマンド
 
 ```bash
-dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ（約30秒）
-dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約2分）
+dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ（約3分30秒・2026-08-29実測）
+dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約4分30秒・2026-08-29実測）
 dotnet test engine/ -c Release                               # 全テスト実行
 dotnet run --project engine/KokoSim.Balance -- \
   simulate --games 10000 --seed 42 --report out/report.md   # 一括シミュレーション＋統計レポート
