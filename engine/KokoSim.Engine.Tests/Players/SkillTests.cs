@@ -499,6 +499,50 @@ public sealed class SkillTests
         Assert.Equal(Enum.GetValues(typeof(Skill)).Length, catalog.Count);
     }
 
+    /// <summary>
+    /// issue skills-yaml-not-data-driven ①: <see cref="SkillGenerator.HiddenIneligible"/>（C#側の隠し不可表）が
+    /// data/skills.yaml の <c>hidden_eligible: false</c> と一致すること。<see cref="Skill.Monster"/>/
+    /// <see cref="Skill.SubmarineMastery"/> は TryAdd を経由しない特別枠なので比較から除く
+    /// （後者は yaml上 hidden_eligible: true とすでに不一致で、それ自体は追わない対象外）。
+    /// </summary>
+    [Fact]
+    public void SkillGenerator_HiddenIneligible_MatchesSkillsYaml()
+    {
+        var path = Engine.Tests.Balance.BalanceRegressionTests.FindDataFile("skills.yaml");
+        var catalog = KokoSim.Config.SkillsCatalogLoader.LoadFromFile(path);
+        var exempt = new HashSet<Skill> { Skill.Monster, Skill.SubmarineMastery };
+        var expected = catalog.Where(e => !e.HiddenEligible && !exempt.Contains(e.Id)).Select(e => e.Id).ToHashSet();
+
+        Assert.Equal(expected, SkillGenerator.HiddenIneligible);
+    }
+
+    /// <summary>
+    /// issue skills-yaml-not-data-driven ①: hidden_eligible: false のスキルは、HiddenShare を1.0
+    /// （必ず隠しを引く設定）にしても隠しへ入らない。修正前は一律22%の確率で隠しになっていた。
+    /// </summary>
+    [Fact]
+    public void Generate_HiddenIneligibleSkill_NeverBecomesHidden()
+    {
+        // HiddenShare=1.0（必ず隠しを引く）でも、カテゴリ適合確率(w依存)の抽選には落ちうるので
+        // w=0/1の両端×多シードで全プールを走査し、「一度でも付与されたら必ずvisible」を確認する。
+        var c = new SkillCoefficients { MaxSkillsPerPlayer = 99, CommonSkillProb = 1.0, HiddenShare = 1.0, MarqueeSkillProb = 0 };
+        var everVisible = new HashSet<Skill>();
+        var everHidden = new HashSet<Skill>();
+        foreach (var w in new[] { 0.0, 1.0 })
+            for (ulong seed = 0; seed < 50; seed++)
+            {
+                var set = SkillGenerator.Generate(pitcherWeight: w, leadership: 0, new Xoshiro256Random(seed), c);
+                foreach (var s in set.Visible) everVisible.Add(s);
+                foreach (var s in set.Hidden) everHidden.Add(s);
+            }
+
+        foreach (var s in SkillGenerator.HiddenIneligible)
+        {
+            Assert.DoesNotContain(s, everHidden);
+            Assert.Contains(s, everVisible); // 付与自体はされている（隠し行きが visible に回されたことの確認）
+        }
+    }
+
     [Fact]
     public void CoefficientsYaml_LoadsSkillEffects()
     {

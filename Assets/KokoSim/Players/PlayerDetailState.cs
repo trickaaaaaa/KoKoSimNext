@@ -279,7 +279,7 @@ namespace KokoSim.Unity.Players
             // 特殊能力（実データ。生成選手は未保有が多い＝空状態を正直に表示）。
             foreach (var sk in p.Skills.Visible)
             {
-                v.Skills.Add(new SkillInfo { Name = SkillJp(sk), Desc = SkillDesc(sk) });
+                v.Skills.Add(new SkillInfo { Name = SkillCatalogProvider.Name(sk), Desc = SkillCatalogProvider.Description(sk) });
             }
             v.HasSkills = v.Skills.Count > 0;
 
@@ -532,65 +532,6 @@ namespace KokoSim.Unity.Players
         }
 
         private static float ClampF(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
-
-
-        private static string SkillJp(Skill s)
-        {
-            switch (s)
-            {
-                case Skill.SlowStarterBat: return "スロースターター（打）";
-                case Skill.Streaky: return "ムラっ気";
-                case Skill.SprayHitter: return "広角打法";
-                case Skill.FirstPitchSwinger: return "初球打ち";
-                case Skill.Grinder: return "粘り打ち";
-                case Skill.SlowStarterPitch: return "スロースターター（投）";
-                case Skill.SecondTimeThrough: return "二巡目注意";
-                case Skill.EffectivelyWild: return "荒れ球";
-                case Skill.DeceptiveBall: return "打たれ強い球質";
-                case Skill.DoublePlayArtist: return "併殺職人";
-                case Skill.MasterCatcher: return "扇の要";
-                case Skill.Moodmaker: return "ムードメーカー";
-                case Skill.SpiritualPillar: return "精神的支柱";
-                case Skill.PracticeLeader: return "練習リーダー";
-                case Skill.RoleModel: return "手本";
-                case Skill.Diligent: return "勤勉";
-                case Skill.Lazy: return "怠け癖";
-                case Skill.Durable: return "頑健";
-                case Skill.InjuryProne: return "故障持ち";
-                case Skill.Monster: return "怪物";
-                case Skill.SubmarineMastery: return "アンダースロー";
-                default: return s.ToString();
-            }
-        }
-
-        private static string SkillDesc(Skill s)
-        {
-            switch (s)
-            {
-                case Skill.SlowStarterBat: return "序盤の打席は本調子でない。回を追うごとにミートが上がる。";
-                case Skill.Streaky: return "好不調の波が大きく、成績の分散が広い。";
-                case Skill.SprayHitter: return "逆方向にも強い打球を飛ばせる。";
-                case Skill.FirstPitchSwinger: return "初球から積極的に振っていく。";
-                case Skill.Grinder: return "ファウルで粘り、四球・失投を引き出す。";
-                case Skill.SlowStarterPitch: return "立ち上がりが不安定。回を追うごとに制球が安定。";
-                case Skill.SecondTimeThrough: return "打線二巡目以降、球威・制球が落ちやすい。";
-                case Skill.EffectivelyWild: return "制球は甘いが的を絞らせない球威。";
-                case Skill.DeceptiveBall: return "見た目より打ちにくい球質。長打を抑える。";
-                case Skill.DoublePlayArtist: return "併殺を取る守備勘に優れる。";
-                case Skill.MasterCatcher: return "リード・盗塁阻止に長けた捕手。";
-                case Skill.Moodmaker: return "チームの士気を明るく保つ。";
-                case Skill.SpiritualPillar: return "主将適性。終盤・接戦での崩れに強い。";
-                case Skill.PracticeLeader: return "周囲の練習効率を底上げする。";
-                case Skill.RoleModel: return "下級生の手本となり成長を促す。";
-                case Skill.Diligent: return "練習の伸びが大きい。";
-                case Skill.Lazy: return "練習の伸びが小さい。";
-                case Skill.Durable: return "故障しにくい。";
-                case Skill.InjuryProne: return "故障しやすい。";
-                case Skill.Monster: return "全能力に補正がかかる規格外の逸材。";
-                case Skill.SubmarineMastery: return "アンダースローで独特の軌道を投げる。";
-                default: return "";
-            }
-        }
     }
 
     /// <summary>一覧→詳細の選手選択を受け渡す（安定 index）。</summary>
