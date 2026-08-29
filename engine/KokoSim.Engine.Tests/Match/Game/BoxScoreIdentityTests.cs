@@ -101,6 +101,35 @@ public sealed class BoxScoreIdentityTests
         Assert.Equal(2, Assert.Single(lines, l => l.Name == starter.Name).PlateAppearances);
     }
 
+    /// <summary>
+    /// 野手登板（issue #209 Phase C）後に <see cref="TeamState.LivePitcherLine"/> を呼ぶと、
+    /// 昇格した投手（守備位置を書き換えた新インスタンス）の成績が積まれている。
+    /// <see cref="TeamState.CurrentPitcher"/> は Rekey 後の実体、<see cref="TeamState.RecordPitching"/> は
+    /// <c>KeyOf</c> で元の実体へ積むため、<c>LivePitcherLine</c> 側が生の <c>CurrentPitcher</c> で
+    /// 素引きすると常に空（球数・奪三振・失点が0のまま）になっていた不具合の回帰テスト。
+    /// </summary>
+    [Fact]
+    public void 野手登板後のLivePitcherLineに球数と奪三振が積まれる()
+    {
+        var state = new TeamState(MakeTeam());
+        var lf = state.CurrentLineup[LeftSlot];
+
+        // 控えが居ないので在フィールドの野手が登板する（RelieveWithがPromoteFielderToMoundへ倒れる）。
+        Assert.True(state.RelieveWith(lf));
+        Assert.Equal(lf.Name, state.CurrentPitcher.Name);
+
+        state.RecordPitching(state.CurrentPitcher, PlateAppearanceResult.Strikeout, runs: 0, outs: 1, pitches: 5);
+        state.RecordPitching(state.CurrentPitcher, PlateAppearanceResult.Single, runs: 1, outs: 0, pitches: 3, unearnedRuns: 0);
+
+        var live = state.LivePitcherLine();
+        Assert.Equal(lf.Name, live.Name);
+        Assert.Equal(8, live.Pitches);
+        Assert.Equal(1, live.Outs);
+        Assert.Equal(1, live.StrikeOuts);
+        Assert.Equal(1, live.Runs);
+        Assert.Equal(1, live.EarnedRuns);
+    }
+
     /// <summary>失策も同一人物へ寄る（守備位置をまたいでも1行・合計は チーム失策と一致）。</summary>
     [Fact]
     public void 守備位置をまたいだ失策は1行にまとまる()

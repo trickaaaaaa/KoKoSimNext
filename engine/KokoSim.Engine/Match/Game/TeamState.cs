@@ -405,7 +405,7 @@ public sealed class TeamState
     public LivePitcherToday LivePitcherLine(int pendingPitches = 0)
     {
         var p = CurrentPitcher;
-        var a = _pit.TryGetValue(p, out var acc) ? acc : null;
+        var a = _pit.TryGetValue(KeyOf(p), out var acc) ? acc : null;
         return new LivePitcherToday(
             p.SourceId, p.UniformNumber, p.Name, p.Throws,
             a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
@@ -438,7 +438,7 @@ public sealed class TeamState
         foreach (var p in _reserves)
         {
             if (p.Position != FieldPosition.Pitcher) continue;
-            var a = _pit.TryGetValue(p, out var acc) ? acc : null;
+            var a = _pit.TryGetValue(KeyOf(p), out var acc) ? acc : null;
             list.Add(new LivePitcherToday(
                 p.SourceId, p.UniformNumber, p.Name, p.Throws,
                 a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
