@@ -723,11 +723,13 @@ namespace KokoSim.Unity.Lineup
             }
             if (hasPitching)
             {
+                // 勝敗投手は概念ごと撤去（高校野球では主役でない・監督判断2026-08-27）。
+                // 4指標を RecordRoom.PitchingCategories（記録タブの投手部門）と同じ顔ぶれに揃える。
                 return new List<StatMetric>
                 {
                     EraMetric(),
-                    new StatMetric { Label = "勝敗", Value = s => s?.Pitching is { Games: > 0 } q
-                        ? q.Wins + "勝" + q.Losses + "敗" : "—" },
+                    new StatMetric { Label = "WHIP", Value = s => s?.Pitching is { Outs: > 0 } q
+                        ? q.Whip.ToString("0.00") : "—" },
                     StrikeOutsMetric(),
                     new StatMetric { Label = "投球回", Value = s => s?.Pitching is { Outs: > 0 } q
                         ? q.InningsText : "—" },

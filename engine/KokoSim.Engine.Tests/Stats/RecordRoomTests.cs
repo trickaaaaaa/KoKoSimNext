@@ -40,8 +40,8 @@ public sealed class RecordRoomTests
     private static RecordCandidate Pitcher(int id, int year, int games, int outs, int hits, int er, int k = 0)
     {
         var c = new RecordCandidate { PlayerId = id, Year = year };
-        c.Pitching.Add(Pit(outs, hits, er, k, id: id), started: true, win: false, loss: false);
-        for (var i = 1; i < games; i++) c.Pitching.Add(Pit(0, 0, 0, id: id), started: false, win: false, loss: false);
+        c.Pitching.Add(Pit(outs, hits, er, k, id: id), started: true);
+        for (var i = 1; i < games; i++) c.Pitching.Add(Pit(0, 0, 0, id: id), started: false);
         return c;
     }
 

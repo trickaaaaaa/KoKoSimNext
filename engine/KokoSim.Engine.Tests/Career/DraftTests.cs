@@ -64,7 +64,7 @@ public sealed class DraftTests
     {
         var s = new PlayerStats(id);
         s.Pitching.Add(new PitchingLine("X", Outs: outs, BattersFaced: bf, Hits: hits, Runs: runs,
-            StrikeOuts: k, Walks: 0, Pitches: bf * 4, SourceId: id), started: true, win: false, loss: false);
+            StrikeOuts: k, Walks: 0, Pitches: bf * 4, SourceId: id), started: true);
         return s;
     }
 

@@ -144,15 +144,13 @@ namespace KokoSim.Unity.Shell
                 key: s => s.Batting.StolenBases,
                 text: s => s.Batting.StolenBases.ToString()));
 
-            // 投手。率系（防御率・WHIP）は規定投球回、数系（勝利・奪三振・投球回）は1以上。
+            // 投手。率系（防御率・WHIP）は規定投球回、数系（奪三振・投球回）は1以上。
+            // 勝敗投手は概念ごと撤去（高校野球では主役でない・監督判断2026-08-27）＝
+            // RecordRoom.PitchingCategories（記録タブの投手部門）と同じ顔ぶれに揃える。
             rows.Add(Build(book, names, "投手", "防御率", descending: false,
                 qualify: s => s.Pitching.Outs >= outsNeeded,
                 key: s => s.Pitching.Era,
                 text: s => s.Pitching.Era.ToString("0.00")));
-            rows.Add(Build(book, names, "投手", "勝利", descending: true,
-                qualify: s => s.Pitching.Wins > 0,
-                key: s => s.Pitching.Wins,
-                text: s => s.Pitching.Wins.ToString()));
             rows.Add(Build(book, names, "投手", "奪三振", descending: true,
                 qualify: s => s.Pitching.StrikeOuts > 0,
                 key: s => s.Pitching.StrikeOuts,

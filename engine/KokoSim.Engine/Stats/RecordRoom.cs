@@ -12,8 +12,8 @@ public enum RecordCategory
 {
     // 打撃
     Average, Hits, HomeRuns, Rbi, StolenBases, Obp, Ops,
-    // 投手
-    Era, Wins, StrikeOuts, InningsPitched, Whip,
+    // 投手（勝敗投手は概念ごと撤去＝高校野球では主役でない・監督判断2026-08-27）
+    Era, StrikeOuts, InningsPitched, Whip,
 }
 
 /// <summary>
@@ -77,7 +77,6 @@ public static class RecordRoom
         RecordCategory.Obp => "出塁率",
         RecordCategory.Ops => "OPS",
         RecordCategory.Era => "防御率",
-        RecordCategory.Wins => "勝利",
         RecordCategory.StrikeOuts => "奪三振",
         RecordCategory.InningsPitched => "投球回",
         RecordCategory.Whip => "WHIP",
@@ -87,7 +86,7 @@ public static class RecordRoom
     /// <summary>投手部門か（打撃部門と区別して区画見出しを出すため）。</summary>
     public static bool IsPitching(RecordCategory c) => c switch
     {
-        RecordCategory.Era or RecordCategory.Wins or RecordCategory.StrikeOuts
+        RecordCategory.Era or RecordCategory.StrikeOuts
             or RecordCategory.InningsPitched or RecordCategory.Whip => true,
         _ => false,
     };
@@ -107,7 +106,6 @@ public static class RecordRoom
         RecordCategory.Obp => x.Batting.Obp,
         RecordCategory.Ops => x.Batting.Ops,
         RecordCategory.Era => x.Pitching.Era,
-        RecordCategory.Wins => x.Pitching.Wins,
         RecordCategory.StrikeOuts => x.Pitching.StrikeOuts,
         RecordCategory.InningsPitched => x.Pitching.Outs,
         RecordCategory.Whip => x.Pitching.Whip,

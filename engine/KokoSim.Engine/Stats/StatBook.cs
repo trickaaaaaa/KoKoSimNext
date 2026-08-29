@@ -51,11 +51,8 @@ public sealed class StatBook
     /// <summary>セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。ID の枠を作って返す。</summary>
     internal PlayerStats GetOrCreate(int id) => For(id);
 
-    /// <summary>
-    /// 1試合ぶんを畳み込む。managerIsAway で自校が先攻/後攻どちらのボックススコアかを選ぶ。
-    /// winPid/losePid は勝敗投手の育成選手ID（<see cref="DecisionOfRecord"/> が算出, 該当なしは null）。
-    /// </summary>
-    public void FoldGame(GameResult r, bool managerIsAway, int? winPid, int? losePid)
+    /// <summary>1試合ぶんを畳み込む。managerIsAway で自校が先攻/後攻どちらのボックススコアかを選ぶ。</summary>
+    public void FoldGame(GameResult r, bool managerIsAway)
     {
         var batting = managerIsAway ? r.AwayBatting : r.HomeBatting;
         var pitching = managerIsAway ? r.AwayPitching : r.HomePitching;
@@ -64,12 +61,12 @@ public sealed class StatBook
         foreach (var line in batting)
             if (line.SourceId is int id) For(id).Batting.Add(line);
 
-        // 投手成績。登板順の先頭＝先発として GamesStarted を計上。勝敗は決定投手IDと一致するときのみ。
+        // 投手成績。登板順の先頭＝先発として GamesStarted を計上。
         for (var i = 0; i < pitching.Count; i++)
         {
             var line = pitching[i];
             if (line.SourceId is not int id) continue;
-            For(id).Pitching.Add(line, started: i == 0, win: winPid == id, loss: losePid == id);
+            For(id).Pitching.Add(line, started: i == 0);
         }
 
         foreach (var line in fielding)

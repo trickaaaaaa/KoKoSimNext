@@ -229,8 +229,6 @@ internal static class StatsSaves
         return new JsonObject()
             .Add("g", p.Games)
             .Add("gs", p.GamesStarted)
-            .Add("w", p.Wins)
-            .Add("l", p.Losses)
             .Add("outs", p.Outs)
             .Add("bf", p.BattersFaced)
             .Add("h", p.Hits)
@@ -244,10 +242,13 @@ internal static class StatsSaves
             .Add("byPitch", byPitch);
     }
 
+    // w/l（勝敗投手）は概念ごと撤去（監督判断2026-08-27）。旧セーブに残る "w"/"l" キーは読まずに無視する
+    // だけで済む（余分なキーがあるだけ）。SaveCodec.CurrentVersion は上げない＝キー削除だけなので
+    // 旧セーブの読み込み自体は壊れない（Migrate 側の対応も不要）。
     public static void RestorePitchingInto(PitchingStatLine target, JsonObject o)
     {
         target.Restore(
-            o.Int("g"), o.Int("gs"), o.Int("w"), o.Int("l"), o.Int("outs"), o.Int("bf"), o.Int("h"),
+            o.Int("g"), o.Int("gs"), o.Int("outs"), o.Int("bf"), o.Int("h"),
             o.Int("r"), o.Int("er"), o.Int("so"), o.Int("bb"), o.Int("hb"), o.Int("np"), o.Int("hra"));
         foreach (var v in o.Arr("byPitch").Items)
         {

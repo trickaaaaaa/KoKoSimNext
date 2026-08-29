@@ -93,8 +93,7 @@ public sealed class NationTournamentStats
     {
         lock (_gate)
         {
-            var (winPid, losePid) = DecisionOfRecord.Resolve(result, schoolIsAway);
-            BookFor(_prefQualifierBySchool, schoolId).FoldGame(result, schoolIsAway, winPid, losePid);
+            BookFor(_prefQualifierBySchool, schoolId).FoldGame(result, schoolIsAway);
         }
     }
 
@@ -122,8 +121,7 @@ public sealed class NationTournamentStats
     {
         lock (_gate)
         {
-            var (winPid, losePid) = DecisionOfRecord.Resolve(result, schoolIsAway);
-            BookFor(_regionalQualifierBySchool, schoolId).FoldGame(result, schoolIsAway, winPid, losePid);
+            BookFor(_regionalQualifierBySchool, schoolId).FoldGame(result, schoolIsAway);
         }
     }
 
@@ -167,8 +165,8 @@ public sealed class NationTournamentStats
     internal void ClearRegionalQualifier() { lock (_gate) _regionalQualifierBySchool.Clear(); }
 
     /// <summary>
-    /// 1試合ぶんを両校へ畳み込む。away=先攻校ID・home=後攻校ID。勝敗投手は各サイドで自動判定
-    /// （<see cref="DecisionOfRecord"/>）。相手校の生成選手も SourceId（校内ID）を持つので集計に乗る。
+    /// 1試合ぶんを両校へ畳み込む。away=先攻校ID・home=後攻校ID。相手校の生成選手も SourceId（校内ID）を
+    /// 持つので集計に乗る。
     /// </summary>
     public void FoldMatch(int awaySchoolId, int homeSchoolId, GameResult result)
     {
@@ -190,8 +188,7 @@ public sealed class NationTournamentStats
 
     private void Fold(int schoolId, GameResult result, bool schoolIsAway)
     {
-        var (winPid, losePid) = DecisionOfRecord.Resolve(result, schoolIsAway);
-        BookFor(_bySchool, schoolId).FoldGame(result, schoolIsAway, winPid, losePid);
-        BookFor(_careerBySchool, schoolId).FoldGame(result, schoolIsAway, winPid, losePid);
+        BookFor(_bySchool, schoolId).FoldGame(result, schoolIsAway);
+        BookFor(_careerBySchool, schoolId).FoldGame(result, schoolIsAway);
     }
 }

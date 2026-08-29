@@ -260,6 +260,9 @@ public static class SaveCodec
             if (!root.Has("lastRegionalPlacementIds")) root.Add("lastRegionalPlacementIds", new JsonArray());
             if (!root.Has("lastJinguChampionId")) root.Add("lastJinguChampionId", JsonNull.Instance);
         }
+        // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
+        // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
+        // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。
         return root;
     }
 

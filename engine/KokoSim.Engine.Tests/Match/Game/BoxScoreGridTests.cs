@@ -2,14 +2,13 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Game;
-using KokoSim.Engine.Stats;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Match.Game;
 
 /// <summary>
-/// 試合結果画面（Issue #13）の供給部品を検証する。
-/// 打席グリッド組み替え（BoxScoreGrid）と勝敗投手の添字判定（DecisionOfRecord）。いずれも表示専用の純関数。
+/// 試合結果画面（Issue #13）の供給部品を検証する。打席グリッド組み替え（BoxScoreGrid）。表示専用の純関数。
+/// 勝敗投手の添字判定（旧 DecisionOfRecord）は概念ごと撤去済み（監督判断2026-08-27）。
 /// </summary>
 public sealed class BoxScoreGridTests
 {
@@ -107,76 +106,5 @@ public sealed class BoxScoreGridTests
 
         Assert.Empty(rows);
         Assert.Equal(0, BoxScoreGrid.MaxPaIndex(rows));
-    }
-
-    // ── 勝敗投手（両校ぶんの添字） ──
-
-    private static PitchingLine Pl(string name, int outs, int? sourceId = null)
-        => new(name, outs, BattersFaced: 0, Hits: 0, Runs: 0, StrikeOuts: 0, Walks: 0, Pitches: 0, SourceId: sourceId);
-
-    private static GameResult Result(int awayRuns, int homeRuns,
-        IReadOnlyList<PitchingLine> awayPitching, IReadOnlyList<PitchingLine> homePitching)
-        => new()
-        {
-            AwayName = "A校", HomeName = "H校",
-            AwayRuns = awayRuns, HomeRuns = homeRuns,
-            InningsPlayed = 9, TotalPitches = 0, PitcherChanges = 0,
-            AwayPitching = awayPitching, HomePitching = homePitching,
-        };
-
-    [Fact]
-    public void ResolveIndices_HomeWin_MarksHomeStarterWin_AndAwayStarterLoss()
-    {
-        var r = Result(2, 5,
-            awayPitching: new[] { Pl("A1", 24), Pl("A2", 3) },
-            homePitching: new[] { Pl("H1", 27) });
-
-        var (awayWin, awayLose, homeWin, homeLose) = DecisionOfRecord.ResolveIndices(r);
-
-        Assert.Null(awayWin);
-        Assert.Equal(0, awayLose);
-        Assert.Equal(0, homeWin);
-        Assert.Null(homeLose);
-    }
-
-    [Fact]
-    public void ResolveIndices_ShortStart_GivesDecisionToLastPitcher()
-    {
-        // 先発1回(3アウト)で降板、2番手が8回＝先発は総アウトの半分未満 → 最終登板投手が勝ち投手。
-        var r = Result(7, 1,
-            awayPitching: new[] { Pl("A1", 3), Pl("A2", 24) },
-            homePitching: new[] { Pl("H1", 27) });
-
-        var (awayWin, awayLose, homeWin, homeLose) = DecisionOfRecord.ResolveIndices(r);
-
-        Assert.Equal(1, awayWin);
-        Assert.Null(awayLose);
-        Assert.Null(homeWin);
-        Assert.Equal(0, homeLose);
-    }
-
-    [Fact]
-    public void ResolveIndices_Tie_NoDecision()
-    {
-        var r = Result(3, 3,
-            awayPitching: new[] { Pl("A1", 27) },
-            homePitching: new[] { Pl("H1", 27) });
-
-        Assert.Equal((null, null, null, null), DecisionOfRecord.ResolveIndices(r));
-    }
-
-    [Fact]
-    public void ResolveIndices_MatchesSourceIdBasedResolve()
-    {
-        var r = Result(4, 2,
-            awayPitching: new[] { Pl("A1", 3, sourceId: 101), Pl("A2", 24, sourceId: 102) },
-            homePitching: new[] { Pl("H1", 27, sourceId: 201) });
-
-        var (awayWin, _, _, homeLose) = DecisionOfRecord.ResolveIndices(r);
-        var (winPid, _) = DecisionOfRecord.Resolve(r, managerIsAway: true);
-        var (_, losePid) = DecisionOfRecord.Resolve(r, managerIsAway: false);
-
-        Assert.Equal(r.AwayPitching[awayWin!.Value].SourceId, winPid);
-        Assert.Equal(r.HomePitching[homeLose!.Value].SourceId, losePid);
     }
 }

@@ -70,16 +70,15 @@ public sealed class PlayerStatStore
         => Archive.Archive(slot, CurrentTournament, playerInfo, year);
 
     /// <summary>
-    /// 1試合ぶんの詳細結果を各スコープへ畳み込む。勝敗投手は自動判定（<see cref="DecisionOfRecord"/>）。
+    /// 1試合ぶんの詳細結果を各スコープへ畳み込む。
     /// <paramref name="isOfficial"/>=false（練習試合）のときは通算スコープにだけ積み、
     /// 公式戦通算・今大会には積まない（設計: 練習試合は公式記録に残さない）。
     /// </summary>
     public void FoldGame(GameResult r, bool managerIsAway, bool isOfficial = true)
     {
-        var (winPid, losePid) = DecisionOfRecord.Resolve(r, managerIsAway);
-        Career.FoldGame(r, managerIsAway, winPid, losePid);
+        Career.FoldGame(r, managerIsAway);
         if (!isOfficial) return;
-        Official.FoldGame(r, managerIsAway, winPid, losePid);
-        CurrentTournament.FoldGame(r, managerIsAway, winPid, losePid);
+        Official.FoldGame(r, managerIsAway);
+        CurrentTournament.FoldGame(r, managerIsAway);
     }
 }

@@ -5,7 +5,8 @@ using KokoSim.Engine.Players;
 namespace KokoSim.Engine.Stats;
 
 /// <summary>
-/// 個人投手の累積成績（複数試合の集計）。1試合ぶんの <see cref="PitchingLine"/> ＋勝敗フラグを畳み込む。
+/// 個人投手の累積成績（複数試合の集計）。1試合ぶんの <see cref="PitchingLine"/> を畳み込む。
+/// 勝敗投手は概念ごと撤去（高校野球では主役でない・監督判断2026-08-27。旧 DecisionOfRecord）。
 /// 防御率は自責点ベース（issue #69。失策/失策連鎖で出塁・延命した走者の得点を除外する簡易規則。
 /// 詳細規則は docs/design/OPEN-QUESTIONS.md 未決E決定事項を参照）。失点ベースは <see cref="Ra"/> に残す。
 /// 純データ・決定論。
@@ -14,8 +15,6 @@ public sealed class PitchingStatLine
 {
     public int Games { get; private set; }
     public int GamesStarted { get; private set; }
-    public int Wins { get; private set; }
-    public int Losses { get; private set; }
     public int Outs { get; private set; }
     public int BattersFaced { get; private set; }
     public int Hits { get; private set; }
@@ -50,13 +49,11 @@ public sealed class PitchingStatLine
     /// <summary>奪三振率（9回換算, アウト0なら0）。</summary>
     public double KPer9 => Outs > 0 ? StrikeOuts * 27.0 / Outs : 0.0;
 
-    /// <summary>1試合ぶんを畳み込む（started＝先発, win/loss＝勝敗投手判定の結果）。</summary>
-    public void Add(PitchingLine l, bool started, bool win, bool loss)
+    /// <summary>1試合ぶんを畳み込む（started＝先発）。</summary>
+    public void Add(PitchingLine l, bool started)
     {
         Games++;
         if (started) GamesStarted++;
-        if (win) Wins++;
-        if (loss) Losses++;
         Outs += l.Outs;
         BattersFaced += l.BattersFaced;
         Hits += l.Hits;
@@ -77,8 +74,6 @@ public sealed class PitchingStatLine
     {
         Games += o.Games;
         GamesStarted += o.GamesStarted;
-        Wins += o.Wins;
-        Losses += o.Losses;
         Outs += o.Outs;
         BattersFaced += o.BattersFaced;
         Hits += o.Hits;
@@ -105,14 +100,12 @@ public sealed class PitchingStatLine
     /// セーブ復元専用（issue #507・<see cref="Saves.StatsSaves"/> だけが使う）。生カウンタを直接据える。
     /// 球種別内訳は <see cref="RestorePitchType"/> を続けて呼ぶ（引数順は書き出しと一致させる）。
     /// </summary>
-    internal void Restore(int games, int gamesStarted, int wins, int losses, int outs, int battersFaced,
+    internal void Restore(int games, int gamesStarted, int outs, int battersFaced,
         int hits, int runs, int earnedRuns, int strikeOuts, int walks, int hitBatters, int pitches,
         int homeRunsAllowed)
     {
         Games = games;
         GamesStarted = gamesStarted;
-        Wins = wins;
-        Losses = losses;
         Outs = outs;
         BattersFaced = battersFaced;
         Hits = hits;

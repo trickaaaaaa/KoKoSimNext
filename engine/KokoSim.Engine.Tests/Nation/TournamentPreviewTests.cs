@@ -194,7 +194,7 @@ public sealed class TournamentPreviewTests
                 new PitchingLine("エース", Outs: 27, BattersFaced: 30, Hits: 4, Runs: 1, StrikeOuts: 12,
                     Walks: 1, Pitches: 110, SourceId: 1, EarnedRuns: 1),
             },
-        }, managerIsAway: true, winPid: 1, losePid: null);
+        }, managerIsAway: true);
         return book;
     }
 

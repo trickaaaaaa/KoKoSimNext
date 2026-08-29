@@ -938,4 +938,44 @@ public sealed class SaveCodecTests
         Assert.Equal(3, header!.Value.Week);   // 他の項目は読めている（丸ごと失敗にしていない）
         Assert.Null(header.Value.SchoolName);
     }
+
+    // ===== 勝敗投手の概念撤去（issue remove-pitcher-win-loss-concept・2026-08-29） =====
+
+    /// <summary>
+    /// 新規セーブは投手成績に "w"/"l" キーを含まないこと（撤去の確認）。
+    /// </summary>
+    [Fact]
+    public void NewSave_PitchingJson_HasNoWinLossKeys()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.DoesNotContain("\"w\":", json);
+        Assert.DoesNotContain("\"l\":", json);
+    }
+
+    /// <summary>
+    /// 旧セーブ（投手成績に "w"/"l" が残っている）も読めること。版は上げていない＝キーが余分にあるだけで、
+    /// <see cref="Saves.StatsSaves.RestorePitchingInto"/> が読まずに無視する（`SaveCodec.Migrate` 側の対応は不要）。
+    /// </summary>
+    [Fact]
+    public void OldSave_WithPitchingWinLossKeys_StillLoads()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var json = SaveCodec.Serialize(state);
+
+        // "pit":{ の直後に旧セーブ由来の "w"/"l" を挿し込む（他のキーの値には触れない＝安全な注入）。
+        var pitMarker = "\"pit\":{";
+        var start = json.IndexOf(pitMarker, System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "投手成績（pit）が直列化されていない");
+        var insertAt = start + pitMarker.Length;
+        var withWinLoss = json.Substring(0, insertAt) + "\"w\":2,\"l\":1," + json.Substring(insertAt);
+
+        Assert.Contains("\"w\":2", withWinLoss);
+        Assert.Contains("\"l\":1", withWinLoss);
+        Assert.True(SaveCodec.TryDeserialize(withWinLoss, out var restored, out var err), err);
+
+        // w/l 以外の投手成績はそのまま復元される（余分なキーが無視されただけ）ことを確認する。
+        var expectedOuts = state.Stats.Career.Players.Values.First(p => p.Pitching.Games > 0).Pitching.Outs;
+        var restoredOuts = restored.Stats.Career.Players.Values.First(p => p.Pitching.Games > 0).Pitching.Outs;
+        Assert.Equal(expectedOuts, restoredOuts);
+    }
 }

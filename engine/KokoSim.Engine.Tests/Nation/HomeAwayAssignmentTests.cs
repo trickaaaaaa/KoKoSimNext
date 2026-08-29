@@ -3,7 +3,6 @@ using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Tournaments;
-using KokoSim.Engine.Stats;
 using Xunit;
 
 namespace KokoSim.Engine.Tests.Nation;
@@ -70,16 +69,7 @@ public sealed class HomeAwayAssignmentTests
         for (var i = 0; i < 200 && !found; i++)
         {
             var r = ResolveLikePlayerMatchResolver(managerIsAway: true, root.Fork((ulong)i));
-            if (r.InningsPlayed == 9 && r.HomeWon)
-            {
-                found = true;
-                // DecisionOfRecord 側でも自校（away）の敗戦として正しく処理できる（勝ち投手なし＝自校非該当）。
-                var (winPid, _) = DecisionOfRecord.Resolve(r, managerIsAway: true);
-                Assert.Null(winPid);
-                // 登板があれば負け投手の登板順インデックスが決まる（テスト用の合成選手は SourceId を持たないため
-                // Resolve の SourceId 解決ではなく DecisionIndex 自体で検証する）。
-                if (r.AwayPitching.Count > 0) Assert.NotNull(DecisionOfRecord.DecisionIndex(r.AwayPitching));
-            }
+            if (r.InningsPlayed == 9 && r.HomeWon) found = true;
         }
         Assert.True(found, "先攻(away)の自校が9回でサヨナラ負けする試合が1つも見つからなかった。");
     }
