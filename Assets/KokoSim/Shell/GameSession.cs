@@ -324,9 +324,16 @@ namespace KokoSim.Unity.Shell
         /// ホームも側画面のトップバーもここを読む＝書式を画面ごとに作らない単一ソース。
         /// </summary>
         public string DateSuffix =>
-            !InTournament
-                ? ""
-                : KindLabel(Kind) + " " + TournamentDate.Label(TournamentEntry.Schedule, Kind, TournamentDay);
+            !InTournament ? "" : KindLabel(Kind) + " " + TournamentDateLabel;
+
+        /// <summary>
+        /// 大会中の実月日そのもの（"7月13日"。大会名を含まない）。大会外は空文字。
+        /// <see cref="GameClock.Week"/> は大会中は進まず凍結する（週暦は大会内実日付を触らない・issue #583）ため、
+        /// 大会中の週表示（ScoreboardStrip の週マス）はこちらを使う＝週マスが凍結週と実日付で食い違わないようにする
+        /// （大会日程と実際の日程が合っていないように見えるバグの修正）。
+        /// </summary>
+        public string TournamentDateLabel =>
+            !InTournament ? "" : TournamentDate.Label(TournamentEntry.Schedule, Kind, TournamentDay);
 
         /// <summary>大会種別の短い呼び名（小書き用）。</summary>
         private static string KindLabel(TournamentKind kind)
