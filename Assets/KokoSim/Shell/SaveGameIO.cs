@@ -132,6 +132,7 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void ResetForNewGame()
         {
+            GameSeed.RerollForNewGame();
             RosterService.Reset();
             ManagerService.Reset();
             NationService.Reset();

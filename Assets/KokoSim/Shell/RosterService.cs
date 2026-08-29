@@ -31,6 +31,9 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public const int NewSchoolIntake = 10;
 
+        /// <summary>新規ゲーム開始のたびの新設校ロスター生成に使う決定論ストリームの識別子（<see cref="GameSeed.Master"/> と混合）。</summary>
+        private const ulong NewSchoolRosterStream = 0x4E53_0000UL;
+
         /// <summary>転任のたびの新規ロスター生成に使う決定論ストリームの識別子（<see cref="GameSeed.Master"/> と混合）。</summary>
         private const ulong TransferRosterStream = 0x558B_0000UL;
 
@@ -156,12 +159,20 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 新設校として作り直す（issue #585）。次アクセスの生成が「1年生 <see cref="NewSchoolIntake"/> 人だけ」になる。
-        /// 新規ゲーム設定の確定から呼ぶ。<see cref="Reset"/> と違いモードを立てる点だけが違う。
+        /// 新規ゲーム設定の確定から呼ぶ。
+        ///
+        /// <para>
+        /// シードは <see cref="GameSeed.Master"/> 由来にする（2026-08-29 ユーザー指摘で修正）。<see cref="DefaultSeed"/>
+        /// 固定のままだと「最初から」を選ぶたびに<b>毎回同じ新入生10人</b>になっていた（<see cref="Reset"/> が既定シードへ
+        /// 戻すだけで、新規ゲームであることを新入生生成へ反映していなかった）。<see cref="GameSeed.Master"/> は
+        /// プロセス起動ごとに変わる（<see cref="GameSeed"/>）ので、これを混ぜることで新規ゲームのたびに新入生が変わる。
+        /// </para>
         /// </summary>
         public static void ResetAsNewSchool()
         {
             Reset();
             _newSchool = true;
+            _rosterSeed = GameSeed.Master ^ NewSchoolRosterStream;
         }
 
         /// <summary>
