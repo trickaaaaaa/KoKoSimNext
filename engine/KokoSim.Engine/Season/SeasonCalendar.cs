@@ -28,6 +28,12 @@ public enum TournamentKind
     Jingu,
     /// <summary>春のセンバツ本戦（32代表校の全国大会）。地区大会の順位＋神宮枠で出場が決まる。</summary>
     SenbatsuKoshien,
+    /// <summary>
+    /// 秋季地区予選（神奈川4地区・兵庫5地区・愛知5地区・北海道10支部等、地理固定割の県だけ）。
+    /// 地区代表が <see cref="Autumn"/>（秋季県大会）へ進む。地区データを持たない県はこの種別を経由せず
+    /// 直接 <see cref="Autumn"/> から始まる（design-05 §1.5, issue autumn-district-tournament-not-wired）。
+    /// </summary>
+    AutumnDistrict,
 }
 
 /// <summary>

@@ -32,7 +32,8 @@ namespace KokoSim.Unity.Shell
         public static FieldGeometry For(TournamentKind kind, int? roundsRemaining, IRandomSource? rng)
             => kind switch
             {
-                TournamentKind.Summer or TournamentKind.Autumn => RegionalStadiumTier.For(roundsRemaining, rng),
+                TournamentKind.Summer or TournamentKind.Autumn or TournamentKind.AutumnDistrict
+                    => RegionalStadiumTier.For(roundsRemaining, rng),
                 _ => For(kind),
             };
 

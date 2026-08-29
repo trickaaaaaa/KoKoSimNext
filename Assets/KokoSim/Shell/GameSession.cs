@@ -278,6 +278,13 @@ namespace KokoSim.Unity.Shell
         public int? LastPrefChampionId { get; private set; }
 
         /// <summary>
+        /// 直近に終わった秋季地区予選の優勝校ID（＝秋季県大会の自地区代表）。null＝まだ地区予選の決勝が
+        /// 消化されていない、または自校の県が地区予選を持たない（<see cref="DistrictEntry"/> だけが読む
+        /// 中継値。<see cref="LastPrefChampionId"/> と同じ理由でセーブに載る・v20）。
+        /// </summary>
+        public int? LastDistrictChampionId { get; private set; }
+
+        /// <summary>
         /// 直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。
         /// null＝まだ決勝が消化されていない。<see cref="RegionalEntry"/> だけが読む中継値
         /// （<see cref="LastPrefChampionId"/> と同じ理由でセーブに載る・v19）。
@@ -686,6 +693,9 @@ namespace KokoSim.Unity.Shell
             // 自県の代表＝甲子園の出場校の1つ。ここが「夏の県大会の優勝校」を知る唯一の地点なので控える
             // （Runner は敗退確定と同時に null 化されるので、後から拾い直せない）。
             if (kind == TournamentKind.Summer) LastPrefChampionId = champion?.Id;
+            // 秋季地区予選の優勝校＝秋季県大会の自地区代表。自校の県が地区予選を持つ年だけここを通る
+            // （持たない県は DistrictEntry を経由せず TournamentEntry.Enter が直接 Autumn を開くため）。
+            if (kind == TournamentKind.AutumnDistrict) LastDistrictChampionId = champion?.Id;
             // 秋季県大会の順位＝地区大会の出場枠判定の材料。夏と違い優勝校だけでは足りない
             // （県によっては2〜3位も地区大会へ進む）ので、順位付きプレースメントを丸ごと控える。
             if (kind == TournamentKind.Autumn)
@@ -709,9 +719,13 @@ namespace KokoSim.Unity.Shell
             if (kind == TournamentKind.Jingu) LastJinguChampionId = champion?.Id;
             // 歴代大会結果は「自校の年度別の1行」なので、自校が1試合も出ていない大会は積まない
             // （積むと甲子園に出ていない年が毎年「不参加」の行で埋まる）。
+            // 秋季地区予選（AutumnDistrict）は積まない＝この直後に続く秋季県大会（Autumn）が
+            // 同じ季節の「本当の1行」を積む。地区予選ぶんまで積むと同じ秋に2行できてしまう
+            // （個人成績は Stats.FoldMatch 側で別途積まれるので、ここで捨てても打率等は失われない）。
             var managerPlayed = false;
             foreach (var m in matches) if (m.ManagerInvolved) { managerPlayed = true; break; }
-            if (managerPlayed) History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion);
+            if (managerPlayed && kind != TournamentKind.AutumnDistrict)
+                History.Fold(matches, kind, year, NationService.ManagerSchoolId, champion);
             // AI校の年次進化の材料（issue wire-ai-school-evolve-into-game）: 自県ブラケットの校別勝数を台帳へ。
             // 自校の勝ちも積まれるが Nation に自校は居ないので進化には効かない（自校の強さは共有ロスター由来）。
             NationService.YearLedger.AddMatches(matches);
@@ -819,7 +833,8 @@ namespace KokoSim.Unity.Shell
         {
             var slot = Kind switch
             {
-                TournamentKind.Autumn or TournamentKind.Regional or TournamentKind.Jingu => TournamentSlot.Autumn,
+                TournamentKind.AutumnDistrict or TournamentKind.Autumn or TournamentKind.Regional
+                    or TournamentKind.Jingu => TournamentSlot.Autumn,
                 TournamentKind.SummerKoshien => TournamentSlot.SummerKoshien,
                 TournamentKind.SenbatsuKoshien => TournamentSlot.Senbatsu,
                 _ => TournamentSlot.SummerPref,
@@ -859,6 +874,7 @@ namespace KokoSim.Unity.Shell
             // 大会連鎖の中継値（v19）。null は「未確定」の意味を持つので、空リストへ潰して保存し
             // Restore 側で null へ戻す（MyRegionPlacementIds の ?? フォールバックが効かなくなるため）。
             s.LastPrefChampionId = LastPrefChampionId;
+            s.LastDistrictChampionId = LastDistrictChampionId;
             s.LastAutumnPlacementIds = LastAutumnPlacementIds != null
                 ? new List<int>(LastAutumnPlacementIds) : new List<int>();
             s.LastRegionalChampionId = LastRegionalChampionId;
@@ -945,6 +961,7 @@ namespace KokoSim.Unity.Shell
             // 「地区大会の順位が無ければ県大会の順位を使う」フォールバックは ?? で書かれており、
             // 空リストのまま据えると「順位0件の地区大会があった」ことになって連鎖が切れる。
             LastPrefChampionId = s.LastPrefChampionId;
+            LastDistrictChampionId = s.LastDistrictChampionId;
             LastAutumnPlacementIds = s.LastAutumnPlacementIds != null && s.LastAutumnPlacementIds.Count > 0
                 ? new List<int>(s.LastAutumnPlacementIds) : null;
             LastRegionalChampionId = s.LastRegionalChampionId;
@@ -1010,6 +1027,7 @@ namespace KokoSim.Unity.Shell
             PendingSenbatsuFieldIds = new List<int>();
             PendingSenbatsuJinguRegion = "";
             LastPrefChampionId = null;
+            LastDistrictChampionId = null;
             LastAutumnPlacementIds = null;
             LastRegionalChampionId = null;
             LastRegionalPlacementIds = null;

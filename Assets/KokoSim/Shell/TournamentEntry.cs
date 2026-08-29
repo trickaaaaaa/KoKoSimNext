@@ -44,11 +44,21 @@ namespace KokoSim.Unity.Shell
             var region = kind == TournamentKind.Summer
                 ? SummerRegions.RegionFor(NationService.Nation.Prefectures, manager.PrefectureId, manager.DistrictId)
                 : (SummerRegion?)null;
-            var field = BuildField(manager, region);
+
+            // 秋は自校の県が地区予選を持つ（data/pref-formats/*.yaml に district_assignment: geographic）なら、
+            // 県大会でなく地区予選から始める（issue autumn-district-tournament-not-wired）。
+            // DistrictPlanProvider.AutumnDistrictsOf は東京の夏2択を混ぜない＝東京の秋はいきなり県大会のまま。
+            var autumnDistricts = kind == TournamentKind.Autumn
+                ? DistrictPlanProvider.AutumnDistrictsOf(manager.PrefectureId) : 0;
+            var actualKind = autumnDistricts > 0 ? TournamentKind.AutumnDistrict : kind;
+
+            var field = actualKind == TournamentKind.AutumnDistrict
+                ? BuildDistrictField(manager, manager.DistrictId ?? 0)
+                : BuildField(manager, region);
             var yearIndex = GameClock.YearIndex;
             var calendarYear = SeasonClock.SeasonBaseYear + (yearIndex - 1);
             // 大会シードは母種（プレイ毎に変動）＋年・種別で導出。同じ母種なら完全再現される（決定論は維持）。
-            var seed = TournamentSeed(kind, yearIndex);
+            var seed = TournamentSeed(actualKind, yearIndex);
 
             // 裏試合フルシム（#43）: 全国通算成績の今大会スコープをリセットし、自県の裏試合を永続ロスターの
             // GameEngine.Play で解決する resolver を用意する（成績を全国集計へ積む・敵AI采配を注入）。
@@ -67,10 +77,10 @@ namespace KokoSim.Unity.Shell
 
             // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
-                TournamentTitle(kind), new PlayerMatchResolver(), homeBg,
+                TournamentTitle(actualKind), new PlayerMatchResolver(), homeBg,
                 onBackgroundMatch: (awayId, homeId, g) => stats.FoldMatch(awayId, homeId, g));
             // field も渡す（大会展望が実際の出場校＝自校＋県内校を引くため）。
-            GameSession.Current.EnterTournament(kind, TournamentTitle(kind), runner, field);
+            GameSession.Current.EnterTournament(actualKind, TournamentTitle(actualKind), runner, field);
             GameSession.Current.Year = yearIndex;
 
             // 他県（全国46〜48県）の裏試合をバックグラウンドでフルシム（自県の区画は上の runner が
@@ -131,8 +141,9 @@ namespace KokoSim.Unity.Shell
             => TournamentSeed(TournamentKind.Summer, yearIndex);
 
         /// <summary>大会シード（母種＋年＋種別）。<see cref="Enter"/> の進行体と
-        /// <see cref="SummerBackgroundSeed"/> の唯一の出どころ。</summary>
-        private static ulong TournamentSeed(TournamentKind kind, int yearIndex)
+        /// <see cref="SummerBackgroundSeed"/> の唯一の出どころ。地区予選から続く秋季県大会
+        /// （<see cref="DistrictEntry"/>）も同じ式を使うため internal。</summary>
+        internal static ulong TournamentSeed(TournamentKind kind, int yearIndex)
             => GameSeed.Master ^ (ulong)(9000 + yearIndex * 10 + (int)kind);
 
         /// <summary>
@@ -177,8 +188,8 @@ namespace KokoSim.Unity.Shell
             // 同じ結果を読むため。**待たない**のが要点で、通常経路（Enter）も大会入場時に背景起動して
             // 待つのは県大会が終わる瞬間の EnsureCompleted() だけ。復帰時点ではまだ試合が残っているので、
             // 試合を1つ消化する間に終わる＝ロード時間は伸びない（47県で実測80ms）。
-            if (t.Kind == TournamentKind.Autumn || t.Kind == TournamentKind.Regional
-                || t.Kind == TournamentKind.Jingu)
+            if (t.Kind == TournamentKind.AutumnDistrict || t.Kind == TournamentKind.Autumn
+                || t.Kind == TournamentKind.Regional || t.Kind == TournamentKind.Jingu)
             {
                 if (!AutumnBackgroundSim.HasResultsFor(AutumnBackgroundSeed(yearIndex)))
                     StartAutumnBackgroundSim(yearIndex, calendarYear, stats, brains, collectGarbage: false);
@@ -226,9 +237,9 @@ namespace KokoSim.Unity.Shell
         {
             var year = SeasonClock.SeasonBaseYear + (GameClock.YearIndex - 1);
             var pref = NationService.PrefectureId;
-            return kind == TournamentKind.Summer
-                ? year + "年 選手権" + PrefectureNames.ShortOf(pref) + "大会"
-                : year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "大会";
+            if (kind == TournamentKind.Summer) return year + "年 選手権" + PrefectureNames.ShortOf(pref) + "大会";
+            if (kind == TournamentKind.AutumnDistrict) return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "地区予選";
+            return year + "年 秋季" + PrefectureNames.JapaneseOf(pref) + "大会";
         }
 
         private static School BuildManagerSchool()
@@ -260,6 +271,22 @@ namespace KokoSim.Unity.Shell
             {
                 if (s.Id == manager.Id) continue;
                 field.Add(s);
+            }
+            return field;
+        }
+
+        /// <summary>
+        /// 秋季地区予選の出場校。自校の県内地区（<paramref name="districtId"/>）と同じ地区のAI校だけに絞る
+        /// （<see cref="BuildField"/> の地区版）。地区は <see cref="NationGenerator"/> が
+        /// <c>DistrictPlanProvider.Plan</c> の地区数から地理固定割で付与済み（設計書05 §2.2）。
+        /// </summary>
+        private static List<School> BuildDistrictField(School manager, int districtId)
+        {
+            var field = new List<School> { manager };
+            foreach (var s in NationService.PrefectureSchools)
+            {
+                if (s.Id == manager.Id) continue;
+                if (s.DistrictId == districtId) field.Add(s);
             }
             return field;
         }

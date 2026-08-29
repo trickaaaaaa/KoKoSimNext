@@ -18,6 +18,8 @@ public sealed class PrefFormatDistrictParserTests
     [InlineData("kanagawa.yaml", "kanagawa", 4)]   // 地区予選 group_split / groups:4（districts の名前は7個だが運用は4）
     [InlineData("hyogo.yaml", "hyogo", 5)]         // 地区予選 group_split / groups:5
     [InlineData("nara.yaml", "nara", 0)]           // district_assignment: none ＝ 県内地区なし
+    [InlineData("aichi.yaml", "aichi", 5)]         // 地区予選 group_split / groups:5
+    [InlineData("hokkaido.yaml", "hokkaido", 10)]  // 支部予選 group_split / groups:10（夏の南北分割とは別物）
     public void Parse_RealFiles(string file, string pref, int districts)
     {
         var text = File.ReadAllText(FindPrefFormat(file));
@@ -75,6 +77,8 @@ stages:
 
         Assert.Equal(4, plan[PrefectureNames.IdOf("kanagawa")]);
         Assert.Equal(5, plan[PrefectureNames.IdOf("hyogo")]);
+        Assert.Equal(5, plan[PrefectureNames.IdOf("aichi")]);
+        Assert.Equal(10, plan[PrefectureNames.IdOf("hokkaido")]);
         Assert.False(plan.ContainsKey(PrefectureNames.IdOf("nara")));   // 地区なしの県は載せない
     }
 

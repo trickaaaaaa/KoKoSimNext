@@ -178,6 +178,10 @@ public sealed class SaveState
     /// <summary>直近に終わった夏の県大会の優勝校ID（＝自県の甲子園代表）。null＝未確定。</summary>
     public int? LastPrefChampionId { get; set; }
 
+    /// <summary>直近に終わった秋季地区予選の優勝校ID（＝秋季県大会の自地区代表）。null＝未確定、
+    /// または自校の県が地区予選を持たない（そのときは秋季県大会が直接始まる）。</summary>
+    public int? LastDistrictChampionId { get; set; }
+
     /// <summary>直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。空＝未確定。</summary>
     public List<int> LastAutumnPlacementIds { get; set; } = new();
 

@@ -1,0 +1,30 @@
+# confidence: verified
+# 出典: 秋季北海道高等学校野球大会(Wikipedia), 全国高等学校野球選手権北北海道大会/南北海道大会(Wikipedia)
+# 型見本: 北海道だけの特殊型。秋季は10支部の地区予選(支部予選)→分割なしの単一「秋季全道大会」。
+#         夏の甲子園予選（北北海道/南北海道の完全独立2分割、engine/KokoSim.Engine/Nation/SummerRegions.cs）
+#         とは別物＝あちらは夏だけの区画、こちらは秋（と春）の支部予選。この district_assignment は
+#         季節をまたいで同じ学校の DistrictId（=支部番号0-9）を指す。SummerRegions.cs の北海道支部
+#         テーブルは、下の districts: と**同じ並び順**（0=札幌 .. 9=釧根）を前提にしている＝順序を
+#         変えるときは両方揃えること。
+pref: hokkaido
+snapshot_year: 2025
+region: hokkaido
+# 0=札幌 1=旭川 2=函館 3=室蘭 4=小樽 5=空知 6=名寄 7=北見 8=十勝 9=釧根
+# （北北海道＝旭川・名寄・釧根・十勝・北見・空知の6支部／南北海道＝札幌・函館・室蘭・小樽の4支部）
+districts: [札幌, 旭川, 函館, 室蘭, 小樽, 空知, 名寄, 北見, 十勝, 釧根]
+district_assignment: geographic
+regional_berths: 1
+seed_exemption: false
+stages:
+  - name: 支部予選
+    type: group_split
+    groups: 10
+    grouping: geographic
+    child:
+      type: knockout
+    advance_per_group: 1    # 支部代表1校が秋季全道大会へ（実在は支部内が複数ブロックだが簡略化）
+  - name: 秋季全道大会
+    type: knockout
+notes:
+  - 秋季全道大会は北北海道/南北海道に分かれない単一大会（夏の甲子園予選とは異なる。要出典を参照）
+  - advance_per_group=1 は本ゲームのAI生成県規模に合わせた簡略化

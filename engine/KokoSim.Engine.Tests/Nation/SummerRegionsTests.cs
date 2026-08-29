@@ -134,12 +134,20 @@ public sealed class SummerRegionsTests
         Assert.Null(region.Split);
     }
 
+    /// <summary>
+    /// 北海道は10支部（DistrictId 0-9）が正で、夏の南北はそこからの多対1写像で決まる
+    /// （支部が正・南北はそこから導出、design-05 §2.2）。範囲外・未設定は0番目（北北海道）に倒す。
+    /// 出典どおりの内訳: 北北海道＝旭川(1)・空知(5)・名寄(6)・北見(7)・十勝(8)・釧根(9)。
+    /// 南北海道＝札幌(0)・函館(2)・室蘭(3)・小樽(4)。
+    /// </summary>
     [Theory]
-    [InlineData(0, 0, "北北海道")]
-    [InlineData(1, 1, "南北海道")]
-    [InlineData(2, 0, "北北海道")]
-    [InlineData(null, 0, "北北海道")]   // 未設定（null）は0区画目に倒す
-    public void RegionFor_SplitPrefecture_UsesDistrictIdParity(int? districtId, int expectedSplit, string expectedName)
+    [InlineData(0, 1, "南北海道")]    // 札幌
+    [InlineData(1, 0, "北北海道")]    // 旭川
+    [InlineData(2, 1, "南北海道")]    // 函館
+    [InlineData(9, 0, "北北海道")]    // 釧根
+    [InlineData(99, 0, "北北海道")]   // 範囲外は0番目に倒す
+    [InlineData(null, 0, "北北海道")] // 未設定（null）は0番目に倒す
+    public void RegionFor_Hokkaido_UsesBranchLookup(int? districtId, int expectedSplit, string expectedName)
     {
         var prefs = MakeNation().Prefectures;
         var region = SummerRegions.RegionFor(prefs, prefectureId: 0, districtId);
@@ -148,13 +156,51 @@ public sealed class SummerRegionsTests
         Assert.Equal(expectedName, region.Name);
     }
 
+    /// <summary>東京は秋季側に地区データを持たないので、従来どおり DistrictId の偶奇で決める。</summary>
+    [Theory]
+    [InlineData(0, 0, "東東京")]
+    [InlineData(1, 1, "西東京")]
+    [InlineData(2, 0, "東東京")]
+    [InlineData(null, 0, "東東京")]
+    public void RegionFor_Tokyo_UsesDistrictIdParity(int? districtId, int expectedSplit, string expectedName)
+    {
+        var prefs = MakeNation().Prefectures;
+        var region = SummerRegions.RegionFor(prefs, prefectureId: 12, districtId);
+        Assert.Equal(12, region.PrefectureId);
+        Assert.Equal(expectedSplit, region.Split);
+        Assert.Equal(expectedName, region.Name);
+    }
+
+    /// <summary>
+    /// 新設校スタート（issue #585系）の地区選択向け。秋季側に地区データを持たない東京だけが2択を返す。
+    /// 北海道は秋季側（10支部・data/pref-formats/hokkaido.yaml）が正になったので空を返す
+    /// （<see cref="HokkaidoBranchNames_MatchesHokkaidoYamlOrder"/> 参照）。
+    /// </summary>
+    [Theory]
+    [InlineData(0, new string[0])]
+    [InlineData(12, new[] { "東東京", "西東京" })]
+    [InlineData(20, new string[0])]
+    public void SplitDistrictNames_OnlyTokyoHasTwoNamedDistricts(int prefectureId, string[] expected)
+    {
+        Assert.Equal(expected, SummerRegions.SplitDistrictNames(prefectureId));
+    }
+
+    /// <summary>北海道の支部名10件（DistrictId順）。data/pref-formats/hokkaido.yaml の districts: と同じ並び。</summary>
+    [Fact]
+    public void HokkaidoBranchNames_MatchesHokkaidoYamlOrder()
+    {
+        Assert.Equal(
+            new[] { "札幌", "旭川", "函館", "室蘭", "小樽", "空知", "名寄", "北見", "十勝", "釧根" },
+            SummerRegions.HokkaidoBranchNames);
+    }
+
     /// <summary>自校の区画（DistrictId基準）と、その区画の Entrants（Id偶奇基準）は独立に決まる。
     /// つまり自校は Entrants に含まれない＝呼び出し側（TournamentEntry.BuildField）が別途足す契約。</summary>
     [Fact]
     public void RegionFor_ManagerRegionEntrants_DoesNotIncludeTheManagerItself()
     {
         var nation = MakeNation();
-        var manager = new School { Id = -1, Name = "自校", PrefectureId = 0, DistrictId = 1, Strength = 50 };
+        var manager = new School { Id = -1, Name = "自校", PrefectureId = 0, DistrictId = 0, Strength = 50 };  // 0=札幌(南)
         var region = SummerRegions.RegionFor(nation.Prefectures, manager.PrefectureId, manager.DistrictId);
         Assert.Equal("南北海道", region.Name);
         Assert.DoesNotContain(SummerRegions.Entrants(nation, region), s => s.Id == manager.Id);

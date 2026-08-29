@@ -776,6 +776,10 @@ namespace KokoSim.Unity.Home
                 // 出場しない年は観るだけの甲子園が始まる（展望とトーナメント表は閲覧できる）。
                 KokoSim.Unity.Shell.KoshienEntry.EnterAfterPrefectureTournament(w.Kind);
 
+                // 秋季地区予選（神奈川・兵庫・愛知・北海道等）の直後は秋季県大会へ即座連鎖する
+                // （issue autumn-district-tournament-not-wired。夏の甲子園と同じ理由）。
+                KokoSim.Unity.Shell.DistrictEntry.EnterAfterDistrictTournament(w.Kind);
+
                 // 秋季県大会の直後は地区大会へ、地区大会の直後は明治神宮大会へ、それぞれ即座連鎖する
                 // （設計書05 §1.5b。夏の甲子園と同じ理由＝暦の開幕週を作らない）。神宮大会の直後は
                 // センバツ32校を確定して控えるだけ（実際の遷移は選考発表週＝GameClock 側のフック）。

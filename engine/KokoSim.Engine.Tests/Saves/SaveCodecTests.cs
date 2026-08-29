@@ -483,6 +483,7 @@ public sealed class SaveCodecTests
         state.LastRegionalChampionId = 3848;
         state.LastRegionalPlacementIds = new List<int> { 3848, -1 };
         state.LastJinguChampionId = 4200;
+        state.LastDistrictChampionId = -1;
         Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
 
         Assert.Equal(-1, s.LastPrefChampionId);
@@ -490,6 +491,7 @@ public sealed class SaveCodecTests
         Assert.Equal(3848, s.LastRegionalChampionId);
         Assert.Equal(new List<int> { 3848, -1 }, s.LastRegionalPlacementIds);
         Assert.Equal(4200, s.LastJinguChampionId);
+        Assert.Equal(-1, s.LastDistrictChampionId);
     }
 
     /// <summary>未確定（null）と「0件の順位」を取り違えない＝<c>MyRegionPlacementIds</c> の
@@ -505,6 +507,7 @@ public sealed class SaveCodecTests
         Assert.Null(s.LastRegionalChampionId);
         Assert.Empty(s.LastRegionalPlacementIds);
         Assert.Null(s.LastJinguChampionId);
+        Assert.Null(s.LastDistrictChampionId);
     }
 
     [Fact]
@@ -527,7 +530,24 @@ public sealed class SaveCodecTests
         Assert.Null(s.LastRegionalChampionId);
         Assert.Empty(s.LastRegionalPlacementIds);
         Assert.Null(s.LastJinguChampionId);
+        Assert.Null(s.LastDistrictChampionId);
         Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
+    [Fact]
+    public void V19Save_WithoutDistrictChampionId_StillLoads_AsUnset()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastPrefChampionId = -1;
+        state.LastDistrictChampionId = 3848;
+        var json = SaveCodec.Serialize(state)
+            .Replace(",\"lastDistrictChampionId\":3848", "")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":19");
+        Assert.DoesNotContain("\"lastDistrictChampionId\"", json);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(-1, s.LastPrefChampionId);   // 他の連鎖中継値は素通りで読めている
+        Assert.Null(s.LastDistrictChampionId);
     }
 
     // ===== センバツの地区大会成績（設計書05 §1.5b・v17） =====

@@ -132,7 +132,7 @@ namespace KokoSim.Unity.NewGame
                 if (has)
                 {
                     _district.choices = Enumerable.Range(0, districts)
-                        .Select(DistrictPlanProvider.DistrictLabel).ToList();
+                        .Select(d => DistrictPlanProvider.DistrictLabel(prefectureId, d)).ToList();
                     _district.index = 0;
                     _district.UnregisterValueChangedCallback(OnDistrictChanged);
                     _district.RegisterValueChangedCallback(OnDistrictChanged);
@@ -200,7 +200,7 @@ namespace KokoSim.Unity.NewGame
             {
                 var name = TypedName.Length == 0 ? "―" : TypedName + "高校";
                 var line = PrefectureNames.JapaneseOf(_prefectureId) + "　" + name;
-                if (_districtId is { } d) line += "　／　" + DistrictPlanProvider.DistrictLabel(d);
+                if (_districtId is { } d) line += "　／　" + DistrictPlanProvider.DistrictLabel(_prefectureId, d);
                 _summary.text = line;
             }
             _start?.SetEnabled(error.Length == 0);
