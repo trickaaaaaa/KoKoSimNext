@@ -47,7 +47,7 @@ namespace KokoSim.Unity.Saves
             _backBtn = Wire("ss-back", OnBack);
             if (_backBtn != null) _backBtn.style.display = _showBack ? DisplayStyle.Flex : DisplayStyle.None;
 
-            _selected = DefaultSlot();
+            _selected = DefaultSlot(_inGame);
             _errorText = "";
             Render();
         }
@@ -105,10 +105,21 @@ namespace KokoSim.Unity.Saves
             if (l != null) l.text = text;
         }
 
-        // 存在する最初のスロット（手動1〜3）を既定選択にする。タイトル側は SaveSlots.AnySaveExists()
-        // を確認してから遷移するため通常どれかは存在するが、無い場合も手動1へフォールバックして落ちない。
-        private static string DefaultSlot()
+        // ホーム/タブ経由（inGame）では、今プレイ中の学校のセーブがあればそれを既定選択にする
+        // （手動1固定でユーザーが毎回クリックし直す不満の解消）。無ければ／タイトル経由（学校の概念が
+        // まだ無い）は従来どおり「存在する最初のスロット」。タイトル側は SaveSlots.AnySaveExists() を
+        // 確認してから遷移するため通常どれかは存在するが、無い場合も手動1へフォールバックして落ちない。
+        private static string DefaultSlot(bool inGame)
         {
+            if (inGame)
+            {
+                var school = NationService.ManagerSchoolName;
+                foreach (var id in SaveSlots.AllSlotIds)
+                {
+                    var info = SaveSlots.ReadInfo(id);
+                    if (info.Exists && !info.Corrupt && info.SchoolName == school) return id;
+                }
+            }
             foreach (var id in SaveSlots.AllSlotIds)
                 if (SaveSlots.ReadInfo(id).Exists) return id;
             return SaveSlots.AllSlotIds[0];
@@ -314,7 +325,7 @@ namespace KokoSim.Unity.Saves
         {
             if (_confirm != null) _confirm.style.display = DisplayStyle.None;
             SaveSlots.Delete(_selected);
-            _selected = DefaultSlot();
+            _selected = DefaultSlot(_inGame);
             _errorText = "";
             Render();
         }
