@@ -805,7 +805,6 @@ public static class GameEngine
             // 一塁走者が投球と同時に走っていた（盗塁企図が打球で巻き戻された。issue #626）か。打球が空中で
             // 捕られると始動種別によらず飛び出しの勝負になる（issue fly-out-runner-dp-table-and-doubled-off-depiction）。
             var r1StealBreak = false;
-            var endrunOnLastPitch = brainHitAndRun; // 空振り三振でのスタート走者の憤死判定（下）に使う
 
             // 打順消費（設計書15 Phase D-2e）: 打席が実際に確定した時点まで遅らせる（下の squeezeAbandoned/
             // stealEndedHalf ガード直後）。ここでは進めない＝Peekのみでこの打者を握ったまま投球ループへ入る。
@@ -1238,13 +1237,19 @@ public static class GameEngine
                 if (manualGear is { } mg) gearOverride = mg;
 
                 // 手動の攻撃サイン（エンドラン）を毎球評価（issue #492 B）。無指示ならフィールド読み取りのみ
-                // ＝RNG非消費。brain のエンドラン（brainHitAndRun）は打席全体に効く既定として温存し、手動は
-                // 「押した次の1球」に効く（bases.First があるときだけ＝走者不在なら自然に無効）。
+                // ＝RNG非消費。ここは1球分の消費でしかないが、Unity側（MatchLiveController）が打席が
+                // 終わるまで毎球これを再予約し続けることで「1打席」持続する（design-09 §1.2）。
+                // brain・手動どちらも「いま一塁に走者がいるか」を毎球見直す＝打席途中の（独立の）盗塁企図
+                // で走者が抜けたら、以降の球は補正もスイング強制もかからない（brainHitAndRun は打席頭の
+                // 判断値のまま据え置くが、有効化の可否は毎球の bases.First で判定し直す）。
                 var manualEndrun = offense.ConsumePendingOffensiveSign() == OffensiveSign.HitAndRun;
-                var endrunThisPitch = brainHitAndRun || (manualEndrun && bases.First is not null);
-                endrunOnLastPitch = endrunThisPitch;
+                var endrunThisPitch = (brainHitAndRun || manualEndrun) && bases.First is not null;
                 r1Start = endrunThisPitch ? StartType.Contact : StartType.Normal;
                 r1StealBreak = false;
+                // 「打者は必ず当てにいく」（設計書09 §1）: 見送りを許さない強制スイング。squeeze/bunt・
+                // brain/手動の1球指示が既に何か決めていればそちらを優先し、無指示のときだけ埋める
+                // （既存のbuntSign既定と同じ「値がある時だけ上書き」の流儀）。
+                if (endrunThisPitch && battingOverride is null) battingOverride = PitchBattingOverride.ForceSwing;
 
                 // 実効打者能力とスイング頻度をこの球の状態（姿勢＋エンドラン）で組み直す（issue #492）。
                 // 無指示なら打席頭の値とビット単位で一致（BatterFor は同じ純関数・DecideSwing/ContactModel は
@@ -1332,6 +1337,31 @@ public static class GameEngine
                         r1Start = appliedStart;
                         r1StealBreak = true;   // stealStartApplied は二盗（一塁走者）でだけ立つ
                     }
+                }
+
+                // エンドランの空振り（設計書09 §1: 「空振り→走者憤死」）: 打席を終わらせるかに関わらず、
+                // スタートを切った一塁走者はこの球が空振りに終わるたび憤死の危機を負う（旧実装は「打席を
+                // 終わらせた最後の球が三振だった場合」だけを見ていたが、Fix Bで空振り自体が増えるため
+                // 2ストライク未満の途中の空振りも同じリスクを持たせる。盗塁ブロックと同じ「即座にoutsへ
+                // 計上しRecordRunnerOutで投球回へ計上、3死目なら半回を終える」idiomへ揃える）。
+                if (endrunThisPitch && bases.First is not null && session.LastPitchKind == AtBat.PitchKind.SwingingStrike)
+                {
+                    var caughtRunner = bases.First;
+                    var stealSafeProb = StealResolver.SuccessProbability(bases.First, defense.Catcher, paBaserunning)
+                            - ctx.Tactics.HitAndRunCaughtPenalty;
+                    var caughtSafe = bases.Second is null
+                        && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng);
+                    if (caughtSafe)
+                    {
+                        bases.Second = caughtRunner;
+                    }
+                    else
+                    {
+                        outs++;
+                        defense.RecordRunnerOut(currentPitcher);
+                    }
+                    bases.First = null;
+                    if (outs >= 3) { stealEndedHalf = true; break; }
                 }
 
                 // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
@@ -1643,29 +1673,14 @@ public static class GameEngine
             }
 
             // 打席前の塁状況を観測（塁ダイヤ／静止走者トークン用。追加記録のみ・判定不変, #3/#4）。
-            // エンドランの空振り（次のブロック）が bases を書き換える前に控える＝issue #534。
             var preFirst = bases.First is not null;
             var preSecond = bases.Second is not null;
             var preThird = bases.Third is not null;
 
-            // エンドランの空振り: スタートを切った一塁走者が憤死の危機（§1）。エンドランが効いたのが
-            // 打席を終わらせた最後の球か（endrunOnLastPitch）で判定する（issue #492: brain は打席全体・手動は
-            // その球だけに効くので、三振を喫した球でスタートを切っていたかを見る）。
-            var extraOutsFromSign = 0;
-            if (endrunOnLastPitch && bases.First is not null && res.Result == PlateAppearanceResult.Strikeout)
-            {
-                var stealSafeProb = StealResolver.SuccessProbability(bases.First, defense.Catcher, paBaserunning)
-                        - ctx.Tactics.HitAndRunCaughtPenalty;
-                if (bases.Second is null && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng))
-                {
-                    bases.Second = bases.First;
-                }
-                else
-                {
-                    extraOutsFromSign = 1;
-                }
-                bases.First = null;
-            }
+            // エンドランの空振り（憤死の危機。設計書09 §1）は投球ループ内（毎球）で判定・解決済み
+            // （上のブロック）。旧実装は「打席を終わらせた最後の球だけ」を特別扱いしてここで
+            // extraOutsFromSign へ積んでいたが、途中の空振りにも同じリスクを持たせたため
+            // 一般の outs++（RecordRunnerOut）へ統合し、ここでの二重判定は廃止した。
 
             // 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）: この打球の外野処理点・肩から
             // 送り判定＋時間の勝負で本塁生還を解く。幾何が無ければ null＝従来の確率テーブルへフォールバック。
@@ -2022,7 +2037,7 @@ public static class GameEngine
             }
 
             var batterOut = BaserunningModel.IsBatterOut(res.Result, batterSafeOnFc, droppedThirdStrikeReached);
-            var outsThisPa = (batterOut ? 1 : 0) + extraOuts + extraOutsFromSign;
+            var outsThisPa = (batterOut ? 1 : 0) + extraOuts;
 
             offense.HomePlayOuts += homeOuts; // 本塁クロスプレー憤死（F2外野＋G1内野ゴロ, 統計参考値）
             offense.ThirdPlayOuts += thirdOuts; // 単打の一塁→三塁レース憤死（Issue #89, 統計参考値）

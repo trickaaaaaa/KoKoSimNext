@@ -880,6 +880,8 @@ namespace KokoSim.Unity.Match
 
             if (result == AdvancePitchResult.PlateAppearance)
             {
+                // 打席が確定した＝「1打席」持続のエンドラン指示はここで解除する（design-09 §1.2）。
+                if (_signChoice != null) { _signChoice = null; _signPad?.ClearSelection("batting"); }
                 // 打席が確定した。<b>打席を終わらせた1球はここから描く</b>——インプレーの打球は確定して
                 // 初めて手に入る（BattedOf が _current.Play を読む）ので、順序は入れ替えられない。
                 _current = _prog.Current;
@@ -1506,12 +1508,15 @@ namespace KokoSim.Unity.Match
         }
 
         // ①の1手は消費後に自動解除（Q12-3: 次球は方針に復帰）。②の方針カードは点けたまま残す。
+        // エンドラン（_signChoice）だけは設計書09 §1.2の通り「1打席」効く指示なので、ここでは解除しない
+        // （2026-08-06 issue #492 でここに巻き込まれ「1球」に縮んでいた退行を修正。PA確定時に
+        // DispatchStep / ResolveAndReplayNext が明示的に解除する）。
         private void ResetPitchTacticsChoice()
         {
             _pitchBattingChoice = null;
-            _signChoice = null;
             _stealChoice = null;
-            _signPad?.ClearSelection("batting", "run");
+            if (_signChoice == null) _signPad?.ClearSelection("batting", "run");
+            else _signPad?.ClearSelection("run");
         }
 
         // ── 打席一括経路（撮影ハーネス＋1球供給が無い打席）──
@@ -1522,6 +1527,7 @@ namespace KokoSim.Unity.Match
         {
             PushPitchTacticsChoice();
             var advanced = _prog.Advance();
+            _signChoice = null;   // 一括経路は1回のAdvanceで打席全体を解決する＝エンドランもここで解除
             ResetPitchTacticsChoice();
             if (!advanced) { EndGame(_prog.BuildResult()); return; }
             _current = _prog.Current;
