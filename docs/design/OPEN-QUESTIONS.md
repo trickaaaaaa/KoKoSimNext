@@ -2,6 +2,98 @@
 
 実装で勝手に確定せず、ここに記録して相談する（CLAUDE.md「進め方」）。
 
+## Q32. バント解決モデルの拡張（4項目）を実装済み・係数は実測前の第一推定（2026-08-29・issue bunt-no-take-on-ball-pitches）
+
+**発端**: オーナーから「バントは見送れるべき／失敗はバント技術・コース・球威・走者の走力で決まるべきでは」との指摘。
+調査の結果、`BuntResolver` はボール球見送り不可・空振り率と小フライ率が完全固定値・犠打成功時の封殺が
+未実装・スクイズの三塁走者が未使用、という4点の欠落が判明（design-02 §4.3/§4.4の一部未実装）。
+オーナー確認（AskUserQuestion）で「4項目まとめて実装」「見送りは能力依存の確率見送り」
+「封殺解決はタイム勝負（物理層のレース方式）」を確定し、実装した。
+
+**実装**（`BuntResolver.cs`/`SqueezeResolver.cs`/`AtBatSession.cs`/`GameEngine.cs`/`TimelineBuilder.cs`）:
+1. ボール球見送り: `BuntResolver.TakeProbability`（ゾーン外距離×選球眼の一次式）。スクイズは対象外。
+2. 空振り率・小フライ率をバント技術・投手の反応球速・球威(`PitchPlan.Stuff`)に連動。成功率にコース補正
+   （`StrikeZone.EdgeProximity`）を追加（design-02 §4.3 の「コース補正」欠落項）。
+3. 一塁走者の封殺（`BuntResult.ForceOutAtSecond`）: 既存の`HomePlayResolver.SecondForceParams`
+   （Issue #369の二塁封殺と同じタッチ秒・バイアス・幅）をそのまま再利用したタイム勝負。守備は
+   「一塁送球 vs 二塁封殺」のうちアウトになりやすい方を選ぶ（`BaserunningModel.ResolveDoublePlay`と同型の
+   比較原則）。打者は一塁生存（野選相当・犠打扱いにしない＝AB算入・SH非算入）。
+4. スクイズの三塁走者スタート: `HomePlayResolver.HomeParams`を使った本塁レース（走塁判断＝Baserunningが
+   スタート遅延に、走力がスプリントに効く）。ボールが実際にプレーされた場合のみ発動、走塁判断が低いと
+   本塁で刺されうる（旧実装は無条件生還）。
+
+新設係数はすべて`BaserunningCoefficients`/`data/coefficients.yaml`/`CoefficientsFile.cs`の3点セットで揃えた
+（`Bunt*`プレフィックス多数＋`SqueezeThirdRunnerStartDelaySeconds`）。バント処理点（`BuntFieldedXM/ZM`等）は
+「誰が処理したか」を特定しない簡略化で、一塁封殺とスクイズ本塁判定が共有する。
+
+**実測**（seed 1-3・2000試合・`useTacticsBrain:true`）: 犠打成功率 70.4〜74.7%（旧来の目安「60-80%」の範囲内）。
+Heavy 74/74 緑（既存の得点/K%/BB%/HR%/盗塁系の帯は無傷）。決定論ベースラインは200行中30行変化
+（tactics/pitch-tactics カードのみ・`tools/regen-determinism-baseline.sh`で再生成済み）。
+
+**未決（要オーナー判断）**:
+1. **`balance-targets.yaml`に新指標（犠打時の一塁封殺率・スクイズの本塁封殺率）の帯をまだ追加していない**。
+   これらは全く新しい・未校正の挙動なので、実測値をそのまま帯として固定するのは時期尚早と判断し保留した。
+   固定するなら: `GameSimulation.cs`にカウンタを追加→実測→帯を決める、の順で別途対応する。
+2. **係数の初期値（`BuntFieldedXM/ZM`等）は実測に基づかない第一推定**。バント処理点をどこに置くか
+   （三塁側チャージ想定で X=-4.0, Z=8.0 とした）の妥当性は絵・体感で確認していない。プレイして
+   違和感があれば校正対象。
+3. **小フライ（PopOut）からのライナー併殺は今回のスコープ外**。design-09の「小フライ併殺」の一部は
+   依然未実装のまま（走者が早めにスタートを切っていたかを表す状態がバント経路に無い）。
+
+**追記（同日・オーナーからの追加指摘への対応、方針決定は監督委任）**: 「二塁走者、または1・2塁での
+三塁アウトのケースは？」という指摘で、上記実装が「一塁走者→二塁封殺」のみで二塁走者側の封殺が
+未実装だったことが判明。方針を監督委任され、以下を決めて実装した:
+- **1・2塁の真のフォースのみ対応**: `BuntResult.ForceOutAtThird`を新設。二塁走者単独（一塁が空）は
+  フォースが成立しない（タッチプレー相当）ため対象外＝現実の野球ルールに従いスコープを絞った
+  （タッチプレーの物理式は今回書かない）
+- **3択比較へ拡張**: `BuntResolver.Resolve`の守備選択を「一塁送球 vs 二塁封殺」の2択から
+  「一塁送球 vs 二塁封殺 vs 三塁封殺」の3択（最もアウトになりやすい一つを選ぶ・Q31と同じ比較原則）へ拡張。
+  三塁封殺は既存の`HomePlayResolver.ThirdForceParams`（Q31で確立済み）をそのまま使い、新しい走者物理式は
+  書いていない。新設係数はスタート遅延1個（`BuntForceR2StartDelaySeconds`、R1と同値0.15を第一推定として流用）
+- **満塁の本塁封殺は今回もスコープ外**（意図的に見送り）: 3塁走者がいる状態での送りバント試行は通常
+  スクイズに切り替わる稀なケースであり、範囲を絞って1回のセッションで検証可能な規模に留めた。
+  必要になれば同じ拡張パターン（`HomePlayResolver.HomeForceParams`・Q31で既に用意済み）で追加できる
+- スクイズ（`SqueezeResolver`）にも同様に`secondRunner`を配線＝1-2-3塁でのスクイズ失敗時、
+  二塁走者が三塁で封殺されるケースも自然に発生しうる（特別扱いしない）
+- 実装ファイル: `BuntResolver.cs`/`SqueezeResolver.cs`/`AtBatSession.cs`/`GameEngine.cs`/`TimelineBuilder.cs`。
+  新規テスト: `BuntResolverTests.cs`の2件（到達可能性・走力連動）、`BuntUnificationTests.cs`・
+  `SacrificeBuntStatsTests.cs`に各1件
+
+**追記2（同日・上記「未決」3件のうち3件を実装、監督選択でオーナー確定「4項目とも実装」）**:
+1. **満塁の本塁封殺**: `BuntResult.ForceOutAtHome`を新設。三塁封殺と同じ拡張パターン（既存の
+   `HomePlayResolver.HomeForceParams`＝Q31で用意済み・新係数はスタート遅延1個
+   `BuntForceR3StartDelaySeconds`のみ）で、守備の選択を「一塁送球/二塁封殺/三塁封殺/本塁封殺」の
+   4択へ拡張。スクイズ（`SqueezeResolver`）は三塁走者を別途独立に本塁レースで解くため、
+   内部で`BuntResolver.Resolve`を呼ぶ際は`thirdRunner`に常にnullを渡し二重判定を避けた。
+2. **`balance-targets.yaml`の新帯**（`games_10k_tactics.bunt_force_out_rate`/
+   `squeeze_runner_out_at_home_rate`）: 実測したところ標準の乱数シム（能力上限[20,88]のN(50,12)）では
+   封殺系2指標が30000試合回しても**一度も発生しなかった**（バント封殺0/14650試行、スクイズはボール
+   インプレー自体が0件）。発動に必要な速度差（打者速・走者遅）がこの分布ではほぼ生じないため。
+   オーナー判断で「厳密な発生率でなく、判定が暴走して毎回封殺になるような重大バグだけを拾う
+   ゆるいスモークテスト帯（0.0-0.05）」を採用。到達可能性そのものは単体テスト
+   （`BuntResolverTests`/`BuntUnificationTests`）が既に固定済み。
+3. **小フライからのライナー併殺**（`BuntResult.PopOutDoubledOff`, design-09「小フライ併殺」）:
+   バント構えは一塁走者が通常打球の`StartType.Contact`と同じ前提（事前の大きめ二次リード）を取ると
+   みなし、小フライ（PopOut、または成功判定失敗時のフォールバック）が出た瞬間、既存の
+   `DoubledOffResolver`（通常打球のコンタクト始動ライナー併殺と同型・設計書12 §4 G2）で一塁走者が
+   戻れるかを判定する。新しい走者物理式は書かず、捕球点・処理野手の送球速度・守備力は既存のバント
+   処理点（`BuntFielderThrowSpeedMps`等）を再利用。捕球点・滞空秒（旧`TimelineBuilder`のprivate定数
+   `BuntPopPointM`/`BuntPopHangSeconds`）を`BaserunningCoefficients.BuntPopFieldedZM`/
+   `BuntPopHangSeconds`へ3点セットで昇格し、判定と絵の単一ソースにした（`BuntFieldedXM/ZM`と同じ
+   「判定＝絵」原則）。打者フライアウト＋一塁走者アウトで2アウト（バント併殺そのものはスコープ外の
+   ままだが、これは実質的な小フライ併殺）。スクイズでも同時に発生しうる（三塁走者の運命とは独立）。
+   満塁の本塁封殺との組み合わせでは発生しない（分岐が排他的）。
+
+**満塁の真のフォースの一段先（3塁走者以遠、例えば併殺）は今回もスコープ外**（意図的）。
+
+**決定論ベースラインの注記**: 今回`TacticsTally`レコード（`GameEngine.cs`）に新しいフィールド3個
+（`BuntForceOuts`/`SqueezeBallInPlay`/`SqueezeRunnerOutAtHome`）を追加した。このレコードの既定
+`ToString()`が`GameResultDigest.Canonical`（決定論ゲートのdigest文字列）に直接埋め込まれているため、
+**値が常に0でも**digest文字列そのものが変わり、tactics/pitch-tactics以外のカード（avg/modern）を含む
+**200行中200行すべて**が再生成対象になった（前回追記時点の「30行のみ」から拡大。ただし
+avg/modernカードの実ゲームプレー・RNG消費順は一切変わっていない＝純粋にdigest文字列フォーマットの
+副作用と確認済み）。`tools/regen-determinism-baseline.sh`で再生成済み。
+
 ## Q31. 一・二塁の併殺で「三塁封殺」ルートがモデルに無い（2026-08-27・DPパターン網羅性の会話で発見）→ **判定層は実装済み（2026-08-27）。表示層は別ターン**
 
 `out/issues-pending/double-play-throw-pace-and-second-out-call.md`（併殺の絵の壊れ①〜⑧・⑦まで実装済み）

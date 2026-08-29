@@ -315,6 +315,41 @@ baserunning:
   bunt_field_throw_base_seconds: 3.70        # コーナー突進＋素手＋短距離送球
   bunt_placement_slope: 0.006                # 好バントほど処理が遅れる
   bunt_infield_hit_time_scale: 0.14          # margin→確率のlogistic幅
+  # バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）。スクイズは対象外（一球でコミット）
+  bunt_take_base: 0.20
+  bunt_take_distance_slope: 1.2
+  bunt_take_discipline_slope: 0.006
+  bunt_take_cap: 0.90
+  # バント: コース補正・技術/球速/球威連動の失敗率（design-02 §4.3の欠落項の実装, issue bunt-no-take-on-ball-pitches）
+  bunt_course_slope: 0.10
+  bunt_stuff_ref_value: 0.0
+  bunt_miss_skill_slope: 0.0008
+  bunt_miss_velocity_slope: 0.001
+  bunt_miss_stuff_slope: 0.015
+  bunt_miss_floor: 0.02
+  bunt_pop_skill_slope: 0.0006
+  bunt_pop_velocity_slope: 0.0008
+  bunt_pop_stuff_slope: 0.012
+  bunt_pop_floor: 0.02
+  # バント: 一塁走者の封殺（フォースアウト, issue bunt-no-take-on-ball-pitches）。処理点は「誰が処理したか」
+  # を特定しない簡略化（bunt_field_throw_base_seconds と同じ抽象レベル）。三塁走者→本塁のスクイズ判定も共有
+  bunt_fielded_x_m: -4.0
+  bunt_fielded_z_m: 8.0
+  bunt_fielded_at_seconds: 0.90
+  bunt_fielder_throw_speed_mps: 30.0
+  bunt_fielder_fielding_level: 50.0
+  bunt_force_r1_start_delay_seconds: 0.15
+  # バント: 二塁走者（1・2塁時）の三塁封殺。既存の third_force_*（Q31）をそのまま使う＝新規係数はスタート遅延のみ
+  bunt_force_r2_start_delay_seconds: 0.15
+  # バント: 三塁走者（満塁時）の本塁封殺。既存の home_force_*（Q31）をそのまま使う＝新規係数はスタート遅延のみ
+  bunt_force_r3_start_delay_seconds: 0.15
+  # バント: 小フライからのライナー併殺（design-09、issue bunt-no-take-on-ball-pitches）。捕球点・滞空時間は
+  # TimelineBuilder の絵と共有する単一ソース（判定=絵）
+  bunt_pop_fielded_z_m: 3.0
+  bunt_pop_hang_seconds: 0.55
+  # スクイズ: 三塁走者のスタート（走力連動, issue bunt-no-take-on-ball-pitches）。送球先が本塁になる以外は
+  # 上のバント処理点を流用（home_success_bias等は既存のまま）
+  squeeze_third_runner_start_delay_seconds: 0.05
   # 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）: 走塁 §4.1 と同じ秒の時間勝負
   home_runner_reaction_intercept: 0.55       # 本塁を狙う走者の判断遅延[s] = intercept − 走塁判断×slope
   home_runner_reaction_slope: 0.004

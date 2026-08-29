@@ -99,7 +99,8 @@ public static class Step4Calibration
             var rng = new Xoshiro256Random(seed ^ (ulong)bunt);
             for (var i = 0; i < 20000; i++)
             {
-                switch (BuntResolver.Resolve(batter, pitcher, safety: false, baserun, rng))
+                switch (BuntResolver.Resolve(batter, pitcher, pitchStuff: 0.0, courseDifficulty: 0.0, safety: false,
+                    firstRunner: null, secondRunner: null, thirdRunner: null, field: null, baserun, rng))
                 {
                     case BuntResult.SacrificeSuccess: sac++; break;
                     case BuntResult.InfieldHit: ih++; break;

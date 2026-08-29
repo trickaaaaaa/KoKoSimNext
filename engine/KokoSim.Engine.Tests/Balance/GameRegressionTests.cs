@@ -112,6 +112,13 @@ public sealed class GameRegressionTests
             $"（Brainつき）四球率 {s.WalkRate:P2} が帯外");
         Assert.True(targets.HomeRunRate.Contains(s.HomeRunRate),
             $"（Brainつき）本塁打率 {s.HomeRunRate:P2} が帯外");
+
+        // バント封殺率・スクイズ本塁封殺率（issue bunt-no-take-on-ball-pitches）: ゆるいスモークテスト帯
+        // （判定が暴走して毎回封殺になるような重大バグだけを拾う。到達可能性そのものは単体テストで固定済み）。
+        Assert.True(targets.BuntForceOutRate.Contains(s.BuntForceOutRate),
+            $"バント封殺率 {s.BuntForceOutRate:P2}（試行 {s.TotalSacrificeBunts}） が帯外");
+        Assert.True(targets.SqueezeRunnerOutAtHomeRate.Contains(s.SqueezeRunnerOutAtHomeRate),
+            $"スクイズ本塁封殺率 {s.SqueezeRunnerOutAtHomeRate:P2}（試行 {s.TotalSqueezeBallInPlay}） が帯外");
     }
 
     /// <summary>

@@ -78,6 +78,11 @@ public sealed record GameTacticsTargets
     public Band StrikeoutRate { get; init; } = new(0.16, 0.22);
     public Band WalkRate { get; init; } = new(0.06, 0.10);
     public Band HomeRunRate { get; init; } = new(0.010, 0.022);
+    /// <summary>バント経路の封殺率（ForceOutAtSecond/Third/Home合算、issue bunt-no-take-on-ball-pitches）。
+    /// ゆるいスモークテスト帯（実測は乱数分布上ほぼ0%。判定が暴走する重大バグだけを拾う）。</summary>
+    public Band BuntForceOutRate { get; init; } = new(0.0, 0.05);
+    /// <summary>スクイズでボールが実際にプレーされたときの三塁走者の本塁封殺率。同上、ゆるいスモークテスト帯。</summary>
+    public Band SqueezeRunnerOutAtHomeRate { get; init; } = new(0.0, 0.05);
 }
 
 /// <summary>
@@ -231,6 +236,8 @@ public static class BalanceTargetsLoader
             StrikeoutRate = g.StrikeoutRate?.ToBand() ?? new Band(0.16, 0.22),
             WalkRate = g.WalkRate?.ToBand() ?? new Band(0.06, 0.10),
             HomeRunRate = g.HomeRunRate?.ToBand() ?? new Band(0.010, 0.022),
+            BuntForceOutRate = g.BuntForceOutRate?.ToBand() ?? new Band(0.0, 0.05),
+            SqueezeRunnerOutAtHomeRate = g.SqueezeRunnerOutAtHomeRate?.ToBand() ?? new Band(0.0, 0.05),
         };
     }
 
@@ -391,6 +398,8 @@ public static class BalanceTargetsLoader
         public BandDto? StrikeoutRate { get; set; }
         public BandDto? WalkRate { get; set; }
         public BandDto? HomeRunRate { get; set; }
+        public BandDto? BuntForceOutRate { get; set; }
+        public BandDto? SqueezeRunnerOutAtHomeRate { get; set; }
     }
 
     private sealed class BandDto

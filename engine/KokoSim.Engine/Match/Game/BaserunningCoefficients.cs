@@ -194,6 +194,87 @@ public sealed record BaserunningCoefficients
     /// <summary>内野安打 margin→確率の logistic 幅[s]。</summary>
     public double BuntInfieldHitTimeScale { get; init; } = 0.14;
 
+    // === バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）===
+    // バントサイン中でも、明確なボール球は構えを解いて見送れる（打者の選球眼で変動）。スクイズは対象外
+    // （一球で必ずコミットする作戦のため見送りを設けない）。
+    /// <summary>ゾーン外に外れた瞬間の見送り基準確率（ゾーン境界ぎりぎりの外れ球での値）。</summary>
+    public double BuntTakeBase { get; init; } = 0.20;
+    /// <summary>ゾーン外距離[m]あたりの見送り確率の増分（大きく外れるほど見送りやすい）。</summary>
+    public double BuntTakeDistanceSlope { get; init; } = 1.2;
+    /// <summary>選球眼(Discipline−50, 効き後)あたりの見送り確率の増分。</summary>
+    public double BuntTakeDisciplineSlope { get; init; } = 0.006;
+    /// <summary>見送り確率の上限（バントの構えに入っている分、完全には見切れない）。</summary>
+    public double BuntTakeCap { get; init; } = 0.90;
+
+    // === バント: コース補正・技術/球速/球威連動の失敗率（design-02 §4.3の欠落項の実装,
+    // issue bunt-no-take-on-ball-pitches）===
+    /// <summary>成功率のコース補正: courseDifficulty[0,1]（StrikeZone.EdgeProximity）あたりの減算。</summary>
+    public double BuntCourseSlope { get; init; } = 0.10;
+    /// <summary>球威(Stuff)の基準値（この値以下は空振り/小フライへの加算なし。0=平均球速投手の期待値と一致）。</summary>
+    public double BuntStuffRefValue { get; init; } = 0.0;
+    /// <summary>空振り率の技術傾き（(Bunt−50)あたり減算。上手いほど空振りしにくい）。</summary>
+    public double BuntMissSkillSlope { get; init; } = 0.0008;
+    /// <summary>空振り率の球速傾き（VelocityPenalty[km/h超過分]あたり加算。SuccessRateの球速補正と共有）。</summary>
+    public double BuntMissVelocitySlope { get; init; } = 0.001;
+    /// <summary>空振り率の球威傾き（Stuff超過分あたり加算）。</summary>
+    public double BuntMissStuffSlope { get; init; } = 0.015;
+    /// <summary>空振り率の下限。</summary>
+    public double BuntMissFloor { get; init; } = 0.02;
+    /// <summary>小フライ率の技術傾き（(Bunt−50)あたり減算）。</summary>
+    public double BuntPopSkillSlope { get; init; } = 0.0006;
+    /// <summary>小フライ率の球速傾き（VelocityPenaltyあたり加算）。</summary>
+    public double BuntPopVelocitySlope { get; init; } = 0.0008;
+    /// <summary>小フライ率の球威傾き（Stuff超過分あたり加算）。</summary>
+    public double BuntPopStuffSlope { get; init; } = 0.012;
+    /// <summary>小フライ率の下限。</summary>
+    public double BuntPopFloor { get; init; } = 0.02;
+
+    // === バント: 一塁走者の封殺（フォースアウト, issue bunt-no-take-on-ball-pitches）===
+    // バントの処理点・処理時間・送球速度は「誰が処理したか」を特定しない簡略化（BuntFieldThrowBaseSeconds と
+    // 同じ抽象レベル）。一塁走者→二塁の封殺は既存の HomePlayResolver.SecondForceParams（Issue #369）をそのまま
+    // 使う＝新しい走者物理式は書かない（不変条件#1）。三塁走者→本塁のスクイズ判定（下記）もこの処理点を再利用する。
+    /// <summary>バント処理点のX座標[m]（本塁原点、負=三塁側）。三塁側チャージを想定した代表値。</summary>
+    public double BuntFieldedXM { get; init; } = -4.0;
+    /// <summary>バント処理点のZ座標[m]（本塁からの深さ）。</summary>
+    public double BuntFieldedZM { get; init; } = 8.0;
+    /// <summary>接触からバント処理までの所要[s]（チャージ＋捕球）。</summary>
+    public double BuntFieldedAtSeconds { get; init; } = 0.90;
+    /// <summary>バント処理野手の代表送球速度[m/s]（誰が処理したか特定しないための平均値）。</summary>
+    public double BuntFielderThrowSpeedMps { get; init; } = 30.0;
+    /// <summary>バント処理野手の代表守備力（握り替え倍率の算出用。50=倍率×1.0）。</summary>
+    public double BuntFielderFieldingLevel { get; init; } = 50.0;
+    /// <summary>一塁走者がバントを読んでから二塁へ走り出す追加スタート遅延[s]（DoublePlayR1StartDelaySeconds
+    /// より短い＝バントは事前に構えが見えるぶん、通常のゴロより早く動ける）。</summary>
+    public double BuntForceR1StartDelaySeconds { get; init; } = 0.15;
+    /// <summary>二塁走者（1・2塁時）がバントを読んでから三塁へ走り出す追加スタート遅延[s]。一塁走者と同じ
+    /// 事前の構えの見えやすさを仮定し、既定値は<see cref="BuntForceR1StartDelaySeconds"/>と同値（実測前の第一推定）。
+    /// 三塁封殺（<see cref="BuntResult.ForceOutAtThird"/>）は既存の<see cref="HomePlayResolver.ThirdForceParams"/>
+    /// （Q31・BaserunningCoefficients.ThirdForceTagSeconds等）をそのまま使う＝新しい走者物理式は書かない。</summary>
+    public double BuntForceR2StartDelaySeconds { get; init; } = 0.15;
+    /// <summary>三塁走者（満塁時）がバントを読んでから本塁へ走り出す追加スタート遅延[s]。R1/R2と同じ
+    /// 事前の構えの見えやすさを仮定し、既定値は同値（実測前の第一推定）。本塁封殺
+    /// （<see cref="BuntResult.ForceOutAtHome"/>）は既存の<see cref="HomePlayResolver.HomeForceParams"/>
+    /// （Q31）をそのまま使う＝新しい走者物理式は書かない。</summary>
+    public double BuntForceR3StartDelaySeconds { get; init; } = 0.15;
+
+    // === バント: 小フライからのライナー併殺（design-09「小フライ併殺」, issue bunt-no-take-on-ball-pitches）===
+    // バント構えは一塁走者が事前に大きめの二次リードを取る（＝通常打球の StartType.Contact と同じ前提）ため、
+    // 小フライを野手が捕った瞬間に一塁へ戻れるかの時間の勝負（DoubledOffResolver, 設計書12 §4 G2）に懸ける。
+    // 捕球点・処理野手の送球速度・守備力は既存のバント処理点（BuntFielderThrowSpeedMps等）を再利用し、
+    // 新しい走者物理式は書かない。二塁封殺等とは独立の判定＝乱数は小フライ確定後にのみ追加で1回消費する。
+    /// <summary>小フライの落下点Z座標[m]（本塁からの深さ。X=0固定＝真後ろ）。TimelineBuilder の絵と共有する
+    /// 単一ソース（旧: TimelineBuilder 内の private const。BuntFieldedZM 等と同じ「判定＝絵」原則）。</summary>
+    public double BuntPopFieldedZM { get; init; } = 3.0;
+    /// <summary>接触から小フライ捕球までの滞空時間[s]。TimelineBuilder の絵と共有する単一ソース。</summary>
+    public double BuntPopHangSeconds { get; init; } = 0.55;
+
+    // === スクイズ: 三塁走者のスタート（走力連動, issue bunt-no-take-on-ball-pitches）===
+    // 送球先が本塁になる以外は上のバント処理点をそのまま流用する（HomePlayResolver.HomeParams は既存の
+    // タッチ秒・バイアス・幅をそのまま使うので新規係数はスタート遅延1つだけで済む）。
+    /// <summary>三塁走者がスクイズのバントを見てからスタートする遅延[s]。投球と同時に走り出すため、
+    /// 通常の走塁反応（HomeRunnerReactionIntercept等）よりかなり短い。</summary>
+    public double SqueezeThirdRunnerStartDelaySeconds { get; init; } = 0.05;
+
     // === 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）===
     // 走塁 §4.1 と同じ時間の勝負を本塁で解く。走者(走力＋走塁判断) vs 外野処理＋中継＋タッチ。
     /// <summary>本塁生還を狙う走者の判断遅延[s] = Intercept − 走塁判断×Slope。</summary>

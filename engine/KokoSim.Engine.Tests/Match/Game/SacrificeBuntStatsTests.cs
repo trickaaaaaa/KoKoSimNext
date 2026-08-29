@@ -65,6 +65,85 @@ public sealed class SacrificeBuntStatsTests
         Assert.Equal(0, line.SacrificeHits);
     }
 
+    /// <summary>
+    /// 一塁封殺（ForceOutAtSecond, issue bunt-no-take-on-ball-pitches）は打者が生きている（野選相当）ので、
+    /// 犠打（SH）にはせず通常の打数（AB）として計上する。GameEngine は
+    /// isSacBunt: buntOutcome == BuntResult.SacrificeSuccess を渡す＝ForceOutAtSecond では常に false。
+    /// </summary>
+    [Fact]
+    public void RecordBatting_ForceOutAtSecond_CountsAsAtBat_NotSH()
+    {
+        var team = TeamOf("A");
+        var batter = team.BattingOrder[0];
+        var state = new TeamState(team);
+        var isSacBunt = BuntResult.ForceOutAtSecond == BuntResult.SacrificeSuccess; // GameEngineと同じ式
+
+        state.RecordBatting(batter, PlateAppearanceResult.InPlayOut, rbi: 0, isSacBunt: isSacBunt);
+
+        var line = state.BuildBattingLines().Single(l => l.Order == 1);
+        Assert.Equal(1, line.AtBats);
+        Assert.Equal(0, line.SacrificeHits);
+    }
+
+    /// <summary>
+    /// 二塁封殺（ForceOutAtThird, 1・2塁の真のフォース）も一塁封殺と同じ理由（打者生存＝野選相当）で
+    /// 犠打ではなく通常の打数として計上する。GameEngine は isSacBunt: buntOutcome == SacrificeSuccess を
+    /// 渡す＝ForceOutAtThird でも常に false。
+    /// </summary>
+    [Fact]
+    public void RecordBatting_ForceOutAtThird_CountsAsAtBat_NotSH()
+    {
+        var team = TeamOf("A");
+        var batter = team.BattingOrder[0];
+        var state = new TeamState(team);
+        var isSacBunt = BuntResult.ForceOutAtThird == BuntResult.SacrificeSuccess; // GameEngineと同じ式
+
+        state.RecordBatting(batter, PlateAppearanceResult.InPlayOut, rbi: 0, isSacBunt: isSacBunt);
+
+        var line = state.BuildBattingLines().Single(l => l.Order == 1);
+        Assert.Equal(1, line.AtBats);
+        Assert.Equal(0, line.SacrificeHits);
+    }
+
+    /// <summary>
+    /// 本塁封殺（ForceOutAtHome, 満塁の真のフォース）も同じ理由（打者生存＝野選相当）で犠打ではなく
+    /// 通常の打数として計上する。GameEngine は isSacBunt: buntOutcome == SacrificeSuccess を渡す＝
+    /// ForceOutAtHome でも常に false。
+    /// </summary>
+    [Fact]
+    public void RecordBatting_ForceOutAtHome_CountsAsAtBat_NotSH()
+    {
+        var team = TeamOf("A");
+        var batter = team.BattingOrder[0];
+        var state = new TeamState(team);
+        var isSacBunt = BuntResult.ForceOutAtHome == BuntResult.SacrificeSuccess; // GameEngineと同じ式
+
+        state.RecordBatting(batter, PlateAppearanceResult.InPlayOut, rbi: 0, isSacBunt: isSacBunt);
+
+        var line = state.BuildBattingLines().Single(l => l.Order == 1);
+        Assert.Equal(1, line.AtBats);
+        Assert.Equal(0, line.SacrificeHits);
+    }
+
+    /// <summary>
+    /// 小フライ併殺（PopOutDoubledOff, design-09「小フライ併殺」）も打者はフライアウトで犠打ではない。
+    /// GameEngine は isSacBunt: buntOutcome == SacrificeSuccess を渡す＝PopOutDoubledOff でも常に false。
+    /// </summary>
+    [Fact]
+    public void RecordBatting_PopOutDoubledOff_CountsAsAtBat_NotSH()
+    {
+        var team = TeamOf("A");
+        var batter = team.BattingOrder[0];
+        var state = new TeamState(team);
+        var isSacBunt = BuntResult.PopOutDoubledOff == BuntResult.SacrificeSuccess; // GameEngineと同じ式
+
+        state.RecordBatting(batter, PlateAppearanceResult.InPlayOut, rbi: 0, isSacBunt: isSacBunt);
+
+        var line = state.BuildBattingLines().Single(l => l.Order == 1);
+        Assert.Equal(1, line.AtBats);
+        Assert.Equal(0, line.SacrificeHits);
+    }
+
     // ===== BattingStatLine（打率・出塁率の分母から完全に除外） =====
 
     [Fact]

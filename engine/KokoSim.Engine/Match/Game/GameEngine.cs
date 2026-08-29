@@ -89,7 +89,11 @@ public sealed record GameResult
 /// <summary>1チームの采配集計（設計書09/11。記録のみ＝試合結果に影響しない）。</summary>
 public sealed record TacticsTally(
     int StealAttempts = 0, int StealSuccesses = 0, int SacrificeBunts = 0, int SacrificeBuntSuccesses = 0,
-    int Squeezes = 0);
+    int Squeezes = 0,
+    // 封殺率の実測用（issue bunt-no-take-on-ball-pitches）: BuntForceOuts はバント経路
+    // （ForceOutAtSecond/Third/Home）の合算、SqueezeBallInPlay/SqueezeRunnerOutAtHome はスクイズで
+    // ボールが実際にプレーされた回数とそのうち三塁走者が本塁で刺された回数。
+    int BuntForceOuts = 0, int SqueezeBallInPlay = 0, int SqueezeRunnerOutAtHome = 0);
 
 /// <summary>
 /// 試合エンジン（設計書01 §3）。イニング進行・走塁・得点・継投・疲労・采配（設計書09）を統括する。
@@ -374,7 +378,8 @@ public static class GameEngine
     }
 
     private static TacticsTally TallyOf(TeamState t)
-        => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes);
+        => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes,
+            t.BuntForceOuts, t.SqueezeBallInPlay, t.SqueezeRunnerOutAtHome);
 
     /// <summary>
     /// 打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。
@@ -830,7 +835,8 @@ public static class GameEngine
             // 通常打席の投球ループ（設計書15 §2.1）: AtBatSession を1球ずつ回し、各投球の前に采配窓を yield する。
             // 一括 ResolveDetailed と実装・RNG消費が完全一致（yield は乱数非消費）＝バッチ Play と対話進行は同一結果。
             var session = AtBatSession.Begin(batterAttrs, pitcher, abCtx, batterPlayer: batter,
-                thirdBaseRunner: squeezeThirdRunner, squeezeWasteProbability: squeezeWaste,
+                thirdBaseRunner: squeezeThirdRunner, firstBaseRunner: bases.First, secondBaseRunner: bases.Second,
+                squeezeWasteProbability: squeezeWaste,
                 initialBalls: pendingBalls, initialStrikes: pendingStrikes,
                 forcedResult: forcedPaResult);
             pendingBalls = pendingStrikes = 0; // 途中カウントは場面ジャンプ直後の1打席にだけ効く
@@ -1497,10 +1503,23 @@ public static class GameEngine
 
             // バント決着（設計書15 Phase D-2b）: セッションがバント経路で確定した場合、進塁は AdvanceOnBunt
             // （一・二塁走者のみ1つ進む・三塁走者は自重）専用ルールで、ApplyDetailed の一般経路は使わない。
+            // ForceOutAtSecond（一塁走者の封殺, issue bunt-no-take-on-ball-pitches）は AdvanceOnBunt を使わず
+            // 一塁へ直接打者を置く（AdvanceOnBunt は一塁走者を進塁させてしまい封殺の意味と矛盾するため）。
+            // ForceOutAtThird（二塁走者の封殺・1・2塁の真のフォースのみ）も同様に手組み: 打者は一塁生存・
+            // 元の一塁走者は（フォースされて）二塁へ進む・元の二塁走者は退場。ForceOutAtHome（三塁走者の封殺・
+            // 満塁の真のフォースのみ）も同様: 打者一塁生存・元一塁→二塁・元二塁→三塁・元三塁は退場（無得点）。
             if (res.BuntOutcome is { } buntOutcome)
             {
                 offense.RecordSacrificeBunt(buntOutcome == BuntResult.SacrificeSuccess);
-                var buntOuts = buntOutcome is BuntResult.PopOut or BuntResult.SacrificeSuccess ? 1 : 0;
+                if (buntOutcome is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome)
+                    offense.RecordBuntForceOut();
+                var buntOuts = buntOutcome switch
+                {
+                    BuntResult.PopOutDoubledOff => 2, // 小フライ＋一塁走者併殺（design-09「小フライ併殺」）
+                    BuntResult.PopOut or BuntResult.SacrificeSuccess
+                        or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome => 1,
+                    _ => 0,
+                };
                 // タイムライン用に進塁前の走者を控える（AdvanceOnBunt は bases を直接書き換えるため、
                 // 呼び出し後には「誰が動いたか」が取れない。issue #490）。
                 var buntPreFirst = bases.First;
@@ -1508,6 +1527,11 @@ public static class GameEngine
                 var buntPreThird = bases.Third;
                 if (buntOutcome == BuntResult.SacrificeSuccess) AdvanceOnBunt(bases, batter: null);
                 else if (buntOutcome == BuntResult.InfieldHit) AdvanceOnBunt(bases, batter);
+                else if (buntOutcome == BuntResult.ForceOutAtSecond) bases.First = batter;
+                else if (buntOutcome == BuntResult.ForceOutAtThird) { bases.Second = bases.First; bases.First = batter; }
+                else if (buntOutcome == BuntResult.ForceOutAtHome)
+                    { bases.Third = bases.Second; bases.Second = bases.First; bases.First = batter; }
+                else if (buntOutcome == BuntResult.PopOutDoubledOff) bases.First = null; // 一塁走者は併殺で退場
                 // バント打球のタイムライン（issue #490）: 判定（BuntResolver）はそのまま、結果から逆算した絵。
                 // CaptureTimelines のときだけ組む＝統計シム・裏試合はゼロコスト・乱数消費ゼロ（他Buildと同作法）。
                 var buntTimeline = ctx.CaptureTimelines
@@ -1538,24 +1562,41 @@ public static class GameEngine
             }
 
             // スクイズ決着（設計書15 Phase D-2c）: セッションがスクイズ経路で確定した場合。ここに来るのは
-            // SacrificeSuccess/InfieldHit/PopOut のみ（ウエストを読まれた場合、または送りバント自体が
-            // Foul/MissedBunt で不成立だった場合はいずれも三塁走者が挟殺されるだけで打席は終わらず、
-            // AtBatSession が PitchResolution.SqueezeRunnerCaughtAtThird で通知して打席続行させる＝上の
-            // インラインブロックで処理済み。つまり sq.RunnerOut はここでは常に false）。
+            // SacrificeSuccess/InfieldHit/ForceOutAtSecond/ForceOutAtThird/PopOut のみ（ウエストを読まれた場合、
+            // または送りバント自体が Foul/MissedBunt で不成立だった場合はいずれも三塁走者が挟殺されるだけで
+            // 打席は終わらず、AtBatSession が PitchResolution.SqueezeRunnerCaughtAtThird で通知して打席続行
+            // させる＝上のインラインブロックで処理済み）。ボールが実際にプレーされたケース（Sacrifice/
+            // InfieldHit/ForceOutAtSecond/ForceOutAtThird）だけ、三塁走者は sq.RunnerOut で生還/本塁封殺の
+            // どちらかに決着する（issue bunt-no-take-on-ball-pitches の④＝design-02 §4.4「三塁走者スタート」の実装）。
             if (res.Squeeze is { } sq)
             {
                 var sqScorer = bases.Third; // スクイズで生還するのは三塁走者（issue #77 得点帰属。null化の前に捕捉）
-                var sqOuts = sq.BatterOut ? 1 : 0;
+                var sqOuts = (sq.BatterOut ? 1 : 0)
+                    + (sq.Bunt is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird ? 1 : 0)
+                    + (sq.Bunt == BuntResult.PopOutDoubledOff ? 1 : 0) // 一塁走者の併殺（design-09「小フライ併殺」）
+                    + (sq.RunnerOut ? 1 : 0);
                 // タイムライン用に進塁前の走者を控える（issue #490。バントと同じ理由）。
                 var sqPreFirst = bases.First;
                 var sqPreSecond = bases.Second;
                 var sqPreThird = bases.Third;
-                if (sq.Bunt is BuntResult.SacrificeSuccess or BuntResult.InfieldHit)
+                if (sq.Bunt is BuntResult.SacrificeSuccess or BuntResult.InfieldHit
+                    or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird)
                 {
-                    bases.Third = null; // 三塁走者は生還済み（sq.Runs=1）
-                    AdvanceOnBunt(bases, sq.BatterOut ? null : batter);
+                    offense.RecordSqueezeBallInPlay(sq.RunnerOut); // 実測用（issue bunt-no-take-on-ball-pitches）
+                    bases.Third = null; // 三塁走者は生還（sq.Runs=1）または本塁で封殺（sq.RunnerOut）＝いずれも退場
+                    if (sq.Bunt == BuntResult.ForceOutAtSecond)
+                        bases.First = batter; // 一塁走者は二塁で封殺済み。打者は一塁生存（野選相当）
+                    else if (sq.Bunt == BuntResult.ForceOutAtThird)
+                        { bases.Second = bases.First; bases.First = batter; } // 二塁走者は三塁で封殺済み
+                    else
+                        AdvanceOnBunt(bases, sq.BatterOut ? null : batter);
                 }
-                // 小フライ（PopOut）は走者釘付けのまま。
+                // 小フライ併殺（PopOutDoubledOff）: 三塁走者は動かず（小フライは走者釘付け）、一塁走者だけ退場。
+                else if (sq.Bunt == BuntResult.PopOutDoubledOff)
+                {
+                    bases.First = null;
+                }
+                // 小フライ（PopOut）は走者（三塁含め）釘付けのまま。
 
                 offense.Runs += sq.Runs;
                 runsThisHalf += sq.Runs;

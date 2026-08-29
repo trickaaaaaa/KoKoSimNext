@@ -110,6 +110,10 @@ public sealed class TeamState
     public int SacrificeBunts { get; private set; }
     public int SacrificeBuntSuccesses { get; private set; }
     public int Squeezes { get; private set; }
+    // 封殺率の実測用（issue bunt-no-take-on-ball-pitches）。
+    public int BuntForceOuts { get; private set; }
+    public int SqueezeBallInPlay { get; private set; }
+    public int SqueezeRunnerOutAtHome { get; private set; }
 
     /// <summary>盗塁企図を走者個人＋チーム計へ記録する（issue #91）。</summary>
     public void RecordSteal(Player runner, bool success)
@@ -142,7 +146,15 @@ public sealed class TeamState
     }
 
     public void RecordSacrificeBunt(bool success) { SacrificeBunts++; if (success) SacrificeBuntSuccesses++; }
+    public void RecordBuntForceOut() => BuntForceOuts++;
     public void RecordSqueeze() => Squeezes++;
+    /// <summary>スクイズでボールが実際にプレーされた回数と、そのうち三塁走者が本塁で刺された回数
+    /// （issue bunt-no-take-on-ball-pitches・design-02 §4.4「三塁走者スタート」）。</summary>
+    public void RecordSqueezeBallInPlay(bool runnerOut)
+    {
+        SqueezeBallInPlay++;
+        if (runnerOut) SqueezeRunnerOutAtHome++;
+    }
 
     // ===== 個人成績（ボックススコア） =====
     private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF, SH; }

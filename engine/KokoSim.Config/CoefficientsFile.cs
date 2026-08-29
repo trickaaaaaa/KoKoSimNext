@@ -767,6 +767,35 @@ public static class CoefficientsLoader
         public double BuntFieldThrowBaseSeconds { get; set; } = D.BuntFieldThrowBaseSeconds;
         public double BuntPlacementSlope { get; set; } = D.BuntPlacementSlope;
         public double BuntInfieldHitTimeScale { get; set; } = D.BuntInfieldHitTimeScale;
+        // バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）
+        public double BuntTakeBase { get; set; } = D.BuntTakeBase;
+        public double BuntTakeDistanceSlope { get; set; } = D.BuntTakeDistanceSlope;
+        public double BuntTakeDisciplineSlope { get; set; } = D.BuntTakeDisciplineSlope;
+        public double BuntTakeCap { get; set; } = D.BuntTakeCap;
+        // バント: コース補正・技術/球速/球威連動の失敗率（issue bunt-no-take-on-ball-pitches）
+        public double BuntCourseSlope { get; set; } = D.BuntCourseSlope;
+        public double BuntStuffRefValue { get; set; } = D.BuntStuffRefValue;
+        public double BuntMissSkillSlope { get; set; } = D.BuntMissSkillSlope;
+        public double BuntMissVelocitySlope { get; set; } = D.BuntMissVelocitySlope;
+        public double BuntMissStuffSlope { get; set; } = D.BuntMissStuffSlope;
+        public double BuntMissFloor { get; set; } = D.BuntMissFloor;
+        public double BuntPopSkillSlope { get; set; } = D.BuntPopSkillSlope;
+        public double BuntPopVelocitySlope { get; set; } = D.BuntPopVelocitySlope;
+        public double BuntPopStuffSlope { get; set; } = D.BuntPopStuffSlope;
+        public double BuntPopFloor { get; set; } = D.BuntPopFloor;
+        // バント: 一塁走者の封殺（issue bunt-no-take-on-ball-pitches）
+        public double BuntFieldedXM { get; set; } = D.BuntFieldedXM;
+        public double BuntFieldedZM { get; set; } = D.BuntFieldedZM;
+        public double BuntFieldedAtSeconds { get; set; } = D.BuntFieldedAtSeconds;
+        public double BuntFielderThrowSpeedMps { get; set; } = D.BuntFielderThrowSpeedMps;
+        public double BuntFielderFieldingLevel { get; set; } = D.BuntFielderFieldingLevel;
+        public double BuntForceR1StartDelaySeconds { get; set; } = D.BuntForceR1StartDelaySeconds;
+        public double BuntForceR2StartDelaySeconds { get; set; } = D.BuntForceR2StartDelaySeconds;
+        public double BuntForceR3StartDelaySeconds { get; set; } = D.BuntForceR3StartDelaySeconds;
+        public double BuntPopFieldedZM { get; set; } = D.BuntPopFieldedZM;
+        public double BuntPopHangSeconds { get; set; } = D.BuntPopHangSeconds;
+        // スクイズ: 三塁走者のスタート（issue bunt-no-take-on-ball-pitches）
+        public double SqueezeThirdRunnerStartDelaySeconds { get; set; } = D.SqueezeThirdRunnerStartDelaySeconds;
         // 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）
         public double HomeRunnerReactionIntercept { get; set; } = D.HomeRunnerReactionIntercept;
         public double HomeRunnerReactionSlope { get; set; } = D.HomeRunnerReactionSlope;
@@ -898,6 +927,31 @@ public static class CoefficientsLoader
             BuntFieldThrowBaseSeconds = BuntFieldThrowBaseSeconds,
             BuntPlacementSlope = BuntPlacementSlope,
             BuntInfieldHitTimeScale = BuntInfieldHitTimeScale,
+            BuntTakeBase = BuntTakeBase,
+            BuntTakeDistanceSlope = BuntTakeDistanceSlope,
+            BuntTakeDisciplineSlope = BuntTakeDisciplineSlope,
+            BuntTakeCap = BuntTakeCap,
+            BuntCourseSlope = BuntCourseSlope,
+            BuntStuffRefValue = BuntStuffRefValue,
+            BuntMissSkillSlope = BuntMissSkillSlope,
+            BuntMissVelocitySlope = BuntMissVelocitySlope,
+            BuntMissStuffSlope = BuntMissStuffSlope,
+            BuntMissFloor = BuntMissFloor,
+            BuntPopSkillSlope = BuntPopSkillSlope,
+            BuntPopVelocitySlope = BuntPopVelocitySlope,
+            BuntPopStuffSlope = BuntPopStuffSlope,
+            BuntPopFloor = BuntPopFloor,
+            BuntFieldedXM = BuntFieldedXM,
+            BuntFieldedZM = BuntFieldedZM,
+            BuntFieldedAtSeconds = BuntFieldedAtSeconds,
+            BuntFielderThrowSpeedMps = BuntFielderThrowSpeedMps,
+            BuntFielderFieldingLevel = BuntFielderFieldingLevel,
+            BuntForceR1StartDelaySeconds = BuntForceR1StartDelaySeconds,
+            BuntForceR2StartDelaySeconds = BuntForceR2StartDelaySeconds,
+            BuntForceR3StartDelaySeconds = BuntForceR3StartDelaySeconds,
+            BuntPopFieldedZM = BuntPopFieldedZM,
+            BuntPopHangSeconds = BuntPopHangSeconds,
+            SqueezeThirdRunnerStartDelaySeconds = SqueezeThirdRunnerStartDelaySeconds,
             HomeRunnerReactionIntercept = HomeRunnerReactionIntercept,
             HomeRunnerReactionSlope = HomeRunnerReactionSlope,
             HomeLeadDistanceM = HomeLeadDistanceM,

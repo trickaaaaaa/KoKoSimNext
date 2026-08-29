@@ -119,6 +119,136 @@ public sealed class BuntUnificationTests
         Assert.Null(session.Result.BuntOutcome);
     }
 
+    /// <summary>
+    /// ボール球見送り（issue bunt-no-take-on-ball-pitches の①）: バント方針中でも、ゾーン外の投球が
+    /// バントを試みずボールとして記録されるケースがある（従来はコース不問で必ずバントを試みていた）。
+    /// </summary>
+    [Fact]
+    public void BallOutsideZone_CanBeTaken_WithoutAttemptingBunt()
+    {
+        var zone = new StrikeZone();
+        var found = false;
+        for (ulong seed = 1; seed <= 500 && !found; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: BunterPlayer);
+            var res = session.ThrowNextPitch(rng, PitchBattingOverride.Bunt);
+            if (session.PitchLog.Count != 1) continue;
+            var p = session.PitchLog[0];
+            if (p.Kind != PitchKind.Ball) continue;
+            Assert.False(zone.Contains(p.LocationX, p.LocationY), "見送ったボールがゾーン内座標になっている");
+            Assert.False(res.EndsPlateAppearance);
+            found = true;
+        }
+        Assert.True(found, "ボール球を見送るケースが見つからなかった（探索範囲を広げる必要あり）");
+    }
+
+    /// <summary>
+    /// 一塁走者の封殺（issue bunt-no-take-on-ball-pitches の③）: 一塁走者が渡されていると、快足打者×
+    /// 鈍足一塁走者の組み合わせで ForceOutAtSecond が出る（打者は一塁生存＝InPlayOut、犠打扱いにはならない）。
+    /// </summary>
+    [Fact]
+    public void ForceOutAtSecond_Reachable_WhenFirstBaseRunnerIsSlow()
+    {
+        var fastBatter = new Player { Bunt = 90, Speed = 99 };
+        var slowRunner = new Player { Speed = 1 };
+        var found = false;
+        for (ulong seed = 1; seed <= 300 && !found; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: fastBatter, firstBaseRunner: slowRunner);
+            PitchResolution res;
+            do { res = session.ThrowNextPitch(rng, PitchBattingOverride.SafetyBunt); }
+            while (!res.EndsPlateAppearance && session.Strikes < 2);
+
+            if (session.IsComplete && session.Result.BuntOutcome == BuntResult.ForceOutAtSecond)
+            {
+                Assert.Equal(PlateAppearanceResult.InPlayOut, session.Result.Result);
+                found = true;
+            }
+        }
+        Assert.True(found, "一塁封殺（ForceOutAtSecond）のケースが見つからなかった");
+    }
+
+    /// <summary>1・2塁の真のフォースで二塁走者が三塁封殺されるケース（ForceOutAtThird）が
+    /// AtBatSession経由でも再現すること。</summary>
+    [Fact]
+    public void ForceOutAtThird_Reachable_WhenSecondBaseRunnerIsSlow()
+    {
+        var fastBatter = new Player { Bunt = 90, Speed = 99 };
+        var midRunner = new Player { Speed = 50 };
+        var slowRunner = new Player { Speed = 1 };
+        var found = false;
+        for (ulong seed = 1; seed <= 300 && !found; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: fastBatter,
+                firstBaseRunner: midRunner, secondBaseRunner: slowRunner);
+            PitchResolution res;
+            do { res = session.ThrowNextPitch(rng, PitchBattingOverride.SafetyBunt); }
+            while (!res.EndsPlateAppearance && session.Strikes < 2);
+
+            if (session.IsComplete && session.Result.BuntOutcome == BuntResult.ForceOutAtThird)
+            {
+                Assert.Equal(PlateAppearanceResult.InPlayOut, session.Result.Result);
+                found = true;
+            }
+        }
+        Assert.True(found, "二塁封殺（ForceOutAtThird）のケースが見つからなかった");
+    }
+
+    /// <summary>満塁の真のフォースで三塁走者が本塁封殺されるケース（ForceOutAtHome）が
+    /// AtBatSession経由でも再現すること（通常バント=SafetyBunt。スクイズではない）。</summary>
+    [Fact]
+    public void ForceOutAtHome_Reachable_WhenThirdBaseRunnerIsSlow()
+    {
+        var fastBatter = new Player { Bunt = 90, Speed = 99 };
+        var midRunner = new Player { Speed = 50 };
+        var slowRunner = new Player { Speed = 1 };
+        var found = false;
+        for (ulong seed = 1; seed <= 300 && !found; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: fastBatter,
+                firstBaseRunner: midRunner, secondBaseRunner: midRunner, thirdBaseRunner: slowRunner);
+            PitchResolution res;
+            do { res = session.ThrowNextPitch(rng, PitchBattingOverride.SafetyBunt); }
+            while (!res.EndsPlateAppearance && session.Strikes < 2);
+
+            if (session.IsComplete && session.Result.BuntOutcome == BuntResult.ForceOutAtHome)
+            {
+                Assert.Equal(PlateAppearanceResult.InPlayOut, session.Result.Result);
+                found = true;
+            }
+        }
+        Assert.True(found, "三塁封殺（ForceOutAtHome）のケースが見つからなかった");
+    }
+
+    /// <summary>小フライからのライナー併殺（PopOutDoubledOff, design-09）がAtBatSession経由でも再現すること。</summary>
+    [Fact]
+    public void PopOutDoubledOff_Reachable_WhenFirstBaseRunnerIsSlow()
+    {
+        var batter = new Player { Bunt = 55 };
+        var slowRunner = new Player { Speed = 1 };
+        var found = false;
+        for (ulong seed = 1; seed <= 300 && !found; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: batter,
+                firstBaseRunner: slowRunner);
+            PitchResolution res;
+            do { res = session.ThrowNextPitch(rng, PitchBattingOverride.Bunt); }
+            while (!res.EndsPlateAppearance && session.Strikes < 2);
+
+            if (session.IsComplete && session.Result.BuntOutcome == BuntResult.PopOutDoubledOff)
+            {
+                Assert.Equal(PlateAppearanceResult.InPlayOut, session.Result.Result);
+                found = true;
+            }
+        }
+        Assert.True(found, "小フライ併殺（PopOutDoubledOff）のケースが見つからなかった");
+    }
+
     // ── GameEngine レベル（AI brain を経由した実試合での統合） ──
 
     private static Player Pos(FieldPosition pos, int bunt = 50, int speed = 50) => new()

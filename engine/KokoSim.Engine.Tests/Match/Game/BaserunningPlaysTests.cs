@@ -80,8 +80,8 @@ public sealed class BaserunningPlaysTests
     public void Bunt_SuccessRate_RisesWithBuntSkill()
     {
         var p = PitcherAttributes.LeagueAverage;
-        var low = BuntResolver.SuccessRate(new Player { Bunt = 20 }, p, C);
-        var high = BuntResolver.SuccessRate(new Player { Bunt = 90 }, p, C);
+        var low = BuntResolver.SuccessRate(new Player { Bunt = 20 }, p, courseDifficulty: 0.0, C);
+        var high = BuntResolver.SuccessRate(new Player { Bunt = 90 }, p, courseDifficulty: 0.0, C);
         Assert.True(high > low, $"バント技術で成功率が上がらない: {low:F2} vs {high:F2}");
     }
 
@@ -89,8 +89,8 @@ public sealed class BaserunningPlaysTests
     public void Bunt_HighVelocity_LowersSuccess()
     {
         var batter = new Player { Bunt = 60 };
-        var slow = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 125 }, C);
-        var fast = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 150 }, C);
+        var slow = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 125 }, courseDifficulty: 0.0, C);
+        var fast = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 150 }, courseDifficulty: 0.0, C);
         Assert.True(fast < slow, "速球でバントが難しくならない");
     }
 
@@ -101,7 +101,8 @@ public sealed class BaserunningPlaysTests
         var seen = new HashSet<BuntResult>();
         var batter = new Player { Bunt = 55, Speed = 70 };
         for (var i = 0; i < 3000; i++)
-            seen.Add(BuntResolver.Resolve(batter, PitcherAttributes.LeagueAverage, safety: true, C, rng));
+            seen.Add(BuntResolver.Resolve(batter, PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0,
+                safety: true, firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng));
         // 犠打成功・内野安打・小フライ・ファウル・空振りが一通り現れる。
         Assert.Contains(BuntResult.SacrificeSuccess, seen);
         Assert.Contains(BuntResult.InfieldHit, seen);
@@ -116,7 +117,8 @@ public sealed class BaserunningPlaysTests
     {
         var rng = new Xoshiro256Random(1);
         var outcome = SqueezeResolver.Resolve(new Player { Bunt = 60 }, new Player { Baserunning = 60 },
-            PitcherAttributes.LeagueAverage, wasteProbability: 1.0, C, rng);
+            PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
+            new FieldGeometry(), wasteProbability: 1.0, C, rng);
         Assert.True(outcome.RunnerOut);
         Assert.Equal(0, outcome.Runs);
     }
@@ -129,10 +131,47 @@ public sealed class BaserunningPlaysTests
         for (var i = 0; i < 200; i++)
         {
             var o = SqueezeResolver.Resolve(new Player { Bunt = 80 }, new Player { Baserunning = 70 },
-                PitcherAttributes.LeagueAverage, wasteProbability: 0.0, C, rng);
+                PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
+                new FieldGeometry(), wasteProbability: 0.0, C, rng);
             scored += o.Runs;
         }
         Assert.True(scored > 0, "スクイズが一度も決まらない");
+    }
+
+    /// <summary>
+    /// 三塁走者のスタート（走塁判断, issue bunt-no-take-on-ball-pitches の④＝design-02 §4.4）: ボールが
+    /// 実際にプレーされたとき（Foul/MissedBuntで不成立でない）でも、走塁判断が低い三塁走者は本塁で刺されうる
+    /// （RunnerOut=true, Runs=0）。走塁判断が高いほど生還率が上がる。
+    /// </summary>
+    [Fact]
+    public void Squeeze_ThirdRunner_ThrownOutAtHome_RisesWithLowBaserunningJudgment_FallsWithHigh()
+    {
+        double RunnerOutRateOnBallInPlay(int baserunning)
+        {
+            var rng = new Xoshiro256Random(3);
+            var batter = new Player { Bunt = 80 };
+            var runner = new Player { Baserunning = baserunning };
+            var caught = 0;
+            var playedBalls = 0;
+            const int n = 20000;
+            for (var i = 0; i < n; i++)
+            {
+                var o = SqueezeResolver.Resolve(batter, runner, PitcherAttributes.LeagueAverage,
+                    pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
+                    new FieldGeometry(), wasteProbability: 0.0, C, rng);
+                if (o.Bunt is BuntResult.Foul or BuntResult.MissedBunt) continue; // 打席続行（挟殺）は別テストの範囲
+                playedBalls++;
+                if (o.RunnerOut) caught++;
+            }
+            Assert.True(playedBalls > 0);
+            return caught / (double)playedBalls;
+        }
+
+        var lowJudgment = RunnerOutRateOnBallInPlay(1);
+        var highJudgment = RunnerOutRateOnBallInPlay(99);
+        Assert.True(lowJudgment > 0.0, "走塁判断が低い三塁走者が一度も本塁で刺されない");
+        Assert.True(lowJudgment > highJudgment,
+            $"走塁判断で本塁封殺率が下がらない: low={lowJudgment:P1} high={highJudgment:P1}");
     }
 
     // --- 進塁判断は Baserunning 参照（設計書02 §4.1） ---
