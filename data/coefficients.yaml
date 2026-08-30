@@ -89,6 +89,16 @@ batting:
   # 「隅のいい球は見逃されやすい」。投手は隅を狙うため 0.02 でも見逃しKが増える＝atbat_10k 帯を再校正済み
   # （strikeout_rate 天井 0.220→0.230 / batting_average 床 0.240→0.235。実測は issue #403 のコメント参照）。
   zone_edge_swing_penalty: 0.02
+  # カウント依存のスイング判断（設計書01 §2③「カウントで判定」、見逃し三振率の調査 第2便）。BatterDecisionは
+  # カウントを一切見ない構造だったため、見逃し三振が全三振の6割超・3-0でのスイング率が45%（実野球はおよそ
+  # 5〜7%）だった。旧 tactics.pitch_tactics_two_strike_force_swing_prob / pitch_tactics_three_zero_take_prob
+  # （Brain依存の外付けパッチ）を無効化し、本則側へ統合。実測（10000打席×seed42/7/2024）: 見逃しK割合
+  # 60%→14.5-16.6%（atbat_10k）/ 17.4-17.7%（games_10k_tactics）、3-0スイング率45%→7.0%（in-zone 10.2% /
+  # 追いかけ 3.8%）。副作用でK%が下がるため atbat_10k/games_10k_tactics の strikeout_rate 床を再校正
+  # （balance-targets.yaml 参照）。walk_rate/home_run_rate/slugging/2B/3B/2B÷HR/得点/失策/games_10kの
+  # 全指標は帯内のまま非破壊。
+  two_strike_swing_boost: 0.28
+  three_zero_swing_factor: 0.15
   whiff_intercept: -2.52         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正。#578 で −2.40→−2.52＝stuff_per_kmh 倍化の平均中立化）
   whiff_contact_slope: 0.030     # ミート→空振り減
   whiff_out_of_zone_penalty: 0.85
@@ -195,6 +205,10 @@ fielding:
   # base=0 で送球ロールを引かない＝現行の捕球のみ判定と完全一致（決定論不変）。正値で悪送球が能力駆動に。
   throw_error_base_prob: 0.0343       # 送球エラー基準確率（ThrowAccuracy50時）。issue #169で正値化＝Ac50で内野ゴロ失策の約40%が送球由来→issue #532で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）
   throw_error_accuracy_slope: 0.004   # 送球精度(Ac−50)あたりの悪送球減少幅
+  # 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球確定後、逸れ幅→回収ロスを守備所要時間へ
+  # 加算してもう一度同じ判定基準で再評価する（拾い直しが間に合えばアウトのまま）。
+  wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）
+  recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
   # トンネル（股・脇を抜けて球が外野へ行く失策, issue #632）。捕球エラーの**内訳**＝失策総数は不変（お手玉が減ってトンネルが増える）。
   # 0で内訳ロールを引かない＝従来と完全一致。正値で「球が外野へ行ったから走者が還った」が物理層の因果になる（進塁は外野からの返球との時間勝負）。
   tunnel_share_prob: 0.30             # 捕球エラーのうちトンネルになる割合
@@ -367,6 +381,16 @@ baserunning:
   # 損失が強肩ほど大きかった（Arm20 +0.41s / Arm99 +0.71s）＝実際の野球と逆。1.88 は Arm50 で 60m ＝
   # リーグ平均の挙動を旧値と揃える値。Arm20→52m / Arm50→60m / Arm80→68m / Arm99→73m。
   cutoff_throw_seconds: 1.88
+  # バックホーム悪送球（外野/中継→本塁の送球エラー, 2026-08-30）。内野送球エラー
+  # （fielding.throw_error_base_prob/throw_error_accuracy_slope）と同型の二値ロール。
+  # 守備が本塁で間に合う場面でだけ引き、送球者のThrowAccuracyが低いほど悪送球になりやすい。
+  relay_throw_error_base_prob: 0.0343
+  relay_throw_error_accuracy_slope: 0.004
+  # 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球確定後、逸れ幅→回収ロスを守備所要時間へ
+  # 加算してもう一度同じMargin/logisticレースを評価する（拾い直しが間に合えばアウトのまま）。
+  wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）。内野側とは独立値
+  recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
+  recovery_sprint_speed_mps: 6.5      # 回収に動く野手のスプリント速度[m/s]（平均的な値の定数）
   home_tag_seconds: 0.12
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅
@@ -732,9 +756,9 @@ tactics:
   captain_mitigation_per_power: 0.004   # 統率力（統率傾向×精神力/100）1あたりの負補正緩和
   captain_bench_factor: 0.30
   # 1球采配（設計書15 §2.3, Phase C）
-  pitch_tactics_two_strike_force_swing_prob: 0.35  # 追い込まれ矯正（見逃し三振回避）
+  pitch_tactics_two_strike_force_swing_prob: 0.0   # 追い込まれ矯正はbatting.two_strike_*（本則）へ統合済み・無効化
   pitch_tactics_two_strike_min_contact: 50
-  pitch_tactics_three_zero_take_prob: 0.85         # 3-0待て
+  pitch_tactics_three_zero_take_prob: 0.0          # 3-0待てはbatting.three_zero_swing_factor（本則）へ統合済み・無効化
   pitch_tactics_three_zero_swing_away_min_power: 80
   pitch_tactics_three_zero_swing_away_from_inning: 7
   pitch_tactics_three_zero_swing_away_max_diff_abs: 1

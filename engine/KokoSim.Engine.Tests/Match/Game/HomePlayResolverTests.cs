@@ -19,8 +19,9 @@ public sealed class HomePlayResolverTests
     private static readonly FieldGeometry Field = new();
 
     /// <summary>外野の処理点（方位0=センター方向, 距離d）。</summary>
-    private static HomePlaySituation Situation(double distanceM, double fieldedAt, int arm = 50)
-        => new(new Vector3D(0, 0, distanceM), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps);
+    private static HomePlaySituation Situation(double distanceM, double fieldedAt, int arm = 50, int throwAccuracy = 50)
+        => new(new Vector3D(0, 0, distanceM), fieldedAt, new Player { ArmStrength = arm }.ToFielder().ThrowSpeedMps,
+            ThrowerThrowAccuracy: throwAccuracy);
 
     private static double ScoreRate(Player runner, int fromBase, HomePlaySituation s, int trials = 4000, ulong seed = 5)
     {
@@ -217,5 +218,78 @@ public sealed class HomePlayResolverTests
         Assert.True(pEasy > pHard, $"深いフライが浅いフライより生還しやすくない: easy={pEasy} hard={pHard}");
         Assert.Equal(TagUpScoreRate(Runner(60, 55), Situation(65, 2.7), 500, 42),
                      TagUpScoreRate(Runner(60, 55), Situation(65, 2.7), 500, 42));
+    }
+
+    // --- バックホーム悪送球（2026-08-30, design-14 P1-6型の二値ロールをバックホームへ拡張）---
+    // 「外野からのバックホームが毎回ドンピシャで届く」違和感の是正。ThrowAccuracy が低いほど、
+    // 守備が間に合う（憤死になる）場面で悪送球が混じり生還に転じることを検証する。
+
+    private static readonly BaserunningCoefficients CWild = C with { RelayThrowErrorBaseProb = 0.20, RelayThrowErrorAccuracySlope = 0.004 };
+
+    [Fact]
+    public void IsWildThrow_LowAccuracy_FiresMoreOftenThanHighAccuracy()
+    {
+        var rng = new Xoshiro256Random(7);
+        var wildLow = 0;
+        var wildHigh = 0;
+        const int trials = 4000;
+        for (var i = 0; i < trials; i++)
+        {
+            if (HomePlayResolver.IsWildThrow(20, CWild, rng)) wildLow++;
+            if (HomePlayResolver.IsWildThrow(90, CWild, rng)) wildHigh++;
+        }
+        Assert.True(wildLow > wildHigh, $"送球精度が低いほうが悪送球が多くない: low={wildLow} high={wildHigh}");
+    }
+
+    [Fact]
+    public void IsWildThrow_ZeroBaseProb_NeverFires_AndConsumesNoRandomState()
+    {
+        // 既定オフ（RelayThrowErrorBaseProb<=0）では旧経路と完全一致＝rngを一切消費しない
+        // （MathUtil.Chance を呼ばずガードで捨てる。ErrorExtraAdvanceProb と同じ流儀）。
+        var touched = new Xoshiro256Random(11);
+        var untouched = new Xoshiro256Random(11);
+        var zero = C with { RelayThrowErrorBaseProb = 0.0 };
+        for (var i = 0; i < 100; i++)
+            Assert.False(HomePlayResolver.IsWildThrow(20, zero, touched));
+        Assert.Equal(untouched.NextDouble(), touched.NextDouble()); // 100回呼んでもrngは1歩も進んでいない
+    }
+
+    [Fact]
+    public void ResolveWithWildThrow_ConvertsSomeOutsToSafe_WhenDefenseWouldWin()
+    {
+        // 強肩・近距離＝素の Resolve ならほぼ確実に憤死する場面。悪送球ロールが有効だと、
+        // その一部が SafeOnWildThrow に転じる（＝毎回ドンピシャで刺さるわけではなくなる）。
+        var runner = Runner();
+        var s = Situation(35, 1.0, arm: 95, throwAccuracy: 20); // 精度20＝低いほど悪送球が起きやすい
+        var rng = new Xoshiro256Random(3);
+        int safe = 0, outAtHome = 0, safeOnWild = 0;
+        const int trials = 4000;
+        for (var i = 0; i < trials; i++)
+        {
+            switch (HomePlayResolver.ResolveWithWildThrow(runner, 1, s, Field, CWild, rng))
+            {
+                case HomePlayResolver.HomeThrowOutcome.Safe: safe++; break;
+                case HomePlayResolver.HomeThrowOutcome.OutAtHome: outAtHome++; break;
+                case HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow: safeOnWild++; break;
+            }
+        }
+        Assert.True(safeOnWild > 0, "守備が勝つはずの場面で悪送球が一度も起きていない");
+        Assert.True(outAtHome > safeOnWild, $"悪送球が起きすぎ（毎回セーフになっている）: out={outAtHome} wild={safeOnWild} safe={safe}");
+    }
+
+    [Fact]
+    public void ResolveWithWildThrow_NeverRolledWhenRunnerAlreadyWinsRace()
+    {
+        // 走者が普通に勝てる場面（悪送球ロールを引く必要が無い）では ResolveSafe と同じ1ロールで確定する
+        // ＝乱数消費順が Resolve と一致（悪送球導入前の帯・決定論と互換）。
+        var runner = Runner(90);
+        var s = Situation(115, 4.5, arm: 20, throwAccuracy: 10); // 走者が圧勝する場面
+        var a = new Xoshiro256Random(9);
+        var b = new Xoshiro256Random(9);
+        var outcome = HomePlayResolver.ResolveWithWildThrow(runner, 3, s, Field, CWild, a);
+        var plain = HomePlayResolver.Resolve(runner, 3, s, Field, CWild, b);
+        Assert.Equal(HomePlayResolver.HomeThrowOutcome.Safe, outcome);
+        Assert.Equal(HomePlayResult.Safe, plain);
+        Assert.Equal(a.NextDouble(), b.NextDouble()); // 以降のrng列も一致＝追加ロールを引いていない
     }
 }

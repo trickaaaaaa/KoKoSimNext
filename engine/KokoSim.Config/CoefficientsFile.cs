@@ -475,6 +475,8 @@ public static class CoefficientsLoader
         public double ChaseBreakSlope { get; set; } = D.ChaseBreakSlope;
         public double ChaseDistanceSlope { get; set; } = D.ChaseDistanceSlope;
         public double ZoneEdgeSwingPenalty { get; set; } = D.ZoneEdgeSwingPenalty;
+        public double TwoStrikeSwingBoost { get; set; } = D.TwoStrikeSwingBoost;
+        public double ThreeZeroSwingFactor { get; set; } = D.ThreeZeroSwingFactor;
         public double WhiffIntercept { get; set; } = D.WhiffIntercept;
         public double WhiffContactSlope { get; set; } = D.WhiffContactSlope;
         public double WhiffOutOfZonePenalty { get; set; } = D.WhiffOutOfZonePenalty;
@@ -529,6 +531,8 @@ public static class CoefficientsLoader
             ChaseBreakSlope = ChaseBreakSlope,
             ChaseDistanceSlope = ChaseDistanceSlope,
             ZoneEdgeSwingPenalty = ZoneEdgeSwingPenalty,
+            TwoStrikeSwingBoost = TwoStrikeSwingBoost,
+            ThreeZeroSwingFactor = ThreeZeroSwingFactor,
             WhiffIntercept = WhiffIntercept,
             WhiffContactSlope = WhiffContactSlope,
             WhiffOutOfZonePenalty = WhiffOutOfZonePenalty,
@@ -597,6 +601,8 @@ public static class CoefficientsLoader
         public double FlyErrorRoutineMarginSeconds { get; set; } = D.FlyErrorRoutineMarginSeconds;
         public double ThrowErrorBaseProb { get; set; } = D.ThrowErrorBaseProb;
         public double ThrowErrorAccuracySlope { get; set; } = D.ThrowErrorAccuracySlope;
+        public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
+        public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
         public double TunnelShareProb { get; set; } = D.TunnelShareProb;
         public double CatchReachFieldingSlope { get; set; } = D.CatchReachFieldingSlope;
         public double CatchReachCapSeconds { get; set; } = D.CatchReachCapSeconds;
@@ -661,6 +667,8 @@ public static class CoefficientsLoader
             FlyErrorRoutineMarginSeconds = FlyErrorRoutineMarginSeconds,
             ThrowErrorBaseProb = ThrowErrorBaseProb,
             ThrowErrorAccuracySlope = ThrowErrorAccuracySlope,
+            WildThrowScatterSigmaM = WildThrowScatterSigmaM,
+            RecoveryReactionSeconds = RecoveryReactionSeconds,
             TunnelShareProb = TunnelShareProb,
             CatchReachFieldingSlope = CatchReachFieldingSlope,
             CatchReachCapSeconds = CatchReachCapSeconds,
@@ -807,6 +815,12 @@ public static class CoefficientsLoader
         public double RelayThrowSpeedMps { get; set; } = D.RelayThrowSpeedMps;
         public double CutoffFractionFromHome { get; set; } = D.CutoffFractionFromHome;
         public double CutoffThrowSeconds { get; set; } = D.CutoffThrowSeconds;
+        // バックホーム悪送球（2026-08-30）
+        public double RelayThrowErrorBaseProb { get; set; } = D.RelayThrowErrorBaseProb;
+        public double RelayThrowErrorAccuracySlope { get; set; } = D.RelayThrowErrorAccuracySlope;
+        public double WildThrowScatterSigmaM { get; set; } = D.WildThrowScatterSigmaM;
+        public double RecoveryReactionSeconds { get; set; } = D.RecoveryReactionSeconds;
+        public double RecoverySprintSpeedMps { get; set; } = D.RecoverySprintSpeedMps;
         public double HomeTagSeconds { get; set; } = D.HomeTagSeconds;
         public double HomeMarginScale { get; set; } = D.HomeMarginScale;
         public double HomeSuccessBias { get; set; } = D.HomeSuccessBias;
@@ -962,6 +976,11 @@ public static class CoefficientsLoader
             RelayThrowSpeedMps = RelayThrowSpeedMps,
             CutoffFractionFromHome = CutoffFractionFromHome,
             CutoffThrowSeconds = CutoffThrowSeconds,
+            RelayThrowErrorBaseProb = RelayThrowErrorBaseProb,
+            RelayThrowErrorAccuracySlope = RelayThrowErrorAccuracySlope,
+            WildThrowScatterSigmaM = WildThrowScatterSigmaM,
+            RecoveryReactionSeconds = RecoveryReactionSeconds,
+            RecoverySprintSpeedMps = RecoverySprintSpeedMps,
             HomeTagSeconds = HomeTagSeconds,
             HomeMarginScale = HomeMarginScale,
             HomeSuccessBias = HomeSuccessBias,

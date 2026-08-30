@@ -14,7 +14,7 @@ namespace KokoSim.Engine.Tests.Balance;
 /// 打者の「慣れ」の統計（issue times-through-order-familiarity）: 先発投手に対する 1巡目 vs 3巡目の被OPS。
 /// 実測（帯値はオーナー承認待ち＝ここでは「正で、控えめ」だけを固定する）。
 /// </summary>
-[Trait("Category", "Heavy")]   // 600試合のフルエンジン
+[Trait("Category", "Heavy")]   // 3000試合のフルエンジン
 public sealed class TimesThroughOrderTests
 {
     private readonly ITestOutputHelper _out;
@@ -32,8 +32,11 @@ public sealed class TimesThroughOrderTests
     [Fact]
     public void ThirdTimeThrough_OpsExceedsFirst_Modestly()
     {
+        // ⚠ 600シードでは足りない（実測 2026-08-30: 送球逸れの回収レース導入でrng列がずれ delta=-.003 に逆転。
+        // 1200シードでも±.000で拮抗）。慣れの効果自体が小さく、乱数列がずれると試合ごとの揺れに埋もれる
+        // ＝母数で殺す（3000シード）。
         var byPass = new[] { new Acc(), new Acc(), new Acc(), new Acc() };   // 添字＝巡目−1（4巡目以降は3へ畳む）
-        for (ulong seed = 1; seed <= 600; seed++)
+        for (ulong seed = 1; seed <= 3000; seed++)
         {
             var away = StrengthTeamFactory.Create(50, "A" + seed, new Xoshiro256Random(seed * 3));
             var home = StrengthTeamFactory.Create(50, "H" + seed, new Xoshiro256Random(seed * 3 + 1));

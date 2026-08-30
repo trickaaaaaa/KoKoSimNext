@@ -21,7 +21,9 @@ public readonly record struct HomePlaySituation(
     double BallFieldedAtSeconds,
     double OutfielderThrowSpeedMps,
     // 処理野手の守備(Fielding)。返球・中継の握り替えを能力で伸縮（Issue #36）。既定50＝現行固定値と恒等。
-    int OutfielderFielding = 50);
+    int OutfielderFielding = 50,
+    // 処理野手の送球精度(ThrowAccuracy)。本塁への悪送球判定（IsWildThrow）専用、既定50＝リーグ平均と恒等。
+    int ThrowerThrowAccuracy = 50);
 
 /// <summary>
 /// 本塁クロスプレーの解決（設計書12 §3, F2）。盗塁 <see cref="StealResolver"/> と同型の「時間の勝負」。
@@ -243,6 +245,68 @@ public static class HomePlayResolver
             ? HomePlayResult.Safe
             : HomePlayResult.OutAtHome;
 
+    // === 本塁への悪送球（2026-08-30, design-14 P1-6b型の二値ロールをバックホームへ拡張）===
+    // 「外野からのバックホームが毎回ドンピシャで届く」違和感の是正。内野ゴロ→一塁の送球エラー
+    // （FieldingResolver.MaybeInfieldError, ThrowErrorBaseProb）と同じ形＝守備が間に合う（憤死になる）
+    // 場面でだけ追加の1ロールを引き、送球者の ThrowAccuracy が低いほど悪送球になりやすい。
+
+    /// <summary>本塁クロスプレーの結果（悪送球を区別する拡張）。<see cref="SafeOnWildThrow"/> は
+    /// 「守備が間に合ったはずが悪送球で生還した」＝呼び出し側で悪送球の連鎖（全走者+1進塁）を
+    /// トリガーする合図。<see cref="Safe"/>（走者が普通に勝った）とは区別する。</summary>
+    public enum HomeThrowOutcome { Safe, OutAtHome, SafeOnWildThrow }
+
+    /// <summary>本塁への送球が逸れるか（送球者の ThrowAccuracy から確率を出し1回だけロール）。
+    /// Ac=50 で <see cref="BaserunningCoefficients.RelayThrowErrorBaseProb"/> と恒等。
+    /// <see cref="BaserunningCoefficients.RelayThrowErrorBaseProb"/>≤0 なら常にfalse（rng非消費＝旧経路と完全一致）。</summary>
+    public static bool IsWildThrow(int throwAccuracy, BaserunningCoefficients c, IRandomSource rng)
+    {
+        if (c.RelayThrowErrorBaseProb <= 0.0) return false;
+        var prob = MathUtil.Clamp(
+            c.RelayThrowErrorBaseProb - (throwAccuracy - 50) * c.RelayThrowErrorAccuracySlope, 0.0, 1.0);
+        return MathUtil.Chance(prob, rng);
+    }
+
+    /// <summary>送球逸れの回収レース（design-12 §3.8）: 逸れ幅をサンプルし、拾い直しロス[s]を返す。
+    /// 回収役は「受け手自身」（起点=塁、逸れ幅ぶんだけ動く。返球不要）と「バックアップ」
+    /// （<see cref="ThrowRecovery.BackupRole"/>の定位置から着弾点まで走り、塁へ返球する）の近い方。
+    /// バックアップの走力・肩は個別Player情報が届いていないため<see cref="BaserunningCoefficients.RecoverySprintSpeedMps"/>
+    /// と<see cref="BaserunningCoefficients.RelayThrowSpeedMps"/>（リーグ平均内野肩）の定数で近似する。</summary>
+    private static double SampleRecoveryPenaltySeconds(
+        HomePlaySituation s, Vector3D targetPoint, int targetBase, BaserunningCoefficients c, IRandomSource rng)
+    {
+        var scatterM = Math.Abs(rng.NextGaussian(0.0, c.WildThrowScatterSigmaM));
+        var landing = ThrowRecovery.LandingPoint(s.BallFieldedPoint, targetPoint, scatterM);
+        var (backupX, backupZ) = FieldGeometry.StandardPosition(ThrowRecovery.BackupRole(targetBase));
+        return ThrowRecovery.RecoveryPenaltySeconds(
+            scatterM, landing, new Vector3D(backupX, 0, backupZ),
+            c.RecoverySprintSpeedMps, c.RecoverySprintSpeedMps, c.RelayThrowSpeedMps, c.RecoveryReactionSeconds);
+    }
+
+    /// <summary>本塁クロスプレーを解決し、悪送球による生還を区別する。塁は <paramref name="p"/> で指定。
+    /// 走者が勝てば <see cref="ResolveSafe"/> と同じ1ロールで確定（悪送球ロールは引かない＝乱数消費順不変）。
+    /// 守備が勝つ場面だけ追加で <see cref="IsWildThrow"/> を引く。悪送球が確定すると、逸れ幅→回収ロス
+    /// （design-12 §3.8）を守備所要時間へ加算してもう一度同じMargin/logisticを評価する＝拾い直しが
+    /// 間に合えば従来どおりアウトのまま（「毎回逸れたら即セーフ」にはしない）。</summary>
+    public static HomeThrowOutcome ResolveWithWildThrow(
+        Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
+        in BasePlayParams p, IRandomSource rng, double extraStartDelaySeconds = 0.0)
+    {
+        if (ResolveSafe(runner, fromBase, s, field, c, p, rng, extraStartDelaySeconds))
+            return HomeThrowOutcome.Safe;
+        if (!IsWildThrow(s.ThrowerThrowAccuracy, c, rng)) return HomeThrowOutcome.OutAtHome;
+
+        var recovery = SampleRecoveryPenaltySeconds(s, p.TargetPoint, p.TargetBase, c, rng);
+        var penalizedMargin = Margin(runner, fromBase, s, field, c, p, extraStartDelaySeconds) + recovery;
+        var stillSafe = MathUtil.Chance(MathUtil.Clamp(MathUtil.Logistic(penalizedMargin / p.MarginScale), 0.01, 0.99), rng);
+        return stillSafe ? HomeThrowOutcome.SafeOnWildThrow : HomeThrowOutcome.OutAtHome;
+    }
+
+    /// <summary>本塁クロスプレーを解決（後方互換: HomeParams 固定）。悪送球を区別する<see cref="ResolveWithWildThrow(Player,int,HomePlaySituation,FieldGeometry,BaserunningCoefficients,in BasePlayParams,IRandomSource,double)"/>の便宜オーバーロード。</summary>
+    public static HomeThrowOutcome ResolveWithWildThrow(
+        Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
+        IRandomSource rng, double extraStartDelaySeconds = 0.0)
+        => ResolveWithWildThrow(runner, fromBase, s, field, c, HomeParams(c), rng, extraStartDelaySeconds);
+
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは本塁クロスプレー（安打・ゴロの本塁レース）と1点だけ違う: 走者の時計の起点が
     // 「打球の到達」ではなく「捕球の瞬間」＝離塁は捕球後。守備も同じ捕球時刻から送球する（DefenseTimeSeconds
@@ -294,4 +358,19 @@ public static class HomePlayResolver
         Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
         in BasePlayParams p, IRandomSource rng)
         => MathUtil.Chance(TagUpSuccessProbability(runner, fromBase, s, field, c, p), rng);
+
+    /// <summary>タッチアップの到達レースを解決し、悪送球による生還を区別する（<see cref="ResolveWithWildThrow(Player,int,HomePlaySituation,FieldGeometry,BaserunningCoefficients,in BasePlayParams,IRandomSource,double)"/>のタッチアップ版）。</summary>
+    public static HomeThrowOutcome TagUpResolveWithWildThrow(
+        Player runner, int fromBase, HomePlaySituation s, FieldGeometry field, BaserunningCoefficients c,
+        in BasePlayParams p, IRandomSource rng)
+    {
+        if (TagUpResolveSafe(runner, fromBase, s, field, c, p, rng))
+            return HomeThrowOutcome.Safe;
+        if (!IsWildThrow(s.ThrowerThrowAccuracy, c, rng)) return HomeThrowOutcome.OutAtHome;
+
+        var recovery = SampleRecoveryPenaltySeconds(s, p.TargetPoint, p.TargetBase, c, rng);
+        var penalizedMargin = TagUpMargin(runner, fromBase, s, field, c, p) + recovery;
+        var stillSafe = MathUtil.Chance(MathUtil.Clamp(MathUtil.Logistic(penalizedMargin / p.MarginScale), 0.01, 0.99), rng);
+        return stillSafe ? HomeThrowOutcome.SafeOnWildThrow : HomeThrowOutcome.OutAtHome;
+    }
 }

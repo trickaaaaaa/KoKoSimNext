@@ -552,9 +552,11 @@ public sealed class BaserunningPlaysTests
         var on = new GameContext { Baserunning = C with { DropThirdStrikeReachProb = 0.9, DropThirdStrikeCatchingSlope = 0.0 } };
         var totalOff = 0;
         var totalOn = 0;
-        // ⚠ 30シードでは足りない（実測 2026-08-14: off=72 / on=70 で逆転した）。振り逃げ1回の得点価値は
-        // 小さく、乱数列がずれると試合ごとの揺れに埋もれる＝母数で殺す（150シード）。
-        for (ulong s = 0; s < 150; s++)
+        // ⚠ 30シードでは足りない（実測 2026-08-14: off=72 / on=70 で逆転した）。150シードも
+        // バックホーム悪送球導入（2026-08-30, RelayThrowErrorBaseProb>0）で乱数列が変わり再度逆転した
+        // （off=629 on=626）。振り逃げ1回の得点価値は小さく、乱数列がずれると試合ごとの揺れに埋もれる
+        // ＝母数をさらに増やして殺す（500シード）。
+        for (ulong s = 0; s < 500; s++)
         {
             totalOff += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
             totalOn += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(s)).TotalRuns;

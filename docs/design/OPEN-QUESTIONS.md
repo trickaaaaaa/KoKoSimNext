@@ -1568,3 +1568,73 @@ CHANGELOG 31b）。実際に確認すると、この保留は徹底されてい�
 **判断**: 他3スキルは実装済み（コミット待ち）。SubmarineMastery は据え置き、
 `data/skills.yaml` の説明文もそのまま残す（削除・改変しない＝将来の投法軸実装時にそのまま使える）。
 投法軸を実装する別issueが先に必要（未起票）。
+
+## 2026-08-30 バックホーム（本塁/中継送球）に悪送球が存在しない → **方針確定（同日・監督判断）**
+
+ユーザー指摘「外野からのバックホームが毎回ドンピシャで違和感がある」を調査した結果、
+`HomePlayResolver`（design-12 §F2）は距離＋肩の速さだけで送球到達時刻を一意に決める完全決定論的なモデルで、
+「守備所要時間 vs 走者所要時間」の時間勝負しか判定していないことが判明。悪送球・送球逸れというイベント自体が
+存在しない（`ThrowScatterSigmaCm`＝`FielderAttributes.cs:47` は式だけ定義され未配線の死コード）。
+
+一方、内野ゴロ→一塁送球には `ThrowAccuracy` 駆動の悪送球モデル（design-14 P1-6b, `FieldingResolver.MaybeInfieldError`,
+`FieldingCoefficients.ThrowErrorBaseProb`/`ThrowErrorAccuracySlope`）が既にあり、この非対称が違和感の正体。
+
+**決定事項（監督確認済み）**:
+1. **モデルの形**: 内野と同型の二値ロール（`ThrowErrorBaseProb − (ThrowAccuracy−50)×ThrowErrorAccuracySlope`）を
+   バックホーム/中継送球にも踏襲する。`ThrowScatterSigmaCm` の距離ベース連続散布モデルは不採用（実装コスト対効果で見送り）。
+2. **悪送球時の結果**: design-14 が内野悪送球に採用した簡略化（「悪送球はほぼ必ず全走者を1つ多く進める」）を
+   本塁/中継のクロスプレーにもそのまま踏襲する。憤死のはずがセーフになり、他の走者も追加で1つ進む。
+
+**未決のまま実装で決めてよい詳細**（監督判断が要らない範囲）:
+- 中継が絡む送球（`HasRelay`）でどちらの野手（外野手 or カットマン）の `ThrowAccuracy` を判定に使うか
+- `HomePlaySituation` への `ThrowAccuracy` の配線経路
+- 三塁レース(`ThirdParams`)・進塁打レース(`AdvanceParams`)・封殺系(`SecondForceParams`/`ThirdForceParams`/`HomeForceParams`)
+  へも同じ悪送球ロールを広げるか、まずは本塁生還レースだけに絞るか（実装は呼び出し元の調査結果を踏まえて判断）
+- 新係数名・YAML/DTO/C#既定の3点セットへの反映
+
+**必須**: 実装後は design-12 F2 実装時と同じく Heavy 統計回帰（得点分布・生還率）を必ず回して帯内を確認する
+（design-12 §3.1 の感度表が参考値）。
+
+**実装済み（2026-08-30・同日）**: `HomePlayResolver.IsWildThrow`/`ResolveWithWildThrow`/`TagUpResolveWithWildThrow`
+＋係数 `RelayThrowErrorBaseProb`/`RelayThrowErrorAccuracySlope`（YAML/DTO/C#既定の3点セット済み）。
+対象は本塁への実送球3経路（安打の本塁レース・内野前進の本塁封殺・犠飛タッチアップ）のみに絞った
+（3塁・2塁送球・スクイズは対象外）。中継が絡む送球はカットマン個別のThrowAccuracyでなく処理した
+外野手のThrowAccuracyで一律判定（`HomePlaySituation`にカットマンのPlayer情報を持たせる配線が
+無いため。必要になれば別issue）。初期係数値は内野送球エラーと同値のまま Heavy 統計回帰が帯内に
+収まったため再校正せず据え置き。RNG消費順が変わるため決定論baselineを再生成し、境界値ぎりぎりで
+別方向に倒れた既存の統計テスト（`DropThirdStrike_Enabled_RaisesRunsForHighStrikeoutTeams`）は
+母数を150→500シードに増やして安定させた（design-12 §3.7 に詳細）。
+
+## 2026-08-30 送球逸れの回収レース（§3.7の悪送球を拾い直しレースへ拡張）→ **設計確定・未実装**
+
+§3.7の悪送球（内野一塁送球・バックホーム）は「発生したら即セーフ」の二値だったが、「逸れた送球を
+野手が拾い直してタッチしに行き、間に合えばアウトのままのケースもあるのでは」というユーザー指摘を受け、
+拡張を設計した（design-12 §3.8に詳細）。
+
+**決定事項（監督確認済み）**:
+1. **段階分け**: フェーズ1＝内野一塁送球・バックホーム/三塁のみ。盗塁の捕手送球（`StealResolver`。
+   ThrowAccuracy未接続・幾何的送球経路も無い）は別issueへ切り出す
+2. **回収役**: 固定バックアップ（一塁→右翼手／本塁→投手／三塁→左翼手）だけでなく、**受け手自身が
+   拾い直すケースも候補に入れ、近い方（min）を採用**する。固定バックアップ一本だと軽微な逸れでも
+   律儀に外野から走ってくる不自然な絵になる、という指摘で修正した
+3. **進塁量**: 逸れ幅に応じた可変進塁は見送り、固定+1進塁（現行§3.7のまま）を維持
+
+**モデルの核**: 新しい確率式は作らず、`ThrowScatterSigmaCm`（死コード）からサンプルした逸れ幅を
+「守備所要時間への加算」として既存の`Margin`/logisticレースに乗せるだけ＝拾い直しが間に合えば
+従来どおりアウト、間に合わなければセーフ＋固定+1進塁。
+
+**未着手**: バックアップ野手の役割表（`FieldGeometry`への新設）・野手属性の解決層への配線・
+逸れ幅サンプルの新規rng消費点（決定論baseline再生成要）。実装後はHeavy統計回帰で
+`ThrowErrorBaseProb`/`RelayThrowErrorBaseProb`の再校正が必要になる見込み（現行値は「エラー＝
+ほぼ確実にセーフ」前提で校正されているため）。
+
+**実装済み（2026-08-30・同日）**: `ThrowRecovery`（新規, `Match/Field/`）＋`HomePlayResolver.ResolveWithWildThrow`/
+`TagUpResolveWithWildThrow`の拡張＋`FieldingResolver`の`FieldingErrorKind.Throw`分岐への統合。
+`ThrowScatterSigmaCm`はcm単位で小さすぎ流用に不適と判明したため、代わりに新設`WildThrowScatterSigmaM`
+（m単位、内野/本塁で独立値）を使用（design-12 §3.8に詳細・理由記載）。対象は3塁ではなく本塁のみ
+（§3.7自体が本塁専用だったため、当初メモの「バックホーム/三塁」は誤記）。バックホーム側の回収役の
+走力・肩は個別Player配線を増やさず`RecoverySprintSpeedMps`等の平均定数で近似（`RelayThrowSpeedMps`
+流用の既存慣習を踏襲）、内野一塁側は呼び出し元に実際の`Fielder`一覧があるため実属性を使用——という
+非対称を意図的に許容した。`ThrowErrorBaseProb`/`RelayThrowErrorBaseProb`自体の再校正は不要だった
+（初期値のままHeavy帯内）。決定論baseline再生成済み。境界値ぎりぎりだった統計テスト
+`ThirdTimeThrough_OpsExceedsFirst_Modestly`が乱数列のずれで逆転したため600→3000シードへ増やして安定化。

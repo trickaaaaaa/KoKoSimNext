@@ -203,6 +203,17 @@ public sealed record FieldingCoefficients
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
 
+    // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
+    // 守備所要時間へ加算してもう一度同じ判定基準（defenseTime+ForceOutMarginSeconds vs runnerTime）で
+    // 再評価する（拾い直しが間に合えばアウトのまま）。回収役（一塁手／右翼手）の走力・肩は実際の
+    // Fielder情報（fielders）から取るため、速度の係数はここには持たない（<c>BaserunningCoefficients</c>と違い
+    // 呼び出し元に実際の野手一覧が揃っているため）。
+    /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。内野送球は距離が短いため
+    /// <c>BaserunningCoefficients.WildThrowScatterSigmaM</c>（バックホーム用）とは独立の値。</summary>
+    public double WildThrowScatterSigmaM { get; init; } = 6.0;
+    /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
+    public double RecoveryReactionSeconds { get; init; } = 0.30;
+
     /// <summary>
     /// トンネル（股・脇を抜けて球が外野へ行く失策, issue #632）の割合。
     /// <b>捕球エラーの内訳</b>＝失策の総数は変えず、お手玉が減ってトンネルが増える

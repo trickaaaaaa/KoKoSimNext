@@ -319,6 +319,28 @@ public sealed record BaserunningCoefficients
     /// 肩&gt;32m/s で恒真）＝中継が消滅するので、その置き換えはしないこと。距離減衰のモデル化は案B（未着手）。
     /// </summary>
     public double CutoffThrowSeconds { get; init; } = 1.88;
+
+    // バックホーム悪送球（外野/中継→本塁の送球エラー, 2026-08-30。FieldingCoefficients.ThrowErrorBaseProb と
+    // 同型の二値ロール）。守備が本塁で間に合う（憤死になる）場面でのみ引く＝内野の送球エラーと同じく
+    // 「アウトのはずが悪送球でセーフ」の分岐。対象は本塁への実送球（安打の本塁レース・内野前進の
+    // 本塁封殺・犠飛タッチアップ）のみ。3塁・2塁への送球（進塁打・封殺・スクイズ）は対象外。
+    /// <summary>本塁への悪送球の基準確率（送球者のThrowAccuracy=50時）。0.0343は内野送球エラー
+    /// （<see cref="Fielding.FieldingCoefficients.ThrowErrorBaseProb"/>）と同値の初期値＝実測して校正する。</summary>
+    public double RelayThrowErrorBaseProb { get; init; } = 0.0343;
+    /// <summary>送球精度(ThrowAccuracy−50)あたりの本塁悪送球確率の減少幅。内野送球エラーと同値。</summary>
+    public double RelayThrowErrorAccuracySlope { get; init; } = 0.004;
+
+    // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
+    // 守備所要時間へ加算してもう一度同じ時間勝負を評価する（拾い直しが間に合えばアウトのまま）。
+    /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。バックホーム/中継は
+    /// 距離が長いぶん内野送球より逸れが大きくなりうるため独立の値を持つ（<c>FieldingCoefficients</c>の同名値とは別）。</summary>
+    public double WildThrowScatterSigmaM { get; init; } = 6.0;
+    /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
+    public double RecoveryReactionSeconds { get; init; } = 0.30;
+    /// <summary>回収に動く野手のスプリント速度[m/s]（個別Player情報が届いていないため平均的な値の定数。
+    /// 受け手・バックアップ共通）。返球速度は<see cref="RelayThrowSpeedMps"/>（リーグ平均内野肩）を流用する。</summary>
+    public double RecoverySprintSpeedMps { get; init; } = 6.5;
+
     /// <summary>本塁でのタッチ[s]。</summary>
     public double HomeTagSeconds { get; init; } = 0.12;
     /// <summary>margin→生還確率の logistic 幅[s]。</summary>

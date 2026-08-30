@@ -49,6 +49,94 @@ public sealed class BaserunningHomePlayTests
         Assert.Equal(homeOuts, outMoves); // 追加アウトは本塁Outレッグと一致
     }
 
+    // --- バックホーム悪送球（2026-08-30, design-14 P1-6型の二値ロールをバックホームへ拡張）---
+    // 「外野からのバックホームが毎回ドンピシャで届く」違和感の是正。RelayThrowErrorBaseProb=1.0（極端値）で
+    // 「守備が勝つ場面は必ず悪送球に転じる」ことを固定し、既存の WithHomeContext_ContestedPlay_... と
+    // 同じ接戦コンテキストで「本塁憤死が消える」ことを検証する。
+
+    [Fact]
+    public void WildThrow_GuaranteedError_HugeScatter_EliminatesHomeOuts_ConvertsToScores()
+    {
+        // 逸れ幅を極端に大きくして回収が絶対に間に合わない境界を固定する（design-12 §3.8の回収レースが
+        // 「逸れ幅が十分大きければ結局セーフ」という極限で従来の二値モデルへ縮退することの契約）。
+        var home = Context(distanceM: 15, fieldedAt: 0.7, arm: 60, aggression: 1.0);
+        var coeff = C with { RelayThrowErrorBaseProb = 1.0, WildThrowScatterSigmaM = 500.0 };
+        var rng = new Xoshiro256Random(5);
+        int scored = 0, homeOuts = 0;
+        for (var i = 0; i < 2000; i++)
+        {
+            var bases = new BaseState { Third = new Player { Speed = 50, Baserunning = 50 } };
+            var (runs, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.Single, new Player(), 0, coeff, rng, collectMoves: true, home);
+            scored += runs;
+            homeOuts += extraOuts;
+        }
+        Assert.True(scored > 0, "本塁生還が一度も出ない");
+        // logistic は 0.01/0.99 にクランプされるため厳密に0にはならない（極端に不利でも1%は残る）。
+        // 「ほぼ全滅している」ことだけを確認する。
+        Assert.True(homeOuts <= 40, $"逸れ幅が極端に大きいのに本塁憤死が残りすぎている: {homeOuts}/2000");
+    }
+
+    [Fact]
+    public void WildThrow_GuaranteedError_TinyScatter_RecoveryOftenSavesTheOut()
+    {
+        // design-12 §3.8の核心: 悪送球が確定しても「毎回即セーフ」にはしない。逸れ幅が小さければ
+        // 受け手自身がすぐ拾い直し、アウトのまま残るケースが（逸れ幅が大きい場合と比べて）相応に増える。
+        var home = Context(distanceM: 15, fieldedAt: 0.7, arm: 60, aggression: 1.0); // 生還・憤死の両方が出る接戦
+        var coeff = C with { RelayThrowErrorBaseProb = 1.0, WildThrowScatterSigmaM = 0.05 };
+        var rng = new Xoshiro256Random(5);
+        int homeOuts = 0;
+        for (var i = 0; i < 2000; i++)
+        {
+            var bases = new BaseState { Third = new Player { Speed = 50, Baserunning = 50 } };
+            var (_, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.Single, new Player(), 0, coeff, rng, collectMoves: true, home);
+            homeOuts += extraOuts;
+        }
+        Assert.True(homeOuts > 40, $"逸れ幅が小さいのに拾い直しで守れているアウトが少なすぎる（回収レースが機能していない）: {homeOuts}/2000");
+    }
+
+    [Fact]
+    public void WildThrow_Disabled_MatchesPreExistingBehavior_NoOutsEliminated()
+    {
+        // 既定オフ(RelayThrowErrorBaseProb=0)では従来どおり憤死が普通に出る＝悪送球導入前の帯と一致。
+        var home = Context(distanceM: 15, fieldedAt: 0.7, arm: 60, aggression: 1.0);
+        var coeff = C with { RelayThrowErrorBaseProb = 0.0 };
+        var rng = new Xoshiro256Random(5);
+        int homeOuts = 0;
+        for (var i = 0; i < 2000; i++)
+        {
+            var bases = new BaseState { Third = new Player { Speed = 50, Baserunning = 50 } };
+            var (_, extraOuts, _, _, _, _) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.Single, new Player(), 0, coeff, rng, collectMoves: true, home);
+            homeOuts += extraOuts;
+        }
+        Assert.True(homeOuts > 0, "悪送球オフでも本塁憤死が出ない（既存挙動が壊れている）");
+    }
+
+    [Fact]
+    public void WildThrow_OnGroundBallForceAtHome_PushesTrailingRunnerExtraBase()
+    {
+        // 内野前進×本塁封殺（ゴロ, design-12 G1）でも同じ悪送球連鎖が効く。二塁走者が同時に居れば
+        // 悪送球1本で三塁まで押し上がる（design-14型の連鎖のバックホームへの拡張）。
+        var coeff = C with { RelayThrowErrorBaseProb = 1.0, WildThrowScatterSigmaM = 500.0 }; // 回収が絶対に間に合わない極端値
+        var runner = new Player { Speed = 85, Baserunning = 80 }; // 積極的に本塁を狙う快足走者
+        var rng = new Xoshiro256Random(5);
+        var homeOuts = 0;
+        var sawExtraAdvance = 0;
+        for (var i = 0; i < 2000; i++)
+        {
+            var second = new Player { Speed = 50, Baserunning = 50 };
+            var bases = new BaseState { Second = second, Third = runner };
+            var (_, _, baseOuts, _, _, moves) = BaserunningModel.ApplyDetailed(
+                bases, PlateAppearanceResult.InPlayOut, new Player(), 0, coeff, rng, collectMoves: true, Grounder(DefenseDepth.In));
+            homeOuts += baseOuts.Home;
+            if (moves.Any(m => m.Runner == second && m.FromBase == 2 && m.ToBase == 3 && !m.Out)) sawExtraAdvance++;
+        }
+        Assert.True(homeOuts <= 40, $"逸れ幅が極端に大きいのに本塁憤死が残りすぎている: {homeOuts}/2000"); // clamp下限(1%)の残り分
+        Assert.True(sawExtraAdvance > 0, "本塁への悪送球で二塁走者が三塁へ押し上がるケースが一度も出ない");
+    }
+
     [Fact]
     public void NullContext_ThirdRunner_AlwaysScores_NoOuts()
     {

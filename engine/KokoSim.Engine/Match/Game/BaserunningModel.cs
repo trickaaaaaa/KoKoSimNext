@@ -267,6 +267,9 @@ public static class BaserunningModel
         var thirdOuts = 0;  // 単打の一塁→三塁レース憤死（Issue #89。extraOuts の内数）
         // 1プレーで送球先は1箇所＝アウトは最大1（1球は2箇所へ投げられない）。本塁・三塁で共有する（#89）。
         var outThrowUsed = false;
+        // バックホーム悪送球（2026-08-30）: 本塁への送球が逸れ、アウトのはずの走者が生還したか。
+        // 発生時は末尾で残る走者を1つずつ押し上げる（design-14 P1-6型の連鎖、全走者+1進塁）。
+        var homeWildThrowOccurred = false;
 
         // 打者の到達塁（単打/野選=1塁、二塁打=2塁）。先行走者から順にこの塁を明け渡す義務があるかを決める。
         var batterBase = isDouble ? 2 : 1;
@@ -297,9 +300,14 @@ public static class BaserunningModel
                 return (HomeVerdict.Held, false); // 自重（RNG消費なし）
             var margin = HomePlayResolver.Margin(runner, fromBase, h.Situation, h.Field, coeff);
             var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
-            var res = HomePlayResolver.Resolve(runner, fromBase, h.Situation, h.Field, coeff, rng);
-            if (res == HomePlayResult.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall);
+            var outcome = HomePlayResolver.ResolveWithWildThrow(runner, fromBase, h.Situation, h.Field, coeff, rng);
+            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall);
             outThrowUsed = true;
+            if (outcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+            {
+                homeWildThrowOccurred = true;
+                return (HomeVerdict.Scored, closeCall);
+            }
             return (HomeVerdict.OutAtHome, closeCall);
         }
 
@@ -424,6 +432,16 @@ public static class BaserunningModel
             }
         }
 
+        // バックホーム悪送球の連鎖（design-14 P1-6型）: この時点の third/second/first は「悪送球が
+        // 無かった場合の」確定済みの行き先。まだ塁上に残っている走者だけをもう1つ押し上げる
+        // （得点済み・アウトになった走者は対象外＝bases変数には現れない）。打者走者自身は対象外（次行で別途配置）。
+        if (homeWildThrowOccurred && currentOuts + extraOuts < 3)
+        {
+            var (extraRuns, movedThird, movedSecond, movedFirst) = PushRunnersOneBase(third, second, first, mv);
+            runs += extraRuns;
+            third = movedThird; second = movedSecond; first = movedFirst;
+        }
+
         // 各走者は互いに異なる塁へ割り当て済み（フォース済みの先行走者は必ず塁を明け渡す）ため、
         // 打者の占有と衝突しない。
         if (third is not null) bases.Third = third;
@@ -452,6 +470,47 @@ public static class BaserunningModel
         mv.Add(new RunnerMove(runner, fromBase, 4, false));
     }
 
+    /// <summary>塁上の走者を1つずつ押し上げる（悪送球1本で全走者+1進塁、design-14 P1-6型の連鎖）。
+    /// 三塁→本塁（得点）、二塁→三塁、一塁→二塁（二塁が空いていれば）の順。ReachedOnError の失策連鎖
+    /// （<see cref="ApplyErrorExtraAdvance"/>）とバックホーム悪送球（<see cref="ApplyRunnerAdvance"/> 内
+    /// TryHome）の共通ロジック。</summary>
+    private static (int Runs, Player? Third, Player? Second, Player? First) PushRunnersOneBase(
+        Player? third, Player? second, Player? first, List<RunnerMove>? mv)
+    {
+        var runs = 0;
+        if (third is not null)
+        {
+            runs++;
+            mv?.Add(new RunnerMove(third, 3, 4, false));
+            third = null;
+        }
+        if (second is not null)
+        {
+            mv?.Add(new RunnerMove(second, 2, 3, false));
+            third = second;
+            second = null;
+        }
+        if (first is not null && second is null)
+        {
+            mv?.Add(new RunnerMove(first, 1, 2, false));
+            second = first;
+            first = null;
+        }
+        return (runs, third, second, first);
+    }
+
+    /// <summary><see cref="PushRunnersOneBase"/> の <see cref="BaseState"/> 版（バックホーム悪送球専用。
+    /// <paramref name="bases"/> を直接書き換える）。ApplyInPlayOut の3塁走者本塁レース（フォース封殺・
+    /// 内野前進・タッチアップ）で共通に使う。</summary>
+    private static int PushRunnersOnWildThrow(BaseState bases, List<RunnerMove>? mv)
+    {
+        var (runs, third, second, first) = PushRunnersOneBase(bases.Third, bases.Second, bases.First, mv);
+        bases.Third = third;
+        bases.Second = second;
+        bases.First = first;
+        return runs;
+    }
+
     /// <summary>失策の連鎖（design-14 P1-6）: 悪送球1本で塁上の走者全員＋打者走者が1つ多く進む、という単一事象として
     /// 一括モデル化する（個別確率ではない）。<paramref name="coeff"/>.ErrorExtraAdvanceProb &gt; 0 のときのみ呼ばれる。</summary>
     private static (int Runs, bool Occurred) ApplyErrorExtraAdvance(
@@ -470,29 +529,11 @@ public static class BaserunningModel
         // 乱数の消費位置と回数を従来と揃え、発生「率」だけを絞る。
         if (!MathUtil.Chance(prob, rng) || errorKind != Fielding.FieldingErrorKind.Throw) return (0, false);
 
-        var runs = 0;
-        var third = bases.Third;
-        var second = bases.Second;
-        var first = bases.First; // ReachedOnError では常に打者走者。
-
-        if (third is not null)
-        {
-            runs++;
-            mv?.Add(new RunnerMove(third, 3, 4, false));
-            bases.Third = null;
-        }
-        if (second is not null)
-        {
-            mv?.Add(new RunnerMove(second, 2, 3, false));
-            bases.Third = second;
-            bases.Second = null;
-        }
-        if (first is not null && bases.Second is null)
-        {
-            mv?.Add(new RunnerMove(first, 1, 2, false));
-            bases.Second = first;
-            bases.First = null;
-        }
+        // first は ReachedOnError では常に打者走者。
+        var (runs, third, second, first) = PushRunnersOneBase(bases.Third, bases.Second, bases.First, mv);
+        bases.Third = third;
+        bases.Second = second;
+        bases.First = first;
         return (runs, true);
     }
 
@@ -630,10 +671,16 @@ public static class BaserunningModel
                 var delay = coeff.HomeGrounderStartDelaySeconds;
                 var forceHomeMargin = HomePlayResolver.Margin(r3, 3, hforce.Situation, hforce.Field, coeff, delay);
                 var forceHomeCloseCall = Math.Abs(forceHomeMargin) < coeff.CloseCallMarginSeconds;
-                if (HomePlayResolver.Resolve(r3, 3, hforce.Situation, hforce.Field, coeff, rng, delay) == HomePlayResult.Safe)
+                var forceHomeOutcome = HomePlayResolver.ResolveWithWildThrow(r3, 3, hforce.Situation, hforce.Field, coeff, rng, delay);
+                if (forceHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                 {
                     runs++;
                     mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay });
+                    if (forceHomeOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+                    {
+                        bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
+                        runs += PushRunnersOnWildThrow(bases, mv);
+                    }
                 }
                 else
                 {
@@ -669,10 +716,16 @@ public static class BaserunningModel
                 {
                     var backHomeMargin = HomePlayResolver.Margin(r3, 3, hi.Situation, hi.Field, coeff, delay);
                     var backHomeCloseCall = Math.Abs(backHomeMargin) < coeff.CloseCallMarginSeconds;
-                    if (HomePlayResolver.Resolve(r3, 3, hi.Situation, hi.Field, coeff, rng, delay) == HomePlayResult.Safe)
+                    var backHomeOutcome = HomePlayResolver.ResolveWithWildThrow(r3, 3, hi.Situation, hi.Field, coeff, rng, delay);
+                    if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                     {
                         runs++;
                         mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay });
+                        if (backHomeOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+                        {
+                            bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
+                            runs += PushRunnersOnWildThrow(bases, mv);
+                        }
                     }
                     else
                     {
@@ -697,11 +750,17 @@ public static class BaserunningModel
                     var tagCloseCall = Math.Abs(tagMargin) < coeff.CloseCallMarginSeconds;
                     // 絵も判定と同じ「捕球を待ってから走る」時計にする（issue score-display-before-home-touch）。
                     var tagCatchAt = hfly.Situation.BallFieldedAtSeconds;
-                    if (HomePlayResolver.TagUpResolveSafe(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp, rng))
+                    var tagOutcome = HomePlayResolver.TagUpResolveWithWildThrow(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp, rng);
+                    if (tagOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                     {
                         runs++;
                         mv?.Add(new RunnerMove(r3, 3, 4, false)
                             { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt });
+                        if (tagOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+                        {
+                            bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
+                            runs += PushRunnersOnWildThrow(bases, mv);
+                        }
                     }
                     else
                     {

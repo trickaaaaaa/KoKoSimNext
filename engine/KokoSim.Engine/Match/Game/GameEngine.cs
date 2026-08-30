@@ -1693,7 +1693,10 @@ public static class GameEngine
                     new Vector3D(fp.FieldedX ?? fp.LandingX, 0, fp.FieldedZ ?? fp.LandingZ),
                     fp.FieldedAtSeconds ?? fp.HangTimeSeconds,
                     arm,
-                    fp.FielderFielding);
+                    fp.FielderFielding,
+                    // バックホーム悪送球（2026-08-30）: 処理野手のThrowAccuracy。下の errorThrowAccuracy
+                    // （失策連鎖用）と同じ取り方＝未処理球では既定50。
+                    fp.FielderThrowAccuracy);
                 // aggression は中立固定（校風/ティア/采配の三層写像は残Q10）。
                 // 守備の内野深さ（G1）＝ゴロ凡打の三塁走者判定へ「前進で刺す/後退で献上」を反映。
                 // ThrowArriveSeconds（一塁送球到達時刻）はゴロ凡打の進塁打（Issue #318）分岐Cの転送起点。
@@ -1989,7 +1992,21 @@ public static class GameEngine
                 // 本塁クロスプレーを描いた打席では投げない＝上の AppendBackHomeThrows と二重にならない。
                 if (!homeThrowAdded && res.Play is { } errPlay && timeline.ErrorPickupAt is not null)
                 {
-                    timeline = Match.Timeline.TimelineBuilder.AppendErrorReturnThrow(timeline, errPlay, ctx.Field);
+                    // 同じ打球で本塁以外（三塁等）に憤死した走者がいるなら、実際の送球はそちらへ行っている
+                    // （issue outfield-hit-home-safe-and-third-out-throw-missing の続報）。以前は拾い直した
+                    // 野手を無条件で二塁/投手へ機械的に投げ返していたため、実際にアウトを取った送球が
+                    // 「棒立ち防止」の演出用送球に握りつぶされて消えていた。
+                    var errReturn = Match.Timeline.TimelineBuilder.ResolveOutfieldReturnTarget(runnerMoves, errPlay.Result);
+                    string? outAtOtherBaseName = null;
+                    var outAtOtherBaseArrive = 0.0;
+                    if (errReturn.RunnerOut)
+                    {
+                        outAtOtherBaseName = errReturn.BaseName;
+                        foreach (var leg in timeline.Runners)
+                            if (leg.Label == errReturn.AnchorLabel && leg.T1 > outAtOtherBaseArrive) outAtOtherBaseArrive = leg.T1;
+                    }
+                    timeline = Match.Timeline.TimelineBuilder.AppendErrorReturnThrow(
+                        timeline, errPlay, ctx.Field, outAtOtherBaseName, outAtOtherBaseArrive);
                 }
             }
 

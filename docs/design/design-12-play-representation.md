@@ -155,6 +155,91 @@ handoff §B の「併殺の名手 = `BaserunningModel` の DP に**野手 identi
 AVG .255→**.273**・得点 4.08→**5.14**/チーム（いずれも `balance-targets.yaml` の帯内）。
 帯は `atbat_10k` に `slugging` / `double_rate` / `triple_rate` / `doubles_per_homerun` を新設して固定した。
 
+### 3.7 バックホーム悪送球（2026-08-30）
+
+**問題**: §3の「送球 vs 走者」時間勝負は、外野処理点・肩の速さ・走者の走力から到達時刻を一意に決める
+完全決定論的なモデルで、送球そのものが逸れる（悪送球になる）イベントを一切持たない。ユーザー報告
+「外野からのバックホームが毎回ドンピシャで届く」の指摘どおり、守備が間に合う場面は必ずアウトになり、
+悪送球による生還は原理的に発生しなかった（`FielderAttributes.ThrowScatterSigmaCm` は式だけ定義され
+未配線の死コードだった）。
+
+**モデル**: 内野ゴロ→一塁の送球エラー（design-14 P1-6b, `FieldingResolver.MaybeInfieldError`,
+`ThrowErrorBaseProb`/`ThrowErrorAccuracySlope`）と同型の二値ロールを本塁送球へ拡張する
+（`HomePlayResolver.IsWildThrow`/`ResolveWithWildThrow`/`TagUpResolveWithWildThrow`,
+係数 `BaserunningCoefficients.RelayThrowErrorBaseProb`/`RelayThrowErrorAccuracySlope`）。
+守備が本塁で間に合う（＝素の `ResolveSafe` が false を返す）場面でだけ追加の1ロールを引き、
+送球者（外野処理者）の `ThrowAccuracy` が低いほど悪送球になりやすい。走者が普通に勝てる場面は
+悪送球ロール自体を引かない＝乱数消費順は悪送球導入前と一致する。
+
+悪送球が発生すると、design-14 P1-6の失策連鎖（「悪送球はほぼ必ず全走者を1つ多く進める」）と同じ扱いで、
+アウトのはずの走者が生還し、塁上に残っている他の走者も1つ多く進む
+（`BaserunningModel.PushRunnersOneBase`。ReachedOnErrorの`ApplyErrorExtraAdvance`と共通ロジック）。
+
+**対象範囲**: 本塁への実送球のみ（安打の本塁レース・内野前進の本塁封殺・犠飛タッチアップ）。
+3塁・2塁への送球（進塁打・封殺・スクイズ）は今回は対象外（拡張する場合は別途）。
+
+**校正**: 初期値は内野送球エラーと同値（`RelayThrowErrorBaseProb=0.0343`）で導入し、Heavy統計回帰
+（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯）が帯内に収まることを確認した
+（2026-08-30、再校正なしで通過）。詳細は `docs/design/OPEN-QUESTIONS.md` 2026-08-30項。
+
+### 3.8 送球逸れの回収レース（実装済み, 2026-08-30）
+
+§3.7（バックホーム）と内野一塁送球（design-14 P1-6b）の悪送球は、どちらも「発生したら即セーフ確定＋
+全走者+1進塁」という二値の割り切りだった。ユーザーから「逸れた送球を野手が拾い直してタッチしに行く
+（＝拾い直しが間に合ってアウトのままのケースもあるのでは）」という指摘を受け、これを拡張として実装した。
+
+**方針**: 新しい確率式は作らず、既存の「守備所要時間 vs 走者所要時間」の`Margin`（logistic）レースに
+**回収ロスを加算するだけ**にする。加算後もなお守備が勝てば従来どおりアウト（＝拾い直しが間に合った）、
+負ければセーフ＋現行どおり他の走者は固定+1進塁（進塁量を逸れ幅から動的に増やす拡張は見送り＝
+シンプルさ優先）。
+
+**モデルの骨格**（`ThrowRecovery`, `engine/KokoSim.Engine/Match/Field/ThrowRecovery.cs`）:
+
+1. **発生判定は現状のまま**: `ThrowErrorBaseProb`/`RelayThrowErrorBaseProb`のロールは変更しない。
+   変わるのは「発生後どうなるか」だけ。
+2. **逸れ幅**: `ThrowScatterSigmaCm`はcm単位（Ac50で22cm程度）で「ボールが塁を通り過ぎて
+   拾い直しレースが起きるほどの逸れ」を表すには小さすぎたため流用せず、新設の
+   `WildThrowScatterSigmaM`（m単位、初期値6.0＝内野/本塁で独立値）をガウス分布からサンプルする。
+   着弾点＝`ThrowRecovery.LandingPoint`＝**目標塁を、元の送球方向に逸れ幅ぶん延長した点**
+   （送球が塁を通り過ぎて転がるイメージ。左右の分離はせず単一距離のまま）。
+3. **回収役は「受け手自身」と「バックアップ」の2候補から近い方を採用**（`ThrowRecovery.RecoveryPenaltySeconds`）:
+   - 受け手自身（一塁手／捕手）: 回収距離＝逸れ幅そのもの（すでに塁に立っていたため起点が近い）。
+     **返球は不要**（拾って直接タッチ）。
+   - バックアップ: 定位置（`FieldGeometry.StandardPosition`）から着弾点までの距離を走り、
+     **逸れ幅ぶんを塁へ返球する**。役割表（`ThrowRecovery.BackupRole`）は実際の野球のバックアップ
+     規則に倣い固定＝一塁→右翼手／二塁→中堅手／三塁→左翼手／本塁→投手（フェーズ1で実際に使うのは
+     一塁と本塁だけ）。
+   - `recoveryTime = min(受け手の回収時間, バックアップの回収時間+返球時間)`。閾値を決め打ちしないため、
+     逸れ幅が小さいうちは受け手自身が、バックアップの定位置あたりまで逸れると（着弾点がバックアップの
+     ほぼ真横になり）バックアップが有利になる。逸れ幅がそれよりずっと大きいと、バックアップは返球ぶんの
+     追加コストがあるため結局受け手側が再び速くなる（`ThrowRecoveryTests`で境界を固定）。
+4. **統合**: 悪送球ロールが確定した後だけ`recoveryTime`を`Margin`（本塁/タッチアップ）または
+   `defenseTime`（内野一塁送球の`defenseTime+ForceOutMarginSeconds<=runnerTime`判定）へ加算し、
+   **同じ判定基準をもう一度評価する**。本塁側は`HomePlayResolver.ResolveWithWildThrow`/
+   `TagUpResolveWithWildThrow`内でもう一度logisticをロール（`HomeThrowOutcome.SafeOnWildThrow`か
+   `OutAtHome`かを区別）、内野一塁側は`FieldingResolver`内で決定論的な閾値再判定（元々`<=`の
+   deterministicなゲートのため、新規rngはガウスサンプルの1回だけ）。
+
+**回収役の走力・肩の情報源（実装上の非対称、意図的）**:
+- 内野一塁送球（`FieldingResolver`）: 呼び出し元に守備の全`Fielder`一覧（`fielders`）が既にあるため、
+  一塁手・右翼手の**実際の**`FielderAttributes.SprintSpeedMps`/`ThrowSpeedMps`を使う。
+- バックホーム（`HomePlayResolver`）: `HomePlaySituation`は意図的に薄い構造体で捕手・投手の`Player`情報を
+  持たない。新規プレイヤー配線を増やすより、`BaserunningCoefficients.RecoverySprintSpeedMps`（平均的な
+  値の定数）＋既存の`RelayThrowSpeedMps`（リーグ平均内野肩、カットマンの返球速度と共用）で近似する
+  ＝既にこのリゾルバが採っている「カットマンの肩は平均値の定数で近似する」慣習（§3のCutoffThrowSeconds等）
+  をそのまま踏襲。
+
+**対象範囲（実装済み）**: フェーズ1＝①内野ゴロ→一塁（`FieldingResolver.MaybeInfieldError`の
+`FieldingErrorKind.Throw`分岐）、②バックホーム（§3.7の3経路＝安打の本塁レース・内野前進の本塁封殺・
+犠飛タッチアップ。**3塁は対象外**＝§3.7自体が本塁専用だったため）。③盗塁の捕手送球（`StealResolver`）は
+`ThrowAccuracy`未接続・幾何的送球経路も無く土台から必要なため引き続き別issue。
+
+**校正**: 新設の`WildThrowScatterSigmaM`/`RecoveryReactionSeconds`/`RecoverySprintSpeedMps`は初期値のまま
+Heavy統計回帰（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯）が帯内に収まることを確認した
+（2026-08-30、再校正なしで通過）。乱数消費順が変わったため決定論baselineを再生成し、境界値ぎりぎりだった
+既存の統計テスト2本（`DropThirdStrike_Enabled_RaisesRunsForHighStrikeoutTeams`, `ThirdTimeThrough_OpsExceedsFirst_Modestly`）
+は母数を増やして安定させた（前者は§3.7時点で500シード化済み、後者を600→3000シードへ）。
+
 ---
 
 ## 4. 走塁スタート種別と読み合い

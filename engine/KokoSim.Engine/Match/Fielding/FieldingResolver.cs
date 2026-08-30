@@ -1,3 +1,4 @@
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Batting;
 using KokoSim.Engine.Match.Field;
@@ -392,6 +393,27 @@ public static class FieldingResolver
                 // 2段階失策（Issue #37/#63, design-14 P1-6b）。失策ロールは実捕球点の野手で引く（Issue #261）。
                 var (result, errorKind) = MaybeInfieldError(
                     fielders, catchPoint, infielder, coeff, rng, errorBonus, throwAccuracy);
+                if (errorKind == FieldingErrorKind.Throw)
+                {
+                    // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）: 悪送球確定後、逸れ幅→回収ロスを
+                    // 守備所要時間へ加算してもう一度同じ判定基準で再評価する。拾い直しが間に合えば
+                    // 従来どおりアウトのまま（「毎回逸れたら即エラー」にはしない）。回収役は一塁手自身
+                    // （返球不要）とバックアップ（右翼手, ThrowRecovery.BackupRole）の近い方。
+                    var scatterM = Math.Abs(rng.NextGaussian(0.0, coeff.WildThrowScatterSigmaM));
+                    var throwLanding = ThrowRecovery.LandingPoint(catchPoint, field.FirstBase, scatterM);
+                    var firstBaseman = fielders.First(f => f.Position == FieldPosition.FirstBase);
+                    var backup = fielders.First(f => f.Position == ThrowRecovery.BackupRole(1));
+                    var (backupX, backupZ) = FieldGeometry.StandardPosition(backup.Position);
+                    var recovery = ThrowRecovery.RecoveryPenaltySeconds(
+                        scatterM, throwLanding, new Vector3D(backupX, 0, backupZ),
+                        firstBaseman.Attributes.SprintSpeedMps, backup.Attributes.SprintSpeedMps,
+                        backup.Attributes.ThrowSpeedMps, coeff.RecoveryReactionSeconds);
+                    if (defenseTime + recovery + coeff.ForceOutMarginSeconds <= runnerTime)
+                    {
+                        result = BattedBallResult.Out;
+                        errorKind = null;
+                    }
+                }
                 if (errorKind == FieldingErrorKind.Tunnel)
                 {
                     // トンネル（issue #632）: 野手は触れず、球は捕球点から<b>その瞬間の速度のまま</b>
