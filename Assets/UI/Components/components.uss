@@ -386,39 +386,39 @@
 .abil-row--lg .abil-row__bar { height: 12px; margin-right: var(--sp-4); }
 .abil-row--lg .abil-row__value { width: 58px; font-size: 34px; }
 
-/* ── SimProgress：背景処理の進捗ストリップ（#208） ─────────────────────
-   画面下端に「ロード中」＋充填バーだけを出す表示。大会名・県数など内部情報は出さない
-   （ラベルは固定・バーの充填だけで進捗を表す）。レイアウト流し込みの最下段に置き（絶対配置に
-   しない＝CTA など下端の本文を覆わない）、上端インク線で本文と分節する（UI原則④）。
-   非表示時は display:none で場所も取らない（完了で即消える）。 */
-.sim-load {
-    flex-shrink: 0;
-    flex-direction: row;
+/* ── WaitOverlay：待つしかない場面の全画面ブロッキング表示 ───────────────
+   セーブ/ロード/裏試合の結果待ちなど、操作しても進まない間は必ずこれを全画面に出す
+   （ユーザー要望：バーを出す場合は大きくわかりやすく）。土台は既存の modal-scrim/modal-card
+   （暗幕＋中央カード、部品辞書の外へ出ない＝UI原則⑤）で、中身だけ見出し級の大きな
+   ラベルと太い進捗バーにする。進捗が不明な処理（同期I/O・母数0の背景処理）は
+   wait-overlay__fill--indeterminate でバーを往復アニメにし、「止まっている」ように
+   見えるのを防ぐ（駆動は WaitOverlayController）。 */
+.wait-overlay__card {
+    padding: 32px 48px;
+    min-width: 420px;
     align-items: center;
-    padding: var(--sp-2) var(--sp-4);
-    background-color: var(--color-panel);
-    border-top-width: var(--nb-border);
-    border-top-color: var(--ink);
 }
-.sim-load__label {
-    font-size: var(--fs-label);
+.wait-overlay__label {
+    font-size: var(--fs-callout);   /* 盤面の大型読み上げと同じ級＝見た目の大きさで「待機」を示す */
     color: var(--color-chalk);
-    margin-right: var(--sp-3);
-    flex-shrink: 0;
+    margin-bottom: var(--sp-4);
 }
-.sim-load__track {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
-    height: 8px;
+.wait-overlay__track {
+    position: relative;   /* __fill の絶対配置(left/top/bottom)をこの矩形内に収める */
+    width: 320px;
+    height: 20px;
     background-color: var(--color-panel-deep);
-    border-radius: 0;
+    border-width: var(--border-w);
+    border-color: var(--color-line);
 }
-.sim-load__fill {
-    height: 100%;
+.wait-overlay__fill {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
     width: 0;
-    background-color: var(--ink);
-    border-radius: 0;
+    background-color: var(--color-lamp);   /* 唯一のアクセント許容枠＝「いま進んでいる」ことの表示 */
+}
+.wait-overlay__fill--indeterminate {
+    width: 30%;
 }
 
 /* ── NumberBadge：背番号バッジ ─────────────────────────────────────── */

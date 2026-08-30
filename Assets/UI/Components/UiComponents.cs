@@ -663,39 +663,75 @@ namespace KokoSim.Unity.Components
             return row;
         }
 
-        // ===== SimProgress（背景処理の進捗ストリップ・#208） =====
+        // ===== WaitOverlay（待つしかない場面の全画面ブロッキング表示） =====
 
         /// <summary>
-        /// 画面下端の進捗ストリップ「ロード中」＋充填バー（#208）。ブースト画面（スタメン設定・結果）で
-        /// 背景の全国裏試合を集中消化している間だけ出す。大会名・県数などの内部情報は一切出さず、
-        /// ラベルは「ロード中」固定・バーの充填だけで進捗を表す。生成後は <see cref="SetSimProgress"/> で
-        /// 充填率を更新し、完了したら display:none で即消す（駆動は <c>SimProgressOverlay</c>）。
+        /// セーブ／ロード／裏試合の結果待ちなど、プレイヤーが待つしかない間だけ全画面を覆う表示。
+        /// 部品辞書の modal-scrim / modal-card（暗幕＋中央カード）を土台に、見出し級の大きな
+        /// ラベル＋太い進捗バーで「待っている」ことを一目で示す。既定は非表示（display:none、
+        /// modal-scrim 側の指定）で、<see cref="SetWaitOverlay"/> で文言と進捗を更新して出す
+        /// （駆動は <c>WaitOverlayController</c>）。
         /// </summary>
-        public static VisualElement SimProgress()
+        public static VisualElement WaitOverlay()
         {
-            var strip = new VisualElement { name = "sim-load" };
-            strip.AddToClassList("sim-load");
+            var scrim = new VisualElement { name = "wait-overlay" };
+            scrim.AddToClassList("ui-root");        // 単独ルート扱い＝フォント継承を自前で持つ（modal 部品の通例）
+            scrim.AddToClassList("modal-scrim");
+            scrim.AddToClassList("wait-overlay");
 
-            var label = new Label("ロード中");
-            label.AddToClassList("sim-load__label");
-            label.AddToClassList("f-body");   // 和文ラベル＝サンセリフ（書体3役ルール）
-            strip.Add(label);
+            var card = new VisualElement();
+            card.AddToClassList("modal-card");
+            card.AddToClassList("wait-overlay__card");
+            scrim.Add(card);
+
+            var label = new Label("処理中");
+            label.AddToClassList("wait-overlay__label");
+            label.AddToClassList("f-body-bd");   // 見出し級の強調＝実ウェイト太字（疑似ボールド禁止）
+            card.Add(label);
 
             var track = new VisualElement();
-            track.AddToClassList("sim-load__track");
-            var fill = new VisualElement { name = "sim-load__fill" };
-            fill.AddToClassList("sim-load__fill");
+            track.AddToClassList("wait-overlay__track");
+            var fill = new VisualElement { name = "wait-overlay__fill" };
+            fill.AddToClassList("wait-overlay__fill");
             track.Add(fill);
-            strip.Add(track);
+            card.Add(track);
 
-            return strip;
+            return scrim;
         }
 
-        /// <summary><see cref="SimProgress"/> のバー充填率(0..1)を更新する。</summary>
-        public static void SetSimProgress(VisualElement strip, float pct)
+        /// <summary>
+        /// <see cref="WaitOverlay"/> のラベル文言と進捗を更新する。<paramref name="pct"/> が null のときは
+        /// 進捗が不明（同期I/O・母数0の背景処理）な状態として、バーを往復アニメ（マーキー）に切り替える
+        /// （不明な処理を満タン/空のまま固定表示すると「止まっている」ように見えるため）。
+        /// </summary>
+        public static void SetWaitOverlay(VisualElement overlay, string label, float? pct)
         {
-            var fill = strip?.Q<VisualElement>("sim-load__fill");
-            if (fill != null) fill.style.width = Length.Percent(Mathf.Clamp01(pct) * 100f);
+            var l = overlay?.Q<Label>(className: "wait-overlay__label");
+            if (l != null && label != null) l.text = label;
+
+            var fill = overlay?.Q<VisualElement>("wait-overlay__fill");
+            if (fill == null) return;
+            if (pct.HasValue)
+            {
+                fill.RemoveFromClassList("wait-overlay__fill--indeterminate");
+                fill.style.left = StyleKeyword.Null;
+                fill.style.width = Length.Percent(Mathf.Clamp01(pct.Value) * 100f);
+            }
+            else
+            {
+                fill.AddToClassList("wait-overlay__fill--indeterminate");
+            }
+        }
+
+        /// <summary>マーキーモード（<see cref="SetWaitOverlay"/> の pct=null）のバー位置を進める。
+        /// 0..1 の位相を渡すと、幅30%のセグメントをトラック内で往復させる。</summary>
+        public static void TickWaitOverlayMarquee(VisualElement overlay, float phase01)
+        {
+            var fill = overlay?.Q<VisualElement>("wait-overlay__fill");
+            if (fill == null || !fill.ClassListContains("wait-overlay__fill--indeterminate")) return;
+            // 0→1→0 の三角波にして端で折り返す（一定速度の往復に見せる）。
+            var t = Mathf.PingPong(phase01 * 2f, 1f);
+            fill.style.left = Length.Percent(t * 70f);   // 幅30%ぶん track 内に収める
         }
 
         // ===== CompareRow（2選手の能力対比） =====

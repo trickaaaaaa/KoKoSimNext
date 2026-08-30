@@ -231,10 +231,9 @@ namespace KokoSim.Unity.Shell
                 });
             }
 
-            // #208: ブースト画面（スタメン設定・結果）では背景シムの集中消化中だけ下端に「ロード中」を出す。
-            // 完了で自動的に消える（オーバーレイ側が Running を毎フレーム見て display を切る）。
-            if (ThrottleFor(target) == NationBackgroundSim.SimThrottle.Boost)
-                SimProgressOverlay.Attach(root);
+            // プレイヤーが待つしかない場面（セーブ/ロード・裏試合の結果待ち・試合開始/結果集計の重い
+            // 後処理）を画面によらず必ず見せる。表示条件はオーバーレイ側が毎フレーム判定して出す/消す。
+            WaitOverlayController.Attach(root);
         }
     }
 }

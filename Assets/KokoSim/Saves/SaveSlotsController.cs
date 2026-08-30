@@ -276,14 +276,20 @@ namespace KokoSim.Unity.Saves
 
         private void OnLoad()
         {
-            if (!SaveSlots.Load(_selected, out var error))
+            // ファイル読込＋復元は同期処理（メインスレッドを止める）。ManualWait で「ロード中」を
+            // 1フレーム先に描画してからブロックへ入り、何も表示されず固まって見えるのを防ぐ（要望対応）。
+            string error = null;
+            ManualWait.Run(_root, "ロード中", () => SaveSlots.Load(_selected, out error), ok =>
             {
-                _errorText = string.IsNullOrEmpty(error) ? "読み込みに失敗しました。" : error;
-                RenderDetail();
-                return;
-            }
-            // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
-            ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+                if (!ok)
+                {
+                    _errorText = string.IsNullOrEmpty(error) ? "読み込みに失敗しました。" : error;
+                    RenderDetail();
+                    return;
+                }
+                // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
+                ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+            });
         }
 
         /// <summary>ホーム経由（保存モード）のみ配線される。大会中は SetEnabled(false) で既に押せない
@@ -291,14 +297,19 @@ namespace KokoSim.Unity.Saves
         private void OnSave()
         {
             if (!_inGame || !SaveGameIO.CanSave) return;
-            if (!SaveSlots.Save(_selected))
+            // SaveGameIO.Save は裏試合の完了待ち（Task.Wait）を含み得る同期処理。ManualWait で
+            // 「セーブ中」を1フレーム先に描画してからブロックへ入る（要望対応、OnLoad と同じ作法）。
+            ManualWait.Run(_root, "セーブ中", () => SaveSlots.Save(_selected), ok =>
             {
-                _errorText = "保存に失敗しました。";
-                RenderDetail();
-                return;
-            }
-            _errorText = "";
-            Render();   // 一覧・詳細を保存直後の内容（年度/週/保存日時）へ更新して結果を見せる
+                if (!ok)
+                {
+                    _errorText = "保存に失敗しました。";
+                    RenderDetail();
+                    return;
+                }
+                _errorText = "";
+                Render();   // 一覧・詳細を保存直後の内容（年度/週/保存日時）へ更新して結果を見せる
+            });
         }
 
         private void OnBack()

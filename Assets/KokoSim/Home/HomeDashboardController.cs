@@ -213,13 +213,20 @@ namespace KokoSim.Unity.Home
             // 背景の全国裏試合／敗退後の残りブラケット消化を完了させてから静的リセットする。GameClock.Advance の
             // 年度替わり・新チーム発足と同じ作法（issue #529）＝背景スレッドと同じ NationRosters を同時に触らない。
             // 完了を待たずに Reset すると、リセット後に新しい NationBackgroundSim.Start が走った場合、旧セッションの
-            // ワーカーがまだ生きていて共有カウンタ(_nextJob等)を奪い合う実害があるため。
-            KokoSim.Unity.Shell.NationBackgroundSim.EnsureCompleted();
-            KokoSim.Unity.Shell.BracketFinishSim.EnsureCompleted();
-            KokoSim.Unity.Shell.KoshienQualifierStatsSim.EnsureCompleted();
-            KokoSim.Unity.Shell.SaveGameIO.ResetForNewGame();
-            HomeState.Reset();
-            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TitleScreen");
+            // ワーカーがまだ生きていて共有カウンタ(_nextJob等)を奪い合う実害があるため。この待ちは main を
+            // ブロックし得るので ManualWait で「タイトルへ戻る準備中」を1フレーム先に描画してから入る。
+            KokoSim.Unity.Shell.ManualWait.Run<object>(_root, "タイトルへ戻る準備中", () =>
+            {
+                KokoSim.Unity.Shell.NationBackgroundSim.EnsureCompleted();
+                KokoSim.Unity.Shell.BracketFinishSim.EnsureCompleted();
+                KokoSim.Unity.Shell.KoshienQualifierStatsSim.EnsureCompleted();
+                return null;
+            }, _ =>
+            {
+                KokoSim.Unity.Shell.SaveGameIO.ResetForNewGame();
+                HomeState.Reset();
+                KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TitleScreen");
+            });
         }
 
         // ===== 大会モード進行（要件1〜7） =====
