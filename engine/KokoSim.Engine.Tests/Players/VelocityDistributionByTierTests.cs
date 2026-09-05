@@ -68,8 +68,13 @@ public sealed class VelocityDistributionByTierTests
         Assert.InRange(Pct(byTier[Tier.D], .5), 132.0, 137.5);
         Assert.InRange(Pct(byTier[Tier.E], .5), 130.0, 135.0);   // E 以下は変更前後で不変（Lv≦50 側）
         Assert.InRange(Pct(byTier[Tier.G], .5), 116.0, 125.0);   // 逆算配分の目標が圧縮後（G は raw より上）になり +0.5
-        // C校で 145+ のエースは 1 割未満（変更前 25%）。
-        Assert.True(byTier[Tier.C].Count(x => x >= 145) <= byTier[Tier.C].Count * 0.10);
+        // C校で 145+ のエースは 1 割強まで（変更前 25%）。
+        // 上限 0.10→0.13（issue prefecture-high-rank-distribution・2026-09-05）: 母集団のσ 13→15 で
+        // 各ティア帯（Cなら 60〜70）の中の密度が平たくなり、C校が帯の上寄りへ寄る＝エースの裾が少し伸びた
+        // （実測 10%→11%。中央値は 140.3→140.6 でほぼ不動＝「C校が強くなった」のではなく帯内の分布の話）。
+        // 併せて先頭600校の内訳も変わっている（校数テーブルを高野連の実加盟校数へ差し替えたため）。
+        Assert.True(byTier[Tier.C].Count(x => x >= 145) <= byTier[Tier.C].Count * 0.13,
+            $"C校の 145+ 率 {100.0 * byTier[Tier.C].Count(x => x >= 145) / byTier[Tier.C].Count:F0}%");
         Assert.InRange(PitcherAttributes.VelocityKmhFromLevel(99), 149.0, 151.0);
     }
 

@@ -7,7 +7,16 @@ public sealed record NationCoefficients
 {
     /// <summary>チーム力の母集団平均・分散（大半はD〜F, 強豪は稀）。</summary>
     public double StrengthMean { get; init; } = 44.0;
-    public double StrengthSd { get; init; } = 13.0;
+    /// <summary>
+    /// 母集団のσ（issue prefecture-high-rank-distribution・2026-09-05）: 13→15。
+    /// 13 だと 80 が +2.8σ で全国4000校のAランク以上が 13校（0.33%）しか出ず、校数最多の神奈川でも
+    /// 期待 0.66 校・「Aが1校もない年」が 49% だった＝校数と高ランク数の相関 0.99 が
+    /// ランク表示（<see cref="Tiers.FromStrength"/>）に出てこない。15 で全国A 37校・神奈川 期待 2.0校。
+    /// 県1位vs2位の勝率は 0.649→0.666 とほぼ動かない（σは1位も2位も一緒に持ち上げる）。
+    /// 17 は全国S 15.7 で NationTests の S≤15 に触るため 15〜16 が上限。
+    /// <b><see cref="ChurnSd"/> と必ずセットで動かすこと</b>（定常σは churn 側が決める）。
+    /// </summary>
+    public double StrengthSd { get; init; } = 15.0;
     public double StrengthMin { get; init; } = 8.0;
     public double StrengthMax { get; init; } = 99.0;
 
@@ -27,8 +36,14 @@ public sealed record NationCoefficients
     /// 集計20年で最多優勝校の中央値が 9/20 だった（issue prefecture-dominance・2026-08-18 に 0.15 へ）。
     /// </summary>
     public double MeanReversion { get; init; } = 0.15;
-    /// <summary>世代交代の揺らぎσ（古豪凋落・新興台頭の源泉）。定常sd＝σ/√(1−(1−rev)²)≈初期sd を保つ大きさ。</summary>
-    public double ChurnSd { get; init; } = 6.5;
+    /// <summary>
+    /// 世代交代の揺らぎσ（古豪凋落・新興台頭の源泉）。定常sd＝σ/√(1−(1−rev)²)＝σ/0.527 なので、
+    /// <b><see cref="StrengthSd"/> と必ずセットで動かす</b>。片方だけ変えると進化が初期σを打ち消し、
+    /// 「新規ゲームは正しいが数年で元へ戻る」という気づきにくい壊れ方をする
+    /// （実測: sd15・churn6.5 据え置きで 10年後に sd 13.0・全国A 13.5 へ回帰。2026-09-05）。
+    /// sd 15 に対して 7.9（=15×0.527）。実測: 10年後 sd 15.3・全国A 44.9。
+    /// </summary>
+    public double ChurnSd { get; init; } = 7.9;
     /// <summary>大会成績1勝あたりの強さボーナス（成功が補強を呼ぶ）。旧 0.12 は覇者の正帰還が強すぎた。</summary>
     public double StrengthPerWin { get; init; } = 0.06;
     /// <summary>名声→強さの寄与（強豪に人が集まる）。</summary>
@@ -59,15 +74,31 @@ public sealed record Nation(IReadOnlyList<Prefecture> Prefectures, IReadOnlyList
 /// <summary>架空4000校の生成（設計書05 §2）。</summary>
 public static class NationGenerator
 {
-    // 47都道府県の校数の相対重み（激戦区を再現: 大都市圏を厚く）。合計を約4000へスケール。
+    /// <summary>
+    /// 47都道府県の校数の相対重み＝日本高等学校野球連盟の硬式加盟校数（2025年度・合計3,768校）。
+    /// JIS順で <see cref="PrefectureNames.Japanese"/> と添字が一致する。
+    /// 出典: https://www.jhbf.or.jp/data/statistical/koushiki/2025.html
+    /// （2023年5月版の別集計とも整合: 東京272/神奈川188/千葉171/茨城102/広島91/鳥取24）。
+    /// 旧テーブルは出典のない手置きで、千葉95（実際173）・埼玉110（実際157）と激戦区を大きく取りこぼす一方、
+    /// 宮城90（実際65）・熊本90（実際59）を過大に見ていた（issue prefecture-high-rank-distribution・2026-09-05）。
+    /// </summary>
     private static readonly int[] PrefectureWeights =
     {
-        190, 60, 55, 90, 45, 45, 75, 80, 65, 65,       // 1-10
-        110, 95, 260, 190, 80, 42, 45, 40, 42, 88,     // 11-20
-        68, 108, 185, 62, 45, 68, 178, 155, 55, 40,    // 21-30
-        22, 24, 58, 78, 48, 32, 42, 52, 30, 125,       // 31-40
-        42, 55, 90, 38, 38, 48, 62,                    // 41-47
+        195,  53,  63,  65,  42,  43,  68,             // 北海道 青森 岩手 宮城 秋田 山形 福島
+        102,  61,  68, 157, 173, 270, 188,             // 茨城 栃木 群馬 埼玉 千葉 東京 神奈川
+         77,  43,  50,  28,  34,  85,                  // 新潟 富山 石川 福井 山梨 長野
+         68, 109, 183,  64,                            // 岐阜 静岡 愛知 三重
+         53,  76, 173, 164,  39,  39,                  // 滋賀 京都 大阪 兵庫 奈良 和歌山
+         24,  39,  58,  93,  56,                       // 鳥取 島根 岡山 広島 山口
+         30,  37,  55,  28,                            // 徳島 香川 愛媛 高知
+        136,  36,  55,  59,  44,  47,  74,  64,        // 福岡 佐賀 長崎 熊本 大分 宮崎 鹿児島 沖縄
     };
+
+    /// <summary>
+    /// 実数（3,768校）から設計書05 §2 の「架空4000校」規模への相似拡大率。
+    /// 県間の比は加盟校数そのままで、総数だけを設計の想定規模に合わせる。
+    /// </summary>
+    private const double SchoolCountScale = 1.0616;
 
     /// <summary>
     /// 架空全国を生成する。districtPlan（県Id→県内地区数）を渡すと、地理固定割（district_assignment=geographic）の
@@ -82,8 +113,8 @@ public static class NationGenerator
         var prefectures = new List<Prefecture>(47);
         for (var i = 0; i < 47; i++)
         {
-            // 重み総和 ≈ 3600 を約4000校へスケール。
-            var count = (int)Math.Round(PrefectureWeights[i] * 1.11);
+            // 加盟校数（実数・合計3,768）を約4000校へ相似拡大する。
+            var count = (int)Math.Round(PrefectureWeights[i] * SchoolCountScale);
             // 県名は実名（JIS順の不変表）。夏の地区名（SummerRegions）は北海道・東京だけ日本語で
             // 分割名を持っていて、それ以外がここの名前をそのまま使う＝「第N県」だと片方だけ実名になる。
             prefectures.Add(new Prefecture(i, PrefectureNames.JapaneseOf(i), count));

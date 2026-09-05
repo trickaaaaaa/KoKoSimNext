@@ -9,7 +9,15 @@ public sealed record CareerCoefficients
     public double CoachingCap { get; init; } = 99.0;
 
     // --- 監督→学校強さ（指導力がチーム力を押し上げる） ---
-    public double CoachingToStrength { get; init; } = 0.78;
+    /// <summary>
+    /// 監督校の強さ＝<c>N(NewSchoolStrengthMean, Sd) + (指導力−20) × これ</c>。
+    /// 0.78→0.88（issue prefecture-high-rank-distribution・2026-09-05）: 全国母集団のσを 13→15 へ広げた際の追従。
+    /// σを広げると県1位の強さが上がる（神奈川 80.1→85.5）のに、プレイヤー側の上限だけが世界と連動していないため、
+    /// 据え置きだと 20年キャリアのセンバツ出場が 2.77→1.32回・生涯0回のキャリアが 20%→49% とキャリア難易度が
+    /// 一段上がってしまう（200シード実測）。0.88 で 2.23回・28% ＝ ほぼ変更前の水準に戻る。
+    /// <b>母集団の <c>NationCoefficients.StrengthSd</c> を動かしたらここも見直すこと</b>（世界とプレイヤーの相対位置を決める）。
+    /// </summary>
+    public double CoachingToStrength { get; init; } = 0.88;
 
     // --- フリー化資格（設計書04 §1.3） ---
     public int FreeKoshienThreshold { get; init; } = 1;   // 甲子園1回でフリー資格

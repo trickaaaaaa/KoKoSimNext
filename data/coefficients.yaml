@@ -1092,7 +1092,14 @@ team_strength:
 
 nation:
   strength_mean: 44.0
-  strength_sd: 13.0
+  # 母集団のσ（issue prefecture-high-rank-distribution・2026-09-05）: 13→15。
+  # 13 だと 80 が +2.8σ ＝ 全国4000校でAランク以上が 13校（0.33%）しか出ず、校数最多の神奈川ですら
+  # 期待 0.66 校・「Aが1校もない年」が 49%。校数と高ランク数の相関自体は 0.99 と強いのに、
+  # ランク帯（Tiers.FromStrength）に対して母集団が低すぎて県差が表示に出ていなかった。
+  # 15 で 全国A 37校／神奈川 期待 2.0校・P(A≥2) 52%。県1位vs2位の勝率は 0.649→0.666 でほぼ動かない
+  # （σを広げると1位も2位も一緒に上がるため）＝ nation_dominance 帯 0.55–0.78 の内側。
+  # 17 まで上げると全国Sが 15.7 で NationTests の S≤15 に触るので 15〜16 が上限。
+  strength_sd: 15.0
   strength_min: 8.0
   strength_max: 99.0
   storied_fame_bonus: 20.0
@@ -1107,9 +1114,12 @@ nation:
   # 年次進化（issue prefecture-dominance・2026-08-18）: 旧 rev 0.10 / churn 5.5 / per_win 0.12 だと強さ82の校の期待ドリフトが
   # −2/年＝一度覇権を取った校が10年近く落ちず、集計20年×49地区で最多優勝校の中央値 9/20・10回以上が15地区。
   # rev 0.15 / churn 6.5 / per_win 0.06 で中央値 5〜7/20・10回以上 4〜7地区（現実の県の分布に近い）。
-  # 定常sd＝churn/√(1−(1−rev)²)＝6.5/0.527≈12.3≈初期sd13 なので全国平均・sd は不変（30年で確認）。
+  # 定常sd＝churn/√(1−(1−rev)²)＝churn/0.527 なので、churn_sd は strength_sd と必ずセットで動かす。
+  # 片方だけ変えると進化が初期σを打ち消す＝「新規ゲームは正しいが数年で元へ戻る」という気づきにくい壊れ方をする
+  # （実測: sd15・churn6.5 据え置きだと 10年後に sd 13.0・全国A 13.5 へ回帰した。2026-09-05）。
+  # sd 15 に対して churn 7.9（=15×0.527）。実測: 10年後 sd 15.3・全国A 44.9・神奈川A 2.30 で保つ。
   mean_reversion: 0.15        # 平均回帰（全国統計の安定化）
-  churn_sd: 6.5               # 世代交代の揺らぎ（勢力変動）。定常sd≈初期sdを保つ
+  churn_sd: 7.9               # 世代交代の揺らぎ（勢力変動）。定常sd≈初期sdを保つ（strength_sd 連動）
   strength_per_win: 0.06
   fame_to_strength: 0.015
   fame_decay: 0.90
@@ -1171,7 +1181,11 @@ career:
   coaching_growth_per_year: 3.0     # 采配経験による指導力上昇
   coaching_growth_per_win: 0.8
   coaching_cap: 99.0
-  coaching_to_strength: 0.78        # 指導力→チーム力の押し上げ
+  # 指導力→チーム力の押し上げ。0.78→0.88（issue prefecture-high-rank-distribution・2026-09-05）:
+  # 母集団の strength_sd を 13→15 に広げると県1位が 80.1→85.5 に上がるので、プレイヤー側の上限も追従させる。
+  # 据え置きだと 20年キャリアのセンバツ出場が 2.77→1.32回・生涯0回が 20%→49%（200シード実測）。0.88 で 2.23回・28%。
+  # strength_sd を動かしたらここも見直すこと（世界とプレイヤーの相対位置を決める係数）。
+  coaching_to_strength: 0.88
   free_koshien_threshold: 1         # 甲子園1回でフリー資格
   free_fame_threshold: 52.0         # または名声60
   min_tenure_years: 3               # 赴任してから強制転任の対象になるまでの最低在任年数（採った1年生の卒業年数）
