@@ -410,7 +410,8 @@ public sealed class TeamState
             p.SourceId, p.UniformNumber, p.Name, p.Throws,
             a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
             p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches + pendingPitches),
-            pendingPitches, a?.BB ?? 0, a?.HB ?? 0, a?.EarnedRuns ?? 0);
+            pendingPitches, a?.BB ?? 0, a?.HB ?? 0, a?.EarnedRuns ?? 0,
+            EffectiveBaseStamina(p), PriorWeekPitchesOf(p), _weeklyPitchLimit);
     }
 
     /// <summary>ライブ観戦の控え（未出場の交代候補・背番号順）。打順は持たないので Order=0。観測データ。</summary>
@@ -814,6 +815,14 @@ public sealed class TeamState
 
     /// <summary>現投手が球数上限に達したか（達したら次打者は投げられない＝継投必須）。</summary>
     public bool CurrentPitcherAtWeeklyLimit() => WeeklyPitchesFor(CurrentPitcher) >= _weeklyPitchLimit;
+
+    /// <summary>
+    /// その投手の<b>持ち越し</b>球数（当試合ぶんを含まない）。HUD が「残り球数」を出すための観測値で、
+    /// 当試合ぶんは <see cref="LivePitcherToday.Pitches"/>＋PendingPitches として別に出ているため
+    /// ここで足さない（足すと UI 側で二重に数える）。
+    /// </summary>
+    public int PriorWeekPitchesOf(Player pitcher)
+        => _priorWeekPitches is not null && _priorWeekPitches.TryGetValue(pitcher, out var v) ? v : 0;
 
     /// <summary>
     /// 控えが残っていれば継投する（既定の指名ラッパ）。動揺はリセット。

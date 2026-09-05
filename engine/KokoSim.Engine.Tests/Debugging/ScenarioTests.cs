@@ -112,7 +112,7 @@ scenarios:
             var sink = new RecordingTraceSink();
             var built = ScenarioBuilder.Build(def, new GameContext { CaptureTrace = true, TraceSink = sink }, 42UL);
             var p = GameEngine.NewProgress(built.Away, built.Home, built.Ctx,
-                new Xoshiro256Random(built.Seed), null, built.Start);
+                new Xoshiro256Random(built.Seed), scenarioStart: built.Start);
 
             // 打席に入る前から決まっている状態（NewProgress で注ぎ終わっている）。
             Assert.Equal(def.Inning, p.Inning);
@@ -148,7 +148,7 @@ scenarios:
             Inning = 6, Top = true, Outs = 1, Bases = new[] { 1, 3 },
         };
         var built = ScenarioBuilder.Build(def, new GameContext(), 5UL);
-        var p = GameEngine.NewProgress(built.Away, built.Home, built.Ctx, new Xoshiro256Random(5UL), null, built.Start);
+        var p = GameEngine.NewProgress(built.Away, built.Home, built.Ctx, new Xoshiro256Random(5UL), scenarioStart: built.Start);
 
         using var steps = GameEngine.Steps(p).GetEnumerator();
         steps.MoveNext();                       // 最初の Pitch 窓（この時点で塁は組み上がっている）
@@ -175,7 +175,7 @@ scenarios:
             Inning = 4, Top = false, AwayScore = 1,
         };
         var built = ScenarioBuilder.Build(def, new GameContext(), 8UL);
-        var p = GameEngine.NewProgress(built.Away, built.Home, built.Ctx, new Xoshiro256Random(8UL), null, built.Start);
+        var p = GameEngine.NewProgress(built.Away, built.Home, built.Ctx, new Xoshiro256Random(8UL), scenarioStart: built.Start);
         foreach (var _ in GameEngine.Steps(p)) { }
         var r = GameEngine.BuildResult(p);
 
@@ -195,7 +195,7 @@ scenarios:
             Inning = 3, Top = true, Balls = 3, Strikes = 2,
         };
         var built = ScenarioBuilder.Build(def, new GameContext { CaptureTrace = true, TraceSink = sink }, 4UL);
-        var p = GameEngine.NewProgress(built.Away, built.Home, built.Ctx, new Xoshiro256Random(4UL), null, built.Start);
+        var p = GameEngine.NewProgress(built.Away, built.Home, built.Ctx, new Xoshiro256Random(4UL), scenarioStart: built.Start);
         foreach (var _ in GameEngine.Steps(p)) { }
 
         Assert.Equal(3, sink.Pitches[0].BallsBefore);
@@ -258,7 +258,7 @@ scenarios:
         var baseline = GameResultDigest.Sha256Of(DeterminismCards.Run("avg", 3UL));
         var p = GameEngine.NewProgress(
             DeterminismCards.Team("A"), DeterminismCards.Team("H"), new GameContext(), new Xoshiro256Random(3UL),
-            null, scenarioStart: null);
+            scenarioStart: null);
         foreach (var _ in GameEngine.Steps(p)) { }
         Assert.Equal(baseline, GameResultDigest.Sha256Of(GameEngine.BuildResult(p)));
     }

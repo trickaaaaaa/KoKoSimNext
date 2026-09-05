@@ -30,10 +30,13 @@ namespace KokoSim.Unity.Shell
             var ctx = Rules.ApplyTo(
                 new GameContext { MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng) }, CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
+            var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
             var managerIsAway = ManagerIsAway(manager, opponent);
             var result = managerIsAway
-                ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2), awayPitchRecovery: mgrRecovery, homePitchRecovery: oppRecovery)
-                : GameEngine.Play(oppTeam, mgrTeam, ctx, rng.Fork(2), awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery);
+                ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2), mgrCarry, oppCarry,
+                    awayPitchRecovery: mgrRecovery, homePitchRecovery: oppRecovery)
+                : GameEngine.Play(oppTeam, mgrTeam, ctx, rng.Fork(2), oppCarry, mgrCarry,
+                    awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery);
             return new PlayerMatchDetail(result, ManagerIsAway: managerIsAway);
         }
 
@@ -56,6 +59,7 @@ namespace KokoSim.Unity.Shell
                 },
                 CalendarYear());
             var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
+            var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
             // 大会フローの実試合にもデバッグHUDの観測を差し込む（設計書17 §5/§12.4, #95）。HUDが閉じていれば
             // AttachTo は恒等（Enabled==false→ctxをそのまま返す）＝観戦の有無で大会結果が変わらない契約
@@ -65,8 +69,12 @@ namespace KokoSim.Unity.Shell
 #endif
             var managerIsAway = ManagerIsAway(manager, opponent);
             var prog = managerIsAway
-                ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2), awayPitchRecovery: mgrRecovery, homePitchRecovery: oppRecovery)
-                : new MatchProgression(oppTeam, mgrTeam, ctx, rng.Fork(2), awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery);
+                ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2),
+                    awayPitchRecovery: mgrRecovery, homePitchRecovery: oppRecovery,
+                    awayPriorWeekPitches: mgrCarry, homePriorWeekPitches: oppCarry)
+                : new MatchProgression(oppTeam, mgrTeam, ctx, rng.Fork(2),
+                    awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery,
+                    awayPriorWeekPitches: oppCarry, homePriorWeekPitches: mgrCarry);
             return new PlayerMatchLive(prog, ManagerIsAway: managerIsAway);
         }
 
@@ -82,6 +90,24 @@ namespace KokoSim.Unity.Shell
                 School manager, Team mgrTeam, School opponent, Team oppTeam)
             => PitchRecoveryLookup.ForMatch(
                 context, coeff,
+                PitchRecoveryLookup.AllPlayers(mgrTeam),
+                p => PitcherLedgerKey.For(isManagerSchool: true, manager.Id, p.SourceId, p.UniformNumber),
+                PitchRecoveryLookup.AllPlayers(oppTeam),
+                p => PitcherLedgerKey.For(isManagerSchool: false, opponent.Id, p.SourceId, p.UniformNumber));
+
+        /// <summary>
+        /// 週間球数制限（設計書05 §1.3）の持ち越し球数を、自校・相手校それぞれ<b>別の辞書</b>で求める。
+        /// キーの取り方は <see cref="PitchRecoveryFor"/> と<b>同じ <see cref="PitcherLedgerKey.For"/></b> を通す
+        /// ＝台帳へ記録した側（TournamentRunner.RecordSide）と引き方が必ず一致する（OPEN-QUESTIONS Q26）。
+        /// 窓の日数は上限値と同じ場所（<see cref="ModernRules.WeeklyPitchWindowDays"/>）から取る。
+        /// context が null（大会外・練習試合等）なら両方とも空辞書＝持ち越しなし（従来挙動と完全一致）。
+        /// </summary>
+        private static (IReadOnlyDictionary<Player, int> Manager, IReadOnlyDictionary<Player, int> Opponent)
+            PriorWeekPitchesFor(
+                TournamentMatchContext? context,
+                School manager, Team mgrTeam, School opponent, Team oppTeam)
+            => PriorWeekPitchLookup.ForMatch(
+                context, Rules.WeeklyPitchWindowDays,
                 PitchRecoveryLookup.AllPlayers(mgrTeam),
                 p => PitcherLedgerKey.For(isManagerSchool: true, manager.Id, p.SourceId, p.UniformNumber),
                 PitchRecoveryLookup.AllPlayers(oppTeam),

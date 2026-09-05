@@ -106,12 +106,13 @@ public static class GameEngine
     // 内部は Steps(...) を drain するだけ＝対話進行と単一コードパス（決定論ゲートで前後一致を固定）。
     public static GameResult Play(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng,
-        IReadOnlyDictionary<Player, int>? priorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null,
         IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
         IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
     {
         var p = NewProgress(
-            awayTeam, homeTeam, ctx, rng, priorWeekPitches,
+            awayTeam, homeTeam, ctx, rng, awayPriorWeekPitches, homePriorWeekPitches,
             awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         foreach (var _ in Steps(p)) { /* drain */ }
         return BuildResult(p);
@@ -133,9 +134,16 @@ public static class GameEngine
     /// 同一キーに潰れかねないため（校内は背番号が一意なので同一チーム内では衝突しない）。
     /// </param>
     /// <param name="homePitchRecovery">同上（後攻チーム分）。</param>
+    /// <param name="awayPriorWeekPitches">
+    /// 週間球数制限（設計書05 §1.3）の持ち越し球数＝この試合より前の直近1週間に投げた球数（先攻チーム分）。
+    /// null=持ち越しなし（＝単一試合では上限に届かない＝従来挙動と完全一致）。
+    /// <b>チームごとに別辞書</b>にするのは <paramref name="awayPitchRecovery"/> と同じ理由（Player の値等価衝突）。
+    /// </param>
+    /// <param name="homePriorWeekPitches">同上（後攻チーム分）。</param>
     public static GameProgress NewProgress(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng,
-        IReadOnlyDictionary<Player, int>? priorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null,
         Debugging.ScenarioStart? scenarioStart = null,
         IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
         IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
@@ -161,8 +169,9 @@ public static class GameEngine
         var away = new TeamState(awayTeam);
         var home = new TeamState(homeTeam);
         // 球数制限（設計書05 §1.3）。既定 WeeklyPitchLimit=MaxValue＝無効＝従来の継投挙動と完全一致。
-        away.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, priorWeekPitches);
-        home.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, priorWeekPitches);
+        // 持ち越しはチームごとに別辞書（SetPitchRecovery/SetDayForm と同じ理由＝Player が値等価の record）。
+        away.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, awayPriorWeekPitches);
+        home.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, homePriorWeekPitches);
         // 試合間の回復モデル（設計書02 §1.1e-2）。既定 null＝素の目安投球数のまま＝従来挙動と完全一致。
         away.SetPitchRecovery(awayPitchRecovery);
         home.SetPitchRecovery(homePitchRecovery);

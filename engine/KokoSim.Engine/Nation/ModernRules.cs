@@ -30,6 +30,13 @@ public sealed record ModernRules
         => PitchLimitEnabled(year) ? WeeklyPitchLimit : int.MaxValue;
 
     /// <summary>
+    /// 「1週間」の実体＝持ち越し球数を数える日数（設計書05 §1.3。実ルールどおり当日を含む7日間）。
+    /// <b>上限値と同じ場所に置く</b>＝窓だけ／上限だけを変えると意味が壊れるため
+    /// （<see cref="Tournaments.PriorWeekPitchLookup"/> はこの値だけを見る）。
+    /// </summary>
+    public int WeeklyPitchWindowDays { get; init; } = 7;
+
+    /// <summary>
     /// 暦年に応じたタイブレーク・球数制限を <see cref="GameContext"/> へ反映する（設計書05 §1.3, issue #252）。
     /// TieBreakEnabled/WeeklyPitchLimit だけを上書きし、他フィールド（MercyRuleEnabled 等）は呼び出し側のまま。
     /// </summary>

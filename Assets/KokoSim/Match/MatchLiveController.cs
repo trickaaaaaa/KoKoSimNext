@@ -4014,7 +4014,9 @@ namespace KokoSim.Unity.Match
             var pcMod = def.StaminaRemaining < 0.3 ? "mhud-pc__n--alert"
                 : def.StaminaRemaining < 0.6 ? "mhud-pc__n--warn" : null;
             idn.Add(MakeRow("mhud-spacer"));
-            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod));
+            // 球数は「今 / 目安」の分母つき（案A）。分母は StaminaTarget＝スタミナバーの分母そのもので、
+            // 連戦で目安が縮めば分母も縮む＝バーと数字が食い違わない。
+            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod, StaminaTargetText(def)));
             band.Add(idn);
 
             // 2段目＝通算防御率・本日の奪三振・与四死球の等幅3セル（打者HUDと同構造）。奪三振と与四死球は
@@ -4030,14 +4032,51 @@ namespace KokoSim.Unity.Match
             band.Add(stats);
 
             // 3段目＝スタミナ。帯の最下段として帯と同幅で組み込む（別要素として浮かせない）。
-            band.Add(BuildStaminaBar(def.StaminaRemaining));
+            // 週間球数制限（設計書05 §1.3）の残りもここに置く＝「残り」の話をバーと並べる。
+            // 名前行に置くと球数（主指標）を帯の外へ押し出す（実測で右端が欠けた）。
+            band.Add(BuildStaminaBar(def.StaminaRemaining, WeeklyLeftForDisplay(def, totalPitches)));
             return band;
         }
+
+        /// <summary>
+        /// 降板の目安マージン（<see cref="FatigueCoefficients.RelievePitchMargin"/> の既定＝実ゲームが使う値）。
+        /// 「ルールで先に止まるか」の判定にだけ使う表示用の定数で、試合の判定には一切触らない。
+        /// </summary>
+        private static readonly double ReliefMargin = new FatigueCoefficients().RelievePitchMargin;
+
+        /// <summary>
+        /// 週間球数制限（設計書05 §1.3）の残り球数。制限なし（int.MaxValue）なら null＝表示しない。
+        /// 持ち越し（<see cref="LivePitcherToday.WeeklyPitchesPrior"/>）＋当試合ぶんを引く。到達判定は
+        /// <b>打席境界</b>なので実際は数球超える＝0でクランプして「打者を打ち終えたら交代」と読ませる。
+        /// </summary>
+        private static int? WeeklyPitchesLeft(LivePitcherToday def, int totalPitchesToday)
+        {
+            if (def == null || def.WeeklyPitchLimit == int.MaxValue) return null;
+            var left = def.WeeklyPitchLimit - def.WeeklyPitchesPrior - totalPitchesToday;
+            return left < 0 ? 0 : left;
+        }
+
+        /// <summary>
+        /// 画面に出す週残（出さないなら null）。<b>ルールがスタミナより先に効く</b>投手＝残りが
+        /// 「目安投球数＋降板マージン」より少ないときだけ出す。普段は出ない＝アクセントを増やさない
+        /// （UI原則②「強調は希少資源」）。
+        /// </summary>
+        private static int? WeeklyLeftForDisplay(LivePitcherToday def, int totalPitchesToday)
+        {
+            var left = WeeklyPitchesLeft(def, totalPitchesToday);
+            return left is int v && v < def.StaminaTarget + ReliefMargin ? left : null;
+        }
+
+        /// <summary>球数の分母＝実効目安投球数（連戦で縮む）。不明（0以下）なら空＝分母を出さない。</summary>
+        private static string StaminaTargetText(LivePitcherToday def)
+            => def == null || def.StaminaTarget <= 0.0
+                ? null
+                : Mathf.RoundToInt((float)def.StaminaTarget).ToString();
 
         // スタミナ残量のバー（継投の目安）。球数の数字だけでなく形でも「そろそろ」を出す。
         // 色は残量で落とす: 6割超=良好 / 3〜6割=注意 / 3割未満=警告（盤面ビューの状態コード）。
         // 文字（見出し・％）は持たない＝残量は形と色だけで読ませ、数字は名前行の球数に集約する。
-        private static VisualElement BuildStaminaBar(double remaining)
+        private static VisualElement BuildStaminaBar(double remaining, int? weeklyLeft = null)
         {
             var row = MakeRow("mhud-stam");
 
@@ -4059,6 +4098,17 @@ namespace KokoSim.Unity.Match
                 track.Add(tick);
             }
             row.Add(track);
+
+            // 週残（出るのはルールで先に止まる投手のときだけ＝普段は帯の見た目が変わらない）。
+            // 数字と和文は Label を分ける（Oswald は欧文専用・設計書16 §2）。
+            if (weeklyLeft is int left)
+            {
+                var box = MakeRow("stam__weekly");
+                box.Add(MakeLabel("週残", "stam__weekly-c"));
+                box.Add(MakeLabel(left.ToString(), "stam__weekly-n", "f-num-bd"));
+                box.Add(MakeLabel("球", "stam__weekly-u"));
+                row.Add(box);
+            }
             return row;
         }
 
@@ -4236,12 +4286,14 @@ namespace KokoSim.Unity.Match
         /// 球数「6球」。数字と和文単位で Label を分ける（Oswald は欧文専用）。見出しは持たない。
         /// 数字は太字＝学年チップより目立たせる（継投判断の主指標）。
         /// </summary>
-        private static VisualElement HudPitchCount(string digits, string mod)
+        private static VisualElement HudPitchCount(string digits, string mod, string denominator)
         {
             var box = MakeRow("mhud-pc");
             var n = MakeLabel(digits, "mhud-pc__n", "f-num-bd");
             if (mod != null) n.AddToClassList(mod);
             box.Add(n);
+            // 分母（実効目安投球数）。数字だけの Label なので Oswald が素直に効く（書体3役ルール）。
+            if (!string.IsNullOrEmpty(denominator)) box.Add(MakeLabel("/ " + denominator, "mhud-pc__d", "f-num"));
             box.Add(MakeLabel("球", "mhud-pc__u"));
             return box;
         }

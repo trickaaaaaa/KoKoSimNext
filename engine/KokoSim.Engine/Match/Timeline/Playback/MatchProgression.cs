@@ -127,7 +127,7 @@ public sealed class MatchProgression
         _homeTeam = home;
         _ctx = ctx;
         _scenarioStart = scenarioStart;
-        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed), null, scenarioStart);
+        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed), scenarioStart: scenarioStart);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
 
@@ -139,10 +139,18 @@ public sealed class MatchProgression
     /// <b>試合開始前の内部状態を控える</b>ので、シードを持たなくても <see cref="Save"/> で中断保存できる。
     /// それ以外の実装（テスト用の固定乱数など）では従来どおり <see cref="Save"/> は使えない。</para>
     /// </summary>
+    /// <param name="awayPriorWeekPitches">
+    /// 週間球数制限（設計書05 §1.3）の持ち越し球数（先攻チーム分）。<b>バッチ側
+    /// （<see cref="GameEngine.Play"/>）と同じ値を渡さないと、観戦した試合だけ制限が効かず
+    /// 「観戦しても結果が変わらない」契約が壊れる</b>。null=持ち越しなし＝従来挙動と完全一致。
+    /// </param>
+    /// <param name="homePriorWeekPitches">同上（後攻チーム分）。</param>
     public MatchProgression(
         Team away, Team home, GameContext ctx, IRandomSource rng,
         IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
-        IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null,
+        IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null)
     {
         _seed = 0;
         _seedable = false;
@@ -152,7 +160,8 @@ public sealed class MatchProgression
         // NewProgress は dayForm 抽選で rng を消費するので、控えるのは必ずその手前。
         _rngState = (rng as Xoshiro256Random)?.CaptureState();
         _p = GameEngine.NewProgress(
-            away, home, ctx, rng, awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
+            away, home, ctx, rng, awayPriorWeekPitches, homePriorWeekPitches,
+            awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
 

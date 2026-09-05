@@ -506,6 +506,33 @@ public sealed class MatchProgressionTests
         Assert.NotEqual(AdvancePitchResult.AwaitingForcedPitcherChange, prog.AdvancePitch());
     }
 
+    /// <summary>
+    /// 週の持ち越し球数が<b>観戦経路（MatchProgression）にも届く</b>こと（issue: 球数制限の可視化）。
+    /// ここが無いと自動消化（GameEngine.Play）だけ制限が効き、観戦した試合だけ効かない＝
+    /// 「観戦しても結果が変わらない」契約が壊れる。持ち越しはチームごとに別辞書で渡す。
+    /// </summary>
+    [Fact]
+    public void PriorWeekPitches_ReachTheLivePath_AndAreScopedPerTeam()
+    {
+        var away = Team("A", true);
+        var home = Team("H", true);
+        var homeStarter = home.BattingOrder[home.PitcherSlot];
+        var ctx = new GameContext { WeeklyPitchLimit = 500, PlayerControlsPitcherChanges = true };
+        var carry = new Dictionary<Player, int> { [homeStarter] = 500 };
+
+        // home 側の辞書へ入れれば、最初の打席を投げ終えた時点で人選待ちになる。
+        var prog = new MatchProgression(away, home, ctx, new Xoshiro256Random(7UL),
+            homePriorWeekPitches: carry);
+        Assert.True(prog.Advance());
+        Assert.True(prog.PendingForcedPitcherChange);
+
+        // 同じ辞書を away 側へ入れても home の投手には効かない（チーム分離）。
+        var misplaced = new MatchProgression(away, home, ctx, new Xoshiro256Random(7UL),
+            awayPriorWeekPitches: carry);
+        Assert.True(misplaced.Advance());
+        Assert.False(misplaced.PendingForcedPitcherChange);
+    }
+
     [Fact]
     public void PlayerControlsPitcherChanges_Default_KeepsAutomaticReliefAndNeverBlocks()
     {

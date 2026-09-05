@@ -134,6 +134,19 @@
   適用する場合は Heavy統計回帰の帯再検証とセットで行うこと。なお `TournamentPitchLedger` による
   週またぎの持ち越し球数（`priorWeekPitches`）を `GameEngine.Play` へ渡す配線は本issueの範囲外
   （既存コメントのとおり帯再校正とセットの別issue）で、単一試合内の `WeeklyPitchLimit` 適用のみ行う。
+- **持ち越し球数の配線＋可視化【2026-09-05実装・out/issues-pending/pitch-limit-visibility.md】**: 上の
+  「別issue」がこれ。`PriorWeekPitchLookup`（`PitchRecoveryLookup` と同型・同じ `PitcherLedgerKey.For` を通す）が
+  大会台帳から直近 `ModernRules.WeeklyPitchWindowDays`（=7日・**上限値と同じ場所に置く**）の球数を引き、
+  `PlayerMatchResolver.Resolve`/`BeginLive` の両方が同じ値を `GameEngine.Play`／`MatchProgression` へ渡す
+  （観戦しても結果が変わらない契約）。**持ち越し辞書はチームごとに別**（`awayPriorWeekPitches`/
+  `homePriorWeekPitches`）＝`Player` が値等価 record なので1本に merge すると別校の選手が全属性一致したとき
+  潰れる（`awayPitchRecovery`/dayForm と同じ理由）。配線前は「1試合で500球」＝到達不能で、
+  強制交代（`MatchProgression.PendingForcedPitcherChange`）は実ゲームで一度も発火していなかった。
+  裏試合は従来どおり `ApplyTo` を通さない＝**相手校の裏試合ぶんの球数は台帳に載るが、裏試合自体は
+  制限を受けない**非対称を残す（全国の得点分布・Balance帯を動かさないため）。
+  表示は試合HUDの投手帯＝球数を「今 / 実効目安投球数」の分母つき（`LivePitcherToday.StaminaTarget`＝
+  スタミナバーの分母そのもの）で出し、週の残り（`WeeklyPitchesPrior`＋当試合ぶんから算出）は
+  **ルールがスタミナより先に効く投手のときだけ**「週残N球」チップで点灯させる。
 - **延長上限で同点の決着＝引き分け再試合【2026-07-26 実装・issue #253】**: トーナメント（勝者が要る）で
   延長上限（`GameContext.MaxInnings=15`）まで同点だった試合は、**別Fork の再試合で決着させる**（現実の
   高校野球の引き分け再試合に準拠）。決着ロジックは `TournamentRunner.DecideByReplay` に一本化し、

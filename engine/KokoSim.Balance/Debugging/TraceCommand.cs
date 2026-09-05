@@ -111,7 +111,7 @@ public static class TraceCommand
                    GameSimulation.GenerateTeam(g, "地元校") with { Tactics = brain },
                    Traced(ctx), null);
 
-            var p = GameEngine.NewProgress(a, h, c, g, null, start);
+            var p = GameEngine.NewProgress(a, h, c, g, scenarioStart: start);
             // 強制発動（設計書17 §6.1, F4）: 最初の1打席に効かせる。--scenario の force 指定も同じ経路。
             if (forced != ForcedOutcome.None) p.ForceNext(forced);
             foreach (var _ in GameEngine.Steps(p)) { /* drain */ }

@@ -46,7 +46,8 @@ public sealed class PitchRecoveryWiringTests
         var (away, home, _) = Teams(5);
         var baseline = GameEngine.Play(away, home, new GameContext(), new Xoshiro256Random(9));
         var withNullRecovery = GameEngine.Play(
-            away, home, new GameContext(), new Xoshiro256Random(9), priorWeekPitches: null,
+            away, home, new GameContext(), new Xoshiro256Random(9),
+            awayPriorWeekPitches: null, homePriorWeekPitches: null,
             awayPitchRecovery: null, homePitchRecovery: null);
 
         Assert.Equal(baseline.AwayRuns, withNullRecovery.AwayRuns);
