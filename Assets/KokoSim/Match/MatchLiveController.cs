@@ -504,8 +504,8 @@ namespace KokoSim.Unity.Match
             _duelImg = null;
             _duelBtn = _root.Q<Button>("duel-view");
             if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
-            InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
-            ApplyDuelViewState();
+            // ⚠ 対決ステージの生成（InitDuelViewDefault）はここではなく BuildGame の**後ろ**。
+            //    生成時に配色をマテリアルへ焼くので、両校の配色が入る前に立てると前試合の色で焼ける。
 
             // 采配の手札は盤面の外（列の下）。打席をまたいで作り直さないのでここで1度だけ生成する。
             var tacticsHost = _root.Q<VisualElement>("tactics-host");
@@ -557,6 +557,13 @@ namespace KokoSim.Unity.Match
             _scoutPanel = new MatchScoutPanel(_root, PauseSituationText);
             _scoutPanel.Bind();
             BuildGame();
+            // 対決ビューの生成は BuildGame の後（＝両校の配色と進行体が入った後）でなければならない。
+            // NewDuelRig は生成時に配色をマテリアルへ焼き、以降の塗り替え（ApplyDuelTeamColors）は
+            // 「半回が変わった時だけ」なので、誤った色で焼くと 1回表のあいだ直る機会が無い
+            // （旧実装は要素クエリの直後に呼んでいたため、2試合目以降は**前試合の配色**で立ち、
+            //  自校の先攻/後攻が前試合と反転していると投手と打者のユニフォームが入れ替わって見えた）。
+            InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
+            ApplyDuelViewState();
             _subPanel.SetMatch(_prog, _managerIsAway);
             _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp);
             // 指示パネルの初期フェーズ（1打席目の攻守）。以降は采配窓ごとに OpenWindow が追従させる。
@@ -670,6 +677,11 @@ namespace KokoSim.Unity.Match
             _cameraWorkWanted = false;
             _duelOn = false;
             _duelManualOff = false;
+            // 配色と「最後に対決ビューへ流した攻守」も試合をまたがない。残すと次の試合の対決ステージが
+            // 前試合の色で立ち、塗り替えガード（ApplyDuelTeamColors）も同じ値で素通りして直らない。
+            _awayColors = null;
+            _homeColors = null;
+            _duelColorsOffenseIsTop = null;
         }
 
         // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
