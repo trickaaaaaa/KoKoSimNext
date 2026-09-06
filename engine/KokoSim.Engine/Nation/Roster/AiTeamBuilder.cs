@@ -24,10 +24,10 @@ public static class AiTeamBuilder
         FieldPosition.CenterField, FieldPosition.RightField,
     };
 
-    // ベンチ入り20人制（背番号1〜20）: 先発9（野手8＋エース1）＋控え野手8（10〜17）＋控え投手3（18〜20）＝20。
-    // StrengthTeamFactory と同じ背番号規則（design-06 §3.3b）。
-    private const int BenchFielderSlots = 8;
-    private const int ReservePitcherSlots = 3;
+    // ベンチ入り20人制（背番号1〜20）: 先発9（野手8＋エース1）＋控え投手3（二番手=10＋散らした2つ）
+    // ＋控え野手8（残り8番号）＝20。採番規則は AiUniformNumbers（StrengthTeamFactory と共通・design-06 §3.3b）。
+    private const int BenchFielderSlots = AiUniformNumbers.BenchFielderSlots;
+    private const int ReservePitcherSlots = AiUniformNumbers.ReservePitcherSlots;
     /// <summary>マウンド組の上限＝先発投手＋控え投手枠。これを超える投手寄りの選手は野手候補へ戻す
     /// （issue ai-two-way-hitting-pitchers-start-as-fielders。旧実装は5人目以降をベンチ外へ捨てていた）。</summary>
     private const int MoundGroupCap = 1 + ReservePitcherSlots;
@@ -65,6 +65,9 @@ public static class AiTeamBuilder
         // 揺らす per-round variance は展望との一致にラウンド識別子の伝播が要るため将来増分（OPEN-QUESTIONS Q21）。
         var conditionRoot = new Xoshiro256Random(
             0x0C0D_0000UL ^ (ulong)(long)school.Id ^ ((ulong)(long)yearIndex * 0x9E37_79B9UL));
+
+        // 背番号の採番表（AiUniformNumbers）。(校ID, 年度) 固定＝大会を跨いでも同じ番号。
+        var numbers = AiUniformNumbers.For(school.Id, yearIndex);
 
         Player Snap(AiPlayer p, int number)
         {
@@ -112,46 +115,61 @@ public static class AiTeamBuilder
             order.Add(Snap(best, PositionNumber(FieldSlots[slot])) with { Position = FieldSlots[slot] });
         }
 
-        // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号10〜17（ベンチ入り20人制、StrengthTeamFactoryと同じ規則）。
-        // マウンド組は控え投手枠（18〜20）へ回すのでここでは除く。生成時に投手寄りだった選手が控え野手に
-        // 座るときは守備位置ラベルを最良適性の守備位置へ置き直す（配置は選抜側が決める #366 §④）。
+        // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号は控え投手が実際に使った番号を除いた
+        // 残りを若い順に詰める（ベンチ入り20人制、StrengthTeamFactory と同じ規則）。採番は控え投手を
+        // 確定させた後（下の bullpen）＝欠番を作らないため、ここでは人選だけして Snap は後回しにする。
+        // マウンド組は控え投手枠へ回すのでここでは除く。
         var benchFielders = fielders.Where(p => !usedIds.Contains(p.Id))
             .OrderByDescending(FielderScore).ThenBy(p => p.Id).Take(BenchFielderSlots).ToList();
-        var num = 10;
-        foreach (var f in benchFielders)
-        {
-            var snapped = Snap(f, num++);
-            if (snapped.Position == FieldPosition.Pitcher)
-                snapped = snapped with { Position = Season.AptitudeRoller.BestFieldPosition(f.Aptitudes) };
-            bench.Add(snapped);
-        }
 
-        // エース（最良投手）＝背番号は常に AceUniformNumber（1）。控え投手は背番号18〜20（最大3人）。
-        // 番号は温存の有無に関わらずロスター順位で固定＝大会を跨いだ台帳キー（#41）の同定を安定させる。
+        // エース（最良投手）＝背番号は常に AceUniformNumber（1）。控え投手は上位から順に 10 →散らした2つ。
+        // <b>番号は詰める</b>＝二番手が守備で先発した日はその下の投手が10を着ける（20人登録で10番が
+        // 欠番になるのは不自然なので、順位に紐付けず「控えに座った順」で配る）。
         //
         // **守備位置は必ずここで投手へ置き直す**（issue #384）。マウンド組は生成時の役割でなく能力で選ぶので、
         // 野手として生成された選手が入り得る。置き直さないと打順に投手が居ないまま同じ守備位置が2人になり、
         // 守備網羅が崩れる（実測: 200校中30校で発生）。配置を決めるのは選抜側の責任（#366 §④）。
         Player SnapToMound(AiPlayer p, int number) => Snap(p, number) with { Position = FieldPosition.Pitcher };
 
+        // 控え投手の番号は上から順に配る（0=エースの1は別枠なので添字1から）。守備で先発した投手は
+        // 守備位置番号（2〜9）を着けるのでここを通らず、その番号は下の投手へ繰り上がる。
+        var moundIndex = 1;
+        int NextMoundNumber() => numbers.Mound[System.Math.Min(moundIndex++, numbers.Mound.Count - 1)];
+
         var snappedAce = trueAce is not null ? SnapToMound(trueAce, AceRestSelector.AceUniformNumber) : null;
-        var pnum = 18;
-        // 控え投手＝マウンド組のうち、エースでも先発でもなく、守備にも就かなかった者（背番号18〜）。
+        // 控え投手＝マウンド組のうち、エースでも先発でもなく、守備にも就かなかった者。
         var bullpen = new List<Player>();
         Player? starter = null;
         if (starterAi is not null)
         {
-            starter = restAce ? SnapToMound(starterAi, pnum++) : snappedAce;
+            starter = restAce ? SnapToMound(starterAi, NextMoundNumber()) : snappedAce;
             if (restAce && snappedAce is not null) bullpen.Add(snappedAce);
         }
         foreach (var p in pitchers.Skip(1))
         {
             if (starterAi is not null && p.Id == starterAi.Id) continue;   // 先発は上で処理済み
             if (usedIds.Contains(p.Id)) continue;                          // 守備で先発（二刀流）
-            bullpen.Add(SnapToMound(p, pnum++));
+            bullpen.Add(SnapToMound(p, NextMoundNumber()));
         }
         if (starter is not null)
             order.Add(starter);
+
+        // 控え野手の採番＝1〜20 のうち先発9人と控え投手が使わなかった番号を若い順に詰める。
+        // 控え投手が3人に満たない校では散らした番号が余るので、それも控え野手へ回す（＝欠番は
+        // 登録人数が20人に届かないぶんだけ末尾に出る）。生成時に投手寄りだった選手が控え野手に座るときは
+        // 守備位置ラベルを最良適性の守備位置へ置き直す（配置は選抜側が決める #366 §④）。
+        var takenNumbers = new HashSet<int>(order.Select(p => p.UniformNumber));
+        foreach (var p in bullpen) takenNumbers.Add(p.UniformNumber);
+        var benchNumbers = new List<int>(AiUniformNumbers.BenchSize);
+        for (var n = 1; n <= AiUniformNumbers.BenchSize; n++)
+            if (!takenNumbers.Contains(n)) benchNumbers.Add(n);
+        for (var i = 0; i < benchFielders.Count && i < benchNumbers.Count; i++)
+        {
+            var snapped = Snap(benchFielders[i], benchNumbers[i]);
+            if (snapped.Position == FieldPosition.Pitcher)
+                snapped = snapped with { Position = Season.AptitudeRoller.BestFieldPosition(benchFielders[i].Aptitudes) };
+            bench.Add(snapped);
+        }
 
         var team = new Team
         {

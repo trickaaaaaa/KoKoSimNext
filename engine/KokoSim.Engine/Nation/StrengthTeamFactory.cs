@@ -85,7 +85,11 @@ public static class StrengthTeamFactory
         // 同一チーム内で下の名前が被らないよう、採用済みの名前を持ち回る（苗字の重複はOK＝現実にもある）。
         var usedGiven = new HashSet<string>();
         var profileSalt = 0x6A17_0000UL;   // 投打・学年用の Fork ソルト（主RNG非消費）
-        // 背番号は高校野球の慣例に沿って採番: 先発の野手＝守備位置番号(2〜9)、エース＝1、控え野手＝10〜17、控え投手＝18〜。
+        // 背番号は AiUniformNumbers（AI校の採番の単一ソース・design-06 §3.3b）から引く: 先発の野手＝守備位置番号(2〜9)、
+        // エース＝1、二番手投手＝10、3枚目以降の控え投手＝11〜20 から校ごとに散らした2つ、控え野手＝残り8つ。
+        // 引くのは Fork＝主RNG非消費で、番号の大小と控え投手の順位も従来（18→19→20）と同じ並びなので、
+        // 控えの名簿順（TeamReserves＝背番号順）も当日の出来のサンプリング順も1ビットも動かない。
+        var numbers = AiUniformNumbers.Draw(rng.Fork(NumberSalt));
         for (var slot = 0; slot < FieldSlots.Length; slot++)
         {
             var pos = FieldSlots[slot];
@@ -109,7 +113,7 @@ public static class StrengthTeamFactory
 
         var bullpen = new List<Player>();
         var wIndex = 1;
-        foreach (var (number, drop) in new[] { (18, 4.0), (19, 2.0) })
+        foreach (var (number, drop) in new[] { (numbers.Mound[1], 4.0), (numbers.Mound[2], 2.0) })
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
             bullpen.Add(AiMentalModel.WithGradeArc(
@@ -117,15 +121,15 @@ public static class StrengthTeamFactory
                     with { UniformNumber = number, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
                 pr.Grade, rc));
         }
-        // 背番号20（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
-        var relief20 = rng.Fork(0x9A20_0000UL);
+        // 控え投手の最後の1枠（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
+        var reliefTail = rng.Fork(0x9A20_0000UL);
         var pr20 = Profile(rc, rng, ref profileSalt, starter: false);
         bullpen.Add(AiMentalModel.WithGradeArc(
-            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], relief20, pc, salt++, ac, archSalt++, rc, mental)
-                with { UniformNumber = 20, Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade },
+            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental)
+                with { UniformNumber = numbers.Mound[3], Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade },
             pr20.Grade, rc));
 
-        // 控え（全員生成・ベンチ入りメンバとして背番号10〜を採番）。能力・氏名とも Fork ストリーム由来＝
+        // 控え野手（全員生成・ベンチ入りメンバとして残り番号を若い順に採番）。能力・氏名とも Fork ストリーム由来＝
         // 主RNG消費を1ビットも変えない。Team.Tactics 未設定の相手校では MaybeOffenseSubs が Bench 前に早期 return するため、
         // 控えを持たせても現行の試合進行・裏試合の決定論には影響しない（采配ブレイン注入時のみ交代候補として機能）。
         var bench = new List<Player>(BenchSlots.Length);
@@ -136,7 +140,7 @@ public static class StrengthTeamFactory
             var pr = Profile(rc, rng, ref profileSalt, starter: false, BenchSlots[i]);
             bench.Add(AiMentalModel.WithGradeArc(
                 PositionPlayer(BenchSlots[i], castCenter - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc)
-                    with { UniformNumber = 10 + i, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
+                    with { UniformNumber = numbers.BenchFielders[i], Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
                 pr.Grade, rc));
         }
 
@@ -309,6 +313,9 @@ public static class StrengthTeamFactory
 
     /// <summary>主軸の守備位置を選ぶ Fork ソルト（主RNG非消費・他ストリームと別の上位ビット）。</summary>
     private const ulong StarSalt = 0x57A2_0000UL;
+
+    /// <summary>背番号の採番表（<see cref="AiUniformNumbers"/>）用の Fork ソルト（主RNG非消費）。</summary>
+    private const ulong NumberSalt = 0x1BAC_0000UL;
 
     /// <summary>
     /// 先発野手 <paramref name="slotCount"/> 枠から主軸 <paramref name="count"/> 枠を重複なしで選ぶ（Fisher–Yates の先頭 count）。

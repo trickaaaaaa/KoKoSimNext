@@ -14,7 +14,7 @@ public static class AceRestSelector
 {
     /// <summary>ロスター上の「真のエース」に常に割り当てる背番号（<see cref="AiTeamBuilder"/> と合わせる）。
     /// 温存で先発を外れても背番号は変わらない＝大会を跨いだ同一投手の同定（台帳キー）が安定する。</summary>
-    public const int AceUniformNumber = 1;
+    public const int AceUniformNumber = AiUniformNumbers.AceNumber;
 
     /// <summary>この試合、エースを外して次点投手を先発させるべきか。</summary>
     public static bool ShouldRestAce(School school, AceRestContext context, EnemyAiCoefficients ai)

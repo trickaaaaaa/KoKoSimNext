@@ -33,6 +33,9 @@ public sealed class AiTwoWayLineupTests
 
     private static double Batting(Player p) => (p.Contact + p.Power + p.Discipline) / 3.0;
 
+    /// <summary>SampleTeams が組む年度（背番号の採番表を引き直すのに使う）。</summary>
+    private const int YearIndex = 1;
+
     /// <summary>issue の実測ハーネス: Strength 30/45/60 × 200校・夏引退後の2学年で Team を組む。</summary>
     private static IEnumerable<(School School, Team Team, AiSchoolRoster Roster)> SampleTeams(AiRosterDeps deps, int perStrength = 200)
     {
@@ -41,9 +44,9 @@ public sealed class AiTwoWayLineupTests
             for (var i = 0; i < perStrength; i++, id++)
             {
                 var school = MakeSchool(id, strength);
-                var roster = AiRosterFactory.Bootstrap(school, 1, deps);
+                var roster = AiRosterFactory.Bootstrap(school, YearIndex, deps);
                 AiRosterCycle.RetireGraduates(roster);
-                yield return (school, AiTeamBuilder.Build(roster, school, 1, deps), roster);
+                yield return (school, AiTeamBuilder.Build(roster, school, YearIndex, deps), roster);
             }
     }
 
@@ -100,7 +103,7 @@ public sealed class AiTwoWayLineupTests
     [Fact]
     public void SurplusPitchers_ReturnToTheFielderPool_AndCanStartInTheField()
     {
-        // マウンド組は先発＋控え投手3までに絞られ（背番号18〜20 は最大3人）、余りは野手候補へ戻る。
+        // マウンド組は先発＋控え投手3までに絞られ（控え投手枠＝二番手10＋散らした2つ）、余りは野手候補へ戻る。
         // 打てる控え投手が守備位置で先発する校が実際に出る（二刀流運用）。
         var deps = NoPhenomDeps();
         var twoWaySchools = 0;
@@ -110,9 +113,15 @@ public sealed class AiTwoWayLineupTests
             teams++;
             var benchPitchers = team.Reserves.Where(p => p.Position == FieldPosition.Pitcher).ToList();
             Assert.True(benchPitchers.Count <= 3, $"校{school.Id}: 控え投手 {benchPitchers.Count}");
-            Assert.All(benchPitchers, p => Assert.InRange(p.UniformNumber, 18, 20));
-            // 生成時に投手寄りだった選手が控え野手に座るとき「投」ラベルを持ち越していない。
-            Assert.DoesNotContain(team.Reserves, p => p.Position == FieldPosition.Pitcher && p.UniformNumber < 18);
+            // 控え投手の背番号は採番表のマウンド枠（10＋散らした2つ）を上から詰めて使う。
+            // 余った枠は控え野手へ回るので、控え投手側だけを見る。
+            var expectedPitcherNumbers = AiUniformNumbers.For(school.Id, YearIndex).Mound
+                .Take(1 + benchPitchers.Count).ToHashSet();
+            Assert.All(benchPitchers, p => Assert.Contains(p.UniformNumber, expectedPitcherNumbers));
+            // 生成時に投手寄りだった選手が控え野手に座るとき「投」ラベルを持ち越していない
+            // ＝控えで投手ラベルを持つのはマウンド枠の番号を着けた者だけ。
+            Assert.DoesNotContain(team.Reserves,
+                p => p.Position == FieldPosition.Pitcher && !expectedPitcherNumbers.Contains(p.UniformNumber));
 
             // 二刀流: 守備に就いた先発野手のうち、投手能力がベンチの控え投手より高い者が居る校を数える。
             var fieldStarters = team.BattingOrder.Where(p => p.Position != FieldPosition.Pitcher);
