@@ -164,9 +164,11 @@
           <ui:Label name="ev-eyebrow" class="rule-head__text" text="今週の出来事" />
         </ui:VisualElement>
 
-        <!-- 立ち絵スロット（役割ごとの単色シルエット。絵はまだ無く、差し替え口だけ用意する） -->
+        <!-- 立ち絵スロット（役割ごとの単色シルエット。絵が無い役割はこのまま／絵が有る役割は
+             ev-portrait-image に差し替わる。差し替え口は EventNovelView.EventPortraits）。 -->
         <ui:VisualElement class="ev__stage">
           <ui:VisualElement name="ev-portrait" class="ev-por">
+            <ui:VisualElement name="ev-portrait-image" class="ev-por__image" />
             <ui:VisualElement class="ev-por__head" />
             <ui:VisualElement class="ev-por__body" />
             <ui:Label name="ev-portrait-role" class="ev-por__role" text="コーチ" />

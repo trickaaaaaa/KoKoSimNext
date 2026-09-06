@@ -15,6 +15,8 @@ namespace KokoSim.Engine.Tests.Match.Game;
 /// 旧 <c>DoublePlayAttemptMinRelaySuccess=0.80</c> では転送で刺せる見込みが6〜8割ある併殺まで「確実な一塁」へ逃げ、
 /// 一塁走者あり内野ゴロの半分以上（実測 60%）で走者を二塁へ進めていた。実物の内野は封殺が取れる限りまず二塁へ投げ、
 /// 転送負けは FC（二塁封殺のみ）として残る。0.55 で 一塁のみ ≈33%／併殺 ≈33%（ゴロアウト比 ≈41%）／FC ≈13%。
+/// 0.55→0.65（issue double-play-per-game-band-review, 2026-08-30）: 併殺/試合の参考帯を高校野球の失策率実測
+/// （issue #123）ベースへ再校正した追従で、一塁のみ ≈44%／併殺 ≈37%（ゴロアウト比）／FC ≈10% へ変化。
 /// 300試合×2校（強さ50同士・采配無し）＝Category=Heavy。並列化の作法は <see cref="RunnerConservationTests"/> と同じ。
 /// </summary>
 [Trait("Category", "Heavy")]
@@ -87,13 +89,15 @@ public sealed class GroundBallDoublePlayDecisionTests
         _out.WriteLine($"n={t.Total} DP={t.Dp} FConly={t.FcOnly} FirstOnly={t.FirstOnly} IFH={t.InfieldHit} E={t.Error} " +
                        $"| DP/groundouts={100.0 * t.Dp / t.GroundOuts:F1}% | DP/g={dpg:F2} FC/g={fcg:F2} runs/team={rpt:F2}");
         Assert.True(t.Total > 600, $"標本不足 n={t.Total}");
-        // 「一塁アウトのみ（走者を二塁へ進める）」は内野ゴロの 4 割以下（旧 0.80 では 60%）。
-        Assert.True(t.FirstOnly <= t.Total * 0.40, $"一塁のみ {t.FirstOnly}/{t.Total}={100.0 * t.FirstOnly / t.Total:F1}% が多すぎる（併殺を狙いに行かない）");
-        // 併殺はゴロアウトの 35〜50%（旧 21%）。上限は「刺せない相手にも投げる」を防ぐ検収。
+        // 「一塁アウトのみ（走者を二塁へ進める）」は内野ゴロの 5 割未満（旧 0.80 では 60%）。
+        // 0.65 への再校正（issue double-play-per-game-band-review, 2026-08-30）で ≈33%→≈44% に上昇したが、
+        // 依然として旧値の「過半」からは区別される水準。
+        Assert.True(t.FirstOnly <= t.Total * 0.48, $"一塁のみ {t.FirstOnly}/{t.Total}={100.0 * t.FirstOnly / t.Total:F1}% が多すぎる（併殺を狙いに行かない）");
+        // 併殺はゴロアウトの 30〜45%（旧 21%、0.55 校正時は 35〜50%）。上限は「刺せない相手にも投げる」を防ぐ検収。
         var dpShare = (double)t.Dp / t.GroundOuts;
-        Assert.InRange(dpShare, 0.35, 0.50);
+        Assert.InRange(dpShare, 0.30, 0.45);
         // 転送負けの FC は残差として残る（0 でも 併殺と同数でもない）。
-        Assert.InRange((double)t.FcOnly / t.GroundOuts, 0.05, 0.30);
+        Assert.InRange((double)t.FcOnly / t.GroundOuts, 0.05, 0.20);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using KokoSim.Config;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
@@ -91,6 +92,10 @@ public static class GameSimulation
         public long TotalSqueezeRunnerOutAtHome { get; init; }
         /// <summary>1球采配（設計書15 Phase C）の帯校正用: 三振/四球/本塁打は1球判断の影響を最も受ける。</summary>
         public long TotalStrikeOuts { get; init; }
+        /// <summary>三振のうち見逃し（最終球が振らずに入った CalledStrike）だったもの。見逃し三振率の調査用。
+        /// useTacticsBrain=true のときだけ2ストライク時のForceSwing矯正が乗るため、useTacticsBrainの有無で
+        /// この値を比較すると矯正の実効果が測れる。</summary>
+        public long TotalLookingStrikeOuts { get; init; }
         public long TotalWalks { get; init; }
         public long TotalHitBatters { get; init; }
         public long TotalHomeRuns { get; init; }
@@ -179,6 +184,10 @@ public static class GameSimulation
         public double SqueezeRunnerOutAtHomeRate =>
             TotalSqueezeBallInPlay > 0 ? (double)TotalSqueezeRunnerOutAtHome / TotalSqueezeBallInPlay : 0;
         public double StrikeoutRate => TotalPlateAppearances > 0 ? (double)TotalStrikeOuts / TotalPlateAppearances : 0;
+        /// <summary>見逃し三振率（打席あたり）。K% の内訳。</summary>
+        public double LookingStrikeoutRate => TotalPlateAppearances > 0 ? (double)TotalLookingStrikeOuts / TotalPlateAppearances : 0;
+        /// <summary>三振に占める見逃しの割合（実野球はおよそ3割前後が参考値。design未定義のためこのゲームの目標帯は無い）。</summary>
+        public double LookingStrikeoutShare => TotalStrikeOuts > 0 ? (double)TotalLookingStrikeOuts / TotalStrikeOuts : 0;
         public double WalkRate => TotalPlateAppearances > 0 ? (double)TotalWalks / TotalPlateAppearances : 0;
         public double HitByPitchRate => TotalPlateAppearances > 0 ? (double)TotalHitBatters / TotalPlateAppearances : 0;
         public double HomeRunRate => TotalPlateAppearances > 0 ? (double)TotalHomeRuns / TotalPlateAppearances : 0;
@@ -253,6 +262,7 @@ public static class GameSimulation
         public long TotalSacrificeBunts, TotalSacrificeBuntSuccesses;
         public long TotalBuntForceOuts, TotalSqueezeBallInPlay, TotalSqueezeRunnerOutAtHome;
         public long TotalStrikeOuts, TotalWalks, TotalHitBatters, TotalHomeRuns, TotalPlateAppearances;
+        public long TotalLookingStrikeOuts;
         public int HomeWins, Ties, Extra, Shutouts;
         // 先攻/後攻を分けた集計（issue #536）。TotalHomeRuns は本塁打の意味で先約済みなので
         // 後攻の「得点」は TotalHomeRunsScored と名を分ける。
@@ -299,6 +309,7 @@ public static class GameSimulation
             foreach (var e in r.Log)
             {
                 if (e.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.HomeRun) TotalHomeRuns++;
+                if (e.Result.IsLookingStrikeout(e.PitchLog)) TotalLookingStrikeOuts++;
 
                 // 守備位置別・フライ/ゴロ別の失策内訳（issue #532）。処理野手が確定した打球（凡打 or 失策出塁）を
                 // フライ/ゴロ別に機会として数え、ReachedOnError を失策として数える。安打で終わった打球は機会に含めない。
@@ -371,6 +382,7 @@ public static class GameSimulation
             TotalSqueezeBallInPlay += o.TotalSqueezeBallInPlay;
             TotalSqueezeRunnerOutAtHome += o.TotalSqueezeRunnerOutAtHome;
             TotalStrikeOuts += o.TotalStrikeOuts;
+            TotalLookingStrikeOuts += o.TotalLookingStrikeOuts;
             TotalWalks += o.TotalWalks;
             TotalHitBatters += o.TotalHitBatters;
             TotalHomeRuns += o.TotalHomeRuns;
@@ -438,6 +450,7 @@ public static class GameSimulation
             TotalSqueezeBallInPlay = TotalSqueezeBallInPlay,
             TotalSqueezeRunnerOutAtHome = TotalSqueezeRunnerOutAtHome,
             TotalStrikeOuts = TotalStrikeOuts,
+            TotalLookingStrikeOuts = TotalLookingStrikeOuts,
             TotalWalks = TotalWalks,
             TotalHitBatters = TotalHitBatters,
             TotalHomeRuns = TotalHomeRuns,
@@ -574,6 +587,8 @@ public static class GameSimulation
         sb.AppendLine(c, $"| 失策数/試合（両軍計） | {s.ErrorsPerGame:F2} | 1.8–3.6 |");
         sb.AppendLine(c, $"| 外野失策シェア | {s.OutfieldErrorShare:P1} | 5–20% |");
         sb.AppendLine(c, $"| 三振率（打席あたり） | {s.StrikeoutRate:P2} | 参考 |");
+        sb.AppendLine(c, $"| うち見逃し三振率（打席あたり） | {s.LookingStrikeoutRate:P2} | 参考（目標帯未設定） |");
+        sb.AppendLine(c, $"| 見逃し三振の割合（三振に占める） | {s.LookingStrikeoutShare:P1} | 参考（実野球はおよそ3割前後） |");
         sb.AppendLine(c, $"| 四球率（打席あたり） | {s.WalkRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 死球率（打席あたり） | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率（打席あたり） | {s.HomeRunRate:P2} | 参考 |");

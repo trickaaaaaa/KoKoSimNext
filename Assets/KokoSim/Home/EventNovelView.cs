@@ -20,6 +20,7 @@ namespace KokoSim.Unity.Home
     {
         private readonly VisualElement _root;       // ev-novel
         private readonly VisualElement _portrait;
+        private readonly VisualElement _portraitImage;
         private readonly Label _eyebrow, _role, _speaker, _say, _progress, _hint;
         private readonly System.Action _onClosed;
         private readonly EventCallback<PointerDownEvent> _click;
@@ -32,6 +33,7 @@ namespace KokoSim.Unity.Home
             _root = root;
             _onClosed = onClosed;
             _portrait = root?.Q<VisualElement>("ev-portrait");
+            _portraitImage = root?.Q<VisualElement>("ev-portrait-image");
             _eyebrow = root?.Q<Label>("ev-eyebrow");
             _role = root?.Q<Label>("ev-portrait-role");
             _speaker = root?.Q<Label>("ev-speaker");
@@ -102,7 +104,9 @@ namespace KokoSim.Unity.Home
             if (_portrait != null)
             {
                 _portrait.EnableInClassList("ev-por--none", narration || result);
+                _portrait.EnableInClassList("ev-por--photo", EventPortraits.HasImage(line.Who));
                 if (_role != null) _role.text = EventPortraits.RoleLabel(line.Who);
+                if (_portraitImage != null) EventPortraits.ApplyImageClass(_portraitImage, line.Who);
             }
 
             if (_speaker != null)
@@ -146,7 +150,7 @@ namespace KokoSim.Unity.Home
         {
             { EventRoles.Manager, "監督" },
             { EventRoles.Player, "部員" },
-            { EventRoles.Coach, "コーチ" },
+            { EventRoles.TeamManager, "マネージャー" },
             { EventRoles.Ob, "OB" },
             { EventRoles.Scout, "スカウト" },
             { EventRoles.Captain, "主将" },
@@ -158,6 +162,21 @@ namespace KokoSim.Unity.Home
         {
             string label;
             return Labels.TryGetValue(who ?? "", out label) ? label : "";
+        }
+
+        /// <summary>
+        /// 実写ポートレートが用意されている役割（Assets/UI/Images/portraits/・issue
+        /// manager-npc-replaces-coach-speaker・2026-08-29）。無い役割は単色シルエットのまま。
+        /// </summary>
+        private static readonly string[] ImageRoles = { EventRoles.Manager, EventRoles.TeamManager };
+
+        public static bool HasImage(string who) => System.Array.IndexOf(ImageRoles, who) >= 0;
+
+        /// <summary>ポートレート要素に役割の画像クラスだけを立てる（他役割の残り香を消してから）。</summary>
+        public static void ApplyImageClass(VisualElement el, string who)
+        {
+            foreach (var role in ImageRoles) el.RemoveFromClassList("ev-por__image--" + role);
+            if (HasImage(who)) el.AddToClassList("ev-por__image--" + who);
         }
     }
 }

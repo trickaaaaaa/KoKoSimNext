@@ -2264,6 +2264,13 @@ namespace KokoSim.Unity.Match
         private bool _duelThrowActive;
         private bool _duelThrowFired;
         private float _duelThrowX, _duelThrowZ, _duelThrowYaw, _duelThrowYawRate, _duelThrowLastT;
+        // 対決ビュー据え置きの送球（issue #512）が実際に発火したか＝投げ手ごとに BeginFieldPlay まで
+        // 持ち越す控え。EndDuelThrow は姿勢（transform）を意図的に触らないため（下記コメント参照）、
+        // BeginFieldPlay の Snapshot がそのまま撮ると送球フォロースルーの途中を「戻り先」に焼いてしまう
+        // （対決ビュー復帰後も送球モーションが再生され続ける実害）。ここを見て Snapshot をアイドルへ
+        // すり替える（BeginFieldPlay で読んだら消費して false に戻す）。
+        private bool _duelThrowFiredCatcher;
+        private bool _duelThrowFiredPitcher;
         // 投げ手の**基準**（BasePos/BaseRot）の控え。PlaceFielder は基準を書き換える（守備の役者は置いた所が
         // 基準）が、この送球の投げ手は対決4体と共有の役者で、基準は対決の構え位置・向き。ここを通った
         // 立ちの向き（三塁送球なら約−45°）を基準に焼いたまま BeginFieldPlay が控え、EndFieldPlay が戻すと、
@@ -2323,7 +2330,8 @@ namespace KokoSim.Unity.Match
                 _duelThrowFired = true;
                 // 捕球ポーズ補正（ミットIK・体寄せ）に投げのクリップを奪わせない（issue #512。
                 // FixCatcherPose は _catchIndex<0 なら何もしない）
-                if (_duelThrowActor == _catcher) _catchIndex = -1;
+                if (_duelThrowActor == _catcher) { _catchIndex = -1; _duelThrowFiredCatcher = true; }
+                else if (_duelThrowActor == _pitcher) _duelThrowFiredPitcher = true;
                 var clip = LoadClip(e.Anchor.Clip);
                 SetActorClip(_duelThrowActor, clip, (t - e.TStart) * e.Rate, e.Anchor.Release + ThrowFollowSeconds);
                 _duelThrowActor.Speed = e.Rate;
@@ -4071,8 +4079,14 @@ namespace KokoSim.Unity.Match
             // 対決ビュー据え置きの送球（盗塁・牽制）から続く場合、投げ手の基準を対決の構えへ戻してから控える
             // （呼び出し側も EndDuelThrow を先に呼ぶが、順序を構造で保証する。EndDuelThrow の項）
             EndDuelThrow();
-            _pitcherSnap = Snapshot(_pitcher);
-            _catcherSnap = Snapshot(_catcher);
+            // EndDuelThrow は見えている送球の姿勢（Clip/Time）をあえて触らない＝ここで素直に Snapshot すると
+            // 送球フォロースルーの途中を「対決ビューへ戻る先」として焼いてしまい、EndFieldPlay で復元した
+            // 後もその続きが再生され続ける（守備ビューへ切り替わった後もモーションが止まらない実害）。
+            // 対決ビュー据え置きの送球が実際に発火した投げ手だけ、アイドルへすり替えて控える。
+            _pitcherSnap = _duelThrowFiredPitcher ? IdleSnapshot(_pitcher) : Snapshot(_pitcher);
+            _catcherSnap = _duelThrowFiredCatcher ? IdleSnapshot(_catcher) : Snapshot(_catcher);
+            _duelThrowFiredPitcher = false;
+            _duelThrowFiredCatcher = false;
 
             // 捕球予定・送球予定を先に組む（_loco の初期 Yaw 種付けに使う＝下記。issue #511）。
             BuildFieldCatchPlan(play);
@@ -4222,6 +4236,23 @@ namespace KokoSim.Unity.Match
                 GroundY = a.GroundY, HoldAtEnd = a.HoldAtEnd, Holding = a.Holding,
                 // ⚠ transform ではなく基準を控える（上の項。フォロースルーの途中の姿勢を
                 // 「立ち位置」として焼くと投手の向きが恒久的に狂う）
+                BasePos = a.BasePos, BaseRot = a.BaseRot,
+            };
+        }
+
+        /// <summary>
+        /// <see cref="Snapshot"/> の亜種＝いま再生中のクリップではなく、その役者のアイドル姿勢を
+        /// 「対決ビューへ戻る先」として控える（対決ビュー据え置きの送球が発火した投げ手専用。上の項）。
+        /// </summary>
+        private static DuelActorSnapshot IdleSnapshot(Actor a)
+        {
+            if (a == null || a.Go == null) return default;
+            return new DuelActorSnapshot
+            {
+                Valid = true,
+                Clip = a.IdleClip, IdleClip = a.IdleClip, Time = 0f, Speed = 1f,
+                EndAt = a.IdleEndAt, DefaultEndAt = a.DefaultEndAt, IdleEndAt = a.IdleEndAt,
+                GroundY = a.GroundY, HoldAtEnd = false, Holding = false,
                 BasePos = a.BasePos, BaseRot = a.BaseRot,
             };
         }

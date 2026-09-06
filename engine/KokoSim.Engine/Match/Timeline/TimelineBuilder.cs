@@ -1704,17 +1704,46 @@ public static class TimelineBuilder
     ///
     /// <para>本塁クロスプレーを描いた打席では呼ばない（<c>AppendBackHomeThrows</c> と二重に投げる）。
     /// 判断は「本塁へ投げるか」を知っている GameEngine 側に置く。</para>
+    ///
+    /// <para><paramref name="outAtOtherBaseName"/>: 同じ打球で本塁以外（三塁等）に憤死した走者がいるなら、
+    /// 実際の送球はそちら（<see cref="BaserunningModel"/> は1プレー1送球＝outThrowUsed）へ行っている
+    /// （issue outfield-hit-home-safe-and-third-out-throw-missing の続報）。この塁が渡された場合は、
+    /// 下の「二塁/投手への棒立ち防止の汎用返球」より<b>優先</b>してそちらへ描く。実際にアウトを取った
+    /// 送球なので、汎用返球にある早期return（投手のお手玉・距離ゼロ・自分から自分へ等）は一切通さず
+    /// 必ず描く（<see cref="GuardAgainstVerdict"/> で憤死走者の到達に間に合う秒へ合わせる）。</para>
     /// </summary>
-    public static PlayTimeline AppendErrorReturnThrow(PlayTimeline timeline, FieldingPlay play, FieldGeometry field)
+    public static PlayTimeline AppendErrorReturnThrow(
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field,
+        string? outAtOtherBaseName = null, double outAtOtherBaseArriveAnchor = 0.0)
     {
         if (timeline.ErrorPickupAt is not { } pickAt
             || timeline.ErrorPickupPoint is not { } from
             || timeline.ErrorPickupRole is not { } fromRole) return timeline;
 
+        var t0 = pickAt + ErrorReturnTransferSeconds;
+
+        if (outAtOtherBaseName is not null)
+        {
+            var outTo = BasePoint(field, outAtOtherBaseName);
+            var outToRole = CoverRoleAt(timeline, outTo, DefaultBaseGuard(outAtOtherBaseName));
+            var outPhysicalArrive = t0 + LegSeconds(Distance(from, outTo), ThrowSpeedOf(play));
+            var outArrive = GuardAgainstVerdict(outPhysicalArrive, t0, outAtOtherBaseArriveAnchor, runnerOut: true);
+            // 拾った野手が既にその塁の持ち主自身（三塁付近で拾い直してそのままタッチ等）なら送球でなく
+            // 保持運び（Carry）で描く。それ以外は距離やお手玉の投手であっても必ず送球を描く。
+            var outKind = outToRole == fromRole ? BallSegmentKind.Carry : BallSegmentKind.Throw;
+            var outBall = new List<BallSegment>(timeline.Ball)
+            {
+                new()
+                {
+                    Kind = outKind, T0 = t0, T1 = outArrive, From = from, To = outTo,
+                    FromRole = fromRole, ToRole = outToRole, ToBase = outAtOtherBaseName,
+                },
+            };
+            return timeline with { Ball = outBall, Duration = Math.Max(timeline.Duration, outArrive + 0.6) };
+        }
+
         // 投手のお手玉＝拾った本人が投手。自分から自分へは投げないし、他所へ投げる理由も無い＝そのまま持っている。
         if (fromRole == FieldPosition.Pitcher) return timeline;
-
-        var t0 = pickAt + ErrorReturnTransferSeconds;
         var deep = Distance(Home, from) > OutfieldDepthM;
         // 投手がマウンドを離れている（本塁バックアップ・一塁カバー・戻りの途中）なら投手へは返さない。
         // 送球が着く頃の位置ではなく**投げ始めの位置**で見る＝実物の野手も「いま居る人」へ投げる。

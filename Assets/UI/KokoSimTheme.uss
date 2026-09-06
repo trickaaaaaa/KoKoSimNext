@@ -1425,6 +1425,27 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* 地の文（narration）は話者が居ない＝立ち絵ごと消す。 */
 .ev-por--none { display: none; }
 
+/* 実写ポートレート（issue manager-npc-replaces-coach-speaker・2026-08-29）。役割ごとに1枚差し込む。
+   絵がまだ無い役割は既定で display:none のまま＝ev-por__head/__body のシルエットが見える。
+   絵がある役割だけ EventNovelView が .ev-por--photo を立て、シルエットと入れ替える。 */
+.ev-por__image {
+    display: none;
+    width: 208px;
+    flex-grow: 1; flex-shrink: 1;
+    min-height: 96px; max-height: 260px;
+    border-radius: 8px 8px 0 0;
+    background-color: var(--day-tx-3);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    -unity-background-scale-mode: scale-and-crop;
+}
+.ev-por--photo .ev-por__head,
+.ev-por--photo .ev-por__body { display: none; }
+.ev-por--photo .ev-por__image { display: flex; }
+
+.ev-por__image--manager { background-image: url("project:///Assets/UI/Images/portraits/manager.jpeg"); }
+.ev-por__image--team_manager { background-image: url("project:///Assets/UI/Images/portraits/team_manager.jpeg"); }
+
 /* 会話ボックス。白面＋インク枠＋ベタ影（案イ＝右下だけ枠を太らせる。部品級）。 */
 .ev__box {
     flex-shrink: 0;

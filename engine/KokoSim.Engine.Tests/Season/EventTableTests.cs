@@ -243,7 +243,7 @@ events:
     {
         var known = new HashSet<string>
         {
-            EventRoles.Manager, EventRoles.Player, EventRoles.Coach, EventRoles.Ob,
+            EventRoles.Manager, EventRoles.Player, EventRoles.TeamManager, EventRoles.Ob,
             EventRoles.Scout, EventRoles.Local, EventRoles.Captain, EventRoles.Narration,
         };
         foreach (var e in RepositoryEvents())
@@ -283,7 +283,7 @@ events:
         }
         Assert.True(variants > 0);
         Assert.True(managerCloses * 3 <= variants,
-            $"監督の行で締まる会話が {managerCloses}/{variants}（1/3 まで。締めは地の文・部員・コーチへ）");
+            $"監督の行で締まる会話が {managerCloses}/{variants}（1/3 まで。締めは地の文・部員・マネージャーへ）");
     }
 
     private static int Occurrences(string s, string needle)

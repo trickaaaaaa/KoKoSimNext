@@ -57,6 +57,23 @@ public sealed record BattingCoefficients
     /// 投手は隅を狙うため小さな値でも見逃しKが強く増える（0.02 で atbat_10k の K% 帯上限を 0.230 へ再校正済み）。
     /// </summary>
     public double ZoneEdgeSwingPenalty { get; init; } = 0.02;
+    /// <summary>
+    /// 2ストライク時（追い込まれ）の「プレートを守る」加点（設計書01 §2③「カウントで判定」・
+    /// 見逃し三振率の調査）。<see cref="BatterDecision.SwingProbability"/> はカウントを一切見ない構造だったため、
+    /// 見逃し三振が三振の6割超を占めていた（実測 issue looking-strikeout-rate）。ゾーン内外どちらにも
+    /// 同一値を加点する対称係数（<see cref="ChaseBreakSlope"/> と同じ1変数原則）。Brain依存の外付けパッチ
+    /// （<c>PitchTacticsTwoStrikeForceSwingProb</c>）ではなく判断そのものに組み込み、既定0.0は恒等
+    /// （strikes未指定の既存呼び出しに影響しない）。
+    /// </summary>
+    public double TwoStrikeSwingBoost { get; init; } = 0.28;
+    /// <summary>
+    /// 3ボール0ストライク時のスイング確率への倍率 [0,1]（設計書01 §2③「カウントで判定」・見逃し三振率の調査）。
+    /// カウント非依存の <see cref="ZoneSwingBase"/>/<see cref="ChaseBase"/> がそのまま3-0にも適用され、
+    /// 実質的な「待て」がゼロだった（3-0でのスイング率が実測45%＝実野球のおよそ5〜7%を大きく上回る）。
+    /// Brain依存の外付けパッチ（<c>PitchTacticsThreeZeroTakeProb</c>）ではなく判断そのものに組み込む。
+    /// 既定1.0は恒等（strikes/balls未指定の既存呼び出しに影響しない）。
+    /// </summary>
+    public double ThreeZeroSwingFactor { get; init; } = 0.15;
 
     // --- コンタクト（空振り/ファウル/フェア） ---
     /// <summary>空振り率のロジスティック基準（球威=打者互角時の空振り対数オッズ）。</summary>

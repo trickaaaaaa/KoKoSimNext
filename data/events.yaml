@@ -7,7 +7,7 @@
 #             （行ごとに独立抽選すると前後が噛み合わない文が出るため。2026-08-13 オーナー決定）。
 #             同じ (イベント, 通算週) なら常に同じ会話＝開き直しても文が変わらない。
 #   lines:    会話の中身。who=役割ID（立ち絵スロット＋既定の話者名）、say=本文、name=話者名の上書き。
-#             who: manager 監督 / player 部員 / coach コーチ / ob OB / scout スカウト /
+#             who: manager 監督 / player 部員 / team_manager マネージャー / ob OB / scout スカウト /
 #                  local 地域の人 / captain 主将 / narration 地の文（立ち絵なし）
 #
 # ■ 監督の書き方（2026-08-19 監督指示・issue event-dialogue-manager-too-cool）
@@ -16,10 +16,10 @@
 #   （EventTableTests の RepositoryTable_ManagerDoesNotPreach で機械的に固定している）:
 #     1. 監督の発話は **1会話に1本まで**。指示・質問・相槌の短い実務の言葉（「分かった」「室内でやろう」）
 #     2. 監督の（……）独白は書かない（プレイヤーの内面を勝手に決めない）
-#     3. 監督の行で会話を締めるのは全体の 1/3 まで。締めは地の文・部員・コーチ・主将に渡す
+#     3. 監督の行で会話を締めるのは全体の 1/3 まで。締めは地の文・部員・マネージャー・主将に渡す
 #     4. 名言・比喩・逆説・格言・一般化（「〜で夏に差が出る」「〜な奴ほど〜」）を書かない
 #     5. 「……」は1会話に1回まで。溜めで格好をつけない
-#     6. 出来事の情報（何が起きたか・誰が主役か）は部員／コーチ／地の文で伝える＝監督の行を消しても意味が通る
+#     6. 出来事の情報（何が起きたか・誰が主役か）は部員／マネージャー／地の文で伝える＝監督の行を消しても意味が通る
 #   結果（誰の・何が・いくつ動いたか）は会話の**最終行に結果行**として提示層が足す（who: result。
 #   yaml には書かない＝呼び出し元が実際の数値で組む）。会話は雰囲気だけでよい。
 #
@@ -44,7 +44,7 @@ events:
             say: "校門の桜はもう散りかけている。新しい部員が、少し大きすぎる制服で並んでいた。"
           - who: captain
             say: "監督、今年の一年、声だけは立派です。"
-          - who: coach
+          - who: team_manager
             say: "{count}名。今日から部室が狭くなりますね。"
       - lines:
           - who: narration
@@ -54,8 +54,8 @@ events:
           - who: manager
             say: "分かった。まず名前を教えてくれ。"
       - lines:
-          - who: coach
-            say: "新入部員、{count}名です。少ないですが、身体つきは悪くない。"
+          - who: team_manager
+            say: "新入部員、{count}名です。少ないですが、体つきは悪くないですよ。"
           - who: captain
             say: "俺らのときより多いですよ。ちゃんと面倒みます。"
       - lines:
@@ -74,7 +74,7 @@ events:
       - lines:
           - who: narration
             say: "夏合宿。日が落ちてもアスファルトは熱を持ったままで、ノックの音だけが響いていた。"
-          - who: coach
+          - who: team_manager
             say: "監督、そろそろ切り上げますか。倒れられたら元も子もない。"
           - who: manager
             say: "あと五本で上がろう。"
@@ -88,7 +88,7 @@ events:
       - lines:
           - who: narration
             say: "合宿最終日の夜。誰も口を利かず、それでも誰も先に寝ようとしなかった。"
-          - who: coach
+          - who: team_manager
             say: "よくやりました。明日は昼から、軽くだけにしましょう。"
           - who: manager
             say: "そうしよう。"
@@ -112,7 +112,7 @@ events:
       - lines:
           - who: captain
             say: "一日くらい、部活のこと忘れてもバチは当たらないですよね。"
-          - who: coach
+          - who: team_manager
             say: "当たりませんよ。ほら、行った行った。"
       - lines:
           - who: narration
@@ -128,21 +128,21 @@ events:
       - lines:
           - who: narration
             say: "冬。吐く息が白い。打球音が乾いて、遠くまで届く。"
-          - who: coach
+          - who: team_manager
             say: "今日は走り込みを長めに入れます。"
           - who: manager
             say: "頼む。"
       - lines:
           - who: player
             say: "監督、指の感覚がないんですけど……。"
-          - who: coach
-            say: "カイロ、部室にあるぞ。ちゃんと使え。"
+          - who: team_manager
+            say: "カイロなら部室にあります。ちゃんと使ってくださいね。"
           - who: narration
             say: "手をこすり合わせながら、列に戻っていった。"
       - lines:
           - who: captain
             say: "夏に負けた分、冬でやり返します。"
-          - who: coach
+          - who: manager
             say: "その意気だ。じゃあ、まず一本目。"
 
   - id: draft_meeting
@@ -156,7 +156,7 @@ events:
           - who: player
             say: "監督、始まりますよ。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、電話は繋がるようにしてありますか。"
           - who: manager
             say: "ああ、机の上だ。"
@@ -165,7 +165,7 @@ events:
       - lines:
           - who: scout
             say: "今年はどこも即戦力を欲しがっています。高校生は下位まで残るかと。"
-          - who: coach
+          - who: team_manager
             say: "順位はどうでも、行けるかどうかですね。"
 
   - id: graduation
@@ -183,13 +183,13 @@ events:
       - lines:
           - who: captain
             say: "この土、持って帰っていいですか。"
-          - who: coach
-            say: "好きなだけ持っていけ。来週には均されるんだから。"
+          - who: team_manager
+            say: "好きなだけ持っていっていいですよ。来週には均されちゃいますから。"
       - lines:
           - who: narration
             say: "背番号を返しに来た三年生の手が、少しだけ震えていた。"
-          - who: coach
-            say: "三年間、よく続けたな。"
+          - who: team_manager
+            say: "三年間、よく続けましたね。"
           - who: narration
             say: "返事の代わりに、深く頭を下げた。"
 
@@ -203,12 +203,12 @@ events:
       - lines:
           - who: player
             say: "監督、すみません……走ったら、ここが。"
-          - who: coach
-            say: "無理はさせられません。二、三週は外しましょう。"
+          - who: narration
+            say: "軽い捻挫ではなさそうだった。二、三週は外したほうがよさそうだ。"
           - who: manager
             say: "分かった。今日は上がれ。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "{player} が練習中に痛めました。歩けてはいますが。"
           - who: captain
             say: "俺が保健室まで付いていきます。"
@@ -217,7 +217,7 @@ events:
             say: "ノックの途中で、ひとり動きが止まった。周りの音がすっと引いていく。"
           - who: player
             say: "……大丈夫です。まだやれます。"
-          - who: coach
+          - who: manager
             say: "駄目だ。座れ。"
       - lines:
           - who: captain
@@ -234,7 +234,7 @@ events:
       - lines:
           - who: narration
             say: "朝から雨。水たまりに映る空は、当分晴れそうにない。"
-          - who: coach
+          - who: team_manager
             say: "室内に切り替えますか。"
           - who: manager
             say: "そうしよう。"
@@ -243,14 +243,14 @@ events:
       - lines:
           - who: player
             say: "監督、今日は中止ですよね？"
-          - who: coach
-            say: "グラウンドは使えん。走るのは使える。"
+          - who: team_manager
+            say: "グラウンドは使えません。走るのは大丈夫です。"
           - who: player
             say: "……ですよね。"
       - lines:
           - who: captain
             say: "雨、恵みだと思うことにします。脚がもう限界だったんで。"
-          - who: coach
+          - who: manager
             say: "じゃあ今日はビデオでも見るか。"
 
   - id: media_coverage
@@ -262,7 +262,7 @@ events:
       - lines:
           - who: narration
             say: "地元紙の記者がグラウンドに来ている。カメラを向けられた部員が急に固くなった。"
-          - who: coach
+          - who: manager
             say: "普段どおりでいいぞ。見られて困る練習はしてない。"
       - lines:
           - who: local
@@ -274,7 +274,7 @@ events:
             name: "記者"
             say: "そうですか。では、写真を一枚。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "写真、{player} ばかり撮られていましたね。"
           - who: captain
             say: "明日の練習であいつが浮かれてたら、俺が締めときます。"
@@ -295,7 +295,7 @@ events:
       - lines:
           - who: narration
             say: "OB会の封筒が部室の机に置かれていた。添えられた紙には「がんばれ」の四文字だけ。"
-          - who: coach
+          - who: team_manager
             say: "毎年、律儀に。ありがたいですね。"
       - lines:
           - who: ob
@@ -323,12 +323,12 @@ events:
       - lines:
           - who: narration
             say: "職員室に呼ばれると、後援会名義の書類が机に置いてあった。"
-          - who: coach
+          - who: team_manager
             say: "施設基金ですね。部費では建たないものに使えます。"
       - lines:
           - who: ob
             say: "室内が無いと、雪の日に何もできんでしょう。少しですが。"
-          - who: coach
+          - who: team_manager
             say: "助かります。設備の相談、また来ますね。"
 
   - id: gear_broken
@@ -340,21 +340,21 @@ events:
       funds: -18
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、ネットが裂けました。あれではフリー打撃が回せません。"
           - who: manager
             say: "買うしかないな。安いのを頼む。"
-          - who: coach
+          - who: team_manager
             say: "了解です。カタログ持ってきます。"
       - lines:
           - who: player
             say: "すみません、バットが折れました。自分のじゃなくて、部の……。"
-          - who: coach
-            say: "道具は消耗品だ。折れるまで振ったなら文句はない。"
+          - who: team_manager
+            say: "道具は消耗品です。折れるまで振ったなら文句はありません。"
       - lines:
           - who: narration
             say: "マシンが止まった。分解した部員たちが、そろって首を横に振る。"
-          - who: coach
+          - who: team_manager
             say: "修理じゃ無理ですね。部費から出すしかないです。"
 
   - id: local_company_support
@@ -391,11 +391,11 @@ events:
       training_weeks: 4
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、県の指定を受けました。月に一度、外部の方が来てくれるそうです。"
           - who: manager
             say: "いいね。日程を合わせよう。"
-          - who: coach
+          - who: team_manager
             say: "はい。まず来月の第一週で。"
       - lines:
           - who: ob
@@ -423,10 +423,10 @@ events:
       - lines:
           - who: narration
             say: "全体練習が終わって一時間。まだ素振りの音がしている。"
-          - who: coach
+          - who: team_manager
             say: "{player} ですね。ここのところ毎日です。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "{player}、朝も来ています。鍵を開けるのが自分より早い。"
           - who: manager
             say: "怪我だけ気をつけて見ておいてくれ。"
@@ -448,11 +448,11 @@ events:
       training_weeks: 2
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、今週から試験前です。全体練習は短縮になります。"
           - who: manager
             say: "分かった。赤点だけは出すなと伝えてくれ。"
-          - who: coach
+          - who: team_manager
             say: "もう三回言いました。"
       - lines:
           - who: player
@@ -476,11 +476,11 @@ events:
       - lines:
           - who: narration
             say: "朝、グラウンドは白一色だった。線を引く場所も分からない。"
-          - who: coach
+          - who: team_manager
             say: "監督、除雪だけで午前が終わります。"
           - who: manager
             say: "体育館を借りよう。"
-          - who: coach
+          - who: team_manager
             say: "バレー部と交渉してきます。"
       - lines:
           - who: player
@@ -520,7 +520,7 @@ events:
       training_weeks: 2
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、今週はサッカー部と半面ずつです。ノックは飛ばせません。"
           - who: manager
             say: "ケースバッティングに切り替えよう。"
@@ -549,11 +549,11 @@ events:
     text: "選手が故障した。"
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、{player} がノックの途中で足を止めました。"
           - who: player
             say: "……大丈夫です。まだやれます。"
-          - who: coach
+          - who: manager
             say: "駄目だ。今日は上がれ。"
       - lines:
           - who: player
@@ -563,8 +563,8 @@ events:
       - lines:
           - who: narration
             say: "全体練習の途中で、ひとり動きが止まった。周りの音がすっと引いていく。"
-          - who: coach
-            say: "{player} です。歩けてはいますが、無理はさせられません。"
+          - who: narration
+            say: "{player}は歩けてはいるが、無理はさせられそうになかった。"
       - lines:
           - who: captain
             say: "監督、{player} が。あいつ、痛いって言わないタイプなんで心配で。"
@@ -583,7 +583,7 @@ events:
           - who: narration
             say: "軽いジョグの足取りが、少しずつ元に戻っていく。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "{player}、今日から全体に合流させます。動きは戻っています。"
           - who: captain
             say: "待ってたぞ。遅れた分、俺が付き合う。"
@@ -602,8 +602,8 @@ events:
       - lines:
           - who: narration
             say: "打球音が、今週だけ違う。"
-          - who: coach
-            say: "監督、{player} のスイング……先週までと別人です。"
+          - who: narration
+            say: "{player}のスイングが、先週までとは別人になっていた。"
       - lines:
           - who: player
             say: "監督、なんか……分かった気がします。うまく言えないんですけど。"
@@ -612,7 +612,7 @@ events:
       - lines:
           - who: captain
             say: "{player}、化けましたね。夏前にこれは大きい。"
-          - who: coach
+          - who: manager
             say: "ああ。本人が一番驚いてる顔してるよ。"
 
   - id: growth_breakthrough
@@ -620,14 +620,14 @@ events:
     text: "選手がコツを掴んだ。"
     variants:
       - lines:
-          - who: coach
-            say: "{player}、フォームの詰まりが取れました。素直な回り方になっています。"
+          - who: narration
+            say: "{player}のフォームの詰まりが取れ、素直な回り方になっていた。"
           - who: manager
             say: "そのまま行かせよう。"
       - lines:
           - who: player
             say: "監督、今のもう一回いいですか。……今のが一番しっくり来ました。"
-          - who: coach
+          - who: manager
             say: "覚えとけ、今の形。"
       - lines:
           - who: narration
@@ -645,11 +645,11 @@ events:
           - who: manager
             say: "変えるな。三週間はフォームに手を入れるな。"
       - lines:
-          - who: coach
-            say: "{player}、数字が落ちてきました。手首をいじり始めています。"
+          - who: narration
+            say: "{player}の数字が落ちてきていた。素振りのたびに、手首をいじり始めている。"
           - who: manager
             say: "止めてくれ。今いじると戻らなくなる。"
-          - who: coach
+          - who: team_manager
             say: "分かりました。声をかけてきます。"
       - lines:
           - who: narration
@@ -662,19 +662,19 @@ events:
     text: "選手の伸びが頭打ちになった。"
     variants:
       - lines:
-          - who: coach
-            say: "{player}、ここから先はもう、大きくは伸びないかもしれません。"
+          - who: narration
+            say: "{player}は、ここから先はもう、大きくは伸びないかもしれなかった。"
           - who: manager
             say: "なら、伸ばす場所を変えよう。"
       - lines:
           - who: narration
             say: "測っても、去年の数字とほとんど変わらない。"
-          - who: coach
-            say: "{player} は、ここが上限かもしれませんね。"
+          - who: narration
+            say: "{player}は、ここが上限かもしれなかった。"
       - lines:
           - who: player
             say: "自分、もう頭打ちですかね。"
-          - who: coach
+          - who: manager
             say: "そこはな。でも他はまだ伸びる。使い方を考えよう。"
 
   - id: growth_yips
@@ -687,8 +687,8 @@ events:
           - who: manager
             say: "今日は遠投だけにしよう。"
       - lines:
-          - who: coach
-            say: "{player}、山なりでしか投げられなくなっています。"
+          - who: narration
+            say: "{player}は、山なりでしか投げられなくなっていた。"
           - who: captain
             say: "みんなの前で投げさせるの、しばらくやめませんか。"
 
@@ -704,7 +704,7 @@ events:
       - lines:
           - who: narration
             say: "何でもない送球が、何でもないように一塁へ収まった。"
-          - who: coach
+          - who: team_manager
             say: "{player}、戻りましたね。長かった。"
 
   # 監督成長イベント（設計書04 §1.1b・issue #612）。年度の終わり（3月の総括）に出る。
@@ -717,14 +717,14 @@ events:
       - lines:
           - who: narration
             say: "あの夏、ベンチから見た景色は、まだ部員たちの話題に上る。"
-          - who: coach
+          - who: team_manager
             say: "監督、あれから采配の切り替えが早くなりましたね。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、去年とサインの出し方が変わりましたね。速くなった。"
           - who: manager
             say: "そうか？"
-          - who: coach
+          - who: team_manager
             say: "ええ。甲子園のあとからです。"
 
   - id: mgr_rival_lesson
@@ -732,11 +732,11 @@ events:
     text: "名将との練習試合で学びがあった。"
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "完敗でしたね。点差以上に、やられた感じがします。"
           - who: manager
             say: "同じ場面で、向こうはもう一枚代えていたな。"
-          - who: coach
+          - who: team_manager
             say: "ええ。ノートに書いておきます。"
       - lines:
           - who: narration
@@ -751,7 +751,7 @@ events:
       - lines:
           - who: narration
             say: "勝てないまま一年が終わった。ノートには反省ばかりが並んでいる。"
-          - who: coach
+          - who: team_manager
             say: "監督、来年の練習メニュー、一度全部見直しませんか。"
           - who: manager
             say: "そうしよう。"
@@ -768,14 +768,14 @@ events:
       - lines:
           - who: narration
             say: "オフの週末、他校の監督たちに混じって、また生徒の側に座っている。"
-          - who: coach
-            say: "講習、どうでした。"
+          - who: team_manager
+            say: "講習、どうでしたか。"
           - who: manager
             say: "半分は知っていた。残り半分が収穫だ。"
-          - who: coach
+          - who: team_manager
             say: "その半分、今度教えてください。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、講習の資料、部室に置いてありましたよ。読んでいいですか。"
           - who: manager
             say: "もちろん。"
@@ -804,7 +804,7 @@ events:
       - lines:
           - who: narration
             say: "全国の常連校を三度率いた老将が、ふらりとグラウンドに現れた。"
-          - who: coach
+          - who: team_manager
             say: "監督、二時間も話し込んでましたね。"
       - lines:
           - who: ob
@@ -820,21 +820,21 @@ events:
     text: "選手の成長タイプに見当がついた。"
     variants:
       - lines:
-          - who: coach
-            say: "監督、{player}、冬に入ってから急に伸びてきましたね。"
+          - who: narration
+            say: "{player}が、冬に入ってから急に伸びてきていた。"
           - who: manager
             say: "去年の測定と並べてみてくれ。"
       - lines:
           - who: narration
             say: "同じ練習をしていても、伸びる時期は選手ごとに違う。"
-          - who: coach
-            say: "{player} の測定値、去年から辿ると形が見えてきましたね。"
+          - who: narration
+            say: "{player}の測定値を去年から辿ると、形が見えてきていた。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "{player} の見立て、当たってますかね。"
           - who: manager
             say: "半分は勘だ。"
-          - who: coach
+          - who: team_manager
             say: "その半分が当たるようになりましたよ。"
 
   # ドラフト（設計書20・issue #617）。候補入り・スカウト視察（評価上昇）・指名確定。
@@ -844,7 +844,7 @@ events:
     text: "選手がドラフト候補に挙がった。"
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、{player} の名前が候補に載っています。地元紙にも出ていました。"
           - who: manager
             say: "本人には俺から言う。"
@@ -868,7 +868,7 @@ events:
       - lines:
           - who: scout
             say: "今日はお邪魔します。……いい体してますね、あの子。"
-          - who: coach
+          - who: team_manager
             say: "本人には言わないでやってください。まだ夏が残ってるんで。"
       - lines:
           - who: scout
@@ -880,7 +880,7 @@ events:
       - lines:
           - who: narration
             say: "ネット裏に、明らかに保護者ではない大人がひとり座っている。"
-          - who: coach
+          - who: team_manager
             say: "……三人目ですね、今週。"
 
   - id: draft_nominated
@@ -900,10 +900,10 @@ events:
           - who: manager
             say: "ああ。よくやった。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "うちから指名者が出るなんて。監督、泣かないでくださいよ。"
           - who: captain
-            say: "コーチのほうが泣いてますって。"
+            say: "マネージャーのほうが泣いてますって。"
 
   - id: draft_missed
     kind: System
@@ -912,8 +912,8 @@ events:
       - lines:
           - who: narration
             say: "最後の名前が読み上げられて、テレビが野球以外の話題に移った。"
-          - who: coach
-            say: "……よく三年、続けたな。"
+          - who: team_manager
+            say: "……よく三年、続けましたね。"
       - lines:
           - who: player
             say: "監督、すみません。……呼ばれませんでした。"
@@ -934,20 +934,20 @@ events:
             say: "監督、遠征も宿も金がかかるでしょう。同期で集めました。"
           - who: manager
             say: "ありがたく使わせてもらいます。"
-          - who: coach
+          - who: team_manager
             say: "封筒、思ったより厚いですよ。数えるの手伝ってください。"
       - lines:
           - who: narration
             say: "部室の机に、名前の並んだ紙が一枚と封筒がいくつも積まれていた。卒業生の名簿だった。"
           - who: captain
             say: "……知らない先輩の名前ばっかりです。"
-          - who: coach
-            say: "この学校で三年やった人たちだ。全員な。"
+          - who: team_manager
+            say: "この学校で三年やった人たちですね。全員。"
       - lines:
           - who: local
             name: "後援会長"
             say: "商店街も出しますよ。うちの店、あの夏のポスターまだ貼ってますからね。"
-          - who: coach
+          - who: team_manager
             say: "何年前のですか、それ。"
           - who: local
             name: "後援会長"
@@ -969,14 +969,14 @@ events:
             say: "抽選会場の壇上で、主将が箱に手を入れる。会場のざわめきが一段落ちた。"
           - who: captain
             say: "……引きました。"
-          - who: coach
+          - who: team_manager
             say: "監督、番号が出ます。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "組み合わせ、出ましたよ。"
           - who: manager
             say: "山はどうだ。"
-          - who: coach
+          - who: team_manager
             say: "厳しいほうです。でも、どこと当たっても同じでしょう。"
       - lines:
           - who: captain
@@ -987,9 +987,9 @@ events:
           - who: narration
             say: "宿舎に戻ると、部員たちが新聞の組み合わせ表を囲んで頭を突き合わせていた。"
           - who: player
-            say: "コーチ、この学校ってどんなチームですか。"
-          - who: coach
-            say: "明日ビデオを出す。今日はもう寝ろ。"
+            say: "マネージャー、この学校ってどんなチームですか。"
+          - who: team_manager
+            say: "明日、映像を用意します。今日はもう休んでくださいね。"
 
   - id: senbatsu_berth_donation
     kind: System
@@ -1000,20 +1000,20 @@ events:
             say: "冬の遠征は寒いでしょう。少ないですが足しにしてください。"
           - who: manager
             say: "助かります。"
-          - who: coach
+          - who: team_manager
             say: "毛布代も出そうですね、これは。"
       - lines:
           - who: narration
             say: "年明けの部室に、振込明細の束が届いていた。差出人は卒業生の会だった。"
           - who: captain
             say: "……去年出た先輩たちもいますね。"
-          - who: coach
-            say: "選ばれた後輩に賭けたんだろう。"
+          - who: team_manager
+            say: "選ばれた後輩に賭けたんでしょうね。"
       - lines:
           - who: local
             name: "後援会長"
             say: "選抜出場、街の掲示板に貼りましたよ。"
-          - who: coach
+          - who: team_manager
             say: "気が早いですね。"
           - who: local
             name: "後援会長"
@@ -1028,20 +1028,20 @@ events:
             say: "抽選会場のモニターに、地区名と校名が順に映し出されていく。"
           - who: captain
             say: "……出ました。"
-          - who: coach
+          - who: team_manager
             say: "監督、初戦の相手です。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "組み合わせ出ましたよ、監督。"
           - who: manager
             say: "初戦はどこだ。"
-          - who: coach
+          - who: team_manager
             say: "去年の秋、県で当たった相手です。"
       - lines:
           - who: player
-            say: "コーチ、相手の映像ってもうありますか。"
-          - who: coach
-            say: "冬の間に集めておいた。明日から見るぞ。"
+            say: "マネージャー、相手の映像ってもうありますか。"
+          - who: team_manager
+            say: "冬の間に集めておきました。明日から見ましょう。"
 
   - id: senbatsu_not_selected
     kind: System
@@ -1052,10 +1052,10 @@ events:
             say: "発表の紙に、自分たちの校名は無かった。部室はしばらく静かだった。"
           - who: captain
             say: "……夏で見返します。"
-          - who: coach
-            say: "その言葉、忘れるなよ。"
+          - who: team_manager
+            say: "その言葉、忘れないでくださいね。"
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、選外でした。"
           - who: manager
             say: "次で取り返す。"
@@ -1066,8 +1066,8 @@ events:
             say: "掲示板の前で部員が肩を落としている横を、他校の歓声が通り過ぎていった。"
           - who: captain
             say: "悔しいです、正直。"
-          - who: coach
-            say: "悔しいうちは伸びる。次の練習からだ。"
+          - who: team_manager
+            say: "悔しいうちは伸びますよ。次の練習からです。"
 
   # --- 選択肢イベント（Phase 5で効果接続） ---
   # 選択肢そのものは #609 の範囲外（発生→提示→閉じるまで）。会話だけ先に用意しておく。
@@ -1085,14 +1085,14 @@ events:
           - who: manager
             say: "よく言ってくれた。"
       - lines:
-          - who: coach
-            say: "エースの球、走ってはいるんです。ただ、フォームが微妙に短い。"
+          - who: narration
+            say: "エースの球は走ってはいるが、フォームがわずかに短くなっていた。"
           - who: captain
             say: "本人に聞いても『大丈夫』としか言わないと思います。"
       - lines:
           - who: narration
             say: "ブルペンの後、{player} がひとりで肘に手を当てているのが見えた。"
-          - who: coach
+          - who: team_manager
             say: "……外されたくないんでしょうね。どうします。"
 
   - id: skipping_practice
@@ -1102,11 +1102,11 @@ events:
     text: "主力が練習をサボっているらしい。"
     variants:
       - lines:
-          - who: coach
+          - who: team_manager
             say: "監督、{player} が今週も途中で抜けています。"
           - who: manager
             say: "叱る前に、まず話を聞こう。"
-          - who: coach
+          - who: team_manager
             say: "そうしましょう。放課後、呼んでおきます。"
       - lines:
           - who: captain
@@ -1116,5 +1116,5 @@ events:
       - lines:
           - who: narration
             say: "全体練習の輪に、いるはずの背番号が見当たらない。"
-          - who: coach
+          - who: team_manager
             say: "サボりで片づく話なら楽なんですけどね。"
