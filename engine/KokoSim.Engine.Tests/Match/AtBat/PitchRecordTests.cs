@@ -111,6 +111,47 @@ public sealed class PitchRecordTests
         Assert.True(mismatches.Count == 0, $"PitchLog不整合（{mismatches.Count}件）:\n" + string.Join("\n", mismatches));
     }
 
+    /// <summary>
+    /// <see cref="PlateAppearanceResultExtensions.IsLookingStrikeout"/>（見逃し三振率の調査用に導入）は
+    /// 三振の最終球が CalledStrike のときだけ true になり、空振り三振（最終球が SwingingStrike）は false になる。
+    /// 三振以外の結果は常に false。両方のケースが実際に現れることも固定する。
+    /// </summary>
+    [Fact]
+    public void IsLookingStrikeout_MatchesFinalPitchKind_AndBothKindsOccur()
+    {
+        var looking = 0;
+        var swinging = 0;
+        var checkedNonStrikeouts = 0;
+
+        foreach (var (_, batter, pitcher) in Matchups())
+        {
+            var ctx = new AtBatContext { Fielders = Field.StandardAlignment() };
+            for (ulong seed = 1; seed <= 200; seed++)
+            {
+                var session = AtBatSession.Begin(batter, pitcher, ctx);
+                var rng = new Xoshiro256Random(seed);
+                while (!session.IsComplete) session.ThrowNextPitch(rng);
+                var result = session.Result;
+
+                if (result.Result != PlateAppearanceResult.Strikeout)
+                {
+                    Assert.False(result.Result.IsLookingStrikeout(result.PitchLog));
+                    checkedNonStrikeouts++;
+                    continue;
+                }
+
+                var last = result.PitchLog![^1];
+                Assert.Equal(last.Kind == PitchKind.CalledStrike, result.Result.IsLookingStrikeout(result.PitchLog));
+                if (result.Result.IsLookingStrikeout(result.PitchLog)) looking++;
+                else swinging++;
+            }
+        }
+
+        Assert.True(checkedNonStrikeouts > 0, "三振以外の結果が1件も観測されなかった（テスト条件を見直す）");
+        Assert.True(looking > 0, "見逃し三振が1件も観測されなかった");
+        Assert.True(swinging > 0, "空振り三振が1件も観測されなかった");
+    }
+
     // --- GameEngine 配線（PlayLogEntry.PitchLog）の結線確認 ---
 
     private static Player Pos(FieldPosition pos) => new()

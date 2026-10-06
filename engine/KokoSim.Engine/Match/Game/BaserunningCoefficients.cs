@@ -415,8 +415,13 @@ public sealed record BaserunningCoefficients
     /// 0.80→0.55（issue double-play-attempt-threshold, 2026-08-18）: 0.80 では見込み6〜8割の併殺まで一塁へ逃げ、
     /// 一塁走者あり内野ゴロの半分で走者を二塁へ進めていた（実測: 一塁のみ 60%／併殺 17%）。実物の内野は封殺が
     /// 取れる限りまず二塁へ投げ、転送負けは FC として残る。0.55 で 一塁のみ 33%／併殺 33%（ゴロアウト比 41%）・
-    /// 併殺 1.88/試合・FC 0.50/試合（帯内）。</summary>
-    public double DoublePlayAttemptMinRelaySuccess { get; init; } = 0.55;
+    /// 併殺 1.88/試合・FC 0.50/試合（旧帯内だが上限寄り）。
+    /// 0.55→0.65（issue double-play-per-game-band-review, 2026-08-30）: 併殺/試合の参考帯が MLB 基準のみ
+    /// （≈1.5/試合）で高校野球固有の実測に基づいていなかった。高校野球の失策率実測（issue #123: 甲子園≈2.1〜2.7/試合
+    /// 両軍計、NPB目安の約2倍）を根拠に「機会は多いが転送成立率はプロより低いはず」の方向で帯を 1.00〜1.70/試合へ
+    /// 再校正（暫定値。併殺/試合そのものの高校野球実測は未発見＝docs/design/OPEN-QUESTIONS.md 参照）。
+    /// 0.65 で 一塁のみ 44%／併殺 37%（ゴロアウト比）・併殺 1.39〜1.41/試合・FC 0.36/試合（新帯内）。</summary>
+    public double DoublePlayAttemptMinRelaySuccess { get; init; } = 0.65;
     /// <summary>二塁ベース経由の転送（ピボット）握り替え[s]。一塁手の中継 <see cref="RelayTransferSeconds"/> とは別値
     /// （捕って踏み替えて投げ返す連携動作＝中継より長い。#318 が外野値と分けたのと同じ扱い）。
     /// 「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）はこの時間を短縮する

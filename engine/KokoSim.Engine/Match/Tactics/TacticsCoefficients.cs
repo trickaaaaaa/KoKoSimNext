@@ -213,11 +213,24 @@ public sealed record TacticsCoefficients
     public double BuntShiftCornerChargeFactor { get; init; } = 0.60;
 
     // ===== 1球采配（設計書15 §2.3, Phase C。C-1のno-opゲートで従来と完全一致を確認済み、C-2で実装） =====
-    /// <summary>追い込まれ矯正: 2ストライクで、見逃さない判断力（Contact）がある打者ほど一定確率でForceSwingへ。</summary>
-    public double PitchTacticsTwoStrikeForceSwingProb { get; init; } = 0.35;
+    /// <summary>
+    /// 追い込まれ矯正: 2ストライクで、見逃さない判断力（Contact）がある打者ほど一定確率でForceSwingへ。
+    /// 見逃し三振率の調査（issue looking-strikeout-rate）で0.35運用時の実効果が薄いことが判明し、
+    /// <see cref="Batting.BattingCoefficients.TwoStrikeSwingBoost"/>（設計書01 §2③「カウントで判定」）を
+    /// 打者判断そのものに新設した。Brain搭載試合だけこのForceSwingと二重に効いて三振率帯を割り込むため既定0.0＝無効化
+    /// （Brainなし経路・低ティアAIにも均一に効く本則側へ寄せる）。エンドラン等ForceSwing自体の他用途は不変。
+    /// </summary>
+    public double PitchTacticsTwoStrikeForceSwingProb { get; init; } = 0.0;
     public int PitchTacticsTwoStrikeMinContact { get; init; } = 50;
-    /// <summary>3ボール0ストライク（3-0）: 高確率でForceTake（classic 3-0待て）。</summary>
-    public double PitchTacticsThreeZeroTakeProb { get; init; } = 0.85;
+    /// <summary>
+    /// 3ボール0ストライク（3-0）: 高確率でForceTake（classic 3-0待て）。
+    /// 見逃し三振率の調査 第2便（issue looking-strikeout-rate）で3-0のスイング率が45%（実野球はおよそ5〜7%）と
+    /// 判明し、<see cref="Batting.BattingCoefficients.ThreeZeroSwingFactor"/>（設計書01 §2③「カウントで判定」）を
+    /// 打者判断そのものに新設した。Brain搭載試合だけこのForceTakeと二重に効いて過剰抑制になるため既定0.0＝無効化
+    /// （Brainなし経路・低ティアAIにも均一に効く本則側へ寄せる）。<c>PitchTacticsThreeZeroSwingAway*</c> の
+    /// 例外条件も無効化に伴い実質不使用（swingAwayを判定してもForceTake自体が発火しないため）。
+    /// </summary>
+    public double PitchTacticsThreeZeroTakeProb { get; init; } = 0.0;
     /// <summary>3-0でも打たせる例外: 強打者×終盤×僅差（一発を狙う価値がTakeを上回る）。</summary>
     public int PitchTacticsThreeZeroSwingAwayMinPower { get; init; } = 80;
     public int PitchTacticsThreeZeroSwingAwayFromInning { get; init; } = 7;

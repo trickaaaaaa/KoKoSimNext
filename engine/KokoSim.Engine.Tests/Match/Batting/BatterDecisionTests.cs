@@ -118,4 +118,68 @@ public sealed class BatterDecisionTests
 
         Assert.Equal(atZero, atOne, 9);
     }
+
+    // --- カウント依存のスイング判断（設計書01 §2③「カウントで判定」、見逃し三振率の調査） ---
+
+    [Fact]
+    public void SwingProbability_CountCoefficientsAtIdentity_StrikesAndBallsHaveNoEffect()
+    {
+        // 2ストライク/3-0系の係数を明示的に恒等（boost=0, factor=1）にすれば、strikes/balls を
+        // 渡しても渡さなくても結果は同一（既存呼び出しへの後方互換の担保。実際の既定値は校正済みで
+        // 恒等ではない＝Coeff（既定 new()）ではなく明示した係数束で検証する）。
+        var identityCoeff = Coeff with { TwoStrikeSwingBoost = 0.0, ThreeZeroSwingFactor = 1.0 };
+
+        var inZoneBase = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, identityCoeff, strikes: 0, balls: 0);
+        var inZoneTwoStrikes = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, identityCoeff, strikes: 2, balls: 1);
+        Assert.Equal(inZoneBase, inZoneTwoStrikes, 9);
+
+        var outOfZoneBase = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, identityCoeff, strikes: 0, balls: 0);
+        var outOfZoneThreeZero = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, identityCoeff, strikes: 0, balls: 3);
+        Assert.Equal(outOfZoneBase, outOfZoneThreeZero, 9);
+    }
+
+    [Fact]
+    public void SwingProbability_TwoStrikes_BoostsBothZones_OnlyAtTwoOrMoreStrikes()
+    {
+        // 1変数原則（ChaseBreakSlope と同じ）: ゾーン内外どちらにも同一値を加点する。
+        var coeff = Coeff with { TwoStrikeSwingBoost = 0.15 };
+
+        var inZoneZero = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: 0);
+        var inZoneOne = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: 1);
+        var inZoneTwo = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: 2);
+        Assert.Equal(inZoneZero, inZoneOne, 9);
+        Assert.Equal(coeff.TwoStrikeSwingBoost, inZoneTwo - inZoneZero, 9);
+
+        var outZoneZero = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, coeff, strikes: 0);
+        var outZoneTwo = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, coeff, strikes: 2);
+        Assert.Equal(coeff.TwoStrikeSwingBoost, outZoneTwo - outZoneZero, 9);
+    }
+
+    [Fact]
+    public void SwingProbability_ThreeZero_ScalesDownSwingRate_OnlyAtThreeBallsZeroStrikes()
+    {
+        var coeff = Coeff with { ThreeZeroSwingFactor = 0.15 };
+
+        var inZoneNormal = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: 0, balls: 2);
+        var inZoneThreeZero = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: 0, balls: 3);
+        Assert.Equal(inZoneNormal * coeff.ThreeZeroSwingFactor, inZoneThreeZero, 9);
+        Assert.True(inZoneThreeZero < inZoneNormal, "3-0はスイング率が下がるはず");
+
+        var outZoneNormal = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, coeff, strikes: 0, balls: 2);
+        var outZoneThreeZero = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, coeff, strikes: 0, balls: 3);
+        Assert.Equal(outZoneNormal * coeff.ThreeZeroSwingFactor, outZoneThreeZero, 9);
+    }
+
+    [Fact]
+    public void SwingProbability_ThreeZero_DoesNotApply_WhenStrikesIsNonZero()
+    {
+        // 3ボール2ストライク（フルカウント）は「3ボール」だが「0ストライク」ではないので対象外
+        // （フルカウントで待てにする必要はない＝別のロジック）。
+        var coeff = Coeff with { ThreeZeroSwingFactor = 0.15 };
+
+        var fullCount = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: 2, balls: 3);
+        var twoStrikesOnly = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: 2, balls: 1);
+
+        Assert.Equal(twoStrikesOnly, fullCount, 9);
+    }
 }

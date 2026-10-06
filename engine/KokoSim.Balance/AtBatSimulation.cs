@@ -27,9 +27,15 @@ public static class AtBatSimulation
         public int Strikeouts { get; init; }
         public int ReachedOnError { get; init; }
         public int InPlayOuts { get; init; }
+        /// <summary>三振のうち見逃し（最終球が振らずに入った CalledStrike）だったもの。見逃し三振率の調査用。</summary>
+        public int LookingStrikeouts { get; init; }
 
         public double Average => AtBats > 0 ? (double)Hits / AtBats : 0;
         public double StrikeoutRate => PlateAppearances > 0 ? (double)Strikeouts / PlateAppearances : 0;
+        /// <summary>見逃し三振率（打席あたり）。K% の内訳。</summary>
+        public double LookingStrikeoutRate => PlateAppearances > 0 ? (double)LookingStrikeouts / PlateAppearances : 0;
+        /// <summary>三振に占める見逃しの割合（実野球はおよそ3割前後が参考値。design未定義のためこのゲームの目標帯は無い）。</summary>
+        public double LookingStrikeoutShare => Strikeouts > 0 ? (double)LookingStrikeouts / Strikeouts : 0;
         public double WalkRate => PlateAppearances > 0 ? (double)Walks / PlateAppearances : 0;
         public double HomeRunRate => PlateAppearances > 0 ? (double)HomeRuns / PlateAppearances : 0;
         public double Babip
@@ -120,8 +126,8 @@ public static class AtBatSimulation
             forks[i] = root.Fork((ulong)i);
         }
 
-        // pa, ab, h, s1, s2, s3, hr, bb, so, roe, outs, hbp（＋ヒストグラム指定時は着地距離×結果のビン）
-        const int Counters = 12;
+        // pa, ab, h, s1, s2, s3, hr, bb, so, roe, outs, hbp, looking_so（＋ヒストグラム指定時は着地距離×結果のビン）
+        const int Counters = 13;
         var histBins = histogram ? BattedBallHistogram.Buckets * BattedBallHistogram.Kinds * 2 : 0;
         var width = Counters + histBins;
         var total = new int[width];
@@ -164,6 +170,7 @@ public static class AtBatSimulation
                     case PlateAppearanceResult.InPlayOut: local[10]++; break;
                     case PlateAppearanceResult.HitByPitch: local[11]++; break;
                 }
+                if (r.IsLookingStrikeout(detailed.PitchLog)) local[12]++;
                 return local;
             },
             local =>
@@ -196,6 +203,7 @@ public static class AtBatSimulation
             ReachedOnError = total[9],
             InPlayOuts = total[10],
             HitByPitches = total[11],
+            LookingStrikeouts = total[12],
         };
     }
 
@@ -965,6 +973,8 @@ public static class AtBatSimulation
         sb.AppendLine("|---|---|---|");
         sb.AppendLine(c, $"| 打率 AVG | {s.Average:F3} | .235–.290 |");
         sb.AppendLine(c, $"| 三振率 K% | {s.StrikeoutRate:P1} | 15.0–23.0% |");
+        sb.AppendLine(c, $"| うち見逃し三振率（打席あたり） | {s.LookingStrikeoutRate:P1} | 参考（目標帯未設定） |");
+        sb.AppendLine(c, $"| 見逃し三振の割合（三振に占める） | {s.LookingStrikeoutShare:P1} | 参考（実野球はおよそ3割前後） |");
         sb.AppendLine(c, $"| 四球率 BB% | {s.WalkRate:P1} | 6.0–10.0% |");
         sb.AppendLine(c, $"| 死球率 HBP% | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率 HR% | {s.HomeRunRate:P2} | 2.0–4.0% |");
@@ -978,7 +988,7 @@ public static class AtBatSimulation
         sb.AppendLine();
         sb.AppendLine("## 内訳");
         sb.AppendLine(c, $"- 単打 {s.Singles} / 二塁打 {s.Doubles} / 三塁打 {s.Triples} / 本塁打 {s.HomeRuns}");
-        sb.AppendLine(c, $"- 四球 {s.Walks} / 三振 {s.Strikeouts} / 失策出塁 {s.ReachedOnError} / インプレー凡打 {s.InPlayOuts}");
+        sb.AppendLine(c, $"- 四球 {s.Walks} / 三振 {s.Strikeouts}（見逃し {s.LookingStrikeouts} / 空振り {s.Strikeouts - s.LookingStrikeouts}） / 失策出塁 {s.ReachedOnError} / インプレー凡打 {s.InPlayOuts}");
         if (s.Histogram is { } h)
         {
             sb.AppendLine();

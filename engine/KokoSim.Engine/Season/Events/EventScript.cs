@@ -4,7 +4,7 @@ namespace KokoSim.Engine.Season.Events;
 
 /// <summary>
 /// 会話1行（設計書03 §5・issue #609）。<paramref name="Who"/> は<b>役割ID</b>で、立ち絵スロットと
-/// 既定の話者名を同時に決める（manager / player / coach / ob / scout / local …）。
+/// 既定の話者名を同時に決める（manager / player / team_manager / ob / scout / local …）。
 /// <paramref name="Name"/> は話者名の上書き（空なら役割の既定名。差し込み語 <c>{player}</c> 等を含んでよい）。
 /// </summary>
 /// <param name="Who">役割ID（立ち絵と既定の話者名）。</param>
@@ -30,7 +30,8 @@ public static class EventRoles
 {
     public const string Manager = "manager";
     public const string Player = "player";
-    public const string Coach = "coach";
+    /// <summary>女子マネージャー。コーチ・選手が担っていた「監督への報告」役の統一先（issue manager-npc-replaces-coach-speaker・2026-08-29）。</summary>
+    public const string TeamManager = "team_manager";
     public const string Ob = "ob";
     public const string Scout = "scout";
     public const string Local = "local";
@@ -50,7 +51,7 @@ public static class EventRoles
     {
         Manager => "監督",
         Player => "部員",
-        Coach => "コーチ",
+        TeamManager => "マネージャー",
         Ob => "OB",
         Scout => "スカウト",
         Local => "地域の人",

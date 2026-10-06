@@ -432,11 +432,11 @@ public sealed class AtBatSession
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
                 inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting,
-                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa)
+                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)
             : 0.0;
         if (!forcedSwing && (forcedTake
             || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng,
-                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa)))
+                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)))
         {
             if (inZone)
             {

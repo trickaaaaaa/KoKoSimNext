@@ -27,6 +27,16 @@ public static class BatterDecision
     /// ゾーン内でのみ <see cref="BattingCoefficients.ZoneEdgeSwingPenalty"/> を掛けて「隅は見逃されやすい」を表現。
     /// 既定 0.0（＝中心）は恒等。ゾーン外では未使用（チェイス側は距離減衰が同役を担う）。
     /// </param>
+    /// <param name="strikes">
+    /// 現在のストライク数（設計書01 §2③「カウントで判定」、見逃し三振率の調査）。2以上（＝追い込まれ）で
+    /// <see cref="BattingCoefficients.TwoStrikeSwingBoost"/>（ゾーン内外に同一値を加点、<see cref="ChaseBreakSlope"/>
+    /// と同じ1変数原則）が乗る。既定 0 は恒等（strikes未指定の既存呼び出しに影響しない）。
+    /// </param>
+    /// <param name="balls">
+    /// 現在のボール数（設計書01 §2③「カウントで判定」、見逃し三振率の調査）。3ボール0ストライク（strikes=0時のみ
+    /// 意味を持つ）で <see cref="BattingCoefficients.ThreeZeroSwingFactor"/> をスイング確率へ掛ける。既定 0 は
+    /// 3-0 に該当しないため恒等（balls未指定の既存呼び出しに影響しない）。
+    /// </param>
     public static double SwingProbability(
         bool inZone,
         double distanceOutsideM,
@@ -35,7 +45,9 @@ public static class BatterDecision
         BattingCoefficients coeff,
         double swingFactor = 1.0,
         double zoneEdgeProximity = 0.0,
-        int familiarityPa = 0)
+        int familiarityPa = 0,
+        int strikes = 0,
+        int balls = 0)
     {
         double p;
         if (inZone)
@@ -54,10 +66,13 @@ public static class BatterDecision
                 - coeff.FamiliarityChasePerPa * ContactModel.FamiliarityEffect(familiarityPa, breakMagnitudeM, coeff);
         }
 
+        if (strikes >= 2) p += coeff.TwoStrikeSwingBoost;
+        if (balls >= 3 && strikes == 0) p *= coeff.ThreeZeroSwingFactor;
+
         return MathUtil.Clamp(p * swingFactor, 0.02, 0.98);
     }
 
-    /// <summary>スイングするか。<paramref name="swingFactor"/>・<paramref name="zoneEdgeProximity"/> の意味は <see cref="SwingProbability"/> を参照。</summary>
+    /// <summary>スイングするか。<paramref name="swingFactor"/>・<paramref name="zoneEdgeProximity"/>・<paramref name="strikes"/>・<paramref name="balls"/> の意味は <see cref="SwingProbability"/> を参照。</summary>
     public static bool DecideSwing(
         bool inZone,
         double distanceOutsideM,
@@ -67,7 +82,9 @@ public static class BatterDecision
         IRandomSource rng,
         double swingFactor = 1.0,
         double zoneEdgeProximity = 0.0,
-        int familiarityPa = 0)
+        int familiarityPa = 0,
+        int strikes = 0,
+        int balls = 0)
         => MathUtil.Chance(
-            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor, zoneEdgeProximity, familiarityPa), rng);
+            SwingProbability(inZone, distanceOutsideM, breakMagnitudeM, batter, coeff, swingFactor, zoneEdgeProximity, familiarityPa, strikes, balls), rng);
 }
