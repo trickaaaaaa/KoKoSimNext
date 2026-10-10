@@ -81,7 +81,8 @@ public static class StealResolver
     private const double MinMarginSeconds = 0.05;
 
     /// <summary>走者所要時間[s]。ギャンブル始動(<see cref="StartType.Gamble"/>)は好ジャンプで短縮（G3）。
-    /// 塁間距離は二盗・三盗・本盗のいずれも同一と近似（<see cref="BaserunningCoefficients.StealLeadDistanceM"/>）。</summary>
+    /// 塁間距離は二盗・三盗を同一と近似（<see cref="BaserunningCoefficients.StealLeadDistanceM"/>）。本盗だけは
+    /// 投手のワインドアップ中に大きくリードを取れるので専用の距離（<see cref="BaserunningCoefficients.StealHomeDistanceM"/>・issue #637）。</summary>
     public static double RunnerTimeSeconds(Player runner, BaserunningCoefficients c, StartType startType = StartType.Normal,
         StealTarget target = StealTarget.Second)
     {
@@ -90,12 +91,14 @@ public static class StealResolver
         // ジャンプ（投手の始動を読んで既に動き出している分）。床の**後**に引く＝全走者から同じ秒だけ
         // 引かれる（理由は StealJumpCreditSeconds のコメント）。
         startDelay -= c.StealJumpCreditSeconds;
-        return c.StealLeadDistanceM / runner.ToFielder(c.AbilityEffect).SprintSpeedMps + startDelay;
+        var distance = target == StealTarget.Home ? c.StealHomeDistanceM : c.StealLeadDistanceM;
+        return distance / runner.ToFielder(c.AbilityEffect).SprintSpeedMps + startDelay;
     }
 
     /// <summary>守備所要時間[s]（投手クイック＋捕手ポップ＋タッチ）。ピッチアウト成立で捕手優位＝短縮（G3）。
     /// ギャンブル走者は無防備でさらに短縮（読まれると最も刺されやすい）。本盗は捕手からの送球ではなく
-    /// 投球そのものが送球を兼ねるため送球区間を持たない（<see cref="BaserunningCoefficients.HomeTagSeconds"/>のみ）。</summary>
+    /// 投球そのものが送球を兼ねるため送球区間を持たない＝投手の始動から球が捕手に届くまで
+    /// （<see cref="BaserunningCoefficients.StealHomeDeliverySeconds"/>）＋タッチ（issue #637）。</summary>
     public static double DefenseTimeSeconds(
         Player catcher, BaserunningCoefficients c, bool pitchout = false, StartType startType = StartType.Normal,
         StealTarget target = StealTarget.Second)
@@ -103,7 +106,7 @@ public static class StealResolver
         double defense;
         if (target == StealTarget.Home)
         {
-            defense = c.PitcherQuickSeconds + c.HomeTagSeconds;
+            defense = c.StealHomeDeliverySeconds + c.HomeTagSeconds;
         }
         else
         {

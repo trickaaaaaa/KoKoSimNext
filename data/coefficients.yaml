@@ -304,7 +304,9 @@ baserunning:
   steal_success_bias: 0.0          # リーグ平均成功率の校正項（🟡）。2026-08-14 に 0.38→0.0＝中身を物理層の秒（steal_jump_credit_seconds 0.19 ＋ catcher_pop_rise_seconds 0.19）へ移した。判定の秒だけを動かして絵の秒に出ない項なので、0以外にすると「送球が先に届いた絵なのにセーフ」が戻る（実測: 成功50%の場面で送球が0.48秒先着）。平均成功率を動かすときは移した先の2項を動かす
   catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
   steal_third_success_bias: -0.35  # 三盗の成功率バイアス（design-14「三盗は成功率下方」）
-  steal_home_success_bias: -0.7    # 本盗の成功率バイアス（design-14「本盗はさらに下方」）
+  steal_home_success_bias: 0.0     # 本盗の成功率バイアス。issue #637 で −0.7→0.0＝難しさは下の物理層の秒で表す（判定だけ動かす項は絵に出ない）
+  steal_home_distance_m: 21.5      # 本盗の走者の残り距離[m]（issue #637）。三塁→本塁27.43mからワインドアップ中のリード約6mを引く
+  steal_home_delivery_seconds: 2.45  # 本盗の守備側[s]（issue #637）。警戒していない投手の投球（クイックではない）＋球の到達。design-14「本盗は三盗よりさらに下方」を守る水準に置く（2026-10-10 ユーザー決定）
   double_steal_third_break_prob: 0.4  # 一・三塁重盗（design-14 P1-4）: 三塁走者も同時スタート（2026-07-17校正）
   pickoff_base_prob: 0.05          # 牽制アウト（design-14 P1-5）の基準確率（2026-07-17校正）
   pickoff_runner_lead_slope: 0.0015
@@ -648,10 +650,10 @@ tactics:
   steal_third_prob: 0.25
   steal_third_max_outs: 0          # 無死のみ
   steal_third_max_diff_abs: 3      # 大差では狙わない
-  # 本盗: 解決式は守備側を投手クイック＋タッチのみで評価し走者の塁間走破に追いつけないため、成功見込みは
-  # どの選手でも解決式の下限(0.01)に張り付く＝成功見込みでの選別が無意味。閾値0＝常に通過させ、頻度は
-  # steal_home_prob と状況条件だけで絞る「超高閾値のギャンブル枠」。
-  steal_home_min_success: 0.0
+  # 本盗: 超高閾値のギャンブル枠。issue #637 で解決式を直し、成功見込みが走者で変わるようになった
+  # （通常始動の見込みで 走力50≈1.6%・70≈3.2%・90≈5.9%）。閾値は走力70前後から上だけが仕掛ける水準＝0.03
+  # （実際の企図はギャンブル始動＝成功率は見込みの約2倍）。
+  steal_home_min_success: 0.03
   steal_home_prob: 0.10
   steal_home_max_outs: 1
   steal_home_max_diff_abs: 1       # 僅差のみ（スクイズと競合する場面はGameEngine側で単純上書き）

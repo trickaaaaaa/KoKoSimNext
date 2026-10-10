@@ -752,6 +752,8 @@ public static class CoefficientsLoader
         public double CatchThrowToThirdDistanceM { get; set; } = D.CatchThrowToThirdDistanceM;
         public double StealThirdSuccessBias { get; set; } = D.StealThirdSuccessBias;
         public double StealHomeSuccessBias { get; set; } = D.StealHomeSuccessBias;
+        public double StealHomeDistanceM { get; set; } = D.StealHomeDistanceM;
+        public double StealHomeDeliverySeconds { get; set; } = D.StealHomeDeliverySeconds;
         public double DoubleStealThirdBreakProb { get; set; } = D.DoubleStealThirdBreakProb;
         public double PickoffBaseProb { get; set; } = D.PickoffBaseProb;
         public double PickoffRunnerLeadSlope { get; set; } = D.PickoffRunnerLeadSlope;
@@ -919,6 +921,8 @@ public static class CoefficientsLoader
             CatchThrowToThirdDistanceM = CatchThrowToThirdDistanceM,
             StealThirdSuccessBias = StealThirdSuccessBias,
             StealHomeSuccessBias = StealHomeSuccessBias,
+            StealHomeDistanceM = StealHomeDistanceM,
+            StealHomeDeliverySeconds = StealHomeDeliverySeconds,
             DoubleStealThirdBreakProb = DoubleStealThirdBreakProb,
             PickoffBaseProb = PickoffBaseProb,
             PickoffRunnerLeadSlope = PickoffRunnerLeadSlope,

@@ -58,11 +58,12 @@ public sealed record TacticsCoefficients
     public int StealThirdMaxOuts { get; init; } = 0;
     public int StealThirdMaxDiffAbs { get; init; } = 3;
 
-    /// <summary>本盗: 超高閾値のギャンブル枠。解決式（StealResolver）は投手クイック＋タッチのみで守備側を
-    /// 評価し、走者側の塁間走破（3秒超）に追いつけないため、どの選手の組み合わせでも成功見込みは解決式の
-    /// 下限（0.01）に張り付く＝「成功見込みで選別する」こと自体が意味を持たない。よって閾値は0（常に通過）
-    /// とし、発生頻度は StealHomeProb と状況条件（アウトカウント・点差）だけで絞る。</summary>
-    public double StealHomeMinSuccess { get; init; } = 0.0;
+    /// <summary>本盗: 超高閾値のギャンブル枠。issue #637 で解決式（StealResolver）の守備側を「ワインドアップ＋
+    /// 球の到達」、走者側を三塁からのリード込み距離に直し、成功見込みが走者で変わるようになった
+    /// （通常始動の見込みで走力50≈1.6%・走力70≈3.2%・走力90≈5.9%）。閾値は走力70前後から上だけが仕掛ける水準
+    /// （旧: 見込みが常に下限1%だったので0＝常に通過）。実際の企図はギャンブル始動なので成功率は見込みの約2倍。
+    /// 発生頻度は StealHomeProb と状況条件（アウトカウント・点差）で絞る。</summary>
+    public double StealHomeMinSuccess { get; init; } = 0.03;
     public double StealHomeProb { get; init; } = 0.10;
     public int StealHomeMaxOuts { get; init; } = 1;
     public int StealHomeMaxDiffAbs { get; init; } = 1;

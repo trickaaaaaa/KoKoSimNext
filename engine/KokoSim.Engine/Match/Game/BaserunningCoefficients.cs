@@ -142,8 +142,32 @@ public sealed record BaserunningCoefficients
     public double CatchThrowToThirdDistanceM { get; init; } = 27.4;
     /// <summary>三盗の成功率バイアス（design-14「三盗は成功率下方」）。StealSuccessBiasに加算。</summary>
     public double StealThirdSuccessBias { get; init; } = -0.35;
-    /// <summary>本盗の成功率バイアス（design-14「本盗はさらに下方」）。StealSuccessBiasに加算。</summary>
-    public double StealHomeSuccessBias { get; init; } = -0.7;
+    /// <summary>
+    /// 本盗の成功率バイアス。StealSuccessBiasに加算。
+    ///
+    /// <para>issue #637（2026-10-10）: −0.7→0.0。本盗が二盗より難しいのは物理層の秒
+    /// （<see cref="StealHomeDistanceM"/>・<see cref="StealHomeDeliverySeconds"/>）で表すようにした。
+    /// 判定の秒だけを動かすこの項は絵に出ない＝0以外にすると「走者が先に還った絵なのにアウト」になる
+    /// （<see cref="StealSuccessBias"/> と同じ理由）。</para>
+    /// </summary>
+    public double StealHomeSuccessBias { get; init; } = 0.0;
+    /// <summary>
+    /// 本盗の走者の残り走塁距離[m]（issue #637）。三塁→本塁 27.43m から、投手がワインドアップで
+    /// 本塁へ向き直るまでに取れるリード（第1リード＋第2リード 約6m）を引いた距離。二盗の
+    /// <see cref="StealLeadDistanceM"/>（23.5m）を流用すると、三塁から一歩も出ていない走者になる。
+    /// </summary>
+    public double StealHomeDistanceM { get; init; } = 21.5;
+    /// <summary>
+    /// 本盗の守備側の秒[s]（issue #637）: 投手の始動から球が捕手に届くまで。本盗は捕手からの送球区間が無く、
+    /// 投球そのものが送球を兼ねる。投手は三塁走者を警戒していない＝クイック（<see cref="PitcherQuickSeconds"/>）
+    /// ではなく通常の投球動作で投げ、球の到達（高校生の球速で約0.5秒）を足す。タッチは
+    /// <see cref="HomeTagSeconds"/>。旧実装はクイック1.40秒だけで球の到達を数えておらず、どの走者も
+    /// 2秒以上負けて成功見込みが常に下限1%だった。
+    /// <para>値は design-14「本盗は三盗よりさらに下方」を守る水準に置いた（2026-10-10 ユーザー決定）。
+    /// 物理だけで決めると約2.7秒（走力50≈5%・走力90≈16%）だが、三盗の解決式自体が低く（走力90で約8%）
+    /// 本盗が三盗を追い越すため、肩80以下の捕手で本盗≦三盗になる 2.45秒（走力50≈1.6%・走力90≈5.9%）。</para>
+    /// </summary>
+    public double StealHomeDeliverySeconds { get; init; } = 2.45;
     /// <summary>一・三塁で二盗を仕掛けた際、三塁走者も同時にスタートして本塁を狙う基準確率（design-14 P1-4）。
     /// 投げた塁（二塁）だけがアウト対象という原則から、成立時の三塁走者は無条件生還。
     /// issue #402で 0.0→0.4 に正値化＝実ゲームで一・三塁重盗が発火（YAML校正値と一致）。</summary>
