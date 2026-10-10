@@ -1437,7 +1437,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     background-color: var(--day-tx-3);
     border-width: var(--nb-border);
     border-color: var(--ink);
-    -unity-background-scale-mode: scale-and-crop;
+    /* 縦長の写真を横に潰さない＝アスペクト保持で塗り切る（cover）。
+       旧 -unity-background-scale-mode は非推奨なので新プロパティで書く。 */
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-size: cover;
 }
 .ev-por--photo .ev-por__head,
 .ev-por--photo .ev-por__body { display: none; }
