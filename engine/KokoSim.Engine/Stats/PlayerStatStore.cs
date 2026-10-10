@@ -45,6 +45,21 @@ public sealed class PlayerStatStore
     /// <summary>大会別アーカイブ（学年×大会枠＋当時の背番号, issue #77）。永続・セーブ横断。</summary>
     public TournamentArchive Archive { get; } = new();
 
+    /// <summary>
+    /// どのスコープ（アーカイブ含む）にでも現れる選手IDの最大値（無ければ 0）。セーブ復元時の採番の
+    /// 再開値に使う（issue #644・<see cref="Season.PlayerIdCounter.Resume"/>）。
+    /// </summary>
+    public int MaxPlayerId()
+    {
+        var max = 0;
+        foreach (var book in new[] { Career, Official, CurrentTournament, PrefQualifier, RegionalQualifier })
+            foreach (var id in book.Players.Keys) if (id > max) max = id;
+        foreach (var key in Archive.Keys)
+            if (Archive.Slot(key) is { } slot)
+                foreach (var id in slot.Keys) if (id > max) max = id;
+        return max;
+    }
+
     /// <summary>大会開始時に今大会スコープをリセット（通算・公式戦通算・県予選・アーカイブは保持）。</summary>
     public void StartTournament() => CurrentTournament.Clear();
 

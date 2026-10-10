@@ -42,6 +42,7 @@ public static class SaveCodec
             .Add("week", s.Week)
             .Add("yearIndex", s.YearIndex)
             .Add("roster", RosterToJson(s.Roster))
+            .Add("nextPlayerId", s.NextPlayerId)
             .Add("manager", CareerSaves.ManagerToJson(s.Manager))
             .Add("facilities", CareerSaves.FacilitiesToJson(s.Facilities))
             .Add("contracts", CareerSaves.ContractsToJson(s.Contracts))
@@ -283,6 +284,9 @@ public static class SaveCodec
             Week = root.Int("week"),
             YearIndex = root.Int("yearIndex"),
             Roster = RosterFromJson(root.Arr("roster")),
+            // 採番の続き番号は issue #644 で追加。無い旧セーブは 0＝復元側がロスターと成績から推定する
+            // （版は上げない＝欠けても既定値で正しく読める項目の追加）。
+            NextPlayerId = root.Has("nextPlayerId") ? root.Int("nextPlayerId") : 0,
             Manager = CareerSaves.ManagerFromJson(root.Obj("manager")),
             Facilities = CareerSaves.FacilitiesFromJson(root.Obj("facilities")),
             // 年契約は v3 で追加。旧セーブ（v1/v2）には無いので、当時と同額・同効果の

@@ -35,6 +35,12 @@ public sealed class SaveState
     // --- 自校部員（背番号・引退フラグ含む。生成順の全員） ---
     public List<DevelopingPlayer> Roster { get; set; } = new();
 
+    /// <summary>
+    /// 自校選手の安定IDの続き番号（issue #644）。0＝未保存（この項目より前のセーブ）＝復元側がロスターと
+    /// 成績ストアの最大IDから推定する（<see cref="Season.PlayerIdCounter.Resume"/>）。
+    /// </summary>
+    public int NextPlayerId { get; set; }
+
     // --- 監督メタ・施設・年契約・監督成長の二重適用ガード ---
     public Manager Manager { get; set; } = new();
     public FacilitySet Facilities { get; set; } = new();

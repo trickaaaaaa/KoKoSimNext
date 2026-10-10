@@ -135,15 +135,17 @@ namespace KokoSim.Unity.Shell
             var all = new List<DevelopingPlayer>(_roster);
             all.AddRange(_graduates);
             s.Roster = all;
+            s.NextPlayerId = _nextId;   // 採番の続き（issue #644。転任後はロスターの最大Idより大きい）
         }
 
         /// <summary>セーブ復元: 保存したロスターを在籍（Grade≤3）と卒業生（Grade&gt;3）へ振り分けて据える。
-        /// 背番号・成長・怪我・引退フラグを丸ごと持ち越し、安定 Id カウンタも最大値の次から再開する。</summary>
+        /// 背番号・成長・怪我・引退フラグを丸ごと持ち越し、安定 Id カウンタも再開する（保存した続き番号・
+        /// ロスター・成績ストアの最大Idのうち大きい方の次から。issue #644）。</summary>
         public static void Restore(KokoSim.Engine.Saves.SaveState s)
         {
             _roster = s.Roster.Where(p => p.Grade <= 3).ToList();
             _graduates = s.Roster.Where(p => p.Grade > 3).ToList();
-            _nextId = s.Roster.Count == 0 ? 1 : s.Roster.Max(p => p.Id) + 1;
+            _nextId = PlayerIdCounter.Resume(s.NextPlayerId, s.Roster, s.Stats);
         }
 
         /// <summary>新規ゲームの完全リセット: 次アクセスで既定シード（42）から再生成させる。</summary>
@@ -191,7 +193,10 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void ResetForTransfer(int yearIndex)
         {
-            _roster = null; _graduates = null; _nextId = 0; _newSchool = true;
+            // 採番（_nextId）は戻さない（issue #644）。成績ストアは学校に紐づかず転任をまたいで残るので、
+            // 1 から振り直すと転任先の新入生に旧校の同じIdの選手の成績が出る。
+            _ = Roster;   // 未生成なら先に確定させ、旧校が使った Id の続きを _nextId に持たせる
+            _roster = null; _graduates = null; _newSchool = true;
             _rosterSeed = GameSeed.Master ^ (TransferRosterStream ^ (ulong)yearIndex);
             _rosterTalentCenterOverride = TalentCenter();
             ProspectService.Reset();   // 旧校の入部予定者は同行しない
@@ -219,9 +224,8 @@ namespace KokoSim.Unity.Shell
             }
 
             // 成績集計の帰属キー（安定ID）を連番付与。生成順＝安定順なので決定論（乱数不使用）。
-            // 1始まり（0は「未割当＝集計対象外」の番兵と衝突させない）。
-            for (var i = 0; i < list.Count; i++) list[i].Id = i + 1;
-            _nextId = list.Count + 1;                  // 次の新入生から振る単調増加カウンタの初期値（issue #535）。
+            // 新規ゲーム（_nextId=0）は 1 から、転任後は旧校で使った Id の続きから振る（issue #535 / #644）。
+            _nextId = PlayerIdCounter.AssignSequential(list, _nextId);
             _graduates = new List<DevelopingPlayer>();  // 卒業生の退避先（初期は空）。
 
             UniformNumberAssigner.AutoAssign(list);   // 初期背番号を能力順で仮割当（プレイヤーが後で編集）
