@@ -35,6 +35,12 @@ public sealed class SaveState
     // --- 自校部員（背番号・引退フラグ含む。生成順の全員） ---
     public List<DevelopingPlayer> Roster { get; set; } = new();
 
+    /// <summary>
+    /// 自校選手の安定IDの続き番号（issue #644）。0＝未保存（この項目より前のセーブ）＝復元側がロスターと
+    /// 成績ストアの最大IDから推定する（<see cref="Season.PlayerIdCounter.Resume"/>）。
+    /// </summary>
+    public int NextPlayerId { get; set; }
+
     // --- 監督メタ・施設・年契約・監督成長の二重適用ガード ---
     public Manager Manager { get; set; } = new();
     public FacilitySet Facilities { get; set; } = new();
@@ -51,6 +57,12 @@ public sealed class SaveState
 
     // --- 全国（materialize 済みロスターのみ。学校・県は再生成） ---
     public List<AiSchoolRoster> NationRosters { get; set; } = new();
+
+    /// <summary>
+    /// 決定論で再生成した全国へ重ねる差分（v21・issue #641）。転任で AI校として残った新設校と、
+    /// 監督がいま率いている生成校（全国から外す）。
+    /// </summary>
+    public NationOverlay NationOverlay { get; set; } = new();
     public NationTournamentStats TournamentStats { get; set; } = new();
     /// <summary>
     /// AI校の進化後 Strength/Fame（issue wire-ai-school-evolve-into-game・v13）。<b>空＝一度も年度末を跨いでいない</b>

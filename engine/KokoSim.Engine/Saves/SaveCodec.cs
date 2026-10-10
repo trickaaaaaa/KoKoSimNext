@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 20;
+    public const int CurrentVersion = 21;
 
     // ===== Serialize =====
 
@@ -42,6 +42,7 @@ public static class SaveCodec
             .Add("week", s.Week)
             .Add("yearIndex", s.YearIndex)
             .Add("roster", RosterToJson(s.Roster))
+            .Add("nextPlayerId", s.NextPlayerId)
             .Add("manager", CareerSaves.ManagerToJson(s.Manager))
             .Add("facilities", CareerSaves.FacilitiesToJson(s.Facilities))
             .Add("contracts", CareerSaves.ContractsToJson(s.Contracts))
@@ -69,6 +70,7 @@ public static class SaveCodec
             .Add("schoolName", s.SchoolName)
             .Add("prefectureId", s.PrefectureId)
             .Add("districtId", s.DistrictId.HasValue ? JsonValue.Of(s.DistrictId.Value) : JsonNull.Instance)
+            .Add("nationOverlay", NationOverlayToJson(s.NationOverlay))
             .Add("incoming", IncomingClassSaves.ToJson(s.Incoming))
             .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
             .Add("draft", DraftSaves.ToJson(s.Draft))
@@ -266,6 +268,10 @@ public static class SaveCodec
         // （v19 の lastPrefChampionId 等と同じ理由・同じ扱い）。
         if (version < 20 && !root.Has("lastDistrictChampionId"))
             root.Add("lastDistrictChampionId", JsonNull.Instance);
+        // v21（issue #641）: 転任で全国に残った学校・監督が率いる生成校。旧セーブは転任で旧校が消えた
+        // 状態のまま（差分なし）で読む＝その後の転任から新しい挙動になる。
+        if (version < 21 && !root.Has("nationOverlay"))
+            root.Add("nationOverlay", NationOverlayToJson(new NationOverlay()));
         // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
         // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
         // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。
@@ -283,6 +289,9 @@ public static class SaveCodec
             Week = root.Int("week"),
             YearIndex = root.Int("yearIndex"),
             Roster = RosterFromJson(root.Arr("roster")),
+            // 採番の続き番号は issue #644 で追加。無い旧セーブは 0＝復元側がロスターと成績から推定する
+            // （版は上げない＝欠けても既定値で正しく読める項目の追加）。
+            NextPlayerId = root.Has("nextPlayerId") ? root.Int("nextPlayerId") : 0,
             Manager = CareerSaves.ManagerFromJson(root.Obj("manager")),
             Facilities = CareerSaves.FacilitiesFromJson(root.Obj("facilities")),
             // 年契約は v3 で追加。旧セーブ（v1/v2）には無いので、当時と同額・同効果の
@@ -313,6 +322,8 @@ public static class SaveCodec
             SchoolName = root.Str("schoolName") ?? "桜丘",
             PrefectureId = root.Int("prefectureId"),
             DistrictId = root["districtId"] is JsonNull ? (int?)null : root.Int("districtId"),
+            // 転任で全国に残った学校は v21 で追加。Migrate が旧セーブへ空の差分を補うので素直に読む。
+            NationOverlay = NationOverlayFromJson(root.Obj("nationOverlay")),
             // 入部予定者は v5 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Incoming = IncomingClassSaves.FromJson(root.Has("incoming") ? root["incoming"] : null),
             // 能動勧誘は v6 で追加。Migrate が旧セーブへ null を補うので素直に読む。
@@ -393,6 +404,39 @@ public static class SaveCodec
         var list = new List<AiSchoolRoster>(arr.Count);
         foreach (var v in arr.Items) list.Add(AiRosterSaves.SchoolRosterFromJson(v.AsObject()));
         return list;
+    }
+
+    // 全国への差分（v21・issue #641）: { managedSchoolId, added: [[id, name, pref, district, strength, fame], ...] }。
+    private static JsonObject NationOverlayToJson(NationOverlay o)
+    {
+        var added = new List<AddedSchool>(o.Added);
+        added.Sort((a, b) => a.Id.CompareTo(b.Id));
+        var arr = new JsonArray();
+        foreach (var a in added)
+            arr.Add(new JsonArray()
+                .Add(JsonValue.Of(a.Id)).Add(JsonValue.Of(a.Name)).Add(JsonValue.Of(a.PrefectureId))
+                .Add(a.DistrictId.HasValue ? JsonValue.Of(a.DistrictId.Value) : JsonNull.Instance)
+                .Add(JsonValue.Of(a.Strength)).Add(JsonValue.Of(a.Fame)));
+        return new JsonObject()
+            .Add("managedSchoolId", o.ManagedSchoolId.HasValue ? JsonValue.Of(o.ManagedSchoolId.Value) : JsonNull.Instance)
+            .Add("added", arr);
+    }
+
+    private static NationOverlay NationOverlayFromJson(JsonObject obj)
+    {
+        var o = new NationOverlay
+        {
+            ManagedSchoolId = obj["managedSchoolId"] is JsonNull ? (int?)null : obj.Int("managedSchoolId"),
+        };
+        foreach (var v in obj.Arr("added").Items)
+        {
+            var t = v.AsArray();
+            o.Added.Add(new AddedSchool(
+                ((JsonNumber)t[0]).AsInt(), ((JsonString)t[1]).Value, ((JsonNumber)t[2]).AsInt(),
+                t[3] is JsonNull ? (int?)null : ((JsonNumber)t[3]).AsInt(),
+                ((JsonNumber)t[4]).AsDouble(), ((JsonNumber)t[5]).AsDouble()));
+        }
+        return o;
     }
 
     // AI校の進化状態（v13）: [[id, strength, fame], ...] を校ID順で。4000校×3値なので配列の配列で詰める。

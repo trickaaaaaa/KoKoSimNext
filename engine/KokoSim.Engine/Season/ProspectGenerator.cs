@@ -796,7 +796,7 @@ public static class ProspectGenerator
                 PitcherRoleResolver.RoleWeight(aptPitcher, bestField, c));
     }
 
-    private static GrowthType SampleGrowthType(IRandomSource rng)
+    internal static GrowthType SampleGrowthType(IRandomSource rng)
     {
         var r = rng.NextDouble();
         if (r < 0.30) return GrowthType.Early;

@@ -135,15 +135,17 @@ namespace KokoSim.Unity.Shell
             var all = new List<DevelopingPlayer>(_roster);
             all.AddRange(_graduates);
             s.Roster = all;
+            s.NextPlayerId = _nextId;   // 採番の続き（issue #644。転任後はロスターの最大Idより大きい）
         }
 
         /// <summary>セーブ復元: 保存したロスターを在籍（Grade≤3）と卒業生（Grade&gt;3）へ振り分けて据える。
-        /// 背番号・成長・怪我・引退フラグを丸ごと持ち越し、安定 Id カウンタも最大値の次から再開する。</summary>
+        /// 背番号・成長・怪我・引退フラグを丸ごと持ち越し、安定 Id カウンタも再開する（保存した続き番号・
+        /// ロスター・成績ストアの最大Idのうち大きい方の次から。issue #644）。</summary>
         public static void Restore(KokoSim.Engine.Saves.SaveState s)
         {
             _roster = s.Roster.Where(p => p.Grade <= 3).ToList();
             _graduates = s.Roster.Where(p => p.Grade > 3).ToList();
-            _nextId = s.Roster.Count == 0 ? 1 : s.Roster.Max(p => p.Id) + 1;
+            _nextId = PlayerIdCounter.Resume(s.NextPlayerId, s.Roster, s.Stats);
         }
 
         /// <summary>新規ゲームの完全リセット: 次アクセスで既定シード（42）から再生成させる。</summary>
@@ -176,7 +178,8 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
-        /// 転任先の新校として作り直す（設計書04 §1.3）。部員は旧校に残る想定（issue「監督の転任システムが
+        /// 転任先の新校として作り直す（設計書04 §1.3）。issue #641 以降は転任先 AI校の部員を引き継ぐ
+        /// （<see cref="AdoptTransferRoster"/>）ので、これは転任先が全国に見つからない場合の保険としてだけ残る。部員は旧校に残る想定（issue「監督の転任システムが
         /// 実ゲームに完全未配線」の決定）なので、新設校と同じ「1年生 <see cref="NewSchoolIntake"/> 人だけ」で
         /// 作り直す。<see cref="Reset"/> と違い <see cref="DraftService.Reset"/> は呼ばない＝教え子名鑑
         /// （プロ入りOB台帳）はキャリア横断の記録なので転任では捨てない（design-04 §1.3「監督能力と名声は持ち越し」）。
@@ -191,9 +194,35 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void ResetForTransfer(int yearIndex)
         {
-            _roster = null; _graduates = null; _nextId = 0; _newSchool = true;
+            // 採番（_nextId）は戻さない（issue #644）。成績ストアは学校に紐づかず転任をまたいで残るので、
+            // 1 から振り直すと転任先の新入生に旧校の同じIdの選手の成績が出る。
+            _ = Roster;   // 未生成なら先に確定させ、旧校が使った Id の続きを _nextId に持たせる
+            _roster = null; _graduates = null; _newSchool = true;
             _rosterSeed = GameSeed.Master ^ (TransferRosterStream ^ (ulong)yearIndex);
             _rosterTalentCenterOverride = TalentCenter();
+            ProspectService.Reset();   // 旧校の入部予定者は同行しない
+            RecruitService.Reset();    // 旧校で勧誘中だった中学生リストも同様
+        }
+
+        /// <summary>次に振る安定ID（転任の変換で新しい部員へ振る続き番号。issue #641）。</summary>
+        public static int NextPlayerId
+        {
+            get { _ = Roster; return _nextId; }
+        }
+
+        /// <summary>
+        /// 転任先 AI校の部員を自校の部員として据える（設計書04 §1.3・issue #641）。部員は学校に所属する＝
+        /// 旧校の部員は旧校（AI校）に残り、転任先の部員を引き継ぐ。変換は engine の
+        /// <see cref="KokoSim.Engine.Career.TransferRosterConversion"/>。<paramref name="nextId"/> は変換で
+        /// 振った続き番号（採番は転任をまたいで単調増加・issue #644）。卒業生の退避先は空から（旧校の卒業生は
+        /// 旧校のもの）。教え子名鑑（<see cref="DraftService"/>）はキャリア横断の記録なので捨てない。
+        /// </summary>
+        public static void AdoptTransferRoster(List<DevelopingPlayer> roster, int nextId)
+        {
+            _roster = roster;
+            _graduates = new List<DevelopingPlayer>();
+            _nextId = nextId;
+            _newSchool = false;
             ProspectService.Reset();   // 旧校の入部予定者は同行しない
             RecruitService.Reset();    // 旧校で勧誘中だった中学生リストも同様
         }
@@ -219,9 +248,8 @@ namespace KokoSim.Unity.Shell
             }
 
             // 成績集計の帰属キー（安定ID）を連番付与。生成順＝安定順なので決定論（乱数不使用）。
-            // 1始まり（0は「未割当＝集計対象外」の番兵と衝突させない）。
-            for (var i = 0; i < list.Count; i++) list[i].Id = i + 1;
-            _nextId = list.Count + 1;                  // 次の新入生から振る単調増加カウンタの初期値（issue #535）。
+            // 新規ゲーム（_nextId=0）は 1 から、転任後は旧校で使った Id の続きから振る（issue #535 / #644）。
+            _nextId = PlayerIdCounter.AssignSequential(list, _nextId);
             _graduates = new List<DevelopingPlayer>();  // 卒業生の退避先（初期は空）。
 
             UniformNumberAssigner.AutoAssign(list);   // 初期背番号を能力順で仮割当（プレイヤーが後で編集）

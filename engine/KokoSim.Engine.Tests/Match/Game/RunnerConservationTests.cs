@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Nation;
@@ -39,11 +40,19 @@ public sealed class RunnerConservationTests
             var result = GameEngine.Play(away, home, ctx, rng);
 
             paCounts[i] = result.Log.Count;
-            foreach (var e in result.Log)
+            for (var k = 0; k < result.Log.Count; k++)
             {
+                var e = result.Log[k];
                 var preRunners = (e.BaseFirstBefore ? 1 : 0) + (e.BaseSecondBefore ? 1 : 0) + (e.BaseThirdBefore ? 1 : 0);
                 var postRunners = (e.BaseFirstAfter ? 1 : 0) + (e.BaseSecondAfter ? 1 : 0) + (e.BaseThirdAfter ? 1 : 0);
-                if (preRunners + 1 != postRunners + e.RunsScored + e.OutsThisPa)
+                // サヨナラの打ち切り（issue #642）: 勝ち越し点より後に本塁へ還った走者は得点にならず、
+                // 試合終了で塁上からも消える＝保存則の右辺から抜ける。試合最後の打席・本塁打以外・
+                // 1点差で後攻勝ち、のときだけ「右辺が足りない」側の不一致を許す。
+                var walkoffTruncated = k == result.Log.Count - 1 && !e.IsTop
+                    && e.Inning >= ctx.RegulationInnings && e.Result != PlateAppearanceResult.HomeRun
+                    && result.HomeRuns == result.AwayRuns + 1
+                    && preRunners + 1 > postRunners + e.RunsScored + e.OutsThisPa;
+                if (!walkoffTruncated && preRunners + 1 != postRunners + e.RunsScored + e.OutsThisPa)
                 {
                     violations.Add(
                         $"seed={i} inning={e.Inning} top={e.IsTop} batter={e.BatterName} result={e.Result} " +
