@@ -14,13 +14,14 @@ namespace KokoSim.Unity.Match
     /// <para><b>症状</b>: 内部では試合が終わっている（<c>_gameOver=True</c>）のに「ゲームセット」も
     /// 結果画面も来ない。投手が投げないだけに見え、UIは生きているので原因が画面に出ない。</para>
     ///
-    /// <para><b>原因</b>: 得点コール（issue #438）は playDriven の間、残り点を減らすのが
-    /// 打球再生の本塁到達だけ。スキップはその再生を畳むので <c>_scoreCallRunsRemaining &gt; 0</c> のまま
-    /// <c>_scoreCallOn</c> が永久に立ち、Update の <c>if (_gameSetPending &amp;&amp; !_scoreCallOn)</c> が
-    /// 一生通らない（実測 <c>_scoreCallClock=696秒</c>）。</para>
+    /// <para><b>原因（当時）</b>: 得点コール（issue #438）は1点ずつの加算を打球再生の本塁到達だけで
+    /// 進めていた。スキップはその再生を畳むので残り点が減らず <c>_scoreCallOn</c> が永久に立ち、
+    /// Update の <c>if (_gameSetPending &amp;&amp; !_scoreCallOn)</c> が一生通らなかった
+    /// （実測 <c>_scoreCallClock=696秒</c>）。issue #643 で加算演出を撤去し、得点コールは
+    /// 最終スコアを掲げて実時間の最終ホールドで必ず消える形になった。</para>
     ///
-    /// <para>ここで守る不変条件は「<b>プレーを畳んだら、そのプレーが駆動していた得点コールも必ず決着する</b>」。
-    /// 自然に得点の再生へ入るのを待ち、入れなければ同じ状態を作って確かめる（どちらでも同じ経路を通る）。</para>
+    /// <para>ここで守る不変条件は「<b>得点コールの表示中にスキップしても「ゲームセット」→結果画面まで届く</b>」。
+    /// 自然に得点コールへ当たるのを待ち、当たらなければ同じ状態を作って確かめる（どちらでも同じ経路を通る）。</para>
     /// </summary>
     public sealed class SkipDuringScoreCallVerifier : MonoBehaviour
     {
@@ -69,14 +70,12 @@ namespace KokoSim.Unity.Match
             SetField(live, "_speed", 4f);
             for (var i = 0; i < 30; i++) yield return null;
 
-            // ── 得点コールがプレー駆動で「まだ残っている」瞬間を捕まえる ──
+            // ── 得点コールの表示中を捕まえる ──
             var natural = false;
             for (var i = 0; i < 4000 && !natural; i++)
             {
                 if ((bool)Field(live, "_gameOver")) break;
-                natural = (bool)Field(live, "_scoreCallOn")
-                          && (bool)Field(live, "_scoreCallPlayDriven")
-                          && (int)Field(live, "_scoreCallRunsRemaining") > 0;
+                natural = (bool)Field(live, "_scoreCallOn");
                 if (!natural) yield return null;
             }
 
@@ -87,12 +86,10 @@ namespace KokoSim.Unity.Match
                 // 自然に当たらなかった場合は同じ状態を作る（守る不変条件は同一）。
                 Debug.Log("[skip-score] 自然な得点再生を捕まえられなかったので状態を作って確かめる");
                 SetField(live, "_scoreCallOn", true);
-                SetField(live, "_scoreCallPlayDriven", true);
-                SetField(live, "_scoreCallRunsRemaining", 1);
+                SetField(live, "_scoreCallClock", 0f);
             }
             Debug.Log("[skip-score] 押下時: scoreCallOn=" + Field(live, "_scoreCallOn")
-                      + " playDriven=" + Field(live, "_scoreCallPlayDriven")
-                      + " remaining=" + Field(live, "_scoreCallRunsRemaining")
+                      + " clock=" + Field(live, "_scoreCallClock")
                       + "（自然=" + natural + "）");
 
             // ── ここでスキップ（委任） ──
@@ -101,8 +98,6 @@ namespace KokoSim.Unity.Match
             yield return null;
 
             if (!(bool)Field(live, "_gameOver")) { Fail("スキップで終局しなかった"); yield break; }
-            if ((bool)Field(live, "_scoreCallPlayDriven") && (int)Field(live, "_scoreCallRunsRemaining") > 0)
-                Fail("プレーを畳んだのに得点コールがプレー駆動のまま残っている（これが止まる原因）");
 
             // ── 「ゲームセット」→ 結果画面まで到達すること ──
             var handedOff = false;
@@ -114,8 +109,7 @@ namespace KokoSim.Unity.Match
             if (!handedOff)
             {
                 Fail("得点コールが消えず「ゲームセット」に到達しない: scoreCallOn="
-                     + Field(live, "_scoreCallOn") + " remaining=" + Field(live, "_scoreCallRunsRemaining")
-                     + " clock=" + Field(live, "_scoreCallClock"));
+                     + Field(live, "_scoreCallOn") + " clock=" + Field(live, "_scoreCallClock"));
                 yield break;
             }
 

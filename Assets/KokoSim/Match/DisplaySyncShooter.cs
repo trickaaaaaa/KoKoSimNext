@@ -12,7 +12,8 @@ namespace KokoSim.Unity.Match
     /// 【開発用・エディタ限定】表示同期（issue #438）の受け入れ実測。使い捨て。
     /// 実シムの打席を進めながら、
     ///  A) 打者セーフの安打: 結果テキストが旧時刻（ResAt）で出ず、到達（_resultShowAt）で出ること
-    ///  B) 生還が決着より遅いプレー: 大型スコアの+1が各走者の本塁到達（_runScoreShowAt[k]）で起きること
+    ///  B) 生還が決着より遅いプレー: 大型スコアが最後の走者の本塁到達（_runScoreShowAt の末尾）で、
+    ///     加算後の最終スコアのまま開くこと＝到達前は出ず、加点前スコアを一度も見せない（issue #643）
     /// を RenderReplayFrame をリフレクションで直接駆動して検証し、前後の絵を撮る。
     /// </summary>
     public sealed class DisplaySyncShooter : MonoBehaviour
@@ -43,11 +44,12 @@ namespace KokoSim.Unity.Match
             var fOwn = t.GetField("_scoreCallOwnScore", Priv);
             var fOpp = t.GetField("_scoreCallOppScore", Priv);
             var fCaption = t.GetField("_caption", Priv);
+            var fCallOn = t.GetField("_scoreCallOn", Priv);
             var mPrepare = t.GetMethod("PrepareDisplayTimings", Priv);
             var mRender = t.GetMethod("RenderReplayFrame", Priv);
             var mHideCall = t.GetMethod("HideScoreCall", Priv);
             if (fCurrent == null || fT == null || fResultShowAt == null || fRunShowAt == null
-                || fOwn == null || fOpp == null || fCaption == null
+                || fOwn == null || fOpp == null || fCaption == null || fCallOn == null
                 || mPrepare == null || mRender == null || mHideCall == null)
             { Debug.LogError("[Sync438] リフレクション対象が見つからない（リネームされた？）"); yield break; }
 
@@ -98,20 +100,29 @@ namespace KokoSim.Unity.Match
                     mPrepare.Invoke(ctrl, new[] { cur });
 
                     int Sum() => (int)fOwn.GetValue(ctrl) + (int)fOpp.GetValue(ctrl);
-                    fT.SetValue(ctrl, play.ResAt + 0.05); mRender.Invoke(ctrl, null);
+                    bool CallOn() => (bool)fCallOn.GetValue(ctrl);
+                    // 打席確定後の両校合計＝テロップが出すべき最終スコア（加算後）。
+                    var finalSum = (int)cur.GetType().GetProperty("AwayScore").GetValue(cur)
+                                 + (int)cur.GetType().GetProperty("HomeScore").GetValue(cur);
+                    var last = runShowAt[runShowAt.Count - 1];
                     var okB = true;
-                    var detail = $"ResAt={play.ResAt:F2}";
-                    for (var k = 0; k < runShowAt.Count; k++)
+                    var detail = $"ResAt={play.ResAt:F2} 最終到達={last:F2}";
+                    // 到達前のどの時刻でもテロップは出ていない（加点前スコアを見せない）。
+                    var probes = new List<double> { play.ResAt + 0.05 };
+                    for (var k = 0; k < runShowAt.Count; k++) probes.Add(runShowAt[k] - 0.05);
+                    foreach (var at in probes)
                     {
-                        fT.SetValue(ctrl, runShowAt[k] - 0.05); mRender.Invoke(ctrl, null);
-                        var before = Sum();
-                        if (k == runShowAt.Count - 1) yield return Capture(ctrl, "b-before-last-run");
-                        fT.SetValue(ctrl, runShowAt[k] + 0.05); mRender.Invoke(ctrl, null);
-                        var after = Sum();
-                        if (k == runShowAt.Count - 1) yield return Capture(ctrl, "b-after-last-run");
-                        okB &= after == before + 1;
-                        detail += $" 到達{k + 1}={runShowAt[k]:F2}({before}→{after})";
+                        if (at >= last) continue;
+                        fT.SetValue(ctrl, at); mRender.Invoke(ctrl, null);
+                        if (CallOn()) { okB = false; detail += $" t={at:F2}で先出し({Sum()})"; }
                     }
+                    fT.SetValue(ctrl, last - 0.05); mRender.Invoke(ctrl, null);
+                    yield return Capture(ctrl, "b-before-last-run");
+                    fT.SetValue(ctrl, last + 0.05); mRender.Invoke(ctrl, null);
+                    yield return Capture(ctrl, "b-after-last-run");
+                    var shown = CallOn() ? Sum() : -1;
+                    okB &= shown == finalSum;
+                    detail += $" 到達後の表示合計={shown} 最終={finalSum}";
                     Debug.Log($"[Sync438] B {(okB ? "OK" : "NG")} 「{play.Result}」 生還{runs} {detail}");
                     doneB = true;
                 }
