@@ -100,9 +100,10 @@ public static class NationalTournamentEngine
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         int? excludePrefectureId = null, int? excludeSplit = null, ModernRules? modernRules = null,
         int? calendarYear = null, IEnemyBrainFactory? brains = null,
-        SummerResolution resolution = SummerResolution.Full)
+        SummerResolution resolution = SummerResolution.Full, bool useRegionalStadiumTier = false)
         => BeginSummer(nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-            excludePrefectureId, excludeSplit, modernRules, calendarYear, brains, resolution: resolution)
+            excludePrefectureId, excludeSplit, modernRules, calendarYear, brains, resolution: resolution,
+            useRegionalStadiumTier: useRegionalStadiumTier)
             .Jobs.Select(j => j()).ToList();
 
     /// <summary>
@@ -115,12 +116,16 @@ public static class NationalTournamentEngine
     /// 各裏試合1つを解決するたびに呼ぶ任意フック（#208）。Shell の背景ワーカーが試合の合間でスロットル
     /// （Paused=停止）を反映するために渡す。null＝素通り（テスト・CLI）。結果・乱数には触れない＝決定論不変。
     /// </param>
+    /// <param name="useRegionalStadiumTier">
+    /// 1球フルシムの裏試合で県大会の汎用ティア球場を使うか（issue #636。<see cref="BackgroundMatchResolver"/> へ渡す）。
+    /// 既定 false＝従来どおり（統計シム・テスト）。集計モデル（ChampionsOnly）は球場を使わないので効かない。
+    /// </param>
     public static SummerRun BeginSummer(
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         int? excludePrefectureId = null, int? excludeSplit = null, ModernRules? modernRules = null,
         int? calendarYear = null, IEnemyBrainFactory? brains = null, Action? afterMatch = null,
-        SummerResolution resolution = SummerResolution.Full)
+        SummerResolution resolution = SummerResolution.Full, bool useRegionalStadiumTier = false)
     {
         var regions = SummerRegions.Build(nation.Prefectures);
         // excludeSplit=null は「区画を問わず県ごと除外」（従来どおり・分割県も両区画とも除外）。
@@ -130,7 +135,7 @@ public static class NationalTournamentEngine
                           && (excludeSplit is null || r.Split == excludeSplit)))
             .Select(region => (Func<PrefectureResult>)(() => RunPrefecture(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-                region, modernRules, calendarYear, brains, afterMatch, resolution)))
+                region, modernRules, calendarYear, brains, afterMatch, resolution, useRegionalStadiumTier)))
             .ToList();
         return new SummerRun(jobs.Count, jobs);
     }
@@ -144,7 +149,8 @@ public static class NationalTournamentEngine
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         SummerRegion region, ModernRules? modernRules, int? calendarYear, IEnemyBrainFactory? brains,
-        Action? afterMatch = null, SummerResolution resolution = SummerResolution.Full)
+        Action? afterMatch = null, SummerResolution resolution = SummerResolution.Full,
+        bool useRegionalStadiumTier = false)
     {
         var field = SummerRegions.Entrants(nation, region).ToList();
         if (field.Count < 2)
@@ -160,7 +166,7 @@ public static class NationalTournamentEngine
         IBackgroundMatchResolver? bg = resolution == SummerResolution.ChampionsOnly
             ? null
             : new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
-                afterMatch: afterMatch);
+                afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier);
         // 北海道・東京の分割区画は forkキーへ分割位置を足して別ストリーム化（無分割の県は従来キーのまま不変）。
         var splitBit = region.Split is { } sp ? (uint)(sp + 1) << 24 : 0u;
         var prefRng = rng.Fork(0xF00D_0000UL ^ (uint)region.PrefectureId ^ splitBit);

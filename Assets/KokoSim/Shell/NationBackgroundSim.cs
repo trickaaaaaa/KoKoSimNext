@@ -147,7 +147,10 @@ namespace KokoSim.Unity.Shell
             var run = NationalTournamentEngine.BeginSummer(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
                 excludePrefectureId: excludePrefectureId, excludeSplit: excludeSplit, modernRules: null, calendarYear: calendarYear,
-                brains: brains, afterMatch: PauseGate, resolution: SummerResolution.ChampionsOnly);
+                brains: brains, afterMatch: PauseGate, resolution: SummerResolution.ChampionsOnly,
+                // 県大会の汎用ティア球場（issue #636）。いまは集計モデル（ChampionsOnly）なので球場は使われないが、
+                // 1球フルシムへ切り替えたとき自県の裏試合・自校の試合と同じ球場になるよう立てておく。
+                useRegionalStadiumTier: true);
 
             _throttle = (int)SimThrottle.Normal;
             _foldLedger = foldLedger;

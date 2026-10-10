@@ -42,24 +42,27 @@ public static class AutumnNationEngine
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         int? excludePrefectureId = null, ModernRules? modernRules = null, int? calendarYear = null,
-        IEnemyBrainFactory? brains = null, SummerResolution resolution = SummerResolution.Full)
+        IEnemyBrainFactory? brains = null, SummerResolution resolution = SummerResolution.Full,
+        bool useRegionalStadiumTier = false)
         => BeginAutumn(nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-            excludePrefectureId, modernRules, calendarYear, brains, resolution: resolution)
+            excludePrefectureId, modernRules, calendarYear, brains, resolution: resolution,
+            useRegionalStadiumTier: useRegionalStadiumTier)
             .Jobs.Select(j => j()).ToList();
 
-    /// <summary>秋季県大会47県ぶんを「県ごとの独立ジョブ列」として構築する（#208 と同型のスライス化）。</summary>
+    /// <summary>秋季県大会47県ぶんを「県ごとの独立ジョブ列」として構築する（#208 と同型のスライス化）。
+    /// <paramref name="useRegionalStadiumTier"/> は夏（<see cref="NationalTournamentEngine.BeginSummer"/>）と同じ意味（issue #636）。</summary>
     public static AutumnRun BeginAutumn(
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         int? excludePrefectureId = null, ModernRules? modernRules = null, int? calendarYear = null,
         IEnemyBrainFactory? brains = null, Action? afterMatch = null,
-        SummerResolution resolution = SummerResolution.Full)
+        SummerResolution resolution = SummerResolution.Full, bool useRegionalStadiumTier = false)
     {
         var jobs = nation.Prefectures
             .Where(p => excludePrefectureId is not int ex || p.Id != ex)
             .Select(pref => (Func<AutumnPrefectureResult>)(() => RunPrefecture(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-                pref, modernRules, calendarYear, brains, afterMatch, resolution)))
+                pref, modernRules, calendarYear, brains, afterMatch, resolution, useRegionalStadiumTier)))
             .ToList();
         return new AutumnRun(jobs.Count, jobs);
     }
@@ -68,7 +71,7 @@ public static class AutumnNationEngine
         Nation nation, NationRosters rosters, GameContext ctx, NationCoefficients coeff,
         TournamentSchedule schedule, int yearIndex, NationTournamentStats stats, IRandomSource rng,
         Prefecture pref, ModernRules? modernRules, int? calendarYear, IEnemyBrainFactory? brains,
-        Action? afterMatch, SummerResolution resolution)
+        Action? afterMatch, SummerResolution resolution, bool useRegionalStadiumTier)
     {
         var field = nation.InPrefecture(pref.Id).ToList();
         var regionRomaji = PrefectureNames.RegionOf(pref.Id);
@@ -82,7 +85,7 @@ public static class AutumnNationEngine
         IBackgroundMatchResolver? bg = resolution == SummerResolution.ChampionsOnly
             ? null
             : new BackgroundMatchResolver(rosters, ctx, yearIndex, stats, modernRules, calendarYear, brains,
-                afterMatch: afterMatch);
+                afterMatch: afterMatch, useRegionalStadiumTier: useRegionalStadiumTier);
         var prefRng = rng.Fork(0xACE0_0000UL ^ (uint)pref.Id);
         var runner = new TournamentRunner(
             field, field[0], coeff, prefRng, schedule, $"{pref.Name}大会",

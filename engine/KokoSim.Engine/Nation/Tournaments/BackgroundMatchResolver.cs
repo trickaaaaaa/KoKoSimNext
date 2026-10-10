@@ -1,4 +1,5 @@
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Players;
@@ -22,6 +23,13 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
     private readonly IEnemyBrainFactory? _brains;
     private readonly System.Action<int, int, GameResult>? _onMatch;
     private readonly System.Action? _afterMatch;
+    private readonly bool _useRegionalStadiumTier;
+
+    /// <summary>
+    /// 球場抽選の専用ストリームid（設計書13）。自校の試合（Shell の PlayerMatchResolver）と同じ値＝
+    /// 同じ流儀で引く。Fork は親状態を進めないので、本編の乱数列（<c>rng.Fork(2)</c>）は変わらない。
+    /// </summary>
+    private const ulong StadiumStreamId = 13;
 
     /// <param name="onMatch">
     /// 解決した各裏試合の (先攻校ID, 後攻校ID, 結果) を受け取る任意コールバック（記録の解像度2層, Q15未決2）。
@@ -32,11 +40,17 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
     /// スロットル状態を見てスピン待機／即継続する」ために使う＝ライブ観戦中はここで即座に手を止められ、
     /// 県丸ごとを走り切ってしまわない（stop-the-world GC の連発を止める）。結果・乱数には触れない＝決定論不変。
     /// </param>
+    /// <param name="useRegionalStadiumTier">
+    /// 県大会（夏・秋）の汎用ティア球場を使うか（issue #636・設計書13 §1）。true なら試合ごとのラウンド
+    /// （<see cref="TournamentMatchContext.RoundsRemaining"/>）から <see cref="RegionalStadiumTier"/> で球場を決め、
+    /// 自校の試合と同じラウンドで同じティアの球場を使う。既定 false＝<paramref name="ctx"/> の Field のまま
+    /// （甲子園・センバツ・地区大会・神宮・展望用の打ち直しなど、県大会の本戦でない呼び出し）。
+    /// </param>
     public BackgroundMatchResolver(
         NationRosters rosters, GameContext ctx, int yearIndex,
         NationTournamentStats? stats = null, ModernRules? modernRules = null, int? calendarYear = null,
         IEnemyBrainFactory? brains = null, System.Action<int, int, GameResult>? onMatch = null,
-        System.Action? afterMatch = null)
+        System.Action? afterMatch = null, bool useRegionalStadiumTier = false)
     {
         _rosters = rosters;
         _ctx = ctx;
@@ -47,6 +61,7 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
         _brains = brains;
         _onMatch = onMatch;
         _afterMatch = afterMatch;
+        _useRegionalStadiumTier = useRegionalStadiumTier;
     }
 
     public GameResult Resolve(School away, School home, IRandomSource rng, TournamentMatchContext? context = null)
@@ -60,8 +75,11 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
             context, _ctx.PitchRecovery,
             PitchRecoveryLookup.AllPlayers(awayTeam), p => PitcherLedgerKey.ForOpponent(away.Id, p.UniformNumber),
             PitchRecoveryLookup.AllPlayers(homeTeam), p => PitcherLedgerKey.ForOpponent(home.Id, p.UniformNumber));
+        var ctx = _useRegionalStadiumTier
+            ? _ctx with { Field = RegionalStadiumTier.For(context?.RoundsRemaining, rng.Fork(StadiumStreamId)) }
+            : _ctx;
         var result = GameEngine.Play(
-            awayTeam, homeTeam, _ctx, rng.Fork(2), awayPitchRecovery: awayRecovery, homePitchRecovery: homeRecovery);
+            awayTeam, homeTeam, ctx, rng.Fork(2), awayPitchRecovery: awayRecovery, homePitchRecovery: homeRecovery);
         _stats?.FoldMatch(away.Id, home.Id, result);
         _onMatch?.Invoke(away.Id, home.Id, result);
         _afterMatch?.Invoke();   // #208: 試合の合間でワーカーがスロットル（Paused=停止）を反映できる継ぎ目。
