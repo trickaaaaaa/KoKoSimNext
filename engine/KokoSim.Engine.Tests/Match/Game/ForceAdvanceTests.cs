@@ -107,9 +107,11 @@ public sealed class ForceAdvanceTests
     }
 
     [Fact]
-    public void Fly_FirstRunner_NotForced_TagUpRemainsProbabilistic()
+    public void Fly_FirstRunner_NotForced_StaysAtFirst()
     {
-        // フライ（タッグアップ）: 一塁走者はフォースではない＝従来の確率進塁のまま、一塁残留が多数出る。
+        // フライ（タッグアップ）: 一塁走者はフォースではない＝一塁残留が多数出る。
+        // design-14 P3-11 で18%固定から物理レースへ置換したため、この 55m の浅いフライでは
+        // 二塁への送球が短く到達見込みが送り閾値に届かない＝全試行で自重する（深さ依存の網羅は FlyTagUpTests）。
         var rng = new Xoshiro256Random(15);
         var stayed = 0;
         for (var i = 0; i < 1000; i++)

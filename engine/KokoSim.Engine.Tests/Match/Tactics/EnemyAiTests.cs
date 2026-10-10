@@ -18,6 +18,9 @@ namespace KokoSim.Engine.Tests.Match.Tactics;
 public sealed class EnemyAiTests
 {
     private static readonly EnemyAiCoefficients Ai = new();
+    // 采配ロジックの単体テストは表示能力を額面どおり効かせる（効き＝恒等）。既定の効き 0.55 では
+    // 走力95 vs 肩20 の「余裕の盗塁」が中庸に寄り、しきい値の前提（際どい/余裕）が崩れる。
+    private static readonly BaserunningCoefficients Br = new() { AbilityEffect = AbilityEffectCoefficients.Identity };
 
     private static Player P(int contact = 50, int power = 50, int bunt = 50, int speed = 50,
         int steal = 50, int arm = 50, FieldPosition pos = FieldPosition.CenterField)
@@ -63,7 +66,7 @@ public sealed class EnemyAiTests
     {
         // G(0): スクイズ・エンドランは引き出しにない → 意図的にも偶発的にも出ない。
         // （盗塁は①能力値ミスの「無謀な盗塁」として稀に出得るので、ここでは検証しない＝下の頻度テストで扱う）
-        var low = new AiTacticsBrain(new AiProfile(90, TierRank: 0, SchoolStyle.SmallBall), aiCoeff: Ai);
+        var low = new AiTacticsBrain(new AiProfile(90, TierRank: 0, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
         var s = Sit(inning: 9, outs: 1, first: P(steal: 90), third: P(), batter: P(power: 40, bunt: 70));
         var signs = RollOffense(low, s, 500);
         Assert.DoesNotContain(OffensiveSign.Squeeze, signs);
@@ -76,7 +79,7 @@ public sealed class EnemyAiTests
         // 盗塁好機で、上級(引き出しにある＝意図的に走る)は初級(偶発の無謀な盗塁のみ)より遥かに多く走る。
         int Steals(int tier)
         {
-            var brain = new AiTacticsBrain(new AiProfile(90, tier, SchoolStyle.SmallBall), aiCoeff: Ai);
+            var brain = new AiTacticsBrain(new AiProfile(90, tier, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
             var s = Sit(inning: 8, outs: 0, first: P(speed: 90, steal: 90), batter: P(power: 72));
             return CountStealAttempts(brain, s, 600);
         }
@@ -87,7 +90,7 @@ public sealed class EnemyAiTests
     public void Tier_HighTier_CanUseSqueezeAndSteal()
     {
         // S(7): 全戦術が引き出しにある。
-        var high = new AiTacticsBrain(new AiProfile(90, TierRank: 7, SchoolStyle.SmallBall), aiCoeff: Ai);
+        var high = new AiTacticsBrain(new AiProfile(90, TierRank: 7, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
         var squeezeSit = Sit(inning: 9, outs: 1, third: P(), batter: P(power: 40, bunt: 80));
         Assert.Contains(OffensiveSign.Squeeze, RollOffense(high, squeezeSit, 500));
         var stealSit = Sit(inning: 8, outs: 0, first: P(speed: 90, steal: 90),
@@ -104,10 +107,10 @@ public sealed class EnemyAiTests
         var weakCatcher = P(arm: 20, pos: FieldPosition.Catcher);
         var s = Sit(inning: 8, outs: 0, second: runner, batter: P(power: 40), catcher: weakCatcher);
         var belowTier = Ai.StealThirdMinTier - 1;
-        var low = new AiTacticsBrain(new AiProfile(95, belowTier, SchoolStyle.SmallBall), aiCoeff: Ai);
+        var low = new AiTacticsBrain(new AiProfile(95, belowTier, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
         Assert.Equal(0, CountStealTargetAttempts(low, s, StealTarget.Third, 500));
 
-        var high = new AiTacticsBrain(new AiProfile(95, Ai.StealThirdMinTier, SchoolStyle.SmallBall), aiCoeff: Ai);
+        var high = new AiTacticsBrain(new AiProfile(95, Ai.StealThirdMinTier, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
         Assert.True(CountStealTargetAttempts(high, s, StealTarget.Third, 500) > 0,
             "StealThirdMinTier以上なら三盗が出るはず");
     }
@@ -118,10 +121,10 @@ public sealed class EnemyAiTests
         var runner = P(speed: 95, steal: 95);
         var s = Sit(inning: 8, outs: 0, third: runner, batter: P(power: 40));
         var belowTier = Ai.StealHomeMinTier - 1;
-        var low = new AiTacticsBrain(new AiProfile(95, belowTier, SchoolStyle.SmallBall), aiCoeff: Ai);
+        var low = new AiTacticsBrain(new AiProfile(95, belowTier, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
         Assert.Equal(0, CountStealTargetAttempts(low, s, StealTarget.Home, 800));
 
-        var high = new AiTacticsBrain(new AiProfile(95, Ai.StealHomeMinTier, SchoolStyle.SmallBall), aiCoeff: Ai);
+        var high = new AiTacticsBrain(new AiProfile(95, Ai.StealHomeMinTier, SchoolStyle.SmallBall), baserunning: Br, aiCoeff: Ai);
         Assert.True(CountStealTargetAttempts(high, s, StealTarget.Home, 800) > 0,
             "StealHomeMinTier以上なら本盗が出るはず");
     }
@@ -140,7 +143,7 @@ public sealed class EnemyAiTests
     [Fact]
     public void Tier_LowTier_DefenseHasNoShiftOrGear()
     {
-        var low = new AiTacticsBrain(new AiProfile(90, TierRank: 1, SchoolStyle.DefensiveMinded), aiCoeff: Ai);
+        var low = new AiTacticsBrain(new AiProfile(90, TierRank: 1, SchoolStyle.DefensiveMinded), baserunning: Br, aiCoeff: Ai);
         var s = Sit(inning: 9, outs: 0, first: P(), diff: -6, batter: P(power: 40, bunt: 60));
         for (ulong i = 0; i < 200; i++)
         {
@@ -160,7 +163,7 @@ public sealed class EnemyAiTests
 
     private static int CountGambles(SchoolStyle style, int tier, int n = 600)
     {
-        var brain = new AiTacticsBrain(new AiProfile(90, tier, style), aiCoeff: Ai);
+        var brain = new AiTacticsBrain(new AiProfile(90, tier, style), baserunning: Br, aiCoeff: Ai);
         var s = MarginalStealSit();
         var g = 0;
         for (ulong i = 0; i < (ulong)n; i++)
@@ -197,7 +200,7 @@ public sealed class EnemyAiTests
 
     private static int CountSteals(SchoolStyle style, int tier = 7)
     {
-        var brain = new AiTacticsBrain(new AiProfile(90, tier, style), aiCoeff: Ai);
+        var brain = new AiTacticsBrain(new AiProfile(90, tier, style), baserunning: Br, aiCoeff: Ai);
         var s = Sit(inning: 6, outs: 0, first: P(speed: 78, steal: 78), batter: P(power: 72)); // 強打者=バント条件外
         return CountStealAttempts(brain, s, 600);
     }
@@ -214,7 +217,7 @@ public sealed class EnemyAiTests
     {
         int Bunts(SchoolStyle style)
         {
-            var brain = new AiTacticsBrain(new AiProfile(90, 7, style), aiCoeff: Ai);
+            var brain = new AiTacticsBrain(new AiProfile(90, 7, style), baserunning: Br, aiCoeff: Ai);
             var s = Sit(inning: 8, outs: 0, first: P(), batter: P(power: 45, bunt: 60));
             return RollOffense(brain, s, 600).Count(x => x == OffensiveSign.SacrificeBunt);
         }
@@ -227,7 +230,7 @@ public sealed class EnemyAiTests
     {
         int Shifts(SchoolStyle style)
         {
-            var brain = new AiTacticsBrain(new AiProfile(90, 7, style), aiCoeff: Ai);
+            var brain = new AiTacticsBrain(new AiProfile(90, 7, style), baserunning: Br, aiCoeff: Ai);
             var s = Sit(inning: 8, outs: 0, first: P(), batter: P(power: 40, bunt: 60));
             var n = 0;
             for (ulong i = 0; i < 600; i++)
@@ -245,7 +248,7 @@ public sealed class EnemyAiTests
     {
         int Bunts(int sense)
         {
-            var brain = new AiTacticsBrain(new AiProfile(sense, 7, SchoolStyle.Standard), aiCoeff: Ai);
+            var brain = new AiTacticsBrain(new AiProfile(sense, 7, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
             var s = Sit(inning: 8, outs: 0, first: P(), batter: P(power: 40, bunt: 60));
             return RollOffense(brain, s, 800).Count(x => x == OffensiveSign.SacrificeBunt);
         }
@@ -258,8 +261,8 @@ public sealed class EnemyAiTests
     [Fact]
     public void Ability_OptimalProbability_RisesWithSense()
     {
-        var dull = new AiTacticsBrain(new AiProfile(10, 7, SchoolStyle.Standard), aiCoeff: Ai);
-        var sharp = new AiTacticsBrain(new AiProfile(95, 7, SchoolStyle.Standard), aiCoeff: Ai);
+        var dull = new AiTacticsBrain(new AiProfile(10, 7, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
+        var sharp = new AiTacticsBrain(new AiProfile(95, 7, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
         Assert.True(sharp.OptimalProbability > dull.OptimalProbability);
         Assert.InRange(sharp.OptimalProbability, 0.5, 0.98);
     }
@@ -269,7 +272,7 @@ public sealed class EnemyAiTests
     [Fact]
     public void Timeout_LowTier_NeverUses()
     {
-        var low = new AiTacticsBrain(new AiProfile(90, TierRank: 0, SchoolStyle.Standard), aiCoeff: Ai);
+        var low = new AiTacticsBrain(new AiProfile(90, TierRank: 0, SchoolStyle.Standard), baserunning: Br, aiCoeff: Ai);
         var s = Sit() with { PitcherRattled = true, PressureIndex = 6 };
         for (ulong i = 0; i < 100; i++)
             Assert.False(low.CallDefenseTimeout(s, new Xoshiro256Random(i)));
@@ -280,7 +283,7 @@ public sealed class EnemyAiTests
     {
         int Visits(SchoolStyle style)
         {
-            var brain = new AiTacticsBrain(new AiProfile(90, 7, style), aiCoeff: Ai);
+            var brain = new AiTacticsBrain(new AiProfile(90, 7, style), baserunning: Br, aiCoeff: Ai);
             var s = Sit() with { PitcherRattled = true, PressureIndex = 6 };
             var n = 0;
             for (ulong i = 0; i < 600; i++)
@@ -330,7 +333,7 @@ public sealed class EnemyAiTests
         var profile = AiProfile.Delegated(tacticalSense: 60, tierRank: 5);
         Assert.Equal(SchoolStyle.Standard, profile.Style);
         Assert.Equal(60, profile.TacticalSense);
-        var brain = new AiTacticsBrain(profile, aiCoeff: Ai);
+        var brain = new AiTacticsBrain(profile, baserunning: Br, aiCoeff: Ai);
         // 委任でも共通の采配システムがそのまま動く（決定的に手を返す）。
         var s = Sit(inning: 8, outs: 0, first: P(), batter: P(power: 40, bunt: 60));
         var sign = brain.CallOffense(s, new Xoshiro256Random(3));

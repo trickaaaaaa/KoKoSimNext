@@ -142,6 +142,11 @@ namespace KokoSim.Unity.Match
         // 頭出しが負になる速度でも面通過は球からずれない（SetSwing のカウントダウン開始）＝
         // つまみの全域 0.5〜3.0 が安全（issue #368）
         public float SwingSpeed;            // 1=収録のまま。スイング系の一発物にだけ掛かる
+        // 足上げ〜トップ（振り出しの手前まで＝クリップ 0.925s まで）の再生倍率（issue batter-timing-load-earlier, 2026-08-18）。
+        // SwingSpeed(2.0) を足上げにも掛けると脚を上げてから振り出すまでが 0.4s しか無く、リリース直前にしか
+        // タイミングを取り始められない（実物は投手の踏み出し〜リリースの 0.3〜0.4s 前から足を上げ、接地→振り出し）。
+        // 区間ごとの一様倍率＝各区間の内部緩急は保つ（キーの打ち直しではない）。振り出し以降は SwingSpeed。
+        public float LoadSpeed;             // 1=収録のまま。足上げ〜トップにだけ掛かる
         // ---- バットの置き方（AlignBat）----
         // 握りが直った今は「両手を結んだ線＝バットの軸」がそのまま使える。旧実装は両手が23cm開いて
         // 拳が積み重ならない収録を前提に、ヨーだけ実測して仰角を決め打ちしていた（合成軸）。
@@ -226,7 +231,7 @@ namespace KokoSim.Unity.Match
         // 高さ1.52m（2026-07-30 実測。18.6m/s）。球の出所だけこの時刻の手から採る
         public float BallReleaseClipTime;
 
-        private const int CurrentVersion = 24;
+        private const int CurrentVersion = 25;
 
         public static DuelCalibration Default => new DuelCalibration
         {
@@ -339,6 +344,9 @@ namespace KokoSim.Unity.Match
             // 実物のスイング（振り出し→接触 0.15〜0.20s）より速いが、**実寸に合わせるだけでは
             // 絵として遅い**というのが監督判断。12fps のポーズが2コマを切るのは承知の上
             SwingSpeed = 2.0f,
+            // 足上げ(0.15)→振り出し(0.925) 0.775 クリップ秒を 1.2 倍で 0.65s＝実物の足上げ〜接地（0.5〜0.7s）相当。
+            // 到達 0.45s の球で、足上げがリリースの約 0.35s 前から始まる（PreLoad）
+            LoadSpeed = 1.2f,
             // 旧0.154（＝ほぼ合成軸）。自作Rokokoは両手が開いて拳が積み重ならない収録だったので
             // 実測線が使えなかったが、Mixamoは元からバットを両手で握った収録なので実測線が素直に使える。
             // 0.154のままだと合成軸の仰角35.7°が頭の方向へ立ち上がり、構えでバットが顔を貫く（2026-07-30 絵で確認）
@@ -585,6 +593,10 @@ namespace KokoSim.Unity.Match
                 c.BuntYawDeg = d.BuntYawDeg;
                 c.BuntTransitionYawDeg = d.BuntTransitionYawDeg;
             }
+            if (c.Version < 25)   // v25: 足上げ〜トップの再生倍率（issue batter-timing-load-earlier・新項目）
+            {
+                c.LoadSpeed = d.LoadSpeed;
+            }
             c.Version = CurrentVersion;
             return c;
         }
@@ -686,7 +698,7 @@ namespace KokoSim.Unity.Match
             /// <summary>肌の固定色（全役割共通）。</summary>
             private static readonly Color SkinTone = new(0.85f, 0.68f, 0.55f);
 
-            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, Belt;
+            public readonly Color Shirt, Pants, Undershirt, Socks, Skin, Shoes, Cap, CapVisor, Belt;
             public readonly bool StripeOn;
             public readonly Color StripeColor;
             /// <summary>縞の本数[本/m]。シェーダへはアクターのスケールを掛けて渡す（RegionMaterial）。</summary>
@@ -694,13 +706,15 @@ namespace KokoSim.Unity.Match
 
             public UniformPalette(Color shirt, Color pants, Color undershirt, Color socks, Color cap,
                 bool stripeOn = false, Color stripeColor = default, float stripeFreqPerMeter = 0f,
-                Color? shoes = null)
+                Color? shoes = null, Color? capVisor = null)
             {
                 Shirt = shirt;
                 Pants = pants;
                 Undershirt = undershirt;
                 Socks = socks;
                 Cap = cap;
+                // つばの指定が無ければクラウンと同色＝従来どおりの1色帽子（issue #621）。
+                CapVisor = capVisor ?? cap;
                 Skin = SkinTone;
                 // ベルトは固定の黒革（高校球児は黒ベルトが多数派）。値はパレット表の「黒」#23242A と
                 // 揃える＝画面で選べる黒と同じ黒になる。**わずかでも赤に寄せると濃い臙脂に見える**
@@ -712,10 +726,14 @@ namespace KokoSim.Unity.Match
                 StripeFreqPerMeter = stripeFreqPerMeter;
             }
 
-            /// <summary>エンジンの確定配色（7領域＋縞）から作る。つばは帽子と1メッシュなので使わない。</summary>
+            /// <summary>
+            /// エンジンの確定配色（7領域＋縞）から作る。つばは issue #621 で帽子メッシュを幾何で
+            /// 二分し、クラウンと別領域になった＝ここで渡した色がそのまま絵に出る。
+            /// </summary>
             public static UniformPalette From(KokoSim.Engine.Nation.TeamColors c) => new(
                 Rgb(c.Shirt), Rgb(c.Pants), Rgb(c.Undershirt), Rgb(c.Socks), Rgb(c.CapCrown),
-                c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter, Rgb(c.Shoes));
+                c.Stripe.On, Rgb(c.Stripe.Color), (float)c.Stripe.FreqPerMeter, Rgb(c.Shoes),
+                Rgb(c.CapVisor));
 
             private static Color Rgb(KokoSim.Engine.Nation.RgbColor c)
                 => new(c.R / 255f, c.G / 255f, c.B / 255f);
@@ -760,13 +778,24 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void SetTeamColors(KokoSim.Engine.Nation.TeamColors defense, KokoSim.Engine.Nation.TeamColors offense)
         {
-            if (defense == null || offense == null) return;
-            _defenseColors = UniformPalette.From(defense);
-            _offenseColors = UniformPalette.From(offense);
-
-            Repaint(_pitcher, _defenseColors);
-            Repaint(_catcher, _defenseColors);
-            Repaint(_batter, _offenseColors);   // 打者ヘルメットは暗紺固定＝チーム色の装備は無い
+            // issue #618: 片方が null でも塗れる側は塗る（旧実装は片方 null で両校とも既定色のままだった）。
+            // null は「その校の配色が不明」であって「既定色で描け」ではないので、不明な側だけ既定に残す。
+            if (defense != null)
+            {
+                _defenseColors = UniformPalette.From(defense);
+                Repaint(_pitcher, _defenseColors);
+                Repaint(_catcher, _defenseColors);
+                // 守備7人（打球処理・盗塁で出る）も守備側の色。生成が遅延（最初の打球で EnsureFieldCast）で
+                // 一度きりのため、ここで塗り替えないと生成時の半回の守備校＝いまの攻撃校の色のまま
+                // 攻守交代をまたぐ（2026-08-15 監督報告「守備陣に攻撃側のユニフォーム」）
+                foreach (var kv in _fieldCast) Repaint(kv.Value, _defenseColors);
+            }
+            if (offense != null)
+            {
+                _offenseColors = UniformPalette.From(offense);
+                Repaint(_batter, _offenseColors);   // 打者ヘルメットは暗紺固定＝チーム色の装備は無い
+                foreach (var a in _runnerCast) Repaint(a, _offenseColors);   // 走者プールも同じ理由で塗り替える
+            }
         }
 
         private static void Repaint(Actor a, UniformPalette pal)
@@ -774,6 +803,7 @@ namespace KokoSim.Unity.Match
             if (a == null) return;
             if (a.RegionMat != null) ApplyRegionColors(a.RegionMat, pal, a.BodyScale);
             foreach (var m in a.TeamMats) if (m != null) m.SetColor("_BaseColor", pal.Cap);
+            foreach (var m in a.VisorMats) if (m != null) m.SetColor("_BaseColor", pal.CapVisor);
         }
 
         /// <summary>
@@ -793,6 +823,10 @@ namespace KokoSim.Unity.Match
                 // 素体の領域マテリアルは _BaseColor が白のダミー＝ここで拾ってはいけない
                 // （チーム色に白を選ばれた瞬間に素体まで塗り替え対象になる）。RegionMat 側で塗り替わる
                 if (m.GetFloat("_UseRegions") > 0.5f) continue;
+                // つばは装着時に直接登録してある（issue #621）。色の一致で拾う一般の走査に任せると、
+                // クラウンとつばが同色で立ち上がった学校で**両方が両方のリストに入り**、
+                // 攻守交代の塗り替えで最後に書いた色へ二つとも倒れる
+                if (a.VisorMats.Contains(m)) continue;
                 if (m.GetColor("_BaseColor") == accent && !a.TeamMats.Contains(m)) a.TeamMats.Add(m);
             }
         }
@@ -972,6 +1006,8 @@ namespace KokoSim.Unity.Match
         private float _battedDur;            // セグメントの長さ[s]（超えたら位置を止める）
         private Vector3 _battedOffset;       // 接触点 − セグメント始点（下の LaunchFadeSeconds で解消）
         private float _battedFade;           // 上を解消するまでの秒数＝打点からの自由落下時間
+        /// <summary>打球プロファイルが地面（h(0)=0）から始まるか（<see cref="BeginBattedBall"/> で判定）。</summary>
+        private bool _battedFromGround;
         private readonly List<Vector4> _trail = new();   // 残像（xyz=ステージローカル / w=残像時計[s]）
         /// <summary>
         /// 残像の「現在時刻」（<see cref="DrawBattedTrail"/> のフェード計算の基準）。対決ビューは
@@ -1037,14 +1073,25 @@ namespace KokoSim.Unity.Match
             // 速度を入れたら**アンカーの逆算も実秒→クリップ秒へ換算し直す**こと（Speed倍する）。
             // 忘れると面通過が球の到達からずれ、絵では「差し替えたら合わなくなった」としか見えない
             public float Speed = 1f;
+            /// <summary>このクリップ秒に達したら <see cref="Speed"/> を <see cref="SpeedAfterSwitch"/> へ切り替える
+            /// （負＝切替なし）。跨ぐコマは切替点で分けて積分する＝境目の誤差を出さない（打者の足上げ→振り出し）。</summary>
+            public float SpeedSwitchAt = -1f;
+            public float SpeedAfterSwitch = 1f;
             public float HoldSeconds;                // 末尾到達時、待機へ戻る前にそのポーズで止める秒数（0=即戻る）
             public float HoldRemaining;               // ↑の残り時間（>0の間はポーズ据え置き＝Graph.Evaluateしない）
             public Material RegionMat;               // 領域塗り分けマテリアル（攻守交代の塗り替え用。一色フォールバック時はnull）
             public float BodyScale;                  // ワールドスケール（縞の刻みをオブジェクト空間へ換算するのに要る）
             public readonly List<Material> TeamMats = new();  // チーム色で塗った装備のマテリアル（帽子・捕手ヘルメット殻）
+            public readonly List<Material> VisorMats = new(); // つばの色で塗った装備（帽子つば・issue #621）
             public Vector3 HeadUpLocal;              // 頭蓋の上方向（頭ボーンローカル）。素立ち＝頭が水平な唯一のポーズで実測
             public Vector3 HeadFwdLocal;             // 頭蓋の前方向（同上）。視線ターゲット由来の水平前だとロールする（斜め被り）ため実測で持つ
             public bool Mirrored;                    // 鏡映親ノードが反転中か。Foot IK の同期（SyncFootIk）に使う
+            /// <summary>
+            /// いま**上下をクリップ（ルートモーション）に預けている**か（横っ飛び・スライディング）。
+            /// 立っている収録は足を地面へ吸わせる（<c>GroundFix</c>）のが正しいが、足が上がって胴が下がる
+            /// 収録では同じことをすると胴が地面へ潜る（実測 −0.40m）。窓を抜けたら false へ戻す。
+            /// </summary>
+            public bool RootDrivenY;
 
             /// <summary>
             /// 直前の <see cref="StepActor"/> でこの体のポーズを**書き直したか**。
@@ -1177,8 +1224,10 @@ namespace KokoSim.Unity.Match
             // 未指定＝スクショ・デモ経路は既定（白＋紺）で立つ
             if (InitialTeamColors is { } tc)
             {
-                _defenseColors = UniformPalette.From(tc.Defense);
-                _offenseColors = UniformPalette.From(tc.Offense);
+                // issue #618: 片側だけ判っている場合がある（相手校ID不明の練習試合）。
+                // UniformPalette.From は null を受けられないので側ごとに判定する。
+                if (tc.Defense != null) _defenseColors = UniformPalette.From(tc.Defense);
+                if (tc.Offense != null) _offenseColors = UniformPalette.From(tc.Offense);
             }
 
             // 立ち位置・装備位置は絵作りパラメータ（DuelCalibration.Default が単一ソース。
@@ -1299,7 +1348,8 @@ namespace KokoSim.Unity.Match
             SeekActor(_pitcher, ReleaseTime);
             // 購入素体は帽子を素で持っている（頭ボーン直付けの剛体メッシュ）ので生成帽子は載せない＝二重帽子を避ける
             if (!useVendor)
-                AttachGear(_pitcher, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer);
+                AttachGear(_pitcher, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer,
+                    _defenseColors.CapVisor);
             SeekActor(_pitcher, 0.001f);
             GroundFix(_pitcher);
             // 生成直後はセット姿勢で止めておく。止めないと Tick が勝手にクリップを頭から流し、
@@ -1668,6 +1718,12 @@ namespace KokoSim.Unity.Match
         private float _swingPendingAnchor;          // 予約中の接触アンカー[クリップ秒]
         private float _swingPendingEndAt;           // 予約中の打ち切り[クリップ秒]
         private float _swingPendingHold;            // 予約中の据え置き[秒]（SwingFinishHoldSeconds）
+        private bool _swingPendingIsLoad;           // 予約がスイングでなく見逃しのタイミング取り（TakeLoad）か
+        private float _preLoadCountdown = -1f;      // 足上げ（PreLoad）開始まで（プレー時間秒。負=予約なし）
+        private float _preLoadStartClip;            // PreLoad の頭出し位置[クリップ秒]
+        private bool _batterPreLoaded;              // 足上げを先に始めていて、リリースで結果に合わせて倍率を決め直す待ち
+        private bool _batterTakeLoad;               // いま打者が見逃しのタイミング取り（振らない頭出し）中か
+        private bool _batterTakeLoadReturning;      // タイミング取りのトップ→構えへ戻るクロスフェード中か（バット軸を凍結する）
 
         /// <summary>
         /// 打席頭の投球入口。セット姿勢（クリップ0秒で停止中）から、振りかぶりを飛ばして
@@ -1685,6 +1741,94 @@ namespace KokoSim.Unity.Match
             CrossfadeActorTo(_pitcher, DeliveryStartTime, CrossfadeSeconds);
             GroundFix(_pitcher);
             _pitcher.Speed = 1f;   // 采配窓の静止を解いて等速再生を始める
+            SchedulePreLoad(WindupSeconds);   // 打者の足上げはリリースの前から（issue batter-timing-load-earlier）
+        }
+
+        /// <summary>
+        /// 打者の足上げ（PreLoad）を「次のリリースの lead 秒前」に予約する（issue batter-timing-load-earlier）。
+        /// lead ＝ 足上げ(<see cref="TakeLoadStartSec"/>)→振り出し(<see cref="TakeLoadStopSec"/>) を LoadSpeed で再生する実秒 −
+        /// （典型の到達時間 − 前足接地の先行 <see cref="TakeLoadLeadSeconds"/>）。到達 0.45s・LoadSpeed 1.2 なら
+        /// リリースの約 0.35s 前から足が上がり、リリース後 0.30s で前足が着く（＝実物の間合い）。
+        /// lead が次のリリースまでに収まらないときは足上げ開始を遅らせる（頭出しを後ろへ＝足上げの途中から）。
+        /// </summary>
+        private void SchedulePreLoad(float releaseIn)
+        {
+            _preLoadCountdown = -1f;
+            if (_batter == null || _swingMissClip == null || releaseIn <= 0.05f) return;
+            float kLoad = Mathf.Max(0.1f, _cal.LoadSpeed);
+            float loadReal = (TakeLoadStopSec - TakeLoadStartSec) / kLoad;
+            float lead = loadReal - (PreLoadAssumedFlightSeconds - TakeLoadLeadSeconds);
+            lead = Mathf.Clamp(lead, 0f, releaseIn - 0.05f);
+            _preLoadStartClip = Mathf.Max(0f,
+                TakeLoadStopSec - kLoad * (lead + PreLoadAssumedFlightSeconds - TakeLoadLeadSeconds));
+            _preLoadCountdown = releaseIn - lead;
+        }
+
+        /// <summary>
+        /// PreLoad の発火。打者が待機中（バント構えでも一発物の途中でもない）なら足上げ〜トップを LoadSpeed で始める。
+        /// 止める形・据え置きは見逃しと同じ（リリースで振ると決まれば <see cref="SetSwing"/> が倍率と打ち切りを差し替える）。
+        /// </summary>
+        private void StartPreLoad()
+        {
+            if (_batter == null || _swingMissClip == null || _batterBunting) return;
+            bool idle = _batter.Clip == _batter.IdleClip && Mathf.Approximately(_batter.EndAt, _batter.IdleEndAt)
+                        && _batter.HoldRemaining <= 0f && _swingCountdown < 0f;
+            if (!idle) return;
+            StartSwing(_swingMissClip, TakeLoadStopSec, _preLoadStartClip, TakeLoadStopSec,
+                Mathf.Max(0.1f, _cal.LoadSpeed), TakeLoadHoldSeconds, isLoad: true);
+            _batterPreLoaded = true;
+        }
+
+        /// <summary>
+        /// PreLoad 中の打者を、リリースで確定した結果と飛翔時間に合わせて**倍率だけ**決め直す（頭出しし直さない）。
+        /// 見逃し: 振り出しの手前 S(<see cref="TakeLoadStopSec"/>) を <paramref name="timeToAnchor"/> 後に置く。
+        /// スイング: S までを LoadSpeed 側の倍率で、S から接触までを SwingSpeed で（区間の切替は StepActor が跨ぎを分けて積分）。
+        /// 倍率が LoadSpeed/SwingSpeed の 0.5〜2.5 倍に収まらない（＝予測から大きく外れた）ときは false＝従来の頭出しへ落とす。
+        /// </summary>
+        private bool TryRetimePreLoaded(float anchorClipSec, float timeToAnchor, float endAt, float hold, bool isLoad)
+        {
+            if (!_batterPreLoaded || _batter == null || _batter.Clip != _swingMissClip) return false;
+            if (_batter.HoldRemaining > 0f || timeToAnchor <= 0.03f) return false;
+            float T = _batter.Time;
+            if (T >= anchorClipSec - 1e-3f) return false;
+            float S = TakeLoadStopSec;
+            float kLoad = Mathf.Max(0.1f, _cal.LoadSpeed);
+            float kSwing = Mathf.Max(0.1f, _cal.SwingSpeed);
+            bool Ok(float k, float nominal) => k >= 0.5f * nominal && k <= 2.5f * nominal;
+
+            float speed, switchAt = -1f, after = kSwing;
+            if (isLoad || T >= S)
+            {
+                // 単一区間: 残りを timeToAnchor で
+                float nominal = isLoad ? kLoad : kSwing;
+                speed = (anchorClipSec - T) / timeToAnchor;
+                if (!Ok(speed, nominal)) return false;
+            }
+            else
+            {
+                // 二区間: S→接触は SwingSpeed のまま、足上げ側の倍率で帳尻を合わせる
+                float tail = (anchorClipSec - S) / kSwing;
+                float tLoad = timeToAnchor - tail;
+                if (tLoad <= 0.03f) return false;
+                speed = (S - T) / tLoad;
+                if (!Ok(speed, kLoad)) return false;
+                switchAt = S;
+            }
+            _batter.Speed = speed;
+            _batter.SpeedSwitchAt = switchAt;
+            _batter.SpeedAfterSwitch = after;
+            _batter.EndAt = endAt;
+            _batter.HoldSeconds = hold;
+            _batter.HoldRemaining = 0f;
+            _swingAnchorClip = isLoad ? 0f : anchorClipSec;
+            _batTrailSwing = !isLoad;
+            _batterTakeLoad = isLoad;
+            _batterTakeLoadReturning = false;
+            _batWrapValid = false;
+            _batRestValid = false;
+            _batterPreLoaded = false;
+            _swingCountdown = -1f;
+            return true;
         }
 
         /// <summary>
@@ -1732,6 +1876,11 @@ namespace KokoSim.Unity.Match
             _passedBallCountdown = -1f;   // 後逸の予約も打席をまたがない（issue #525）
             _passedBallIndex = -1;
             _swingCountdown = -1f;   // 打席をまたいで「幽霊スイング」を引き継がない
+            _swingPendingIsLoad = false;
+            _batterTakeLoad = false;
+            _batterTakeLoadReturning = false;
+            _preLoadCountdown = -1f;
+            _batterPreLoaded = false;
             ClearBatTrail();         // 前の打席の振りの尾を持ち越さない
             if (_umpire != null && _umpire.IdleClip != null) SetActorClip(_umpire, _umpire.IdleClip, 0f, 0f);
             if (_pitcher != null)
@@ -1824,6 +1973,30 @@ namespace KokoSim.Unity.Match
         // -0.71 では 0.382m しかなく芯が球を通り越す。design-18 §4.5-⑪
         private const float SwingMissPlane = 1.08f;
         private const float SwingHitContact = 1.17f;
+
+        // ---- 見逃しの「タイミング取り」（issue batter-take-timing-load, 2026-08-18） ----
+        // 見逃す球（ボール見送り・見逃しストライク・振らない暴投/捕逸）でも足を上げてトップを作り、振らずに構えへ戻す。
+        // 専用収録は無いので、同じ打撃クリップの**構え→トップ**を頭出し再生し、振り出す直前で止めて据え置く。
+        // 実測（DuelMotionSpike.RunBatterLoadProbe・0.025s刻み・Batter_Mixamo_Strike_01・右打者）:
+        //   0.00 構え（前足 y0.059 z0.30・握り z−0.09）／ 0.15 足上げ開始（y0.062→）／ 0.45 前足を後ろ足へ引き寄せ切る（z0.00）
+        //   0.55〜0.575 頂点（前足 y0.164）／ 0.775 トップ（握りが最も後ろ z−0.369。〜0.90 まで保持）
+        //   0.925 踏み込み完了（前足 z0.360）・前足ほぼ接地（y0.078）／ 0.95〜1.00 バット始動（右手 2.2→3.4 m/s）／ 1.00〜1.05 前足接地（y0.058→0.053）
+        // 腰の開き: 83°→111°（0.65 コイル）→ 0.80 から戻り始め 0.95 で 93°＝トップと接地は振り出しと同時（この収録は「足が着いた瞬間に振る」）。
+        // 見逃しは**バット始動の手前 0.925 で止める**（前足は着き・握りはトップ・腰は開き始め）＝ここが「構えて待つ」形。
+        /// <summary>見逃しのタイミング取りで止めるクリップ内秒（振り出す直前）。</summary>
+        private const float TakeLoadStopSec = 0.925f;
+        /// <summary>止める瞬間を球の到達より何秒前に置くか（実物は前足接地が到達の 0.10〜0.20s 前）。</summary>
+        private const float TakeLoadLeadSeconds = 0.15f;
+        /// <summary>止めた形（トップ）を据え置く秒数。捕球と判定が出るまで持たせてから構えへ戻す。</summary>
+        private const float TakeLoadHoldSeconds = 0.45f;
+        /// <summary>足上げが始まるクリップ秒（実測表の「足上げ開始」）。PreLoad はここから再生する。</summary>
+        private const float TakeLoadStartSec = 0.15f;
+        /// <summary>
+        /// PreLoad（issue batter-timing-load-earlier）: 足上げは**リリースの前**から始める。結果（振る/見逃す）と
+        /// 飛翔時間はリリースまで分からないので、典型の到達時間でタイミングを組み、リリースで実際の飛翔時間に合わせて
+        /// 再生倍率だけ決め直す（頭出しし直さない＝絵が飛ばない）。
+        /// </summary>
+        private const float PreLoadAssumedFlightSeconds = 0.45f;
 
         /// <summary>
         /// バント（issue #490）の面通過・当てのクリップ内時刻。<see cref="SwingMissPlane"/>/
@@ -2137,10 +2310,12 @@ namespace KokoSim.Unity.Match
                 float preRoll = Mathf.Clamp(nextReleaseIn - FollowSeconds, 0.5f, WindupSeconds);
                 _cutCountdown = nextReleaseIn - preRoll;
                 _cutClipTime = ReleaseTime - preRoll;
+                SchedulePreLoad(nextReleaseIn);   // 次球の足上げも次のリリースの前から
             }
             else
             {
                 _cutCountdown = -1f;   // 最後の1球: フォロースルーを最後まで→クリップ末尾でセット姿勢
+                _preLoadCountdown = -1f;
             }
             ScheduleReactions(outcome, nextReleaseIn, flight, catchIndex, isStrike, isBuntAttempt,
                 isCalledStrikeout, pitch, batterSwung);
@@ -2228,17 +2403,27 @@ namespace KokoSim.Unity.Match
                 case DuelPitchOutcome.InPlayContact:
                     SetSwing(hitClip, hitAnchor, _ballArrival, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
                     break;
-                // CalledStrike（見逃し）は打者を待機のままにする＝ここで何もしない（#291）。
-                // バントの見送り（Sign=Bunt・Kind=Ball等でoutcome=Take）も同様＝バント構えのまま何もしない。
-                // 捕手の捕球は下の catcherCatches に含めたまま残す
+                // 見逃し（Take／CalledStrike）: 旧 #291 は待機のまま何もしなかった（呆然と見送る）。
+                // 実物は見逃す球でも足を上げてトップを作り、振らないと決めて止める＝同じ打撃クリップの
+                // 構え→トップを頭出し再生し、振り出す直前で止めて構えへ戻す（issue batter-take-timing-load）。
+                // バント構え中（Sign=Bunt で outcome=Take 等）はバント構えのまま何もしない。
+                case DuelPitchOutcome.Take:
+                case DuelPitchOutcome.CalledStrike:
+                    if (!_batterBunting) SetTakeLoad(flight);
+                    break;
                 case DuelPitchOutcome.HitByPitch:
-                    SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
+                    // 足上げの途中（PreLoad）から死球へは姿勢差が大きいのでクロスフェードで繋ぐ
+                    if (_batterPreLoaded) CrossfadeActorToClip(_batter, _hbpClip, HbpReact - flight, 4.2f, 0.15f);
+                    else SetActorClip(_batter, _hbpClip, HbpReact - flight, 4.2f);
+                    _batterPreLoaded = false;
                     break;
                 // NotCaught（暴投・捕逸・振り逃げ。issue #525）。打者が振ったかは分類でなく batterSwung が持つ
                 // ＝振り逃げ（ほぼ空振り三振）で打者のスイングが消えないようにする。見送りなら待機のまま
                 case DuelPitchOutcome.NotCaught:
                     if (batterSwung)
                         SetSwing(missClip, missAnchor, flight, EffectiveSwingFinishSec(), SwingFinishHoldSeconds);
+                    else if (!_batterBunting)
+                        SetTakeLoad(flight);   // 振らない暴投・捕逸もタイミングだけは取る
                     break;
             }
             // 捕り損ねる球は捕球でなく後逸を予約する（issue #525）。catchIndex は SelectCatchAnchor が
@@ -2264,9 +2449,13 @@ namespace KokoSim.Unity.Match
         /// クリップ頭（構え）から始めて、アンカーが球に一致するまで開始そのものを待つ。
         /// これでつまみの全域が安全になり、速度を上げても面通過は球からずれない。
         /// </summary>
-        private void SetSwing(AnimationClip clip, float anchorClipSec, float flight, float endAt, float hold)
+        private void SetSwing(AnimationClip clip, float anchorClipSec, float flight, float endAt, float hold,
+            bool isLoad = false)
         {
             if (_batter == null || clip == null) return;
+            // 足上げを先に始めている（PreLoad）なら頭出しし直さず倍率だけ合わせる（issue batter-timing-load-earlier）
+            if (clip == _swingMissClip && TryRetimePreLoaded(anchorClipSec, flight, endAt, hold, isLoad)) return;
+            _batterPreLoaded = false;
             float k = Mathf.Max(0.1f, _cal.SwingSpeed);
             float seek = anchorClipSec - flight * k;
             _swingCountdown = -1f;
@@ -2278,10 +2467,26 @@ namespace KokoSim.Unity.Match
                 _swingPendingAnchor = anchorClipSec;
                 _swingPendingEndAt = endAt;
                 _swingPendingHold = hold;
+                _swingPendingIsLoad = isLoad;
                 _swingCountdown = flight - anchorClipSec / k;
                 return;
             }
-            StartSwing(clip, anchorClipSec, seek, endAt, k, hold);
+            StartSwing(clip, anchorClipSec, seek, endAt, k, hold, isLoad);
+        }
+
+        /// <summary>
+        /// 見逃しのタイミング取り（issue batter-take-timing-load）。<see cref="SetSwing"/> と同じカウントダウン方式で、
+        /// アンカー＝止める形（<see cref="TakeLoadStopSec"/>＝前足が着きトップが決まった直後・振り出す直前）を
+        /// 球の到達の <see cref="TakeLoadLeadSeconds"/> 前に置く。再生速度はスイングと同じ <c>SwingSpeed</c>＝
+        /// 振るときと見逃すときで足上げ〜トップの動きが同じ（振り出すかどうかまで見分けが付かない＝実物どおり）。
+        /// 止めた後は <see cref="TakeLoadHoldSeconds"/> 据え置き（design-18 §4.5-⑭）→ 構えへクロスフェードで戻る。
+        /// バット軌道（<see cref="SwingBatAxis"/>）は武装しない＝バットは構えで焼いた向きのまま手について動く。
+        /// </summary>
+        private void SetTakeLoad(float flight)
+        {
+            if (_batter == null || _swingMissClip == null) return;
+            SetSwing(_swingMissClip, TakeLoadStopSec, Mathf.Max(0f, flight - TakeLoadLeadSeconds),
+                TakeLoadStopSec, TakeLoadHoldSeconds, isLoad: true);
         }
 
         /// <summary>
@@ -2290,9 +2495,11 @@ namespace KokoSim.Unity.Match
         /// 差し替えのたびに <c>HoldSeconds</c> を0へ落とすので、呼び元で先に張ると予約側で消える。
         /// </summary>
         private void StartSwing(AnimationClip clip, float anchorClipSec, float seek, float endAt, float k,
-            float hold)
+            float hold, bool isLoad = false)
         {
             if (_batter == null || clip == null) return;
+            _batterTakeLoad = isLoad;
+            _batterTakeLoadReturning = false;
             // 構えを別クリップにしていると、ここが**クリップの切り口**になる（構え→スイング）。
             // 頭出しだけだと姿勢が飛ぶので投手のカットバックと同じクロスフェードで繋ぐ。
             // 同じクリップのとき（既定）は従来どおり頭出しだけ＝絵は1ビットも変わらない
@@ -2303,9 +2510,11 @@ namespace KokoSim.Unity.Match
 #if UNITY_EDITOR
             if (SwingAnchorOverrideForCapture > 0f) anchorClipSec = SwingAnchorOverrideForCapture;
 #endif
-            _swingAnchorClip = anchorClipSec;   // バット軌道（SwingBatAxis）の終点＝接触の時刻
+            // 見逃しのタイミング取りはバット軌道を武装しない（接触の時刻を 0 にすると SwingBatAxis は
+            // 構えで焼いた向きをそのまま返す＝トップでも手に付いて平行移動するだけ）。軌跡（#444）も出さない。
+            _swingAnchorClip = isLoad ? 0f : anchorClipSec;   // バット軌道（SwingBatAxis）の終点＝接触の時刻
             _batWrapValid = false;
-            _batTrailSwing = true;   // バット軌跡の武装（issue #444）。解除は FinishOneShot／打席の仕切り直し
+            _batTrailSwing = !isLoad;   // バット軌跡の武装（issue #444）。解除は FinishOneShot／打席の仕切り直し
             _batRestValid = false;
             // 頭出しは「基準位置へ戻して0→seekをルートモーション込みで積分し直す」ので、
             // **クリップ頭からseekまでの水平移動がそのまま位置の差分として乗る**。待機ループ側は
@@ -2708,12 +2917,13 @@ namespace KokoSim.Unity.Match
         /// 球を打球セグメントへ乗り換える（＝接触の瞬間）。<paramref name="overshoot"/> は接触を跨いだ
         /// このフレームぶんの端数[s]で、打球時計をそこから始める＝時間が飛ばず球も跳ばない。
         ///
-        /// 打点（＝球が判定面に着いた位置）と、engine のセグメント始点（本塁=原点・高さ0）は食い違う。
-        /// セグメント側は俯瞰の平面図用に「高さは種別ごとのプロファイル」で作られていて、滞空も
-        /// ゴロも h(0)=0＝地面から始まるためで、そのまま乗せると球がバットから足元へ飛ぶ。
+        /// 打点（＝球が判定面に着いた位置）と、engine のセグメント始点（本塁=原点）は食い違う。
+        /// セグメント側は俯瞰の平面図用に「高さは種別ごとのプロファイル」で作られていて、ゴロは h(0)=0＝
+        /// 地面から始まるためで、そのまま乗せると球がバットから足元へ飛ぶ。
         /// 差は**打点からの自由落下**で解消する（左右・前後は同じ時間で線形に寄せる）:
         ///   ・ゴロは打点から落ちて地面を這う＝これがそのまま「バットから出て弾む」絵になる
-        ///   ・フライは4秒の弧に0.8mが0.4秒だけ乗るだけ＝落下点も滞空時間も engine のまま動かない
+        ///   ・滞空は engine の打ち出し高さ（<c>BallSegment.LaunchHeightM</c>＝接触点 1.0m）から立ち上がる
+        ///     プロファイルなので、実打点との差（±0.2m）は線形に寄せるだけ＝落下点も滞空時間も engine のまま
         /// </summary>
         private void BeginBattedBall(float overshoot)
         {
@@ -2722,6 +2932,10 @@ namespace KokoSim.Unity.Match
             var contact = BallPointAt(_ballArrival);
             _battedOffset = new Vector3(
                 contact.x - (float)head.X, contact.y - (float)head.H, contact.z - (float)head.Y);
+            // プロファイルが地面（h(0)=0）から始まるか（ゴロ／古い滞空）。打ち出し高さ付きの滞空
+            // （engine BallSegment.LaunchHeightM・issue duel-view-fly-leaves-bat-flat-then-rises）は打点の
+            // 高さから立ち上がるので、max の細工でなく差ぶんを線形に寄せる側へ落とす（下 BattedPointAt）。
+            _battedFromGround = head.H <= 1e-3;
             // 打点から地面までの自由落下時間。左右のずれ（±0.4m程度）もこの時間で解消する
             _battedFade = Mathf.Sqrt(2f * Mathf.Max(0.05f, Mathf.Abs(_battedOffset.y)) / 9.8f);
             _battedT = 0f;
@@ -2777,10 +2991,13 @@ namespace KokoSim.Unity.Match
             // ゴロも同じ）ので、足すとゴロが自由落下と最初のバウンドの合計で 0.78→1.05m へ**上がって**
             // しまう（2026-07-31 実測）。max なら「打点から落ちる → プロファイルが追い越したらそちらへ
             // 乗る」となり、ゴロは落ちて弾み、フライは2コマで弧に乗る。落下点も滞空時間も engine のまま。
+            // 打ち出し高さ付きの滞空（LaunchHeightM）は h(0)＝engine の打点（1.0m）から始まるので、対決の
+            // 実打点（投球の実着弾高さ）との差（±0.2m 程度）は左右・前後と同じく線形に寄せる＝
+            // 最初のフレームから上がる（平らな区間が無い）。ゴロは従来どおり max（打点から落ちて弾む）。
             float h = (float)b.H;
-            float y = _battedOffset.y > 0f
+            float y = _battedFromGround && _battedOffset.y > 0f
                 ? Mathf.Max(h, _battedOffset.y - 4.9f * t * t)   // 打点から落ちる／追い越されたら弧へ乗る
-                : h + _battedOffset.y * k;                       // 既に打点の高さから始まる見本用
+                : h + _battedOffset.y * k;                       // 打点の高さから始まるプロファイル（差は線形に解消）
             return new Vector3(
                 (float)b.X + _battedOffset.x * k,
                 y,
@@ -2883,6 +3100,7 @@ namespace KokoSim.Unity.Match
             a.EndAt = endAt;
             a.HoldSeconds = 0f;      // 新しいクリップへの差し替えは保留中のホールド予約を打ち消す
             a.HoldRemaining = 0f;
+            a.SpeedSwitchAt = -1f;   // 倍率の切替予約も持ち越さない
             SeekActor(a, Mathf.Max(0f, seekTo));
         }
 
@@ -2916,6 +3134,13 @@ namespace KokoSim.Unity.Match
                 }
             }
 
+            // 足上げ（PreLoad）の開始予約（リリースの前から。issue batter-timing-load-earlier）
+            if (_preLoadCountdown >= 0f)
+            {
+                _preLoadCountdown -= deltaTime;
+                if (_preLoadCountdown < 0f) StartPreLoad();
+            }
+
             // スイングの開始予約（頭出しでは間に合わない速い再生用。issue #368）。
             // 捕球・コールと同じくプレー時間で数える＝12fpsの量子化に丸められない
             if (_swingCountdown >= 0f)
@@ -2923,7 +3148,7 @@ namespace KokoSim.Unity.Match
                 _swingCountdown -= deltaTime;
                 if (_swingCountdown < 0f && _swingPendingClip != null)
                     StartSwing(_swingPendingClip, _swingPendingAnchor, 0f, _swingPendingEndAt,
-                        Mathf.Max(0.1f, _cal.SwingSpeed), _swingPendingHold);
+                        Mathf.Max(0.1f, _cal.SwingSpeed), _swingPendingHold, _swingPendingIsLoad);
             }
 
             // 捕球クリップの開始予約（球到達に捕球の瞬間を合わせる。issue #332 第2弾）。
@@ -3924,7 +4149,7 @@ namespace KokoSim.Unity.Match
         /// </param>
         private static void ApplyRegionColors(Material mat, UniformPalette pal, float objectScale)
         {
-            var colors = new Color[8];
+            var colors = new Color[DuelUniformMeshBuilder.RegionCount];
             colors[(int)DuelUniformMeshBuilder.Region.Shirt] = pal.Shirt;
             colors[(int)DuelUniformMeshBuilder.Region.Pants] = pal.Pants;
             colors[(int)DuelUniformMeshBuilder.Region.Undershirt] = pal.Undershirt;
@@ -3933,6 +4158,9 @@ namespace KokoSim.Unity.Match
             colors[(int)DuelUniformMeshBuilder.Region.Shoes] = pal.Shoes;
             colors[(int)DuelUniformMeshBuilder.Region.Cap] = pal.Cap;
             colors[(int)DuelUniformMeshBuilder.Region.Belt] = pal.Belt;
+            // つばはクラウンと別領域（issue #621）。領域を持たない古い焼き資産では帽子が丸ごと
+            // Cap 領域なので、つばの色は単に使われない＝落ちない・黙って1色に戻るだけ。
+            colors[(int)DuelUniformMeshBuilder.Region.CapVisor] = pal.CapVisor;
             // **ガンマ→リニア変換を自分でやる**。プロジェクトはリニア色空間で、Properties に宣言した
             // Color（_BaseColor・_StripeColor）は SetColor が自動変換してくれるが、_RegionColors は
             // 配列＝Properties に宣言できず SetColorArray が素通しする。素通しすると sRGB値を
@@ -4257,7 +4485,20 @@ namespace KokoSim.Unity.Match
                 return;
             }
             float before = a.Time;
-            a.Time += step * a.Speed;
+            // 区間ごとの再生倍率（打者の足上げ→振り出し）。切替点を跨ぐコマは手前を旧倍率・先を新倍率で積分する
+            float adv = step * a.Speed;
+            if (a.SpeedSwitchAt > 0f && a.Time < a.SpeedSwitchAt)
+            {
+                float toSwitch = a.SpeedSwitchAt - a.Time;
+                if (adv >= toSwitch)
+                {
+                    float realLeft = step - toSwitch / Mathf.Max(0.01f, a.Speed);
+                    a.Speed = a.SpeedAfterSwitch;
+                    a.SpeedSwitchAt = -1f;
+                    adv = toSwitch + Mathf.Max(0f, realLeft) * a.Speed;
+                }
+            }
+            a.Time += adv;
             float end = a.EndAt > 0f && a.EndAt < a.Clip.length ? a.EndAt : a.Clip.length;
             if (a.Time >= end)
             {
@@ -4300,7 +4541,7 @@ namespace KokoSim.Unity.Match
             // 0.18秒遅れて出る＝「振りが遅くて球と合っていない」。倍率を上げても、それまでは
             // 「クリップを早く打ち切る」だけでポーズは常に1倍速だった。
             // グラフはアクター別なので、他の役（Speed=1）の見え方は変わらない
-            EvaluateWithMirrorFix(a, step * a.Speed);
+            EvaluateWithMirrorFix(a, adv);
             a.PoseAdvanced = true;
             // 打者の待機ループは自作打撃クリップの構え区間にわずかな水平ルートモーションが乗っており、
             // 毎コマ蓄積すると打席内で左右にドリフトして見える（#291）。待機中（構え区間ループ中）だけ
@@ -4335,9 +4576,22 @@ namespace KokoSim.Unity.Match
             // 構えとスイングが同じクリップ（既定）では復帰後の Time/EndAt が待機区間の値になり、
             // クリップ時刻の比較だけでは戻り動作を区別できないため、ここで明示的に下ろす
             if (a == _batter) _batTrailSwing = false;
+            bool wasTakeLoad = a == _batter && _batterTakeLoad;
+            if (a == _batter) { _batterTakeLoad = false; _batterTakeLoadReturning = wasTakeLoad; _batterPreLoaded = false; }
             a.Time = 0f;
             a.EndAt = a.DefaultEndAt;   // 投手は購入クリップ6.00sの尻尾を毎回切り落とす（既定0=末尾まで）
             a.Speed = 1f;               // 一発物の速度指定は持ち越さない（待機は常に収録の速さ）
+            a.SpeedSwitchAt = -1f;
+            if (wasTakeLoad && a.IdleClip != null && a.Clip == a.IdleClip)
+            {
+                // 見逃しのタイミング取り（トップで据え置き）→構え。構えが同じクリップの頭（IdleFromOwnClip=0）の
+                // ときはクリップ内の飛びになるので、ハードカットせず同一クリップ内クロスフェードで戻す
+                // （振り切り→構えの巻き戻しは従来どおりハードカット＝据え置きの後なので許容している）
+                CrossfadeActorTo(a, 0f, CrossfadeSeconds);
+                a.EndAt = a.IdleEndAt;
+                if (a.HoldAtEnd) a.Holding = true;
+                return;
+            }
             if (a.IdleClip != null && a.Clip != a.IdleClip)
             {
                 // 打者の構えを別クリップにしていると、フォロー→構えもクリップの切り口になる。
@@ -4360,11 +4614,24 @@ namespace KokoSim.Unity.Match
         /// <summary>低い方の足ボーンが接地面＋足首オフセットに来るよう縦だけ合わせる（ステージローカル）。</summary>
         private void GroundFix(Actor a)
         {
+            a.Go.transform.localPosition -= new Vector3(0f, FootClearance(a), 0f);
+        }
+
+        /// <summary>
+        /// 接地誤差[m]＝低い方の足ボーンのy −（接地面＋足首オフセット）。正＝宙に浮いている／
+        /// 負＝地面へめり込んでいる。<see cref="GroundFix"/> が消す量そのもの＝
+        /// **「浮いている」の定義をここ一箇所に置く**（実測プローブが写しを持つと、直したのに
+        /// 別の式で測って NG に見える。design-18 の「目測でなく実測で判定する」の前提）。
+        /// 骨が引けない素体では 0（＝補正しない）を返す。
+        /// </summary>
+        private float FootClearance(Actor a)
+        {
+            if (a?.Animator == null || a.Go == null) return 0f;
             var lf = a.Animator.GetBoneTransform(HumanBodyBones.LeftFoot);
             var rf = a.Animator.GetBoneTransform(HumanBodyBones.RightFoot);
-            if (lf == null || rf == null) return;
+            if (lf == null || rf == null) return 0f;
             float footLocalY = Mathf.Min(lf.position.y, rf.position.y) - _root.transform.position.y;
-            a.Go.transform.localPosition += new Vector3(0f, (a.GroundY + a.AnkleOffset) - footLocalY, 0f);
+            return footLocalY - (a.GroundY + a.AnkleOffset);
         }
 
         // ---- 小道具（§3.3。両手整列バット＋手ボーン子ミット） ------------------
@@ -4854,13 +5121,20 @@ namespace KokoSim.Unity.Match
                 // **捕手向き(0.18)** と暴れており、肝心の接触の姿勢が「芯が捕手を向く」＝軌道にならない。
                 // 収録の手首は道具を持たない前提の振りなので、そもそもバット軸の情報を持っていない。
                 bool onIdleLoop = _batter.Clip == _batter.IdleClip;
-                if (onIdleLoop)
+                // 見逃しのタイミング取り（トップ）→構えへ戻るクロスフェードの間は、混ざりかけの両手から
+                // 合成軸を採り直さない（握り線の水平方向が混合の途中で回り、バットが1コマ横に寝る＝2026-08-18 実測）。
+                // トップの間ずっと凍結していた構えの向きをそのまま持ち、フェードが終わったら通常の採り直しへ戻る
+                // （始点も終点も同じ構えの向きなので飛ばない）。
+                if (_batterTakeLoadReturning && _batter.FadeRemaining <= 0f) _batterTakeLoadReturning = false;
+                bool freezeHeld = onIdleLoop && _batterTakeLoadReturning && _batHeldValid;
+                if (onIdleLoop && !freezeHeld)
                 {
                     _batHeldAxis = axis;
                     _batHeldValid = true;
                     _batWrapValid = false;   // 次のスイングへ巻き付きの起点を持ち越さない
                     _batRestValid = false;
                 }
+                if (freezeHeld) axis = _batHeldAxis;
                 var grip = (lh + rh) * 0.5f;
                 if (!onIdleLoop && battingClip && _batHeldValid) axis = SwingBatAxis(grip, RestFrameBone());
                 // スイング面を**バット単体**へ掛ける（SwingPlaneBatOnly。腕は収録のまま動かさない）。
@@ -5036,7 +5310,8 @@ namespace KokoSim.Unity.Match
         /// 寸法はUBC頭部の実測（2026-07-28: 頭ボーン基準で幅0.18・奥行き0.22・頭頂+0.21）から。
         /// コンテナはlossyScale逆数でワールドスケール1に戻してあるので、子パーツは実寸(m)で置く。
         /// </summary>
-        private void AttachGear(Actor actor, GearKind kind, Vector3 gazeLocal, Color accent, int layer)
+        private void AttachGear(Actor actor, GearKind kind, Vector3 gazeLocal, Color accent, int layer,
+            Color? visorAccent = null)
         {
             var head = actor.Animator.GetBoneTransform(HumanBodyBones.Head);
             var dark = new Color(0.13f, 0.13f, 0.15f);
@@ -5088,8 +5363,24 @@ namespace KokoSim.Unity.Match
                         // 後頭部の露出はわずかな後ろ寄せだけで拾う
                         if (DuelGearMeshes.Cap() != null)
                         {
-                            GearMeshPart(mount, DuelGearMeshes.Cap(), "cap-mesh",
-                                new Vector3(0f, 0.185f, -0.025f), Quaternion.identity, accent, layer);
+                            var capPos = new Vector3(0f, 0.185f, -0.025f);
+                            Mesh crown, visorMesh;
+                            // つばはクラウンと別色にできる（issue #621）。生成メッシュは1マテリアルなので
+                            // 幾何で二分した複製を2つ置く。二分できなければ従来どおり1色で被せる。
+                            if (visorAccent.HasValue && SplitCapMesh(DuelGearMeshes.Cap(), out crown, out visorMesh))
+                            {
+                                GearMeshPart(mount, crown, "cap-mesh",
+                                    capPos, Quaternion.identity, accent, layer);
+                                var visorGo = GearMeshPart(mount, visorMesh, "cap-visor",
+                                    capPos, Quaternion.identity, visorAccent.Value, layer);
+                                var visorMat = visorGo.GetComponent<MeshRenderer>().sharedMaterial;
+                                if (!actor.VisorMats.Contains(visorMat)) actor.VisorMats.Add(visorMat);
+                            }
+                            else
+                            {
+                                GearMeshPart(mount, DuelGearMeshes.Cap(), "cap-mesh",
+                                    capPos, Quaternion.identity, accent, layer);
+                            }
                         }
                         else
                         {
@@ -5376,6 +5667,74 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>較正済み装備メッシュ（DuelGearMeshes）をコンテナ実寸空間へ置く。scale は一様倍率。</summary>
+        // ---- 帽子の二分（issue #621） -------------------------------------------------
+
+        /// <summary>
+        /// つばと判定する境界（生成メッシュ AIGear_Cap1_lo の境界箱に対する比）。実測した箱は
+        /// y -0.160..0.069 / z -0.058..0.221（クラウン中心=原点・つば+Z の較正どおり）で、
+        /// つばの頂点は<b>下40%かつ前55%より先</b>にしか無い。比で持つのは、メッシュを差し替えた
+        /// ときに絶対値の閾値だと帽子が丸ごと片方の色になるため。
+        /// </summary>
+        private const float GearVisorBelowShare = 0.40f;
+        private const float GearVisorAheadShare = 0.55f;
+
+        private static readonly Dictionary<Mesh, (Mesh Crown, Mesh Visor)> _capSplitCache = new();
+
+        /// <summary>
+        /// 生成メッシュの帽子をクラウンとつばへ二分した複製を返す（頂点配列は共有し、三角形だけ振り分ける）。
+        /// どちらかが空になったら false＝閾値が形に合っていない合図なので、呼び元は1色へ戻す。
+        /// </summary>
+        private static bool SplitCapMesh(Mesh src, out Mesh crown, out Mesh visor)
+        {
+            crown = null; visor = null;
+            if (src == null) return false;
+            if (_capSplitCache.TryGetValue(src, out var cached))
+            {
+                crown = cached.Crown; visor = cached.Visor;
+                return crown != null && visor != null;
+            }
+
+            var v = src.vertices;
+            var tris = src.triangles;
+            var b = src.bounds;
+            float yEdge = b.min.y + b.size.y * GearVisorBelowShare;
+            float zEdge = b.min.z + b.size.z * GearVisorAheadShare;
+
+            var crownTris = new List<int>();
+            var visorTris = new List<int>();
+            for (int t = 0; t < tris.Length; t += 3)
+            {
+                var mid = (v[tris[t]] + v[tris[t + 1]] + v[tris[t + 2]]) / 3f;
+                var into = (mid.y < yEdge && mid.z > zEdge) ? visorTris : crownTris;
+                into.Add(tris[t]); into.Add(tris[t + 1]); into.Add(tris[t + 2]);
+            }
+            if (crownTris.Count == 0 || visorTris.Count == 0)
+            {
+                _capSplitCache[src] = (null, null);
+                return false;
+            }
+
+            crown = CloneWithTriangles(src, crownTris, "-crown");
+            visor = CloneWithTriangles(src, visorTris, "-visor");
+            _capSplitCache[src] = (crown, visor);
+            return true;
+        }
+
+        private static Mesh CloneWithTriangles(Mesh src, List<int> tris, string suffix)
+        {
+            var m = new Mesh
+            {
+                name = src.name + suffix,
+                hideFlags = HideFlags.HideAndDontSave,
+                vertices = src.vertices,
+                normals = src.normals,
+                uv = src.uv,
+            };
+            m.SetTriangles(tris, 0);
+            m.RecalculateBounds();
+            return m;
+        }
+
         private GameObject GearMeshPart(GameObject container, Mesh mesh, string name,
             Vector3 localPos, Quaternion localRot, Color color, int layer, float scale = 1f)
         {
@@ -5588,6 +5947,15 @@ namespace KokoSim.Unity.Match
         /// 直近の球の判定（ストライク系か）に連動する＝CatcherClampShooter が測定窓を組むのに使う
         /// （私有 const の写しを持たせない）。</summary>
         public float CatcherLingerSecondsForCapture => CatcherLingerSeconds(_catchIsStrike);
+
+        /// <summary>【実測プローブ用】捕手の接地誤差[m]（<see cref="FootClearance"/>）。
+        /// 正＝宙に浮いている／負＝めり込んでいる（issue #607 の受け入れは構え時 |誤差| ≈ 0）。</summary>
+        public float CatcherFootClearanceForCapture() => FootClearance(_catcher);
+
+        /// <summary>【実測プローブ用】捕手の立ち位置基準の縦（<c>BasePos.y</c>）。
+        /// <see cref="ApplyCatcherResidualShift"/> が毎コマここへ焼き直すので、
+        /// <b>これが汚れると接地補正の結果が毎コマ捨てられる</b>（issue #607 の原因の直接観測）。</summary>
+        public float CatcherBaseYForCapture => _catcher == null ? 0f : _catcher.BasePos.y;
 #endif
 
         public string CatchDiagForCapture()
@@ -5852,6 +6220,12 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool ForceCatalogOnly;
 
+        /// <summary>
+        /// 【開発用】購入素体を無視してU2素体で組む（issue #621）。購入素体は gitignore 配下で
+        /// 手元に無い環境がある＝U2側にも実装が要る作り（帽子つばの塗り分け等）を、素体を消さずに確かめる。
+        /// </summary>
+        public static bool ForceU2Body;
+
         private static DuelAssetCatalog _catalog;
         private static bool _catalogTried;
 
@@ -5899,6 +6273,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private static GameObject LoadVendorBody()
         {
+            // 【検証用】購入素体が手元に無い環境（＝U2素体へ落ちる経路）を、素体を消さずに再現する。
+            // 帽子つばの塗り分けのように**素体ごとに実装が別**な作りでは、こちらの経路も絵で確かめる要がある。
+            if (ForceU2Body) return null;
 #if UNITY_EDITOR
             if (!ForceCatalogOnly)
             {

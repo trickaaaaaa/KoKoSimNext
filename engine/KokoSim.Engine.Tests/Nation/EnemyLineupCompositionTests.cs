@@ -21,13 +21,19 @@ public sealed class EnemyLineupCompositionTests
     [Fact]
     public void Create_WithoutModernRules_NeverUsesDh_RegressionOfDefaultBehavior()
     {
+        // 投手は原則9番だが、打撃総合が野手平均以上の打撃型エースだけは上位打順に入る（issue #360＝設計どおり）。
+        // AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers: パワー⇄ミートの振り替え＋凸凹配分）で
+        // その個体がまれに出る（20校中1校）ので、「全校9番」ではなく「DHは使わない・投手は打順にいる・大半は9番」を固定する。
+        var ninth = 0;
         foreach (var id in Enumerable.Range(1, 20))
         {
             var team = StrengthTeamFactory.ForSchool(Sch(id), yearIndex: 1);
             Assert.False(team.UsesDh);
-            Assert.Equal(8, team.PitcherSlot);
+            Assert.InRange(team.PitcherSlot, 0, 8);
             Assert.Equal(FieldPosition.Pitcher, team.BattingOrder[team.PitcherSlot].Position);
+            if (team.PitcherSlot == 8) ninth++;
         }
+        Assert.True(ninth >= 17, $"投手が9番の校 {ninth}/20");
     }
 
     [Fact]
@@ -65,8 +71,15 @@ public sealed class EnemyLineupCompositionTests
 
         var team = dhSchool.Team;
         Assert.Equal(9, team.BattingOrder.Count);
-        Assert.All(team.BattingOrder, p => Assert.NotEqual(FieldPosition.Pitcher, p.Position));
+        // 先発投手は打順に入らない。DH は控え全員から選ぶ（打てる控え投手も候補＝issue ai-two-way-hitting-pitchers-start-as-fielders）
+        // ので、Position=Pitcher の打者が居るとすればそれは DH 枠だけ。
         Assert.NotNull(team.StartingPitcher);
+        Assert.DoesNotContain(team.BattingOrder, p => ReferenceEquals(p, team.StartingPitcher));
+        for (var i = 0; i < team.BattingOrder.Count; i++)
+        {
+            if (i == team.DhSlot) continue;
+            Assert.NotEqual(FieldPosition.Pitcher, team.BattingOrder[i].Position);
+        }
         Assert.Equal(FieldPosition.Pitcher, team.StartingPitcher!.Position);
         Assert.Equal(-1, team.PitcherSlot);
         Assert.InRange(team.DhSlot, 0, 8);

@@ -28,12 +28,17 @@ public static class ContactModel
         PitchPlan plan,
         PitchTrajectoryFeatures features,
         bool inZone,
-        BattingCoefficients coeff)
+        BattingCoefficients coeff,
+        int familiarityPa = 0)
     {
+        // 投打差 d＝球威（腕の振り＋捕手リード）− ミート項。差の効きは soft-cap で飽和させる
+        // （issue matchup-gap-saturation-k-rate）: 互角近傍は線形のまま、大差で頭打ち。
+        var matchup = plan.Stuff - coeff.WhiffContactSlope * (batter.Contact - 50);
         var z = coeff.WhiffIntercept
-                - coeff.WhiffContactSlope * (batter.Contact - 50)
-                + plan.Stuff
-                + coeff.WhiffBreakSlope * features.BreakMagnitudeM;
+                + SaturateMatchup(matchup, coeff.WhiffMatchupCap)
+                + coeff.WhiffBreakSlope * features.BreakMagnitudeM
+                // 慣れ（設計書02 §2.3b）: 同一投手との対戦回数ぶん空振りにくくなる。変化量が大きい球ほど割引。
+                - coeff.FamiliarityWhiffPerPa * FamiliarityEffect(familiarityPa, features.BreakMagnitudeM, coeff);
         if (!inZone)
         {
             z += coeff.WhiffOutOfZonePenalty;
@@ -42,13 +47,33 @@ public static class ContactModel
     }
 
     /// <summary>
+    /// 慣れの実効蓄積（issue times-through-order-familiarity）: min(対戦回数, 上限) × (1 − 割引/m × 変化量)、下限0。
+    /// 対戦回数0なら常に0＝慣れ無し（従来と1ビットも変わらない）。
+    /// </summary>
+    public static double FamiliarityEffect(int familiarityPa, double breakMagnitudeM, BattingCoefficients coeff)
+    {
+        if (familiarityPa <= 0) return 0.0;
+        var n = System.Math.Min(familiarityPa, coeff.FamiliarityMaxPa);
+        var discount = System.Math.Max(0.0, 1.0 - coeff.FamiliarityBreakDiscountPerM * breakMagnitudeM);
+        return n * discount;
+    }
+
+    /// <summary>
+    /// 投打差の対数オッズ寄与の soft-cap: cap×tanh(d/cap)。cap≤0 なら恒等（従来の線形）。
+    /// 奇関数なので平均同士（d≈0）の環境は動かさず、裾だけを潰す。
+    /// </summary>
+    public static double SaturateMatchup(double d, double cap)
+        => cap > 0.0 ? cap * System.Math.Tanh(d / cap) : d;
+
+    /// <summary>
     /// コンタクト品質への投手側の寄与（「打たせて取る」の土台）。打球初速・打球角のばらつきの双方を通じて
     /// 打球質を動かす。速い球は当たれば強い打球になり（本格派の代償）、制球とキレは芯を外させる（技巧派の武器）。
     /// 3項とも基準値で0＝リーグ平均投手では恒等なので、係数を入れても得点環境の平均は動かない。
+    /// 球速は反応球速（<see cref="PitchPlan.ReactionKmh"/>＝効きを通した値）を読む（設計書21）。
     /// </summary>
     public static double PitcherContactQualityBias(
         PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
-        => coeff.ContactQualityPerKmh * (plan.VelocityKmh - coeff.ContactQualityVelocityRefKmh)
+        => coeff.ContactQualityPerKmh * (plan.ReactionKmh - coeff.ContactQualityVelocityRefKmh)
            + coeff.ContactQualityPerControl * (plan.ControlLevel - 50.0)
            + coeff.ContactQualityPerBreakM * (features.BreakMagnitudeM - coeff.ContactQualityBreakRefM);
 
@@ -58,7 +83,7 @@ public static class ContactModel
     /// </summary>
     public static double TimingOffsetMean(
         BatterAttributes batter, PitchPlan plan, PitchTrajectoryFeatures features, BattingCoefficients coeff)
-        => coeff.TimingPerKmh * (plan.VelocityKmh - coeff.TimingRefKmh)
+        => coeff.TimingPerKmh * (plan.ReactionKmh - coeff.TimingRefKmh)
            + coeff.TimingPerBreakM * (features.BreakMagnitudeM - coeff.TimingBreakRefM)
            - coeff.TimingPerContact * (batter.Contact - 50);
 
@@ -84,9 +109,10 @@ public static class ContactModel
         PitchTrajectoryFeatures features,
         bool inZone,
         BattingCoefficients coeff,
-        IRandomSource rng)
+        IRandomSource rng,
+        int familiarityPa = 0)
     {
-        var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff);
+        var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff, familiarityPa);
         if (MathUtil.Chance(whiffProb, rng))
         {
             return (ContactOutcome.Whiff, null);
@@ -110,8 +136,11 @@ public static class ContactModel
         var veloFactor = coeff.MinQualityVeloFactor + (1.0 - coeff.MinQualityVeloFactor) * quality;
         var exitMps = maxExitKmh * veloFactor / 3.6;
 
-        // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。
-        var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality));
+        // 品質が低いほど角度が乱れる（ミスショットのゴロ・ポップ）。ミートが良いほど締まる（安打の分業。issue ai-roster-power-top-tier-all-sluggers）。
+        var contactTighten = coeff.LaunchAngleSigmaPerContact > 0.0
+            ? Math.Max(coeff.LaunchAngleSigmaContactFloor, 1.0 - coeff.LaunchAngleSigmaPerContact * (batter.Contact - 50))
+            : 1.0;
+        var angleSigma = coeff.LaunchAngleSigma * (1.0 + (1.0 - quality)) * contactTighten;
         var launchAngle = coeff.MeanLaunchAngle(batter.LaunchTendency) + rng.NextGaussian(0, angleSigma);
 
         // ④ タイミングのズレ（設計書01 §2④）→ ⑤ 打球方向（§2⑤）。issue #262 で案C＝ズレ変数を正式導入。

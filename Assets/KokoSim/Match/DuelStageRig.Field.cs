@@ -113,7 +113,9 @@ namespace KokoSim.Unity.Match
                 // 初期ポーズを1コマ評価してから装備を焼く（AttachGear/AttachGlove は視線の実測が要る）
                 StepActor(a, 0.001f);
                 GroundFix(a);
-                if (!useVendor) AttachGear(a, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer);
+                if (!useVendor)
+                    AttachGear(a, GearKind.Cap, Vector3.zero, _defenseColors.Cap, layer,
+                        _defenseColors.CapVisor);
                 CollectTeamMats(a, _defenseColors.Cap);
                 // グラブは投手と同じ左手・同じメッシュ。視線ターゲットは本塁（＝ステージ原点）
                 AttachGlove(a, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal,
@@ -173,6 +175,14 @@ namespace KokoSim.Unity.Match
         /// <summary>
         /// 野手を stage-local の (x,z) へ置く。yaw を渡さなければ本塁を向く。
         /// 縦は <see cref="GroundFix"/> が骨の実測で解く（クリップごとに根の高さが違うため）。
+        ///
+        /// ⚠ <see cref="Actor.BasePos"/> の<b>縦は書き換えない</b>（issue #607）。BasePos.y は
+        /// 「その役者の待機クリップでの接地高」＝役者ごとに一度決まる基準で、クリップごとの縦の差は
+        /// transform 側の <see cref="GroundFix"/> が毎コマ吸収する担当。ここで現在の縦を焼き直すと、
+        /// <b>そのクリップ固有の補正が基準へ混ざる</b>。とくに捕手は毎コマ
+        /// <c>BasePos + 横オフセット</c> で位置を書き直す（<see cref="ApplyCatcherResidualShift"/>）ため、
+        /// 盗塁の送球（<see cref="StepDuelThrow"/>。立ちクリップ）でここを通ると
+        /// 立ちの縦が基準として焼き付き、しゃがみの構えへ戻ったあとも以降ずっと宙に浮いた。
         /// </summary>
         private void PlaceFielder(Actor a, float x, float z, float? yawDeg = null)
         {
@@ -180,10 +190,12 @@ namespace KokoSim.Unity.Match
             var lp = a.Go.transform.localPosition;
             a.Go.transform.localPosition = new Vector3(x, lp.y, z);
             a.Go.transform.localRotation = Quaternion.Euler(0f, yawDeg ?? YawFacingHome(x, z), 0f);
-            a.BasePos = a.Go.transform.localPosition;
+            a.BasePos = new Vector3(x, a.BasePos.y, z);   // ⚠ 縦は据え置き（上の項）
             a.BaseRot = a.Go.transform.localRotation;
             a.GroundY = FieldGroundY(x, z);   // マウンドの上だけ持ち上がる（投手が降りたら地面へ）
-            GroundFix(a);
+            // 飛び込み中は上下をクリップ（ルートモーション）が持っている＝足で吸わせない。
+            // 吸わせると足が上がったぶんだけ胴が地面へ潜る（実測 −0.40m。design-18 §7-2）
+            if (!a.RootDrivenY) GroundFix(a);
         }
 
         /// <summary>投手板まわりの平坦部の半径[m]。マウンドの断面はここまで水平。</summary>
@@ -241,13 +253,116 @@ namespace KokoSim.Unity.Match
             }
         }
 
-        /// <summary>速さの段。遅い順（同じ誤差なら遅い段を採る＝走らせすぎない）。</summary>
+        /// <summary>速さの段（前向き）。遅い順（同じ誤差なら遅い段を採る＝走らせすぎない）。</summary>
         private static readonly LocoClip[] LocoLadder =
         {
             new LocoClip("AA_Baseball_Defender_Movement_Walk_F_Loop", 0.73f, -4.5f),
             new LocoClip("AA_Baseball_Defender_Movement_Run_Loop", 4.28f, -9.6f),
             new LocoClip("AA_Baseball_Defender_Movement_Sprint_Loop", 5.11f, -12.9f),
         };
+
+        // ---- 走りの2軸目＝向き（issue wire-defender-locomotion-motions） --------------------
+        //
+        // 速さの段（上）に**球がどちらに居るか**の軸を足す。engine は位置しか返さないので
+        // 向きの材料は「速度ベクトル」と「球の方向」の角度差だけ（CatchApproach と同じ材料）。
+        //
+        // ⚠ 収録名の L/R は**「体の向きに対してどちらへ動くか」**（実測 2026-08-16・
+        //    DuelMotionSpike.RunLocomotionFacingProbe／out/duel-stage/locomotion-facing.tsv）:
+        //      Run_L90 / Sprint_L90 … 前走りのまま**胸と首を右へ**（首の筋 +0.3〜+0.55・胸 +1〜+28°）
+        //                            ＝球が右に居るときの「見ながら走る」
+        //      Run_R90 / Sprint_R90 … 前走りのまま**胸と首を左へ**（首 −0.4〜−0.9）＝球が左
+        //      Shuffle_L / Shuffle_R … 胸を球へ向けたまま**真横へ**（±90°・1.35m/s。速いのは無い）
+        //      Run_Back / Walk_B     … 背走（胸は進行方向の反対 ±16°以内。2.33／0.72m/s）
+        //    「L90 は横走り」と名前で決めると、絵は「なんとなく斜め」の前走りになる。
+        //    横へ速く動く収録は無いので、速い横移動は「見ながら走る」（斜め）で表す。
+        //    背走も 2.33×1.45=3.4m/s が上限＝それ以上は体を回して「見ながら走る」（実物の背走も同じ）。
+
+        /// <summary>走りの向きの区分。<see cref="LocoFacing.LookLeft"/>＝球が左（左を見ながら走る）。</summary>
+        private enum LocoFacing { Forward, LookLeft, LookRight, Back }
+
+        /// <summary>球が左に居るときの段（首と胸を左へ向けたまま走る収録）。</summary>
+        private static readonly LocoClip[] LocoLadderLookLeft =
+        {
+            new LocoClip("AA_Baseball_Defender_Movement_Walk_R_Loop", 0.72f, 5f),
+            new LocoClip("AA_Baseball_Defender_Movement_Run_R90_Loop", 3.72f, -8f),
+            new LocoClip("AA_Baseball_Defender_Movement_Sprint_R90_Loop", 5.59f, 0f),
+        };
+
+        /// <summary>球が右に居るときの段（首と胸を右へ向けたまま走る収録）。</summary>
+        private static readonly LocoClip[] LocoLadderLookRight =
+        {
+            new LocoClip("AA_Baseball_Defender_Movement_Walk_L_Loop", 0.72f, -4f),
+            new LocoClip("AA_Baseball_Defender_Movement_Run_L90_Loop", 4.36f, -23f),
+            new LocoClip("AA_Baseball_Defender_Movement_Sprint_L90_Loop", 5.57f, -20f),
+        };
+
+        /// <summary>背走の段。速いのは無い（上限を超えたら「見ながら走る」へ落ちる）。</summary>
+        private static readonly LocoClip[] LocoLadderBack =
+        {
+            new LocoClip("AA_Baseball_Defender_Movement_Walk_B_Loop", 0.72f, 176f),
+            new LocoClip("AA_Baseball_Defender_Movement_Run_Back_Loop", 2.33f, 164f),
+        };
+
+        /// <summary>真横のシャッフル（球を正面に見たまま横へ）。球が右＝左へ動く＝Shuffle_L。</summary>
+        private static readonly LocoClip ShuffleToLeft =
+            new LocoClip("AA_Baseball_Defender_Movement_Shuffle_L", 1.36f, -90f);
+        private static readonly LocoClip ShuffleToRight =
+            new LocoClip("AA_Baseball_Defender_Movement_Shuffle_R", 1.35f, 90f);
+
+        /// <summary>これより前は前向き（|球の方向−進行方向|[度]）。</summary>
+        private const float FacingForwardDeg = 40f;
+        /// <summary>これより後ろは背走。</summary>
+        private const float FacingBackDeg = 130f;
+        /// <summary>区分の境目のヒステリシス[度]（境目で毎コマ入れ替わると足が跳ぶ）。</summary>
+        private const float FacingHysteresisDeg = 8f;
+        /// <summary>シャッフルを使う角度帯（真横 ±この幅）。</summary>
+        private const float ShuffleBandDeg = 28f;
+        /// <summary>球がこれより近いと向きの材料にしない（持っている球・足元の球で方向が暴れる）[m]。</summary>
+        private const float FacingMinBallDistM = 1.5f;
+
+        /// <summary>
+        /// 発進（構え→走り出し）の一発物。<c>MoveDirDeg</c> は**クリップ全体の変位の向き**
+        /// （途中で体が回るので、進行方向をこれで合わせると入りの構えは球の方を向く）。
+        /// <c>VClip</c> は**終端付近の速さ**（実測 u=1.0 の speedHere）＝走りの段へ渡す直前の速さ。
+        /// </summary>
+        private readonly struct StartClip
+        {
+            public readonly string Name;
+            public readonly float Length;
+            public readonly float MoveDirDeg;
+            public readonly float EndSpeed;
+            public readonly LocoFacing Facing;
+            public StartClip(string name, float length, float moveDirDeg, float endSpeed, LocoFacing facing)
+            {
+                Name = name; Length = length; MoveDirDeg = moveDirDeg; EndSpeed = endSpeed; Facing = facing;
+            }
+        }
+
+        private static readonly StartClip[] StartClips =
+        {
+            new StartClip("AA_Baseball_Defender_Movement_Crouch_To_Run_Type01", 1.33f, 5f, 3.14f, LocoFacing.Forward),
+            new StartClip("AA_Baseball_Defender_Movement_Crouch_To_Run_Type02", 1.00f, 5f, 2.79f, LocoFacing.Forward),
+            new StartClip("AA_Baseball_Defender_Movement_Crouch_To_Run_R90", 1.23f, 88f, 3.51f, LocoFacing.LookLeft),
+            new StartClip("AA_Baseball_Defender_Movement_Crouch_To_Run_L90", 0.77f, -87f, 3.04f, LocoFacing.LookRight),
+            new StartClip("AA_Baseball_Defender_Movement_Crouch_To_Run_Back", 0.57f, 147f, 1.50f, LocoFacing.Back),
+        };
+
+        /// <summary>
+        /// 発進を流すレッグの下限[s]。engine の加減速は区間長の <see cref="PlaybackEvaluator.MoveRampFraction"/>
+        /// （15%）しか無く、短いレッグでは発進の窓（<see cref="StartMaxSeconds"/>）がレッグの大半を占めて
+        /// 走りが一度も出ない。実測の中央値は 1.1s（p10 0.30／p90 3.37）。
+        /// </summary>
+        private const float StartMinLegSeconds = 0.6f;
+        /// <summary>
+        /// 発進を流すレッグの巡航速度の上限[m/s]。engine の実測（2026-08-16・501レッグ）は**全レッグ 8.3〜8.8**
+        /// （距離÷脚力で尺を決めるので距離に依らず全力）なので、ここを 6 にすると発進は一度も出ない。
+        /// 発進の収録は終端でも 3 m/s 前後＝どのみち足は追いつかない。それでも「構えから体を起こして
+        /// 押し出す」2〜3コマは絵になる（実測ストリップ 2026-08-16）ので、窓を <see cref="StartMaxSeconds"/>
+        /// で短く切って全レッグに流す。滑りは走りの段とは別枠で数える（<c>発進=…本 …コマ slip=</c>）。
+        /// </summary>
+        private const float StartMaxCruiseMps = 9.0f;
+        /// <summary>発進の一発物から走りの段へ移すときの繋ぎ[s]（位相が対応しないのでクロスフェード）。</summary>
+        private const float StartHandoffFadeSeconds = 0.12f;
 
         /// <summary>再生速度の許容幅。外れると足の運びが目に見えて嘘になる。</summary>
         private const float LocoSpeedMin = 0.6f, LocoSpeedMax = 1.45f;
@@ -294,6 +409,15 @@ namespace KokoSim.Unity.Match
 
             /// <summary>↑へ寄せる速さ[度/秒]。0=回頭中でない。</summary>
             public float ThrowYawRate;
+
+            /// <summary>いまの向きの区分（issue wire-defender-locomotion-motions）。ヒステリシスの基準。</summary>
+            public LocoFacing Facing;
+            /// <summary>いま流している段の表（<see cref="Ladder"/> の添字が指す配列）。null=前向き表。</summary>
+            public LocoClip[] LadderTable;
+            /// <summary>発進の一発物を流し終える時刻（プレーの時計）。この間は走りの段が触らない。</summary>
+            public float StartUntil;
+            /// <summary>いま流している発進の添字（-1=無し）。</summary>
+            public int StartClip;
         }
 
         private readonly Dictionary<FieldPosition, FielderMotion> _loco = new();
@@ -317,7 +441,7 @@ namespace KokoSim.Unity.Match
         {
             if (a == null || a.Go == null) return;
             FielderMotion st;
-            if (!_loco.TryGetValue(pos, out st)) st = new FielderMotion { Ladder = -1 };
+            if (!_loco.TryGetValue(pos, out st)) st = new FielderMotion { Ladder = -1, CatchEvent = -1, StartClip = -1 };
             float prevYaw = st.Yaw;
             bool hadYaw = st.Started;
 
@@ -343,6 +467,13 @@ namespace KokoSim.Unity.Match
             {
                 st.CatchEvent = -1;
                 st.Ladder = -1;   // 走り／待機の管理へ戻す
+                st.StartClip = -1; st.StartUntil = 0f;   // 捕球に奪われた発進は再開しない
+                // 上下をクリップに預けていたなら返してもらう（次の PlaceFielder が足で接地を解き直す）
+                if (a.RootDrivenY)
+                {
+                    a.RootDrivenY = false;
+                    if (a.Animator != null) a.Animator.applyRootMotion = false;
+                }
             }
 
             // 速度は中央差分。engine は位置しか返さないので、速さも向きもここで採るしかない
@@ -354,18 +485,107 @@ namespace KokoSim.Unity.Match
             float vx = (float)(pb.Pos.X - pa.Pos.X) / span;
             float vz = (float)(pb.Pos.Y - pa.Pos.Y) / span;
             float speed = Mathf.Sqrt(vx * vx + vz * vz);
+            bool moving = speed >= FielderIdleSpeedMps;
 
-            // 段を選ぶ。クランプ後にどれだけ嘘が残るかで比べる（比なので対数で見る）
+            // 向きの2軸目: 球が進行方向のどちらに居るか（issue wire-defender-locomotion-motions）。
+            // Vector2.SignedAngle は反時計回りが正＝フィールドの (x,z) では**正＝球が左手側**
+            // （ApproachAt と同じ規約）。球が無い／近すぎる（持っている・足元）ときは前向き扱い
+            float side = 0f;
+            bool haveSide = false;
+            if (moving)
+            {
+                var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
+                if (ball.HasValue)
+                {
+                    var toBall = new Vector2((float)(ball.Value.X - cur.Pos.X), (float)(ball.Value.Y - cur.Pos.Y));
+                    if (toBall.magnitude >= FacingMinBallDistM)
+                    {
+                        side = Vector2.SignedAngle(new Vector2(vx, vz), toBall);
+                        haveSide = true;
+                    }
+                }
+            }
+
+            // 発進の一発物を流している間は段を触らない（向きと速さの倍率だけ合わせる）。
+            // 立ち止まったら（短いレッグ）そこで畳んで通常の管理へ戻す
+            if (t < st.StartUntil && st.StartClip >= 0)
+            {
+                // 別の一発物（送球・タッチ）に差し替えられていたら発進は終わり（窓が重なっても再開しない）
+                bool stillStart = a.Clip != null && a.Clip.name == StartClips[st.StartClip].Name;
+                if (!moving || !stillStart)
+                {
+                    st.StartUntil = 0f;
+                    if (!stillStart) st.StartClip = -1;
+                }
+                else
+                {
+                    var sc = StartClips[st.StartClip];
+                    float startYaw = Mathf.Atan2(vx, vz) * Mathf.Rad2Deg - sc.MoveDirDeg;
+                    st.Yaw = st.Started
+                        ? Mathf.MoveTowardsAngle(st.Yaw, startYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
+                        : startYaw;
+                    st.Started = true;
+                    float fadeS = EntryFadeSeconds <= 0f ? 0f
+                        : Mathf.Clamp01(1f - (t - _fieldT0) / EntryFadeSeconds);
+                    PlaceFielder(a, (float)cur.Pos.X + st.Entry.x * fadeS,
+                        (float)cur.Pos.Y + st.Entry.y * fadeS, st.Yaw);
+                    if (dt > 0f)
+                    {
+                        // 発進の足の食い違い。収録の速さは終端へ向けてほぼ線形に増える（実測 speedHere）
+                        // ので、その時刻の収録速度を線形で見積もって比を採る。**別枠で数える**
+                        // （走りの段の受け入れ数字に紛れ込ませない＝発進の代償がいくらかを読めるように）
+                        float u = a.Clip != null && a.Clip.length > 0.01f ? Mathf.Clamp01(a.Time / a.Clip.length) : 0f;
+                        float clipV = Mathf.Max(0.05f, sc.EndSpeed * u) * a.Speed;
+                        float ratio = speed / clipV;
+                        _startFrames++;
+                        _startSlipMax = Mathf.Max(_startSlipMax, ratio);
+                        _startSlipMin = Mathf.Min(_startSlipMin, ratio);
+                    }
+                    if (dt > 0f && hadYaw)
+                        _locoMaxYawStep = Mathf.Max(_locoMaxYawStep, Mathf.Abs(Mathf.DeltaAngle(prevYaw, st.Yaw)));
+                    _locoMaxSpeed = Mathf.Max(_locoMaxSpeed, speed);
+                    _loco[pos] = st;
+                    return;
+                }
+            }
+            bool handoffFromStart = st.StartClip >= 0;
+            st.StartClip = -1;
+
+            // 向きの区分（ヒステリシス付き）と段の表。止まっているコマは区分を据え置く。
+            // 「背走で行くか・体を回して走るか」「シャッフルで済むか」は**そのレッグの巡航速度**で決める
+            // （瞬間の速さだと加減速の1〜2コマで背走⇄振り向きが1コマずつ出る。実測 2026-08-16:
+            //  左翼手が発進→背走1コマ→見ながら走る、と3コマで3種）。実物も走り出す前に決めている
+            float cruise = Mathf.Max(speed, LegCruiseAt(pos, t));
+            if (moving) st.Facing = haveSide ? SelectFacing(st.Facing, side, cruise) : LocoFacing.Forward;
+            LocoClip[] table = TableOf(st.Facing);
+            LocoClip[] shuffle = null;
+            if (moving && haveSide && (st.Facing == LocoFacing.LookLeft || st.Facing == LocoFacing.LookRight)
+                && Mathf.Abs(Mathf.Abs(side) - 90f) <= ShuffleBandDeg)
+            {
+                // 真横で遅ければシャッフル（球を正面に見たまま横へ）。球が左＝右へ動く＝Shuffle_R
+                var sh = side > 0f ? ShuffleToRight : ShuffleToLeft;
+                if (cruise <= sh.VClip * LocoSpeedMax) shuffle = side > 0f ? ShuffleRightTable : ShuffleLeftTable;
+            }
+
+            // 段を選ぶ。クランプ後にどれだけ嘘が残るかで比べる（比なので対数で見る）。
+            // シャッフルは同点なら勝ち（帯の中では横向きの絵を優先）
             int want = -1;
+            LocoClip[] wantTable = table;
             float mul = 1f;
-            if (speed >= FielderIdleSpeedMps)
+            if (moving)
             {
                 float best = float.MaxValue;
-                for (int i = 0; i < LocoLadder.Length; i++)
+                if (shuffle != null)
                 {
-                    float m = Mathf.Clamp(speed / LocoLadder[i].VClip, LocoSpeedMin, LocoSpeedMax);
-                    float err = Mathf.Abs(Mathf.Log(speed / (LocoLadder[i].VClip * m)));
-                    if (err < best - 1e-4f) { best = err; want = i; mul = m; }
+                    float m0 = Mathf.Clamp(speed / shuffle[0].VClip, LocoSpeedMin, LocoSpeedMax);
+                    best = Mathf.Abs(Mathf.Log(speed / (shuffle[0].VClip * m0)));
+                    want = 0; wantTable = shuffle; mul = m0;
+                }
+                for (int i = 0; i < table.Length; i++)
+                {
+                    float m = Mathf.Clamp(speed / table[i].VClip, LocoSpeedMin, LocoSpeedMax);
+                    float err = Mathf.Abs(Mathf.Log(speed / (table[i].VClip * m)));
+                    if (err < best - 1e-4f) { best = err; want = i; wantTable = table; mul = m; }
                 }
                 // 足と地面の食い違い。1.0=一致 / >1=地面のほうが速い（前へ滑る）/
                 // <1=足のほうが速い（後ろへ滑る＝ムーンウォーク）。**絵で見えるのはこの比**であって
@@ -373,40 +593,53 @@ namespace KokoSim.Unity.Match
                 if (dt > 0f)
                 {
                     _locoMoveFrames++;
-                    float ratio = speed / Mathf.Max(0.01f, LocoLadder[want].VClip * mul);
+                    float ratio = speed / Mathf.Max(0.01f, wantTable[want].VClip * mul);
                     _locoSlipMax = Mathf.Max(_locoSlipMax, ratio);
                     _locoSlipMin = Mathf.Min(_locoSlipMin, ratio);
                     if (ratio > 1.15f || ratio < 0.87f) _locoClampFrames++;
+                    if (wantTable == shuffle) _facingFrames[4]++;
+                    else _facingFrames[(int)st.Facing]++;
                 }
             }
 
-            // 向き。走っている間は**進行方向**をエンジンの速度ベクトルへ合わせる（体の向きではない）
+            // 向き。走っている間は**進行方向**をエンジンの速度ベクトルへ合わせる（体の向きではない）。
+            // 背走・見ながら走る収録は MoveDirDeg が胸の向きから大きく外れている＝同じ式で
+            // 胸が球のほうへ残る
             float targetYaw = want < 0
                 ? YawFacingHome((float)cur.Pos.X, (float)cur.Pos.Y)
-                : Mathf.Atan2(vx, vz) * Mathf.Rad2Deg - LocoLadder[want].MoveDirDeg;
+                : Mathf.Atan2(vx, vz) * Mathf.Rad2Deg - wantTable[want].MoveDirDeg;
             // ⚠ 立ち止まって「これから投げる」人は本塁でなく**的**を向いて待つ（issue #505 ②）。
             //    engine のサンプルは捕球と送球が同じ瞬間だが、実データは球を持って待つ場面がある。
             //    そこで本塁向きへ流すと、捕球中に開いておいた向きが投げる前に捨てられる
             float pending;
             if (want < 0 && TryPendingThrowYaw(pos, t, out pending)) targetYaw = pending;
+            // 停止中、まだ生きている球（飛んでいる／転がっている／保持中）があればその方向を向く。
+            // 追いつけず立ち止まった野手が本塁（≈カメラの向き）へフォールバックし、打球を見送るはずの
+            // 瞬間にこちらを向いてしまう不自然さの対策（issue fence-camera-zoom-and-outfielder-facing）
+            else if (want < 0 && TryFacingLiveBall(t, cur.Pos, out pending)) targetYaw = pending;
             st.Yaw = st.Started
                 ? Mathf.MoveTowardsAngle(st.Yaw, targetYaw, FielderYawRateDegPerSec * Mathf.Max(0f, dt))
                 : targetYaw;
             st.Started = true;
 
-            // クリップの差し替え。**位相を保って移る**（0へ戻すと足が跳ぶ）
-            if (want != st.Ladder)
+            // クリップの差し替え。**位相を保って移る**（0へ戻すと足が跳ぶ）。
+            // 発進の一発物からの引き継ぎだけは位相が対応しないのでクロスフェード
+            if (want != st.Ladder || wantTable != st.LadderTable)
             {
-                var clip = want < 0 ? IdleClipFor(pos) : LoadClip(LocoLadder[want].Name);
+                var clip = want < 0 ? IdleClipFor(pos) : LoadClip(wantTable[want].Name);
                 if (clip != null && clip != a.Clip)
                 {
                     float phase = a.Clip != null && a.Clip.length > 0.01f
                         ? Mathf.Repeat(a.Time / a.Clip.length, 1f) : 0f;
-                    SetActorClip(a, clip, phase * clip.length, 0f);
+                    if (handoffFromStart && want >= 0)
+                        CrossfadeActorToClip(a, clip, 0f, 0f, StartHandoffFadeSeconds);
+                    else
+                        SetActorClip(a, clip, phase * clip.length, 0f);
                     a.IdleClip = clip;   // ループさせる（FinishOneShot がここへ戻る）
                     a.IdleEndAt = 0f;
                 }
                 st.Ladder = want;
+                st.LadderTable = wantTable;
             }
             // ⚠ Speed は SetActorClip では戻らない。毎コマ入れ直す（差し替えの前後で持ち越さない）
             a.Speed = want < 0 ? 1f : mul;
@@ -432,9 +665,72 @@ namespace KokoSim.Unity.Match
             _loco[pos] = st;
         }
 
+        /// <summary>
+        /// 時刻 t にその野手が走っているレッグの巡航速度[m/s]（台形プロファイルの平坦部）。
+        /// レッグの外（止まっている）なら 0。engine の実測（2026-08-16・501レッグ）では
+        /// **ほぼ全レッグが 8.3〜8.8 m/s**（距離÷脚力で尺を決めているため距離に依らず全力）。
+        /// </summary>
+        private float LegCruiseAt(FieldPosition pos, float t)
+        {
+            IReadOnlyList<PlaybackMove> segs;
+            if (_fieldPlay?.Moves == null || !_fieldPlay.Moves.TryGetValue(pos, out segs) || segs == null) return 0f;
+            foreach (var m in segs)
+            {
+                if (t < m.T0 || t > m.T1) continue;
+                float dur = (float)(m.T1 - m.T0);
+                if (dur < 1e-3f) continue;
+                var from = PlaybackEvaluator.FielderAt(_fieldPlay, pos, m.T0).Pos;
+                var d = new Vector2((float)(m.To.X - from.X), (float)(m.To.Y - from.Y));
+                return d.magnitude / dur / (1f - (float)PlaybackEvaluator.MoveRampFraction);
+            }
+            return 0f;
+        }
+
+        private static readonly LocoClip[] ShuffleLeftTable = { ShuffleToLeft };
+        private static readonly LocoClip[] ShuffleRightTable = { ShuffleToRight };
+
+        private static LocoClip[] TableOf(LocoFacing f)
+        {
+            switch (f)
+            {
+                case LocoFacing.LookLeft: return LocoLadderLookLeft;
+                case LocoFacing.LookRight: return LocoLadderLookRight;
+                case LocoFacing.Back: return LocoLadderBack;
+                default: return LocoLadder;
+            }
+        }
+
+        /// <summary>
+        /// 向きの区分を選ぶ。<paramref name="side"/> は進行方向から見た球の方向[度]（正＝左手側）。
+        /// 境目は前の区分に <see cref="FacingHysteresisDeg"/> だけ有利にする（境目で毎コマ入れ替わると
+        /// 足も向きも跳ぶ）。背走は収録の上限速度（2.33×1.45）を超えたら体を回して「見ながら走る」へ
+        /// 落とす＝実物も同じ（速い背走は無い）。真後ろ（±172°超）では左右の選択を据え置く。
+        /// </summary>
+        private static LocoFacing SelectFacing(LocoFacing prev, float side, float speed)
+        {
+            float a = Mathf.Abs(side);
+            float fwdLimit = FacingForwardDeg + (prev == LocoFacing.Forward ? FacingHysteresisDeg : -FacingHysteresisDeg);
+            float backLimit = FacingBackDeg + (prev == LocoFacing.Back ? -FacingHysteresisDeg : FacingHysteresisDeg);
+            if (a < fwdLimit) return LocoFacing.Forward;
+            bool prevIsLook = prev == LocoFacing.LookLeft || prev == LocoFacing.LookRight;
+            if (a > backLimit)
+            {
+                float backMax = LocoLadderBack[LocoLadderBack.Length - 1].VClip * LocoSpeedMax;
+                if (speed <= backMax) return LocoFacing.Back;
+                if (a > 172f && prevIsLook) return prev;
+                return side > 0f ? LocoFacing.LookLeft : LocoFacing.LookRight;
+            }
+            if (a > 172f && prevIsLook) return prev;
+            return side > 0f ? LocoFacing.LookLeft : LocoFacing.LookRight;
+        }
+
         private float _locoMaxPosErr, _locoMaxYawStep, _locoMaxSpeed;
         private int _locoMoveFrames, _locoClampFrames;
         private float _locoSlipMax, _locoSlipMin;
+        /// <summary>動いているコマの区分別の数（前/左見/右見/背走/シャッフル）。絵に「向き」が出たかの実測。</summary>
+        private readonly int[] _facingFrames = new int[5];
+        private int _startFired, _startFrames;
+        private float _startSlipMax, _startSlipMin;
 
         /// <summary>
         /// 【撮影ハーネス用】走りの受け入れ実測（プレー開始からの最悪値）。
@@ -447,9 +743,158 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public string FielderRunDiagForCapture() => string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
-            "posErrMax={0:F3}m\tyawStepMax={1:F1}deg\tvMax={2:F2}m/s\tslip={3:F2}〜{4:F2}\t目立つ={5}/{6}コマ",
+            "posErrMax={0:F3}m\tyawStepMax={1:F1}deg\tvMax={2:F2}m/s\tslip={3:F2}〜{4:F2}\t目立つ={5}/{6}コマ"
+            + "\t向き 前{7}/左見{8}/右見{9}/背走{10}/横{11}コマ\t発進={12}本 {13}コマ slip={14:F2}〜{15:F2}",
             _locoMaxPosErr, _locoMaxYawStep, _locoMaxSpeed,
-            _locoSlipMin > 1e6f ? 1f : _locoSlipMin, _locoSlipMax, _locoClampFrames, _locoMoveFrames);
+            _locoSlipMin > 1e6f ? 1f : _locoSlipMin, _locoSlipMax, _locoClampFrames, _locoMoveFrames,
+            _facingFrames[0], _facingFrames[1], _facingFrames[2], _facingFrames[3], _facingFrames[4],
+            _startFired, _startFrames,
+            _startSlipMin > 1e6f ? 1f : _startSlipMin, _startSlipMax);
+
+        // ---- 発進（構え→走り出し。issue wire-defender-locomotion-motions） ----------------------
+        //
+        // 捕球と同じ**絶対時刻の予定表**（design-18 §4.5-⑩「特定のコマでだけ起きる副作用をポーズ更新に
+        // 書かない」）。engine の移動レッグ（PlaybackMove）の頭で「止まっていた野手」にだけ流す。
+        // 途中の時刻から再生を始めても同じ絵になる。
+
+        private struct FieldStartEvent
+        {
+            public FieldPosition Pos;
+            public float TStart;      // レッグの頭（プレーの時計）
+            public int Clip;          // StartClips の添字
+            public float Mul;         // 再生倍率
+            public float Until;       // 走りの段へ渡す時刻（プレーの時計）
+            public LocoFacing Facing;
+            public bool Fired;
+        }
+
+        private readonly List<FieldStartEvent> _startEvents = new();
+
+        /// <summary>
+        /// 発進の一発物を見せる最長[s]。これを過ぎたら位相に関わらず走りの段へ渡す（クロスフェード）。
+        /// 12fps で 3コマ＝構えを解いて押し出すところまで。長くすると足の遅れ（滑り）が目に付く。
+        /// </summary>
+        private const float StartMaxSeconds = 0.25f;
+        /// <summary>予定の時刻からこれ以上遅れて来たら流さない（途中から見始めた場合）[s]。</summary>
+        private const float StartLateToleranceSeconds = 0.25f;
+        /// <summary>この間隔以上止まっていたレッグの頭だけを「発進」とみなす[s]。</summary>
+        private const float StartRestGapSeconds = 0.15f;
+        /// <summary>これより短いレッグでは発進を流さない[m]。</summary>
+        private const float StartMinLegM = 1.5f;
+
+        private void BuildFieldStartPlan(PlaybackPlay play, float t0)
+        {
+            _startEvents.Clear();
+            if (play?.Moves == null) return;
+            foreach (var pos in AllFieldPositions)
+            {
+                IReadOnlyList<PlaybackMove> segs;
+                if (!play.Moves.TryGetValue(pos, out segs) || segs == null) continue;
+                double prevEnd = double.NegativeInfinity;
+                foreach (var m in segs)
+                {
+                    bool fromRest = m.T0 - prevEnd >= StartRestGapSeconds;
+                    prevEnd = m.T1;
+                    if (!fromRest || m.T0 < t0) continue;
+                    float dur = (float)(m.T1 - m.T0);
+                    if (dur < StartMinLegSeconds) continue;
+                    var from = PlaybackEvaluator.FielderAt(play, pos, m.T0).Pos;
+                    var d = new Vector2((float)(m.To.X - from.X), (float)(m.To.Y - from.Y));
+                    if (d.magnitude < StartMinLegM) continue;
+                    // 巡航速度＝台形プロファイルの平坦部（平均 ÷ (1−肩)）
+                    float cruise = d.magnitude / dur / (1f - (float)PlaybackEvaluator.MoveRampFraction);
+                    if (cruise > StartMaxCruiseMps) continue;
+
+                    // 向きは球の方向で決める（走りの段と同じ材料・同じ規約）
+                    var facing = LocoFacing.Forward;
+                    var ball = PlaybackEvaluator.BallAt(play, m.T0 + 0.1);
+                    if (ball.HasValue)
+                    {
+                        var toBall = new Vector2((float)(ball.Value.X - from.X), (float)(ball.Value.Y - from.Y));
+                        if (toBall.magnitude >= FacingMinBallDistM)
+                            facing = SelectFacing(LocoFacing.Forward, Vector2.SignedAngle(d, toBall), cruise);
+                    }
+                    int clip = -1;
+                    switch (facing)
+                    {
+                        case LocoFacing.Forward: clip = cruise >= 2.0f ? 1 : 0; break;
+                        case LocoFacing.LookLeft: clip = 2; break;
+                        case LocoFacing.LookRight: clip = 3; break;
+                        case LocoFacing.Back: clip = 4; break;
+                    }
+                    if (clip < 0) continue;
+                    var sc = StartClips[clip];
+                    float mul = Mathf.Clamp(cruise / sc.EndSpeed, LocoSpeedMin, LocoSpeedMax);
+                    float until = (float)m.T0 + Mathf.Min(StartMaxSeconds, sc.Length / mul);
+                    _startEvents.Add(new FieldStartEvent
+                    {
+                        Pos = pos, TStart = (float)m.T0, Clip = clip, Mul = mul, Until = until, Facing = facing,
+                    });
+                }
+            }
+        }
+
+        /// <summary>予定の時刻が来た発進を流す。捕球中・遅刻・すでに走っている野手には流さない。</summary>
+        private void FireDueStarts(float t)
+        {
+            for (int i = 0; i < _startEvents.Count; i++)
+            {
+                var e = _startEvents[i];
+                if (e.Fired || t < e.TStart) continue;
+                e.Fired = true;
+                _startEvents[i] = e;
+                if (t > e.TStart + StartLateToleranceSeconds) continue;
+                var a = FielderActor(e.Pos);
+                FielderMotion st;
+                if (a == null || a.Go == null || !_loco.TryGetValue(e.Pos, out st)) continue;
+                if (t < st.CatchUntil || st.Ladder != -1) continue;   // 捕っている／もう走っている
+                var clip = LoadClip(StartClips[e.Clip].Name);
+                if (clip == null) continue;
+                // 構えの待機から発進へ。内野は構え→構えなので実質そのまま、外野（立ち待機）は短く繋ぐ
+                CrossfadeActorToClip(a, clip, (t - e.TStart) * e.Mul, 0f, StartHandoffFadeSeconds);
+                a.Speed = e.Mul;
+                a.IdleClip = IdleClipFor(e.Pos);   // 万一末尾まで行ったら待機へ（走りの段が先に奪うのが正）
+                a.IdleEndAt = 0f;
+                st.StartClip = e.Clip;
+                st.StartUntil = e.Until;
+                st.Facing = e.Facing;
+                st.Ladder = int.MinValue;          // 走りの段の管理から外す（渡すときに差し替えさせる）
+                st.LadderTable = null;
+                _loco[e.Pos] = st;
+                _startFired++;
+            }
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】野手1人のいまのクリップ名（接頭辞なし）・再生倍率・立ち位置・向き。
+        /// 走りの向きの配線（issue wire-defender-locomotion-motions）の受け入れで
+        /// 「どの収録が・どの場面で出たか」を機械的に拾うため。
+        /// </summary>
+        public bool FielderClipForCapture(FieldPosition pos, out string clip, out float speedMul,
+            out Vector2 xz, out float yawDeg)
+        {
+            clip = null; speedMul = 1f; xz = Vector2.zero; yawDeg = 0f;
+            var a = FielderActor(pos);
+            if (a == null || a.Go == null) return false;
+            clip = a.Clip != null ? a.Clip.name.Replace("AA_Baseball_Defender_Movement_", "").Replace("AA_Baseball_", "") : "";
+            speedMul = a.Speed;
+            var lp = a.Go.transform.localPosition;
+            xz = new Vector2(lp.x, lp.z);
+            yawDeg = a.Go.transform.localEulerAngles.y;
+            return true;
+        }
+
+        /// <summary>【撮影ハーネス用】発進の予定表（どの野手が・いつ・どの収録を・何倍で）。</summary>
+        public string FieldStartPlanForCapture()
+        {
+            var sb = new StringBuilder();
+            foreach (var e in _startEvents)
+                sb.AppendFormat(System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}\tt={1:F2}\t{2}\tx{3:F2}\tuntil={4:F2}\t{5}\n",
+                    e.Pos, e.TStart, StartClips[e.Clip].Name.Replace("AA_Baseball_Defender_Movement_", ""),
+                    e.Mul, e.Until, e.Facing);
+            return sb.ToString();
+        }
 
         // ---- 捕る（F5） ---------------------------------------------------------
         //
@@ -503,12 +948,27 @@ namespace KokoSim.Unity.Match
             /// </summary>
             public readonly float PostCatchFollowSeconds;
 
+            /// <summary>
+            /// 体の上下が**ルートモーションに入っている**収録か（横っ飛び・スライディング）。
+            ///
+            /// 野手は <c>rootMotion:false</c> ＋ <see cref="GroundFix"/>（足を地面へ吸わせる）で置いており、
+            /// 立っている収録ではそれで正しい。だが飛び込みは**足が上がって胴が下**になるので、
+            /// 足で吸わせると胴が地面へめり込む（実測 2026-08-14: 伸び切りのコマで足は根から 1.083m、
+            /// 体の最下点は 0.688m ＝ 足を地面へ置くと最下点が **−0.40m**）。
+            /// この収録の間だけ <c>applyRootMotion</c> を入れて上下をクリップに持たせ、
+            /// <see cref="GroundFix"/> を止める（横位置と向きは従来どおり engine が毎コマ置く）。
+            /// このとき <see cref="GloveY"/> は「足元から」ではなく<b>地面から</b>の高さになる。
+            /// </summary>
+            public readonly bool RootDrivenY;
+
             public FieldCatchAnchor(string clip, float moment, float gloveY,
-                float gloveX, float gloveZ, CatchApproach approach, float postCatchFollowSeconds = -1f)
+                float gloveX, float gloveZ, CatchApproach approach, float postCatchFollowSeconds = -1f,
+                bool rootDrivenY = false)
             {
                 Clip = clip; Moment = moment; GloveY = gloveY;
                 GloveX = gloveX; GloveZ = gloveZ; Approach = approach;
                 PostCatchFollowSeconds = postCatchFollowSeconds;
+                RootDrivenY = rootDrivenY;
             }
         }
 
@@ -539,6 +999,53 @@ namespace KokoSim.Unity.Match
         };
 
         /// <summary>
+        /// 飛び込み系の捕球（issue wire-unused-defender-motions）。**捕球余裕が小さいときだけ**選ばれ、
+        /// 高さの主軸（<see cref="FieldCatchAnchors"/>）とは別表にしてある。
+        ///
+        /// <para>engine は空中捕球の余裕（<c>CatchTimeBudget − 到達所要</c>）を持っており、
+        /// 小さい正＝ぎりぎり届く／小さい負＝あと一歩届かない。**絵ではこの区別が付かない**
+        /// （届かなかったのか、余裕で前に落ちたのか）のが元の症状で、これがそのまま発火条件になる。</para>
+        ///
+        /// <para>アンカーは実測（2026-08-14・<c>DuelMotionSpike.RunFielderCatchProbe</c>／
+        /// <c>out/duel-stage/fieldcatch.tsv</c> ＋ 波形 <c>fieldcatch-detail.tsv</c>）。
+        /// ⚠ **集計の <c>tDisp</c> をそのまま使えない収録がある**（design-18 §4.5-③）:
+        /// スライディングは「構えからグラブが最も動いた瞬間」が走り出しの腕振り（0.24s）に立ち、
+        /// 実際に体を投げ出して捕るのは 0.88s。波形（根の沈み <c>rootY</c> が底を打つ区間）で採った。</para>
+        /// </summary>
+        private static readonly FieldCatchAnchor[] FieldDiveAnchors =
+        {
+            // 横っ飛び。伸び切りは 0.80s（根が 0.606m 沈む＝地面すれすれ 0.170m でグラブが止まる）
+            new("AA_Baseball_Defender_Movement_Sprint_Diving_Catch", 0.80f, 0.170f, -0.789f, -0.023f,
+                CatchApproach.Forward, rootDrivenY: true),
+            // スライディングキャッチ。0.88s（根が 0.685m 沈み切ったコマ。グラブは 0.330m）
+            new("AA_Baseball_Defender_Movement_Sprint_Sliding_Catch", 0.88f, 0.330f, -0.356f, 0.086f,
+                CatchApproach.Forward, rootDrivenY: true),
+            // 背走ジャンピング。1.36s（跳躍の頂点。足が上がるだけで胴は下がらない＝接地は従来どおり足で解ける）
+            new("AA_Baseball_Defender_Movement_Run_Back_To_Jumping_Catch", 1.36f, 1.581f, -0.252f, 0.287f,
+                CatchApproach.Back),
+        };
+
+        private const int DiveAnchorDiving = 0;
+        private const int DiveAnchorSliding = 1;
+        private const int DiveAnchorBackJump = 2;
+
+        /// <summary>
+        /// 飛び込みを出す捕球余裕[s]（監督決定 2026-08-13）。
+        ///
+        /// <para>母集団の実測（40試合・空中捕球1341件。<c>CatchMarginDisplayTests</c> に表がある）:
+        /// 0.20 秒なら捕球の 9.6%／落球の 16.7% が該当＝**10打席に1回強**。0.50 秒まで開けると
+        /// 4本に1本が飛び込みで安っぽく、0.10 秒まで絞ると 4.6% で死に演出になる。</para>
+        /// </summary>
+        public const float DiveMarginSeconds = 0.20f;
+
+        /// <summary>
+        /// 横っ飛びとスライディングを分ける捕球余裕[s]。**際どいほど大げさな収録**にする
+        /// （実測で 0〜0.10 が 4.6%、0.10〜0.20 が 5.0% ＝ ほぼ半々に割れる）。
+        /// 単調なしきい値なので、同じプレーは常に同じ絵になる（乱数を引かない）。
+        /// </summary>
+        private const float DiveLayoutMarginSeconds = 0.10f;
+
+        /// <summary>
         /// 近づき方を切り替える速さ[m/s]。これ未満は「その場」。
         /// <see cref="FielderIdleSpeedMps"/> と別に持つのは、走りの段の切替と捕球クリップの選択が
         /// **同じ閾値である必要はない**ため（歩き程度で近づくならその場の捕球で足りる）。
@@ -551,6 +1058,20 @@ namespace KokoSim.Unity.Match
 
         /// <summary>捕った形を見せる据え置き[s]（打ち切りには必ず据え置きを添える＝design-18 §4.5-⑭）。</summary>
         private const float CatchHoldSeconds = 0.35f;
+
+        /// <summary>
+        /// 飛び込み・お手玉の後、収録の尻尾（着地〜起き上がり）を見せる上限[s]。
+        /// 収録の実尺は 1.6〜2.0 秒だが、engine の回収時刻はこちらの都合を待たない＝
+        /// 上限で頭打ちにして、走りの段へ戻す（起き上がりの途中でも engine の予定が優先）。
+        /// </summary>
+        private const float DiveTailMaxSeconds = 1.6f;
+
+        /// <summary>その収録の「捕る瞬間より後」の尺[s]（上限つき）。窓の長さと譲る範囲の**単一ソース**。</summary>
+        private static float DiveTailSeconds(FieldCatchAnchor anchor)
+        {
+            var clip = LoadClip(anchor.Clip);
+            return clip == null ? 0f : Mathf.Min(DiveTailMaxSeconds, clip.length - anchor.Moment);
+        }
 
         /// <summary>
         /// 捕球点を収録のグラブ位置より何割ぶん内側へ置くか（腕に残す余裕）。
@@ -567,6 +1088,33 @@ namespace KokoSim.Unity.Match
         /// 捕球クリップを選ぶ**純関数**（乱数を引かない＝同じプレーは常に同じ絵）。
         /// 主軸は球の高さ、副軸は近づき方。残差はグラブIKが詰めるので、ここは「系統が合っていれば良い」。
         /// </summary>
+        /// <summary>
+        /// お手玉（弾く）の収録。左右2本（実測 2026-08-14）。<c>Moment</c> は「グラブが球へ届いて
+        /// 弾く瞬間」＝グラブが最も下がったコマで、その後の**もう一度掴みにいく芝居**（L=1.10s／R=1.36s）
+        /// ではない。<c>tDisp</c>（構えからの移動量の最大）はその後者に立つので使えない。
+        /// どちらも根は動かない（<c>rootY</c>≈0）＝接地は従来どおり足で解ける。
+        /// </summary>
+        private static readonly FieldCatchAnchor[] FieldFumbleAnchors =
+        {
+            new("AA_Baseball_Defender_Movement_Fumble_L", 0.34f, 0.490f, -0.696f, 0.335f, CatchApproach.Left),
+            new("AA_Baseball_Defender_Movement_Fumble_R", 0.84f, 0.304f, -0.454f, 0.306f, CatchApproach.Right),
+        };
+
+        /// <summary>
+        /// 飛び込み系を選ぶ**純関数**（乱数なし）。合わなければ −1 ＝従来の高さ×近づき方へ落とす。
+        ///
+        /// <para>高さの主軸は使わない。<c>CatchHeightFor</c> は種別ごとの定数（滞空は一律 1.40m）で
+        /// 飛球の間に差が無く、飛び込むかどうかを決められるのは engine の**捕球余裕**だけだからである。
+        /// 落球側（余裕が負）は常に横っ飛び＝「飛び込んだが届かなかった」の絵（監督決定 2026-08-13）。</para>
+        /// </summary>
+        private static int SelectFieldDive(float catchMarginSeconds, CatchApproach approach)
+        {
+            if (Mathf.Abs(catchMarginSeconds) >= DiveMarginSeconds) return -1;
+            if (approach == CatchApproach.Back) return DiveAnchorBackJump;   // 背走はジャンピング一択
+            if (catchMarginSeconds < DiveLayoutMarginSeconds) return DiveAnchorDiving;
+            return DiveAnchorSliding;
+        }
+
         private static int SelectFieldCatch(float ballHeightM, CatchApproach approach)
         {
             int best = -1;
@@ -600,13 +1148,45 @@ namespace KokoSim.Unity.Match
             public FieldPosition Pos;
             public float TCatch;      // 球が着く時刻（プレーの時計）
             public float TStart;      // クリップを始める時刻＝TCatch − Moment（負なら頭を捨てて始める）
+            public FieldCatchKind Kind;
             public int Anchor;
             public Vector3 Point;     // 捕球点（**予定時に1回だけ確定**。毎コマ球を追わない）
             public float HoldUntil;   // 捕球点に球を留めておく終わり（次のセグメントが始まるまで）
             public float FielderGapM; // 捕球の瞬間の「野手の立ち位置 → 球の終点」の水平距離（実測用）
             public float PulledM;     // 捕球点を engine の終点から**軌跡に沿って**遡らせた量[m]
+            /// <summary>
+            /// クリップを流さない（球の扱いだけ行う）。飛び込んだ本人が**そのまま拾う**ときに立つ。
+            ///
+            /// <para>実測 2026-08-14: 抜けた飛球の回収時刻は落球の <b>0.08 秒後</b>だった
+            /// （engine の回収は落下点で決まるので、飛び込んだ足元に落ちればほぼ同時になる）。
+            /// そのまま両方流すと、飛び込みが 0.12 秒で走り込み捕球のクリップに奪われ、
+            /// **飛び込みが絵に出ない**。回収時刻は判定なので動かせない＝<b>クリップ側を譲る</b>。
+            /// 球は予定どおりこの野手のグラブへ入る（倒れたまま掴む絵になる）。</para>
+            /// </summary>
+            public bool SkipClip;
             public bool Fired;
         }
+
+        /// <summary>
+        /// 予定1件が「どう終わる芝居か」。<b>engine が既に決めた結果</b>の写しで、ここで何かを決めはしない。
+        ///
+        /// <para><see cref="Catch"/>/<see cref="Dive"/> だけが球をグラブへ吸わせ、グラブIKを当てる。
+        /// <see cref="DiveMiss"/>（飛び込んだが届かない）と <see cref="Fumble"/>（弾く）は
+        /// **球に触らせない**＝engine の球の位置がそのまま描かれ、届かなかった距離は
+        /// 「野手の立ち位置と球の距離」そのものになる（絵のために距離を発明しない）。</para>
+        /// </summary>
+        private enum FieldCatchKind { Catch, Dive, DiveMiss, Fumble }
+
+        private static FieldCatchAnchor AnchorOf(FieldCatchKind kind, int index) => kind switch
+        {
+            FieldCatchKind.Dive or FieldCatchKind.DiveMiss => FieldDiveAnchors[index],
+            FieldCatchKind.Fumble => FieldFumbleAnchors[index],
+            _ => FieldCatchAnchors[index],
+        };
+
+        /// <summary>球をグラブへ吸わせる種別か（＝捕った芝居）。</summary>
+        private static bool HoldsBall(FieldCatchKind kind)
+            => kind == FieldCatchKind.Catch || kind == FieldCatchKind.Dive;
 
         private readonly List<FieldCatchEvent> _catchEvents = new();
 
@@ -648,6 +1228,67 @@ namespace KokoSim.Unity.Match
         private float _catchHoldDriftMax;
         private int _catchHoldCount;
 
+        /// <summary>飛び込み系の窓での「体の最下点の対地高」[m]。負＝地面へめり込んだ・実測用。</summary>
+        private float _diveClearanceMin = float.MaxValue, _diveClearanceMax = float.MinValue;
+        /// <summary>このプレーで組んだ芝居の内訳（受け入れの実測・撮影ハーネス用）。</summary>
+        private int _kindCatch, _kindDive, _kindDiveMiss, _kindFumble;
+
+        /// <summary>体の最下点（ワールドY）。接地の判定材料＝目測では「そういう姿勢」と区別できない。</summary>
+        private static float LowestBoneY(Animator anim)
+        {
+            var bones = new[]
+            {
+                HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes,
+                HumanBodyBones.RightToes, HumanBodyBones.Hips, HumanBodyBones.Chest,
+                HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightHand,
+                HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm,
+                HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg,
+            };
+            float low = float.MaxValue;
+            foreach (var b in bones)
+            {
+                var t = anim.GetBoneTransform(b);
+                if (t != null) low = Mathf.Min(low, t.position.y);
+            }
+            return low;
+        }
+
+        /// <summary>
+        /// 【撮影ハーネス用】守備の芝居の実測（issue wire-unused-defender-motions）。
+        ///
+        /// <c>内訳</c> は engine の結果から選ばれた芝居の数＝しきい値が母集団で効いているかの根拠。
+        /// <c>接地</c> は飛び込み中の体の最下点の対地高で、**負ならめり込んでいる**（絵では
+        /// 「そういう姿勢」と区別できないので数で見る＝design-18 §3.3 と同じ理由）。
+        /// </summary>
+        public string FieldDiveDiagForCapture() => string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "内訳 捕球={0} 飛び込み={1} 届かず={2} お手玉={3}\t接地={4:F3}〜{5:F3}m\t直近={6}@{7:F2}s({8})→今{9:F2}s",
+            _kindCatch, _kindDive, _kindDiveMiss, _kindFumble,
+            _diveClearanceMin > 1e6f ? 0f : _diveClearanceMin,
+            _diveClearanceMax < -1e6f ? 0f : _diveClearanceMax,
+            _lastFiredClip ?? "-", _lastFiredAt, _lastFiredKind,
+            _lastFiredPos.HasValue && FielderActor(_lastFiredPos.Value) != null
+                ? FielderActor(_lastFiredPos.Value).Time : -1f)
+            + "\t予定=" + FieldCatchPlanForCapture();
+
+        private string _lastFiredClip;
+        private float _lastFiredAt;
+        private FieldCatchKind _lastFiredKind;
+        private FieldPosition? _lastFiredPos;
+
+        /// <summary>【撮影ハーネス用】このプレーの芝居の予定表（誰が・いつ・何を）。</summary>
+        public string FieldCatchPlanForCapture()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var e in _catchEvents)
+            {
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(e.Pos).Append(':').Append(e.Kind).Append('@')
+                    .Append(e.TCatch.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return sb.Length > 0 ? sb.ToString() : "-";
+        }
+
         /// <summary>
         /// このプレーの捕球を全部洗い出して予定表にする。
         ///
@@ -656,6 +1297,12 @@ namespace KokoSim.Unity.Match
         /// **送球の受け手だけは推定しない**（<c>ToRole</c>＝seam E1）。併殺のように二塁の周りへ
         /// 遊撃手・二塁手・走者が同時に集まる場面では最近傍が取り違え、「受けていない野手が捕る」
         /// という形で絵に出るのに、原因は絵からは切り分けられない。
+        ///
+        /// <para>「捕ったのか・弾いたのか・届かなかったのか」も推定しない（issue wire-unused-defender-motions）。
+        /// engine が <c>CatchMargin</c>（空中捕球の余裕）と <c>Fumbled</c>（弾いた）で既に決めており、
+        /// ここはその写しで芝居を選ぶだけ。<b>余裕が負＝捕っていない</b>ので、その打球は球をグラブへ
+        /// 吸わせない（従来はここが「終点に野手が居るか」だけの判定で、抜けた打球でも近ければ
+        /// 球がグラブへ寄っていた）。</para>
         /// </summary>
         private void BuildFieldCatchPlan(PlaybackPlay play)
         {
@@ -665,6 +1312,15 @@ namespace KokoSim.Unity.Match
             _catchHoldDriftMax = 0f;
             _catchHoldCount = 0;
             if (play == null || play.Ball == null) return;
+
+            // 弾いた瞬間（お手玉）。engine の判定イベントが単一ソース＝時刻を絵の側で作らない
+            var fumbleAt = float.NaN;
+            if (play.Fumbled && play.Judgements != null)
+                foreach (var j in play.Judgements)
+                    if (j.Kind == JudgementKind.Error) fumbleAt = (float)j.T;
+            // 空中捕球の余裕（フライ/ライナーのみ非null）。ゴロは NaN＝下の分岐が全部素通りする
+            var catchMargin = play.CatchMargin.HasValue ? (float)play.CatchMargin.Value : float.NaN;
+            var aerialResolved = false;   // 空中の勝負は1本の打球につき1回だけ
 
             foreach (var seg in play.Ball)
             {
@@ -686,6 +1342,29 @@ namespace KokoSim.Unity.Match
 
                 float tc = (float)seg.T1;
                 var end = seg.At(seg.T1 - seg.T0);
+
+                // どう終わる芝居か（engine が決めた結果の写し）。
+                //   弾いた瞬間で終わる打球  → お手玉
+                //   空中の勝負で余裕が負    → 捕っていない。際どければ飛び込んで届かない絵、
+                //                             完全に抜けた当たりは芝居なし（従来の「落球に捕球クリップを
+                //                             流さない」を明示的に保つ）
+                var kind = FieldCatchKind.Catch;
+                var aerial = !isThrow && !float.IsNaN(catchMargin) && !aerialResolved
+                    && (eb == null ? seg is ArcSegment : eb.Kind == BallSegmentKind.Flight);
+                if (!isThrow && !float.IsNaN(fumbleAt) && Mathf.Abs(tc - fumbleAt) < 0.05f)
+                {
+                    kind = FieldCatchKind.Fumble;
+                    aerialResolved |= aerial;
+                }
+                else if (aerial)
+                {
+                    aerialResolved = true;
+                    if (catchMargin < 0f)
+                    {
+                        if (catchMargin <= -DiveMarginSeconds) continue;   // 抜けた当たり＝誰も触らない
+                        kind = FieldCatchKind.DiveMiss;
+                    }
+                }
 
                 // 受け手。送球は engine が知っている（E1）＝推定しない。無ければ従来どおり最近傍へ落とす
                 FieldPosition who;
@@ -717,13 +1396,27 @@ namespace KokoSim.Unity.Match
                 float h = isThrow ? ThrowCatchHeightM
                     : CatchHeightFor(eb != null ? eb.Kind
                         : (seg is RollSegment ? BallSegmentKind.Roll : BallSegmentKind.Flight));
-                int anchor = SelectFieldCatch(h, app);
-                if (anchor < 0) continue;
+                int anchor;
+                if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
+                else if (kind == FieldCatchKind.DiveMiss) anchor = DiveAnchorDiving;
+                else
+                {
+                    // ぎりぎり届く飛球は「間に合わせ方」で選ぶ（高さの主軸より優先）
+                    anchor = aerial ? SelectFieldDive(catchMargin, app) : -1;
+                    if (anchor >= 0) kind = FieldCatchKind.Dive;
+                    else
+                    {
+                        anchor = SelectFieldCatch(h, app);
+                        if (anchor < 0) continue;
+                    }
+                }
 
                 // 次のセグメントが始まるまでは球を捕球点に留める（engine の保持位置は高さ0のため）
                 float holdUntil = (float)play.Dur;
                 foreach (var nxt in play.Ball)
                     if (nxt.T0 >= seg.T1 - 1e-4 && nxt.T0 < holdUntil) holdUntil = (float)nxt.T0;
+                // 捕っていない芝居は球に触らせない（窓を開かない）＝球は engine の位置のまま
+                if (!HoldsBall(kind)) holdUntil = float.NegativeInfinity;
 
                 // 捕球点を**収録のグラブが居る距離**へ合わせる。engine の終点は「球が止まる点」で
                 // あって「捕る点」ではなく、実測では**両側に**破綻していた:
@@ -733,7 +1426,7 @@ namespace KokoSim.Unity.Match
                 //             グラブを胸の中へ畳むことになる
                 // どちらも「グラブの居る距離で捕る」で解ける。嘘の大きさは両側とも
                 // |野手との距離 − グラブの距離| に収まる（打点を投手側へ出す既存の作法と同型）。
-                var an = FieldCatchAnchors[anchor];
+                var an = AnchorOf(kind, anchor);
                 float reach = new Vector2(an.GloveX, an.GloveZ).magnitude * CatchReachSlack;
                 var fp = PlaybackEvaluator.FielderAt(play, who, tc).Pos;
                 // 高さは**選んだ収録のグラブの高さそのもの**にする。`h` は「その種別ならこのくらいの高さ」
@@ -777,14 +1470,59 @@ namespace KokoSim.Unity.Match
                 {
                     Pos = who,
                     TCatch = tc,
-                    TStart = tc - FieldCatchAnchors[anchor].Moment,
+                    TStart = tc - an.Moment,
+                    Kind = kind,
                     Anchor = anchor,
                     Point = pt,
                     HoldUntil = holdUntil,
                     FielderGapM = bestD,
                     PulledM = pulled,
                 });
+                switch (kind)
+                {
+                    case FieldCatchKind.Dive: _kindDive++; break;
+                    case FieldCatchKind.DiveMiss: _kindDiveMiss++; break;
+                    case FieldCatchKind.Fumble: _kindFumble++; break;
+                    default: _kindCatch++; break;
+                }
             }
+
+            // 飛び込み・お手玉の**尻尾**（着地〜起き上がり）に、同じ野手の次の予定が食い込む場合は
+            // そちらのクリップを譲らせる（球の扱いだけ残す）。engine の時刻は1つも動かさない
+            for (int i = 0; i < _catchEvents.Count; i++)
+            {
+                var body = _catchEvents[i];
+                if (body.Kind == FieldCatchKind.Catch) continue;
+                var tail = body.TCatch + DiveTailSeconds(AnchorOf(body.Kind, body.Anchor));
+                for (int j = 0; j < _catchEvents.Count; j++)
+                {
+                    if (j == i) continue;
+                    var next = _catchEvents[j];
+                    if (next.Pos != body.Pos || next.TCatch <= body.TCatch || next.TCatch > tail) continue;
+                    next.SkipClip = true;
+                    _catchEvents[j] = next;
+                }
+            }
+        }
+
+        /// <summary>
+        /// お手玉の左右を**打球の到来方向**で決める（監督決定 2026-08-13。乱数を引かない＝決定論）。
+        ///
+        /// <para>球がその野手の右手側へ流れていれば <c>Fumble_R</c>、左手側なら <c>Fumble_L</c>。
+        /// 「体の向き」は捕球と同じくグラブが球へ向くよう後から回すので、判定は<b>向きに依らない量</b>
+        /// ——球の進行方向と「野手→球」の外積の符号——で採る。</para>
+        /// </summary>
+        private static int SelectFumbleSide(PlaybackPlay play, FieldPosition who, float tc, PlaybackBallSegment seg)
+        {
+            var end = seg.At(seg.T1 - seg.T0);
+            var back = seg.At(Mathf.Max(0f, (float)(seg.T1 - seg.T0) - 0.1f));
+            var travel = new Vector2((float)(end.X - back.X), (float)(end.Y - back.Y));
+            var fp = PlaybackEvaluator.FielderAt(play, who, tc).Pos;
+            var toBall = new Vector2((float)(end.X - fp.X), (float)(end.Y - fp.Y));
+            if (travel.sqrMagnitude < 1e-8f || toBall.sqrMagnitude < 1e-8f) return 0;
+            // 外積 z＞0 … 球は野手から見て**左手側**へ抜けていく（フィールドの (x,z) 系）
+            float cross = toBall.x * travel.y - toBall.y * travel.x;
+            return cross > 0f ? 0 : 1;
         }
 
         /// <summary>終点からこれ以上離れていたら「誰も捕っていない」[m]。</summary>
@@ -854,14 +1592,34 @@ namespace KokoSim.Unity.Match
                 var e = _catchEvents[i];
                 if (e.Fired || t < e.TStart) continue;
                 var a = FielderActor(e.Pos);
-                var anchor = FieldCatchAnchors[e.Anchor];
+                var anchor = AnchorOf(e.Kind, e.Anchor);
                 var clip = LoadClip(anchor.Clip);
+                if (e.SkipClip)
+                {
+                    // 飛び込みの尻尾に食い込む回収。**クリップは譲る**（倒れたまま掴む絵）が、
+                    // 球はこの予定のものなので狙点とIKはそのまま生かす
+                    FielderMotion sk;
+                    if (_loco.TryGetValue(e.Pos, out sk))
+                    {
+                        sk.CatchEvent = i;
+                        _loco[e.Pos] = sk;
+                    }
+                    e.Fired = true;
+                    _catchEvents[i] = e;
+                    continue;
+                }
                 if (a != null && clip != null)
                 {
                     // ⚠ 頭出しは Max(0,…) で潰さない。TStart が未来なら**まだ来ていない**ので
                     //    上の t < TStart で降りており、ここへ来る時点で t − TStart ≥ 0 が保証されている
                     var endAt = anchor.PostCatchFollowSeconds >= 0f
                         ? anchor.Moment + anchor.PostCatchFollowSeconds : 0f;
+                    // 上下をクリップに持たせる収録（横っ飛び・スライディング）。
+                    // ⚠ **頭出しの前に切って、置き直してから入れる**。SeekActor はルートモーションを
+                    //    積みながら 0→頭出し位置まで進めるので、入れたまま頭出しすると
+                    //    「まだ沈んでいないはずの量」だけ根が下がった状態から始まる
+                    if (a.Animator != null) a.Animator.applyRootMotion = false;
+                    a.RootDrivenY = false;
                     SetActorClip(a, clip, t - e.TStart, endAt);
                     a.Speed = 1f;                       // 走りの倍率を持ち越さない
                     a.HoldSeconds = CatchHoldSeconds;   // 捕った形を見せてから待機へ戻る
@@ -869,7 +1627,13 @@ namespace KokoSim.Unity.Match
                     if (_loco.TryGetValue(e.Pos, out st))
                     {
                         st.Ladder = int.MinValue;       // 走りの段の管理から外す（クリップを奪わせない）
-                        st.CatchUntil = e.TCatch + CatchHoldSeconds;
+                        st.StartClip = -1; st.StartUntil = 0f;   // 発進の途中でも捕球が勝つ
+                        // 飛び込み系は**起き上がりまで収録に入っている**（実測: 横っ飛び 2.83s のうち
+                        // 捕るのは 0.80s で、残りが着地〜起き上がり。腰の高さが 0.79→0.17→0.72 と戻る）。
+                        // 0.35 秒で窓を閉じると走りの段がクリップを奪い、倒れた姿勢から待機へ瞬間移動する
+                        // （打ち切りには必ず据え置きを添える＝design-18 §4.5-⑬⑭ と同じ失敗）。
+                        st.CatchUntil = e.TCatch + (e.Kind == FieldCatchKind.Catch
+                            ? CatchHoldSeconds : DiveTailSeconds(anchor));
                         st.CatchEvent = i;
                         // **グラブが球の来る方を向くように体を回す**。走る向きを速度ベクトルへ
                         // 合わせたのと同じ考え方で、今度は合わせる対象がグラブになる。
@@ -897,10 +1661,21 @@ namespace KokoSim.Unity.Match
                         _loco[e.Pos] = st;
                         PlaceFielder(a, (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.X,
                             (float)PlaybackEvaluator.FielderAt(_fieldPlay, e.Pos, t).Pos.Y, st.Yaw);
+                        // 足が地面に載った状態で置き直してから、上下をクリップへ渡す（横位置と向きは
+                        // これまでどおり毎コマ engine が置く＝ルートモーションの XZ は捨てられる）
+                        if (anchor.RootDrivenY && a.Animator != null)
+                        {
+                            a.RootDrivenY = true;
+                            a.Animator.applyRootMotion = true;
+                        }
                     }
                 }
                 e.Fired = true;
                 _catchEvents[i] = e;
+                _lastFiredClip = anchor.Clip;
+                _lastFiredAt = e.TCatch;
+                _lastFiredKind = e.Kind;
+                _lastFiredPos = e.Pos;
             }
         }
 
@@ -941,6 +1716,7 @@ namespace KokoSim.Unity.Match
                 for (int i = 0; i < _catchEvents.Count; i++)
                 {
                     var c = _catchEvents[i];
+                    if (!HoldsBall(c.Kind)) continue;          // 球を持っていない＝タッチしにいけない
                     if (c.TCatch > t1 + 1e-3f) continue;       // タッチより後に捕る球は関係ない
                     var d = new Vector2(c.Point.x, c.Point.z) - bag;
                     if (d.magnitude > TagReceiverRadiusM) continue;
@@ -1071,6 +1847,23 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
+        /// 停止中、まだ生きている（飛んでいる／転がっている／保持中の）球があればその方向[度]を返す
+        /// （issue fence-camera-zoom-and-outfielder-facing）。<see cref="TryPendingThrowYaw"/> と同じ
+        /// 「本塁向きへ流れ戻るのを防ぐ」作法で、対象を送球予定でなく球そのものに広げたもの。
+        /// 距離が近すぎる（自分がちょうど居る位置＝球を持っている本人）ときは向きが数値的に決まらないので拾わない。
+        /// </summary>
+        private bool TryFacingLiveBall(float t, PlaybackVec here, out float yaw)
+        {
+            yaw = 0f;
+            var ball = PlaybackEvaluator.BallAt(_fieldPlay, t);
+            if (!ball.HasValue) return false;
+            var toBall = new Vector2((float)(ball.Value.X - here.X), (float)(ball.Value.Y - here.Y));
+            if (toBall.magnitude < FacingMinBallDistM) return false;
+            yaw = Mathf.Atan2(toBall.x, toBall.y) * Mathf.Rad2Deg;
+            return true;
+        }
+
+        /// <summary>
         /// 種付けの時点（<paramref name="t0"/>）で「もう投げ始めているはず」の送球があれば、
         /// その的の向き[度]を返す（issue #511・<c>BeginFieldPlay</c> の <c>_loco</c> 初期化専用）。
         /// 対決ビューから続く送球（盗塁の二塁送球・牽制）は投げ手の「前」のコマを見せていないので、
@@ -1116,6 +1909,23 @@ namespace KokoSim.Unity.Match
                 var st = kv.Value;
                 if (st.CatchEvent < 0 || st.CatchEvent >= _catchEvents.Count) continue;
                 var e = _catchEvents[st.CatchEvent];
+                // 接地の実測（飛び込み系）。**絵では「そういう姿勢」と区別できない**ので数で見る。
+                // 体の最下点が負＝地面へめり込んでいる／大きな正＝浮いている
+                if (e.Kind != FieldCatchKind.Catch)
+                {
+                    var ac = FielderActor(kv.Key);
+                    if (ac?.Animator != null)
+                    {
+                        float clr = LowestBoneY(ac.Animator) - _root.transform.position.y - ac.GroundY;
+                        _diveClearanceMin = Mathf.Min(_diveClearanceMin, clr);
+                        _diveClearanceMax = Mathf.Max(_diveClearanceMax, clr);
+                    }
+                }
+                // 捕っていない芝居（飛び込んだが届かない・お手玉）はグラブを球へ寄せない。
+                // 寄せると**捕ってしまう**＝収録は捕るクリップなので、IK を当てないことが
+                // 「届かなかった」の表現そのものになる。外れる量は engine の幾何
+                // （その時刻の野手の位置と球の位置の差）がそのまま出る＝絵のために距離を発明しない
+                if (!HoldsBall(e.Kind)) continue;
                 var a = FielderActor(kv.Key);
                 if (a == null || a.Animator == null) continue;
 
@@ -1201,12 +2011,14 @@ namespace KokoSim.Unity.Match
                 + "s）のグラブ→捕球点の最悪="
                 + _catchHoldDriftMax.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
                 + "m\t計測コマ=" + _catchHoldCount);
-            sb.AppendLine("pos\ttCatch\ttStart\tcatchH\t野手との距離\t手前へ\tclip");
+            sb.AppendLine("pos\t芝居\ttCatch\ttStart\tcatchH\t野手との距離\t手前へ\tclip");
             foreach (var e in _catchEvents)
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                    "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F2}\t{6}", e.Pos, e.TCatch, e.TStart,
+                    "{0}\t{1}{2}\t{3:F2}\t{4:F2}\t{5:F2}\t{6:F2}\t{7:F2}\t{8}",
+                    e.Pos, e.Kind, e.SkipClip ? "(譲)" : "", e.TCatch, e.TStart,
                     e.Point.y, e.FielderGapM, e.PulledM,
-                    FieldCatchAnchors[e.Anchor].Clip.Replace("AA_Baseball_Defender_", "")));
+                    // ⚠ 表は3つある（通常／飛び込み／お手玉）。添字だけで引くと別の収録名が出る
+                    AnchorOf(e.Kind, e.Anchor).Clip.Replace("AA_Baseball_Defender_", "")));
             return sb.ToString();
         }
 
@@ -1452,6 +2264,19 @@ namespace KokoSim.Unity.Match
         private bool _duelThrowActive;
         private bool _duelThrowFired;
         private float _duelThrowX, _duelThrowZ, _duelThrowYaw, _duelThrowYawRate, _duelThrowLastT;
+        // 対決ビュー据え置きの送球（issue #512）が実際に発火したか＝投げ手ごとに BeginFieldPlay まで
+        // 持ち越す控え。EndDuelThrow は姿勢（transform）を意図的に触らないため（下記コメント参照）、
+        // BeginFieldPlay の Snapshot がそのまま撮ると送球フォロースルーの途中を「戻り先」に焼いてしまう
+        // （対決ビュー復帰後も送球モーションが再生され続ける実害）。ここを見て Snapshot をアイドルへ
+        // すり替える（BeginFieldPlay で読んだら消費して false に戻す）。
+        private bool _duelThrowFiredCatcher;
+        private bool _duelThrowFiredPitcher;
+        // 投げ手の**基準**（BasePos/BaseRot）の控え。PlaceFielder は基準を書き換える（守備の役者は置いた所が
+        // 基準）が、この送球の投げ手は対決4体と共有の役者で、基準は対決の構え位置・向き。ここを通った
+        // 立ちの向き（三塁送球なら約−45°）を基準に焼いたまま BeginFieldPlay が控え、EndFieldPlay が戻すと、
+        // 以降ずっと捕手の体の軸が三塁を向いた（2026-08-15 監督報告。issue #607 の縦と同型で、向きと横位置の版）
+        private Vector3 _duelThrowBasePos;
+        private Quaternion _duelThrowBaseRot;
 
         /// <summary>
         /// この一投の頭出しを準備する。対象は投げ手が捕手/投手の1本だけ（盗塁・牽制はどちらも
@@ -1462,8 +2287,7 @@ namespace KokoSim.Unity.Match
         public bool TryBeginDuelThrow(PlaybackPlay play, out float fireAt)
         {
             fireAt = 0f;
-            _duelThrowActive = false;
-            _duelThrowFired = false;
+            EndDuelThrow();   // 前の送球が畳まれずに残っていたら基準を戻してから始める
             if (!Available || play?.Ball == null) return false;
 
             PlaybackBallSegment throwSeg = null;
@@ -1506,7 +2330,8 @@ namespace KokoSim.Unity.Match
                 _duelThrowFired = true;
                 // 捕球ポーズ補正（ミットIK・体寄せ）に投げのクリップを奪わせない（issue #512。
                 // FixCatcherPose は _catchIndex<0 なら何もしない）
-                if (_duelThrowActor == _catcher) _catchIndex = -1;
+                if (_duelThrowActor == _catcher) { _catchIndex = -1; _duelThrowFiredCatcher = true; }
+                else if (_duelThrowActor == _pitcher) _duelThrowFiredPitcher = true;
                 var clip = LoadClip(e.Anchor.Clip);
                 SetActorClip(_duelThrowActor, clip, (t - e.TStart) * e.Rate, e.Anchor.Release + ThrowFollowSeconds);
                 _duelThrowActor.Speed = e.Rate;
@@ -1515,6 +2340,8 @@ namespace KokoSim.Unity.Match
                 _duelThrowX = lp.x;
                 _duelThrowZ = lp.z;
                 _duelThrowYaw = _duelThrowActor.Go.transform.localEulerAngles.y;
+                _duelThrowBasePos = _duelThrowActor.BasePos;   // 基準を控える（EndDuelThrow で戻す。上の項）
+                _duelThrowBaseRot = _duelThrowActor.BaseRot;
                 float rest = Mathf.Abs(Mathf.DeltaAngle(_duelThrowYaw, e.Yaw));
                 float span = Mathf.Max(1f / PoseFps, e.TRelease - 1f / PoseFps - t);
                 _duelThrowYawRate = rest / span;
@@ -1533,9 +2360,19 @@ namespace KokoSim.Unity.Match
             PlaceFielder(_duelThrowActor, _duelThrowX, _duelThrowZ, _duelThrowYaw);
         }
 
-        /// <summary>対決ビュー据え置きの送球状態を畳む（BeginFieldPlay への引き渡し後・プレー打ち切り時）。</summary>
+        /// <summary>
+        /// 対決ビュー据え置きの送球状態を畳む（BeginFieldPlay への引き渡し後・プレー打ち切り時）。
+        /// 投げ手の基準（BasePos/BaseRot）を対決の構えへ戻す＝<b>必ず BeginFieldPlay より前に呼ぶ</b>
+        /// （BeginFieldPlay がその時点の基準を控え、EndFieldPlay がそれを戻すため。transform は触らない＝
+        /// 見えている送球の姿勢はそのまま、次の打席の巻き戻し先だけを正す）。
+        /// </summary>
         public void EndDuelThrow()
         {
+            if (_duelThrowFired && _duelThrowActor != null)
+            {
+                _duelThrowActor.BasePos = _duelThrowBasePos;
+                _duelThrowActor.BaseRot = _duelThrowBaseRot;
+            }
             _duelThrowActive = false;
             _duelThrowFired = false;
             _duelThrowActor = null;
@@ -2015,7 +2852,9 @@ namespace KokoSim.Unity.Match
                 a.IdleClip = idle;
                 StepActor(a, 0.001f);
                 GroundFix(a);
-                if (!useVendor) AttachGear(a, GearKind.Cap, Vector3.zero, _offenseColors.Cap, layer);
+                if (!useVendor)
+                    AttachGear(a, GearKind.Cap, Vector3.zero, _offenseColors.Cap, layer,
+                        _offenseColors.CapVisor);
                 CollectTeamMats(a, _offenseColors.Cap);
                 a.Go.SetActive(false);
                 a.Enabled = false;
@@ -2277,14 +3116,16 @@ namespace KokoSim.Unity.Match
             _runnerMotion[idx] = st;
         }
 
-        /// <summary>走者を置く（守備の <see cref="PlaceFielder"/> と同じ。接地はマウンド以外は平ら）。</summary>
+        /// <summary>走者を置く（守備の <see cref="PlaceFielder"/> と同じ。接地はマウンド以外は平ら）。
+        /// 縦を基準へ焼かないのも同じ理由（issue #607。走者は毎コマ基準から書き直す相手が今は居ないが、
+        /// 「<see cref="PlaceFielder"/> と同じ」と書いてある以上ここだけ違う規則にしない）。</summary>
         private void PlaceRunner(Actor a, float x, float z, float yawDeg)
         {
             if (a == null || a.Go == null) return;
             var lp = a.Go.transform.localPosition;
             a.Go.transform.localPosition = new Vector3(x, lp.y, z);
             a.Go.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
-            a.BasePos = a.Go.transform.localPosition;
+            a.BasePos = new Vector3(x, a.BasePos.y, z);   // ⚠ 縦は据え置き（PlaceFielder の項）
             a.BaseRot = a.Go.transform.localRotation;
             a.GroundY = FieldGroundY(x, z);
             GroundFix(a);
@@ -2408,7 +3249,12 @@ namespace KokoSim.Unity.Match
 
         private const float FenceWingM = 95f;    // 両翼（2D の _wingM と同値）
         private const float FenceCenterM = 118f; // 中堅（同 _centerM）
-        private const float FenceHeightM = 3.2f;
+        // フェンス高さは engine の既定（FieldGeometry.FenceHeightM）を単一ソースにする
+        // （issue fence-carom-and-over-the-head-cues）。3Dだけ 3.2m を持っていて、engine の判定
+        // （本塁打・フェンス激突）が使う 4.0m と食い違っていた＝**絵で越えているのに越えていない**
+        // （逆も）が起こり得る。跳ね返りを描く前に揃える。
+        private static readonly float FenceHeightM =
+            (float)new KokoSim.Engine.Match.Field.FieldGeometry().FenceHeightM;
         private const float WarningTrackM = 3.5f;
         private const float HomeCircleM = 4.3f;
         private const float FoulQuarterRad = Mathf.PI / 4f;   // フェア領域は ±45°
@@ -2804,7 +3650,30 @@ namespace KokoSim.Unity.Match
                 ThrowFollowsBall: !IsEndpointFramedThrow(play) && FieldThrowFollowsBall,
                 HeldBallFollowsRunner: true,
                 LooseBallFollowsChaser: true,
-                ThrowBoxGrowsWithBall: FieldThrowBoxGrows, KeepSubjectFramed: FieldKeepSubjectFramed);
+                ThrowBoxGrowsWithBall: FieldThrowBoxGrows,
+                KeepSubjectFramed: FieldKeepSubjectFramed && !IsHomeRun(play),
+                ReturnsToWide: FieldReturnsToWide);
+
+        /// <summary>
+        /// 本塁打（誰にも処理されない打球）か（issue fence-camera-zoom-and-outfielder-facing）。
+        ///
+        /// <para>本塁打では守備9人全員が「各塁のカバーへ入る」演出で <see cref="PlaybackPlay.Moves"/> に
+        /// 登録され、常に「動いている」扱いになる。<see cref="CameraPlanBuilder.ZoomKeepingSomeoneFramed"/>
+        /// （issue #566・枠に人が1人も居ないコマだけ広げる機構）はこの内野〜捕手陣も候補にするため、
+        /// 球が外野の奥（60〜130m）へ飛んでいく間、常に本塁付近の内野手までを収めようとして
+        /// 寄り切れない（実測: センター方向へ直線的に飛ぶサンプルでズームが 6.88→3.72 倍のあいだで
+        /// 振動し続け、6.88倍で頭打ちのまま着地まで寄らなかった）。誰も捕れない本塁打では
+        /// 「守備の誰かを収める」こと自体が不要な絵の要求なので、この打球だけ機構を切る。</para>
+        /// </summary>
+        private static bool IsHomeRun(PlaybackPlay play) => play?.Result != null && play.Result.Contains("ホームラン");
+
+        /// <summary>
+        /// プレーの終わりに全景（縦155m）へ戻すか（issue field-view-cut-back-sooner ④）。
+        /// **絵で決める値**なので比較撮影のために差し替えられるようにしてある（true で旧挙動）。
+        /// engine のプラン（<see cref="CameraFraming.ReturnsToWide"/>）と3D側のカット
+        /// （<see cref="_fieldCamCutT"/>）の両方がここを見る＝片方だけ変えるとプランと実カットがずれる。
+        /// </summary>
+        public static bool FieldReturnsToWide = false;
 
         /// <summary>
         /// 「始点と終点を両方収める」枠にすべき短い送球1本のプレーか（牽制 issue #515／暴投・捕逸の
@@ -2833,12 +3702,19 @@ namespace KokoSim.Unity.Match
         /// 存在しない＝プランが持っていない**ので、ここで足す。無いと寄った瞬間にフライが画面の上へ抜ける
         /// （枠 19m の構図に対し打球の頂点は 30m 級＝1枠ぶん以上うわを通る）。
         ///
-        /// 滞空中（<see cref="BallSegmentKind.Flight"/>）は**現在高度を追わない**（issue #399②-1）。
+        /// 滞空中（<see cref="BallSegmentKind.Flight"/>）の**上昇中**は現在高度を追わない（issue #399②-1）。
         /// 現在高度＋0.6秒先読みで決めると、上昇中はほぼ同じ高さへ貼り付き続けて上昇が絵から消える
         /// （ライナーに見える症状の主因）。代わりに**そのセグメントの頂点・着地点（0とApexHeightM）を
-        /// 両端とする箱**を取る＝engine 側 FitBox の縦版で、セグメント中は枠が一定のまま
-        /// 球がその中で弧を描いて見える。頂点は <c>apex·4u(1−u)</c>（u=0.5で最大）の性質から
-        /// セグメント中央の値をそのまま読むだけで求まる（式を Unity 側で持ち直さない）。
+        /// 両端とする箱**を取る＝engine 側 FitBox の縦版で、上昇中は枠が一定のまま球がその中で弧を描いて見える。
+        /// 頂点は <c>apex·4u(1−u)</c>（u=0.5で最大）の性質からセグメント中央の値をそのまま読むだけで求まる
+        /// （式を Unity 側で持ち直さない）。
+        ///
+        /// **頂点を過ぎた下降中は、その時点の現在高度を基準に切り替える**（issue
+        /// fence-camera-zoom-and-outfielder-facing）。頂点固定のままだとフェンス際・本塁打の着地・
+        /// 頭越えの瞬間まで頂点ぶんの縦枠（本塁打級で20〜30m）を引きずり、寄れない。高さは着地へ向けて
+        /// 単調に下がるので現在高度をそのまま使っても上昇時の問題（貼り付いて絵から消える）は起きない。
+        /// frameH の変化自体は <see cref="ApplyFieldCamera"/> 側のレート制限（毎秒 <see cref="FieldZoomSpeedCapMPerSecond"/>）
+        /// で滑らかに追いつく＝段差では跳ばない。
         /// それ以外の区間（保持中・ゴロ・送球等）は従来どおり現在＋先読みの箱に落ちる。
         /// </summary>
         private void ComputeFieldFrame(float t, out Vector3 aim, out float frameH)
@@ -2851,9 +3727,12 @@ namespace KokoSim.Unity.Match
             var flight = FieldFlightSegmentAt(t);
             if (flight != null)
             {
-                float apex = Mathf.Max(0f, (float)flight.At((flight.T1 - flight.T0) * 0.5).H);
-                aimY = Mathf.Max(FieldAimYMin, apex * 0.5f);
-                frameH = Mathf.Max(frameH, apex + FieldMarginM * 2f);
+                double half = (flight.T1 - flight.T0) * 0.5;
+                float apex = Mathf.Max(0f, (float)flight.At(half).H);
+                double rel = t - flight.T0;
+                float h = rel > half ? Mathf.Max(0f, (float)flight.At(rel).H) : apex;
+                aimY = Mathf.Max(FieldAimYMin, h * 0.5f);
+                frameH = Mathf.Max(frameH, h + FieldMarginM * 2f);
             }
             else
             {
@@ -3197,8 +4076,17 @@ namespace KokoSim.Unity.Match
             SetFieldCastVisible(true);
             _fieldPlay = play;
             _fieldT0 = t0;
-            _pitcherSnap = Snapshot(_pitcher);
-            _catcherSnap = Snapshot(_catcher);
+            // 対決ビュー据え置きの送球（盗塁・牽制）から続く場合、投げ手の基準を対決の構えへ戻してから控える
+            // （呼び出し側も EndDuelThrow を先に呼ぶが、順序を構造で保証する。EndDuelThrow の項）
+            EndDuelThrow();
+            // EndDuelThrow は見えている送球の姿勢（Clip/Time）をあえて触らない＝ここで素直に Snapshot すると
+            // 送球フォロースルーの途中を「対決ビューへ戻る先」として焼いてしまい、EndFieldPlay で復元した
+            // 後もその続きが再生され続ける（守備ビューへ切り替わった後もモーションが止まらない実害）。
+            // 対決ビュー据え置きの送球が実際に発火した投げ手だけ、アイドルへすり替えて控える。
+            _pitcherSnap = _duelThrowFiredPitcher ? IdleSnapshot(_pitcher) : Snapshot(_pitcher);
+            _catcherSnap = _duelThrowFiredCatcher ? IdleSnapshot(_catcher) : Snapshot(_catcher);
+            _duelThrowFiredPitcher = false;
+            _duelThrowFiredCatcher = false;
 
             // 捕球予定・送球予定を先に組む（_loco の初期 Yaw 種付けに使う＝下記。issue #511）。
             BuildFieldCatchPlan(play);
@@ -3211,6 +4099,10 @@ namespace KokoSim.Unity.Match
             _locoMaxPosErr = _locoMaxYawStep = _locoMaxSpeed = 0f;
             _locoMoveFrames = _locoClampFrames = 0;
             _locoSlipMax = 0f; _locoSlipMin = float.MaxValue;
+            for (int i = 0; i < _facingFrames.Length; i++) _facingFrames[i] = 0;
+            _startFired = _startFrames = 0;
+            _startSlipMax = 0f; _startSlipMin = float.MaxValue;
+            BuildFieldStartPlan(play, t0);     // 発進の予定表（issue wire-defender-locomotion-motions）
             foreach (var pos in AllFieldPositions)
             {
                 var a = FielderActor(pos);
@@ -3221,6 +4113,7 @@ namespace KokoSim.Unity.Match
                 {
                     Ladder = -1,
                     CatchEvent = -1,
+                    StartClip = -1,
                     Entry = new Vector2(lp.x - (float)want.Pos.X, lp.z - (float)want.Pos.Y),
                 };
                 // 対決ビューから続く送球（盗塁の二塁送球・牽制）は、的へ向く「前」のコマを
@@ -3254,7 +4147,11 @@ namespace KokoSim.Unity.Match
             // では着弾＋余韻へ前倒しされる＝カットも同じ瞬間に跳ぶので、プランの「全景への移動走行」
             // （3Dでは用のないところを見ている travel）は実カットに乗らない。
             var wideStart = CameraPlanBuilder.WideStartTime(play);
-            _fieldCamCutT = double.IsFinite(wideStart) ? (float)wideStart : float.PositiveInfinity;
+            // 全景へ戻さない設定（issue field-view-cut-back-sooner ④）ではカットそのものを打たない。
+            // プランも全景へ戻らない（ReturnsToWide:false）ので、ここで切ると**戻り先ではない枠**へ跳ぶ。
+            _fieldCamCutT = FieldReturnsToWide && double.IsFinite(wideStart)
+                ? (float)wideStart
+                : float.PositiveInfinity;
             // 全景カットをびっくりマークの窓の中で切らない（2026-08-05 監督報告「カメラが見づらい・
             // 切り替えが早い」。実測: エラーの1秒後＝窓のど真ん中で回転298°/s・画角2273°/sのカットが
             // 直撃していた）。窓の終わり＝マーク消灯と同時に切る（据え→カットの2拍子に整える）
@@ -3343,6 +4240,23 @@ namespace KokoSim.Unity.Match
             };
         }
 
+        /// <summary>
+        /// <see cref="Snapshot"/> の亜種＝いま再生中のクリップではなく、その役者のアイドル姿勢を
+        /// 「対決ビューへ戻る先」として控える（対決ビュー据え置きの送球が発火した投げ手専用。上の項）。
+        /// </summary>
+        private static DuelActorSnapshot IdleSnapshot(Actor a)
+        {
+            if (a == null || a.Go == null) return default;
+            return new DuelActorSnapshot
+            {
+                Valid = true,
+                Clip = a.IdleClip, IdleClip = a.IdleClip, Time = 0f, Speed = 1f,
+                EndAt = a.IdleEndAt, DefaultEndAt = a.DefaultEndAt, IdleEndAt = a.IdleEndAt,
+                GroundY = a.GroundY, HoldAtEnd = false, Holding = false,
+                BasePos = a.BasePos, BaseRot = a.BaseRot,
+            };
+        }
+
         private void Restore(Actor a, DuelActorSnapshot s)
         {
             if (a == null || a.Go == null || !s.Valid) return;
@@ -3378,6 +4292,8 @@ namespace KokoSim.Unity.Match
             // タッチは最後（同じ野手が「捕る→タッチする」と続くとき、タッチが後勝ちであるべき。
             // 送球より後なのも同じ理由＝タッチする野手はもう投げない。issue #489）
             FireDueTags(t);
+            // 発進は最後（捕る・投げる・タッチが同じ野手に入っていたらそちらが勝つ）
+            FireDueStarts(t);
 
             // 守備9人（投手・捕手を含む）。位置は engine の真値、足と向きは Unity が合わせる
             foreach (var pos in AllFieldPositions)

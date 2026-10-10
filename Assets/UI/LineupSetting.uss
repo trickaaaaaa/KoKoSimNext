@@ -60,6 +60,8 @@
 .lineup-row .num-badge { margin-left: var(--sp-2); }
 .lineup-row .pos-chip { min-width: 36px; height: 34px; font-size: 19px; }
 .lineup-row .rank-chip { min-width: 34px; height: 36px; font-size: 22px; }
+/* 調子（表情顔）。故障チップの隣＝行の末尾（issue: スタメン決定画面に調子が無い, 2026-08-25）。 */
+.lu-row__cond { margin-left: var(--sp-2); }
 /* 選手名と「学年・投打」の間の通算成績。学年・投打と同じ控えめグレー・名前より目立たせない。 */
 .lu-root .lineup-row__stat { font-size: 19px; color: var(--color-muted); margin-right: var(--sp-3); }
 

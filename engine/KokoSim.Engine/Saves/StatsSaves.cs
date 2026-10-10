@@ -13,12 +13,14 @@ namespace KokoSim.Engine.Saves;
 /// </summary>
 internal static class StatsSaves
 {
-    // ===== PlayerStatStore（4スコープ） =====
+    // ===== PlayerStatStore（5スコープ） =====
 
     public static JsonObject StoreToJson(PlayerStatStore s) => new JsonObject()
         .Add("career", BookToJson(s.Career))
         .Add("official", BookToJson(s.Official))
         .Add("current", BookToJson(s.CurrentTournament))
+        .Add("prefQualifier", BookToJson(s.PrefQualifier))
+        .Add("regionalQualifier", BookToJson(s.RegionalQualifier))
         .Add("archive", ArchiveToJson(s.Archive));
 
     public static void RestoreInto(PlayerStatStore target, JsonObject o)
@@ -26,6 +28,13 @@ internal static class StatsSaves
         RestoreBookInto(target.Career, o.Obj("career"));
         RestoreBookInto(target.Official, o.Obj("official"));
         RestoreBookInto(target.CurrentTournament, o.Obj("current"));
+        // prefQualifier は v15（夏の甲子園）で追加。旧セーブは項目ごと無い＝空で読む
+        // （その年の甲子園展望に県予選成績が出ないだけで進行は詰まらない）。
+        if (o.Has("prefQualifier")) RestoreBookInto(target.PrefQualifier, o.Obj("prefQualifier"));
+        else target.PrefQualifier.Clear();
+        // regionalQualifier は v17（センバツの地区大会成績）で追加。旧セーブは項目ごと無い＝空で読む。
+        if (o.Has("regionalQualifier")) RestoreBookInto(target.RegionalQualifier, o.Obj("regionalQualifier"));
+        else target.RegionalQualifier.Clear();
         RestoreArchiveInto(target.Archive, o.Arr("archive"));
     }
 
@@ -47,11 +56,94 @@ internal static class StatsSaves
 
     public static void RestoreInto(NationTournamentStats target, JsonArray arr)
     {
-        target.StartTournament();   // 全消去してから積む
+        target.StartTournament();   // 今大会スコープを全消去してから積む
         foreach (var v in arr.Items)
         {
             var o = v.AsObject();
             RestoreBookInto(target.GetOrCreateBook(o.Int("schoolId")), o.Obj("book"));
+        }
+    }
+
+    /// <summary>全国の通算スコープ（校ID→StatBook, issue #634）。今大会と別配列で持つ。</summary>
+    public static JsonArray NationCareerToJson(NationTournamentStats s)
+    {
+        var ids = new List<int>(s.CareerSchools);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids)
+        {
+            var book = s.CareerForSchool(id);
+            if (book is null) continue;
+            arr.Add(new JsonObject().Add("schoolId", id).Add("book", BookToJson(book)));
+        }
+        return arr;
+    }
+
+    public static void RestoreCareerInto(NationTournamentStats target, JsonArray arr)
+    {
+        target.ClearCareer();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            RestoreBookInto(target.GetOrCreateCareerBook(o.Int("schoolId")), o.Obj("book"));
+        }
+    }
+
+    /// <summary>
+    /// 全国の県予選スコープ（校ID→StatBook。設計書05 §1.4b）。今大会・通算と別配列で持つ。
+    /// 甲子園の大会展望が引く読み物なので、消えても進行は詰まらないが、代表校の再シムは
+    /// 大会をまたいで走り直さないため保存する。
+    /// </summary>
+    public static JsonArray NationPrefQualifierToJson(NationTournamentStats s)
+    {
+        var ids = new List<int>(s.PrefQualifierSchools);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids)
+        {
+            var book = s.PrefQualifierForSchool(id);
+            if (book is null) continue;
+            arr.Add(new JsonObject().Add("schoolId", id).Add("book", BookToJson(book)));
+        }
+        return arr;
+    }
+
+    public static void RestorePrefQualifierInto(NationTournamentStats target, JsonArray arr)
+    {
+        target.ClearPrefQualifier();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            RestoreBookInto(target.GetOrCreatePrefQualifierBook(o.Int("schoolId")), o.Obj("book"));
+        }
+    }
+
+    /// <summary>
+    /// 全国の地区大会スコープ（校ID→StatBook。設計書05 §1.5b）。今大会・通算・県予選と別配列で持つ。
+    /// センバツの大会展望が引く読み物なので、消えても進行は詰まらないが、選出校の再シムは
+    /// 大会をまたいで走り直さないため保存する。
+    /// </summary>
+    public static JsonArray NationRegionalQualifierToJson(NationTournamentStats s)
+    {
+        var ids = new List<int>(s.RegionalQualifierSchools);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids)
+        {
+            var book = s.RegionalQualifierForSchool(id);
+            if (book is null) continue;
+            arr.Add(new JsonObject().Add("schoolId", id).Add("book", BookToJson(book)));
+        }
+        return arr;
+    }
+
+    public static void RestoreRegionalQualifierInto(NationTournamentStats target, JsonArray arr)
+    {
+        target.ClearRegionalQualifier();
+        foreach (var v in arr.Items)
+        {
+            var o = v.AsObject();
+            RestoreBookInto(target.GetOrCreateRegionalQualifierBook(o.Int("schoolId")), o.Obj("book"));
         }
     }
 
@@ -109,11 +201,14 @@ internal static class StatsSaves
         .Add("sb", b.StolenBases)
         .Add("cs", b.CaughtStealing)
         .Add("r", b.Runs)
-        .Add("sf", b.SacrificeFlies);
+        .Add("sf", b.SacrificeFlies)
+        .Add("sh", b.SacrificeHits);
 
+    // sh は issue sacrifice-bunt-counted-as-at-bat で追加。旧セーブは項目ごと無い＝0で読む。
     public static void RestoreBattingInto(BattingStatLine target, JsonObject o) => target.Restore(
         o.Int("g"), o.Int("pa"), o.Int("ab"), o.Int("h"), o.Int("2b"), o.Int("3b"), o.Int("hr"),
-        o.Int("rbi"), o.Int("bb"), o.Int("hbp"), o.Int("so"), o.Int("sb"), o.Int("cs"), o.Int("r"), o.Int("sf"));
+        o.Int("rbi"), o.Int("bb"), o.Int("hbp"), o.Int("so"), o.Int("sb"), o.Int("cs"), o.Int("r"), o.Int("sf"),
+        o.Has("sh") ? o.Int("sh") : 0);
 
     // ===== PitchingStatLine =====
 
@@ -134,8 +229,6 @@ internal static class StatsSaves
         return new JsonObject()
             .Add("g", p.Games)
             .Add("gs", p.GamesStarted)
-            .Add("w", p.Wins)
-            .Add("l", p.Losses)
             .Add("outs", p.Outs)
             .Add("bf", p.BattersFaced)
             .Add("h", p.Hits)
@@ -149,10 +242,13 @@ internal static class StatsSaves
             .Add("byPitch", byPitch);
     }
 
+    // w/l（勝敗投手）は概念ごと撤去（監督判断2026-08-27）。旧セーブに残る "w"/"l" キーは読まずに無視する
+    // だけで済む（余分なキーがあるだけ）。SaveCodec.CurrentVersion は上げない＝キー削除だけなので
+    // 旧セーブの読み込み自体は壊れない（Migrate 側の対応も不要）。
     public static void RestorePitchingInto(PitchingStatLine target, JsonObject o)
     {
         target.Restore(
-            o.Int("g"), o.Int("gs"), o.Int("w"), o.Int("l"), o.Int("outs"), o.Int("bf"), o.Int("h"),
+            o.Int("g"), o.Int("gs"), o.Int("outs"), o.Int("bf"), o.Int("h"),
             o.Int("r"), o.Int("er"), o.Int("so"), o.Int("bb"), o.Int("hb"), o.Int("np"), o.Int("hra"));
         foreach (var v in o.Arr("byPitch").Items)
         {

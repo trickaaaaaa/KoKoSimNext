@@ -12,7 +12,7 @@ namespace KokoSim.Engine.Tests.Season;
 /// </summary>
 public sealed class SeasonEngineTests
 {
-    private static SeasonContext LoadContext()
+    internal static SeasonContext LoadContext()
     {
         var coeffPath = BalanceRegressionTests.FindDataFile("coefficients.yaml");
         var eventsPath = BalanceRegressionTests.FindDataFile("events.yaml");
@@ -124,20 +124,34 @@ public sealed class SeasonEngineTests
         // issue #535: 年度替わりロジックを RosterLifecycle.AdvanceYear へ切り出した前後で SeasonEngine.Run の
         // 出力が1ビット一致することを固定する。
         // AdvanceYear が SeasonEngine の消費する乱数列・進級・卒業・新入生を1つでも変えれば、この表が割れる。
-        // 採り直し履歴: issue #578 Step 2（球速のバリューを2倍・whiff_intercept で平均三振率は据え置き）で
-        // 実戦成長の入力が変わるため再採取した（物理層を意図して変えたときだけ採り直す。#535 の性質は不変）。
+        // 採り直し履歴:
+        //   issue #578 Step 2（球速のバリューを2倍・whiff_intercept で平均三振率は据え置き）で
+        //     実戦成長の入力が変わるため再採取。
+        //   issue #613（設備・資金イベントを3件新設）/ #615（練習効率イベントを3件新設）で
+        //     **週次抽選のプールと重み合計が変わる**ため再採取。
+        //     イベント表への追加は必ずここを割る（＝どの週に何が当たるかが動く）。data/events.yaml に
+        //     Random/Choice を足したら、この表は採り直す前提で考える。
+        //   2026-08-15（案D: base_main_exp 85→130・level_up_growth 1.05→1.04・身体系の名声連動）で
+        //     育成の到達レベルが変わるため再採取。乱数消費列（部員数・イベント数）は不変で、レベルの列だけ動いた。
+        //   2026-08-16（issue matchup-gap-saturation-k-rate: 投打差の soft-cap／fatigue-gradual-before-threshold:
+        //     消耗カーブ／本格派の制球オフセット −12→−7）で実戦成長の入力（試合結果）が変わるため再採取。
+        //     部員数・イベント数は不変で、レベルの列だけ動いた。
+        //   2026-08-18（issue pitcher-barely-affects-contact-quality: 投手の打球品質寄与 ×3＋球質タイプのオフセット再校正
+        //     ＋quality_mean 0.63。同日の本塁打判定の正し／初速上限は年次の列を動かさなかった）で再採取。
+        //     部員数・イベント数は不変で、レベルの列だけ動いた。
+        // （物理層・育成式・イベント表を意図して変えたときだけ採り直す。#535 の性質は不変）
         var golden = new (int Year, int Roster, double Reg, double Grad, int Events)[]
         {
-            (1, 11, 0, 0, 27),
-            (2, 21, 39.554545454545455, 0, 22),
-            (3, 30, 38.99047619047619, 0, 31),
-            (4, 29, 39.13333333333335, 40.236363636363635, 32),
-            (5, 28, 39.10701754385965, 38.42, 29),
-            (6, 27, 38.9859649122807, 40.52222222222221, 30),
-            (7, 25, 41.115686274509805, 38.6, 31),
-            (8, 26, 41.510416666666664, 39.918518518518525, 28),
-            (9, 29, 38.55185185185185, 43.00833333333333, 31),
-            (10, 31, 37.750793650793646, 40.5, 35),
+            (1, 11, 0, 0, 28),
+            (2, 21, 42.52121212121212, 0, 22),
+            (3, 30, 44.32380952380953, 0, 31),
+            (4, 29, 43.266666666666666, 43.651515151515156, 32),
+            (5, 29, 41.26491228070176, 45.89333333333333, 29),
+            (6, 30, 40.72333333333333, 41.2, 34),
+            (7, 29, 41.79666666666667, 42.513333333333335, 33),
+            (8, 28, 42.470175438596485, 40.21, 31),
+            (9, 26, 41.54814814814815, 44.33333333333333, 32),
+            (10, 29, 42.68627450980392, 41.166666666666664, 32),
         };
 
         var summary = SeasonEngine.Run(10, LoadContext(), new Xoshiro256Random(20260808));

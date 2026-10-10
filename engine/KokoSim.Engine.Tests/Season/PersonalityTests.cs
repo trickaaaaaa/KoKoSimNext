@@ -140,9 +140,9 @@ public sealed class PersonalityTests
         var pitcher = new PitcherAttributes { MaxVelocityKmh = 140 };
         Player Batter(double bonus) => new() { Bunt = 50, BuntSuccessBonus = bonus };
 
-        var selfless = BuntResolver.SuccessRate(Batter(+0.05), pitcher, c);
-        var neutral = BuntResolver.SuccessRate(Batter(0.0), pitcher, c);
-        var spotlight = BuntResolver.SuccessRate(Batter(-0.06), pitcher, c);
+        var selfless = BuntResolver.SuccessRate(Batter(+0.05), pitcher, courseDifficulty: 0.0, c);
+        var neutral = BuntResolver.SuccessRate(Batter(0.0), pitcher, courseDifficulty: 0.0, c);
+        var spotlight = BuntResolver.SuccessRate(Batter(-0.06), pitcher, courseDifficulty: 0.0, c);
 
         Assert.True(selfless > neutral);
         Assert.True(spotlight < neutral);

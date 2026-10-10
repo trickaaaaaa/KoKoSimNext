@@ -30,10 +30,11 @@
 | docs/design/design-18 | 選手キャラクター制作方針（対決ビュー用3Dキャラ＝リアル頭身ローポリ＋ピクセル化シェーダ、モーキャップ調達、色替え6領域、時間量子化） |
 | docs/design/design-19 | UIリスタイル「デーゲーム・フルNB」（昼の白地＋インク枠＋ベタ影＋芝/土/空の色ブロック＋応援団赤CTA。§8に実装確定事項＝夜トグル廃止/トップバーは電光掲示板島だけ黒/カードは.card一本化） |
 | docs/design/design-20 | ドラフト（NPB指名・ドラフト候補・注目度）。注目度スコア（能力合成×隠し上限＋成績集計）／候補閾値・予想順位バンド／10月最終週の指名（3年のみ・独立Fork乱数で帯不変）／通知フィード連動・ドラフト画面IA |
+| docs/design/design-21 | 表示能力→物理層の「効き」（`ability_effect:` 全員対称≈0.55・入口4つ＝ToBatter/ToFielder/Pitcher/反応球速）と圧縮の撤去（raw＝中身）。球速は km/h を変えず反応オフセットで寝かせる／球速の価値（cq_per_kmh −0.005）／aggregate_scale 7.2／帯・テストの扱い |
 
 ## 不変条件（違反するコードを書かない）
 
-1. **二層構造**: 打席・打球・守備の解決は必ず物理層（初速・角度・回転・時間）で計算する。表示能力値を直接確率に使わない。表示層→物理層の変換式は一箇所（`data/coefficients.yaml` 駆動）に集約する
+1. **二層構造**: 打席・打球・守備の解決は必ず物理層（初速・角度・回転・時間）で計算する。表示能力値を直接確率に使わない。表示層→物理層の変換式は一箇所（`data/coefficients.yaml` 駆動）に集約する。**表示能力の「効き」（`ability_effect:`・設計書21）もその一部**＝解決式が `Player` の能力を読むときは必ず `ToBatter(effect)/ToFielder(effect)/AbilityEffectCoefficients.Pitcher` か `c.AbilityEffect.Batting(...)` 等を通す（生の Lv を `(X−50)×slope` に入れない）
 2. **決定論**: 乱数はすべてシード付き `IRandomSource` を注入して使う。`System.Random` の直接 new や `Guid` 由来の乱数は禁止。同シード同結果を常に保証する
 3. **エンジン純度**: `engine/` 配下に `UnityEngine` への参照を持ち込まない。時刻・IO・乱数はすべて注入する
 4. **データ駆動**: バランス係数・球種定義・イベント・校名語彙・球場は `data/` のYAMLに置く。**係数の正典は `data/` の YAML** だが、実ゲーム（Unity）と Balance CLI 既定は YAML を読まず **C#既定**（各 `new XxxCoefficients()`）で走る。したがって **C#既定は YAML と一致していなければならず、`CoefficientsDefaultsConsistencyTests` が全プロパティで一致を固定する（片方だけ変えない）**。バランス調整は YAML を編集し、**同じ値を C#既定にも反映する**（順序はどちらでもよいが、両方を揃えてコミットする）。一致テストが赤い＝実ゲームが校正前の係数で走っている合図（issue #402）。例外は「実ゲームでは意図的にオフ」の係数（例: 天候モデル `weather`＝GameContext では null）で、この種の意図的乖離だけ同テストの除外リストに、理由を添えて載せる
@@ -208,8 +209,8 @@ docs/design/                  # 設計書01〜07
 ## コマンド
 
 ```bash
-dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ（約30秒）
-dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約2分）
+dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ（約3分30秒・2026-08-29実測）
+dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約4分30秒・2026-08-29実測）
 dotnet test engine/ -c Release                               # 全テスト実行
 dotnet run --project engine/KokoSim.Balance -- \
   simulate --games 10000 --seed 42 --report out/report.md   # 一括シミュレーション＋統計レポート

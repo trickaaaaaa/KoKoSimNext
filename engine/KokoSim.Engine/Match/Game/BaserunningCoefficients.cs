@@ -3,6 +3,13 @@ namespace KokoSim.Engine.Match.Game;
 /// <summary>走塁進塁の確率係数（YAML駆動, 得点分布の統計回帰で調整）。</summary>
 public sealed record BaserunningCoefficients
 {
+    /// <summary>
+    /// 表示能力→物理層の効き（設計書21・<see cref="KokoSim.Engine.Players.AbilityEffectCoefficients"/>）。正典は YAML の <c>ability_effect:</c> 1ブロックで、
+    /// ローダが batting/fielding/baserunning の3ブロックへ<b>同じ値</b>を配る（解決式が手元の係数束から引けるようにするため）。
+    /// 3つが食い違わないことは <c>AbilityEffectConsistencyTests</c> が固定する。
+    /// </summary>
+    public KokoSim.Engine.Players.AbilityEffectCoefficients AbilityEffect { get; init; } = new();
+
     /// <summary>単打で1塁走者が3塁まで進む基準確率（走力50時）。</summary>
     public double FirstToThirdOnSingle { get; init; } = 0.28;
     /// <summary>単打で2塁走者が生還する基準確率。</summary>
@@ -22,8 +29,12 @@ public sealed record BaserunningCoefficients
     /// （打者走力で上昇。design-14 P1-1）。issue #402で 0.0→0.06 に正値化＝実ゲームで野選が発火（YAML校正値と一致）。</summary>
     public double FieldersChoiceProb { get; init; } = 0.06;
     /// <summary>失策出塁（ReachedOnError）時、全走者＋打者に追加1進塁が発生する基準確率（design-14 P1-6）。
-    /// issue #169で 0.0→0.20 に正値化＝実ゲームで失策連鎖が発火（YAML sim値と一致）。base のゲート下で rng は1回のまま。</summary>
-    public double ErrorExtraAdvanceProb { get; init; } = 0.20;
+    /// issue #169で 0.0→0.20 に正値化＝実ゲームで失策連鎖が発火（YAML sim値と一致）。base のゲート下で rng は1回のまま。
+    /// <para>issue #629（監督決定 2026-08-13）で 0.20→0.90。連鎖の対象を<b>悪送球だけ</b>に絞った
+    /// （捕球エラー・フライ落球は球が野手の足元にあるので連鎖しない）ぶん、1本あたりの確率を上げて
+    /// 試合あたりの連鎖数を据え置く＝「悪送球はほぼ必ず全走者を1つ多く進める」というモデルになる。
+    /// 実測（2000試合・seed 42/7）: ゲート無し0.20で 0.450/試合・得点5.21 → 悪送球のみ0.90で 0.484/0.482・5.20/5.21。</para></summary>
+    public double ErrorExtraAdvanceProb { get; init; } = 0.90;
     /// <summary>失策連鎖の送球精度連動（Issue #37 / design-14 P1-6b）。連鎖確率 = ErrorExtraAdvanceProb −
     /// (送球者 ThrowAccuracy − 50)×この値。issue #169で 0.0→0.003 に正値化＝「送球が不正確な野手の失策ほど連鎖しやすい」（YAML sim値と一致）。</summary>
     public double ErrorExtraAdvanceAccuracySlope { get; init; } = 0.003;
@@ -75,10 +86,35 @@ public sealed record BaserunningCoefficients
     /// スプリント速度は天井速度（加速ランプ非モデル化）なので、反応＋加速不足をこの遅延で吸収する（Step4再校正）。</summary>
     public double StealReactionIntercept { get; init; } = 0.90;
     public double StealReactionSlope { get; init; } = 0.004;
+    /// <summary>
+    /// ジャンプ[s]（走者が投手の始動を読んで既に動き出している分。上の遅延から差し引く）。
+    ///
+    /// <para>2026-08-14: 判定境界の校正項 <see cref="StealSuccessBias"/>(0.38) を物理層へ移した半分
+    /// （残り半分は <see cref="CatcherPopRiseSeconds"/>）。走者は「投球を見てから走り出す」のではなく
+    /// 投手の始動を読んで走るので、遅延の全部を反応として払うのは過大だった＝この分を免除する。
+    /// 実測: 走力50/盗塁50の二塁到達が 3.94秒 → 3.75秒（高校生の実測 3.6〜3.8秒に寄る）。</para>
+    ///
+    /// <para>⚠ 床（<c>max(0.10, …)</c> / ギャンブルの <c>max(0.05, …)</c>）の**後**に引く＝全走者から
+    /// ちょうど同じ秒だけ引かれる。床の前に引くと快足走者だけ床に当たって引きが浅くなり、
+    /// 「校正項を移しただけ（帯不変）」でなくなる。</para>
+    /// </summary>
+    public double StealJumpCreditSeconds { get; init; } = 0.19;
     /// <summary>投手クイック[s]（投法補正は後回し, §2.2）。</summary>
     public double PitcherQuickSeconds { get; init; } = 1.40;
     /// <summary>捕手の握り替え[s]（ポップタイム＝これ＋送球時間）。</summary>
     public double PopTransferSeconds { get; init; } = 0.70;
+    /// <summary>
+    /// 捕手が立ち上がって投げる形を作る分[s]（ポップタイムの**守備力で縮まない**固定部分）。
+    ///
+    /// <para>2026-08-14: <see cref="StealSuccessBias"/>(0.38) を物理層へ移した半分（残り半分は
+    /// <see cref="StealJumpCreditSeconds"/>）。実測: 肩50のポップタイム（捕球→二塁到達）が
+    /// 1.91秒 → 2.10秒（高校生の実測 2.0〜2.3秒に寄る。1.91秒はプロの好捕手の値だった）。</para>
+    ///
+    /// <para>⚠ <see cref="PopTransferSeconds"/> に足し込まず別項にするのは、あちらが守備力で伸縮する
+    /// （<see cref="TransferFieldingSlope"/>）ため。足し込むと捕手ごとに移した秒が変わり
+    /// 「校正項を移しただけ」でなくなる。立ち上がりは技術で縮められない部分＝固定が物理的にも正しい。</para>
+    /// </summary>
+    public double CatcherPopRiseSeconds { get; init; } = 0.19;
     /// <summary>
     /// トランスファー倍率の守備(Fielding)傾き（Issue #36）。走塁系の各握り替え（捕手ポップ/外野返球/中継/帰塁）
     /// に共通。倍率 = max(min, 1 − (Fielding−50)×この値)。守備50で×1.0＝恒等（帯不変）。
@@ -92,8 +128,16 @@ public sealed record BaserunningCoefficients
     /// <summary>margin→成功確率のlogistic幅[s]（Step4再校正: 反応係数を上げ絶対タイムを現実化した分、
     /// グリッドが飽和しないよう幅を広げ、肩差が効くようにする）。</summary>
     public double StealMarginScale { get; init; } = 0.22;
-    /// <summary>成功率バイアス[s]（リーグ平均成功率を現実値に寄せる校正項, 🟡）。</summary>
-    public double StealSuccessBias { get; init; } = 0.38;
+    /// <summary>
+    /// 成功率バイアス[s]（リーグ平均成功率を現実値に寄せる校正項, 🟡）。
+    ///
+    /// <para>⚠ 2026-08-14 に <b>0.38 → 0.0</b>。中身を物理層の秒へ移した
+    /// （走者側 <see cref="StealJumpCreditSeconds"/> 0.19 ＋ 守備側 <see cref="CatcherPopRiseSeconds"/> 0.19）。
+    /// この項は<b>判定の秒だけを動かして絵の秒には出ない</b>ので、0以外にすると
+    /// 「捕手の送球が先に届いた絵なのにセーフ」が構造的に戻る（実測: 成功50%の場面で送球が0.48秒先着）。
+    /// リーグ平均成功率を動かしたいときは、移した先の2項（＝絵に出る秒）を動かすこと。</para>
+    /// </summary>
+    public double StealSuccessBias { get; init; } = 0.0;
     /// <summary>本塁→三塁の送球距離[m]（design-14 P1-4、三盗）。</summary>
     public double CatchThrowToThirdDistanceM { get; init; } = 27.4;
     /// <summary>三盗の成功率バイアス（design-14「三盗は成功率下方」）。StealSuccessBiasに加算。</summary>
@@ -150,6 +194,87 @@ public sealed record BaserunningCoefficients
     /// <summary>内野安打 margin→確率の logistic 幅[s]。</summary>
     public double BuntInfieldHitTimeScale { get; init; } = 0.14;
 
+    // === バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）===
+    // バントサイン中でも、明確なボール球は構えを解いて見送れる（打者の選球眼で変動）。スクイズは対象外
+    // （一球で必ずコミットする作戦のため見送りを設けない）。
+    /// <summary>ゾーン外に外れた瞬間の見送り基準確率（ゾーン境界ぎりぎりの外れ球での値）。</summary>
+    public double BuntTakeBase { get; init; } = 0.20;
+    /// <summary>ゾーン外距離[m]あたりの見送り確率の増分（大きく外れるほど見送りやすい）。</summary>
+    public double BuntTakeDistanceSlope { get; init; } = 1.2;
+    /// <summary>選球眼(Discipline−50, 効き後)あたりの見送り確率の増分。</summary>
+    public double BuntTakeDisciplineSlope { get; init; } = 0.006;
+    /// <summary>見送り確率の上限（バントの構えに入っている分、完全には見切れない）。</summary>
+    public double BuntTakeCap { get; init; } = 0.90;
+
+    // === バント: コース補正・技術/球速/球威連動の失敗率（design-02 §4.3の欠落項の実装,
+    // issue bunt-no-take-on-ball-pitches）===
+    /// <summary>成功率のコース補正: courseDifficulty[0,1]（StrikeZone.EdgeProximity）あたりの減算。</summary>
+    public double BuntCourseSlope { get; init; } = 0.10;
+    /// <summary>球威(Stuff)の基準値（この値以下は空振り/小フライへの加算なし。0=平均球速投手の期待値と一致）。</summary>
+    public double BuntStuffRefValue { get; init; } = 0.0;
+    /// <summary>空振り率の技術傾き（(Bunt−50)あたり減算。上手いほど空振りしにくい）。</summary>
+    public double BuntMissSkillSlope { get; init; } = 0.0008;
+    /// <summary>空振り率の球速傾き（VelocityPenalty[km/h超過分]あたり加算。SuccessRateの球速補正と共有）。</summary>
+    public double BuntMissVelocitySlope { get; init; } = 0.001;
+    /// <summary>空振り率の球威傾き（Stuff超過分あたり加算）。</summary>
+    public double BuntMissStuffSlope { get; init; } = 0.015;
+    /// <summary>空振り率の下限。</summary>
+    public double BuntMissFloor { get; init; } = 0.02;
+    /// <summary>小フライ率の技術傾き（(Bunt−50)あたり減算）。</summary>
+    public double BuntPopSkillSlope { get; init; } = 0.0006;
+    /// <summary>小フライ率の球速傾き（VelocityPenaltyあたり加算）。</summary>
+    public double BuntPopVelocitySlope { get; init; } = 0.0008;
+    /// <summary>小フライ率の球威傾き（Stuff超過分あたり加算）。</summary>
+    public double BuntPopStuffSlope { get; init; } = 0.012;
+    /// <summary>小フライ率の下限。</summary>
+    public double BuntPopFloor { get; init; } = 0.02;
+
+    // === バント: 一塁走者の封殺（フォースアウト, issue bunt-no-take-on-ball-pitches）===
+    // バントの処理点・処理時間・送球速度は「誰が処理したか」を特定しない簡略化（BuntFieldThrowBaseSeconds と
+    // 同じ抽象レベル）。一塁走者→二塁の封殺は既存の HomePlayResolver.SecondForceParams（Issue #369）をそのまま
+    // 使う＝新しい走者物理式は書かない（不変条件#1）。三塁走者→本塁のスクイズ判定（下記）もこの処理点を再利用する。
+    /// <summary>バント処理点のX座標[m]（本塁原点、負=三塁側）。三塁側チャージを想定した代表値。</summary>
+    public double BuntFieldedXM { get; init; } = -4.0;
+    /// <summary>バント処理点のZ座標[m]（本塁からの深さ）。</summary>
+    public double BuntFieldedZM { get; init; } = 8.0;
+    /// <summary>接触からバント処理までの所要[s]（チャージ＋捕球）。</summary>
+    public double BuntFieldedAtSeconds { get; init; } = 0.90;
+    /// <summary>バント処理野手の代表送球速度[m/s]（誰が処理したか特定しないための平均値）。</summary>
+    public double BuntFielderThrowSpeedMps { get; init; } = 30.0;
+    /// <summary>バント処理野手の代表守備力（握り替え倍率の算出用。50=倍率×1.0）。</summary>
+    public double BuntFielderFieldingLevel { get; init; } = 50.0;
+    /// <summary>一塁走者がバントを読んでから二塁へ走り出す追加スタート遅延[s]（DoublePlayR1StartDelaySeconds
+    /// より短い＝バントは事前に構えが見えるぶん、通常のゴロより早く動ける）。</summary>
+    public double BuntForceR1StartDelaySeconds { get; init; } = 0.15;
+    /// <summary>二塁走者（1・2塁時）がバントを読んでから三塁へ走り出す追加スタート遅延[s]。一塁走者と同じ
+    /// 事前の構えの見えやすさを仮定し、既定値は<see cref="BuntForceR1StartDelaySeconds"/>と同値（実測前の第一推定）。
+    /// 三塁封殺（<see cref="BuntResult.ForceOutAtThird"/>）は既存の<see cref="HomePlayResolver.ThirdForceParams"/>
+    /// （Q31・BaserunningCoefficients.ThirdForceTagSeconds等）をそのまま使う＝新しい走者物理式は書かない。</summary>
+    public double BuntForceR2StartDelaySeconds { get; init; } = 0.15;
+    /// <summary>三塁走者（満塁時）がバントを読んでから本塁へ走り出す追加スタート遅延[s]。R1/R2と同じ
+    /// 事前の構えの見えやすさを仮定し、既定値は同値（実測前の第一推定）。本塁封殺
+    /// （<see cref="BuntResult.ForceOutAtHome"/>）は既存の<see cref="HomePlayResolver.HomeForceParams"/>
+    /// （Q31）をそのまま使う＝新しい走者物理式は書かない。</summary>
+    public double BuntForceR3StartDelaySeconds { get; init; } = 0.15;
+
+    // === バント: 小フライからのライナー併殺（design-09「小フライ併殺」, issue bunt-no-take-on-ball-pitches）===
+    // バント構えは一塁走者が事前に大きめの二次リードを取る（＝通常打球の StartType.Contact と同じ前提）ため、
+    // 小フライを野手が捕った瞬間に一塁へ戻れるかの時間の勝負（DoubledOffResolver, 設計書12 §4 G2）に懸ける。
+    // 捕球点・処理野手の送球速度・守備力は既存のバント処理点（BuntFielderThrowSpeedMps等）を再利用し、
+    // 新しい走者物理式は書かない。二塁封殺等とは独立の判定＝乱数は小フライ確定後にのみ追加で1回消費する。
+    /// <summary>小フライの落下点Z座標[m]（本塁からの深さ。X=0固定＝真後ろ）。TimelineBuilder の絵と共有する
+    /// 単一ソース（旧: TimelineBuilder 内の private const。BuntFieldedZM 等と同じ「判定＝絵」原則）。</summary>
+    public double BuntPopFieldedZM { get; init; } = 3.0;
+    /// <summary>接触から小フライ捕球までの滞空時間[s]。TimelineBuilder の絵と共有する単一ソース。</summary>
+    public double BuntPopHangSeconds { get; init; } = 0.55;
+
+    // === スクイズ: 三塁走者のスタート（走力連動, issue bunt-no-take-on-ball-pitches）===
+    // 送球先が本塁になる以外は上のバント処理点をそのまま流用する（HomePlayResolver.HomeParams は既存の
+    // タッチ秒・バイアス・幅をそのまま使うので新規係数はスタート遅延1つだけで済む）。
+    /// <summary>三塁走者がスクイズのバントを見てからスタートする遅延[s]。投球と同時に走り出すため、
+    /// 通常の走塁反応（HomeRunnerReactionIntercept等）よりかなり短い。</summary>
+    public double SqueezeThirdRunnerStartDelaySeconds { get; init; } = 0.05;
+
     // === 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）===
     // 走塁 §4.1 と同じ時間の勝負を本塁で解く。走者(走力＋走塁判断) vs 外野処理＋中継＋タッチ。
     /// <summary>本塁生還を狙う走者の判断遅延[s] = Intercept − 走塁判断×Slope。</summary>
@@ -194,6 +319,28 @@ public sealed record BaserunningCoefficients
     /// 肩&gt;32m/s で恒真）＝中継が消滅するので、その置き換えはしないこと。距離減衰のモデル化は案B（未着手）。
     /// </summary>
     public double CutoffThrowSeconds { get; init; } = 1.88;
+
+    // バックホーム悪送球（外野/中継→本塁の送球エラー, 2026-08-30。FieldingCoefficients.ThrowErrorBaseProb と
+    // 同型の二値ロール）。守備が本塁で間に合う（憤死になる）場面でのみ引く＝内野の送球エラーと同じく
+    // 「アウトのはずが悪送球でセーフ」の分岐。対象は本塁への実送球（安打の本塁レース・内野前進の
+    // 本塁封殺・犠飛タッチアップ）のみ。3塁・2塁への送球（進塁打・封殺・スクイズ）は対象外。
+    /// <summary>本塁への悪送球の基準確率（送球者のThrowAccuracy=50時）。0.0343は内野送球エラー
+    /// （<see cref="Fielding.FieldingCoefficients.ThrowErrorBaseProb"/>）と同値の初期値＝実測して校正する。</summary>
+    public double RelayThrowErrorBaseProb { get; init; } = 0.0343;
+    /// <summary>送球精度(ThrowAccuracy−50)あたりの本塁悪送球確率の減少幅。内野送球エラーと同値。</summary>
+    public double RelayThrowErrorAccuracySlope { get; init; } = 0.004;
+
+    // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
+    // 守備所要時間へ加算してもう一度同じ時間勝負を評価する（拾い直しが間に合えばアウトのまま）。
+    /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。バックホーム/中継は
+    /// 距離が長いぶん内野送球より逸れが大きくなりうるため独立の値を持つ（<c>FieldingCoefficients</c>の同名値とは別）。</summary>
+    public double WildThrowScatterSigmaM { get; init; } = 6.0;
+    /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
+    public double RecoveryReactionSeconds { get; init; } = 0.30;
+    /// <summary>回収に動く野手のスプリント速度[m/s]（個別Player情報が届いていないため平均的な値の定数。
+    /// 受け手・バックアップ共通）。返球速度は<see cref="RelayThrowSpeedMps"/>（リーグ平均内野肩）を流用する。</summary>
+    public double RecoverySprintSpeedMps { get; init; } = 6.5;
+
     /// <summary>本塁でのタッチ[s]。</summary>
     public double HomeTagSeconds { get; init; } = 0.12;
     /// <summary>margin→生還確率の logistic 幅[s]。</summary>
@@ -240,8 +387,6 @@ public sealed record BaserunningCoefficients
     /// <summary>一塁手の転送握り替え[s]（一塁を取ってから三塁へ転送する経路 P_relay 用。
     /// <see cref="RelayTransferSeconds"/> と同軸）。</summary>
     public double AdvanceRelayTransferSeconds { get; init; } = 0.55;
-    /// <summary>走者の三塁到達見込みがこれ以下なら守備は一塁を捨てて三塁へ直接送球する（分岐B/Cの境界）。</summary>
-    public double AdvanceDirectThrowMaxRunnerSuccess { get; init; } = 0.45;
 
     // === 併殺の物理レース（内野ゴロ×一塁走者, Issue #369, 設計書12 §2）===
     // 13%固定テーブル（DoublePlayProb）を二段の秒勝負へ置換する: ①捕球点→二塁の封殺が間に合うか（P_force2）
@@ -261,15 +406,22 @@ public sealed record BaserunningCoefficients
     /// <summary>二塁封殺 到達確率バイアス[s]（校正項。一塁走者物理の保守性を吸収する）。</summary>
     public double SecondForceSuccessBias { get; init; } = 0.00;
     /// <summary>一塁走者の二塁到達見込み（P_r1_safe）がこれを超えたら守備は封殺自体が不可＝一塁を取る（分岐A）。
-    /// 内野ゴロの二塁封殺は短い送球で走者(≈3.5s)に先着するのが通常＝この分岐Aは俊足走者/深い右方向ゴロ等の稀ケース。
-    /// <see cref="AdvanceDirectThrowMaxRunnerSuccess"/> と同型の「守備が幾何で送球先を選ぶ」境界。</summary>
+    /// 内野ゴロの二塁封殺は短い送球で走者(≈3.5s)に先着するのが通常＝この分岐Aは俊足走者/深い右方向ゴロ等の稀ケース。</summary>
     public double DoublePlayForceMaxRunnerSuccess { get; init; } = 0.60;
     /// <summary>二塁封殺は間に合うが、二塁→一塁の転送で打者を刺せる見込み（P_relay_out）がこれ未満なら
     /// 守備は併殺を狙わず「確実な一塁アウト」を取る（分岐A＝打者一塁アウト＋一塁走者は二塁へ）。
     /// ＝ルーティンなゴロ凡打（進塁打）と併殺狙いを分ける境界。高いほど併殺を狙わず一塁のみが増える。
-    /// これにより野選（二塁封殺＋打者生存）は「併殺を狙った末に転送が僅かに間に合わなかった残差」に限られ、
-    /// 現実の稀な発生頻度に収まる（守備はそもそも刺せない相手には二塁へ投げない）。</summary>
-    public double DoublePlayAttemptMinRelaySuccess { get; init; } = 0.80;
+    /// 野選（二塁封殺＋打者生存）は「併殺を狙った末に転送が僅かに間に合わなかった残差」として出る。
+    /// 0.80→0.55（issue double-play-attempt-threshold, 2026-08-18）: 0.80 では見込み6〜8割の併殺まで一塁へ逃げ、
+    /// 一塁走者あり内野ゴロの半分で走者を二塁へ進めていた（実測: 一塁のみ 60%／併殺 17%）。実物の内野は封殺が
+    /// 取れる限りまず二塁へ投げ、転送負けは FC として残る。0.55 で 一塁のみ 33%／併殺 33%（ゴロアウト比 41%）・
+    /// 併殺 1.88/試合・FC 0.50/試合（旧帯内だが上限寄り）。
+    /// 0.55→0.65（issue double-play-per-game-band-review, 2026-08-30）: 併殺/試合の参考帯が MLB 基準のみ
+    /// （≈1.5/試合）で高校野球固有の実測に基づいていなかった。高校野球の失策率実測（issue #123: 甲子園≈2.1〜2.7/試合
+    /// 両軍計、NPB目安の約2倍）を根拠に「機会は多いが転送成立率はプロより低いはず」の方向で帯を 1.00〜1.70/試合へ
+    /// 再校正（暫定値。併殺/試合そのものの高校野球実測は未発見＝docs/design/OPEN-QUESTIONS.md 参照）。
+    /// 0.65 で 一塁のみ 44%／併殺 37%（ゴロアウト比）・併殺 1.39〜1.41/試合・FC 0.36/試合（新帯内）。</summary>
+    public double DoublePlayAttemptMinRelaySuccess { get; init; } = 0.65;
     /// <summary>二塁ベース経由の転送（ピボット）握り替え[s]。一塁手の中継 <see cref="RelayTransferSeconds"/> とは別値
     /// （捕って踏み替えて投げ返す連携動作＝中継より長い。#318 が外野値と分けたのと同じ扱い）。
     /// 「併殺の名手」スキル（<see cref="Players.Skill.DoublePlayArtist"/>）はこの時間を短縮する
@@ -280,6 +432,31 @@ public sealed record BaserunningCoefficients
     /// <summary>二塁→一塁の転送送球の校正項[s]（打者生存＝野選頻度を現実値へ寄せる。正で打者生存＝野選寄り）。
     /// 併殺打/試合と得点環境を Heavy 実測で校正するノブ（#318 の AdvanceSuccessBias と同役）。</summary>
     public double DoublePlayRelayBias { get; init; } = 0.00;
+
+    // === 併殺の代替ルート（三塁/本塁の自己フォース, Q31・issue double-play-throw-pace-and-second-out-call ⑩）===
+    // 一・二塁（三塁手が自打球）／満塁（捕手・投手が自打球）では、守備が二塁封殺でなく「自分でベースを踏んで
+    // フォース→一塁へ転送」を選ぶことがある（送球1本で完結＝中継〈ピボット〉が無い点が二塁封殺と違う）。
+    // 実際にその塁を処理した野手だけがこのルートを検討でき（BaserunningModel.ResolveDoublePlay のゲート）、
+    // 対象走者の到達見込みが二塁封殺より低い（＝守備に有利）ときだけ選ばれる。
+
+    /// <summary>三塁での自己フォースのタッチ/捕球[s]（<see cref="SecondForceTagSeconds"/> と同軸）。</summary>
+    public double ThirdForceTagSeconds { get; init; } = 0.10;
+    /// <summary>三塁での自己フォース margin→到達確率の logistic 幅[s]（<see cref="SecondForceMarginScale"/> と同軸）。</summary>
+    public double ThirdForceMarginScale { get; init; } = 0.45;
+    /// <summary>三塁での自己フォース 到達確率バイアス[s]（校正項。<see cref="ThirdParams"/> とは別＝
+    /// あちらは開けた進塁レース用の校正で意味が違う）。</summary>
+    public double ThirdForceSuccessBias { get; init; } = 0.00;
+    /// <summary>本塁での自己フォースのタッチ/捕球[s]（<see cref="SecondForceTagSeconds"/> と同軸）。</summary>
+    public double HomeForceTagSeconds { get; init; } = 0.10;
+    /// <summary>本塁での自己フォース margin→到達確率の logistic 幅[s]（<see cref="SecondForceMarginScale"/> と同軸）。</summary>
+    public double HomeForceMarginScale { get; init; } = 0.45;
+    /// <summary>本塁での自己フォース 到達確率バイアス[s]（校正項。<see cref="HomeSuccessBias"/> とは別＝
+    /// あちらは開けた本塁生還レース用の校正で意味が違う）。</summary>
+    public double HomeForceSuccessBias { get; init; } = 0.00;
+    /// <summary>自己フォース側の一塁への転送送球の握り替え[s]。既に塁上でボールを握っている野手がそのまま
+    /// 投げる動作＝中継を受けてから投げ返す <see cref="DoublePlayPivotTransferSeconds"/>（0.90）とは別物
+    /// （受け取り動作が無いぶん短い）。</summary>
+    public double DoublePlaySelfForceRelayTransferSeconds { get; init; } = 0.70;
 
     // === 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）===
     // タッグアップは走者の時計の起点が「捕球の瞬間」である点だけが本塁クロスプレーと異なる。走者は捕球時刻に
@@ -295,6 +472,27 @@ public sealed record BaserunningCoefficients
     /// Heavy 実測で校正（Issue #90）: 1.50 で 得点≈5.1/チーム・本塁憤死≈0.365/試合（帯内）かつ球質タイプの
     /// 実戦バランス中立（Archetypes_AreBalanceNeutral_InActualGames）を維持。</summary>
     public double TagUpSuccessBias { get; init; } = 1.50;
+
+    // === 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）===
+    // 犠飛（三塁→本塁）と同じ機構を目標塁だけ替えて使う（走者の式・幅は共有し、塁固有はバイアスだけ分離）。
+    // 置換前は両方とも ProductiveOutAdvanceProb の18%固定で、打球の深さ・外野の肩・走力を一切見ていなかった
+    // （浅いライトフライでも一塁走者が18%で二塁へ走る＝非現実的）。物理レースにすると、浅いフライは送球が
+    // 短く到達見込みが低い＝自重、深いフライだけ試みる、が幾何から創発する。
+    /// <summary>タッチアップ（二塁→三塁）の到達確率バイアス[s]（校正項）。本塁と別に持つのは、送球距離が
+    /// 塁ごとに大きく違い <see cref="TagUpSuccessBias"/>（本塁用 1.50）を流用すると浅いフライでも
+    /// 成立してしまうため。帯校正はこの1本で行う（#318 の AdvanceSuccessBias と同役）。
+    /// 実測（走者50・肩50・中堅方向・2000試行）: 100m まで0%・105m 86%・115m 93%・120m 95%（走塁死は5〜14%）。
+    /// <para>1.30 まで上げると 95m から動き出すが、<b>球場の広さと結び付いて帯を割る</b>——広い球場ほど
+    /// 外野が深い位置で捕る＝タッチアップが増えるため、広い球場の得点が上がって
+    /// <c>StadiumRegressionTests</c> の「標準 &gt; 広」順序が崩れ、<c>PitcherArchetypeTests</c> の守備依存差も
+    /// 詰まる（どちらも差 0.03〜0.04 の僅差比較）。0.85 では両方とも緑。</para></summary>
+    public double TagUpThirdSuccessBias { get; init; } = 0.85;
+    /// <summary>タッチアップ（一塁→二塁）の到達確率バイアス[s]（校正項）。二塁への送球は最短＝実物でも
+    /// 一塁走者のタッチアップはごく稀。<see cref="TagUpThirdSuccessBias"/> と同役で塁だけ違う。
+    /// 実測（走者50・肩50・中堅方向）: 105m まで0%・115m から動く＝<b>最深部のフライでだけ走る</b>。
+    /// 三塁側（0.85）より高くできるのは、一塁走者のタッチアップは元々頻度が低く、球場の広さと結び付いて
+    /// 帯を動かす主因（数の多い二塁→三塁）から分離できるため（この値で Stadium/Archetype とも緑）。</summary>
+    public double TagUpSecondSuccessBias { get; init; } = 1.20;
 
     /// <summary>
     /// 判定オーバーレイ（Issue #59）: margin[s]の絶対値がこの値未満なら「際どい」＝セーフ表示の対象。
@@ -322,6 +520,14 @@ public sealed record BaserunningCoefficients
     public double DoubledOffMarginScale { get; init; } = 0.20;
     /// <summary>戻れる確率バイアス[s]（Heavy実測で校正, 🟡）。</summary>
     public double DoubledOffSuccessBias { get; init; } = 0.0;
+    /// <summary>盗塁で投球と同時に走っていた一塁走者（issue #626 の巻き戻し）が、接触の時点で既に稼いでいた
+    /// リード[m]。飛び出しの勝負（<see cref="DoubledOffResolver"/>）で戻りの距離にそのまま乗る
+    /// （issue fly-out-runner-dp-table-and-doubled-off-depiction）。投手の始動〜接触≈1.1s × 基準走力から。</summary>
+    public double StealBreakExtraLeadM { get; init; } = 6.0;
+    /// <summary>飛び出した走者が「盲目的に走る」上限（<see cref="LinerCommitCapSeconds"/>）を過ぎてから捕球までの間に、
+    /// 打球を見ながら塁の方へ戻る速さ[m/s]（歩き〜小走り）。長い滞空ほど捕球時点のリードが縮む＝深いフライで
+    /// 盗塁・エンドランの走者が刺されない現実（issue fly-out-runner-dp-table-and-doubled-off-depiction）。</summary>
+    public double DoubledOffRetreatSpeedMps { get; init; } = 3.0;
 
     // === 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）===
     // 「捕手リード＋投手センス vs 状況の意外性」を確率化。読まれた盗塁はピッチアウトで捕手が優位に立ち

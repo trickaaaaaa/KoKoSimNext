@@ -89,7 +89,11 @@ public sealed record GameResult
 /// <summary>1チームの采配集計（設計書09/11。記録のみ＝試合結果に影響しない）。</summary>
 public sealed record TacticsTally(
     int StealAttempts = 0, int StealSuccesses = 0, int SacrificeBunts = 0, int SacrificeBuntSuccesses = 0,
-    int Squeezes = 0);
+    int Squeezes = 0,
+    // 封殺率の実測用（issue bunt-no-take-on-ball-pitches）: BuntForceOuts はバント経路
+    // （ForceOutAtSecond/Third/Home）の合算、SqueezeBallInPlay/SqueezeRunnerOutAtHome はスクイズで
+    // ボールが実際にプレーされた回数とそのうち三塁走者が本塁で刺された回数。
+    int BuntForceOuts = 0, int SqueezeBallInPlay = 0, int SqueezeRunnerOutAtHome = 0);
 
 /// <summary>
 /// 試合エンジン（設計書01 §3）。イニング進行・走塁・得点・継投・疲労・采配（設計書09）を統括する。
@@ -102,9 +106,14 @@ public static class GameEngine
     // 内部は Steps(...) を drain するだけ＝対話進行と単一コードパス（決定論ゲートで前後一致を固定）。
     public static GameResult Play(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng,
-        IReadOnlyDictionary<Player, int>? priorWeekPitches = null)
+        IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null,
+        IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
     {
-        var p = NewProgress(awayTeam, homeTeam, ctx, rng, priorWeekPitches);
+        var p = NewProgress(
+            awayTeam, homeTeam, ctx, rng, awayPriorWeekPitches, homePriorWeekPitches,
+            awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         foreach (var _ in Steps(p)) { /* drain */ }
         return BuildResult(p);
     }
@@ -118,10 +127,26 @@ public static class GameEngine
     /// <param name="scenarioStart">
     /// 場面ジャンプの開始局面（設計書17 §3.4, F2）。null=通常どおり1回表の頭から。
     /// </param>
+    /// <param name="awayPitchRecovery">
+    /// 試合間の回復モデル（設計書02 §1.1e-2, issue #41 本流配線）で調整済みの実効目安投球数（先攻チーム分）。
+    /// null=素の目安投球数のまま（従来挙動と完全一致・Balance CLI 等は常にこちら）。チームごとに別辞書にするのは、
+    /// <see cref="Player"/> が値等価の record で、1つの辞書へ merge すると別校の選手が偶然全属性一致したとき
+    /// 同一キーに潰れかねないため（校内は背番号が一意なので同一チーム内では衝突しない）。
+    /// </param>
+    /// <param name="homePitchRecovery">同上（後攻チーム分）。</param>
+    /// <param name="awayPriorWeekPitches">
+    /// 週間球数制限（設計書05 §1.3）の持ち越し球数＝この試合より前の直近1週間に投げた球数（先攻チーム分）。
+    /// null=持ち越しなし（＝単一試合では上限に届かない＝従来挙動と完全一致）。
+    /// <b>チームごとに別辞書</b>にするのは <paramref name="awayPitchRecovery"/> と同じ理由（Player の値等価衝突）。
+    /// </param>
+    /// <param name="homePriorWeekPitches">同上（後攻チーム分）。</param>
     public static GameProgress NewProgress(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng,
-        IReadOnlyDictionary<Player, int>? priorWeekPitches = null,
-        Debugging.ScenarioStart? scenarioStart = null)
+        IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null,
+        Debugging.ScenarioStart? scenarioStart = null,
+        IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null)
     {
         // 試合ごとの天候（気温）モデル（Issue #120）。専用Forkストリームで気温を1回引き、空気密度・投手消耗を
         // 派生させた ctx に差し替える。Fork は親 rng の状態を進めない＝以降の乱数順・決定論は不変。
@@ -144,14 +169,24 @@ public static class GameEngine
         var away = new TeamState(awayTeam);
         var home = new TeamState(homeTeam);
         // 球数制限（設計書05 §1.3）。既定 WeeklyPitchLimit=MaxValue＝無効＝従来の継投挙動と完全一致。
-        away.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, priorWeekPitches);
-        home.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, priorWeekPitches);
+        // 持ち越しはチームごとに別辞書（SetPitchRecovery/SetDayForm と同じ理由＝Player が値等価の record）。
+        away.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, awayPriorWeekPitches);
+        home.SetWeeklyPitchBudget(ctx.WeeklyPitchLimit, homePriorWeekPitches);
+        // 試合間の回復モデル（設計書02 §1.1e-2）。既定 null＝素の目安投球数のまま＝従来挙動と完全一致。
+        away.SetPitchRecovery(awayPitchRecovery);
+        home.SetPitchRecovery(homePitchRecovery);
 
         // 試合限りの好不調（設計書02 §3.3b）: 試合開始時に全選手へ当日の揺らぎを付与。
         // 大半は微小・スパイクは十数試合に一度。事前に見えない（投げて/打って初めて分かる）。
-        var dayForm = SampleDayForms(awayTeam, homeTeam, ctx, rng);
+        // チームごとに別辞書で TeamState へ持たせる（issue dayform-dictionary-shared-across-teams）:
+        // SetPitchRecovery と同じ理由＝Player が値等価の record なので、1つの辞書へ merge すると
+        // 別校の選手が偶然全属性一致したとき同一キーに潰れかねない（校内は背番号が一意なので
+        // 同一チーム内では衝突しない）。
+        var (awayDayForm, homeDayForm) = SampleDayForms(awayTeam, homeTeam, ctx, rng);
+        away.SetDayForm(awayDayForm);
+        home.SetDayForm(homeDayForm);
 
-        var progress = new GameProgress(awayTeam, homeTeam, away, home, ctx, rng, dayForm);
+        var progress = new GameProgress(awayTeam, homeTeam, away, home, ctx, rng);
         if (scenarioStart is not null) ApplyScenarioStart(progress, scenarioStart);
         if (traceHeader is not null) ctx.TraceSink!.OnGameStart(traceHeader);
         return progress;
@@ -257,9 +292,25 @@ public static class GameEngine
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs > p.Away.Runs) break;
 
             // 裏: 後攻(home)攻撃 / 先攻(away)守備。最終回以降はサヨナラ判定。
+            //
+            // issue #633: コールドも「点差がついた時点で打ち切る」（設計書05 §1.3）。判定が半回の
+            // 境目（上の :249 と下の :268）にしか無かったため、裏の攻撃中に点差が開いてもその半回を
+            // 3アウトまで消化していた。サヨナラと同じ器＝打席の決着ごとに評価される述語へ相乗りさせる。
+            //
+            // 表には入れない: 先攻がコールド差をつけても**その回の裏は行ってから**終わるのが実際の
+            // ルールで、表の中で打ち切ると後攻の攻撃機会を奪う（:249 の「表を終えた時点で後攻が既に
+            // リードなら裏を省く」はそのまま維持）。
+            //
+            // MercyEnded と break はここでは触らない。半回を早く抜けた後に既存の :268 が
+            // そのまま拾う（二重に break を足すと表の分岐と食い違う）。
             var allowWalkoff = p.Inning >= ctx.RegulationInnings;
+            var stopBottomHalf = allowWalkoff || ctx.MercyRuleEnabled
+                ? () => p.Home.Runs > p.Away.Runs
+                        && (allowWalkoff
+                            || IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
+                : (Func<bool>?)null;
             foreach (var s in PlayHalfSteps(p, p.Home, p.Away,
-                walkoff: allowWalkoff ? () => p.Home.Runs > p.Away.Runs : null, isTop: false)) yield return s;
+                walkoff: stopBottomHalf, isTop: false)) yield return s;
 
             // 規定回以降で決着していれば終了。
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs != p.Away.Runs) break;
@@ -336,19 +387,26 @@ public static class GameEngine
     }
 
     private static TacticsTally TallyOf(TeamState t)
-        => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes);
+        => new(t.StealAttempts, t.StealSuccesses, t.SacrificeBunts, t.SacrificeBuntSuccesses, t.Squeezes,
+            t.BuntForceOuts, t.SqueezeBallInPlay, t.SqueezeRunnerOutAtHome);
 
-    /// <summary>打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。</summary>
-    private static Dictionary<Player, double> SampleDayForms(
+    /// <summary>
+    /// 打順＋先発＋「投手として置かれた控え」の当日の出来をサンプリング（順序固定＝決定論）。
+    /// チームごとに別辞書を返す（issue dayform-dictionary-shared-across-teams）＝
+    /// <see cref="TeamState.SetPitchRecovery"/> と同じ理由（値等価の <see cref="Player"/> record を
+    /// 1本の辞書へ merge すると別校の選手が偶然全属性一致したとき同一キーに潰れかねない）。
+    /// 抽選順は先攻→後攻で従来と1ビットも変えない。
+    /// </summary>
+    private static (Dictionary<Player, double> Away, Dictionary<Player, double> Home) SampleDayForms(
         Team awayTeam, Team homeTeam, GameContext ctx, IRandomSource rng)
     {
-        var map = new Dictionary<Player, double>();
         // ムラっけ（設計書10）は当日の出来の振れ幅を拡大。スキルなしは倍率1.0で従来と同一。
         double Sample(Player p) => Players.FormModel.SampleDayForm(
             rng, ctx.Form, SkillModel.DayFormVarianceFactor(p.Skills, ctx.Skills));
 
-        foreach (var team in new[] { awayTeam, homeTeam })
+        Dictionary<Player, double> SampleTeam(Team team)
         {
+            var map = new Dictionary<Player, double>();
             foreach (var p in team.BattingOrder) map[p] = Sample(p);
             // DH制の先発投手は打順外（設計書09 §6）なので個別にサンプリング。
             if (team.UsesDh && team.StartingPitcher is not null)
@@ -361,8 +419,10 @@ public static class GameEngine
             // 消費が増える別の変更なので、やるなら帯の張り直しを伴う独立した issue にする。
             foreach (var p in team.Reserves)
                 if (p.Position == Field.FieldPosition.Pitcher) map[p] = Sample(p);
+            return map;
         }
-        return map;
+
+        return (SampleTeam(awayTeam), SampleTeam(homeTeam));
     }
 
     private static IEnumerable<GameStep> PlayHalfSteps(
@@ -372,7 +432,6 @@ public static class GameEngine
         var ctx = p.Ctx;
         var rng = p.Rng;
         var log = p.Log;
-        var dayForm = p.DayForm;
         var inning = p.Inning; // 半イニングは単一イニング内で完結（p.Inning は Steps が進める）
 
         var bases = new BaseState();
@@ -381,6 +440,13 @@ public static class GameEngine
         // 自責点（issue #69）: 失策で出塁 or 失策連鎖で延命した走者を集合で追跡し、生還時に自責から除外する。
         // 半イニング内で使い切り（次の半イニングは新しい集合）。簡易規則の詳細は design-14/PitchingStatLine 参照。
         var unearnedRunners = new HashSet<Player>();
+        // 引き継ぎ走者の責任投手（issue inherited-runner-run-attribution）: 走者→出塁させた投手。
+        // unearnedRunners と同じ寿命（半イニング）・同じ場所で持つ。GameProgress に置くのは代走の差し替え
+        // （SubstitutionCommands.PinchRun＝対話采配）からも引き継ぎを書けるようにするため。
+        var responsible = p.RunnerResponsibility;
+        responsible.Clear();
+        // 直前の打席を投げた投手（Pa() で「未登録の走者＝この打席で出塁した打者走者」の責任投手にする）。
+        Player? paPitcher = null;
 
         // デバッグ観測（設計書17 §4）。既定 null＝以降の観測分岐はすべて素通り＝従来と完全一致。
         var traceSink = p.TraceSink;
@@ -395,6 +461,14 @@ public static class GameEngine
             p.CurrentBases = bases;
             p.CurrentOuts = outs;
             p.CurrentIsTop = isTop;
+            // 打席で出塁した打者走者の責任投手＝この打席を投げた投手。塁上で未登録の走者は打者走者だけ
+            // （タイブレーク/場面ジャンプの走者は半イニング頭で、代走は差し替え時に登録済み）。
+            if (paPitcher is not null)
+            {
+                if (bases.First is { } r1 && !responsible.ContainsKey(r1)) responsible[r1] = paPitcher;
+                if (bases.Second is { } r2 && !responsible.ContainsKey(r2)) responsible[r2] = paPitcher;
+                if (bases.Third is { } r3 && !responsible.ContainsKey(r3)) responsible[r3] = paPitcher;
+            }
             // 打席の観測レコード（設計書17 §4.1）。この時点で outs は当該打席ぶんを加算済み。
             if (traceSink is not null && log.Count > 0)
             {
@@ -446,6 +520,10 @@ public static class GameEngine
             pendingBalls = seeded.Balls;
             pendingStrikes = seeded.Strikes;
         }
+        // タイブレーク／場面ジャンプで最初から塁にいる走者は、この半イニングの頭の投手の責任にする。
+        if (bases.First is { } seededFirst) responsible[seededFirst] = defense.CurrentPitcher;
+        if (bases.Second is { } seededSecond) responsible[seededSecond] = defense.CurrentPitcher;
+        if (bases.Third is { } seededThird) responsible[seededThird] = defense.CurrentPitcher;
 
         // 守備固め（設計書09 §6）: イニング頭に守備側が控えを起用。控え空/無指示なら素通り＝従来一致。
         MaybeDefensiveSub(defense, offense, ctx, rng, inning, bases);
@@ -454,10 +532,19 @@ public static class GameEngine
         // 既定Brain（Standard／無指示）は常に「動かさない」を返すので従来一致。
         MaybeDefenseSwap(defense, offense, ctx, rng, inning, isTop);
 
+        // issue #619: 1球指示の予約は半回をまたがない。盗塁・牽制が3アウト目になった球は
+        // 予約を消費しないまま半回が終わる（stealEndedHalf）ため、消さないと次の攻撃回の
+        // 先頭打者へ持ち越される。予約は「押した次の1球」の寿命なので、ここで捨てるのが正しい。
+        // 読み書きのみで乱数を消費しない＝無指示のシム・統計帯は不変。
+        offense.SetPendingPitchBattingOverride(null);
+        offense.SetPendingSteal(null, StealTarget.Second);
+        offense.ConsumePendingOffensiveSign();
+        defense.SetPendingPitchDefenseOverride(null, null);
+
         while (outs < 3)
         {
             // 選手交代（設計書09 §6, 攻撃側）: 代走→代打。控え空/無指示なら素通り＝従来と完全一致。
-            MaybeOffenseSubs(offense, defense, ctx, rng, inning, outs, bases);
+            MaybeOffenseSubs(p, offense, defense, ctx, rng, inning, outs, bases);
 
             // スモールボール暫定ヒューリスティック（既定オフ）。采配Brain設定時はサインが置き換える。
             if (ctx.EnableSmallBall && offense.Tactics is null)
@@ -466,9 +553,60 @@ public static class GameEngine
                 if (outs >= 3) break;
             }
 
+            // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。乱数は消費しない。
+            Timeline.Playback.LiveAtBat LiveAtBatOf(Player b, Player pit, int balls, int strikes, int pitchNumberInPa) => new()
+            {
+                Inning = inning,
+                IsTop = isTop,
+                AwayScore = p.Away.Runs,
+                HomeScore = p.Home.Runs,
+                Outs = outs,
+                BaseFirst = bases.First is not null,
+                BaseSecond = bases.Second is not null,
+                BaseThird = bases.Third is not null,
+                Balls = balls,
+                Strikes = strikes,
+                PitchNumberInPa = pitchNumberInPa,
+                BatterOrder = offense.CurrentBatterOrder,
+                BatterName = b.Name,
+                BatterSourceId = b.SourceId,
+                BatterBats = b.Bats,
+                BatterPosition = b.Position,
+                BatterNumber = b.UniformNumber,
+                BatterConditionValue = b.ConditionValue,
+                PitcherName = pit.Name,
+                PitcherSourceId = pit.SourceId,
+                PitcherThrows = pit.Throws,
+                PitcherNumber = pit.UniformNumber,
+                PitcherConditionValue = pit.ConditionValue,
+            };
+
+            // 打席の頭の采配窓（まだ1球も投げていない窓）。**投手・打者を束縛する前**に開く（2026-08-15）。
+            // 旧実装は束縛（実効能力の計算・AtBatSession.Begin）を済ませてから窓を開いていたため、この窓で
+            // 行った継投・代打はこの打席に届かず次の打席から効いた（監督報告「一人目の打者の間、前の投手が
+            // 投げている」）。GameReplay は決定列を打席境界＝この窓と同じ位置で適用するので、順序を揃えることで
+            // Save/Load 往復とも一致する。yield は乱数非消費＝一括 Play・AI駆動のシムは1ビットも変わらない。
+            // **打席の頭でも埋まる**のが肝で、これが無いとUIは1球目を投げるまで打者を知れず、打席の頭で
+            // サインを受け付けられない。
+            if (ctx.CapturePitches)
+                p.LiveAtBat = LiveAtBatOf(offense.PeekBatter(), defense.CurrentPitcher, pendingBalls, pendingStrikes, 1);
+            yield return Pitch();
+
             var batter = offense.PeekBatter();
             var batterOrder = offense.CurrentBatterOrder; // ライブ観戦のスタメン列ハイライト用（打順消費前に採取）
             var currentPitcher = defense.CurrentPitcher; // 成績計上用の投手アイデンティティ
+            paPitcher = currentPitcher;
+            // 打者一巡: 打席に立つ選手は塁上に居ないので、前の出塁で残った責任投手を忘れる
+            // （残すと救援のときに出た同じ選手の生還が先発へ付く）。
+            responsible.Remove(batter);
+
+            // 走者の責任投手（issue inherited-runner-run-attribution）: 登録があればその投手、無ければ
+            // 今の投手（＝この打席で出た打者走者）。生還時の失点・自責点はこの投手へ付ける。
+            Player ResponsibleFor(Player runner)
+                => responsible.TryGetValue(runner, out var owner) ? owner : currentPitcher;
+            // 打席の外（本盗・重盗・暴投/捕逸）で生還した走者の失点を責任投手へ付ける（sign=-1 は巻き戻し）。
+            void ChargeRunnerScored(Player runner, int sign = 1)
+                => defense.ChargeRuns(ResponsibleFor(runner), sign, unearnedRunners.Contains(runner) ? sign : 0);
 
             // 試合中の受傷（設計書03 §3.5・issue #29 B）。判定はすべて Fork した専用ストリームなので
             // 本体の乱数順・試合結果は不変。この打席で起きた分をタイムラインのキャプションにも載せる。
@@ -502,9 +640,17 @@ public static class GameEngine
             // 打席頭のスナップショット。1球采配（設計書15 §2.3）の Base としても使う。打撃・スコア等は
             // 打席内で不変だが、塁上/アウト数は盗塁の毎球判定（設計書15 Phase D-2d）により打席途中で
             // 変わりうるため、毎球ループの先頭（下）で都度作り直す。
-            // Brain が両方nullなら未構築のまま＝以降 IPitchTacticsBrain 判定も必ずfalseなので参照されない。
+            // Brain が両方nullなら未構築のまま。
+            // ⚠ 「未構築なら以降 IPitchTacticsBrain 判定も必ずfalse」は成り立たない。打席の**途中**で
+            //    brain が差し込まれうるからで、実際 MatchProgression.SkipDelegateToAi（スキップ委任）が
+            //    OverrideTactics でそれをやる。未構築の situation は Batter が null なので、そのまま
+            //    1球采配へ渡すと StandardTacticsBrain.CallPitchAction の s.Base.Batter で NRE になる
+            //    （＝スキップが例外で落ち、押した側からは「試合が進まない」としか見えない）。
+            //    構築済みかを下の1球采配の入口で見張る（両チームとも brain 無しの試合だけが該当し、
+            //    既存経路では brain がある＝必ず構築済みなので RNG 消費も結果も1ビットも変わらない）。
             var situation = default(TacticsSituation);
-            if (offense.Tactics is not null || defense.Tactics is not null)
+            var situationBuilt = offense.Tactics is not null || defense.Tactics is not null;
+            if (situationBuilt)
             {
                 situation = new TacticsSituation(
                     inning, ctx.RegulationInnings, outs, offense.Runs - defense.Runs,
@@ -559,31 +705,42 @@ public static class GameEngine
             // （＝従来と完全一致・帯不変）。減衰カーブ（VelocityDrop/ControlDrop）は共通なので、エース酷使でも
             // 実効能力の算出結果は ctx.Fatigue と同値＝変わるのは継投「時期」（ShouldRelieve）だけ。
             var fatigue = defense.Fatigue ?? ctx.Fatigue;
-            var pitcher = PitchingFatigue.Effective(currentPitcher, defense.FatiguePitches, fatigue);
-            // 調子・当日の出来（設計書02 §3.3/§3.3b）。
-            pitcher = Players.FormModel.ApplyPitcher(pitcher, currentPitcher.Condition, FormOf(dayForm, currentPitcher), ctx.Form);
-            var batterAttrs = Players.FormModel.ApplyBatter(batter.ToBatter(), batter.Condition, FormOf(dayForm, batter), ctx.Form);
+            // 投手・打者の実効能力（疲労→調子→スキル→プレッシャー）。**純関数の連鎖で乱数非消費**。
+            // 打席頭と、采配窓で継投・代打が入ったときの束縛し直し（RebindMatchup）が同じ式を通る＝一箇所に置く。
+            (PitcherAttributes Pitcher, BatterAttributes BatterBase, SkillPlayMods PlayMods) EffectiveMatchup()
+            {
+                // 表示→物理の効き（設計書21）: 投手は制球・キレを Lv で寝かせる（球速の反応は PitchSelection・スタミナは据え置き）。
+                var pit = PitchingFatigue.Effective(
+                    ctx.Batting.AbilityEffect.Pitcher(currentPitcher.Pitching), defense.FatiguePitches, fatigue,
+                    defense.EffectiveBaseStamina(currentPitcher));
+                // 調子・当日の出来（設計書02 §3.3/§3.3b）。
+                pit = Players.FormModel.ApplyPitcher(pit, currentPitcher.Condition, defense.DayFormOf(currentPitcher), ctx.Form);
+                // 表示→物理の効き（設計書21）は ToBatter の中＝ここが打者側の唯一の入口。
+                var bat = Players.FormModel.ApplyBatter(batter.ToBatter(ctx.Batting.AbilityEffect), batter.Condition, offense.DayFormOf(batter), ctx.Form);
 
-            // スキル（設計書10）: 尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
-            var priorPa = offense.PriorPlateAppearances(batter);
-            var priorBf = defense.PriorBattersFaced(currentPitcher);
-            batterAttrs = SkillModel.ApplyBatter(batterAttrs, batter.Skills, priorPa, ctx.Skills);
-            pitcher = SkillModel.ApplyPitcher(pitcher, currentPitcher.Skills, priorBf, ctx.Skills);
-            var playMods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
+                // スキル（設計書10）: 尻上がり/打者一巡は試合内の登板・打席累積で効く。行動特性・球質は playMods へ。
+                var priorPa = offense.PriorPlateAppearances(batter);
+                var priorBf = defense.PriorBattersFaced(currentPitcher);
+                bat = SkillModel.ApplyBatter(bat, batter.Skills, priorPa, ctx.Skills);
+                pit = SkillModel.ApplyPitcher(pit, currentPitcher.Skills, priorBf, ctx.Skills);
+                var mods = SkillModel.PlayMods(batter.Skills, currentPitcher.Skills, priorBf, ctx.Skills);
 
-            // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
-            var pitcherFatigueOver = defense.FatiguePitches > currentPitcher.Pitching.StaminaPitches;
-            pitcher = PressureModel.ApplyPitcher(pitcher, PressureModel.Multiplier(
-                currentPitcher.Mental, pressureIdx, ctx.Pressure,
-                defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
-                defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0));
-            batterAttrs = PressureModel.ApplyBatter(batterAttrs, PressureModel.Multiplier(
-                batter.Mental, pressureIdx, ctx.Pressure,
-                offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
+                // プレッシャー×精神力（設計書02 §3）: 緩和=主将＋伝令、負側増幅=疲労・動揺。精神力50なら恒等。
+                var pitcherFatigueOver = defense.FatiguePitches > defense.EffectiveBaseStamina(currentPitcher);
+                pit = PressureModel.ApplyPitcher(pit, PressureModel.Multiplier(
+                    currentPitcher.Mental, pressureIdx, ctx.Pressure,
+                    defense.MitigationFor(offense: false, ctx.Tactics, ctx.Skills), pitcherFatigueOver,
+                    defense.PitcherRattled ? ctx.Tactics.RattledNegativeAmplify : 1.0));
+                bat = PressureModel.ApplyBatter(bat, PressureModel.Multiplier(
+                    batter.Mental, pressureIdx, ctx.Pressure,
+                    offense.MitigationFor(offense: true, ctx.Tactics, ctx.Skills)));
+                return (pit, bat, mods);
+            }
+            var (pitcher, batterBase, playMods) = EffectiveMatchup();
             // ここまで（調子・スキル・プレッシャー）が打席内で不変な実効打者能力の土台。以降のサイン補正
             // （エンドラン/バスター/得点圏）と打撃姿勢は毎球評価しうる（issue #492）ので、土台を控えておき
             // 球ごとに BatterFor(...) で組み直す。無指示なら毎球の値は打席頭の値とビット単位で一致する。
-            var batterBase = batterAttrs;
+            var batterAttrs = batterBase;
 
             // --- バントサイン（設計書02 §4.3・設計書15 Phase D-2b）: AtBatSession の投球ループへ統一。
             // 2ストライクに達するまで毎球バント試行を上書きし、決着しなければ実カウントを保ったまま
@@ -604,7 +761,7 @@ public static class GameEngine
             // 打席途中に押されうるので下の投球ループで球ごとに取り直す。
             double SqueezeWasteNow() => MathUtil.Clamp(
                 ctx.Tactics.SqueezeReadBase
-                + (defense.Catcher.Fielding - 50) * ctx.Tactics.SqueezeReadPerLead
+                + (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Fielding) - 50) * ctx.Tactics.SqueezeReadPerLead
                 + (outs == 1 && Math.Abs(offense.Runs - defense.Runs) <= 1
                     ? ctx.Tactics.SqueezeReadObviousBonus : 0.0),
                 0.0, 0.60);
@@ -654,33 +811,68 @@ public static class GameEngine
             // 一塁走者のスタート種別（設計書12 §4, Q10決定）: エンドランは接触と同時に飛び出すコンタクト始動。
             // 投球ループが「その球でエンドランが効いたか」で毎球更新し、打席確定時（打球解決）に最後の値を使う。
             var r1Start = brainHitAndRun ? StartType.Contact : StartType.Normal;
-            var endrunOnLastPitch = brainHitAndRun; // 空振り三振でのスタート走者の憤死判定（下）に使う
+            // 一塁走者が投球と同時に走っていた（盗塁企図が打球で巻き戻された。issue #626）か。打球が空中で
+            // 捕られると始動種別によらず飛び出しの勝負になる（issue fly-out-runner-dp-table-and-doubled-off-depiction）。
+            var r1StealBreak = false;
 
             // 打順消費（設計書15 Phase D-2e）: 打席が実際に確定した時点まで遅らせる（下の squeezeAbandoned/
             // stealEndedHalf ガード直後）。ここでは進めない＝Peekのみでこの打者を握ったまま投球ループへ入る。
 
             // 守備指示→初期守備位置（陣形の効果は幾何＝物理から出る, §2.1）。基準配置を控えておき、陣形を
             // 1球単位で上書き（issue #492）するときはこの基準から組み直す。
-            var baseAlignment = defense.DefensiveAlignment(ctx.Field);
+            var baseAlignment = defense.DefensiveAlignment(ctx.Field, ctx.Fielding.AbilityEffect);
             var fielders = AlignmentTactics.Adjust(baseAlignment, defTactics, ctx.Tactics);
-            var directive = defTactics.Policy == PitchPolicy.Auto
-                ? (PitchDirective?)null
-                : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
-            // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。名捕手（設計書10）は実効リードを底上げ。
-            var catcherLead = defense.Catcher.Lead
-                + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
-            var abCtx = ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
-                gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
-                skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
-                swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics));
+            // 打席文脈（守備配置・配球方針・捕手リード・スキル）。打席頭と束縛し直し（RebindMatchup）が同じ式を通る。
+            AtBatContext BuildAtBatContext()
+            {
+                var directive = defTactics.Policy == PitchPolicy.Auto
+                    ? (PitchDirective?)null
+                    : ctx.Tactics.DirectiveFor(defTactics.Policy, batter.Bats);
+                // 捕手リード（設計書01 §2①）: 良い配球で球威を引き出す。名捕手（設計書10）は実効リードを底上げ。
+                var catcherLead = ctx.Batting.AbilityEffect.Pitching(defense.Catcher.Lead)
+                    + (defense.Catcher.Skills.Has(Skill.MasterCatcher) ? ctx.Skills.MasterCatcherLeadBonus : 0);
+                return ctx.ToAtBatContext(fielders, runnersOn: bases.RunnerCount > 0,
+                    gear: defTactics.Gear, directive: directive, takeFirstPitch: sign == OffensiveSign.Take,
+                    skills: playMods, catcherLead: catcherLead, intentionalWalk: defTactics.IntentionalWalk,
+                    swingProbabilityFactor: BattingApproachModel.SwingFactor(offense.BattingApproach, ctx.Tactics),
+                    // 慣れ（設計書02 §2.3b）: この打者がこの試合でこの投手と対戦した打席数。継投で0へ戻る。
+                    familiarityPa: offense.PriorPlateAppearancesAgainst(batter, currentPitcher));
+            }
+            var abCtx = BuildAtBatContext();
 
             // 通常打席の投球ループ（設計書15 §2.1）: AtBatSession を1球ずつ回し、各投球の前に采配窓を yield する。
             // 一括 ResolveDetailed と実装・RNG消費が完全一致（yield は乱数非消費）＝バッチ Play と対話進行は同一結果。
             var session = AtBatSession.Begin(batterAttrs, pitcher, abCtx, batterPlayer: batter,
-                thirdBaseRunner: squeezeThirdRunner, squeezeWasteProbability: squeezeWaste,
+                thirdBaseRunner: squeezeThirdRunner, firstBaseRunner: bases.First, secondBaseRunner: bases.Second,
+                squeezeWasteProbability: squeezeWaste,
                 initialBalls: pendingBalls, initialStrikes: pendingStrikes,
                 forcedResult: forcedPaResult);
             pendingBalls = pendingStrikes = 0; // 途中カウントは場面ジャンプ直後の1打席にだけ効く
+
+            // 采配窓で継投・代打が入ったとき（プレイヤーの手動交代。AI・一括シムはここへ来ない＝帯不変）、
+            // この打席の投手・打者を差し替えて実効能力・打席文脈・AtBatSession を組み直す。頭の窓は上で束縛より
+            // 前に開いたので通常ここへは来ないが、打席途中の窓（クリック中断→交代）では毎回ここで拾う＝
+            // 新投手が同じカウントから同じ打者に投げ続ける（成績・球数はこの打席ぶんまるごと新投手へ＝簡略）。
+            // 乱数は一切消費しない（EffectiveMatchup / BuildAtBatContext はすべて純関数）。
+            void RebindMatchup()
+            {
+                batter = offense.PeekBatter();
+                currentPitcher = defense.CurrentPitcher;
+                paPitcher = currentPitcher;
+                responsible.Remove(batter);
+                if (situationBuilt)
+                    situation = situation with { Batter = batter, Pitcher = currentPitcher, Catcher = defense.Catcher };
+                (pitcher, batterBase, playMods) = EffectiveMatchup();
+                // 得点圏の強攻補正は打者の性格で決まる（上の chanceApplies と同じ式・同じ sign 状態）
+                chanceApplies = sign == OffensiveSign.Swing
+                    && (bases.Second is not null || bases.Third is not null)
+                    && batter.ChanceHitFactor != 1.0;
+                batterAttrs = BatterFor(offense.BattingApproach, brainHitAndRun);
+                baseAlignment = defense.DefensiveAlignment(ctx.Field, ctx.Fielding.AbilityEffect);   // 投野交代・守備交代で野手が代わりうる
+                fielders = AlignmentTactics.Adjust(baseAlignment, defTactics, ctx.Tactics);
+                abCtx = BuildAtBatContext();
+                session.RebindMatchup(batterAttrs, pitcher, abCtx, batter);
+            }
 
             // 采配ラベル（観測専用・設計書17 §4.1）。sign はバント/スクイズ/敬遠で Swing へ畳まれた後なので、
             // 畳む前の別名（buntSign/squeezeSign/IntentionalWalk）から表示用に復元する。
@@ -691,39 +883,20 @@ public static class GameEngine
 
             var squeezeAbandoned = false;
             var stealEndedHalf = false;
+            var atHeadWindow = true;   // 打席の頭の窓は束縛の前（上）で開いた
             while (!session.IsComplete)
             {
-                // 采配窓の観測（設計書15 Phase D-1 のUI採用）: これから投げる1球の局面。
-                // **打席の頭（まだ1球も投げていない窓）でも埋まる**のが肝で、これが無いとUIは1球目を
-                // 投げるまで打者を知れず、打席の頭でサインを受け付けられない。乱数は消費しない。
-                if (ctx.CapturePitches)
-                    p.LiveAtBat = new Timeline.Playback.LiveAtBat
-                    {
-                        Inning = inning,
-                        IsTop = isTop,
-                        AwayScore = p.Away.Runs,
-                        HomeScore = p.Home.Runs,
-                        Outs = outs,
-                        BaseFirst = bases.First is not null,
-                        BaseSecond = bases.Second is not null,
-                        BaseThird = bases.Third is not null,
-                        Balls = session.Balls,
-                        Strikes = session.Strikes,
-                        PitchNumberInPa = session.PitchCount + 1,
-                        BatterOrder = batterOrder,
-                        BatterName = batter.Name,
-                        BatterSourceId = batter.SourceId,
-                        BatterBats = batter.Bats,
-                        BatterPosition = batter.Position,
-                        BatterNumber = batter.UniformNumber,
-                        BatterConditionValue = batter.ConditionValue,
-                        PitcherName = currentPitcher.Name,
-                        PitcherSourceId = currentPitcher.SourceId,
-                        PitcherThrows = currentPitcher.Throws,
-                        PitcherNumber = currentPitcher.UniformNumber,
-                        PitcherConditionValue = currentPitcher.ConditionValue,
-                    };
-                yield return Pitch();
+                // 打席途中の采配窓（各投球の手前）。頭の窓は上で開いてあるので1周目は開かない。
+                if (!atHeadWindow)
+                {
+                    if (ctx.CapturePitches)
+                        p.LiveAtBat = LiveAtBatOf(batter, currentPitcher, session.Balls, session.Strikes, session.PitchCount + 1);
+                    yield return Pitch();
+                }
+                atHeadWindow = false;
+                // 窓で継投・代打が入っていたら、この球からその選手で解決する（上の RebindMatchup の項）。
+                if (!ReferenceEquals(offense.PeekBatter(), batter) || !ReferenceEquals(defense.CurrentPitcher, currentPitcher))
+                    RebindMatchup();
 
                 // 観測（設計書17 §4）: この球の乱数消費を測るため、采配窓を抜けた直後の値を控える。
                 var drawsAtPitchStart = rngStats?.Draws ?? 0;
@@ -733,7 +906,7 @@ public static class GameEngine
 
                 // 塁上/アウト数は盗塁の毎球判定（下）で打席途中に変わりうるため、brain へ渡す前に
                 // 毎球作り直す（打者・スコア差等その他のフィールドは打席内不変なので変えない）。
-                if (offense.Tactics is not null || defense.Tactics is not null)
+                if (situationBuilt)
                 {
                     situation = situation with
                     {
@@ -763,7 +936,7 @@ public static class GameEngine
                 // （解決式は StealResolver 等の従来のまま、下の盗塁ブロックで解決する）。
                 StartType? stealAttempt = null;
                 var stealTarget = StealTarget.Second;
-                if (offense.Tactics is IPitchTacticsBrain offensePitchBrain)
+                if (situationBuilt && offense.Tactics is IPitchTacticsBrain offensePitchBrain)
                 {
                     var pSituation = new PitchTacticsSituation(
                         situation, session.Balls, session.Strikes, session.PitchCount, session.LastPitchKind);
@@ -784,7 +957,7 @@ public static class GameEngine
                     stealAttempt = manualSteal.Start;
                     stealTarget = manualSteal.Target;
                 }
-                if (defense.Tactics is IPitchTacticsBrain defensePitchBrain)
+                if (situationBuilt && defense.Tactics is IPitchTacticsBrain defensePitchBrain)
                 {
                     var pSituation = new PitchTacticsSituation(
                         situation, session.Balls, session.Strikes, session.PitchCount, session.LastPitchKind);
@@ -813,13 +986,37 @@ public static class GameEngine
                 // 判定結果（アウト/セーフ）に関わらず組む＝分岐させない（2026-08-05 issue決定）。
                 Timeline.Playback.PlaybackPlay? pickoffPlay = null;
 
+                // issue #626: 盗塁が無効になる球（ファウル＝ボールデッド／打球＝打球優先）のための控え。
+                // 盗塁は実球より前に完全解決する構造で、その球が無効だったと判るのは投げた後になる。
+                // 解決順・乱数消費順は<b>一切動かさず</b>、適用結果だけを後から巻き戻す（不変条件#2）。
+                // 牽制（PickoffResolver）は投球前の独立事象なので巻き戻さない＝牽制で決着した球には
+                // そもそも盗塁が走らないので、下の stealRolledBack 系は立たない。
+                var steal0First = bases.First;
+                var steal0Second = bases.Second;
+                var steal0Third = bases.Third;
+                var steal0Outs = outs;
+                var steal0Runs = offense.Runs;
+                var steal0RunsThisHalf = runsThisHalf;
+                Player? stealRecRunner = null;      // RecordSteal した走者（取り消し対象）
+                var stealRecSuccess = false;
+                Player? stealRecScorer = null;      // 本盗・重盗で得点した走者（帰属の取り消し対象）
+                var stealDoubleBreak = false;       // 重盗の三塁ブレイクを数えたか
+                StartType? stealStartApplied = null; // 実際に走った始動種別（打球の球でだけ活かす）
+
                 // 盗塁/牽制/重盗（設計書02 §4.2・設計書09 §1・design-14 P1-4/P1-5・設計書15 Phase D-2d）:
                 // カウントは消費せず（実球はこの後も通常どおり投げる）、この球の前に走者だけが動く。
                 // PickoffResolver→StealReadModel.RollPitchout→StealResolver→重盗ロールの呼び出し順は
                 // 旧来の打席頭一括判定と不変。3アウト目ならこの打席は未決着のまま次イニングへ
                 // （スクイズの挟殺と同じ扱い＝設計書15 Phase D-2c の squeezeAbandoned を踏襲）。
+                // 狙える塁の判定は StealTargets が単一ソース（issue #622）。UI の可否・ラベルも同じ式を引く
+                // ＝「押せたのに engine が解決しない指示」を構造的に作らない。各分岐に残っている
+                // `bases.X is { }` は判定の重複ではなく**コンパイラへの非null証明**（走者をそのまま
+                // 牽制・盗塁解決へ渡すため。式が bool 経由になると null 解析が届かない）。
+                var stealFeasible = StealTargets.FromBases(
+                    bases.First is not null, bases.Second is not null, bases.Third is not null);
+
                 if (stealAttempt is { } stealStart && stealTarget == StealTarget.Second
-                    && bases.First is not null && bases.Second is null)
+                    && stealFeasible == StealTarget.Second && bases.First is { })
                 {
                     // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ
                     // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ。
@@ -834,6 +1031,7 @@ public static class GameEngine
                     {
                         offense.PickoffCount++;
                         outs++;
+                        defense.RecordRunnerOut(currentPitcher); // 牽制死も投球回に数える（完投=27アウトの保証）
                         bases.First = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -851,14 +1049,19 @@ public static class GameEngine
                         // 強制発動（F4）は抽選をスキップして成否を固定する。ここだけ乱数の消費順が変わるが、
                         // 強制した試合は HasForcedOutcomes で digest・統計から丸ごと外れるので影響が漏れない。
                         // 非強制時 paBaserunning は ctx.Baserunning と同一参照＝従来の乱数順・結果に不変。
-                        var safe = force switch
+                        var steal = force switch
                         {
-                            Debugging.ForcedOutcome.StealSuccess => true,
-                            Debugging.ForcedOutcome.StealCaught => false,
-                            _ => StealResolver.Resolve(
-                                bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart) == StealResult.Safe,
+                            Debugging.ForcedOutcome.StealSuccess => StealResolver.Forced(
+                                bases.First, defense.Catcher, paBaserunning, StealResult.Safe, pitchout, stealStart),
+                            Debugging.ForcedOutcome.StealCaught => StealResolver.Forced(
+                                bases.First, defense.Catcher, paBaserunning, StealResult.CaughtStealing, pitchout, stealStart),
+                            _ => StealResolver.ResolveVerdict(
+                                bases.First, defense.Catcher, paBaserunning, rng, pitchout, stealStart),
                         };
+                        var safe = steal.Safe;
                         offense.RecordSteal(bases.First, safe);
+                        stealRecRunner = secondStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
+                        stealStartApplied = stealStart;
                         // 全力疾走・スライディング（設計書03 §3.5）: 盗塁企図ごとに走者が受傷しうる。
                         if (bases.First is { } slider)
                         {
@@ -874,22 +1077,30 @@ public static class GameEngine
                         else
                         {
                             outs++;
+                            defense.RecordRunnerOut(currentPitcher); // 盗塁死も投球回に数える（下の巻き戻しと対）
                         }
                         bases.First = null;
 
                         // 一・三塁の重盗（design-14 P1-4）: 二盗の送球中に三塁走者も本塁を狙う。既定オフ
                         // (DoubleStealThirdBreakProb=0)では分岐自体に入らずrng消費ゼロ＝単独二盗と完全一致。
                         // 投げた塁（二塁）だけがアウト対象という原則から、成立時の三塁走者は無条件生還。
+                        // issue #619: 本盗と同じ理由で、未消費の手動スクイズ予約があるときは三塁走者を
+                        // 走らせない（同じ球で三塁走者がスクイズと重盗の両方に使われるのを防ぐ）。
+                        // 既定 DoubleStealThirdBreakProb=0 では従来どおりこの分岐に入らず乱数消費ゼロ。
                         if (bases.Third is not null && paBaserunning.DoubleStealThirdBreakProb > 0.0
+                            && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze
                             && MathUtil.Chance(paBaserunning.DoubleStealThirdBreakProb, rng))
                         {
                             offense.DoubleStealThirdBreakCount++;
+                            stealDoubleBreak = true;         // issue #626: 巻き戻し対象
                             offense.Runs += 1;
                             runsThisHalf += 1;
                             if (bases.Third is { } dsScorer)
                             {
                                 offense.RecordRun(dsScorer); // 得点帰属（issue #77）
+                                ChargeRunnerScored(dsScorer); // 失点は責任投手へ
                                 doubleScorer = dsScorer;     // 重盗の絵（issue #485）
+                                stealRecScorer = dsScorer;   // issue #626: 巻き戻し対象
                             }
                             bases.Third = null;
                         }
@@ -898,15 +1109,16 @@ public static class GameEngine
                         if (ctx.CaptureTimelines)
                             stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                 Timeline.TimelineBuilder.BuildSteal(
-                                    secondStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
-                                    paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer));
+                                    secondStealer, defense.Catcher, steal.Result,
+                                    paBaserunning, ctx.Field, StealTarget.Second, pitchout, stealStart, doubleScorer,
+                                    steal.RunnerSeconds, steal.DefenseSeconds));
 
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }
                 // 三盗（issue #67）: 二塁のみ在塁でのみ判断側が返す（塁状況が排他のため一・三塁の重盗とは無競合）。
                 else if (stealAttempt is { } thirdStart && stealTarget == StealTarget.Third
-                    && bases.Second is not null && bases.First is null && bases.Third is null)
+                    && stealFeasible == StealTarget.Third && bases.Second is { })
                 {
                     var pickedOffSecond = PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
@@ -918,6 +1130,7 @@ public static class GameEngine
                     {
                         offense.PickoffCount++;
                         outs++;
+                        defense.RecordRunnerOut(currentPitcher); // 牽制死も投球回に数える
                         bases.Second = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -926,10 +1139,11 @@ public static class GameEngine
                         var thirdStealer = bases.Second!; // 三盗の走者（下で bases.Second は三塁移動 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Second, defense.Catcher, currentPitcher, thirdStart, ctx.Baserunning, rng);
-                        var safe = StealResolver.Resolve(
-                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart,
-                            StealTarget.Third) == StealResult.Safe;
+                        var steal = StealResolver.ResolveVerdict(
+                            bases.Second, defense.Catcher, ctx.Baserunning, rng, pitchout, thirdStart, StealTarget.Third);
+                        var safe = steal.Safe;
                         offense.RecordSteal(bases.Second, safe);
+                        stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Second is { } thirdSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -937,22 +1151,28 @@ public static class GameEngine
                                 inning, isTop, log.Count, rng, ctx.MatchInjury, ctx.Skills, ctx.InjuryCatalog,
                                 sub: session.PitchCount));
                         }
-                        if (safe) { bases.Third = bases.Second; } else { outs++; }
+                        if (safe) { bases.Third = bases.Second; }
+                        else { outs++; defense.RecordRunnerOut(currentPitcher); } // 三盗死も投球回に数える
                         bases.Second = null;
                         // 再生データ（issue #485）: 三盗の走塁勝負を絵にする（送球先＝三塁・受け手＝三塁手）。
                         if (ctx.CaptureTimelines)
                             stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                 Timeline.TimelineBuilder.BuildSteal(
-                                    thirdStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
-                                    ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart));
+                                    thirdStealer, defense.Catcher, steal.Result,
+                                    ctx.Baserunning, ctx.Field, StealTarget.Third, pitchout, thirdStart,
+                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds));
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }
                 // 本盗（issue #67, design-14）: 三塁のみ在塁でのみ判断側が返す。同じ球でスクイズが確定していれば
                 // 三塁走者は既にそちらへ使われているため、本盗は試みない（単純上書き, Q12-3と同型）。
+                // issue #619: 抑止は brain 由来のスクイズ（battingOverride）だけでなく、まだ消費していない
+                // 手動スクイズ予約も見る。手動指示の消費はこの下（盗塁解決の後）なので、予約を覗かないと
+                // 「同じ球でスクイズと本盗が両方走り、三塁走者が二重に使われる」ことになる。
                 else if (stealAttempt is { } homeStart && stealTarget == StealTarget.Home
-                    && bases.Third is not null && bases.Second is null && bases.First is null
-                    && battingOverride != PitchBattingOverride.Squeeze)
+                    && stealFeasible == StealTarget.Home && bases.Third is { }
+                    && battingOverride != PitchBattingOverride.Squeeze
+                    && offense.PendingPitchBattingOverride != PitchBattingOverride.Squeeze)
                 {
                     var pickedOffThird = PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
@@ -964,6 +1184,7 @@ public static class GameEngine
                     {
                         offense.PickoffCount++;
                         outs++;
+                        defense.RecordRunnerOut(currentPitcher); // 牽制死も投球回に数える
                         bases.Third = null;
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
@@ -972,10 +1193,11 @@ public static class GameEngine
                         var homeStealer = bases.Third!; // 本盗の走者（下で bases.Third は生還 or アウトで null）
                         var pitchout = StealReadModel.RollPitchout(
                             bases.Third, defense.Catcher, currentPitcher, homeStart, ctx.Baserunning, rng);
-                        var safe = StealResolver.Resolve(
-                            bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart,
-                            StealTarget.Home) == StealResult.Safe;
+                        var steal = StealResolver.ResolveVerdict(
+                            bases.Third, defense.Catcher, ctx.Baserunning, rng, pitchout, homeStart, StealTarget.Home);
+                        var safe = steal.Safe;
                         offense.RecordSteal(bases.Third, safe);
+                        stealRecRunner = homeStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
                         if (bases.Third is { } homeSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -987,19 +1209,26 @@ public static class GameEngine
                         {
                             offense.Runs += 1;
                             runsThisHalf += 1;
-                            if (bases.Third is { } homeScorer) offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
+                            if (bases.Third is { } homeScorer)
+                            {
+                                offense.RecordRun(homeScorer); // 本盗の得点帰属（issue #77）
+                                ChargeRunnerScored(homeScorer); // 失点は責任投手へ
+                                stealRecScorer = homeScorer;   // issue #626: 巻き戻し対象
+                            }
                         }
                         else
                         {
                             outs++;
+                            defense.RecordRunnerOut(currentPitcher); // 本盗死も投球回に数える
                         }
                         bases.Third = null;
                         // 再生データ（issue #485）: 本盗は捕手からの送球区間そのものが無い（投球が送球を兼ねる）。
                         if (ctx.CaptureTimelines)
                             stealPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                                 Timeline.TimelineBuilder.BuildSteal(
-                                    homeStealer, defense.Catcher, safe ? StealResult.Safe : StealResult.CaughtStealing,
-                                    ctx.Baserunning, ctx.Field, StealTarget.Home, pitchout, homeStart));
+                                    homeStealer, defense.Catcher, steal.Result,
+                                    ctx.Baserunning, ctx.Field, StealTarget.Home, pitchout, homeStart,
+                                    doubleStealScorer: null, steal.RunnerSeconds, steal.DefenseSeconds));
                         if (outs >= 3) { stealEndedHalf = true; break; }
                     }
                 }
@@ -1017,12 +1246,19 @@ public static class GameEngine
                 if (manualGear is { } mg) gearOverride = mg;
 
                 // 手動の攻撃サイン（エンドラン）を毎球評価（issue #492 B）。無指示ならフィールド読み取りのみ
-                // ＝RNG非消費。brain のエンドラン（brainHitAndRun）は打席全体に効く既定として温存し、手動は
-                // 「押した次の1球」に効く（bases.First があるときだけ＝走者不在なら自然に無効）。
+                // ＝RNG非消費。ここは1球分の消費でしかないが、Unity側（MatchLiveController）が打席が
+                // 終わるまで毎球これを再予約し続けることで「1打席」持続する（design-09 §1.2）。
+                // brain・手動どちらも「いま一塁に走者がいるか」を毎球見直す＝打席途中の（独立の）盗塁企図
+                // で走者が抜けたら、以降の球は補正もスイング強制もかからない（brainHitAndRun は打席頭の
+                // 判断値のまま据え置くが、有効化の可否は毎球の bases.First で判定し直す）。
                 var manualEndrun = offense.ConsumePendingOffensiveSign() == OffensiveSign.HitAndRun;
-                var endrunThisPitch = brainHitAndRun || (manualEndrun && bases.First is not null);
-                endrunOnLastPitch = endrunThisPitch;
+                var endrunThisPitch = (brainHitAndRun || manualEndrun) && bases.First is not null;
                 r1Start = endrunThisPitch ? StartType.Contact : StartType.Normal;
+                r1StealBreak = false;
+                // 「打者は必ず当てにいく」（設計書09 §1）: 見送りを許さない強制スイング。squeeze/bunt・
+                // brain/手動の1球指示が既に何か決めていればそちらを優先し、無指示のときだけ埋める
+                // （既存のbuntSign既定と同じ「値がある時だけ上書き」の流儀）。
+                if (endrunThisPitch && battingOverride is null) battingOverride = PitchBattingOverride.ForceSwing;
 
                 // 実効打者能力とスイング頻度をこの球の状態（姿勢＋エンドラン）で組み直す（issue #492）。
                 // 無指示なら打席頭の値とビット単位で一致（BatterFor は同じ純関数・DecideSwing/ContactModel は
@@ -1050,15 +1286,92 @@ public static class GameEngine
                 double? sqWasteOverride = null;
                 if (battingOverride == PitchBattingOverride.Squeeze && squeezeSign is null)
                 {
-                    sqThirdOverride = bases.Third;
-                    sqWasteOverride = SqueezeWasteNow();
-                    offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
+                    // issue #619: 予約を消費した時点で三塁が空なら、スクイズが成立しない場面なので
+                    // 無指示（強攻）へ落とす。盗塁・牽制の解決は手動指示の消費より前に走るため、
+                    // 「窓を開けた時は三塁走者が居たのに、投球の直前に本盗・牽制死・重盗で消えた」が起こりうる。
+                    // ここで落とさないと ①両方nullで AtBatSession が例外を投げて試合が止まる
+                    // ②打席頭スナップショット（_thirdBaseRunner）が生きていると、もう三塁に居ない走者で
+                    // スクイズが解決される（幽霊走者）— のどちらかになる。
+                    // 無指示へ落とす経路は SqueezeWasteNow（純計算）も RecordSqueeze も通らない＝乱数消費ゼロ。
+                    if (bases.Third is null)
+                    {
+                        battingOverride = null;
+                    }
+                    else
+                    {
+                        sqThirdOverride = bases.Third;
+                        sqWasteOverride = SqueezeWasteNow();
+                        offense.RecordSqueeze(); // 手動スクイズの試行を記録（brain は打席頭で記録済み）
+                    }
                 }
 
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,
                     batterOverride: batterAttrsPitch, swingFactorOverride: swingFactorPitch,
                     fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
                     squeezeWasteOverride: sqWasteOverride);
+
+                // 盗塁の取り消し（issue #626）: 投げた球が「盗塁が成立しない球」だったら、上で適用した
+                // 盗塁の結果だけを巻き戻す。乱数は既に引き終わっており順序も量も変えない（不変条件#2）。
+                //
+                //  - Foul   … ボールデッド。走者は元の塁へ戻り、企図そのものが無かったことになる
+                //  - InPlay … 打球優先。盗塁は記録されず、走者は打球の解決（BaserunningModel.ApplyDetailed）で進む。
+                //             スタートを切っていた分は r1Start へ渡して走塁の有利として活かす
+                //
+                // ファウルチップ（実ルールではインプレーで盗塁が成立する）は PitchKind に区別が無いため
+                // 当面 Foul へ一括する（2026-08-13 監督判断。OPEN-QUESTIONS 参照）。
+                // 三盗・本盗を打球の球で巻き戻した場合の「スタートの有利」は、走塁モデルが一塁走者の始動しか
+                // 受け取らないため表現しない（走者は通常の始動で進む＝有利を捨てる保守側に倒す）。
+                if (stealRecRunner is not null
+                    && session.LastPitchKind is AtBat.PitchKind.Foul or AtBat.PitchKind.InPlay)
+                {
+                    bases.First = steal0First;
+                    bases.Second = steal0Second;
+                    bases.Third = steal0Third;
+                    outs = steal0Outs;
+                    offense.Runs = steal0Runs;
+                    runsThisHalf = steal0RunsThisHalf;
+                    offense.UndoSteal(stealRecRunner, stealRecSuccess);
+                    // 盗塁死を上で投球回に計上済みなら、それも対で戻す（outs は steal0Outs へ戻している）。
+                    if (!stealRecSuccess) defense.RecordRunnerOut(currentPitcher, -1);
+                    if (stealRecScorer is not null)
+                    {
+                        offense.UndoRun(stealRecScorer);
+                        ChargeRunnerScored(stealRecScorer, -1); // 責任投手の失点も対で戻す
+                    }
+                    if (stealDoubleBreak) offense.DoubleStealThirdBreakCount--;
+                    stealPlay = null;   // 絵にも出さない＝同じ球のファウル打球の再生へ落ちる
+                    if (session.LastPitchKind == AtBat.PitchKind.InPlay
+                        && stealStartApplied is { } appliedStart)
+                    {
+                        r1Start = appliedStart;
+                        r1StealBreak = true;   // stealStartApplied は二盗（一塁走者）でだけ立つ
+                    }
+                }
+
+                // エンドランの空振り（設計書09 §1: 「空振り→走者憤死」）: 打席を終わらせるかに関わらず、
+                // スタートを切った一塁走者はこの球が空振りに終わるたび憤死の危機を負う（旧実装は「打席を
+                // 終わらせた最後の球が三振だった場合」だけを見ていたが、Fix Bで空振り自体が増えるため
+                // 2ストライク未満の途中の空振りも同じリスクを持たせる。盗塁ブロックと同じ「即座にoutsへ
+                // 計上しRecordRunnerOutで投球回へ計上、3死目なら半回を終える」idiomへ揃える）。
+                if (endrunThisPitch && bases.First is not null && session.LastPitchKind == AtBat.PitchKind.SwingingStrike)
+                {
+                    var caughtRunner = bases.First;
+                    var stealSafeProb = StealResolver.SuccessProbability(bases.First, defense.Catcher, paBaserunning)
+                            - ctx.Tactics.HitAndRunCaughtPenalty;
+                    var caughtSafe = bases.Second is null
+                        && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng);
+                    if (caughtSafe)
+                    {
+                        bases.Second = caughtRunner;
+                    }
+                    else
+                    {
+                        outs++;
+                        defense.RecordRunnerOut(currentPitcher);
+                    }
+                    bases.First = null;
+                    if (outs >= 3) { stealEndedHalf = true; break; }
+                }
 
                 // 1球ぶんの観測（設計書15 Phase D-1 のUI採用）: 投げ終えた球と、その時点の局面・対戦を控える。
                 // 打席が確定する前に1球ずつ絵にするための供給口で、MatchProgression.AdvancePitch と対で使う。
@@ -1076,6 +1389,10 @@ public static class GameEngine
                         BaseFirst = bases.First is not null,
                         BaseSecond = bases.Second is not null,
                         BaseThird = bases.Third is not null,
+                        // 得点も同じく「この球を投げ終えた時点」（issue #628）。本盗の生還はこの球より前に
+                        // 解決済みなのでここに乗る。暴投・捕逸はこの後に判定するので、そちらで with し直す。
+                        AwayScore = p.Away.Runs,
+                        HomeScore = p.Home.Runs,
                         PitchNumberInPa = session.PitchCount,
                         // この球の前に盗塁が解決していれば、その再生データを載せる（issue #485）。
                         // 打席途中の盗塁はこの1球観測が唯一の運び口（打球は Current.Play が運ぶ）。
@@ -1103,6 +1420,9 @@ public static class GameEngine
                         PressureIndex = pressureIdx,
                         Rattled = defense.PitcherRattled,
                         PitchingFatigue = (int)System.Math.Round(defense.FatiguePitches),
+                        EffectiveVelocityCeilingKmh = pitcher.MaxVelocityKmh,
+                        EffectiveControl = pitcher.Control,
+                        FamiliarityPa = abCtx.FamiliarityPa,
                         Gear = gearOverride ?? defTactics.Gear,
                         Policy = tracePolicy ?? defTactics.Policy,
                         ChosenSign = battingOverride?.ToString() ?? paSignLabel,
@@ -1120,6 +1440,7 @@ public static class GameEngine
                     // （盗塁死で3アウトになる場合と同じ扱い＝この打者は次イニング先頭）。
                     bases.Third = null;
                     outs++;
+                    defense.RecordRunnerOut(currentPitcher); // スクイズ挟殺も投球回に数える
                     if (outs >= 3) { squeezeAbandoned = true; EmitPitchTrace(); break; }
                 }
 
@@ -1138,7 +1459,7 @@ public static class GameEngine
                         paBaserunning.WildPitchProb - (pitcher.Control - 50) * paBaserunning.WildPitchControlSlope,
                         0.0, 1.0);
                     var pbProb = MathUtil.Clamp(
-                        paBaserunning.PassedBallProb - (defense.Catcher.Catching - 50) * paBaserunning.PassedBallCatchingSlope,
+                        paBaserunning.PassedBallProb - (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Catching) - 50) * paBaserunning.PassedBallCatchingSlope,
                         0.0, 1.0);
                     // 着弾コースのゲート（issue #525・監督判断 2026-08-07）: 捕手が捕り損ねうる球（低い球/大きく
                     // 外れた球）だけを対象にする。ゾーン内の捕れる球は構造的に対象外＝捕れる球が後逸にならない。
@@ -1158,7 +1479,11 @@ public static class GameEngine
                         var wpRuns = BaserunningModel.ApplyBatteryMiss(bases);
                         offense.Runs += wpRuns;
                         runsThisHalf += wpRuns;
-                        if (wpRuns > 0 && wpScorer is not null) offense.RecordRun(wpScorer);
+                        if (wpRuns > 0 && wpScorer is not null)
+                        {
+                            offense.RecordRun(wpScorer);
+                            ChargeRunnerScored(wpScorer); // 失点は責任投手へ
+                        }
                         offense.WildPitchCount++;
                         // 再生データ（issue #487）: この球は暴投判定が投球後に走るため p.LastPitch を
                         // 既に構築済み（EmitPitchTrace 手前の CapturePitches ブロック）＝with で追加する。
@@ -1172,6 +1497,14 @@ public static class GameEngine
                             };
                     }
                 }
+
+                // 得点を「この球を投げ終えた時点」へ揃え直す（issue #628）。LivePitch を組んだ後にも
+                // その球ぶんの得点が入りうる（いまは暴投・捕逸での生還）ので、投球ごとの処理を
+                // すべて終えたここで一度だけ上書きする＝発生源が増えても取りこぼさない。
+                // 観測（CapturePitches）の担当なので CaptureTimelines のオン/オフとは無関係。乱数不使用。
+                if (ctx.CapturePitches && p.LastPitch is { } lpScore
+                    && (lpScore.AwayScore != p.Away.Runs || lpScore.HomeScore != p.Home.Runs))
+                    p.LastPitch = lpScore with { AwayScore = p.Away.Runs, HomeScore = p.Home.Runs };
 
                 // この1球ぶんの観測を流す（暴投判定まで含めて「この球の窓」の乱数消費に数える）。
                 EmitPitchTrace();
@@ -1200,7 +1533,7 @@ public static class GameEngine
 
             // 投球過多（設計書03 §3.5）: スタミナ目安を大きく超えて投げ続けた投手の肩肘。
             if (defense.FatiguePitches
-                > currentPitcher.Pitching.StaminaPitches + ctx.MatchInjury.OveruseOverPitches)
+                > defense.EffectiveBaseStamina(currentPitcher) + ctx.MatchInjury.OveruseOverPitches)
             {
                 Hurt(MatchInjuryModel.Roll(
                     InjuryScene.Overuse, ctx.MatchInjury.OveruseProb, currentPitcher, defense.Name,
@@ -1209,10 +1542,23 @@ public static class GameEngine
 
             // バント決着（設計書15 Phase D-2b）: セッションがバント経路で確定した場合、進塁は AdvanceOnBunt
             // （一・二塁走者のみ1つ進む・三塁走者は自重）専用ルールで、ApplyDetailed の一般経路は使わない。
+            // ForceOutAtSecond（一塁走者の封殺, issue bunt-no-take-on-ball-pitches）は AdvanceOnBunt を使わず
+            // 一塁へ直接打者を置く（AdvanceOnBunt は一塁走者を進塁させてしまい封殺の意味と矛盾するため）。
+            // ForceOutAtThird（二塁走者の封殺・1・2塁の真のフォースのみ）も同様に手組み: 打者は一塁生存・
+            // 元の一塁走者は（フォースされて）二塁へ進む・元の二塁走者は退場。ForceOutAtHome（三塁走者の封殺・
+            // 満塁の真のフォースのみ）も同様: 打者一塁生存・元一塁→二塁・元二塁→三塁・元三塁は退場（無得点）。
             if (res.BuntOutcome is { } buntOutcome)
             {
                 offense.RecordSacrificeBunt(buntOutcome == BuntResult.SacrificeSuccess);
-                var buntOuts = buntOutcome is BuntResult.PopOut or BuntResult.SacrificeSuccess ? 1 : 0;
+                if (buntOutcome is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome)
+                    offense.RecordBuntForceOut();
+                var buntOuts = buntOutcome switch
+                {
+                    BuntResult.PopOutDoubledOff => 2, // 小フライ＋一塁走者併殺（design-09「小フライ併殺」）
+                    BuntResult.PopOut or BuntResult.SacrificeSuccess
+                        or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird or BuntResult.ForceOutAtHome => 1,
+                    _ => 0,
+                };
                 // タイムライン用に進塁前の走者を控える（AdvanceOnBunt は bases を直接書き換えるため、
                 // 呼び出し後には「誰が動いたか」が取れない。issue #490）。
                 var buntPreFirst = bases.First;
@@ -1220,6 +1566,11 @@ public static class GameEngine
                 var buntPreThird = bases.Third;
                 if (buntOutcome == BuntResult.SacrificeSuccess) AdvanceOnBunt(bases, batter: null);
                 else if (buntOutcome == BuntResult.InfieldHit) AdvanceOnBunt(bases, batter);
+                else if (buntOutcome == BuntResult.ForceOutAtSecond) bases.First = batter;
+                else if (buntOutcome == BuntResult.ForceOutAtThird) { bases.Second = bases.First; bases.First = batter; }
+                else if (buntOutcome == BuntResult.ForceOutAtHome)
+                    { bases.Third = bases.Second; bases.Second = bases.First; bases.First = batter; }
+                else if (buntOutcome == BuntResult.PopOutDoubledOff) bases.First = null; // 一塁走者は併殺で退場
                 // バント打球のタイムライン（issue #490）: 判定（BuntResolver）はそのまま、結果から逆算した絵。
                 // CaptureTimelines のときだけ組む＝統計シム・裏試合はゼロコスト・乱数消費ゼロ（他Buildと同作法）。
                 var buntTimeline = ctx.CaptureTimelines
@@ -1250,24 +1601,41 @@ public static class GameEngine
             }
 
             // スクイズ決着（設計書15 Phase D-2c）: セッションがスクイズ経路で確定した場合。ここに来るのは
-            // SacrificeSuccess/InfieldHit/PopOut のみ（ウエストを読まれた場合、または送りバント自体が
-            // Foul/MissedBunt で不成立だった場合はいずれも三塁走者が挟殺されるだけで打席は終わらず、
-            // AtBatSession が PitchResolution.SqueezeRunnerCaughtAtThird で通知して打席続行させる＝上の
-            // インラインブロックで処理済み。つまり sq.RunnerOut はここでは常に false）。
+            // SacrificeSuccess/InfieldHit/ForceOutAtSecond/ForceOutAtThird/PopOut のみ（ウエストを読まれた場合、
+            // または送りバント自体が Foul/MissedBunt で不成立だった場合はいずれも三塁走者が挟殺されるだけで
+            // 打席は終わらず、AtBatSession が PitchResolution.SqueezeRunnerCaughtAtThird で通知して打席続行
+            // させる＝上のインラインブロックで処理済み）。ボールが実際にプレーされたケース（Sacrifice/
+            // InfieldHit/ForceOutAtSecond/ForceOutAtThird）だけ、三塁走者は sq.RunnerOut で生還/本塁封殺の
+            // どちらかに決着する（issue bunt-no-take-on-ball-pitches の④＝design-02 §4.4「三塁走者スタート」の実装）。
             if (res.Squeeze is { } sq)
             {
                 var sqScorer = bases.Third; // スクイズで生還するのは三塁走者（issue #77 得点帰属。null化の前に捕捉）
-                var sqOuts = sq.BatterOut ? 1 : 0;
+                var sqOuts = (sq.BatterOut ? 1 : 0)
+                    + (sq.Bunt is BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird ? 1 : 0)
+                    + (sq.Bunt == BuntResult.PopOutDoubledOff ? 1 : 0) // 一塁走者の併殺（design-09「小フライ併殺」）
+                    + (sq.RunnerOut ? 1 : 0);
                 // タイムライン用に進塁前の走者を控える（issue #490。バントと同じ理由）。
                 var sqPreFirst = bases.First;
                 var sqPreSecond = bases.Second;
                 var sqPreThird = bases.Third;
-                if (sq.Bunt is BuntResult.SacrificeSuccess or BuntResult.InfieldHit)
+                if (sq.Bunt is BuntResult.SacrificeSuccess or BuntResult.InfieldHit
+                    or BuntResult.ForceOutAtSecond or BuntResult.ForceOutAtThird)
                 {
-                    bases.Third = null; // 三塁走者は生還済み（sq.Runs=1）
-                    AdvanceOnBunt(bases, sq.BatterOut ? null : batter);
+                    offense.RecordSqueezeBallInPlay(sq.RunnerOut); // 実測用（issue bunt-no-take-on-ball-pitches）
+                    bases.Third = null; // 三塁走者は生還（sq.Runs=1）または本塁で封殺（sq.RunnerOut）＝いずれも退場
+                    if (sq.Bunt == BuntResult.ForceOutAtSecond)
+                        bases.First = batter; // 一塁走者は二塁で封殺済み。打者は一塁生存（野選相当）
+                    else if (sq.Bunt == BuntResult.ForceOutAtThird)
+                        { bases.Second = bases.First; bases.First = batter; } // 二塁走者は三塁で封殺済み
+                    else
+                        AdvanceOnBunt(bases, sq.BatterOut ? null : batter);
                 }
-                // 小フライ（PopOut）は走者釘付けのまま。
+                // 小フライ併殺（PopOutDoubledOff）: 三塁走者は動かず（小フライは走者釘付け）、一塁走者だけ退場。
+                else if (sq.Bunt == BuntResult.PopOutDoubledOff)
+                {
+                    bases.First = null;
+                }
+                // 小フライ（PopOut）は走者（三塁含め）釘付けのまま。
 
                 offense.Runs += sq.Runs;
                 runsThisHalf += sq.Runs;
@@ -1275,6 +1643,14 @@ public static class GameEngine
                 // その1点は自責対象外のまま引き継ぐ。
                 var sqUnearnedRuns = sq.Runs > 0 && sqScorer is not null && unearnedRunners.Contains(sqScorer) ? sq.Runs : 0;
                 if (sq.Runs > 0 && sqScorer is not null) offense.RecordRun(sqScorer);
+                // 生還する三塁走者が引き継ぎ走者なら失点は責任投手へ（今の投手の行には積まない）。
+                var sqOwnRuns = sq.Runs;
+                if (sq.Runs > 0 && sqScorer is not null && !ResponsibleFor(sqScorer).Equals(currentPitcher))
+                {
+                    defense.ChargeRuns(ResponsibleFor(sqScorer), sq.Runs, sqUnearnedRuns);
+                    sqOwnRuns = 0;
+                    sqUnearnedRuns = 0;
+                }
                 // スクイズのタイムライン（issue #490）: バントと同じビルダーを使い回す（三塁走者の生還は
                 // pre/post の突き合わせで自然に描かれる）。
                 var sqTimeline = ctx.CaptureTimelines
@@ -1286,6 +1662,7 @@ public static class GameEngine
                     : null;
                 FinishPlateAppearance(offense, defense, currentPitcher, batter,
                     res.Result, sq.Runs, sqOuts, res.Pitches, inning, isTop, log, ctx,
+                    pitcherRuns: sqOwnRuns,
                     timeline: sqTimeline,
                     outsBefore: outs,
                     baseFirstBefore: sqPreFirst is not null, baseSecondBefore: sqPreSecond is not null, baseThirdBefore: sqPreThird is not null,
@@ -1305,29 +1682,14 @@ public static class GameEngine
             }
 
             // 打席前の塁状況を観測（塁ダイヤ／静止走者トークン用。追加記録のみ・判定不変, #3/#4）。
-            // エンドランの空振り（次のブロック）が bases を書き換える前に控える＝issue #534。
             var preFirst = bases.First is not null;
             var preSecond = bases.Second is not null;
             var preThird = bases.Third is not null;
 
-            // エンドランの空振り: スタートを切った一塁走者が憤死の危機（§1）。エンドランが効いたのが
-            // 打席を終わらせた最後の球か（endrunOnLastPitch）で判定する（issue #492: brain は打席全体・手動は
-            // その球だけに効くので、三振を喫した球でスタートを切っていたかを見る）。
-            var extraOutsFromSign = 0;
-            if (endrunOnLastPitch && bases.First is not null && res.Result == PlateAppearanceResult.Strikeout)
-            {
-                var stealSafeProb = StealResolver.SuccessProbability(bases.First, defense.Catcher, paBaserunning)
-                        - ctx.Tactics.HitAndRunCaughtPenalty;
-                if (bases.Second is null && MathUtil.Chance(MathUtil.Clamp(stealSafeProb, 0.02, 0.98), rng))
-                {
-                    bases.Second = bases.First;
-                }
-                else
-                {
-                    extraOutsFromSign = 1;
-                }
-                bases.First = null;
-            }
+            // エンドランの空振り（憤死の危機。設計書09 §1）は投球ループ内（毎球）で判定・解決済み
+            // （上のブロック）。旧実装は「打席を終わらせた最後の球だけ」を特別扱いしてここで
+            // extraOutsFromSign へ積んでいたが、途中の空振りにも同じリスクを持たせたため
+            // 一般の outs++（RecordRunnerOut）へ統合し、ここでの二重判定は廃止した。
 
             // 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）: この打球の外野処理点・肩から
             // 送り判定＋時間の勝負で本塁生還を解く。幾何が無ければ null＝従来の確率テーブルへフォールバック。
@@ -1340,7 +1702,10 @@ public static class GameEngine
                     new Vector3D(fp.FieldedX ?? fp.LandingX, 0, fp.FieldedZ ?? fp.LandingZ),
                     fp.FieldedAtSeconds ?? fp.HangTimeSeconds,
                     arm,
-                    fp.FielderFielding);
+                    fp.FielderFielding,
+                    // バックホーム悪送球（2026-08-30）: 処理野手のThrowAccuracy。下の errorThrowAccuracy
+                    // （失策連鎖用）と同じ取り方＝未処理球では既定50。
+                    fp.FielderThrowAccuracy);
                 // aggression は中立固定（校風/ティア/采配の三層写像は残Q10）。
                 // 守備の内野深さ（G1）＝ゴロ凡打の三塁走者判定へ「前進で刺す/後退で献上」を反映。
                 // ThrowArriveSeconds（一塁送球到達時刻）はゴロ凡打の進塁打（Issue #318）分岐Cの転送起点。
@@ -1349,9 +1714,18 @@ public static class GameEngine
                 var dpPivotBonus = (defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.Skills.Has(Skill.DoublePlayArtist) == true
                                     || defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.Skills.Has(Skill.DoublePlayArtist) == true)
                     ? ctx.Skills.DoublePlayArtistBonus : 0.0;
+                // 併殺ピボットの中継球速（issue⑦: 従来 RelayThrowSpeedMps 固定で二塁手/遊撃手の地肩が
+                // 併殺成立率に無効だった）。二塁カバーへ実際に入るのは「処理した側と逆の中堅手」
+                // （FormationTable の全ゾーンでこの対応＝遊撃手/三塁手が処理→二塁手がカバー、それ以外
+                // （二塁手/一塁手/投手/捕手）が処理→遊撃手がカバー）。判定層はゾーン表を持たないので、
+                // 処理役から同じ対応を導く（DefensiveFormation.BuildGenericRules と等価）。
+                var dpPivotRole = fp.FielderRole is Field.FieldPosition.ThirdBase or Field.FieldPosition.Shortstop
+                    ? Field.FieldPosition.SecondBase : Field.FieldPosition.Shortstop;
+                var dpPivotArm = defense.PlayerAtPosition(dpPivotRole)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps;
                 homePlay = new HomePlayContext(
                     ctx.Field, homePlaySituation, ctx.Tactics, 0.5, defTactics.Infield, fp.IsFly,
-                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus);
+                    fp.ThrowArriveSeconds, fp.BatterToFirstSeconds, dpPivotBonus, dpPivotArm,
+                    FielderRole: fp.FielderRole);
             }
 
             // 自責点（issue #69）: 失策連鎖が発生した打席では、打席前から塁上にいた走者も同じ失策1本で
@@ -1367,12 +1741,17 @@ public static class GameEngine
             // 走塁詳細（走者の動き）はタイムライン捕捉時のみ収集（判定・乱数順は同一）。
             // 失策連鎖（design-14 P1-6b）の送球精度連動用: 失策を犯した野手の ThrowAccuracy（未処理球では既定50）。
             var errorThrowAccuracy = res.Play?.FielderThrowAccuracy ?? 50;
+            // 失策種別（issue #629）: 連鎖は悪送球にだけ乗る。強制結果（設計書17 §6.1）は物理層を
+            // 1回も回さない＝res.Play ごと無く種別も取れないので、注入で連鎖を再現できるよう悪送球とみなす
+            // （実試合の失策は必ず FieldingResolver 由来の Play を持つので、この既定へは落ちない）。
+            var errorKind = res.Play?.ErrorKind
+                ?? (res.Result == PlateAppearanceResult.ReachedOnError ? Match.Fielding.FieldingErrorKind.Throw : null);
             // collectMoves は常に true（GameEngine は自校の詳細試合専用＝裏試合は通らない, RNG中立）。
             // 得点帰属（issue #77）に本塁到達 RunnerMove を使うため、観戦しない試合でも moves を収集する。
             // 走塁係数は paBaserunning（設計書17 §6.1, F4）。非強制時は ctx.Baserunning と同一参照＝従来と不変。
             var (runs, extraOuts, baseOuts, batterSafeOnFc, errorExtraAdvanceOccurred, runnerMoves) = BaserunningModel.ApplyDetailed(
                 bases, res.Result, batter, outs, paBaserunning, rng, collectMoves: true,
-                homePlay, r1Start, errorThrowAccuracy);
+                homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
             offense.Runs += runs;
@@ -1394,13 +1773,26 @@ public static class GameEngine
 
             // 本塁到達（ToBase>=4・非アウト）した走者へ得点を帰属（issue #77）。同時に自責点対象外の
             // 生還数を数える（issue #69）。
+            // 失点の帰属（issue inherited-runner-run-attribution）: 走者ごとに責任投手を引き、今の投手の
+            // 分（ownRuns）だけを打席の投手行へ、引き継ぎ走者の分は責任投手へ直接付ける。
             var unearnedRunsThisPa = 0;
+            var ownRunsThisPa = 0;
             foreach (var m in runnerMoves)
             {
                 if (m.ToBase >= 4 && !m.Out)
                 {
                     offense.RecordRun(m.Runner);
-                    if (unearnedRunners.Contains(m.Runner)) unearnedRunsThisPa++;
+                    var unearned = unearnedRunners.Contains(m.Runner);
+                    var owner = ResponsibleFor(m.Runner);
+                    if (owner.Equals(currentPitcher))
+                    {
+                        ownRunsThisPa++;
+                        if (unearned) unearnedRunsThisPa++;
+                    }
+                    else
+                    {
+                        defense.ChargeRuns(owner, 1, unearned ? 1 : 0);
+                    }
                 }
             }
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
@@ -1444,26 +1836,95 @@ public static class GameEngine
             {
                 if (runnerMoves.Count > 0)
                 {
-                    timeline = Match.Timeline.TimelineBuilder.AppendRunnerLegs(timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding);
+                    // フライ捕球なら捕球時刻を渡す＝進塁する走者は全員タッチアップ（捕球起点）になる。
+                    var flyCaughtAt = res.Play is { IsFly: true, Result: Match.Fielding.BattedBallResult.Out } caughtFly
+                        ? caughtFly.FieldedAtSeconds ?? caughtFly.HangTimeSeconds   // 接触からの秒（TagUpCatchAtSeconds と同じ基準）
+                        : (double?)null;
+                    // 失策の連鎖（design-14 P1-6）で同一走者に積まれた続きの move は、失策の瞬間より前に
+                    // 走り出させない（issue error-extra-advance-phantom-runner）。悪送球＝一塁へ届くはずだった時刻。
+                    var errorAt = res.Play is { Result: Match.Fielding.BattedBallResult.Error } chainErrPlay
+                        ? chainErrPlay.ErrorAtSeconds
+                          ?? (chainErrPlay.ErrorKind == Match.Fielding.FieldingErrorKind.Throw ? chainErrPlay.ThrowArriveSeconds : null)
+                        : null;
+                    timeline = Match.Timeline.TimelineBuilder.AppendRunnerLegs(
+                        timeline, runnerMoves, ctx.Field, paBaserunning, ctx.Fielding, flyCaughtAt, errorAt);
 
                     // 併殺(二塁封殺)かつ内野ゴロなら、ボールの送球連鎖を 6-4-3 型に差し替える（設計書12 §2, F1 Slice 3）。
-                    // 野選（FC, design-14 P1-1）も同じ二塁封殺 RunnerMove を積むが打者は生存するため、
-                    // !batterSafeOnFc で除外しないと「打者アウト」の2本目送球が誤って描画される。
+                    // 野選（FC, design-14 P1-1）も同じ二塁封殺 RunnerMove を積む。BuildBattedBall は二塁封殺・
+                    // 野選の区別を知らずに「打」レッグ・判定を一塁アウトとして作ってしまっている（打球の基礎
+                    // 解決＝直接送球1本の前提で組むため）ので、FCでも呼んで実際の結末（打者セーフ）へ
+                    // 描き直す（issue double-play-throw-pace-and-second-out-call の追加報告。以前は !batterSafeOnFc
+                    // で除外していたため、野選が「打者も一塁アウト＝併殺成立」に誤って見えていた）。
                     var hasForceAtSecond = false;
+                    RunnerMove? selfForceLead = null;
                     foreach (var m in runnerMoves)
                     {
-                        if (m.Out && m.FromBase == 1 && m.ToBase == 2) { hasForceAtSecond = true; break; }
+                        if (m.Out && m.FromBase == 1 && m.ToBase == 2) hasForceAtSecond = true;
+                        else if (m.SelfForceDoublePlayLead) selfForceLead = m;
                     }
-                    if (hasForceAtSecond && !batterSafeOnFc && res.Play is { IsFly: false } dpPlay)
+                    if (hasForceAtSecond && res.Play is { IsFly: false } dpPlay)
                     {
-                        // 打者走者の一塁到達（"打"レッグ終端）を2本目送球のアンカーにする。
+                        // 打者走者の一塁到達（"打"レッグ終端）を食い違いガードのアンカーにする。
                         var batterArrive = timeline.Duration;
                         foreach (var leg in timeline.Runners)
                         {
                             if (leg.Label == "打") { batterArrive = leg.T1; break; }
                         }
+                        // 判定側（BaserunningModel.ResolveDoublePlay）と同じ値を渡す＝絵と判定が同じ秒で組まれる
+                        // （issue double-play-throw-pace-and-second-out-call 案B/C）。
+                        var dpPivotBonusForDisplay =
+                            (defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.Skills.Has(Skill.DoublePlayArtist) == true
+                             || defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.Skills.Has(Skill.DoublePlayArtist) == true)
+                            ? ctx.Skills.DoublePlayArtistBonus : 0.0;
+                        var pivotSprintSpeedByRole = new Dictionary<Field.FieldPosition, double>
+                        {
+                            [Field.FieldPosition.SecondBase] =
+                                defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.ToFielder(ctx.Baserunning.AbilityEffect).SprintSpeedMps
+                                    ?? new FielderAttributes().SprintSpeedMps,
+                            [Field.FieldPosition.Shortstop] =
+                                defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.ToFielder(ctx.Baserunning.AbilityEffect).SprintSpeedMps
+                                    ?? new FielderAttributes().SprintSpeedMps,
+                        };
+                        // 中継球速（issue⑦）: 絵側の二塁カバー役は AppendDoublePlayThrows 内部の実際の陣形
+                        // （CoverRoleAt）で決まる＝2B/SSどちらが来ても引けるよう両方を渡す。判定側
+                        // （HomePlayContext.DoublePlayPivotArmMps）とは別経路の辞書だが、実際に選ばれる役
+                        // （二塁手/遊撃手のどちらが処理側と反対か）は同じ対応（DefensiveFormation）から
+                        // 出るので値は一致する。
+                        var pivotThrowSpeedByRole = new Dictionary<Field.FieldPosition, double>
+                        {
+                            [Field.FieldPosition.SecondBase] =
+                                defense.PlayerAtPosition(Field.FieldPosition.SecondBase)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps
+                                    ?? new FielderAttributes().ThrowSpeedMps,
+                            [Field.FieldPosition.Shortstop] =
+                                defense.PlayerAtPosition(Field.FieldPosition.Shortstop)?.ToFielder(ctx.Baserunning.AbilityEffect).ThrowSpeedMps
+                                    ?? new FielderAttributes().ThrowSpeedMps,
+                        };
                         timeline = Match.Timeline.TimelineBuilder.AppendDoublePlayThrows(
-                            timeline, dpPlay, ctx.Field, batterArrive);
+                            timeline, dpPlay, ctx.Field, batterArrive, ctx.Baserunning, dpPivotBonusForDisplay,
+                            pivotSprintSpeedByRole, batterOut: !batterSafeOnFc,
+                            pivotThrowSpeedByRole: pivotThrowSpeedByRole);
+                    }
+                    // 併殺の代替ルート（三塁/本塁の自己フォース, Q31）: 三塁手/捕手/投手が自打球を自分でベースへ
+                    // 運んで封殺→一塁へ自己送球。上の二塁封殺(hasForceAtSecond)とは互いに排他
+                    // （BaserunningModel.ResolveDoublePlay がどちらか一方の経路しか選ばないため）。
+                    else if (selfForceLead is { } sfl && res.Play is { IsFly: false } sfPlay)
+                    {
+                        var batterArrive = timeline.Duration;
+                        foreach (var leg in timeline.Runners)
+                        {
+                            if (leg.Label == "打") { batterArrive = leg.T1; break; }
+                        }
+                        timeline = Match.Timeline.TimelineBuilder.AppendSelfForceDoublePlayThrows(
+                            timeline, sfPlay, ctx.Field, batterArrive, sfl.ToBase, ctx.Baserunning,
+                            batterOut: !batterSafeOnFc);
+                    }
+
+                    // 飛び出しの勝負（フライ捕球→一塁走者が戻る vs 戻し送球）: 戻し送球を描く
+                    // （issue fly-out-runner-dp-table-and-doubled-off-depiction）。走者レッグは AppendRunnerLegs が積む。
+                    if (res.Play is { IsFly: true } doPlay)
+                    {
+                        timeline = Match.Timeline.TimelineBuilder.AppendDoubledOffThrow(
+                            timeline, doPlay, runnerMoves, ctx.Field, paBaserunning);
                     }
                 }
 
@@ -1486,7 +1947,12 @@ public static class GameEngine
                         var toHome = Math.Abs(leg.To.X) < 0.5 && Math.Abs(leg.To.Z) < 0.5;
                         if (!toHome) continue;
                         if (leg.OutAtEnd) { outAtHome = leg; break; }
-                        safeAtHome ??= leg;
+                        // 複数生還するプレーでは**最後に還る走者**に送球を合わせる（issue
+                        // match-picture-vs-safe-out-verdict）。走者レッグは三塁走者→二塁走者→一塁走者の順に
+                        // 積まれるので、先に見つかったものを採ると<b>いちばん早く還る走者</b>に固定され、
+                        // 後から還る走者は捕手がボールを持ったあとに悠々とホームインする絵になっていた
+                        // （実測 300試合で189件・中央値0.82秒・最大1.76秒の先着）。すぐ下の外野返球の枝と同じ形。
+                        if (safeAtHome is null || leg.T1 > safeAtHome.T1) safeAtHome = leg;
                     }
                     if (outAtHome is { } o)
                     {
@@ -1494,9 +1960,14 @@ public static class GameEngine
                             timeline, bhPlay, ctx.Field, o.T1, runnerOut: true, paBaserunning);
                         homeThrowAdded = true;
                     }
-                    else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield))
+                    else if (safeAtHome is { } s && (bhPlay.RangeM > 46.0 || bhPlay.ThroughInfield)
+                        && !HasOutAtOtherBase(runnerMoves))
                     {
                         // 外野安打での生還は際どくなくても返球を描く（ボールが外野で死なない, #7）。
+                        // ただし同じ打球で本塁以外（三塁等）に憤死した走者がいるなら、実際の送球は
+                        // そちら（1プレー1送球＝BaserunningModel の outThrowUsed）へ行っている＝
+                        // ここで本塁への演出用送球を描くと、実際にアウトを取った送球が下のブロックで
+                        // 握りつぶされてしまう（issue outfield-hit-home-safe-and-third-out-throw-missing）。
                         timeline = Match.Timeline.TimelineBuilder.AppendBackHomeThrows(
                             timeline, bhPlay, ctx.Field, s.T1, runnerOut: false, paBaserunning);
                         homeThrowAdded = true;
@@ -1504,18 +1975,47 @@ public static class GameEngine
                 }
 
                 // 本塁送球が無い外野安打は、先頭走者の到達塁へ返球してボールを内野へ戻す（#6）。
-                // 返球到達は打者走者の到達時刻（"打"レッグ終端＝到達塁）に紐付けて、送球が走者を追い越さないようにする。
+                // 狙う塁は**走塁結果から**決める（issue #627）。打者の塁打数だけで決めていた頃は、単打で
+                // 一塁走者が三塁まで進んでも二塁へ返していた。返球到達のアンカーも同じ走者のレッグ終端に
+                // 揃える＝打者走者に紐付けると「三塁へ投げるが打者の一塁到達に合わせて着く」ことになる。
+                // トンネル（issue #632）も外野まで球が行く＝返球しないと外野手が球を持ったまま棒立ちになる
+                // （issue #629 ③と同じ症状）。ただしお手玉・悪送球・フライ落球は「拾い直し」を持つので、
+                // 下の AppendErrorReturnThrow が投げる＝二重に積まないよう ErrorPickupAt が無い失策だけを拾う。
                 if (!homeThrowAdded && res.Play is { } ofHit && (ofHit.RangeM > 46.0 || ofHit.ThroughInfield)
-                    && ofHit.Result is Match.Fielding.BattedBallResult.Single
-                        or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple)
+                    && (ofHit.Result is Match.Fielding.BattedBallResult.Single
+                            or Match.Fielding.BattedBallResult.Double or Match.Fielding.BattedBallResult.Triple
+                        || (ofHit.Result == Match.Fielding.BattedBallResult.Error && timeline.ErrorPickupAt is null)))
                 {
-                    var leadBase = ofHit.Result == Match.Fielding.BattedBallResult.Triple ? "third" : "second";
+                    var returnTo = Match.Timeline.TimelineBuilder.ResolveOutfieldReturnTarget(runnerMoves, ofHit.Result);
                     var runnerArrive = 0.0;
                     foreach (var leg in timeline.Runners)
-                        if (leg.Label == "打" && leg.T1 > runnerArrive) runnerArrive = leg.T1;
+                        if (leg.Label == returnTo.AnchorLabel && leg.T1 > runnerArrive) runnerArrive = leg.T1;
                     // 中継しきい値は肩連動（issue #526）＝判定と同じ係数を渡して絵と食い違わせない
                     timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
-                        timeline, ofHit, ctx.Field, leadBase, runnerArrive, ctx.Fielding, paBaserunning);
+                        timeline, ofHit, ctx.Field, returnTo.BaseName, runnerArrive, ctx.Fielding, paBaserunning,
+                        returnTo.RunnerOut);
+                }
+
+                // 失策でこぼれた球を拾った野手は内野へ投げ返す（issue #629 ③）。積まないと、拾った野手が
+                // 球を持ったまま棒立ちで、走者が本塁まで走り抜けるのを眺めている絵になる。
+                // 本塁クロスプレーを描いた打席では投げない＝上の AppendBackHomeThrows と二重にならない。
+                if (!homeThrowAdded && res.Play is { } errPlay && timeline.ErrorPickupAt is not null)
+                {
+                    // 同じ打球で本塁以外（三塁等）に憤死した走者がいるなら、実際の送球はそちらへ行っている
+                    // （issue outfield-hit-home-safe-and-third-out-throw-missing の続報）。以前は拾い直した
+                    // 野手を無条件で二塁/投手へ機械的に投げ返していたため、実際にアウトを取った送球が
+                    // 「棒立ち防止」の演出用送球に握りつぶされて消えていた。
+                    var errReturn = Match.Timeline.TimelineBuilder.ResolveOutfieldReturnTarget(runnerMoves, errPlay.Result);
+                    string? outAtOtherBaseName = null;
+                    var outAtOtherBaseArrive = 0.0;
+                    if (errReturn.RunnerOut)
+                    {
+                        outAtOtherBaseName = errReturn.BaseName;
+                        foreach (var leg in timeline.Runners)
+                            if (leg.Label == errReturn.AnchorLabel && leg.T1 > outAtOtherBaseArrive) outAtOtherBaseArrive = leg.T1;
+                    }
+                    timeline = Match.Timeline.TimelineBuilder.AppendErrorReturnThrow(
+                        timeline, errPlay, ctx.Field, outAtOtherBaseName, outAtOtherBaseArrive);
                 }
             }
 
@@ -1532,7 +2032,7 @@ public static class GameEngine
             {
                 var reachProb = MathUtil.Clamp(
                     paBaserunning.DropThirdStrikeReachProb
-                    - (defense.Catcher.Catching - 50) * paBaserunning.DropThirdStrikeCatchingSlope,
+                    - (ctx.Fielding.AbilityEffect.Fielding(defense.Catcher.Catching) - 50) * paBaserunning.DropThirdStrikeCatchingSlope,
                     0.0, 0.95);
                 if (MathUtil.Chance(reachProb, rng)
                     && session.PitchLog.Count > 0
@@ -1563,13 +2063,14 @@ public static class GameEngine
             }
 
             var batterOut = BaserunningModel.IsBatterOut(res.Result, batterSafeOnFc, droppedThirdStrikeReached);
-            var outsThisPa = (batterOut ? 1 : 0) + extraOuts + extraOutsFromSign;
+            var outsThisPa = (batterOut ? 1 : 0) + extraOuts;
 
             offense.HomePlayOuts += homeOuts; // 本塁クロスプレー憤死（F2外野＋G1内野ゴロ, 統計参考値）
             offense.ThirdPlayOuts += thirdOuts; // 単打の一塁→三塁レース憤死（Issue #89, 統計参考値）
             if (batterSafeOnFc) offense.FieldersChoiceCount++; // 野選（FC, design-14 P1-1。統計参考値）
             // 併殺打（GIDP, Issue #369）: 二塁封殺（1→2 Out）成立かつ打者一塁アウト（野選でない）の内野ゴロ。
-            // AppendDoublePlayThrows の描画条件（hasForceAtSecond && !batterSafeOnFc）と同一＝件数と絵が一致する。
+            // AppendDoublePlayThrows は野選（FC）でも呼ぶ（打者を実際の結末へ描き直すため）が、
+            // この集計は従来どおり !batterSafeOnFc だけを併殺打として数える。
             if (!batterSafeOnFc && res.Play is { IsFly: false })
             {
                 foreach (var m in runnerMoves)
@@ -1595,11 +2096,14 @@ public static class GameEngine
                 timeline = timeline with { Captions = caps };
             }
 
-            // 失策の個人帰属（issue #91）: FielderRole（守備位置）から当該選手を引く。守備位置は必ず埋まっている
+            // 失策の個人帰属（issue #91）: 守備位置から当該選手を引く。守備位置は必ず埋まっている
             // ため通常は解決できるが、万一 null でもチーム計（AddError相当）は FinishPlateAppearance 側で必ず加算する。
+            // ⚠ トンネル（issue #632）は<b>処理野手が回収する外野手</b>なので FielderRole では別人に付く。
+            // 失策は抜かれた内野手（ErrorFielderRole）に付ける（他の種別では null＝FielderRole と同じ）。
             Player? errorFielder = null;
             Match.Field.FieldPosition errorRole = default;
-            if (res.Result == PlateAppearanceResult.ReachedOnError && res.Play is { FielderRole: { } eRole })
+            if (res.Result == PlateAppearanceResult.ReachedOnError
+                && (res.Play?.ErrorFielderRole ?? res.Play?.FielderRole) is { } eRole)
             {
                 errorRole = eRole;
                 errorFielder = defense.PlayerAtPosition(eRole);
@@ -1614,6 +2118,7 @@ public static class GameEngine
                 res.Result, runs, outsThisPa, res.Pitches, inning, isTop, log, ctx, timeline,
                 outsBefore, preFirst, preSecond, preThird, postFirst, postSecond, postThird,
                 batterOrder, res.PitchLog, errorFielder, errorRole, isSacFly, unearnedRunsThisPa,
+                pitcherRuns: ownRunsThisPa,
                 play: res.Play);
             // 敬遠（design-14 P1-3・設計書15 Phase D-2a）: 統一ステッパ経由でも、四球の内訳として別記録する。
             if (defTactics.IntentionalWalk) offense.IntentionalWalkCount++;
@@ -1650,16 +2155,20 @@ public static class GameEngine
         bool isSacFly = false,
         int unearnedRuns = 0,
         Match.Fielding.FieldingPlay? play = null,
-        bool isSacBunt = false)
+        bool isSacBunt = false,
+        int? pitcherRuns = null)
     {
         if (result.IsHit()) offense.AddHit();
         if (result == PlateAppearanceResult.ReachedOnError) defense.RecordFieldingError(errorFielder, errorRole);
-        offense.RecordBatting(batter, result, runs, isSacFly);
+        offense.RecordBatting(batter, result, runs, isSacFly, isSacBunt);
+        offense.RecordMatchup(batter, pitcher);   // 慣れの蓄積（設計書02 §2.3b）
         // 打席確定球の球種（issue #180）: インプレーで終わった打席のみ末尾の PitchRecord が決め球。
         PitchType? decisivePitch = pitchLog is { Count: > 0 } pl && pl[^1].Kind == PitchKind.InPlay
             ? pl[^1].PitchType
             : null;
-        defense.RecordPitching(pitcher, result, runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
+        // pitcherRuns＝この打席の投手に付ける失点（引き継ぎ走者の分は呼び出し側が責任投手へ付けた後）。
+        // 省略時は runs 全部＝走者の由来を持たない経路（バント等・得点なし）向け。
+        defense.RecordPitching(pitcher, result, pitcherRuns ?? runs, outsThisPa, pitches, decisivePitch, unearnedRuns);
         defense.NotePitchingResult(result, ctx.Tactics.RattledThresholdFor(pitcher.Mental),
             outsThisPa, ctx.Tactics.RattledRecoveryOuts);
         offense.TickOffenseCalm();
@@ -1675,7 +2184,9 @@ public static class GameEngine
             pitchLog,
             batter.ConditionValue, pitcher.ConditionValue,
             // 打球観測（本日成績の略記列用）: 既に確定した FieldingPlay の値を写すだけ＝判定・乱数順・digest不変。
-            play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
+            // ⚠ 失策の記録は「処理した野手」ではなく「失策を犯した野手」に付く。トンネル（issue #632）は
+            // 球を回収するのが外野手なので、ErrorFielderRole を優先しないと「左失」（＝外野失策）になる。
+            play?.ErrorFielderRole ?? play?.FielderRole, play?.IsFly ?? false, play?.Class, play?.BearingDeg,
             outsThisPa, isSacFly, isSacBunt));
     }
 
@@ -1707,6 +2218,19 @@ public static class GameEngine
                or Match.Field.FieldPosition.RightField;
 
     /// <summary>
+    /// 本塁以外（三塁等）で憤死した走者がこの打球にいるか（issue
+    /// outfield-hit-home-safe-and-third-out-throw-missing）。<see cref="BaserunningModel"/> は1プレー1送球
+    /// （<c>outThrowUsed</c>）なので、本塁以外で憤死した走者がいれば実際の送球はそちらへ行っており、
+    /// 本塁への安全な生還は無条件（送球なし）だったということになる。
+    /// </summary>
+    private static bool HasOutAtOtherBase(IReadOnlyList<RunnerMove> moves)
+    {
+        foreach (var m in moves)
+            if (m.Out && m.ToBase != 4) return true;
+        return false;
+    }
+
+    /// <summary>
     /// 継投判断（設計書11 §4, issue #209）。打席境界ごとに呼ぶ。采配Brainがあれば <see cref="ITacticsBrain.CallPitchingChange"/>
     /// に委ね（Standard＝従来の疲労球数トリガーそのまま／AI＝高度トリガー＋三層を被せる）、無指示（Brain=null）なら
     /// 従来の engine 直判定を完全に踏襲する（＝帯不変）。判断RNGは専用Forkストリームで引くため試合結果RNGを進めない
@@ -1717,13 +2241,14 @@ public static class GameEngine
         int inning, bool isTop, int paIndex, int runsThisHalf, int outs)
     {
         var fatigue = defense.Fatigue ?? ctx.Fatigue;
-        var fatigueTriggered = PitchingFatigue.ShouldRelieve(defense.CurrentPitcher, defense.FatiguePitches, fatigue);
+        var staminaTarget = defense.EffectiveBaseStamina(defense.CurrentPitcher);
+        var fatigueTriggered = PitchingFatigue.ShouldRelieve(
+            defense.CurrentPitcher, defense.FatiguePitches, fatigue, staminaTarget);
         var atWeekly = defense.CurrentPitcherAtWeeklyLimit();
 
         var changed = false;
         if (defense.Tactics is { } brain)
         {
-            var staminaTarget = defense.CurrentPitcher.Pitching.StaminaPitches;
             // 継投人選の候補＝控え全員＋在フィールドのレギュラー野手（issue #209 Phase B/C）。
             // 在フィールド野手が選ばれたら RelieveWith が投野交代で守備穴を backfill する。
             var candidates = defense.ReliefRankingCandidates;
@@ -1750,8 +2275,12 @@ public static class GameEngine
                 };
             }
         }
-        else if (fatigueTriggered || atWeekly)
+        else if (!ctx.PlayerControlsPitcherChanges && (fatigueTriggered || atWeekly))
         {
+            // PlayerControlsPitcherChanges が真の自校だけは何もしない：疲労のみ（fatigueTriggered）は
+            // 目安に過ぎないので自動交代せずプレイヤーの采配権のまま、atWeekly はルール上の強制だが
+            // engine で機械的に選ばず MatchProgression.PendingForcedPitcherChange 側で人選待ちにする。
+            // 既定（false＝裏試合・統計シム・既存テスト）はここに来ず従来どおり1ビットも変わらない。
             changed = defense.TryChangePitcher();
         }
 
@@ -1791,7 +2320,8 @@ public static class GameEngine
             bases.First = null;
             return 0;
         }
-        // 盗塁死。
+        // 盗塁死。投球回にも数える（完投=27アウトの保証）。
+        defense.RecordRunnerOut(defense.CurrentPitcher);
         bases.First = null;
         return 1;
     }
@@ -1844,18 +2374,20 @@ public static class GameEngine
 
     /// <summary>攻撃側の打席頭の代走・代打判断（代走が先＝走者を確定してから打者を替える）。</summary>
     private static void MaybeOffenseSubs(
-        TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int inning, int outs, BaseState bases)
+        GameProgress p, TeamState offense, TeamState defense, GameContext ctx, IRandomSource rng, int inning, int outs, BaseState bases)
     {
         if (offense.Tactics is null || offense.Reserves.Count == 0) return;
 
         // 代走: 塁上の鈍足走者を速い控えへ。塁の参照も差し替える。
         if (offense.Tactics.CallPinchRun(SubSituationFor(offense, defense, ctx, inning, outs, bases), rng)
-            is { } r && offense.PinchRunFor(r.Runner, r.Sub))
+            is { } r && offense.PinchRunFor(r.Runner, r.Sub, out var inserted))
         {
-            var inserted = r.Sub with { Position = r.Runner.Position };
+            // 塁上の参照は engine が実際に打順へ入れた実体へ揃える（ここで組み直すと打順の実体とズレる）。
             if (bases.First == r.Runner) bases.First = inserted;
             else if (bases.Second == r.Runner) bases.Second = inserted;
             else if (bases.Third == r.Runner) bases.Third = inserted;
+            // 代走は元走者の責任投手を引き継ぐ（issue inherited-runner-run-attribution）。
+            if (inserted is not null) p.TransferRunnerResponsibility(r.Runner, inserted);
         }
 
         // 代打: 次打者を厚い控えへ（投手枠はStandard側で除外）。
@@ -1878,10 +2410,6 @@ public static class GameEngine
             bases.First, bases.Second, bases.Third, upcoming, upcomingIsPitcher,
             team.CurrentLineup, team.Reserves);
     }
-
-    /// <summary>当日の出来を引く（途中出場等で未登録なら0=平常）。</summary>
-    private static double FormOf(Dictionary<Player, double> dayForm, Player p)
-        => dayForm.TryGetValue(p, out var v) ? v : 0.0;
 
     /// <summary>コールドゲーム（マーシールール）判定（設計書05 §1.3, OPEN-QUESTIONS Q18）。internal はテスト専用。</summary>
     internal static bool IsMercy(int inning, int away, int home)
@@ -1926,7 +2454,6 @@ public sealed class GameProgress
     public TeamState Home { get; }
     public GameContext Ctx { get; }
     public IRandomSource Rng { get; }
-    public Dictionary<Player, double> DayForm { get; }
 
     /// <summary>現在のイニング（Steps が進める）。</summary>
     public int Inning { get; set; } = 1;
@@ -1965,7 +2492,7 @@ public sealed class GameProgress
     }
 
     public GameProgress(Team awayTeam, Team homeTeam, TeamState away, TeamState home,
-        GameContext ctx, IRandomSource rng, Dictionary<Player, double> dayForm)
+        GameContext ctx, IRandomSource rng)
     {
         AwayTeam = awayTeam;
         HomeTeam = homeTeam;
@@ -1973,7 +2500,6 @@ public sealed class GameProgress
         Home = home;
         Ctx = ctx;
         Rng = rng;
-        DayForm = dayForm;
     }
 
     /// <summary>攻撃側の TeamState（isTop=true なら先攻 away）。対話采配の適用先判定に使う。</summary>
@@ -1988,6 +2514,23 @@ public sealed class GameProgress
     public int CurrentOuts { get; internal set; }
     /// <summary>直近に確定した打席が表（先攻の攻撃）だったか。交代対象チームの攻守判定に使う。</summary>
     public bool CurrentIsTop { get; internal set; } = true;
+
+    // ===== 引き継ぎ走者の責任投手（issue inherited-runner-run-attribution・野球規則 9.16(g)） =====
+    // 走者 → その走者を出塁させた投手。生還時の失点・自責点はこの投手へ付ける（救援は自分が出した走者と
+    // 打者走者ぶんだけ）。半イニング内で使い切り（PlayHalfSteps の頭で空にする）。記録のみ＝乱数非消費・
+    // 試合進行には一切影響しない。代走は元走者の責任投手を引き継ぐ（<see cref="TransferRunnerResponsibility"/>）。
+    /// <summary>走者→責任投手（今の半イニングぶん）。走者の実体は塁上の参照と同じ（record の値等価で引く）。</summary>
+    internal Dictionary<Player, Player> RunnerResponsibility { get; } = new();
+
+    /// <summary>代走: 元走者 <paramref name="from"/> の責任投手を、塁に入る <paramref name="to"/> へ引き継ぐ。</summary>
+    internal void TransferRunnerResponsibility(Player from, Player to)
+    {
+        if (RunnerResponsibility.TryGetValue(from, out var pitcher))
+        {
+            RunnerResponsibility.Remove(from);
+            RunnerResponsibility[to] = pitcher;
+        }
+    }
 
     // ===== デバッグ観測（設計書17 §4, F1）。すべて観測専用で試合結果には影響しない。 =====
 

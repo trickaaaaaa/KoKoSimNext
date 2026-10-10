@@ -108,6 +108,7 @@ public static class CareerEngine
             // メタ更新。
             ApplyResults(manager, reachedKoshien, nationalChampion, wins, upsetFameDelta, c);
             manager.CareerYears++;
+            manager.YearsAtSchool++;
             if (reachedKoshien) manager.KoshienAppearances++;
 
             // 監督成長イベント（設計書04 §1.1b: 節目の跳ね）。独立ストリームで既存の乱数列を乱さない。
@@ -125,8 +126,11 @@ public static class CareerEngine
                 baseStrength = c.FreeChoiceSchoolStrength;
                 schoolsServed++;
                 transferred = true;
+                manager.YearsAtSchool = 0;
             }
-            else if (manager.Status == ManagerStatus.Teacher)
+            // 最低在任年数（設計書04 §1.3追記）。赴任した年に採った1年生が卒業する（3年）までは
+            // 強制転任の抽選そのものを行わない＝必ず残留（ManagerTransferModel.Evaluate と同じ判定式）。
+            else if (manager.Status == ManagerStatus.Teacher && manager.YearsAtSchool >= c.MinTenureYears)
             {
                 // 残留判定（設計書04 §1.3）。信頼度が高いほど校が引き留める＝腰を据えて育てられる。
                 // 信頼が積み上がるまでは配置転換で渡り歩く「修行編」、信頼を得れば数年腰を据える、という手触り。
@@ -140,6 +144,7 @@ public static class CareerEngine
                     prefId = rng.NextInt(0, nation.Prefectures.Count);
                     baseStrength = rng.NextGaussian(c.NewSchoolStrengthMean, c.NewSchoolStrengthSd);
                     manager.Trust = c.TrustReset; // 信頼度は転任でリセット
+                    manager.YearsAtSchool = 0;
                     schoolsServed++;
                     transferred = true;
                 }
@@ -234,13 +239,7 @@ public static class CareerEngine
 
         // 名声（持ち越し）。FamePerWin は勝利一律の加算、upsetFameDelta は Tier 格差ぶんの金星/取りこぼし
         // （順当な結果には効かない＝二重計上でない, issue #170）。
-        m.Fame = MathUtil.Clamp(
-            m.Fame * c.FameDecay
-                + c.FamePerWin * wins
-                + (reachedKoshien ? c.FameKoshienAppearance : 0)
-                + (nationalChampion ? c.FameNationalChampion : 0)
-                + upsetFameDelta,
-            0, 100);
+        m.Fame = NextFame(m.Fame, reachedKoshien, nationalChampion, wins, upsetFameDelta, c);
 
         // 信頼度（校内）。
         var trust = m.Trust + c.TrustPerWin * wins + (reachedKoshien ? c.TrustKoshien : 0);
@@ -261,5 +260,36 @@ public static class CareerEngine
                           + c.FacilityFundDonationPerFame * m.Fame
                           + (reachedKoshien ? c.FacilityFundKoshienBonus : 0)
                           + (nationalChampion ? c.FacilityFundNationalTitleBonus : 0);
+    }
+
+    /// <summary>
+    /// 名声の1年ぶんの更新（設計書04 §1.2・2026-08-26 案C+D）。純関数＝乱数を引かない。
+    ///
+    /// <para>形は「減衰＋上昇」だが、上昇側にだけ2段の抑えが入る:
+    /// <list type="number">
+    /// <item>逓減（案C）: 上昇量に <c>(1 − 名声/FameGainCeiling)</c> を掛ける。定常値が
+    /// <c>100g/(20+g)</c> になり100へ張り付かない（強さ75の常勝校でも C 帯で落ち着く）。</item>
+    /// <item>年間上限（案D）: <b>正味の</b>上昇量を <see cref="CareerCoefficients.FameSeasonRiseCap"/> で
+    /// 頭打ちにする。県大会を制した年でも等級が1段ぶんずつしか動かない。</item>
+    /// </list>
+    /// どちらも下降側には効かない＝勝てなくなった王朝は従来どおり一世代で崩れる。</para>
+    /// </summary>
+    public static double NextFame(
+        double fame, bool reachedKoshien, bool nationalChampion, int wins, double upsetFameDelta,
+        CareerCoefficients c)
+    {
+        var gain = c.FamePerWin * wins
+                   + (reachedKoshien ? c.FameKoshienAppearance : 0)
+                   + (nationalChampion ? c.FameNationalChampion : 0)
+                   + upsetFameDelta;
+
+        // 逓減は上昇側だけ（負のデルタに掛けると「名声が高いほど取りこぼしの罰が軽い」になって逆）。
+        if (gain > 0 && c.FameGainCeiling > 0)
+            gain *= Math.Max(0, 1.0 - fame / c.FameGainCeiling);
+
+        var next = fame * c.FameDecay + gain;
+        // 正味の上昇の頭打ち。減衰で下がる年（next < fame）には効かない。
+        if (next > fame + c.FameSeasonRiseCap) next = fame + c.FameSeasonRiseCap;
+        return MathUtil.Clamp(next, 0, 100);
     }
 }

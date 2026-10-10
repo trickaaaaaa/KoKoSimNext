@@ -13,9 +13,11 @@ namespace KokoSim.Engine.Tests.Match.Game;
 
 /// <summary>
 /// ゴロ凡打の進塁打（二塁→三塁）を 18%固定テーブルから物理レースへ（Issue #318, 設計書12 §3.5）。
-/// 守備は幾何（捕球点→三塁の直接送球でどれだけ刺せそうか＝P_direct）で3分岐を純関数で選ぶ:
-/// A) 走者自重（RNG非消費）／ B) 一塁を捨てて三塁へ直接送球（野選・P_direct でレース）／
-/// C) 一塁を取り走者は転送レース（P_relay）。方向性は係数でなく幾何から創発する。
+/// この場面に至った時点で打者走者は一塁アウトが確定しており（実際の内野は確実な1アウトを捨てて三塁の
+/// 走者を直接狙わない＝issue productive-out-second-to-third-not-advancing で「一塁を捨てて三塁へ直接送球」
+/// 分岐を廃止）、二塁走者の帰趨は一塁送球到達を起点にした転送レース（P_relay）だけで決まる:
+/// A) 転送の脅威が実在する（P_relay &lt; 送り閾値）→ 走者自重（RNG非消費）／
+/// B) 脅威が薄い → 走者は三塁へ進み、転送とレース（P_relay）。
 /// 適用は「ゴロ凡打×二塁走者あり×一塁走者なし×三塁空き×extraOuts==0」の1場面のみ。それ以外は従来テーブル。
 /// </summary>
 public sealed class GrounderAdvanceRaceTests
@@ -33,11 +35,19 @@ public sealed class GrounderAdvanceRaceTests
             DefenseDepth.Normal, isFly, throwArriveSeconds);
     }
 
-    /// <summary>捕球点→三塁の直接送球に対する走者の到達確率（分岐選択に使う純関数の量）。</summary>
-    private static double PDirect(HomePlayContext home, Player runner)
-        => HomePlayResolver.SuccessProbability(
-            runner, 2, home.Situation, home.Field, C, HomePlayResolver.AdvanceParams(home.Field, C),
-            C.GrounderAdvanceStartDelaySeconds);
+    /// <summary>一塁送球到達を起点にした転送レースでの走者到達確率（分岐選択に使う純関数の量）。
+    /// <see cref="BaserunningModel"/> 内部の P_relay 計算と同じ組み立て（一塁ベース起点・中継速度・
+    /// AdvanceRelayTransferSeconds）。</summary>
+    private static double PRelay(HomePlayContext home, Player runner)
+    {
+        Assert.NotNull(home.ThrowArriveSeconds);
+        var advance = HomePlayResolver.AdvanceParams(Field, C);
+        var relay = new HomePlaySituation(
+            Field.FirstBase, home.ThrowArriveSeconds!.Value, C.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
+        return HomePlayResolver.SuccessProbability(
+            runner, 2, relay, Field, C, advance, C.GrounderAdvanceStartDelaySeconds,
+            transferSecondsOverride: C.AdvanceRelayTransferSeconds);
+    }
 
     // ゴロ凡打×二塁走者あり×一塁走者なし×三塁空き（＝物理レースが効く唯一の場面）。
     private static (BaseState Bases, int ExtraOuts, bool BatterSafeOnFc, IReadOnlyList<RunnerMove> Moves) RunOnce(
@@ -82,57 +92,44 @@ public sealed class GrounderAdvanceRaceTests
     // ================= 順序性（幾何・走力からの創発）=================
 
     [Fact]
-    public void Order_Depth_DeeperFieldingPoint_RaisesReachProbability()
+    public void Order_ThrowArriveLater_RaisesReachProbability()
     {
-        // ①深さ: 捕球点を三塁から遠く（深く）するほど直接送球が長い＝走者の到達確率が単調に上がる。
+        // ①一塁送球到達が遅いほど中継の起点が遅れる＝走者の到達確率が単調に上がる。
         var runner = new Player { Speed = 50, Baserunning = 50 };
         var probs = new List<double>();
-        foreach (var (x, z, at) in new[] { (10.0, 26.0, 1.6), (14.0, 34.0, 1.9), (18.0, 42.0, 2.2), (22.0, 50.0, 2.5) })
-            probs.Add(PDirect(Grounder(x, z, at), runner));
+        foreach (var arrive in new[] { 1.6, 1.9, 2.2, 2.5 })
+            probs.Add(PRelay(Grounder(x: 9, z: 40, fieldedAt: 1.4, throwArriveSeconds: arrive), runner));
         for (var i = 1; i < probs.Count; i++)
-            Assert.True(probs[i] > probs[i - 1], $"深いほど到達確率が上がるはず: {string.Join(",", probs.Select(p => p.ToString("F3")))}");
-    }
-
-    [Fact]
-    public void Order_Direction_ThreeShortGap_LowerThan_OneTwoGap()
-    {
-        // ②方向: 同じ深さ（|Z| 等距離）でも三遊間（三塁に近い＝短い送球）は一二塁間より到達確率が明確に低い。
-        var runner = new Player { Speed = 50, Baserunning = 50 };
-        var threeGap = Grounder(x: -12, z: 40, fieldedAt: 2.0); // 三遊間（三塁側）
-        var oneTwoGap = Grounder(x: 12, z: 40, fieldedAt: 2.0);  // 一二塁間（一塁側）
-        var pThree = PDirect(threeGap, runner);
-        var pOneTwo = PDirect(oneTwoGap, runner);
-        Assert.True(pOneTwo > pThree + 0.15,
-            $"一二塁間(={pOneTwo:F3})は三遊間(={pThree:F3})より明確に到達しやすいはず（方向性の創発）");
+            Assert.True(probs[i] > probs[i - 1], $"一塁到達が遅いほど到達確率が上がるはず: {string.Join(",", probs.Select(p => p.ToString("F3")))}");
     }
 
     [Fact]
     public void Order_Runner_FasterRunner_RaisesReachProbability()
     {
-        // ③走者: 走力・走塁判断を上げると走者所要が短く＝到達確率が上がる。
-        var home = Grounder(x: 16, z: 42, fieldedAt: 2.1);
-        var slow = PDirect(home, new Player { Speed = 20, Baserunning = 20 });
-        var fast = PDirect(home, new Player { Speed = 90, Baserunning = 90 });
+        // ②走者: 走力・走塁判断を上げると走者所要が短く＝到達確率が上がる。
+        var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, throwArriveSeconds: 2.1);
+        var slow = PRelay(home, new Player { Speed = 20, Baserunning = 20 });
+        var fast = PRelay(home, new Player { Speed = 90, Baserunning = 90 });
         Assert.True(fast > slow + 0.15, $"快足(={fast:F3})は鈍足(={slow:F3})より到達しやすいはず");
     }
 
     // ================= 分岐 A（自重・RNG非消費）=================
 
     [Fact]
-    public void BranchA_ShortThrow_HoldsAtSecond_NoRngConsumed()
+    public void BranchA_FastRelay_HoldsAtSecond_NoRngConsumed()
     {
-        // 三遊間の浅いゴロ＝直接送球が短い＝P_direct が閾値未満＝自重（二塁残留）。RNG非消費（不変条件#2）。
-        var home = Grounder(x: -14, z: 22, fieldedAt: 1.5, arm: 70);
+        // 一塁送球到達が早い（中継の脅威が実在する）＝P_relay が閾値未満＝自重（二塁残留）。RNG非消費（不変条件#2）。
+        var home = Grounder(x: 9, z: 40, fieldedAt: 1.2, arm: 70, throwArriveSeconds: 1.7);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
         var t = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
-        Assert.True(PDirect(home, r2) < t, "この捕球点は自重域（P_direct < 閾値）のはず");
+        Assert.True(PRelay(home, r2) < t, "この一塁到達は自重域（P_relay < 閾値）のはず");
 
         var rng = new Xoshiro256Random(321);
         for (var i = 0; i < 50; i++)
         {
             var (bases, extraOuts, batterSafeOnFc, _) = RunOnce(home, r2, new Player(), rng);
             Assert.Equal(0, extraOuts);         // 自重＝アウトなし
-            Assert.False(batterSafeOnFc);       // 打者は一塁アウトのまま（野選でない）
+            Assert.False(batterSafeOnFc);       // 打者は一塁アウトのまま
             Assert.Same(r2, bases.Second);      // 二塁残留
             Assert.Null(bases.Third);
         }
@@ -141,85 +138,66 @@ public sealed class GrounderAdvanceRaceTests
         Assert.Equal(fresh.NextDouble(), rng.NextDouble(), 15);
     }
 
-    // ================= 分岐 B（一塁を捨てて三塁へ直接送球＝野選）=================
+    // ================= 分岐 B（一塁経由の転送レース＝進塁打の既定形）=================
 
     [Fact]
-    public void BranchB_DirectThrow_BatterSafeOnFc_AndStandsAtFirst()
+    public void BranchB_RoutineGrounder_BatterOut_RunnerAdvancesUsually()
     {
-        // 中距離ゴロ＝P_direct が [閾値, max] の帯＝守備は一塁を捨てて三塁へ直接送球。打者は野選で一塁生存。
-        var home = Grounder(x: 12, z: 38, fieldedAt: 2.2, arm: 80);
+        // 標準的な二塁手守備位置・現実的な捕球/送球到達時刻（issue productive-out-second-to-third-not-advancing の
+        // 実測レンジ）＝定型的な進塁打のはず。打者は常にアウト（野選にならない）、走者はほとんどのケースで三塁へ。
+        var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: 3.0);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
         var t = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
-        var pd = PDirect(home, r2);
-        Assert.InRange(pd, t, C.AdvanceDirectThrowMaxRunnerSuccess); // 分岐B域を保証
+        Assert.True(PRelay(home, r2) >= t, "標準的な二塁ゴロは進塁を試みる域のはず");
 
-        var batter = new Player();
-        var (bases, _, batterSafeOnFc, _) = RunOnce(home, r2, batter, new Xoshiro256Random(5));
-        Assert.True(batterSafeOnFc, "分岐B＝野選で打者は生存するはず");
-        Assert.Same(batter, bases.First); // 打者は一塁に立つ
-    }
-
-    [Fact]
-    public void BranchB_DirectThrow_ProducesReachAndRunnerOut()
-    {
-        // 分岐B: レースは P_direct で解く＝三塁到達と三塁での走塁死の両方が出る。刺殺は extraOuts＋(2→3,Out)。
-        var home = Grounder(x: 12, z: 38, fieldedAt: 2.2, arm: 80);
-        var r2 = new Player { Speed = 50, Baserunning = 50 };
         var rng = new Xoshiro256Random(11);
-        int reached = 0, outs = 0, extra = 0;
-        for (var i = 0; i < 4000; i++)
+        int reached = 0, held = 0, outs = 0;
+        const int trials = 2000;
+        for (var i = 0; i < trials; i++)
         {
             var (bases, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r2, new Player(), rng);
-            Assert.True(batterSafeOnFc); // 分岐Bは常に野選
-            reached += moves.Count(m => m is { FromBase: 2, ToBase: 3, Out: false });
-            outs += moves.Count(m => m is { FromBase: 2, ToBase: 3, Out: true });
-            extra += extraOuts;
+            Assert.False(batterSafeOnFc); // 打者は常に一塁アウト（野選にならない）
+            if (bases.Third == r2) reached++;
+            else if (bases.Second == r2) held++;
+            else outs += extraOuts; // 三塁での走塁死
         }
-        Assert.True(reached > 0, "分岐Bで三塁到達が一度も出ない（レースが機能していない）");
-        Assert.True(outs > 0, "分岐Bで三塁での走塁死が一度も出ない（刺殺が起きない）");
-        Assert.Equal(outs, extra); // この設定では追加アウトは進塁レースの憤死のみ
+        Assert.True(reached > trials * 0.7, $"標準的な二塁ゴロは大半が進塁するはず（到達={reached}/{trials}）");
     }
 
-    // ================= 分岐 C（一塁を取る＝打者アウト・転送レース）=================
-
     [Fact]
-    public void BranchC_Relay_BatterOut_ProducesReachAndRunnerOut()
+    public void BranchB_Relay_ProducesReachAndRunnerOut()
     {
-        // 深いゴロ＝P_direct が max 超＝守備は一塁を取る（打者アウト）。走者は一塁経由の転送とレース（P_relay）。
-        // 鈍足＋早めの一塁送球到達で P_relay を中庸にし、到達と刺殺の両方を出す。
-        var home = Grounder(x: 20, z: 48, fieldedAt: 2.4, arm: 55, throwArriveSeconds: 2.9);
-        var r2 = new Player { Speed = 25, Baserunning = 25 };
-        Assert.True(PDirect(home, r2) > C.AdvanceDirectThrowMaxRunnerSuccess, "この捕球点は分岐C域（P_direct > max）のはず");
-
+        // 中継が際どくなる送球到達（拮抗域）＝三塁到達と三塁での走塁死の両方が出る。刺殺は extraOuts＋(2→3,Out)。
+        var home = Grounder(x: 9, z: 40, fieldedAt: 1.4, arm: 50, throwArriveSeconds: 2.0);
+        var r2 = new Player { Speed = 50, Baserunning = 50 };
         var rng = new Xoshiro256Random(29);
         int reached = 0, outs = 0, extra = 0;
         for (var i = 0; i < 4000; i++)
         {
             var (_, extraOuts, batterSafeOnFc, moves) = RunOnce(home, r2, new Player(), rng);
-            Assert.False(batterSafeOnFc); // 分岐Cは打者アウト（野選でない）
+            Assert.False(batterSafeOnFc); // 打者は常に一塁アウト
             reached += moves.Count(m => m is { FromBase: 2, ToBase: 3, Out: false });
             outs += moves.Count(m => m is { FromBase: 2, ToBase: 3, Out: true });
             extra += extraOuts;
         }
-        Assert.True(reached > 0, "分岐Cで三塁到達（進塁打）が一度も出ない");
-        Assert.True(outs > 0, "分岐Cで三塁での走塁死が一度も出ない（稀な刺殺が起きない）");
-        Assert.Equal(outs, extra);
+        Assert.True(reached > 0, "三塁到達が一度も出ない（レースが機能していない）");
+        Assert.True(outs > 0, "三塁での走塁死が一度も出ない（刺殺が起きない）");
+        Assert.Equal(outs, extra); // この設定では追加アウトは進塁レースの憤死のみ
     }
 
     [Fact]
-    public void BranchC_NullThrowArrive_BloodlessAdvance_NoRngConsumed()
+    public void NullThrowArrive_BloodlessAdvance_NoRngConsumed()
     {
-        // 分岐C域だが一塁送球時刻が無い（転送起点が組めない）＝無血進塁（RNG非消費・フォールバック）。
+        // 一塁送球到達時刻が無い（転送起点が組めない）＝無血進塁（RNG非消費・フォールバック）。
         var home = Grounder(x: 20, z: 48, fieldedAt: 2.4, arm: 55, throwArriveSeconds: null);
         var r2 = new Player { Speed = 25, Baserunning = 25 };
-        Assert.True(PDirect(home, r2) > C.AdvanceDirectThrowMaxRunnerSuccess, "分岐C域のはず");
 
         var rng = new Xoshiro256Random(77);
         for (var i = 0; i < 40; i++)
         {
             var (bases, extraOuts, batterSafeOnFc, _) = RunOnce(home, r2, new Player(), rng);
             Assert.Equal(0, extraOuts);
-            Assert.False(batterSafeOnFc);   // 打者は一塁アウト（分岐C）
+            Assert.False(batterSafeOnFc);   // 打者は一塁アウト
             Assert.Same(r2, bases.Third);   // 走者は無血で三塁へ
             Assert.Null(bases.Second);
         }
@@ -230,16 +208,18 @@ public sealed class GrounderAdvanceRaceTests
     // ================= 従来テーブルへのフォールバック =================
 
     [Fact]
-    public void Fallback_FlyOut_UsesLegacyTable_Deterministic()
+    public void FlyOut_UsesTagUpRace_NotLegacyTable_Deterministic()
     {
-        // フライアウト（IsFly=true）は走者の時計が別物＝物理レース対象外。従来テーブル（productive_out_advance_prob）。
-        var flyDeep = Grounder(x: 20, z: 48, fieldedAt: 2.4, arm: 55, throwArriveSeconds: 2.9, isFly: true);
+        // フライアウト（IsFly=true）はゴロの転送レースではなくタッチアップの物理レースで解く
+        // （design-14 P3-11。かつては走者の時計が別物という理由で18%固定テーブルへ落としていた）。
+        // この浅いフライ（48m）は三塁への送球が短く到達見込みが送り閾値に届かない＝全試行で自重する。
+        // 18%固定テーブルのままなら 2000試行で 300〜460 程度進んでいた。深さ依存の網羅は FlyTagUpTests。
+        var flyShallow = Grounder(x: 20, z: 48, fieldedAt: 2.4, arm: 55, throwArriveSeconds: 2.9, isFly: true);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
-        var a = CountAdvances(flyDeep, r2, seed: 99);
-        var b = CountAdvances(flyDeep, r2, seed: 99);
+        var a = CountAdvances(flyShallow, r2, seed: 99);
+        var b = CountAdvances(flyShallow, r2, seed: 99);
         Assert.Equal(a, b); // 決定論
-        // 18%固定テーブル（走力補正で微増）＝2000試行で概ね 300〜460。物理レース（深い→ほぼ全進塁）とは明確に違う。
-        Assert.InRange(a, 250, 500);
+        Assert.Equal(0, a);
     }
 
     [Fact]
@@ -265,16 +245,16 @@ public sealed class GrounderAdvanceRaceTests
         // extraOuts>0（この打球の送球はもう使われた＝本塁憤死等）では、物理レースへ入らず従来テーブル 18% へ
         // フォールバックする。浅い中央ゴロ＋前進守備で三塁走者を本塁で勝負（送り閾値を超える P_home）させ、
         // r3 が生還した打席（extraOuts==0）と本塁憤死した打席（extraOuts>0）で二塁走者の進塁挙動が変わることで確認。
-        // 捕球点は三塁に近い＝物理なら P_direct が閾値未満＝自重（進塁0%・RNG非消費）になる域を選ぶ。
+        // 一塁送球到達が早い＝物理なら P_relay が閾値未満＝自重（進塁0%・RNG非消費）になる域を選ぶ。
         // ⇒ extraOuts==0 は物理で自重（≈0%）、extraOuts>0 は従来テーブル（≈18%）＝挙動が切り替わる。
         var home = new HomePlayContext(
             Field,
             new HomePlaySituation(new Vector3D(8, 0, 33), 1.5, new Player { ArmStrength = 50 }.ToFielder().ThrowSpeedMps),
-            new TacticsCoefficients(), 0.5, DefenseDepth.In, IsFly: false, ThrowArriveSeconds: 2.6);
+            new TacticsCoefficients(), 0.5, DefenseDepth.In, IsFly: false, ThrowArriveSeconds: 1.9);
         var r2 = new Player { Speed = 50, Baserunning = 50 };
         var r3 = new Player { Speed = 50, Baserunning = 50 };
         var tAdvance = HomeSendDecision.SendAdvanceThreshold(0.5, new TacticsCoefficients());
-        Assert.True(PDirect(home, r2) < tAdvance, "この捕球点は二塁走者の物理レースでは自重域のはず");
+        Assert.True(PRelay(home, r2) < tAdvance, "この一塁到達は二塁走者の物理レースでは自重域のはず");
 
         var rng = new Xoshiro256Random(2024);
         int advOnExtra = 0, nExtra = 0, advOnClean = 0, nClean = 0;

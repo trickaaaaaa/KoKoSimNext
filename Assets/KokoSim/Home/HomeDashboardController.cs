@@ -20,13 +20,16 @@ namespace KokoSim.Unity.Home
 
         private HomeState _state;
         private VisualElement _root;
-        private VisualElement _banner, _dialog, _result, _newTeam;
+        private VisualElement _banner, _dialog, _result, _newTeam, _xt;
         private VisualElement _menu, _menuTitleConfirm;
         private Label _menuSaveReason;
 
         // 新チーム発足（次期主将の指名）モーダルの選択状態。RosterService.Active 内の index を持つ。
         private KokoSim.Unity.Components.RadarChartView _ntRadar;
         private int _ntPick = -1;
+
+        // 監督オファー（転任の選択, 設計書04 §1.3）モーダルの選択状態。null＝残留。
+        private int? _xtPick;
 
         // 「部の実力」の6角形（部品辞書 RadarChartView）。総合力パネルと同じ絵をカードサイズで出す。
         private KokoSim.Unity.Components.RadarChartView _tsRadar;
@@ -35,10 +38,14 @@ namespace KokoSim.Unity.Home
 
         // 登録したハンドラ（OnDisable で必ず外す）。ScreenRouter は同じ GameObject を SetActive で付け外し
         // するだけなので、外さないと画面往復のたびに多重登録され「1クリックで複数日進む」不具合になる。
-        private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk;
+        private Button _advanceBtn, _dialogYes, _dialogNo, _resultOk, _newTeamOk, _xtOk;
         private Button _menuBtn, _menuSaveBtn, _menuTitleBtn, _menuCloseBtn, _menuTitleYes, _menuTitleNo;
         private VisualElement _tsRow;
         private EventCallback<ClickEvent> _tsRowClick;
+
+        // イベントのノベル提示（issue #609）。本文域（ヒーロー帯＋3カラム）と二者択一で入れ替える。
+        private EventNovelView _novel;
+        private VisualElement _hero, _dash;
 
         private void OnEnable()
         {
@@ -50,6 +57,7 @@ namespace KokoSim.Unity.Home
             _dialog = _root.Q<VisualElement>("tm-dialog");
             _result = _root.Q<VisualElement>("tm-result");
             _newTeam = _root.Q<VisualElement>("nt-modal");
+            _xt = _root.Q<VisualElement>("xt-modal");
             _menu = _root.Q<VisualElement>("hm-menu");
             _menuTitleConfirm = _root.Q<VisualElement>("hm-menu-title-confirm");
             _menuSaveReason = _root.Q<Label>("hm-menu-save-reason");
@@ -65,6 +73,7 @@ namespace KokoSim.Unity.Home
             _dialogNo = Wire("tm-dialog-no", OnMatchNo);
             _resultOk = Wire("tm-result-ok", OnResultOk);
             _newTeamOk = Wire("nt-ok", OnNewTeamConfirm);
+            _xtOk = Wire("xt-ok", OnTransferConfirm);
 
             _menuBtn = Wire("hm-menu-btn", OnMenuOpen);
             _menuSaveBtn = Wire("hm-menu-save", OnMenuSave);
@@ -81,13 +90,23 @@ namespace KokoSim.Unity.Home
                 _tsRow.RegisterCallback(_tsRowClick);
             }
 
+            _hero = _root.Q<VisualElement>("home-hero");
+            _dash = _root.Q<VisualElement>("home-dash");
+            _novel = new EventNovelView(_root.Q<VisualElement>("ev-novel"), OnNovelClosed);
+            // 本文域は必ず見える状態から始める。UIDocument のツリーは画面を離れても生き残るので、
+            // ノベルを開いたまま他タブへ移ると、隠したインライン指定が残って空のホームになる。
+            SetBodyVisible(true);
+
             Render();
 
             // 他画面（練習・大会・練習試合・選手・メンバー）で週を進めて引退週／大会開幕週に入った場合は
             // ここへ回送されてくる（ScreenRouter が Pending/BannerPending を見て回送する, issue #134）。
             // その回送分もこの1箇所で受けて指名モーダル／開幕バナーを出す（演出の導線をホームに集約する）。
             if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();
+            else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();
             else if (_state.BannerPending) ShowBanner();
+            // 大会中に溜まったイベント（大会後に持ち越した分）もここで拾う（issue #609）。
+            else TryShowEvent();
 
             var session = KokoSim.Unity.Shell.GameSession.Current;
             if (session.ResultPending && session.LastOutcome != null)
@@ -112,8 +131,10 @@ namespace KokoSim.Unity.Home
             if (_dialogNo != null) _dialogNo.clicked -= OnMatchNo;
             if (_resultOk != null) _resultOk.clicked -= OnResultOk;
             if (_newTeamOk != null) _newTeamOk.clicked -= OnNewTeamConfirm;
+            if (_xtOk != null) _xtOk.clicked -= OnTransferConfirm;
             if (_tsRow != null && _tsRowClick != null) _tsRow.UnregisterCallback(_tsRowClick);
             _tsRowClick = null;
+            if (_novel != null) { _novel.Dispose(); _novel = null; }
 
             if (_menuBtn != null) _menuBtn.clicked -= OnMenuOpen;
             if (_menuSaveBtn != null) _menuSaveBtn.clicked -= OnMenuSave;
@@ -192,12 +213,20 @@ namespace KokoSim.Unity.Home
             // 背景の全国裏試合／敗退後の残りブラケット消化を完了させてから静的リセットする。GameClock.Advance の
             // 年度替わり・新チーム発足と同じ作法（issue #529）＝背景スレッドと同じ NationRosters を同時に触らない。
             // 完了を待たずに Reset すると、リセット後に新しい NationBackgroundSim.Start が走った場合、旧セッションの
-            // ワーカーがまだ生きていて共有カウンタ(_nextJob等)を奪い合う実害があるため。
-            KokoSim.Unity.Shell.NationBackgroundSim.EnsureCompleted();
-            KokoSim.Unity.Shell.BracketFinishSim.EnsureCompleted();
-            KokoSim.Unity.Shell.SaveGameIO.ResetForNewGame();
-            HomeState.Reset();
-            KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TitleScreen");
+            // ワーカーがまだ生きていて共有カウンタ(_nextJob等)を奪い合う実害があるため。この待ちは main を
+            // ブロックし得るので ManualWait で「タイトルへ戻る準備中」を1フレーム先に描画してから入る。
+            KokoSim.Unity.Shell.ManualWait.Run<object>(_root, "タイトルへ戻る準備中", () =>
+            {
+                KokoSim.Unity.Shell.NationBackgroundSim.EnsureCompleted();
+                KokoSim.Unity.Shell.BracketFinishSim.EnsureCompleted();
+                KokoSim.Unity.Shell.KoshienQualifierStatsSim.EnsureCompleted();
+                return null;
+            }, _ =>
+            {
+                KokoSim.Unity.Shell.SaveGameIO.ResetForNewGame();
+                HomeState.Reset();
+                KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TitleScreen");
+            });
         }
 
         // ===== 大会モード進行（要件1〜7） =====
@@ -218,8 +247,44 @@ namespace KokoSim.Unity.Home
                 _state.AdvanceWeek();
                 Render();
                 if (KokoSim.Unity.Shell.NewTeamService.Pending) ShowNewTeam();  // 引退週＝新チーム発足（設計書09 §8）
+                else if (KokoSim.Unity.Shell.ManagerTransferService.Pending) ShowTransferOffer();  // 転任判定（設計書04 §1.3）
                 else if (_state.BannerPending) ShowBanner();    // 大会開幕演出（要件1・2）
+                else TryShowEvent();                            // 週次イベントのノベル提示（issue #609）
             }
+        }
+
+        // ===== イベント（ノベル提示・issue #609） =====
+
+        /// <summary>
+        /// 溜まっているイベントがあればノベル面へ入れ替える。開いている間は本文域（ヒーロー帯＋3カラム）を
+        /// 隠す＝案B「トップバー残し」。新チーム発足・開幕バナーが出る週は<b>呼ばない</b>ので、
+        /// イベントはキューに残り、次にホームへ来たとき（<c>OnEnable</c>）に出る。
+        /// </summary>
+        private void TryShowEvent()
+        {
+            if (_novel == null || !KokoSim.Unity.Shell.EventService.HasPending) return;
+            if (!_novel.OpenNext()) return;
+            SetBodyVisible(false);
+        }
+
+        /// <summary>ノベルを閉じた（全イベント消化）＝本文域を戻して最新化する。</summary>
+        private void OnNovelClosed()
+        {
+            SetBodyVisible(true);
+            Render();
+        }
+
+        /// <summary>
+        /// 本文域（ヒーロー帯＋3カラム）の表示。ノベルを出している間は隠す。
+        /// <b>週送りボタンも一緒に止める</b>＝トップバーは残る作りなので、会話の途中でも押せてしまい、
+        /// 押すと読んでいる最中に次の週のイベントが積み上がる。
+        /// </summary>
+        private void SetBodyVisible(bool visible)
+        {
+            var d = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_hero != null) _hero.style.display = d;
+            if (_dash != null) _dash.style.display = d;
+            if (_advanceBtn != null) _advanceBtn.SetEnabled(visible);
         }
 
         // ===== 新チーム発足：次期主将の指名（設計書09 §8・案C 左リスト＋右詳細） =====
@@ -338,6 +403,112 @@ namespace KokoSim.Unity.Home
             return e;
         }
 
+        // ===== 監督オファー（転任の選択, 設計書04 §1.3・issue「監督の転任システムが実ゲームに完全未配線」） =====
+
+        private void ShowTransferOffer()
+        {
+            if (_xt == null) return;
+            var view = KokoSim.Unity.Shell.ManagerTransferService.BuildView();
+            if (view.Rows.Count == 0)
+            {
+                // 候補が組めなかった（想定外）＝導線を閉じて通常進行へ戻す。
+                KokoSim.Unity.Shell.ManagerTransferService.Clear();
+                return;
+            }
+
+            _xtPick = view.Rows[0].SchoolId;
+            RenderTransferOffer(view);
+            _xt.style.display = DisplayStyle.Flex;
+            _xt.BringToFront();
+        }
+
+        private void RenderTransferOffer(KokoSim.Unity.Shell.TransferOfferView view)
+        {
+            SetText("xt-hd-title", view.Headline);
+            SetText("xt-lead", view.Lead);
+            SetText("xt-note", view.CanStay ? "" : "強制転任のため、この赴任先は拒否できません。");
+
+            var rows = _root.Q<ScrollView>("xt-rows");
+            if (rows != null)
+            {
+                rows.Clear();
+                foreach (var r in view.Rows) rows.Add(BuildOfferRow(r));
+            }
+            RenderTransferOfferDetail(view);
+        }
+
+        private VisualElement BuildOfferRow(KokoSim.Unity.Shell.TransferOfferRow r)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("xt-row");
+            if (r.SchoolId == _xtPick) row.AddToClassList("xt-row--on");
+
+            var name = new Label(r.IsStay ? r.SchoolName + "（残留）" : r.SchoolName);
+            name.AddToClassList("xt-c-name");
+            row.Add(name);
+
+            var pref = new Label(r.PrefectureName); pref.AddToClassList("xt-c-pref"); row.Add(pref);
+
+            var rank = new VisualElement(); rank.AddToClassList("xt-c-rank");
+            rank.Add(UiComponents.RankChip(r.TierLetter, RankChipSize.Small));
+            row.Add(rank);
+
+            var power = new Label(((int)System.Math.Round(r.Strength)).ToString());
+            power.AddToClassList("xt-c-power");
+            power.AddToClassList("f-num");   // 純数値セル＝コンデンス体（書体3役, 設計書16）
+            row.Add(power);
+
+            var id = r.SchoolId;
+            row.RegisterCallback<ClickEvent>(_ => OnPickOffer(id));
+            return row;
+        }
+
+        private void OnPickOffer(int? schoolId)
+        {
+            if (_xtPick == schoolId) return;
+            _xtPick = schoolId;
+            RenderTransferOffer(KokoSim.Unity.Shell.ManagerTransferService.BuildView());
+        }
+
+        private void RenderTransferOfferDetail(KokoSim.Unity.Shell.TransferOfferView view)
+        {
+            KokoSim.Unity.Shell.TransferOfferRow picked = null;
+            foreach (var r in view.Rows) if (r.SchoolId == _xtPick) { picked = r; break; }
+            if (picked == null) return;
+
+            SetText("xt-d-name", picked.IsStay ? picked.SchoolName + "（残留）" : picked.SchoolName);
+            SetText("xt-d-sub", picked.PrefectureName);
+
+            var facts = _root.Q<VisualElement>("xt-d-facts");
+            if (facts != null)
+            {
+                facts.Clear();
+                facts.Add(XtFact("総合", ((int)System.Math.Round(picked.Strength)).ToString()));
+                facts.Add(XtFact("名声", ((int)System.Math.Round(picked.Fame)).ToString()));
+            }
+
+            if (_xtOk != null) _xtOk.text = picked.IsStay ? "残留する" : "この学校へ赴任する";
+        }
+
+        private static VisualElement XtFact(string key, string value)
+        {
+            var e = new VisualElement();
+            e.AddToClassList("xt-fact");
+            var k = new Label(key); k.AddToClassList("xt-fact__k");
+            var v = new Label(value); v.AddToClassList("xt-fact__v"); v.AddToClassList("f-num");
+            e.Add(k); e.Add(v);
+            return e;
+        }
+
+        private void OnTransferConfirm()
+        {
+            if (!KokoSim.Unity.Shell.ManagerTransferService.Confirm(_xtPick)) return;
+            if (_xt != null) _xt.style.display = DisplayStyle.None;
+            Render();
+            if (_state.BannerPending) ShowBanner();
+            else TryShowEvent();
+        }
+
         // 隠しパラメータ一覧（選手詳細と同じ判明ルール）から取り出す。未判明は「？」のまま出す。
         private static string HiddenOf(KokoSim.Unity.Players.PlayerDetailView v, string key)
         {
@@ -354,6 +525,7 @@ namespace KokoSim.Unity.Home
             if (_newTeam != null) _newTeam.style.display = DisplayStyle.None;
             Render();
             if (_state.BannerPending) ShowBanner();   // 指名の後に大会開幕演出が残っていれば続けて出す
+            else TryShowEvent();                      // 開幕が無ければ持ち越したイベントを続けて出す（issue #609）
         }
 
         private void ShowBanner()

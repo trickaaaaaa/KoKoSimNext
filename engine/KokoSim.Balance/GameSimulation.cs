@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using KokoSim.Config;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
@@ -82,8 +83,19 @@ public static class GameSimulation
         public long TotalStealSuccesses { get; init; }
         public long TotalSacrificeBunts { get; init; }
         public long TotalSacrificeBuntSuccesses { get; init; }
+        /// <summary>バント経路（犠打/セーフティ）での封殺（ForceOutAtSecond/Third/Home 合算,
+        /// issue bunt-no-take-on-ball-pitches）。分母は<see cref="TotalSacrificeBunts"/>と同じ。</summary>
+        public long TotalBuntForceOuts { get; init; }
+        /// <summary>スクイズでボールが実際にプレーされた回数（ウエスト/ファウル/空振りは含まない）。</summary>
+        public long TotalSqueezeBallInPlay { get; init; }
+        /// <summary>スクイズでボールが実際にプレーされ、かつ三塁走者が本塁で刺された回数。</summary>
+        public long TotalSqueezeRunnerOutAtHome { get; init; }
         /// <summary>1球采配（設計書15 Phase C）の帯校正用: 三振/四球/本塁打は1球判断の影響を最も受ける。</summary>
         public long TotalStrikeOuts { get; init; }
+        /// <summary>三振のうち見逃し（最終球が振らずに入った CalledStrike）だったもの。見逃し三振率の調査用。
+        /// useTacticsBrain=true のときだけ2ストライク時のForceSwing矯正が乗るため、useTacticsBrainの有無で
+        /// この値を比較すると矯正の実効果が測れる。</summary>
+        public long TotalLookingStrikeOuts { get; init; }
         public long TotalWalks { get; init; }
         public long TotalHitBatters { get; init; }
         public long TotalHomeRuns { get; init; }
@@ -160,11 +172,22 @@ public static class GameSimulation
         public double IntentionalWalksPerGame => Games > 0 ? (double)TotalIntentionalWalks / Games : 0;
         public double DoubleStealThirdBreaksPerGame => Games > 0 ? (double)TotalDoubleStealThirdBreaks / Games : 0;
         public double WildPitchesPerGame => Games > 0 ? (double)TotalWildPitches / Games : 0;
+        public double StealAttemptsPerGame => Games > 0 ? (double)TotalStealAttempts / Games : 0;
         public double StealSuccessRate => TotalStealAttempts > 0 ? (double)TotalStealSuccesses / TotalStealAttempts : 0;
         public double SacrificeBuntsPerGame => Games > 0 ? (double)TotalSacrificeBunts / Games : 0;
         public double SacrificeBuntSuccessRate =>
             TotalSacrificeBunts > 0 ? (double)TotalSacrificeBuntSuccesses / TotalSacrificeBunts : 0;
+        /// <summary>バント経路の封殺率（issue bunt-no-take-on-ball-pitches）。</summary>
+        public double BuntForceOutRate =>
+            TotalSacrificeBunts > 0 ? (double)TotalBuntForceOuts / TotalSacrificeBunts : 0;
+        /// <summary>スクイズでボールが実際にプレーされたときの、三塁走者の本塁封殺率。</summary>
+        public double SqueezeRunnerOutAtHomeRate =>
+            TotalSqueezeBallInPlay > 0 ? (double)TotalSqueezeRunnerOutAtHome / TotalSqueezeBallInPlay : 0;
         public double StrikeoutRate => TotalPlateAppearances > 0 ? (double)TotalStrikeOuts / TotalPlateAppearances : 0;
+        /// <summary>見逃し三振率（打席あたり）。K% の内訳。</summary>
+        public double LookingStrikeoutRate => TotalPlateAppearances > 0 ? (double)TotalLookingStrikeOuts / TotalPlateAppearances : 0;
+        /// <summary>三振に占める見逃しの割合（実野球はおよそ3割前後が参考値。design未定義のためこのゲームの目標帯は無い）。</summary>
+        public double LookingStrikeoutShare => TotalStrikeOuts > 0 ? (double)TotalLookingStrikeOuts / TotalStrikeOuts : 0;
         public double WalkRate => TotalPlateAppearances > 0 ? (double)TotalWalks / TotalPlateAppearances : 0;
         public double HitByPitchRate => TotalPlateAppearances > 0 ? (double)TotalHitBatters / TotalPlateAppearances : 0;
         public double HomeRunRate => TotalPlateAppearances > 0 ? (double)TotalHomeRuns / TotalPlateAppearances : 0;
@@ -187,11 +210,14 @@ public static class GameSimulation
     /// </param>
     public static Stats Run(int games, ulong seed, string? coefficientsPath = null, FieldGeometry? field = null,
         bool useTacticsBrain = false, bool applyWeather = false,
-        Func<IRandomSource, string, bool, Team>? teamFactory = null)
+        Func<IRandomSource, string, bool, Team>? teamFactory = null,
+        Func<GameContext, GameContext>? contextTransform = null)
     {
         var ctx = BuildContext(coefficientsPath, field);
         // 天候は既定オフ。coefficients.yaml に weather ブロックがあっても applyWeather:false の間は剥がして従来挙動に固定する。
         if (!applyWeather) ctx = ctx with { Weather = null };
+        // 係数ファイルの外から文脈を差し替える口（表示→物理の効きの掃引など。既定 null＝従来と1ビットも変えない）。
+        if (contextTransform is not null) ctx = contextTransform(ctx);
         var brain = useTacticsBrain ? new StandardTacticsBrain(ctx.Tactics, ctx.Baserunning) : null;
         var root = new Xoshiro256Random(seed);
 
@@ -234,7 +260,9 @@ public static class GameSimulation
         public long TotalWildPitches;
         public long TotalStealAttempts, TotalStealSuccesses;
         public long TotalSacrificeBunts, TotalSacrificeBuntSuccesses;
+        public long TotalBuntForceOuts, TotalSqueezeBallInPlay, TotalSqueezeRunnerOutAtHome;
         public long TotalStrikeOuts, TotalWalks, TotalHitBatters, TotalHomeRuns, TotalPlateAppearances;
+        public long TotalLookingStrikeOuts;
         public int HomeWins, Ties, Extra, Shutouts;
         // 先攻/後攻を分けた集計（issue #536）。TotalHomeRuns は本塁打の意味で先約済みなので
         // 後攻の「得点」は TotalHomeRunsScored と名を分ける。
@@ -272,12 +300,16 @@ public static class GameSimulation
             TotalStealSuccesses += r.AwayTactics.StealSuccesses + r.HomeTactics.StealSuccesses;
             TotalSacrificeBunts += r.AwayTactics.SacrificeBunts + r.HomeTactics.SacrificeBunts;
             TotalSacrificeBuntSuccesses += r.AwayTactics.SacrificeBuntSuccesses + r.HomeTactics.SacrificeBuntSuccesses;
+            TotalBuntForceOuts += r.AwayTactics.BuntForceOuts + r.HomeTactics.BuntForceOuts;
+            TotalSqueezeBallInPlay += r.AwayTactics.SqueezeBallInPlay + r.HomeTactics.SqueezeBallInPlay;
+            TotalSqueezeRunnerOutAtHome += r.AwayTactics.SqueezeRunnerOutAtHome + r.HomeTactics.SqueezeRunnerOutAtHome;
             foreach (var p in r.AwayPitching) { TotalStrikeOuts += p.StrikeOuts; TotalWalks += p.Walks; TotalHitBatters += p.HitBatters; }
             foreach (var p in r.HomePitching) { TotalStrikeOuts += p.StrikeOuts; TotalWalks += p.Walks; TotalHitBatters += p.HitBatters; }
             TotalPlateAppearances += r.Log.Count;
             foreach (var e in r.Log)
             {
                 if (e.Result == KokoSim.Engine.Match.AtBat.PlateAppearanceResult.HomeRun) TotalHomeRuns++;
+                if (e.Result.IsLookingStrikeout(e.PitchLog)) TotalLookingStrikeOuts++;
 
                 // 守備位置別・フライ/ゴロ別の失策内訳（issue #532）。処理野手が確定した打球（凡打 or 失策出塁）を
                 // フライ/ゴロ別に機会として数え、ReachedOnError を失策として数える。安打で終わった打球は機会に含めない。
@@ -346,7 +378,11 @@ public static class GameSimulation
             TotalStealSuccesses += o.TotalStealSuccesses;
             TotalSacrificeBunts += o.TotalSacrificeBunts;
             TotalSacrificeBuntSuccesses += o.TotalSacrificeBuntSuccesses;
+            TotalBuntForceOuts += o.TotalBuntForceOuts;
+            TotalSqueezeBallInPlay += o.TotalSqueezeBallInPlay;
+            TotalSqueezeRunnerOutAtHome += o.TotalSqueezeRunnerOutAtHome;
             TotalStrikeOuts += o.TotalStrikeOuts;
+            TotalLookingStrikeOuts += o.TotalLookingStrikeOuts;
             TotalWalks += o.TotalWalks;
             TotalHitBatters += o.TotalHitBatters;
             TotalHomeRuns += o.TotalHomeRuns;
@@ -410,7 +446,11 @@ public static class GameSimulation
             TotalStealSuccesses = TotalStealSuccesses,
             TotalSacrificeBunts = TotalSacrificeBunts,
             TotalSacrificeBuntSuccesses = TotalSacrificeBuntSuccesses,
+            TotalBuntForceOuts = TotalBuntForceOuts,
+            TotalSqueezeBallInPlay = TotalSqueezeBallInPlay,
+            TotalSqueezeRunnerOutAtHome = TotalSqueezeRunnerOutAtHome,
             TotalStrikeOuts = TotalStrikeOuts,
+            TotalLookingStrikeOuts = TotalLookingStrikeOuts,
             TotalWalks = TotalWalks,
             TotalHitBatters = TotalHitBatters,
             TotalHomeRuns = TotalHomeRuns,
@@ -452,6 +492,9 @@ public static class GameSimulation
     private static int Ability(IRandomSource rng)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(50, 12)), 20, 88);
 
+    // issue game-sim-all-right-handed-batters: 打席の左右を実ロスターと揃える（AtBatSimulation.SampleBats が
+    // 単一ソース）。それ以前は全員右打ちで、打球方向（issue #262）が三塁・遊撃側へ偏って games_10k 系の
+    // 帯がその母集団で校正されていた。
     private static Player GeneratePositionPlayer(IRandomSource rng, FieldPosition pos) => new()
     {
         Name = pos.ToString(),
@@ -464,6 +507,7 @@ public static class GameSimulation
         ArmStrength = Ability(rng),
         Fielding = Ability(rng),
         Catching = Ability(rng),
+        Bats = AtBatSimulation.SampleBats(rng),
     };
 
     private static Player GeneratePitcher(IRandomSource rng, string name)
@@ -484,6 +528,7 @@ public static class GameSimulation
             ArmStrength = Ability(rng),
             Fielding = Ability(rng),
             Catching = Ability(rng),
+            Bats = AtBatSimulation.SampleBats(rng),
             Pitching = new PitcherAttributes
             {
                 MaxVelocityKmh = velo,
@@ -542,6 +587,8 @@ public static class GameSimulation
         sb.AppendLine(c, $"| 失策数/試合（両軍計） | {s.ErrorsPerGame:F2} | 1.8–3.6 |");
         sb.AppendLine(c, $"| 外野失策シェア | {s.OutfieldErrorShare:P1} | 5–20% |");
         sb.AppendLine(c, $"| 三振率（打席あたり） | {s.StrikeoutRate:P2} | 参考 |");
+        sb.AppendLine(c, $"| うち見逃し三振率（打席あたり） | {s.LookingStrikeoutRate:P2} | 参考（目標帯未設定） |");
+        sb.AppendLine(c, $"| 見逃し三振の割合（三振に占める） | {s.LookingStrikeoutShare:P1} | 参考（実野球はおよそ3割前後） |");
         sb.AppendLine(c, $"| 四球率（打席あたり） | {s.WalkRate:P2} | 参考 |");
         sb.AppendLine(c, $"| 死球率（打席あたり） | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率（打席あたり） | {s.HomeRunRate:P2} | 参考 |");
@@ -559,6 +606,8 @@ public static class GameSimulation
         sb.AppendLine(c, $"| 暴投・パスボール | {s.WildPitchesPerGame:F3} |");
         sb.AppendLine(c, $"| 盗塁成功率（参考） | {s.StealSuccessRate:P1}（試行 {s.TotalStealAttempts}） |");
         sb.AppendLine(c, $"| 犠打成功率（参考） | {s.SacrificeBuntSuccessRate:P1}（試行 {s.TotalSacrificeBunts}） |");
+        sb.AppendLine(c, $"| バント封殺率（参考） | {s.BuntForceOutRate:P1}（試行 {s.TotalSacrificeBunts}） |");
+        sb.AppendLine(c, $"| スクイズ本塁封殺率（参考） | {s.SqueezeRunnerOutAtHomeRate:P1}（試行 {s.TotalSqueezeBallInPlay}） |");
         sb.AppendLine();
         sb.AppendLine("## 守備位置別・フライ/ゴロ別 失策内訳（issue #532）");
         sb.AppendLine();

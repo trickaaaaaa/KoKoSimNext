@@ -6,10 +6,14 @@ namespace KokoSim.Engine.Match.Game;
 
 /// <summary>
 /// ライブ観戦のスタメン列1行（現在のラインナップの1スロット・交代反映済み）。今日の成績のみ保持し、
-/// 通算・背番号・調子は Shell 側で <see cref="SourceId"/> をキーに join する。観測データ＝試合結果に影響しない。
+/// 通算・背番号・調子は Shell 側で <b>(校ID, <see cref="SourceId"/>)</b> をキーに join する
+/// （校IDは試合中不変なので観測データに載せず静的経路で渡す, issue #634）。観測データ＝試合結果に影響しない。
 /// </summary>
 /// <param name="Order">打順（1-9）。</param>
-/// <param name="SourceId">選手ID（自校のみ。相手校生成選手は null）。</param>
+/// <param name="SourceId">
+/// 校内選手ID（両校とも持つ。永続ロスター #80 以降は相手校の生成選手も採番済み）。
+/// <b>校をまたいで一意ではない</b>（校ごとに1から振る）ので、成績の join は必ず校IDと組で行う（#634）。
+/// </param>
 /// <param name="Number">背番号（0=番号なし/ベンチ外・1〜=ベンチ入り）。</param>
 /// <param name="Name">選手名。</param>
 /// <param name="Position">守備位置（DHスロットは <see cref="FieldPosition.DesignatedHitter"/>）。</param>
@@ -26,8 +30,8 @@ public sealed record LiveBatterSlot(
     int AtBats, int Hits, int Rbi, string? ReplacedName, double ConditionValue = 0.0,
     int Grade = 0);
 
-/// <summary>ライブ観戦の現投手の今日の成績。通算防御率は Shell 側で <see cref="SourceId"/> から join する。</summary>
-/// <param name="SourceId">選手ID（自校のみ。相手校は null）。</param>
+/// <summary>ライブ観戦の現投手の今日の成績。通算防御率は Shell 側で (校ID, <see cref="SourceId"/>) から join する。</summary>
+/// <param name="SourceId">校内選手ID（両校とも持つ。校をまたいで一意ではない, issue #634）。</param>
 /// <param name="Number">背番号（0=番号なし・1〜=ベンチ入り）。</param>
 /// <param name="Name">投手名。</param>
 /// <param name="Throws">左右投。</param>
@@ -53,11 +57,26 @@ public sealed record LiveBatterSlot(
 /// <param name="Walks">今日の与四球（issue #407）。</param>
 /// <param name="HitByPitch">今日の与死球（issue #407）。表示では与四球と合算して「与四死球」として出す。</param>
 /// <param name="EarnedRuns">今日の自責点（issue #449。ライブ防御率＝通算＋本日の合算に使う）。</param>
+/// <param name="StaminaTarget">
+/// 実効目安投球数（<see cref="TeamState.EffectiveBaseStamina"/>＝連戦の消耗を反映済み）。
+/// <see cref="StaminaRemaining"/> の分母そのもので、HUD が「87 / 118球」の分母に使う
+/// ＝バーと数字が食い違わない。0以下は分母不明（表示しない）。
+/// </param>
+/// <param name="WeeklyPitchesPrior">
+/// 週間球数制限（設計書05 §1.3）の<b>持ち越し</b>球数＝この試合より前の直近1週間に投げた球数。
+/// 当試合ぶんは <see cref="Pitches"/>＋<see cref="PendingPitches"/> に出ているので含まない。
+/// 大会外の試合・台帳なしでは0。
+/// </param>
+/// <param name="WeeklyPitchLimit">
+/// 週間球数の上限（<see cref="GameContext.WeeklyPitchLimit"/> の写し）。int.MaxValue＝制限なし
+/// ＝UI は残り球数を出さない。
+/// </param>
 public sealed record LivePitcherToday(
     int? SourceId, int Number, string Name, Handedness Throws,
     int Pitches, int Outs, int Runs, int StrikeOuts, double ConditionValue = 0.0,
     int Grade = 0, int ReliefOrder = 1, double StaminaRemaining = 1.0, int PendingPitches = 0,
-    int Walks = 0, int HitByPitch = 0, int EarnedRuns = 0);
+    int Walks = 0, int HitByPitch = 0, int EarnedRuns = 0,
+    double StaminaTarget = 0.0, int WeeklyPitchesPrior = 0, int WeeklyPitchLimit = int.MaxValue);
 
 /// <summary>
 /// 1チームのライブ観戦スナップショット（現在の打順9人＋現投手＋控え）。

@@ -17,7 +17,19 @@ namespace KokoSim.Unity.Shell
         public int YearIndex { get; }
         public DateTime SavedAt { get; }
 
-        public SaveSlotInfo(string slotId, bool exists, bool corrupt, int week, int yearIndex, DateTime savedAt)
+        /// <summary>
+        /// そのセーブに保存されている自校名（issue #624）。<b>実行中の自校名ではない</b>＝
+        /// スロットごとに別の校名が出る。v3以前の旧セーブには入っていないので
+        /// <see cref="SchoolNameOrDefault"/> が既定（桜丘）へ落とす。
+        /// </summary>
+        public string SchoolName { get; }
+
+        /// <summary>表示用の校名。旧セーブ（校名なし）は Migrate と同じ既定「桜丘」。</summary>
+        public string SchoolNameOrDefault =>
+            string.IsNullOrEmpty(SchoolName) ? "桜丘" : SchoolName;
+
+        public SaveSlotInfo(string slotId, bool exists, bool corrupt, int week, int yearIndex,
+            DateTime savedAt, string schoolName = null)
         {
             SlotId = slotId;
             Exists = exists;
@@ -25,6 +37,7 @@ namespace KokoSim.Unity.Shell
             Week = week;
             YearIndex = yearIndex;
             SavedAt = savedAt;
+            SchoolName = schoolName;
         }
     }
 
@@ -100,7 +113,8 @@ namespace KokoSim.Unity.Shell
                 || header.Version < 1 || header.Version > SaveCodec.CurrentVersion)
                 return new SaveSlotInfo(slotId, exists: true, corrupt: true, week: 0, yearIndex: 0, savedAt);
 
-            return new SaveSlotInfo(slotId, exists: true, corrupt: false, header.Week, header.YearIndex, savedAt);
+            return new SaveSlotInfo(slotId, exists: true, corrupt: false, header.Week, header.YearIndex,
+                savedAt, header.SchoolName);
         }
 
         /// <summary>スロットへ現在状態を保存する（今回 UI からは呼ばない。#509 で使う）。</summary>

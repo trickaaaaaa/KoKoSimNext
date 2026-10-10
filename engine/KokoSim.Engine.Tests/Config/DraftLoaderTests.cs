@@ -17,6 +17,7 @@ public sealed class DraftLoaderTests
               performance_weight: 0.4
               ceiling_blend: 0.5
               candidate_threshold: 55.0
+              candidate_min_tier: C
               nomination_midpoint: 62.0
             """;
 
@@ -26,6 +27,7 @@ public sealed class DraftLoaderTests
         Assert.Equal(0.4, c.PerformanceWeight, 6);
         Assert.Equal(0.5, c.CeilingBlend, 6);
         Assert.Equal(55.0, c.CandidateThreshold, 6);
+        Assert.Equal(KokoSim.Engine.Nation.Tier.C, c.CandidateMinTier);
         Assert.Equal(62.0, c.NominationMidpoint, 6);
     }
 
@@ -44,6 +46,7 @@ public sealed class DraftLoaderTests
         Assert.Equal(0.7, c.AbilityWeight, 6);
         Assert.Equal(def.PerformanceWeight, c.PerformanceWeight, 6);
         Assert.Equal(def.FirstRoundThreshold, c.FirstRoundThreshold, 6);
+        Assert.Equal(def.CandidateMinTier, c.CandidateMinTier);
         Assert.Equal(def.NominationSpread, c.NominationSpread, 6);
     }
 
@@ -59,5 +62,7 @@ public sealed class DraftLoaderTests
         Assert.True(c.UpperRoundThreshold > c.MiddleRoundThreshold);
         Assert.True(c.MiddleRoundThreshold > c.CandidateThreshold);
         Assert.InRange(c.CeilingBlend, 0.0, 1.0);
+        // 足切りランクは C# 既定（Unity 実プレイの真値）と一致していること（片方だけ変えない）。
+        Assert.Equal(new KokoSim.Engine.Career.Draft.DraftCoefficients().CandidateMinTier, c.CandidateMinTier);
     }
 }

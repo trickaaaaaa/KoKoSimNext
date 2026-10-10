@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Game;
-using KokoSim.Engine.Stats;
 using KokoSim.Unity.Match;
 
 namespace KokoSim.Unity.MatchResult
@@ -24,10 +23,12 @@ namespace KokoSim.Unity.MatchResult
         public string Average = "";
     }
 
-    /// <summary>投手成績の1行（勝敗マーク／名前／球数／投球回／奪三振／失点／四球）。</summary>
+    /// <summary>
+    /// 投手成績の1行（名前／球数／投球回／奪三振／失点／四球）。勝敗投手は概念ごと撤去
+    /// （高校野球では主役でない・監督判断2026-08-27。旧 Mark 列＝勝/敗マークは削除）。
+    /// </summary>
     public sealed class MatchResultPitchingRow
     {
-        public string Mark = "";        // 勝 / 敗 / 空
         public string Name = "";
         public string Pitches = "0";
         public string Innings = "0";
@@ -73,8 +74,7 @@ namespace KokoSim.Unity.MatchResult
     /// <summary>
     /// 試合結果（<see cref="GameResult"/>）→ 試合結果画面の表示モデルへの変換（issue #13・案B）。
     /// 表示専用＝ここでは数値を作らず、エンジンの集計をそのまま文字列へ整形するだけ（不変条件#2 決定論に無影響）。
-    /// 打席グリッドは engine の純関数 <see cref="BoxScoreGrid"/>、勝敗投手は
-    /// <see cref="DecisionOfRecord.ResolveIndices"/> を使う（判定ロジックをUI側に持たない）。
+    /// 打席グリッドは engine の純関数 <see cref="BoxScoreGrid"/> を使う（判定ロジックをUI側に持たない）。
     /// </summary>
     public static class MatchResultState
     {
@@ -91,8 +91,6 @@ namespace KokoSim.Unity.MatchResult
             var ownName = managerIsAway ? awayName : homeName;
             var oppName = managerIsAway ? homeName : awayName;
 
-            var (awayWin, awayLose, homeWin, homeLose) = DecisionOfRecord.ResolveIndices(r);
-
             var v = new MatchResultView
             {
                 OutcomeText = r.Tied ? (rematchOnTie ? "引き分け（再試合）" : "引き分け") : ownRuns > oppRuns ? "勝利" : "敗戦",
@@ -101,10 +99,8 @@ namespace KokoSim.Unity.MatchResult
                     + (r.MercyEnded ? $"（{r.InningsPlayed}回コールド）" : ""),
                 AwayLine = LineRow(awayName, isOwn: managerIsAway, r.AwayRuns, r.AwayHits, r.AwayErrors),
                 HomeLine = LineRow(homeName, isOwn: !managerIsAway, r.HomeRuns, r.HomeHits, r.HomeErrors),
-                Own = Side(r, managerIsAway, ownName, "自校", isOwn: true,
-                    managerIsAway ? awayWin : homeWin, managerIsAway ? awayLose : homeLose),
-                Opponent = Side(r, !managerIsAway, oppName, "相手", isOwn: false,
-                    managerIsAway ? homeWin : awayWin, managerIsAway ? homeLose : awayLose),
+                Own = Side(r, managerIsAway, ownName, "自校", isOwn: true),
+                Opponent = Side(r, !managerIsAway, oppName, "相手", isOwn: false),
             };
 
             // イニング列は両軍の長い方に合わせる（延長は列を伸ばす）。
@@ -132,7 +128,7 @@ namespace KokoSim.Unity.MatchResult
         }
 
         private static MatchResultSideView Side(
-            GameResult r, bool isAway, string teamName, string caption, bool isOwn, int? winIndex, int? loseIndex)
+            GameResult r, bool isAway, string teamName, string caption, bool isOwn)
         {
             var batting = isAway ? r.AwayBatting : r.HomeBatting;
             var pitching = isAway ? r.AwayPitching : r.HomePitching;
@@ -152,12 +148,10 @@ namespace KokoSim.Unity.MatchResult
                     Average = MatchLiveStatsProvider.Avg(b.Average),
                 });
 
-            for (var i = 0; i < pitching.Count; i++)
+            foreach (var p in pitching)
             {
-                var p = pitching[i];
                 side.Pitching.Add(new MatchResultPitchingRow
                 {
-                    Mark = i == winIndex ? "勝" : i == loseIndex ? "敗" : "",
                     Name = p.Name,
                     Pitches = p.Pitches.ToString(),
                     Innings = p.InningsText,

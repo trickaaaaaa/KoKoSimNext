@@ -47,6 +47,14 @@ namespace KokoSim.Unity.Match
             /// </summary>
             public KokoSim.Engine.Nation.TeamColors AwayColors;
             public KokoSim.Engine.Nation.TeamColors HomeColors;
+            /// <summary>
+            /// 両校の学校ID（issue #634）。成績の帰属キー (校ID, 選手ID) の校側で、通算成績を
+            /// 自校ストアと全国ストアのどちらから引くかを決める。<b>試合中に変わらない同定情報</b>なので
+            /// 観測データ（<see cref="MatchLiveSnapshot"/>）には載せず、チーム配色と同じ静的経路で渡す。
+            /// 不明（デモ・練習試合の相手など）は <c>int.MinValue</c>＝どちらの校とも一致しない＝成績なし。
+            /// </summary>
+            public int AwaySchoolId = int.MinValue;
+            public int HomeSchoolId = int.MinValue;
             public int ManagerTacticalSense = 70;
             /// <summary>
             /// 勝者が要る文脈か（大会戦＝true）。結果画面で延長上限の引き分けを「引き分け（再試合）」と
@@ -117,12 +125,17 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float scoreCallFinalHoldSeconds = 1.1f;
         [Tooltip("自校（後攻 home）の采配能力（委任AIの強さ・スキップ時に使用）。")]
         [SerializeField] private int managerTacticalSense = 70;
+        [Tooltip("高速試合モード（design-06 §3.4）の半イニング送り間隔[秒]（×1基準。既存の速度倍率 _speed で伸縮する）。演出（対決ビュー/2D俯瞰）を出さずスコアボードだけ進める観戦モード。")]
+        [SerializeField] private float fastModeHalfInningSeconds = 1.0f;
 
         // ライブ観戦（大会フロー）モードの状態。デモ生成モードでは false / null。
         private bool _managerIsAway;
         // 両校の配色（設計書18 §3.5.1）。攻守交代のたびに守備側/攻撃側へ割り当て直す（DuelStageRig.SetTeamColors）。
         private KokoSim.Engine.Nation.TeamColors _awayColors;
         private KokoSim.Engine.Nation.TeamColors _homeColors;
+        // 両校の学校ID（成績の帰属キーの校側, issue #634）。既定はどちらの校とも一致しない値＝成績なし。
+        private int _awaySchoolId = int.MinValue;
+        private int _homeSchoolId = int.MinValue;
         private bool? _duelColorsOffenseIsTop;   // 対決ビューへ最後に流した攻守（null=未適用）
         private System.Action<GameResult> _onComplete;
         private GameResult _finalResult;
@@ -135,6 +148,13 @@ namespace KokoSim.Unity.Match
         // ラインスコアを描き直したかのフラグ。掲示板は「プレーが確定してから点を掲げる」（実物の運用と同じ）
         // ので、打席の演出が resolved になった瞬間に1回だけ更新する（毎フレーム Snapshot を組み直さない）。
         private bool _lineScorePosted;
+        // いま掲示板に出ている得点（issue #628）。「まだ掲げていない点」＝これとエンジン集計の差、が
+        // 得点コール（issue #60）を何回回すかの単一ソース。打球・押し出し・打席途中の生還が別々に
+        // 掲げるようになったので、各経路が自分の点数を数え直すと同じ点を二度祝う。
+        private int _postedAwayRuns, _postedHomeRuns;
+        // 打球の無い得点（押し出し）を掲げる時刻（打席の時計。issue score-display-before-home-touch）。
+        // null＝予約なし。据え置きの途中で来るので、必ず FinishPaView までに掲げ切る。
+        private double? _nonBattedScoreAt;
         // クリック中断ポップアップ（issue #289・案P1）。盤面クリック＝演出だけを止める自由中断で、
         // エンジンには触れない（CallTimeout を呼ばない＝伝令・動揺解除は動かさない）。
         // 伝令・選手交代・スキップ・再開はこのポップアップに集約する。
@@ -146,6 +166,9 @@ namespace KokoSim.Unity.Match
         private bool _timeoutSentThisPause;   // 1中断につき伝令1回（連打で複数消費させない）
         // 自動連続進行の中断中フラグ（ポップアップ表示〜再開の間 true）。盤面・自動進行の両方を止める。
         private bool _paused;
+        // 球数制限の強制交代パネル（OpenForcedPitcherChangePanel）が中断メニューを経由せず _paused を
+        // 立てた印。中断メニューの「再開」は押せないので、Update() がパネルの Close を検知して自分で戻す。
+        private bool _forcedSubPause;
         // 自動進行を開始したか（OnEnable の一度だけ。スクショ時＝CaptureMode は開始しない）。
         private bool _autoStarted;
         // タイムライン駆動カメラワーク（design-06/12・Issue #119）の観戦設定トグル。既定オフ＝現行の固定全景。
@@ -178,6 +201,12 @@ namespace KokoSim.Unity.Match
         private readonly List<Button> _speedButtons = new();
         // 速度ボタンのハンドラ（ラムダのため OnDisable で外せるよう保持する）。
         private readonly List<(Button Button, System.Action Handler)> _speedHandlers = new();
+
+        // 高速試合モード（design-06 §3.4）。演出を出さずスコアボードだけを実時間経過で半イニング送りする。
+        // 速度ボタン列と同じ排他選択グループの一員（_speedButtons/_speedHandlers に相乗り）。
+        private bool _fastMode;
+        private double _fastModeClock;
+        private VisualElement _fastModeBoard;
 
         // 3カラム（左=自校 / 右=相手）＋マッチアップHUD。表示専用（数値はエンジン集計 Snapshot から引く）。
         // 左下コーナーは「上=投手HUD／下=指示パネル」の常設スタック（issue #289）。HUD はスロットの
@@ -464,6 +493,9 @@ namespace KokoSim.Unity.Match
             _backHome = _root.Q<Button>("back-home");
             if (_backHome != null) _backHome.clicked += OnBackHome;
             WireSpeed("spd-05", 0.5f); WireSpeed("spd-1", 1f); WireSpeed("spd-2", 2f); WireSpeed("spd-4", 4f);
+            WireFastMode("spd-fast");
+            _fastModeBoard = _root.Q<VisualElement>("fastmode-board");
+            if (_fastModeBoard != null) _fastModeBoard.style.display = DisplayStyle.None;
             _camWork = _root.Q<Button>("cam-work");
             if (_camWork != null) _camWork.clicked += OnToggleCameraWork;
             ApplyCameraWorkState();
@@ -472,8 +504,8 @@ namespace KokoSim.Unity.Match
             _duelImg = null;
             _duelBtn = _root.Q<Button>("duel-view");
             if (_duelBtn != null) _duelBtn.clicked += OnToggleDuelView;
-            InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
-            ApplyDuelViewState();
+            // ⚠ 対決ステージの生成（InitDuelViewDefault）はここではなく BuildGame の**後ろ**。
+            //    生成時に配色をマテリアルへ焼くので、両校の配色が入る前に立てると前試合の色で焼ける。
 
             // 采配の手札は盤面の外（列の下）。打席をまたいで作り直さないのでここで1度だけ生成する。
             var tacticsHost = _root.Q<VisualElement>("tactics-host");
@@ -525,6 +557,13 @@ namespace KokoSim.Unity.Match
             _scoutPanel = new MatchScoutPanel(_root, PauseSituationText);
             _scoutPanel.Bind();
             BuildGame();
+            // 対決ビューの生成は BuildGame の後（＝両校の配色と進行体が入った後）でなければならない。
+            // NewDuelRig は生成時に配色をマテリアルへ焼き、以降の塗り替え（ApplyDuelTeamColors）は
+            // 「半回が変わった時だけ」なので、誤った色で焼くと 1回表のあいだ直る機会が無い
+            // （旧実装は要素クエリの直後に呼んでいたため、2試合目以降は**前試合の配色**で立ち、
+            //  自校の先攻/後攻が前試合と反転していると投手と打者のユニフォームが入れ替わって見えた）。
+            InitDuelViewDefault();   // 既定=対決ビュー（issue #312）。Rig不可なら俯瞰へフォールバック
+            ApplyDuelViewState();
             _subPanel.SetMatch(_prog, _managerIsAway);
             _scoutPanel.SetMatch(_prog, _managerIsAway, _awayDisp, _homeDisp);
             // 指示パネルの初期フェーズ（1打席目の攻守）。以降は采配窓ごとに OpenWindow が追従させる。
@@ -590,6 +629,8 @@ namespace KokoSim.Unity.Match
             _shownInning = 0;
             _shownIsTop = false;
             _shownAnyHalf = false;
+            _postedAwayRuns = _postedHomeRuns = 0;   // 掲示済み得点の基準（issue #628）も試合をまたがない
+            _nonBattedScoreAt = null;                // 待たせていた押し出しの掲示予約も持ち越さない
             _paQueue.Clear();
             _paConfirmed = false;
             _stealPlay = null;       // 打席途中の盗塁再生（issue #485）は試合をまたがない
@@ -602,6 +643,8 @@ namespace KokoSim.Unity.Match
             _homeTeam = null;
             _t = 0;
             _speed = 1f;
+            _fastMode = false;
+            _fastModeClock = 0;
             _pitchIdx = 0;
             _pitchClock = 0f;
             _pitchCallAt = pitchIntervalSeconds;
@@ -634,6 +677,11 @@ namespace KokoSim.Unity.Match
             _cameraWorkWanted = false;
             _duelOn = false;
             _duelManualOff = false;
+            // 配色と「最後に対決ビューへ流した攻守」も試合をまたがない。残すと次の試合の対決ステージが
+            // 前試合の色で立ち、塗り替えガード（ApplyDuelTeamColors）も同じ値で素通りして直らない。
+            _awayColors = null;
+            _homeColors = null;
+            _duelColorsOffenseIsTop = null;
         }
 
         // 試合ごとに初期化する表示（前試合の実況履歴・BSO・結果チップを残さない）。要素クエリ後に呼ぶ。
@@ -671,6 +719,8 @@ namespace KokoSim.Unity.Match
                 _homeDisp = req.HomeName ?? homeName;
                 _awayColors = req.AwayColors;
                 _homeColors = req.HomeColors;
+                _awaySchoolId = req.AwaySchoolId;
+                _homeSchoolId = req.HomeSchoolId;
                 // 掲示板の校名はエンジンの観測データ（LiveLineScore.Name）から出るのでここでは埋めない。
                 SetColumnTitles();
                 return;
@@ -678,6 +728,10 @@ namespace KokoSim.Unity.Match
 
             // デモ/スクショ用の自前生成（本番フローでは通らない）。
             _managerIsAway = false;
+            // 校IDは持たない＝どちらの校とも一致しない＝成績は「—」（issue #634）。
+            // 直前の実試合の値が残ると、デモの選手に他校の成績が付く。
+            _awaySchoolId = int.MinValue;
+            _homeSchoolId = int.MinValue;
 #if UNITY_EDITOR
             if (ManagerIsAwayOverrideForCapture is { } mia) _managerIsAway = mia;
 #endif
@@ -828,8 +882,18 @@ namespace KokoSim.Unity.Match
                 return;
             }
 
+            // 週間球数制限に達した自校投手がいる（MatchProgression.PendingForcedPitcherChange）。
+            // 疲労だけでは起きない＝プレイヤーが自分で気づいて代える（要件どおりシステムからは何も言わない）。
+            if (result == AdvancePitchResult.AwaitingForcedPitcherChange)
+            {
+                OpenForcedPitcherChangePanel();
+                return;
+            }
+
             if (result == AdvancePitchResult.PlateAppearance)
             {
+                // 打席が確定した＝「1打席」持続のエンドラン指示はここで解除する（design-09 §1.2）。
+                if (_signChoice != null) { _signChoice = null; _signPad?.ClearSelection("batting"); }
                 // 打席が確定した。<b>打席を終わらせた1球はここから描く</b>——インプレーの打球は確定して
                 // 初めて手に入る（BattedOf が _current.Play を読む）ので、順序は入れ替えられない。
                 _current = _prog.Current;
@@ -1099,6 +1163,20 @@ namespace KokoSim.Unity.Match
             _subPanel?.Open();
         }
 
+        /// <summary>
+        /// 週間球数制限に達した自校投手がいて、プレイヤーの人選待ちになった
+        /// （<see cref="MatchProgression.PendingForcedPitcherChange"/>）。中断メニューを経由せず、
+        /// 交代パネルを直接・強制的に開く。<see cref="MatchSubstitutionPanel.Close"/> 側が
+        /// 交代するまで閉じさせないので、これ以降の自動進行は既存の IsOpen ガードで自然に止まる。
+        /// </summary>
+        private void OpenForcedPitcherChangePanel()
+        {
+            if (_gameOver || _prog == null || _subPanel == null || _subPanel.IsOpen) return;
+            _paused = true;
+            _forcedSubPause = true;
+            _subPanel.Open();
+        }
+
         // 選手能力ビューア（issue #602）。中断中ならいつでも開ける＝**読むだけ**なので
         // 伝令を消費せず乱数も引かない（開閉が試合結果に影響しない＝決定論不変）。
         // 打席解決中（BackgroundGameOp）でも進行体の可変状態には触れないが、交代・伝令と同じ守りで
@@ -1113,7 +1191,17 @@ namespace KokoSim.Unity.Match
         // 交代確定後（即時・取り消し不可）。該当スロットを即入替（退いた選手名を薄く併記）。
         private void OnSubstitutionApplied()
         {
-            RefreshPanel();
+            // 采配窓で止まっているなら、窓の対戦（打者・投手）を engine から引き直す。engine は交代の直後に
+            // LiveAtBat を今の実体へ差し替え（MatchProgression.RecordSubstitution）、次の球からその選手で
+            // 解決する（打席の頭なら束縛前・途中なら束縛し直し）。引き直さないと HUD の打者・対決ビューの
+            // 利き腕がこの打席のあいだ古いまま＝「交代したのに前の投手が投げている」に見える（2026-08-15）。
+            if (_stage == LiveStage.Window && _atBat != null && _prog?.CurrentAtBat is { } at)
+            {
+                _atBat = at;
+                ApplyWindowSituation();     // HUD・スタメン列・カードの可否
+                ApplyDuelHandedness();      // 継投後の利き腕・代打の左右で立たせ替える（issue #337 と同じ入口）
+            }
+            else RefreshPanel();
             if (_caption != null) _caption.text = "選手交代を行った。";
         }
 
@@ -1133,9 +1221,14 @@ namespace KokoSim.Unity.Match
             if (_caption != null) _caption.text = "以降を委任して試合終了。";
         }
 
-        // 終局処理（自然終了・スキップ委任 共通）。結果を確定表示し、ライブ観戦なら試合結果画面へ渡す。
+        // 終局処理（自然終了・スキップ委任・高速試合モード中の終局 共通）。結果を確定表示し、
+        // ライブ観戦なら試合結果画面へ渡す。
         private void EndGame(GameResult result)
         {
+            // 高速試合モード中に終局した場合はここで抜ける（_prog.IsFinished なので OpenWindowOrBreak は
+            // 何もしない＝安全）。抜けておかないと通常ループが止まったままで「ゲームセット」テロップ等の
+            // Update() 側の後処理（_gameSetPending の消化）が一生走らない。
+            SetFastMode(false);
             EndFieldPlay();   // 打球の途中で終局しても守備陣・走者を場に置き去りにしない
             _view.HideJudgement();
             _gameOver = true;
@@ -1144,6 +1237,19 @@ namespace KokoSim.Unity.Match
             _paused = false;
             // 中断ポップアップを開いたまま背景解決が終局に達した場合も閉じる（結果画面へ暗幕を残さない）。
             SetVisible(_pauseModal, false);
+            _subPanel?.Close();
+            _scoutPanel?.Close();
+            // ⚠ 終局の受け渡し（_gameSetPending → FinishGameEndHandOff）は Update の中で、
+            //    _paused / _inningBreakOn の早期 return より**後ろ**にある。つまり終局の瞬間に
+            //    立っていた演出フラグは、そのまま結果画面への遷移を人質に取る。演出は畳めばよいだけ
+            //    なので、終局ではここで全部下ろしてから _gameSetPending を立てる
+            //    （実害: 得点コールが残って試合が終わらなかった 2026-08-14。同じ形が回間の暗幕にもある）。
+            //    ⚠ EndInningBreak は使わない＝あれは保留していた**次の采配窓を開く**のが仕事で、
+            //      終局後に呼ぶと終わった試合の打席を描き始める。ここは暗幕を畳むだけにする。
+            _inningBreakOn = false;
+            _inningBreakClock = 0f;
+            _afterInningBreak = null;
+            SetVisible(_inningBreak, false);
             _finalResult = result;
             UpdateScoreboardFinal(result);
             if (_result != null) { _result.text = FinalResultText(result); _result.style.display = DisplayStyle.Flex; }
@@ -1234,17 +1340,30 @@ namespace KokoSim.Unity.Match
                     OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Bunt; PrepareBuntStance(true); },
                     OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
                 new SignPad.SignDef { Id = "batting-squeeze", Label = "スクイズ", Icon = "決", Offense = true, Group = "batting",
-                    GroupLabel = "打撃", EnabledIf = () => RunnerOnThird,
-                    OnSelect = () => { _pitchBattingChoice = PitchBattingOverride.Squeeze; PrepareBuntStance(true); },
-                    OnClear = () => { _pitchBattingChoice = null; PrepareBuntStance(false); } },
+                    GroupLabel = "打撃", EnabledIf = () => RunnerOnThird && !HomeStealChosen,
+                    OnSelect = () =>
+                    {
+                        _pitchBattingChoice = PitchBattingOverride.Squeeze;
+                        PrepareBuntStance(true);
+                        _signPad?.RefreshEnabled();   // 本盗札をその場で消灯（issue #622）
+                    },
+                    OnClear = () =>
+                    {
+                        _pitchBattingChoice = null;
+                        PrepareBuntStance(false);
+                        _signPad?.RefreshEnabled();
+                    } },
                 new SignPad.SignDef { Id = "sign-hitrun", Label = "エンドラン", Icon = "走", Offense = true, Group = "batting",
                     GroupLabel = "打撃", EnabledIf = () => RunnerOnFirst,
                     OnSelect = () => _signChoice = OffensiveSign.HitAndRun,
                     OnClear = () => _signChoice = null },
+                // 狙う塁は塁状況で一意に決まる（一塁→二盗／二塁のみ→三盗／三塁のみ→本盗）ので、
+                // カードは1枚のままラベルだけ書き換える（issue #622・案A）。
                 new SignPad.SignDef { Id = "run-steal", Label = "盗塁", Icon = "盗", Offense = true, Group = "run",
-                    GroupLabel = "走塁", EnabledIf = () => RunnerOnFirst,
-                    OnSelect = () => _stealChoice = StartType.Gamble,
-                    OnClear = () => _stealChoice = null },
+                    GroupLabel = "走塁", LabelOf = () => StealCardLabel,
+                    EnabledIf = () => StealTargetNow != null,
+                    OnSelect = () => { _stealChoice = StartType.Gamble; _signPad?.RefreshEnabled(); },
+                    OnClear = () => { _stealChoice = null; _signPad?.RefreshEnabled(); } },
                 // ── 攻撃: 構え（方針・解除するまで続く）──
                 new SignPad.SignDef { Id = "app-work", Label = "待球策", Icon = "粘", Offense = true, Group = "approach",
                     GroupLabel = "姿勢", OnSelect = () => PushApproach(BattingApproach.WorkCount),
@@ -1283,6 +1402,33 @@ namespace KokoSim.Unity.Match
         private bool RunnerOnAnyBase =>
             _atBat is { BaseFirst: true } or { BaseSecond: true } or { BaseThird: true };
 
+        /// <summary>
+        /// いまの塁状況で単独盗塁が狙える塁（issue #622。null＝どの塁も狙えない＝カードは消灯）。
+        /// 判定式は engine の <see cref="StealTargets"/> が単一ソース＝「押せたのに engine が
+        /// 解決しない指示」を構造的に作らない。狙う塁は塁状況で一意に決まるので選ばせない。
+        /// </summary>
+        private StealTarget? StealTargetOnBases => _atBat == null
+            ? null
+            : StealTargets.FromBases(_atBat.BaseFirst, _atBat.BaseSecond, _atBat.BaseThird);
+
+        private StealTarget? StealTargetNow
+            // 本盗とスクイズは同じ三塁走者を使う。engine は手動スクイズの予約がある球で本盗を
+            // 走らせない（issue #619）ので、押しても不発になる並びをカード側でも作らせない。
+            => StealTargetOnBases == StealTarget.Home && _pitchBattingChoice == PitchBattingOverride.Squeeze
+                ? null
+                : StealTargetOnBases;
+
+        /// <summary>本盗を予約済みか（スクイズ側の可否に効かせる。上の裏返し）。</summary>
+        private bool HomeStealChosen => _stealChoice != null && StealTargetOnBases == StealTarget.Home;
+
+        /// <summary>盗塁カードの表示名（狙う塁で書き換える。案A・2026-08-14 監督選択）。</summary>
+        private string StealCardLabel => StealTargetNow switch
+        {
+            StealTarget.Third => "三盗",
+            StealTarget.Home => "本盗",
+            _ => "盗塁",
+        };
+
         // ② 方針カード: 押した瞬間にエンジンへ入れて、解除するまでそのままにする。
         private void PushApproach(BattingApproach approach)
         {
@@ -1316,6 +1462,7 @@ namespace KokoSim.Unity.Match
         // 現在の選択を毎窓ここで再予約して寿命を保つ（issue #492: 1球の口は消費後に自動でnullへ戻るため）。
         private void PushPitchTacticsChoice()
         {
+            DropImpossiblePitchChoices();
             // 自校が攻撃していない球へは攻撃の1手を渡さない。渡すと自校の予約として残り、
             // **次に自校が攻撃する回の初球で不意に発動する**。
             var offense = _atBat != null
@@ -1328,7 +1475,10 @@ namespace KokoSim.Unity.Match
             // t=0 から始まり直す＝前倒しが丸ごと無駄になる（実測: リリース時点で Idle_To_Bunt が
             // 毎回 t=0.00 のままだった）。構えの真偽はその球の指示を持つ OnPitchReleased が決める。
             _prog.SetOffensiveSign(_managerIsAway, offense ? _signChoice : null);
-            _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null);
+            // 狙う塁は塁状況から導く（issue #622）。無指示のときは既定（二盗）を渡す＝engine の
+            // 消費順・乱数列は無指示時とまったく同じ（不変条件#2）。
+            _prog.SetStealAttempt(_managerIsAway, offense ? _stealChoice : null,
+                StealTargetNow ?? StealTarget.Second);
             // 守備方針の再予約（自校が守備の窓のみ）。攻撃中は相手守備＝brain のまま触らない。
             if (!offense)
             {
@@ -1337,13 +1487,48 @@ namespace KokoSim.Unity.Match
             }
         }
 
+        // issue #619: 押し込む直前に局面条件を採り直し、満たさなくなった「1手」は engine へ渡さず点灯も落とす。
+        // 窓の中では塁は変わらない（ApplyWindowSituation の RefreshEnabled で足りる）が、打席一括経路には
+        // 窓のスナップショットが無く、前の球の選択が残ったまま別の塁状況へ押し込まれうる。
+        // 本命の防御は engine 側（三塁が空ならスクイズは無指示へ落ちる）で、ここはその表示側の整合＝
+        // 「押せてしまった指示が黙って別物として効く」のを防ぐ。構えは下ろさない（issue #490: この経路から
+        // 構えを解くと、札を押した瞬間に始めた移行が投球直前で巻き戻る）。
+        private void DropImpossiblePitchChoices()
+        {
+            var dropBatting = false;
+            if (_pitchBattingChoice == PitchBattingOverride.Squeeze && !RunnerOnThird)
+            {
+                _pitchBattingChoice = null;
+                dropBatting = true;
+            }
+            else if (_pitchBattingChoice == PitchBattingOverride.Bunt && !RunnerOnAnyBase)
+            {
+                _pitchBattingChoice = null;
+                dropBatting = true;
+            }
+            if (_signChoice == OffensiveSign.HitAndRun && !RunnerOnFirst)
+            {
+                _signChoice = null;
+                dropBatting = true;
+            }
+            var dropRun = _stealChoice != null && StealTargetNow == null;
+            if (dropRun) _stealChoice = null;
+
+            if (dropBatting && dropRun) _signPad?.ClearSelection("batting", "run");
+            else if (dropBatting) _signPad?.ClearSelection("batting");
+            else if (dropRun) _signPad?.ClearSelection("run");
+        }
+
         // ①の1手は消費後に自動解除（Q12-3: 次球は方針に復帰）。②の方針カードは点けたまま残す。
+        // エンドラン（_signChoice）だけは設計書09 §1.2の通り「1打席」効く指示なので、ここでは解除しない
+        // （2026-08-06 issue #492 でここに巻き込まれ「1球」に縮んでいた退行を修正。PA確定時に
+        // DispatchStep / ResolveAndReplayNext が明示的に解除する）。
         private void ResetPitchTacticsChoice()
         {
             _pitchBattingChoice = null;
-            _signChoice = null;
             _stealChoice = null;
-            _signPad?.ClearSelection("batting", "run");
+            if (_signChoice == null) _signPad?.ClearSelection("batting", "run");
+            else _signPad?.ClearSelection("run");
         }
 
         // ── 打席一括経路（撮影ハーネス＋1球供給が無い打席）──
@@ -1354,6 +1539,7 @@ namespace KokoSim.Unity.Match
         {
             PushPitchTacticsChoice();
             var advanced = _prog.Advance();
+            _signChoice = null;   // 一括経路は1回のAdvanceで打席全体を解決する＝エンドランもここで解除
             ResetPitchTacticsChoice();
             if (!advanced) { EndGame(_prog.BuildResult()); return; }
             _current = _prog.Current;
@@ -1556,8 +1742,9 @@ namespace KokoSim.Unity.Match
             // 実況の区別は「控えから出たか／守備に就いていた者が回ったか（＝守備に穴が開くか）」（issue #381）。
             // 出てきた控えが投手枠かどうかでは分けない＝控えからの登板はすべて「投手交代」。
             var isFielder = kind != KokoSim.Engine.Match.Game.PitchingChangeKind.ReserveRelief;
-            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.ReserveRelief ? "投手交代"
-                : kind == KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap ? "投野交代" : "野手登板";
+            // 「野手登板」は表示しない＝控えから出たか在フィールド野手が回ったかを盤面の文言では区別しない
+            //（アンバー強調のみ isFielder で残す）。
+            _subCallTag.text = kind == KokoSim.Engine.Match.Game.PitchingChangeKind.TwoWaySwap ? "投野交代" : "投手交代";
             _subCallTag.EnableInClassList("sub-call__tag--fielder", isFielder);   // 野手系だけアンバー点灯（一過性強調）
             _subCallText.text = SubEventText(e);
             _subCall.style.display = DisplayStyle.Flex;
@@ -1840,7 +2027,24 @@ namespace KokoSim.Unity.Match
                 var hold = DuelPacingActive
                     ? Mathf.Max(noPlayHoldSeconds, _duelRig?.PendingResultHoldSeconds ?? 0f)
                     : noPlayHoldSeconds;
+                // 掲示板はここで掲げる（issue #628）。ただし押し出しの得点は「走者が歩いて還る一拍」を
+                // 待ってから掲げる（issue score-display-before-home-touch）。絵が無いぶん、結果テロップと
+                // 同時に加算すると走者がまだ塁上に居るのに点だけが増えて見える。間の長さは engine が単一ソース。
+                var pendingRuns = RunsNotYetPosted(_current.IsTop);
+                var scoreDelay = (float)PlaybackDisplaySync.NonBattedScoreDelaySeconds;
+                if (pendingRuns > 0)
+                {
+                    // 得点コールが終わるまで据え置きを伸ばす。伸ばさないと FinishPaView の HideScoreCall が
+                    // 加算の途中でコールを消す（既定 1.2 秒 < 待ち 1.8 + 1点ぶん 0.5+1.1 秒）。
+                    hold = Mathf.Max(hold, scoreDelay + scoreCallStepSeconds * pendingRuns + scoreCallFinalHoldSeconds);
+                }
+                else
+                {
+                    PostResolvedScore(_current.Inning, _current.IsTop);   // 点が動かない結果は待つ理由がない
+                }
                 _t = -hold; // 経過で采配窓へ
+                // 待ってから掲げる予約（点が入ったときだけ）。実時間でなく打席の時計で数えるので倍速に追従する。
+                _nonBattedScoreAt = pendingRuns > 0 ? _t + scoreDelay : (double?)null;
                 if (_caption != null) _caption.text = _current.BatterName + "　" + ResultJp(_current.Result);
                 if (_result != null) { _result.text = ResultJp(_current.Result); _result.style.display = DisplayStyle.Flex; }
             }
@@ -1849,6 +2053,7 @@ namespace KokoSim.Unity.Match
         // 打席の再生が終わった: 塁ダイヤを結果へ更新してから、中断中でなければ次の采配窓を開けに行く。
         private void FinishPaView()
         {
+            FlushPendingNonBattedScore();   // 待たせていた押し出しの点を落とさない（据え置きが縮む経路の保険）
             EndFieldPlay();   // 守備陣・走者を伏せて対決の構図へ戻す（＝次打席への唯一のカット）
             _view.HideJudgement();   // 器は盤面の外＝ビュー切替では消えない（打ち切りに据え置きを添えるのと同型）
             HidePitchCall();
@@ -1939,8 +2144,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -1972,6 +2177,7 @@ namespace KokoSim.Unity.Match
             {
                 SetOuts(q.Live.Outs);
                 SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
             }
             // 打席の続きへ（打球の FinishPaView と違い次打席へは進めない）。この球が打席を終わらせていれば
             // 続けて打球再生／結果保持へ入る（盗塁のあと同じ球で三振・四球・インプレーが起きる稀な複合）。
@@ -2054,8 +2260,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2125,8 +2331,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2148,6 +2354,7 @@ namespace KokoSim.Unity.Match
             {
                 SetOuts(q.Live.Outs);
                 SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
             }
             _foulFlightHoldSeconds = null;
             _windowCarry = 0f;
@@ -2209,8 +2416,8 @@ namespace KokoSim.Unity.Match
                     if (s.T1 > lastEvent) lastEvent = s.T1;
                 }
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
             return ClampBeforeWideCameraCut(end, play);
         }
 
@@ -2226,6 +2433,7 @@ namespace KokoSim.Unity.Match
             {
                 SetOuts(q.Live.Outs);
                 SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
             }
             _foulFlightHoldSeconds = null;
             _windowCarry = 0f;
@@ -2240,6 +2448,9 @@ namespace KokoSim.Unity.Match
 
         private void Update()
         {
+            // 高速試合モード中は演出系（対決ビュー/2D俯瞰/HUD各種）を一切更新しない別ループへ分岐する。
+            if (_fastMode) { TickFastMode(); return; }
+
             // ×4速時は酔い防止のため自動で全景固定へ（Issue #119 完了条件）。毎フレーム同期するだけで十分軽量。
             _view.CameraWorkEnabled = _cameraWorkWanted && _speed < 4f;
             // 判定オーバーレイ（#59）の表示窓はプレー時間軸で数えるので、倍速を渡して実時間の見え方を保つ（#236 症状A）。
@@ -2252,6 +2463,16 @@ namespace KokoSim.Unity.Match
             RefreshMiniDiamond();       // 走者の小ダイヤ（issue #595）。同じくポーズ中も現在位置のまま残す
             RefreshHudVisibility();     // 打球プレー中はマッチアップHUDを引っ込める（下の説明を参照）
             UpdateTacticsAcceptance();  // 采配カードの受付ゲート（issue #493）。投手が次球の振りかぶりへ入ったら締め切る
+
+            // 強制交代パネル（球数制限）が閉じた＝継投が確定した。中断メニューを経由していないので
+            // 「再開」ボタンを押しようがない＝ここで自分から中断を解いて自動進行へ戻す。
+            if (_forcedSubPause && (_subPanel == null || !_subPanel.IsOpen))
+            {
+                _forcedSubPause = false;
+                _paused = false;
+                AdvanceToNextWindow();
+                return;
+            }
 
             // タイム中断中（issue #173）は盤面・オーバーレイ・自動進行のすべてを凍結する。再開で続きから流れる。
             if (_paused) return;
@@ -2389,6 +2610,7 @@ namespace KokoSim.Unity.Match
                     {
                         SetOuts(q.Live.Outs);
                         SetBases(q.Live.BaseFirst, q.Live.BaseSecond, q.Live.BaseThird);
+                        PostMidPaScore(q.Live);   // 打席途中に入った点もここで掲げる（issue #628）
                     }
                     if (IsTerminalPitch(_pitchIdx))
                     {
@@ -2486,10 +2708,24 @@ namespace KokoSim.Unity.Match
                 RenderReplayFrame();
                 if (_t > PlayEndTime() + FinishGraceSeconds) FinishPaView();
             }
-            else if (_t >= 0)
+            else
             {
-                FinishPaView();
+                // 押し出しの得点は据え置きの途中で掲げる（issue score-display-before-home-touch）。
+                if (_nonBattedScoreAt is { } at && _t >= at) FlushPendingNonBattedScore();
+                if (_t >= 0) FinishPaView();
             }
+        }
+
+        /// <summary>
+        /// 待たせていた「打球の無い得点」を掲げる（issue score-display-before-home-touch）。
+        /// 据え置きの途中で来るのが通常だが、スキップ等で打席が畳まれる経路でも点を落とさないよう
+        /// <see cref="FinishPaView"/> からも呼ぶ（二度掲げないよう予約は必ず消す）。
+        /// </summary>
+        private void FlushPendingNonBattedScore()
+        {
+            if (_nonBattedScoreAt is null) return;
+            _nonBattedScoreAt = null;
+            if (_current != null) PostResolvedScore(_current.Inning, _current.IsTop);
         }
 
         /// <summary>再生を打ち切ってから次打席へ移るまでの余韻[秒]。</summary>
@@ -2511,6 +2747,12 @@ namespace KokoSim.Unity.Match
         /// レンダリング（<c>RenderStealFrame</c> 等は判定より前に呼ばれる）が1コマ、
         /// カット後の全景（縦155m級）を描いてしまう（実測: 枠が10.5m→147.3mへ1コマで飛ぶ）。
         /// 打ち切りをハードカットより確実に手前で終わらせることで、そのコマを再生の外へ出す。
+        ///
+        /// <para>⚠ 全景ハードカットは廃止した（issue field-view-cut-back-sooner ④・
+        /// <see cref="DuelStageRig.FieldReturnsToWide"/>）ので、この clamp が守っていた「全景の1コマ」
+        /// はもう出ない。それでも残しているのは<b>打席途中プレーの尺そのもの</b>が
+        /// この値で決まっているため（外すと盗塁・牽制の再生が伸びる＝この issue が頼まれていない変更に
+        /// なる）。旧挙動（FieldReturnsToWide=true）へ戻したときの保険も兼ねる。</para>
         /// </summary>
         private static double ClampBeforeWideCameraCut(double end, PlaybackPlay play)
         {
@@ -2537,24 +2779,17 @@ namespace KokoSim.Unity.Match
             var play = _current.Play;
 
             // 「まだ見るもの」＝決着／球が動き終わる／**実際に動く**走者レッグの終わり。
-            // ⚠ 動かない走者のレッグを数えないこと。塁上で止まる走者は AppendHeldRunners が
-            // T1=Duration で張るので、除かないと必ず Dur に戻って1秒も縮まらない。
-            var lastEvent = play.ResAt;
-            foreach (var seg in play.Ball) if (seg.T1 > lastEvent) lastEvent = seg.T1;
-            foreach (var r in play.Runners)
-                foreach (var s in r.Segs)
-                {
-                    if (s.From.X == s.To.X && s.From.Y == s.To.Y) continue;   // その場に居るだけ
-                    if (s.T1 > lastEvent) lastEvent = s.T1;
-                }
+            // 規則は engine の純関数（PlaybackDisplaySync.LastActionTime）が単一ソース＝
+            // 凡打の打者走者の駆け抜けを待たない扱い（issue field-view-cut-back-sooner ①）も含む。
+            var lastEvent = PlaybackDisplaySync.LastActionTime(play);
             var end = System.Math.Min(play.Dur, lastEvent + PlayTailSeconds);
 
             // 判定オーバーレイ（#59）の表示窓 [T1, T1+hold) を必ず含める（issue #236 症状A）。
             // 内野ゴロの打者走者は「送球到達＝アウト成立」より後に一塁へ着く（T1＞ResAt）ので、
             // 早切りだけだと最頻のアウトが一度も出ない。Dur でクランプしない（SetTime は t の純関数で、
             // Dur を超えた時刻を評価しても最終フレームを保持するだけ）。
-            var judged = PlaybackEvaluator.LastJudgementTime(play);
-            if (judged.HasValue) end = System.Math.Max(end, judged.Value + _view.JudgementHoldSeconds);
+            var judged = PlaybackEvaluator.LastJudgementEndTime(play, _view.JudgementHoldSeconds);
+            if (judged.HasValue) end = System.Math.Max(end, judged.Value);
 
             // ⚠ 得点テロップ（#60）の寿命も含める。FinishPaView が HideScoreCall するので、
             // 含めないと**加算の途中でテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
@@ -2609,7 +2844,7 @@ namespace KokoSim.Unity.Match
             if (_runScoreShowAt.Count > 0 && _runScoreShown < _runScoreShowAt.Count)
             {
                 if (!_scoreCallOn && _runScoreShown == 0 && _t >= _runScoreShowAt[0] - scoreCallStepSeconds)
-                    BeginScoreCall(_current, playDriven: true);
+                    BeginScoreCall(_current.IsTop, _runScoreShowAt.Count, playDriven: true);
                 while (_scoreCallOn && _scoreCallPlayDriven
                        && _runScoreShown < _runScoreShowAt.Count && _t >= _runScoreShowAt[_runScoreShown])
                 {
@@ -2636,7 +2871,10 @@ namespace KokoSim.Unity.Match
                 return;
             }
             _resultShowAt = PlaybackDisplaySync.ResultShowTime(play);
-            _runScoreShowAt = PlaybackDisplaySync.RunScoreTimes(play, item.RunsScored, scoreCallStepSeconds);
+            // 掲げる点は打席の得点（RunsScored）でなく「まだ掲示板に出していない点」で数える（issue #628）。
+            // ①打席途中に暴投・本盗で入って既に掲げた点を二度祝わない ②RunsScored に乗らない得点
+            //（暴投での生還・重盗の生還。MatchProgression のコメント参照）を取りこぼさない。
+            _runScoreShowAt = PlaybackDisplaySync.RunScoreTimes(play, RunsNotYetPosted(item.IsTop), scoreCallStepSeconds);
             _lineScorePostAt = _runScoreShowAt.Count > 0
                 ? System.Math.Max(_resultShowAt, _runScoreShowAt[_runScoreShowAt.Count - 1])
                 : _resultShowAt;
@@ -2651,9 +2889,11 @@ namespace KokoSim.Unity.Match
         {
             if (!resolved) { _lineScorePosted = false; return; }
             if (_lineScorePosted) return;
+            // 掲げる前に「まだ出していない点」を数える（PostLineScore が基準を更新するため, issue #628）。
+            var gained = RunsNotYetPosted(item.IsTop);
             _lineScorePosted = true;
             PostLineScore(item.Inning, item.IsTop, finished: false);
-            if (item.RunsScored > 0) BeginScoreCall(item, playDriven: false);
+            BeginScoreCall(item.IsTop, gained, playDriven: false);
         }
 
         private void UpdateScoreboardFinal(GameResult r)
@@ -2666,8 +2906,62 @@ namespace KokoSim.Unity.Match
         {
             if (_prog == null) return;
             var snap = _prog.Snapshot();
-            LineScorePanel.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            // lsc-root は LineScorePanel テンプレートの内部名なので、fastmode-board 追加後は
+            // inning-break のインスタンスと同名が2つ並ぶ。_root の丸ごと検索（単一マッチ）だと
+            // ツリー順で先に来る側しか埋まらず、もう一方が空のまま表示される（2026-08-25 実害）。
+            // 各インスタンスの器（自分のサブツリーだけ）を渡して個別に埋める。
+            LineScorePanel.Fill(_inningBreak, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            LineScorePanel.Fill(_fastModeBoard, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
             ScoreBug.Fill(_root, snap.AwayLine, snap.HomeLine, inning, isTop, finished);
+            // 掲げた点を控える（issue #628）。次に掲げるときの「まだ出していない点」の基準になる。
+            _postedAwayRuns = snap.AwayLine.Runs;
+            _postedHomeRuns = snap.HomeLine.Runs;
+        }
+
+        /// <summary>まだ掲示板へ出していない得点（攻撃側ぶん）。負にはしない。</summary>
+        private int RunsNotYetPosted(bool isTop)
+        {
+            if (_prog == null) return 0;
+            var snap = _prog.Snapshot();
+            var gained = isTop ? snap.AwayLine.Runs - _postedAwayRuns : snap.HomeLine.Runs - _postedHomeRuns;
+            return Mathf.Max(0, gained);
+        }
+
+        /// <summary>
+        /// 打球の無い打席確定（四球・死球・三振＝押し出しはここ）で掲示板を掲げる（issue #628）。
+        /// 走者の到達アニメが無いので待つ理由がなく、結果テロップと同じ瞬間に出す。
+        /// 打球のある経路の掲示時刻（#438「最後の走者が本塁へ帰ってから」）には触らない。
+        /// </summary>
+        /// <returns>この掲示で新たに出した得点（＝据え置きを伸ばすかの判断に使う）。</returns>
+        private int PostResolvedScore(int inning, bool isTop)
+        {
+            if (_prog == null || _lineScorePosted) return 0;
+            var gained = RunsNotYetPosted(isTop);
+            _lineScorePosted = true;
+            PostLineScore(inning, isTop, finished: false);
+            // 得点コール（issue #60）も出す（監督決定 2026-08-13）。走者の到達アニメが無いので
+            // 打球のような「帰るたび1点ずつ」ではなく、確定の瞬間に既存の実時間演出で回す。
+            if (gained > 0) { HidePitchCall(); BeginScoreCall(isTop, gained, playDriven: false); }
+            return gained;
+        }
+
+        /// <summary>
+        /// 打席途中のプレー（本盗の生還・暴投/捕逸での生還）で入った点を、その再生の終わりで掲げる（issue #628）。
+        ///
+        /// <para>エンジンの集計（<c>Snapshot</c>）は打席まるごと解決済みなので、そのまま掲げると
+        /// <b>同じ打席の後の得点まで先に出る</b>（#438 で直した得点の先出しの再発）。1球観測が持つ
+        /// 「その球の時点の得点」と集計が一致するときだけ掲げる＝残りがあるなら打球側の掲示に任せる。</para>
+        /// </summary>
+        private void PostMidPaScore(LivePitch live)
+        {
+            if (_prog == null || live == null) return;
+            var snap = _prog.Snapshot();
+            if (live.AwayScore != snap.AwayLine.Runs || live.HomeScore != snap.HomeLine.Runs) return;
+            var gained = RunsNotYetPosted(_shownIsTop);
+            if (gained <= 0) return;
+            PostLineScore(_shownInning, _shownIsTop, finished: false);
+            HidePitchCall();
+            BeginScoreCall(_shownIsTop, gained, playDriven: false);
         }
 
         // ── 中継風カウント（BSO）＋塁ダイヤ ──
@@ -2794,17 +3088,24 @@ namespace KokoSim.Unity.Match
         // 加算タイミング（issue #438）: 通常再生は**各走者の本塁到達**（プレー時計・RenderReplayFrame が
         // PlaybackDisplaySync.RunScoreTimes で駆動）。キャプチャ（結果時点へ一気に飛ぶ）だけ
         // 旧・等間隔（実時間）で回す＝playDriven で切り替える。
-        private void BeginScoreCall(LivePlateAppearance item, bool playDriven)
+        /// <summary>
+        /// 得点コール（issue #60）を始める。<paramref name="runs"/> は<b>これから掲げる点</b>だけ
+        /// （issue #628）。打席の得点（<c>RunsScored</c>）で数えると、暴投での生還のように打席に
+        /// 紐づかない点や、打席途中に既に掲げた点を二度祝う。加点前スコアはエンジン集計から逆算する。
+        /// </summary>
+        private void BeginScoreCall(bool isTop, int runs, bool playDriven)
         {
             if (_scoreCall == null || _scoreCallOwnNum == null || _scoreCallOppNum == null) return;
+            if (_prog == null || runs <= 0) return;
 
             var ownIsAway = _managerIsAway;
-            var awayBefore = item.IsTop ? item.AwayScore - item.RunsScored : item.AwayScore;
-            var homeBefore = item.IsTop ? item.HomeScore : item.HomeScore - item.RunsScored;
+            var snap = _prog.Snapshot();
+            var awayBefore = isTop ? snap.AwayLine.Runs - runs : snap.AwayLine.Runs;
+            var homeBefore = isTop ? snap.HomeLine.Runs : snap.HomeLine.Runs - runs;
             _scoreCallOwnScore = ownIsAway ? awayBefore : homeBefore;
             _scoreCallOppScore = ownIsAway ? homeBefore : awayBefore;
-            _scoreCallOwnScoring = item.IsTop == ownIsAway;
-            _scoreCallRunsRemaining = item.RunsScored;
+            _scoreCallOwnScoring = isTop == ownIsAway;
+            _scoreCallRunsRemaining = runs;
             _scoreCallClock = 0f;
             _scoreCallOn = true;
             _scoreCallPlayDriven = playDriven;
@@ -2952,10 +3253,104 @@ namespace KokoSim.Unity.Match
             System.Action handler = () =>
             {
                 _speed = speed;
+                SetFastMode(false);   // 数値速度を選び直す＝高速試合モードの解除操作を兼ねる（専用の「戻る」ボタンは作らない）
                 foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
             };
             b.clicked += handler;
             _speedHandlers.Add((b, handler));
+        }
+
+        // 高速試合モードの入口（design-06 §3.4）。速度ボタンと同じ排他選択グループの一員として登録する
+        // （_speedButtons への相乗り＝OnDisable の一括解除もそのまま効く）。_speed 自体は変更しない
+        // （直前の速度倍率のまま「半イニング送りの間隔」にも流用する＝新しいペース系統を増やさない）。
+        private void WireFastMode(string name)
+        {
+            var b = _root.Q<Button>(name);
+            if (b == null) return;
+            _speedButtons.Add(b);
+            System.Action handler = () =>
+            {
+                SetFastMode(true);
+                foreach (var sb in _speedButtons) sb.EnableInClassList("chip-btn--on", sb == b);
+            };
+            b.clicked += handler;
+            _speedHandlers.Add((b, handler));
+        }
+
+        /// <summary>
+        /// 高速試合モードの切替。ON: 対決ビュー/2D俯瞰を隠して大型スコアボードへ差し替える。
+        /// OFF: 表示を戻し、<see cref="AdvanceToNextWindow"/>（打席頭のウィンドウを開く既存の入口そのもの。
+        /// 試合開始時の <see cref="StartAutoRun"/> と同じ経路）で1球進行ループへ戻す。
+        ///
+        /// <para><b>罠</b>: <see cref="MatchProgression.CurrentAtBat"/> は「<see cref="MatchProgression.AdvancePitch"/>
+        /// が Pitch を返した直後に読む」契約（同プロパティのXMLコメント）で、<see cref="MatchProgression.Advance"/>
+        /// 系（<see cref="TickFastMode"/> が使う <c>AdvanceUntilInningEnd</c>）の直後に読むと打席途中の値を
+        /// 拾うことがある（実測: 2026-08-24、高速モード中に「3番 2-2」のような未確定値が出た）。
+        /// 復帰時は必ずこの経路（内部で <c>AdvancePitch</c> を1回呼んで窓を張り直す）を通す。</para>
+        /// </summary>
+        private void SetFastMode(bool on)
+        {
+            if (_fastMode == on) return;
+            _fastMode = on;
+            _fastModeClock = 0;
+            if (_fastModeBoard != null) _fastModeBoard.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
+            var tacticsHost = _root?.Q<VisualElement>("tactics-host");
+            if (tacticsHost != null) tacticsHost.style.display = on ? DisplayStyle.None : DisplayStyle.Flex;
+            if (on)
+            {
+                if (_fieldHost != null) _fieldHost.style.display = DisplayStyle.None;
+                if (_duelHost != null) _duelHost.style.display = DisplayStyle.None;
+                // 演出系の一過性オーバーレイ（プレイボール等のテロップ・判定・得点コール・交代ポップアップ・
+                // イニング間画面）は自前の実時間タイマーで消える設計だが、そのタイマーは高速試合モードの
+                // Update() 分岐では回さない。ここで畳んでおかないと消えるきっかけを永遠に失い、
+                // 盤面に張り付いたまま高速試合モードの間じゅう残る（EndGame の EndFieldPlay と同じ理由）。
+                EndFieldPlay();
+                _view.HideJudgement();
+                HideGameTelop();
+                HidePitchCall();
+                HideSubCall();
+                if (_scoreCallOn) { _scoreCallOn = false; if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None; }
+                if (_inningBreakOn) { _inningBreakOn = false; _inningBreakClock = 0f; _afterInningBreak = null; SetVisible(_inningBreak, false); }
+                PostFastModeBoard();
+            }
+            else
+            {
+                ApplyDuelViewState();   // 対決ビュー/俯瞰の表示を _duelOn の状態へ戻す
+                if (_prog != null && !_prog.IsFinished) { _stage = LiveStage.Idle; AdvanceToNextWindow(); }
+            }
+        }
+
+        /// <summary>
+        /// 高速試合モードの進行（design-17 §6.2 向けに実装済みの早送りAPIをそのまま使う。結果は不変）。
+        /// 実時間で <see cref="fastModeHalfInningSeconds"/>（×<see cref="_speed"/>）ごとに半イニング進め、
+        /// スコアボードだけ更新する。試合終了は通常終了と同じ <see cref="EndGame"/> 経路に合流する。
+        /// </summary>
+        private void TickFastMode()
+        {
+            if (_gameOver || _paused || _prog == null) return;
+            _fastModeClock += Time.deltaTime * _speed;
+            if (_fastModeClock < fastModeHalfInningSeconds) return;
+            _fastModeClock -= fastModeHalfInningSeconds;
+            _prog.AdvanceUntilInningEnd();
+            if (_prog.IsFinished) { EndGame(_prog.BuildResult()); return; }
+            // 球数制限で投手交代待ちになった＝早送り中でも必ず一旦止めてプレイヤーに選ばせる。
+            // 高速試合モードを解いて通常速度へ戻すと、直後の AdvanceToNextWindow が窓を開き直す
+            // 過程で AwaitingForcedPitcherChange を検知し、交代パネルが自動的に開く。
+            if (_prog.PendingForcedPitcherChange) { SetFastMode(false); return; }
+            PostFastModeBoard();
+        }
+
+        /// <summary>
+        /// 大型スコアボード＋左右スタメン列（現打者ハイライト）を今の進行状況へ更新する。BSO/塁は
+        /// <see cref="MatchProgression.CurrentAtBat"/> が信頼できる区間（1球進行の窓）でしか安全に読めない
+        /// （<see cref="SetFastMode"/> の罠コメント参照）ため、高速モード中は更新しない＝入る前の値のまま残る。
+        /// </summary>
+        private void PostFastModeBoard()
+        {
+            if (_prog?.Current is not { } current) return;   // まだ1打席も確定していない（滅多にない）
+            _atBat = null;   // RefreshPanel を snap.OffenseIsTop/CurrentBatterOrder のフォールバックへ倒す
+            PostLineScore(current.Inning, current.IsTop, finished: false);
+            RefreshPanel();
         }
 
         // カメラ演出トグル（Issue #119）。押すたびオン/オフ、既定オフ。
@@ -2979,10 +3374,13 @@ namespace KokoSim.Unity.Match
         private DuelStageRig NewDuelRig()
         {
             var offenseIsTop = _prog?.Snapshot().OffenseIsTop ?? true;
-            DuelStageRig.InitialTeamColors = _awayColors != null && _homeColors != null
+            // issue #618: 片方でも判っていれば渡す（旧実装は両方揃わないと渡さず、自校の配色が常に null
+            // だったせいで相手校の配色まで捨てていた）。判らない側は rig 側で既定色のまま残る。
+            var anyColors = _awayColors != null || _homeColors != null;
+            DuelStageRig.InitialTeamColors = anyColors
                 ? (offenseIsTop ? _homeColors : _awayColors, offenseIsTop ? _awayColors : _homeColors)
                 : ((KokoSim.Engine.Nation.TeamColors, KokoSim.Engine.Nation.TeamColors)?)null;
-            _duelColorsOffenseIsTop = _awayColors != null && _homeColors != null ? offenseIsTop : (bool?)null;
+            _duelColorsOffenseIsTop = anyColors ? offenseIsTop : (bool?)null;
             var rig = new DuelStageRig();
             DuelStageRig.InitialTeamColors = null;   // 静的な受け渡し窓は使ったら必ず閉じる
             // 判定表示の長さを流し込む＝捕手の据え置き（捕球位置で静止する窓）が表示と同じ時刻に終わる
@@ -3062,6 +3460,35 @@ namespace KokoSim.Unity.Match
         private void EndFieldPlay()
         {
             if (FieldPlayActive) _duelRig.EndFieldPlay();
+            SettlePlayDrivenScoreCall();
+        }
+
+        /// <summary>
+        /// プレー時計で駆動している得点コール（issue #438）を、駆動元のプレーが畳まれた時点で決着させる。
+        ///
+        /// <para><b>これが無いと試合が終わらない</b>（オーナー報告 2026-08-14）。得点コールは playDriven の間、
+        /// 残り点を減らすのが <see cref="RenderReplayFrame"/> の本塁到達だけで、<see cref="AdvanceScoreCall"/> は
+        /// 実時間では1点も減らさず必ず早期 return する。プレーを畳む経路（スキップ委任＝<c>EndGame</c> の
+        /// <c>EndFieldPlay</c>／<c>SetPlay(null)</c>）を通ると走者は二度と本塁へ着かないので、
+        /// <c>_scoreCallRunsRemaining &gt; 0</c> のまま <c>_scoreCallOn</c> が永久に立つ。すると Update の
+        /// <c>if (_gameSetPending &amp;&amp; !_scoreCallOn)</c> が一生通らず、
+        /// <b>試合は内部で終わっているのに「ゲームセット」も結果画面も来ない</b>
+        /// （実測: <c>_gameOver=True / _gameSetPending=True / _scoreCallOn=True /
+        /// _scoreCallRunsRemaining=1 / _scoreCallClock=696秒</c>）。
+        /// 絵は「投手が投げないだけ」に見え、UIは生きているので原因が画面に出ない止まり方になる。</para>
+        ///
+        /// <para>残りを表示上いっきに乗せてから実時間駆動へ戻す＝最終スコアは正しく出て、
+        /// 既存の最終ホールド（<c>scoreCallFinalHoldSeconds</c>）を経て通常どおり消える＝
+        /// 「得点テロップの演出が済んでからゲームセットを掲げる」順序（issue #442）は保つ。
+        /// プレーが最後まで再生された通常経路では残りが0なので何もしない。</para>
+        /// </summary>
+        private void SettlePlayDrivenScoreCall()
+        {
+            if (!_scoreCallOn || !_scoreCallPlayDriven) return;
+            while (_scoreCallRunsRemaining > 0) StepScoreCallOnce();
+            _runScoreShown = _runScoreShowAt.Count;
+            _scoreCallPlayDriven = false;   // 以降は実時間の最終ホールドで畳む
+            _scoreCallClock = 0f;
         }
 
         /// <summary>
@@ -3322,8 +3749,13 @@ namespace KokoSim.Unity.Match
             var order = _atBat?.BatterOrder ?? snap.CurrentBatterOrder;
 
             // 左右とも同じ並び（打順→守備→名前→背番号→調子→今日）。ミラーはしない。
-            BuildColumn(_leftLineup, _leftPitcher, own, mirror: false, highlightOrder: offenseIsOwn ? order : 0);
-            BuildColumn(_rightLineup, _rightPitcher, opp, mirror: false, highlightOrder: offenseIsOwn ? 0 : order);
+            // 校ID＝調子の真値/誤認と通算成績の帰属先（issue #634）。配色と同じ静的経路から来る。
+            var ownSchoolId = ownIsAway ? _awaySchoolId : _homeSchoolId;
+            var oppSchoolId = ownIsAway ? _homeSchoolId : _awaySchoolId;
+            BuildColumn(_leftLineup, _leftPitcher, own, mirror: false, highlightOrder: offenseIsOwn ? order : 0,
+                schoolId: ownSchoolId);
+            BuildColumn(_rightLineup, _rightPitcher, opp, mirror: false, highlightOrder: offenseIsOwn ? 0 : order,
+                schoolId: oppSchoolId);
             RefreshHud(snap, offenseIsTop, order);
             ApplyDuelTeamColors(offenseIsTop);
         }
@@ -3336,7 +3768,7 @@ namespace KokoSim.Unity.Match
         private void ApplyDuelTeamColors(bool offenseIsTop)
         {
             if (_duelRig == null || !_duelRig.Available) return;
-            if (_awayColors == null || _homeColors == null) return;
+            if (_awayColors == null && _homeColors == null) return;   // issue #618: 片方でも判れば塗る
             if (_duelColorsOffenseIsTop == offenseIsTop) return;   // 半回が変わった時だけ塗る
             _duelColorsOffenseIsTop = offenseIsTop;
             var offense = offenseIsTop ? _awayColors : _homeColors;
@@ -3345,13 +3777,13 @@ namespace KokoSim.Unity.Match
         }
 
         private void BuildColumn(VisualElement lineupHost, VisualElement pitcherHost,
-            LiveTeamSnapshot team, bool mirror, int highlightOrder)
+            LiveTeamSnapshot team, bool mirror, int highlightOrder, int schoolId)
         {
             if (lineupHost != null)
             {
                 lineupHost.Clear();
                 foreach (var s in team.Lineup)
-                    lineupHost.Add(BuildLineupRow(s, mirror, atBat: s.Order == highlightOrder));
+                    lineupHost.Add(BuildLineupRow(s, mirror, atBat: s.Order == highlightOrder, schoolId));
             }
             if (pitcherHost != null)
             {
@@ -3366,8 +3798,8 @@ namespace KokoSim.Unity.Match
                     if (b.Number <= 0) continue;
                     var asPitcher = FindReservePitcher(team, b.Number);
                     benchRows.Add((b.Number, asPitcher is null
-                        ? BuildBenchRow(b, mirror)
-                        : BuildBenchPitcherRow(asPitcher, mirror)));
+                        ? BuildBenchRow(b, mirror, schoolId)
+                        : BuildBenchPitcherRow(asPitcher, mirror, schoolId)));
                 }
                 if (benchRows.Count > 0)
                 {
@@ -3383,7 +3815,7 @@ namespace KokoSim.Unity.Match
         // 並び: 打順 / 守備位置 / 名前(フルネーム) / 背番号 / 調子（右列は row-reverse でミラー）。
         // 名前セルはライブ観戦だけ固定幅にする（mlineup-row--compact。試合前画面と共有クラスのため
         // 画面ローカルの直書きにせずモディファイアで限定。issue #297）。
-        private VisualElement BuildLineupRow(LiveBatterSlot s, bool mirror, bool atBat)
+        private VisualElement BuildLineupRow(LiveBatterSlot s, bool mirror, bool atBat, int schoolId)
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-row");
@@ -3399,7 +3831,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(NumText(s.Number), "num-badge", "num-badge--sm", "f-num"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
         }
@@ -3416,7 +3848,7 @@ namespace KokoSim.Unity.Match
         }
 
         // 控え1行（背番号・名前フル・調子）。守備位置は出さない。代打・代走・守備固めの候補。
-        private VisualElement BuildBenchRow(LiveBatterSlot s, bool mirror)
+        private VisualElement BuildBenchRow(LiveBatterSlot s, bool mirror, int schoolId)
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-benchrow");
@@ -3425,13 +3857,13 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(s.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(s.SourceId, s.ConditionValue, s.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, s.ConditionValue, s.Name));
             row.Add(face);
             return row;
         }
 
         // 控え投手1行（背番号・名前フル・調子）。
-        private VisualElement BuildBenchPitcherRow(LivePitcherToday p, bool mirror)
+        private VisualElement BuildBenchPitcherRow(LivePitcherToday p, bool mirror, int schoolId)
         {
             var row = new VisualElement();
             row.AddToClassList("mlineup-benchrow");
@@ -3440,7 +3872,7 @@ namespace KokoSim.Unity.Match
             row.Add(MakeLabel(p.Name, "mlineup-row__name"));
             var face = new ConditionFace();
             face.AddToClassList("mlineup-row__cond");
-            face.Set(_statsProvider.ConditionOf(p.SourceId, p.ConditionValue, p.Name));
+            face.Set(_statsProvider.ConditionOf(schoolId, p.ConditionValue, p.Name));
             row.Add(face);
             return row;
         }
@@ -3534,8 +3966,12 @@ namespace KokoSim.Unity.Match
             var offenseColor = TeamChipColor(offenseIsTop ? _awayColors : _homeColors);
             var defenseColor = TeamChipColor(offenseIsTop ? _homeColors : _awayColors);
 
-            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseColor));
-            _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseColor));
+            // 校ID＝通算成績の帰属先（issue #634。配色とまったく同じ攻守の割り当て）。
+            var offenseSchoolId = offenseIsTop ? _awaySchoolId : _homeSchoolId;
+            var defenseSchoolId = offenseIsTop ? _homeSchoolId : _awaySchoolId;
+
+            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseColor, defenseSchoolId));
+            _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseColor, offenseSchoolId));
         }
 
         /// <summary>
@@ -3549,7 +3985,7 @@ namespace KokoSim.Unity.Match
             return new Color32(c.R, c.G, c.B, 255);
         }
 
-        private VisualElement BuildHudPitcher(LivePitcherToday def, Color teamColor)
+        private VisualElement BuildHudPitcher(LivePitcherToday def, Color teamColor, int schoolId)
         {
             var band = HudBand();
 
@@ -3578,14 +4014,17 @@ namespace KokoSim.Unity.Match
             var pcMod = def.StaminaRemaining < 0.3 ? "mhud-pc__n--alert"
                 : def.StaminaRemaining < 0.6 ? "mhud-pc__n--warn" : null;
             idn.Add(MakeRow("mhud-spacer"));
-            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod));
+            // 球数は「今 / 目安」の分母つき（案A）。分母は StaminaTarget＝スタミナバーの分母そのもので、
+            // 連戦で目安が縮めば分母も縮む＝バーと数字が食い違わない。
+            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod, StaminaTargetText(def)));
             band.Add(idn);
 
             // 2段目＝通算防御率・本日の奪三振・与四死球の等幅3セル（打者HUDと同構造）。奪三振と与四死球は
             // 対で見て初めて「今日の出来」になるので隣接させる（issue #407）。単位は見出しへ逃がしてあるので
             // 値は数字だけ＝Oswald（.f-num）が素直に効く（設計書16 §2）。
             // 防御率は通算＋本日の合算（issue #449。通算なしは本日分のみ、登板なしかつ本日アウト0のみ「—」）。
-            var era = MatchLiveStatsProvider.LiveEra(_statsProvider.CareerPitching(def.SourceId), def.EarnedRuns, def.Outs);
+            var era = MatchLiveStatsProvider.LiveEra(
+                _statsProvider.CareerPitching(schoolId, def.SourceId), def.EarnedRuns, def.Outs);
             var stats = HudStatsRow();
             stats.Add(HudCell("防御率", era, first: true));
             stats.Add(HudCell("奪三振", def.StrikeOuts.ToString()));
@@ -3593,14 +4032,51 @@ namespace KokoSim.Unity.Match
             band.Add(stats);
 
             // 3段目＝スタミナ。帯の最下段として帯と同幅で組み込む（別要素として浮かせない）。
-            band.Add(BuildStaminaBar(def.StaminaRemaining));
+            // 週間球数制限（設計書05 §1.3）の残りもここに置く＝「残り」の話をバーと並べる。
+            // 名前行に置くと球数（主指標）を帯の外へ押し出す（実測で右端が欠けた）。
+            band.Add(BuildStaminaBar(def.StaminaRemaining, WeeklyLeftForDisplay(def, totalPitches)));
             return band;
         }
+
+        /// <summary>
+        /// 降板の目安マージン（<see cref="FatigueCoefficients.RelievePitchMargin"/> の既定＝実ゲームが使う値）。
+        /// 「ルールで先に止まるか」の判定にだけ使う表示用の定数で、試合の判定には一切触らない。
+        /// </summary>
+        private static readonly double ReliefMargin = new FatigueCoefficients().RelievePitchMargin;
+
+        /// <summary>
+        /// 週間球数制限（設計書05 §1.3）の残り球数。制限なし（int.MaxValue）なら null＝表示しない。
+        /// 持ち越し（<see cref="LivePitcherToday.WeeklyPitchesPrior"/>）＋当試合ぶんを引く。到達判定は
+        /// <b>打席境界</b>なので実際は数球超える＝0でクランプして「打者を打ち終えたら交代」と読ませる。
+        /// </summary>
+        private static int? WeeklyPitchesLeft(LivePitcherToday def, int totalPitchesToday)
+        {
+            if (def == null || def.WeeklyPitchLimit == int.MaxValue) return null;
+            var left = def.WeeklyPitchLimit - def.WeeklyPitchesPrior - totalPitchesToday;
+            return left < 0 ? 0 : left;
+        }
+
+        /// <summary>
+        /// 画面に出す週残（出さないなら null）。<b>ルールがスタミナより先に効く</b>投手＝残りが
+        /// 「目安投球数＋降板マージン」より少ないときだけ出す。普段は出ない＝アクセントを増やさない
+        /// （UI原則②「強調は希少資源」）。
+        /// </summary>
+        private static int? WeeklyLeftForDisplay(LivePitcherToday def, int totalPitchesToday)
+        {
+            var left = WeeklyPitchesLeft(def, totalPitchesToday);
+            return left is int v && v < def.StaminaTarget + ReliefMargin ? left : null;
+        }
+
+        /// <summary>球数の分母＝実効目安投球数（連戦で縮む）。不明（0以下）なら空＝分母を出さない。</summary>
+        private static string StaminaTargetText(LivePitcherToday def)
+            => def == null || def.StaminaTarget <= 0.0
+                ? null
+                : Mathf.RoundToInt((float)def.StaminaTarget).ToString();
 
         // スタミナ残量のバー（継投の目安）。球数の数字だけでなく形でも「そろそろ」を出す。
         // 色は残量で落とす: 6割超=良好 / 3〜6割=注意 / 3割未満=警告（盤面ビューの状態コード）。
         // 文字（見出し・％）は持たない＝残量は形と色だけで読ませ、数字は名前行の球数に集約する。
-        private static VisualElement BuildStaminaBar(double remaining)
+        private static VisualElement BuildStaminaBar(double remaining, int? weeklyLeft = null)
         {
             var row = MakeRow("mhud-stam");
 
@@ -3622,10 +4098,22 @@ namespace KokoSim.Unity.Match
                 track.Add(tick);
             }
             row.Add(track);
+
+            // 週残（出るのはルールで先に止まる投手のときだけ＝普段は帯の見た目が変わらない）。
+            // 数字と和文は Label を分ける（Oswald は欧文専用・設計書16 §2）。
+            if (weeklyLeft is int left)
+            {
+                var box = MakeRow("stam__weekly");
+                box.Add(MakeLabel("週残", "stam__weekly-c"));
+                box.Add(MakeLabel(left.ToString(), "stam__weekly-n", "f-num-bd"));
+                box.Add(MakeLabel("球", "stam__weekly-u"));
+                row.Add(box);
+            }
             return row;
         }
 
-        private VisualElement BuildHudBatter(LiveBatterSlot batterToday, Matchup m, bool offenseIsTop, Color teamColor)
+        private VisualElement BuildHudBatter(LiveBatterSlot batterToday, Matchup m, bool offenseIsTop,
+            Color teamColor, int schoolId)
         {
             var band = HudBand();
 
@@ -3642,14 +4130,14 @@ namespace KokoSim.Unity.Match
             idn.Add(MakeRow("mhud-spacer"));
             var face = new ConditionFace();
             face.AddToClassList("mhud-face");
-            face.Set(_statsProvider.ConditionOf(m.BatterSourceId, m.BatterConditionValue, m.BatterName));
+            face.Set(_statsProvider.ConditionOf(schoolId, m.BatterConditionValue, m.BatterName));
             idn.Add(face);
             band.Add(idn);
 
             // 2段目＝成績。打率は通算＋本日の合算（issue #449。通算なしは本日分のみ、通算なしかつ
             // 本日打数0のみ「—」）。本塁打・打点は通算のみ（issue範囲外・据え置き）＝等幅セルに割ると
             // 同格の3項目に見えるが、意味の違いはここに残す。
-            var b = _statsProvider.CareerBatting(m.BatterSourceId);
+            var b = _statsProvider.CareerBatting(schoolId, m.BatterSourceId);
             var stats = HudStatsRow();
             stats.Add(HudCell("打率", MatchLiveStatsProvider.LiveAvg(b, batterToday?.AtBats ?? 0, batterToday?.Hits ?? 0), first: true));
             stats.Add(HudCell("本塁打", b == null ? "—" : b.HomeRuns.ToString()));
@@ -3798,12 +4286,14 @@ namespace KokoSim.Unity.Match
         /// 球数「6球」。数字と和文単位で Label を分ける（Oswald は欧文専用）。見出しは持たない。
         /// 数字は太字＝学年チップより目立たせる（継投判断の主指標）。
         /// </summary>
-        private static VisualElement HudPitchCount(string digits, string mod)
+        private static VisualElement HudPitchCount(string digits, string mod, string denominator)
         {
             var box = MakeRow("mhud-pc");
             var n = MakeLabel(digits, "mhud-pc__n", "f-num-bd");
             if (mod != null) n.AddToClassList(mod);
             box.Add(n);
+            // 分母（実効目安投球数）。数字だけの Label なので Oswald が素直に効く（書体3役ルール）。
+            if (!string.IsNullOrEmpty(denominator)) box.Add(MakeLabel("/ " + denominator, "mhud-pc__d", "f-num"));
             box.Add(MakeLabel("球", "mhud-pc__u"));
             return box;
         }
@@ -3856,6 +4346,13 @@ namespace KokoSim.Unity.Match
         // ── 打球プレーの3D再生を外から覗く窓（打球処理の3D化 F9 の受け入れ用） ──
         /// <summary>打球再生の時計[秒]。俯瞰・3D・判定オーバーレイを同時に駆動している唯一の値。</summary>
         public double PlayClockForCapture => _t;
+
+        /// <summary>
+        /// いま掲示板に出ている得点（"先攻-後攻"）。得点が<b>いつ</b>増えたかは絵の外側からは
+        /// 分からない（掲示板の数字は撮った瞬間の値でしかない）ので、時刻と並べて記録するための窓
+        /// （issue score-display-before-home-touch）。
+        /// </summary>
+        public string PostedScoreForCapture => _postedAwayRuns + "-" + _postedHomeRuns;
 
         /// <summary>3Dの守備ビューが走っているか。</summary>
         public bool FieldPlayActiveForCapture => FieldPlayActive;
@@ -3962,6 +4459,9 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public void FreezeLiveForCapture(bool on) => _paused = on;
 
+        /// <summary>検証用: いま高速試合モード中か（design-06 §3.4）。</summary>
+        public bool FastModeForCapture => _fastMode;
+
         /// <summary>
         /// スクショ用: いま<b>打席の頭の采配窓</b>で止まっているか（まだ1球も投げていない＝設計書15 §8 の肝）。
         /// この状態で撮った絵が「打者を見てからサインを出せる」ことの証拠になる。
@@ -4007,6 +4507,48 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 現在のライブ観戦スナップショット（HUD/スタメン列の数値の元, issue #397）。</summary>
         public MatchLiveSnapshot SnapshotForCapture() => _prog?.Snapshot();
+
+        /// <summary>
+        /// スクショ用: 盗塁カードを押した状態にする（狙う塁は塁状況から決まる・issue #622）。
+        /// 自校が攻撃している窓でだけ効く＝実際にカードを押せる条件と同じ。
+        /// </summary>
+        public bool SelectStealForCapture()
+        {
+            if (_atBat == null || StealTargetNow == null) return false;
+            if (_atBat.IsTop != _managerIsAway) return false;   // 守備の窓では攻撃の1手を出さない
+            _stealChoice = StartType.Gamble;
+            _signPad?.RefreshEnabled();
+            return true;
+        }
+
+        /// <summary>スクショ用: 盗塁の再生（走者→捕手送球→判定）が走っているか。</summary>
+        public bool StealPlayActiveForCapture => _stealPlay != null;
+
+        /// <summary>スクショ用: 再生速度（待ち時間を詰める。画面の×N と同じ口）。</summary>
+        public void SetSpeedForCapture(float speed) => _speed = speed;
+
+        /// <summary>
+        /// スクショ用: 進行だけを止める（タイムの導線は通らない）。再生中の1コマを撮るには、
+        /// <see cref="FreezeCurrentAtResult"/> のように打席結果へ飛ばしてしまうと**その瞬間が消える**。
+        /// </summary>
+        public void SetPausedForCapture(bool paused) => _paused = paused;
+
+        /// <summary>スクショ用: 盗塁カードのいまの表示名と可否（issue #622）。</summary>
+        public string StealCardLabelForCapture => StealCardLabel;
+
+        public bool StealCardEnabledForCapture => StealTargetNow != null;
+
+        /// <summary>スクショ用: いま窓に映っている塁（"一二三" の在塁だけを並べた文字列）。</summary>
+        public string BasesForCapture
+        {
+            get
+            {
+                if (_atBat == null) return "(窓なし)";
+                var s = (_atBat.BaseFirst ? "一" : "") + (_atBat.BaseSecond ? "二" : "")
+                        + (_atBat.BaseThird ? "三" : "");
+                return s.Length == 0 ? "走者なし" : s;
+            }
+        }
 
         /// <summary>スクショ用: 次の打席を1つ解決してロードする（Update 非依存）。試合終了なら false。</summary>
         public bool AdvanceForCapture()
@@ -4061,6 +4603,9 @@ namespace KokoSim.Unity.Match
 
         /// <summary>スクショ用: 指枠の「そのまま退かせる」を選ぶ（先に指枠を主選択しておくこと。issue #452）。</summary>
         public void PickSubstitutionDhWithdrawForCapture() => _subPanel?.PickDhWithdrawForCapture();
+
+        /// <summary>スクショ用: 投手が絡む比較の「投球／打撃・守備」トグルを切り替える。</summary>
+        public void ToggleSubstitutionCmpViewForCapture() => _subPanel?.ToggleCmpFielderViewForCapture();
 
         /// <summary>スクショ用: いまDH制が生きているか（DH解除は不可逆＝前後の突き合わせに使う。issue #452）。</summary>
         public bool UsesDhForCapture => _subPanel != null && _subPanel.UsesDhForCapture;

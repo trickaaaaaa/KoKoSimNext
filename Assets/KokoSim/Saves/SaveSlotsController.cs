@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using KokoSim.Unity.Components;   // 部品辞書（NumUnit）
-using KokoSim.Unity.Shell;        // SaveSlots / NationService / ScreenRouter
+using KokoSim.Unity.Shell;        // SaveSlots / ScreenRouter
 
 namespace KokoSim.Unity.Saves
 {
@@ -47,7 +47,7 @@ namespace KokoSim.Unity.Saves
             _backBtn = Wire("ss-back", OnBack);
             if (_backBtn != null) _backBtn.style.display = _showBack ? DisplayStyle.Flex : DisplayStyle.None;
 
-            _selected = DefaultSlot();
+            _selected = DefaultSlot(_inGame);
             _errorText = "";
             Render();
         }
@@ -105,10 +105,21 @@ namespace KokoSim.Unity.Saves
             if (l != null) l.text = text;
         }
 
-        // 存在する最初のスロット（手動1〜3）を既定選択にする。タイトル側は SaveSlots.AnySaveExists()
-        // を確認してから遷移するため通常どれかは存在するが、無い場合も手動1へフォールバックして落ちない。
-        private static string DefaultSlot()
+        // ホーム/タブ経由（inGame）では、今プレイ中の学校のセーブがあればそれを既定選択にする
+        // （手動1固定でユーザーが毎回クリックし直す不満の解消）。無ければ／タイトル経由（学校の概念が
+        // まだ無い）は従来どおり「存在する最初のスロット」。タイトル側は SaveSlots.AnySaveExists() を
+        // 確認してから遷移するため通常どれかは存在するが、無い場合も手動1へフォールバックして落ちない。
+        private static string DefaultSlot(bool inGame)
         {
+            if (inGame)
+            {
+                var school = NationService.ManagerSchoolName;
+                foreach (var id in SaveSlots.AllSlotIds)
+                {
+                    var info = SaveSlots.ReadInfo(id);
+                    if (info.Exists && !info.Corrupt && info.SchoolName == school) return id;
+                }
+            }
             foreach (var id in SaveSlots.AllSlotIds)
                 if (SaveSlots.ReadInfo(id).Exists) return id;
             return SaveSlots.AllSlotIds[0];
@@ -177,8 +188,10 @@ namespace KokoSim.Unity.Saves
         {
             var info = SaveSlots.ReadInfo(_selected);
 
+            // 校名は**そのセーブの中身**から出す（issue #624）。実行中の自校名を出すと、
+            // タイトル経由ではどの枠も静的既定の「桜丘」になる＝スロットの区別が付かない。
             SetText("ss-d-name", info.Exists
-                ? (info.Corrupt ? "読み込めません" : NationService.ManagerSchoolName)
+                ? (info.Corrupt ? "読み込めません" : info.SchoolNameOrDefault)
                 : "── 空き ──");
             SetText("ss-d-sub", SlotLabel(_selected));
 
@@ -232,7 +245,7 @@ namespace KokoSim.Unity.Saves
         private static string SchoolCellText(SaveSlotInfo info)
         {
             if (!info.Exists) return "── 空き ──";
-            return info.Corrupt ? "（読み込み不可）" : NationService.ManagerSchoolName;
+            return info.Corrupt ? "（読み込み不可）" : info.SchoolNameOrDefault;   // issue #624
         }
 
         private static VisualElement FactRow(string label, VisualElement value)
@@ -263,14 +276,20 @@ namespace KokoSim.Unity.Saves
 
         private void OnLoad()
         {
-            if (!SaveSlots.Load(_selected, out var error))
+            // ファイル読込＋復元は同期処理（メインスレッドを止める）。ManualWait で「ロード中」を
+            // 1フレーム先に描画してからブロックへ入り、何も表示されず固まって見えるのを防ぐ（要望対応）。
+            string error = null;
+            ManualWait.Run(_root, "ロード中", () => SaveSlots.Load(_selected, out error), ok =>
             {
-                _errorText = string.IsNullOrEmpty(error) ? "読み込みに失敗しました。" : error;
-                RenderDetail();
-                return;
-            }
-            // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
-            ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+                if (!ok)
+                {
+                    _errorText = string.IsNullOrEmpty(error) ? "読み込みに失敗しました。" : error;
+                    RenderDetail();
+                    return;
+                }
+                // クリック配信中の同期 Show は UITK のイベント木を壊すため遅延切替を使う（ScreenRouter.cs 冒頭コメント参照）。
+                ScreenRouter.Instance?.ShowDeferred("HomeDashboard");
+            });
         }
 
         /// <summary>ホーム経由（保存モード）のみ配線される。大会中は SetEnabled(false) で既に押せない
@@ -278,14 +297,19 @@ namespace KokoSim.Unity.Saves
         private void OnSave()
         {
             if (!_inGame || !SaveGameIO.CanSave) return;
-            if (!SaveSlots.Save(_selected))
+            // SaveGameIO.Save は裏試合の完了待ち（Task.Wait）を含み得る同期処理。ManualWait で
+            // 「セーブ中」を1フレーム先に描画してからブロックへ入る（要望対応、OnLoad と同じ作法）。
+            ManualWait.Run(_root, "セーブ中", () => SaveSlots.Save(_selected), ok =>
             {
-                _errorText = "保存に失敗しました。";
-                RenderDetail();
-                return;
-            }
-            _errorText = "";
-            Render();   // 一覧・詳細を保存直後の内容（年度/週/保存日時）へ更新して結果を見せる
+                if (!ok)
+                {
+                    _errorText = "保存に失敗しました。";
+                    RenderDetail();
+                    return;
+                }
+                _errorText = "";
+                Render();   // 一覧・詳細を保存直後の内容（年度/週/保存日時）へ更新して結果を見せる
+            });
         }
 
         private void OnBack()
@@ -312,7 +336,7 @@ namespace KokoSim.Unity.Saves
         {
             if (_confirm != null) _confirm.style.display = DisplayStyle.None;
             SaveSlots.Delete(_selected);
-            _selected = DefaultSlot();
+            _selected = DefaultSlot(_inGame);
             _errorText = "";
             Render();
         }

@@ -529,6 +529,240 @@ public sealed class TimelineTests
         }
     }
 
+    // --- issue double-play-throw-pace-and-second-out-call: 秒を判定モデルと同じ式で組む（案B+C+E）。 ---
+
+    [Fact]
+    public void DoublePlayThrows_SecondLegSpeedMatchesRelayThrowSpeed()
+    {
+        // ②: 二塁→一塁は判定モデル（BaserunningModel.ResolveDoublePlay）と同じ
+        // BaserunningCoefficients.RelayThrowSpeedMps（既定32.0）で飛ぶ。以前は「打者到達へアンカーし
+        // 余りを飛行時間に吸わせる」書き方で 10〜13 m/s まで間延びしていた（実測60試合51件・issue参照）。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
+
+        var throws = tl.Ball.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+        var dist = System.Math.Sqrt(
+            System.Math.Pow(throws[1].To.X - throws[1].From.X, 2) + System.Math.Pow(throws[1].To.Z - throws[1].From.Z, 2));
+        var speed = dist / (throws[1].T1 - throws[1].T0);
+        Assert.InRange(speed, 20.0, 34.0);
+    }
+
+    [Fact]
+    public void DoublePlayThrows_CoverBaseArrivesBeforeThrow()
+    {
+        // ①③: 二塁カバーの急ぎ度（issue fielder-leg-speed-by-distance）を、実際に描いた二塁送球の
+        // 到達へ引き直す。以前は陣形ループの時点でこの送球がまだ無く、期限が決着（＝ずっと後）へ
+        // フォールバックして悠々と歩いていた＝球のほうが先にベースへ着いていた（誰も居ないベースに
+        // 球が飛ぶ絵。実測60試合51件・issue参照）。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
+
+        var second = new TimelinePoint(field.SecondBase.X, field.SecondBase.Z);
+        var secondArrive = tl.Ball.First(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "second").T1;
+        var pivotMove = tl.Moves.Single(m => m.Task == FielderTask.CoverBase
+            && System.Math.Sqrt(System.Math.Pow(m.To.X - second.X, 2) + System.Math.Pow(m.To.Z - second.Z, 2)) < 1.0);
+        Assert.True(pivotMove.T1 <= secondArrive, "二塁カバーが送球の到達より後に着いている（誰も居ないベースに球が飛ぶ絵）");
+    }
+
+    [Fact]
+    public void DoublePlayThrows_FieldersChoice_UnassistedPutoutFixture_StillCorrectsBatterLeg()
+    {
+        // 実試合の実測で見つかった残存ケース: 一塁手のアンアシスト（3U, Carry のみ・Throw が無い）で
+        // AppendDoublePlayThrows は「既存の送球（Throw）が無い」ため早期returnする（内野ゴロの併殺絵は
+        // 組めない）が、それでも「打」の誤アウトだけは訂正されなければならない（さもないと3U併殺のFCが
+        // 200試合中 6/111 件で誤ってアウト表示のまま残っていた＝2026-08-27 実測で発見）。
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.InfieldGrounder(FieldPosition.FirstBase, unassistedPutout: true);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        Assert.DoesNotContain(baseTl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive, batterOut: false);
+
+        Assert.False(tl.Runners.First(r => r.Label == "打").OutAtEnd);
+        Assert.DoesNotContain(tl.Judgements, j => j.Label == "打" && j.Kind == JudgementKind.Out);
+        Assert.Equal(batterArrive, tl.ResolvedAt, 9);
+    }
+
+    [Fact]
+    public void DoublePlayThrows_FieldersChoice_CloseCall_ShowsBatterSafe_NotOut()
+    {
+        // 野選（FC, batterOut=false）: 二塁は封殺できても一塁への転送が僅かに間に合わない
+        // BaserunningModel.ResolveDoublePlay 分岐B。BuildBattedBall は二塁封殺・野選の区別を知らずに
+        // 「打」レッグ・判定を一塁アウトとして作ってしまっているので、AppendDoublePlayThrows が
+        // batterOut=false のとき実際の結末（打者セーフ）へ差し替えることを確かめる（監督報告の追加バグ）。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+        // 基礎解決（BuildBattedBall）の時点では常にアウト扱い。
+        Assert.True(baseTl.Runners.First(r => r.Label == "打").OutAtEnd);
+        Assert.Contains(baseTl.Judgements, j => j.Label == "打" && j.Kind == JudgementKind.Out);
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive, batterOut: false);
+
+        var batterLeg = tl.Runners.First(r => r.Label == "打");
+        Assert.False(batterLeg.OutAtEnd, "野選なのに打者がアウト扱いのまま（塁上でタッチアウトの演技が出てしまう）");
+        Assert.DoesNotContain(tl.Judgements, j => j.Label == "打" && j.Kind == JudgementKind.Out);
+        var safeJudge = Assert.Single(tl.Judgements, j => j.Label == "打" && j.Kind == JudgementKind.Safe);
+        Assert.Equal(batterArrive, safeJudge.T, 9);
+        // 結果確定時刻（結果テキストの表示起点）も、送球到達でなく打者自身の到達に合わせる。
+        Assert.Equal(batterArrive, tl.ResolvedAt, 9);
+    }
+
+    [Fact]
+    public void DoublePlayThrows_FieldersChoice_NotCloseCall_SuppressesSafeOverlay()
+    {
+        // 野選でも際どくない（守備の見立てを大きく外れた幸運な生存）ケースでは、通常の内野安打と
+        // 同じ出し分け規約（batterCloseCall）に従い「セーフ」の演出を出さない＝アウト判定だけを消す。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+        var farAnchor = batterArrive + 1.0; // 際どさしきい値(既定0.15s)を大きく超える
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, farAnchor, batterOut: false);
+
+        Assert.False(tl.Runners.First(r => r.Label == "打").OutAtEnd);
+        Assert.DoesNotContain(tl.Judgements, j => j.Label == "打");
+        Assert.Equal(farAnchor, tl.ResolvedAt, 9);
+    }
+
+    [Fact]
+    public void DoublePlayThrows_ForcedRunnerAtSecond_RunsAllTheWayToTheBag()
+    {
+        // ④: 二塁封殺（Force=true）の一塁走者は、判定確定後もレッグを弄らず塁まで走り切る
+        // （2026-08-27 監督判断。フォースはタッチが要らないので一塁フォースの打者走者と同じ扱い）。
+        // 判定時刻（アウトの確定）は実際の送球到達へ合わせるが、走者のレッグ自体は途中で止めない。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+        var second = new TimelinePoint(field.SecondBase.X, field.SecondBase.Z);
+
+        // 二塁封殺の RunnerMove（BaserunningModel.ResolveDoublePlay が実際に積む形と同じ: Out+Force）を
+        // AppendRunnerLegs で走者レッグへ落としてから、本題の AppendDoublePlayThrows へ渡す
+        // （GameEngine 本番の呼び出し順と同じ: 走者レッグ→併殺送球の順）。
+        var move = new RunnerMove(new Player { Speed = 50 }, 1, 2, Out: true) { Force = true };
+        var withRunner = TimelineBuilder.AppendRunnerLegs(
+            baseTl, new[] { move }, field, new BaserunningCoefficients(), new FieldingCoefficients());
+        var runnerLegBefore = withRunner.Runners.Single(r => r.OutAtEnd && r.Label != "打" && r.Force);
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(withRunner, play, field, batterArrive);
+
+        var secondArrive = tl.Ball.First(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "second").T1;
+        var runnerLegAfter = tl.Runners.Single(r => r.OutAtEnd && r.Label != "打" && r.Force);
+        // レッグの終端は塁そのもの・元のレッグと同じ到達時刻（＝途中で止められていない）。
+        Assert.Equal(second.X, runnerLegAfter.To.X, 6);
+        Assert.Equal(second.Z, runnerLegAfter.To.Z, 6);
+        Assert.Equal(runnerLegBefore.T1, runnerLegAfter.T1, 9);
+        // それでもアウトの判定（判定オーバーレイの確定時刻）は、走者到達でなく実際の送球到達を指す。
+        var runnerOutJudgement = tl.Judgements.Single(j => j.Label == runnerLegAfter.Label && j.Kind == JudgementKind.Out);
+        Assert.Equal(secondArrive, runnerOutJudgement.T, 9);
+        Assert.True(secondArrive < runnerLegAfter.T1, "この前提（球が走者より先に着く＝DP成立）が崩れている");
+    }
+
+    [Fact]
+    public void DoublePlayThrows_BatterOutJudgementAndResolvedAt_MatchSecondThrowArrival()
+    {
+        // ③⑤: 打者のアウト判定・結果確定時刻（ResolvedAt＝結果テキストの表示起点）を、このプレーでは
+        // 描かれない「処理点→一塁の直接送球」の到達ではなく、実際に描いた2本目の到達へ合わせる。
+        // 以前は判定・テロップが球より p50 0.87s 早く出て、球が着く瞬間には何も表示が無かった
+        // （実測60試合51件・issue参照）。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
+
+        var firstArrive = tl.Ball.First(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "first").T1;
+        var batterOutJudgement = tl.Judgements.Single(j => j.Label == "打" && j.Kind == JudgementKind.Out);
+        Assert.Equal(firstArrive, batterOutJudgement.T, 9);
+        Assert.Equal(firstArrive, tl.ResolvedAt, 9);
+    }
+
+    [Fact]
+    public void DoublePlayThrows_PivotSprintSpeedOverride_AffectsCoverBasePace()
+    {
+        // 二塁カバー野手の実際のスプリント速度を渡すと、脚力の上限としてその値が使われる
+        // （渡さないときは既定の走力で代用）。GrounderOut() 固定シナリオでは必要速度が既定の
+        // 走力(7.25m/s)を下回る（＝走力でなく期限が効くケース）ため、既定を下回る遅い脚力を渡して
+        // 脚力側が効くことを確かめる。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+        var second = new TimelinePoint(field.SecondBase.X, field.SecondBase.Z);
+
+        var tlDefault = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
+        var pivotRole = tlDefault.Ball.First(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "second").ToRole!.Value;
+
+        var tlSlow = TimelineBuilder.AppendDoublePlayThrows(
+            baseTl, play, field, batterArrive, coefficients: null, pivotBonusSeconds: 0.0,
+            pivotSprintSpeedByRole: new Dictionary<FieldPosition, double> { [pivotRole] = 3.0 });
+
+        double MoveEnd(PlayTimeline t) => t.Moves.Single(m => m.Task == FielderTask.CoverBase
+            && System.Math.Sqrt(System.Math.Pow(m.To.X - second.X, 2) + System.Math.Pow(m.To.Z - second.Z, 2)) < 1.0).T1;
+
+        Assert.True(MoveEnd(tlSlow) > MoveEnd(tlDefault), "遅いスプリント速度を渡しても急ぎ度に反映されていない");
+    }
+
+    [Fact]
+    public void DoublePlayThrows_PivotThrowSpeedOverride_ChangesSecondLegSpeed()
+    {
+        // issue⑦: 二塁→一塁（2本目）の中継球速は、渡さなければ従来どおり RelayThrowSpeedMps 定数
+        // （既定32.0）。二塁カバー役の実際の肩を pivotThrowSpeedByRole で渡すと、その値に応じて
+        // 2本目の実効速度（描いた距離÷所要時間）が動く。所要時間には SecondForceTagSeconds（タッチ分）
+        // が加算されるため実効速度は入力の肩そのものとは一致しない＝ここでは強弱の順序性だけを見る。
+        var field = new FieldGeometry();
+        var play = GrounderOut();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tlDefault = TimelineBuilder.AppendDoublePlayThrows(baseTl, play, field, batterArrive);
+        var pivotRole = tlDefault.Ball.First(b => b.Kind == BallSegmentKind.Throw && b.ToBase == "second").ToRole!.Value;
+
+        double SecondLegSpeed(PlayTimeline t)
+        {
+            var thr = t.Ball.Last(b => b.Kind == BallSegmentKind.Throw);
+            var dist = System.Math.Sqrt(
+                System.Math.Pow(thr.To.X - thr.From.X, 2) + System.Math.Pow(thr.To.Z - thr.From.Z, 2));
+            return dist / (thr.T1 - thr.T0);
+        }
+
+        var tlWeakArm = TimelineBuilder.AppendDoublePlayThrows(
+            baseTl, play, field, batterArrive, coefficients: null, pivotBonusSeconds: 0.0,
+            pivotSprintSpeedByRole: null, batterOut: true,
+            pivotThrowSpeedByRole: new Dictionary<FieldPosition, double> { [pivotRole] = 15.0 });
+        var tlStrongArm = TimelineBuilder.AppendDoublePlayThrows(
+            baseTl, play, field, batterArrive, coefficients: null, pivotBonusSeconds: 0.0,
+            pivotSprintSpeedByRole: null, batterOut: true,
+            pivotThrowSpeedByRole: new Dictionary<FieldPosition, double> { [pivotRole] = 45.0 });
+
+        Assert.True(SecondLegSpeed(tlStrongArm) > SecondLegSpeed(tlDefault),
+            $"定数(32.0)より強い上書きは既定より速いはず: strong={SecondLegSpeed(tlStrongArm):F2} > default={SecondLegSpeed(tlDefault):F2}");
+        Assert.True(SecondLegSpeed(tlDefault) > SecondLegSpeed(tlWeakArm),
+            $"既定は定数(32.0)より弱い上書きより速いはず: default={SecondLegSpeed(tlDefault):F2} > weak={SecondLegSpeed(tlWeakArm):F2}");
+    }
+
     [Fact]
     public void DoublePlayThrows_TimesAreContinuousAndMonotonic()
     {
@@ -548,9 +782,11 @@ public sealed class TimelineTests
         Assert.Equal(roll.To.X, throws[0].From.X, 6);
         Assert.Equal(roll.To.Z, throws[0].From.Z, 6);
         Assert.True(throws[0].T0 >= roll.T1 - 1e-6, "1本目がロール終端より前に始まっている");
-        // 1本目終端≈2本目始点（握り替え分だけ後・連続）。
+        // 1本目終端≈2本目始点（ピボット握り替え分だけ後・連続）。判定モデルと同じ
+        // DoublePlayPivotTransferSeconds（既定0.90s）×守備係数で組む（issue
+        // double-play-throw-pace-and-second-out-call 案B）ので、上限は係数の可動域（守備1でも約1.1s）を見る。
         Assert.True(throws[1].T0 >= throws[0].T1 - 1e-6, "2本目が1本目到達より前に始まっている");
-        Assert.True(throws[1].T0 - throws[0].T1 <= 0.25, "握り替えが長すぎる（連続でない）");
+        Assert.True(throws[1].T0 - throws[0].T1 <= 1.2, "握り替えが長すぎる（連続でない）");
         // 二塁到達 < 一塁到達。
         Assert.True(throws[0].T1 < throws[1].T1, "二塁より先に一塁へ到達している");
         // 全ボール区間が単調かつ Duration 内。
@@ -597,6 +833,212 @@ public sealed class TimelineTests
             System.Math.Pow(throws[0].To.X - throws[0].From.X, 2) + System.Math.Pow(throws[0].To.Z - throws[0].From.Z, 2));
         var speed = dist / (throws[0].T1 - throws[0].T0);
         Assert.Equal(play.FielderThrowSpeedMps!.Value, speed, 3); // 握り替えを挟んでも速度は肩どおり
+    }
+
+    // --- Q31: 併殺の代替ルート（三塁/本塁の自己フォース）の絵。表示専用・結果不変・乱数不使用。 ---
+
+    private static FieldingPlay ThirdBaseSelfForceGrounder()
+        => FieldingPlayFixtures.InfieldGrounder(
+            FieldPosition.ThirdBase, fieldedX: -17.0, fieldedZ: 17.0);
+
+    private static FieldingPlay HomeSelfForceGrounder()
+        => FieldingPlayFixtures.InfieldGrounder(
+            FieldPosition.Catcher, fieldedX: 1.0, fieldedZ: 3.0);
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_ThirdBase_ReplacesSingleThrowWithCarryAndThrow()
+    {
+        var field = new FieldGeometry();
+        var play = ThirdBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        Assert.Single(baseTl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArrive, targetBase: 3);
+
+        var third = new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z);
+        var first = new TimelinePoint(field.FirstBase.X, field.FirstBase.Z);
+        var carry = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Carry);
+        Assert.Equal(play.FieldedX!.Value, carry.From.X, 6);
+        Assert.Equal(play.FieldedZ!.Value, carry.From.Z, 6);
+        Assert.Equal(third.X, carry.To.X, 6);
+        Assert.Equal(third.Z, carry.To.Z, 6);
+        var throwSeg = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(third.X, throwSeg.From.X, 6);
+        Assert.Equal(third.Z, throwSeg.From.Z, 6);
+        Assert.Equal(first.X, throwSeg.To.X, 6);
+        Assert.Equal(first.Z, throwSeg.To.Z, 6);
+        Assert.True(carry.T1 <= throwSeg.T0 + 1e-6, "自己送球がベースを踏む前に始まっている");
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_HomeBase_ReplacesSingleThrowWithCarryAndThrow()
+    {
+        var field = new FieldGeometry();
+        var play = HomeSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArrive, targetBase: 4);
+
+        var first = new TimelinePoint(field.FirstBase.X, field.FirstBase.Z);
+        var carry = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Carry);
+        Assert.Equal(0.0, carry.To.X, 6);
+        Assert.Equal(0.0, carry.To.Z, 6);
+        var throwSeg = Assert.Single(tl.Ball, b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(0.0, throwSeg.From.X, 6);
+        Assert.Equal(0.0, throwSeg.From.Z, 6);
+        Assert.Equal(first.X, throwSeg.To.X, 6);
+        Assert.Equal(first.Z, throwSeg.To.Z, 6);
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_CarryAndThrowSameFielderRole()
+    {
+        // 中継（ピボット）が無い＝処理した野手自身が塁を踏み、そのまま一塁へ投げる。受け手は一塁カバー。
+        var field = new FieldGeometry();
+        var play = ThirdBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArrive, targetBase: 3);
+
+        var carry = tl.Ball.Single(b => b.Kind == BallSegmentKind.Carry);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(FieldPosition.ThirdBase, carry.FromRole);
+        Assert.Equal(FieldPosition.ThirdBase, carry.ToRole);
+        Assert.Equal("third", carry.ToBase);
+        Assert.Equal(FieldPosition.ThirdBase, throwSeg.FromRole); // 投げ手は自己フォースした本人（中継なし）
+        Assert.Equal(FieldPosition.FirstBase, throwSeg.ToRole);
+        Assert.Equal("first", throwSeg.ToBase);
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_FlyBall_LeavesTimelineUnchanged()
+    {
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.CaughtFly(FieldPosition.CenterField);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArriveAnchor: 5.0, targetBase: 3);
+
+        Assert.Same(baseTl, tl);
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_ForcedRunnerAtThird_JudgementTimeMatchesCarryArrival_LegRunsToTheBag()
+    {
+        var field = new FieldGeometry();
+        var play = ThirdBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+        var third = new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z);
+
+        // BaserunningModel.ResolveDoublePlaySelfForce が実際に積む形（Out+Force+SelfForceDoublePlayLead）。
+        var move = new RunnerMove(new Player { Speed = 50 }, 2, 3, Out: true)
+            { Force = true, SelfForceDoublePlayLead = true };
+        var withRunner = TimelineBuilder.AppendRunnerLegs(
+            baseTl, new[] { move }, field, new BaserunningCoefficients(), new FieldingCoefficients());
+        var runnerLegBefore = withRunner.Runners.Single(r => r.OutAtEnd && r.Label != "打" && r.Force);
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(withRunner, play, field, batterArrive, targetBase: 3);
+
+        var carryArrive = tl.Ball.Single(b => b.Kind == BallSegmentKind.Carry).T1;
+        var runnerLegAfter = tl.Runners.Single(r => r.OutAtEnd && r.Label != "打" && r.Force);
+        Assert.Equal(third.X, runnerLegAfter.To.X, 6);
+        Assert.Equal(third.Z, runnerLegAfter.To.Z, 6);
+        Assert.Equal(runnerLegBefore.T1, runnerLegAfter.T1, 9); // レッグ自体は途中で止められていない
+        var runnerOutJudgement = tl.Judgements.Single(j => j.Label == runnerLegAfter.Label && j.Kind == JudgementKind.Out);
+        Assert.Equal(carryArrive, runnerOutJudgement.T, 9);
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_BatterOutJudgementAndResolvedAt_MatchThrowArrival()
+    {
+        var field = new FieldGeometry();
+        var play = ThirdBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArrive, targetBase: 3);
+
+        var throwArrive = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw).T1;
+        var batterOutJudgement = tl.Judgements.Single(j => j.Label == "打" && j.Kind == JudgementKind.Out);
+        Assert.Equal(throwArrive, batterOutJudgement.T, 9);
+        Assert.Equal(throwArrive, tl.ResolvedAt, 9);
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_FieldersChoice_CorrectsBatterLegToSafe()
+    {
+        // 三塁/本塁は封殺できても一塁への転送が僅かに間に合わない野選（BaserunningModel.
+        // ResolveDoublePlaySelfForce 分岐B）。BuildBattedBall は自己フォースを知らずに「打」レッグ・
+        // 判定を一塁アウトとして作ってしまっているので、batterOut=false のとき実際の結末（打者セーフ）
+        // へ差し替えることを確かめる（AppendDoublePlayThrows と同じ規約）。
+        var field = new FieldGeometry();
+        var play = ThirdBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+        Assert.True(baseTl.Runners.First(r => r.Label == "打").OutAtEnd);
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(
+            baseTl, play, field, batterArrive, targetBase: 3, batterOut: false);
+
+        Assert.False(tl.Runners.First(r => r.Label == "打").OutAtEnd);
+        Assert.DoesNotContain(tl.Judgements, j => j.Label == "打" && j.Kind == JudgementKind.Out);
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_TimesAreContinuousAndMonotonic()
+    {
+        var field = new FieldGeometry();
+        var play = ThirdBaseSelfForceGrounder();
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArrive, targetBase: 3);
+
+        var roll = tl.Ball.Single(b => b.Kind == BallSegmentKind.Roll);
+        var carry = tl.Ball.Single(b => b.Kind == BallSegmentKind.Carry);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.Equal(roll.To.X, carry.From.X, 6);
+        Assert.Equal(roll.To.Z, carry.From.Z, 6);
+        Assert.True(carry.T0 >= roll.T1 - 1e-6, "自己フォースがロール終端より前に始まっている");
+        Assert.True(throwSeg.T0 >= carry.T1 - 1e-6, "自己送球がベース到達より前に始まっている");
+        Assert.True(carry.T1 < throwSeg.T1, "対象塁より先に一塁へ到達している");
+        foreach (var b in tl.Ball)
+        {
+            Assert.True(b.T1 >= b.T0, $"区間が逆行: {b.Kind}");
+            Assert.True(b.T1 <= tl.Duration + 1e-6, $"区間が Duration を超過: {b.Kind}");
+        }
+    }
+
+    [Fact]
+    public void SelfForceDoublePlayThrows_LongCarry_ThrowNeverStartsBeforeCarryArrives()
+    {
+        // 実測（3000試合1573件中2件・最大0.061秒）: 対象を守る野手が処理点から対象塁まで遠く運ぶ稀なケースでは、
+        // 判定モデルの二段目握り替え起点（一段目と同じ捕球時刻）だけを素直に描くと「まだベースへ向かっている
+        // 絵なのに一塁へ投げ始めている」順序矛盾になる。実際に運びが長くなる処理点（三塁から約22m）で固定し、
+        // 表示ガードが順序を保証することを確かめる。
+        var field = new FieldGeometry();
+        var play = FieldingPlayFixtures.InfieldGrounder(FieldPosition.ThirdBase, fieldedX: 3.0, fieldedZ: 20.0);
+        var baseTl = TimelineBuilder.BuildBattedBall(
+            play, field.StandardAlignment(), field, null, runnersOn: true, TimelineBuilder.DescribeResult(play));
+        var batterArrive = baseTl.Runners.First(r => r.Label == "打").T1;
+
+        var tl = TimelineBuilder.AppendSelfForceDoublePlayThrows(baseTl, play, field, batterArrive, targetBase: 3);
+
+        var carry = tl.Ball.Single(b => b.Kind == BallSegmentKind.Carry);
+        var throwSeg = tl.Ball.Single(b => b.Kind == BallSegmentKind.Throw);
+        Assert.True(throwSeg.T0 >= carry.T1 - 1e-6, "自己送球が対象塁への到達より前に始まっている");
     }
 
     // --- F1 Slice 3: GameEngine 結線（併殺で二塁→一塁の2連続送球が描かれる） ---
@@ -661,6 +1103,47 @@ public sealed class TimelineTests
             }
         }
         Assert.True(found > 0, "300シードで内野ゴロ併殺タイムラインが1件も見つからない");
+    }
+
+    [Fact]
+    public void SelfForceDoublePlay_InGame_DrawsCarryThenFirstThrowChain()
+    {
+        // Q31・GameEngine 結線: 三塁手が自打球を処理し二塁走者を三塁で自己フォースする代替ルートが
+        // 実試合で実際に選ばれたとき、Carry(処理点→三塁)→Throw(三塁→一塁)の絵に差し替わることを確かめる
+        // （実測: 3000試合中 third は約1535件＝約2試合に1件。300シードなら高確率で見つかる）。
+        var field = new FieldGeometry();
+        var third = new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z);
+        var first = new TimelinePoint(field.FirstBase.X, field.FirstBase.Z);
+
+        var found = 0;
+        for (ulong s = 0; s < 300 && found == 0; s++)
+        {
+            var r = CapturedGame(s);
+            foreach (var tl in r.Log.Select(e => e.Timeline).Where(t => t is not null)!)
+            {
+                var carry = tl!.Ball.FirstOrDefault(b => b.Kind == BallSegmentKind.Carry && b.ToBase == "third");
+                if (carry is null) continue;
+
+                var throwSeg = tl.Ball.FirstOrDefault(
+                    b => b.Kind == BallSegmentKind.Throw && Near(b.From, third) && Near(b.To, first));
+                Assert.NotNull(throwSeg);
+                Assert.Equal(carry.FromRole, carry.ToRole); // 中継なし＝処理した本人がベースを踏む
+                Assert.Equal(carry.ToRole, throwSeg!.FromRole); // 投げ手も同一人物
+                Assert.True(carry.T1 <= throwSeg.T0 + 1e-6, "自己送球がベース到達より前に始まっている");
+                Assert.True(throwSeg.T1 <= tl.Duration + 1e-6);
+
+                var thirdOutLeg = tl.Runners.FirstOrDefault(leg => leg.OutAtEnd && Near(leg.To, third));
+                if (thirdOutLeg is not null)
+                {
+                    var judgement = Assert.Single(tl.Judgements, j => j.Label == thirdOutLeg.Label);
+                    Assert.Equal(JudgementKind.Out, judgement.Kind);
+                    Assert.Equal(carry.T1, judgement.T, 6);
+                }
+                found++;
+                break;
+            }
+        }
+        Assert.True(found > 0, "300シードで三塁自己フォースのタイムラインが1件も見つからない");
     }
 
     [Fact]
@@ -790,24 +1273,40 @@ public sealed class TimelineTests
     [Fact]
     public void StealTimeline_ThrowSpeedReflectsArmNotCatcherFielding()
     {
-        var c = new BaserunningCoefficients();
+        // 走力80 vs 守備90/30 の濃淡を額面どおり見る（効き＝恒等）。既定の効き 0.55 では差が矛盾ガードの中に埋もれる。
+        var c = new BaserunningCoefficients { AbilityEffect = AbilityEffectCoefficients.Identity };
         var field = new FieldGeometry();
         var runner = new Player { Speed = 80, Steal = 75 };
         var quickCatcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 90 };
         var slowCatcher = new Player { Position = FieldPosition.Catcher, ArmStrength = 60, Fielding = 30 };
 
-        BallSegment Throw(Player catcher) => TimelineBuilder
-            .BuildSteal(runner, catcher, StealResult.Safe, c, field)
+        BallSegment Throw(Player catcher, StealResult result) => TimelineBuilder
+            .BuildSteal(runner, catcher, result, c, field)
             .Ball.Single(b => b.Kind == BallSegmentKind.Throw);
 
-        // 送球区間の長さ（＝球の速さ）は肩だけで決まる＝同じ肩なら守備が違っても不変。
-        var expected = c.CatchThrowDistanceM / quickCatcher.ToFielder().ThrowSpeedMps;
-        var quick = Throw(quickCatcher);
-        var slow = Throw(slowCatcher);
-        Assert.Equal(expected, quick.T1 - quick.T0, 6);
-        Assert.Equal(expected, slow.T1 - slow.T0, 6);
+        // 送球区間の長さ（＝球の速さ）は肩だけで決まる＝同じ肩なら守備が違っても、
+        // セーフ/アウトが違っても不変（矛盾ガードは投げ始めをずらすだけ）。
+        var expected = c.CatchThrowDistanceM / quickCatcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
+        foreach (var result in new[] { StealResult.Safe, StealResult.CaughtStealing })
+        {
+            var q = Throw(quickCatcher, result);
+            var s = Throw(slowCatcher, result);
+            Assert.Equal(expected, q.T1 - q.T0, 6);
+            Assert.Equal(expected, s.T1 - s.T0, 6);
+        }
+
         // 守備の差は「投げ始め（握り替え）」に出る＝守備90の捕手の方が早く投げ始める。
-        Assert.True(quick.T0 < slow.T0, $"守備90の捕手が守備30より早く投げ始めていない（{quick.T0:F3} vs {slow.T0:F3}）");
+        // ⚠ セーフの回**でも**差が出ること。校正項を物理層へ移す前（案B＝表示側の矛盾ガード）は、
+        // セーフの到達が「走者到達＋0.20秒」へ固定され、区間長が同じである以上投げ始めも一致した
+        // ＝<b>捕手の守備の差が絵から消えていた</b>。いまは判定が使った秒をそのまま描くので濃淡が戻る
+        // （issue verdict-margin-into-physical-layer）。
+        foreach (var result in new[] { StealResult.CaughtStealing, StealResult.Safe })
+        {
+            var q = Throw(quickCatcher, result);
+            var s = Throw(slowCatcher, result);
+            Assert.True(q.T0 < s.T0,
+                $"守備90の捕手が守備30より早く投げ始めていない（{result}: {q.T0:F3} vs {s.T0:F3}）");
+        }
     }
 
     // --- 本盗（issue #485）: 投球が送球を兼ねる＝捕手からの送球区間そのものが無い。 ---
@@ -841,7 +1340,7 @@ public sealed class TimelineTests
         Assert.Equal("third", throwSeg.ToBase);
         Assert.Equal(FieldPosition.ThirdBase, throwSeg.ToRole);
         Assert.True(Near(throwSeg.To, new TimelinePoint(field.ThirdBase.X, field.ThirdBase.Z)), "送球先が三塁でない");
-        Assert.Equal(c.CatchThrowToThirdDistanceM / catcher.ToFielder().ThrowSpeedMps, throwSeg.T1 - throwSeg.T0, 6);
+        Assert.Equal(c.CatchThrowToThirdDistanceM / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps, throwSeg.T1 - throwSeg.T0, 6);
         var leg = Assert.Single(tl.Runners);
         Assert.True(Near(leg.From, new TimelinePoint(field.SecondBase.X, field.SecondBase.Z)), "三盗の走者が二塁発でない");
         Assert.Contains(tl.Moves, m => m.Role == FieldPosition.ThirdBase && m.Task == FielderTask.CoverBase);

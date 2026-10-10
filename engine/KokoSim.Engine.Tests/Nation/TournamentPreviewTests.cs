@@ -59,6 +59,31 @@ public sealed class TournamentPreviewTests
         }
     }
 
+    /// <summary>
+    /// 甲子園・センバツは49代表/32校が多数の県から集まるため、校名（生成物で一意の保証が無い）が
+    /// 別の県の校と偶然一致することがある。以前は byName を素朴な ToDictionary で組んでいたため
+    /// 同名の2校目で ArgumentException（重複キー）が飛び、展望画面ごと開けなくなっていた
+    /// （2026-08-22 実機検証で発見。KoshienFlowCheck 系の既存ハーネスは展望を一度も呼んでおらず未発見だった）。
+    /// </summary>
+    [Fact]
+    public void Build_DoesNotThrow_WhenTwoEntrantsShareTheSameName()
+    {
+        var field = new List<School>
+        {
+            Sch(1, 88, name: "帝都産大付属高校"),
+            Sch(2, 80, name: "帝都産大付属高校"),   // 別の県の同名校（衝突）
+            Sch(3, 70),
+            Sch(4, 60),
+        };
+
+        var p = TournamentPreviewBuilder.Build("春季テスト大会", field, berths: 1, "");
+
+        Assert.NotEmpty(p.Contenders);
+        // 同名校が居ても落ちない＝先勝ちで畳まれ、両方の格付け行が消えずに残る。
+        Assert.Equal(p.Contenders.Count, p.NotablePlayers.Count);
+        Assert.Equal(p.Contenders.Count, p.Rosters.Count);
+    }
+
     private static int CountOccurrences(string haystack, string needle)
     {
         var count = 0;
@@ -124,6 +149,96 @@ public sealed class TournamentPreviewTests
             });
             Assert.False(string.IsNullOrWhiteSpace(r.SeedLabel));
         }
+    }
+
+    // ===== 注目選手の成績行＝今大会の実測値（issue #634） =====
+    //
+    // 以前はここで能力から確率的な打率・防御率を合成しており、実際の試合結果とは無関係の数字が
+    // 「今大会 防御率1.13」として出ていた（裏試合フルシム #43 が実測を積んでいるのに読んでいなかった）。
+
+    /// <summary>SourceId を焼いた素朴なチーム（豪腕商業＝投手力が上＝エースが看板になる）。</summary>
+    private static Team MakeAceTeam()
+    {
+        var fielders = new[]
+        {
+            FieldPosition.Catcher, FieldPosition.FirstBase, FieldPosition.SecondBase, FieldPosition.ThirdBase,
+            FieldPosition.Shortstop, FieldPosition.LeftField, FieldPosition.CenterField, FieldPosition.RightField,
+            FieldPosition.DesignatedHitter,
+        };
+        var order = fielders
+            .Select((p, i) => new Player { Position = p, Name = $"{p}先発", UniformNumber = i + 2, SourceId = i + 2 })
+            .ToList();
+        var pitcher = new Player
+        {
+            Position = FieldPosition.Pitcher, Name = "エース", UniformNumber = 1, SourceId = 1,
+            Pitching = PitcherAttributes.LeagueAverage,
+        };
+        order[0] = pitcher;
+        return new Team
+        {
+            Name = "豪腕商業", BattingOrder = order, PitcherSlot = 0, StartingPitcher = pitcher,
+            Reserves = new List<Player>(),
+        };
+    }
+
+    private static KokoSim.Engine.Stats.StatBook AceBook()
+    {
+        var book = new KokoSim.Engine.Stats.StatBook();
+        // 27アウト・自責1・奪三振12 の1試合＝防御率1.00。
+        book.FoldGame(new GameResult
+        {
+            AwayName = "豪腕商業", HomeName = "相手", AwayRuns = 3, HomeRuns = 1,
+            InningsPlayed = 9, TotalPitches = 0, PitcherChanges = 0,
+            AwayPitching = new[]
+            {
+                new PitchingLine("エース", Outs: 27, BattersFaced: 30, Hits: 4, Runs: 1, StrikeOuts: 12,
+                    Walks: 1, Pitches: 110, SourceId: 1, EarnedRuns: 1),
+            },
+        }, managerIsAway: true);
+        return book;
+    }
+
+    [Fact]
+    public void NotableStatLine_UsesMeasuredStats_WhenTheSchoolHasPlayed()
+    {
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) =>
+                school.Name == "豪腕商業" ? MakeAceTeam() : StrengthTeamFactory.ForSchool(school, year),
+            statsForSchool: id => id == 3 ? AceBook() : null);
+
+        var ace = p.NotablePlayers.First(n => n.SchoolName == "豪腕商業");
+        Assert.True(ace.PitcherLed);
+        Assert.Contains("防御率1.00", ace.StatLine);   // 実測（27アウト・自責1）
+        Assert.Contains("12奪三振", ace.StatLine);
+    }
+
+    [Fact]
+    public void NotableStatLine_SaysNotPlayedYet_WhenTheSchoolHasNoGames()
+    {
+        // 帳簿を渡さない＝開幕前。合成した見込み値で埋め戻さず「まだしていない」と書く。
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) =>
+                school.Name == "豪腕商業" ? MakeAceTeam() : StrengthTeamFactory.ForSchool(school, year));
+
+        var ace = p.NotablePlayers.First(n => n.SchoolName == "豪腕商業");
+        Assert.Contains("最速", ace.StatLine);          // 能力（真値）は今までどおり出る
+        Assert.Contains("今大会 未登板", ace.StatLine);
+        Assert.DoesNotContain("防御率", ace.StatLine);
+    }
+
+    [Fact]
+    public void RosterMembers_CarryTheSourceId_ForStatJoin()
+    {
+        // 成績の帰属キーを持つのは永続ロスター（#80）＝実戦・裏試合フルシムと同一ソース。
+        // 旧 StrengthTeamFactory の使い捨て生成は SourceId を持たない＝成績も積まれない（join も空振りで正しい）。
+        var rosters = new KokoSim.Engine.Nation.Roster.NationRosters(
+            new KokoSim.Engine.Nation.Roster.AiRosterDeps());
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) => rosters.TeamFor(school, year));
+
+        // 校別詳細が (校ID, 選手ID) で今大会成績を join するための帰属キー。
+        foreach (var r in p.Rosters)
+            Assert.All(r.Members, m => Assert.True(m.SourceId > 0, $"{r.SchoolName} の {m.Name} に SourceId が無い"));
     }
 
     // ===== DHスロットの登録メンバー表記（enum由来の「指」, issue #70） =====
@@ -233,6 +348,32 @@ public sealed class TournamentPreviewTests
         Assert.Contains("2校", p.Meta);               // 進出枠
         Assert.Contains("地区大会", p.Meta);
         Assert.All(p.Contenders, c => Assert.False(string.IsNullOrEmpty(c.Blurb)));
+    }
+
+    /// <summary>
+    /// 甲子園は「次のステージ」が無い＝進出枠の言い回しを出さない（設計書06 §3.5b）。
+    /// 秋・夏の県大会は従来どおり枠を出す。
+    /// </summary>
+    [Fact]
+    public void Lead_And_Meta_AdaptToTheStage()
+    {
+        var koshien = TournamentPreviewBuilder.Build(
+            "2028年 全国高等学校野球選手権大会", Field(), berths: 1, nextStageName: "",
+            stage: PreviewStage.SummerKoshien);
+        Assert.Contains("代表", koshien.Meta);
+        Assert.DoesNotContain("上位", koshien.Meta);
+        Assert.Contains("頂点に立つのは一校だけ", koshien.Lead);
+        Assert.DoesNotContain("新チーム始動の秋", koshien.Lead);
+
+        var summer = TournamentPreviewBuilder.Build(
+            "2028年 選手権神奈川大会", Field(), berths: 1, nextStageName: "甲子園",
+            stage: PreviewStage.SummerPrefecture);
+        Assert.Contains("最後の夏", summer.Lead);
+        Assert.Contains("甲子園", summer.Meta);
+
+        // 既定（秋）は従来の文言のまま＝旧来の呼び出しは1文字も変わらない。
+        var autumn = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会");
+        Assert.Contains("新チーム始動の秋", autumn.Lead);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
+using KokoSim.Engine.Match.Fielding;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Match.Timeline.Playback;
@@ -79,8 +80,8 @@ public sealed class BaserunningPlaysTests
     public void Bunt_SuccessRate_RisesWithBuntSkill()
     {
         var p = PitcherAttributes.LeagueAverage;
-        var low = BuntResolver.SuccessRate(new Player { Bunt = 20 }, p, C);
-        var high = BuntResolver.SuccessRate(new Player { Bunt = 90 }, p, C);
+        var low = BuntResolver.SuccessRate(new Player { Bunt = 20 }, p, courseDifficulty: 0.0, C);
+        var high = BuntResolver.SuccessRate(new Player { Bunt = 90 }, p, courseDifficulty: 0.0, C);
         Assert.True(high > low, $"バント技術で成功率が上がらない: {low:F2} vs {high:F2}");
     }
 
@@ -88,8 +89,8 @@ public sealed class BaserunningPlaysTests
     public void Bunt_HighVelocity_LowersSuccess()
     {
         var batter = new Player { Bunt = 60 };
-        var slow = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 125 }, C);
-        var fast = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 150 }, C);
+        var slow = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 125 }, courseDifficulty: 0.0, C);
+        var fast = BuntResolver.SuccessRate(batter, new PitcherAttributes { MaxVelocityKmh = 150 }, courseDifficulty: 0.0, C);
         Assert.True(fast < slow, "速球でバントが難しくならない");
     }
 
@@ -100,7 +101,8 @@ public sealed class BaserunningPlaysTests
         var seen = new HashSet<BuntResult>();
         var batter = new Player { Bunt = 55, Speed = 70 };
         for (var i = 0; i < 3000; i++)
-            seen.Add(BuntResolver.Resolve(batter, PitcherAttributes.LeagueAverage, safety: true, C, rng));
+            seen.Add(BuntResolver.Resolve(batter, PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0,
+                safety: true, firstRunner: null, secondRunner: null, thirdRunner: null, field: null, C, rng));
         // 犠打成功・内野安打・小フライ・ファウル・空振りが一通り現れる。
         Assert.Contains(BuntResult.SacrificeSuccess, seen);
         Assert.Contains(BuntResult.InfieldHit, seen);
@@ -115,7 +117,8 @@ public sealed class BaserunningPlaysTests
     {
         var rng = new Xoshiro256Random(1);
         var outcome = SqueezeResolver.Resolve(new Player { Bunt = 60 }, new Player { Baserunning = 60 },
-            PitcherAttributes.LeagueAverage, wasteProbability: 1.0, C, rng);
+            PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
+            new FieldGeometry(), wasteProbability: 1.0, C, rng);
         Assert.True(outcome.RunnerOut);
         Assert.Equal(0, outcome.Runs);
     }
@@ -128,10 +131,47 @@ public sealed class BaserunningPlaysTests
         for (var i = 0; i < 200; i++)
         {
             var o = SqueezeResolver.Resolve(new Player { Bunt = 80 }, new Player { Baserunning = 70 },
-                PitcherAttributes.LeagueAverage, wasteProbability: 0.0, C, rng);
+                PitcherAttributes.LeagueAverage, pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
+                new FieldGeometry(), wasteProbability: 0.0, C, rng);
             scored += o.Runs;
         }
         Assert.True(scored > 0, "スクイズが一度も決まらない");
+    }
+
+    /// <summary>
+    /// 三塁走者のスタート（走塁判断, issue bunt-no-take-on-ball-pitches の④＝design-02 §4.4）: ボールが
+    /// 実際にプレーされたとき（Foul/MissedBuntで不成立でない）でも、走塁判断が低い三塁走者は本塁で刺されうる
+    /// （RunnerOut=true, Runs=0）。走塁判断が高いほど生還率が上がる。
+    /// </summary>
+    [Fact]
+    public void Squeeze_ThirdRunner_ThrownOutAtHome_RisesWithLowBaserunningJudgment_FallsWithHigh()
+    {
+        double RunnerOutRateOnBallInPlay(int baserunning)
+        {
+            var rng = new Xoshiro256Random(3);
+            var batter = new Player { Bunt = 80 };
+            var runner = new Player { Baserunning = baserunning };
+            var caught = 0;
+            var playedBalls = 0;
+            const int n = 20000;
+            for (var i = 0; i < n; i++)
+            {
+                var o = SqueezeResolver.Resolve(batter, runner, PitcherAttributes.LeagueAverage,
+                    pitchStuff: 0.0, courseDifficulty: 0.0, firstRunner: null, secondRunner: null,
+                    new FieldGeometry(), wasteProbability: 0.0, C, rng);
+                if (o.Bunt is BuntResult.Foul or BuntResult.MissedBunt) continue; // 打席続行（挟殺）は別テストの範囲
+                playedBalls++;
+                if (o.RunnerOut) caught++;
+            }
+            Assert.True(playedBalls > 0);
+            return caught / (double)playedBalls;
+        }
+
+        var lowJudgment = RunnerOutRateOnBallInPlay(1);
+        var highJudgment = RunnerOutRateOnBallInPlay(99);
+        Assert.True(lowJudgment > 0.0, "走塁判断が低い三塁走者が一度も本塁で刺されない");
+        Assert.True(lowJudgment > highJudgment,
+            $"走塁判断で本塁封殺率が下がらない: low={lowJudgment:P1} high={highJudgment:P1}");
     }
 
     // --- 進塁判断は Baserunning 参照（設計書02 §4.1） ---
@@ -322,7 +362,8 @@ public sealed class BaserunningPlaysTests
         var bases = new BaseState { Second = second, Third = third };
         var rng = new SequenceRandom(0.99, 0.0); // 二塁走者の本盗判定は失敗(→三塁へ) → 続く追加進塁判定は確実成立
         var (runs, extraOuts, _, _, _, moves) = BaserunningModel.ApplyDetailed(
-            bases, PlateAppearanceResult.ReachedOnError, batter, 0, coeff, rng);
+            bases, PlateAppearanceResult.ReachedOnError, batter, 0, coeff, rng,
+            errorKind: FieldingErrorKind.Throw);   // 連鎖は悪送球だけ（issue #629）
 
         Assert.Equal(2, runs); // 三塁走者(元)生還＋追加進塁で経由してきた走者も生還
         Assert.Equal(0, extraOuts);
@@ -347,7 +388,8 @@ public sealed class BaserunningPlaysTests
                     Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 },
                 };
                 var (runs, _, _, _, _, _) = BaserunningModel.ApplyDetailed(
-                    bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng);
+                    bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng,
+                    errorKind: FieldingErrorKind.Throw);
                 total += runs;
             }
             return (double)total / trials;
@@ -356,6 +398,60 @@ public sealed class BaserunningPlaysTests
         var off = AvgRuns(0.0);
         var on = AvgRuns(0.9);
         Assert.True(on > off, $"失策連鎖を有効化しても平均得点が増えない: off={off:F2} on={on:F2}");
+    }
+
+    // --- 失策連鎖は悪送球だけ（issue #629・監督決定 2026-08-13） ---
+    // 捕球エラー（お手玉）とフライ落球は球が野手の足元にある＝全走者が1つ多く進む理由がない。
+    // 絵も「3m弾いて拾い直す」だけなので、走者だけ進むと因果が合わない（issue #629 の症状そのもの）。
+
+    /// <summary>本題: 同じ乱数・同じ場面でも、捕球エラーとフライ落球では連鎖しない。</summary>
+    [Theory]
+    [InlineData(null)]                          // 失策種別が不明（強制結果など）＝連鎖させない
+    [InlineData(FieldingErrorKind.Catch)]       // お手玉・フライ落球
+    public void ErrorExtraAdvance_OnlyChainsOnThrowError(FieldingErrorKind? kind)
+    {
+        var coeff = C with { ErrorExtraAdvanceProb = 1.0 };   // 悪送球なら必ず連鎖する設定
+
+        var thrown = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
+        var t = BaserunningModel.ApplyDetailed(
+            thrown, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff,
+            new SequenceRandom(0.99, 0.0), errorKind: FieldingErrorKind.Throw);
+
+        var caught = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
+        var c = BaserunningModel.ApplyDetailed(
+            caught, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff,
+            new SequenceRandom(0.99, 0.0), errorKind: kind);
+
+        Assert.True(t.ErrorExtraAdvanceOccurred, "悪送球で連鎖していない");
+        Assert.False(c.ErrorExtraAdvanceOccurred, $"{kind?.ToString() ?? "種別なし"} で連鎖している");
+        // 症状そのもの: お手玉で二塁走者が生還しない（悪送球なら還る）。
+        Assert.Equal(2, t.Runs);
+        Assert.Equal(1, c.Runs);
+        Assert.Same(caught.Third, caught.Third);   // 元二塁走者は三塁で止まる
+        Assert.NotNull(caught.Third);
+    }
+
+    /// <summary>
+    /// ゲートは<b>乱数を引いてから</b>効く（issue #525 と同じ流儀）。捕球エラーでも消費は1回のままで、
+    /// 打席あたりの乱数消費位置が失策種別で揺れない＝帯の再校正が連鎖の増減だけで済む。
+    /// </summary>
+    [Fact]
+    public void ErrorExtraAdvance_Gate_DoesNotChangeRandomConsumption()
+    {
+        var coeff = C with { ErrorExtraAdvanceProb = 1.0 };
+        for (ulong seed = 0; seed < 100; seed++)
+        {
+            var a = new Xoshiro256Random(seed);
+            var b = new Xoshiro256Random(seed);
+            var ba = new BaseState { Second = new Player { Baserunning = 50 } };
+            var bb = new BaseState { Second = new Player { Baserunning = 50 } };
+            BaserunningModel.ApplyDetailed(ba, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, a,
+                errorKind: FieldingErrorKind.Throw);
+            BaserunningModel.ApplyDetailed(bb, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, b,
+                errorKind: FieldingErrorKind.Catch);
+            // 消費が同じなら、次に引く値も同じ。
+            Assert.Equal(a.NextDouble(), b.NextDouble());
+        }
     }
 
     // --- 失策連鎖の送球精度連動（Issue #37, design-14 P1-6b） ---
@@ -372,7 +468,7 @@ public sealed class BaserunningPlaysTests
             };
             var (_, _, _, _, chain, _) = BaserunningModel.ApplyDetailed(
                 bases, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, rng,
-                errorThrowAccuracy: throwAccuracy);
+                errorThrowAccuracy: throwAccuracy, errorKind: FieldingErrorKind.Throw);
             if (chain) occurred++;
         }
         return (double)occurred / trials;
@@ -397,11 +493,11 @@ public sealed class BaserunningPlaysTests
             var bLo = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
             var lo = BaserunningModel.ApplyDetailed(
                 bLo, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed),
-                errorThrowAccuracy: 10);
+                errorThrowAccuracy: 10, errorKind: FieldingErrorKind.Throw);
             var bHi = new BaseState { Second = new Player { Baserunning = 50 }, Third = new Player { Baserunning = 50 } };
             var hi = BaserunningModel.ApplyDetailed(
                 bHi, PlateAppearanceResult.ReachedOnError, new Player(), 0, coeff, new Xoshiro256Random(seed),
-                errorThrowAccuracy: 90);
+                errorThrowAccuracy: 90, errorKind: FieldingErrorKind.Throw);
             Assert.Equal(lo.Runs, hi.Runs);
             Assert.Equal(lo.ErrorExtraAdvanceOccurred, hi.ErrorExtraAdvanceOccurred);
         }
@@ -456,7 +552,11 @@ public sealed class BaserunningPlaysTests
         var on = new GameContext { Baserunning = C with { DropThirdStrikeReachProb = 0.9, DropThirdStrikeCatchingSlope = 0.0 } };
         var totalOff = 0;
         var totalOn = 0;
-        for (ulong s = 0; s < 30; s++)
+        // ⚠ 30シードでは足りない（実測 2026-08-14: off=72 / on=70 で逆転した）。150シードも
+        // バックホーム悪送球導入（2026-08-30, RelayThrowErrorBaseProb>0）で乱数列が変わり再度逆転した
+        // （off=629 on=626）。振り逃げ1回の得点価値は小さく、乱数列がずれると試合ごとの揺れに埋もれる
+        // ＝母数をさらに増やして殺す（500シード）。
+        for (ulong s = 0; s < 500; s++)
         {
             totalOff += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
             totalOn += GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), on, new Xoshiro256Random(s)).TotalRuns;
@@ -581,9 +681,10 @@ public sealed class BaserunningPlaysTests
     [Fact]
     public void DoubleStealThirdBreak_Enabled_ChangesOutcomesForStealHeavyTeams()
     {
-        Team Brainy(string name) => FastTeam(name) with { Tactics = new StandardTacticsBrain(new TacticsCoefficients()) };
-        var off = new GameContext();
-        var on = new GameContext { Baserunning = C with { DoubleStealThirdBreakProb = 1.0 } };
+        // 俊足チームの走力を額面どおり効かせる（効き＝恒等）＝既定の効き 0.55 では重盗の企図が減り 40 シードで差が出ない。
+        var off = new GameContext().WithAbilityEffect(AbilityEffectCoefficients.Identity);
+        var on = off with { Baserunning = off.Baserunning with { DoubleStealThirdBreakProb = 1.0 } };
+        Team Brainy(string name) => FastTeam(name) with { Tactics = new StandardTacticsBrain(new TacticsCoefficients(), off.Baserunning) };
         var differs = false;
         for (ulong s = 0; s < 40 && !differs; s++)
         {
@@ -714,7 +815,8 @@ public sealed class BaserunningPlaysTests
         var totalOff = 0;
         var totalOn = 0;
         var wpOn = 0;
-        for (ulong s = 0; s < 30; s++)
+        // ⚠ 30シードでは足りない（実測 2026-08-14: off=255 / on=252 で逆転した）。理由は上の振り逃げと同じ。
+        for (ulong s = 0; s < 150; s++)
         {
             totalOff += GameEngine.Play(FastTeam("A"), FastTeam("H"), off, new Xoshiro256Random(s)).TotalRuns;
             var r = GameEngine.Play(FastTeam("A"), FastTeam("H"), on, new Xoshiro256Random(s));

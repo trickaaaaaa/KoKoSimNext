@@ -46,7 +46,8 @@ public sealed class TournamentRunnerAceRestTests
         var runner = new TournamentRunner(
             // seed は「7試合きっかりで終わる（引き分け再試合が出ない）」ブラケットになる値を選ぶ。
             // 打球方向の改定（issue #262）で 123 は10回引き分け→再試合が発生するようになったため 124 へ更新。
-            schools, schools[0], new NationCoefficients(), new Xoshiro256Random(124),
+            // 逆算配分の目標を圧縮後の強さへ変えた（issue prefecture-dominance）で 124 も再試合が出るため 125 へ更新。
+            schools, schools[0], new NationCoefficients(), new Xoshiro256Random(125),
             schedule, "テスト大会", playerResolver: null, backgroundResolver: bg);
 
         // playerResolver 無し＝自校カードも背景フルシムで解決される＝全国AI校と同じ経路（scope B）。

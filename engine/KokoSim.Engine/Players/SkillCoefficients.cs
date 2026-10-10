@@ -46,6 +46,22 @@ public sealed record SkillCoefficients
     // --- チーム系 ---
     /// <summary>精神的支柱: 主将としての統率力（緩和量）の拡大倍率（設計書09 §8）。</summary>
     public double SpiritualPillarCaptainFactor { get; init; } = 1.4;
+    /// <summary>
+    /// ムードメーカー: 出場中（投手 or 守備でフィールドに立っている）なら、プレッシャー負補正の緩和量
+    /// （<see cref="Match.Game.TeamState.MitigationFor"/>）へ加算する固定量。主将の統率力とは別枠で
+    /// 誰か1人でも出場していれば加算（複数人保有でも重複加算しない）。
+    /// </summary>
+    public double MoodmakerMitigationBonus { get; init; } = 0.06;
+    /// <summary>
+    /// 練習リーダー: 同じロスターに1人でも保有者が居ると、本人以外の全部員の週間経験値へ掛かる倍率
+    /// （<see cref="Season.DevelopmentModel.TeamSkillExpFactor"/>）。
+    /// </summary>
+    public double PracticeLeaderExpFactor { get; init; } = 1.05;
+    /// <summary>
+    /// お手本: 自分より学年が上（先輩）で同ポジション（最高適性）の保有者が居ると、その後輩の
+    /// 週間経験値へ掛かる倍率（<see cref="Season.DevelopmentModel.TeamSkillExpFactor"/>）。
+    /// </summary>
+    public double RoleModelExpFactor { get; init; } = 1.08;
 
     // --- 体質・成長系 ---
     public double DiligentExpFactor { get; init; } = 1.15;

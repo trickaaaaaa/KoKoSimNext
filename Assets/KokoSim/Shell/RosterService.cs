@@ -31,6 +31,12 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public const int NewSchoolIntake = 10;
 
+        /// <summary>新規ゲーム開始のたびの新設校ロスター生成に使う決定論ストリームの識別子（<see cref="GameSeed.Master"/> と混合）。</summary>
+        private const ulong NewSchoolRosterStream = 0x4E53_0000UL;
+
+        /// <summary>転任のたびの新規ロスター生成に使う決定論ストリームの識別子（<see cref="GameSeed.Master"/> と混合）。</summary>
+        private const ulong TransferRosterStream = 0x558B_0000UL;
+
         /// <summary>年度替わりの新入生生成に使う決定論ストリームの識別子（<see cref="GameSeed.Master"/> と混合, issue #535）。</summary>
         private const ulong YearRolloverStream = 0x5535_0000UL;
 
@@ -63,8 +69,13 @@ namespace KokoSim.Unity.Shell
         // 新入生へ振る安定ID（成績集計の帰属キー）の次の値。単調増加＝既存・卒業生の Id と衝突しない（issue #535）。
         private static int _nextId;
 
+        // 次回生成（Build）に使うシードと才能中心値の上書き。既定は新規ゲーム開始時と同じ固定シード/既定中心値
+        // （従来どおり）。転任時だけ ResetForTransfer が年度依存のシードと名声反映の中心値に差し替える。
+        private static ulong _rosterSeed = DefaultSeed;
+        private static double? _rosterTalentCenterOverride;
+
         /// <summary>共有ロスター（セッション内で同一インスタンス・順序安定）。初回アクセスで生成。夏引退者は含むが卒業生は含まない。</summary>
-        public static IReadOnlyList<DevelopingPlayer> Roster => _roster ??= Build(DefaultSeed);
+        public static IReadOnlyList<DevelopingPlayer> Roster => _roster ??= Build(_rosterSeed, _rosterTalentCenterOverride);
 
         /// <summary>
         /// 卒業してロスターを外れた選手（年度替わりで Grade&gt;3 になり除去された者）。成績の名前解決
@@ -139,6 +150,8 @@ namespace KokoSim.Unity.Shell
         public static void Reset()
         {
             _roster = null; _graduates = null; _nextId = 0; _newSchool = false;
+            _rosterSeed = DefaultSeed;
+            _rosterTalentCenterOverride = null;
             ProspectService.Reset();   // 予定者もこの進行のものなので一緒に捨てる（issue #587）
             RecruitService.Reset();    // 勧誘の中学生リストも同じ（issue #588）
             DraftService.Reset();      // 教え子名鑑（過年度の指名確定）も同じ（issue #586）
@@ -146,15 +159,46 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 新設校として作り直す（issue #585）。次アクセスの生成が「1年生 <see cref="NewSchoolIntake"/> 人だけ」になる。
-        /// 新規ゲーム設定の確定から呼ぶ。<see cref="Reset"/> と違いモードを立てる点だけが違う。
+        /// 新規ゲーム設定の確定から呼ぶ。
+        ///
+        /// <para>
+        /// シードは <see cref="GameSeed.Master"/> 由来にする（2026-08-29 ユーザー指摘で修正）。<see cref="DefaultSeed"/>
+        /// 固定のままだと「最初から」を選ぶたびに<b>毎回同じ新入生10人</b>になっていた（<see cref="Reset"/> が既定シードへ
+        /// 戻すだけで、新規ゲームであることを新入生生成へ反映していなかった）。<see cref="GameSeed.Master"/> は
+        /// プロセス起動ごとに変わる（<see cref="GameSeed"/>）ので、これを混ぜることで新規ゲームのたびに新入生が変わる。
+        /// </para>
         /// </summary>
         public static void ResetAsNewSchool()
         {
             Reset();
             _newSchool = true;
+            _rosterSeed = GameSeed.Master ^ NewSchoolRosterStream;
         }
 
-        private static List<DevelopingPlayer> Build(ulong seed)
+        /// <summary>
+        /// 転任先の新校として作り直す（設計書04 §1.3）。部員は旧校に残る想定（issue「監督の転任システムが
+        /// 実ゲームに完全未配線」の決定）なので、新設校と同じ「1年生 <see cref="NewSchoolIntake"/> 人だけ」で
+        /// 作り直す。<see cref="Reset"/> と違い <see cref="DraftService.Reset"/> は呼ばない＝教え子名鑑
+        /// （プロ入りOB台帳）はキャリア横断の記録なので転任では捨てない（design-04 §1.3「監督能力と名声は持ち越し」）。
+        ///
+        /// <para>
+        /// シードは<paramref name="yearIndex"/>依存にする（2026-08-23 ユーザー指摘で修正）。<see cref="DefaultSeed"/>
+        /// 固定のままだと、新設校と同じ生成経路を使い回す都合上<b>何年目の転任でも同じ10人</b>が出てしまう
+        /// （新規ゲーム開始は一度きりなので問題が出ないが、転任は1キャリアで何度も起きるため実害になる）。
+        /// 才能中心値も<see cref="TalentCenter"/>（名声＋スカウト網反映）へ差し替える＝持ち越した名声が
+        /// 転任先の1年生の質にも効くようにする（従来は<c>talentCenter</c>省略でFame非依存の既定32.0固定だった）。
+        /// </para>
+        /// </summary>
+        public static void ResetForTransfer(int yearIndex)
+        {
+            _roster = null; _graduates = null; _nextId = 0; _newSchool = true;
+            _rosterSeed = GameSeed.Master ^ (TransferRosterStream ^ (ulong)yearIndex);
+            _rosterTalentCenterOverride = TalentCenter();
+            ProspectService.Reset();   // 旧校の入部予定者は同行しない
+            RecruitService.Reset();    // 旧校で勧誘中だった中学生リストも同様
+        }
+
+        private static List<DevelopingPlayer> Build(ulong seed, double? talentCenterOverride = null)
         {
             var rng = new Xoshiro256Random(seed);
             var coefficients = new RosterCoefficients();
@@ -165,7 +209,8 @@ namespace KokoSim.Unity.Shell
             for (var grade = 1; grade <= lastGrade; grade++)
             {
                 var intake = ProspectGenerator.Intake(
-                    grade, coefficients, rng, fixedCount: _newSchool ? NewSchoolIntake : (int?)null);
+                    grade, coefficients, rng, talentCenter: talentCenterOverride,
+                    fixedCount: _newSchool ? NewSchoolIntake : (int?)null);
                 foreach (var p in intake)
                 {
                     p.Grade = grade;

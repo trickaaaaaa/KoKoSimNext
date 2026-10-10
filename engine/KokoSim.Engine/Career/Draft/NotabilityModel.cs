@@ -1,3 +1,4 @@
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
@@ -106,7 +107,7 @@ public static class NotabilityModel
         return Clamp(50.0 * (1 - shrink) + raw * shrink, 0, 100);
     }
 
-    /// <summary>注目度→予想指名順位バンド（設計書20 §3.1）。</summary>
+    /// <summary>注目度→予想指名順位バンド（設計書20 §3.1）。足切り（§3.1a）は含まない純粋な閾値写像。</summary>
     public static DraftRankBand BandOf(double notability, DraftCoefficients c)
     {
         if (notability >= c.FirstRoundThreshold) return DraftRankBand.FirstRound;
@@ -115,6 +116,27 @@ public static class NotabilityModel
         if (notability >= c.CandidateThreshold) return DraftRankBand.LowerRound;
         return DraftRankBand.None;
     }
+
+    /// <summary>
+    /// 候補入りの足切り（設計書20 §3.1a）。選手画面のカテゴリランク（打撃力／投手力＝
+    /// <see cref="PlayerStrengthProfile"/>・現在値だけの合成）の高い方が
+    /// <see cref="DraftCoefficients.CandidateMinTier"/> に届いているか。注目度は隠し上限と成績で
+    /// 持ち上がるので、これが無いと「打者ランクD」が中位で指名される。
+    /// </summary>
+    public static bool MeetsCandidateFloor(DevelopingPlayer player, TeamStrengthCoefficients strength, DraftCoefficients c)
+    {
+        var s = PlayerStrengthProfile.Compute(player, strength);
+        var best = s.BattingTier > s.PitchingTier ? s.BattingTier : s.PitchingTier;
+        return best >= c.CandidateMinTier;
+    }
+
+    /// <summary>
+    /// 足切り込みの予想バンド。床に届かない選手は注目度に関わらず <see cref="DraftRankBand.None"/>。
+    /// 候補判定はすべてここを通す（<see cref="DraftEngine"/> の3入口で共通）。
+    /// </summary>
+    public static DraftRankBand BandOf(
+        DevelopingPlayer player, double notability, TeamStrengthCoefficients strength, DraftCoefficients c)
+        => MeetsCandidateFloor(player, strength, c) ? BandOf(notability, c) : DraftRankBand.None;
 
     private static double Clamp(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
 }

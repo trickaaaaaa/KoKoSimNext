@@ -8,16 +8,18 @@ namespace KokoSim.Unity.Shell
     /// 調子の表情顔（設計書02 §3.3・パワプロ式5段階）。SDFフォントに絵文字が無いため Painter2D で描画する。
     /// 眺めてスキャンするだけで状態が拾える（UI原則⑥）。自校は常に真値、相手校は監督の育成眼に応じた
     /// 誤認あり（<see cref="FormModel.Observe"/>, issue #47）だが、どちらも必ず何らかの表情を描く。
-    /// 色は tokens.uss の状態色を映す（RankPalette と同じミラー方針）。盤面/状態色はアクセント本数制限の対象外。
+    /// 色は tokens.uss の --cond-* を映す（RankPalette と同じミラー方針）。盤面/状態色はアクセント本数制限の対象外。
+    /// 向きは「赤＝絶好調（熱い）… 青＝絶不調（冷えている）」＝ランクチップ（赤系が上・青系が下）と同じ
+    /// パワプロ式。以前は信号機式（緑＝良・赤＝悪）で、同じ行のランク色と意味が逆になっていた（2026-08-15）。
     /// </summary>
     public sealed class ConditionFace : VisualElement
     {
-        // tokens.uss の状態色ミラー（--color-good / --color-lamp / --color-muted / --color-warn）。
-        private static readonly Color Excellent = new(0x69 / 255f, 0xB9 / 255f, 0x8B / 255f); // good
-        private static readonly Color Good = new(0xA8 / 255f, 0xC6 / 255f, 0x4E / 255f);       // rank-d 黄緑
-        private static readonly Color Normal = new(0x9A / 255f, 0xA5 / 255f, 0xA0 / 255f);     // muted
-        private static readonly Color Poor = new(0xEC / 255f, 0x8B / 255f, 0x3C / 255f);       // rank-b 橙
-        private static readonly Color Terrible = new(0xE8 / 255f, 0x6A / 255f, 0x4A / 255f);   // warn
+        // tokens.uss --cond-best/good/normal/bad/worst のミラー（ConditionLabels.ColorHex とも一致させる）。
+        private static readonly Color Excellent = new(0xEF / 255f, 0x3B / 255f, 0x3B / 255f); // 赤
+        private static readonly Color Good = new(0xF2 / 255f, 0x8B / 255f, 0x2E / 255f);      // 橙
+        private static readonly Color Normal = new(0xF4 / 255f, 0xCB / 255f, 0x3C / 255f);    // 黄
+        private static readonly Color Poor = new(0x5A / 255f, 0xA9 / 255f, 0xE6 / 255f);      // 水色
+        private static readonly Color Terrible = new(0x4C / 255f, 0x5B / 255f, 0xD4 / 255f);  // 青
         private static readonly Color Ink = new(0x14 / 255f, 0x23 / 255f, 0x1B / 255f);        // 顔上の暗インク
 
         private Condition _condition = Condition.Normal;

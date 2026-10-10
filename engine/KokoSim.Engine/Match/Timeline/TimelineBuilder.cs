@@ -19,7 +19,8 @@ public static class TimelineBuilder
     /// <summary>投球の所要時間[s]（演出用の固定値。実測球速の反映は詳細モードで）。</summary>
     private const double PitchDuration = 0.45;
     /// <summary>投球開始→接触までのリード[s]。</summary>
-    private const double ContactAt = 0.85;
+    /// <summary>接触（打球発生）のタイムライン時刻[s]。走者・野手のレッグはこれを起点に「接触からの秒」を足す。</summary>
+    public const double ContactAt = 0.85;
     /// <summary>牽制球のリリース→走者が帰塁を始めるまでの反応[s]（演出用の固定値）。
     /// <see cref="PickoffResolver"/> は時間の勝負を持たない単発のベルヌーイ試行なので流用元が無い。</summary>
     private const double PickoffReactionSeconds = 0.05;
@@ -51,13 +52,11 @@ public static class TimelineBuilder
     /// 単純化した絵にする（design-18 §4.5-③/⑨: 秒は判定と同一の分解で組み、絵のために別秒を発明しない —
     /// ただし方向はどのみち判定に無いので、ここだけは演出用に決め打つ）。</summary>
     private const double BuntFieldPointM = 6.0;
-    /// <summary>バント: 小フライ(PopOut)の落下点＝本塁からマウンド方向へこの距離[m]（グラウンドゴロより手前）。</summary>
-    private const double BuntPopPointM = 3.0;
-    /// <summary>バント: 小フライの頂点高さ[m]（演出用の固定値）。</summary>
+    /// <summary>バント: 小フライの頂点高さ[m]（演出用の固定値）。落下点・滞空秒は
+    /// <see cref="BaserunningCoefficients.BuntPopFieldedZM"/>/<see cref="BaserunningCoefficients.BuntPopHangSeconds"/>
+    /// へ昇格済み（issue bunt-no-take-on-ball-pitches。判定層のライナー併殺判定と共有する単一ソース＝判定と絵を
+    /// 食い違わせない）。</summary>
     private const double BuntPopApexM = 3.0;
-    /// <summary>バント: 小フライの滞空[s]（演出用の固定値。<see cref="BuntResolver"/> は成否のみのベルヌーイ試行で
-    /// 距離・時間を持たないため、絵の秒はここで新規に組む）。</summary>
-    private const double BuntPopHangSeconds = 0.55;
     /// <summary>バント: 守備所要（<see cref="BaserunningCoefficients.BuntFieldThrowBaseSeconds"/> 由来）のうち、
     /// 捕球（処理点到達）に割く比率。残りを送球区間に割く（内訳を持たないため均等に近い比率で分ける演出用の固定値）。</summary>
     private const double BuntFieldShareOfDefenseTime = 0.55;
@@ -182,7 +181,8 @@ public static class TimelineBuilder
         double closeCallMarginSeconds = 0.15,
         double closeFlyMarginSeconds = 0.15,
         double fielderReachM = 4.20,
-        Player? batter = null)
+        Player? batter = null,
+        FieldingCoefficients? fieldingCoeff = null)
     {
         var table = formations ?? FormationTable.Default;
         var landing = new TimelinePoint(play.LandingX, play.LandingZ);
@@ -190,6 +190,17 @@ public static class TimelineBuilder
         // （Issue #301①②）。着地点しか見ていなかったため、外野安打でボールが着地点に貼り付いたまま
         // 静止し、野手の居場所ともズレていた。
         var fieldPoint = FieldPointOf(play);
+        // フェンス直撃の跳ね返り（issue fence-carom-and-over-the-head-cues）。判定はフェンス際で
+        // 回収した扱いのままだが、**絵では球が戻ってくる**ので、回収の瞬間に球が居る場所は内野寄りになる。
+        // 表示の回収点をそこへ差し替える＝野手の到達先・送球の起点・球の終端が1つの点で揃う
+        // （バラバラに持つと「野手が戻ってくる球を通り過ごす」絵になる）。
+        // 送球の**到達時刻は判定どおり**（AppendBackHomeThrows 等が判定の秒で組む）＝起点が近づいたぶんは
+        // 投げ始めが遅れる＝返球前にボールを保持する「間」に吸収される（Issue #334 と同じ形）。
+        if (play.Carom is { } caromForPoint && play.FieldedAtSeconds is { } fieldedForPoint)
+        {
+            var meet = caromForPoint.PositionAt(fieldedForPoint);
+            fieldPoint = new TimelinePoint(meet.X, meet.Z);
+        }
 
         // 守備陣形（9人全員に役割を付与, CHANGELOG 33）。ゾーン分類は着地点距離(RangeM)ではなく
         // 実際の回収点(fieldPoint)基準にする（Issue #336①）。ゴロは本塁寄りで着地して転がるため、
@@ -234,13 +245,34 @@ public static class TimelineBuilder
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Flight, T0 = ContactAt, T1 = landAt,
-                From = Home, To = landing, ApexHeightM = play.ApexHeightM,
+                From = Home, To = landing, ApexHeightM = play.ApexHeightM, LaunchHeightM = play.LaunchHeightM,
             });
             // 抜けた飛球は着地して終わりではない: 着地点→回収点まで転がる（Issue #301②）。
             // 経路・時刻はエンジンの転がり結果（FieldedX/Z・FieldedAtSeconds）をそのまま使い、
             // 表示側で独自の転がりを発明しない。空中捕球（fieldedAt≤landAt）・本塁打・ファウル
             // （回収点＝着地点）は差が出ないので区間を足さない。
-            if (fieldedAt > landAt + 1e-9 && Distance(landing, fieldPoint) >= 0.5)
+            if (play.Carom is { } carom)
+            {
+                // フェンス直撃（issue fence-carom-and-over-the-head-cues）: 転がりを**当たる瞬間で区切り**、
+                // 残速×反発係数から出した跳ね返りを内野側へ足す。「0.40秒の無」だった区間に絵が付く。
+                var hitPt = new TimelinePoint(carom.HitPoint.X, carom.HitPoint.Z);
+                var hitAt = ContactAt + carom.HitAtSeconds;
+                if (hitAt > landAt + 1e-9 && Distance(landing, hitPt) >= 0.5)
+                {
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Roll, T0 = landAt, T1 = hitAt, From = landing, To = hitPt,
+                    });
+                }
+                if (fieldedAt > hitAt + 1e-9 && Distance(hitPt, fieldPoint) >= 0.5)
+                {
+                    ball.Add(new BallSegment
+                    {
+                        Kind = BallSegmentKind.Roll, T0 = hitAt, T1 = fieldedAt, From = hitPt, To = fieldPoint,
+                    });
+                }
+            }
+            else if (fieldedAt > landAt + 1e-9 && Distance(landing, fieldPoint) >= 0.5)
             {
                 ball.Add(new BallSegment
                 {
@@ -279,6 +311,19 @@ public static class TimelineBuilder
             };
         var captions = new List<TimelineCaption> { new(0.05, "ピッチャー、投げた"), new(ContactAt + 0.01, contactMsg) };
 
+        // 打球の行方の手がかり（issue fence-carom-and-over-the-head-cues ③）。絵だけでは
+        // 「アウトじゃない＝じゃあ長打か」と結果から逆算するしかなかったので、言葉でも出す。
+        // 判定は増やさない＝engine が既に持っている観測（着地点の深さ・ReachedFence）を写すだけ。
+        if (play.Result != BattedBallResult.HomeRun && play.RangeM > 46.0
+            && play.FielderRole is { } overRole && Find(fielders, overRole) is { } overFielder)
+        {
+            var startRange = Math.Sqrt(
+                overFielder.Location.X * overFielder.Location.X + overFielder.Location.Z * overFielder.Location.Z);
+            if (play.RangeM > startRange + 1.0) captions.Add(new TimelineCaption(landAt, "頭を越えた！"));
+        }
+        if (play.Carom is { } caromCaption)
+            captions.Add(new TimelineCaption(ContactAt + caromCaption.HitAtSeconds, "フェンス直撃！"));
+
         // 一塁送球（内野ゴロ）。到達時刻(T1)はエンジンの ThrowArriveSeconds のまま固定し、投げ始め(T0)を
         // 「実距離÷肩」の飛行時間から逆算する（Issue #334）。捕球オーバーヘッド＋握り替えは、捕球点で
         // ボールを保持する「間」として自然に吸収される（AddThrowChain と同じ形）。
@@ -287,12 +332,26 @@ public static class TimelineBuilder
         TimelinePoint? errorBallRest = null;
         var errorBallDeadAt = 0.0;
         FieldPosition? errorChaser = null;
+        // 失策球を拾い上げる瞬間（issue #629 ③。返球を積むのは GameEngine 側）。
+        double? errorPickupAt = null;
+        TimelinePoint? errorPickupPoint = null;
+        FieldPosition? errorPickupRole = null;
         if (play.ThrowArriveSeconds is { } throwArrive && play.Result is BattedBallResult.Out or BattedBallResult.Single or BattedBallResult.Error)
         {
             if (!play.IsFly && play.RangeM <= 46.0)
             {
                 var firstBase = BasePoint(field, "first");
-                var arrive = ContactAt + throwArrive;
+                var physicalArrive = ContactAt + throwArrive;
+                // 判定と絵の矛盾ガード（issue match-picture-vs-safe-out-verdict）。
+                // 一塁の封殺は `defenseTime + ForceOutMarginSeconds(0.60) <= runnerTime` でアウトなので、
+                // `runnerTime − 0.60 < defenseTime <= runnerTime` の帯は<b>絵では送球が先着しているのに
+                // 内野安打</b>になる（実測: 内野安打 1,374 件中 1,147 件＝83.5%・平均 0.37 秒先着＝走者が
+                // 塁の 2.4〜3.0m 手前。最大 0.60 秒＝約4m）。本塁クロスプレー・外野返球と同じガードを通す。
+                // ⚠ ずれた分は捕球点でボールを保持する「間」に吸収される（Issue #334 と同じ形）＝
+                // 送球そのものの見た目の速度は肩どおりのまま。アウト側は必ず 0.60 秒以上先着しているので不発。
+                var runnerAnchor = ContactAt + play.BatterToFirstSeconds;
+                var firstOut = play.Result == BattedBallResult.Out;
+                var arrive = physicalArrive;   // エラーの枝は一塁へ正着しない＝ガードの対象外
                 if (play.Result == BattedBallResult.Error
                     && play.ErrorKind == FieldingErrorKind.Throw && !play.UnassistedPutout)
                 {
@@ -339,6 +398,8 @@ public static class TimelineBuilder
                     // アンアシスト（3U, Issue #400）: 送球せず一塁手がボールをグラブに収めたまま運ぶ。
                     // Carry セグメント（保持しての移動）で表現し、山なりの Throw は積まない。到達(T1)は判定を
                     // 決めた刺殺時刻のまま＝一塁手のカバー移動レッグ（下の注入）と同時にベースへ着く。
+                    // 走って運ぶので「間」で詰められない＝最速も物理そのもの（ガードはセーフ側でしか効かない）。
+                    arrive = GuardAgainstVerdict(physicalArrive, physicalArrive, runnerAnchor, firstOut);
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Carry,
@@ -350,6 +411,7 @@ public static class TimelineBuilder
                 else
                 {
                     var flight = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
+                    arrive = GuardAgainstVerdict(physicalArrive, fieldedAt + flight, runnerAnchor, firstOut);
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Throw,
@@ -429,11 +491,15 @@ public static class TimelineBuilder
         else if (play.Result == BattedBallResult.Error)
         {
             // 失策出塁（issue #439）: エラー確定の瞬間に「エラー」を必ず1枚出す。
-            // 捕球エラー＝処理点で弾いた時刻／悪送球＝送球が一塁に届くはずだった時刻。
+            // 捕球エラー＝処理点で弾いた時刻／悪送球＝送球が一塁に届くはずだった時刻／
+            // トンネル（issue #632）＝内野手が抜かれた瞬間（ErrorAtSeconds。処理時刻は外野手が
+            // 球を回収する時刻＝ずっと後なので、fieldedAt を使うと絵とテロップが数秒ずれる）。
             // セーフと違い際どさ条件を課さない＝「アウトの絵に見えるのに黙って出塁」を防ぐのが目的。
-            var errAt = play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
-                ? ContactAt + et
-                : fieldedAt;
+            var errAt = play.ErrorAtSeconds is { } ea
+                ? ContactAt + ea
+                : play.ErrorKind == FieldingErrorKind.Throw && play.ThrowArriveSeconds is { } et
+                    ? ContactAt + et
+                    : fieldedAt;
             judgements.Add(new JudgementEvent { Label = "打", T = errAt, Kind = JudgementKind.Error });
         }
         else if (batterCloseCall)
@@ -540,12 +606,58 @@ public static class TimelineBuilder
                 if (dist < 0.5) continue;
 
                 var speed = Math.Max(4.0, fielder.Attributes.SprintSpeedMps);
-                var t0 = diveEnd is not null ? Math.Max(ContactAt + 0.35, diveT1 + 0.1) : ContactAt + 0.35; // 反応
-                var t1 = t0 + dist / speed;
+                // 反応 0.35s。処理野手だけは判定の反応遅延（守備力で縮む・F80=0.28s）より遅く出さない
+                // （issue fielder-body-far-from-ball-at-catch）: 判定は「体が実効リーチまで寄れた時刻」で処理点を
+                // 採るので、絵の出足が判定より遅いと守備の巧い野手ほど体が球に届かない絵になる。
+                var reaction = isBallFielder ? Math.Min(0.35, fielder.Attributes.ReactionDelaySeconds) : 0.35;
+                // 走路取りの巧さ（issue fielder-body-far-from-ball-at-catch 案C）: 判定は守備力>50 の野手に
+                // 滞空時間比例の到達猶予（CatchTimeBudget の routeFactor）を与える＝「脚力より長く走れる」ことにして
+                // いるので、絵の出足を接触＋反応にしたままだと体が落下点に届かない（守備80で 2%・最大 3.4m）。
+                // 猶予ぶんだけ出足を早める（打った瞬間の読み＝接触の少し前まで）。判定は不変・表示専用。
+                if (isBallFielder && play.IsFly && play.Result == BattedBallResult.Out && fieldingCoeff is { } fc)
+                {
+                    var routeBudget = Math.Min(play.HangTimeSeconds * fc.CatchReachFactor, fc.CatchReachCapSeconds);
+                    var routeBonus = routeBudget * (fielder.Attributes.Fielding - 50) * fc.CatchReachFieldingSlope;
+                    if (routeBonus > 0) reaction = Math.Max(-FlyJumpAnticipationSeconds, reaction - routeBonus);
+                }
+                var t0 = diveEnd is not null ? Math.Max(ContactAt + reaction, diveT1 + 0.1) : ContactAt + reaction;
+
+                // 急ぎ度（issue fielder-leg-speed-by-distance）: 全レッグを「距離÷脚力」で切ると、2m 寄るだけの
+                // 二塁手も送球を受けに塁へ寄る一塁手も余裕のある飛球の中堅手も全員が全力疾走になる
+                // （実測 501 レッグの巡航が全部 8.3〜8.8 m/s）。急がない移動＝塁カバー／バックアップ／中継／
+                // 余裕のあるフライは<b>期限から逆算した必要速度</b>で走らせる（上限は脚力＝間に合わない移動は
+                // 従来どおり全力、下限は小走り）。着く時刻は期限＝判定の秒より前で、判定はこのレッグを読まない
+                // （表示専用・帯不変）。期限: 塁カバー＝その塁への送球到達の少し前／バックアップ・中継＝決着／
+                // 余裕のあるフライ＝捕球の少し前（落下点で待ち構える）。
+                double? paceDeadline = null;
+                if (isBallFielder)
+                {
+                    if (play.IsFly && play.Result == BattedBallResult.Out) paceDeadline = fieldedAt - FlySettleSeconds;
+                }
+                else if (task == FielderTask.CoverBase)
+                {
+                    paceDeadline = (ThrowArriveAtBase(ball, a.Target) ?? resolvedAt) - CoverSetSeconds;
+                }
+                else if (task is FielderTask.Backup or FielderTask.Cutoff)
+                {
+                    paceDeadline = resolvedAt;
+                }
+                var pace = speed;
+                if (paceDeadline is { } dl && dl - t0 > 1e-6)
+                {
+                    var need = dist / (dl - t0);
+                    // 歩き（≤EasyPaceMinMps）と小走り（≥EasyJogMps）の間は小走りへ切り上げる（早く着いて待つ）。
+                    // 3D の収録は歩き 0.73 m/s と走り 4.28 m/s の間に何も無く、間の速さは足が滑る
+                    // （実測 2026-08-18: 間の速さのレッグは尺が長くコマ数を稼ぐので「目立つ」が 7%→15〜18%）。
+                    pace = need <= EasyPaceMinMps ? EasyPaceMinMps
+                        : need < EasyJogMps ? Math.Min(speed, EasyJogMps)
+                        : Math.Min(speed, need);
+                }
+                var t1 = t0 + dist / pace;
                 if (isBallFielder)
                 {
                     (t0, t1) = ArriveByFieldedAt(t0, t1, fieldedAt);
-                    to = StopWithinReach(moveFrom, to, speed * (t1 - t0), fielderReachM);
+                    to = StopWithinReach(moveFrom, to, pace * (t1 - t0), fielderReachM);
                     if (a.Position == FieldPosition.FirstBase) firstBaseFieldEnd = to; // アンアシスト運びの起点（#400）
                 }
                 moves.Add(new FielderMove { Role = a.Position, T0 = t0, T1 = t1, To = to, Task = task });
@@ -622,12 +734,17 @@ public static class TimelineBuilder
                     var from = new TimelinePoint(coverer.Location.X, coverer.Location.Z);
                     var to = FirstBaseCoverPoint(field, fieldPoint);
                     var dist = Distance(from, to);
-                    if (dist >= 0.5)
-                    {
-                        var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
-                        var t0 = ContactAt + 0.35;
-                        moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t0 + dist / speed, To = to, Task = FielderTask.CoverBase });
-                    }
+                    var t0 = ContactAt + 0.35;
+                    var speed = Math.Max(4.0, coverer.Attributes.SprintSpeedMps);
+                    var t1 = t0 + dist / speed;
+                    // ⚠ 既に別の持ち場へ走っている野手には注入しない（体は2箇所に居られない）。
+                    // 表の担当（例: 右方向の打球で投手は本塁バックアップ）と、この動的注入が同じ時刻に
+                    // 重なると、FielderAt は重なった区間で**両方の行き先へ同時に寄せる**ので合成速度が
+                    // 脚力を超える（実測: 右前へのフライを一塁手が捕った seed182 で投手 11.26 m/s。
+                    // 一塁へ球は来ておらず、カバー自体が要らない場面だった＝LegSpeedTests が検出）。
+                    // 絵では「向きが少し変」としか見えないので、重なりそのものを作らせない。
+                    if (dist >= 0.5 && !IsBusy(moves, firstBaseCoverer, t0, t1))
+                        moves.Add(new FielderMove { Role = firstBaseCoverer, T0 = t0, T1 = t1, To = to, Task = FielderTask.CoverBase });
                 }
             }
 
@@ -667,6 +784,25 @@ public static class TimelineBuilder
             }
         }
 
+        // フライ落球（issue #629 ④）: 送球が存在しない（ThrowArriveSeconds=null）ため上の失策球ブロックへ
+        // 一切入らず、球が着地点に貼り付いて静止していた＝外野失策で走者が還る場面がいちばん
+        // 「野手がぼーっとしている」ように見えていた原因。落とした球は足元へ転がり、落とした本人が拾い直す。
+        // ゴロの捕球エラー（お手玉）とまったく同じ形＝弾む距離・時間・追いかける野手の決め方を共有する。
+        if (play.IsFly && play.Result == BattedBallResult.Error && errorBallRest is null)
+        {
+            var dropRest = Overshoot(Home, fieldPoint, ErrorDeflectM);
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Roll,
+                T0 = fieldedAt, T1 = fieldedAt + ErrorDeflectSeconds,
+                From = fieldPoint, To = dropRest,
+                FromRole = play.FielderRole,
+            });
+            errorBallRest = dropRest;
+            errorBallDeadAt = fieldedAt + ErrorDeflectSeconds;
+            errorChaser = play.FielderRole;
+        }
+
         // エラーでこぼれた/逸れた球は野手が追いかけて拾いに行く（issue #439 ①）。
         // 捕球エラー＝弾いた本人が拾い直す／悪送球＝一塁カバーが振り返って追う。
         // 表示専用の定点計算のみ（乱数不使用）。3D側はエラープレーの決着後レッグを剥がさない
@@ -699,6 +835,12 @@ public static class TimelineBuilder
                     Role = chaserRole, T0 = t0, T1 = t1, To = chaseTo, Task = FielderTask.Chase,
                 });
                 if (t1 + 0.5 > returnTail) returnTail = t1 + 0.5;
+                // 拾い上げる瞬間を明示的に控える（issue #629 ③）。返球はこの後 GameEngine が
+                // AppendErrorReturnThrow で積む＝本塁送球を描いた打席では積まない、という判断を
+                // 「本塁へ投げるか」を知っている側（GameEngine）に残すため、ここでは投げない。
+                errorPickupAt = t1;
+                errorPickupPoint = chaseTo;
+                errorPickupRole = chaserRole;
             }
         }
 
@@ -722,11 +864,17 @@ public static class TimelineBuilder
             Result = resultText,
             ResolvedAt = resolvedAt,
             FielderStarts = StartsOf(fielders),
+            // 表示専用の観測（既に決まった値の写し＝新規計算・乱数消費ゼロ）
+            CatchMarginSeconds = play.CatchMarginSeconds,
+            FumbledCatch = play.ErrorKind == FieldingErrorKind.Catch,
             Ball = ball,
             Moves = moves,
             Runners = runners,
             Captions = captions,
             Judgements = judgements,
+            ErrorPickupAt = errorPickupAt,
+            ErrorPickupPoint = errorPickupPoint,
+            ErrorPickupRole = errorPickupRole,
         };
     }
 
@@ -763,6 +911,7 @@ public static class TimelineBuilder
             {
                 Kind = isFly ? BallSegmentKind.Flight : BallSegmentKind.Roll,
                 T0 = ContactAt, T1 = landAt, From = Home, To = landing, ApexHeightM = ground.ApexHeightM,
+                LaunchHeightM = isFly ? ball.ContactHeightM : 0.0,
             },
         };
 
@@ -798,13 +947,20 @@ public static class TimelineBuilder
     /// <para>秒は判定（<see cref="StealResolver"/>）と同一の分解で組む＝絵のために別秒を発明しない（design-18 §4.5-③/⑨）。
     /// <paramref name="pitchout"/>/<paramref name="startType"/> は判定側の <see cref="StealResolver.DefenseTimeSeconds"/> と
     /// 揃えて渡す（渡さないと到達時刻の差が「球の速さ」に化ける）。</para></summary>
+    /// <param name="runnerSeconds">判定が使った走者の秒（ゆらぎ込み・<see cref="StealResolver.ResolveVerdict"/> の出力）。
+    /// 省略すると<b>ゆらぎ0</b>から結果に矛盾しない最小の秒を組む（絵づくり用の呼び出し）。</param>
+    /// <param name="defenseSeconds">同じく守備の秒。<paramref name="runnerSeconds"/> と対で渡す。</param>
     public static PlayTimeline BuildSteal(
         Player runner, Player catcher, StealResult result, BaserunningCoefficients c, FieldGeometry field,
         StealTarget target = StealTarget.Second, bool pitchout = false, Tactics.StartType startType = Tactics.StartType.Normal,
-        Player? doubleStealScorer = null)
+        Player? doubleStealScorer = null, double? runnerSeconds = null, double? defenseSeconds = null)
     {
-        var runnerTime = StealResolver.RunnerTimeSeconds(runner, c, startType, target);
-        var defenseTime = StealResolver.DefenseTimeSeconds(catcher, c, pitchout, startType, target);
+        // 秒は判定が使ったものをそのまま写す（表示専用・新規計算ゼロ）。持たない呼び出しだけ組み直す。
+        var play = runnerSeconds is { } rs && defenseSeconds is { } ds
+            ? new StealVerdict(result, rs, ds)
+            : StealResolver.Forced(runner, catcher, c, result, pitchout, startType, target);
+        var runnerTime = play.RunnerSeconds;
+        var defenseTime = play.DefenseSeconds;
         var safe = result == StealResult.Safe;
 
         // 狙う塁で走者レッグの from/to・受け手・実況の塁名を一般化する。
@@ -836,20 +992,14 @@ public static class TimelineBuilder
         }
         else
         {
-            // 捕手の握り替え（ポップ）は判定と同じ守備係数込みの値で使う（バグ修正 issue #485）。
-            // 生の PopTransferSeconds を使うと肩と無関係に送球区間が伸縮し（守備90で約0.1秒短縮）、
-            // 差が全部「球の速さ」に化ける。ピッチアウト／ギャンブルの短縮も同様に投げ始めへ反映する
-            // （StealResolver.DefenseTimeSeconds の引き算と揃える）＝送球区間長を送球そのもの（肩）だけに保つ。
-            var popTransfer = c.PopTransferSeconds
-                * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-            var quickBonus = 0.0;
-            if (pitchout)
-            {
-                quickBonus += c.PitchoutDefenseBonusSeconds;
-                if (startType == Tactics.StartType.Gamble) quickBonus += c.GamblePitchoutExtraBonusSeconds;
-            }
-            var throwStart = Math.Max(pitchArrive, pitchArrive + popTransfer - quickBonus); // 握り替え（守備係数・読み切り込み）
-            var throwArrive = defenseTime - c.TagSeconds;                                    // 送球到達（判定由来）
+            // 到達は判定が使った秒そのもの（守備の巧拙・読み切り・ゆらぎは全部この中に入っている）。
+            // 投げ始めは「到達 − 距離÷肩」で逆算する（issue #485 の性質＝差が球の速さに化けない）。
+            var throwArrive = defenseTime - c.TagSeconds;   // 送球到達（判定が使った秒。ゆらぎ込み）
+            // 送球区間の長さは常に「距離÷肩」（issue #485）。ゆらぎ（握り替えのもたつき/速いポップ）は
+            // 投げ始めの位置に出す＝球の見た目の速さは肩どおりのまま。
+            var throwDistance = target == StealTarget.Third ? c.CatchThrowToThirdDistanceM : c.CatchThrowDistanceM;
+            var flightToBase = throwDistance / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
+            var throwStart = Math.Max(pitchArrive, throwArrive - flightToBase);   // 捕る前には投げられない
             ball.Add(new BallSegment
             {
                 // 受け手は下の Moves でベースカバーに入る野手と同一（Issue E1・単一ソース）
@@ -858,7 +1008,10 @@ public static class TimelineBuilder
             });
             moves.Add(new FielderMove
             {
-                Role = receiver, T0 = 0.3, T1 = Math.Max(0.9, throwArrive - 0.2), To = toPt, Task = FielderTask.CoverBase,
+                // カバーに入る野手は球より先に塁へ着く（塁に入るのは送球の都合と無関係）。
+                Role = receiver, T0 = 0.3,
+                T1 = Math.Max(0.9, throwArrive - 0.2),
+                To = toPt, Task = FielderTask.CoverBase,
             });
             captions.Add(new TimelineCaption(throwStart, $"キャッチャー、{baseLabel}へ送球——"));
         }
@@ -934,8 +1087,8 @@ public static class TimelineBuilder
         // 走者のリード位置（次塁方向へ HomeLeadDistanceM ぶん）。本塁クロスプレーの二次リードと同じ量を流用。
         var leadPt = LeadPoint(field, baseIndex, c.HomeLeadDistanceM);
 
-        var throwT1 = Distance(Mound, basePt) / pitcher.ToFielder().ThrowSpeedMps;
-        var naturalReturn = PickoffReactionSeconds + Distance(leadPt, basePt) / runner.ToFielder().SprintSpeedMps;
+        var throwT1 = Distance(Mound, basePt) / pitcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
+        var naturalReturn = PickoffReactionSeconds + Distance(leadPt, basePt) / runner.ToFielder(c.AbilityEffect).SprintSpeedMps;
         var runnerT1 = pickedOff
             ? Math.Max(naturalReturn, throwT1 + c.TagSeconds)
             : Math.Min(naturalReturn, Math.Max(PickoffReactionSeconds + 0.05, throwT1 - c.TagSeconds));
@@ -1018,7 +1171,7 @@ public static class TimelineBuilder
 
         // 捕手が追って拾う→送球姿勢を作って投手へ戻す（issue #487「捕手が追う→拾って戻す」）。
         var catcherArrive = BatteryMissReactionSeconds
-            + Distance(Home, backstopPt) / catcher.ToFielder().SprintSpeedMps;
+            + Distance(Home, backstopPt) / catcher.ToFielder(c.AbilityEffect).SprintSpeedMps;
         var pickupAt = Math.Max(BatteryMissRollSeconds, catcherArrive);
         var moves = new List<FielderMove>
         {
@@ -1029,8 +1182,8 @@ public static class TimelineBuilder
             },
         };
         var throwStart = pickupAt
-            + c.PopTransferSeconds * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-        var throwArrive = throwStart + Distance(backstopPt, Mound) / catcher.ToFielder().ThrowSpeedMps;
+            + c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var throwArrive = throwStart + Distance(backstopPt, Mound) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
         ball.Add(new BallSegment
         {
             Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = throwArrive, From = backstopPt, To = Mound,
@@ -1104,7 +1257,7 @@ public static class TimelineBuilder
 
         // 捕手が追って拾う（issue #487 の暴投・捕逸と同じ組み立て。落球位置が近いぶん往復は短い）。
         var catcherArrive = DropThirdStrikeReactionSeconds
-            + Distance(Home, missPt) / catcher.ToFielder().SprintSpeedMps;
+            + Distance(Home, missPt) / catcher.ToFielder(c.AbilityEffect).SprintSpeedMps;
         var pickupAt = Math.Max(DropThirdStrikeRollSeconds, catcherArrive);
         var moves = new List<FielderMove>
         {
@@ -1116,10 +1269,10 @@ public static class TimelineBuilder
         };
 
         var throwStart = pickupAt
-            + c.PopTransferSeconds * catcher.ToFielder().TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
-        var throwFlight = Distance(missPt, firstPt) / catcher.ToFielder().ThrowSpeedMps;
+            + c.PopTransferSeconds * catcher.ToFielder(c.AbilityEffect).TransferFactor(c.TransferFieldingSlope, c.TransferFactorMin);
+        var throwFlight = Distance(missPt, firstPt) / catcher.ToFielder(c.AbilityEffect).ThrowSpeedMps;
         var batterArrive = DropThirdStrikeBatterReactionSeconds
-            + Distance(Home, firstPt) / batter.ToFielder().SprintSpeedMps;
+            + Distance(Home, firstPt) / batter.ToFielder(c.AbilityEffect).SprintSpeedMps;
 
         // 出塁は確定済み＝送球が走者を追い越して見える絵にしない（矛盾ガード）。
         var throwArrive = Math.Max(throwStart + throwFlight, batterArrive + DropThirdStrikeThrowGuardSeconds);
@@ -1203,10 +1356,11 @@ public static class TimelineBuilder
         double resolvedAt;
         string resultText;
 
-        if (result == BuntResult.PopOut)
+        if (result is BuntResult.PopOut or BuntResult.PopOutDoubledOff)
         {
-            var popPt = new TimelinePoint(0, BuntPopPointM);
-            var catchAt = ContactAt + BuntPopHangSeconds;
+            var popFielded = BuntResolver.PopFieldedPoint(c);
+            var popPt = new TimelinePoint(popFielded.X, popFielded.Z);
+            var catchAt = ContactAt + c.BuntPopHangSeconds;
             ball.Add(new BallSegment
             {
                 Kind = BallSegmentKind.Flight, T0 = ContactAt, T1 = catchAt, From = Home, To = popPt,
@@ -1220,6 +1374,202 @@ public static class TimelineBuilder
             resultText = "小フライ";
             captions.Add(new TimelineCaption(catchAt, "小フライ——バントアウト"));
             judgements.Add(new JudgementEvent { Label = "打", T = catchAt, Kind = JudgementKind.Out });
+
+            if (result == BuntResult.PopOutDoubledOff && preFirst is not null)
+            {
+                // ライナー併殺（design-09「小フライ併殺」）: 判定層と同じ捕球点・滞空秒（BuntResolver.PopFieldedPoint/
+                // BaserunningCoefficients.BuntPopHangSeconds）＋DoubledOffResolverの秒をそのまま使う
+                // （判定＝絵。design-18原則と同型）。
+                var throwArrive = catchAt + DoubledOffResolver.DefenseReturnSeconds(
+                    (field.FirstBase - popFielded).Length, c.BuntFielderThrowSpeedMps, c, (int)c.BuntFielderFieldingLevel);
+                ball.Add(new BallSegment
+                {
+                    Kind = BallSegmentKind.Throw, T0 = catchAt, T1 = throwArrive, From = popPt, To = firstPt,
+                    FromRole = FieldPosition.Catcher, ToRole = FieldPosition.FirstBase, ToBase = "first",
+                });
+                moves.Add(new FielderMove
+                {
+                    Role = FieldPosition.FirstBase, T0 = 0.0, T1 = Math.Max(0.3, throwArrive - 0.15),
+                    To = firstPt, Task = FielderTask.CoverBase,
+                });
+                runners.Add(new RunnerLeg
+                {
+                    Label = "走1", T0 = catchAt, T1 = throwArrive, From = firstPt, To = firstPt,
+                    OutAtEnd = true, Force = false, Runner = preFirst,
+                });
+                resolvedAt = Math.Max(resolvedAt, throwArrive);
+                resultText = "小フライ併殺";
+                captions.Add(new TimelineCaption(throwArrive, "併殺——一塁で戻れず"));
+                judgements.Add(new JudgementEvent { Label = "走1", T = throwArrive, Kind = JudgementKind.Out });
+            }
+        }
+        else if (result == BuntResult.ForceOutAtSecond)
+        {
+            // 一塁走者の封殺（issue bunt-no-take-on-ball-pitches）: 判定層と同じ処理点・処理時刻
+            // （BuntResolver.FieldedSituation）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
+            // 使う＝判定と絵を食い違わせない（design-18の「判定＝絵」原則と同型）。
+            var situation = BuntResolver.FieldedSituation(c);
+            var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
+            var secondPt = BasePoint(field, "second");
+            var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
+            var throwArrive = ContactAt + HomePlayResolver.ResolveThrowPath(situation, field.SecondBase, c).ArriveAtSeconds;
+
+            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
+                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
+                + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
+            var batterArrive = ContactAt + battingTime;
+            var r1ArriveRaw = preFirst is null
+                ? throwArrive
+                : ContactAt + HomePlayResolver.RunnerTimeSeconds(preFirst, 1, 2, field, c, c.BuntForceR1StartDelaySeconds);
+            // 矛盾ガード（BuildDropThirdStrikeと同じ考え方）: 判定はアウトなので送球が先着する絵にする。
+            var r1Arrive = Math.Min(r1ArriveRaw, throwArrive - BuntThrowGuardSeconds);
+
+            ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = secondPt,
+                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.SecondBase, ToBase = "second",
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.SecondBase, T0 = 0.0, T1 = Math.Max(0.3, throwArrive - 0.15),
+                To = secondPt, Task = FielderTask.CoverBase,
+            });
+
+            runners.Add(new RunnerLeg
+            {
+                Label = "打", T0 = ContactAt, T1 = batterArrive, From = Home, To = firstPt,
+                OutAtEnd = false, Force = false, Runner = batter,
+            });
+            if (preFirst is not null)
+            {
+                runners.Add(new RunnerLeg
+                {
+                    Label = "走1", T0 = ContactAt, T1 = r1Arrive, From = firstPt, To = secondPt,
+                    OutAtEnd = true, Force = true, Runner = preFirst,
+                });
+            }
+            resolvedAt = Math.Max(batterArrive, Math.Max(r1Arrive, throwArrive));
+            resultText = "一塁封殺";
+            captions.Add(new TimelineCaption(resolvedAt, "封殺——二塁で刺した"));
+            judgements.Add(new JudgementEvent { Label = "走1", T = resolvedAt, Kind = JudgementKind.Out });
+        }
+        else if (result == BuntResult.ForceOutAtThird)
+        {
+            // 二塁走者の封殺（1・2塁の真のフォースのみ）: 一塁走者の封殺と同じ処理点・処理時刻
+            // （BuntResolver.FieldedSituation）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
+            // 三塁向けに使う＝判定と絵を食い違わせない（design-18の「判定＝絵」原則と同型）。
+            var situation = BuntResolver.FieldedSituation(c);
+            var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
+            var thirdPt = BasePoint(field, "third");
+            var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
+            var throwArrive = ContactAt + HomePlayResolver.ResolveThrowPath(situation, field.ThirdBase, c).ArriveAtSeconds;
+
+            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
+                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
+                + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
+            var batterArrive = ContactAt + battingTime;
+            var r2ArriveRaw = preSecond is null
+                ? throwArrive
+                : ContactAt + HomePlayResolver.RunnerTimeSeconds(preSecond, 2, 3, field, c, c.BuntForceR2StartDelaySeconds);
+            // 矛盾ガード（BuildDropThirdStrikeと同じ考え方）: 判定はアウトなので送球が先着する絵にする。
+            var r2Arrive = Math.Min(r2ArriveRaw, throwArrive - BuntThrowGuardSeconds);
+
+            ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = thirdPt,
+                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.ThirdBase, ToBase = "third",
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.ThirdBase, T0 = 0.0, T1 = Math.Max(0.3, throwArrive - 0.15),
+                To = thirdPt, Task = FielderTask.CoverBase,
+            });
+
+            runners.Add(new RunnerLeg
+            {
+                Label = "打", T0 = ContactAt, T1 = batterArrive, From = Home, To = firstPt,
+                OutAtEnd = false, Force = false, Runner = batter,
+            });
+            if (preSecond is not null)
+            {
+                runners.Add(new RunnerLeg
+                {
+                    Label = "走2", T0 = ContactAt, T1 = r2Arrive, From = BasePoint(field, "second"), To = thirdPt,
+                    OutAtEnd = true, Force = true, Runner = preSecond,
+                });
+            }
+            resolvedAt = Math.Max(batterArrive, Math.Max(r2Arrive, throwArrive));
+            resultText = "二塁封殺";
+            captions.Add(new TimelineCaption(resolvedAt, "封殺——三塁で刺した"));
+            judgements.Add(new JudgementEvent { Label = "走2", T = resolvedAt, Kind = JudgementKind.Out });
+        }
+        else if (result == BuntResult.ForceOutAtHome)
+        {
+            // 三塁走者の封殺（満塁の真のフォースのみ）: 一塁・二塁走者の封殺と同じ処理点・処理時刻
+            // （BuntResolver.FieldedSituation）＋送球経路の単一ソース（HomePlayResolver.ResolveThrowPath）を
+            // 本塁向けに使う＝判定と絵を食い違わせない（design-18の「判定＝絵」原則と同型）。
+            var situation = BuntResolver.FieldedSituation(c);
+            var fieldPt = new TimelinePoint(situation.BallFieldedPoint.X, situation.BallFieldedPoint.Z);
+            var fieldAt = ContactAt + situation.BallFieldedAtSeconds;
+            var throwArrive = ContactAt
+                + HomePlayResolver.ResolveThrowPath(situation, new Core.Vector3D(0, 0, 0), c).ArriveAtSeconds;
+
+            var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
+                ? c.BuntLeftFirstStepBonusSeconds : 0.0;
+            var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
+                + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
+            var batterArrive = ContactAt + battingTime;
+            var r3ArriveRaw = preThird is null
+                ? throwArrive
+                : ContactAt + HomePlayResolver.RunnerTimeSeconds(preThird, 3, 4, field, c, c.BuntForceR3StartDelaySeconds);
+            // 矛盾ガード（BuildDropThirdStrikeと同じ考え方）: 判定はアウトなので送球が先着する絵にする。
+            var r3Arrive = Math.Min(r3ArriveRaw, throwArrive - BuntThrowGuardSeconds);
+
+            ball.Add(new BallSegment { Kind = BallSegmentKind.Roll, T0 = ContactAt, T1 = fieldAt, From = Home, To = fieldPt });
+            ball.Add(new BallSegment
+            {
+                Kind = BallSegmentKind.Throw, T0 = fieldAt, T1 = throwArrive, From = fieldPt, To = Home,
+                FromRole = FieldPosition.Pitcher, ToRole = FieldPosition.Catcher, ToBase = "home",
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.Pitcher, T0 = ContactAt, T1 = fieldAt, To = fieldPt, Task = FielderTask.FieldBall,
+            });
+            moves.Add(new FielderMove
+            {
+                Role = FieldPosition.Catcher, T0 = 0.0, T1 = Math.Max(0.3, throwArrive - 0.15),
+                To = Home, Task = FielderTask.CoverBase,
+            });
+
+            runners.Add(new RunnerLeg
+            {
+                Label = "打", T0 = ContactAt, T1 = batterArrive, From = Home, To = firstPt,
+                OutAtEnd = false, Force = false, Runner = batter,
+            });
+            if (preThird is not null)
+            {
+                runners.Add(new RunnerLeg
+                {
+                    Label = "走3", T0 = ContactAt, T1 = r3Arrive, From = BasePoint(field, "third"), To = Home,
+                    OutAtEnd = true, Force = true, Runner = preThird,
+                });
+            }
+            resolvedAt = Math.Max(batterArrive, Math.Max(r3Arrive, throwArrive));
+            resultText = "三塁封殺";
+            captions.Add(new TimelineCaption(resolvedAt, "封殺——本塁で刺した"));
+            judgements.Add(new JudgementEvent { Label = "走3", T = resolvedAt, Kind = JudgementKind.Out });
         }
         else
         {
@@ -1228,9 +1578,9 @@ public static class TimelineBuilder
             // 呼び出し元は safety フラグを保持していないため、既定として犠打側で揃える＝絵の近似）。
             var handednessBonus = batter.Bats is Handedness.Left or Handedness.Switch
                 ? c.BuntLeftFirstStepBonusSeconds : 0.0;
-            var battingTime = c.BuntBaseDistanceM / batter.ToBatter().SpeedToFirstMps()
+            var battingTime = c.BuntBaseDistanceM / batter.ToBatter(c.AbilityEffect).SpeedToFirstMps()
                 + c.BuntRunnerReactionSeconds + c.SacrificeBuntSquareDelaySeconds - handednessBonus;
-            var defenseTime = c.BuntFieldThrowBaseSeconds + (batter.Bunt - 50) * c.BuntPlacementSlope;
+            var defenseTime = c.BuntFieldThrowBaseSeconds + (c.AbilityEffect.Batting(batter.Bunt) - 50) * c.BuntPlacementSlope;
 
             var fieldAt = ContactAt + defenseTime * BuntFieldShareOfDefenseTime;
             var throwArriveRaw = ContactAt + defenseTime;
@@ -1281,9 +1631,14 @@ public static class TimelineBuilder
             resolvedAt = Math.Max(resolvedAt, t1);
             if (toBase >= 4) captions.Add(new TimelineCaption(t1, "生還！"));
         }
-        AddAdvance(preFirst, postFirst, 1, 2, "走1");
-        AddAdvance(preSecond, postSecond, 2, 3, "走2");
-        AddAdvance(preThird, postThird, 3, 4, "走3");
+        // 一塁走者の封殺（ForceOutAtSecond）・二塁走者の封殺（ForceOutAtThird）・三塁走者の封殺
+        // （ForceOutAtHome）・小フライ併殺（PopOutDoubledOff）は上のブロックで個別に描画済み（アウト＝
+        // AddAdvanceの「安全に進んだ」前提と食い違うため、二重描画を避けてここではスキップする）。フォースで
+        // 安全に進む走者（例: ForceOutAtThirdでの旧一塁走者）は他の結果と同じく汎用のAddAdvanceで描く。
+        if (result is not (BuntResult.ForceOutAtSecond or BuntResult.PopOutDoubledOff))
+            AddAdvance(preFirst, postFirst, 1, 2, "走1");
+        if (result != BuntResult.ForceOutAtThird) AddAdvance(preSecond, postSecond, 2, 3, "走2");
+        if (result != BuntResult.ForceOutAtHome) AddAdvance(preThird, postThird, 3, 4, "走3");
 
         return new PlayTimeline
         {
@@ -1299,6 +1654,119 @@ public static class TimelineBuilder
         };
     }
 
+    /// <summary>失策球の返球を握り替える間[s]（表示専用の演出値）。</summary>
+    private const double ErrorReturnTransferSeconds = 0.25;
+
+    /// <summary>失策球を投手へ返してよい「マウンドに居る」とみなす半径[m]（マウンド接地半径 2.74m と同程度）。</summary>
+    private const double ErrorReturnPitcherOnMoundM = 3.0;
+
+    /// <summary>
+    /// 時刻 <paramref name="t"/> にその役の野手が居る点（表示専用の写し）。開始位置
+    /// （<see cref="PlayTimeline.FielderStarts"/>）から野手レッグを時刻順に辿り、走行中なら線形補間する
+    /// ＝再生層 <c>PlaybackEvaluator.FielderAt</c> と同じ読み方。開始位置が無ければ標準守備位置。
+    /// 判定には使わない（返球先の選択＝絵の都合にだけ使う）。
+    /// </summary>
+    private static TimelinePoint FielderPositionAt(PlayTimeline timeline, FieldPosition role, double t)
+    {
+        var pos = timeline.FielderStarts is { } starts && starts.TryGetValue(role, out var s0)
+            ? s0 : StandardStarts()[role];
+        // その役のレッグを開始時刻順に辿る（積み順は保証されていないので並べ替える）
+        var legs = new List<FielderMove>();
+        foreach (var m in timeline.Moves) if (m.Role == role) legs.Add(m);
+        legs.Sort((a, b) => a.T0.CompareTo(b.T0));
+        FielderMove? current = null;   // t の時点で走行中、または直近に終えたレッグ
+        foreach (var m in legs)
+        {
+            if (m.T0 > t) break;
+            if (current is not null) pos = current.To;   // 前のレッグの行き先が次のレッグの出発点
+            current = m;
+        }
+        if (current is null) return pos;
+        if (t >= current.T1 || current.T1 <= current.T0) return current.To;
+        var u = (t - current.T0) / (current.T1 - current.T0);
+        return new TimelinePoint(pos.X + (current.To.X - pos.X) * u, pos.Z + (current.To.Z - pos.Z) * u);
+    }
+
+    /// <summary>
+    /// 失策でこぼれた球を拾った野手が内野へ投げ返す（issue #629 ③）。表示専用・乱数不使用。
+    ///
+    /// <para>これが無いと、拾った野手は球を持ったまま<b>棒立ち</b>で、走者が本塁まで走り抜けるのを
+    /// 眺めている絵になる（issue #629 の症状）。投げ先は球の位置で決める＝外野で拾ったら二塁へ
+    /// 投げ返し、内野で拾ったら投手へ返して間合いを切る。走者を刺しにいく送球ではないので
+    /// 判定には一切関与しない（<see cref="GuardAgainstVerdict"/> も通さない）。</para>
+    ///
+    /// <para><b>投手へ返すのは、投げる時刻に投手がマウンドに居るときだけ</b>。走者ありの内野ゴロでは陣形表が
+    /// 投手を本塁バックアップへ走らせる（<see cref="DefensiveFormation"/>）ので、失策球を拾って投げる頃
+    /// （お手玉で約3.8秒・悪送球で約6秒）の投手は本塁後方〜戻りの途中に居て、マウンドへ投げると誰も
+    /// 居ない所へ球が飛ぶ（実測: 遊撃お手玉で投手は 20m、三塁悪送球で 16m 離れていた。2026-08-15
+    /// 監督報告「なぜか投手にボールを送る」）。投手が居なければ二塁ベース（実際に塁カバーへ入っている
+    /// 野手）へ返す＝外野で拾った場合と同じ扱い。位置は野手レッグの写しから引くだけで新たな判定はしない。</para>
+    ///
+    /// <para>本塁クロスプレーを描いた打席では呼ばない（<c>AppendBackHomeThrows</c> と二重に投げる）。
+    /// 判断は「本塁へ投げるか」を知っている GameEngine 側に置く。</para>
+    ///
+    /// <para><paramref name="outAtOtherBaseName"/>: 同じ打球で本塁以外（三塁等）に憤死した走者がいるなら、
+    /// 実際の送球はそちら（<see cref="BaserunningModel"/> は1プレー1送球＝outThrowUsed）へ行っている
+    /// （issue outfield-hit-home-safe-and-third-out-throw-missing の続報）。この塁が渡された場合は、
+    /// 下の「二塁/投手への棒立ち防止の汎用返球」より<b>優先</b>してそちらへ描く。実際にアウトを取った
+    /// 送球なので、汎用返球にある早期return（投手のお手玉・距離ゼロ・自分から自分へ等）は一切通さず
+    /// 必ず描く（<see cref="GuardAgainstVerdict"/> で憤死走者の到達に間に合う秒へ合わせる）。</para>
+    /// </summary>
+    public static PlayTimeline AppendErrorReturnThrow(
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field,
+        string? outAtOtherBaseName = null, double outAtOtherBaseArriveAnchor = 0.0)
+    {
+        if (timeline.ErrorPickupAt is not { } pickAt
+            || timeline.ErrorPickupPoint is not { } from
+            || timeline.ErrorPickupRole is not { } fromRole) return timeline;
+
+        var t0 = pickAt + ErrorReturnTransferSeconds;
+
+        if (outAtOtherBaseName is not null)
+        {
+            var outTo = BasePoint(field, outAtOtherBaseName);
+            var outToRole = CoverRoleAt(timeline, outTo, DefaultBaseGuard(outAtOtherBaseName));
+            var outPhysicalArrive = t0 + LegSeconds(Distance(from, outTo), ThrowSpeedOf(play));
+            var outArrive = GuardAgainstVerdict(outPhysicalArrive, t0, outAtOtherBaseArriveAnchor, runnerOut: true);
+            // 拾った野手が既にその塁の持ち主自身（三塁付近で拾い直してそのままタッチ等）なら送球でなく
+            // 保持運び（Carry）で描く。それ以外は距離やお手玉の投手であっても必ず送球を描く。
+            var outKind = outToRole == fromRole ? BallSegmentKind.Carry : BallSegmentKind.Throw;
+            var outBall = new List<BallSegment>(timeline.Ball)
+            {
+                new()
+                {
+                    Kind = outKind, T0 = t0, T1 = outArrive, From = from, To = outTo,
+                    FromRole = fromRole, ToRole = outToRole, ToBase = outAtOtherBaseName,
+                },
+            };
+            return timeline with { Ball = outBall, Duration = Math.Max(timeline.Duration, outArrive + 0.6) };
+        }
+
+        // 投手のお手玉＝拾った本人が投手。自分から自分へは投げないし、他所へ投げる理由も無い＝そのまま持っている。
+        if (fromRole == FieldPosition.Pitcher) return timeline;
+        var deep = Distance(Home, from) > OutfieldDepthM;
+        // 投手がマウンドを離れている（本塁バックアップ・一塁カバー・戻りの途中）なら投手へは返さない。
+        // 送球が着く頃の位置ではなく**投げ始めの位置**で見る＝実物の野手も「いま居る人」へ投げる。
+        var pitcherOnMound = Distance(FielderPositionAt(timeline, FieldPosition.Pitcher, t0), Mound) < ErrorReturnPitcherOnMoundM;
+        var toSecond = deep || !pitcherOnMound;
+        var to = toSecond ? BasePoint(field, "second") : Mound;
+        var toRole = toSecond ? CoverRoleAt(timeline, to, DefaultBaseGuard("second")) : FieldPosition.Pitcher;
+        // 自分から自分へは投げない（二塁カバーが自分で拾い直した等）。
+        // 距離ゼロの送球は絵に出ないが、ボール区間としては嘘なので積まない＝そのまま持っている。
+        if (toRole == fromRole || Distance(from, to) < 5.0) return timeline;
+        var t1 = t0 + LegSeconds(Distance(from, to), ThrowSpeedOf(play));
+
+        var ball = new List<BallSegment>(timeline.Ball)
+        {
+            new()
+            {
+                Kind = BallSegmentKind.Throw, T0 = t0, T1 = t1, From = from, To = to,
+                FromRole = fromRole, ToRole = toRole, ToBase = toSecond ? "second" : null,
+            },
+        };
+        return timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, t1 + 0.6) };
+    }
+
     /// <summary>
     /// 走塁結果（BaserunningModel.ApplyDetailed）をタイムラインの走者レッグへ変換して合成する。
     /// 打者走者は既定レッグ（本塁→一塁）があるため、二塁打以降の続きのレッグだけ追加する。乱数不使用。
@@ -1307,33 +1775,76 @@ public static class TimelineBuilder
     /// null を返し、かつ <see cref="AppendHeldRunners"/> も「動いた塁」を除外するため、フォース進塁する
     /// 走者が接触時刻まで盤面から消える（＝塁上に居ないように見える）。表示専用・結果不変。
     /// </summary>
+    /// <param name="flyCaughtAtSeconds">
+    /// この打球が<b>空中で捕られた</b>フライなら、その捕球時刻[s]（<b>接触からの秒</b>＝
+    /// <see cref="RunnerMove.TagUpCatchAtSeconds"/> と同じ基準。それ以外は null）。
+    ///
+    /// <para>フライ捕球で塁を進む走者は例外なくタッチアップ＝捕球まで塁を離れられない。判定側は
+    /// 本塁レース（<c>HomePlaySituation</c>）を持つ場面でだけ <see cref="RunnerMove.TagUpCatchAtSeconds"/> を
+    /// 積むので、レースを持たない進塁（固定確率の進塁打）は起点が無いまま接触＋反応で走り出していた
+    /// ＝<b>捕球より前に離塁する絵</b>が残っていた（実測: 犠飛34件中4人。乱数列がずれて表に出た潜在不具合）。
+    /// ここで拾って全員を捕球起点に揃える。表示専用・乱数不使用。</para>
+    /// </param>
+    /// <param name="errorAtSeconds">
+    /// 失策（悪送球）が確定した時刻[s]（<b>接触からの秒</b>）。失策の連鎖（design-14 P1-6）で同一走者に積まれた
+    /// 続きの move（0→1 の後の 1→2 等）は、この時刻より前には走り出させない（悪送球が逸れる前に
+    /// 次塁へ走る絵を防ぐ）。null＝連結はするが起点は前の塁への到達時刻のまま。
+    /// </param>
     public static PlayTimeline AppendRunnerLegs(
         PlayTimeline timeline, IReadOnlyList<RunnerMove> moves, FieldGeometry field,
-        BaserunningCoefficients baserunning, FieldingCoefficients fielding)
+        BaserunningCoefficients baserunning, FieldingCoefficients fielding,
+        double? flyCaughtAtSeconds = null, double? errorAtSeconds = null)
     {
         if (moves.Count == 0) return timeline;
 
         var legs = new List<RunnerLeg>(timeline.Runners);
         var judgements = new List<JudgementEvent>(timeline.Judgements);
         var runnerIndex = 0;
-        foreach (var m in moves)
+        var chainStartAt = errorAtSeconds is { } errAt ? ContactAt + errAt : 0.0;
+        foreach (var (m, chainFromBase) in MergeChainedMoves(moves))
         {
             // 走者の時計は判定と共通（Issue #316）。打席から走り出す打者走者と、塁上でリードを
             // 取ってから走る走者は物理が違うので、式ではなく文脈で分ける。以前はここだけ
             // 「27.43/速度 + 0.35」という第4の式を持っていて、判定より 0.58〜1.63 秒遅かった。
             var fromBox = m.FromBase == 0;
-            var speed = m.Runner.ToFielder().SprintSpeedMps;
+            var speed = m.Runner.ToFielder(baserunning.AbilityEffect).SprintSpeedMps;
+            // タッチアップ（フライ捕球を待つ走者）は文脈が違う＝二次リードなし・静止スタート。
+            // 起点も接触でなく捕球なので、その秒をそのまま追加スタート遅延として払う
+            // （issue score-display-before-home-touch。判定 TagUpRunnerTimeSeconds と同じ時計になる）。
+            // 判定がタッチアップの起点を持たない進塁（固定確率の進塁打）も、フライ捕球なら捕球起点に揃える。
+            var tagUpAt = fromBox ? null : m.TagUpCatchAtSeconds ?? flyCaughtAtSeconds;
             var ctx = fromBox
                 ? ExtraBaseResolver.BatterContextOf(fielding)
-                : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+                : tagUpAt is not null
+                    ? HomePlayResolver.TagUpContextOf(m.Runner, baserunning)
+                    : HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+            var extraStart = m.ExtraStartDelaySeconds + (tagUpAt ?? 0.0);
 
             var label = fromBox ? "打" : $"走{++runnerIndex}";
             var startBase = fromBox ? 1 : m.FromBase;          // 打者は一塁到達後の続きから
             var t = fromBox
                 ? FindBatterArrive(timeline)                   // 一塁到達時刻から続ける
-                : ContactAt + ctx.StartDelaySeconds + m.ExtraStartDelaySeconds;
+                : ContactAt + ctx.StartDelaySeconds + extraStart;
 
             if (fromBox && m.ToBase <= 1) continue;            // 打者の一塁までは既定レッグ
+            if (fromBox)
+            {
+                // 打者走者が一塁を回って続く（失策の連鎖等）なら、内野ゴロの一塁駆け抜けレッグ（#443）は要らない
+                // ＝同時刻に「駆け抜ける」と「二塁へ向かう」の2本が重ならないよう外す（表示専用）。
+                var firstPt = BasePoint(field, "first");
+                legs.RemoveAll(l => l.Label == "打" && l.T0 >= t - 1e-6
+                    && Distance(l.From, firstPt) < 0.5 && Distance(l.To, firstPt) <= FirstBaseOverrunDistanceM + 0.1);
+            }
+
+            // 飛び出しの勝負（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 一塁走者が二塁方向へ
+            // 飛び出し→捕球で反転→一塁へ戻る（憤死 or 帰塁セーフ）。ToBase==FromBase なので下の塁間ループは
+            // 1本も積まない＝以前は憤死も帰塁も描かれず「描写なしでツーアウト」に見えていた。
+            if (m.FromBase == 1 && m.ToBase == 1 && m.DoubledOffThrowArriveSeconds is { } doThrowArrive)
+            {
+                AppendDoubledOffLegs(legs, judgements, m, label, speed, field, baserunning,
+                    flyCaughtAtSeconds, doThrowArrive);
+                continue;
+            }
 
             // 二次リード（<see cref="RunnerContext.LeadDistanceM"/>）。時計は塁間からリードぶんを**引いた**
             // 距離で回っているので、絵でも次塁側へ出しておかないと「引いた距離ぶんの時間で満距離を走る」
@@ -1354,14 +1865,20 @@ public static class TimelineBuilder
             {
                 var from = BaseName(b);
                 var to = BaseName(b + 1);
+                // 失策の連鎖ぶん（issue error-extra-advance-phantom-runner）: 連結した続きの区間は
+                // 「前の塁に着いた後、失策の瞬間以降に、その塁を回るところから」走る。判定はこの区間に
+                // 時計を持たない（連鎖は確率で決まる進塁）ので、打者走者の続きの区間と同じ式で描く。
+                var chained = chainFromBase is { } cfb && b >= cfb;
+                if (chained) t = Math.Max(t, chainStartAt);
                 // 打者走者は塁打数判定と同じ「1塁ぶんを積む」書き方、塁上の走者は本塁レースと同じ
                 // 「出発塁からの累積」。どちらも判定側とまったく同じ数式・同じ順序なので、
                 // 最終レッグの終端がそのまま判定に使われた到達時刻になる。
                 // （累積で書くのは二次リードを塁ごとに二重に引かないため）
-                var t1 = fromBox
-                    ? t + RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field)
+                var t1 = fromBox || chained
+                    ? t + RunnerClock.SegmentSeconds(
+                        speed, b, b + 1, fromBox ? ctx : ExtraBaseResolver.BatterContextOf(fielding), field)
                     : ContactAt + RunnerClock.SegmentSeconds(
-                        speed, m.FromBase, b + 1, ctx, field, m.ExtraStartDelaySeconds);
+                        speed, m.FromBase, b + 1, ctx, field, extraStart);
                 legs.Add(new RunnerLeg
                 {
                     Label = label,
@@ -1403,14 +1920,155 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 飛び出しの走者レッグ（issue fly-out-runner-dp-table-and-doubled-off-depiction）。判定
+    /// （<see cref="DoubledOffResolver"/>）と同じ材料＝稼いだリード <see cref="RunnerMove.DoubledOffLeadM"/>・
+    /// 走者の脚力・反転の判断遅延で組む: 一塁で待機 → 二塁方向へリードぶん走る（盗塁で走っていた走者は
+    /// 投球中から動き出す＝脚力で逆算した開始時刻） → 捕球まで止まる → 反転して一塁へ戻る（Returning）。
+    /// 戻りの尺は判定の RunnerReturnSeconds と同じ「反転遅延＋リード÷脚力」＝レッグ終端が判定の走者到達時刻。
+    /// 憤死は戻し送球の到達（判定の守備所要）で確定＝判定イベントはその時刻に置く。
+    /// </summary>
+    private static void AppendDoubledOffLegs(
+        List<RunnerLeg> legs, List<JudgementEvent> judgements, RunnerMove m, string label, double speed,
+        FieldGeometry field, BaserunningCoefficients baserunning,
+        double? flyCaughtAtSeconds, double throwArriveSeconds)
+    {
+        var first = BasePoint(field, "first");
+        // 飛び出す走者は二次リードを取っている（タッチアップ文脈ではない）。
+        var ctx = HomePlayResolver.RunnerContextOf(m.Runner, baserunning);
+        var lead = Math.Max(0.0, ctx.LeadDistanceM);
+        var leadPt = LeadPoint(field, 1, lead);
+        var leadM = Math.Max(0.0, m.DoubledOffLeadM);                       // 捕球時点の距離（判定の戻り距離）
+        var maxLeadM = Math.Max(leadM, m.DoubledOffMaxLeadM);                // 折り返し点（コミット上限まで走った点）
+        var farPt = LeadPoint(field, 1, lead + maxLeadM);
+        var catchPt = LeadPoint(field, 1, lead + leadM);
+        // 捕球時刻（接触基準）。判定側は捕球点の時刻をそのまま使うので、絵も同じ起点にする。
+        var caughtAt = flyCaughtAtSeconds ?? baserunning.LinerCommitCapSeconds;
+        var catchAt = ContactAt + caughtAt;
+        // 走者が飛び出しを止める時刻（判定の LinerCommitCapSeconds までしか盲目的に走らない）。
+        var commitEnd = ContactAt + Math.Min(caughtAt, baserunning.LinerCommitCapSeconds);
+        var runSeconds = maxLeadM / Math.Max(1e-6, speed);
+        // 走り始めは脚力から逆算（盗塁で走っていた走者は接触前＝投球中から動く。コンタクト始動は接触直後）。
+        var runStart = Math.Max(0.0, Math.Min(commitEnd - runSeconds, ContactAt + baserunning.LinerBreakReactionSeconds));
+        var runEnd = Math.Max(runStart + 0.05, commitEnd);
+        var reverseAt = catchAt + baserunning.DoubledOffReverseSeconds;
+        var runnerArrive = catchAt + baserunning.DoubledOffReverseSeconds + leadM / Math.Max(1e-6, speed);
+        var throwArrive = ContactAt + throwArriveSeconds;
+
+        if (runStart > 0)
+            legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = runStart, From = first, To = leadPt, Runner = m.Runner });
+        legs.Add(new RunnerLeg { Label = label, T0 = runStart, T1 = runEnd, From = leadPt, To = farPt, Runner = m.Runner });
+        // 長い滞空: 折り返し点から捕球まで打球を見ながら塁の方へ戻る（判定の DoubledOffRetreatSpeedMps）。
+        if (catchAt > runEnd)
+            legs.Add(new RunnerLeg { Label = label, T0 = runEnd, T1 = catchAt, From = farPt, To = catchPt, Runner = m.Runner });
+        if (reverseAt > Math.Max(runEnd, catchAt))
+            legs.Add(new RunnerLeg { Label = label, T0 = Math.Max(runEnd, catchAt), T1 = reverseAt, From = catchPt, To = catchPt, Runner = m.Runner });
+        legs.Add(new RunnerLeg
+        {
+            Label = label, T0 = reverseAt, T1 = Math.Max(reverseAt + 0.05, runnerArrive), From = catchPt, To = first,
+            OutAtEnd = m.Out, CloseCall = m.CloseCall, Returning = true, Runner = m.Runner,
+        });
+        if (m.Out || m.CloseCall)
+        {
+            judgements.Add(new JudgementEvent
+            {
+                Label = label,
+                T = m.Out ? Math.Min(throwArrive, runnerArrive) : runnerArrive,
+                Kind = m.Out ? JudgementKind.Out : JudgementKind.Safe,
+                CloseCall = m.CloseCall,
+            });
+        }
+    }
+
+    /// <summary>
+    /// 飛び出しの勝負の戻し送球（捕球点→一塁）を描く（issue fly-out-runner-dp-table-and-doubled-off-depiction）。
+    /// 対象は <c>FromBase == ToBase == 1</c> かつ <see cref="RunnerMove.DoubledOffThrowArriveSeconds"/> を持つ move
+    /// （憤死・帰塁セーフとも）。到達時刻は判定の守備所要（握り替え＋送球＋タッチ）＝タッチぶんだけ手前で球が着く。
+    /// 同じ打球で本塁へ還る走者が居る（外野手が本塁へ投げる）場合は積まない（<c>AppendBackHomeThrows</c> が投げる）。
+    /// 表示専用・乱数不使用。
+    /// </summary>
+    public static PlayTimeline AppendDoubledOffThrow(
+        PlayTimeline timeline, FieldingPlay play, IReadOnlyList<RunnerMove> moves, FieldGeometry field,
+        BaserunningCoefficients baserunning)
+    {
+        RunnerMove? target = null;
+        foreach (var m in moves)
+        {
+            if (m.ToBase >= 4 && !m.Out) return timeline; // 本塁へ還る走者あり＝返球は本塁へ
+            if (m.FromBase == 1 && m.ToBase == 1 && m.DoubledOffThrowArriveSeconds is not null) target = m;
+        }
+        if (target is null || !play.IsFly) return timeline;
+
+        var fieldPoint = FieldPointOf(play);
+        var first = BasePoint(field, "first");
+        var catchAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
+        var t1 = ContactAt + target.DoubledOffThrowArriveSeconds!.Value - baserunning.DoubledOffTagSeconds;
+        var t0 = Math.Min(t1 - 0.05, catchAt + baserunning.DoubledOffTransferSeconds);
+        var ball = new List<BallSegment>(timeline.Ball)
+        {
+            new()
+            {
+                Kind = BallSegmentKind.Throw, T0 = t0, T1 = t1, From = fieldPoint, To = first,
+                FromRole = play.FielderRole, ToRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase),
+                ToBase = "first",
+            },
+        };
+        return timeline with { Ball = ball, Duration = Math.Max(timeline.Duration, t1 + 0.6) };
+    }
+
+    /// <summary>
+    /// 同一走者（<b>参照同値</b>）の連続 move（前の <c>ToBase</c> == 次の <c>FromBase</c>・前がアウトでない）を
+    /// 1本に連結する（issue error-extra-advance-phantom-runner）。失策の連鎖
+    /// （<c>BaserunningModel.ApplyErrorExtraAdvance</c>）は「もう1つ進む」ぶんを別 move として積むので、
+    /// そのまま描くと 2本目が「打席前から次塁に居た走者」になり幻の走者が立つ。判定・記録は move 列のまま
+    /// （得点は <c>ToBase&gt;=4</c> を数えるだけ）なので、連結は描画の中だけで行う。
+    /// <c>Player</c> は record（値同値）なので参照同値で結ぶ（能力が同じ別人を掴まない＝#627 と同じ注意）。
+    /// 戻り値の第2要素は連鎖ぶんが始まる塁（連結が無ければ null）。
+    /// </summary>
+    internal static List<(RunnerMove Move, int? ChainFromBase)> MergeChainedMoves(IReadOnlyList<RunnerMove> moves)
+    {
+        var merged = new List<(RunnerMove Move, int? ChainFromBase)>(moves.Count);
+        foreach (var m in moves)
+        {
+            var joined = false;
+            // 塁を動かない move（飛び出しの帰塁 1→1 等）は連結の対象にも起点にもしない。
+            for (var i = 0; i < merged.Count && m.ToBase > m.FromBase; i++)
+            {
+                var (prev, cfb) = merged[i];
+                if (!ReferenceEquals(prev.Runner, m.Runner) || prev.Out || prev.ToBase <= prev.FromBase
+                    || prev.ToBase != m.FromBase) continue;
+                merged[i] = (prev with
+                {
+                    ToBase = m.ToBase, Out = m.Out, CloseCall = m.CloseCall, Force = m.Force,
+                }, cfb ?? m.FromBase);
+                joined = true;
+                break;
+            }
+            if (!joined) merged.Add((m, null));
+        }
+        return merged;
+    }
+
+    /// <summary>
     /// 打席前に塁上にいて、この打球で動かなかった走者の静止トークンを足す（#3）。
     /// 移動レッグを持つ塁（走者が動いた）は二重に描かない。ラベルは移動走者("打"/"走1"…)と衝突しない
     /// "走一/走二/走三"。T0=0,T1=Duration の0長レッグ＝定点表示。結果不変・乱数不使用の表示専用。
     ///
     /// 2アウトのフライアウト（#299）はタッチアップ不要のため例外: 静止させず、接触直後
     /// （<see cref="AppendRunnerLegs"/> と同じ ContactAt+0.10）から走者速度で次塁方向へスタートさせ、
-    /// 捕球時刻（イニング終了）でその位置に止める（帰塁の描画はしない）。0/1アウトのフライ・
-    /// ゴロアウトは従来どおり静止のまま（issue の「判断が要る点」によりフライの2アウトだけに限定）。
+    /// 捕球時刻（イニング終了）でその位置に止める（帰塁の描画はしない）。
+    ///
+    /// <para>2アウトの<b>ゴロアウト</b>も同じ扱いにする（issue #625）。判定側（<c>BaserunningModel</c>）は
+    /// 3アウト目の凡打で進塁計算を打ち切る＝移動レッグが1件も積まれないため、直さないと
+    /// フォースされた走者が塁に張り付いて見える。止める時刻は<b>打者が一塁でアウトになる瞬間</b>
+    /// （＝3アウト目の成立）で、フライの捕球時刻と同じ役割。走り切らせない（監督決定 2026-08-13・案B）。</para>
+    ///
+    /// <para>フライは走者全員が対象だが、<b>ゴロはフォースされている塁だけ</b>（一塁は常に／
+    /// 二塁は一塁が埋まっていれば／三塁は一・二塁が埋まっていれば）。フォースの無い走者は
+    /// 走る義務が無く、engine も進塁を解いていないので静止のままにする。
+    /// <c>IsFly</c> は「空中で捕った」の意味なので、<c>IsFly: false</c> がそのまま
+    /// 「地面に落ちた＝タッチアップの要らない打球」と一致する。</para>
+    ///
+    /// <para>0/1アウトは従来どおり静止のまま。乱数不使用・結果不変の表示専用。</para>
     /// </summary>
     public static PlayTimeline AppendHeldRunners(
         PlayTimeline timeline, bool first, bool second, bool third,
@@ -1421,15 +2079,19 @@ public static class TimelineBuilder
         var movedFrom = new HashSet<int>();
         foreach (var m in moves) movedFrom.Add(m.FromBase); // 1/2/3（0=打者）
 
-        var autoRun = outsBefore == 2 && play is { IsFly: true, Result: BattedBallResult.Out };
-        var catchAt = autoRun ? ContactAt + (play!.FieldedAtSeconds ?? play.HangTimeSeconds) : 0.0;
+        var flyAutoRun = outsBefore == 2 && play is { IsFly: true, Result: BattedBallResult.Out };
+        var groundForceRun = outsBefore == 2 && play is { IsFly: false, Result: BattedBallResult.Out };
+        // 止める時刻＝イニングが終わる瞬間。フライは捕球、ゴロは打者が一塁でアウトになる時刻。
+        var stopAt = flyAutoRun ? ContactAt + (play!.FieldedAtSeconds ?? play.HangTimeSeconds)
+            : groundForceRun ? FindBatterArrive(timeline)
+            : 0.0;
 
         var legs = new List<RunnerLeg>(timeline.Runners);
-        void AddHeld(int b, bool occupied, Player? runner, string name, string nextName, string label)
+        void AddHeld(int b, bool occupied, Player? runner, string name, string nextName, string label, bool forced)
         {
             if (!occupied || movedFrom.Contains(b)) return;
             var pt = BasePoint(field, name);
-            if (autoRun && runner is not null)
+            if ((flyAutoRun || (groundForceRun && forced)) && runner is not null)
             {
                 // 走者の時計は判定と共通（Issue #316）。塁上からのスタートなので
                 // AppendRunnerLegs の「塁上から」文脈とまったく同じ扱いにする。
@@ -1438,25 +2100,26 @@ public static class TimelineBuilder
                 // 二次リードは AppendRunnerLegs と同じ扱い（時計が塁間から引いている距離を絵にも乗せる）。
                 var leadPt = LeadPoint(field, b, Math.Max(0.0, ctx.LeadDistanceM));
                 legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = t0, From = pt, To = leadPt, OutAtEnd = false, Runner = runner });
-                if (catchAt > t0)
+                if (stopAt > t0)
                 {
-                    var speed = runner.ToFielder().SprintSpeedMps;
+                    var speed = runner.ToFielder(baserunning.AbilityEffect).SprintSpeedMps;
                     var perBase = RunnerClock.SegmentSeconds(speed, b, b + 1, ctx, field) - ctx.StartDelaySeconds;
-                    var frac = Math.Clamp((catchAt - t0) / perBase, 0.0, 1.0);
+                    var frac = Math.Clamp((stopAt - t0) / perBase, 0.0, 1.0);
                     var next = BasePoint(field, nextName);
                     // 進むのは「リード位置から次塁まで」＝時計が持っている距離。塁からの満距離で刻むと
                     // リードぶんだけ速く走ることになる。
                     var stop = new TimelinePoint(
                         leadPt.X + (next.X - leadPt.X) * frac, leadPt.Z + (next.Z - leadPt.Z) * frac);
-                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = catchAt, From = leadPt, To = stop, OutAtEnd = false, Runner = runner });
+                    legs.Add(new RunnerLeg { Label = label, T0 = t0, T1 = stopAt, From = leadPt, To = stop, OutAtEnd = false, Runner = runner });
                 }
                 return;
             }
             legs.Add(new RunnerLeg { Label = label, T0 = 0, T1 = timeline.Duration, From = pt, To = pt, OutAtEnd = false, Runner = runner });
         }
-        AddHeld(1, first, firstPlayer, "first", "second", "走一");
-        AddHeld(2, second, secondPlayer, "second", "third", "走二");
-        AddHeld(3, third, thirdPlayer, "third", "home", "走三");
+        // フォースは打者走者から連なる（一塁は常に／二塁は一塁が埋まっていれば／三塁は一・二塁が埋まっていれば）。
+        AddHeld(1, first, firstPlayer, "first", "second", "走一", forced: true);
+        AddHeld(2, second, secondPlayer, "second", "third", "走二", forced: first);
+        AddHeld(3, third, thirdPlayer, "third", "home", "走三", forced: first && second);
 
         if (legs.Count == timeline.Runners.Count) return timeline;
         return timeline with { Runners = legs };
@@ -1464,8 +2127,6 @@ public static class TimelineBuilder
 
     /// <summary>処理野手の肩が不明なとき（FielderRole なし等）に使う送球速度[m/s]。表示専用のフォールバック。</summary>
     private const double FallbackThrowSpeedMps = 31.0;
-    /// <summary>併殺の二塁での握り替え[s]（表示専用の演出値。判定/帯に一切干渉しない）。</summary>
-    private const double DpTransferSeconds = 0.15;
 
     /// <summary>
     /// 送球を描く速度[m/s]＝処理野手の肩（<see cref="FieldingPlay.FielderThrowSpeedMps"/>）。
@@ -1499,6 +2160,31 @@ public static class TimelineBuilder
         }
         // セーフなのに送球が先着して見える → 走者到達の直後へ回す。
         return Math.Max(physicalArrive, runnerArriveAnchor + VerdictGuardLagSeconds);
+    }
+
+    /// <summary>
+    /// 野選（FC）で「打」（打者走者）の誤ったアウト表現を実際の結末（セーフ）へ訂正する
+    /// （issue double-play-throw-pace-and-second-out-call の追加報告）。<see cref="BuildBattedBall"/> は
+    /// 二塁封殺・野選の区別を知らずに、打球の基礎解決（処理点→一塁の直接送球1本の前提）だけで
+    /// 「打」レッグ・判定を一塁アウトとして作ってしまう＝<see cref="AppendDoublePlayThrows"/> が
+    /// batterOut=false を受け取った時点で必ず訂正が要る。<paramref name="closeCall"/>=false（保守側）
+    /// なら判定オーバーレイは出さず（アウト判定を消すだけ）、true なら「セーフ」を出す。
+    /// </summary>
+    private static PlayTimeline PatchFieldersChoiceBatterLeg(
+        PlayTimeline timeline, double batterArriveAnchor, bool closeCall)
+    {
+        var runners = new List<RunnerLeg>(timeline.Runners.Count);
+        foreach (var r in timeline.Runners)
+            runners.Add(r.Label == "打" && r.OutAtEnd ? r with { OutAtEnd = false, CloseCall = closeCall } : r);
+
+        var judgements = new List<JudgementEvent>(timeline.Judgements.Count);
+        foreach (var j in timeline.Judgements)
+        {
+            if (j.Label != "打" || j.Kind != JudgementKind.Out) { judgements.Add(j); continue; }
+            if (closeCall) judgements.Add(j with { T = batterArriveAnchor, Kind = JudgementKind.Safe, CloseCall = true });
+            // closeCall=false は消すだけ（際どくない安全な出塁にまで演出を出さない通常の内野安打と同じ扱い）。
+        }
+        return timeline with { Runners = runners, Judgements = judgements, ResolvedAt = batterArriveAnchor };
     }
 
     /// <summary>送球1本の所要時間[s]（実際に描く距離÷その送球の速度＝画面上の速度が肩どおりになる）。</summary>
@@ -1567,14 +2253,58 @@ public static class TimelineBuilder
     }
 
     /// <summary>
-    /// 併殺(6-4-3型)の送球連鎖を描く（設計書12 §2, F1 Slice 2）。既存の「野手→一塁」1本 Throw を、
+    /// 併殺(6-4-3型)の送球連鎖を描く（設計書12 §2, F1 Slice 2。秒の組み方は issue
+    /// double-play-throw-pace-and-second-out-call の案B+C+E）。既存の「野手→一塁」1本 Throw を、
     /// 「野手処理点→二塁→一塁」の2本 Throw に差し替える。結果不変・乱数不使用の表示専用。
     /// 内野ゴロ(!IsFly かつ既存の一塁送球あり)以外は何もせず元のタイムラインをそのまま返す。
-    /// batterArriveAnchor=打者走者の一塁到達時刻[s]（2本目の到達をここへ合わせる。物理下限は保持）。
+    ///
+    /// <para>秒は判定モデル（<see cref="BaserunningModel"/> の <c>ResolveDoublePlay</c>）と<b>同じ式</b>
+    /// （<see cref="HomePlayResolver.ResolveThrowPath"/>）で組む＝処理点→二塁の握り替え・二塁→一塁の
+    /// ピボット握り替え・中継球速・タッチが判定と絵で食い違わない。以前は握り替え固定0.15秒×2＋
+    /// 一塁到達を打者到達へ強制アンカーしていたため、①送球が肩そのままの速さで飛び ②2本目が
+    /// 打者到達までの余りを全部飛行時間に吸って極端に遅くなり ③すべての併殺が完全な同着（差0秒）に
+    /// 見えていた（走力・肩・守備・打球の違いが絵に一切出ない）。</para>
+    ///
+    /// <para>二塁カバー（<paramref name="pivotSprintSpeedByRole"/>）の急ぎ度（issue
+    /// fielder-leg-speed-by-distance）も引き直す。陣形ループの時点ではこの二塁送球がまだ存在せず、
+    /// 期限が「一塁送球の決着＝ずっと後」へフォールバックして悠々と歩くため、球のほうが先にベースへ
+    /// 着いていた（誰も居ないベースに球が飛ぶ絵）。</para>
+    ///
+    /// <para>打者のアウト判定（<see cref="JudgementKind.Out"/>, Label="打"）も、このプレーでは描かれない
+    /// 「処理点→一塁の直接送球」の到達（<see cref="FieldingPlay.ThrowArriveSeconds"/>）ではなく、
+    /// 実際に描いた2本目の到達へ差し替える（判定オーバーレイ／結果テキストが球より早く消える問題）。</para>
+    ///
+    /// <para>二塁封殺の一塁走者は、封殺（Force=true）判定の確定時刻（＝二塁送球の到達）だけを実際の
+    /// 秒へ差し替え、走者のレッグそのものは弄らない（issue④・2026-08-27 監督判断）。フォースはタッチが
+    /// 要らないので、実物の併殺と同じく「アウトが確定した後も走者はそのまま塁まで走り切る」絵になる
+    /// （一塁フォースの打者走者と同じ扱い。3Dの演技選択は Force フラグで既に非タッチへ分岐済み）。</para>
+    ///
+    /// batterArriveAnchor=打者走者の一塁到達時刻[s]（食い違いのガードにのみ使う。Issue #301③と同じ
+    /// <see cref="GuardAgainstVerdict"/> 方式＝物理を基本にし、確定判定と矛盾するときだけ寄せる）。
+    /// coefficients=null なら既定係数（Unity 実プレーが使う C# 既定と同一、判定と同じ既定）。
+    /// pivotBonusSeconds=「併殺の名手」スキルによるピボット握り替え短縮[s]（判定側と同じ値を渡す）。
+    /// pivotSprintSpeedByRole=二塁カバー野手のスプリント速度[m/s]（Role→値。無ければ既定の走力で代用）。
+    ///
+    /// <para>batterOut=打者が実際にアウトか（既定true）。二塁は封殺できても一塁への転送が僅かに間に合わない
+    /// 野選（FC, <c>BaserunningModel.ResolveDoublePlay</c> 分岐B）では false を渡す。この呼び出し元
+    /// （<see cref="Game.GameEngine"/>）に来る時点で打者の「打」レッグ・判定は<b>常に一塁アウトとして
+    /// 作られている</b>（<see cref="BuildBattedBall"/> は二塁封殺・野選の区別を知らない基礎解決の時点で
+    /// 走るため）。false を渡すと、その既に作られたアウト判定・レッグを実際の秒・結果へ差し替える
+    /// （さもないと野選が「打者も一塁アウト＝併殺成立」に見えてしまう）。</para>
     /// </summary>
     public static PlayTimeline AppendDoublePlayThrows(
-        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor)
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
+        BaserunningCoefficients? coefficients = null, double pivotBonusSeconds = 0.0,
+        IReadOnlyDictionary<FieldPosition, double>? pivotSprintSpeedByRole = null, bool batterOut = true,
+        IReadOnlyDictionary<FieldPosition, double>? pivotThrowSpeedByRole = null)
     {
+        // 野選（FC・batterOut=false）は、この先どの経路を通っても（3Uアンアシスト等でこの下の早期returnに
+        // 掛かっても）「打」の誤アウトだけは必ず訂正する。BuildBattedBall は二塁封殺・野選の区別を知らず、
+        // 打球の基礎解決（直接送球1本の前提）の時点で「打」を一塁アウトとして作ってしまっているため。
+        // ここでは実際の際どさ（送球との秒差）が分からないので保守的にアウト判定だけ消す＝際どさが分かる
+        // 経路（下の本処理）まで進めたら、際どければ「セーフ」演出へ差し替える。
+        if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
+
         if (play.IsFly || play.RangeM > 46.0) return timeline; // 内野ゴロ以外は対象外
 
         // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す。
@@ -1591,24 +2321,45 @@ public static class TimelineBuilder
         }
         if (existingThrow is null) return timeline;
 
+        var c = coefficients ?? new BaserunningCoefficients();
         var fieldPoint = FieldPointOf(play);                        // ロール終端＝実捕球点（Issue #301①）
         var second = BasePoint(field, "second");
         var first = BasePoint(field, "first");
-
         var arm = ThrowSpeedOf(play);                              // 処理野手の肩（Issue #301③）
-        // 野手処理時刻は play から直接出す（Issue #334: 差し替え前の Throw の T0 はもう捕球時刻と
-        // 一致しない＝一塁向け送球の投げ始めに変わったので、existingThrow.T0 を流用できない）。
-        var fieldedAt = ContactAt + (play.FieldedAtSeconds ?? play.HangTimeSeconds);
-        var releaseAt = fieldedAt + DpTransferSeconds;              // 処理点で握り替えてから投げ始める
-        var secondArrive = releaseAt + Distance(fieldPoint, second) / arm;
-        var pivotAt = secondArrive + DpTransferSeconds;             // 二塁で握り替え
-        // 一塁到達は打者到達へアンカー（＝際どく封殺）。ただし物理的な下限は割らない。
-        var firstArrive = Math.Max(batterArriveAnchor, pivotAt + Distance(second, first) / arm);
+
+        // 1本目（処理点→二塁）: 判定モデル（BaserunningModel.ResolveDoublePlay）と同じ入力・同じ式。
+        var situation = new HomePlaySituation(
+            new Core.Vector3D(fieldPoint.X, 0, fieldPoint.Z),
+            play.FieldedAtSeconds ?? play.HangTimeSeconds, arm, play.FielderFielding);
+        var pathToSecond = HomePlayResolver.ResolveThrowPath(situation, field.SecondBase, c);
+        var releaseAt = ContactAt + pathToSecond.ReleaseAtSeconds;
+        var secondArrive = ContactAt + pathToSecond.ArriveAtSeconds;
 
         // 送球の投げ手／受け手（Issue E1）。**併殺はここが最近傍マッチの壊れる場所**＝
         // 二塁の周りに遊撃手・二塁手・走者が同時に居るので、座標だけでは中継役を取り違える。
+        // pivotRole はこの先の2本目の中継球速（issue⑦）にも使うため、ここで先に確定させる。
         var pivotRole = CoverRoleAt(timeline, second, FieldPosition.SecondBase);
         var firstRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
+
+        // 2本目（二塁→一塁）: ピボット握り替え・タッチは判定と同じ式。中継球速は実際に二塁カバーへ
+        // 入った野手の地肩（issue⑦。`RelayThrowSpeedMps` は本来カットマン専用の共通定数の流用だった＝
+        // 二塁手/遊撃手の地肩が併殺成立率に一切効かない不整合があった）。渡されない/該当が無ければ
+        // 従来の定数へフォールバック（帯を動かす変更なので判定側 BaserunningModel.ResolveDoublePlay と
+        // 必ず同じ値を使う＝呼び出し側 GameEngine が同一のソースから両方へ渡す）。
+        var pivotTransfer = Math.Max(0.0, c.DoublePlayPivotTransferSeconds - pivotBonusSeconds);
+        var pivotArm = pivotRole is { } pivotArmRole && pivotThrowSpeedByRole != null
+            && pivotThrowSpeedByRole.TryGetValue(pivotArmRole, out var pArm) ? pArm : c.RelayThrowSpeedMps;
+        var pivotSituation = new HomePlaySituation(
+            field.SecondBase, pathToSecond.ArriveAtSeconds, pivotArm, play.FielderFielding);
+        var pathToFirst = HomePlayResolver.ResolveThrowPath(
+            pivotSituation, field.FirstBase, c, transferSecondsOverride: pivotTransfer);
+        var pivotAt = ContactAt + pathToFirst.ReleaseAtSeconds;
+        var firstArrivePhysical = ContactAt + pathToFirst.ArriveAtSeconds + c.SecondForceTagSeconds;
+        // 食い違いのガード（Issue #301③と同型）: 打者アウトが確定判定なら物理が打者到達より遅く見える
+        // ときだけタッチの瞬間へ詰める。野選（batterOut=false）は逆＝物理が打者より先着して見える絵にせず
+        // 走者到達の直後へ回す。物理下限（食い違いゼロの最速）はここが兼ねる。
+        var firstArrive = GuardAgainstVerdict(firstArrivePhysical, firstArrivePhysical, batterArriveAnchor, runnerOut: batterOut);
+
         ball.Add(new BallSegment
         {
             Kind = BallSegmentKind.Throw, T0 = releaseAt, T1 = secondArrive,
@@ -1622,26 +2373,60 @@ public static class TimelineBuilder
             FromRole = pivotRole, ToRole = firstRole, ToBase = "first",
         });
 
-        // 二塁封殺の判定時刻を走者到達ではなく実際の送球到達へ差し替える（Issue #328①）。
-        // 送球のほうが先に着くのが通常（DP成立の前提）なので、走者レッグもその時刻・位置で止め、
-        // 判定確定後に走者だけ塁上まで走り切る絵にしない（送球が後着の稀なケースは物理無矛盾の
-        // 保証が無いため、判定時刻だけ差し替えてレッグは弄らない）。
+        // 二塁カバーの急ぎ度を、実際に描いた二塁送球の到達へ引き直す（issue③・fielder-leg-speed-by-distance
+        // と同じ式）。陣形ループはこの二塁送球がまだ無い時点で急ぎ度を決めており、期限がここへ届かず
+        // 決着（＝ずっと後）へフォールバックして悠々と歩いてしまう＝球のほうが先にベースへ着く。
+        var moves = timeline.Moves;
+        if (pivotRole is { } pr)
+        {
+            var idx = -1;
+            for (var i = 0; i < moves.Count; i++)
+            {
+                if (moves[i].Role == pr && moves[i].Task == FielderTask.CoverBase && Distance(moves[i].To, second) < 1.0)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0)
+            {
+                var mv = moves[idx];
+                var start = timeline.FielderStarts is { } starts && starts.TryGetValue(pr, out var s0) ? s0 : mv.To;
+                var dist = Distance(start, mv.To);
+                var deadline = secondArrive - CoverSetSeconds;
+                var speed = Math.Max(4.0, pivotSprintSpeedByRole != null
+                    && pivotSprintSpeedByRole.TryGetValue(pr, out var sp) ? sp : new FielderAttributes().SprintSpeedMps);
+                double t1;
+                if (deadline - mv.T0 > 1e-6)
+                {
+                    var need = dist / (deadline - mv.T0);
+                    var pace = need <= EasyPaceMinMps ? EasyPaceMinMps
+                        : need < EasyJogMps ? Math.Min(speed, EasyJogMps)
+                        : Math.Min(speed, need);
+                    t1 = mv.T0 + dist / pace;
+                }
+                else
+                {
+                    t1 = mv.T0 + dist / speed;   // 間に合わない＝全力（fielder-leg-speed-by-distance と同じ扱い）
+                }
+                if (t1 < mv.T1)
+                {
+                    var updatedMoves = new List<FielderMove>(moves);
+                    updatedMoves[idx] = mv with { T1 = t1 };
+                    moves = updatedMoves;
+                }
+            }
+        }
+
+        // 二塁封殺の判定時刻を走者到達ではなく実際の送球到達へ差し替える（Issue #328①）。フォース
+        // （このレッグは常に Force=true・BaserunningModel.ResolveDoublePlay 参照）はタッチが要らないので、
+        // 判定確定後も走者は塁まで走り切る絵のまま（issue double-play-throw-pace-and-second-out-call ④・
+        // 2026-08-27 監督判断）＝一塁フォースの打者走者と同じ扱い（弄るのは判定時刻だけでレッグは弄らない）。
         var runners = timeline.Runners;
         var judgements = timeline.Judgements;
         foreach (var leg in timeline.Runners)
         {
             if (!leg.OutAtEnd || leg.Label == "打" || Distance(leg.To, second) >= 0.5) continue;
-
-            if (secondArrive < leg.T1 - 1e-9)
-            {
-                var frac = leg.T1 > leg.T0 ? Math.Clamp((secondArrive - leg.T0) / (leg.T1 - leg.T0), 0.0, 1.0) : 0.0;
-                var stop = new TimelinePoint(
-                    leg.From.X + (leg.To.X - leg.From.X) * frac, leg.From.Z + (leg.To.Z - leg.From.Z) * frac);
-                var updatedRunners = new List<RunnerLeg>(runners.Count);
-                foreach (var r in runners)
-                    updatedRunners.Add(ReferenceEquals(r, leg) ? r with { T1 = Math.Max(leg.T0, secondArrive), To = stop } : r);
-                runners = updatedRunners;
-            }
 
             var updatedJudgements = new List<JudgementEvent>(judgements.Count);
             foreach (var j in judgements)
@@ -1655,8 +2440,197 @@ public static class TimelineBuilder
             break;
         }
 
+        double resolvedAt;
+        if (batterOut)
+        {
+            // 打者のアウト判定（issue③）: 描かれない直接送球ではなく、実際に描いた2本目の到達へ合わせる。
+            var judgements2 = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+                judgements2.Add(j.Label == "打" && j.Kind == JudgementKind.Out ? j with { T = firstArrive } : j);
+            judgements = judgements2;
+
+            // 結果確定時刻（issue⑤）: 判定オーバーレイと同じく、描かれない直接送球の到達
+            // （ResolvedAt は元々 forceOutAt=ContactAt+ThrowArriveSeconds のまま）ではなく、
+            // 実際に描いた2本目の到達に合わせる。結果テキスト（PlaybackDisplaySync.ResultShowTime）が
+            // 判定オーバーレイと同じ「打」Out判定の存在をゲートにこの値を読むため、判定側だけ直すと
+            // テロップは直らない（表示専用フィールド・帯/digestの対象外）。
+            resolvedAt = firstArrive;
+        }
+        else
+        {
+            // 野選（FC）: 冒頭の PatchFieldersChoiceBatterLeg で既にアウト判定は消してある（安全側）。
+            // ここでは実際の際どさ（判定の物理下限＝打者到達に対する勝敗マージン。GuardAgainstVerdict
+            // 適用前）が分かるので、際どければ「セーフ」演出へ格上げする＝際どくない（守備が大差で負けた）
+            // 野選まで毎回演出を出さない（通常の内野安打と同じ出し分け規約, batterCloseCall 参照）。
+            var fcCloseCall = Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
+            if (fcCloseCall)
+            {
+                var updatedRunners = new List<RunnerLeg>(runners.Count);
+                foreach (var r in runners)
+                    updatedRunners.Add(r.Label == "打" ? r with { CloseCall = true } : r);
+                runners = updatedRunners;
+                judgements = new List<JudgementEvent>(judgements)
+                {
+                    new() { Label = "打", T = batterArriveAnchor, Kind = JudgementKind.Safe, CloseCall = true },
+                };
+            }
+
+            // 結果確定時刻: 打者がセーフで生きる結果なので、送球の到達ではなく走者自身の到達を使う
+            // （PlaybackDisplaySync.ResultShowTime の「打者がセーフで生きる結果は走者到達まで待つ」と同じ規約。
+            // 冒頭の Patch で既に同じ値をセット済みだが、Ball/Moves と一緒に with で返すため明示する）。
+            resolvedAt = batterArriveAnchor;
+        }
+
         var duration = Math.Max(timeline.Duration, firstArrive + 1.0);
-        return timeline with { Ball = ball, Duration = duration, Runners = runners, Judgements = judgements };
+        return timeline with
+        {
+            Ball = ball, Moves = moves, Duration = duration, Runners = runners, Judgements = judgements,
+            ResolvedAt = resolvedAt,
+        };
+    }
+
+    /// <summary>
+    /// 併殺の代替ルート（三塁/本塁の自己フォース, Q31）の送球連鎖を描く。既存の「野手→一塁」1本 Throw を、
+    /// 「処理点→対象塁（自己フォース, Carry）→一塁（自己送球, Throw）」の2本に差し替える。結果不変・
+    /// 乱数不使用の表示専用。判定モデル（<see cref="BaserunningModel"/> の <c>ResolveDoublePlaySelfForce</c>）と
+    /// <b>同じ入力・同じ式</b>（<see cref="HomePlayResolver.ResolveThrowPath"/>）で秒を組む＝
+    /// <see cref="AppendDoublePlayThrows"/> と同じ設計。
+    ///
+    /// <para>一段目（処理点→対象塁）は送球ではなく<see cref="BallSegmentKind.Carry"/>（グラブに収めたまま
+    /// 走ってベースを踏む）＝<see cref="FieldingPlay.UnassistedPutout"/>（3U）と同じ表現。二段目（対象塁→
+    /// 一塁）は同じ野手がそのまま投げる自己送球（中継〈ピボット〉なし＝<see cref="AppendDoublePlayThrows"/>の
+    /// ような2人目の受け手・地肩差し替えは不要）。</para>
+    ///
+    /// targetBase=対象塁（3=三塁自己フォース／4=本塁自己フォース）。呼び出し元は
+    /// <see cref="RunnerMove.SelfForceDoublePlayLead"/> が立った move の <c>ToBase</c> をそのまま渡す。
+    /// batterOut=打者が実際にアウトか（<see cref="AppendDoublePlayThrows"/> と同じ意味・同じ既定true。
+    /// 三塁/本塁は封殺できても一塁への転送がわずかに間に合わない野選では false）。
+    /// </summary>
+    public static PlayTimeline AppendSelfForceDoublePlayThrows(
+        PlayTimeline timeline, FieldingPlay play, FieldGeometry field, double batterArriveAnchor,
+        int targetBase, BaserunningCoefficients? coefficients = null, bool batterOut = true)
+    {
+        if (!batterOut) timeline = PatchFieldersChoiceBatterLeg(timeline, batterArriveAnchor, closeCall: false);
+
+        if (play.IsFly || play.RangeM > 46.0) return timeline; // ゲート自体が内野ゴロ限定（Q31）＝保守的に同じ条件
+
+        // 既存の送球（野手→一塁）を1本だけ除去。無ければ差し替え不能なので元を返す（AppendDoublePlayThrows と同型）。
+        BallSegment? existingThrow = null;
+        var ball = new List<BallSegment>(timeline.Ball.Count + 1);
+        foreach (var seg in timeline.Ball)
+        {
+            if (seg.Kind == BallSegmentKind.Throw && existingThrow is null)
+            {
+                existingThrow = seg;
+                continue;
+            }
+            ball.Add(seg);
+        }
+        if (existingThrow is null) return timeline;
+
+        var c = coefficients ?? new BaserunningCoefficients();
+        var fieldPoint = FieldPointOf(play);
+        var arm = ThrowSpeedOf(play);
+        var fieldedAtSeconds = play.FieldedAtSeconds ?? play.HangTimeSeconds;
+        var first = BasePoint(field, "first");
+        var firstRole = CoverRoleAt(timeline, first, FieldPosition.FirstBase);
+
+        var force = targetBase == 3 ? HomePlayResolver.ThirdForceParams(field, c) : HomePlayResolver.HomeForceParams(c);
+        var targetPt = targetBase == 3 ? BasePoint(field, "third") : Home;
+        var targetBaseName = targetBase == 3 ? "third" : "home";
+
+        // 一段目（処理点→対象塁）: 送球ではなく自分で運ぶ（UnassistedPutout と同じ Carry 表現）。判定モデルと
+        // 同じ式・transferSecondsOverride: 0.0（握り替えなし＝その場でベースへ踏み込むだけ）。
+        var situation = new HomePlaySituation(
+            new Core.Vector3D(fieldPoint.X, 0, fieldPoint.Z), fieldedAtSeconds, arm, play.FielderFielding);
+        var pathToTarget = HomePlayResolver.ResolveThrowPath(situation, force.TargetPoint, c, transferSecondsOverride: 0.0);
+        var carryStart = ContactAt + pathToTarget.ReleaseAtSeconds;
+        var targetArrive = ContactAt + pathToTarget.ArriveAtSeconds;
+
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Carry, T0 = carryStart, T1 = targetArrive,
+            From = fieldPoint, To = targetPt,
+            FromRole = play.FielderRole, ToRole = play.FielderRole, ToBase = targetBaseName,
+        });
+
+        // 二段目（対象塁→一塁）: 同じ野手がそのまま投げる自己送球（中継なし）。起点は対象塁・時刻は判定モデルと
+        // 同じ基準（BallFieldedAtSeconds＝一段目と同じ捕球時刻。ResolveDoublePlaySelfForce 参照）、握り替えは
+        // 自己フォース専用の DoublePlaySelfForceRelayTransferSeconds。
+        var selfForceSituation = new HomePlaySituation(force.TargetPoint, fieldedAtSeconds, arm, play.FielderFielding);
+        var pathToFirst = HomePlayResolver.ResolveThrowPath(
+            selfForceSituation, field.FirstBase, c, transferSecondsOverride: c.DoublePlaySelfForceRelayTransferSeconds);
+        // 判定モデルの握り替え起点は一段目と同じ捕球時刻（対象塁への到達＝targetArrive を待たない）なので、
+        // 一段目の運びが長い稀なケース（対象を守る野手が遠くまで追ったゴロ）では、この式のまま描くと
+        // 「まだベースへ向かっている絵なのに一塁へ投げ始めている」順序矛盾になる（実測3000試合1573件中2件・
+        // 最大0.061秒の逆転）。判定の到達秒（firstArrive）はそのまま（結果不変）、表示だけ「対象塁へ着くまでは
+        // 投げ始めない」下限で詰める（GuardAgainstVerdict と同型の表示専用ガード）。
+        var throwStart = Math.Max(ContactAt + pathToFirst.ReleaseAtSeconds, targetArrive);
+        var firstArrivePhysical = ContactAt + pathToFirst.ArriveAtSeconds + c.SecondForceTagSeconds;
+        var firstArrive = GuardAgainstVerdict(firstArrivePhysical, firstArrivePhysical, batterArriveAnchor, runnerOut: batterOut);
+
+        ball.Add(new BallSegment
+        {
+            Kind = BallSegmentKind.Throw, T0 = throwStart, T1 = firstArrive,
+            From = targetPt, To = first,
+            FromRole = play.FielderRole, ToRole = firstRole, ToBase = "first",
+        });
+
+        // 対象走者（三塁/本塁で自己フォースされた走者）の判定時刻を、実際に描いた到達（targetArrive）へ
+        // 差し替える（AppendDoublePlayThrows の二塁封殺パッチと同型）。フォースはタッチが要らないので、
+        // 判定確定後も走者は塁まで走り切る絵のまま（レッグそのものは弄らない）。
+        var runners = timeline.Runners;
+        var judgements = timeline.Judgements;
+        foreach (var leg in timeline.Runners)
+        {
+            if (!leg.OutAtEnd || leg.Label == "打" || Distance(leg.To, targetPt) >= 0.5) continue;
+
+            var updatedJudgements = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+            {
+                updatedJudgements.Add(
+                    j.Label == leg.Label && j.Kind == JudgementKind.Out && Math.Abs(j.T - leg.T1) < 1e-9
+                        ? j with { T = targetArrive }
+                        : j);
+            }
+            judgements = updatedJudgements;
+            break;
+        }
+
+        double resolvedAt;
+        if (batterOut)
+        {
+            // 打者のアウト判定: 描かれない直接送球ではなく、実際に描いた2本目の到達へ合わせる。
+            var judgements2 = new List<JudgementEvent>(judgements.Count);
+            foreach (var j in judgements)
+                judgements2.Add(j.Label == "打" && j.Kind == JudgementKind.Out ? j with { T = firstArrive } : j);
+            judgements = judgements2;
+            resolvedAt = firstArrive;
+        }
+        else
+        {
+            // 野選（FC）: 冒頭の PatchFieldersChoiceBatterLeg で既にアウト判定は消してある（安全側）。
+            // 際どければ「セーフ」演出へ格上げする（AppendDoublePlayThrows と同じ出し分け規約）。
+            var fcCloseCall = Math.Abs(firstArrivePhysical - batterArriveAnchor) < c.CloseCallMarginSeconds;
+            if (fcCloseCall)
+            {
+                var updatedRunners = new List<RunnerLeg>(runners.Count);
+                foreach (var r in runners)
+                    updatedRunners.Add(r.Label == "打" ? r with { CloseCall = true } : r);
+                runners = updatedRunners;
+                judgements = new List<JudgementEvent>(judgements)
+                {
+                    new() { Label = "打", T = batterArriveAnchor, Kind = JudgementKind.Safe, CloseCall = true },
+                };
+            }
+            resolvedAt = batterArriveAnchor;
+        }
+
+        var duration = Math.Max(timeline.Duration, firstArrive + 1.0);
+        return timeline with
+        {
+            Ball = ball, Duration = duration, Runners = runners, Judgements = judgements, ResolvedAt = resolvedAt,
+        };
     }
 
     /// <summary>
@@ -1732,9 +2706,54 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// 外野安打の返球先（issue #627）。<b>アウトも含めた先頭走者の到達塁</b>と、その走者のレッグ名・生死。
+    /// </summary>
+    /// <param name="BaseName">投げる塁（"second" / "third" 等）。<see cref="AppendOutfieldReturnThrow"/> へ渡す。</param>
+    /// <param name="AnchorLabel">
+    /// 返球到達を紐付ける走者レッグの名前（<see cref="AppendRunnerLegs"/> が付ける "走1".."走N" / "打"）。
+    /// Player の同値ではなく名前で引く＝<c>Player</c> は record（値同値）なので、能力の等しい別人を掴み得る。
+    /// </param>
+    /// <param name="RunnerOut">その走者が狙う塁で憤死したか。</param>
+    public readonly record struct OutfieldReturnTarget(string BaseName, string AnchorLabel, bool RunnerOut);
+
+    /// <summary>
+    /// 外野安打の返球先を走塁結果から決める（issue #627）。表示専用・乱数不使用の純関数。
+    ///
+    /// <para>従来は打者の塁打数だけで決めていた（単打・二塁打は無条件で二塁）ため、単打で一塁走者が
+    /// 三塁まで進んでも中堅手が二塁へ返し、<b>三塁の走者が無警戒で到達する</b>絵になっていた。
+    /// #89 の物理レースは三塁での走塁死まで解いているので、アウトになった走者も先頭として数える
+    /// （でないと「ボールは二塁へ行ったのに三塁でアウト」になる）。</para>
+    ///
+    /// <para>本塁到達（<c>ToBase</c>=4）は <see cref="AppendBackHomeThrows"/> の持ち場なのでここでは狙わない。
+    /// 塁上の走者が誰も進まなかった打席は従来どおり打者の到達塁（＝三塁打なら三塁・他は二塁）。</para>
+    /// </summary>
+    public static OutfieldReturnTarget ResolveOutfieldReturnTarget(
+        IReadOnlyList<RunnerMove> moves, BattedBallResult result)
+    {
+        var leadTo = 0;
+        var leadOut = false;
+        string? leadLabel = null;
+        var index = 0;
+        foreach (var m in moves)
+        {
+            if (m.FromBase == 0) continue;              // 打者走者は「先頭走者」ではない（下の既定で見る）
+            index++;                                    // AppendRunnerLegs の "走N" と同じ採番（塁上の走者だけ数える）
+            if (m.ToBase <= m.FromBase) continue;       // 動いていない＝レッグが無いのでアンカーに使えない
+            if (m.ToBase > 3 || m.ToBase <= leadTo) continue;
+            leadTo = m.ToBase;
+            leadOut = m.Out;
+            leadLabel = $"走{index}";
+        }
+        if (leadLabel is null)
+            return new OutfieldReturnTarget(result == BattedBallResult.Triple ? "third" : "second", "打", false);
+        return new OutfieldReturnTarget(BaseName(leadTo), leadLabel, leadOut);
+    }
+
+    /// <summary>
     /// 外野安打でボールを内野へ返す送球連鎖（設計書12, #6）。外野処理点→(中継 or 直接)→先頭走者の到達塁。
     /// 本塁クロスプレーが無い外野安打専用（バックホームと二重に描かない）。結果不変・乱数不使用の表示専用。
-    /// leadBaseName は "second"（単打/二塁打）/"third"（三塁打）。ボールが外野で死ぬのを防ぐ。
+    /// leadBaseName は <see cref="ResolveOutfieldReturnTarget"/> が決める（issue #627。打者の塁打数だけで
+    /// 決めていた頃の "second"/"third" 固定ではない）。ボールが外野で死ぬのを防ぐ。
     ///
     /// 到達時刻は**エンジンが塁打数を決めたのと同じ式**（<see cref="ExtraBaseResolver.ThrowArriveSeconds"/>）
     /// で出す（Issue #301③）。従来は定数31m/s固定で、かつ到達を常に「走者到達+0.3s」へ紐付けていたため、
@@ -1747,9 +2766,14 @@ public static class TimelineBuilder
     /// ＝Unity 実プレーが使う値と同一。判定側（<see cref="Game.HomePlayResolver.ResolveThrowPath"/>）と
     /// 同じ係数を渡すことで、絵と判定で中継の出方が食い違わない。
     /// </param>
+    /// <param name="runnerOut">
+    /// 狙う塁で走者が憤死したか（issue #627）。<see cref="GuardAgainstVerdict"/> の向きが真逆になる
+    /// ＝アウトなら送球は走者より**先に**着かねばならない。既定 false（セーフ）。
+    /// </param>
     public static PlayTimeline AppendOutfieldReturnThrow(
         PlayTimeline timeline, FieldingPlay play, FieldGeometry field, string leadBaseName, double runnerArriveAnchor,
-        FieldingCoefficients? coefficients = null, Game.BaserunningCoefficients? baserunning = null)
+        FieldingCoefficients? coefficients = null, Game.BaserunningCoefficients? baserunning = null,
+        bool runnerOut = false)
     {
         if (!IsOutfieldHit(play)) return timeline; // 外野へ抜けた打球のみ（バウンド抜けを含む, Issue #63）
         foreach (var seg in timeline.Ball)
@@ -1780,7 +2804,7 @@ public static class TimelineBuilder
         var leg1 = LegSeconds(Distance(fieldPoint, cutoff ?? target), arm);
         var leg2 = cutoff is { } cut ? LegSeconds(Distance(cut, target), arm) : 0.0;
         var arrive = GuardAgainstVerdict(
-            physicalArrive, readyAt + leg1 + leg2, runnerArriveAnchor, runnerOut: false);
+            physicalArrive, readyAt + leg1 + leg2, runnerArriveAnchor, runnerOut);
 
         var ball = new List<BallSegment>(timeline.Ball);
         AddThrowChain(ball, fieldPoint, target, cutoff, readyAt, arrive, leg1, leg2,
@@ -1869,6 +2893,39 @@ public static class TimelineBuilder
     /// <summary>実捕球者の移動レッグの最短表示長[s]（瞬間移動に見せないための下限）。</summary>
     private const double MinFieldLegSeconds = 0.12;
 
+    /// <summary>急がない移動の最低ペース[m/s]（歩き。issue fielder-leg-speed-by-distance）。これより遅くは
+    /// 動かさない＝期限が遠くても止まって見えず、着いたら待つ。0.9＝歩きの収録（Walk 0.73 m/s×再生倍率上限 1.45
+    /// ＝巡航 1.06）とシャッフル（1.35×1.45＝1.96）の両方に収まる速さ。2.0 だと巡航 2.35 でシャッフルが一度も
+    /// 選ばれず、1.5 だと巡航 1.76 が歩き（≤1.06）と走り（≥2.57）の収録の隙間に落ちて足が滑る（実測 2026-08-18:
+    /// 目立つ 7%→18%）。</summary>
+    private const double EasyPaceMinMps = 0.9;
+
+    /// <summary>急がない移動の小走り[m/s]（同上）。歩きより速く必要な移動はここへ切り上げる＝走りの収録
+    /// （4.28 m/s×再生倍率下限 0.6＝巡航 2.57）に収まる速さ。</summary>
+    private const double EasyJogMps = 2.2;
+
+    /// <summary>余裕のあるフライで落下点に着いておく、捕球からの猶予[s]（同上）。</summary>
+    private const double FlySettleSeconds = 0.5;
+
+    /// <summary>塁カバーで送球到達より前に着いておく猶予[s]（同上）。</summary>
+    private const double CoverSetSeconds = 0.4;
+
+    /// <summary>走路取りの巧い野手が飛球へ出足を早められる上限[s]（接触より前＝打者の振りを読んだ分。表示専用）。</summary>
+    private const double FlyJumpAnticipationSeconds = 0.10;
+
+    /// <summary>その塁へ向かう送球（<see cref="BallSegment.ToBase"/>）の到達時刻。無ければ null。</summary>
+    private static double? ThrowArriveAtBase(IReadOnlyList<BallSegment> ball, string? baseName)
+    {
+        if (baseName is null) return null;
+        double? arrive = null;
+        foreach (var b in ball)
+        {
+            if (b.Kind != BallSegmentKind.Throw || b.ToBase != baseName) continue;
+            if (arrive is null || b.T1 < arrive) arrive = b.T1;
+        }
+        return arrive;
+    }
+
     /// <summary>守備位置の日本語呼称（実況・結果表示用）。</summary>
     private static string PositionName(FieldPosition p) => p switch
     {
@@ -1907,11 +2964,16 @@ public static class TimelineBuilder
     /// <summary>
     /// 守備結果を守備位置・打球種別から具体的な実況文にする（"ショートゴロ" "レフト前ヒット" 等）。
     /// 表示専用。判定・乱数には一切影響しない（既存の FieldingPlay から派生するだけ）。
-    /// 凡打・失策は処理/失策した野手名（FielderRole）、安打は着地方向（AreaName）で命名する。
+    /// 凡打は処理した野手名（FielderRole）、安打は着地方向（AreaName）で命名する。
+    /// <b>失策は失策を犯した野手名</b>（ErrorFielderRole。トンネル＝issue #632 では処理野手が回収する
+    /// 外野手なので、FielderRole のままだと「レフトのエラー」＝抜かれた内野手の失策が外野手の名前で出る）。
     /// </summary>
     public static string DescribeResult(FieldingPlay play)
     {
-        var pos = play.FielderRole is { } r ? PositionName(r) : "";
+        var namedRole = play.Result == BattedBallResult.Error
+            ? play.ErrorFielderRole ?? play.FielderRole
+            : play.FielderRole;
+        var pos = namedRole is { } r ? PositionName(r) : "";
         return play.Result switch
         {
             BattedBallResult.HomeRun => "ホームラン",
@@ -1936,6 +2998,24 @@ public static class TimelineBuilder
             if (r.Label == "打") return r.T1;
         }
         return ContactAt + 4.3;
+    }
+
+    /// <summary>
+    /// この野手が [t0,t1) に別のレッグで走っているか（レッグの二重付与よけ）。
+    ///
+    /// <para>再生の <c>PlaybackEvaluator.FielderAt</c> は同じ役の移動を**順に合成**する（前のレッグの
+    /// 到達点を次のレッグの出発点にする）ので、時刻が重なった2本は「両方の行き先へ同時に寄る」
+    /// 合成移動になり、どちらのレッグの尺よりも速く動く。判定には出ず絵にも「向きが変」としか
+    /// 出ないので、重なりを作る側で塞ぐ（検出は LegSpeedTests / PictureNeverSplitsAFielder）。</para>
+    /// </summary>
+    private static bool IsBusy(IReadOnlyList<FielderMove> moves, FieldPosition role, double t0, double t1)
+    {
+        foreach (var m in moves)
+        {
+            if (m.Role != role) continue;
+            if (m.T0 < t1 - 1e-9 && t0 < m.T1 - 1e-9) return true;
+        }
+        return false;
     }
 
     private static Fielder? Find(IReadOnlyList<Fielder> fielders, FieldPosition pos)

@@ -72,6 +72,11 @@ public enum AdvancePitchResult
     PlateAppearance,
     /// <summary>試合が終了した。</summary>
     Finished,
+    /// <summary>
+    /// 週間球数制限に達した自校投手がいて、プレイヤーが交代先を選ぶまで進めない
+    /// （<see cref="MatchProgression.PendingForcedPitcherChange"/> が真の間）。
+    /// </summary>
+    AwaitingForcedPitcherChange,
 }
 
 /// <summary>
@@ -122,7 +127,7 @@ public sealed class MatchProgression
         _homeTeam = home;
         _ctx = ctx;
         _scenarioStart = scenarioStart;
-        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed), null, scenarioStart);
+        _p = GameEngine.NewProgress(away, home, ctx, new Xoshiro256Random(seed), scenarioStart: scenarioStart);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
 
@@ -134,7 +139,18 @@ public sealed class MatchProgression
     /// <b>試合開始前の内部状態を控える</b>ので、シードを持たなくても <see cref="Save"/> で中断保存できる。
     /// それ以外の実装（テスト用の固定乱数など）では従来どおり <see cref="Save"/> は使えない。</para>
     /// </summary>
-    public MatchProgression(Team away, Team home, GameContext ctx, IRandomSource rng)
+    /// <param name="awayPriorWeekPitches">
+    /// 週間球数制限（設計書05 §1.3）の持ち越し球数（先攻チーム分）。<b>バッチ側
+    /// （<see cref="GameEngine.Play"/>）と同じ値を渡さないと、観戦した試合だけ制限が効かず
+    /// 「観戦しても結果が変わらない」契約が壊れる</b>。null=持ち越しなし＝従来挙動と完全一致。
+    /// </param>
+    /// <param name="homePriorWeekPitches">同上（後攻チーム分）。</param>
+    public MatchProgression(
+        Team away, Team home, GameContext ctx, IRandomSource rng,
+        IReadOnlyDictionary<Player, double>? awayPitchRecovery = null,
+        IReadOnlyDictionary<Player, double>? homePitchRecovery = null,
+        IReadOnlyDictionary<Player, int>? awayPriorWeekPitches = null,
+        IReadOnlyDictionary<Player, int>? homePriorWeekPitches = null)
     {
         _seed = 0;
         _seedable = false;
@@ -143,7 +159,9 @@ public sealed class MatchProgression
         _ctx = ctx;
         // NewProgress は dayForm 抽選で rng を消費するので、控えるのは必ずその手前。
         _rngState = (rng as Xoshiro256Random)?.CaptureState();
-        _p = GameEngine.NewProgress(away, home, ctx, rng);
+        _p = GameEngine.NewProgress(
+            away, home, ctx, rng, awayPriorWeekPitches, homePriorWeekPitches,
+            awayPitchRecovery: awayPitchRecovery, homePitchRecovery: homePitchRecovery);
         _steps = GameEngine.Steps(_p).GetEnumerator();
     }
 
@@ -189,11 +207,48 @@ public sealed class MatchProgression
     public bool PinchHitUpcoming(bool offenseIsAway, int benchIndex)
     {
         if (!SubstitutionCommands.PinchHit(_p, offenseIsAway, benchIndex)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PinchHit, offenseIsAway, benchIndex));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.PinchHit, offenseIsAway, benchIndex, PitchIndex: PendingPitchIndex));
         return true;
     }
 
-    // ===== 選手交代（設計書09 §6）。打席境界の采配窓で呼ぶ。乱数を消費しないので帯は不変。 =====
+    /// <summary>
+    /// 選手交代の決定を記録し、いま止まっている采配窓の対戦（<see cref="CurrentAtBat"/>）を今の実体に合わせる。
+    ///
+    /// <para><b>PitchIndex</b>: 打席の頭の窓・打席境界なら 0、打席途中の窓ならその球数（1球采配と同じ数え方）。
+    /// GameReplay はこの位置で同じ交代を適用する＝エンジンは打席の頭の窓の後で投手・打者を束縛し、途中の窓
+    /// でも束縛し直す（<c>GameEngine.PlayHalfSteps</c> の RebindMatchup）ので、ライブと復元で
+    /// 「その交代がどの球から効くか」が一致する（2026-08-15。旧来は常に 0 で、打席途中の継投は復元で
+    /// 打席の頭から効いていた）。</para>
+    ///
+    /// <para><b>LiveAtBat</b>: 窓は「これから投げる1球」の観測で、交代の直後は打者・投手が古い。エンジンは
+    /// 次の球でその選手を使うので、観測もここで差し替える＝UIは交代直後から新しい対戦を映せる。読み書きのみで
+    /// 乱数は消費しない。</para>
+    /// </summary>
+    private void RecordSubstitution(GameDecision d)
+    {
+        _decisions.Add(d);
+        RefreshLiveMatchupAfterSubstitution();
+    }
+
+    private void RefreshLiveMatchupAfterSubstitution()
+    {
+        if (_p.LiveAtBat is not { } at || _steps.Current?.Kind != GameStepKind.Pitch) return;
+        var offense = _p.OffenseOf(at.IsTop);
+        var defense = _p.OffenseOf(!at.IsTop);
+        var batter = offense.PeekBatter();
+        var pitcher = defense.CurrentPitcher;
+        _p.LiveAtBat = at with
+        {
+            BatterOrder = offense.CurrentBatterOrder,
+            BatterName = batter.Name, BatterSourceId = batter.SourceId, BatterBats = batter.Bats,
+            BatterPosition = batter.Position, BatterNumber = batter.UniformNumber,
+            BatterConditionValue = batter.ConditionValue,
+            PitcherName = pitcher.Name, PitcherSourceId = pitcher.SourceId, PitcherThrows = pitcher.Throws,
+            PitcherNumber = pitcher.UniformNumber, PitcherConditionValue = pitcher.ConditionValue,
+        };
+    }
+
+    // ===== 選手交代（設計書09 §6）。采配窓で呼ぶ（打席の頭・途中とも。上の RecordSubstitution の項）。乱数を消費しないので帯は不変。 =====
     // 適用は必ず SubstitutionCommands（添字ベース）を通し、同じ関数を GameReplay も使う。
     // ＝「同シード＋同交代操作 → 同結果」と Save/Load 往復の一致が構造的に保証される（不変条件#2）。
 
@@ -247,8 +302,8 @@ public sealed class MatchProgression
     {
         var idx = IndexOf(_p.OffenseOf(teamIsAway).Reserves, sub);
         if (idx < 0 || !SubstitutionCommands.PinchRun(_p, teamIsAway, baseIndex, idx)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.PinchRun, teamIsAway, idx,
-            TargetIndex: baseIndex));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.PinchRun, teamIsAway, idx,
+            TargetIndex: baseIndex, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -257,7 +312,7 @@ public sealed class MatchProgression
     {
         var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, sub);
         if (idx < 0 || !SubstitutionCommands.ChangePitcher(_p, teamIsAway, idx)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ChangePitcher, teamIsAway, idx));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.ChangePitcher, teamIsAway, idx, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -271,7 +326,7 @@ public sealed class MatchProgression
     {
         var idx = ReferenceIndexOf(_p.OffenseOf(teamIsAway).ReliefRankingCandidates, sub);
         if (idx < 0 || !SubstitutionCommands.Relieve(_p, teamIsAway, idx)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.Relieve, teamIsAway, idx));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.Relieve, teamIsAway, idx, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -286,7 +341,7 @@ public sealed class MatchProgression
     {
         var idx = ReferenceIndexOf(_p.OffenseOf(teamIsAway).ReliefRankingCandidates, fielder);
         if (idx < 0 || !SubstitutionCommands.SwapPitcherWithFielder(_p, teamIsAway, idx)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.SwapPitcherWithFielder, teamIsAway, idx));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.SwapPitcherWithFielder, teamIsAway, idx, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -298,7 +353,7 @@ public sealed class MatchProgression
     {
         var idx = ReferenceIndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, sub);
         if (idx < 0 || !SubstitutionCommands.DefenseAssign(_p, teamIsAway, slot, idx)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.DefenseAssign, teamIsAway, idx, TargetIndex: slot));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.DefenseAssign, teamIsAway, idx, TargetIndex: slot, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -309,8 +364,8 @@ public sealed class MatchProgression
         var slot = IndexOf(team.CurrentLineup, outgoing);
         var idx = IndexOf(team.Reserves, sub);
         if (slot < 0 || idx < 0 || !SubstitutionCommands.DefensiveSub(_p, teamIsAway, slot, idx)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.DefensiveSub, teamIsAway, idx,
-            TargetIndex: slot));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.DefensiveSub, teamIsAway, idx,
+            TargetIndex: slot, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -322,8 +377,8 @@ public sealed class MatchProgression
     public bool SwapDefensivePositions(bool teamIsAway, int slotA, int slotB)
     {
         if (!SubstitutionCommands.SwapDefense(_p, teamIsAway, slotA, slotB)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.SwapDefense, teamIsAway, slotB,
-            TargetIndex: slotA));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.SwapDefense, teamIsAway, slotB,
+            TargetIndex: slotA, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -335,7 +390,7 @@ public sealed class MatchProgression
     {
         var idx = IndexOf(_p.OffenseOf(teamIsAway).AvailablePitcherCandidates, reliever);
         if (idx < 0 || !SubstitutionCommands.ConvertRelief(_p, teamIsAway, at, idx)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ConvertRelief, teamIsAway, idx, At: at));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.ConvertRelief, teamIsAway, idx, At: at, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -346,7 +401,7 @@ public sealed class MatchProgression
     public bool ReleaseDh(bool teamIsAway, Field.FieldPosition? at)
     {
         if (!SubstitutionCommands.ReleaseDh(_p, teamIsAway, at)) return false;
-        _decisions.Add(new GameDecision(_confirmed, GameDecisionKind.ReleaseDh, teamIsAway, BenchIndex: 0, At: at));
+        RecordSubstitution(new GameDecision(_confirmed, GameDecisionKind.ReleaseDh, teamIsAway, BenchIndex: 0, At: at, PitchIndex: PendingPitchIndex));
         return true;
     }
 
@@ -528,9 +583,29 @@ public sealed class MatchProgression
             Start: start, StealTarget: target, PitchIndex: PendingPitchIndex));
     }
 
+    /// <summary>
+    /// 週間球数制限に達した自校投手がいて、プレイヤーが交代先を選ぶまで <see cref="Advance"/>／
+    /// <see cref="AdvancePitch"/> が進めない状態か（<see cref="GameContext.PlayerControlsPitcherChanges"/> が
+    /// 真の試合限定）。<see cref="TeamState.CurrentPitcherAtWeeklyLimit"/> は副作用のない述語なので、
+    /// プレイヤーが継投すれば（投手が入れ替わり球数が0に戻れば）次に読んだ時点で自然に false へ戻る＝
+    /// 専用のリセット処理は持たない。
+    /// </summary>
+    public bool PendingForcedPitcherChange
+    {
+        get
+        {
+            if (!_ctx.PlayerControlsPitcherChanges || Current is null || IsFinished) return false;
+            var sameHalf = _p.CurrentOuts < 3;
+            var nextIsTop = sameHalf ? _p.CurrentIsTop : !_p.CurrentIsTop;
+            var defense = _p.OffenseOf(!nextIsTop);
+            return defense.Tactics is null && defense.CurrentPitcherAtWeeklyLimit();
+        }
+    }
+
     /// <summary>次の打席を1つ解決して <see cref="Current"/> に載せる。試合終了なら false。</summary>
     public bool Advance()
     {
+        if (PendingForcedPitcherChange) return false;
         if (IsFinished) return false;
         // 1球ごとの采配窓（GameStepKind.Pitch, 設計書15）は読み飛ばし、打席が確定した境界だけを表に出す。
         // 従来どおりの打席単位供給（Pitch 窓で一時停止したいなら AdvancePitch を使う＝Phase D-1）。
@@ -560,6 +635,7 @@ public sealed class MatchProgression
     /// </summary>
     public AdvancePitchResult AdvancePitch()
     {
+        if (PendingForcedPitcherChange) return AdvancePitchResult.AwaitingForcedPitcherChange;
         if (IsFinished) return AdvancePitchResult.Finished;
         if (!_steps.MoveNext())
         {

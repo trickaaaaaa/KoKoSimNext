@@ -1,3 +1,5 @@
+using KokoSim.Engine.Nation;
+
 namespace KokoSim.Engine.Career.Draft;
 
 /// <summary>
@@ -23,8 +25,9 @@ public sealed record DraftCoefficients
     public double BatterOpsScale { get; init; } = 45.0;
     /// <summary>1試合あたり本塁打への加点。</summary>
     public double BatterHrPerGameScale { get; init; } = 6.0;
-    /// <summary>実績が満点加重に達する打席数（これ未満は中立50へ収縮）。</summary>
-    public int BatterMinPlateAppearances { get; init; } = 40;
+    /// <summary>実績が満点加重に達する打席数（これ未満は中立50へ収縮）。40 だと夏県＋秋で満額に達し
+    /// 一夏の固め打ちがフルに効いたので 100 へ（2026-08-15）。</summary>
+    public int BatterMinPlateAppearances { get; init; } = 100;
 
     // --- 投手の実績スコア ---
     public double PitcherEraBase { get; init; } = 3.50;
@@ -40,6 +43,12 @@ public sealed record DraftCoefficients
     public double MiddleRoundThreshold { get; init; } = 66.0;
     /// <summary>候補入りの下限（＝下位/育成バンドの下限）。これ未満は候補でない。</summary>
     public double CandidateThreshold { get; init; } = 58.0;
+    /// <summary>
+    /// 候補入りの足切りランク（設計書20 §3.1a）。選手画面のカテゴリランク（打撃力／投手力＝
+    /// <see cref="PlayerStrengthProfile"/> の現在値合成）の**高い方**がこの等級に届かない選手は、
+    /// 注目度がいくつでも圏外。隠し上限や成績で「打者ランクDの4位指名」が出ないための床。
+    /// </summary>
+    public Tier CandidateMinTier { get; init; } = Tier.B;
 
     // --- 指名確定（10月最終週・3年のみ, 設計書20 §3.2） ---
     /// <summary>指名確率ロジスティックの中点（この注目度で指名確率50%）。</summary>

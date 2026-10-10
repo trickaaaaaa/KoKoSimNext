@@ -43,6 +43,11 @@ namespace KokoSim.Unity.Shell
                         // issue #529: 自校敗退後の残りブラケット背景消化も、同じロスター（NationService.Rosters）
                         // を読むため同様に完了を待ってからロスターへ触る。
                         BracketFinishSim.EnsureCompleted();
+                        // 代表校の県予選成績の打ち直し（設計書05 §1.4b）も同じロスターを読むので完了を待つ。
+                        KoshienQualifierStatsSim.EnsureCompleted();
+                        // AI校の年次進化（issue wire-ai-school-evolve-into-game・設計書05 §2.3）: 終了年度の勝数で
+                        // Strength/Fame を動かす。AdvanceAiYear の**前**＝逆算配分の目標を進化後の値にする。
+                        NationService.EvolveAiSchools(prevYear);
                         NationService.AdvanceAiYear(YearIndex);
                         // 終了した年度ぶんの監督メタ更新（指導力・采配・名声・信頼度・節目イベント, issue #171）。
                         // 通常は3月の総括（EnterWeek の確定週フック・issue #587）で済んでいるので、ここは
@@ -53,6 +58,9 @@ namespace KokoSim.Unity.Shell
                         // 年度替わりで一切触られず学年が固定されていた）。ロジックは engine の RosterLifecycle.AdvanceYear。
                         // 監督成長（名声更新）の後に呼ぶ＝今季の成績で上がった名声が新入生の質へ効く（design-04 §1）。
                         RosterService.AdvanceYear(YearIndex);
+                        // 週次イベントの年次フラグを落とす（issue #609）。「今年はもう出た」印を
+                        // 年度替わりで解除しないと、一度出たイベントが二度と出なくなる。
+                        EventService.OnYearChanged();
                     }
                     EnterWeek();
                 }
@@ -109,8 +117,21 @@ namespace KokoSim.Unity.Shell
                 DraftService.RunNomination(YearIndex, DraftYear());
 
             // 大会開幕週なら大会モードへ入る（要件1）。二重入場を避けるため通常モードのときだけ。
+            // 甲子園はここでは始まらない（暦の週を持たず、夏の県大会の後始末から直接つなぐ・設計書05 §1.1a）。
             if (t.TournamentStarting is { } kind && GameSession.Current.Mode == GameMode.Normal)
                 TournamentEntry.Enter(kind);
+
+            // 観るだけの甲子園（自校が出場していない年）を1週ぶん進める。実際の日程どおりに
+            // ラウンドが埋まっていき、決着したら優勝校が通知フィードへ出る。
+            GameSession.Current.AdvanceSpectatedKoshien(7);
+
+            // センバツ選考発表（設計書05 §1.5b）。地区大会・神宮大会が終わった時点で32校は確定済み
+            // （GameSession.PendingSenbatsuFieldIds）＝ここでは読み上げるだけ。
+            if (Calendar.IsSenbatsuAnnounceWeek(Week) && GameSession.Current.Mode == GameMode.Normal)
+                SenbatsuEntry.Announce();
+
+            // 観るだけのセンバツ（自校が選ばれていない年）を1週ぶん進める（AdvanceSpectatedKoshien と同型）。
+            GameSession.Current.AdvanceSpectatedSenbatsu(7);
 
             // 新チーム発足（夏の3年引退の翌週）: 主将指名の導線（NewTeamService）を開き、AI校も代替わりさせる。
             if (t.NewTeam != null)
@@ -119,6 +140,7 @@ namespace KokoSim.Unity.Shell
                 // AI校も夏後に代替わり: 進行中の全国裏試合を完了させてから3年生を引退させる（#80・秋は下級生のみ）。
                 NationBackgroundSim.EnsureCompleted();
                 BracketFinishSim.EnsureCompleted();   // issue #529: 同じロスターを読むため同様に完了を待つ。
+                KoshienQualifierStatsSim.EnsureCompleted();   // 設計書05 §1.4b: 同上。
                 NationService.RetireAiGraduates();
             }
         }

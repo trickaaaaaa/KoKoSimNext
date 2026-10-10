@@ -76,23 +76,25 @@ namespace KokoSim.Unity.Tournament
 
         private void Render()
         {
-            var session = GameSession.Current;
-            var inTournament = session.InTournament;
+            // 表示する大会は GameSession が決める（対話中の大会 or 自校が出ていない甲子園）。
+            // 画面側で2種類を分岐しない＝「観るだけの甲子園」でも展望と樹形図がそのまま出る。
+            var display = GameSession.Current.Display;
+            var open = display != null;
 
             RenderTopBar();
 
-            Show(_empty, !inTournament);
-            Show(_bracketView, inTournament && _mode == ViewMode.Bracket);
-            Show(_previewView, inTournament && _mode == ViewMode.Preview);
-            Show(_detailView, inTournament && _mode == ViewMode.Detail);
+            Show(_empty, !open);
+            Show(_bracketView, open && _mode == ViewMode.Bracket);
+            Show(_previewView, open && _mode == ViewMode.Preview);
+            Show(_detailView, open && _mode == ViewMode.Detail);
 
-            if (!inTournament) return;
+            if (!open) return;
 
             switch (_mode)
             {
                 case ViewMode.Preview: RenderPreview(); break;
                 case ViewMode.Detail: RenderDetail(); break;
-                default: RenderBracket(session.Runner.BuildBracketView()); break;
+                default: RenderBracket(display.Runner.BuildBracketView()); break;
             }
         }
 
@@ -123,18 +125,25 @@ namespace KokoSim.Unity.Tournament
         private void RenderBracket(TournamentBracketView view)
         {
             var session = GameSession.Current;
-            var runner = session.Runner;
+            var display = session.Display;
+            var live = display.IsLive;          // false＝自校が出ていない大会（観るだけの甲子園）
+            var runner = display.Runner;
 
-            var status = view.ManagerIsChampion ? "自校 優勝！"
+            var status = !live ? "自校は出場していません"
+                : view.ManagerIsChampion ? "自校 優勝！"
                 : view.ManagerEliminated ? "自校 敗退"
                 : "自校 進行中";
             SetText("tb-title", view.Title);
-            SetText("tb-meta", "出場 " + session.Field.Count + "校 ／ " + status
+            SetText("tb-meta", "出場 " + display.Field.Count + "校 ／ " + status
                 + " ／ 優勝校: " + (view.ChampionName ?? "未定"));
 
-            // 次戦（終了していれば結果の総括）。
+            // 次戦（終了していれば結果の総括）。観るだけの大会は「次戦」が無いので進み具合だけ出す。
             string next;
-            if (runner.Finished)
+            if (!live)
+                next = runner.BracketResolutionPending
+                    ? "開催中　残り " + runner.RemainingBracketRounds + " ラウンド"
+                    : "全日程終了　優勝 " + (view.ChampionName ?? "―");
+            else if (runner.Finished)
                 next = view.ManagerIsChampion ? "全試合終了 ─ 優勝" : "自校は敗退しました";
             else if (session.ReachedMatchDay)
                 next = "本日 試合　" + runner.RoundName + "　vs " + (runner.NextOpponent?.Name ?? "―");
@@ -150,11 +159,16 @@ namespace KokoSim.Unity.Tournament
             var others = new System.Collections.Generic.List<BracketMatch>();
             foreach (var m in view.Matches) (m.ManagerInvolved ? mine : others).Add(m);
 
+            // 自校が出ていない大会（観るだけの甲子園）は「自校の戦績」の欄ごと出さない
+            // ＝毎回「まだ自校の試合は行われていません」だけが並ぶ空欄を作らない。
+            Show(_root.Q<Label>("tb-h-mine"), live);
             var myHost = _root.Q<VisualElement>("tp-my-matches");
             if (myHost != null)
             {
+                Show(myHost, live);
                 myHost.Clear();
-                if (mine.Count == 0) myHost.Add(Note("まだ自校の試合は行われていません。"));
+                if (!live) { }
+                else if (mine.Count == 0) myHost.Add(Note("まだ自校の試合は行われていません。"));
                 else foreach (var m in mine) myHost.Add(BuildMatchRow(m));
             }
 
@@ -554,6 +568,128 @@ namespace KokoSim.Unity.Tournament
 
             Fill("tp-contenders", v.Contenders, BuildCard);
             Fill("tp-notables", v.Notables, BuildNotable);
+            RenderEntrants(v.Entrants);
+        }
+
+        // ===== 出場校（甲子園。左＝49代表の名簿／右＝選んだ1校） =====
+
+        private string _entrantSchool;   // 右ペインに出している校名（null＝先頭を出す）
+        private TournamentPreviewState.StatScope _entrantScope = TournamentPreviewState.StatScope.PrefQualifier;
+
+        /// <summary>
+        /// 出場校の名簿を描く。県大会（Entrants が空）ではセクションごと出さない
+        /// ＝「中身の無い見出しだけが残る」形にしない。
+        /// </summary>
+        private void RenderEntrants(System.Collections.Generic.List<TournamentPreviewState.EntrantRow> rows)
+        {
+            var section = _root.Q<VisualElement>("tp-entrants-section");
+            Show(section, rows.Count > 0);
+            if (rows.Count == 0) return;
+
+            // 甲子園は「県の代表」だが、センバツは複数校が同じ地区から選ばれることもある選出枠＝「校」。
+            var koshien = KokoSim.Unity.Shell.GameSession.Current.Kind
+                == KokoSim.Engine.Season.TournamentKind.SummerKoshien;
+            SetText("tp-entrants-h", "出場 " + rows.Count + (koshien ? "代表" : "校"));
+
+            var head = _root.Q<VisualElement>("tp-ent-head");
+            if (head != null)
+            {
+                head.Clear();
+                head.Add(Cell("代表", "tp-ec--pref"));
+                head.Add(Cell("校名", "tp-ec--name"));
+                head.Add(Cell("総合", "tp-ec--rank"));
+                head.Add(Cell("出場", "tp-ec--app"));
+            }
+
+            // 未選択・前回の選択が今年の出場校に居ない年は先頭（北の代表）を出す。
+            if (_entrantSchool == null || !rows.Any(r => r.SchoolName == _entrantSchool))
+                _entrantSchool = rows[0].SchoolName;
+
+            var host = _root.Q<VisualElement>("tp-entrants");
+            if (host != null)
+            {
+                host.Clear();
+                foreach (var r in rows) host.Add(EntrantRow(r));
+            }
+            RenderEntrantDetail();
+        }
+
+        private VisualElement EntrantRow(TournamentPreviewState.EntrantRow r)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("tp-erow");
+            if (r.IsManager) row.AddToClassList("tp-erow--own");
+            if (r.SchoolName == _entrantSchool) row.AddToClassList("tp-erow--selected");
+
+            row.Add(Cell(r.RegionName, "tp-ec--pref"));
+            // 校名は明朝（書体3役ルール: 校名・人名は .f-display）。
+            var name = Cell(r.SchoolName, "tp-ec--name");
+            name.AddToClassList("f-display");
+            row.Add(name);
+
+            var rank = new VisualElement();
+            rank.AddToClassList("tp-ec--rank");
+            rank.Add(UiComponents.RankChipLegacy(r.TierLetter, RankChipSize.Small));
+            row.Add(rank);
+
+            row.Add(Cell(r.AppearanceLabel, "tp-ec--app"));
+
+            var school = r.SchoolName;
+            row.RegisterCallback<PointerDownEvent>(_ =>
+            {
+                _entrantSchool = school;
+                Render();
+            });
+            return row;
+        }
+
+        /// <summary>右ペイン（選んだ1校）。寸評・3軸・成績スコープの切替・ベンチ入り20人の表。</summary>
+        private void RenderEntrantDetail()
+        {
+            var r = TournamentPreviewState.BuildSchoolDetail(_entrantSchool, _entrantScope);
+            if (r == null) return;
+
+            SetText("tp-ed-name", r.SchoolName);
+            SetText("tp-ed-tag", r.Tag + " ／ " + r.StatsCaption);
+            SetText("tp-ed-blurb", r.Sub);
+
+            var bars = _root.Q<VisualElement>("tp-ed-bars");
+            if (bars != null)
+            {
+                bars.Clear();
+                bars.Add(Bar("打力", r.Batting, false));
+                bars.Add(Bar("投手", r.Pitching, false));
+                bars.Add(Bar("守備", r.Defense, true));
+            }
+
+            // 成績スコープの切替（甲子園＝県予選／甲子園・センバツ＝地区大会／センバツ）。既定は
+            // 直前の大会の実測＝開幕前でも中身のある表が出る（大会が変われば選択も追従する）。
+            var senbatsu = KokoSim.Unity.Shell.GameSession.Current.Kind
+                == KokoSim.Engine.Season.TournamentKind.SenbatsuKoshien;
+            var qualifierScope = senbatsu
+                ? TournamentPreviewState.StatScope.RegionalQualifier
+                : TournamentPreviewState.StatScope.PrefQualifier;
+            if (_entrantScope != qualifierScope && _entrantScope != TournamentPreviewState.StatScope.CurrentTournament)
+                _entrantScope = qualifierScope;
+
+            var tabs = _root.Q<VisualElement>("tp-ed-tabs");
+            if (tabs != null)
+            {
+                tabs.Clear();
+                var selected = _entrantScope == qualifierScope ? 0 : 1;
+                tabs.Add(UiComponents.SegTabs(new[] { senbatsu ? "地区大会" : "県予選", senbatsu ? "センバツ" : "甲子園" },
+                    selected, i =>
+                {
+                    _entrantScope = i == 0 ? qualifierScope : TournamentPreviewState.StatScope.CurrentTournament;
+                    Render();
+                }));
+            }
+
+            var host = _root.Q<VisualElement>("tp-ed-roster");
+            if (host == null) return;
+            host.Clear();
+            host.Add(MemberHeader());
+            foreach (var m in r.Members) host.Add(MemberRow(m));
         }
 
         // ===== ビュー3: 校別詳細（トーナメント表の高校名クリック, issue #189） =====
@@ -568,7 +704,8 @@ namespace KokoSim.Unity.Tournament
             if (r == null) return;
 
             SetText("td-title", r.SchoolName);
-            SetText("td-tag", r.Tag);
+            // 消化試合数は格付けと同じ1行に載せる（新しい欄を作らず、表の数字の分母を先に示す, issue #634）。
+            SetText("td-tag", r.Tag + " ／ " + r.StatsCaption);
             SetText("td-blurb", r.Sub);
 
             var host = _root.Q<VisualElement>("td-roster");
@@ -667,6 +804,8 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>登録メンバー表の見出し行（背番号・選手・学年・投打）。校別詳細ページの表で使う。</summary>
+        // 今大会成績の3列は「登板があれば投手の数字」（issue #634・案A）。1本の背番号順の表のまま、
+        // 見せる数字だけ役割に合わせるので、見出しは打者側／投手側を両方書く（例「打率/防」）。
         private static VisualElement MemberHeader()
         {
             var th = new VisualElement();
@@ -675,6 +814,9 @@ namespace KokoSim.Unity.Tournament
             th.Add(Cell("選手", "tp-mc--name"));
             th.Add(Cell("学年", "tp-mc--grade"));
             th.Add(Cell("投打", "tp-mc--hand"));
+            th.Add(Cell("打率/防", "tp-mc--st"));
+            th.Add(Cell("本/回", "tp-mc--st"));
+            th.Add(Cell("点/奪", "tp-mc--st"));
             return th;
         }
 
@@ -688,7 +830,18 @@ namespace KokoSim.Unity.Tournament
             row.Add(Cell(m.Name, "tp-mc--name"));
             row.Add(Cell(m.Grade, "tp-mc--grade"));
             row.Add(Cell(m.Hand, "tp-mc--hand"));
+            row.Add(StatCell(m.Stat1));
+            row.Add(StatCell(m.Stat2));
+            row.Add(StatCell(m.Stat3));
             return row;
+        }
+
+        /// <summary>今大会成績の1セル。数字だけのセルなのでコンデンス数字（.f-num・UI原則③）。</summary>
+        private static Label StatCell(string text)
+        {
+            var l = Cell(text, "tp-mc--st");
+            l.AddToClassList("f-num");
+            return l;
         }
 
         private static Label Cell(string text, string cls)

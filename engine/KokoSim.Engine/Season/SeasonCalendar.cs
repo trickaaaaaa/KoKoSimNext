@@ -1,10 +1,39 @@
 namespace KokoSim.Engine.Season;
 
-/// <summary>大会種別（夏の地方大会 / 秋季県大会）。大会モードの開始判定に使う（設計書05 §1.1）。</summary>
+/// <summary>
+/// 大会種別（夏の地方大会 / 秋季県大会 / 夏の甲子園 / 秋季地区大会 / 明治神宮大会 / 春のセンバツ）。
+/// 大会モードの開始判定に使う（設計書05 §1.1／§1.5b）。
+///
+/// <para><b>値は末尾にだけ足す</b>。セーブ（<see cref="Saves.TournamentSaveState.Kind"/>）へ int で
+/// 直列化されるので、途中に挿すと既存セーブの大会種別が別物になる。</para>
+///
+/// <para><see cref="SummerKoshien"/>・<see cref="Regional"/>・<see cref="Jingu"/> は<b>週で始まらない</b>＝
+/// <see cref="SeasonCalendar.TournamentStartingAt"/> は決して返さない。前段の大会の後始末から直接つなぐ
+/// （設計書05 §1.1a／§1.5b）。3年引退（<see cref="SeasonCalendar.SummerRetireWeek"/>+1）・夏合宿（第18週）・
+/// 冬合宿（<see cref="SeasonCalendar.WinterCampWeek"/>）等との衝突を避けるため。</para>
+///
+/// <para><see cref="SenbatsuKoshien"/> だけは例外で、選考発表週（<see cref="SeasonCalendar.SenbatsuAnnounceWeek"/>）
+/// から直接つなぐ＝神宮大会（11月頃）とセンバツ本戦（3月）の間に現実で数ヶ月の実プレイ週
+/// （冬合宿・新入生確定）が挟まるため、地区大会・神宮大会と同じ「即座連鎖」だけでは表現できない。</para>
+/// </summary>
 public enum TournamentKind
 {
     Summer,
     Autumn,
+    /// <summary>夏の甲子園（49代表の全国大会）。夏の県大会の優勝で出場が決まる。</summary>
+    SummerKoshien,
+    /// <summary>秋季地区大会（関東大会・九州大会等10地区）。秋季県大会の順位が出場枠内なら出場する。</summary>
+    Regional,
+    /// <summary>明治神宮大会（高校の部）。地区大会の優勝校10校によるトーナメント。</summary>
+    Jingu,
+    /// <summary>春のセンバツ本戦（32代表校の全国大会）。地区大会の順位＋神宮枠で出場が決まる。</summary>
+    SenbatsuKoshien,
+    /// <summary>
+    /// 秋季地区予選（神奈川4地区・兵庫5地区・愛知5地区・北海道10支部等、地理固定割の県だけ）。
+    /// 地区代表が <see cref="Autumn"/>（秋季県大会）へ進む。地区データを持たない県はこの種別を経由せず
+    /// 直接 <see cref="Autumn"/> から始まる（design-05 §1.5, issue autumn-district-tournament-not-wired）。
+    /// </summary>
+    AutumnDistrict,
 }
 
 /// <summary>
@@ -50,6 +79,13 @@ public sealed record SeasonCalendar
     /// </summary>
     public int RecruitListWeek { get; init; } = 24;
 
+    /// <summary>
+    /// センバツ選考発表の週（1月 ≒ 第39週。冬合宿（<see cref="WinterCampWeek"/>=38）の直後に置き正面衝突を
+    /// 避ける。設計書05 §1.5b）。32校は地区大会・明治神宮大会が終わった時点（即座連鎖の末尾）で既に
+    /// 確定済み＝この週は保存済みの結果を読み上げるノベルを1本出すだけで、乱数もロジックも新たに引かない。
+    /// </summary>
+    public int SenbatsuAnnounceWeek { get; init; } = 39;
+
     public bool IsFirstHalf(int week) => week < SecondHalfStartWeek;
 
     /// <summary>その週が入部予定者の確定週か（設計書04 §2.1）。</summary>
@@ -63,6 +99,9 @@ public sealed record SeasonCalendar
 
     /// <summary>その週がドラフト指名週か（設計書20 §4）。週送りループの指名フック判定に使う。</summary>
     public bool IsDraftWeek(int week) => week == DraftWeek;
+
+    /// <summary>その週がセンバツ選考発表週か（設計書05 §1.5b）。週送りループの発表フック判定に使う。</summary>
+    public bool IsSenbatsuAnnounceWeek(int week) => week == SenbatsuAnnounceWeek;
 
     /// <summary>
     /// その週から見た「次の公式戦」と開幕までの残り週（issue #582）。トップバーのカウントダウンの単一ソース。
@@ -79,7 +118,12 @@ public sealed record SeasonCalendar
         return (TournamentKind.Summer, WeeksPerYear - week + SummerTournamentStartWeek);
     }
 
-    /// <summary>その週に開幕する大会があれば種別を返す（なければ null）。大会モードへの遷移判定に使う。</summary>
+    /// <summary>
+    /// その週に開幕する大会があれば種別を返す（なければ null）。大会モードへの遷移判定に使う。
+    ///
+    /// <para><b><see cref="TournamentKind.SummerKoshien"/> は決して返さない。</b> 甲子園は暦の週でなく
+    /// 夏の県大会の後始末から直接つなぐ（設計書05 §1.1a）＝ここへ足すと3年引退・夏合宿の週と衝突する。</para>
+    /// </summary>
     public TournamentKind? TournamentStartingAt(int week)
     {
         if (week == SummerTournamentStartWeek) return TournamentKind.Summer;

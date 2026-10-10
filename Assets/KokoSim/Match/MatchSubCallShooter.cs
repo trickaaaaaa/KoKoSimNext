@@ -66,7 +66,7 @@ namespace KokoSim.Unity.Match
             yield return Capture(ctrl, "02-two-way-swap");
 
             // ③ 野手登板＋backfill（在フィールド野手が登板・旧投手退場・空き守備をベンチ野手が補充）。
-            //    タグ「野手登板」・アンバー点灯。
+            //    タグ「投手交代」（文言では区別しない）・アンバー点灯。
             ctrl.ForceSubCallForCapture(new PitchingChangeEvent(
                 Inning: 8, IsTopHalf: false, DefenseIsAway: false,
                 Change: new PitchingChangeOutcome(

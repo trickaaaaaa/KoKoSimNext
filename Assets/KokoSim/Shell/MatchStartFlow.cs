@@ -19,17 +19,23 @@ namespace KokoSim.Unity.Shell
         /// 大会戦は <see cref="BackgroundGameOp"/> 経由で非同期に走り、完了後に MatchLive へ自動遷移する
         /// （呼び出し元は結果を待つ必要が無い）。既に他のバックグラウンド処理が走っていて開始できなかった場合
         /// （二重起動）は AwaitingMatchStart を戻して false を返す＝呼び出し元は詰まらず入力を再開してよい。
+        ///
+        /// <para><paramref name="onFailed"/> は<b>非同期に</b>失敗したときにメインスレッドで呼ぶ
+        /// （＝false を返す同期の失敗とは別経路）。大会戦の準備は別スレッドなので、そこで例外が出ると
+        /// 戻り値では伝えられない。呼び出し元は「準備中」の入力ロックをここで必ず解くこと。</para>
         /// </summary>
-        public static bool Begin()
+        public static bool Begin(System.Action onFailed = null)
         {
             var session = GameSession.Current;
             session.AwaitingMatchStart = false;
-            var started = session.PendingMatchIsPractice ? BeginPractice(session) : BeginTournament(session);
+            var started = session.PendingMatchIsPractice
+                ? BeginPractice(session)
+                : BeginTournament(session, onFailed);
             if (!started) session.AwaitingMatchStart = true;   // 開始できなかった＝取りこぼし対策で元に戻す
             return started;
         }
 
-        private static bool BeginTournament(GameSession session)
+        private static bool BeginTournament(GameSession session, System.Action onFailed)
         {
             var homeState = HomeState.Current;
 
@@ -41,16 +47,32 @@ namespace KokoSim.Unity.Shell
                 () => live = homeState.BeginMatch(),
                 () =>
                 {
+                    // ⚠ work が例外を投げると live は null のまま来る（例外自体は BackgroundGameOp が
+                    //    ログに出して握り潰す）。null チェックが無いとここで NRE になり、遷移もせず
+                    //    呼び出し元の「準備中」ロックも解けない＝**試合開始ボタンが二度と押せなくなる**
+                    //    （実害: スタメンの守備網羅が崩れて BuildFromLineup が ArgumentException を投げ、
+                    //    対戦カード画面から一歩も進めなくなった 2026-08-14）。練習試合側（BeginPractice）は
+                    //    もともと outcome.Live の null を見ているので、大会戦だけが素通しだった。
+                    if (live == null)
+                    {
+                        UnityEngine.Debug.LogError("[試合開始] 準備に失敗した（ログの例外を参照）。入力を戻す。");
+                        session.AwaitingMatchStart = true;   // 消費した導線を戻す＝押し直せる
+                        onFailed?.Invoke();
+                        return;
+                    }
                     MatchLiveController.Pending = new MatchLiveController.LiveMatchRequest
                     {
                         Progression = live.Progression,
                         ManagerIsAway = live.ManagerIsAway,
                         AwayName = live.ManagerIsAway ? NationService.ManagerSchoolName : live.OpponentName,
                         HomeName = live.ManagerIsAway ? live.OpponentName : NationService.ManagerSchoolName,
-                        AwayColors = TeamColorsOf(live.ManagerIsAway
-                            ? NationService.ManagerSchoolId : live.OpponentId),
-                        HomeColors = TeamColorsOf(live.ManagerIsAway
-                            ? live.OpponentId : NationService.ManagerSchoolId),
+                        AwayColors = live.ManagerIsAway
+                            ? ManagerColors() : OpponentColorsOf(live.OpponentId),
+                        HomeColors = live.ManagerIsAway
+                            ? OpponentColorsOf(live.OpponentId) : ManagerColors(),
+                        // 成績の帰属キーの校側（issue #634）。配色と同じ静的経路で渡す。
+                        AwaySchoolId = live.ManagerIsAway ? NationService.ManagerSchoolId : live.OpponentId,
+                        HomeSchoolId = live.ManagerIsAway ? live.OpponentId : NationService.ManagerSchoolId,
                         ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                         OnComplete = result =>
                         {
@@ -93,10 +115,13 @@ namespace KokoSim.Unity.Shell
                 ManagerIsAway = live.ManagerIsAway,
                 AwayName = live.ManagerIsAway ? ownName : opponentName,
                 HomeName = live.ManagerIsAway ? opponentName : ownName,
-                AwayColors = TeamColorsOf(live.ManagerIsAway
-                    ? NationService.ManagerSchoolId : opponentId),
-                HomeColors = TeamColorsOf(live.ManagerIsAway
-                    ? opponentId : NationService.ManagerSchoolId),
+                AwayColors = live.ManagerIsAway
+                    ? ManagerColors() : OpponentColorsOf(opponentId),
+                HomeColors = live.ManagerIsAway
+                    ? OpponentColorsOf(opponentId) : ManagerColors(),
+                // 成績の帰属キーの校側（issue #634）。練習試合の相手校も全国ストア側で引く。
+                AwaySchoolId = live.ManagerIsAway ? NationService.ManagerSchoolId : opponentId,
+                HomeSchoolId = live.ManagerIsAway ? opponentId : NationService.ManagerSchoolId,
                 ManagerTacticalSense = ManagerService.TacticalSenseForAi,
                 RematchOnTie = false,   // 練習試合は引き分けで終わる（再試合はない）
                 OnComplete = result =>
@@ -112,9 +137,19 @@ namespace KokoSim.Unity.Shell
             return true;
         }
 
-        /// <summary>校IDからユニフォーム配色を引く（設計書18 §3.5.1）。自校だけはプレイヤーの上書きが効く。
-        /// ID不明（-1）のときは null＝対決ビューが既定色で描く。</summary>
-        private static TeamColors TeamColorsOf(int schoolId)
+        // issue #618: 旧 TeamColorsOf(int) は `schoolId < 0 ? null : ...` で弾いていたが、自校ID
+        // （NationService.ManagerSchoolId）は -1 ＝「生成校と衝突しない専用ID」であって「ID不明」ではない。
+        // 番兵 -1 が2つの意味に多重定義されていたため、自校の配色は常に null で返り、
+        // 消費側が「両方揃わないと塗らない」設計だったので相手校の配色まで巻き添えで捨てられていた
+        // （＝対決ビューが常に既定色）。呼び出し側で自校/相手校を明示的に分けて番兵の多重定義を解く。
+
+        /// <summary>自校のユニフォーム配色（設計書18 §3.5.1）。プレイヤーの上書きがあればそれ、
+        /// 無ければ校IDからの決定論割り当て。<b>必ず非nullを返す</b>。</summary>
+        private static TeamColors ManagerColors() => TeamColorProvider.ManagerColors;
+
+        /// <summary>相手校のユニフォーム配色。ID不明のときだけ null＝対決ビューがその側を既定色で描く
+        /// （練習試合で相手が未確定の保険経路。大会戦の OpponentId は必ず実在する）。</summary>
+        private static TeamColors OpponentColorsOf(int schoolId)
             => schoolId < 0 ? null : TeamColorProvider.For(schoolId);
     }
 }

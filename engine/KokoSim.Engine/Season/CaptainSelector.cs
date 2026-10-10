@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Season;
 
@@ -58,6 +59,26 @@ public static class CaptainSelector
             foreach (var p in roster) p.IsCaptain = false;
         }
         return SelectAuto(roster);
+    }
+
+    /// <summary>
+    /// 試合層の <see cref="Player"/> 一覧から主将を選ぶ（AI校用。issue ai-school-mental-fixed-50）。
+    /// 規則は <see cref="SelectAuto"/> と同じ＝最上級生の中で統率力（統率傾向×精神力/100）最大、
+    /// タイブレークは統率傾向→名前→背番号で決定論。空なら null。返すのは渡した参照そのもの
+    /// （<c>Team.Captain</c> は在場判定を参照一致で行うので、打順・控えに入っている実体を渡すこと）。
+    /// </summary>
+    public static Player? SelectFromPlayers(IEnumerable<Player> players)
+    {
+        var list = players.ToList();
+        if (list.Count == 0) return null;
+        var topGrade = list.Max(p => p.Grade);
+        return list
+            .Where(p => p.Grade == topGrade)
+            .OrderByDescending(p => p.Leadership * p.Mental / 100.0)
+            .ThenByDescending(p => p.Leadership)
+            .ThenBy(p => p.Name, System.StringComparer.Ordinal)
+            .ThenBy(p => p.UniformNumber)
+            .First();
     }
 
     /// <summary>プレイヤーによる手動指名（設計書09 §8）。他の主将フラグを外して指定選手に付ける。</summary>

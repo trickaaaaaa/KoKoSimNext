@@ -42,6 +42,23 @@ public static class HomeSendDecision
         return MathUtil.Clamp(t, 0.05, 0.95);
     }
 
+    /// <summary>
+    /// 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）の送り閾値。
+    /// 進塁打と同じく<b>アウト数を取らない</b>（<see cref="Game.BaserunningModel"/> の ApplyInPlayOut が
+    /// currentOuts&gt;=2 で即 return するため2アウト緩和は死にコード）。閾値が他より高い理由は
+    /// <see cref="TacticsCoefficients.SendTagUpMinSuccess"/> のコメント参照。純関数・乱数不使用。
+    /// </summary>
+    public static double SendTagUpThreshold(double aggression, TacticsCoefficients c)
+    {
+        var t = c.SendTagUpMinSuccess;
+        t -= (aggression - 0.5) * c.SendTagUpAggressionSpan;
+        return MathUtil.Clamp(t, 0.05, 0.95);
+    }
+
+    /// <summary>タッチアップの到達見込みと状況から、走る(true)か自重(false)かを決める。</summary>
+    public static bool ShouldSendTagUp(double reachProbability, double aggression, TacticsCoefficients c)
+        => reachProbability >= SendTagUpThreshold(aggression, c);
+
     /// <summary>送り閾値の共通式（本塁・三塁で係数だけ差し替え）。</summary>
     private static double Threshold(int outs, double aggression, double minSuccess, double twoOutRelax, double aggressionSpan)
     {

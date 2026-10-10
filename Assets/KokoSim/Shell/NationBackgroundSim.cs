@@ -54,6 +54,16 @@ namespace KokoSim.Unity.Shell
         private static int _nextJob;      // Interlocked。次に取るジョブ添字（並列ワーカーが奪い合う）。
         private static volatile int _total;  // シム対象区画数（進捗バーの母数）。
         private static int _matchesResolved;  // Interlocked。裏試合を解決した累計試合数（定期GCの分母）。
+        // 手元の結果がどの大会のものか（ResultsGate で保護。未設定＝無し）。年ではなくシードで刻むのは
+        // AutumnBackgroundSim と同じ理由＝母種が違えば「同じ年」でも全国の学校そのものが別物になる。
+        private static ulong _resultsSeed;
+        private static bool _resultsSeedSet;
+        // 校別勝数を年間台帳（AI校進化の材料）へ積むか。**ロード復帰の積み直しでは false**＝
+        // 勝数はセーブ（nationYearWins）から復元済みで、積むと二重計上になる。
+        private static volatile bool _foldLedger = true;
+        // 消化中に GC を挟むか。ゲームプレイ中はフレームを守るために挟むが、ロード復帰の
+        // 追いつき実行（49区画で実測44ms）では 1 回の Gen2 GC の方が高くつくので挟まない。
+        private static volatile bool _collectGarbage = true;
 
         /// <summary>直近に開始した全国裏試合タスク（次の節目までに完了させるために保持）。</summary>
         public static Task Current => _task;
@@ -82,30 +92,78 @@ namespace KokoSim.Unity.Shell
             get { var total = _total; return total <= 0 ? 1f : Math.Min(1f, (float)Done / total); }
         }
 
+        // 消化した区画の結果（他県ぶん）。甲子園（49代表）の入力なので**捨てない**。
+        // 背景ワーカーが並列に書き、メインスレッド（KoshienEntry）が読むのでロックで守る。
+        // 並列消化は順不同なので、読み出し側で区画Id順に整列してから使う（決定論＝並び順に依存させない）。
+        private static readonly List<PrefectureResult> Results = new List<PrefectureResult>();
+        private static readonly object ResultsGate = new object();
+
+        /// <summary>
+        /// 他県の地方大会結果（消化済みぶん・スナップショット）。甲子園の出場校を組むために使う。
+        ///
+        /// <para>並列消化なので<b>積まれる順は不定</b>。<see cref="EnsureCompleted"/> を先に呼んで
+        /// 全区画を確定させ、呼び出し側が区画Id順へ整列すること（並び順が結果に効く場所では
+        /// 決定論が壊れるため）。</para>
+        /// </summary>
+        public static IReadOnlyList<PrefectureResult> PrefectureResults
+        {
+            get { lock (ResultsGate) return new List<PrefectureResult>(Results); }
+        }
+
+        /// <summary>
+        /// この大会（<paramref name="seed"/>）の他県ぶんが手元にある（消化済み or 消化中）か。
+        /// <see cref="Start"/> を二重に呼ばないための判定（<c>AutumnBackgroundSim.HasResultsFor</c> と同型）。
+        /// </summary>
+        public static bool HasResultsFor(ulong seed)
+        {
+            lock (ResultsGate)
+            {
+                if (!_resultsSeedSet || _resultsSeed != seed) return false;
+                return Running || Results.Count > 0;
+            }
+        }
+
         /// <summary>
         /// 他県（<paramref name="excludePrefectureId"/> 以外）の夏の地方大会をスライス駆動で開始する。
         /// 自県は呼び出し側（HomeState の TournamentRunner）が対話的に消化して同一 stats へ積むため除外する。
+        /// 自県が北海道・東京（分割県）のときは <paramref name="excludeSplit"/> に自校の区画だけを渡す＝
+        /// もう片方の区画（南北海道等）はここで通常どおり背景消化され、独自の代表を出す（issue 北海道・東京分割）。
+        ///
+        /// <para><paramref name="foldLedger"/> false＝校別勝数を年間台帳へ積まない、
+        /// <paramref name="collectGarbage"/> false＝消化中に GC を挟まない。どちらもロード復帰の
+        /// 積み直し（<c>TournamentEntry.RestoreRunner</c>）用で、通常の大会入場では既定の true。</para>
         /// </summary>
         public static void Start(
             Nation nation, NationRosters rosters, NationTournamentStats stats,
             NationCoefficients coeff, TournamentSchedule schedule, int yearIndex, int calendarYear,
-            int excludePrefectureId, ulong seed, IEnemyBrainFactory brains)
+            int excludePrefectureId, int? excludeSplit, ulong seed, IEnemyBrainFactory brains,
+            bool foldLedger = true, bool collectGarbage = true)
         {
             var rng = new Xoshiro256Random(seed ^ 0x4E37_1000UL);
             var ctx = new GameContext();
-            // 他46県（自校非関与）は優勝校のみ集計モデルで即決する（#試合開始前ロード短縮）。甲子園本戦・全国成績閲覧が
+            // 他46〜48県（自校非関与）は優勝校のみ集計モデルで即決する（#試合開始前ロード短縮）。甲子園本戦・全国成績閲覧が
             // 未実装の現状、他県は優勝校しか消費されないため1球フルシムは不要＝約4000試合の裏 churn（約5分・2GB確保）を消す。
             // 自県は別途プレフェッチでフルシムする（TournamentEntry 側）。個別県の詳細が要る場面が来たらオンデマンド Full 化する。
             var run = NationalTournamentEngine.BeginSummer(
                 nation, rosters, ctx, coeff, schedule, yearIndex, stats, rng,
-                excludePrefectureId: excludePrefectureId, modernRules: null, calendarYear: calendarYear,
+                excludePrefectureId: excludePrefectureId, excludeSplit: excludeSplit, modernRules: null, calendarYear: calendarYear,
                 brains: brains, afterMatch: PauseGate, resolution: SummerResolution.ChampionsOnly);
 
             _throttle = (int)SimThrottle.Normal;
+            _foldLedger = foldLedger;
+            _collectGarbage = collectGarbage;
             _total = run.Total;
             Volatile.Write(ref _done, 0);
             Volatile.Write(ref _nextJob, 0);
             Volatile.Write(ref _matchesResolved, 0);
+            // 今年ぶんだけを持つ（去年の代表を混ぜない）。刻印は Clear と同じロックで立てる
+            // ＝HasResultsFor が「空にした直後・刻印前」の隙間を見て取り違えない。
+            lock (ResultsGate)
+            {
+                Results.Clear();
+                _resultsSeed = seed;
+                _resultsSeedSet = true;
+            }
 
             // 静止画面で待ち時間を縮めるため複数ワーカーで並列消化（区画は独立 Fork ＝決定論不変）。
             // Paused（ライブ試合中）は各ワーカーが手前で停止＝確保が止まり2D再生の滑らかさを守る。
@@ -133,7 +191,14 @@ namespace KokoSim.Unity.Shell
 
                 // 重い処理: 1区画をフルシム。県内の各試合の合間で PauseGate（engine の afterMatch フック経由）が
                 // 走るので、ライブ試合に入った瞬間に県の途中でも即座に手を止められる＝県丸ごと走り切らない。
-                jobs[idx]();
+                var result = jobs[idx]();
+                // 他県の校別勝数を年間台帳へ（AI校の年次進化の材料。台帳はロックで守られている）。
+                // ロード復帰の積み直しでは積まない＝勝数はセーブ（nationYearWins）から復元済みで、
+                // ここで積むと同じ大会を二度数えてAI校の進化が倍加速する。
+                if (_foldLedger) NationService.YearLedger.AddWins(result.Wins);
+                // 代表校（＋勝ち上がり）は甲子園の入力なので控える。以前はここで捨てていたため
+                // 「49代表が集まらない」＝甲子園を組めない状態だった。
+                lock (ResultsGate) Results.Add(result);
                 Interlocked.Increment(ref _done);
 
                 // 区画間で必ずメインスレッドへ時間を譲る（確保レート抑制＝GC を短く分散させる）。
@@ -156,7 +221,7 @@ namespace KokoSim.Unity.Shell
         private static void PauseGate()
         {
             var m = Interlocked.Increment(ref _matchesResolved);
-            if (m % CollectEveryMatches == 0)
+            if (_collectGarbage && m % CollectEveryMatches == 0)
                 GC.Collect();   // ヒープ肥大を防ぐ短い定期回収（ライブ試合前に溜め込まない）。
             while ((SimThrottle)_throttle == SimThrottle.Paused)
                 Thread.Sleep(PausedPollMs);

@@ -160,10 +160,13 @@ public sealed class ForceTagDisplayTests
     public void GrounderAdvanceRace_ThirdBaseOut_IsTag()
     {
         // 二塁走者のみ（一塁空＝非フォース）の内野ゴロで三塁を狙って刺される物理レース（Issue #318）。
+        // 一塁送球到達（ThrowArriveSeconds）を起点にした転送レースで拮抗するよう校正
+        // （issue productive-out-second-to-third-not-advancing で「一塁を捨てて直接送球」分岐を廃止したため、
+        // 出塁と刺殺の両方を観測するには実在する送球＝転送レースの拮抗域を使う）。
         var home = new HomePlayContext(
-            Field, new HomePlaySituation(new Vector3D(-24, 0, 22), 2.4, new Player { ArmStrength = 70 }.ToFielder().ThrowSpeedMps),
+            Field, new HomePlaySituation(new Vector3D(-24, 0, 22), 1.4, new Player { ArmStrength = 70 }.ToFielder().ThrowSpeedMps),
             new TacticsCoefficients(), 1.0, DefenseDepth.Normal, IsFly: false,
-            ThrowArriveSeconds: null, BatterToFirstSeconds: 4.2);
+            ThrowArriveSeconds: 2.0, BatterToFirstSeconds: 4.2);
         var rng = new Xoshiro256Random(318);
         int found = 0;
         for (var i = 0; i < 2000; i++)

@@ -7,7 +7,7 @@
     <ui:VisualElement class="root">
 
       <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース） ===== -->
-      <ui:Instance template="TopBar" />
+      <ui:Instance template="TopBar" class="topbar-slot" />
 
       <!-- ===== 主役ブロック: 直近の予定（全幅ヒーロー帯・design-16 §5 / 決定1-A）=====
            均等3カラムを破って本文最上部に横断で載る主役。大会週は「次の試合」（対戦カード）、
@@ -54,7 +54,7 @@
       </ui:VisualElement>
 
       <!-- ===== ダッシュボード本体（3カラム・外側スクロールなし） ===== -->
-      <ui:VisualElement class="dash">
+      <ui:VisualElement name="home-dash" class="dash">
 
         <!-- COL1: 部の実力＝6指標レーダー / 故障者（「次の試合」は主役ヒーロー帯へ移設） -->
         <ui:VisualElement class="dash-col dash-col--a">
@@ -154,6 +154,41 @@
 
       </ui:VisualElement>
 
+      <!-- ===== イベント（ノベル提示・設計書03 §5 / issue #609）=====
+           案B「トップバー残し・立ち絵中」。暗幕を全画面に敷かず、トップバーの下の本文域だけを
+           入れ替える（昼NBの白地に暗幕は合わないため。コントローラが hero/dash と二者択一する）。
+           面のどこを押しても次の行へ進み、最後の行で閉じる。 -->
+      <ui:VisualElement name="ev-novel" class="ev">
+        <ui:VisualElement class="rule-head ev__eyebrow">
+          <ui:VisualElement class="rule-head__rule" />
+          <ui:Label name="ev-eyebrow" class="rule-head__text" text="今週の出来事" />
+        </ui:VisualElement>
+
+        <!-- 立ち絵スロット（役割ごとの単色シルエット。絵が無い役割はこのまま／絵が有る役割は
+             ev-portrait-image に差し替わる。差し替え口は EventNovelView.EventPortraits）。 -->
+        <ui:VisualElement class="ev__stage">
+          <ui:VisualElement name="ev-portrait" class="ev-por">
+            <ui:VisualElement name="ev-portrait-image" class="ev-por__image" />
+            <ui:VisualElement class="ev-por__head" />
+            <ui:VisualElement class="ev-por__body" />
+            <ui:Label name="ev-portrait-role" class="ev-por__role" text="コーチ" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 会話ボックス（話者名＝明朝／本文＝サンセリフ） -->
+        <ui:VisualElement class="ev__box">
+          <ui:Label name="ev-speaker" class="ev__speaker f-display" text="コーチ" />
+          <ui:Label name="ev-say" class="ev__say" text="" />
+          <ui:VisualElement class="ev__foot">
+            <ui:Label name="ev-progress" class="ev__progress f-num" text="" />
+            <ui:Label name="ev-hint" class="ev__hint" text="クリックで次へ" />
+          </ui:VisualElement>
+          <!-- 結果（誰の・何が・いくつ）は右下の帯でなく会話の最終行＝結果行（USS の ev__say の result 修飾）で出す
+               （2026-08-19 監督指示。旧・案A2 の帯 ev-effect は廃止）。XMLコメント内に二重ハイフンを書くと
+               UXML の取り込みが黙って空になる（画面が丸ごと消える）ので、クラス名をそのまま書かない。 -->
+        </ui:VisualElement>
+      </ui:VisualElement>
+
       <!-- 大会モード: 開幕バナー（全画面センター・フェード）。既定は非表示、コントローラが出す。 -->
       <ui:VisualElement name="tm-banner" class="ui-root tm-banner">
         <ui:VisualElement class="tm-banner__inner">
@@ -212,6 +247,42 @@
           <ui:VisualElement class="nt-foot">
             <ui:Label name="nt-note" class="nt-foot__note" text="" />
             <ui:Button name="nt-ok" class="tm-btn tm-btn--primary nt-ok" text="この選手を主将にする" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- 監督オファー: 転任の選択（設計書04 §1.3）。左に候補（残留＋オファー校）、右に選択中の詳細。
+           強制転任は残留行が無く候補1件のみ＝拒否できない（設計どおり）。 -->
+      <ui:VisualElement name="xt-modal" class="ui-root modal-scrim">
+        <ui:VisualElement class="modal-card xt-card">
+          <ui:VisualElement class="xt-hd">
+            <ui:Label name="xt-hd-title" class="xt-hd__t" text="" />
+          </ui:VisualElement>
+          <ui:Label name="xt-lead" class="xt-lead" text="" />
+
+          <ui:VisualElement class="xt-body">
+            <!-- 左: 候補リスト（32px行） -->
+            <ui:VisualElement class="xt-list">
+              <ui:VisualElement class="xt-th">
+                <ui:Label class="xt-c-name xt-th__c" text="学校" />
+                <ui:Label class="xt-c-pref xt-th__c" text="県" />
+                <ui:Label class="xt-c-rank xt-th__c" text="格" />
+                <ui:Label class="xt-c-power xt-th__c" text="総合" />
+              </ui:VisualElement>
+              <ui:ScrollView name="xt-rows" class="xt-rows" />
+            </ui:VisualElement>
+
+            <!-- 右: 選択中の詳細 -->
+            <ui:VisualElement class="xt-detail">
+              <ui:Label name="xt-d-name" class="xt-d__name" text="" />
+              <ui:Label name="xt-d-sub" class="xt-d__sub" text="" />
+              <ui:VisualElement name="xt-d-facts" class="xt-d__facts" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <ui:VisualElement class="xt-foot">
+            <ui:Label name="xt-note" class="xt-foot__note" text="" />
+            <ui:Button name="xt-ok" class="tm-btn tm-btn--primary xt-ok" text="" />
           </ui:VisualElement>
         </ui:VisualElement>
       </ui:VisualElement>

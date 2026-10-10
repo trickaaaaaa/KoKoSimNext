@@ -154,6 +154,9 @@ namespace KokoSim.EditorTools
 
             EditorGUILayout.LabelField("振りの速さ", EditorStyles.miniBoldLabel);
             cal.SwingSpeed = EditorGUILayout.Slider("再生速度 [倍]", cal.SwingSpeed, 0.5f, 3f);
+            // 足上げ〜トップ（クリップ 0.15→0.925）の倍率。振り出し以降は上の SwingSpeed。1.2 で足上げ〜接地 0.65s＝実物相当。
+            // 到達 0.45s の球で足上げがリリースの (0.775/LoadSpeed − 0.30)s 前から始まる（1.2→0.35s前 / 2.0→0.09s前）
+            cal.LoadSpeed = EditorGUILayout.Slider("足上げの速度 [倍]", cal.LoadSpeed, 0.5f, 3f);
             // 振り出し(clip 0.90)→接触(1.12) は 0.22 クリップ秒。実物は 0.15〜0.20s なので 1.1〜1.5 が実寸相当。
             // ただし**実寸に合わせるだけでは絵として遅い**（監督確定 2026-08-01: 1.4/1.7/2.0 を撮り比べて 2.0）。
             // つまみは全域（0.5〜3.0）安全＝2.4倍を超えて頭出しが負になっても、SetSwing が

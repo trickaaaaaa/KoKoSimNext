@@ -44,8 +44,26 @@ namespace KokoSim.Unity.Match
             ctrl.PickSubstitutionCandidateForCapture(0);
             yield return Capture(ctrl, "sub-2-defense-relief-preview");
 
-            // ②c 守備固めプレビュー（野手枠→控え。野手能力の比較が出ることの確認＝指摘4, issue #452）。
+            // ②b' 「投手を変えるとき打撃・守備が見えない」への対応: トグルで打撃・守備ビューへ切替。
+            // 高さが変わらない（.msub-cmp-toggle 予約）ことと、守備適性帯まで出ることを見る。
+            ctrl.ToggleSubstitutionCmpViewForCapture();
+            yield return Capture(ctrl, "sub-2b-defense-relief-fielderview");
+            ctrl.ToggleSubstitutionCmpViewForCapture();   // 投球ビューへ戻す
+
+            // ②b'' 「投手交代と守備位置をまとめて行えない」への対応: 確定してもモーダルが閉じないこと・
+            // 続けて別操作（守備位置の入替）ができることを見る。
+            ctrl.ApplySubstitutionForCapture();
+            yield return Capture(ctrl, "sub-2c-after-apply-still-open");
+            if (!ctrl.SubstitutionOpenForCapture)
+                Debug.LogError("[SubShooter] 確定後にモーダルが閉じてしまった（一斉編集の要件を満たさない）");
+            ctrl.PickSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition.LeftField);
+            ctrl.PickSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition.CenterField);
+            yield return Capture(ctrl, "sub-2d-chained-fielderswap-preview");
+            ctrl.ApplySubstitutionForCapture();
+            yield return Capture(ctrl, "sub-2e-second-apply-still-open");
             ctrl.CloseSubstitutionForCapture();
+
+            // ②c 守備固めプレビュー（野手枠→控え。野手能力の比較が出ることの確認＝指摘4, issue #452）。
             ctrl.OpenSubstitutionForCapture();
             ctrl.PickSubstitutionSlotForCapture(KokoSim.Engine.Match.Field.FieldPosition.LeftField);
             ctrl.PickSubstitutionCandidateForCapture(1);

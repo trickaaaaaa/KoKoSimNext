@@ -1,0 +1,24 @@
+# confidence: verified
+# 出典: 高校野球ドットコム「秋季愛知県大会出場校が出揃う」(2025年秋), 愛知県高等学校野球連盟サイト
+#       (aichi-kouyaren.com 秋季地区予選 東三河/知多 各ページ)
+# 型見本: 地区予選（5地区）→ 県大会（knockout）。2025年秋の内訳＝名古屋16・東三河6・西三河11・知多5・尾張10。
+pref: aichi
+snapshot_year: 2025
+region: tokai
+districts: [名古屋, 東三河, 西三河, 知多, 尾張]
+district_assignment: geographic
+regional_berths: 3
+seed_exemption: false
+stages:
+  - name: 地区予選
+    type: group_split
+    groups: 5
+    grouping: geographic
+    child:
+      type: knockout
+    advance_per_group: 1    # 地区代表1校が県大会へ（実数は要項PDFで変動するが、簡略化して固定）
+  - name: 県大会
+    type: knockout
+notes:
+  - 2025年秋の地区別出場校数（名古屋16・東三河6・西三河11・知多5・尾張10）は年度で変動しうる
+  - advance_per_group=1 は本ゲームのAI生成県規模（実在より小規模）に合わせた簡略化

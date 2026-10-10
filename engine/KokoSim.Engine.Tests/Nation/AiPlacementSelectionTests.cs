@@ -148,9 +148,16 @@ public sealed class AiPlacementSelectionTests
         double Eff(Player pl, FieldPosition pos)
             => EffectiveFielding.Raw(pl.Fielding, byId[pl.SourceId!.Value].Aptitude(pos), coeff);
 
+        // ⚠ 比べるのは**規則上あり得る入替**だけ（issue ai-lefty-not-at-c-2b-3b-ss）。左投げを
+        // 捕手・二塁・三塁・遊撃へ動かす入替は守備力が上がっても採らない＝ソルバの目的関数は
+        // 「実効守備力 − 左投げの罰」になった。ここで除外しないと「改善する入替がある」と誤検出する。
+        bool Legal(Player pl, FieldPosition pos)
+            => pl.Throws != Handedness.Left || !FieldPositions.IsRightThrowOnly(pos);
+
         for (var a = 0; a < starters.Count; a++)
             for (var b = a + 1; b < starters.Count; b++)
             {
+                if (!Legal(starters[a], starters[b].Position) || !Legal(starters[b], starters[a].Position)) continue;
                 var current = Eff(starters[a], starters[a].Position) + Eff(starters[b], starters[b].Position);
                 var swapped = Eff(starters[a], starters[b].Position) + Eff(starters[b], starters[a].Position);
                 Assert.True(swapped <= current + 1e-9,

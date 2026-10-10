@@ -125,12 +125,17 @@ namespace KokoSim.Unity.MatchPreview
             _starting = true;
             _start?.SetEnabled(false);   // 押せない見た目にする（無言で無視しない）
 
-            if (!MatchStartFlow.Begin())
-            {
-                // 他のバックグラウンド処理と衝突して開始できなかった（二重起動）。詰まないよう入力を戻す。
-                _starting = false;
-                _start?.SetEnabled(true);
-            }
+            // 失敗は2経路ある。①同期＝他のバックグラウンド処理と衝突（二重起動）②非同期＝別スレッドの
+            // 準備が例外で落ちた。②を拾わないと「準備中」ロックが解けず**試合開始が二度と押せない**
+            // （画面を出入りすれば OnEnable でリセットされるが、その場では詰む）。
+            if (!MatchStartFlow.Begin(ReleaseStartLock)) ReleaseStartLock();
+        }
+
+        /// <summary>「準備中」の入力ロックを解く（押し直せる状態へ戻す）。</summary>
+        private void ReleaseStartLock()
+        {
+            _starting = false;
+            _start?.SetEnabled(true);
         }
     }
 }

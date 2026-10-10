@@ -232,4 +232,24 @@ public sealed class TournamentScheduleTests
     [Fact]
     public void Label_IsMonthAndDay()
         => Assert.Equal("7月13日", TournamentDate.Label(S, TournamentKind.Summer, 3));
+
+    /// <summary>夏の甲子園は8月6日開幕（設計書05 §1.1）。県大会・秋とは別の月日を引く。</summary>
+    [Fact]
+    public void RealDate_Koshien_OpensInAugust()
+    {
+        Assert.Equal((8, 6), TournamentDate.DateOf(S, TournamentKind.SummerKoshien, 0));
+        Assert.Equal("8月13日", TournamentDate.Label(S, TournamentKind.SummerKoshien, 7));
+    }
+
+    /// <summary>
+    /// 49代表＝6ラウンドの甲子園は全13日で8月中に収まる（8月6日開幕・決勝8月18日）。
+    /// 日程表は県大会と同じものを引く（大会ごとに別の日割りを持たない）ので、実際の選手権（約17日）より
+    /// 数日短い。大会が消費する週数は最終日から出す（13日＝1週）。
+    /// </summary>
+    [Fact]
+    public void KoshienFinal_StaysInAugust()
+    {
+        Assert.Equal(12, S.FinalDay(6));
+        Assert.Equal((8, 18), TournamentDate.DateOf(S, TournamentKind.SummerKoshien, S.FinalDay(6)));
+    }
 }

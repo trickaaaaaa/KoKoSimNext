@@ -13,7 +13,7 @@ public static class PickoffResolver
     public static double Probability(Player runner, Player pitcher, BaserunningCoefficients c)
         => MathUtil.Clamp(
             c.PickoffBaseProb
-            + (runner.Steal - 50) * c.PickoffRunnerLeadSlope
+            + (c.AbilityEffect.Running(runner.Steal) - 50) * c.PickoffRunnerLeadSlope
             - (pitcher.Mental - 50) * c.PickoffPitcherSenseSlope,
             0.0, c.PickoffMaxProb);
 

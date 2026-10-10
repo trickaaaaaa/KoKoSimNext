@@ -55,7 +55,13 @@ public sealed class BackgroundMatchResolver : IBackgroundMatchResolver
         var homeAceRest = AceRestContext.From(context, away.Tier);
         var awayTeam = WithBrain(_rosters.TeamFor(away, _yearIndex, _modernRules, _calendarYear, awayAceRest), away);
         var homeTeam = WithBrain(_rosters.TeamFor(home, _yearIndex, _modernRules, _calendarYear, homeAceRest), home);
-        var result = GameEngine.Play(awayTeam, homeTeam, _ctx, rng.Fork(2));
+        // 試合間の回復モデル（設計書02 §1.1e-2）。裏試合は自校非関与＝両校とも (校ID, 背番号) キー。
+        var (awayRecovery, homeRecovery) = PitchRecoveryLookup.ForMatch(
+            context, _ctx.PitchRecovery,
+            PitchRecoveryLookup.AllPlayers(awayTeam), p => PitcherLedgerKey.ForOpponent(away.Id, p.UniformNumber),
+            PitchRecoveryLookup.AllPlayers(homeTeam), p => PitcherLedgerKey.ForOpponent(home.Id, p.UniformNumber));
+        var result = GameEngine.Play(
+            awayTeam, homeTeam, _ctx, rng.Fork(2), awayPitchRecovery: awayRecovery, homePitchRecovery: homeRecovery);
         _stats?.FoldMatch(away.Id, home.Id, result);
         _onMatch?.Invoke(away.Id, home.Id, result);
         _afterMatch?.Invoke();   // #208: 試合の合間でワーカーがスロットル（Paused=停止）を反映できる継ぎ目。

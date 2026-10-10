@@ -77,9 +77,13 @@ public sealed class DoubledOffResolverTests
     public void LeadGained_IsCapped_ForLongHangTimes()
     {
         // 「盲目的に走る」時間は頭打ち＝滞空が長くなってもリード(と戻り所要)は増え続けない。
+        // 上限を過ぎたら打球を見ながら塁の方へ戻る（DoubledOffRetreatSpeedMps）＝捕球時点のリードは縮む
+        // （issue fly-out-runner-dp-table-and-doubled-off-depiction。最大リード MaxLeadM は上限で一定）。
         var leadAtCap = DoubledOffResolver.LeadGainedM(1.0, C);
         var leadBeyondCap = DoubledOffResolver.LeadGainedM(4.0, C);
-        Assert.Equal(leadAtCap, leadBeyondCap, 6);
+        Assert.True(leadBeyondCap <= leadAtCap);
+        Assert.Equal(System.Math.Max(0.0, leadAtCap - C.DoubledOffRetreatSpeedMps * 3.0), leadBeyondCap, 6);
+        Assert.Equal(DoubledOffResolver.MaxLeadM(1.0, C), DoubledOffResolver.MaxLeadM(4.0, C), 6);
     }
 
     // --- 契約: 確率はクランプされ、決定論である ---

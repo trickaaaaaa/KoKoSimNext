@@ -82,6 +82,13 @@ public sealed class NationRosters
                 r = AiRosterFactory.Bootstrap(school, yearIndex, _deps);
                 _rosters[school.Id] = r;
             }
+            else if (!r.MentalBackfillChecked)
+            {
+                // 旧セーブ（精神系を振っていない世代＝全員 50/50/50）の後埋め（issue ai-school-mental-fixed-50）。
+                // 校ごとに一度だけ検査する。能力は触らない（決定論 Fork＝同じセーブなら同じ値）。
+                AiMentalModel.BackfillIfUnrolled(r, school, _deps);
+                r.MentalBackfillChecked = true;
+            }
             return r;
         }
     }

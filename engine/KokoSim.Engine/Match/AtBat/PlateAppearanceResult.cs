@@ -38,4 +38,10 @@ public static class PlateAppearanceResultExtensions
         PlateAppearanceResult.HomeRun => 4,
         _ => 0,
     };
+
+    /// <summary>見逃し三振か（三振のうち、最終球が振らずに入った CalledStrike のもの）。空振り三振との
+    /// 内訳を測る（見逃し三振率の調査）。<paramref name="pitchLog"/> が null/空（バント等 AtBatSession を
+    /// 通らない経路）では常に false。判定・帯には関与しない集計専用。</summary>
+    public static bool IsLookingStrikeout(this PlateAppearanceResult r, System.Collections.Generic.IReadOnlyList<PitchRecord>? pitchLog)
+        => r == PlateAppearanceResult.Strikeout && pitchLog is { Count: > 0 } log && log[^1].Kind == PitchKind.CalledStrike;
 }

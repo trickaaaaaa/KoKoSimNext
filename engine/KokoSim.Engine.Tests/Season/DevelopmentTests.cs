@@ -27,12 +27,12 @@ public sealed class DevelopmentTests
         Assert.True(t.LifetimeTotal(GrowthType.Standard) > t.LifetimeTotal(GrowthType.Early));
     }
 
-    // --- 必要exp曲線（設計書02 §5.1: 100×1.05^v） ---
+    // --- 必要exp曲線（設計書02 §5.1: 100×1.04^v。2026-08-15 案D で 1.05→1.04） ---
 
     [Theory]
     [InlineData(0, 100.0)]
-    [InlineData(20, 265.33)]
-    [InlineData(50, 1146.74)]
+    [InlineData(20, 219.11)]
+    [InlineData(50, 710.67)]
     public void RequiredExp_FollowsFormula(int level, double expected)
     {
         var c = new TrainingCoefficients();

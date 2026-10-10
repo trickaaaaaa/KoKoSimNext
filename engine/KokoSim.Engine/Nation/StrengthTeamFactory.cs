@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Game;
 using KokoSim.Engine.Match.Tactics;
+using KokoSim.Engine.Nation.Roster;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 
@@ -44,7 +46,7 @@ public static class StrengthTeamFactory
         EnemyAiCoefficients? aiCoeff = null, FormCoefficients? form = null)
         => Create(school.Strength, school.Name, SeedFor(school.Id, yearIndex),
             personalityCoeff, nameVocab, rosterCoeff, modernRules, calendarYear,
-            school.ManagerTraits, aiCoeff, form);
+            school.ManagerTraits, aiCoeff, form, school.Style);
 
     /// <summary>校ID＋年度から生成シードを導出する（決定論・不変条件#2）。</summary>
     public static IRandomSource SeedFor(int schoolId, int yearIndex)
@@ -54,15 +56,25 @@ public static class StrengthTeamFactory
         PersonalityCoefficients? personalityCoeff = null, PlayerNameVocab? nameVocab = null,
         RosterCoefficients? rosterCoeff = null, ModernRules? modernRules = null, int? calendarYear = null,
         IReadOnlyList<ManagerTrait>? traits = null, EnemyAiCoefficients? aiCoeff = null,
-        FormCoefficients? form = null)
+        FormCoefficients? form = null, SchoolStyle? style = null)
     {
         var pc = personalityCoeff ?? new PersonalityCoefficients();
         var vocab = nameVocab ?? new PlayerNameVocab();
         var rc = rosterCoeff ?? new RosterCoefficients();
+        // 精神力の中心は圧縮前の強度と校風から（issue ai-school-mental-fixed-50。AiMentalModel が単一ソース）。
+        // 学年アークは Profile で引いた学年に応じて後段で載せる。
+        var mental = new AiMentalDraw(AiMentalModel.MentalCenter(strength, style, rc), AiMentalModel.StyleBonus(style, rc));
         // ティア→能力の圧縮（issue #578・Q24 確定2）。ここで1度だけ写す＝以降の控え・中継ぎの
         // 差分（−4/−2/−6/−8）は圧縮後の空間で絶対値のまま効く（チーム内の厚みは縮めない）。
         // 表示ランクは元の strength のまま（確定4＝表示は直さない）。
+        var rawStrength = strength;
         strength = rc.CompressStrength(strength);
+        // 上位集中＝スター型（issue prefecture-dominance-star）: 圧縮で削った分をエース＋主軸へ戻す。脇役は
+        // lift×cast_drop だけ下げてチーム総合を圧縮後の尺度に留める。主軸の守備位置は Fork（主RNG非消費）で選ぶ。
+        var lift = rc.StarLift(rawStrength);
+        var castCenter = strength - rc.AiStarCastDrop * lift;
+        var starLift = lift * (1.0 + rc.AiStarCastDrop);   // 脇役の中心から見た上乗せ＝圧縮後 + lift
+        var starSlots = PickStarSlots(rng.Fork(StarSalt), FieldSlots.Length, rc.AiStarHitters);
         var ac = rc.Archetypes;   // 球質タイプ係数は自校生成と同じ RosterCoefficients に同居
         var archSalt = 0x7B15_0000UL;   // 球質タイプ用の Fork ソルト（主RNG非消費）
         var order = new List<Player>(9);
@@ -73,36 +85,51 @@ public static class StrengthTeamFactory
         // 同一チーム内で下の名前が被らないよう、採用済みの名前を持ち回る（苗字の重複はOK＝現実にもある）。
         var usedGiven = new HashSet<string>();
         var profileSalt = 0x6A17_0000UL;   // 投打・学年用の Fork ソルト（主RNG非消費）
-        // 背番号は高校野球の慣例に沿って採番: 先発の野手＝守備位置番号(2〜9)、エース＝1、控え野手＝10〜17、控え投手＝18〜。
-        foreach (var pos in FieldSlots)
+        // 背番号は AiUniformNumbers（AI校の採番の単一ソース・design-06 §3.3b）から引く: 先発の野手＝守備位置番号(2〜9)、
+        // エース＝1、二番手投手＝10、3枚目以降の控え投手＝11〜20 から校ごとに散らした2つ、控え野手＝残り8つ。
+        // 引くのは Fork＝主RNG非消費で、番号の大小と控え投手の順位も従来（18→19→20）と同じ並びなので、
+        // 控えの名簿順（TeamReserves＝背番号順）も当日の出来のサンプリング順も1ビットも動かない。
+        var numbers = AiUniformNumbers.Draw(rng.Fork(NumberSalt));
+        for (var slot = 0; slot < FieldSlots.Length; slot++)
         {
-            var pr = Profile(rc, rng, ref profileSalt, starter: true);
-            order.Add(PositionPlayer(pos, strength, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven))
-                with { UniformNumber = PositionNumber(pos), Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
+            var pos = FieldSlots[slot];
+            var pr = Profile(rc, rng, ref profileSalt, starter: true, pos);
+            order.Add(AiMentalModel.WithGradeArc(
+                PositionPlayer(pos, castCenter, rng, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc,
+                        battingLift: starSlots.Contains(slot) ? starLift : 0.0)
+                    with { UniformNumber = PositionNumber(pos), Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
+                pr.Grade, rc));
         }
         // 投手枠に置く4人の「投手寄せ重み」をエース格から順に引く（#377・Fork＝主RNG非消費）。
         // 打撃はこの w の連続量で決まる＝役割ごとの −20 の崖は無い。
         var pitcherW = PitcherWeights(rc, rng, 0x7C77_0000UL);
 
         var acePr = Profile(rc, rng, ref profileSalt, starter: true);
-        order.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc)
-            with { UniformNumber = 1, Throws = acePr.Throws, Bats = acePr.Bats, Grade = acePr.Grade });
+        order.Add(AiMentalModel.WithGradeArc(
+            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter, pitcherW[0], rng, pc, salt++, ac, archSalt++, rc, mental,
+                    pitchingLift: starLift)
+                with { UniformNumber = 1, Throws = acePr.Throws, Bats = acePr.Bats, Grade = acePr.Grade },
+            acePr.Grade, rc));
 
         var bullpen = new List<Player>();
         var wIndex = 1;
-        foreach (var (number, drop) in new[] { (18, 4.0), (19, 2.0) })
+        foreach (var (number, drop) in new[] { (numbers.Mound[1], 4.0), (numbers.Mound[2], 2.0) })
         {
             var pr = Profile(rc, rng, ref profileSalt, starter: false);
-            bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc)
-                with { UniformNumber = number, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
+            bullpen.Add(AiMentalModel.WithGradeArc(
+                Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - drop, pitcherW[wIndex++], rng, pc, salt++, ac, archSalt++, rc, mental)
+                    with { UniformNumber = number, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
+                pr.Grade, rc));
         }
-        // 背番号20（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
-        var relief20 = rng.Fork(0x9A20_0000UL);
+        // 控え投手の最後の1枠（現代のベンチ入り20人制）。能力ロールは Fork＝主RNG非消費で決定論を保つ。
+        var reliefTail = rng.Fork(0x9A20_0000UL);
         var pr20 = Profile(rc, rng, ref profileSalt, starter: false);
-        bullpen.Add(Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), strength - 6, pitcherW[wIndex], relief20, pc, salt++, ac, archSalt++, rc)
-            with { UniformNumber = 20, Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade });
+        bullpen.Add(AiMentalModel.WithGradeArc(
+            Pitcher(GenName(vocab, rng, ref nameSalt, usedGiven), castCenter - 6, pitcherW[wIndex], reliefTail, pc, salt++, ac, archSalt++, rc, mental)
+                with { UniformNumber = numbers.Mound[3], Throws = pr20.Throws, Bats = pr20.Bats, Grade = pr20.Grade },
+            pr20.Grade, rc));
 
-        // 控え（全員生成・ベンチ入りメンバとして背番号10〜を採番）。能力・氏名とも Fork ストリーム由来＝
+        // 控え野手（全員生成・ベンチ入りメンバとして残り番号を若い順に採番）。能力・氏名とも Fork ストリーム由来＝
         // 主RNG消費を1ビットも変えない。Team.Tactics 未設定の相手校では MaybeOffenseSubs が Bench 前に早期 return するため、
         // 控えを持たせても現行の試合進行・裏試合の決定論には影響しない（采配ブレイン注入時のみ交代候補として機能）。
         var bench = new List<Player>(BenchSlots.Length);
@@ -110,9 +137,11 @@ public static class StrengthTeamFactory
         for (var i = 0; i < BenchSlots.Length; i++)
         {
             var ability = rng.Fork(benchSalt++);   // 控えの能力ロールは Fork（主RNG非消費）
-            var pr = Profile(rc, rng, ref profileSalt, starter: false);
-            bench.Add(PositionPlayer(BenchSlots[i], strength - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven))
-                with { UniformNumber = 10 + i, Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade });
+            var pr = Profile(rc, rng, ref profileSalt, starter: false, BenchSlots[i]);
+            bench.Add(AiMentalModel.WithGradeArc(
+                PositionPlayer(BenchSlots[i], castCenter - 8, ability, pc, salt++, GenName(vocab, rng, ref nameSalt, usedGiven), mental, rc)
+                    with { UniformNumber = numbers.BenchFielders[i], Throws = pr.Throws, Bats = pr.Bats, Grade = pr.Grade },
+                pr.Grade, rc));
         }
 
         // 監督傾向・抜擢型（issue #55）: Compose の前に控えを先発へ抜擢する（オーダー編成に効く傾向）。
@@ -131,9 +160,24 @@ public static class StrengthTeamFactory
         // 打順編成＋DH使用判断（issue #54, 設計書11 §4）。既に確定した能力ロールだけを材料にする決定論変換
         // （rng は使わない）＝展望（TournamentPreview）と実戦（Shell）が同じここを通り自動で一致する。
         var composed = LineupOrderer.Compose(team, rc.Lineup, modernRules, calendarYear);
+        // 主将（設計書09 §8）: 自校と同じ規則（最上級生の統率力最大）で AI 校にも置く（issue ai-school-mental-fixed-50）。
+        // 参照は Compose 後の打順・控えの実体から選ぶ（Team.Captain の在場判定は参照一致）。
+        var captain = CaptainSelector.SelectFromPlayers(AllPlayers(composed));
         // 監督傾向・継投系（issue #55, 決定4: B-1）: エース酷使/継投早めのチームだけ継投しきい値を差し替える。
         // 傾向なしは null＝GameContext.Fatigue に落ちる（従来と完全一致・帯不変）。
-        return composed with { Fatigue = ManagerTraitEffects.FatigueOverride(new FatigueCoefficients(), traits, ai) };
+        return composed with
+        {
+            Captain = captain,
+            Fatigue = ManagerTraitEffects.FatigueOverride(new FatigueCoefficients(), traits, ai),
+        };
+    }
+
+    /// <summary>主将候補＝打順＋控え＋（DH制の）先発投手の全員（Compose 後の参照）。</summary>
+    internal static IEnumerable<Player> AllPlayers(Team t)
+    {
+        foreach (var p in t.BattingOrder) yield return p;
+        foreach (var p in t.Reserves) yield return p;
+        if (t.StartingPitcher is { } sp) yield return sp;
     }
 
     /// <summary>
@@ -196,11 +240,21 @@ public static class StrengthTeamFactory
     /// 投打の分布は ProspectGenerator.Create（設計書01 §1.1c）と同じ条件付き抽選＝自校と同一の傾向にする。
     /// 学年は先発を上級生寄り・控えを下級生寄りに配分する（高校野球の実感に沿う）。
     /// </summary>
+    /// <param name="position">
+    /// この選手が就く守備位置（分かっているとき）。<see cref="FieldPositions.IsRightThrowOnly"/> の位置なら
+    /// 左投げを引いても右投げに固定する（issue ai-lefty-not-at-c-2b-3b-ss）。
+    /// null＝位置が決まっていない経路（永続AIロスターの生成。配置は <c>AiTeamBuilder</c> が後で決める）。
+    /// </param>
     internal static (Handedness Throws, Handedness Bats, int Grade) Profile(
-        RosterCoefficients c, IRandomSource rng, ref ulong profileSalt, bool starter)
+        RosterCoefficients c, IRandomSource rng, ref ulong profileSalt, bool starter,
+        FieldPosition? position = null)
     {
         var r = rng.Fork(profileSalt++);
         var throws = r.NextDouble() < c.ThrowLeftProb ? Handedness.Left : Handedness.Right;
+        // ⚠ 乱数は**引いてから捨てる**（issue #525/#629 と同じ流儀）。引き直すと Fork の消費列が
+        // ずれて学年・以降の生成まで動く＝裏試合の決定論と帯が動く。下の Bats も右投げ側の
+        // 条件分布へ落ちるだけで**引く回数は左右どちらでも1回**なので消費不変。
+        if (throws == Handedness.Left && position is { } p && FieldPositions.IsRightThrowOnly(p)) throws = Handedness.Right;
         Handedness bats;
         if (r.NextDouble() < c.SwitchProb) bats = Handedness.Switch;
         else if (throws == Handedness.Left) bats = r.NextDouble() < c.BatLeftGivenLeftThrow ? Handedness.Left : Handedness.Right;
@@ -257,6 +311,30 @@ public static class StrengthTeamFactory
     /// </summary>
     private const int PitcherWeightPoolSize = 6;
 
+    /// <summary>主軸の守備位置を選ぶ Fork ソルト（主RNG非消費・他ストリームと別の上位ビット）。</summary>
+    private const ulong StarSalt = 0x57A2_0000UL;
+
+    /// <summary>背番号の採番表（<see cref="AiUniformNumbers"/>）用の Fork ソルト（主RNG非消費）。</summary>
+    private const ulong NumberSalt = 0x1BAC_0000UL;
+
+    /// <summary>
+    /// 先発野手 <paramref name="slotCount"/> 枠から主軸 <paramref name="count"/> 枠を重複なしで選ぶ（Fisher–Yates の先頭 count）。
+    /// 全枠を1回ずつ引く（消費数固定）。<paramref name="count"/> ≤ 0 なら空。
+    /// </summary>
+    internal static HashSet<int> PickStarSlots(IRandomSource rng, int slotCount, int count)
+    {
+        var slots = new int[slotCount];
+        for (var i = 0; i < slotCount; i++) slots[i] = i;
+        for (var i = 0; i < slotCount - 1; i++)
+        {
+            var j = rng.NextInt(i, slotCount);
+            (slots[i], slots[j]) = (slots[j], slots[i]);
+        }
+        var chosen = new HashSet<int>();
+        for (var i = 0; i < Math.Min(Math.Max(0, count), slotCount); i++) chosen.Add(slots[i]);
+        return chosen;
+    }
+
     /// <summary>
     /// 投手枠に置く選手たちの「投手寄せ重み」をエース格から順に返す（#377）。
     /// 適性プールを独立Fork（主RNG非消費）でロールし、判定スコア（投手適性＋バイアス−最良守備適性）の
@@ -290,33 +368,40 @@ public static class StrengthTeamFactory
     /// 全選手が PitcherAttributes を持つ形にするのは #366b（#378）の担当。ここで分けているのは
     /// 乱数消費列を野手側で1ビットも変えないため＝この issue の帯の動きを投手側だけに閉じ込める。
     /// </summary>
+    /// <param name="battingLift">主軸（スター型）の打撃3能力（ミート/パワー/選球眼）の中心上乗せ。他の能力は脇役と同じ中心。</param>
+    /// <param name="pitchingLift">エース格（スター型）の投手4能力（球速/制球/スタミナ/キレ）の中心上乗せ。マウンドに置く選手だけ効く。</param>
     internal static Player CreatePlayer(string playerName, FieldPosition pos, double strength, double pitcherWeight,
         IRandomSource rng, PersonalityCoefficients pc, ulong salt,
-        PitcherArchetypeCoefficients ac, ulong archetypeSalt, RosterCoefficients rc)
+        PitcherArchetypeCoefficients ac, ulong archetypeSalt, RosterCoefficients rc,
+        AiMentalDraw? mental = null, double battingLift = 0.0, double pitchingLift = 0.0)
     {
         var onMound = pos == FieldPosition.Pitcher;
-        // 打撃中心: 本業(strength) ↔ 専門外(strength×OffSpecialtyFactor) を w で補間。
-        var battingCenter = strength + (strength * rc.OffSpecialtyFactor - strength) * pitcherWeight;
+        // 打撃中心: 本業(strength) ↔ 専門外(strength×OffSpecialtyFactor) を w で補間。主軸の上乗せは補間の後に足す
+        // （投手寄せの主軸でも上乗せ量は同じ）。
+        var battingCenter = strength + (strength * rc.OffSpecialtyFactor - strength) * pitcherWeight + battingLift;
 
-        // Ability() の呼び出し順を従来どおり保ち、乱数消費列を不変にする（決定論の後方互換, 2A）。
-        var contact = Ability(battingCenter, rng);
-        var power = Ability(battingCenter, rng);
+        // 打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers）: パワーを希少側にしてミートへ振り替え（打撃指標不変）
+        // ＋5能力の凸凹配分（重みは専用 Fork から＝主RNG非消費）。Ability() の呼び出し順・回数は従来どおり保つ。
+        var prof = AiBattingProfile.Draw(rng.Fork(salt ^ AiBattingProfile.ProfileSalt), rc);
+        var contact = Ability((battingCenter + rc.AiPowerSkew) * prof.Contact, rng);
+        var power = Ability(Math.Max(0.0, battingCenter - rc.AiPowerSkew) * prof.Power, rng);
         var launch = Ability(50, rng);
-        var discipline = Ability(strength, rng);
+        var discipline = Ability((strength + battingLift) * prof.Discipline, rng);
         var speed = Ability(strength, rng);
         var arm = Ability(strength, rng);
-        var fielding = Ability(strength, rng);
-        var catching = Ability(strength, rng);
+        var fielding = Ability(strength * prof.Fielding, rng);
+        var catching = Ability(strength * prof.Catching, rng);
 
         PitcherAttributes? pitching = null;
         if (onMound)
         {
-            var control = Ability(strength, rng);
-            var staminaLevel = Ability(strength, rng);
-            var pitchRank = Ability(strength, rng);
+            var pitchingCenter = strength + pitchingLift;
+            var control = Ability(pitchingCenter, rng);
+            var staminaLevel = Ability(pitchingCenter, rng);
+            var pitchRank = Ability(pitchingCenter, rng);
             // 球速も他能力と同じく個体差を持つ（旧実装は強さの決定関数で、同じ強さの学校のエースが全員同じ球速＝
             // AI校に技巧派が存在できなかった）。自校（RosterTeamBuilder）と同じ「球速Level→km/h」の形に揃える。
-            var velocityLevel = Ability(strength, rng);
+            var velocityLevel = Ability(pitchingCenter, rng);
 
             // 球質タイプで配分を振り替える（総合はほぼ不変・Fork＝主RNG非消費）。
             var archetype = PitcherArchetypes.Sample(rng.Fork(archetypeSalt), ac);
@@ -351,6 +436,13 @@ public static class StrengthTeamFactory
         // 呼ぶ位置も条件も旧 LatentPitching と同じなので、生成される値・乱数消費列ともに完全に同一。
         pitching ??= UntrainedPitchingEstimator.Estimate(arm, rng.Fork(salt ^ UntrainedPitchingSalt));
 
+        // 精神力・統率・捕手リード（issue ai-school-mental-fixed-50）: 専用 Fork（性格 salt・潜在投手 salt と別ストリーム）
+        // で引く＝主RNGの消費列と上の能力ロールは1ビットも変わらない。中心は呼び出し側が学校の強さ・校風から
+        // 決める（AiMentalModel.MentalCenter）。null＝中心 = mental_mean + (strength−50)×slope（学校を知らない呼び出し）。
+        var draw = mental ?? new AiMentalDraw(AiMentalModel.MentalCenter(strength, null, rc), 0.0);
+        var (mentalLv, leadershipLv, leadLv) = AiMentalModel.Roll(
+            draw.Center, draw.StyleBonus, pp, rc, rng.Fork(salt ^ AiMentalModel.MentalSalt));
+
         return new Player
         {
             Name = playerName,
@@ -372,18 +464,29 @@ public static class StrengthTeamFactory
             Personality = personality,
             BuntSuccessBonus = pp.BuntSuccessBonus,
             ChanceHitFactor = pp.ChanceHitFactor,
+            Mental = mentalLv,
+            Leadership = leadershipLv,
+            Lead = leadLv,
         };
     }
 
     /// <summary>守備位置の選手（単一生成器の w=0 呼び出し＝明確な野手）。</summary>
     internal static Player PositionPlayer(FieldPosition pos, double strength, IRandomSource rng,
-        PersonalityCoefficients pc, ulong salt, string playerName)
+        PersonalityCoefficients pc, ulong salt, string playerName, AiMentalDraw? mental = null,
+        RosterCoefficients? rc = null, double battingLift = 0.0)
         => CreatePlayer(playerName, pos, strength, pitcherWeight: 0.0, rng, pc, salt,
-            new PitcherArchetypeCoefficients(), 0UL, new RosterCoefficients());
+            new PitcherArchetypeCoefficients(), 0UL, rc ?? new RosterCoefficients(), mental, battingLift: battingLift);
 
     /// <summary>投手枠の選手（単一生成器へ投手寄せ重みを渡す）。</summary>
     internal static Player Pitcher(string name, double strength, double pitcherWeight, IRandomSource rng,
         PersonalityCoefficients pc, ulong salt, PitcherArchetypeCoefficients ac, ulong archetypeSalt,
-        RosterCoefficients rc)
-        => CreatePlayer(name, FieldPosition.Pitcher, strength, pitcherWeight, rng, pc, salt, ac, archetypeSalt, rc);
+        RosterCoefficients rc, AiMentalDraw? mental = null, double pitchingLift = 0.0)
+        => CreatePlayer(name, FieldPosition.Pitcher, strength, pitcherWeight, rng, pc, salt, ac, archetypeSalt, rc, mental,
+            pitchingLift: pitchingLift);
 }
+
+/// <summary>
+/// AI校の精神力を引くときの中心（学校の強さ・校風から <see cref="Roster.AiMentalModel.MentalCenter"/> で決めた値）と
+/// 校風の統率上乗せ。生成器へ「学校」を渡さずに済ませるための小さな束（issue ai-school-mental-fixed-50）。
+/// </summary>
+public readonly record struct AiMentalDraw(double Center, double StyleBonus);

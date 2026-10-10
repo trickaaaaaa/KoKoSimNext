@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Career.Draft;
 using KokoSim.Engine.Core;
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
 using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
@@ -18,11 +19,14 @@ public sealed class DraftHistoryTests
 {
     private static readonly DraftCoefficients C = new();
 
+    // 足切り（設計書20 §3.1a）は打撃力チップ（弾道/選球眼込み）で見るので、それも同じ値で埋める。
     private static readonly AbilityKind[] BatterKinds =
     {
         AbilityKind.Contact, AbilityKind.Power, AbilityKind.Speed,
         AbilityKind.Fielding, AbilityKind.ArmStrength, AbilityKind.Catching,
+        AbilityKind.LaunchTendency, AbilityKind.Discipline,
     };
+    private static readonly TeamStrengthCoefficients S = new();
 
     private static DevelopingPlayer Batter(int id, int grade, int level, int number, string name)
     {
@@ -40,7 +44,7 @@ public sealed class DraftHistoryTests
     };
 
     private static DraftResult Nominate(IReadOnlyList<DevelopingPlayer> roster, ulong seed)
-        => DraftEngine.RunNomination(3, roster, _ => (PlayerStats?)null, C, new Xoshiro256Random(seed));
+        => DraftEngine.RunNomination(3, roster, _ => (PlayerStats?)null, C, S, new Xoshiro256Random(seed));
 
     /// <summary>ロスターから背番号を引く関数（見つからなければ0）。</summary>
     private static Func<int, int> NumbersOf(IReadOnlyList<DevelopingPlayer> roster) => id =>
@@ -143,7 +147,7 @@ public sealed class DraftHistoryTests
 
         for (var i = 0; i < 5; i++)
         {
-            var result = DraftEngine.RunNomination(3, roster, _ => (PlayerStats?)null, C, rng);
+            var result = DraftEngine.RunNomination(3, roster, _ => (PlayerStats?)null, C, S, rng);
             new DraftHistory().AddFrom(result, 2028, NumbersOf(roster));
         }
 

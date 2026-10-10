@@ -153,7 +153,7 @@ public static class GameReplay
         var rng = save.RngState is { } st
             ? Xoshiro256Random.FromState(st)
             : new Xoshiro256Random(save.Seed);
-        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, rng, null, scenarioStart);
+        var p = GameEngine.NewProgress(awayTeam, homeTeam, ctx, rng, scenarioStart: scenarioStart);
         var e = GameEngine.Steps(p).GetEnumerator();
 
         // 采配決定を「その球の直前」に適用しながら、確定打席数ぶん再生する（設計書15 Phase D-1）。

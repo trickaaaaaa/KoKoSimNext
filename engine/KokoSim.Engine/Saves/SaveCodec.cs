@@ -10,8 +10,14 @@ using KokoSim.Engine.Stats;
 
 namespace KokoSim.Engine.Saves;
 
-/// <summary>スロット一覧行に出す最小限のヘッダ（<see cref="SaveCodec.PeekHeader"/>）。</summary>
-public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
+/// <summary>
+/// スロット一覧行に出す最小限のヘッダ（<see cref="SaveCodec.PeekHeader"/>）。
+///
+/// <para><paramref name="SchoolName"/> は v4（issue #585）から本体に入っている自校名。
+/// <b>それより前のセーブには無い</b>ので null になる＝呼び出し側で既定（桜丘）へ落とす。
+/// ここで既定を埋めない（「読めなかった」と「桜丘という校名だった」を潰さないため）。</para>
+/// </summary>
+public readonly record struct SaveHeader(int Version, int Week, int YearIndex, string? SchoolName);
 
 /// <summary>
 /// セーブの正典コーデック（issue #507）。<see cref="SaveState"/> ⇔ JSON 文字列。<b>形（スキーマ）は engine 側</b>で、
@@ -23,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex);
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 8;
+    public const int CurrentVersion = 20;
 
     // ===== Serialize =====
 
@@ -42,13 +48,23 @@ public static class SaveCodec
             .Add("managerLastGrownYear", s.ManagerLastGrownYear)
             .Add("managerGrownWinsBaseline", s.ManagerGrownWinsBaseline)
             .Add("managerGrownKoshienBaseline", s.ManagerGrownKoshienBaseline)
+            .Add("managerPendingUpsetDeltas", DoublesToJson(s.ManagerPendingUpsetDeltas))
             .Add("nationRosters", NationRostersToJson(s.NationRosters))
             .Add("nationTournamentStats", StatsSaves.NationStatsToJson(s.TournamentStats))
+            .Add("nationCareerStats", StatsSaves.NationCareerToJson(s.TournamentStats))
+            .Add("nationPrefQualifierStats", StatsSaves.NationPrefQualifierToJson(s.TournamentStats))
+            .Add("nationRegionalQualifierStats", StatsSaves.NationRegionalQualifierToJson(s.TournamentStats))
+            .Add("nationSchools", NationSchoolsToJson(s.NationSchools))
+            .Add("nationYearWins", IntMapToJson(s.NationYearWins))
+            .Add("nationKoshienChampionId", s.NationKoshienChampionId)
             .Add("sessionYear", s.SessionYear)
             .Add("stats", StatsSaves.StoreToJson(s.Stats))
             .Add("records", RecordBookSaves.ToJson(s.Records))
             .Add("newTeamPending", s.NewTeamPending)
             .Add("newTeamRetired", RetiredToJson(s.NewTeamRetiredNames))
+            .Add("managerTransferPending", s.ManagerTransferPending)
+            .Add("managerTransferKind", s.ManagerTransferKind)
+            .Add("managerTransferCandidates", TransferCandidatesToJson(s.ManagerTransferCandidates))
             .Add("teamColorOverride", CareerSaves.TeamColorsToJson(s.TeamColorOverride))
             .Add("schoolName", s.SchoolName)
             .Add("prefectureId", s.PrefectureId)
@@ -57,7 +73,20 @@ public static class SaveCodec
             .Add("recruiting", RecruitingSaves.ToJson(s.Recruiting))
             .Add("draft", DraftSaves.ToJson(s.Draft))
             .Add("tournamentHistory", TournamentHistorySaves.ToJson(s.TournamentHistory))
-            .Add("tournament", TournamentSaves.ToJson(s.Tournament));
+            .Add("events", EventSaves.ToJson(s.Events))
+            .Add("trainingBoosts", EventSaves.BoostsToJson(s.TrainingBoosts))
+            .Add("tournament", TournamentSaves.ToJson(s.Tournament))
+            .Add("koshien", TournamentSaves.ToJson(s.Koshien))
+            .Add("senbatsu", TournamentSaves.ToJson(s.Senbatsu))
+            .Add("pendingSenbatsuFieldIds", IntsToJson(s.PendingSenbatsuFieldIds))
+            .Add("pendingSenbatsuJinguRegion", s.PendingSenbatsuJinguRegion)
+            .Add("lastPrefChampionId", NullableIntToJson(s.LastPrefChampionId))
+            .Add("lastAutumnPlacementIds", IntsToJson(s.LastAutumnPlacementIds))
+            .Add("lastDistrictChampionId", NullableIntToJson(s.LastDistrictChampionId))
+            .Add("lastRegionalChampionId", NullableIntToJson(s.LastRegionalChampionId))
+            .Add("lastRegionalPlacementIds", IntsToJson(s.LastRegionalPlacementIds))
+            .Add("lastJinguChampionId", NullableIntToJson(s.LastJinguChampionId))
+            .Add("lastLineup", LineupSaves.ToJson(s.LastLineup));
         return root.ToString();
     }
 
@@ -122,8 +151,12 @@ public static class SaveCodec
     }
 
     /// <summary>
-    /// スロット一覧表示に必要な最小限（version/week/yearIndex）だけを覗く（issue #508）。
+    /// スロット一覧表示に必要な最小限（version/week/yearIndex/schoolName）だけを覗く（issue #508・#624）。
     /// ロスター等は読まないため <see cref="TryDeserialize"/> より軽い。読めなければ null。
+    ///
+    /// <para>校名は <b>スキーマ版を上げずに</b>読む＝v4 から本体に既に書かれている項目を覗くだけで、
+    /// 書式は何も変わらない。無い（v3以前）／文字列でない場合は <c>SchoolName = null</c> を返し、
+    /// 表示側が既定へ落とす（issue #624）。</para>
     /// </summary>
     public static SaveHeader? PeekHeader(string? text)
     {
@@ -132,7 +165,11 @@ public static class SaveCodec
         {
             var root = JsonValue.Parse(text!).AsObject();
             if (!root.Has("version")) return null;
-            return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"));
+            // ⚠ 任意項目は必ず Has で分岐する。型付きゲッタは欠損を KeyNotFound で投げる作りなので、
+            // 素で Str すると**校名が無いだけの旧セーブでヘッダ全体が読めなくなる**＝一覧が
+            // 「壊れている」表示に落ちる（この分岐が無い版をテストが赤で捕まえた）。
+            return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"),
+                root.Has("schoolName") ? root.Str("schoolName") : null);
         }
         catch (Exception) { return null; }
     }
@@ -171,6 +208,67 @@ public static class SaveCodec
         // 累計へ畳んで捨てていた＝過去ぶんは作り直せないので、空配列で補う（通算戦績 records は無傷で残る）。
         // 大会別アーカイブに増えた year は要素ごとの欠損＝Read 側で 0（＝年不明）として読む。
         if (version < 8 && !root.Has("tournamentHistory")) root.Add("tournamentHistory", new JsonArray());
+        // ⚠ v9 以降は **別々のブランチが同時に版を上げた**（#634 が v9、#609 が v9、#615 が v10）。
+        // ローカル統合時に 11 へ揃え、3つとも「11 未満なら欠けているものを補う」形にした
+        // ＝どちらの枝で書いたセーブ（v9/v10）を開いても取りこぼしが出ない。
+        // ・nationCareerStats（issue #634）: 全国の学校別成績の通算スコープ。過去ぶんは作り直せないので空配列。
+        // ・events（issue #609）: 週次イベントの発火状態（クールダウン・年次フラグ）。未発火＝null。
+        // ・trainingBoosts（issue #615）: 期間つきの練習効率補正。効いている補正は存在しえないので空配列。
+        if (version < 11 && !root.Has("nationCareerStats")) root.Add("nationCareerStats", new JsonArray());
+        if (version < 11 && !root.Has("events")) root.Add("events", JsonNull.Instance);
+        if (version < 11 && !root.Has("trainingBoosts")) root.Add("trainingBoosts", new JsonArray());
+        // v12（2026-08-15）: 番狂わせ名声デルタの持ち越し。旧セーブは今年度ぶんが無い＝空配列（順当扱い）。
+        if (version < 12 && !root.Has("managerPendingUpsetDeltas")) root.Add("managerPendingUpsetDeltas", new JsonArray());
+        // v13（issue wire-ai-school-evolve-into-game）: AI校の進化後 Strength/Fame と今年度の校別勝数。
+        // 旧セーブは進化が一度も走っていない＝生成値のまま・勝数なし＝どちらも空配列で補う。
+        if (version < 13 && !root.Has("nationSchools")) root.Add("nationSchools", new JsonArray());
+        if (version < 13 && !root.Has("nationYearWins")) root.Add("nationYearWins", new JsonArray());
+        // v14（issue lineup-carry-over-previous-game）: 前回スタメンの記憶。旧セーブは一度も確定していない扱い＝null。
+        if (version < 14 && !root.Has("lastLineup")) root.Add("lastLineup", JsonNull.Instance);
+        // v15（夏の甲子園）: 全国の県予選スコープ（甲子園の大会展望が引く読み物）と、非対話の甲子園
+        // （自校が出場しなかった年の進行体）。旧セーブはどちらも存在しえない＝空配列／null で補う。
+        // 自校ぶんの県予選スコープ（stats.prefQualifier）は StatsSaves 側の Has 分岐で読む。
+        if (version < 15 && !root.Has("nationPrefQualifierStats")) root.Add("nationPrefQualifierStats", new JsonArray());
+        if (version < 15 && !root.Has("koshien")) root.Add("koshien", JsonNull.Instance);
+        if (version < 15 && !root.Has("nationKoshienChampionId")) root.Add("nationKoshienChampionId", -1);
+        // v16（春のセンバツ）: 観るだけのセンバツ（自校が選ばれていない年の進行体）と、選考発表を待つ32校。
+        // 旧セーブはどちらも存在しえない＝null／空配列で補う。
+        if (version < 16 && !root.Has("senbatsu")) root.Add("senbatsu", JsonNull.Instance);
+        if (version < 16 && !root.Has("pendingSenbatsuFieldIds")) root.Add("pendingSenbatsuFieldIds", new JsonArray());
+        if (version < 16 && !root.Has("pendingSenbatsuJinguRegion")) root.Add("pendingSenbatsuJinguRegion", "");
+        // v17（センバツの地区大会成績）: 全国の地区大会スコープ（センバツの大会展望が引く読み物）。
+        // 旧セーブは存在しえない＝空配列で補う。自校ぶん（stats.regionalQualifier）は StatsSaves 側の
+        // Has 分岐で読む。
+        if (version < 17 && !root.Has("nationRegionalQualifierStats"))
+            root.Add("nationRegionalQualifierStats", new JsonArray());
+        // v18（監督の転任システム・設計書04 §1.3）: 監督オファーの保留状態が増えた。
+        // 旧セーブは待機が存在しえない＝false/0/空配列で補う。
+        if (version < 18)
+        {
+            if (!root.Has("managerTransferPending")) root.Add("managerTransferPending", false);
+            if (!root.Has("managerTransferKind")) root.Add("managerTransferKind", 0);
+            if (!root.Has("managerTransferCandidates")) root.Add("managerTransferCandidates", new JsonArray());
+        }
+        // v19（issue autumn-chain-placements-not-saved）: 大会連鎖の中継値（県大会→甲子園／
+        // 県大会→地区大会→明治神宮→センバツ選考）が増えた。旧セーブは一時値として捨てられていて
+        // 作り直せないので「未確定」＝null／空配列で補う。ロード直後に連鎖の後段へ入る局面
+        // （地区大会・明治神宮の最中のセーブ）だけは旧セーブでは救えず、従来どおり選考が飛ぶ。
+        if (version < 19)
+        {
+            if (!root.Has("lastPrefChampionId")) root.Add("lastPrefChampionId", JsonNull.Instance);
+            if (!root.Has("lastAutumnPlacementIds")) root.Add("lastAutumnPlacementIds", new JsonArray());
+            if (!root.Has("lastRegionalChampionId")) root.Add("lastRegionalChampionId", JsonNull.Instance);
+            if (!root.Has("lastRegionalPlacementIds")) root.Add("lastRegionalPlacementIds", new JsonArray());
+            if (!root.Has("lastJinguChampionId")) root.Add("lastJinguChampionId", JsonNull.Instance);
+        }
+        // v20（issue autumn-district-tournament-not-wired）: 秋季地区予選（AutumnDistrict）→
+        // 秋季県大会の中継値が増えた。旧セーブは地区予選という段階が存在しえない＝未確定null で補う
+        // （v19 の lastPrefChampionId 等と同じ理由・同じ扱い）。
+        if (version < 20 && !root.Has("lastDistrictChampionId"))
+            root.Add("lastDistrictChampionId", JsonNull.Instance);
+        // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
+        // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
+        // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。
         return root;
     }
 
@@ -195,10 +293,21 @@ public static class SaveCodec
             ManagerLastGrownYear = root.Int("managerLastGrownYear"),
             ManagerGrownWinsBaseline = root.Int("managerGrownWinsBaseline"),
             ManagerGrownKoshienBaseline = root.Int("managerGrownKoshienBaseline"),
+            // 番狂わせデルタは v12 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            ManagerPendingUpsetDeltas = DoublesFromJson(root.Arr("managerPendingUpsetDeltas")),
             NationRosters = NationRostersFromJson(root.Arr("nationRosters")),
+            // AI校の進化状態・年間勝数は v13 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            NationSchools = NationSchoolsFromJson(root.Arr("nationSchools")),
+            NationYearWins = IntMapFromJson(root.Arr("nationYearWins")),
+            // 甲子園王者は v15 で追加。Migrate が旧セーブへ -1（未確定）を補うので素直に読む。
+            NationKoshienChampionId = root.Int("nationKoshienChampionId"),
             SessionYear = root.Int("sessionYear"),
             NewTeamPending = root.Bool("newTeamPending"),
             NewTeamRetiredNames = RetiredFromJson(root.Arr("newTeamRetired")),
+            // 監督オファー待ちは v18 で追加。Migrate が旧セーブへ false/0/空配列を補うので素直に読む。
+            ManagerTransferPending = root.Bool("managerTransferPending"),
+            ManagerTransferKind = root.Int("managerTransferKind"),
+            ManagerTransferCandidates = TransferCandidatesFromJson(root.Arr("managerTransferCandidates")),
             TeamColorOverride = CareerSaves.TeamColorsFromJson(root["teamColorOverride"]),
             // 自校の同定は v4 で追加。Migrate が旧セーブへ既定（桜丘・神奈川・地区なし）を補うので素直に読む。
             SchoolName = root.Str("schoolName") ?? "桜丘",
@@ -208,11 +317,35 @@ public static class SaveCodec
             Incoming = IncomingClassSaves.FromJson(root.Has("incoming") ? root["incoming"] : null),
             // 能動勧誘は v6 で追加。Migrate が旧セーブへ null を補うので素直に読む。
             Recruiting = RecruitingSaves.FromJson(root.Has("recruiting") ? root["recruiting"] : null),
+            // 週次イベントの発火状態は v9 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            Events = EventSaves.FromJson(root.Has("events") ? root["events"] : null),
+            // 練習効率の補正は v10 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+            TrainingBoosts = EventSaves.BoostsFromJson(root.Arr("trainingBoosts")),
             Tournament = TournamentSaves.FromJson(root.Has("tournament") ? root["tournament"] : null),
+            // 非対話の甲子園（自校が出場していない年）は v15 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            Koshien = TournamentSaves.FromJson(root.Has("koshien") ? root["koshien"] : null),
+            // 非対話のセンバツ・選考発表待ち32校は v16 で追加。Migrate が旧セーブへ null/空配列を補うので素直に読む。
+            Senbatsu = TournamentSaves.FromJson(root.Has("senbatsu") ? root["senbatsu"] : null),
+            PendingSenbatsuFieldIds = IntsFromJson(root.Arr("pendingSenbatsuFieldIds")),
+            LastPrefChampionId = NullableIntFromJson(root, "lastPrefChampionId"),
+            LastAutumnPlacementIds = IntsFromJson(root.Arr("lastAutumnPlacementIds")),
+            LastDistrictChampionId = NullableIntFromJson(root, "lastDistrictChampionId"),
+            LastRegionalChampionId = NullableIntFromJson(root, "lastRegionalChampionId"),
+            LastRegionalPlacementIds = IntsFromJson(root.Arr("lastRegionalPlacementIds")),
+            LastJinguChampionId = NullableIntFromJson(root, "lastJinguChampionId"),
+            PendingSenbatsuJinguRegion = root.Has("pendingSenbatsuJinguRegion") ? (root.Str("pendingSenbatsuJinguRegion") ?? "") : "",
+            // 前回スタメンは v14 で追加。Migrate が旧セーブへ null を補うので素直に読む。
+            LastLineup = LineupSaves.FromJson(root["lastLineup"]),
         };
 
         s.TournamentStats = new NationTournamentStats();
         StatsSaves.RestoreInto(s.TournamentStats, root.Arr("nationTournamentStats"));
+        // 通算スコープは v9 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        StatsSaves.RestoreCareerInto(s.TournamentStats, root.Arr("nationCareerStats"));
+        // 県予選スコープは v15 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        StatsSaves.RestorePrefQualifierInto(s.TournamentStats, root.Arr("nationPrefQualifierStats"));
+        // 地区大会スコープは v17 で追加。Migrate が旧セーブへ空配列を補うので素直に読む。
+        StatsSaves.RestoreRegionalQualifierInto(s.TournamentStats, root.Arr("nationRegionalQualifierStats"));
 
         s.Stats = new PlayerStatStore();
         StatsSaves.RestoreInto(s.Stats, root.Obj("stats"));
@@ -262,6 +395,86 @@ public static class SaveCodec
         return list;
     }
 
+    // AI校の進化状態（v13）: [[id, strength, fame], ...] を校ID順で。4000校×3値なので配列の配列で詰める。
+    private static JsonArray NationSchoolsToJson(List<SchoolEvolutionState> states)
+    {
+        var sorted = new List<SchoolEvolutionState>(states);
+        sorted.Sort((a, b) => a.SchoolId.CompareTo(b.SchoolId));
+        var arr = new JsonArray();
+        foreach (var st in sorted)
+            arr.Add(new JsonArray().Add(JsonValue.Of(st.SchoolId)).Add(JsonValue.Of(st.Strength)).Add(JsonValue.Of(st.Fame)));
+        return arr;
+    }
+
+    private static List<SchoolEvolutionState> NationSchoolsFromJson(JsonArray arr)
+    {
+        var list = new List<SchoolEvolutionState>(arr.Count);
+        foreach (var v in arr.Items)
+        {
+            var t = v.AsArray();
+            list.Add(new SchoolEvolutionState(
+                ((JsonNumber)t[0]).AsInt(), ((JsonNumber)t[1]).AsDouble(), ((JsonNumber)t[2]).AsDouble()));
+        }
+        return list;
+    }
+
+    // 校ID→整数（年間勝数）: [[id, n], ...] を校ID順で。
+    private static JsonArray IntMapToJson(Dictionary<int, int> map)
+    {
+        var ids = new List<int>(map.Keys);
+        ids.Sort();
+        var arr = new JsonArray();
+        foreach (var id in ids) arr.Add(new JsonArray().Add(JsonValue.Of(id)).Add(JsonValue.Of(map[id])));
+        return arr;
+    }
+
+    private static Dictionary<int, int> IntMapFromJson(JsonArray arr)
+    {
+        var map = new Dictionary<int, int>(arr.Count);
+        foreach (var v in arr.Items)
+        {
+            var t = v.AsArray();
+            map[((JsonNumber)t[0]).AsInt()] = ((JsonNumber)t[1]).AsInt();
+        }
+        return map;
+    }
+
+    private static JsonArray DoublesToJson(List<double> values)
+    {
+        var arr = new JsonArray();
+        foreach (var v in values) arr.Add(JsonValue.Of(v));
+        return arr;
+    }
+
+    private static List<double> DoublesFromJson(JsonArray arr)
+    {
+        var list = new List<double>(arr.Count);
+        foreach (var v in arr.Items) list.Add(((JsonNumber)v).AsDouble());
+        return list;
+    }
+
+    // 校ID列（v16・センバツ選考発表待ちの32校）: [id, id, ...]。
+    private static JsonArray IntsToJson(List<int> values)
+    {
+        var arr = new JsonArray();
+        foreach (var v in values) arr.Add(JsonValue.Of(v));
+        return arr;
+    }
+
+    private static List<int> IntsFromJson(JsonArray arr)
+    {
+        var list = new List<int>(arr.Count);
+        foreach (var v in arr.Items) list.Add(((JsonNumber)v).AsInt());
+        return list;
+    }
+
+    // 校ID1つ（v19・大会連鎖の中継値）。null＝未確定なので JSON null と往復させる。
+    private static JsonValue NullableIntToJson(int? value)
+        => value.HasValue ? JsonValue.Of(value.Value) : (JsonValue)JsonNull.Instance;
+
+    private static int? NullableIntFromJson(JsonObject root, string key)
+        => !root.Has(key) || root[key] is JsonNull ? (int?)null : root.Int(key);
+
     private static JsonArray RetiredToJson(List<string> names)
     {
         var arr = new JsonArray();
@@ -273,6 +486,38 @@ public static class SaveCodec
     {
         var list = new List<string>(arr.Count);
         foreach (var v in arr.Items) list.Add(((JsonString)v).Value);
+        return list;
+    }
+
+    // 監督オファーの候補校（v18）: [id, name, prefectureId, districtId|null, strength, fame] の配列。
+    private static JsonArray TransferCandidatesToJson(List<TransferCandidate> candidates)
+    {
+        var arr = new JsonArray();
+        foreach (var cand in candidates)
+            arr.Add(new JsonArray()
+                .Add(JsonValue.Of(cand.SchoolId))
+                .Add(JsonValue.Of(cand.SchoolName))
+                .Add(JsonValue.Of(cand.PrefectureId))
+                .Add(cand.DistrictId.HasValue ? JsonValue.Of(cand.DistrictId.Value) : JsonNull.Instance)
+                .Add(JsonValue.Of(cand.Strength))
+                .Add(JsonValue.Of(cand.Fame)));
+        return arr;
+    }
+
+    private static List<TransferCandidate> TransferCandidatesFromJson(JsonArray arr)
+    {
+        var list = new List<TransferCandidate>(arr.Count);
+        foreach (var v in arr.Items)
+        {
+            var t = v.AsArray();
+            list.Add(new TransferCandidate(
+                SchoolId: ((JsonNumber)t[0]).AsInt(),
+                SchoolName: ((JsonString)t[1]).Value,
+                PrefectureId: ((JsonNumber)t[2]).AsInt(),
+                DistrictId: t[3] is JsonNull ? (int?)null : ((JsonNumber)t[3]).AsInt(),
+                Strength: ((JsonNumber)t[4]).AsDouble(),
+                Fame: ((JsonNumber)t[5]).AsDouble()));
+        }
         return list;
     }
 }

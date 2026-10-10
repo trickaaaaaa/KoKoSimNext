@@ -56,10 +56,11 @@ namespace KokoSim.EditorTools
             { "RightEye_Ball_Geo", Region.Skin },
             // 帽子は独立領域（2026-07-29。チームカラーをプレイヤーが領域ごとに決めるため、
             // アンダーと同色に固定していた従来運用をやめた）。
-            // **クラウンとつばは1メッシュなので塗り分けられない**＝帽子は1色。分けるにはこのメッシュを
-            // 幾何で二分する前処理が要る（つば＝クラウン下端より下かつ前方の頂点帯）。
-            { "A_Players_0001_Cap_0001", Region.Cap },
+            // クラウンとつばは1メッシュだが、issue #621 で幾何で二分して塗り分けるようにした
+            // （ClassifyCap。ここには載せず三角形単位で振り分ける）。
         };
+
+        private const string CapMeshName = "A_Players_0001_Cap_0001";
 
         private const string SuitMeshName = "A_Players_0001_Suit_0001";
         private const string PantsMeshName = "A_Players_0001_Pants_0001";
@@ -110,6 +111,10 @@ namespace KokoSim.EditorTools
                 {
                     regionPerVertex = ClassifyPants(copy, pantsTex, out note);
                 }
+                else if (r.name == CapMeshName)
+                {
+                    regionPerVertex = ClassifyCap(copy, out note);
+                }
                 else
                 {
                     Region reg;
@@ -128,10 +133,18 @@ namespace KokoSim.EditorTools
                 // 縞をスキニング後の頂点位置で刻むと、生地に印刷された縞ではなく
                 // 「空間に固定された縞の中を体が通り抜ける」絵になる（2026-07-29 実害）。
                 // 静止座標をここで焼いておけば、体が曲がっても縞は生地に付いたまま伸び縮みする。
+                //
+                // 袖だけは刻み座標を**腕の軸に沿った長さ**にする（issue uniform-stripes-ring-on-sleeves, 2026-08-18）。
+                // 実物のピンストライプは生地を平らに広げて全部縦に裁つので、胴は縦縞・袖は腕の長さ方向に直交する
+                // 輪（腕を下ろすと横縞）になる。左右 x の一枚板のままだと、斜め下へ伸びたAポーズの腕を平面が
+                // 斜めに切って楕円の弧になる。継ぎ目（肩）は支配ボーンで切り替える（縫い目で向きが変わるのは実物どおり）。
                 var rest = copy.vertices;
                 var uv1 = new Vector2[copy.vertexCount];
                 for (int i = 0; i < uv1.Length; i++)
-                    uv1[i] = new Vector2((regionPerVertex[i] + 0.5f) / 8f, rest[i].x);
+                    uv1[i] = new Vector2(
+                        KokoSim.Unity.Match.DuelUniformMeshBuilder.RegionUv(regionPerVertex[i]), rest[i].x);
+                if (r.name == SuitMeshName)
+                    note += " / " + SleeveStripeAlongArm(copy, regionPerVertex, r as SkinnedMeshRenderer, anim, uv1);
                 copy.uv2 = uv1;   // Mesh.uv2 == UV1（シェーダの TEXCOORD1）
 
                 var outPath = OutDir + "/" + r.name + "_Regions.asset";
@@ -147,6 +160,61 @@ namespace KokoSim.EditorTools
             AssetDatabase.Refresh();
             return sb.ToString();
         }
+
+        /// <summary>
+        /// 帽子を三角形単位で クラウン / つば に振り分ける（issue #621）。
+        ///
+        /// テクスチャでは分けられない（帽子は無地1色）ので<b>幾何で二分する</b>。実測した
+        /// メッシュ空間（Z-up・顔は -y 側）での形は:
+        ///   y  -0.169(つば先) 〜 0.114(後頭部) ／ z  1.666(下端) 〜 1.789(天辺)
+        ///   前方の1/4（y &lt; min+0.25）かつ下40%（z &lt; min+0.40）にだけ、薄い板状の帯がある＝つば
+        /// しきい値は<b>境界箱に対する比</b>で持つ（絶対値で持つと取り込みスケールが変わった瞬間に
+        /// 帽子が丸ごと片方の色になる）。
+        /// </summary>
+        private static int[] ClassifyCap(Mesh mesh, out string note)
+        {
+            var v = mesh.vertices;
+            var tris = mesh.triangles;
+            var b = mesh.bounds;
+
+            float yEdge = b.min.y + b.size.y * VisorFrontShare;
+            float zEdge = b.min.z + b.size.z * VisorHeightShare;
+
+            var voteCrown = new int[v.Length];
+            var voteVisor = new int[v.Length];
+            int triCrown = 0, triVisor = 0;
+            for (int t = 0; t < tris.Length; t += 3)
+            {
+                int a = tris[t], b2 = tris[t + 1], c = tris[t + 2];
+                var mid = (v[a] + v[b2] + v[c]) / 3f;   // 三角形の重心で判定（頂点だと縁で割れる）
+                if (mid.y < yEdge && mid.z < zEdge)
+                {
+                    triVisor++; voteVisor[a]++; voteVisor[b2]++; voteVisor[c]++;
+                }
+                else
+                {
+                    triCrown++; voteCrown[a]++; voteCrown[b2]++; voteCrown[c]++;
+                }
+            }
+
+            int conflicts = 0;
+            var outRegion = new int[v.Length];
+            for (int i = 0; i < v.Length; i++)
+            {
+                if (voteCrown[i] > 0 && voteVisor[i] > 0) conflicts++;
+                outRegion[i] = voteVisor[i] > voteCrown[i] ? (int)Region.CapVisor : (int)Region.Cap;
+            }
+
+            note = "三角形 クラウン=" + triCrown + " つば=" + triVisor
+                 + " / 頂点の領域またぎ=" + conflicts + "（多い＝境界がギザつく）";
+            return outRegion;
+        }
+
+        /// <summary>つばと判定する前方の割合（境界箱の y 幅に対する比）。</summary>
+        private const float VisorFrontShare = 0.25f;
+
+        /// <summary>同・高さの割合（境界箱の z 高さに対する比）。</summary>
+        private const float VisorHeightShare = 0.40f;
 
         /// <summary>
         /// Suit を三角形単位で Shirt / Undershirt に振り分ける。頂点ではなく三角形の UV 重心で
@@ -296,6 +364,55 @@ namespace KokoSim.EditorTools
             mesh.vertices = verts;
             mesh.RecalculateBounds();
             return "袖を張り出した頂点=" + moved + "（袖口 " + _flare.ToString("F2") + "倍）";
+        }
+
+        /// <summary>
+        /// 袖の縞の刻み座標を「上腕ボーンの原点からの腕軸方向の距離」で上書きする（issue uniform-stripes-ring-on-sleeves）。
+        /// 対象＝ユニ上の領域かつ支配ボーンが上腕/前腕。軸は <see cref="FlareSleeves"/> と同じく**バインドポーズ**から取る
+        /// （design-18 §3.5.1b）。前腕は上腕の長さを足して肘で連続させる。単位は胴の x と同じメッシュ空間[m]＝
+        /// 線の太さ・間隔は胴と同じ実寸になる（_StripeFreq は共通）。
+        /// </summary>
+        private static string SleeveStripeAlongArm(Mesh mesh, int[] region, SkinnedMeshRenderer smr, Animator anim, Vector2[] uv1)
+        {
+            if (smr == null || anim == null || !anim.isHuman) return "袖の縞=SKIP（Humanoidでない）";
+            var bw = mesh.boneWeights;
+            var bind = mesh.bindposes;
+            if (bw == null || bw.Length != mesh.vertexCount || bind == null || bind.Length == 0)
+                return "袖の縞=SKIP（スキン情報なし）";
+            var verts = mesh.vertices;
+            int moved = 0;
+            var arms = new[]
+            {
+                new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand },
+                new[] { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand },
+            };
+            foreach (var arm in arms)
+            {
+                int bi = BoneIndex(smr, anim, arm[0]);
+                int bj = BoneIndex(smr, anim, arm[1]);
+                int bk = BoneIndex(smr, anim, arm[2]);
+                if (bi < 0 || bj < 0) continue;
+                var p0 = bind[bi].inverse.MultiplyPoint3x4(Vector3.zero);
+                var p1 = bind[bj].inverse.MultiplyPoint3x4(Vector3.zero);
+                var p2 = bk >= 0 ? bind[bk].inverse.MultiplyPoint3x4(Vector3.zero) : p1 + (p1 - p0);
+                float lenU = (p1 - p0).magnitude;
+                float lenL = (p2 - p1).magnitude;
+                if (lenU < 1e-4f) continue;
+                var u = (p1 - p0) / lenU;
+                var v = lenL > 1e-4f ? (p2 - p1) / lenL : u;
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    if (region[i] != (int)Region.Shirt) continue;
+                    int dom = Dominant(bw[i]);
+                    float along;
+                    if (dom == bi) along = Vector3.Dot(verts[i] - p0, u);
+                    else if (dom == bj) along = lenU + Vector3.Dot(verts[i] - p1, v);
+                    else continue;
+                    uv1[i].y = along;
+                    moved++;
+                }
+            }
+            return "袖の縞を腕軸の輪にした頂点=" + moved;
         }
 
         private static int BoneIndex(SkinnedMeshRenderer smr, Animator anim, HumanBodyBones human)

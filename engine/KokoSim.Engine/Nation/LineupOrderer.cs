@@ -157,13 +157,12 @@ public static class LineupOrderer
     }
 
     /// <summary>
-    /// DH に繰り上げる候補＝控えのうち<b>投手枠に置かれていない者</b>（issue #381）。
-    /// 控えは1本の名簿になったが、ここで候補を広げると「打てる控え投手がDHに入る」編成が新たに生まれ
-    /// 打線が変わる＝帯が動く。本 issue は構造の後片付けなので候補集合は旧 Team.Reserves と同一に保つ。
-    /// 広げるなら帯の張り直しを伴う独立した判断にする。
+    /// DH に繰り上げる候補＝<b>控え全員</b>（投手枠の控えを含む。issue ai-two-way-hitting-pitchers-start-as-fielders）。
+    /// #381 の後片付け時は帯を動かさないため旧 Team.Reserves と同じ「投手枠以外」に保っていたが、
+    /// DH は守備に就かず打つ＝打てる控え投手のいちばん自然な受け皿なので広げた（帯4本は編成を測らない）。
+    /// DH に入った投手が登板するときは野手登板＝DH解除（<see cref="Match.Game.TeamState.PromoteFielderToMoundDh"/>）。
     /// </summary>
-    private static IReadOnlyList<Player> DhCandidates(Team team)
-        => team.Reserves.Where(p => p.Position != Match.Field.FieldPosition.Pitcher).ToList();
+    private static IReadOnlyList<Player> DhCandidates(Team team) => team.Reserves;
 
     private static int IndexOfReference(IReadOnlyList<Player> list, Player target)
     {

@@ -98,6 +98,13 @@ public sealed class GameRegressionTests
         Assert.True(targets.DoubleStealThirdBreakPerGame.Contains(s.DoubleStealThirdBreaksPerGame),
             $"一・三塁重盗/試合 {s.DoubleStealThirdBreaksPerGame:F3} が参考帯外");
 
+        // 単独盗塁（issue steal-thresholds-unreachable, 2026-08-27）: 采配閾値の再校正で企図が
+        // 実質0件から復活したので、この2本は「盗塁が死にコードへ逆戻りしていないか」を守る。
+        Assert.True(targets.StealAttemptPerGame.Contains(s.StealAttemptsPerGame),
+            $"盗塁企図/試合 {s.StealAttemptsPerGame:F3} が帯外");
+        Assert.True(targets.StealSuccessRate.Contains(s.StealSuccessRate),
+            $"盗塁成功率 {s.StealSuccessRate:P1}（試行 {s.TotalStealAttempts}） が帯外");
+
         // 1球采配（設計書15 Phase C-2）: 追い込まれ矯正/3-0待て/決め球切替の影響を最も受ける指標。
         Assert.True(targets.StrikeoutRate.Contains(s.StrikeoutRate),
             $"（Brainつき）三振率 {s.StrikeoutRate:P2} が帯外");
@@ -105,6 +112,13 @@ public sealed class GameRegressionTests
             $"（Brainつき）四球率 {s.WalkRate:P2} が帯外");
         Assert.True(targets.HomeRunRate.Contains(s.HomeRunRate),
             $"（Brainつき）本塁打率 {s.HomeRunRate:P2} が帯外");
+
+        // バント封殺率・スクイズ本塁封殺率（issue bunt-no-take-on-ball-pitches）: ゆるいスモークテスト帯
+        // （判定が暴走して毎回封殺になるような重大バグだけを拾う。到達可能性そのものは単体テストで固定済み）。
+        Assert.True(targets.BuntForceOutRate.Contains(s.BuntForceOutRate),
+            $"バント封殺率 {s.BuntForceOutRate:P2}（試行 {s.TotalSacrificeBunts}） が帯外");
+        Assert.True(targets.SqueezeRunnerOutAtHomeRate.Contains(s.SqueezeRunnerOutAtHomeRate),
+            $"スクイズ本塁封殺率 {s.SqueezeRunnerOutAtHomeRate:P2}（試行 {s.TotalSqueezeBallInPlay}） が帯外");
     }
 
     /// <summary>

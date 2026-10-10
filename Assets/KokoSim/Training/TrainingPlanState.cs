@@ -636,7 +636,7 @@ namespace KokoSim.Unity.Training
             var beforeLv = new Dictionary<AbilityKind, int>();
             foreach (var k in GrowthDisplayOrder) { beforeProg[k] = LevelProgress(p, k); beforeLv[k] = p.Level(k); }
 
-            KokoSim.Unity.Shell.TrainingWeek.Apply(p, _week);   // 練習不可週は内部で何もしない（バーは全て0）
+            KokoSim.Unity.Shell.TrainingWeek.Apply(p, _week, roster: _roster);   // 練習不可週は内部で何もしない（バーは全て0）
 
             foreach (var k in GrowthDisplayOrder)
             {

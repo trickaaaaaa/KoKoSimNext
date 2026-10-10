@@ -88,12 +88,18 @@ public sealed class ContactModelTests
         // issue #578 Step 2 で **2倍**（オーナー方針 Q24-1「球速のバリューはもう少し高くてよい」）。
         // 校正前は「制球（与四球）の失点価値は球速の約4倍」だった＝2倍にして差を半分に詰める。
         // 平均三振率は whiff_intercept（−2.40→−2.52）で据え置き＝動くのは球速の**配分**だけ（帯不変）。
+        // Lv50 を境に上位の傾きが 0.47→0.36 に寝る（issue velocity-kmh-mapping-flatten-top, 2026-08-18）ので、
+        // 「2倍」は Lv≦50 側の傾きで測る。上位側は 0.36/0.47 倍＝約1.5倍（物理は km/h のまま・意図した副作用）。
         var coeff = new BattingCoefficients();
-        var perVelocityLevel =
+        var perVelocityLevelBelow =
+            (PitcherAttributes.VelocityKmhFromLevel(50) - PitcherAttributes.VelocityKmhFromLevel(49))
+            * coeff.StuffPerKmh;
+        Assert.InRange(perVelocityLevelBelow / coeff.WhiffContactSlope, 1.8, 2.25);
+
+        var perVelocityLevelAbove =
             (PitcherAttributes.VelocityKmhFromLevel(51) - PitcherAttributes.VelocityKmhFromLevel(50))
             * coeff.StuffPerKmh;
-
-        Assert.InRange(perVelocityLevel / coeff.WhiffContactSlope, 1.8, 2.25);
+        Assert.InRange(perVelocityLevelAbove / coeff.WhiffContactSlope, 1.4, 1.7);
     }
 
     [Fact]
@@ -158,16 +164,23 @@ public sealed class ContactModelTests
     }
 
     [Fact]
-    public void PitcherContactQualityBias_FasterPitches_AreHitHarder()
+    public void PitcherContactQualityBias_FasterPitches_AreHitWeaker_AndUseReactionVelocity()
     {
-        // 速い球は空振りを取れる代わりに、当てられたときは強い打球になる（本格派の代償）。
+        // 速い球は空振りを取れるうえ、当てられても芯を外しやすい（contact_quality_per_kmh < 0。設計書21・2026-08-19）。
+        // 旧 +0.003（速いほど強い打球）は「速い球ほど絶対変化量が小さい」効果と合わさって球速の価値を打ち消し、
+        // 球速+40Lv で打球あたり安打率が .323→.376 と**速いほど打たれる**倒錯を生んでいた（球速の価値の是正）。
         var coeff = new BattingCoefficients();
+        Assert.True(coeff.ContactQualityPerKmh < 0.0);
         var features = new PitchTrajectoryFeatures(coeff.ContactQualityBreakRefM, 0.0, 0.45);
         var slow = Plan(coeff.ContactQualityVelocityRefKmh - 10) with { ControlLevel = 50.0 };
         var fast = Plan(coeff.ContactQualityVelocityRefKmh + 10) with { ControlLevel = 50.0 };
 
         Assert.True(ContactModel.PitcherContactQualityBias(fast, features, coeff)
-            > ContactModel.PitcherContactQualityBias(slow, features, coeff));
+            < ContactModel.PitcherContactQualityBias(slow, features, coeff));
+
+        // 読むのは反応球速（効きを通した値）: 実球速が速くても反応球速が基準なら寄与0。
+        var muted = fast with { ReactionVelocityKmh = coeff.ContactQualityVelocityRefKmh };
+        Assert.Equal(0.0, ContactModel.PitcherContactQualityBias(muted, features, coeff), 12);
     }
 
     [Fact]

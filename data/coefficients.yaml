@@ -40,6 +40,8 @@ pitching:
   # 配球（Phase 簡略。設計書09で采配・慣れ §2.3b に接続）
   straight_share: 0.55
   catcher_lead_stuff_per_point: 0.004   # 捕手リード→球威（設計書01 §2①）。(Lead−50)×これ。50=恒等
+  lead_straight_share_max_shift: 0.10   # 捕手リード→配球のストレート比率シフト上限（符号あり・catcher_lead_stuff_per_pointと同じ対称設計）。(Lead−50)×投手の軸差(FB球威 vs 変化球キレ平均)で最大この幅。Lead50/軸互角は恒等
+  lead_pitch_weight_max_exponent: 1.0   # 捕手リード→変化球の選び分け強さ上限。weight=Rank^exponent（exponent=leadFactor×これ、符号あり）。Lead50/変化球1本以下は一様抽選のまま
   # 回転数マッピング（設計書15 §0.1 Q12-5, Phase B観測専用の暫定式。判定には未接続＝帯に無関係）
   # Issue #274: 球種分岐。ストレート=球威(Power)軸、変化球=キレ(Sharpness)軸。
   spin_rpm_base: 2200.0            # 基準回転数[rpm]（能力=50のとき・145km/h・2200rpm）
@@ -51,11 +53,31 @@ pitching:
   gear_coast_velocity_penalty_kmh: 2.5
   gear_coast_stamina_factor: 0.7
 
+# --- 表示能力→物理層の効き（設計書21・issue prefecture-dominance-physics, 2026-08-19） ---
+# エンジンは「チーム全体が10Lv上＝勝率90%」と急で、AI校だけを生成で寝かせる圧縮（roster.tier_compression_*）は表示ランクと中身を
+# 乖離させた。代わりに表示→物理の境界（Player.ToBatter/ToFielder・AbilityEffectCoefficients.Pitcher・PitchPlan.ReactionVelocityKmh）で
+# 全員対称に effective = pivot + scale×(Lv−pivot) を掛ける。表示Lv・最速km/h・目安球数・3D表現は変えず、動くのは「Lv1あたりの結果の差」だけ。
+# 正典はこの1ブロック。ローダが batting/fielding/baserunning の3ブロックへ同じ値を配る（食い違いは AbilityEffectConsistencyTests）。
+# 実測（永続ロスター同士＝実ゲーム経路・スター lift 0.25・300試合×2方向）:
+#   全部1.0: 80vs75 74.5%／80vs70 86%／80vs65 96%／60vs50 94%（10Lv差≈90%＝急すぎ）
+#   投手1.0/打撃0.5/守備0.4/走力0.5: 65／78／89／85 だが 80vs80 が 1.3−1.3 の投手戦（投手だけ素の効きだと強豪戦が全部投手戦）
+#   全員一律 0.55（守備0.45）: 65／82／88／81、80vs80 2.4−2.4 → 案A採用（オーナー決定 2026-08-19）。エースの突出はスター（roster.ai_star_*）で。
+ability_effect:
+  pivot: 50.0
+  batting_scale: 0.55    # ミート/パワー/選球眼/バント
+  fielding_scale: 0.45   # 守備/捕球/肩/送球（守備+10 の得点価値が打撃+10 より大きいので少し深く）
+  running_scale: 0.55    # 走力/盗塁/走塁
+  # 投手（制球/キレ/球威ランク/捕手リード）と球速の反応。球速は km/h が画面に出るので実球速は変えず、打者の反応
+  # （球威・タイミング・打球質・バント難度）に使う反応球速だけを Lv50=132km/h 軸で寝かせる。スタミナ（目安球数）も据え置き。
+  # 案A（オーナー決定 2026-08-19）: 投手を寝かせないと 80vs80 が 1.3−1.3 の投手戦（実測）。全員一律≈0.55 で 2.4−2.4。
+  pitching_scale: 0.55
+
 # --- 打撃（打席解決の確率・物理変換, Phase 1 統計回帰で調整済み） ---
 # league-average 母集団で AVG≈.265 / K%≈19.6 / BB%≈8.6 / HR%≈3.1 に収まる初期値。
 batting:
   aim_sigma_x_m: 0.10            # 投手の狙い散布σ（横）
   aim_sigma_y_m: 0.155           # 投手の狙い散布σ（縦）
+  aim_spread_control_slope_per_point: 0.008  # 制球の高い投手ほど隅を狙う・低い投手は真ん中を狙う＝狙い散布σ×max(0.5, 1+これ×(Control−50))。C50で恒等（issue walk-rate-floor-vs-elite-pitcher）
   zone_swing_base: 0.68          # ゾーン内スイング率
   chase_base: 0.28               # ゾーン外追いかけ率
   chase_discipline_slope: 0.0045 # 選球眼→追いかけ抑制
@@ -67,29 +89,58 @@ batting:
   # 「隅のいい球は見逃されやすい」。投手は隅を狙うため 0.02 でも見逃しKが増える＝atbat_10k 帯を再校正済み
   # （strikeout_rate 天井 0.220→0.230 / batting_average 床 0.240→0.235。実測は issue #403 のコメント参照）。
   zone_edge_swing_penalty: 0.02
+  # カウント依存のスイング判断（設計書01 §2③「カウントで判定」、見逃し三振率の調査 第2便）。BatterDecisionは
+  # カウントを一切見ない構造だったため、見逃し三振が全三振の6割超・3-0でのスイング率が45%（実野球はおよそ
+  # 5〜7%）だった。旧 tactics.pitch_tactics_two_strike_force_swing_prob / pitch_tactics_three_zero_take_prob
+  # （Brain依存の外付けパッチ）を無効化し、本則側へ統合。実測（10000打席×seed42/7/2024）: 見逃しK割合
+  # 60%→14.5-16.6%（atbat_10k）/ 17.4-17.7%（games_10k_tactics）、3-0スイング率45%→7.0%（in-zone 10.2% /
+  # 追いかけ 3.8%）。副作用でK%が下がるため atbat_10k/games_10k_tactics の strikeout_rate 床を再校正
+  # （balance-targets.yaml 参照）。walk_rate/home_run_rate/slugging/2B/3B/2B÷HR/得点/失策/games_10kの
+  # 全指標は帯内のまま非破壊。
+  two_strike_swing_boost: 0.28
+  three_zero_swing_factor: 0.15
   whiff_intercept: -2.52         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正。#578 で −2.40→−2.52＝stuff_per_kmh 倍化の平均中立化）
   whiff_contact_slope: 0.030     # ミート→空振り減
   whiff_out_of_zone_penalty: 0.85
   # 誘発変化合成量[m]（設計書15 Phase E-2）あたりの空振り加算。旧stuff_per_pitch_rank（球種ランク直参照）は
   # Sharpness→rpm→変化量の経路で弾道へ織り込み済みのため完全置換（二重計上回避）。校正ノブ。
   whiff_break_slope: 1.5
+  # 投打差（球威−ミート項）の対数オッズ寄与の soft-cap（issue matchup-gap-saturation-k-rate）: cap×tanh(d/cap)。
+  # 互角近傍は線形のまま、大差で ±cap に飽和＝A投手が格下打線から平均24三振を取るのを止める。0以下＝無効（従来の線形）。
+  whiff_matchup_cap: 1.5
+  # 打者の「慣れ」（設計書02 §2.3b・issue times-through-order-familiarity）: 同一投手との試合内対戦回数（打席）が
+  # 増えるほど空振り対数オッズと追いかけ率が控えめに下がる。継投でその投手に対して0から。変化量が大きい球ほど割引
+  # （1 − break_discount_per_m × 変化量[m]・下限0）。1打席シム（atbat_10k）は対戦回数0＝不変。
+  familiarity_whiff_per_pa: 0.08
+  familiarity_chase_per_pa: 0.008
+  familiarity_max_pa: 3
+  familiarity_break_discount_per_m: 1.2
   foul_share: 0.35               # コンタクト中のファウル割合（方位角±45°超の幾何ファウルは別枠, issue #262）
   # 球速→球威。基準はリーグ平均投手の平均リリース球速（最速132 − 平均ドロップ4）に置き、
   # 傾きは「球速1レベル ≈ ミート1レベル」になるよう 0.030 ÷ 0.47(km/h per level) ≈ 0.064 とする。
+  # ⚠ 0.47 は Lv≦50 の傾き。Lv>50 は 0.36（issue velocity-kmh-mapping-flatten-top, 2026-08-18）＝上位では
+  # 「球速Lv1 ≈ ミート約1.5Lv」に下がる（物理は km/h で効かせたまま。上位ティアの最速表示を現実に寄せた分の意図した副作用）。
   stuff_base_velocity_kmh: 128.0
   # issue #578 Step 2（オーナー方針 Q24-1「球速のバリューはもう少し高くてよい」）: 0.064→0.128 ＝
   # 球速1レベルの空振り価値をミート1レベル相当から**2レベル相当**へ倍化する。校正前は「制球の失点価値は
   # 球速の約4倍」だったのを2倍まで詰める。平均三振率は whiff_intercept 側（−2.40→−2.52）で据え置き＝
   # 動くのは球速の配分だけ（atbat_10k の K% 帯は 21.7/22.6/22.7 で校正前と同値・帯不変）。
   stuff_per_kmh: 0.128
-  exit_velo_intercept_kmh: 125.0 # 打球初速上限の切片
-  exit_velo_per_power: 0.82      # パワー1あたり初速上限
-  quality_mean: 0.60             # コンタクト品質の平均（issue #262: 打球が散った分の得点増を吸収）
+  # 打球初速上限 = 切片 + パワー×傾き [km/h]。P50=166 を固定して上位を寝かせた（旧 125+0.82P は P90 で 199＝
+  # MLB全史最速級・B/A校の試合が 5〜10 本塁打/試合。issue homerun-rate-explodes-at-high-power, 2026-08-18）。
+  exit_velo_intercept_kmh: 141.0 # 打球初速上限の切片（P30 156／P70 176／P90 186）
+  exit_velo_per_power: 0.50      # パワー1あたり初速上限
+  quality_mean: 0.63             # コンタクト品質の平均（#262 で 0.62→0.60、本塁打判定の正しで 0.62、投手の品質寄与×3 で 0.63 へ 2026-08-18）
   quality_contact_slope: 0.0020
   quality_sigma: 0.17
   launch_angle_at_lt1: -5.0      # 弾道1の平均打球角
   launch_angle_at_lt100: 26.0    # 弾道100の平均打球角
   launch_angle_sigma: 12.0
+  # ミートによる打球角度σの締まり（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）: σ×(1−これ×(Contact−50))、下限 floor。
+  # ミートが良いほどゴロ・ポップが減ってライナー帯（安打）に集まり、本塁打帯（25〜35°）からは外れる＝「パワーは本塁打・ミートは安打」の分業。
+  # C90 で AVG .353→.380／HR 4.2→1.9%（P60・D投手）。母集団は AVG .249→.252・HR 1.67→1.60%。
+  launch_angle_sigma_per_contact: 0.010
+  launch_angle_sigma_contact_floor: 0.6
   bearing_sigma: 19.0            # 打球方向の「残差」σ（引っ張り/流しを引いた後のばらつき）
   min_quality_velo_factor: 0.55
   # ④タイミングのズレ →⑤打球方向（設計書01 §2④⑤, issue #262）🟡実測校正
@@ -108,11 +159,16 @@ batting:
   bearing_ground_angle_deg: 0.0      # 「純ゴロ」とみなす打球角（以下で頭打ち）
   bearing_fly_angle_deg: 25.0        # 「純フライ」とみなす打球角（以上で頭打ち）
   # コンタクト品質への投手側寄与（「打たせて取る」の土台）。3項とも基準値で寄与0＝リーグ平均投手で恒等。
+  # 2026-08-18: 3項を ×3（旧 0.0010/-0.0010/-0.30）。旧値だとエースが本塁打を減らせるのは三振の分だけで、当てられれば
+  # F投手と同じ本塁打率だった（issue pitcher-barely-affects-contact-quality）。
   contact_quality_velocity_ref_kmh: 121.5  # 平均的な配球の実投球速度（ストレート比0.55×球種の球速比込み）
-  contact_quality_per_kmh: 0.0010          # 速い球は当たれば強い打球（本格派の代償）
-  contact_quality_per_control: -0.0010     # 制球が良いほど芯を外させる（技巧派の武器）
+  # 2026-08-19（設計書21・球速の価値）: +0.0030 では球速Lv 50→90 で打球あたり安打率 .323→.376・本塁打率 1.8→3.45% と「速い投手ほど
+  # 打たれる」になり三振増と相殺＝球速+10 の得点差 ±0（Q24-1 の倍化が無効化されていた）。−0.0050 で打球の質を球速に対して平坦〜微減
+  # （差し込まれ）にする＝球速+10 ≈ 制球+10（AVG −.017）。単一対戦の実測は OPEN-QUESTIONS Q24-5。
+  contact_quality_per_kmh: -0.0050         # 速い球は差し込まれる（当たっても弱い）
+  contact_quality_per_control: -0.0030     # 制球が良いほど芯を外させる（技巧派の武器）
   contact_quality_break_ref_m: 0.47        # 132km/h・2200rpm の誘発変化合成量
-  contact_quality_per_break_m: -0.30       # 変化が大きいほど詰まる
+  contact_quality_per_break_m: -0.90       # 変化が大きいほど詰まる
 
 # --- 守備（弾道→捕球/送球判定） ---
 fielding:
@@ -125,7 +181,9 @@ fielding:
   runner_reaction_seconds: 0.45        # 実戦オフセット（設計書02 §4.1b: 走力50右で本塁→一塁≈4.2s）
   left_batter_first_step_bonus_seconds: 0.13  # 左打者は一塁が近く速い（§4.1b）
   infield_depth_m: 46.0
-  force_out_margin_seconds: 0.60       # 一塁封殺の判定余裕（issue #358で0.0→0.60）。守備の所要時間の水増しをやめた代わりに、判定側の余裕としてここへ移した分。物理層(=絵)は現実の秒に戻したまま、内野安打の頻度だけをここで校正する。0.0のままだと内野安打が内野ゴロの1.5%へ潰れる（実測。実際は6〜7%規模で、当ゲームは打率・BABIP帯に合わせて11%）＝この項はシムに無い内野安打の源（もたつき・弾き・守備位置の揺らぎ）と、捕球点が実戦より本塁寄り＝送球距離が短いぶんの残差を吸う
+  force_out_margin_seconds: 0.0        # 一塁封殺の判定余裕。issue #358 で 0.0→0.60 とした校正項を 2026-08-14 に物理層（infield_handle_jitter_mean_seconds）へ移して 0 へ戻した＝判定は素のタイミング比較。判定の秒を動かすのに絵の秒に出ない項だったため「送球が先に届いた絵なのにセーフ」が構造的に出ていた（実測: 内野安打の83.5%）。0以外にすると再びその食い違いが戻る
+  infield_handle_jitter_mean_seconds: 0.49  # 0.48→0.49（2026-08-18）: ミドル前進上限4→10m＋半径捕球の処理点を体到達へ（issue middle-infielder-charge-cap/fielder-body-far-from-ball-at-catch）の差し引き−0.4ptを戻す（実測60,000打席×seed 7/42/2024で 9.4/9.3/10.0%）。 内野の打球処理のもたつき[s]の平均（指数分布・下限0で右に裾）。捕ってから離すまでに余分にかかる時間で、引いた値が**そのままタイムラインの秒**になる＝絵と判定が一致する。守備力（transfer と同じ係数）で伸縮。0.43 は内野安打率から逆算（従来の定数0.60と**同じ**内野ゴロの帰結＝アウト82.8%/内野安打9.6%/失策7.6%になる平均は0.43。実測 2026-08-14・200,000打席・seed 7）。統合時に issue #630 の前進捕球で守備が速くなった分を戻して 0.43→0.48（実測60,000打席×seed 7/42/2024で内野安打9.5/9.1/9.8%＝#630の目標9.6〜9.7%と一致）
+  infield_handle_jitter_max_factor: 3.0     # もたつきの上限＝平均の何倍で頭打ちにするか。指数の裾は無限に伸びるので「捕ってから4秒動かない内野手」が極稀に出る。絵に出る量なので実在しない値は切る（3.0＝1.2秒・上位5%が頭打ち）
 
   catch_close_call_margin_seconds: 0.15  # 判定オーバーレイ「フェア」（Issue #328②）: |捕球余裕|がこれ未満の落球だけ着地の瞬間に表示。表示専用・帯不変
   # 失策モデル（issue #123, 2026-07-23）: 平均守備(Catching50)で0.064＝両軍計≈2.4/試合（甲子園実測2.1〜2.7域）。
@@ -147,6 +205,13 @@ fielding:
   # base=0 で送球ロールを引かない＝現行の捕球のみ判定と完全一致（決定論不変）。正値で悪送球が能力駆動に。
   throw_error_base_prob: 0.0343       # 送球エラー基準確率（ThrowAccuracy50時）。issue #169で正値化＝Ac50で内野ゴロ失策の約40%が送球由来→issue #532で×1.29（0.0266→0.0343・捕球60/送球40の按分維持）
   throw_error_accuracy_slope: 0.004   # 送球精度(Ac−50)あたりの悪送球減少幅
+  # 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球確定後、逸れ幅→回収ロスを守備所要時間へ
+  # 加算してもう一度同じ判定基準で再評価する（拾い直しが間に合えばアウトのまま）。
+  wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）
+  recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
+  # トンネル（股・脇を抜けて球が外野へ行く失策, issue #632）。捕球エラーの**内訳**＝失策総数は不変（お手玉が減ってトンネルが増える）。
+  # 0で内訳ロールを引かない＝従来と完全一致。正値で「球が外野へ行ったから走者が還った」が物理層の因果になる（進塁は外野からの返球との時間勝負）。
+  tunnel_share_prob: 0.30             # 捕球エラーのうちトンネルになる割合
   # 空中捕球の守備範囲（Issue #24 原因2）。滞空時間比例のままだと深い飛球ほど守備範囲が
   # 無制限に広がるため、走れる時間に絶対上限を掛け、走路取りの巧拙（守備力）で伸縮させる。
   # 守備50・上限未満では従来（滞空×1.00）と同一。
@@ -157,6 +222,7 @@ fielding:
   roll_retention_flat: 0.72      # 水平に近いライナーがバウンドで保持する前進速度の割合（滑って伸びる）
   roll_retention_steep: 0.25     # 真上から落ちる大飛球が保持する割合（失速して死ぬ）
   fence_carom_seconds: 0.40      # フェンス到達打球の跳ね返り処理の追加時間
+  fence_restitution: 0.35        # フェンスの反発係数（跳ね返り初速＝到達時の残速×これ。表示専用・判定不変）
   outfield_pickup_seconds: 0.30  # 転がる打球を拾い上げる時間
   throw_distance_drag_per_m: 0.0045  # 送球の失速: 到達 = 距離÷送球速度×(1+距離×この値)
   running_top_speed_factor: 1.15 # 一塁到達後の巡航速度倍率（本塁→一塁の平均速度に対する比）
@@ -174,9 +240,19 @@ fielding:
   liner_apex_range_ratio: 0.15
   infielder_reach_height_m: 2.20    # 内野手が届く高さ上限（これを越える弾みは頭上を抜ける）
   infielder_fielding_radius_m: 4.20 # 内野手の横の守備範囲（グラブ＋ダイブ）。これを抜ける強い打球だけ外野へ
+  infielder_dive_reach_m: 2.0       # 飛びつきの実効リーチ（体の中心→捕球点）。半径で触れると判定した打球の処理点・処理時刻は体がここまで寄れた時刻で採る（体が3〜4m離れたまま捕球・送球しない）
   chopper_wait_factor: 0.55         # 高バウンド（チョッパー）で野手が待たされる時間の係数（内野安打に効く）
   infield_intercept_step_seconds: 0.02  # 内野境界の通過時刻を求める走査刻み
   pitcher_fielding_reaction_penalty_seconds: 0.35 # 投手のゴロ処理の追加反応遅延（Issue #261: フォロースルー直後で守備体勢が崩れる分。処理野手割り当てにのみ効く）
+  # 前進捕球（チャージ, issue #630）: 従来は処理野手が「守備位置に最も近い経路上の点」で打球を待った＝
+  # ボテボテのゴロほど長く突っ立って待ち、内野安打が転がっていた（絵にもそのまま出ていた）。緩い打球だけ
+  # 前へ出て早い時刻・本塁寄りの点で捕る。前進量 = 上限 ×(1 − 打球速度/charge_slow_ball_speed_mps) の直線＝
+  # 強い打球は前進量0＝従来と完全に同じ捕球点・処理時刻（乱数は引かない）。
+  charge_slow_ball_speed_mps: 30.0  # この速度以上で待って捕る（前進量0）。静止球で上限いっぱい。オーナー選択2026-08-13
+  charge_max_advance_corner_m: 6.0  # 投手・一塁手・三塁手が前へ出られる距離（最短の守備範囲からの上乗せ）
+  charge_max_advance_middle_m: 10.0 # 二塁手・遊撃手。4.0 では実効1〜2m でボテボテに突っ込まず待ち捕りだった（issue middle-infielder-charge-cap）。代償は前進量比例のペナルティ
+  charge_throw_penalty_seconds: 0.12  # 前進いっぱいでの握り替え追加時間（走りながら捕る＝体勢が悪い分を食い戻す）
+  charge_throw_accuracy_penalty: 6.0  # 前進いっぱいでの送球精度の低下[点]（悪送球ロールへ効く）
   irregular_bounce_prob: 0.030      # イレギュラーバウンドの発生確率（一律。土質接続は将来の別Issue）
   irregular_bounce_lateral_deg: 12.0     # イレギュラーの横ぶれ最大角[deg]
   irregular_bounce_restitution_swing: 0.60  # イレギュラーの反発係数の揺らぎ幅
@@ -198,7 +274,7 @@ baserunning:
   productive_out_advance_prob: 0.18
   double_play_prob: 0.13
   fielders_choice_prob: 0.06       # 野選（FC, design-14 P1-1）: DP不成立時に先行走者アウト＋打者一塁生存（2026-07-17校正）
-  error_extra_advance_prob: 0.20   # 失策連鎖（design-14 P1-6）: ReachedOnError時に全走者+打者へ追加1進塁（2026-07-17校正）
+  error_extra_advance_prob: 0.90   # 失策連鎖（design-14 P1-6）: **悪送球のみ**でReachedOnError時に全走者+打者へ追加1進塁（issue #629 で 0.20→0.90 再校正・2026-08-13）
   error_extra_advance_accuracy_slope: 0.003  # 失策連鎖の送球精度連動（Issue #37）: 確率=prob−(Ac−50)×これ。0で非連動＝恒等
 
   drop_third_strike_reach_prob: 0.39       # 振り逃げ（design-14 P1-2）: 第3ストライクが捕り損ねうる球のとき成立（issue #525で 0.001→0.39 再校正）
@@ -217,13 +293,15 @@ baserunning:
   catch_throw_distance_m: 38.8
   steal_reaction_intercept: 0.90   # スタート遅延[s] = intercept − steal×slope（Step4再校正: 快足を3.4秒台へ）
   steal_reaction_slope: 0.004
+  steal_jump_credit_seconds: 0.19  # ジャンプ[s]。走者は投手の始動を読んで既に動き出している＝遅延から差し引く（床の後に引く）。steal_success_bias 0.38 を物理層へ移した半分（2026-08-14）。走力50/盗塁50の二塁到達 3.94→3.75秒（高校生の実測3.6〜3.8秒へ）
   pitcher_quick_seconds: 1.40      # 投手クイック（投法補正は後回し）
-  pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋送球時間）
+  pop_transfer_seconds: 0.70       # 捕手の握り替え（ポップ = これ＋立ち上がり＋送球時間）
+  catcher_pop_rise_seconds: 0.19   # 捕手の立ち上がり[s]（守備力で縮まない固定部分）。steal_success_bias 0.38 を物理層へ移した残り半分（2026-08-14）。肩50のポップタイム 1.91→2.10秒（高校生の実測2.0〜2.3秒へ）。⚠ pop_transfer_seconds へ足し込むと守備力で伸縮して「移しただけ」でなくなる
   transfer_fielding_slope: 0.004   # 走塁系トランスファーの守備連動（Issue #36）。fielding.throw_transfer_fielding_slope と揃える
   transfer_factor_min: 0.70        # 走塁系トランスファー倍率の下限（Issue #36）
   tag_seconds: 0.10
   steal_margin_scale: 0.22         # margin→成功確率のlogistic幅（Step4再校正: 肩差が効く幅に拡張）
-  steal_success_bias: 0.38         # リーグ平均成功率の校正項（🟡, Step4再校正）
+  steal_success_bias: 0.0          # リーグ平均成功率の校正項（🟡）。2026-08-14 に 0.38→0.0＝中身を物理層の秒（steal_jump_credit_seconds 0.19 ＋ catcher_pop_rise_seconds 0.19）へ移した。判定の秒だけを動かして絵の秒に出ない項なので、0以外にすると「送球が先に届いた絵なのにセーフ」が戻る（実測: 成功50%の場面で送球が0.48秒先着）。平均成功率を動かすときは移した先の2項を動かす
   catch_throw_to_third_distance_m: 27.4  # 本塁→三塁の送球距離（design-14 P1-4、三盗）
   steal_third_success_bias: -0.35  # 三盗の成功率バイアス（design-14「三盗は成功率下方」）
   steal_home_success_bias: -0.7    # 本盗の成功率バイアス（design-14「本盗はさらに下方」）
@@ -251,6 +329,41 @@ baserunning:
   bunt_field_throw_base_seconds: 3.70        # コーナー突進＋素手＋短距離送球
   bunt_placement_slope: 0.006                # 好バントほど処理が遅れる
   bunt_infield_hit_time_scale: 0.14          # margin→確率のlogistic幅
+  # バント: ボール球見送り（issue bunt-no-take-on-ball-pitches）。スクイズは対象外（一球でコミット）
+  bunt_take_base: 0.20
+  bunt_take_distance_slope: 1.2
+  bunt_take_discipline_slope: 0.006
+  bunt_take_cap: 0.90
+  # バント: コース補正・技術/球速/球威連動の失敗率（design-02 §4.3の欠落項の実装, issue bunt-no-take-on-ball-pitches）
+  bunt_course_slope: 0.10
+  bunt_stuff_ref_value: 0.0
+  bunt_miss_skill_slope: 0.0008
+  bunt_miss_velocity_slope: 0.001
+  bunt_miss_stuff_slope: 0.015
+  bunt_miss_floor: 0.02
+  bunt_pop_skill_slope: 0.0006
+  bunt_pop_velocity_slope: 0.0008
+  bunt_pop_stuff_slope: 0.012
+  bunt_pop_floor: 0.02
+  # バント: 一塁走者の封殺（フォースアウト, issue bunt-no-take-on-ball-pitches）。処理点は「誰が処理したか」
+  # を特定しない簡略化（bunt_field_throw_base_seconds と同じ抽象レベル）。三塁走者→本塁のスクイズ判定も共有
+  bunt_fielded_x_m: -4.0
+  bunt_fielded_z_m: 8.0
+  bunt_fielded_at_seconds: 0.90
+  bunt_fielder_throw_speed_mps: 30.0
+  bunt_fielder_fielding_level: 50.0
+  bunt_force_r1_start_delay_seconds: 0.15
+  # バント: 二塁走者（1・2塁時）の三塁封殺。既存の third_force_*（Q31）をそのまま使う＝新規係数はスタート遅延のみ
+  bunt_force_r2_start_delay_seconds: 0.15
+  # バント: 三塁走者（満塁時）の本塁封殺。既存の home_force_*（Q31）をそのまま使う＝新規係数はスタート遅延のみ
+  bunt_force_r3_start_delay_seconds: 0.15
+  # バント: 小フライからのライナー併殺（design-09、issue bunt-no-take-on-ball-pitches）。捕球点・滞空時間は
+  # TimelineBuilder の絵と共有する単一ソース（判定=絵）
+  bunt_pop_fielded_z_m: 3.0
+  bunt_pop_hang_seconds: 0.55
+  # スクイズ: 三塁走者のスタート（走力連動, issue bunt-no-take-on-ball-pitches）。送球先が本塁になる以外は
+  # 上のバント処理点を流用（home_success_bias等は既存のまま）
+  squeeze_third_runner_start_delay_seconds: 0.05
   # 本塁クロスプレー（バックホーム憤死, 設計書12 §3, F2）: 走塁 §4.1 と同じ秒の時間勝負
   home_runner_reaction_intercept: 0.55       # 本塁を狙う走者の判断遅延[s] = intercept − 走塁判断×slope
   home_runner_reaction_slope: 0.004
@@ -268,6 +381,16 @@ baserunning:
   # 損失が強肩ほど大きかった（Arm20 +0.41s / Arm99 +0.71s）＝実際の野球と逆。1.88 は Arm50 で 60m ＝
   # リーグ平均の挙動を旧値と揃える値。Arm20→52m / Arm50→60m / Arm80→68m / Arm99→73m。
   cutoff_throw_seconds: 1.88
+  # バックホーム悪送球（外野/中継→本塁の送球エラー, 2026-08-30）。内野送球エラー
+  # （fielding.throw_error_base_prob/throw_error_accuracy_slope）と同型の二値ロール。
+  # 守備が本塁で間に合う場面でだけ引き、送球者のThrowAccuracyが低いほど悪送球になりやすい。
+  relay_throw_error_base_prob: 0.0343
+  relay_throw_error_accuracy_slope: 0.004
+  # 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球確定後、逸れ幅→回収ロスを守備所要時間へ
+  # 加算してもう一度同じMargin/logisticレースを評価する（拾い直しが間に合えばアウトのまま）。
+  wild_throw_scatter_sigma_m: 6.0     # 逸れ幅の標準偏差[m]（半正規分布）。内野側とは独立値
+  recovery_reaction_seconds: 0.30     # 回収に動き出すまでの反応遅延[s]
+  recovery_sprint_speed_mps: 6.5      # 回収に動く野手のスプリント速度[m/s]（平均的な値の定数）
   home_tag_seconds: 0.12
   home_grounder_start_delay_seconds: 1.55    # ゴロ凡打の三塁走者は打球を読んでから走る＝遅い(G1)
   home_margin_scale: 0.25                    # margin→生還確率のlogistic幅
@@ -276,14 +399,15 @@ baserunning:
   third_tag_seconds: 0.10                     # 三塁でのベースタッチ（本塁クロスプレーより短い）
   third_margin_scale: 0.45                    # margin→確率のlogistic幅（本塁より広め＝打球の深さ・外野の肩を効かせる）
   third_success_bias: 0.88                    # #316: 加速+回る損失をモデル化した分(-0.62s)を引いて 1.50→0.88
-  # ゴロ凡打の進塁打（二塁→三塁, Issue #318, 設計書12 §3.5）: 18%固定テーブルを「捕球点→三塁の物理レース」へ。
-  # 守備は幾何（P_direct）で「一塁を取る/一塁を捨てて三塁へ直接投げる/走者は自重」を選ぶ（采配でなく物理で決める）。
+  # ゴロ凡打の進塁打（二塁→三塁, Issue #318／issue productive-out-second-to-third-not-advancing, 設計書12 §3.5）:
+  # 18%固定テーブルを「一塁送球到達→三塁への転送レース」へ。打者走者はこの場面に至った時点で一塁アウトが確定して
+  # おり（実際の内野は確実な1アウトを捨てて三塁の走者を直接狙わない）、二塁走者は転送の脅威（P_relay）だけで
+  # 進むか自重するかが決まる（采配でなく物理で決める）。
   grounder_advance_start_delay_seconds: 0.90 # ゴロを読んでから走り出す追加遅延[s]。本塁(1.55)より短い＝進塁は生還ほど慎重に見極めない
   advance_tag_seconds: 0.10                   # 進塁先でのタッチ[s]（third_tag_seconds と同軸）
   advance_margin_scale: 0.45                  # margin→確率のlogistic幅（三塁レースと同軸）
   advance_success_bias: 0.00                  # 校正項[s]。帯校正はこの1本だけで行う（Issue #318）
   advance_relay_transfer_seconds: 0.55        # 一塁手の転送握り替え[s]（relay_transfer_seconds と同軸）
-  advance_direct_throw_max_runner_success: 0.45 # 走者の到達見込みがこれ以下なら守備は一塁を捨てて三塁へ直接投げる
   # 併殺の物理レース（内野ゴロ×一塁走者, Issue #369, 設計書12 §2）: 13%固定テーブル（double_play_prob）を
   # 「捕球点→二塁の封殺（P_force2）／二塁→一塁の転送」の二段の秒勝負へ。守備は幾何で3分岐を純関数で選ぶ
   # （A=一塁のみ／B=野選／C=併殺）。方向性・深さ・打者/走者の脚は係数でなく幾何から創発する。
@@ -294,14 +418,29 @@ baserunning:
   second_force_margin_scale: 0.45            # 二塁封殺 margin→到達確率のlogistic幅（三塁・進塁と同軸）
   second_force_success_bias: 0.00           # 二塁封殺の校正項[s]
   double_play_force_max_runner_success: 0.60 # 一塁走者の二塁到達見込みがこれ超なら封殺自体が不可＝一塁を取る（分岐A-1・稀）
-  double_play_attempt_min_relay_success: 0.80 # 二塁→一塁の転送で打者を刺せる見込みがこれ未満なら併殺を狙わず確実な一塁アウト（分岐A-2）
+  double_play_attempt_min_relay_success: 0.65 # 二塁→一塁の転送で打者を刺せる見込みがこれ未満なら併殺を狙わず確実な一塁アウト（分岐A-2）。0.80→0.55（2026-08-18: 見込み6〜8割の併殺まで一塁へ逃げていた）→0.65（2026-08-30: 併殺/試合の帯を高校野球の失策率実測ベースへ再校正した際の追従。詳細はBaserunningCoefficients.csのXMLコメント）
   double_play_pivot_transfer_seconds: 0.90   # 二塁ベース経由の転送（ピボット）握り替え[s]（relay_transfer_seconds とは別値）
   double_play_relay_margin_scale: 0.20       # 二塁→一塁の転送 margin→打者生存（野選）確率のlogistic幅
   double_play_relay_bias: 0.00               # 二塁→一塁の転送の校正項[s]（正で打者生存＝野選寄り）。併殺打/得点をHeavyで校正
+  # 併殺の代替ルート（三塁/本塁の自己フォース, Q31）: 三塁手/捕手・投手が自打球を自分でベースへ運んで
+  # フォース（送球なし）→一塁へ転送。実際にその塁を処理した野手だけが検討でき、二塁封殺より到達見込みが
+  # 低い（守備に有利）ときだけ選ばれる（BaserunningModel.ResolveDoublePlay のゲート）。
+  third_force_tag_seconds: 0.10              # 三塁での自己フォースのタッチ/捕球[s]（second_force_tag_seconds と同軸）
+  third_force_margin_scale: 0.45             # 三塁での自己フォース margin→到達確率のlogistic幅
+  third_force_success_bias: 0.00             # 三塁での自己フォースの校正項[s]
+  home_force_tag_seconds: 0.10               # 本塁での自己フォースのタッチ/捕球[s]（second_force_tag_seconds と同軸）
+  home_force_margin_scale: 0.45              # 本塁での自己フォース margin→到達確率のlogistic幅
+  home_force_success_bias: 0.00              # 本塁での自己フォースの校正項[s]
+  double_play_self_force_relay_transfer_seconds: 0.70  # 自己フォース側の一塁への転送握り替え[s]（受け取り動作が無いぶん double_play_pivot_transfer_seconds より短い）
   # 犠飛のタッチアップ（Issue #90, 設計書12 §3.5）: 走者は捕球時刻にスタート（二次リードなし＝全塁間27.4mを走る）、
   # 守備も同じ捕球時刻から送球＝共通起点が捕球時刻。深い外野フライは送球が長く生還、浅いフライは自重/憤死。
   tag_up_margin_scale: 0.40                   # margin→生還確率のlogistic幅（本塁クロスプレーより広め＝深さ・肩を効かせる）
   tag_up_success_bias: 1.50                   # 生還率・本塁憤死頻度を現実値へ校正（Heavy実測, Issue #90。球質タイプ中立を維持）
+  # 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）: 置換前は両方とも
+  # productive_out_advance_prob の18%固定で深さ・肩・走力を見ていなかった（浅いライトフライでも一塁走者が
+  # 18%で二塁へ）。塁ごとに送球距離が大きく違うため、本塁用の tag_up_success_bias(1.50) は流用せず塁固有に持つ。
+  tag_up_third_success_bias: 0.85             # 二塁→三塁の校正項[s]。実測 100mまで0%・105m 86%・115m 93%。1.30だと広い球場の得点が上がりStadium/Archetypeの僅差比較が割れる
+  tag_up_second_success_bias: 1.20            # 一塁→二塁の校正項[s]。二塁への送球は最短＝実測 105mまで0%・115mから動く（最深部のフライでだけ走る）
   close_call_margin_seconds: 0.15            # 判定オーバーレイ（Issue #59）: |margin|がこれ未満なら「際どい」＝セーフ表示。アウトは常時表示のため無関係
   # ライナー併殺（コンタクト始動の一塁走者が捕られ戻れず, 設計書12 §4, G2）
   liner_break_reaction_seconds: 0.05         # 接触と同時に飛び出す＝ほぼ即時
@@ -312,6 +451,8 @@ baserunning:
   doubled_off_tag_seconds: 0.10
   doubled_off_margin_scale: 0.20             # margin→塁へ戻れる確率のlogistic幅
   doubled_off_success_bias: 0.0              # 校正前の暫定値（Heavy実測で調整）
+  steal_break_extra_lead_m: 6.0              # 盗塁で走っていた一塁走者が接触時点で稼いでいたリード（飛び出しの戻り距離に加算）
+  doubled_off_retreat_speed_mps: 3.0         # コミット上限を過ぎてから捕球までに打球を見ながら塁へ戻る速さ（深いフライで刺されない）
   # 守備の読み/ピッチアウト（設計書09 §1, 設計書12 §5, G3）: 捕手リード＋投手センス vs 状況の意外性
   steal_expectedness_intercept: 0.42         # 盗塁企図の基準「予想されやすさ」E
   steal_expectedness_steal_slope: 0.006      # Steal能力→予想度（快足盗塁屋は読まれやすい）
@@ -330,6 +471,12 @@ fatigue:
   velocity_drop_per_over_pitch: 0.05
   control_drop_per_over_pitch: 0.12
   relieve_pitch_margin: 25.0
+  # 目安の手前から徐々に効く消耗カーブ（issue fatigue-gradual-before-threshold・設計書02 §1.1e）。
+  # 目安×onset_ratio から二次カーブで低下を始め、目安到達時に球速天井 −velocity_drop_at_guideline_kmh／
+  # 制球 −control_drop_at_guideline、超過後は上の per_over_pitch 勾配で段差なく続く。onset_ratio ≥ 1.0 で旧階段型。
+  onset_ratio: 0.6
+  velocity_drop_at_guideline_kmh: 2.0
+  control_drop_at_guideline: 5.0
   # hard_cap_pitches はハードキャップ撤廃（issue #356）で撤去。降板は目安投球数＋relieve_pitch_margin と
   # 疲労による能力低下だけで決まる。スタミナ自体も上限なし（伸ばした分だけ長く投げられる）。
 
@@ -423,6 +570,9 @@ skills:
   master_catcher_lead_bonus: 10          # 名捕手: 実効リード+10（設計書10, 01 §2①）
   # チーム系
   spiritual_pillar_captain_factor: 1.4   # 精神的支柱: 主将の緩和量拡大（設計書09 §8）
+  moodmaker_mitigation_bonus: 0.06       # ムードメーカー: 出場中なら緩和量へ加算（主将とは別枠、複数人でも重複しない）
+  practice_leader_exp_factor: 1.05       # 練習リーダー: 保有者が居ると他の全部員の週間経験値へ乗る倍率
+  role_model_exp_factor: 1.08            # お手本: 先輩・同ポジション保有者が居るとその後輩の週間経験値へ乗る倍率
   # 体質・成長系
   diligent_exp_factor: 1.15
   lazy_exp_factor: 0.85
@@ -484,13 +634,17 @@ tactics:
   squeeze_prob: 0.28
   squeeze_max_diff_abs: 1
   squeeze_min_bunt: 55
-  steal_min_success: 0.72          # 解決式の成功見込みがこの値以上で仕掛ける
+  # issue steal-thresholds-unreachable（2026-08-27）: 旧0.72は実ロスター実測の到達可能上限（p99=60.7%・
+  # max=65.8%）を超えていて原理的に一度も通らない死にコードだった。0.50は概ねp70相当（詳細は
+  # TacticsCoefficients.StealMinSuccess のコメント参照）。
+  steal_min_success: 0.50          # 解決式の成功見込みがこの値以上で仕掛ける
   steal_prob: 0.45
   # 三盗・本盗（issue #67, design-14 未決A）: 二塁のみ在塁／三塁のみ在塁でのみ判定。塁状況が排他のため
   # 一・三塁の重盗（baserunning.double_steal_third_break_prob）とは競合しない。
-  # 三盗: 解決式の実現可能な見込み天井自体が二盗（≈0.95）よりずっと低い（俊足×弱肩でも≈0.4〜0.65）ため、
-  # 0.30は「三盗レンジの中で上位のみ」という相対的な選別線（TacticsCoefficients.StealThirdMinSuccess参照）。
-  steal_third_min_success: 0.30
+  # 三盗: issue steal-thresholds-unreachable（2026-08-27）: 旧コメントの想定天井（俊足×弱肩でも≈0.4〜0.65）
+  # は実測と食い違い、実際の到達可能上限は p99=6.4%・max=7.9%（実ロスター11200件）。旧0.30は死にコード
+  # だった。0.045は概ねp85相当（詳細はTacticsCoefficients.StealThirdMinSuccessのコメント参照）。
+  steal_third_min_success: 0.045
   steal_third_prob: 0.25
   steal_third_max_outs: 0          # 無死のみ
   steal_third_max_diff_abs: 3      # 大差では狙わない
@@ -521,6 +675,10 @@ tactics:
   # ゴロ凡打は currentOuts>=2 で ApplyInPlayOut が即 return するため 2アウト緩和は死にコードになる。
   send_advance_min_success: 0.35     # 中立采配で進塁を狙う閾値
   send_advance_aggression_span: 0.40 # aggression(0..1)で閾値を±動かす幅
+  # 犠飛以外のタッチアップの送り判定（design-14 P3-11）。静止から出るぶん博打の分が悪く、実物の三塁コーチも
+  # 「ほぼ確実な時だけ行かせる」＝他の送り閾値より高い。進塁打の0.35を流用すると送った試行の3〜4割が走塁死になる。
+  send_tag_up_min_success: 0.85      # 中立采配でタッチアップを行かせる閾値
+  send_tag_up_aggression_span: 0.20  # aggression(0..1)で閾値を±動かす幅
   # 内野深さ×ゴロ×本塁（G1, 設計書12 §4/§5）は深さで本塁プレーの有無を分岐（前進=勝負/後退=献上/通常=テーブル）。
   # 送りバイアスは baserunning.home_grounder_start_delay_seconds で調整。
   # 守備指示判断
@@ -598,9 +756,9 @@ tactics:
   captain_mitigation_per_power: 0.004   # 統率力（統率傾向×精神力/100）1あたりの負補正緩和
   captain_bench_factor: 0.30
   # 1球采配（設計書15 §2.3, Phase C）
-  pitch_tactics_two_strike_force_swing_prob: 0.35  # 追い込まれ矯正（見逃し三振回避）
+  pitch_tactics_two_strike_force_swing_prob: 0.0   # 追い込まれ矯正はbatting.two_strike_*（本則）へ統合済み・無効化
   pitch_tactics_two_strike_min_contact: 50
-  pitch_tactics_three_zero_take_prob: 0.85         # 3-0待て
+  pitch_tactics_three_zero_take_prob: 0.0          # 3-0待てはbatting.three_zero_swing_factor（本則）へ統合済み・無効化
   pitch_tactics_three_zero_swing_away_min_power: 80
   pitch_tactics_three_zero_swing_away_from_inning: 7
   pitch_tactics_three_zero_swing_away_max_diff_abs: 1
@@ -765,6 +923,13 @@ insight:
   accuracy_per_talent_eye: 0.004
   accuracy_max: 0.97
 
+# --- 週次イベントの発火（設計書03 §5 / 04 §3.2・issue #609）---
+# 従来 EventScheduler にハードコードされていた「同一週最大1件・発火率50%」をここへ出したもの。
+# 固定イベント（カレンダー連動）は weekly_fire_probability を通さず必ず発火する。
+events:
+  weekly_fire_probability: 0.5   # ランダム/選択イベントを1件でも引く確率（毎週は起きない）
+  max_random_per_week: 1         # 1週に提示するランダム/選択イベントの上限
+
 # --- 入部予定者の事前開示（設計書04 §2.1 効果2・issue #587）---
 # スカウト網の契約段が渡す開示精度 0〜1 を「推定誤差σ」と「隠しパラメータの判明確率」へ写す。
 # 表示専用＝選手そのものには触れないので帯に影響しない。
@@ -821,7 +986,8 @@ manager_growth:
 
 # --- 育成（練習→能力, 設計書02 §5.1） ---
 training:
-  base_main_exp: 85.0
+  # 2026-08-15: 85→130（案D）。旧値では中核能力+4〜5/3年で「新入生の質＝チームの質」になりすぎた。
+  base_main_exp: 130.0
   sub_factor: 0.4
   facility_coef: 1.0          # 施設レベル0（施設なし）の基準施設係数。facility_tiers で上位を注入（#115）
   # 基準指導力（中立点, #115）。監督メタ（分野別指導力）を注入しないときの既定＝この指導力で従来と1ビット一致。
@@ -842,7 +1008,9 @@ training:
     - { coef: 2.05, budget_minutes: 600 }   # Lv3
     - { coef: 2.40, budget_minutes: 700 }   # Lv4 フル施設（名門・強豪）
   level_up_base: 100.0        # 必要exp = base × growth^level
-  level_up_growth: 1.05
+  # 2026-08-15: 1.05→1.04（案D）。1.05だと Lv70台の必要expがLv32の7.8倍で成長がほぼ止まり、名声で入る
+  # B/Aの新入生が「入学時が完成形」になる。1.04で Lv74 でも3年+2〜3（施設フルで+10）。
+  level_up_growth: 1.04
   aptitude_required_exp_factor: 0.6   # 守備位置適性は能力より緩い必要exp（<1.0で速く伸びる, 守備適性 未決1）
   # 能力別 trainability（伸ばしやすさ, Issue #114）: 能力の素質の形（内在特性）。exp加算時に乗算する。
   # GrowthMultiplier（分野別の伸びしろ・個体差）や環境倍率（監督指導力・施設 #115）とは直交する。
@@ -875,7 +1043,7 @@ training:
   reference_week_minutes: 300
   default_budget_minutes: 300  # 照明/寮などの施設導入で増やす（設計書03 §4, 今回は口だけ）
   # 実戦成長（設計書02 §5.3a, Q8・2026-07-20）: 精神力/走塁判断/捕手リードは試合出場でのみ伸びる。
-  # 1試合出場あたりのexp（成長段階係数を乗算）。必要expは能力値と同じ曲線（100×1.05^v）🟡
+  # 1試合出場あたりのexp（成長段階係数を乗算）。必要expは能力値と同じ曲線（100×level_up_growth^v）🟡
   match_mental_exp: 260.0
   match_lead_exp: 400.0        # 捕手として出場した試合のみ
   match_baserunning_exp: 300.0
@@ -924,16 +1092,35 @@ team_strength:
 
 nation:
   strength_mean: 44.0
-  strength_sd: 13.0
+  # 母集団のσ（issue prefecture-high-rank-distribution・2026-09-05）: 13→15。
+  # 13 だと 80 が +2.8σ ＝ 全国4000校でAランク以上が 13校（0.33%）しか出ず、校数最多の神奈川ですら
+  # 期待 0.66 校・「Aが1校もない年」が 49%。校数と高ランク数の相関自体は 0.99 と強いのに、
+  # ランク帯（Tiers.FromStrength）に対して母集団が低すぎて県差が表示に出ていなかった。
+  # 15 で 全国A 37校／神奈川 期待 2.0校・P(A≥2) 57%。県1位vs2位の勝率は 0.649→0.666 でほぼ動かない
+  # （σを広げると1位も2位も一緒に上がるため）＝ nation_dominance 帯 0.55–0.78 の内側。
+  # 17 まで上げると全国Sが 15.7 で NationTests の S≤15 に触るので 15〜16 が上限。
+  strength_sd: 15.0
   strength_min: 8.0
   strength_max: 99.0
   storied_fame_bonus: 20.0
-  storied_strength_bonus: 8.0
+  # 古豪の強さボーナス（issue prefecture-dominance・2026-08-18）: 8→4。8だと県1位−2位の差が最大22ポイントに開き
+  # （宮崎 seed2026 は 81.8 vs 65.6）、その県は生成時点で一強が確定していた。
+  storied_strength_bonus: 4.0
   emerging_fame_penalty: -5.0
-  aggregate_scale: 4.0        # 強さ差→勝率。GameEngineにキャリブレーション（差10→≈0.92）
-  mean_reversion: 0.10        # 平均回帰（全国統計の安定化）
-  churn_sd: 5.5               # 世代交代の揺らぎ（勢力変動）。定常sd≈初期sdを保つ
-  strength_per_win: 0.12
+  # 強さ差→勝率のロジスティック尺度。フルシム（実ゲーム経路＝永続ロスター同士）へ校正: 4.0→7.2（2026-08-19・設計書21）。
+  # 圧縮撤去＋効き ability_effect ≈0.55 の世界で 差5→63%／10→77〜84%／15→88%／20→95%／30→99% を fit すると 6〜9（平均 7.1）。
+  # 旧 4.0 は圧縮0.55の差で引いていた（＝raw 差なら 4/0.55≈7.3）ので、実質据え置き。Heavy AggregateModel_MatchesGameEngineWinRate が固定する。
+  aggregate_scale: 7.2
+  # 年次進化（issue prefecture-dominance・2026-08-18）: 旧 rev 0.10 / churn 5.5 / per_win 0.12 だと強さ82の校の期待ドリフトが
+  # −2/年＝一度覇権を取った校が10年近く落ちず、集計20年×49地区で最多優勝校の中央値 9/20・10回以上が15地区。
+  # rev 0.15 / churn 6.5 / per_win 0.06 で中央値 5〜7/20・10回以上 4〜7地区（現実の県の分布に近い）。
+  # 定常sd＝churn/√(1−(1−rev)²)＝churn/0.527 なので、churn_sd は strength_sd と必ずセットで動かす。
+  # 片方だけ変えると進化が初期σを打ち消す＝「新規ゲームは正しいが数年で元へ戻る」という気づきにくい壊れ方をする
+  # （実測: sd15・churn6.5 据え置きだと 10年後に sd 13.0・全国A 13.5 へ回帰した。2026-09-05）。
+  # sd 15 に対して churn 7.9（=15×0.527）。実測: 10年後 sd 15.3・全国A 44.9・神奈川A 2.30 で保つ。
+  mean_reversion: 0.15        # 平均回帰（全国統計の安定化）
+  churn_sd: 7.9               # 世代交代の揺らぎ（勢力変動）。定常sd≈初期sdを保つ（strength_sd 連動）
+  strength_per_win: 0.06
   fame_to_strength: 0.015
   fame_decay: 0.90
   fame_champion: 40.0
@@ -958,6 +1145,18 @@ tournament:
   summer_open_day: 10
   autumn_open_month: 9
   autumn_open_day: 12
+  # 夏の甲子園（設計書05 §1.1）。暦の週では始まらず夏の県大会の後始末から直接つなぐので、
+  # ここは「表示する実月日」だけを決める（週インデックスとは独立）。
+  koshien_open_month: 8
+  koshien_open_day: 6
+  # 秋季地区大会・明治神宮大会・春のセンバツ本戦（設計書05 §1.5b）。地区大会・神宮大会は
+  # 前段の後始末から即座連鎖、センバツ本戦は選考発表週から即座連鎖＝ここも表示専用。
+  regional_open_month: 10
+  regional_open_day: 18
+  jingu_open_month: 11
+  jingu_open_day: 15
+  senbatsu_open_month: 3
+  senbatsu_open_day: 19
 
 # --- 記録室の規定（issue #600・設計書06 §3.9） ---
 # 高校野球は試合数が少なく、閾値が無いと「1打数1安打＝打率1.000」が校歴代1位に出る。
@@ -982,16 +1181,29 @@ career:
   coaching_growth_per_year: 3.0     # 采配経験による指導力上昇
   coaching_growth_per_win: 0.8
   coaching_cap: 99.0
-  coaching_to_strength: 0.78        # 指導力→チーム力の押し上げ
+  # 指導力→チーム力の押し上げ。0.78→0.88（issue prefecture-high-rank-distribution・2026-09-05）:
+  # 母集団の strength_sd を 13→15 に広げると県1位が 80.1→85.5 に上がるので、プレイヤー側の上限も追従させる。
+  # 据え置きだと 20年キャリアのセンバツ出場が 2.77→1.32回・生涯0回が 20%→49%（200シード実測）。0.88 で 2.23回・28%。
+  # strength_sd を動かしたらここも見直すこと（世界とプレイヤーの相対位置を決める係数）。
+  coaching_to_strength: 0.88
   free_koshien_threshold: 1         # 甲子園1回でフリー資格
   free_fame_threshold: 52.0         # または名声60
+  min_tenure_years: 3               # 赴任してから強制転任の対象になるまでの最低在任年数（採った1年生の卒業年数）
   retain_trust_threshold: 60.0      # 残留確率ロジスティックの中点（この信頼度で残留確率＝上限の半分）
   retain_trust_spread: 10.0         # ロジスティックの傾き（信頼度の効き幅）
   retain_probability: 0.8           # 高信頼時の残留確率の上限
-  fame_koshien_appearance: 22.0
+  # 2026-08-15（案2）: 甲22/勝1.5/減衰0.92 → 甲30/勝4.0/減衰0.80。旧値は時定数 1/(1−0.92)=12.5年で
+  # 名声が「勝っても動かない」（年2勝で5年目12・10年目21）。新値は時定数5年・定常=勝数×20（旧18.75と同等）＝
+  # 上がりも下がりも速い（100→年1勝で6年後41）。全国優勝は甲子園本戦の実プレイ接続まで実ゲームでは発火しない。
+  fame_koshien_appearance: 30.0
   fame_national_champion: 45.0
-  fame_per_win: 1.5
-  fame_decay: 0.92
+  fame_per_win: 4.0
+  fame_decay: 0.80
+  # 2026-08-26（案C+D）: 加算だけだと ①名声のレンジが強さ60台で使い切られる（実ゲームの年間公式戦勝数は
+  # 強さ65で約5勝＝定常99＝S に張り付く）②県大会を制した年は名声がいくつでも1年でSへ飛ぶ（+91.7）。
+  # 上げ方の形で寝かせる（勝数の数え方は変えない）。out/issues-pending/fame-rises-too-fast.md
+  fame_gain_ceiling: 100.0        # 逓減の基準（上昇側にだけ ×(1−名声/この値)。定常＝100g/(20+g)）
+  fame_season_rise_cap: 12.0      # 1年に上がれる正味の名声（等級の帯幅10なので1年1段強。下降側には効かない）
   # 番狂わせ連動の名声変動（issue #170）。格上撃破=金星で↑、格下敗北=取りこぼしで↓。順当な結果には効かない。
   fame_upset_win_per_tier: 3.0    # 格上に勝った時のTier格差1段あたりの上昇（金星）
   fame_upset_loss_per_tier: 3.5   # 格下に負けた時のTier格差1段あたりの低下（取りこぼし・やや重く）
@@ -1012,9 +1224,17 @@ career:
   facility_fund_donation_per_fame: 20.0   # 後援会・OB寄付（名声1あたり[万円/年]。名声100で年2000万）
   facility_fund_koshien_bonus: 1000.0     # 甲子園出場の年の一時金[万円]
   facility_fund_national_title_bonus: 5000.0  # 全国優勝の年の一時金[万円]（出場ぶんに上乗せ）
+  # 甲子園出場が決まった日にOB・卒業生から入る激励金（設計書05 §1.1a）。上の施設基金とは別の財布
+  # ＝**部費**（遠征・宿泊・応援バス）で、その場でイベントとして見える形で入る。
+  koshien_berth_donation_base: 120.0      # 土台[万円]（年間予算 80+0.8×信頼 の約1倍）
+  koshien_berth_donation_per_fame: 1.5    # 名声1あたりの上乗せ[万円]
   new_school_strength_mean: 34.0    # 教員監督の赴任先は弱小
   new_school_strength_sd: 6.0
   free_choice_school_strength: 48.0 # フリー化後の本拠地
+  # フリー監督のオファー（設計書04 §1.3「残留自由・他校オファーの選択制」）。残留はいつでも選べる。
+  free_agent_offer_chance: 0.35     # 1年にオファーが届く確率
+  free_agent_offer_count: 2         # 1回のオファーで並べる移籍先候補数（残留は別枠）
+  free_agent_offer_spread: 10.0     # 候補校の強さの散らばり（free_choice_school_strength を中心）
 
 # --- 施設（Issue #128・設計書03 §4 / 04 §4）: funds→施設購入の支出先。多軸（照明/室内/寮/トレ） ---
 # 各系統は tiers[0]=施設なし（費用0・効果0）から並べる。全系統Lv0で従来一致（不変条件#2）。
@@ -1164,16 +1384,25 @@ roster:
   talent_max: 90.0
   # 名声→talentCenterフィードバック（issue #127・設計書04 §2.1）: 監督の名声が高いほど良い新入生が集まる。
   # 上振れは指数飽和カーブ（線形→漸近）で頭打ち＝「勝つ→怪物→また勝つ」の暴走ループ防止が必須要件。
-  # 既定は控えめな幅（Fame最大でも talent_center_default 32→40程度に留める）。
-  fame_talent_center_span: 8.0
-  fame_talent_center_tau: 30.0
+  # 2026-08-15（案D）: 8/30 → 50/50。旧値は Fame最大でも 32→40（E境界）で、自校の新入生は名声を極めても
+  # AI C校（強度60）の新入生に届かず、自校がD以上へ行く経路が実質閉じていた。新値は名声20→48(E) / 40→59(D) /
+  # 60→67(C) / 80→72(B) / 100→75(B。SD8なので上位個体はA)。頭打ち（span）は残す＝暴走防止の要件は維持。
+  # 名声は fame_decay(0.80) で自己制限するので、勝ち続けないと中心も落ちる。
+  fame_talent_center_span: 50.0
+  fame_talent_center_tau: 50.0
   # ティア→能力の圧縮（issue #578・OPEN-QUESTIONS Q24 の確定2）。AI校の「強度→能力中心」だけを寝かせ、
   # 格差マッチの一方的さを緩める。#536 の実測では実力差10ポイントごとに得点が約0.4倍になっていた。
   # 自校（ProspectGenerator）は対象外なので、ピボットを平均帯(50)に置くと自校との差が縮まらず効果が出ない
   # ＝自校の実力域（≒35〜40）に置く。表示ランク（School.Strength）は圧縮しない（確定4＝表示は直さない）。
   tier_compression_pivot: 40.0
-  tier_compression_slope: 0.55  # 実測で決めた値（自校の完封され率 D50 21.2%→10.2% / C60 40.3%→21.5%）
-  tier_compression_knee: 60.0   # これ以上は圧縮せず100で元の尺度へ戻す（膝なしだとA校の実力が76→58まで落ちる）
+  # 2026-08-19（設計書21・案C）: 0.55 → 1.0（圧縮なし）。AI校だけを寝かせる圧縮は表示ランクと中身を乖離させるので撤去し、
+  # 代わりに ability_effect:（表示→物理の効き）を全員対称に寝かせる＝raw が中身。式は比較・実験用に残す（slope=1・knee=100 は恒等）。
+  tier_compression_slope: 1.0
+  # 膝（issue prefecture-dominance・2026-08-18 で 60→100＝膝なし・一様圧縮）: 膝60は「上を100で元尺度へ戻す」勾配1.225で
+  # 上位帯の差を raw より拡大し（80→75.5 / 65→57.1）、県1位 vs 2位（差15）が単試合 99%＝同じ校が毎年優勝する主因だった。
+  # 一様0.55: 80vs75 63% / 80vs70 75% / 80vs65 86% / 80vs60 92% / 80vs50 98%（フルシム実測）。代償として強度85の校の
+  # 能力中心は 64.75（表示A・中身B−）まで落ちる＝オーナー承認済み（表示ランクは raw のまま。展望の能力バーとは乖離する）。
+  tier_compression_knee: 100.0
 
   # 凸凹配分（総ポイントをランダム重みで配分・偏り自体もばらつく＝金太郎飴回避）
   concentration_mean: 0.35    # 偏り強度σ。大きいほど内訳が凸凹
@@ -1181,9 +1410,14 @@ roster:
   specialty_floor: 14         # 専門能力の下限（「できない」を作らない）
   off_specialty_factor: 0.55  # 専門外能力の中心係数（総合力×これ）。パワプロ型特化を禁止
   off_specialty_floor: 8
-  # 運動能力ベースライン（走力・地肩・スタミナ, 名声独立, §1.1b-2）
+  # 運動能力ベースライン（走力・地肩・スタミナ, §1.1b-2）。physical_mean は名声0（talentCenter=talent_center_default）
+  # のときの中心。physical_talent_slope は talentCenter が上がったぶんの何割を身体系中心に乗せるか
+  # （2026-08-15 案D: 0.75。0 なら旧来の名声独立）。SD は据え置き＝弱小校の俊足・強肩は残る。
+  # 0 のままだと名声で入るB/Aの新入生が「打撃Aで走力E」になり、機動力・肩・球速の天井でチームがCで頭打ちになる。
+  # AI校（StrengthTeamFactory）は身体系が強度連動なので、これで自校だけ天井が低い非対称が消える。
   physical_mean: 45.0
   physical_sd: 12.0
+  physical_talent_slope: 0.75
   # スタミナLevel→目安投球数の変換（切片・傾き, 設計書02 §1.1e / issue #408）。#356の上限撤廃に伴い水準を引き上げ。
   # Lv10→70.5 / Lv45→96.75（生成平均）/ Lv50→100.5（D帯）/ Lv92→132（完投上限域）。傾きを 0.9→0.75 に寝かせて
   # 下限を持ち上げつつ上限が高校野球の完投域(120〜140)を外れないよう解いた。順変換・逆変換・生成が同じ定数で動く。
@@ -1200,6 +1434,25 @@ roster:
   lead_sd: 8.0
   lead_mental_corr: 0.30
   lead_cap_mental_corr: 0.15     # Q8(c): リードcapの野球脳相関（名捕手の天井）
+  # AI校の精神力・統率・捕手リード（issue ai-school-mental-fixed-50, 2026-08-18）: 旧実装は全員50固定・主将なし。
+  # 自校と同じ分布（mental_mean/sd・leadership_*・lead_*）を学校の強さ・校風・学年で寄せて引く（専用Fork＝他の能力ロール不変）
+  ai_mental_strength_slope: 0.25   # 精神力中心 = mental_mean + (School.Strength − 50)×これ（圧縮前の強度。G≈40／D≈47／S≈56）
+  ai_mental_per_grade: 4.0         # 進級ごとに精神力 +これ（3年で +8＝自校の実戦成長の平均像）
+  ai_style_mental_bonus: 3.0       # 校風「守り勝つ」「全員野球」の精神・統率の上乗せ
+  # AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18）: 旧実装は全能力を同じ中心で独立に引き
+  # 成長も一律なので B/A校は先発全員がスラッガーだった。パワーを希少側にしてミートへ振り替え（打撃指標不変）＋5能力の凸凹配分。
+  ai_power_skew: 8.0               # パワー中心 −これ／ミート中心 +これ（.35C+.35P の打撃指標を保つ）
+  ai_concentration: 0.15           # ミート/パワー/選球眼/守備/捕球の凸凹配分σ（総和不変。自校 concentration_mean 0.35 より控えめ）
+  # AI校の上位集中＝スター型（issue prefecture-dominance-star, 2026-08-18）: ティア圧縮を一様に掛けると上位校のエースが平凡になる
+  # （A校のエース最速 138km/h）。圧縮で削った分（raw−圧縮後）をエース＋主軸へ戻し、脇役は圧縮後の中心のまま＝現実の強豪の形。
+  # チーム総合（6指標）は圧縮後の尺度に留める（Create は脇役を lift×cast_drop 下げる／永続ロスターは逆算配分が自動で寄せる）。
+  ai_star_share: 1.0               # スターの上乗せの割合（1.0＝既定量／0＝スター無し）
+  # 2026-08-19: 圧縮撤去に伴い lift の定義を「圧縮で削った分」から (強さ−40)×これ へ。raw 80 でエース/主軸 +10（Lv 90＝146km/h）
+  ai_star_lift_per_point: 0.25
+  ai_star_hitters: 3               # 使い捨て生成（Create）: 先発野手8人のうち主軸の人数
+  ai_star_hitters_per_cohort: 1    # 永続ロスター: 1学年あたりの主軸打者（3学年で Create と同数）
+  ai_star_pitchers_per_cohort: 1   # 永続ロスター: 1学年あたりのエース格（投手適性順）
+  ai_star_cast_drop: 0.30          # 使い捨て生成: 脇役の中心を lift×これ 下げてチーム総合を圧縮後の尺度に留める（実測: 0.25で+0.7・0.35で−0.6）
   # 投打の利き（§1.1c）
   throw_left_prob: 0.12
   switch_prob: 0.03
@@ -1249,22 +1502,30 @@ roster:
   archetype_soft_toss_share: 0.08    # 軟投派（残りはバランス型）
   # #578 Step 3: 球速の価値が2倍になったので球速オフセットを寝かせて型の中立性を回復（12/−10/−14 → 8/−7/−10）。
   # 制球・スタミナ・キレでの代償は実測で効かない（軟投派は制球を上げると失点が増える＝打たせて取る型の宿命）。
-  archetype_power_velocity: 8
-  archetype_power_control: -12
+  # 2026-08-16（issue matchup-gap-saturation-k-rate ＋ fatigue-gradual-before-threshold）: 投打差の soft-cap で高球速の
+  # 空振り価値が頭打ちになり（本格派 3.01→3.85 失点）、消耗カーブで球速天井が目安の手前から落ちる（→4.08）ため、
+  # 本格派の制球の代償を −12→−7 に寝かせて型の中立性を回復（実測400試合: バランス3.49／本格3.6前後／技巧3.29／軟投3.49）。
+  # 投手総合の加重和では本格派が +1.5 ほど有利に見えるが、型の中立は「実戦の失点」で校正する（式の中立は循環論法）。
+  # 2026-08-18（issue pitcher-barely-affects-contact-quality）: 投手の打球品質寄与を ×3 にしたので制球・キレの失点価値がさらに
+  # 上がり、本格派 3.35 vs 技巧派 2.49（spread 0.86）に開いた。制球の振れ幅を縮め（本格 −7→−4・技巧 +6→+3）球速の振れ幅を
+  # 広げ（本格 +8→+10・技巧 −7→−8・軟投 −10→−11）、キレを +2 で揃えて実戦中立へ（400試合: バランス2.97／本格2.99／技巧2.74／
+  # 軟投2.79＝spread 0.26。守備依存 swing 本格 8.86 vs 技巧・軟投 9.27 で「打たせて取る＝守備依存」も維持）。
+  archetype_power_velocity: 10
+  archetype_power_control: -4
   archetype_power_stamina: -2
   archetype_power_pitch_rank: 2
-  archetype_finesse_velocity: -7
-  archetype_finesse_control: 6
+  archetype_finesse_velocity: -8
+  archetype_finesse_control: 3
   archetype_finesse_stamina: 1
-  archetype_finesse_pitch_rank: 3
+  archetype_finesse_pitch_rank: 2
   # 軟投派の上乗せは 2026-07-21（Issue #24）に再校正。打球の塁打数を転がり込みの幾何で
   # 決めるようにした結果、打球初速の低さ（＝転がらない＝長打になりにくい）が以前より価値を持ち、
   # 軟投派だけ失点が下がった（実測 3.65 vs 技巧派 3.96）。キレ+5→+3・制球+4→+3 で実戦中立へ戻す
   # （Archetypes_AreBalanceNeutral_InActualGames）。
-  archetype_soft_toss_velocity: -10
-  archetype_soft_toss_control: 3
+  archetype_soft_toss_velocity: -11
+  archetype_soft_toss_control: 2
   archetype_soft_toss_stamina: 2
-  archetype_soft_toss_pitch_rank: 3
+  archetype_soft_toss_pitch_rank: 2
   # 旧フィールド（後方互換）
   init_level_mean: 32.0
   init_level_sd: 8.0
@@ -1292,10 +1553,13 @@ persistent_roster:
   # 投手適性のバイアスは自校と共通（roster.pitcher_aptitude_bias）＝AI校だけ別の下駄を履かせない。
   cohort_size: 11                # 1学年の人数（旧編成の実測 8＋約2.9人 に合わせた値）
   pitcher_count_floor: 1         # マウンドに立てる人数の下限（0人化を構造的に防ぐ）
+  # 二刀流運用（issue ai-two-way-hitting-pitchers-start-as-fielders）: 守備8枠の割当重み＝実効守備力＋打撃総合×これ。
+  # 0 なら従来どおり守備だけで先発を選ぶ。打撃は候補ごとの定数なので「誰を出すか」にだけ効き、枠の割り振りには効かない。
+  field_slot_batting_weight: 2.0
   freshman_gap: 8.0             # 新入生の能力中心 = Strength − これ（未熟スタート・3年で開花）
   fame_recruit_weight: 0.04     # 名声由来の入学時上振れ（(Fame−50)×これ）
   annual_growth: 6.0            # 逆算配分のベースライン年間成長素点
-  senior_growth_factor: 0.4     # 3年（引退間際）の成長係数
+  senior_growth_factor: 0.75    # 3年（引退間際）の成長係数（0.4→0.75 2026-08-18: 逆算配分の伸びが2年に集中して2年>3年が6〜8割の校で起きていた）
   target_tolerance: 3.0         # 逆算配分の許容誤差（翌夏チーム総合 vs 進化後Strength）
   max_residual_per_node: 4.0    # 逆算残差補正の1節目あたり上限
   # 年3節目の分割比（夏大会後 / 秋大会後 / 冬明け）。合計1.0。

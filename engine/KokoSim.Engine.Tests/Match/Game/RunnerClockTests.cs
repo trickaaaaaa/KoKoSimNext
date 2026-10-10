@@ -45,13 +45,13 @@ public sealed class RunnerClockTests
             var runner = RunnerWith(speed, baserunning);
             // #316 以前の HomePlayResolver.RunnerTimeSeconds の式をそのまま書き下したもの。
             var startDelay = System.Math.Max(
-                0.10, c.HomeRunnerReactionIntercept - runner.Baserunning * c.HomeRunnerReactionSlope);
+                0.10, c.HomeRunnerReactionIntercept - c.AbilityEffect.Running(runner.Baserunning) * c.HomeRunnerReactionSlope);
             var distance = System.Math.Max(
                 0.0, (toBase - fromBase) * Field.BaseDistanceM - c.HomeLeadDistanceM);
-            var expected = distance / runner.ToFielder().SprintSpeedMps + startDelay + extraDelay;
+            var expected = distance / runner.ToFielder(c.AbilityEffect).SprintSpeedMps + startDelay + extraDelay;
 
             var actual = RunnerClock.SegmentSeconds(
-                runner, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, c), Field, extraDelay);
+                runner, c.AbilityEffect, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, c), Field, extraDelay);
 
             Assert.Equal(expected, actual);   // 許容差なし＝ビット一致
             // 委譲後の公開APIも同値（呼び手の載せ替えで判定が動かないことの担保）。
@@ -112,9 +112,9 @@ public sealed class RunnerClockTests
         var withTurn = new BaserunningCoefficients { RunnerBaseTurnSeconds = 0.30 };
 
         var a = RunnerClock.SegmentSeconds(
-            runner, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, noTurn), Field);
+            runner, noTurn.AbilityEffect, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, noTurn), Field);
         var b = RunnerClock.SegmentSeconds(
-            runner, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, withTurn), Field);
+            runner, withTurn.AbilityEffect, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, withTurn), Field);
 
         Assert.Equal(expectedTurns * 0.30, b - a, 9);
     }
@@ -171,9 +171,9 @@ public sealed class RunnerClockTests
         var after = new BaserunningCoefficients();
 
         var tBefore = RunnerClock.SegmentSeconds(
-            runner, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, before), Field);
+            runner, before.AbilityEffect, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, before), Field);
         var tAfter = RunnerClock.SegmentSeconds(
-            runner, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, after), Field);
+            runner, after.AbilityEffect, fromBase, toBase, HomePlayResolver.RunnerContextOf(runner, after), Field);
 
         Assert.Equal(expectedGain, tBefore - tAfter, 2);
     }
@@ -186,8 +186,8 @@ public sealed class RunnerClockTests
     {
         var runner = RunnerWith(50, 50);
         var bc = new BaserunningCoefficients();
-        var lead = RunnerClock.SegmentSeconds(runner, 3, 4, HomePlayResolver.RunnerContextOf(runner, bc), Field);
-        var box = RunnerClock.SegmentSeconds(runner, 1, 2, ExtraBaseResolver.BatterContextOf(new FieldingCoefficients()), Field)
+        var lead = RunnerClock.SegmentSeconds(runner, bc.AbilityEffect, 3, 4, HomePlayResolver.RunnerContextOf(runner, bc), Field);
+        var box = RunnerClock.SegmentSeconds(runner, bc.AbilityEffect, 1, 2, ExtraBaseResolver.BatterContextOf(new FieldingCoefficients()), Field)
                   + bc.HomeRunnerReactionIntercept - 50 * bc.HomeRunnerReactionSlope;
 
         Assert.True(lead < box, $"塁上({lead:F3}s)が打席から({box:F3}s)より速くない");
@@ -205,7 +205,7 @@ public sealed class RunnerClockTests
         {
             var runner = RunnerWith(speed, 50);
             var p = fromBase ? HomePlayResolver.RunnerContextOf(runner, c) : ExtraBaseResolver.BatterContextOf(new FieldingCoefficients());
-            var t = RunnerClock.SegmentSeconds(runner, 1, 4, p, Field);
+            var t = RunnerClock.SegmentSeconds(runner, c.AbilityEffect, 1, 4, p, Field);
             Assert.True(t < prev, $"走力{speed}で遅くなっている({t:F3}s ≧ {prev:F3}s)");
             prev = t;
         }
@@ -218,8 +218,8 @@ public sealed class RunnerClockTests
         var c = new BaserunningCoefficients();
         var slow = RunnerWith(50, 10);
         var fast = RunnerWith(50, 90);
-        var tSlow = RunnerClock.SegmentSeconds(slow, 3, 4, HomePlayResolver.RunnerContextOf(slow, c), Field);
-        var tFast = RunnerClock.SegmentSeconds(fast, 3, 4, HomePlayResolver.RunnerContextOf(fast, c), Field);
+        var tSlow = RunnerClock.SegmentSeconds(slow, c.AbilityEffect, 3, 4, HomePlayResolver.RunnerContextOf(slow, c), Field);
+        var tFast = RunnerClock.SegmentSeconds(fast, c.AbilityEffect, 3, 4, HomePlayResolver.RunnerContextOf(fast, c), Field);
 
         Assert.True(tFast < tSlow, $"走塁判断が高い走者が速くない({tFast:F3}s ≧ {tSlow:F3}s)");
     }
@@ -232,7 +232,8 @@ public sealed class RunnerClockTests
     [Fact]
     public void ReactionFloor_IsInactive_AcrossTheWholeAbilityScale()
     {
-        var c = new BaserunningCoefficients();
+        // 効きは恒等で回す＝物理層が受け取りうる 0〜99 全域で下限が発火しないことの担保（既定の効き 0.55 では 99 が 77 に寝る）。
+        var c = new BaserunningCoefficients { AbilityEffect = AbilityEffectCoefficients.Identity };
         for (var br = 0; br <= 99; br++)
         {
             var delay = HomePlayResolver.RunnerContextOf(RunnerWith(50, br), c).StartDelaySeconds;

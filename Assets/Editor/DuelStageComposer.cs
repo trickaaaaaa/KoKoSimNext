@@ -402,9 +402,24 @@ namespace KokoSim.EditorTools
         internal static void Cleanup()
         {
             for (var go = GameObject.Find(RootName); go != null; go = GameObject.Find(RootName))
+            {
+                DestroyMaterials(go);
                 Object.DestroyImmediate(go);
+            }
             var cam = GameObject.Find("~DuelStageCamera");
             if (cam != null) Object.DestroyImmediate(cam);
+        }
+
+        /// <summary>
+        /// Primitive/SpawnBat等が都度 new Material するぶんは GameObject 破棄だけでは残る
+        /// （マテリアルは子オブジェクトではない）。2026-08-22 実測で22,111個のリークを確認・
+        /// ここ1箇所で塞ぐ（呼び出し側は全員 RootName の下にぶら下げる規約なので網羅できる）。
+        /// </summary>
+        private static void DestroyMaterials(GameObject root)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                foreach (var m in r.sharedMaterials)
+                    if (m != null) Object.DestroyImmediate(m);
         }
 
         private static void SetLayer(GameObject go, int layer)

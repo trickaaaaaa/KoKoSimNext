@@ -13,7 +13,7 @@ namespace KokoSim.Unity.Shell
     /// <summary>
     /// 自校の一戦だけを詳細試合エンジン（GameEngine）で解決する Shell 実装（設計書05 §1.4）。
     /// 自校ロスター＋スタメン（GameSession.Lineup）を持つのはこの層なのでここに置く。相手校は
-    /// DevelopingPlayer を持たないため学校から生成（StrengthTeamFactory.ForSchool）。
+    /// 永続ロスター（#80・<see cref="NationService.Rosters"/>）から組む＝展望・実戦・全国成績が同一ソース。
     /// 自校の先攻/後攻は <see cref="HomeAwayAssignment"/> が対戦の組み合わせ（校ID対＋年度＋週）から
     /// 決定論で決める（OPEN-Q 未決I, issue #70）。大会本流の乱数には依存しないので、対戦カード画面
     /// （<see cref="MatchPreview.MatchPreviewState"/>）でも同じ入口で先読みできる。
@@ -27,11 +27,16 @@ namespace KokoSim.Unity.Shell
         {
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
-            var ctx = Rules.ApplyTo(new GameContext { MercyRuleEnabled = mercyRuleEnabled }, CalendarYear());
+            var ctx = Rules.ApplyTo(
+                new GameContext { MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng) }, CalendarYear());
+            var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
+            var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
             var managerIsAway = ManagerIsAway(manager, opponent);
             var result = managerIsAway
-                ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2))
-                : GameEngine.Play(oppTeam, mgrTeam, ctx, rng.Fork(2));
+                ? GameEngine.Play(mgrTeam, oppTeam, ctx, rng.Fork(2), mgrCarry, oppCarry,
+                    awayPitchRecovery: mgrRecovery, homePitchRecovery: oppRecovery)
+                : GameEngine.Play(oppTeam, mgrTeam, ctx, rng.Fork(2), oppCarry, mgrCarry,
+                    awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery);
             return new PlayerMatchDetail(result, ManagerIsAway: managerIsAway);
         }
 
@@ -45,8 +50,16 @@ namespace KokoSim.Unity.Shell
             var mgrTeam = BuildManagerTeam(manager.Name);
             var oppTeam = BuildOpponentTeam(opponent, AceRestContext.From(context, manager.Tier));
             var ctx = Rules.ApplyTo(
-                new GameContext { CaptureTimelines = true, CapturePitches = true, MercyRuleEnabled = mercyRuleEnabled },
+                new GameContext
+                {
+                    CaptureTimelines = true, CapturePitches = true,
+                    // 自校の投手交代はプレイヤーの采配権にする（Resolve側＝観戦しない裏解決には付けない）。
+                    PlayerControlsPitcherChanges = true,
+                    MercyRuleEnabled = mercyRuleEnabled, Field = Stadium(context, rng),
+                },
                 CalendarYear());
+            var (mgrRecovery, oppRecovery) = PitchRecoveryFor(context, ctx.PitchRecovery, manager, mgrTeam, opponent, oppTeam);
+            var (mgrCarry, oppCarry) = PriorWeekPitchesFor(context, manager, mgrTeam, opponent, oppTeam);
 #if KOKOSIM_DEBUG || UNITY_EDITOR || DEVELOPMENT_BUILD
             // 大会フローの実試合にもデバッグHUDの観測を差し込む（設計書17 §5/§12.4, #95）。HUDが閉じていれば
             // AttachTo は恒等（Enabled==false→ctxをそのまま返す）＝観戦の有無で大会結果が変わらない契約
@@ -56,10 +69,49 @@ namespace KokoSim.Unity.Shell
 #endif
             var managerIsAway = ManagerIsAway(manager, opponent);
             var prog = managerIsAway
-                ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2))
-                : new MatchProgression(oppTeam, mgrTeam, ctx, rng.Fork(2));
+                ? new MatchProgression(mgrTeam, oppTeam, ctx, rng.Fork(2),
+                    awayPitchRecovery: mgrRecovery, homePitchRecovery: oppRecovery,
+                    awayPriorWeekPitches: mgrCarry, homePriorWeekPitches: oppCarry)
+                : new MatchProgression(oppTeam, mgrTeam, ctx, rng.Fork(2),
+                    awayPitchRecovery: oppRecovery, homePitchRecovery: mgrRecovery,
+                    awayPriorWeekPitches: oppCarry, homePriorWeekPitches: mgrCarry);
             return new PlayerMatchLive(prog, ManagerIsAway: managerIsAway);
         }
+
+        /// <summary>
+        /// 試合間の回復モデル（設計書02 §1.1e-2, issue #41 本流配線）で調整済みの実効目安投球数を、
+        /// 自校・相手校それぞれ<b>別の辞書</b>で求める（校をまたいだ Player 値等価の衝突を構造的に避ける。
+        /// <see cref="PitchRecoveryLookup.ForMatch"/> 参照）。context が null（大会外・練習試合等）なら
+        /// 両方とも空辞書＝GameEngine 側は素の目安投球数のまま（従来挙動と完全一致）。
+        /// </summary>
+        private static (IReadOnlyDictionary<Player, double> Manager, IReadOnlyDictionary<Player, double> Opponent)
+            PitchRecoveryFor(
+                TournamentMatchContext? context, PitchRecoveryCoefficients coeff,
+                School manager, Team mgrTeam, School opponent, Team oppTeam)
+            => PitchRecoveryLookup.ForMatch(
+                context, coeff,
+                PitchRecoveryLookup.AllPlayers(mgrTeam),
+                p => PitcherLedgerKey.For(isManagerSchool: true, manager.Id, p.SourceId, p.UniformNumber),
+                PitchRecoveryLookup.AllPlayers(oppTeam),
+                p => PitcherLedgerKey.For(isManagerSchool: false, opponent.Id, p.SourceId, p.UniformNumber));
+
+        /// <summary>
+        /// 週間球数制限（設計書05 §1.3）の持ち越し球数を、自校・相手校それぞれ<b>別の辞書</b>で求める。
+        /// キーの取り方は <see cref="PitchRecoveryFor"/> と<b>同じ <see cref="PitcherLedgerKey.For"/></b> を通す
+        /// ＝台帳へ記録した側（TournamentRunner.RecordSide）と引き方が必ず一致する（OPEN-QUESTIONS Q26）。
+        /// 窓の日数は上限値と同じ場所（<see cref="ModernRules.WeeklyPitchWindowDays"/>）から取る。
+        /// context が null（大会外・練習試合等）なら両方とも空辞書＝持ち越しなし（従来挙動と完全一致）。
+        /// </summary>
+        private static (IReadOnlyDictionary<Player, int> Manager, IReadOnlyDictionary<Player, int> Opponent)
+            PriorWeekPitchesFor(
+                TournamentMatchContext? context,
+                School manager, Team mgrTeam, School opponent, Team oppTeam)
+            => PriorWeekPitchLookup.ForMatch(
+                context, Rules.WeeklyPitchWindowDays,
+                PitchRecoveryLookup.AllPlayers(mgrTeam),
+                p => PitcherLedgerKey.For(isManagerSchool: true, manager.Id, p.SourceId, p.UniformNumber),
+                PitchRecoveryLookup.AllPlayers(oppTeam),
+                p => PitcherLedgerKey.For(isManagerSchool: false, opponent.Id, p.SourceId, p.UniformNumber));
 
         /// <summary>
         /// この対戦の自校先攻/後攻。対戦カード画面（<see cref="MatchPreview.MatchPreviewState"/>）も
@@ -71,6 +123,17 @@ namespace KokoSim.Unity.Shell
         /// <summary>現代ルール（現状トグルなし・年代連動の既定値, 設計書05 §1.3）。DH判定と
         /// タイブレーク/球数制限の GameContext 反映（issue #252）の両方でこの1インスタンスを使う。</summary>
         private static readonly ModernRules Rules = new();
+
+        /// <summary>専用の球場抽選ストリームid（設計書13。本編・継投等の乱数を汚さない＝Fork は親状態を進めない）。</summary>
+        private const ulong StadiumStreamId = 13;
+
+        /// <summary>
+        /// いま戦っている大会の球場寸法（設計書13 §1）。甲子園は固有球場、夏・秋の県大会は汎用ティア
+        /// （序盤=市営級／準決勝・決勝=県営級）、それ以外（地区・神宮）は既定。<b>Resolve と BeginLive が
+        /// 同じ値を使う</b>（観戦しても結果が変わらない契約）ので、両者ともこの1メソッドを通す。
+        /// </summary>
+        private static KokoSim.Engine.Match.Field.FieldGeometry Stadium(TournamentMatchContext? context, IRandomSource rng)
+            => MatchStadium.For(GameSession.Current.Kind, context?.RoundsRemaining, rng.Fork(StadiumStreamId));
 
         /// <summary>現在の暦年（<see cref="GameSession.Current"/> の YearIndex から換算）。</summary>
         private static int CalendarYear() => SeasonClock.SeasonBaseYear + (GameSession.Current.Year - 1);

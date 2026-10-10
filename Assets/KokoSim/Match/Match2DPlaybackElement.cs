@@ -369,9 +369,12 @@ namespace KokoSim.Unity.Match
             }
 
             var kind = found.Value.Kind;
+            // 併殺の2つ目のアウト（常に打者）は「ダブルプレー」（issue
+            // double-play-throw-pace-and-second-out-call ③案F・2026-08-27監督判断）。
+            // IsAdditionalOut は engine 側（PlaybackEvaluator.JudgementAt）が単一ソースで判定する。
             UiComponents.SetCallText(_judgementLabel, _judgementLabelShadow, kind switch
             {
-                JudgementKind.Out => "アウト",
+                JudgementKind.Out => found.Value.IsAdditionalOut ? "ダブルプレー" : "アウト",
                 JudgementKind.Fair => "フェア",
                 JudgementKind.HomeRun => "ホームラン",
                 JudgementKind.Error => "エラー",

@@ -16,7 +16,7 @@ namespace KokoSim.Unity.Shell
     /// </summary>
     public static class GameSeed
     {
-        private static ulong _master = InitMaster();
+        private static ulong _master = RollMaster();
 
         /// <summary>この新規ゲームの母種。全ての派生シードのもと。</summary>
         public static ulong Master => _master;
@@ -24,7 +24,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>母種の16進表記（バグ報告・再現トークンへの貼り付け用）。</summary>
         public static string MasterHex => Hex(_master);
 
-        private static ulong InitMaster()
+        private static ulong RollMaster()
         {
             var master = unchecked((ulong)System.DateTime.UtcNow.Ticks * 0x9E3779B97F4A7C15UL);
             // 設計書17 §8（Q18-1）: 母種ログ1行は KOKOSIM_DEBUG の「外」＝define非依存で常に出す。
@@ -32,6 +32,15 @@ namespace KokoSim.Unity.Shell
             UnityEngine.Debug.Log("[KokoSim] master seed = " + Hex(master));
             return master;
         }
+
+        /// <summary>
+        /// 新規ゲーム開始のたびに母種を引き直す（2026-08-29 ユーザー指摘で新設）。<see cref="_master"/> は
+        /// 従来クラス初回アクセス時（＝プロセス起動時）にしか採らなかったため、同一プロセス内で
+        /// 「最初から」を繰り返すと母種が変わらず、新入生10人（<see cref="RosterService"/>）をはじめ
+        /// 母種依存の初期状態がすべて同じになっていた。「新規ゲームの完全リセット」の一部として、
+        /// デバッグ面のシード固定（<see cref="Reset(ulong)"/>）とは別に、常時（リリースビルドでも）呼ぶ。
+        /// </summary>
+        public static void RerollForNewGame() => _master = RollMaster();
 
         private static string Hex(ulong v)
             => "0x" + v.ToString("x16", System.Globalization.CultureInfo.InvariantCulture);

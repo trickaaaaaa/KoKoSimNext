@@ -31,7 +31,14 @@ namespace KokoSim.Unity.Match
     /// </summary>
     public static class DuelUniformMeshBuilder
     {
-        /// <summary>内部領域ID。UV1.x に (id + 0.5)/8 で載せ、シェーダーの _RegionColors[8] を引く。</summary>
+        /// <summary>
+        /// 内部領域ID。UV1.x に (id + 0.5)/8 で載せ、シェーダーの _RegionColors を引く。
+        ///
+        /// <b>8番以降は UV1.x が 1 を超える</b>（8なら 1.0625）が、この値はテクスチャ座標として
+        /// サンプリングされない生の属性なので折り返さない。刻み幅（/8）を変えないのは、
+        /// <b>すでに焼いた資産の意味を変えないため</b>＝割る数を16にすると既存の
+        /// Body_Uniform_*.asset が全部別領域として読まれ、焼き直すまで色が総入れ替えになる。
+        /// </summary>
         public enum Region
         {
             Shirt = 0,       // ユニ上（胴・半袖）
@@ -40,9 +47,16 @@ namespace KokoSim.Unity.Match
             Socks = 3,       // ソックス（膝下〜足首）
             Skin = 4,        // 肌（頭・手・前腕先端）
             Shoes = 5,       // シューズ（固定暗色）
-            Cap = 6,         // 帽子（クラウン＋つば。購入素体の Cap メッシュ全体・2026-07-29）
+            Cap = 6,         // 帽子クラウン（購入素体の Cap メッシュのうち、つばを除いた部分）
             Belt = 7,        // ベルト（購入素体の Pants メッシュ内の帯＋バックル。固定暗色・2026-07-29）
+            CapVisor = 8,    // 帽子つば（Cap メッシュを幾何で二分した前下の帯・issue #621）
         }
+
+        /// <summary>領域数（_RegionColors の要素数と一致させる）。</summary>
+        public const int RegionCount = 9;
+
+        /// <summary>領域ID → UV1.x（焼き側と読み側で同じ式を使うための単一ソース）。</summary>
+        public static float RegionUv(int region) => (region + 0.5f) / 8f;
 
         /// <summary>
         /// 生成パラメータ。境界位置 t は 2026-07-28 の実測プローブ（セグメント軸 t 分布）を基準に決めた。
@@ -371,7 +385,7 @@ namespace KokoSim.Unity.Match
             var outTris = new int[outN];
             for (int t3 = 0; t3 < outN / 3; t3++)
             {
-                float u = ((int)outRegions[t3] + 0.5f) / 8f;
+                float u = RegionUv((int)outRegions[t3]);
                 Vector3 faceN = default;
                 if (p.FlatShading)
                 {

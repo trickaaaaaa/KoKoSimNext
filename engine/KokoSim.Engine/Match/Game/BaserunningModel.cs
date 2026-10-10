@@ -1,6 +1,7 @@
 using System;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
+using KokoSim.Engine.Match.Field;
 using KokoSim.Engine.Match.Tactics;
 using KokoSim.Engine.Players;
 
@@ -26,6 +27,20 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     public double ExtraStartDelaySeconds { get; init; }
 
     /// <summary>
+    /// タイムライン表示専用: タッチアップ（フライ捕球を待ってから走る）の走者なら、その**捕球時刻**[s]
+    /// （接触基準＝<see cref="HomePlaySituation.BallFieldedAtSeconds"/>）。null＝タッチアップでない。
+    ///
+    /// <para>判定側（<see cref="HomePlayResolver.TagUpRunnerTimeSeconds"/>）は捕球起点・二次リードなしで
+    /// 走者の時計を回すのに、表示側は塁上の走者を一律「接触＋反応遅れ」で走らせていた（issue
+    /// score-display-before-home-touch）。結果、犠飛の走者は<b>打った瞬間に三塁を離れ</b>（実測 208/208 件・
+    /// 中央値 4.04 秒早い）、得点も本塁到達＝捕球のころに入っていた。ここに捕球時刻を載せて
+    /// <see cref="HomePlayResolver.TagUpContextOf"/> と組で使うと、レッグが判定と同じ時計になる。</para>
+    ///
+    /// <para>乱数不使用・判定不変の観測値の写し（<c>ExtraStartDelaySeconds</c> と同じ扱い）。</para>
+    /// </summary>
+    public double? TagUpCatchAtSeconds { get; init; }
+
+    /// <summary>
     /// タイムライン表示専用（issue #489）: この移動の到達がフォース（塁を踏むだけでアウト。
     /// タッチの芝居を出さない）か、タッチプレー（野手が走者へタッチしにいく）かの区別。
     /// 判定・帯には無関係＝乱数を消費せず、確定済みの Out と組み合わせて表示側が演技を選ぶだけ。
@@ -33,6 +48,29 @@ public sealed record RunnerMove(Player Runner, int FromBase, int ToBase, bool Ou
     /// 「満塁ゴロの本塁封殺」の3種のみ true にする（design-18 §4.5, issue #489）。
     /// </summary>
     public bool Force { get; init; }
+
+    /// <summary>
+    /// タイムライン表示専用（Q31）: この Out が併殺の「代替一段目」（三塁手/捕手/投手が自打球を自分で
+    /// ベースへ運んで封殺＝送球なし・中継〈ピボット〉なし）か。既存の「内野前進時の単独本塁封殺」
+    /// （<see cref="ApplyInPlayOut"/> の r3Forced×InfieldDepth.In 分岐）も同じ
+    /// FromBase=3/ToBase=4/Out=true/Force=true の形を作るため、後続（一塁への転送送球）が伴う併殺の絵か、
+    /// 単発の本塁封殺の絵かを <c>Force</c> フラグだけでは区別できない。乱数不使用・判定不変。
+    /// </summary>
+    public bool SelfForceDoublePlayLead { get; init; }
+
+    /// <summary>
+    /// タイムライン表示専用（issue fly-out-runner-dp-table-and-doubled-off-depiction）: 飛び出し（ライナー併殺の
+    /// 物理レース <see cref="DoubledOffResolver"/>）を走った一塁走者なら、守備の戻し送球が一塁に届く時刻[s]
+    /// （接触基準）。<c>FromBase == ToBase == 1</c> の move（憤死=Out／帰塁セーフ=!Out）にだけ載る。
+    /// null＝飛び出しの勝負ではない。判定・帯には無関係（判定側で計算済みの値の写し）。
+    /// </summary>
+    public double? DoubledOffThrowArriveSeconds { get; init; }
+
+    /// <summary>同上・捕球時点で走者が塁から離れていた距離[m]（判定の戻り距離＝絵の折り返し後の戻り）。</summary>
+    public double DoubledOffLeadM { get; init; }
+
+    /// <summary>同上・飛び出しの最大リード[m]（コミット上限まで走った点。長い滞空ではここから捕球まで塁の方へ戻る）。</summary>
+    public double DoubledOffMaxLeadM { get; init; }
 }
 
 /// <summary>
@@ -90,7 +128,8 @@ public static class BaserunningModel
         bool ErrorExtraAdvanceOccurred, IReadOnlyList<RunnerMove> Moves) ApplyDetailed(
         BaseState bases, PlateAppearanceResult result, Player batter,
         int currentOuts, BaserunningCoefficients coeff, IRandomSource rng, bool collectMoves = true,
-        HomePlayContext? home = null, StartType r1Start = StartType.Normal, int errorThrowAccuracy = 50)
+        HomePlayContext? home = null, StartType r1Start = StartType.Normal, int errorThrowAccuracy = 50,
+        Fielding.FieldingErrorKind? errorKind = null, bool r1StealBreak = false)
     {
         var mv = collectMoves ? new List<RunnerMove>() : null;
         var r1 = bases.First;
@@ -123,7 +162,7 @@ public static class BaserunningModel
                 var errorExtraAdvanceOccurred = false;
                 if (coeff.ErrorExtraAdvanceProb > 0.0)
                 {
-                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, coeff, rng, mv, errorThrowAccuracy);
+                    var (extraRuns, occurred) = ApplyErrorExtraAdvance(bases, batter, currentOuts, outs, coeff, rng, mv, errorThrowAccuracy, errorKind);
                     runs += extraRuns;
                     errorExtraAdvanceOccurred = occurred;
                 }
@@ -161,7 +200,7 @@ public static class BaserunningModel
 
             case PlateAppearanceResult.InPlayOut:
             {
-                var (runs, outs, homeOuts, batterSafeOnFc) = ApplyInPlayOut(bases, batter, r1, r2, r3, currentOuts, coeff, rng, mv, home, r1Start);
+                var (runs, outs, homeOuts, batterSafeOnFc) = ApplyInPlayOut(bases, batter, r1, r2, r3, currentOuts, coeff, rng, mv, home, r1Start, r1StealBreak);
                 return (runs, outs, (homeOuts, 0), batterSafeOnFc, false, Moves(mv)); // 凡打の塁上憤死は本塁のみ
             }
 
@@ -228,6 +267,9 @@ public static class BaserunningModel
         var thirdOuts = 0;  // 単打の一塁→三塁レース憤死（Issue #89。extraOuts の内数）
         // 1プレーで送球先は1箇所＝アウトは最大1（1球は2箇所へ投げられない）。本塁・三塁で共有する（#89）。
         var outThrowUsed = false;
+        // バックホーム悪送球（2026-08-30）: 本塁への送球が逸れ、アウトのはずの走者が生還したか。
+        // 発生時は末尾で残る走者を1つずつ押し上げる（design-14 P1-6型の連鎖、全走者+1進塁）。
+        var homeWildThrowOccurred = false;
 
         // 打者の到達塁（単打/野選=1塁、二塁打=2塁）。先行走者から順にこの塁を明け渡す義務があるかを決める。
         var batterBase = isDouble ? 2 : 1;
@@ -249,7 +291,7 @@ public static class BaserunningModel
         {
             if (currentOuts + extraOuts >= 3) return (HomeVerdict.Held, false); // 既に3アウト＝以降は進めない
             if (home is not { } h)
-                return (tableUnconditional || MathUtil.Chance(P(tableProb, runner.Baserunning, coeff), rng)
+                return (tableUnconditional || MathUtil.Chance(P(tableProb, coeff.AbilityEffect.Running(runner.Baserunning), coeff), rng)
                     ? HomeVerdict.Scored : HomeVerdict.Held, false);
 
             // F2: 送り判定（勝てる時だけ送る）→ 時間の勝負（外野中継 vs 走者）。
@@ -258,9 +300,14 @@ public static class BaserunningModel
                 return (HomeVerdict.Held, false); // 自重（RNG消費なし）
             var margin = HomePlayResolver.Margin(runner, fromBase, h.Situation, h.Field, coeff);
             var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
-            var res = HomePlayResolver.Resolve(runner, fromBase, h.Situation, h.Field, coeff, rng);
-            if (res == HomePlayResult.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall);
+            var outcome = HomePlayResolver.ResolveWithWildThrow(runner, fromBase, h.Situation, h.Field, coeff, rng);
+            if (outcome == HomePlayResolver.HomeThrowOutcome.Safe || outThrowUsed) return (HomeVerdict.Scored, closeCall);
             outThrowUsed = true;
+            if (outcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+            {
+                homeWildThrowOccurred = true;
+                return (HomeVerdict.Scored, closeCall);
+            }
             return (HomeVerdict.OutAtHome, closeCall);
         }
 
@@ -385,6 +432,16 @@ public static class BaserunningModel
             }
         }
 
+        // バックホーム悪送球の連鎖（design-14 P1-6型）: この時点の third/second/first は「悪送球が
+        // 無かった場合の」確定済みの行き先。まだ塁上に残っている走者だけをもう1つ押し上げる
+        // （得点済み・アウトになった走者は対象外＝bases変数には現れない）。打者走者自身は対象外（次行で別途配置）。
+        if (homeWildThrowOccurred && currentOuts + extraOuts < 3)
+        {
+            var (extraRuns, movedThird, movedSecond, movedFirst) = PushRunnersOneBase(third, second, first, mv);
+            runs += extraRuns;
+            third = movedThird; second = movedSecond; first = movedFirst;
+        }
+
         // 各走者は互いに異なる塁へ割り当て済み（フォース済みの先行走者は必ず塁を明け渡す）ため、
         // 打者の占有と衝突しない。
         if (third is not null) bases.Third = third;
@@ -413,48 +470,79 @@ public static class BaserunningModel
         mv.Add(new RunnerMove(runner, fromBase, 4, false));
     }
 
+    /// <summary>塁上の走者を1つずつ押し上げる（悪送球1本で全走者+1進塁、design-14 P1-6型の連鎖）。
+    /// 三塁→本塁（得点）、二塁→三塁、一塁→二塁（二塁が空いていれば）の順。ReachedOnError の失策連鎖
+    /// （<see cref="ApplyErrorExtraAdvance"/>）とバックホーム悪送球（<see cref="ApplyRunnerAdvance"/> 内
+    /// TryHome）の共通ロジック。</summary>
+    private static (int Runs, Player? Third, Player? Second, Player? First) PushRunnersOneBase(
+        Player? third, Player? second, Player? first, List<RunnerMove>? mv)
+    {
+        var runs = 0;
+        if (third is not null)
+        {
+            runs++;
+            mv?.Add(new RunnerMove(third, 3, 4, false));
+            third = null;
+        }
+        if (second is not null)
+        {
+            mv?.Add(new RunnerMove(second, 2, 3, false));
+            third = second;
+            second = null;
+        }
+        if (first is not null && second is null)
+        {
+            mv?.Add(new RunnerMove(first, 1, 2, false));
+            second = first;
+            first = null;
+        }
+        return (runs, third, second, first);
+    }
+
+    /// <summary><see cref="PushRunnersOneBase"/> の <see cref="BaseState"/> 版（バックホーム悪送球専用。
+    /// <paramref name="bases"/> を直接書き換える）。ApplyInPlayOut の3塁走者本塁レース（フォース封殺・
+    /// 内野前進・タッチアップ）で共通に使う。</summary>
+    private static int PushRunnersOnWildThrow(BaseState bases, List<RunnerMove>? mv)
+    {
+        var (runs, third, second, first) = PushRunnersOneBase(bases.Third, bases.Second, bases.First, mv);
+        bases.Third = third;
+        bases.Second = second;
+        bases.First = first;
+        return runs;
+    }
+
     /// <summary>失策の連鎖（design-14 P1-6）: 悪送球1本で塁上の走者全員＋打者走者が1つ多く進む、という単一事象として
     /// 一括モデル化する（個別確率ではない）。<paramref name="coeff"/>.ErrorExtraAdvanceProb &gt; 0 のときのみ呼ばれる。</summary>
     private static (int Runs, bool Occurred) ApplyErrorExtraAdvance(
         BaseState bases, Player batter, int currentOuts, int extraOuts,
-        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, int throwAccuracy)
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, int throwAccuracy,
+        Fielding.FieldingErrorKind? errorKind)
     {
         if (currentOuts + extraOuts >= 3) return (0, false);
         // 送球精度連動（Issue #37）: 送球者の精度が低いほど連鎖しやすい。Ac=50 で base と恒等（傾き項=0）。
         var prob = MathUtil.Clamp(
             coeff.ErrorExtraAdvanceProb - (throwAccuracy - 50) * coeff.ErrorExtraAdvanceAccuracySlope, 0.0, 1.0);
-        if (!MathUtil.Chance(prob, rng)) return (0, false);
+        // 失策種別のゲート（issue #629）: 連鎖は design-14 P1-6 が定義するとおり**悪送球**の連鎖。
+        // 捕球エラー（お手玉）とフライ落球では球は野手の足元にあり、全走者が1つ多く進む理由がない
+        // （絵も「3m弾いて拾い直す」だけなので、走者だけ進むと因果が合わない）。
+        // ⚠ 判定の位置は &&の第2項＝**Chance を引いてから**捨てる（issue #525 と同じ流儀）。
+        // 乱数の消費位置と回数を従来と揃え、発生「率」だけを絞る。
+        if (!MathUtil.Chance(prob, rng) || errorKind != Fielding.FieldingErrorKind.Throw) return (0, false);
 
-        var runs = 0;
-        var third = bases.Third;
-        var second = bases.Second;
-        var first = bases.First; // ReachedOnError では常に打者走者。
-
-        if (third is not null)
-        {
-            runs++;
-            mv?.Add(new RunnerMove(third, 3, 4, false));
-            bases.Third = null;
-        }
-        if (second is not null)
-        {
-            mv?.Add(new RunnerMove(second, 2, 3, false));
-            bases.Third = second;
-            bases.Second = null;
-        }
-        if (first is not null && bases.Second is null)
-        {
-            mv?.Add(new RunnerMove(first, 1, 2, false));
-            bases.Second = first;
-            bases.First = null;
-        }
+        // first は ReachedOnError では常に打者走者。
+        var (runs, third, second, first) = PushRunnersOneBase(bases.Third, bases.Second, bases.First, mv);
+        bases.Third = third;
+        bases.Second = second;
+        bases.First = first;
         return (runs, true);
     }
 
+    /// <param name="r1StealBreak">一塁走者が投球と同時に走っていた（盗塁企図が打球で巻き戻された。issue #626）か。
+    /// 打球が空中で捕られると<b>始動種別によらず</b>飛び出しの勝負になる（<see cref="DoubledOffResolver"/>）。</param>
     private static (int, int, int, bool) ApplyInPlayOut(
         BaseState bases, Player batter, Player? r1, Player? r2, Player? r3, int currentOuts,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv, HomePlayContext? home = null,
-        StartType r1Start = StartType.Normal)
+        StartType r1Start = StartType.Normal, bool r1StealBreak = false)
     {
         if (currentOuts >= 2) return (0, 0, 0, false); // この凡打が3アウト目。進塁なし。
 
@@ -474,16 +562,37 @@ public static class BaserunningModel
         var batterSafeOnFc = false;
         // 併殺・野選（内野ゴロ×一塁走者, Issue #369）: 実試合経路（home!=null・ゴロ・打者の一塁到達時刻あり）は
         // 13%固定テーブルでなく「捕球点→二塁の封殺（P_force2）／二塁→一塁の転送」の二段の物理レースで解く
-        // （#318 のゴロ進塁打と同じ流儀）。それ以外（home無し・フライ・打者一塁到達時刻なし＝単体テスト/
+        // （#318 のゴロ進塁打と同じ流儀）。それ以外（home無し・打者一塁到達時刻なし＝単体テスト/
         // 純テーブル経路）は従来テーブル（DoublePlayProb / FieldersChoiceProb）へフォールバックし乱数消費順も保存する。
+        //
+        // ⚠ フライ（home is { IsFly: true }）は従来テーブルの対象外（issue fly-out-legacy-double-play-table）:
+        // 13% はゴロ併殺の率で、フライで一塁走者にフォースは掛からない（「二塁で封殺」の形自体が嘘）。
+        // 空中で捕られた打球で一塁走者が余分にアウトになるのは、下の飛び出しの物理レース（DoubledOffResolver＝
+        // 一塁へ戻れず憤死）だけ。実測では 0/1死・一塁走者ありのフライアウトの 20% がここで「捕球を待って
+        // 二塁へ走って刺される」絵になっていた。
+        var flyOut = home is { IsFly: true };
         if (r1 is not null && home is { IsFly: false, BatterToFirstSeconds: not null } dp)
         {
-            (extraOuts, batterSafeOnFc) = ResolveDoublePlay(bases, batter, r1, dp, coeff, rng, mv);
-            if (extraOuts > 0) r1 = null; // 二塁封殺成立＝一塁走者は塁上に残らない（分岐Aは extraOuts==0 で r1 温存）
+            DoublePlayForceTarget dpTarget;
+            (extraOuts, batterSafeOnFc, dpTarget) = ResolveDoublePlay(bases, batter, r1, r2, r3, dp, coeff, rng, mv);
+            if (extraOuts > 0)
+            {
+                // どの塁を攻めたかで空ける走者が違う（Q31）。二塁/三塁が空けば、後続の押し出し進塁
+                // カスケード（717行目〜）が既存のまま自動的に残りの走者を正しく進める＝特別扱い不要。
+                switch (dpTarget)
+                {
+                    case DoublePlayForceTarget.Second: r1 = null; break;
+                    case DoublePlayForceTarget.Third: r2 = null; break;
+                    case DoublePlayForceTarget.Home:
+                        r3 = null;
+                        homeOuts++; // 本塁クロスプレー憤死の統計参考値（603行目の単独本塁封殺と同じ計上先）
+                        break;
+                }
+            }
         }
-        // 併殺（1塁走者あり, 従来テーブル）。
-        else if (r1 is not null && MathUtil.Chance(
-                MathUtil.Clamp(coeff.DoublePlayProb - coeff.SpeedSlope * (r1.Speed - 50), 0.02, 0.5), rng))
+        // 併殺（1塁走者あり, 従来テーブル。ゴロ／home無しだけ）。
+        else if (r1 is not null && !flyOut && MathUtil.Chance(
+                MathUtil.Clamp(coeff.DoublePlayProb - coeff.SpeedSlope * (coeff.AbilityEffect.Running(r1.Speed) - 50), 0.02, 0.5), rng))
         {
             extraOuts = 1;
             mv?.Add(new RunnerMove(r1, 1, 2, Out: true) { Force = true }); // 二塁封殺
@@ -493,8 +602,8 @@ public static class BaserunningModel
         // 野選（FC, design-14 P1-1）: DP不成立時のみ判定。既定0では分岐自体に入らず rng を一切消費しない
         // （MathUtil.Chance は確率0でも rng.NextDouble() を1回消費するため、確率式へ0を渡すだけでは
         //  乱数消費順が既存と不一致になる。ガードで分岐そのものをスキップして完全一致を保つ）。
-        else if (r1 is not null && coeff.FieldersChoiceProb > 0.0 && MathUtil.Chance(
-                MathUtil.Clamp(coeff.FieldersChoiceProb + coeff.SpeedSlope * (batter.Speed - 50), 0.0, 0.95), rng))
+        else if (r1 is not null && !flyOut && coeff.FieldersChoiceProb > 0.0 && MathUtil.Chance(
+                MathUtil.Clamp(coeff.FieldersChoiceProb + coeff.SpeedSlope * (coeff.AbilityEffect.Running(batter.Speed) - 50), 0.0, 0.95), rng))
         {
             extraOuts = 1;
             batterSafeOnFc = true;
@@ -505,19 +614,41 @@ public static class BaserunningModel
         }
 
         // ライナー併殺（設計書12 §4, G2）: コンタクト始動(エンドラン等)の一塁走者は打球が空中で捕られた時点で
-        // 既に走り出している＝塁へ戻れるかの時間の勝負になる。上の一般併殺判定を生き残った場合のみ追加で効く
-        // （同一走者への二重計上を避ける）。フライ/ライナー以外（ゴロ）は対象外。
-        if (r1 is not null && r1Start == StartType.Contact && home is { IsFly: true } liner)
+        // 既に走り出している＝塁へ戻れるかの時間の勝負になる。フライ/ライナー以外（ゴロ）は対象外。
+        // 盗塁で走っていた走者（r1StealBreak・issue #626 の巻き戻し）とギャンブル始動も同じ勝負に乗る
+        // （issue fly-out-runner-dp-table-and-doubled-off-depiction）。投球で既に走っていたぶんは
+        // StealBreakExtraLeadM だけリードが余計に伸びる（戻りが遠い）。通常始動（Normal）は対象外＝帰塁できる。
+        var r1RacedBack = false;
+        if (r1 is not null && home is { IsFly: true } liner
+            && (r1Start is StartType.Contact or StartType.Gamble || r1StealBreak))
         {
+            var catchAt = liner.Situation.BallFieldedAtSeconds;
             var catchToFirstM = (liner.Field.FirstBase - liner.Situation.BallFieldedPoint).Length;
-            if (DoubledOffResolver.Resolve(
-                    r1, liner.Situation.BallFieldedAtSeconds, catchToFirstM, liner.Situation.OutfielderThrowSpeedMps,
-                    coeff, rng, liner.Situation.OutfielderFielding) == DoubledOffResult.DoubledOff)
+            var extraLead = r1StealBreak || r1Start == StartType.Gamble ? coeff.StealBreakExtraLeadM : 0.0;
+            var arm = liner.Situation.OutfielderThrowSpeedMps;
+            var fielding = liner.Situation.OutfielderFielding;
+            // 絵の材料（表示専用）: 守備の戻し送球が一塁に届く時刻・走者が稼いだリード・際どさ。
+            var throwArrive = catchAt + DoubledOffResolver.DefenseReturnSeconds(catchToFirstM, arm, coeff, fielding);
+            var leadM = DoubledOffResolver.LeadGainedM(catchAt, coeff, extraLead);
+            var maxLeadM = DoubledOffResolver.MaxLeadM(catchAt, coeff, extraLead);
+            var doMargin = DoubledOffResolver.Margin(r1, catchAt, catchToFirstM, arm, coeff, fielding, extraLead);
+            var doCloseCall = Math.Abs(doMargin) < coeff.CloseCallMarginSeconds;
+            r1RacedBack = true;
+            if (DoubledOffResolver.Resolve(r1, catchAt, catchToFirstM, arm, coeff, rng, fielding, extraLead)
+                == DoubledOffResult.DoubledOff)
             {
                 extraOuts++;
-                mv?.Add(new RunnerMove(r1, 1, 1, Out: true)); // 一塁へ戻れず憤死
+                mv?.Add(new RunnerMove(r1, 1, 1, Out: true) // 一塁へ戻れず憤死
+                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM });
                 bases.First = null;
                 r1 = null;
+            }
+            else
+            {
+                // 帰塁セーフ。塁上は不変だが「飛び出して戻った」絵を出すため move を積む（表示専用・
+                // ToBase==FromBase なので得点・封殺・先頭走者の判定はどれも拾わない）。
+                mv?.Add(new RunnerMove(r1, 1, 1, Out: false)
+                    { CloseCall = doCloseCall, DoubledOffThrowArriveSeconds = throwArrive, DoubledOffLeadM = leadM, DoubledOffMaxLeadM = maxLeadM });
             }
         }
 
@@ -540,10 +671,16 @@ public static class BaserunningModel
                 var delay = coeff.HomeGrounderStartDelaySeconds;
                 var forceHomeMargin = HomePlayResolver.Margin(r3, 3, hforce.Situation, hforce.Field, coeff, delay);
                 var forceHomeCloseCall = Math.Abs(forceHomeMargin) < coeff.CloseCallMarginSeconds;
-                if (HomePlayResolver.Resolve(r3, 3, hforce.Situation, hforce.Field, coeff, rng, delay) == HomePlayResult.Safe)
+                var forceHomeOutcome = HomePlayResolver.ResolveWithWildThrow(r3, 3, hforce.Situation, hforce.Field, coeff, rng, delay);
+                if (forceHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                 {
                     runs++;
                     mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = forceHomeCloseCall, ExtraStartDelaySeconds = delay });
+                    if (forceHomeOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+                    {
+                        bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
+                        runs += PushRunnersOnWildThrow(bases, mv);
+                    }
                 }
                 else
                 {
@@ -579,10 +716,16 @@ public static class BaserunningModel
                 {
                     var backHomeMargin = HomePlayResolver.Margin(r3, 3, hi.Situation, hi.Field, coeff, delay);
                     var backHomeCloseCall = Math.Abs(backHomeMargin) < coeff.CloseCallMarginSeconds;
-                    if (HomePlayResolver.Resolve(r3, 3, hi.Situation, hi.Field, coeff, rng, delay) == HomePlayResult.Safe)
+                    var backHomeOutcome = HomePlayResolver.ResolveWithWildThrow(r3, 3, hi.Situation, hi.Field, coeff, rng, delay);
+                    if (backHomeOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                     {
                         runs++;
                         mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = backHomeCloseCall, ExtraStartDelaySeconds = delay });
+                        if (backHomeOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+                        {
+                            bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
+                            runs += PushRunnersOnWildThrow(bases, mv);
+                        }
                     }
                     else
                     {
@@ -605,15 +748,25 @@ public static class BaserunningModel
                 {
                     var tagMargin = HomePlayResolver.TagUpMargin(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp);
                     var tagCloseCall = Math.Abs(tagMargin) < coeff.CloseCallMarginSeconds;
-                    if (HomePlayResolver.TagUpResolveSafe(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp, rng))
+                    // 絵も判定と同じ「捕球を待ってから走る」時計にする（issue score-display-before-home-touch）。
+                    var tagCatchAt = hfly.Situation.BallFieldedAtSeconds;
+                    var tagOutcome = HomePlayResolver.TagUpResolveWithWildThrow(r3, 3, hfly.Situation, hfly.Field, coeff, tagUp, rng);
+                    if (tagOutcome != HomePlayResolver.HomeThrowOutcome.OutAtHome)
                     {
                         runs++;
-                        mv?.Add(new RunnerMove(r3, 3, 4, false) { CloseCall = tagCloseCall });
+                        mv?.Add(new RunnerMove(r3, 3, 4, false)
+                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt });
+                        if (tagOutcome == HomePlayResolver.HomeThrowOutcome.SafeOnWildThrow)
+                        {
+                            bases.Third = null; // r3 は既に得点済み＝以降は二塁・一塁だけを押し上げる。
+                            runs += PushRunnersOnWildThrow(bases, mv);
+                        }
                     }
                     else
                     {
                         extraOuts++; homeOuts++; // タッチアップ失敗＝本塁での走塁死
-                        mv?.Add(new RunnerMove(r3, 3, 4, Out: true) { CloseCall = tagCloseCall });
+                        mv?.Add(new RunnerMove(r3, 3, 4, Out: true)
+                            { CloseCall = tagCloseCall, TagUpCatchAtSeconds = tagCatchAt });
                     }
                     bases.Third = null;
                     r3 = null;
@@ -636,67 +789,84 @@ public static class BaserunningModel
         // （Issue #318, 設計書12 §3.5）。守備は幾何（P_direct）で「一塁を取る/一塁を捨てて三塁へ直接投げる/
         // 走者は自重」を選び、送り判定1段だけが本塁・三塁レースと同じ流儀で入る。それ以外（フォース・フライ・
         // extraOuts>0・home無し）は従来テーブル（ProductiveOutAdvanceProb）へフォールバック（rng消費順も従来どおり）。
+        // フライ捕球での非フォース進塁はタッチアップ＝捕球まで塁を離れられない。絵の起点にだけ使う
+        // 観測値（表示専用・乱数不使用。issue score-display-before-home-touch）。
+        var flyTagUpCatchAt = home is { IsFly: true } flyAdv
+            ? (double?)flyAdv.Situation.BallFieldedAtSeconds
+            : null;
+
         if (r2 is not null && bases.Third is null)
         {
             if (!r2Forced && extraOuts == 0 && home is { IsFly: false } adv)
             {
-                ResolveGrounderAdvance(bases, batter, r2, adv, coeff, rng, mv, ref extraOuts, ref batterSafeOnFc);
+                ResolveGrounderAdvance(bases, r2, adv, coeff, rng, mv, ref extraOuts);
                 r2 = null; // 進塁・憤死・自重のいずれでも二塁走者の帰趨はここで確定（自重時は bases.Second のまま）。
+            }
+            else if (extraOuts == 0 && home is { IsFly: true } fly2)
+            {
+                // フライ捕球＝タッチアップ（design-14 P3-11）。18%固定でなく犠飛と同じ物理レース。
+                // フライではフォースが掛からない（r2Forced は必ず false）ので分岐を分けない。
+                ResolveFlyTagUp(bases, r2, 2, fly2, coeff, rng, mv, ref extraOuts);
+                r2 = null; // 進塁・憤死・自重のいずれでも帰趨はここで確定（自重時は bases.Second のまま）。
             }
             else if (r2Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
             {
-                mv?.Add(new RunnerMove(r2, 2, 3, false));
+                mv?.Add(new RunnerMove(r2, 2, 3, false)
+                    { TagUpCatchAtSeconds = r2Forced ? null : flyTagUpCatchAt });
                 bases.Third = r2;
                 bases.Second = null;
                 r2 = null;
             }
         }
-        if (r1 is not null && bases.Second is null && (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng)))
+        // タッチアップが3アウト目を作ったらここで打ち切る（進塁は起きない）。既存経路では
+        // ここに来る時点で extraOuts が増えているのは ResolveGrounderAdvance だけ＝そのとき r1 は必ず null
+        // （非フォースの二塁走者⇒一塁は空）なので、この行の追加は従来経路に対して恒等。
+        if (currentOuts + battersOwnOut + extraOuts >= 3) return (runs, extraOuts, homeOuts, batterSafeOnFc);
+        // 飛び出しの勝負を走って戻った一塁走者は、その捕球でタッチアップはできない（塁に戻るのが捕球の後）＝進塁抽選を引かない。
+        if (r1 is not null && !r1RacedBack && bases.Second is null)
         {
-            mv?.Add(new RunnerMove(r1, 1, 2, false));
-            bases.Second = r1;
-            bases.First = null;
+            if (extraOuts == 0 && home is { IsFly: true } fly1)
+            {
+                // 一塁→二塁のタッチアップ（design-14 P3-11）。二塁への送球は最短なので、
+                // 浅い・中くらいのフライでは到達見込みが送り閾値に届かず自重する＝実物どおり稀になる。
+                ResolveFlyTagUp(bases, r1, 1, fly1, coeff, rng, mv, ref extraOuts);
+            }
+            else if (r1Forced || MathUtil.Chance(coeff.ProductiveOutAdvanceProb, rng))
+            {
+                mv?.Add(new RunnerMove(r1, 1, 2, false)
+                    { TagUpCatchAtSeconds = r1Forced ? null : flyTagUpCatchAt });
+                bases.Second = r1;
+                // 一塁の後始末は「まだ r1 自身が居るとき」だけ行う（Q31）。併殺の代替ルート
+                // （三塁/本塁の自己フォース）で野選（打者一塁生存）が成立すると、r1 は対象走者でない
+                // （生存し続けここへ来る）のに一塁には既に打者が立っている＝無条件で null にすると
+                // 打者を消してしまう（2026-08-27実測: 走者保存則違反で発覚）。既存の全経路では
+                // ここに来る時点で bases.First は必ず r1 自身のまま＝この条件は既存経路には無害。
+                if (ReferenceEquals(bases.First, r1)) bases.First = null;
+            }
         }
 
         return (runs, extraOuts, homeOuts, batterSafeOnFc);
     }
 
     /// <summary>
-    /// ゴロ凡打の非フォース進塁打（二塁→三塁, Issue #318, 設計書12 §3.5）を物理レースで解く。
-    /// 守備は幾何で決まる「捕球点→三塁の直接送球でどれだけ刺せそうか（P_direct）」だけで3分岐を純関数で選ぶ:
-    /// A) 走者自重（RNG非消費）／ B) 一塁を捨てて三塁へ直接送球（打者は野選で一塁生存, P_direct でレース）／
-    /// C) 一塁を取り（打者アウト）走者は一塁経由の転送とレース（P_relay）。方向性は係数でなく幾何から創発する
-    /// （三遊間ゴロは捕球点が三塁に近い＝P_direct 低＝自重／一二塁間ゴロは遠い＝P_direct 高＝無血進塁）。
+    /// ゴロ凡打の非フォース進塁打（二塁→三塁, Issue #318／issue productive-out-second-to-third-not-advancing,
+    /// 設計書12 §3.5）を物理レースで解く。この呼び出しに至った時点で打者走者は一塁アウトが確定している
+    /// （実際の内野は「一塁の確実な1アウト」を捨てて三塁の走者を直接狙う判断はしない＝守備の危険回避を
+    /// 物理レースだけでは表現できないため、旧実装にあった「一塁を捨てて三塁へ直接送球」分岐は廃止）。
+    /// 二塁走者の帰趨は、実際に発生する送球（一塁への送球到達時刻）を起点にした転送レース（P_relay）だけで決まる:
+    /// A) 転送の脅威が実在する（P_relay &lt; 送り閾値）→ 走者自重（RNG非消費）／
+    /// B) 脅威が薄い → 走者は三塁へ進み、転送とレース（P_relay）。
     /// 走者所要は本塁・三塁レースと同じ <see cref="HomePlayResolver"/> 経由（新しい走者の式を書かない）。
     /// 呼び出し前提: 非フォースの二塁走者（⇒一塁は必ず空）・三塁は空き・extraOuts==0・ゴロ。
     /// </summary>
     private static void ResolveGrounderAdvance(
-        BaseState bases, Player batter, Player r2, HomePlayContext home,
+        BaseState bases, Player r2, HomePlayContext home,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
-        ref int extraOuts, ref bool batterSafeOnFc)
+        ref int extraOuts)
     {
         var advance = HomePlayResolver.AdvanceParams(home.Field, coeff);
         var delay = coeff.GrounderAdvanceStartDelaySeconds;
-        // P_direct: 守備が捕球点から三塁へ直接投げた場合の走者到達確率（打球方向・深さは home.Situation から創発）。
-        var pDirect = HomePlayResolver.SuccessProbability(r2, 2, home.Situation, home.Field, coeff, advance, delay);
-        // 送り閾値（アウト数を取らない＝2アウト緩和なし。理由は HomeSendDecision.SendAdvanceThreshold のコメント）。
-        var t = HomeSendDecision.SendAdvanceThreshold(home.Aggression, home.Tactics);
 
-        // A) 自重。二塁残留（bases.Second は r2 のまま）。RNG非消費（本塁・三塁レースの流儀, 不変条件#2）。
-        if (pDirect < t) return;
-
-        if (pDirect <= coeff.AdvanceDirectThrowMaxRunnerSuccess)
-        {
-            // B) 守備は一塁を捨てて三塁へ直接送球。打者は野選で一塁生存（非フォースの r2 ⇒ 一塁は必ず空＝衝突しない）。
-            batterSafeOnFc = true;
-            bases.First = batter;
-            mv?.Add(new RunnerMove(batter, 0, 1, false));
-            var margin = HomePlayResolver.Margin(r2, 2, home.Situation, home.Field, coeff, advance, delay);
-            ResolveAdvanceRace(bases, r2, pDirect, margin, delay, coeff, rng, mv, ref extraOuts);
-            return;
-        }
-
-        // C) 守備は一塁を取る（打者アウト）。走者は一塁経由の転送とレース（P_relay）。
         if (home.ThrowArriveSeconds is not { } arriveAtFirst)
         {
             // 一塁送球が無い経路（転送起点が組めない）＝無血進塁（RNG非消費・フォールバック）。
@@ -711,9 +881,58 @@ public static class BaserunningModel
             home.Field.FirstBase, arriveAtFirst, coeff.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
         var pRelay = HomePlayResolver.SuccessProbability(
             r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
+        // 送り閾値（アウト数を取らない＝2アウト緩和なし。理由は HomeSendDecision.SendAdvanceThreshold のコメント）。
+        var t = HomeSendDecision.SendAdvanceThreshold(home.Aggression, home.Tactics);
+
+        // A) 自重。二塁残留（bases.Second は r2 のまま）。RNG非消費（本塁・三塁レースの流儀, 不変条件#2）。
+        if (pRelay < t) return;
+
+        // B) 走者は一塁経由の転送とレース。打者は一塁アウト（batterSafeOnFc は変えない＝この呼び出しに入った時点で確定済み）。
         var relayMargin = HomePlayResolver.Margin(
             r2, 2, relay, home.Field, coeff, advance, delay, transferSecondsOverride: coeff.AdvanceRelayTransferSeconds);
         ResolveAdvanceRace(bases, r2, pRelay, relayMargin, delay, coeff, rng, mv, ref extraOuts);
+    }
+
+    /// <summary>
+    /// 犠飛以外のタッチアップ（一塁→二塁 / 二塁→三塁, design-14 P3-11）を物理レースで解く。
+    /// 犠飛（三塁→本塁, Issue #90）と<b>同じ機構を目標塁だけ替えて</b>使う＝走者の式は新設しない（不変条件#1）。
+    /// 走者は捕球時刻にスタート（二次リードなし＝全塁間を走る）、守備も同じ捕球時刻から送球するので、
+    /// 勝負は「塁間を走る時間」対「捕球地点→次塁の送球時間」＝打球の深さ・方向と外野の肩だけが効く。
+    /// 浅いフライは送球が短く到達見込みが送り閾値に届かない＝自重（RNG非消費）。
+    /// 呼び出し前提: フライ・extraOuts==0・進塁先が空き。
+    /// </summary>
+    private static void ResolveFlyTagUp(
+        BaseState bases, Player runner, int fromBase, HomePlayContext fly,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv,
+        ref int extraOuts)
+    {
+        var p = fromBase == 2
+            ? HomePlayResolver.TagUpThirdParams(fly.Field, coeff)
+            : HomePlayResolver.TagUpSecondParams(fly.Field, coeff);
+        var prob = HomePlayResolver.TagUpSuccessProbability(runner, fromBase, fly.Situation, fly.Field, coeff, p);
+        // 送り閾値はタッチアップ専用（他の送り判定より高い）。静止から出るぶん博打の分が悪く、実物の
+        // 三塁コーチも「ほぼ確実な時だけ行かせる」＝低い閾値を流用すると送った試行の3〜4割が走塁死になり、
+        // 走者を進めるどころか攻撃を削る（実測で得点が帯の下限割れ）。理由は SendTagUpMinSuccess のコメント。
+        if (!HomeSendDecision.ShouldSendTagUp(prob, fly.Aggression, fly.Tactics)) return; // 自重（RNG非消費）
+
+        var margin = HomePlayResolver.TagUpMargin(runner, fromBase, fly.Situation, fly.Field, coeff, p);
+        var closeCall = Math.Abs(margin) < coeff.CloseCallMarginSeconds;
+        // 絵も判定と同じ「捕球を待ってから走る」時計にする（犠飛と同じ扱い）。
+        var catchAt = fly.Situation.BallFieldedAtSeconds;
+        var toBase = fromBase + 1;
+        if (HomePlayResolver.TagUpResolveSafe(runner, fromBase, fly.Situation, fly.Field, coeff, p, rng))
+        {
+            mv?.Add(new RunnerMove(runner, fromBase, toBase, false)
+                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt });
+            if (toBase == 3) bases.Third = runner; else bases.Second = runner;
+        }
+        else
+        {
+            extraOuts++; // タッチアップ失敗＝進塁先での走塁死
+            mv?.Add(new RunnerMove(runner, fromBase, toBase, Out: true)
+                { CloseCall = closeCall, TagUpCatchAtSeconds = catchAt });
+        }
+        if (fromBase == 2) bases.Second = null; else bases.First = null;
     }
 
     /// <summary>進塁レースの決着（Issue #318）。セーフ=三塁到達／アウト=三塁での走塁死（extraOuts加算）。
@@ -736,6 +955,129 @@ public static class BaserunningModel
         bases.Second = null;
     }
 
+    /// <summary>どの塁を攻めて併殺を狙ったか（Q31・タイムライン/統計の分岐に使う）。</summary>
+    private enum DoublePlayForceTarget { Second, Third, Home }
+
+    /// <summary>
+    /// 併殺・野選を解く（Q31でディスパッチャ化）。既定は二塁封殺ルート（<see cref="ResolveDoublePlayAtSecond"/>、
+    /// 従来どおり1バイトも変えない）。二つの代替ゲートが成立するときだけ、対象走者の到達見込みを二塁封殺と
+    /// 比較し、代替のほうが守備に有利（生存確率が低い）なら代替（<see cref="ResolveDoublePlaySelfForce"/>）を選ぶ:
+    /// ①三塁手が自打球を処理＋二塁走者あり → 二塁走者を三塁で自己フォース（送球なし・中継なしで一塁へ転送）／
+    /// ②捕手/投手が自打球を処理＋三塁走者あり（満塁）→ 三塁走者を本塁で自己フォース。
+    /// ゲート不成立（大多数のケース）では <c>home.FielderRole</c> を1回比較するだけで即座に二塁封殺へ落ちる＝
+    /// 一塁走者のみ在塁シナリオの RNG 消費順・挙動は完全不変（帯不変の根拠）。
+    /// </summary>
+    /// <returns>(追加アウト数, 打者が野選で一塁生存したか, どの塁を攻めたか)。</returns>
+    private static (int ExtraOuts, bool BatterSafeOnFc, DoublePlayForceTarget Target) ResolveDoublePlay(
+        BaseState bases, Player batter, Player r1, Player? r2, Player? r3, HomePlayContext home,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+    {
+        var thirdCandidate = r2 is not null && home.FielderRole == FieldPosition.ThirdBase;
+        // 本塁のフォースは満塁（一・二・三塁とも占有）でなければ成立しない（r3Forced＝486行目付近と同じ定義）。
+        // 二塁が空いていれば三塁走者は押し出されない＝フォースでないので自己フォースの対象外。
+        var homeCandidate = r2 is not null && r3 is not null && home.FielderRole is FieldPosition.Catcher or FieldPosition.Pitcher;
+
+        if (!thirdCandidate && !homeCandidate)
+        {
+            var (eo, fc) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv);
+            return (eo, fc, DoublePlayForceTarget.Second);
+        }
+
+        var force2nd = HomePlayResolver.SecondForceParams(home.Field, coeff);
+        var delay = coeff.DoublePlayR1StartDelaySeconds;
+        var pR1Safe2nd = HomePlayResolver.SuccessProbability(r1, 1, home.Situation, home.Field, coeff, force2nd, delay);
+
+        if (thirdCandidate)
+        {
+            var force3rd = HomePlayResolver.ThirdForceParams(home.Field, coeff);
+            var pR2Safe3rd = HomePlayResolver.SuccessProbability(
+                r2!, 2, home.Situation, home.Field, coeff, force3rd, delay, transferSecondsOverride: 0.0);
+            if (pR2Safe3rd < pR1Safe2nd)
+            {
+                var (eo, fc) = ResolveDoublePlaySelfForce(
+                    bases, batter, leadRunner: r2!, leadFromBase: 2, home, force3rd, delay, coeff, rng, mv);
+                return (eo, fc, DoublePlayForceTarget.Third);
+            }
+        }
+        if (homeCandidate)
+        {
+            var forceHome = HomePlayResolver.HomeForceParams(coeff);
+            var pR3SafeHome = HomePlayResolver.SuccessProbability(
+                r3!, 3, home.Situation, home.Field, coeff, forceHome, delay, transferSecondsOverride: 0.0);
+            if (pR3SafeHome < pR1Safe2nd)
+            {
+                var (eo, fc) = ResolveDoublePlaySelfForce(
+                    bases, batter, leadRunner: r3!, leadFromBase: 3, home, forceHome, delay, coeff, rng, mv);
+                return (eo, fc, DoublePlayForceTarget.Home);
+            }
+        }
+
+        var (eo2, fc2) = ResolveDoublePlayAtSecond(bases, batter, r1, home, coeff, rng, mv);
+        return (eo2, fc2, DoublePlayForceTarget.Second);
+    }
+
+    /// <summary>
+    /// 併殺の代替一段目（Q31）: 三塁手/捕手/投手が自打球を自分でベースへ運んで封殺（送球なし）→
+    /// そのまま自分の肩で一塁へ転送する（中継〈ピボット〉なし＝1回投げのみ）。ゲート
+    /// （<c>home.FielderRole</c> が実際にその塁を処理した野手であること）は呼び出し元
+    /// （<see cref="ResolveDoublePlay"/>）が既に確認済み。分岐構造は <see cref="ResolveDoublePlayAtSecond"/>
+    /// と同型（A-1/A-2は RNG非消費、成立時のみ1回消費）だが、二段目の起点・転送秒・タッチ秒は
+    /// 対象塁（三塁/本塁）固有の係数を使う。
+    /// </summary>
+    private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlaySelfForce(
+        BaseState bases, Player batter, Player leadRunner, int leadFromBase, HomePlayContext home,
+        HomePlayResolver.BasePlayParams force, double delay,
+        BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
+    {
+        // A-1) 自己フォース自体が間に合わない（現実にはほぼ起きない＝呼び出し元の比較で既に二塁封殺より
+        // 有利と分かっているが、絶対的な間に合わなさは独立に見る）＝守備は諦め一塁を取る。RNG非消費。
+        var pLeadSafe = HomePlayResolver.SuccessProbability(
+            leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+        if (pLeadSafe > coeff.DoublePlayForceMaxRunnerSuccess) return (0, false);
+
+        // 二段目: 自己フォースした野手自身がそのまま一塁へ転送する（中継なし＝ピボット無し。issue⑦のような
+        // 「二塁カバーに実際に入った野手」探しは不要＝この野手自身が投げ手）。起点は処理点でなく対象塁
+        // （force.TargetPoint）、時刻はフォースした瞬間（=BallFieldedAtSeconds、握り替えは自己フォース専用の
+        // DoublePlaySelfForceRelayTransferSeconds＝中継を受けてから投げ返す DoublePlayPivotTransferSeconds とは別）。
+        var selfForceSituation = new HomePlaySituation(
+            force.TargetPoint, home.Situation.BallFieldedAtSeconds, home.Situation.OutfielderThrowSpeedMps,
+            home.Situation.OutfielderFielding);
+        var relayToFirst = HomePlayResolver
+            .ResolveThrowPath(selfForceSituation, home.Field.FirstBase, coeff,
+                transferSecondsOverride: coeff.DoublePlaySelfForceRelayTransferSeconds)
+            .ArriveAtSeconds + coeff.SecondForceTagSeconds; // 一塁のタッチは二塁封殺ルートと同軸
+        var batterMargin = relayToFirst - home.BatterToFirstSeconds!.Value + coeff.DoublePlayRelayBias;
+        var pBatterSafe = MathUtil.Clamp(
+            MathUtil.Logistic(batterMargin / coeff.DoublePlayRelayMarginScale), 0.01, 0.99);
+
+        // A-2) この代替の一塁転送が薄い＝仕掛けない（二塁封殺への再挑戦はしない＝v1の単純化。代替は
+        // 二塁より生存見込みが低いと分かった上で選ばれているため、二塁を試しても大差ない見込み）。RNG非消費。
+        if (1.0 - pBatterSafe < coeff.DoublePlayAttemptMinRelaySuccess) return (0, false);
+
+        // 自己フォースは成立（対象走者アウト）。際どさは表示のみ（RNG非消費）。
+        var leadMargin = HomePlayResolver.Margin(
+            leadRunner, leadFromBase, home.Situation, home.Field, coeff, force, delay, transferSecondsOverride: 0.0);
+        var leadClose = Math.Abs(leadMargin) < coeff.CloseCallMarginSeconds;
+        mv?.Add(new RunnerMove(leadRunner, leadFromBase, force.TargetBase, Out: true)
+            { CloseCall = leadClose, Force = true, SelfForceDoublePlayLead = true });
+        if (leadFromBase == 2) bases.Second = null; else bases.Third = null;
+
+        if (MathUtil.Chance(pBatterSafe, rng))
+        {
+            // B) 野選: 代替を狙ったが打者が転送を上回って一塁生存。対象走者(r2/r3)は本塁封殺と違い r1
+            // 自身ではないので r1 は生存し続け、この先の一塁走者カスケード（ApplyInPlayOut）が
+            // 「r1 は一塁から出た」として bases.First の後始末を走らせる＝ここで打者を置いても、
+            // その後始末が対象を見ずに上書きすると打者が消える（2026-08-27実測: 走者保存則違反で発覚）。
+            // 後始末側を「まだ r1 自身が居るときだけクリアする」よう絞ったので、ここでは通常どおり
+            // 即座に置いてよい（ApplyWalk の bases.First=batter 直書き注意と同種の罠）。
+            bases.First = batter;
+            mv?.Add(new RunnerMove(batter, 0, 1, false));
+            return (1, true);
+        }
+        // C) 併殺: 打者も一塁でアウト（打者アウトは呼び出し側の battersOwnOut=1 が計上）。
+        return (1, false);
+    }
+
     /// <summary>
     /// 併殺・野選を「捕球点→二塁の封殺（P_force2）」と「二塁→一塁の転送」の二段レースで解く
     /// （Issue #369, 設計書12 §2）。#318 の <see cref="ResolveGrounderAdvance"/> と同型で、守備は幾何だけで
@@ -751,7 +1093,7 @@ public static class BaserunningModel
     /// 呼び出し前提: 一塁走者あり・ゴロ・home.BatterToFirstSeconds 非null。
     /// </summary>
     /// <returns>(追加アウト数, 打者が野選で一塁生存したか)。</returns>
-    private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlay(
+    private static (int ExtraOuts, bool BatterSafeOnFc) ResolveDoublePlayAtSecond(
         BaseState bases, Player batter, Player r1, HomePlayContext home,
         BaserunningCoefficients coeff, IRandomSource rng, List<RunnerMove>? mv)
     {
@@ -769,8 +1111,11 @@ public static class BaserunningModel
         var arriveAtSecond = HomePlayResolver
             .ResolveThrowPath(home.Situation, home.Field.SecondBase, coeff).ArriveAtSeconds;
         var pivotTransfer = Math.Max(0.0, coeff.DoublePlayPivotTransferSeconds - home.DoublePlayPivotBonusSeconds);
+        // 中継球速は二塁カバーに実際に入った野手の地肩（issue⑦。渡されなければ従来のカットマン用
+        // 共通定数 RelayThrowSpeedMps へフォールバック＝旧挙動と恒等）。
+        var pivotArm = home.DoublePlayPivotArmMps ?? coeff.RelayThrowSpeedMps;
         var pivot = new HomePlaySituation(
-            home.Field.SecondBase, arriveAtSecond, coeff.RelayThrowSpeedMps, home.Situation.OutfielderFielding);
+            home.Field.SecondBase, arriveAtSecond, pivotArm, home.Situation.OutfielderFielding);
         var relayToFirst = HomePlayResolver
             .ResolveThrowPath(pivot, home.Field.FirstBase, coeff, transferSecondsOverride: pivotTransfer)
             .ArriveAtSeconds + coeff.SecondForceTagSeconds;

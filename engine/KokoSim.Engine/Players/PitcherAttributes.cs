@@ -19,6 +19,15 @@ public sealed record PitcherAttributes
     /// <summary>最高球速[km/h]（範囲110〜165）。カタログ上限であり、試合中は毎球これ以下をサンプリング（§1.1d）。</summary>
     public double MaxVelocityKmh { get; init; } = 132.0;
 
+    /// <summary>
+    /// 球速の反応オフセット[km/h]（設計書21）。打者の反応（球威・タイミング・打球質・バント難度）に使う球速は
+    /// 実球速＋これ。表示→物理の効き <see cref="AbilityEffectCoefficients.Pitcher"/> が
+    /// <c>PitchingKmh(MaxVelocityKmh) − MaxVelocityKmh</c> を焼く（速い投手ほど負・遅い投手ほど正・Lv50=132km/h で0）。
+    /// 差分で持つので、その後の消耗・調子・ギア・毎球のドロップ（いずれも実測 km/h の単位）は寝かせずそのまま効く。
+    /// 育成レイヤの投手（<see cref="Player.Pitching"/>）では常に0＝保存もしない。
+    /// </summary>
+    public double ReactionVelocityOffsetKmh { get; init; } = 0.0;
+
     /// <summary>コントロール: 狙いからの散布σ（1〜100）。</summary>
     public int Control { get; init; } = 50;
 
@@ -80,19 +89,35 @@ public sealed record PitcherAttributes
 
     // --- 球速Level → 最高球速[km/h]（表示層→物理層の一箇所集約・不変条件#1） ---
     // 旧式 120 + Lv*0.45 は Lv50→142.5km/h と高校野球として速すぎ、かつ Lv80以上が上限155に張り付いて
-    // 最上位帯の差が消えていた（本格派が際立たない）。下の式は LeagueAverage の記述（Lv50=132km/h）と一致し、
-    // 上限に触れずに Lv99≈155 まで伸びる。目安: Lv30→123 / Lv50→132 / Lv70→141 / Lv85→148 / Lv99→155。
+    // 最上位帯の差が消えていた（本格派が際立たない）。108.5 + 0.47×Lv は LeagueAverage の記述（Lv50=132km/h）と一致する。
+    //
+    // Lv50 を境に上位を寝かせる区分線形（issue velocity-kmh-mapping-flatten-top, 2026-08-18・案A）:
+    // 一本の傾き 0.47 では C校のエースに 140 後半が複数居り、A/S は Lv99 のクランプで全員 155 に張り付いていた
+    // （実測 seed2026・600校: エース最速 p50 C 142／B 148／A 154／S 155＝現実の高校野球より B以上で +5〜10、C で +3〜5）。
+    // Lv>50 は 132 + 0.36×(Lv−50) ＝ Lv60→135.6 / 70→139.2 / 80→142.8 / 90→146.4 / 99→149.6。
+    // 同じ Lv 分布で C 140／B 144／A 148／S 149.6 に来る（現実の目安: 甲子園常連 A/S 140〜148・150+ は年に数人）。
+    // Lv≦50 は従来どおり（E以下の一般母集団は妥当だった）。逆変換は同じ区分の逆関数（往復一致をテストで固定）。
+    // 球速の物理効果（stuff_per_kmh 等）は km/h で効くので、上位では「Lv1 の価値」が 0.47→0.36 km/h ぶんに下がる。
     private const double VelocityInterceptKmh = 108.5;
     private const double VelocitySlopeKmhPerLevel = 0.47;
+    /// <summary>区分の境（この Lv までは従来の傾き）。</summary>
+    public const int VelocityKneeLevel = 50;
+    /// <summary>境から上の傾き[km/h per Lv]。</summary>
+    public const double VelocitySlopeAboveKneeKmhPerLevel = 0.36;
+    private const double VelocityKneeKmh = VelocityInterceptKmh + VelocityKneeLevel * VelocitySlopeKmhPerLevel;   // 132.0
 
-    /// <summary>育成レイヤの球速Level(1〜100)→最高球速[km/h]の変換。</summary>
+    /// <summary>育成レイヤの球速Level(1〜100)→最高球速[km/h]の変換（Lv50 を境に上位を寝かせる区分線形）。</summary>
     public static double VelocityKmhFromLevel(int level)
-        => VelocityInterceptKmh + level * VelocitySlopeKmhPerLevel;
+        => level <= VelocityKneeLevel
+            ? VelocityInterceptKmh + level * VelocitySlopeKmhPerLevel
+            : VelocityKneeKmh + (level - VelocityKneeLevel) * VelocitySlopeAboveKneeKmhPerLevel;
 
-    /// <summary>最高球速[km/h]→球速Level の逆変換（表示・選出で「球速の等級」を復元する用）。</summary>
+    /// <summary>最高球速[km/h]→球速Level の逆変換（表示・選出で「球速の等級」を復元する用。順変換と同じ区分の逆関数）。</summary>
     public static int LevelFromVelocityKmh(double kmh)
     {
-        var lv = (kmh - VelocityInterceptKmh) / VelocitySlopeKmhPerLevel;
+        var lv = kmh <= VelocityKneeKmh
+            ? (kmh - VelocityInterceptKmh) / VelocitySlopeKmhPerLevel
+            : VelocityKneeLevel + (kmh - VelocityKneeKmh) / VelocitySlopeAboveKneeKmhPerLevel;
         return (int)Math.Round(Math.Clamp(lv, 1, 100));
     }
 

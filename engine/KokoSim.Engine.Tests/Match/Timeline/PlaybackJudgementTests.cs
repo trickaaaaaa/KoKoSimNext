@@ -94,6 +94,47 @@ public sealed class PlaybackJudgementTests
     }
 
     [Fact]
+    public void JudgementAt_FlagsSecondOut_AsAdditionalOut_OnDoublePlay()
+    {
+        // issue double-play-throw-pace-and-second-out-call ③案F（2026-08-27監督判断＝「ダブルプレー」）。
+        // 1つ目（走1・二塁封殺）は通常の「アウト」のまま、2つ目（打・一塁封殺）だけ IsAdditionalOut=true。
+        var play = new PlaybackPlay
+        {
+            Name = "dp", Dur = 10, Result = "dp", ResAt = 4,
+            Ball = Array.Empty<PlaybackBallSegment>(),
+            Judgements = new[] { J(3.0, isOut: true, label: "走1"), J(4.0, isOut: true, label: "打") },
+        };
+
+        Assert.False(PlaybackEvaluator.JudgementAt(play, 3.4, Hold)!.Value.IsAdditionalOut);
+        Assert.True(PlaybackEvaluator.JudgementAt(play, 4.0, Hold)!.Value.IsAdditionalOut);
+    }
+
+    [Fact]
+    public void JudgementAt_SingleOut_IsNotAdditionalOut()
+    {
+        var play = PlayWith(J(4.0, isOut: true));
+        Assert.False(PlaybackEvaluator.JudgementAt(play, 4.0, Hold)!.Value.IsAdditionalOut);
+    }
+
+    [Fact]
+    public void JudgementAt_SecondSafe_IsNotAdditionalOut()
+    {
+        // アウトでない判定（セーフ等）には適用しない。1つ目がアウト・2つ目がセーフでも false のまま。
+        var play = new PlaybackPlay
+        {
+            Name = "fc", Dur = 10, Result = "fc", ResAt = 4,
+            Ball = Array.Empty<PlaybackBallSegment>(),
+            Judgements = new[]
+            {
+                J(3.0, isOut: true, label: "走1"),
+                J(4.0, isOut: false, closeCall: true, label: "打"),
+            },
+        };
+
+        Assert.False(PlaybackEvaluator.JudgementAt(play, 4.0, Hold)!.Value.IsAdditionalOut);
+    }
+
+    [Fact]
     public void LastJudgementTime_ScalesWindowWithHold()
     {
         // 倍速再生では hold をプレー時間軸で広げる（実時間の見え方を一定にする）。窓の始点は変わらない。

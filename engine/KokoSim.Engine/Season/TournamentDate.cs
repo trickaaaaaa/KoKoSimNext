@@ -39,10 +39,15 @@ public static class TournamentDate
     }
 
     /// <summary>大会種別ごとの実開幕月日（<see cref="TournamentSchedule"/> ＝ YAML 駆動）。</summary>
-    public static (int Month, int Day) OpeningOf(TournamentSchedule schedule, TournamentKind kind)
-        => kind == TournamentKind.Summer
-            ? (schedule.SummerOpenMonth, schedule.SummerOpenDay)
-            : (schedule.AutumnOpenMonth, schedule.AutumnOpenDay);
+    public static (int Month, int Day) OpeningOf(TournamentSchedule schedule, TournamentKind kind) => kind switch
+    {
+        TournamentKind.Summer => (schedule.SummerOpenMonth, schedule.SummerOpenDay),
+        TournamentKind.SummerKoshien => (schedule.KoshienOpenMonth, schedule.KoshienOpenDay),
+        TournamentKind.Regional => (schedule.RegionalOpenMonth, schedule.RegionalOpenDay),
+        TournamentKind.Jingu => (schedule.JinguOpenMonth, schedule.JinguOpenDay),
+        TournamentKind.SenbatsuKoshien => (schedule.SenbatsuOpenMonth, schedule.SenbatsuOpenDay),
+        _ => (schedule.AutumnOpenMonth, schedule.AutumnOpenDay),
+    };
 
     /// <summary>大会内経過日（0＝開幕日）の実月日。</summary>
     public static (int Month, int Day) DateOf(TournamentSchedule schedule, TournamentKind kind, int tournamentDay)

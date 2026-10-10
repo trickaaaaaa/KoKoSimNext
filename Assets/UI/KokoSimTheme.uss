@@ -14,6 +14,13 @@
     -unity-font-definition: url("project://database/Assets/UI/Fonts/Generated/IBMPlexSansJP-Regular.asset?fileID=11400000&guid=1c2f415f2731d410cad039b0f26f6602&type=2#IBMPlexSansJP-Regular");
 }
 
+/* トップバー（<ui:Instance template="TopBar" class="topbar-slot" />）は絶対に潰さない。
+   ⚠ instance が作る TemplateContainer は**どの USS にも当たらない裸の要素**で、既定で縮む。
+   中身（.sb2 / .nav）は flex-shrink:0 なので、潰れた分だけ下の本文域が上へ乗り上げ、
+   タブが隠れて押せなくなる（実測 2026-08-14: 本文が育つと 181px → 67px まで潰れた）。
+   本文側の要求高を抑えるのは .dash-col / .card__scroll の役目で、こちらは最後の砦。 */
+.topbar-slot { flex-shrink: 0; }
+
 /* UI Toolkit は Web と違いパネルが固定高。コンテナが flex-shrink で潰れて
    重ならないよう、主要ブロックは縮小を禁止して自然な内容高を保つ。 */
 .header, .nav, .board, .school, .meters, .meter,
@@ -285,6 +292,7 @@
 .cell--name { flex-grow: 2.2; }
 .cell--wide { flex-grow: 3.2; }
 .cell--narrow { flex-grow: 0.8; }
+.cell--warn { color: var(--color-warn); }   /* 怪我など本当の警告だけ（調子色 .cond--* を借りない） */
 
 /* ===== 練習計画 ===== */
 .day__e { font-size: 18px; color: var(--color-muted); margin-top: 3px; -unity-text-align: middle-center; white-space: normal; }
@@ -475,12 +483,17 @@
 /* 優勝候補だけは左端の太罫（新聞の柱）で示す。全周アンバー枠は面を飾りすぎるのでやめた。 */
 .tp-team--fav { border-left-width: 3px; border-left-color: var(--sky); }
 
-.tp-mark { width: 64px; align-items: center; justify-content: flex-start; }
+/* 幅は「優勝候補」（4字＋字送り）が収まる実測値。64px だと右へはみ出して寸評に重なる
+   （実機で確認）。flex-shrink:0 が無いと本文側の伸長で潰れてやはり重なる。 */
+.tp-mark { width: 80px; flex-shrink: 0; align-items: center; justify-content: flex-start; }
 .tp-mark__sym { font-size: 34px; }
 .tp-mark__sym--fav { color: var(--sky); }
 .tp-mark__sym--cont { color: var(--color-chalk); }
 .tp-mark__sym--dark { color: var(--color-warn); }
-.tp-mark__label { font-size: var(--fs-cap); letter-spacing: 1px; color: var(--color-muted); margin-top: 2px; }
+.tp-mark__label {
+    font-size: var(--fs-cap); letter-spacing: 1px; color: var(--color-muted); margin-top: 2px;
+    white-space: nowrap; -unity-text-align: middle-center;
+}
 
 .tp-body { flex-grow: 1; }
 .tp-team-sub { flex-direction: row; align-items: center; flex-wrap: wrap; }
@@ -566,6 +579,54 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-pcard__stat { font-size: var(--fs-label); color: var(--ink); margin-bottom: var(--sp-1); white-space: normal; }
 .tp-pcard__blurb { font-size: var(--fs-label); color: var(--tx-1); white-space: normal; }
 
+/* ── 出場校（甲子園の展望）: 左＝49代表の名簿／右＝選んだ1校 ────────────
+   ブロック自体は固定高で、中の2ペインが独立にスクロールする（ページのスクロールに
+   49行が埋もれると「選んだ校の詳細」が画面外へ出てしまうため）。
+   区切りは面の明度差だけ（UI原則④）。表は登録メンバー表と同じ語彙で組む。 */
+.tp-ent-split {
+    flex-direction: row; height: var(--tp-ent-h); flex-shrink: 0; margin-bottom: var(--sp-3);
+}
+.tp-ent-split__left {
+    width: 40%; flex-shrink: 0; background-color: var(--sf-card);
+    border-radius: var(--radius-card); overflow: hidden;
+}
+.tp-ent-split__right {
+    flex-grow: 1; flex-basis: 0; min-width: 0; margin-left: var(--sp-3);
+    background-color: var(--sf-card); border-radius: var(--radius-card);
+    padding: var(--sp-3) var(--sp-4);
+}
+/* 左ペインの見出しはスクロールの外（列名を常に見せる）。 */
+.tp-eth {
+    flex-direction: row; align-items: center; height: var(--h-thead); flex-shrink: 0;
+    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    border-bottom-width: 1px; border-bottom-color: var(--divider);
+}
+.tp-eth Label { font-size: var(--fs-th); color: var(--tx-2); margin: 0; }
+.tp-ent-scroll { flex-grow: 1; min-height: 0; }
+
+.tp-erow {
+    flex-direction: row; align-items: center; min-height: 32px; flex-shrink: 0;
+    padding-left: var(--sp-4); padding-right: var(--sp-4);
+    border-bottom-width: 1px; border-bottom-color: var(--color-line-soft);
+}
+.tp-erow Label { font-size: var(--fs-label); color: var(--tx-1); margin: 0; }
+.tp-erow:hover { background-color: var(--sf-hover); }
+/* 選択中・自校は「面」で示す（線を足さない・UI原則④）。自校は一段濃い面で常に見つけられる。 */
+.tp-erow--selected { background-color: var(--sf-inset); }
+.tp-erow--own .tp-ec--name { color: var(--sky); }
+
+.tp-ec--pref { width: var(--col-ent-pref); flex-shrink: 0; color: var(--tx-2); }
+.tp-ec--name { flex-grow: 1; flex-basis: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-ec--rank { width: var(--col-ent-rank); flex-shrink: 0; flex-direction: row; justify-content: center; }
+.tp-ec--app { width: var(--col-ent-app); flex-shrink: 0; -unity-text-align: middle-right; color: var(--tx-2); }
+
+/* 右ペイン（選んだ1校）。見出し・寸評は展望カードと同じ語彙・同じ物差しで出す。 */
+.tp-ed-name { font-size: 24px; color: var(--tx-1); margin-bottom: var(--sp-1); }
+.tp-ed-tag { font-size: var(--fs-label); color: var(--tx-2); margin-bottom: var(--sp-2); }
+.tp-ed-blurb { font-size: var(--fs-label); color: var(--tx-1); white-space: normal; margin-bottom: var(--sp-3); }
+/* 成績スコープの切替（県予選／甲子園）。部品辞書の SegTabs をそのまま置く器。 */
+.tp-ed-tabs { margin-top: var(--sp-3); margin-bottom: var(--sp-2); flex-shrink: 0; }
+
 /* 登録メンバー：背番号順の表を収める枠（校別詳細ページ, issue #189）。 */
 .tp-roster {
     background-color: var(--sf-card); border-radius: var(--radius-card);
@@ -590,6 +651,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .tp-mc--name { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--sp-4); }
 .tp-mc--grade { width: var(--col-mem-grade); flex-shrink: 0; -unity-text-align: middle-right; }
 .tp-mc--hand { width: var(--col-mem-hand); flex-shrink: 0; -unity-text-align: middle-right; }
+/* 今大会成績（issue #634）。数字は右揃え・桁揃え（UI原則③）。見出しと同じ幅トークンを参照する。 */
+.tp-mc--st {
+    width: var(--col-mem-stat); flex-shrink: 0; -unity-text-align: middle-right;
+    padding-left: var(--sp-2);
+}
 /* 背番号だけアンバー（モックの td.n 相当）。数値は右揃え・装飾なし。 */
 .tp-mrow .tp-mc--no { color: var(--ink); }
 .tp-mrow .tp-mc--hand { color: var(--tx-2); }
@@ -713,7 +779,9 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 
 /* --- 3カラム本体（外側スクロールなし・内部スクロール） --- */
 .dash { flex-grow: 1; flex-direction: row; padding: 14px; overflow: hidden; }
-.dash-col { flex-direction: column; overflow: hidden; }
+/* min-height:0 が無いと、カード内 ScrollView の**中身の高さ**が列の最小高になり、
+   列が縮めない＝本文域が要求する高さが青天井になる（トップバーが潰される。下の .topbar-slot 参照）。 */
+.dash-col { flex-direction: column; overflow: hidden; min-height: 0; }
 .dash-col--a { width: 440px; flex-shrink: 0; margin-right: 14px; }
 .dash-col--b { flex-grow: 1; margin-right: 14px; }
 .dash-col--c { width: 372px; flex-shrink: 0; }
@@ -736,7 +804,10 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .card__hd-title { font-size: 20px; letter-spacing: 1px; color: #FFFFFF; }
 .card__hd-sub { font-size: var(--fs-cap); color: #FFFFFF; opacity: 0.82; letter-spacing: 1px; }
 .card__body { padding: 6px 16px 16px 16px; }
-.card__scroll { flex-grow: 1; }
+/* flex-shrink の既定は UI Toolkit では 0。ScrollView に付けないと「中身の高さのまま」居座り、
+   カードからあふれてスクロールバーも出ない（＝12件のフィードが 1,349px を要求して画面を押し広げる。
+   実測 2026-08-14）。縮められるようにして初めて「はみ出しはスクロールで受ける」が成立する。 */
+.card__scroll { flex-grow: 1; flex-shrink: 1; }
 /* ── 横並びカードの寸法（左右に並べる時。列間は margin-right で作る）───────────
    旧 pd2-card--half/--grow/--radar/--hidden/--pitch を .card に統合（部品一本化・design-19）。
    縦積み(margin-bottom)と横並び(margin-right)が両立するよう、横並びは modifier で右余白を持つ。 */
@@ -851,11 +922,11 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 /* 調子5段階の色（選手一覧・主将指名など全画面共通）。
    値の正は tokens.uss の --cond-*（この画面群は tokens.uss を読まないため写し。両者を必ず一致させること）。
    色分岐はC#側で Condition enum から行い、表示文字列で比較しない。 */
-.cond--best { color: #F5C64A; }    /* = --cond-best 絶好調 */
-.cond--good { color: #9FCB3B; }    /* = --cond-good 好調 */
-.cond--normal { color: #9AA5A0; }  /* = --cond-normal 普通 */
-.cond--bad { color: #EE8A3C; }     /* = --cond-bad 不調 */
-.cond--worst { color: #E86A4A; }   /* = --cond-worst 絶不調 */
+.cond--best { color: #EF3B3B; }    /* = --cond-best 絶好調（赤） */
+.cond--good { color: #F28B2E; }    /* = --cond-good 好調（橙） */
+.cond--normal { color: #F4CB3C; }  /* = --cond-normal 普通（黄） */
+.cond--bad { color: #5AA9E6; }     /* = --cond-bad 不調（水色） */
+.cond--worst { color: #4C5BD4; }   /* = --cond-worst 絶不調（青） */
 
 /* --- 通知フィード --- */
 .fd-item { flex-direction: row; align-items: stretch; border-bottom-width: 1px; border-bottom-color: var(--color-line); }
@@ -1208,6 +1279,53 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
 .nt-foot__note { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
 .nt-ok { min-width: 220px; margin-right: 0; }
 
+/* ===== 監督オファー：転任の選択（設計書04 §1.3・issue「監督の転任システムが実ゲームに完全未配線」） =====
+   新チーム発足モーダル（nt-*）と同じ「左リスト＋右詳細」（部品辞書の modal-scrim / modal-card を使用）。
+   列幅はヘッダーとデータ行が同じトークンを参照する（UI-BUILD-METHOD Step 1）。
+   アクセント黄はこのモーダル内で「選択中の行」と「主要CTA」の2箇所だけに絞る（UI原則②）。 */
+.xt-card { width: 760px; padding: 20px 24px 18px 24px; }
+
+.xt-hd { flex-direction: row; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.xt-hd__t { font-size: var(--fs-page); color: var(--color-chalk); letter-spacing: 2px; }
+.xt-lead { font-size: var(--fs-label); color: var(--color-muted); margin-top: 4px; margin-bottom: 12px; flex-shrink: 0; white-space: normal; }
+
+/* 高さは左リスト（ヘッダ26 + 32px行 x 3 + 内側余白14）でなく、右詳細（校名+県+facts2行+余白）が
+   収まる値で決める＝詳細側のほうが必要高が大きい（校名22 + 県18 + margin10 + facts44 + 上下padding24）。 */
+.xt-body { flex-direction: row; height: 168px; flex-shrink: 0; }
+
+/* 左：候補リスト（残留＋オファー校） */
+.xt-list { flex-grow: 1; flex-basis: 0; min-width: 0; background-color: var(--color-panel); border-radius: var(--radius-card); padding: 6px 8px 8px 8px; }
+.xt-th { flex-direction: row; align-items: center; height: 26px; flex-shrink: 0;
+    border-bottom-width: 1px; border-bottom-color: var(--color-line); }
+.xt-th__c { font-size: var(--fs-cap); color: var(--color-faint); }
+.xt-rows { flex-grow: 1; }
+
+.xt-row { flex-direction: row; align-items: center; height: 32px; flex-shrink: 0; padding-left: 6px;
+    border-left-width: 3px; border-left-color: rgba(0, 0, 0, 0); border-radius: var(--radius-chip); }
+.xt-row:hover { background-color: var(--color-row-hover); }
+.xt-row--on { background-color: var(--color-panel-hover); border-left-color: var(--sky); }
+
+.xt-c-name { flex-grow: 1; flex-basis: 0; min-width: 0; font-size: var(--fs-body); color: var(--color-chalk); }
+.xt-c-pref { width: 90px; flex-shrink: 0; -unity-text-align: middle-left; font-size: var(--fs-label); color: var(--color-muted); }
+.xt-c-rank { width: 46px; flex-shrink: 0; flex-direction: row; justify-content: center; align-items: center; }
+.xt-c-power { width: 54px; flex-shrink: 0; -unity-text-align: middle-right; padding-right: 8px;
+    font-size: var(--fs-label); color: var(--color-chalk); }
+
+/* 右：選択中の詳細 */
+.xt-detail { width: 260px; flex-shrink: 0; margin-left: 12px; background-color: var(--color-panel);
+    border-radius: var(--radius-card); padding: 12px 14px; overflow: hidden; }
+.xt-d__name { font-size: 20px; color: var(--color-chalk); }
+.xt-d__sub { font-size: var(--fs-cap); color: var(--color-muted); margin-top: 2px; }
+.xt-d__facts { flex-direction: column; margin-top: 10px; flex-shrink: 0; }
+.xt-fact { flex-direction: row; align-items: center; height: 22px; flex-shrink: 0; }
+.xt-fact__k { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; }
+.xt-fact__v { font-size: var(--fs-label); color: var(--color-chalk); -unity-text-align: middle-right; padding-right: 2px; }
+
+/* 足元：注記＋主要CTA（1画面1つ・大きく。UI原則⑦） */
+.xt-foot { flex-direction: row; align-items: center; justify-content: space-between; margin-top: 14px; flex-shrink: 0; }
+.xt-foot__note { font-size: var(--fs-cap); color: var(--color-faint); flex-grow: 1; flex-basis: 0; min-width: 0; white-space: normal; }
+.xt-ok { min-width: 200px; margin-right: 0; }
+
 /* ═══════════════════════════════════════════════════════════════════════
    design-19 G1 昼スキン上書き（TopBar/nav/CTA）。tokens 反転で全面が昼になった後、
    「スコアボードは昼でも黒」「nav は白地インク枠・選択=空青」「CTA=応援団赤」を上書きする。
@@ -1244,3 +1362,130 @@ Button.tp-back:hover { background-color: var(--sf-hover); color: var(--tx-1); }
     border-radius: 0;
 }
 .advance:hover { background-color: #F0563C; }
+
+/* ═══ イベント（ノベル提示・設計書03 §5 / issue #609）════════════════════════
+   案B「トップバー残し・立ち絵中」。トップバーは残し、本文域（ヒーロー帯＋3カラム）だけを
+   この面と入れ替える（display の二者択一。コントローラが切り替える）。
+   暗幕を敷かないのは、昼NB（白地＋インク枠）に全画面の黒幕が乗ると別のゲームに見えるため。
+
+   色は使わない: 立ち絵が入るまでのプレースホルダは単色シルエットで、アクセント（応援団赤）は
+   1つも置かない（UI原則②＝赤はCTA専用。ここに主要操作は無く、面のどこを押しても進む）。 */
+.ev {
+    flex-grow: 1;
+    flex-direction: column;
+    padding: 14px;          /* .dash と同じ＝入れ替えても本文域の起点が動かない */
+    overflow: hidden;
+    display: none;          /* 既定は非表示。コントローラが出す */
+}
+.ev__eyebrow { flex-shrink: 0; }
+
+/* 立ち絵の舞台。薄い土の井に沈め、会話ボックスとの主従を作る。 */
+.ev__stage {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    align-items: center;
+    justify-content: flex-end;
+    background-color: var(--dirt-well);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    padding: var(--sp-4);
+    overflow: hidden;
+}
+
+/* 役割スロット（単色シルエット＋役割名）。絵が入ったらこの中身だけ差し替える。 */
+/* 立ち絵は<b>舞台の高さに追従させる</b>（胴を伸縮させる）。固定高にすると、効果帯が付いて
+   舞台が縮んだ週だけ頭が切れる＝「効果のあるイベントでだけ絵が壊れる」形になる。 */
+.ev-por { flex-grow: 1; flex-shrink: 1; min-height: 0; align-items: center; justify-content: flex-end; }
+/* 枠はインクで締める（この画面だけ枠なしの塊が浮くのを避ける。design-19 の「インク枠」）。 */
+.ev-por__head {
+    width: 92px; height: 92px;
+    border-radius: 46px;            /* 正円（--radius-pill=12px では角丸の四角に見える） */
+    background-color: var(--day-tx-3);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    flex-shrink: 0;
+}
+.ev-por__body {
+    width: 208px;
+    flex-grow: 1; flex-shrink: 1;
+    min-height: 96px; max-height: 260px;
+    border-radius: 96px 96px 0 0;   /* 肩の丸み。人の形に見える最低限 */
+    background-color: var(--day-tx-3);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    margin-top: var(--sp-1);
+}
+.ev-por__role {
+    font-size: var(--fs-cap);
+    letter-spacing: 3px;
+    color: var(--day-tx-2);
+    margin-top: var(--sp-2);
+}
+/* 地の文（narration）は話者が居ない＝立ち絵ごと消す。 */
+.ev-por--none { display: none; }
+
+/* 実写ポートレート（issue manager-npc-replaces-coach-speaker・2026-08-29）。役割ごとに1枚差し込む。
+   絵がまだ無い役割は既定で display:none のまま＝ev-por__head/__body のシルエットが見える。
+   絵がある役割だけ EventNovelView が .ev-por--photo を立て、シルエットと入れ替える。 */
+.ev-por__image {
+    display: none;
+    width: 208px;
+    flex-grow: 1; flex-shrink: 1;
+    min-height: 96px; max-height: 260px;
+    border-radius: 8px 8px 0 0;
+    background-color: var(--day-tx-3);
+    border-width: var(--nb-border);
+    border-color: var(--ink);
+    -unity-background-scale-mode: scale-and-crop;
+}
+.ev-por--photo .ev-por__head,
+.ev-por--photo .ev-por__body { display: none; }
+.ev-por--photo .ev-por__image { display: flex; }
+
+.ev-por__image--manager { background-image: url("project:///Assets/UI/Images/portraits/manager.jpeg"); }
+.ev-por__image--team_manager { background-image: url("project:///Assets/UI/Images/portraits/team_manager.jpeg"); }
+
+/* 会話ボックス。白面＋インク枠＋ベタ影（案イ＝右下だけ枠を太らせる。部品級）。 */
+.ev__box {
+    flex-shrink: 0;
+    min-height: 168px;
+    background-color: var(--sf-card);
+    border-color: var(--ink);
+    border-top-width: var(--nb-border);
+    border-left-width: var(--nb-border);
+    border-right-width: var(--nb-panel-edge);
+    border-bottom-width: var(--nb-panel-edge);
+    padding: var(--sp-3) var(--sp-4);
+    margin-top: var(--sp-3);
+}
+.ev__speaker {
+    font-size: var(--fs-page);
+    color: var(--ink);
+    margin-bottom: var(--sp-2);
+}
+.ev__speaker--none { display: none; }
+.ev__say {
+    font-size: var(--fs-body);
+    color: var(--ink);
+    white-space: normal;
+    flex-grow: 1;
+}
+/* 地の文は「誰の声でもない」＝一段落として中央に置く。 */
+.ev__say--narration { color: var(--day-tx-2); -unity-text-align: middle-center; }
+.ev__foot {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--sp-2);
+    flex-shrink: 0;
+}
+.ev__progress { font-size: var(--fs-cap); color: var(--day-tx-3); }
+.ev__hint { font-size: var(--fs-cap); color: var(--day-tx-2); letter-spacing: 2px; }
+
+/* 結果行（監督指示 2026-08-19。旧・案A2 の右下の帯は廃止）。会話の最終行に
+   「山田 のミートが ＋5 上がった！」を太字＋色で言い切る。色は通知フィードの Up/Warn と
+   同じ意味づけ＝吉報は空の青、凶報（怪我・スランプ・破損）は警告色。太字は実ウェイト
+   （.f-body-bd をコード側で付ける）。中央寄せは地の文と同じ「誰の声でもない行」の扱い。 */
+.ev__say--result { color: var(--sky); -unity-text-align: middle-center; }
+.ev__say--result-bad { color: var(--color-warn); }

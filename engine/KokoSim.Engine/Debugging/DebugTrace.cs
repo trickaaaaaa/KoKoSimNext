@@ -69,6 +69,12 @@ public sealed record PitchTrace
     public bool Rattled { get; init; }
     /// <summary>この投手の当日の累計球数（PitchingFatigue の入力）。</summary>
     public int PitchingFatigue { get; init; }
+    /// <summary>この球の実効球速天井[km/h]（消耗カーブ・調子・スキル・重圧を反映した後。issue fatigue-gradual-before-threshold）。</summary>
+    public double EffectiveVelocityCeilingKmh { get; init; }
+    /// <summary>この球の実効制球（同上）。</summary>
+    public int EffectiveControl { get; init; }
+    /// <summary>慣れの蓄積値＝この打者がこの試合でこの投手と対戦済みの打席数（issue times-through-order-familiarity）。</summary>
+    public int FamiliarityPa { get; init; }
     public PitcherGear Gear { get; init; }
     public PitchPolicy Policy { get; init; }
 

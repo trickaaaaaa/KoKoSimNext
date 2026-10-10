@@ -69,4 +69,29 @@ public sealed class ThrowAccuracyErrorTests
         var twoStage = new FieldingCoefficients { ThrowErrorBaseProb = 0.10 };
         Assert.True(ErrorRate(twoStage, 50) > ErrorRate(catchOnly, 50));
     }
+
+    // --- 送球逸れの回収レース（design-12 §3.8, 2026-08-30）: 悪送球が確定しても「毎回即失策」にはしない ---
+
+    [Fact]
+    public void WildThrowRecovery_TinyScatter_LowerErrorRate_ThanHugeScatter()
+    {
+        // 逸れ幅が小さいほど一塁手/右翼手の拾い直しが間に合いやすく、悪送球が確定していても
+        // 最終的な失策(ReachedOnError)率は下がる（拾い直しでアウトのまま守れるケースが増える）。
+        // ErrorMaxProb=1.0＝悪送球ロール自体の天井(既定0.30)を外し、回収レースの効果だけを測る。
+        var tiny = new FieldingCoefficients { ThrowErrorBaseProb = 1.0, ErrorMaxProb = 1.0, WildThrowScatterSigmaM = 0.05 };
+        var huge = new FieldingCoefficients { ThrowErrorBaseProb = 1.0, ErrorMaxProb = 1.0, WildThrowScatterSigmaM = 500.0 };
+        var tinyRate = ErrorRate(tiny, throwAccuracy: 50);
+        var hugeRate = ErrorRate(huge, throwAccuracy: 50);
+        Assert.True(tinyRate < hugeRate, $"逸れ幅が小さいのに失策率が下がっていない: tiny={tinyRate:F3} huge={hugeRate:F3}");
+    }
+
+    [Fact]
+    public void WildThrowRecovery_HugeScatter_AlmostAlwaysErrors()
+    {
+        // 逸れ幅が極端に大きければ拾い直しは絶対に間に合わない＝従来の二値モデル（悪送球=即失策）へ縮退する。
+        // ErrorMaxProb=1.0＝悪送球ロール自体の天井(既定0.30)を外し、回収レースの効果だけを測る。
+        var coeff = new FieldingCoefficients { ThrowErrorBaseProb = 1.0, ErrorMaxProb = 1.0, WildThrowScatterSigmaM = 20000.0 };
+        var rate = ErrorRate(coeff, throwAccuracy: 50, trials: 2000);
+        Assert.True(rate > 0.80, $"逸れ幅が極端に大きいのに失策率が下がりすぎている: {rate:F3}");
+    }
 }

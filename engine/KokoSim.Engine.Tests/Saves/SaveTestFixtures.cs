@@ -121,6 +121,13 @@ internal static class SaveTestFixtures
         stats.ArchiveCurrentTournament(TournamentSlot.SummerPref,
             new Dictionary<int, (int Grade, int UniformNumber)> { [1] = (3, 1), [2] = (2, 18) }, year: 2);
 
+        // 全国の学校別成績（#43）。今大会と通算で値が別々になる状態にする（issue #634）＝
+        // 前の大会ぶんを畳んでから StartTournament で今大会だけ消し、もう1試合積む。
+        var nationStats = new NationTournamentStats();
+        nationStats.FoldMatch(awaySchoolId: 200, homeSchoolId: 300, SyntheticGame());
+        nationStats.StartTournament();
+        nationStats.FoldMatch(awaySchoolId: 200, homeSchoolId: 300, SyntheticGame());
+
         var records = new SchoolRecordBook();
         records.RecordOfficialMatch(winnerId: 100, loserId: 200);
         records.RecordOfficialMatch(winnerId: 100, loserId: 300);
@@ -161,13 +168,22 @@ internal static class SaveTestFixtures
             ManagerLastGrownYear = 1,
             ManagerGrownWinsBaseline = 4,
             ManagerGrownKoshienBaseline = 1,
+            ManagerPendingUpsetDeltas = new List<double> { 6.0, -3.5, 0.0 },
             NationRosters = new List<AiSchoolRoster>(rosters.Snapshot()),
-            TournamentStats = new NationTournamentStats(),
+            TournamentStats = nationStats,
             SessionYear = 2,
             Stats = stats,
             Records = records,
             NewTeamPending = true,
             NewTeamRetiredNames = new List<string> { "卒業太郎", "卒業次郎" },
+            // 監督オファー待ち（v18・転任システム）。地区なし候補と地区ありの候補を両方混ぜて往復を試す。
+            ManagerTransferPending = true,
+            ManagerTransferKind = (int)TransferEventKind.FreeAgentOffer,
+            ManagerTransferCandidates = new List<TransferCandidate>
+            {
+                new(SchoolId: 1200, SchoolName: "遠征学園", PrefectureId: 27, DistrictId: null, Strength: 61.5, Fame: 12.0),
+                new(SchoolId: 340, SchoolName: "海浜工業", PrefectureId: 1, DistrictId: 2, Strength: 47.25, Fame: 3.5),
+            },
             TeamColorOverride = new TeamColors(
                 new RgbColor(0x1D, 0x32, 0x27), new RgbColor(0xED, 0xEB, 0xE0),
                 new RgbColor(0xE8, 0x6A, 0x4A), new RgbColor(0xF5, 0xC6, 0x4A),
@@ -185,8 +201,40 @@ internal static class SaveTestFixtures
             Draft = BuildDraftHistory(),
             // 歴代大会結果（v8・issue #600）。優勝した年・敗退した年・優勝校が未確定の年を混ぜる。
             TournamentHistory = BuildTournamentHistory(),
+            // 週次イベントの発火状態（v9・issue #609）。クールダウン途中＋年次フラグ1本で往復を測る。
+            Events = BuildEventState(),
+            // 練習効率の補正（v10・issue #615）。全体ぶんと個人ぶんを1本ずつ。
+            TrainingBoosts = new List<TrainingBoostSaveState>
+            {
+                new TrainingBoostSaveState { Source = "outside_coach_visit", Mult = 1.10, WeeksLeft = 3, PlayerId = 0 },
+                new TrainingBoostSaveState { Source = "self_practice_awakened", Mult = 1.20, WeeksLeft = 5, PlayerId = 7 },
+            },
+            // 前回スタメンの記憶（v14・issue lineup-carry-over-previous-game）。DH制で採る（先発IDが載ることまで測る）。
+            LastLineup = BuildLastLineup(),
         };
     }
+
+    /// <summary>前回スタメン（DH制・「指」は5番・先発ID=1）。</summary>
+    public static LineupMemory BuildLastLineup() => new(
+        new[] { 2, 3, 4, 5, 6, 7, 8, 9, 10 },
+        new[]
+        {
+            FieldPosition.CenterField, FieldPosition.SecondBase, FieldPosition.Shortstop, FieldPosition.FirstBase,
+            FieldPosition.DesignatedHitter, FieldPosition.LeftField, FieldPosition.ThirdBase, FieldPosition.Catcher,
+            FieldPosition.RightField,
+        },
+        StartingPitcherId: 1);
+
+    /// <summary>
+    /// 週次イベントの発火状態（issue #609）。クールダウンが効いている途中の状態で採る
+    /// （空だと「載っていない」と「まっさら」の区別が付かない）。
+    /// </summary>
+    public static EventSchedulerSaveState BuildEventState() => new()
+    {
+        AbsoluteWeek = 37,
+        LastFiredWeeks = new Dictionary<string, int> { ["injury"] = 31, ["rain_week"] = 35, ["ob_donation"] = 12 },
+        AnnualFlags = new List<string> { "draft_done" },
+    };
 
     /// <summary>
     /// 歴代大会結果3件（issue #600）。優勝／準優勝／優勝校が空欄の3通りを混ぜて往復を測る。

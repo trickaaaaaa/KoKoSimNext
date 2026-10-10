@@ -18,6 +18,7 @@ public sealed record GameContext
     public FieldingCoefficients Fielding { get; init; } = new();
     public BaserunningCoefficients Baserunning { get; init; } = new();
     public FatigueCoefficients Fatigue { get; init; } = new();
+    public PitchRecoveryCoefficients PitchRecovery { get; init; } = new();
 
     /// <summary>
     /// 試合ごとの天候（気温）モデル（Issue #120, design-05 大会単位の味付け）。null または無効の間は
@@ -95,6 +96,16 @@ public sealed record GameContext
     /// </summary>
     public bool CapturePitches { get; init; }
 
+    /// <summary>
+    /// 自校の投手交代をプレイヤーの采配権にするか（issue: 試合中に投手が勝手に交代される・2026-08-25）。
+    /// 既定オフ＝裏試合・統計シム・既存テストは全部これ＝<see cref="GameEngine.MaybeChangePitcher"/> の
+    /// 挙動もその帯も従来どおり変わらない。真のときだけ、<see cref="TeamState.Tactics"/> が null の自校に対して、
+    /// 週間球数制限（<see cref="TeamState.CurrentPitcherAtWeeklyLimit"/>）到達時の自動交代を止め、
+    /// <see cref="Timeline.Playback.MatchProgression.PendingForcedPitcherChange"/> でプレイヤーの人選待ちにする。
+    /// 疲労トリガー（目安に過ぎない）は真偽どちらでも自動交代・通知の対象から外す。
+    /// </summary>
+    public bool PlayerControlsPitcherChanges { get; init; }
+
     /// <summary>守備陣形ルール表（CHANGELOG 33, data/defensive-formations.yaml から注入。null=既定表）。</summary>
     public Match.Timeline.FormationTable? Formations { get; init; }
 
@@ -113,12 +124,25 @@ public sealed record GameContext
     /// <summary>観測が実際に走るか（フラグとシンクの両方が揃ったときだけ）。</summary>
     public bool TracingEnabled => CaptureTrace && TraceSink is not null;
 
+    /// <summary>
+    /// 表示→物理の効き（設計書21）を打撃/守備/走塁の3ブロックへ同じ値で配った写し。正典は1つ（YAML <c>ability_effect:</c>）で
+    /// 3ブロックが食い違うと「走者は寝ているのに野手は寝ていない」世界になるので、差し替えは必ずここを通す
+    /// （テストで恒等 <see cref="Players.AbilityEffectCoefficients.Identity"/> に戻すときも同じ）。
+    /// </summary>
+    public GameContext WithAbilityEffect(Players.AbilityEffectCoefficients e) => this with
+    {
+        Batting = Batting with { AbilityEffect = e },
+        Fielding = Fielding with { AbilityEffect = e },
+        Baserunning = Baserunning with { AbilityEffect = e },
+    };
+
     /// <summary>指定守備陣で打席解決用コンテキストを作る。gear/directive/take は采配（設計書09）、skills はスキル（設計書10）が設定する。</summary>
     public AtBatContext ToAtBatContext(IReadOnlyList<Fielder> fielders, bool runnersOn = false,
         PitcherGear gear = PitcherGear.Normal, Tactics.PitchDirective? directive = null,
         bool takeFirstPitch = false, SkillPlayMods? skills = null, int catcherLead = 50,
-        bool intentionalWalk = false, double swingProbabilityFactor = 1.0) => new()
+        bool intentionalWalk = false, double swingProbabilityFactor = 1.0, int familiarityPa = 0) => new()
     {
+        FamiliarityPa = familiarityPa,
         Aerodynamics = Aerodynamics,
         Mound = Mound,
         StrikeZone = StrikeZone,

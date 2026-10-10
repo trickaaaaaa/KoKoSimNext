@@ -46,7 +46,13 @@ namespace KokoSim.Unity.Components
 
             // 週は白ドット、カウントダウンだけアンバー点灯（UI原則②＝アクセントは希少資源。
             // 掲示板の中でも点灯させるのは最重要値ひとつだけ）。
-            FillCells(root.Q("week-cells"), SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week), false);
+            // 大会中は GameClock.Week が開幕時点で凍結する（週暦は大会内実日付を触らない・issue #583）ため、
+            // ここも GameSession の大会内実日付を使う。素朴に GameClock.Week を出すと、進み続ける実日付
+            // （week-year側）と凍結した週表示が食い違って見える（大会日程と実際の日程が合っていないバグ）。
+            var weekCellsValue = GameSession.Current.InTournament
+                ? GameSession.Current.TournamentDateLabel
+                : SeasonClock.CompactLabel(GameClock.YearIndex, GameClock.Week);
+            FillCells(root.Q("week-cells"), weekCellsValue, false);
             FillCells(root.Q("countdown-cells"), countdownValue, true);
         }
 

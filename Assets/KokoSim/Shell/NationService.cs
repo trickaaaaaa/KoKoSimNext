@@ -51,13 +51,58 @@ namespace KokoSim.Unity.Shell
         private static List<School> _prefecture;
         private static List<School> _away;
 
+        // ===== AI校の年次進化（issue wire-ai-school-evolve-into-game・設計書05 §2.3）=====
+        // 学校の Strength/Fame は生成値のまま固定されていた（Evolve を呼ぶ箇所が無かった）＝県内一強が
+        // 23大会続く。年間の校別勝数を台帳へ積み、年度替わりに1回 AiSchoolEvolution.ApplyYear で進化させ、
+        // 進化後の値はセーブへ載せる（学校・県の名前は決定論再生成で戻るので変化する2値だけ保存する）。
+
+        /// <summary>今年度の校別勝数（自県ブラケット＋他県裏試合）。年度末の進化で消費して空にする。</summary>
+        public static AiSchoolYearLedger YearLedger { get; } = new AiSchoolYearLedger();
+
+        /// <summary>一度でも進化した（or セーブから進化後の値を受けた）か。真なら Capture で全校の値を保存する。</summary>
+        private static bool _hasEvolution;
+        /// <summary>セーブから受けた進化後の値。<see cref="Nation"/> を再生成した直後に上書きして消費する。</summary>
+        private static List<SchoolEvolutionState> _pendingSchoolStates;
+
         /// <summary>
         /// 全国4000校。<b>県内地区（DistrictId）の割当を渡して生成する</b>（issue #585）。地区の付与は
         /// 独立Fork（NationGenerator 側）なので強さ・名声・校風の生成列は乱れない＝全国生成は不変。
+        /// セーブ復元直後は生成した実体へ進化後の Strength/Fame を上書きする（同一インスタンスなので
+        /// 校IDで引く側＝ロスターの成長ターゲット・出場校は自動で追従する）。
         /// </summary>
-        public static Nation Nation => _nation ?? (_nation = NationGenerator.Generate(
-            SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026),
-            districtPlan: DistrictPlanProvider.Plan));
+        public static Nation Nation
+        {
+            get
+            {
+                if (_nation != null) return _nation;
+                _nation = NationGenerator.Generate(
+                    SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026),
+                    districtPlan: DistrictPlanProvider.Plan);
+                if (_pendingSchoolStates != null)
+                {
+                    AiSchoolEvolution.Restore(_nation, _pendingSchoolStates);
+                    _pendingSchoolStates = null;
+                }
+                return _nation;
+            }
+        }
+
+        /// <summary>
+        /// 年度替わり（4月）に1回、終了した年度 <paramref name="endedYearIndex"/> の勝数で全AI校を進化させる
+        /// （<see cref="GameClock"/> が <see cref="AdvanceAiYear"/> の<b>前</b>に呼ぶ＝進化後の Strength を
+        /// 逆算配分の目標にする）。乱数は母種×年度の専用ストリーム＝他の抽選列は不変（不変条件#2）。
+        /// 甲子園王者は台帳が持ち回る（8月に決まり進化は翌4月＝年をまたぐ）。
+        /// 自校は <see cref="Nation"/> に含まれない（専用ID）ので、自校が優勝した年は対象校なし＝無しと同じ。
+        /// </summary>
+        public static void EvolveAiSchools(int endedYearIndex)
+        {
+            AiSchoolEvolution.ApplyYear(Nation, YearLedger.Snapshot(), YearLedger.ChampionId, Coeff,
+                GameSeed.Master, endedYearIndex);
+            YearLedger.Clear();
+            _hasEvolution = true;
+            // 遠征先は強さ順の等間隔抽出＝勢力図が動いたら並べ直す（県内校リストは生成順なので不変）。
+            _away = null;
+        }
 
         /// <summary>本拠県の全高校（自校は含まない）。順序は生成順で安定。</summary>
         public static IReadOnlyList<School> PrefectureSchools
@@ -156,9 +201,19 @@ namespace KokoSim.Unity.Shell
         /// <summary>全国の永続ロスター保持庫（遅延生成の単一ソース）。</summary>
         public static NationRosters Rosters => _rosters ?? (_rosters = new NationRosters(RosterDeps));
 
-        /// <summary>全国の今大会通算成績（裏試合フルシムが積む単一ソース）。</summary>
+        /// <summary>全国の学校別成績（裏試合フルシムが積む単一ソース。今大会＋通算の2スコープ）。</summary>
         public static NationTournamentStats TournamentStats
             => _tournamentStats ?? (_tournamentStats = new NationTournamentStats());
+
+        /// <summary>
+        /// 成績を (校ID, 選手ID) で引く単一の入口（issue #634）。自校ストア（<see cref="GameSession.Stats"/>）と
+        /// 全国ストア（<see cref="TournamentStats"/>）の振り分けは engine の <see cref="SchoolStatsLookup"/> に
+        /// 集約されている＝画面ごとに「SourceId があれば自校」と書かない。
+        /// <para>参照するストア実体はセーブ復元で差し替わる（<see cref="GameSession.Current"/> ごと入れ替わる）ので
+        /// 都度組む＝軽い値オブジェクト。</para>
+        /// </summary>
+        public static SchoolStatsLookup StatsLookup
+            => new SchoolStatsLookup(ManagerSchoolId, GameSession.Current.Stats, TournamentStats);
 
         /// <summary>学校ID→School 解決（成長ターゲット＝進化後Strength を引く）。自校IDは対象外＝null。</summary>
         public static School SchoolById(int id)
@@ -177,6 +232,10 @@ namespace KokoSim.Unity.Shell
         {
             s.NationRosters = new List<AiSchoolRoster>(Rosters.Snapshot());
             s.TournamentStats = TournamentStats;
+            // AI校の進化状態（v13）。一度も進化していなければ空＝生成値のまま（旧セーブと同じ意味）。
+            s.NationSchools = _hasEvolution ? AiSchoolEvolution.Snapshot(Nation) : new List<SchoolEvolutionState>();
+            s.NationYearWins = new Dictionary<int, int>(YearLedger.Snapshot());
+            s.NationKoshienChampionId = YearLedger.ChampionId;
             // 自校の同定（issue #585・v4）。学校・県と違い再生成では出てこないので保存する。
             s.SchoolName = ManagerSchoolName;
             s.PrefectureId = PrefectureId;
@@ -190,6 +249,13 @@ namespace KokoSim.Unity.Shell
             _tournamentStats = s.TournamentStats;
             _nation = null;
             _schoolById = null;
+            _away = null;
+            // AI校の進化状態（v13）: 再生成の直後に上書きするため保留に置く。空＝生成値のまま。
+            _pendingSchoolStates = s.NationSchools != null && s.NationSchools.Count > 0 ? s.NationSchools : null;
+            _hasEvolution = _pendingSchoolStates != null;
+            YearLedger.Clear();
+            if (s.NationYearWins != null) YearLedger.AddWins(s.NationYearWins);
+            YearLedger.SetChampion(s.NationKoshienChampionId);
             // 自校の同定（旧セーブは Migrate が桜丘・神奈川で補ってくる）。県別キャッシュもここで落ちる。
             SetSchoolIdentity(s.SchoolName, s.PrefectureId, s.DistrictId);
         }
@@ -207,6 +273,9 @@ namespace KokoSim.Unity.Shell
             _schoolById = null;
             _rosters = null;
             _tournamentStats = null;
+            _hasEvolution = false;
+            _pendingSchoolStates = null;
+            YearLedger.Clear();
         }
 
         /// <summary>夏大会後の代替わり: 生成済み全校の3年生を引退させる（秋の新チーム＝下級生のみ）。</summary>

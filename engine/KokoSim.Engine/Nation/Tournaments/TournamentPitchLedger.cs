@@ -29,6 +29,15 @@ public readonly record struct PitcherLedgerKey
     /// <summary>相手校の生成投手（校ID＋背番号）。</summary>
     public static PitcherLedgerKey ForOpponent(int schoolId, int uniformNumber) => new(false, schoolId, uniformNumber);
 
+    /// <summary>
+    /// 「自校かどうか」でキーの取り方を分ける単一ルール（OPEN-QUESTIONS Q26）。
+    /// 自校（<paramref name="isManagerSchool"/>）かつ育成選手ID（<paramref name="sourceId"/>）を持てば
+    /// <see cref="ForPlayer"/>、それ以外は <see cref="ForOpponent"/>。記録側（TournamentRunner.RecordSide）と
+    /// 参照側（試合開始前の実効目安投球数の算出）の両方がこの1メソッドを通ることでキーの取り違えを防ぐ。
+    /// </summary>
+    public static PitcherLedgerKey For(bool isManagerSchool, int schoolId, int? sourceId, int uniformNumber)
+        => isManagerSchool && sourceId is int sid ? ForPlayer(sid) : ForOpponent(schoolId, uniformNumber);
+
     // ===== セーブ往復（issue #565） =====
     // 中身は同定のためだけの3値で、外から個別に読む用途は無い（読めると「キーの意味」を外で解釈する
     // コードが生えてしまう）。よって getter は生やさず、**そのまま書いてそのまま戻す**3値だけを開ける。

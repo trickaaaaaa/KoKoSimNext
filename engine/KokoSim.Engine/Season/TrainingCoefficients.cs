@@ -6,8 +6,8 @@ namespace KokoSim.Engine.Season;
 /// <summary>育成式の係数（設計書02 §5.1, YAML駆動）。</summary>
 public sealed record TrainingCoefficients
 {
-    /// <summary>主効果の練習基礎値[exp/週]。</summary>
-    public double BaseMainExp { get; init; } = 85.0;
+    /// <summary>主効果の練習基礎値[exp/週]。2026-08-15 に 85→130（案D。中核能力の3年間の伸び +4〜5 → +7）。</summary>
+    public double BaseMainExp { get; init; } = 130.0;
     /// <summary>副効果の倍率。</summary>
     public double SubFactor { get; init; } = 0.4;
 
@@ -54,9 +54,13 @@ public sealed record TrainingCoefficients
         new() { Coef = 2.40, BudgetMinutes = 700 }, // Lv4 フル施設
     };
 
-    /// <summary>レベルアップ必要exp = LevelUpBase × LevelUpGrowth^v（設計書02: 100 × 1.05^v）。</summary>
+    /// <summary>
+    /// レベルアップ必要exp = LevelUpBase × LevelUpGrowth^v（設計書02 §5.1）。
+    /// Growth は 2026-08-15 に 1.05→1.04（案D）。1.05 だと Lv74 の必要expが Lv32 の7.8倍で高レベル帯の成長が
+    /// ほぼ止まり、名声で入る B/A の新入生が「入学時が完成形」になる。1.04 で Lv74 でも3年 +2〜3（施設フル +10）。
+    /// </summary>
     public double LevelUpBase { get; init; } = 100.0;
-    public double LevelUpGrowth { get; init; } = 1.05;
+    public double LevelUpGrowth { get; init; } = 1.04;
 
     /// <summary>
     /// 能力別 trainability（伸ばしやすさ）係数（Issue #114）。exp加算時に乗算する内在特性。

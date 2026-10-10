@@ -37,9 +37,11 @@ public static class TierMatchupSimulation
         double StrikeoutRate, double WalkRate, double HomeWinRate);
 
     private static Cell Measure(string awayLabel, string homeLabel, int games, ulong seed,
-        string? coefficientsPath, Func<IRandomSource, string, bool, Team> factory)
+        string? coefficientsPath, Func<IRandomSource, string, bool, Team> factory,
+        AbilityEffectCoefficients? effect = null)
     {
-        var s = GameSimulation.Run(games, seed, coefficientsPath, teamFactory: factory);
+        var s = GameSimulation.Run(games, seed, coefficientsPath, teamFactory: factory,
+            contextTransform: effect is null ? null : ctx => ctx.WithAbilityEffect(effect));
         return new Cell(
             awayLabel, homeLabel, games,
             (double)s.TotalAwayTeamRuns / games,
@@ -88,15 +90,19 @@ public static class TierMatchupSimulation
     /// 通るよう公開している＝帯が守っているものとレポートが見せているものを一致させる。
     /// 自校は先攻に置く（<c>AwayRunsPerGame</c>／<c>AwayShutoutRate</c> が自校の得点・完封され率）。
     /// </summary>
+    /// <param name="effect">表示→物理の効き（設計書21）を係数ファイルの値から差し替える（null＝係数どおり）。
+    /// 帯の意味を固定する回帰（恒等＝寝かせない世界なら赤くなる）が使う。</param>
     public static IReadOnlyList<Cell> MeasureManagerLadder(
-        int games, ulong seed, string? coefficientsPath, RosterCoefficients coeff, IReadOnlyList<double> strengths)
+        int games, ulong seed, string? coefficientsPath, RosterCoefficients coeff, IReadOnlyList<double> strengths,
+        AbilityEffectCoefficients? effect = null)
     {
         var cells = new List<Cell>(strengths.Count);
         foreach (var h in strengths)
         {
             var opp = h;
             cells.Add(Measure("自校", Label(h), games, seed + 9000 + (ulong)h, coefficientsPath,
-                (rng, name, isAway) => isAway ? ManagerTeam(rng, name, coeff) : StrengthTeam(rng, name, opp, coeff)));
+                (rng, name, isAway) => isAway ? ManagerTeam(rng, name, coeff) : StrengthTeam(rng, name, opp, coeff),
+                effect));
         }
         return cells;
     }

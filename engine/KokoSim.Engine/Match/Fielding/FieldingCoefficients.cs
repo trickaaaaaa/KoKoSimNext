@@ -5,6 +5,13 @@ namespace KokoSim.Engine.Match.Fielding;
 /// <summary>守備解決の係数（YAML駆動, 統計回帰で調整）。</summary>
 public sealed record FieldingCoefficients
 {
+    /// <summary>
+    /// 表示能力→物理層の効き（設計書21・<see cref="KokoSim.Engine.Players.AbilityEffectCoefficients"/>）。正典は YAML の <c>ability_effect:</c> 1ブロックで、
+    /// ローダが batting/fielding/baserunning の3ブロックへ<b>同じ値</b>を配る（解決式が手元の係数束から引けるようにするため）。
+    /// 3つが食い違わないことは <c>AbilityEffectConsistencyTests</c> が固定する。
+    /// </summary>
+    public KokoSim.Engine.Players.AbilityEffectCoefficients AbilityEffect { get; init; } = new();
+
     /// <summary>守備位置適性の基準値（この適性で補正なし＝×1.0）。設計書01 §1.1。</summary>
     public double AptitudeNeutral { get; init; } = 50.0;
     /// <summary>適性1ポイントあたりの実効守備力補正の傾き。</summary>
@@ -78,15 +85,69 @@ public sealed record FieldingCoefficients
 
     /// <summary>
     /// 一塁でのアウト判定の安全マージン[s]（守備側がこの秒数だけ余裕を持てばアウト）。
-    /// issue #358 で 0.0→0.60。<see cref="InfieldPlayOverheadSeconds"/> の水増しをやめた分の
-    /// 得点環境をここへ移した項＝<b>物理層（＝タイムラインの絵）は現実の秒のまま、内野安打の頻度だけを
-    /// 判定側で校正する</b>。0.0 のままだと内野安打が内野ゴロの1.5%へ潰れる（実測。実際は6〜7%規模）。
-    /// 実体は①シムに無い内野安打の源（握り替えのもたつき・弾き・守備位置の揺らぎ＝守備所要の分散が0）と
-    /// ②捕球点が実戦より本塁寄り＝送球距離が短いぶんの残差。①を分散として物理層へ入れられれば
-    /// その分だけ小さくできる（将来の増分）。値は打率・BABIP帯から逆算した 0.60
-    /// （0.55 だと AVG が帯下限 .240 に張り付く）。data/coefficients.yaml と同値。
+    ///
+    /// <para><b>0.0（2026-08-14）</b>。issue #358 で 0.0→0.60 とした校正項を
+    /// <see cref="InfieldHandleJitterMeanSeconds"/>（物理層のもたつき）へ移した
+    /// ＝判定は素のタイミング比較（<c>defenseTime &lt;= runnerTime</c>）に戻った。</para>
+    ///
+    /// <para>なぜ移したか: この項は<b>判定の秒を動かすのに絵の秒には出ない</b>ため、
+    /// 「送球が先に届いた絵なのにセーフ」が構造的に出ていた（実測: 内野安打 1,374件のうち
+    /// 1,147件＝83.5% が絵の上では送球が先着・平均 0.37秒）。項の実体は
+    /// 「シムに無い内野安打の源（もたつき・弾き）＝守備所要の分散が0」だったので、
+    /// <b>分散を持つ実際の秒</b>として物理層で払わせるのが筋（不変条件#1）。</para>
+    ///
+    /// <para>0 以外の値を入れると再び絵と判定が食い違う。残してあるのは
+    /// 「境界に定数を戻す」を意図的に選べるようにするためだけで、既定は 0。
+    /// data/coefficients.yaml と同値。</para>
     /// </summary>
-    public double ForceOutMarginSeconds { get; init; } = 0.60;
+    public double ForceOutMarginSeconds { get; init; } = 0.0;
+
+    /// <summary>
+    /// 内野の打球処理の**もたつき**[s]（捕ってから離すまでに余分にかかる時間の平均・指数分布）。
+    ///
+    /// <para>実物の内野ゴロは、握り替えを一度で決められる／グラブの土手に当たる／体勢を作り直す、
+    /// と処理時間が<b>右に裾を引く</b>。従来のモデルは所要が決定論値だけ（分散0）で、
+    /// その足りない分を判定境界の定数（<see cref="ForceOutMarginSeconds"/>=0.60）で埋めていた。
+    /// ここへ移すと<b>引いた値がそのままタイムラインの秒</b>になり、絵と判定が構造的に一致する。</para>
+    ///
+    /// <para>分布は指数（下限0・右に裾）。一様や正規では「速すぎる守備」が出てしまい、
+    /// 内野安打が“ときどき大きくもたつく”という実物の形にならない。
+    /// 平均は <see cref="Players.FielderAttributes.TransferFactor"/> で伸縮する
+    /// ＝<b>守備の巧拙がもたつきの量に出る</b>（握り替えと同じ係数を使う＝手さばきの単一ソース）。</para>
+    ///
+    /// <para>値は内野安打率から逆算する（帯 <c>InfieldHitShare</c> 0.05〜0.15）。従来の定数 0.60 と
+    /// <b>同じ内野ゴロの帰結</b>（アウト 82.8% / 内野安打 9.6% / 失策 7.6%）になる平均が 0.43 で、
+    /// 分布の裾が定数ぶんの仕事をする（実測 2026-08-14・200,000打席・seed 7）。
+    /// 0 にすると内野ゴロの1.5%まで潰れる（issue #358 の実測と同じ）。</para>
+    ///
+    /// <para><b>0.43 → 0.48（2026-08-14・ローカル統合時）</b>: issue #630 の前進捕球（チャージ）が
+    /// 守備所要を縮めるため、同じ 0.43 では内野安打が 7.5% へ落ちた。#630 は同じ理由で
+    /// <see cref="ForceOutMarginSeconds"/> を 0.60→0.72 へ厚くしていた＝その校正をこちら（物理層）で
+    /// やり直したもの。実測（60,000打席×seed 7/42/2024）: 内野安打 9.5% / 9.1% / 9.8%
+    /// ＝#630 の目標水準（9.6〜9.7%）に一致。</para>
+    ///
+    /// <para><b>代償</b>: 「捕ってから離すまで」が中央値 1.10秒・平均 1.23秒になる（実物は 0.6〜0.9秒）。
+    /// 系統的な遅れを走路側（実捕球を遅らせて捕球点を本塁から遠ざける）へ逃がす案を実測したが、
+    /// <b>処理野手の選択そのものが変わって</b>内野安打が 3.4% へ落ちた（最初に触れる野手を選ぶ式なので、
+    /// 全員を遅らせると別の野手が選ばれ、間に合わない場合はゾーン最寄りへ落ちて逆に速くなる）。
+    /// 走路側でやるなら選択と落とし先を作り直す必要があり、この issue の範囲を越える。
+    /// data/coefficients.yaml と同値。</para>
+    /// </summary>
+    ///
+    /// <para><b>0.48 → 0.49（2026-08-18・issue middle-infielder-charge-cap ＋ fielder-body-far-from-ball-at-catch）</b>:
+    /// ミドルの前進上限 4→10m（捕球が早くなる方向）と、半径捕球の処理点を体が届く時刻へ採り直す（遅くなる方向）を
+    /// 同時に入れた差し引きが −0.4pt（実測 60,000打席×seed 7/42/2024: 9.0/8.8/9.5%）。0.49 で 9.4/9.3/10.0%
+    /// ＝従来水準（9.5/9.1/9.8%）に戻る。</para>
+    public double InfieldHandleJitterMeanSeconds { get; init; } = 0.49;
+
+
+    /// <summary>
+    /// もたつきの上限（平均の何倍で頭打ちにするか）。指数分布は裾が無限に伸びるので、
+    /// 「捕ってから4秒動かない内野手」が極稀に出る。<b>絵に出る量なので実在しない値は切る</b>。
+    /// 3.0 なら 1.4秒＝上位 5.0% が頭打ちで、内野安打率への寄与は 0.1pt 未満（実測）。
+    /// data/coefficients.yaml と同値。
+    /// </summary>
+    public double InfieldHandleJitterMaxFactor { get; init; } = 3.0;
 
     /// <summary>
     /// 飛球の捕球余裕[s]の際どさしきい値（判定オーバーレイ「フェア」, Issue #328②）。
@@ -142,6 +203,29 @@ public sealed record FieldingCoefficients
     /// クランプは捕球エラーと同じ ErrorMinProb/ErrorMaxProb を流用。</summary>
     public double ThrowErrorAccuracySlope { get; init; } = 0.004;
 
+    // 送球逸れの回収レース（design-12 §3.8, 2026-08-30）。悪送球が確定した後、逸れ幅→回収ロスを
+    // 守備所要時間へ加算してもう一度同じ判定基準（defenseTime+ForceOutMarginSeconds vs runnerTime）で
+    // 再評価する（拾い直しが間に合えばアウトのまま）。回収役（一塁手／右翼手）の走力・肩は実際の
+    // Fielder情報（fielders）から取るため、速度の係数はここには持たない（<c>BaserunningCoefficients</c>と違い
+    // 呼び出し元に実際の野手一覧が揃っているため）。
+    /// <summary>悪送球1本あたりの逸れ幅の標準偏差[m]（半正規分布からサンプル）。内野送球は距離が短いため
+    /// <c>BaserunningCoefficients.WildThrowScatterSigmaM</c>（バックホーム用）とは独立の値。</summary>
+    public double WildThrowScatterSigmaM { get; init; } = 6.0;
+    /// <summary>回収に動き出すまでの反応遅延[s]（受け手・バックアップ共通）。</summary>
+    public double RecoveryReactionSeconds { get; init; } = 0.30;
+
+    /// <summary>
+    /// トンネル（股・脇を抜けて球が外野へ行く失策, issue #632）の割合。
+    /// <b>捕球エラーの内訳</b>＝失策の総数は変えず、お手玉が減ってトンネルが増える
+    /// （失策率は #123/#532 で実測域へ校正済みなので動かさない）。
+    ///
+    /// <para>0 のときは内訳ロール自体を引かない＝乱数消費順・結果とも完全に従来どおり
+    /// （<see cref="ThrowErrorBaseProb"/> と同じ恒等の作法）。正値にすると
+    /// 「球が外野へ行ったから走者が還った」という因果が物理層で成立する（不変条件#1）。</para>
+    /// data/coefficients.yaml と同値。
+    /// </summary>
+    public double TunnelShareProb { get; init; } = 0.30;
+
     // --- 塁打数の決定（Issue #24: 距離しきい値を廃し、転がり＋幾何＋走力の連続量で決める） ---
 
     /// <summary>着地後の転がりの減速度[m/s²]（芝・土の摩擦＋バウンドの損失を集約）。</summary>
@@ -155,6 +239,17 @@ public sealed record FieldingCoefficients
 
     /// <summary>フェンスに達した打球の跳ね返り処理に要する追加時間[s]（カロムの方向は当面無視）。</summary>
     public double FenceCaromSeconds { get; init; } = 0.40;
+
+    /// <summary>
+    /// フェンスの反発係数（issue fence-carom-and-over-the-head-cues）。跳ね返り初速＝
+    /// フェンス到達時の残速 × これ。**表示専用**（判定＝回収時刻・塁打数は
+    /// <see cref="FenceCaromSeconds"/> のままで一切変わらない）。
+    ///
+    /// <para>高校の球場の金網＋パッドを想定して 0.30〜0.40 が出発点（監督決定 2026-08-13）。
+    /// 現行の <see cref="RollDecelMps2"/>=2.60 だと、左中間へ低いライナー（フェンス到達時 17.3 m/s）で
+    /// e=0.35 なら約 7m 戻る。将来は球場ごとの材質差へ拡張できる（design-13 の延長）。</para>
+    /// </summary>
+    public double FenceRestitution { get; init; } = 0.35;
 
     /// <summary>外野手が転がる打球を拾い上げるのに要する時間[s]（内野ゴロの InfieldPlayOverheadSeconds 相当）。</summary>
     public double OutfieldPickupSeconds { get; init; } = 0.30;
@@ -218,6 +313,15 @@ public sealed record FieldingCoefficients
     public double InfielderFieldingRadiusM { get; init; } = 4.20;
 
     /// <summary>
+    /// 飛びつきの実効リーチ[m]（体の中心から捕球点まで。伸ばした腕＋倒れ込む体）。
+    /// <see cref="InfielderFieldingRadiusM"/> が「内野を抜けるか」の判定半径なのに対し、こちらは
+    /// **処理点・処理時刻**を決める（issue fielder-body-far-from-ball-at-catch）: 半径で触れると判定した打球も、
+    /// 処理は体がこの距離まで球に寄れた時刻・点で行う＝絵で野手の体が球から 3〜4m 離れたまま捕球・送球しない。
+    /// 常に <see cref="InfielderFieldingRadiusM"/> 以下として扱う。
+    /// </summary>
+    public double InfielderDiveReachM { get; init; } = 2.0;
+
+    /// <summary>
     /// 高く弾むバウンド（チョッパー）で内野手が待たされる時間の係数（Issue #63 やること1）。
     /// 待ち時間 = この係数 × √(2×最大バウンド頂点/g)＝頂点からの自由落下時間。
     /// 大きいほど高バウンドが内野安打になりやすい。0で従来（待ちなし）。
@@ -234,6 +338,44 @@ public sealed record FieldingCoefficients
     /// 0で従来（投手も他内野手と同じ反応）。処理野手の割り当てにのみ効き、頭上抜け判定（帯校正）には影響しない。
     /// </summary>
     public double PitcherFieldingReactionPenaltySeconds { get; init; } = 0.35;
+
+    // --- 前進捕球（チャージ, issue #630）---
+    // 従来は処理野手が「守備位置に最も近い経路上の点」で打球を待った＝ボテボテのゴロほど長く突っ立って
+    // 待つ絵になり、内野安打が転がっていた。緩い打球だけ前へ出て早い時刻・本塁寄りの点で捕る。
+    // 乱数は引かない（幾何と時間だけ＝不変条件#1/#2）。
+
+    /// <summary>
+    /// 前進捕球を始める打球の「緩さ」しきい[m/s]（待って捕るときの打球速度）。この速度で前進量0、
+    /// 静止球で前進量が上限いっぱいへ直線的に増える（＝しきいの前後で絵と判定が不連続に飛ばない）。
+    /// 強い打球は前進量0＝<b>従来と完全に同じ捕球点・処理時刻</b>になる。
+    ///
+    /// <para>30.0＝オーナー選択（2026-08-13）。「強い当たりでも3〜4m詰める・緩い当たりは思い切り突っ込む」水準で、
+    /// 実測では遊撃定位置への 86km/h のゴロが 2.18s/39m地点 → 1.88s/35m地点、115km/h のゴロが
+    /// 1.51s/39m → 1.39s/36m。母集団では平均捕球が 1.237→1.191s。減った内野安打は
+    /// <see cref="ForceOutMarginSeconds"/> を 0.60→0.72 へ厚くして水準ごと戻してある（帯は書き換えていない）。</para>
+    /// </summary>
+    public double ChargeSlowBallSpeedMps { get; init; } = 30.0;
+
+    /// <summary>コーナー（投手・一塁手・三塁手）が前へ出られる距離[m]（最短の守備範囲からの上乗せ）。
+    /// 一塁が近く送球が短いぶん、実戦でも思い切って突っ込める役割。</summary>
+    public double ChargeMaxAdvanceCornerM { get; init; } = 6.0;
+
+    /// <summary>ミドル（二塁手・遊撃手）が前へ出られる距離[m]。一塁までの送球が長く、
+    /// 体勢を崩すと間に合わないぶんコーナーより浅い。</summary>
+    ///
+    /// <para><b>4.0 → 10.0（issue middle-infielder-charge-cap）</b>: 4m は 30 m/s 分母の線形係数が掛かって実効 1〜2.4m
+    /// ＝遊撃・二塁が正面のボテボテに 2〜3m しか出ず立って待っていた（実測: 79 km/h 遊撃正面で 3.3m/2.25s→内野安打。
+    /// 上限なしで会える最速点は 9.6m/1.76s）。コーナーの 6m は上限なしと同値だったので触らない。突っ込んだ代償は
+    /// 前進量に比例する握り替え・送球精度のペナルティが払う。</para>
+    public double ChargeMaxAdvanceMiddleM { get; init; } = 10.0;
+
+    /// <summary>前進捕球いっぱいのときの握り替え追加時間[s]（走りながら捕る＝体勢が悪い）。
+    /// 前進量に比例して掛ける。前進で縮んだ捕球時刻をそのぶん食い戻す＝一方的な守備強化にしない項。</summary>
+    public double ChargeThrowPenaltySeconds { get; init; } = 0.12;
+
+    /// <summary>前進捕球いっぱいのときの送球精度の低下[点]（走りながらの送球は逸れる）。
+    /// 前進量に比例して野手の ThrowAccuracy から引き、悪送球ロール（design-14 P1-6b）へ効かせる。</summary>
+    public double ChargeThrowAccuracyPenalty { get; init; } = 6.0;
 
     /// <summary>イレギュラーバウンドの発生確率（一律。球場の土質との接続は将来の別Issue）。</summary>
     public double IrregularBounceProb { get; init; } = 0.030;

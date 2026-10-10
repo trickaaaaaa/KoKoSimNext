@@ -12,7 +12,7 @@
     <Style src="ManagementScreen.uss" />
     <ui:VisualElement class="root ui-root">
 
-      <ui:Instance template="TopBar" />
+      <ui:Instance template="TopBar" class="topbar-slot" />
 
       <ui:VisualElement class="mn-main">
 

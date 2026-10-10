@@ -54,15 +54,18 @@ public sealed record RosterCoefficients
 
     /// <summary>
     /// 名声(Fame, 0-100)由来のtalentCenter上振れ幅の上限（頭打ち, issue #127・設計書04 §2.1）。
-    /// 既定8.0＝Fame最大でも TalentCenterDefault(32)→40程度に留める（控えめな幅。暴走ループ防止）。
+    /// 2026-08-15（案D）に 8→50。旧値は Fame最大でも 32→40（E境界）で、自校の新入生が AI C校（強度60）の
+    /// 新入生にも届かず、自校が D 以上へ行く経路が実質閉じていた。新値は名声20→48(E)/40→59(D)/60→67(C)/
+    /// 80→72(B)/100→75(B。SD8 なので上位個体は A)。頭打ち自体は残す＝暴走防止の要件は維持し、
+    /// 名声は <c>CareerCoefficients.FameDecay</c> で自己制限する。
     /// </summary>
-    public double FameTalentCenterSpan { get; init; } = 8.0;
+    public double FameTalentCenterSpan { get; init; } = 50.0;
 
     /// <summary>
     /// 名声由来の上振れが頭打ちへ漸近する速さ（指数飽和の時定数, issue #127）。
     /// 小さいほど低い名声でも早く頭打ちに近づき、大きいほど線形に近い緩やかな伸びになる。
     /// </summary>
-    public double FameTalentCenterTau { get; init; } = 30.0;
+    public double FameTalentCenterTau { get; init; } = 50.0;
 
     /// <summary>
     /// 名声(Fame, 0-100)から新入生の総合力中心(talentCenter)を求める（設計書04 §2.1・issue #127）。
@@ -92,16 +95,23 @@ public sealed record RosterCoefficients
     /// 格差マッチの得点差が緩む（issue #536 の実測: 実力差10ポイントごとに得点が約0.4倍）。
     /// <b>全国トップ校の絶対能力も同時に下がる</b>ので、値は実測（<c>simulate-tiers</c>）で決める。
     /// </summary>
-    public double TierCompressionSlope { get; init; } = 0.55;
+    /// <para>2026-08-19（設計書21・案C）: 0.55 → <b>1.0（圧縮なし）</b>。ティア圧縮はAI校だけを寝かせるため表示ランクと中身が乖離した。
+    /// 代わりに表示→物理の効き（<see cref="Players.AbilityEffectCoefficients"/>）を全員対称に寝かせる＝raw が中身。写像の式は
+    /// 比較・実験用に残す（slope=1・knee=100 は恒等）。</para>
+    public double TierCompressionSlope { get; init; } = 1.0;
 
     /// <summary>
     /// 圧縮を掛ける上限（この強度より上は圧縮せず、100 で元の尺度へ戻るよう傾きを起こす）。
     /// 100＝膝なし＝全帯域を一様に圧縮する。低い値ほど「低ティアだけ寝かせて上位は保つ」非線形になる
     /// （Q24 の確定3「低ティアだけ持ち上げる（非線形）」）。
-    /// <para>一様圧縮（膝なし）は上位校の絶対能力まで削る: pivot40/slope0.55 では強度85の学校の実力が
-    /// 76.1→57.6（表示A・中身D）まで落ち、育て切った自校が全国最強になってしまう（実測 2026-08-10）。</para>
+    /// <para>一様圧縮（膝なし）は上位校の絶対能力まで削る: pivot40/slope0.55 では強度85の学校の能力中心が
+    /// 64.75（表示A・中身B−）まで落ち、育て切った自校が全国最強級になる（実測 2026-08-10）。</para>
+    /// <para>2026-08-18（issue prefecture-dominance）に 60→100＝膝なしへ。膝60は「上を100で元尺度へ戻す」
+    /// 勾配1.225で上位帯の差を raw より拡大し（80→75.5 / 65→57.1）、県1位 vs 2位（差15）が単試合 99% で
+    /// 同じ校が毎年優勝する主因だった。一様0.55の実測: 80vs75 63% / 80vs70 75% / 80vs65 86% / 80vs60 92%。
+    /// 上位校の絶対能力の代償はオーナー承認済み。</para>
     /// </summary>
-    public double TierCompressionKnee { get; init; } = 60.0;
+    public double TierCompressionKnee { get; init; } = 100.0;
 
     /// <summary>
     /// 学校の強度（<see cref="Nation.School.Strength"/>）を能力中心へ写す（issue #578）。
@@ -132,6 +142,18 @@ public sealed record RosterCoefficients
 
     // --- 運動能力ベースライン（走力・地肩・スタミナ, 名声独立, 設計書01 §1.1b-2） ---
     public double PhysicalMean { get; init; } = 45.0;
+    /// <summary>
+    /// 身体系（走力・地肩・スタミナ）中心の名声連動（2026-08-15 案D・設計書01 §1.1b-2 但し書き）。
+    /// 身体系中心 = PhysicalMean + (talentCenter − TalentCenterDefault) × これ。0 なら旧来の名声独立。
+    /// SD は据え置きなので弱小校の俊足・強肩は残る。0 のままだと名声で入る B/A の新入生が「打撃Aで走力E」になり、
+    /// 機動力・肩・球速の天井でチームが C で頭打ちになる。AI校（StrengthTeamFactory）は身体系が強度連動なので、
+    /// これで自校だけ天井が低い非対称が消える。既定は data/coefficients.yaml roster.physical_talent_slope と一致。
+    /// </summary>
+    public double PhysicalTalentSlope { get; init; } = 0.75;
+
+    /// <summary>新入生の総合力中心 <paramref name="talentCenter"/> に対応する身体系中心（<see cref="PhysicalTalentSlope"/>）。</summary>
+    public double PhysicalCenterFor(double talentCenter)
+        => PhysicalMean + (talentCenter - TalentCenterDefault) * PhysicalTalentSlope;
     public double PhysicalSd { get; init; } = 12.0;
 
     /// <summary>
@@ -162,6 +184,59 @@ public sealed record RosterCoefficients
     public double LeadMentalCorr { get; init; } = 0.30;   // 野球脳との相関（天性の効き）
     /// <summary>リードcapの野球脳相関（Q8(c): 名捕手の天井は野球脳で決まる）。(Mental−50)×これ を cap に加算。</summary>
     public double LeadCapMentalCorr { get; init; } = 0.15;
+
+    // --- AI校の精神力・統率・捕手リード（issue ai-school-mental-fixed-50, 2026-08-18） ---
+    // 旧実装は AI校の選手が全員 Mental=Leadership=Lead=50 固定・主将なし（Player の既定値のまま）で、
+    // 相手の「精神」ランクが常に D・プレッシャー/動揺/読みが全校同じだった。自校（上の mental_mean 等）と同じ
+    // 分布を、学校の強さ・校風・学年で寄せて引く。乱数は専用 Fork（主RNG非消費）＝他の能力ロールは不変。
+    /// <summary>AI校の精神力中心 = mental_mean + (School.Strength − 50) × これ。強さは**圧縮前**の学校強度
+    /// （ティア圧縮は身体・技術の下位校救済であって精神の物差しではない）。0.25 で G校 ≈40／D校 ≈47／S校 ≈56。</summary>
+    public double AiMentalStrengthSlope { get; init; } = 0.25;
+    /// <summary>AI校の精神力の学年アーク（進級ごとに +これ。3年で +8）。自校の実戦成長（新入生46→3年間で開花）の
+    /// 平均像に合わせた定数＝相手校も上級生ほど精神が強い。</summary>
+    public double AiMentalPerGrade { get; init; } = 4.0;
+    /// <summary>校風「守り勝つ」「全員野球」の精神・統率の上乗せ（design-11 三層プロファイルの精神の項）。</summary>
+    public double AiStyleMentalBonus { get; init; } = 3.0;
+
+    // --- AI校の打撃プロフィール（issue ai-roster-power-top-tier-all-sluggers, 2026-08-18） ---
+    // 旧実装は AI校の選手の全能力を同じ中心 N(center,6) で独立に引き、永続ロスターの成長（逆算配分）も全能力を
+    // 一律に足すので、B/A校は先発9人がみな中心≒75〜85 の万能型（全員スラッガー）になっていた。
+    // 本塁打率はパワーに対して凸（HR% ∝ exp(0.053P)）なので「平均を保って散らす」だけでは本塁打が増える。
+    // パワーを希少側にし（中心 −skew）、同じ量をミートへ回して打撃指標（.35C+.35P）を保つ＝学校の強さの意味は不変。
+    /// <summary>AI校の打者のパワー中心を下げ、ミート中心を同じ量だけ上げる幅（打撃指標を保つ振り替え）。</summary>
+    public double AiPowerSkew { get; init; } = 8.0;
+    /// <summary>AI校の打撃・技術5能力（ミート/パワー/選球眼/守備/捕球）の凸凹配分σ（重み exp(N(0,σ)) を平均1に正規化＝
+    /// 総和不変）。自校の <see cref="ConcentrationMean"/>（0.35）より控えめ＝AI は成長で一律に伸びるので生成時の凸凹が
+    /// そのまま残る。0 で凸凹なし。</summary>
+    public double AiConcentration { get; init; } = 0.15;
+
+    // --- AI校の上位集中＝スター型（issue prefecture-dominance-star, 2026-08-18） ---
+    // ティア圧縮（CompressStrength）は「チーム全体の能力差」を縮めて番狂わせを起こすが、一様に掛けると上位校のエースが
+    // 平凡になる（一様0.55で A校のエース最速が 138km/h＝DからSまで 136〜140 で横一線）。現実の強豪は
+    // 「エース＋主軸数人が突出＋脇は平均」の上位集中なので、圧縮で削った分（raw−圧縮後＝lift）を少数のスターへ戻す。
+    // スターは打撃（主軸）か投球（エース）の能力中心だけ lift×share を上乗せし、脇役は圧縮後の中心のまま。
+    // 使い捨て生成（StrengthTeamFactory.Create）は脇役を lift×cast_drop だけ下げてチーム総合を圧縮後の尺度に留める。
+    // 永続ロスターは逆算配分（AiRosterCycle.Settle）が総合を圧縮後の目標へ寄せるので脇役の補正は自動で決まる。
+    /// <summary>スターの上乗せの割合（1.0＝既定量・0＝スター無し）。</summary>
+    public double AiStarShare { get; init; } = 1.0;
+    /// <summary>
+    /// スターの上乗せ量＝(強さ − ピボット40)×これ×share（2026-08-19・設計書21）。圧縮を撤去したので「圧縮で削った分を戻す」
+    /// 定義から「強い学校ほどエース・主軸が突出する」定義へ。0.25 で raw 80 の校はエース/主軸 +10（Lv 90＝エース最速 146km/h）、
+    /// 脇役は Create で −3（総合据え置き）。永続ロスターは逆算配分が総合を raw に留めるので脇役の補正は自動。
+    /// </summary>
+    public double AiStarLiftPerPoint { get; init; } = 0.25;
+    /// <summary>使い捨て生成（Create）で先発野手8人のうち主軸にする人数。</summary>
+    public int AiStarHitters { get; init; } = 3;
+    /// <summary>永続ロスターの1学年（コホート）あたりの主軸打者の人数（3学年で Create の人数に揃える）。</summary>
+    public int AiStarHittersPerCohort { get; init; } = 1;
+    /// <summary>永続ロスターの1学年あたりのエース格（投手適性で最も投手に寄った者から順）。</summary>
+    public int AiStarPitchersPerCohort { get; init; } = 1;
+    /// <summary>使い捨て生成で脇役の中心を lift×これ だけ下げ、チーム総合（6指標）を圧縮後の尺度に留める。</summary>
+    public double AiStarCastDrop { get; init; } = 0.30;
+
+    /// <summary>スターの上乗せ量＝(強さ − ピボット)×lift_per_point×share。ピボット（40）より弱い学校は 0。</summary>
+    public double StarLift(double strength)
+        => Math.Max(0.0, strength - TierCompressionPivot) * AiStarLiftPerPoint * AiStarShare;
 
     // --- 投打の利き（設計書01 §1.1c） ---
     public double ThrowLeftProb { get; init; } = 0.12;
@@ -481,10 +556,11 @@ public static class ProspectGenerator
         // スキル（設計書10）: 独立ストリームで抽選し能力ロール列を乱さない。プールの出し分けも連続量。
         p.Skills = SkillGenerator.Generate(wRole, leadership, rng.Fork(SkillStreamId(year, index)), skillCoeff);
 
-        // --- Stage 1: 運動能力ベースライン（名声独立） ---
+        // --- Stage 1: 運動能力ベースライン（中心は名声に半連動・SDは独立, §1.1b-2） ---
+        var physicalCenter = c.PhysicalCenterFor(talentCenter);
         foreach (var k in Physical)
         {
-            var level = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(c.PhysicalMean, c.PhysicalSd)), 10, 92);
+            var level = (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(physicalCenter, c.PhysicalSd)), 10, 92);
             SetWithCap(p, k, level, c, growth, rng);
         }
 

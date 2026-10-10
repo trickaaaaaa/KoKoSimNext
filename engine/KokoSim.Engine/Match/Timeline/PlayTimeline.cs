@@ -36,6 +36,14 @@ public sealed record BallSegment
     public double ApexHeightM { get; init; }
 
     /// <summary>
+    /// 滞空セグメントの打ち出し高さ[m]（Flight のみ・表示専用。issue duel-view-fly-leaves-bat-flat-then-rises）。
+    /// 0（既定）＝地面から始まる従来プロファイル（送球の山なり等はこのまま）。打球の滞空は接触点の高さ
+    /// （<see cref="Fielding.FieldingPlay.LaunchHeightM"/>）を載せ、h(0)=打点から立ち上がる放物線にする。
+    /// 着地（u=1）は 0 のまま＝落下点・滞空時間は不変。
+    /// </summary>
+    public double LaunchHeightM { get; init; }
+
+    /// <summary>
     /// この送球を投げた野手（<see cref="BallSegmentKind.Throw"/> のみ。表示専用・Issue E1）。
     ///
     /// 3Dの守備ビューは「誰が投げるモーションをするか」を決める必要があるが、座標だけでは
@@ -173,6 +181,23 @@ public sealed record PlayTimeline
     /// </summary>
     public IReadOnlyDictionary<FieldPosition, TimelinePoint>? FielderStarts { get; init; }
 
+    /// <summary>
+    /// 空中捕球の余裕[s]（<see cref="Fielding.FieldingPlay.CatchMarginSeconds"/> の写し。表示専用）。
+    /// 正＝余裕を持って捕った／負＝間に合わず落ちた。フライ・ライナーのみ非null。
+    ///
+    /// <para>判定側は既にこの値で捕る/捕らないを決めており、ここは**決まった値の写し**＝新規計算も
+    /// 乱数消費もゼロ（<see cref="FielderStarts"/> と同じ構図）。3Dの守備は「ぎりぎり届く」＝
+    /// 横っ飛び・スライディング・背走ジャンピングを出すのにこの値だけを見る（絵からは
+    /// 「届かなかったのか、余裕で前に落ちたのか」が区別できないのが元の症状）。</para>
+    /// </summary>
+    public double? CatchMarginSeconds { get; init; }
+
+    /// <summary>
+    /// 打球処理で球を弾いたか（<c>FieldingPlay.ErrorKind == Catch</c> の写し。表示専用）。
+    /// 3Dの守備が「お手玉」の収録を流す条件そのもの。悪送球（Throw）は false。
+    /// </summary>
+    public bool FumbledCatch { get; init; }
+
     public IReadOnlyList<BallSegment> Ball { get; init; } = System.Array.Empty<BallSegment>();
     public IReadOnlyList<FielderMove> Moves { get; init; } = System.Array.Empty<FielderMove>();
     public IReadOnlyList<RunnerLeg> Runners { get; init; } = System.Array.Empty<RunnerLeg>();
@@ -180,4 +205,19 @@ public sealed record PlayTimeline
     /// <summary>判定イベント列（判定オーバーレイ, Issue #260）。時刻付きの独立イベントで、
     /// 走者レッグの終端に依存せず「いつ判定が出るか」を表す。</summary>
     public IReadOnlyList<JudgementEvent> Judgements { get; init; } = System.Array.Empty<JudgementEvent>();
+
+    /// <summary>
+    /// 失策でこぼれた球を野手が拾い上げる瞬間（issue #629）。失策プレーで追いかけレッグを積んだときだけ非null。
+    ///
+    /// <para><see cref="TimelineBuilder.AppendErrorReturnThrow"/> が「いつ・どこから投げ返すか」を決めるのに使う。
+    /// 拾い上げた時刻は追いかけレッグの終端そのものだが、レッグ列から後で当て推量で拾うと
+    /// 同じ <c>Chase</c> を使う別の動き（決着後に定位置へ戻る等）と区別できないので、組んだ側が明示的に置く。</para>
+    /// </summary>
+    public double? ErrorPickupAt { get; init; }
+
+    /// <summary>失策球を拾い上げる地点（<see cref="ErrorPickupAt"/> と対）。</summary>
+    public TimelinePoint? ErrorPickupPoint { get; init; }
+
+    /// <summary>失策球を拾い上げる野手（<see cref="ErrorPickupAt"/> と対）。</summary>
+    public FieldPosition? ErrorPickupRole { get; init; }
 }

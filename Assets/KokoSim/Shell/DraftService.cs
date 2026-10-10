@@ -44,6 +44,10 @@ namespace KokoSim.Unity.Shell
         /// <summary>係数（C#既定＝data/draft.yaml と同値）。</summary>
         public static DraftCoefficients Coefficients { get; private set; } = new DraftCoefficients();
 
+        // 候補入りの足切り（設計書20 §3.1a）は選手画面のカテゴリランクと同じ合成で判定する
+        // ＝チップを出している画面群と同じ単一ソース（TeamStrengthCoeff.Default）を渡す。
+        private static KokoSim.Engine.Nation.TeamStrengthCoefficients Strength { get { return TeamStrengthCoeff.Default; } }
+
         private static DraftHistory _history;
 
         // 前回週のバンド（選手Id→バンド）。null＝まだ基準を採っていない＝次の評価は差分を出さない。
@@ -92,7 +96,7 @@ namespace KokoSim.Unity.Shell
         /// <summary>今の在籍者ぜんぶの注目度スナップショット（ドラフト画面・キャリア画面の表示用）。</summary>
         public static IReadOnlyList<DraftEvaluation> Evaluate()
         {
-            return DraftEngine.EvaluateRoster(Pool, StatsOf, Coefficients);
+            return DraftEngine.EvaluateRoster(Pool, StatsOf, Coefficients, Strength);
         }
 
         /// <summary>
@@ -143,7 +147,7 @@ namespace KokoSim.Unity.Shell
             if (yearIndex <= _lastNominatedYear) return null;
 
             var rng = new Xoshiro256Random(GameSeed.Master ^ (NominationStream ^ (ulong)yearIndex));
-            var result = DraftEngine.RunNomination(yearIndex, Pool, StatsOf, Coefficients, rng);
+            var result = DraftEngine.RunNomination(yearIndex, Pool, StatsOf, Coefficients, Strength, rng);
             History.AddFrom(result, calendarYear, UniformNumberOf);
 
             _lastNominatedYear = yearIndex;

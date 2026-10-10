@@ -17,7 +17,7 @@
         <!-- 共通トップバー（タブ帯）。「システム」タブから開いたときだけ出す＝他のタブと同じ見え方にする。
              タイトル/ホームのメニュー経由では隠す（SaveSlotsController が display を切る）。 -->
         <ui:VisualElement name="ss-topbar" style="display: none;">
-            <ui:Instance template="TopBar" />
+            <ui:Instance template="TopBar" class="topbar-slot" />
         </ui:VisualElement>
         <ui:VisualElement class="ss-main">
 

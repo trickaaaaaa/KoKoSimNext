@@ -4,7 +4,9 @@
 //
 // 領域塗り分け（design-18 §3.5 U2着衣メッシュ用・2026-07-28）:
 // _UseRegions=1 のとき、UV1.x（DuelUniformMeshBuilder が載せた領域ID (id+0.5)/8）で
-// _RegionColors[8]（SetColorArray でスクリプトから設定・Properties宣言不可）を引く。
+// _RegionColors[9]（SetColorArray でスクリプトから設定・Properties宣言不可）を引く。
+// **刻み幅は /8 のまま**で、領域を足すときは 8番以降＝UV1.x が 1 を超える側へ伸ばす
+// （割る数を変えると既に焼いた資産の領域IDが全部ずれる。issue #621）。
 // _UseRegions=0（既定）は従来どおり _BaseColor 一色＝地形・小道具の既存呼び出しは無改修で動く。
 // 1アクター1マテリアルを維持する（サブメッシュ分割にしない）＝DuelMotionCatalog.BakeRig の
 // sharedMaterial（単数）前提を壊さない。
@@ -50,7 +52,7 @@ Shader "KokoSim/DuelStageProxyLambert"
             float4 _LightDir;
             float _Ambient;
             float _UseRegions;
-            float4 _RegionColors[8];
+            float4 _RegionColors[9];
             float _StripeOn;
             fixed4 _StripeColor;
             float _StripeFreq;

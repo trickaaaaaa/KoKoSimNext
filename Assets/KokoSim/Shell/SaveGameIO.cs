@@ -87,8 +87,11 @@ namespace KokoSim.Unity.Shell
             NationService.Capture(s);
             GameSession.Current.Capture(s);
             NewTeamService.Capture(s);
+            ManagerTransferService.Capture(s);
             TeamColorProvider.Capture(s);
             DraftService.Capture(s);
+            EventService.Capture(s);
+            TrainingBoostService.Capture(s);
             return s;
         }
 
@@ -108,11 +111,18 @@ namespace KokoSim.Unity.Shell
             NationService.Restore(s);
             GameSession.Current.Restore(s);
             NewTeamService.Restore(s);
+            ManagerTransferService.Restore(s);
             TeamColorProvider.Restore(s);
             // 教え子名鑑はロスター**と**成績の後（issue #586）。復元時にバンドの基準を採り直すため、
             // 部員（RosterService）と公式戦通算（GameSession.Stats）の両方が据わっている必要がある。
             DraftService.Restore(s);
+            EventService.Restore(s);
+            TrainingBoostService.Restore(s);
             if (s.Tournament != null) TournamentEntry.RestoreRunner(s.Tournament);
+            // 観るだけの甲子園（自校が出場していない年）。対話モードの大会とは排他なので順序は問わない。
+            if (s.Koshien != null) KoshienEntry.RestoreSpectated(s.Koshien);
+            // 観るだけのセンバツ（自校が選ばれていない年）。同上。
+            if (s.Senbatsu != null) SenbatsuEntry.RestoreSpectated(s.Senbatsu);
         }
 
         /// <summary>
@@ -122,6 +132,7 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void ResetForNewGame()
         {
+            GameSeed.RerollForNewGame();
             RosterService.Reset();
             ManagerService.Reset();
             NationService.Reset();
@@ -129,7 +140,10 @@ namespace KokoSim.Unity.Shell
                 NationService.DefaultSchoolName, NationService.DefaultPrefectureId, null);
             GameSession.Current.ResetForNewGame();
             NewTeamService.Clear();
+            ManagerTransferService.Clear();
             TeamColorProvider.Clear();
+            EventService.Clear();
+            TrainingBoostService.Clear();
             GameClock.Reset();
             LastSavedAt = null;   // 新しい進行＝まだ一度も保存していない
         }

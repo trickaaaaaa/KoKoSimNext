@@ -42,6 +42,7 @@ public static class DraftLoader
             UpperRoundThreshold = d.UpperRoundThreshold ?? def.UpperRoundThreshold,
             MiddleRoundThreshold = d.MiddleRoundThreshold ?? def.MiddleRoundThreshold,
             CandidateThreshold = d.CandidateThreshold ?? def.CandidateThreshold,
+            CandidateMinTier = d.CandidateMinTier ?? def.CandidateMinTier,
             NominationMidpoint = d.NominationMidpoint ?? def.NominationMidpoint,
             NominationSpread = d.NominationSpread ?? def.NominationSpread,
         };
@@ -70,6 +71,7 @@ public static class DraftLoader
         public double? UpperRoundThreshold { get; set; }
         public double? MiddleRoundThreshold { get; set; }
         public double? CandidateThreshold { get; set; }
+        public KokoSim.Engine.Nation.Tier? CandidateMinTier { get; set; }
         public double? NominationMidpoint { get; set; }
         public double? NominationSpread { get; set; }
     }

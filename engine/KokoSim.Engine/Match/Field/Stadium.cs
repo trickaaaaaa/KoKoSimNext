@@ -42,4 +42,68 @@ public sealed record Stadium
         CenterFenceM = CenterM,
         FenceHeightM = FenceHeightM,
     };
+
+    /// <summary>
+    /// 甲子園（設計書13 §1・OPEN-QUESTIONS Q11）。夏の甲子園の全試合はここで行われる＝
+    /// 大会ごとの球場割当（<see cref="Nation.Tournaments.StadiumPlan"/>）と違い固定なので定数で持つ。
+    ///
+    /// <para><b>両翼が狭い変則球場</b>（95m）で中堅は深い（118m）。地方の県営級（100/122）より
+    /// 両翼への一発が出やすい（実測 HR% 3.22% vs 2.03%）＝「地方の広い球場で勝ち上がった打線が
+    /// 甲子園の浅い両翼で一発を打つ」が再現される。設計書12-stadiums の旧記述（甲子園は本塁打が
+    /// 出にくい）は実寸では成立しないため、実測を採って設計書13を改訂済み。</para>
+    ///
+    /// <para><b>値は <c>data/stadiums.yaml</c> の <c>koshien</c> と一致させること</b>（不変条件#4）。
+    /// <c>StadiumDefaultsConsistencyTests</c> が両者の一致を固定する。</para>
+    /// </summary>
+    public static Stadium Koshien { get; } = new()
+    {
+        Id = "koshien",
+        Name = "甲子園",
+        Tier = StadiumTier.National,
+        LeftM = 95.0,
+        RightM = 95.0,
+        CenterM = 118.0,
+        FenceHeightM = 2.6,
+    };
+
+    /// <summary>
+    /// 地方大会（県大会）の汎用ティア球場（設計書13 §1・issue #41系「地方大会の球場割当」）。
+    /// 47県固有の実在球場は追わず、data/stadiums.yaml の汎用タイプ3種を序盤/準決勝・決勝で使い分ける
+    /// （<see cref="RegionalStadiumTier"/>）。<b>値は data/stadiums.yaml と一致させること</b>（不変条件#4。
+    /// <c>StadiumLoaderTests.RegionalTierDefaults_MatchTheRepositoryYaml</c> が固定する）。
+    /// </summary>
+    public static Stadium MunicipalSmall01 { get; } = new()
+    {
+        Id = "municipal_small_01",
+        Name = "市営球場（狭い）",
+        Tier = StadiumTier.Municipal,
+        LeftM = 91.0,
+        RightM = 91.0,
+        CenterM = 115.0,
+        FenceHeightM = 2.0,
+    };
+
+    /// <summary>同上（序盤ラウンドのもう一方）。</summary>
+    public static Stadium MunicipalSmall02 { get; } = new()
+    {
+        Id = "municipal_small_02",
+        Name = "市営球場（やや狭い）",
+        Tier = StadiumTier.Municipal,
+        LeftM = 93.0,
+        RightM = 93.0,
+        CenterM = 116.0,
+        FenceHeightM = 2.0,
+    };
+
+    /// <summary>同上（準決勝・決勝＝県営級。地方の県営級の実測基準として design-02/13 で参照される寸法）。</summary>
+    public static Stadium PrefLarge { get; } = new()
+    {
+        Id = "pref_large_01",
+        Name = "県営球場（広い）",
+        Tier = StadiumTier.Prefectural,
+        LeftM = 100.0,
+        RightM = 100.0,
+        CenterM = 122.0,
+        FenceHeightM = 3.0,
+    };
 }

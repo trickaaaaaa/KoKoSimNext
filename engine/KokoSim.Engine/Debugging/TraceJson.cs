@@ -77,6 +77,9 @@ public static class TraceJson
         sb.Append(",\"st\":{\"press\":").Append(Int(t.PressureIndex))
           .Append(",\"rat\":").Append(Bool(t.Rattled))
           .Append(",\"pf\":").Append(Int(t.PitchingFatigue))
+          .Append(",\"evc\":").Append(Num(t.EffectiveVelocityCeilingKmh, 1))
+          .Append(",\"ectl\":").Append(Int(t.EffectiveControl))
+          .Append(",\"fam\":").Append(Int(t.FamiliarityPa))
           .Append(",\"gear\":").Append(Str(t.Gear.ToString()))
           .Append(",\"pol\":").Append(Str(t.Policy.ToString())).Append('}');
 

@@ -1,3 +1,4 @@
+using KokoSim.Engine.Nation;
 using KokoSim.Engine.Season;
 using Xunit;
 
@@ -33,12 +34,35 @@ public sealed class FameTalentCenterTests
     [Fact]
     public void TalentCenter_CapsNearSpan_AtMaxFame()
     {
-        // 頭打ち（cap）は実装の必須要件（issue #127）。Fame=100でも既定+span(=40)を超えない。
+        // 頭打ち（cap）は実装の必須要件（issue #127）。Fame=100でも既定+span を超えない。
         var atMax = C.TalentCenterFromFame(100);
         Assert.True(atMax <= C.TalentCenterDefault + C.FameTalentCenterSpan,
             $"Fame=100のtalentCenter({atMax})が上限({C.TalentCenterDefault + C.FameTalentCenterSpan})を超えた");
-        // 控えめな幅（owner決定 1-A）: 32→40程度に収まる。
-        Assert.InRange(atMax, 38.0, 40.0);
+        // 2026-08-15（案D・オーナー決定）: 名声を極めた学校には B/A の新入生が入る＝Fame=100 で中心 B 帯（70〜79）。
+        // 旧決定 1-A「控えめ（32→40）」は撤回。
+        Assert.InRange(atMax, 70.0, 79.0);
+    }
+
+    [Fact]
+    public void TalentCenter_LadderByFame_MatchesOwnerDecision()
+    {
+        // 案D の目標帯（2026-08-15）: 名声20→E / 40→D / 60→C / 80→B。名声は減衰（CareerCoefficients.FameDecay）で
+        // 自己制限するので、この帯に「居続ける」には勝ち続ける必要がある＝暴走防止は減衰側が担う。
+        Assert.Equal(Tier.E, Tiers.FromStrength(C.TalentCenterFromFame(20)));
+        Assert.Equal(Tier.D, Tiers.FromStrength(C.TalentCenterFromFame(40)));
+        Assert.Equal(Tier.C, Tiers.FromStrength(C.TalentCenterFromFame(60)));
+        Assert.Equal(Tier.B, Tiers.FromStrength(C.TalentCenterFromFame(80)));
+    }
+
+    [Fact]
+    public void PhysicalCenter_FollowsTalentCenter_WithSlope()
+    {
+        // 身体系中心の名声連動（案D・設計書01 §1.1b-2 但し書き）: 名声0 では PhysicalMean のまま、
+        // 中心が上がったぶんの slope 倍だけ上がる。slope=0 なら旧来の名声独立に戻る（1ビット一致の口）。
+        Assert.Equal(C.PhysicalMean, C.PhysicalCenterFor(C.TalentCenterDefault), 9);
+        Assert.Equal(C.PhysicalMean + 40 * C.PhysicalTalentSlope, C.PhysicalCenterFor(C.TalentCenterDefault + 40), 9);
+        var independent = C with { PhysicalTalentSlope = 0 };
+        Assert.Equal(independent.PhysicalMean, independent.PhysicalCenterFor(90), 9);
     }
 
     [Fact]

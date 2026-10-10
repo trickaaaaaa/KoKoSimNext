@@ -98,7 +98,8 @@ public sealed class TeamState
     {
         Errors++;
         if (fielder is null) return;
-        if (!_field.TryGetValue(fielder, out var a)) { a = new FieldAccum(); _field[fielder] = a; }
+        var key = KeyOf(fielder);
+        if (!_field.TryGetValue(key, out var a)) { a = new FieldAccum(); _field[key] = a; }
         a.Position = role;
         a.Errors++;
     }
@@ -109,20 +110,54 @@ public sealed class TeamState
     public int SacrificeBunts { get; private set; }
     public int SacrificeBuntSuccesses { get; private set; }
     public int Squeezes { get; private set; }
+    // 封殺率の実測用（issue bunt-no-take-on-ball-pitches）。
+    public int BuntForceOuts { get; private set; }
+    public int SqueezeBallInPlay { get; private set; }
+    public int SqueezeRunnerOutAtHome { get; private set; }
 
     /// <summary>盗塁企図を走者個人＋チーム計へ記録する（issue #91）。</summary>
     public void RecordSteal(Player runner, bool success)
     {
         StealAttempts++;
         if (success) StealSuccesses++;
-        if (!_bat.TryGetValue(runner, out var a)) { a = new BatAccum(); _bat[runner] = a; }
+        var key = KeyOf(runner);
+        if (!_bat.TryGetValue(key, out var a)) { a = new BatAccum(); _bat[key] = a; }
         if (success) a.SB++; else a.CS++;
     }
+    /// <summary>
+    /// issue #626: 無効になった盗塁企図の記録を取り消す（ファウル＝ボールデッド／打球＝打球優先）。
+    ///
+    /// <para>盗塁は投球より前に完全解決してから実球を投げる構造なので、投球結果が「無かったことにする球」
+    /// だったと判るのは記録の後になる。乱数消費順を動かさないために<b>解決はそのまま走らせて記録だけ戻す</b>
+    /// （<see cref="RecordSteal"/> と対称。ここで乱数も試合状態も動かさない）。</para>
+    /// </summary>
+    public void UndoSteal(Player runner, bool success)
+    {
+        StealAttempts--;
+        if (success) StealSuccesses--;
+        if (!_bat.TryGetValue(KeyOf(runner), out var a)) return;
+        if (success) a.SB--; else a.CS--;
+    }
+
+    /// <summary>issue #626: 無効になった得点の個人帰属を取り消す（本盗・重盗の生還）。</summary>
+    public void UndoRun(Player runner)
+    {
+        if (_bat.TryGetValue(KeyOf(runner), out var a)) a.R--;
+    }
+
     public void RecordSacrificeBunt(bool success) { SacrificeBunts++; if (success) SacrificeBuntSuccesses++; }
+    public void RecordBuntForceOut() => BuntForceOuts++;
     public void RecordSqueeze() => Squeezes++;
+    /// <summary>スクイズでボールが実際にプレーされた回数と、そのうち三塁走者が本塁で刺された回数
+    /// （issue bunt-no-take-on-ball-pitches・design-02 §4.4「三塁走者スタート」）。</summary>
+    public void RecordSqueezeBallInPlay(bool runnerOut)
+    {
+        SqueezeBallInPlay++;
+        if (runnerOut) SqueezeRunnerOutAtHome++;
+    }
 
     // ===== 個人成績（ボックススコア） =====
-    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF; }
+    private sealed class BatAccum { public int PA, AB, H, Doubles, Triples, HR, RBI, BB, SO, HBP, SB, CS, R, SF, SH; }
     private sealed class PitAccum
     {
         public int BF, H, Runs, EarnedRuns, SO, BB, Outs, Pitches, HB, HRA;
@@ -134,13 +169,48 @@ public sealed class TeamState
     private readonly Dictionary<Player, PitAccum> _pit = new();
     private readonly Dictionary<Player, FieldAccum> _field = new();
 
-    /// <summary>打者の1打席を記録（rbi ≈ そのプレーで入った得点）。isSacFly＝犠飛（issue #68）は打数から除外する。</summary>
-    public void RecordBatting(Player batter, PlateAppearanceResult r, int rbi, bool isSacFly = false)
+    /// <summary>
+    /// 成績の帰属キーの読み替え表（守備位置を書き換えた新インスタンス → 元の選手のキー）。
+    ///
+    /// <para><see cref="Player"/> は record ＝既定の値等価が <see cref="Player.Position"/> を含むので、
+    /// コンバート・投野交代・DH解除（この型が <c>with { Position = ... }</c> で差し替える箇所）を挟むと
+    /// 同じ選手の成績が2つの辞書エントリへ割れる。実害は ①ボックススコアに同じ選手が2行出る
+    /// （原本スタメン行＝交代前の分／末尾に交代後の分）②通算成績の出場試合数が二重計上される
+    /// （<see cref="Stats.StatBook.FoldGame"/> は行単位で畳み込む）③試合内累積で効くスキル（尻上がり等）の
+    /// 打席数が守備位置変更でリセットされる、の3つ。</para>
+    ///
+    /// <para>比較器で Position を無視する手は<b>採れない</b>。守備位置以外に個人を識別する情報を持たない
+    /// 選手（同能力・無名・背番号なし）が同じチームに複数居ると全員が1人に潰れ、複数のスタメン行が
+    /// 同じ集計を共有して合計が食い違う。そこで「位置を書き換えた瞬間に元のキーへ結び直す」形にする＝
+    /// 守備位置が動かない通常の試合では表が空のままで、従来と1ビットも変わらない。</para>
+    /// </summary>
+    private readonly Dictionary<Player, Player> _accountKey = new();
+
+    /// <summary>成績を積む先のキー（守備位置を書き換える前の選手）。読み替えが無ければ本人。</summary>
+    private Player KeyOf(Player p) => _accountKey.TryGetValue(p, out var k) ? k : p;
+
+    /// <summary>
+    /// 守備位置を書き換えた新インスタンス <paramref name="to"/> を、元の選手 <paramref name="from"/> の
+    /// 帰属キーへ結び付けて返す。<c>with { Position = ... }</c> は必ずこれを通す。
+    /// </summary>
+    private Player Rekey(Player from, Player to)
     {
-        if (!_bat.TryGetValue(batter, out var a)) { a = new BatAccum(); _bat[batter] = a; }
+        if (!from.Equals(to)) _accountKey[to] = KeyOf(from);
+        return to;
+    }
+
+    /// <summary>
+    /// 打者の1打席を記録（rbi ≈ そのプレーで入った得点）。isSacFly＝犠飛（issue #68）／
+    /// isSacBunt＝犠打（issue sacrifice-bunt-counted-as-at-bat）はどちらも打数から除外する。
+    /// </summary>
+    public void RecordBatting(Player batter, PlateAppearanceResult r, int rbi, bool isSacFly = false, bool isSacBunt = false)
+    {
+        var key = KeyOf(batter);
+        if (!_bat.TryGetValue(key, out var a)) { a = new BatAccum(); _bat[key] = a; }
         a.PA++;
         if (isSacFly) a.SF++;
-        if (r.IsAtBat() && !isSacFly) a.AB++;
+        if (isSacBunt) a.SH++;
+        if (r.IsAtBat() && !isSacFly && !isSacBunt) a.AB++;
         if (r.IsHit()) a.H++;
         if (r == PlateAppearanceResult.Double) a.Doubles++;
         if (r == PlateAppearanceResult.Triple) a.Triples++;
@@ -154,7 +224,8 @@ public sealed class TeamState
     /// <summary>走者/打者の生還を記録（得点＝個人の生還数, issue #77）。打席と独立に本塁到達で1加算。</summary>
     public void RecordRun(Player runner)
     {
-        if (!_bat.TryGetValue(runner, out var a)) { a = new BatAccum(); _bat[runner] = a; }
+        var key = KeyOf(runner);
+        if (!_bat.TryGetValue(key, out var a)) { a = new BatAccum(); _bat[key] = a; }
         a.R++;
     }
 
@@ -163,7 +234,8 @@ public sealed class TeamState
     public void RecordPitching(Player pitcher, PlateAppearanceResult r, int runs, int outs, int pitches,
         PitchType? decisivePitch = null, int unearnedRuns = 0)
     {
-        if (!_pit.TryGetValue(pitcher, out var a)) { a = new PitAccum(); _pit[pitcher] = a; }
+        var key = KeyOf(pitcher);
+        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
         a.BF++;
         if (r.IsHit()) a.H++;
         a.Runs += runs;
@@ -183,11 +255,53 @@ public sealed class TeamState
         }
     }
 
+    /// <summary>
+    /// 失点・自責点を投手 <paramref name="pitcher"/> の行へ直接積む（issue inherited-runner-run-attribution）。
+    /// 引き継ぎ走者の生還（責任投手＝前の投手）と、打席の外で入る得点（本盗・重盗・暴投/捕逸）に使う。
+    /// <see cref="RecordPitching"/> の runs は「その打席の投手に付く分」だけになり、残りはここで責任投手へ付ける。
+    /// 負値は巻き戻し（issue #626 の盗塁無効化）。対戦記録（BF/H/SO/BB…）は動かさない。
+    /// </summary>
+    public void ChargeRuns(Player pitcher, int runs, int unearnedRuns = 0)
+    {
+        var key = KeyOf(pitcher);
+        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        a.Runs += runs;
+        a.EarnedRuns += runs - unearnedRuns;
+    }
+
+    /// <summary>
+    /// 打席の外で成立した走塁アウト（盗塁死・牽制死・スクイズ挟殺）を投手のアウト数（投球回）へ計上する。
+    /// これらは打席確定を通らず <see cref="RecordPitching"/> に乗らないため、計上しないと完投でも
+    /// アウト合計が27に届かず「9回投げたのに8回2/3」と表示される。対戦記録（BF等）は動かさない。
+    /// outs=-1 は issue #626 の巻き戻し用（ファウル/打球で無効になった盗塁死と対で呼ぶ）。
+    /// </summary>
+    public void RecordRunnerOut(Player pitcher, int outs = 1)
+    {
+        var key = KeyOf(pitcher);
+        if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
+        a.Outs += outs;
+    }
+
     /// <summary>当該試合でこの打者が既に完了した打席数（尻上がり等の試合内非線形スキル用, 設計書10）。</summary>
-    public int PriorPlateAppearances(Player batter) => _bat.TryGetValue(batter, out var a) ? a.PA : 0;
+    public int PriorPlateAppearances(Player batter) => _bat.TryGetValue(KeyOf(batter), out var a) ? a.PA : 0;
+
+    // 打者×投手の試合内対戦回数（設計書02 §2.3b「慣れ」・issue times-through-order-familiarity）。
+    // キーは帰属キー（守備位置の書き換えで実体が変わっても同じ選手）。継投で新しい投手が来れば自然に0から。
+    private readonly Dictionary<(Player Batter, Player Pitcher), int> _matchupPa = new();
+
+    /// <summary>この打者がこの試合でこの投手と既に完了した打席数（慣れの蓄積値）。相手が変われば0。</summary>
+    public int PriorPlateAppearancesAgainst(Player batter, Player pitcher)
+        => _matchupPa.TryGetValue((KeyOf(batter), KeyOf(pitcher)), out var n) ? n : 0;
+
+    /// <summary>打席の確定で対戦回数を1つ進める（<see cref="RecordBatting"/> と同じ打席境界で呼ぶ）。</summary>
+    public void RecordMatchup(Player batter, Player pitcher)
+    {
+        var key = (KeyOf(batter), KeyOf(pitcher));
+        _matchupPa[key] = (_matchupPa.TryGetValue(key, out var n) ? n : 0) + 1;
+    }
 
     /// <summary>当該試合でこの投手が既に対戦した打者数（尻上がり/打者一巡用, 設計書10）。継投でリセット。</summary>
-    public int PriorBattersFaced(Player pitcher) => _pit.TryGetValue(pitcher, out var a) ? a.BF : 0;
+    public int PriorBattersFaced(Player pitcher) => _pit.TryGetValue(KeyOf(pitcher), out var a) ? a.BF : 0;
 
     /// <summary>打順順の打撃成績（スタメン9人＋途中出場で打席に立った選手）。</summary>
     public IReadOnlyList<BattingLine> BuildBattingLines()
@@ -198,8 +312,8 @@ public sealed class TeamState
         {
             // 投手枠は実体化後のインスタンス（成績の帰属キー）で引く。実体化が恒等なら _team.BattingOrder[i] と同一。
             var p = !_team.UsesDh && i == _team.PitcherSlot ? _starter : _team.BattingOrder[i];
-            starters.Add(p);
-            var a = _bat.TryGetValue(p, out var acc) ? acc : new BatAccum();
+            starters.Add(KeyOf(p));
+            var a = _bat.TryGetValue(KeyOf(p), out var acc) ? acc : new BatAccum();
             // DHスロットは守備に就かない＝表示だけ FieldPosition.DesignatedHitter（内部の本来守備位置は
             // Player.Position に温存＝守備適性計算・DH解除時の引き継ぎに使う, issue #70）。
             var displayPos = _team.UsesDh && i == _team.DhSlot ? FieldPosition.DesignatedHitter : p.Position;
@@ -215,7 +329,7 @@ public sealed class TeamState
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
-                a.HBP, a.SB, a.CS, a.R, a.SF);
+                a.HBP, a.SB, a.CS, a.R, a.SF, a.SH);
     }
 
     /// <summary>失策があった選手の守備成績（issue #91）。0件の選手は載せない＝合計はチーム計 <see cref="Errors"/> と一致する。</summary>
@@ -234,8 +348,8 @@ public sealed class TeamState
         var seen = new HashSet<Player>();
         void Add(Player p)
         {
-            if (p == null || seen.Contains(p) || !_pit.TryGetValue(p, out var a)) return;
-            seen.Add(p);
+            if (p == null || seen.Contains(KeyOf(p)) || !_pit.TryGetValue(KeyOf(p), out var a)) return;
+            seen.Add(KeyOf(p));
             IReadOnlyDictionary<PitchType, PitchTypeBattingLine>? byPitch = a.ByPitch.Count > 0
                 ? a.ByPitch.ToDictionary(kv => kv.Key, kv => new PitchTypeBattingLine(kv.Value.AtBats, kv.Value.Hits, kv.Value.HomeRuns))
                 : null;
@@ -261,7 +375,7 @@ public sealed class TeamState
         for (var i = 0; i < 9; i++)
         {
             var p = _lineup[i];
-            var a = _bat.TryGetValue(p, out var acc) ? acc : null;
+            var a = _bat.TryGetValue(KeyOf(p), out var acc) ? acc : null;
             // 現在DHが解除されていれば(_usesDh=false)このスロットは実守備位置を表示する（issue #70）。
             var displayPos = _usesDh && i == _dhSlot ? FieldPosition.DesignatedHitter : p.Position;
             slots.Add(new LiveBatterSlot(
@@ -291,12 +405,13 @@ public sealed class TeamState
     public LivePitcherToday LivePitcherLine(int pendingPitches = 0)
     {
         var p = CurrentPitcher;
-        var a = _pit.TryGetValue(p, out var acc) ? acc : null;
+        var a = _pit.TryGetValue(KeyOf(p), out var acc) ? acc : null;
         return new LivePitcherToday(
             p.SourceId, p.UniformNumber, p.Name, p.Throws,
             a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
             p.Grade, PitcherChanges + 1, StaminaRemainingOf(p, FatiguePitches + pendingPitches),
-            pendingPitches, a?.BB ?? 0, a?.HB ?? 0, a?.EarnedRuns ?? 0);
+            pendingPitches, a?.BB ?? 0, a?.HB ?? 0, a?.EarnedRuns ?? 0,
+            EffectiveBaseStamina(p), PriorWeekPitchesOf(p), _weeklyPitchLimit);
     }
 
     /// <summary>ライブ観戦の控え（未出場の交代候補・背番号順）。打順は持たないので Order=0。観測データ。</summary>
@@ -305,7 +420,7 @@ public sealed class TeamState
         var list = new List<LiveBatterSlot>(_reserves.Count);
         foreach (var p in _reserves)
         {
-            var a = _bat.TryGetValue(p, out var acc) ? acc : null;
+            var a = _bat.TryGetValue(KeyOf(p), out var acc) ? acc : null;
             list.Add(new LiveBatterSlot(
                 0, p.SourceId, p.UniformNumber, p.Name, p.Position, p.Bats,
                 a?.AB ?? 0, a?.H ?? 0, a?.RBI ?? 0, null, p.ConditionValue, p.Grade));
@@ -324,7 +439,7 @@ public sealed class TeamState
         foreach (var p in _reserves)
         {
             if (p.Position != FieldPosition.Pitcher) continue;
-            var a = _pit.TryGetValue(p, out var acc) ? acc : null;
+            var a = _pit.TryGetValue(KeyOf(p), out var acc) ? acc : null;
             list.Add(new LivePitcherToday(
                 p.SourceId, p.UniformNumber, p.Name, p.Throws,
                 a?.Pitches ?? 0, a?.Outs ?? 0, a?.Runs ?? 0, a?.SO ?? 0, p.ConditionValue,
@@ -563,15 +678,32 @@ public sealed class TeamState
     }
 
     /// <summary>
-    /// プレッシャー負補正の緩和量（0〜1）: 主将の在場×統率力（§8）＋伝令の効果窓（§3）。
-    /// offense=true なら攻撃側（打者へ）、false なら守備側（投手へ）。
+    /// プレッシャー負補正の緩和量（0〜1）: 主将の在場×統率力（§8）＋ムードメーカーの在場（設計書10）＋
+    /// 伝令の効果窓（§3）。offense=true なら攻撃側（打者へ）、false なら守備側（投手へ）。
     /// </summary>
     public double MitigationFor(bool offense, TacticsCoefficients c, SkillCoefficients? skills = null)
     {
-        var m = CaptainMitigation(c, skills);
+        var m = CaptainMitigation(c, skills) + MoodmakerMitigation(skills);
         if (offense && OffenseCalmPa > 0) m += c.TimeoutMitigation;
         if (!offense && DefenseCalmPa > 0) m += c.TimeoutMitigation;
         return Math.Min(1.0, m);
+    }
+
+    /// <summary>
+    /// ムードメーカー（設計書10）の緩和量。出場中（投手 or 守備でフィールドに立っている）の誰か1人でも
+    /// 保有していれば加算する。主将の統率力とは別枠＝複数人保有していても加算は1回だけ。
+    /// </summary>
+    private double MoodmakerMitigation(SkillCoefficients? skills)
+    {
+        if (skills is null) return 0.0;
+        if (CurrentPitcher.Skills.Has(Skill.Moodmaker)) return skills.MoodmakerMitigationBonus;
+        for (var i = 0; i < 9; i++)
+        {
+            if (_usesDh && i == _dhSlot) continue;
+            if (!_usesDh && i == _pitcherSlot) continue;
+            if (_lineup[i].Skills.Has(Skill.Moodmaker)) return skills.MoodmakerMitigationBonus;
+        }
+        return 0.0;
     }
 
     /// <summary>
@@ -615,13 +747,45 @@ public sealed class TeamState
     /// スタミナ残量（1=満タン、0=目安投球数を使い切った）。継投の目安として見せるための観測値で、
     /// 実際の継投判定は <see cref="PitchingFatigue.ShouldRelieve"/>（目安投球数＋マージン。ハードキャップ撤廃, issue #356）が行う。
     /// </summary>
-    private static double StaminaRemainingOf(Player pitcher, double fatiguePitches)
+    private double StaminaRemainingOf(Player pitcher, double fatiguePitches)
     {
-        var stamina = pitcher.Pitching.StaminaPitches;
+        var stamina = EffectiveBaseStamina(pitcher);
         if (stamina <= 0) return 0.0;
         var remaining = 1.0 - fatiguePitches / stamina;
         return remaining < 0.0 ? 0.0 : remaining > 1.0 ? 1.0 : remaining;
     }
+
+    // ===== 試合間の回復モデル（設計書02 §1.1e-2, issue #41 本流配線） =====
+    private IReadOnlyDictionary<Player, double>? _pitchRecovery;
+
+    /// <summary>
+    /// 大会台帳（<see cref="Nation.Tournaments.TournamentPitchLedger"/>）から求めた実効目安投球数を注入する
+    /// （<see cref="GameEngine.NewProgress"/> から。null/未登録の投手は素の <c>Pitching.StaminaPitches</c> のまま
+    /// ＝一発トーナメント序盤・Balance CLI 等は従来挙動と完全一致）。選手能力そのもの
+    /// （<see cref="Players.PitcherAttributes.StaminaPitches"/>）は書き換えない。
+    /// </summary>
+    public void SetPitchRecovery(IReadOnlyDictionary<Player, double>? effectiveStaminaPitches)
+        => _pitchRecovery = effectiveStaminaPitches;
+
+    /// <summary>その投手の実効目安投球数（連戦の消耗を反映済み。上書きが無ければ素の目安投球数）。</summary>
+    public double EffectiveBaseStamina(Player pitcher)
+        => _pitchRecovery is not null && _pitchRecovery.TryGetValue(pitcher, out var v)
+            ? v : pitcher.Pitching.StaminaPitches;
+
+    // ===== 試合限りの好不調 dayForm（設計書02 §3.3b, issue dayform-dictionary-shared-across-teams） =====
+    private IReadOnlyDictionary<Player, double>? _dayForm;
+
+    /// <summary>
+    /// 当日の出来（<see cref="GameEngine.NewProgress"/> の抽選結果）を注入する。<see cref="_pitchRecovery"/>
+    /// と同じ理由でチームごとに別辞書にする＝ <see cref="Player"/> が値等価の record なので、両チームを
+    /// 1本の辞書へ merge すると別校の選手が偶然全属性一致したとき同一キーに潰れかねない
+    /// （校内は背番号が一意なので同一チーム内では衝突しない）。
+    /// </summary>
+    public void SetDayForm(IReadOnlyDictionary<Player, double> dayForm) => _dayForm = dayForm;
+
+    /// <summary>当日の出来を引く（途中出場等で未登録なら0=平常）。</summary>
+    public double DayFormOf(Player p)
+        => _dayForm is not null && _dayForm.TryGetValue(p, out var v) ? v : 0.0;
 
     /// <summary>球数を加算。staminaWeight はギア「飛ばす/流す」の消耗倍率（既定1.0＝Normal）。</summary>
     public void AddPitches(int pitches, double staminaWeight = 1.0)
@@ -653,6 +817,14 @@ public sealed class TeamState
     public bool CurrentPitcherAtWeeklyLimit() => WeeklyPitchesFor(CurrentPitcher) >= _weeklyPitchLimit;
 
     /// <summary>
+    /// その投手の<b>持ち越し</b>球数（当試合ぶんを含まない）。HUD が「残り球数」を出すための観測値で、
+    /// 当試合ぶんは <see cref="LivePitcherToday.Pitches"/>＋PendingPitches として別に出ているため
+    /// ここで足さない（足すと UI 側で二重に数える）。
+    /// </summary>
+    public int PriorWeekPitchesOf(Player pitcher)
+        => _priorWeekPitches is not null && _priorWeekPitches.TryGetValue(pitcher, out var v) ? v : 0;
+
+    /// <summary>
     /// 控えが残っていれば継投する（既定の指名ラッパ）。動揺はリセット。
     /// 採るのは<b>名簿順（背番号順）で最初の「投手として置かれた控え」</b>＝控えを二分していた頃の先頭と同じ選手。
     /// 投手枠の控えが尽きたら名簿先頭の控えが緊急登板する（#93: 内部の投/野区分でゲートしない）。
@@ -676,7 +848,7 @@ public sealed class TeamState
         // 退いた投手は再登板できない（リエントリー禁止）。非DHでは打順からも外れる。
         var outgoing = CurrentPitcher;
         // 実況上の区別は「控えから出たか／守備に就いていた者が回ったか」。ここは常に控えからの登板。
-        _retired.Add(outgoing);
+        _retired.Add(KeyOf(outgoing));
         // 誰が上がっても本人の投手能力で投げる（#381。旧実装はここで潜在能力を詰め替えていた）。
         CurrentPitcher = sub;
         // 非DH制では投手は打順内。新投手を投手スロットへ反映（打者としても入れ替わる）。
@@ -741,14 +913,22 @@ public sealed class TeamState
     public bool RelieveWith(Player sub, ReliefBackfillCoefficients? backfill = null, bool allowBenchBackfill = true)
     {
         var skip = _usesDh ? _dhSlot : _pitcherSlot;
+        var fSlot = -1;
         for (var i = 0; i < _lineup.Length; i++)
+            if (i != skip && ReferenceEquals(_lineup[i], sub)) { fSlot = i; break; }
+        // 参照で拾えないときだけ帰属キーで引き直す＝コンバート後の実体を渡されても在フィールドと判る。
+        // 控えに残っている選手は対象外（同値の控えと守備者を取り違えないため。従来どおり継投へ回す）。
+        if (fSlot < 0 && !_reserves.Contains(sub))
         {
-            if (i != skip && ReferenceEquals(_lineup[i], sub))
-                return _usesDh
-                    ? PromoteFielderToMoundDh(sub, i, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill)
-                    : PromoteFielderToMound(sub, i, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill);
+            var s2 = IndexOf(sub);
+            if (s2 >= 0 && s2 != skip) fSlot = s2;
         }
-        return ChangePitcherTo(sub);
+        if (fSlot < 0) return ChangePitcherTo(sub);
+        // 昇格に渡すのは打順の現物（古い実体の Position で空き守備を決めると別の位置を backfill する）。
+        var onField = _lineup[fSlot];
+        return _usesDh
+            ? PromoteFielderToMoundDh(onField, fSlot, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill)
+            : PromoteFielderToMound(onField, fSlot, backfill ?? new ReliefBackfillCoefficients(), allowBenchBackfill);
     }
 
     /// <summary>
@@ -765,7 +945,7 @@ public sealed class TeamState
         var vacated = fielder.Position;   // 野手が空ける守備位置
         // マウンドへ動かすのは守備位置だけ（issue #381）。投手能力は全選手が最初から持っているので、
         // 登板の瞬間に詰め替える工程（旧 Materialize）は要らない＝詰め替え漏れという失敗の形が消える。
-        var mound = fielder with { Position = FieldPosition.Pitcher };
+        var mound = Rekey(fielder, fielder with { Position = FieldPosition.Pitcher });
 
         // ②判定: 空き守備を旧投手より明確に上手く守れるベンチ野手が居るか（打力で基準を補正）。
         var benchFielder = allowBenchBackfill ? BestReserveDefender() : null;
@@ -777,9 +957,9 @@ public sealed class TeamState
             {
                 // ②: 旧投手は退場（リエントリー禁止）。ベンチ野手が旧投手の打順スロットへ入り、空いた守備位置を守る。
                 _reserves.Remove(benchFielder);
-                _retired.Add(retiringPitcher);
+                _retired.Add(KeyOf(retiringPitcher));
                 _replacedAtSlot[_pitcherSlot] = retiringPitcher.Name;
-                _lineup[_pitcherSlot] = benchFielder with { Position = vacated };
+                _lineup[_pitcherSlot] = Rekey(benchFielder, benchFielder with { Position = vacated });
                 _lineup[fSlot] = mound;
                 CurrentPitcher = mound;
                 _pitcherSlot = fSlot;
@@ -798,7 +978,7 @@ public sealed class TeamState
         }
 
         // ①: 投野交代（旧投手を空き守備へ回す・両者残留）。_retired/_bench に触れない＝リエントリー禁止に抵触しない。
-        _lineup[_pitcherSlot] = retiringPitcher with { Position = vacated };
+        _lineup[_pitcherSlot] = Rekey(retiringPitcher, retiringPitcher with { Position = vacated });
         _lineup[fSlot] = mound;
         CurrentPitcher = mound;
         _pitcherSlot = fSlot;   // 投手の打順スロットは新投手（元野手）のスロットへ移る（非DH不変条件を維持）
@@ -828,7 +1008,7 @@ public sealed class TeamState
     {
         var retiringPitcher = CurrentPitcher;   // DHでは打順外＝必ず退場
         var vacated = fielder.Position;         // 野手が空ける守備位置
-        var mound = fielder with { Position = FieldPosition.Pitcher };
+        var mound = Rekey(fielder, fielder with { Position = FieldPosition.Pitcher });
         var dh = _lineup[_dhSlot];              // 元DH（守備に就いていない・打順スロット _dhSlot）
 
         // ②判定: 空き守備を元DHより明確に上手く守れるベンチ野手が居るか（元DHの打力で基準を補正＝好打者DHは残す）。
@@ -842,7 +1022,7 @@ public sealed class TeamState
         }
 
         // 共通: 野手Fをマウンドへ（打順スロット維持）、旧投手Pは退場、DH解除。
-        _retired.Add(retiringPitcher);
+        _retired.Add(KeyOf(retiringPitcher));
         _lineup[fSlot] = mound;
         CurrentPitcher = mound;
         _pitcherSlot = fSlot;
@@ -852,15 +1032,15 @@ public sealed class TeamState
         {
             // ②: ベンチ野手が空き守備へ・元DHの打順スロットへ入る。元DHは退場（リエントリー禁止）。
             _reserves.Remove(benchFielder!);
-            _retired.Add(dh);
+            _retired.Add(KeyOf(dh));
             _replacedAtSlot[_dhSlot] = dh.Name;
-            _lineup[_dhSlot] = benchFielder! with { Position = vacated };
+            _lineup[_dhSlot] = Rekey(benchFielder!, benchFielder! with { Position = vacated });
             backfiller = benchFielder!;
         }
         else
         {
             // ①相当: 元DHが空き守備に就く（DHを失って野手化・打順スロット維持）。
-            _lineup[_dhSlot] = dh with { Position = vacated };
+            _lineup[_dhSlot] = Rekey(dh, dh with { Position = vacated });
             backfiller = dh;
         }
 
@@ -903,7 +1083,7 @@ public sealed class TeamState
     public bool IsAvailable(Player sub) => _reserves.Contains(sub);
 
     /// <summary>この試合で退場済みか（リエントリー禁止＝再出場できない）。交代UIのグレーアウト判定に使う。</summary>
-    public bool IsRetired(Player p) => _retired.Contains(p);
+    public bool IsRetired(Player p) => _retired.Contains(KeyOf(p));
 
     /// <summary>試合開始時の控え（交代UIが「使い切った控え」をグレーアウト表示するための原本）。</summary>
     public IReadOnlyList<Player> RosterReserves => _team.Reserves;
@@ -918,10 +1098,20 @@ public sealed class TeamState
     public bool PinchHitNext(Player sub) => SubstituteAtSlot(_battingIndex, sub);
 
     /// <summary>塁上の走者 runner を控え sub に代える（代走）。打順・守備位置を継承。塁の差し替えは呼び出し側（BaseState）。</summary>
-    public bool PinchRunFor(Player runner, Player sub)
+    public bool PinchRunFor(Player runner, Player sub) => PinchRunFor(runner, sub, out _);
+
+    /// <summary>
+    /// 代走の内部版。<paramref name="inserted"/> は<b>実際に打順へ入った実体</b>で、呼び出し側は
+    /// これをそのまま塁へ差す。呼び出し側で <c>sub with { Position = runner.Position }</c> と組み直すと、
+    /// 渡された runner が古い実体だったときに打順の実体とズレ、塁上の走者の得点が別の帰属キーへ積まれる。
+    /// </summary>
+    public bool PinchRunFor(Player runner, Player sub, out Player? inserted)
     {
+        inserted = null;
         var slot = IndexOf(runner);
-        return slot >= 0 && SubstituteAtSlot(slot, sub);
+        if (slot < 0 || !SubstituteAtSlot(slot, sub)) return false;
+        inserted = _lineup[slot];
+        return true;
     }
 
     /// <summary>守備交代: 出場中の outgoing を控え sub に代える（守備位置を継承）。</summary>
@@ -948,7 +1138,7 @@ public sealed class TeamState
         for (var i = 0; i < _lineup.Length; i++) positions[i] = _lineup[i].Position;
         var next = Season.DefenseAssignment.Swap(positions, slotA, slotB);
         for (var i = 0; i < _lineup.Length; i++)
-            if (_lineup[i].Position != next[i]) _lineup[i] = _lineup[i] with { Position = next[i] };
+            if (_lineup[i].Position != next[i]) _lineup[i] = Rekey(_lineup[i], _lineup[i] with { Position = next[i] });
         return true;
     }
 
@@ -986,17 +1176,17 @@ public sealed class TeamState
 
         var oldPitcher = CurrentPitcher;
         var displaced = _lineup[fSlot];
-        var mound = reliever with { Position = FieldPosition.Pitcher };
+        var mound = Rekey(reliever, reliever with { Position = FieldPosition.Pitcher });
 
-        _retired.Add(displaced);
+        _retired.Add(KeyOf(displaced));
         _replacedAtSlot[fSlot] = displaced.Name;
         if (_usesDh)
         {
-            _lineup[fSlot] = oldPitcher with { Position = to };
+            _lineup[fSlot] = Rekey(oldPitcher, oldPitcher with { Position = to });
         }
         else
         {
-            _lineup[_pitcherSlot] = oldPitcher with { Position = to };
+            _lineup[_pitcherSlot] = Rekey(oldPitcher, oldPitcher with { Position = to });
             _lineup[fSlot] = mound;
             _pitcherSlot = fSlot;
         }
@@ -1053,17 +1243,17 @@ public sealed class TeamState
         {
             var target = IndexOf(_lineup.FirstOrDefault(p => p != dhPlayer && p.Position == pos)!);
             if (target < 0) return false;
-            _retired.Add(_lineup[target]);
+            _retired.Add(KeyOf(_lineup[target]));
             _replacedAtSlot[target] = _lineup[target].Name;   // 観測: 守備位置に就いた選手が退いた
-            _lineup[target] = dhPlayer with { Position = pos };
+            _lineup[target] = Rekey(dhPlayer, dhPlayer with { Position = pos });
         }
         else
         {
-            _retired.Add(dhPlayer);
+            _retired.Add(KeyOf(dhPlayer));
         }
         // 投手が DH の打順スロットへ入り、そこが投手スロットになる。
         _replacedAtSlot[_dhSlot] = dhPlayer.Name;   // 観測: DHが退いて投手が打順へ
-        _lineup[_dhSlot] = CurrentPitcher with { Position = FieldPosition.Pitcher };
+        _lineup[_dhSlot] = Rekey(CurrentPitcher, CurrentPitcher with { Position = FieldPosition.Pitcher });
         CurrentPitcher = _lineup[_dhSlot];
         _pitcherSlot = _dhSlot;
         _usesDh = false;
@@ -1081,22 +1271,36 @@ public sealed class TeamState
         // 控えは1本の名簿＝代打・代走・守備交代も継投も同じプールから起用する（#93 / issue #256 / #381）。
         if (!_reserves.Remove(sub)) return false;
         var outgoing = _lineup[slot];
-        _lineup[slot] = sub with { Position = outgoing.Position };
-        _retired.Add(outgoing);
+        _lineup[slot] = Rekey(sub, sub with { Position = outgoing.Position });
+        _retired.Add(KeyOf(outgoing));
         _replacedAtSlot[slot] = outgoing.Name;   // ライブ観戦の交代表示用（観測データ）
         Substitutions++;
         return true;
     }
 
+    /// <summary>
+    /// その選手が今就いている打順スロット（0始まり。居なければ -1）。
+    ///
+    /// <para>参照でなく値で引くので、守備位置を書き換えた後（コンバート・投野交代・DH解除）の実体と
+    /// 書き換える前の実体は<b>別物</b>になる。そのままだと <see cref="PinchRunFor"/> /
+    /// <see cref="DefensiveSub"/> が -1 を受けて<b>黙って不成立</b>になる（例外も記録も残らない）。
+    /// 帰属キー（<see cref="KeyOf"/>）へ揃えてから比べることで、どちらの実体を渡されても同じ枠を指す。
+    /// 読み替えが1件も無い＝守備位置が動いていない試合では従来の値一致と完全に同じ。</para>
+    /// </summary>
     private int IndexOf(Player p)
     {
+        var key = KeyOf(p);
         for (var i = 0; i < 9; i++)
-            if (_lineup[i] == p) return i;
+            if (_lineup[i] == p || KeyOf(_lineup[i]).Equals(key)) return i;
         return -1;
     }
 
     /// <summary>守備陣（打順の非投手8人＋現投手）を守備位置に配置する。DH制ではDHが守備に就かない（§6）。</summary>
     public IReadOnlyList<Fielder> DefensiveAlignment(FieldGeometry field)
+        => DefensiveAlignment(field, Players.AbilityEffectCoefficients.Identity);
+
+    /// <summary>守備陣（表示→物理の効き付き・設計書21）。試合の解決はこちらを通す。</summary>
+    public IReadOnlyList<Fielder> DefensiveAlignment(FieldGeometry field, Players.AbilityEffectCoefficients effect)
     {
         var byPos = new Dictionary<FieldPosition, FielderAttributes>();
         var skipSlot = _usesDh ? _dhSlot : _pitcherSlot;
@@ -1104,9 +1308,9 @@ public sealed class TeamState
         {
             if (i == skipSlot) continue;
             var p = _lineup[i];
-            byPos[p.Position] = p.ToFielder();
+            byPos[p.Position] = p.ToFielder(effect);
         }
-        byPos[FieldPosition.Pitcher] = CurrentPitcher.ToFielder();
+        byPos[FieldPosition.Pitcher] = CurrentPitcher.ToFielder(effect);
         return field.AlignmentFrom(byPos);
     }
 }

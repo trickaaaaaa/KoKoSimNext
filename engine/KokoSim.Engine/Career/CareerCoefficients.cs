@@ -9,13 +9,29 @@ public sealed record CareerCoefficients
     public double CoachingCap { get; init; } = 99.0;
 
     // --- 監督→学校強さ（指導力がチーム力を押し上げる） ---
-    public double CoachingToStrength { get; init; } = 0.78;
+    /// <summary>
+    /// 監督校の強さ＝<c>N(NewSchoolStrengthMean, Sd) + (指導力−20) × これ</c>。
+    /// 0.78→0.88（issue prefecture-high-rank-distribution・2026-09-05）: 全国母集団のσを 13→15 へ広げた際の追従。
+    /// σを広げると県1位の強さが上がる（神奈川 80.1→85.5）のに、プレイヤー側の上限だけが世界と連動していないため、
+    /// 据え置きだと 20年キャリアのセンバツ出場が 2.77→1.32回・生涯0回のキャリアが 20%→49% とキャリア難易度が
+    /// 一段上がってしまう（200シード実測）。0.88 で 2.23回・28% ＝ ほぼ変更前の水準に戻る。
+    /// <b>母集団の <c>NationCoefficients.StrengthSd</c> を動かしたらここも見直すこと</b>（世界とプレイヤーの相対位置を決める）。
+    /// </summary>
+    public double CoachingToStrength { get; init; } = 0.88;
 
     // --- フリー化資格（設計書04 §1.3） ---
     public int FreeKoshienThreshold { get; init; } = 1;   // 甲子園1回でフリー資格
     public double FreeFameThreshold { get; init; } = 52;  // または名声
 
     // --- 強制転任（教員監督, 設計書04 §1.3） ---
+    /// <summary>
+    /// 赴任してから強制転任の対象になるまでの最低在任年数。赴任した年に獲った1年生が卒業する
+    /// （3年で卒業）までは追い出されない、という手触りを保証する下限（2026-08-23 ユーザー指摘で追加）。
+    /// この年数未満は残留ロジスティックの抽選そのものを行わず必ず残留する。フリー化資格
+    /// （<see cref="FreeKoshienThreshold"/>/<see cref="FreeFameThreshold"/>）はこの下限の対象外
+    /// （実績による解放は早く起きてもプレイヤーに不利益がない）。
+    /// </summary>
+    public int MinTenureYears { get; init; } = 3;
     /// <summary>残留確率ロジスティックの中点となる信頼度（この信頼度で残留確率＝上限の半分）。
     /// TrustReset(50)近傍から到達可能な帯に置き、信頼を積むほど腰を据えられるようにする。</summary>
     public double RetainTrustThreshold { get; init; } = 60;
@@ -25,10 +41,32 @@ public sealed record CareerCoefficients
     public double RetainProbability { get; init; } = 0.8;
 
     // --- 名声（設計書04 §1.2, 全国区・持ち越し） ---
-    public double FameKoshienAppearance { get; init; } = 22.0;
+    // 2026-08-15（案2）: 甲22/勝1.5/減衰0.92 → 甲30/勝4.0/減衰0.80。旧値は時定数 1/(1−0.92)=12.5年で
+    // 「勝っても名声が動かない」（年2勝で5年目12・10年目21）。新値は時定数5年・定常＝勝数×20（旧18.75と同等）で
+    // 上がりも下がりも速い（100→年1勝で6年後41）。全国優勝は甲子園本戦の実プレイ接続まで実ゲームでは発火しない。
+    public double FameKoshienAppearance { get; init; } = 30.0;
     public double FameNationalChampion { get; init; } = 45.0;
-    public double FamePerWin { get; init; } = 1.5;
-    public double FameDecay { get; init; } = 0.92;
+    public double FamePerWin { get; init; } = 4.0;
+    public double FameDecay { get; init; } = 0.80;
+
+    // 2026-08-26（案C+D）: 上の加算だけだと ①名声のレンジが強さ60台で使い切られ（定常＝勝数×20 で、
+    // 実ゲームの年間公式戦勝数は強さ65で約5勝＝定常99＝S に張り付く）②県大会を制した年は名声がいくつでも
+    // 1年で S へ飛ぶ（13.4勝×4.0＋甲子園30＋番狂わせ8＝+91.7）。等級は10点刻みなので「F→D→急にA」に見える。
+    // 「公式戦勝数」の中身が sim（夏の県大会＋甲子園だけ）と実ゲーム（秋の県・地区も数える）で約2倍ずれている
+    // のが原因だが、勝数の数え方は変えずに**上げ方の形**で寝かせる（out/issues-pending/fame-rises-too-fast.md）。
+    /// <summary>
+    /// 逓減の基準となる名声の上限（案C）。<b>上昇側だけ</b>に <c>(1 − 名声/この値)</c> を掛け、
+    /// 上限に近いほど上がりにくくする。定常値が <c>100g/(20+g)</c>（g＝年間の上昇量）になり
+    /// 100 に張り付かない＝A・S は甲子園を積み重ねた監督のために空いたままになる。
+    /// 下降側（取りこぼしの負デルタ）には掛けない（名声が高いほど負けの罰が軽くなるのは逆）。
+    /// </summary>
+    public double FameGainCeiling { get; init; } = 100.0;
+    /// <summary>
+    /// 1年に上がれる名声の上限（案D）。逓減（<see cref="FameGainCeiling"/>）だけでは県制覇の年に
+    /// 2段飛ぶ（52→86）ので、<b>正味の上昇量</b>をここで頭打ちにする。下降側には効かない
+    /// （＝勝てなくなった王朝は従来どおり一世代で崩れる）。等級の帯幅が10なので +12＝1年で1段強。
+    /// </summary>
+    public double FameSeasonRiseCap { get; init; } = 12.0;
 
     // --- 番狂わせ連動の名声変動（issue #170, 設計書04 §1.2） ---
     // FamePerWin は「勝った事実」への一律加算のまま。ここは勝敗に加えて「相手との Tier 格差」だけを見る
@@ -77,6 +115,15 @@ public sealed record CareerCoefficients
     public double FacilityFundDonationPerFame { get; init; } = 20.0;
     /// <summary>甲子園出場の年に後援会から入る一時金[万円]。</summary>
     public double FacilityFundKoshienBonus { get; init; } = 1000.0;
+
+    // --- 甲子園出場が決まった日の激励金（設計書05 §1.1a・OB/卒業生の募金） ---
+    // 上の FacilityFundKoshienBonus（施設基金・年度末に無言で入る）とは<b>別の財布・別のタイミング</b>。
+    // こちらは**部費**＝遠征・宿泊・応援バスに使う運営費で、出場が決まったその場でイベントとして見える形で入る
+    // （オーナー決定 2026-08-21）。二重計上ではない（建物の金と遠征の金は現実でも別勘定）。
+    /// <summary>甲子園出場が決まった日にOB・卒業生から入る激励金の土台[万円]。</summary>
+    public double KoshienBerthDonationBase { get; init; } = 120.0;
+    /// <summary>同・名声1あたりの上乗せ[万円]（名声100で +150万＝年間予算の2倍強）。</summary>
+    public double KoshienBerthDonationPerFame { get; init; } = 1.5;
     /// <summary>全国優勝の年に入る一時金[万円]（甲子園出場ぶんとは別に上乗せ）。</summary>
     public double FacilityFundNationalTitleBonus { get; init; } = 5000.0;
 
@@ -85,4 +132,12 @@ public sealed record CareerCoefficients
     public double NewSchoolStrengthSd { get; init; } = 6.0;
     /// <summary>フリー監督が選べる好条件校の強さ。</summary>
     public double FreeChoiceSchoolStrength { get; init; } = 48.0;
+
+    // --- フリー監督のオファー（設計書04 §1.3「残留自由・他校オファーの選択制」） ---
+    /// <summary>フリー監督が1年に他校オファーを受け取る確率（残留はいつでも選べる＝拒否できる）。</summary>
+    public double FreeAgentOfferChance { get; init; } = 0.35;
+    /// <summary>1回のオファーで提示する移籍先候補の数（残留の選択肢は別枠で常に付く）。</summary>
+    public int FreeAgentOfferCount { get; init; } = 2;
+    /// <summary>オファー候補校の強さの散らばり（<see cref="FreeChoiceSchoolStrength"/> を中心とした正規分布）。</summary>
+    public double FreeAgentOfferSpread { get; init; } = 10.0;
 }

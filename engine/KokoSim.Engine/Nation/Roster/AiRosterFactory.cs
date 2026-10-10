@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using KokoSim.Engine.Core;
@@ -45,11 +46,18 @@ public static class AiRosterFactory
         var archSalt = 0x7B25_0000UL;
         var nameSalt = 0x4E27_0000UL;
         var rc = deps.Roster;
+        // 精神力・統率・リードの中心＝圧縮前の学校強度と校風（issue ai-school-mental-fixed-50。AiMentalModel が単一ソース）。
+        // 新入生は学年アーク前の値。進級（AiRosterCycle.AdvanceOneYear）とブートストラップの上級生でアークを載せる。
+        var mental = new AiMentalDraw(
+            AiMentalModel.MentalCenter(school.Strength, school.Style, rc), AiMentalModel.StyleBonus(school.Style, rc));
 
         // コホートは「守備8枠＋投手プール」ではなく**同じ生成器を通した N 人**（issue #384）。
         // 一人ひとり守備位置適性をロールし、そこから投手寄せ重み w（打撃の連続補間）と
         // 「投手として育っているか」を導く。誰がどこを守るかは AiTeamBuilder が毎回選抜する
         // ＝選手は配置を持たない（#366）。適性ロールは Fork＝主RNGの消費列を乱さない。
+        var apts = new int[pc.CohortSize][];
+        var leans = new bool[pc.CohortSize];
+        var weights = new double[pc.CohortSize];
         for (var i = 0; i < pc.CohortSize; i++)
         {
             var aptitudes = AptitudeRoller.Roll(rc, rng.Fork(AptitudeSalt + (ulong)i));
@@ -58,8 +66,23 @@ public static class AiRosterFactory
             // 判定も重みも PitcherRoleResolver に集約された式を使う（自校と同じ係数・同じ分布）。
             // 旧実装は AI校だけ PitcherEmergenceBias=15 という別の下駄を履いていたが、これは
             // 「候補6人プールから選ぶ」構造の歪みを補うためのもので、全員が適性を持つ今は要らない。
-            var leansPitcher = PitcherRoleResolver.IsNaturalPitcher(pitcherApt, bestField, rc);
-            var weight = PitcherRoleResolver.PitcherWeight(pitcherApt, bestField, rc);
+            apts[i] = aptitudes;
+            leans[i] = PitcherRoleResolver.IsNaturalPitcher(pitcherApt, bestField, rc);
+            weights[i] = PitcherRoleResolver.PitcherWeight(pitcherApt, bestField, rc);
+        }
+
+        // 上位集中＝スター型（issue prefecture-dominance-star）: 圧縮で削った分（raw−圧縮後）を学年ごとに
+        // エース格（投手に寄った者から順に AiStarPitchersPerCohort 人）と主軸（野手から Fork で AiStarHittersPerCohort 人）へ戻す。
+        // 脇役は圧縮後の中心のまま＝逆算配分（AiRosterCycle.Settle）がチーム総合を圧縮後の目標へ寄せる。
+        // 投手に寄った者がいない学年はエース格なし（「エース不在の代」も自然に出る）。
+        var lift = rc.StarLift(school.Strength);
+        var (starPitchers, starHitters) = PickStars(leans, weights, rc, rng.Fork(StarSalt));
+
+        for (var i = 0; i < pc.CohortSize; i++)
+        {
+            var aptitudes = apts[i];
+            var leansPitcher = leans[i];
+            var weight = weights[i];
 
             var name = PlayerNameGenerator.Generate(deps.NameVocab, rng.Fork(nameSalt++), usedGiven);
             var pr = StrengthTeamFactory.Profile(rc, rng, ref profileSalt, starter: i == 0);
@@ -67,10 +90,12 @@ public static class AiRosterFactory
             // それ以外は肩からの推定で埋まる（#381）＝「全員が投手能力を持つが、投げ慣れた者が上」。
             var snap = leansPitcher
                 ? StrengthTeamFactory.Pitcher(name, center, weight, rng, deps.Personality,
-                        salt++, rc.Archetypes, archSalt++, rc)
+                        salt++, rc.Archetypes, archSalt++, rc, mental,
+                        pitchingLift: starPitchers.Contains(i) ? lift : 0.0)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats }
                 : StrengthTeamFactory.PositionPlayer(
-                        BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name)
+                        BestFieldPosition(aptitudes), center, rng, deps.Personality, salt++, name, mental, rc,
+                        battingLift: starHitters.Contains(i) ? lift : 0.0)
                     with { Grade = 1, Throws = pr.Throws, Bats = pr.Bats };
             players.Add(new AiPlayer(nextPlayerId++, enrollmentYearIndex, aptitudes, PhenomType.None, 1, snap));
         }
@@ -115,7 +140,8 @@ public static class AiRosterFactory
             foreach (var ai in cohort)
             {
                 ai.Grade = grade;
-                ai.Snapshot = ai.Snapshot with { Grade = grade };
+                // 上級生は (grade−1) 学年ぶんの精神力アークを載せる（進級と同じ量＝ブートストラップと通常進行で同じ値）。
+                ai.Snapshot = AiMentalModel.WithGradeArc(ai.Snapshot with { Grade = grade }, grade, deps.Roster);
                 roster.Add(ai);
             }
         }
@@ -128,6 +154,33 @@ public static class AiRosterFactory
 
     /// <summary>コホートの適性ロール用 Fork ソルト（他ストリームと別の上位ビット）。</summary>
     private const ulong AptitudeSalt = 0x6F3A_0000UL;
+
+    /// <summary>主軸の選抜用 Fork ソルト（他ストリームと別の上位ビット）。</summary>
+    private const ulong StarSalt = 0x57A3_0000UL;
+
+    /// <summary>
+    /// コホート内のエース格（投手に寄った者を重み順に <see cref="RosterCoefficients.AiStarPitchersPerCohort"/> 人）と
+    /// 主軸（投手に寄っていない者から Fork で <see cref="RosterCoefficients.AiStarHittersPerCohort"/> 人）の添字。
+    /// 全野手候補を1回ずつ引く（消費数固定）。
+    /// </summary>
+    internal static (HashSet<int> Pitchers, HashSet<int> Hitters) PickStars(
+        bool[] leans, double[] weights, RosterCoefficients rc, IRandomSource rng)
+    {
+        var pitchers = new HashSet<int>();
+        var hitters = new HashSet<int>();
+        var pitcherOrder = Enumerable.Range(0, leans.Length).Where(i => leans[i])
+            .OrderByDescending(i => weights[i]).ThenBy(i => i).ToList();
+        for (var k = 0; k < Math.Min(rc.AiStarPitchersPerCohort, pitcherOrder.Count); k++) pitchers.Add(pitcherOrder[k]);
+
+        var fielders = Enumerable.Range(0, leans.Length).Where(i => !leans[i]).ToArray();
+        for (var i = 0; i < fielders.Length - 1; i++)
+        {
+            var j = rng.NextInt(i, fielders.Length);
+            (fielders[i], fielders[j]) = (fielders[j], fielders[i]);
+        }
+        for (var k = 0; k < Math.Min(Math.Max(0, rc.AiStarHittersPerCohort), fielders.Length); k++) hitters.Add(fielders[k]);
+        return (pitchers, hitters);
+    }
 
     /// <summary>
     /// 適性が最も高い守備位置（投手を除く8つ）。生成時の <see cref="Player.Position"/> の置き場所と

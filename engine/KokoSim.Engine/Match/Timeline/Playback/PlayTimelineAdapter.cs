@@ -69,6 +69,9 @@ public static class PlayTimelineAdapter
             // 出発点（判定が距離を測った守備配置）。座標と違って推定できないので素通しする
             Starts = t.FielderStarts?.ToDictionary(kv => kv.Key, kv => Vec(kv.Value)),
             Runners = runners,
+            // 守備の芝居の入力（表示専用）。座標と同じく既に決まった値の素通し
+            CatchMargin = t.CatchMarginSeconds,
+            Fumbled = t.FumbledCatch,
             Caps = caps,
             Judgements = judgements,
         };
@@ -111,22 +114,24 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
     public BallSegmentKind Kind => _kind;
 
     private readonly BallSegmentKind _kind;
-    private readonly double _fx, _fy, _tx, _ty, _apex, _dist;
+    private readonly double _fx, _fy, _tx, _ty, _apex, _launch, _dist;
 
-    private EndpointBallSegment(BallSegmentKind kind, double t0, double t1, TimelinePoint from, TimelinePoint to, double apex)
+    private EndpointBallSegment(
+        BallSegmentKind kind, double t0, double t1, TimelinePoint from, TimelinePoint to, double apex, double launch)
         : base(t0, t1)
     {
         _kind = kind;
         _fx = from.X; _fy = from.Z;
         _tx = to.X; _ty = to.Z;
         _apex = apex;
+        _launch = Math.Max(0.0, launch);
         var dx = _tx - _fx;
         var dy = _ty - _fy;
         _dist = Math.Sqrt(dx * dx + dy * dy);
     }
 
     public static EndpointBallSegment From(BallSegment s)
-        => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM)
+        => new(s.Kind, s.T0, s.T1, s.From, s.To, s.ApexHeightM, s.LaunchHeightM)
         {
             // 送球の投げ手／受け手（Issue E1）。座標と違って**推定できない**値なので素通しする
             FromRole = s.FromRole, ToRole = s.ToRole, ToBase = s.ToBase,
@@ -150,7 +155,10 @@ public sealed record EndpointBallSegment : PlaybackBallSegment
             case BallSegmentKind.Pitch:
                 return 1.7 - 1.1 * u;                          // リリース→やや低め（mock pitch）
             case BallSegmentKind.Flight:
-                return Math.Max(0, _apex) * 4 * u * (1 - u);   // 0→頂点ApexHeightM→0 の放物線
+                // 打点→頂点ApexHeightM→着地0 の放物線（issue duel-view-fly-leaves-bat-flat-then-rises）。
+                // 線形項 launch·(1−u) で打点から始め、放物線項の振幅を launch/2 だけ削ると頂点はほぼ ApexHeightM
+                // のまま（誤差 launch²/(16·(Apex−launch/2))＝1mの打点・20mの弧で 0.3cm）。launch=0 なら従来式。
+                return _launch * (1 - u) + Math.Max(0, _apex - _launch * 0.5) * 4 * u * (1 - u);
             case BallSegmentKind.Throw:
                 return 1.7 + (_dist / 9) * 4 * u * (1 - u);    // 山なりの送球（mock throw）
             case BallSegmentKind.Carry:

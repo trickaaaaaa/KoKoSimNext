@@ -57,6 +57,8 @@ public sealed class SaveCodecTests
         Assert.Equal(1, s.Contracts.LevelOf("coach_pitching"));
         Assert.Equal(0, s.Contracts.LevelOf("expedition"));
         Assert.Equal(1, s.ManagerLastGrownYear);
+        // 番狂わせ名声デルタの持ち越し（v12）: 試合ごとの値と並びがそのまま往復すること。
+        Assert.Equal(new[] { 6.0, -3.5, 0.0 }, s.ManagerPendingUpsetDeltas);
 
         // 成績（private set の集計器＋球種別内訳が復元されている）
         var p1 = s.Stats.Career.Get(1);
@@ -74,6 +76,15 @@ public sealed class SaveCodecTests
         Assert.Equal(state.NationRosters.Count, s.NationRosters.Count);
         Assert.True(s.NewTeamPending);
         Assert.Equal(2, s.NewTeamRetiredNames.Count);
+
+        // 監督オファー待ち（v18）: 種別・候補（地区なし/地区ありの両方）が往復すること。
+        Assert.True(s.ManagerTransferPending);
+        Assert.Equal((int)KokoSim.Engine.Career.TransferEventKind.FreeAgentOffer, s.ManagerTransferKind);
+        Assert.Equal(2, s.ManagerTransferCandidates.Count);
+        Assert.Equal(1200, s.ManagerTransferCandidates[0].SchoolId);
+        Assert.Null(s.ManagerTransferCandidates[0].DistrictId);
+        Assert.Equal(2, s.ManagerTransferCandidates[1].DistrictId);
+        Assert.Equal(47.25, s.ManagerTransferCandidates[1].Strength, 6);
         Assert.NotNull(s.TeamColorOverride);
         Assert.True(s.TeamColorOverride!.Stripe.On);
         Assert.Equal(state.TeamColorOverride!.Shirt, s.TeamColorOverride.Shirt);
@@ -367,6 +378,220 @@ public sealed class SaveCodecTests
         Assert.NotNull(s.Incoming);   // 他の項目は素通りで読めている
     }
 
+    // v11（番狂わせデルタの持ち越しが無かった版）のセーブは managerPendingUpsetDeltas を持たない。
+    // 読めて空で補われること（今年度ぶんは順当扱い＝名声は勝数と甲子園だけで動く）。
+    [Fact]
+    public void V11Save_WithoutPendingUpsetDeltas_StillLoads_AsEmpty()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"managerPendingUpsetDeltas\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "managerPendingUpsetDeltas が直列化されていない");
+        var end = json.IndexOf(",\"nationRosters\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "nationRosters が managerPendingUpsetDeltas の後に居ない");
+        var v11 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":11");
+        Assert.DoesNotContain("\"managerPendingUpsetDeltas\"", v11);
+
+        Assert.True(SaveCodec.TryDeserialize(v11, out var s, out var err), err);
+        Assert.Empty(s.ManagerPendingUpsetDeltas);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
+    // ===== 前回スタメンの記憶（issue lineup-carry-over-previous-game・v14） =====
+
+    [Fact]
+    public void LastLineup_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.NotNull(s.LastLineup);
+        Assert.Equal(state.LastLineup!.PlayerIds, s.LastLineup!.PlayerIds);
+        Assert.Equal(state.LastLineup.Positions, s.LastLineup.Positions);
+        Assert.Equal(1, s.LastLineup.StartingPitcherId);
+        Assert.True(s.LastLineup.UsesDh);
+        Assert.Equal(4, s.LastLineup.DhSlot);
+    }
+
+    [Fact]
+    public void LastLineup_Null_RoundTripsAsNull()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastLineup = null;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+        Assert.Null(s.LastLineup);
+    }
+
+    [Fact]
+    public void V13Save_WithoutLastLineup_StillLoads_AsNull()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"lastLineup\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "lastLineup が直列化されていない");
+        var end = json.LastIndexOf('}');
+        var v13 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":13");
+        Assert.DoesNotContain("\"lastLineup\"", v13);
+
+        Assert.True(SaveCodec.TryDeserialize(v13, out var s, out var err), err);
+        Assert.Null(s.LastLineup);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
+    // ===== センバツ選考発表待ち（設計書05 §1.5b・v16） =====
+
+    [Fact]
+    public void PendingSenbatsuField_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.PendingSenbatsuFieldIds = new List<int> { -1, 100, 200, 300 };
+        state.PendingSenbatsuJinguRegion = "kanto";
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Equal(new List<int> { -1, 100, 200, 300 }, s.PendingSenbatsuFieldIds);
+        Assert.Equal("kanto", s.PendingSenbatsuJinguRegion);
+    }
+
+    [Fact]
+    public void V15Save_WithoutSenbatsuFields_StillLoads_AsEmpty()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"senbatsu\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "senbatsu が直列化されていない");
+        var end = json.IndexOf(",\"lastLineup\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "lastLineup が senbatsu 系の後に居ない");
+        var v15 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":15");
+        Assert.DoesNotContain("\"senbatsu\"", v15);
+        Assert.DoesNotContain("\"pendingSenbatsuFieldIds\"", v15);
+
+        Assert.True(SaveCodec.TryDeserialize(v15, out var s, out var err), err);
+        Assert.Null(s.Senbatsu);
+        Assert.Empty(s.PendingSenbatsuFieldIds);
+        Assert.Equal("", s.PendingSenbatsuJinguRegion);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
+    // ===== 大会連鎖の中継値（設計書05 §1.1a/§1.5b・v19） =====
+
+    [Fact]
+    public void TournamentChainRelayValues_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastPrefChampionId = -1;
+        state.LastAutumnPlacementIds = new List<int> { -1, 3848, 3867, 3851 };
+        state.LastRegionalChampionId = 3848;
+        state.LastRegionalPlacementIds = new List<int> { 3848, -1 };
+        state.LastJinguChampionId = 4200;
+        state.LastDistrictChampionId = -1;
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Equal(-1, s.LastPrefChampionId);
+        Assert.Equal(new List<int> { -1, 3848, 3867, 3851 }, s.LastAutumnPlacementIds);
+        Assert.Equal(3848, s.LastRegionalChampionId);
+        Assert.Equal(new List<int> { 3848, -1 }, s.LastRegionalPlacementIds);
+        Assert.Equal(4200, s.LastJinguChampionId);
+        Assert.Equal(-1, s.LastDistrictChampionId);
+    }
+
+    /// <summary>未確定（null）と「0件の順位」を取り違えない＝<c>MyRegionPlacementIds</c> の
+    /// フォールバック（地区の順位が無ければ県の順位を使う）は null 判定で書かれている。</summary>
+    [Fact]
+    public void TournamentChainRelayValues_Unset_RoundTripsAsNullAndEmpty()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Null(s.LastPrefChampionId);
+        Assert.Empty(s.LastAutumnPlacementIds);
+        Assert.Null(s.LastRegionalChampionId);
+        Assert.Empty(s.LastRegionalPlacementIds);
+        Assert.Null(s.LastJinguChampionId);
+        Assert.Null(s.LastDistrictChampionId);
+    }
+
+    [Fact]
+    public void V18Save_WithoutChainRelayValues_StillLoads_AsUnset()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastAutumnPlacementIds = new List<int> { -1, 3848 };
+        var json = SaveCodec.Serialize(state);
+        var start = json.IndexOf(",\"lastPrefChampionId\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "lastPrefChampionId が直列化されていない");
+        var end = json.IndexOf(",\"lastLineup\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "lastLineup が連鎖中継値の後に居ない");
+        var v18 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":18");
+        Assert.DoesNotContain("\"lastAutumnPlacementIds\"", v18);
+
+        Assert.True(SaveCodec.TryDeserialize(v18, out var s, out var err), err);
+        Assert.Null(s.LastPrefChampionId);
+        Assert.Empty(s.LastAutumnPlacementIds);
+        Assert.Null(s.LastRegionalChampionId);
+        Assert.Empty(s.LastRegionalPlacementIds);
+        Assert.Null(s.LastJinguChampionId);
+        Assert.Null(s.LastDistrictChampionId);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
+    [Fact]
+    public void V19Save_WithoutDistrictChampionId_StillLoads_AsUnset()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastPrefChampionId = -1;
+        state.LastDistrictChampionId = 3848;
+        var json = SaveCodec.Serialize(state)
+            .Replace(",\"lastDistrictChampionId\":3848", "")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":19");
+        Assert.DoesNotContain("\"lastDistrictChampionId\"", json);
+
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(-1, s.LastPrefChampionId);   // 他の連鎖中継値は素通りで読めている
+        Assert.Null(s.LastDistrictChampionId);
+    }
+
+    // ===== センバツの地区大会成績（設計書05 §1.5b・v17） =====
+
+    [Fact]
+    public void RegionalQualifierStats_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        // 自校ぶん（PlayerStatStore）と他校ぶん（NationTournamentStats）の両方に実測を入れる
+        // （SchoolStatsLookup が校IDで振り分ける対の構造＝PrefQualifier と同じ形）。
+        // 自校は「今大会成績を地区大会スコープへ焼き取る」経路で積む（BuildRichState が既に
+        // CurrentTournament へ1試合分積んでいる＝SnapshotPrefQualifier と対の作法）。
+        state.Stats.SnapshotRegionalQualifier();
+        // SyntheticGame() は away 側だけ埋める合成ボックススコア＝schoolIsAway: true で畳む
+        // （BuildRichState 内の他の畳み込みと同じ作法。BuildManagerRoster の管理ロスターとは無関係の
+        // 別校=400として積む）。
+        state.TournamentStats.FoldRegionalQualifier(400, SaveTestFixtures.SyntheticGame(), schoolIsAway: true);
+
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.True(s.Stats.RegionalQualifier.Players.Count > 0);
+        var restoredBook = s.TournamentStats.RegionalQualifierForSchool(400);
+        Assert.NotNull(restoredBook);
+        Assert.True(restoredBook!.Players.Count > 0);
+    }
+
+    [Fact]
+    public void V16Save_WithoutRegionalQualifierStats_StillLoads_AsEmpty()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"nationRegionalQualifierStats\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "nationRegionalQualifierStats が直列化されていない");
+        var end = json.IndexOf(",\"nationSchools\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "nationSchools が nationRegionalQualifierStats の後に居ない");
+        var v16 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":16");
+        Assert.DoesNotContain("\"nationRegionalQualifierStats\"", v16);
+
+        Assert.True(SaveCodec.TryDeserialize(v16, out var s, out var err), err);
+        Assert.Empty(s.TournamentStats.RegionalQualifierSchools);
+        Assert.Empty(s.Stats.RegionalQualifier.Players);
+        Assert.Equal(1, s.ManagerLastGrownYear);   // 他の項目は素通りで読めている
+    }
+
     // ===== 教え子名鑑（issue #586） =====
 
     // 過年度の指名確定（年・当時の背番号・順位・バンド・注目度）が往復すること。
@@ -443,6 +668,53 @@ public sealed class SaveCodecTests
         }
     }
 
+    // 全国の学校別成績（issue #634・v9）が2スコープとも往復すること。通算は大会をまたいで積むので、
+    // ここが落ちると相手校のHUDに出す「通算」がロードのたびに消える。
+    [Fact]
+    public void NationStats_BothScopes_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        // 素材は先攻(200)側だけ打撃行を持つ合成試合を2試合ぶん（間に StartTournament）。
+        // ＝今大会は1試合ぶん・通算は2試合ぶんで、スコープが混ざっていれば必ず食い違う。
+        const int awayId = 200;
+        Assert.Equal(3, Hits(state.TournamentStats.ForSchool(awayId)));
+        Assert.Equal(6, Hits(state.TournamentStats.CareerForSchool(awayId)));
+
+        Assert.Equal(3, Hits(s.TournamentStats.ForSchool(awayId)));
+        Assert.Equal(6, Hits(s.TournamentStats.CareerForSchool(awayId)));
+        Assert.Equal(
+            new List<int>(state.TournamentStats.CareerSchools).Count,
+            new List<int>(s.TournamentStats.CareerSchools).Count);
+    }
+
+    // v8 のセーブ（通算スコープが無い）が読めること。今大会ぶんは無傷で残り、通算は空から積み直す。
+    [Fact]
+    public void V8Save_WithoutNationCareerStats_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"nationCareerStats\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "nationCareerStats が直列化されていない");
+        var end = json.IndexOf(",\"sessionYear\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "sessionYear が nationCareerStats の後に居ない");
+        var v8 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":8");
+        Assert.DoesNotContain("\"nationCareerStats\"", v8);
+
+        Assert.True(SaveCodec.TryDeserialize(v8, out var s, out var err), err);
+        Assert.Empty(s.TournamentStats.CareerSchools);
+        Assert.NotEmpty(s.TournamentStats.Schools);   // 今大会ぶんは素通りで読めている
+    }
+
+    private static int Hits(KokoSim.Engine.Stats.StatBook? book)
+    {
+        var hits = 0;
+        if (book != null)
+            foreach (var kv in book.Players) hits += kv.Value.Batting.Hits;
+        return hits;
+    }
+
     // まだ1つも大会を終えていない進行（新規ゲーム）も往復すること。
     [Fact]
     public void TournamentHistory_Empty_RoundTrips()
@@ -491,6 +763,101 @@ public sealed class SaveCodecTests
         Assert.True(SaveCodec.TryDeserialize(v7, out var s, out var err), err);
         Assert.Empty(s.TournamentHistory.Entries);
         Assert.NotEmpty(s.Draft.Records);   // 他の項目は素通りで読めている
+    }
+
+    // 週次イベントの発火状態（issue #609・v9）が往復すること。
+    [Fact]
+    public void EventSchedulerState_RoundTrips()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.NotNull(s.Events);
+        Assert.Equal(state.Events!.AbsoluteWeek, s.Events!.AbsoluteWeek);
+        Assert.Equal(state.Events.LastFiredWeeks.Count, s.Events.LastFiredWeeks.Count);
+        foreach (var kv in state.Events.LastFiredWeeks) Assert.Equal(kv.Value, s.Events.LastFiredWeeks[kv.Key]);
+        Assert.Equal(state.Events.AnnualFlags.Count, s.Events.AnnualFlags.Count);
+        foreach (var f in state.Events.AnnualFlags) Assert.Contains(f, s.Events.AnnualFlags);
+    }
+
+    /// <summary>
+    /// クールダウンがロードで明けないこと（issue #609 の本題）。状態を載せ忘れると、
+    /// 直前に見たイベントが開き直した直後にもう一度出る＝往復の値比較だけでは気づけないので、
+    /// <b>復元したスケジューラが実際に発火を止める</b>ところまで測る。
+    /// </summary>
+    [Fact]
+    public void EventSchedulerState_KeepsCooldownsAcrossLoad()
+    {
+        var table = new[]
+        {
+            new KokoSim.Engine.Season.Events.GameEvent
+            {
+                Id = "injury", Kind = KokoSim.Engine.Season.Events.EventKind.Random, Weight = 1.0,
+                CooldownWeeks = 12, Text = "故障した。",
+            },
+        };
+
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        var scheduler = new KokoSim.Engine.Season.Events.EventScheduler(table);
+        s.Events!.RestoreInto(scheduler);
+
+        // 通算37週で最終発火31週・クールダウン12週＝まだ明けていない。
+        var fired = scheduler.Week(week: 20, rng: new KokoSim.Engine.Core.Xoshiro256Random(1));
+        Assert.Empty(fired);
+    }
+
+    // v8（イベント状態が無かった版）のセーブは events を持たない。読めて null で補われること。
+    [Fact]
+    public void V8Save_WithoutEventState_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"events\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "events が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が events の後に居ない");
+        var v8 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":8");
+        Assert.DoesNotContain("\"events\"", v8);
+
+        Assert.True(SaveCodec.TryDeserialize(v8, out var s, out var err), err);
+        Assert.Null(s.Events);              // 一度も発火していない＝まっさらで正しい
+        Assert.NotEmpty(s.TournamentHistory.Entries);   // 他の項目は素通りで読めている
+    }
+
+    // 練習効率の補正（issue #615・v10）が往復すること。
+    [Fact]
+    public void TrainingBoosts_RoundTrip()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        Assert.True(SaveCodec.TryDeserialize(SaveCodec.Serialize(state), out var s, out var err), err);
+
+        Assert.Equal(state.TrainingBoosts.Count, s.TrainingBoosts.Count);
+        for (var i = 0; i < state.TrainingBoosts.Count; i++)
+        {
+            Assert.Equal(state.TrainingBoosts[i].Source, s.TrainingBoosts[i].Source);
+            Assert.Equal(state.TrainingBoosts[i].Mult, s.TrainingBoosts[i].Mult, 6);
+            Assert.Equal(state.TrainingBoosts[i].WeeksLeft, s.TrainingBoosts[i].WeeksLeft);
+            Assert.Equal(state.TrainingBoosts[i].PlayerId, s.TrainingBoosts[i].PlayerId);
+        }
+    }
+
+    // v9（補正が無かった版）のセーブは trainingBoosts を持たない。読めて空で補われること。
+    [Fact]
+    public void V9Save_WithoutTrainingBoosts_StillLoads()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        var start = json.IndexOf(",\"trainingBoosts\":", System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "trainingBoosts が直列化されていない");
+        var end = json.IndexOf(",\"tournament\":", System.StringComparison.Ordinal);
+        Assert.True(end > start, "tournament が trainingBoosts の後に居ない");
+        var v9 = json.Remove(start, end - start)
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":9");
+
+        Assert.True(SaveCodec.TryDeserialize(v9, out var s, out var err), err);
+        Assert.Empty(s.TrainingBoosts);
+        Assert.NotNull(s.Events);   // 他の項目は素通りで読めている
     }
 
     // 大会中のセーブが往復すること（ブラケット・乱数状態・球数台帳・出場校）。
@@ -561,5 +928,74 @@ public sealed class SaveCodecTests
 
         Assert.Null(SaveCodec.PeekHeader("壊れた"));
         Assert.Null(SaveCodec.PeekHeader(""));
+    }
+
+    /// <summary>
+    /// issue #624: スロット一覧が「実行中の自校名」でなく<b>そのセーブの校名</b>を出せるよう、
+    /// ヘッダが <c>schoolName</c> を運ぶ。v4（issue #585）から本体に書かれている項目を覗くだけ＝
+    /// スキーマ版は上げない。
+    /// </summary>
+    [Fact]
+    public void PeekHeader_ReadsSchoolName()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.Equal("北嶺", SaveCodec.PeekHeader(json)!.Value.SchoolName);
+    }
+
+    /// <summary>
+    /// 校名が無い（v3以前）・型が違う・null のセーブでも<b>例外にならず null を返す</b>。
+    /// 既定（桜丘）はヘッダで埋めない＝「読めなかった」と「桜丘という校名だった」を潰さないため。
+    /// </summary>
+    [Theory]
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1}")]                        // 項目ごと無い（v3以前相当）
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1,\"schoolName\":null}")]    // null
+    [InlineData("{\"version\":8,\"week\":3,\"yearIndex\":1,\"schoolName\":42}")]      // 文字列でない
+    public void PeekHeader_MissingSchoolName_IsNullNotThrow(string json)
+    {
+        var header = SaveCodec.PeekHeader(json);
+
+        Assert.NotNull(header);
+        Assert.Equal(3, header!.Value.Week);   // 他の項目は読めている（丸ごと失敗にしていない）
+        Assert.Null(header.Value.SchoolName);
+    }
+
+    // ===== 勝敗投手の概念撤去（issue remove-pitcher-win-loss-concept・2026-08-29） =====
+
+    /// <summary>
+    /// 新規セーブは投手成績に "w"/"l" キーを含まないこと（撤去の確認）。
+    /// </summary>
+    [Fact]
+    public void NewSave_PitchingJson_HasNoWinLossKeys()
+    {
+        var json = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        Assert.DoesNotContain("\"w\":", json);
+        Assert.DoesNotContain("\"l\":", json);
+    }
+
+    /// <summary>
+    /// 旧セーブ（投手成績に "w"/"l" が残っている）も読めること。版は上げていない＝キーが余分にあるだけで、
+    /// <see cref="Saves.StatsSaves.RestorePitchingInto"/> が読まずに無視する（`SaveCodec.Migrate` 側の対応は不要）。
+    /// </summary>
+    [Fact]
+    public void OldSave_WithPitchingWinLossKeys_StillLoads()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        var json = SaveCodec.Serialize(state);
+
+        // "pit":{ の直後に旧セーブ由来の "w"/"l" を挿し込む（他のキーの値には触れない＝安全な注入）。
+        var pitMarker = "\"pit\":{";
+        var start = json.IndexOf(pitMarker, System.StringComparison.Ordinal);
+        Assert.True(start >= 0, "投手成績（pit）が直列化されていない");
+        var insertAt = start + pitMarker.Length;
+        var withWinLoss = json.Substring(0, insertAt) + "\"w\":2,\"l\":1," + json.Substring(insertAt);
+
+        Assert.Contains("\"w\":2", withWinLoss);
+        Assert.Contains("\"l\":1", withWinLoss);
+        Assert.True(SaveCodec.TryDeserialize(withWinLoss, out var restored, out var err), err);
+
+        // w/l 以外の投手成績はそのまま復元される（余分なキーが無視されただけ）ことを確認する。
+        var expectedOuts = state.Stats.Career.Players.Values.First(p => p.Pitching.Games > 0).Pitching.Outs;
+        var restoredOuts = restored.Stats.Career.Players.Values.First(p => p.Pitching.Games > 0).Pitching.Outs;
+        Assert.Equal(expectedOuts, restoredOuts);
     }
 }

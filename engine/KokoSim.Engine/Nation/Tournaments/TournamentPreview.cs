@@ -6,6 +6,27 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// <summary>優勝争いの格付けマーク（設計書06 §3.5b）。◎優勝候補 / ○対抗 / ▲ダークホース / 無印。</summary>
 public enum ContenderMark { Favorite, Contender, DarkHorse, None }
 
+/// <summary>
+/// 大会プレビューの舞台（設計書06 §3.5b）。リード文とメタ文言だけを出し分ける
+/// ＝格付け・3軸・寸評のロジックは共通（大会が変わっても評価の物差しは変えない）。
+/// <b>文言は engine が組む</b>（UIで文字列を組み立てない原則）。
+/// </summary>
+public enum PreviewStage
+{
+    /// <summary>秋季県大会（既定。旧来の文言）。</summary>
+    Autumn,
+    /// <summary>夏の県予選。</summary>
+    SummerPrefecture,
+    /// <summary>夏の甲子園（49代表・次のステージが無い）。</summary>
+    SummerKoshien,
+    /// <summary>秋季地区大会（関東・九州等10地区。県大会の上位校が集う）。</summary>
+    Regional,
+    /// <summary>明治神宮大会（各地区の王者が集う。次のステージという言い方が無い＝終着点の文言）。</summary>
+    Jingu,
+    /// <summary>春のセンバツ本戦（32校・次のステージが無い）。</summary>
+    SenbatsuKoshien,
+}
+
 /// <summary>チームの3軸レーティング（表示用0〜99。打力/投手/守備）。</summary>
 public sealed record TeamRating(int Batting, int Pitching, int Defense)
 {
@@ -19,7 +40,8 @@ public sealed record PreviewContender(
 /// <summary>
 /// 注目選手1人（設計書06 §3.5b「注目選手ピックアップ」）。
 /// 氏名・背番号・学年・投打・最速球速は<b>実際の対戦相手ラインナップと同一の真値</b>
-/// （StrengthTeamFactory.ForSchool 由来）。StatLine の成績値だけは能力から導いた読み物用の見込み値。
+/// （StrengthTeamFactory.ForSchool 由来）。StatLine の成績値は<b>今大会の実測値</b>
+/// （裏試合フルシム #43 が積んだ値。まだ1試合もしていなければ成績を出さない, issue #634）。
 ///
 /// <paramref name="PitcherLed"/> は<b>選手の属性ではなく校の看板の別</b>＝この校を投手力で採ったか
 /// 打力で採ったか（<see cref="PickNotable"/> の選出理由）。旧名 <c>IsPitcher</c> は選手が投手か否かに
@@ -29,13 +51,22 @@ public sealed record NotablePlayer(
     string SchoolName, int UniformNumber, string Name, int Grade, string PositionLabel,
     string HandednessLabel, bool PitcherLed, string StatLine, string Blurb);
 
-/// <summary>登録メンバー1人（背番号・氏名・守備位置・学年・投打まで。詳細指標は出さない＝設計§3.5b）。</summary>
+/// <summary>
+/// 登録メンバー1人（背番号・氏名・守備位置・学年・投打まで。能力の詳細指標は出さない＝設計§3.5b）。
+/// <paramref name="SourceId"/> は校内選手ID＝<b>成績の帰属キー</b>（issue #634）。校別詳細は
+/// (校ID, SourceId) で今大会成績を join する（能力からの合成値ではなく実測値を出すため）。
+/// </summary>
 public sealed record RosterMember(
-    int UniformNumber, string Name, string PositionLabel, int Grade, string HandednessLabel);
+    int UniformNumber, string Name, string PositionLabel, int Grade, string HandednessLabel,
+    int SourceId = 0);
 
-/// <summary>出場校1校の登録メンバー（ベンチ入り20人）。</summary>
+/// <summary>
+/// 出場校1校の登録メンバー（ベンチ入り20人）。
+/// <paramref name="Rating"/> は展望カードと同じ3軸（打力/投手/守備）＝校別詳細でも同じ物差しを出せる。
+/// </summary>
 public sealed record RosterExcerpt(
-    string SchoolName, Tier Tier, string SeedLabel, string TeamBlurb, IReadOnlyList<RosterMember> Members);
+    string SchoolName, Tier Tier, string SeedLabel, string TeamBlurb, IReadOnlyList<RosterMember> Members,
+    TeamRating Rating);
 
 /// <summary>大会プレビュー（設計書06 §3.5b, mock-tournament-preview.html）。自動生成の読み物データ。</summary>
 public sealed record TournamentPreview(
@@ -61,9 +92,18 @@ public static class TournamentPreviewBuilder
         _ => (0, 0, 0),                             // 型なし
     };
 
+    /// <param name="statsForSchool">
+    /// 校ID→今大会成績の帳簿（issue #634）。注目選手の成績行は<b>実測値</b>で書く。省略／未登録の校は
+    /// 「まだ試合をしていない」扱いで成績を出さない（能力から合成した見込み値は出さない＝嘘を書かない）。
+    /// </param>
+    /// <param name="stage">
+    /// 大会の舞台（リード文・メタ文言の出し分け）。既定は従来どおり秋の県大会の文言。
+    /// </param>
     public static TournamentPreview Build(
         string title, IReadOnlyList<School> entrants, int berths, string nextStageName, int yearIndex = 1,
-        System.Func<School, int, Match.Game.Team>? teamProvider = null)
+        System.Func<School, int, Match.Game.Team>? teamProvider = null,
+        System.Func<int, Stats.StatBook?>? statsForSchool = null,
+        PreviewStage stage = PreviewStage.Autumn)
     {
         if (entrants.Count == 0) throw new System.ArgumentException("出場校が空です。");
 
@@ -88,12 +128,17 @@ public static class TournamentPreviewBuilder
         contenders = contenders
             .OrderBy(c => (int)c.Mark).ThenBy(c => c.Seed).ToList();
 
-        var meta = $"出場 {entrants.Count}校 ／ 上位{berths}校が{nextStageName}へ ─ 自動生成プレビュー";
-        var lead = BuildLead(contenders, entrants.Count, berths, nextStageName);
+        var meta = IsFinalStage(stage)
+            ? $"出場 {entrants.Count}{(stage == PreviewStage.SummerKoshien ? "代表" : "校")} ─ 自動生成プレビュー"
+            : $"出場 {entrants.Count}校 ／ 上位{berths}校が{nextStageName}へ ─ 自動生成プレビュー";
+        var lead = BuildLead(contenders, entrants.Count, berths, nextStageName, stage);
 
         // 注目選手・登録メンバーは格付け校ぶんだけ実チーム（＝実戦と同一ソース）から組む。
         // 全出場校を先食い生成しない（出場200校規模でもコストは格付け校ぶんに収まる）。
-        var byName = ranked.ToDictionary(s => s.Name, s => s);
+        // 校名は生成物で一意の保証が無い（甲子園・センバツは多数の県から集まるため衝突しうる）＝
+        // ToDictionary だと重複キーで例外を投げるので、同名校が居ても落ちないよう先勝ちで畳む。
+        var byName = new Dictionary<string, School>();
+        foreach (var s in ranked) if (!byName.ContainsKey(s.Name)) byName[s.Name] = s;
         var notables = new List<NotablePlayer>();
         var rosters = new List<RosterExcerpt>();
         foreach (var c in contenders)
@@ -102,7 +147,8 @@ public static class TournamentPreviewBuilder
             // 実戦と同一ソース。永続ロスター（#80）を注入すれば展望＝実戦の一致契約を保つ（既定は従来の ForSchool）。
             var team = teamProvider is not null ? teamProvider(school, yearIndex)
                 : StrengthTeamFactory.ForSchool(school, yearIndex);
-            notables.Add(PickNotable(c, team));
+            var book = statsForSchool?.Invoke(school.Id);
+            notables.Add(PickNotable(c, team, book, stage));
             rosters.Add(BuildRoster(c, team));
         }
 
@@ -160,7 +206,8 @@ public static class TournamentPreviewBuilder
     /// 1校の看板選手を選ぶ。投手力が打力を上回る校はエース、そうでなければ主砲。
     /// 表示中の3軸バーと選出理由が一致するので「なぜこの選手か」が読み手に伝わる。
     /// </summary>
-    private static NotablePlayer PickNotable(PreviewContender c, Match.Game.Team team)
+    private static NotablePlayer PickNotable(
+        PreviewContender c, Match.Game.Team team, Stats.StatBook? book, PreviewStage stage)
     {
         // 同値は打者側に寄せる（投手ばかりが並ぶのを避け、投打の顔ぶれが混ざるようにする）。
         var pitcherLed = c.Rating.Pitching > c.Rating.Batting;
@@ -179,7 +226,9 @@ public static class TournamentPreviewBuilder
             PositionLabel: PositionLabel(p.Position),
             HandednessLabel: Players.HandednessLabels.Combined(p.Throws, p.Bats),
             PitcherLed: pitcherLed,
-            StatLine: pitcherLed ? PitcherStatLine(p) : BatterStatLine(p),
+            StatLine: pitcherLed
+                ? PitcherStatLine(p, StatsOf(book, p), stage)
+                : BatterStatLine(p, StatsOf(book, p), stage),
             Blurb: pitcherLed ? PitcherBlurb(p) : BatterBlurb(p));
     }
 
@@ -192,10 +241,11 @@ public static class TournamentPreviewBuilder
             .Select(p => new RosterMember(
                 p.UniformNumber, p.Name,
                 PositionLabel(ReferenceEquals(p, dhPlayer) ? Match.Field.FieldPosition.DesignatedHitter : p.Position),
-                p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats)))
+                p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats),
+                SourceId: p.SourceId ?? 0))
             .ToList();
         var seedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : $"第{c.Seed}シード";
-        return new RosterExcerpt(c.Name, c.Tier, seedLabel, c.Blurb, members);
+        return new RosterExcerpt(c.Name, c.Tier, seedLabel, c.Blurb, members, c.Rating);
     }
 
     private static string PositionLabel(Match.Field.FieldPosition pos) => pos switch
@@ -213,7 +263,15 @@ public static class TournamentPreviewBuilder
         _ => "―",
     };
 
-    // --- 成績の見込み値（能力からの決定論導出＝読み物用の合成。裏試合は成績が付かないため実測値は存在しない） ---
+    // --- 成績行（今大会の実測値。裏試合フルシム #43 が全4000校ぶん積んでいる, issue #634） ---
+    //
+    // 以前はここで能力から確率的な打率・防御率を合成して「今大会 打率.312」と書いていたが、
+    // それは実際の試合結果とは無関係の数字だった（#43 で実測が積まれるようになったのに読み口が
+    // 繋がっていなかった）。まだ1試合もしていない校は**成績を出さない**＝合成値で埋め戻さない。
+
+    /// <summary>この選手の今大会成績（帳簿が無い／選手IDが無い／未登録なら null）。</summary>
+    private static Stats.PlayerStats? StatsOf(Stats.StatBook? book, Players.Player p)
+        => book is not null && p.SourceId is int id ? book.Get(id) : null;
 
     /// <summary>球質タイプ。生成時に確定した型があればそれを使い、無ければ能力から推定する。</summary>
     private static Players.PitcherArchetype ArchetypeOf(Players.Player p)
@@ -223,24 +281,46 @@ public static class TournamentPreviewBuilder
             Players.PitcherAttributes.LevelFromVelocityKmh(a.MaxVelocityKmh), a.Control, a.PitchRank);
     }
 
-    private static string PitcherStatLine(Players.Player p)
+    /// <summary>
+    /// 注目選手の成績行が指す期間の呼び名。甲子園の展望は<b>県予選</b>、センバツの展望は<b>地区大会</b>の
+    /// 実測を出す（開幕前は今大会が空なので、そのままだと「今大会 未登板」しか書けなくなる）。
+    /// 文言は engine 側で決める（UIで文字列を組み立てない）。
+    /// </summary>
+    private static string StatPeriodLabel(PreviewStage stage) => stage switch
     {
-        var a = p.Pitching;
-        var skill = (a.Control + a.PitchRank) / 2.0;
-        // 上位校のエースが防御率1点台に収まる傾斜（県大会の実感に合わせる）。skill85→約0.9 / 70→約2.4 / 50→4.4。
-        var era = System.Math.Round(MathUtil.Clamp(4.40 - (skill - 50) * 0.10, 0.35, 6.50), 2);
-        var k = (int)System.Math.Round(MathUtil.Clamp(12 + (a.PitchRank - 40) * 0.55, 6, 60));
+        PreviewStage.SummerKoshien => "県予選",
+        PreviewStage.SenbatsuKoshien => "地区大会",
+        _ => "今大会",
+    };
+
+    /// <summary>
+    /// このステージに「次のステージへの切符」という言い回しが無いか（＝終着点の文言を使うか）。
+    /// 甲子園（夏・センバツ）は最終到達点なので当然。明治神宮大会も、優勝校が新たな組み合わせへ
+    /// 進むわけではない（センバツ選考の材料になるだけ）ため同じ扱いにする。
+    /// </summary>
+    private static bool IsFinalStage(PreviewStage stage)
+        => stage is PreviewStage.SummerKoshien or PreviewStage.Jingu or PreviewStage.SenbatsuKoshien;
+
+    private static string PitcherStatLine(Players.Player p, Stats.PlayerStats? stats, PreviewStage stage)
+    {
         // 球質タイプを先に置き、球速は「特徴のひとつ」として併記する（球速を主役にしない）。
         var type = Players.PitcherArchetypes.Label(ArchetypeOf(p));
-        return $"{type} ／ 最速{(int)System.Math.Round(a.MaxVelocityKmh)}km/h ／ 今大会 防御率{era:0.00}・{k}奪三振";
+        var period = StatPeriodLabel(stage);
+        var head = $"{type} ／ 最速{(int)System.Math.Round(p.Pitching.MaxVelocityKmh)}km/h ／ {period} ";
+        var s = stats?.Pitching;
+        if (s is null || s.Games == 0) return head + "未登板";
+        return head + $"防御率{s.Era:0.00}・{s.StrikeOuts}奪三振";
     }
 
-    private static string BatterStatLine(Players.Player p)
+    private static string BatterStatLine(Players.Player p, Stats.PlayerStats? stats, PreviewStage stage)
     {
-        var avg = MathUtil.Clamp(0.230 + (p.Contact - 50) * 0.0055, 0.180, 0.520);
-        var hr = (int)System.Math.Round(MathUtil.Clamp((p.Power - 55) * 0.14, 0, 9));
-        var avgText = avg.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture).TrimStart('0');
-        return hr > 0 ? $"今大会 打率{avgText}・{hr}本" : $"今大会 打率{avgText}・{p.Steal / 12}盗塁";
+        var period = StatPeriodLabel(stage);
+        var s = stats?.Batting;
+        if (s is null || s.AtBats == 0) return $"{period} 未出場";
+        var avgText = s.Average.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture).TrimStart('0');
+        return s.HomeRuns > 0
+            ? $"{period} 打率{avgText}・{s.HomeRuns}本"
+            : $"{period} 打率{avgText}・{s.Rbi}打点";
     }
 
     /// <summary>球質タイプで語り口を分ける（球速の閾値では分けない＝技巧派・軟投派も主役になれる）。</summary>
@@ -370,19 +450,37 @@ public static class TournamentPreviewBuilder
     };
 
     private static string BuildLead(
-        IReadOnlyList<PreviewContender> contenders, int entrantCount, int berths, string nextStageName)
+        IReadOnlyList<PreviewContender> contenders, int entrantCount, int berths, string nextStageName,
+        PreviewStage stage)
     {
         var fav = contenders.FirstOrDefault(c => c.Mark == ContenderMark.Favorite);
         var conts = contenders.Where(c => c.Mark == ContenderMark.Contender).ToList();
         var dark = contenders.FirstOrDefault(c => c.Mark == ContenderMark.DarkHorse);
 
         var sb = new System.Text.StringBuilder();
-        sb.Append("新チーム始動の秋、まだ誰も完成していない。");
+        sb.Append(Opening(stage, entrantCount));
         if (fav is not null) sb.Append($"そんな中で頭ひとつ抜けるのは{fav.Name}。");
         if (conts.Count >= 2) sb.Append($"対するは{conts[0].Name}と{conts[1].Name}。");
         else if (conts.Count == 1) sb.Append($"対抗は{conts[0].Name}。");
         if (dark is not null) sb.Append($"伏兵・{dark.Name}も不気味だ。");
-        sb.Append($"上位{berths}校に与えられる{nextStageName}への切符を、{entrantCount}校が争う。");
+        sb.Append(Closing(stage, entrantCount, berths, nextStageName));
         return sb.ToString();
     }
+
+    /// <summary>リード文の書き出し（大会の舞台で変える）。</summary>
+    private static string Opening(PreviewStage stage, int entrantCount) => stage switch
+    {
+        PreviewStage.SummerKoshien => $"{entrantCount}代表が出そろった。ここから先は一度負ければ終わりだ。",
+        PreviewStage.SummerPrefecture => "三年生にとって最後の夏が来た。",
+        PreviewStage.Regional => "秋季県大会を勝ち抜いた顔ぶれが、地区の頂点をかけて集う。",
+        PreviewStage.Jingu => "各地区の代表が全国屈指の力を競う、大学野球部との定期戦とは別の高校の部。",
+        PreviewStage.SenbatsuKoshien => $"秋の激闘を経て選ばれた{entrantCount}校が、春の聖地に集った。",
+        _ => "新チーム始動の秋、まだ誰も完成していない。",
+    };
+
+    /// <summary>リード文の締め（終着点のステージは「次のステージ」が無いので勝ち抜きの言い方に変える）。</summary>
+    private static string Closing(PreviewStage stage, int entrantCount, int berths, string nextStageName)
+        => IsFinalStage(stage)
+            ? "頂点に立つのは一校だけ。"
+            : $"上位{berths}校に与えられる{nextStageName}への切符を、{entrantCount}校が争う。";
 }

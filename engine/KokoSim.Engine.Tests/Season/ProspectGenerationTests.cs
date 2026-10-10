@@ -120,25 +120,45 @@ public sealed class ProspectGenerationTests
         Assert.True(ltRightBat < 0.10, $"左投右打が多すぎる: {ltRightBat:P1}");
     }
 
-    // --- 運動能力ベースラインは名声（総合力）と独立（設計書01 §1.1b-2） ---
+    // --- 運動能力ベースラインの中心は名声（総合力）に半連動・ばらつきは独立（設計書01 §1.1b-2, 2026-08-15 案D） ---
 
     [Fact]
-    public void PhysicalAbilities_AreIndependentOfTalent()
+    public void PhysicalAbilities_FollowTalent_WithHalfSlope_ButKeepSpread()
     {
         var low = Cohort(20.0);
         var high = Cohort(70.0);
 
         double Mean(IEnumerable<DevelopingPlayer> pop, AbilityKind k) => pop.Average(p => p.Level(k));
 
-        // 走力・地肩は総合力が大きく違っても平均がほぼ変わらない（弱小校の俊足・強肩が出る）。
-        Assert.True(System.Math.Abs(Mean(low, AbilityKind.Speed) - Mean(high, AbilityKind.Speed)) < 5.0,
-            "走力が名声に連動してしまっている");
-        Assert.True(System.Math.Abs(Mean(low, AbilityKind.ArmStrength) - Mean(high, AbilityKind.ArmStrength)) < 5.0,
-            "地肩が名声に連動してしまっている");
+        // 走力・地肩の平均は総合力の差(50)×slope(0.75)＝37.5 だけ動く（±3の許容。clamp 10〜92 の影響を含む）。
+        var expected = 50.0 * C.PhysicalTalentSlope;
+        Assert.InRange(Mean(high, AbilityKind.Speed) - Mean(low, AbilityKind.Speed), expected - 3.0, expected + 3.0);
+        Assert.InRange(Mean(high, AbilityKind.ArmStrength) - Mean(low, AbilityKind.ArmStrength), expected - 3.0, expected + 3.0);
+        // ばらつき（SD 12）は残る＝弱小校（中心20→身体系36）にも E 以上（40+）の俊足が一定数出る。
+        Assert.True(low.Count(p => p.Level(AbilityKind.Speed) >= 50) > low.Count * 0.08,
+            "弱小校の俊足が消えている（身体系のSDが潰れている）");
 
         // 一方、専門能力（ミート）は総合力に明確に連動する。
         Assert.True(Mean(high, AbilityKind.Contact) - Mean(low, AbilityKind.Contact) > 15.0,
             "専門能力が総合力に連動していない");
+    }
+
+    [Fact]
+    public void PhysicalAbilities_AreIndependentOfTalent_WhenSlopeIsZero()
+    {
+        // physical_talent_slope=0 は旧来（名声独立）に戻す口。ここが効く限り「弱小校の俊足」の旧挙動へ戻せる。
+        var c0 = C with { PhysicalTalentSlope = 0 };
+        List<DevelopingPlayer> Cohort0(double center)
+        {
+            var all = new List<DevelopingPlayer>();
+            for (var s = 0; s < 250; s++)
+                all.AddRange(ProspectGenerator.Intake(1, c0, new Xoshiro256Random((ulong)(1000 + s)), talentCenter: center));
+            return all;
+        }
+        var low = Cohort0(20.0);
+        var high = Cohort0(70.0);
+        Assert.True(System.Math.Abs(low.Average(p => p.Level(AbilityKind.Speed)) - high.Average(p => p.Level(AbilityKind.Speed))) < 5.0,
+            "slope=0 でも走力が名声に連動している");
     }
 
     // --- パワプロ型特化の禁止（専門外にも下限, 設計書01 §1.1b） ---

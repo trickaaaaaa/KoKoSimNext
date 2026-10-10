@@ -4,6 +4,7 @@ using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Players;
+using KokoSim.Engine.Season;
 
 namespace KokoSim.Engine.Nation.Roster;
 
@@ -24,7 +25,7 @@ public static class AiRosterCycle
     /// </summary>
     public static void RetireGraduates(AiSchoolRoster roster) => roster.RemoveWhere(p => p.Grade >= 3);
 
-    /// <summary>ブートストラップ直後、上級生を過年度ぶん成長させてチーム総合を Strength 近傍へ寄せる。</summary>
+    /// <summary>ブートストラップ直後、上級生を過年度ぶん成長させてチーム総合を <see cref="GrowthTarget"/> 近傍へ寄せる。</summary>
     public static void SettleToTarget(AiSchoolRoster roster, School school, int yearIndex, AiRosterDeps deps)
         // 全員が新入生中心で生成されているので、grade-1 学年ぶん (grade-1)×g を積んで加齢差を作る。
         => Settle(roster, school, yearIndex, deps, gradeFactor: g => g - 1);
@@ -42,7 +43,8 @@ public static class AiRosterCycle
         foreach (var p in roster.Players)
         {
             p.Grade++;
-            p.Snapshot = p.Snapshot with { Grade = p.Grade };
+            // 精神力の学年アーク（issue ai-school-mental-fixed-50）: 進級ごとに +AiMentalPerGrade。能力の逆算配分とは別。
+            p.Snapshot = AiMentalModel.Promote(p.Snapshot with { Grade = p.Grade }, deps.Roster);
         }
 
         // 新入生コホート（Grade=1）を加入。
@@ -69,13 +71,24 @@ public static class AiRosterCycle
     }
 
     /// <summary>
+    /// 逆算配分のターゲット＝<b>ティア圧縮後</b>の強さ（<see cref="RosterCoefficients.CompressStrength"/>）。
+    /// 旧実装は raw の <c>school.Strength</c> を目標にしていたので、入学時の中心（<see cref="AiRosterFactory.RecruitCenter"/>）
+    /// だけ圧縮しても在校生の成長で raw まで戻され、<b>実ゲームのAI校は圧縮前と同じ能力</b>だった
+    /// （実測 2026-08-18: 強度80校の先発平均Lv 86・総合79／強度50校 Lv 54・総合49＝#578 の低ティア緩和も実ゲームには
+    /// 届いていなかった。issue #402 と同型の「sim だけ直る」穴）。sim（<see cref="StrengthTeamFactory.Create"/>）・
+    /// 集計モデル（<see cref="AggregateMatch"/>）・実ゲーム（ここ）の3経路が同じ写像を通る。
+    /// </summary>
+    internal static double GrowthTarget(School school, AiRosterDeps deps)
+        => deps.Roster.CompressStrength(school.Strength);
+
+    /// <summary>
     /// 逆算配分の一般形。非怪物の在校生を <paramref name="gradeFactor"/>×g（g は二分探索で決める強度）だけ
-    /// 現スナップショットから成長させ、怪物を除いたチーム総合が school.Strength に一致する g を求める。
+    /// 現スナップショットから成長させ、怪物を除いたチーム総合が <see cref="GrowthTarget"/> に一致する g を求める。
     /// </summary>
     private static void Settle(AiSchoolRoster roster, School school, int yearIndex, AiRosterDeps deps,
         Func<int, double> gradeFactor)
     {
-        var target = school.Strength;
+        var target = GrowthTarget(school, deps);
         var growable = roster.Players
             .Where(p => !p.Phenom.IsPhenom() && p.Grade is >= 1 and <= 3 && gradeFactor(p.Grade) > 0)
             .ToList();
@@ -108,7 +121,7 @@ public static class AiRosterCycle
     private static double ProjectedOverall(AiSchoolRoster roster, School school, int yearIndex, AiRosterDeps deps)
     {
         var active = roster.Players.Where(p => p.Grade is >= 1 and <= 3 && !p.Phenom.IsPhenom()).ToList();
-        if (active.Count == 0) return school.Strength;
+        if (active.Count == 0) return GrowthTarget(school, deps);
         var team = AiTeamBuilder.BuildFrom(active, school, yearIndex, deps);
         return ScoutedTeamProfile.Compute(team, deps.TeamStrength).Overall;
     }

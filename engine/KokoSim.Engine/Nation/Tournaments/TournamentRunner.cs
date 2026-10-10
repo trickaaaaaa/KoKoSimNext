@@ -49,6 +49,26 @@ public sealed record TournamentSchedule
     /// <summary>秋季県大会の実開幕日。</summary>
     public int AutumnOpenDay { get; init; } = 12;
 
+    /// <summary>夏の甲子園の実開幕月（設計書05 §1.1「夏の甲子園（8月）」）。</summary>
+    public int KoshienOpenMonth { get; init; } = 8;
+    /// <summary>夏の甲子園の実開幕日。</summary>
+    public int KoshienOpenDay { get; init; } = 6;
+
+    /// <summary>秋季地区大会の実開幕月（表示専用。前段の秋季県大会の後始末から即座連鎖するため
+    /// 週アンカーとは無関係、設計書05 §1.5b）。</summary>
+    public int RegionalOpenMonth { get; init; } = 10;
+    /// <summary>秋季地区大会の実開幕日。</summary>
+    public int RegionalOpenDay { get; init; } = 18;
+    /// <summary>明治神宮大会の実開幕月（表示専用）。</summary>
+    public int JinguOpenMonth { get; init; } = 11;
+    /// <summary>明治神宮大会の実開幕日。</summary>
+    public int JinguOpenDay { get; init; } = 15;
+    /// <summary>春のセンバツ本戦の実開幕月（表示専用。選考発表週から即座連鎖するため
+    /// 週アンカーとは無関係、設計書05 §1.5b）。</summary>
+    public int SenbatsuOpenMonth { get; init; } = 3;
+    /// <summary>春のセンバツ本戦の実開幕日。</summary>
+    public int SenbatsuOpenDay { get; init; } = 19;
+
     /// <summary>残りラウンド数 <paramref name="roundsRemaining"/> のカードを分散させる日数。</summary>
     public int SpreadDaysFor(int roundsRemaining)
     {
@@ -111,7 +131,10 @@ public sealed record PlayerMatchOutcome(
     bool ManagerWasAway = false,
     bool MercyEnded = false,
     // 引き分け再試合（設計書05 §1.3）で行われた再試合数。0＝初戦で決着。>0 なら Detail は決着した再試合の結果。
-    int TieReplays = 0);
+    int TieReplays = 0,
+    // 相手校の学校ID（issue #634）。<see cref="Detail"/> の相手校側ボックススコアを全国成績
+    // （NationTournamentStats）へ畳み込む帰属先。校名だけでは学校を同定できないため持つ。
+    int OpponentId = -1);
 
 /// <summary>
 /// ライブ観戦する自校戦の受け渡し（<see cref="TournamentRunner.BeginNextPlayerMatch"/> の戻り）。
@@ -264,31 +287,75 @@ public sealed class TournamentRunner
         IBackgroundMatchResolver? backgroundResolver = null,
         bool isNationalTournament = false,
         Action<int, int, GameResult>? onBackgroundMatch = null)
+        : this(entrants, ManagerIdIn(entrants, manager), coeff, rng, schedule, title,
+               playerResolver, backgroundResolver, isNationalTournament, onBackgroundMatch)
+    {
+    }
+
+    /// <summary>
+    /// どの学校にも一致しない自校ID（<see cref="Spectated"/> 専用）。実在の校IDは 0 以上か自校の -1 なので衝突しない。
+    /// </summary>
+    private const int NoManagerId = int.MinValue;
+
+    /// <summary>参加校に自校が居ることを確かめて自校IDを返す（居なければ投げる＝取り違えを早期に落とす）。</summary>
+    private static int ManagerIdIn(IReadOnlyList<School> entrants, School manager)
     {
         if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
         if (entrants.All(s => s.Id != manager.Id)) throw new ArgumentException("自校が参加校に含まれていません。");
+        return manager.Id;
+    }
 
+    /// <summary>
+    /// <b>自校が出場していない大会</b>の進行体を組む（設計書05 §1.1a）。自校が県予選で敗退した年の
+    /// 夏の甲子園がこれで、プレイヤーは観るだけ＝全カードが裏試合として解決される。
+    ///
+    /// <para>自校IDをどの学校にも一致しない値にするので、生成直後に <c>PlayerActive=false</c>
+    /// （＝<see cref="BracketResolutionPending"/> が true）になる。呼び出し側は
+    /// <see cref="StepBracketResolution"/> を日程に合わせて刻めばよい。<b>nominal manager として
+    /// 出場校の1つを渡してはいけない</b>＝その校が樹形図で「自校」として強調されてしまう。</para>
+    /// </summary>
+    public static TournamentRunner Spectated(
+        IReadOnlyList<School> entrants,
+        NationCoefficients coeff,
+        IRandomSource rng,
+        TournamentSchedule schedule,
+        string title,
+        IBackgroundMatchResolver? backgroundResolver = null,
+        bool isNationalTournament = false,
+        Action<int, int, GameResult>? onBackgroundMatch = null)
+    {
+        if (entrants.Count == 0) throw new ArgumentException("参加校が空です。");
+        return new TournamentRunner(entrants, NoManagerId, coeff, rng, schedule, title,
+            playerResolver: null, backgroundResolver, isNationalTournament, onBackgroundMatch);
+    }
+
+    private TournamentRunner(
+        IReadOnlyList<School> entrants,
+        int managerId,
+        NationCoefficients coeff,
+        IRandomSource rng,
+        TournamentSchedule schedule,
+        string title,
+        IPlayerMatchResolver? playerResolver,
+        IBackgroundMatchResolver? backgroundResolver,
+        bool isNationalTournament,
+        Action<int, int, GameResult>? onBackgroundMatch)
+    {
         _coeff = coeff;
         _rng = rng;
         _schedule = schedule;
         _playerResolver = playerResolver;
         _backgroundResolver = backgroundResolver;
-        _managerId = manager.Id;
+        _managerId = managerId;
         _isNationalTournament = isNationalTournament;
         _onBackgroundMatch = onBackgroundMatch;
         Title = title;
 
-        // 強さ順にシード（同値は Id で決定化）。不足分は不戦勝(null)。
-        var seeded = entrants.OrderByDescending(s => s.Strength).ThenBy(s => s.Id).ToList();
-        var size = TournamentEngine.NextPowerOfTwo(seeded.Count);
-        _totalRounds = TournamentRecorder.RoundsRemaining(size);
-        var order = TournamentEngine.SeedOrder(size);
-        _current = new School?[size];
-        for (var slot = 0; slot < size; slot++)
-        {
-            var seed = order[slot] - 1;
-            _current[slot] = seed < seeded.Count ? seeded[seed] : null;
-        }
+        // 組み合わせ抽選（issue #631）: 上位K校をシードとして対角へ、残りは抽選で空きへ。不足分は不戦勝(null)。
+        // 抽選は Fork した専用ストリーム＝本編の乱数列を進めない（試合結果・統計帯は動かない）。
+        // rng は大会ごとに（母種＾年＾種別で）違うので、同じ年でも夏と秋で別の表になる。
+        _current = TournamentDraw.Arrange(entrants, rng.Fork(TournamentDraw.DrawStreamId));
+        _totalRounds = TournamentRecorder.RoundsRemaining(_current.Length);
 
         _roundEntrants = new School?[]?[_totalRounds + 1];
         _roundEntrants[0] = (School?[])_current.Clone();   // 初期シード配置は確定済み＝樹形図の起点。
@@ -772,7 +839,8 @@ public sealed class TournamentRunner
                 var mls = Math.Min(mgrRuns, oppRuns);
                 outcome = new PlayerMatchOutcome(
                     managerWon, opp.Name, opp.Tier, mgrRuns, oppRuns, roundName, IsChampion: false,
-                    Detail: r, ManagerWasAway: managerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays);
+                    Detail: r, ManagerWasAway: managerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays,
+                    OpponentId: opp.Id);
                 _matches.Add(new BracketMatch(roundName, roundsRemaining, mw.Name, ml.Name, mw.Id, ml.Id, mws, mls, true, r.MercyEnded));
                 RecordCard(round, i, mw.Id == a.Id, mws, mls, r.MercyEnded);
                 RecordOutings(r, managerIsAway ? mgr : opp, managerIsAway ? opp : mgr, matchDay);
@@ -794,7 +862,7 @@ public sealed class TournamentRunner
                     managerWon, opponent.Name, opponent.Tier,
                     managerWon ? winScore : loseScore,
                     managerWon ? loseScore : winScore,
-                    roundName, IsChampion: false);
+                    roundName, IsChampion: false, OpponentId: opponent.Id);
             }
 
             next[i] = winner;
@@ -897,7 +965,8 @@ public sealed class TournamentRunner
         _current = p.Next;
         return new PlayerMatchOutcome(
             managerWon, p.Opp.Name, p.Opp.Tier, mgrRuns, oppRuns, p.RoundName, IsChampion: false,
-            Detail: r, ManagerWasAway: p.ManagerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays);
+            Detail: r, ManagerWasAway: p.ManagerIsAway, MercyEnded: r.MercyEnded, TieReplays: replays,
+            OpponentId: p.Opp.Id);
     }
 
     /// <summary>得点差(margin)から表示用スコアを合成する（敗者0〜3点＋差）。決定論（注入乱数）。</summary>
@@ -966,9 +1035,7 @@ public sealed class TournamentRunner
         var isManagerSchool = schoolId == _managerId;
         foreach (var l in lines)
         {
-            var key = isManagerSchool && l.SourceId is int sid
-                ? PitcherLedgerKey.ForPlayer(sid)
-                : PitcherLedgerKey.ForOpponent(schoolId, l.UniformNumber);
+            var key = PitcherLedgerKey.For(isManagerSchool, schoolId, l.SourceId, l.UniformNumber);
             _pitchLedger.Record(key, l.Pitches, matchDay);
         }
     }

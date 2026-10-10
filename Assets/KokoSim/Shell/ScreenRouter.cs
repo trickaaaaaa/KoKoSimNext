@@ -60,6 +60,14 @@ namespace KokoSim.Unity.Shell
         // 起動時の既定画面（issue #482 でタイトルへ差し替え）。ホームは「はじめから／つづきから」の後に出す。
         private const string DefaultScreen = "TitleScreen";
 
+        // 主将指名モーダル／大会開幕バナーの提示先＝ハブ画面。**起動時の既定画面とは別物**。
+        // 元は両方とも "HomeDashboard" で DefaultScreen 1本だったが、issue #482 で起動時の入口を
+        // タイトルへ差し替えたときに回送先まで巻き込まれ、大会開幕週にホーム以外のタブで週を進めると
+        // タイトルへ飛ばされていた（例外は出ないので気づけない）。さらに SaveSlots は下の
+        // WeekAdvancers に入っているため、タイトルの「つづきから」を押しても1フレームで
+        // タイトルへ弾き返され、押しても無反応にしか見えなかった。定数を用途ごとに分ける。
+        private const string HomeScreen = "HomeDashboard";
+
         // ホーム以外で「今週を進める」を持つ画面。ここで引退週／大会開幕週に入ったら、主将指名モーダル／
         // 開幕バナーの演出をホームで出すため回送する（issue #134: 全タブに advance を配線したので選手/メンバーも含む）。
         private static readonly string[] WeekAdvancers =
@@ -92,13 +100,14 @@ namespace KokoSim.Unity.Shell
             // バックグラウンド Task（試合後の大会処理）の完了をメインスレッドで反映する（issue #138）。
             MainThreadDispatcher.Drain();
 
-            // 新チーム発足（夏の3年引退の翌週）の主将指名／夏・秋の大会開幕バナーは、どの画面で週を進めても
-            // ホームで出す（導線を1箇所に集約する, 設計書09 §8 / issue #134）。回送元は「週を進められる画面」だけに
-            // 限る（試合中フローの画面から引き剥がさない）。BannerPending はホームが開幕演出を出して下ろす。
+            // 新チーム発足（夏の3年引退の翌週）の主将指名／夏・秋の大会開幕バナー／監督オファー（設計書04 §1.3）は、
+            // どの画面で週を進めてもホームで出す（導線を1箇所に集約する, 設計書09 §8 / issue #134）。回送元は
+            // 「週を進められる画面」だけに限る（試合中フローの画面から引き剥がさない）。各 Pending はホームが
+            // 該当のモーダル/オファー画面を出して下ろす。
             if (_pending == null
-                && (NewTeamService.Pending || GameSession.Current.BannerPending)
+                && (NewTeamService.Pending || GameSession.Current.BannerPending || ManagerTransferService.Pending)
                 && System.Array.IndexOf(WeekAdvancers, _current) >= 0)
-                _pending = DefaultScreen;
+                _pending = HomeScreen;
 
             if (_pending == null) return;
             var target = _pending;
@@ -222,10 +231,9 @@ namespace KokoSim.Unity.Shell
                 });
             }
 
-            // #208: ブースト画面（スタメン設定・結果）では背景シムの集中消化中だけ下端に「ロード中」を出す。
-            // 完了で自動的に消える（オーバーレイ側が Running を毎フレーム見て display を切る）。
-            if (ThrottleFor(target) == NationBackgroundSim.SimThrottle.Boost)
-                SimProgressOverlay.Attach(root);
+            // プレイヤーが待つしかない場面（セーブ/ロード・裏試合の結果待ち・試合開始/結果集計の重い
+            // 後処理）を画面によらず必ず見せる。表示条件はオーバーレイ側が毎フレーム判定して出す/消す。
+            WaitOverlayController.Attach(root);
         }
     }
 }

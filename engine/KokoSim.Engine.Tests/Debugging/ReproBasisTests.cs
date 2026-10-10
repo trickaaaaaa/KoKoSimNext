@@ -113,10 +113,12 @@ public sealed class ReproBasisTests
 
     /// <summary>打席途中（Pitch窓）で中断しても、pitch粒度の位置ごと復元して結果が一致する。</summary>
     // seed は rng ストリームが変わるたびに更新が要る（8打席後の次打席が2球以上続くこと＝mid-PA save が
-    // 成立する前提を満たす値を選ぶ）。旧 5→2（Issue #63 バウンド導入）→3（issue #262 打球方向）。
+    // 成立する前提を満たす値を選ぶ）。旧 5→2（Issue #63 バウンド導入）→3（issue #262 打球方向）
+    // →4/9（2026-08-14 もたつきの導入で内野ゴロ1件につき1発ぶん列がずれた）
+    // →1/9（design-14 P3-11 のタッチアップ物理レース化で列がずれた。4 は次打席が1球で終わるようになった）。
     [Theory]
-    [InlineData(3UL)]
-    [InlineData(11UL)]
+    [InlineData(1UL)]
+    [InlineData(9UL)]
     public void InjectedRng_SaveMidPlateAppearance_MatchesUninterrupted(ulong seed)
     {
         var full = GameResultDigest.Sha256Of(

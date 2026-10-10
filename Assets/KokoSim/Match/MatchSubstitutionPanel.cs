@@ -29,17 +29,19 @@ namespace KokoSim.Unity.Match
     /// を通り、engine の <see cref="MatchProgression.Relieve"/>／<see cref="MatchProgression.DefenseAssign"/>／
     /// <see cref="MatchProgression.SwapDefensivePositions"/>／<see cref="MatchProgression.ConvertPitcherAndRelieve"/>／
     /// <see cref="MatchProgression.ReleaseDh"/> へ振り分ける。判断ロジックはエンジンに委ね、ここは表示と実行呼び出しだけ
-    /// （不変条件#3 エンジン純度）。確定は即時・取り消し不可。</para>
+    /// （不変条件#3 エンジン純度）。確定は1操作ずつ即時・取り消し不可。ただし確定してもモーダルは
+    /// 閉じない（issue報告「投手交代と守備位置を一斉に変えられない」への対応）＝継投→守備位置の
+    /// 入れ替えのように複数操作を同じセッションで続けて行える。閉じるのは✕／やめるを押した時だけ。</para>
     /// </summary>
     public sealed class MatchSubstitutionPanel
     {
         private readonly VisualElement _root;
         private readonly System.Action _onApplied;
 
-        private VisualElement _scrim, _kinds, _outRows, _inRows, _cmpRows;
+        private VisualElement _scrim, _kinds, _outRows, _inRows, _cmpRows, _cmpToggle;
         private ScrollView _cmpScroll;
         private Label _phase, _outsCap, _insCap, _note;
-        private Button _ok;
+        private Button _ok, _close, _cancel;
 
         private MatchProgression _prog;
         private bool _teamIsAway;
@@ -61,6 +63,7 @@ namespace KokoSim.Unity.Match
         private int _defInIndex = -1;    // 控え一覧の添字（枠→控え）
         private FieldPosition? _convertTo;  // 継投時に元投手を回す守備位置（null=退場）
         private bool _dhWithdraw;        // 指枠を「そのまま退場」させる
+        private bool _cmpFielderOverride;   // 投手が絡む操作でも打撃・守備ビューを見たい（トグル選択）
 
         /// <param name="aptitudeGrades">
         /// 守備適性の9ポジションのランクを <see cref="Player.SourceId"/> から引く（issue #452）。
@@ -90,6 +93,7 @@ namespace KokoSim.Unity.Match
             _outRows = _root.Q<VisualElement>("msub-out-rows");
             _inRows = _root.Q<VisualElement>("msub-in-rows");
             _cmpRows = _root.Q<VisualElement>("msub-cmp-rows");
+            _cmpToggle = _root.Q<VisualElement>("msub-cmp-toggle");
             // ScrollView 本体（窓の高さを持つ要素）。_cmpRows.parent は contentContainer なので届かない。
             _cmpScroll = _root.Q<ScrollView>(className: "msub-cmp-scroll");
             _phase = _root.Q<Label>("msub-phase");
@@ -97,6 +101,8 @@ namespace KokoSim.Unity.Match
             _insCap = _root.Q<Label>("msub-ins-cap");
             _note = _root.Q<Label>("msub-note");
             _ok = _root.Q<Button>("msub-ok");
+            _close = _root.Q<Button>("msub-close");
+            _cancel = _root.Q<Button>("msub-cancel");
 
             Click("msub-close", Close);
             Click("msub-cancel", Close);
@@ -123,8 +129,15 @@ namespace KokoSim.Unity.Match
             Render();
         }
 
+        /// <summary>
+        /// 週間球数制限で強制的に開いた投手交代待ち（<see cref="MatchProgression.PendingForcedPitcherChange"/>）の間は、
+        /// 閉じても何も変えずに投げさせ続けることになるため、実際に継投するまで閉じさせない。
+        /// </summary>
+        private bool ForcedPitcherChangePending => _prog != null && _prog.PendingForcedPitcherChange;
+
         public void Close()
         {
+            if (ForcedPitcherChangePending) return;
             _open = false;
             if (_scrim != null) _scrim.style.display = DisplayStyle.None;
         }
@@ -191,6 +204,14 @@ namespace KokoSim.Unity.Match
             }
         }
 
+        /// <summary>スクショ用: 投手が絡む比較の「投球／打撃・守備」トグルを切り替える（クリックと同じ経路）。</summary>
+        public void ToggleCmpFielderViewForCapture()
+        {
+            if (!_open) return;
+            _cmpFielderOverride = !_cmpFielderOverride;
+            Render();
+        }
+
         /// <summary>スクショ用: 「この操作を確定」を押す（実行経路はボタンと同一）。issue #452 の操作一巡確認用。</summary>
         public void ApplyForCapture() => Apply();
 
@@ -252,6 +273,7 @@ namespace KokoSim.Unity.Match
             _defInIndex = -1;
             _convertTo = null;
             _dhWithdraw = false;
+            _cmpFielderOverride = false;
             if (_opt != null && !_opt.IsOffense)
             {
                 BuildDefenseModel();
@@ -331,7 +353,14 @@ namespace KokoSim.Unity.Match
         private void Render()
         {
             if (_opt == null) return;
-            if (_phase != null) _phase.text = _opt.IsFinished ? "試合終了" : _opt.IsOffense ? "攻撃中" : "守備中";
+            var forced = ForcedPitcherChangePending;
+            if (_phase != null)
+                _phase.text = _opt.IsFinished ? "試合終了"
+                    : forced ? "球数制限：投手を交代してください"
+                    : _opt.IsOffense ? "攻撃中" : "守備中";
+            // 交代するまで閉じさせない（Close 側のガードと対で、押せる/押せないを見た目にも出す）。
+            _close?.SetEnabled(!forced);
+            _cancel?.SetEnabled(!forced);
             BuildKinds();
             if (_opt.IsOffense) { BuildOffenseOut(); BuildOffenseIn(); }
             else { BuildDefenseAssign(); BuildDefenseCandidates(); }
@@ -663,7 +692,10 @@ namespace KokoSim.Unity.Match
 
         private void BuildCompare()
         {
-            var (outgoing, incoming, pitcherView, capA, capB) = CompareSubjects();
+            var (outgoing, incoming, isPitcherCtx, capA, capB) = CompareSubjects();
+            // 投手が絡む操作でも打撃・守備を見たいという要望への対応（トグルは選択中だけ効く・既定は投球）。
+            var pitcherView = isPitcherCtx && !_cmpFielderOverride;
+            BuildCmpToggle(isPitcherCtx);
             // 空カードには「次に何を選べばよいか」を出す（開いた直後の空状態の道標。issue #452 指摘4）。
             FillCard("msub-cmp-a", outgoing, EmptyCardTextA(), pitcherView);
             FillCard("msub-cmp-b", incoming, EmptyCardTextB(), pitcherView);
@@ -696,6 +728,23 @@ namespace KokoSim.Unity.Match
                 if (aptA != null || aptB != null)
                     _cmpRows.Add(UiComponents.AptitudeStrip(aptA, aptB, capA, capB));
             }
+        }
+
+        /// <summary>
+        /// 投手が絡む操作（継投／投野交代）のときだけ「投球／打撃・守備」の切替を出す
+        /// （「投手を変えるとき投手能力しか見えず、守備位置を一緒に考えられない」への対応）。
+        /// 高さは常に同じ（.msub-cmp-toggle が予約）＝出し分けで比較欄の位置が動かない。
+        /// </summary>
+        private void BuildCmpToggle(bool showToggle)
+        {
+            if (_cmpToggle == null) return;
+            _cmpToggle.Clear();
+            if (!showToggle) return;
+            _cmpToggle.Add(UiComponents.SegTabs(new[] { "投球", "打撃・守備" }, _cmpFielderOverride ? 1 : 0, i =>
+            {
+                _cmpFielderOverride = i == 1;
+                Render();
+            }));
         }
 
         /// <summary>左カード（退く側）の空状態文言。何も選んでいないとき次の一手を指す。</summary>
@@ -869,8 +918,13 @@ namespace KokoSim.Unity.Match
                 }
                 return;
             }
-            Close();
+            // 確定してもモーダルは閉じない＝続けて別の交代・守備位置変更を行える（一操作ごとに開き直す
+            // 手間を消す）。1手ずつ即時確定・取り消し不可なのは変わらない。閉じるのはユーザーが
+            // ✕／やめるを押した時だけ（Close は Click ハンドラ側に残したまま）。
+            _opt = _prog.SubstitutionOptions(_teamIsAway);
+            ResetSelection();
             _onApplied?.Invoke();
+            Render();
         }
 
         // ── 表示ヘルパ ──

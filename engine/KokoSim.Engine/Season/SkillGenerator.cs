@@ -10,6 +10,19 @@ namespace KokoSim.Engine.Season;
 /// </summary>
 public static class SkillGenerator
 {
+    /// <summary>
+    /// 隠しスキルになり得ない（issue skills-yaml-not-data-driven）。data/skills.yaml の
+    /// <c>hidden_eligible: false</c> と一致させる（<see cref="Engine.Tests.Players.SkillTests"/> の
+    /// 一致テストで固定）。<see cref="Skill.Monster"/>/<see cref="Skill.SubmarineMastery"/> は
+    /// <see cref="TryAdd"/> を経由せず常に visible へ直接足すため、この表には含めない
+    /// （SubmarineMastery は yaml上 hidden_eligible: true だが、この不一致自体は監督判断で追わない）。
+    /// </summary>
+    internal static readonly HashSet<Skill> HiddenIneligible = new()
+    {
+        Skill.SprayHitter, Skill.FirstPitchSwinger, Skill.Grinder, Skill.EffectivelyWild,
+        Skill.DoublePlayArtist, Skill.Moodmaker, Skill.PracticeLeader, Skill.Diligent,
+    };
+
     // 投手が持ちうる挙動系。
     private static readonly Skill[] PitchingPool =
     {
@@ -57,7 +70,10 @@ public static class SkillGenerator
         {
             if (count >= c.MaxSkillsPerPlayer) return;
             if (!MathUtil.Chance(prob, rng)) return;
-            if (MathUtil.Chance(c.HiddenShare, rng)) hidden.Add(s);
+            // RNG消費は hidden_eligible に関わらず常に1回（乱数消費順を変えない）。
+            // 隠し不可のスキルは、隠し行きを引いた結果を無視して visible へ回す。
+            var wantsHidden = MathUtil.Chance(c.HiddenShare, rng);
+            if (wantsHidden && !HiddenIneligible.Contains(s)) hidden.Add(s);
             else visible.Add(s);
             count++;
         }

@@ -27,9 +27,15 @@ public static class AtBatSimulation
         public int Strikeouts { get; init; }
         public int ReachedOnError { get; init; }
         public int InPlayOuts { get; init; }
+        /// <summary>三振のうち見逃し（最終球が振らずに入った CalledStrike）だったもの。見逃し三振率の調査用。</summary>
+        public int LookingStrikeouts { get; init; }
 
         public double Average => AtBats > 0 ? (double)Hits / AtBats : 0;
         public double StrikeoutRate => PlateAppearances > 0 ? (double)Strikeouts / PlateAppearances : 0;
+        /// <summary>見逃し三振率（打席あたり）。K% の内訳。</summary>
+        public double LookingStrikeoutRate => PlateAppearances > 0 ? (double)LookingStrikeouts / PlateAppearances : 0;
+        /// <summary>三振に占める見逃しの割合（実野球はおよそ3割前後が参考値。design未定義のためこのゲームの目標帯は無い）。</summary>
+        public double LookingStrikeoutShare => Strikeouts > 0 ? (double)LookingStrikeouts / Strikeouts : 0;
         public double WalkRate => PlateAppearances > 0 ? (double)Walks / PlateAppearances : 0;
         public double HomeRunRate => PlateAppearances > 0 ? (double)HomeRuns / PlateAppearances : 0;
         public double Babip
@@ -120,8 +126,8 @@ public static class AtBatSimulation
             forks[i] = root.Fork((ulong)i);
         }
 
-        // pa, ab, h, s1, s2, s3, hr, bb, so, roe, outs, hbp（＋ヒストグラム指定時は着地距離×結果のビン）
-        const int Counters = 12;
+        // pa, ab, h, s1, s2, s3, hr, bb, so, roe, outs, hbp, looking_so（＋ヒストグラム指定時は着地距離×結果のビン）
+        const int Counters = 13;
         var histBins = histogram ? BattedBallHistogram.Buckets * BattedBallHistogram.Kinds * 2 : 0;
         var width = Counters + histBins;
         var total = new int[width];
@@ -164,6 +170,7 @@ public static class AtBatSimulation
                     case PlateAppearanceResult.InPlayOut: local[10]++; break;
                     case PlateAppearanceResult.HitByPitch: local[11]++; break;
                 }
+                if (r.IsLookingStrikeout(detailed.PitchLog)) local[12]++;
                 return local;
             },
             local =>
@@ -196,6 +203,7 @@ public static class AtBatSimulation
             ReachedOnError = total[9],
             InPlayOuts = total[10],
             HitByPitches = total[11],
+            LookingStrikeouts = total[12],
         };
     }
 
@@ -211,10 +219,18 @@ public static class AtBatSimulation
         public required int[] AtBats { get; init; }
         public required int[] Hits { get; init; }
         public required int[] Strikeouts { get; init; }
+        /// <summary>四球（issue walk-rate-floor-vs-elite-pitcher の検収: 高制球投手の与四球/9）。</summary>
+        public required int[] Walks { get; init; }
+        /// <summary>アウト（打席のうち出塁しなかったもの＝ 打席 − 安打 − 四死球 − 失策出塁）。与四球/9 の分母。</summary>
+        public required int[] Outs { get; init; }
 
         public double StrikeoutRate(Tier t) =>
             PlateAppearances[(int)t] > 0 ? (double)Strikeouts[(int)t] / PlateAppearances[(int)t] : 0;
         public double Average(Tier t) => AtBats[(int)t] > 0 ? (double)Hits[(int)t] / AtBats[(int)t] : 0;
+        public double WalkRate(Tier t) =>
+            PlateAppearances[(int)t] > 0 ? (double)Walks[(int)t] / PlateAppearances[(int)t] : 0;
+        /// <summary>与四球/9（打席シムの近似: 四球 ÷ アウト × 27）。</summary>
+        public double WalksPer9(Tier t) => Outs[(int)t] > 0 ? 27.0 * Walks[(int)t] / Outs[(int)t] : 0;
     }
 
     /// <summary>サンプル投手の総合等級（投手総合＝TeamStrengthCoefficients の重みで G〜S に量子化）。</summary>
@@ -239,7 +255,7 @@ public static class AtBatSimulation
         for (var i = 0; i < atBats; i++) forks[i] = root.Fork((ulong)i);
 
         const int TierCount = 8;  // G..S
-        const int Counters = 4;   // pa, ab, h, so
+        const int Counters = 6;   // pa, ab, h, so, bb, outs
         var width = TierCount * Counters;
         var total = new int[width];
         Parallel.For(0, atBats,
@@ -255,19 +271,26 @@ public static class AtBatSimulation
                 if (r.IsAtBat()) local[b + 1]++;     // AB
                 if (r.IsHit()) local[b + 2]++;       // H
                 if (r == PlateAppearanceResult.Strikeout) local[b + 3]++;
+                if (r == PlateAppearanceResult.Walk) local[b + 4]++;
+                if (!r.IsHit() && r is not (PlateAppearanceResult.Walk or PlateAppearanceResult.HitByPitch
+                        or PlateAppearanceResult.ReachedOnError)) local[b + 5]++;
                 return local;
             },
             local => { lock (total) { for (var k = 0; k < width; k++) total[k] += local[k]; } });
 
         var pa = new int[TierCount]; var ab = new int[TierCount]; var h = new int[TierCount]; var so = new int[TierCount];
+        var bb = new int[TierCount]; var outs = new int[TierCount];
         for (var t = 0; t < TierCount; t++)
         {
             pa[t] = total[t * Counters];
             ab[t] = total[t * Counters + 1];
             h[t] = total[t * Counters + 2];
             so[t] = total[t * Counters + 3];
+            bb[t] = total[t * Counters + 4];
+            outs[t] = total[t * Counters + 5];
         }
-        return new PitcherRankStats { PlateAppearances = pa, AtBats = ab, Hits = h, Strikeouts = so };
+        return new PitcherRankStats
+            { PlateAppearances = pa, AtBats = ab, Hits = h, Strikeouts = so, Walks = bb, Outs = outs };
     }
 
     /// <summary>投手ランク別 三振率・被打率のMarkDownレポート（issue #402 検証出力）。</summary>
@@ -279,12 +302,12 @@ public static class AtBatSimulation
         sb.AppendLine();
         sb.AppendLine(c, $"投手総合＝球速.40/制球.25/スタミナ.15/キレ.20 の等級（G〜S）で層別（シード {seed}）。");
         sb.AppendLine();
-        sb.AppendLine("| 投手ランク | 打席(PA) | 三振率 K% | 被打率 AVG |");
-        sb.AppendLine("|---|---:|---:|---:|");
+        sb.AppendLine("| 投手ランク | 打席(PA) | 三振率 K% | 被打率 AVG | 四球率 BB% | 与四球/9（近似） |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---:|");
         foreach (var t in new[] { Tier.S, Tier.A, Tier.B, Tier.C, Tier.D, Tier.E, Tier.F, Tier.G })
         {
             if (s.PlateAppearances[(int)t] == 0) continue;
-            sb.AppendLine(c, $"| {t} | {s.PlateAppearances[(int)t]} | {s.StrikeoutRate(t):P1} | {s.Average(t):F3} |");
+            sb.AppendLine(c, $"| {t} | {s.PlateAppearances[(int)t]} | {s.StrikeoutRate(t):P1} | {s.Average(t):F3} | {s.WalkRate(t):P1} | {s.WalksPer9(t):F2} |");
         }
         return sb.ToString();
     }
@@ -771,6 +794,108 @@ public static class AtBatSimulation
         };
     }
 
+    // ===== 投打差の格子（issue matchup-gap-saturation-k-rate） =====
+
+    /// <summary>
+    /// 「投手レベル×打者レベル」の1対1格子。投手は球速/制球/キレを同レベル、打者はミート/選球眼を同レベルに置き、
+    /// 各マスを <paramref name="atBatsPerCell"/> 打席回して K% / BB% / 被打率 を出す。
+    /// 統計帯 <c>atbat_10k</c>（平均同士）では見えない A/S 投手 vs E/F 打線の裾（24奪三振試合）を検収する。
+    /// 決定論並列（マス×打席の事前 Fork）。
+    /// </summary>
+    public sealed record MatchupGrid(
+        int[] PitcherLevels, int[] BatterLevels,
+        int[,] Pa, int[,] Ab, int[,] H, int[,] So, int[,] Bb)
+    {
+        public double StrikeoutRate(int pi, int bi) => Pa[pi, bi] > 0 ? (double)So[pi, bi] / Pa[pi, bi] : 0;
+        public double WalkRate(int pi, int bi) => Pa[pi, bi] > 0 ? (double)Bb[pi, bi] / Pa[pi, bi] : 0;
+        public double Average(int pi, int bi) => Ab[pi, bi] > 0 ? (double)H[pi, bi] / Ab[pi, bi] : 0;
+
+        public string ToMarkdown()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("| 投手＼打者 | " + string.Join(" | ", BatterLevels.Select(b => $"B{b}")) + " |");
+            sb.AppendLine("|---|" + string.Concat(BatterLevels.Select(_ => "---|")));
+            for (var pi = 0; pi < PitcherLevels.Length; pi++)
+            {
+                var kmh = PitcherAttributes.VelocityKmhFromLevel(PitcherLevels[pi]);
+                sb.Append($"| P{PitcherLevels[pi]} ({kmh:F0}km/h) |");
+                for (var bi = 0; bi < BatterLevels.Length; bi++)
+                    sb.Append($" {StrikeoutRate(pi, bi):P0} / {WalkRate(pi, bi):P0} / {Average(pi, bi):.000} |");
+                sb.AppendLine();
+            }
+            sb.AppendLine();
+            sb.AppendLine("各マス: K% / BB% / 被打率");
+            return sb.ToString();
+        }
+    }
+
+    public static readonly int[] DefaultGridPitcherLevels = { 35, 50, 65, 80, 90 };
+    public static readonly int[] DefaultGridBatterLevels = { 30, 45, 60, 75 };
+
+    /// <summary>格子の投手（球速/制球/キレ＝level・スタミナは打席単位で無関係・ストレート＋スライダー）。</summary>
+    public static PitcherAttributes GridPitcher(int level) => new()
+    {
+        MaxVelocityKmh = PitcherAttributes.VelocityKmhFromLevel(level),
+        Control = level,
+        PitchRank = level,
+        StaminaPitches = 90.0,
+        Repertoire = new[]
+        {
+            PitchSlot.FastballOf(level),
+            new PitchSlot { Type = PitchType.Slider, Power = level, Sharpness = level },
+        },
+    };
+
+    /// <summary>格子の打者（ミート/選球眼＝level・他は50・右打ち）。</summary>
+    public static BatterAttributes GridBatter(int level) => new()
+    {
+        Contact = level, Discipline = level,
+        Power = 50, LaunchTendency = 50, Speed = 50, Bats = Handedness.Right,
+    };
+
+    public static MatchupGrid RunMatchupGrid(int atBatsPerCell, ulong seed, string? coefficientsPath = null,
+        int[]? pitcherLevels = null, int[]? batterLevels = null)
+    {
+        var pl = pitcherLevels ?? DefaultGridPitcherLevels;
+        var bl = batterLevels ?? DefaultGridBatterLevels;
+        var ctx = BuildContext(coefficientsPath);
+        var root = new Xoshiro256Random(seed);
+        var cells = pl.Length * bl.Length;
+        var forks = new IRandomSource[cells * atBatsPerCell];
+        for (var i = 0; i < forks.Length; i++) forks[i] = root.Fork((ulong)i);
+
+        const int Counters = 5; // pa, ab, h, so, bb
+        var total = new int[cells * Counters];
+        Parallel.For(0, forks.Length,
+            () => new int[cells * Counters],
+            (i, _, local) =>
+            {
+                var cell = i / atBatsPerCell;
+                var pi = cell / bl.Length;
+                var bi = cell % bl.Length;
+                var r = AtBatResolver.ResolveDetailed(GridBatter(bl[bi]), GridPitcher(pl[pi]), ctx, forks[i]).Result;
+                var b = cell * Counters;
+                local[b]++;
+                if (r.IsAtBat()) local[b + 1]++;
+                if (r.IsHit()) local[b + 2]++;
+                if (r == PlateAppearanceResult.Strikeout) local[b + 3]++;
+                if (r == PlateAppearanceResult.Walk) local[b + 4]++;
+                return local;
+            },
+            local => { lock (total) { for (var k = 0; k < total.Length; k++) total[k] += local[k]; } });
+
+        var pa = new int[pl.Length, bl.Length]; var ab = new int[pl.Length, bl.Length];
+        var h = new int[pl.Length, bl.Length]; var so = new int[pl.Length, bl.Length]; var bb = new int[pl.Length, bl.Length];
+        for (var pi = 0; pi < pl.Length; pi++)
+            for (var bi = 0; bi < bl.Length; bi++)
+            {
+                var b = (pi * bl.Length + bi) * Counters;
+                pa[pi, bi] = total[b]; ab[pi, bi] = total[b + 1]; h[pi, bi] = total[b + 2];
+                so[pi, bi] = total[b + 3]; bb[pi, bi] = total[b + 4];
+            }
+        return new MatchupGrid(pl, bl, pa, ab, h, so, bb);
+    }
+
     private static int SampleAbility(IRandomSource rng, double mean = 50, double sd = 12, int min = 20, int max = 88)
         => (int)MathUtil.Clamp(Math.Round(rng.NextGaussian(mean, sd)), min, max);
 
@@ -789,8 +914,9 @@ public static class AtBatSimulation
     /// 実ロスター（<see cref="Season.ProspectGenerator"/> / <see cref="Nation.StrengthTeamFactory"/>）と揃える。
     /// それ以前は全員右打ちだったので、引っ張り方向が片側へ寄って分布が実態とずれる。
     /// 確率は生成器の既定と同値（スイッチ3% ／ 左投12% ／ 左投の98%が左打 ／ 右投の40%が左打）。
+    /// <see cref="GameSimulation"/> も同じ式を使う（左右の分布式は1箇所に集約する）。
     /// </summary>
-    private static Handedness SampleBats(IRandomSource rng)
+    internal static Handedness SampleBats(IRandomSource rng)
     {
         if (rng.NextDouble() < 0.03) return Handedness.Switch;
         var throwsLeft = rng.NextDouble() < 0.12;
@@ -847,6 +973,8 @@ public static class AtBatSimulation
         sb.AppendLine("|---|---|---|");
         sb.AppendLine(c, $"| 打率 AVG | {s.Average:F3} | .235–.290 |");
         sb.AppendLine(c, $"| 三振率 K% | {s.StrikeoutRate:P1} | 15.0–23.0% |");
+        sb.AppendLine(c, $"| うち見逃し三振率（打席あたり） | {s.LookingStrikeoutRate:P1} | 参考（目標帯未設定） |");
+        sb.AppendLine(c, $"| 見逃し三振の割合（三振に占める） | {s.LookingStrikeoutShare:P1} | 参考（実野球はおよそ3割前後） |");
         sb.AppendLine(c, $"| 四球率 BB% | {s.WalkRate:P1} | 6.0–10.0% |");
         sb.AppendLine(c, $"| 死球率 HBP% | {s.HitByPitchRate:P2} | 参考 0.5–2.0% |");
         sb.AppendLine(c, $"| 本塁打率 HR% | {s.HomeRunRate:P2} | 2.0–4.0% |");
@@ -860,7 +988,7 @@ public static class AtBatSimulation
         sb.AppendLine();
         sb.AppendLine("## 内訳");
         sb.AppendLine(c, $"- 単打 {s.Singles} / 二塁打 {s.Doubles} / 三塁打 {s.Triples} / 本塁打 {s.HomeRuns}");
-        sb.AppendLine(c, $"- 四球 {s.Walks} / 三振 {s.Strikeouts} / 失策出塁 {s.ReachedOnError} / インプレー凡打 {s.InPlayOuts}");
+        sb.AppendLine(c, $"- 四球 {s.Walks} / 三振 {s.Strikeouts}（見逃し {s.LookingStrikeouts} / 空振り {s.Strikeouts - s.LookingStrikeouts}） / 失策出塁 {s.ReachedOnError} / インプレー凡打 {s.InPlayOuts}");
         if (s.Histogram is { } h)
         {
             sb.AppendLine();

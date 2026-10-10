@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.Batting;
@@ -45,8 +46,10 @@ public sealed class PitchModelTests
     public void Fatigue_UsesStaminaPitches_AsFreshWindow()
     {
         var p = new Player { Pitching = new PitcherAttributes { StaminaPitches = 80.0, MaxVelocityKmh = 140.0, Control = 60 } };
-        var fresh = PitchingFatigue.Effective(p, 80.0, new FatigueCoefficients());
-        Assert.Equal(140.0, fresh.MaxVelocityKmh); // 目安以内は無減衰
+        // 目安の onset（既定60%）までは無減衰。目安到達時は係数どおり（−2km/h・−5）＝FatigueCurveTests 参照
+        // （issue fatigue-gradual-before-threshold で「目安まで完全ゼロ」の階段型は廃止）。
+        var fresh = PitchingFatigue.Effective(p, 80.0 * new FatigueCoefficients().OnsetRatio, new FatigueCoefficients());
+        Assert.Equal(140.0, fresh.MaxVelocityKmh);
 
         var tired = PitchingFatigue.Effective(p, 120.0, new FatigueCoefficients());
         Assert.True(tired.MaxVelocityKmh < 140.0, "目安超過で球速天井が落ちない");
@@ -122,6 +125,30 @@ public sealed class PitchModelTests
 
         // 目安＋margin を超えれば（球数の絶対値とは無関係に）降板する。
         Assert.True(PitchingFatigue.ShouldRelieve(ace, 185.0, c));
+    }
+
+    // --- 隅を狙う（issue walk-rate-floor-vs-elite-pitcher） ---
+
+    [Fact]
+    public void HigherControl_SpreadsTheAim_TowardTheCorners_And50IsIdentity()
+    {
+        // 狙い散布σは max(0.5, 1 + slope×(Control−50)) 倍。C50 は恒等・C90 は広く・C30 は狭い（真ん中を狙う）・乱数消費は同じ。
+        double AimSpread(int control, ulong seed)
+        {
+            var pitcher = new PitcherAttributes { MaxVelocityKmh = 140.0, Control = control };
+            var rng = new Xoshiro256Random(seed);
+            var xs = Enumerable.Range(0, 3000).Select(_ => PitchSelection.Select(pitcher, Zone, Bat, Pit, rng).AimX).ToList();
+            var mean = xs.Average();
+            return Math.Sqrt(xs.Sum(x => (x - mean) * (x - mean)) / xs.Count);
+        }
+        var c30 = AimSpread(30, 9);
+        var c50 = AimSpread(50, 9);
+        var c90 = AimSpread(90, 9);
+        Assert.InRange(c50, Bat.AimSigmaXMeters * 0.95, Bat.AimSigmaXMeters * 1.05);
+        var expected90 = Bat.AimSigmaXMeters * (1.0 + Bat.AimSpreadControlSlopePerPoint * 40);
+        var expected30 = Bat.AimSigmaXMeters * System.Math.Max(0.5, 1.0 - Bat.AimSpreadControlSlopePerPoint * 20);
+        Assert.InRange(c90, expected90 * 0.95, expected90 * 1.05);
+        Assert.InRange(c30, expected30 * 0.95, expected30 * 1.05);
     }
 
     // --- ギア「飛ばす/流す」（§1.1f） ---
@@ -306,6 +333,114 @@ public sealed class PitchModelTests
         // 差分は係数どおり厳密に (Lead差)×perPoint。
         Assert.Equal((80 - 50) * Pit.CatcherLeadStuffPerPoint, high.Stuff - mid.Stuff, 12);
         Assert.Equal((20 - 50) * Pit.CatcherLeadStuffPerPoint, low.Stuff - mid.Stuff, 12);
+    }
+
+    // --- 捕手リード→配球選択（設計書01 §2①: リードが50から離れたぶん投手の強い/弱い軸へ寄る） ---
+
+    [Fact]
+    public void CatcherLead_Fifty_PitchSelection_IsUnchanged()
+    {
+        // 球威A(≈90)・キレF(≈15)相当の非対称レパートリー。ちょうどLead50では
+        // 配球のRNG消費列も含め1ビットも変わらないことを固定する（帯不変の担保）。
+        var pitcher = new PitcherAttributes
+        {
+            MaxVelocityKmh = 147.0,
+            Repertoire = new[]
+            {
+                new PitchSlot { Type = PitchType.Fastball, Power = 90, Sharpness = 90 },
+                new PitchSlot { Type = PitchType.Slider, Power = 50, Sharpness = 15 },
+                new PitchSlot { Type = PitchType.Curve, Power = 50, Sharpness = 15 },
+            },
+        };
+
+        var baseline = PitchSelection.Select(pitcher, Zone, Bat, Pit, new Xoshiro256Random(42));
+        var withLead = PitchSelection.Select(pitcher, Zone, Bat, Pit, new Xoshiro256Random(42), catcherLead: 50);
+        Assert.Equal(baseline.Type, withLead.Type);
+        Assert.Equal(baseline.VelocityKmh, withLead.VelocityKmh, 9);
+    }
+
+    [Fact]
+    public void CatcherLead_ShiftsStraightShare_TowardStrongerAxis_BothDirections()
+    {
+        static double FastballShare(PitcherAttributes p, int lead, ulong seed)
+        {
+            var rng = new Xoshiro256Random(seed);
+            const int n = 20000;
+            var fb = 0;
+            for (var i = 0; i < n; i++)
+            {
+                if (PitchSelection.Select(p, Zone, Bat, Pit, rng, catcherLead: lead).Type == PitchType.Fastball) fb++;
+            }
+            return fb / (double)n;
+        }
+
+        // 球威A・キレF: ストレートが圧倒的に強い側。
+        var strongFastball = new PitcherAttributes
+        {
+            MaxVelocityKmh = 147.0,
+            Repertoire = new[]
+            {
+                new PitchSlot { Type = PitchType.Fastball, Power = 90, Sharpness = 90 },
+                new PitchSlot { Type = PitchType.Slider, Power = 50, Sharpness = 15 },
+            },
+        };
+        var fbShareAvg = FastballShare(strongFastball, 50, 1234);
+        var fbShareHigh = FastballShare(strongFastball, 90, 1234);
+        var fbShareLow = FastballShare(strongFastball, 10, 1234);
+        // 高リードほど強い軸（ストレート）へ寄り、低リードほど逆に弱い軸（変化球）へ寄る（対称）。
+        Assert.True(fbShareHigh > fbShareAvg + 0.02,
+            $"高リードでストレート比率が上がっていない: avg={fbShareAvg:P1} high={fbShareHigh:P1}");
+        Assert.True(fbShareLow < fbShareAvg - 0.02,
+            $"低リードでストレート比率が下がっていない: avg={fbShareAvg:P1} low={fbShareLow:P1}");
+
+        // 対称性: 変化球の方が強い投手では、高リードでストレート比率が下がる（＝良い変化球を活かす）。
+        var strongBreaking = new PitcherAttributes
+        {
+            MaxVelocityKmh = 130.0,
+            Repertoire = new[]
+            {
+                new PitchSlot { Type = PitchType.Fastball, Power = 30, Sharpness = 30 },
+                new PitchSlot { Type = PitchType.Fork, Power = 50, Sharpness = 90 },
+            },
+        };
+        var breakingShareAvg = FastballShare(strongBreaking, 50, 5678);
+        var breakingShareHigh = FastballShare(strongBreaking, 90, 5678);
+        Assert.True(breakingShareHigh < breakingShareAvg - 0.02,
+            $"変化球優位の投手で高リードのストレート比率が下がっていない: avg={breakingShareAvg:P1} high={breakingShareHigh:P1}");
+    }
+
+    [Fact]
+    public void CatcherLead_High_PrefersSharperBreakingBall_AmongMultiple()
+    {
+        var pitcher = new PitcherAttributes
+        {
+            MaxVelocityKmh = 140.0,
+            Repertoire = new[]
+            {
+                PitchSlot.FastballOf(60),
+                new PitchSlot { Type = PitchType.Slider, Power = 50, Sharpness = 20 },
+                new PitchSlot { Type = PitchType.Curve, Power = 50, Sharpness = 80 },
+            },
+        };
+
+        static double CurveShareAmongBreaking(PitcherAttributes p, int lead, ulong seed)
+        {
+            var rng = new Xoshiro256Random(seed);
+            const int n = 20000;
+            int curve = 0, slider = 0;
+            for (var i = 0; i < n; i++)
+            {
+                var t = PitchSelection.Select(p, Zone, Bat, Pit, rng, catcherLead: lead).Type;
+                if (t == PitchType.Curve) curve++;
+                else if (t == PitchType.Slider) slider++;
+            }
+            return curve / (double)(curve + slider);
+        }
+
+        var atAverage = CurveShareAmongBreaking(pitcher, 50, 99);
+        var atHigh = CurveShareAmongBreaking(pitcher, 95, 99);
+        Assert.InRange(atAverage, 0.45, 0.55); // 50以下は従来どおり一様抽選（≈50/50）
+        Assert.True(atHigh > 0.65, $"高リードでキレの高い変化球へ寄っていない: {atHigh:P1}");
     }
 
     // === Issue #274: 球威/キレの役割分担確認テスト ===

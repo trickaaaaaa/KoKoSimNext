@@ -24,10 +24,13 @@ public static class AiTeamBuilder
         FieldPosition.CenterField, FieldPosition.RightField,
     };
 
-    // ベンチ入り20人制（背番号1〜20）: 先発9（野手8＋エース1）＋控え野手8（10〜17）＋控え投手3（18〜20）＝20。
-    // StrengthTeamFactory と同じ背番号規則（design-06 §3.3b）。
-    private const int BenchFielderSlots = 8;
-    private const int ReservePitcherSlots = 3;
+    // ベンチ入り20人制（背番号1〜20）: 先発9（野手8＋エース1）＋控え投手3（二番手=10＋散らした2つ）
+    // ＋控え野手8（残り8番号）＝20。採番規則は AiUniformNumbers（StrengthTeamFactory と共通・design-06 §3.3b）。
+    private const int BenchFielderSlots = AiUniformNumbers.BenchFielderSlots;
+    private const int ReservePitcherSlots = AiUniformNumbers.ReservePitcherSlots;
+    /// <summary>マウンド組の上限＝先発投手＋控え投手枠。これを超える投手寄りの選手は野手候補へ戻す
+    /// （issue ai-two-way-hitting-pitchers-start-as-fielders。旧実装は5人目以降をベンチ外へ捨てていた）。</summary>
+    private const int MoundGroupCap = 1 + ReservePitcherSlots;
 
     /// <summary>
     /// ロスターから Team を構成する。<paramref name="modernRules"/>/<paramref name="calendarYear"/> は
@@ -47,8 +50,12 @@ public static class AiTeamBuilder
     {
         // 誰がマウンドに立ち誰がどこを守るかは、選手が覚えている配置ではなく**毎回の選抜**で決める（issue #384）。
         // ① マウンド組＝投手能力（ReliefScore と同じ合成）の上位。全員が投手能力を持つ（#381）ので
-        //    「投手として育った者」が自然に上へ来る。人数は投手適性が野手適性を上回る者の数（豊作/苦作の年が出る）。
-        // ② 守備8枠＝残りから実効守備力（地力×適性）の総和が最大になる割当（ハンガリアン法）。
+        //    「投手として育った者」が自然に上へ来る。人数は投手適性が野手適性を上回る者の数（豊作/苦作の年が出る）
+        //    を先発＋控え投手枠（MoundGroupCap）で頭打ちにし、余りは野手候補へ戻す。
+        // ② 守備8枠＝「残りの野手候補＋その日の先発投手を除くマウンド組」から、実効守備力（地力×適性）に
+        //    打撃を加味した重みの総和が最大になる割当（ハンガリアン法）。打てる控え投手は守備位置で先発する
+        //    （二刀流運用・issue ai-two-way-hitting-pitchers-start-as-fielders）。試合中に登板するときは
+        //    在フィールドからの投野交代（TeamState.RelieveWith）で守備穴をベンチが埋める。
         var (pitchers, fielders) = SelectMoundGroup(active, deps.Roster, deps.Persistent);
 
         // 相手校の当季調子variance（Q21・2026-07-22）。(校ID, 年度, 選手ID) の決定論シードから
@@ -58,6 +65,9 @@ public static class AiTeamBuilder
         // 揺らす per-round variance は展望との一致にラウンド識別子の伝播が要るため将来増分（OPEN-QUESTIONS Q21）。
         var conditionRoot = new Xoshiro256Random(
             0x0C0D_0000UL ^ (ulong)(long)school.Id ^ ((ulong)(long)yearIndex * 0x9E37_79B9UL));
+
+        // 背番号の採番表（AiUniformNumbers）。(校ID, 年度) 固定＝大会を跨いでも同じ番号。
+        var numbers = AiUniformNumbers.For(school.Id, yearIndex);
 
         Player Snap(AiPlayer p, int number)
         {
@@ -71,59 +81,95 @@ public static class AiTeamBuilder
             };
         }
 
+        // その日の先発投手を先に決める（温存判断 issue #42）。守備8枠の候補は「先発投手を除くマウンド組」を含む
+        // ので、誰が投げるかを先に確定させないと候補集合が決まらない。エースは温存日も守備に就かせない
+        // （背番号1を保ち、球数台帳キー (校ID, 背番号) の同定を安定させる #41）。
+        var trueAce = pitchers.FirstOrDefault();
+        var restAce = trueAce is not null && pitchers.Count > 1 && aceRest is not null
+            && AceRestSelector.ShouldRestAce(school, aceRest, deps.EnemyAi);
+        var starterAi = restAce ? pitchers[1] : trueAce;
+
         var order = new List<Player>(9);
         var bench = new List<Player>();
-        var usedFielders = new HashSet<int>();
+        var usedIds = new HashSet<int>();
 
-        // 先発野手8人＝実効守備力の総和が最大になる割当（issue #384）。守備位置ごとに独立で最良を採ると
+        // 守備8枠の候補＝野手候補＋（先発投手・エースを除く）マウンド組。
+        var fieldCandidates = new List<AiPlayer>(fielders);
+        foreach (var p in pitchers)
+        {
+            if (starterAi is not null && p.Id == starterAi.Id) continue;
+            if (trueAce is not null && p.Id == trueAce.Id) continue;
+            fieldCandidates.Add(p);
+        }
+
+        // 先発野手8人＝実効守備力＋打撃の総和が最大になる割当（issue #384）。守備位置ごとに独立で最良を採ると
         // 「捕手も遊撃もこなせる1人」を先に取られた枠が総崩れするので、8枠を同時に解く。
         // 自校（RosterTeamBuilder）は同じ問題を 8! 全探索で解いており、本ソルバは同じ最適解を返す。
-        var assignment = AssignFieldPositions(fielders, deps.Fielding);
+        var assignment = AssignFieldPositions(fieldCandidates, deps.Fielding, deps.Roster.Lineup, deps.Persistent);
         for (var slot = 0; slot < FieldSlots.Length; slot++)
         {
             var idx = assignment[slot];
             if (idx < 0) continue;   // 候補が8人未満（保険。コホート構成上は起きない）
-            var best = fielders[idx];
-            usedFielders.Add(best.Id);
+            var best = fieldCandidates[idx];
+            usedIds.Add(best.Id);
             order.Add(Snap(best, PositionNumber(FieldSlots[slot])) with { Position = FieldSlots[slot] });
         }
 
-        // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号10〜17（ベンチ入り20人制、StrengthTeamFactoryと同じ規則）。
-        var benchFielders = fielders.Where(p => !usedFielders.Contains(p.Id))
-            .OrderByDescending(FielderScore).Take(BenchFielderSlots).ToList();
-        var num = 10;
-        foreach (var f in benchFielders)
-            bench.Add(Snap(f, num++));
+        // 控え野手（各守備位置の次点＝守備固め供給）＋余り。背番号は控え投手が実際に使った番号を除いた
+        // 残りを若い順に詰める（ベンチ入り20人制、StrengthTeamFactory と同じ規則）。採番は控え投手を
+        // 確定させた後（下の bullpen）＝欠番を作らないため、ここでは人選だけして Snap は後回しにする。
+        // マウンド組は控え投手枠へ回すのでここでは除く。
+        var benchFielders = fielders.Where(p => !usedIds.Contains(p.Id))
+            .OrderByDescending(FielderScore).ThenBy(p => p.Id).Take(BenchFielderSlots).ToList();
 
-        // エース（最良投手）＝背番号は常に AceUniformNumber（1）。控え投手は背番号18〜20（最大3人）。
-        // 番号は温存の有無に関わらずロスター順位で固定＝大会を跨いだ台帳キー（#41）の同定を安定させる。
+        // エース（最良投手）＝背番号は常に AceUniformNumber（1）。控え投手は上位から順に 10 →散らした2つ。
+        // <b>番号は詰める</b>＝二番手が守備で先発した日はその下の投手が10を着ける（20人登録で10番が
+        // 欠番になるのは不自然なので、順位に紐付けず「控えに座った順」で配る）。
         //
         // **守備位置は必ずここで投手へ置き直す**（issue #384）。マウンド組は生成時の役割でなく能力で選ぶので、
         // 野手として生成された選手が入り得る。置き直さないと打順に投手が居ないまま同じ守備位置が2人になり、
         // 守備網羅が崩れる（実測: 200校中30校で発生）。配置を決めるのは選抜側の責任（#366 §④）。
         Player SnapToMound(AiPlayer p, int number) => Snap(p, number) with { Position = FieldPosition.Pitcher };
 
-        var trueAce = pitchers.FirstOrDefault();
-        var snappedAce = trueAce is not null ? SnapToMound(trueAce, AceRestSelector.AceUniformNumber) : null;
-        var pnum = 18;
-        var relief = pitchers.Skip(1).Take(ReservePitcherSlots).Select(p => SnapToMound(p, pnum++)).ToList();
+        // 控え投手の番号は上から順に配る（0=エースの1は別枠なので添字1から）。守備で先発した投手は
+        // 守備位置番号（2〜9）を着けるのでここを通らず、その番号は下の投手へ繰り上がる。
+        var moundIndex = 1;
+        int NextMoundNumber() => numbers.Mound[System.Math.Min(moundIndex++, numbers.Mound.Count - 1)];
 
-        // 温存判断（issue #42）。相手・残ラウンド・エースの消耗（#41台帳）・校風から次点投手を先発させるか決める。
-        var starter = snappedAce;
+        var snappedAce = trueAce is not null ? SnapToMound(trueAce, AceRestSelector.AceUniformNumber) : null;
+        // 控え投手＝マウンド組のうち、エースでも先発でもなく、守備にも就かなかった者。
         var bullpen = new List<Player>();
-        if (snappedAce is not null && relief.Count > 0 && aceRest is not null
-            && AceRestSelector.ShouldRestAce(school, aceRest, deps.EnemyAi))
+        Player? starter = null;
+        if (starterAi is not null)
         {
-            starter = relief[0];
-            bullpen.Add(snappedAce);
-            bullpen.AddRange(relief.Skip(1));
+            starter = restAce ? SnapToMound(starterAi, NextMoundNumber()) : snappedAce;
+            if (restAce && snappedAce is not null) bullpen.Add(snappedAce);
         }
-        else
+        foreach (var p in pitchers.Skip(1))
         {
-            bullpen.AddRange(relief);
+            if (starterAi is not null && p.Id == starterAi.Id) continue;   // 先発は上で処理済み
+            if (usedIds.Contains(p.Id)) continue;                          // 守備で先発（二刀流）
+            bullpen.Add(SnapToMound(p, NextMoundNumber()));
         }
         if (starter is not null)
             order.Add(starter);
+
+        // 控え野手の採番＝1〜20 のうち先発9人と控え投手が使わなかった番号を若い順に詰める。
+        // 控え投手が3人に満たない校では散らした番号が余るので、それも控え野手へ回す（＝欠番は
+        // 登録人数が20人に届かないぶんだけ末尾に出る）。生成時に投手寄りだった選手が控え野手に座るときは
+        // 守備位置ラベルを最良適性の守備位置へ置き直す（配置は選抜側が決める #366 §④）。
+        var takenNumbers = new HashSet<int>(order.Select(p => p.UniformNumber));
+        foreach (var p in bullpen) takenNumbers.Add(p.UniformNumber);
+        var benchNumbers = new List<int>(AiUniformNumbers.BenchSize);
+        for (var n = 1; n <= AiUniformNumbers.BenchSize; n++)
+            if (!takenNumbers.Contains(n)) benchNumbers.Add(n);
+        for (var i = 0; i < benchFielders.Count && i < benchNumbers.Count; i++)
+        {
+            var snapped = Snap(benchFielders[i], benchNumbers[i]);
+            if (snapped.Position == FieldPosition.Pitcher)
+                snapped = snapped with { Position = Season.AptitudeRoller.BestFieldPosition(benchFielders[i].Aptitudes) };
+            bench.Add(snapped);
+        }
 
         var team = new Team
         {
@@ -132,7 +178,10 @@ public static class AiTeamBuilder
             PitcherSlot = 8,
             Reserves = Match.Game.TeamReserves.Merge(bullpen, bench),
         };
-        return LineupOrderer.Compose(team, deps.Roster.Lineup, modernRules, calendarYear);
+        var composed = LineupOrderer.Compose(team, deps.Roster.Lineup, modernRules, calendarYear);
+        // 主将（設計書09 §8）: 自校と同じ規則（最上級生の統率力最大）で AI 校にも置く（issue ai-school-mental-fixed-50）。
+        // ベンチ入り20人の中から選ぶ（Compose 後の参照＝Team.Captain の在場判定は参照一致）。
+        return composed with { Captain = CaptainSelector.SelectFromPlayers(StrengthTeamFactory.AllPlayers(composed)) };
     }
 
     /// <summary>
@@ -143,7 +192,8 @@ public static class AiTeamBuilder
     /// - **下限** <see cref="PersistentRosterCoefficients.PitcherCountFloor"/>: 誰も投手に寄らない年でも
     ///   投手能力の最良者をマウンドへ立てる＝投手0人化を防ぐ
     /// - **上限** 残りが守備8枠を割り当てられる人数を下回らないこと＝守備網羅を防衛する
-    ///   （投手寄りばかりの年に守備が組めなくなるのを防ぐ）
+    ///   （投手寄りばかりの年に守備が組めなくなるのを防ぐ）。さらに <see cref="MoundGroupCap"/>（先発＋控え投手3）
+    ///   で頭打ちにし、5人目以降の投手寄りは野手候補へ戻す（ベンチ外へ捨てない。二刀流運用）
     ///
     /// 並びは投手能力の降順＝先頭がエース格。乱数を使わない純関数（決定論）。
     /// </summary>
@@ -158,7 +208,7 @@ public static class AiTeamBuilder
         var leaning = ranked.Count(p => PitcherRoleResolver.IsNaturalPitcher(
             p.Aptitude(FieldPosition.Pitcher), Season.AptitudeRoller.BestField(p.Aptitudes), rc));
 
-        var maxMound = System.Math.Max(0, active.Count - FieldSlots.Length);
+        var maxMound = System.Math.Min(MoundGroupCap, System.Math.Max(0, active.Count - FieldSlots.Length));
         var count = System.Math.Min(System.Math.Max(leaning, pc.PitcherCountFloor), maxMound);
 
         var mound = ranked.Take(count).ToList();
@@ -168,24 +218,57 @@ public static class AiTeamBuilder
     }
 
     /// <summary>
-    /// 守備8枠への割当（issue #384）。重みは実効守備力＝地力(Fielding)×適性補正で、自校の
-    /// <see cref="Season.EffectiveFielding"/> と同じ式を通す。戻り値は枠→候補の添字（候補不足なら −1）。
+    /// 守備8枠への割当（issue #384）。重みは実効守備力＝地力(Fielding)×適性補正（自校の
+    /// <see cref="Season.EffectiveFielding"/> と同じ式）に、<b>打撃総合×係数</b>を足したもの
+    /// （issue ai-two-way-hitting-pitchers-start-as-fielders）。打撃は候補ごとの定数なので「どの枠に置くか」は
+    /// 守備で、「誰を出すか」は守備＋打撃で決まる＝守備だけで先発を選び打てる選手を座らせる偏りを直す。
+    /// 戻り値は枠→候補の添字（候補不足なら −1）。
     /// </summary>
     private static int[] AssignFieldPositions(
-        IReadOnlyList<AiPlayer> fielders, Match.Fielding.FieldingCoefficients coeff)
+        IReadOnlyList<AiPlayer> fielders, Match.Fielding.FieldingCoefficients coeff,
+        LineupCoefficients lineup, PersistentRosterCoefficients pc)
     {
         var empty = new int[FieldSlots.Length];
         for (var i = 0; i < empty.Length; i++) empty[i] = -1;
         if (fielders.Count < FieldSlots.Length) return empty;   // 保険（SelectMoundGroup の上限が防いでいる）
 
         var w = new double[FieldSlots.Length, fielders.Count];
-        for (var slot = 0; slot < FieldSlots.Length; slot++)
-            for (var i = 0; i < fielders.Count; i++)
-                w[slot, i] = Season.EffectiveFielding.Raw(
+        for (var i = 0; i < fielders.Count; i++)
+        {
+            var batting = LineupOrderer.BattingScore(fielders[i].Snapshot, lineup) * pc.FieldSlotBattingWeight;
+            for (var slot = 0; slot < FieldSlots.Length; slot++)
+            {
+                var raw = Season.EffectiveFielding.Raw(
                     fielders[i].Snapshot.Fielding, fielders[i].Aptitude(FieldSlots[slot]), coeff);
+                if (fielders[i].Snapshot.Throws == Players.Handedness.Left)
+                    raw -= LeftThrowPenalty(FieldSlots[slot]);
+                w[slot, i] = raw + batting;
+            }
+        }
 
         return Core.AssignmentSolver.MaxWeight(w);
     }
+
+    /// <summary>
+    /// 左投げを <see cref="FieldPositions.IsRightThrowOnly"/> の位置へ座らせないための重み罰
+    /// （issue ai-lefty-not-at-c-2b-3b-ss）。
+    ///
+    /// <para>⚠ ハード除外（候補から外す）にしない＝<b>右投げの野手が4人未満のチームで割当そのものが
+    /// 成立しなくなる</b>（<c>AssignmentSolver.MaxWeight</c> が解を返せない）。罰の大小で「どうしても
+    /// 入れる場合の妥協順」を表す＝<b>三塁 → 二塁 → 捕手 → 遊撃</b>（監督決定 2026-08-13。
+    /// 遊撃がいちばん譲れない）。</para>
+    ///
+    /// <para>値は実効守備力（高々150程度）より1桁大きく、かつ位置どうしの差もそれより大きい。
+    /// ＝右投げが足りているうちは必ず右投げが勝ち、足りないときは妥協順のとおりに崩れる。</para>
+    /// </summary>
+    private static double LeftThrowPenalty(FieldPosition pos) => pos switch
+    {
+        FieldPosition.ThirdBase => 1000.0,
+        FieldPosition.SecondBase => 2000.0,
+        FieldPosition.Catcher => 3000.0,
+        FieldPosition.Shortstop => 4000.0,
+        _ => 0.0,
+    };
 
     /// <summary>投手の起用序列スコア（球速レベル＋制球＋キレ＋スタミナレベル）。</summary>
     private static double PitcherScore(AiPlayer p)

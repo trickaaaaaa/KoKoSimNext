@@ -32,22 +32,27 @@ public sealed class JudgementOverlayTests
         var coeff = new FieldingCoefficients { ErrorBaseProb = 0 };
         var checkedOut = false;
         var checkedSingle = false;
+        // ⚠ シードを振る。守備の所要にもたつき（InfieldHandleJitterMeanSeconds）が乗ってからは、
+        // 同じ当たりでも内野安打になるのは<b>裾を引いた回</b>だけ＝1シードだけ走査すると
+        // 内野安打が1件も出ずテストが空回りする（実測 2026-08-14）。
         for (var velo = 5.0; velo <= 45.0; velo += 0.5)
-        {
-            var ball = new BattedBall { ExitVelocityMps = velo, LaunchAngleDeg = -3, BearingDeg = 5 };
-            var play = FieldingResolver.ResolveDetailed(
-                ball, Field, Aero, BatterAttributes.LeagueAverage, Field.StandardAlignment(), coeff, new Xoshiro256Random(1));
-
-            if (!play.ThrowArriveSeconds.HasValue)
+            for (ulong seed = 1; seed <= 20; seed++)
             {
-                Assert.Null(play.JudgementMarginSeconds); // 送球が絡まないプレーはmargin無し
-                continue;
-            }
+                var ball = new BattedBall { ExitVelocityMps = velo, LaunchAngleDeg = -3, BearingDeg = 5 };
+                var play = FieldingResolver.ResolveDetailed(
+                    ball, Field, Aero, BatterAttributes.LeagueAverage, Field.StandardAlignment(), coeff,
+                    new Xoshiro256Random(seed));
 
-            Assert.NotNull(play.JudgementMarginSeconds); // 送球が絡んだ判定は必ずmarginを持つ
-            if (play.Result == BattedBallResult.Out) { Assert.True(play.JudgementMarginSeconds <= 0); checkedOut = true; }
-            else if (play.Result == BattedBallResult.Single) { Assert.True(play.JudgementMarginSeconds > 0); checkedSingle = true; }
-        }
+                if (!play.ThrowArriveSeconds.HasValue)
+                {
+                    Assert.Null(play.JudgementMarginSeconds); // 送球が絡まないプレーはmargin無し
+                    continue;
+                }
+
+                Assert.NotNull(play.JudgementMarginSeconds); // 送球が絡んだ判定は必ずmarginを持つ
+                if (play.Result == BattedBallResult.Out) { Assert.True(play.JudgementMarginSeconds <= 0); checkedOut = true; }
+                else if (play.Result == BattedBallResult.Single) { Assert.True(play.JudgementMarginSeconds > 0); checkedSingle = true; }
+            }
         Assert.True(checkedOut, "内野ゴロのアウトが走査範囲に無い（テスト条件を見直す必要）");
         Assert.True(checkedSingle, "内野安打が走査範囲に無い（テスト条件を見直す必要）");
     }

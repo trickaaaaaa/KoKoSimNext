@@ -33,13 +33,16 @@ public readonly record struct PitchResolution(bool EndsPlateAppearance, bool Squ
 /// </summary>
 public sealed class AtBatSession
 {
-    private readonly BatterAttributes _batter;
-    private readonly Player? _batterPlayer;
+    // 打席途中の交代（RebindMatchup）で差し替わる＝readonly にしない。それ以外は打席内で不変。
+    private BatterAttributes _batter;
+    private Player? _batterPlayer;
     private readonly Player? _thirdBaseRunner;
+    private readonly Player? _firstBaseRunner;
+    private readonly Player? _secondBaseRunner;
     private readonly double _squeezeWasteProbability;
-    private readonly PitcherAttributes _pitcher;
-    private readonly AtBatContext _ctx;
-    private readonly BattingCoefficients _batting;
+    private PitcherAttributes _pitcher;
+    private AtBatContext _ctx;
+    private BattingCoefficients _batting;
 
     private int _balls;
     private int _strikes;
@@ -56,12 +59,15 @@ public sealed class AtBatSession
     private PlateAppearanceResult? _forcedResult;
 
     private AtBatSession(
-        BatterAttributes batter, Player? batterPlayer, Player? thirdBaseRunner, double squeezeWasteProbability,
+        BatterAttributes batter, Player? batterPlayer, Player? thirdBaseRunner, Player? firstBaseRunner,
+        Player? secondBaseRunner, double squeezeWasteProbability,
         PitcherAttributes pitcher, AtBatContext ctx, BattingCoefficients batting)
     {
         _batter = batter;
         _batterPlayer = batterPlayer;
         _thirdBaseRunner = thirdBaseRunner;
+        _firstBaseRunner = firstBaseRunner;
+        _secondBaseRunner = secondBaseRunner;
         _squeezeWasteProbability = squeezeWasteProbability;
         _pitcher = pitcher;
         _ctx = ctx;
@@ -121,6 +127,19 @@ public sealed class AtBatSession
     /// <see cref="Player"/>（走塁判断・走力）。null=スクイズ指示を一切使わない呼び出し向けの省略時既定＝
     /// 実際にスクイズを試みると例外になる。
     /// </param>
+    /// <param name="firstBaseRunner">
+    /// バント/スクイズ（issue bunt-no-take-on-ball-pitches）で <see cref="BuntResolver"/> が一塁走者の
+    /// 二塁封殺（<see cref="BuntResult.ForceOutAtSecond"/>）を判定するのに使う一塁走者の生 <see cref="Player"/>。
+    /// 打席頭のスナップショットで固定（<see cref="_thirdBaseRunner"/> と異なり毎球オーバーライドは無い＝
+    /// 打席途中の代走等は稀かつ致命的でないためスコープ外）。null=一塁に走者がいない、または一塁封殺を
+    /// 判定しない呼び出し（既存テスト等）向けの省略時既定＝その場合は従来どおり一塁送球のみで判定する。
+    /// </param>
+    /// <param name="secondBaseRunner">
+    /// バント/スクイズで <see cref="BuntResolver"/> が二塁走者の三塁封殺（<see cref="BuntResult.ForceOutAtThird"/>、
+    /// 1・2塁の真のフォースのみ）を判定するのに使う二塁走者の生 <see cref="Player"/>。<paramref name="firstBaseRunner"/>
+    /// と同じく打席頭のスナップショットで固定・毎球オーバーライドなし。null=二塁に走者がいない、または
+    /// 一塁走者がいない（フォース不成立）場合の既定＝三塁封殺は判定しない。
+    /// </param>
     /// <param name="squeezeWasteProbability">
     /// スクイズのウエスト（外し）を守備側が読み切る確率（設計書02 §4.4 / 09 §1）。打席頭の状況（捕手リード・
     /// アウト数・点差）で決まり打席中は不変なので、GameEngine が1回だけ計算して渡す。既定0＝外さない。
@@ -137,13 +156,27 @@ public sealed class AtBatSession
     /// </param>
     public static AtBatSession Begin(
         BatterAttributes batter, PitcherAttributes pitcher, AtBatContext ctx, Player? batterPlayer = null,
-        Player? thirdBaseRunner = null, double squeezeWasteProbability = 0.0,
+        Player? thirdBaseRunner = null, Player? firstBaseRunner = null, Player? secondBaseRunner = null,
+        double squeezeWasteProbability = 0.0,
         int initialBalls = 0, int initialStrikes = 0,
         PlateAppearanceResult? forcedResult = null)
     {
-        // スキルの打球挙動補正（設計書10）。行動特性・球質だけをここで反映（数値補正は実効能力側で適用済み）。
-        // 広角打法（引っ張りバイアスの縮小, issue #262）・粘り打ち（ファウル率）は打撃係数の1打席コピーへ。
-        // スキルなしなら共有係数のまま。
+        var session = new AtBatSession(
+            batter, batterPlayer, thirdBaseRunner, firstBaseRunner, secondBaseRunner, squeezeWasteProbability,
+            pitcher, ctx, BattingFor(ctx));
+        session._balls = initialBalls;
+        session._strikes = initialStrikes;
+        session._forcedResult = forcedResult;
+        return session;
+    }
+
+    /// <summary>
+    /// スキルの打球挙動補正（設計書10）を反映した打撃係数の1打席コピー。行動特性・球質だけをここで反映
+    /// （数値補正は実効能力側で適用済み）。広角打法（引っ張りバイアスの縮小, issue #262）・粘り打ち（ファウル率）。
+    /// スキルなしなら共有係数のまま。RNG非消費（従来 <see cref="Begin"/> のインラインと同一）。
+    /// </summary>
+    private static BattingCoefficients BattingFor(AtBatContext ctx)
+    {
         var batting = ctx.Batting;
         if (ctx.Skills.BearingPullFactor != 1.0 || ctx.Skills.FoulShareFactor != 1.0)
         {
@@ -157,13 +190,23 @@ public sealed class AtBatSession
                 FoulShare = MathUtil.Clamp(batting.FoulShare * ctx.Skills.FoulShareFactor, 0.0, 0.9),
             };
         }
+        return batting;
+    }
 
-        var session = new AtBatSession(
-            batter, batterPlayer, thirdBaseRunner, squeezeWasteProbability, pitcher, ctx, batting);
-        session._balls = initialBalls;
-        session._strikes = initialStrikes;
-        session._forcedResult = forcedResult;
-        return session;
+    /// <summary>
+    /// 采配窓で投手・打者が代わったとき（継投・代打。2026-08-15）、この打席の対戦を差し替える。
+    /// カウント・球数・投球記録・トレースはそのまま引き継ぐ＝打席途中の継投は新投手が同じカウントから
+    /// 同じ打者に投げ続ける。実効能力と打席文脈（守備配置・配球方針・捕手リード）は呼び出し側
+    /// （GameEngine の打席頭と同じ式）で組み直して渡す。乱数は一切消費しない。
+    /// </summary>
+    public void RebindMatchup(BatterAttributes batter, PitcherAttributes pitcher, AtBatContext ctx, Player? batterPlayer)
+    {
+        if (IsComplete) throw new System.InvalidOperationException("確定した打席の対戦は差し替えられません。");
+        _batter = batter;
+        _batterPlayer = batterPlayer;
+        _pitcher = pitcher;
+        _ctx = ctx;
+        _batting = BattingFor(ctx);
     }
 
     /// <summary>
@@ -270,8 +313,28 @@ public sealed class AtBatSession
             if (_batterPlayer is null)
                 throw new System.InvalidOperationException(
                     "バント指示を受けましたが AtBatSession.Begin に batterPlayer が渡されていません。");
+
+            // ボール球見送り（issue bunt-no-take-on-ball-pitches）: ゾーン外だけ判定する。選球眼が高いほど
+            // 大きく外れた球を見送りやすい。スクイズは対象外（一球でコミットする作戦のため見送りを設けない）。
+            if (!inZone)
+            {
+                var takeDistanceM = ctx.StrikeZone.DistanceOutsideM(loc.X, loc.Y);
+                if (MathUtil.Chance(BuntResolver.TakeProbability(takeDistanceM, _batterPlayer, ctx.Baserunning), rng))
+                {
+                    _balls++;
+                    RecordPitch(PitchKind.Ball, plan, loc, inZone, sign: battingOverride);
+                    if (_balls >= 4) return Finish(PlateAppearanceResult.Walk);
+                    return Continue();
+                }
+            }
+
             var safety = battingOverride == Tactics.PitchBattingOverride.SafetyBunt;
-            var bunt = BuntResolver.Resolve(_batterPlayer, pitcher, safety, ctx.Baserunning, rng);
+            var courseDifficulty = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y);
+            // _thirdBaseRunner はスクイズ専用ではなく打席頭の三塁走者スナップショット（GameEngineが
+            // bases.Third を無条件に渡す）なので、通常バント（非スクイズ）でもそのまま満塁の本塁封殺判定に使える。
+            var bunt = BuntResolver.Resolve(
+                _batterPlayer, pitcher, plan.Stuff, courseDifficulty, safety,
+                _firstBaseRunner, _secondBaseRunner, _thirdBaseRunner, ctx.Field, ctx.Baserunning, rng);
             switch (bunt)
             {
                 case BuntResult.MissedBunt:
@@ -285,10 +348,26 @@ public sealed class AtBatSession
                     return Continue();
 
                 case BuntResult.PopOut:
+                case BuntResult.PopOutDoubledOff:
                     RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
                     return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
 
                 case BuntResult.SacrificeSuccess:
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
+                    return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
+
+                case BuntResult.ForceOutAtSecond:
+                    // 一塁走者が二塁で封殺され、打者は一塁生存（野選相当）。犠打とは扱わない（GameEngine側）。
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
+                    return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
+
+                case BuntResult.ForceOutAtThird:
+                    // 二塁走者が三塁で封殺され、打者・一塁走者は生存（野選相当）。犠打とは扱わない（GameEngine側）。
+                    RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
+                    return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
+
+                case BuntResult.ForceOutAtHome:
+                    // 三塁走者が本塁で封殺され（満塁のみ）、打者・一塁・二塁走者は生存（野選相当・無得点）。
                     RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
                     return FinishBunt(PlateAppearanceResult.InPlayOut, bunt);
 
@@ -313,25 +392,26 @@ public sealed class AtBatSession
                 throw new System.InvalidOperationException(
                     "スクイズ指示を受けましたが三塁走者が渡されていません（AtBatSession.Begin の thirdBaseRunner も thirdRunnerOverride も null）。");
             var wasteProb = squeezeWasteOverride ?? _squeezeWasteProbability;
+            var squeezeCourseDifficulty = ctx.StrikeZone.EdgeProximity(loc.X, loc.Y);
             var sq = SqueezeResolver.Resolve(
-                _batterPlayer, thirdRunner, pitcher, wasteProb, ctx.Baserunning, rng);
+                _batterPlayer, thirdRunner, pitcher, plan.Stuff, squeezeCourseDifficulty,
+                _firstBaseRunner, _secondBaseRunner, ctx.Field, wasteProb, ctx.Baserunning, rng);
 
-            if (!sq.BatterOut && sq.Runs == 0 && sq.RunnerOut)
+            // バントが不成立（ウエストを読まれた、または空振り/ファウル）: 三塁走者が飛び出していれば挟殺
+            // される。打席は確定せず、以降は強攻へフォールバックする。issue bunt-no-take-on-ball-pitches で
+            // 三塁走者が本塁で刺されるケース（ボールは実際にプレーされた）が新設され、そちらは
+            // BatterOut/Runs/RunnerOut の組み合わせだけでは区別できなくなったため、判定条件を
+            // 「バントが不成立か」（sq.Bunt）に変更した。
+            if (sq.Bunt is BuntResult.MissedBunt or BuntResult.Foul)
             {
-                // ウエストを読まれた（守備がピッチアウトで対抗）: 打者はバントを試みられずボール、
-                // 飛び出した三塁走者が挟殺される。打席は確定せず、以降は強攻へフォールバックする。
                 _balls++;
                 RecordPitch(PitchKind.Ball, plan, loc, inZone, sign: battingOverride);
                 return new PitchResolution(EndsPlateAppearance: false, SqueezeRunnerCaughtAtThird: true);
             }
 
-            var kind = sq.Bunt switch
-            {
-                BuntResult.MissedBunt => PitchKind.SwingingStrike,
-                BuntResult.Foul => PitchKind.Foul,
-                _ => PitchKind.InPlay, // PopOut / SacrificeSuccess / InfieldHit
-            };
-            RecordPitch(kind, plan, loc, inZone, swung: true, sign: battingOverride);
+            // ここに来るのは PopOut / SacrificeSuccess / InfieldHit / ForceOutAtSecond / ForceOutAtThird のみ＝
+            // すべてボールが実際にプレーされたケース。
+            RecordPitch(PitchKind.InPlay, plan, loc, inZone, swung: true, sign: battingOverride);
             var sqResult = sq.Bunt == BuntResult.InfieldHit ? PlateAppearanceResult.Single : PlateAppearanceResult.InPlayOut;
             return FinishSqueeze(sqResult, sq);
         }
@@ -352,11 +432,11 @@ public sealed class AtBatSession
         var swingProb = ctx.CaptureTrace
             ? BatterDecision.SwingProbability(
                 inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting,
-                swingFactor, zoneEdgeProximity)
+                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)
             : 0.0;
         if (!forcedSwing && (forcedTake
             || !BatterDecision.DecideSwing(inZone, distanceOutsideM, _lastPitchFeatures!.Value.BreakMagnitudeM, batter, batting, rng,
-                swingFactor, zoneEdgeProximity)))
+                swingFactor, zoneEdgeProximity, ctx.FamiliarityPa, _strikes, _balls)))
         {
             if (inZone)
             {
@@ -375,7 +455,7 @@ public sealed class AtBatSession
         }
 
         // ④ コンタクト判定 → ⑤ 打球生成（広角打法/粘り打ちは batting コピーへ反映済み）
-        var (outcome, ball) = ContactModel.Resolve(batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng);
+        var (outcome, ball) = ContactModel.Resolve(batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa);
         switch (outcome)
         {
             case ContactOutcome.Whiff:
@@ -419,7 +499,7 @@ public sealed class AtBatSession
                         play, fielders, ctx.Field, ctx.Formations, ctx.RunnersOn,
                         Timeline.TimelineBuilder.DescribeResult(play), ctx.Baserunning.CloseCallMarginSeconds,
                         ctx.Fielding.CatchCloseCallMarginSeconds, ctx.Fielding.InfielderFieldingRadiusM,
-                        _batterPlayer);
+                        _batterPlayer, ctx.Fielding);
                 }
                 _result = new AtBatResult(pa, _pitchCount)
                 {

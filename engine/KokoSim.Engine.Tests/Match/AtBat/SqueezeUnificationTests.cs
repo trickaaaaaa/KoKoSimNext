@@ -104,26 +104,28 @@ public sealed class SqueezeUnificationTests
             Assert.True(session.IsComplete);
             Assert.Single(session.PitchLog);
             var sq = session.Result.Squeeze!.Value;
-            Assert.False(sq.RunnerOut);
+            // ボールが実際にプレーされた場合でも、三塁走者は本塁レースで刺されうる（RunnerOut=true,
+            // issue bunt-no-take-on-ball-pitches の④＝design-02 §4.4「三塁走者スタート」）。その場合 Runs=0。
 
             switch (sq.Bunt)
             {
                 case BuntResult.SacrificeSuccess:
                     Assert.Equal(PlateAppearanceResult.InPlayOut, session.Result.Result);
                     Assert.True(sq.BatterOut);
-                    Assert.Equal(1, sq.Runs);
+                    Assert.Equal(sq.RunnerOut ? 0 : 1, sq.Runs);
                     seenSac = true;
                     break;
                 case BuntResult.InfieldHit:
                     Assert.Equal(PlateAppearanceResult.Single, session.Result.Result);
                     Assert.False(sq.BatterOut);
-                    Assert.Equal(1, sq.Runs);
+                    Assert.Equal(sq.RunnerOut ? 0 : 1, sq.Runs);
                     seenHit = true;
                     break;
                 case BuntResult.PopOut:
                     Assert.Equal(PlateAppearanceResult.InPlayOut, session.Result.Result);
                     Assert.True(sq.BatterOut);
                     Assert.Equal(0, sq.Runs);
+                    Assert.False(sq.RunnerOut); // 小フライは走者釘付け（本塁レースは発生しない）
                     seenPop = true;
                     break;
             }
@@ -131,6 +133,36 @@ public sealed class SqueezeUnificationTests
         Assert.True(seenSac, "SacrificeSuccess のケースが見つからなかった");
         Assert.True(seenHit, "InfieldHit のケースが見つからなかった");
         Assert.True(seenPop, "PopOut のケースが見つからなかった");
+    }
+
+    /// <summary>
+    /// 1・3塁でのスクイズ: 小フライ（PopOut）から一塁走者が併殺されるケース（PopOutDoubledOff, design-09
+    /// 「小フライ併殺」）でも三塁走者は釘付けのまま（RunnerOut=false）＝一塁側の併殺と三塁走者の運命は独立。
+    /// </summary>
+    [Fact]
+    public void PopOutDoubledOff_OnFirstBaseRunner_LeavesThirdRunnerUnaffected()
+    {
+        var slowFirstRunner = new Player { Speed = 1 };
+        var found = false;
+        for (ulong seed = 1; seed <= 400 && !found; seed++)
+        {
+            var rng = new Xoshiro256Random(seed);
+            var session = AtBatSession.Begin(Batter, Pitcher, Ctx(), batterPlayer: Bunter,
+                thirdBaseRunner: ThirdRunner, firstBaseRunner: slowFirstRunner, squeezeWasteProbability: 0.0);
+            var res = session.ThrowNextPitch(rng, PitchBattingOverride.Squeeze);
+            if (res.SqueezeRunnerCaughtAtThird) continue;
+
+            var sq = session.Result.Squeeze!.Value;
+            if (sq.Bunt == BuntResult.PopOutDoubledOff)
+            {
+                Assert.Equal(PlateAppearanceResult.InPlayOut, session.Result.Result);
+                Assert.True(sq.BatterOut);
+                Assert.False(sq.RunnerOut); // 三塁走者は影響されない
+                Assert.Equal(0, sq.Runs);
+                found = true;
+            }
+        }
+        Assert.True(found, "PopOutDoubledOff のケースが見つからなかった");
     }
 
     /// <summary>スクイズ指示が無い（battingOverride=Squeeze を渡さない）打席は従来どおり通常パイプラインのまま。</summary>

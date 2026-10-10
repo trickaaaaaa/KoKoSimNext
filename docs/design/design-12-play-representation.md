@@ -106,6 +106,18 @@ handoff §B の「併殺の名手 = `BaserunningModel` の DP に**野手 identi
 - **残タスク**: **aggressionの三層（校風/ティア/采配）写像**は残Q10。**安全側の際どいセーフ**（送られたが生還）の送球描画は「送った」シグナルが未伝搬のため未実装（憤死＝Out時のみ描画）。（**犠飛のタッチアップは Issue #90 で物理レース化完了**＝下記。）
 - **一塁→三塁 物理レース化 完了（Issue #89, 2026-07-23）**: 単打の一塁→三塁を固定確率テーブル（`first_to_third_on_single`）から本塁と同型のレースへ置換。`HomePlayResolver` を目標塁で一般化（`BasePlayParams`＝送球先座標/タッチ/バイアス/幅を塁ごとに分離、本塁は現状値で挙動据え置き）し、送球先を三塁ベースとした守備所要（中継しきい値 `cutoff_distance_threshold_m` 共有）と `HomeSendDecision.ShouldSendThird`（閾値・2アウト緩和・aggression）で解く。**三塁での走塁死**を `RunnerMove(1→3, Out)` として `extraOuts` へ算入（`GameResult.ThirdPlayOuts`）。1プレー1送球の制約（`outThrowUsed`）を本塁と共有＝本塁と三塁を同時に刺さない。旧テーブルは `HomePlayContext` が無い純テーブル経路（単体テスト）のフォールバックとして存置。係数は `data/coefficients.yaml`（`baserunning.third_*` / `tactics.send_third_*`）。**Heavy 校正着地**: `third_success_bias=1.50` で 得点≈5.0/チーム（変更前5.19からの微減・帯3.5–6.0内）・三塁憤死≈0.20/試合（`balance-targets.yaml third_play_outs_per_game: 0.02–0.40`）。RNG消費順が変わるため決定論ベースライン再ベースライン済み。
 - **犠飛のタッチアップ 物理レース化 完了（Issue #90, 2026-07-23）**: 凡打フライで三塁走者が生還する犠飛を、能力に依存しない定数テーブル（`sac_fly_score_prob=0.30`）から本塁と同型のレースへ置換。タッグアップは**走者の時計の起点が「捕球の瞬間」**（離塁は捕球後）である点だけが本塁クロスプレーと異なる。守備も同じ捕球時刻から送球する（`DefenseTimeSeconds` は `BallFieldedAtSeconds` を含む）ため**共通起点が捕球時刻**になり相殺し、勝負は「三塁→本塁 27.4m を走る時間（二次リードなし＝全塁間）」対「捕球地点→本塁の送球時間」だけ＝**打球の深さ・方向と外野の肩・走者の走力/走塁判断が効く**。`HomePlayResolver.TagUp*`（`TagUpRunnerTimeSeconds`＝起点=捕球時刻・リードなし／`TagUpMargin`/`TagUpSuccessProbability`/`TagUpResolveSafe`）を追加し、`HomeSendDecision.ShouldSend`（浅いフライは自重・深ければ回す）で送り判定を通す。**タッチアップ失敗＝本塁での走塁死**を `RunnerMove(3→4, Out)` として `extraOuts`／`HomePlayOuts` に算入。旧テーブルは `HomePlayContext` が無い純テーブル経路（単体テスト）のフォールバックとして存置（`home!=null`＝実試合経路のみ物理レース）。自重時は RNG 非消費（本塁レースの流儀）＝決定論ベースライン再ベースライン済み。係数は `data/coefficients.yaml`（`baserunning.tag_up_margin_scale=0.40` / `tag_up_success_bias=1.50`）。**Heavy 校正着地**: 得点 5.03→5.11/チーム・本塁憤死 0.337→0.365/試合（ともに帯内 `runs_per_team:3.5–6.0`／`home_play_outs_per_game:0.12–0.42`、seed42・4000試合）＝深い外野フライは確実に生還・浅いフライ/内野フライは自重・際どいクロスプレーでのみ憤死、と現実的に振り分く。`tag_up_success_bias` は 2.00 だと球質タイプの実戦バランス中立（`Archetypes_AreBalanceNeutral_InActualGames`）を割ったため 1.50 で着地（深いフライ profile の差が失点差へ出るのを抑制）。**二塁走者のタッチアップ（深い外野フライで二塁→三塁）はスコープ外**（同枠組みで拡張可能だが、本 Issue は三塁→本塁の犠飛生還に限定）。犠飛の**成績記録**（打数除外・犠飛カウント）は別 Issue #68。
+- **守備ビューの全景ハードカットを廃止（issue field-view-cut-back-sooner, 2026-08-14）**: プレーの終わり（`CameraPlanBuilder.WideStartTime`）で縦155mの全景へ跳ばず、**その枠のまま止める**。居残りそのものより「全景へ行くから違和感がある」が主因だった（監督指示 2026-08-13）。`CameraPlan` のコメントは以前から「3Dの守備ビューは全景へ戻さずこの時刻の枠のまま止める」と書いていて実装だけが戻していた＝コメント側が正しかった。切り替えは `CameraFraming.ReturnsToWide`（既定 true＝2D俯瞰は従来どおり全景へ戻す＝ゴールデン不変）と `DuelStageRig.FieldReturnsToWide`（3D側のカット時刻。**両方が同じフラグを見る**＝片方だけ変えるとプランと実カットがずれる）。
+  - **本塁打の一周**は、まだ走っている走者が居るあいだ**その塁間まるごと**（27.4m）を枠に収めて追う。⚠ 枠を「走者の現在地＋向かう塁」にすると塁に近づくほど箱が点へ縮んで**ズームが脈打ち**、塁を踏んだ瞬間に跳ね返って走者が枠外へ出る（実測）。塁間で固定ならズームは変わらず中心が寄るだけ。走者を探すのは**先取りしない時刻**で引く（先取りするとレッグが終わる 0.25 秒前に枠が離れ、**塁を踏む直前に走者が画面から外れる**）。着いた直後はその塁間の枠に据える
+  - **凡打の尺**（①）: アウトになった打者走者の一塁到達（＋駆け抜け #443）を待たない。判定は送球到達で確定していて、そのあとは守備ビューとしては用の済んだ絵。規則は engine の `PlaybackDisplaySync.LastActionTime` が単一ソース（Unity 側の PlayEndTime から重複ロジックを引き上げた）。実測: 凡打 719 件で尺が**中央値 1.48 秒**短くなる（平均1.35 / 最大3.65）。他の走者が進塁中のプレーは1件も縮まない
+  - 返球（③）・本塁打（②）の尺は削らない。判定・得点コール・結果テロップの寿命も従来どおり（`LastJudgementEndTime` を必ず max で含める＝「切ったせいで一度も見えない」を作らない）
+- **判定オーバーレイの表示窓を種別ごとにした（issue homerun-call-until-home-touch, 2026-08-14）**: 窓はそれまで種別によらず固定 0.6 秒だったが、**ホームランだけ**終端を「打者走者が本塁を踏む瞬間＋余韻」にする。柵越えの判定は<b>着地の瞬間</b>に立つのに打者が一周して還るのは約10秒後（実測400試合: p10 9.3 / p50 10.2 / p90 11.1 秒）で、**約9.6秒間なにも出ていない**時間ができていた（監督決定 2026-08-13「上限は設けない。打者の本塁到達まで出し続ける」）。推定飛距離（#354）は同じ窓に乗る。規則は engine の `PlaybackEvaluator.JudgementEndTime` が単一ソースで、再生の早切り（`LastJudgementEndTime`）も同じ規則を読む＝Unity 側に種別分岐を書かない（#236 症状A の方針）。⚠ 得点コール（#60）と**必ず同時に出る**ようになったので、`.score-call` の縦位置を 40% → 63% へ下げた（判定の器が 38% へ動いた後も 40% のままで、実測 1600×900 で 82px 完全に重なり「ホームラン」が読めなかった）。**片方の縦位置を動かしたら必ずもう片方を測り直す**。
+- **絵の方針「物理優先＋矛盾ガード」を明文化（issue match-picture-vs-safe-out-verdict, 2026-08-14）**: タイムラインの送球到達は**物理どおり**（実距離÷肩）を基本に置き、**エンジンの確定判定と矛盾するときだけ**ずらす（Issue #301③ で選んだ方針。それまでコードのコメントにしかなかった）。判定はロジスティック抽選や校正項（一塁 `ForceOutMarginSeconds`=0.60・盗塁 `StealSuccessBias`=0.38）を含むので、物理レースの勝敗と確定結果は食い違うことがある——そのときだけ絵を譲る。
+  - **セーフ確定**: 送球が走者より先に着く絵にしない（走者到達＋0.20 秒へ後ろへ回す）
+  - **アウト確定**: 送球が走者より後に着く絵にしない（タッチの瞬間まで前へ詰める。「間」ゼロの最速より前へは詰めない）
+  - **ずらした分の吸収先**（＝送球区間の長さ＝見た目の速度は肩どおりのまま。Issue #334 の性質を壊さない）: 一塁・外野返球は**捕球点でボールを保持する「間」**／中継は**カットマンが持つ間**／盗塁は**捕手の握り替え（ポップ）**。盗塁は投げ始めを後ろへ倒して区間長を保つ
+  - **適用箇所**: 本塁クロスプレー・外野返球（従来）＋**一塁の封殺/内野安打**・**盗塁**（この issue で追加）。本塁送球のアンカーは「最後に還る走者」（複数生還プレーで先頭走者に付けると、後続が捕手のボール保持後に悠々生還する絵になる）
+  - **既知の限界**: ガードは `max(物理の到達, 走者到達 + 0.20)` なので、判定境界の帯に入るセーフ（内野安打の 83.5%）は**元の物理差がいくらでも一律 0.2 秒差の絵**になる＝際どいセーフ同士の濃淡が潰れる。走者が物理的にも勝っているセーフとアウトはガード不発で無傷。濃淡まで物理から出すには校正項を物理層へ移す必要がある（issue `verdict-margin-into-physical-layer`）
+- **タッチアップの絵を判定と同じ時計にした（issue score-display-before-home-touch, 2026-08-14）**: 上の物理レースは走者の時計を**捕球起点・二次リードなし・静止スタート**で回すのに、タイムライン側（`TimelineBuilder.AppendRunnerLegs`）は塁上の走者を一律「接触＋反応遅れ」で走らせていた＝**走者は打った瞬間に三塁を離れ**（実測 208/208 件・中央値 4.04 秒早い）、得点は本塁到達（＝ちょうど捕球のころ）で入っていた（本塁到達−捕球 の中央値 +0.03 秒／47.6% は捕球以前）。直しは①`RunnerMove.TagUpCatchAtSeconds`（捕球時刻の写し・表示専用）②`HomePlayResolver.TagUpContextOf`（`RunnerContext` でタッチアップの物理を表す＝リード0・速度倍率1.0）の2つで、レッグの起点・距離・速度が判定と一致する。**判定側の式（`TagUpRunnerTimeSeconds`）は1文字も変えない**（帯・決定論ダイジェストを動かさないため）＝両者が同じ秒を返すことは `TagUpRunnerLegTests` が固定する。非フォースのフライ進塁（二塁→三塁・一塁→二塁）にも同じ起点を掛ける（捕球前に離塁する絵はルール上あり得ない）。得点表示は `PlaybackDisplaySync.RunScoreTimes` がレッグの終端を読むので自動的に揃う（issue #438）。**打球の無い得点**（押し出しの四球・死球）はタイムラインが無く本塁到達の時刻が存在しないので、結果確定から固定の一拍（`PlaybackDisplaySync.NonBattedScoreDelaySeconds` = 1.8 秒・演出値）だけ待ってから掲げる（#628 の「結果テロップと同時」を改める）。
 - **ゴロ凡打の進塁打 物理レース化 完了（Issue #318, 2026-07-30）**: ゴロ凡打で二塁走者が三塁へ進むかを、打球・守備・走者に依存しない一律確率（`productive_out_advance_prob=0.18`）から**捕球点→三塁の物理レース**へ置換。適用は「**ゴロ凡打×二塁走者あり×一塁走者なし×三塁空き×extraOuts==0**」の1場面のみ（ゴロでは一塁走者ありだと `r2Forced` が真で確率が短絡されるため、実際に18%が引かれていたのはこの1場面だけ）。守備は「一塁の確実な1アウト」と「進塁を刺す」を**采配でなく物理**（幾何）で選ぶ。判定に使う量は2つとも `HomePlayResolver`（新しい走者の式を作らず係数束だけ差し替え。`AdvanceParams`＝送球先=三塁・タッチ/バイアス/幅は進塁固有）で求める:
   - **`P_direct`** = 守備が**捕球点から三塁へ直接**投げた場合の走者到達確率（`home.Situation` の内野ゴロ実捕球点・処理時刻・肩がそのまま入る＝**打球方向が自動的に効く**。三遊間ゴロは捕球点が三塁に近い＝低い＝自重／一二塁間ゴロは遠い＝高い＝無血進塁。**方向性は係数でなく幾何から創発**）。
   - **`P_relay`** = 守備が**一塁を取ってから転送**した場合の走者到達確率（一塁ベースを起点にした擬似 `HomePlaySituation`＋中継速度で同じ関数へ。一塁手の握り替えだけ `ResolveThrowPath` の `transferSecondsOverride` で `advance_relay_transfer_seconds` に差し替え。**null なら現行 `outfield_transfer_seconds` とビット一致**＝既存呼び出し不変）。
@@ -142,6 +154,91 @@ handoff §B の「併殺の名手 = `BaserunningModel` の DP に**野手 identi
 三塁打 238→**291**（単一バケット集中を解消し60〜120mに分散）/ 二塁打÷本塁打 1.17→**1.68** /
 AVG .255→**.273**・得点 4.08→**5.14**/チーム（いずれも `balance-targets.yaml` の帯内）。
 帯は `atbat_10k` に `slugging` / `double_rate` / `triple_rate` / `doubles_per_homerun` を新設して固定した。
+
+### 3.7 バックホーム悪送球（2026-08-30）
+
+**問題**: §3の「送球 vs 走者」時間勝負は、外野処理点・肩の速さ・走者の走力から到達時刻を一意に決める
+完全決定論的なモデルで、送球そのものが逸れる（悪送球になる）イベントを一切持たない。ユーザー報告
+「外野からのバックホームが毎回ドンピシャで届く」の指摘どおり、守備が間に合う場面は必ずアウトになり、
+悪送球による生還は原理的に発生しなかった（`FielderAttributes.ThrowScatterSigmaCm` は式だけ定義され
+未配線の死コードだった）。
+
+**モデル**: 内野ゴロ→一塁の送球エラー（design-14 P1-6b, `FieldingResolver.MaybeInfieldError`,
+`ThrowErrorBaseProb`/`ThrowErrorAccuracySlope`）と同型の二値ロールを本塁送球へ拡張する
+（`HomePlayResolver.IsWildThrow`/`ResolveWithWildThrow`/`TagUpResolveWithWildThrow`,
+係数 `BaserunningCoefficients.RelayThrowErrorBaseProb`/`RelayThrowErrorAccuracySlope`）。
+守備が本塁で間に合う（＝素の `ResolveSafe` が false を返す）場面でだけ追加の1ロールを引き、
+送球者（外野処理者）の `ThrowAccuracy` が低いほど悪送球になりやすい。走者が普通に勝てる場面は
+悪送球ロール自体を引かない＝乱数消費順は悪送球導入前と一致する。
+
+悪送球が発生すると、design-14 P1-6の失策連鎖（「悪送球はほぼ必ず全走者を1つ多く進める」）と同じ扱いで、
+アウトのはずの走者が生還し、塁上に残っている他の走者も1つ多く進む
+（`BaserunningModel.PushRunnersOneBase`。ReachedOnErrorの`ApplyErrorExtraAdvance`と共通ロジック）。
+
+**対象範囲**: 本塁への実送球のみ（安打の本塁レース・内野前進の本塁封殺・犠飛タッチアップ）。
+3塁・2塁への送球（進塁打・封殺・スクイズ）は今回は対象外（拡張する場合は別途）。
+
+**校正**: 初期値は内野送球エラーと同値（`RelayThrowErrorBaseProb=0.0343`）で導入し、Heavy統計回帰
+（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯）が帯内に収まることを確認した
+（2026-08-30、再校正なしで通過）。詳細は `docs/design/OPEN-QUESTIONS.md` 2026-08-30項。
+
+### 3.8 送球逸れの回収レース（実装済み, 2026-08-30）
+
+§3.7（バックホーム）と内野一塁送球（design-14 P1-6b）の悪送球は、どちらも「発生したら即セーフ確定＋
+全走者+1進塁」という二値の割り切りだった。ユーザーから「逸れた送球を野手が拾い直してタッチしに行く
+（＝拾い直しが間に合ってアウトのままのケースもあるのでは）」という指摘を受け、これを拡張として実装した。
+
+**方針**: 新しい確率式は作らず、既存の「守備所要時間 vs 走者所要時間」の`Margin`（logistic）レースに
+**回収ロスを加算するだけ**にする。加算後もなお守備が勝てば従来どおりアウト（＝拾い直しが間に合った）、
+負ければセーフ＋現行どおり他の走者は固定+1進塁（進塁量を逸れ幅から動的に増やす拡張は見送り＝
+シンプルさ優先）。
+
+**モデルの骨格**（`ThrowRecovery`, `engine/KokoSim.Engine/Match/Field/ThrowRecovery.cs`）:
+
+1. **発生判定は現状のまま**: `ThrowErrorBaseProb`/`RelayThrowErrorBaseProb`のロールは変更しない。
+   変わるのは「発生後どうなるか」だけ。
+2. **逸れ幅**: `ThrowScatterSigmaCm`はcm単位（Ac50で22cm程度）で「ボールが塁を通り過ぎて
+   拾い直しレースが起きるほどの逸れ」を表すには小さすぎたため流用せず、新設の
+   `WildThrowScatterSigmaM`（m単位、初期値6.0＝内野/本塁で独立値）をガウス分布からサンプルする。
+   着弾点＝`ThrowRecovery.LandingPoint`＝**目標塁を、元の送球方向に逸れ幅ぶん延長した点**
+   （送球が塁を通り過ぎて転がるイメージ。左右の分離はせず単一距離のまま）。
+3. **回収役は「受け手自身」と「バックアップ」の2候補から近い方を採用**（`ThrowRecovery.RecoveryPenaltySeconds`）:
+   - 受け手自身（一塁手／捕手）: 回収距離＝逸れ幅そのもの（すでに塁に立っていたため起点が近い）。
+     **返球は不要**（拾って直接タッチ）。
+   - バックアップ: 定位置（`FieldGeometry.StandardPosition`）から着弾点までの距離を走り、
+     **逸れ幅ぶんを塁へ返球する**。役割表（`ThrowRecovery.BackupRole`）は実際の野球のバックアップ
+     規則に倣い固定＝一塁→右翼手／二塁→中堅手／三塁→左翼手／本塁→投手（フェーズ1で実際に使うのは
+     一塁と本塁だけ）。
+   - `recoveryTime = min(受け手の回収時間, バックアップの回収時間+返球時間)`。閾値を決め打ちしないため、
+     逸れ幅が小さいうちは受け手自身が、バックアップの定位置あたりまで逸れると（着弾点がバックアップの
+     ほぼ真横になり）バックアップが有利になる。逸れ幅がそれよりずっと大きいと、バックアップは返球ぶんの
+     追加コストがあるため結局受け手側が再び速くなる（`ThrowRecoveryTests`で境界を固定）。
+4. **統合**: 悪送球ロールが確定した後だけ`recoveryTime`を`Margin`（本塁/タッチアップ）または
+   `defenseTime`（内野一塁送球の`defenseTime+ForceOutMarginSeconds<=runnerTime`判定）へ加算し、
+   **同じ判定基準をもう一度評価する**。本塁側は`HomePlayResolver.ResolveWithWildThrow`/
+   `TagUpResolveWithWildThrow`内でもう一度logisticをロール（`HomeThrowOutcome.SafeOnWildThrow`か
+   `OutAtHome`かを区別）、内野一塁側は`FieldingResolver`内で決定論的な閾値再判定（元々`<=`の
+   deterministicなゲートのため、新規rngはガウスサンプルの1回だけ）。
+
+**回収役の走力・肩の情報源（実装上の非対称、意図的）**:
+- 内野一塁送球（`FieldingResolver`）: 呼び出し元に守備の全`Fielder`一覧（`fielders`）が既にあるため、
+  一塁手・右翼手の**実際の**`FielderAttributes.SprintSpeedMps`/`ThrowSpeedMps`を使う。
+- バックホーム（`HomePlayResolver`）: `HomePlaySituation`は意図的に薄い構造体で捕手・投手の`Player`情報を
+  持たない。新規プレイヤー配線を増やすより、`BaserunningCoefficients.RecoverySprintSpeedMps`（平均的な
+  値の定数）＋既存の`RelayThrowSpeedMps`（リーグ平均内野肩、カットマンの返球速度と共用）で近似する
+  ＝既にこのリゾルバが採っている「カットマンの肩は平均値の定数で近似する」慣習（§3のCutoffThrowSeconds等）
+  をそのまま踏襲。
+
+**対象範囲（実装済み）**: フェーズ1＝①内野ゴロ→一塁（`FieldingResolver.MaybeInfieldError`の
+`FieldingErrorKind.Throw`分岐）、②バックホーム（§3.7の3経路＝安打の本塁レース・内野前進の本塁封殺・
+犠飛タッチアップ。**3塁は対象外**＝§3.7自体が本塁専用だったため）。③盗塁の捕手送球（`StealResolver`）は
+`ThrowAccuracy`未接続・幾何的送球経路も無く土台から必要なため引き続き別issue。
+
+**校正**: 新設の`WildThrowScatterSigmaM`/`RecoveryReactionSeconds`/`RecoverySprintSpeedMps`は初期値のまま
+Heavy統計回帰（`HomePlayOutsPerGame`/`SqueezeRunnerOutAtHomeRate`/得点帯）が帯内に収まることを確認した
+（2026-08-30、再校正なしで通過）。乱数消費順が変わったため決定論baselineを再生成し、境界値ぎりぎりだった
+既存の統計テスト2本（`DropThirdStrike_Enabled_RaisesRunsForHighStrikeoutTeams`, `ThirdTimeThrough_OpsExceedsFirst_Modestly`）
+は母数を増やして安定させた（前者は§3.7時点で500シード化済み、後者を600→3000シードへ）。
 
 ---
 

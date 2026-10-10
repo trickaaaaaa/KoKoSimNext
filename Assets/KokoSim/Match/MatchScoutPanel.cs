@@ -157,9 +157,10 @@ namespace KokoSim.Unity.Match
             }
 
             // 控え（役割で分けない1本の名簿・背番号順。使用済みは沈める＝リエントリー禁止が一目で分かる）。
+            // ポジションは出場している選手の守備位置なので、控えの行には付けない（まだ守備位置が無い）。
             scroll.Add(Section("控え"));
-            foreach (var p in opt.Reserves) scroll.Add(Row(p, columns, order: "—", current: false));
-            foreach (var p in opt.UsedReserves) scroll.Add(Row(p, columns, order: "—", current: false, used: true));
+            foreach (var p in opt.Reserves) scroll.Add(Row(p, columns, order: "—", current: false, showPosition: false));
+            foreach (var p in opt.UsedReserves) scroll.Add(Row(p, columns, order: "—", current: false, used: true, showPosition: false));
             if (opt.Reserves.Count == 0 && opt.UsedReserves.Count == 0)
                 scroll.Add(UiComponents.EmptyState("控えはいない。"));
         }
@@ -196,7 +197,7 @@ namespace KokoSim.Unity.Match
         }
 
         private static VisualElement Row(Player p, IReadOnlyList<AbilityColumn> columns,
-            string order, bool current, bool used = false)
+            string order, bool current, bool used = false, bool showPosition = true)
         {
             var row = new VisualElement();
             row.AddToClassList("mscout-row");
@@ -204,7 +205,7 @@ namespace KokoSim.Unity.Match
             if (used) row.AddToClassList("mscout-row--used");
 
             row.Add(Cell(order, "msc__ord", numeric: true));
-            row.Add(Cell(p == null ? "—" : MatchLiveStatsProvider.PosAbbr(p.Position), "msc__pos"));
+            row.Add(Cell(p == null || !showPosition ? "—" : MatchLiveStatsProvider.PosAbbr(p.Position), "msc__pos"));
             row.Add(Cell(p != null && p.UniformNumber > 0 ? p.UniformNumber.ToString() : "—", "msc__no", numeric: true));
             row.Add(Cell(p?.Name ?? "—", "msc__name", display: true));
             row.Add(Cell(p != null && p.Grade > 0 ? p.Grade + "年" : "—", "msc__grade"));

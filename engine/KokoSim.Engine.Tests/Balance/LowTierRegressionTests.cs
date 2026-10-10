@@ -66,20 +66,22 @@ public sealed class LowTierRegressionTests
     }
 
     /// <summary>
-    /// 帯の意味を固定する: <b>ティア圧縮を外すと赤くなる</b>こと。帯を置いただけで実は何も
+    /// 帯の意味を固定する: <b>表示→物理の効き（設計書21）を恒等に戻すと赤くなる</b>こと。帯を置いただけで実は何も
     /// 守っていない（どんな係数でも通る幅だった）という失敗を防ぐ回帰。
+    /// 2026-08-19 以前は「ティア圧縮を外す」で同じことを確かめていたが、圧縮は恒等が既定になり、勾配を寝かせる役は
+    /// <c>ability_effect</c>（全員対称）へ移ったので、寝かせない世界＝効き 1.0 で測る。
     /// </summary>
     [Fact]
-    public void Bands_WouldCatch_TheUncompressedGradient()
+    public void Bands_WouldCatch_TheUnmutedGradient()
     {
         var targets = BalanceTargetsLoader.LoadLowTierFromFile(
             BalanceRegressionTests.FindDataFile("balance-targets.yaml"));
         var coeffPath = BalanceRegressionTests.FindDataFile("coefficients.yaml");
 
-        // 圧縮なし（slope=1・膝なし）＝ #578 着手前の生成に戻した世界。
-        var uncompressed = new RosterCoefficients { TierCompressionSlope = 1.0, TierCompressionKnee = 100.0 };
+        // 効き 1.0（寝かせない）＝設計書21 以前の物理層に戻した世界。生成は既定（圧縮恒等）のまま。
         var cells = TierMatchupSimulation.MeasureManagerLadder(
-            games: 400, 42UL, coeffPath, uncompressed, Ladder);
+            games: 400, 42UL, coeffPath, new RosterCoefficients(), Ladder,
+            effect: KokoSim.Engine.Players.AbilityEffectCoefficients.Identity);
 
         var failures = new List<string>();
         if (!targets.ManagerRunsVsD50.Contains(cells[1].AwayRunsPerGame)) failures.Add("得点vsD50");
@@ -87,7 +89,7 @@ public sealed class LowTierRegressionTests
         if (!targets.ManagerShutoutRateVsC60.Contains(cells[2].AwayShutoutRate)) failures.Add("完封され率vsC60");
 
         Assert.True(failures.Count >= 2,
-            "圧縮を外しても帯が緑のまま＝帯が広すぎて何も守っていない。"
+            "効きを恒等に戻しても帯が緑のまま＝帯が広すぎて何も守っていない。"
             + $"実測: 得点vsD50={cells[1].AwayRunsPerGame:F2} / 完封vsD50={cells[1].AwayShutoutRate:P1}"
             + $" / 完封vsC60={cells[2].AwayShutoutRate:P1}");
     }

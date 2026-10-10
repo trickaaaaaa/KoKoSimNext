@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Match.AtBat;
 using KokoSim.Engine.Match.Field;
@@ -473,5 +474,77 @@ public sealed class MatchProgressionTests
         var restored = GameResultDigest.Sha256Of(GameEngine.BuildResult(resumed.Progress));
 
         Assert.Equal(direct, restored);
+    }
+
+    // ── 自校の投手交代をプレイヤーの采配権にする（GameContext.PlayerControlsPitcherChanges） ──
+    // 試合中に投手が勝手に交代される報告への対応。週間球数制限（WeeklyPitchLimit）に達しても
+    // engine は機械的に選ばず、MatchProgression が「人選待ち」を表明して進行をブロックする。
+
+    [Fact]
+    public void PlayerControlsPitcherChanges_WeeklyLimit_BlocksUntilRelieved()
+    {
+        var away = Team("A", true);
+        var home = Team("H", true);
+        // 上限1球＝守備側（表なので home）の先発が1球投げた時点で必ず週間上限に到達する。
+        var ctx = new GameContext { WeeklyPitchLimit = 1, PlayerControlsPitcherChanges = true };
+        var prog = new MatchProgression(away, home, ctx, 7UL);
+
+        // 最初の打席（表）を1つ確定させる。まだ人選待ちにはならない（打席の途中で投手を差し替えない）。
+        AdvancePitchResult r;
+        do { r = prog.AdvancePitch(); } while (r == AdvancePitchResult.Pitch);
+        Assert.Equal(AdvancePitchResult.PlateAppearance, r);
+
+        // 次の打席へ進もうとすると、週間上限に達した投手がまだ交代されていないため人選待ちで止まる。
+        Assert.True(prog.PendingForcedPitcherChange);
+        Assert.Equal(AdvancePitchResult.AwaitingForcedPitcherChange, prog.AdvancePitch());
+        Assert.False(prog.Advance());   // Advance 系はどれも進めない
+
+        // プレイヤーが継投すれば人選待ちが解け、以降は普通に進む。
+        var reliever = home.Reserves.First(p => p.Position == FieldPosition.Pitcher);
+        Assert.True(prog.Relieve(teamIsAway: false, reliever));
+        Assert.False(prog.PendingForcedPitcherChange);
+        Assert.NotEqual(AdvancePitchResult.AwaitingForcedPitcherChange, prog.AdvancePitch());
+    }
+
+    /// <summary>
+    /// 週の持ち越し球数が<b>観戦経路（MatchProgression）にも届く</b>こと（issue: 球数制限の可視化）。
+    /// ここが無いと自動消化（GameEngine.Play）だけ制限が効き、観戦した試合だけ効かない＝
+    /// 「観戦しても結果が変わらない」契約が壊れる。持ち越しはチームごとに別辞書で渡す。
+    /// </summary>
+    [Fact]
+    public void PriorWeekPitches_ReachTheLivePath_AndAreScopedPerTeam()
+    {
+        var away = Team("A", true);
+        var home = Team("H", true);
+        var homeStarter = home.BattingOrder[home.PitcherSlot];
+        var ctx = new GameContext { WeeklyPitchLimit = 500, PlayerControlsPitcherChanges = true };
+        var carry = new Dictionary<Player, int> { [homeStarter] = 500 };
+
+        // home 側の辞書へ入れれば、最初の打席を投げ終えた時点で人選待ちになる。
+        var prog = new MatchProgression(away, home, ctx, new Xoshiro256Random(7UL),
+            homePriorWeekPitches: carry);
+        Assert.True(prog.Advance());
+        Assert.True(prog.PendingForcedPitcherChange);
+
+        // 同じ辞書を away 側へ入れても home の投手には効かない（チーム分離）。
+        var misplaced = new MatchProgression(away, home, ctx, new Xoshiro256Random(7UL),
+            awayPriorWeekPitches: carry);
+        Assert.True(misplaced.Advance());
+        Assert.False(misplaced.PendingForcedPitcherChange);
+    }
+
+    [Fact]
+    public void PlayerControlsPitcherChanges_Default_KeepsAutomaticReliefAndNeverBlocks()
+    {
+        // 既定（false＝裏試合・統計シム・既存テスト全部）は従来どおり機械的に交代し、進行はブロックしない。
+        var away = Team("A", true);
+        var home = Team("H", true);
+        var ctx = new GameContext { WeeklyPitchLimit = 1 };
+        var prog = new MatchProgression(away, home, ctx, 7UL);
+        var guard = 0;
+        while (prog.Advance() && guard++ < 20)
+        {
+            Assert.False(prog.PendingForcedPitcherChange);
+        }
     }
 }

@@ -17,7 +17,7 @@
     <ui:VisualElement class="root ui-root">
 
       <!-- ===== 共通トップバー（スコアボード＋ナビ・単一ソース／G0では夜のまま） ===== -->
-      <ui:Instance template="TopBar" />
+      <ui:Instance template="TopBar" class="topbar-slot" />
 
       <!-- ===== マスターディテール：左=部員名簿／右=能力詳細（独立2ペインスクロール） ===== -->
       <ui:VisualElement class="pl-split">
