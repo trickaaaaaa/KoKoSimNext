@@ -310,7 +310,7 @@ public static class GameEngine
                             || IsMercy(p.Inning, p.Away.Runs, p.Home.Runs))
                 : (Func<bool>?)null;
             foreach (var s in PlayHalfSteps(p, p.Home, p.Away,
-                walkoff: stopBottomHalf, isTop: false)) yield return s;
+                walkoff: stopBottomHalf, isTop: false, truncateAtWalkoff: allowWalkoff)) yield return s;
 
             // 規定回以降で決着していれば終了。
             if (p.Inning >= ctx.RegulationInnings && p.Home.Runs != p.Away.Runs) break;
@@ -426,7 +426,8 @@ public static class GameEngine
     }
 
     private static IEnumerable<GameStep> PlayHalfSteps(
-        GameProgress p, TeamState offense, TeamState defense, Func<bool>? walkoff, bool isTop)
+        GameProgress p, TeamState offense, TeamState defense, Func<bool>? walkoff, bool isTop,
+        bool truncateAtWalkoff = false)
     {
         // 従来 PlayHalf の本体をそのまま踏襲（yield 挿入と totalPitches の状態化のみ）。エイリアスで差分最小化。
         var ctx = p.Ctx;
@@ -883,6 +884,7 @@ public static class GameEngine
 
             var squeezeAbandoned = false;
             var stealEndedHalf = false;
+            var walkoffMidPa = false;
             var atHeadWindow = true;   // 打席の頭の窓は束縛の前（上）で開いた
             while (!session.IsComplete)
             {
@@ -1508,6 +1510,26 @@ public static class GameEngine
 
                 // この1球ぶんの観測を流す（暴投判定まで含めて「この球の窓」の乱数消費に数える）。
                 EmitPitchTrace();
+
+                // サヨナラは打席の途中でも成立する（issue #642）。本盗・重盗・暴投/捕逸で勝ち越した球で
+                // 試合は終わる＝この打席は未決着のまま打ち切る（3アウト目の盗塁死と同じ扱い）。
+                // 旧実装は打席の決着後にしか判定せず、勝ち越した後も同じ打席で得点が積み増せた。
+                // 打席が同じ球で決着した場合（四球と同時の暴投等）は打席を確定させる＝下の通常経路へ。
+                if (truncateAtWalkoff && offense.Runs > defense.Runs && !session.IsComplete)
+                {
+                    walkoffMidPa = true;
+                    break;
+                }
+            }
+            if (walkoffMidPa)
+            {
+                defense.AddPitches(session.PitchCount, gearWeight);
+                p.TotalPitches += session.PitchCount;
+                p.CurrentBases = bases;
+                p.CurrentOuts = outs;
+                p.CurrentIsTop = isTop;
+                offense.RecordInningRuns(runsThisHalf);
+                yield break;
             }
             if (squeezeAbandoned || stealEndedHalf) continue;
 
@@ -1754,6 +1776,17 @@ public static class GameEngine
                 homePlay, r1Start, errorThrowAccuracy, errorKind, r1StealBreak);
             var homeOuts = baseOuts.Home; // 本塁クロスプレー憤死（統計参考値）
             var thirdOuts = baseOuts.Third; // 単打の一塁→三塁レース憤死（Issue #89。統計参考値）
+            // サヨナラの打ち切り（issue #642・公認野球規則 5.08(b)）: 最終回以降の裏は、勝ち越しの走者が
+            // 本塁に達した時点で試合終了＝それより後の走者の得点は認めない。例外は本塁打だけ（全員の得点を
+            // 認める）。本塁へは前の走者から順に還るとみなし、勝ち越しに要る人数だけを得点にする。
+            // 得点帰属・打点・投手の失点はすべて下の countedScorers から数える＝スコアと個人成績を揃える。
+            // 走塁の解決（乱数消費）は打ち切りの前に済んでいる＝決着後の数え方だけが変わる。
+            // 絵（runnerMoves）は触らない＝勝ち越し後の走者が本塁へ向かう絵は残る（表示側は別途）。
+            int? walkoffCap = truncateAtWalkoff && res.Result != PlateAppearanceResult.HomeRun
+                ? Math.Max(0, defense.Runs - offense.Runs + 1)
+                : null;
+            var countedScorers = ScorersCountedAtWalkoff(runnerMoves, walkoffCap);
+            if (walkoffCap is { } cap && runs > cap) runs = cap;
             offense.Runs += runs;
             runsThisHalf += runs;
 
@@ -1777,22 +1810,19 @@ public static class GameEngine
             // 分（ownRuns）だけを打席の投手行へ、引き継ぎ走者の分は責任投手へ直接付ける。
             var unearnedRunsThisPa = 0;
             var ownRunsThisPa = 0;
-            foreach (var m in runnerMoves)
+            foreach (var m in countedScorers)
             {
-                if (m.ToBase >= 4 && !m.Out)
+                offense.RecordRun(m.Runner);
+                var unearned = unearnedRunners.Contains(m.Runner);
+                var owner = ResponsibleFor(m.Runner);
+                if (owner.Equals(currentPitcher))
                 {
-                    offense.RecordRun(m.Runner);
-                    var unearned = unearnedRunners.Contains(m.Runner);
-                    var owner = ResponsibleFor(m.Runner);
-                    if (owner.Equals(currentPitcher))
-                    {
-                        ownRunsThisPa++;
-                        if (unearned) unearnedRunsThisPa++;
-                    }
-                    else
-                    {
-                        defense.ChargeRuns(owner, 1, unearned ? 1 : 0);
-                    }
+                    ownRunsThisPa++;
+                    if (unearned) unearnedRunsThisPa++;
+                }
+                else
+                {
+                    defense.ChargeRuns(owner, 1, unearned ? 1 : 0);
                 }
             }
             if (errorExtraAdvanceOccurred) offense.ErrorExtraAdvanceCount++; // 失策連鎖（design-14 P1-6。統計参考値）
@@ -2137,6 +2167,22 @@ public static class GameEngine
         }
 
         offense.RecordInningRuns(runsThisHalf);
+    }
+
+    /// <summary>
+    /// 打席で本塁に還った走者のうち、得点として数えるもの（issue #642）。<paramref name="cap"/> が null なら
+    /// 全員、値があれば前の走者（出発した塁が先の走者）から順に cap 人まで＝サヨナラの勝ち越し点で打ち切る。
+    /// </summary>
+    internal static IReadOnlyList<RunnerMove> ScorersCountedAtWalkoff(IReadOnlyList<RunnerMove> moves, int? cap)
+    {
+        var scorers = new List<RunnerMove>();
+        foreach (var m in moves)
+            if (m.ToBase >= 4 && !m.Out) scorers.Add(m);
+        if (cap is not { } c || scorers.Count <= c) return scorers;
+        // 前の走者から（FromBase の大きい順）。同じ塁からの出発は無いので安定性は要らない。
+        scorers.Sort((a, b) => b.FromBase.CompareTo(a.FromBase));
+        scorers.RemoveRange(c, scorers.Count - c);
+        return scorers;
     }
 
     /// <summary>速報・成績・動揺・伝令窓の更新（結果には影響しない共通後処理）。</summary>
