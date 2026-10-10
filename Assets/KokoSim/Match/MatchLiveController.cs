@@ -119,7 +119,7 @@ namespace KokoSim.Unity.Match
         [SerializeField] private float duelPitchIntervalSeconds = DuelStageRig.DefaultPitchInterval;
         [Tooltip("1球ごとの判定オーバーレイ（ストライク/ボール/ファール＋球速球種）の表示時間[秒]。0.85=監督確定 2026-08-05（0.35は短い）。対決ビューの捕手はこの表示が消えるまで捕球位置で静止する（NewDuelRig が rig へ流し込む）。")]
         [SerializeField] private float pitchCallHoldSeconds = 0.85f;
-        [Tooltip("得点オーバーレイ（issue #60）の1点あたりの加算間隔[秒]（加点前の一時停止にも使う）。")]
+        [Tooltip("本塁到達の時刻が取れない得点の補完間隔[秒]（PlaybackDisplaySync.RunScoreTimes の保険）。得点オーバーレイは加算後スコアだけを出す（issue #643）。")]
         [SerializeField] private float scoreCallStepSeconds = 0.5f;
         [Tooltip("得点オーバーレイが最終スコアに達してから消えるまでの表示時間[秒]。")]
         [SerializeField] private float scoreCallFinalHoldSeconds = 1.1f;
@@ -377,16 +377,14 @@ namespace KokoSim.Unity.Match
         private Label _scoreCallOwnName, _scoreCallOwnNum, _scoreCallOppNum, _scoreCallOppName;
         private float _scoreCallClock;
         private bool _scoreCallOn;
-        private int _scoreCallOwnScore, _scoreCallOppScore, _scoreCallRunsRemaining;
-        private bool _scoreCallOwnScoring;
-        private bool _scoreCallPlayDriven;   // true=加算はプレー時計（本塁到達）駆動（issue #438）。false=旧・等間隔（キャプチャ用）
+        private int _scoreCallOwnScore, _scoreCallOppScore;
 
         // ── 表示同期（issue #438）: 結果テキスト・ラインスコア・大型スコアの表示時刻（プレー時計）──
         // 時刻の計算は engine の純関数 PlaybackDisplaySync が単一ソース。プレー開始時に前計算する。
         private double _resultShowAt;                // 結果テキスト＝打者がセーフで生きる結果は到達レッグT1
         private double _lineScorePostAt;             // ラインスコア掲示＝最後の生還走者の本塁到達後
         private System.Collections.Generic.IReadOnlyList<double> _runScoreShowAt
-            = System.Array.Empty<double>();          // 大型スコア+1の時刻（各走者の本塁到達T1・昇順）
+            = System.Array.Empty<double>();          // 各走者の本塁到達T1（昇順）。大型スコアは最後の到達で開く（issue #643）
         private int _runScoreShown;                  // 発火済みの本数
 
         // 交代ポップアップ（issue #209 表現）。継投・投野交代・野手登板が起きた瞬間に数秒だけ盤面へ浮かせる。
@@ -2035,8 +2033,8 @@ namespace KokoSim.Unity.Match
                 if (pendingRuns > 0)
                 {
                     // 得点コールが終わるまで据え置きを伸ばす。伸ばさないと FinishPaView の HideScoreCall が
-                    // 加算の途中でコールを消す（既定 1.2 秒 < 待ち 1.8 + 1点ぶん 0.5+1.1 秒）。
-                    hold = Mathf.Max(hold, scoreDelay + scoreCallStepSeconds * pendingRuns + scoreCallFinalHoldSeconds);
+                    // 掲げている途中でコールを消す（既定 1.2 秒 < 待ち 1.8 + 最終ホールド 1.1 秒）。
+                    hold = Mathf.Max(hold, scoreDelay + scoreCallFinalHoldSeconds);
                 }
                 else
                 {
@@ -2792,8 +2790,8 @@ namespace KokoSim.Unity.Match
             if (judged.HasValue) end = System.Math.Max(end, judged.Value);
 
             // ⚠ 得点テロップ（#60）の寿命も含める。FinishPaView が HideScoreCall するので、
-            // 含めないと**加算の途中でテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
-            // 加算は各走者の本塁到達（issue #438）なので、最後の到達＋最終ホールドまで見せ切る。
+            // 含めないと**掲げた直後にテロップごと消える**（本塁打は必ずここを通る＝早切りの直撃）。
+            // テロップは最後の走者の本塁到達（issue #438/#643）で開くので、そこから最終ホールドまで見せ切る。
             // ⚠ 非有限は無視（#208 の教訓: ResAt=+∞ のプレーで end=∞ になると再生が終わらない）。
             if (_runScoreShowAt.Count > 0 && double.IsFinite(_runScoreShowAt[_runScoreShowAt.Count - 1]))
                 end = System.Math.Max(end, _runScoreShowAt[_runScoreShowAt.Count - 1] + scoreCallFinalHoldSeconds);
@@ -2839,19 +2837,13 @@ namespace KokoSim.Unity.Match
                 _lineScorePosted = false;   // 巻き戻し（キャプチャのシーク）は掲示前へ戻す＝旧 resolved=false と同型
             }
 
-            // 大型スコア（issue #438）: 各走者の本塁到達（プレー時計）で1点ずつ。器は到達の1拍前に
-            // 加点前スコアで開く（#60 の「前スコア→加算」の演出順は保つ）。
-            if (_runScoreShowAt.Count > 0 && _runScoreShown < _runScoreShowAt.Count)
+            // 大型スコア（issue #438/#643）: **最後の得点走者の本塁到達**（プレー時計）で、加算後の
+            // 最終スコアのまま開く。加点前スコアを先に見せると「1-1→2-1」が2点入ったように読める（#643）。
+            if (_runScoreShowAt.Count > 0 && _runScoreShown < _runScoreShowAt.Count
+                && _t >= _runScoreShowAt[_runScoreShowAt.Count - 1])
             {
-                if (!_scoreCallOn && _runScoreShown == 0 && _t >= _runScoreShowAt[0] - scoreCallStepSeconds)
-                    BeginScoreCall(_current.IsTop, _runScoreShowAt.Count, playDriven: true);
-                while (_scoreCallOn && _scoreCallPlayDriven
-                       && _runScoreShown < _runScoreShowAt.Count && _t >= _runScoreShowAt[_runScoreShown])
-                {
-                    StepScoreCallOnce();
-                    _scoreCallClock = 0f;   // 最後の+1から最終ホールドを数え直す
-                    _runScoreShown++;
-                }
+                BeginScoreCall(_current.IsTop, _runScoreShowAt.Count);
+                _runScoreShown = _runScoreShowAt.Count;
             }
         }
 
@@ -2893,7 +2885,7 @@ namespace KokoSim.Unity.Match
             var gained = RunsNotYetPosted(item.IsTop);
             _lineScorePosted = true;
             PostLineScore(item.Inning, item.IsTop, finished: false);
-            BeginScoreCall(item.IsTop, gained, playDriven: false);
+            BeginScoreCall(item.IsTop, gained);
         }
 
         private void UpdateScoreboardFinal(GameResult r)
@@ -2940,8 +2932,8 @@ namespace KokoSim.Unity.Match
             _lineScorePosted = true;
             PostLineScore(inning, isTop, finished: false);
             // 得点コール（issue #60）も出す（監督決定 2026-08-13）。走者の到達アニメが無いので
-            // 打球のような「帰るたび1点ずつ」ではなく、確定の瞬間に既存の実時間演出で回す。
-            if (gained > 0) { HidePitchCall(); BeginScoreCall(isTop, gained, playDriven: false); }
+            // 掲示の瞬間に最終スコアで開く。
+            if (gained > 0) { HidePitchCall(); BeginScoreCall(isTop, gained); }
             return gained;
         }
 
@@ -2961,7 +2953,7 @@ namespace KokoSim.Unity.Match
             if (gained <= 0) return;
             PostLineScore(_shownInning, _shownIsTop, finished: false);
             HidePitchCall();
-            BeginScoreCall(_shownIsTop, gained, playDriven: false);
+            BeginScoreCall(_shownIsTop, gained);
         }
 
         // ── 中継風カウント（BSO）＋塁ダイヤ ──
@@ -3083,17 +3075,19 @@ namespace KokoSim.Unity.Match
         }
 
         // ── 得点時の大型スコアオーバーレイ（issue #60） ──
-        // 並びは自校－相手校固定（先攻/後攻に依存しない）。加点前スコアを表示してから、得点数ぶん
-        // 1点ずつ加算する演出を挟み、最終スコアで一呼吸おいて自動的に消える。
-        // 加算タイミング（issue #438）: 通常再生は**各走者の本塁到達**（プレー時計・RenderReplayFrame が
-        // PlaybackDisplaySync.RunScoreTimes で駆動）。キャプチャ（結果時点へ一気に飛ぶ）だけ
-        // 旧・等間隔（実時間）で回す＝playDriven で切り替える。
+        // 並びは自校－相手校固定（先攻/後攻に依存しない）。**加算後の最終スコアだけ**を掲げ、
+        // 一呼吸おいて自動的に消える（issue #643）。加点前スコア→+1 の加算演出は、1-1 から 2-1 への
+        // 変化が「2点入った」ように読めるので撤去した。
+        // 開く時刻（issue #438）: 通常再生は**最後の得点走者の本塁到達**（プレー時計・RenderReplayFrame が
+        // PlaybackDisplaySync.RunScoreTimes の最後の時刻で駆動）。打球の無い得点・打席途中の得点・
+        // キャプチャ（結果時点へ一気に飛ぶ）は掲示の瞬間に開く。
         /// <summary>
         /// 得点コール（issue #60）を始める。<paramref name="runs"/> は<b>これから掲げる点</b>だけ
         /// （issue #628）。打席の得点（<c>RunsScored</c>）で数えると、暴投での生還のように打席に
-        /// 紐づかない点や、打席途中に既に掲げた点を二度祝う。加点前スコアはエンジン集計から逆算する。
+        /// 紐づかない点や、打席途中に既に掲げた点を二度祝う。スコアはエンジン集計から加点前を逆算し、
+        /// その点を足した最終値を出す。
         /// </summary>
-        private void BeginScoreCall(bool isTop, int runs, bool playDriven)
+        private void BeginScoreCall(bool isTop, int runs)
         {
             if (_scoreCall == null || _scoreCallOwnNum == null || _scoreCallOppNum == null) return;
             if (_prog == null || runs <= 0) return;
@@ -3102,13 +3096,12 @@ namespace KokoSim.Unity.Match
             var snap = _prog.Snapshot();
             var awayBefore = isTop ? snap.AwayLine.Runs - runs : snap.AwayLine.Runs;
             var homeBefore = isTop ? snap.HomeLine.Runs : snap.HomeLine.Runs - runs;
-            _scoreCallOwnScore = ownIsAway ? awayBefore : homeBefore;
-            _scoreCallOppScore = ownIsAway ? homeBefore : awayBefore;
-            _scoreCallOwnScoring = isTop == ownIsAway;
-            _scoreCallRunsRemaining = runs;
+            var awayAfter = isTop ? awayBefore + runs : awayBefore;
+            var homeAfter = isTop ? homeBefore : homeBefore + runs;
+            _scoreCallOwnScore = ownIsAway ? awayAfter : homeAfter;
+            _scoreCallOppScore = ownIsAway ? homeAfter : awayAfter;
             _scoreCallClock = 0f;
             _scoreCallOn = true;
-            _scoreCallPlayDriven = playDriven;
 
             if (_scoreCallOwnName != null) _scoreCallOwnName.text = ownIsAway ? _awayDisp : _homeDisp;
             if (_scoreCallOppName != null) _scoreCallOppName.text = ownIsAway ? _homeDisp : _awayDisp;
@@ -3116,30 +3109,10 @@ namespace KokoSim.Unity.Match
             _scoreCall.style.display = DisplayStyle.Flex;
         }
 
-        /// <summary>+1を1回ぶん進める（表示だけ。加算時刻の判断は呼び元が持つ）。</summary>
-        private void StepScoreCallOnce()
-        {
-            if (_scoreCallOwnScoring) _scoreCallOwnScore++; else _scoreCallOppScore++;
-            _scoreCallRunsRemaining--;
-            RefreshScoreCallLabels();
-        }
-
         private void AdvanceScoreCall(float dt)
         {
             _scoreCallClock += dt;
-            if (_scoreCallRunsRemaining > 0)
-            {
-                // プレー時計駆動（issue #438）: 加算は RenderReplayFrame が本塁到達で行う。
-                // ここで実時間の等間隔を回すと二重加算になる。
-                if (_scoreCallPlayDriven) return;
-                if (_scoreCallClock < scoreCallStepSeconds) return;
-                _scoreCallClock -= scoreCallStepSeconds;
-                StepScoreCallOnce();
-            }
-            else if (_scoreCallClock >= scoreCallFinalHoldSeconds)
-            {
-                HideScoreCall();
-            }
+            if (_scoreCallClock >= scoreCallFinalHoldSeconds) HideScoreCall();
         }
 
         private void RefreshScoreCallLabels()
@@ -3152,7 +3125,6 @@ namespace KokoSim.Unity.Match
         {
             _scoreCallOn = false;
             _scoreCallClock = 0f;
-            _scoreCallRunsRemaining = 0;
             if (_scoreCall != null) _scoreCall.style.display = DisplayStyle.None;
         }
 
@@ -3460,35 +3432,6 @@ namespace KokoSim.Unity.Match
         private void EndFieldPlay()
         {
             if (FieldPlayActive) _duelRig.EndFieldPlay();
-            SettlePlayDrivenScoreCall();
-        }
-
-        /// <summary>
-        /// プレー時計で駆動している得点コール（issue #438）を、駆動元のプレーが畳まれた時点で決着させる。
-        ///
-        /// <para><b>これが無いと試合が終わらない</b>（オーナー報告 2026-08-14）。得点コールは playDriven の間、
-        /// 残り点を減らすのが <see cref="RenderReplayFrame"/> の本塁到達だけで、<see cref="AdvanceScoreCall"/> は
-        /// 実時間では1点も減らさず必ず早期 return する。プレーを畳む経路（スキップ委任＝<c>EndGame</c> の
-        /// <c>EndFieldPlay</c>／<c>SetPlay(null)</c>）を通ると走者は二度と本塁へ着かないので、
-        /// <c>_scoreCallRunsRemaining &gt; 0</c> のまま <c>_scoreCallOn</c> が永久に立つ。すると Update の
-        /// <c>if (_gameSetPending &amp;&amp; !_scoreCallOn)</c> が一生通らず、
-        /// <b>試合は内部で終わっているのに「ゲームセット」も結果画面も来ない</b>
-        /// （実測: <c>_gameOver=True / _gameSetPending=True / _scoreCallOn=True /
-        /// _scoreCallRunsRemaining=1 / _scoreCallClock=696秒</c>）。
-        /// 絵は「投手が投げないだけ」に見え、UIは生きているので原因が画面に出ない止まり方になる。</para>
-        ///
-        /// <para>残りを表示上いっきに乗せてから実時間駆動へ戻す＝最終スコアは正しく出て、
-        /// 既存の最終ホールド（<c>scoreCallFinalHoldSeconds</c>）を経て通常どおり消える＝
-        /// 「得点テロップの演出が済んでからゲームセットを掲げる」順序（issue #442）は保つ。
-        /// プレーが最後まで再生された通常経路では残りが0なので何もしない。</para>
-        /// </summary>
-        private void SettlePlayDrivenScoreCall()
-        {
-            if (!_scoreCallOn || !_scoreCallPlayDriven) return;
-            while (_scoreCallRunsRemaining > 0) StepScoreCallOnce();
-            _runScoreShown = _runScoreShowAt.Count;
-            _scoreCallPlayDriven = false;   // 以降は実時間の最終ホールドで畳む
-            _scoreCallClock = 0f;
         }
 
         /// <summary>
@@ -4014,9 +3957,9 @@ namespace KokoSim.Unity.Match
             var pcMod = def.StaminaRemaining < 0.3 ? "mhud-pc__n--alert"
                 : def.StaminaRemaining < 0.6 ? "mhud-pc__n--warn" : null;
             idn.Add(MakeRow("mhud-spacer"));
-            // 球数は「今 / 目安」の分母つき（案A）。分母は StaminaTarget＝スタミナバーの分母そのもので、
-            // 連戦で目安が縮めば分母も縮む＝バーと数字が食い違わない。
-            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod, StaminaTargetText(def)));
+            // 球数は「今 / この試合で投げられる最大」の分母つき。分母は週間球数制限（設計書05 §1.3）の
+            // 上限から持ち越しを引いた値＝試合開始時点で固定（目安投球数は出さない）。
+            idn.Add(HudPitchCount(totalPitches.ToString(), pcMod, MaxPitchesThisGameText(def)));
             band.Add(idn);
 
             // 2段目＝通算防御率・本日の奪三振・与四死球の等幅3セル（打者HUDと同構造）。奪三振と与四死球は
@@ -4032,17 +3975,9 @@ namespace KokoSim.Unity.Match
             band.Add(stats);
 
             // 3段目＝スタミナ。帯の最下段として帯と同幅で組み込む（別要素として浮かせない）。
-            // 週間球数制限（設計書05 §1.3）の残りもここに置く＝「残り」の話をバーと並べる。
-            // 名前行に置くと球数（主指標）を帯の外へ押し出す（実測で右端が欠けた）。
-            band.Add(BuildStaminaBar(def.StaminaRemaining, WeeklyLeftForDisplay(def, totalPitches)));
+            band.Add(BuildStaminaBar(def.StaminaRemaining));
             return band;
         }
-
-        /// <summary>
-        /// 降板の目安マージン（<see cref="FatigueCoefficients.RelievePitchMargin"/> の既定＝実ゲームが使う値）。
-        /// 「ルールで先に止まるか」の判定にだけ使う表示用の定数で、試合の判定には一切触らない。
-        /// </summary>
-        private static readonly double ReliefMargin = new FatigueCoefficients().RelievePitchMargin;
 
         /// <summary>
         /// 週間球数制限（設計書05 §1.3）の残り球数。制限なし（int.MaxValue）なら null＝表示しない。
@@ -4057,26 +3992,16 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>
-        /// 画面に出す週残（出さないなら null）。<b>ルールがスタミナより先に効く</b>投手＝残りが
-        /// 「目安投球数＋降板マージン」より少ないときだけ出す。普段は出ない＝アクセントを増やさない
-        /// （UI原則②「強調は希少資源」）。
+        /// 球数の分母＝この試合で投げられる最大球数（週間上限 − 持ち越し。0でクランプ）。
+        /// 制限なし（int.MaxValue）なら空＝分母を出さない。
         /// </summary>
-        private static int? WeeklyLeftForDisplay(LivePitcherToday def, int totalPitchesToday)
-        {
-            var left = WeeklyPitchesLeft(def, totalPitchesToday);
-            return left is int v && v < def.StaminaTarget + ReliefMargin ? left : null;
-        }
-
-        /// <summary>球数の分母＝実効目安投球数（連戦で縮む）。不明（0以下）なら空＝分母を出さない。</summary>
-        private static string StaminaTargetText(LivePitcherToday def)
-            => def == null || def.StaminaTarget <= 0.0
-                ? null
-                : Mathf.RoundToInt((float)def.StaminaTarget).ToString();
+        private static string MaxPitchesThisGameText(LivePitcherToday def)
+            => WeeklyPitchesLeft(def, 0)?.ToString();
 
         // スタミナ残量のバー（継投の目安）。球数の数字だけでなく形でも「そろそろ」を出す。
         // 色は残量で落とす: 6割超=良好 / 3〜6割=注意 / 3割未満=警告（盤面ビューの状態コード）。
         // 文字（見出し・％）は持たない＝残量は形と色だけで読ませ、数字は名前行の球数に集約する。
-        private static VisualElement BuildStaminaBar(double remaining, int? weeklyLeft = null)
+        private static VisualElement BuildStaminaBar(double remaining)
         {
             var row = MakeRow("mhud-stam");
 
@@ -4098,17 +4023,6 @@ namespace KokoSim.Unity.Match
                 track.Add(tick);
             }
             row.Add(track);
-
-            // 週残（出るのはルールで先に止まる投手のときだけ＝普段は帯の見た目が変わらない）。
-            // 数字と和文は Label を分ける（Oswald は欧文専用・設計書16 §2）。
-            if (weeklyLeft is int left)
-            {
-                var box = MakeRow("stam__weekly");
-                box.Add(MakeLabel("週残", "stam__weekly-c"));
-                box.Add(MakeLabel(left.ToString(), "stam__weekly-n", "f-num-bd"));
-                box.Add(MakeLabel("球", "stam__weekly-u"));
-                row.Add(box);
-            }
             return row;
         }
 

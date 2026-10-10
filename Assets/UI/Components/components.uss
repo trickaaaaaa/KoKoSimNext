@@ -1549,17 +1549,6 @@
 .stam__fill--low { background-color: var(--color-warn); }
 /* 目盛は3等分（残り2/3・1/3の位置）＝色の変わり目と同じ場所。溝と同じく帯の上なので白の薄膜。 */
 .stam__tick { position: absolute; top: 0; bottom: 0; width: 1px; background-color: var(--hud-divider); }
-/* 週間球数制限の残り（設計書05 §1.3）。「残り」の話なのでスタミナ帯の右端に置く
-   ＝名前行（球数＝主指標）を押し出さない。ルールで先に止まる投手のときだけ出る。 */
-.stam__weekly {
-    flex-direction: row;
-    align-items: center;
-    flex-shrink: 0;
-    margin-left: var(--sp-2);
-}
-.stam__weekly-c { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); color: var(--hud-label); margin-right: 2px; }
-.stam__weekly-n { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); color: var(--color-warn); }
-.stam__weekly-u { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); color: var(--hud-label); margin-left: 1px; }
 /* MatchupHud：盤面ホスト上の画面座標固定オーバーレイ（コーナーの定義はブロック冒頭）。 */
 .matchup-hud {
     position: absolute;
