@@ -63,3 +63,7 @@ TestResults/
 # メニュー「KokoSim/Duel/F8 ビルド同梱の索引を焼く」で作れる
 Assets/KokoSim/Resources/
 Assets/KokoSim/Resources.meta
+
+# 出所未確認の実写ポートレート（公開リポジトリに載せない・ローカルにだけ置く）
+Assets/UI/Images/portraits/*.jpeg
+Assets/UI/Images/portraits/*.jpeg.meta
