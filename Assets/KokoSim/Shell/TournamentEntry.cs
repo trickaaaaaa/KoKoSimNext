@@ -73,7 +73,9 @@ namespace KokoSim.Unity.Shell
             //   同じカードがロード後にもう一度畳まれる＝二重計上になる。
             var homeBg = new MemoizingBackgroundResolver(
                 new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: brains));
+                    modernRules: null, calendarYear: calendarYear, brains: brains,
+                    // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
+                    useRegionalStadiumTier: true));
 
             // 自校の一戦は詳細試合エンジンで解決（PlayerMatchResolver）。自県の裏試合は homeBg でフルシム。
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed), Schedule,
@@ -173,7 +175,9 @@ namespace KokoSim.Unity.Shell
             var stats = NationService.TournamentStats;   // 復元済み＝StartTournament は呼ばない
             var homeBg = new MemoizingBackgroundResolver(
                 new BackgroundMatchResolver(NationService.Rosters, new GameContext(), yearIndex, stats: null,
-                    modernRules: null, calendarYear: calendarYear, brains: brains));
+                    modernRules: null, calendarYear: calendarYear, brains: brains,
+                    // 県大会（夏・秋・秋季地区予選）＝自校の試合と同じ汎用ティア球場（issue #636・MatchStadium と同じ判定）
+                    useRegionalStadiumTier: true));
 
             var runner = TournamentRunner.FromSaved(t.Runner, field, manager, NationCoeff, Schedule,
                 new PlayerMatchResolver(), homeBg,
