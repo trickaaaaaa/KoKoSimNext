@@ -125,8 +125,8 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// 選択を確定する。<paramref name="schoolId"/>=null は残留（強制転任では不可＝false を返す）。
-        /// 転任を選ぶと: 信頼度リセット・施設/施設基金を置いていく・部員は新設校と同じ形で作り直す
-        /// （部員は旧校に残る想定, issue「監督の転任システムが実ゲームに完全未配線」の決定）・自校の同定を更新する。
+        /// 転任を選ぶと: 信頼度リセット・施設/施設基金を置いていく・部員は学校に残る（旧校は AI校として全国に残り、
+        /// 転任先 AI校の部員を引き継ぐ。issue #641）・自校の同定を更新する。
         /// 部費・名声・指導力・采配・育成眼は監督個人の実績として持ち越す（触らない）。
         /// </summary>
         public static bool Confirm(int? schoolId)
@@ -146,8 +146,26 @@ namespace KokoSim.Unity.Shell
 
             ManagerTransferModel.ApplyTransfer(ManagerService.Manager, ManagerService.Coefficients);
             ManagerService.ResetFacilitiesForTransfer();
-            RosterService.ResetForTransfer(GameClock.YearIndex);
-            NationService.SetSchoolIdentity(target.SchoolName, target.PrefectureId, target.DistrictId);
+            // 部員は学校に所属する（issue #641）: 旧校は AI校として全国に残り旧部員もそこに残る。
+            // 転任先 AI校の部員を引き継ぎ、転任先は全国から外れる（自校＝専用ID で大会に出る）。
+            var targetSchool = NationService.SchoolById(target.SchoolId);
+            if (targetSchool != null)
+            {
+                var active = RosterService.Active;
+                var departing = new DepartingSchool(
+                    NationService.ManagerSchoolName, NationService.PrefectureId, NationService.DistrictId,
+                    TeamOverall.Of(active));
+                var result = NationService.TransferManager(
+                    departing, active, targetSchool, GameClock.YearIndex, RosterService.NextPlayerId);
+                RosterService.AdoptTransferRoster(result.Roster, result.NextPlayerId);
+            }
+            else
+            {
+                // 候補が全国に見つからない（あり得ないはずの）場合だけ旧挙動＝1年生で作り直す。
+                RosterService.ResetForTransfer(GameClock.YearIndex);
+            }
+            // 候補の校名は全国の表記（「〜高校」込み）。自校の校名は幹で持つ（表示側で「高校」を付ける）。
+            NationService.SetSchoolIdentity(SchoolNames.Stem(target.SchoolName), target.PrefectureId, target.DistrictId);
 
             Clear();
             return true;

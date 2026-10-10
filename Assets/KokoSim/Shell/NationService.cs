@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using KokoSim.Engine.Career;
 using KokoSim.Engine.Core;
 using KokoSim.Engine.Nation;
 using KokoSim.Engine.Nation.Roster;
+using KokoSim.Engine.Season;
 using KokoSim.Engine.Stats;
 
 namespace KokoSim.Unity.Shell
@@ -47,7 +49,10 @@ namespace KokoSim.Unity.Shell
         }
 
         private static readonly NationCoefficients Coeff = new NationCoefficients();
+        private static Nation _generated;
         private static Nation _nation;
+        // 転任で全国に残った学校・監督が率いる生成校（issue #641）。決定論で再生成した全国に重ねる差分。
+        private static NationOverlay _overlay = new NationOverlay();
         private static List<School> _prefecture;
         private static List<School> _away;
 
@@ -75,9 +80,7 @@ namespace KokoSim.Unity.Shell
             get
             {
                 if (_nation != null) return _nation;
-                _nation = NationGenerator.Generate(
-                    SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026),
-                    districtPlan: DistrictPlanProvider.Plan);
+                _nation = _overlay.Apply(GeneratedNation);
                 if (_pendingSchoolStates != null)
                 {
                     AiSchoolEvolution.Restore(_nation, _pendingSchoolStates);
@@ -85,6 +88,33 @@ namespace KokoSim.Unity.Shell
                 }
                 return _nation;
             }
+        }
+
+        /// <summary>
+        /// 決定論で再生成した素の全国（seed=2026）。転任の差分（<see cref="_overlay"/>）を当てる前。
+        /// 大会・練習試合などはすべて差分込みの <see cref="Nation"/> を見る。
+        /// </summary>
+        private static Nation GeneratedNation => _generated ??= NationGenerator.Generate(
+            SchoolNameVocabProvider.Default, Coeff, new Xoshiro256Random(2026),
+            districtPlan: DistrictPlanProvider.Plan);
+
+        /// <summary>
+        /// 監督の転任（設計書04 §1.3・issue #641）。旧校を AI校として全国に残し（旧部員はそのロスターへ）、
+        /// 転任先 AI校の部員を新しい自校の部員として返す。転任先は全国から外れる（自校は専用ID で出場）。
+        /// 自校の同定（校名・県）は呼び出し側が <see cref="SetSchoolIdentity"/> で据え直す。
+        /// </summary>
+        public static SchoolTransferResult TransferManager(
+            DepartingSchool departing, IReadOnlyList<DevelopingPlayer> departingActive, School target,
+            int yearIndex, int nextPlayerId)
+        {
+            _ = Nation;   // 保留中の年次進化を当ててから差分を動かす
+            var result = SchoolTransfer.Execute(_overlay, GeneratedNation, Rosters, departing, departingActive,
+                target, yearIndex, nextPlayerId, GameSeed.Master);
+            _nation = null;
+            _prefecture = null;
+            _away = null;
+            _schoolById = null;
+            return result;
         }
 
         /// <summary>
@@ -236,6 +266,7 @@ namespace KokoSim.Unity.Shell
             s.NationSchools = _hasEvolution ? AiSchoolEvolution.Snapshot(Nation) : new List<SchoolEvolutionState>();
             s.NationYearWins = new Dictionary<int, int>(YearLedger.Snapshot());
             s.NationKoshienChampionId = YearLedger.ChampionId;
+            s.NationOverlay = _overlay;   // 転任の差分（v21・issue #641）
             // 自校の同定（issue #585・v4）。学校・県と違い再生成では出てこないので保存する。
             s.SchoolName = ManagerSchoolName;
             s.PrefectureId = PrefectureId;
@@ -247,6 +278,8 @@ namespace KokoSim.Unity.Shell
         {
             _rosters = NationRosters.FromSaved(RosterDeps, s.NationRosters);
             _tournamentStats = s.TournamentStats;
+            _overlay = s.NationOverlay ?? new NationOverlay();
+            _generated = null;
             _nation = null;
             _schoolById = null;
             _away = null;
@@ -267,6 +300,8 @@ namespace KokoSim.Unity.Shell
         /// </summary>
         public static void Reset()
         {
+            _overlay = new NationOverlay();
+            _generated = null;
             _nation = null;
             _prefecture = null;
             _away = null;

@@ -44,6 +44,29 @@ public sealed class NationRosters
         lock (_gate) _rosters[roster.SchoolId] = roster;
     }
 
+    /// <summary>
+    /// 転任（issue #641）: 学校のロスターを差し替える。旧校の部員を AI校のロスターとして据える／
+    /// 生成校へ戻るとき書き戻す。既存のロスターは捨てる。
+    /// </summary>
+    public void Put(AiSchoolRoster roster)
+    {
+        lock (_gate) _rosters[roster.SchoolId] = roster;
+    }
+
+    /// <summary>
+    /// 転任（issue #641）: 学校のロスターを取り出して保持庫から外す。監督が率いることになった生成校の部員は
+    /// 自校のロスターへ移るので、全国側に残すと同じ選手が2校に居ることになる。無ければ null。
+    /// </summary>
+    public AiSchoolRoster? Take(int schoolId)
+    {
+        lock (_gate)
+        {
+            if (!_rosters.TryGetValue(schoolId, out var r)) return null;
+            _rosters.Remove(schoolId);
+            return r;
+        }
+    }
+
     /// <summary>セーブ復元専用: 保持中の全ロスターを捨てる（復元前の一掃）。</summary>
     internal void ClearRosters()
     {

@@ -57,6 +57,12 @@ public sealed class SaveState
 
     // --- 全国（materialize 済みロスターのみ。学校・県は再生成） ---
     public List<AiSchoolRoster> NationRosters { get; set; } = new();
+
+    /// <summary>
+    /// 決定論で再生成した全国へ重ねる差分（v21・issue #641）。転任で AI校として残った新設校と、
+    /// 監督がいま率いている生成校（全国から外す）。
+    /// </summary>
+    public NationOverlay NationOverlay { get; set; } = new();
     public NationTournamentStats TournamentStats { get; set; } = new();
     /// <summary>
     /// AI校の進化後 Strength/Fame（issue wire-ai-school-evolve-into-game・v13）。<b>空＝一度も年度末を跨いでいない</b>
