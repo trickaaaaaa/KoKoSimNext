@@ -209,8 +209,8 @@ docs/design/                  # 設計書01〜07
 ## コマンド
 
 ```bash
-dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ（約3分30秒・2026-08-29実測）
-dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約4分30秒・2026-08-29実測）
+dotnet test engine/ -c Release --filter "Category!=Heavy"    # 日常ループ（約2分・2026-10-11実測・10コア）
+dotnet test engine/ -c Release --filter "Category=Heavy"     # 統計回帰（約9分・2026-10-11実測・10コア。CIはシャード並列）
 dotnet test engine/ -c Release                               # 全テスト実行
 dotnet run --project engine/KokoSim.Balance -- \
   simulate --games 10000 --seed 42 --report out/report.md   # 一括シミュレーション＋統計レポート
@@ -221,6 +221,10 @@ dotnet run --project engine/KokoSim.Balance -- \
   engine に `#if DEBUG` / `Debug.Assert` は無いので検証内容も変わらない
 - 統計回帰（`[Trait("Category","Heavy")]`）はバランス係数・確率モデルの変更時とコミット前に必ず回す（不変条件#5）
 - **数百試合以上のフルゲームループを回す統計テストは Heavy に置く**（fast 側の膨張防止。issue #361）。
+- **xUnit は同じクラスのテスト（Theory の各ケースも）を直列に回す**＝1クラスが重いと、それだけで日常ループの
+  壁時間が決まる（issue #639: `SkipDelegateAlwaysEndsTests` の3ケースが直列426秒で、日常ループが7分台になっていた）。
+  fast に残す重いテストは、中身を `Parallel.For` で並列化する（押下点・シードごとに状態を作り直して独立にする）。
+  所要時間の内訳は `--logger "trx"` の結果をクラス別に集計すれば出る
   CI の rest シャードが自動で拾う（網羅性は tools/check-heavy-shards.sh が検証）
 - 統計シム（GameSimulation/AtBatSimulation）は決定論保存で並列化済み（事前Fork＋整数部分和）。同シード同結果は維持される。
   テスト内で数百試合を逐次 for で回す場合も同じ作法（シード事前確定＋試合ローカルのチーム生成＋整数部分和）で並列化する
