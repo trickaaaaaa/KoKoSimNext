@@ -67,7 +67,11 @@
                     <ui:Label name="tp-meta" class="tp-meta" text="" />
                 </ui:VisualElement>
 
-                <ui:Button name="tp-back" class="tp-back" text="◀ トーナメントに戻る" />
+                <!-- 控えめなサブ操作の並び。HTMLで開く＝大会パンフレットを書き出して既定ブラウザで開く（issue #645） -->
+                <ui:VisualElement class="tp-subrow">
+                    <ui:Button name="tp-back" class="tp-back" text="◀ トーナメントに戻る" />
+                    <ui:Button name="tp-export-html" class="tp-back tp-subrow__next" text="HTMLで開く" />
+                </ui:VisualElement>
 
                 <ui:Label name="tp-lead" class="tp-lead" text="" />
 
