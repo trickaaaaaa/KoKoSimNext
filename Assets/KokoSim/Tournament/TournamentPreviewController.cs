@@ -41,6 +41,8 @@ namespace KokoSim.Unity.Tournament
             if (go != null) go.clicked += () => { _mode = ViewMode.Preview; Render(); };
             var back = _root.Q<Button>("tp-back");
             if (back != null) back.clicked += () => { _mode = ViewMode.Bracket; Render(); };
+            var export = _root.Q<Button>("tp-export-html");
+            if (export != null) export.clicked += ExportPamphlet;
             var detailBack = _root.Q<Button>("tp-detail-back");
             if (detailBack != null) detailBack.clicked += () => { _mode = ViewMode.Bracket; Render(); };
 
@@ -134,8 +136,9 @@ namespace KokoSim.Unity.Tournament
                 : view.ManagerEliminated ? "自校 敗退"
                 : "自校 進行中";
             SetText("tb-title", view.Title);
+            // 優勝校は決まるまで区切りごと出さない（「未定」と書かない＝issue #645）。
             SetText("tb-meta", "出場 " + display.Field.Count + "校 ／ " + status
-                + " ／ 優勝校: " + (view.ChampionName ?? "未定"));
+                + (view.ChampionName != null ? " ／ 優勝校: " + view.ChampionName : ""));
 
             // 次戦（終了していれば結果の総括）。観るだけの大会は「次戦」が無いので進み具合だけ出す。
             string next;
@@ -190,12 +193,13 @@ namespace KokoSim.Unity.Tournament
         /// <summary>他校結果の表示上限（全部出すと200校規模でスクロールが破綻するため）。</summary>
         private const int OtherMatchLimit = 40;
 
-        // ===== 樹形図（トーナメント表） =====
+        // ===== 樹形図（新聞型トーナメント表・issue #645） =====
 
         /// <summary>
-        /// 樹形図を描く。甲子園ブラケット風に左右2ブロック（各ラウンドの前半/後半スロット）へ分割し、
-        /// 決勝を中央で向き合わせる（issue #188。ブロックサイズは常に2の冪なので必ず均等に割れる）。
-        /// 全カードを省略なく出し、初期表示は自校の最新カードを中央に置く。
+        /// 新聞型トーナメント表を描く。校名は1回戦の端にだけ置き、勝ち上がりは線の太さで表す。
+        /// 甲子園ブラケット風に左右2ブロックへ割り、決勝を中央で向き合わせる（#188 の配置を維持）。
+        /// 座標は engine の <see cref="NewspaperBracketLayout"/>、描画は <see cref="NewspaperBracketElement"/>。
+        /// 初期表示は自校の最新の試合の位置を中央に置く。
         /// </summary>
         private void RenderBracketTree(TournamentBracketView view)
         {
@@ -205,111 +209,19 @@ namespace KokoSim.Unity.Tournament
             host.Clear();
             head.Clear();
 
-            var tree = TournamentPreviewState.BuildBracketTree(view);
-            if (tree.Rounds.Count == 0)
+            var bracket = NewspaperBracketLayout.Build(view, NewspaperBracketElement.Metrics);
+            if (bracket.Leaves.Count == 0)
             {
                 host.Add(Note("トーナメント表はまだ組まれていません。"));
                 return;
             }
 
-            var finalRound = tree.Rounds.Count - 1;
-            VisualElement focus = null;
-
-            // 左ブロック：ラウンド0→準決勝まで、通常どおり左→右。
-            for (var r = 0; r < finalRound; r++)
-                host.Add(BuildBlockColumn(tree, r, finalRound, mirrored: false, head, ref focus, OpenSchoolDetail));
-
-            // 中央：決勝＋優勝欄（1列にまとめる。両ブロックの準決勝がここへ直結する）。
-            head.Add(ColumnHead(tree.Rounds[finalRound].Name, hasLead: false, hasElbow: true));
-            head.Add(ColumnHead("優勝", hasLead: false, hasElbow: false));
-            host.Add(BuildFinalColumn(tree, ref focus, OpenSchoolDetail));
-
-            // 右ブロック：準決勝→ラウンド0を逆順に並べ、接続線を左右反転して決勝へ向き合わせる。
-            for (var r = finalRound - 1; r >= 0; r--)
-                host.Add(BuildBlockColumn(tree, r, finalRound, mirrored: true, head, ref focus, OpenSchoolDetail));
+            var paper = new NewspaperBracketElement(bracket, OpenSchoolDetail);
+            host.Add(paper);
+            head.Add(NewspaperBracketElement.BuildHead(bracket));
 
             var scroll = _root.Q<ScrollView>("tp-bracket-scroll");
-            if (scroll != null && focus != null) CenterOn(scroll, focus);
-        }
-
-        /// <summary>
-        /// 片ブロック1ラウンド分の列。mirrored=false は左ブロック（前半スロット・左→右に通常配置）、
-        /// mirrored=true は右ブロック（後半スロット・接続線を左右反転して決勝側を向く）。
-        /// </summary>
-        private static VisualElement BuildBlockColumn(TournamentPreviewState.BracketTreeView tree,
-            int r, int finalRound, bool mirrored, VisualElement head, ref VisualElement focus,
-            System.Action<string> onSchoolClick)
-        {
-            var col = tree.Rounds[r];
-            var half = col.Cards.Count / 2;
-            var cards = mirrored ? col.Cards.Skip(half) : col.Cards.Take(half);
-            var isBlockFinal = r == finalRound - 1;   // このブロックの準決勝＝決勝へまっすぐ1本
-
-            head.Add(ColumnHead(col.Name, hasLead: r > 0, hasElbow: true, mirrored));
-
-            var colEl = new VisualElement();
-            colEl.AddToClassList("brk-col");
-            var body = new VisualElement();
-            body.AddToClassList("brk-col__body");
-
-            foreach (var card in cards)
-            {
-                var slot = new VisualElement();
-                slot.AddToClassList("brk-slot");
-                var cardEl = BuildBracketCard(card, onSchoolClick);
-                var outConnector = isBlockFinal
-                    ? FlatConnector(card.ManagerAdvances)
-                    : mirrored
-                        ? MirroredElbow(card.SlotIndex % 2 == 0, card.ManagerAdvances)
-                        : Elbow(card.SlotIndex % 2 == 0, card.ManagerAdvances);
-
-                if (mirrored)
-                {
-                    // 右ブロックは決勝側（左）へ出る接続線を先に、自校の帯を最後（外側）に置く。
-                    slot.Add(outConnector);
-                    slot.Add(cardEl);
-                    if (r > 0) slot.Add(Lead(card.ManagerInvolved));
-                }
-                else
-                {
-                    if (r > 0) slot.Add(Lead(card.ManagerInvolved));
-                    slot.Add(cardEl);
-                    slot.Add(outConnector);
-                }
-
-                body.Add(slot);
-                if (ReferenceEquals(tree.ManagerFocus, card)) focus = cardEl;
-            }
-            colEl.Add(body);
-            return colEl;
-        }
-
-        /// <summary>中央列：決勝カード＋優勝欄を1つの枠にまとめる（両ブロックの準決勝がここへ直結する）。</summary>
-        private static VisualElement BuildFinalColumn(TournamentPreviewState.BracketTreeView tree, ref VisualElement focus,
-            System.Action<string> onSchoolClick)
-        {
-            var col = new VisualElement();
-            col.AddToClassList("brk-col");
-            var body = new VisualElement();
-            body.AddToClassList("brk-col__body");
-
-            var slot = new VisualElement();
-            slot.AddToClassList("brk-slot");
-
-            var finalRound = tree.Rounds[tree.Rounds.Count - 1];
-            if (finalRound.Cards.Count > 0)
-            {
-                var card = finalRound.Cards[0];
-                var cardEl = BuildBracketCard(card, onSchoolClick);
-                slot.Add(cardEl);
-                if (ReferenceEquals(tree.ManagerFocus, card)) focus = cardEl;
-            }
-            slot.Add(FlatConnector(tree.ManagerIsChampion));
-            slot.Add(ChampionBadge(tree));
-
-            body.Add(slot);
-            col.Add(body);
-            return col;
+            if (scroll != null && paper.FocusMarker != null) CenterOn(scroll, paper.FocusMarker);
         }
 
         /// <summary>ラウンド名帯を縦スクロール量ぶん下げて、ビューポート上端に貼り付ける。</summary>
@@ -317,179 +229,6 @@ namespace KokoSim.Unity.Tournament
         {
             var head = _root.Q<VisualElement>("tp-bracket-head");
             if (head != null) head.style.top = offsetY;
-        }
-
-        /// <summary>
-        /// ラウンド名の見出しセル。列と同じ寸法トークン（接続線の帯を空要素で置く）で組み、
-        /// 見出しと列の横位置が必ず一致するようにする。mirrored=true は右ブロック用で、
-        /// 列本体の接続線の並び（決勝側の帯が先、自校の帯が後）に合わせてスペーサーの順を反転する。
-        /// </summary>
-        private static VisualElement ColumnHead(string text, bool hasLead, bool hasElbow, bool mirrored = false)
-        {
-            var cell = new VisualElement();
-            cell.AddToClassList("brk-hcell");
-            if (mirrored)
-            {
-                if (hasElbow) cell.Add(Spacer("brk-elbow"));
-                cell.Add(ColumnHeadLabel(text));
-                if (hasLead) cell.Add(Spacer("brk-lead"));
-            }
-            else
-            {
-                if (hasLead) cell.Add(Spacer("brk-lead"));
-                cell.Add(ColumnHeadLabel(text));
-                if (hasElbow) cell.Add(Spacer("brk-elbow"));
-            }
-            return cell;
-        }
-
-        private static Label ColumnHeadLabel(string text)
-        {
-            var l = new Label(text);
-            l.AddToClassList("brk-col__name");
-            return l;
-        }
-
-        private static VisualElement Spacer(string cls)
-        {
-            var e = new VisualElement();
-            e.AddToClassList(cls);
-            return e;
-        }
-
-        private static VisualElement BuildBracketCard(TournamentPreviewState.BracketCardRow c,
-            System.Action<string> onSchoolClick)
-        {
-            var card = new VisualElement();
-            card.AddToClassList("brk-card");
-            if (c.ManagerInvolved) card.AddToClassList("brk-card--fav");
-
-            if (c.IsBye)
-            {
-                // 不戦勝は「（不戦勝）」の偽対戦相手を出さず、勝ち上がる校名だけを1行で見せる
-                // （露出させない＝issue #188）。2行カードと違い対戦線を引かないので自然に区別がつく。
-                // 不戦勝カードはクリック不可（issue #189: 未確定枠・不戦勝はクリック不可）。
-                card.Add(SlotLine(c.Top.IsDetermined ? c.Top : c.Bottom, clickable: false, onSchoolClick));
-                return card;
-            }
-
-            var top = SlotLine(c.Top, c.Top.IsDetermined, onSchoolClick);
-            top.AddToClassList("brk-line--top");
-            card.Add(top);
-            card.Add(SlotLine(c.Bottom, c.Bottom.IsDetermined, onSchoolClick));
-            if (c.MercyEnded)
-            {
-                var mercy = new Label("コールド");
-                mercy.AddToClassList("brk-mercy");
-                card.Add(mercy);
-            }
-            return card;
-        }
-
-        /// <summary>樹形図1行（校名＋スコア）。clickable=true かつ校名が確定していれば校別詳細へ遷移する
-        /// （issue #189。未確定枠「（未定）」・不戦勝は clickable=false で渡ってくる）。</summary>
-        private static VisualElement SlotLine(TournamentPreviewState.BracketSlotRow s, bool clickable,
-            System.Action<string> onSchoolClick)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("brk-line");
-
-            var name = new Label(s.Name);
-            name.AddToClassList("brk-name");
-            if (s.IsManager) name.AddToClassList("brk-name--fav");
-            else if (!s.IsDetermined) name.AddToClassList("brk-name--tbd");
-            else if (s.IsLoser) name.AddToClassList("brk-name--out");
-            if (s.IsWinner) name.AddToClassList("brk-name--win");
-            if (clickable && s.IsDetermined)
-            {
-                name.AddToClassList("brk-name--clickable");
-                var schoolName = s.Name;
-                name.RegisterCallback<ClickEvent>(_ => onSchoolClick(schoolName));
-            }
-            row.Add(name);
-
-            var score = new Label(s.Score);
-            score.AddToClassList("brk-score");
-            score.AddToClassList("f-num");   // スコアは純数値＝コンデンス体（決定2-B）
-            if (s.IsLoser) score.AddToClassList("brk-score--out");
-            row.Add(score);
-            return row;
-        }
-
-        /// <summary>優勝欄バッジ（決勝カードの隣に添える）。自校優勝のときだけアンバー。</summary>
-        private static VisualElement ChampionBadge(TournamentPreviewState.BracketTreeView tree)
-        {
-            var card = new VisualElement();
-            card.AddToClassList("brk-champ");
-            var cap = new Label("CHAMPION");
-            cap.AddToClassList("brk-champ__cap");
-            card.Add(cap);
-            var name = new Label(tree.ChampionName ?? "（未定）");
-            name.AddToClassList("brk-champ__name");
-            if (tree.ChampionName == null) name.AddToClassList("brk-champ__name--tbd");
-            else if (tree.ManagerIsChampion) name.AddToClassList("brk-champ__name--fav");
-            card.Add(name);
-            return card;
-        }
-
-        /// <summary>前段から入る横線（帯の縦中央に1本）。</summary>
-        private static VisualElement Lead(bool fav) => Connector("brk-lead", fav, upper: true);
-
-        /// <summary>決勝→優勝欄のまっすぐな1本。</summary>
-        private static VisualElement FlatConnector(bool fav)
-        {
-            var e = Connector("brk-elbow", fav, upper: true);
-            e.AddToClassList("brk-elbow--flat");
-            return e;
-        }
-
-        /// <summary>横線と縦線の直角。down=true でカード中央から下（＝組の上側カード）へ折れる。</summary>
-        private static VisualElement Elbow(bool down, bool fav)
-        {
-            var e = new VisualElement();
-            e.AddToClassList("brk-elbow");
-            e.Add(Connector("brk-elbow__part", fav, upper: true));    // 左半分＝カードから出る横線
-            e.Add(Vertical(down, fav));                               // 右半分の左端＝中点へ伸びる縦線
-            return e;
-        }
-
-        /// <summary>Elbow の左右反転版（右ブロック用）。パーツの並びを逆にして、カードの左側から
-        /// 決勝側（中点）へ向けて出る折れ線にする。down の意味（組の上/下どちら側か）は不変。</summary>
-        private static VisualElement MirroredElbow(bool down, bool fav)
-        {
-            var e = new VisualElement();
-            e.AddToClassList("brk-elbow");
-            e.Add(Vertical(down, fav));                               // 左半分の右端＝中点から伸びる縦線
-            e.Add(Connector("brk-elbow__part", fav, upper: true));    // 右半分＝カードへ入る横線
-            return e;
-        }
-
-        /// <summary>上下2分割の帯。upper 側に横線（＝帯の縦中央に線が来る）。</summary>
-        private static VisualElement Connector(string cls, bool fav, bool upper)
-        {
-            var e = new VisualElement();
-            e.AddToClassList(cls);
-            e.Add(Half(upper ? "brk-half--h" : null, fav && upper));
-            e.Add(Half(upper ? null : "brk-half--h", fav && !upper));
-            return e;
-        }
-
-        private static VisualElement Vertical(bool down, bool fav)
-        {
-            var e = new VisualElement();
-            e.AddToClassList("brk-elbow__part");
-            e.Add(Half(down ? null : "brk-half--v", fav && !down));
-            e.Add(Half(down ? "brk-half--v" : null, fav && down));
-            return e;
-        }
-
-        private static VisualElement Half(string lineClass, bool fav)
-        {
-            var e = new VisualElement();
-            e.AddToClassList("brk-half");
-            if (lineClass != null) e.AddToClassList(lineClass);
-            if (lineClass != null && fav) e.AddToClassList("brk-half--fav");
-            return e;
         }
 
         /// <summary>初期表示で自校のカードをビューポート中央に置く（レイアウト確定後に1回だけ）。</summary>
@@ -508,6 +247,9 @@ namespace KokoSim.Unity.Tournament
                     Mathf.Clamp(pos.y + target.layout.height * 0.5f - view.y * 0.5f, 0f,
                         Mathf.Max(0f, content.y - view.y)));
                 SyncBracketHead(scroll.scrollOffset.y);
+                // ScrollView がスクロール量を次のレイアウトで丸め直すことがある（値変更イベントは来ない）。
+                // 1フレーム後にもう一度合わせ、段名帯の上に中身の端が覗かないようにする。
+                scroll.schedule.Execute(() => SyncBracketHead(scroll.scrollOffset.y));
             };
             target.RegisterCallback(cb);
         }
@@ -569,6 +311,28 @@ namespace KokoSim.Unity.Tournament
             Fill("tp-contenders", v.Contenders, BuildCard);
             Fill("tp-notables", v.Notables, BuildNotable);
             RenderEntrants(v.Entrants);
+        }
+
+        /// <summary>
+        /// 大会パンフレット（展望・トーナメント表・出場全校の登録メンバー）を HTML に書き出して既定ブラウザで開く
+        /// （issue #645）。中身は純関数 <see cref="TournamentPamphletHtml.Render"/>、ここは書き出しと起動だけ。
+        /// 同じ大会は上書き（persistentDataPath/previews/&lt;年&gt;-&lt;大会種別&gt;.html）。
+        /// </summary>
+        private void ExportPamphlet()
+        {
+            var v = new TournamentPreviewState().Build();
+            var display = GameSession.Current.Display;
+            if (v == null || display == null) return;   // 開催中でなければ何もしない（展望ビュー自体も出ない）
+
+            var bracket = NewspaperBracketLayout.Build(display.Runner.BuildBracketView(), TournamentPamphletHtml.Metrics);
+            var schools = TournamentPreviewState.BuildPamphletSchools(v, bracket);
+            var html = TournamentPamphletHtml.Render(v, bracket, schools);
+
+            var dir = System.IO.Path.Combine(Application.persistentDataPath, "previews");
+            System.IO.Directory.CreateDirectory(dir);
+            var path = System.IO.Path.Combine(dir, GameSession.Current.Year + "-" + display.Kind + ".html");
+            System.IO.File.WriteAllText(path, html, new System.Text.UTF8Encoding(false));
+            Application.OpenURL(TournamentPamphletHtml.FileUrl(path));
         }
 
         // ===== 出場校（甲子園。左＝49代表の名簿／右＝選んだ1校） =====
@@ -694,8 +458,7 @@ namespace KokoSim.Unity.Tournament
 
         // ===== ビュー3: 校別詳細（トーナメント表の高校名クリック, issue #189） =====
 
-        /// <summary>樹形図の高校名クリックの入口。未確定枠・不戦勝は SlotLine 側で clickable=false にして
-        /// そもそもここへ来ないようにしている。</summary>
+        /// <summary>樹形図の高校名クリックの入口。校名は1回戦の端にだけあり、どれも確定した校名（issue #645）。</summary>
         private void OpenSchoolDetail(string schoolName) => ShowSchoolDetail(schoolName);
 
         private void RenderDetail()

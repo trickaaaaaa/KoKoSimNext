@@ -62,46 +62,6 @@ namespace KokoSim.Unity.Tournament
             public List<MemberRow> Members;
         }
 
-        /// <summary>樹形図の1スロット（カードの上側／下側）の表示行。</summary>
-        public sealed class BracketSlotRow
-        {
-            public string Name;         // 校名。未確定枠（不戦勝の空き枠を含む）は「（未定）」
-            public string Score;        // 消化済みカードのみ。未消化は空文字
-            public bool IsManager;      // 自校ライン（アンバー強調）
-            public bool IsWinner;       // 勝ち上がった側
-            public bool IsLoser;        // 消化済みかつ敗者（グレーアウト）
-            public bool IsDetermined;   // 校名が確定しているか
-        }
-
-        /// <summary>樹形図の1カード（対戦枠）。Round は0基点、SlotIndex はラウンド内のカード位置。</summary>
-        public sealed class BracketCardRow
-        {
-            public int Round, SlotIndex;
-            public string RoundName;
-            public BracketSlotRow Top, Bottom;
-            public bool ManagerInvolved;   // このカードに自校がいる（左からの接続線＋枠をアンバーに）
-            public bool ManagerAdvances;   // 自校がこのカードを勝ち上がった（右への接続線をアンバーに）
-            public bool IsBye;
-            public bool MercyEnded;        // コールドゲーム（マーシールール）成立で打ち切られたか（設計書05 §1.3, Q18）
-        }
-
-        /// <summary>樹形図の1ラウンド＝1列。</summary>
-        public sealed class BracketRoundColumn
-        {
-            public int Round;
-            public string Name;
-            public List<BracketCardRow> Cards = new List<BracketCardRow>();
-        }
-
-        /// <summary>樹形図（ラウンド×スロットの2次元）。Controller はこれを描画するだけ。</summary>
-        public sealed class BracketTreeView
-        {
-            public List<BracketRoundColumn> Rounds = new List<BracketRoundColumn>();
-            public string ChampionName;        // 未確定は null
-            public bool ManagerIsChampion;
-            public BracketCardRow ManagerFocus;   // 初期表示でスクロールする先（自校の最新カード）
-        }
-
         /// <summary>
         /// 甲子園の出場校一覧の1行（設計書05 §1.1a・要望「N年ぶりN回目が見れる」）。
         /// 左ペインの名簿がこれを並べ、押すと右ペインにその校の詳細（県予選成績まで）が出る。
@@ -276,6 +236,39 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>
+        /// 大会パンフレット（HTML・issue #645）に載せる出場全校の登録メンバー。並びは甲子園・センバツが出場校名簿
+        /// （北から南）、県大会はトーナメント表の端の上から（紙面の索引が表の並びと一致する）。
+        /// 成績スコープは画面の既定と同じ＝甲子園は県予選、センバツは地区大会、それ以外は今大会。
+        /// </summary>
+        public static List<TournamentPamphletHtml.School> BuildPamphletSchools(
+            View view, KokoSim.Engine.Nation.Tournaments.NewspaperBracket bracket)
+        {
+            var d = KokoSim.Unity.Shell.GameSession.Current.Display;
+            var list = new List<TournamentPamphletHtml.School>();
+            if (d == null) return list;
+            var scope = d.Kind == TK.SummerKoshien ? StatScope.PrefQualifier
+                : d.Kind == TK.SenbatsuKoshien ? StatScope.RegionalQualifier : StatScope.CurrentTournament;
+            var managerName = d.Field.FirstOrDefault(s => s.Id == KokoSim.Unity.Shell.NationService.ManagerSchoolId)?.Name;
+
+            var order = new List<(string Name, string Region)>();
+            if (view.Entrants.Count > 0) foreach (var e in view.Entrants) order.Add((e.SchoolName, e.RegionName));
+            else foreach (var l in bracket.Leaves) order.Add((l.Name, ""));
+            // 表に載らなかった出場校（端が組まれる前など）も落とさない。
+            var seen = new HashSet<string>(order.Select(o => o.Name));
+            foreach (var s in d.Field) if (seen.Add(s.Name)) order.Add((s.Name, ""));
+
+            var done = new HashSet<string>();
+            foreach (var (name, region) in order)
+            {
+                if (!done.Add(name)) continue;
+                var block = BuildSchoolDetail(name, scope);
+                if (block == null) continue;
+                list.Add(new TournamentPamphletHtml.School { Block = block, Region = region, IsManager = name == managerName });
+            }
+            return list;
+        }
+
+        /// <summary>
         /// 甲子園の出場校名簿（要望「N年ぶりN回目が見れる」）。並びは<b>代表の区画Id順</b>
         /// ＝北から南へ（実際の出場校一覧と同じ読み順）。同じ区画の中は校IDで安定化する。
         ///
@@ -438,61 +431,6 @@ namespace KokoSim.Unity.Tournament
             StatScope.RegionalQualifier => "地区大会",
             _ => "今大会",
         };
-
-        /// <summary>
-        /// エンジンのブラケット出力（TournamentRunner.BuildBracketView）を樹形図の描画用に変換する。
-        /// ここでは表示文言と強調フラグを決めるだけで、勝敗・スロット配置はエンジンの値をそのまま使う。
-        /// </summary>
-        public static BracketTreeView BuildBracketTree(TournamentBracketView view)
-        {
-            var tree = new BracketTreeView();
-            if (view == null || view.Rounds == null) return tree;
-            tree.ChampionName = view.ChampionName;
-            tree.ManagerIsChampion = view.ManagerIsChampion;
-
-            foreach (var r in view.Rounds)
-            {
-                var col = new BracketRoundColumn { Round = r.Round, Name = r.RoundName };
-                foreach (var c in r.Cards)
-                {
-                    var row = new BracketCardRow
-                    {
-                        Round = c.Round,
-                        SlotIndex = c.SlotIndex,
-                        RoundName = c.RoundName,
-                        IsBye = c.IsBye,
-                        Top = Slot(c.Top, c),
-                        Bottom = Slot(c.Bottom, c),
-                        MercyEnded = c.MercyEnded,
-                    };
-                    row.ManagerInvolved = c.Top.IsManager || c.Bottom.IsManager;
-                    row.ManagerAdvances = (row.Top.IsManager && row.Top.IsWinner)
-                                          || (row.Bottom.IsManager && row.Bottom.IsWinner);
-                    col.Cards.Add(row);
-                    // ラウンド順に走査するので、最後に残るのが自校の最新カード（＝初期スクロール先）。
-                    if (row.ManagerInvolved) tree.ManagerFocus = row;
-                }
-                tree.Rounds.Add(col);
-            }
-            return tree;
-        }
-
-        private static BracketSlotRow Slot(BracketSlot s, BracketCard card)
-        {
-            // 不戦勝カードの空き側は Controller 側で描画自体を省く（issue #188）。相手側は勝者扱いにして
-            // 自校ラインを途切れさせない。
-            var name = s.IsDetermined ? s.TeamName : "（未定）";
-            var isWinner = s.IsWinner || (card.IsBye && s.IsDetermined);
-            return new BracketSlotRow
-            {
-                Name = name,
-                Score = s.Score.HasValue ? s.Score.Value.ToString() : "",
-                IsManager = s.IsManager,
-                IsWinner = isWinner,
-                IsLoser = card.IsPlayed && !s.IsWinner,
-                IsDetermined = s.IsDetermined,
-            };
-        }
 
         /// <summary>
         /// 優勝候補行の寸評に添える甲子園出場歴（issue #84「甲子園 夏5回・春2回」等）。未出場は空文字。
