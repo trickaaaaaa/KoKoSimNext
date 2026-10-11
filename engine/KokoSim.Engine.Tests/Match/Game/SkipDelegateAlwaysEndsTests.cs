@@ -42,7 +42,7 @@ public sealed class SkipDelegateAlwaysEndsTests
     public void SkipAtEveryPitchWindow_AlwaysFinishes(bool managerHasBrain, bool opponentHasBrain)
     {
         var ctx = new GameContext { MercyRuleEnabled = true, CaptureTimelines = true, CapturePitches = true };
-        var failures = new List<string>();
+        var failures = new System.Collections.Concurrent.ConcurrentBag<string>();
 
         for (var seed = 0; seed < 4; seed++)
         {
@@ -56,13 +56,13 @@ public sealed class SkipDelegateAlwaysEndsTests
             var probe = New();
             while (probe.AdvancePitch() != AdvancePitchResult.Finished) count++;
 
-            for (var stop = 0; stop <= count; stop++)
+            // 押下点ごとに試合を頭から作り直す＝各押下点は独立（共有するのは不変の ctx だけ）。
+            // 総当たりのまま並列化する（issue #639: 直列だとこの1クラスが日常ループの壁時間を決めていた）。
+            System.Threading.Tasks.Parallel.For(0, count + 1, stop =>
             {
                 var prog = New();
-                var finished = false;
                 for (var i = 0; i < stop; i++)
-                    if (prog.AdvancePitch() == AdvancePitchResult.Finished) { finished = true; break; }
-                if (finished) continue;
+                    if (prog.AdvancePitch() == AdvancePitchResult.Finished) return;
 
                 try
                 {
@@ -70,13 +70,13 @@ public sealed class SkipDelegateAlwaysEndsTests
                 }
                 catch (Exception e)
                 {
-                    failures.Add($"seed={seed} 窓={stop}/{count}: {e.GetType().Name} {e.Message}");
+                    failures.Add($"seed={s} 窓={stop}/{count}: {e.GetType().Name} {e.Message}");
                 }
-            }
+            });
         }
 
         Assert.True(failures.Count == 0,
             $"スキップで例外が出た（{failures.Count}件）:\n"
-            + string.Join("\n", failures.GetRange(0, Math.Min(5, failures.Count))));
+            + string.Join("\n", System.Linq.Enumerable.Take(System.Linq.Enumerable.OrderBy(failures, f => f), 5)));
     }
 }
