@@ -119,8 +119,8 @@ public sealed class StealPictureMatchesVerdictTests
     /// 新係数（バイアス0・ジャンプ0.19・立ち上がり0.19）で <see cref="StealResolver.SuccessProbability"/> が
     /// 完全一致する（二盗・三盗）。＝帯も決定論ダイジェストも動かないことの根拠。
     ///
-    /// <para>本盗だけは送球区間が無い（＝立ち上がりが乗らない）ので 0.19 だけ走者有利へ動くが、
-    /// 元々クランプ下限 1% に張り付いている場面なので確率は動かない。それも併せて固定する。</para>
+    /// <para>本盗は対象外（送球区間が無い＝立ち上がりが乗らない）。issue #637 で本盗専用の秒へ組み直し、
+    /// 下限1%張り付きではなくなったので、旧係数との一致は確かめられない（本盗は StealHomeModelTests）。</para>
     /// </summary>
     [Fact]
     public void MovingTheBias_DoesNotChangeAnySuccessProbability()
@@ -139,9 +139,6 @@ public sealed class StealPictureMatchesVerdictTests
                                 Assert.Equal(
                                     StealResolver.SuccessProbability(runner, catcher, old, pitchout, start, target),
                                     StealResolver.SuccessProbability(runner, catcher, C, pitchout, start, target), 12);
-                            // 本盗は両方ともクランプ下限（＝結果は不変）
-                            Assert.Equal(0.01,
-                                StealResolver.SuccessProbability(runner, catcher, C, pitchout, start, StealTarget.Home), 12);
                         }
     }
 
