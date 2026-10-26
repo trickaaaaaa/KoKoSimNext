@@ -104,6 +104,13 @@ namespace KokoSim.Unity.Match
         /// チームを差す。既定 null＝従来と完全一致。
         /// </summary>
         public static System.Func<KokoSim.Engine.Match.Game.Team> HomeTeamOverrideForCapture;
+
+        /// <summary>
+        /// 【開発用・エディタ限定】デモ試合を <c>data/debug/scenarios.yaml</c> の場面から始める差し替え口（issue #647）。
+        /// 場面ジャンプ（設計書17 §3.4）と同じ <c>ScenarioBuilder</c> で組み、シナリオの <c>force</c> を最初の打席へ予約する
+        /// ＝撮りたい場面（ゲームセットの瞬間など）を確実に作る。"player" 側はデモの自校で解決する。既定 null＝従来と完全一致。
+        /// </summary>
+        public static string ScenarioIdForCapture;
 #endif
 
         [SerializeField] private ulong gameSeed = 20260718UL;
@@ -770,6 +777,17 @@ namespace KokoSim.Unity.Match
 #if UNITY_EDITOR
             if (GameSeedOverrideForCapture is { } s) seed = s;
 #endif
+#if UNITY_EDITOR
+            if (!string.IsNullOrEmpty(ScenarioIdForCapture)
+                && Unity.Debugging.DebugScenarios.Catalog.TryGet(ScenarioIdForCapture, out var scenario))
+            {
+                var built = KokoSim.Engine.Debugging.ScenarioBuilder.Build(scenario, ctx, seed, home);
+                _homeTeam = built.Home;
+                _prog = new MatchProgression(built.Away, built.Home, built.Ctx, built.Seed, built.Start);
+                if (KokoSim.Engine.Debugging.ForcedOutcomes.TryParse(scenario.Force, out var force)) _prog.ForceNext(force);
+                return;
+            }
+#endif
             _prog = new MatchProgression(away, home, ctx, seed);
         }
 
@@ -1228,6 +1246,9 @@ namespace KokoSim.Unity.Match
             // Update() 側の後処理（_gameSetPending の消化）が一生走らない。
             SetFastMode(false);
             EndFieldPlay();   // 打球の途中で終局しても守備陣・走者を場に置き去りにしない
+            // 対決ビューの役者をその場で止める（issue #647）。EndFieldPlay は投手を投球クリップの途中へ戻すので、
+            // 止めないと終わった試合で投げ終わりの余韻が再生され続ける。⚠ EndFieldPlay の後（戻された姿勢から畳む）
+            if (_duelRig != null && _duelRig.Available) _duelRig.FreezeForGameEnd();
             _view.HideJudgement();
             _gameOver = true;
             _stage = LiveStage.Over;

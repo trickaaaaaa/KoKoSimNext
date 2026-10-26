@@ -85,3 +85,37 @@ scenarios:
     inning: 1
     top: true
     seed: 20260726
+
+  # ── 終局の絵の検証（issue #647）。最初の打席で必ずゲームセットになる場面 ──
+  # 強制発動（force）は使わない＝投球・打球の計算を飛ばすので打球の軌道が出ず、3Dの守備プレーを通らない。
+  # 代わりに両校をAI校にしてシードを固定し、自然な解決のまま決着を決定論で固定する
+  # （"player" を使うと Unity のデモ自校と engine の代用校で別チームになり、同じシードでも結果が変わる）。
+  # 決着の中身は GameEndScenarioTests が固定する＝係数を変えて結果が動いたらテストが赤くなる→シードを選び直す。
+  - id: game-end-strikeout-lab
+    name: 終局検証・三振で決着（9回表2死・1点リード）
+    away: { school: "AI:tier=C", score: 2 }
+    home: { school: "AI:tier=C", score: 3 }
+    inning: 9
+    top: true
+    outs: 2
+    count: { balls: 1, strikes: 2 }
+    seed: 20260726
+
+  - id: game-end-groundout-lab
+    name: 終局検証・打球アウトで決着（9回表2死・1点リード）
+    away: { school: "AI:tier=C", score: 2 }
+    home: { school: "AI:tier=C", score: 3 }
+    inning: 9
+    top: true
+    outs: 2
+    seed: 20260726
+
+  - id: game-end-walkoff-lab
+    name: 終局検証・サヨナラ安打（9回裏2死三塁・同点）
+    away: { school: "AI:tier=C", score: 3 }
+    home: { school: "AI:tier=C", score: 3 }
+    inning: 9
+    top: false
+    outs: 2
+    bases: [3]
+    seed: 20260735
