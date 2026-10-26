@@ -173,8 +173,9 @@ public sealed record BaserunningCoefficients
     /// issue #402で 0.0→0.4 に正値化＝実ゲームで一・三塁重盗が発火（YAML校正値と一致）。</summary>
     public double DoubleStealThirdBreakProb { get; init; } = 0.4;
     /// <summary>牽制アウト（design-14 P1-5）の基準確率。走者の盗塁パラメータ(Steal)が高いほどリードが大きく上昇、
-    /// 投手のMental（牽制の鋭さの代理指標）が高いほど下降。issue #402で 0.0→0.05 に正値化＝実ゲームで牽制アウトが発火（YAML校正値と一致）。</summary>
-    public double PickoffBaseProb { get; init; } = 0.05;
+    /// 投手のMental（牽制の鋭さの代理指標）が高いほど下降。issue #402で 0.0→0.05 に正値化したが、issue #661 で 0.0 に戻した＝牽制は<b>盗塁企図の球にしか出ない</b>ので、
+    /// 牽制球が映った瞬間に「この後、盗塁だ」と分かってしまう。0 の間は牽制の判定も絵も出ない（乱数も消費しない）。</summary>
+    public double PickoffBaseProb { get; init; } = 0.0;
     /// <summary>走者Steal(-50)あたりの牽制アウト確率の上昇幅。</summary>
     public double PickoffRunnerLeadSlope { get; init; } = 0.0015;
     /// <summary>投手Mental(-50)あたりの牽制アウト確率の減少幅。</summary>

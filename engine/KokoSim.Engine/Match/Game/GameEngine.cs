@@ -1020,12 +1020,12 @@ public static class GameEngine
                 if (stealAttempt is { } stealStart && stealTarget == StealTarget.Second
                     && stealFeasible == StealTarget.Second && bases.First is { })
                 {
-                    // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ
-                    // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ。
+                    // 牽制アウト／離塁刺殺（design-14 P1-5）: 盗塁企図の裏で低確率の刺殺。既定オフ（issue #661）
+                    // (PickoffBaseProb=0)では PickoffResolver.Resolve 内のガードでrng消費ゼロ、牽制の絵も出さない。
                     var pickedOffFirst = PickoffResolver.Resolve(bases.First, currentPitcher, paBaserunning, rng);
                     // 再生データ（issue #486）: 判定結果（アウト/セーフ）に関わらず、牽制球が投じられた
                     // 球は絵にする＝分岐させない。乱数不使用（BuildPickoff は既に確定した pickedOffFirst の写し）。
-                    if (ctx.CaptureTimelines)
+                    if (ctx.CaptureTimelines && paBaserunning.PickoffBaseProb > 0.0)
                         pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                             Timeline.TimelineBuilder.BuildPickoff(
                                 bases.First, currentPitcher, "first", pickedOffFirst, paBaserunning, ctx.Field));
@@ -1124,7 +1124,7 @@ public static class GameEngine
                 {
                     var pickedOffSecond = PickoffResolver.Resolve(bases.Second, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
-                    if (ctx.CaptureTimelines)
+                    if (ctx.CaptureTimelines && ctx.Baserunning.PickoffBaseProb > 0.0)
                         pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                             Timeline.TimelineBuilder.BuildPickoff(
                                 bases.Second, currentPitcher, "second", pickedOffSecond, ctx.Baserunning, ctx.Field));
@@ -1178,7 +1178,7 @@ public static class GameEngine
                 {
                     var pickedOffThird = PickoffResolver.Resolve(bases.Third, currentPitcher, ctx.Baserunning, rng);
                     // 再生データ（issue #486）: 判定結果に関わらず、牽制球が投じられた球は絵にする。
-                    if (ctx.CaptureTimelines)
+                    if (ctx.CaptureTimelines && ctx.Baserunning.PickoffBaseProb > 0.0)
                         pickoffPlay = Timeline.Playback.PlayTimelineAdapter.ToPlaybackPlay(
                             Timeline.TimelineBuilder.BuildPickoff(
                                 bases.Third, currentPitcher, "third", pickedOffThird, ctx.Baserunning, ctx.Field));
