@@ -19,6 +19,30 @@ public sealed class JsonRoundTripTests
         Assert.Equal(json, Roundtrip(json));
     }
 
+    /// <summary>
+    /// issue #660: オブジェクトはキーが一定数を超えると索引を作る。索引の前後で、引き当て・上書き（位置は初回のまま）・
+    /// 書き出し順が変わらないこと。
+    /// </summary>
+    [Fact]
+    public void Object_ManyKeys_LookupOverwriteAndOrder_AcrossIndexThreshold()
+    {
+        var o = new JsonObject();
+        for (var i = 0; i < 20; i++) o.Add("k" + i, i);
+        o.Add("k3", 300);    // 索引ができる前に入ったキーの上書き
+        o.Add("k15", 1500);  // 索引ができた後に入ったキーの上書き
+        Assert.Equal(20, o.Count);
+        Assert.Equal(300, o.Int("k3"));
+        Assert.Equal(1500, o.Int("k15"));
+        Assert.Equal(19, o.Int("k19"));
+        Assert.False(o.Has("k20"));
+        Assert.Throws<System.Collections.Generic.KeyNotFoundException>(() => o.Int("k20"));
+        Assert.Equal("k3", o.Keys[3]);
+        Assert.Equal("k15", o.Keys[15]);
+        var json = o.ToString();
+        Assert.StartsWith("{\"k0\":0,\"k1\":1,\"k2\":2,\"k3\":300,", json);
+        Assert.Equal(json, Roundtrip(json));
+    }
+
     [Fact]
     public void String_Escapes_Roundtrip()
     {

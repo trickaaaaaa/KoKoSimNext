@@ -199,7 +199,7 @@ namespace KokoSim.Unity.Shell
 
         /// <summary>
         /// ファイルを読み gunzip して JSON テキストを返す（復元はしない）。読めなければ false（例外で落ちない）。
-        /// スロット一覧のヘッダ読み取り（<see cref="SaveSlots.ReadInfo"/>）と <see cref="Load"/> の共通経路。
+        /// <see cref="Load"/> の経路（一覧の見出しは <see cref="TryPeekHeader"/> で流し読みする）。
         /// </summary>
         public static bool TryReadText(string path, out string json, out string error)
         {
@@ -219,6 +219,27 @@ namespace KokoSim.Unity.Shell
                 error = e.Message;
                 Debug.LogWarning($"[セーブ] 読み取り失敗（{path}）: {e.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// スロット一覧用の見出しを、gunzip しながら流し読みする（issue #660）。展開後の文字列を作らず、
+        /// 中身も組み立てない（<see cref="SaveCodec.PeekHeader(TextReader)"/>）。読めなければ null（例外で落ちない）。
+        /// </summary>
+        public static SaveHeader? TryPeekHeader(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return null;
+                using var fs = File.OpenRead(path);
+                using var gz = new GZipStream(fs, CompressionMode.Decompress);
+                using var reader = new StreamReader(gz, Encoding.UTF8);
+                return SaveCodec.PeekHeader(reader);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[セーブ] 見出しの読み取り失敗（{path}）: {e.Message}");
+                return null;
             }
         }
     }

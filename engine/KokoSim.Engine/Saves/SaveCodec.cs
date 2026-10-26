@@ -163,15 +163,29 @@ public static class SaveCodec
     public static SaveHeader? PeekHeader(string? text)
     {
         if (string.IsNullOrEmpty(text)) return null;
+        using var reader = new System.IO.StringReader(text!);
+        return PeekHeader(reader);
+    }
+
+    private static readonly string[] HeaderKeys = { "version", "week", "yearIndex", "schoolName" };
+
+    /// <summary>
+    /// <see cref="PeekHeader(string?)"/> の流し読み版（issue #660）。値を組み立てずに読み飛ばすので、
+    /// 24MB のセーブでも DOM パースより桁違いに軽く、展開後の巨大な文字列も要らない
+    /// （呼び出し側は gzip の展開ストリームをそのまま渡せる）。判定は文字列版と同じ:
+    /// 文書全体の構文が壊れていれば null、version/week/yearIndex は整数必須、校名は任意。
+    /// </summary>
+    public static SaveHeader? PeekHeader(System.IO.TextReader reader)
+    {
         try
         {
-            var root = JsonValue.Parse(text!).AsObject();
-            if (!root.Has("version")) return null;
-            // ⚠ 任意項目は必ず Has で分岐する。型付きゲッタは欠損を KeyNotFound で投げる作りなので、
-            // 素で Str すると**校名が無いだけの旧セーブでヘッダ全体が読めなくなる**＝一覧が
-            // 「壊れている」表示に落ちる（この分岐が無い版をテストが赤で捕まえた）。
-            return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"),
-                root.Has("schoolName") ? root.Str("schoolName") : null);
+            var v = JsonHeaderScanner.Scan(reader, HeaderKeys);
+            if (v[0] is not JsonHeaderScanner.NumberToken ver || !ver.TryInt(out var version)) return null;
+            if (v[1] is not JsonHeaderScanner.NumberToken wk || !wk.TryInt(out var week)) return null;
+            if (v[2] is not JsonHeaderScanner.NumberToken yi || !yi.TryInt(out var yearIndex)) return null;
+            // ⚠ 校名は任意項目（v3以前は無い）。無い・文字列でない＝null で返し、ヘッダ全体は読める扱い
+            // （校名が無いだけの旧セーブを「壊れている」表示に落とさない）。
+            return new SaveHeader(version, week, yearIndex, v[3] as string);
         }
         catch (Exception) { return null; }
     }
