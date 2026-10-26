@@ -126,7 +126,6 @@ public sealed class TournamentPreviewTests
         Assert.NotNull(ace);
         Assert.True(ace!.PitcherLed);
         Assert.Equal(1, ace.UniformNumber);
-        Assert.Equal("投", ace.PositionLabel);
     }
 
     [Fact]
@@ -265,18 +264,16 @@ public sealed class TournamentPreviewTests
         };
     }
 
+    /// <summary>
+    /// 守備位置はプレイヤーが決めるもの＝大会展望はゲームが付けた本来の守備位置・適性を出さない。
+    /// 選手を載せるレコードに守備位置の項目を足したら、このテストが赤くなる。
+    /// </summary>
     [Fact]
-    public void Rosters_DhSlot_ShowsDesignatedHitterLabel_NotRealPosition()
+    public void ListedPlayers_CarryNoPositionInformation()
     {
-        var dhTeam = MakeDhTeam();
-        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
-            teamProvider: (school, year) => school.Name == "強打学園" ? dhTeam : StrengthTeamFactory.ForSchool(school, year));
-
-        var roster = p.Rosters.First(r => r.SchoolName == "強打学園");
-        var dhMember = roster.Members.First(m => m.Name == "DH打者");
-        Assert.Equal("指", dhMember.PositionLabel);
-        // 他の野手は実守備位置のまま。
-        Assert.Contains(roster.Members, m => m.Name == "Catcher先発" && m.PositionLabel == "捕");
+        foreach (var t in new[] { typeof(NotablePlayer), typeof(RosterMember) })
+            Assert.DoesNotContain(t.GetProperties(), pr =>
+                pr.Name.Contains("Position") || pr.PropertyType == typeof(KokoSim.Engine.Match.Field.FieldPosition));
     }
 
     /// <summary>issue #667: DH制の先発投手は打順外（Reserves にも居ない）でも、メンバー表とエースに出る。</summary>
@@ -289,7 +286,7 @@ public sealed class TournamentPreviewTests
 
         var roster = p.Rosters.First(r => r.SchoolName == "強打学園");
         Assert.Equal(10, roster.Members.Count);
-        Assert.Contains(roster.Members, m => m.Name == "先発P" && m.PositionLabel == "投");
+        Assert.Contains(roster.Members, m => m.Name == "先発P");
 
         var again = TournamentPreviewBuilder.BuildRosterFor(
             Field().First(s => s.Name == "強打学園"), Field(), berths: 2,
