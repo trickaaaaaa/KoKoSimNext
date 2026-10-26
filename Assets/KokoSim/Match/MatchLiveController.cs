@@ -1221,6 +1221,10 @@ namespace KokoSim.Unity.Match
                 ApplyDuelHandedness();      // 継投後の利き腕・代打の左右で立たせ替える（issue #337 と同じ入口）
             }
             else RefreshPanel();
+            // 投げ終えた球を描いている最中に交代すると、次の窓（_atBatNext）は交代前の観測のまま先に掴まれている。
+            // engine は CurrentAtBat を差し替え済みなので、引き直さないと窓が開いた時に前の打者の左右・HUDで出る
+            // （issue #677。窓で止まっている場合は上の枝で足りる）。
+            if (_atBatNext != null && _prog?.CurrentAtBat is { } next) _atBatNext = next;
             if (_caption != null) _caption.text = "選手交代を行った。";
         }
 
