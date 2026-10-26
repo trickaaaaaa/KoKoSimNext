@@ -336,6 +336,25 @@ public static class TimelineBuilder
         double? errorPickupAt = null;
         TimelinePoint? errorPickupPoint = null;
         FieldPosition? errorPickupRole = null;
+        // 一塁送球が実際に着く時刻（絵）。判定が決めた ThrowArriveSeconds に「受け手を待つ間」を足した値で、
+        // 一塁送球の枝でだけ入る。アウト表示・結果確定時刻はこちらへ揃える（球が着く瞬間に「アウト」を出す）。
+        double? firstThrowArriveAt = null;
+        // 受け手（一塁カバー役）が一塁へ着く見込み時刻（issue #672）。カバーの移動レッグと同じ式
+        // （接触＋反応0.35s＋距離÷脚力）。投手の一塁カバーは全力で走っても約3.85秒かかるが、一塁手が
+        // 処理する早い送球は 2.7〜3.5 秒で着く＝**投手が来る前に球だけが無人の一塁へ着いてアウトになる**
+        // （実測: 実試合の一塁送球 4151 本のうち 53 本。全部「一塁手→投手」。遅れの中央値 0.45s・最大 1.15s）。
+        double? coverReadyAt = null;
+        if (!play.UnassistedPutout && firstBaseCoverer != play.FielderRole && play.FielderRole is not null)
+        {
+            var coverFielder = Find(fielders, firstBaseCoverer);
+            if (coverFielder is not null)
+            {
+                var coverFrom = new TimelinePoint(coverFielder.Location.X, coverFielder.Location.Z);
+                var coverSpeed = Math.Max(4.0, coverFielder.Attributes.SprintSpeedMps);
+                coverReadyAt = ContactAt + 0.35
+                    + Distance(coverFrom, FirstBaseCoverPoint(field, fieldPoint)) / coverSpeed;
+            }
+        }
         if (play.ThrowArriveSeconds is { } throwArrive && play.Result is BattedBallResult.Out or BattedBallResult.Single or BattedBallResult.Error)
         {
             if (!play.IsFly && play.RangeM <= 46.0)
@@ -412,6 +431,18 @@ public static class TimelineBuilder
                 {
                     var flight = LegSeconds(Distance(fieldPoint, firstBase), ThrowSpeedOf(play));
                     arrive = GuardAgainstVerdict(physicalArrive, fieldedAt + flight, runnerAnchor, firstOut);
+                    // 受け手が一塁へ着くまで送球を持って待つ（issue #672）。「間」で吸収＝送球の見た目の速度は
+                    // 肩どおりのまま（T0 を後ろへずらすだけ）。アウトは判定の「走者到達の0.60秒前以前」を
+                    // 破らないよう走者到達の少し前を上限にする（それでも受け手が間に合わないほど遅い走者は、
+                    // 判定どおり先着させる＝判定を絵で覆さない）。セーフは走者より後ろなので上限なし。
+                    if (coverReadyAt is { } ready && play.Result != BattedBallResult.Error)
+                    {
+                        var wait = ready + ReceiverSetSeconds;
+                        arrive = firstOut
+                            ? Math.Max(arrive, Math.Min(wait, runnerAnchor - ReceiverSetSeconds))
+                            : Math.Max(arrive, wait);
+                    }
+                    firstThrowArriveAt = arrive;
                     ball.Add(new BallSegment
                     {
                         Kind = BallSegmentKind.Throw,
@@ -485,7 +516,7 @@ public static class TimelineBuilder
         {
             // 送球が塁に届いた瞬間にアウトが確定する（defenseTime+margin≤runnerTime が保証されているため
             // 常に batterArrive 以前＝走者は判定確定後も一塁まで走り切る絵のまま, Issue #328①）。
-            var forceOutAt = play.ThrowArriveSeconds is { } ta ? ContactAt + ta : batterArrive;
+            var forceOutAt = firstThrowArriveAt ?? (play.ThrowArriveSeconds is { } ta ? ContactAt + ta : batterArrive);
             judgements.Add(new JudgementEvent { Label = "打", T = forceOutAt, Kind = JudgementKind.Out });
         }
         else if (play.Result == BattedBallResult.Error)
@@ -519,7 +550,7 @@ public static class TimelineBuilder
             BattedBallResult.HomeRun => landAt,
             BattedBallResult.Foul => landAt,
             BattedBallResult.Out when play.IsFly => fieldedAt,
-            BattedBallResult.Out => ContactAt + (play.ThrowArriveSeconds ?? play.FieldedAtSeconds ?? play.HangTimeSeconds),
+            BattedBallResult.Out => firstThrowArriveAt ?? ContactAt + (play.ThrowArriveSeconds ?? play.FieldedAtSeconds ?? play.HangTimeSeconds),
             BattedBallResult.Single when play.ThrowArriveSeconds is not null => batterArrive, // 内野安打は駆け込み
             _ => fieldedAt,
         };
@@ -2909,6 +2940,9 @@ public static class TimelineBuilder
 
     /// <summary>塁カバーで送球到達より前に着いておく猶予[s]（同上）。</summary>
     private const double CoverSetSeconds = 0.4;
+
+    /// <summary>一塁送球を、受け手が一塁へ着いてから着かせるときの余裕[s]（issue #672）。</summary>
+    private const double ReceiverSetSeconds = 0.05;
 
     /// <summary>走路取りの巧い野手が飛球へ出足を早められる上限[s]（接触より前＝打者の振りを読んだ分。表示専用）。</summary>
     private const double FlyJumpAnticipationSeconds = 0.10;
