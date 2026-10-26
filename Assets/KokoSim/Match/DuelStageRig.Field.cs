@@ -172,6 +172,23 @@ namespace KokoSim.Unity.Match
             }
         }
 
+        /// <summary>鏡映親ノード（左投手・左打者）の下に居る役者は local の x と yaw の符号が世界と逆（issue #672）。</summary>
+        private static float MirrorSign(Actor a) => a != null && a.Mirrored ? -1f : 1f;
+
+        /// <summary>役者のいまの位置をステージ座標で返す（鏡映中は local の x を反転して戻す）。</summary>
+        private static Vector3 StagePos(Actor a)
+        {
+            var lp = a.Go.transform.localPosition;
+            return new Vector3(lp.x * MirrorSign(a), lp.y, lp.z);
+        }
+
+        /// <summary>役者のいまの向き（世界の yaw[度]）。鏡映中は local の yaw の符号を反転して戻す。</summary>
+        private static float StageYaw(Actor a)
+        {
+            float y = a.Go.transform.localEulerAngles.y;
+            return a.Mirrored ? Mathf.Repeat(-y, 360f) : y;
+        }
+
         /// <summary>
         /// 野手を stage-local の (x,z) へ置く。yaw を渡さなければ本塁を向く。
         /// 縦は <see cref="GroundFix"/> が骨の実測で解く（クリップごとに根の高さが違うため）。
@@ -187,10 +204,15 @@ namespace KokoSim.Unity.Match
         private void PlaceFielder(Actor a, float x, float z, float? yawDeg = null)
         {
             if (a == null || a.Go == null) return;
+            // 引数は**ステージ座標**（x=+一塁側・yaw=世界の向き）。左投手は x=0 面の鏡映親ノード
+            // （localScale.x=-1）の下に居るので、そのまま local へ書くと x も向きも左右が逆になる
+            // ＝一塁カバーに走る左投手が三塁側へ走り、一塁は無人のままアウトになった（issue #672 の再現で実害）。
+            // 鏡映中は x と yaw の符号を反転して書く（親の反転で世界の値に戻る）。
+            float s = MirrorSign(a);
             var lp = a.Go.transform.localPosition;
-            a.Go.transform.localPosition = new Vector3(x, lp.y, z);
-            a.Go.transform.localRotation = Quaternion.Euler(0f, yawDeg ?? YawFacingHome(x, z), 0f);
-            a.BasePos = new Vector3(x, a.BasePos.y, z);   // ⚠ 縦は据え置き（上の項）
+            a.Go.transform.localPosition = new Vector3(x * s, lp.y, z);
+            a.Go.transform.localRotation = Quaternion.Euler(0f, (yawDeg ?? YawFacingHome(x, z)) * s, 0f);
+            a.BasePos = new Vector3(x * s, a.BasePos.y, z);   // ⚠ 縦は据え置き（上の項）
             a.BaseRot = a.Go.transform.localRotation;
             a.GroundY = FieldGroundY(x, z);   // マウンドの上だけ持ち上がる（投手が降りたら地面へ）
             // 飛び込み中は上下をクリップ（ルートモーション）が持っている＝足で吸わせない。
@@ -654,7 +676,7 @@ namespace KokoSim.Unity.Match
             // 向きの飛びは1コマなので静止画に残らない）ので、通しながら最悪値を溜める
             if (dt > 0f && t > _fieldT0 + EntryFadeSeconds)
             {
-                var lp = a.Go.transform.localPosition;
+                var lp = StagePos(a);
                 _locoMaxPosErr = Mathf.Max(_locoMaxPosErr,
                     new Vector2(lp.x - (float)cur.Pos.X, lp.z - (float)cur.Pos.Y).magnitude);
             }
@@ -878,9 +900,9 @@ namespace KokoSim.Unity.Match
             if (a == null || a.Go == null) return false;
             clip = a.Clip != null ? a.Clip.name.Replace("AA_Baseball_Defender_Movement_", "").Replace("AA_Baseball_", "") : "";
             speedMul = a.Speed;
-            var lp = a.Go.transform.localPosition;
+            var lp = StagePos(a);
             xz = new Vector2(lp.x, lp.z);
-            yawDeg = a.Go.transform.localEulerAngles.y;
+            yawDeg = StageYaw(a);
             return true;
         }
 
@@ -1248,6 +1270,23 @@ namespace KokoSim.Unity.Match
         /// <c>接地</c> は飛び込み中の体の最下点の対地高で、**負ならめり込んでいる**（絵では
         /// 「そういう姿勢」と区別できないので数で見る＝design-18 §3.3 と同じ理由）。
         /// </summary>
+        /// <summary>【診断用】守備の役ごとの、いまの位置（ステージ座標）・活性・描画の有無・対決の役との兼用。</summary>
+        public string FielderPlaceDiagForCapture(params FieldPosition[] roles)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new StringBuilder();
+            foreach (var r in roles)
+            {
+                var a = FielderActor(r);
+                if (a == null || a.Go == null) { sb.Append(r).Append("=なし "); continue; }
+                var local = _root.transform.InverseTransformPoint(a.Go.transform.position);
+                int on = 0, all = 0;
+                foreach (var rd in a.Go.GetComponentsInChildren<Renderer>(true)) { all++; if (rd.enabled && rd.gameObject.activeInHierarchy) on++; }
+                sb.Append(string.Format(ci, "{0}=({1:F1},{2:F1}) active={3} 描画{4}/{5} ", r, local.x, local.z, a.Go.activeInHierarchy, on, all));
+            }
+            return sb.ToString();
+        }
+
         public string FieldDiveDiagForCapture() => string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             "内訳 捕球={0} 飛び込み={1} 届かず={2} お手玉={3}\t接地={4:F3}〜{5:F3}m\t直近={6}@{7:F2}s({8})→今{9:F2}s",
@@ -2356,10 +2395,10 @@ namespace KokoSim.Unity.Match
                 SetActorClip(_duelThrowActor, clip, (t - e.TStart) * e.Rate, e.Anchor.Release + ThrowFollowSeconds);
                 _duelThrowActor.Speed = e.Rate;
                 _duelThrowActor.HoldSeconds = ThrowHoldSeconds;
-                var lp = _duelThrowActor.Go.transform.localPosition;
+                var lp = StagePos(_duelThrowActor);
                 _duelThrowX = lp.x;
                 _duelThrowZ = lp.z;
-                _duelThrowYaw = _duelThrowActor.Go.transform.localEulerAngles.y;
+                _duelThrowYaw = StageYaw(_duelThrowActor);
                 _duelThrowBasePos = _duelThrowActor.BasePos;   // 基準を控える（EndDuelThrow で戻す。上の項）
                 _duelThrowBaseRot = _duelThrowActor.BaseRot;
                 float rest = Mathf.Abs(Mathf.DeltaAngle(_duelThrowYaw, e.Yaw));
@@ -4128,7 +4167,7 @@ namespace KokoSim.Unity.Match
                 var a = FielderActor(pos);
                 if (a == null || a.Go == null) continue;
                 var want = PlaybackEvaluator.FielderAt(play, pos, t0);
-                var lp = a.Go.transform.localPosition;
+                var lp = StagePos(a);
                 var motion = new FielderMotion
                 {
                     Ladder = -1,
@@ -4662,7 +4701,7 @@ namespace KokoSim.Unity.Match
                     sb.AppendLine(pos + "\t" + want.X.ToString("F2") + "\t" + want.Y.ToString("F2") + "\t(未生成)");
                     continue;
                 }
-                var lp = a.Go.transform.localPosition;
+                var lp = StagePos(a);
                 float dx = lp.x - (float)want.X, dz = lp.z - (float)want.Y;
                 sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                     "{0}\t{1:F2}\t{2:F2}\t{3:F2}\t{4:F2}\t{5:F3}\t{6:F2}\t{7:F2}\t{8}\t{9}\t{10:F1}",
