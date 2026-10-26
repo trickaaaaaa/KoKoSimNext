@@ -74,6 +74,24 @@ public sealed record BattingCoefficients
     /// 既定1.0は恒等（strikes/balls未指定の既存呼び出しに影響しない）。
     /// </summary>
     public double ThreeZeroSwingFactor { get; init; } = 0.15;
+    /// <summary>
+    /// 初球（0-0）のスイング確率への倍率 [0,1]（issue #683）。カウント非依存の <see cref="ZoneSwingBase"/>/<see cref="ChaseBase"/>
+    /// が初球にもそのまま効き、初球にスイングする割合が約46%（実野球の目安は約3割）、初球で終わる打席が22%
+    /// （同1〜2割強）と「早打ち」になっていた。初球は様子を見る打者像を判断そのものに組み込む。
+    /// 効くのは**ゾーン内のスイングだけ**（ゾーン外の見送り率まで下げると四球が増えすぎる）。実測（600試合）: 1.0→0.65 で初球スイング率 46%→約34%、初球で終わる打席 22%→約16%。
+    /// </summary>
+    public double FirstPitchSwingFactor { get; init; } = 0.65;
+    /// <summary>
+    /// 初球以外の「まだ追い込まれていないカウント」（0-1, 1-0, 1-1, 2-0, 2-1 など。3ボールは除く）のスイング確率への倍率
+    /// （issue #683）。初球だけ見送っても打席の球数は目標まで伸びないため、序盤のカウント全体で少しだけ見ていく。
+    /// 既定1.0は恒等。
+    /// </summary>
+    public double EarlyCountSwingFactor { get; init; } = 0.82;
+    /// <summary>
+    /// 2ストライク後のファール割合への加算（issue #683）。追い込まれたら当てにいってファールで粘る。
+    /// 全体のファール率（全投球の約18.7%＝実野球並み）は動かさず、粘りだけを足して球数を伸ばす。0は恒等。
+    /// </summary>
+    public double TwoStrikeFoulBonus { get; init; } = 0.10;
 
     // --- コンタクト（空振り/ファウル/フェア） ---
     /// <summary>空振り率のロジスティック基準（球威=打者互角時の空振り対数オッズ）。</summary>

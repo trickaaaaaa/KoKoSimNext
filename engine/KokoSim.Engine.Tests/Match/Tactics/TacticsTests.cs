@@ -692,7 +692,8 @@ public sealed class TacticsTests
 
         var plainRate = ExtraRunRate(new GameContext { MaxInnings = 12 });
         var tbRate = ExtraRunRate(new GameContext { MaxInnings = 12, TieBreakEnabled = true, TieBreakStartInning = 10 });
-        Assert.True(tbRate > plainRate * 1.5, $"タイブレークで延長の得点率が上がるはず: tb={tbRate:F3} plain={plainRate:F3}");
+        // 1.5→1.4: 初球・序盤カウントの見送り（issue #683）で延長の通常回の得点率が上がり、比は約1.46倍（tb 1.15 / plain 0.79）。タイブレークの効きは健在。
+        Assert.True(tbRate > plainRate * 1.4, $"タイブレークで延長の得点率が上がるはず: tb={tbRate:F3} plain={plainRate:F3}");
     }
 
     // ===== YAML駆動（不変条件#4） =====

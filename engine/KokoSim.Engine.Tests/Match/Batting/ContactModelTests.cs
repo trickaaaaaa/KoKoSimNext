@@ -22,6 +22,28 @@ public sealed class ContactModelTests
     };
 
     [Fact]
+    public void Resolve_TwoStrikeFoulBonus_RaisesFoulShare_OnlyAtTwoOrMoreStrikes()
+    {
+        // issue #683: 追い込まれたら当てにいってファールで粘る。2ストライク未満は FoulShare のまま。
+        var batter = BatterAttributes.LeagueAverage;
+        var coeff = new BattingCoefficients { FoulShare = 0.30, TwoStrikeFoulBonus = 0.30, WhiffIntercept = -30.0 };
+        var features = new PitchTrajectoryFeatures(0.0, 0.0, 0.45);
+        double FoulRate(int strikes)
+        {
+            var rng = new Xoshiro256Random(7);
+            var fouls = 0;
+            const int n = 20000;
+            for (var i = 0; i < n; i++)
+                if (ContactModel.Resolve(batter, Plan(), features, true, coeff, rng, 0, strikes).Outcome == ContactOutcome.Foul) fouls++;
+            return (double)fouls / n;
+        }
+
+        Assert.InRange(FoulRate(0), 0.28, 0.32);
+        Assert.InRange(FoulRate(1), 0.28, 0.32);
+        Assert.InRange(FoulRate(2), 0.58, 0.62);
+    }
+
+    [Fact]
     public void WhiffProbability_IncreasesMonotonically_WithBreakMagnitude()
     {
         var batter = BatterAttributes.LeagueAverage;

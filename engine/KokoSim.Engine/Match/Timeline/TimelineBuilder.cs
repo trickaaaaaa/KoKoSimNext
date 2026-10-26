@@ -2343,7 +2343,12 @@ public static class TimelineBuilder
         var ball = new List<BallSegment>(timeline.Ball.Count + 1);
         foreach (var seg in timeline.Ball)
         {
-            if (seg.Kind == BallSegmentKind.Throw && existingThrow is null)
+            // 一塁手が処理した打球は一塁への「送球」ではなく保持運び（Carry）で描かれる。これを拾わないと
+            // 二塁封殺・野選が「一塁へ運んで終わり・二塁へは誰も投げない」絵になる（走者だけ二塁で憤死。
+            // 一塁ゴロの二塁封殺で3000試合に5件）。3-6-3 の1本目として差し替える。
+            var isFirstCarry = seg.Kind == BallSegmentKind.Carry && seg.ToBase == "first"
+                && play.FielderRole == FieldPosition.FirstBase;
+            if ((seg.Kind == BallSegmentKind.Throw || isFirstCarry) && existingThrow is null)
             {
                 existingThrow = seg;
                 continue;
@@ -2550,7 +2555,12 @@ public static class TimelineBuilder
         var ball = new List<BallSegment>(timeline.Ball.Count + 1);
         foreach (var seg in timeline.Ball)
         {
-            if (seg.Kind == BallSegmentKind.Throw && existingThrow is null)
+            // 一塁手が処理した打球は一塁への「送球」ではなく保持運び（Carry）で描かれる。これを拾わないと
+            // 二塁封殺・野選が「一塁へ運んで終わり・二塁へは誰も投げない」絵になる（走者だけ二塁で憤死。
+            // 一塁ゴロの二塁封殺で3000試合に5件）。3-6-3 の1本目として差し替える。
+            var isFirstCarry = seg.Kind == BallSegmentKind.Carry && seg.ToBase == "first"
+                && play.FielderRole == FieldPosition.FirstBase;
+            if ((seg.Kind == BallSegmentKind.Throw || isFirstCarry) && existingThrow is null)
             {
                 existingThrow = seg;
                 continue;

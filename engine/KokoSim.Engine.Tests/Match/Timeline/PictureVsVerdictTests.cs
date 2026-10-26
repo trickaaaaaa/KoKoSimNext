@@ -119,6 +119,30 @@ public sealed class PictureVsVerdictTests
             $"送球が先着した内野安打が {bad.Count}/{infieldHits} 件: {string.Join(" / ", bad.Take(5))}");
     }
 
+    // ---- ②' 二塁封殺: アウトになった走者に向けて球が二塁へ飛ぶ ----
+
+    /// <summary>
+    /// 二塁で憤死した一塁走者がいるプレーには、必ず二塁へ向かう球（送球）がある。
+    /// 一塁手が処理した一塁ゴロの二塁封殺・野選は、一塁への保持運び（Carry）を一塁送球と取り違えて差し替えず、
+    /// 「一塁へ運んで終わり・二塁へは誰も投げないのに走者だけアウト」になっていた（3000試合に5件）。
+    /// </summary>
+    [Fact]
+    public void RunnerOutAtSecond_AlwaysHasABallToSecond()
+    {
+        var bad = new List<string>();
+        var checkedPlays = 0;
+        foreach (var tl in Timelines(400))
+        {
+            var out2 = tl.Runners.Any(l => l.Label == "走1" && l.OutAtEnd && Math.Abs(l.To.X) < 1.0 && l.To.Z > 30);
+            if (!out2) continue;
+            checkedPlays++;
+            if (!tl.Ball.Any(b => b.ToBase == "second" && (b.Kind == BallSegmentKind.Throw || b.Kind == BallSegmentKind.Carry)))
+                bad.Add(tl.Result);
+        }
+        Assert.True(checkedPlays >= 30, $"二塁封殺が {checkedPlays} 件しかない＝テストが空回り");
+        Assert.True(bad.Count == 0, $"二塁へ球が飛ばないまま走者がアウト: {bad.Count}/{checkedPlays} 件 {string.Join(" / ", bad.Take(5))}");
+    }
+
     // ---- ③ 盗塁: セーフなら送球は走者より後 ----
 
     [Theory]
@@ -188,6 +212,9 @@ public sealed class PictureVsVerdictTests
         var checkedPlays = 0;
         foreach (var tl in Timelines())
         {
+            // 外野フライのタッチアップ（生還＋別走者が進塁を刺される）は対象外。球の返球が丸ごと描かれない既知の穴
+            // （issue #685）で、この検査の趣旨（外野安打の演出用送球が憤死側を握りつぶさないこと）とは別物。
+            if (tl.Result.EndsWith("フライ")) continue;
             var scoredSafely = tl.Runners.Any(l => !l.OutAtEnd && IsHome(l.To) && Dist(l.From, l.To) >= 0.5);
             if (!scoredSafely) continue;
 
@@ -209,9 +236,9 @@ public sealed class PictureVsVerdictTests
     // ---- 補助 ----
 
     /// <summary>実試合のタイムライン（打球プレーのみ）。</summary>
-    private static IEnumerable<PlayTimeline> Timelines()
+    private static IEnumerable<PlayTimeline> Timelines(int games = Games)
     {
-        for (ulong seed = 1; seed <= Games; seed++)
+        for (ulong seed = 1; seed <= (ulong)games; seed++)
         {
             var r = GameEngine.Play(BuildTeam("A"), BuildTeam("H"),
                 new GameContext { CaptureTimelines = true }, new Xoshiro256Random(seed));

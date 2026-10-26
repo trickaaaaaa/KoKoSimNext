@@ -110,7 +110,8 @@ public static class ContactModel
         bool inZone,
         BattingCoefficients coeff,
         IRandomSource rng,
-        int familiarityPa = 0)
+        int familiarityPa = 0,
+        int strikes = 0)
     {
         var whiffProb = WhiffProbability(batter, plan, features, inZone, coeff, familiarityPa);
         if (MathUtil.Chance(whiffProb, rng))
@@ -119,7 +120,9 @@ public static class ContactModel
         }
 
         // 当てたうち一定割合はファウル。
-        if (MathUtil.Chance(coeff.FoulShare, rng))
+        // 追い込まれたらファールで粘る（issue #683）。
+        var foulShare = strikes >= 2 ? Math.Min(0.9, coeff.FoulShare + coeff.TwoStrikeFoulBonus) : coeff.FoulShare;
+        if (MathUtil.Chance(foulShare, rng))
         {
             return (ContactOutcome.Foul, null);
         }

@@ -131,6 +131,10 @@ public sealed class StealOnDeadBallTests
             if (cur.PitchNumberInPa <= 1) continue;      // 同じ打席の前の球が無い
             if (cur.PickoffPlay is not null) continue;   // 牽制は投球と独立に塁・アウトを動かせる正当な事象
             var prev = pitches[i - 1];
+            // 直前の球が暴投・捕逸になりうる球（ボール・見逃し・空振り）だと、その球の観測（LivePitch の塁）は
+            // 暴投の進塁を反映する前の値＝次の球の局面と食い違うのは正当（ファウルのせいではない）。
+            // 初球・序盤カウントの見送り（issue #683）で球の並びが変わり、この食い違いが顕在化した。
+            if (prev.Pitch.Kind is PitchKind.Ball or PitchKind.CalledStrike or PitchKind.SwingingStrike) continue;
             Assert.Equal(prev.Outs, cur.Outs);
             Assert.Equal(prev.BaseFirst, cur.BaseFirst);
             Assert.Equal(prev.BaseSecond, cur.BaseSecond);

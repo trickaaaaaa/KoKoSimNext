@@ -68,6 +68,13 @@ public static class BatterDecision
 
         if (strikes >= 2) p += coeff.TwoStrikeSwingBoost;
         if (balls >= 3 && strikes == 0) p *= coeff.ThreeZeroSwingFactor;
+        // 初球・序盤カウントの見送りはゾーン内だけ（issue #683）。ゾーン外の球を見送る率まで下げると四球が増えすぎ、
+        // 「甘い球を見逃してストライクを先行される」＝実際の初球見送りの姿から外れる。
+        if (inZone)
+        {
+            if (balls == 0 && strikes == 0) p *= coeff.FirstPitchSwingFactor;
+            else if (strikes < 2 && balls < 3) p *= coeff.EarlyCountSwingFactor;
+        }
 
         return MathUtil.Clamp(p * swingFactor, 0.02, 0.98);
     }
