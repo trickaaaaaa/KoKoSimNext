@@ -54,9 +54,7 @@
     align-self: flex-start;
     background-color: var(--color-panel);
     border-radius: var(--radius-panel);
-    padding-top: var(--sp-1);
-    padding-bottom: var(--sp-1);
-    padding-right: var(--sp-2);
+    /* 内側の余白は持たない＝表の外枠（.bs-table）に行がぴったり収まる（issue #649） */
     margin-left: var(--sp-4);
     margin-top: var(--sp-3);
     margin-bottom: var(--sp-3);

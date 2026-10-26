@@ -95,6 +95,7 @@ namespace KokoSim.Unity.MatchResult
 
             Replace("mr-line-away", LineRow(v.AwayLine));
             Replace("mr-line-home", LineRow(v.HomeLine));
+            UiComponents.BoxTable(_root.Q<VisualElement>(className: "mr-linescore"));
         }
 
         private static VisualElement LineRow(MatchResultLineRow r)
@@ -128,8 +129,9 @@ namespace KokoSim.Unity.MatchResult
                     var cells = new List<(string, string)> { (b.Pos, "pos"), (b.Name, "name") };
                     foreach (var n in b.Numbers) cells.Add((n, "num"));
                     cells.Add((b.Average, "avg"));
-                    bat.Add(UiComponents.BoxRow(cells, alt: i % 2 == 1));
+                    bat.Add(UiComponents.BoxRow(cells));
                 }
+                UiComponents.BoxTable(bat);
             }
 
             var pit = Host(prefix + "-pit");
@@ -148,8 +150,9 @@ namespace KokoSim.Unity.MatchResult
                     {
                         (p.Name, "name"), (p.Pitches, "num"), (p.Innings, "inn"),
                         (p.StrikeOuts, "num"), (p.Runs, "num"), (p.Walks, "num"),
-                    }, alt: i % 2 == 1));
+                    }));
                 }
+                UiComponents.BoxTable(pit);
             }
 
             var pa = Host(prefix + "-pa");
@@ -171,8 +174,9 @@ namespace KokoSim.Unity.MatchResult
                         if (text.Length == 0) cells.Add(("・", "pa empty"));
                         else cells.Add((text, r.Reached[c] ? "pa" : "pa dim"));
                     }
-                    pa.Add(UiComponents.BoxRow(cells, alt: i % 2 == 1));
+                    pa.Add(UiComponents.BoxRow(cells));
                 }
+                UiComponents.BoxTable(pa);
             }
         }
 
