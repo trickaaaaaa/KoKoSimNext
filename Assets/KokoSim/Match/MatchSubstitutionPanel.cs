@@ -1039,10 +1039,6 @@ namespace KokoSim.Unity.Match
             name.AddToClassList("bench-row__name");
             row.Add(name);
 
-            var tag = new Label(PosJp(p.Position));
-            tag.AddToClassList("bench-row__tag");
-            row.Add(tag);
-
             if (!string.IsNullOrEmpty(note))
             {
                 var n = new Label(note);

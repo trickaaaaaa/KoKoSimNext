@@ -92,6 +92,26 @@ public sealed class MatchProgressionSubstitutionTests
         return null;
     }
 
+    /// <summary>
+    /// issue #677: 打席の頭の窓（AdvancePitch が Pitch を返した直後）で代打を出すと、CurrentAtBat が代打の選手
+    /// （名前・左右）へ差し替わる。UI は投げ終えた球を描く間に次の窓を先に掴むので、交代のたびにこの値を引き直す。
+    /// </summary>
+    [Fact]
+    public void PinchHit_AtPitchWindow_RefreshesCurrentAtBat()
+    {
+        var prog = new MatchProgression(Team("A"), Team("H"), new GameContext { CapturePitches = true }, 5UL);
+        Assert.Equal(AdvancePitchResult.Pitch, prog.AdvancePitch());
+        var before = prog.CurrentAtBat!;
+        var sub = prog.SubstitutionOptions(teamIsAway: true).Reserves.First(p => p.Name != before.BatterName);
+
+        Assert.True(prog.PinchHit(teamIsAway: true, sub));
+
+        var after = prog.CurrentAtBat!;
+        Assert.Equal(sub.Name, after.BatterName);
+        Assert.Equal(sub.Bats, after.BatterBats);
+        Assert.NotEqual(before.BatterName, after.BatterName);
+    }
+
     // ===== 1. 局面の問い合わせ =====
 
     [Fact]
