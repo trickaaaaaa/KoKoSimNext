@@ -53,8 +53,8 @@ namespace KokoSim.Unity.Match
 
             var ctrl = FindController();
             if (ctrl == null) { Debug.LogError("[Renewal] MatchLive/Controller が見つからない"); yield break; }
-            // 撮影の試合は LiveMatchRequest を通らないのでチーム配色が載っていない。HUDのチーム色チップが
-            // 灰色のフォールバックで写って実物と違う絵になるため、パレット表から2校ぶん差し込む
+            // 撮影の試合は LiveMatchRequest を通らないのでチーム配色が載っていない。対決ビューの選手が
+            // 既定色で写って実物と違う絵になるため、パレット表から2校ぶん差し込む
             //（実試合の経路では上書きされない）。
             var pal = KokoSim.Engine.Nation.TeamColorPalette.Fallback;
             ctrl.FillTeamColorsForCapture(pal.ColorsFor(11), pal.ColorsFor(27));

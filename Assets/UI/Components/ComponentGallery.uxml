@@ -153,7 +153,7 @@
                     <ui:Label text="4" class="mhud-cp__t f-num" />
                     <ui:Label text="番" class="mhud-cp__u" />
                 </ui:VisualElement>
-                <ui:VisualElement class="mhud-cp mhud-cp--team" style="background-color: rgb(28, 62, 122);">
+                <ui:VisualElement class="mhud-cp mhud-cp--pos">
                     <ui:Label text="三塁" class="mhud-cp__t" />
                 </ui:VisualElement>
                 <ui:Label text="5" class="mhud-no f-num" />
