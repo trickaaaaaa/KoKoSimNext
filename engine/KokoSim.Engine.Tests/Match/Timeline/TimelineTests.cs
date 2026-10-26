@@ -295,7 +295,12 @@ public sealed class TimelineTests
         Assert.Equal(play.FielderThrowSpeedMps!.Value, displaySpeed, 3);
 
         // 到達時刻(T1)は判定を決めたエンジンの値のまま（表示専用の修正で判定・帯には触れない）。
-        Assert.Equal(0.85 + play.ThrowArriveSeconds!.Value, throwSeg.T1, 6);
+        // ただし一塁手の送球は、受け手の投手が一塁へ着くまで持って待つ（issue #672）＝判定より遅れうる。
+        // その場合も判定の値より早くはならず、投げ始め(T0)が同じだけ後ろへずれるので上の速度は変わらない。
+        if (role == FieldPosition.FirstBase)
+            Assert.True(throwSeg.T1 >= 0.85 + play.ThrowArriveSeconds!.Value - 1e-6, "受け手を待つ間で送球が判定より早く着いた");
+        else
+            Assert.Equal(0.85 + play.ThrowArriveSeconds!.Value, throwSeg.T1, 6);
         // 投げ始め(T0)は捕球より前には遡らない。
         Assert.True(throwSeg.T0 >= 0.85 + play.FieldedAtSeconds!.Value - 1e-6, "捕球より前に投げ始めている");
     }
