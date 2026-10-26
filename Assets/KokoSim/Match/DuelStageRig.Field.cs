@@ -1014,36 +1014,25 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private static readonly FieldCatchAnchor[] FieldDiveAnchors =
         {
-            // 横っ飛び。伸び切りは 0.80s（根が 0.606m 沈む＝地面すれすれ 0.170m でグラブが止まる）
-            new("AA_Baseball_Defender_Movement_Sprint_Diving_Catch", 0.80f, 0.170f, -0.789f, -0.023f,
-                CatchApproach.Forward, rootDrivenY: true),
-            // スライディングキャッチ。0.88s（根が 0.685m 沈み切ったコマ。グラブは 0.330m）
-            new("AA_Baseball_Defender_Movement_Sprint_Sliding_Catch", 0.88f, 0.330f, -0.356f, 0.086f,
-                CatchApproach.Forward, rootDrivenY: true),
             // 背走ジャンピング。1.36s（跳躍の頂点。足が上がるだけで胴は下がらない＝接地は従来どおり足で解ける）
             new("AA_Baseball_Defender_Movement_Run_Back_To_Jumping_Catch", 1.36f, 1.581f, -0.252f, 0.287f,
                 CatchApproach.Back),
+            // 【廃止 issue #674】横っ飛び（Sprint_Diving_Catch 0.80s）とスライディング（Sprint_Sliding_Catch 0.88s）。
+            // どちらも体が空中で横に伸びて地面から浮いたように見え、捕ったあとは体を丸めて転がって立ち上がる
+            // ＝外野手の飛びつきが不恰好（オーナー指摘）。収録は購入モーションで中身は直せないので出さない。
+            // 実測の表は design-18 §4.5。復活させるなら、この表へ戻し SelectFieldDive / DiveMiss の分岐を足す。
         };
 
-        private const int DiveAnchorDiving = 0;
-        private const int DiveAnchorSliding = 1;
-        private const int DiveAnchorBackJump = 2;
+        private const int DiveAnchorBackJump = 0;
 
         /// <summary>
-        /// 飛び込みを出す捕球余裕[s]（監督決定 2026-08-13）。
+        /// 飛び込み（いまは背走ジャンピングだけ。横っ飛び・スライディングは #674 で廃止）を出す捕球余裕[s]（監督決定 2026-08-13）。
         ///
         /// <para>母集団の実測（40試合・空中捕球1341件。<c>CatchMarginDisplayTests</c> に表がある）:
         /// 0.20 秒なら捕球の 9.6%／落球の 16.7% が該当＝**10打席に1回強**。0.50 秒まで開けると
         /// 4本に1本が飛び込みで安っぽく、0.10 秒まで絞ると 4.6% で死に演出になる。</para>
         /// </summary>
         public const float DiveMarginSeconds = 0.20f;
-
-        /// <summary>
-        /// 横っ飛びとスライディングを分ける捕球余裕[s]。**際どいほど大げさな収録**にする
-        /// （実測で 0〜0.10 が 4.6%、0.10〜0.20 が 5.0% ＝ ほぼ半々に割れる）。
-        /// 単調なしきい値なので、同じプレーは常に同じ絵になる（乱数を引かない）。
-        /// </summary>
-        private const float DiveLayoutMarginSeconds = 0.10f;
 
         /// <summary>
         /// 近づき方を切り替える速さ[m/s]。これ未満は「その場」。
@@ -1110,9 +1099,8 @@ namespace KokoSim.Unity.Match
         private static int SelectFieldDive(float catchMarginSeconds, CatchApproach approach)
         {
             if (Mathf.Abs(catchMarginSeconds) >= DiveMarginSeconds) return -1;
-            if (approach == CatchApproach.Back) return DiveAnchorBackJump;   // 背走はジャンピング一択
-            if (catchMarginSeconds < DiveLayoutMarginSeconds) return DiveAnchorDiving;
-            return DiveAnchorSliding;
+            // 背走だけがジャンピング。前進・横から間に合わせる飛球は通常の捕球へ落とす（横っ飛び・スライディング廃止 #674）
+            return approach == CatchApproach.Back ? DiveAnchorBackJump : -1;
         }
 
         private static int SelectFieldCatch(float ballHeightM, CatchApproach approach)
@@ -1398,7 +1386,13 @@ namespace KokoSim.Unity.Match
                         : (seg is RollSegment ? BallSegmentKind.Roll : BallSegmentKind.Flight));
                 int anchor;
                 if (kind == FieldCatchKind.Fumble) anchor = SelectFumbleSide(play, who, tc, seg);
-                else if (kind == FieldCatchKind.DiveMiss) anchor = DiveAnchorDiving;
+                else if (kind == FieldCatchKind.DiveMiss)
+                {
+                    // 横っ飛びを廃止した（#674）ので、届かなかった絵は背走ジャンプだけ。前進・横は従来の
+                    // 「完全に抜けた当たり」と同じく誰も芝居をしない（落球に捕球クリップを流さない）
+                    anchor = app == CatchApproach.Back ? DiveAnchorBackJump : -1;
+                    if (anchor < 0) continue;
+                }
                 else
                 {
                     // ぎりぎり届く飛球は「間に合わせ方」で選ぶ（高さの主軸より優先）
