@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -46,23 +47,51 @@ public abstract class JsonValue
             : new JsonNumber(v.ToString("G17", CultureInfo.InvariantCulture));
 }
 
-/// <summary>順序保存のオブジェクト（キー挿入順で書き出す＝差分比較のノイズを減らす）。</summary>
+/// <summary>
+/// 順序保存のオブジェクト（キー挿入順で書き出す＝差分比較のノイズを減らす）。
+///
+/// <para>セーブは数十万個の小さなオブジェクト（選手1人・成績1行）でできているので、1個ごとに
+/// Dictionary を持つと Unity(Mono) で生成だけで秒単位かかる（issue #660 実測: 24MB のセーブで
+/// パース4.1秒・書き出し4.3秒）。キーと値は並べて持ち、キーが <see cref="IndexThreshold"/> を
+/// 超えたオブジェクトだけ索引（Dictionary）を作る。小さいオブジェクトの線形探索は索引より速い。</para>
+/// </summary>
 public sealed class JsonObject : JsonValue
 {
+    /// <summary>この数を超えたら索引を作る。</summary>
+    private const int IndexThreshold = 8;
+
     private readonly List<string> _keys = new();
-    private readonly Dictionary<string, JsonValue> _map = new();
+    private readonly List<JsonValue> _values = new();
+    private Dictionary<string, int>? _index;
 
     public IReadOnlyList<string> Keys => _keys;
     public int Count => _keys.Count;
-    public bool Has(string key) => _map.ContainsKey(key);
+    public bool Has(string key) => IndexOf(key) >= 0;
 
-    public JsonValue this[string key] => _map[key];
+    public JsonValue this[string key] =>
+        IndexOf(key) is var i and >= 0 ? _values[i] : throw new KeyNotFoundException($"JSON key not found: {key}");
+
+    private int IndexOf(string key)
+    {
+        if (_index != null) return _index.TryGetValue(key, out var i) ? i : -1;
+        for (var i = 0; i < _keys.Count; i++)
+            if (string.Equals(_keys[i], key, StringComparison.Ordinal)) return i;
+        return -1;
+    }
 
     // --- 追加（フルエント。同じキーは上書き＝順序は初回位置を維持） ---
     public JsonObject Add(string key, JsonValue value)
     {
-        if (!_map.ContainsKey(key)) _keys.Add(key);
-        _map[key] = value;
+        var at = IndexOf(key);
+        if (at >= 0) { _values[at] = value; return this; }
+        _keys.Add(key);
+        _values.Add(value);
+        if (_index != null) _index[key] = _keys.Count - 1;
+        else if (_keys.Count > IndexThreshold)
+        {
+            _index = new Dictionary<string, int>(_keys.Count * 2, StringComparer.Ordinal);
+            for (var i = 0; i < _keys.Count; i++) _index[_keys[i]] = i;
+        }
         return this;
     }
 
@@ -74,8 +103,7 @@ public sealed class JsonObject : JsonValue
     public JsonObject Add(string key, double value) => Add(key, Of(value));
 
     // --- 型付きゲッタ（欠損は KeyNotFound で早期に気づく。任意項目は Has で分岐） ---
-    private JsonValue Get(string key) =>
-        _map.TryGetValue(key, out var v) ? v : throw new KeyNotFoundException($"JSON key not found: {key}");
+    private JsonValue Get(string key) => this[key];
 
     public bool IsNull(string key) => Get(key) is JsonNull;
     public string? Str(string key) => Get(key) is JsonString s ? s.Value : null;
@@ -95,7 +123,7 @@ public sealed class JsonObject : JsonValue
             if (i > 0) sb.Append(',');
             JsonString.WriteEscaped(sb, _keys[i]);
             sb.Append(':');
-            _map[_keys[i]].Write(sb);
+            _values[i].Write(sb);
         }
         sb.Append('}');
     }
@@ -139,6 +167,12 @@ public sealed class JsonString : JsonValue
     public static void WriteEscaped(StringBuilder sb, string s)
     {
         sb.Append('"');
+        // 速い道: 逃がす文字が無ければ丸ごと足す（セーブの文字列はほぼ全部これ。1字ずつ Append すると
+        // Mono で書き出しが秒単位になる＝issue #660）
+        var plain = true;
+        foreach (var c in s)
+            if (c == '"' || c == '\\' || c < 0x20) { plain = false; break; }
+        if (plain) { sb.Append(s).Append('"'); return; }
         foreach (var c in s)
         {
             switch (c)

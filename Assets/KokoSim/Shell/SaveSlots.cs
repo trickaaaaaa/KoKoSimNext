@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using KokoSim.Engine.Saves;
 
@@ -101,21 +102,38 @@ namespace KokoSim.Unity.Shell
             return false;
         }
 
-        /// <summary>スロット1枠ぶんの一覧行メタを読む（存在しない/壊れていても例外を投げない）。</summary>
+        /// <summary>
+        /// スロット1枠ぶんの一覧行メタを読む（存在しない/壊れていても例外を投げない）。
+        ///
+        /// <para>同じファイル（更新時刻とサイズが同じ）は2回目から読み直さない（issue #660）。一覧画面は1回の
+        /// 表示で既定スロット選び・一覧・詳細と同じ枠を何度も読むうえ、セーブは展開後 20MB 級になる。
+        /// 保存・削除でファイルが変われば時刻かサイズが変わるので、自然に読み直される。</para>
+        /// </summary>
         public static SaveSlotInfo ReadInfo(string slotId)
         {
             var path = PathFor(slotId);
-            if (!File.Exists(path))
+            var file = new FileInfo(path);
+            if (!file.Exists)
+            {
+                InfoCache.Remove(path);
                 return new SaveSlotInfo(slotId, exists: false, corrupt: false, week: 0, yearIndex: 0, savedAt: default);
+            }
 
-            var savedAt = File.GetLastWriteTime(path);
-            if (!SaveGameIO.TryReadText(path, out var json, out _) || SaveCodec.PeekHeader(json) is not { } header
-                || header.Version < 1 || header.Version > SaveCodec.CurrentVersion)
-                return new SaveSlotInfo(slotId, exists: true, corrupt: true, week: 0, yearIndex: 0, savedAt);
+            var stamp = (file.LastWriteTimeUtc, file.Length);
+            if (InfoCache.TryGetValue(path, out var hit) && hit.Stamp == stamp) return hit.Info;
 
-            return new SaveSlotInfo(slotId, exists: true, corrupt: false, header.Week, header.YearIndex,
-                savedAt, header.SchoolName);
+            var savedAt = file.LastWriteTime;
+            var info = SaveGameIO.TryPeekHeader(path) is { } header
+                       && header.Version >= 1 && header.Version <= SaveCodec.CurrentVersion
+                ? new SaveSlotInfo(slotId, exists: true, corrupt: false, header.Week, header.YearIndex,
+                    savedAt, header.SchoolName)
+                : new SaveSlotInfo(slotId, exists: true, corrupt: true, week: 0, yearIndex: 0, savedAt);
+            InfoCache[path] = (stamp, info);
+            return info;
         }
+
+        /// <summary>一覧行メタの控え（パス→読んだ時点の更新時刻・サイズと結果）。</summary>
+        private static readonly Dictionary<string, ((DateTime, long) Stamp, SaveSlotInfo Info)> InfoCache = new();
 
         /// <summary>スロットへ現在状態を保存する（今回 UI からは呼ばない。#509 で使う）。</summary>
         public static bool Save(string slotId) => SaveGameIO.Save(PathFor(slotId));

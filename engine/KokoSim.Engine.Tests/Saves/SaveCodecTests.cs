@@ -959,6 +959,67 @@ public sealed class SaveCodecTests
         Assert.Null(header.Value.SchoolName);
     }
 
+    // ===== 見出しの流し読み（issue #660） =====
+
+    /// <summary>従来の見出し読み（DOM へ丸ごとパース）。流し読み版がこれと同じ答えを返すことの基準。</summary>
+    private static SaveHeader? PeekHeaderViaDom(string text)
+    {
+        try
+        {
+            var root = KokoSim.Engine.Saves.Json.JsonValue.Parse(text).AsObject();
+            if (!root.Has("version")) return null;
+            return new SaveHeader(root.Int("version"), root.Int("week"), root.Int("yearIndex"),
+                root.Has("schoolName") ? root.Str("schoolName") : null);
+        }
+        catch (Exception) { return null; }
+    }
+
+    public static IEnumerable<object[]> HeaderCases()
+    {
+        var rich = SaveCodec.Serialize(SaveTestFixtures.BuildRichState());
+        yield return new object[] { "rich", rich };
+        // 後半が壊れたセーブは一覧でも「壊れている」に落ちること（途中で読み打ち切らない）
+        yield return new object[] { "rich-truncated", rich.Substring(0, rich.Length * 2 / 3) };
+        yield return new object[] { "rich-trailing", rich + "x" };
+        yield return new object[] { "rich-last-brace-missing", rich.Substring(0, rich.Length - 1) };
+        yield return new object[] { "nested-escapes",
+            "{\"a\":[{\"b\":\"x\\\"y\\u0041\\\\\"},[],{},[[1,-2.5e3]],{\"c\":{\"d\":null}}],\"version\":3,\"week\":1,"
+            + "\"yearIndex\":2,\"z\":true,\"schoolName\":\"桜\\n丘\\u3042\"}" };
+        yield return new object[] { "mismatched-bracket", "{\"version\":1,\"week\":1,\"yearIndex\":1,\"a\":[1}}" };
+        yield return new object[] { "unclosed-string", "{\"version\":1,\"week\":1,\"yearIndex\":1,\"a\":\"abc}" };
+        yield return new object[] { "bad-literal", "{\"version\":1,\"week\":1,\"yearIndex\":1,\"a\":tru}" };
+        yield return new object[] { "missing-comma", "{\"version\":1 \"week\":1,\"yearIndex\":1}" };
+        yield return new object[] { "duplicate-key-last-wins", "{\"version\":1,\"week\":1,\"yearIndex\":1,\"week\":9}" };
+        yield return new object[] { "version-float", "{\"version\":1.5,\"week\":1,\"yearIndex\":1}" };
+        yield return new object[] { "version-string", "{\"version\":\"1\",\"week\":1,\"yearIndex\":1}" };
+        yield return new object[] { "week-missing", "{\"version\":1,\"yearIndex\":1}" };
+        yield return new object[] { "root-array", "[1,2]" };
+        yield return new object[] { "empty-object", "{}" };
+        yield return new object[] { "whitespace", " \n{ \"version\" : 2 ,\t\"week\":4,\r\n\"yearIndex\":3 } \n" };
+    }
+
+    [Theory]
+    [MemberData(nameof(HeaderCases))]
+    public void PeekHeader_Streaming_MatchesDomParse(string name, string json)
+    {
+        _ = name;
+        Assert.Equal(PeekHeaderViaDom(json), SaveCodec.PeekHeader(json));
+        using var reader = new System.IO.StringReader(json);
+        Assert.Equal(PeekHeaderViaDom(json), SaveCodec.PeekHeader(reader));
+    }
+
+    /// <summary>流し読みは読み取りバッファ（64K字）の境目をまたいでも同じに読める。</summary>
+    [Fact]
+    public void PeekHeader_Streaming_SurvivesBufferBoundaries()
+    {
+        var filler = new System.Text.StringBuilder();
+        for (var i = 0; i < 30000; i++) filler.Append("{\"k\":\"v\\\"").Append(i).Append("\"},");
+        var json = "{\"version\":5,\"big\":[" + filler + "1],\"week\":12,\"yearIndex\":4,\"schoolName\":\"境目\"}";
+        Assert.True(json.Length > 3 * 65536);
+        var h = SaveCodec.PeekHeader(json);
+        Assert.Equal(new SaveHeader(5, 12, 4, "境目"), h);
+    }
+
     // ===== 勝敗投手の概念撤去（issue remove-pitcher-win-loss-concept・2026-08-29） =====
 
     /// <summary>

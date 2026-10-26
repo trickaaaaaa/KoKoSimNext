@@ -91,6 +91,19 @@ internal sealed class JsonParser
     private string ParseString()
     {
         _i++; // opening quote
+        // 速い道: 閉じ引用符までにエスケープが無ければ切り出すだけ（セーブの文字列はほぼ全部これ。
+        // 1個ごとに StringBuilder を作ると Mono でパースが秒単位になる＝issue #660）
+        for (var j = _i; j < _s.Length; j++)
+        {
+            var cj = _s[j];
+            if (cj == '\\') break;
+            if (cj == '"')
+            {
+                var plain = _s.Substring(_i, j - _i);
+                _i = j + 1;
+                return plain;
+            }
+        }
         var sb = new StringBuilder();
         while (true)
         {
