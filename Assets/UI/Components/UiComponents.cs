@@ -815,18 +815,19 @@ namespace KokoSim.Unity.Components
         /// 空白区切りで複数指定できる（例 "pa dim"＝打席結果セルを淡く）。
         /// 見出し行とデータ行が同じ列種別を使うことで、幅が構造的に揃う（横ずれの対策）。
         /// </summary>
-        public static VisualElement BoxRow(
-            IEnumerable<(string Text, string Kind)> cells, bool header = false, bool alt = false)
+        public static VisualElement BoxRow(IEnumerable<(string Text, string Kind)> cells, bool header = false)
         {
             var row = new VisualElement();
             row.AddToClassList("bs-row");
             if (header) row.AddToClassList("bs-row--head");
-            if (alt) row.AddToClassList("bs-row--alt");
 
+            var first = true;
             foreach (var (text, kind) in cells)
             {
                 var cell = new Label(text);
                 cell.AddToClassList("bs-cell");
+                if (first) cell.AddToClassList("bs-cell--first");   // 先頭セルは縦罫なし（外枠と二重にしない）
+                first = false;
                 foreach (var k in kind.Split(' '))
                     if (k.Length > 0) cell.AddToClassList("bs-cell--" + k);
                 // 数字だけのセル（回別得点・R/H/E・打数など、ヘッダーの回数字も含む）はコンデンス体に。
@@ -835,6 +836,23 @@ namespace KokoSim.Unity.Components
                 row.Add(cell);
             }
             return row;
+        }
+
+        /// <summary>
+        /// BoxRow を並べた器を「表」に仕上げる（issue #649）。外枠（インク）を付け、最後の行の横罫を外す
+        /// ＝外枠と二重にしない。行を足し終えてから呼ぶ。行は器の直下でも、1行ずつ包んだ子の中でもよい。
+        /// </summary>
+        public static void BoxTable(VisualElement host)
+        {
+            if (host == null) return;
+            host.AddToClassList("bs-table");
+            VisualElement last = null;
+            host.Query<VisualElement>(className: "bs-row").ForEach(r =>
+            {
+                r.RemoveFromClassList("bs-row--last");
+                last = r;
+            });
+            last?.AddToClassList("bs-row--last");
         }
 
         /// <summary>Oswald（欧文専用）に載せてよい「数字だけのセル」か。数字・小数点・記号のみを許可し、
