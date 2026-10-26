@@ -31,6 +31,17 @@ namespace KokoSim.Unity.Match
 
         public static void Arm() => UnityEditor.EditorPrefs.SetBool(SpawnFlag, true);
 
+        /// <summary>true＝スライディングキャッチ（捕球余裕 +0.10〜+0.20s の外野フライ）だけを撮る（issue #674）。</summary>
+        public static bool SlideOnly;
+        /// <summary>SlideOnly のとき撮る本数（接触の 0.4s 前〜1.4s 後を等間隔）。</summary>
+        public static int SlideFrames = 8;
+        /// <summary>SlideOnly で撮る場面の数。</summary>
+        public static int SlideScenes = 3;
+        /// <summary>SlideOnly で撮る捕球余裕の帯[s]（既定=スライディング +0.10〜+0.20。横っ飛びは 0〜+0.10）。</summary>
+        public static double SlideMargin0 = 0.10, SlideMargin1 = 0.20;
+        /// <summary>出力ファイル名の頭（帯ごとに撮り分ける）。</summary>
+        public static string SlideTag = "slide";
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoSpawn()
         {
@@ -50,7 +61,7 @@ namespace KokoSim.Unity.Match
         {
             Application.runInBackground = true;
             Time.captureDeltaTime = 1f / 30f;
-            Directory.CreateDirectory(ShotDir);
+            Directory.CreateDirectory(ShotDir);   // ⚠ 撮影中に消さない（書き込みが DirectoryNotFound で落ちる）
             Directory.CreateDirectory(OutDir);
 
             MatchLiveController.CaptureMode = true;
@@ -63,7 +74,8 @@ namespace KokoSim.Unity.Match
             yield return null;
 
             _log = new StringBuilder("場面\t捕球余裕[s]\t再生時計[s]\t実況\t内訳と接地\n");
-            var todo = new HashSet<Want> { Want.Dive, Want.DiveMiss, Want.Fumble };
+            var todo = SlideOnly ? new HashSet<Want> { Want.Dive } : new HashSet<Want> { Want.Dive, Want.DiveMiss, Want.Fumble };
+            var slideLeft = SlideScenes;
 
             for (var game = 1; game <= MaxGames && todo.Count > 0; game++)
             {
@@ -76,6 +88,24 @@ namespace KokoSim.Unity.Match
                     var want = Classify(play);
                     if (play == null || want == null || !todo.Contains(want.Value))
                     {
+                        _ctrl.FreezeCurrentAtResult();
+                        yield return null;
+                        continue;
+                    }
+                    if (SlideOnly)
+                    {
+                        // スライディング帯（+0.10〜+0.20s）かつ外野のフライだけ。横っ飛び帯・内野ゴロは撮らない
+                        if (play.CatchMargin is not { } sm || sm < SlideMargin0 || sm >= SlideMargin1) { _ctrl.FreezeCurrentAtResult(); yield return null; continue; }
+                        if (--slideLeft <= 0) todo.Remove(want.Value);
+                        var tcs = FirstFlightEnd(play);
+                        var tag = SlideTag + "-" + (SlideScenes - slideLeft);
+                        Debug.Log($"[守備の芝居] {tag} 余裕={play.CatchMargin:F2}s 接触={tcs:F2}s");
+                        for (var k = 0; k < SlideFrames; k++)
+                        {
+                            var tk = tcs - 0.40 + k * (1.8 / (SlideFrames - 1));
+                            yield return PlayUntil(tk);
+                            yield return Shoot($"{tag}-f{k}", $"{tag} t={tk - tcs:+0.00;-0.00}", play);
+                        }
                         _ctrl.FreezeCurrentAtResult();
                         yield return null;
                         continue;
