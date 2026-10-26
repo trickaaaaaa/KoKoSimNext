@@ -375,6 +375,17 @@ namespace KokoSim.Unity.Tournament
         }
 
         /// <summary>
+        /// 自校のメンバー表用チーム（issue #667）。スタメン設定があればそれ（ベンチ入り全員が載る）、
+        /// 未設定なら登録メンバー（背番号1〜20）だけで20人を組む。試合用の自動編成（<c>Build</c>）は
+        /// ベンチ外を打順に入れ控え野手も積まないので、そのまま使うと背番号0が載って12人前後になる。
+        /// </summary>
+        private static KokoSim.Engine.Match.Game.Team ManagerTeamForPreview(string schoolName)
+            => KokoSim.Unity.Shell.GameSession.Current.Lineup != null
+                ? KokoSim.Unity.Shell.PlayerMatchResolver.BuildManagerTeam(schoolName)
+                : KokoSim.Engine.Season.RosterTeamBuilder.BuildRegistered(
+                    KokoSim.Unity.Shell.RosterService.Active, schoolName);
+
+        /// <summary>
         /// 出場校1校のチーム（登録メンバー・注目選手の材料）。相手校は永続ロスター（#80）＝実戦と同一ソース。
         /// <b>自校だけは実戦と同じ入口（<see cref="KokoSim.Unity.Shell.PlayerMatchResolver.BuildManagerTeam"/>）
         /// から組む</b>——自校ID（-1）を全国ロスターへ渡すと架空の部員が生成され、実在しない選手名の表で
@@ -383,7 +394,7 @@ namespace KokoSim.Unity.Tournament
         /// </summary>
         private static KokoSim.Engine.Match.Game.Team TeamFor(School school, int year)
             => school.Id == KokoSim.Unity.Shell.NationService.ManagerSchoolId
-                ? KokoSim.Unity.Shell.PlayerMatchResolver.BuildManagerTeam(school.Name)
+                ? ManagerTeamForPreview(school.Name)
                 : KokoSim.Unity.Shell.NationService.Rosters.TeamFor(school, year);
 
         /// <summary>

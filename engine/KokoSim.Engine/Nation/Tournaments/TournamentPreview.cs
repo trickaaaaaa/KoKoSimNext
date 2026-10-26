@@ -214,8 +214,8 @@ public static class TournamentPreviewBuilder
         var p = pitcherLed
             // 投手はエース（先発）を採る。実際に対戦するのはこの投手なので「展望で見た投手と当たる」が成立する。
             // 誰を看板にするかは球速では決めない（型と成績の見せ方は StatLine/Blurb が担う）。
-            ? team.BattingOrder[team.PitcherSlot]
-            : team.BattingOrder.Where((_, i) => i != team.PitcherSlot)
+            ? (team.UsesDh ? team.StartingPitcher! : team.BattingOrder[team.PitcherSlot])
+            : team.BattingOrder.Where((_, i) => team.UsesDh || i != team.PitcherSlot)   // DH制は打順に投手がいない
                   .OrderByDescending(x => x.Power * 2 + x.Contact).First();
 
         return new NotablePlayer(
@@ -237,6 +237,8 @@ public static class TournamentPreviewBuilder
         // DHスロットの選手は本来守備位置ではなく「指」を表示する（enum由来・issue #70）。
         var dhPlayer = team.UsesDh ? team.BattingOrder[team.DhSlot] : null;
         var members = team.BattingOrder.Concat(team.Reserves)
+            .Concat(team.StartingPitcher is { } sp && !team.Reserves.Contains(sp) && !team.BattingOrder.Contains(sp)
+                ? new[] { sp } : System.Array.Empty<Players.Player>())   // DH制は先発投手が打順外（#667）
             .OrderBy(p => p.UniformNumber)
             .Select(p => new RosterMember(
                 p.UniformNumber, p.Name,
