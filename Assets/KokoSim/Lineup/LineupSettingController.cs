@@ -157,15 +157,39 @@ namespace KokoSim.Unity.Lineup
             sp.Clear();
             if (!v.UsesDh) return;   // DH制のときだけ先発投手ピルを出す
 
+            // 先発投手（issue #656）。DHバーの空いた幅いっぱいに、打順行と同じ部品・同じ級数で並べる
+            // ＝背番号・主将・名前・通算成績（防御率・投球回・奪三振）・学年投打・故障・調子。打順行と情報量を揃える。
             var pill = new VisualElement();
             pill.AddToClassList("sp-pill");
+            pill.AddToClassList("sp-pill--wide");
             if (v.StartingPitcherPicked) pill.AddToClassList("sp-pill--picked");
             var cap = new Label("先発");
             cap.AddToClassList("sp-pill__cap");
             pill.Add(cap);
+
+            var num = new Label(NumText(v.StartingPitcherNumber));
+            num.AddToClassList("num-badge");
+            num.AddToClassList("num-badge--sm");
+            num.AddToClassList("f-num");
+            pill.Add(num);
+
+            if (v.StartingPitcherIsCaptain) pill.Add(CaptainMark());
             var name = new Label(v.StartingPitcherName);
-            name.AddToClassList("sp-pill__name");
+            name.AddToClassList("lineup-row__name");
             pill.Add(name);
+
+            var stat = new Label(v.StartingPitcherStatText);
+            stat.AddToClassList("lineup-row__stat");
+            pill.Add(stat);
+
+            var info = new Label(v.StartingPitcherGradeLabel + "  " + v.StartingPitcherHandLabel);
+            info.AddToClassList("lineup-row__info");
+            pill.Add(info);
+
+            if (v.StartingPitcherInjury.Length > 0) pill.Add(InjuryChip(v.StartingPitcherInjury));
+            // 調子（表情顔・常に自校の真値）。打順行・控え行と同じ部品。
+            pill.Add(ConditionFaceEl(v.StartingPitcherCondition));
+
             pill.RegisterCallback<ClickEvent>(e => { e.StopPropagation(); _state.ClickStartingPitcher(); Render(); });
             sp.Add(pill);
         }
