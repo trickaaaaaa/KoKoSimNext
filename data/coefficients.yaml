@@ -308,7 +308,7 @@ baserunning:
   steal_home_distance_m: 21.5      # 本盗の走者の残り距離[m]（issue #637）。三塁→本塁27.43mからワインドアップ中のリード約6mを引く
   steal_home_delivery_seconds: 2.45  # 本盗の守備側[s]（issue #637）。警戒していない投手の投球（クイックではない）＋球の到達。design-14「本盗は三盗よりさらに下方」を守る水準に置く（2026-10-10 ユーザー決定）
   double_steal_third_break_prob: 0.4  # 一・三塁重盗（design-14 P1-4）: 三塁走者も同時スタート（2026-07-17校正）
-  pickoff_base_prob: 0.05          # 牽制アウト（design-14 P1-5）の基準確率（2026-07-17校正）
+  pickoff_base_prob: 0.0           # 牽制アウト（design-14 P1-5）の基準確率。issue #661 でオフ（0.05→0）＝牽制は盗塁企図の球にしか出ず、映った瞬間に盗塁が読めるため。0の間は判定も絵も出ない
   pickoff_runner_lead_slope: 0.0015
   pickoff_pitcher_sense_slope: 0.001
   pickoff_max_prob: 0.08

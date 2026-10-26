@@ -227,9 +227,9 @@ public sealed class ForcedOutcomeTests
             Assert.True(PickoffResolver.Resolve(
                 new Player { Steal = 50 }, new Player { Mental = 50 }, applied, rng));
 
-        // 強制していない素の係数は据え置き（既定 0.08 の帯を動かしていないこと）。
+        // 強制していない素の係数は据え置き（上限 0.08 を動かしていないこと）。
         var bare = new BaserunningCoefficients();
-        Assert.Equal(0.05, bare.PickoffBaseProb);
+        Assert.Equal(0.0, bare.PickoffBaseProb);   // 牽制は #661 でオフ
         Assert.Equal(0.08, bare.PickoffMaxProb);
     }
 }

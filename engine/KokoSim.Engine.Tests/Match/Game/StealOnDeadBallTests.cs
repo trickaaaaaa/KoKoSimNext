@@ -70,6 +70,25 @@ public sealed class StealOnDeadBallTests
         return (prog.BuildResult(), pitches);
     }
 
+    /// <summary>
+    /// issue #661: 牽制は既定でオフ。牽制球が映ると「この後、盗塁だ」と分かってしまうので、
+    /// 全球で盗塁を試みる試合でも牽制の絵（<see cref="LivePitch.PickoffPlay"/>）も牽制死も出ない。
+    /// </summary>
+    [Theory]
+    [InlineData(1UL, StealTarget.Second)]
+    [InlineData(7UL, StealTarget.Third)]
+    [InlineData(42UL, StealTarget.Second)]
+    public void PickoffIsOffByDefault_NoPickoffPlayNorPickoffOut(ulong seed, StealTarget target)
+    {
+        Assert.Equal(0.0, new BaserunningCoefficients().PickoffBaseProb);
+
+        var (result, pitches) = PlayStealingEveryPitch(seed, target);
+
+        Assert.All(pitches, p => Assert.Null(p.PickoffPlay));
+        Assert.Equal(0, result.PickoffCount);
+        Assert.Contains(pitches, p => p.StealPlay is not null);   // 前提: 盗塁自体は起きている
+    }
+
     /// <summary>ファウル・打球の球には盗塁の再生データが載らない（＝絵にも出ない）。</summary>
     [Theory]
     [InlineData(1UL)]

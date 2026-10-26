@@ -537,7 +537,7 @@ public sealed class BaserunningPlaysTests
     [Fact]
     public void DropThirdStrike_Disabled_DoesNotChangeGame()
     {
-        // 既定は issue #402 で正値化されたため、無効ゲートは明示的に 0 を指定して検証する。
+        // 既定は issue #661 で再び 0（オフ）。ここでは明示的に 0 を指定してゲートを検証する。
         var off = new GameContext { Baserunning = C with { DropThirdStrikeReachProb = 0.0 } };
         var a = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(42));
         var b = GameEngine.Play(WeakContactTeam("A"), WeakContactTeam("H"), off, new Xoshiro256Random(42));
@@ -656,7 +656,7 @@ public sealed class BaserunningPlaysTests
     public void Pickoff_Enabled_ChangesOutcomesForStealHeavyTeams()
     {
         Team Brainy(string name) => FastTeam(name) with { Tactics = new StandardTacticsBrain(new TacticsCoefficients()) };
-        var off = new GameContext { Baserunning = C with { PickoffBaseProb = 0.0 } }; // 既定は #402 で正値化＝明示的に0で対比
+        var off = new GameContext { Baserunning = C with { PickoffBaseProb = 0.0 } }; // 明示的に0で対比（既定は #661 でオフ）
         var on = new GameContext { Baserunning = C with { PickoffBaseProb = 0.08 } };
         var differs = false;
         for (ulong s = 0; s < 40 && !differs; s++)
