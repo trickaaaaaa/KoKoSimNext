@@ -693,7 +693,7 @@ namespace KokoSim.Unity.Match
         private readonly struct UniformPalette
         {
             /// <summary>パレット表の「黒」#23242A。ベルト・既定のスパイクをこれに揃える。</summary>
-            private static readonly Color PaletteBlack = new(0x23 / 255f, 0x24 / 255f, 0x2A / 255f);
+            internal static readonly Color PaletteBlack = new(0x23 / 255f, 0x24 / 255f, 0x2A / 255f);
 
             /// <summary>肌の固定色（全役割共通）。</summary>
             private static readonly Color SkinTone = new(0.85f, 0.68f, 0.55f);
@@ -1362,17 +1362,20 @@ namespace KokoSim.Unity.Match
             // ヘルメットの紺は壁(0.12,0.20,0.16)と同輝度だと頭が背景に溶けて「頭が無い」絵になる
             // （2026-07-28監督指摘）。ポスタライズ6段で2段ぶん明るい紺にして輪郭を立てる
             AttachGear(_batter, GearKind.Helmet, mound, new Color(0.28f, 0.31f, 0.45f), layer);
-            AttachGear(_catcher, GearKind.CatcherGear, mound, _defenseColors.Cap, layer);
+            // 捕手防具（ヘルメット殻・胸当て・レガース）は全校共通の黒（issue #659）。実物も黒が多数派で、
+            // 校色だと白い帽子の高校で防具が白い塊になり形が読めなかった。マスクのケージは中の dark のまま
+            AttachGear(_catcher, GearKind.CatcherGear, mound, UniformPalette.PaletteBlack, layer);
             // accent=シャツ色: 球審の胸プロテクター（薄型3段＋肩当て）は「服の下に着る」前提の
             // シルエットなので、シャツから突き出た部分がシャツの膨らみに読めるようシャツ色へ追随させる。
             // 旧固定色 (0.13,0.13,0.15) は紺シャツ時代の値＝薄いブルーのシャツだと黒い塊が腹に浮いた
             // （issue #445 の候補出しで実測）。マスクと背面ストラップは AttachGear 内の dark 固定のまま
             AttachGear(_umpire, GearKind.UmpireGear, mound, UniformPalette.Umpire.Shirt, layer);
 
-            // 攻守交代で塗り替える装備を拾っておく（投手の帽子＝U2経路のみ／捕手のヘルメット殻）。
-            // 購入素体の帽子は素体メッシュの領域なので、ここではなく RegionMat 側で替わる
+            // 攻守交代で塗り替える装備を拾っておく（投手の帽子＝U2経路のみ）。
+            // 購入素体の帽子は素体メッシュの領域なので、ここではなく RegionMat 側で替わる。
+            // ⚠ 捕手は拾わない（issue #659）: 防具は校色でなくなった。拾うのは「色の一致」なので、
+            //    黒い帽子の高校だと黒い防具まで帽子扱いで拾われ、次の攻守交代で相手校の色に塗られる
             CollectTeamMats(_pitcher, _defenseColors.Cap);
-            CollectTeamMats(_catcher, _defenseColors.Cap);
 
             // グラブ（被り物と同じく初期ポーズ評価後＝視線実測が要るため）。利き手でない側に着ける。
             // 投手は 2026-07-29 まで**グラブを持っていなかった**（AttachMitt が捕手専用だった）
@@ -6020,6 +6023,25 @@ namespace KokoSim.Unity.Match
                 + " ミット中心=" + center.ToString("F3")
                 + " 狙点=" + _ballCatchPoint.ToString("F3")
                 + " ずれ=" + Vector3.Distance(center, _ballCatchPoint).ToString("F3") + "m";
+        }
+
+        /// <summary>
+        /// 捕手防具の実色（issue #659 の検証用）。部品ごとの _BaseColor を返す。絵ではポスタライズ・陰影で
+        /// 「黒っぽい」と「黒」が区別できないので、攻守交代をまたいだ後も含めて値で確かめる。
+        /// </summary>
+        internal string CatcherGearColorDiagForCapture()
+        {
+            var sb = new System.Text.StringBuilder();
+            if (_catcher?.Go == null) return "catcher なし";
+            foreach (var r in _catcher.Go.GetComponentsInChildren<Renderer>(true))
+            {
+                var n = r.gameObject.name;
+                if (!(n.StartsWith("cmask") || n.StartsWith("chest") || n.StartsWith("leg"))) continue;
+                var m = r.sharedMaterial;
+                if (m == null || !m.HasProperty("_BaseColor")) continue;
+                sb.Append(n).Append('=').Append('#').Append(ColorUtility.ToHtmlStringRGB(m.GetColor("_BaseColor"))).Append(' ');
+            }
+            return sb.ToString();
         }
 
         internal string GloveDiagForCapture()
