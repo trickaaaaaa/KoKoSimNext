@@ -3925,31 +3925,15 @@ namespace KokoSim.Unity.Match
             LiveBatterSlot batterToday = batterOrder >= 1 && batterOrder <= offense.Count
                 ? offense[batterOrder - 1] : null;
 
-            // 名前行のチップの地色＝その選手のチーム色（帽子クラウン＝アンダーシャツと同じ「チーム色」）。
-            // 試合中不変なので観測データには載せず LiveMatchRequest の静的経路から来る（設計書18 §3.5.1）。
-            var offenseColor = TeamChipColor(offenseIsTop ? _awayColors : _homeColors);
-            var defenseColor = TeamChipColor(offenseIsTop ? _homeColors : _awayColors);
-
-            // 校ID＝通算成績の帰属先（issue #634。配色とまったく同じ攻守の割り当て）。
+            // 校ID＝通算成績の帰属先（issue #634）。
             var offenseSchoolId = offenseIsTop ? _awaySchoolId : _homeSchoolId;
             var defenseSchoolId = offenseIsTop ? _homeSchoolId : _awaySchoolId;
 
-            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseColor, defenseSchoolId));
-            _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseColor, offenseSchoolId));
+            _hudPitcherSlot.Add(BuildHudPitcher(defPitcher, defenseSchoolId));
+            _hudBatterSlot.Add(BuildHudBatter(batterToday, mu, offenseIsTop, offenseSchoolId));
         }
 
-        /// <summary>
-        /// チーム色チップの地色。配色が来ていない経路（撮影ハーネス等）では帯に馴染む灰へ落とす
-        /// ——透明にすると守備位置だけ地無しになって行の並びが崩れる。
-        /// </summary>
-        private static Color TeamChipColor(KokoSim.Engine.Nation.TeamColors colors)
-        {
-            if (colors == null) return new Color(1f, 1f, 1f, 0.22f);
-            var c = colors.CapCrown;
-            return new Color32(c.R, c.G, c.B, 255);
-        }
-
-        private VisualElement BuildHudPitcher(LivePitcherToday def, Color teamColor, int schoolId)
+        private VisualElement BuildHudPitcher(LivePitcherToday def, int schoolId)
         {
             var band = HudBand();
 
@@ -4048,7 +4032,7 @@ namespace KokoSim.Unity.Match
         }
 
         private VisualElement BuildHudBatter(LiveBatterSlot batterToday, Matchup m, bool offenseIsTop,
-            Color teamColor, int schoolId)
+            int schoolId)
         {
             var band = HudBand();
 
@@ -4056,7 +4040,7 @@ namespace KokoSim.Unity.Match
             var idn = HudIdRow();
             idn.Add(HudChip(m.BatterOrder.ToString(), "番", "mhud-cp--key", numeric: true));
             var pos = MatchLiveStatsProvider.PosJp(batterToday?.Position ?? m.BatterPosition);
-            if (pos.Length > 0) idn.Add(HudTeamChip(pos, teamColor));
+            if (pos.Length > 0) idn.Add(HudChip(pos, null, "mhud-cp--pos", numeric: false));
             var bNum = NumText(m.BatterNumber);
             if (bNum.Length > 0) idn.Add(HudNumber(bNum));
             idn.Add(HudName(m.BatterName));
@@ -4195,16 +4179,6 @@ namespace KokoSim.Unity.Match
             return chip;
         }
 
-        /// <summary>
-        /// チーム色地のチップ（打者=守備位置／投手=背番号）。地色は校ごとに変わるので
-        /// USS では宣言できず、ここでインラインで入れる（値は data/team-colors.yaml 由来・乱数不使用）。
-        /// </summary>
-        private static VisualElement HudTeamChip(string text, Color bg)
-        {
-            var chip = HudChip(text, null, "mhud-cp--team", numeric: IsNumText(text));
-            chip.style.backgroundColor = bg;
-            return chip;
-        }
 
         /// <summary>
         /// 帯の中で最も大きい要素＝選手名。人名は明朝なので、書体registryに新クラスを足さず
@@ -4375,7 +4349,7 @@ namespace KokoSim.Unity.Match
 
         /// <summary>
         /// スクショ用: チーム配色を差し込む。撮影ハーネスの試合は <see cref="LiveMatchRequest"/> を通らないので
-        /// 配色が null のまま＝HUDのチーム色チップが灰色のフォールバックで写ってしまい、実物と違う絵になる。
+        /// 配色が null のまま＝対決ビューの選手が既定色（白＋紺）で写ってしまい、実物と違う絵になる。
         /// 既に配色が入っている経路（実試合）では**上書きしない**。
         /// </summary>
         public void FillTeamColorsForCapture(KokoSim.Engine.Nation.TeamColors away, KokoSim.Engine.Nation.TeamColors home)

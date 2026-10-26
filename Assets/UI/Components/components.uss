@@ -1427,7 +1427,7 @@
 .mhud-pc__n--alert { color: var(--color-warn); }     /* 残量 3割未満＝警告 */
 
 /* 名前行のチップ（打順・守備位置・先発・学年）。地を持つのは①打順/登板順（白地黒字）
-   ②守備位置（チーム色地白字・地色は生成側がインラインで入れる）③学年（薄い白）の3種。 */
+   ②守備位置（芝の緑地に白字・全校共通）③学年（薄い白）の3種。 */
 .mhud-cp {
     flex-direction: row;
     align-items: center;
@@ -1444,7 +1444,10 @@
 .mhud-cp__u { font-size: var(--hud-fs-lab); height: var(--hud-h-lab); margin-left: 2px; }
 .mhud-cp--key { background-color: #FFFFFF; }                       /* 打順・登板順 */
 .mhud-cp--key .mhud-cp__t, .mhud-cp--key .mhud-cp__u { color: var(--ink); }
-.mhud-cp--team .mhud-cp__t, .mhud-cp--team .mhud-cp__u { color: #FFFFFF; }  /* 守備位置 */
+/* 守備位置。以前は校色を地にしていたが、明るい校色だと白字が読めなかったので全校共通の芝の緑に統一
+   （issue #658。見比べで監督が選定）。 */
+.mhud-cp--pos { background-color: var(--grass); }
+.mhud-cp--pos .mhud-cp__t, .mhud-cp--pos .mhud-cp__u { color: #FFFFFF; }
 .mhud-cp--dim { background-color: var(--hud-chip-dim); margin-right: 0; }   /* 学年 */
 .mhud-cp--dim .mhud-cp__t, .mhud-cp--dim .mhud-cp__u { color: var(--hud-label); }
 
