@@ -138,8 +138,9 @@ namespace KokoSim.Unity.MatchResult
             foreach (var b in batting)
                 side.Batting.Add(new MatchResultBattingRow
                 {
-                    Pos = MatchLiveStatsProvider.PosAbbr(b.Position),
-                    Name = b.Name,
+                    Pos = PosText(b),
+                    // 途中出場は入った枠の直下に1字下げて並べる（誰の代わりかは位置欄の「打・走・守」で読める）
+                    Name = b.Entry == BoxEntry.Starter ? b.Name : "　" + b.Name,
                     Numbers = new[]
                     {
                         b.AtBats.ToString(), b.Hits.ToString(), b.Doubles.ToString(), b.Triples.ToString(),
@@ -181,6 +182,18 @@ namespace KokoSim.Unity.MatchResult
                 side.PaRows.Add(row);
             }
             return side;
+        }
+
+        /// <summary>
+        /// 野手成績の「位」欄。スタメンは守備位置、途中出場は入り方（打＝代打／走＝代走／守＝守備交代）と、
+        /// 実際に守備に就いたならその位置（例: 打→左）。選手本来の守備適性（<c>BattingLine.Position</c>）は
+        /// 途中出場には使わない＝守備に就かなかった代打・代走は入り方だけを出す（issue #680）。
+        /// </summary>
+        public static string PosText(BattingLine b)
+        {
+            if (b.Entry == BoxEntry.Starter) return MatchLiveStatsProvider.PosAbbr(b.Position);
+            var mark = b.Entry switch { BoxEntry.PinchHit => "打", BoxEntry.PinchRun => "走", _ => "守" };
+            return b.FieldedAt is { } at ? mark + "→" + MatchLiveStatsProvider.PosAbbr(at) : mark;
         }
 
         /// <summary>打席結果の短縮表記（グリッドの1マスに収まる長さ）。</summary>

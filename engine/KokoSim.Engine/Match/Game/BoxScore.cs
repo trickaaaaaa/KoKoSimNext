@@ -4,6 +4,9 @@ using KokoSim.Engine.Players;
 
 namespace KokoSim.Engine.Match.Game;
 
+/// <summary>ボックススコア上の出場の仕方（表示専用）。</summary>
+public enum BoxEntry { Starter, PinchHit, PinchRun, DefensiveSub }
+
 /// <summary>
 /// 個人打撃成績（1試合）。プレー記録から集計。HitByPitches/StolenBases/CaughtStealing/SacrificeHits は
 /// SourceId より後（互換のため末尾追加）。Position は表示専用＝DHスロットは <see cref="FieldPosition.DesignatedHitter"/>（issue #70）。
@@ -16,6 +19,13 @@ public sealed record BattingLine(
     int StolenBases = 0, int CaughtStealing = 0, int Runs = 0, int SacrificeFlies = 0,
     int SacrificeHits = 0)
 {
+    /// <summary>出場の仕方（スタメン／代打／代走／守備交代）。表示専用。</summary>
+    public BoxEntry Entry { get; init; } = BoxEntry.Starter;
+    /// <summary>途中出場のとき、代わって退いた選手名（スタメンは null）。</summary>
+    public string? EnteredFor { get; init; }
+    /// <summary>途中出場の選手が実際に守備に就いた最後の位置。守備に就かなかった（代打・代走のみ）なら null。選手本来の適性ではない。</summary>
+    public FieldPosition? FieldedAt { get; init; }
+
     /// <summary>打率（打数0なら0）。</summary>
     public double Average => AtBats > 0 ? (double)Hits / AtBats : 0.0;
 }
