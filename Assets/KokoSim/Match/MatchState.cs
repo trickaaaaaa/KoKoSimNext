@@ -121,7 +121,8 @@ namespace KokoSim.Unity.Match
         private static BatRow ToBatRow(BattingLine b) => new()
         {
             Order = b.Order.ToString(),
-            Pos = PosJp(b.Position),
+            // 途中出場は本来の適性でなく入り方（打・走・守）と実際に守った位置を出す（issue #680）
+            Pos = b.Entry == BoxEntry.Starter ? PosJp(b.Position) : MatchResult.MatchResultState.PosText(b),
             Name = b.Name,
             Ab = b.AtBats, H = b.Hits, Rbi = b.Rbi, Hr = b.HomeRuns, Bb = b.Walks, So = b.StrikeOuts,
             Avg = AvgStr(b.Average, b.AtBats),

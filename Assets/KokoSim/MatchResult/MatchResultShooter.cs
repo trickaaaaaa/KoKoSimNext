@@ -40,6 +40,7 @@ namespace KokoSim.Unity.MatchResult
                 Debug.LogError("[MR] 閉じるボタンが UXML に無い");
 
             // 勝ち試合（勝敗表記がアンバーになる）／負け試合／延長（イニング列が10回以降まで伸びる）。
+            if (SubsOnly) { yield return Shot(doc, ctrl, "03-result-subs", Kind.Subs); Debug.Log("[MR] DONE subs"); yield break; }
             yield return Shot(doc, ctrl, "00-result-win", Kind.Win);
             yield return Shot(doc, ctrl, "01-result-lose", Kind.Lose);
             yield return Shot(doc, ctrl, "02-result-extra", Kind.Extra);
@@ -47,13 +48,35 @@ namespace KokoSim.Unity.MatchResult
             Debug.Log("[MR] DONE all shots");
         }
 
-        private enum Kind { Win, Lose, Extra }
+        /// <summary>true＝途中出場（代打・代走・守備交代）のある試合を1枚だけ撮る（issue #680）。</summary>
+        public static bool SubsOnly;
+
+        private enum Kind { Win, Lose, Extra, Subs }
+
+        // 自校（後攻）が代打・代走・守備交代を出した試合を作る（自動試合は交代をしないので進行体を直接操作する）。
+        private static GameResult PlaySubsGame()
+        {
+            var home = RosterTeamBuilder.Build(RosterService.Active, HomeName);
+            var away = StrengthTeamFactory.Create(58, AwayName, new Xoshiro256Random(99UL));
+            var prog = new KokoSim.Engine.Match.Timeline.Playback.MatchProgression(away, home, new GameContext(), 2026UL);
+            var done = 0;
+            for (var guard = 0; guard < 400 && done < 3 && prog.Advance(); guard++)
+            {
+                var o = prog.SubstitutionOptions(teamIsAway: false);
+                if (done == 0 && o.CanPinchHit && prog.PinchHit(false, o.Reserves[0])) done++;
+                else if (done == 1 && o.CanPinchRun && prog.PinchRun(false, o.Runners[0].BaseIndex, o.Reserves[0])) done++;
+                else if (done == 2 && !o.IsOffense && o.Reserves.Count > 0 && prog.DefenseAssign(false, 1, o.Reserves[0])) done++;
+            }
+            Debug.Log("[MR] subs made=" + done);
+            return prog.SkipDelegateToAi(false, 50);
+        }
 
         // 条件に合う試合を1つ探して撮る（自校＝後攻 home 固定。実フローと同じ向き）。
         private IEnumerator Shot(UIDocument doc, MatchResultController ctrl, string file, Kind kind)
         {
             ulong seed;
-            var r = FindGame(kind, out seed);
+            seed = 0;
+            var r = kind == Kind.Subs ? PlaySubsGame() : FindGame(kind, out seed);
             if (r == null) { Debug.LogWarning("[MR] 条件の試合が見つからず: " + kind); yield break; }
 
             ctrl.RenderForCapture(r, managerIsAway: false, AwayName, HomeName);
@@ -75,6 +98,8 @@ namespace KokoSim.Unity.MatchResult
                 {
                     Kind.Win => r.HomeRuns > r.AwayRuns,
                     Kind.Lose => r.HomeRuns < r.AwayRuns,
+                    Kind.Subs => System.Linq.Enumerable.Any(r.AwayBatting, l => l.Entry != BoxEntry.Starter)
+                                 || System.Linq.Enumerable.Any(r.HomeBatting, l => l.Entry != BoxEntry.Starter),
                     _ => r.AwayLineScore.Count > 9,
                 };
                 if (ok) { usedSeed = seed; return r; }
