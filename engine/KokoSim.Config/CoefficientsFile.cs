@@ -2150,6 +2150,9 @@ public static class CoefficientsLoader
         public int SpecialtyFloor { get; set; } = D.SpecialtyFloor;
         public double OffSpecialtyFactor { get; set; } = D.OffSpecialtyFactor;
         public int OffSpecialtyFloor { get; set; } = D.OffSpecialtyFloor;
+        public double DualTalentCorr { get; set; } = D.DualTalentCorr;
+        public double DualTalentGateZ { get; set; } = D.DualTalentGateZ;
+        public double DualTalentRatioSlope { get; set; } = D.DualTalentRatioSlope;
         // 運動能力ベースライン（中心は名声に半連動, §1.1b-2）
         public double PhysicalMean { get; set; } = D.PhysicalMean;
         public double PhysicalSd { get; set; } = D.PhysicalSd;

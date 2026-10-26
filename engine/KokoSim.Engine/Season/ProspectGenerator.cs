@@ -139,6 +139,14 @@ public sealed record RosterCoefficients
     /// <summary>専門外能力の中心係数（総合力×これ）＋低フロア。パワプロ型特化を禁止。</summary>
     public double OffSpecialtyFactor { get; init; } = 0.55;
     public int OffSpecialtyFloor { get; init; } = 8;
+    /// <summary>
+    /// 投打両立素質 z2 と総合力 z の相関（#684）。0 で完全独立。素質の高い選手ほどやや両立しやすい程度に弱く効かせる。
+    /// </summary>
+    public double DualTalentCorr { get; init; } = 0.3;
+    /// <summary>両立素質 z2（標準正規）がこれを超えた分だけ専門外の中心係数が上がる。超えない選手は従来と1ビットも変わらない。</summary>
+    public double DualTalentGateZ { get; init; } = 0.5;
+    /// <summary>ゲートを超えた z2 1σあたりに専門外の中心係数へ足す量（上限 1.0＝本業と同じ）。</summary>
+    public double DualTalentRatioSlope { get; init; } = 0.30;
 
     // --- 運動能力ベースライン（走力・地肩・スタミナ, 名声独立, 設計書01 §1.1b-2） ---
     public double PhysicalMean { get; init; } = 45.0;
@@ -573,7 +581,15 @@ public static class ProspectGenerator
         // --- Stage 2: 総合力→専門能力へ凸凹配分（投手寄せは w で連続化, Issue #174） ---
         var total = MathUtil.Clamp(rng.NextGaussian(talentCenter, c.TalentSd), c.TalentMin, c.TalentMax);
         var concentration = MathUtil.Clamp(rng.NextGaussian(c.ConcentrationMean, c.ConcentrationSd), 0.05, 1.0);
-        var offCenter = total * c.OffSpecialtyFactor;
+        // 投打の両立素質（#684）: 専用Forkで独立に引くので主RNG列は不変。ゲート未満の大多数は従来の 0.55 のまま。
+        var dualRng = rng.Fork(DualTalentStreamId(year, index));
+        var zTotal = c.TalentSd > 0 ? (total - talentCenter) / c.TalentSd : 0.0;
+        var zDual = c.DualTalentCorr * zTotal
+                    + Math.Sqrt(Math.Max(0.0, 1.0 - c.DualTalentCorr * c.DualTalentCorr)) * dualRng.NextGaussian(0, 1);
+        var offRatio = MathUtil.Clamp(
+            c.OffSpecialtyFactor + c.DualTalentRatioSlope * Math.Max(0.0, zDual - c.DualTalentGateZ),
+            c.OffSpecialtyFactor, 1.0);
+        var offCenter = total * offRatio;
 
         // 投手センス（隠し, 球速levelの土台）: 野手水準(total×係数) ↔ 投手上振れ(total+bonus) を w で補間。
         // 二段分岐を廃し、投手適性に対して連続に振る（旧: isPitcher で total+bonus か total×0.45 の二択）。
@@ -755,6 +771,9 @@ public static class ProspectGenerator
 
     /// <summary>性格抽選の独立ストリームID（他ストリームと別の上位ビット）。</summary>
     private static ulong PersonalityStreamId(int year, int index) => 0x9D2B_0000UL ^ (ulong)(year * 1000 + index + 1);
+
+    /// <summary>投打の両立素質の独立ストリームID（能力ロール列を1ビットも乱さない, #684）。</summary>
+    private static ulong DualTalentStreamId(int year, int index) => 0x4E61_0000UL ^ (ulong)(year * 1000 + index + 1);
 
     /// <summary>球質タイプ抽選の独立ストリーム（能力ロール列を乱さない）。</summary>
     private static ulong ArchetypeStreamId(int year, int index) => 0x7B15_0000UL ^ (ulong)(year * 1000 + index + 1);
