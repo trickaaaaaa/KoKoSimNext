@@ -16,7 +16,7 @@ stages:
     child:
       type: round_robin       # 各ブロック4チームのリーグ戦
       teams_per_group: 4
-    advance_per_group: null    # リーグ上位が県大会へ（枠数は要項PDFで確認）
+    advance_per_group: 8       # 各地区の上位8校が県大会へ（4地区×8＝32校＋夏代表の推薦。実在より小規模なゲーム内校数に合わせた簡略化・issue #688）
   - name: 県大会
     type: knockout
 # 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=横浜スタジアム、序盤=市営級プールから抽選
@@ -26,4 +26,4 @@ stadiums:
 notes:
   - 春と異なり秋は地区がリーグ戦形式
   - seed_exemptionの推薦校は県大会から登場
-  - ブロック内の進出数は要項PDFで確定させる（現状 structure 寄り）
+  - 現状の実装は地区ごとの1トーナメントで、上位 advance_per_group 校が県大会へ進む（4校ブロックのリーグ戦の再現は issue #688 の後続）

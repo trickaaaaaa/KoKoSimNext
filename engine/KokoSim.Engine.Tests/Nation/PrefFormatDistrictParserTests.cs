@@ -26,6 +26,38 @@ public sealed class PrefFormatDistrictParserTests
         Assert.Equal((pref, districts), PrefFormatDistrictParser.Parse(text));
     }
 
+    /// <summary>県大会へ進む校数と夏代表の推薦も同じファイルから読む（issue #688）。
+    /// 地区なしの県（奈良）は規則を持たない＝1校・推薦なし。</summary>
+    [Theory]
+    [InlineData("kanagawa.yaml", 4, 8, true)]
+    [InlineData("hyogo.yaml", 5, 8, true)]
+    [InlineData("aichi.yaml", 5, 6, false)]
+    [InlineData("hokkaido.yaml", 10, 3, false)]
+    [InlineData("nara.yaml", 0, 1, false)]
+    public void ParseRule_RealFiles(string file, int districts, int advance, bool seed)
+    {
+        var rule = PrefFormatDistrictParser.ParseRule(File.ReadAllText(FindPrefFormat(file)));
+        Assert.Equal(districts, rule.Districts);
+        Assert.Equal(advance, rule.AdvancePerDistrict);
+        Assert.Equal(seed, rule.SeedExemption);
+    }
+
+    /// <summary>YAML の進出校数は PrefFormat（完全ロード）と同じ値でなければならない（2経路の乖離防止）。</summary>
+    [Theory]
+    [InlineData("kanagawa.yaml")]
+    [InlineData("hyogo.yaml")]
+    [InlineData("aichi.yaml")]
+    [InlineData("hokkaido.yaml")]
+    public void ParseRule_AdvanceMatchesFullLoad(string file)
+    {
+        var path = FindPrefFormat(file);
+        var full = KokoSim.Config.PrefFormatLoader.LoadFromFile(path);
+        var stage = full.Stages.First(s => s.Type == StageType.GroupSplit);
+        var rule = PrefFormatDistrictParser.ParseRule(File.ReadAllText(path));
+        Assert.Equal(stage.AdvancePerGroup ?? 1, rule.AdvancePerDistrict);
+        Assert.Equal(full.SeedExemption, rule.SeedExemption);
+    }
+
     /// <summary>入れ子（child: の type）をステージ自身の type と取り違えない。</summary>
     [Fact]
     public void Parse_IgnoresNestedChildKeys()

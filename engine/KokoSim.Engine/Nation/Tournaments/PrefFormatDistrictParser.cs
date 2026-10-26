@@ -12,19 +12,34 @@ namespace KokoSim.Engine.Nation.Tournaments;
 /// Unity は StreamingAssets へ複製した同じ YAML をこのパーサで読む＝**同じファイルの同じ値**を見る。
 /// <see cref="DistrictPlan.Build"/> が完全ロードから作る「県Id→地区数」と同じ意味の値を返す。
 ///
-/// 見るのは次の3つだけ:
+/// 見るのは次の5つだけ:
 ///   - 先頭の <c>pref: kanagawa</c>（ローマ字県名）
 ///   - <c>district_assignment: geographic</c>（地理固定割でなければ地区は無い＝0）
 ///   - <c>stages:</c> の中で <c>type: group_split</c> かつ <c>grouping: geographic</c> のステージの <c>groups: N</c>
+///   - 同ステージの <c>advance_per_group: N</c>（各地区から県大会へ進む校数。null/無し＝1。issue #688）
+///   - 先頭の <c>seed_exemption: true</c>（夏の代表校を県大会へ推薦するか。issue #688）
 /// ステージの入れ子（<c>child:</c> 配下の type）を拾わないよう、**ステージ自身の字下げ段だけ**を見る。
 /// </summary>
 public static class PrefFormatDistrictParser
 {
+    /// <summary>秋季地区予選の規則（県内地区数・各地区の進出校数・夏代表の推薦）。地区が無い県は Districts=0。</summary>
+    public sealed record AutumnDistrictRule(string Pref, int Districts, int AdvancePerDistrict, bool SeedExemption);
+
     /// <summary>1県ぶんの YAML から (ローマ字県名, 地区数) を返す。地区が無い県は Districts=0。</summary>
     public static (string Pref, int Districts) Parse(string yaml)
     {
+        var r = ParseRule(yaml);
+        return (r.Pref, r.Districts);
+    }
+
+    /// <summary>1県ぶんの YAML から秋季地区予選の規則を返す（地区が無い県は Districts=0・Advance=1・Seed=false）。</summary>
+    public static AutumnDistrictRule ParseRule(string yaml)
+    {
         string pref = "";
         var geographic = false;
+        var seedExemption = false;
+        var foundAdvance = 1;
+        int? stageAdvance = null;
 
         // stages: 配下のステージ1件ぶんの状態。ステージの区切り（"- " 始まり）で確定・リセットする。
         var inStages = false;
@@ -36,8 +51,11 @@ public static class PrefFormatDistrictParser
         void CloseStage()
         {
             if (found == 0 && stageType == "group_split" && stageGrouping == "geographic" && stageGroups is { } g)
+            {
                 found = g;
-            stageType = null; stageGrouping = null; stageGroups = null;
+                foundAdvance = System.Math.Max(1, stageAdvance ?? 1);
+            }
+            stageType = null; stageGrouping = null; stageGroups = null; stageAdvance = null;
         }
 
         foreach (var raw in yaml.Replace("\r\n", "\n").Split('\n'))
@@ -57,6 +75,7 @@ public static class PrefFormatDistrictParser
                 if (k0 == null) continue;
                 if (k0 == "pref") pref = v0;
                 else if (k0 == "district_assignment") geographic = v0 == "geographic";
+                else if (k0 == "seed_exemption") seedExemption = v0 == "true";
                 else if (k0 == "stages") inStages = true;
                 continue;
             }
@@ -82,6 +101,9 @@ public static class PrefFormatDistrictParser
             {
                 case "type": stageType = v; break;
                 case "grouping": stageGrouping = v; break;
+                case "advance_per_group":
+                    if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var adv)) stageAdvance = adv;
+                    break;
                 case "groups":
                     if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)) stageGroups = n;
                     break;
@@ -89,7 +111,9 @@ public static class PrefFormatDistrictParser
         }
         CloseStage();
 
-        return (pref, geographic ? found : 0);
+        return geographic
+            ? new AutumnDistrictRule(pref, found, foundAdvance, seedExemption)
+            : new AutumnDistrictRule(pref, 0, 1, false);
     }
 
     /// <summary>複数県ぶんの YAML テキストから「県Id → 地区数」を作る（地区0の県は載せない）。</summary>
@@ -102,6 +126,20 @@ public static class PrefFormatDistrictParser
             if (districts <= 0) continue;
             var id = PrefectureNames.IdOf(pref);
             if (id >= 0) map[id] = districts;
+        }
+        return map;
+    }
+
+    /// <summary>複数県ぶんの YAML テキストから「県Id → 秋季地区予選の規則」を作る（地区0の県は載せない）。</summary>
+    public static IReadOnlyDictionary<int, AutumnDistrictRule> BuildRules(IEnumerable<string> yamlTexts)
+    {
+        var map = new Dictionary<int, AutumnDistrictRule>();
+        foreach (var text in yamlTexts)
+        {
+            var rule = ParseRule(text);
+            if (rule.Districts <= 0) continue;
+            var id = PrefectureNames.IdOf(rule.Pref);
+            if (id >= 0) map[id] = rule;
         }
         return map;
     }
