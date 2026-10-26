@@ -88,6 +88,8 @@
 /* 総合ランク列は廃止（Issue #30/#270）。空いた幅は「学年・投打」に回して「右投右打」の切れを解消する。 */
 .lu-th--info { width: 128px; }
 .lu-root .lineup-row__info { width: 128px; }
+/* 先発の欄の学年投打は中身の幅（欄が狭いので打順行の128px固定だと名前が消える。issue #656） */
+.lu-root .sp-pill--wide .lineup-row__info { width: auto; }
 
 /* 守備位置・先発の操作説明（打順表の直下・1行）。操作の入口を示すだけの補助文字なので最弱の文字色。 */
 .lu-hint {
@@ -113,8 +115,11 @@
     padding-bottom: var(--sp-2);
 }
 .lu-dhbar__label { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-3); }
-.lu-dhbar__spacer { flex-grow: 1; }
-.lu-sp { flex-direction: row; }
+/* トグルと先発の欄の間は固定の間隔だけ。空いた幅は先発の欄が全部使う（issue #656）。 */
+.lu-dhbar__spacer { width: var(--sp-3); flex-shrink: 0; }
+.lu-sp { flex-direction: row; flex-grow: 1; flex-basis: 0; min-width: 0; }
+/* 先発の欄の見出し「先発」は打順行の学年投打と同じ級数（小さいと読めない＝監督指摘）。 */
+.lu-root .sp-pill__cap { font-size: 19px; }
 
 .lu-section {
     font-size: var(--fs-label);

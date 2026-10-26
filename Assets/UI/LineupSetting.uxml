@@ -45,7 +45,7 @@
 
                         <!-- DH制トグル＋先発投手（DH時のみ先発ピルを出す） -->
                         <ui:VisualElement class="lu-dhbar">
-                            <ui:Label text="指名打者（DH）" class="lu-dhbar__label" />
+                            <ui:Label text="DH" class="lu-dhbar__label" />
                             <ui:VisualElement name="lu-dh-switch" class="switch">
                                 <ui:VisualElement class="switch__knob" />
                             </ui:VisualElement>

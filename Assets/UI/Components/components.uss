@@ -1042,6 +1042,27 @@
 .sp-pill--picked { border-color: var(--sky); background-color: var(--color-panel-hover); }
 .sp-pill__cap { font-size: var(--fs-cap); color: var(--color-muted); margin-right: var(--sp-2); }
 .sp-pill__name { font-size: var(--fs-label); color: var(--color-chalk); margin-right: var(--sp-2); }
+/* 横に伸びる先発の欄（issue #656・スタメン設定のDHバー）。打順行と同じ部品（背番号・名前・成績・学年投打・調子）を
+   1行に並べる＝行高も打順行（.lineup-row の min-height 40px）に揃える。幅は置き場所（親）の残りを全部使う。 */
+.sp-pill--wide {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    height: auto;
+    min-height: 40px;
+}
+/* 欄の中の名前は打順行と同じ部品だが、欄が狭いので伸び縮み列の名前が幅0まで押されて消える（実測）。
+   名前に最低幅を持たせ、学年投打は固定幅でなく中身の幅にする。 */
+.sp-pill--wide .lineup-row__name { min-width: 148px; }   /* 6文字（姓3＋全角空白＋名2）が切れない幅（24px級・実測145px） */
+.sp-pill--wide .lineup-row__info { width: auto; flex-shrink: 0; }   /* 画面側の幅指定は LineupSetting.uss で同じく上書き */
+/* 詰め切れないときは名前でなく成績を省略記号で切る（名前が主役） */
+.sp-pill--wide .lineup-row__stat {
+    flex-shrink: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* ── StatBlock：成績2列（通算/今大会）。数値は右揃え・桁揃え（UI原則③） ── */
 /* ── StatTable：比較カードの成績表（issue #388） ──

@@ -96,6 +96,15 @@ namespace KokoSim.Unity.Lineup
         public bool UsesDh;
         public string StartingPitcherName = "";
         public bool StartingPitcherPicked;
+        // 先発投手の行（DH制時のみ・issue #656）。打順行と情報量を揃える＝背番号・主将・学年投打・成績・故障・調子。
+        // 成績欄は打順行の「打率・本・点」の位置に投手の通算「防御率・投球回・奪三振」（監督決定）。
+        public int StartingPitcherNumber;
+        public bool StartingPitcherIsCaptain;
+        public string StartingPitcherGradeLabel = "";
+        public string StartingPitcherHandLabel = "";
+        public string StartingPitcherStatText = "";
+        public string StartingPitcherInjury = "";
+        public Condition StartingPitcherCondition = Condition.Normal;
         public string TeamRankGrade = "C";
 
         public CompareCardView CardA = new CompareCardView();
@@ -585,6 +594,13 @@ namespace KokoSim.Unity.Lineup
                 var sp = _roster[_spIdx];
                 v.StartingPitcherName = sp.Name;
                 v.StartingPitcherPicked = _pickKind == PickKind.StartingPitcher;
+                v.StartingPitcherNumber = sp.UniformNumber;
+                v.StartingPitcherIsCaptain = sp.IsCaptain;
+                v.StartingPitcherGradeLabel = sp.Grade + "年";
+                v.StartingPitcherHandLabel = HandednessLabels.Combined(sp.Throws, sp.Bats);
+                v.StartingPitcherStatText = CareerPitchLine(sp);
+                v.StartingPitcherInjury = InjuryChipText(sp);
+                v.StartingPitcherCondition = FormModel.Quantize(sp.ConditionValue);
             }
 
             // 控え（打順外・背番号順）。ToLineupSpec が積む控え名簿と同じ順なので、
@@ -770,6 +786,21 @@ namespace KokoSim.Unity.Lineup
             Label = "本塁打",
             Value = s => s?.Batting is { Games: > 0 } b ? b.HomeRuns.ToString() : "—",
         };
+
+        // 先発投手行の簡易成績（通算の防御率・投球回・奪三振。issue #656 監督決定）。値の定義は比較カードの指標
+        // （EraMetric 等）と同じ・データ無しは「-」。区切りは打順行（全角空白）より狭い半角2つ＝DHバーの中に
+        // 置くので幅が足りず、全角だと6文字の名前が切れる（実測: 欄669pxに名前の最低148pxが入らない）。
+        // 見出しも打順行の「本」「点」にならって1文字（防＝防御率）。「防御率」のままだと3桁の奪三振で欄を超える。
+        internal static string CareerPitchLine(DevelopingPlayer p)
+            => PitchLine(GameSession.Current.Stats.Career.Get(p.Id)?.Pitching);
+
+        internal static string PitchLine(PitchingStatLine q)
+        {
+            if (q == null || q.Games == 0) return "防 -  回 -  振 -";
+            var era = q.Outs > 0 ? q.Era.ToString("0.00") : "-";
+            var ip = q.Outs > 0 ? q.InningsText : "-";
+            return "防 " + era + "  回 " + ip + "  振 " + q.StrikeOuts;
+        }
 
         // 打順行の簡易成績（通算のみ・全員打撃成績＝投手も打率/本/点）。データ無しは「-」。
         private static string CareerBatLine(DevelopingPlayer p)
