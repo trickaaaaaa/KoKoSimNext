@@ -2080,6 +2080,32 @@ namespace KokoSim.Unity.Match
         private static readonly FieldThrowAnchor CatcherThrowAnchor =
             new("AA_Baseball_Catcher_Throwing", 1.16f, 1.390f, 0.336f, 0.380f, float.MaxValue);
 
+        /// <summary>
+        /// 捕手の送球を対決ビューで見せるのはこのクリップ内時刻[s]まで（issue #662）。この収録は胸を正面に向けたまま
+        /// 右腕を一塁側へ約0.6m張り出してから前へ振る（実測 <c>CatcherThrowClipProbe</c>: 手が横へ走り出すのが
+        /// 0.60s・張り出し切るのが0.77s・リリース1.16sの手の向きは+6.4°＝球の向きは正しい）。対決ビューは捕手を
+        /// 正面から撮るので、この張り出し→振りが「三塁へ横振りしている」絵に映る。張り出す前に守備ビューへ渡す。
+        /// </summary>
+        private const float CatcherDuelThrowShowUntilClip = 0.55f;
+
+        /// <summary>
+        /// 据え置き送球（<see cref="TryBeginDuelThrow"/>）を守備ビューへ渡す時刻（プレーの絶対時刻）。
+        /// 捕手は <see cref="CatcherDuelThrowShowUntilClip"/> の瞬間（リリースより前）、投手（牽制）はリリース。
+        /// 準備していなければ NaN。
+        /// </summary>
+        public float DuelThrowHandoffAt
+        {
+            get
+            {
+                if (!_duelThrowActive) return float.NaN;
+                var e = _duelThrow;
+                if (_duelThrowActor != _catcher) return e.TRelease;
+                // クリップの頭を捨てて途中から流す（TFire > TStart）ときは、見せる区間が無ければ流し始めで渡す
+                float at = e.TStart + CatcherDuelThrowShowUntilClip / Mathf.Max(1e-3f, e.Rate);
+                return Mathf.Clamp(at, e.TFire, e.TRelease);
+            }
+        }
+
         /// <summary>フォロースルーを見せる長さ[s]（リリースから先）。</summary>
         private const float ThrowFollowSeconds = 0.55f;
 

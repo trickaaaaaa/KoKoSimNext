@@ -119,3 +119,39 @@ scenarios:
     outs: 2
     bases: [3]
     seed: 20260735
+
+  # ── 盗塁の捕手送球の絵の検証（issue #662）。最初の打席の初球で必ず二盗を企図する ──
+  # 走塁系の強制は「走者一塁・二塁空き・打席の初球」でだけ効く（ForceNextForCapture の注記）。
+  # 成否だけを固定する（投球は通常どおり解く）ので、捕手の送球は守備ビューまで通る。
+  - id: steal-safe-lab
+    name: 盗塁検証・二盗成功（1回表無死一塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    force: StealSuccess
+    seed: 20260736
+
+  - id: steal-caught-lab
+    name: 盗塁検証・二盗失敗（1回表無死一塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    force: StealCaught
+    seed: 20260736
+
+  # 監督が攻撃側で自分で盗塁サインを出す経路（強制発動なし＝采配カードから企図する。成否は自然に解く）
+  - id: steal-sign-lab
+    name: 盗塁検証・自分で盗塁サイン（1回表無死一塁）
+    away: { school: "AI:tier=C", score: 0 }
+    home: { school: "AI:tier=C", score: 0 }
+    inning: 1
+    top: true
+    outs: 0
+    bases: [1]
+    seed: 20260736
