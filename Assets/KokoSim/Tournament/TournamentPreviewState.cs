@@ -167,7 +167,7 @@ namespace KokoSim.Unity.Tournament
                 {
                     Number = n.UniformNumber.ToString(),
                     Name = n.Name,
-                    Sub = n.SchoolName + "・" + n.Grade + "年・" + n.HandednessLabel + "・" + n.PositionLabel,
+                    Sub = n.SchoolName + "・" + n.Grade + "年・" + n.HandednessLabel,
                     StatLine = n.StatLine,
                     Blurb = n.Blurb,
                 });
@@ -225,7 +225,7 @@ namespace KokoSim.Unity.Tournament
                 var row = new MemberRow
                 {
                     Number = m.UniformNumber.ToString(),
-                    Name = m.Name + "（" + m.PositionLabel + "）",
+                    Name = m.Name,
                     Grade = m.Grade + "年",
                     Hand = m.HandednessLabel,
                 };
