@@ -3018,6 +3018,39 @@ namespace KokoSim.Unity.Match
 
 
         /// <summary>
+        /// 終局（ゲームセット）の瞬間に対決ビューの4人を止める（issue #647）。
+        /// 打球で決着すると <see cref="EndFieldPlay"/> が投手を「打球プレー開始時点の控え」＝投球クリップの途中へ
+        /// 戻すため、そのままだと終わった試合で投げ終わりの続きが再生される。三振決着でも最後の1球は
+        /// フォロースルーを末尾まで流す予約（<c>_cutCountdown = -1</c> の分岐）なので同じく余韻が残る。
+        /// ここでは各役の待機姿勢の頭（投手はセット姿勢＝クリップ頭）へ短くクロスフェードし、**再生速度0**で静止させる
+        /// （StepActor は速度0でもフェードの重みだけ送り、クリップ内時刻は進まない＝フェードが済めば完全に止まる）。
+        /// 次球へのカットバック・球審コールの予約も取り消す。リグは試合ごとに作り直すので戻す処理は要らない。
+        /// </summary>
+        public void FreezeForGameEnd()
+        {
+            if (!Available) return;
+            _cutCountdown = -1f;
+            _umpireCallCountdown = -1f;
+            foreach (var a in new[] { _pitcher, _catcher, _batter, _umpire })
+            {
+                if (a == null || a.Go == null || !a.Graph.IsValid() || a.Clip == null) continue;
+                a.Holding = false;
+                if (a.IdleClip != null && a.IdleClip != a.Clip)
+                    CrossfadeActorToClip(a, a.IdleClip, 0f, a.IdleEndAt, CrossfadeSeconds);
+                else
+                {
+                    CrossfadeActorTo(a, 0f, CrossfadeSeconds);
+                    a.EndAt = a.Clip == a.IdleClip ? a.IdleEndAt : a.DefaultEndAt;
+                }
+                a.HoldSeconds = 0f;
+                a.HoldRemaining = 0f;
+                a.SpeedSwitchAt = -1f;
+                a.Speed = 0f;   // ⚠ 差し替えの後（SetActorClip/Seek は速度を触らないが順序で保証する）
+            }
+            if (_batter != null) { _batTrailSwing = false; _batterTakeLoad = false; _batterTakeLoadReturning = false; }
+        }
+
+        /// <summary>
         /// 【開発ツール用】投手を**発射する瞬間の姿勢で静止**させ、球を手に持たせる（issue #332 の出所合わせ）。
         /// 動いている絵で位置を合わせるのは無理なので、止めた状態で <see cref="BallDiagForCapture"/> の
         /// 数値を見ながらスライダを回す＝スクショ往復が要らない。
@@ -6157,6 +6190,24 @@ namespace KokoSim.Unity.Match
         /// applyRootMotion / フェード中）。ルートモーションの積分は絵では「向きが少し変」としか見えず
         /// 目測で切り分けられないので、必ずこの実測で判定する（design-18 §7-2）。
         /// </summary>
+        /// <summary>
+        /// 終局の静止の実測（issue #647）。投手・捕手・打者・球審ごとに「クリップ名 時刻 速度 フェード残」。
+        /// 終局後に時刻が動かず、フェード残が0へ落ちていれば止まっている。
+        /// </summary>
+        internal string FreezeDiagForCapture()
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var (name, a) in new[] { ("P", _pitcher), ("C", _catcher), ("B", _batter), ("U", _umpire) })
+            {
+                if (a == null || a.Go == null) { sb.Append(name).Append("=- "); continue; }
+                sb.Append(name).Append('=').Append(a.Clip != null ? a.Clip.name : "-").Append('@')
+                  .Append(a.Time.ToString("F2")).Append("x").Append(a.Speed.ToString("F1"))
+                  .Append(a.FadeRemaining > 0f ? "~" + a.FadeRemaining.ToString("F2") : "")
+                  .Append(a.Holding ? "H" : "").Append(' ');
+            }
+            return sb.ToString();
+        }
+
         internal string PitcherDiagForCapture()
         {
             if (_pitcher == null || _pitcher.Go == null) return "0\t0\t0\t0\t-\t-";
