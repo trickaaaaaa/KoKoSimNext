@@ -6208,6 +6208,48 @@ namespace KokoSim.Unity.Match
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 捕手の送球の向きと姿勢の実測（issue #662）。タブ区切り1行:
+        /// クリップ@時刻・保持・据え置き送球中か・体の基準ヨー・transformヨー・肩線から出した胸の向き・
+        /// 右手位置(x,y,z)・腰の高さ（足元基準）・送球の的への方向（捕手位置から）。ヨーは Atan2(x,z)[度]
+        /// ＝+zがマウンド・+xが一塁側。手の動いた向きは呼び出し側が連続2コマの右手位置から出す。
+        /// </summary>
+        internal string CatcherThrowDiagForCapture()
+        {
+            var a = _catcher;
+            if (a?.Go == null || a.Animator == null) return "-";
+            var t = a.Go.transform;
+            Vector3 L(Transform b) => b != null ? _root.transform.InverseTransformPoint(b.position) : Vector3.zero;
+            var ls = a.Animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var rs = a.Animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            var hand = L(a.Animator.GetBoneTransform(HumanBodyBones.RightHand));
+            var hips = L(a.Animator.GetBoneTransform(HumanBodyBones.Hips));
+            float chestYaw = float.NaN;
+            if (ls != null && rs != null)
+            {
+                var across = L(rs) - L(ls);
+                var fwd = Vector3.Cross(across, Vector3.up);
+                chestYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+            }
+            var pos = t.localPosition;
+            float targetYaw = float.NaN;
+            if (_duelThrowActive || _duelThrowFired)
+            {
+                var e = _duelThrow;
+                targetYaw = e.Yaw;
+            }
+            return (a.Clip != null ? a.Clip.name : "-") + "@" + a.Time.ToString("F2")
+                + "\t" + (a.Holding ? "H" : "-")
+                + "\t" + (_duelThrowActive ? (_duelThrowFired ? "throw" : "armed") : "-")
+                + "\t" + Mathf.DeltaAngle(0f, a.BaseRot.eulerAngles.y).ToString("F1")
+                + "\t" + Mathf.DeltaAngle(0f, t.localEulerAngles.y).ToString("F1")
+                + "\t" + chestYaw.ToString("F1")
+                + "\t" + hand.x.ToString("F3") + "," + hand.y.ToString("F3") + "," + hand.z.ToString("F3")
+                + "\t" + (hips.y - pos.y).ToString("F3")
+                + "\t" + targetYaw.ToString("F1")
+                + "\t" + pos.x.ToString("F2") + "," + pos.z.ToString("F2");
+        }
+
         internal string PitcherDiagForCapture()
         {
             if (_pitcher == null || _pitcher.Go == null) return "0\t0\t0\t0\t-\t-";

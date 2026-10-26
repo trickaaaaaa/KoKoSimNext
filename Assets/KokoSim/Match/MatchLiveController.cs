@@ -333,6 +333,9 @@ namespace KokoSim.Unity.Match
         // 捕手の送球を対決ビューの寄りで見せてからリリースで守備ビューへ引き渡す（issue #512）。
         // _stealReleaseAt = FieldCutMomentOf(steal)＝BeginFieldPlay へ渡す t0 と同じ定義（TRelease）。
         private double _stealReleaseAt;
+        // 実際に守備ビューへ渡す時刻（issue #662）。捕手の送球はリリースより前（腕を横へ張り出す前）で渡す
+        // ＝正面の構図だと張り出し→振りが「三塁へ横振り」に映るため。投手（牽制）・頭出しできない時はリリース。
+        private double _stealHandoffAt;
         private bool _stealHandedOff;
 
         // 打席途中の牽制の再生（issue #486）。盗塁と同型だが、判定結果（アウト/セーフ）に関わらず
@@ -2110,9 +2113,12 @@ namespace KokoSim.Unity.Match
             // （RenderStealFrame）。頭出しできない（rig 未導入・クリップ無し等）なら従来どおり即座に
             // 守備ビューへ切り替える。
             _stealHandedOff = false;
+            _stealHandoffAt = _stealReleaseAt;
             if (_duelRig != null && _duelRig.Available && _duelRig.TryBeginDuelThrow(steal, out var fireAt))
             {
                 _t = fireAt;
+                var handoff = _duelRig.DuelThrowHandoffAt;
+                if (float.IsFinite(handoff)) _stealHandoffAt = System.Math.Min(_stealReleaseAt, handoff);
             }
             else
             {
@@ -2123,7 +2129,9 @@ namespace KokoSim.Unity.Match
         }
 
         /// <summary>捕手の送球を対決ビューの寄りで見せ終わり、守備ビューへ引き渡す（issue #512）。
-        /// 送球予定を頭出しできなかった場合は <see cref="EnterStealPlay"/> から即座に呼ばれる。</summary>
+        /// 送球予定を頭出しできなかった場合は <see cref="EnterStealPlay"/> から即座に呼ばれる。
+        /// 守備ビューは**渡した時刻から**再生する（捕手はリリース前に渡す＝issue #662。守備ビュー側の
+        /// 捕手の送球予定は同じ BuildThrowEvent から組むので、途中から入っても続きが流れる）。</summary>
         private void HandOffStealToFieldView()
         {
             _stealHandedOff = true;
@@ -2134,7 +2142,7 @@ namespace KokoSim.Unity.Match
                 if (_prog != null && _current != null)
                     _duelRig.SetFieldIdentity(_prog.CurrentDefenseIdentity(_current.IsTop));
                 _duelRig.EndDuelThrow();
-                _duelRig.BeginFieldPlay(_stealPlay, (float)_stealReleaseAt);
+                _duelRig.BeginFieldPlay(_stealPlay, (float)System.Math.Min(_t, _stealReleaseAt));
             }
         }
 
@@ -2144,7 +2152,7 @@ namespace KokoSim.Unity.Match
         {
             if (_stealPlay == null) return;
             _view.SetTime(_t);
-            if (!_stealHandedOff && _t >= _stealReleaseAt) HandOffStealToFieldView();
+            if (!_stealHandedOff && _t >= _stealHandoffAt) HandOffStealToFieldView();
             if (FieldPlayActive) _duelRig.SetFieldTime((float)_t);
             else _duelRig?.StepDuelThrow((float)_t);
             if (_caption != null) _caption.text = PlaybackEvaluator.CaptionAt(_stealPlay, _t);
