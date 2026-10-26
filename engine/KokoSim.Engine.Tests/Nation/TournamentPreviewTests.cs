@@ -279,6 +279,24 @@ public sealed class TournamentPreviewTests
         Assert.Contains(roster.Members, m => m.Name == "Catcher先発" && m.PositionLabel == "捕");
     }
 
+    /// <summary>issue #667: DH制の先発投手は打順外（Reserves にも居ない）でも、メンバー表とエースに出る。</summary>
+    [Fact]
+    public void Rosters_DhTeam_ListsStartingPitcherOutsideOrderAndReserves()
+    {
+        var dh = MakeDhTeam() with { Reserves = new List<Player>() };
+        var p = TournamentPreviewBuilder.Build("秋季テスト県大会", Field(), berths: 2, "地区大会",
+            teamProvider: (school, year) => school.Name == "強打学園" ? dh : StrengthTeamFactory.ForSchool(school, year));
+
+        var roster = p.Rosters.First(r => r.SchoolName == "強打学園");
+        Assert.Equal(10, roster.Members.Count);
+        Assert.Contains(roster.Members, m => m.Name == "先発P" && m.PositionLabel == "投");
+
+        var again = TournamentPreviewBuilder.BuildRosterFor(
+            Field().First(s => s.Name == "強打学園"), Field(), berths: 2,
+            teamProvider: (school, year) => dh);
+        Assert.Equal(10, again.Members.Count);
+    }
+
     /// <summary>
     /// ★展望↔実戦の一致。展望が載せた選手は、実際にその校と対戦したときのラインナップに
     /// 同一氏名・同一背番号で存在する（「展望に載ってた選手だ！」の担保）。

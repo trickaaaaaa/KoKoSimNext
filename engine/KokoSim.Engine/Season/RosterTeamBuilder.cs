@@ -98,6 +98,31 @@ public static class RosterTeamBuilder
     }
 
     /// <summary>
+    /// 登録メンバー（背番号1〜20＝ベンチ入り）だけで組むチーム。スタメン未設定のときの自校編成と、
+    /// 大会展望の校別詳細（issue #667）が使う。<see cref="Build"/> は部員全員から能力順で選ぶので
+    /// ベンチ外（背番号0）が打順に入り、控え野手も積まない＝約12人で背番号0が混ざっていた。
+    /// こちらは候補をベンチ入りに絞り、使われなかったベンチ入りを控えに積んで20人にそろえる。
+    /// ベンチ入りが9人に満たない（新規ゲーム直後など）ときは従来どおり全員から組む。
+    /// </summary>
+    public static Team BuildRegistered(
+        IReadOnlyList<DevelopingPlayer> roster, string name, Match.Tactics.ITacticsBrain? tactics = null)
+    {
+        var benchIn = roster.Where(p => p.UniformNumber >= 1).ToList();
+        if (benchIn.Count < 9) return Build(roster, name, tactics);
+
+        var team = Build(benchIn, name, tactics);
+        var used = new HashSet<int>();
+        foreach (var p in team.BattingOrder.Concat(team.Reserves))
+            if (p.SourceId is { } id) used.Add(id);
+        var rest = benchIn.Where(dp => !used.Contains(dp.Id))
+            .OrderBy(dp => dp.UniformNumber)
+            .Select(dp => ToPlayer(dp, PitcherRoleResolver.LeansPitcher(dp)
+                ? FieldPosition.Pitcher : FieldPosition.CenterField))
+            .ToList();
+        return team with { Reserves = TeamReserves.Merge(team.Reserves, rest) };
+    }
+
+    /// <summary>
     /// 野手8人を8守備位置へ、適性補正後の実効守備力（Fielding×AptitudeFactor）の総和が最大になるよう割り当てる
     /// （設計書01 §1.1「本職優先」/ OPEN-QUESTIONS 未決2b）。8!=40320通りの全探索（決定論・状態を持たない）。
     /// <paramref name="fielders"/> が8人に満たない場合、不足分の行は重み0で埋め、余った位置は

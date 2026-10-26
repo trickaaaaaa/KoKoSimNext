@@ -163,3 +163,41 @@ public sealed class LineupSpecTests
         Assert.Throws<ArgumentException>(() => RosterTeamBuilder.BuildFromLineup(new LineupSpec(order)));
     }
 }
+
+/// <summary>issue #667: 登録メンバーだけで20人を組む <see cref="RosterTeamBuilder.BuildRegistered"/>。</summary>
+public sealed class BuildRegisteredTests
+{
+    private static List<DevelopingPlayer> Roster(int total, int benchIn)
+    {
+        var list = new List<DevelopingPlayer>();
+        for (var i = 1; i <= total; i++)
+        {
+            var p = new DevelopingPlayer
+            {
+                Id = i, Name = $"部員{i}", Grade = 1 + i % 3,
+                UniformNumber = i <= benchIn ? i : 0,
+            };
+            PitcherRoleResolver.SeedAptitudeForRole(p, pitcher: i % 5 == 0);
+            list.Add(p);
+        }
+        return list;
+    }
+
+    [Fact]
+    public void BenchOutNeverAppears_AndAllBenchInAreListed()
+    {
+        var team = RosterTeamBuilder.BuildRegistered(Roster(total: 40, benchIn: 20), "自校");
+
+        var all = team.BattingOrder.Concat(team.Reserves).ToList();
+        Assert.Equal(20, all.Count);
+        Assert.DoesNotContain(all, p => p.UniformNumber < 1);
+        Assert.Equal(20, all.Select(p => p.UniformNumber).Distinct().Count());
+    }
+
+    [Fact]
+    public void FewerThanNineBenchIn_FallsBackToWholeRoster()
+    {
+        var team = RosterTeamBuilder.BuildRegistered(Roster(total: 30, benchIn: 5), "自校");
+        Assert.Equal(9, team.BattingOrder.Count);   // 組めないまま落ちない
+    }
+}
