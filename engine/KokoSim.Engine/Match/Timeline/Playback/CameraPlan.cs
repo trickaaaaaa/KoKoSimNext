@@ -374,12 +374,27 @@ public static class CameraPlanBuilder
         foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
         {
             if (pos == FieldPosition.DesignatedHitter) continue;   // 守備に就かない
-            if (!HasStartedMoving(play, pos, t)) continue;
-            yield return PlaybackEvaluator.FielderAt(play, pos, t).Pos;
+            var at = PlaybackEvaluator.FielderAt(play, pos, t).Pos;
+            // 球を持っている／すぐそばに居る野手も関与者（issue #689）。三塁手のように定位置で捕る野手は
+            // Moves に載らないので、動き出しだけで判定すると保持中に「誰も居ない」と見なされて枠が広がる。
+            if (!HasStartedMoving(play, pos, t) && !IsAtBall(play, at, t)) continue;
+            yield return at;
         }
         foreach (var runner in play.Runners)
             if (PlaybackEvaluator.RunnerAt(runner, t) is { } p)
                 yield return p;
+    }
+
+    private const double AtBallRadiusM = 1.5;
+
+    /// <summary>野手が時刻 t の球のすぐそば（<see cref="AtBallRadiusM"/> 以内）に居るか。</summary>
+    private static bool IsAtBall(PlaybackPlay play, PlaybackVec at, double t)
+    {
+        var ball = PlaybackEvaluator.BallAt(play, t);
+        if (!ball.HasValue) return false;
+        var dx = at.X - ball.Value.X;
+        var dy = at.Y - ball.Value.Y;
+        return dx * dx + dy * dy <= AtBallRadiusM * AtBallRadiusM;
     }
 
     /// <summary>時刻 t までに、この野手の予定された動き（<see cref="PlaybackPlay.Moves"/>）が始まっているか。</summary>
@@ -473,7 +488,7 @@ public static class CameraPlanBuilder
                 // まだ**誰も持っていない**（野手が拾いに走っている最中）なら、被写体はその野手（issue #566）。
                 // 走者は25〜40m先に居るので、ここで走者を入れると枠が追いつかず地面を舐める。下の
                 // HeldBallFollowsRunner は「持っている」あいだの作法なので、走っている間は先に抜ける。
-                if (fr.LooseBallFollowsChaser && ChasingFielderAt(play, actualT) is { } chaser)
+                if (fr.LooseBallFollowsChaser && ChasingFielderAt(play, actualT, heldV) is { } chaser)
                     return FitBox(heldV, chaser, fr);
                 // 球が止まっている間も走っている走者が居れば一緒に収める（issue #488 実機確認 2026-08-06）。
                 // 振り逃げは「捕手が本塁付近で球を持っている 2.4秒」がまるごとこの分岐で、球だけを
@@ -601,20 +616,28 @@ public static class CameraPlanBuilder
     /// 悪化した）。拾った後は球のところに立っているので、球との箱は点に近い＝寄った枠のまま
     /// 「捕手が拾って投げ返す」が読める。送球が始まればこの分岐自体を抜ける。</para>
     ///
-    /// <para>列挙は <see cref="FieldPosition"/> の宣言順＝辞書の並びに依らず決定論（不変条件#2）。</para>
+    /// <para>誰を選ぶかは球にいちばん近い野手（issue #689。宣言順の先頭だと内野ゴロで捕手が選ばれ引いていく）。
+    /// 同距離は <see cref="FieldPosition"/> の宣言順＝決定論（不変条件#2）。</para>
     /// </summary>
-    private static PlaybackVec? ChasingFielderAt(PlaybackPlay play, double t)
+    private static PlaybackVec? ChasingFielderAt(PlaybackPlay play, double t, PlaybackVec ball)
     {
-        if (play.Moves is null || play.Moves.Count == 0) return null;
+        // 球にいちばん近い野手（issue #689）。宣言順の先頭の「動いた野手」を取ると、内野ゴロでも毎回
+        // 本塁へ動く捕手が選ばれ、遊撃手が球を持っている間ずっと「遊撃手＋本塁」(40m級)の枠になって
+        // 引いていく。球を拾いに走る野手も、拾って持っている野手も、球のいちばん近くに居る。
+        // 定位置のまま捕る野手（三塁手など）は Moves に載らないので、候補は全野手にする。
+        // 同距離は宣言順（strict <）＝辞書の並びに依らず決定論。
+        PlaybackVec? found = null;
+        var best = double.PositiveInfinity;
         foreach (FieldPosition pos in Enum.GetValues(typeof(FieldPosition)))
         {
-            if (!play.Moves.TryGetValue(pos, out var moves) || moves.Count == 0) continue;
-            var started = false;
-            foreach (var m in moves) if (t >= m.T0) { started = true; break; }
-            if (!started) continue;
-            return PlaybackEvaluator.FielderAt(play, pos, t).Pos;
+            if (pos == FieldPosition.DesignatedHitter) continue;   // 守備に就かない
+            var at = PlaybackEvaluator.FielderAt(play, pos, t).Pos;
+            var d = (at.X - ball.X) * (at.X - ball.X) + (at.Y - ball.Y) * (at.Y - ball.Y);
+            if (d >= best) continue;
+            best = d;
+            found = at;
         }
-        return null;
+        return found;
     }
 
     private static PlaybackRun? FindCriticalRunAt(PlaybackPlay play, double t)
