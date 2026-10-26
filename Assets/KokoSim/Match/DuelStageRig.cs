@@ -951,6 +951,7 @@ namespace KokoSim.Unity.Match
         private Transform _capMount, _helmetMount;   // 被り物の位置オフセット枠（gear-head直下・実寸[m]）
         private Transform _cHelmetMount, _cMaskMount;   // 捕手のヘルメット・マスク（同上）
         private Transform _cChestMount;                 // 捕手の胸プロテクター（gear-chest直下）
+        private DuelChestTilt _cChestTilt;              // 肩と背骨の前傾へ毎コマ合わせる
 
         // 結果分岐の一発物クリップ（design-18 §7-2 第2弾。無いものはnull＝その分岐は待機のまま）
         private AnimationClip _swingMissClip, _swingHitClip, _hbpClip, _umpireStrikeClip, _umpireStrikeOutClip;
@@ -1456,7 +1457,7 @@ namespace KokoSim.Unity.Match
             }
             if (_cHelmetMount != null) _cHelmetMount.localPosition = cal.CatcherHelmetOffset;
             if (_cMaskMount != null) _cMaskMount.localPosition = cal.CatcherMaskOffset;
-            if (_cChestMount != null) _cChestMount.localPosition = cal.CatcherChestOffset;
+            if (_cChestTilt != null) _cChestTilt.Offset = cal.CatcherChestOffset;
             // 手の中の球はスライダを動かした瞬間に動かす（貼り付け中だけ＝飛翔中は触らない）
             if (_ballHeld) HoldBallInHand();
         }
@@ -5328,8 +5329,14 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private static readonly Vector3 UmpireMaskBase = new(0f, 0.090f, 0.075f);
 
-        /// <summary>胸プロテクターの装着位置[m]（gear-chestコンテナ＝胸ボーン原点・+Z体前）。</summary>
-        private static readonly Vector3 ChestMeshBase = new(0f, 0f, 0.085f);
+        /// <summary>
+        /// 胸プロテクターの前後の装着位置[m]（gear-chestコンテナ＝胸ボーン原点・+Z体前）。高さと前傾は
+        /// <see cref="DuelChestTilt"/> が毎コマ肩・背骨へ合わせるので、ここは前後だけ。
+        /// </summary>
+        private static readonly Vector3 ChestMeshBase = new(0f, 0f, 0.115f);
+
+        /// <summary>胸プロテクターの横幅の倍率（生成メッシュの幅0.40mに掛ける）。</summary>
+        private const float ChestWidthScale = 1.3f;
 
         /// <summary>打者ヘルメットの被り角の回転中心（殻 helmet-shell の中心。AttachGear の配置と一致させる）。</summary>
         private static readonly Vector3 HelmetPivot = new(0f, 0.13f, 0.02f);
@@ -5524,23 +5531,23 @@ namespace KokoSim.Unity.Match
                         // 高さは**肩ボーン（UpperArm頭）の実測**へメッシュ上端（肩当ての天面）を合わせる。
                         // コンテナのボーンは UpperChest/Chest/Spine のどれに落ちるかが素体依存で、
                         // 原点の高さが揃わない＝固定オフセットだと腰まで下がる（2026-07-29 実害）。
-                        // 旧実装が肩当てだけ肩ボーン実測で置いていたのと同じ理由
+                        // 取り付け時の高さだけでなく**毎コマ**合わせる（DuelChestTilt）: しゃがんで上体を倒すと
+                        // 肩は起きた姿勢の高さから外れ、固定の胸当ては腹〜ももの上まで下がって見えなかった。
                         var chestGear = DuelGearMeshes.Chest();
-                        float shoulderY = 0f; int shoulderN = 0;
-                        foreach (var armBone in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm })
-                        {
-                            var arm = actor.Animator.GetBoneTransform(armBone);
-                            if (arm == null) continue;
-                            shoulderY += c.transform.InverseTransformPoint(arm.position).y;
-                            shoulderN++;
-                        }
-                        float top = shoulderN > 0
-                            ? shoulderY / shoulderN + 0.045f    // 肩の稜線の少し上
-                            : chestGear.bounds.extents.y;       // 肩ボーンが無い素体は素の中心置き
                         _cChestMount = OffsetMount(c, "chest-offset");
-                        GearMeshPart(_cChestMount.gameObject, chestGear, "chest-mesh",
-                            new Vector3(0f, top - chestGear.bounds.extents.y, ChestMeshBase.z),
-                            Quaternion.identity, accent, layer);
+                        var chestMeshGo = GearMeshPart(_cChestMount.gameObject, chestGear, "chest-mesh",
+                            new Vector3(0f, 0f, ChestMeshBase.z), Quaternion.identity, accent, layer);
+                        // 生成メッシュの胸当ては幅0.40mで上衣の肩幅（袖込み）より狭く、ミットの両脇に黒が少ししか出ない。
+                        // 実物は脇の下まで覆う幅なので左右だけ広げる（前後・上下は据え置き）。
+                        chestMeshGo.transform.localScale = new Vector3(ChestWidthScale, 1f, 1f);
+                        _cChestTilt = _cChestMount.gameObject.AddComponent<DuelChestTilt>();
+                        var ca = actor.Animator;
+                        _cChestTilt.Hips = ca.GetBoneTransform(HumanBodyBones.Hips);
+                        _cChestTilt.Neck = ca.GetBoneTransform(HumanBodyBones.Neck) ?? ca.GetBoneTransform(HumanBodyBones.Head);
+                        _cChestTilt.LeftShoulder = ca.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                        _cChestTilt.RightShoulder = ca.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                        _cChestTilt.Container = c.transform;
+                        _cChestTilt.MeshTopLocalY = chestGear.bounds.extents.y;   // メッシュは中心が原点＝上端は +extents.y
                     }
                     else
                     {

@@ -20,6 +20,13 @@ namespace KokoSim.Unity.Match
 
         public static string FileName = "i659-catcher-gear";
 
+        /// <summary>胸プロテクターのずらし量（issue 胸当て: 位置の当たりを絵で探る用）。null＝既定。</summary>
+        public static Vector3? ChestOffsetForShot;
+        /// <summary>true＝配色の違う3校を撮らず、最初の1校（明るい帽子）だけ撮る。</summary>
+        public static bool FirstOnly;
+        /// <summary>FirstOnly のとき、胸プロテクターの前後ずらし量[m]をこの順に変えて寄りを撮る（位置の当たりを一度に探す）。</summary>
+        public static float[] ChestZSweep;
+
         /// <summary>守備側の配色ID（最も明るい帽子・黒い帽子・赤い帽子）。攻撃側は白＋紺で固定。</summary>
         private static readonly string[] DefenseIds = { "white_yamabuki", "white_black", "white_red" };
 
@@ -58,6 +65,17 @@ namespace KokoSim.Unity.Match
                 yield return CaptureZoom(FileName + "-" + id + "-near");
                 Debug.Log("[CatcherGearShot] " + id + "（帽子 " + def.Team + "）: "
                           + DuelStageRig.Live?.CatcherGearColorDiagForCapture());
+                if (FirstOnly) break;
+            }
+            if (FirstOnly)
+            {
+                if (ChestZSweep != null)
+                    foreach (var z in ChestZSweep)
+                    {
+                        ChestOffsetForShot = new Vector3(0f, 0f, z);
+                        yield return CaptureZoom(FileName + "-dz" + z.ToString("0.00"));
+                    }
+                ctrl.FreezeLiveForCapture(false); Debug.Log("[CatcherGearShot] DONE"); yield break;
             }
 
             // 黒い帽子の高校が守備 → 攻守交代で赤い帽子の高校が守備。旧実装は色の一致で防具を
@@ -82,6 +100,7 @@ namespace KokoSim.Unity.Match
             var prev = DuelStageRig.CalibrationOverride;
             var cal = DuelCalibration.Default;
             cal.AimY = CatcherAimY; cal.AimZ = CatcherAimZ; cal.FovDeg = CatcherFov;
+            if (ChestOffsetForShot is { } co) cal.CatcherChestOffset = co;
             DuelStageRig.CalibrationOverride = cal;
             DuelStageRig.Live?.ApplyCalibration(cal);
             for (int i = 0; i < 12; i++) yield return null;
