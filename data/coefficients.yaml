@@ -99,6 +99,10 @@ batting:
   # 全指標は帯内のまま非破壊。
   two_strike_swing_boost: 0.28
   three_zero_swing_factor: 0.15
+  # 初球のスイング倍率・2ストライク後のファール加算（issue #683。早打ち是正）。値は実測で校正する。
+  first_pitch_swing_factor: 0.65    # 初球の様子見・ゾーン内のみ（初球スイング率 46%→約34%）
+  early_count_swing_factor: 0.82    # 0-1/1-0/1-1等も少し見る・ゾーン内のみ（打席あたり 3.26→約3.6球）
+  two_strike_foul_bonus: 0.10     # 追い込まれてからファールで粘る（打席あたりファール 0.61→約0.68本）
   whiff_intercept: -2.52         # 空振り対数オッズ基準（Phase E-2で弾道由来モデルへ再校正。#578 で −2.40→−2.52＝stuff_per_kmh 倍化の平均中立化）
   whiff_contact_slope: 0.030     # ミート→空振り減
   whiff_out_of_zone_penalty: 0.85

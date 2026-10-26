@@ -138,9 +138,12 @@ public sealed class TacticsCardWindowsTests
     [Fact]
     public void SetStealAttempt_ChangesTheGame()
     {
-        Assert.NotEqual(
-            ShaFromRunnerOnFirst(null),
-            ShaFromRunnerOnFirst((prog, isTop) => prog.SetStealAttempt(isTop, StartType.Gamble)));
+        // 特定シードでは盗塁の企図が結果を変えないこともある（RNG列に依存）。複数シードで一度でも変われば十分。
+        var differs = false;
+        for (ulong s = 1; s <= 40 && !differs; s++)
+            differs = ShaFromRunnerOnFirst(null, s)
+                != ShaFromRunnerOnFirst((prog, isTop) => prog.SetStealAttempt(isTop, StartType.Gamble), s);
+        Assert.True(differs, "盗塁を指示しても試合結果が一切変わらない");
     }
 
     /// <summary>一塁に走者が出た打席まで進め、そこで指示してから最後まで流した試合の digest。</summary>

@@ -455,7 +455,7 @@ public sealed class AtBatSession
         }
 
         // ④ コンタクト判定 → ⑤ 打球生成（広角打法/粘り打ちは batting コピーへ反映済み）
-        var (outcome, ball) = ContactModel.Resolve(batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa);
+        var (outcome, ball) = ContactModel.Resolve(batter, plan, _lastPitchFeatures!.Value, inZone, batting, rng, ctx.FamiliarityPa, _strikes);
         switch (outcome)
         {
             case ContactOutcome.Whiff:

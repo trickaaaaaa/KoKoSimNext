@@ -10,7 +10,8 @@ namespace KokoSim.Engine.Tests.Match.Batting;
 /// </summary>
 public sealed class BatterDecisionTests
 {
-    private static readonly BattingCoefficients Coeff = new();
+    // 初球・序盤カウントの係数は恒等にそろえる（カウントを渡さない既存テストの前提＝strikes/balls 既定 0-0 を保つ。issue #683）
+    private static readonly BattingCoefficients Coeff = new() { FirstPitchSwingFactor = 1.0, EarlyCountSwingFactor = 1.0 };
     private static readonly BatterAttributes Batter = BatterAttributes.LeagueAverage;
 
     [Fact]
@@ -168,6 +169,28 @@ public sealed class BatterDecisionTests
         var outZoneNormal = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, coeff, strikes: 0, balls: 2);
         var outZoneThreeZero = BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, coeff, strikes: 0, balls: 3);
         Assert.Equal(outZoneNormal * coeff.ThreeZeroSwingFactor, outZoneThreeZero, 9);
+    }
+
+    [Fact]
+    public void SwingProbability_FirstPitchAndEarlyCount_ScaleDown_OnlyBeforeTwoStrikes()
+    {
+        // issue #683: 初球は FirstPitchSwingFactor、0-1/1-0/1-1/2-1 等は EarlyCountSwingFactor、
+        // 2ストライク以降と3ボールは対象外（待球は2ストライク前の様子見だけ）。
+        var coeff = Coeff with { FirstPitchSwingFactor = 0.6, EarlyCountSwingFactor = 0.8, TwoStrikeSwingBoost = 0.0 };
+        double P(int s, int b) => BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, coeff, strikes: s, balls: b);
+        // ゾーン外（チェイス）は初球・序盤係数の対象外
+        Assert.Equal(
+            BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, Coeff, strikes: 0, balls: 0),
+            BatterDecision.SwingProbability(false, 0.1, 0.3, Batter, coeff, strikes: 0, balls: 0), 9);
+        var plain = BatterDecision.SwingProbability(true, 0.0, 0.3, Batter, Coeff with { TwoStrikeSwingBoost = 0.0 }, strikes: 0, balls: 1);
+
+        Assert.Equal(plain * 0.6, P(0, 0), 9);   // 0-0
+        Assert.Equal(plain * 0.8, P(1, 0), 9);   // 0-1（1ストライク）
+        Assert.Equal(plain * 0.8, P(0, 1), 9);   // 1-0
+        Assert.Equal(plain * 0.8, P(1, 2), 9);   // 2-1
+        Assert.Equal(plain, P(2, 0), 9);         // 0-2（追い込まれ）は対象外
+        Assert.Equal(plain, P(2, 3), 9);         // フルカウントも対象外
+        Assert.Equal(plain * 0.15, P(0, 3), 9);  // 3-0 は ThreeZeroSwingFactor だけ（初球・序盤係数は掛けない）
     }
 
     [Fact]
