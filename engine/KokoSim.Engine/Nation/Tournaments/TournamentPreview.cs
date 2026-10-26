@@ -48,16 +48,16 @@ public sealed record PreviewContender(
 /// 読めるので改名した（#366「投手は配置であって属性ではない」／issue #379）。
 /// </summary>
 public sealed record NotablePlayer(
-    string SchoolName, int UniformNumber, string Name, int Grade, string PositionLabel,
+    string SchoolName, int UniformNumber, string Name, int Grade,
     string HandednessLabel, bool PitcherLed, string StatLine, string Blurb);
 
 /// <summary>
-/// 登録メンバー1人（背番号・氏名・守備位置・学年・投打まで。能力の詳細指標は出さない＝設計§3.5b）。
+/// 登録メンバー1人（背番号・氏名・学年・投打まで。能力の詳細指標も守備位置も出さない＝設計§3.5b・守備位置はプレイヤーが決めるもの）。
 /// <paramref name="SourceId"/> は校内選手ID＝<b>成績の帰属キー</b>（issue #634）。校別詳細は
 /// (校ID, SourceId) で今大会成績を join する（能力からの合成値ではなく実測値を出すため）。
 /// </summary>
 public sealed record RosterMember(
-    int UniformNumber, string Name, string PositionLabel, int Grade, string HandednessLabel,
+    int UniformNumber, string Name, int Grade, string HandednessLabel,
     int SourceId = 0);
 
 /// <summary>
@@ -223,7 +223,6 @@ public static class TournamentPreviewBuilder
             UniformNumber: p.UniformNumber,
             Name: p.Name,
             Grade: p.Grade,
-            PositionLabel: PositionLabel(p.Position),
             HandednessLabel: Players.HandednessLabels.Combined(p.Throws, p.Bats),
             PitcherLed: pitcherLed,
             StatLine: pitcherLed
@@ -234,36 +233,18 @@ public static class TournamentPreviewBuilder
 
     private static RosterExcerpt BuildRoster(PreviewContender c, Match.Game.Team team)
     {
-        // DHスロットの選手は本来守備位置ではなく「指」を表示する（enum由来・issue #70）。
-        var dhPlayer = team.UsesDh ? team.BattingOrder[team.DhSlot] : null;
         var members = team.BattingOrder.Concat(team.Reserves)
             .Concat(team.StartingPitcher is { } sp && !team.Reserves.Contains(sp) && !team.BattingOrder.Contains(sp)
                 ? new[] { sp } : System.Array.Empty<Players.Player>())   // DH制は先発投手が打順外（#667）
             .OrderBy(p => p.UniformNumber)
             .Select(p => new RosterMember(
                 p.UniformNumber, p.Name,
-                PositionLabel(ReferenceEquals(p, dhPlayer) ? Match.Field.FieldPosition.DesignatedHitter : p.Position),
                 p.Grade, Players.HandednessLabels.Combined(p.Throws, p.Bats),
                 SourceId: p.SourceId ?? 0))
             .ToList();
         var seedLabel = c.Mark == ContenderMark.DarkHorse ? "ノーシード" : $"第{c.Seed}シード";
         return new RosterExcerpt(c.Name, c.Tier, seedLabel, c.Blurb, members, c.Rating);
     }
-
-    private static string PositionLabel(Match.Field.FieldPosition pos) => pos switch
-    {
-        Match.Field.FieldPosition.Pitcher => "投",
-        Match.Field.FieldPosition.Catcher => "捕",
-        Match.Field.FieldPosition.FirstBase => "一",
-        Match.Field.FieldPosition.SecondBase => "二",
-        Match.Field.FieldPosition.ThirdBase => "三",
-        Match.Field.FieldPosition.Shortstop => "遊",
-        Match.Field.FieldPosition.LeftField => "左",
-        Match.Field.FieldPosition.CenterField => "中",
-        Match.Field.FieldPosition.RightField => "右",
-        Match.Field.FieldPosition.DesignatedHitter => "指",
-        _ => "―",
-    };
 
     // --- 成績行（今大会の実測値。裏試合フルシム #43 が全4000校ぶん積んでいる, issue #634） ---
     //
