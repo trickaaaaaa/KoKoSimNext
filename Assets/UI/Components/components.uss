@@ -1920,7 +1920,7 @@
     border-left-color: var(--divider);
 }
 .bs-cell--first { border-left-width: 0; }
-.bs-cell--pos { width: 24px; -unity-text-align: middle-center; color: var(--color-muted); padding-right: 0; }
+.bs-cell--pos { width: 64px; -unity-text-align: middle-center; color: var(--color-muted); padding-right: 0; }
 .bs-cell--name {
     flex-grow: 1;
     flex-basis: 0;

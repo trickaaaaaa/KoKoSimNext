@@ -22,6 +22,11 @@ public sealed class TeamState
     private readonly List<Player> _reserves;
     private readonly HashSet<Player> _retired = new(); // 退場者（高校野球=リエントリー禁止で再出場不可）
     private readonly string?[] _replacedAtSlot = new string?[9]; // 各スロットで直近に退いた選手名（ライブ観戦の交代表示・観測用）
+    // ボックススコアの出場表記用（観測専用＝試合結果・乱数に触れない）。途中出場の入り方・入った打順枠・誰の代わりか、
+    // 守備に就いたことがあるか（就いた最後の位置）。守備位置は「実際に守った位置」だけを持ち、選手本来の適性は使わない。
+    private readonly List<Player> _entrants = new();
+    private readonly Dictionary<Player, (BoxEntry Kind, int Slot, string ForName)> _entry = new();
+    private readonly Dictionary<Player, FieldPosition> _fieldedAt = new();
     private bool _usesDh;
     private int _dhSlot;
     private int _pitcherSlot;
@@ -235,6 +240,7 @@ public sealed class TeamState
         PitchType? decisivePitch = null, int unearnedRuns = 0)
     {
         var key = KeyOf(pitcher);
+        NoteFielders();
         if (!_pit.TryGetValue(key, out var a)) { a = new PitAccum(); _pit[key] = a; }
         a.BF++;
         if (r.IsHit()) a.H++;
@@ -252,6 +258,16 @@ public sealed class TeamState
             pa.AtBats++;
             if (r.IsHit()) pa.Hits++;
             if (r == PlateAppearanceResult.HomeRun) pa.HomeRuns++;
+        }
+    }
+
+    /// <summary>守備側の打席を1つ消化するたびに、いま守っている選手とその位置を控える（ボックススコアの「実際に守った位置」）。</summary>
+    private void NoteFielders()
+    {
+        for (var i = 0; i < 9; i++)
+        {
+            if (_usesDh && i == _dhSlot) continue;   // DHは守備に就かない
+            _fieldedAt[KeyOf(_lineup[i])] = _lineup[i].Position;
         }
     }
 
@@ -319,13 +335,25 @@ public sealed class TeamState
             var displayPos = _team.UsesDh && i == _team.DhSlot ? FieldPosition.DesignatedHitter : p.Position;
             lines.Add(Line(i + 1, p, displayPos, a));
         }
+        // 代打・代走・守備交代で入った選手は、打席に立たなくても載せる（入った打順枠の直下・誰の代わりか・守った位置つき）。
+        foreach (var key in _entrants)
+        {
+            if (starters.Contains(key)) continue;
+            var a = _bat.TryGetValue(key, out var acc) ? acc : new BatAccum();
+            var e = _entry[key];
+            lines.Add(Line(e.Slot + 1, key, key.Position, a) with
+            {
+                Entry = e.Kind, EnteredFor = e.ForName, FieldedAt = _fieldedAt.TryGetValue(key, out var fp) ? fp : null,
+            });
+        }
         // 救援投手など途中出場で打席に立った選手を追記（合計がチーム安打と一致する）。
         foreach (var kv in _bat)
         {
-            if (starters.Contains(kv.Key)) continue;
+            if (starters.Contains(kv.Key) || _entry.ContainsKey(kv.Key)) continue;
             lines.Add(Line(_team.PitcherSlot + 1, kv.Key, kv.Key.Position, kv.Value));
         }
-        return lines;
+        // 打順の枠順（同じ枠は スタメン→途中出場の入った順）。OrderBy は安定ソート。
+        return lines.OrderBy(l => l.Order).ToList();
 
         static BattingLine Line(int order, Player p, FieldPosition displayPos, BatAccum a)
             => new(order, displayPos, p.Name, a.PA, a.AB, a.H, a.Doubles, a.Triples, a.HR, a.RBI, a.BB, a.SO, p.SourceId,
@@ -1094,8 +1122,11 @@ public sealed class TeamState
     /// <summary>DHが入っている打順スロット（0始まり。DH制のときだけ意味を持つ）。</summary>
     public int DhSlot => _dhSlot;
 
+    /// <summary>テスト用: 打順スロット指定で代打の入り方を作る（<see cref="PinchHitNext"/> は次打者固定のため）。</summary>
+    internal bool SubstituteForTest(int slot, Player sub) => SubstituteAtSlot(slot, sub, BoxEntry.PinchHit);
+
     /// <summary>次打者へ代打を送る（退いた打者の打順・守備位置を継承）。控えに sub が無ければ false。</summary>
-    public bool PinchHitNext(Player sub) => SubstituteAtSlot(_battingIndex, sub);
+    public bool PinchHitNext(Player sub) => SubstituteAtSlot(_battingIndex, sub, BoxEntry.PinchHit);
 
     /// <summary>塁上の走者 runner を控え sub に代える（代走）。打順・守備位置を継承。塁の差し替えは呼び出し側（BaseState）。</summary>
     public bool PinchRunFor(Player runner, Player sub) => PinchRunFor(runner, sub, out _);
@@ -1109,7 +1140,7 @@ public sealed class TeamState
     {
         inserted = null;
         var slot = IndexOf(runner);
-        if (slot < 0 || !SubstituteAtSlot(slot, sub)) return false;
+        if (slot < 0 || !SubstituteAtSlot(slot, sub, BoxEntry.PinchRun)) return false;
         inserted = _lineup[slot];
         return true;
     }
@@ -1118,7 +1149,7 @@ public sealed class TeamState
     public bool DefensiveSub(Player outgoing, Player sub)
     {
         var slot = IndexOf(outgoing);
-        return slot >= 0 && SubstituteAtSlot(slot, sub);
+        return slot >= 0 && SubstituteAtSlot(slot, sub, BoxEntry.DefensiveSub);
     }
 
     /// <summary>
@@ -1156,7 +1187,7 @@ public sealed class TeamState
     /// <see cref="RelieveWith"/>、DH解除は <see cref="ReleaseDh"/> を使う。役割（投/野）で候補を分けない（#93）。
     /// </summary>
     public bool AssignFielderToSlot(int slot, Player sub)
-        => IsSwappableDefenseSlot(slot) && SubstituteAtSlot(slot, sub);
+        => IsSwappableDefenseSlot(slot) && SubstituteAtSlot(slot, sub, BoxEntry.DefensiveSub);
 
     /// <summary>
     /// コンバート継投（issue #235 方針②）: 現投手を守備位置 <paramref name="to"/> へ回し、控え投手
@@ -1266,12 +1297,15 @@ public sealed class TeamState
     /// 非DHの投手スロットへ代打した場合、投手本人は退場扱いになるため、守備再開前に必ず継投すること
     /// （C-2 の GameEngine が強制。TryChangePitcher が投手スロットの打者を新投手で上書きする）。
     /// </summary>
-    private bool SubstituteAtSlot(int slot, Player sub)
+    private bool SubstituteAtSlot(int slot, Player sub, BoxEntry kind)
     {
         // 控えは1本の名簿＝代打・代走・守備交代も継投も同じプールから起用する（#93 / issue #256 / #381）。
         if (!_reserves.Remove(sub)) return false;
         var outgoing = _lineup[slot];
         _lineup[slot] = Rekey(sub, sub with { Position = outgoing.Position });
+        var entrantKey = KeyOf(_lineup[slot]);   // 成績の帰属キー（守備位置を書き換える前の選手）
+        if (!_entry.ContainsKey(entrantKey)) _entrants.Add(entrantKey);
+        _entry[entrantKey] = (kind, slot, outgoing.Name);
         _retired.Add(KeyOf(outgoing));
         _replacedAtSlot[slot] = outgoing.Name;   // ライブ観戦の交代表示用（観測データ）
         Substitutions++;
