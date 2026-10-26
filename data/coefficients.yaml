@@ -1412,6 +1412,11 @@ roster:
   specialty_floor: 14         # 専門能力の下限（「できない」を作らない）
   off_specialty_factor: 0.55  # 専門外能力の中心係数（総合力×これ）。パワプロ型特化を禁止
   off_specialty_floor: 8
+  # 投打の両立素質（#684）: 専用乱数 z2 がゲートを超えた分だけ専門外の中心係数(0.55)が上がる＝投打とも高い選手が
+  # 分布の裾に出る。ゲート未満（大多数）は従来と同じ。corr は総合力との相関。
+  dual_talent_corr: 0.3
+  dual_talent_gate_z: 0.5
+  dual_talent_ratio_slope: 0.30
   # 運動能力ベースライン（走力・地肩・スタミナ, §1.1b-2）。physical_mean は名声0（talentCenter=talent_center_default）
   # のときの中心。physical_talent_slope は talentCenter が上がったぶんの何割を身体系中心に乗せるか
   # （2026-08-15 案D: 0.75。0 なら旧来の名声独立）。SD は据え置き＝弱小校の俊足・強肩は残る。
