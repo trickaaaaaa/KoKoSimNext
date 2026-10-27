@@ -2747,6 +2747,46 @@ public static class TimelineBuilder
     }
 
     /// <summary>
+    /// タッチで刺された走者のレッグ終端を、その塁へ着いた送球の時刻まで延ばす（issue #685）。
+    /// 返球は「間ゼロで投げ切った最速」より早くは着けられない（<see cref="GuardAgainstVerdict"/>）ので、
+    /// 判定がアウトでも送球がわずかに遅れて着くことがある（実測: タッチアップの憤死で最大0.07秒）。
+    /// そのとき走者が先に塁へ着いてからアウトになる絵を避け、タッチの瞬間＝送球の到達に揃える。
+    /// 判定・結果は変えない（表示専用・乱数不使用）。送球が先に着いていれば何もしない。
+    /// </summary>
+    public static PlayTimeline AlignTaggedRunnerToThrow(PlayTimeline timeline, string baseName, string runnerLabel)
+    {
+        double? arrive = null;
+        foreach (var b in timeline.Ball)
+        {
+            if (b.ToBase != baseName) continue;
+            if (b.Kind != BallSegmentKind.Throw && b.Kind != BallSegmentKind.Carry) continue;
+            if (arrive is null || b.T1 < arrive) arrive = b.T1;
+        }
+        if (arrive is not { } t) return timeline;
+
+        var changed = false;
+        var runners = new List<RunnerLeg>(timeline.Runners.Count);
+        foreach (var leg in timeline.Runners)
+        {
+            if (leg.Label == runnerLabel && leg.OutAtEnd && leg.T1 < t)
+            {
+                runners.Add(leg with { T1 = t });
+                changed = true;
+            }
+            else runners.Add(leg);
+        }
+        if (!changed) return timeline;
+
+        var judgements = new List<JudgementEvent>(timeline.Judgements.Count);
+        foreach (var j in timeline.Judgements)
+            judgements.Add(j.Label == runnerLabel && j.Kind == JudgementKind.Out && j.T < t ? j with { T = t } : j);
+        return timeline with
+        {
+            Runners = runners, Judgements = judgements, Duration = Math.Max(timeline.Duration, t + 0.6),
+        };
+    }
+
+    /// <summary>
     /// 外野安打の返球先（issue #627）。<b>アウトも含めた先頭走者の到達塁</b>と、その走者のレッグ名・生死。
     /// </summary>
     /// <param name="BaseName">投げる塁（"second" / "third" 等）。<see cref="AppendOutfieldReturnThrow"/> へ渡す。</param>
