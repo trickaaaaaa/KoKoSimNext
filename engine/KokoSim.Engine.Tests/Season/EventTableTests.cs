@@ -137,7 +137,10 @@ events:
             // システムイベント（issue #610〜）。IDは呼び出し側にベタ書きされているので、
             // 消えると「その出来事だけ黙って会話が出ない」形で壊れる。
             "injury_occurred", "injury_returned",
-            "growth_awakening", "growth_breakthrough", "growth_slump",
+            "growth_awakening_batting", "growth_awakening_pitching", "growth_awakening_defense",
+            "growth_awakening_running", "growth_grand_awakening", "growth_surge", "growth_new_pitch",
+            "growth_pitch_refined", "growth_big_stage_batting", "growth_big_stage_pitching",
+            "growth_breakthrough", "growth_slump",
             "growth_plateau", "growth_yips", "growth_yips_overcome",
             "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",

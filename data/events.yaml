@@ -595,9 +595,10 @@ events:
 
   # 選手成長イベント（設計書03 §5.5・issue #611）。
   # 上げは「兆しの上に起きた」、下げは**理不尽にしない**（「ここが限界だった」と納得できる言い方）。
-  - id: growth_awakening
+  # 覚醒は分野で会話を分ける（issue #694）。投手が覚醒して打撃の話になっていた。
+  - id: growth_awakening_batting
     kind: System
-    text: "選手が覚醒した。"
+    text: "選手が打撃で覚醒した。"
     variants:
       - lines:
           - who: narration
@@ -612,8 +613,74 @@ events:
       - lines:
           - who: captain
             say: "{player}、化けましたね。夏前にこれは大きい。"
+          - who: team_manager
+            say: "本人が一番驚いてる顔してますよ。"
+
+  - id: growth_awakening_pitching
+    kind: System
+    text: "選手が投球で覚醒した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "ブルペンのミットの音が、ひとりだけ重い。"
+          - who: team_manager
+            say: "{player}君、今日の球、受けてる子が手を振ってました。"
+      - lines:
+          - who: player
+            say: "監督、指にかかる感じが全然違うんです。"
           - who: manager
-            say: "ああ。本人が一番驚いてる顔してるよ。"
+            say: "もう何球か見せてくれ。"
+          - who: narration
+            say: "続けて投げた球も、同じ軌道でミットに収まった。"
+      - lines:
+          - who: captain
+            say: "{player}の球、打撃投手に入ってもらったら誰も前に飛ばせませんでした。"
+          - who: team_manager
+            say: "記録、つけておきますね。"
+
+  - id: growth_awakening_defense
+    kind: System
+    text: "選手が守備で覚醒した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "ノックの打球に、{player}の一歩目が先に動いていた。"
+          - who: captain
+            say: "今の、捕れる位置にもう居ましたよ。"
+      - lines:
+          - who: player
+            say: "監督、打った瞬間にどこへ来るか見えるようになりました。"
+          - who: manager
+            say: "そうか。続けてみよう。"
+          - who: narration
+            say: "その日のノックで、{player}は一度も球をこぼさなかった。"
+      - lines:
+          - who: team_manager
+            say: "{player}君の送球、全部胸に来てるって一塁の子が言ってました。"
+          - who: captain
+            say: "あいつの後ろなら安心して投げられますね。"
+
+  - id: growth_awakening_running
+    kind: System
+    text: "選手が走塁で覚醒した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "ベースランニングのタイムを測った{player}が、ストップウォッチを二度見していた。"
+          - who: team_manager
+            say: "測り間違いじゃないです。自己ベストです。"
+      - lines:
+          - who: player
+            say: "監督、スタートの切り方、やっと分かった気がします。"
+          - who: manager
+            say: "牽制にも気をつけてな。"
+          - who: captain
+            say: "あの一歩目なら、二塁はもらったようなもんですね。"
+      - lines:
+          - who: narration
+            say: "紅白戦で{player}が一塁から一気に本塁まで還ってきた。"
+          - who: captain
+            say: "あの打球で還ってくるのかよ。"
 
   - id: growth_breakthrough
     kind: System
@@ -634,6 +701,130 @@ events:
             say: "同じ練習をしているのに、ひとりだけ音が変わる日がある。"
           - who: captain
             say: "{player}、今日いいじゃん。何変えた？"
+
+  # issue #694 で足した上昇イベント。数値（上がった能力・球種）は結果行で言い切る＝ここは雰囲気だけ。
+  - id: growth_grand_awakening
+    kind: System
+    text: "選手が大覚醒した。"
+    variants:
+      - lines:
+          - who: narration
+            say: "その日のグラウンドで、{player}だけが別の競技をしているように見えた。"
+          - who: team_manager
+            say: "監督、見ましたか。私、鳥肌立ちました。"
+          - who: captain
+            say: "あいつ、本物になりましたね。"
+      - lines:
+          - who: player
+            say: "監督、今までで一番、体が思ったとおりに動きました。"
+          - who: manager
+            say: "見てた。とんでもないな。"
+          - who: narration
+            say: "周りで練習していた部員たちが、いつの間にか手を止めて見ていた。"
+      - lines:
+          - who: captain
+            say: "{player}、去年までと完全に別人ですよ。何があったんですか。"
+          - who: team_manager
+            say: "スカウトの人が来たら、真っ先に見せたいですね。"
+
+  - id: growth_surge
+    kind: System
+    text: "選手に伸びしろが見えた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "{player}は、まだ自分の限界の手前にもいないようだった。"
+          - who: team_manager
+            say: "最近、伸び方が変わってきましたね。"
+      - lines:
+          - who: player
+            say: "監督、最近練習が楽しくて仕方ないんです。"
+          - who: captain
+            say: "{player}、まだまだ伸びますよ。"
+      - lines:
+          - who: team_manager
+            say: "{player}君、毎週の記録がずっと右肩上がりなんです。"
+          - who: manager
+            say: "どこまで行くか楽しみだな。"
+          - who: narration
+            say: "記録ノートの数字は、まだ上を向いていた。"
+
+  - id: growth_new_pitch
+    kind: System
+    text: "投手が新しい球種を覚えた。"
+    variants:
+      - lines:
+          - who: player
+            say: "監督、握りを変えたら、曲がるようになりました。"
+          - who: manager
+            say: "受けてもらおう。"
+          - who: narration
+            say: "キャッチャーのミットが、思ったよりずっと外で鳴った。"
+      - lines:
+          - who: narration
+            say: "{player}がブルペンで、見慣れない握りを試していた。"
+          - who: captain
+            say: "それ、試合で使えますよ。"
+      - lines:
+          - who: team_manager
+            say: "{player}君、新しい球をずっと練習してたんです。今日、形になりました。"
+          - who: captain
+            say: "打席に立ったら絶対嫌な球ですね。"
+
+  - id: growth_pitch_refined
+    kind: System
+    text: "投手の球種が良くなった。"
+    variants:
+      - lines:
+          - who: narration
+            say: "{player}の持ち球のひとつが、今週は低めにきっちり決まっていた。"
+          - who: team_manager
+            say: "あの球、前より曲がりが鋭くなりましたね。"
+      - lines:
+          - who: player
+            say: "監督、あの球、やっと自信を持って投げられます。"
+          - who: captain
+            say: "ブルペンで見ました。キレが全然違う。"
+
+  - id: growth_big_stage_batting
+    kind: System
+    text: "選手が大舞台で化けた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "スタンドの歓声を背に、{player}の打球は外野の頭を越えていった。"
+          - who: team_manager
+            say: "あの場面で打てる子、なかなかいませんよ。"
+      - lines:
+          - who: player
+            say: "監督、打席に立ったら、不思議と落ち着いてました。"
+          - who: captain
+            say: "あの打席で、あいつ一段上に行きましたね。"
+      - lines:
+          - who: narration
+            say: "試合後のロッカーで、{player}は誰よりも静かだった。"
+          - who: team_manager
+            say: "顔つきが変わりましたね。"
+
+  - id: growth_big_stage_pitching
+    kind: System
+    text: "投手が大舞台で化けた。"
+    variants:
+      - lines:
+          - who: narration
+            say: "マウンドの{player}は、回を追うごとに球が走っていった。"
+          - who: team_manager
+            say: "最後の回が一番速かったです。"
+      - lines:
+          - who: player
+            say: "監督、大観衆の前のほうが、腕が振れました。"
+          - who: captain
+            say: "あの投球、一生忘れないと思います。"
+      - lines:
+          - who: narration
+            say: "試合が終わっても、{player}はしばらくマウンドのほうを見ていた。"
+          - who: captain
+            say: "あいつ、今日で本物のエースになりましたね。"
 
   - id: growth_slump
     kind: System

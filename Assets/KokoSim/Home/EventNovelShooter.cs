@@ -133,9 +133,17 @@ namespace KokoSim.Unity.Home
                 EventService.BeginWeek();
                 var awake = new KokoSim.Engine.Season.GrowthNotice(
                     subject, KokoSim.Engine.Season.GrowthEventType.Awakening,
-                    KokoSim.Engine.Season.AbilityKind.Power);
+                    KokoSim.Engine.Season.AbilityKind.Power)
+                {
+                    Domain = KokoSim.Engine.Season.GrowthDomain.Batting,
+                    Gains = new[]
+                    {
+                        new KokoSim.Engine.Season.AbilityGain(KokoSim.Engine.Season.AbilityKind.Power, 4),
+                        new KokoSim.Engine.Season.AbilityGain(KokoSim.Engine.Season.AbilityKind.Contact, 4),
+                    },
+                };
                 var coeff = new KokoSim.Engine.Season.GrowthEventCoefficients();
-                EventService.Push(GrowthEventText.EventId(awake.Type), subject.Name,
+                EventService.Push(GrowthEventText.EventId(awake), subject.Name,
                     GrowthEventText.Effect(awake, coeff), subject.Id);
                 Debug.Log("[EV] 成長フィード: " + GrowthEventText.Feed(awake, coeff));
 

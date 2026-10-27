@@ -901,7 +901,7 @@ injury:
 # --- 選手成長イベント（設計書03 §5.5: 覚醒/開眼/スランプ/伸び悩み/イップス）🟡 ---
 # 原則: 上昇はレアな福音、下降は文脈必須（理不尽回避）。覚醒率・恒久ダウン率は設計書07で検証
 growth:
-  awakening_weekly_prob: 0.0015
+  awakening_weekly_prob: 0.007        # #694: 0.0015→0.007（1校あたり年0.4回→約2回。SeasonEngine 40年で実測）
   awakening_growth_threshold: 1.15
   awakening_condition_min: 0.2
   awakening_gain: 4
@@ -920,6 +920,34 @@ growth:
   yips_weekly_prob: 0.0008
   yips_ability_drop: 5
   yips_overcome_weekly_prob: 0.03
+  # --- issue #694 で足した上昇イベント（2026-10-28 監督決定: 4系統すべて）---
+  # 大覚醒: 1能力が大きく跳ね、その能力の才能上限も少し上がる。極レア（好調＋伸びしろの上に起きる）
+  grand_awakening_weekly_prob: 0.0006
+  grand_awakening_condition_min: 0.4
+  grand_awakening_gain: 10
+  grand_awakening_cap_lift: 5
+  # 伸びしろアップ: 分野の伸びしろ×factor（max で頭打ち）＋分野の才能上限+cap_lift。能力はその場で動かない
+  growth_surge_weekly_prob: 0.0015
+  growth_surge_condition_min: 0.1
+  growth_surge_factor: 1.25
+  growth_surge_max: 1.8
+  growth_surge_cap_lift: 3
+  # 新球種のコツ（投手のみ）: 変化球が max 本未満なら覚え（キレ+offset で入る）、達していれば最弱の球種を磨く
+  new_pitch_weekly_prob: 0.0025
+  new_pitch_max_breaking: 4
+  new_pitch_offset: -6
+  pitch_refine_gain: 5
+  # 大舞台での化け: 公式戦の好投・好打の直後に、大会の格ごとの確率で精神力＋分野の能力2つ
+  big_stage_prob_koshien: 0.4
+  big_stage_prob_regional: 0.25
+  big_stage_prob_prefectural: 0.1
+  big_stage_mental_gain: 5
+  big_stage_gain: 3
+  big_stage_min_hits: 3
+  big_stage_min_rbi: 4
+  big_stage_min_outs: 21
+  big_stage_max_runs: 2
+  big_stage_min_strike_outs: 10
 
 # --- 気づきイベント（設計書03 §5.6: 育成眼→頻度/精度）🟡 ---
 insight:
