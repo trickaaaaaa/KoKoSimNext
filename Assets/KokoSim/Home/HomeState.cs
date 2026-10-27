@@ -103,8 +103,6 @@ namespace KokoSim.Unity.Home
         private readonly FormCoefficients _form = new FormCoefficients();
         private readonly List<FeedItem> _feed = new List<FeedItem>();
 
-        // 個別指導枠の並べ替えに使うカテゴリ別指標の係数。他画面の比較カードと同一の単一ソース。
-        private static readonly TeamStrengthCoefficients GuidanceCoeff = TeamStrengthCoeff.Default;
 
         // 現在週/年度は全画面共有の GameClock、大会モードの進行は GameSession を単一ソースとする（画面ごとに持たない）。
         // 大会モードの構築（進行体・裏試合フルシム）は TournamentEntry（Shell）へ移した（issue #134）。
@@ -898,13 +896,14 @@ namespace KokoSim.Unity.Home
                 view.HeroBigUnit = left > 0 ? "週" : "";
             }
 
-            // 個別指導（設計書04。枠のみ＝上位2名を仮表示＋空き1。効果はエンジン未接続 Q7）。
-            // 並べ替えキーは打撃力（「選手個人の総合ランク」は #30 で廃止, issue #270）。
-            var top = roster.OrderByDescending(x => PlayerStrengthProfile.Compute(x, GuidanceCoeff).Batting)
-                .Take(2).ToList();
-            view.Guidance.Add(new GuidanceSlot { Name = top.Count > 0 ? top[0].Name : "", Focus = "打撃強化", Empty = top.Count == 0 });
-            view.Guidance.Add(new GuidanceSlot { Name = top.Count > 1 ? top[1].Name : "", Focus = "投球", Empty = top.Count <= 1 });
-            view.Guidance.Add(new GuidanceSlot { Empty = true });
+            // 個別指導（設計書03 §3.3・issue #693）。練習計画画面で指名した選手（共有ロスターの
+            // IndividualCoaching）をそのまま出す＝仮表示はしない。枠数は係数（既定3）。
+            var nominated = roster.Where(x => x.IndividualCoaching).ToList();
+            view.GuidanceTotal = _training.IndividualCoachingSlots;
+            for (var s = 0; s < view.GuidanceTotal; s++)
+                view.Guidance.Add(s < nominated.Count
+                    ? new GuidanceSlot { Name = nominated[s].Name }
+                    : new GuidanceSlot { Empty = true });
             view.GuidanceUsed = view.Guidance.Count(g => !g.Empty);
 
             view.Feed = _feed.ToList();

@@ -836,8 +836,13 @@ namespace KokoSim.Unity.Home
             else
             {
                 var name = new Label(g.Name); name.AddToClassList("gd-name");
-                var focus = new Label(g.Focus); focus.AddToClassList("gd-focus");
-                slot.Add(name); slot.Add(focus);
+                slot.Add(name);
+                // 重点は持っているときだけ出す（実際の指名を出すようになって固定ラベルは廃止, issue #693）。
+                if (!string.IsNullOrEmpty(g.Focus))
+                {
+                    var focus = new Label(g.Focus); focus.AddToClassList("gd-focus");
+                    slot.Add(focus);
+                }
             }
             return slot;
         }

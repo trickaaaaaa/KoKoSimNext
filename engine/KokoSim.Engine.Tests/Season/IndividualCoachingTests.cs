@@ -7,9 +7,10 @@ namespace KokoSim.Engine.Tests.Season;
 /// <summary>
 /// 個別指導3枠: 指名選手の主効果exp×係数（Issue #126・OPEN-QUESTIONS Q7(a)）。
 /// ・指名（DevelopingPlayer.IndividualCoaching=true）かつ分野別指導力が中立点より高いと主効果expだけ速く伸びる。
-/// ・非指名 or coaching=null は追加倍率1.0＝従来一致（不変条件#2）。
+/// ・新任監督（指導力20＝中立点）や coaching=null でも基礎倍率（既定×1.5）が掛かる（#693）。
+/// ・非指名は追加倍率1.0＝従来一致（不変条件#2）。
 /// ・副効果・守備適性は個別指導の対象外（主効果expのみ）。
-/// ・IndividualCoachingBonusScale=0 は個別指導の効果を無効化できる（無効化用の逃げ道）。
+/// ・基礎倍率1.0＋スケール0で個別指導の効果を無効化できる（無効化用の逃げ道）。
 /// </summary>
 public sealed class IndividualCoachingTests
 {
@@ -64,29 +65,45 @@ public sealed class IndividualCoachingTests
         Assert.Equal(legacy.Exp(AbilityKind.Velocity), notNominated.Exp(AbilityKind.Velocity));
     }
 
+    /// <summary>
+    /// 新任監督（指導力は全分野20＝中立点）でも、指名すれば主効果がはっきり速く伸びる（issue #693）。
+    /// 旧式は中立点で倍率ちょうど1.0＝指名しても何も起きなかった。
+    /// </summary>
     [Fact]
-    public void Nominated_WithNullCoaching_HasNoEffect()
+    public void Nominated_AtNewManagerCoaching_StillGrowsClearlyFaster()
     {
-        // coaching=nullはcoachingFactor比が常に1.0なので、指名しても追加倍率は1.0（従来一致）。
-        var withSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: true, coaching: null);
-        var withoutSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: false, coaching: null);
-        Assert.Equal(withoutSlot, withSlot);
+        var rookie = CoachingProfile.FromManager(new KokoSim.Engine.Career.Manager());
+        Assert.Equal(20, rookie.Pitching);
+
+        var withSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: true, coaching: rookie, weeks: 40);
+        var withoutSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: false, coaching: rookie, weeks: 40);
+
+        Assert.True(withSlot >= withoutSlot * 1.3,
+            $"新任監督の個別指導で伸びが変わらない（指名{withSlot} vs 非指名{withoutSlot}）");
+    }
+
+    /// <summary>倍率そのもの: 新任×1.5、指導力が上がるほど伸び、名将（90）で×2.5前後（2026-10-28 監督決定）。</summary>
+    [Fact]
+    public void Bonus_IsOnePointFiveForRookie_AndAboutTwoPointFiveForMaster()
+    {
+        var c = new TrainingCoefficients();
+        var nominated = new DevelopingPlayer { IndividualCoaching = true };
+        var baseline = 1.0 + c.CoachingLevel * c.CoachingSlope;
+        double Bonus(double level) => DevelopmentModel.IndividualCoachingBonus(
+            AbilityKind.Velocity, nominated, CoachingProfile.Uniform(level), c, 1.0, baseline);
+
+        Assert.Equal(1.5, Bonus(20), 6);
+        Assert.True(Bonus(40) > Bonus(20) && Bonus(60) > Bonus(40), "指導力が上がっても倍率が伸びない");
+        Assert.InRange(Bonus(90), 2.3, 2.6);
+        Assert.Equal(1.5, DevelopmentModel.IndividualCoachingBonus(AbilityKind.Velocity, nominated, null, c, 1.0, baseline), 6);
+        Assert.Equal(1.0, DevelopmentModel.IndividualCoachingBonus(
+            AbilityKind.Velocity, new DevelopingPlayer(), CoachingProfile.Uniform(90), c, 1.0, baseline));
     }
 
     [Fact]
-    public void Nominated_AtBaselineCoaching_HasNoEffect()
+    public void BaseOneAndScaleZero_DisablesBonus()
     {
-        // 分野別指導力が中立点(20)ちょうどならcoachingFactor比=1.0なので、指名しても伸びは変わらない。
-        var baseline = CoachingProfile.Uniform(20);
-        var withSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: true, coaching: baseline);
-        var withoutSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: false, coaching: baseline);
-        Assert.Equal(withoutSlot, withSlot);
-    }
-
-    [Fact]
-    public void IndividualCoachingBonusScale_Zero_DisablesBonus()
-    {
-        var c = new TrainingCoefficients { IndividualCoachingBonusScale = 0.0 };
+        var c = new TrainingCoefficients { IndividualCoachingBaseMultiplier = 1.0, IndividualCoachingBonusScale = 0.0 };
         var ace = new CoachingProfile { Pitching = 90 };
         var withSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: true, coaching: ace, coefficients: c);
         var withoutSlot = GainByTrainWeek(AbilityKind.Velocity, TrainingMenu.VelocityTraining, nominated: false, coaching: ace, coefficients: c);
