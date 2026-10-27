@@ -2782,3 +2782,25 @@ Button.ucp-arrow:hover { background-color: var(--color-panel-hover); }
 }
 .empty-state__text { font-size: var(--fs-label); color: var(--tx-3); margin: 0; padding: 0; }
 .empty-state__note { font-size: var(--fs-cap); color: var(--tx-3); margin: var(--sp-2) 0 0 0; padding: 0; }
+
+/* ── BurstBalloon：ギザギザの叫び吹き出し（issue #696）─────────────────────────
+   試合盤面の一瞬の合図（「走った！」）。形は BurstBalloon.cs が Painter2D で描く＝ここは寸法と色だけ。
+   盤面ビューなので色は状態コード（走者＝アンバー）で、データ画面のアクセント本数制限の対象外
+   （CLAUDE.md「適用範囲の例外（試合盤面）」）。カスタムプロパティは var() を受けないのでリテラルで持ち、
+   tokens の --color-lamp / --ink と手で同期する。 */
+.burst {
+    --burst-fill: #F5C64A;   /* = --color-lamp（走者の状態色） */
+    --burst-ink: #131512;    /* = --ink */
+    width: var(--burst-w);
+    height: var(--burst-h);
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.burst__text {
+    font-size: var(--fs-callout);
+    color: var(--ink);
+    -unity-text-align: middle-center;
+    margin: 0;
+    padding: 0;
+}

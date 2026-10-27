@@ -375,6 +375,12 @@ namespace KokoSim.Unity.Match
         private Label _pitchCallNote, _pitchCallPitchType, _pitchCallSpeed, _pitchCallUnit;
         private float _pitchCallClock;
         private bool _pitchCallOn;
+        // 「走った！」の叫び吹き出し（issue #696）。走者の元の塁ごとに1つ（[0]=一塁…[2]=三塁）。
+        // 投手が投球動作に入った瞬間に、その球でスタートを切った走者の塁の側へ出す（攻守とも）。
+        private VisualElement _runnerGoHost;
+        private readonly KokoSim.Unity.Components.BurstBalloon[] _runnerGo = new KokoSim.Unity.Components.BurstBalloon[3];
+        private float _runnerGoClock = -1f;   // 残り表示秒（プレー時間）。負＝非表示
+        [SerializeField] private float runnerGoHoldSeconds = 1.6f;
         // 出現/消失の演出（issue #479）。USS の transition は display の切替をまたいで走らないので、
         // 「表示にしてから次フレームで is-enter を外す」で出現を、「is-enter を戻してから畳む」で消失を出す。
         // pitchCallHoldSeconds はこの出現・消失を含めた**総寿命**として扱う＝対決ビューの捕手据え置き
@@ -531,6 +537,20 @@ namespace KokoSim.Unity.Match
             _lampsO = new[] { _root.Q<VisualElement>("sbug-lamp-o0"), _root.Q<VisualElement>("sbug-lamp-o1") };
             _bases = new[] { _root.Q<VisualElement>("sbug-base-1"), _root.Q<VisualElement>("sbug-base-2"), _root.Q<VisualElement>("sbug-base-3") };
 
+            _runnerGoHost = _root.Q<VisualElement>("runner-go-host");
+            if (_runnerGoHost != null)
+            {
+                for (var b = 0; b < _runnerGo.Length; b++)
+                {
+                    var balloon = new KokoSim.Unity.Components.BurstBalloon("走った！");
+                    balloon.AddToClassList("runner-go__burst");
+                    balloon.AddToClassList("runner-go__burst--b" + (b + 1));
+                    balloon.style.display = DisplayStyle.None;
+                    _runnerGo[b] = balloon;
+                    _runnerGoHost.Add(balloon);
+                }
+            }
+
             _pitchCall = _root.Q<VisualElement>("pitch-call");
             _pitchCallJudge = _root.Q<Label>("pitch-call-judge");
             _pitchCallJudgeShadow = _root.Q<Label>("pitch-call-judge-sh");
@@ -659,6 +679,7 @@ namespace KokoSim.Unity.Match
             _inPitchPhase = false;
             _pitchBallVisible = false;
             _pitchCallClock = 0f;
+            HideRunnerGo();
             _pitchCallOn = false;
             _scoreCallClock = 0f;
             _scoreCallOn = false;
@@ -1651,6 +1672,10 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void BeginPitchWindupOrBall(int index, bool forceWindup)
         {
+            // 「走った！」（issue #696）: この球でスタートを切った走者がいれば、投球動作の始まりで出す。
+            // 打席の初球（と牽制後の投げ直し）はここが振りかぶりの頭。打席途中の球はこの球をエンジンが
+            // 解決するのがリリースの瞬間なので、ここ＝リリースで出る（振りかぶりはその前に始まっている）。
+            ShowRunnerGo(index >= 0 && index < _paQueue.Count ? _paQueue[index].Live : null);
             _pitchIdx = index;
             _pitchCallDone = false;
             _battedHoldActive = false;
@@ -2528,6 +2553,11 @@ namespace KokoSim.Unity.Match
                     _pitchCall?.AddToClassList("is-enter");
                 if (_pitchCallClock >= pitchCallHoldSeconds) HidePitchCall();
             }
+            if (_runnerGoClock >= 0f)
+            {
+                _runnerGoClock -= Time.deltaTime * _speed;
+                if (_runnerGoClock < 0f) HideRunnerGo();
+            }
             // 得点オーバーレイも自前の寿命で加算演出→消去まで進める（issue #60）。
             if (_scoreCallOn) AdvanceScoreCall(Time.deltaTime * _speed);
             // 交代ポップアップも自前の寿命で消す（issue #209 表現）。
@@ -3060,6 +3090,32 @@ namespace KokoSim.Unity.Match
             ShowCallHost(_pitchCall);
             _pitchCallOn = true;
             _pitchCallClock = 0f;
+        }
+
+        /// <summary>
+        /// 「走った！」の吹き出しを、この球でスタートを切った走者の塁の側に出す（issue #696）。
+        /// 読むのは engine の観測 <see cref="LivePitch.RunnersStarted"/> だけ＝盗塁・エンドラン・スクイズを
+        /// 表示側で見分けない。走者がいなければ何もしない（前の吹き出しも残さない）。
+        /// </summary>
+        private void ShowRunnerGo(LivePitch live)
+        {
+            HideRunnerGo();
+            if (_fastMode || live == null || live.RunnersStarted == 0) return;
+            var any = false;
+            for (var b = 0; b < _runnerGo.Length; b++)
+            {
+                if (_runnerGo[b] == null || !live.RunnerStarted(b + 1)) continue;
+                _runnerGo[b].style.display = DisplayStyle.Flex;
+                any = true;
+            }
+            if (any) _runnerGoClock = runnerGoHoldSeconds;
+        }
+
+        private void HideRunnerGo()
+        {
+            _runnerGoClock = -1f;
+            foreach (var b in _runnerGo)
+                if (b != null) b.style.display = DisplayStyle.None;
         }
 
         private void HidePitchCall()

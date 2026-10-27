@@ -97,6 +97,17 @@ public sealed record LivePitch
     public PlaybackPlay? StealPlay { get; init; }
 
     /// <summary>
+    /// この球で<b>投球と同時にスタートを切った走者</b>の元の塁（issue #696）。bit1=一塁・bit2=二塁・bit3=三塁。
+    /// 盗塁（単独・重盗・三盗・本盗）・エンドラン・スクイズをまとめた1つの読み口で、表示側は種類ごとに
+    /// 判定を書かない。盗塁が打球・ファウルで取り消されても「走った」事実は残る（<see cref="StealPlay"/> は消える）。
+    /// 牽制で刺された走者はスタートを切っていない＝含まない。観測専用（乱数を引かない）。
+    /// </summary>
+    public int RunnersStarted { get; init; }
+
+    /// <summary><paramref name="fromBase"/>（1〜3）の走者がこの球でスタートを切ったか。</summary>
+    public bool RunnerStarted(int fromBase) => (RunnersStarted & (1 << fromBase)) != 0;
+
+    /// <summary>
     /// この球の前に起きた牽制（アウト/セーフいずれも, issue #486）の再生データ。盗塁企図の裏で
     /// <see cref="Game.PickoffResolver.Resolve"/> が発火した球にだけ載る（判定結果に関わらず載る＝
     /// アウト/セーフで再生の有無を分岐させない、2026-08-05 issue決定）。<see cref="StealPlay"/> と同じ球に
