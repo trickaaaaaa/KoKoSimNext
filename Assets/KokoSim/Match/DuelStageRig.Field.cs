@@ -3670,6 +3670,41 @@ namespace KokoSim.Unity.Match
         /// </summary>
         public static bool FieldKeepSubjectFramed = true;
 
+        /// <summary>
+        /// 内野ゴロ・併殺の固定枠（issue #689・監督決定: 案Bベース＋アウトの瞬間だけ一塁へ寄せる）。
+        /// 接触から送球リリースまでは「本塁〜二塁を収める固定枠」に据えて動かさず、最後の送球が出てから
+        /// 到達までのあいだに、送球の終点（一塁）へゆっくり寄せて決着まで据える。
+        /// false にすると従来の追従（比較撮影用の切り替え）。
+        /// </summary>
+        public static bool FieldInfieldFixedFrame = true;
+        private static readonly Vector3 InfieldFixedAim = new(0f, 1.2f, 24f);
+        private const float InfieldFixedFrameH = 44f;
+        /// <summary>アウトの瞬間に寄せる枠の縦[m]。ズーム速度上限（12m/s）で追える範囲に収める。</summary>
+        private const float InfieldOutFrameH = 22f;
+        /// <summary>最後の送球の到達後も寄せ続ける秒数（据え置きの収束余白）。</summary>
+        private const float InfieldOutSettleSeconds = 0.3f;
+        private bool _fieldInfieldFixed;
+        private bool _fieldInfieldHasOut;
+        private float _fieldInfieldOutT0, _fieldInfieldOutT1;
+        private Vector3 _fieldInfieldOutAim;
+
+        /// <summary>転がる打球で、球も送球も内野（本塁から45m以内）に収まるプレーか。</summary>
+        private static bool IsInfieldGrounder(PlaybackPlay play)
+        {
+            if (play?.Ball == null) return false;
+            var rolled = false;
+            foreach (var seg in play.Ball)
+            {
+                if (seg is not EndpointBallSegment eb) continue;
+                if (eb.Kind == BallSegmentKind.Flight) return false;
+                if (eb.Kind == BallSegmentKind.Roll || eb.Kind == BallSegmentKind.Bounce) rolled = true;
+                var a = eb.At(0);
+                var b = eb.At(eb.T1 - eb.T0);
+                if (a.Y > 45.0 || b.Y > 45.0) return false;
+            }
+            return rolled;
+        }
+
         private System.Collections.Generic.IReadOnlyList<CameraKeyframe> _fieldPlan;
 
         /// <summary>
@@ -3806,6 +3841,18 @@ namespace KokoSim.Unity.Match
                 }
             }
             aim = new Vector3((float)vp.Cx, aimY, (float)vp.Cy);
+            if (_fieldInfieldFixed)
+            {
+                aim = InfieldFixedAim; frameH = InfieldFixedFrameH;
+                if (_fieldInfieldHasOut && t > _fieldInfieldOutT0)
+                {
+                    var u = Mathf.Clamp01((t - _fieldInfieldOutT0) / Mathf.Max(0.01f, _fieldInfieldOutT1 - _fieldInfieldOutT0));
+                    var w = u * u * (3f - 2f * u);   // smoothstep
+                    aim = Vector3.Lerp(InfieldFixedAim, _fieldInfieldOutAim, w);
+                    frameH = Mathf.Lerp(InfieldFixedFrameH, InfieldOutFrameH, w);
+                }
+                return;
+            }
 
             // びっくりマーク表示中は**据えた固定枠**へ切り替える（2026-08-05 監督報告2件:
             // 「マークが出てない」＝球だけ追うプランが野手を画角外へ置き去り（レフトで実測0/7画角内）、
@@ -4197,6 +4244,23 @@ namespace KokoSim.Unity.Match
             _runnerHeadMin = float.MaxValue;
             _runnerSlipMax = 0f; _runnerSlipMin = float.MaxValue;
 
+            _fieldInfieldFixed = FieldInfieldFixedFrame && IsInfieldGrounder(play);
+            _fieldInfieldHasOut = false;
+            if (_fieldInfieldFixed)
+            {
+                // 最後の送球（併殺なら一塁への2本目）の終点へ寄せる。送球が無いプレーは固定枠のまま。
+                EndpointBallSegment lastThrow = null;
+                foreach (var seg in play.Ball)
+                    if (seg is EndpointBallSegment { Kind: BallSegmentKind.Throw } eb) lastThrow = eb;
+                if (lastThrow != null)
+                {
+                    var end = lastThrow.At(lastThrow.T1 - lastThrow.T0);
+                    _fieldInfieldHasOut = true;
+                    _fieldInfieldOutT0 = (float)lastThrow.T0;
+                    _fieldInfieldOutT1 = (float)lastThrow.T1 + InfieldOutSettleSeconds;
+                    _fieldInfieldOutAim = new Vector3((float)end.X, FieldAimYMin, (float)end.Y);
+                }
+            }
             PlanErrorMark(play);               // びっくりマーク（issue #439 ②）
             BuildFieldCameraPlan(play, t0);    // ⚠ 見せ始める時刻から組む（頭が全景になるのを防ぐ）
             BuildFieldStationPlan(play, t0);   // ⚠ プランを組んだ後（据え位置の判定が視野プランを引く）
