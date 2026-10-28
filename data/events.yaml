@@ -25,6 +25,7 @@
 #
 # ■ 差し込み語（EventTextFormat が展開。未知の語はそのまま残る＝データ側の書き間違いが絵に出る）
 #   {player} 主役の部員名 ／ {school} 自校名 ／ {manager} 監督名 ／ {count} 1年生の人数（新入部員）
+#   {injury} 故障名の話し言葉（「足首の捻挫」）／ {weeks} 全治までの週数 …… injury_occurred だけが渡す（issue #695）
 #   ※ {player} はいまは「在籍部員から暦で決まる1人」。System イベント（issue #610〜）では
 #     実際に起きた出来事の主役が渡される。
 #
@@ -194,37 +195,6 @@ events:
             say: "返事の代わりに、深く頭を下げた。"
 
   # --- ランダムイベント（重み付き抽選） ---
-  - id: injury
-    kind: Random
-    weight: 2.0
-    cooldown_weeks: 6
-    text: "選手が練習中に故障した。"
-    variants:
-      - lines:
-          - who: player
-            say: "監督、すみません……走ったら、ここが。"
-          - who: narration
-            say: "軽い捻挫ではなさそうだった。二、三週は外したほうがよさそうだ。"
-          - who: manager
-            say: "分かった。今日は上がれ。"
-      - lines:
-          - who: team_manager
-            say: "{player} が練習中に痛めました。歩けてはいますが。"
-          - who: captain
-            say: "俺が保健室まで付いていきます。"
-      - lines:
-          - who: narration
-            say: "ノックの途中で、ひとり動きが止まった。周りの音がすっと引いていく。"
-          - who: player
-            say: "……大丈夫です。まだやれます。"
-          - who: manager
-            say: "駄目だ。座れ。"
-      - lines:
-          - who: captain
-            say: "監督、{player} が。あいつ、痛いって言わないタイプなんで心配で。"
-          - who: manager
-            say: "見に行こう。"
-
   - id: rain_week
     kind: Random
     weight: 3.0
@@ -547,29 +517,19 @@ events:
   - id: injury_occurred
     kind: System
     text: "選手が故障した。"
+    # 故障はマネージャーの一言で言い切る（issue #695・2026-10-28 監督決定）。誰が・何で・何週離脱かだけ。
+    # 小芝居は挟まず、結果行も足さない（この1行が結果そのもの）。{injury}/{weeks} は発生元が渡す。
+    # 主役で会話を分けるので（同じ週に2人故障しても別の文）言い回しは2通り以上置く。
     variants:
       - lines:
           - who: team_manager
-            say: "監督、{player} がノックの途中で足を止めました。"
-          - who: player
-            say: "……大丈夫です。まだやれます。"
-          - who: manager
-            say: "駄目だ。今日は上がれ。"
+            say: "大変です！{player} 君が{injury}で全治{weeks}週間です！"
       - lines:
-          - who: player
-            say: "監督、すみません……ここ、ちょっと。"
-          - who: manager
-            say: "隠さずに言えたのは偉い。すぐ診てもらおう。"
+          - who: team_manager
+            say: "監督、大変です！{player} 君、{injury}で全治{weeks}週間だそうです！"
       - lines:
-          - who: narration
-            say: "全体練習の途中で、ひとり動きが止まった。周りの音がすっと引いていく。"
-          - who: narration
-            say: "{player}は歩けてはいるが、無理はさせられそうになかった。"
-      - lines:
-          - who: captain
-            say: "監督、{player} が。あいつ、痛いって言わないタイプなんで心配で。"
-          - who: manager
-            say: "よく言ってくれた。見に行こう。"
+          - who: team_manager
+            say: "大変です！{player} 君が{injury}です。全治{weeks}週間と言われました！"
 
   - id: injury_returned
     kind: System
