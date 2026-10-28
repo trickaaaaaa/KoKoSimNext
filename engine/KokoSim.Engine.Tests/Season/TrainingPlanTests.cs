@@ -160,7 +160,7 @@ public sealed class TrainingPlanTests
         var auto = HighCapBatter();
         for (var w = 0; w < weeks; w++)
         {
-            var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = TrainingPreset.BatterAuto }, false, 300);
+            var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = TrainingPreset.BatterAuto }, 300);
             DevelopmentModel.TrainWeekPlan(auto, alloc, Ref, 0, 1.0, stages, c);
         }
 
@@ -191,17 +191,16 @@ public sealed class TrainingPlanTests
 
     // 6. 各プリセットが budget をちょうど満たす（合計=budget、決定論）。
     [Theory]
-    [InlineData(TrainingPreset.PitcherAuto, true)]
-    [InlineData(TrainingPreset.BatterAuto, false)]
-    [InlineData(TrainingPreset.Balanced, true)]
-    [InlineData(TrainingPreset.Balanced, false)]
-    [InlineData(TrainingPreset.DefenseFocus, false)]
-    [InlineData(TrainingPreset.AceDevelopment, true)]
-    [InlineData(TrainingPreset.SluggerDevelopment, false)]
-    public void Preset_FillsBudgetExactly(TrainingPreset preset, bool isPitcher)
+    [InlineData(TrainingPreset.PitcherAuto)]
+    [InlineData(TrainingPreset.BatterAuto)]
+    [InlineData(TrainingPreset.Balanced)]
+    [InlineData(TrainingPreset.DefenseFocus)]
+    [InlineData(TrainingPreset.AceDevelopment)]
+    [InlineData(TrainingPreset.SluggerDevelopment)]
+    public void Preset_FillsBudgetExactly(TrainingPreset preset)
     {
         const int budget = 300;
-        var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = preset }, isPitcher, budget);
+        var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = preset }, budget);
 
         var total = 0;
         foreach (var a in alloc) total += a.Minutes;
@@ -209,10 +208,29 @@ public sealed class TrainingPlanTests
         Assert.NotEmpty(alloc);
     }
 
+    // issue #680: 練習計画を組んでいない選手の既定は全員バランス型。ゲームが判定した投手らしさで変えない。
+    [Fact]
+    public void DefaultPlan_IsBalanced_ForEveryone()
+    {
+        Assert.Equal(TrainingPreset.Balanced, TrainingPlan.Default.Preset);
+    }
+
+    // issue #680: バランス型は全員共通の配分（打撃・投球・守備を含む）。入力に選手を取らない＝判定が入る余地がない。
+    [Fact]
+    public void Balanced_MixesBattingPitchingAndDefense()
+    {
+        var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = TrainingPreset.Balanced }, 300);
+        var menus = new HashSet<TrainingMenu>();
+        foreach (var a in alloc) menus.Add(a.Menu);
+        Assert.Contains(TrainingMenu.Batting, menus);
+        Assert.Contains(TrainingMenu.Pitching, menus);
+        Assert.Contains(TrainingMenu.Defense, menus);
+    }
+
     [Fact]
     public void PitcherAuto_UsesOnlyPitcherMenus()
     {
-        var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = TrainingPreset.PitcherAuto }, true, 300);
+        var alloc = TrainingPresets.Resolve(new TrainingPlan { Preset = TrainingPreset.PitcherAuto }, 300);
         var allowed = new HashSet<TrainingMenu>
         {
             TrainingMenu.Pitching, TrainingMenu.BreakingBall, TrainingMenu.Running,
@@ -248,7 +266,7 @@ public sealed class TrainingPlanTests
                 new MenuAllocation(TrainingMenu.Defense, 200),
             },
         };
-        var alloc = TrainingPresets.Resolve(over, false, 300);
+        var alloc = TrainingPresets.Resolve(over, 300);
         var total = 0;
         foreach (var a in alloc) total += a.Minutes;
         Assert.Equal(300, total); // 600→300 に比例縮小
@@ -258,7 +276,7 @@ public sealed class TrainingPlanTests
             Preset = TrainingPreset.Custom,
             Allocations = new[] { new MenuAllocation(TrainingMenu.Batting, 100) },
         };
-        var alloc2 = TrainingPresets.Resolve(under, false, 300);
+        var alloc2 = TrainingPresets.Resolve(under, 300);
         var total2 = 0;
         foreach (var a in alloc2) total2 += a.Minutes;
         Assert.Equal(100, total2); // 不足はそのまま（残り idle）

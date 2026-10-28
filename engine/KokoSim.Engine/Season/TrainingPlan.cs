@@ -37,7 +37,10 @@ public sealed record TrainingPlan
         return sum;
     }
 
-    /// <summary>お任せ既定（投手/野手で自動選択）。</summary>
-    public static TrainingPlan Auto(bool isPitcher) =>
-        new() { Preset = isPitcher ? TrainingPreset.PitcherAuto : TrainingPreset.BatterAuto };
+    /// <summary>
+    /// 練習計画を組んでいない選手（<see cref="DevelopingPlayer.Plan"/>=null）の既定＝全員バランス型（issue #680）。
+    /// 以前はゲームが判定した投手らしさで投手お任せ/野手お任せを選んでいたが、守備位置・投手適性は
+    /// プレイヤーが決めるものなので判定を使わない。
+    /// </summary>
+    public static TrainingPlan Default => new() { Preset = TrainingPreset.Balanced };
 }

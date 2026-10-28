@@ -246,9 +246,9 @@ namespace KokoSim.Unity.Training
         }
 
         /// <summary>選手の練習計画（単一ソースは <see cref="DevelopingPlayer.Plan"/>）。
-        /// null=お任せは投手適性から自動選択して返す＝週送りの <see cref="KokoSim.Unity.Shell.TrainingWeek"/> と同じ既定。</summary>
+        /// null=未設定は全員バランス型＝週送りの <see cref="KokoSim.Unity.Shell.TrainingWeek"/> と同じ既定（issue #680）。</summary>
         private TrainingPlan PlanOf(int index)
-            => _roster[index].Plan ?? TrainingPlan.Auto(PitcherRoleResolver.LeansPitcher(_roster[index]));
+            => _roster[index].Plan ?? TrainingPlan.Default;
 
         /// <summary>選手の練習計画を書き込む（単一ソース <see cref="DevelopingPlayer.Plan"/>。共有ロスターなので画面往復で保持される）。</summary>
         private void SetPlan(int index, TrainingPlan plan) => _roster[index].Plan = plan;
@@ -367,10 +367,7 @@ namespace KokoSim.Unity.Training
             if (index < 0 || index >= _roster.Count) return;
             _delegated[index] = !_delegated[index];
             if (_delegated[index])
-                SetPlan(index, new TrainingPlan
-                {
-                    Preset = PitcherRoleResolver.LeansPitcher(_roster[index]) ? TrainingPreset.PitcherAuto : TrainingPreset.Balanced,
-                });
+                SetPlan(index, new TrainingPlan { Preset = TrainingPreset.Balanced });   // ゲームの判定で選ばない（issue #680）
         }
 
         public bool IsDelegated(int index) => index >= 0 && index < _delegated.Length && _delegated[index];
@@ -668,7 +665,7 @@ namespace KokoSim.Unity.Training
         {
             TrainingPreset.PitcherAuto => "投手向け。投げ込み・変化球・球速・走り込みを自動で配分します。",
             TrainingPreset.BatterAuto => "野手向け。打撃・長打・選球・守備・走塁を幅広く自動で配分します。",
-            TrainingPreset.Balanced => "役割に応じて打撃と投球をバランス良く。迷ったらこれ。",
+            TrainingPreset.Balanced => "打撃・投球・守備をまんべんなく。迷ったらこれ。",
             TrainingPreset.DefenseFocus => "守備と送球を重点強化。堅い守りのチーム作りに。",
             TrainingPreset.AceDevelopment => "投げ込み・球速・変化球に集中。エースを一気に育てます。",
             TrainingPreset.SluggerDevelopment => "長打・打撃・筋力に集中。主砲の一発を伸ばします。",
@@ -708,7 +705,7 @@ namespace KokoSim.Unity.Training
         }
 
         private IReadOnlyList<MenuAllocation> ResolvedAllocations(int index)
-            => TrainingPresets.Resolve(PlanOf(index), PitcherRoleResolver.LeansPitcher(_roster[index]), Budget);
+            => TrainingPresets.Resolve(PlanOf(index), Budget);
 
         /// <summary>背番号の表示テキスト（ベンチ外は「—」）。単一ソースは DevelopingPlayer.UniformNumber。</summary>
         private string NumTextAt(int index)

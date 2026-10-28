@@ -36,9 +36,8 @@ public sealed class TrainingPlanWiringTests
     /// 監督は中立点（基準指導力20）＝従来と1ビット一致する条件で回す。</summary>
     private static void ApplyWeek(DevelopingPlayer p, int budget)
     {
-        var isPitcher = PitcherRoleResolver.LeansPitcher(p);
-        var plan = p.Plan ?? TrainingPlan.Auto(isPitcher);
-        var alloc = TrainingPresets.Resolve(plan, isPitcher, budget);
+        var plan = p.Plan ?? TrainingPlan.Default;
+        var alloc = TrainingPresets.Resolve(plan, budget);
         DevelopmentModel.TrainWeekPlan(p, alloc, C.ReferenceWeekMinutes, 1, 1.0, Stages, C,
             new SkillCoefficients(), new PersonalityCoefficients(), CoachingProfile.Uniform(20));
     }

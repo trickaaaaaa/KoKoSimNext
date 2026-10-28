@@ -158,8 +158,8 @@ public static class SeasonEngine
                 {
                     if (!ctx.Calendar.CanTrain(p.Grade, week)) continue;
                     // 選手ごとの練習計画（未設定はお任せ）を実効配分へ解決して1週ぶん適用（設計書03 §3.1）。
-                    var plan = p.Plan ?? TrainingPlan.Auto(PitcherRoleResolver.LeansPitcher(p));
-                    var alloc = TrainingPresets.Resolve(plan, PitcherRoleResolver.LeansPitcher(p), budget);
+                    var plan = p.Plan ?? TrainingPlan.Default;
+                    var alloc = TrainingPresets.Resolve(plan, budget);
                     var stage = ctx.Calendar.StageIndex(p.Grade, week);
                     DevelopmentModel.TrainWeekPlan(
                         p, alloc, training.ReferenceWeekMinutes,
