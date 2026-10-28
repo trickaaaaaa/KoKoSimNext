@@ -49,6 +49,9 @@
                          judge は影用の複製を先に置いて背面に敷く（USS の text_shadow は1要素1つしか
                          持てないので、ぼかし影は面のラベル・硬い影はこの複製が担う。issue #479）。
                          下段は球種と球速を別ラベルに割る（数字は Oswald・和文はサンセリフ＝書体3役ルール）。 -->
+                    <!-- 走った！の叫び吹き出し（issue #696）。走者の元の塁ごとの BurstBalloon を MatchLiveController が
+                         この層へ生成し、その球でスタートを切った塁だけ出す。クリックは素通し。 -->
+                    <ui:VisualElement name="runner-go-host" class="runner-go" picking-mode="Ignore" />
                     <ui:VisualElement name="pitch-call" class="pitch-call">
                         <ui:VisualElement class="pitch-call__stack">
                             <ui:Label name="pitch-call-judge-sh" class="pitch-call__judge pitch-call__judge--shadow" text="" />

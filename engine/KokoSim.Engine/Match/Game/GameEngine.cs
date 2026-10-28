@@ -1000,6 +1000,9 @@ public static class GameEngine
                 var steal0Runs = offense.Runs;
                 var steal0RunsThisHalf = runsThisHalf;
                 Player? stealRecRunner = null;      // RecordSteal した走者（取り消し対象）
+                // この球でスタートを切った走者の元の塁（bit1=一塁 / bit2=二塁 / bit3=三塁。issue #696・観測専用）。
+                // 盗塁は打球・ファウルで巻き戻しても「走った」事実は残る＝巻き戻しでは消さない。
+                var runnersStartedMask = 0;
                 var stealRecSuccess = false;
                 Player? stealRecScorer = null;      // 本盗・重盗で得点した走者（帰属の取り消し対象）
                 var stealDoubleBreak = false;       // 重盗の三塁ブレイクを数えたか
@@ -1063,6 +1066,7 @@ public static class GameEngine
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.First, safe);
                         stealRecRunner = secondStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
+                        runnersStartedMask |= 1 << 1;
                         stealStartApplied = stealStart;
                         // 全力疾走・スライディング（設計書03 §3.5）: 盗塁企図ごとに走者が受傷しうる。
                         if (bases.First is { } slider)
@@ -1095,6 +1099,7 @@ public static class GameEngine
                         {
                             offense.DoubleStealThirdBreakCount++;
                             stealDoubleBreak = true;         // issue #626: 巻き戻し対象
+                            runnersStartedMask |= 1 << 3;
                             offense.Runs += 1;
                             runsThisHalf += 1;
                             if (bases.Third is { } dsScorer)
@@ -1146,6 +1151,7 @@ public static class GameEngine
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.Second, safe);
                         stealRecRunner = thirdStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
+                        runnersStartedMask |= 1 << 2;
                         if (bases.Second is { } thirdSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -1200,6 +1206,7 @@ public static class GameEngine
                         var safe = steal.Safe;
                         offense.RecordSteal(bases.Third, safe);
                         stealRecRunner = homeStealer; stealRecSuccess = safe;   // issue #626: 巻き戻し対象
+                        runnersStartedMask |= 1 << 3;
                         if (bases.Third is { } homeSlider)
                         {
                             Hurt(MatchInjuryModel.Roll(
@@ -1307,6 +1314,10 @@ public static class GameEngine
                     }
                 }
 
+                // エンドランの一塁走者・スクイズの三塁走者も、投球と同時にスタートを切る（issue #696・観測専用）。
+                if (endrunThisPitch && bases.First is not null) runnersStartedMask |= 1 << 1;
+                if (battingOverride == PitchBattingOverride.Squeeze && bases.Third is not null) runnersStartedMask |= 1 << 3;
+
                 var pitchRes = session.ThrowNextPitch(rng, battingOverride, pitchOverride, gearOverride,
                     batterOverride: batterAttrsPitch, swingFactorOverride: swingFactorPitch,
                     fieldersOverride: fieldersOverride, thirdRunnerOverride: sqThirdOverride,
@@ -1399,6 +1410,7 @@ public static class GameEngine
                         // この球の前に盗塁が解決していれば、その再生データを載せる（issue #485）。
                         // 打席途中の盗塁はこの1球観測が唯一の運び口（打球は Current.Play が運ぶ）。
                         StealPlay = stealPlay,
+                        RunnersStarted = runnersStartedMask,
                         // この球の前に牽制が発火していれば、その再生データを載せる（issue #486）。
                         PickoffPlay = pickoffPlay,
                     };

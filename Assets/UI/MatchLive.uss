@@ -251,3 +251,18 @@
 .msc__unitnum { font-size: var(--fs-cap); color: var(--color-chalk); margin: 0; padding: 0; }
 .msc__unit { font-size: var(--fs-cap); color: var(--color-faint); margin: 0 0 0 2px; padding: 0; }
 .msc__none { font-size: var(--fs-cap); color: var(--color-faint); margin: 0; padding: 0; }
+
+/* ── 走った！の叫び吹き出し（issue #696）──────────────────────────────────
+   置き場は盤面全体に敷いた透明な層。吹き出しは走者の元の塁の側へ置く（2026-10-28 監督決定）。
+   対決ビューは投手の背中越しに本塁を見る構図＝一塁は画面の左、三塁は右、二塁は手前（画面下）。
+   寸法と色は部品（components.uss の .burst）が持つ＝ここは位置だけ。 */
+.runner-go {
+    position: absolute;
+    left: 0; right: 0; top: 0; bottom: 0;
+}
+.runner-go__burst {
+    position: absolute;
+}
+.runner-go__burst--b1 { left: 6%; top: 34%; }
+.runner-go__burst--b3 { right: 6%; top: 34%; }
+.runner-go__burst--b2 { left: 50%; bottom: 14%; translate: -50% 0; }
