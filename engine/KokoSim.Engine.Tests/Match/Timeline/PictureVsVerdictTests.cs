@@ -212,9 +212,6 @@ public sealed class PictureVsVerdictTests
         var checkedPlays = 0;
         foreach (var tl in Timelines())
         {
-            // 外野フライのタッチアップ（生還＋別走者が進塁を刺される）は対象外。球の返球が丸ごと描かれない既知の穴
-            // （issue #685）で、この検査の趣旨（外野安打の演出用送球が憤死側を握りつぶさないこと）とは別物。
-            if (tl.Result.EndsWith("フライ")) continue;
             var scoredSafely = tl.Runners.Any(l => !l.OutAtEnd && IsHome(l.To) && Dist(l.From, l.To) >= 0.5);
             if (!scoredSafely) continue;
 
@@ -231,6 +228,34 @@ public sealed class PictureVsVerdictTests
         }
         Assert.True(checkedPlays >= 1,
             $"本塁生還+別走者の他塁憤死が同時に起きるプレーが {checkedPlays} 件しかない＝テストが空回り");
+    }
+
+    /// <summary>
+    /// 外野フライのタッチアップで、別の走者が進塁を刺されたなら、その塁へ外野手の送球が着く（issue #685）。
+    /// 以前は生還があると本塁返球の枝から外れ（他塁の憤死ありのため）、外野返球の枝は安打専用だったので、
+    /// 球の返球が1本も描かれず、走者が突然アウトになっていた。
+    /// </summary>
+    [Fact]
+    public void TagUpRunnerThrownOutOnFlyOut_HasThrowToThatBase()
+    {
+        var checkedPlays = 0;
+        foreach (var tl in Timelines(200))   // 60試合だと該当4件＝200で10件前後
+        {
+            if (!tl.Result.EndsWith("フライ")) continue;
+            var outLeg = tl.Runners.FirstOrDefault(l => l.OutAtEnd && l.Label != "打" && !IsHome(l.To)
+                && Dist(l.From, l.To) >= 0.5);
+            if (outLeg is null) continue;
+
+            checkedPlays++;
+            var throwArrive = tl.Ball
+                .Where(b => (b.Kind == BallSegmentKind.Throw || b.Kind == BallSegmentKind.Carry) && Dist(b.To, outLeg.To) < 1.0)
+                .Select(b => (double?)b.T1).Min();
+            Assert.True(throwArrive is not null,
+                $"{tl.Result}: {outLeg.Label} がタッチアップで刺されたのに、その塁への送球が無い");
+            Assert.True(throwArrive <= outLeg.T1 + 1e-6,
+                $"{tl.Result}: 送球({throwArrive:F2}s)が走者({outLeg.T1:F2}s)より後に着くのにアウトになっている");
+        }
+        Assert.True(checkedPlays >= 1, $"タッチアップで刺されるフライが {checkedPlays} 件＝テストが空回り");
     }
 
     // ---- 補助 ----
