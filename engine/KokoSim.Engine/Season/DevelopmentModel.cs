@@ -92,18 +92,17 @@ public static class DevelopmentModel
     }
 
     /// <summary>
-    /// 個別指導3枠の追加倍率（Issue #126・OPEN-QUESTIONS Q7(a)）。<paramref name="p"/> が指名中
-    /// （<see cref="DevelopingPlayer.IndividualCoaching"/>）のときだけ、その週の主効果expへ
-    /// #115のcoachingFactor比（<see cref="CoachAdj"/>）をもう一段乗せる。
-    /// 追加倍率 = 1 + (coachingFactor比 − 1) × IndividualCoachingBonusScale。
-    /// 非指名 or coaching=null（比=1.0）なら 1.0＝従来一致。
+    /// 個別指導3枠の追加倍率（Issue #126・#693・OPEN-QUESTIONS Q7(a)）。<paramref name="p"/> が指名中
+    /// （<see cref="DevelopingPlayer.IndividualCoaching"/>）のときだけ、その週の主効果expへ乗せる。
+    /// 追加倍率 = 基礎倍率 + (coachingFactor比 − 1) × スケール（下限1.0）。
+    /// coaching=null は中立点（比=1.0）扱い＝基礎倍率だけが掛かる。非指名なら 1.0＝従来一致。
     /// </summary>
-    private static double IndividualCoachingBonus(AbilityKind ability, DevelopingPlayer p,
+    internal static double IndividualCoachingBonus(AbilityKind ability, DevelopingPlayer p,
         CoachingProfile? coaching, TrainingCoefficients c, double receptivity, double baselineFactor)
     {
         if (!p.IndividualCoaching) return 1.0;
         var ratio = CoachAdj(ability, coaching, c, receptivity, baselineFactor);
-        return 1.0 + (ratio - 1.0) * c.IndividualCoachingBonusScale;
+        return Math.Max(1.0, c.IndividualCoachingBaseMultiplier + (ratio - 1.0) * c.IndividualCoachingBonusScale);
     }
 
     public static void TrainWeek(
