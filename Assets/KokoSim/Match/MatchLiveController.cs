@@ -380,6 +380,27 @@ namespace KokoSim.Unity.Match
         private VisualElement _runnerGoHost;
         private readonly KokoSim.Unity.Components.BurstBalloon[] _runnerGo = new KokoSim.Unity.Components.BurstBalloon[3];
         private float _runnerGoClock = -1f;   // 残り表示秒（プレー時間）。負＝非表示
+        // 「走った！」を出した球（同じ球で2回出さない。振りかぶりで出した球をリリースでまた出さない）。
+        private LivePitch _runnerGoFor;
+
+        // 振りかぶりで先に解決した次の1球（issue #696）。打席途中の球は、対決ビューで投手が次の振りかぶりへ
+        // 入った瞬間（DuelStageRig.HasCutToNextWindup＝采配カードの受付締切）にエンジンへ投げさせ、
+        // その結果をリリース（＝従来エンジンを呼んでいた采配窓）まで預かる。押し込む指示も締切も
+        // 見た目どおりになり、走者のスタートが振りかぶりの頭で分かる。エンジンの呼び出し列は変わらない。
+        private struct PreResolvedStep
+        {
+            public AdvancePitchResult Result;
+            public LivePitch Thrown;
+            /// <summary>解決する直前の観測。預かっている間の HUD はこれで描く（次の球の結果を先に出さない）。</summary>
+            public MatchLiveSnapshot SnapshotBefore;
+        }
+        private PreResolvedStep? _preStep;
+        // 打席途中の守備ビュー（盗塁・暴投捕逸・振り逃げ）から戻った直後の球は振りかぶりから見せる（issue #696）。
+        // 戻った投手はセット姿勢で止まっている（DuelStageRig.EndFieldPlay）＝牽制の投げ直しと同じ扱い。
+        // 振りかぶりが無いと「走った！」を出す投球動作の頭が無い（従来はセット姿勢からリリースへ跳んでいた）。
+        private bool _windupAfterFieldPlay;
+        /// <summary>エンジンが画面より1球先へ進んでいる（振りかぶりで解決済み・リリース前）。</summary>
+        private bool EngineAheadOfScreen => _preStep.HasValue;
         [SerializeField] private float runnerGoHoldSeconds = 1.6f;
         // 出現/消失の演出（issue #479）。USS の transition は display の切替をまたいで走らないので、
         // 「表示にしてから次フレームで is-enter を外す」で出現を、「is-enter を戻してから畳む」で消失を出す。
@@ -665,6 +686,9 @@ namespace KokoSim.Unity.Match
             _pickoffPlay = null;     // 打席途中の牽制再生（issue #486）も同様
             _batteryMissPlay = null; // 打席途中の暴投・捕逸再生（issue #487）も同様
             _dropThirdStrikePlay = null; // 打席途中の振り逃げ再生（issue #488）も同様
+            _preStep = null;             // 振りかぶりで先に解決した球（issue #696）も試合をまたがない
+            _windupAfterFieldPlay = false;
+            _runnerGoFor = null;
             _windowClock = _windowHold = _windowCarry = 0f;
             _displayedLogCount = 0;
             _prog = null;
@@ -902,6 +926,16 @@ namespace KokoSim.Unity.Match
             if (_subPanel != null && _subPanel.IsOpen) return;   // 交代モーダルを開いている間は待つ
             if (_scoutPanel != null && _scoutPanel.IsOpen) return;   // 能力ビューアも同じ（issue #602）
 
+            // 振りかぶりで先に解決した球（issue #696）があれば、エンジンは呼ばずにそれを描く
+            //（指示はその時点で押し込み済み・消灯済み）。
+            if (_preStep is { } pre)
+            {
+                _preStep = null;
+                DispatchStep(pre.Result, pre.Thrown);
+                DrainSubstitutionEvents();
+                return;
+            }
+
             if (commitTactics) PushPitchTacticsChoice();
             var before = _prog.LastPitch;
             var result = _prog.AdvancePitch();
@@ -912,6 +946,37 @@ namespace KokoSim.Unity.Match
             DispatchStep(result, thrown);
             // 直前の1歩で起きた継投をポップアップ＋実況履歴へ（issue #209 表現）。新着が無ければ何もしない。
             DrainSubstitutionEvents();
+        }
+
+        /// <summary>
+        /// 打席途中の次の1球を、投手が振りかぶりへ入った瞬間に解決しておく（issue #696）。
+        /// 解決するのは「同じ打席の続きの球を、対決ビューの間合いで、そのまま投げる」ときだけ。
+        /// 守備ビューへ寄り道する球・打席を終わらせた球・半回が変わる窓・球数制限の交代待ち・
+        /// モーダル表示中は従来どおり采配窓（＝リリース）で解決する。
+        /// </summary>
+        private void TryPreResolveNextPitch()
+        {
+            if (_preStep.HasValue || _prog == null || _gameOver || _fastMode || CaptureMode) return;
+            if (!DuelPacingActive || !(_duelRig?.HasCutToNextWindup ?? false)) return;
+            if (_pitchIdx + 1 < _paQueue.Count || IsTerminalPitch(_pitchIdx)) return;
+            var next = _atBatNext;
+            if (next == null || _atBat == null || next.PitchNumberInPa <= 1) return;
+            if (next.IsTop != _atBat.IsTop || next.Inning != _atBat.Inning) return;
+            var live = _paQueue[_pitchIdx].Live;
+            if (live == null || live.StealPlay != null || live.BatteryMissPlay != null
+                || live.DropThirdStrikePlay != null) return;
+            if (_prog.PendingForcedPitcherChange) return;
+            if (_subPanel != null && _subPanel.IsOpen) return;
+            if (_scoutPanel != null && _scoutPanel.IsOpen) return;
+
+            var snapBefore = _prog.Snapshot();
+            PushPitchTacticsChoice();
+            var before = _prog.LastPitch;
+            var result = _prog.AdvancePitch();
+            var thrown = ReferenceEquals(_prog.LastPitch, before) ? null : _prog.LastPitch;
+            ResetPitchTacticsChoice();
+            _preStep = new PreResolvedStep { Result = result, Thrown = thrown, SnapshotBefore = snapBefore };
+            ShowRunnerGo(thrown);
         }
 
         private void DispatchStep(AdvancePitchResult result, LivePitch thrown)
@@ -1118,7 +1183,9 @@ namespace KokoSim.Unity.Match
         {
             if (_prog == null) return;
             if (_pmSituation != null) _pmSituation.text = PauseSituationText();
-            var resolving = BackgroundGameOp.Running;
+            // 振りかぶりで先に解決した球を預かっている間（issue #696）も、エンジンが画面より先にいる
+            // ＝伝令・交代・能力ビューアは「投げ終わった後」の状態に効く／見えてしまうので伏せる。
+            var resolving = BackgroundGameOp.Running || EngineAheadOfScreen;
             if (_pmTimeout != null)
             {
                 var off = _prog.OffenseTimeoutsLeft(_managerIsAway);
@@ -1172,7 +1239,7 @@ namespace KokoSim.Unity.Match
         private void OnSendTimeout()
         {
             if (_gameOver || !_paused || _prog == null) return;
-            if (BackgroundGameOp.Running) return;   // 解決中は打席境界が未確定なので受け付けない
+            if (BackgroundGameOp.Running || EngineAheadOfScreen) return;   // 解決中は打席境界が未確定なので受け付けない
             if (_timeoutSentThisPause) return;      // 1中断につき1回
             var kind = _prog.CallTimeout(_managerIsAway);
             if (kind == MatchProgression.PlayerTimeoutResult.Unavailable) return;
@@ -1200,6 +1267,7 @@ namespace KokoSim.Unity.Match
         private void OnOpenSubstitution()
         {
             if (_gameOver || _prog == null || !_paused) return;
+            if (EngineAheadOfScreen) return;   // 振りかぶりで解決済みの球を預かっている（issue #696）
             _subPanel?.Open();
         }
 
@@ -1224,7 +1292,7 @@ namespace KokoSim.Unity.Match
         private void OnOpenScout()
         {
             if (_gameOver || _prog == null || !_paused) return;
-            if (BackgroundGameOp.Running) return;
+            if (BackgroundGameOp.Running || EngineAheadOfScreen) return;
             _scoutPanel?.Open();
         }
 
@@ -1673,8 +1741,9 @@ namespace KokoSim.Unity.Match
         private void BeginPitchWindupOrBall(int index, bool forceWindup)
         {
             // 「走った！」（issue #696）: この球でスタートを切った走者がいれば、投球動作の始まりで出す。
-            // 打席の初球（と牽制後の投げ直し）はここが振りかぶりの頭。打席途中の球はこの球をエンジンが
-            // 解決するのがリリースの瞬間なので、ここ＝リリースで出る（振りかぶりはその前に始まっている）。
+            // 打席の初球（と牽制後の投げ直し）はここが振りかぶりの頭。打席途中の球は振りかぶりの頭で
+            // 先に解決して出し済み（TryPreResolveNextPitch）＝同じ球は ShowRunnerGo が二度出さない。
+            // 先に解決できなかった球（守備ビュー帰り等）だけ、ここ＝リリースで出る。
             ShowRunnerGo(index >= 0 && index < _paQueue.Count ? _paQueue[index].Live : null);
             _pitchIdx = index;
             _pitchCallDone = false;
@@ -1696,7 +1765,9 @@ namespace KokoSim.Unity.Match
             // 移行クリップを通すか直接構えるかを猶予で選ぶ。
             var buntNow = (index >= 0 && index < _paQueue.Count && IsBuntSign(_paQueue[index].Token))
                           || PendingBuntSign();
-            var useWindup = (index == 0 || forceWindup) && DuelPacingActive;
+            var afterField = _windupAfterFieldPlay;
+            _windupAfterFieldPlay = false;
+            var useWindup = (index == 0 || forceWindup || afterField) && DuelPacingActive;
             PrepareBuntStance(buntNow, useWindup ? DuelStageRig.WindupSeconds : 0f);
 
             if (useWindup)
@@ -2214,6 +2285,7 @@ namespace KokoSim.Unity.Match
         private void FinishStealView()
         {
             EndFieldPlay();          // 守備陣・走者を伏せて対決の構図へ戻す（＝打席への唯一のカット）
+            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
             _view.HideJudgement();
             _stealPlay = null;
             var q = _paQueue[_pitchIdx];
@@ -2398,6 +2470,7 @@ namespace KokoSim.Unity.Match
         private void FinishBatteryMissView()
         {
             EndFieldPlay();
+            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
             _view.HideJudgement();
             _batteryMissPlay = null;
             var q = _paQueue[_pitchIdx];
@@ -2482,6 +2555,7 @@ namespace KokoSim.Unity.Match
         private void FinishDropThirdStrikeView()
         {
             EndFieldPlay();
+            _windupAfterFieldPlay = true;   // 次の球は振りかぶりから（issue #696）
             _view.HideJudgement();
             _dropThirdStrikePlay = null;
             var q = _paQueue[_pitchIdx];
@@ -2710,6 +2784,7 @@ namespace KokoSim.Unity.Match
                 }
                 if (_pitchCallDone)
                 {
+                    TryPreResolveNextPitch();   // 次の球の振りかぶりに入ったら、その球を先に解決（issue #696）
                     var interval = DuelPacingActive ? duelPitchIntervalSeconds : pitchIntervalSeconds;
                     if (_foulFlightHoldSeconds is { } hold) interval = Mathf.Max(interval, hold);
                     if (_pitchClock < interval) return;
@@ -3099,6 +3174,8 @@ namespace KokoSim.Unity.Match
         /// </summary>
         private void ShowRunnerGo(LivePitch live)
         {
+            if (live != null && ReferenceEquals(live, _runnerGoFor)) return;   // 振りかぶりで出し済み
+            _runnerGoFor = live;
             HideRunnerGo();
             if (_fastMode || live == null || live.RunnersStarted == 0) return;
             var any = false;
@@ -3359,6 +3436,9 @@ namespace KokoSim.Unity.Match
             if (tacticsHost != null) tacticsHost.style.display = on ? DisplayStyle.None : DisplayStyle.Flex;
             if (on)
             {
+                // 振りかぶりで先に解決した球（issue #696）はエンジン側では投げ終わっている＝描かずに捨てる。
+                _preStep = null;
+                HideRunnerGo();
                 if (_fieldHost != null) _fieldHost.style.display = DisplayStyle.None;
                 if (_duelHost != null) _duelHost.style.display = DisplayStyle.None;
                 // 演出系の一過性オーバーレイ（プレイボール等のテロップ・判定・得点コール・交代ポップアップ・
@@ -3814,7 +3894,8 @@ namespace KokoSim.Unity.Match
         private void RefreshPanel()
         {
             if (_prog == null || _statsProvider == null) return;
-            var snap = _prog.Snapshot();
+            // 振りかぶりで先に解決した球を預かっている間は、解決前の観測で描く（球数・今日成績の先出し防止）。
+            var snap = _preStep is { } pre ? pre.SnapshotBefore : _prog.Snapshot();
             var ownIsAway = _managerIsAway;
             var own = ownIsAway ? snap.Away : snap.Home;
             var opp = ownIsAway ? snap.Home : snap.Away;
