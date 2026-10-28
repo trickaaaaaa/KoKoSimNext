@@ -22,9 +22,9 @@ stages:
     grouping: geographic
     child:
       type: knockout
-    advance_per_group: 1    # 支部代表1校が秋季全道大会へ（実在は支部内が複数ブロックだが簡略化）
+    advance_per_group: 3    # 各支部の上位3校が秋季全道大会へ（10支部×3＝30校。実在は支部内が複数ブロックだが簡略化・issue #688）
   - name: 秋季全道大会
     type: knockout
 notes:
   - 秋季全道大会は北北海道/南北海道に分かれない単一大会（夏の甲子園予選とは異なる。要出典を参照）
-  - advance_per_group=1 は本ゲームのAI生成県規模に合わせた簡略化
+  - advance_per_group=3 は本ゲームのAI生成県規模に合わせた簡略化
