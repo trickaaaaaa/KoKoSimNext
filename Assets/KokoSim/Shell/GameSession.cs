@@ -468,6 +468,33 @@ namespace KokoSim.Unity.Shell
 
         private readonly List<MatchInjuryOutcome> _injuryNotices = new List<MatchInjuryOutcome>();
 
+        // 大舞台での化け（issue #694・設計書03 §5.5）。公式戦1試合ぶん、好打・好投の出場者に大会の格で決まる確率で起きる。
+        private static readonly GrowthEventCoefficients GrowthEventsCoeff = new GrowthEventCoefficients();
+        private int _bigStageSeq;
+        private readonly List<GrowthNotice> _bigStageNotices = new List<GrowthNotice>();
+
+        /// <summary>
+        /// 公式戦の後に大舞台イベントを判定する（練習試合は呼ばない）。乱数は試合ごとの独立ストリーム
+        /// （怪我と同じ作法）＝大会の展開・ほかの抽選の乱数列はずれない。
+        /// </summary>
+        private void ApplyBigStage(GameResult detail, bool managerWasAway)
+        {
+            var prob = GrowthEventsCoeff.BigStageProb(Kind);
+            if (prob <= 0.0) return;
+            var rng = new Xoshiro256Random(
+                0x8167_0000UL ^ (ulong)(GameClock.YearIndex * 10000 + GameClock.Week * 100 + (++_bigStageSeq)));
+            _bigStageNotices.AddRange(GrowthEventModel.BigStage(
+                detail, managerWasAway, RosterService.Roster, prob, rng, GrowthEventsCoeff));
+        }
+
+        /// <summary>大舞台イベントの結果を取り出して空にする（通知フィード・ノベルへ流す用）。</summary>
+        public List<GrowthNotice> DrainBigStageNotices()
+        {
+            var list = new List<GrowthNotice>(_bigStageNotices);
+            _bigStageNotices.Clear();
+            return list;
+        }
+
         /// <summary>試合後の怪我処理の結果を取り出して空にする（通知フィードへ流す用）。</summary>
         public List<MatchInjuryOutcome> DrainInjuryNotices()
         {
@@ -573,6 +600,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
+                ApplyBigStage(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
             ExitTournamentIfFinished();
@@ -617,6 +645,7 @@ namespace KokoSim.Unity.Shell
                 ApplyMatchGrowth(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchCondition(detail, LastOutcome.ManagerWasAway);
                 ApplyMatchInjuries(detail, LastOutcome.ManagerWasAway);
+                ApplyBigStage(detail, LastOutcome.ManagerWasAway);
             }
             ResultPending = true;
             ExitTournamentIfFinished();

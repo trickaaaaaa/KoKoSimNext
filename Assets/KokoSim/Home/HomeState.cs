@@ -273,7 +273,7 @@ namespace KokoSim.Unity.Home
                     Tag = GrowthEventText.IsGood(n.Type) ? "成長" : "警告",
                 });
                 KokoSim.Unity.Shell.EventService.Push(
-                    GrowthEventText.EventId(n.Type), n.Player.Name,
+                    GrowthEventText.EventId(n), n.Player.Name,
                     GrowthEventText.Effect(n, _growth), n.Player.Id);
             }
             PushFeed(items);
@@ -712,7 +712,23 @@ namespace KokoSim.Unity.Home
                 },
             };
             items.AddRange(InjuryFeedItems());
+            items.AddRange(BigStageFeedItems(_growth));
             PushFeed(items);
+        }
+
+        /// <summary>
+        /// 大舞台での化け（issue #694）を通知フィードとノベルへ流す。効果は engine が適用済み＝ここは提示だけ。
+        /// </summary>
+        private static List<FeedItem> BigStageFeedItems(GrowthEventCoefficients c)
+        {
+            var items = new List<FeedItem>();
+            foreach (var n in GameSession.Current.DrainBigStageNotices())
+            {
+                items.Add(new FeedItem { When = "本日", Text = GrowthEventText.Feed(n, c), Kind = FeedKind.Up, Tag = "成長" });
+                KokoSim.Unity.Shell.EventService.Push(
+                    GrowthEventText.EventId(n), n.Player.Name, GrowthEventText.Effect(n, c), n.Player.Id);
+            }
+            return items;
         }
 
         /// <summary>
