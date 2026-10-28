@@ -46,6 +46,16 @@ namespace KokoSim.Unity.Shell
             return name.Length > 0 ? name + "（" + Site(site) + "）" : Site(site);
         }
 
+        /// <summary>
+        /// 会話で言う形「足首の捻挫」（issue #695。マネージャーの一言に差し込む）。
+        /// 種類が無ければ部位だけ（「足首の故障」）。括弧書きの <see cref="Diagnosis"/> は表・フィード用。
+        /// </summary>
+        public static string Spoken(InjuryType type, InjurySite site)
+        {
+            var name = Type(type);
+            return Site(site) + "の" + (name.Length > 0 ? name : "故障");
+        }
+
         /// <summary>「捻挫（足首）・中度」。健常なら空文字。</summary>
         public static string Short(DevelopingPlayer p)
             => p == null || p.Injury == InjurySeverity.None

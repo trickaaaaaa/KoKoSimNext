@@ -173,6 +173,16 @@ namespace KokoSim.Unity.Shell
         /// 別の会話になる（同じ人・同じ週なら常に同じ会話）。</para>
         /// </summary>
         public static void Push(string eventId, string subjectName, PresentedEffect effect, int salt = 0)
+            => Push(eventId, subjectName, effect, salt, null);
+
+        /// <summary>
+        /// <see cref="Push(string, string, PresentedEffect, int)"/> に、その出来事だけが知っている差し込み語
+        /// （故障名 {injury}・全治週 {weeks} など。issue #695）を足す版。<paramref name="extra"/> の語は
+        /// <see cref="KokoSim.Engine.Season.Events.EventTextFormat.KnownKeys"/> に登録済みのものだけを渡す。
+        /// 会話の1行で結果を言い切るイベントは <paramref name="effect"/> を null にする＝結果行を足さない。
+        /// </summary>
+        public static void Push(string eventId, string subjectName, PresentedEffect effect, int salt,
+            IReadOnlyDictionary<string, string> extra)
         {
             var e = Scheduler.Find(eventId);
             if (e == null)
@@ -186,6 +196,7 @@ namespace KokoSim.Unity.Shell
 
             var values = BuildValues();
             if (!string.IsNullOrEmpty(subjectName)) values["player"] = subjectName;
+            if (extra != null) foreach (var kv in extra) values[kv.Key] = kv.Value;
             var script = EventScheduler.PickScript(e, Scheduler.AbsoluteWeek, salt, Rng());
 
             _pending.Add(new PresentedEvent

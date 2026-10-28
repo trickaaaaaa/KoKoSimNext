@@ -29,12 +29,20 @@ public sealed record TrainingCoefficients
     public int IndividualCoachingSlots { get; init; } = 3;
 
     /// <summary>
-    /// 個別指導3枠の追加倍率スケール（Issue #126・OPEN-QUESTIONS Q7(a)）。指名選手の主効果expにだけ、
-    /// 分野別指導力由来のcoachingFactor比（Issue #115・<see cref="DevelopmentModel"/> の中立点比）を
-    /// もう一段乗せる: 追加倍率 = 1 + (coachingFactor比 − 1) × このスケール。
-    /// 既定1.0＝#115の写像をそのまま流用。coaching=null または指名なしなら追加倍率は1.0（従来一致）。
+    /// 個別指導3枠の基礎倍率（issue #693）。指名選手の主効果expに、監督の指導力に関係なく掛かる分。
+    /// 旧式（#126）は「指導力の比−1」だけだったので、新任監督（指導力20＝中立点）ではちょうど1.0＝
+    /// 指名しても何も起きなかった。新任でも効果が体感できるよう、ここを床にする。
+    /// 追加倍率 = この値 + (coachingFactor比 − 1) × <see cref="IndividualCoachingBonusScale"/>（下限1.0）。
     /// </summary>
-    public double IndividualCoachingBonusScale { get; init; } = 1.0;
+    public double IndividualCoachingBaseMultiplier { get; init; } = 1.5;
+
+    /// <summary>
+    /// 個別指導3枠の指導力スケール（Issue #126・#693）。分野別指導力由来のcoachingFactor比
+    /// （Issue #115・<see cref="DevelopmentModel"/> の中立点比）が1を超えた分に掛ける。
+    /// 既定3.0＝名将（指導力90・素直さ1.0）で比1.32 → 追加倍率 ≈ 2.45（2026-10-28 監督決定「名将で×2.5程度」）。
+    /// 基礎倍率1.0・スケール0で個別指導の効果を無効化できる。
+    /// </summary>
+    public double IndividualCoachingBonusScale { get; init; } = 3.0;
 
     /// <summary>
     /// 施設レベル→(係数, 週練習時間) 対応表（Issue #115・設計書03 §4）。index=施設レベル。

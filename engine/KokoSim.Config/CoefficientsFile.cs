@@ -1435,6 +1435,7 @@ public static class CoefficientsLoader
         public double CoachingLevel { get; set; } = D.CoachingLevel;
         public double CoachingSlope { get; set; } = D.CoachingSlope;
         public int IndividualCoachingSlots { get; set; } = D.IndividualCoachingSlots;
+        public double IndividualCoachingBaseMultiplier { get; set; } = D.IndividualCoachingBaseMultiplier;
         public double IndividualCoachingBonusScale { get; set; } = D.IndividualCoachingBonusScale;
         public List<FacilityTierDto>? FacilityTiers { get; set; }
         public double LevelUpBase { get; set; } = D.LevelUpBase;
@@ -1458,6 +1459,7 @@ public static class CoefficientsLoader
             CoachingLevel = CoachingLevel,
             CoachingSlope = CoachingSlope,
             IndividualCoachingSlots = IndividualCoachingSlots,
+            IndividualCoachingBaseMultiplier = IndividualCoachingBaseMultiplier,
             IndividualCoachingBonusScale = IndividualCoachingBonusScale,
             FacilityTiers = FacilityTiers is null
                 ? new TrainingCoefficients().FacilityTiers

@@ -194,6 +194,10 @@ public sealed class SaveState
     /// または自校の県が地区予選を持たない（そのときは秋季県大会が直接始まる）。</summary>
     public int? LastDistrictChampionId { get; set; }
 
+    /// <summary>直近に終わった秋季地区予選の県大会進出校ID（順位順。上位 advance_per_group 校・v22・issue #688）。
+    /// 空＝未確定、または旧セーブ（その場合は <see cref="LastDistrictChampionId"/> 1校だけが進出校）。</summary>
+    public List<int> LastDistrictQualifierIds { get; set; } = new();
+
     /// <summary>直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。空＝未確定。</summary>
     public List<int> LastAutumnPlacementIds { get; set; } = new();
 

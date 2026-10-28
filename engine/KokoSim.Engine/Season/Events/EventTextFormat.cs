@@ -14,7 +14,7 @@ namespace KokoSim.Engine.Season.Events;
 public static class EventTextFormat
 {
     /// <summary>差し込み語として書いてよいキー（data/events.yaml のヘッダと対応）。</summary>
-    public static readonly IReadOnlyList<string> KnownKeys = new[] { "player", "school", "manager", "count" };
+    public static readonly IReadOnlyList<string> KnownKeys = new[] { "player", "school", "manager", "count", "injury", "weeks" };
 
     /// <summary>差し込み語を置換する。<paramref name="values"/> に無いキーは <c>{key}</c> のまま残す。</summary>
     public static string Apply(string text, IReadOnlyDictionary<string, string> values)
