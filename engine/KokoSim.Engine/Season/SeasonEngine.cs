@@ -11,6 +11,8 @@ public sealed record SeasonContext
     public TrainingCoefficients Training { get; init; } = new();
     public RosterCoefficients Roster { get; init; } = new();
     public Players.FormCoefficients Form { get; init; } = new();
+    /// <summary>成長イベントの観測口（issue #694。発生回数の計測・テスト用）。null＝観測しない（結果は不変）。</summary>
+    public Action<GrowthNotice>? GrowthObserver { get; init; }
     public Players.SkillCoefficients Skills { get; init; } = new();
     public Players.PersonalityCoefficients Personalities { get; init; } = new();
     public InjuryCoefficients Injury { get; init; } = new();
@@ -189,7 +191,8 @@ public static class SeasonEngine
 
                 // 選手成長イベント（設計書03 §5.5: 覚醒/開眼/スランプ/伸び悩み/イップス）。独立ストリーム。
                 var growthRng = rng.Fork(0x6707_0000UL ^ (ulong)(year * 100 + week));
-                GrowthEventModel.Week(roster, growthRng, ctx.Growth);
+                var growthNotices = GrowthEventModel.Week(roster, growthRng, ctx.Growth);
+                if (ctx.GrowthObserver is { } observe) foreach (var n in growthNotices) observe(n);
 
                 eventsFired += scheduler.Week(week, rng).Count;
             }

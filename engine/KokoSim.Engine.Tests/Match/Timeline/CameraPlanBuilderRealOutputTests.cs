@@ -137,6 +137,60 @@ public sealed class CameraPlanBuilderRealOutputTests
         Assert.Equal(held.Value.Y, heldKf.Cy, 1);
     }
 
+    // ---- issue #689: 内野ゴロで球を持った野手のまわりが引いていく ----------------------------
+
+    /// <summary>
+    /// 内野ゴロ→一塁封殺（送球1本・投げ手が内野手・受け手が一塁）。保持中のカメラは
+    /// 「球を持っている野手」に留まるべきで、本塁に立ったままの捕手を枠に入れて引いてはいけない。
+    /// </summary>
+    [Fact]
+    public void Build_StaysOnFielderHoldingBall_OnInfieldGrounder_NotOnTheCatcher()
+    {
+        var checkedPlays = 0;
+        for (var seed = 1UL; seed <= 120 && checkedPlays < 6; seed++)
+        {
+            var r = GameEngine.Play(BuildTeam("A"), BuildTeam("H"),
+                new GameContext { CaptureTimelines = true }, new Xoshiro256Random(seed));
+            foreach (var e in r.Log)
+            {
+                if (e.Timeline is null || e.Result != PlateAppearanceResult.InPlayOut) continue;
+                var play = PlayTimelineAdapter.ToPlaybackPlay(e.Timeline);
+                var segs = play.Ball.OfType<EndpointBallSegment>().ToList();
+                var pitch = segs.FirstOrDefault(b => b.Kind == BallSegmentKind.Pitch);
+                var roll = segs.FirstOrDefault(b => b.Kind == BallSegmentKind.Roll);
+                var throws = segs.Where(b => b.Kind == BallSegmentKind.Throw).ToList();
+                if (pitch is null || roll is null || throws.Count != 1) continue;
+                if (throws[0].ToRole != FieldPosition.FirstBase) continue;
+                if (throws[0].FromRole is not (FieldPosition.Shortstop or FieldPosition.SecondBase or FieldPosition.ThirdBase)) continue;
+                if (throws[0].T0 - roll.T1 < 0.9) continue;   // 保持が十分長いものだけ
+
+                var start = pitch.T1 + 0.5;
+                var framing = new CameraFraming(40.0, 2.0, CameraFraming.Default.PitchZoom,
+                    ThrowFollowsBall: true, HeldBallFollowsRunner: true, LooseBallFollowsChaser: true,
+                    ThrowBoxGrowsWithBall: true, KeepSubjectFramed: true, ReturnsToWide: false);
+                var plan = CameraPlanBuilder.Build(play, framing, start);
+
+                var heldFrom = Math.Max(roll.T1, start);
+                var heldTo = throws[0].T0;
+                var frameAtCatch = 155.22 / CameraEvaluator.ViewportAt(plan, heldFrom).ZoomMult;
+                // 保持の頭 0.5 秒は、転がり中の枠（球＋一塁。③＝#689 で別途扱う）からパンが追いつく猶予。
+                for (var t = heldFrom + 0.5; t < heldTo - 0.1; t += 0.05)
+                {
+                    var vp = CameraEvaluator.ViewportAt(plan, t);
+                    var ball = PlaybackEvaluator.BallAt(play, t)!.Value;
+                    var frameH = 155.22 / vp.ZoomMult;
+                    Assert.True(frameH <= frameAtCatch + 0.5,
+                        $"seed={seed} t={t:F2}: 保持中に枠が広がった {frameAtCatch:F1}m → {frameH:F1}m");
+                    var dist = Math.Sqrt((vp.Cx - ball.X) * (vp.Cx - ball.X) + (vp.Cy - ball.Y) * (vp.Cy - ball.Y));
+                    Assert.True(dist <= 3.0,
+                        $"seed={seed} t={t:F2}: 注視点が球を持った野手から {dist:F1}m 離れた cx={vp.Cx:F1},{vp.Cy:F1} ball={ball.X:F1},{ball.Y:F1} roll={roll.T0:F2}-{roll.T1:F2} thr={heldTo:F2} moves={string.Join(";", play.Moves.Select(m => m.Key + ":" + string.Join(",", m.Value.Select(v => $"{v.T0:F1}-{v.T1:F1}({v.To.X:F0},{v.To.Y:F0})"))))}");
+                }
+                checkedPlays++;
+            }
+        }
+        Assert.True(checkedPlays >= 3, $"検証できたプレーが少ない: {checkedPlays}");
+    }
+
     private static void AssertWithinViewport(CameraViewport vp, double x, double y)
     {
         const double designWidthM = 760.0 / 3.35;

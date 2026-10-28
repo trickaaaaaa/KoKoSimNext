@@ -112,8 +112,13 @@ namespace KokoSim.Unity.Home
             if (subject != null)
             {
                 EventService.BeginWeek();
-                EventService.Push("injury_occurred", subject.Name,
-                    PresentedEffect.Bad(subject.Name + " が右足首を捻挫（軽度）。全治 2 週"), subject.Id);
+                // 故障はマネージャーの一言で言い切る（issue #695）＝結果行なし。
+                EventService.Push("injury_occurred", subject.Name, null, subject.Id,
+                    new System.Collections.Generic.Dictionary<string, string>
+                    {
+                        { "injury", "足首の捻挫" },
+                        { "weeks", "2" },
+                    });
 
                 var home = Open("HomeDashboard");
                 yield return null; yield return null;
@@ -133,9 +138,17 @@ namespace KokoSim.Unity.Home
                 EventService.BeginWeek();
                 var awake = new KokoSim.Engine.Season.GrowthNotice(
                     subject, KokoSim.Engine.Season.GrowthEventType.Awakening,
-                    KokoSim.Engine.Season.AbilityKind.Power);
+                    KokoSim.Engine.Season.AbilityKind.Power)
+                {
+                    Domain = KokoSim.Engine.Season.GrowthDomain.Batting,
+                    Gains = new[]
+                    {
+                        new KokoSim.Engine.Season.AbilityGain(KokoSim.Engine.Season.AbilityKind.Power, 4),
+                        new KokoSim.Engine.Season.AbilityGain(KokoSim.Engine.Season.AbilityKind.Contact, 4),
+                    },
+                };
                 var coeff = new KokoSim.Engine.Season.GrowthEventCoefficients();
-                EventService.Push(GrowthEventText.EventId(awake.Type), subject.Name,
+                EventService.Push(GrowthEventText.EventId(awake), subject.Name,
                     GrowthEventText.Effect(awake, coeff), subject.Id);
                 Debug.Log("[EV] 成長フィード: " + GrowthEventText.Feed(awake, coeff));
 

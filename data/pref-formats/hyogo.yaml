@@ -15,17 +15,17 @@ stages:
     grouping: geographic
     child:
       type: knockout          # 各地区内はブロックトーナメント
-    advance_per_group: null    # 地区ごとに県大会枠（合計55、要項PDFで内訳確定）
+    advance_per_group: 8       # 各地区の上位8校（5地区×8＝40校＋夏代表の推薦。実在の55校より小規模なゲーム内校数に合わせた簡略化・issue #688）
     loser_bracket:
       enabled: true           # 各地区で敗者復活の代表決定戦
       advance: null
   - name: 県大会
     type: knockout
-    entries: 56               # 地区予選55 ＋ 推薦1（東洋大姫路）
+    entries: 41               # 地区予選40（5地区×8）＋ 推薦1（東洋大姫路）。実在は56
 # 使用球場（設計書13-stadiums §2-2）: 準決勝・決勝=神戸総合運動公園、序盤=市営級プールから抽選
 stadiums:
   final: hyogo_final
   early: [municipal_small_01, municipal_small_02]
 notes:
-  - 県大会56チーム＝地区予選勝ち上がり55＋夏甲子園校の推薦1
+  - 実在の県大会は56チーム＝地区予選勝ち上がり55＋夏甲子園校の推薦1（本ゲームは校数規模に合わせ41）
   - 各地区の県大会枠内訳と敗者復活の救い上げ数は要項PDFで確定

@@ -132,12 +132,16 @@ events:
         var required = new[]
         {
             "entrance_ceremony", "summer_camp", "culture_festival", "winter_camp", "draft_meeting", "graduation",
-            "injury", "rain_week", "media_coverage", "ob_donation", "recruit_rival_move",
+            // "injury"（週次の故障の会話）は issue #695 で削除＝効果が無く、誰も故障していないのに語っていた。
+            "rain_week", "media_coverage", "ob_donation", "recruit_rival_move",
             "ace_hidden_injury", "skipping_practice",
             // システムイベント（issue #610〜）。IDは呼び出し側にベタ書きされているので、
             // 消えると「その出来事だけ黙って会話が出ない」形で壊れる。
             "injury_occurred", "injury_returned",
-            "growth_awakening", "growth_breakthrough", "growth_slump",
+            "growth_awakening_batting", "growth_awakening_pitching", "growth_awakening_defense",
+            "growth_awakening_running", "growth_grand_awakening", "growth_surge", "growth_new_pitch",
+            "growth_pitch_refined", "growth_big_stage_batting", "growth_big_stage_pitching",
+            "growth_breakthrough", "growth_slump",
             "growth_plateau", "growth_yips", "growth_yips_overcome",
             "mgr_koshien_experience", "mgr_rival_lesson", "mgr_big_loss",
             "mgr_seminar", "mgr_pro_ob", "mgr_mentor",
@@ -210,6 +214,49 @@ events:
         var rng = new Xoshiro256Random(44);
         for (var w = 1; w <= 20; w++)
             Assert.Same(EventScheduler.PickScript(e, w, rng), EventScheduler.PickScript(e, w, 0, rng));
+    }
+
+    /// <summary>
+    /// 故障はマネージャーの一言で言い切る（issue #695・2026-10-28 監督決定）。小芝居を挟まず、
+    /// その1行に誰が・何で・何週離脱かが全部入る＝結果行に頼らない。
+    /// </summary>
+    [Fact]
+    public void InjuryOccurred_IsOneTeamManagerLine_NamingWhoWhatAndWeeks()
+    {
+        var e = RepositoryEvents().First(x => x.Id == "injury_occurred");
+        Assert.True(e.Variants.Count >= 2, "主役で会話を分けるので2通り以上要る");
+        foreach (var v in e.Variants)
+        {
+            var line = Assert.Single(v.Lines);
+            Assert.Equal(EventRoles.TeamManager, line.Who);
+            var keys = EventTextFormat.KeysIn(line.Say);
+            Assert.Contains("player", keys);
+            Assert.Contains("injury", keys);
+            Assert.Contains("weeks", keys);
+        }
+
+        var said = EventTextFormat.Apply(e.Variants[0].Lines[0].Say, new Dictionary<string, string>
+        {
+            ["player"] = "山田", ["injury"] = "足首の捻挫", ["weeks"] = "3",
+        });
+        Assert.DoesNotContain("{", said);
+        Assert.Contains("足首の捻挫", said);
+        Assert.Contains("全治3週間", said);
+    }
+
+    /// <summary>
+    /// 週次の抽選表に「故障した」と語るだけの会話を置かない（issue #695）。効果の無いランダム抽選なので、
+    /// 選ばれた部員は実際には故障しておらず、語られた選手が普通に練習している状態になっていた。
+    /// 故障は InjuryModel が起こし、主役つきの injury_occurred が語る。
+    /// </summary>
+    [Fact]
+    public void RepositoryTable_HasNoWeeklyDrawnInjuryTalk()
+    {
+        foreach (var e in RepositoryEvents().Where(x => x.Kind == EventKind.Random))
+        {
+            Assert.NotEqual("injury", e.Id);
+            Assert.DoesNotContain("故障", e.Text);
+        }
     }
 
     [Fact]

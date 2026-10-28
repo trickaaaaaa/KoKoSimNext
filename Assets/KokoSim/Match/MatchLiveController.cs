@@ -3588,23 +3588,67 @@ namespace KokoSim.Unity.Match
                 foreach (var l in _duelFieldLabelPool) l.style.display = DisplayStyle.None;
                 return;
             }
-            var labels = _duelRig.CurrentFieldLabels(MaxDuelFieldLabels);
+            // 重なりの間引き（issue #689）。優先順に並んだ候補を画面空間で置き、
+            // ①判定テロップ（アウト/ダブルプレー等）の矩形に被るものは出さない
+            // ②先に置いたラベルと重なるものは上へずらし、2段ずらしても重なるなら出さない。
+            // 固定枠の内野（44m）は9人が小さく密集するので、頭上の名札が互いに被る。
+            var labels = _duelRig.CurrentFieldLabels(MaxDuelFieldLabels * 2);
             var w = _duelImg.resolvedStyle.width;
             var h = _duelImg.resolvedStyle.height;
             if (float.IsNaN(w) || float.IsNaN(h) || w <= 0f || h <= 0f) return;   // レイアウト未確定の初回フレーム
 
-            for (var i = 0; i < labels.Count; i++)
+            var blocked = new List<Rect>(2);
+            // 判定テロップと、球種・球速のチップ（pitch-call）の両方を避ける。
+            foreach (var hostName in new[] { "judgement-call", "pitch-call" })
             {
-                var lbl = DuelFieldLabelSlot(i);
+                var host = _root?.Q<VisualElement>(hostName);
+                if (host == null || host.resolvedStyle.display != DisplayStyle.Flex) continue;
+                foreach (var el in new VisualElement[] { host.Q<VisualElement>(className: "pitch-call__stack"),
+                             host.Q<VisualElement>(className: "pitch-call__readout"), host.Q<Label>("judgement-detail") })
+                {
+                    if (el == null || el.resolvedStyle.display == DisplayStyle.None) continue;
+                    var wb = el.worldBound;
+                    if (float.IsNaN(wb.width) || wb.width <= 0f) continue;
+                    blocked.Add(new Rect(_duelImg.WorldToLocal(wb.position), wb.size));
+                }
+            }
+
+            var placed = new List<Rect>(MaxDuelFieldLabels);
+            var shown = 0;
+            for (var i = 0; i < labels.Count && shown < MaxDuelFieldLabels; i++)
+            {
                 var l = labels[i];
+                var lbl = DuelFieldLabelSlot(shown);
                 lbl.text = l.Name;
+                var lw = lbl.resolvedStyle.width; var lh = lbl.resolvedStyle.height;
+                if (float.IsNaN(lw) || lw <= 0f) lw = 16f * l.Name.Length + 16f;   // 初回は文字数からの概算
+                if (float.IsNaN(lh) || lh <= 0f) lh = 24f;
+                var x = l.Viewport01.x * w;
+                var y = (1f - l.Viewport01.y) * h;
+                var ok = false;
+                for (var step = 0; step < 3 && !ok; step++)
+                {
+                    var r = new Rect(x - lw * 0.5f, y - lh - step * (lh + 2f), lw, lh);   // translate: -50% -100% と同じ原点
+                    if (Overlaps(r, blocked) || Overlaps(r, placed)) continue;
+                    placed.Add(r);
+                    lbl.style.left = r.x + lw * 0.5f;
+                    lbl.style.top = r.y + lh;
+                    ok = true;
+                }
+                if (!ok) continue;
                 lbl.EnableInClassList("duel-field-label--runner", l.IsRunner);
                 lbl.style.display = DisplayStyle.Flex;
-                lbl.style.left = l.Viewport01.x * w;
-                lbl.style.top = (1f - l.Viewport01.y) * h;
+                shown++;
             }
-            for (var i = labels.Count; i < _duelFieldLabelPool.Count; i++)
+            for (var i = shown; i < _duelFieldLabelPool.Count; i++)
                 _duelFieldLabelPool[i].style.display = DisplayStyle.None;
+        }
+
+        private static bool Overlaps(Rect r, List<Rect> others)
+        {
+            for (var i = 0; i < others.Count; i++)
+                if (r.Overlaps(others[i])) return true;
+            return false;
         }
 
         private Label DuelFieldLabelSlot(int index)

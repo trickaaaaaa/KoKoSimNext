@@ -1266,6 +1266,29 @@ public static class CoefficientsLoader
         public double YipsWeeklyProb { get; set; } = D.YipsWeeklyProb;
         public int YipsAbilityDrop { get; set; } = D.YipsAbilityDrop;
         public double YipsOvercomeWeeklyProb { get; set; } = D.YipsOvercomeWeeklyProb;
+        public double GrandAwakeningWeeklyProb { get; set; } = D.GrandAwakeningWeeklyProb;
+        public double GrandAwakeningConditionMin { get; set; } = D.GrandAwakeningConditionMin;
+        public int GrandAwakeningGain { get; set; } = D.GrandAwakeningGain;
+        public int GrandAwakeningCapLift { get; set; } = D.GrandAwakeningCapLift;
+        public double GrowthSurgeWeeklyProb { get; set; } = D.GrowthSurgeWeeklyProb;
+        public double GrowthSurgeConditionMin { get; set; } = D.GrowthSurgeConditionMin;
+        public double GrowthSurgeFactor { get; set; } = D.GrowthSurgeFactor;
+        public double GrowthSurgeMax { get; set; } = D.GrowthSurgeMax;
+        public int GrowthSurgeCapLift { get; set; } = D.GrowthSurgeCapLift;
+        public double NewPitchWeeklyProb { get; set; } = D.NewPitchWeeklyProb;
+        public int NewPitchMaxBreaking { get; set; } = D.NewPitchMaxBreaking;
+        public int NewPitchOffset { get; set; } = D.NewPitchOffset;
+        public int PitchRefineGain { get; set; } = D.PitchRefineGain;
+        public double BigStageProbKoshien { get; set; } = D.BigStageProbKoshien;
+        public double BigStageProbRegional { get; set; } = D.BigStageProbRegional;
+        public double BigStageProbPrefectural { get; set; } = D.BigStageProbPrefectural;
+        public int BigStageMentalGain { get; set; } = D.BigStageMentalGain;
+        public int BigStageGain { get; set; } = D.BigStageGain;
+        public int BigStageMinHits { get; set; } = D.BigStageMinHits;
+        public int BigStageMinRbi { get; set; } = D.BigStageMinRbi;
+        public int BigStageMinOuts { get; set; } = D.BigStageMinOuts;
+        public int BigStageMaxRuns { get; set; } = D.BigStageMaxRuns;
+        public int BigStageMinStrikeOuts { get; set; } = D.BigStageMinStrikeOuts;
 
         public GrowthEventCoefficients ToModel() => new()
         {
@@ -1288,6 +1311,29 @@ public static class CoefficientsLoader
             YipsWeeklyProb = YipsWeeklyProb,
             YipsAbilityDrop = YipsAbilityDrop,
             YipsOvercomeWeeklyProb = YipsOvercomeWeeklyProb,
+            GrandAwakeningWeeklyProb = GrandAwakeningWeeklyProb,
+            GrandAwakeningConditionMin = GrandAwakeningConditionMin,
+            GrandAwakeningGain = GrandAwakeningGain,
+            GrandAwakeningCapLift = GrandAwakeningCapLift,
+            GrowthSurgeWeeklyProb = GrowthSurgeWeeklyProb,
+            GrowthSurgeConditionMin = GrowthSurgeConditionMin,
+            GrowthSurgeFactor = GrowthSurgeFactor,
+            GrowthSurgeMax = GrowthSurgeMax,
+            GrowthSurgeCapLift = GrowthSurgeCapLift,
+            NewPitchWeeklyProb = NewPitchWeeklyProb,
+            NewPitchMaxBreaking = NewPitchMaxBreaking,
+            NewPitchOffset = NewPitchOffset,
+            PitchRefineGain = PitchRefineGain,
+            BigStageProbKoshien = BigStageProbKoshien,
+            BigStageProbRegional = BigStageProbRegional,
+            BigStageProbPrefectural = BigStageProbPrefectural,
+            BigStageMentalGain = BigStageMentalGain,
+            BigStageGain = BigStageGain,
+            BigStageMinHits = BigStageMinHits,
+            BigStageMinRbi = BigStageMinRbi,
+            BigStageMinOuts = BigStageMinOuts,
+            BigStageMaxRuns = BigStageMaxRuns,
+            BigStageMinStrikeOuts = BigStageMinStrikeOuts,
         };
     }
 
@@ -1435,6 +1481,7 @@ public static class CoefficientsLoader
         public double CoachingLevel { get; set; } = D.CoachingLevel;
         public double CoachingSlope { get; set; } = D.CoachingSlope;
         public int IndividualCoachingSlots { get; set; } = D.IndividualCoachingSlots;
+        public double IndividualCoachingBaseMultiplier { get; set; } = D.IndividualCoachingBaseMultiplier;
         public double IndividualCoachingBonusScale { get; set; } = D.IndividualCoachingBonusScale;
         public List<FacilityTierDto>? FacilityTiers { get; set; }
         public double LevelUpBase { get; set; } = D.LevelUpBase;
@@ -1458,6 +1505,7 @@ public static class CoefficientsLoader
             CoachingLevel = CoachingLevel,
             CoachingSlope = CoachingSlope,
             IndividualCoachingSlots = IndividualCoachingSlots,
+            IndividualCoachingBaseMultiplier = IndividualCoachingBaseMultiplier,
             IndividualCoachingBonusScale = IndividualCoachingBonusScale,
             FacilityTiers = FacilityTiers is null
                 ? new TrainingCoefficients().FacilityTiers

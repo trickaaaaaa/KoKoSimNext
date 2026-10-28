@@ -72,9 +72,12 @@ namespace KokoSim.Unity.Tournament
             HomeState.Current.DismissResult();
             yield return null;
 
-            if (!wonDistrict)
+            // 地区予選の上位N校（YAML の advance_per_group・issue #688）は優勝しなくても県大会へ進む。
+            // 圏外で敗退した年だけは県大会を観るだけで処理して地区大会へ直接つなぐ（例外を投げないこと）。
+            if (!(GameSession.Current.InTournament && GameSession.Current.Kind == TournamentKind.Autumn))
             {
-                Note("自校が地区予選で敗退＝秋季県大会には出場しない年（正常系。ここで終了）。");
+                Note("自校は県大会進出圏外（地区予選の結果: " + (wonDistrict ? "優勝" : "敗退")
+                    + "）＝県大会は観るだけで処理した年（正常系）。");
                 Debug.Log("[DISTRICTFLOW] " + (_fail == 0 ? "PASS" : "FAIL(" + _fail + ")") + "\n" + _log);
                 yield break;
             }
@@ -83,10 +86,13 @@ namespace KokoSim.Unity.Tournament
                 GameSession.Current.InTournament && GameSession.Current.Kind == TournamentKind.Autumn,
                 "kind=" + GameSession.Current.Kind);
             var prefFieldCount = GameSession.Current.Field.Count;
-            Note("秋季県大会の出場校数（地区代表の集合のはず）: " + prefFieldCount);
-            Check("秋季県大会の出場校は地区予選より少ない（全県ではなく地区代表の集合）",
-                prefFieldCount <= districtFieldCount || prefFieldCount < NationService.PrefectureSchools.Count,
-                "district=" + districtFieldCount + " pref大会=" + prefFieldCount);
+            var advance = DistrictPlanProvider.AdvancePerDistrictOf(NationService.PrefectureId);
+            var districts = DistrictPlanProvider.AutumnDistrictsOf(NationService.PrefectureId);
+            var seedExtra = DistrictPlanProvider.SeedExemptionOf(NationService.PrefectureId) ? 1 : 0;
+            Note("秋季県大会の出場校数（各地区の上位" + advance + "校×" + districts + "地区＋夏代表推薦）: " + prefFieldCount);
+            Check("秋季県大会の出場校数が 地区数×進出校数（＋夏代表の推薦）に収まる",
+                prefFieldCount > districts && prefFieldCount <= districts * advance + seedExtra,
+                "pref大会=" + prefFieldCount + " 上限=" + (districts * advance + seedExtra));
             GameSession.Current.ConsumeBanner();
 
             yield return PlayOutCurrentTournament();

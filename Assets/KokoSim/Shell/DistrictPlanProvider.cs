@@ -27,9 +27,22 @@ namespace KokoSim.Unity.Shell
         private const string RelativeDir = "KokoSim/pref-formats";
 
         private static IReadOnlyDictionary<int, int> _cached;
+        private static IReadOnlyDictionary<int, PrefFormatDistrictParser.AutumnDistrictRule> _rules;
 
         /// <summary>県Id → 県内地区数。地区を持たない県は載らない。</summary>
         public static IReadOnlyDictionary<int, int> Plan => _cached ?? (_cached = Load());
+
+        /// <summary>県Id → 秋季地区予選の規則（各地区の進出校数・夏代表の推薦。issue #688）。地区を持たない県は載らない。</summary>
+        public static IReadOnlyDictionary<int, PrefFormatDistrictParser.AutumnDistrictRule> Rules
+            => _rules ?? (_rules = LoadRules());
+
+        /// <summary>各地区から秋季県大会へ進む校数（地区予選を持たない県は1）。</summary>
+        public static int AdvancePerDistrictOf(int prefectureId)
+            => Rules.TryGetValue(prefectureId, out var r) ? r.AdvancePerDistrict : 1;
+
+        /// <summary>夏の代表校を秋季県大会へ推薦するか（<c>seed_exemption</c>）。</summary>
+        public static bool SeedExemptionOf(int prefectureId)
+            => Rules.TryGetValue(prefectureId, out var r) && r.SeedExemption;
 
         /// <summary>その県の地区数（0＝地区なし）。東京だけ SummerRegions 側の2択を優先する。
         /// 新規開始画面の地区選択欄向け＝秋季大会の地区予選判定には <see cref="AutumnDistrictsOf"/> を使うこと
@@ -67,6 +80,36 @@ namespace KokoSim.Unity.Shell
                 if (districtId >= 0 && districtId < branches.Count) return branches[districtId];
             }
             return "第" + (districtId + 1) + "地区";
+        }
+
+        private static IReadOnlyDictionary<int, PrefFormatDistrictParser.AutumnDistrictRule> LoadRules()
+        {
+            var texts = ReadAllYaml();
+            return texts == null
+                ? new Dictionary<int, PrefFormatDistrictParser.AutumnDistrictRule>()
+                : PrefFormatDistrictParser.BuildRules(texts);
+        }
+
+        /// <summary>StreamingAssets の県別 YAML を全部読む（regional-tournaments は地区表ではないので除く）。無ければ null。</summary>
+        private static List<string> ReadAllYaml()
+        {
+            try
+            {
+                var dir = Path.Combine(Application.streamingAssetsPath, RelativeDir);
+                if (!Directory.Exists(dir)) return null;
+                var texts = new List<string>();
+                foreach (var path in Directory.GetFiles(dir, "*.yaml"))
+                {
+                    if (Path.GetFileName(path) == "regional-tournaments.yaml") continue;
+                    texts.Add(File.ReadAllText(path));
+                }
+                return texts;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[県内地区] 規則の読込失敗（{e.Message}）。進出校数は1校で継続。");
+                return null;
+            }
         }
 
         private static IReadOnlyDictionary<int, int> Load()

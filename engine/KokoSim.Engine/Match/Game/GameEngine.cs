@@ -2038,6 +2038,27 @@ public static class GameEngine
                         returnTo.RunnerOut);
                 }
 
+                // 外野フライのタッチアップで別の走者が進塁を刺された（issue #685）: 捕った外野手からその塁へ投げる。
+                // 生還者がいると上の本塁返球は「他塁の憤死あり」で外れ、外野返球は安打専用なので、どこにも
+                // 入らず球が1本も返らないまま走者がアウトになっていた。1プレー1送球＝刺した塁へ投げる。
+                // 既に送球を積んだプレー（飛び出しの戻し送球）では AppendOutfieldReturnThrow 側が二重に投げない。
+                if (!homeThrowAdded && res.Play is { IsFly: true, Result: Match.Fielding.BattedBallResult.Out } tagPlay
+                    && HasOutAtOtherBase(runnerMoves))
+                {
+                    var tagTarget = Match.Timeline.TimelineBuilder.ResolveOutfieldReturnTarget(runnerMoves, tagPlay.Result);
+                    if (tagTarget.RunnerOut)
+                    {
+                        var runnerArrive = 0.0;
+                        foreach (var leg in timeline.Runners)
+                            if (leg.Label == tagTarget.AnchorLabel && leg.T1 > runnerArrive) runnerArrive = leg.T1;
+                        timeline = Match.Timeline.TimelineBuilder.AppendOutfieldReturnThrow(
+                            timeline, tagPlay, ctx.Field, tagTarget.BaseName, runnerArrive, ctx.Fielding, paBaserunning,
+                            runnerOut: true);
+                        timeline = Match.Timeline.TimelineBuilder.AlignTaggedRunnerToThrow(
+                            timeline, tagTarget.BaseName, tagTarget.AnchorLabel);
+                    }
+                }
+
                 // 失策でこぼれた球を拾った野手は内野へ投げ返す（issue #629 ③）。積まないと、拾った野手が
                 // 球を持ったまま棒立ちで、走者が本塁まで走り抜けるのを眺めている絵になる。
                 // 本塁クロスプレーを描いた打席では投げない＝上の AppendBackHomeThrows と二重にならない。
