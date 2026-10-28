@@ -524,13 +524,10 @@ namespace KokoSim.Unity.Home
                         Kind = FeedKind.Warn,
                         Tag = "警告",
                     });
-                    // ノベルで見せる（issue #610）。診断名と離脱週は会話の最終行＝結果行で言い切る（2026-08-19）。
-                    KokoSim.Unity.Shell.EventService.Push("injury_occurred", p.Name,
-                        KokoSim.Unity.Shell.PresentedEffect.Bad(
-                            p.Name + " が " + InjuryLabel.Diagnosis(p.InjuryType, p.InjurySite)
-                            + "（" + InjuryLabel.Severity(p.Injury) + "）。全治 "
-                            + InjuryLabel.WeeksToFullRecovery(p) + " 週"),
-                        p.Id);
+                    // ノベルで見せる（issue #610）。マネージャーの一言で故障名と全治週を言い切る
+                    // （issue #695・2026-10-28）＝結果行は足さない。数字はフィードと同じ材料から作る。
+                    KokoSim.Unity.Shell.EventService.Push("injury_occurred", p.Name, null, p.Id,
+                        InjuryEventValues(p));
                 }
                 else
                 {
@@ -909,6 +906,14 @@ namespace KokoSim.Unity.Home
             view.Feed = _feed.ToList();
             return view;
         }
+
+        /// <summary>故障の一言（injury_occurred）へ差し込む語。フィードの行と同じ材料（issue #695）。</summary>
+        internal static Dictionary<string, string> InjuryEventValues(DevelopingPlayer p)
+            => new Dictionary<string, string>
+            {
+                { "injury", InjuryLabel.Spoken(p.InjuryType, p.InjurySite) },
+                { "weeks", InjuryLabel.WeeksToFullRecovery(p).ToString() },
+            };
 
         // ===== 表示用の変換 =====
 

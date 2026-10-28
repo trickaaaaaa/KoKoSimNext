@@ -535,6 +535,25 @@ public sealed class SaveCodecTests
     }
 
     [Fact]
+    public void DistrictQualifierIds_RoundTrip_AndV21SaveLoadsAsEmpty()
+    {
+        var state = SaveTestFixtures.BuildRichState();
+        state.LastDistrictChampionId = 3848;
+        state.LastDistrictQualifierIds = new List<int> { 3848, -1, 3867 };
+        var json = SaveCodec.Serialize(state);
+        Assert.True(SaveCodec.TryDeserialize(json, out var s, out var err), err);
+        Assert.Equal(new List<int> { 3848, -1, 3867 }, s.LastDistrictQualifierIds);
+
+        // v21 以前＝キーが無い。空で読める（DistrictEntry は空なら優勝校1校だけへ戻す）。
+        var v21 = json.Replace(",\"lastDistrictQualifierIds\":[3848,-1,3867]", "")
+            .Replace($"\"version\":{SaveCodec.CurrentVersion}", "\"version\":21");
+        Assert.DoesNotContain("lastDistrictQualifierIds", v21);
+        Assert.True(SaveCodec.TryDeserialize(v21, out var old, out var err2), err2);
+        Assert.Empty(old.LastDistrictQualifierIds);
+        Assert.Equal(3848, old.LastDistrictChampionId);
+    }
+
+    [Fact]
     public void V19Save_WithoutDistrictChampionId_StillLoads_AsUnset()
     {
         var state = SaveTestFixtures.BuildRichState();
