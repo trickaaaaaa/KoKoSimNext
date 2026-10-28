@@ -43,8 +43,13 @@ namespace KokoSim.Unity.Shell
 
             var prefectureId = NationService.PrefectureId;
             var districtCount = DistrictPlanProvider.AutumnDistrictsOf(prefectureId);
+            var advance = DistrictPlanProvider.AdvancePerDistrictOf(prefectureId);
             var yearIndex = GameClock.YearIndex;
-            var field = CollectDistrictChampions(prefectureId, districtCount, myChampionId.Value, yearIndex);
+            // 自地区の進出校。旧セーブ（v21以前）は一覧が無く優勝校1校だけが残っているのでそれを使う。
+            var myQualifierIds = GameSession.Current.LastDistrictQualifierIds is { Count: > 0 } ids
+                ? ids : new[] { myChampionId.Value };
+            var field = CollectDistrictQualifiers(prefectureId, districtCount, advance, myQualifierIds, yearIndex);
+            AddSummerChampionSeed(field, prefectureId);
             if (field.Count < 2)
             {
                 UnityEngine.Debug.LogWarning(
@@ -56,6 +61,23 @@ namespace KokoSim.Unity.Shell
             var manager = ManagerSchool();
             var title = TournamentEntry.TournamentTitle(TournamentKind.Autumn);
             var seed = TournamentEntry.TournamentSeed(TournamentKind.Autumn, yearIndex);
+
+            // 自校が地区予選で県大会進出圏外だった年は出場しない（issue #688）。TournamentRunner は自校が
+            // 出場校に居ないと投げるので、観るだけで県大会を同期解決し、その順位を地区大会の判定へ渡す。
+            if (field.All(s => s.Id != manager.Id))
+            {
+                var spectated = TournamentRunner.Spectated(
+                    field, NationCoeff, new Xoshiro256Random(seed), TournamentEntry.Schedule, title);
+                spectated.DrainBracketResolution();
+                var byId = field.ToDictionary(s => s.Id);
+                var placementIds = KnockoutPlacement.FromMatches(spectated.BuildBracketView().Matches, id => byId[id])
+                    .Select(s => s.Id).ToList();
+                GameSession.Current.SetSpectatedAutumnPlacement(placementIds);
+                // 通常の県大会の直後に走る地区大会以降の連鎖を、ここから直接起動する。
+                RegionalEntry.EnterAfterPrefectureTournament(TournamentKind.Autumn);
+                return false;
+            }
+
             var runner = new TournamentRunner(field, manager, NationCoeff, new Xoshiro256Random(seed),
                 TournamentEntry.Schedule, title, new PlayerMatchResolver(), RegionalEntry.BackgroundResolver(yearIndex),
                 onBackgroundMatch: (awayId, homeId, g) => NationService.TournamentStats.FoldMatch(awayId, homeId, g));
@@ -65,35 +87,50 @@ namespace KokoSim.Unity.Shell
         }
 
         /// <summary>
-        /// 自校の地区代表＋他地区の代表（同期解決）を集める。district 0..districtCount-1 の並びで
+        /// 自校の地区の進出校＋他地区の進出校（同期解決）を集める。district 0..districtCount-1 の並びで
         /// 決定論（他地区の解決順が結果に影響しないよう、シードは地区番号ごとに分ける）。
         /// </summary>
-        private static List<School> CollectDistrictChampions(
-            int prefectureId, int districtCount, int myChampionId, int yearIndex)
+        private static List<School> CollectDistrictQualifiers(
+            int prefectureId, int districtCount, int advance, IReadOnlyList<int> myQualifierIds, int yearIndex)
         {
             var manager = ManagerSchool();
-            var field = new List<School>(districtCount);
+            var field = new List<School>(districtCount * advance);
             for (var d = 0; d < districtCount; d++)
             {
                 if (d == (manager.DistrictId ?? 0))
                 {
-                    var mine = myChampionId == ManagerSchoolId ? manager : NationService.SchoolById(myChampionId);
-                    if (mine != null) field.Add(mine);
+                    foreach (var id in myQualifierIds)
+                    {
+                        var mine = id == ManagerSchoolId ? manager : NationService.SchoolById(id);
+                        if (mine != null) field.Add(mine);
+                    }
                     continue;
                 }
 
-                var champion = ResolveOtherDistrict(prefectureId, d, yearIndex);
-                if (champion != null) field.Add(champion);
+                field.AddRange(ResolveOtherDistrict(prefectureId, d, advance, yearIndex));
             }
             return field;
         }
 
-        /// <summary>自校が居ない地区の代表を同期解決する（自校IDを混ぜないので Spectated でよい）。</summary>
-        private static School ResolveOtherDistrict(int prefectureId, int districtId, int yearIndex)
+        /// <summary>
+        /// 夏の代表校（<see cref="GameSession.LastPrefChampionId"/>）を県大会へ推薦する（<c>seed_exemption</c>・
+        /// 設計書05 §1.5）。地区予選の進出校に既に居れば足さない。夏を優勝していない年（未確定）は何もしない。
+        /// </summary>
+        private static void AddSummerChampionSeed(List<School> field, int prefectureId)
+        {
+            if (!DistrictPlanProvider.SeedExemptionOf(prefectureId)) return;
+            if (GameSession.Current.LastPrefChampionId is not int id) return;
+            if (field.Any(s => s.Id == id)) return;
+            var school = id == ManagerSchoolId ? ManagerSchool() : NationService.SchoolById(id);
+            if (school != null) field.Add(school);
+        }
+
+        /// <summary>自校が居ない地区の進出校（上位 advance 校）を同期解決する（自校IDを混ぜないので Spectated でよい）。</summary>
+        private static IReadOnlyList<School> ResolveOtherDistrict(
+            int prefectureId, int districtId, int advance, int yearIndex)
         {
             var entrants = NationService.PrefectureSchools.Where(s => s.DistrictId == districtId).ToList();
-            if (entrants.Count == 0) return null;
-            if (entrants.Count == 1) return entrants[0];
+            if (entrants.Count <= advance) return entrants;
 
             var seed = GameSeed.Master ^ (9600UL + (ulong)yearIndex * 10 + (ulong)districtId * 1000
                 + (ulong)prefectureId);
@@ -103,8 +140,8 @@ namespace KokoSim.Unity.Shell
             runner.DrainBracketResolution();
 
             var byId = entrants.ToDictionary(s => s.Id);
-            var placement = KnockoutPlacement.FromMatches(runner.BuildBracketView().Matches, id => byId[id]);
-            return placement.Count > 0 ? placement[0] : null;
+            return KnockoutPlacement.FromMatches(runner.BuildBracketView().Matches, id => byId[id])
+                .Take(advance).ToList();
         }
 
         private static School ManagerSchool() => RegionalEntry.ManagerSchool();

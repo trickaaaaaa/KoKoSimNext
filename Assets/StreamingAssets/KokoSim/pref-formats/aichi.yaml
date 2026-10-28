@@ -16,9 +16,9 @@ stages:
     grouping: geographic
     child:
       type: knockout
-    advance_per_group: 1    # 地区代表1校が県大会へ（実数は要項PDFで変動するが、簡略化して固定）
+    advance_per_group: 6    # 各地区の上位6校が県大会へ（5地区×6＝30校。実数は要項PDFで変動するが、簡略化して固定・issue #688）
   - name: 県大会
     type: knockout
 notes:
   - 2025年秋の地区別出場校数（名古屋16・東三河6・西三河11・知多5・尾張10）は年度で変動しうる
-  - advance_per_group=1 は本ゲームのAI生成県規模（実在より小規模）に合わせた簡略化
+  - advance_per_group=6 は本ゲームのAI生成県規模（実在より小規模）に合わせた簡略化

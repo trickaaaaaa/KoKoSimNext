@@ -29,7 +29,7 @@ public readonly record struct SaveHeader(int Version, int Week, int YearIndex, s
 public static class SaveCodec
 {
     /// <summary>現行スキーマ版。項目を増やす破壊的変更のたびに +1 し、<see cref="Migrate"/> に移行を足す。</summary>
-    public const int CurrentVersion = 21;
+    public const int CurrentVersion = 22;
 
     // ===== Serialize =====
 
@@ -85,6 +85,7 @@ public static class SaveCodec
             .Add("lastPrefChampionId", NullableIntToJson(s.LastPrefChampionId))
             .Add("lastAutumnPlacementIds", IntsToJson(s.LastAutumnPlacementIds))
             .Add("lastDistrictChampionId", NullableIntToJson(s.LastDistrictChampionId))
+            .Add("lastDistrictQualifierIds", IntsToJson(s.LastDistrictQualifierIds))
             .Add("lastRegionalChampionId", NullableIntToJson(s.LastRegionalChampionId))
             .Add("lastRegionalPlacementIds", IntsToJson(s.LastRegionalPlacementIds))
             .Add("lastJinguChampionId", NullableIntToJson(s.LastJinguChampionId))
@@ -286,6 +287,10 @@ public static class SaveCodec
         // 状態のまま（差分なし）で読む＝その後の転任から新しい挙動になる。
         if (version < 21 && !root.Has("nationOverlay"))
             root.Add("nationOverlay", NationOverlayToJson(new NationOverlay()));
+        // v22（issue #688）: 秋季地区予選から県大会へ進む校が優勝校1校から上位N校に増えた。旧セーブには
+        // 進出校の一覧が無い＝空で補い、DistrictEntry は空なら従来どおり優勝校1校だけを使う。
+        if (version < 22 && !root.Has("lastDistrictQualifierIds"))
+            root.Add("lastDistrictQualifierIds", new JsonArray());
         // 勝敗投手の概念撤去（監督判断2026-08-27）: 投手成績の "w"/"l" キーを書かなくなった。
         // 版は上げない＝項目が減っただけで、旧セーブに残る "w"/"l" は StatsSaves.RestorePitchingInto が
         // 読まずに無視するので支障なく開ける（余分なキーがあるだけ）。
@@ -355,6 +360,7 @@ public static class SaveCodec
             LastPrefChampionId = NullableIntFromJson(root, "lastPrefChampionId"),
             LastAutumnPlacementIds = IntsFromJson(root.Arr("lastAutumnPlacementIds")),
             LastDistrictChampionId = NullableIntFromJson(root, "lastDistrictChampionId"),
+            LastDistrictQualifierIds = IntsFromJson(root.Arr("lastDistrictQualifierIds")),
             LastRegionalChampionId = NullableIntFromJson(root, "lastRegionalChampionId"),
             LastRegionalPlacementIds = IntsFromJson(root.Arr("lastRegionalPlacementIds")),
             LastJinguChampionId = NullableIntFromJson(root, "lastJinguChampionId"),

@@ -285,11 +285,24 @@ namespace KokoSim.Unity.Shell
         public int? LastDistrictChampionId { get; private set; }
 
         /// <summary>
+        /// 直近に終わった秋季地区予選の県大会進出校ID（順位順の上位 advance_per_group 校・v22・issue #688）。
+        /// null＝未確定（旧セーブ含む。その場合 <see cref="DistrictEntry"/> は優勝校1校だけを進出校とする）。
+        /// </summary>
+        public IReadOnlyList<int> LastDistrictQualifierIds { get; private set; }
+
+        /// <summary>
         /// 直近に終わった秋季県大会の順位付き出場校ID（＝地区大会の出場枠判定の材料）。
         /// null＝まだ決勝が消化されていない。<see cref="RegionalEntry"/> だけが読む中継値
         /// （<see cref="LastPrefChampionId"/> と同じ理由でセーブに載る・v19）。
         /// </summary>
         public IReadOnlyList<int> LastAutumnPlacementIds { get; private set; }
+
+        /// <summary>
+        /// 自校が出場しなかった秋季県大会（地区予選の進出圏外・issue #688）を同期解決した順位を控える。
+        /// 出場した年は <see cref="FoldTournamentRecords"/> が同じ値を畳み込みで入れる（地区大会の判定の材料）。
+        /// </summary>
+        public void SetSpectatedAutumnPlacement(IReadOnlyList<int> placementIds)
+            => LastAutumnPlacementIds = placementIds != null ? new List<int>(placementIds) : null;
 
         /// <summary>
         /// 直近に終わった地区大会の優勝校ID（＝明治神宮大会の自地区代表）。null＝地区大会が決勝まで
@@ -724,7 +737,16 @@ namespace KokoSim.Unity.Shell
             if (kind == TournamentKind.Summer) LastPrefChampionId = champion?.Id;
             // 秋季地区予選の優勝校＝秋季県大会の自地区代表。自校の県が地区予選を持つ年だけここを通る
             // （持たない県は DistrictEntry を経由せず TournamentEntry.Enter が直接 Autumn を開くため）。
-            if (kind == TournamentKind.AutumnDistrict) LastDistrictChampionId = champion?.Id;
+            if (kind == TournamentKind.AutumnDistrict)
+            {
+                LastDistrictChampionId = champion?.Id;
+                // 自地区の県大会進出校＝トーナメント順位の上位N校（issue #688）。N は YAML の advance_per_group。
+                var byId = (System.Func<int, School>)(id => id == NationService.ManagerSchoolId
+                    ? NationService.ManagerSchool() : NationService.SchoolById(id));
+                LastDistrictQualifierIds = KnockoutPlacement.FromMatches(matches, byId)
+                    .Take(DistrictPlanProvider.AdvancePerDistrictOf(NationService.PrefectureId))
+                    .Select(s => s.Id).ToList();
+            }
             // 秋季県大会の順位＝地区大会の出場枠判定の材料。夏と違い優勝校だけでは足りない
             // （県によっては2〜3位も地区大会へ進む）ので、順位付きプレースメントを丸ごと控える。
             if (kind == TournamentKind.Autumn)
@@ -904,6 +926,8 @@ namespace KokoSim.Unity.Shell
             // Restore 側で null へ戻す（MyRegionPlacementIds の ?? フォールバックが効かなくなるため）。
             s.LastPrefChampionId = LastPrefChampionId;
             s.LastDistrictChampionId = LastDistrictChampionId;
+            s.LastDistrictQualifierIds = LastDistrictQualifierIds != null
+                ? new List<int>(LastDistrictQualifierIds) : new List<int>();
             s.LastAutumnPlacementIds = LastAutumnPlacementIds != null
                 ? new List<int>(LastAutumnPlacementIds) : new List<int>();
             s.LastRegionalChampionId = LastRegionalChampionId;
@@ -991,6 +1015,8 @@ namespace KokoSim.Unity.Shell
             // 空リストのまま据えると「順位0件の地区大会があった」ことになって連鎖が切れる。
             LastPrefChampionId = s.LastPrefChampionId;
             LastDistrictChampionId = s.LastDistrictChampionId;
+            LastDistrictQualifierIds = s.LastDistrictQualifierIds != null && s.LastDistrictQualifierIds.Count > 0
+                ? new List<int>(s.LastDistrictQualifierIds) : null;
             LastAutumnPlacementIds = s.LastAutumnPlacementIds != null && s.LastAutumnPlacementIds.Count > 0
                 ? new List<int>(s.LastAutumnPlacementIds) : null;
             LastRegionalChampionId = s.LastRegionalChampionId;
@@ -1057,6 +1083,7 @@ namespace KokoSim.Unity.Shell
             PendingSenbatsuJinguRegion = "";
             LastPrefChampionId = null;
             LastDistrictChampionId = null;
+            LastDistrictQualifierIds = null;
             LastAutumnPlacementIds = null;
             LastRegionalChampionId = null;
             LastRegionalPlacementIds = null;

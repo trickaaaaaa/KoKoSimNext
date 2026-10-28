@@ -112,8 +112,13 @@ namespace KokoSim.Unity.Home
             if (subject != null)
             {
                 EventService.BeginWeek();
-                EventService.Push("injury_occurred", subject.Name,
-                    PresentedEffect.Bad(subject.Name + " が右足首を捻挫（軽度）。全治 2 週"), subject.Id);
+                // 故障はマネージャーの一言で言い切る（issue #695）＝結果行なし。
+                EventService.Push("injury_occurred", subject.Name, null, subject.Id,
+                    new System.Collections.Generic.Dictionary<string, string>
+                    {
+                        { "injury", "足首の捻挫" },
+                        { "weeks", "2" },
+                    });
 
                 var home = Open("HomeDashboard");
                 yield return null; yield return null;
