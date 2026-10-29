@@ -324,6 +324,10 @@ namespace KokoSim.Unity.Match
         private bool _battedHoldActive;
         private float _battedHoldClock;
         private const float BattedHoldSafetyCapSeconds = 1.5f;
+        /// <summary>「打った瞬間」の本塁打で、対決ビューのまま打者を映して見送る秒数（issue #704。**絵で決める値**）。</summary>
+        public static float NoDoubtWatchSeconds = 1.8f;
+
+        private bool IsNoDoubtHomeRun => _current?.Play?.HomeRun == KokoSim.Engine.Match.Timeline.HomeRunStyle.NoDoubt;
 
         // 打席途中の盗塁の再生（issue #485）。非nullの間＝盗塁プレー（走者が走る→捕手が投げる→塁で判定）を
         // 守備ビューで見せている最中。打球の据え置きと違い、終わったら打席の続きへ戻す（＝次打席へは進めない）。
@@ -2687,6 +2691,17 @@ namespace KokoSim.Unity.Match
                 if (_battedHoldActive)
                 {
                     _battedHoldClock += Time.deltaTime * _speed;
+                    // 「打った瞬間」の本塁打は、球が画面から出ても打者を映したまま見送る（issue #704。
+                    // 監督決定: 当たりの違いはカメラだけで見せる）。守備ビューへはこの秒数が経ってから切り替える
+                    if (IsNoDoubtHomeRun)
+                    {
+                        if (_battedHoldClock >= NoDoubtWatchSeconds)
+                        {
+                            _battedHoldActive = false;
+                            EnterBattedBallOrHold();
+                        }
+                        return;
+                    }
                     if ((_duelRig?.BattedOutOfFrame ?? true) || _battedHoldClock >= BattedHoldSafetyCapSeconds)
                     {
                         _battedHoldActive = false;
@@ -2752,10 +2767,15 @@ namespace KokoSim.Unity.Match
                         // インプレー打球は対決構図のまま球がビューポートから出るまで据え置く
                         // （design-18 §4.5-④・issue #481）。三振・四球等（Play無し）は見せるものが
                         // 無いので即座に結果保持へ入る。
-                        if (_current.Play != null && DuelPacingActive && !(_duelRig?.BattedOutOfFrame ?? true))
+                        // 「打った瞬間」の本塁打は球が画面の外でも据え置く＝打者を映したまま見送る（issue #704）
+                        if (_current.Play != null && DuelPacingActive
+                            && (IsNoDoubtHomeRun || !(_duelRig?.BattedOutOfFrame ?? true)))
                         {
                             _battedHoldActive = true;
                             _battedHoldClock = 0f;
+                            // 見送っている間は振り抜いた形のまま止める（既定の据え置き0.8sで構えへ戻ると
+                            // 「次の球を待つ打者」に見える。issue #704）
+                            if (IsNoDoubtHomeRun) _duelRig?.HoldBatterFinish(NoDoubtWatchSeconds);
                             return;
                         }
                         EnterBattedBallOrHold();   // 打席を終わらせた球は判定直後に打球再生／結果保持へ

@@ -190,6 +190,9 @@ public sealed record PlaybackPlay
     public double? CatchMargin { get; init; }
     /// <summary>球を弾いたか（<see cref="KokoSim.Engine.Match.Timeline.PlayTimeline.FumbledCatch"/> の写し）。</summary>
     public bool Fumbled { get; init; }
+    /// <summary>本塁打の当たりの種類（<see cref="KokoSim.Engine.Match.Timeline.PlayTimeline.HomeRunStyle"/> の写し。
+    /// 3D の守備ビューがカメラの見せ方を選ぶ唯一の入力・issue #704）。本塁打以外は null。</summary>
+    public KokoSim.Engine.Match.Timeline.HomeRunStyle? HomeRun { get; init; }
     public IReadOnlyList<PlaybackCaption> Caps { get; init; } = Array.Empty<PlaybackCaption>();
     /// <summary>判定イベント列（Issue #260）。<see cref="PlaybackEvaluator.JudgementAt"/> の単一ソース。</summary>
     public IReadOnlyList<PlaybackJudgement> Judgements { get; init; } = Array.Empty<PlaybackJudgement>();

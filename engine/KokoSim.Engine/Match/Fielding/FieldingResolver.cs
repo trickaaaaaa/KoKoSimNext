@@ -113,6 +113,13 @@ public sealed record FieldingPlay
     public double? CatchMarginSeconds { get; init; }
 
     /// <summary>
+    /// 本塁打の当たりの種類（issue #704・表示専用）。フェンス上の余裕と打球角度から
+    /// <see cref="Timeline.HomeRunStyles.Classify"/> で分けた値。本塁打以外は null。
+    /// 既に決まった弾道の写し＝新規の乱数消費・判定への影響はゼロ。
+    /// </summary>
+    public Timeline.HomeRunStyle? HomeRunStyle { get; init; }
+
+    /// <summary>
     /// 失策の種類（issue #439）。<see cref="Result"/>==Error のときだけ非null。
     /// 引いたロールの結果を記録するだけ＝新規RNGなし（不変条件#2）。
     /// </summary>
@@ -252,7 +259,11 @@ public static class FieldingResolver
         // 本塁打（上の clearsFence）。着地点は柵の外＝本塁打らしく飛んでいく絵のまま。
         if (clearsFence)
         {
-            return Base(BattedBallResult.HomeRun);
+            return Base(BattedBallResult.HomeRun) with
+            {
+                HomeRunStyle = Timeline.HomeRunStyles.Classify(
+                    ground.FenceCrossPosition.Y - field.FenceHeightM, ball.LaunchAngleDeg),
+            };
         }
 
         var isFly = ground.ApexHeightM >= coeff.FlyApexThresholdM;
