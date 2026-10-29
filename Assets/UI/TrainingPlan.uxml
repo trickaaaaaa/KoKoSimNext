@@ -32,7 +32,7 @@
             <ui:VisualElement class="tp-coach">
                 <ui:VisualElement class="tp-coach__head">
                     <ui:Label text="個別指導 3枠" class="tp-coach__title" />
-                    <ui:Label text="指名中は主眼メニューの経験値に指導力ボーナスが上乗せされる" class="tp-coach__hint" />
+                    <ui:Label text="下の表の★で指名・解除。指名中は主眼メニューの経験値に指導力ボーナスが上乗せされる" class="tp-coach__hint" />
                 </ui:VisualElement>
                 <ui:VisualElement name="nom-slots" class="tp-coach__slots" />
             </ui:VisualElement>
@@ -51,6 +51,7 @@
             </ui:VisualElement>
 
             <ui:VisualElement class="tp-thead">
+                <ui:Label text="指名" class="tp-th tp-th--nom" />
                 <ui:Label text="背番号 ／ 選手 ／ 学年 ／ 投打" class="tp-th tp-th--id" />
                 <ui:Label text="能力" class="tp-th tp-th--rank" />
                 <ui:Label text="練習設定" class="tp-th tp-th--preset" />

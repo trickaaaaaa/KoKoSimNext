@@ -41,7 +41,7 @@
 .nom-slot {
     flex-shrink: 0;
     flex-direction: row; align-items: center;
-    width: 128px; height: 44px;
+    min-width: 128px; height: 44px;   /* 指名中は「背番号 名前 ×」が入るので幅は中身なり（issue #707） */
     background-color: var(--color-panel-deep);
     border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
     padding-left: var(--sp-2); padding-right: var(--sp-2); margin-left: var(--sp-2);
@@ -54,6 +54,13 @@
 .nom-slot--empty .nom-slot__num { background-color: var(--color-line); color: var(--color-muted); }
 .nom-slot__name { font-size: var(--fs-label); color: var(--color-chalk); }
 .nom-slot--empty .nom-slot__name { color: var(--color-faint); }
+/* 指名中の枠を外す×（issue #707）。名前は flex-grow で押し、×を枠の右端へ。 */
+.nom-slot__name { flex-grow: 1; flex-shrink: 0; margin-right: var(--sp-1); }
+.nom-slot__x {
+    flex-shrink: 0; width: 22px; height: 22px; -unity-text-align: middle-center;
+    font-size: var(--fs-label); color: var(--color-muted); border-radius: var(--radius-chip);
+}
+.nom-slot__x:hover { color: var(--sky); background-color: var(--color-panel-hover); }
 
 /* ═══ ROSTER TABLE（全幅） ═══ */
 .tp-table { flex-grow: 1; flex-direction: column; }
@@ -83,6 +90,7 @@
 /* 固定列は flex-shrink: 0（付けないと隣の flex-grow 列の中身が広い行だけ幅を奪われ列がずれる＝横ずれの真因）。
    見出しLabelは既定 margin/padding を持つので 0 に潰し、データ列(VisualElement)と列境界を一致させる。 */
 .tp-th { font-size: 18px; color: var(--color-muted); letter-spacing: 1px; flex-shrink: 0; margin: 0; padding: 0; }
+.tp-th--nom { width: var(--col-nom); }
 .tp-th--id { width: var(--col-id); }
 .tp-th--rank { width: var(--col-rank); }
 .tp-th--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
@@ -101,6 +109,19 @@
 .tcell--rank { width: var(--col-rank); }
 .tcell--preset { flex-grow: 1; flex-basis: 0; min-width: 0; padding-left: var(--col-alloc-pad); }
 .tcell--copy { width: var(--col-copy); justify-content: center; }
+.tcell--nom { width: var(--col-nom); }
+
+/* 個別指導の指名★（issue #707）。指名中＝空色の塗り（モーダルの .nom-btn--on と同じ色）・未指名＝線の色。
+   行ごとに反復する導線なのでアンバーにしない（UI原則②）。 */
+.nom-star {
+    width: 34px; height: 34px; -unity-text-align: middle-center;
+    font-size: 20px; color: var(--color-line);
+    background-color: var(--color-panel-deep);
+    border-width: var(--border-w); border-color: var(--color-line); border-radius: var(--radius-chip);
+}
+.nom-star:hover { border-color: var(--sky); color: var(--sky); }
+.nom-star--on { background-color: var(--sky); border-color: var(--sky); color: #FFFFFF; }
+.nom-star--on:hover { color: #FFFFFF; }
 /* カテゴリ別ランク4組は独立列に出したので折返し禁止で1行に固定する（Issue #273）。 */
 .tcell--rank .cat-rank-chips { flex-wrap: nowrap; }
 
