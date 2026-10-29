@@ -32,6 +32,20 @@ namespace KokoSim.Unity.Match
         /// <summary>跳ねで進む距離＝入射の水平速さ×この係数[m]。座席の段を1〜3段ぶん転がる程度。</summary>
         public static float StandHopRunPerMps = 0.08f;
 
+        private HomeRunStyle _hrStyle = HomeRunStyle.Standard;
+        private bool _hrFence;        // 柵を越えた瞬間が求まったか
+        private float _hrFenceT;
+        private Vector3 _hrFenceLocal; // 柵を越えた瞬間の球（_root 基準）
+
+        // ── 当たりの種類ごとのカメラ（issue #704。監督決定: テロップは出さずカメラだけで見せ分ける） ──
+        /// <summary>弾丸ライナーの追従の速さ（パン・ズームの速度上限に掛ける倍率）。**絵で決める値**。</summary>
+        public static float LinerCamSpeedScale = 2.2f;
+        /// <summary>ぎりぎりの本塁打で、柵を越える瞬間に寄せる縦の実寸[m]。</summary>
+        public static float WallFrameH = 13f;
+        /// <summary>柵を越える何秒前から寄せ始めるか／寄せ切るか[s]。</summary>
+        public static float WallBlendStartSeconds = 0.9f;
+        public static float WallBlendFullSeconds = 0.35f;
+
         private bool _hrHit;
         private float _hrHitT;
         private Vector3 _hrHitPos;    // _root 基準
@@ -48,8 +62,10 @@ namespace KokoSim.Unity.Match
         private void PlanHomeRunStandHit(PlaybackPlay play)
         {
             _hrHit = false;
+            _hrFence = false;
+            _hrStyle = play?.HomeRun ?? HomeRunStyle.Standard;
             LastStandHit = null;
-            if (!IsHomeRun(play) || _standColliders.Count == 0 || play.Ball == null) return;
+            if (!IsHomeRun(play) || play.Ball == null) return;
 
             EndpointBallSegment flight = null;
             foreach (var s in play.Ball)
@@ -65,7 +81,13 @@ namespace KokoSim.Unity.Match
                 var cur = BallLocal(play, t);
                 float th = Mathf.Atan2(cur.x, cur.z);
                 bool beyondFence = new Vector2(cur.x, cur.z).magnitude > FenceR(th);
-                if (beyondFence)
+                if (beyondFence && !_hrFence)
+                {
+                    _hrFence = true;
+                    _hrFenceT = t;
+                    _hrFenceLocal = cur;
+                }
+                if (beyondFence && _standColliders.Count > 0)
                 {
                     var a = root.TransformPoint(prev);
                     var b = root.TransformPoint(cur);
@@ -89,6 +111,55 @@ namespace KokoSim.Unity.Match
                     }
                 }
                 prev = cur;
+            }
+        }
+
+        /// <summary>
+        /// 打者を振り抜いた形のまま少なくとも <paramref name="seconds"/> 秒止める（「打った瞬間」の見送り・issue #704）。
+        /// まだ振っている途中なら、振り終わりの据え置きを延ばす。既に据え置き中なら残りを延ばす。
+        /// </summary>
+        public void HoldBatterFinish(float seconds)
+        {
+            if (_batter == null) return;
+            if (_batter.HoldRemaining > 0f) _batter.HoldRemaining = Mathf.Max(_batter.HoldRemaining, seconds);
+            else if (_batter.HoldSeconds > 0f) _batter.HoldSeconds = Mathf.Max(_batter.HoldSeconds, seconds);
+        }
+
+        /// <summary>この打球のカメラの速度上限に掛ける倍率（弾丸ライナーだけ速く追う）。</summary>
+        private float HomeRunCamSpeedScale
+            => _fieldPlay != null && _hrStyle == HomeRunStyle.Liner ? LinerCamSpeedScale : 1f;
+
+        /// <summary>
+        /// 当たりの種類ごとに守備カメラの枠を上書きする（<see cref="ComputeFieldFrame"/> の最後に呼ぶ）。
+        /// ・ぎりぎり: 柵を越える瞬間へ寄り、柵の上をかすめるのを見せる
+        /// ・高々と: 落ちてくる間も頂点ぶんの縦枠を保つ（寄らずに弧の高さを見せる）
+        /// 打った瞬間（対決ビューでの見送り）とライナー（追従の速さ）は別の場所で効かせる。
+        /// </summary>
+        private void ApplyHomeRunStyleFrame(float t, ref Vector3 aim, ref float frameH)
+        {
+            if (_fieldPlay == null) return;
+            switch (_hrStyle)
+            {
+                case HomeRunStyle.Wall when _hrFence:
+                {
+                    float w = Mathf.InverseLerp(_hrFenceT - WallBlendStartSeconds, _hrFenceT - WallBlendFullSeconds, t);
+                    w = w * w * (3f - 2f * w);
+                    if (w <= 0f) return;
+                    var fenceAim = new Vector3(_hrFenceLocal.x, Mathf.Max(FieldAimYMin, FenceHeightM * 0.6f), _hrFenceLocal.z);
+                    aim = Vector3.Lerp(aim, fenceAim, w);
+                    frameH = Mathf.Lerp(frameH, WallFrameH, w);
+                    return;
+                }
+                case HomeRunStyle.Towering:
+                {
+                    if (_hrHit && t >= _hrHitT) return;
+                    var flight = FieldFlightSegmentAt(t);
+                    if (flight == null) return;
+                    float apex = Mathf.Max(0f, (float)flight.At((flight.T1 - flight.T0) * 0.5).H);
+                    aim.y = Mathf.Max(aim.y, apex * 0.5f);
+                    frameH = Mathf.Max(frameH, apex + FieldMarginM * 2f);
+                    return;
+                }
             }
         }
 
