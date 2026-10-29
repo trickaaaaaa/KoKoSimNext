@@ -826,6 +826,9 @@ namespace KokoSim.Unity.Home
         {
             var slot = new VisualElement();
             slot.AddToClassList("gd-slot");
+            // 枠を押すと練習計画へ（指名・解除は部員表の★で行う, issue #707）。表示だけの枠にしない。
+            slot.AddToClassList("gd-slot--link");
+            slot.RegisterCallback<ClickEvent>(_ => KokoSim.Unity.Shell.ScreenRouter.Instance?.ShowDeferred("TrainingPlan"));
             if (g.Empty)
             {
                 slot.AddToClassList("gd-slot--empty");

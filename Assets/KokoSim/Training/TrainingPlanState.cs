@@ -79,6 +79,14 @@ namespace KokoSim.Unity.Training
         public int Minutes;         // 割当分
     }
 
+    /// <summary>個別指導の枠1つ（issue #707）。</summary>
+    public sealed class NominationSlot
+    {
+        public int Index = -1;          // 空き枠は -1
+        public string Label = "空き";
+        public bool Empty => Index < 0;
+    }
+
     public sealed class PlayerTrainRow
     {
         public int Index;
@@ -96,6 +104,7 @@ namespace KokoSim.Unity.Training
         public List<string> Gains = new List<string>();      // 伸び見込み（ミート+1 等・旧表示）
         public List<GainBar> GainBars = new List<GainBar>();  // 今週の見込み（exp進捗バー・新表示）
         public bool Selected;
+        public bool Nominated;   // 個別指導に指名中（部員表の★列, issue #707）
     }
 
     public sealed class TrainingPlanView
@@ -111,8 +120,8 @@ namespace KokoSim.Unity.Training
         public string CampMult = "";
         public string CampNote = "";
 
-        // 個別指導3枠
-        public List<string> Nominations = new List<string> { "空き", "空き", "空き" };
+        // 個別指導3枠（Index＝ロスター添字・空き枠は -1。枠の×で外すのに使う, issue #707）
+        public List<NominationSlot> Nominations = new List<NominationSlot>();
 
         // 選択選手（エディタ）
         public int SelectedIndex;
@@ -372,18 +381,12 @@ namespace KokoSim.Unity.Training
 
         public bool IsDelegated(int index) => index >= 0 && index < _delegated.Length && _delegated[index];
 
-        /// <summary>個別指導3枠の指名トグル（設計書06 §3.3・Issue #126）。上限は係数
+        /// <summary>個別指導3枠の指名トグル（設計書06 §3.3・Issue #126/#707）。上限は係数
         /// TrainingCoefficients.IndividualCoachingSlots（既定3）。共有ロスター本体（DevelopingPlayer.
-        /// IndividualCoaching）へ直接書き込むため、指名は育成式（DevelopmentModel）へ実効果を持つ。</summary>
-        public void ToggleNominate(int index)
-        {
-            if (index < 0 || index >= _roster.Count) return;
-            if (_roster[index].IndividualCoaching) { _roster[index].IndividualCoaching = false; return; }
-
-            var count = 0;
-            foreach (var p in _roster) if (p.IndividualCoaching) count++;
-            if (count < _training.IndividualCoachingSlots) _roster[index].IndividualCoaching = true;
-        }
+        /// IndividualCoaching）へ直接書き込むため、指名は育成式（DevelopmentModel）へ実効果を持つ。
+        /// 判定は engine の IndividualCoachingNomination に集約（部員表の★・枠の×・モーダルの3入口が共有）。</summary>
+        public NominationResult ToggleNominate(int index)
+            => IndividualCoachingNomination.Toggle(_roster, index, _training.IndividualCoachingSlots);
 
         public bool IsNominated(int index) => index >= 0 && index < _roster.Count && _roster[index].IndividualCoaching;
 
@@ -454,6 +457,7 @@ namespace KokoSim.Unity.Training
                 FocusSummary = _delegated[i] ? "コーチ一任" : FocusSummary(ResolvedAllocations(i)),
                 Chips = AllocationChips(i),
                 Selected = i == _selected,
+                Nominated = src.IndividualCoaching,
             };
         }
 
@@ -500,9 +504,9 @@ namespace KokoSim.Unity.Training
                 if (s < nominatedIdx.Count)
                 {
                     var idx = nominatedIdx[s];
-                    view.Nominations.Add(NumTextAt(idx) + " " + _roster[idx].Name);
+                    view.Nominations.Add(new NominationSlot { Index = idx, Label = NumTextAt(idx) + " " + _roster[idx].Name });
                 }
-                else view.Nominations.Add("空き");
+                else view.Nominations.Add(new NominationSlot());
             }
         }
 

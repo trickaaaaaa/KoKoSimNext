@@ -222,6 +222,7 @@
     --col-rank: 240px;      /* カテゴリ別ランク4組（打/走/守/投）専用列。id列から分離して見切れを解消（Issue #273） */
     --col-preset: 120px;    /* プリセット */
     --col-gain: 150px;      /* 今週の見込み（exp進捗） */
+    --col-nom: 52px;        /* 個別指導の指名★（issue #707） */
     --col-copy: 48px;       /* 複製 */
     --col-alloc-pad: 12px;  /* 配分列の左パディング（flex-grow列） */
 

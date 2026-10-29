@@ -63,7 +63,7 @@ namespace KokoSim.Unity.Training
             // モーダル内の操作（対象は選択選手）。押下後も Render で開いたまま最新化する。
             Click("template-save", () => { _state.SaveTemplate(); Toast("週テンプレを保存しました"); Render(); });
             Click("delegate-toggle", () => { _state.ToggleDelegate(_state.SelectedIndex); Render(); });
-            Click("sel-nom", () => { _state.ToggleNominate(_state.SelectedIndex); Render(); });
+            Click("sel-nom", () => Nominate(_state.SelectedIndex));
             // 前後選手切替（issue #222⑥・一覧の現在フィルタ/ソート順）。
             Click("sel-prev", () => { _state.StepSelected(-1); Render(); _modal?.Focus(); });
             Click("sel-next", () => { _state.StepSelected(+1); Render(); _modal?.Focus(); });
@@ -139,24 +139,49 @@ namespace KokoSim.Unity.Training
         }
 
         // ── 個別指導3枠 ─────────────────────────────
+        /// <summary>指名・解除（部員表の★・枠の×・モーダルのボタンの共通入口, issue #707）。
+        /// 枠が埋まっているときは黙って無視せず、トーストで理由を出す。</summary>
+        private void Nominate(int index)
+        {
+            var result = _state.ToggleNominate(index);
+            if (result == NominationResult.Full)
+                Toast("個別指導の枠がいっぱいです（" + _nomSlotCount + "枠）。先に誰かを外してください");
+            Render();
+        }
+
+        private int _nomSlotCount = 3;   // 直近の描画での枠数（係数 IndividualCoachingSlots）。トーストの文言用
+
         private void BuildNominations(TrainingPlanView v)
         {
+            _nomSlotCount = v.Nominations.Count;
             var host = _root.Q<VisualElement>("nom-slots");
             if (host == null) return;
             host.Clear();
             for (var s = 0; s < v.Nominations.Count; s++)
             {
+                var n = v.Nominations[s];
                 var slot = new VisualElement();
                 slot.AddToClassList("nom-slot");
-                if (v.Nominations[s] == "空き") slot.AddToClassList("nom-slot--empty");
+                if (n.Empty) slot.AddToClassList("nom-slot--empty");
 
                 var num = new Label((s + 1).ToString());
                 num.AddToClassList("nom-slot__num");
                 slot.Add(num);
 
-                var name = new Label(v.Nominations[s]);
+                var name = new Label(n.Label);
                 name.AddToClassList("nom-slot__name");
                 slot.Add(name);
+
+                // 指名中の枠は×で外せる（issue #707）。
+                if (!n.Empty)
+                {
+                    var idx = n.Index; // 捕捉
+                    var x = new Label("×");
+                    x.AddToClassList("nom-slot__x");
+                    x.tooltip = "個別指導から外す";
+                    x.RegisterCallback<ClickEvent>(_ => Nominate(idx));
+                    slot.Add(x);
+                }
 
                 host.Add(slot);
             }
@@ -207,6 +232,17 @@ namespace KokoSim.Unity.Training
                 row.AddToClassList("row-panel");   // 共通部品：白パネル＋インク枠＋ベタ影（components.uss）
                 row.AddToClassList("row-panel--dense");   // 高密度バリアント（Issue #273）
                 if (r.Selected) row.AddToClassList("row-panel--selected");
+
+                // 個別指導の指名（★。押すたびに指名⇄解除, issue #707）。先頭列＝一覧を見ながら選べる。
+                var nomCell = new VisualElement();
+                nomCell.AddToClassList("tcell"); nomCell.AddToClassList("tcell--nom");
+                var star = new Label("★");
+                star.AddToClassList("nom-star");
+                if (r.Nominated) star.AddToClassList("nom-star--on");
+                star.tooltip = r.Nominated ? "個別指導から外す" : "個別指導に指名";
+                star.RegisterCallback<ClickEvent>(_ => Nominate(idx));
+                nomCell.Add(star);
+                row.Add(nomCell);
 
                 // 背番号／選手／学年／投打（投/野ポジションは非表示）。学年・投打は名前と同じ上段へ
                 // （Issue #273：ベンチ外選手だけメタ行に「ベンチ外」チップが乗り2行になる＝それ以外は1行）。

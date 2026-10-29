@@ -916,6 +916,10 @@ Button.tp-subrow__next { margin-left: var(--sp-2); }   /* Button.tp-back の mar
    カウントダウンで既に2箇所使うため、枠が2つある指導ラベルに配ると必ず超過する）。 */
 .gd-focus { font-size: var(--fs-cap); color: var(--color-muted); }
 .gd-empty-t { font-size: var(--fs-label); color: var(--color-faint); -unity-text-align: middle-center; flex-grow: 1; }
+/* 枠を押すと練習計画へ（issue #707）。押せることをホバーで示す。 */
+.gd-slot--link:hover { background-color: var(--color-panel-hover); }
+.gd-slot--empty.gd-slot--link:hover { border-color: var(--sky); }
+.gd-slot--empty.gd-slot--link:hover .gd-empty-t { color: var(--sky); }
 
 /* ============================================================ */
 /* 選手詳細（mock: 野球部監督GM「選手詳細」）              pd2-* */
